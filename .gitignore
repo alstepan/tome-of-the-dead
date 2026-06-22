@@ -1,0 +1,20 @@
+# Build artifacts
+/build/*
+!/build/.gitkeep
+
+# sjasmplus listings / debug output kept out of git
+*.lst
+*.sld
+*.map
+*.exp
+
+# Emulator state
+*.szx
+*.z80.snap
+*.rzx
+
+# Generated graphics intermediates (sources live in assets/, packed asm is committed)
+*.intermediate.png
+
+# macOS
+.DS_Store

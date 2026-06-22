@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sjasmplus:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(open -a Fuse for macOS:*)",
+      "Bash(/Applications/zesarux.app/Contents/MacOS/zesarux:*)",
+      "Bash(nc:*)",
+      "Bash(python3:*)",
+      "Bash(ollama run:*)",
+      "Bash(ollama list)",
+      "Read(//Users/alexs/sources/zxspectrum/wazhack/**)"
+    ],
+    "deny": []
+  }
+}
