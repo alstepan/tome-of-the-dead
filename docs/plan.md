@@ -12,10 +12,17 @@
 
 ## Current state
 
-- **Active phase:** P1 — Game design (pending launch of `game-designer`)
-- **Last completed:** P0 — Project setup
-- **Top risk:** rendering choice (P1) reorders all engine work; everything
-  downstream of P1 is provisional until that doc lands.
+- **Active phase:** P2 — Engine skeleton & toolchain proof (ready to start)
+- **Last completed:** P1 — Game design (top-down Slice-1 spec, staged; user-approved)
+- **Milestone strategy (decided 2026-06-26):** the eventual target look is
+  **side-view bitmap sprites (WazHack feel)**, but we **stage** it.
+  **Slice 1 = top-down char-cell** — proves turn loop, combat, RNG, level gen,
+  items, and the test harness fast and clash-free. **Milestone 2 = side-view
+  renderer** built on top of the proven game logic. Phases P1–P6 below are the
+  Slice 1 (top-down) track; **M2** is appended after them.
+- **Top risk (mitigated by staging):** side-view rendering is expensive (runtime
+  clash management, pre-shifted masked sprites, banked assets, pixel-coord
+  entities). Staging defers that risk to M2 and keeps Slice 1 small.
 
 ---
 
@@ -27,7 +34,7 @@
 - **Exit gate:** `.claude/` skills+agents present; `docs/conventions.md` &
   `docs/memory-map.md` exist; git initialised. ✅
 
-### P1 — Game design · `TODO`
+### P1 — Game design · `DONE`
 - **Owner:** `game-designer` · **Depends:** P0
 - **Goal:** define the Spectrum reinterpretation.
 - **Exit gate:** `docs/design/spectrum-design.md` exists and is approved by the
@@ -56,11 +63,12 @@
 ### P4 — Vertical slice content · `TODO`
 - **Owner:** `z80-staff-engineer` (+ `game-designer` for balance)
 - **Depends:** P3
-- **Goal:** one dungeon level (generation), melee combat, a handful of monsters
-  and items, descend stairs, death.
+- **Goal:** procedurally generated levels, melee combat, a handful of monsters
+  and items, **descend stairs generates the next level (≥2 levels)**, death.
 - **Exit gate:** the P1 **playability checklist** passes end-to-end (player can
-  reach the stairs, a monster can kill the player, no softlock); test scenarios
-  green; deterministic seed reproduces runs.
+  reach the stairs, **descend generates a fresh, reachable level 2**, a monster
+  can kill the player, no softlock); test scenarios green; deterministic seed
+  reproduces runs.
 
 ### P5 — Graphics pass · `TODO`
 - **Owner:** `graphics-artist` · **Depends:** P3 (slots), P4 (asset list)
@@ -81,6 +89,18 @@
 - **Exit gate:** player routine integrated (T-state cost documented); cues play
   without stalling the turn loop.
 
+### M2 — Side-view renderer (target look) · `TODO`
+- **Owner:** `z80-staff-engineer` + `graphics-artist` · **Depends:** P6 (proven
+  game logic)
+- **Goal:** replace the top-down renderer with the WazHack-style side-view —
+  pixel-coordinate entities, scrolling viewport, pre-shifted masked sprites,
+  runtime attribute-clash management, banked sprite assets. Game logic (turn
+  loop, combat, RNG, level gen, items) is reused; the renderer + entity-coord
+  model + level structure are rebuilt.
+- **Exit gate:** the playability checklist passes with the side-view renderer;
+  clash managed (no illegal cells); turn redraw within frame budget. This is
+  where the bulk of the graphics + clash engineering lands.
+
 ---
 
 ## How we control state
@@ -97,7 +117,7 @@
 
 | Risk | Phase | Mitigation |
 |------|-------|------------|
-| Rendering choice reshapes engine | P1 | Decide it explicitly in P1 before P3; keep P2 design-light |
+| Side-view rendering cost (clash, sprites, banking) | M2 | Target = side-view, but **staged**: Slice 1 is top-down; side-view deferred to M2 on proven logic |
 | ZRCP flag names differ in this build | P2 | Validate on first `debug` run; fix the skill |
 | Attribute clash on real art | P5 | Pipeline enforces ≤2 colours/cell + round-trip |
 | Z80/byte budget overrun | P3+ | Reviewer tracks cycle/byte cost; memory-map gates allocation |
