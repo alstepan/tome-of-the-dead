@@ -12,8 +12,15 @@
 
 ## Current state
 
-- **Active phase:** P2 — Engine skeleton & toolchain proof (ready to start)
-- **Last completed:** P1 — Game design (top-down Slice-1 spec, staged; user-approved)
+- **Active phase:** P4 — Vertical slice content
+- **Last completed:** P3 — Core loop (verified 2026-06-28; z80-reviewer verdict
+  fix-then-ship, all gating fixes applied; evidence in the P3 section)
+- **Decision (2026-06-26, manager+user):** movement uses a **4-key layout**
+  (`hjkl` + `QAOP`, no `yubn`), with **diagonals via two-key chords** — pressing
+  two orthogonal keys together moves diagonally, so all 8 directions are reachable
+  from 4 keys. Input sums held-key contributions into `(dx,dy)`. Revises the
+  design's original 8-key assumption; design §3/§5.3/§8.7 updated; AI stays
+  4-connected (monsters orthogonal), player may step diagonally.
 - **Milestone strategy (decided 2026-06-26):** the eventual target look is
   **side-view bitmap sprites (WazHack feel)**, but we **stage** it.
   **Slice 1 = top-down char-cell** — proves turn loop, combat, RNG, level gen,
@@ -43,7 +50,7 @@
   shapes, combat + deterministic RNG model, and a playability checklist.
 - **Unblocks:** the detailed engine sequencing in P3/P4.
 
-### P2 — Engine skeleton & toolchain proof · `TODO`
+### P2 — Engine skeleton & toolchain proof · `DONE`
 - **Owner:** `z80-staff-engineer` · **Depends:** P1 (boot/loader is design-light;
   can start in parallel once P1 is approved)
 - **Goal:** prove the pipeline end-to-end and lay the program skeleton.
@@ -51,16 +58,52 @@
   and ZEsarUX, **`debug` confirms ZRCP connectivity** (regs/memory readable),
   and the `test` skill captures its first golden. `docs/memory-map.md` seeded
   with the real program/origin layout.
+- **Evidence (verified by manager 2026-06-26):**
+  - Build clean (0 warnings). ZEsarUX 12.1 launches headless with ZRCP;
+    `get-registers`/`read-memory`/`write-memory` all work (`write-memory` needs
+    **decimal** addr+value — recorded in the harness). Top P2 risk ("ZRCP flag
+    names differ") **retired**.
+  - Smoke frame is deterministic and ROM-independent: own glyph blitter draws
+    "WAZHACK" (verified by decoding `$4000` from screen RAM), attributes flooded
+    to `$47`, boot state `GAME_STATE=$01` / `RNG_STATE=$A55A`, CPU in halt loop.
+  - First golden committed: `tests/golden/smoke.hash`
+    (`8e0ba62a…d54c4e6`); `tests/smoke.py` via `tools/test_harness.py` asserts
+    state + golden, exits non-zero on mismatch. Re-run green.
+  - `docs/memory-map.md` seeded (program origin, screen regions, working storage,
+    stable test-observable addresses, SP/state-block constraint).
+  - **Caveat:** ZEsarUX (the testable path) is fully green; Fuse on macOS is
+    GUI-only and not headlessly verifiable — the `.tap` autoloader is built and
+    valid, Fuse boot is a manual `run` confirmation.
+  - **Reusable for P3:** `draw_cell` (blit one 8×8 glyph to char cell (col,row),
+    no per-row address recompute) is the dirty-cell render primitive P3 builds on.
 
-### P3 — Core loop (input → turn → render) · `TODO`
+### P3 — Core loop (input → turn → render) · `DONE`
 - **Owner:** `z80-staff-engineer` (+ `graphics-artist` for placeholder tiles)
 - **Depends:** P1, P2
 - **Goal:** the heartbeat — read input, advance a turn, render the frame, per the
   chosen rendering approach.
 - **Exit gate:** player moves around a static map, rendered correctly; turn
   counter advances; golden-screen + state assertions green via `test`.
+- **Evidence (verified by manager 2026-06-28):**
+  - Build clean (0 warnings). `tests/smoke.py` green; `tests/p3.py` **31/31**
+    green and repeatable. Asserts: boot state, move-E (§6.4), one-keypress-one-turn
+    (§6.6), dirty-cell subset (§6.18), **diagonal chord K+L → (+1,−1)**, wall-block
+    no-move/no-turn (§6.5), WAIT, opposite-key-cancel no-turn, cross-turn debounce
+    / no-auto-repeat.
+  - `z80-reviewer` verdict **fix-then-ship**, no runtime bugs. Gating fixes done:
+    memory-map synced to real addresses/size (code+data `$8000..$84CC`, 1228 B);
+    two missing input-invariant tests committed; redundant `push/pop bc` removed.
+    `IY=$5C3A` invariant documented in `docs/conventions.md`.
+  - Built: 4-key chordable input (`hjkl`+`QAOP`, diagonals via two-key chords),
+    static 30×21 map, dirty-cell renderer on `draw_cell`, 16-slot entity array
+    (`$B000`, laid out for P4), turn loop. Stable addrs: `GAME_STATE/RNG_STATE/`
+    `TURN_COUNTER`, `PLAYER_X/Y`, `KBD_MATRIX/INPUT_SRC` (test injection).
+- **Carried into P4 (manager note):** diagonal **corner-cutting is permitted**
+  (diagonal legal iff destination walkable; no corner-block). Accepted for the
+  slice; P4 must make a conscious call given monsters become 4-connected and
+  combat is adjacency-based — keep it, or add corner-blocking with documented cost.
 
-### P4 — Vertical slice content · `TODO`
+### P4 — Vertical slice content · `IN-PROGRESS`
 - **Owner:** `z80-staff-engineer` (+ `game-designer` for balance)
 - **Depends:** P3
 - **Goal:** procedurally generated levels, melee combat, a handful of monsters

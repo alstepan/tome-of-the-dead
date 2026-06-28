@@ -154,20 +154,32 @@ fight by bumping, grab an item or two, descend or die.
 The Spectrum keyboard has **no dedicated cursor block** (cursor keys are
 shifted 5/6/7/8 on a 48K layout and awkward). So we pick deliberately.
 
-### DECISION: **Primary = classic Rogue `hjkl` + `yubn` diagonals.** Secondary
-(redundant) = `QAOP` cross for players who don't know vi-keys.
+### DECISION (REVISED 2026-06-26, manager+user): **4 movement keys, with
+diagonals via two-key chords.** No dedicated diagonal keys (`yubn` dropped).
+Primary = classic Rogue `hjkl`; secondary (redundant) = `QAOP` cross. A single
+direction key moves orthogonally; **pressing two orthogonal keys at the same time
+moves diagonally** (e.g. `K`+`L` = up-right, `J`+`H` = down-left). So the player
+can reach all 8 directions, but the *key layout* is only 4 keys — diagonals are
+emergent from chording, not separate bindings.
 
-| Key | Action |
+| Key(s) | Action |
 |---|---|
-| `H` | move left (west) |
-| `L` | move right (east) |
-| `K` | move up (north) |
-| `J` | move down (south) |
-| `Y` | move up-left (NW) |
-| `U` | move up-right (NE) |
-| `B` | move down-left (SW) |
-| `N` | move down-right (SE) |
-| `Q` / `A` / `O` / `P` | redundant up / down / left / right (no diagonals) |
+| `H`  (or `O`) | move left (west) |
+| `L`  (or `P`) | move right (east) |
+| `K`  (or `Q`) | move up (north) |
+| `J`  (or `A`) | move down (south) |
+| `K`+`L`, `K`+`H`, `J`+`L`, `J`+`H` (any orthogonal pair) | move diagonally (NE/NW/SE/SW) |
+
+**Input model:** the input layer samples the *set* of movement keys currently
+held and sums their contributions into a step `(dx,dy)`, each component ∈
+`{-1,0,+1}`: `dx = (+1 if east key) + (-1 if west key)`, `dy = (+1 if south key)
++ (-1 if north key)`. Opposite keys cancel (`dx`/`dy` = 0). If `(dx,dy) == (0,0)`
+→ no action, no turn. This yields up to **8 movement directions from 4 keys**.
+Because two physical presses are rarely perfectly simultaneous, the sampler
+should allow a tiny capture window (engineer's choice — e.g. on first edge,
+re-read the matrix ~1 frame later and OR the held keys) so a near-simultaneous
+second key still registers as a diagonal. Still **one chord = one turn** (debounce
+to a single action per press; require release before the next).
 | `.` (period) or `Space` | wait / pass turn |
 | `G` | quaff healing potion (G = "glug"; avoids clashing with movement letters) |
 | `>` (Symbol-Shift + `T`) → **use `D` for "descend"** | descend stairs when standing on them |
@@ -189,10 +201,12 @@ shifted 5/6/7/8 on a 48K layout and awkward). So we pick deliberately.
 
 ### Engine contract
 
-- Input layer maps a pressed key → an **action enum**: `MOVE(dir 0–7)`,
-  `WAIT`, `QUAFF`, `DESCEND`, `CONFIRM`. The 8 directions index a
-  `dxdy[8]` table of signed (dx,dy). Unmapped keys = no action (do not advance a
-  turn).
+- Input layer samples held movement keys → a **step action** carrying `(dx,dy)`,
+  each ∈ `{-1,0,+1}` (summed per the revised §3 input model), plus the discrete
+  actions `WAIT`, `QUAFF`, `DESCEND`, `CONFIRM`. `(dx,dy)` reaches all 8
+  directions from the 4 movement keys via chording; `(0,0)` = no action (no turn).
+  A `dxdy` lookup table is unnecessary — `(dx,dy)` is computed directly from the
+  key set. (Chordable 4-key scheme per the revised §3; original design was 8 keys.)
 - Reading the keyboard half-rows directly is fine; debounce so one physical press
   = one action (turn-based, so a simple "wait for no-key then key" or edge-detect
   is enough — engineer's choice, but **one keypress must equal one turn**).
@@ -354,8 +368,8 @@ N".
 
 Per monster, each turn:
 
-1. If **adjacent to player** (Chebyshev distance 1) → **attack** the player
-   (to-hit + damage as above).
+1. If **orthogonally adjacent to player** (Manhattan distance 1 — 4-connected per
+   the revised §3) → **attack** the player (to-hit + damage as above).
 2. Else compute `dx = sign(player.x - x)`, `dy = sign(player.y - y)`; attempt to
    move one step by that (dx,dy).
    - If the target cell is a wall or occupied → try the axis-only fallbacks
@@ -572,9 +586,13 @@ to them if you disagree:
    Spectrum). Cosmetic but player-facing; assumed fine.
 6. **XP/levelling OUT for the slice** (flat stats + gold score). Cheap to add if
    wanted; assumed deferred.
-7. **8-direction movement with vi-keys** as primary. If the user prefers
-   4-direction only (simpler, fewer keys), drop `yubn`; the engine cost
-   difference is negligible. Assumed 8-direction.
+7. **Movement scheme (RESOLVED 2026-06-26 → 4 keys, chordable to diagonals).**
+   The original assumption was 8-direction vi-keys; manager+user chose a **4-key**
+   layout (`hjkl` + `QAOP`, no `yubn`) where **pressing two orthogonal keys at
+   once moves diagonally** — so all 8 directions are reachable from 4 keys via
+   chords. Input sums held-key contributions into `(dx,dy)`. §3 and the engine
+   contract are updated. Monster AI (§5.3) remains 4-connected (monsters move/
+   attack orthogonally); the player may step diagonally. No longer open.
 
 Nothing here blocks P2 (engine skeleton is design-light). The items above only
 need confirmation before **P3/P4** build to them.

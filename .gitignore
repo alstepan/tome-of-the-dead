@@ -16,5 +16,9 @@
 # Generated graphics intermediates (sources live in assets/, packed asm is committed)
 *.intermediate.png
 
+# Python (test harness / tools)
+__pycache__/
+*.pyc
+
 # macOS
 .DS_Store

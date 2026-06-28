@@ -45,6 +45,13 @@
 - IM and ISR setup is documented in one place once it exists.
 - Routines that must run with interrupts disabled document the `di`/`ei` window
   and keep it as short as possible.
+- **`IY` = `$5C3A` invariant.** The engine runs under the ROM IM1 ISR (e.g. the
+  chord-capture `halt` in the input layer relies on the ROM keyboard scan), which
+  addresses system variables via `IY`. Both the `.tap` (USR-from-BASIC) and `.sna`
+  entry paths leave `IY=$5C3A`, and the engine never reloads it — so it works
+  today. If any routine ever repurposes `IY` or the `$5C00` system-var region
+  while interrupts are enabled, the ROM ISR becomes memory-corrupting. Either keep
+  `IY=$5C3A` whenever `ei` is in effect, or install a custom ISR first.
 
 ## Testing hook
 
