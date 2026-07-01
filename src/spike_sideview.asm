@@ -84,6 +84,27 @@ TRACK_COL       EQU 28              ; trackable pillar (sky band, rows 12-17)
 ;                 — the ~537k T baseline the reviewer measured. Flip to A/B.
 USE_NAIVE_SCROLL EQU 0
 
+; SPIKE-3 build flag (A/B the shift HEIGHT on the SAME scene). Rows 0-11 are blank
+; sky and rows 0-17 attrs are a uniform ATTR_AIR band, so both are shift-invariant
+; for THIS scene — a content-rows-only shift is byte-exact vs the full-height path
+; (tests/scroll.py + tests/sideview.py stay green either way).
+;   1 (default) = content-rows-only: shift only the 12 non-sky bitmap rows (char
+;                 rows 12..23 = pixel rows 96..191, 96 scanlines) and only the 6
+;                 ground-band attr rows (18..23). ~91k T -> ~1.28 frames.
+;   0           = full-height SPIKE-2 path: all 192 scanlines + 24 attr rows
+;                 (~146k T -> ~2.07 frames) — the A/B baseline.
+SHIFT_CONTENT_ROWS_ONLY EQU 1
+
+; Content-shift geometry (derived, no magic addresses). Bitmap content begins at
+; char row 12 whose top scanline address is $4880 (high $40|(row&$18)=$48, low
+; (row&7)<<5=$80). The ZX third boundary at char row 16 (pixel 128) is bitmap high
+; $50, where the enumeration crosses from third 1 (rows 12-15, r'>=4) into third 2
+; (rows 16-23, all r'). Ground-band attrs start at $5A40 (= SCREEN_ATTR+18*32).
+CONTENT_TOP_ROW EQU 12
+BMP_C_START     EQU SCREEN_BITMAP + ((CONTENT_TOP_ROW & $18) << 8) + ((CONTENT_TOP_ROW & 7) << 5) ; $4880
+BMP_T2_HIGH     EQU SCREEN_BITMAP >> 8 | (16 & $18)   ; $50: bitmap high byte of third 2 (row 16)
+ATTR_C_START    EQU SCREEN_ATTR + GROUND_ROW * 32     ; $5A40: first ground-band attr row
+
 ; Pre-shift table (design §1.3): 8 copies x 144 B, generated at boot.
 PRESHIFT_FRAME  EQU 144             ; one 16x24 [mask,data]x3 frame
 PRESHIFT_COUNT  EQU 8
@@ -275,7 +296,7 @@ do_scroll_redraw:
                 ret
 
 ;==============================================================================
-; SPIKE-2 — BYTE-SHIFT HORIZONTAL SCROLL (default; design §3.3 / plan SPIKE-2).
+; BYTE-SHIFT HORIZONTAL SCROLL (design §3.3 / plan SPIKE-2 & SPIKE-3).
 ;
 ; Instead of redrawing all 768 cells (do_scroll_redraw, ~537k T), shift the
 ; visible 32-col playfield one byte-column IN PLACE and redraw ONLY the single
@@ -283,21 +304,36 @@ do_scroll_redraw:
 ; faithful render of world cols [origin..origin+31]; the sprite is erased BEFORE
 ; apply_motion is called (spike_loop step 1), so the shift moves pure background.
 ;
-; Per-step EAST cost (computed per-instruction from the listing, uncontended;
-; budget 70,908 T/frame, 128K):
-;   shift_bitmap_left   192 scanlines: per page 7x570 + 604, x24    ~110,300 T
-;   shift_attr_left      24 rows      : 3 pages x (7x570+604)        ~13,800 T
-;   draw_newcol_bitmap   24 cells     : ~678 T/cell (= 521k/768)     ~17,500 T
-;   set_newcol_attr      24 band wr.  : ~199 T/row                    ~4,800 T
+; SPIKE-3 LEVER (default, SHIFT_CONTENT_ROWS_ONLY=1): shift only the 12 non-sky
+; content rows. Rows 0-11 bitmap is blank sky (shift-invariant) and rows 0-17
+; attrs are a uniform ATTR_AIR band (shift-invariant) for THIS scene, so the
+; content-only shift is byte-exact (tests/scroll.py + sideview.py green).
+;
+; Per 8px EAST scroll STEP, per-instruction from build/spike.lst (uncontended;
+; budget 70,908 T/frame, 128K). Content path (default):
+;   shift_bitmap_left    96 scanlines : third1 rows12-15 18,762 + third2         (lst 379-411)
+;                                        rows16-23 36,835 + ld ix 14       ~55,611 T
+;                                        (LDI cont scanline = 570 T; 96x)
+;   shift_attr_left       6 rows 18-23 : 5x570 + 565 wrap + 44 adv + 14     ~3,473 T  (lst 508-524)
+;   draw_newcol_bitmap   24 cells      : ~678 T/cell (unchanged, full col)  ~17,500 T (lst 579-589)
+;   set_newcol_attr      24 band wr.   : ~199 T/row (unchanged, full col)    ~4,800 T (lst 598-614)
 ;   ----------------------------------------------------------------------------
-;   TOTAL per 8px EAST scroll step                                  ~146,400 T
-;        = 2.07 frames   vs naive redraw ~537,000 T = 7.57 frames   (3.67x win)
-;   (WEST ~+4k: shift_*_right add 4 addr-arith ops/line; symmetric, optional.)
-; Contended (ULA; screen $4000-$5AFF read+written by the LDI/LDD moves; ~+40% on
-; the move-heavy phases during active display):  ~190,000-210,000 T = ~2.7-3.0 fr.
-; LEVER (not taken, scene-specific): rows 0-11 are blank sky — shifting only the
-; 12 content rows (96 scanlines) halves the bitmap shift to ~55k -> ~91k total
-; (~1.3 frames). Reported as full-screen (general worst case); see file-end note.
+;   TOTAL per 8px EAST scroll step (+~164 wrapper)                   ~81,500 T
+;        = 1.15 frames   vs SPIKE-2 full-height ~146,400 T = 2.07 fr  (1.80x win)
+;   WEST ~+2.4k (shift_*_right add 24 T/scanline addr-arith): ~84,000 T = 1.19 fr.
+;   NOTE: the SCROLL STEP is background only. The 1-in-4 scroll FRAME also erases
+;   + reblits the sprite (~13.5k T, the SPIKE motion-frame cost), so the real
+;   worst-case scroll frame under sustained edge-walking is ~95k T (east) / ~97.5k
+;   (west) ~= 1.34/1.37 frames. The 3 intervening glide frames are ~13.5k (~0.19
+;   frame). Contended (ULA, screen R/W by the LDI/LDD moves): add ~+40% on the
+;   move-heavy shift phases.
+; FURTHER LEVERS (not taken): skip sky rows in draw_newcol/set_newcol too (the
+;   exposed col-31/0 sky is already blank/ATTR_AIR); shadow-screen double-buffer
+;   to make the >1-frame scroll tear-free (M2 polish, see plan SPIKE-3 exit gate).
+;
+; Full-height baseline (SHIFT_CONTENT_ROWS_ONLY=0, A/B): shift_bitmap ~110,300 T
+; (192 scanlines) + shift_attr ~13,800 T (24 rows) + newcol 17,500 + setattr 4,800
+;   = ~146,400 T = 2.07 frames. Flip the flag for apples-to-apples measurement.
 ;
 ; Border bracket per phase so a scope shows the raster cost (design §5.4):
 ;   CYAN bitmap-shift, YELLOW attr-shift, WHITE new-column, BLACK done.
@@ -356,6 +392,39 @@ scroll_view_west:
 ; Clobbers: A, BC (via LDI), DE, HL, IX.
 ;==============================================================================
 shift_bitmap_left:
+    IF SHIFT_CONTENT_ROWS_ONLY
+                ; SPIKE-3: shift only char rows 12..23 (pixel 96..191). The scanline
+                ; enumeration is the SAME +32/wrap address walk, but it starts at the
+                ; first content scanline ($4880) and, on each high-page advance while
+                ; still in third 1 (high $49..$4F), resets low to 128 to SKIP the sky
+                ; scanlines (r'=0..3, char rows 8..11) — third 2 (high>=$50) resumes
+                ; at low 0 (all r'). 96 scanlines vs 192; correctness proven by the
+                ; sky being blank (shift-invariant) so the omitted rows stay exact.
+                ld   ix, BMP_C_START          ; $4880 = char row 12, top scanline
+.scan:
+                push ix
+                pop  de                       ; DE = dest (col 0 of this scanline)
+                ld   h, d
+                ld   l, e
+                inc  hl                       ; HL = source (col 1)
+                DUP  31
+                ldi                           ; col c+1 -> col c, 31 bytes
+                EDUP
+                ld   a, ixl
+                add  a, 32                    ; next scanline (low += 32)
+                ld   ixl, a
+                jr   nc, .scan                ; no carry -> same high page
+                ld   a, ixh
+                inc  a                        ; low wrapped -> next high page
+                ld   ixh, a
+                cp   SCREEN_ATTR >> 8         ; $58: past bitmap -> done
+                ret  nc
+                cp   BMP_T2_HIGH              ; $50: reached third 2 (rows 16..23)?
+                jr   nc, .scan                ;   yes -> keep low 0, walk all r'
+                ld   a, 128                   ;   no  -> still third 1: skip sky
+                ld   ixl, a                   ;          r'0..3, resume at r'4
+                jr   .scan
+    ELSE
                 ld   ix, SCREEN_BITMAP        ; first scanline base (high $40,low 0)
 .scan:
                 push ix
@@ -376,6 +445,7 @@ shift_bitmap_left:
                 cp   SCREEN_ATTR >> 8         ; bitmap ends at $5800 (24 high pages)
                 jr   c, .scan
                 ret
+    ENDIF
 
 ;==============================================================================
 ; shift_bitmap_right — mirror of shift_bitmap_left for westward scroll: move
@@ -383,6 +453,38 @@ shift_bitmap_left:
 ; Clobbers: A, BC, DE, HL, IX.
 ;==============================================================================
 shift_bitmap_right:
+    IF SHIFT_CONTENT_ROWS_ONLY
+                ; SPIKE-3 mirror of shift_bitmap_left: content rows 12..23 only, LDD.
+                ld   ix, BMP_C_START          ; $4880 = char row 12, top scanline
+.scan:
+                push ix
+                pop  hl                       ; HL = base (col 0)
+                ld   d, h
+                ld   e, l
+                ld   a, e
+                add  a, VIEW_COLS - 1         ; DE = base+31 = dest (col 31)
+                ld   e, a
+                ld   a, l
+                add  a, VIEW_COLS - 2         ; HL = base+30 = source (col 30)
+                ld   l, a                     ; (low<=224, +31 <=255: no page cross)
+                DUP  31
+                ldd                           ; col c-1 -> col c, 31 bytes downward
+                EDUP
+                ld   a, ixl
+                add  a, 32
+                ld   ixl, a
+                jr   nc, .scan
+                ld   a, ixh
+                inc  a
+                ld   ixh, a
+                cp   SCREEN_ATTR >> 8         ; $58: past bitmap -> done
+                ret  nc
+                cp   BMP_T2_HIGH              ; $50: reached third 2 (rows 16..23)?
+                jr   nc, .scan                ;   yes -> keep low 0, walk all r'
+                ld   a, 128                   ;   no  -> still third 1: skip sky
+                ld   ixl, a
+                jr   .scan
+    ELSE
                 ld   ix, SCREEN_BITMAP
 .scan:
                 push ix
@@ -408,6 +510,7 @@ shift_bitmap_right:
                 cp   SCREEN_ATTR >> 8
                 jr   c, .scan
                 ret
+    ENDIF
 
 ;==============================================================================
 ; shift_attr_left — move the 24 attribute rows' cols 1..31 -> 0..30 (col 31 left
@@ -418,7 +521,15 @@ shift_bitmap_right:
 ; Clobbers: A, BC, DE, HL, IX.
 ;==============================================================================
 shift_attr_left:
+    IF SHIFT_CONTENT_ROWS_ONLY
+                ; SPIKE-3: shift only the 6 ground-band rows (18..23). Sky rows 0..17
+                ; are a uniform ATTR_AIR band (features share the band attr) so their
+                ; shift is a no-op — skipping them is byte-exact. Ground rows are
+                ; contiguous ($5A40..$5AFF, one page) so no third-split is needed.
+                ld   ix, ATTR_C_START         ; $5A40 = row 18 (first ground-band row)
+    ELSE
                 ld   ix, SCREEN_ATTR
+    ENDIF
 .scan:
                 push ix
                 pop  de
@@ -444,7 +555,11 @@ shift_attr_left:
 ; Clobbers: A, BC, DE, HL, IX.
 ;==============================================================================
 shift_attr_right:
+    IF SHIFT_CONTENT_ROWS_ONLY
+                ld   ix, ATTR_C_START         ; SPIKE-3: ground-band rows 18..23 only
+    ELSE
                 ld   ix, SCREEN_ATTR
+    ENDIF
 .scan:
                 push ix
                 pop  hl

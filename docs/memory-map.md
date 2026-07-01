@@ -111,18 +111,30 @@ _Addresses the `test` skill reads via ZRCP (`tests/smoke.py`). Keep these stable
 > modify `src/main.asm`, so the P2/P3 `build`/`smoke`/`p3` path is untouched. It
 > reuses the shared `constants.asm` EQUs and re-uses (by copy) the P3 input
 > primitives + the `INPUT_SRC`/`KBD_MATRIX` injection contract. No `$7FFD` paging.
-> Origin `$8000`; code `$8000..$8556`, full image (with assets) `$8000..$8614`
-> (1557 B) after SPIKE-2. Throwaway: not slice content.
+> Origin `$8000`; code `$8000..$8567`, full image (with assets) `$8000..$8625`
+> (1573 B) after SPIKE-3. Throwaway: not slice content.
 >
-> **SPIKE-2 (byte-shift scroll, 2026-06-29):** the scroll path is now a byte-shift
+> **SPIKE-2 (byte-shift scroll, 2026-06-29):** the scroll path is a byte-shift
 > (`scroll_view_east`/`scroll_view_west`): shift the visible playfield one
 > byte-column in place (bitmap + attrs) then redraw only the newly-exposed column.
 > Compile-time flag `USE_NAIVE_SCROLL` (default 0) flips back to the naive
-> 768-cell `do_scroll_redraw` baseline for A/B measurement. NO new fixed RAM
-> addresses were allocated — the scroll routines reuse screen memory in place and
-> the existing `$BF1x` scratch/observable block; `WORLD_BUF`/`VIEW_ORIGIN_COL`
-> unchanged. The shift routines clobber `IX` (documented in their headers; the ROM
-> ISR preserves it, `IY` stays `$5C3A`).
+> 768-cell `do_scroll_redraw` baseline for A/B measurement.
+>
+> **SPIKE-3 (content-rows-only shift, 2026-07-01):** the default shift height is
+> now the 12 non-sky content rows. `shift_bitmap_left/right` shift only char rows
+> 12–23 (pixel 96–191, 96 scanlines) and `shift_attr_left/right` shift only the 6
+> ground-band rows 18–23; rows 0–11 bitmap (blank sky) and rows 0–17 attrs (uniform
+> `ATTR_AIR`) are shift-invariant for this scene, so the result is byte-exact vs the
+> full-height path (`tests/scroll.py` 12/12 + `tests/sideview.py` 14/14 stay green;
+> west path window-verified over ZRCP). Compile-time flag `SHIFT_CONTENT_ROWS_ONLY`
+> (default 1) reverts to the full-height SPIKE-2 path (flag 0) for A/B. **Per 8px
+> EAST scroll step ≈ 81.5k T ≈ 1.15 frames** (vs SPIKE-2 146.4k / 2.07 fr; 1.80×);
+> west ≈ 84k. The 1-in-4 scroll *frame* additionally erases+reblits the sprite
+> (~13.5k T) → worst-case scroll frame ≈ 95k T (~1.34 fr); the 3 glide frames are
+> ~13.5k (~0.19 fr). NO new fixed RAM addresses were allocated — the scroll routines
+> reuse screen memory in place and the existing `$BF1x` scratch/observable block;
+> `WORLD_BUF`/`VIEW_ORIGIN_COL` unchanged. The shift routines clobber `IX`
+> (documented in their headers; the ROM ISR preserves it, `IY` stays `$5C3A`).
 
 | Symbol             | Address      | Size   | Notes                                              |
 |--------------------|--------------|--------|----------------------------------------------------|
@@ -143,4 +155,4 @@ legality set asserted by `tests/sideview.py` is exactly `{$05,$4F,$46}`.
 > The spike's `$BF1x` vars sit **above** the initial SP (`$BF00`, stack grows
 > down) alongside the existing `INPUT_SRC`/`KBD_MATRIX` mirror, so the shallow
 > spike call stack never reaches them. `PRESHIFT_TABLE`/`WORLD_BUF` live far below
-> at `$A000..$AAFF` (clear of code `≤$8437` and of the `$B100..$BF00` stack run).
+> at `$A000..$AAFF` (clear of the image `≤$8625` and of the `$B100..$BF00` stack run).

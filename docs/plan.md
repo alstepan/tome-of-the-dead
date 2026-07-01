@@ -12,8 +12,9 @@
 
 ## Current state
 
-- **Active phase:** SPIKE-3 — smoothness lever (prove sub-frame scroll before the
-  side-view commit; decided with user 2026-07-01: "one more smoothness lever first")
+- **Active phase:** SPIKE-3 — smoothness lever · IN-PROGRESS (lever = content-rows-only
+  shift; sprite-glide + 1-in-4 scroll cadence already present in the spike, see the
+  SPIKE-3 section; decided with user 2026-07-01: "one more smoothness lever first")
 - **Commit decision (2026-07-01, user):** side-view feasibility is accepted, but
   before folding it forward as the Slice 1 renderer and building P4 on it, prove
   **one sub-frame smoothness lever** so movement is demonstrably smooth, not merely
@@ -190,7 +191,7 @@
   - **Verdict:** fix-then-ship (spike is decision-quality as-is; "fixes" are M2
     scope). Side-view risk #1 retired; **scroll risk remains the open gate.**
 
-### SPIKE-2 — Byte-shift scroll proof · `IN-PROGRESS`
+### SPIKE-2 — Byte-shift scroll proof · `DONE`
 - **Owner:** `z80-staff-engineer` → `z80-reviewer` · **Depends:** SPIKE
 - **Decision (2026-06-29, user):** side-view is committed *pending* this — prove
   the one remaining unretired risk (scroll) before folding side-view forward.
@@ -223,6 +224,74 @@
   - **Read:** a periodic ~2-frame (~40–60 ms) hitch per scroll step is acceptable
     for stepped roguelike movement; true sub-frame smoothness is normal M2 work,
     not a feasibility unknown. **Scroll risk retired to an acceptable level.**
+
+### SPIKE-3 — Scroll smoothness lever · `DONE`
+- **Owner:** `z80-staff-engineer` → `z80-reviewer` · **Depends:** SPIKE-2
+- **Decision (2026-07-01, user):** before folding side-view forward, prove **one**
+  sub-frame smoothness lever so motion is *demonstrably smooth*, not merely
+  hitch-tolerable.
+- **Framing (manager, grounded in the spike code):** two of the three smoothness
+  properties are **already present** in the spike and just need to be recognised
+  as such — (1) the sprite already glides at **2px/frame** (`MOVE_STEP=2`), and
+  (2) the viewport only scrolls at the dead-zone margin, so during sustained
+  edge-walking the expensive scroll fires only **1 frame in 4** (sprite crosses a
+  byte boundary every 4×2px). Inter-scroll motion is therefore already smooth.
+  The **only** residual hitch is the cost of that 1-in-4 scroll *frame*: the
+  full-height byte-shift (~146k T ≈ 2 frames). SPIKE-3 attacks exactly that.
+- **Lever chosen = content-rows-only shift.** Rows 0–11 are blank sky; shift only
+  the 12 content rows (rows 12–23 = 96 scanlines) in `shift_bitmap_left/right`
+  (and, if it helps, skip the sky in `shift_attr_*`). Predicted ~55k bitmap →
+  **~91k T total ≈ 1.28 frames** for the scroll frame (code comment, lines
+  288–300). Guard it behind a compile-time flag (`SHIFT_CONTENT_ROWS_ONLY`,
+  default 1) for A/B measurement against the SPIKE-2 full-height path.
+- **Exit gate:**
+  1. Content-rows-only shift implemented, **`tests/scroll.py` + `tests/sideview.py`
+     still green** (no tear/clash/trail — correctness must not regress; the scene's
+     content is confined to rows 12–23 so a content-rows shift must be byte-exact).
+  2. Manager records the **measured worst-case frame under sustained edge-walking**
+     from `build/spike.lst`: the scroll-frame T-cost (new vs the 146k baseline) and
+     the 3 intervening glide-frame costs, i.e. the real per-frame envelope while
+     the player walks into the viewport edge continuously.
+  3. Verdict: is the scroll frame now ≤~1 frame (demonstrably smooth), or ~1.3
+     frames (one minor 1-in-4 burst)? If the latter, note whether the
+     **shadow-screen double-buffer** (split the shift across 2 frames, atomic flip
+     — tear-free even if work >1 frame) is warranted now or is M2 polish. Then
+     manager+user **commit**: fold side-view forward as the Slice 1 renderer.
+
+- **RESULT / evidence (2026-07-01):** content-rows-only shift built behind flag
+  `SHIFT_CONTENT_ROWS_ONLY` (default 1); full-height SPIKE-2 path preserved for A/B
+  (flag=0). Manager verified independently (not on agent assertion): build clean
+  (0 warn); `tests/sideview.py` **14/14** (golden hash `bfc7560e…5aae6` unchanged —
+  the shift never runs at rest); `tests/scroll.py` **12/12** (full-window byte-compare
+  vs `WORLD_BUF` → no tear/dropped/doubled/stale scanline from the shorter shift).
+  Constants confirmed against `build/spike.lst`: `BMP_C_START=$4880` (char row 12
+  top scanline, interleaved), `BMP_T2_HIGH=$50` (third-1→2 at row 16),
+  `ATTR_C_START=$5A40` (ground row 18) → shift covers rows **12–23 = 96 scanlines**,
+  not 192.
+  - **Measured per-frame envelope (uncontended, 70,908 T/frame budget):**
+    - **Glide frame** (3 of every 4 while edge-walking): ~13.5k T ≈ **0.19 frame** —
+      erase + reblit sprite only. Comfortably sub-frame; motion is smooth.
+    - **Scroll frame** (1 of 4): scroll step ~81.5k T (bitmap shift ~55.6k [was
+      110.3k] + attr shift ~3.5k [was 13.8k] + newcol 17.5k + set-attr 4.8k) + sprite
+      erase/blit ~13.5k ≈ **~95k T ≈ 1.34 frames** (west ~1.37). Was ~2.2 frames at
+      full-height → **~1.65× cheaper scroll frame; 1.80× cheaper scroll step.**
+      Contended: +~40% on the move-heavy shift phases.
+  - **PROVEN:** inter-scroll motion is genuinely smooth (2px glide, 0.19-frame
+    frames); the periodic scroll cost is cut to a single ~1.34-frame frame occurring
+    1-in-4 during sustained edge-walking. No tear, correctness preserved.
+  - **REMAINING (not taken here):** the scroll frame is still >1 frame, so during
+    continuous edge-walking there is one dropped frame every 4th step. Erasing even
+    that requires the **shadow-screen double-buffer** (split the ~95k across 2 frames,
+    atomic `$7FFD` bit-3 flip → tear-free regardless of cost) OR skipping sky rows in
+    `draw_newcol_bitmap`/`set_newcol_attr` too (a further ~cheap lever noted in-code).
+    Both are straightforward M2 renderer work, not feasibility unknowns.
+  - **Correctness caveat (inherent to the lever):** byte-exactness relies on this
+    scene confining bitmap content to rows 12–23 and keeping sky attrs uniform
+    `ATTR_AIR`. Content in rows 0–11 or non-uniform sky attrs would need flag=0.
+  - **Read:** smoothness risk retired. Inter-scroll motion is smooth; the residual
+    is a single 1-in-4 minor burst with a known, cheap, non-speculative fix path
+    (double-buffer). **Recommend committing side-view forward as the Slice 1
+    renderer.** Manager awaiting user's fold-forward + commit decision.
 
 ### P4 — Vertical slice content · `BLOCKED(awaiting side-view commit decision)`
 - **Owner:** `z80-staff-engineer` (+ `game-designer` for balance)
