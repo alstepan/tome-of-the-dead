@@ -1,0 +1,58 @@
+# WazHack/ZX side-view background tileset — durable git-diffable source.
+# Scene per docs/design/sideview-renderer.md sec 5.1 + colour bands sec 2.2.
+#   air band   (rows 0-17): black paper / cyan ink  -> features are cyan-on-black
+#   ground band(rows 18-23): blue  paper / white ink -> floor texture white-on-blue
+# Each tile = header "=== name ink:<c> paper:<c> [bright]" then 8 rows of 8 chars
+# ('#' = ink pixel, '.' = paper). Clash-legal by construction (one paper+ink/cell).
+# The ATTR_AIR=$05 / ATTR_GROUND=$4F band attrs the engine derives by row; these
+# tile attrs match the band so a feature cell stays clash-legal in its band.
+
+=== blank ink:cyan paper:black
+........
+........
+........
+........
+........
+........
+........
+........
+
+=== floor ink:white paper:blue bright
+########
+.#..#..#
+........
+#..#..#.
+........
+.#..#..#
+........
+#..#..#.
+
+=== ground ink:white paper:blue bright
+........
+..#..#..
+........
+#..#..#.
+........
+.#..#..#
+........
+#..#..#.
+
+=== pillar ink:cyan paper:black
+.######.
+.#....#.
+.#....#.
+.#....#.
+.#....#.
+.#....#.
+.#....#.
+.######.
+
+=== doorway ink:cyan paper:black
+########
+#......#
+#......#
+#......#
+#......#
+#......#
+#......#
+#......#

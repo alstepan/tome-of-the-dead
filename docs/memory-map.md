@@ -101,3 +101,46 @@ _Addresses the `test` skill reads via ZRCP (`tests/smoke.py`). Keep these stable
 | `PLAYER_Y`     | `$B002` | byte: player tile row; `5` at boot                  |
 | `INPUT_SRC`    | `$BF05` | byte: input source; poke `1` to inject via `KBD_MATRIX` |
 | `KBD_MATRIX`   | `$BF06` | 8 B: keyboard half-row mirror (active-low); poke to inject keys |
+
+## Side-view feasibility SPIKE (throwaway — `src/spike_sideview.asm`)
+
+> **Isolated build.** The spike is a SEPARATE program/image assembled on its own
+> (`sjasmplus src/spike_sideview.asm --fullpath --lst=build/spike.lst
+> --sld=build/spike.sld -i src`) → `build/spike.tap` / `build/spike.sna`
+> (`--fullpath` required with `--sld`, else a warning). It does **not** share or
+> modify `src/main.asm`, so the P2/P3 `build`/`smoke`/`p3` path is untouched. It
+> reuses the shared `constants.asm` EQUs and re-uses (by copy) the P3 input
+> primitives + the `INPUT_SRC`/`KBD_MATRIX` injection contract. No `$7FFD` paging.
+> Origin `$8000`; code `$8000..$8556`, full image (with assets) `$8000..$8614`
+> (1557 B) after SPIKE-2. Throwaway: not slice content.
+>
+> **SPIKE-2 (byte-shift scroll, 2026-06-29):** the scroll path is now a byte-shift
+> (`scroll_view_east`/`scroll_view_west`): shift the visible playfield one
+> byte-column in place (bitmap + attrs) then redraw only the newly-exposed column.
+> Compile-time flag `USE_NAIVE_SCROLL` (default 0) flips back to the naive
+> 768-cell `do_scroll_redraw` baseline for A/B measurement. NO new fixed RAM
+> addresses were allocated — the scroll routines reuse screen memory in place and
+> the existing `$BF1x` scratch/observable block; `WORLD_BUF`/`VIEW_ORIGIN_COL`
+> unchanged. The shift routines clobber `IX` (documented in their headers; the ROM
+> ISR preserves it, `IY` stays `$5C3A`).
+
+| Symbol             | Address      | Size   | Notes                                              |
+|--------------------|--------------|--------|----------------------------------------------------|
+| `PRESHIFT_TABLE`   | `$A000`      | 1152 B | 8 × 144-B pre-shift frames, **boot-generated** from the single S=0 `player` frame (`$A000..$A47F`). Entry `s` = `PRESHIFT_TABLE + s*144`; layout = 24 rows × `[m0,d0,m1,d1,m2,d2]`. |
+| `WORLD_BUF`        | `$A500`      | 1536 B | 64×24 tile-id buffer (one byte/cell, row-major; `$A500..$AAFF`) — the wider-than-screen scene scrolled horizontally. |
+| `CUR_SC`           | `$BF10`      | 1 B    | scratch: current sprite screen char col            |
+| `CUR_DX`           | `$BF11`      | 1 B    | scratch: this frame's dx (`-1`/`0`/`+1`)           |
+| `SPRITE_PX`        | `$BF12`      | 2 B    | **test-observable** word (LE): player WORLD pixel X (0..488); `120` at boot |
+| `SPRITE_PY`        | `$BF14`      | 1 B    | sprite top pixel Y; constant `120` (char-row 15)   |
+| `VIEW_ORIGIN_COL`  | `$BF15`      | 1 B    | **test-observable**: world col shown at screen col 0; `0` at boot |
+| `FRAME_COUNTER`    | `$BF16`      | 2 B    | **test-observable** word (LE): per-frame liveness counter |
+
+Spike-only attribute constants (defined in `src/spike_sideview.asm`, not
+`constants.asm`): `ATTR_AIR=$05` (cyan/black, rows 0–17), `ATTR_GROUND=$4F`
+(white/blue bright, rows 18–23), `ATTR_SPRITE=$46` (= `ATTR_PLAYER`). The clash
+legality set asserted by `tests/sideview.py` is exactly `{$05,$4F,$46}`.
+
+> The spike's `$BF1x` vars sit **above** the initial SP (`$BF00`, stack grows
+> down) alongside the existing `INPUT_SRC`/`KBD_MATRIX` mirror, so the shallow
+> spike call stack never reaches them. `PRESHIFT_TABLE`/`WORLD_BUF` live far below
+> at `$A000..$AAFF` (clear of code `≤$8437` and of the `$B100..$BF00` stack run).
