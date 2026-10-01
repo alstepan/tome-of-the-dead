@@ -55,7 +55,7 @@ The SVG convention the importer requires (one black rect, one fill path of
 
 Bytes: MSB = leftmost pixel; mask bit 1 = transparent; composite
 `screen = (screen AND mask) OR data`; descriptor PAPER must equal band paper
-(black) — docs/design/sideview-renderer.md §1.4/§1.7.
+(black) — docs/design/foundations.md F8.
 
 ## Validation (must pass before committing data)
 
@@ -71,5 +71,4 @@ Bytes: MSB = leftmost pixel; mask bit 1 = transparent; composite
 
 - The committed artifact is the `.asm` byte table, not the PNG. Keep the source
   image under `assets/gfx/` for re-derivation, but code references the asm labels.
-- Concept art from Ollama/ComfyUI is an *input* to redraw against — never a
-  direct input to this converter expecting good output.
+- No AI raster as input. Art comes from the Design canvas or `.grid` edits.

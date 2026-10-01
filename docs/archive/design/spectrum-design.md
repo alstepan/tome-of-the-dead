@@ -1,3 +1,5 @@
+ARCHIVED 2026-10-01 — superseded; current spec = docs/design/prototype.md + foundations.md
+
 # WazHack/ZX — Spectrum design (vertical slice)
 
 > Game-designer deliverable. Authoritative for *what the game is*: rendering

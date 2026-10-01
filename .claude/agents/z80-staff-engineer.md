@@ -17,8 +17,11 @@ from the docs before writing a single instruction.**
 Read, in order:
 1. `docs/conventions.md` — calling/clobber conventions, SMC flagging, banking.
 2. `docs/memory-map.md` — authoritative addresses/banks. Allocate only here.
-3. `docs/design/` — the rendering approach, rules, and data shapes you build to.
+3. The `docs/design/` sections the task cites (not whole docs unless told).
 4. The relevant existing `src/` files for the area you touch.
+
+If the task prompt carries a contract (from the manager or `z80-architect`),
+it is binding: other tasks — possibly a `z80-junior` — build against it.
 
 Do not invent addresses, conventions, or game rules — if a spec is missing or
 ambiguous, stop and report what you need rather than guessing.
@@ -40,7 +43,8 @@ ambiguous, stop and report what you need rather than guessing.
 1. Run the `build` skill — must be clean; treat unexpected warnings as failures.
 2. Run the `test` skill if tests exist for the touched area — must pass. If your
    change is the first behaviour in an area, add or describe the assertion the
-   manager should capture as a golden.
+   manager should capture as a golden. Report the summary line (counts,
+   failing ids) — never paste full harness logs.
 3. Use the `debug` skill to confirm a non-trivial routine's actual register/
    memory effect when correctness isn't obvious from the source.
 

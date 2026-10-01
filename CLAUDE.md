@@ -21,9 +21,26 @@ agent, which reconstructs context from the docs on every spawn.
 
 Delegation map:
 - design/rules/scope/rendering → `game-designer`
-- Z80 implementation → `z80-staff-engineer`
+- Z80 implementation, hard (frame tick, render, paging, memory layout) →
+  `z80-staff-engineer` (Opus)
+- Z80/Python implementation, bounded (data, tests, tools, renames, doc sync) →
+  `z80-junior` (Sonnet); escalates to staff via `ESCALATE:`
+- feature split needing code knowledge → `z80-architect` (Opus, read-only)
 - review (correctness/perf/regression) → `z80-reviewer`
 - graphics data → `graphics-artist`; sound → `sound-composer` (deferred)
+
+### Token budget rules (manager)
+
+- Default: the manager splits tasks itself from the plan — no extra spawn.
+  `z80-architect` only for medium/large features whose contracts need code
+  reading; small or hard tasks go straight to staff.
+- Model overrides per spawn: `z80-reviewer` → Sonnet for data/test/tool diffs;
+  `graphics-artist` → Sonnet for import/convert-only runs (authoring stays Opus).
+- Task prompts name the exact doc sections and files to read; agents do not
+  cold-load whole design docs.
+- Agents report test summaries (counts, failing ids), never full harness logs.
+- Junior tasks run in parallel only with disjoint owned files; shared layout
+  files (`memory-map.md`, `sprites/index.asm`, `*_defs.asm`) are staff-only.
 
 The manager writes/maintains `docs/plan.md`, decides task sequencing, integrates
 results, runs the final `build`/`test` gate, and keeps the docs authoritative.
@@ -47,8 +64,9 @@ subagent:
 - Emulator (debug/test): **ZEsarUX** via the **ZRCP** remote protocol (TCP)
 - Pixel editing: Pixelorama (GUI; agents cannot drive it — they produce/validate
   the packed asm byte data instead)
-- Image concept-gen: Ollama (`flux2-klein`, `z-image-turbo`) + ComfyUI — concept
-  art only; NEVER usable as final assets (see graphics-artist agent)
+- Sprite art: the user's claude.ai **Design** canvas (Artifact type "Design") is
+  the source of truth; the manager reads/writes it (subagents can't use the
+  Artifact tool), the artist imports via `tools/svg_sprites.py`. No AI raster.
 
 ## Workflow
 

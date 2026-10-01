@@ -1,3 +1,5 @@
+ARCHIVED 2026-10-01 — superseded; current spec = docs/design/prototype.md + foundations.md
+
 # WazHack/ZX — Side-view renderer (FEASIBILITY SPIKE design)
 
 > **PROTO revisions 2026-09-24 (pointer; spike text below unchanged).**

@@ -8,7 +8,7 @@ Two modes:
 
   sprite  (default)  16xH masked sprite for the side-view renderer.
                      Emits the EXACT data contract from
-                     docs/design/sideview-renderer.md sec 1.4/1.7:
+                     docs/design/foundations.md F8:
                        H rows of [c0_mask,c0_data, c1_mask,c1_data, c2_mask,c2_data]
                        (MSB = leftmost pixel, mask bit 1 = transparent,
                         third column padded fully transparent: mask $FF/data $00)
@@ -41,13 +41,13 @@ Validation (must pass or the tool exits non-zero):
 
 Usage examples:
   # image -> derive grid + asm
-  python3 tools/gfx_convert.py --mode sprite --in concept.png --name player \
+  python3 tools/gfx_convert.py --mode sprite --in concept.png --name hero \
       --width 16 --height 24 --ink yellow --paper black --bright \
-      --band-paper black --out assets/gfx/player.asm --grid assets/gfx/player.grid
+      --band-paper black --out assets/gfx/sprites/hero.asm --grid assets/gfx/sprites/hero.grid
 
   # hand-tuned text grid -> asm (deterministic, the durable path)
-  python3 tools/gfx_convert.py --mode sprite --in assets/gfx/player.grid \
-      --name player --out assets/gfx/player.asm
+  python3 tools/gfx_convert.py --mode sprite --in assets/gfx/sprites/hero.grid \
+      --name hero --out assets/gfx/sprites/hero.asm
 
   # multi-tile text grid -> asm
   python3 tools/gfx_convert.py --mode tile --in assets/gfx/tiles.grid \
@@ -246,7 +246,7 @@ def pack_sprite(fg: np.ndarray, solid: np.ndarray | None = None,
     layout : "legacy" (policy below) or "native": W/8 data columns, never a pad
              column, W in NATIVE_WIDTHS (the canvas sprite set, svg_sprites.py).
 
-    Width policy (matches docs/design/sideview-renderer.md sec 1.4/7):
+    Width policy (matches docs/design/foundations.md F8):
       * W==16 : 2 real data columns + 1 pad column (fully transparent),
                 i.e. 6 bytes/row — the legacy 16xH sprite/cat contract.
       * W==32 : 4 real data columns, NO pad column (the engine boot-gen adds

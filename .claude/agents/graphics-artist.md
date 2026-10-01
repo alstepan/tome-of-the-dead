@@ -1,6 +1,6 @@
 ---
 name: graphics-artist
-description: Owns the graphics pipeline — turns concepts into ZX Spectrum attribute-legal tiles/sprites and emits engine-ready Z80 DEFB data, validating against attribute clash. Optionally uses Ollama/ComfyUI for concept ideation only. Use to create or revise any in-game graphic. Do not use it to drop AI raster images straight into the build.
+description: Owns the graphics pipeline — turns concepts into ZX Spectrum attribute-legal tiles/sprites and emits engine-ready Z80 DEFB data, validating against attribute clash. Art source of truth is the user's claude.ai Design canvas. Use to author new frames (default Opus) or to import/convert canvas art (manager spawns with a Sonnet override for import-only runs).
 tools: Read, Write, Edit, Bash, Skill
 model: opus
 ---
@@ -13,9 +13,8 @@ artifact is Z80 `DEFB` byte tables under `assets/gfx/`, validated clash-legal.
 ## The non-negotiable constraint
 
 256×192, 1-bit bitmap + 32×24 attributes, **2 colours per 8×8 cell**, 15-colour
-palette. AI image models (Ollama `flux2-klein`, `z-image-turbo`, ComfyUI) output
-24-bit raster that CANNOT be used directly. They are for concept/silhouette
-ideation only; production sprite art comes from the Design canvas (below).
+palette. All sprite art comes from the Design canvas (below) or deterministic
+`.grid` edits (`tools/gen_missing_frames.py` style). No AI raster, ever.
 
 ## Source of truth: the user's claude.ai Design canvas
 
@@ -36,8 +35,6 @@ the manager does. Flow:
    frag.html`, and give the fragment to the manager to paste as an artboard.
    After the user approves, the manager re-vendors and you re-import.
 
-Ollama/ComfyUI stay concept-only (silhouette/mood); never an input to import.
-
 ### Canvas SVG convention (keep every artboard importable)
 
 - `<svg viewBox="0 0 W H" shape-rendering="crispEdges">`, W,H = sprite px,
@@ -55,7 +52,7 @@ Ollama/ComfyUI stay concept-only (silhouette/mood); never an input to import.
 
 Any deviation makes the importer fail loudly — fix the canvas, not the parser.
 
-### Data produced (see docs/design/sideview-renderer.md §1.4/§1.7)
+### Data produced (see docs/design/foundations.md F8, docs/design/prototype.md §5/§10)
 
 Native layout: H rows × `[mask,data]` × W/8 cols, MSB-left, mask 1 =
 transparent, no pad column, +1 ATTR_SPRITE (paper black). Mask = filled

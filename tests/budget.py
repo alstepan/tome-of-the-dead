@@ -11,24 +11,24 @@ screen (skeleton adjacent, rat, goblin, bat) — the Knight's 40-px WIND-UP/SLAS
 FOLLOW against the skeleton while everything else moves/attacks, then a run of
 walking turns. Reports max / mean tick and the per-phase split of the worst tick.
 
-Usage: python3 tests/proto_budget.py      (exit 1 if any tick > budget)
+Usage: python3 tests/budget.py      (exit 1 if any tick > budget)
 """
 import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-sys.argv = [sys.argv[0]] + ["999"]           # keep proto.py's item filter inert
-import proto  # noqa: E402
-from proto_lib import Harness, S, EMU_ARGS, K_KNIGHT, EF_ACTIVE, EF_HOSTILE, EF_LEFT  # noqa: E402
+sys.argv = [sys.argv[0]] + ["999"]           # keep game.py's item filter inert
+import game  # noqa: E402
+from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, EF_ACTIVE, EF_HOSTILE, EF_LEFT  # noqa: E402
 
 BUDGET = 2 * 70908
 PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "wait_tick"]
-if os.environ.get("PROTO_PROFILE"):                # finer split for optimisation work
+if os.environ.get("GAME_PROFILE"):                # finer split for optimisation work
     PHASES = ["tick_work", "read_turn_input", "try_player_turn", "resolve_monsters",
               "materialise", "anim_tick", "render", "render.nopend", "render.e2done",
               "render.e3done", "render.drdone", "draw_zap", "wait_tick"]
-    PHASES += [n for n in os.environ["PROTO_PROFILE"].split(",") if n in S]
+    PHASES += [n for n in os.environ["GAME_PROFILE"].split(",") if n in S]
 
 
 RETURNS = {}
@@ -118,7 +118,7 @@ SCENARIOS = {
 
 def run_scenario(h, scen):
     name, placements, keys = scen
-    p = proto.T(h)
+    p = game.T(h)
     p.boot(K_KNIGHT, freeze=0)
     p.isolate()
     p.place(0, 12, 14)

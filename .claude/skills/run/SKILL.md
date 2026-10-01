@@ -17,8 +17,7 @@ Run the current build in **Fuse for macOS** (the primary runtime emulator).
 open "/Applications/Fuse for macOS/Fuse.app" build/wazhack.tap
 ```
 
-PROTO (first playable prototype): `open "/Applications/Fuse for macOS/Fuse.app" build/proto.tap`
-(128K model; keys 1/2/3 pick a hero, H/L walk+attack, K/J climb, G quaff,
+Controls (128K model; keys 1/2/3 pick a hero, H/L walk+attack, K/J climb, G quaff,
 SPACE wait, ENTER on the end screens).
 Load it from the **128 BASIC / Tape Loader**: in 48 BASIC (or after `USR 0`)
 `$7FFD` paging is locked and `start` stops with "LOAD FROM 128 BASIC"

@@ -1,5 +1,5 @@
 ;==============================================================================
-; proto_anim.asm — per-entity animation state machine (prototype §7) and the
+; anim.asm — per-entity animation state machine (prototype §7) and the
 ; per-tick dirty-sprite renderer (§4.2/§4.3/§5.5).
 ;
 ; Per tick: anim_tick advances every live entity of CUR_ROOM (REST idle loop /

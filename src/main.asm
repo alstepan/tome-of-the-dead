@@ -1,642 +1,625 @@
 ;==============================================================================
-; main.asm — WazHack/ZX engine entry point.
+; main.asm — WazHack/ZX: first playable fighting prototype.
+;             Spec: docs/design/prototype.md (rev B, authoritative).
 ;
-; Target : ZX Spectrum 128K
-; Origin : $8000 (see docs/memory-map.md)
+; Target : ZX Spectrum 128K.   Build:
+;   sjasmplus src/main.asm --fullpath --lst=build/wazhack.lst --sld=build/wazhack.sld
+;             --sym=build/wazhack.sym -i src
+;   -> build/wazhack.tap (BASIC loader + main CODE + 2 headerless sprite banks)
+;   -> build/wazhack.sna (128K snapshot; entry = boot, all banks preloaded)
 ;
-; P3 — the heartbeat: read input -> resolve one turn -> render dirty cells ->
-; bump the turn counter, on a hand-authored static map. No procgen, monsters,
-; combat, or items yet (those are P4). Built on the P2 skeleton's own glyph
-; blitter (draw_cell) — no ROM print/CLS dependency (those no-op from a bare
-; snapshot; the engine owns rendering per design §1).
+; Memory (docs/memory-map.md "PROTO"): code+tables $8000..(< $B000, bank 2);
+; runtime entity/frame/render tables $B000..$B9FF; stack $BA00..$BEFF; state
+; block $BF00..$BFFF; room maps + generator buffers $6000..$6C1F (bank 5);
+; unshifted sprite SOURCES in banks 1/3 (assembled at virtual $8000..$FFFF);
+; mirrored + pre-shifted sprite POOL generated at boot into banks 0/4/6.
 ;
-; Boot: stack/state -> entities -> render map+player -> turn loop.
-; Logic is keypress-paced (design §4.1): the loop blocks in get_action until a
-; fresh keypress. Interrupts stay on (IM1 ROM ISR) only so HALT works for the
-; one-frame chord capture window.
+; Loop: 25 Hz tick (2 frames, ROM IM1 FRAMES counter). TURN_PHASE INPUT samples
+; keys and resolves a whole turn instantly (player, then monsters in slot order,
+; then pending materialise); TURN_PHASE ANIM replays it (tweens, attack /
+; reaction / death sequences) until every queue is done (>= 2 ticks).
 ;==============================================================================
 
                 DEVICE ZXSPECTRUM128
 
                 INCLUDE "constants.asm"
+                INCLUDE "defs.asm"
+
+;==============================================================================
+; SPRITE SOURCES — banks 1 and 3, assembled contiguously at virtual $8000..$FFFF
+; (slot 2 = page 1, slot 3 = page 3). Read only by the boot generator via
+; copy_virt (virtual < $C000 -> bank 1 at +$4000, else bank 3 as-is).
+;==============================================================================
+                MMU  2, BANK_SRC_LO
+                MMU  3, BANK_SRC_HI
+                ORG  SRC_VIRT_BASE
+sprite_src:
+                INCLUDE "../assets/gfx/sprites/index.asm"
+sprite_src_end:
+SRC_TOTAL       EQU sprite_src_end - sprite_src
+    IF SRC_TOTAL > $4000
+SRC_LEN_LO      EQU $4000
+    ELSE
+SRC_LEN_LO      EQU SRC_TOTAL
+    ENDIF
+SRC_LEN_HI      EQU SRC_TOTAL - SRC_LEN_LO
+                ASSERT SRC_TOTAL <= $8000
+                DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B (bank1 ", /D, SRC_LEN_LO, ", bank3 ", /D, SRC_LEN_HI, ")"
+
+;==============================================================================
+; MAIN IMAGE — bank 2 at $8000.
+;==============================================================================
+                MMU  2, 2
+                MMU  3, 0
+                ORG  $8000
 
 ;------------------------------------------------------------------------------
-; Test-observable state lives at STABLE ADDRESSES (docs/memory-map.md). These
-; are RUNTIME storage (EQU, no image bytes); init_game writes their boot values
-; so the tape/snapshot stays a single clean CODE block.
+; start — .tap entry (RANDOMIZE USR 32768): pull the two headerless sprite-bank
+; blocks off tape with the ROM loader, then boot. The .sna enters at boot.
 ;------------------------------------------------------------------------------
-
-                ORG $8000
-
 start:
-                di                      ; quiet window while we set up the stack
-                ld   sp, WORKSTORE_TOP   ; stack grows down from the state block
-                call init_game
-                ei                       ; ROM IM1 ISR on — only so HALT works
+                di
+                ld   sp, WORKSTORE_TOP
+                ld   iy, IY_SYSVAR
+                call check_paging              ; stops here if $7FFD is locked
+.lo:            ld   a, BANK_SRC_LO            ; test probe (paging OK)
+                call page_bank
+                ld   ix, BANK_WINDOW
+                ld   de, SRC_LEN_LO
+                ld   a, $FF                    ; data block flag
+                scf                            ; LOAD (not VERIFY)
+                call ROM_LD_BYTES
+                jr   nc, .lo                   ; tape error: rewind + retry
+    IF SRC_LEN_HI > 0
+.hi:            ld   a, BANK_SRC_HI
+                call page_bank
+                ld   ix, BANK_WINDOW
+                ld   de, SRC_LEN_HI
+                ld   a, $FF
+                scf
+                call ROM_LD_BYTES
+                jr   nc, .hi
+    ENDIF
+start_loaded:                                  ; falls straight into boot:
+                ASSERT start_loaded == boot    ; nothing may be inserted here
 
-;------------------------------------------------------------------------------
-; game_loop — the P3 turn loop (design §4.1, reduced).
-;   read input -> resolve action -> (if a turn was consumed) bump turn counter.
-; resolve_action renders the dirty cells itself; an illegal move costs no turn.
-;------------------------------------------------------------------------------
-game_loop:
-                call get_action          ; A = action; for ACT_MOVE: D=dx, E=dy
-                call resolve_action      ; CF set iff a turn was consumed
-                jr   nc, game_loop       ; no turn (illegal move / no-op) -> reread
-                ld   hl, (TURN_COUNTER)
+;==============================================================================
+; boot — .sna entry. Cold init, pool generation (~1 s), then hero select.
+;==============================================================================
+boot:
+                di
+                ld   sp, WORKSTORE_TOP
+                ld   iy, IY_SYSVAR             ; ROM ISR invariant (conventions)
+                im   1
+                ld   a, BANK_POOL0
+                call page_bank
+                xor  a
+                out  (PORT_BORDER), a
+                ld   (INPUT_SRC), a
+                ld   (ANIM_FREEZE), a
+                ld   (ANIM_TRACE_IDX), a
+                ld   (BLIT_MISS), a
+                ld   (DMG_OVERFLOW), a
+                ld   (CLIP_TRAP), a
+                ld   (TURN_PHASE), a
+                ld   (ZAP_T), a
+                ld   (PEND_DMG_COUNT), a
+                ld   (CUR_ROOM), a
+                ld   (YIELD_FLAG), a
+                ld   hl, 0
+                ld   (OVERRUN_COUNT), hl
+                ld   (TICK_COUNTER), hl
+                ld   (TURN_COUNTER), hl
+                ld   hl, RNG_SEED
+                ld   (RNG_STATE), hl
+                ld   a, 1
+                ld   (INPUT_REPEAT), a         ; play default: held keys repeat
+                ld   a, GS_BOOT
+                ld   (GAME_STATE), a
+                ld   hl, ANIM_TRACE
+                ld   de, ANIM_TRACE + 1
+                ld   bc, ANIM_TRACE_LEN - 1
+                ld   (hl), $FF
+                ldir
+                call init_kbd_mirror
+                ld   a, ATTR_HUD
+                call clear_screen
+                ld   hl, P_ENTITIES            ; nothing drawn / alive yet
+                ld   de, P_ENTITIES + 1
+                ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1
+                ld   (hl), 0
+                ldir
+                ei
+                call build_bitrev
+                call init_tiles
+                call alloc_reset
+                ; monsters: every kind's frames, both facings (§5.2)
+                ld   a, K_SKELETON
+.gk:            push af
+                call gen_kind
+                pop  af
+                inc  a
+                cp   K_COUNT
+                jr   c, .gk
+                ; the three heroes' IDLE frames for the select screen
+                ld   a, FID_knight_idle1
+                call gen_frame
+                ld   a, FID_wizard_idle
+                call gen_frame
+                ld   a, FID_rogue_idle
+                call gen_frame
+                or   a                         ; CF = 0: save
+                call sel_frt_copy
+                call alloc_mark                ; hero sets regenerate from here
+boot_done:                                     ; falls through into enter_select
+                ASSERT boot_done == enter_select
+
+;==============================================================================
+; enter_select — GS_SELECT: the three heroes' IDLE frames, names, keys 1/2/3.
+;==============================================================================
+SEL_ROW         EQU 7                   ; body top row of the hero previews
+enter_select:
+                ld   a, GS_BOOT                ; GS_SELECT only once fully drawn
+                ld   (GAME_STATE), a
+                scf                            ; the last game's gen_kind re-pointed
+                call sel_frt_copy              ; its hero's idle FRT row: restore
+                xor  a
+                call clear_screen
+                ld   b, 2
+                ld   c, 8
+                ld   hl, str_title
+                call print_str
+                ld   hl, sel_tab
+                ld   b, 3
+.h:             push bc
+                push hl
+                ld   a, (hl)                   ; fid
+                ld   (BL_FID), a
                 inc  hl
-                ld   (TURN_COUNTER), hl   ; one chord/keypress = exactly one turn
-                jr   game_loop
+                ld   a, (hl)                   ; col
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   (BL_FPX), a
+                ld   a, SEL_ROW * 8
+                ld   (BL_FPY), a
+                xor  a
+                ld   (BL_LEFT), a
+                call blit_sprite
+                pop  hl
+                push hl
+                inc  hl
+                ld   c, (hl)                   ; col
+                inc  hl
+                ld   a, (hl)                   ; attr
+                ld   b, SEL_ROW
+                ld   d, 3
+                ld   e, 6
+                call stamp_rect
+                pop  hl
+                push hl
+                inc  hl
+                ld   c, (hl)
+                dec  c
+                inc  hl
+                inc  hl
+                ld   a, (hl)
+                inc  hl
+                ld   h, (hl)
+                ld   l, a
+                ld   b, SEL_ROW + 7
+                call print_str
+                pop  hl
+                ld   de, 5
+                add  hl, de
+                pop  bc
+                djnz .h
+                ld   b, SEL_ROW + 9
+                ld   c, 7
+                ld   hl, str_keys
+                call print_str
+                ld   b, SEL_ROW + 9
+                ld   a, ATTR_HUD
+                call row_attr_fill
+                ld   b, 2
+                call row_attr_fill
+                ld   b, SEL_ROW + 7
+                call row_attr_fill
+                ld   a, (SYS_FRAMES)
+                ld   (LAST_TICK_FRAME), a
+                ld   a, GS_SELECT
+                ld   (GAME_STATE), a
+select_loop:
+                halt
+select_tick:                                   ; test probe (after the HALT)
+                call scan_matrix
+                call sample_input
+                ld   a, (PLAYER_DISC)
+                ld   c, K_KNIGHT
+                bit  DK_1_BIT, a               ; '1'
+                jr   nz, start_game
+                inc  c
+                bit  DK_2_BIT, a               ; '2'
+                jr   nz, start_game
+                inc  c
+                bit  DK_3_BIT, a               ; '3'
+                jr   nz, start_game
+                jr   select_loop
+row_attr_fill:  ld   c, 0
+                push af
+                call attr_addr
+                pop  af
+                ld   (hl), a
+                ld   d, h
+                ld   e, l
+                inc  de
+                ld   bc, 31
+                ldir
+                ret
+
+;------------------------------------------------------------------------------
+; check_paging — 48 BASIC / USR 0 set $7FFD bit 5 (paging lock): every later
+; OUT is ignored, so the two sprite banks would load over each other and the
+; pool would alias. Write different bytes to bank 1 and bank 0 at $C000 and
+; read bank 1 back; on a mismatch print a message and stop (DI + HALT).
+; Tape path only (the .sna preloads all banks and enters at boot). Bank 0 and
+; bank 1 $C000 are free here (pool / sources are written after this).
+; +2A/+3 are unsupported (different paging). Clobbers: A, BC, HL (+ print).
+;------------------------------------------------------------------------------
+check_paging:
+                ld   a, BANK_SRC_LO
+                call page_bank
+                ld   hl, BANK_WINDOW
+                ld   (hl), PAGING_PROBE
+                ld   a, BANK_POOL0
+                call page_bank
+                ld   (hl), ~PAGING_PROBE & $FF
+                ld   a, BANK_SRC_LO
+                call page_bank
+                ld   a, (hl)
+                cp   PAGING_PROBE
+                ret  z
+                ld   a, ATTR_HUD
+                call clear_screen
+                ld   b, 11
+                ld   c, 5
+                ld   hl, str_lock
+                call print_str
+.locked:        di                             ; test probe (paging locked)
+                halt
+
+
+; select-screen entries: fid, body col, attr, name
+sel_tab:        DB   FID_knight_idle1, 5,  $47
+                DW   nm_knight
+                DB   FID_wizard_idle,  14, $45
+                DW   nm_wizard
+                DB   FID_rogue_idle,   23, $44
+                DW   nm_rogue
 
 ;==============================================================================
-; init_game — boot-time state + first full render.
-; In : —   Clobbers: everything (cold path)
+; start_game — C = hero kind. Generate its frames (§5.2: only the chosen
+; hero), new game, first render, then the play loop.
 ;==============================================================================
-init_game:
+start_game:
+                ld   a, c
+                ld   (HERO_KIND), a
+                call alloc_restore
+                ld   a, (HERO_KIND)
+                call gen_kind
+                call new_game
+                ld   h, ROOM_MAP >> 8
+                ld   a, (CUR_ROOM)
+                call build_room_map
+                ld   a, ATTR_HUD
+                call clear_screen
+                call draw_room
+                call hud_status
+                call hud_room
+                call msg_begin
+                ld   hl, str_welcome
+                call print_str
+                ld   a, 1
+                ld   (NEED_RELEASE), a         ; the select key must be released
                 ld   a, GS_PLAYING
                 ld   (GAME_STATE), a
-                ld   hl, RNG_SEED
-                ld   (RNG_STATE), hl      ; fixed seed (design §5.6); test-observable
-                ld   hl, 0
-                ld   (TURN_COUNTER), hl
-                xor  a
-                ld   (INPUT_SRC), a       ; default: scan real keyboard
-                call init_kbd_mirror
-                call init_entities
-
-                ld   a, COL_BLUE
-                out  (PORT_BORDER), a
-                call clear_bitmap         ; blank pixels (status/message rows stay 0)
-                call fill_attr            ; flood all 768 attrs to ATTR_MAP
-                call draw_map             ; blit every terrain cell once
-                jp   draw_player          ; @ over the start cell (tail call)
+                ld   a, (SYS_FRAMES)
+                ld   (LAST_TICK_FRAME), a
+start_game_done:                               ; falls through into play_loop
+                ASSERT start_game_done == play_loop
 
 ;==============================================================================
-; init_kbd_mirror — set the 8-byte keyboard mirror to "all released".
+; play_loop — one 25 Hz tick per iteration (prototype §3.2).
+;==============================================================================
+play_loop:
+                call wait_tick
+tick_work:                                     ; budget probe: tick work starts here
+                ld   hl, (TICK_COUNTER)
+                inc  hl
+                ld   (TICK_COUNTER), hl
+                ld   a, (GAME_STATE)
+                cp   GS_PLAYING
+                jp   nz, end_screen
+                ld   a, (TURN_PHASE)
+                or   a
+                call z, read_turn_input        ; INPUT: maybe start a turn
+                call anim_tick
+                call render
+                ld   a, (TURN_PHASE)
+                or   a
+                jr   z, play_loop
+                ld   hl, TURN_TICK
+                inc  (hl)
+                call turn_done
+                call c, end_turn
+                jr   play_loop
+
+;------------------------------------------------------------------------------
+; wait_tick — pace to 2 frames per tick. Arriving with >= 2 frames already gone
+; means this tick blew its 141.8k T budget: OVERRUN_COUNT++ (presentation only).
+; Clobbers: A, B, HL
+;------------------------------------------------------------------------------
+wait_tick:
+                ld   a, (LAST_TICK_FRAME)
+                ld   b, a
+                ld   a, (SYS_FRAMES)
+                sub  b
+                cp   TICK_FRAMES
+                jr   c, .wait
+                ld   hl, (OVERRUN_COUNT)
+                inc  hl
+                ld   (OVERRUN_COUNT), hl
+                jr   .go
+.wait:          halt
+                ld   a, (SYS_FRAMES)
+                sub  b
+                cp   TICK_FRAMES
+                jr   c, .wait
+.go:            ld   a, (SYS_FRAMES)
+                ld   (LAST_TICK_FRAME), a
+                ret
+
+; resync_tick — forget elapsed time (after a transition / long cold path).
+resync_tick:
+                ld   a, (SYS_FRAMES)
+                ld   (LAST_TICK_FRAME), a
+                ret
+
+;------------------------------------------------------------------------------
+; read_turn_input — INPUT phase. Held keys repeat unless INPUT_REPEAT = 0 (then
+; a release is required between turns, the P3 rule). A legal action resolves
+; the whole turn now and enters the ANIM phase.  Clobbers: all but IY.
+;------------------------------------------------------------------------------
+read_turn_input:
+                call scan_matrix
+                call sample_input
+                jr   nz, .held
+                xor  a
+                ld   (NEED_RELEASE), a
+                ret
+.held:          ld   a, (INPUT_REPEAT)
+                or   a
+                jr   nz, .go
+                ld   a, (NEED_RELEASE)
+                or   a
+                ret  nz
+.go:            call try_player_turn
+                ret  nc                        ; illegal: no turn consumed
+                ld   a, 1
+                ld   (NEED_RELEASE), a
+                ld   a, (EXIT_KIND)
+                or   a
+                call z, resolve_monsters       ; exit turn: monsters don't act
+                ld   a, TP_ANIM
+                ld   (TURN_PHASE), a
+                xor  a
+                ld   (TURN_TICK), a
+                ret
+
+;------------------------------------------------------------------------------
+; end_turn — ANIM finished: transition (if exiting), TURN_COUNTER++, potion
+; pickup, HUD, death / win checks, back to INPUT.  Clobbers: all but IY.
+;------------------------------------------------------------------------------
+end_turn:
+                ld   a, (EXIT_KIND)
+                or   a
+                call nz, do_exit
+                ld   hl, (TURN_COUNTER)
+                inc  hl
+                ld   (TURN_COUNTER), hl
+                call potion_pickup
+                call hud_status
+                xor  a
+                ld   (TURN_PHASE), a
+                ld   a, (P_ENTITIES + E_FLAGS)
+                and  EF_DYING
+                jr   z, .alive
+                ld   a, GS_DEAD
+                ld   (GAME_STATE), a
+                call msg_begin
+                ld   hl, str_died
+                jp   print_str
+.alive:         ; win: standing on storey 0 of room D with x <= 3 (§8.2)
+                ld   a, (CUR_ROOM)
+                cp   WIN_ROOM
+                ret  nz
+                ld   ix, P_ENTITIES
+                call is_standing
+                ret  nz
+                call storey_ref
+                or   a
+                ret  nz
+                ld   a, (ix+E_X)
+                cp   WIN_MAX_X + 1
+                ret  nc
+                ld   a, GS_WIN
+                ld   (GAME_STATE), a
+                call msg_begin
+                ld   hl, str_win
+                jp   print_str
+
+;------------------------------------------------------------------------------
+; do_exit — follower selection (§3.7), frozen Cauldron transition (§3.6),
+; arrival, arrival conflicts.  Clobbers: all but IY.
+;------------------------------------------------------------------------------
+do_exit:
+                call follow_select
+                call hide_sprites              ; every sprite hidden, hero too
+                ld   a, GS_TRANSITION          ; (state flips once none is drawn)
+                ld   (GAME_STATE), a
+                ld   h, NEXT_MAP >> 8
+                ld   a, (EXIT_DEST)
+                call build_room_map
+                ld   a, (EXIT_KIND)
+                cp   EX_UP
+                jr   nc, .v
+                call hscroll_room
+                jr   .arr
+.v:             call vscroll_room
+.arr:           call shadow_room               ; clean background of the new room
+                ld   a, (EXIT_DEST)
+                ld   (CUR_ROOM), a
+                ld   ix, P_ENTITIES
+                ld   (ix+E_ROOM), a
+                ld   a, (EXIT_KIND)
+                cp   EX_RIGHT
+                jr   nz, .nl
+                ld   (ix+E_X), 1               ; entered from the left edge
+                res  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   .pos
+.nl:            cp   EX_LEFT
+                jr   nz, .vert
+                KFIELD KT_BW
+                ld   b, a
+                ld   a, ROOM_COLS - 1
+                sub  b
+                ld   (ix+E_X), a               ; 31 - w
+                set  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   .pos
+.vert:          ld   a, (EXIT_COL)
+                ld   (ix+E_X), a
+                KFIELD KT_BH
+                ld   b, a
+                ld   a, (EXIT_KIND)
+                cp   EX_UP
+                ld   a, (STOREYS - 1) * STOREY_H + 6   ; up: stand on storey 2
+                jr   z, .vy
+                ld   a, 6                      ; down: stand on storey 0
+.vy:            sub  b
+                ld   (ix+E_Y), a
+.pos:           call snap_pxpy
+                ld   (ix+E_MODE), M_REST
+                call arrival_conflicts
+                call hud_room
+                xor  a
+                ld   (EXIT_KIND), a
+                ld   a, GS_PLAYING
+                ld   (GAME_STATE), a
+                jp   resync_tick
+
+;------------------------------------------------------------------------------
+; end_screen — GS_DEAD / GS_WIN: wait for ENTER -> hero select (new game uses
+; the same fixed seed, §6.5).
+;------------------------------------------------------------------------------
+end_screen:
+                call scan_matrix
+                call sample_input
+                ld   a, (PLAYER_DISC)
+                bit  DK_ENTER_BIT, a
+                jp   z, play_loop
+                jp   enter_select
+
+;==============================================================================
+; init_kbd_mirror — all released.  Clobbers: A, B, HL
 ;==============================================================================
 init_kbd_mirror:
                 ld   hl, KBD_MATRIX
                 ld   b, KBD_MATRIX_LEN
                 ld   a, KBD_RELEASED
-.row:
-                ld   (hl), a
+.r:             ld   (hl), a
                 inc  hl
-                djnz .row
+                djnz .r
                 ret
 
-;==============================================================================
-; init_entities — zero the 16-slot array, then set up the player (slot 0).
-; P3 only needs x/y/flags, but hp/atk are filled so P4 inherits sane defaults.
-;==============================================================================
-init_entities:
-                ld   hl, ENTITIES
-                ld   de, ENTITIES + 1
-                ld   bc, ENT_ARRAY_LEN - 1
-                ld   (hl), 0
-                ldir                       ; whole array -> 0 (all slots inactive)
-
-                ; player slot 0 — kind already 0
-                ld   a, PLAYER_START_X
-                ld   (PLAYER_X), a
-                ld   a, PLAYER_START_Y
-                ld   (PLAYER_Y), a
-                ld   a, PLAYER_START_HP
-                ld   (ENTITIES + ENT_HP), a
-                ld   (ENTITIES + ENT_MAX_HP), a
-                ld   a, PLAYER_START_ATK
-                ld   (ENTITIES + ENT_ATK), a
-                ld   a, EF_ACTIVE | EF_PLAYER
-                ld   (ENTITIES + ENT_FLAGS), a
-                ret
+                INCLUDE "io.asm"
+                INCLUDE "gfx.asm"
+                INCLUDE "logic.asm"
+                INCLUDE "anim.asm"
+                INCLUDE "data.asm"
+                INCLUDE "../assets/gfx/bg_tiles.asm"
 
 ;==============================================================================
-; INPUT LAYER (design §3, REVISED 4-key-chordable scheme).
+; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3.
 ;==============================================================================
-
-;==============================================================================
-; scan_matrix — copy the 8 keyboard half-rows into KBD_MATRIX.
-; If INPUT_SRC != 0 the mirror is left untouched (test injection path).
-; In : —   Out: KBD_MATRIX[0..7] updated   Clobbers: A, BC, D, HL
-;------------------------------------------------------------------------------
-; B holds the half-row select on A8..A15; a single 0 bit rotates through it
-; ($FE,$FD,$FB,... back to $FE), giving the 8 half-rows in mirror-index order.
-;==============================================================================
-scan_matrix:
-                ld   a, (INPUT_SRC)
-                or   a
-                ret  nz                    ; test mode: keep the poked mirror
-                ld   hl, KBD_MATRIX
-                ld   c, $FE                ; ULA low address byte (A0 = 0)
-                ld   b, $FE                ; first half-row select (rotates)
-                ld   d, KBD_MATRIX_LEN
-.row:
-                in   a, (c)                ; B on A8..A15 selects the half-row
-                ld   (hl), a
-                inc  hl
-                rlc  b                     ; move the 0 bit to the next half-row
-                dec  d
-                jr   nz, .row
-                ret
-
-;==============================================================================
-; sample_keys — fold the held movement keys into a direction bitset.
-; In : KBD_MATRIX   Out: A = DIR_* bitset (primary hjkl + secondary QAOP)
-; Clobbers: A, E
-;==============================================================================
-sample_keys:
-                ld   e, 0                  ; accumulator
-                ld   a, (KBD_MATRIX + KBROW_HJKL)
-                bit  KB_L_BIT, a
-                jr   nz, .nL
-                set  DIR_E_BIT, e
-.nL:
-                bit  KB_K_BIT, a
-                jr   nz, .nK
-                set  DIR_N_BIT, e
-.nK:
-                bit  KB_J_BIT, a
-                jr   nz, .nJ
-                set  DIR_S_BIT, e
-.nJ:
-                bit  KB_H_BIT, a
-                jr   nz, .nH
-                set  DIR_W_BIT, e
-.nH:
-                ld   a, (KBD_MATRIX + KBROW_POIUY)
-                bit  KB_P_BIT, a
-                jr   nz, .nP
-                set  DIR_E_BIT, e
-.nP:
-                bit  KB_O_BIT, a
-                jr   nz, .nO
-                set  DIR_W_BIT, e
-.nO:
-                ld   a, (KBD_MATRIX + KBROW_QWERT)
-                bit  KB_Q_BIT, a
-                jr   nz, .nQ
-                set  DIR_N_BIT, e
-.nQ:
-                ld   a, (KBD_MATRIX + KBROW_ASDFG)
-                bit  KB_A_BIT, a
-                jr   nz, .nA
-                set  DIR_S_BIT, e
-.nA:
-                ld   a, e
-                ret
-
-;==============================================================================
-; sample_discrete — first non-movement action key held, if any.
-; In : KBD_MATRIX   Out: A = ACT_WAIT/QUAFF/DESCEND/CONFIRM or ACT_NONE
-; Clobbers: A
-;==============================================================================
-sample_discrete:
-                ld   a, (KBD_MATRIX + KBROW_SPACE)
-                bit  KB_SPACE_BIT, a
-                jr   nz, .nSpace
-                ld   a, ACT_WAIT
-                ret
-.nSpace:
-                ld   a, (KBD_MATRIX + KBROW_ASDFG)
-                bit  KB_G_BIT, a
-                jr   nz, .nG
-                ld   a, ACT_QUAFF
-                ret
-.nG:
-                bit  KB_D_BIT, a
-                jr   nz, .nD
-                ld   a, ACT_DESCEND
-                ret
-.nD:
-                ld   a, (KBD_MATRIX + KBROW_HJKL)
-                bit  KB_ENTER_BIT, a
-                jr   nz, .nEnter
-                ld   a, ACT_CONFIRM
-                ret
-.nEnter:
-                xor  a                     ; ACT_NONE
-                ret
-
-;==============================================================================
-; any_key_down — is any movement OR discrete key currently held?
-; Out: NZ if something held, Z if nothing.   Clobbers: A, E
-;==============================================================================
-any_key_down:
-                call sample_keys
-                or   a
-                ret  nz
-                call sample_discrete        ; A = action or ACT_NONE
-                or   a                       ; sample_discrete's `ld a` leaves stale
-                ret                          ; flags, so re-test A here (NZ = held)
-
-;==============================================================================
-; dirs_to_step — bitset -> signed step. Opposite keys cancel.
-; In : A = DIR_* bitset   Out: D = dx, E = dy (each -1/0/+1); Z set iff (0,0)
-; Clobbers: A, D, E
-;==============================================================================
-dirs_to_step:
-                ld   d, 0
-                bit  DIR_E_BIT, a
-                jr   z, .nE
-                inc  d                     ; +1
-.nE:
-                bit  DIR_W_BIT, a
-                jr   z, .nW
-                dec  d                     ; sum -> 0 if both, $FF if only west
-.nW:
-                ld   e, 0
-                bit  DIR_S_BIT, a
-                jr   z, .nS
-                inc  e
-.nS:
-                bit  DIR_N_BIT, a
-                jr   z, .nN
-                dec  e
-.nN:
-                ld   a, d
-                or   e                     ; Z iff dx==0 && dy==0
-                ret
-
-;==============================================================================
-; get_action — block until a fresh action; debounce one press = one action.
-; Out: A = action code; for ACT_MOVE, D = dx, E = dy.
-; Clobbers: A, BC, D, E, HL
-;------------------------------------------------------------------------------
-; Debounce: wait for all keys released, then for a press (design §3: one chord =
-; one turn, release required between). Chord capture window: on the first
-; movement edge, HALT one frame (~20ms) and re-sample, OR-ing the two reads, so a
-; near-simultaneous second key still registers as a diagonal.
-;==============================================================================
-get_action:
-.release:
-                call scan_matrix
-                call any_key_down
-                jr   nz, .release          ; hold here until everything is up
-.press:
-                call scan_matrix
-                call sample_keys
-                or   a
-                jr   nz, .have_move
-                call sample_discrete
-                or   a
-                jr   z, .press             ; nothing actionable -> keep waiting
-                ret                        ; discrete action (A set)
-.have_move:
-                push af                     ; save first movement sample
-                halt                        ; chord capture window: ~1 frame
-                call scan_matrix
-                call sample_keys
-                pop  bc                     ; B = first sample
-                or   b                      ; combined held set
-                call dirs_to_step
-                jr   z, .press             ; opposite keys cancelled -> no action
-                ld   a, ACT_MOVE
-                ret
-
-;==============================================================================
-; resolve_action — apply the player's action for one turn.
-; In : A = action; D = dx, E = dy (ACT_MOVE only)
-; Out: CF set iff a turn was consumed.   Clobbers: A, BC, DE, HL
-;------------------------------------------------------------------------------
-; Illegal move into a wall (or off-map) = position unchanged AND no turn (§6.5).
-; Diagonal-vs-wall rule (P3): a step is legal iff the DESTINATION cell is
-; walkable; corner-cutting between two diagonal walls is NOT blocked (documented
-; simplification — cheapest correct rule for the slice).
-;==============================================================================
-resolve_action:
-                cp   ACT_MOVE
-                jr   z, .move
-                cp   ACT_WAIT
-                jr   z, .wait
-                or   a                      ; QUAFF/DESCEND/CONFIRM: no-op, no turn
-                ret
-.wait:
-                scf                         ; WAIT consumes a turn (design §4.1)
-                ret
-.move:
-                ld   a, (PLAYER_X)
-                add  a, d                   ; nx = x + dx (8-bit two's complement)
-                cp   MAP_W
-                jr   nc, .blocked           ; off-map (incl. wrap to $FF) -> illegal
-                ld   c, a                   ; C = nx (map col)
-                ld   a, (PLAYER_Y)
-                add  a, e
-                cp   MAP_H
-                jr   nc, .blocked
-                ld   b, a                   ; B = ny (map row)
-                call map_tile               ; A = terrain at (nx,ny); preserves BC
-                or   a
-                jr   z, .blocked            ; T_WALL = 0 -> not walkable
-                ; --- legal move: redraw old cell as terrain, then player at new
-                push bc                     ; save new (ny,nx)
-                call draw_player_terrain    ; restore terrain under old position
-                pop  bc
-                ld   a, c
-                ld   (PLAYER_X), a
-                ld   a, b
-                ld   (PLAYER_Y), a
-                call draw_player
-                scf                         ; turn consumed
-                ret
-.blocked:
-                or   a                      ; CF = 0: no turn
-                ret
-
-;==============================================================================
-; RENDER (dirty-cell, design §1/§6.18). draw_cell (P2) is the per-cell blitter.
-;==============================================================================
-
-;==============================================================================
-; map_tile — terrain byte at map (mx,my).
-; In : B = my (row), C = mx (col)   Out: A = tile byte   Preserves BC
-; Clobbers: A, DE, HL
-;------------------------------------------------------------------------------
-; addr = map_data + my*MAP_W + mx, MAP_W=30 = (my<<5) - (my<<1).
-;==============================================================================
-map_tile:
-                ld   l, b
-                ld   h, 0                   ; HL = my
-                add  hl, hl                 ; my*2
-                ld   e, l
-                ld   d, h                   ; DE = my*2
-                add  hl, hl                 ; *4
-                add  hl, hl                 ; *8
-                add  hl, hl                 ; *16
-                add  hl, hl                 ; *32
-                or   a
-                sbc  hl, de                 ; my*32 - my*2 = my*30
-                ld   e, c
-                ld   d, 0
-                add  hl, de                 ; + mx
-                ld   de, map_data
-                add  hl, de
-                ld   a, (hl)
-                ret
-
-;==============================================================================
-; cell_attr_addr — attribute-byte address of screen char cell (col,row).
-; In : B = screen row (0..23), C = screen col (0..31)   Out: HL = attr addr
-; Preserves BC, DE   Clobbers: A, HL
-;------------------------------------------------------------------------------
-; addr = SCREEN_ATTR + row*32 + col. row<<5 via 5 adds (no DE needed so callers
-; can keep a glyph pointer in DE across the call).
-;==============================================================================
-cell_attr_addr:
-                ld   l, b
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl                 ; HL = row*32
-                ld   a, l
-                add  a, c
-                ld   l, a
-                jr   nc, .noCarry
-                inc  h
-.noCarry:
-                ld   a, h
-                add  a, (SCREEN_ATTR >> 8)  ; SCREEN_ATTR low byte is 0
-                ld   h, a
-                ret
-
-;==============================================================================
-; blit_cell — draw a glyph + attribute into a MAP cell (applies viewport offset).
-; In : A = attr, B = my, C = mx, HL = 8-byte glyph
-; Clobbers: A, B, DE, HL   (C ends as screen col)
-;==============================================================================
-blit_cell:
-                inc  b                      ; map my -> screen row (+VIEW_ROW_OFF)
-                inc  c                      ; map mx -> screen col (+VIEW_COL_OFF)
-                ex   de, hl                 ; DE = glyph ptr (parked over attr calc)
-                push af                      ; save attr
-                call cell_attr_addr          ; HL = attr addr (BC, DE preserved)
-                pop  af
-                ld   (hl), a                 ; write the cell's single attribute
-                ex   de, hl                  ; HL = glyph ptr again
-                jp   draw_cell               ; blit 8 bitmap rows (tail call)
-
-;==============================================================================
-; draw_map_cell — draw the terrain glyph for map (mx,my) with ATTR_MAP.
-; In : B = my, C = mx   Clobbers: A, B, DE, HL  (C ends as screen col)
-;==============================================================================
-draw_map_cell:
-                call map_tile               ; A = terrain (BC preserved)
-                add  a, a                    ; tile*8 -> glyph offset (tile <= 3)
-                add  a, a
-                add  a, a
-                ld   l, a
-                ld   h, 0
-                ld   de, tile_glyphs
-                add  hl, de                  ; HL = glyph ptr
-                ld   a, ATTR_MAP
-                jp   blit_cell
-
-;==============================================================================
-; draw_map — render the whole map once (cold; boot only). ~630 cell blits.
-;==============================================================================
-draw_map:
-                ld   b, 0                    ; my
-.row:
-                ld   c, 0                    ; mx
-.col:
-                push bc
-                call draw_map_cell
-                pop  bc
-                inc  c
-                ld   a, c
-                cp   MAP_W
-                jr   nz, .col
-                inc  b
-                ld   a, b
-                cp   MAP_H
-                jr   nz, .row
-                ret
-
-;==============================================================================
-; draw_player — draw the @ glyph at the player's current cell.
-; draw_player_terrain — restore the terrain glyph at the player's current cell
-;                       (used to erase the old position before a move).
-; Clobbers: A, BC, DE, HL
-;==============================================================================
-draw_player_terrain:
-                ld   a, (PLAYER_Y)
-                ld   b, a
-                ld   a, (PLAYER_X)
-                ld   c, a
-                jp   draw_map_cell
-
-draw_player:
-                ld   a, (PLAYER_Y)
-                ld   b, a
-                ld   a, (PLAYER_X)
-                ld   c, a
-                ld   hl, glyph_player
-                ld   a, ATTR_PLAYER
-                jp   blit_cell
-
-;==============================================================================
-; clear_bitmap — blank the whole pixel bitmap to 0 (cold; boot only).
-; Out: $4000..$57FF = 0   Clobbers: A, BC, DE, HL
-;==============================================================================
-clear_bitmap:
-                xor  a
-                ld   hl, SCREEN_BITMAP
-                ld   (hl), a
-                ld   de, SCREEN_BITMAP + 1
-                ld   bc, SCREEN_BITMAP_LEN - 1
-                ldir
-                ret
-
-;==============================================================================
-; fill_attr — flood the attribute grid with ATTR_MAP (status/spare/message rows
-; included; map cells overwrite their own attrs in draw_map). Cold; boot only.
-; Out: $5800..$5AFF = ATTR_MAP   Clobbers: A, BC, DE, HL
-;==============================================================================
-fill_attr:
-                ld   a, ATTR_MAP
-                ld   hl, SCREEN_ATTR
-                ld   (hl), a
-                ld   de, SCREEN_ATTR + 1
-                ld   bc, SCREEN_ATTR_LEN - 1
-                ldir
-                ret
-
-;==============================================================================
-; draw_cell — blit one 8x8 glyph into char cell (col,row). REUSED FROM P2 — the
-; dirty-cell render primitive. In one char cell the 8 pixel rows share the low
-; byte and differ only in bits of the high byte, so we compute the base once and
-; `inc d` per row (no per-row address recompute).
-;
-; In : B = cell row (0..23), C = cell col (0..31), HL = 8-byte glyph
-; Out: 8 glyph bytes written; HL advanced past the glyph
-; Clobbers: A, B, DE, HL  (preserves C, IX, IY)
-;------------------------------------------------------------------------------
-;   high = $40 | (row & $18);  low = ((row & 7) << 5) | col
-;==============================================================================
-draw_cell:
-                ld   a, b
-                and  $18
-                or   $40
-                ld   d, a                    ; D = high byte of the cell's top row
-                ld   a, b
-                and  7
-                rrca                          ; (row & 7) << 5 (8-bit rot: <<5 == >>3)
-                rrca
-                rrca
-                or   c                        ; | col
-                ld   e, a                     ; E = low byte (constant down the cell)
-                ld   b, GLYPH_BYTES
-.row:
-                ld   a, (hl)
-                ld   (de), a                  ; write one pixel row
-                inc  hl
-                inc  d                        ; next scanline = high+1
-                djnz .row
-                ret
-
-;==============================================================================
-; STATIC MAP (design §4.2) — 30x21, row-major, one byte/cell. Hand-authored:
-; a solid border, a vertical wall divider at col 15 splitting two rooms, and a
-; single corridor tile (15,10) joining them. Player starts at (1,5).
-;
-; Layout (#=wall '.'=floor '+'=corridor), rows top->bottom:
-;   row 0  : ##############################
-;   rows1-9: #..............#.............#   (left room | wall | right room)
-;   row 10 : #..............+.............#   (corridor links the rooms)
-;   rows11-19 #..............#.............#
-;   row 20 : ##############################
-;==============================================================================
-map_data:
-                DEFS MAP_W, T_WALL            ; row 0
-                DUP 9                         ; rows 1..9
-                  DB  T_WALL
-                  DEFS 14, T_FLOOR
-                  DB  T_WALL
-                  DEFS 13, T_FLOOR
-                  DB  T_WALL
+                ALIGN 256
+kind_tab:
+                ;     KN  WZ  RG  SK  GB  GH  RT  BT  SL
+                KROW   3,  3,  3,  3,  3,  3,  4,  3,  3          ; KT_BW (cells)
+                KROW BH_K_KNIGHT, BH_K_WIZARD, BH_K_ROGUE, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME ; KT_BH
+                KROW  22, 14, 18, 10,  6,  7,  3,  3,  5          ; KT_HP
+                KROW   2,  3,  5,  2,  1,  2,  0,  1,  0          ; KT_ATK
+                KROW   2,  1,  3,  2,  1,  3,  1,  4,  0          ; KT_EVA
+                KROW   6,  6,  4,  4,  3,  4,  2,  2,  3          ; KT_DIE
+                KROW   0,  1,  1,  0,  0,  0,  0,  0,  0          ; KT_BONUS
+                KROW   1,  3,  1,  1,  1,  1,  1,  1,  1          ; KT_REACH
+                KROW   1,  1,  1,  1,  1,  1,  1,  1,  2          ; KT_PERIOD
+                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER|KF_ZAP, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL, KF_CLIMBER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0  ; KT_FLAGS
+                KROW $47,$45,$44,$47,$44,$45,$06,$43,$44          ; KT_ATTR
+                KROW KFID_KNIGHT, KFID_WIZARD, KFID_ROGUE, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME   ; KT_FID0
+                KROW KFCNT_KNIGHT, KFCNT_WIZARD, KFCNT_ROGUE, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME ; KT_FCNT
+                ASSERT $ - kind_tab == KT_MOD7
+                DUP 24, n
+                DB   n % 7                     ; KT_MOD7
                 EDUP
-                ; row 10 — corridor gap in the divider
-                DB  T_WALL
-                DEFS 14, T_FLOOR
-                DB  T_CORR
-                DEFS 13, T_FLOOR
-                DB  T_WALL
-                DUP 9                         ; rows 11..19
-                  DB  T_WALL
-                  DEFS 14, T_FLOOR
-                  DB  T_WALL
-                  DEFS 13, T_FLOOR
-                  DB  T_WALL
+                ASSERT $ - kind_tab == KT_DIV7
+                DUP 24, n
+                DB   n / 7                     ; KT_DIV7
                 EDUP
-                DEFS MAP_W, T_WALL            ; row 20
+                ASSERT $ - kind_tab == 256
 
-;==============================================================================
-; TILESET (placeholder, design §6 P5 replaces with artist data). 8 bytes/glyph,
-; MSB = leftmost pixel. Indexed by terrain id (T_WALL..T_STAIRS). One ink/paper
-; per cell => clash-free by construction (§6.17).
-;==============================================================================
-tile_glyphs:
-gl_wall:        DB  $00,$24,$7E,$24,$24,$7E,$24,$00   ; '#'
-gl_floor:       DB  $00,$00,$00,$18,$18,$00,$00,$00   ; centre dot
-gl_corr:        DB  $00,$18,$18,$00,$18,$18,$00,$00   ; ':'
-gl_stairs:      DB  $00,$40,$70,$7C,$70,$40,$00,$00   ; '>'
-
-glyph_player:   DB  $3C,$42,$5A,$56,$5C,$40,$3E,$00   ; '@'
-
-code_end:                                       ; first free byte past emitted code
+code_end:
 CODE_LEN        EQU code_end - start
+                ASSERT code_end <= P_ENTITIES
+                ASSERT FRT + FRT_MAX * FRT_STRIDE <= SLOTVARS
+                ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
+                ASSERT LOWRAM_END <= $8000
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, CODE_LEN, " B), free to ENTITIES: ", /D, P_ENTITIES - code_end
 
 ;------------------------------------------------------------------------------
-; tap_loader — tokenised BASIC autoloader:
-;   10 CLEAR VAL "32767": RANDOMIZE USR VAL "32768"
-; Tokenised in a scratch ORG (not part of the runtime image).
+; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "32768"
+; CLEAR 24575 frees $6000..$7FFF for the room maps / generator buffers.
+; Tokenised in a scratch ORG (page 0 at $E000; not part of the runtime image —
+; bank 0 is overwritten by the pre-shift pool at boot).
 ;------------------------------------------------------------------------------
                 ORG  $E000
 tap_loader:
-                ; Line 10: CLEAR VAL "32767"
-                DB   0, 10                   ; line number 10 (big-endian)
+                DB   0, 10
                 DW   tap_l10_end - tap_l10_body
-tap_l10_body:
-                DB   $FD                      ; CLEAR
-                DB   $B0, '"', "32767", '"'   ; VAL "32767"
-                DB   $0D                      ; ENTER
+tap_l10_body:   DB   $FD, $B0, '"', "24575", '"', $0D
 tap_l10_end:
-
-                ; Line 20: LOAD "" CODE — without this, RANDOMIZE USR jumps
-                ; into memory the tape never actually loaded (real tape-load
-                ; semantics only auto-loads the BASIC block; ZEsarUX's
-                ; smartload bypasses this, which is why this was invisible
-                ; to automated ZRCP tests but crashes/resets on real Fuse).
                 DB   0, 20
                 DW   tap_l20_end - tap_l20_body
-tap_l20_body:
-                DB   $EF                      ; LOAD
-                DB   $22, $22                  ; ""
-                DB   $AF                      ; CODE
-                DB   $0D
+tap_l20_body:   DB   $EF, $22, $22, $AF, $0D
 tap_l20_end:
-
-                ; Line 30: RANDOMIZE USR VAL "32768"
                 DB   0, 30
                 DW   tap_l30_end - tap_l30_body
-tap_l30_body:
-                DB   $F9                      ; RANDOMIZE
-                DB   $C0                      ; USR
-                DB   $B0, '"', "32768", '"'   ; VAL "32768"
-                DB   $0D                      ; ENTER
+tap_l30_body:   DB   $F9, $C0, $B0, '"', "32768", '"', $0D
 tap_l30_end:
 tap_loader_len  EQU  $ - tap_loader
 
 ;==============================================================================
-; Emit artefacts (unchanged from P2): a two-block autoloader .tap and a snapshot.
-; MUST come after tap_loader's bytes are assembled — SAVETAP dumps the
-; assembler's memory image at the point it executes in source order, not at
-; end of file, so calling it before the loader's ORG block silently emits an
-; all-zero BASIC data block (assembles clean, checksums clean, "Nonsense in
-; BASIC" only on a real tape-load — ZEsarUX's smartload bypasses this
-; entirely, which is how this went undetected).
+; Artefacts. SAVETAP dumps device memory at this point in source order (see
+; main.asm's note), so it comes after every byte is assembled. The sprite-source
+; banks are saved by mapping each into slot 3 ($C000) in turn.
 ;==============================================================================
                 EMPTYTAP "build/wazhack.tap"
                 SAVETAP  "build/wazhack.tap", BASIC, "wazhack", tap_loader, tap_loader_len, 10
                 SAVETAP  "build/wazhack.tap", CODE,  "wazhack", start, CODE_LEN
-                SAVESNA "build/wazhack.sna", start
+                MMU  3, BANK_SRC_LO
+                SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, SRC_LEN_LO
+    IF SRC_LEN_HI > 0
+                MMU  3, BANK_SRC_HI
+                SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, SRC_LEN_HI
+    ENDIF
+                MMU  3, 0
+                SAVESNA  "build/wazhack.sna", boot

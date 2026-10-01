@@ -1,5 +1,5 @@
 ;==============================================================================
-; proto_logic.asm — PROTO turn logic (prototype §3, §6).
+; logic.asm — PROTO turn logic (prototype §3, §6).
 ;   world/room build, collision, player actions (walk / climb / bump-attack /
 ;   quaff / wait / exits), combat rolls, monster AI (walker / climber / flyer +
 ;   yield rule), pending materialise, follow selection, potions, HUD.
@@ -989,7 +989,7 @@ find_target:
 
 ;------------------------------------------------------------------------------
 ; do_attack — IX = attacker, A = target slot. Rolls to-hit (d20+atk >= 10+eva)
-; then damage (1dN+bonus, saturating) — prototype §6.2, spectrum-design §5.1/2.
+; then damage (1dN+bonus, saturating) — prototype §6.2, foundations F1/F2.
 ; Sets the attacker's ATTACK sequence + IMPACT info and the target's reaction.
 ; TMP3 = gap (from find_target, for the wizard zap). Clobbers: all but IX.
 ;------------------------------------------------------------------------------
