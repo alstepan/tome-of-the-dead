@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """PROTO playability checklist (docs/design/prototype.md §11.3, items 1-40).
 
-Drives build/proto.sna in ZEsarUX over ZRCP. Fixed seed, INPUT_REPEAT=0
+Drives build/wazhack.sna in ZEsarUX over ZRCP. Fixed seed, INPUT_REPEAT=0
 (edge-triggered), ANIM_FREEZE=1 unless a check needs idle motion. Scenario setup
 uses pokes of the entity array (layout in docs/memory-map.md) where walking there
 would only add time; the long no-softlock walkthrough (#37) plays the real game.
 
 Usage:
-    python3 tests/proto.py                  # run everything
-    python3 tests/proto.py --update-golden  # refresh proto_select / proto_start
-    python3 tests/proto.py 1 2 30           # run only the listed items
+    python3 tests/game.py                  # run everything
+    python3 tests/game.py --update-golden  # refresh game_select / game_start
+    python3 tests/game.py 1 2 30           # run only the listed items
 """
 import hashlib
 import os
@@ -20,7 +20,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from proto_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at,  # noqa: E402
+from game_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at,  # noqa: E402
                        cell_bytes, TILE_ATTRS, FLASH_ATTRS, KIND_ATTR,
                        GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION,
                        EF_LEFT, EF_PENDING, EF_ACTIVE, EF_HOSTILE,
@@ -263,7 +263,7 @@ def main():
         if want(1):
             p.load()
             h.expect("1 boot GS_SELECT", p.wait_state(GS_SELECT), True)
-            golden(h, "proto_select", p.frame())
+            golden(h, "game_select", p.frame())
             p.boot(K_KNIGHT)
             e = p.ent(0)
             h.expect("1 GS_PLAYING", p.rb("GAME_STATE"), GS_PLAYING)
@@ -273,7 +273,7 @@ def main():
             h.expect("1 y", e["Y"], 14)
             h.expect("1 hp", e["HP"], 22)
             h.expect("1 potions", e["POT"], 1)
-            golden(h, "proto_start", p.frame())
+            golden(h, "game_start", p.frame())
             h.expect("1 GEN_OVERFLOW 0 after boot + hero gen", p.rb("GEN_OVERFLOW"), 0)
             h.expect("39 start attrs legal", attr_violations(p.frame(), legal_attrs(p)), [])
             h.expect("8 floor band A at rest", floor_band_ok(p.frame(), holes(0)), [])
@@ -893,12 +893,12 @@ def main():
             h.expect("49 CLIP_TRAP counted", p.rb("CLIP_TRAP"), 1)
 
         # ---------------- 50 tape end-to-end (the real 128 Tape Loader path)
-        # The .sna enters at `boot`; this loads a private copy of proto.tap the
+        # The .sna enters at `boot`; this loads a private copy of wazhack.tap the
         # way a user does (reset -> 128 menu Tape Loader autoload -> BASIC ->
         # CODE -> start -> 2x LD-BYTES into banks 1/3 -> boot).
         if want(50):
-            tap = os.path.join(tempfile.mkdtemp(prefix="proto_tap_"), "proto.tap")
-            shutil.copyfile(os.path.join(os.path.dirname(HERE), "build", "proto.tap"), tap)
+            tap = os.path.join(tempfile.mkdtemp(prefix="game_tap_"), "wazhack.tap")
+            shutil.copyfile(os.path.join(os.path.dirname(HERE), "build", "wazhack.tap"), tap)
             p.wb("GAME_STATE", 0)                        # no stale GS_SELECT
             p.z.cmd("set-memory-zone 0")                 # scrub banks 1/3: sources
             for b in (1, 3):                             # must come off the tape
@@ -929,30 +929,30 @@ def main():
         if want(51):
             p.boot(K_WIZARD)
             ref_start = p.frame()
-            golden(h, "proto_start_wizard", ref_start)
+            golden(h, "game_start_wizard", ref_start)
             ref_pool = p.hero_pool()
             p.boot(K_KNIGHT)
             h.expect("51 knight dies", p.die(), True)
             h.expect("51 ENTER -> GS_SELECT", p.enter_to_select(), True)
-            golden(h, "proto_select", p.frame())
+            golden(h, "game_select", p.frame())
             p.hold("2")
             h.expect("51 '2' starts a wizard game", p.wait_state(GS_PLAYING), True)
             p.release()
             p.settle(3)
             h.expect("51 2nd game wizard start screen == fresh wizard boot",
                      p.frame() == ref_start, True)
-            golden(h, "proto_start_wizard", p.frame())
+            golden(h, "game_start_wizard", p.frame())
             frt, data = p.hero_pool()
             h.expect("51 2nd game wizard FRT rows == fresh boot", frt == ref_pool[0], True)
             h.expect("51 2nd game wizard pool bytes == fresh boot", data == ref_pool[1], True)
             h.expect("51 wizard dies", p.die(), True)
             h.expect("51 ENTER -> GS_SELECT (after 2 heroes)", p.enter_to_select(), True)
-            golden(h, "proto_select", p.frame())
+            golden(h, "game_select", p.frame())
             p.hold("1")
             p.wait_state(GS_PLAYING)
             p.release()
             p.settle(3)
-            golden(h, "proto_start", p.frame())
+            golden(h, "game_start", p.frame())
 
         # ---------------- 42 (review C R1) overlap repair of a DIRTY_ATTR sprite
         # The hero's attr is toggled every tick (DIRTY_ATTR, frame unchanged)
@@ -1025,9 +1025,9 @@ def main():
 def tape_rest(h, p):
     """#50 after the tape reached GS_SELECT: screen, pool, banks, play."""
     p.tick(2)                                    # park on select_tick
-    golden(h, "proto_select", p.frame())
+    golden(h, "game_select", p.frame())
     h.expect("50 tape GEN_OVERFLOW 0", p.rb("GEN_OVERFLOW"), 0)
-    from proto_lib import SNA_RAM
+    from game_lib import SNA_RAM
     p.z.cmd("set-memory-zone 0")
     try:
         ram = p.z.read_memory(0, 131072)
@@ -1045,7 +1045,7 @@ def tape_rest(h, p):
     h.expect("50 tape: '1' starts the game", p.wait_state(GS_PLAYING), True)
     p.release()
     p.settle(3)
-    golden(h, "proto_start", p.frame())
+    golden(h, "game_start", p.frame())
 
 
 def walkthrough(h, p, check14=False):
@@ -1110,7 +1110,7 @@ def walkthrough(h, p, check14=False):
     res["select"] = p.wait_state(GS_SELECT)
     p.release()
     p.settle()
-    golden(h, "proto_select", p.frame())             # after a WIN -> ENTER
+    golden(h, "game_select", p.frame())             # after a WIN -> ENTER
     return res
 
 

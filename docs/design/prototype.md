@@ -25,17 +25,15 @@
 > `assets/gfx/source/wazhack_sprites.dc.html` (Knight / Wizard / Rogue; Skeleton,
 > Goblin, Ghost, Giant Rat, Bat, Slime). This replaces Wizard/Witch + cat. (2) "All
 > directions" means rooms with floors joined by ladders, plus up/down room exits
-> that use the Cauldron vertical transition (`spectrum-design.md` §R1/R2).
+> that use the Cauldron vertical transition (`foundations.md` F5/F6).
 > (3) There is no climb art in the sheet, so this doc decides how climbing is shown
 > (§3.4, §10). (4) Every state an entity can be in must have art (§10).
 >
-> **What this doc supersedes** for the side-view game: `spectrum-design.md` §R3,
-> §2.4, parts of §3, §4.1, §4.3/§4.4, §5.3 and §5.4 (see its R4 block).
-> `heroes.md` is superseded by §2 + §10 here. `sideview-renderer.md` §1.1/§1.3/§1.6
-> is revised by §5 here, and its §2.2 band zoning is **kept and extended** by §4.
-> **Reused unchanged:** §5.1 to-hit, §5.2 dice, §5.6 RNG, the §3 quaff key, R1/R2,
-> the P3 input primitives + ZRCP injection, and the spike's masked blit +
-> attribute-follow.
+> **Companion doc:** `docs/design/foundations.md` holds the stable rules this spec
+> reuses unchanged: rolls and RNG (F1-F3), turn invariants (F4), the room-transition
+> scroll and room model (F5/F6), input rules (F7), the sprite data contract (F8) and
+> colour zoning (F9). The earlier top-down and spike designs are archived under
+> `docs/archive/design/`.
 >
 > Numbers are binding. The engineer assigns bytes/addresses in
 > `docs/memory-map.md`.
@@ -224,7 +222,7 @@ hole), `POTION` (1 cell), `CHEST` (2×2 cells), `TORCH` (1×2, optional).
   freedom, Ghost: 3. Flyers never enter a floor row and never pass through walls
   or entities. Ghosts do not phase.
 
-### 3.6 Room exits and transitions (§R1/R2 applied)
+### 3.6 Room exits and transitions (foundations F5/F6 applied)
 
 - **Horizontal exit:** an open wall col on storey `s`. The player's body entering
   col 0 (moving left) or col 31 (moving right) triggers it. The step animates first,
@@ -315,7 +313,7 @@ arriving.
 
 ### 4.1 Zoning
 
-The spike's two-band idea (`sideview-renderer.md` §2.2) is kept, repeated per
+The two-band idea (`foundations.md` F9) is kept, repeated per
 storey. **Air bands are PAPER black; floor rows are a coloured band.** Every sprite
 attr has black paper, so a sprite may only ever stamp **black-paper cells**. §4.2
 proves that it does.
@@ -499,7 +497,7 @@ The caps are enforced at authoring (≤ 3 monsters per room initially) and at
 - Reach: Knight 1, Rogue 1, **Wizard 3**, all monsters 1 (gap 0 or 1). Attack frames
   overhang 8–16 px forward over the gap.
 
-### 6.2 Rolls (reuse `spectrum-design.md` §5.1/§5.2/§5.6 verbatim)
+### 6.2 Rolls (reuse `foundations.md` F1/F2/F3 verbatim)
 
 To-hit `d20 + atk ≥ 10 + eva`. Damage `1dN + bonus`, saturating. xorshift16, fixed
 seed, mask-and-reject. **RNG consumption order:** player to-hit, then damage. Then
@@ -617,7 +615,7 @@ monsters never block anything.
   `potions −= 1`, costs **1 turn** (2 ticks). The hero flashes `ATTR_HEAL` and
   monsters act as normal. `G` with `potions == 0` **or `hp == max_hp`** does
   nothing (no turn, no waste). You can quaff on a ladder (attr-only flash, §4.2).
-  This reuses the old §3 quaff action and the §4.3 `potions` field.
+  The `potions` field is in §11.1.
   - **Why carried:** it turns healing into a decision (drink now, or save it for
     the skeleton), shows the stock in the HUD, and matches the existing design.
     Auto-quaff would waste potions picked up at full hp.
@@ -960,7 +958,7 @@ Setup: fixed seed, `INPUT_REPEAT = 0`, `ANIM_FREEZE = 1` for goldens. "Wait for 
 40. **Budget:** `OVERRUN_COUNT` reported after the walkthrough, target 0. The
     heavy-mix tick is measured against the §5.5 target of ≤ 95 % of 141.8k T.
 
-**As-built additions (rev C). Numbers match the test ids in `tests/proto.py`.**
+**As-built additions (rev C). Numbers match the test ids in `tests/game.py`.**
 The zap-skips-sprites check is part of **#19** ("no ZAP attr inside the target's
 drawn footprint").
 - **12b. Mid-ladder yield is along the ladder** (§6.4 rule 1): a climbing monster in

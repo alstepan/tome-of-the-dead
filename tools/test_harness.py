@@ -3,7 +3,7 @@
 
 Launches ZEsarUX headless with the ZRCP remote protocol, smartloads a build,
 and exposes small assert helpers (state reads + golden-screen hashing). Built on
-tools/zrcp.py. Scenarios live under tests/ and use this module; see tests/smoke.py.
+tools/zrcp.py. Scenarios live under tests/ and use this module; see tests/game_lib.py.
 
 Self-contained and repeatable: kills any stray emulator on the port before
 launching and terminates its own emulator on exit (context-manager friendly).

@@ -1,9 +1,9 @@
 ;==============================================================================
-; proto_gfx.asm — PROTO graphics layer.
+; gfx.asm — PROTO graphics layer.
 ;   paging, boot-time mirror+pre-shift generator (prototype §5.1/§5.2),
 ;   masked blit at any (px multiple of 4, py) (§5.1), exact-footprint attr
 ;   stamp (§4.2), tile-map erase/restore (§4.3), HUD text, room draw and the
-;   frozen Cauldron transition scrolls (§3.6, spectrum-design R1/R2).
+;   frozen Cauldron transition scrolls (§3.6, foundations F5/F6).
 ; Conventions: IX preserved unless stated; IY never touched (= $5C3A, ROM ISR).
 ;==============================================================================
 
@@ -1190,7 +1190,7 @@ frt_ptr:
                 ret
 
 ;==============================================================================
-; init_tiles — TILE_GLYPHS / TILE_ATTRS in RAM. Stand-ins from proto_data +
+; init_tiles — TILE_GLYPHS / TILE_ATTRS in RAM. Stand-ins from data.asm +
 ; bg_tiles_floor; potion/chest/torch glyphs extracted from the sheet's item
 ; frames (masked source: data byte = offset 1 of each [mask,data] pair).
 ; Clobbers: all but IX.  Boot only.
@@ -1295,7 +1295,7 @@ init_tiles:
                 ret
 
 ;==============================================================================
-; TRANSITION SCROLLS (prototype §3.6; spectrum-design R1/R2). Gameplay frozen,
+; TRANSITION SCROLLS (prototype §3.6; foundations F5/F6). Gameplay frozen,
 ; sprites already erased, HUD rows 21..23 never touched. ROOM_MAP is shifted in
 ; lock-step so it always mirrors the screen; at the end ROOM_MAP == NEXT_MAP.
 ; Clobbers: A, BC, DE, HL, IX (documented; IY untouched).

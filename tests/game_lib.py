@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Helpers for the PROTO ZRCP tests (tests/proto.py, tests/proto_budget.py).
+"""Helpers for the game ZRCP tests (tests/game.py, tests/budget.py).
 
-Addresses and frame ids are parsed from build/proto.sym, so the tests follow the
+Addresses and frame ids are parsed from build/wazhack.sym, so the tests follow the
 build instead of hard-coding numbers (docs/memory-map.md "PROTO" is the human
 reference). Input is injected through the P3 contract: INPUT_SRC=1 freezes the
 KBD_MATRIX mirror and we poke active-low half-row bytes.
@@ -19,13 +19,13 @@ REPO = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(REPO, "tools"))
 from test_harness import Harness  # noqa: E402,F401
 
-BUILD_SNA = os.path.join(REPO, "build", "proto.sna")
-SYM = os.path.join(REPO, "build", "proto.sym")
+BUILD_SNA = os.path.join(REPO, "build", "wazhack.sna")
+SYM = os.path.join(REPO, "build", "wazhack.sym")
 
 # Every ZRCP command must answer within this (a `run` is <= 1 emulated s of
 # boot pool generation; everything else is instant). A stuck command raises
 # TimeoutError in seconds instead of hanging the suite for hours.
-CMD_TIMEOUT = float(os.environ.get("PROTO_CMD_TIMEOUT", "30"))
+CMD_TIMEOUT = float(os.environ.get("GAME_CMD_TIMEOUT", "30"))
 # `run` opcode limit: a tick is <= ~40k opcodes, boot's pool gen ~1M. A run
 # that hits the limit without reaching a probe is an anomaly (logged, retried).
 RUN_LIMIT = 4000000
@@ -33,8 +33,8 @@ MAX_RUN_RETRIES = 3            # consecutive non-probe returns before failing
 # ZEsarUX flags for the tick-exact suites. Results never depend on wall-clock
 # pacing (every advance is a breakpoint-bounded `run`), so let the emulator run
 # unthrottled and windowless: ~2x faster, and no GUI window for App Nap to
-# throttle. Override with PROTO_EMU_ARGS="" to watch it in the cocoa window.
-EMU_ARGS = tuple(os.environ.get("PROTO_EMU_ARGS",
+# throttle. Override with GAME_EMU_ARGS="" to watch it in the cocoa window.
+EMU_ARGS = tuple(os.environ.get("GAME_EMU_ARGS",
                                 "--emulatorspeed 1000 --vo null --ao null").split())
 
 
@@ -51,14 +51,14 @@ S = load_syms()
 
 
 def _private_snapshot():
-    """Copy build/proto.sna once to a private temp file and load only that:
-    a concurrent assemble rewrites build/proto.sna in place (SAVESNA path is
+    """Copy build/wazhack.sna once to a private temp file and load only that:
+    a concurrent assemble rewrites build/wazhack.sna in place (SAVESNA path is
     hard-coded), and a smartload mid-write reads a torn file. Also parse the
     128K image so every load() can verify all 8 banks byte-for-byte."""
     data = open(BUILD_SNA, "rb").read()
     if len(data) != 131103:
         raise RuntimeError(f"{BUILD_SNA}: {len(data)} bytes, want a 128K .sna (131103)")
-    fd, path = tempfile.mkstemp(prefix="proto_", suffix=".sna")
+    fd, path = tempfile.mkstemp(prefix="game_", suffix=".sna")
     with os.fdopen(fd, "wb") as f:
         f.write(data)
     ram48, pc, p7ffd = data[27:27 + 49152], data[49179] | data[49180] << 8, data[49181]
@@ -69,13 +69,13 @@ def _private_snapshot():
             banks[b] = data[off:off + 16384]
             off += 16384
     if pc != S["boot"]:
-        raise RuntimeError(f"proto.sna entry {pc:#06x} != proto.sym boot {S['boot']:#06x}:"
+        raise RuntimeError(f"wazhack.sna entry {pc:#06x} != wazhack.sym boot {S['boot']:#06x}:"
                            " .sna and .sym are from different builds (rebuild with --sym)")
     return path, hashlib.sha256(data).hexdigest(), b"".join(banks[i] for i in range(8)), p7ffd
 
 
 SNA, SNA_SHA256, SNA_RAM, SNA_7FFD = _private_snapshot()
-print(f"[proto] snapshot {BUILD_SNA} sha256={SNA_SHA256[:16]} -> private copy {SNA}", flush=True)
+print(f"[game] snapshot {BUILD_SNA} sha256={SNA_SHA256[:16]} -> private copy {SNA}", flush=True)
 
 
 def _cleanup_snapshot():
@@ -88,7 +88,7 @@ def _cleanup_snapshot():
 import atexit  # noqa: E402
 atexit.register(_cleanup_snapshot)
 
-# entity layout (proto_defs.asm)
+# entity layout (defs.asm)
 STRIDE = 32
 E = dict(KIND=0, ROOM=1, FLAGS=2, X=3, Y=4, HP=5, MAXHP=6, AIDIR=7, POT=8,
          PX=9, PY=10, MODE=11, REACT=15, HIT=22, FLT=18, FLA=19, DVIS=24, DFID=25,

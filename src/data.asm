@@ -1,5 +1,5 @@
 ;==============================================================================
-; proto_data.asm — PROTO static tables: kinds, frame table (with the §10
+; data.asm — PROTO static tables: kinds, frame table (with the §10
 ; stand-in rule), per-kind state->frame role tables, animation sequences, the
 ; 4 hand-authored rooms (§8), spawns, strings and stand-in tile glyphs.
 ;
@@ -200,7 +200,7 @@ POOL_HERO_MAX = POOL_ROGUE
 POOL_NEED       EQU POOL_MONSTERS + POOL_HERO_MAX + 3 * 576 + 3 * 576
                 ASSERT POOL_NEED <= 3 * 16384
                 ASSERT FID_COUNT <= FRT_MAX
-                DISPLAY "PROTO frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of 49152 (monsters ", /D, POOL_MONSTERS, ", hero max ", /D, POOL_HERO_MAX, ")"
+                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of 49152 (monsters ", /D, POOL_MONSTERS, ", hero max ", /D, POOL_HERO_MAX, ")"
 
 ;==============================================================================
 ; ROLE TABLES (per-kind state -> frame). Stand-ins per prototype §7/§10:
@@ -358,7 +358,7 @@ sl_hurt:        DB SL_HURT, 3, 0, SEQ_END
 sl_death:       DEATHSEQ SL_HURT, SL_DEAD, FID_slime_dead, SL_REST
 
 ;------------------------------------------------------------------------------
-; kind_seqs: KS_STRIDE (18) B per kind — see KS_* in proto_defs.asm.
+; kind_seqs: KS_STRIDE (18) B per kind — see KS_* in defs.asm.
 ;------------------------------------------------------------------------------
 kind_seqs:
                 DW kn_idle, kn_move, kn_climb, kn_climbrest, kn_attack, kn_hurt, kn_block, kn_death

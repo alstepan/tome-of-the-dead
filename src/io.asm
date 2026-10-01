@@ -1,5 +1,5 @@
 ;==============================================================================
-; proto_io.asm — PROTO input layer + RNG.
+; io.asm — PROTO input layer + RNG.
 ;
 ; Input: COPIED (not shared) from main.asm's P3 layer, keeping the exact
 ; INPUT_SRC / KBD_MATRIX test-injection contract. Copy rather than factor
@@ -7,7 +7,7 @@
 ; bytes) and PROTO's semantics differ anyway (held keys repeat, no diagonals,
 ; extra 1/2/3/G/Enter/'.' keys) — prototype §3.1/§9.
 ;
-; RNG: xorshift16 (7,9,8), spectrum-design §5.6 — main.asm only seeds
+; RNG: xorshift16 (7,9,8), foundations F3 — main.asm only seeds
 ; RNG_STATE, it has no generator yet, so this is the first implementation.
 ;==============================================================================
 

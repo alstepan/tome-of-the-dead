@@ -48,22 +48,22 @@ tests/golden/<name>.hash  # committed golden screen hashes
 A change is not "done" until `test` passes. A new golden hash without a stated,
 reviewed reason is itself a failure.
 
-## PROTO suites (`build/proto.sna`, build it first with `--sym`)
+## Game suites (`build/wazhack.sna`, build it first with `--sym`)
 
 ```sh
-python3 tests/proto.py                 # prototype.md §11.3 checklist (1-40) + 41-51 extras (50 = real tape load, 51 = select/2nd hero)
-python3 tests/proto.py 5 9 30          # only the listed checklist items
-python3 tests/proto.py --update-golden # refresh proto_select / proto_start hashes
-python3 tests/proto_budget.py          # per-tick T-state budget (exit 1 if > 2 frames)
-PROTO_PROFILE=1 python3 tests/proto_budget.py   # + per-phase split of the worst tick
+python3 tests/game.py                 # prototype.md §11.3 checklist (1-40) + 41-51 extras (50 = real tape load, 51 = select/2nd hero)
+python3 tests/game.py 5 9 30          # only the listed checklist items
+python3 tests/game.py --update-golden # refresh game_select / game_start hashes
+python3 tests/budget.py          # per-tick T-state budget (exit 1 if > 2 frames)
+GAME_PROFILE=1 python3 tests/budget.py   # + per-phase split of the worst tick
 ```
 
-- **Tick-exact**: `tests/proto_lib.py` keeps ZEsarUX in cpu-step mode with
+- **Tick-exact**: `tests/game_lib.py` keeps ZEsarUX in cpu-step mode with
   breakpoints on the test-probe labels (`wait_tick`, `select_tick`) and advances
   one 25 Hz tick per `run`, so scenarios are deterministic (no sleeps, no racing
   the renderer). Frames sampled "mid-turn" are read with the tick's render
   complete.
-- Addresses and frame ids come from `build/proto.sym`; the entity layout is in
+- Addresses and frame ids come from `build/wazhack.sym`; the entity layout is in
   `docs/memory-map.md` (PROTO).
 - **No wall-clock anywhere.** `Proto.load()` never leaves cpu-step mode
   (smartload in step mode is synchronous) and verifies the reload: all 128K
@@ -72,21 +72,20 @@ PROTO_PROFILE=1 python3 tests/proto_budget.py   # + per-phase split of the worst
   under host load (reloads silently not taking → scenarios starting from the
   previous one's state). `tick()` checks every `run` returned on a probe PC;
   anything else is logged `[ANOMALY]`, re-run, and fails after 3 in a row.
-- `build/proto.sna` is copied to a private temp file at startup (sha256
+- `build/wazhack.sna` is copied to a private temp file at startup (sha256
   printed) so a concurrent assemble can't feed a torn file; `.sna` entry must
   equal `.sym` `boot` or the suite refuses to run.
 - ZEsarUX runs `--emulatorspeed 1000 --vo null --ao null` for these suites
-  (`PROTO_EMU_ARGS=""` to watch in the window). Per-command timeout 30 s
-  (`PROTO_CMD_TIMEOUT`): a stuck `run` fails in seconds.
+  (`GAME_EMU_ARGS=""` to watch in the window). Per-command timeout 30 s
+  (`GAME_CMD_TIMEOUT`): a stuck `run` fails in seconds.
 - Output is flushed per line; `[time] load #n` lines give per-scenario wall
   time. Full run ≈ 70 s idle, ≈ 2 min with 8 busy cores; the §8.2
   walkthrough is played twice (determinism #38).
-- `proto_budget.py` gates the "mix" scenario (every tick <= 2 frames) and
+- `budget.py` gates the "mix" scenario (every tick <= 2 frames) and
   reports the review-A1 "heavy" mix (hero + 2 skeletons + goblin + ghost,
   ~109% today) without gating on it.
-- #50 loads a private copy of `build/proto.tap` through ZEsarUX's 128K Tape
+- #50 loads a private copy of `build/wazhack.tap` through ZEsarUX's 128K Tape
   Loader autoload (the only test of the real `start` path; the .sna enters at
   `boot`): GS_SELECT, select golden, GEN_OVERFLOW 0, banks 1/3 == .sna, then a
   game start golden. It free-runs briefly (polls GAME_STATE, 60 s cap).
-- Regression gate for PROTO work: `proto.py` + `proto_budget.py` green, and the
-  older `smoke.py`, `p3.py`, `sideview.py`, `scroll.py` still green.
+- Regression gate: `game.py` + `budget.py` green.

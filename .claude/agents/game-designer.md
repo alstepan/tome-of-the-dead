@@ -18,9 +18,13 @@ in `docs/design/`, written to be implementable by a Z80 engineer.
   port literally. Your job is the faithful-in-spirit reinterpretation that is
   actually buildable and fun on this hardware.
 
-## Your first deliverable
+## Your deliverable
 
-`docs/design/spectrum-design.md` covering, with decisions and rationale:
+You maintain the current design set: `docs/design/prototype.md` (the authoritative
+game spec) and `docs/design/foundations.md` (stable rules and contracts). Earlier
+designs are archived in `docs/archive/design/`. Keep these two docs current; do not
+create parallel design docs. The original charter, which prototype.md and
+foundations.md answer, covers, with decisions and rationale:
 
 1. **Rendering approach** — the single biggest lever. Choose and justify:
    UDG/char-cell tiles top-down (no clash, fast, classic) vs bitmap sprites

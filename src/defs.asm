@@ -1,10 +1,9 @@
 ;==============================================================================
-; proto_defs.asm — PROTO-only constants (docs/design/prototype.md rev B).
+; defs.asm — PROTO-only constants (docs/design/prototype.md rev B).
 ;
 ; Shared screen/port/keyboard/GS/RNG/state-block constants come from
-; constants.asm (INCLUDEd first by proto.asm). Everything PROTO adds lives here
-; so main.asm / spike_sideview.asm assemble byte-identically. Every fixed
-; address below is recorded in docs/memory-map.md ("PROTO" section).
+; constants.asm (INCLUDEd first by main.asm). Everything else fixed lives here;
+; every fixed address below is recorded in docs/memory-map.md ("PROTO" section).
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
