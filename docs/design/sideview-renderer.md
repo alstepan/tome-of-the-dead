@@ -1,5 +1,18 @@
 # WazHack/ZX — Side-view renderer (FEASIBILITY SPIKE design)
 
+> **PROTO revisions 2026-09-24 (pointer; spike text below unchanged).**
+> `docs/design/prototype.md` revises, for the shipped game: **§1.1** sprite box →
+> per-kind body boxes from the sprite sheet (heroes 24×48), frames up to 40 px wide
+> with a per-frame x-anchor (prototype §5.3); **§1.3** 8 pre-shifts → at most 2
+> (shift 0/4; one for stationary frames) because all positions are multiples of
+> 4 px (prototype §5.1), plus load-time mirroring for facing (§5.2); **§1.6** erase
+> → background redraw from the room tile map restores attrs for free (no attr
+> shadow); **§2.2** two-band zoning is **kept and repeated per storey** (black air
+> bands, coloured floor rows); ladders cross floors through black-paper hole
+> cells with climbers snapped to the ladder columns, the "+1 column" stamp trick
+> is dropped for exact footprints, and a draw-order/overlap rule covers multiple
+> sprites (prototype §4, rev B).
+
 > **REVISED 2026-06-28: colour proven.** Scope change by manager+user — the spike
 > must now PROVE COLOUR: a coloured sprite moving over a coloured background with
 > attribute clash **actively managed every frame**, not a monochrome playfield.
@@ -8,7 +21,7 @@
 > a moving sprite), **§3.3** (attributes scroll with the background), **§5**
 > (assertions are now *legality*, not *identity*; attribute-write cost added to the
 > budget), **§6-§8** (hand-off, banking byte, assumptions). All other decisions
-> (16×24 sprite, masked blit, engine-side pre-shift, fine-sprite/coarse-background
+> (32×48 sprite, masked blit, engine-side pre-shift, fine-sprite/coarse-background
 > scroll, pixel-coordinate entity model) are **unchanged** — colour does not touch
 > the bitmap/blit/scroll path; see §2.1.
 
@@ -55,17 +68,18 @@ cost/feasibility — clash, masked pre-shifted sprites, scroll, banking") plus t
 
 ## 1. Sprite format & blitting strategy
 
-### 1.1 DECISION — sprite size: **16 × 24 px** (2 cells wide × 3 cells tall)
+### 1.1 DECISION — sprite size: **32 × 48 px** (4 cells wide × 6 cells tall)
 
-A 16×24 sprite is the smallest box that reads as a *standing humanoid* (head /
-torso / legs) side-on at Spectrum resolution — the spike's whole point is a
-**recognizable** adventurer, and 16×16 reads as a squat blob. 24 px = exactly 3
-character rows, which (see §1.5) lets us keep the sprite **char-row-aligned
-vertically** and pay the pre-shift cost on the X axis only.
+A 32×48 sprite gives a large, detailed side-on humanoid (head / torso / legs)
+with room for the distinguishing hero features (hat shape, staff, robe hem) to
+read clearly — the point is a **recognizable, characterful** adventurer, not a
+squat blob. 48 px = exactly 6 character rows, which (see §1.5) lets us keep the
+sprite **char-row-aligned vertically** and pay the pre-shift cost on the X axis
+only. 32 px = 4 byte-columns per row.
 
-- Fallback if blit cost is marginal: drop to **16×16** (2×2 cells). Same data
-  contract, 33% fewer rows to blit. The reviewer's measurement decides whether the
-  extra row band is affordable; default to 16×24 and let the number argue.
+- Fallback if blit cost is marginal: drop the box height/width. Same data
+  contract. The reviewer's measurement decides whether the full 4×6 cell region
+  is affordable per frame; default to 32×48 and let the number argue.
 
 ### 1.2 DECISION — masked blit: AND-mask then OR-data, per byte
 
@@ -83,17 +97,18 @@ through its outline so there is no rectangular black box around the figure.
 
 ### 1.3 DECISION — sub-byte X: **pre-shift all 8 positions** (not shift-at-runtime)
 
-A 16-px sprite placed at an arbitrary X spans **3 byte-columns** once shifted by
-1-7 (16 bits shifted into a third byte). The two options:
+A 32-px sprite placed at an arbitrary X spans **5 byte-columns** once shifted by
+1-7 (32 bits shifted right spill into a fifth byte); byte-aligned (S=0) it spans
+its native **4 byte-columns**. The two options:
 
 | Option | Bytes | Cycles per blit |
 |---|---|---|
 | **Pre-shift 8 (CHOSEN)** | 8 × one frame | ~0 shift cost: pick the pre-shifted copy by `X AND 7`, then a straight masked copy |
-| Shift-at-runtime | 1 × one frame | Per blit: rotate a 3-byte span right by `X AND 7`, ×24 rows. Z80 has no multi-bit shift, so worst case ≈ 24 rows × 7 shifts × 3 bytes ≈ **~500 rotate ops just to shift**, dwarfing the copy and paid *every frame the sprite moves* |
+| Shift-at-runtime | 1 × one frame | Per blit: rotate a 5-byte span right by `X AND 7`, ×48 rows. Z80 has no multi-bit shift, so worst case ≈ 48 rows × 7 shifts × 5 bytes ≈ **~1700 rotate ops just to shift**, dwarfing the copy and paid *every frame the sprite moves* |
 
 On a slow Z80 the runtime shift is the dominant cost and it recurs every motion
 frame; the pre-shift trades **bytes (cheap, 128K) for cycles (scarce)**. One
-16×24 frame is 144 bytes (§1.4), so 8 pre-shifts = **1152 bytes** — trivial in
+32×48 frame is 384 bytes (§1.4), so 8 pre-shifts = **3072 bytes** — trivial in
 main RAM. DECISION: pre-shift 8.
 
 **Who generates the 8 copies — DECISION: engine generates them at boot from one
@@ -101,38 +116,45 @@ artist-supplied unshifted frame.** The artist emits exactly **one** frame
 (S=0); `init` shifts it into the 8-entry pre-shift table in RAM once at startup.
 Rationale: minimises the artist data contract to a single frame, emits no
 pre-shifted image bytes into the tape, and the boot-time shift is a one-off cost
+(a 32px sprite shifts into a 5-byte-column span; the S=0 frame's fifth column is
+all-transparent, §1.4)
 off the hot path. (M2: an offline `tools/` step emits all 8 pre-shifts straight
 into a `$C000` bank instead, when many sprites/frames make boot-gen too slow.)
 
 ### 1.4 DECISION — byte layout the artist emits (DATA CONTRACT)
 
-The sprite occupies a **uniform 3-byte-column span** at every pre-shift (the
-unshifted S=0 frame pads its third column to transparent: mask `$FF`, data `$00`),
-so one blit routine serves all 8 shifts.
+The artist emits the **native 4-byte-column** S=0 (byte-aligned) frame. The
+engine's boot-time pre-shift (§1.3) produces the shifted copies, each of which
+spills into a **5-byte-column span** (32 bits shifted right by 1-7 reach into a
+fifth column); the S=0 frame's fifth column is implicitly all-transparent
+(mask `$FF`, data `$00`), so one blit routine serves all 8 shifts.
 
 Per frame, **row-major, top row first; within a row, left column first; within a
 column, mask byte then data byte** (interleaved so the blit reads them
 sequentially as it walks the screen):
 
 ```
-frame = 24 rows × [ col0_mask, col0_data, col1_mask, col1_data, col2_mask, col2_data ]
-      = 24 × 6  = 144 bytes
+frame = 48 rows × [ col0_mask, col0_data, col1_mask, col1_data,
+                    col2_mask, col2_data, col3_mask, col3_data ]
+      = 48 × 8  = 384 bytes
 ```
 
 - Bit order: **MSB = leftmost pixel** (matches the existing tileset, `main.asm`
   `tile_glyphs`).
 - Mask polarity: **AND-mask, `1` = transparent** (§1.2).
-- The artist/converter delivers **one** 144-byte frame (the S=0, char-aligned
-  figure) **+ one colour descriptor byte** (§1.7), plus its human-readable 16×24
-  pixel + mask source. **= 145 bytes.** No pre-shifts, no animation frames. The
+- The artist/converter delivers **one** 384-byte frame (the S=0, char-aligned
+  4-column figure) **+ one colour descriptor byte** (§1.7), plus its
+  human-readable 32×48 pixel + mask source. **= 385 bytes.** No pre-shifts (the
+  engine generates the 5-column shifted copies at boot), no animation frames. The
   sprite shape stays 1-bit + mask; **colour is carried in the single descriptor
   byte, not per pixel** (a 1-bit screen cannot hold per-pixel colour) — the
   renderer stamps that descriptor into the attribute cells the sprite covers (§2).
 
-> Artist hand-off in one line: *"One side-on adventurer, 16×24, 1-bit + 1-bit
-> mask, emitted as 24 rows of `[mask,data]×3` (MSB-left, mask 1=transparent),
-> third column padded transparent, 144 bytes; then 1 colour-descriptor byte
-> (§1.7). 145 bytes total."*
+> Artist hand-off in one line: *"One side-on adventurer, 32×48, 1-bit + 1-bit
+> mask, emitted as 48 rows of `[mask,data]×4` (MSB-left, mask 1=transparent),
+> 384 bytes; then 1 colour-descriptor byte (§1.7). 385 bytes total. The engine
+> pre-shifts into a 5-column span at boot; the artist emits only the 4-column
+> S=0 frame."*
 
 ### 1.7 DECISION — sprite colour descriptor: **ONE attribute byte** (REVISED 2026-06-28)
 
@@ -140,11 +162,11 @@ The sprite carries its colour as a **single Spectrum attribute byte**
 `ATTR_SPRITE = FLASH|BRIGHT|PAPER|INK` (same bit layout as `constants.asm`), which
 the renderer stamps into every attribute cell the sprite currently covers (§2.3).
 
-Why one uniform byte and **not** a per-cell attribute block (a 3×3 = 9-byte map):
+Why one uniform byte and **not** a per-cell attribute block (a 4×6 = 24-byte map):
 
 - The spike's clash problem is the **moving footprint**, not per-cell colour
   richness — and the footprint write set / cost is *identical* whether the
-  renderer stamps 1 repeated byte or 9 distinct bytes (§2.3). One byte proves
+  renderer stamps 1 repeated byte or 24 distinct bytes (§2.3). One byte proves
   colour-under-motion with the minimal, most clash-checkable contract.
 - **Hard constraint on the byte's PAPER bits:** `ATTR_SPRITE` paper **must equal
   the paper of the colour band the sprite stands in** (§2.2). Because paper then
@@ -156,25 +178,25 @@ Why one uniform byte and **not** a per-cell attribute block (a 3×3 = 9-byte map
 - Spike value: `ATTR_SPRITE = $46` (PAPER black, INK yellow, BRIGHT) — this is the
   existing `ATTR_PLAYER` constant; reuse it.
 
-> **M2 (flagged, not built):** a per-cell 3×3 attribute block lets the sprite be
-> multi-coloured (e.g. yellow torso / white legs). It is a drop-in: same 9 stamp
-> writes, the converter emits 9 bytes instead of 1, each still one paper+ink so
+> **M2 (flagged, not built):** a per-cell 4×6 attribute block lets the sprite be
+> multi-coloured (e.g. cyan hat / white robe). It is a drop-in: same stamp
+> writes, the converter emits 24 bytes instead of 1, each still one paper+ink so
 > still clash-legal by construction. Out of spike scope.
 
 ### 1.5 DECISION — vertical alignment: **sprite Y is char-row-aligned (floor line)**
 
 The sprite stands on the floor at a fixed Y that is a multiple of 8, so it spans
-**exactly 3 char rows** with no vertical sub-cell and **no vertical pre-shift**.
+**exactly 6 char rows** with no vertical sub-cell and **no vertical pre-shift**.
 Justification: the horizontal axis is the scroll/sub-pixel axis under test;
 vertical sub-pixel adds cost and band-colour complications (§2) while adding
 nothing to the feasibility question. The blit therefore touches a fixed
-**3 byte-columns × 24 rows** region. (M2: sub-pixel Y for jumps/elevation reuses
+**up to 5 byte-columns × 48 rows** region. (M2: sub-pixel Y for jumps/elevation reuses
 the same pre-shift technique on the Y axis or accepts 8px Y steps.)
 
 ### 1.6 DECISION — erase / no-trails: **redraw background tiles under the sprite**
 
 Before blitting the sprite at its new position, redraw the background tiles under
-the sprite's **previous** bounding box (up to 3 char-cols × 3 char-rows) from the
+the sprite's **previous** bounding box (up to 5 char-cols × 6 char-rows) from the
 world tile buffer (§3) via the existing `draw_cell`. This is the simplest robust
 no-trails method and reuses proven code. (M2: save-under/restore-under is faster
 once profiled; note it, don't build it.)
@@ -193,7 +215,7 @@ impossible by construction — but the playfield was monochrome (one ink for spr
 **clash managed at runtime**. So §2 is rewritten.
 
 What does **not** change: the bitmap path. Pixels are 1-bit regardless of colour;
-the 16×24 size, masked `(scr AND mask) OR data` blit, engine-side pre-shift, the
+the 32×48 size, masked `(scr AND mask) OR data` blit, engine-side pre-shift, the
 erase-under, and the scroll model are all colour-agnostic. Colour is **purely an
 attribute-plane concern**, handled by a small extra per-frame routine (§2.3) that
 runs alongside — never inside — the blit. That separation is why proving colour
@@ -217,9 +239,9 @@ This alone is genuine colour (cyan pillars on black sky over a blue floor) and
 attribute.
 
 **(B) Per-cell attribute-follow (the moving sprite re-tints its footprint).** The
-sprite occupies **char rows 15–17** (its 24 px = 3 cells, feet resting on the
+sprite occupies **char rows 12–17** (its 48 px = 6 cells, feet resting on the
 ground band top at row 18), so its whole vertical footprint sits **inside the air
-band** → single paper (black) across the footprint. Each frame the renderer:
+band** (rows 0–17) → single paper (black) across the footprint. Each frame the renderer:
 
 1. **restores** the cells of its *current* footprint to the band attribute
    (`ATTR_AIR`), then
@@ -242,21 +264,22 @@ the user wanted proven.
 
 ### 2.3 The footprint write/restore set and its EXACT per-frame cost
 
-- **Footprint = a fixed 3 cols × 3 rows = 9 cells**, stamped every frame
+- **Footprint = a fixed 5 cols × 6 rows = 30 cells**, stamped every frame
   regardless of `X AND 7`. When the sprite is byte-aligned it really covers only
-  2 cols; the spike still stamps the third (right-margin) column because, with
+  4 cols; the spike still stamps the fifth (right-margin) column because, with
   paper == band paper, stamping an empty cell is **invisible** — so the routine is
   **branch-free** (no aligned/unaligned special-case).
-- **Restore set = the same 9 cells**, all written back to the single constant
-  `ATTR_AIR` (legal because all three footprint rows are air). The sprite stays in
+- **Restore set = the same 30 cells**, all written back to the single constant
+  `ATTR_AIR` (legal because all six footprint rows are air). The sprite stays in
   one band, so restore needs no per-row table.
-- **Writes/frame = 9 restore + 9 stamp = 18 attribute-byte writes.**
+- **Writes/frame = 30 restore + 30 stamp = 60 attribute-byte writes.**
 
 **Cost.** Attribute addresses are linear: `$5800 + row*32 + col`; `INC HL` steps a
-column, `+32` steps a row. Estimate: setup ~60 T + 18 × (`LD (HL),A` 7 T + step
-~8 T) ≈ **~330 T-states/frame, bounded < 400 T**. That is **< 0.6 % of the 70,908
-T-state frame** and roughly an order of magnitude cheaper than the 24-row masked
-blit. For N sprites it scales ~330 T × N (≈ 3,300 T at N = 10) — still trivial.
+column, `+32` steps a row. Estimate: setup ~60 T + 60 × (`LD (HL),A` 7 T + step
+~8 T) ≈ **~960 T-states/frame, bounded < 1100 T**. That is **< 1.6 % of the 70,908
+T-state frame** and still roughly an order of magnitude cheaper than the 48-row
+masked blit. For N sprites it scales ~960 T × N (≈ 9,600 T at N = 10) — still
+comfortably affordable.
 
 **KEY RESULT for the verdict:** managing colour clash under motion is nearly free
 on top of the bitmap renderer, because the attribute plane is 1/8 the resolution
@@ -285,7 +308,7 @@ attributes legitimately change every frame. Replace it with:
    is in the known finite set `{ATTR_AIR, ATTR_GROUND, ATTR_SPRITE, ATTR_FEATURE?}`.
    No garbage/stale value appears. (Each such value is itself one paper+one ink, so
    this guarantees no mis-coloured cell — see §2.4.)
-2. **Footprint is coloured:** the ≤9 cells under the sprite's *current*
+2. **Footprint is coloured:** the ≤30 cells under the sprite's *current*
    `SPRITE_PX/SPRITE_PY` equal `ATTR_SPRITE`. Proves colour is stamped under
    motion.
 3. **No colour trail:** cells the sprite covered N frames ago but no longer covers
@@ -311,6 +334,17 @@ attributes legitimately change every frame. Replace it with:
 ---
 
 ## 3. Scroll model
+
+> **SUPERSEDED 2026-07-03 for the shipped renderer.** The continuous
+> fine-sprite/coarse-background follow-with-dead-zone scroll below (and the
+> per-frame HALT-synced motion loop in §3.4) was **valid for the spike** and
+> proved feasibility, but the shipped Slice 1 renderer uses the **Cauldron-style
+> room-transition scroll** instead: the screen is static during play and scrolls
+> once, whole-screen, only on a room-boundary crossing (gameplay frozen). See
+> `spectrum-design.md` §R1/R2 (Rendering & world model revisions). The byte-shift
+> primitive proven here is reused for the transition shift; the continuous-scroll
+> dead-zone/double-buffer machinery is not shipped. §3.1–§3.4 are kept for the
+> spike record only.
 
 ### 3.1 DECISION — horizontal only; **vertical OUT for the spike**
 
@@ -360,7 +394,7 @@ that decision.
   or the feature attr if the tile is a feature. This adds **768 attribute writes
   per scroll step** (occasional, amortised) — a separate cost line the reviewer
   records (§5.4). Between scroll steps (the common case: pixel-granular sprite
-  motion inside the dead zone) attributes are touched **only** by the 18-write
+  motion inside the dead zone) attributes are touched **only** by the 60-write
   footprint follow (§2.3).
 
 ### 3.4 DECISION — frame pacing: per-frame loop synced to `HALT`
@@ -418,8 +452,8 @@ the array layout and all P3 code untouched, and the spike is throwaway.
    black paper / cyan ink, rows 0–17) over **ground** (`ATTR_GROUND`, blue paper /
    white ink, rows 18–23). Attributes set at init and rewritten on each scroll step
    (§3.3).
-2. **Player sprite (coloured)**: the 16×24 masked adventurer (§1) at char rows
-   15–17, **bright yellow** (`ATTR_SPRITE = $46`) on the black sky, standing on the
+2. **Player sprite (coloured)**: the 32×48 masked adventurer (§1) at char rows
+   12–17, **bright yellow** (`ATTR_SPRITE = $46`) on the black sky, standing on the
    ground band, initially in the viewport's central dead zone.
 3. **Motion**: hold West/East (existing `H`/`L` or `O`/`P`) → sprite moves
    ±2px/frame within the dead zone; at the margin the world origin advances 1 cell
@@ -433,12 +467,12 @@ the array layout and all P3 code untouched, and the spike is throwaway.
 
 | # | Check | How asserted |
 |---|---|---|
-| 1 | **Sprite is on screen** | Bitmap bytes at the sprite's known initial 3-col × 24-row region match the known composited signature (sprite-over-floor); non-blank where the figure is. |
+| 1 | **Sprite is on screen** | Bitmap bytes at the sprite's known initial 4-col × 48-row region match the known composited signature (sprite-over-floor); non-blank where the figure is. |
 | 2 | **No trails after motion** | Move East several frames, then read the bitmap at the **vacated** cells: they equal the pure **background** pattern from the world buffer (sprite fully erased — proves the mask + erase). The single most important check. |
 | 3 | **Sub-byte X path runs** | After a 2px move, `ENT_PX AND 7` is non-zero (2,4,6,…); read `ENT_PX`. Confirms pre-shifted blits (not just the S=0 copy) are exercised. |
 | 4 | **Viewport scrolled** | After crossing the dead zone, `VIEW_ORIGIN_COL` has changed **and** a known background feature's bitmap has moved by 8px (sample two columns). |
 | 5a | **Clash-legal (sanctioned values)** | Every byte in `$5800-$5AFF` ∈ `{ATTR_AIR=$05, ATTR_GROUND=$4F, ATTR_SPRITE=$46, (ATTR_FEATURE?)}` on every motion/scroll frame. Each value is one paper+ink, so no cell is mis-coloured (§2.4). Replaces the old "byte-identical" check — **legality, not identity**. |
-| 5b | **Footprint coloured under motion** | The ≤9 attribute cells under the sprite's current `SPRITE_PX/SPRITE_PY` equal `ATTR_SPRITE=$46`. Proves colour is stamped as the sprite moves. |
+| 5b | **Footprint coloured under motion** | The ≤30 attribute cells under the sprite's current `SPRITE_PX/SPRITE_PY` equal `ATTR_SPRITE=$46`. Proves colour is stamped as the sprite moves. |
 | 5c | **No colour trail** | After moving East several frames, the cells vacated by the sprite equal `ATTR_AIR=$05`, **not** `ATTR_SPRITE`. The colour counterpart of check 2 (no pixel trails). |
 | 6 | **No softlock / loop alive** | A test-observable frame counter advances while input is injected; the loop never wedges. |
 
@@ -461,7 +495,7 @@ known-after-N-frames frame are committed for the spike scene.
 | Measurement | Why |
 |---|---|
 | **Per-frame sprite redraw cost** = erase-under + masked blit, in **T-states** | The hot cost; recurs every motion frame |
-| **Per-frame attribute-follow cost** = 18-write restore+stamp (§2.3), in **T-states** | The colour cost; recurs every motion frame. Add it to the sprite redraw cost — the per-sprite frame budget is now blit **+** attr-follow. Designer estimate ~330 T (< 400 T); confirm the real number. |
+| **Per-frame attribute-follow cost** = 60-write restore+stamp (§2.3), in **T-states** | The colour cost; recurs every motion frame. Add it to the sprite redraw cost — the per-sprite frame budget is now blit **+** attr-follow. Designer estimate ~960 T (< 1100 T); confirm the real number. |
 | **Per-scroll-step background redraw cost** in T-states | Occasional. **Report bitmap redraw and the 768-cell attribute rewrite (§3.3) separately** — colour adds the attribute pass to the scroll step. |
 | **Single-sprite cost (blit + attr-follow) extrapolated to N sprites** | Verdict input; ~8-12 sprites |
 | **Flicker/tearing severity** (single screen, no double-buffer) | Informs the M2 shadow-screen decision |
@@ -483,7 +517,7 @@ the fallbacks are: 16×16 sprites (§1.1), fewer simultaneous sprites, per-step
 
 Everything fits in main RAM below `$C000`:
 
-- pre-shift table: 8 × 144 = **1152 B** (or 144 B source + boot-gen, §1.3)
+- pre-shift table: 8 × 384 = **3072 B** (or 384 B source + boot-gen, §1.3)
 - sprite colour descriptor: **1 B** (`ATTR_SPRITE`, §1.7)
 - world tile buffer: 64 × 24 = **1536 B**
 - background tileset: a handful of 8×8 glyphs ≈ **64-128 B**
@@ -491,13 +525,13 @@ Everything fits in main RAM below `$C000`:
   feature attr) at redraw (§3.3); band attr constants only (`ATTR_AIR`,
   `ATTR_GROUND`, …), a few bytes.
 
-Total < ~3 KB. The spike runs on the single normal screen (bank 5) with no paging.
+Total < ~5 KB. The spike runs on the single normal screen (bank 5) with no paging.
 State explicitly: **the spike does not touch `$7FFD`.**
 
 ### 6.2 M2 (flagged, not built in the spike)
 
 - **Sprite assets**: 3 monster kinds + player × a few animation frames × 8
-  pre-shifts × ~144 B reaches tens of KB → M2 puts sprite/mask data in `$C000`
+  pre-shifts × ~384 B reaches tens of KB → M2 puts sprite/mask data in `$C000`
   banks, with a documented bank-switch (and its T-state cost) around the blit, via
   the `PORT_7FFD_SHADOW` discipline (`docs/conventions.md` Banking).
 - **Double buffering**: per-frame full redraw on the single live screen will
@@ -511,26 +545,27 @@ State explicitly: **the spike does not touch `$7FFD`.**
 
 - **Artist + converter** build: `tools/gfx_convert.py` (image/text → clash-checked
   masked Z80 DEFB + round-trip) and `tools/gfx_assess.py` (silhouette IoU, SSIM,
-  clash, render-back), producing **one 16×24** side-on adventurer through the
-  autonomous Ollama pipeline. Emit **24 rows of `[mask,data] × 3 columns`**
-  (MSB=left pixel, mask `1`=transparent, third column padded transparent) = **144
-  B**, **followed by 1 colour-descriptor byte** `ATTR_SPRITE` (§1.7) = **145 B
-  total**. Constraint the converter validates: `ATTR_SPRITE` **paper bits must
+  clash, render-back), producing **one 32×48** side-on adventurer through the
+  autonomous Ollama pipeline. Emit **48 rows of `[mask,data] × 4 columns`**
+  (MSB=left pixel, mask `1`=transparent) = **384
+  B**, **followed by 1 colour-descriptor byte** `ATTR_SPRITE` (§1.7) = **385 B
+  total** (the engine pre-shifts into a 5-column span at boot; the artist emits
+  only the 4-column S=0 frame). Constraint the converter validates: `ATTR_SPRITE` **paper bits must
   equal the band paper** the sprite stands in (air = black) — assess flags a
   mismatch. Also a small background tileset (floor / cyan pillar / doorway / blank,
-  8×8 each). No pre-shifts, no animation. (Per-cell 3×3 attr block is M2.)
+  8×8 each). No pre-shifts, no animation. (Per-cell 4×6 attr block is M2.)
 - **Engineer** builds: boot-time pre-shift gen (8 copies); a 64×24 world tile
   buffer; a per-frame loop (HALT-synced) reusing `scan_matrix`/`sample_keys`/
   `dirs_to_step`; pixel-granular sprite motion with dead-zone follow + cell-granular
   background redraw; masked blit `(scr AND mask) OR data`; erase-under via
   `draw_cell`. **Colour:** init the two colour bands (`ATTR_AIR`/`ATTR_GROUND`);
-  each frame **restore (9 cells → `ATTR_AIR`) → move → stamp (9 cells →
+  each frame **restore (30 cells → `ATTR_AIR`) → move → stamp (30 cells →
   `ATTR_SPRITE`) → blit** (§2.2-2.3); on scroll, rewrite the 32×24 visible
   attributes from (row→band)+(tile-id→feature) (§3.3). Expose `SPRITE_PX`,
   `SPRITE_PY`, `VIEW_ORIGIN_COL`, `FRAME_COUNTER`. Throwaway source path OK. No
   `$7FFD`.
 - **Reviewer** records: per-frame **sprite redraw + attribute-follow** T-states
-  (the colour cost is now part of the per-sprite budget, ~330 T est.),
+  (the colour cost is now part of the per-sprite budget, ~960 T est.),
   per-scroll-step T-states (bitmap redraw **and** the 768-cell attribute pass,
   separately), extrapolation to ~8-12 sprites against ~70,908 T/frame, flicker
   severity; and **screen-checks clash *legality* not identity** (§2.5: sanctioned
@@ -544,8 +579,8 @@ State explicitly: **the spike does not touch `$7FFD`.**
 1. **Colour scheme (REVISED — colour now in scope).** The spike proves colour via
    §2: two fixed bands (air = black paper/cyan ink rows 0-17; ground = blue
    paper/white ink rows 18-23), a **bright-yellow** sprite (`ATTR_SPRITE=$46`) kept
-   **within the air band** (rows 15-17) so its paper matches the band, and a
-   per-frame 9-cell restore/stamp attribute-follow. Confirm: (a) "colour follows
+   **within the air band** (rows 12-17) so its paper matches the band, and a
+   per-frame 30-cell restore/stamp attribute-follow. Confirm: (a) "colour follows
    the sprite" — background pixels in covered cells briefly take the sprite ink — is
    the accepted look (it is the standard ZX compromise; the alternative, true
    per-pixel colour, is impossible on this hardware); (b) the **single uniform
@@ -561,8 +596,9 @@ State explicitly: **the spike does not touch `$7FFD`.**
 3. **Per-frame (real-time) loop reusing the input primitives**, diverging from the
    turn loop for the spike only. Confirm this is acceptable (the alternative,
    per-keypress 8px steps, is weaker evidence but stays inside the turn model).
-4. **16×24 sprite** (vs 16×16). I default to 16×24 for recognizability and let the
-   reviewer's number decide a fall-back to 16×16. Confirm or pin a size.
+4. **32×48 sprite** (4×6 cells) — pinned by the user (2026-07-17). The reviewer's
+   number decides whether the full 4×6 blit region is affordable per frame; if
+   marginal, the box shrinks (§1.1) but the size decision itself is settled.
 5. **Vertical scroll OUT, sprite Y char-aligned.** Confirm vertical is out of the
    spike.
 

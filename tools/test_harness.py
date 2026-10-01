@@ -42,7 +42,10 @@ class Harness:
         self.failures = []
 
     # --- lifecycle ----------------------------------------------------------
-    def launch(self):
+    def launch(self, extra_args=()):
+        """extra_args: appended ZEsarUX flags. Only for suites whose results
+        do not depend on wall-clock pacing (e.g. the tick-exact PROTO driver
+        uses --emulatorspeed / --vo null); settle-based suites keep defaults."""
         # Kill a stray emulator holding our port so runs are repeatable.
         subprocess.run(["pkill", "-f", f"remoteprotocol-port {self.port}"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -50,7 +53,7 @@ class Harness:
         self.proc = subprocess.Popen(
             [ZESARUX, "--machine", "128k",
              "--enable-remoteprotocol", "--remoteprotocol-port", str(self.port),
-             "--nosplash", "--noconfigfile"],
+             "--nosplash", "--noconfigfile", *extra_args],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.z = Zrcp(port=self.port)   # retries the connect until the port is up
         return self
@@ -89,8 +92,25 @@ class Harness:
         return b[0] | (b[1] << 8)
 
     def frame_bytes(self):
-        """Full screen frame (bitmap+attrs) as raw bytes — the golden unit."""
+        """Full screen frame (bitmap+attrs) as raw bytes — the golden unit.
+
+        Reads bank 5 ($4000) unconditionally: the boot/golden buffer. For the
+        128K shadow double-buffer (SPIKE-4) use displayed_frame_bytes() to follow
+        whichever bank ULA is showing.
+        """
         return self.z.read_memory(SCREEN_ADDR, SCREEN_FRAME_LEN)
+
+    def displayed_frame_bytes(self, shadow_addr=0xBF18):
+        """The frame ULA is CURRENTLY displaying, per PORT_7FFD_SHADOW bit3.
+
+        bit3=0 -> bank 5 @ $4000 (also the single-buffer / non-paged case);
+        bit3=1 -> bank 7 @ $C000 (the shadow screen). Returned bytes are indexed
+        identically to frame_bytes() (offset 0 = first bitmap byte), so the
+        cell/attr helpers work unchanged regardless of which bank is shown.
+        """
+        shadow = self.read_byte(shadow_addr)
+        base = 0xC000 if (shadow & 0x08) else SCREEN_ADDR
+        return self.z.read_memory(base, SCREEN_FRAME_LEN)
 
     def frame_sha256(self):
         return hashlib.sha256(self.frame_bytes()).hexdigest()
@@ -104,7 +124,7 @@ class Harness:
         ok = got == want
         gs = got if isinstance(got, str) else hex(got)
         ws = want if isinstance(want, str) else hex(want)
-        print(f"[{'PASS' if ok else 'FAIL'}] {name}: got {gs} want {ws}")
+        print(f"[{'PASS' if ok else 'FAIL'}] {name}: got {gs} want {ws}", flush=True)
         if not ok:
             self.failures.append(name)
         return ok

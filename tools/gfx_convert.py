@@ -17,6 +17,13 @@ Two modes:
                      Composite rule the renderer uses:
                        screen = (screen AND mask) OR data
 
+  sprite --layout native   (canvas sprite set, driven by tools/svg_sprites.py)
+                     W in 8/16/24/32/40: W/8 [mask,data] columns, NO pad column,
+                     from a 3-state .grid ('#' ink, '+' opaque paper, '.'
+                     transparent) so the mask can be the filled silhouette +
+                     outline. Adds <name>_w/_h/_cols (+ _ax/_ay anchor) EQUs.
+                     Legacy mode output is unchanged byte-for-byte.
+
   tile               One or more 8x8 background tiles. Emits 8 bitmap bytes per
                      tile (MSB=left) plus a parallel attribute-byte table.
                      Clash-legal by construction (one paper+ink per cell).
@@ -99,6 +106,10 @@ def attr_ink(a: int) -> int:
 # Grid glyph alphabet (tolerant, so hand-editing is forgiving).
 INK_CHARS = set("#X*@")
 BLANK_CHARS = set("._ ")
+# 3-state grids (svg_sprites.py): '+' = OPAQUE paper — not drawn (data 0) but
+# mask 0, so it punches the background out (filled interior / 1-px outline).
+# Legacy 2-state grids never contain it, so their mask stays ~data.
+OPAQUE_CHARS = set("+")
 
 
 # ---------------------------------------------------------------------------
@@ -113,29 +124,46 @@ def parse_grid_text(text: str, width: int | None, height: int | None):
     Everything else (comment lines, headers, blank-out-of-band) is ignored.
     Returns (matrix, width, height).
     """
-    rows: list[list[bool]] = []
+    fg, _solid, w, h = parse_grid_text_mask(text, width, height)
+    return fg, w, h
+
+
+def parse_grid_text_mask(text: str, width: int | None, height: int | None):
+    """As parse_grid_text, but also returns the OPAQUE matrix (mask 0 = solid).
+
+    solid = ink | '+' cells. For a legacy 2-state grid solid == fg, so the mask
+    is exactly ~data (byte-identical to the historical behaviour).
+    Returns (fg, solid, width, height).
+    """
+    alphabet = INK_CHARS | BLANK_CHARS | OPAQUE_CHARS
+    rows: list[str] = []
     for raw in text.splitlines():
         line = raw.rstrip("\n")
         stripped = line.strip()
-        if not stripped or stripped.startswith("#") and not set(stripped) <= (INK_CHARS | BLANK_CHARS):
+        if not stripped or stripped.startswith("#") and not set(stripped) <= alphabet:
             # comment / header line
             continue
         cells = stripped
-        if not set(cells) <= (INK_CHARS | BLANK_CHARS):
+        if not set(cells) <= alphabet:
             continue
         if width is not None and len(cells) != width:
             continue
-        rows.append([c in INK_CHARS for c in cells])
+        rows.append(cells)
     if not rows:
         raise ValueError("no grid rows parsed; check legend and width")
-    w = width if width is not None else len(rows[0])
+    # width unknown: the dominant row length (a lone "#" comment line would
+    # otherwise masquerade as a 1-px-wide first row)
+    w = width if width is not None else max(set(map(len, rows)),
+                                            key=lambda n: sum(len(r) == n for r in rows))
     # keep only rows of the dominant width
     rows = [r for r in rows if len(r) == w]
     if height is not None:
         if len(rows) != height:
             raise ValueError(f"expected {height} grid rows, parsed {len(rows)}")
-    mat = np.array(rows, dtype=bool)
-    return mat, w, mat.shape[0]
+    fg = np.array([[c in INK_CHARS for c in r] for r in rows], dtype=bool)
+    solid = np.array([[c in INK_CHARS or c in OPAQUE_CHARS for c in r] for r in rows],
+                     dtype=bool)
+    return fg, solid, w, fg.shape[0]
 
 
 def grid_to_text(mat: np.ndarray, name: str, legend: str) -> str:
@@ -207,51 +235,86 @@ def pack_byte_msb_left(bits: list[bool]) -> int:
     return b
 
 
-def pack_sprite(fg: np.ndarray):
-    """Foreground matrix (H x 16) -> (rows_bytes, descriptor-less).
+NATIVE_WIDTHS = (8, 16, 24, 32, 40)
 
-    Returns a list of H rows, each a list of 6 bytes:
-      [c0_mask, c0_data, c1_mask, c1_data, c2_mask, c2_data]
-    data bit = sprite (foreground) pixel; mask bit 1 = transparent (background).
-    For a pure 2-state shape mask == ~data within the 16 data columns; the third
-    column is padded fully transparent (mask $FF, data $00).
+
+def pack_sprite(fg: np.ndarray, solid: np.ndarray | None = None,
+                layout: str = "legacy"):
+    """Foreground matrix (H x W) -> row byte lists (descriptor-less).
+
+    solid  : optional opaque matrix (mask 0 where True). None -> mask = ~data.
+    layout : "legacy" (policy below) or "native": W/8 data columns, never a pad
+             column, W in NATIVE_WIDTHS (the canvas sprite set, svg_sprites.py).
+
+    Width policy (matches docs/design/sideview-renderer.md sec 1.4/7):
+      * W==16 : 2 real data columns + 1 pad column (fully transparent),
+                i.e. 6 bytes/row — the legacy 16xH sprite/cat contract.
+      * W==32 : 4 real data columns, NO pad column (the engine boot-gen adds
+                the 5th shifted column), i.e. 8 bytes/row — the 32x48 hero
+                contract (48 rows of [mask,data]x4 = 384 bytes).
+
+    Each row: [c0_mask,c0_data, c1_mask,c1_data, ...] MSB=leftmost pixel,
+    mask bit 1 = transparent (background), data bit = sprite pixel.
     """
     h, w = fg.shape
-    if w != 16:
-        raise ValueError(f"sprite must be 16 px wide, got {w}")
+    if layout == "native":
+        if w not in NATIVE_WIDTHS:
+            raise ValueError(f"native sprite width must be one of {NATIVE_WIDTHS}, got {w}")
+        pad = False
+    else:
+        if w not in (16, 32):
+            raise ValueError(f"sprite must be 16 or 32 px wide, got {w}")
+        pad = (w == 16)       # 16px keeps the legacy transparent pad column
+    if solid is not None and not np.array_equal(solid | fg, solid):
+        raise ValueError("solid matrix must cover every ink pixel")
+    ncols = w // 8            # real data columns
     rows = []
     for r in range(h):
         row_bytes = []
-        for col in range(2):  # two real data columns
+        for col in range(ncols):
             seg = list(fg[r, col * 8:col * 8 + 8])
             data = pack_byte_msb_left(seg)
-            mask = (~data) & 0xFF  # transparent everywhere the sprite isn't
+            if solid is None:
+                mask = (~data) & 0xFF  # transparent everywhere the sprite isn't
+            else:
+                mask = (~pack_byte_msb_left(list(solid[r, col * 8:col * 8 + 8]))) & 0xFF
             row_bytes.extend([mask, data])
-        # third padded column: fully transparent
-        row_bytes.extend([0xFF, 0x00])
+        if pad:
+            row_bytes.extend([0xFF, 0x00])
         rows.append(row_bytes)
     return rows
 
 
-def unpack_sprite(rows) -> np.ndarray:
+def unpack_sprite(rows, width: int = 16, layout: str = "legacy") -> np.ndarray:
     """Decode packed rows back to a foreground matrix (round-trip)."""
+    return unpack_sprite_mask(rows, width, layout)[0]
+
+
+def unpack_sprite_mask(rows, width: int = 16, layout: str = "legacy"):
+    """Decode packed rows back to (foreground, solid) matrices (round-trip)."""
     h = len(rows)
-    fg = np.zeros((h, 16), dtype=bool)
+    ncols = width // 8
+    pad = (width == 16) and layout != "native"
+    expect = ncols * 2 + (2 if pad else 0)
+    fg = np.zeros((h, width), dtype=bool)
+    solid = np.zeros((h, width), dtype=bool)
     for r, rb in enumerate(rows):
-        # validate structure
-        if len(rb) != 6:
-            raise ValueError("row must have 6 bytes")
-        c2_mask, c2_data = rb[4], rb[5]
-        if c2_mask != 0xFF or c2_data != 0x00:
-            raise ValueError(f"row {r}: third column not padded transparent")
-        for col in range(2):
+        if len(rb) != expect:
+            raise ValueError(f"row {r} must have {expect} bytes, got {len(rb)}")
+        if pad:
+            c_mask, c_data = rb[ncols * 2], rb[ncols * 2 + 1]
+            if c_mask != 0xFF or c_data != 0x00:
+                raise ValueError(f"row {r}: pad column not fully transparent")
+        for col in range(ncols):
             mask, data = rb[col * 2], rb[col * 2 + 1]
             if (mask & data) != 0:
                 raise ValueError(f"row {r} col {col}: data set under transparent mask")
             for i in range(8):
                 if data & (1 << (7 - i)):
                     fg[r, col * 8 + i] = True
-    return fg
+                if not mask & (1 << (7 - i)):
+                    solid[r, col * 8 + i] = True
+    return fg, solid
 
 
 # ---------------------------------------------------------------------------
@@ -263,22 +326,43 @@ def hexbytes(bs) -> str:
 
 
 def emit_sprite_asm(name, rows, descriptor, src, width, height,
-                    ink, paper, bright, band_paper) -> str:
+                    ink, paper, bright, band_paper, layout_mode="legacy",
+                    notes=None, anchor=None, gen_date=None) -> str:
     flto = lambda i: COL_NAME[i]
+    native = layout_mode == "native"
     L = []
     L.append(f"; ============================================================================")
     L.append(f"; {name} — side-view masked sprite (WazHack/ZX)")
-    L.append(f"; Generated by tools/gfx_convert.py on {date.today().isoformat()}")
+    L.append(f"; Generated by tools/gfx_convert.py on {gen_date or date.today().isoformat()}")
     L.append(f"; Source        : {src}")
-    L.append(f"; Dimensions    : {width}x{height} px = 2 data cols + 1 pad col x {height} rows")
-    L.append(f"; Layout/row    : c0_mask,c0_data, c1_mask,c1_data, c2_mask,c2_data  (MSB=left)")
+    for n in notes or []:
+        L.append(f";                 {n}")
+    ncols = width // 8
+    pad = width == 16 and not native
+    bpr = ncols * 2 + (2 if pad else 0)  # bytes per row
+    layout = ", ".join(f"c{c}_mask,c{c}_data" for c in range(ncols))
+    if native:
+        dims = (f"{width}x{height} px = {ncols} data cols x {height} rows, no pad col "
+                f"(engine pre-shift spills into col {ncols})")
+    elif width == 16:
+        dims = f"{width}x{height} px = 2 data cols + 1 pad col x {height} rows"
+        layout += ", c{}_mask,c{}_data(pad $FF/$00)".format(ncols, ncols)
+    else:
+        dims = f"{width}x{height} px = 4 data cols x {height} rows (engine boot-gens 5th shifted col)"
+    L.append(f"; Dimensions    : {dims}")
+    L.append(f"; Layout/row    : {layout}  (MSB=left)")
     L.append(f"; Mask polarity : bit 1 = transparent (keep background)")
+    if native:
+        L.append(f"; Mask shape    : filled silhouette (+ outline if any) — enclosed paper is opaque")
     L.append(f"; Composite     : screen = (screen AND mask) OR data")
-    L.append(f"; Bytes         : {height}*6 + 1 descriptor = {height*6+1}")
+    L.append(f"; Bytes         : {height}*{bpr} + 1 descriptor = {height*bpr+1}")
     L.append(f"; Colour        : ink={flto(ink)} paper={flto(paper)} bright={int(bright)}"
              f"  -> ATTR_SPRITE=${descriptor:02X}")
     L.append(f"; Band paper    : {flto(band_paper)} (descriptor PAPER must match — verified)")
     L.append(f"; Intended use  : engine boot-gen of 8 pre-shifts; masked blit at pixel X")
+    if anchor is not None:
+        L.append(f"; Anchor        : ax={anchor[0]} ay={anchor[1]}  draw_x = body_x - ax, "
+                 f"draw_y = body_y - ay (right-facing; body_x/y = reference frame origin)")
     L.append(f"; ============================================================================")
     L.append(f"{name}:")
     for r, rb in enumerate(rows):
@@ -286,21 +370,30 @@ def emit_sprite_asm(name, rows, descriptor, src, width, height,
     L.append(f"{name}_attr:")
     L.append(f"        DEFB ${descriptor:02X}                                  ; ATTR_SPRITE")
     L.append(f"{name}_len  EQU $ - {name}")
+    if native:
+        L.append(f"{name}_w    EQU {width}                ; px")
+        L.append(f"{name}_h    EQU {height}                ; px (rows)")
+        L.append(f"{name}_cols EQU {ncols}                 ; byte columns (x2 bytes each)")
+    if anchor is not None:
+        L.append(f"{name}_ax   EQU {anchor[0]}                 ; x-anchor, px left of body origin")
+        L.append(f"{name}_ay   EQU {anchor[1]}                 ; y-anchor, px above body origin")
     L.append("")
     return "\n".join(L)
 
 
-def emit_tiles_asm(name, tiles, src) -> str:
+def emit_tiles_asm(name, tiles, src, notes=None, gen_date=None, use=None) -> str:
     """tiles: list of dicts {name,bitmap(8 bytes),attr,ink,paper,bright}."""
     L = []
     L.append(f"; ============================================================================")
     L.append(f"; {name} — 8x8 background tileset (WazHack/ZX side-view scene)")
-    L.append(f"; Generated by tools/gfx_convert.py on {date.today().isoformat()}")
+    L.append(f"; Generated by tools/gfx_convert.py on {gen_date or date.today().isoformat()}")
     L.append(f"; Source        : {src}")
+    for n in notes or []:
+        L.append(f";                 {n}")
     L.append(f"; Layout        : {len(tiles)} tiles x 8 bitmap bytes (MSB=left), row-major")
     L.append(f";                 parallel attr table, one attribute byte per tile")
     L.append(f"; Clash         : each tile is one paper+ink — clash-legal by construction")
-    L.append(f"; Intended use  : draw_cell background (floor/pillar/doorway/blank)")
+    L.append(f"; Intended use  : {use or 'draw_cell background (floor/pillar/doorway/blank)'}")
     L.append(f"; ============================================================================")
     L.append(f"{name}:")
     for t in tiles:
@@ -401,15 +494,26 @@ def run_sprite(args) -> int:
     src_in = args.infile
     is_grid = src_in.lower().endswith(".grid") or src_in.lower().endswith(".txt")
 
+    native = args.layout == "native"
+    solid = None
     if is_grid:
         with open(src_in) as f:
-            fg, w, h = parse_grid_text(f.read(), args.width, args.height)
+            text = f.read()
+        if native:
+            # native reads the grid's own width (8..40) and the 3-state mask
+            fg, solid, w, h = parse_grid_text_mask(text, None, None)
+        else:
+            fg, w, h = parse_grid_text(text, args.width, args.height)
     else:
+        if native:
+            print("ERROR: --layout native requires a .grid input", file=sys.stderr)
+            return 2
         fg = image_to_grid(src_in, args.width, args.height, args.threshold, args.invert)
         w, h = args.width, args.height
 
-    if w != 16:
-        print(f"ERROR: sprite width must be 16, got {w}", file=sys.stderr)
+    allowed = NATIVE_WIDTHS if native else (16, 32)
+    if w not in allowed:
+        print(f"ERROR: sprite width must be one of {allowed}, got {w}", file=sys.stderr)
         return 2
 
     # durable grid source (always (re)written so image-derived grids are committed)
@@ -419,7 +523,7 @@ def run_sprite(args) -> int:
             f.write(grid_to_text(fg, args.name, legend))
         print(f"grid : {args.grid}")
 
-    rows = pack_sprite(fg)
+    rows = pack_sprite(fg, solid, args.layout)
 
     ink = COLOURS[args.ink]
     paper = COLOURS[args.paper]
@@ -435,9 +539,12 @@ def run_sprite(args) -> int:
         errs.append("descriptor ink == paper (sprite would be invisible)")
 
     # ---- validation: round-trip ----
-    decoded = unpack_sprite(rows)
+    decoded, dsolid = unpack_sprite_mask(rows, w, args.layout)
     if not np.array_equal(decoded, fg):
         errs.append("round-trip mismatch: decoded bytes != quantised target")
+    exp_solid = fg if solid is None else solid
+    if not np.array_equal(dsolid, exp_solid):
+        errs.append("round-trip mismatch: decoded mask != source mask")
 
     if errs:
         print("VALIDATION FAILED:", file=sys.stderr)
@@ -445,11 +552,18 @@ def run_sprite(args) -> int:
             print("  - " + e, file=sys.stderr)
         return 1
 
-    asm = emit_sprite_asm(args.name, rows, descriptor, os.path.basename(src_in),
-                          16, h, ink, paper, args.bright, band_paper)
+    anchor = None
+    if args.anchor_x is not None or args.anchor_y is not None:
+        anchor = (args.anchor_x or 0, args.anchor_y or 0)
+    src_label = src_in if args.src_path else os.path.basename(src_in)
+    asm = emit_sprite_asm(args.name, rows, descriptor, src_label,
+                          w, h, ink, paper, args.bright, band_paper,
+                          layout_mode=args.layout, notes=args.note,
+                          anchor=anchor, gen_date=args.date)
+    bpr = len(rows[0])
     with open(args.out, "w") as f:
         f.write(asm)
-    print(f"asm  : {args.out}  ({h*6+1} bytes: {h}*6 + 1 descriptor)")
+    print(f"asm  : {args.out}  ({h*bpr+1} bytes: {h}*{bpr} + 1 descriptor)")
     print(f"clash: OK (descriptor ${descriptor:02X}, paper matches band)")
     print(f"round-trip: OK")
 
@@ -469,7 +583,9 @@ def run_tile(args) -> int:
             if not (0 <= by <= 255):
                 print(f"ERROR: tile {t['name']} bad byte", file=sys.stderr)
                 return 1
-    asm = emit_tiles_asm(args.name, tiles, os.path.basename(args.infile))
+    src_label = args.infile if args.src_path else os.path.basename(args.infile)
+    asm = emit_tiles_asm(args.name, tiles, src_label, notes=args.note, gen_date=args.date,
+                         use=args.use)
     with open(args.out, "w") as f:
         f.write(asm)
     names = ", ".join(t['name'] for t in tiles)
@@ -496,6 +612,19 @@ def main(argv=None) -> int:
     p.add_argument("--threshold", type=int, default=None,
                    help="(image) luminance threshold; default = mean")
     p.add_argument("--invert", action="store_true", help="(image) flip fg/bg choice")
+    p.add_argument("--layout", choices=["legacy", "native"], default="legacy",
+                   help="(sprite) legacy: 16w+pad col / 32w; native: W/8 cols, no pad, "
+                        "W in 8..40, 3-state grid ('+' = opaque paper)")
+    p.add_argument("--anchor-x", dest="anchor_x", type=int, default=None,
+                   help="(sprite) x-anchor EQU (px left of body origin)")
+    p.add_argument("--anchor-y", dest="anchor_y", type=int, default=None,
+                   help="(sprite) y-anchor EQU (px above body origin)")
+    p.add_argument("--note", action="append", default=None,
+                   help="extra header line under Source (repeatable)")
+    p.add_argument("--use", default=None, help="(tile) 'Intended use' header text")
+    p.add_argument("--date", default=None, help="header date override (reproducible output)")
+    p.add_argument("--src-path", dest="src_path", action="store_true",
+                   help="record the input path as given, not its basename")
     args = p.parse_args(argv)
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)

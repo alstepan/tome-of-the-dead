@@ -57,3 +57,10 @@
 
 - Anything worth asserting on (player HP, RNG state, dungeon seed, render flags)
   should live at a stable, named address so the `test` skill can read it via ZRCP.
+
+## Test probe labels
+
+- A label that exists only as a ZRCP breakpoint target for the tests (e.g.
+  `tick_work`, `wait_tick`, `select_tick` in `src/proto.asm`) is commented
+  "test probe" at its definition and listed in `docs/memory-map.md`. Never place
+  a probe on a `HALT`: ZEsarUX's `run` re-fires on the halted PC without progress.

@@ -586,14 +586,6 @@ glyph_player:   DB  $3C,$42,$5A,$56,$5C,$40,$3E,$00   ; '@'
 code_end:                                       ; first free byte past emitted code
 CODE_LEN        EQU code_end - start
 
-;==============================================================================
-; Emit artefacts (unchanged from P2): a two-block autoloader .tap and a snapshot.
-;==============================================================================
-                EMPTYTAP "build/wazhack.tap"
-                SAVETAP  "build/wazhack.tap", BASIC, "wazhack", tap_loader, tap_loader_len, 10
-                SAVETAP  "build/wazhack.tap", CODE,  "wazhack", start, CODE_LEN
-                SAVESNA "build/wazhack.sna", start
-
 ;------------------------------------------------------------------------------
 ; tap_loader — tokenised BASIC autoloader:
 ;   10 CLEAR VAL "32767": RANDOMIZE USR VAL "32768"
@@ -601,15 +593,50 @@ CODE_LEN        EQU code_end - start
 ;------------------------------------------------------------------------------
                 ORG  $E000
 tap_loader:
+                ; Line 10: CLEAR VAL "32767"
                 DB   0, 10                   ; line number 10 (big-endian)
-                DW   tap_line_end - tap_line_body
-tap_line_body:
+                DW   tap_l10_end - tap_l10_body
+tap_l10_body:
                 DB   $FD                      ; CLEAR
                 DB   $B0, '"', "32767", '"'   ; VAL "32767"
-                DB   ':'
+                DB   $0D                      ; ENTER
+tap_l10_end:
+
+                ; Line 20: LOAD "" CODE — without this, RANDOMIZE USR jumps
+                ; into memory the tape never actually loaded (real tape-load
+                ; semantics only auto-loads the BASIC block; ZEsarUX's
+                ; smartload bypasses this, which is why this was invisible
+                ; to automated ZRCP tests but crashes/resets on real Fuse).
+                DB   0, 20
+                DW   tap_l20_end - tap_l20_body
+tap_l20_body:
+                DB   $EF                      ; LOAD
+                DB   $22, $22                  ; ""
+                DB   $AF                      ; CODE
+                DB   $0D
+tap_l20_end:
+
+                ; Line 30: RANDOMIZE USR VAL "32768"
+                DB   0, 30
+                DW   tap_l30_end - tap_l30_body
+tap_l30_body:
                 DB   $F9                      ; RANDOMIZE
                 DB   $C0                      ; USR
                 DB   $B0, '"', "32768", '"'   ; VAL "32768"
                 DB   $0D                      ; ENTER
-tap_line_end:
-tap_loader_len  EQU  tap_line_end - tap_loader
+tap_l30_end:
+tap_loader_len  EQU  $ - tap_loader
+
+;==============================================================================
+; Emit artefacts (unchanged from P2): a two-block autoloader .tap and a snapshot.
+; MUST come after tap_loader's bytes are assembled — SAVETAP dumps the
+; assembler's memory image at the point it executes in source order, not at
+; end of file, so calling it before the loader's ORG block silently emits an
+; all-zero BASIC data block (assembles clean, checksums clean, "Nonsense in
+; BASIC" only on a real tape-load — ZEsarUX's smartload bypasses this
+; entirely, which is how this went undetected).
+;==============================================================================
+                EMPTYTAP "build/wazhack.tap"
+                SAVETAP  "build/wazhack.tap", BASIC, "wazhack", tap_loader, tap_loader_len, 10
+                SAVETAP  "build/wazhack.tap", CODE,  "wazhack", start, CODE_LEN
+                SAVESNA "build/wazhack.sna", start

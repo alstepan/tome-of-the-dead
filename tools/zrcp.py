@@ -25,6 +25,7 @@ import time
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 10000
 PROMPT = b"command> "
+STEP_PROMPT = b"command@cpu-step> "     # prompt while in enter-cpu-step mode
 
 
 class Zrcp:
@@ -52,12 +53,14 @@ class Zrcp:
         self.close()
 
     def _read_until_prompt(self):
-        while PROMPT not in self._buf:
+        while PROMPT not in self._buf and STEP_PROMPT not in self._buf:
             chunk = self.sock.recv(4096)
             if not chunk:
                 break
             self._buf += chunk
-        head, _, self._buf = self._buf.partition(PROMPT)
+        i, j = self._buf.find(PROMPT), self._buf.find(STEP_PROMPT)
+        prompt = STEP_PROMPT if j >= 0 and (i < 0 or j < i) else PROMPT
+        head, _, self._buf = self._buf.partition(prompt)
         return head.decode("latin-1")
 
     def cmd(self, line):

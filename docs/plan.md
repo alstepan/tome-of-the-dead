@@ -12,9 +12,81 @@
 
 ## Current state
 
-- **Active phase:** SPIKE-3 — smoothness lever · IN-PROGRESS (lever = content-rows-only
-  shift; sprite-glide + 1-in-4 scroll cadence already present in the spike, see the
-  SPIKE-3 section; decided with user 2026-07-01: "one more smoothness lever first")
+- **PROTO — first playable fighting prototype (user 2026-09-24) · IN-PROGRESS.**
+  Uses the user's claude.ai Design canvas "WazHack Spectrum Sprites"
+  (https://claude.ai/artifact/U71G9dWUWzZBVxmJUrevD3, vendored at
+  `assets/gfx/source/wazhack_sprites.dc.html`) as the art source of truth.
+  Decisions: cast = the sheet's (heroes **Knight/Wizard/Rogue** 24×48; monsters
+  Skeleton, Goblin, Ghost, Rat, Bat, Slime) — **supersedes Wizard/Witch + cat**
+  (R3); "move in all directions" = **rooms + ladders/stairs** (walk L/R, climb
+  U/D, vertical Cauldron transitions). Converter: build our own
+  (`tools/svg_sprites.py` → `gfx_convert.py`). Gate: heroes and enemies visibly
+  move in all four directions and fight (attack anims, HP, death), ZRCP-tested.
+  Spec review answers (user 2026-09-24): accepted 3 storeys + HUD, 25 Hz/4 px,
+  turn-based w/ key repeat, flyers storey-bound, instant zap, visual-only block;
+  CHANGED: **keep coloured floor bands** (ladder holes solved by cell-snapped
+  climbing), **monsters follow between rooms** (persistent state), **potions**
+  added; **all 32 missing frames + tiles** to be drawn and reviewed on the canvas
+  as "Draft 3" before import.
+  Progress 2026-09-24: spec rev B done; 32 missing frames + tiles drawn and
+  published to the canvas as artboard "Draft 3" (awaiting user review; imported
+  meanwhile from `assets/gfx/source/draft3_frames.html`); `src/proto*.asm` built
+  (all 3 stages, worst tick 139.2k/141.8k T per engineer). **Manager gate NOT
+  passed:** builds clean + legacy suites green, but full `tests/proto.py` = 108/118
+  in 3h53m (the same items pass in isolation, 46/46) → suspected order-dependent/
+  racy harness; z80-reviewer diagnosing + reviewing.
+  **Update 2026-09-25 — manager gate PASSED:** root cause = racy snapshot reload in
+  `tests/proto_lib.py` (silently continued from the previous scenario's state under
+  host load; also a reviewer rebuild overwrote proto.sna mid-run). Harness now
+  reloads inside cpu-step, verifies all 128K RAM vs the .sna, loads a private copy,
+  30 s command timeout, headless 2× speed. 3-slice static review (fix-then-ship):
+  2 🔴 fixed (mid-ladder yield let a monster leave the ladder and climb through
+  floor; overlap repair skipped attr-dirty sprites), plus paging-lock check, alloc
+  $10000 wrap, damage-list overflow, zap over sprites, ladder bodies block reach,
+  yield fallback, potion edge cases, new-game reset. Manager run: builds 0 warn;
+  proto 157/157 (~80 s); smoke/p3/sideview/scroll green.
+  **Update 2026-09-25 (later):** user playtest found (a) the tape path fell into
+  `check_paging` after loading → Fuse reset (fixed in progress + tape E2E test),
+  (b) the hero-select screen shows the wrong sprites after a game ends. **User
+  decision: renderer optimisation DISCARDED for now**; after these bugs are fixed,
+  the manager + user review the plan and game concepts before any new work.
+  **Fixed + manager-gated 2026-09-25:** tape path (`ASSERT start_loaded == boot`
+  + fall-through guards, tape E2E test #50) and select-screen sprites
+  (`sel_frt_copy` restores the select idles' FRT rows; #51 covers a second game
+  with a different hero). Optimisation reverted. Manager run: builds 0 warn,
+  proto 179/179, legacy green; tape sha256 `6fa4629d…`. **PROTO playable; next =
+  plan/concept review with the user.**
+  **Open:** (1) heavy fight (hero + 2 skeletons + goblin + ghost) measures
+  154,852 T = 109% of the 2-frame tick on the turn-start tick → user decision;
+  (2) Draft 3 art review on the canvas; (3) spec §6.4 text for the new ladder
+  rules (designer); (4) Fuse / real-hardware load not yet tried; (5) single-buffer
+  flicker unmitigated.
+  Steps: (1) game-designer → `docs/design/prototype.md`; (1‖) graphics-artist →
+  SVG importer + masked asm + ladder tiles + pipeline docs; (2) z80-staff-engineer
+  → `src/proto.asm`; (3) z80-reviewer; (4) manager gate (build + test).
+- **Scroll model re-scoped (user decision 2026-07-03) — Cauldron-style room
+  transitions.** SPIKE-4's double-buffer continuous scroll is **DONE and works
+  (tests 12/12)** but the continuous 8px-every-4-frames scroll read as a slow
+  lurch. Decision: **drop continuous scrolling during play.** Normal gameplay is
+  **static** (dirty-sprite redraw only, no per-frame shift); the screen scrolls
+  **once, whole-screen, only on a room-boundary crossing** with gameplay frozen
+  (Cauldron, 1985). The dungeon becomes **room-based** (discrete rooms joined at
+  edges), not an open continuous floor. Side-view is **committed** as the Slice 1
+  renderer. Full spec: `docs/design/spectrum-design.md` §R1/R2; the spike's
+  continuous-scroll model (`sideview-renderer.md` §3) is marked superseded.
+- **Hero selection added (user 2026-07-03):** player picks **Wizard or Witch** at
+  start (cosmetic in Slice 1), each with a **cat companion** (following ally).
+  Artist contract: `docs/design/heroes.md`.
+- **Next:** sprite work (wizard/witch idle 16×24 + cat idle 16×16, per
+  `heroes.md`) and the **room-transition scroll engine** (reuse the SPIKE-2/3/4
+  byte-shift primitive for the frozen whole-screen pan; double-buffer no longer
+  required since we never scroll during interactive frames). Then unblock P4
+  content on the room-based world model.
+- **Superseded active phase:** SPIKE-4 — shadow-screen double-buffer · DONE
+  (12/12; the double-buffer machinery is retained in the spike but is **not**
+  needed by the shipped Cauldron scroll — kept for reference only). Was IN-PROGRESS
+  under user 2026-07-01 "build double-buffer first"; the 2026-07-03 re-scope makes
+  continuous-scroll smoothness moot. SPIKE-3 (content-rows lever) DONE (`71d2b1c`).
 - **Commit decision (2026-07-01, user):** side-view feasibility is accepted, but
   before folding it forward as the Slice 1 renderer and building P4 on it, prove
   **one sub-frame smoothness lever** so movement is demonstrably smooth, not merely
@@ -292,6 +364,61 @@
     is a single 1-in-4 minor burst with a known, cheap, non-speculative fix path
     (double-buffer). **Recommend committing side-view forward as the Slice 1
     renderer.** Manager awaiting user's fold-forward + commit decision.
+
+### SPIKE-4 — Shadow-screen double-buffer · `DONE (superseded by Cauldron re-scope 2026-07-03)`
+- **Note (2026-07-03):** built and green (tests 12/12), but the 2026-07-03 scroll
+  re-scope to **Cauldron-style room transitions** (see Current state /
+  `spectrum-design.md` §R1) removes continuous scrolling from interactive play, so
+  the double-buffer's job (hiding the 1-in-4 scroll burst) no longer applies. The
+  byte-shift primitive is reused for the frozen whole-screen room-transition pan;
+  the double-buffer is retained in the spike for reference, not shipped.
+- **Owner:** `z80-staff-engineer` → `z80-reviewer` · **Depends:** SPIKE-3
+- **Decision (2026-07-01, user):** "build double-buffer first" — before folding
+  side-view forward, erase even the residual 1-in-4 ~1.34-frame scroll burst so
+  motion is *fully* sub-frame and tear-free, not just improved.
+- **Why a plain flip is not enough:** double-buffering by itself only hides
+  *tearing*; it does not shrink the ~95k-T (1.34-frame) scroll frame. To make
+  **every** frame ≤1 frame we must **spread the scroll work across the 4-frame
+  inter-scroll window** (the sprite crosses a byte boundary only every 4×2px) into
+  the hidden back buffer, then reveal it with an **atomic `$7FFD` bit-3 flip**.
+- **Target scheme (guidance; engineer may refine):** two screen buffers — bank 5
+  (`$4000`, displayed when bit3=0) and bank 7 (drawn via the `$C000` window with
+  `$7FFD` bits0-2=7, displayed when bit3=1). Each edge-walk step:
+  - frames 1–4 (glide): advance the sprite 2px on the **front** buffer as today
+    (~0.19 fr), AND do ~¼ of the next scroll into the **back** buffer (incremental
+    content-rows shift + newcol + sprite), keeping every frame sub-frame;
+  - on the boundary frame, **flip** bit3 to reveal the fully-prepared back buffer;
+    the old front becomes the new back. No frame exceeds budget; the flip is atomic.
+- **Key constraints / risks to handle:**
+  - Renderer writes are currently hardcoded to `$4000/$5800`; back-buffer drawing
+    needs a **base-relative** target (bank 7 bitmap `$C000`, attrs `$D800` via the
+    window). Keep it behind flag `USE_SHADOW_DOUBLEBUFFER` (default 1) with the
+    SPIKE-3 single-buffer path as fallback (flag 0) for A/B.
+  - **Never page out ROM** (`$7FFD` bit4 stays 0 — ROM IM1 ISR + `halt` sync rely
+    on it); only touch bit3 (screen select) and bits0-2 (`$C000` bank). `$7FFD` is
+    write-only → keep a `PORT_7FFD_SHADOW` byte (currently `TBD` in memory-map —
+    **allocate it in this change** and record the value/RMW discipline).
+  - Code/data/stack live in the fixed `$8000-$BFFF` region (bank 2) and
+    `PRESHIFT_TABLE`/`WORLD_BUF` at `$A000/$A500` — unaffected by `$C000` paging;
+    confirm no routine assumes `$C000` holds anything across the window swap.
+  - The sprite must be present on **both** buffers at the correct position after a
+    flip (it lives on whichever buffer is shown); handle the erase/reblit on the
+    back buffer during the incremental prep.
+  - Note the contention model (bank 5 `$4000-$7FFF` is contended whether or not
+    displayed; bank 7 at `$C000` contention is model-dependent) — measure, don't
+    assume.
+- **Exit gate:**
+  1. `USE_SHADOW_DOUBLEBUFFER` path implemented; **`tests/scroll.py` +
+     `tests/sideview.py` green** (no tear/clash/trail/stale column). Add/extend a
+     ZRCP assertion that the **displayed** buffer (per `$7FFD` shadow / which bank
+     bit3 selects) shows the expected post-scroll window — i.e. the flip actually
+     reveals a correct, complete frame (no half-shifted buffer ever displayed).
+  2. Manager records the **measured worst-case single frame** under sustained
+     edge-walking from `build/spike.lst`: prove **no frame exceeds ~70,908 T** (or
+     report the real number and where the residual is). Include the flip cost and
+     the per-frame share of the spread scroll work.
+  3. Verdict: is motion now fully sub-frame + tear-free? Then manager+user
+     **commit + fold side-view forward** as the Slice 1 renderer (unblock P4).
 
 ### P4 — Vertical slice content · `BLOCKED(awaiting side-view commit decision)`
 - **Owner:** `z80-staff-engineer` (+ `game-designer` for balance)

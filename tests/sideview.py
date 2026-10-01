@@ -127,7 +127,7 @@ def main():
         h.expect("viewport scrolled (origin>0)", origin > 0, True)
         h.expect("origin left of tracker", origin < TRACK_COL, True)
 
-        frame = h.frame_bytes()
+        frame = h.displayed_frame_bytes()   # SPIKE-4: follow the shown bank
 
         # 5a — every playfield attribute byte is clash-legal (sanctioned value)
         attrs = frame[6144:6912]

@@ -22,6 +22,30 @@ sjasmplus src/main.asm \
 - `--sld` emits Source Level Debug data consumed by the `debug` skill / DeZog.
 - `--lst` listing is handy for checking byte/cycle layout and label addresses.
 
+## PROTO build (separate program: `docs/design/prototype.md`)
+
+```sh
+sjasmplus src/proto.asm \
+  --fullpath \
+  --lst=build/proto.lst \
+  --sld=build/proto.sld \
+  --sym=build/proto.sym \
+  -i src
+```
+
+- Emits `build/proto.tap` (BASIC loader + CODE + two headerless sprite-bank
+  blocks) and `build/proto.sna` (128K, entry `boot`).
+- `--sym` is required: `tests/proto*.py` read every address / frame id from it.
+- The assembler prints three `DISPLAY` lines (sprite-source size, frame count +
+  pre-shift pool need vs 48 KB, image end) — check them; the pool / image /
+  table limits are ASSERTs, so an overflow fails the build.
+- Sprite art comes from `assets/gfx/sprites/index.asm`; frames/tiles that are
+  missing or have an illegal anchor fall back to stand-ins automatically
+  (`src/proto_data.asm` FRM/ROLE/TSRC tables) — no code change needed when art
+  lands.
+- Also re-assemble `src/main.asm` and the spike (commands in memory-map.md) to
+  confirm they stay 0 errors / 0 warnings.
+
 ## Success criteria
 
 - Exit code 0, no errors.

@@ -114,8 +114,10 @@ def verify_window(h, frame, origin, sc, tag):
             # --- bitmap: faithful render of the world window (no tear/trail) ---
             if not in_foot:
                 want = TILE_BYTES[expected_tile(wc, r)]
-                if cell_bytes(frame, c, r) != want:
+                got = cell_bytes(frame, c, r)
+                if got != want:
                     bitmap_bad += 1
+                    print(f"       mismatch r={r} c={c} wc={wc} want={want} got={got}")
             # --- attribute bands survive the shift ----------------------------
             a = attr_byte(frame, c, r)
             if r <= 17 and not in_foot and a != ATTR_AIR:
@@ -149,7 +151,7 @@ def main():
         # --- burst 1: scroll several columns east, then verify the window -----
         px, origin, sc = scroll_and_settle(h, KEY_L, 1.0)
         h.expect("scrolled east (origin>0)", origin > 0, True)
-        frame = h.frame_bytes()
+        frame = h.displayed_frame_bytes()   # SPIKE-4: follow the shown bank
         verify_window(h, frame, origin, sc, "east")
 
         # rightmost newly-exposed column matches the world (the byte-shift's job)
@@ -179,7 +181,7 @@ def main():
         # --- burst 2: scroll further east, re-verify at a new origin ----------
         px2, origin2, sc2 = scroll_and_settle(h, KEY_L, 0.7)
         h.expect("scrolled further (origin advanced)", origin2 > origin, True)
-        frame2 = h.frame_bytes()
+        frame2 = h.displayed_frame_bytes()   # SPIKE-4: follow the shown bank
         verify_window(h, frame2, origin2, sc2, "east2")
 
         # --- liveness --------------------------------------------------------

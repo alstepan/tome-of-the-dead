@@ -24,6 +24,140 @@
 
 ---
 
+## Rendering & world model — 2026-07-03 revisions (side-view committed)
+
+> **Decided 2026-07-03, user.** The side-view spike track (SPIKE…SPIKE-4) proved
+> the WazHack-style renderer feasible, and it is now **committed as the Slice 1
+> renderer** (the top-down §1 below is retained as the reference for the
+> renderer-agnostic game logic — turn loop, combat, RNG, entities, level gen —
+> which is reused unchanged; only the *presentation* switches to side-view). This
+> block records three binding decisions that supersede parts of the spike design
+> (`sideview-renderer.md` §3) and add new content. All numbers here are binding.
+
+### R1. Scroll model — DECISION: **Cauldron-style room-transition scroll** (replaces continuous scroll)
+
+The continuous per-column double-buffer scroll (SPIKE-4) works but reads as a
+slow lurch (12.5 column-scrolls/s = one 8px jump every 4 frames). We **drop
+continuous scrolling during play** in favour of the model used by *Cauldron*
+(Hewson, 1985):
+
+- **Normal gameplay: the screen is STATIC.** The player (and cat, and monsters)
+  move freely **within the current room**. Nothing scrolls while the player
+  walks. The renderer only redraws dirty sprites/cells — no bitmap shift per
+  frame. This removes the per-frame scroll cost from the hot path entirely.
+- **Room transition: gameplay PAUSES and the whole screen scrolls once.** When
+  the player steps across a room boundary (an exit edge), the turn loop **freezes**
+  and the full 6144-byte screen bitmap is shifted left/right (or the
+  vertical equivalent, see R2) toward the adjacent room in a **single animated
+  sequence**, then play resumes in the new room.
+- **Transition animation budget:** shift the entire screen **4–8 px/frame** via a
+  pixel-shift chain (`RLCA`/`RRCA` per byte-row). A full 256px room width =
+  **32–64 frames ≈ 0.64–1.3 s**. Because gameplay is frozen, the transition may
+  spend the **whole frame budget** on the shift — the very cost that made
+  continuous scroll unacceptable is fine here because it happens **infrequently
+  and off the interactive path**. Start at 8 px/frame (~0.64 s); drop to 4 if it
+  tears or reads too fast.
+- **Why this wins:** normal movement becomes as cheap as the static top-down
+  renderer (dirty-sprite redraw only, no shift), while transitions get the
+  faithful "camera pans to the next room" WazHack feel. It also kills the SPIKE-4
+  residual (spreading scroll work across frames, atomic flip) — no longer needed,
+  because we never scroll *during* interactive frames.
+
+> **Supersedes** `sideview-renderer.md` §3.2/§3.4 (fine-sprite/coarse-background
+> follow-with-dead-zone continuous scroll, per-frame HALT-synced motion loop) for
+> the shipped renderer. The spike's byte-shift primitive is still the basis of the
+> transition shift; the double-buffer is optional polish, not required.
+
+### R2. Dungeon structure — DECISION: **room-based, discrete rooms joined at edges**
+
+The world is **not** an open continuous floor; it is a graph of **discrete rooms**
+connected at their edges, which is exactly what R1's transition model wants and
+fits WazHack's dungeon structure naturally.
+
+- **A room = one screenful.** Each room fits the viewport (side-view playfield;
+  see §2.4 for the row split). No intra-room scrolling.
+- **Rooms connect at edges.** A room has up to 4 exits (left/right/up/down edge).
+  Stepping onto an exit cell triggers the R1 transition to the neighbouring room
+  in that direction. Horizontal exits scroll left/right; vertical exits scroll
+  up/down (vertical shift = whole-screen `LDIR` by 8-px bands — cheaper than
+  horizontal, still frozen-budget).
+- **Corridors are just narrow rooms / short transitions.** A corridor is modelled
+  as a room whose walkable area is a 1–2 tile-tall passage; it need not be special
+  cased. This keeps the map model = "a set of rooms + an adjacency table", not a
+  giant tile array.
+- **Level = a small graph of rooms.** Slice target: **4–6 rooms per level**
+  (unchanged from §4.4), now each its own screen with an adjacency/exit table,
+  rather than a single 30×21 array. The down-stairs live in one room far (in graph
+  hops) from the entry room; connectivity is a generation invariant (§6.2).
+- **Engineer data shape (fields, not bytes):** per room — `room_id`, a tile buffer
+  for its screenful of terrain, and an **exits[4]** table = `{dir → neighbour
+  room_id or NONE, exit_cell(s)}`. The active room's tile buffer is what the
+  renderer draws; on transition the neighbour's buffer is scrolled in.
+
+> This replaces the single-screen no-scroll assumption of the top-down §2.4/§4.2
+> for the shipped side-view. Game logic (combat, AI, turns) is unchanged — it just
+> operates on "the current room's" entities/tiles.
+
+### R3. Hero selection — DECISION: **choose Wizard or Witch at start; both have a cat companion**
+
+> **SUPERSEDED 2026-09-24 (user)** by `docs/design/prototype.md` §2: the cast is
+> now the sprite sheet's — heroes **Knight / Wizard / Rogue** (mechanically
+> distinct, prototype §6.3); **Witch and cat dropped for now** (cat art kept in
+> `assets/gfx/cat_*`, unused). R3 below is kept for the record only.
+
+At game start the player picks one of **two hero classes**; both are side-view
+humanoids with a following **cat** pet (as in WazHack). Full visual/animation
+spec for the artist is in `docs/design/heroes.md`; the game-model summary:
+
+- **Wizard** and **Witch** are the two selectable player kinds. For **Slice 1
+  they are mechanically identical** (same HP/atk/dmg/start kit) — the choice is
+  cosmetic (sprite + optional flavour). Class differentiation (e.g. a spell) is a
+  post-slice hook, noted but OUT of the slice.
+- **Cat companion:** a small side-view quadruped that **follows the player**. It
+  is a separate entity in the array (an ally), occupies a cell, and is drawn as a
+  sprite. Slice behaviour: pathless follow (greedy step toward the player, one
+  step behind, non-blocking to the player, does not fight yet). It participates in
+  R1 transitions (snaps into the new room with the player).
+- **Selection screen** (pre-game state): a minimal two-option chooser (`W` =
+  Wizard, `I` = Witch — or Left/Right + Enter; engineer's choice) that sets
+  `player.kind` and the player sprite set, then generates level 1. This adds one
+  game state (`SELECT`) ahead of `PLAYING`.
+
+Entity-model impact: the player slot's `kind` now encodes wizard vs witch; the
+cat is one more entity slot with an `IS_ALLY` flag (new `flags` bit) and follow
+AI. `MAX_ENTITIES` (16) is unchanged — cat + player + up to 14 monsters.
+
+### R4. PROTO revisions — 2026-09-24 (pointer)
+
+> **Decided 2026-09-24 (user + game-designer).** The first playable prototype is
+> specified in **`docs/design/prototype.md`**, which is authoritative for the
+> side-view game where it conflicts with this document. Summary of what it
+> supersedes here (sections below are kept, not rewritten):
+>
+> - **R3** hero selection → sprite-sheet cast (Knight/Wizard/Rogue), no cat/Witch.
+> - **§2.4** screen budget → side-view rooms are rows 0–20 (3 storeys × 7 rows),
+>   HUD rows 21–23 (prototype §3.3, §9).
+> - **§3** controls → side-view semantics: L/R walk or bump-attack, U/D climb
+>   ladders; chords no longer mean diagonals (vertical wins if legal); held keys
+>   repeat turns (prototype §3.1, §9).
+> - **§4.1** turn loop → same player-then-monsters logic, now with a presentation
+>   *animation phase* at a 25 Hz tick (prototype §3.1–§3.2).
+> - **§4.3/§4.4** entity fields & counts → prototype §11.1 (pixel u8 coords,
+>   facing, animation, room, spawn); on-screen cap hero + 4 monsters (§5.5).
+> - **§5.3** AI → walker/flyer archetypes + ladder-climbing (prototype §6.4).
+> - **§5.4** monster table → the six sprite-sheet kinds (prototype §6.3).
+> - **§2.1/§2.2 items** → PROTO keeps only **potions** (carried, `G` quaff from §3,
+>   heal 8, max 9, persistent once taken; prototype §6.6). No regen. Weapon/gold
+>   pickups OUT for PROTO.
+> - **R2 room model, extended (rev B, user):** monsters **persist per room** in
+>   the entity array (no reset on re-entry) and **follow the player through
+>   exits** under a deterministic, cap-respecting rule (prototype §3.7).
+> - **Colour (rev B, user):** coloured floor bands are kept; ladders cross them via
+>   black-paper hole cells + snapped climbers + no combat on ladders (prototype §4).
+> - **Unchanged and reused:** §5.1 to-hit, §5.2 damage dice, §5.6 RNG, R1/R2.
+
+---
+
 ## 0. One-paragraph pitch
 
 A turn-based, top-down dungeon crawl in the Rogue/NetHack lineage, "faithful in
@@ -135,6 +269,9 @@ fight by bumping, grab an item or two, descend or die.
 
 ### 2.4 Screen budget (24 rows)
 
+> **Side-view: SUPERSEDED 2026-09-24** by `prototype.md` §3.3/§9 (room rows 0–20,
+> HUD rows 21–23).
+
 | Rows | Use |
 |---|---|
 | 0 | Top status line: `HP nn/nn  Lv n  G nnnn` (compact) |
@@ -150,6 +287,10 @@ fight by bumping, grab an item or two, descend or die.
 ---
 
 ## 3. Controls
+
+> **Side-view: partly SUPERSEDED 2026-09-24** by `prototype.md` §9 — same keys,
+> but U/D = climb, chords resolve vertical-first (no diagonals), held keys repeat
+> turns (test flag `INPUT_REPEAT=0` restores the edge-triggered rule below).
 
 The Spectrum keyboard has **no dedicated cursor block** (cursor keys are
 shifted 5/6/7/8 on a 48K layout and awkward). So we pick deliberately.
@@ -366,6 +507,9 @@ N".
 
 ### 5.3 Monster AI — DECISION: greedy step-toward-player (no pathfinding)
 
+> **Side-view: SUPERSEDED 2026-09-24** by `prototype.md` §6.4 (walker/flyer
+> archetypes, ladder climbers, storey-bound flyers). Kept for the top-down record.
+
 Per monster, each turn:
 
 1. If **orthogonally adjacent to player** (Manhattan distance 1 — 4-connected per
@@ -383,6 +527,9 @@ deterministic, testable behaviour and reads as "monsters come at you." It can be
 upgraded post-slice.
 
 ### 5.4 Monster kind table (3 kinds) — starting balance
+
+> **Side-view: SUPERSEDED 2026-09-24** by `prototype.md` §6.3 (hero + six
+> sprite-sheet monster kinds). The rat/kobold/orc table below is historical.
 
 | id | name (glyph) | hp | atk | evasion | damage | wake N | notes |
 |---|---|---|---|---|---|---|---|

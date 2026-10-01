@@ -1,0 +1,29 @@
+# WazHack/ZX ladder tiles — authored in tools/svg_sprites.py (LADDER_GRID).
+# Sheet style: one ink on black paper. Dim yellow (INK 6, no BRIGHT) = wood,
+# distinct from the cyan pillar/doorway and white-on-blue floor, and non-bright
+# so the bright sprites stay on top visually (canvas mock: scenery is dim).
+# Rails at x=1 and x=6 (one px in from each edge so stacked/adjacent cells keep
+# a black gap from walls); rungs every 4 px so a 48-px climber always overlaps
+# 12 rungs and the pattern tiles seamlessly vertically.
+# ladder_top replaces the FLOOR cell the ladder passes through: its row 0 is a
+# full-width tread continuing the floor's own top surface line (bg floor row 0
+# is $FF), so the walkable line is unbroken and the hole reads as an opening.
+=== ladder ink:yellow paper:black
+.#....#.
+.######.
+.#....#.
+.#....#.
+.#....#.
+.######.
+.#....#.
+.#....#.
+
+=== ladder_top ink:yellow paper:black
+########
+.#....#.
+.#....#.
+.#....#.
+.#....#.
+.######.
+.#....#.
+.#....#.
