@@ -1,0 +1,26 @@
+# Build artifacts
+/build/*
+!/build/.gitkeep
+
+# sjasmplus listings / debug output kept out of git
+*.lst
+*.sld
+*.map
+*.exp
+
+# Emulator state
+*.szx
+*.z80.snap
+*.rzx
+
+# Generated graphics intermediates (sources live in assets/, packed asm is committed)
+*.intermediate.png
+# Render-backs from gfx_assess (reproducible from the packed .asm)
+*_render.png
+
+# Python (test harness / tools)
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
