@@ -67,6 +67,11 @@ CHAR_PREFIX = {
     "GIANT RAT": "rat", "BAT": "bat", "SLIME": "slime",
 }
 
+# Characters present on the vendored canvas / draft sheets but dropped from the
+# build (out of scope; G1 budget docs/design/budget.md §2). The sheets stay
+# untouched; parse_sheet() filters these frames out. Their K_* id is a hole.
+EXCLUDE_CHARS = {"ROGUE"}
+
 # Mask policy (see graphics-artist.md / report): filled silhouette + 1-px
 # 8-neighbour outline. Per-character opt-outs go here with a reason.
 OUTLINE = True
@@ -356,6 +361,7 @@ def parse_sheet(path: str):
             pending.clear()
     if pending:
         raise ValueError("trailing svg without caption")
+    frames = [f for f in frames if f.character not in EXCLUDE_CHARS]
     return frames, mock
 
 

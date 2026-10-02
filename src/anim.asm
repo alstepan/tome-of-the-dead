@@ -577,6 +577,7 @@ render:
                 push bc
                 push de
                 call erase_rect
+.probe_e2_ret:                                  ; flicker probe (no code)
                 pop  de
                 pop  bc
                 call dmg_add
@@ -717,6 +718,7 @@ draw_slot:
                 ld   a, (hl)
                 ld   (BL_FPY), a
                 call blit_sprite
+.probe_blit_ret:                                ; flicker probe (no code)
                 ; ANIM_TRACE on a drawn-frame change (§11.2)
                 SLOTVAR N_LOG
                 ld   a, (hl)

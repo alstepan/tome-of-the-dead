@@ -44,18 +44,6 @@
         INCLUDE "wizard_climb2.asm"
         INCLUDE "wizard_hurt.asm"
         INCLUDE "wizard_dead.asm"
-        INCLUDE "rogue_idle.asm"
-        INCLUDE "rogue_walk1.asm"
-        INCLUDE "rogue_walk2.asm"
-        INCLUDE "rogue_walk3.asm"
-        INCLUDE "rogue_walk4.asm"
-        INCLUDE "rogue_stab1.asm"
-        INCLUDE "rogue_stab2.asm"
-        INCLUDE "rogue_idle2.asm"
-        INCLUDE "rogue_climb1.asm"
-        INCLUDE "rogue_climb2.asm"
-        INCLUDE "rogue_hurt.asm"
-        INCLUDE "rogue_dead.asm"
         INCLUDE "skeleton_walk1.asm"
         INCLUDE "skeleton_walk2.asm"
         INCLUDE "skeleton_walk3.asm"
@@ -204,50 +192,6 @@ wizard_flags:
         DEFB 0,1,1,1,1,0,0,0,2,2,0,0
 wizard_frame_count EQU 12
 wizard_bytes       EQU wizard_idle_len + wizard_walk1_len + wizard_walk2_len + wizard_walk3_len + wizard_walk4_len + wizard_cast1_len + wizard_cast2_len + wizard_idle2_len + wizard_climb1_len + wizard_climb2_len + wizard_hurt_len + wizard_dead_len   ; = 3628
-
-; ---- rogue: 12 frames, 3628 bytes
-rogue_frames:
-        DEFW rogue_idle
-        DEFW rogue_walk1
-        DEFW rogue_walk2
-        DEFW rogue_walk3
-        DEFW rogue_walk4
-        DEFW rogue_stab1
-        DEFW rogue_stab2
-        DEFW rogue_idle2
-        DEFW rogue_climb1
-        DEFW rogue_climb2
-        DEFW rogue_hurt
-        DEFW rogue_dead
-rogue_meta:
-        DEFB 3,48,0,0        ; rogue_idle             24x48
-        DEFB 3,48,0,0        ; rogue_walk1            24x48
-        DEFB 3,48,0,0        ; rogue_walk2            24x48
-        DEFB 3,48,0,0        ; rogue_walk3            24x48
-        DEFB 3,48,0,0        ; rogue_walk4            24x48
-        DEFB 4,48,0,0        ; rogue_stab1            32x48
-        DEFB 4,48,0,0        ; rogue_stab2            32x48
-        DEFB 3,48,0,0        ; rogue_idle2            24x48
-        DEFB 3,48,0,0        ; rogue_climb1           24x48
-        DEFB 3,48,0,0        ; rogue_climb2           24x48
-        DEFB 4,48,8,0        ; rogue_hurt             32x48
-        DEFB 5,16,8,-32        ; rogue_dead             40x16
-ROGUE_IDLE_IDX EQU 0
-ROGUE_WALK1_IDX EQU 1
-ROGUE_WALK2_IDX EQU 2
-ROGUE_WALK3_IDX EQU 3
-ROGUE_WALK4_IDX EQU 4
-ROGUE_STAB1_IDX EQU 5
-ROGUE_STAB2_IDX EQU 6
-ROGUE_IDLE2_IDX EQU 7
-ROGUE_CLIMB1_IDX EQU 8
-ROGUE_CLIMB2_IDX EQU 9
-ROGUE_HURT_IDX EQU 10
-ROGUE_DEAD_IDX EQU 11
-rogue_flags:
-        DEFB 0,1,1,1,1,0,0,0,2,2,0,0
-rogue_frame_count EQU 12
-rogue_bytes       EQU rogue_idle_len + rogue_walk1_len + rogue_walk2_len + rogue_walk3_len + rogue_walk4_len + rogue_stab1_len + rogue_stab2_len + rogue_idle2_len + rogue_climb1_len + rogue_climb2_len + rogue_hurt_len + rogue_dead_len   ; = 3628
 
 ; ---- skeleton: 10 frames, 2986 bytes
 skeleton_frames:
@@ -449,5 +393,5 @@ item_flags:
 item_frame_count EQU 6
 item_bytes       EQU item_potion_len + item_scroll_len + item_sword_len + item_key_len + item_chest_len + item_torch_len   ; = 166
 
-sprites_frame_count EQU 86
-sprites_total_bytes EQU knight_bytes + wizard_bytes + rogue_bytes + skeleton_bytes + goblin_bytes + ghost_bytes + rat_bytes + bat_bytes + slime_bytes + item_bytes   ; = 19910 (unshifted, masked, incl. descriptors)
+sprites_frame_count EQU 74
+sprites_total_bytes EQU knight_bytes + wizard_bytes + skeleton_bytes + goblin_bytes + ghost_bytes + rat_bytes + bat_bytes + slime_bytes + item_bytes   ; = 16282 (unshifted, masked, incl. descriptors)

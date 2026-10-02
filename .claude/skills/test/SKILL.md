@@ -56,6 +56,7 @@ python3 tests/game.py 5 9 30          # only the listed checklist items
 python3 tests/game.py --update-golden # refresh game_select / game_start hashes
 python3 tests/budget.py          # per-tick T-state budget (exit 1 if > 2 frames)
 GAME_PROFILE=1 python3 tests/budget.py   # + per-phase split of the worst tick
+FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scenarios a/b/c); MEASUREMENT, not a pass/fail gate; A/B the order with -DRENDER_FIRST=0
 ```
 
 - **Tick-exact**: `tests/game_lib.py` keeps ZEsarUX in cpu-step mode with

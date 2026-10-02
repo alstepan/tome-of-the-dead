@@ -105,23 +105,6 @@ POOLACC = 0
 KFCNT_WIZARD = FCTR - KFID_WIZARD
 POOL_WIZARD = POOLACC
 
-KFID_ROGUE = FCTR
-POOLACC = 0
-                FRM rogue_idle,     K_ROGUE, 24, STA
-                FRM rogue_idle2,    K_ROGUE, 24, STA
-                FRM rogue_walk1,    K_ROGUE, 24, MOT
-                FRM rogue_walk2,    K_ROGUE, 24, MOT
-                FRM rogue_walk3,    K_ROGUE, 24, MOT
-                FRM rogue_walk4,    K_ROGUE, 24, MOT
-                FRM rogue_stab1,    K_ROGUE, 24, STA
-                FRM rogue_stab2,    K_ROGUE, 24, STA
-                FRM rogue_climb1,   K_ROGUE, 24, STA|SYM
-                FRM rogue_climb2,   K_ROGUE, 24, STA|SYM
-                FRM rogue_hurt,     K_ROGUE, 24, STA
-                FRM rogue_dead,     K_ROGUE, 24, STA
-KFCNT_ROGUE = FCTR - KFID_ROGUE
-POOL_ROGUE = POOLACC
-
 KFID_MONSTERS = FCTR
 KFID_SKELETON = FCTR
 POOLACC = 0
@@ -188,16 +171,13 @@ FID_COUNT = FCTR
 KFCNT_MONSTERS = FCTR - KFID_MONSTERS
 
                 ; Pool budget (prototype §5.2 / R-2): monsters + the largest
-                ; hero + the 3 select-screen idles + worst per-bank straddle
+                ; hero + the 2 select-screen idles + worst per-bank straddle
                 ; waste (<= 1 largest variant, 6 cols x 48 x 2 = 576) x 3 banks.
 POOL_HERO_MAX = POOL_KNIGHT
     IF POOL_WIZARD > POOL_HERO_MAX
 POOL_HERO_MAX = POOL_WIZARD
     ENDIF
-    IF POOL_ROGUE > POOL_HERO_MAX
-POOL_HERO_MAX = POOL_ROGUE
-    ENDIF
-POOL_NEED       EQU POOL_MONSTERS + POOL_HERO_MAX + 3 * 576 + 3 * 576
+POOL_NEED       EQU POOL_MONSTERS + POOL_HERO_MAX + 2 * 576 + 3 * 576
                 ASSERT POOL_NEED <= 3 * 16384
                 ASSERT FID_COUNT <= FRT_MAX
                 DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of 49152 (monsters ", /D, POOL_MONSTERS, ", hero max ", /D, POOL_HERO_MAX, ")"
@@ -218,11 +198,6 @@ POOL_NEED       EQU POOL_MONSTERS + POOL_HERO_MAX + 3 * 576 + 3 * 576
                 ROLE WZ_IDLE2,  FID_wizard_idle2,  WZ_REST
                 ROLE WZ_HURT,   FID_wizard_hurt,   WZ_REST
                 ROLE WZ_DEAD,   FID_wizard_dead,   WZ_REST
-
-                ROLE RG_REST,   FID_rogue_idle,    FID_rogue_idle
-                ROLE RG_IDLE2,  FID_rogue_idle2,   RG_REST
-                ROLE RG_HURT,   FID_rogue_hurt,    RG_REST
-                ROLE RG_DEAD,   FID_rogue_dead,    RG_REST
 
                 ROLE SK_REST,   FID_skeleton_walk1, FID_skeleton_walk1
                 ROLE SK_HURT,   FID_skeleton_hurt, SK_REST
@@ -305,14 +280,6 @@ wz_climbrest:   CLIMBREST FID_wizard_climb1, FID_wizard_walk1
 wz_attack:      DB FID_wizard_cast1, 2, 0, FID_wizard_cast2, 3, SF_IMPACT, SEQ_END
 wz_hurt:        DB WZ_HURT, 3, 0, SEQ_END
 wz_death:       DEATHSEQ WZ_HURT, WZ_DEAD, FID_wizard_dead, WZ_REST
-; --- Rogue ---
-rg_idle:        DB 32, RG_REST, 16, RG_IDLE2, 16, SEQ_END
-rg_move:        DB 4, FID_rogue_walk1, 1, FID_rogue_walk2, 1, FID_rogue_walk3, 1, FID_rogue_walk4, 1, SEQ_END
-rg_climb:       CLIMBCYC FID_rogue_climb1, FID_rogue_climb2, FID_rogue_walk1, FID_rogue_walk2, FID_rogue_walk3, FID_rogue_walk4
-rg_climbrest:   CLIMBREST FID_rogue_climb1, FID_rogue_walk1
-rg_attack:      DB FID_rogue_stab1, 2, 0, FID_rogue_stab2, 2, SF_IMPACT, SEQ_END
-rg_hurt:        DB RG_HURT, 3, 0, SEQ_END
-rg_death:       DEATHSEQ RG_HURT, RG_DEAD, FID_rogue_dead, RG_REST
 ; --- Skeleton ---
 sk_idle:        DB 1, SK_REST, 1, SEQ_END
 sk_move:        DB 4, FID_skeleton_walk1, 1, FID_skeleton_walk2, 1, FID_skeleton_walk3, 1, FID_skeleton_walk4, 1, SEQ_END
@@ -365,8 +332,7 @@ kind_seqs:
                 DB 2
                 DW wz_idle, wz_move, wz_climb, wz_climbrest, wz_attack, wz_hurt, wz_hurt, wz_death
                 DB 2
-                DW rg_idle, rg_move, rg_climb, rg_climbrest, rg_attack, rg_hurt, rg_hurt, rg_death
-                DB 2
+                DS KS_STRIDE, 0                ; K_ROGUE retired (hole keeps K_* ids stable)
                 DW sk_idle, sk_move, sk_climb, sk_climbrest, sk_attack, sk_hurt, sk_hurt, sk_death
                 DB 3
                 DW gb_idle, gb_move, gb_climb, gb_climbrest, gb_attack, gb_hurt, gb_hurt, gb_death
@@ -382,12 +348,11 @@ kind_seqs:
                 ASSERT $ - kind_seqs == K_COUNT * KS_STRIDE
 
 ; resting frame per kind (select screen, HOLD fallback)
-kind_rest:      DB KN_REST, WZ_REST, RG_REST, SK_REST, GB_REST, GH_REST, RT_REST, BT_REST, SL_REST
+kind_rest:      DB KN_REST, WZ_REST, 0, SK_REST, GB_REST, GH_REST, RT_REST, BT_REST, SL_REST
 
-kind_names:     DW nm_knight, nm_wizard, nm_rogue, nm_skeleton, nm_goblin, nm_ghost, nm_rat, nm_bat, nm_slime
+kind_names:     DW nm_knight, nm_wizard, 0, nm_skeleton, nm_goblin, nm_ghost, nm_rat, nm_bat, nm_slime
 nm_knight:      DB "KNIGHT", 0
 nm_wizard:      DB "WIZARD", 0
-nm_rogue:       DB "ROGUE", 0
 nm_skeleton:    DB "SKELETON", 0
 nm_goblin:      DB "GOBLIN", 0
 nm_ghost:       DB "GHOST", 0
@@ -460,7 +425,7 @@ SPAWN_COUNT     EQU ($ - spawn_tab) / 5
 ;------------------------------------------------------------------------------
 str_title:      DB "CHOOSE YOUR HERO", 0
 str_lock:       DB "LOAD FROM 128 BASIC", 0     ; check_paging: $7FFD locked
-str_keys:       DB "1        2        3", 0
+str_keys:       DB "1            2", 0
 str_hp:         DB "  HP ", 0
 str_pot:        DB "  POT ", 0
 str_room:       DB "ROOM ", 0
