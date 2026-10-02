@@ -185,7 +185,7 @@ Tags: **[S]** z80-staff-engineer (Opus), **[J]** z80-junior (Sonnet). Phases
 | A3 ✅ review: ship (feat/cold-code) | Cold-code relocation: generator + boot → bank 5 low RAM; menus/select → bank 3 via bank-2 trampoline; memory-map | S | A2 | `.sna` behaviour identical; tests green; bank-2 headroom measured |
 | A4 ✅ `4593389` (feat/zx0-tools) | ZX0 sprite sources: tool side (pack per frame in `gfx_convert`/`svg_sprites`, sjasmplus include) | J | A2 | round-trip decode test bit-exact |
 | A5 ✅ review: ship (feat/zx0-engine) | ZX0 engine side: decompressor in fixed RAM, generator unpacks per frame into `GEN_SRC` | S | A3, A4 | pool bytes identical to today; boot time measured |
-| A6 | Raise `FRT_MAX` (to the M1 number) + tile ids 32 → 64 | S | A3 | tests green; memory-map |
+| A6 ✅ review: ship | Raise `FRT_MAX` (to the M1 number) + tile ids 32 → 64 | S | A3 | tests green; memory-map |
 | A7 | Double buffer (E1, option A/B — decide after A1 eyeball): bank-7 clean bg rebased to `$E000`, present/flip | S | A3 | flicker.py = 0 events; budget measured; user confirms on hardware |
 | A8 | IM2 + ISR stub + silent AY player slot (8 KB reserved bank 3), `SYS_FRAMES`/ROM chain kept | S | A3 | tests green; ISR cost measured; no DI windows |
 | A9 | Real-hardware gate (E2): tape load + contended worst tick on the user's 128K | user + S | A7, A8 | recorded |
@@ -206,7 +206,24 @@ A3 review carry-overs (z80-reviewer, 2026-10-02):
   (~80 B) back to bank 2 to undo the +7% transition / +14% boot slowdown.
 - Optional test: breakpoint on PC in `$C000-$DFFF` with `$7FFD&7 ≠ 3`.
 
-A5 review carry-overs (z80-reviewer, 2026-10-02; fold into A6):
+A6 review carry-overs (z80-reviewer, 2026-10-02; **first part of A7**):
+- Clear `GEN_ZBLK` at the top of `build_room_map` (where GEN_SCRATCH is
+  overwritten), not only in alloc_*; 3F must still call alloc_reset/restore.
+- tests/zx0_pool.py stale-cache check: look the block up via
+  `fdesc_tab[FID_wizard_idle]` FD_BLK and assert it is non-zero.
+- ASSERT `FT_OFFR == FT_H+1 && FT_OFFL == FT_OFFR+1`; ASSERT K_COUNT ≤ K_MAX
+  and ≤ the KROW width.
+- build.sh: skip the packer for `-DZX0_SOURCES=0`.
+- gen_kind guard for a 0-frame kind (Rogue hole: B=0 → 256 frames).
+Decisions (user, 2026-10-02):
+- **Fonts** (6×8 768 B, menu ~0.96 KB, title 864 B) live in **bank 3** and are
+  **copied at boot to runtime RAM `$B200..$B7FF`** (6×8 must be always
+  mapped; menu/title may stay paged with the bank-3 menu code). Bank-2 image
+  tail (677 B) is reserved for Stage-3 hot code.
+- **Resistance table** cannot be 1 B/kind (6 types × 3 bits = 18 bits): give
+  it its own 96 B table (third kind page or bank-5 spare) — confirm in 3D.
+
+A5 review carry-overs (z80-reviewer, 2026-10-02; done in A6):
 - Clear `GEN_ZBLK` in `alloc_reset`/`alloc_restore` so the unpack cache never
   outlives a session (3F safety); add a negative stale-cache test.
 - Single build entry point (`tools/build.sh`: packer → sjasmplus), used by the

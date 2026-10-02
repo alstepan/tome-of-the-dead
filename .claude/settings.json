@@ -2,6 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(sjasmplus:*)",
+      "Bash(tools/build.sh:*)",
+      "Bash(bash tools/build.sh:*)",
+      "Bash(./tools/build.sh:*)",
       "Bash(git status)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
