@@ -1036,8 +1036,14 @@ def tape_rest(h, p):
     lo, hi = S["SRC_LEN_LO"], S["SRC_LEN_HI"]
     h.expect("50 bank 1 sprite sources == .sna", ram[1 * 16384:1 * 16384 + lo] ==
              SNA_RAM[1 * 16384:1 * 16384 + lo], True)
-    h.expect("50 bank 3 sprite sources == .sna", ram[3 * 16384:3 * 16384 + hi] ==
-             SNA_RAM[3 * 16384:3 * 16384 + hi], True)
+    # bank 3 block = source tail + bank-3 cold code (select, scrolls): BANK3_LEN >= hi
+    b3 = S.get("BANK3_LEN", hi)
+    h.expect("50 bank 3 sprite sources + cold code == .sna", ram[3 * 16384:3 * 16384 + b3] ==
+             SNA_RAM[3 * 16384:3 * 16384 + b3], True)
+    # CODE block starts in bank 5 low RAM (boot, generator) and runs into bank 2
+    lo5 = S["lowram_code"] - 0x4000
+    h.expect("50 bank 5 low-RAM cold code == .sna", ram[5 * 16384 + lo5:6 * 16384] ==
+             SNA_RAM[5 * 16384 + lo5:6 * 16384], True)
     p.wb("INPUT_REPEAT", 0)
     p.wb("ANIM_FREEZE", 1)
     p.wb("INPUT_SRC", 1)

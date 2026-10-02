@@ -19,14 +19,17 @@ sjasmplus src/main.asm \
 ```
 
 - `src/main.asm` is the single entry the assembler walks (it `INCLUDE`s the rest).
-- Emits `build/wazhack.tap` (BASIC loader + CODE + two headerless sprite-bank
-  blocks) and `build/wazhack.sna` (128K, entry `boot`).
+- Emits `build/wazhack.tap` (BASIC loader + one CODE block = bank-5 low-RAM
+  cold code + bank-2 image, then two headerless blocks: bank 1 sources, bank 3
+  source tail + cold code) and `build/wazhack.sna` (128K, entry `boot`).
 - `--sym` is required: `tests/game*.py` and `tests/budget.py` read every address /
   frame id from it.
 - `--sld` emits Source Level Debug data consumed by the `debug` skill / DeZog.
 - `--lst` listing is handy for checking byte/cycle layout and label addresses.
-- The assembler prints three `DISPLAY` lines (sprite-source size, frame count +
-  pre-shift pool need vs 48 KB, image end) — check them; the pool / image /
+- The assembler prints five `DISPLAY` lines (sprite-source size, bank-3 cold
+  code + room to the AY reserve, low-RAM cold code + spare after the A5/A6
+  reserves, frame count + pre-shift pool need vs 48 KB, bank-2 image end +
+  headroom) — check them; the pool / image /
   table limits are ASSERTs, so an overflow fails the build.
 - Sprite art comes from `assets/gfx/sprites/index.asm`; frames/tiles that are
   missing or have an illegal anchor fall back to stand-ins automatically
