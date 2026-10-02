@@ -41,22 +41,34 @@ SRC_VIRT_BASE   EQU $8000           ; sources are assembled at virtual $8000..$F
 ;------------------------------------------------------------------------------
 ROOM_MAP        EQU $6000           ; 672 B: current room tile ids, 32x21 row-major
 NEXT_MAP        EQU $6300           ; 672 B: destination room during a transition
-BITREV_TAB      EQU $6600           ; 256 B: bit-reversed byte (page-aligned)
-GEN_SRC         EQU $6700           ; 512 B: source frame copied out of its bank
-GEN_MIR         EQU $6900           ; 512 B: mirrored copy (left-facing)
-TILE_GLYPHS     EQU $6B00           ; 256 B: 32 tiles x 8 B (page-aligned)
-TILE_ATTRS      EQU $6C00           ; 32 B : attr per tile id (page-aligned)
-LOWRAM_END      EQU $6C20
-; Reserved for Stage 3A (docs/memory-map.md "Bank 5 low RAM"); ASSERTed in main.asm
-; so the cold-code block can never grow into them:
-;   A6 tile ids 32 -> 64: $6C20..$6D3F (glyphs grow to 512 B, attrs to 64 B)
-;   A6 frame descriptors: FDESC_RESERVE B directly BELOW lowram_code (loaded)
+; A6: tile ids 32 -> 64. TILE_GLYPHS is 512-ALIGNED so glyph(id) = base + id*8
+; is formed as E = id*8 (low 8 bits), D = (base >> 9) RL carry (= id bit 5):
+; +8 T per drawn cell vs the 32-id `ld d, base>>8` (tile_rect).
+TILE_GLYPHS     EQU $6600           ; 512 B: 64 tiles x 8 B ($6600..$67FF)
+BITREV_TAB      EQU $6800           ; 256 B: bit-reversed byte (page-aligned)
+TILE_ATTRS      EQU $6900           ; 64 B : attr per tile id (one page: ld h, TILE_ATTRS>>8)
+GEN_SRC         EQU $6940           ; 512 B: source frame copied out of its bank (raw build; init_tiles items)
+GEN_MIR         EQU $6B40           ; 512 B: mirrored copy (left-facing)
+LOWRAM_END      EQU $6D40
+TILE_IDS        EQU 64              ; tile id capacity (glyphs/attrs above)
+TILE_COMMON     EQU 32              ; ids 0..31: engine/common tiles (init_tiles)
+; ids 32..63: per-level decor slots (game.md §1.2). HOOK (Stage 3B, not built):
+; at level start copy the level's 32 glyphs + 32 attrs (32 x 9 B = 288 B per
+; set, 8 sets = 2,304 B in bank 7 spare) to TILE_LEVEL_GLYPHS / TILE_LEVEL_ATTRS
+; — the glyph half is exactly the second page of TILE_GLYPHS (one 256-B LDIR).
+TILE_LEVEL_GLYPHS EQU TILE_GLYPHS + TILE_COMMON * 8
+TILE_LEVEL_ATTRS  EQU TILE_ATTRS + TILE_COMMON
+; Bank-5 low-RAM fit (ASSERTed in main.asm, docs/memory-map.md "Bank 5 low RAM"):
+;   fixed buffers ROOM_MAP..LOWRAM_END; then free RAM (level state, 3B);
+;   then the cold block lowram_code..$7FFF, which ends with the frame
+;   descriptors (fdesc_tab, FID_COUNT x FDESC_STRIDE). The cold block grows
+;   DOWN, so the fit ASSERT keeps room for (FRT_MAX - FID_COUNT) more
+;   descriptors: adding frames can never collide with the buffers.
 ;   A5 ZX0 decompressor:  dzx0 + zx0_frame inside lowram.asm (<= ZX0_BUDGET B,
-;                         ASSERTed; the block grows down by its real size)
-;   A5 ZX0 scratch:       aliases ROOM_MAP..NEXT_MAP ($6000..$65FF, 1,536 B) —
-;                         the generator only runs while no room is built
-LOWRAM_FREE_END EQU $6D40           ; end of fixed low-RAM buffers incl. the A6 tile reserve
-FDESC_RESERVE   EQU 160 * 12        ; A6: FRT_MAX 160 x <= 12 B descriptors
+;                         ASSERTed); A5 ZX0 scratch aliases ROOM_MAP..NEXT_MAP
+;                         ($6000..$65FF, 1,536 B) — the generator only runs
+;                         while no room is built
+LOWRAM_FREE_END EQU LOWRAM_END      ; end of the fixed low-RAM buffers
 ZX0_BUDGET      EQU 128             ; A5: decompressor (68 B) + glue, max
     IFNDEF ZX0_SOURCES                          ; A5: 1 = sprite sources ZX0-packed
 ZX0_SOURCES     EQU 1                           ;     (build/zx0/sprites_zx0.asm from tools/zx0_sources.py);
@@ -80,9 +92,13 @@ HUD_ROW         EQU 21              ; rows 21..23 = HUD (never scrolled/stamped)
 P_ENTITIES      EQU $B000           ; 16 slots x 32 B = 512 B ($B000..$B1FF)
 P_ENT_STRIDE    EQU 32
 P_MAX_ENT       EQU 16
-FRT             EQU $B200           ; frame runtime table: 16 B/fid, <=96 fids
 FRT_STRIDE      EQU 16
-FRT_MAX         EQU 96              ; $B200..$B7FF
+FRT_MAX         EQU 160             ; A6 (game.md §11.2): 68 used today
+FRT             EQU P_ENTITIES - FRT_MAX * FRT_STRIDE   ; $A600..$AFFF: frame runtime
+                                    ; table, 16 B/fid (4 variants x bank,lo,hi + 4 pad);
+                                    ; directly below ENTITIES, the image ends below it
+BANK2_FREE      EQU $B200           ; A6: vacated old FRT ($B200..$B7FF, 1,536 B):
+BANK2_FREE_END  EQU SLOTVARS        ;     free bank-2 runtime RAM (docs/memory-map.md)
 SLOTVARS        EQU $B800           ; per-slot render scratch, 16 B per array
 N_VIS           EQU SLOTVARS + $00  ; desired: 0 hidden / 1 visible
 N_FID           EQU SLOTVARS + $10  ; desired frame id
@@ -186,8 +202,8 @@ ATK_PTR         EQU $BF8E           ; word: attacker entity during do_attack
 MON_SLOT        EQU $BF90           ; resolve_monsters slot counter
 ANIM_SLOT       EQU $BF91           ; anim/render slot counter
 YIELD_FLAG      EQU $BF92           ; 1 while a monster takes a yield step
-GEN_ZBLK        EQU $BF93           ; word: virtual addr of the ZX0 block now unpacked in GEN_SCRATCH (0 = none)
-GEN_ZDESC       EQU $BF95           ; 4 B: current frame descriptor (DW block, DW scratch addr)
+GEN_ZBLK        EQU $BF93           ; word: virtual addr of the ZX0 block now unpacked in GEN_SCRATCH
+                                    ; (0 = none; cleared by alloc_reset / alloc_restore)
 GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
 MSG_BUF         EQU $BFA0           ; 32 B message line composition
 TIMING_MARK     EQU $BFC0           ; spare
@@ -297,6 +313,7 @@ K_RAT           EQU 6
 K_BAT           EQU 7
 K_SLIME         EQU 8
 K_COUNT         EQU 9
+K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 18 needed)
 ; body height in cells per kind (single source: kind_tab KT_BH row and the FRM
 ; frame-height ASSERT both use these; named BH_<kind> so FRM can paste `kind`)
 BH_K_KNIGHT     EQU 6
@@ -308,22 +325,26 @@ BH_K_RAT        EQU 2
 BH_K_BAT        EQU 2
 BH_K_SLIME      EQU 2
 
-; offsets of the parallel arrays inside the 256-B kind_tab page (16 B each)
-KT_BW           EQU $00             ; body width, cells
-KT_BH           EQU $10             ; body height, cells
-KT_HP           EQU $20
-KT_ATK          EQU $30
-KT_EVA          EQU $40
-KT_DIE          EQU $50
-KT_BONUS        EQU $60
-KT_REACH        EQU $70
-KT_PERIOD       EQU $80
-KT_FLAGS        EQU $90
-KT_ATTR         EQU $A0
-KT_FID0         EQU $B0             ; first frame id of the kind
-KT_FCNT         EQU $C0             ; frame count of the kind
-KT_MOD7         EQU $D0             ; 24 B: n mod 7   (n = y+h, 0..23)
-KT_DIV7         EQU $E8             ; 24 B: n div 7
+; offsets of the parallel arrays inside kind_tab: 2 pages, 32 B per array
+; (K_MAX). An array never crosses a page (kind < 32, offsets multiple of $20),
+; so KFIELD keeps its 8-bit add: H = page of the array, L = low(off) + kind.
+KT_BW           EQU $000            ; body width, cells          (page 0)
+KT_BH           EQU $020            ; body height, cells
+KT_HP           EQU $040
+KT_ATK          EQU $060
+KT_EVA          EQU $080
+KT_DIE          EQU $0A0
+KT_BONUS        EQU $0C0
+KT_REACH        EQU $0E0
+KT_PERIOD       EQU $100            ;                            (page 1)
+KT_FLAGS        EQU $120
+KT_ATTR         EQU $140
+KT_FID0         EQU $160            ; first frame id of the kind
+KT_FCNT         EQU $180            ; frame count of the kind
+KT_MOD7         EQU $1A0            ; 24 B: n mod 7   (n = y+h, 0..23)
+KT_DIV7         EQU $1B8            ; 24 B: n div 7   (same page as KT_MOD7: feet_mod)
+KT_END          EQU $1D0            ; $1D0..$1FF: 48 B spare in page 1
+KT_SIZE         EQU $200
 
 ; KT_FLAGS bits
 KF_FLYER        EQU %00000001
@@ -334,16 +355,31 @@ KF_BAT          EQU %00010000       ; bat jitter / wander
 KF_ZAP          EQU %00100000       ; wizard zap overlay on impact
 
 ;------------------------------------------------------------------------------
-; Frame table (static, in image) — 8 B/fid.
+; Frame table (static, bank 2 image, frame_tab) — FT_STRIDE (4) B/fid.
 ;------------------------------------------------------------------------------
-FT_SRC          EQU 0               ; word: virtual source address (banks 1/3)
-FT_COLS         EQU 2               ; data byte-columns (W/8)
-FT_H            EQU 3               ; rows (px)
-FT_OFFR         EQU 4               ; signed: frame_px = body_px + off (right)
-FT_OFFL         EQU 5               ; signed: (left-facing)
-FT_FLAGS        EQU 6               ; FF_*
-FT_KIND         EQU 7
-FT_STRIDE       EQU 8
+; A6: only what the per-tick renderer reads (blit, footprint, frame offsets)
+; stays in bank 2; the generator-only part is the bank-5 descriptor (FD_*).
+FT_COLS         EQU 0               ; data byte-columns (W/8)
+FT_H            EQU 1               ; rows (px)
+FT_OFFR         EQU 2               ; signed: frame_px = body_px + off (right)
+FT_OFFL         EQU 3               ; signed: (left-facing)
+FT_STRIDE       EQU 4
+
+;------------------------------------------------------------------------------
+; Frame descriptor (A6; bank 5 low RAM, fdesc_tab at the end of the cold block,
+; read only by gen_frame) — 5 B/fid:
+;   FD_BLK   word: ZX0 build = VIRTUAL address of the frame's packed block
+;                  (banks 1/3; also the GEN_ZBLK cache key);
+;                  raw build = virtual address of the raw frame
+;   FD_FRM   word: ZX0 build = the frame's address inside GEN_SCRATCH once its
+;                  block is unpacked (GEN_SCRATCH + in-block offset); raw: 0
+;   FD_FLAGS byte: FF_*
+;------------------------------------------------------------------------------
+FD_BLK          EQU 0
+FD_FRM          EQU 2
+FD_FLAGS        EQU 4
+FDESC_STRIDE    EQU 5
+FDESC_RESERVE   EQU FRT_MAX * FDESC_STRIDE  ; 800 B at FRT_MAX (game.md budgeted <= 12 B x 160)
 
 FF_MOTION       EQU %00000001       ; store both shifts (0 and 4)
 FF_SYM          EQU %00000010       ; symmetric: left = right (no mirror)
@@ -431,10 +467,79 @@ RENDER_FIRST    EQU 1                           ;     (build with -DRENDER_FIRST
 TWEEN_STEP      EQU 4               ; px per tick
 
 ; KFIELD off — A = kind_tab[kind(IX) + off].  Clobbers: A, HL   (~45 T)
+; off is a KT_* constant: its page is folded into H at assembly time.
     MACRO KFIELD off
                 ld   a, (ix+E_KIND)
-                add  a, off
+                add  a, (off) & $FF
                 ld   l, a
-                ld   h, kind_tab >> 8
+                ld   h, (kind_tab + (off)) >> 8
                 ld   a, (hl)
     ENDM
+
+;------------------------------------------------------------------------------
+; FRM name, kind, body_w_px, flags — one frame of the frame list (src/frames.asm).
+; The list is INCLUDEd twice (A6):
+;   FRM_EMIT = FRM_DESC  lowram.asm fdesc_tab (bank 5): the generator's 5-B
+;                        descriptor FD_BLK, FD_FRM, FD_FLAGS (defs.asm FD_*)
+;   FRM_EMIT = FRM_HOT   data.asm frame_tab (bank 2): the renderer's 4-B entry
+;                        FT_COLS, FT_H, FT_OFFR, FT_OFFL; defines FID_<name> and
+;                        accumulates POOLACC = bytes this frame costs in the
+;                        pre-shift pool (both facings; MOTION = shifts 0+4,
+;                        STATIONARY = the one shift its anchor implies; SYM =
+;                        one facing shared).
+; STAND-IN RULE (prototype §10): a frame is included only if its label EXISTS in
+; the sprite sources AND its anchor is legal (§5.3: ax mod 4 == 0, 0 <= ax <= 8,
+; 0 <= ax_L <= 16); otherwise FID_<name> = -1 and the ROLE tables fall back.
+; Both passes apply the same rule, so fid n is entry n of both tables
+; (ASSERTed: FDESC_COUNT == FID_COUNT).
+;------------------------------------------------------------------------------
+FRM_DESC        EQU 0
+FRM_HOT         EQU 1
+
+    MACRO FRM nm, kind, bwpx, flg
+FRM_OK = 0
+    IF EXIST nm
+      IF ((nm_ax & 3) == 0) && (nm_ax <= 8) && ((nm_w - nm_ax - bwpx) >= 0) && ((nm_w - nm_ax - bwpx) <= 16)
+FRM_OK = 1
+      ENDIF
+    ENDIF
+    IF FRM_EMIT == FRM_DESC
+      IF FRM_OK
+FCTR = FCTR + 1
+        DW   nm                                ; FD_BLK
+        IF ZX0_SOURCES
+          DW   GEN_SCRATCH + nm_zoff           ; FD_FRM
+        ELSE
+          DW   0
+        ENDIF
+        DB   flg                               ; FD_FLAGS
+      ENDIF
+    ELSE
+      IF FRM_OK
+FID_nm EQU FCTR
+FCTR = FCTR + 1
+        ; bottom-anchored frames must fit the body rows and be whole cells
+        ; (fpy = py + bh*8 - H stays inside the body, row fix-up every 8 lines)
+        ASSERT (nm_h <= BH_kind * 8) && ((nm_h & 7) == 0)
+        DB   nm_cols, nm_h, low(0 - nm_ax), low(0 - (nm_w - nm_ax - bwpx))
+        IF (flg) & FF_MOTION
+          IF (flg) & FF_SYM
+POOLACC = POOLACC + nm_h * 2 * (2 * nm_cols + 1)
+          ELSE
+POOLACC = POOLACC + 2 * nm_h * 2 * (2 * nm_cols + 1)
+          ENDIF
+        ELSE
+POOLACC = POOLACC + nm_h * 2 * (nm_cols + (((nm_ax & 7) != 0) & 1))
+          IF ((flg) & FF_SYM) == 0
+POOLACC = POOLACC + nm_h * 2 * (nm_cols + ((((nm_w - nm_ax - bwpx) & 7) != 0) & 1))
+          ENDIF
+        ENDIF
+      ELSE
+FID_nm EQU -1
+      ENDIF
+    ENDIF
+    ENDM
+
+MOT             EQU FF_MOTION
+STA             EQU 0
+SYM             EQU FF_SYM

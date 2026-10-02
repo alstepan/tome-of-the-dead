@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
-"""Emit the ZX0-packed sprite SOURCES include for the build (Stage 3A task A5).
+"""Emit the ZX0-packed sprite SOURCES include for the build (Stage 3A tasks A5/A6).
 
-Pre-build step (the `build` skill runs it before sjasmplus). Writes
+Pre-build step (tools/build.sh runs it before sjasmplus). Writes
 build/zx0/sprites_zx0.asm, which src/main.asm INCLUDEs at virtual $8000 in place
 of assets/gfx/sprites/index.asm when ZX0_SOURCES = 1 (the default).
 
 Format (docs/memory-map.md "Sprite sources (ZX0)"):
-  * Generator frames (every frame named in a src/data.asm FRM line) are grouped
+  * Generator frames (every frame named in a src/frames.asm FRM line) are grouped
     per kind, in FRM order (= fid order = gen_kind order, so the generator's
     one-block cache never thrashes), into blocks of <= ZX0_MAX_FRAMES
     consecutive frames whose raw size is <= GEN_SCRATCH_LEN (1,536 B, the
     generator-time scratch they unpack into). The partition per kind is the
     one with the fewest packed bytes (exhaustive DP over 1..4-frame blocks).
     Each block = one ZX0 stream (v2, standard, forward, no header).
-  * Every packed frame keeps its label `nm`, now the address of a 4-byte
-    descriptor:  DW zblk_N (virtual address of the packed block),
-                 DW GEN_SCRATCH + raw offset of the frame inside the block.
+  * Every packed frame becomes EQUs only (A6: no bytes in banks 1/3):
+      nm      EQU zblk_N   virtual address of its packed block (FD_BLK)
+      nm_zoff EQU offset   raw offset of the frame inside the block
     plus nm_w/h/cols/ax/ay copied from its .asm and nm_len = raw pixel bytes
     (cols*h*2; NO trailing ATTR byte — the raw build's nm_len includes it).
+    The FRM list assembles them into the bank-5 frame descriptors (fdesc_tab:
+    DW nm, DW GEN_SCRATCH + nm_zoff, DB flags; src/defs.asm FD_*).
   * Items + tiles (read by init_tiles via copy_virt, never by the generator)
     stay raw: their .asm files are INCLUDEd verbatim, first.
   * index.asm's per-kind tables (<kind>_frames/_meta/_flags/...) are not
@@ -44,7 +46,7 @@ sys.path.insert(0, os.path.join(REPO, "tools"))
 import zx0_pack as zp  # noqa: E402
 
 SPR = os.path.join(REPO, "assets/gfx/sprites")
-DATA_ASM = os.path.join(REPO, "src/data.asm")
+DATA_ASM = os.path.join(REPO, "src/frames.asm")
 DZX0 = os.path.join(REPO, "tools/bin/dzx0")
 OUT = os.path.join(REPO, "build/zx0/sprites_zx0.asm")
 SCRATCH_LEN = 1536          # GEN_SCRATCH_LEN (src/defs.asm); ASSERTed in the output too
@@ -56,7 +58,7 @@ def fail(msg):
 
 
 def frm_order():
-    """Frame names in src/data.asm FRM order (= fid order)."""
+    """Frame names in src/frames.asm FRM order (= fid order)."""
     names = []
     for line in open(DATA_ASM):
         m = re.match(r"\s+FRM\s+(\w+)\s*,", line.split(";")[0])
@@ -120,17 +122,29 @@ def roundtrip(z: bytes, raw: bytes, tmp: str, tag: str):
 
 def raw_source_total(index_names):
     """Bytes the raw build assembles from index.asm (frames + attr bytes +
-    tables): every DEFB/DEFW item of index.asm and its includes."""
+    tables): every DEFB/DEFW item of index.asm and its includes. Strict: a
+    DEFB item must be a numeric literal ($xx hex or decimal -128..255), a DEFW
+    item a label or literal; DB/DW/DEFS/DS or anything unparsable fails."""
     def count(path):
         n = 0
-        for line in open(path):
+        for ln, line in enumerate(open(path), 1):
             code = line.split(";")[0].strip()
-            u = code.upper()
-            for kw, sz in (("DEFB", 1), ("DEFW", 2), ("DB ", 1), ("DW ", 2)):
-                p = u.find(kw)
-                if p >= 0 and (p == 0 or code[p - 1] in " \t:"):
-                    n += sz * len([t for t in code[p + len(kw):].split(",") if t.strip()])
-                    break
+            if ":" in code and not code.upper().startswith(("DEFB", "DEFW")):
+                code = code.split(":", 1)[1].strip()          # "label: DEFB ..."
+            if not code:
+                continue
+            kw = code.split(None, 1)[0].upper()
+            if kw in ("DB", "DW", "DEFS", "DS", "DEFM", "DM", "BLOCK"):
+                fail(f"{os.path.relpath(path, REPO)}:{ln}: unsupported data directive {kw!r}")
+            if kw not in ("DEFB", "DEFW"):
+                continue
+            items = [t.strip() for t in code[len(kw):].split(",")]
+            for t in items:
+                ok = (re.fullmatch(r"\$[0-9A-Fa-f]{1,2}|-?\d{1,3}", t) and -128 <= zp.literal(t) <= 255) \
+                    if kw == "DEFB" else re.fullmatch(r"[A-Za-z_]\w*|\$[0-9A-Fa-f]{1,4}|\d+", t)
+                if not ok:
+                    fail(f"{os.path.relpath(path, REPO)}:{ln}: bad {kw} item {t!r}")
+            n += (1 if kw == "DEFB" else 2) * len(items)
         return n
     return count(os.path.join(SPR, "index.asm")) + sum(
         count(os.path.join(SPR, nm + ".asm")) for nm in index_names)
@@ -215,10 +229,11 @@ def main():
         lines.append(f"        ASSERT (zblk_{b}_end <= BANK_WINDOW) || (zblk_{b} >= BANK_WINDOW)")
         first += len(seg)
     lines.append("")
-    lines.append("; ---- frame descriptors (FT_SRC points here): DW block, DW GEN_SCRATCH+off ----")
+    lines.append("; ---- per-frame EQUs (A6: the descriptors are fdesc_tab in bank 5) ----")
     for n, b, off, ln in desc:
         m = meta(n)
-        lines.append(f"{n}:      DW zblk_{b}, GEN_SCRATCH + {off}    ; raw {ln} B")
+        lines.append(f"{n} EQU zblk_{b}                ; FD_BLK; raw {ln} B")
+        lines.append(f"{n}_zoff EQU {off}               ; FD_FRM = GEN_SCRATCH + {off}")
         for f in ("w", "h", "cols", "ax", "ay"):
             lines.append(f"{n}_{f} EQU {m[f]}")
         lines.append(f"{n}_len EQU {ln}                ; raw pixel bytes (no ATTR byte)")

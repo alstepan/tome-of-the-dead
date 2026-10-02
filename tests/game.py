@@ -131,8 +131,8 @@ class T(Proto):
         every drawn sprite footprint (transition / erase correctness)."""
         fr = self.frame()
         rmap = self.z.read_memory(S["ROOM_MAP"], 672)
-        glyphs = self.z.read_memory(S["TILE_GLYPHS"], 256)
-        attrs = self.z.read_memory(S["TILE_ATTRS"], 32)
+        glyphs = self.z.read_memory(S["TILE_GLYPHS"], S["TILE_IDS"] * 8)
+        attrs = self.z.read_memory(S["TILE_ATTRS"], S["TILE_IDS"])
         covered = set()
         for s_ in range(16):
             e = self.ent(s_)
@@ -206,7 +206,8 @@ class T(Proto):
         f0 = self.rb(S["kind_tab"] + S["KT_FID0"] + k)
         n = self.rb(S["kind_tab"] + S["KT_FCNT"] + k)
         frt = self.z.read_memory(S["FRT"] + f0 * 16, n * 16)
-        ft = self.z.read_memory(S["frame_tab"] + f0 * 8, n * 8)
+        fs = S["FT_STRIDE"]
+        ft = self.z.read_memory(S["frame_tab"] + f0 * fs, n * fs)
         self.z.cmd("set-memory-zone 0")
         try:
             ram = self.z.read_memory(0, 131072)
@@ -214,7 +215,7 @@ class T(Proto):
             self.z.cmd("set-memory-zone -1")
         data = []
         for f in range(n):
-            cols, hh = ft[f * 8 + S["FT_COLS"]], ft[f * 8 + S["FT_H"]]
+            cols, hh = ft[f * fs + S["FT_COLS"]], ft[f * fs + S["FT_H"]]
             for v in range(4):
                 bank, lo, hi = frt[f * 16 + v * 3:f * 16 + v * 3 + 3]
                 if bank == S["FRT_NONE"]:

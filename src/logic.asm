@@ -59,16 +59,16 @@ feet_mod:
                 KFIELD KT_BH
                 add  a, (ix+E_Y)
                 ld   l, a
-                ld   h, kind_tab >> 8
+                ld   h, (kind_tab + KT_MOD7) >> 8   ; KT_MOD7/KT_DIV7: one page
                 push hl
                 ld   a, l
-                add  a, KT_DIV7
+                add  a, KT_DIV7 & $FF
                 ld   l, a
                 ld   a, (hl)
                 pop  hl
                 push af
                 ld   a, l
-                add  a, KT_MOD7
+                add  a, KT_MOD7 & $FF
                 ld   l, a
                 ld   a, (hl)
                 pop  hl
@@ -289,9 +289,9 @@ build_room_map:
                 ld   l, 0
                 ld   b, 0                      ; row
 .r:             push hl
-                ld   h, kind_tab >> 8
+                ld   h, (kind_tab + KT_MOD7) >> 8
                 ld   a, b
-                add  a, KT_MOD7
+                add  a, KT_MOD7 & $FF
                 ld   l, a
                 ld   a, (hl)
                 pop  hl
@@ -428,9 +428,9 @@ build_room_map:
                 push de
                 call .cell
                 push hl
-                ld   h, kind_tab >> 8
+                ld   h, (kind_tab + KT_MOD7) >> 8
                 ld   a, b
-                add  a, KT_MOD7
+                add  a, KT_MOD7 & $FF
                 ld   l, a
                 ld   a, (hl)
                 pop  hl

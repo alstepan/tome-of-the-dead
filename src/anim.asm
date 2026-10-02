@@ -438,9 +438,7 @@ render:
                 SLOTVAR N_FID
                 ld   a, (hl)
                 ld   (BL_FID), a
-                call ft_ptr                    ; HL = frame_tab + fid*8
-                inc  hl
-                inc  hl
+                call ft_ptr                    ; HL = frame_tab + fid*4 (FT_COLS)
                 inc  hl                        ; FT_H
                 ld   b, (hl)
                 inc  hl                        ; FT_OFFR
@@ -876,7 +874,7 @@ draw_zap:
                 add  a, a
                 add  a, a
                 ld   l, a
-                ld   h, TILE_GLYPHS >> 8
+                ld   h, TILE_GLYPHS >> 8       ; T_ZAP1/2 < TILE_COMMON (32): first page
                 ld   a, ATTR_ZAP
                 call draw_glyph
 .skip:          pop  bc

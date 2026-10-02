@@ -48,7 +48,7 @@ tests/golden/<name>.hash  # committed golden screen hashes
 A change is not "done" until `test` passes. A new golden hash without a stated,
 reviewed reason is itself a failure.
 
-## Game suites (`build/wazhack.sna`, build it first with `--sym`)
+## Game suites (`build/wazhack.sna` + `.sym`: build first with `tools/build.sh`)
 
 ```sh
 python3 tests/game.py                 # prototype.md §11.3 checklist (1-40) + 41-51 extras (50 = real tape load, 51 = select/2nd hero)
@@ -56,7 +56,7 @@ python3 tests/game.py 5 9 30          # only the listed checklist items
 python3 tests/game.py --update-golden # refresh game_select / game_start hashes
 python3 tests/budget.py          # per-tick T-state budget (exit 1 if > 2 frames)
 GAME_PROFILE=1 python3 tests/budget.py   # + per-phase split of the worst tick
-python3 tests/zx0_pool.py       # A5: builds ZX0_SOURCES=1 and =0 itself, pool banks 0/4/6 + FRT byte-identical at boot / each hero start / hero regen after a game; GEN_TRAP 0; prints cold-path T-states (--baseline DIR: also an old checkout)
+python3 tests/zx0_pool.py       # A5/A6: builds ZX0_SOURCES=1 and =0 itself (tools/build.sh -o tmp), pool banks 0/4/6 + FRT byte-identical at boot / each hero start / hero regen after a game / regen over a poked STALE GEN_ZBLK + garbage GEN_SCRATCH (A6 negative cache test); GEN_TRAP 0; prints cold-path T-states (--baseline DIR: also an old checkout, e.g. a `git archive` of it)
 python3 tests/zx0_roundtrip.py   # A4: every frame / kind block packs + unpacks bit-exact with the reference dzx0
 FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scenarios a/b/c); MEASUREMENT, not a pass/fail gate; A/B the order with -DRENDER_FIRST=0
 ```

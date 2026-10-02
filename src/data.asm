@@ -4,53 +4,14 @@
 ; 4 hand-authored rooms (§8), spawns and in-game strings. (Stand-in tile
 ; glyphs / tile tables: lowram.asm; select strings: bank3.asm.)
 ;
-; STAND-IN RULE (prototype §10, task brief): every frame is declared with FRM.
-; FRM includes a frame only if its label EXISTS in assets/gfx/sprites/index.asm
+; STAND-IN RULE (prototype §10, task brief): every frame is declared with FRM
+; (src/frames.asm). FRM includes a frame only if its label EXISTS in the sources
 ; AND its anchor is legal (§5.3: ax mod 4 == 0, 0 <= ax <= 8, 0 <= ax_L <= 16).
 ; Otherwise FID_<name> = -1 and the per-kind ROLE table below falls back to the
 ; listed stand-in frame. When the artist appends a frame (or re-pads an anchor)
 ; it drops in with NO code change; the role tables are the only thing to edit
 ; if a name differs.
 ;==============================================================================
-
-;------------------------------------------------------------------------------
-; FRM name, kind, body_w_px, flags  — one 8-byte FT entry per included frame.
-; Also accumulates POOLACC = bytes this frame costs in the pre-shift pool
-; (both facings; MOTION = shifts 0+4, STATIONARY = the one shift its anchor
-; implies; SYM = one facing shared).
-;------------------------------------------------------------------------------
-FCTR = 0
-POOLACC = 0
-
-    MACRO FRM nm, kind, bwpx, flg
-    IF EXIST nm
-      IF ((nm_ax & 3) == 0) && (nm_ax <= 8) && ((nm_w - nm_ax - bwpx) >= 0) && ((nm_w - nm_ax - bwpx) <= 16)
-FID_nm EQU FCTR
-FCTR = FCTR + 1
-        ; bottom-anchored frames must fit the body rows and be whole cells
-        ; (fpy = py + bh*8 - H stays inside the body, row fix-up every 8 lines)
-        ASSERT (nm_h <= BH_kind * 8) && ((nm_h & 7) == 0)
-        DW   nm
-        DB   nm_cols, nm_h, low(0 - nm_ax), low(0 - (nm_w - nm_ax - bwpx)), flg, kind
-        IF (flg) & FF_MOTION
-          IF (flg) & FF_SYM
-POOLACC = POOLACC + nm_h * 2 * (2 * nm_cols + 1)
-          ELSE
-POOLACC = POOLACC + 2 * nm_h * 2 * (2 * nm_cols + 1)
-          ENDIF
-        ELSE
-POOLACC = POOLACC + nm_h * 2 * (nm_cols + (((nm_ax & 7) != 0) & 1))
-          IF ((flg) & FF_SYM) == 0
-POOLACC = POOLACC + nm_h * 2 * (nm_cols + ((((nm_w - nm_ax - bwpx) & 7) != 0) & 1))
-          ENDIF
-        ENDIF
-      ELSE
-FID_nm EQU -1
-      ENDIF
-    ELSE
-FID_nm EQU -1
-    ENDIF
-    ENDM
 
 ; ROLE dst, candidate_fid, fallback_fid  — the state->frame table entry.
     MACRO ROLE dst, cand, fb
@@ -61,115 +22,16 @@ dst EQU fb
       ENDIF
     ENDM
 
-MOT             EQU FF_MOTION
-STA             EQU 0
-SYM             EQU FF_SYM
 
 ;==============================================================================
-; FRAME TABLE (8 B/fid). Kinds are contiguous so a kind's frames are
-; [KT_FID0, KT_FID0 + KT_FCNT). Heroes are listed first; monsters after.
+; FRAME TABLE (bank 2, FT_STRIDE = 4 B/fid: FT_COLS, FT_H, FT_OFFR, FT_OFFL —
+; what the per-tick renderer reads). The list itself is src/frames.asm; its
+; generator half (source block / offset / flags) is fdesc_tab in lowram.asm.
 ;==============================================================================
 frame_tab:
-KFID_KNIGHT = FCTR
-POOLACC = 0
-                FRM knight_idle1,   K_KNIGHT, 24, STA
-                FRM knight_idle2,   K_KNIGHT, 24, STA
-                FRM knight_walk1,   K_KNIGHT, 24, MOT
-                FRM knight_walk2,   K_KNIGHT, 24, MOT
-                FRM knight_walk3,   K_KNIGHT, 24, MOT
-                FRM knight_walk4,   K_KNIGHT, 24, MOT
-                FRM knight_windup,  K_KNIGHT, 24, STA
-                FRM knight_slash,   K_KNIGHT, 24, STA
-                FRM knight_follow,  K_KNIGHT, 24, STA
-                FRM knight_block,   K_KNIGHT, 24, STA
-                FRM knight_hurt,    K_KNIGHT, 24, STA
-                FRM knight_climb1,  K_KNIGHT, 24, STA|SYM
-                FRM knight_climb2,  K_KNIGHT, 24, STA|SYM
-                FRM knight_dead,    K_KNIGHT, 24, STA
-KFCNT_KNIGHT = FCTR - KFID_KNIGHT
-POOL_KNIGHT = POOLACC
-
-KFID_WIZARD = FCTR
-POOLACC = 0
-                FRM wizard_idle,    K_WIZARD, 24, STA
-                FRM wizard_idle2,   K_WIZARD, 24, STA
-                FRM wizard_walk1,   K_WIZARD, 24, MOT
-                FRM wizard_walk2,   K_WIZARD, 24, MOT
-                FRM wizard_walk3,   K_WIZARD, 24, MOT
-                FRM wizard_walk4,   K_WIZARD, 24, MOT
-                FRM wizard_cast1,   K_WIZARD, 24, STA
-                FRM wizard_cast2,   K_WIZARD, 24, STA
-                FRM wizard_climb1,  K_WIZARD, 24, STA|SYM
-                FRM wizard_climb2,  K_WIZARD, 24, STA|SYM
-                FRM wizard_hurt,    K_WIZARD, 24, STA
-                FRM wizard_dead,    K_WIZARD, 24, STA
-KFCNT_WIZARD = FCTR - KFID_WIZARD
-POOL_WIZARD = POOLACC
-
-KFID_MONSTERS = FCTR
-KFID_SKELETON = FCTR
-POOLACC = 0
-                FRM skeleton_walk1,     K_SKELETON, 24, MOT
-                FRM skeleton_walk2,     K_SKELETON, 24, MOT
-                FRM skeleton_walk3,     K_SKELETON, 24, MOT
-                FRM skeleton_walk4,     K_SKELETON, 24, MOT
-                FRM skeleton_raise,     K_SKELETON, 24, STA
-                FRM skeleton_cut,       K_SKELETON, 24, STA
-                FRM skeleton_collapsed, K_SKELETON, 24, STA
-                FRM skeleton_climb1,    K_SKELETON, 24, STA|SYM
-                FRM skeleton_climb2,    K_SKELETON, 24, STA|SYM
-                FRM skeleton_hurt,      K_SKELETON, 24, STA
-KFCNT_SKELETON = FCTR - KFID_SKELETON
-
-KFID_GOBLIN = FCTR
-                FRM goblin_walk1,   K_GOBLIN, 24, MOT
-                FRM goblin_walk2,   K_GOBLIN, 24, MOT
-                FRM goblin_walk3,   K_GOBLIN, 24, MOT
-                FRM goblin_walk4,   K_GOBLIN, 24, MOT
-                FRM goblin_clubup,  K_GOBLIN, 24, STA
-                FRM goblin_smash,   K_GOBLIN, 24, STA
-                FRM goblin_climb1,  K_GOBLIN, 24, STA|SYM
-                FRM goblin_climb2,  K_GOBLIN, 24, STA|SYM
-                FRM goblin_hurt,    K_GOBLIN, 24, STA
-                FRM goblin_dead,    K_GOBLIN, 24, STA
-KFCNT_GOBLIN = FCTR - KFID_GOBLIN
-
-KFID_GHOST = FCTR
-                FRM ghost_float1,   K_GHOST, 24, MOT
-                FRM ghost_float2,   K_GHOST, 24, MOT
-                FRM ghost_lunge,    K_GHOST, 24, STA
-                FRM ghost_hurt,     K_GHOST, 24, STA
-                FRM ghost_dead,     K_GHOST, 24, STA
-KFCNT_GHOST = FCTR - KFID_GHOST
-
-KFID_RAT = FCTR
-                FRM rat_run1,       K_RAT, 32, MOT
-                FRM rat_run2,       K_RAT, 32, MOT
-                FRM rat_bite,       K_RAT, 32, STA
-                FRM rat_hurt,       K_RAT, 32, STA
-                FRM rat_dead,       K_RAT, 32, STA
-KFCNT_RAT = FCTR - KFID_RAT
-
-KFID_BAT = FCTR
-                FRM bat_flapup,     K_BAT, 24, MOT
-                FRM bat_glide,      K_BAT, 24, MOT
-                FRM bat_flapdown,   K_BAT, 24, MOT
-                FRM bat_dive,       K_BAT, 24, STA
-                FRM bat_hurt,       K_BAT, 24, STA
-                FRM bat_dead,       K_BAT, 24, STA
-KFCNT_BAT = FCTR - KFID_BAT
-
-KFID_SLIME = FCTR
-                FRM slime_wobble,   K_SLIME, 24, STA
-                FRM slime_squash,   K_SLIME, 24, MOT
-                FRM slime_stretch,  K_SLIME, 24, MOT
-                FRM slime_lunge,    K_SLIME, 24, STA
-                FRM slime_hurt,     K_SLIME, 24, STA
-                FRM slime_dead,     K_SLIME, 24, STA
-KFCNT_SLIME = FCTR - KFID_SLIME
-POOL_MONSTERS = POOLACC
-FID_COUNT = FCTR
-KFCNT_MONSTERS = FCTR - KFID_MONSTERS
+FRM_EMIT = FRM_HOT
+                INCLUDE "frames.asm"
+                ASSERT $ - frame_tab == FID_COUNT * FT_STRIDE
 
                 ; Pool budget (prototype §5.2 / R-2): monsters + the largest
                 ; hero + the 2 select-screen idles + worst per-bank straddle
@@ -440,8 +302,10 @@ str_died:       DB "YOU DIED - PRESS ENTER", 0
 str_win:        DB "TREASURE! PRESS ENTER", 0
 str_welcome:    DB "FIND THE TREASURE", 0
 
-; per-kind stats (prototype §6.3) — emitted into the page-aligned kind_tab
+; per-kind stats (prototype §6.3) — emitted into the page-aligned kind_tab,
+; one K_MAX (32) B array per KROW (ids 9..31 = 0 until Stage 3F kinds land)
 ;                  KN  WZ  RG  SK  GB  GH  RT  BT  SL
     MACRO KROW v0, v1, v2, v3, v4, v5, v6, v7, v8
-                DB v0, v1, v2, v3, v4, v5, v6, v7, v8, 0, 0, 0, 0, 0, 0, 0
+                DB v0, v1, v2, v3, v4, v5, v6, v7, v8
+                DS K_MAX - 9, 0
     ENDM

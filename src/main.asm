@@ -3,16 +3,17 @@
 ;             Spec: docs/design/prototype.md (rev B, authoritative).
 ;
 ; Target : ZX Spectrum 128K.   Build:
-;   sjasmplus src/main.asm --fullpath --lst=build/wazhack.lst --sld=build/wazhack.sld
-;             --sym=build/wazhack.sym -i src
+;   tools/build.sh   (zx0_sources.py, then sjasmplus src/main.asm --fullpath
+;                     --lst/--sld/--sym=build/wazhack.* -i src; fails on warnings)
 ;   -> build/wazhack.tap (BASIC loader + CODE lowram_code..code_end + 2
 ;      headerless blocks: bank 1 sources, bank 3 source tail + cold code)
 ;   -> build/wazhack.sna (128K snapshot; entry = boot, all banks preloaded)
 ;
-; Memory (docs/memory-map.md "PROTO"): HOT code+tables $8000..(< $B000, bank
-; 2); runtime entity/frame/render tables $B000..$BAFF; stack $BB00..$BEFF;
-; state block $BF00..$BFFF; room maps + generator buffers $6000..$6C1F and
-; the COLD code block lowram_code..$7FFF (bank 5: boot, generator, game start);
+; Memory (docs/memory-map.md "PROTO"): HOT code+tables $8000..(< FRT, bank
+; 2); frame runtime table FRT $A600..$AFFF; runtime entity/render tables
+; $B000..$BAFF; stack $BB00..$BEFF; state block $BF00..$BFFF; room maps, tiles
+; + generator buffers $6000..$6D3F and the COLD block lowram_code..$7FFF (bank
+; 5: boot, generator, game start, frame descriptors);
 ; COLD paged code in bank 3 after the source tail (select, transition scrolls,
 ; via far3); unshifted sprite SOURCES in banks 1/3 (assembled at virtual
 ; $8000..$FFFF); mirrored + pre-shifted sprite POOL generated at boot into
@@ -33,9 +34,10 @@
 ; SPRITE SOURCES — banks 1 and 3, assembled contiguously at virtual $8000..$FFFF
 ; (slot 2 = page 1, slot 3 = page 3). Read only by the boot generator (and
 ; init_tiles) via copy_virt (virtual < $C000 -> bank 1 at +$4000, else bank 3
-; as-is). ZX0_SOURCES = 1 (default): the generator frames are ZX0 blocks +
-; 4-B descriptors (build/zx0/sprites_zx0.asm, written by tools/zx0_sources.py
-; — run it before sjasmplus; the `build` skill does); items/tiles stay raw.
+; as-is). ZX0_SOURCES = 1 (default): the generator frames are ZX0 blocks
+; (build/zx0/sprites_zx0.asm, written by tools/zx0_sources.py — tools/build.sh
+; runs it); their per-frame block/offset are EQUs folded into the bank-5
+; fdesc_tab (A6); items/tiles stay raw.
 ; ZX0_SOURCES = 0: the raw index.asm, as before A5 (A/B, tests/zx0_pool.py).
 ;==============================================================================
                 MMU  2, BANK_SRC_LO
@@ -58,7 +60,7 @@ SRC_LEN_HI      EQU SRC_TOTAL - SRC_LEN_LO
                 ASSERT SRC_TOTAL <= $8000
                 DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B (bank1 ", /D, SRC_LEN_LO, ", bank3 ", /D, SRC_LEN_HI, ")"
     IF ZX0_SOURCES
-                DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed (+", /D, ZX0_FRAMES * 4, " B descriptors); total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
+                DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed; total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
     ENDIF
 
 
@@ -85,15 +87,22 @@ BANK3_CODE_LEN  EQU bank3_end - bank3_code
 ;==============================================================================
                 MMU  1, 5
                 ORG  $8000 - (lowram_code_end - lowram_code)
-lowram_code:
+lowram_code:                                   ; = start (ASSERTed): the USR target
                 INCLUDE "lowram.asm"
 lowram_code_end:
 LOWRAM_CODE_LEN EQU lowram_code_end - lowram_code
                 ASSERT lowram_code_end == $8000
-LOWRAM_SPARE    EQU lowram_code - ZX0_RESERVE - FDESC_RESERVE - LOWRAM_FREE_END
-                ASSERT lowram_code - ZX0_RESERVE - FDESC_RESERVE >= LOWRAM_FREE_END
+                ; the descriptors are the tail of the cold block: room for the
+                ; remaining FRT_MAX - FDESC_COUNT ones is kept free below it
+FDESC_GROW      EQU (FRT_MAX - FDESC_COUNT) * FDESC_STRIDE
+LOWRAM_SPARE    EQU lowram_code - ZX0_RESERVE - FDESC_GROW - LOWRAM_FREE_END
+                ASSERT lowram_code - ZX0_RESERVE - FDESC_GROW >= LOWRAM_FREE_END
+                ASSERT fdesc_end == lowram_code_end
+                ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= TILE_GLYPHS  ; the lowest buffer above the alias
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= BITREV_TAB
-                DISPLAY "GAME low-RAM cold code: ", /H, lowram_code, "..0x7FFF (", /D, LOWRAM_CODE_LEN, " B), spare after A5/A6 reserves: ", /D, LOWRAM_SPARE
+                ASSERT (TILE_GLYPHS & $1FF) == 0                    ; tile_rect glyph addressing
+                ASSERT (TILE_ATTRS & $FF) + TILE_IDS <= 256          ; one page
+                DISPLAY "GAME low-RAM cold block: ", /H, lowram_code, "..0x7FFF (", /D, LOWRAM_CODE_LEN, " B = code ", /D, fdesc_tab - lowram_code, " + ", /D, FDESC_COUNT, " frame descriptors ", /D, fdesc_end - fdesc_tab, " B); spare after the descriptor growth reserve (", /D, FDESC_GROW, " B): ", /D, LOWRAM_SPARE
 
 ;==============================================================================
 ; MAIN IMAGE — bank 2 at $8000. Hot code + tables only.
@@ -337,7 +346,8 @@ enter_select:
                 INCLUDE "data.asm"
 
 ;==============================================================================
-; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3.
+; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
+; pages, K_MAX (32) B per array; no array crosses a page (KFIELD, feet_mod).
 ;==============================================================================
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
                 ALIGN 256
@@ -357,6 +367,8 @@ kind_tab:
                 KROW KFID_KNIGHT, KFID_WIZARD, 0, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME   ; KT_FID0
                 KROW KFCNT_KNIGHT, KFCNT_WIZARD, 0, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME ; KT_FCNT
                 ASSERT $ - kind_tab == KT_MOD7
+                ASSERT (KT_MOD7 >> 8) == ((KT_DIV7 + 23) >> 8)    ; feet_mod: one H for both
+                ASSERT (KT_FID0 >> 8) == (KT_FCNT >> 8)            ; gen_kind: one H for both
                 DUP 24, n
                 DB   n % 7                     ; KT_MOD7
                 EDUP
@@ -364,19 +376,22 @@ kind_tab:
                 DUP 24, n
                 DB   n / 7                     ; KT_DIV7
                 EDUP
-                ASSERT $ - kind_tab == 256
+                ASSERT $ - kind_tab == KT_END
+                ASSERT KT_END <= KT_SIZE           ; $1D0..$1FF spare (resistances, 3F)
 
 code_end:
 IMAGE_LEN       EQU code_end - image_start
 TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + bank 2
                 ASSERT start == lowram_code    ; USR target = first byte of the block
+                ASSERT FDESC_COUNT == FID_COUNT    ; fdesc_tab and frame_tab: same frames
                 ASSERT image_start == $8000
-                ASSERT code_end <= P_ENTITIES
-                ASSERT FRT + FRT_MAX * FRT_STRIDE <= SLOTVARS
+                ASSERT code_end <= FRT         ; the image ends below the frame runtime table
+                ASSERT FRT + FRT_MAX * FRT_STRIDE <= P_ENTITIES
+                ASSERT P_ENTITIES + P_MAX_ENT * P_ENT_STRIDE <= BANK2_FREE
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
                 ASSERT LOWRAM_END <= LOWRAM_FREE_END
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to ENTITIES: ", /D, P_ENTITIES - code_end, " (+", /D, kind_tab - kind_tab_pad, " B kind_tab ALIGN pad)"
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, kind_tab - kind_tab_pad, " B kind_tab ALIGN pad); free runtime RAM ", /H, BANK2_FREE, "..", /H, BANK2_FREE_END - 1, ": ", /D, BANK2_FREE_END - BANK2_FREE
 
 ;------------------------------------------------------------------------------
 ; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"
