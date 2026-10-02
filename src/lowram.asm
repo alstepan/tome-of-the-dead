@@ -453,18 +453,18 @@ hud_clear_mark:
 ;==============================================================================
 ; vis_reset / vis_room_sync — THE render-state resync of every "new world
 ; state" path. CONTRACT (A7 review, bugs B7/B7b): render runs FIRST in a tick
-; (RENDER_FIRST) from the previous tick's anim_tick output (N_VIS / N_FID /
+; (RENDER_FIRST) from the previous tick's anim_tick output (R_VIS / R_FID /
 ; RLIST), so any path that changes CUR_ROOM or rewrites the entity table
 ; must call one of these before play_loop renders again:
 ;   vis_reset     — the entity table was rewritten: new_game (and, Stage 3B,
 ;                   every level change / stairs). Every slot hidden, so a
-;                   stale N_FID (the dead hero's frame, a monster of the last
+;                   stale R_FID (the dead hero's frame, a monster of the last
 ;                   game) can never be drawn; the first anim_tick refills it.
 ;                   (B7b: new game after death drew the old game's slots and
 ;                   the hero with a frame of the previous hero.)
 ;   vis_room_sync — CUR_ROOM changed, slots kept (do_exit): hide every slot
 ;                   not live in CUR_ROOM (not ACTIVE, PENDING, other room);
-;                   the hero keeps N_VIS / N_FID = its last frame (valid), so
+;                   the hero keeps R_VIS / R_FID = its last frame (valid), so
 ;                   it is drawn at its arrival position on the first tick.
 ;                   (B7: every monster of the room just left was drawn at its
 ;                   old position on the new room for one tick.)
@@ -474,15 +474,16 @@ hud_clear_mark:
 ; Cold (room change / new game only).  Clobbers: A, BC, DE, HL, IX.
 ;==============================================================================
 vis_reset:
-                ld   hl, N_VIS
+                ld   hl, SLOTREC + R_VIS
                 ld   b, P_MAX_ENT
-                xor  a
-.z:             ld   (hl), a
-                inc  l                         ; N_VIS: 16 B inside one page
+.z:             ld   (hl), 0
+                ld   a, l
+                add  a, SLOTREC_STRIDE         ; SLOTREC: 16 records in one page
+                ld   l, a
                 djnz .z
 vis_room_sync:
                 ld   ix, P_ENTITIES
-                ld   hl, N_VIS
+                ld   hl, SLOTREC + R_VIS
                 ld   de, P_ENT_STRIDE
                 ld   bc, (P_MAX_ENT << 8) | (RLIST & $FF)  ; C = RLIST write ptr
 .l:             ld   a, (ix+E_FLAGS)
@@ -499,21 +500,26 @@ vis_room_sync:
                 bit  0, (ix+E_DVIS)
                 jr   z, .n                     ; neither visible nor drawn
 .add:           ld   a, l
-                sub  N_VIS & $FF               ; slot
+                rrca
+                rrca
+                rrca
+                rrca                           ; slot = L / 16 (R_VIS = 0)
                 push hl
                 ld   l, c
                 ld   h, RLIST >> 8
                 ld   (hl), a
                 pop  hl
                 inc  c
-.n:             inc  l
+.n:             ld   a, l
+                add  a, SLOTREC_STRIDE
+                ld   l, a
                 add  ix, de
                 djnz .l
                 ld   a, c
                 sub  RLIST & $FF
                 ld   (RLIST_N), a
                 ret
-                ASSERT (N_VIS & $FF) + P_MAX_ENT <= 256
+                ASSERT (SLOTREC & $FF) == 0 && R_VIS == 0 && P_MAX_ENT * SLOTREC_STRIDE == 256
                 ASSERT (RLIST & $FF) + P_MAX_ENT <= 256
 
 ;==============================================================================

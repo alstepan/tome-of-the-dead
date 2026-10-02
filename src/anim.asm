@@ -4,7 +4,7 @@
 ;
 ; Per tick: anim_tick advances every live entity of CUR_ROOM (REST idle loop /
 ; MOVE tween 4 px + motion cycle / SEQ one-shot with IMPACT / HOLD) and writes
-; the desired frame into N_VIS/N_FID. render then diffs desired vs drawn:
+; the desired frame into R_VIS/R_FID (SLOTREC). render then diffs desired vs drawn:
 ;   erase changed sprites (tile-map restore = bitmap + attr, §4.3), repair
 ;   overlapping sprites (FORCE re-blit, cascading), draw in slot order with the
 ;   player last, stamp exact-footprint attrs, overlay the zap, tick timers.
@@ -24,10 +24,13 @@ anim_tick:
                 xor  a
                 ld   (RLIST_N), a
 .lp:            ld   (ANIM_SLOT), a
-                ld   hl, N_VIS
-                add  a, l
+                rlca
+                rlca
+                rlca
+                rlca
                 ld   l, a
-                ld   (hl), 0                   ; default: hidden
+                ld   h, SLOTREC >> 8
+                ld   (hl), 0                   ; R_VIS default: hidden
                 ld   a, (ANIM_SLOT)
                 call ent_ix
                 ld   a, (ix+E_FLAGS)
@@ -40,14 +43,15 @@ anim_tick:
                 call anim_entity               ; A = fid, B = visible
                 ld   c, a
                 ld   a, (ANIM_SLOT)
-                ld   hl, N_FID
-                add  a, l
+                rlca
+                rlca
+                rlca
+                rlca
                 ld   l, a
-                ld   (hl), c
-                ld   a, l
-                sub  N_FID - N_VIS
-                ld   l, a
-                ld   (hl), b
+                ld   h, SLOTREC >> 8
+                ld   (hl), b                   ; R_VIS
+                inc  l
+                ld   (hl), c                   ; R_FID
                 ld   a, b
                 or   a
                 jr   nz, .add                  ; visible -> render list
@@ -79,7 +83,8 @@ anim_tick:
 
 ;------------------------------------------------------------------------------
 ; rl_first / rl_next — iterate RLIST (slots visible or still drawn this tick,
-; ascending). rl_next: A = ANIM_SLOT = next slot, CF = 1 when exhausted.
+; ascending). rl_next: A = ANIM_SLOT = next slot (Z = slot 0), HL = its
+; SLOTREC record (R_VIS), CF = 1 when exhausted.
 ; Clobbers: A, HL.  (The render loops touch ~5 slots instead of 16.)
 ;------------------------------------------------------------------------------
 rl_first:       xor  a
@@ -95,12 +100,19 @@ rl_next:        ld   a, (RL_IDX)
                 ld   (RL_IDX), a
                 ld   a, l
                 add  a, RLIST & $FF
-                ld   l, a
-                ld   h, RLIST >> 8
+                ld   l, a                      ; (RLIST, RLIST_N: one page)
                 ld   a, (hl)
                 ld   (ANIM_SLOT), a
-                or   a                         ; CF = 0
+                rlca
+                rlca
+                rlca
+                rlca
+                ld   l, a                      ; A7b: HL = the slot's record
+                ld   h, SLOTREC >> 8
+                ld   a, (ANIM_SLOT)
+                or   a                         ; CF = 0; Z = slot 0
                 ret
+                ASSERT (RLIST >> 8) == (RLIST_N >> 8)
 
 ;------------------------------------------------------------------------------
 ; anim_entity — IX = live entity. Out: A = fid, B = 1 visible / 0 hidden.
@@ -396,140 +408,34 @@ turn_done:
 
 ;==============================================================================
 ; RENDER
+; A7b: per-slot state is one 16-B record (SLOTREC + slot*16, fields R_*), so a
+; slot's fields are reached by inc l / RFIELD instead of one 31-T array lookup
+; each; classify + erase + damage run in ONE pass over RLIST (was three), and
+; a moving sprite's old and new footprints become one damage rect when their
+; union is a rectangle (same row band or same col band, overlapping or
+; touching): fewer rects to mark for present and to test in the repair pass.
 ;==============================================================================
-; slot_var — HL = array (page SLOTVARS) + ANIM_SLOT.   A = array low offset.
-    MACRO SLOTVAR arr
-                ld   a, (ANIM_SLOT)
-                add  a, arr & $FF
+; RFIELD f — L = this record's field f (H = SLOTREC page).  Clobbers: A  (22 T)
+    MACRO RFIELD f
+                ld   a, l
+                and  $F0
+                or   f
                 ld   l, a
-                ld   h, arr >> 8
     ENDM
+                ASSERT SLOTREC_STRIDE == 16 && (SLOTREC & $FF) == 0
+                ASSERT P_MAX_ENT * SLOTREC_STRIDE == 256 && R_LOG < 16
+                ASSERT E_DFPX == E_DFID + 1 && E_DFPY == E_DFID + 2 && E_DCOL == E_DFID + 3
+                ASSERT E_DROW == E_DFID + 4 && E_DCOLS == E_DFID + 5 && E_DROWS == E_DFID + 6
+                ASSERT R_FPX == R_FID + 1 && R_FPY == R_FID + 2 && R_COL == R_FID + 3
+                ASSERT R_ROW == R_FID + 4 && R_COLS == R_FID + 5 && R_ROWS == R_FID + 6
+                ASSERT R_LEFT == R_ROWS + 1 && R_ATTR == R_LEFT + 1 && R_DATTR == R_ATTR + 1
+                ASSERT R_DIRTY == R_DATTR + 1 && R_LOG == R_DIRTY + 1
+                ASSERT DIRTY_ATTR == DIRTY_NONE + 1 && DIRTY_FULL == 2
 
 render:
-                ; ---------------- 1. desired state + dirty class ----------------
-                call rl_first
-.d1:            call rl_next
-                jp   c, .d1done
-                call ent_ix
-                SLOTVAR N_LOG
-                ld   (hl), 0
-                SLOTVAR N_VIS
-                ld   a, (hl)
-                or   a
-                jr   nz, .vis
-                ld   a, (ix+E_DVIS)
-                and  1
-                jr   z, .none
-                ld   a, DIRTY_FULL             ; was drawn, now hidden: erase
-                jr   .setd
-.none:          xor  a
-.setd:          push af
-                SLOTVAR N_DIRTY
-                pop  af
-                ld   (hl), a
-                jp   .n1
-.vis:           ; facing
-                ld   a, (ix+E_FLAGS)
-                and  EF_LEFT
-                ld   c, a
-                SLOTVAR N_LEFT
-                ld   (hl), c
-                ; frame offsets
-                SLOTVAR N_FID
-                ld   a, (hl)
-                ld   (BL_FID), a
-                call ft_ptr                    ; HL = frame_tab + fid*4 (FT_COLS)
-                inc  hl                        ; FT_H
-                ld   b, (hl)
-                inc  hl                        ; FT_OFFR
-                ld   a, c
-                or   a
-                jr   z, .offr
-                inc  hl                        ; FT_OFFL
-.offr:          ld   a, (hl)
-                add  a, (ix+E_PX)
-                ld   (BL_FPX), a               ; fpx = px + off
-                ld   c, b                      ; fpy = py + bh*8 - H
-                KFIELD KT_BH
-                add  a, a
-                add  a, a
-                add  a, a
-                add  a, (ix+E_PY)
-                sub  c
-                ld   (BL_FPY), a
-                SLOTVAR N_FPX
-                ld   a, (BL_FPX)
-                ld   (hl), a
-                SLOTVAR N_FPY
-                ld   a, (BL_FPY)
-                ld   (hl), a
-                ; attr: flash overrides the kind colour
-                ld   a, (ix+E_FLT)
-                or   a
-                ld   a, (ix+E_FLA)
-                jr   nz, .fl
-                KFIELD KT_ATTR
-.fl:            ld   c, a
-                SLOTVAR N_ATTR
-                ld   (hl), c
-                ; footprint
-                ld   a, (BL_FPX)
-                ld   e, a
-                ld   a, (BL_FPY)
-                ld   d, a
-                ld   a, (BL_FID)
-                call frame_footprint           ; C col, B row, D cols, E rows
-                push de
-                SLOTVAR N_COL
-                ld   (hl), c
-                SLOTVAR N_ROW
-                ld   (hl), b
-                pop  de
-                SLOTVAR N_COLS
-                ld   (hl), d
-                SLOTVAR N_ROWS
-                ld   (hl), e
-                ; classify vs drawn
-                ld   a, (ix+E_DVIS)
-                and  1
-                jr   z, .full_log
-                ld   a, (BL_FID)
-                cp   (ix+E_DFID)
-                jr   nz, .full_log
-                ld   a, (ix+E_DVIS)
-                and  EF_LEFT
-                ld   c, a
-                SLOTVAR N_LEFT
-                ld   a, (hl)
-                cp   c
-                jr   nz, .full
-                ld   a, (BL_FPX)
-                cp   (ix+E_DFPX)
-                jr   nz, .full
-                ld   a, (BL_FPY)
-                cp   (ix+E_DFPY)
-                jr   nz, .full
-                SLOTVAR D_ATTR
-                ld   c, (hl)
-                SLOTVAR N_ATTR
-                ld   a, (hl)
-                cp   c
-                ld   a, DIRTY_NONE
-                jr   z, .cls
-                ld   a, DIRTY_ATTR
-                jr   .cls
-.full_log:      SLOTVAR N_LOG
-                ld   (hl), 1
-.full:          ld   a, DIRTY_FULL
-.cls:           ld   c, a
-                SLOTVAR N_DIRTY
-                ld   (hl), c
-.n1:            jp   .d1
-.d1done:
-
-                ; ---------------- 2. erase + damage list ------------------------
                 xor  a
                 ld   (DMG_COUNT), a
+                ; ---------------- 1. queued restores (PEND_DMG) ------------------
                 ld   a, (PEND_DMG_COUNT)
                 or   a
                 jr   z, .nopend
@@ -557,18 +463,231 @@ render:
                 xor  a
                 ld   (PEND_DMG_COUNT), a
 .nopend:
+                ; ---------------- 2. per slot: classify, erase, damage ----------
                 call rl_first
-.e2:            call rl_next
-                jr   c, .e2done
-                call ent_ix
-                SLOTVAR N_DIRTY
+.s:             call rl_next                   ; HL = record (R_VIS), A = slot
+                jp   c, .sdone
+                call ent_ix                    ; (keeps HL)
+                ld   a, (hl)                   ; R_VIS
+                or   a
+                jp   z, .hidden
+                ; desired frame geometry (§5.1): fpx = px + off, fpy = py + bh*8 - H
+                inc  l                         ; R_FID
                 ld   a, (hl)
-                cp   DIRTY_FULL
-                jr   nz, .n2
+                push hl
+                ld   l, a
+                ld   h, 0
+                add  hl, hl
+                add  hl, hl                    ; fid * FT_STRIDE
+                ld   de, frame_tab + FT_COLS
+                add  hl, de
+                ld   c, (hl)                   ; C = data cols
+                inc  hl
+                ld   b, (hl)                   ; B = H (FT_H)
+                inc  hl                        ; FT_OFFR
+                bit  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   z, .offr
+                inc  hl                        ; FT_OFFL
+.offr:          ld   a, (hl)
+                add  a, (ix+E_PX)
+                ld   e, a                      ; E = fpx
+                KFIELD KT_BH
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, (ix+E_PY)
+                sub  b
+                ld   d, a                      ; D = fpy
+                pop  hl                        ; R_FID
+                inc  l
+                ld   (hl), e                   ; R_FPX
+                inc  l
+                ld   (hl), d                   ; R_FPY
+                ; exact footprint (§4.2): cols = W/8 (+1 if shifted),
+                ; rows = (fpy&7 + H + 7) >> 3
+                inc  l
+                ld   a, e
+                rrca
+                rrca
+                rrca
+                and  $1F
+                ld   (hl), a                   ; R_COL
+                inc  l
+                ld   a, d
+                rrca
+                rrca
+                rrca
+                and  $1F
+                ld   (hl), a                   ; R_ROW
+                inc  l
+                ld   a, e
+                and  4
+                jr   z, .c0
+                inc  c                         ; shifted: +1 spill col
+.c0:            ld   (hl), c                   ; R_COLS
+                inc  l
+                ld   a, d
+                and  7
+                add  a, b
+                add  a, 7
+                rrca
+                rrca
+                rrca
+                and  $1F
+                ld   (hl), a                   ; R_ROWS
+                inc  l
+                ld   a, (ix+E_FLAGS)
+                and  EF_LEFT
+                ld   (hl), a                   ; R_LEFT
+                ld   b, a                      ; B = desired facing
+                inc  l
+                ld   a, (ix+E_FLT)             ; attr: flash overrides the kind colour
+                or   a
+                ld   a, (ix+E_FLA)
+                jr   nz, .fl
+                KFIELD_KEEPHL KT_ATTR
+.fl:            ld   (hl), a                   ; R_ATTR
+                inc  l
+                ld   c, DIRTY_NONE
+                cp   (hl)                      ; R_DATTR
+                jr   z, .sa
+                inc  c                         ; DIRTY_ATTR
+.sa:            ; classify vs drawn: frame / facing / position change -> FULL
+                bit  0, (ix+E_DVIS)
+                jr   z, .full_log              ; not drawn
+                RFIELD R_FID
+                ld   a, (hl)
+                cp   (ix+E_DFID)
+                jr   nz, .full_log             ; frame change: ANIM_TRACE logs it
                 ld   a, (ix+E_DVIS)
-                and  1
-                jr   z, .n2
-                ld   c, (ix+E_DCOL)            ; erase the old footprint
+                and  EF_LEFT
+                cp   b
+                jr   nz, .full
+                inc  l
+                ld   a, (hl)
+                cp   (ix+E_DFPX)
+                jr   nz, .full
+                inc  l
+                ld   a, (hl)
+                cp   (ix+E_DFPY)
+                jr   nz, .full
+                ld   a, l
+                add  a, R_DIRTY - R_FPY
+                ld   l, a
+                ld   (hl), c                   ; R_DIRTY = NONE / ATTR
+                inc  l
+                ld   (hl), 0                   ; R_LOG
+                dec  c
+                jp   nz, .s                    ; NONE: nothing to erase or add
+                RFIELD R_COL                   ; ATTR: re-stamped in place
+                jp   .addn
+.full_log:      RFIELD R_LOG
+                ld   (hl), 1
+                jr   .fullc
+.full:          RFIELD R_LOG
+                ld   (hl), 0
+.fullc:         dec  l                         ; R_DIRTY
+                ld   (hl), DIRTY_FULL
+                RFIELD R_COL
+                bit  0, (ix+E_DVIS)
+                jr   z, .addn                  ; not drawn: new footprint only
+                push hl
+                call .erase                    ; C,B,D,E = old footprint
+                pop  hl
+                ; old O (entity drawn block, still intact) + new N (record) ->
+                ; one rect if O u N is a rectangle, else both
+                ld   c, (hl)
+                inc  l
+                ld   b, (hl)
+                inc  l
+                ld   d, (hl)
+                inc  l
+                ld   e, (hl)                   ; C,B,D,E = N
+                ld   a, b
+                cp   (ix+E_DROW)
+                jr   nz, .tryv
+                ld   a, e
+                cp   (ix+E_DROWS)
+                jr   nz, .tryv
+                ; same row band: merge if c1 <= c0 + w0 and c0 <= c1 + w1
+                ld   a, (ix+E_DCOL)
+                add  a, (ix+E_DCOLS)
+                ld   l, a                      ; L = O end col (H unused now)
+                cp   c
+                jr   c, .two
+                ld   a, c
+                add  a, d                      ; A = N end col
+                cp   (ix+E_DCOL)
+                jr   c, .two
+                cp   l
+                jr   nc, .h1
+                ld   a, l                      ; A = max end
+.h1:            ld   l, a
+                ld   a, (ix+E_DCOL)
+                cp   c
+                jr   nc, .h2
+                ld   c, a                      ; C = min col
+.h2:            ld   a, l
+                sub  c
+                ld   d, a                      ; D = bbox cols
+                jr   .add1
+.tryv:          ld   a, c                      ; same col band: merge if
+                cp   (ix+E_DCOL)               ; r1 <= r0 + h0 and r0 <= r1 + h1
+                jr   nz, .two
+                ld   a, d
+                cp   (ix+E_DCOLS)
+                jr   nz, .two
+                ld   a, (ix+E_DROW)
+                add  a, (ix+E_DROWS)
+                ld   l, a                      ; L = O end row
+                cp   b
+                jr   c, .two
+                ld   a, b
+                add  a, e                      ; A = N end row
+                cp   (ix+E_DROW)
+                jr   c, .two
+                cp   l
+                jr   nc, .v1
+                ld   a, l
+.v1:            ld   l, a
+                ld   a, (ix+E_DROW)
+                cp   b
+                jr   nc, .v2
+                ld   b, a                      ; B = min row
+.v2:            ld   a, l
+                sub  b
+                ld   e, a                      ; E = bbox rows
+                jr   .add1
+.two:           push bc
+                push de
+                ld   c, (ix+E_DCOL)
+                ld   b, (ix+E_DROW)
+                ld   d, (ix+E_DCOLS)
+                ld   e, (ix+E_DROWS)
+                call dmg_add                   ; O
+                pop  de
+                pop  bc
+                jr   .add1                     ; N
+.addn:          ld   c, (hl)                   ; HL = R_COL: C,B,D,E = N
+                inc  l
+                ld   b, (hl)
+                inc  l
+                ld   d, (hl)
+                inc  l
+                ld   e, (hl)
+.add1:          call dmg_add
+                jp   .s
+.hidden:        RFIELD R_LOG
+                ld   (hl), 0
+                dec  l                         ; R_DIRTY
+                ld   (hl), DIRTY_NONE
+                bit  0, (ix+E_DVIS)
+                jp   z, .s                     ; neither visible nor drawn
+                ld   (hl), DIRTY_FULL          ; was drawn, now hidden: erase
+                call .erase
+                jr   .add1                     ; O
+                ; erase the drawn footprint (IX) -> C,B,D,E = it; not drawn now
+.erase:         ld   c, (ix+E_DCOL)
                 ld   b, (ix+E_DROW)
                 ld   d, (ix+E_DCOLS)
                 ld   e, (ix+E_DROWS)
@@ -579,58 +698,8 @@ render:
                 pop  de
                 pop  bc
                 ld   (ix+E_DVIS), 0
-                ; A7: a sprite redrawn in place (same footprint: frame change)
-                ; would add the same rect twice (here and in .e3): add it once,
-                ; in .e3 (fewer rects to mark for present and to test in repair)
-                SLOTVAR N_VIS
-                ld   a, (hl)
-                or   a
-                jr   z, .add2                  ; hidden now: .e3 adds nothing
-                ld   a, l
-                add  a, N_COL - N_VIS
-                ld   l, a
-                ld   a, (hl)
-                cp   c
-                jr   nz, .add2
-                ld   a, l
-                add  a, N_ROW - N_COL
-                ld   l, a
-                ld   a, (hl)
-                cp   b
-                jr   nz, .add2
-                ld   a, l
-                add  a, N_COLS - N_ROW
-                ld   l, a
-                ld   a, (hl)
-                cp   d
-                jr   nz, .add2
-                ld   a, l
-                add  a, N_ROWS - N_COLS
-                ld   l, a
-                ld   a, (hl)
-                cp   e
-                jr   z, .n2
-.add2:          call dmg_add
-.n2:            jr   .e2
-                ASSERT N_COL > N_VIS && N_ROW > N_COL && N_COLS > N_ROW && N_ROWS > N_COLS
-                ASSERT (N_VIS >> 8) == (N_ROWS >> 8)
-.e2done:
-                ; new footprints of changed visible sprites join the damage list
-                call rl_first
-.e3:            call rl_next
-                jr   c, .e3done
-                SLOTVAR N_DIRTY
-                ld   a, (hl)
-                or   a
-                jr   z, .n3
-                SLOTVAR N_VIS
-                ld   a, (hl)
-                or   a
-                jr   z, .n3
-                call slot_new_rect
-                call dmg_add
-.n3:            jr   .e3
-.e3done:
+                ret
+.sdone:
                 ld   a, (DMG_COUNT)            ; A7: present needs only these rects:
                 ld   (DMG_PRES_N), a           ; a forced re-blit (below) only rewrites
                                                ; cells outside them with identical
@@ -642,28 +711,39 @@ render:
                 call rl_first
 .f3:            call rl_next
                 jr   c, .f3done
-                SLOTVAR N_DIRTY
+                ld   a, (hl)                   ; R_VIS
+                or   a
+                jr   z, .f3
+                ld   a, l
+                or   R_DIRTY
+                ld   l, a
                 ld   a, (hl)
                 cp   DIRTY_FULL                ; NONE *and* ATTR get repaired: an
-                jr   nc, .nf                   ; ATTR draw only stamps, so its
+                jr   nc, .f3                   ; ATTR draw only stamps, so its
                                                ; pixels under a damage rect are lost
-                SLOTVAR N_VIS
-                ld   a, (hl)
-                or   a
-                jr   z, .nf
-                call slot_new_rect             ; same as drawn (not dirty)
+                push hl
+                ld   a, l
+                sub  R_DIRTY - R_COL
+                ld   l, a
+                ld   c, (hl)                   ; same as drawn (not dirty)
+                inc  l
+                ld   b, (hl)
+                inc  l
+                ld   d, (hl)
+                inc  l
+                ld   e, (hl)
                 push bc
                 push de
                 call dmg_hit
                 pop  de
                 pop  bc
-                jr   nc, .nf
-                call dmg_add
-                SLOTVAR N_DIRTY
+                pop  hl                        ; R_DIRTY
+                jr   nc, .f3
                 ld   (hl), DIRTY_FORCE
+                call dmg_add
                 ld   a, 1
                 ld   (RENDER_PASS), a
-.nf:            jr   .f3
+                jr   .f3
 .f3done:        ld   a, (RENDER_PASS)
                 or   a
                 jr   nz, .force
@@ -682,19 +762,20 @@ render:
                 or   a
                 jr   nz, .nopl
                 ld   (ANIM_SLOT), a
+                ld   hl, SLOTREC               ; slot 0's record
                 call draw_slot
 .nopl:
 
                 ; ---------------- 5. zap overlay, 6. timers ---------------------
                 call draw_zap
-                ld   ix, P_ENTITIES
-                ld   b, P_MAX_ENT
+                ld   hl, P_ENTITIES + E_FLT    ; A7b: HL walk, 47 T/slot (was 63)
                 ld   de, P_ENT_STRIDE
-.t:             ld   a, (ix+E_FLT)
+                ld   b, P_MAX_ENT
+.t:             ld   a, (hl)
                 or   a
                 jr   z, .tn
-                dec  (ix+E_FLT)
-.tn:            add  ix, de
+                dec  (hl)
+.tn:            add  hl, de
                 djnz .t
                 ld   a, (ZAP_T)
                 or   a
@@ -711,76 +792,85 @@ render:
                 ld   e, 1
                 jp   queue_damage
 
-; slot_new_rect — C,B,D,E = the desired footprint of ANIM_SLOT.  Clobbers A, HL
-slot_new_rect:
-                SLOTVAR N_COL
-                ld   c, (hl)
-                SLOTVAR N_ROW
-                ld   b, (hl)
-                SLOTVAR N_COLS
-                ld   d, (hl)
-                SLOTVAR N_ROWS
-                ld   e, (hl)
-                ret
-
+;------------------------------------------------------------------------------
 ; draw_slot — blit/stamp ANIM_SLOT per its dirty class; update drawn state.
+; In : HL = its record (SLOTREC + slot*16).  Clobbers: all but IY.
+;------------------------------------------------------------------------------
 draw_slot:
-                ld   a, (ANIM_SLOT)
-                call ent_ix
-                SLOTVAR N_DIRTY
+                ld   a, l
+                or   R_DIRTY
+                ld   l, a
                 ld   a, (hl)
                 or   a
-                ret  z
+                ret  z                         ; NONE
                 ld   c, a
-                SLOTVAR N_VIS
+                RFIELD R_VIS
                 ld   a, (hl)
                 or   a
                 ret  z                         ; hidden: erase already done
+                ld   a, (ANIM_SLOT)
+                call ent_ix                    ; (keeps HL, C)
                 ld   a, c
                 cp   DIRTY_ATTR
                 jr   z, .attr
                 ; full / force: blit
-                SLOTVAR N_FID
-                ld   a, (hl)
+                inc  l
+                ld   a, (hl)                   ; R_FID
                 ld   (BL_FID), a
-                SLOTVAR N_LEFT
-                ld   a, (hl)
-                ld   (BL_LEFT), a
-                SLOTVAR N_FPX
-                ld   a, (hl)
+                inc  l
+                ld   a, (hl)                   ; R_FPX
                 ld   (BL_FPX), a
-                SLOTVAR N_FPY
-                ld   a, (hl)
+                inc  l
+                ld   a, (hl)                   ; R_FPY
                 ld   (BL_FPY), a
+                ld   a, l
+                add  a, R_LEFT - R_FPY
+                ld   l, a
+                ld   a, (hl)                   ; R_LEFT
+                ld   (BL_LEFT), a
                 call blit_sprite
 .probe_blit_ret:                                ; flicker probe (no code)
-                ; ANIM_TRACE on a drawn-frame change (§11.2)
-                SLOTVAR N_LOG
-                ld   a, (hl)
-                or   a
-                call nz, trace_log
-                ; drawn state
-                ld   a, (BL_FID)
-                ld   (ix+E_DFID), a
-                ld   a, (BL_FPX)
-                ld   (ix+E_DFPX), a
-                ld   a, (BL_FPY)
-                ld   (ix+E_DFPY), a
+                ; drawn state: E_DVIS, then E_DFID..E_DROWS = R_FID..R_ROWS
                 ld   a, (BL_LEFT)
                 or   1
                 ld   (ix+E_DVIS), a
-                call slot_new_rect
-                ld   (ix+E_DCOL), c
-                ld   (ix+E_DROW), b
-                ld   (ix+E_DCOLS), d
-                ld   (ix+E_DROWS), e
-.attr:          call slot_new_rect
-                SLOTVAR N_ATTR
+                ld   a, (ANIM_SLOT)
+                rlca
+                rlca
+                rlca
+                rlca
+                inc  a                         ; R_FID
+                ld   l, a
+                ld   h, SLOTREC >> 8
+                push ix
+                pop  de
+                ld   a, e
+                add  a, E_DFID                 ; (32-B records: no carry)
+                ld   e, a
+                ld   bc, R_ROWS - R_FID + 1
+                ldir                           ; HL -> R_LEFT
+                ld   a, l
+                add  a, R_LOG - R_LEFT
+                ld   l, a
                 ld   a, (hl)
-                push af
-                SLOTVAR D_ATTR
-                pop  af
-                ld   (hl), a
+                or   a
+                jr   z, .attr
+                push hl
+                call trace_log                 ; ANIM_TRACE on a drawn-frame change (§11.2)
+                pop  hl
+.attr:          RFIELD R_COL
+                ld   c, (hl)
+                inc  l
+                ld   b, (hl)
+                inc  l
+                ld   d, (hl)
+                inc  l
+                ld   e, (hl)
+                inc  l
+                inc  l                         ; R_ATTR
+                ld   a, (hl)
+                inc  l
+                ld   (hl), a                   ; R_DATTR = the attr stamped now
                 jp   stamp_rect
 
 ; trace_log — append (ANIM_SLOT, BL_FID) to the 32-B ANIM_TRACE ring.

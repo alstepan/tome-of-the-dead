@@ -83,9 +83,9 @@ and shadow banks are uncontended (0/4/6) resp. contended (7, erase-only).
 `PORT_7FFD_SHADOW` always has bit 4 = 1 (48K ROM: IM1 ISR, charset, LD-BYTES).
 
 Tape: BASIC `10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"`
-(the 5 USR digits are emitted from the `start` label, today `30349` = `$768D`).
-ONE CODE block `lowram_code..code_end` (`TAPE_CODE_LEN` 11,331 B: bank-5
-low-RAM cold block `$768D..$7FFF` — code, then the frame descriptors
+(the 5 USR digits are emitted from the `start` label, today `30341` = `$7685`).
+ONE CODE block `lowram_code..code_end` (`TAPE_CODE_LEN` 11,339 B: bank-5
+low-RAM cold block `$7685..$7FFF` — code, then the frame descriptors
 `fdesc_tab` as its tail — straight into the bank-2 image `$8000..code_end`;
 the low-RAM block is ORGed to end exactly at `$8000` so there is no gap, and
 `start` is its first byte: `ASSERT start == lowram_code`). **A6 layout
@@ -154,8 +154,8 @@ display latency (user decision, A7).
 | Routine (file) | Where / when | What |
 |----------------|--------------|------|
 | `pmark_rect` (gfx.asm, bank 2) | — | ORs cell rect C,B,D,E into `PRES_MASK` (1- and 2-mask-byte rects in one row pass), sets `PRES_ANY`, lowers `PRES_RMIN` |
-| `pmark_dmg` (gfx.asm) | `play_loop`, right after `render` | marks `DMG_LIST[0..DMG_PRES_N)` (PEND_DMG restores, erased old footprints, new / attr-only footprints; render adds an in-place redraw's rect once; the overlap-repair rects after them only rewrite identical bytes) |
-| `present` (gfx.asm) | `tick_work`, before render (probe `probe_presented` after it) | flushes `HUD_PW` into the mask, copies every marked cell from `PRES_RMIN` down, clears the mask; ~50 T when idle |
+| `pmark_dmg` (gfx.asm) | `play_loop`, right after `render` | marks `DMG_LIST[0..DMG_PRES_N)` (PEND_DMG restores, erased old footprints, new / attr-only footprints; A7b: a moved sprite's old + new footprint is ONE rect when their union is a rectangle — same row band or same col band, overlapping or touching — which covers the in-place redraw too; the overlap-repair rects after them only rewrite identical bytes) |
+| `present` (gfx.asm) | `tick_work`, before render (probe `probe_presented` after it) | flushes `HUD_PW` into the mask, copies every marked cell from `PRES_RMIN` down, clears the mask; ~50 T when idle; A7b: a full mask byte (8 cells, HUD text) goes by LDI lines (`.full8`, ~1.5k vs ~2.1k T) except cols 24-31 of a third's last char row (low byte `$F8`: LDI would carry into H) |
 | `draw_zap` / `hud_track` / `clear_row` | during the tick | zap run → `pmark_rect`; HUD rows → `HUD_EXT` / `HUD_PW` per string (only the cols that held or now hold text; `clear_row` blanks only `HUD_EXT` cols) |
 | `present_full` (lowram.asm) | `start_game`; end of `do_exit` | whole screen bank 5 → screen 2 (LDIR 6,912 B), mask + `HUD_PW` cleared, show bank 7 |
 | `show_bank5` / `set_screen` (lowram.asm) | `enter_select`; `do_exit` before the scroll | display bank 5 (they draw there) |
@@ -182,7 +182,27 @@ Cost (ZEsarUX, contended): present ~200 T per cell at the tick start;
 budget mix worst tick 120,293 → **140,151 T (98.8%)**, heavy (over the M1
 cap, reported) 124,729 → 143,471 T (101.2%, 1 tick). A7 review: mix
 140,170 T; heavy 144,913 T (102.2%, 2 ticks) — its ghost now starts at x 23
-(x 4 is inside `{5,2}`'s end box, B8), so the fight geometry differs. End screens keep
+(x 4 is inside `{5,2}`'s end box, B8), so the fight geometry differs. **A7b (renderer optimisation, hard prerequisite of A8)**, same tests:
+budget mix worst 140,170 → **121,395 T (85.6%)**, heavy 144,913 (2 overruns)
+→ **121,049 T (85.4%, 0 overruns)**; `tests/flicker.py` worst tick a
+145,966 (2 overruns) → 122,100, b 64,377 → 58,747, c 109,010 → 96,194, all 0
+events / tears / split; means mix 71,716 → 61,139, heavy 52,256 → 44,472.
+Levers, in measured order: `erase_rect` steps rows incrementally (218 → 74 T
+per row; −1.2k / −2.4k); per-slot render state as one 16-B record per slot
+(`SLOTREC`, fields by `inc l` instead of a 31-T array lookup each),
+classify + erase + damage in ONE `RLIST` pass (was three), merged move rects
+(−8.3k / −11.2k); the blit with DE = screen / HL = pool data (`and (hl)` /
+`or (hl)`: 44 T/byte, was 52; line end `ld e,c`: 31 T/line aligned, was 42;
+FRT pointer by nibble swap; −8.1k / −9.2k); `stamp_rect` row step 55 T (was
+79), `print_char` `inc e`, present `.full8` (−1.2k / −0.8k together). Not
+taken (measured or costed, no gain worth the bytes): attr-only present for
+`DIRTY_ATTR` (flash ticks are not the worst ticks), run-length present for
+partial mask bytes (break-even ~4 cells per run; sprite runs are 3-7),
+moving code to `$B200` (bank-2 code is already uncontended; only the
+screen / shadow data is, and that cannot move), reordering render into the
+border (the tick fills both frames). The worst ticks are now present of a
+turn's HUD lines + sprite rects (~26k, half in contended display time) +
+render ~85k (blits ~55k) + the turn's HUD print (~11k). End screens keep
 showing bank 7; the 3E inventory page will draw in bank 5 behind
 `show_bank5` and leave through `present_full`.
 
@@ -251,11 +271,11 @@ outweighing the +8 T per redrawn background cell of the 64-id glyph address.)
 
 | Range | Symbol | Contents |
 |-------|--------|----------|
-| `$8000..$A2CF` | `image_start`…`code_end` | HOT code + static tables (8,912 B incl. 173 B `ALIGN` pad before `kind_tab`; `ASSERT code_end <= FRT`). **Headroom measured (A7 B8 rev 2026-10-02): 816 B to `FRT` + 173 B pad = 989 B** for code/static tables (A6: 677 B; A7: 111 B after present / pmark / HUD tracking / in-place rect dedupe / paging +566 B; the review moved 1,062 B of cold code out — `build_room_map` 254 B to bank-5 low RAM, `new_game` + `init_ent_common` + `spawn_tab` and follower selection + arrival conflicts 794 B to bank 3, net of the `far3` call sites — and added the B8 flyer ladder-end rule +159 B and the bank-2 `map_cell` +21 B; the 2026-10-02 cross-or-leave flyer rule + blocked-climb wait: +4 B net), plus the 1,536 B free runtime RAM `$B200..$B7FF` below. Code bytes `$8000..kind_tab_pad` 8,275 (A7 review 8,271; A7 9,153; A6 8,587). `kind_tab` page-aligned at `$A100` (moves with the code: tests read it from the `.sym`), **2 pages** (`KT_SIZE` `$200`): 13 parallel **32-B** kind arrays (`K_MAX` 32; ids 0..8 used, 2 = Rogue hole) + MOD7/DIV7 tables, `KT_END` `$1D0` → `$A2D0..$A2FF` 48 B spare in its page (resistances, 3F). No array crosses a page: `KFIELD` folds the page into `H`. `frame_tab` **4 B/fid** (`FT_COLS`, `FT_H`, `FT_OFFR`, `FT_OFFL`: only what the renderer reads; 68 fids = 272 B). `far3` / `restore_page` / `blit_keep` / `enter_select`: the bank-3 trampolines (48 B). |
+| `$8000..$A2CF` | `image_start`…`code_end` | HOT code + static tables (8,912 B incl. 251 B `ALIGN` pad before `kind_tab`; `ASSERT code_end <= FRT`). **Headroom measured (A7b rebased on the B8 rev): 816 B to `FRT` + 251 B pad = 1,067 B** for code/static tables (A7 review: 993 B; A7b: code −78 B net — the one-pass record render (−138 B) and the blit rewrite (−46 B) pay for the erase row stepping (+26), `stamp_rect` / the 16-bit blit entry patch (+19) and the present `.full8` path (+61); A6: 677 B; A7: 111 B after present / pmark / HUD tracking / in-place rect dedupe / paging +566 B; the review moved 1,062 B of cold code out — `build_room_map` 254 B to bank-5 low RAM, `new_game` + `init_ent_common` + `spawn_tab` and follower selection + arrival conflicts 794 B to bank 3, net of the `far3` call sites — and added the B8 flyer ladder-end rule +159 B and the bank-2 `map_cell` +21 B; the 2026-10-02 cross-or-leave flyer rule + blocked-climb wait: +4 B net), plus the 1,536 B free runtime RAM `$B200..$B7FF` below. Code bytes `$8000..kind_tab_pad` 8,193 (A7 review 8,271; A7 9,153; A6 8,587). `kind_tab` page-aligned at `$A100` (moves with the code: tests read it from the `.sym`), **2 pages** (`KT_SIZE` `$200`): 13 parallel **32-B** kind arrays (`K_MAX` 32; ids 0..8 used, 2 = Rogue hole) + MOD7/DIV7 tables, `KT_END` `$1D0` → `$A2D0..$A2FF` 48 B spare in its page (resistances, 3F). No array crosses a page: `KFIELD` folds the page into `H`. `frame_tab` **4 B/fid** (`FT_COLS`, `FT_H`, `FT_OFFR`, `FT_OFFL`: only what the renderer reads; 68 fids = 272 B). `far3` / `restore_page` / `blit_keep` / `enter_select`: the bank-3 trampolines (48 B). |
 | `$A600..$AFFF` | `FRT` | frame runtime table (A6: moved from `$B200`): 16 B/fid (4 variants × bank,lo,hi), **`FRT_MAX` 160** (68 used); `FRT = P_ENTITIES − FRT_MAX × 16` |
 | `$B000..$B1FF` | `P_ENTITIES` | 16 slots × **32 B** (layout below); slot 0 = hero |
-| `$B200..$B7FF` | `BANK2_FREE` | **free** (1,536 B; the vacated A5 `FRT`): uncontended runtime RAM, not in the image/tape (`BANK2_FREE_END` = `SLOTVARS`) |
-| `$B800..$B8CF` | `SLOTVARS` | per-slot render scratch, 16 B arrays: `N_VIS $B800`, `N_FID $B810`, `N_FPX $B820`, `N_FPY $B830`, `N_ATTR $B840`, `N_DIRTY $B850`, `N_COL..N_ROWS $B860-$B890`, `D_ATTR $B8A0`, `N_LEFT $B8B0`, `N_LOG $B8C0` |
+| `$B200..$B7FF` | `BANK2_FREE` | **free** (1,536 B; the vacated A5 `FRT`): uncontended runtime RAM, not in the image/tape (`BANK2_FREE_END` = `SLOTREC`) |
+| `$B800..$B8FF` | `SLOTREC` | A7b: per-slot render record, 16 slots × **16 B** (one page; record = `SLOTREC + slot*16`, fields reached by `inc l`): `R_VIS +0`, `R_FID +1` (written by `anim_tick`), `R_FPX +2`, `R_FPY +3`, `R_COL +4`, `R_ROW +5`, `R_COLS +6`, `R_ROWS +7` (`R_FID..R_ROWS` = the entity's drawn block `E_DFID..E_DROWS` in the same order: `draw_slot` copies it with one LDIR; ASSERTed), `R_LEFT +8`, `R_ATTR +9`, `R_DATTR +10`, `R_DIRTY +11`, `R_LOG +12`, +13..15 spare (was the 13 × 16-B `SLOTVARS` arrays `N_VIS`… `$B800..$B8CF`) |
 | `$B900..$B9BF` | `DMG_LIST` | per-render damage rects, 4 B each (c0,c1,r0,r1), 48 max |
 | `$B9C0..$B9CF` | `PEND_DMG` | queued damage for the next render (4 rects) |
 | `$BA00..$BA4F` | `LIVE_LIST` | per-turn collider list, 5 B/entry (slot, ptr, w, h); `LIVE_N $BA50` |
@@ -285,8 +305,8 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6900` | `TILE_ATTRS` | 64 | attr by tile id (one page: `ld h, TILE_ATTRS>>8`) |
 | `$6940` | `GEN_SRC` | 512 | generator: source frame copied out of bank 1/3 (raw build; `init_tiles` items) |
 | `$6B40` | `GEN_MIR` | 512 | generator: mirrored frame (`LOWRAM_END` = `LOWRAM_FREE_END` `$6D40`) |
-| `$6D40..$768C` | free | 2,381 | of which 460 B are kept for descriptor growth (below); **1,921 spare** (`LOWRAM_SPARE` DISPLAY) → level state (Stage 3B, ~0.6 KB) |
-| `$768D..$7FFF` | `lowram_code` (`start` first) | 2,419 | **cold block**, ends exactly at `$8000` (`src/lowram.asm`): code 2,079 B (A7 review +295: `build_room_map` 254 out of bank 2, `vis_reset` + RLIST rebuild 41; A7 +193: `hud_clear_mark`, `vis_room_sync`, `set_screen`/`show_bank5`/`present_full`, boot HUD init, 0-frame `gen_kind` guard; A6 1,591; A5 1,572: + session cache clears in `alloc_reset`/`alloc_restore` 11, − `gen_kind` clear 6, + 64-attr clear in `init_tiles` 13, `zx0_frame` 53 → 39, `gen_frame` descriptor read +15), then **`fdesc_tab..fdesc_end`** (A6): frame descriptors, `FDESC_STRIDE` **5 B** × 68 = 340 B (`FD_BLK` word = virtual packed block / raw: virtual frame, `FD_FRM` word = `GEN_SCRATCH` + in-block offset, `FD_FLAGS`), generated from the same `src/frames.asm` list as `frame_tab` (ASSERT counts equal). Raw build: 2,321 B at `$76EF` |
+| `$6D40..$7684` | free | 2,373 | of which 460 B are kept for descriptor growth (below); **1,913 spare** (`LOWRAM_SPARE` DISPLAY) → level state (Stage 3B, ~0.6 KB) |
+| `$7685..$7FFF` | `lowram_code` (`start` first) | 2,427 | **cold block**, ends exactly at `$8000` (`src/lowram.asm`): code 2,087 B (A7b +8: `vis_reset` / `vis_room_sync` walk the 16-B `SLOTREC` records; A7 review +295: `build_room_map` 254 out of bank 2, `vis_reset` + RLIST rebuild 41; A7 +193: `hud_clear_mark`, `vis_room_sync`, `set_screen`/`show_bank5`/`present_full`, boot HUD init, 0-frame `gen_kind` guard; A6 1,591; A5 1,572: + session cache clears in `alloc_reset`/`alloc_restore` 11, − `gen_kind` clear 6, + 64-attr clear in `init_tiles` 13, `zx0_frame` 53 → 39, `gen_frame` descriptor read +15), then **`fdesc_tab..fdesc_end`** (A6): frame descriptors, `FDESC_STRIDE` **5 B** × 68 = 340 B (`FD_BLK` word = virtual packed block / raw: virtual frame, `FD_FRM` word = `GEN_SCRATCH` + in-block offset, `FD_FLAGS`), generated from the same `src/frames.asm` list as `frame_tab` (ASSERT counts equal). Raw build: 2,329 B at `$76E7` |
 | inside the cold block | A5 `zx0_code..zx0_code_end` | 107 | `zx0_frame` 39 + `dzx0_standard` 68 (ASSERT ≤ `ZX0_BUDGET` 128; `ZX0_RESERVE` = 0 in ZX0 builds, 128 in `-DZX0_SOURCES=0` builds) |
 | `$6000..$65FF` (alias) | A5 `GEN_SCRATCH` | 1,536 | ZX0 unpack target **aliasing `ROOM_MAP`+`NEXT_MAP`** (ends exactly at `TILE_GLYPHS`, ASSERTed): the generator runs only at boot, hero start and (3F) level start, before the room map is built — never mid-room. Guard: `GEN_TRAP` (state block) counts `gen_frame` calls while `GAME_STATE` is PLAYING/TRANSITION; tests assert 0 |
 
@@ -300,8 +320,8 @@ bank-5 cold code (pages bank 7 at `$C000`).
 
 Fit (ASSERTed: `lowram_code − ZX0_RESERVE − (FRT_MAX − FDESC_COUNT) ×
 FDESC_STRIDE ≥ LOWRAM_FREE_END`, and `fdesc_end == lowram_code_end`): 3,392
-fixed buffers (incl. the 64-id tiles) + 2,419 cold block + 460 descriptor
-growth to 160 frames = 6,271 of 8,192 B → **1,921 spare** (A7: 2,216; A6: 2,409; A5: 1,308 with
+fixed buffers (incl. the 64-id tiles) + 2,427 cold block + 460 descriptor
+growth to 160 frames = 6,279 of 8,192 B → **1,913 spare** (A7 review: 1,921; A7: 2,216; A6: 2,409; A5: 1,308 with
 its 1,920 B ≤ 12-B descriptor reserve), room for the ~0.6 KB level state with
 ~1.3 KB margin. A separate 1.5 KB ZX0 scratch would now fit, but would eat
 most of that margin — the alias stays. `$5B00-$5BFF` and `$5CC0-$5FFF` (~1,088 B, E: free once `boot` has

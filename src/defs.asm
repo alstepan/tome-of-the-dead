@@ -109,21 +109,22 @@ FRT             EQU P_ENTITIES - FRT_MAX * FRT_STRIDE   ; $A600..$AFFF: frame ru
                                     ; table, 16 B/fid (4 variants x bank,lo,hi + 4 pad);
                                     ; directly below ENTITIES, the image ends below it
 BANK2_FREE      EQU $B200           ; A6: vacated old FRT ($B200..$B7FF, 1,536 B):
-BANK2_FREE_END  EQU SLOTVARS        ;     free bank-2 runtime RAM (docs/memory-map.md)
-SLOTVARS        EQU $B800           ; per-slot render scratch, 16 B per array
-N_VIS           EQU SLOTVARS + $00  ; desired: 0 hidden / 1 visible
-N_FID           EQU SLOTVARS + $10  ; desired frame id
-N_FPX           EQU SLOTVARS + $20  ; desired frame px (top-left)
-N_FPY           EQU SLOTVARS + $30  ; desired frame py (top-left)
-N_ATTR          EQU SLOTVARS + $40  ; desired attr
-N_DIRTY         EQU SLOTVARS + $50  ; DIRTY_* class this tick
-N_COL           EQU SLOTVARS + $60  ; desired footprint
-N_ROW           EQU SLOTVARS + $70
-N_COLS          EQU SLOTVARS + $80
-N_ROWS          EQU SLOTVARS + $90
-D_ATTR          EQU SLOTVARS + $A0  ; attr last stamped
-N_LEFT          EQU SLOTVARS + $B0  ; desired facing (0/EF_LEFT)
-N_LOG           EQU SLOTVARS + $C0  ; 1 = log this draw in ANIM_TRACE
+BANK2_FREE_END  EQU SLOTREC         ;     free bank-2 runtime RAM (docs/memory-map.md)
+SLOTREC         EQU $B800           ; A7b: per-slot render record, 16 B per slot ($B800..$B8FF,
+SLOTREC_STRIDE  EQU 16              ;     one page): record = SLOTREC + slot*16, fields by inc l
+R_VIS           EQU 0               ; desired: 0 hidden / 1 visible (anim_tick)
+R_FID           EQU 1               ; desired frame id (anim_tick)      } R_FID..R_ROWS: same
+R_FPX           EQU 2               ; desired frame px (top-left)      } order as the entity's
+R_FPY           EQU 3               ; desired frame py (top-left)      } drawn block E_DFID..
+R_COL           EQU 4               ; desired footprint (cells)        } E_DROWS: draw_slot
+R_ROW           EQU 5               ;                                  } copies it with one
+R_COLS          EQU 6               ;                                  } LDIR
+R_ROWS          EQU 7
+R_LEFT          EQU 8               ; desired facing (0 / EF_LEFT)
+R_ATTR          EQU 9               ; desired attr
+R_DATTR         EQU 10              ; attr last stamped
+R_DIRTY         EQU 11              ; DIRTY_* class this tick
+R_LOG           EQU 12              ; 1 = log this draw in ANIM_TRACE
 DMG_LIST        EQU $B900           ; damage rects: 4 B each (col,row,cols,rows)
 DMG_MAX         EQU 48              ; $B900..$B9BF
 PEND_DMG        EQU $B9C0           ; queued damage for next render: 4 rects ($B9C0..$B9CF)
@@ -306,7 +307,7 @@ RC_HURT         EQU 1
 RC_BLOCK        EQU 2
 RC_DEATH        EQU 3
 
-; N_DIRTY classes
+; R_DIRTY classes
 DIRTY_NONE      EQU 0
 DIRTY_ATTR      EQU 1
 DIRTY_FULL      EQU 2               ; erase old + blit new

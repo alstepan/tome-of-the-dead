@@ -26,8 +26,9 @@ BUDGET = 2 * 70908
 PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "wait_tick"]
 if os.environ.get("GAME_PROFILE"):                # finer split for optimisation work
     PHASES = ["tick_work", "read_turn_input", "try_player_turn", "resolve_monsters",
-              "materialise", "anim_tick", "render", "render.nopend", "render.e2done",
-              "render.e3done", "render.drdone", "draw_zap", "wait_tick"]
+              "materialise", "anim_tick", "render", "render.nopend", "render.sdone",
+              "render.f3done", "render.drdone", "draw_zap", "pmark_dmg", "present",
+              "wait_tick"]
     PHASES += [n for n in os.environ["GAME_PROFILE"].split(",") if n in S]
 
 

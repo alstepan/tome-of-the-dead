@@ -753,7 +753,7 @@ def main():
         # ---------------- 52 (user bug B7) no old-room monster after a transition
         # Root cause: render runs first in a tick (A1 RENDER_FIRST), so the
         # first render after do_exit used the PREVIOUS tick's anim_tick output
-        # (N_VIS / RLIST of the old room): every monster of the room just left
+        # (N_VIS, now SLOTREC R_VIS / RLIST of the old room): every monster of the room just left
         # was drawn at its old position on the new room for one tick, then
         # erased. Followers are irrelevant; the slime (slow, never follows)
         # shows it. Both scroll directions.
@@ -836,7 +836,7 @@ def main():
                      [i for i, d in enumerate(s_) if d][:5], [])
 
         # ---------------- 54 (review A7, B7b) new game after death: no stale slot
-        # new_game rewrote the entity table but left N_VIS / N_FID / RLIST of
+        # new_game rewrote the entity table but left N_VIS / N_FID (now R_VIS / R_FID) / RLIST of
         # the dead game, so the first (render-first) tick of the new game drew
         # skeleton C (room C, parked in room A by die()) at its old position
         # and the hero with the DEAD knight's frame id from a pool that now
