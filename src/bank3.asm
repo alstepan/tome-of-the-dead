@@ -478,6 +478,8 @@ new_game:
                 ld   (PEND_DMG_COUNT), a
                 ld   (TURN_PHASE), a
                 ld   (NEED_RELEASE), a
+                ld   (FLY_INBOX), a            ; 0 outside ai_flyer (try_step reads it)
+                ld   (YIELD_FLAG), a
                 ld   hl, P_ENTITIES
                 ld   de, P_ENTITIES + 1
                 ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1

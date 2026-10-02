@@ -56,6 +56,28 @@ def bitrev(b):
     return int(f"{b:08b}"[::-1], 2)
 
 
+def ladder_segs(p, room_label):
+    """[(col, s)] ladder segments of a room descriptor (RD_LADDERS = 6)."""
+    desc = S[room_label]
+    n = p.rb(desc + 6)
+    return [(p.rb(desc + 7 + 2 * i), p.rb(desc + 8 + 2 * i)) for i in range(n)]
+
+
+def body(p, kind):
+    """(w, h) from kind_tab (KT_BW / KT_BH): never hard-coded in tests."""
+    kt = S["kind_tab"]
+    return p.rb(kt + S["KT_BW"] + kind), p.rb(kt + S["KT_BH"] + kind)
+
+
+def in_end_box(p, e, segs):
+    """Cols of entity e's body inside a ladder-end box of its storey
+    (flyer_lcost's test: bottom end of {col,t}, top end of {col,t+1})."""
+    w, h_ = body(p, e["KIND"])
+    t = min(2, (e["Y"] + h_) // S["STOREY_H"])
+    cols = set(range(e["X"], e["X"] + w))
+    return sorted(cols & {c + k for c, s in segs if s - t in (0, 1) for k in range(3)})
+
+
 def art_frame(name):
     import re
     t = open(os.path.join(os.path.dirname(HERE), "assets", "gfx", "sprites", name + ".asm")).read()
@@ -863,74 +885,141 @@ def main():
                      badbg[:3], [])
             h.expect("54 BLIT_MISS 0", p.rb("BLIT_MISS"), 0)
 
-        # ---------------- 55 (user bug B8) flyers never hold a ladder end ----
-        # The Ghost drifted onto the shaft's end box above the climbing hero
-        # and parked there: the hero's climb was blocked at the top. Rule:
-        # a flyer never moves into a ladder-end box (the standing box at
-        # either end of a segment, cols col..col+2 in that storey); one that
-        # is in one (spawn / follower) steps out, never deeper. Room A
-        # ladders {5,2}, {23,1}. Fixed seed; ghost speed unchanged (period 1).
-        if want(55):
+        # ---------------- 55-58 flyers vs ladder ends (B8) ------------------
+        # User bug B8: the Ghost parked on a shaft's end box above the
+        # climbing hero; the blocked climb cost no turn, so nothing moved.
+        # Rule by user 2026-10-02 (prototype §3.5 / §6.4): flyers MAY cross a
+        # shaft (enter a ladder-end box moving in x) but never wait, stop,
+        # attack or reverse inside one; one inside at turn start must move
+        # (keep crossing or step out). Fully boxed (both x steps illegal) it
+        # may stay / attack. A climb blocked by an entity is a WAIT turn.
+        # Room A ladders {5,2}, {23,1}. Fixed seed; flyer speeds unchanged.
+        if want(55) or want(56) or want(57) or want(58):
             p.boot(K_KNIGHT)
-            desc = S["room_a"]                      # {col, s} list after boot
-            n = p.rb(desc + 6)
-            segs = [(p.rb(desc + 7 + 2 * i), p.rb(desc + 8 + 2 * i)) for i in range(n)]
+            segs = ladder_segs(p, "room_a")
+            moved_in = []                         # violations: in a box, x kept
 
-            def in_end_box(e, bw=3):
-                """cols of slot e's body inside a ladder-end box of its storey."""
-                t = min(2, (e["Y"] + (4 if e["KIND"] == K_GHOST else 2)) // 7)
-                cols = set(range(e["X"], e["X"] + bw))
-                return sorted(cols & {c + k for c, s in segs if s - t in (0, 1)
-                                      for k in range(3)})
+            def track(slot, prev, tag):
+                e = p.ent(slot)
+                if in_end_box(p, e, segs) and e["X"] == prev["X"]:
+                    moved_in.append((tag, prev["X"], e["X"], e["Y"]))
+                return e
 
+        if want(55):
             p.isolate()
             p.place(0, 5, 14)                       # foot of {5,2}, storey 2
             p.place(SLOT_GHOST, 5, 8, room=0)       # INSIDE the top end box
-            g_in = in_end_box(p.ent(SLOT_GHOST))
-            out_after, inside = None, []
-            for w_ in range(4):                     # hero waits: ghost steps out
-                if not in_end_box(p.ent(SLOT_GHOST)):
+            g_in = in_end_box(p, p.ent(SLOT_GHOST), segs)
+            out_after = None
+            g = p.ent(SLOT_GHOST)
+            for w_ in range(4):                     # hero waits: ghost moves out
+                if not in_end_box(p, g, segs):
                     out_after = w_
                     break
                 p.turn("SPACE")
-            ups, downs = [], []
-            for i in range(7):                      # climb up: never blocked
-                ups.append(p.turn("K"))
-                g = p.ent(SLOT_GHOST)
-                if in_end_box(g):
-                    inside.append(("up", i, g["X"], g["Y"]))
-            top = p.ent(0)["Y"]
+                g = track(SLOT_GHOST, g, "wait%d" % w_)
+            ys = []
+            for i in range(7):                      # climb up: 7 moving turns
+                p.turn("K")
+                ys.append(p.ent(0)["Y"])
+                g = track(SLOT_GHOST, g, "up%d" % i)
             for _ in range(3):
                 p.turn("SPACE")                     # ghost chases on storey 1
+                g = track(SLOT_GHOST, g, "top")
+            ys2 = []
             for i in range(7):                      # and back down
-                downs.append(p.turn("J"))
-                g = p.ent(SLOT_GHOST)
-                if in_end_box(g):
-                    inside.append(("down", i, g["X"], g["Y"]))
+                p.turn("J")
+                ys2.append(p.ent(0)["Y"])
+                g = track(SLOT_GHOST, g, "down%d" % i)
             h.expect("55 setup: ghost placed inside the top end box of {5,2}",
                      len(g_in) == 3, True)
-            h.expect("55 ghost steps out of the ladder-end box within 3 turns",
+            h.expect("55 ghost moves out of the ladder-end box within 3 turns",
                      out_after is not None and out_after <= 3, True)
-            h.expect("55 hero climbs {5,2} up in 7 turns, no blocked input",
-                     (ups, top), ([True] * 7, 7))
-            h.expect("55 hero climbs back down in 7 turns, no blocked input",
-                     (downs, p.ent(0)["Y"]), ([True] * 7, 14))
-            h.expect("55 ghost never in a ladder-end box after stepping out",
-                     inside[:3], [])
-            # bat wander (other storey) treats shafts as walls: never inside,
-            # still moving
+            h.expect("55 hero climbs {5,2} up: one row per turn",
+                     ys, list(range(13, 6, -1)))
+            h.expect("55 hero climbs back down: one row per turn",
+                     ys2, list(range(8, 15)))
+            # bat wander/jitter (other storey) may cross shafts, never idles in
+            # a box, keeps moving
             p.isolate()
             p.place(0, 14, 14)                      # hero on storey 2
             p.place(SLOT_BATB, 12, 8, room=0)       # bat B on storey 1
-            xs, binside = set(), []
-            for i in range(30):
+            xs, crossed = set(), 0
+            b = p.ent(SLOT_BATB)
+            for i in range(40):
                 p.turn("SPACE")
-                b = p.ent(SLOT_BATB)
+                b = track(SLOT_BATB, b, "bat%d" % i)
                 xs.add(b["X"])
-                if in_end_box(b):
-                    binside.append((i, b["X"], b["Y"]))
-            h.expect("55 bat (wander/jitter) never in a ladder-end box", binside[:3], [])
-            h.expect("55 bat keeps moving (>= 4 distinct cols in 30 turns)", len(xs) >= 4, True)
+                crossed += bool(in_end_box(p, b, segs))
+            h.expect("55 flyers never end a turn in a ladder-end box with x kept",
+                     moved_in[:3], [])
+            h.expect("55 bat keeps moving (>= 4 distinct cols in 40 turns)", len(xs) >= 4, True)
+            h.expect("55 bat crosses a shaft (turns ended in a box > 0)", crossed > 0, True)
+
+        # 56: the Ghost crosses the {23,1} shaft (storey 1 box cols 23..25) to
+        # reach the hero (91cf829 made shafts walls: it stopped at x 26).
+        if want(56):
+            moved_in.clear()
+            p.isolate()
+            p.place(0, 12, p.stand_y(1))            # hero storey 1, cols 12..14
+            p.place(SLOT_GHOST, 27, 8, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+            gx, inbox = [], 0
+            g = p.ent(SLOT_GHOST)
+            for i in range(16):
+                p.turn("SPACE")
+                g = track(SLOT_GHOST, g, "cross%d" % i)
+                gx.append(g["X"])
+                inbox += bool(in_end_box(p, g, segs))
+            h.expect("56 ghost crosses the shaft: 5 turns in its end box", inbox, 5)
+            h.expect("56 ghost reaches the hero (x 16, gap 1 = reach)", gx[-1], 16)
+            h.expect("56 ghost x strictly decreasing to 16",
+                     gx[:11], list(range(26, 15, -1)))
+            h.expect("56 no x-kept turn inside a box", moved_in[:3], [])
+
+        # 57: in a box the Ghost moves instead of attacking: hero at x 2
+        # (cols 2..4) beside {5,2}'s top box (cols 5..7). Ghost from x 9:
+        # 8 (gap 3) -> 7 (in, gap 2) -> 6 (in, gap 1: in reach, moves on) ->
+        # 5 (in, gap 0) -> fully boxed (left = hero, right = a reversal that
+        # stays inside): stays and may attack (the documented exception).
+        if want(57):
+            p.isolate()
+            p.place(0, 2, p.stand_y(1))
+            p.place(SLOT_GHOST, 9, 8, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+            hp0 = p.ent(0)["HP"]
+            seq = []
+            for i in range(6):
+                p.turn("SPACE")
+                seq.append((p.ent(SLOT_GHOST)["X"], p.ent(0)["HP"] < hp0))
+            first_hit = next((i for i, (_, hit) in enumerate(seq) if hit), None)
+            h.expect("57 ghost x per turn 8,7,6,5,5,5", [x for x, _ in seq], [8, 7, 6, 5, 5, 5])
+            h.expect("57 no attack before fully boxed at x 5 (first hit >= turn 5)",
+                     first_hit is None or first_hit >= 4, True)
+
+        # 58 (rule b): a climb blocked by an entity is a WAIT (monsters act; the
+        # blocker yields), not a free no-op. Hero mid-ladder on {5,2} at y 11
+        # climbing up; ghost parked on the next step (5,7).
+        if want(58):
+            p.isolate()
+            p.place(0, 5, 11)
+            p.set_ent(0, AIDIR=0xFF)
+            p.place(SLOT_GHOST, 5, 7, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+            tc = p.rw("TURN_COUNTER")
+            p.turn("K")
+            h.expect("58 blocked climb consumes a turn", p.rw("TURN_COUNTER") - tc, 1)
+            h.expect("58 hero did not move (y 11)", p.ent(0)["Y"], 11)
+            h.expect("58 blocker moved off (x != 5)", p.ent(SLOT_GHOST)["X"] != 5, True)
+            h.expect("58 hero then reaches the top", p.climb("K"), True)
+            h.expect("58 hero standing on storey 1 (y 7)", p.ent(0)["Y"], 7)
+
+        # 59 (rule b): terrain-blocked / illegal climbs stay free (no turn).
+        if want(59):
+            p.boot(K_KNIGHT)
+            p.isolate()                             # hero x 2, storey 2: no ladder
+            h.expect("59 UP without a ladder: no turn", p.no_turn("K"), True)
+            h.expect("59 DOWN on the bottom storey, no hole: no turn", p.no_turn("J"), True)
+            p.place(0, 5, 7)                        # top of {5,2} (storey 1)
+            h.expect("59 UP at a down-only shaft top: no turn", p.no_turn("K"), True)
+            h.expect("59 CLIMB_BLK clear after a terrain block", p.rb("CLIMB_BLK"), 0)
 
         # ---------------- 32 / 33 quaff & full pack --------------------------
         if want(32) or want(33):

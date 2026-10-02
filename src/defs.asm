@@ -220,12 +220,14 @@ GEN_ZBLK        EQU $BF93           ; word: virtual addr of the ZX0 block now un
 PRES_ANY        EQU $BF95           ; A7: 1 = PRES_MASK has a bit set (present has work)
 DMG_PRES_N      EQU $BF96           ; A7: DMG_LIST rects pmark_dmg marks (before overlap repair)
 PRES_RMIN       EQU $BF97           ; A7: first marked row ($FF = none); present starts there
+FLY_INBOX       EQU $BF98           ; ai_flyer: overlap with a ladder-end box at turn start (0 outside ai_flyer)
 HUD_EXT         EQU $BF9A           ; A7: 3 B, per HUD row: cols 0..EXT-1 may hold ink in bank 5
 HUD_PW          EQU $BF9D           ; A7: 3 B, per HUD row: cols 0..PW-1 changed since the last present
 HUD_ROWS        EQU 3               ;     (rows HUD_ROW..23; HUD_PW = HUD_EXT + HUD_ROWS)
 GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
 MSG_BUF         EQU $BFA0           ; 32 B message line composition
 TIMING_MARK     EQU $BFC0           ; spare
+CLIMB_BLK       EQU $BFC1           ; 1 = this input's climb was blocked by an entity (-> wait turn)
 
 ; Game states (GAME_STATE). 2/3/4 shared with constants.asm.
 GS_SELECT       EQU $05

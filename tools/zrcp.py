@@ -18,12 +18,13 @@ Usage from the shell:
     python3 tools/zrcp.py read-memory 16384 16
     python3 tools/zrcp.py --load build/wazhack.sna get-registers
 """
+import os
 import socket
 import sys
 import time
 
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 10000
+DEFAULT_PORT = int(os.environ.get("ZRCP_PORT", "10000"))
 PROMPT = b"command> "
 STEP_PROMPT = b"command@cpu-step> "     # prompt while in enter-cpu-step mode
 

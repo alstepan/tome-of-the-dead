@@ -337,7 +337,10 @@ snap_pxpy:
 ;==============================================================================
 ; PLAYER TURN — try_player_turn: resolve the sampled keys (PLAYER_DIR/DISC).
 ; Chords (§9): vertical wins if a climb is legal, else horizontal, else G, else
-; wait. Illegal -> CF = 0, nothing changed (no turn).  Out: CF = 1 turn used.
+; wait. A climb blocked by an ENTITY counts as a wait (rule by user 2026-10-02,
+; §6.4: the blocker gets its turn to move off), at wait priority. Illegal
+; (terrain / no ladder) -> CF = 0, nothing changed (no turn).
+; Out: CF = 1 turn used.
 ; Clobbers: all but IY.  (IX = player on return)
 ;==============================================================================
 try_player_turn:
@@ -345,6 +348,7 @@ try_player_turn:
                 ld   ix, P_ENTITIES
                 xor  a
                 ld   (ACT_SLOT), a
+                ld   (CLIMB_BLK), a            ; A = 0
                 ld   a, (ix+E_FLAGS)
                 and  EF_DYING
                 ret  nz                        ; dead heroes don't act (CF=0)
@@ -384,8 +388,9 @@ try_player_turn:
                 ld   a, (PLAYER_DISC)
 .nq:            bit  DK_WAIT_BIT, a
                 jr   nz, .wait
-                or   a                         ; nothing legal: CF = 0, no turn
-                ret
+                ld   a, (CLIMB_BLK)            ; climb blocked by an entity:
+                or   a                         ; a wait (else CF = 0, no turn)
+                ret  z
 .wait:          scf                            ; WAIT: a 2-tick turn, nothing moves
                 ret
 
@@ -393,6 +398,9 @@ try_player_turn:
 ; try_climb — IX = player, D = dy ($FF up / 1 down). CF = 1 if done (§3.4).
 ; Standing: UP needs {x,s} ({x,0} = up-exit, no step), DOWN needs {x,s+1}
 ; ({x,3} = down-exit, first step animated). Mid-ladder: continue or reverse.
+; Step blocked by an entity: CF = 0 and CLIMB_BLK = 1 (the caller turns it
+; into a wait); no ladder: CF = 0, CLIMB_BLK untouched.
+; Clobbers: A, BC, DE, HL, TMP6
 ;------------------------------------------------------------------------------
 try_climb:
                 ld   a, d
@@ -456,13 +464,16 @@ try_climb:
                 add  a, b
                 ld   b, a
                 call box_free
-                ccf
-                ret  nc                        ; blocked -> no turn
+                jr   c, .blk
                 ld   (ix+E_Y), b
                 ld   a, (TMP6)
                 ld   (ix+E_AIDIR), a
                 ld   (ix+E_MODE), M_MOVE
                 scf
+                ret
+.blk:           ld   a, 1                      ; blocked by an entity: no step;
+                ld   (CLIMB_BLK), a            ; try_player_turn makes it a wait
+                xor  a                         ; CF = 0
                 ret
 
 ;------------------------------------------------------------------------------
@@ -1160,12 +1171,17 @@ attack_if_reach:
 ;------------------------------------------------------------------------------
 ; try_step_face / try_step — move IX by (D=dx, E=dy) if legal: body limits
 ; (cols 1..30; monsters treat 0/31 as walls), no sideways step while mid-ladder
-; (§3.4 snap), box_free, cork_check, and (B8) for flyers the ladder-end rule
-; (flyer_lcost: never into a ladder-end box; out of one only). The flyer band
-; is NOT checked here: callers keep it by construction (chase targets 7s+1,
-; wander uses clamp_band).
+; (§3.4 snap), box_free, cork_check, and the flyer ladder-end rule (§3.5, rule
+; by user 2026-10-02): a flyer that started its turn inside a ladder-end box
+; (FLY_INBOX != 0, set by ai_flyer) may only keep crossing (dx = its facing)
+; or step out of the box (flyer_lcost at the new x = 0); never dx = 0 and
+; never a reversal that stays inside. Entering a box is free. Yield steps
+; (YIELD_FLAG) never see the rule (FLY_INBOX = 0 outside ai_flyer).
+; The flyer band is NOT checked here: callers keep it by construction (chase
+; targets 7s+1, wander uses clamp_band).
 ; try_step_face also sets facing from dx. CF = 1 if moved.
-; Clobbers: A, BC, DE, HL
+; Clobbers: A, BC, DE, HL, TMP6 (try_step_face), TMP7 (flyer_lcost)
+; Cost of the flyer rule: 24 T when FLY_INBOX = 0 (the common case).
 ;------------------------------------------------------------------------------
 try_step_face:
                 ld   a, d
@@ -1207,28 +1223,14 @@ try_step:
                 call box_free
                 pop  hl
                 jr   c, .no
-                ld   a, (YIELD_FLAG)
+                ld   a, (FLY_INBOX)            ; flyer inside a ladder-end box?
                 or   a
-                jr   nz, .ok
+                jr   nz, .inbox
+.cork:          ld   a, (YIELD_FLAG)
+                or   a
+                jr   nz, .go
                 call cork_check                ; never re-cork a climbing hero
                 jr   c, .no
-.ok:            ; B8: a flyer never moves into a ladder-end box; one already
-                ; in one may only step to less overlap (out, never deeper)
-                KFIELD KT_FLAGS
-                and  KF_FLYER
-                jr   z, .go
-                call flyer_lcost               ; A = overlap at the new x
-                or   a
-                jr   z, .go
-                push af
-                push bc
-                ld   c, (ix+E_X)
-                call flyer_lcost               ; A = overlap where it is now
-                pop  bc
-                ld   l, a
-                pop  af
-                cp   l
-                jr   nc, .no                   ; not out-bound: illegal
 .go:
                 ld   (ix+E_X), c
                 ld   (ix+E_Y), b
@@ -1237,6 +1239,19 @@ try_step:
                 ret
 .no:            or   a
                 ret
+.inbox:         ; H = dx. Keep crossing (dx = facing) or leave the box.
+                ld   a, h
+                or   a
+                jr   z, .no                    ; x kept: would stay inside
+                bit  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   z, .fr
+                neg                            ; facing left: dx -1 -> 1
+.fr:            dec  a
+                jr   z, .cork                  ; continuing the crossing
+                call flyer_lcost               ; reversal: only out of the box
+                or   a                         ; (C = new x, D = w)
+                jr   nz, .no
+                jr   .cork
 
 ;------------------------------------------------------------------------------
 ; cork_check — CF = 1 if box (C,B,D,E) overlaps any box on the hero's remaining
@@ -1278,26 +1293,32 @@ cork_check:
 
 ;------------------------------------------------------------------------------
 ; ai_flyer — Bat / Ghost (prototype §6.4). Band: 7s <= y <= 7s+6-h.
+; Ladder ends (§3.5, rule by user 2026-10-02): flyers may cross a shaft but
+; never block the hero. FLY_INBOX = overlap with a ladder-end box at turn
+; start (flyer_lcost, the turn's only call unless a reversal is tried inside
+; a box); try_step enforces "keep crossing or leave". Inside a box the flyer
+; moves before anything else, x only: chase dx first (0: facing), then the
+; other way. Neither legal (fully boxed by entities) -> attack if in reach,
+; else stay. FLY_INBOX is 0 again on return.
+; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 ai_flyer:
-                call attack_if_reach
-                ret  c
-                ; B8: inside a ladder-end box (spawn, follower placement):
-                ; step out first, x only, toward the hero (aligned: the
-                ; roomier side), else the other way; try_step only accepts
-                ; a step to less overlap. Both blocked: the usual moves below.
                 call get_box
                 call flyer_lcost
-                or   a
+                ld   (FLY_INBOX), a
+                call .body
+                xor  a
+                ld   (FLY_INBOX), a
+                ret
+.body:          or   a
                 jr   z, .free
-                call dx_to_player
+                call dx_to_player              ; preferred dx: the chase
                 ld   a, d
                 or   a
                 jr   nz, .esc
-                inc  d                         ; D = 1
-                ld   a, (ix+E_X)
-                cp   ROOM_COLS / 2
-                jr   c, .esc
+                inc  d                         ; aligned: facing
+                bit  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   z, .esc
                 ld   d, $FF
 .esc:           ld   e, 0
                 push de
@@ -1310,7 +1331,10 @@ ai_flyer:
                 ld   e, 0
                 call try_step_face
                 ret  c
+                jp   attack_if_reach           ; fully boxed: may attack, else stays
 .free:
+                call attack_if_reach
+                ret  c
                 call storey_ref
                 ld   (TMP4), a                 ; my storey s
                 ld   a, (PL_STOREY)
@@ -1377,14 +1401,7 @@ ai_flyer:
                 add  a, c
                 dec  a
                 cp   ROOM_COLS - 1
-                jr   nc, .rev                  ; right col > 30
-                push de                        ; B8: a ladder shaft ahead is a
-                KFIELD KT_BW                   ; wall for flyers too (C = new x)
-                ld   d, a
-                call flyer_lcost
-                pop  de
-                or   a
-                jr   z, .bok
+                jr   c, .bok                   ; right col <= 30
 .rev:           ld   a, d
                 neg
                 ld   d, a
@@ -1422,15 +1439,16 @@ ai_flyer:
 
 ;------------------------------------------------------------------------------
 ; flyer_lcost — B8 (user bug: the Ghost parked on a ladder end and the hero
-; could not get past). A = how many of the cols C .. C+D-1 lie in a
+; could not get past; rule by user 2026-10-02, §3.5: flyers may cross a shaft
+; but never wait / attack / stop / reverse inside a ladder-end box).
+; A = how many of the cols C .. C+D-1 lie in a
 ; ladder-end box of IX's storey t = the standing box at either end of a
 ; segment, the box the climbers' "no head-on" rule keeps clear (§6.4): the
 ; bottom end of {col, t} and the top end of {col, t+1}, cols col..col+2. A
 ; flyer's band lies inside its storey's standing rows, so only the cols
 ; decide. 0 = clear. Exit shafts count ({col,0} bottom, {col,3} top); a
-; stacked shaft counts twice (harmless: only 0 / "less" is used).
-; Effect: ladder shafts are walls for flyers (a 3-wide body can't cross a
-; 3-wide shaft without ending a turn in it).
+; stacked shaft counts twice (harmless: only 0 / non-0 is used).
+; Called once per flyer turn (ai_flyer) + once per reversal tried inside a box.
 ; Preserves BC, DE, IX.  Clobbers: A, HL, TMP7.  ~330 T + ~75 T per segment
 ; (~95 T for one of this storey).
 ;------------------------------------------------------------------------------

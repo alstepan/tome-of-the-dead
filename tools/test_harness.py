@@ -24,7 +24,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from zrcp import Zrcp  # noqa: E402
 
 ZESARUX = "/Applications/zesarux.app/Contents/MacOS/zesarux"
-DEFAULT_PORT = 10000
+# ZRCP_PORT lets parallel worktrees run suites without killing each other's
+# emulator (the launcher pkills by port).
+DEFAULT_PORT = int(os.environ.get("ZRCP_PORT", "10000"))
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Full screen frame = bitmap (6144) + attributes (768). The golden unit.
