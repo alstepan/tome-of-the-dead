@@ -1,0 +1,134 @@
+# WazHack/ZX CONCEPT round-4 COMMON structure tiles (12 ids) — DRAFT. Supersedes walls.tiles
+# (round-2 plaster) and walls_r3.tiles (round-3 whole-wall dither).
+# Format = tools/gfx_convert.py --mode tile. Style brief (user ref assets/gfx/concept/ref/bloodstone.png,
+# translated, not copied): mostly black, bricks as open OUTLINES (mortar only, = the existing WALL),
+# architecture as crumbling FRAGMENTS with ragged edges, lumpy pillars, white rubble, cyan roots.
+# Ink shown is the default; walls/pillars take ATTR_WALL[depth], platform_hi ATTR_FLOOR[depth].
+# wall_worn        : WALL with broken mortar runs (variety inside a fragment)
+# wall_brk_top/bot : a fragment's ragged top / bottom edge, bricks closed along the break,
+#                    in register with WALL (rows 0/4 mortar), so they stack on WALL directly
+# wall_brk_l/r     : ragged left / right edge of a fragment
+# pillar_l/r       : lumpy organic pillar, 2 cols, repeats every 8 rows (open outline)
+# platform_hi      : floor-row variant: highlight lip on top + broken brick lines (floor attr)
+# rubble           : small pile on the standing row ($07)
+# root_top/end1/end2: hanging roots ($05); end1<->end2 = 1-cell glyph-swap sway (optional)
+=== wall_worn ink:blue paper:black
+###.####
+#...#...
+#.......
+#...#...
+##.###.#
+..#.....
+..#...#.
+......#.
+
+=== wall_brk_top ink:blue paper:black
+........
+.....##.
+##.....#
+#...#...
+###.####
+..##..#.
+..#...#.
+..#...#.
+
+=== wall_brk_bot ink:blue paper:black
+########
+#...#...
+#...#...
+#..##...
+###.####
+.##...#.
+#....###
+......#.
+
+=== wall_brk_l ink:blue paper:black
+..######
+...##...
+.#..#...
+....#...
+.....###
+..#...#.
+...#..#.
+..#...#.
+
+=== wall_brk_r ink:blue paper:black
+######..
+#...#...
+#...#.#.
+#..#....
+###.....
+..#..#..
+..#.#...
+..#..#..
+
+=== pillar_l ink:blue paper:black
+..##....
+.#..#...
+#....#..
+#..#....
+.#......
+.#..#...
+#...#...
+#.......
+
+=== pillar_r ink:blue paper:black
+.....#..
+...#..#.
+.......#
+..#...#.
+......#.
+...#...#
+.......#
+....#.#.
+
+=== platform_hi ink:white paper:blue
+########
+#.#.#.#.
+...#....
+........
+#####.##
+.......#
+........
+.......#
+
+=== rubble ink:white paper:black
+........
+........
+........
+........
+...#....
+..###.#.
+.#####.#
+########
+
+=== root_top ink:cyan paper:black
+########
+.##..##.
+.#...#..
+.#...#..
+..#..#..
+..#...#.
+..#...#.
+...#..#.
+
+=== root_end1 ink:cyan paper:black
+...#..#.
+...#...#
+...#...#
+..#....#
+..#...#.
+..#.....
+.#......
+........
+
+=== root_end2 ink:cyan paper:black
+...#..#.
+...#..#.
+....#.#.
+....#..#
+....#..#
+.....#..
+.....#..
+........
+

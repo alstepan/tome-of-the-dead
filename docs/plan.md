@@ -126,6 +126,31 @@ Engine work in this stage = flicker fix + real-hardware measurement only.
   while Fed ✓; **projectiles as real sprites where possible**; walls on **black
   paper with dithered light-brick patches**. User played the A1/A2 build:
   "works well".
+- **game.md rev 2 answers (user, 2026-10-02):** Mage bar **keeps the BAG icon**
+  (game.md §… to be revised: 10 icons × 24 px = 240 px fits); **AY reserve 7 KB**
+  ✓; **Ogre Warlord (D4) + Death Knight (D7)** ✓. A4 measured ZX0: **1.80×**
+  per frame (game), 1.69× (concept), **2.71× per kind block**.
+- **Art review (user, 2026-10-02):** decor animations ✓; golden-boss glow =
+  **SYNC** variant; ZX0 packing = **blocks of 3–4 frames per kind** (A5);
+  screens to be redrawn at **9+9+6** for review (fallback 10+10+4); level colour
+  schemes ✓; plaster damage = **1–2 "exposed brick" decor patches per room**,
+  not whole-wall dithering; wall style **inspired by Bloodstone (ZX), not a
+  copy** (ref: `assets/gfx/concept/ref/bloodstone.png`); **Zombie → Vampire**
+  (decided 2026-10-02; can turn into the existing bat).
+- **Round-4 review (user, 2026-10-02):** layout **9+9+6** ✓; panel ornament ✓;
+  panel = **24×16 icons + full info row (name/cost/range) + 16×16 gear**;
+  Death Knight = evil-twin Warrior with a **distinct silhouette**; fix-up pass
+  (Ogre face, Vampire cape pose, plaster patches, denser wall fragments, Power
+  Strike icon).
+- **Round-5 review (user, 2026-10-02): concept APPROVED.** Additions: custom
+  **6×8 font** for the log, info line and the **inventory page** (more info /
+  larger icons there); a custom **larger menu font**; Warrior/Mage must
+  **find** books, scrolls, arrows and throwing weapons, and the Warrior **can
+  run out** of throwables.
+- **Pending game.md rev 3 (batch):** 6×8 font + cell-boundary colour rule +
+  menu font; finite throwables/arrows found in the dungeon; panel layout 24×16 icons / 16×16 gear; Mage keeps BAG (10 icons); Zombie →
+  Vampire on D3/D6/D8 (resists: undead set, weak to fire, drain attack);
+  glow = SYNC; ZX0 blocks of 3–4 frames.
 - B6 discarded. **B2 flicker is the top bug.**
 
 ### Tasks
@@ -133,7 +158,7 @@ Engine work in this stage = flicker fix + real-hardware measurement only.
 |---|------|-------|------|
 | G1 ✅ | Budget after flicker fix: bytes per bank, contended T per tick, AY reserve, sprite-frame + decor-tile headroom, Rogue bytes reclaimed | z80-architect (read-only) | one budget table in `docs/design/budget.md` |
 | M1 ✅ (revision in progress) | Mechanics: core loop, turn/real-time model incl. jump, 2-storey rooms, doors/dead ends/generation, HP/mana/hunger, items + inventory, spells + ranged, monster roster, encounter cap (B1), win/lose, menu + controls | game-designer (Opus) + user | `docs/design/game.md` approved by user |
-| G2 | Art direction + asset list: Warrior/Mage frame list (jump, climb-attack, cast/ranged per spell), projectiles/FX, decor tiles, doors, HUD (HP/mana/hunger), inventory screen | game-designer → graphics-artist drafts on canvas | user approves on canvas |
+| G2 ✅ (concept approved R5; fonts pending) | Art direction + asset list: Warrior/Mage frame list (jump, climb-attack, cast/ranged per spell), projectiles/FX, decor tiles, doors, HUD (HP/mana/hunger), inventory screen | game-designer → graphics-artist drafts on canvas | user approves on canvas |
 | E0 ✅ (user: better, double buffer still needed) | Reorder experiment: render right after the HALT, anim/logic after it; measure render timing vs the beam. Also scouts a single-buffer approach for a possible future 48K port (48K itself out of scope) | z80-junior (manager-authorised exception: `play_loop` order only) | measured before/after + user eyeball; decides how E1 proceeds |
 | E1 | Flicker fix: double buffer (option A or B, `budget.md` §3); clean background rebased to bank 7 `$E000` | z80-staff-engineer | tests green; user confirms no flicker in Fuse **and on hardware** |
 | E2 | Real-hardware run: tape load + contended worst-tick measurement | staff + user | recorded worst tick vs budget |
@@ -154,8 +179,8 @@ Tags: **[S]** z80-staff-engineer (Opus), **[J]** z80-junior (Sonnet). Phases
 |---|------|-----|---------|------|
 | A1 ✅ `10ad983` | Merge E0 `RENDER_FIRST` + `tests/flicker.py` as the flicker baseline | J | user eyeball | 179/179; flicker numbers recorded |
 | A2 ✅ `10ad983` | Remove the Rogue (frames, tables, select screen, tests) | J | A1 | tests green; budget §2 bytes reclaimed |
-| A3 | Cold-code relocation: generator + boot → bank 5 low RAM; menus/select → bank 3 via bank-2 trampoline; memory-map | S | A2 | `.sna` behaviour identical; tests green; bank-2 headroom measured |
-| A4 | ZX0 sprite sources: tool side (pack per frame in `gfx_convert`/`svg_sprites`, sjasmplus include) | J | A2 | round-trip decode test bit-exact |
+| A3 ✅ review: ship (feat/cold-code) | Cold-code relocation: generator + boot → bank 5 low RAM; menus/select → bank 3 via bank-2 trampoline; memory-map | S | A2 | `.sna` behaviour identical; tests green; bank-2 headroom measured |
+| A4 ✅ `4593389` (feat/zx0-tools) | ZX0 sprite sources: tool side (pack per frame in `gfx_convert`/`svg_sprites`, sjasmplus include) | J | A2 | round-trip decode test bit-exact |
 | A5 | ZX0 engine side: decompressor in fixed RAM, generator unpacks per frame into `GEN_SRC` | S | A3, A4 | pool bytes identical to today; boot time measured |
 | A6 | Raise `FRT_MAX` (to the M1 number) + tile ids 32 → 64 | S | A3 | tests green; memory-map |
 | A7 | Double buffer (E1, option A/B — decide after A1 eyeball): bank-7 clean bg rebased to `$E000`, present/flip | S | A3 | flicker.py = 0 events; budget measured; user confirms on hardware |
@@ -163,6 +188,20 @@ Tags: **[S]** z80-staff-engineer (Opus), **[J]** z80-junior (Sonnet). Phases
 | A9 | Real-hardware gate (E2): tape load + contended worst tick on the user's 128K | user + S | A7, A8 | recorded |
 
 Parallel: A4 ‖ A3; A6 ‖ A7 ‖ A8 after A3.
+
+A3 review carry-overs (z80-reviewer, 2026-10-02):
+- **A6:** `ASSERT start == lowram_code` clashes with descriptors placed below
+  `lowram_code` in the CODE block → place them after `start` or rewrite the
+  assert + SAVETAP start.
+- **A7:** `page_bank` forces bit 3 = 0 and `restore_page` restores the whole
+  byte → keep the current screen bit in `page_bank`; `restore_page` takes only
+  bits 0–2 from the saved value. Transition scrolls draw on the `$4000` screen.
+- **3F:** generator must run before `build_room_map` and never during a
+  do_exit scroll (`GEN_SCRATCH` aliases ROOM_MAP/NEXT_MAP) → add a debug trap
+  counter in `gen_frame` asserted by tests.
+- Optional: move the scroll LDI movers (~350 B) / `gen_variant` inner loop
+  (~80 B) back to bank 2 to undo the +7% transition / +14% boot slowdown.
+- Optional test: breakpoint on PC in `$C000-$DFFF` with `$7FFD&7 ≠ 3`.
 
 ### 3B — World & screen (needs game.md §1–2 + revised layout)
 2-storey rooms + new panel rows (icon bar, bars, worn gear, 2-row message log);
