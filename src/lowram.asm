@@ -60,6 +60,7 @@ boot:
                 ld   (BLIT_MISS), a
                 ld   (DMG_OVERFLOW), a
                 ld   (CLIP_TRAP), a
+                ld   (GEN_TRAP), a             ; since boot (like GEN_OVERFLOW)
                 ld   (TURN_PHASE), a
                 ld   (ZAP_T), a
                 ld   (PEND_DMG_COUNT), a
@@ -193,8 +194,9 @@ init_kbd_mirror:
                 ret
 
 ;==============================================================================
-; BOOT-TIME GENERATOR (prototype §5.1/§5.2). Per frame: copy the unshifted
-; right-facing source out of banks 1/3, then emit each needed variant
+; BOOT-TIME GENERATOR (prototype §5.1/§5.2). Per frame: get the unshifted
+; right-facing source out of banks 1/3 (ZX0_SOURCES: unpack its block into
+; GEN_SCRATCH once, zx0_frame; raw: copy_virt to GEN_SRC), then emit each needed variant
 ; (facing x shift) into the pool banks 0/4/6 with a bump allocator. No variant
 ; straddles a bank (allocator skips to the next bank). ~70-100 T/output byte.
 ;==============================================================================
@@ -350,6 +352,10 @@ copy_virt:
 ; gen_kind — generate every frame of kind A.   Clobbers: all but IX
 ;------------------------------------------------------------------------------
 gen_kind:
+    IF ZX0_SOURCES
+                ld   hl, 0                     ; GEN_SCRATCH may hold room maps
+                ld   (GEN_ZBLK), hl            ; since the last session: no cache
+    ENDIF
                 ld   h, kind_tab >> 8
                 add  a, KT_FID0
                 ld   l, a
@@ -369,12 +375,28 @@ gen_kind:
 
 ;------------------------------------------------------------------------------
 ; gen_frame — generate all variants of frame A into the pool; fill FRT[A].
+; ZX0_SOURCES: the frame is read from its block unpacked in GEN_SCRATCH, which
+; aliases ROOM_MAP/NEXT_MAP — callable only while no room is built (boot, hero
+; start; 3F: level start before build_room_map). A call while GAME_STATE is
+; PLAYING/TRANSITION bumps GEN_TRAP (saturating; tests assert 0). The block
+; cache (GEN_ZBLK) must be invalidated by the caller after anything else
+; wrote GEN_SCRATCH: gen_kind does it; boot's direct calls follow gen_kind.
 ; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 gen_frame:
                 ld   (GEN_FID), a
+                ld   a, (GAME_STATE)           ; GEN_SCRATCH guard (A3 carry-over)
+                cp   GS_PLAYING
+                jr   z, .trap
+                cp   GS_TRANSITION
+                jr   nz, .safe
+.trap:          ld   hl, GEN_TRAP
+                inc  (hl)
+                jr   nz, .safe
+                dec  (hl)                      ; saturate at 255
+.safe:
                 ; FRT[fid] = all NONE
-                call frt_ptr                   ; HL = FRT + fid*16
+                call frt_ptr_cur               ; HL = FRT + fid*16 (A was clobbered)
                 ld   b, 4
 .clr:           ld   (hl), FRT_NONE
                 inc  hl
@@ -398,6 +420,10 @@ gen_frame:
                 inc  hl
                 ld   a, (hl)
                 ld   (GEN_FLAGS), a
+    IF ZX0_SOURCES
+                ex   de, hl                    ; HL = virt descriptor
+                call zx0_frame                 ; HL = frame in GEN_SCRATCH (no copy)
+    ELSE
                 ; source bytes = cols * H * 2
                 push de
                 call gen_rowbytes              ; A = cols*2
@@ -409,8 +435,10 @@ gen_frame:
                 pop  hl                        ; HL = virt src
                 ld   de, GEN_SRC
                 call copy_virt
-                ; --- right facing ---
                 ld   hl, GEN_SRC
+    ENDIF
+                ; --- right facing --- (GEN_BASE = the unmirrored source until
+                ; mirror_src has read it; gen_variant only reads it)
                 ld   (GEN_BASE), hl
                 ld   a, (GEN_FID)
                 call ft_ptr
@@ -598,10 +626,11 @@ gen_variant:
                 djnz .row
                 ret
 
-; mirror_src — GEN_SRC -> GEN_MIR, each row's columns reversed + bit-reversed.
+; mirror_src — (GEN_BASE) -> GEN_MIR, each row's columns reversed + bit-reversed.
+; GEN_BASE = GEN_SRC (raw sources) or the frame inside GEN_SCRATCH (ZX0).
 ; Clobbers: A, BC, DE, HL
 mirror_src:
-                ld   hl, GEN_SRC
+                ld   hl, (GEN_BASE)
                 ld   de, GEN_MIR
                 ld   a, (GEN_H)
                 ld   b, a
@@ -663,6 +692,51 @@ mul8:
                 add  hl, de
 .n:             djnz .m
                 ret
+
+    IF ZX0_SOURCES
+;------------------------------------------------------------------------------
+; zx0_frame — HL = VIRTUAL address of a frame descriptor (build/zx0/
+; sprites_zx0.asm: DW packed block, DW GEN_SCRATCH + raw offset). Unpacks the
+; block into GEN_SCRATCH unless it is already there (GEN_ZBLK = one-block
+; cache: blocks hold 1-4 consecutive fids of one kind, so gen_kind unpacks
+; each block exactly once). The tool guarantees no packed block straddles
+; virtual $C000, so the whole stream is in one bank's $C000 window.
+; Out: HL = the frame's raw bytes (cols*H*2, in GEN_SCRATCH). $C000 = the
+; source bank. Clobbers: A, BC, DE, HL.
+; Cost: descriptor ~0.4k T; unpack (once per block) ~1.6 B packed -> raw at
+; roughly LDIR speed + Elias bits, e.g. ~25-45k T for a 1.1-1.4 KB block.
+;------------------------------------------------------------------------------
+zx0_code:
+zx0_frame:
+                ld   de, GEN_ZDESC
+                ld   bc, 4
+                call copy_virt                 ; may straddle $C000: handled
+                ld   hl, (GEN_ZDESC)           ; HL = virt block
+                ld   de, (GEN_ZBLK)
+                or   a
+                sbc  hl, de
+                jr   z, .have                  ; already unpacked
+                add  hl, de
+                ld   (GEN_ZBLK), hl
+                ld   a, h
+                cp   BANK_WINDOW >> 8
+                ld   a, BANK_SRC_HI            ; (ld keeps CF)
+                jr   nc, .pg                   ; virt $C000.. = bank 3 as-is
+                ld   a, h
+                add  a, (BANK_WINDOW - SRC_VIRT_BASE) >> 8
+                ld   h, a                      ; virt $8000.. = bank 1 at +$4000
+                ld   a, BANK_SRC_LO
+.pg:            push hl
+                call page_bank
+                pop  hl
+                ld   de, GEN_SCRATCH
+                call dzx0_standard
+.have:          ld   hl, (GEN_ZDESC + 2)       ; HL = GEN_SCRATCH + offset
+                ret
+                INCLUDE "dzx0_standard.asm"
+zx0_code_end:
+                ASSERT zx0_code_end - zx0_code <= ZX0_BUDGET
+    ENDIF
 
 ; frt_ptr — HL = FRT + A*16 ; frt_ptr_cur uses GEN_FID.  Clobbers: A, DE, HL
 ;------------------------------------------------------------------------------
