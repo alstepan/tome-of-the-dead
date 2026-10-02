@@ -31,14 +31,22 @@
 
 ;==============================================================================
 ; SPRITE SOURCES — banks 1 and 3, assembled contiguously at virtual $8000..$FFFF
-; (slot 2 = page 1, slot 3 = page 3). Read only by the boot generator via
-; copy_virt (virtual < $C000 -> bank 1 at +$4000, else bank 3 as-is).
+; (slot 2 = page 1, slot 3 = page 3). Read only by the boot generator (and
+; init_tiles) via copy_virt (virtual < $C000 -> bank 1 at +$4000, else bank 3
+; as-is). ZX0_SOURCES = 1 (default): the generator frames are ZX0 blocks +
+; 4-B descriptors (build/zx0/sprites_zx0.asm, written by tools/zx0_sources.py
+; — run it before sjasmplus; the `build` skill does); items/tiles stay raw.
+; ZX0_SOURCES = 0: the raw index.asm, as before A5 (A/B, tests/zx0_pool.py).
 ;==============================================================================
                 MMU  2, BANK_SRC_LO
                 MMU  3, BANK_SRC_HI
                 ORG  SRC_VIRT_BASE
 sprite_src:
+    IF ZX0_SOURCES
+                INCLUDE "../build/zx0/sprites_zx0.asm"
+    ELSE
                 INCLUDE "../assets/gfx/sprites/index.asm"
+    ENDIF
 sprite_src_end:
 SRC_TOTAL       EQU sprite_src_end - sprite_src
     IF SRC_TOTAL > $4000
@@ -49,6 +57,9 @@ SRC_LEN_LO      EQU SRC_TOTAL
 SRC_LEN_HI      EQU SRC_TOTAL - SRC_LEN_LO
                 ASSERT SRC_TOTAL <= $8000
                 DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B (bank1 ", /D, SRC_LEN_LO, ", bank3 ", /D, SRC_LEN_HI, ")"
+    IF ZX0_SOURCES
+                DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed (+", /D, ZX0_FRAMES * 4, " B descriptors); total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
+    ENDIF
 
 
 ;==============================================================================

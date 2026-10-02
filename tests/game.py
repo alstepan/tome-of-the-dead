@@ -275,6 +275,8 @@ def main():
             h.expect("1 potions", e["POT"], 1)
             golden(h, "game_start", p.frame())
             h.expect("1 GEN_OVERFLOW 0 after boot + hero gen", p.rb("GEN_OVERFLOW"), 0)
+            # A5: gen_frame never runs while GEN_SCRATCH (= room maps) is live
+            h.expect("1 GEN_TRAP 0 after boot + hero gen", p.rb("GEN_TRAP"), 0)
             h.expect("39 start attrs legal", attr_violations(p.frame(), legal_attrs(p)), [])
             h.expect("8 floor band A at rest", floor_band_ok(p.frame(), holes(0)), [])
 
@@ -945,6 +947,8 @@ def main():
             frt, data = p.hero_pool()
             h.expect("51 2nd game wizard FRT rows == fresh boot", frt == ref_pool[0], True)
             h.expect("51 2nd game wizard pool bytes == fresh boot", data == ref_pool[1], True)
+            h.expect("51 GEN_TRAP 0 after a hero regen over built room maps",
+                     p.rb("GEN_TRAP"), 0)
             h.expect("51 wizard dies", p.die(), True)
             h.expect("51 ENTER -> GS_SELECT (after 2 heroes)", p.enter_to_select(), True)
             golden(h, "game_select", p.frame())
@@ -1007,6 +1011,8 @@ def main():
             h.expect("40 OVERRUN_COUNT reported (target 0)", res1["overrun"], 0)
             h.expect("40 DMG_OVERFLOW 0 over the walkthrough", res1["dmgov"], 0)
             h.expect("40 CLIP_TRAP 0 over the walkthrough", res1["clip"], 0)
+            h.expect("40 GEN_TRAP 0 over the walkthrough (rooms built + scrolled)",
+                     res1["gentrap"], 0)
             h.expect("36 WIN: ENTER -> GS_SELECT", res1["select"], True)
             if want(38):
                 res2 = walkthrough(h, p, check14=False)
@@ -1108,7 +1114,7 @@ def walkthrough(h, p, check14=False):
     p.until(lambda: p.rb("GAME_STATE") != GS_PLAYING, 40)
     res = dict(gs=p.rb("GAME_STATE"), turns=p.rw("TURN_COUNTER"),
                overrun=p.rw("OVERRUN_COUNT"), miss=p.rb("BLIT_MISS"), hp=p.ent(0)["HP"],
-               dmgov=p.rb("DMG_OVERFLOW"), clip=p.rb("CLIP_TRAP"))
+               dmgov=p.rb("DMG_OVERFLOW"), clip=p.rb("CLIP_TRAP"), gentrap=p.rb("GEN_TRAP"))
     res["state"] = (p.rw("RNG_STATE"), p.rw("TURN_COUNTER"), p.rb("POTIONS_TAKEN"),
                     tuple((e["ROOM"], e["X"], e["Y"], e["HP"], e["FLAGS"] & 0x7F)
                           for e in (p.ent(s) for s in range(9))))

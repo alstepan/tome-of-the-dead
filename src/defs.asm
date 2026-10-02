@@ -51,12 +51,21 @@ LOWRAM_END      EQU $6C20
 ; so the cold-code block can never grow into them:
 ;   A6 tile ids 32 -> 64: $6C20..$6D3F (glyphs grow to 512 B, attrs to 64 B)
 ;   A6 frame descriptors: FDESC_RESERVE B directly BELOW lowram_code (loaded)
-;   A5 ZX0 decompressor:  ZX0_RESERVE B inside lowram.asm (the block grows down)
+;   A5 ZX0 decompressor:  dzx0 + zx0_frame inside lowram.asm (<= ZX0_BUDGET B,
+;                         ASSERTed; the block grows down by its real size)
 ;   A5 ZX0 scratch:       aliases ROOM_MAP..NEXT_MAP ($6000..$65FF, 1,536 B) —
 ;                         the generator only runs while no room is built
 LOWRAM_FREE_END EQU $6D40           ; end of fixed low-RAM buffers incl. the A6 tile reserve
 FDESC_RESERVE   EQU 160 * 12        ; A6: FRT_MAX 160 x <= 12 B descriptors
-ZX0_RESERVE     EQU 128             ; A5: decompressor (~68 B) + glue
+ZX0_BUDGET      EQU 128             ; A5: decompressor (68 B) + glue, max
+    IFNDEF ZX0_SOURCES                          ; A5: 1 = sprite sources ZX0-packed
+ZX0_SOURCES     EQU 1                           ;     (build/zx0/sprites_zx0.asm from tools/zx0_sources.py);
+    ENDIF                                       ;     -DZX0_SOURCES=0 = raw index.asm (A/B)
+    IF ZX0_SOURCES
+ZX0_RESERVE     EQU 0               ; consumed: the code is inside the cold block
+    ELSE
+ZX0_RESERVE     EQU ZX0_BUDGET      ; raw build keeps the same fit margin
+    ENDIF
 GEN_SCRATCH     EQU ROOM_MAP        ; A5: 1,536 B generator-time scratch (alias, rooms dead)
 GEN_SCRATCH_LEN EQU NEXT_MAP + $300 - ROOM_MAP
 
@@ -177,6 +186,9 @@ ATK_PTR         EQU $BF8E           ; word: attacker entity during do_attack
 MON_SLOT        EQU $BF90           ; resolve_monsters slot counter
 ANIM_SLOT       EQU $BF91           ; anim/render slot counter
 YIELD_FLAG      EQU $BF92           ; 1 while a monster takes a yield step
+GEN_ZBLK        EQU $BF93           ; word: virtual addr of the ZX0 block now unpacked in GEN_SCRATCH (0 = none)
+GEN_ZDESC       EQU $BF95           ; 4 B: current frame descriptor (DW block, DW scratch addr)
+GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
 MSG_BUF         EQU $BFA0           ; 32 B message line composition
 TIMING_MARK     EQU $BFC0           ; spare
 
