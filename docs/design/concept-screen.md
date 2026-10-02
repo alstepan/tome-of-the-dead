@@ -1,9 +1,13 @@
 # WazHack/ZX — Screen concept
 
-> Status: **rev 2 (M1, 2026-10-01)**. This is the layout revision after the user's concept
-> review: the V1 family, with the bottom panel grown to 6 rows. It adds 2 message-log rows,
-> 24×24 action icons and a worn-gear block, plus larger decor, brick patches and per-level
-> floor colours.
+> Status: **rev 3 (M1, 2026-10-02) — concept approved in round 5.** Rev 2 was the layout
+> revision after the user's first concept review: the V1 family, with the bottom panel grown
+> to 6 rows, larger decor, brick patches and per-level floor colours. **Rev 3 replaces the
+> panel** with the approved round-5 design: **10 icons 24×16**, a full info line, bars with
+> the hunger word and ammo, a 2-row log beside a 4-slot 16×16 gear block, an ornament on
+> row 17; and adds the **custom fonts** (§5.1). Approved reference image:
+> `assets/gfx/concept/screen_d7_fortress.png` (a concept render: its glyph widths are
+> 8 px, the real text is 6×8).
 > Mechanics and numbers are owned by `game.md`. Where the two differ, game.md wins. This doc
 > stays consistent with `budget.md` §6–§8, `prototype.md` §4 and `foundations.md` F9.
 > Coordinates are **(col, row)** on the 32×24 char grid, 0-based.
@@ -18,7 +22,7 @@
   holes, pit cells and the exit grate.
 - Walls: `WALL` takes `ATTR_WALL[depth]` in air rows and `ATTR_FLOOR[depth]` in floor rows.
   Ladder: 3 cols wide, `$02`. Its top cell row is the **hole** in the floor above.
-- Hero 24×48 (6 rows), CAST2 32×48. Goblin 24×32. Skeleton/Zombie/Mummy/Orc/Necro 24×48.
+- Hero 24×48 (6 rows), CAST2 32×48. Goblin 24×32. Skeleton/Vampire/Mummy/Orc/Necro 24×48.
 - **Animated decor under a sprite footprint pauses.** Re-blitting the sprite over it would
   cost 12–28k T (budget §6).
 - Row 0 has an implied ceiling. Lower-storey ceiling decor hangs from the underside of the
@@ -34,8 +38,9 @@
 | Hero standing rows (storey 0 / 1) | 3–8 / 13–18 | **2–7 / 11–16** |
 | Headroom over a 48-px hero (jump band) | 3 rows | **2 rows = 16 px** |
 | Bottom panel | rows 20–23 (4) | **rows 18–23 (6)** |
-| Action icons | 16×16 | **24×24** (3×3 cells) |
-| Message log | 1 row | **2 rows** |
+| Action icons | 16×16 | **10 × 24×16** (3×2 cells; rev 3, was 24×24 in rev 2) |
+| Info line | — | **row 20, 42 chars, 6×8 font** (rev 3) |
+| Message log | 1 row | **2 rows**, 32 chars each, 6×8 font |
 | Worn gear | 5 × 8×8 strip | **4 × 16×16 block** |
 | Room map / climb turns per storey | 640 B / 10 | **576 B / 9** |
 
@@ -53,7 +58,8 @@ Legend: `#` wall · `=` floor · `<`/`>` pit caps · `o` pit (black, floor row) 
 `G` Goblin · `*` projectile (sprite) · `T` tall torch · `t` small torch · `b`/`B` brazier
 flame/bowl · `c` candles · `w` cobweb · `~` moss · `|` chain · `F` banner · `k` skulls ·
 `d` drip · `x` barred window · `p` brick patch (missing plaster) · `r` rubble · `.` air.
-Panel glyphs: §5.
+Panel glyphs: §5. (In the grid below the panel rows show *cells*, not text widths: log and
+info text use 6-px glyphs, 4 chars per 3 cells.)
 
 ```
      0         1         2         3
@@ -76,14 +82,20 @@ Panel glyphs: §5.
 15   #...MMMM...........GGG..HHH...DD
 16   #.c.MMMM.........k.GGG..HHH...DD
 17   #==============================#
-18   111222333444555666777888FIREBOLT
-19   1112223334445556667778883MP MED.
-20   111222333444555666777888WWAAHHCC
-21   h####14m##..05f###..K.D3WWAAHHCC
-22   GOBLIN ATTACKS YOU AND MISSES.
-23   THE FIREBOLT FLIES.
+18   111222333444555666777888999000D7
+19   111222333444555666777888999000K.
+20   FIREBOLT 3MP RANGE 12 FIRE BURST
+21   h####14m####12f####FED..........
+22   LLLLLLLLLLLLLLLLLLLLLLLLWWAAHHCC
+23   LLLLLLLLLLLLLLLLLLLLLLLLWWAAHHCC
 ```
-Every grid line is exactly 32 cells.
+Every grid line is exactly 32 cells. Panel rows: icons `1–9, 0` (24×16 each; the Mage's
+selected icon is slot 3, Firebolt) · `D7` depth · `K.` key icon · row 20 info line · row 21
+`h` heart, `####` 32-px bars, numbers, `m` drop, `f` drumstick, `FED` hunger word, cols 24–31
+blank here: the Warrior shows `D3 A06` (daggers 3, arrows 6); the Mage mock has none · `L` log (24 cells = 32 chars) ·
+`WWAAHHCC` worn gear (weapon, armour, helmet, charm). Row 17 is the storey-1 floor and
+carries the panel **ornament** (a decorative border in `ATTR_FLOOR`, same cells, no new
+attrs; approved round 4).
 
 ### 3.1 Structure (exact extents)
 
@@ -258,26 +270,34 @@ same sprite mirrored.
 The panel is the always-visible *use* surface. Gear management happens only on the page
 (§7). The hero sprite does not change with equipment.
 
+**Approved round-5 layout (replaces every earlier panel description).**
+
 | Cells | Content | Attr |
 |---|---|---|
-| (0–23, 18–20) | **8 icon slots 24×24**; slot *n* at cols `3n … 3n+2` | per state below |
-| (24–31, 18) | selected name, 8 chars (`FIREBOLT`, `LIGHTNG`, `P.STRIKE`, `WHIRLWND`, `APPLE`) | `$47` |
-| (24–31, 19) | cost / range / count line: `3MP MED.`, `5MP LNG2` (2 = bounces), `X3 +15FD`, `ARROWS 8` | `$46` |
-| (24–31, 20–21) | **worn gear, 4 × 16×16**: weapon 24–25, armour 26–27, helmet 28–29, charm 30–31. An empty slot is a dotted outline `$01` | item ink |
-| (0, 21) heart · (1–4, 21) HP bar 32 px · (5–6, 21) HP number | | `$42` |
-| (7, 21) drop · (8–11, 21) MP bar 32 px · (12–13, 21) MP number | | `$45` |
-| (14, 21) drumstick · (15–18, 21) FOOD bar 32 px | hunger-stage attr `$44`/`$46`/`$42` | |
-| (20, 21) key icon (only while carrying the level key) · (22–23, 21) depth `D3` | | `$46` / `$47` |
-| (0–31, 22–23) **message log**: newest on row 23; a new message scrolls row 23 → 22 (256 B bitmap + 32 attr copy, ~5k T, input tick) | | `$07` (row 22) / `$47` (row 23) |
+| (0–29, 18–19) | **10 icon slots 24×16**; slot *i* (0-based) at cols `3i … 3i+2`, rows 18–19 | per state below |
+| (30–31, 18) | **depth** `D1`–`D8` (6×8 font; 2 chars = 12 px) | `$47` |
+| (30, 19) | **key icon** 8×8 (only while carrying the level key) | `$46` |
+| (0–31, 20) | **info line** for the selected icon: name, MP cost, range, bounces/notes, ammo (≤ 42 chars, §5.1) | name `$47` (chars 0–15) · numbers `$46` (from char 16) · notes `$45` (from char 28) |
+| (0, 21) heart · (1–4, 21) **HP bar 32 px** · (5–6, 21) HP number (≤ 2 digits) | | `$42` |
+| (7, 21) drop · (8–11, 21) **MP bar 32 px** · (12–13, 21) MP number (≤ 2 digits) | | `$45` |
+| (14, 21) drumstick · (15–18, 21) **FOOD bar 32 px** · (19–23, 21) **hunger stage word** (`FED`, `OK`, `HUNGRY`, `WEAK`; 6 chars max = 36 px) | stage attr `$44`/`$46`/`$42`/`$42` | |
+| (24–31, 21) **Warrior ammo** `D6 A12` (daggers, arrows; blank for the Mage; a count at 0 shows in `$02`) | | `$47` |
+| (0–23, 22–23) **message log**, 2 rows × 32 chars (6×8 font). Newest on row 23; a new message scrolls row 23 → 22 (192 px × 8 lines ≈ 192 B bitmap + attr copy, ~4k T, input tick) | | `$07` (row 22) / `$47` (row 23) |
+| (24–31, 22–23) **worn gear, 4 × 16×16**: weapon 24–25, armour 26–27, helmet 28–29, charm 30–31. An empty slot is a dotted outline | item ink / `$01` |
+| row 17 (storey-1 floor) | panel **ornament** | `ATTR_FLOOR` |
 
-**Icon order.** Warrior: 1 sword · 2 Power Strike · 3 Whirlwind · 4 daggers · 5 bow · 6 quick
-food · 7 quick potion · 8 bag. Mage: 1 staff · 2 Spark · 3 Firebolt · 4 Frost ·
-5 Drain Life · 6 Lightning · 7 quick food · 8 quick potion. The Mage bar has **no bag
-icon**: open the page with FIRE+↓ or `I` (game.md §3.1).
+**Icon order** (full table: game.md §3.5). Warrior (9 + 1 spare): 1 sword · 2 Power Strike ·
+3 Whirlwind · 4 daggers · 5 bow · 6 quick food · 7 quick potion · 8 quick scroll · 9 bag ·
+10 empty outline. Mage (10): 1 staff · 2 Spark · 3 Firebolt · 4 Frost · 5 Drain Life ·
+6 Lightning · 7 quick food · 8 quick potion · 9 quick scroll · 10 bag. **Both classes have
+the BAG icon** (FIRE on it opens the page; FIRE+↓ / `I` also do).
 - Unlearned ability slots draw the empty outline, and the cursor skips them.
-- Quick slots show the item's 16×16 icon in the slot's top-left 2×2 cells, with the
-  count digit at (col+2, row+2).
-- FIRE on the bag (Warrior) opens the page.
+- Quick slots (food, potion, scroll) show the item's 16×16 icon in the slot's left 2×2
+  cells, with the count digit (6×8) at cell (col+2, row+1).
+- The info line for the selected icon, examples (≤ 42 chars):
+  `FIREBOLT  3MP RANGE 12  FIRE BURST` · `DAGGERS X6  RANGE 6  RECOVERABLE` ·
+  `BOW X12  RANGE 14  ARROW BREAKS ON HIT` · `NO ARROWS  USE THE SWORD` · `APPLE X3  +15 FOOD`.
+- **Ammo at 0:** the icon greys out (below) and the ammo count turns `$02`.
 
 | Icon state | Attr |
 |---|---|
@@ -287,43 +307,72 @@ icon**: open the page with FIRE+↓ or `I` (game.md §3.1).
 | Selected + greyed | `$0F` |
 
 Melee (sword/staff) never greys. The 32-px bars give 8 px per 25 %, and the exact value is
-always in the digits.
+always in the digits. The selected icon's PAPER blue spans its 3×2 cells (rows 18–19).
+
+### 5.1 Text and fonts (user, round 5; rules and numbers also in game.md §3.4)
+
+| Font | Glyph | Where | Capacity |
+|---|---|---|---|
+| **Text font** | **6×8**, ASCII 32–127, 768 B | log (cols 0–23), info line (row 20), numbers/word on row 21, inventory page | **32 chars** per log line (192 px); **42 chars** on a full row (252 of 256 px) |
+| **Menu font** | **8×16** (title may be **16×16** glyphs), ~64 glyphs, size TBD by the artist | main menu, hero/controls select, redefine, pause, `DEPTH n` card, death and win screens | 32 chars per line |
+
+- **Colour rule.** Attributes are per 8 px, glyphs are 6 px, so a char straddles cells. A
+  text row has **one colour**, or its coloured words begin on **24-px boundaries** (chars
+  0, 4, 8, 12 …; 3 cells = 4 chars). Info line fields: name at char 0, numbers at char 16,
+  notes at char 28 (all multiples of 4). The log: one colour per row.
+- Text is written with a glyph blit that shifts by `(x mod 8)`; each char costs 8 byte-writes
+  + a masked merge on the straddled cell. Black paper only on text rows (log, info line,
+  page), so no ink/paper clash.
+- Fonts are drawn into **both** screens (double buffer) so glyph data sits in **always-mapped
+  bank 2** (768 B + menu font TBD; game.md §11.2).
+- **Messages:** one log line, ≤ 32 chars, upper case, no wrapping. Examples:
+  `GOBLIN ATTACKS YOU AND MISSES.` (30) · `THE FIREBOLT FLIES.` · `THE VAMPIRE TURNS INTO A BAT!`
+  (28) · `NO ARROWS.` · `YOU PICK UP 3 ARROWS.`. Messages longer than 32 chars are not allowed.
 
 ## 6. Icon set
 
 | Icon | Bar | Page / gear | 8×8 (floor) | Ink |
 |---|---|---|---|---|
-| Sword, Staff, Power Strike, Whirlwind, Daggers, Bow | 24×24 | — | dagger/arrow ammo only | `$47`,`$46`,`$42`,`$47`,`$47`,`$06` |
-| Spark / Firebolt / Frost / Drain Life / Lightning | 24×24 | — | — | `$43` / `$42` / `$45` / `$43` / `$47` |
-| Bag | 24×24 | — | — | `$06` |
+| Sword, Staff, Power Strike, Whirlwind, Daggers, Bow | **24×16** | — | dagger/arrow ammo only | `$47`,`$46`,`$42`,`$47`,`$47`,`$06` |
+| Spark / Firebolt / Frost / Drain Life / Lightning | **24×16** | — | — | `$43` / `$42` / `$45` / `$43` / `$47` |
+| Bag | **24×16** | — | — | `$06` |
 | Heart / drop / drumstick / key | 8×8 labels | | | `$42` / `$45` / `$44` / `$46` |
 | Food ×5, potions ×3, scrolls ×3, books, key | 16×16 in a quick slot | 16×16 | yes | per item (rev 1 inks) |
 | Weapons ×6 + 2 unique, armour ×3 + 1, helmets ×2 + 1, charms ×4 + 1 | — | 16×16 (page + gear block) | yes | per item |
-| Empty slot (dotted) | 24 / 16 | 16 | — | `$01` |
+| Empty slot (dotted) | 24×16 / 16×16 | 16 | — | `$01` |
 
-Bytes (E): 12 bar icons × 73 ≈ 0.9 KB, ~44 items × (33 + 9) ≈ 1.8 KB, labels 32 B, so
-≈ 2.7 KB raw, ZX0-packed ~1.6 KB, of cold data in bank 3 (game.md §11.2). They are drawn into bank 5 (the
-compose buffer), so they don't need fixed RAM.
+Bytes (E): 12 bar icons × (48 bitmap + 6 attr = 54) ≈ 0.65 KB, ~44 items × (33 + 9) ≈ 1.8 KB,
+labels 32 B, so ≈ 2.5 KB raw, ZX0-packed ~1.5 KB, of cold data in bank 3 (game.md §11.2). They
+are drawn into bank 5 (the compose buffer), so they don't need fixed RAM. **Fonts are
+separate: bank 2, §5.1.**
 
 ## 7. Inventory page (full screen, play paused)
 
-Unchanged from rev 1 except that the **worn column has 4 slots** (weapon rows 3–4,
-armour 6–7, helmet 9–10, **charm** 12–13). Rows 15–16 of the worn column are now free;
-they show the counters `KEY`, `DAGGERS n`, `ARROWS n`. The bag stays 5×4 = 20 slots at cols
-`13+3i … 14+3i`, rows `3+3j … 4+3j`. Stats are at rows 15–17. The verb strip is row 19:
-food `EAT QUICK DROP`, potion `DRINK QUICK DROP`, scroll/book `READ DROP`, bag gear
-`EQUIP DROP`, worn gear `REMOVE`. The description is rows 21–22 and the hint row 23.
-Controls are as in rev 1 (directions move, ←/→ pick the verb, FIRE confirms, FIRE+↓ backs
+Layout as rev 2 (**4 worn slots**: weapon rows 3–4, armour 6–7, helmet 9–10, **charm**
+12–13; bag 5×4 = 20 slots at cols `13+3i … 14+3i`, rows `3+3j … 4+3j`), **but all text is the
+6×8 text font** (user, round 5): labels, names, stats, counters, the verb strip and the
+description, so a row holds **42 chars** and the page can say more. Rows 15–16 of the worn
+column show the counters `KEY`, `DAGGERS n`, `ARROWS n` (`NO ARROWS` in `$02` at 0). Stats at
+rows 15–17. The verb strip is row 19: food `EAT QUICK DROP`, potion `DRINK QUICK DROP`,
+scroll `READ QUICK DROP`, book `READ DROP`, bag gear `EQUIP DROP`, worn gear `REMOVE`.
+**Larger icons (round 5; engineer/artist to size):** the selected item is shown magnified
+2× (32×32, cols 0–3, rows 20–23) beside its description (rows 20–22, cols 5–31 ≈ 36 chars × 3
+lines, hint on row 23). Colour rule §5.1 applies: one colour per row, or words on 24-px
+boundaries. Controls as rev 1 (directions move, ←/→ pick the verb, FIRE confirms, FIRE+↓ backs
 out). A verb that changes the game state costs 1 turn, applied on return to play.
 
 ## 8. Decisions taken in this revision
 
 - 2×9 + 6. The jump is 16 px; the decision is accepted in game.md §2.4.
-- 24×24 icons, 2-row log, and gear as 16×16 with 4 slots (charm: user agreed).
+- **Rev 3 (round 5 approved):** panel = 10 icons 24×16, depth + key at cols 30–31, info line
+  on row 20, bars + hunger word + ammo on row 21, 2-row log (cols 0–23) + 4 gear icons 16×16
+  (cols 24–31), ornament on row 17. Custom 6×8 text font and 8×16 menu font, in bank 2.
+  Colour rule: one colour per row or words on 24-px boundaries. Mage keeps the BAG icon.
+- 2-row log, and gear as 16×16 with 4 slots (charm: user agreed).
 - 64 tile ids, split into 32 common and 32 per-level, with 8 sets in bank 7.
 - Door 2 cols, belonging to the connection.
 - 8 per-level colour schemes.
 - The tall torch is in the catalogue.
 - **Rev 2b:** black walls with dithered brick patches; projectiles and impacts as sprites;
-  the Mage bar has 5 spells and no bag icon.
+  the Mage bar has 5 spells (rev 3: and keeps the bag icon).
 - Staff swing has its own frame.

@@ -4,6 +4,10 @@
 > **Rev 2 (2026-10-01):** user answers applied. 8 levels; 2 unique bosses + golden bosses;
 > monster resistances and Drain Life; projectiles and impacts are real sprites; black walls
 > with dithered brick patches (concept-screen §3.3).
+> **Rev 3 (2026-10-02):** round-4/5 review applied. Approved 9+9+6 panel (24×16 icons, info
+> line, 16×16 gear); custom 6×8 text font + 8×16 menu font (§3.4); Mage keeps BAG (10 icons);
+> Zombie → **Vampire**; gold glow = SYNC; ZX0 in blocks of 3–4 frames (§11); **finite
+> ammunition** (§6.3, §8.5); Death Knight redesigned (5 frames); hunger stage names.
 > It supersedes `prototype.md` wherever they differ. Anything not restated here keeps the
 > PROTO rule: turn phases §3.2, ladders §3.4, the follow and materialise rules §3.7, F9
 > zoning §4, frame rules §5.1–§5.4, line of attack §6.1, AI §6.4, the animation state
@@ -158,16 +162,17 @@ in a row" caps flight speed at 7 cols per 2 turns.
 | Jump | ↖ ↗ | Q+O, Q+P | — |
 | Wait | ↓ with no ladder below | A | `.` |
 | Use the selected icon toward your facing | FIRE **tap** (fires on release, no direction pressed while held) | SPACE | ENTER |
-| Move the icon cursor (no turn passes) | FIRE held + ← → (repeat after 10 ticks, then every 4) | — | `1`–`8` |
-| Inventory page | FIRE held + ↓ (Warrior also: FIRE on the BAG icon) | — | `I` |
+| Move the icon cursor (no turn passes) | FIRE held + ← → (repeat after 10 ticks, then every 4) | — | `1`–`9`, `0` (= slot 10) |
+| Inventory page | FIRE held + ↓ (or FIRE on the BAG icon) | — | `I` |
 | Pause (Resume / Quit) | FIRE held + ↑ | — | BREAK |
 | Page: move / verb / confirm / back | directions / ← → / FIRE / FIRE held + ↓ | same | — |
 | Close door, hit the Book | FIRE on the melee icon / bump | — | — |
 | Pickups | automatic at the end of a turn | — | — |
 
-- ↙/↘ act as ←/→. Opposite keys cancel (F7). The cursor **skips unlearned slots**.
-- **The Mage bar has no BAG icon:** its 8 slots are full (§6). The gesture is taught by the
-  first-turn message `FIRE+DOWN: BAG`.
+- ↙/↘ act as ←/→. Opposite keys cancel (F7). The cursor **skips unlearned slots** (empty
+  outlines) but **does not skip greyed ones** (you may select a greyed icon to read its info
+  line; FIRE on it is illegal, costs no turn, and prints the reason, e.g. `NO ARROWS`).
+- **Both bars have a BAG icon** (Warrior slot 9, Mage slot 10). Layouts: §3.5.
 
 ### 3.2 Main menu (bank 3, cold)
 
@@ -182,6 +187,61 @@ WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|
 - Redefine asks for UP, DOWN, LEFT, RIGHT, FIRE (no duplicates).
 - START seeds the RNG → generates D1 → play.
 
+### 3.3 Panel at a glance (layout: concept-screen §5; approved round 5)
+
+Rows 18–19: **10 icons 24×16** (cols `3i … 3i+2`), cols 30–31 = depth + key icon. Row 20: the
+**info line** (selected icon's name, MP cost, range, bounces/notes). Row 21: HP / MP / FOOD
+bars (32 px each) with numbers, the **hunger stage word**, the Warrior's ammo. Rows 22–23:
+2-row message log (cols 0–23) + **4 worn-gear icons 16×16** (cols 24–31). Row 17 (the
+storey-1 floor) carries the panel ornament.
+
+### 3.4 Text and fonts (user, round 5)
+
+| Font | Cell | Used for | Capacity |
+|---|---|---|---|
+| **Text font** (custom) | **6×8** px, ASCII 32–127 (96 glyphs, **768 B**) | message log, info line, inventory page (labels, descriptions, counters) | log **32 chars per line** (192 px, cols 0–23); info line **42 chars** (252 px); page rows 42 chars |
+| **Menu font** (custom) | **8×16** px (title may be 16×16 glyphs) | main menu, hero/controls select, redefine, pause, `DEPTH n` card, death and win screens | 32 chars per line; ~11 lines. Size **TBD by the artist** (≈ 64 glyphs × 16 B = 1 KB; caps, digits, punctuation only) |
+
+**Colour rule (attributes are 8 px, text is 6 px).** The lcm is 24 px. A text row therefore
+has **one colour for the whole row**, or coloured words start on **24-px boundaries (every 4
+chars: char index 0, 4, 8 … )**. Never recolour mid-cell. The log uses one colour per row
+(newest row `$47`, older row `$07`). The info line uses 3 fixed fields (name `$47` at chars
+0–15; numbers `$46` from char 16; notes `$45` from char 28).
+
+**Message limits (rev 3).** Every message is **one log line, ≤ 32 chars, upper case**. A
+message that would exceed it must be reworded in the table below; there is no wrapping.
+Examples (all ≤ 32): `YOU HIT THE GOBLIN.` · `THE GOBLIN MISSES YOU.` ·
+`DEATH KNIGHT PARRIES!` · `YOU THROW A DAGGER.` · `YOU GRASP LITTLE OF IT.` ·
+`THE BOOK IS DESTROYED` (21) · `NO ARROWS.` · `QUIVER FULL.` · `THE VAMPIRE TURNS INTO A BAT!` (28) · `YOU PICK UP 3 ARROWS.` ·
+`FOOD: HUNGRY.` The death line moves to the menu font: `KILLED BY …` ≤ 32 chars, with the
+monster name abbreviated by a table if longer than the budget.
+
+**Placement (memory).** Both fonts are drawn into **both** screens (double buffer), so the
+glyph data must live in **always-mapped RAM (bank 2)**, not in a paged bank. Budget table:
+§11.2.
+
+### 3.5 Icon bars (10 slots; `$` = ink, concept-screen §6)
+
+| Slot | **Warrior** | **Mage** |
+|---|---|---|
+| 1 | Sword | Staff |
+| 2 | Power Strike | Spark |
+| 3 | Whirlwind | Firebolt |
+| 4 | Daggers | Frost Shard |
+| 5 | Bow | Drain Life |
+| 6 | Quick food | Lightning |
+| 7 | Quick potion | Quick food |
+| 8 | Quick scroll | Quick potion |
+| 9 | **Bag** | Quick scroll |
+| 10 | (empty outline; spare) | **Bag** |
+
+- The Warrior has 9 icons (a spare 10th). The Mage has all 10.
+- **Quick scroll** (new slot, needed to hold the scroll icon the approved panel shows): FIRE
+  reads the quick scroll (1 turn; same effect as `READ` on the page). Auto-fill: the stack
+  with the most scrolls, ties → Teleport, Fear, Enchant. `QUICK` on the page pins a type.
+  It greys out with no scroll.
+- Unlearned ability slots draw an empty outline and are skipped by the cursor.
+
 ---
 
 ## 4. Classes
@@ -193,8 +253,9 @@ WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|
 | Melee | Short Sword 1d6, reach 1 | Oak Staff 1d4, reach 1, own **STAFF_SWING** frame. Never greys out (the 0-MP fallback) |
 | MP regen | +1 per 8 turns | +1 per 5 turns |
 | Mana use | 2 power attacks (§6.2) | 5 spells (§6.1) |
-| Ranged | **throwing daggers** (range 6) + **bow** (range 14), §6.3 | spells |
-| Start kit | 3 daggers, 8 arrows, 1 Heal, 1 Apple | 1 Heal, 1 Mana, 1 Apple |
+| Finite supplies | daggers, arrows (§6.3) | spell books/scrolls are found, never bought (§5) |
+| Ranged | **throwing daggers** (range 6) + **bow** (range 14), both **finite** (§6.3) | spells |
+| Start kit | **3 daggers, 6 arrows**, 1 Heal, 1 Apple | 1 Heal, 1 Mana, 1 Apple |
 | Class book per level | D1 Power Strike · D2 Vigor · D3 Whirlwind · D4–D7 Vigor | D1 Spark · D2 Firebolt · D3 Frost Shard · D4 **Drain Life** · D5 Lightning · D6–D7 Tome of Power |
 
 - **Growth: no XP.** Progress comes from books, gear and boss kills.
@@ -209,7 +270,7 @@ WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|
 
 | Rule | Decision |
 |---|---|
-| Source | Abilities come **only** from books. Melee is always available |
+| Source | Abilities come **only** from books **found in the dungeon** (nothing is bought or granted). Melee is always available. Scrolls and ammunition are likewise found only (§8.5) |
 | Placement | **Exactly 1 class book per level, D1–D7** (class-aware, table §4). **The D1 book lies in the start room.** D8 has none |
 | Reading | Page verb `READ`, 1 turn on return. Learns the ability (fills its bar slot); the book is consumed |
 | Other class's book | 50 % per level. `READ` → "YOU GRASP LITTLE OF IT": Warrior +1 max MP, Mage +2 max HP; the book crumbles |
@@ -280,8 +341,8 @@ sprite. **≤ 3 tracks at once**; more are queued.
 
 - Cast: CAST1 2 → CAST2 3 ticks, with the hero flashing the spell ink. The projectile spawns
   on the CAST2 tick. No per-spell cast frames.
-- **Mage bar = staff + 5 spells + food + potion** (8 slots). Drain Life is **added**, not
-  swapped for anything; the BAG icon leaves the Mage bar (§3.1).
+- **Mage bar = staff + 5 spells + food + potion + scroll + bag** (10 slots, §3.5). Drain
+  Life is **added**, not swapped for anything.
 
 ### 6.2 Warrior power attacks (MP) and melee
 
@@ -297,13 +358,38 @@ A power attack with no target is illegal (no turn, no MP).
 
 | | Throw dagger | Bow |
 |---|---|---|
-| Ammo | `DAGGERS` 0–9 (counter) | `ARROWS` 0–30 (counter) |
+| Ammo (counter) | `DAGGERS` **0–9** | `ARROWS` **0–24** |
+| Start | **3** | **6** |
 | Range / to-hit / dmg | 6 / atk+1 / 1d4+2 PHYS | 14 / atk / 1d6+1 PHYS |
-| Recovery | **always**: it lands under the impact cell or at the range end | consumed |
 | Frames | WIND-UP → **THROW** 32×48 | **BOW** 32×48 |
 | Projectile sprites | dagger_spin1/2 8×8 `$47` | arrow1/2 16×8 `$07` → arrow_hit 8×8 |
 
 Both are legal with no target. Axe throwing is dropped (daggers only).
+
+**Finite ammunition (user, rev 3).** The Warrior's ranged play is a resource, not a free
+attack. Rules:
+
+| Rule | Dagger | Arrow |
+|---|---|---|
+| Spent | −1 on every throw/shot | −1 on every shot |
+| **On a hit** | lost **1 in 4** (RNG), else drops as a floor item under the target's feet | **always broken** (consumed) |
+| **On a miss** | lost **1 in 4**, else lands at the impact cell (wall cell: the free cell in front; range end: that cell) | **50 % recoverable**: lands like a dagger; else broken |
+| Recovery | walk over it: normal auto-pickup, +1 each | same |
+| Lost in a pit column | always lost (falls away) | always lost |
+| Floor list full (§8.5, 32) | lost | lost |
+
+- Expected throws per found dagger ≈ 4 (a 25 % loss per throw), so a small supply stays
+  useful but really does run out. Arrows are ≈ 1 shot each, ~1.3 with misses.
+- **Stack limits:** `DAGGERS` 9, `ARROWS` 24. Pickup takes what fits; the remainder stays on
+  the floor and `QUIVER FULL.` prints.
+- **At 0 ammo:** that icon **greys out** (`$07`; selected+greyed `$0F`), FIRE on it is
+  illegal (no turn, no MP) and prints `NO DAGGERS.` / `NO ARROWS.`. **Melee is always
+  available** (the sword icon never greys). Info line shows `NONE LEFT`.
+- Dropped-ammo floor items merge into one stack per cell and are drawn as the 8×8
+  dagger/arrow item glyph.
+- Skeleton Archers' arrows are not recoverable (monster projectiles leave no item); the
+  Archer's own drop is the supply (§8.5, §9.1).
+- The **Mage has no ammunition**; his limit is MP and the found books/scrolls.
 
 ---
 
@@ -318,12 +404,15 @@ Both are legal with no target. Axe throwing is dropped (daggers only).
 
 **Hunger** (`FOOD` 0–100, start 80): burns −1 per **6 turns**, a jump −2 extra. **Never fatal.**
 
-| Stage | FOOD | Effects | Bar attr |
+The stage word is shown on the panel (row 21, 6 cells max, in the stage's attr). **Four
+distinct stages, each name ≤ 6 chars:**
+
+| Stage (panel word) | FOOD | Effects | Bar + word attr |
 |---|---|---|---|
-| Fed | 50–100 | **HP +1 per 12 turns** (user: agreed) | `$44` |
-| Peckish | 25–49 | no HP regen | `$46` |
-| Hungry | 10–24 | atk −1, MP regen halved | `$42` |
-| Weak | 0–9 | atk −2, eva −1, dmg −1 (min 1), no MP regen, no jump | `$42` + message every 50 turns |
+| **FED** | 50–100 | **HP +1 per 12 turns** (user: agreed) | `$44` |
+| **OK** (was Peckish) | 25–49 | no HP regen | `$46` |
+| **HUNGRY** | 10–24 | atk −1, MP regen halved | `$42` |
+| **WEAK** | 0–9 | atk −2, eva −1, dmg −1 (min 1), no MP regen, no jump | `$42` + message every 50 turns (`YOU ARE WEAK WITH HUNGER.`) |
 
 | Food | FOOD | Source |
 |---|---|---|
@@ -340,8 +429,10 @@ Per level (E): ~450 turns ≈ 75 FOOD burned. Supply: 3–4 floor items + drops 
 ## 8. Items and inventory
 
 - **Bag: 20 slots** (5×4 page grid), same-type stacks to 9.
-- Ammo and the **level key** are counters outside the bag.
-- Pickup is automatic. A full bag prints `BAG FULL`.
+- Ammo (`DAGGERS`, `ARROWS`) and the **level key** are counters outside the bag.
+- Pickup is automatic. A full bag prints `BAG FULL.`
+- Everything the hero uses is **found**: books, scrolls, ammunition, gear. Nothing is
+  sold or regenerated.
 
 **Worn slots: 4** (user: agreed): weapon · armour · helmet · **charm** (ring *or* amulet).
 
@@ -367,11 +458,26 @@ Weapons are class-locked; everything else is not.
 - FOOD: the smallest FOOD value first.
 - POTION: Heal, else Mana, else Cure.
 - `QUICK` on the page pins a type until its stack runs out.
-- Scrolls get no quick slot.
+- SCROLL: the largest stack, ties Teleport → Fear → Enchant (§3.5). Quick scroll = read.
 
-**Per level** (floor list ≤ 32 entries): food 3–4 · potions 2–3 (≥ 1 Heal) · scroll 1 ·
-gear 1–2 (depth-gated) · class book 1 (D1–D7) · other-class book 0–1 · key 1 ·
-Warrior ammo 2 stacks.
+### 8.5 Per-level placement (floor list ≤ 32 entries)
+
+Food 3–4 · potions 2–3 (≥ 1 Heal) · **scrolls 1–2** (rev 2: 1; E: 1–2 keeps the quick
+slot alive) · gear 1–2 (depth-gated) · class book 1 (D1–D7) · other-class book 0–1 ·
+key 1 · **ammunition (rev 3; Warrior runs only: a Mage run generates no ammo entries):**
+
+| Item | Per level | Notes |
+|---|---|---|
+| **Dagger stack** | **1 stack of 2–3** (`1d2+1`) on D1–D7; none on D8 | placed in a random non-start, non-lair room |
+| **Arrow stack** | **1 stack of 5–8** (`1d4+4`) on D1–D7; D8 none | same |
+| Skeleton Archer drop | Arrows ×3, 1/2 | D4, D5, D7 (§9.1) |
+| Thrown-and-recovered | per §6.3 | not a placement; uses floor-list slots |
+
+Supply estimate (E, whole run): daggers ≈ 3 + 7 × 2.5 ≈ 20 found + recoveries (×4 throws
+each ≈ 80 throws if all are used); arrows ≈ 6 + 7 × 6.5 ≈ 52 found + ~9 from Archers.
+With ~14 monsters per level and ~65 % to-hit, a level's ~6 arrows kill about one monster, so
+ranged play is a **tool for the dangerous kinds** (archers, casters, the Ogre's approach),
+not a replacement for the sword. The stack caps (9 / 24) make hoarding a loss.
 
 ### 8.6 Bosses and unique gear (every level; never follow; death opens the grate)
 
@@ -379,7 +485,7 @@ Warrior ammo 2 stacks.
 |---|---|---|---|
 | D1 | Golden Goblin King | golden Goblin | **Goblin King's Helm**: helmet DEF 1, eva +1 |
 | D2 | Golden Spider Queen | golden Spider | **Silk Cloak**: armour DEF 1, eva +2, poison-immune |
-| D3 | Golden Rotting Lord | golden Zombie | **Gravecloak**: armour DEF 2, DRAIN R, DARK R |
+| D3 | Golden Vampire Lord | golden Vampire | **Gravecloak**: armour DEF 2, DRAIN R, DARK R |
 | D4 | **Ogre Warlord** | **unique** | **Warlord's Cleaver** (W: 1d10+1, atk+1) / **Bone Staff** (M: 1d6, spells +2) |
 | D5 | Golden Pharaoh | golden Mummy | **Scarab Amulet**: charm, MP regen ×2, FOOD burn ×½ |
 | D6 | Golden High Necromancer | golden Necromancer | **Ring of the Grave**: charm, DARK I, MP+2 |
@@ -396,8 +502,8 @@ Warrior ammo 2 stacks.
   - When it is stationary, only its **footprint attrs** are rewritten at ~0.12k T/cell
     (**M**, incl. the attr-only present copy): **~2.2k T per step** for a 3×6 boss, ≤ 2.9k
     for a 4×6 one. That is ≤ 1.5k T/tick on average.
-  - Pattern: SYNC (all cells together) or a diagonal SWEEP. The artist picks; the cost is
-    the same.
+  - Pattern: **SYNC only** (all footprint cells step together; user decision, rev 3). No
+    diagonal sweep.
   - The hit flash overrides it. `$06`/`$46`/`$47` join the legality set.
   - Weight +1 (§9.3).
 
@@ -420,7 +526,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Goblin | 24×32 | 6 | 1 | 1 | 0 | 1d4 | 3 | walker, climber, opener | chase | Apple 1/4 | D1, D2 |
 | Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker | hit **poisons** (−1 HP / 3 turns, ×3) | — | D2, D4, D5 |
 | Skeleton | 24×48 | 10 | 2 | 2 | 1 | 1d6 | 5 | walker, climber, opener | chase | — | D3, D5, D8 |
-| Zombie | 24×48 | 14 | 1 | 0 | 0 | 1d6 | 5 | walker, acts every 2 | hit poisons 1/4 | — | D3, D6, D8 |
+| **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | walker, opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
 | Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift | — | D3, D6–D8 |
 | Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, climber, opener | chase | Meat 1/3 | D4, D6, D7 |
 | Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, climber, opener | ranged | Arrows ×3 1/2 (W) | D4, D5, D7 |
@@ -428,6 +534,11 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener | ranged, cooldown 2 | Mana 1/3 | D6–D8 |
 | **Ogre Warlord** (unique) | **32×48** | 40 | 5 | 1 | 2 | 1d10+2 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg | unique | D4 |
 | **Death Knight** (unique) | 24×48 | 50 | 6 | 3 | 3 | 1d10+3 | 5 | walker, climber, lair only | chase; **parries** 1 in 3 PHYS hits (BLOCK frame, 0 dmg) | unique | D7 |
+
+**Death Knight silhouette (round 4/5):** an evil twin of the Warrior with a clearly distinct
+outline: a **two-handed greatsword** (blade carried upright above the shoulder when walking,
+chopped down in CLEAVE) and a **horned, crowned helm**. Do not reuse Knight frames. **5 frame
+ids:** WALK1, WALK2, CLEAVE, BLOCK, DEAD (the rev-2 WIND-UP is dropped; HURT = flash).
 | **Necromancer Archmage** | 24×48 | 40 | 4 | 3 | 1 | 1d6; Death Bolt 1d8+3 DARK r28, 1 bounce | **6** | teleports, never walks | boss caster | — | D8 |
 
 Opener = it can open closed doors (1 turn). Locked/sealed doors stop all monsters. The
@@ -442,7 +553,7 @@ Ogre and Death Knight scale by depth like the rest.
 | Slime | R | W | | | | |
 | Spider | | W | | | | |
 | Skeleton, Skeleton Archer | | | **I** | | **I** | I |
-| Zombie | | W | **I** | | **I** | I |
+| Vampire (undead set) | | **W** | **I** | | **I** | I |
 | Ghost | R | | I | **X** | I | I |
 | Orc | | R | | | | |
 | Mummy | R | W | I | | I | I |
@@ -477,6 +588,20 @@ Design intent:
 3. Hero adjacent → **teleport** to the other storey (cooldown 4; attr flash).
 4. Melee, else wait.
 
+**Vampire** (D3, D6, D8; and the golden Vampire Lord). Humanoid form is the Vampire kind;
+**bat form reuses the Bat kind's frames and movement** (flyer, erratic, bat attack 1d2),
+while keeping the Vampire's current hp, resistances and its encounter-cap weight (it never
+frees cap room). Transforming costs its whole turn and prints `THE VAMPIRE TURNS INTO A
+BAT!`. Bat form heals nothing; the drain bite exists only in humanoid form. First match:
+1. **Flee:** humanoid, hp ≤ ⅓ max (E: 5 of 14), the hero in reach or in line, and it has
+   not fled yet → bat, runs away erratically (away from the hero) for **8 turns**, then
+   reverts to humanoid (once per life; the golden Lord may flee once too).
+2. **Close distance:** humanoid, hero on the **other storey** or across a pit (no walk path
+   shorter than 12 cols), gap ≤ 10 cols → bat and flies at the hero. It reverts to
+   humanoid when within 2 cols of the hero on the same storey (costs its turn).
+3. Otherwise humanoid chase and bite.
+Flying over a pit is fine (flyer rules); on a ladder it cannot attack, as for any body.
+Bosses never follow, so the Lord's bat form stays in its lair.
 **Ogre:** a SLAM turn plays RAISE → SLAM.
 **Death Knight:** a parry plays BLOCK and prints `PARRIED`.
 
@@ -504,12 +629,12 @@ Followers: prototype §3.7 + this cap. **Bosses never follow.**
 |---|---|---|---|
 | D1 | Rat, Bat, Slime, Goblin | 11 | Golden Goblin King |
 | D2 | Goblin, Spider, Bat, Rat | 12 | Golden Spider Queen |
-| D3 | Skeleton, Zombie, Ghost, Bat | 12 | Golden Rotting Lord |
+| D3 | Skeleton, Vampire, Ghost, Bat | 12 | Golden Vampire Lord |
 | D4 | Orc, Rat, Spider, Skeleton Archer | 13 | **Ogre Warlord** |
 | D5 | Mummy, Skeleton, Skeleton Archer, Spider | 13 | Golden Pharaoh |
-| D6 | Zombie, Ghost, Necromancer, Orc | 14 | Golden High Necromancer |
+| D6 | Vampire, Ghost, Necromancer, Orc | 14 | Golden High Necromancer |
 | D7 | Orc, Skeleton Archer, Ghost, Necromancer | 14 | **Death Knight** |
-| D8 | Necromancer, Skeleton, Ghost, Zombie | 10 + Archmage (+ ≤ 2 summons) | Archmage |
+| D8 | Necromancer, Skeleton, Ghost, Vampire | 10 + Archmage (+ ≤ 2 summons) | Archmage |
 
 ---
 
@@ -522,7 +647,7 @@ keeps pace.
 |---|---|---|---|
 | D1 | 24/6 · 16/12 | soft | the D1 book in the start room |
 | D2 | 27/7 · 19/13 | poison | Cure; Firebolt (Spider W) |
-| D3 | 33/9 · 22/14 | first undead: Frost/Drain are useless | Firebolt (Zombie W); Whirlwind |
+| D3 | 33/9 · 22/14 | first undead: Frost/Drain are useless | Firebolt (Vampire W); Whirlwind |
 | D4 | 36/10 · 25/15 | archers, Ogre 43 hp | Drain Life on living Orcs/Ogre; close doors; bow |
 | D5 | 42/12 · 28/16 | Mummy PHYS R, curse | Lightning; fire on Mummies; Scarab next |
 | D6 | 48/14 · 31/17 | casters, ghost reflecting Lightning | Ring of the Grave; Firebolt on ghosts |
@@ -543,35 +668,46 @@ Verify with ≥ 5 seeds × 2 heroes before Stage 3 exit.
 
 - Source = `W/8 × H × 2`. Pool: stationary = 2 × source; moving = 2 × source + 2 × source ×
   (cols+1)/cols; projectiles = 2 × source (one shift).
-- Sources ZX0 ~1.7× (E).
+- **ZX0 format (rev 3, A4 measured; supersedes rev 2's per-frame packing).** Sources are
+  packed in **blocks of 3–4 frames per kind**. The generator unpacks one block into the
+  **1.5 KB `GEN_SCRATCH`** (aliasing `ROOM_MAP`+`NEXT_MAP`, memory-map; legal because the
+  generator never runs mid-room), then reads the frames out of it. Rev 2 unpacked each frame
+  into the 512 B `GEN_SRC`. Measured ratios: **1.80× per frame, 2.71× per kind block**
+  (concept data 1.69×). A block must unpack to ≤ 1,536 B; a kind whose 3–4 frames exceed it is
+  split into two blocks (the packer asserts). Budget below keeps the **conservative 1.7×**
+  and reports the block gain as slack.
 
 ### 11.1 Frame ids and bytes (new)
 
 | Owner | Frames | Ids | Source raw | Pool |
 |---|---|---|---|---|
-| Monsters drawn **M**: Zombie, Mummy, Orc, Necromancer, Spider 5 each; Archer 4 (HURT/DEAD = Skeleton) | WALK×2, ATTACK, HURT, DEAD | 29 | ~8,000 **M** | 4.2–4.6 KB per kind, Spider 2.75 **M** |
+| Monsters drawn **M**: **Vampire**, Mummy, Orc, Necromancer, Spider 5 each; Archer 4 (HURT/DEAD = Skeleton) | WALK×2, ATTACK, HURT, DEAD | 29 | ~8,000 **M** | 4.2–4.6 KB per kind, Spider 2.75 **M** |
 | Mage drawn **M** | STAFF_SWING **40×48** | 1 | 480 | 960 |
 | Warrior **M** (round 3) | JUMP1, JUMP2 24×48, POWER_STRIKE 40×48 (ax 4), WHIRL 40×48 (ax 8), THROW 32×48, BOW 32×48 | 6 | 2,304 | **5,568** |
 | Mage **M** | JUMP1, JUMP2 | 2 | 576 | 1,920 |
 | Archmage **M** | IDLE 24×48, CAST 40×48 (HURT = flash, DEAD = Necro) | 2 | 768 | 1,536 |
 | **Ogre Warlord**, to draw | WALK1/2 32×48 (M), RAISE 40×48, SLAM 40×48, HURT 32×48, DEAD 40×16 | 6 | 2,272 | 6,464 |
-| **Death Knight**, to draw | WALK1/2 24×48 (M), WIND-UP 32×48, CLEAVE 40×48, BLOCK 32×48, DEAD 40×16 (HURT = flash) | 6 | 1,984 | 5,504 |
+| **Death Knight**, to draw (redesign: greatsword, horned crowned helm) | WALK1/2 24×48 (M), CLEAVE 40×48, BLOCK 32×48, DEAD 40×16 (HURT = flash) | **5** | ~1,830 (E, artist confirms) | **5,184** |
 | **Spell sprites, lean set M** (round 3) | Spark fly ×2 + fizz, Firebolt fly ×2 + burst, Frost fly + crack, Lightning fly ×2 + flash, Drain fly ×2 + hit (11 already drawn) | 14 | 464 | 1,696 |
 | Other projectile/impact sprites **M** | power burst 1, necro bolt 3 (Death Bolt = same frames, `$43`), arrow 2 + hit 1, dagger spin 2 (4 → 2), staff bonk 1 | 10 | ~370 | ~740 |
 | Golden bosses | recolour + glow | 0 | 0 | 0 |
-| **Total new** | | **76** | **~17.2K raw → ~10.1K ZX0 (E)** | projectiles ~2.4 KB resident on every level |
+| **Total new** | | **75** | **~17.0K raw → ~10.0K ZX0 at 1.7× (E); ~6.3K at the 2.71× block ratio** | projectiles ~2.4 KB resident on every level |
+
+The Vampire's bat form reuses the Bat kind's frames: **0 new ids**. A level with a Vampire
+therefore needs the **Bat set resident too** (D6 and D8; D3 already has it): +2.0 KB pool
+(§11.3).
 
 ### 11.2 Limits vs need
 
 | Store | Budget limit | Need | Verdict / change |
 |---|---|---|---|
-| Frame ids | 28 free (`FRT_MAX` 96, 68 used) | 68 + 76 = **144** | **`FRT_MAX` → 160**: +64 × 16 B = **+1,024 B bank 2**. 16 spare |
+| Frame ids | 28 free (`FRT_MAX` 96, 68 used) | 68 + 75 = **143** | **`FRT_MAX` → 160**: +64 × 16 B = **+1,024 B bank 2**. 16 spare |
 | Kind ids | 16 | 2 heroes + Rogue hole + 12 monster kinds + Archmage + Ogre + Death Knight = **18** | **`kind_tab` → 32**: **+256 B bank 2**. The resistance table adds ~60 B (3 B/kind) |
-| Bank 2 | ~0.87K + ~2.1K freed by the cold-code move ≈ 3.0K | FRT +1,024, kinds +256, resist ~60 = **1.34K** | Fits, ~1.6K left for new hot code. **The static frame descriptors (24 B/frame) must leave bank 2**: 146 × 24 = 3.5K. The engineer trims them to ≤ 12 B (W, H, ax, class/sym, source bank+offset) → 144 × 12 ≈ 1.75K, moved to **bank 5** next to the generator that alone reads them |
-| Bank 5 low RAM | ~6.1K | generator + boot ~2.1K, ZX0 + `GEN_SRC` 0.6K, tile glyphs 0.6K, level state 0.6K, frame descriptors ~1.75K | ~5.65K, fits, **0.45K margin** |
-| Sources + cold data (banks 1+3) | 32,768 − AY reserve | existing 16,899 → ~9.9K ZX0 + new ~10.1K ZX0 + menus code ~2.0K + icons ~2.7K → 1.6K ZX0 + strings ~2.9K → 1.7K ZX0 = **25.3K** | With AY at 8 KB (24.6K free): **0.7K over**. **Change: AY reserve 8 → 7 KB** (player ~2K + in-game music ~4K + FX ~1K still fit, budget §5) → 25.6K, ~0.3K margin |
+| Bank 2 | ~0.87K + ~2.1K freed by the cold-code move ≈ 3.0K | FRT +1,024, kinds +256, resist ~60 = **1.34K**; **text font 768 B** (6×8 × 96, rev 3); **menu font ~1 KB (size TBD by the artist)** | Fonts must be in always-mapped RAM (drawn into both screens). 1.34 + 0.77 = 2.11K, **~0.9K left** — the ~1 KB menu font would **not fit** on top. **Open (engineer/artist):** menu font ≤ ~0.8 KB (≈ 50 glyphs × 16 B: caps, digits, minimal punctuation), or menu screens draw into one screen only and the menu font lives in a paged bank (menus are static, no double buffer needed). The text font is fixed. **The static frame descriptors (24 B/frame) must leave bank 2**: 146 × 24 = 3.5K. The engineer trims them to ≤ 12 B (W, H, ax, class/sym, source bank+offset) → 144 × 12 ≈ 1.75K, moved to **bank 5** next to the generator that alone reads them |
+| Bank 5 low RAM | ~6.1K | generator + boot ~2.1K, ZX0 + `GEN_SRC` 0.6K (rev 3: the scratch is the 1.5 KB `GEN_SCRATCH`, **aliasing `ROOM_MAP`/`NEXT_MAP` → 0 extra bytes**; only the decompressor ~0.1K stays here), tile glyphs 0.6K, level state 0.6K, frame descriptors ~1.75K | ~5.65K, fits, **0.45K margin** |
+| Sources + cold data (banks 1+3) | 32,768 − AY reserve | existing 16,899 → ~9.9K ZX0 + new ~10.1K ZX0 + menus code ~2.0K + icons ~2.7K → 1.6K ZX0 + strings ~2.9K → 1.7K ZX0 = **25.3K** | With AY at 8 KB (24.6K free): **0.7K over**. **AY reserve 7 KB (user: approved)** (player ~2K + in-game music ~4K + FX ~1K still fit, budget §5) → 25.6K, ~0.3K margin **at the conservative 1.7×**. With the rev-3 block packing (2.71× measured on kind data) the expected total is ~18–20K, i.e. ≥ 5K of real margin; the 1.7× row stays the build gate until A5 reports actual sizes |
 | Bank 7 spare | 2,656 | **8 per-level tilesets 2,304** | Fits (cold, copied at level start; never drawn into bank 7) |
-| Pool per level (0/4/6) | 49,152 − hero **18,176** (Knight 12,608 + Warrior 5,568 **M**) − straddle 1,728 − projectiles ~2.4K = **26.8K** | max **D7 22.8K** (§11.3) | **Fits, ≥ 4.0K slack** on every level. Build ASSERT per level |
+| Pool per level (0/4/6) | 49,152 − hero **18,176** (Knight 12,608 + Warrior 5,568 **M**) − straddle 1,728 − projectiles ~2.4K = **26.8K** | max **D8 23.9K** (§11.3; includes the Bat set for the Vampire's bat form) | **Fits, ≥ 2.9K slack** on every level. Build ASSERT per level |
 | Tile ids | 64 | 29 common + ≤ 32 per level | fits (§1.2) |
 | Render tick | ~114k T | §9.3 weights incl. projectiles; gold glow ≤ 1.5k/tick | by construction; E2 measures |
 
@@ -588,22 +724,31 @@ of 1.7×, sources grow by ~2.3K. The levers, cheapest first:
 |---|---|---|
 | D1 | Rat 2.0 + Bat 2.0 + Slime 1.8 + Goblin 5.6 | 11.4 |
 | D2 | Goblin 5.6 + Spider 2.75 + Bat 2.0 + Rat 2.0 | 12.4 |
-| D3 | Skeleton 8.4 + Zombie 4.6 + Ghost 2.9 + Bat 2.0 | 17.9 |
+| D3 | Skeleton 8.4 + Vampire 4.6 + Ghost 2.9 + Bat 2.0 | 17.9 |
 | D4 | Orc 4.6 + Rat 2.0 + Spider 2.75 + Archer 4.4 + Skel HURT/DEAD 0.9 + **Ogre 6.5** | 21.2 |
 | D5 | Mummy 4.6 + Skeleton 8.4 + Archer 4.4 + Spider 2.75 | 20.2 |
-| D6 | Zombie 4.6 + Ghost 2.9 + Necro 4.48 + Orc 4.6 | 16.6 |
-| D7 | Orc 4.6 + Archer 4.4 + Skel HURT/DEAD 0.9 + Ghost 2.9 + Necro 4.48 + **Death Knight 5.5** | **22.8** |
-| D8 | Necro 4.48 + Skeleton 8.4 + Ghost 2.9 + Zombie 4.6 + Archmage 1.54 | 21.9 |
+| D6 | Vampire 4.6 + **Bat 2.0** + Ghost 2.9 + Necro 4.48 + Orc 4.6 | 18.6 |
+| D7 | Orc 4.6 + Archer 4.4 + Skel HURT/DEAD 0.9 + Ghost 2.9 + Necro 4.48 + **Death Knight 5.18** | 22.5 |
+| D8 | Necro 4.48 + Skeleton 8.4 + Ghost 2.9 + Vampire 4.6 + **Bat 2.0** + Archmage 1.54 | **23.9** |
 
-Level-start regeneration (≤ 23 KB) takes ≈ 1.8 s (E), behind a `DEPTH n` card.
+Level-start regeneration (≤ 24 KB, D8) takes ≈ 1.9 s (E; block unpacking is not slower than per-frame), behind a `DEPTH n` card.
 
 ---
 
 ## 12. Open questions for the user
 
-1. **Mage bar:** adding Drain Life means the BAG icon leaves the Mage bar (inventory via
-   FIRE+↓ / `I`). The Warrior keeps it. OK, or should Spark make room instead?
-2. **AY reserve 8 → 7 KB** to fit 8 levels, unique bosses and sprite projectiles. OK?
-3. **Unique bosses:** Ogre Warlord (D4) and Death Knight (D7). OK?
-4. The **8 colour schemes** (§1.2): the 4 new ones are D4 cyan, D6 white, D7 bright blue
-   and D8 magenta. Confirm on the canvas.
+Answered and removed in rev 3: Mage bar keeps BAG; AY reserve 7 KB; Ogre Warlord + Death
+Knight; the 8 colour schemes.
+
+1. **Ammo numbers (§6.3, §8.5):** start 3 daggers / 6 arrows; stack caps 9 / 24; dagger
+   lost 1 in 4 per throw; arrow broken on a hit, 50 % recoverable on a miss; per level 1
+   dagger stack of 2–3 + 1 arrow stack of 5–8 (D1–D7). Confirm, or tune after the 5-seed
+   playtest.
+2. **Quick scroll slot (§3.5):** added to the bar so the approved scroll icon works. Scrolls
+   per level raised 1 → 1–2. OK?
+3. **Vampire (§9.1–9.2):** hp 14, atk 2, 1d6 drain bite, slow in humanoid form, bat form to
+   flee (hp ≤ 5, 8 turns, once) or to close distance. Confirm numbers.
+4. **Hunger stage 2 is named `OK`** (§7). Alternative `SNACKY`/`PECKIS`. OK?
+5. **Menu font size** (§11.2): bank 2 has room for ~0.8 KB of it, not 1 KB. Artist decides
+   the glyph count, or menus move to one-screen drawing.
+6. The Bat set is now resident on D6 and D8 (+2.0 KB pool; D8 = 23.9 KB, still fits).

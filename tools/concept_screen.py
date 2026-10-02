@@ -1467,8 +1467,10 @@ def asset_bytes(art: Art) -> tuple[list[str], dict]:
 
 def main() -> int:
     import concept_r4
+    import concept_fonts
     art = Art()
     concept_r4.load(art)
+    concept_fonts.load(art)
     os.makedirs(OUT, exist_ok=True)
     all_errs, report = [], []
     for lay in ("v1", "v2"):
@@ -1494,6 +1496,9 @@ def main() -> int:
     anim_gif(art, os.path.join(OUT, "decor_anim.gif"))
     all_errs += r2_validate(art) + r3_validate(art) + concept_r4.r4_validate(art)
     e4, rep4 = concept_r4.write_screens(art)
+    ef, repf = concept_fonts.write_all(art)
+    e4 += ef
+    rep4 += repf
     all_errs += e4
     report += rep4
     r2_lines = r2_bytes(art) + r3_bytes(art) + concept_r4.r4_bytes(art)
