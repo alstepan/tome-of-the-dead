@@ -95,7 +95,12 @@ def attr_violations(frame, legal):
             if attr_at(frame, c, r) not in legal]
 
 
+GOLDEN_PROTO = []                             # the Proto in use (A7 sync check)
+
+
 def golden(h, name, data):
+    if GOLDEN_PROTO:
+        GOLDEN_PROTO[0].check_synced(name)
     sha = hashlib.sha256(data).hexdigest()
     path = os.path.join(GOLDEN_DIR, name + ".hash")
     if UPDATE:
@@ -259,6 +264,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         p = T(h)
+        GOLDEN_PROTO.append(p)
 
         # ---------------- 1. boot & select --------------------------------
         if want(1):
@@ -722,6 +728,91 @@ def main():
             g = p.ent(SLOT_GOBLIN)
             h.expect("28 reappears once the hero moved off", bool(g["FLAGS"] & EF_PENDING), False)
 
+        # ---------------- 52 (user bug B7) no old-room monster after a transition
+        # Root cause: render runs first in a tick (A1 RENDER_FIRST), so the
+        # first render after do_exit used the PREVIOUS tick's anim_tick output
+        # (N_VIS / RLIST of the old room): every monster of the room just left
+        # was drawn at its old position on the new room for one tick, then
+        # erased. Followers are irrelevant; the slime (slow, never follows)
+        # shows it. Both scroll directions.
+        if want(52):
+            def ghost_check(tag, slot, key, dest):
+                sl = p.ent(slot)
+                h.expect(f"52 {tag} setup: slime drawn, not in {dest}",
+                         (sl["DVIS"] & 1, sl["ROOM"] != dest), (1, True))
+                old = {(c, r) for c in range(sl["DCOL"], sl["DCOL"] + sl["DCOLS"])
+                       for r in range(sl["DROW"], sl["DROW"] + sl["DROWS"])}
+                p.hold(key)
+                seen, stale, after = [], [], 0
+                for i in range(300):
+                    p.tick()
+                    if i == 1:
+                        p.release()
+                    if p.rb("CUR_ROOM") != dest or p.rb("GAME_STATE") != GS_PLAYING:
+                        continue
+                    after += 1                      # 1 = the tick do_exit ran in
+                    fr = p.frame()                  # the DISPLAYED screen
+                    cov = set()
+                    for s_ in range(16):
+                        e = p.ent(s_)
+                        if not e["DVIS"] & 1:
+                            continue
+                        if e["ROOM"] != dest:
+                            stale.append((after, s_, e["ROOM"]))
+                        else:
+                            cov |= {(c, r) for c in range(e["DCOL"], e["DCOL"] + e["DCOLS"])
+                                    for r in range(e["DROW"], e["DROW"] + e["DROWS"])}
+                    bad = [cr for cr in sorted(old - cov) if not p.is_bg(fr, *cr)]
+                    if bad:
+                        seen.append((after, bad[:3]))
+                    if after >= 4:
+                        break
+                p.release()
+                p.until(lambda: p.idle())
+                h.expect(f"52 {tag} sampled 4 ticks after the transition", after, 4)
+                h.expect(f"52 {tag} no entity of another room drawn", stale[:3], [])
+                h.expect(f"52 {tag} slime's old cells show the new room's background",
+                         seen[:3], [])
+
+            p.boot(K_KNIGHT)
+            p.isolate(keep=(SLOT_SLIME,))
+            p.place(0, 28, 14)                      # A storey 2 -> right exit
+            ghost_check("A->B (horizontal)", SLOT_SLIME, "L", 1)
+            p.isolate()
+            p.place(SLOT_SLIME, 8, 4, room=1)       # B storey 0, far from the shaft
+            p.place(0, 24, 14)
+            ghost_check("B->C (vertical)", SLOT_SLIME, "J", 2)
+
+        # ---------------- 53 (review A7) present keeps up: zap, potion, quaff
+        # Per tick, right after the tick-start present (probe_presented):
+        # displayed bank 7 == composed bank 5, through a wizard zap (overlay
+        # not in DMG_LIST), a potion pickup (shadow_rect + PEND_DMG + message)
+        # and a quaff (attr flash + HUD).
+        if want(53):
+            p.boot(K_WIZARD)
+            p.isolate(keep=(SLOT_RAT,))
+            p.place(0, 6, 14)
+            p.place(SLOT_RAT, 12, 18)            # gap 3: zap
+            p.present_watch(True)
+            p.clear_trace()
+            p.turn("L")
+            zapped = FID["wizard_cast2"] in p.trace_fids(0)
+            p.set_ent(SLOT_RAT, ROOM=NOWHERE)
+            p.place(0, 24, 0)                    # potion 0 at col 28, storey 0
+            for _ in range(3):
+                p.turn("L")
+            pot = p.ent(0)["POT"]
+            p.set_ent(0, HP=5)
+            p.turn("G")
+            p.settle()
+            s_ = p.present_samples
+            p.present_watch(False)
+            h.expect("53 setup: zap cast, potion taken, quaff", (zapped,
+                     pot >= 2, p.ent(0)["HP"] > 5), (True, True, True))
+            h.expect("53 probe_presented sampled every tick", len(s_) >= 20, True)
+            h.expect("53 bank 7 == bank 5 after every tick-start present",
+                     [i for i, d in enumerate(s_) if d][:5], [])
+
         # ---------------- 32 / 33 quaff & full pack --------------------------
         if want(32) or want(33):
             p.boot(K_KNIGHT)
@@ -1025,6 +1116,10 @@ def main():
                   f" {time.monotonic() - Proto._t_last:.1f}s", flush=True)
         print(f"[info] run anomalies (returns outside a probe): {Proto.anomalies}", flush=True)
         h.expect("harness: no run anomalies", Proto.anomalies, 0)
+        # A7: at every wait_tick read during play, displayed bank 7 == bank 5
+        print(f"[info] A7 present checks at goldens (displayed vs composed): "
+              f"{Proto.present_checks}, mismatches {Proto.present_mismatch[:5]}", flush=True)
+        h.expect("A7 present: displayed == composed at every golden", len(Proto.present_mismatch), 0)
         return 0 if h.ok else 1
 
 

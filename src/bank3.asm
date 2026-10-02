@@ -10,7 +10,10 @@
 ; NEXT_MAP and TILE_* are in bank 5, TMP4/TMP5 in bank 2).
 ; FORBIDDEN callees from here (they page $C000): page_bank, shadow_rect,
 ; shadow_room, erase_rect, hide_sprites, draw_room, blit_sprite (use blit_keep),
-; and every bank-5 generator routine (gen_*, alloc*, copy_virt, mirror_src).
+; present / present_full (A7), and every bank-5 generator
+; routine (gen_*, alloc*, copy_virt, mirror_src).
+; A7: everything here draws on the $4000 (bank 5) screen, which is the one
+; displayed while it runs (enter_select / do_exit call show_bank5 first).
 ;
 ; Bank 3 is contended: code fetches here pay ULA contention (cold paths only:
 ; the select screen idles in HALT; the scrolls are dominated by contended

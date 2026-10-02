@@ -279,10 +279,14 @@ exit_h:
 
 ;==============================================================================
 ; build_room_map — tile map of room A into the map at page H (ROOM_MAP/NEXT_MAP).
+; Overwrites GEN_SCRATCH (aliases both maps), so the ZX0 block cache GEN_ZBLK
+; is dropped here too (A6 review: not only in alloc_reset/alloc_restore).
 ; Clobbers: all but IX.   ~40k T (room entry / transition only)
 ;==============================================================================
 build_room_map:
                 ld   (TMP0), a                 ; room
+                ld   de, 0
+                ld   (GEN_ZBLK), de            ; GEN_SCRATCH is about to be overwritten
                 ld   a, h
                 ld   (TMP1), a                 ; map page
                 ; base fill: rows 0..20
@@ -2242,7 +2246,7 @@ hud_room:
                 call print_str
                 ld   a, (CUR_ROOM)
                 add  a, 'A'
-                jp   print_char
+                jp   print_char_hud            ; A7: HUD tracking
 
 ; msg_begin — clear the message row; B/C = its first cell.  Clobbers: A, DE, HL
 msg_begin:

@@ -305,7 +305,8 @@ str_welcome:    DB "FIND THE TREASURE", 0
 ; per-kind stats (prototype §6.3) — emitted into the page-aligned kind_tab,
 ; one K_MAX (32) B array per KROW (ids 9..31 = 0 until Stage 3F kinds land)
 ;                  KN  WZ  RG  SK  GB  GH  RT  BT  SL
+KROW_W          EQU 9                   ; kinds per KROW (its parameter count)
     MACRO KROW v0, v1, v2, v3, v4, v5, v6, v7, v8
                 DB v0, v1, v2, v3, v4, v5, v6, v7, v8
-                DS K_MAX - 9, 0
+                DS K_MAX - KROW_W, 0
     ENDM

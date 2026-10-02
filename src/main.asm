@@ -115,10 +115,19 @@ image_start:
 
 ;==============================================================================
 ; play_loop — one 25 Hz tick per iteration (prototype §3.2).
+; A7 double buffer (option A): bank 7 is displayed during play; render composes
+; in bank 5 and pmark_dmg marks the cells it changed. The NEXT tick starts with
+; present, right after the HALT: it copies everything marked during the
+; previous tick (render + HUD / messages of the turn logic) top to bottom while
+; the beam is still in the top border, so it stays ahead of the beam (no tear)
+; and runs mostly uncontended. Cost: +1 tick display latency (user, A7).
+; At probe_presented bank 7 == bank 5 (tests/flicker.py asserts it per tick).
 ;==============================================================================
 play_loop:
                 call wait_tick
 tick_work:                                     ; budget probe: tick work starts here
+                call present                   ; A7: last tick's changes -> bank 7
+probe_presented:                               ; test probe (no code): bank 7 == bank 5
                 ld   hl, (TICK_COUNTER)
                 inc  hl
                 ld   (TICK_COUNTER), hl
@@ -131,6 +140,7 @@ tick_work:                                     ; budget probe: tick work starts 
                 ; (beam is still in the top border/first rows) instead of wherever
                 ; input+anim happened to end. Costs one tick of display latency.
                 call render
+                call pmark_dmg                 ; A7: presented at the next tick start
 probe_render_done:
                 ld   a, (TURN_PHASE)
                 or   a
@@ -142,6 +152,7 @@ probe_render_done:
                 call z, read_turn_input        ; INPUT: maybe start a turn
                 call anim_tick
                 call render
+                call pmark_dmg
 probe_render_done:
     ENDIF
                 ld   a, (TURN_PHASE)
@@ -259,11 +270,14 @@ end_turn:
 
 ;------------------------------------------------------------------------------
 ; do_exit — follower selection (§3.7), frozen Cauldron transition (§3.6),
-; arrival, arrival conflicts.  Clobbers: all but IY.
+; arrival, arrival conflicts. A7: shows bank 5 for the scroll (bank-3 code
+; scrolls $4000), then present_full copies it to bank 7 and shows bank 7.
+; Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 do_exit:
                 call follow_select
                 call hide_sprites              ; every sprite hidden, hero too
+                call show_bank5                ; A7: the scroll runs on the $4000 screen
                 ld   a, GS_TRANSITION          ; (state flips once none is drawn)
                 ld   (GAME_STATE), a
                 ld   h, NEXT_MAP >> 8
@@ -310,6 +324,8 @@ do_exit:
                 ld   (ix+E_MODE), M_REST
                 call arrival_conflicts
                 call hud_room
+                call vis_room_sync             ; B7: no old-room sprite in the next render
+                call present_full              ; A7: bank 5 -> 7 (6,912 B), show bank 7
                 xor  a
                 ld   (EXIT_KIND), a
                 ld   a, GS_PLAYING
@@ -334,6 +350,7 @@ end_screen:
 ; so the stack is at its base level here.
 ;==============================================================================
 enter_select:
+                call show_bank5                ; A7: select draws on (and shows) bank 5
                 ld   hl, sel_run
                 call far3                      ; C = hero kind
                 jp   start_game
@@ -352,6 +369,8 @@ enter_select:
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
                 ALIGN 256
 kind_tab:
+                ASSERT K_COUNT <= K_MAX            ; A6 review: every kind has a column
+                ASSERT K_COUNT <= KROW_W           ; ... and KROW emits it (widen KROW first)
                 ;     KN  WZ  RG  SK  GB  GH  RT  BT  SL
                 KROW   3,  3,  3,  3,  3,  3,  4,  3,  3          ; KT_BW (cells)
                 KROW BH_K_KNIGHT, BH_K_WIZARD, 0, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME ; KT_BH

@@ -9,11 +9,15 @@
 ;==============================================================================
 
 ;==============================================================================
-; page_bank — page RAM bank A (0..7) at $C000 (48K ROM, normal screen).
-; In : A = bank.   Clobbers: A, BC.   48 T
+; page_bank — page RAM bank A (0..7) at $C000; 48K ROM; the displayed screen
+; (bit 3) is KEPT (A7: set_screen patches it into the OR below, so paging costs
+; nothing extra). Shadow before OUT (an ISR re-OUTing the shadow is never
+; stale); bit 4 = 1, bit 5 never set.
+; In : A = bank (0..7).   Clobbers: A, BC.   48 T
+; SMC: .scr+1 = P7FFD_ROM48 | screen bit, patched only by set_screen.
 ;==============================================================================
 page_bank:
-                or   P7FFD_ROM48
+.scr:           or   P7FFD_ROM48              ; SMC: | P7FFD_SCREEN7 while bank 7 is shown
                 ld   (PORT_7FFD_SHADOW), a    ; port is write-only: keep the shadow
                 ld   bc, PORT_7FFD
                 out  (c), a
@@ -21,16 +25,16 @@ page_bank:
 
 ;==============================================================================
 ; far3 — call the bank-3 cold routine at HL with bank 3 paged in at $C000, then
-; put the caller's $C000 bank back (saved PORT_7FFD_SHADOW value).
+; put the caller's $C000 bank back (saved PORT_7FFD_SHADOW value, bits 0-2).
 ; In : HL = target (bank3.asm), A = passed to the target in A.
 ; Out: the target's BC, DE, HL, IX (passed through).  Clobbers: A, F.
-; ~200 T + target. Not re-entrant into another bank (bank-3 code must not page
+; ~220 T + target. Not re-entrant into another bank (bank-3 code must not page
 ; $C000 itself — see bank3.asm; it blits through blit_keep).
 ;==============================================================================
 far3:
                 ld   b, a
                 ld   a, (PORT_7FFD_SHADOW)
-                push af                        ; caller's page (bit 4 set, bit 5 clear)
+                push af                        ; caller's page (restore_page uses bits 0-2)
                 ld   a, b
                 push af                        ; target's A
                 ld   a, BANK_COLD3
@@ -40,15 +44,16 @@ far3:
                 pop  af
                 ; fall through
 ;------------------------------------------------------------------------------
-; restore_page — re-page $C000 from A = a saved PORT_7FFD_SHADOW value. Shadow
-; first, then the port (page_bank rule: an ISR re-OUTing the shadow is then
-; never stale). Clobbers: nothing but the shadow (BC kept for far3's callers).
+; restore_page — re-page $C000 from A = a saved PORT_7FFD_SHADOW value: only
+; its bank bits 0-2 are taken (A7: the screen bit may have changed meanwhile —
+; select / transitions switch it — and must not be rolled back). Through
+; page_bank: shadow first, then the port. Clobbers: A, F (BC kept for far3's
+; callers).   ~95 T
 ;------------------------------------------------------------------------------
 restore_page:
-                ld   (PORT_7FFD_SHADOW), a
                 push bc
-                ld   bc, PORT_7FFD
-                out  (c), a
+                and  7
+                call page_bank
                 pop  bc
                 ret
 jp_hl:          jp   (hl)
@@ -172,11 +177,11 @@ tile_rect:
 .mhi:           add  a, ROOM_MAP >> 8         ; SMC: map page (ROOM_MAP / NEXT_MAP)
                 ld   (.mh+1), a
                 ld   a, d
-.aor:           or   SCREEN_ATTR >> 8          ; SMC: $58 screen / $D8 shadow
+.aor:           or   SCREEN_ATTR >> 8          ; SMC: $58 screen / $F8 shadow (A7)
                 ld   (.ah+1), a
                 ld   a, b
                 and  $18
-.bor:           or   SCREEN_BITMAP >> 8        ; SMC: $40 screen / $C0 shadow
+.bor:           or   SCREEN_BITMAP >> 8        ; SMC: $40 screen / $E0 shadow (A7)
                 ld   (.sh+1), a
                 ld   a, e
                 and  $E0
@@ -226,7 +231,8 @@ set_tile_map:
                 ld   (tile_rect.mhi+1), a
                 ret
 
-; set_tile_target — A = 0: tile_rect draws to the screen; else to the shadow.
+; set_tile_target — A = 0: tile_rect draws to the screen; else to the shadow
+; (bank 7 $E000/$F800 — the caller pages bank 7).
 ; Clobbers: A
 set_tile_target:
                 or   a
@@ -237,6 +243,9 @@ set_tile_target:
                 sub  (SCREEN_ATTR - SCREEN_BITMAP) >> 8
                 ld   (tile_rect.bor+1), a
                 ret
+                ; tile_rect ORs the row bits into these bases
+                ASSERT SHADOW_ATTR - SHADOW_BITMAP == SCREEN_ATTR - SCREEN_BITMAP
+                ASSERT (SHADOW_BITMAP & $17FF) == 0 && (SHADOW_ATTR & $3FF) == 0
 
 ; shadow_rect — redraw rect C,B,D,E of the clean-background shadow (bank 7)
 ; from ROOM_MAP (room entry, potion taken).  Clobbers: A, BC, DE, HL
@@ -256,8 +265,9 @@ shadow_rect:
 ;==============================================================================
 ; erase_rect — restore a cell rect (bitmap + attrs) from the clean-background
 ; shadow in bank 7 (prototype R-1 lever: "clean-background copy for erase").
-; Shadow = the room's tiles in screen layout at $C000/$D800, so source and
-; destination share the low byte and differ by +$80 in the high byte.
+; Shadow = the room's tiles in screen layout at $E000/$F800 (A7: rebased above
+; screen 2), so source and destination share the low byte and differ by +$A0
+; in the high byte.
 ; In : C = col, B = row, D = cols, E = rows.  Clobbers: A, BC, DE, HL (IX kept)
 ; ~231 T/cell (vs ~290 T for the tile-map path: no map/glyph/attr lookups).
 ; SMC: .cols+1, .rows+1, .bh/.dh/.ah/.dah+1 patched per call / per row.
@@ -319,6 +329,342 @@ erase_rect:
                 ret
 
 ;==============================================================================
+; PRESENT — A7 double buffer, option A (docs/design/budget.md §3). During play
+; the ULA shows bank 7's screen 2 ($C000); everything is still composed in
+; bank 5 ($4000) as before, and present copies the cells changed since the
+; last present from bank 5 to screen 2, so the beam never sees an erased
+; sprite. Changed cells are marked in PRES_MASK (pmark_rect) by:
+;   - render's damage list (present_dmg): erased old footprints, new / forced
+;     footprints, attr-only stamps, PEND_DMG restores (potion, zap end);
+;   - draw_zap (the overlay is not in the damage list);
+;   - the HUD rows (clear_row + print_char keep HUD_EXT / HUD_PW per row: only
+;     the cols that held or now hold text are copied, not all 32).
+; Full-screen paths (start_game, room transitions) use present_full instead;
+; select / transitions draw while bank 5 itself is shown (show_bank5).
+; Invariant (tests): at the wait_tick probe screen 2 == the bank-5 screen.
+;==============================================================================
+
+;------------------------------------------------------------------------------
+; pmark_rect — mark the cell rect C col, B row, D cols, E rows (D, E >= 1,
+; B + E <= 24) for the next present; cols past 31 are clamped.
+; Clobbers: A, HL (BC, DE kept).
+; ~200 T + 46 T per row (1 mask byte) / 68 T per row (2); wider rects (HUD):
+; ~85 T per mask byte + 49 T per row.
+; SMC: .base+1 = low byte of the rect's first mask byte (patched per call).
+;------------------------------------------------------------------------------
+pmark_rect:
+                push bc
+                push de
+                ld   a, 1
+                ld   (PRES_ANY), a
+                ld   hl, PRES_RMIN
+                ld   a, b
+                cp   (hl)
+                jr   nc, .rm
+                ld   (hl), a                   ; first marked row: present starts there
+.rm:            ld   a, c
+                add  a, d
+                dec  a                         ; last col
+                cp   ROOM_COLS
+                jr   c, .lc
+                ld   a, ROOM_COLS - 1
+.lc:            ld   d, a                      ; D = last col
+                ld   a, b
+                add  a, a
+                add  a, a
+                ld   b, a                      ; B = row * 4
+                ; fast paths (one row pass): the run fits 1 or 2 mask bytes
+                ld   a, c
+                rrca
+                rrca
+                rrca
+                and  3
+                add  a, b
+                add  a, PRES_MASK & $FF
+                ld   (.base+1), a              ; SMC: first mask byte of the rect
+                ld   a, d
+                and  7
+                add  a, (pm_tab & $FF) + 1
+                ld   l, a
+                ld   h, pm_tab >> 8
+                ld   a, d
+                xor  c
+                and  $18                       ; same mask byte?
+                jr   nz, .two
+                ld   a, (hl)                   ; $FF >> (last+1 & 7..8)
+                ld   d, a
+                call .lo                       ; A = $FF >> (C & 7)
+                xor  d
+                ld   d, a                      ; D = mask
+                call .base
+.r1:            ld   a, (hl)
+                or   d
+                ld   (hl), a
+                ld   a, l
+                add  a, 4
+                ld   l, a
+                djnz .r1
+                jr   .done
+.two:           ld   a, c
+                or   7
+                add  a, 8                      ; last col of the next mask byte
+                cp   d
+                jr   c, .seg                   ; >= 3 bytes (HUD rows): general loop
+                ld   a, (hl)
+                cpl
+                ld   d, a                      ; D = mask of the 2nd byte
+                call .lo
+                ld   c, a                      ; C = mask of the 1st byte
+                call .base
+.r2:            ld   a, (hl)
+                or   c
+                ld   (hl), a
+                inc  l
+                ld   a, (hl)
+                or   d
+                ld   (hl), a
+                ld   a, l
+                add  a, 3
+                ld   l, a
+                djnz .r2
+.done:          pop  de
+                pop  bc
+                ret
+.lo:            ld   a, c                      ; A = $FF >> (C & 7)
+                and  7
+                add  a, pm_tab & $FF
+                ld   l, a
+                ld   a, (hl)                   ; (H = pm_tab page)
+                ret
+.base:          ld   l, 0                      ; SMC: HL = first mask byte, B = rows
+                ld   h, PRES_MASK >> 8
+                ld   b, e
+                ret
+.seg:           ld   a, c                      ; C = first col inside this mask byte
+                and  7
+                add  a, pm_tab & $FF
+                ld   l, a
+                ld   h, pm_tab >> 8
+                ld   a, c
+                or   7                         ; last col of this mask byte
+                cp   d
+                ld   a, (hl)                   ; $FF >> (C & 7)   (ld keeps CF)
+                jr   c, .rows                  ; the run goes on into the next byte
+                push af
+                ld   a, d
+                and  7
+                add  a, (pm_tab & $FF) + 1
+                ld   l, a
+                pop  af
+                xor  (hl)                      ; cut after the last col
+.rows:          push de
+                ld   d, a                      ; D = this byte's mask
+                ld   a, c
+                rrca
+                rrca
+                rrca
+                and  3                         ; mask byte index C / 8
+                add  a, b
+                add  a, PRES_MASK & $FF
+                ld   l, a
+                ld   h, PRES_MASK >> 8
+.row:           ld   a, (hl)
+                or   d
+                ld   (hl), a
+                ld   a, l
+                add  a, 4
+                ld   l, a
+                dec  e
+                jr   nz, .row
+                pop  de
+                ld   a, c
+                or   7
+                cp   d                         ; this byte's last col < D: next byte
+                inc  a                         ; (inc keeps CF)
+                ld   c, a
+                jr   c, .seg
+                pop  de
+                pop  bc
+                ret
+
+pm_tab:         DB   $FF, $7F, $3F, $1F, $0F, $07, $03, $01, $00   ; $FF >> n, n = 0..8
+                ASSERT (pm_tab >> 8) == ((pm_tab + 8) >> 8)
+                ASSERT (PRES_MASK & 3) == 0 && (PRES_MASK & $FF) + PRES_LEN == 256
+
+;------------------------------------------------------------------------------
+; pmark_dmg — mark the first DMG_PRES_N rects of render's damage list
+; (c0,c1,r0,r1: PEND_DMG restores, erased old footprints, new footprints of
+; changed sprites) for the present at the next tick start. The overlap-repair rects appended after them
+; are skipped: re-blitting an undamaged sprite in the same slot order rewrites
+; the cells outside the damaged ones with the bytes already there (masked blit
+; is idempotent, attr stamps repeat in the same order), so only cells inside
+; the first rects can differ. (A DMG_LIST overflow in phases 1-2 makes the
+; last of them the whole playfield, which is then marked.) play_loop calls
+; this right after render.  Clobbers: A, BC, DE, HL.
+;------------------------------------------------------------------------------
+pmark_dmg:
+                ld   a, (DMG_PRES_N)
+                or   a
+                ret  z
+                ld   b, a
+                ld   hl, DMG_LIST
+.l:             push bc
+                ld   c, (hl)                   ; c0
+                inc  hl
+                ld   a, (hl)
+                sub  c
+                ld   d, a                      ; cols = c1 - c0
+                inc  hl
+                ld   b, (hl)                   ; r0
+                inc  hl
+                ld   a, (hl)
+                sub  b
+                ld   e, a                      ; rows = r1 - r0
+                inc  hl
+                push hl
+                call pmark_rect
+                pop  hl
+                pop  bc
+                djnz .l
+                ret
+
+;------------------------------------------------------------------------------
+; present — copy every marked cell (8 bitmap bytes + attr) from the bank-5
+; screen to screen 2 (bank 7), rows top to bottom; clears the mask. Called
+; first thing after the tick's HALT (play_loop): it starts ~13k T before the
+; beam reaches line 0 and copies a char row faster than the beam scans one, so
+; it stays ahead of the beam (a cell would only tear if the beam scanned it
+; mid-copy). Leaves bank 7 paged at $C000.
+; Clobbers: A, BC, DE, HL.
+; Cost: ~50 T if nothing is marked; else ~65 T per clean row + ~200 T per
+; dirty row + ~60 T per non-zero mask byte + 251 T per copied cell (contended:
+; 2 accesses per byte, budget §4) + 31 T per clear bit before a byte's last.
+; SMC: .sbh/.dbh/.sah/.dah+1 (src/dst bitmap/attr high) and .rb+1 (the row's
+; low-byte base) patched per dirty row.
+;------------------------------------------------------------------------------
+present:
+                ld   a, (PRES_ANY)
+                or   a
+                ret  z
+                ld   hl, HUD_PW                ; HUD rows: mark cols 0..PW-1
+                ld   b, HUD_ROW
+.hud:           ld   a, (hl)
+                or   a
+                jr   z, .hn
+                ld   (hl), 0
+                push hl
+                ld   c, 0
+                ld   d, a
+                ld   e, 1
+                call pmark_rect
+                pop  hl
+.hn:            inc  l
+                inc  b
+                ld   a, b
+                cp   HUD_ROW + HUD_ROWS
+                jr   c, .hud
+                xor  a
+                ld   (PRES_ANY), a             ; (after the marks: they set it)
+                ld   a, BANK_SCREEN7
+                call page_bank
+                ld   a, (PRES_RMIN)            ; skip the rows above the first mark
+                cp   PRES_LEN / 4
+                jr   c, .rmin
+                xor  a                         ; (unset / garbage: scan all)
+.rmin:          add  a, a
+                add  a, a
+                add  a, PRES_MASK & $FF
+                ld   l, a
+                ld   h, PRES_MASK >> 8
+                ld   a, $FF
+                ld   (PRES_RMIN), a
+.rowt:          ld   a, (hl)                   ; any bit in this row's 4 bytes?
+                inc  l
+                or   (hl)
+                inc  l
+                or   (hl)
+                inc  l
+                or   (hl)
+                jr   nz, .dirty
+                inc  l
+                jr   nz, .rowt                 ; PRES_MASK ends at a page end
+                ret
+.dirty:         dec  l
+                dec  l
+                dec  l                         ; L = the row's mask byte 0
+                ld   a, l
+                sub  PRES_MASK & $FF
+                rrca
+                rrca                           ; A = row 0..23
+.probe_row:                                    ; flicker probe (no code): A = row
+                ld   b, a
+                and  $18
+                or   SCREEN_BITMAP >> 8
+                ld   (.sbh+1), a
+                add  a, (SCREEN7_BITMAP - SCREEN_BITMAP) >> 8
+                ld   (.dbh+1), a
+                ld   a, b
+                rrca
+                rrca
+                rrca
+                ld   c, a
+                and  3
+                or   SCREEN_ATTR >> 8
+                ld   (.sah+1), a
+                add  a, (SCREEN7_ATTR - SCREEN_ATTR) >> 8
+                ld   (.dah+1), a
+                ld   a, c
+                and  $E0
+                ld   (.rb+1), a                ; (row & 7) << 5
+.byte:          ld   a, (hl)
+                or   a
+                jr   z, .nextb
+                ld   (hl), 0
+                push hl
+                ld   c, a                      ; C = bits left, bit 7 = this col
+                ld   a, l
+                and  3                         ; mask byte index in the row
+                add  a, a
+                add  a, a
+                add  a, a
+.rb:            or   0                         ; SMC: row low base
+                ld   b, a                      ; B = low byte of the cell
+                dec  b                         ; (.bit pre-increments)
+.bit:           inc  b
+                sla  c
+                jr   c, .copy
+                jr   .bit                      ; clear bit, set bits remain: 31 T
+.copy:          ld   l, b
+                ld   e, b
+.sbh:           ld   h, 0                      ; SMC: bank-5 bitmap high
+.dbh:           ld   d, 0                      ; SMC: screen-2 bitmap high
+                DUP  7
+                ld   a, (hl)
+                ld   (de), a
+                inc  h
+                inc  d
+                EDUP
+                ld   a, (hl)
+                ld   (de), a
+.sah:           ld   h, 0                      ; SMC: bank-5 attr high
+.dah:           ld   d, 0                      ; SMC: screen-2 attr high
+                ld   a, (hl)
+                ld   (de), a
+                inc  c
+                dec  c
+                jr   nz, .bit                  ; more set bits in this byte
+                pop  hl
+.nextb:         inc  l
+                ld   a, l
+                and  3
+                jr   nz, .byte
+.probe_row_end:                                ; flicker probe (no code)
+                or   l                         ; A = 0 here: L = 0 <=> past row 23
+                jp   nz, .rowt
+                ret
+                ASSERT SCREEN7_ATTR - SCREEN7_BITMAP == SCREEN_ATTR - SCREEN_BITMAP
+
+;==============================================================================
 ; draw_room — full redraw of rows 0..20 from ROOM_MAP.  ~195k T (boot/room only)
 ;==============================================================================
 draw_room:
@@ -354,8 +700,9 @@ clear_screen:
 
 ;==============================================================================
 ; TEXT (ROM charset, 48K ROM paged).
-; print_char — A = ASCII 32..127 at cell (row B, col C); C advances.
-; Clobbers: A, DE, HL.
+; print_char — A = ASCII 32..127 at cell (row B, col C); C advances. A7: no
+; HUD tracking here (callers end with hud_track: print_str, print_dec,
+; print_char_hud).  Clobbers: A, DE, HL.
 ;==============================================================================
 print_char:
                 ld   l, a
@@ -388,12 +735,45 @@ print_char:
                 inc  c
                 ret
 
+;------------------------------------------------------------------------------
+; hud_track — after text ending at (row B, col C-1): on a HUD row widen
+; HUD_EXT / HUD_PW to C (A7: present copies the row's first HUD_PW cells).
+; Called once per string (print_str end, print_dec, print_char_hud), not per
+; char.  Clobbers: A, HL.   ~22 T off the HUD, ~85 T on it.
+;------------------------------------------------------------------------------
+; print_char_hud — print_char + hud_track (a lone char ending a HUD line).
+print_char_hud:
+                call print_char
+hud_track:
+                ld   a, b
+                sub  HUD_ROW
+                ret  c                         ; not a HUD row
+                add  a, HUD_EXT & $FF
+                ld   l, a
+                ld   h, HUD_EXT >> 8
+                ld   a, c
+                cp   (hl)
+                jr   c, .pw
+                ld   (hl), a                   ; EXT = max(EXT, C)
+.pw:            ld   a, l
+                add  a, HUD_ROWS
+                ld   l, a                      ; -> HUD_PW of the row
+                ld   a, c
+                cp   (hl)
+                ret  c
+                ld   (hl), a                   ; PW = max(PW, C)
+                ld   a, 1
+                ld   (PRES_ANY), a
+                ret
+                ASSERT HUD_PW == HUD_EXT + HUD_ROWS && HUD_ROW + HUD_ROWS == 24
+                ASSERT (HUD_EXT >> 8) == ((HUD_PW + HUD_ROWS - 1) >> 8)
+
 ; print_str — HL = 0-terminated string at (row B, col C). C advances.
 ; Clobbers: A, C, DE, HL
 print_str:
                 ld   a, (hl)
                 or   a
-                ret  z
+                jr   z, hud_track              ; A7: once per string
                 push hl
                 call print_char
                 pop  hl
@@ -409,7 +789,8 @@ print_dec:
                 ld   h, 10
                 call .digit
                 add  a, '0'
-                jp   print_char
+                call print_char
+                jp   hud_track                 ; A7
 .digit:
                 ld   e, '0' - 1
 .sub:           inc  e
@@ -432,12 +813,26 @@ print_dec:
 .skip:          ld   a, d
                 ret
 
-; clear_row — blank the bitmap of char row B and set its 32 attrs to A.
-; Unrolled fill: ~3.3k T (was ~7k with a byte loop).  Clobbers: A, DE, HL (B kept)
+; clear_row — blank the bitmap of char row B and set its 32 attrs to A; tells
+; present what changed (A7, hud_clear_mark). A7: on a HUD row only the cols
+; that can hold ink (HUD_EXT) are blanked — the rest is blank already.
+; Unrolled fill: ~0.4k + 88 T per blanked col (3.3k for a whole row).
+; Clobbers: A, DE, HL (BC kept)
+; SMC: .lj+1 = entry into the unrolled blanking chain (32 - cols stores in).
 clear_row:
                 push bc
                 ld   c, 0
                 push af
+                call hud_clear_mark            ; A7: A = cols to blank (low RAM)
+                ld   e, a
+                ld   a, ROOM_COLS
+                sub  e
+                add  a, a                      ; 2 B per store (ld (hl),a / inc l)
+                ld   l, a
+                ld   h, 0
+                ld   de, .chain
+                add  hl, de
+                ld   (.lj+1), hl
                 call attr_addr
                 pop  af
                 DUP  32
@@ -457,7 +852,8 @@ clear_row:
                 ld   c, 8
                 xor  a
 .line:          ld   l, e
-                DUP  32
+.lj:            jp   .chain                    ; SMC: chain entry
+.chain:         DUP  32
                 ld   (hl), a
                 inc  l
                 EDUP
@@ -706,6 +1102,7 @@ frame_footprint:
 ; ft_ptr — HL = frame_tab + A*FT_STRIDE (4).  Clobbers: A, DE, HL
                 ASSERT FT_STRIDE == 4          ; blit_sprite / frame_footprint / ft_ptr: 2 x add hl,hl
                 ASSERT FT_H == FT_COLS + 1     ; blit_sprite / frame_footprint: inc hl
+                ASSERT FT_OFFR == FT_H + 1 && FT_OFFL == FT_OFFR + 1 ; render .vis: inc hl chain
 ft_ptr:
                 ld   l, a
                 ld   h, 0

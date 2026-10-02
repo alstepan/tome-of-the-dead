@@ -67,6 +67,20 @@ boot:
                 ld   (PEND_DMG_COUNT), a
                 ld   (CUR_ROOM), a
                 ld   (YIELD_FLAG), a
+                ld   hl, HUD_PW                ; A7 HUD tracking: nothing pending,
+                ld   (hl), a                   ; ink extents unknown (= whole rows)
+                inc  l
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                ld   a, ROOM_COLS
+                ld   hl, HUD_EXT
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                xor  a
                 ld   hl, 0
                 ld   (OVERRUN_COUNT), hl
                 ld   (TICK_COUNTER), hl
@@ -174,6 +188,7 @@ start_game:
                 call msg_begin
                 ld   hl, str_welcome
                 call print_str
+                call present_full              ; A7: bank 5 -> 7, display bank 7
                 ld   a, 1
                 ld   (NEED_RELEASE), a         ; the select key must be released
                 ld   a, GS_PLAYING
@@ -181,6 +196,146 @@ start_game:
                 ld   a, (SYS_FRAMES)
                 ld   (LAST_TICK_FRAME), a
                 jp   play_loop
+
+;==============================================================================
+; hud_clear_mark — clear_row's A7 hook: A = the new attr, B = row, C = 0.
+; Out: A = cols clear_row must blank (0..32: the old ink extent; 32 if the
+; attr changes or the row is not a HUD row).
+; HUD row: the cols present must copy grow to the old ink extent (HUD_EXT) —
+; or to the whole row if the row's attr changes (compared with bank 5 col 0) —
+; and HUD_EXT restarts at 0 (print_char widens both again). Any other row:
+; the whole row is marked (unused in play). Cold-ish (≤ 3 per turn), so it
+; lives here, not in bank 2.  Clobbers: A, DE, HL (BC kept).
+;==============================================================================
+hud_clear_mark:
+                ld   d, a                      ; D = new attr
+                ld   a, b
+                sub  HUD_ROW
+                jr   c, .whole
+                ld   e, a                      ; E = HUD row index
+                call attr_addr                 ; HL = attr of (B, 0); keeps BC, DE
+                ld   a, (hl)
+                sub  d
+                ld   d, a                      ; D = 0: same attr
+                ld   a, e
+                add  a, HUD_EXT & $FF
+                ld   l, a
+                ld   h, HUD_EXT >> 8
+                ld   a, (hl)                   ; old ink extent
+                ld   (hl), 0
+                cp   ROOM_COLS + 1             ; clamp: clear_row's chain entry
+                jr   c, .ext                   ; must stay inside the chain
+                ld   a, ROOM_COLS
+.ext:
+                inc  d
+                dec  d
+                jr   z, .same
+                ld   a, ROOM_COLS              ; attr changes: every cell
+.same:          or   a
+                ret  z                         ; row was blank, attr unchanged
+                ld   e, a
+                ld   a, l
+                add  a, HUD_ROWS
+                ld   l, a                      ; -> HUD_PW
+                ld   a, e
+                cp   (hl)
+                ret  c
+                ld   (hl), a                   ; PW = max(PW, extent)
+                ld   a, 1
+                ld   (PRES_ANY), a
+                ld   a, e
+                ret
+.whole:         ld   de, (ROOM_COLS << 8) | 1
+                call pmark_rect
+                ld   a, ROOM_COLS
+                ret
+
+;==============================================================================
+; vis_room_sync — after a room change (do_exit): hide (N_VIS = 0) every slot
+; that anim_tick would not show in CUR_ROOM (not ACTIVE, PENDING, or another
+; room). Bug B7: render runs first in a tick (RENDER_FIRST), so the first
+; render after do_exit used the previous tick's anim_tick output — the OLD
+; room's desired state — and drew every monster of the room just left at its
+; old position on the new room for one tick (any monster: not follower
+; logic). hide_sprites already cleared E_DVIS, so a hidden slot is simply
+; skipped (DIRTY_NONE); the hero (and nothing else) is drawn at its arrival
+; position with its last frame, as before. Cold (room change only).
+; Clobbers: A, B, DE, HL, IX.
+;==============================================================================
+vis_room_sync:
+                ld   ix, P_ENTITIES
+                ld   hl, N_VIS
+                ld   de, P_ENT_STRIDE
+                ld   b, P_MAX_ENT
+.l:             ld   a, (ix+E_FLAGS)
+                and  EF_ACTIVE | EF_PENDING
+                cp   EF_ACTIVE
+                jr   nz, .hide
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   z, .n
+.hide:          ld   (hl), 0
+.n:             inc  l                         ; N_VIS: 16 B inside one page
+                add  ix, de
+                djnz .l
+                ret
+                ASSERT (N_VIS & $FF) + P_MAX_ENT <= 256
+
+;==============================================================================
+; A7 display switching (cold; bank 5 low RAM is always mapped, so bank-2 and
+; bank-5 callers alike reach it). page_bank / present stay in bank 2 (hot).
+; set_screen — show bank 5 (A = 0) or bank 7 (A = P7FFD_SCREEN7); the $C000
+; bank stays as it is. Order: page_bank SMC, shadow, port (shadow before OUT;
+; no ISR pages $C000, so SMC vs shadow can never be seen out of step).
+; Clobbers: A, BC.   ~90 T
+;==============================================================================
+set_screen:
+                or   P7FFD_ROM48
+                ld   (page_bank.scr+1), a     ; SMC: every later page_bank keeps it
+                ld   b, a
+                ld   a, (PORT_7FFD_SHADOW)
+                and  7                        ; current $C000 bank
+                or   b
+                ld   (PORT_7FFD_SHADOW), a
+                ld   bc, PORT_7FFD
+                out  (c), a
+                ret
+
+; show_bank5 — display the composed screen itself (select, transitions, A7).
+; Clobbers: A, BC
+show_bank5:
+                xor  a
+                jr   set_screen
+
+;------------------------------------------------------------------------------
+; present_full — the whole bank-5 screen to screen 2, mask cleared, then show
+; bank 7 (start_game; the end of a room transition). Leaves bank 7 paged.
+; Clobbers: A, BC, DE, HL.   6,912 x 21 T = 145k T + contention (cold).
+;------------------------------------------------------------------------------
+present_full:
+                ld   a, BANK_SCREEN7
+                call page_bank
+                ld   hl, SCREEN_BITMAP
+                ld   de, SCREEN7_BITMAP
+                ld   bc, SCREEN_FRAME_LEN
+                ldir
+                ld   hl, PRES_MASK
+                ld   b, PRES_LEN
+                xor  a
+.c:             ld   (hl), a
+                inc  l
+                djnz .c
+                ld   (PRES_ANY), a
+                ld   hl, HUD_PW
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                inc  l
+                ld   (hl), a                   ; HUD rows are in sync too
+                dec  a
+                ld   (PRES_RMIN), a            ; $FF: no marked row
+                ld   a, P7FFD_SCREEN7
+                jp   set_screen
 
 ;==============================================================================
 ; init_kbd_mirror — all released.  Clobbers: A, B, HL
@@ -363,7 +518,9 @@ copy_virt:
                 ret
 
 ;------------------------------------------------------------------------------
-; gen_kind — generate every frame of kind A.   Clobbers: all but IX
+; gen_kind — generate every frame of kind A; a kind with 0 frames (the Rogue
+; hole, unused ids) returns at once (djnz with B = 0 would run 256 frames).
+; Clobbers: all but IX
 ;------------------------------------------------------------------------------
 gen_kind:
                 ld   h, (kind_tab + KT_FID0) >> 8   ; KT_FID0/KT_FCNT: same page
@@ -375,6 +532,9 @@ gen_kind:
                 add  a, KT_FCNT - KT_FID0
                 ld   l, a
                 ld   b, (hl)                   ; count
+                inc  b
+                dec  b
+                ret  z                         ; 0-frame kind: nothing to generate
 .f:             push bc
                 ld   a, c
                 call gen_frame
