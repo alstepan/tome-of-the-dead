@@ -685,9 +685,11 @@ def sprite_rgb(bm, solid, attr) -> np.ndarray:
 
 
 def contact_sheet(art: Art, sizes: dict) -> np.ndarray:
-    sh = Sheet(art.font, 600)
+    sh = Sheet(art.font, 720)
+    import concept_r4
+    concept_r4.sheet_current(sh, art)
     D = art.decor
-    sh.heading("DECOR (8x8 GLYPHS, ATTR AS IN GAME)")
+    sh.heading("R1 DECOR (8x8 GLYPHS, ATTR AS IN GAME)")
     tor = np.vstack([art.tiles["torch_t"], art.tiles["torch_b"]])
     sh.add([glyph_rgb(tor, a) for a in (0x46, 0x42, 0x06)], "TORCH(EXISTS)")
     bra = [np.vstack([D[f]["bm"], D["brazier_bowl"]["bm"]]) for f in ("brazier_flame1",
@@ -714,7 +716,7 @@ def contact_sheet(art: Art, sizes: dict) -> np.ndarray:
     sh.add([glyph_rgb(np.block([[b, b], [b, b]]), 0x06)], "BOOKS")
     sh.add([glyph_rgb(np.hstack([D["cauldron_l"]["bm"], D[f]["bm"]]), 0x44)
             for f in ("cauldron_r1", "cauldron_r2")], "CAULDRON(DEF)")
-    sh.heading("DOOR: CLOSED / OPEN / +RING (OPT.)")
+    sh.heading("R1 DOOR: CLOSED / OPEN / +RING (LOCK PLATE)")
     Do = art.door
     wall = art.tiles["wall"]
     def door_img(planks: bool, ring: bool):
@@ -731,7 +733,7 @@ def contact_sheet(art: Art, sizes: dict) -> np.ndarray:
         return render_rgb(bmx, at)
     sh.add([door_img(True, False), door_img(False, False), door_img(True, True)], "DOOR")
 
-    sh.heading("ICONS 16x16: NORMAL / SELECTED / GREYED / SEL+GREY")
+    sh.heading("R1 ICONS 16x16 (BAR USE SUPERSEDED BY 24x24; PAGE/QUICK STILL 16)")
     for n, b in art.ic16.items():
         a = b["attr"]
         if n in ("staff", "spark", "firebolt", "frost", "lightning", "bag"):
@@ -742,10 +744,10 @@ def contact_sheet(art: Art, sizes: dict) -> np.ndarray:
             sh.add([glyph_rgb(b["bm"], x) for x in (0x47, 0x43, 0x46)], "SCROLL X3")
         else:
             sh.add([glyph_rgb(b["bm"], a)], n.upper())
-    sh.heading("ICONS 8x8 (BAR LABELS, V2 BAR, GEAR STRIP, FLOOR)")
+    sh.heading("R1 ICONS 8x8 (LABELS, GEAR, FLOOR; V2 BAR SUPERSEDED)")
     for n, b in art.ic8.items():
         sh.add([glyph_rgb(b["bm"], b["attr"])], n.replace("8", "").upper()[:6])
-    sh.heading("SPELLS (MASK OUTLINE IN GREY)")
+    sh.heading("R1 SPELLS (MASK OUTLINE IN GREY)")
     groups = [("SPARK", ["spark_fly1", "spark_fly2"]), ("FIZZLE", ["spark_fizz1", "spark_fizz2"]),
               ("FIREBOLT", ["firebolt_fly1", "firebolt_fly2"]),
               ("BURST", ["firebolt_burst1", "firebolt_burst2"]),
@@ -763,6 +765,7 @@ def anim_gif(art: Art, path: str, nframes: int = 96):
     """Animated decor (attr cycles + glyph swaps per §3.3) and the four spells in
     flight per §4, rendered through the attribute model. 1 GIF frame = 1 tick
     (2 TV frames = 40 ms)."""
+    import concept_r4
     D, T, F = art.decor, art.tiles, art.font
     candle_tab = [(0x46, 5), (0x06, 1), (0x46, 3), (0x06, 2), (0x46, 7), (0x06, 1),
                   (0x46, 2), (0x06, 3)]                 # RNG-free, 8 steps, 24 ticks
@@ -776,7 +779,7 @@ def anim_gif(art: Art, path: str, nframes: int = 96):
     ]
     frames = []
     for t in range(nframes):
-        s = Screen(rows=62)
+        s = Screen(rows=78)
         # --- decor strip: rows 0-2 air, row 3 floor
         for c in range(32):
             s.glyph(c, 3, T["platform"], A_FLOOR)
@@ -838,7 +841,8 @@ def anim_gif(art: Art, path: str, nframes: int = 96):
                 s.sprite(nm + " fx", cx, y, fg, so, a)
         r2_gif_layer(art, s, t, 16)
         r3_gif_layer(art, s, t, 46)
-        frames.append(Image.fromarray(s.rgb_image()).resize((256 * 2, 62 * 8 * 2),
+        concept_r4.gif_layer(art, s, t, 62)
+        frames.append(Image.fromarray(s.rgb_image()).resize((256 * 2, 78 * 8 * 2),
                                                             Image.NEAREST))
     frames[0].save(path, save_all=True, append_images=frames[1:], duration=40, loop=0,
                    optimize=False)
@@ -988,11 +992,11 @@ def r2_sheet(sh: "Sheet", art) -> None:
         if o["swap"] or o["cycle"]:
             tag += f" SW{len(o['swap'])} AC{len(o['cycle'])}"
         sh.add(imgs, tag)
-    sh.heading("R2 PLASTER WALL: TILES / PATCH WITH EXISTING WALL")
+    sh.heading("R2 PLASTER WALL -- SUPERSEDED (R4 FRAGMENTS + PATCHES)")
     sh.add([glyph_rgb(art.walls[n]["bm"], A_WALL) for n in art.walls] + [glyph_rgb(art.tiles["wall"], A_WALL)],
            "PLAS CRACK HOLE EDGE +WALL")
     sh.add([wall_demo(art)], "PATCH (AIR ROWS)")
-    sh.heading("R2 PER-LEVEL COLOUR SCHEMES (ATTR ONLY)")
+    sh.heading("R2 COLOUR SCHEMES -- SUPERSEDED BY GAME.MD 8 SCHEMES")
     for name, fa, wa in SCHEMES:
         sh.add([scheme_slice(art, fa, wa)], f"{name} ${fa:02X}/${wa:02X}")
     sh.heading("R2 WARRIOR ICONS 16x16: NORMAL / SELECTED / GREYED")
@@ -1005,18 +1009,18 @@ def r2_sheet(sh: "Sheet", art) -> None:
         else:
             sh.add([glyph_rgb(b["bm"], x) for x in (a, sel(a), A_GREY)], n.upper().replace("_", " "))
     sh.add([glyph_rgb(b["bm"], b["attr"]) for b in art.ic8b.values()], "8X8 SWORD MAIL HELM SHLD BOOK")
-    sh.heading("R2 ICON SIZE TRIAL: 16x16 VS 24x24")
+    sh.heading("R2 ICON SIZE TRIAL (DECIDED: 24x24)")
     for n16, n24 in (("staff", "staff24"), ("firebolt", "firebolt24"), ("apple", "apple24"),
                      ("bag", "bag24")):
         a = art.ic16[n16]["attr"]
         sh.add([glyph_rgb(art.ic16[n16]["bm"], a), glyph_rgb(art.ic24[n24]["bm"], a),
                 glyph_rgb(art.ic24[n24]["bm"], sel(a))], n16.upper())
-    sh.heading("R2 BOSS LOOT: SHIMMER CYCLE / FLASH BIT")
+    sh.heading("R2 LOOT: SHIMMER = FLOOR, FLASH = PANEL/PAGE (DECIDED)")
     sw = art.ic16b["sword"]["bm"]
     sh.add([glyph_rgb(sw, a) for a in LOOT_SHIMMER], "SHIMMER 46>47>45>47")
     sh.add([glyph_rgb(sw, 0x47), render_rgb(~sw, np.full((2, 2), 0x47, np.uint8))],
            "FLASH $C7 (BOTH PHASES)")
-    sh.heading("R2 PROJECTILES + IMPACTS (MASK OUTLINE GREY)")
+    sh.heading("R2 PROJECTILES + IMPACTS (AXE DROPPED; DAGGER 2 FRAMES)")
     for cap, fr in (("ARROW", ["arrow_fly1", "arrow_fly2"]), ("HIT", ["arrow_hit"]),
                     ("AXE SPIN", ["axe_spin1", "axe_spin2", "axe_spin3", "axe_spin4"]),
                     ("AXE HIT", ["axe_hit"]),
@@ -1028,7 +1032,7 @@ def r2_sheet(sh: "Sheet", art) -> None:
     sh.heading("R2 MAGE STAFF SWING: IDLE / CAST1 / SWING 40X48 + BONK")
     sh.add([sprite_rgb(*art.r2[f]) for f in ("wizard_idle", "wizard_cast1", "wizard_staffswing")]
            + [sprite_rgb(*art.proj["staff_bonk"])], "MAGE")
-    sh.heading("R2 MONSTERS (WALK1 WALK2 ATTACK HURT DEAD)")
+    sh.heading("R2 MONSTERS (ZOMBIE SUPERSEDED BY VAMPIRE; SPIDER/DEAD = R3)")
     for kind, (frames, _bw, _mo) in MONSTERS.items():
         imgs = [sprite_rgb(*art.r2[f]) for f in frames]
         if kind == "skelarch":
@@ -1272,7 +1276,7 @@ def sprite_with_cell_attrs(fg, solid, attrs: dict, h_cells: int, w_cells: int) -
 
 
 def r3_sheet(sh, art) -> None:
-    sh.heading("R3 WALLS: BLACK + DITHERED BRICK PATCHES")
+    sh.heading("R3 WALLS -- SUPERSEDED (R4 FRAGMENTS + PATCHES)")
     sh.add([glyph_rgb(b["bm"], A_WALL) for b in art.walls3.values()]
            + [glyph_rgb(art.tiles["wall"], A_WALL)], "DARK DITH PATCH FADE +OLD")
     sh.add([wall3_demo(art, A_WALL)], "INK $01")
@@ -1291,7 +1295,7 @@ def r3_sheet(sh, art) -> None:
     for cap, fly, fx in SPELL_SET:
         src = lambda f: art.spells.get(f) or art.r2[f]
         sh.add([sprite_rgb(*src(f)) for f in fly + fx], cap)
-    sh.heading("R3 GOLD GLOW (CHAMPION): SYNC CYCLE / DIAGONAL SWEEP")
+    sh.heading("R3 GOLD GLOW (SWEEP REJECTED; SYNC DECIDED)")
     fg, so, _ = art.r2["orc_walk1"]
     cells = [(c, r) for r in range(6) for c in range(3)]
     sh.add([sprite_with_cell_attrs(fg, so, glow_attrs(t, cells, "sync"), 6, 3)
@@ -1306,21 +1310,22 @@ def r3_sheet(sh, art) -> None:
 
 
 def glow_gif(art, path: str, nframes: int = 32):
-    """Standalone strip: champion orc + goblin, gold glow SYNC vs SWEEP (attr-only)."""
+    """Standalone strip: gold glow, SYNC only (user decision, round 4), on 4 bodies (attr-only)."""
     frames = []
     for t in range(nframes):
         s = Screen(rows=8)
         for c in range(32):
             s.glyph(c, 7, art.tiles["platform"], A_FLOOR)
-        for i, (n, mode, col) in enumerate((("orc_walk1", "sync", 2), ("orc_walk1", "sweep", 9),
-                                            ("goblin_walk1", "sync", 17), ("goblin_walk1", "sweep", 23))):
+        for i, (n, mode, col) in enumerate((("orc_walk1", "sync", 2), ("ogre_walk1", "sync", 9),
+                                            ("dknight_walk1", "sync", 17), ("goblin_walk1", "sync", 23))):
             fg, so, _ = art.r2[n]
             h = fg.shape[0] // 8
             y0 = 7 - h
             s.sprite(n, col * 8, y0 * 8, fg, so, 0x46)
-            for (c, r), a in glow_attrs(t, [(c, r) for r in range(h) for c in range(3)], mode).items():
+            wc = fg.shape[1] // 8
+            for (c, r), a in glow_attrs(t, [(c, r) for r in range(h) for c in range(wc)], mode).items():
                 s.attr[y0 + r, col + c] = a
-            s.text(col, 0, mode.upper(), 0x07, art.font)
+            s.text(col, 0, n.split("_")[0].upper()[:5], 0x07, art.font)
         frames.append(Image.fromarray(s.rgb_image()).resize((256 * 3, 64 * 3), Image.NEAREST))
     frames[0].save(path, save_all=True, append_images=frames[1:], duration=40, loop=0)
 
@@ -1461,7 +1466,9 @@ def asset_bytes(art: Art) -> tuple[list[str], dict]:
 # ---------------------------------------------------------------------------
 
 def main() -> int:
+    import concept_r4
     art = Art()
+    concept_r4.load(art)
     os.makedirs(OUT, exist_ok=True)
     all_errs, report = [], []
     for lay in ("v1", "v2"):
@@ -1485,8 +1492,11 @@ def main() -> int:
     lines, tot = asset_bytes(art)
     save_png(contact_sheet(art, tot), os.path.join(OUT, "concept_sheet.png"), 3)
     anim_gif(art, os.path.join(OUT, "decor_anim.gif"))
-    all_errs += r2_validate(art) + r3_validate(art)
-    r2_lines = r2_bytes(art) + r3_bytes(art)
+    all_errs += r2_validate(art) + r3_validate(art) + concept_r4.r4_validate(art)
+    e4, rep4 = concept_r4.write_screens(art)
+    all_errs += e4
+    report += rep4
+    r2_lines = r2_bytes(art) + r3_bytes(art) + concept_r4.r4_bytes(art)
     glow_gif(art, os.path.join(OUT, "boss_glow.gif"))
 
     print("\n".join(report))

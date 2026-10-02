@@ -1,0 +1,84 @@
+# WazHack/ZX CONCEPT round-4 panel ornament (our motif: chain + winged skull) — DRAFT.
+# Format = tools/gfx_convert.py --mode tile. Drawn ONCE into the storey-1 floor row (row 17), which
+# doubles as the panel's top frame: floor attr (ATTR_FLOOR[depth]) so F9 holds (sprites never
+# enter floor rows; heroes stand on its top line). Layout: cap_l, chain (link/bar alternating),
+# wing_l skull_l skull_r wing_r at cols 14-17, chain, cap_r. 8 glyphs = 64 B (+8 attr), cold data.
+=== orn_link ink:white paper:blue
+########
+........
+.######.
+#......#
+#......#
+.######.
+........
+########
+
+=== orn_bar ink:white paper:blue
+########
+........
+........
+########
+########
+........
+........
+########
+
+=== orn_cap_l ink:white paper:blue
+########
+#.......
+#.###...
+#.#.#...
+#.#..###
+#.####..
+#.......
+########
+
+=== orn_cap_r ink:white paper:blue
+########
+.......#
+...###.#
+...#.#.#
+###..#.#
+..####.#
+.......#
+########
+
+=== orn_wing_l ink:white paper:blue
+########
+......##
+....####
+..####.#
+.####.##
+###.####
+........
+########
+
+=== orn_skull_l ink:white paper:blue
+########
+....####
+...#####
+...##..#
+...##..#
+....###.
+.....#.#
+########
+
+=== orn_skull_r ink:white paper:blue
+########
+####....
+#####...
+#..##...
+#..##...
+.###....
+#.#.....
+########
+
+=== orn_wing_r ink:white paper:blue
+########
+##......
+####....
+#.####..
+##.####.
+####.###
+........
+########
