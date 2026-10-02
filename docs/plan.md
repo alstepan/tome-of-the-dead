@@ -46,7 +46,7 @@ squash of `feat/project-scaffold` @ `238af0c`; tape sha256 `6fa4629d…`).
 | B4 | Spec §6.4 text for the new ladder rules | designer | |
 | B5 | Fuse / real-hardware tape load not yet tried | user | |
 
-## Stage 2 — design before building · `IN-PROGRESS` (decided 2026-10-01)
+## Stage 2 — design before building · `DONE` (design; E1/E2 continue in 3A) (decided 2026-10-01)
 
 No new gameplay code until mechanics + graphics are designed and approved.
 Engine work in this stage = flicker fix + real-hardware measurement only.
@@ -147,6 +147,9 @@ Engine work in this stage = flicker fix + real-hardware measurement only.
   larger icons there); a custom **larger menu font**; Warrior/Mage must
   **find** books, scrolls, arrows and throwing weapons, and the Warrior **can
   run out** of throwables.
+- **Game name (user, 2026-10-02): "TOME OF THE DEAD".** Graphics approved; fonts approved
+  (thin 6×8 for the log/info/inventory, 8×16 menu font, 16×16 script title).
+  **Stage 2 design closed 2026-10-02.**
 - **Pending game.md rev 3 (batch):** 6×8 font + cell-boundary colour rule +
   menu font; finite throwables/arrows found in the dungeon; panel layout 24×16 icons / 16×16 gear; Mage keeps BAG (10 icons); Zombie →
   Vampire on D3/D6/D8 (resists: undead set, weak to fire, drain attack);
@@ -158,7 +161,7 @@ Engine work in this stage = flicker fix + real-hardware measurement only.
 |---|------|-------|------|
 | G1 ✅ | Budget after flicker fix: bytes per bank, contended T per tick, AY reserve, sprite-frame + decor-tile headroom, Rogue bytes reclaimed | z80-architect (read-only) | one budget table in `docs/design/budget.md` |
 | M1 ✅ (revision in progress) | Mechanics: core loop, turn/real-time model incl. jump, 2-storey rooms, doors/dead ends/generation, HP/mana/hunger, items + inventory, spells + ranged, monster roster, encounter cap (B1), win/lose, menu + controls | game-designer (Opus) + user | `docs/design/game.md` approved by user |
-| G2 ✅ (concept approved R5; fonts pending) | Art direction + asset list: Warrior/Mage frame list (jump, climb-attack, cast/ranged per spell), projectiles/FX, decor tiles, doors, HUD (HP/mana/hunger), inventory screen | game-designer → graphics-artist drafts on canvas | user approves on canvas |
+| G2 ✅ (concept + fonts approved) | Art direction + asset list: Warrior/Mage frame list (jump, climb-attack, cast/ranged per spell), projectiles/FX, decor tiles, doors, HUD (HP/mana/hunger), inventory screen | game-designer → graphics-artist drafts on canvas | user approves on canvas |
 | E0 ✅ (user: better, double buffer still needed) | Reorder experiment: render right after the HALT, anim/logic after it; measure render timing vs the beam. Also scouts a single-buffer approach for a possible future 48K port (48K itself out of scope) | z80-junior (manager-authorised exception: `play_loop` order only) | measured before/after + user eyeball; decides how E1 proceeds |
 | E1 | Flicker fix: double buffer (option A or B, `budget.md` §3); clean background rebased to bank 7 `$E000` | z80-staff-engineer | tests green; user confirms no flicker in Fuse **and on hardware** |
 | E2 | Real-hardware run: tape load + contended worst-tick measurement | staff + user | recorded worst tick vs budget |
@@ -181,7 +184,7 @@ Tags: **[S]** z80-staff-engineer (Opus), **[J]** z80-junior (Sonnet). Phases
 | A2 ✅ `10ad983` | Remove the Rogue (frames, tables, select screen, tests) | J | A1 | tests green; budget §2 bytes reclaimed |
 | A3 ✅ review: ship (feat/cold-code) | Cold-code relocation: generator + boot → bank 5 low RAM; menus/select → bank 3 via bank-2 trampoline; memory-map | S | A2 | `.sna` behaviour identical; tests green; bank-2 headroom measured |
 | A4 ✅ `4593389` (feat/zx0-tools) | ZX0 sprite sources: tool side (pack per frame in `gfx_convert`/`svg_sprites`, sjasmplus include) | J | A2 | round-trip decode test bit-exact |
-| A5 | ZX0 engine side: decompressor in fixed RAM, generator unpacks per frame into `GEN_SRC` | S | A3, A4 | pool bytes identical to today; boot time measured |
+| A5 ✅ review: ship (feat/zx0-engine) | ZX0 engine side: decompressor in fixed RAM, generator unpacks per frame into `GEN_SRC` | S | A3, A4 | pool bytes identical to today; boot time measured |
 | A6 | Raise `FRT_MAX` (to the M1 number) + tile ids 32 → 64 | S | A3 | tests green; memory-map |
 | A7 | Double buffer (E1, option A/B — decide after A1 eyeball): bank-7 clean bg rebased to `$E000`, present/flip | S | A3 | flicker.py = 0 events; budget measured; user confirms on hardware |
 | A8 | IM2 + ISR stub + silent AY player slot (8 KB reserved bank 3), `SYS_FRAMES`/ROM chain kept | S | A3 | tests green; ISR cost measured; no DI windows |
@@ -202,6 +205,15 @@ A3 review carry-overs (z80-reviewer, 2026-10-02):
 - Optional: move the scroll LDI movers (~350 B) / `gen_variant` inner loop
   (~80 B) back to bank 2 to undo the +7% transition / +14% boot slowdown.
 - Optional test: breakpoint on PC in `$C000-$DFFF` with `$7FFD&7 ≠ 3`.
+
+A5 review carry-overs (z80-reviewer, 2026-10-02; fold into A6):
+- Clear `GEN_ZBLK` in `alloc_reset`/`alloc_restore` so the unpack cache never
+  outlives a session (3F safety); add a negative stale-cache test.
+- Single build entry point (`tools/build.sh`: packer → sjasmplus), used by the
+  build/test skills and tests — avoids assembling stale packed art.
+- `tools/zx0_pack.py`: strict `DEFB $xx` parser (fail on other tokens).
+- A6: fold block+offset into the low-RAM FDESC descriptors; drop the banked
+  4-B descriptors + `copy_virt` in `zx0_frame`.
 
 ### 3B — World & screen (needs game.md §1–2 + revised layout)
 2-storey rooms + new panel rows (icon bar, bars, worn gear, 2-row message log);

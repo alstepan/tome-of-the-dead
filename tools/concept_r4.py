@@ -349,8 +349,12 @@ def write_screens(art) -> tuple[list[str], list[str]]:
              ("screen_d4_warrens", lambda: screen_d4(art)),
              ("screen_d7_fortress", lambda: screen_d7(art)),
              ("screen_d8_sanctum", lambda: screen_d8(art))]
+    import concept_fonts
+    depth_of = {"screen_9x9": "D1", "screen_d4_warrens": "D4", "screen_d7_fortress": "D7",
+                "screen_d8_sanctum": "D8"}
     for fn, mk in shots:
         s = mk()
+        concept_fonts.apply_panel6(s, art, depth_of[fn])       # info line + log in 6x8
         scr = s.to_scr()
         open(os.path.join(OUT, fn + ".scr"), "wb").write(scr)
         C.save_png(s.rgb_image(), os.path.join(OUT, fn + ".png"))
@@ -400,6 +404,8 @@ def panel_strip(art, ornament: bool) -> np.ndarray:
     s = room(art, "D1", ornament)
     panel(s, art, "mage", "D1", 2, "FIREBOLT 3MP RANGE 12 BURST",
           ["THE GOBLIN MISSES YOU.", "THE FIREBOLT FLIES."], greyed={5})
+    import concept_fonts
+    concept_fonts.apply_panel6(s, art, "D1")
     img = s.rgb_image()
     return img[16 * 8:24 * 8]
 
@@ -439,6 +445,23 @@ def sheet_current(sh, art) -> None:
     sh.add([C.sprite_rgb(art.r2[n][0], art.r2[n][1], INK["vampire"]) for n in
             ("vampire_walk1", "vampire_walk2", "vampire_bite", "vampire_hurt", "vampire_dead")],
            "VAMPIRE (BAT FORM = EXISTING BAT)")
+    sh.heading("FONTS (R6 THIN/SCRIPT): 6x8 768 B / MENU 8x16 832 B / TITLE A-Z 864 B")
+    f6, f16, ft = art.f6, art.f16, art.ft
+    def strip(glyphs, codes, ink=(255, 255, 255)):
+        ims = []
+        for c in codes:
+            g = glyphs[c]
+            im = np.zeros(g.shape + (3,), np.uint8)
+            im[g] = ink
+            ims.append(im)
+        return np.hstack(ims)
+    for i in range(32, 128, 32):
+        sh.add([strip(f6, range(i, i + 32))], f"6X8 {i}-{i + 31}")
+    import font_tool
+    sh.add([strip(f16, [ord(c) for c in font_tool.MENU_SET[:26]])], "MENU 8X16")
+    sh.add([strip(f16, [ord(c) for c in font_tool.MENU_SET[26:]])], "MENU 8X16 (2)")
+    sh.add([strip(ft, [ord(c) for c in "ABCDEFGHIJKLM"])], "TITLE 16X16 A-M")
+    sh.add([strip(ft, [ord(c) for c in "NOPQRSTUVWXYZ"])], "TITLE 16X16 N-Z")
     sh.heading("R4 GOLD GLOW (SYNC, DECIDED)")
     fg, so, _ = art.r2["orc_walk1"]
     cells = [(c, r) for r in range(6) for c in range(3)]

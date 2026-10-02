@@ -4,7 +4,8 @@
 > `assets/gfx/sprites/index.asm`, `docs/memory-map.md`, `docs/design/prototype.md`.
 > **M** = measured (sym/listing/memory-map/ASSERT formula), **E** = estimate.
 > 128K frame = 70,908 T; tick = 2 frames = 141,816 T; target 95% = **134.7k T**.
-> E2 replaces the E numbers (per-phase tick split, contention factor, stack
+> A3/A5 (2026-10-02) measured: bank-2 headroom 3,170 B, low-RAM spare 1,308 B,
+> sources 7,219 B packed. E2 replaces the E numbers (per-phase tick split, contention factor, stack
 > depth, AY player cost) with measurements.
 
 ## 1. Usage per bank (today)
@@ -133,6 +134,7 @@ of logic leaves the heaviest render tick.
 |---|---|---|---|
 | Pre-shift pool 0/4/6 | **10,976** | hero frames beyond 12,608, new monsters, boss, projectiles/FX | M |
 | Sources banks 1+3 | 32,768 − 16,899 − 8,192 = **7,677** | unshifted source of every new frame | M+E |
+| ↳ **after A3+A5 (measured 2026-10-02)** | ZX0 sources 7,219 B (68 frames, 23 blocks, 2.40×): **bank 1 9,165 free**, **bank 3 7,232 free** below the AY reserve (`$E000`, 7 KB per user) | new frame sources (packed), menus/menu font, strings, icons | M |
 | Frame ids | **28** | all new frames together | M |
 | Bank 2 | ~**870 B** (+~2.1 KB if cold code moves out → ~3 KB) | hot code only | M+E |
 | Bank 5 low RAM | 5,088 + ~1,000 | cold code (menu, inventory, generator), font, level state, item tables, tiles | M+E |
