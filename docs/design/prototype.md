@@ -159,6 +159,8 @@ A **WAIT** turn lasts 2 ticks.
 
 ### 3.3 Room geometry (cells)
 
+> **Superseded by `game.md` §2.1** (2 storeys × 9 rows + 6-row panel).
+
 The room area is **32 cols × 21 rows (rows 0–20)**. The HUD is rows 21–23 (§9).
 There are **3 storeys** of 7 rows. For storey `s ∈ {0,1,2}` (0 = top):
 
@@ -468,6 +470,8 @@ clean-background erase and the reviewer's list. The measurement and the result a
 recorded by the manager in `plan.md`. Until the target is met, overruns are
 presentation-only (`OVERRUN_COUNT`), never logic.
 
+> **Caps superseded by `game.md` §9.3** (weight cap incl. projectiles).
+
 **Caps (binding):** **hero + 4 monsters on screen**; **≤ 2 Skeletons** among them.
 The caps are enforced at authoring (≤ 3 monsters per room initially) and at
 **follow time** (§3.7 step 3), the only way a room's population grows.
@@ -712,6 +716,8 @@ slots are the truth (§3.7). The tile map (672 B) is built from the descriptor +
 ---
 
 ## 9. Controls & HUD
+
+> **Superseded by `game.md` §3** (controls, menu) **and `concept-screen.md` §5** (panel).
 
 | Key | PROTO action |
 |---|---|

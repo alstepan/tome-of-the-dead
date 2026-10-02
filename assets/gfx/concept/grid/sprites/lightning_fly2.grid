@@ -1,0 +1,19 @@
+# WazHack/ZX gfx text grid — DERIVED by tools/concept_screen.py from
+# assets/gfx/concept/grid/spells.grid (edit that); CONCEPT draft, not on the canvas yet.
+# name: lightning_fly2
+# size: 16x8
+# character: SPELL FX
+# caption: LIGHTNING_FLY2
+# ink: #FFFFFF
+# attr: $47 (ink white, paper black, bright 1)
+# anchor: 0 0
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+................
+......+++.......
+.....++#++...+++
++++.++###++.++##
+##+++##+##+++##+
++##+##+++##+##++
+++###++.++###++.
+.++#++...++#++..

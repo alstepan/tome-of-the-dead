@@ -1,0 +1,48 @@
+# WazHack/ZX CONCEPT round-2 plastered wall tiles — DRAFT for user review.
+# Format = tools/gfx_convert.py --mode tile. Same ink/paper as the existing WALL ($01 in air
+# rows). Plaster = solid ink; bare brick = the existing wall pattern (mortar ink, faces paper),
+# in register with it (period 4 px across, 8 px down), so a hole/edge continues the global
+# brick grid. Brick pixels touching plaster are paper: a 1-px recess shadow at the break.
+# Edge contract: plaster/plaster_crack/plaster_hole have all-plaster borders; plaster_edge is
+# plaster on top, brick at the bottom, and its left/right borders change at the same row (4),
+# so a row of plaster_edge tiles joins plaster above and the existing wall below seamlessly.
+# Air rows only: in floor rows walls use $0F, where solid plaster would read as solid white.
+=== plaster ink:blue paper:black
+########
+########
+#####.##
+########
+########
+########
+#.######
+########
+
+=== plaster_crack ink:blue paper:black
+###.####
+###.####
+####.###
+####.###
+#####.##
+####.#.#
+######.#
+#######.
+
+=== plaster_hole ink:blue paper:black
+########
+###..###
+##..#.##
+#...#..#
+#.###.##
+##...###
+###.####
+########
+
+=== plaster_edge ink:blue paper:black
+########
+########
+########
+####.###
+#.#.#.##
+........
+..#...#.
+..#...#.

@@ -1,0 +1,56 @@
+# WazHack/ZX CONCEPT door (docs/design/concept-screen.md §3.1) — DRAFT for user review.
+# Format = tools/gfx_convert.py --mode tile. 4 ids: arch L/R + plank L/R (planks repeat x5).
+# Dim yellow $06 = wood. Open state: planks become AIR, the arch stays (no new id).
+# The arch is the frame only (double stroke), so it still reads right when the door is open.
+# Iron band + rivet are baked into the planks, so they repeat on every plank row.
+# door_r_ring is OPTIONAL (a 5th id): a single ring handle; with only 4 ids the ring
+# would repeat on all 5 plank rows, so the mock uses the plain planks.
+=== door_arch_l ink:yellow paper:black
+.....###
+...##...
+..#..###
+.#..##..
+.#.#....
+#..#....
+#.#.....
+#.#.....
+
+=== door_arch_r ink:yellow paper:black
+###.....
+...##...
+###..#..
+..##..#.
+....#.#.
+....#..#
+.....#.#
+.....#.#
+
+=== door_l ink:yellow paper:black
+#.#.##.#
+#.#.##.#
+#.#.....
+#.#.####
+#.#.....
+#.#.##.#
+#.#.##.#
+#.#.##.#
+
+=== door_r ink:yellow paper:black
+#.##.#.#
+#.##.#.#
+.....#.#
+####.#.#
+.....#.#
+#.##.#.#
+#.##.#.#
+#.##.#.#
+
+=== door_r_ring ink:yellow paper:black
+#.##.#.#
+#.##.#.#
+.....#.#
+####.#.#
+.....#.#
+#...##.#
+.###.#.#
+#...##.#

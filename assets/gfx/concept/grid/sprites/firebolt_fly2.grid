@@ -1,0 +1,19 @@
+# WazHack/ZX gfx text grid — DERIVED by tools/concept_screen.py from
+# assets/gfx/concept/grid/spells.grid (edit that); CONCEPT draft, not on the canvas yet.
+# name: firebolt_fly2
+# size: 16x8
+# character: SPELL FX
+# caption: FIREBOLT_FLY2
+# ink: #FF3030
+# attr: $42 (ink red, paper black, bright 1)
+# anchor: 0 0
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
++++.+++++#####++
++#+++#+########+
++++#+#+#########
+#+##############
+++##+###########
++#+++#+#########
+++++#+++#######+
+...+++.++#####++

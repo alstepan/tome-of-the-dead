@@ -1,0 +1,19 @@
+# WazHack/ZX gfx text grid — DERIVED by tools/concept_screen.py from
+# assets/gfx/concept/grid/projectiles.grid (edit that); CONCEPT draft, not on the canvas yet.
+# name: necro_hit
+# size: 8x8
+# character: PROJECTILE FX
+# caption: NECRO_HIT
+# ink: #00FF00
+# attr: $44 (ink green, paper black, bright 1)
+# anchor: 0 0
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+#++.++#+
++#+++#++
++++#+++.
+.+###+..
++++#+++.
++#+++#++
+#++.++#+
+++...+++

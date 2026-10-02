@@ -1,0 +1,19 @@
+# WazHack/ZX gfx text grid — DERIVED by tools/concept_screen.py from
+# assets/gfx/concept/grid/projectiles.grid (edit that); CONCEPT draft, not on the canvas yet.
+# name: dagger_spin4
+# size: 8x8
+# character: PROJECTILE FX
+# caption: DAGGER_SPIN4
+# ink: #FFFFFF
+# attr: $47 (ink white, paper black, bright 1)
+# anchor: 0 0
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+#++.....
+##++....
++##++...
+++##++++
+.++##+#+
+..+++#++
+...+#+##
+...+++##

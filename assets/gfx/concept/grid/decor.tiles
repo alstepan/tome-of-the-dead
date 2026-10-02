@@ -1,0 +1,198 @@
+# WazHack/ZX CONCEPT decor tiles (docs/design/concept-screen.md §3.3) — DRAFT for user review.
+# Format = tools/gfx_convert.py --mode tile: "=== name ink:<c> paper:<c> [bright]" + 8 rows
+# of 8 ('#' ink, '.' paper). One paper+ink per tile, so clash-legal by construction.
+# Every decor tile sits in an AIR band (black paper, F9). Animated objects list every frame.
+# Attr cycles (torch, brazier flame, candles) are attr-only and live in concept_screen.py.
+# The wall torch (#1) is NOT here: it reuses item_torch (existing art, 0 new ids).
+
+# --- #2 Brazier: flame (2-frame glyph swap + $46/$42 attr cycle) over a bowl ($07)
+=== brazier_flame1 ink:yellow paper:black bright
+....#...
+...##...
+..###.#.
+.#.###..
+..####..
+.##.###.
+.######.
+..####..
+
+=== brazier_flame2 ink:yellow paper:black bright
+...#....
+...##.#.
+.#.##...
+..####..
+.####.#.
+.###.##.
+.######.
+..####..
+
+=== brazier_bowl ink:white paper:black
+#.#.##.#
+########
+.######.
+..####..
+...##...
+...##...
+..####..
+.##..##.
+
+# --- #3 Candles: cluster of 3 on the standing row (attr cycle $46/$06, 8-step table)
+=== candles ink:yellow paper:black bright
+...#....
+...#....
+.#......
+.#..#..#
+....#..#
+.#..#...
+.#..#.##
+########
+
+# --- #4 Dripping water: frame 1 bead forming, frame 2 drop falling (then hold 12 ticks)
+=== drip1 ink:cyan paper:black bright
+..####..
+...##...
+...##...
+..####..
+..####..
+...##...
+........
+........
+
+=== drip2 ink:cyan paper:black bright
+..####..
+...##...
+........
+........
+...#....
+..###...
+..###...
+...#....
+
+# --- #5 Cobweb (top-left corner: wall on the left, ceiling above)
+=== cobweb ink:white paper:black
+########
+##..#.#.
+#.#.#.#.
+#..###..
+###.#...
+#.#.#...
+#..#....
+##......
+
+# --- #6 Hanging chain (repeats vertically: oval link + edge-on link)
+=== chain ink:white paper:black
+...##...
+..#..#..
+..#..#..
+..#..#..
+...##...
+...##...
+...##...
+...##...
+
+# --- #7 Banner: rod + cloth (emblem in negative), swallowtail
+=== banner_top ink:magenta paper:black bright
+########
+.######.
+.######.
+.##..##.
+.#.##.#.
+.#.##.#.
+.##..##.
+.######.
+
+=== banner_tail ink:magenta paper:black bright
+.######.
+.######.
+.######.
+.######.
+.##..##.
+.##..##.
+.#....#.
+.#....#.
+
+# --- #8 Skulls & bones (on the standing row)
+=== skulls ink:white paper:black bright
+........
+........
+..###...
+.#####.#
+.#.#.#.#
+.#####.#
+..#.#.##
+##.###.#
+
+# --- #9 Barred window (one glyph tiled 2x2): lit panes, black bars (dim cyan = moonlight)
+=== window ink:cyan paper:black
+###.###.
+###.###.
+###.###.
+###.###.
+###.###.
+###.###.
+###.###.
+........
+
+# --- #10 Moss hanging under a floor (tiles horizontally)
+=== moss ink:green paper:black
+##.####.
+#..#.##.
+#..#..#.
+...#..#.
+...#....
+...#....
+........
+........
+
+# --- #11 Rubble (dead-end marker, sits on the standing row)
+=== rubble ink:blue paper:black
+........
+........
+........
+....##..
+...####.
+.##.###.
+####..##
+########
+
+# --- #12 Bookshelf (one glyph tiled 2x2)
+=== bookshelf ink:yellow paper:black
+########
+#.##.#.#
+#.##.#.#
+#.##.#.#
+#.##.###
+#.##.###
+#.##.###
+########
+
+# --- deferred: Cauldron 2x1 (left static, right bubbles: 2-frame glyph swap)
+=== cauldron_l ink:green paper:black bright
+...#....
+.#..#.#.
+########
+.#######
+#.######
+.#######
+..######
+...#....
+
+=== cauldron_r1 ink:green paper:black bright
+#..#....
+...#.#..
+########
+#######.
+######.#
+#######.
+######..
+....#...
+
+=== cauldron_r2 ink:green paper:black bright
+.#....#.
+#.#.....
+########
+#######.
+######.#
+#######.
+######..
+....#...
