@@ -26,6 +26,8 @@ BANK_POOL0      EQU 0               ; pre-shift pool (uncontended), boot-generat
 BANK_POOL1      EQU 4
 BANK_POOL2      EQU 6
 BANK_SHADOW     EQU 7               ; clean-background shadow (R-1 erase lever)
+BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
+AY_RESERVE      EQU $E000           ; bank 3 $E000..$FFFF: AY player/music reserve (A8); cold code + sources end below
 SHADOW_BITMAP   EQU $C000           ; bank 7: room tiles in screen layout (rows 0..20)
 SHADOW_ATTR     EQU $D800           ; bank 7: room tile attrs in screen layout
 BANK_WINDOW     EQU $C000
@@ -45,6 +47,18 @@ GEN_MIR         EQU $6900           ; 512 B: mirrored copy (left-facing)
 TILE_GLYPHS     EQU $6B00           ; 256 B: 32 tiles x 8 B (page-aligned)
 TILE_ATTRS      EQU $6C00           ; 32 B : attr per tile id (page-aligned)
 LOWRAM_END      EQU $6C20
+; Reserved for Stage 3A (docs/memory-map.md "Bank 5 low RAM"); ASSERTed in main.asm
+; so the cold-code block can never grow into them:
+;   A6 tile ids 32 -> 64: $6C20..$6D3F (glyphs grow to 512 B, attrs to 64 B)
+;   A6 frame descriptors: FDESC_RESERVE B directly BELOW lowram_code (loaded)
+;   A5 ZX0 decompressor:  ZX0_RESERVE B inside lowram.asm (the block grows down)
+;   A5 ZX0 scratch:       aliases ROOM_MAP..NEXT_MAP ($6000..$65FF, 1,536 B) —
+;                         the generator only runs while no room is built
+LOWRAM_FREE_END EQU $6D40           ; end of fixed low-RAM buffers incl. the A6 tile reserve
+FDESC_RESERVE   EQU 160 * 12        ; A6: FRT_MAX 160 x <= 12 B descriptors
+ZX0_RESERVE     EQU 128             ; A5: decompressor (~68 B) + glue
+GEN_SCRATCH     EQU ROOM_MAP        ; A5: 1,536 B generator-time scratch (alias, rooms dead)
+GEN_SCRATCH_LEN EQU NEXT_MAP + $300 - ROOM_MAP
 
 ROOM_COLS       EQU 32
 ROOM_ROWS       EQU 21

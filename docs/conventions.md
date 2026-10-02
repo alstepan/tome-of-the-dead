@@ -32,6 +32,12 @@
 - Paging port is `$7FFD` (write-only — keep a shadow byte in RAM, never read-modify
   the port). Record the current bank shadow location in `docs/memory-map.md`.
 - Document which bank any far data lives in, and the bank-switch cost around it.
+- Hot (per-tick) code lives in bank 2. Cold code that pages `$C000` lives in
+  bank 5 low RAM (`src/lowram.asm`); cold code that needs no other `$C000`
+  bank lives in bank 3 (`src/bank3.asm`) and is entered only through `far3`
+  (HL = target, A = arg; restores the caller's page from the shadow). Bank-3
+  code never pages `$C000` itself — it calls bank-2 helpers that re-page it
+  (`blit_keep`). See `docs/memory-map.md` "Cold code placement".
 
 ## Style
 

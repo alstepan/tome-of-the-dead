@@ -5,14 +5,18 @@
 ; Target : ZX Spectrum 128K.   Build:
 ;   sjasmplus src/main.asm --fullpath --lst=build/wazhack.lst --sld=build/wazhack.sld
 ;             --sym=build/wazhack.sym -i src
-;   -> build/wazhack.tap (BASIC loader + main CODE + 2 headerless sprite banks)
+;   -> build/wazhack.tap (BASIC loader + CODE lowram_code..code_end + 2
+;      headerless blocks: bank 1 sources, bank 3 source tail + cold code)
 ;   -> build/wazhack.sna (128K snapshot; entry = boot, all banks preloaded)
 ;
-; Memory (docs/memory-map.md "PROTO"): code+tables $8000..(< $B000, bank 2);
-; runtime entity/frame/render tables $B000..$B9FF; stack $BA00..$BEFF; state
-; block $BF00..$BFFF; room maps + generator buffers $6000..$6C1F (bank 5);
-; unshifted sprite SOURCES in banks 1/3 (assembled at virtual $8000..$FFFF);
-; mirrored + pre-shifted sprite POOL generated at boot into banks 0/4/6.
+; Memory (docs/memory-map.md "PROTO"): HOT code+tables $8000..(< $B000, bank
+; 2); runtime entity/frame/render tables $B000..$BAFF; stack $BB00..$BEFF;
+; state block $BF00..$BFFF; room maps + generator buffers $6000..$6C1F and
+; the COLD code block lowram_code..$7FFF (bank 5: boot, generator, game start);
+; COLD paged code in bank 3 after the source tail (select, transition scrolls,
+; via far3); unshifted sprite SOURCES in banks 1/3 (assembled at virtual
+; $8000..$FFFF); mirrored + pre-shifted sprite POOL generated at boot into
+; banks 0/4/6.
 ;
 ; Loop: 25 Hz tick (2 frames, ROM IM1 FRAMES counter). TURN_PHASE INPUT samples
 ; keys and resolves a whole turn instantly (player, then monsters in slot order,
@@ -46,280 +50,48 @@ SRC_LEN_HI      EQU SRC_TOTAL - SRC_LEN_LO
                 ASSERT SRC_TOTAL <= $8000
                 DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B (bank1 ", /D, SRC_LEN_LO, ", bank3 ", /D, SRC_LEN_HI, ")"
 
+
 ;==============================================================================
-; MAIN IMAGE — bank 2 at $8000.
+; BANK-3 COLD CODE — hero select + transition scrolls (bank3.asm), assembled
+; straight after the source tail in bank 3 (never below $C000), ending below
+; the AY reserve. Loaded by the bank-3 tape block (BANK3_LEN from $C000).
+;==============================================================================
+    IF $ < BANK_WINDOW
+                ORG  BANK_WINDOW               ; sources all in bank 1
+    ENDIF
+bank3_code:
+                INCLUDE "bank3.asm"
+bank3_end:
+BANK3_LEN       EQU bank3_end - BANK_WINDOW
+BANK3_CODE_LEN  EQU bank3_end - bank3_code
+                ASSERT bank3_end <= AY_RESERVE
+                DISPLAY "GAME bank-3 cold code: ", /H, bank3_code, "..", /H, bank3_end - 1, " (", /D, BANK3_CODE_LEN, " B), free to AY reserve: ", /D, AY_RESERVE - bank3_end
+
+;==============================================================================
+; BANK-5 LOW-RAM COLD CODE — tape entry, boot, generator, init_tiles, game
+; start (lowram.asm). ORGed so it ends exactly at $8000 (no ALIGN inside, so
+; its size does not depend on its base): contiguous with the bank-2 image.
+;==============================================================================
+                MMU  1, 5
+                ORG  $8000 - (lowram_code_end - lowram_code)
+lowram_code:
+                INCLUDE "lowram.asm"
+lowram_code_end:
+LOWRAM_CODE_LEN EQU lowram_code_end - lowram_code
+                ASSERT lowram_code_end == $8000
+LOWRAM_SPARE    EQU lowram_code - ZX0_RESERVE - FDESC_RESERVE - LOWRAM_FREE_END
+                ASSERT lowram_code - ZX0_RESERVE - FDESC_RESERVE >= LOWRAM_FREE_END
+                ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= BITREV_TAB
+                DISPLAY "GAME low-RAM cold code: ", /H, lowram_code, "..0x7FFF (", /D, LOWRAM_CODE_LEN, " B), spare after A5/A6 reserves: ", /D, LOWRAM_SPARE
+
+;==============================================================================
+; MAIN IMAGE — bank 2 at $8000. Hot code + tables only.
 ;==============================================================================
                 MMU  2, 2
                 MMU  3, 0
                 ORG  $8000
+image_start:
 
-;------------------------------------------------------------------------------
-; start — .tap entry (RANDOMIZE USR 32768): pull the two headerless sprite-bank
-; blocks off tape with the ROM loader, then boot. The .sna enters at boot.
-;------------------------------------------------------------------------------
-start:
-                di
-                ld   sp, WORKSTORE_TOP
-                ld   iy, IY_SYSVAR
-                call check_paging              ; stops here if $7FFD is locked
-.lo:            ld   a, BANK_SRC_LO            ; test probe (paging OK)
-                call page_bank
-                ld   ix, BANK_WINDOW
-                ld   de, SRC_LEN_LO
-                ld   a, $FF                    ; data block flag
-                scf                            ; LOAD (not VERIFY)
-                call ROM_LD_BYTES
-                jr   nc, .lo                   ; tape error: rewind + retry
-    IF SRC_LEN_HI > 0
-.hi:            ld   a, BANK_SRC_HI
-                call page_bank
-                ld   ix, BANK_WINDOW
-                ld   de, SRC_LEN_HI
-                ld   a, $FF
-                scf
-                call ROM_LD_BYTES
-                jr   nc, .hi
-    ENDIF
-start_loaded:                                  ; falls straight into boot:
-                ASSERT start_loaded == boot    ; nothing may be inserted here
-
-;==============================================================================
-; boot — .sna entry. Cold init, pool generation (~1 s), then hero select.
-;==============================================================================
-boot:
-                di
-                ld   sp, WORKSTORE_TOP
-                ld   iy, IY_SYSVAR             ; ROM ISR invariant (conventions)
-                im   1
-                ld   a, BANK_POOL0
-                call page_bank
-                xor  a
-                out  (PORT_BORDER), a
-                ld   (INPUT_SRC), a
-                ld   (ANIM_FREEZE), a
-                ld   (ANIM_TRACE_IDX), a
-                ld   (BLIT_MISS), a
-                ld   (DMG_OVERFLOW), a
-                ld   (CLIP_TRAP), a
-                ld   (TURN_PHASE), a
-                ld   (ZAP_T), a
-                ld   (PEND_DMG_COUNT), a
-                ld   (CUR_ROOM), a
-                ld   (YIELD_FLAG), a
-                ld   hl, 0
-                ld   (OVERRUN_COUNT), hl
-                ld   (TICK_COUNTER), hl
-                ld   (TURN_COUNTER), hl
-                ld   hl, RNG_SEED
-                ld   (RNG_STATE), hl
-                ld   a, 1
-                ld   (INPUT_REPEAT), a         ; play default: held keys repeat
-                ld   a, GS_BOOT
-                ld   (GAME_STATE), a
-                ld   hl, ANIM_TRACE
-                ld   de, ANIM_TRACE + 1
-                ld   bc, ANIM_TRACE_LEN - 1
-                ld   (hl), $FF
-                ldir
-                call init_kbd_mirror
-                ld   a, ATTR_HUD
-                call clear_screen
-                ld   hl, P_ENTITIES            ; nothing drawn / alive yet
-                ld   de, P_ENTITIES + 1
-                ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1
-                ld   (hl), 0
-                ldir
-                ei
-                call build_bitrev
-                call init_tiles
-                call alloc_reset
-                ; monsters: every kind's frames, both facings (§5.2)
-                ld   a, K_SKELETON
-.gk:            push af
-                call gen_kind
-                pop  af
-                inc  a
-                cp   K_COUNT
-                jr   c, .gk
-                ; the two heroes' IDLE frames for the select screen
-                ld   a, FID_knight_idle1
-                call gen_frame
-                ld   a, FID_wizard_idle
-                call gen_frame
-                or   a                         ; CF = 0: save
-                call sel_frt_copy
-                call alloc_mark                ; hero sets regenerate from here
-boot_done:                                     ; falls through into enter_select
-                ASSERT boot_done == enter_select
-
-;==============================================================================
-; enter_select — GS_SELECT: the two heroes' IDLE frames, names, keys 1/2.
-;==============================================================================
-SEL_ROW         EQU 7                   ; body top row of the hero previews
-enter_select:
-                ld   a, GS_BOOT                ; GS_SELECT only once fully drawn
-                ld   (GAME_STATE), a
-                scf                            ; the last game's gen_kind re-pointed
-                call sel_frt_copy              ; its hero's idle FRT row: restore
-                xor  a
-                call clear_screen
-                ld   b, 2
-                ld   c, 8
-                ld   hl, str_title
-                call print_str
-                ld   hl, sel_tab
-                ld   b, 2
-.h:             push bc
-                push hl
-                ld   a, (hl)                   ; fid
-                ld   (BL_FID), a
-                inc  hl
-                ld   a, (hl)                   ; col
-                add  a, a
-                add  a, a
-                add  a, a
-                ld   (BL_FPX), a
-                ld   a, SEL_ROW * 8
-                ld   (BL_FPY), a
-                xor  a
-                ld   (BL_LEFT), a
-                call blit_sprite
-                pop  hl
-                push hl
-                inc  hl
-                ld   c, (hl)                   ; col
-                inc  hl
-                ld   a, (hl)                   ; attr
-                ld   b, SEL_ROW
-                ld   d, 3
-                ld   e, 6
-                call stamp_rect
-                pop  hl
-                push hl
-                inc  hl
-                ld   c, (hl)
-                dec  c
-                inc  hl
-                inc  hl
-                ld   a, (hl)
-                inc  hl
-                ld   h, (hl)
-                ld   l, a
-                ld   b, SEL_ROW + 7
-                call print_str
-                pop  hl
-                ld   de, 5
-                add  hl, de
-                pop  bc
-                djnz .h
-                ld   b, SEL_ROW + 9
-                ld   c, 7
-                ld   hl, str_keys
-                call print_str
-                ld   b, SEL_ROW + 9
-                ld   a, ATTR_HUD
-                call row_attr_fill
-                ld   b, 2
-                call row_attr_fill
-                ld   b, SEL_ROW + 7
-                call row_attr_fill
-                ld   a, (SYS_FRAMES)
-                ld   (LAST_TICK_FRAME), a
-                ld   a, GS_SELECT
-                ld   (GAME_STATE), a
-select_loop:
-                halt
-select_tick:                                   ; test probe (after the HALT)
-                call scan_matrix
-                call sample_input
-                ld   a, (PLAYER_DISC)
-                ld   c, K_KNIGHT
-                bit  DK_1_BIT, a               ; '1'
-                jr   nz, start_game
-                inc  c
-                bit  DK_2_BIT, a               ; '2'
-                jr   nz, start_game
-                jr   select_loop
-row_attr_fill:  ld   c, 0
-                push af
-                call attr_addr
-                pop  af
-                ld   (hl), a
-                ld   d, h
-                ld   e, l
-                inc  de
-                ld   bc, 31
-                ldir
-                ret
-
-;------------------------------------------------------------------------------
-; check_paging — 48 BASIC / USR 0 set $7FFD bit 5 (paging lock): every later
-; OUT is ignored, so the two sprite banks would load over each other and the
-; pool would alias. Write different bytes to bank 1 and bank 0 at $C000 and
-; read bank 1 back; on a mismatch print a message and stop (DI + HALT).
-; Tape path only (the .sna preloads all banks and enters at boot). Bank 0 and
-; bank 1 $C000 are free here (pool / sources are written after this).
-; +2A/+3 are unsupported (different paging). Clobbers: A, BC, HL (+ print).
-;------------------------------------------------------------------------------
-check_paging:
-                ld   a, BANK_SRC_LO
-                call page_bank
-                ld   hl, BANK_WINDOW
-                ld   (hl), PAGING_PROBE
-                ld   a, BANK_POOL0
-                call page_bank
-                ld   (hl), ~PAGING_PROBE & $FF
-                ld   a, BANK_SRC_LO
-                call page_bank
-                ld   a, (hl)
-                cp   PAGING_PROBE
-                ret  z
-                ld   a, ATTR_HUD
-                call clear_screen
-                ld   b, 11
-                ld   c, 5
-                ld   hl, str_lock
-                call print_str
-.locked:        di                             ; test probe (paging locked)
-                halt
-
-
-; select-screen entries: fid, body col, attr, name
-sel_tab:        DB   FID_knight_idle1, 8,  $47
-                DW   nm_knight
-                DB   FID_wizard_idle,  21, $45
-                DW   nm_wizard
-
-;==============================================================================
-; start_game — C = hero kind. Generate its frames (§5.2: only the chosen
-; hero), new game, first render, then the play loop.
-;==============================================================================
-start_game:
-                ld   a, c
-                ld   (HERO_KIND), a
-                call alloc_restore
-                ld   a, (HERO_KIND)
-                call gen_kind
-                call new_game
-                ld   h, ROOM_MAP >> 8
-                ld   a, (CUR_ROOM)
-                call build_room_map
-                ld   a, ATTR_HUD
-                call clear_screen
-                call draw_room
-                call hud_status
-                call hud_room
-                call msg_begin
-                ld   hl, str_welcome
-                call print_str
-                ld   a, 1
-                ld   (NEED_RELEASE), a         ; the select key must be released
-                ld   a, GS_PLAYING
-                ld   (GAME_STATE), a
-                ld   a, (SYS_FRAMES)
-                ld   (LAST_TICK_FRAME), a
-start_game_done:                               ; falls through into play_loop
-                ASSERT start_game_done == play_loop
 
 ;==============================================================================
 ; play_loop — one 25 Hz tick per iteration (prototype §3.2).
@@ -477,13 +249,13 @@ do_exit:
                 ld   h, NEXT_MAP >> 8
                 ld   a, (EXIT_DEST)
                 call build_room_map
-                ld   a, (EXIT_KIND)
+                ld   a, (EXIT_KIND)            ; scroll arg: the exit direction
+                ld   hl, hscroll_room          ; both scrolls live in bank 3
                 cp   EX_UP
-                jr   nc, .v
-                call hscroll_room
-                jr   .arr
-.v:             call vscroll_room
-.arr:           call shadow_room               ; clean background of the new room
+                jr   c, .h
+                ld   hl, vscroll_room
+.h:             call far3
+                call shadow_room               ; clean background of the new room
                 ld   a, (EXIT_DEST)
                 ld   (CUR_ROOM), a
                 ld   ix, P_ENTITIES
@@ -534,30 +306,29 @@ end_screen:
                 ld   a, (PLAYER_DISC)
                 bit  DK_ENTER_BIT, a
                 jp   z, play_loop
-                jp   enter_select
+                ; ENTER: fall through into enter_select
 
 ;==============================================================================
-; init_kbd_mirror — all released.  Clobbers: A, B, HL
+; enter_select — hero select (bank 3: sel_run via far3), then start_game (bank
+; 5 low RAM) with C = the chosen kind. Reached by jp only (boot, end_screen),
+; so the stack is at its base level here.
 ;==============================================================================
-init_kbd_mirror:
-                ld   hl, KBD_MATRIX
-                ld   b, KBD_MATRIX_LEN
-                ld   a, KBD_RELEASED
-.r:             ld   (hl), a
-                inc  hl
-                djnz .r
-                ret
+enter_select:
+                ld   hl, sel_run
+                call far3                      ; C = hero kind
+                jp   start_game
+
 
                 INCLUDE "io.asm"
                 INCLUDE "gfx.asm"
                 INCLUDE "logic.asm"
                 INCLUDE "anim.asm"
                 INCLUDE "data.asm"
-                INCLUDE "../assets/gfx/bg_tiles.asm"
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3.
 ;==============================================================================
+kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
                 ALIGN 256
 kind_tab:
                 ;     KN  WZ  RG  SK  GB  GH  RT  BT  SL
@@ -585,19 +356,25 @@ kind_tab:
                 ASSERT $ - kind_tab == 256
 
 code_end:
-CODE_LEN        EQU code_end - start
+IMAGE_LEN       EQU code_end - image_start
+TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + bank 2
+                ASSERT start == lowram_code    ; USR target = first byte of the block
+                ASSERT image_start == $8000
                 ASSERT code_end <= P_ENTITIES
                 ASSERT FRT + FRT_MAX * FRT_STRIDE <= SLOTVARS
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
-                ASSERT LOWRAM_END <= $8000
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, CODE_LEN, " B), free to ENTITIES: ", /D, P_ENTITIES - code_end
+                ASSERT LOWRAM_END <= LOWRAM_FREE_END
+                ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to ENTITIES: ", /D, P_ENTITIES - code_end, " (+", /D, kind_tab - kind_tab_pad, " B kind_tab ALIGN pad)"
 
 ;------------------------------------------------------------------------------
-; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "32768"
-; CLEAR 24575 frees $6000..$7FFF for the room maps / generator buffers.
+; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"
+; CLEAR 24575 frees $6000..$7FFF for the room maps / generator buffers and the
+; low-RAM cold code. The USR address is emitted as 5 ASCII digits of `start`.
 ; Tokenised in a scratch ORG (page 0 at $E000; not part of the runtime image —
 ; bank 0 is overwritten by the pre-shift pool at boot).
 ;------------------------------------------------------------------------------
+TAPE_CLEAR      EQU 24575
                 ORG  $E000
 tap_loader:
                 DB   0, 10
@@ -610,23 +387,25 @@ tap_l20_body:   DB   $EF, $22, $22, $AF, $0D
 tap_l20_end:
                 DB   0, 30
                 DW   tap_l30_end - tap_l30_body
-tap_l30_body:   DB   $F9, $C0, $B0, '"', "32768", '"', $0D
+tap_l30_body:   DB   $F9, $C0, $B0, '"'
+                DB   '0' + (start / 10000) % 10, '0' + (start / 1000) % 10
+                DB   '0' + (start / 100) % 10, '0' + (start / 10) % 10, '0' + start % 10
+                DB   '"', $0D
 tap_l30_end:
 tap_loader_len  EQU  $ - tap_loader
 
 ;==============================================================================
 ; Artefacts. SAVETAP dumps device memory at this point in source order (see
-; main.asm's note), so it comes after every byte is assembled. The sprite-source
-; banks are saved by mapping each into slot 3 ($C000) in turn.
+; main.asm's note), so it comes after every byte is assembled. Slot 1 = page 5
+; and slot 2 = page 2 here, so the CODE block spans low-RAM cold + bank 2. The
+; banked blocks are saved by mapping each bank into slot 3 ($C000) in turn.
 ;==============================================================================
                 EMPTYTAP "build/wazhack.tap"
                 SAVETAP  "build/wazhack.tap", BASIC, "wazhack", tap_loader, tap_loader_len, 10
-                SAVETAP  "build/wazhack.tap", CODE,  "wazhack", start, CODE_LEN
+                SAVETAP  "build/wazhack.tap", CODE,  "wazhack", lowram_code, TAPE_CODE_LEN
                 MMU  3, BANK_SRC_LO
                 SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, SRC_LEN_LO
-    IF SRC_LEN_HI > 0
-                MMU  3, BANK_SRC_HI
-                SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, SRC_LEN_HI
-    ENDIF
+                MMU  3, BANK_COLD3             ; source tail + bank-3 cold code
+                SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, BANK3_LEN
                 MMU  3, 0
                 SAVESNA  "build/wazhack.sna", boot

@@ -1,7 +1,8 @@
 ;==============================================================================
 ; data.asm — PROTO static tables: kinds, frame table (with the §10
 ; stand-in rule), per-kind state->frame role tables, animation sequences, the
-; 4 hand-authored rooms (§8), spawns, strings and stand-in tile glyphs.
+; 4 hand-authored rooms (§8), spawns and in-game strings. (Stand-in tile
+; glyphs / tile tables: lowram.asm; select strings: bank3.asm.)
 ;
 ; STAND-IN RULE (prototype §10, task brief): every frame is declared with FRM.
 ; FRM includes a frame only if its label EXISTS in assets/gfx/sprites/index.asm
@@ -423,9 +424,6 @@ SPAWN_COUNT     EQU ($ - spawn_tab) / 5
 ;------------------------------------------------------------------------------
 ; Strings (0-terminated, upper case; ROM charset).
 ;------------------------------------------------------------------------------
-str_title:      DB "CHOOSE YOUR HERO", 0
-str_lock:       DB "LOAD FROM 128 BASIC", 0     ; check_paging: $7FFD locked
-str_keys:       DB "1            2", 0
 str_hp:         DB "  HP ", 0
 str_pot:        DB "  POT ", 0
 str_room:       DB "ROOM ", 0
@@ -441,58 +439,6 @@ str_quaff:      DB "YOU DRINK A POTION", 0
 str_died:       DB "YOU DIED - PRESS ENTER", 0
 str_win:        DB "TREASURE! PRESS ENTER", 0
 str_welcome:    DB "FIND THE TREASURE", 0
-
-;------------------------------------------------------------------------------
-; Stand-in tile glyphs (engine placeholders until the artist's PLATFORM/WALL/
-; LADDER_L/M/R/ZAP tiles land — prototype §10.2 #33-41). PLATFORM reuses
-; assets/gfx/bg_tiles.asm (bg_tiles_floor). Items (potion/chest/torch) are
-; extracted at boot from the sheet frames (item_*), see init_tiles.
-;------------------------------------------------------------------------------
-gl_wall:        DB $FF,$84,$84,$84,$FF,$10,$10,$10   ; brick course
-gl_lad_l:       DB $C0,$FF,$C0,$C0,$C0,$FF,$C0,$C0   ; left rail + rungs (every 4 px)
-gl_lad_m:       DB $00,$FF,$00,$00,$00,$FF,$00,$00   ; rungs
-gl_lad_r:       DB $03,$FF,$03,$03,$03,$FF,$03,$03   ; right rail + rungs
-gl_zap1:        DB $00,$00,$08,$D4,$23,$00,$00,$00   ; bolt, staff row
-gl_zap2:        DB $00,$00,$10,$2B,$C4,$00,$00,$00
-
-; TILE_ATTRS source (copied to the page-aligned RAM table at boot)
-tile_attr_src:  DB ATTR_AIR, ATTR_FLOOR, ATTR_WALL, ATTR_FLOOR
-                DB ATTR_LADDER, ATTR_LADDER, ATTR_LADDER
-                DB ATTR_LADDER, ATTR_LADDER, ATTR_LADDER
-                DB ATTR_POTION, ATTR_CHEST, ATTR_CHEST, ATTR_CHEST, ATTR_CHEST
-                DB ATTR_TORCH, ATTR_TORCH, ATTR_ZAP, ATTR_ZAP
-                DB ATTR_FLOOR, ATTR_FLOOR
-                ASSERT $ - tile_attr_src == T_COUNT
-
-;------------------------------------------------------------------------------
-; Tile glyph sources, stand-in rule: the artist's tile (banked sheet source,
-; prototype §10.2 #33-41) if its label exists, else the engine stand-in above.
-;   DB tile_id, banked(1)/image(0) ; DW src
-;------------------------------------------------------------------------------
-    MACRO TSRC q_id, q_art, q_std
-      IF EXIST q_art
-        DB q_id, 1
-        DW q_art
-      ELSE
-        DB q_id, 0
-        DW q_std
-      ENDIF
-    ENDM
-tile_src_tab:
-                TSRC T_PLAT,    tiles_bg_platform,      bg_tiles_floor
-                TSRC T_BRICK,   tiles_bg_wall,          gl_wall
-                TSRC T_WALLF,   tiles_bg_wall,          gl_wall
-                TSRC T_LAD_L,   tiles_bg_ladder_l,      gl_lad_l
-                TSRC T_LAD_M,   tiles_bg_ladder_m,      gl_lad_m
-                TSRC T_LAD_R,   tiles_bg_ladder_r,      gl_lad_r
-                TSRC T_HOLE_L,  tiles_bg_ladder_l,      gl_lad_l
-                TSRC T_HOLE_M,  tiles_bg_ladder_m,      gl_lad_m
-                TSRC T_HOLE_R,  tiles_bg_ladder_r,      gl_lad_r
-                TSRC T_ZAP1,    tiles_fx_zap1,          gl_zap1
-                TSRC T_ZAP2,    tiles_fx_zap2,          gl_zap2
-                TSRC T_END_L,   tiles_bg_platform_end_l, bg_tiles_floor
-                TSRC T_END_R,   tiles_bg_platform_end_r, bg_tiles_floor
-TILE_SRC_N      EQU ($ - tile_src_tab) / 4
 
 ; per-kind stats (prototype §6.3) — emitted into the page-aligned kind_tab
 ;                  KN  WZ  RG  SK  GB  GH  RT  BT  SL
