@@ -116,7 +116,7 @@ class Rec:
             elif n == "blit":
                 fid = self.p.rb("BL_FID")
                 fpy = self.p.rb("BL_FPY")
-                h = self.p.rb(S["frame_tab"] + fid * 8 + 3)
+                h = self.p.rb(S["frame_tab"] + fid * S["FT_STRIDE"] + S["FT_H"])
                 cur = dict(slot=self.p.rb("ANIM_SLOT"), t0=now, y0=fpy, y1=fpy + h - 1)
             elif n == "blit_end":
                 cur["t1"] = now

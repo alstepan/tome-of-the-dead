@@ -198,9 +198,10 @@ tile_rect:
                 ld   a, d
                 add  a, a
                 add  a, a
-                add  a, a
+                add  a, a                      ; CF = id bit 5 (ids < TILE_IDS = 64)
                 ld   e, a
-                ld   d, TILE_GLYPHS >> 8       ; DE = glyph
+                ld   d, TILE_GLYPHS >> 9
+                rl   d                         ; DE = TILE_GLYPHS + id*8 (512-aligned base; +8 T vs 32 ids)
 .sh:            ld   h, 0                      ; SMC: bitmap high (L = C still)
                 DUP  7
                 ld   a, (de)
@@ -486,8 +487,7 @@ blit_sprite:
                 ld   l, a
                 ld   h, 0
                 add  hl, hl
-                add  hl, hl
-                add  hl, hl                    ; fid*8
+                add  hl, hl                    ; fid*FT_STRIDE (4; ASSERTed at ft_ptr)
                 ld   de, frame_tab + FT_COLS
                 add  hl, de
                 ld   c, (hl)                   ; C = data cols
@@ -666,8 +666,7 @@ frame_footprint:
                 ld   l, a
                 ld   h, 0
                 add  hl, hl
-                add  hl, hl
-                add  hl, hl
+                add  hl, hl                    ; fid*FT_STRIDE
                 push de
                 ld   de, frame_tab + FT_COLS
                 add  hl, de
@@ -704,11 +703,12 @@ frame_footprint:
                 ld   e, l                      ; E = rows
                 ret
 
-; ft_ptr — HL = frame_tab + A*8.  Clobbers: A, DE, HL
+; ft_ptr — HL = frame_tab + A*FT_STRIDE (4).  Clobbers: A, DE, HL
+                ASSERT FT_STRIDE == 4          ; blit_sprite / frame_footprint / ft_ptr: 2 x add hl,hl
+                ASSERT FT_H == FT_COLS + 1     ; blit_sprite / frame_footprint: inc hl
 ft_ptr:
                 ld   l, a
                 ld   h, 0
-                add  hl, hl
                 add  hl, hl
                 add  hl, hl
                 ld   de, frame_tab

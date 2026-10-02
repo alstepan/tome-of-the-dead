@@ -32,21 +32,50 @@ ZX0 = os.path.join(REPO, "tools/bin/zx0")
 OUT = os.path.join(REPO, "build/zx0")
 
 
+HEXBYTE = re.compile(r"\$[0-9A-Fa-f]{2}")
+
+
+def literal(t: str) -> int:
+    """Numeric literal $xx / decimal -> int (callers validate the form)."""
+    return int(t[1:], 16) if t.startswith("$") else int(t)
+
+
+def parse_defb(code: str, where: str) -> bytes:
+    """Strict: `DEFB $xx,$xx,...` only — every item exactly `$` + 2 hex
+    digits. Anything else (decimal, expressions, labels, empty items) fails
+    loudly: a silently mis-parsed frame would pack the wrong pixels."""
+    if not code.upper().startswith("DEFB") or (len(code) > 4 and not code[4].isspace()):
+        raise SystemExit(f"zx0_pack: {where}: expected DEFB, got {code!r}")
+    items = [t.strip() for t in code[4:].split(",")]
+    for t in items:
+        if not HEXBYTE.fullmatch(t):
+            raise SystemExit(f"zx0_pack: {where}: bad DEFB item {t!r} (want $xx)")
+    return bytes(int(t[1:], 16) for t in items)
+
+
 def game_frames():
-    """[(name, bytes)] in index.asm include order."""
+    """[(name, bytes)] in index.asm include order. Each frame file: `name:`,
+    then only DEFB $xx rows (blank / comment lines and `name_<sub>:` labels
+    allowed) up to `name_attr:`. Any other line in that span fails."""
     d = os.path.join(REPO, "assets/gfx/sprites")
     names = re.findall(r'INCLUDE\s+"(\w+)\.asm"', open(os.path.join(d, "index.asm")).read())
     out = []
     for n in names:
-        buf, on = bytearray(), False
-        for line in open(os.path.join(d, n + ".asm")):
+        path = os.path.join(d, n + ".asm")
+        buf, on, done = bytearray(), False, False
+        for ln, line in enumerate(open(path), 1):
             code = line.split(";")[0].strip()
             if code == n + ":":
                 on = True
-            elif code.startswith(n + "_attr"):
+            elif on and code.startswith(n + "_attr"):
+                done = True
                 break
-            elif on and code.upper().startswith("DEFB"):
-                buf += bytes(int(t.strip().lstrip("$"), 16) for t in code[4:].split(","))
+            elif on and re.fullmatch(rf"{n}_\w+:", code):
+                pass                       # sub-label (tile sheets): no bytes
+            elif on and code:
+                buf += parse_defb(code, f"{os.path.relpath(path, REPO)}:{ln}")
+        if not on or not done:
+            raise SystemExit(f"zx0_pack: {path}: missing '{n}:' or '{n}_attr' label")
         out.append((n, bytes(buf)))
     return out
 

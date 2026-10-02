@@ -5,8 +5,9 @@
 ; 1/3 and writes the pre-shift pool in banks 0/4/6, so it cannot live in a
 ; paged bank. main.asm ORGs this block so it ENDS at $8000 (lowram_code ..
 ; $7FFF): it is contiguous with the bank-2 image and the tape CODE block is the
-; single range lowram_code .. code_end. Anything loaded later (A6 frame
-; descriptors) is placed directly below it, so the loaded range stays one block.
+; single range lowram_code .. code_end, entered at its first byte (start). The
+; block ENDS with the frame descriptors (fdesc_tab, A6): new frames grow it
+; downward; main.asm keeps the FRT_MAX growth reserve free below it.
 ;
 ; Contended (bank 5): every opcode fetch pays ULA contention while the screen is
 ; being drawn. Nothing here runs per tick (boot, hero select, game start).
@@ -202,16 +203,25 @@ init_kbd_mirror:
 ;==============================================================================
 pool_banks:     DB BANK_POOL0, BANK_POOL1, BANK_POOL2
 
-; alloc_reset — pool empty.   Clobbers: A, HL
+; alloc_reset — pool empty; starts a generator session.   Clobbers: A, HL
+; A generator SESSION = alloc_reset/alloc_restore .. the next build_room_map.
+; Both entry points drop the ZX0 block cache (GEN_ZBLK): GEN_SCRATCH aliases
+; the room maps, so a cached block never outlives its session (A5 review).
 alloc_reset:
                 xor  a
                 ld   (ALLOC_IDX), a
                 ld   (GEN_OVERFLOW), a
                 ld   hl, BANK_WINDOW
                 ld   (ALLOC_PTR), hl
+    IF ZX0_SOURCES
+                ld   l, a
+                ld   h, a
+                ld   (GEN_ZBLK), hl            ; no cached block
+    ENDIF
                 ret
 
 ; alloc_mark / alloc_restore — remember/rewind the pool top (hero regen).
+; alloc_restore starts a session too (drops GEN_ZBLK). Clobbers: A, HL
 alloc_mark:
                 ld   a, (ALLOC_IDX)
                 ld   (ALLOC_MARK_IDX), a
@@ -223,6 +233,10 @@ alloc_restore:
                 ld   (ALLOC_IDX), a
                 ld   hl, (ALLOC_MARK_PTR)
                 ld   (ALLOC_PTR), hl
+    IF ZX0_SOURCES
+                ld   hl, 0
+                ld   (GEN_ZBLK), hl            ; no cached block
+    ENDIF
                 ret
 
 ; alloc — reserve BC bytes. Out: A = bank, HL = addr, CF = 1 if the pool is full.
@@ -352,12 +366,8 @@ copy_virt:
 ; gen_kind — generate every frame of kind A.   Clobbers: all but IX
 ;------------------------------------------------------------------------------
 gen_kind:
-    IF ZX0_SOURCES
-                ld   hl, 0                     ; GEN_SCRATCH may hold room maps
-                ld   (GEN_ZBLK), hl            ; since the last session: no cache
-    ENDIF
-                ld   h, kind_tab >> 8
-                add  a, KT_FID0
+                ld   h, (kind_tab + KT_FID0) >> 8   ; KT_FID0/KT_FCNT: same page
+                add  a, KT_FID0 & $FF
                 ld   l, a
                 ld   a, (hl)                   ; first fid
                 ld   c, a
@@ -379,8 +389,10 @@ gen_kind:
 ; aliases ROOM_MAP/NEXT_MAP — callable only while no room is built (boot, hero
 ; start; 3F: level start before build_room_map). A call while GAME_STATE is
 ; PLAYING/TRANSITION bumps GEN_TRAP (saturating; tests assert 0). The block
-; cache (GEN_ZBLK) must be invalidated by the caller after anything else
-; wrote GEN_SCRATCH: gen_kind does it; boot's direct calls follow gen_kind.
+; cache (GEN_ZBLK) is valid for one generator session only: alloc_reset /
+; alloc_restore drop it (every caller starts with one of them).
+; Static data: frame_tab (bank 2: cols, H, offsets) + fdesc_tab (bank 5:
+; block, frame address, flags) — no banked descriptor read, no copy_virt.
 ; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 gen_frame:
@@ -403,25 +415,36 @@ gen_frame:
                 inc  hl
                 inc  hl
                 djnz .clr
-                ; read the static entry
+                ; read the static entries
                 ld   a, (GEN_FID)
-                call ft_ptr                    ; HL = frame_tab + fid*8
-                ld   e, (hl)
-                inc  hl
-                ld   d, (hl)                   ; DE = virtual src
-                inc  hl
+                call ft_ptr                    ; HL = frame_tab + fid*4 (FT_COLS)
                 ld   a, (hl)
                 ld   (GEN_COLS), a
-                inc  hl
+                inc  hl                        ; FT_H
                 ld   a, (hl)
                 ld   (GEN_H), a
+                ; HL = fdesc_tab + fid*5
+                ld   a, (GEN_FID)
+                ld   l, a
+                ld   h, 0
+                ld   e, l
+                ld   d, h
+                add  hl, hl
+                add  hl, hl
+                add  hl, de
+                ld   de, fdesc_tab
+                add  hl, de
+                ld   e, (hl)                   ; FD_BLK
                 inc  hl
-                inc  hl                        ; skip OFFR for now
+                ld   d, (hl)                   ; DE = virt block (raw: virt src)
                 inc  hl
-                ld   a, (hl)
+                ld   c, (hl)                   ; FD_FRM
+                inc  hl
+                ld   b, (hl)                   ; BC = frame in GEN_SCRATCH
+                inc  hl
+                ld   a, (hl)                   ; FD_FLAGS
                 ld   (GEN_FLAGS), a
     IF ZX0_SOURCES
-                ex   de, hl                    ; HL = virt descriptor
                 call zx0_frame                 ; HL = frame in GEN_SCRATCH (no copy)
     ELSE
                 ; source bytes = cols * H * 2
@@ -695,28 +718,26 @@ mul8:
 
     IF ZX0_SOURCES
 ;------------------------------------------------------------------------------
-; zx0_frame — HL = VIRTUAL address of a frame descriptor (build/zx0/
-; sprites_zx0.asm: DW packed block, DW GEN_SCRATCH + raw offset). Unpacks the
-; block into GEN_SCRATCH unless it is already there (GEN_ZBLK = one-block
-; cache: blocks hold 1-4 consecutive fids of one kind, so gen_kind unpacks
-; each block exactly once). The tool guarantees no packed block straddles
-; virtual $C000, so the whole stream is in one bank's $C000 window.
+; zx0_frame — DE = VIRTUAL address of the frame's packed block (FD_BLK), BC =
+; the frame's address in GEN_SCRATCH (FD_FRM). Unpacks the block into
+; GEN_SCRATCH unless it is already there (GEN_ZBLK = one-block cache: blocks
+; hold 1-4 consecutive fids of one kind, so gen_kind unpacks each block
+; exactly once). The tool guarantees no packed block straddles virtual $C000,
+; so the whole stream is in one bank's $C000 window.
 ; Out: HL = the frame's raw bytes (cols*H*2, in GEN_SCRATCH). $C000 = the
-; source bank. Clobbers: A, BC, DE, HL.
-; Cost: descriptor ~0.4k T; unpack (once per block) ~1.6 B packed -> raw at
+; source bank if a block was unpacked (else unchanged). Clobbers: A, BC, DE, HL.
+; Cost: cache hit ~110 T (A5: ~0.4k T incl. the banked 4-B descriptor
+; copy_virt, now gone); unpack (once per block) ~1.6 B packed -> raw at
 ; roughly LDIR speed + Elias bits, e.g. ~25-45k T for a 1.1-1.4 KB block.
 ;------------------------------------------------------------------------------
 zx0_code:
 zx0_frame:
-                ld   de, GEN_ZDESC
-                ld   bc, 4
-                call copy_virt                 ; may straddle $C000: handled
-                ld   hl, (GEN_ZDESC)           ; HL = virt block
-                ld   de, (GEN_ZBLK)
+                push bc                        ; -> HL on exit
+                ld   hl, (GEN_ZBLK)
                 or   a
                 sbc  hl, de
                 jr   z, .have                  ; already unpacked
-                add  hl, de
+                ex   de, hl                    ; HL = virt block
                 ld   (GEN_ZBLK), hl
                 ld   a, h
                 cp   BANK_WINDOW >> 8
@@ -731,7 +752,7 @@ zx0_frame:
                 pop  hl
                 ld   de, GEN_SCRATCH
                 call dzx0_standard
-.have:          ld   hl, (GEN_ZDESC + 2)       ; HL = GEN_SCRATCH + offset
+.have:          pop  hl                        ; HL = frame in GEN_SCRATCH
                 ret
                 INCLUDE "dzx0_standard.asm"
 zx0_code_end:
@@ -794,9 +815,16 @@ frt_ptr:
 ; Clobbers: all but IX.  Boot only.
 ;==============================================================================
 init_tiles:
+                ; all TILE_IDS glyphs + attrs zeroed (A6: 64 ids; the per-level
+                ; half 32..63 stays blank until 3B loads a level tileset)
                 ld   hl, TILE_GLYPHS
                 ld   de, TILE_GLYPHS + 1
-                ld   bc, 255
+                ld   bc, TILE_IDS * 8 - 1
+                ld   (hl), 0
+                ldir
+                ld   hl, TILE_ATTRS
+                ld   de, TILE_ATTRS + 1
+                ld   bc, TILE_IDS - 1
                 ld   (hl), 0
                 ldir
                 ld   hl, tile_attr_src
@@ -913,6 +941,7 @@ tile_attr_src:  DB ATTR_AIR, ATTR_FLOOR, ATTR_WALL, ATTR_FLOOR
                 DB ATTR_TORCH, ATTR_TORCH, ATTR_ZAP, ATTR_ZAP
                 DB ATTR_FLOOR, ATTR_FLOOR
                 ASSERT $ - tile_attr_src == T_COUNT
+                ASSERT T_COUNT <= TILE_COMMON  ; init_tiles/.pick/zap: id*8 < 256
 
 ;------------------------------------------------------------------------------
 ; Tile glyph sources, stand-in rule: the artist's tile (banked sheet source,
@@ -946,3 +975,17 @@ TILE_SRC_N      EQU ($ - tile_src_tab) / 4
 
 ; bg_tiles_floor: the PLATFORM stand-in glyph (init_tiles only)
                 INCLUDE "../assets/gfx/bg_tiles.asm"
+
+;==============================================================================
+; fdesc_tab — frame descriptors (A6), FDESC_STRIDE (5) B per fid, read only
+; by gen_frame: FD_BLK (ZX0: virtual packed-block address / raw: virtual
+; frame address), FD_FRM (ZX0: GEN_SCRATCH + in-block offset), FD_FLAGS.
+; Generated from src/frames.asm (the same list as frame_tab). MUST stay the
+; last thing in the cold block (ASSERTed): it is the part that grows.
+;==============================================================================
+fdesc_tab:
+FRM_EMIT = FRM_DESC
+                INCLUDE "frames.asm"
+FDESC_COUNT     EQU FCTR
+fdesc_end:
+                ASSERT fdesc_end - fdesc_tab == FDESC_COUNT * FDESC_STRIDE
