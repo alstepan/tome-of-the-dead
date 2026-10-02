@@ -1,0 +1,27 @@
+# WazHack/ZX gfx text grid — DERIVED by tools/concept_screen.py from
+# assets/gfx/concept/grid/r3_frames.grid (from tools/concept_r3_frames.py) (edit that); CONCEPT draft, not on the canvas yet.
+# name: necro_dead
+# size: 32x16
+# character: R3 FRAME
+# caption: NECRO_DEAD
+# ink: #FF00FF
+# attr: $43 (ink magenta, paper black, bright 1)
+# anchor: 0 0
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+................................
+................................
+................................
+.............................+++
+............................++#+
+...........................++###
+....................++++++++#+#+
+..................+++#####+++#++
+........+++++++..++#########+#+.
+...++++++#+#+#++++##++#++###+#+.
+..++##############+++++++++++#+.
+.++###+#########+#####++####+#+.
+++#+#####+####+#####+######++#++
++#####+#####+####+#####+#######+
+################################
+++++++++++++++++++++++++++++++++

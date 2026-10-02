@@ -1,0 +1,19 @@
+# WazHack/ZX gfx text grid — DERIVED by tools/concept_screen.py from
+# assets/gfx/concept/grid/spells.grid (edit that); CONCEPT draft, not on the canvas yet.
+# name: frost_fly
+# size: 8x8
+# character: SPELL FX
+# caption: FROST_FLY
+# ink: #00FFFF
+# attr: $45 (ink cyan, paper black, bright 1)
+# anchor: 0 0
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+....+++.
+...++#++
+++++###+
+##+##+##
+++++###+
+...++#++
+....+++.
+........

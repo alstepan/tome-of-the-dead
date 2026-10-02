@@ -1,0 +1,52 @@
+# WazHack/ZX CONCEPT round-2 8x8 icons (gear strip / floor variant) — DRAFT.
+# Format = tools/gfx_convert.py --mode tile. 8 B + 1 attr each.
+=== sword8 ink:white paper:black bright
+......##
+.....###
+....###.
+.#.###..
+..###...
+..##....
+.#..#...
+#.......
+
+=== mail8 ink:white paper:black bright
+.##..##.
+########
+#.#.#.##
+##.#.#.#
+.#.#.##.
+.##.#.#.
+.#.#.##.
+.######.
+
+=== helm8 ink:white paper:black bright
+..####..
+.######.
+########
+#......#
+###..###
+###..###
+.##..##.
+........
+
+=== shield8 ink:yellow paper:black bright
+########
+#.####.#
+#.#..#.#
+#......#
+#.#..#.#
+.#.##.#.
+..#..#..
+...##...
+
+=== book8 ink:magenta paper:black bright
+.######.
+#######.
+##.##.#.
+##....#.
+##.##.#.
+#######.
+#.#.#.#.
+.######.
+

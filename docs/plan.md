@@ -40,18 +40,158 @@ squash of `feat/project-scaffold` @ `238af0c`; tape sha256 `6fa4629d…`).
 
 | # | Issue | Owner | Notes |
 |---|-------|-------|-------|
-| B1 | Heavy fight (hero + 2 skeletons + goblin + ghost) = 154,852 T = **109%** of the 2-frame tick on the turn-start tick | staff | Needs user decision: optimise vs cap encounter size |
-| B2 | Single-buffer flicker unmitigated | staff | Shadow-screen double-buffer proven in SPIKE-4 (see history) |
+| B1 | Heavy fight = 154,852 T = **109%** of the 2-frame tick (ZEsarUX, contention emulated) | staff | **E0 RENDER_FIRST: 125,067 T = 88%, 0 overruns** (manager-verified 2026-10-01); still M1 encounter cap for double-buffer + AY headroom |
+| B2 | **Single-buffer flicker — top bug** | staff | Stage 2 E1; `budget.md` §3 |
 | B3 | Draft 3 art (32 frames + tiles) not yet reviewed on the canvas | user → artist | Imported provisionally from `assets/gfx/source/draft3_frames.html` |
 | B4 | Spec §6.4 text for the new ladder rules | designer | |
 | B5 | Fuse / real-hardware tape load not yet tried | user | |
-| B6 | Bugs from the user's playtest of the baseline | user → manager | **To be listed** |
 
-## Next
+## Stage 2 — design before building · `IN-PROGRESS` (decided 2026-10-01)
 
-Plan & concept review with the user (game loop beyond the prototype: dungeon
-generation, progression, items, descend, sound). Phases are defined here after
-that review — nothing is scheduled until then.
+No new gameplay code until mechanics + graphics are designed and approved.
+Engine work in this stage = flicker fix + real-hardware measurement only.
+
+### Requirements (user, 2026-10-01)
+- **Target: real 128K** (user has hardware). Timing is judged *contended*.
+- **Cast:** Warrior (Knight) + Mage (Wizard). **Rogue out of scope** (memory).
+- **Stats:** health, **mana**, **hunger**. Hunger **lowers stats** (no
+  starvation death). Food: meat + monster drops (apple, carrot, pear, cheese).
+- **Warrior uses mana for power attacks**; Mage for spells. **Mage melee =
+  staff attack**, always available (the fallback at 0 mana, as in WazHack).
+- **Ranged magic (WazHack-like):** each spell has its **own range**; some
+  spells **reflect off walls**; each spell has its own projectile/impact
+  animation.
+- **Monster kinds: up to 4 per level** (+ boss level); pool generated per level.
+- **Turn logic runs in the input tick** (+~40 ms latency accepted).
+- **Storeys: 2, taller than PROTO's 7 rows**; frees screens/space for icons,
+  inventory and menu.
+- **Items + inventory:** full-screen inventory page (pauses play); the **bottom
+  panel shows the currently selected spell/attack**.
+- **Run:** **permadeath**, **no tape save**. **Win:** kill the final boss
+  **Necromancer Archmage**, find the **Book of Absolute Death Magic** and
+  destroy it.
+- **Ranged attacks** with distinct animations per spell/weapon — **magic is the
+  focus**.
+- **Movement:** **jump = one discrete turn action**. **No attacks while
+  climbing** (PROTO rule kept).
+- **Screen: at most 2 storeys** (PROTO has 3).
+- **Dungeon:** **doors** and **dead ends**; richer **background decoration**,
+  some of it **animated**.
+- **Controls:** redefinable keys in a **main menu**; **Kempston**, **Sinclair**
+  (IF2 / +2 ports), keyboard. Cursor/Protek out of scope. Joystick type chosen
+  in the menu (Kempston can't be auto-detected safely). **The whole game must be
+  playable with 4 directions + diagonals + FIRE** (movement, jump, attack,
+  spell select/cast, inventory); keyboard may add shortcuts but never required
+  ones. **Control model (user, 2026-10-01): icon bar + bump-to-attack**
+  (Barbarian/Myth-style, free in a turn-based game):
+  - directions = move/climb; ↖/↗ = jump (one turn); walking into a monster =
+    melee;
+  - FIRE tap = use the selected icon toward facing;
+  - FIRE held + ←/→ = move the icon cursor (no turn passes; auto-repeat delay);
+  - FIRE held + ↓ = full-screen inventory page;
+  - keyboard: number keys select icons directly;
+  - icon bar in the bottom panel: melee, power attack (Warrior), known spells
+    (Mage), quick food/potion, inventory; shows the selection, mana cost, and
+    greys out icons that can't be afforded.
+- **Sound:** not built this stage, but **memory + frame time reserved for an AY
+  player** (music + FX).
+- **Art:** graphics-artist drafts frames → user reviews on the Design canvas.
+- **Concept review (user, 2026-10-01)** — mockups `assets/gfx/concept/` approved
+  in direction (graphics, spells, inventory page). Decisions:
+  - Layout **V1 family, revised**: bottom panel grows by **2 message rows**
+    ("goblin attacks you and misses") at the expense of storey height
+    (→ ~2×9 + 6, designer to confirm); **larger icons**; **worn gear shown in
+    the panel** (larger icons if needed).
+  - **Larger background objects** (tall torches à la Barbarian / Prince of
+    Persia); **brick-wall tile** with patches of missing plaster.
+  - **Tile ids → 64** (+288 B).
+  - **Door 2 columns** wide. **Floor colours differ per level.**
+  - **Warrior: two power attacks, a ranged throw and bow shots.**
+  - **Bouncing spells can hit the caster.**
+  - **Mage staff swing: dedicated frame.**
+  - **Quick slots auto-fill.**
+  - **Every level ends with a boss dropping unique gear.**
+  - **New monsters:** zombie, mummy, orc, skeleton-archer, necromancer (regular
+    caster), giant spider.
+  - **Budget levers (user):** sprite sources compressed with **ZX0** (per frame);
+    cold code out of bank 2 (generator + boot → bank 5 low RAM, menus → bank 3
+    via trampoline) to raise `FRT_MAX`; per-level pool generation.
+  - **Spells (Mage) and power attacks (Warrior) are learned only by reading
+    books** found in the dungeon.
+- **M1 review (user, 2026-10-01)** on `docs/design/game.md`: charm slot (4 gear
+  slots) ✓; **longer run — more levels**; **two unique bosses** + the rest
+  **"golden" bosses** (recolour + gold-glow attribute cycling); jump + pits ✓;
+  **monster resistances** (immune/resist/reflect per damage type, e.g. undead
+  immune to cold + life drain; reflected spells can hit the caster); HP regen
+  while Fed ✓; **projectiles as real sprites where possible**; walls on **black
+  paper with dithered light-brick patches**. User played the A1/A2 build:
+  "works well".
+- B6 discarded. **B2 flicker is the top bug.**
+
+### Tasks
+| # | Task | Owner | Gate |
+|---|------|-------|------|
+| G1 ✅ | Budget after flicker fix: bytes per bank, contended T per tick, AY reserve, sprite-frame + decor-tile headroom, Rogue bytes reclaimed | z80-architect (read-only) | one budget table in `docs/design/budget.md` |
+| M1 ✅ (revision in progress) | Mechanics: core loop, turn/real-time model incl. jump, 2-storey rooms, doors/dead ends/generation, HP/mana/hunger, items + inventory, spells + ranged, monster roster, encounter cap (B1), win/lose, menu + controls | game-designer (Opus) + user | `docs/design/game.md` approved by user |
+| G2 | Art direction + asset list: Warrior/Mage frame list (jump, climb-attack, cast/ranged per spell), projectiles/FX, decor tiles, doors, HUD (HP/mana/hunger), inventory screen | game-designer → graphics-artist drafts on canvas | user approves on canvas |
+| E0 ✅ (user: better, double buffer still needed) | Reorder experiment: render right after the HALT, anim/logic after it; measure render timing vs the beam. Also scouts a single-buffer approach for a possible future 48K port (48K itself out of scope) | z80-junior (manager-authorised exception: `play_loop` order only) | measured before/after + user eyeball; decides how E1 proceeds |
+| E1 | Flicker fix: double buffer (option A or B, `budget.md` §3); clean background rebased to bank 7 `$E000` | z80-staff-engineer | tests green; user confirms no flicker in Fuse **and on hardware** |
+| E2 | Real-hardware run: tape load + contended worst-tick measurement | staff + user | recorded worst tick vs budget |
+
+Order: G1 → (M1 ⇄ G2) ; E0 → E1 (parallel to M1/G2) → E2.
+Stage exit: game.md + budget.md + canvas art approved; E1/E2 done → Stage 3
+(build) is planned from these.
+
+## Stage 3 — build · `TODO` (draft 2026-10-01; detailed per phase once game.md lands)
+
+Principle: foundations first (no gameplay change, provable by the existing 179
+tests + flicker/budget scripts), then vertical features each ending playable.
+Tags: **[S]** z80-staff-engineer (Opus), **[J]** z80-junior (Sonnet). Phases
+3B–3F get a z80-architect breakdown when started (contracts + tests).
+
+### 3A — Engine foundations · can start now (independent of M1)
+| # | Task | Tag | Depends | Gate |
+|---|------|-----|---------|------|
+| A1 ✅ `10ad983` | Merge E0 `RENDER_FIRST` + `tests/flicker.py` as the flicker baseline | J | user eyeball | 179/179; flicker numbers recorded |
+| A2 ✅ `10ad983` | Remove the Rogue (frames, tables, select screen, tests) | J | A1 | tests green; budget §2 bytes reclaimed |
+| A3 | Cold-code relocation: generator + boot → bank 5 low RAM; menus/select → bank 3 via bank-2 trampoline; memory-map | S | A2 | `.sna` behaviour identical; tests green; bank-2 headroom measured |
+| A4 | ZX0 sprite sources: tool side (pack per frame in `gfx_convert`/`svg_sprites`, sjasmplus include) | J | A2 | round-trip decode test bit-exact |
+| A5 | ZX0 engine side: decompressor in fixed RAM, generator unpacks per frame into `GEN_SRC` | S | A3, A4 | pool bytes identical to today; boot time measured |
+| A6 | Raise `FRT_MAX` (to the M1 number) + tile ids 32 → 64 | S | A3 | tests green; memory-map |
+| A7 | Double buffer (E1, option A/B — decide after A1 eyeball): bank-7 clean bg rebased to `$E000`, present/flip | S | A3 | flicker.py = 0 events; budget measured; user confirms on hardware |
+| A8 | IM2 + ISR stub + silent AY player slot (8 KB reserved bank 3), `SYS_FRAMES`/ROM chain kept | S | A3 | tests green; ISR cost measured; no DI windows |
+| A9 | Real-hardware gate (E2): tape load + contended worst tick on the user's 128K | user + S | A7, A8 | recorded |
+
+Parallel: A4 ‖ A3; A6 ‖ A7 ‖ A8 after A3.
+
+### 3B — World & screen (needs game.md §1–2 + revised layout)
+2-storey rooms + new panel rows (icon bar, bars, worn gear, 2-row message log);
+per-level floor colours; decor tiles (static, animated, large multi-cell, brick
+walls); doors (2-col); dead ends; level generator; room transitions for the new
+geometry. **Exit:** walk a generated level, doors open, decor animates, log shows.
+
+### 3C — Hero, controls & menu (needs game.md §2–4)
+Main menu, redefine keys, joystick select (Kempston/Sinclair/keys); icon bar +
+bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
+**Exit:** whole game driveable by joystick alone (scripted ZRCP test per input).
+
+### 3D — Combat & magic (needs game.md §4–6)
+Projectile entities (range, wall reflection, can hit caster); spells; Warrior
+power attacks ×2, throw, bow; mana; impact FX. **Exit:** spell/missile table
+reproduced by tests.
+
+### 3E — Items, inventory & survival (needs game.md §7–8)
+Inventory page (bank-5 screen), equip, quick slots auto-fill, food/hunger,
+books → learning spells/power attacks, potions/scrolls, boss unique loot.
+**Exit:** pick up → equip → eat → learn spell, all tested.
+
+### 3F — Monsters, bosses & win (needs game.md §9–10)
+Per-level pool generation (≤ 4 kinds + boss); new monsters (zombie, mummy, orc,
+skeleton-archer, necromancer, giant spider) + ranged AI; level bosses; Necromancer
+Archmage + Book of Absolute Death Magic → win. **Exit:** full run start → win.
+
+### 3G — Sound & polish (later)
+AY music + FX on the A8 slot; balance pass; hardware hardening.
 
 ## How we control state
 

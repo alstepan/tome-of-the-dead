@@ -1,0 +1,198 @@
+# WazHack/ZX CONCEPT 8x8 icons (docs/design/concept-screen.md §5/§6) — DRAFT for user review.
+# Format = tools/gfx_convert.py --mode tile. Panel-only (sprite-free zone): 8 B + 1 attr each.
+# Uses: bar labels (heart/drop/drumstick), V1 separator, V1 worn-gear strip, V2 8x8 action bar,
+# and the 8x8 floor variant of items. Ink = default; potion/scroll ink is per type.
+
+# --- status bar labels
+=== heart ink:red paper:black bright
+........
+.##.##..
+#######.
+#######.
+.#####..
+..###...
+...#....
+........
+
+=== drop ink:cyan paper:black bright
+...#....
+...#....
+..###...
+.##.##..
+.#.###..
+.#####..
+..###...
+........
+
+=== drumstick ink:green paper:black bright
+..####..
+.######.
+.######.
+.######.
+..####..
+...#....
+..#.#...
+.#...#..
+
+# --- V1 separator between icons and the name/cost lines ($01)
+=== separator ink:blue paper:black
+...##...
+...##...
+...##...
+...##...
+...##...
+...##...
+...##...
+...##...
+
+# --- actions (V2 bar)
+=== staff8 ink:yellow paper:black bright
+.....##.
+....#..#
+....#.##
+...#.##.
+...##...
+..##....
+.##.....
+##......
+
+=== spark8 ink:magenta paper:black bright
+...#....
+...#....
+..###...
+#######.
+..###...
+...#....
+...#....
+........
+
+=== firebolt8 ink:red paper:black bright
+........
+.....##.
+.#..####
+...#####
+#.######
+...#####
+.#..###.
+........
+
+=== frost8 ink:cyan paper:black bright
+...#....
+.#.#.#..
+..###...
+#######.
+..###...
+.#.#.#..
+...#....
+........
+
+=== lightning8 ink:white paper:black bright
+....###.
+...###..
+..###...
+.######.
+...###..
+..##....
+.##.....
+.#......
+
+=== bag8 ink:yellow paper:black
+..#.#...
+...#....
+..###...
+.#...#..
+#######.
+###.###.
+#######.
+.#####..
+
+# --- items (8x8 floor / quick-slot / gear-strip variants)
+=== apple8 ink:red paper:black bright
+....#...
+...#.##.
+.##.##..
+#.#####.
+#######.
+#######.
+.#####..
+..#.#...
+
+=== meat8 ink:magenta paper:black bright
+.####...
+##..##..
+#.####..
+#.####..
+.####...
+....#...
+....##..
+...#.#..
+
+=== potion8 ink:red paper:black bright
+..###...
+...#....
+..#.#...
+.#...#..
+.#####..
+.##.##..
+.#####..
+..###...
+
+=== scroll8 ink:white paper:black bright
+.######.
+#.#....#
+.##.##.#
+..#....#
+..#.##.#
+..#....#
+.######.
+#.#####.
+
+=== robe8 ink:magenta paper:black bright
+..#..#..
+.##..##.
+###..###
+#.####.#
+..####..
+..####..
+.######.
+########
+
+=== hood8 ink:magenta paper:black bright
+..####..
+.######.
+##....##
+##....##
+#..##..#
+##....##
+.######.
+########
+
+=== ring8 ink:yellow paper:black bright
+...##...
+..#..#..
+...##...
+..####..
+.#....#.
+.#....#.
+.#....#.
+..####..
+
+=== amulet8 ink:cyan paper:black bright
+#......#
+.#....#.
+..#..#..
+...##...
+..####..
+.##.###.
+.######.
+..####..
+
+=== empty8 ink:blue paper:black
+#.#.#.#.
+.......#
+#.......
+.......#
+#.......
+.......#
+#.......
+.#.#.#.#

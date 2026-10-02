@@ -1,0 +1,27 @@
+# WazHack/ZX gfx text grid — DERIVED by tools/concept_screen.py from
+# assets/gfx/concept/grid/spells.grid (edit that); CONCEPT draft, not on the canvas yet.
+# name: power_burst
+# size: 16x16
+# character: SPELL FX
+# caption: POWER_BURST
+# ink: #FFFFFF
+# attr: $47 (ink white, paper black, bright 1)
+# anchor: 0 0
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+.+++..+##+..+++.
+.+#++.+##+.++#+.
+.++#+++##+++#++.
+..++#++##++#++..
+...++#++++#++...
+....++####++....
++++++#++++#+++++
+#####+#++#+#####
+#####+#++#+#####
++++++#++++#+++++
+....++####++....
+...++#++++#++...
+..++#++##++#++..
+.++#+++##+++#++.
+.+#++.+##+.++#+.
+.+++..+##+..+++.

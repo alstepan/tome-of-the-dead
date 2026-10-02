@@ -1,0 +1,19 @@
+# WazHack/ZX gfx text grid — DERIVED by tools/concept_screen.py from
+# assets/gfx/concept/grid/spells.grid (edit that); CONCEPT draft, not on the canvas yet.
+# name: spark_fizz2
+# size: 8x8
+# character: SPELL FX
+# caption: SPARK_FIZZ2
+# ink: #FF00FF
+# attr: $43 (ink magenta, paper black, bright 1)
+# anchor: 0 0
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+#+...+#+
+++++++++
++++#+++.
++#+++#+.
++++#+++.
+++++++++
+#+...+#+
+++...+++

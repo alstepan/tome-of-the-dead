@@ -1,0 +1,19 @@
+# WazHack/ZX gfx text grid — DERIVED by tools/concept_screen.py from
+# assets/gfx/concept/grid/r3_frames.grid (from tools/concept_r3_frames.py) (edit that); CONCEPT draft, not on the canvas yet.
+# name: drain_fly2
+# size: 16x8
+# character: R3 FRAME
+# caption: DRAIN_FLY2
+# ink: ?
+# attr: $41 (ink blue, paper black, bright 1)
+# anchor: 0 0
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+...+++....++++++
+++++#++++++##++#
++#+#+#+#+#+++###
+++#+++++++#++##+
+++++++#++++++##+
++#+#+#+#+#+++###
+#+++++++#++#+++#
+++.....++++++.++
