@@ -26,6 +26,13 @@ row by row; a row tears if the beam scans any of its 8 pixel lines while the
 row is being copied ([present.probe_row, present.probe_row_end]); split into
 playfield rows (0-20, sprites) and HUD rows (21-23, text). Conservative: the
 whole char row counts even if the beam is in another column.
+Late rows (A7 review): a row whose copy STARTS after the beam already scanned
+all its 8 lines in that frame shows the OLD content for the whole frame; if
+the same present also copied a row before the beam reached it (an "early"
+row: NEW content in that frame), the frame mixes old and new rows (a sprite
+spanning both is split across char rows for one frame). Reported as
+late_rows (all) / split (late rows of presents that also have an early row
+in the same frame). Gated: any split late row fails the run (exit 1).
 
 Usage: FL=abc python3 tests/flicker.py      (scenarios a b c)
 """
@@ -213,6 +220,19 @@ def tears(ev):
     return pf, hud
 
 
+def late_rows(ev):
+    """(late rows, late rows of a split present): see the module doc."""
+    late, early = [], []
+    for w in ev["rows"]:
+        y0 = w["row"] * 8
+        f = w["t0"] // FRAME
+        if FIRST_LINE_T + (y0 + 7) * LINE + f * FRAME < w["t0"]:
+            late.append(f)
+        elif w["t1"] < FIRST_LINE_T + y0 * LINE + f * FRAME:
+            early.append(f)
+    return len(late), sum(1 for f in late if f in early)
+
+
 def run(h, name):
     p = game.T(h)
     p.boot(K_KNIGHT, freeze=0)
@@ -262,6 +282,8 @@ def run(h, name):
     tr = [tears(e) for e in T]
     nrows = sum(len(e["rows"]) for e in T)
     shown = sum(1 for e in T for x in e["erases"] if x.get("shown", True))
+    lr = [late_rows(e) for e in T]
+    nlate, nsplit = sum(a for a, _ in lr), sum(b for _, b in lr)
 
     def mm(v):
         return "%d/%d/%d" % (min(v), sum(v) // len(v), max(v)) if v else "-"
@@ -271,6 +293,8 @@ def run(h, name):
     print(f"erases on the displayed bank={shown}; present rows copied={nrows}"
           f" tear_events playfield={sum(a for a, _ in tr)} hud={sum(b for _, b in tr)}"
           f" (ticks affected={sum(1 for a, b in tr if a or b)})")
+    print(f"late_rows={nlate} split={nsplit}"
+          f" (ticks affected={sum(1 for a, _ in lr if a)})")
     ps = [w["t0"] for e in T for w in e["rows"]]
     pe = [w["t1"] for e in T for w in e["rows"]]
     print(f"present row start min/mean/max: {mm(ps)}  end: {mm(pe)}")
@@ -281,13 +305,18 @@ def run(h, name):
     print(f"render start min/mean/max (ticks that draw): {mm(rs)}")
     print(f"render end   min/mean/max (ticks that draw): {mm(re_)}")
     print(f"worst tick T={worst}  OVERRUN={p.rw('OVERRUN_COUNT')}", flush=True)
+    return nsplit
 
 
 def main():
+    split = 0
     with Harness() as h:
         h.launch(EMU_ARGS)
         for w in WHICH:
-            run(h, w)
+            split += run(h, w)
+    if split:
+        print(f"[FAIL] flicker: {split} split late rows (present fell behind the beam)")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

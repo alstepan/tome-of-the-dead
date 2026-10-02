@@ -266,22 +266,6 @@ room_d:         DB EXIT_NONE, EXIT_NONE, 2, ROOM_C, EXIT_NONE, EXIT_NONE
 WIN_ROOM        EQU ROOM_D
 WIN_MAX_X       EQU 3               ; standing on storey 0 with x <= 3 (chest cols)
 
-;------------------------------------------------------------------------------
-; Spawns (used ONCE at new-game init; slots are the truth afterwards, §3.7).
-;   DB kind, room, col, storey, flags(EF_LEFT or 0) ; slot = 1 + index
-;------------------------------------------------------------------------------
-HERO_START_COL  EQU 2
-HERO_START_S    EQU 2
-spawn_tab:
-                DB K_RAT,      ROOM_A, 16, 2, EF_LEFT
-                DB K_SLIME,    ROOM_A, 14, 1, EF_LEFT
-                DB K_GOBLIN,   ROOM_B, 16, 2, EF_LEFT
-                DB K_BAT,      ROOM_B, 18, 1, EF_LEFT
-                DB K_SKELETON, ROOM_C, 16, 2, EF_LEFT
-                DB K_GHOST,    ROOM_C, 12, 1, EF_LEFT
-                DB K_SKELETON, ROOM_D, 12, 0, EF_LEFT
-                DB K_BAT,      ROOM_D, 12, 2, EF_LEFT
-SPAWN_COUNT     EQU ($ - spawn_tab) / 5
 
 ;------------------------------------------------------------------------------
 ; Strings (0-terminated, upper case; ROM charset).

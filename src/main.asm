@@ -275,7 +275,8 @@ end_turn:
 ; Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 do_exit:
-                call follow_select
+                ld   hl, follow_select         ; bank 3 (cold)
+                call far3
                 call hide_sprites              ; every sprite hidden, hero too
                 call show_bank5                ; A7: the scroll runs on the $4000 screen
                 ld   a, GS_TRANSITION          ; (state flips once none is drawn)
@@ -322,7 +323,8 @@ do_exit:
                 ld   (ix+E_Y), a
 .pos:           call snap_pxpy
                 ld   (ix+E_MODE), M_REST
-                call arrival_conflicts
+                ld   hl, arrival_conflicts     ; bank 3 (cold)
+                call far3
                 call hud_room
                 call vis_room_sync             ; B7: no old-room sprite in the next render
                 call present_full              ; A7: bank 5 -> 7 (6,912 B), show bank 7

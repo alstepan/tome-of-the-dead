@@ -223,6 +223,13 @@ hole), `POTION` (1 cell), `CHEST` (2×2 cells), `TORCH` (1×2, optional).
 - y is clamped to the storey's **air band**: `7s ≤ y ≤ 7s+6−h`. Bat: 5 rows of
   freedom, Ghost: 3. Flyers never enter a floor row and never pass through walls
   or entities. Ghosts do not phase.
+- **Ladder ends (B8, user decision, as built):** a flyer never moves into a
+  ladder-end box (the standing box at either end of a segment, cols
+  `col … col+2` in that storey — the box the climbers' "no head-on" rule keeps
+  clear, §6.4). A flyer already in one (spawn, follower placement) steps out
+  first (x only, toward the hero, else the other way; never deeper). So a
+  shaft is a wall for flyers; the Bat's wander reverses at it like at a wall.
+  Speeds unchanged.
 
 ### 3.6 Room exits and transitions (foundations F5/F6 applied)
 

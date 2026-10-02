@@ -115,7 +115,10 @@ SCENARIOS = {
         (5, 15, 14, HOSTILE),                     # skeleton C right, gap 0
         (7, 8, 14, RIGHT),                        # skeleton D left, gap 1
         (3, 20, 16, HOSTILE),                     # goblin
-        (6, 4, 15, RIGHT)], KEYS),                # ghost, storey-2 band
+        (6, 23, 15, HOSTILE)], KEYS),             # ghost, storey-2 band; B8: x 4 was
+                                                  # inside {5,2}'s end box (now walled
+                                                  # off left of the shaft): joins from
+                                                  # the right instead
 }
 
 

@@ -25,7 +25,7 @@ from game_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at
                        GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION,
                        EF_LEFT, EF_PENDING, EF_ACTIVE, EF_HOSTILE,
                        K_KNIGHT, K_WIZARD, K_SKELETON, K_GOBLIN, K_RAT,
-                       K_BAT, K_SLIME)
+                       K_BAT, K_SLIME, K_GHOST)
 
 GOLDEN_DIR = os.path.join(HERE, "golden")
 UPDATE = "--update-golden" in sys.argv
@@ -812,6 +812,125 @@ def main():
             h.expect("53 probe_presented sampled every tick", len(s_) >= 20, True)
             h.expect("53 bank 7 == bank 5 after every tick-start present",
                      [i for i, d in enumerate(s_) if d][:5], [])
+
+        # ---------------- 54 (review A7, B7b) new game after death: no stale slot
+        # new_game rewrote the entity table but left N_VIS / N_FID / RLIST of
+        # the dead game, so the first (render-first) tick of the new game drew
+        # skeleton C (room C, parked in room A by die()) at its old position
+        # and the hero with the DEAD knight's frame id from a pool that now
+        # holds the wizard (BLIT_MISS stayed 0). Fix: new_game -> vis_reset.
+        # Checked on the first 2 ticks after GS_PLAYING with a DIFFERENT hero.
+        if want(54):
+            p.boot(K_KNIGHT)
+            died = p.die()
+            sk = p.ent(SLOT_SKC)
+            old = {(c, r) for c in range(sk["DCOL"], sk["DCOL"] + sk["DCOLS"])
+                   for r in range(sk["DROW"], sk["DROW"] + sk["DROWS"])}
+            h.expect("54 setup: knight died, skeleton C drawn in room A",
+                     (died, sk["DVIS"] & 1, sk["ROOM"]), (True, 1, 0))
+            p.hold("ENTER")
+            p.wait_state(GS_SELECT)
+            p.release()
+            p.settle()
+            p.hold("2")                         # wizard
+            p.wait_state(GS_PLAYING)
+            p.release()
+            wz0 = p.rb(S["kind_tab"] + S["KT_FID0"] + K_WIZARD)
+            wzn = p.rb(S["kind_tab"] + S["KT_FCNT"] + K_WIZARD)
+            stale, badfid, badbg = [], [], []
+            for t in (1, 2):
+                p.tick()                        # first ticks of the new game
+                cur = p.rb("CUR_ROOM")
+                cov = set()
+                for s_ in range(16):
+                    e = p.ent(s_)
+                    if not e["DVIS"] & 1:
+                        continue
+                    if e["ROOM"] != cur or not e["FLAGS"] & EF_ACTIVE:
+                        stale.append((t, s_, e["ROOM"]))
+                    cov |= {(c, r) for c in range(e["DCOL"], e["DCOL"] + e["DCOLS"])
+                            for r in range(e["DROW"], e["DROW"] + e["DROWS"])}
+                e0 = p.ent(0)
+                if e0["DVIS"] & 1 and not wz0 <= e0["DFID"] < wz0 + wzn:
+                    badfid.append((t, e0["DFID"]))
+                fr = p.composed_frame()
+                badbg += [(t, cr) for cr in sorted(old - cov) if not p.is_bg(fr, *cr)][:3]
+            h.expect("54 new game ticks 1-2: no slot of another room / dead slot drawn",
+                     stale[:3], [])
+            h.expect("54 new game ticks 1-2: hero drawn only with a wizard frame",
+                     badfid[:3], [])
+            h.expect("54 new game ticks 1-2: skeleton C's old cells show background",
+                     badbg[:3], [])
+            h.expect("54 BLIT_MISS 0", p.rb("BLIT_MISS"), 0)
+
+        # ---------------- 55 (user bug B8) flyers never hold a ladder end ----
+        # The Ghost drifted onto the shaft's end box above the climbing hero
+        # and parked there: the hero's climb was blocked at the top. Rule:
+        # a flyer never moves into a ladder-end box (the standing box at
+        # either end of a segment, cols col..col+2 in that storey); one that
+        # is in one (spawn / follower) steps out, never deeper. Room A
+        # ladders {5,2}, {23,1}. Fixed seed; ghost speed unchanged (period 1).
+        if want(55):
+            p.boot(K_KNIGHT)
+            desc = S["room_a"]                      # {col, s} list after boot
+            n = p.rb(desc + 6)
+            segs = [(p.rb(desc + 7 + 2 * i), p.rb(desc + 8 + 2 * i)) for i in range(n)]
+
+            def in_end_box(e, bw=3):
+                """cols of slot e's body inside a ladder-end box of its storey."""
+                t = min(2, (e["Y"] + (4 if e["KIND"] == K_GHOST else 2)) // 7)
+                cols = set(range(e["X"], e["X"] + bw))
+                return sorted(cols & {c + k for c, s in segs if s - t in (0, 1)
+                                      for k in range(3)})
+
+            p.isolate()
+            p.place(0, 5, 14)                       # foot of {5,2}, storey 2
+            p.place(SLOT_GHOST, 5, 8, room=0)       # INSIDE the top end box
+            g_in = in_end_box(p.ent(SLOT_GHOST))
+            out_after, inside = None, []
+            for w_ in range(4):                     # hero waits: ghost steps out
+                if not in_end_box(p.ent(SLOT_GHOST)):
+                    out_after = w_
+                    break
+                p.turn("SPACE")
+            ups, downs = [], []
+            for i in range(7):                      # climb up: never blocked
+                ups.append(p.turn("K"))
+                g = p.ent(SLOT_GHOST)
+                if in_end_box(g):
+                    inside.append(("up", i, g["X"], g["Y"]))
+            top = p.ent(0)["Y"]
+            for _ in range(3):
+                p.turn("SPACE")                     # ghost chases on storey 1
+            for i in range(7):                      # and back down
+                downs.append(p.turn("J"))
+                g = p.ent(SLOT_GHOST)
+                if in_end_box(g):
+                    inside.append(("down", i, g["X"], g["Y"]))
+            h.expect("55 setup: ghost placed inside the top end box of {5,2}",
+                     len(g_in) == 3, True)
+            h.expect("55 ghost steps out of the ladder-end box within 3 turns",
+                     out_after is not None and out_after <= 3, True)
+            h.expect("55 hero climbs {5,2} up in 7 turns, no blocked input",
+                     (ups, top), ([True] * 7, 7))
+            h.expect("55 hero climbs back down in 7 turns, no blocked input",
+                     (downs, p.ent(0)["Y"]), ([True] * 7, 14))
+            h.expect("55 ghost never in a ladder-end box after stepping out",
+                     inside[:3], [])
+            # bat wander (other storey) treats shafts as walls: never inside,
+            # still moving
+            p.isolate()
+            p.place(0, 14, 14)                      # hero on storey 2
+            p.place(SLOT_BATB, 12, 8, room=0)       # bat B on storey 1
+            xs, binside = set(), []
+            for i in range(30):
+                p.turn("SPACE")
+                b = p.ent(SLOT_BATB)
+                xs.add(b["X"])
+                if in_end_box(b):
+                    binside.append((i, b["X"], b["Y"]))
+            h.expect("55 bat (wander/jitter) never in a ladder-end box", binside[:3], [])
+            h.expect("55 bat keeps moving (>= 4 distinct cols in 30 turns)", len(xs) >= 4, True)
 
         # ---------------- 32 / 33 quaff & full pack --------------------------
         if want(32) or want(33):
