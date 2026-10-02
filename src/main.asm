@@ -141,12 +141,10 @@ boot:
                 inc  a
                 cp   K_COUNT
                 jr   c, .gk
-                ; the three heroes' IDLE frames for the select screen
+                ; the two heroes' IDLE frames for the select screen
                 ld   a, FID_knight_idle1
                 call gen_frame
                 ld   a, FID_wizard_idle
-                call gen_frame
-                ld   a, FID_rogue_idle
                 call gen_frame
                 or   a                         ; CF = 0: save
                 call sel_frt_copy
@@ -155,7 +153,7 @@ boot_done:                                     ; falls through into enter_select
                 ASSERT boot_done == enter_select
 
 ;==============================================================================
-; enter_select — GS_SELECT: the three heroes' IDLE frames, names, keys 1/2/3.
+; enter_select — GS_SELECT: the two heroes' IDLE frames, names, keys 1/2.
 ;==============================================================================
 SEL_ROW         EQU 7                   ; body top row of the hero previews
 enter_select:
@@ -170,7 +168,7 @@ enter_select:
                 ld   hl, str_title
                 call print_str
                 ld   hl, sel_tab
-                ld   b, 3
+                ld   b, 2
 .h:             push bc
                 push hl
                 ld   a, (hl)                   ; fid
@@ -241,9 +239,6 @@ select_tick:                                   ; test probe (after the HALT)
                 inc  c
                 bit  DK_2_BIT, a               ; '2'
                 jr   nz, start_game
-                inc  c
-                bit  DK_3_BIT, a               ; '3'
-                jr   nz, start_game
                 jr   select_loop
 row_attr_fill:  ld   c, 0
                 push af
@@ -290,12 +285,10 @@ check_paging:
 
 
 ; select-screen entries: fid, body col, attr, name
-sel_tab:        DB   FID_knight_idle1, 5,  $47
+sel_tab:        DB   FID_knight_idle1, 8,  $47
                 DW   nm_knight
-                DB   FID_wizard_idle,  14, $45
+                DB   FID_wizard_idle,  21, $45
                 DW   nm_wizard
-                DB   FID_rogue_idle,   23, $44
-                DW   nm_rogue
 
 ;==============================================================================
 ; start_game — C = hero kind. Generate its frames (§5.2: only the chosen
@@ -340,11 +333,25 @@ tick_work:                                     ; budget probe: tick work starts 
                 ld   a, (GAME_STATE)
                 cp   GS_PLAYING
                 jp   nz, end_screen
+    IF RENDER_FIRST
+                ; E0 experiment: draw right after the HALT sync, so the erase->draw
+                ; window of every sprite sits at a fixed early point of the frame
+                ; (beam is still in the top border/first rows) instead of wherever
+                ; input+anim happened to end. Costs one tick of display latency.
+                call render
+probe_render_done:
+                ld   a, (TURN_PHASE)
+                or   a
+                call z, read_turn_input        ; INPUT: maybe start a turn
+                call anim_tick
+    ELSE
                 ld   a, (TURN_PHASE)
                 or   a
                 call z, read_turn_input        ; INPUT: maybe start a turn
                 call anim_tick
                 call render
+probe_render_done:
+    ENDIF
                 ld   a, (TURN_PHASE)
                 or   a
                 jr   z, play_loop
@@ -555,7 +562,7 @@ init_kbd_mirror:
 kind_tab:
                 ;     KN  WZ  RG  SK  GB  GH  RT  BT  SL
                 KROW   3,  3,  3,  3,  3,  3,  4,  3,  3          ; KT_BW (cells)
-                KROW BH_K_KNIGHT, BH_K_WIZARD, BH_K_ROGUE, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME ; KT_BH
+                KROW BH_K_KNIGHT, BH_K_WIZARD, 0, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME ; KT_BH
                 KROW  22, 14, 18, 10,  6,  7,  3,  3,  5          ; KT_HP
                 KROW   2,  3,  5,  2,  1,  2,  0,  1,  0          ; KT_ATK
                 KROW   2,  1,  3,  2,  1,  3,  1,  4,  0          ; KT_EVA
@@ -565,8 +572,8 @@ kind_tab:
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  2          ; KT_PERIOD
                 KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER|KF_ZAP, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL, KF_CLIMBER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0  ; KT_FLAGS
                 KROW $47,$45,$44,$47,$44,$45,$06,$43,$44          ; KT_ATTR
-                KROW KFID_KNIGHT, KFID_WIZARD, KFID_ROGUE, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME   ; KT_FID0
-                KROW KFCNT_KNIGHT, KFCNT_WIZARD, KFCNT_ROGUE, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME ; KT_FCNT
+                KROW KFID_KNIGHT, KFID_WIZARD, 0, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME   ; KT_FID0
+                KROW KFCNT_KNIGHT, KFCNT_WIZARD, 0, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME ; KT_FCNT
                 ASSERT $ - kind_tab == KT_MOD7
                 DUP 24, n
                 DB   n % 7                     ; KT_MOD7

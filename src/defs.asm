@@ -90,7 +90,7 @@ PL_H            EQU $BA75
 PL_STOREY       EQU $BA76
 PL_LADDER       EQU $BA77           ; 1 = hero mid-ladder
 BLIT_CROWS      EQU $BA79           ; aligned blit: char rows left
-SEL_FRT_SAVE    EQU $BA80           ; 3 x FRT_STRIDE: boot FRT rows of the select idles ($BA80..$BAAF)
+SEL_FRT_SAVE    EQU $BA80           ; 2 x FRT_STRIDE: boot FRT rows of the select idles ($BA80..$BA9F)
 MSG_Q           EQU $BA78           ; queued impact message: attacker slot + 1 (0 = none)
 STACK_BOTTOM    EQU $BB00           ; stack grows down from $BF00 to here
 
@@ -101,7 +101,7 @@ STACK_BOTTOM    EQU $BB00           ; stack grows down from $BF00 to here
 TURN_PHASE      EQU $BF10           ; 0 = INPUT, 1 = ANIM          (test-observable)
 TICK_COUNTER    EQU $BF11           ; word: 25 Hz ticks elapsed    (test-observable)
 CUR_ROOM        EQU $BF13           ; 0..3 = A..D                  (test-observable)
-HERO_KIND       EQU $BF14           ; K_KNIGHT/K_WIZARD/K_ROGUE    (test-observable)
+HERO_KIND       EQU $BF14           ; K_KNIGHT/K_WIZARD (2 = retired)   (test-observable)
 POTIONS_TAKEN   EQU $BF15           ; bitmask of level potion ids  (test-observable)
 INPUT_REPEAT    EQU $BF16           ; 1 = hold repeats (default); 0 = edge-triggered
 ANIM_FREEZE     EQU $BF17           ; 1 = resting sprites hold IDLE frame 0
@@ -262,7 +262,8 @@ MSG_M_MISS      EQU 5
 ;------------------------------------------------------------------------------
 K_KNIGHT        EQU 0
 K_WIZARD        EQU 1
-K_ROGUE         EQU 2
+                                ; id 2 retired (Rogue removed, G1 budget 2): hole kept so
+                                ; K_* ids / HERO_KIND semantics stay stable
 K_SKELETON      EQU 3
 K_GOBLIN        EQU 4
 K_GHOST         EQU 5
@@ -274,7 +275,6 @@ K_COUNT         EQU 9
 ; frame-height ASSERT both use these; named BH_<kind> so FRM can paste `kind`)
 BH_K_KNIGHT     EQU 6
 BH_K_WIZARD     EQU 6
-BH_K_ROGUE      EQU 6
 BH_K_SKELETON   EQU 6
 BH_K_GOBLIN     EQU 4
 BH_K_GHOST      EQU 4
@@ -399,6 +399,9 @@ ZAP_TICKS       EQU 3
 FLASH_TICKS     EQU 2
 EXIT_NONE       EQU $FF
 TICK_FRAMES     EQU 2               ; 25 Hz
+    IFNDEF RENDER_FIRST                         ; E0: 1 = render right after wait_tick
+RENDER_FIRST    EQU 1                           ;     (build with -DRENDER_FIRST=0 for the old order)
+    ENDIF
 TWEEN_STEP      EQU 4               ; px per tick
 
 ; KFIELD off — A = kind_tab[kind(IX) + off].  Clobbers: A, HL   (~45 T)

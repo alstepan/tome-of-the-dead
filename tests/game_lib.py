@@ -103,13 +103,13 @@ KEYS = {
     "P": (5, 0), "O": (5, 1), "Q": (2, 0), "A": (1, 0), "G": (1, 4),
     "SPACE": (7, 0), "1": (3, 0), "2": (3, 1), "3": (3, 2),
 }
-HERO_KEY = {0: "1", 1: "2", 2: "3"}
+HERO_KEY = {0: "1", 1: "2"}                  # id 2 (Rogue) retired: hole in the K_* ids
 
 ATTR_AIR, ATTR_WALL, ATTR_FLOOR, ATTR_LADDER = 0x00, 0x01, 0x0F, 0x02
 TILE_ATTRS = {0x00, 0x01, 0x0F, 0x02, 0x42, 0x06, 0x46}
 FLASH_ATTRS = {0x42, 0x44, 0x45}          # ATTR_HIT, ATTR_HEAL, zap
 KIND_ATTR = {0: 0x47, 1: 0x45, 2: 0x44, 3: 0x47, 4: 0x44, 5: 0x45, 6: 0x06, 7: 0x43, 8: 0x44}
-K_KNIGHT, K_WIZARD, K_ROGUE, K_SKELETON, K_GOBLIN, K_GHOST, K_RAT, K_BAT, K_SLIME = range(9)
+K_KNIGHT, K_WIZARD, _K_RETIRED, K_SKELETON, K_GOBLIN, K_GHOST, K_RAT, K_BAT, K_SLIME = range(9)
 
 
 class Proto:

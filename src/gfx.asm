@@ -1142,7 +1142,7 @@ ft_ptr:
 
 ; frt_ptr — HL = FRT + A*16 ; frt_ptr_cur uses GEN_FID.  Clobbers: A, DE, HL
 ;------------------------------------------------------------------------------
-; sel_frt_copy — CF = 0: save the three select idles' FRT rows (boot pool,
+; sel_frt_copy — CF = 0: save the two select idles' FRT rows (boot pool,
 ; below the alloc mark) to SEL_FRT_SAVE; CF = 1: restore them. start_game's
 ; gen_kind regenerates the chosen hero's frames ABOVE the mark and re-points
 ; their FRT rows (incl. its select idle) there; the next hero's gen_kind then
@@ -1154,7 +1154,7 @@ sel_frt_copy:
                 ld   (TMP0), a
                 ld   hl, sel_tab
                 ld   de, SEL_FRT_SAVE
-                ld   b, 3
+                ld   b, 2
 .l:             push bc
                 push hl
                 push de

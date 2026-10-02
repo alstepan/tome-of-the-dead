@@ -24,7 +24,7 @@ from game_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at
                        cell_bytes, TILE_ATTRS, FLASH_ATTRS, KIND_ATTR,
                        GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION,
                        EF_LEFT, EF_PENDING, EF_ACTIVE, EF_HOSTILE,
-                       K_KNIGHT, K_WIZARD, K_ROGUE, K_SKELETON, K_GOBLIN, K_RAT,
+                       K_KNIGHT, K_WIZARD, K_SKELETON, K_GOBLIN, K_RAT,
                        K_BAT, K_SLIME)
 
 GOLDEN_DIR = os.path.join(HERE, "golden")
