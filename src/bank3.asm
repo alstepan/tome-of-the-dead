@@ -836,3 +836,5 @@ spawn_tab:
                 DB K_SKELETON, ROOM_D, 12, 0, EF_LEFT
                 DB K_BAT,      ROOM_D, 12, 1, EF_LEFT
 SPAWN_COUNT     EQU ($ - spawn_tab) / 5
+
+                INCLUDE "levelgen.asm"          ; B3B-7: level_gen, level_start_x
