@@ -92,7 +92,8 @@ TILE_LEVEL_ATTRS  EQU TILE_ATTRS + TILE_COMMON
 ;                         ASSERTed); A5 ZX0 scratch aliases ROOM_MAP..NEXT_MAP
 ;                         ($6000..$65FF, 1,536 B) — the generator only runs
 ;                         while no room is built
-LOWRAM_FREE_END EQU LOWRAM_END      ; end of the fixed low-RAM buffers
+LOWRAM_FREE_END EQU LOWRAM_END_3B   ; B3B-1: end of the fixed low-RAM buffers incl. the 3B level
+                                    ; state + ornament glyphs ($6D40..$6EBF, level_defs.asm)
 ZX0_BUDGET      EQU 128             ; A5: decompressor (68 B) + glue, max
     IFNDEF ZX0_SOURCES                          ; A5: 1 = sprite sources ZX0-packed
 ZX0_SOURCES     EQU 1                           ;     (build/zx0/sprites_zx0.asm from tools/zx0_sources.py);
@@ -594,3 +595,8 @@ FID_nm EQU -1
 MOT             EQU FF_MOTION
 STA             EQU 0
 SYM             EQU FF_SYM
+
+;------------------------------------------------------------------------------
+; Stage 3B data contracts (B3B-1): EQUs + ASSERTs only, no bytes.
+;------------------------------------------------------------------------------
+                INCLUDE "level_defs.asm"
