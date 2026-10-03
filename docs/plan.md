@@ -277,6 +277,12 @@ status step at each entity's phase start, HOLD/MIND/POISON/WEAK, held-hero auto-
 + 2 panel icons, boss/resistance/immunity rules (§9.1 mask; 3rd `kind_tab` page). Tests:
 seeded Frost freeze = exactly 2 skipped actions; sleeper wakes on damage; STUN_GUARD; poison
 never below 1 HP; confused reversal + `YOU STUMBLE.`; boss halving.
+3D also implements (game.md rev 5, user 2026-10-03): **ability ranks** (§5 rank table, `ARANK`
+2 B, current-rank rows copied to bank 2, roman suffix on the info line), **ability gates**
+(Mage: staff only until a book; Warrior: bow needs the bow bag item + ARROWS, `NO BOW.`), and
+**XP/levels** (§4.1: `KXP` column, `XP_NEXT`, level-up W +4/+1, M +3/+2, atk L4/L8, eva L6,
+panel digit at (31,19), BAG info line). Tests: seeded kill → XP and level-up at the
+threshold; respawn half XP; rank 2/3 values per ability; no spell before the first book.
 
 ### 3E — Items, inventory & survival (needs game.md §7–8)
 Inventory page (bank-5 screen), equip, quick slots auto-fill, food/hunger,
@@ -289,6 +295,13 @@ for 3F's wave code), **blessed/cursed gear** (§8.7: odds, sticky curse, Enchant
 never auto-fill), the **item record** (§8.9) and the Sleep scroll / extended Cure (§8).
 Tests: trap placement 1,000 seeds Python == Z80; trigger/search/jump-over; cursed unequip
 refused until Enchant; identify-on-use + elimination.
+**Rev 5 (user 2026-10-03) supersedes the cursed rule above:** cursed `m` ∈ {−2,−1,+1,+2}
+rolled by depth (`ISTATE` bits 5–7, bit 2 HIDDEN until equipped), sticky until **Enchant
+blesses** it (`m = max(m,+1)`) or a **projectile hit shatters** it (1 in 4, uniform among worn
+cursed slots; DART counts); no regen penalty (§8.7). Book placement: generic class books,
+content decided at READ (§5), 2nd book 1 in 2 on D4–D7. Tests: reveal on equip; Enchant
+blesses all worn cursed; seeded shatter empties the slot (fists 1d2); book read order
+(unlock → rank-up → tome); levelcheck includes the cursed value roll and extra books.
 
 ### 3F — Monsters, bosses & win (needs game.md §9–10)
 Per-level pool generation (≤ 4 kinds + boss); new monsters (zombie, mummy, orc,
@@ -296,8 +309,12 @@ skeleton-archer, necromancer, giant spider) + ranged AI; level bosses; Necromanc
 Archmage + Book of Absolute Death Magic → win. **Exit:** full run start → win.
 3F also implements game.md §9.5 (respawn trickle while the boss lives; idle wave behind `IDLE_WAVE`, default off).
 3F also implements **monster tiers** (game.md §9.6, user 2026-10-03): 12 tier rows (30/32
-kinds), spawn roll from `T2_BASE`/`T3_BASE` + `Δ` (PL vs `PL_EXP`), tier abilities (on-hit
+kinds), spawn roll from `T2_BASE`/`T3_BASE` + `Δ` (rev 5: `LVL − d`, game.md §9.6), tier abilities (on-hit
 status, parry, rage, breed, summon, sniper/slinger), drop/XP scaling, and the ALARM trap wave.
+3F also implements **gear wear** (game.md §8.10, rev 5, user 2026-10-03): NOTCH on parried
+melee (Skeleton Guard/Knight, Death Knight, 1 in 2) and ACID on Black Widow bites (1 in 4,
+armour else helmet), `m −1`, floor −3 then destroyed, blessed immune. Tests: seeded notch/acid
+lowers `m`; destruction at −3 empties the slot (frees a cursed slot); blessed unchanged.
 
 ### 3G — Sound & polish (later)
 AY music + FX on the A8 slot; balance pass; hardware hardening.

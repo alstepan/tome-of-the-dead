@@ -11,6 +11,12 @@
 > **Rev 4 (2026-10-03):** user 2026-10-03 adds **status effects** (§6.4, 3D), **traps** (§1.5,
 > 3E), **blessed/cursed gear as known states** (§8.7, 3E) and **light identification** of
 > potions/scrolls (§8.8, 3E); details are designer decisions 2026-10-03.
+> **Rev 5 (2026-10-03):** user 2026-10-03 replaces the cursed-gear rule (§8.7: hidden ±
+> modifier revealed on equip, sticky until **blessed** by Enchant or **shattered** by a
+> projectile hit; no regen penalty) and adds **XP and hero levels** (§4.1, max level 9),
+> which replace boss-kill growth and the tier power level `PL` (§9.6), **gear wear only from
+> special attacks** (§8.10) and **book-gated abilities with ranks from repeat books** (§4,
+> §5, §6.3). Numbers are designer decisions 2026-10-03.
 > It supersedes `prototype.md` wherever they differ. Anything not restated here keeps the
 > PROTO rule: turn phases §3.2, ladders §3.4, the follow and materialise rules §3.7, F9
 > zoning §4, frame rules §5.1–§5.4, line of attack §6.1, AI §6.4, the animation state
@@ -414,14 +420,78 @@ Budget table: §11.2.
 | Mana use | 2 power attacks (§6.2) | 5 spells (§6.1) |
 | Finite supplies | daggers, arrows (§6.3) | spell books/scrolls are found, never bought (§5) |
 | Ranged | **throwing daggers** (range 6) + **bow** (range 14), both **finite** (§6.3) | spells |
-| Start kit | **3 daggers, 6 arrows**, 1 Heal, 1 Apple | 1 Heal, 1 Mana, 1 Apple |
-| Class book per level | D1 Power Strike · D2 Vigor · D3 Whirlwind · D4–D7 Vigor | D1 Spark · D2 Firebolt · D3 Frost Shard · D4 **Drain Life** · D5 Lightning · D6–D7 Tome of Power |
+| Start kit | **Bow** (bag item, 1 slot, rev 5), **3 daggers, 6 arrows**, 1 Heal, 1 Apple | 1 Heal, 1 Mana, 1 Apple |
+| Ability unlock depth (rev 5: earliest depth; §5 read-time rule) | Power Strike D1 · Whirlwind D3; other books rank them up, then Vigor | Spark D1 · Firebolt D2 · Frost Shard D3 · **Drain Life** D4 · Lightning D5; other books rank them up, then Power |
+| Without a book (user 2026-10-03) | sword melee only; daggers need DAGGERS > 0; bow needs the **bow** (bag item, start kit) **and** ARROWS > 0 | **staff swing only**: no spell at all until a book is read |
 
-- **Growth: no XP.** Progress comes from books, gear and boss kills.
-- Each **boss kill: +3 max HP, +1 max MP** (current values too).
-- **Tome of Vigor:** +3 HP, +1 MP. **Tome of Power:** +3 MP, +1 HP.
-- **Why +3/+1, not rev 1's +4/+2:** there are 7 boss kills in 8 levels, and +4/+2 would
-  overshoot (§10).
+- **Growth (rev 5):** XP levels (§4.1), books (abilities + tomes) and gear. Boss kills no
+  longer grant stats directly; they grant large XP.
+- **Tome of Vigor:** +3 HP, +1 MP. **Tome of Power:** +3 MP, +1 HP. Rev 5: a tome is only
+  what a class book gives once every ability is learned and at rank 3 (§5).
+- **Why these level-up amounts:** the hero reaches about L8 at D8 entry (7 level-ups). In rev
+  4, 7 boss kills (+3/+1) plus the tomes made W 60/18 and M 39/25 at D8; rev 5's +4/+1 (W)
+  and +3/+2 (M) plus ~3 late Vigor tomes (W) land at W ~61/16, M ~37/26 (§10).
+
+### 4.1 Experience and levels (user 2026-10-03: add XP; numbers designer decision 2026-10-03)
+
+**Award.** Every monster death awards the hero `KXP[kind]` (per-kind byte in `kind_tab`,
+tiers have their own rows). `F_RESPAWN` monsters (respawns, ALARM/idle waves, summons,
+Rabbit Rat offspring) award `KXP / 2`, min 1 (`RESPAWN_XP_DIV`, §9.5). The Archmage awards 0
+(its death ends the run). No XP for books, items, traps or exploration.
+
+| Kind | XP | Tier 2 | XP | Tier 3 | XP |
+|---|---|---|---|---|---|
+| Rat | 2 | Giant Rat | 3 | Rabbit Rat | 4 |
+| Bat | 2 | Screech Bat | 3 | | |
+| Slime | 3 | | | | |
+| Goblin | 3 | Goblin Slinger | 4 | | |
+| Spider | 4 | Black Widow | 6 | | |
+| Skeleton | 6 | Skeleton Guard | 9 | Skeleton Knight | 12 |
+| Ghost | 6 | Poltergeist | 9 | | |
+| Skeleton Archer | 7 | Skeleton Sniper | 10 | | |
+| Vampire | 9 | | | | |
+| Orc | 9 | Orc Berserker | 13 | Orc Bouncer | 18 |
+| Necromancer | 10 | Bone Caller | 15 | | |
+| Mummy | 12 | | | | |
+
+Bosses: Golden Goblin King 20 · Spider Queen 30 · Vampire Lord 45 · **Ogre Warlord 60** ·
+Pharaoh 65 · High Necromancer 80 · **Death Knight 90** · Archmage 0. (Tier XP ≈ base ×1.5 /
+×2, baked into the row: no runtime multiply.)
+
+**Levels.** `LVL` 1–9 (**max 9**), `XP` 16-bit, saturating at 9,999. Thresholds (total XP):
+
+| Level | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|---|
+| `XP_NEXT` | 40 | 100 | 200 | 340 | 500 | 700 | 920 | 1,150 |
+
+Expected XP at depth entry (E, full clear incl. tiers and ~3 respawns per level): D2 ~48, D3
+~116, D4 ~243, D5 ~399, D6 ~589, D7 ~827, D8 ~1,072, run end ~1,190. So the **expected
+level is `LVL_EXP(d) = d`** at every depth entry (thresholds sit ~15 % under the expected
+totals, so a hero who skips a few monsters still keeps pace; skipping a third of a level
+drops one level). L9 comes near the end of D8, only for thorough play.
+
+**Level-up** (each level; several at once loop): **Warrior max HP +4, max MP +1 · Mage max
+HP +3, max MP +2; current HP/MP rise by the same amounts** (not a full heal). The class split
+replaces the Vigor/Power tomes, which are now rare (§5: books mostly teach or rank up
+abilities). Extra steps: **L4 atk +1 · L6 eva +1 · L8 atk +1** (mirrors
+the monsters' atk + (d − 1) div 3, §9.1). DEF stays gear-only.
+
+**Books still matter.** XP never teaches an ability: spells and power attacks come only from
+class books (§5), repeat books raise ability ranks (§5), and the rare tomes add on top of
+the level curve. Levels are the stat floor; books are the toolkit.
+
+**Messages:** `YOU REACH LEVEL 5!` (18), then on L4/L8 `YOU STRIKE TRUER.` (17), on L6
+`YOU FEEL NIMBLE.` (16). Death/win screens show `LEVEL n`.
+
+**Display.** Panel cell **(31, 19)** (free; the key icon is at (30, 19)): the level digit
+`1`–`9` in the 6×8 text font, attr `$46`; queued (§3.3). The **BAG icon's info line** shows
+the numbers: `BAG 12/20  LV 5  XP 412/500` (≤ 42; at L9 `XP 1234`). The inventory page
+header shows the same. 0 new glyphs.
+
+**Cost.** State: `XP` 2 B + `LVL` 1 B (replaces `PL`, net +2 B). Tables: `KXP` 32 B (a
+`kind_tab` column, in the current page's 48 B spare), `XP_NEXT` 16 B. Code: award hot in bank
+2 ~40 B (16-bit add + one compare; ~150 T per kill); level-up in bank 3 via `far3` ~120 B
+(~2k T, ≤ 8 times a run); display ~60 B. Strings ~70 B raw.
 
 ---
 
@@ -430,9 +500,37 @@ Budget table: §11.2.
 | Rule | Decision |
 |---|---|
 | Source | Abilities come **only** from books **found in the dungeon** (nothing is bought or granted). Melee is always available. Scrolls and ammunition are likewise found only (§8.5) |
-| Placement | **Exactly 1 class book per level, D1–D7** (class-aware, table §4). **The D1 book lies in the start room.** D8 has none |
-| Reading | Page verb `READ`, 1 turn on return. Learns the ability (fills its bar slot); the book is consumed |
-| Other class's book | 50 % per level. `READ` → "YOU GRASP LITTLE OF IT": Warrior +1 max MP, Mage +2 max HP; the book crumbles |
+| Placement (rev 5, designer decision 2026-10-03) | **1 class book per level D1–D7, plus a 2nd class book with 1 in 2 on D4–D7** (`GEN_RNG`; E ≈ 9 per run). **The D1 book lies in the start room.** D8 has none. The generator places a generic **class book** (`SPELLBOOK` / `WAR MANUAL`); *what it teaches is decided when it is read* (below), so generation never depends on hero state |
+| Reading | Page verb `READ`, 1 turn on return; the book is consumed. Content, first match (gameplay RNG): **1.** an unlearned ability whose unlock depth (§4) ≤ the current depth → learn the earliest-depth one (rank 1; fills its bar slot); **2.** else **rank up** a known ability below rank 3, chosen uniformly; **3.** else a tome (Warrior Vigor, Mage Power, §4). So the D1 book always teaches the starter (Spark / Power Strike), each later ability arrives at its unlock depth (or on the next book read, if carried), and every other book is a rank-up. "Chance of new vs rank-up" (user) = rule 1 is deterministic (the §10 threat answers depend on the schedule); the rank-up target is the random part |
+| Other class's book | 50 % per level. `READ` → "YOU GRASP LITTLE OF IT": Warrior +1 max MP, Mage +2 max HP; the book crumbles. Unchanged |
+| Expected yield (E) | Warrior: 2 unlocks, 4 rank-ups (both to rank 3 by ~D6), ~3 Vigor. Mage: 5 unlocks, ~4 rank-ups (of 10 possible), ~0 Power. Mage ranks are the scarcer choice by design: 5 spells × 3 ranks cannot all max |
+
+**Ability ranks (user 2026-10-03: repeat books level an ability; numbers designer decision
+2026-10-03). Max rank 3; rank 1 = the §6.1/§6.2 row. Ranks are cumulative.**
+
+| Ability | Rank 2 | Rank 3 |
+|---|---|---|
+| Spark (1 MP, r6, 1d4+1) | 1d4+2, range 8 | 1d4+3, CONFUSED chance 1 in 2 |
+| Firebolt (3 MP, r12, 1d8+2, burst 1d4) | 1d8+3, burst 1d6 | 1d8+4, the burst **spares the caster** |
+| Frost Shard (3 MP, r12, 1d6, 1 bounce, freeze 2) | freeze 3, 2 bounces | 1d6+2, freeze 4 (bosses halved, §6.4) |
+| Drain Life (3 MP, r5, 1d6+1) | 1d6+2, range 8 | **2 MP**, 1d6+3 |
+| Lightning (5 MP, r28, 1d8+3, 2 bounces) | 1d8+4 | **4 MP**, 3 bounces (loop guard 4 still binds) |
+| Power Strike (3 MP, +2 hit, ×2, stun 1) | **2 MP** | stun 2 (bosses 1) |
+| Whirlwind (4 MP, dmg +1) | dmg +2 | **3 MP**, to-hit +2 |
+
+Daggers and the bow have no ranks (ammo is their limit).
+
+**Display.** Icons are unchanged (no pip: the 24×16 art fills its 3×2 cells, a digit would
+clash). The **info line name field** carries the rank as a roman suffix: `FIREBOLT II  3MP
+RANGE 12  FIRE BURST`, `POWER STRIKE III` (16 = the name field max). Messages: `YOU LEARN
+FIREBOLT!` · `FIREBOLT RISES TO RANK 2.` (25; longest `POWER STRIKE RISES TO RANK 3.` 29).
+
+**Data / cost.** Hero state `ARANK` 2 B (2 bits × up to 5 abilities; 0 = unlearned, replaces
+the learned-bit test). Rank table: 7 abilities × 3 ranks × 6 fields (MP, range, die, bonus,
+bounces, effect duration/chance) = **126 B**; the engineer may keep it in bank 3 and copy the
+hero's ≤ 5 current rows (30 B) into bank 2 on learn/rank-up, so casting reads one row as now
+(0 extra T per cast). Read-time book code ~90 B bank 3; strings ~60 B raw (two message
+stems + roman suffixes; ability names exist).
 
 ---
 
@@ -544,6 +642,10 @@ attack. Rules:
 - **At 0 ammo:** that icon **greys out** (`$07`; selected+greyed `$0F`), FIRE on it is
   illegal (no turn, no MP) and prints `NO DAGGERS.` / `NO ARROWS.`. **Melee is always
   available** (the sword icon never greys). Info line shows `NONE LEFT`.
+- **No bow (rev 5, user 2026-10-03: no weapon → no ranged):** the **bow is a bag item** (1
+  slot, start kit; can be dropped, never worn, never worn down or shattered). Without it in the
+  bag the bow icon greys exactly as at 0 arrows and FIRE prints `NO BOW.`; arrows are still
+  picked up. Daggers are both weapon and ammo, so `DAGGERS = 0` is the only dagger gate.
 - Dropped-ammo floor items merge into one stack per cell and are drawn as the 8×8
   dagger/arrow item glyph.
 - Skeleton Archers' arrows are not recoverable (monster projectiles leave no item); the
@@ -679,7 +781,7 @@ distinct stages, each name ≤ 6 chars:**
 
 The Mummy curse applies the same penalties as the WEAK **status** (§6.4), not cumulative with
 this stage. The panel hunger word stays FOOD-derived; the curse shows as a status icon.
-**Worn cursed gear** (§8.7) switches the FED HP regen off.
+Worn cursed gear does **not** affect regen (rev 5, §8.7).
 
 | Food | FOOD | Source |
 |---|---|---|
@@ -721,7 +823,8 @@ Weapons are class-locked; everything else is not.
 - Scrolls (read on the page): **Teleport** (random free spot in a random room, never the lair
   while its boss lives) · **Fear** (the room's monsters flee 6 turns) · **Sleep** (new, 3D/3E:
   the room's monsters fall ASLEEP 8 turns, §6.4) · **Enchant** (if any worn item is cursed:
-  **uncurses all worn gear** instead (`THE CURSE LIFTS.`); else weapon dmg +1, max +3).
+  **blesses every worn cursed item** instead (§8.7, `THE CURSE LIFTS. BLESSED!`); else
+  weapon dmg +1, max +3).
   Floor scrolls pick the type uniformly from the four.
 - The **key** opens the lair door and is consumed.
 
@@ -737,7 +840,8 @@ Weapons are class-locked; everything else is not.
 ### 8.5 Per-level placement (floor list ≤ 32 entries)
 
 Food 3–4 · potions 2–3 (≥ 1 Heal) · **scrolls 1–2** (rev 2: 1; E: 1–2 keeps the quick
-slot alive) · gear 1–2 (depth-gated) · class book 1 (D1–D7) · other-class book 0–1 ·
+slot alive) · gear 1–2 (depth-gated) · class book 1 (D1–D7) + 1 more with 1 in 2 on D4–D7
+(rev 5, §5) · other-class book 0–1 ·
 key 1 · **ammunition (rev 3; Warrior runs only: a Mage run generates no ammo entries):**
 
 | Item | Per level | Notes |
@@ -784,22 +888,59 @@ not a replacement for the sword. The stack caps (9 / 24) make hoarding a loss.
 Uniques on the floor shimmer with the same cycle (it counts toward the room's attr-cycle
 cells). Panel and page use hardware FLASH.
 
-### 8.7 Blessed and cursed gear (3E; user 2026-10-03: known states, no identification)
+### 8.7 Blessed and cursed gear (3E; user 2026-10-03: known states, no identification; rev 5 user 2026-10-03: hidden ± value, bless/shatter)
 
 Every **found gear item** (weapon, armour, helmet, charm) has a visible state: **BLESSED,
-normal or CURSED**. Start kit and boss uniques are always normal.
+normal or CURSED**. Start kit and boss uniques are always normal. Every state carries a
+**modifier `m`** applied to the item's **main stat**: weapon dmg +m · armour/helmet DEF +m
+(Robe/Hood: max MP +m) · charm max HP +2m. Hero totals clamp at 0 (DEF, max MP); damage keeps
+`max(1, …)` (§7).
 
-| State | Effect | Unequip |
-|---|---|---|
-| **BLESSED** | **+1 to its main stat**: weapon dmg +1 · armour/helmet DEF +1 (Robe/Hood: MP +1) · charm max HP +2 | free |
-| normal | as §8 | free |
-| **CURSED** | **also +1 to its main stat** (dark power), but **sticky** and, while any cursed item is worn, **no FED HP regen** (§7) | **impossible** (`IT IS CURSED! YOU CANNOT.` 25) until an **Enchant** scroll is read: all worn gear becomes normal (loses the +1) |
+| State | `m` | Value shown | Unequip |
+|---|---|---|---|
+| **BLESSED** | +1 | always | free |
+| normal | 0 | — | free |
+| **CURSED** (user) | −2, −1, +1 or +2 (roll below) | **CURSED is visible; the value is hidden until the item is first equipped** (user + designer decision 2026-10-03: a state is known, a number is learned by wearing it — no identification verb) | **impossible** (`IT IS CURSED! YOU CANNOT.` 25) until the item is **blessed** or **shattered** |
 
-**Why the upside on cursed (designer decision 2026-10-03):** with the state visible, a pure
-penalty item is never worn and is just floor junk. "Stronger, but it locks the slot and stops
-your regen until you spend an Enchant" is a real choice and makes Enchant matter twice.
-Equipping a cursed item prints `IT CLINGS TO YOU. CURSED!` (24). If the user prefers the
-plain variant (cursed = −1 main stat, sticky), only this table row changes.
+**Cursed value roll (designer decision 2026-10-03; out of 8, `GEN_RNG` at item placement):**
+
+| Depth | −2 | −1 | +1 | +2 | mean |
+|---|---|---|---|---|---|
+| D1–D3 | 0 | 5 | 3 | 0 | −0.25 |
+| D4–D6 | 2 | 3 | 2 | 1 | −0.4 |
+| D7–D8 | 3 | 2 | 2 | 1 | −0.5 |
+
+Equip reveals it: `IT CLINGS TO YOU! CURSED -1.` (27) / `… CURSED +2.` The value stays shown
+on that item from then on (page `CURSED -1 HELM`, info line note `STICKY`). Unworn: `CURSED ?`.
+
+**Blessing (designer decision 2026-10-03: reuse Enchant, 0 new item types).** Reading
+**Enchant** (known or unknown) while any worn item is cursed blesses **every worn cursed
+item**: state → BLESSED, `m = max(m, +1)` (a cursed +2 keeps its +2), value shown;
+`THE CURSE LIFTS. BLESSED!` (25). The weapon enchant is not applied that read. Unworn
+cursed items in the bag are not affected (bless what you wear).
+
+**Shattering (user: "destroyed, e.g. when an enemy shoots you"; details designer decision
+2026-10-03; self-contained, no durability).**
+- **Trigger:** a **projectile hit on the hero that deals ≥ 1 damage**: monster arrows/rocks
+  (Archer, Sniper, Slinger), Dark/Death Bolts, the **DART trap** (§1.5), and the hero's own
+  bounced or reflected spells. Not melee, bursts (Firebolt splash), falls, poison or aura.
+- **Roll:** if ≥ 1 worn item is cursed, **1 in 4** (`SHATTER_CHANCE` 64/256, gameplay RNG)
+  one of them shatters; the slot is chosen **uniformly among the worn cursed slots** (the
+  projectile "finds the flaw"). Blessed and normal gear never shatter.
+- **Result:** the item is destroyed (not dropped); the slot becomes **empty** (dotted outline
+  in the panel gear cell, queued). Hero stats recompute as on unequip; HP/MP clamp to the new
+  max. An empty **weapon** slot = **fists 1d2 PHYS** for either class (same frames; Power
+  Strike doubles it). The hero may equip a replacement from the bag at once.
+- **Message:** `YOUR CURSED ARMOUR SHATTERS!` (28), slot words WEAPON / ARMOUR / HELM /
+  CHARM (4 fixed strings, no item-name table).
+- A known re-arming DART trap is therefore a deliberate (costly: ~3.5 HP + POISON 6 per hit,
+  ~4 hits expected) way to break a curse on D1–D3, where no monster shoots except the Goblin
+  Slinger tier. Intended.
+
+**Why the regen penalty is removed (designer decision 2026-10-03):** the downside is now the
+gamble itself (mean `m` < 0) plus the lock (a cursed item blocks a better find or a boss
+unique in its slot). A regen penalty on top would make a cursed +1/+2 strictly bad and kill
+the gamble the user asked for.
 
 **Odds per found gear item (seeded, out of 16):**
 
@@ -812,9 +953,15 @@ plain variant (cursed = −1 main stat, sticky), only this table row changes.
 
 **Display.** The item's 16×16 icon (page, worn-gear panel cells) and its 8×8 floor glyph take
 the state colour on all their cells: **BLESSED `$45`**, **CURSED `$42`**, normal = the item's own
-attr (cell-uniform, no clash; uniques keep FLASH). Page description row prefixes `BLESSED ` /
-`CURSED `; the info line note field shows `STICKY` for a worn cursed item. Pickup line:
-`YOU PICK UP A CURSED HELM.`
+attr (cell-uniform, no clash; uniques keep FLASH). Page description row prefixes `BLESSED +1 ` /
+`CURSED ? ` (unrevealed) / `CURSED -1 ` (revealed); the info line note field shows `STICKY`
+for a worn cursed item. Pickup line: `YOU PICK UP A CURSED HELM.`
+
+**Cost (rev 5, E):** value roll ~40 B (bank 5, generator), shatter roll + slot pick + clear
+~90 B and bless ~30 B (bank 3, `far3`), reveal-on-equip ~20 B; stat recompute is the existing
+unequip path. Strings ~90 B raw (4 slot words, reveal, bless, shatter). The rev-4 regen check
+is deleted (−~10 B hot). Per projectile hit on the hero: one test of the worn-cursed mask
+(~30 T) on the fast path.
 
 ### 8.8 Light identification (3E; user 2026-10-03)
 
@@ -840,8 +987,8 @@ ammo, the key: always known.
 - **Using unknowns:** effects are identical to known use; the risk is timing only.
   Unknown potions are **never refused** (the HP = max / FOOD rules apply only to known types;
   a wasted Heal still identifies). An unknown **Teleport** teleports, **Fear**/**Sleep** hit
-  the room's monsters (an empty room: no effect, still identified), **Enchant** uncurses or
-  enchants as §8. Read unknown in the lair: Teleport still never lands in the lair.
+  the room's monsters (an empty room: no effect, still identified), **Enchant** blesses
+  worn cursed gear or enchants as §8. Read unknown in the lair: Teleport still never lands in the lair.
 - **Quick slots:** §8 "Quick slots auto-fill" (unknowns never auto-fill; pinnable).
 - **Budget (bank 3):** appearance strings ~90 B, ID messages ~60 B, shuffle + naming code
   ~150 B; 8 B state; 0 tile ids (potions/scrolls are item glyphs recoloured).
@@ -850,11 +997,47 @@ ammo, the key: always known.
 
 Floor-list entries, bag slots and worn slots all carry the same item fields:
 `TYPE` (item type id) · `QTY` (stack 1–9; ammo counts live outside the bag) · `ISTATE`:
-bits 0–1 BUC (0 normal, 1 blessed, 2 cursed, 3 reserved) · bit 2 **UNKNOWN (reserved, always
-0)** · bits 3–4 weapon enchant +0..3 · bits 5–7 spare. Stacks merge only on equal `TYPE` and
-`ISTATE`. Potion/scroll knowledge is **per type** (the `KNOWN` byte, §8.8), so no per-item
-flag is needed now; bit 2 is reserved so a later per-item unknown (e.g. unknown BUC on gear)
-needs no format change: the display layer would test it, logic ignores it.
+bits 0–1 BUC (0 normal, 1 blessed, 2 cursed, 3 reserved) · bit 2 **HIDDEN** (rev 5: the
+cursed value is not yet revealed; set at generation for cursed items, cleared on first
+equip or on blessing; **display-only**, logic ignores it, as rev 4 reserved it) · bits 3–4
+weapon enchant +0..3 · **bits 5–7 `m`, the signed BUC/wear modifier** (3-bit two's
+complement −4..+3; used −3..+2; §8.7, §8.10). Stacks merge only on equal `TYPE` and
+`ISTATE`. Potion/scroll knowledge is **per type** (the `KNOWN` byte, §8.8). Gear's effective
+main stat = base + `m` (+ enchant for weapons), computed once on equip/unequip/change.
+
+### 8.10 Gear wear from special attacks (3F; user 2026-10-03: wear only from special attacks; details designer decision 2026-10-03)
+
+No durability counter: wear lowers the item's existing modifier `m` (§8.9). Ordinary hits,
+time and use never wear gear.
+
+| Source | Target slot | Trigger | Chance |
+|---|---|---|---|
+| **NOTCH** — Skeleton Guard, Skeleton Knight (§9.6), **Death Knight** (§9.1) | worn **weapon** | the monster **parries the hero's melee hit** (incl. Power Strike, Whirlwind; not thrown/shot ammo, not fists) | 1 in 2 per parry |
+| **ACID** — **Black Widow** (§9.6; replaces its rev-4 sleep bite) | worn **armour**, else helmet, else nothing | its bite hits the hero (≥ 1 dmg) | 1 in 4 per hit |
+
+**Effect.** `m −= 1` on the target item; stats recompute as on unequip. **Floor `m = −3`**: a
+wear event on an item already at −3 **destroys** it; the slot empties exactly as a curse
+shatter (§8.7: dotted outline, recompute, fists for an empty weapon slot).
+- **Blessed items are immune** (no change, short message). Blessing is the only protection.
+- **Normal items** go negative and stay normal (page `CHAIN MAIL -1`; still free to unequip).
+- **Cursed items** wear like normal ones (a cursed +2 notches to +1, …) and **destruction at
+  the floor frees the slot**, the second way out of a curse besides a projectile shatter.
+  A hidden value cannot occur (a worn item is revealed).
+- Boss uniques wear like normal items (the Mirror Helm is a helmet: hit only with no armour).
+
+**Messages (≤ 32):** `YOUR WEAPON IS NOTCHED!` (23) · `ACID EATS YOUR ARMOUR!` (22; HELM
+variant) · `YOUR BLESSED WEAPON HOLDS.` (26; ARMOUR/HELM variants) · `YOUR WEAPON BREAKS!`
+(19) · `YOUR ARMOUR FALLS APART!` (24; HELM variant).
+
+**Frequency (E).** ACID: a Black Widow lands ~2 bites per fight → ~0.5 wear per Widow, ~1
+Widow per D2/D4/D5 level. NOTCH: ~1–2 parries per Guard/Knight fight → ~0.75 notch; Death
+Knight ~3 parries → ~1.5 notches. Expect a Warrior to lose ~2–4 points of weapon/armour per
+run unless blessed: noticeable, never run-ending. Mage: staff notches equally (he melees
+less).
+
+**Cost.** Code ~70 B bank 3 (shares the shatter clear path); the hooks are the existing parry
+branch and the generic on-hit effect (new effect code `ACID`, no new column). Strings ~110 B
+raw. Per event ~0.3k T; 0 on the fast path.
 
 ---
 
@@ -879,7 +1062,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5 |
 | Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener | ranged, cooldown 2; Dark Bolt hit 1 in 3 → FEAR 3 (§6.4) | Mana 1/3 | D6–D8 |
 | **Ogre Warlord** (unique) | **32×48** | 40 | 5 | 1 | 2 | 1d10+2 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg, a hit STUNS 1 (§6.4) | unique | D4 |
-| **Death Knight** (unique) | 24×48 | 50 | 6 | 3 | 3 | 1d10+3 | 5 | walker, climber, lair only | chase; **parries** 1 in 3 PHYS hits (BLOCK frame, 0 dmg) | unique | D7 |
+| **Death Knight** (unique) | 24×48 | 50 | 6 | 3 | 3 | 1d10+3 | 5 | walker, climber, lair only | chase; **parries** 1 in 3 PHYS hits (BLOCK frame, 0 dmg); a parried melee hit **notches** the weapon 1 in 2 (§8.10) | unique | D7 |
 
 **Death Knight silhouette (round 4/5):** an evil twin of the Warrior with a clearly distinct
 outline: a **two-handed greatsword** (blade carried upright above the shoulder when walking,
@@ -1026,7 +1209,7 @@ permanently the turn the boss dies (the flag is not re-armed on revisit or reloa
 |---|---|---|
 | `RESPAWN_PERIOD` | 48 | check every 48 game turns (hero turn counter, `turn mod 48 = 0`) |
 | `RESPAWN_CHANCE` | 96 (of 256) | ≈ 38 % per check, so about 1 spawn per ~128 turns, ~3–4 per 450-turn level |
-| `RESPAWN_XP_DIV` | 2 | XP awarded = kind XP / 2, rounded down, min 1 |
+| `RESPAWN_XP_DIV` | 2 | XP awarded = `KXP` (§4.1) / 2, rounded down, min 1 |
 | `RESPAWN_ITEM_W` | 2 | room weight = 1 + 2 × (un-picked floor items in the room), capped at 7 |
 | `IDLE_WAVE` | 0 | build flag, default **off** (see below) |
 | `IDLE_TURNS` | 60 | idle-wave trigger |
@@ -1109,9 +1292,9 @@ Short names ≤ 12 chars (messages, §6.4).
 | | | **Rabbit Rat** | 8/2/3/0/1d4 | `$47` | **breeds**: hit and survives → 1 in 4 spawns one base **Rat** in the nearest legal cell (summon code, slot + §9.3 cap; `F_RESPAWN`); once per Rabbit Rat (`ENT_STAT` spare bit) |
 | Bat (`$43`) | **Screech Bat** | | 5/2/4/0/1d3 | `$05` | bite 1 in 4 → CONFUSED 2 |
 | Goblin (`$44`) | **Goblin Slinger** | | 8/2/1/0/1d4; rock 1d3 PHYS r6 | `$06` | ranged AI as the Archer (cooldown 2); rock = `dagger_spin` frames at `$06`, not recoverable; weight 3 + 1 |
-| Spider | **Black Widow** | | 10/4/3/0/1d4 | `$02` | POISON 12; bite 1 in 4 → ASLEEP 2 |
-| Skeleton (`$47`) | **Skeleton Guard** | | 14/3/2/2/1d6 | `$05` | **parries 1 in 4** PHYS hits (Death Knight parry; 0 dmg, `PARRIED`, no BLOCK frame: the hit flash is skipped) |
-| | | **Skeleton Knight** | 18/4/2/3/1d8 | `$44` | parries 1 in 3; hit 1 in 4 → STUNNED 1 |
+| Spider | **Black Widow** | | 10/4/3/0/1d4 | `$02` | POISON 12; bite 1 in 4 → **ACID** (armour `m −1`, §8.10; rev 5 replaces ASLEEP 2) |
+| Skeleton (`$47`) | **Skeleton Guard** | | 14/3/2/2/1d6 | `$05` | **parries 1 in 4** PHYS hits (Death Knight parry; 0 dmg, `PARRIED`, no BLOCK frame: the hit flash is skipped); a parried melee hit **notches** the weapon 1 in 2 (§8.10) |
+| | | **Skeleton Knight** | 18/4/2/3/1d8 | `$44` | parries 1 in 3 (notch 1 in 2, §8.10); hit 1 in 4 → STUNNED 1 |
 | Ghost (`$45`) | **Poltergeist** | | 11/3/3/0/1d4 DRAIN | `$03` | touch 1 in 3 → FEAR 3 (replaces the Ghost's confusion) |
 | Orc | **Orc Berserker** | | 18/4/0/1/1d8+2 | `$02` | FEAR-immune; **rage**: hp ≤ ½ max → atk +2 |
 | | | **Orc Bouncer** | 24/5/1/2/1d10 | `$03` | hit 1 in 3 → STUNNED 1 (a "bouncer" throws you out cold) |
@@ -1131,9 +1314,10 @@ their tiers' inks; if one clashes, the tier ink moves within the palette.
 
 **Spawn roll (initial population §9.4 and respawns §9.5; bosses, escorts, summons and
 breeding are never rolled).** For each monster of a kind that has tiers:
-- **Hero power level** `PL` = boss kills + class books read (the per-level class book, incl.
-  Vigor/Power tomes; other-class books do not count). **Expected** `PL_EXP(d) = 2 × (d − 1)`
-  (one boss + one book per level, §4/§10). `Δ = clamp(PL − PL_EXP(d), −2, +2)`.
+- **Rev 5 (user 2026-10-03: XP replaces `PL`):** hero level `LVL` (§4.1) vs the **expected
+  level `LVL_EXP(d) = d`** (§4.1 XP curve). `Δ = clamp(LVL − d, −2, +2)`. One Δ unit is now a
+  whole depth of progress (rev 4's `PL` unit was half); the shifts stay 16/8 and are a
+  playtest knob (§10).
 - Odds out of 256, `T2 = clamp(T2_BASE[d] + 16·Δ, 0, 160)`, `T3 = clamp(T3_BASE[d] + 8·Δ, 0,
   80)` if `d ≥ TIER3_MIN_DEPTH` else 0. Roll `r` (gameplay RNG for respawns, `GEN_RNG` for
   the initial population): `r < T3` → tier 3 (if the kind has one, else tier 2); `r < T3 +
@@ -1147,9 +1331,10 @@ breeding are never rolled).** For each monster of a kind that has tiers:
 `TIER3_MIN_DEPTH = 4` (D1–D3 never elite), `TIER_SHIFT2 = 16`, `TIER_SHIFT3 = 8`,
 `TIER_DELTA_MAX = 2`, `T2_CAP = 160`, `T3_CAP = 80`. A tier counts with its base for the
 "≤ 4 kinds" rule (the pool loads base frames only). The initial-population roll uses the
-`PL` at level entry; the levelcheck/population reference takes `PL` as an input.
+`LVL` at level entry; the levelcheck/population reference takes `LVL` as an input.
 
-**Rewards.** XP (where §9.5 applies it): ×1.5 tier 2, ×2 tier 3 (round down). Drops: the
+**Rewards.** XP: each tier row has its own `KXP` (§4.1 table, ≈ ×1.5 tier 2, ×2 tier 3);
+§9.5 halving applies. Drops: the
 base drop numerator +1 per tier above 1 (Cheese 1/4 → 2/4 → 3/4; Arrows 1/2 → 2/2); a tier
 whose base has no drop drops a random food (Carrot/Apple/Pear) 1 in 4. `F_RESPAWN` still
 cancels drops.
@@ -1166,19 +1351,31 @@ Render: **0 per tick** (ink from `KT_ATTR`); turn logic +≤ 0.2k T per hit for 
 
 ## 10. Balance sketch
 
-Monster hp × count rises ~25 % per depth (depth scaling + kinds). Boss and book growth
-keeps pace.
+Monster hp × count rises ~25 % per depth (depth scaling + kinds). XP levels (§4.1), ability
+ranks and gear keep pace.
 
-| Depth | Hero at entry W HP/MP · M HP/MP | Threat | Key answer |
-|---|---|---|---|
-| D1 | 24/6 · 16/12 | soft | the D1 book in the start room |
-| D2 | 27/7 · 19/13 | poison | Cure; Firebolt (Spider W) |
-| D3 | 33/9 · 22/14 | first undead: Frost/Drain are useless | Firebolt (Vampire W); Whirlwind |
-| D4 | 36/10 · 25/15 | archers, Ogre 43 hp | Drain Life on living Orcs/Ogre; close doors; bow |
-| D5 | 42/12 · 28/16 | Mummy PHYS R, curse (WEAK 12, §6.4); first ALARM traps | Lightning; fire on Mummies; Cure; Scarab next |
-| D6 | 48/14 · 31/17 | casters, ghost reflecting Lightning | Ring of the Grave; Firebolt on ghosts |
-| D7 | 54/16 · 35/21 | Death Knight (parry, fire reflect) | Lightning (W); Power Strike through parries |
-| D8 | 60/18 · 39/25 | Archmage + summons + bouncing bolt; reflects Frost/Lightning | Mirror Helm; Firebolt; potions saved |
+| Depth | Expected `LVL` | Hero at entry W HP/MP · M HP/MP (rev 5) | Threat | Key answer |
+|---|---|---|---|---|
+| D1 | 1 | 24/6 · 16/12 | soft | the D1 book in the start room |
+| D2 | 2 | 28/7 · 19/14 | poison | Cure; Firebolt (Spider W) |
+| D3 | 3 | 32/8 · 22/16 | first undead: Frost/Drain are useless | Firebolt (Vampire W); Whirlwind |
+| D4 | 4 | 36/9 · 25/18 | archers, Ogre 43 hp; Black Widow acid | Drain Life on living Orcs/Ogre; close doors; bow |
+| D5 | 5 | 40/10 · 28/20 | Mummy PHYS R, curse (WEAK 12, §6.4); first ALARM traps | Lightning; fire on Mummies; Cure; Scarab next |
+| D6 | 6 | 47/12 · 31/22 | casters, ghost reflecting Lightning | Ring of the Grave; Firebolt on ghosts |
+| D7 | 7 | 54/14 · 34/24 | Death Knight (parry + notch, fire reflect) | Lightning (W); Power Strike through parries; blessed weapon |
+| D8 | 8 | 61/16 · 37/26 | Archmage + summons + bouncing bolt; reflects Frost/Lightning | Mirror Helm; Firebolt; potions saved |
+
+**Rev 5 changes (E; flagged for the 5-seed playtest):**
+- HP lands within ±2 of rev 4 at D8. **Mage MP runs ~+4 above rev 4 from D4 to D7** (the +2
+  per level arrives earlier than the old Power tomes) and ranks cut MP costs (Drain 2,
+  Lightning 4): the Mage is stronger mid-run. Knob: Mage level-up MP +2 → +1 on odd levels.
+- Hero atk +1 at L4/L8 and eva +1 at L6 add ~5–10 % to-hit / evasion from D4 on. Knob: drop
+  the L6 eva step.
+- XP thresholds assume a near-full clear; a stair-diving hero is ~1 level behind by D5, which
+  lowers his tier odds (Δ = −1) and is the intended rubber band. Check the D8 entry level
+  over seeds (target 7–8).
+- Cursed mean `m` −0.25…−0.5, wear ~2–4 points per run: confirm gear feels lossy but not
+  punitive; blessing (Enchant) is the counter.
 
 **Sample duel (D1, Warrior vs Goblin):** 65 % to hit, 3.5 avg → ~2.6 turns, ~2.3 HP lost.
 **Mage:** opening with 2 Sparks at range costs ~0 HP. Mana economy is ~90 MP per level.
@@ -1191,7 +1388,7 @@ event) and Cure now answers four effects; traps cost ~2–4 HP per level (DART) 
 monsters being tougher, self-correcting through `Δ` for a hero who skips books or bosses.
 
 **Tuning knobs, in order:** Heal amount, food per level, depth scaling, boss multiplier,
-`T2_BASE`/`T3_BASE`, trap counts.
+`XP_NEXT`, level-up HP/MP, `T2_BASE`/`T3_BASE`, trap counts, rank table, `SHATTER_CHANCE`.
 Verify with ≥ 5 seeds × 2 heroes before Stage 3 exit.
 
 ---
@@ -1242,6 +1439,7 @@ therefore needs the **Bat set resident too** (D6 and D8; D3 already has it): +2.
 | Pool per level (0/4/6) | 49,152 − hero **18,176** (Knight 12,608 + Warrior 5,568 **M**) − straddle 1,728 − projectiles ~2.4K = **26.8K** | max **D8 23.9K** (§11.3; includes the Bat set for the Vampire's bat form) | **Fits, ≥ 2.9K slack** on every level. Build ASSERT per level |
 | Tile ids | 64 | 29 common + ≤ 32 per level | fits (§1.2). Rev 4: common id 10 = `T_TRAP` → common ids full |
 | **Rev 4 (designer decision 2026-10-03)** | — | kind rows 18 + 12 tiers = **30 of 32**; 3rd `kind_tab` page **+256 B bank 2** (resist, immunity, on-hit, parry, tier-up); `ENT_STAT` 64 B in `BANK2_FREE`; status hot code ~150 B bank 2 | bank 2: +256 + ~150 B against the ~0.9K left (+64 B in `BANK2_FREE`, which is outside the image). Cold, bank 3: status apply/messages ~300 B, traps (gen + trigger + search) ~350 B, BUC + ID ~250 B, tiers ~170 B, strings ~1.1 KB raw (status 0.45, traps 0.2, ID/BUC 0.25, tier names 0.13, scroll/potion names) → **~2.2 KB raw, ~1.4 KB at 1.7×** against bank 3's 7.4 KB free (R3 had 4.1 KB planned). Glyphs: 7 status icons 56 B (panel), trap glyph 8 B. Level state: trap list 12 B; state block: ID tables 8 B, `PL` 1 B. Render: tints = one-off attr rewrites; tiers 0 |
+| **Rev 5 (designer decision 2026-10-03)** | — | **Bank 2:** `KXP` 32 B (kind_tab page spare 48 → 16 B), current-rank rows ≤ 30 B, XP award ~40 B, regen check −10 B → **~+0.1 KB**. **Bank 3 cold:** level-up + display ~180 B, curse shatter/bless/reveal ~140 B, wear ~70 B, book read-time ~90 B, rank table 126 B, `XP_NEXT` 16 B, strings ~330 B raw (XP 70, curse 90, wear 110, ranks 60) → **~0.95 KB raw** (worst case uncompressed) against bank 3's free space after rev 4 (~6 KB). **Bank 5:** cursed value roll ~40 B (margin 0.45 → ~0.41 KB). **State block:** `XP` 2 + `LVL` 1 + `ARANK` 2 − `PL` 1 = **+4 B**. Item record: 0 B (`ISTATE` spare bits). Turn cost: ~150 T per kill, ~30 T per projectile hit on the hero, ≤ 0.3k T per wear event; 0 render | fits |
 | Render tick | ~114k T | §9.3 weights incl. projectiles; gold glow ≤ 1.5k/tick | by construction; E2 measures |
 
 **Risk.** Sources are the tightest store, and the ZX0 ratio is an estimate. At 1.5× instead
@@ -1284,7 +1482,13 @@ Knight; the 8 colour schemes.
 4. **Hunger stage 2 is named `OK`** (§7). Alternative `SNACKY`/`PECKIS`. OK?
 5. ~~Menu font size~~ — resolved 2026-10-03 (§3.4): the menu font lives in bank 3, ≤ 1.5 KB raw.
 6. The Bat set is now resident on D6 and D8 (+2.0 KB pool; D8 = 23.9 KB, still fits).
-7. **Cursed gear (§8.7, rev 4):** designer chose "cursed = +1 main stat, sticky, no FED
-   regen until Enchant" over a plain penalty, because the state is visible. Confirm.
-8. **Hero power level (§9.6):** the doc has no XP (§4), so tiers use `PL` = boss kills +
-   class books read. Confirm, or define an XP level instead (§9.5 still mentions kind XP).
+7. ~~Cursed gear~~ — resolved 2026-10-03 (user, rev 5, §8.7): hidden ± value revealed on
+   equip, sticky until blessed (Enchant) or shattered (projectile hit, 1 in 4); no regen
+   penalty.
+8. ~~Hero power level~~ — resolved 2026-10-03 (user, rev 5): XP and levels (§4.1) replace
+   `PL`; tiers use `LVL − d` (§9.6).
+9. **Bow as a bag item (§6.3, rev 5):** the designer kept it in the start kit (droppable) so
+   the "no bow → no arrows" gate holds without delaying the Warrior's ranged play. The
+   alternative is a guaranteed bow find on D2 (start with daggers only). Confirm.
+10. **2nd class book 1 in 2 on D4–D7 (§5, rev 5):** added so repeat-book ranks are reachable
+   (else the Mage would see ~2 rank-ups per run). Confirm, or tune after the playtest.
