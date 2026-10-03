@@ -114,6 +114,7 @@ class Rng:
     def __init__(self, seed, depth):
         s = (seed ^ (depth * 0x0101)) & 0xFFFF
         self.x = s or 1
+        self.calls = 0           # rnd()/rnd16 calls (Z80 time budget stat)
 
     def step(self):
         x = self.x
@@ -124,10 +125,15 @@ class Rng:
         return x
 
     def rnd(self, n):
+        self.calls += 1
         return (self.step() & 0xFF) % n
 
     def rnd16(self):
+        self.calls += 1
         return self.step()
+
+
+LAST = (0, 0)               # (restarts, rnd calls) of the last generate()
 
 
 class Room:
@@ -317,14 +323,18 @@ def attempt(rng, depth):
 
 def generate(depth, seed, master=0):
     rng = Rng(seed, depth)
+    global LAST
+    restarts = 0
     for _ in range(MAX_RESTARTS):
         try:
             rooms, edges, floor, start, lair, n = attempt(rng, depth)
             break
         except Restart:
+            restarts += 1
             continue
     else:
         raise RuntimeError("levelgen: too many restarts")
+    LAST = (restarts, rng.calls)
     b = bytearray(BLOCK_LEN)
     b[H["LVL_DEPTH"]] = depth
     b[H["LVL_SEED"]:H["LVL_SEED"] + 2] = (seed & 0xFFFF).to_bytes(2, "little")
