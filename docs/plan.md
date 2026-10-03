@@ -259,7 +259,7 @@ geometry. **Exit:** walk a generated level, doors open, decor animates, log show
 | B3B-10 | `decor_tick` | S | B3B-8 | W14; flicker 0; mix ≤ 126k |
 | B3B-11 in progress (staff, feat/3b-world) | Panel engine (`print6`, `log_push`, bars, `PANEL_DIRTY` queue) | S | B3B-3, -2 | W15; panel golden; mix ≤ 126k |
 | B3B-12 (note from B3B-3 review: arriving via a shaft puts the hero inside a ladder-end box where a flyer is "fully boxed" and may attack every turn — keep flyer spawns away from the arrival shaft; designer to confirm) | Level change (`level_enter`: start + descend) | S | B3B-8, -11 | W16; `GEN_TRAP` 0 |
-| B3B-13 | Message strings via `log_push`; drop PROTO-only code | J | B3B-11, -5 | strings ≤ 32 chars (ASSERT) |
+| B3B-13 | Message strings via `log_push`; drop PROTO-only code; **text compression (user 2026-10-03):** dictionary-token format for log messages / item & monster names (upper-case charset + 1-byte tokens for common words, per-char decode in `print6`, random access, built by a Python tool from the real string list with a build-time round-trip check); ZX0 blocks for long static text (menus, help, book/scroll text, title/end screens) from 3C | J | B3B-11, -5 | strings ≤ 32 chars (ASSERT) |
 
 Merge order: A8 → B3B-1 → B3B-3 (all budget numbers count after A8). Risks: tick budget (R1), bank-2 bytes ~1 KB new hot code vs 1,067 B (R2: boot-copy to `$B500`, delete PROTO code), bank 3 ≈ 4.1 KB of 7.4 KB (R3), golden churn (R4), Python↔Z80 generator byte equality (R5).
 
