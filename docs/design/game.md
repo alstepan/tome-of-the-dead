@@ -704,6 +704,89 @@ Followers: prototype §3.7 + this cap. **Bosses never follow.**
 | D7 | Orc, Skeleton Archer, Ghost, Necromancer | 14 | **Death Knight** |
 | D8 | Necromancer, Skeleton, Ghost, Vampire | 10 + Archmage (+ ≤ 2 summons) | Archmage |
 
+### 9.5 Respawn trickle
+
+Implemented in 3F. Tags: **U** = user 2026-10-03, **D** = designer decision 2026-10-03.
+
+**Rule (U).** While the level boss is alive, the level slowly refills. The trickle stops
+permanently the turn the boss dies (the flag is not re-armed on revisit or reload).
+
+**Constants (D, named, tuning knobs).**
+
+| Name | Value | Meaning |
+|---|---|---|
+| `RESPAWN_PERIOD` | 48 | check every 48 game turns (hero turn counter, `turn mod 48 = 0`) |
+| `RESPAWN_CHANCE` | 96 (of 256) | ≈ 38 % per check, so about 1 spawn per ~128 turns, ~3–4 per 450-turn level |
+| `RESPAWN_XP_DIV` | 2 | XP awarded = kind XP / 2, rounded down, min 1 |
+| `RESPAWN_ITEM_W` | 2 | room weight = 1 + 2 × (un-picked floor items in the room), capped at 7 |
+| `IDLE_WAVE` | 0 | build flag, default **off** (see below) |
+| `IDLE_TURNS` | 60 | idle-wave trigger |
+| `IDLE_WAVE_MAX` | 2 | monsters per wave: 1 + (rnd & 1) |
+
+**Hard limits (U).** A spawn is skipped (no retry until the next check) unless all hold:
+1. A free entity slot exists (hero + ≤ 15 slots, §9.4); never evict or reuse a live one.
+2. The target room satisfies the §9.3 cap with the new body added (Σ weight ≤ 12, ≤ 4
+   monsters, incl. pending). Initial-population Σ ≤ 8 is not applied.
+3. The target room is not the hero's current room and not the room the hero just left (the
+   previous room, for the turn after a transition and until the hero enters a third
+   room; `prev_room` is updated on every room change).
+4. The room is not the boss lair (a lair holds boss + ≤ 1 escort, Σ ≤ 12, never topped up).
+
+**Room choice (U + D).** Eligible rooms = all rooms passing 2–4. Pick one by weighted
+random using the weight above (rooms with un-picked items preferred; every eligible room
+has weight ≥ 1, so the fallback is automatic). No eligible room = skip.
+
+**Kind (U + D).** Uniform over the level's own ≤ 4 kinds (§9.4), never the boss, an escort
+unique, a summon or any `unique` kind. If the picked kind would break the cap, try the
+next kind in the level's list once (cheapest-first not needed), else skip.
+
+**Flags (U).** Respawned monsters get `F_RESPAWN`: **no drops** (the death-drop roll is
+skipped) and XP / `RESPAWN_XP_DIV`. They are otherwise normal and may follow (prototype §3.7,
+subject to the §9.3 cap) like any monster.
+
+**Depth scaling (D).** None: period and chance are the same on every depth. Per-depth hp ×
+count already rises ~25 % (§10) and per-kind weights grow with depth, so the cap and slot
+limits throttle later depths automatically; a faster trickle would stack on that growth
+and break the §10 threat curve.
+
+**Placement (D).** Cell-legal, deterministic from the gameplay RNG (`RNG_STATE`, the
+same stream as combat, so a seeded test replays; `GEN_RNG` is generation-only and
+untouched). Draw up to 8 candidate cells in the chosen room; first legal one wins, else skip:
+- Walkers: a floor-standing cell on a storey, not a ladder cell or pit cell, not a door
+  cell, not in a ladder-end box (the 1-cell footprint at each ladder end), not occupied,
+  and at least 6 columns from the hero if the room is visible.
+- Flyers (Bat, Ghost, Vampire bat form not applicable at spawn): a cell inside the kind's
+  flight band for the storey (same band as generation), same exclusions, over a pit allowed.
+- The monster is created at full hp, in the **idle** state the generator uses for
+  initial monsters (wakes when the hero enters its room or on a noise/hit); it takes no
+  action on the spawn turn. The room map is not touched; spawning occurs outside the
+  hero's room, so there is no render cost and no redraw beyond the normal room entry.
+
+**Idle wave (U, gated by `IDLE_WAVE`, default off; D for details).** Enable only if
+playtesting shows camping (waiting in a cleared room to regen, or farming) is a problem.
+- Counter `idle_turns` counts hero turns spent in the same room with **no floor item
+  picked up** (a pickup, room change, or learning a book resets it; plain waiting does
+  not). At `idle_turns = IDLE_TURNS` the wave fires once and resets the counter.
+- Fires only while the boss is alive. Spawns `1 + (rnd & 1)` monsters of the level's kinds
+  (as above, `F_RESPAWN`, no drops, half XP) **at the room's doors / exits** (the door
+  cells' adjacent floor, or the ladder-end cell if the room has none), awake and
+  chasing, as if arriving from the neighbouring room.
+- The same slot, §9.3 cap and kind rules apply; each monster that does not fit is skipped
+  (a full room produces no wave). It ignores the "not in hero's room" rule, which is
+  the whole point, but not the cap.
+
+**Saves and revisits (D).** Levels are regenerated from the seed; respawned monsters exist
+only in the entity slots and are not stored in the seed or the level image. Leaving a
+level discards them, and a regenerated level restores the original population with
+only the boss-alive state as saved. The turn-counter phase, `prev_room` and
+`idle_turns` are runtime-only and reset on level entry. A boss-dead flag stops the
+trickle for the rest of that visit (and for a regenerated level, because the grate is
+then open).
+
+**Tests (3F).** Seeded run: with the cap full or 0 free slots no spawn occurs; no spawn in
+the hero's or previous room; no spawn after the boss dies; a spawned monster drops nothing
+and awards half XP; same seed and inputs reproduce the same spawns.
+
 ---
 
 ## 10. Balance sketch

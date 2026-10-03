@@ -281,6 +281,7 @@ books → learning spells/power attacks, potions/scrolls, boss unique loot.
 Per-level pool generation (≤ 4 kinds + boss); new monsters (zombie, mummy, orc,
 skeleton-archer, necromancer, giant spider) + ranged AI; level bosses; Necromancer
 Archmage + Book of Absolute Death Magic → win. **Exit:** full run start → win.
+3F also implements game.md §9.5 (respawn trickle while the boss lives; idle wave behind `IDLE_WAVE`, default off).
 
 ### 3G — Sound & polish (later)
 AY music + FX on the A8 slot; balance pass; hardware hardening.
