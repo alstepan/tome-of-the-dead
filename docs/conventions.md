@@ -39,6 +39,16 @@
   code never pages `$C000` itself — it calls bank-2 helpers that re-page it
   (`blit_keep`). See `docs/memory-map.md` "Cold code placement".
 
+## World-state changes (render resync contract)
+
+- The play loop renders FIRST in a tick, from the previous tick's `anim_tick`
+  output (`N_VIS` / `N_FID` / `RLIST`). Every path that **rewrites the entity
+  table** (new game; Stage 3B level change / stairs) must end with
+  `vis_reset`, and every path that **changes `CUR_ROOM` with the slots kept**
+  (room exit) with `vis_room_sync` (both `src/lowram.asm`, always mapped).
+  Skipping it draws the previous world's slots for a tick (bugs B7 / B7b;
+  `tests/game.py` #52 / #54). See `docs/memory-map.md` "Double buffer".
+
 ## Style
 
 - Labels: `snake_case`; local labels `.likeThis` under a parent.

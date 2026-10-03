@@ -96,9 +96,12 @@ class Stepper:
 HOSTILE = EF_ACTIVE | EF_HOSTILE | EF_LEFT
 RIGHT = EF_ACTIVE | EF_HOSTILE
 KEYS = [("L", 6), ("H", 4), ("SPACE", 4)]        # slash the skeleton, walk away, wait
-# Gate: "mix" must keep every tick within the 2-frame budget. "heavy" (review
-# A1: hero + 2 skeletons + goblin + ghost) is REPORTED only (~109% today; the
-# renderer optimisation is deferred by the user, 2026-09-25).
+# Gate: "mix" must keep every tick within the 2-frame budget. It is the M1
+# encounter cap exactly (game.md §9.3: skeleton tall 5 + goblin medium 3 + rat
+# small 2 + bat small 2 = 12, 4 monsters) with the hero's slash on top.
+# "heavy" (hero + 2 skeletons + goblin + ghost = 5+5+3+3 = 16 > 12) is OVER
+# the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
+# flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix",)
 SCENARIOS = {
     # hero + 4 monsters in A (cap), all visible, all close enough to act
@@ -112,7 +115,9 @@ SCENARIOS = {
         (5, 15, 14, HOSTILE),                     # skeleton C right, gap 0
         (7, 8, 14, RIGHT),                        # skeleton D left, gap 1
         (3, 20, 16, HOSTILE),                     # goblin
-        (6, 4, 15, RIGHT)], KEYS),                # ghost, storey-2 band
+        (6, 4, 15, RIGHT)], KEYS),                # ghost, storey-2 band, starts in
+                                                  # {5,2}'s end box (legal again: flyers
+                                                  # cross shafts, rule 2026-10-02)
 }
 
 

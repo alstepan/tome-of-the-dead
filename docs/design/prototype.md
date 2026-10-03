@@ -223,6 +223,31 @@ hole), `POTION` (1 cell), `CHEST` (2×2 cells), `TORCH` (1×2, optional).
 - y is clamped to the storey's **air band**: `7s ≤ y ≤ 7s+6−h`. Bat: 5 rows of
   freedom, Ghost: 3. Flyers never enter a floor row and never pass through walls
   or entities. Ghosts do not phase.
+- **Ladder ends (B8; rule by user 2026-10-02, as built — supersedes the
+  91cf829 "shafts are walls" rule):** flyers **may cross** a ladder shaft but
+  must **never block the hero**. A *ladder-end box* = the standing box at
+  either end of a segment, cols `col … col+2` in that storey (the box the
+  climbers' "no head-on" rule keeps clear, §6.4).
+  - Entering a box is legal only as part of crossing (an x move; the y-only
+    move can't change box membership anyway).
+  - A flyer inside a box at the **start of its turn must move**: it may keep
+    crossing (dx = its facing) or step out (any x step that ends with no box
+    overlap). It never waits, stops (dx = 0) or reverses while staying inside.
+    Order: the chase dx first (aligned: facing), then the other x direction;
+    y kept; no RNG drawn.
+  - It does **not attack from inside a box** while a legal move exists. Fully
+    boxed (both x steps illegal: an entity ahead, a reversal that stays
+    inside) it may attack if in reach, else it stays. Typical case: the hero
+    standing right beside a shaft while the Ghost arrives from the far side:
+    the Ghost ends on the shaft and fights there (the hero can fight or leave;
+    he is not climbing, so nothing is corked).
+  - Yield steps (§6.4, hero mid-ladder) are exempt: they move off the hero's
+    path in x, reversing inside a box if need be.
+  - The Ghost's 3-col body spends 5 turns in a 3-col box when crossing:
+    accepted. Speeds unchanged; the Bat's wander reverses only at walls.
+  - Engine: `ai_flyer` computes the box overlap once per turn (`FLY_INBOX`,
+    `flyer_lcost`); `try_step` enforces "keep crossing or leave".
+    `tests/game.py` #55–#57.
 
 ### 3.6 Room exits and transitions (foundations F5/F6 applied)
 
@@ -589,9 +614,15 @@ and in-reach monsters then attack.
 3. Else: Bat wanders (`dx` = facing, reversing at walls; `dy = rng_mod(3) − 1`,
    clamped). Ghost drifts (`dx = sign(player.x − x)`).
 
-**No softlock:** illegal inputs cost no turn. The player can always reverse on a
-ladder. Monsters yield ladder ends and never start a head-on climb. Pending
-monsters never block anything.
+**No softlock:** illegal inputs (no ladder, wall, terrain) cost no turn. **A
+climb (start or continue) blocked by an entity counts as a WAIT** (rule by user
+2026-10-02, as built): the turn is consumed, monsters act, so the blocker
+yields (§6.4 yield rule) instead of the hero being frozen by a free no-op. A
+chord falls back to its horizontal move first; the blocked climb has wait
+priority (after G). The player can always reverse on a ladder (a reversal
+blocked by a climber behind is also a wait). Monsters yield ladder ends and
+never start a head-on climb; flyers never idle in a ladder-end box (§3.5).
+Pending monsters never block anything. `tests/game.py` #58 / #59.
 
 ### 6.5 Hit feedback & reactions
 

@@ -67,6 +67,20 @@ boot:
                 ld   (PEND_DMG_COUNT), a
                 ld   (CUR_ROOM), a
                 ld   (YIELD_FLAG), a
+                ld   hl, HUD_PW                ; A7 HUD tracking: nothing pending,
+                ld   (hl), a                   ; ink extents unknown (= whole rows)
+                inc  l
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                ld   a, ROOM_COLS
+                ld   hl, HUD_EXT
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                xor  a
                 ld   hl, 0
                 ld   (OVERRUN_COUNT), hl
                 ld   (TICK_COUNTER), hl
@@ -162,7 +176,8 @@ start_game:
                 call alloc_restore
                 ld   a, (HERO_KIND)
                 call gen_kind
-                call new_game
+                ld   hl, new_game              ; bank 3 (A7 review: cold, out of bank 2)
+                call far3                      ; (far3 puts this $C000 bank back)
                 ld   h, ROOM_MAP >> 8
                 ld   a, (CUR_ROOM)
                 call build_room_map
@@ -174,6 +189,7 @@ start_game:
                 call msg_begin
                 ld   hl, str_welcome
                 call print_str
+                call present_full              ; A7: bank 5 -> 7, display bank 7
                 ld   a, 1
                 ld   (NEED_RELEASE), a         ; the select key must be released
                 ld   a, GS_PLAYING
@@ -181,6 +197,380 @@ start_game:
                 ld   a, (SYS_FRAMES)
                 ld   (LAST_TICK_FRAME), a
                 jp   play_loop
+
+;==============================================================================
+; build_room_map — tile map of room A into the map at page H (ROOM_MAP/NEXT_MAP).
+; Overwrites GEN_SCRATCH (aliases both maps), so the ZX0 block cache GEN_ZBLK
+; is dropped here too (A6 review: not only in alloc_reset/alloc_restore).
+; A7 review: bank-5 low RAM (cold); its cell lookup map_cell stays in bank 2
+; (potion_pickup uses it every turn end). Clobbers: all but IX.   ~40k T (room entry /
+; transition only)
+;==============================================================================
+build_room_map:
+                ld   (TMP0), a                 ; room
+                ld   de, 0
+                ld   (GEN_ZBLK), de            ; GEN_SCRATCH is about to be overwritten
+                ld   a, h
+                ld   (TMP1), a                 ; map page
+                ; base fill: rows 0..20
+                ld   l, 0
+                ld   b, 0                      ; row
+.r:             push hl
+                ld   h, (kind_tab + KT_MOD7) >> 8
+                ld   a, b
+                add  a, KT_MOD7 & $FF
+                ld   l, a
+                ld   a, (hl)
+                pop  hl
+                cp   6
+                ld   e, T_AIR
+                ld   d, T_BRICK
+                jr   nz, .air
+                ld   e, T_PLAT
+                ld   d, T_WALLF
+.air:           ld   (hl), d                   ; col 0
+                inc  hl
+                ld   c, 30
+.c:             ld   (hl), e
+                inc  hl
+                dec  c
+                jr   nz, .c
+                ld   (hl), d                   ; col 31
+                inc  hl
+                inc  b
+                ld   a, b
+                cp   ROOM_ROWS
+                jr   nz, .r
+                ; exits L / R: open the air rows of that storey
+                ld   a, (TMP0)
+                call room_desc
+                push hl
+                ld   a, (hl)                   ; exitL storey
+                ld   c, 0
+                call .open
+                pop  hl
+                push hl
+                inc  hl
+                inc  hl
+                ld   a, (hl)                   ; exitR storey
+                ld   c, 31
+                call .open
+                pop  hl
+                ld   de, RD_LADDERS
+                add  hl, de
+                ; ladders
+                ld   b, (hl)
+                inc  hl
+                inc  b
+.lad:           dec  b
+                jr   z, .ladd
+                push bc
+                ld   c, (hl)                   ; col
+                inc  hl
+                ld   a, (hl)                   ; s
+                inc  hl
+                push hl
+                call .ladder
+                pop  hl
+                pop  bc
+                jr   .lad
+.ladd:          ; potions
+                ld   b, (hl)
+                inc  hl
+                inc  b
+.pot:           dec  b
+                jr   z, .potd
+                push bc
+                ld   a, (hl)                   ; id
+                inc  hl
+                ld   c, (hl)                   ; col
+                inc  hl
+                ld   e, (hl)                   ; s
+                inc  hl
+                push hl
+                call bitmask                   ; A = 1 << id
+                ld   hl, POTIONS_TAKEN
+                and  (hl)
+                jr   nz, .taken
+                ld   a, e
+                call storey_row5               ; A = 7s+5
+                ld   b, a
+                call map_cell                  ; HL = map cell (B,C)
+                ld   (hl), T_POTION
+.taken:         pop  hl
+                pop  bc
+                jr   .pot
+.potd:          ; decor
+                ld   b, (hl)
+                inc  hl
+                inc  b
+.dec:           dec  b
+                ret  z
+                push bc
+                ld   a, (hl)                   ; tile
+                inc  hl
+                ld   c, (hl)
+                inc  hl
+                ld   d, (hl)                   ; row
+                inc  hl
+                push hl
+                push af
+                ld   b, d
+                call map_cell
+                pop  af
+                ld   (hl), a
+                pop  hl
+                pop  bc
+                jr   .dec
+
+.open:          ; A = storey (or EXIT_NONE), C = col: rows 7s..7s+5 -> T_AIR
+                cp   EXIT_NONE
+                ret  z
+                ld   b, a
+                add  a, a
+                add  a, a
+                add  a, a
+                sub  b                         ; 7s
+                ld   b, a
+                ld   e, 6
+.o:             call map_cell
+                ld   (hl), T_AIR
+                inc  b
+                dec  e
+                jr   nz, .o
+                ret
+
+.ladder:        ; C = col, A = s: rows 7s-1..7s+5 clipped to 0..20
+                ld   b, a
+                add  a, a
+                add  a, a
+                add  a, a
+                sub  b                         ; 7s
+                dec  a                         ; 7s-1 (may be $FF)
+                ld   b, a
+                ld   e, 7
+.lr:            ld   a, b
+                cp   ROOM_ROWS                 ; $FF / >20 -> skip
+                jr   nc, .lskip
+                push de
+                call map_cell
+                push hl
+                ld   h, (kind_tab + KT_MOD7) >> 8
+                ld   a, b
+                add  a, KT_MOD7 & $FF
+                ld   l, a
+                ld   a, (hl)
+                pop  hl
+                cp   6
+                ld   a, T_LAD_L
+                jr   nz, .la
+                ; floor row: caps on the platform cells either side of the hole
+                dec  hl
+                ld   a, (hl)
+                cp   T_PLAT
+                jr   nz, .nc1
+                ld   (hl), T_END_R             ; platform ends at the hole's left
+.nc1:           inc  hl
+                inc  hl
+                inc  hl
+                inc  hl
+                ld   a, (hl)
+                cp   T_PLAT
+                jr   nz, .nc2
+                ld   (hl), T_END_L             ; platform resumes at its right
+.nc2:           dec  hl
+                dec  hl
+                dec  hl
+                ld   a, T_HOLE_L
+.la:            ld   (hl), a
+                inc  hl
+                inc  a
+                ld   (hl), a
+                inc  hl
+                inc  a
+                ld   (hl), a
+                pop  de
+.lskip:         inc  b
+                dec  e
+                jr   nz, .lr
+                ret
+
+
+
+;==============================================================================
+; hud_clear_mark — clear_row's A7 hook: A = the new attr, B = row, C = 0.
+; Out: A = cols clear_row must blank (0..32: the old ink extent; 32 if the
+; attr changes or the row is not a HUD row).
+; HUD row: the cols present must copy grow to the old ink extent (HUD_EXT) —
+; or to the whole row if the row's attr changes (compared with bank 5 col 0) —
+; and HUD_EXT restarts at 0 (print_char widens both again). Any other row:
+; the whole row is marked (unused in play). Cold-ish (≤ 3 per turn), so it
+; lives here, not in bank 2.  Clobbers: A, DE, HL (BC kept).
+;==============================================================================
+hud_clear_mark:
+                ld   d, a                      ; D = new attr
+                ld   a, b
+                sub  HUD_ROW
+                jr   c, .whole
+                ld   e, a                      ; E = HUD row index
+                call attr_addr                 ; HL = attr of (B, 0); keeps BC, DE
+                ld   a, (hl)
+                sub  d
+                ld   d, a                      ; D = 0: same attr
+                ld   a, e
+                add  a, HUD_EXT & $FF
+                ld   l, a
+                ld   h, HUD_EXT >> 8
+                ld   a, (hl)                   ; old ink extent
+                ld   (hl), 0
+                cp   ROOM_COLS + 1             ; clamp: clear_row's chain entry
+                jr   c, .ext                   ; must stay inside the chain
+                ld   a, ROOM_COLS
+.ext:
+                inc  d
+                dec  d
+                jr   z, .same
+                ld   a, ROOM_COLS              ; attr changes: every cell
+.same:          or   a
+                ret  z                         ; row was blank, attr unchanged
+                ld   e, a
+                ld   a, l
+                add  a, HUD_ROWS
+                ld   l, a                      ; -> HUD_PW
+                ld   a, e
+                cp   (hl)
+                ret  c
+                ld   (hl), a                   ; PW = max(PW, extent)
+                ld   a, 1
+                ld   (PRES_ANY), a
+                ld   a, e
+                ret
+.whole:         ld   de, (ROOM_COLS << 8) | 1
+                call pmark_rect
+                ld   a, ROOM_COLS
+                ret
+
+;==============================================================================
+; vis_reset / vis_room_sync — THE render-state resync of every "new world
+; state" path. CONTRACT (A7 review, bugs B7/B7b): render runs FIRST in a tick
+; (RENDER_FIRST) from the previous tick's anim_tick output (N_VIS / N_FID /
+; RLIST), so any path that changes CUR_ROOM or rewrites the entity table
+; must call one of these before play_loop renders again:
+;   vis_reset     — the entity table was rewritten: new_game (and, Stage 3B,
+;                   every level change / stairs). Every slot hidden, so a
+;                   stale N_FID (the dead hero's frame, a monster of the last
+;                   game) can never be drawn; the first anim_tick refills it.
+;                   (B7b: new game after death drew the old game's slots and
+;                   the hero with a frame of the previous hero.)
+;   vis_room_sync — CUR_ROOM changed, slots kept (do_exit): hide every slot
+;                   not live in CUR_ROOM (not ACTIVE, PENDING, other room);
+;                   the hero keeps N_VIS / N_FID = its last frame (valid), so
+;                   it is drawn at its arrival position on the first tick.
+;                   (B7: every monster of the room just left was drawn at its
+;                   old position on the new room for one tick.)
+; Both rebuild RLIST (ascending, slot 0 first, as anim_tick does) from the
+; slots still visible or drawn (E_DVIS bit 0; hide_sprites / new_game cleared
+; it, so today = the visible ones), so render never walks a stale list.
+; Cold (room change / new game only).  Clobbers: A, BC, DE, HL, IX.
+;==============================================================================
+vis_reset:
+                ld   hl, N_VIS
+                ld   b, P_MAX_ENT
+                xor  a
+.z:             ld   (hl), a
+                inc  l                         ; N_VIS: 16 B inside one page
+                djnz .z
+vis_room_sync:
+                ld   ix, P_ENTITIES
+                ld   hl, N_VIS
+                ld   de, P_ENT_STRIDE
+                ld   bc, (P_MAX_ENT << 8) | (RLIST & $FF)  ; C = RLIST write ptr
+.l:             ld   a, (ix+E_FLAGS)
+                and  EF_ACTIVE | EF_PENDING
+                cp   EF_ACTIVE
+                jr   nz, .hide
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   z, .chk
+.hide:          ld   (hl), 0
+.chk:           ld   a, (hl)
+                or   a
+                jr   nz, .add                  ; visible
+                bit  0, (ix+E_DVIS)
+                jr   z, .n                     ; neither visible nor drawn
+.add:           ld   a, l
+                sub  N_VIS & $FF               ; slot
+                push hl
+                ld   l, c
+                ld   h, RLIST >> 8
+                ld   (hl), a
+                pop  hl
+                inc  c
+.n:             inc  l
+                add  ix, de
+                djnz .l
+                ld   a, c
+                sub  RLIST & $FF
+                ld   (RLIST_N), a
+                ret
+                ASSERT (N_VIS & $FF) + P_MAX_ENT <= 256
+                ASSERT (RLIST & $FF) + P_MAX_ENT <= 256
+
+;==============================================================================
+; A7 display switching (cold; bank 5 low RAM is always mapped, so bank-2 and
+; bank-5 callers alike reach it). page_bank / present stay in bank 2 (hot).
+; set_screen — show bank 5 (A = 0) or bank 7 (A = P7FFD_SCREEN7); the $C000
+; bank stays as it is. Order: page_bank SMC, shadow, port (shadow before OUT;
+; no ISR pages $C000, so SMC vs shadow can never be seen out of step).
+; Clobbers: A, BC.   ~90 T
+;==============================================================================
+set_screen:
+                or   P7FFD_ROM48
+                ld   (page_bank.scr+1), a     ; SMC: every later page_bank keeps it
+                ld   b, a
+                ld   a, (PORT_7FFD_SHADOW)
+                and  7                        ; current $C000 bank
+                or   b
+                ld   (PORT_7FFD_SHADOW), a
+                ld   bc, PORT_7FFD
+                out  (c), a
+                ret
+
+; show_bank5 — display the composed screen itself (select, transitions, A7).
+; Clobbers: A, BC
+show_bank5:
+                xor  a
+                jr   set_screen
+
+;------------------------------------------------------------------------------
+; present_full — the whole bank-5 screen to screen 2, mask cleared, then show
+; bank 7 (start_game; the end of a room transition). Leaves bank 7 paged.
+; Clobbers: A, BC, DE, HL.   6,912 x 21 T = 145k T + contention (cold).
+;------------------------------------------------------------------------------
+present_full:
+                ld   a, BANK_SCREEN7
+                call page_bank
+                ld   hl, SCREEN_BITMAP
+                ld   de, SCREEN7_BITMAP
+                ld   bc, SCREEN_FRAME_LEN
+                ldir
+                ld   hl, PRES_MASK
+                ld   b, PRES_LEN
+                xor  a
+.c:             ld   (hl), a
+                inc  l
+                djnz .c
+                ld   (PRES_ANY), a
+                ld   hl, HUD_PW
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                inc  l
+                ld   (hl), a                   ; HUD rows are in sync too
+                dec  a
+                ld   (PRES_RMIN), a            ; $FF: no marked row
+                ld   a, P7FFD_SCREEN7
+                jp   set_screen
 
 ;==============================================================================
 ; init_kbd_mirror — all released.  Clobbers: A, B, HL
@@ -363,7 +753,9 @@ copy_virt:
                 ret
 
 ;------------------------------------------------------------------------------
-; gen_kind — generate every frame of kind A.   Clobbers: all but IX
+; gen_kind — generate every frame of kind A; a kind with 0 frames (the Rogue
+; hole, unused ids) returns at once (djnz with B = 0 would run 256 frames).
+; Clobbers: all but IX
 ;------------------------------------------------------------------------------
 gen_kind:
                 ld   h, (kind_tab + KT_FID0) >> 8   ; KT_FID0/KT_FCNT: same page
@@ -375,6 +767,9 @@ gen_kind:
                 add  a, KT_FCNT - KT_FID0
                 ld   l, a
                 ld   b, (hl)                   ; count
+                inc  b
+                dec  b
+                ret  z                         ; 0-frame kind: nothing to generate
 .f:             push bc
                 ld   a, c
                 call gen_frame

@@ -17,19 +17,30 @@ ROM_LD_BYTES    EQU $0556           ; ROM tape loader (IX=dst, DE=len, A=flag, C
 ;------------------------------------------------------------------------------
 ; 128K paging. $7FFD is write-only: always write through PORT_7FFD_SHADOW.
 ;   bit 4 = 1 -> 48K BASIC ROM (IM1 ISR + charset + LD-BYTES live there)
-;   bit 3 = 0 -> display normal screen (bank 5)
-;------------------------------------------------------------------------------
+;   bit 3     -> displayed screen: 0 = bank 5 ($4000; boot, select, transition
+;                scrolls), 1 = bank 7 (A7 double buffer: during play). Only
+;                set_screen changes it (also via show_bank5 / present_full);
+;                page_bank / restore_page keep it.
+;   bit 5 (paging lock) is never set.
 P7FFD_ROM48     EQU %00010000
+P7FFD_SCREEN7   EQU %00001000
 BANK_SRC_LO     EQU 1               ; sprite SOURCES, virtual $8000-$BFFF (contended)
 BANK_SRC_HI     EQU 3               ; sprite SOURCES, virtual $C000-$FFFF (contended)
 BANK_POOL0      EQU 0               ; pre-shift pool (uncontended), boot-generated
 BANK_POOL1      EQU 4
 BANK_POOL2      EQU 6
-BANK_SHADOW     EQU 7               ; clean-background shadow (R-1 erase lever)
+BANK_SHADOW     EQU 7               ; clean-background shadow (R-1 erase lever), $E000..
+BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
 BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
 AY_RESERVE      EQU $E000           ; bank 3 $E000..$FFFF: AY player/music reserve (A8); cold code + sources end below
-SHADOW_BITMAP   EQU $C000           ; bank 7: room tiles in screen layout (rows 0..20)
-SHADOW_ATTR     EQU $D800           ; bank 7: room tile attrs in screen layout
+; Bank 7 (A7): screen 2 at $C000 (what the ULA shows during play; written only
+; by present / present_full), the clean background rebased to $E000: both in
+; screen layout, so screen -> screen 2 is +$80 and screen -> shadow is +$A0
+; in the high byte, low bytes equal.
+SCREEN7_BITMAP  EQU $C000           ; bank 7: displayed bitmap (copy of $4000)
+SCREEN7_ATTR    EQU $D800           ; bank 7: displayed attrs  (copy of $5800)
+SHADOW_BITMAP   EQU $E000           ; bank 7: room tiles in screen layout (rows 0..20: $E000..$F79F)
+SHADOW_ATTR     EQU $F800           ; bank 7: room tile attrs in screen layout ($F800..$FA9F)
 BANK_WINDOW     EQU $C000
 FT_BLOCKER      EQU $FE             ; find_target: nearest body is mid-ladder (not a slot)
 PAGING_PROBE    EQU $A5             ; check_paging: bank-1 marker (bank 0 gets ~)
@@ -131,6 +142,8 @@ PL_LADDER       EQU $BA77           ; 1 = hero mid-ladder
 BLIT_CROWS      EQU $BA79           ; aligned blit: char rows left
 SEL_FRT_SAVE    EQU $BA80           ; 2 x FRT_STRIDE: boot FRT rows of the select idles ($BA80..$BA9F)
 MSG_Q           EQU $BA78           ; queued impact message: attacker slot + 1 (0 = none)
+PRES_MASK       EQU $BAA0           ; A7: present dirty-cell mask, 24 rows x 4 B ($BAA0..$BAFF);
+PRES_LEN        EQU 24 * 4          ;     byte row*4 + col/8, bit 7 - col%8 (bit 7 = leftmost)
 STACK_BOTTOM    EQU $BB00           ; stack grows down from $BF00 to here
 
 ;------------------------------------------------------------------------------
@@ -204,9 +217,17 @@ ANIM_SLOT       EQU $BF91           ; anim/render slot counter
 YIELD_FLAG      EQU $BF92           ; 1 while a monster takes a yield step
 GEN_ZBLK        EQU $BF93           ; word: virtual addr of the ZX0 block now unpacked in GEN_SCRATCH
                                     ; (0 = none; cleared by alloc_reset / alloc_restore)
+PRES_ANY        EQU $BF95           ; A7: 1 = PRES_MASK has a bit set (present has work)
+DMG_PRES_N      EQU $BF96           ; A7: DMG_LIST rects pmark_dmg marks (before overlap repair)
+PRES_RMIN       EQU $BF97           ; A7: first marked row ($FF = none); present starts there
+FLY_INBOX       EQU $BF98           ; ai_flyer: overlap with a ladder-end box at turn start (0 outside ai_flyer)
+HUD_EXT         EQU $BF9A           ; A7: 3 B, per HUD row: cols 0..EXT-1 may hold ink in bank 5
+HUD_PW          EQU $BF9D           ; A7: 3 B, per HUD row: cols 0..PW-1 changed since the last present
+HUD_ROWS        EQU 3               ;     (rows HUD_ROW..23; HUD_PW = HUD_EXT + HUD_ROWS)
 GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
 MSG_BUF         EQU $BFA0           ; 32 B message line composition
 TIMING_MARK     EQU $BFC0           ; spare
+CLIMB_BLK       EQU $BFC1           ; 1 = this input's climb was blocked by an entity (-> wait turn)
 
 ; Game states (GAME_STATE). 2/3/4 shared with constants.asm.
 GS_SELECT       EQU $05

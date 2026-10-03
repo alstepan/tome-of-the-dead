@@ -578,9 +578,42 @@ render:
 .probe_e2_ret:                                  ; flicker probe (no code)
                 pop  de
                 pop  bc
-                call dmg_add
                 ld   (ix+E_DVIS), 0
+                ; A7: a sprite redrawn in place (same footprint: frame change)
+                ; would add the same rect twice (here and in .e3): add it once,
+                ; in .e3 (fewer rects to mark for present and to test in repair)
+                SLOTVAR N_VIS
+                ld   a, (hl)
+                or   a
+                jr   z, .add2                  ; hidden now: .e3 adds nothing
+                ld   a, l
+                add  a, N_COL - N_VIS
+                ld   l, a
+                ld   a, (hl)
+                cp   c
+                jr   nz, .add2
+                ld   a, l
+                add  a, N_ROW - N_COL
+                ld   l, a
+                ld   a, (hl)
+                cp   b
+                jr   nz, .add2
+                ld   a, l
+                add  a, N_COLS - N_ROW
+                ld   l, a
+                ld   a, (hl)
+                cp   d
+                jr   nz, .add2
+                ld   a, l
+                add  a, N_ROWS - N_COLS
+                ld   l, a
+                ld   a, (hl)
+                cp   e
+                jr   z, .n2
+.add2:          call dmg_add
 .n2:            jr   .e2
+                ASSERT N_COL > N_VIS && N_ROW > N_COL && N_COLS > N_ROW && N_ROWS > N_COLS
+                ASSERT (N_VIS >> 8) == (N_ROWS >> 8)
 .e2done:
                 ; new footprints of changed visible sprites join the damage list
                 call rl_first
@@ -598,6 +631,10 @@ render:
                 call dmg_add
 .n3:            jr   .e3
 .e3done:
+                ld   a, (DMG_COUNT)            ; A7: present needs only these rects:
+                ld   (DMG_PRES_N), a           ; a forced re-blit (below) only rewrites
+                                               ; cells outside them with identical
+                                               ; bytes (same sprites, same slot order)
 
                 ; ---------------- 3. overlap repair (cascade) -------------------
 .force:         xor  a
@@ -851,7 +888,8 @@ dmg_hit:
 
 ;------------------------------------------------------------------------------
 ; draw_zap — wizard zap overlay: ZAP1/ZAP2 alternating per tick in the gap
-; cells of the staff row, skipping cells under any drawn sprite (zap_covered).
+; cells of the staff row, skipping cells under any drawn sprite (zap_covered);
+; marks the run for present (A7).
 ; Clobbers: A, BC, DE, HL, IX
 ;------------------------------------------------------------------------------
 draw_zap:
@@ -862,6 +900,13 @@ draw_zap:
                 ld   b, a
                 ld   a, (ZAP_COL)
                 ld   c, a
+                push bc                        ; A7: the overlay is not in DMG_LIST:
+                ld   d, b                      ; mark its whole row run for present
+                ld   e, 1
+                ld   a, (ZAP_ROW)
+                ld   b, a
+                call pmark_rect
+                pop  bc
 .l:             push bc
                 call zap_covered               ; a drawn sprite's cell (hero,
                 jr   c, .skip                  ; or a wide / HURT target): keep it

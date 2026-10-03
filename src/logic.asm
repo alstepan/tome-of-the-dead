@@ -277,198 +277,9 @@ exit_h:
 .no:            or   a
                 ret
 
-;==============================================================================
-; build_room_map — tile map of room A into the map at page H (ROOM_MAP/NEXT_MAP).
-; Clobbers: all but IX.   ~40k T (room entry / transition only)
-;==============================================================================
-build_room_map:
-                ld   (TMP0), a                 ; room
-                ld   a, h
-                ld   (TMP1), a                 ; map page
-                ; base fill: rows 0..20
-                ld   l, 0
-                ld   b, 0                      ; row
-.r:             push hl
-                ld   h, (kind_tab + KT_MOD7) >> 8
-                ld   a, b
-                add  a, KT_MOD7 & $FF
-                ld   l, a
-                ld   a, (hl)
-                pop  hl
-                cp   6
-                ld   e, T_AIR
-                ld   d, T_BRICK
-                jr   nz, .air
-                ld   e, T_PLAT
-                ld   d, T_WALLF
-.air:           ld   (hl), d                   ; col 0
-                inc  hl
-                ld   c, 30
-.c:             ld   (hl), e
-                inc  hl
-                dec  c
-                jr   nz, .c
-                ld   (hl), d                   ; col 31
-                inc  hl
-                inc  b
-                ld   a, b
-                cp   ROOM_ROWS
-                jr   nz, .r
-                ; exits L / R: open the air rows of that storey
-                ld   a, (TMP0)
-                call room_desc
-                push hl
-                ld   a, (hl)                   ; exitL storey
-                ld   c, 0
-                call .open
-                pop  hl
-                push hl
-                inc  hl
-                inc  hl
-                ld   a, (hl)                   ; exitR storey
-                ld   c, 31
-                call .open
-                pop  hl
-                ld   de, RD_LADDERS
-                add  hl, de
-                ; ladders
-                ld   b, (hl)
-                inc  hl
-                inc  b
-.lad:           dec  b
-                jr   z, .ladd
-                push bc
-                ld   c, (hl)                   ; col
-                inc  hl
-                ld   a, (hl)                   ; s
-                inc  hl
-                push hl
-                call .ladder
-                pop  hl
-                pop  bc
-                jr   .lad
-.ladd:          ; potions
-                ld   b, (hl)
-                inc  hl
-                inc  b
-.pot:           dec  b
-                jr   z, .potd
-                push bc
-                ld   a, (hl)                   ; id
-                inc  hl
-                ld   c, (hl)                   ; col
-                inc  hl
-                ld   e, (hl)                   ; s
-                inc  hl
-                push hl
-                call bitmask                   ; A = 1 << id
-                ld   hl, POTIONS_TAKEN
-                and  (hl)
-                jr   nz, .taken
-                ld   a, e
-                call storey_row5               ; A = 7s+5
-                ld   b, a
-                call .cell                     ; HL = map cell (B,C)
-                ld   (hl), T_POTION
-.taken:         pop  hl
-                pop  bc
-                jr   .pot
-.potd:          ; decor
-                ld   b, (hl)
-                inc  hl
-                inc  b
-.dec:           dec  b
-                ret  z
-                push bc
-                ld   a, (hl)                   ; tile
-                inc  hl
-                ld   c, (hl)
-                inc  hl
-                ld   d, (hl)                   ; row
-                inc  hl
-                push hl
-                push af
-                ld   b, d
-                call .cell
-                pop  af
-                ld   (hl), a
-                pop  hl
-                pop  bc
-                jr   .dec
-
-.open:          ; A = storey (or EXIT_NONE), C = col: rows 7s..7s+5 -> T_AIR
-                cp   EXIT_NONE
-                ret  z
-                ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b                         ; 7s
-                ld   b, a
-                ld   e, 6
-.o:             call .cell
-                ld   (hl), T_AIR
-                inc  b
-                dec  e
-                jr   nz, .o
-                ret
-
-.ladder:        ; C = col, A = s: rows 7s-1..7s+5 clipped to 0..20
-                ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b                         ; 7s
-                dec  a                         ; 7s-1 (may be $FF)
-                ld   b, a
-                ld   e, 7
-.lr:            ld   a, b
-                cp   ROOM_ROWS                 ; $FF / >20 -> skip
-                jr   nc, .lskip
-                push de
-                call .cell
-                push hl
-                ld   h, (kind_tab + KT_MOD7) >> 8
-                ld   a, b
-                add  a, KT_MOD7 & $FF
-                ld   l, a
-                ld   a, (hl)
-                pop  hl
-                cp   6
-                ld   a, T_LAD_L
-                jr   nz, .la
-                ; floor row: caps on the platform cells either side of the hole
-                dec  hl
-                ld   a, (hl)
-                cp   T_PLAT
-                jr   nz, .nc1
-                ld   (hl), T_END_R             ; platform ends at the hole's left
-.nc1:           inc  hl
-                inc  hl
-                inc  hl
-                inc  hl
-                ld   a, (hl)
-                cp   T_PLAT
-                jr   nz, .nc2
-                ld   (hl), T_END_L             ; platform resumes at its right
-.nc2:           dec  hl
-                dec  hl
-                dec  hl
-                ld   a, T_HOLE_L
-.la:            ld   (hl), a
-                inc  hl
-                inc  a
-                ld   (hl), a
-                inc  hl
-                inc  a
-                ld   (hl), a
-                pop  de
-.lskip:         inc  b
-                dec  e
-                jr   nz, .lr
-                ret
-
-.cell:          ; HL = map(TMP1 page) + B*32 + C.  Clobbers A
+; map_cell — HL = map(TMP1 page) + B*32 + C (build_room_map, potion_pickup:
+; bank 2 so the per-turn pickup stays uncontended).  Clobbers: A
+map_cell:
                 ld   a, b
                 rrca
                 rrca
@@ -509,110 +320,6 @@ storey_row5:
                 pop  bc
                 ret
 
-;==============================================================================
-; NEW GAME (prototype §6.5: fixed seed reseeded; all rooms, monsters, potions
-; re-initialised). HERO_KIND already set.  Clobbers: all but IY.
-;==============================================================================
-new_game:
-                ld   hl, RNG_SEED
-                ld   (RNG_STATE), hl
-                ld   hl, 0
-                ld   (TURN_COUNTER), hl
-                ld   (TICK_COUNTER), hl        ; per-game test observables
-                ld   hl, ANIM_TRACE            ; (OVERRUN_COUNT, GEN_OVERFLOW
-                ld   de, ANIM_TRACE + 1        ; stay "since boot")
-                ld   bc, ANIM_TRACE_LEN - 1
-                ld   (hl), $FF
-                ldir
-                xor  a
-                ld   (ANIM_TRACE_IDX), a
-                ld   (BLIT_MISS), a
-                ld   (DMG_OVERFLOW), a
-                ld   (CLIP_TRAP), a
-                ld   (POTIONS_TAKEN), a
-                ld   (CUR_ROOM), a
-                ld   (EXIT_KIND), a
-                ld   (ZAP_T), a
-                ld   (MSG_Q), a
-                ld   (PEND_DMG_COUNT), a
-                ld   (TURN_PHASE), a
-                ld   (NEED_RELEASE), a
-                ld   hl, P_ENTITIES
-                ld   de, P_ENTITIES + 1
-                ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1
-                ld   (hl), 0
-                ldir
-                ; --- hero, slot 0 ---
-                ld   ix, P_ENTITIES
-                ld   a, (HERO_KIND)
-                ld   (ix+E_KIND), a
-                ld   (ix+E_ROOM), ROOM_A
-                ld   (ix+E_FLAGS), EF_ACTIVE | EF_PLAYER
-                ld   (ix+E_X), HERO_START_COL
-                ld   (ix+E_POT), 1
-                KFIELD KT_BH
-                ld   b, a
-                ld   a, HERO_START_S * STOREY_H + 6
-                sub  b
-                ld   (ix+E_Y), a
-                call init_ent_common
-                ; --- monsters from spawn_tab, slots 1.. ---
-                ld   hl, spawn_tab
-                ld   b, SPAWN_COUNT
-                ld   ix, P_ENTITIES + P_ENT_STRIDE
-.sp:            push bc
-                ld   a, (hl)
-                ld   (ix+E_KIND), a
-                inc  hl
-                ld   a, (hl)
-                ld   (ix+E_ROOM), a
-                inc  hl
-                ld   a, (hl)
-                ld   (ix+E_X), a
-                inc  hl
-                ld   c, (hl)                   ; storey
-                inc  hl
-                ld   a, (hl)
-                or   EF_ACTIVE | EF_HOSTILE
-                ld   (ix+E_FLAGS), a
-                inc  hl
-                push hl
-                ld   a, c
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  c
-                ld   c, a                      ; 7s
-                KFIELD KT_FLAGS
-                and  KF_FLYER
-                jr   z, .walker
-                ld   a, c
-                inc  a                         ; flyer cruises at 7s+1
-                jr   .sety
-.walker:        KFIELD KT_BH
-                ld   b, a
-                ld   a, c
-                add  a, 6
-                sub  b                         ; 7s+6-h
-.sety:          ld   (ix+E_Y), a
-                call init_ent_common
-                pop  hl
-                ld   de, P_ENT_STRIDE
-                add  ix, de
-                pop  bc
-                djnz .sp
-                ret
-
-; init_ent_common — hp/max from the kind, px/py from x/y, render state reset.
-init_ent_common:
-                KFIELD KT_HP
-                ld   (ix+E_HP), a
-                ld   (ix+E_MAXHP), a
-                call snap_pxpy
-                ld   (ix+E_MODE), M_REST
-                ld   (ix+E_DFID), $FF
-                ret
-
 ; snap_pxpy — px = x*8, py = y*8.  Clobbers: A
 snap_pxpy:
                 ld   a, (ix+E_X)
@@ -630,7 +337,10 @@ snap_pxpy:
 ;==============================================================================
 ; PLAYER TURN — try_player_turn: resolve the sampled keys (PLAYER_DIR/DISC).
 ; Chords (§9): vertical wins if a climb is legal, else horizontal, else G, else
-; wait. Illegal -> CF = 0, nothing changed (no turn).  Out: CF = 1 turn used.
+; wait. A climb blocked by an ENTITY counts as a wait (rule by user 2026-10-02,
+; §6.4: the blocker gets its turn to move off), at wait priority. Illegal
+; (terrain / no ladder) -> CF = 0, nothing changed (no turn).
+; Out: CF = 1 turn used.
 ; Clobbers: all but IY.  (IX = player on return)
 ;==============================================================================
 try_player_turn:
@@ -638,6 +348,7 @@ try_player_turn:
                 ld   ix, P_ENTITIES
                 xor  a
                 ld   (ACT_SLOT), a
+                ld   (CLIMB_BLK), a            ; A = 0
                 ld   a, (ix+E_FLAGS)
                 and  EF_DYING
                 ret  nz                        ; dead heroes don't act (CF=0)
@@ -677,8 +388,9 @@ try_player_turn:
                 ld   a, (PLAYER_DISC)
 .nq:            bit  DK_WAIT_BIT, a
                 jr   nz, .wait
-                or   a                         ; nothing legal: CF = 0, no turn
-                ret
+                ld   a, (CLIMB_BLK)            ; climb blocked by an entity:
+                or   a                         ; a wait (else CF = 0, no turn)
+                ret  z
 .wait:          scf                            ; WAIT: a 2-tick turn, nothing moves
                 ret
 
@@ -686,6 +398,9 @@ try_player_turn:
 ; try_climb — IX = player, D = dy ($FF up / 1 down). CF = 1 if done (§3.4).
 ; Standing: UP needs {x,s} ({x,0} = up-exit, no step), DOWN needs {x,s+1}
 ; ({x,3} = down-exit, first step animated). Mid-ladder: continue or reverse.
+; Step blocked by an entity: CF = 0 and CLIMB_BLK = 1 (the caller turns it
+; into a wait); no ladder: CF = 0, CLIMB_BLK untouched.
+; Clobbers: A, BC, DE, HL, TMP6
 ;------------------------------------------------------------------------------
 try_climb:
                 ld   a, d
@@ -749,13 +464,16 @@ try_climb:
                 add  a, b
                 ld   b, a
                 call box_free
-                ccf
-                ret  nc                        ; blocked -> no turn
+                jr   c, .blk
                 ld   (ix+E_Y), b
                 ld   a, (TMP6)
                 ld   (ix+E_AIDIR), a
                 ld   (ix+E_MODE), M_MOVE
                 scf
+                ret
+.blk:           ld   a, 1                      ; blocked by an entity: no step;
+                ld   (CLIMB_BLK), a            ; try_player_turn makes it a wait
+                xor  a                         ; CF = 0
                 ret
 
 ;------------------------------------------------------------------------------
@@ -1453,10 +1171,17 @@ attack_if_reach:
 ;------------------------------------------------------------------------------
 ; try_step_face / try_step — move IX by (D=dx, E=dy) if legal: body limits
 ; (cols 1..30; monsters treat 0/31 as walls), no sideways step while mid-ladder
-; (§3.4 snap), box_free, cork_check. The flyer band is NOT checked here: callers
-; keep it by construction (chase targets 7s+1, wander uses clamp_band).
+; (§3.4 snap), box_free, cork_check, and the flyer ladder-end rule (§3.5, rule
+; by user 2026-10-02): a flyer that started its turn inside a ladder-end box
+; (FLY_INBOX != 0, set by ai_flyer) may only keep crossing (dx = its facing)
+; or step out of the box (flyer_lcost at the new x = 0); never dx = 0 and
+; never a reversal that stays inside. Entering a box is free. Yield steps
+; (YIELD_FLAG) never see the rule (FLY_INBOX = 0 outside ai_flyer).
+; The flyer band is NOT checked here: callers keep it by construction (chase
+; targets 7s+1, wander uses clamp_band).
 ; try_step_face also sets facing from dx. CF = 1 if moved.
-; Clobbers: A, BC, DE, HL
+; Clobbers: A, BC, DE, HL, TMP6 (try_step_face), TMP7 (flyer_lcost)
+; Cost of the flyer rule: 24 T when FLY_INBOX = 0 (the common case).
 ;------------------------------------------------------------------------------
 try_step_face:
                 ld   a, d
@@ -1498,12 +1223,15 @@ try_step:
                 call box_free
                 pop  hl
                 jr   c, .no
-                ld   a, (YIELD_FLAG)
+                ld   a, (FLY_INBOX)            ; flyer inside a ladder-end box?
                 or   a
-                jr   nz, .ok
+                jr   nz, .inbox
+.cork:          ld   a, (YIELD_FLAG)
+                or   a
+                jr   nz, .go
                 call cork_check                ; never re-cork a climbing hero
                 jr   c, .no
-.ok:
+.go:
                 ld   (ix+E_X), c
                 ld   (ix+E_Y), b
                 ld   (ix+E_MODE), M_MOVE
@@ -1511,6 +1239,19 @@ try_step:
                 ret
 .no:            or   a
                 ret
+.inbox:         ; H = dx. Keep crossing (dx = facing) or leave the box.
+                ld   a, h
+                or   a
+                jr   z, .no                    ; x kept: would stay inside
+                bit  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   z, .fr
+                neg                            ; facing left: dx -1 -> 1
+.fr:            dec  a
+                jr   z, .cork                  ; continuing the crossing
+                call flyer_lcost               ; reversal: only out of the box
+                or   a                         ; (C = new x, D = w)
+                jr   nz, .no
+                jr   .cork
 
 ;------------------------------------------------------------------------------
 ; cork_check — CF = 1 if box (C,B,D,E) overlaps any box on the hero's remaining
@@ -1552,8 +1293,46 @@ cork_check:
 
 ;------------------------------------------------------------------------------
 ; ai_flyer — Bat / Ghost (prototype §6.4). Band: 7s <= y <= 7s+6-h.
+; Ladder ends (§3.5, rule by user 2026-10-02): flyers may cross a shaft but
+; never block the hero. FLY_INBOX = overlap with a ladder-end box at turn
+; start (flyer_lcost, the turn's only call unless a reversal is tried inside
+; a box); try_step enforces "keep crossing or leave". Inside a box the flyer
+; moves before anything else, x only: chase dx first (0: facing), then the
+; other way. Neither legal (fully boxed by entities) -> attack if in reach,
+; else stay. FLY_INBOX is 0 again on return.
+; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 ai_flyer:
+                call get_box
+                call flyer_lcost
+                ld   (FLY_INBOX), a
+                call .body
+                xor  a
+                ld   (FLY_INBOX), a
+                ret
+.body:          or   a
+                jr   z, .free
+                call dx_to_player              ; preferred dx: the chase
+                ld   a, d
+                or   a
+                jr   nz, .esc
+                inc  d                         ; aligned: facing
+                bit  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   z, .esc
+                ld   d, $FF
+.esc:           ld   e, 0
+                push de
+                call try_step_face
+                pop  de
+                ret  c
+                ld   a, d
+                neg
+                ld   d, a
+                ld   e, 0
+                call try_step_face
+                ret  c
+                jp   attack_if_reach           ; fully boxed: may attack, else stays
+.free:
                 call attack_if_reach
                 ret  c
                 call storey_ref
@@ -1657,6 +1436,70 @@ ai_flyer:
                 ret  z
                 ld   d, 0
                 jp   try_step
+
+;------------------------------------------------------------------------------
+; flyer_lcost — B8 (user bug: the Ghost parked on a ladder end and the hero
+; could not get past; rule by user 2026-10-02, §3.5: flyers may cross a shaft
+; but never wait / attack / stop / reverse inside a ladder-end box).
+; A = how many of the cols C .. C+D-1 lie in a
+; ladder-end box of IX's storey t = the standing box at either end of a
+; segment, the box the climbers' "no head-on" rule keeps clear (§6.4): the
+; bottom end of {col, t} and the top end of {col, t+1}, cols col..col+2. A
+; flyer's band lies inside its storey's standing rows, so only the cols
+; decide. 0 = clear. Exit shafts count ({col,0} bottom, {col,3} top); a
+; stacked shaft counts twice (harmless: only 0 / non-0 is used).
+; Called once per flyer turn (ai_flyer) + once per reversal tried inside a box.
+; Preserves BC, DE, IX.  Clobbers: A, HL, TMP7.  ~330 T + ~75 T per segment
+; (~95 T for one of this storey).
+;------------------------------------------------------------------------------
+flyer_lcost:
+                push bc
+                push de
+                ld   e, d                      ; E = w
+                call storey_ref                ; A = t (flyer: its band's storey)
+                ld   b, a
+                push de
+                call cur_room_desc             ; HL = descriptor (A, DE)
+                pop  de
+                ld   a, l
+                add  a, RD_LADDERS
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a                      ; HL -> n_ladders
+                ld   d, 0                      ; D = overlap count
+                ld   a, (hl)
+.l:             or   a
+                jr   z, .done
+                ld   (TMP7), a                 ; segments left
+                inc  hl
+                inc  hl                        ; -> s
+                ld   a, (hl)
+                sub  b
+                cp   2                         ; s == t or t + 1?
+                jr   nc, .n
+                dec  hl
+                ld   a, (hl)                   ; col
+                inc  hl
+                sub  c                         ; k - x for k = col .. col+2:
+                cp   e                         ; inside the body iff < w
+                jr   nc, $+3                   ; (unsigned: k < x wraps high)
+                inc  d
+                inc  a
+                cp   e
+                jr   nc, $+3
+                inc  d
+                inc  a
+                cp   e
+                jr   nc, $+3
+                inc  d
+.n:             ld   a, (TMP7)
+                dec  a
+                jr   .l
+.done:          ld   a, d
+                pop  de
+                pop  bc
+                ret
 
 ; clamp_band — E = dy clamped so IX stays in its storey air band.  Clobbers A, B, HL
 clamp_band:
@@ -1787,260 +1630,6 @@ cache_player:
                 ret
 
 ;==============================================================================
-; FOLLOW SELECTION (prototype §3.7) — on the player's exit turn, before the
-; transition. EXIT_KIND/DEST/STOREY/COL set. No RNG; deterministic order
-; (gap ascending, ties lower slot). Clobbers: all but IY.
-;==============================================================================
-follow_select:
-                xor  a
-                ld   (FOLLOW_N), a
-                ; reference box: player (horizontal) or the shaft standing box
-                ld   ix, P_ENTITIES
-                call get_box
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                jr   c, .hbox
-                ld   a, (EXIT_COL)
-                ld   c, a
-                ld   a, (EXIT_STOREY)
-                ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b
-                add  a, 6
-                sub  e
-                ld   b, a                      ; standing y on the exit storey
-.hbox:          ld   a, c
-                ld   (TMP0), a                 ; ref x
-                ld   a, d
-                ld   (TMP2), a                 ; ref w
-                ; --- candidate gaps ---
-                ld   a, 1
-.cl:            ld   (TMP7), a
-                ld   hl, CAND_LIST
-                ld   e, a
-                ld   d, 0
-                add  hl, de
-                ld   (hl), $FF
-                call ent_ix
-                ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING | EF_DYING
-                cp   EF_ACTIVE
-                jr   nz, .cn
-                ld   a, (CUR_ROOM)
-                cp   (ix+E_ROOM)
-                jr   nz, .cn
-                call on_ladder
-                jr   z, .cn                    ; must be standing / flying
-                call storey_ref
-                ld   hl, EXIT_STOREY
-                cp   (hl)
-                jr   nz, .cn
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                jr   c, .hz
-                KFIELD KT_FLAGS                ; vertical: climbers only
-                and  KF_CLIMBER
-                jr   z, .cn
-.hz:            ; gap = |boxes| distance
-                ld   a, (TMP0)
-                cp   (ix+E_X)
-                jr   c, .mright
-                KFIELD KT_BW
-                add  a, (ix+E_X)
-                ld   b, a
-                ld   a, (TMP0)
-                sub  b                         ; ref.x - (m.x+m.w)
-                jr   .g
-.mright:        ld   a, (TMP0)
-                ld   hl, TMP2
-                add  a, (hl)
-                ld   b, a
-                ld   a, (ix+E_X)
-                sub  b                         ; m.x - (ref.x+ref.w)
-.g:             jr   c, .cn
-                cp   FOLLOW_GAP + 1
-                jr   nc, .cn
-                ld   b, a
-                ld   a, (TMP7)
-                ld   e, a
-                ld   d, 0
-                ld   hl, CAND_GAP
-                add  hl, de
-                ld   (hl), b
-                ld   hl, CAND_LIST
-                add  hl, de
-                ld   (hl), a
-.cn:            ld   a, (TMP7)
-                inc  a
-                cp   P_MAX_ENT
-                jp   c, .cl
-                ; --- destination population ---
-                call dest_counts               ; TMP3 = alive, TMP4 = tall
-                ; --- admit in (gap, slot) order ---
-.pick:          ld   a, (FOLLOW_N)
-                cp   FOLLOW_MAX
-                ret  nc
-                ld   b, $FF                    ; best gap
-                ld   c, $FF                    ; best slot
-                ld   hl, CAND_LIST + 1
-                ld   de, CAND_GAP + 1
-                ld   a, 1
-.pl:            push af
-                ld   a, (hl)
-                cp   $FF
-                jr   z, .pn
-                ld   a, (de)
-                cp   b
-                jr   nc, .pn                   ; not strictly smaller (ties: lower slot)
-                ld   b, a
-                pop  af
-                push af
-                ld   c, a
-.pn:            inc  hl
-                inc  de
-                pop  af
-                inc  a
-                cp   P_MAX_ENT
-                jr   c, .pl
-                ld   a, c
-                cp   $FF
-                ret  z                         ; no more candidates
-                ; mark processed
-                ld   hl, CAND_LIST
-                ld   e, a
-                ld   d, 0
-                add  hl, de
-                ld   (hl), $FF
-                call ent_ix
-                ; caps: alive + 1 <= ROOM_CAP ; tall + 1 <= TALL_CAP
-                ld   a, (TMP3)
-                cp   ROOM_CAP
-                jr   nc, .pick                 ; rejected, stays
-                KFIELD KT_FLAGS
-                and  KF_TALL
-                jr   z, .admit
-                ld   a, (TMP4)
-                cp   TALL_CAP
-                jr   nc, .pick
-                inc  a
-                ld   (TMP4), a
-.admit:         ld   hl, TMP3
-                inc  (hl)
-                ld   hl, FOLLOW_N
-                inc  (hl)
-                call place_follower
-                jr   .pick
-
-; dest_counts — TMP3 = active monsters (incl. pending) in EXIT_DEST, TMP4 = tall.
-dest_counts:
-                xor  a
-                ld   (TMP3), a
-                ld   (TMP4), a
-                ld   a, 1
-.l:             ld   (TMP5), a
-                call ent_ix
-                ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_DYING
-                cp   EF_ACTIVE
-                jr   nz, .n
-                ld   a, (EXIT_DEST)
-                cp   (ix+E_ROOM)
-                jr   nz, .n
-                ld   hl, TMP3
-                inc  (hl)
-                KFIELD KT_FLAGS
-                and  KF_TALL
-                jr   z, .n
-                ld   hl, TMP4
-                inc  (hl)
-.n:             ld   a, (TMP5)
-                inc  a
-                cp   P_MAX_ENT
-                jr   c, .l
-                ret
-
-; place_follower — IX = admitted follower: room <- dest, PENDING, entry spot.
-place_follower:
-                ld   a, (EXIT_DEST)
-                ld   (ix+E_ROOM), a
-                set  EF_PENDING_BIT, (ix+E_FLAGS)
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                jr   nc, .vert
-                ; horizontal: x = 1 (arrive at left edge) or 31-w; face in
-                cp   EX_RIGHT
-                jr   nz, .fromleft
-                ld   (ix+E_X), 1
-                res  EF_LEFT_BIT, (ix+E_FLAGS)
-                jr   .hy
-.fromleft:      KFIELD KT_BW
-                ld   b, a
-                ld   a, ROOM_COLS - 1
-                sub  b
-                ld   (ix+E_X), a
-                set  EF_LEFT_BIT, (ix+E_FLAGS)
-.hy:            set  EF_WALKIN_BIT, (ix+E_FLAGS)
-                KFIELD KT_FLAGS
-                and  KF_FLYER
-                ret  nz                        ; flyers keep their band offset (same s)
-                ld   a, (EXIT_STOREY)
-                jr   .stand
-.vert:          ld   a, (EXIT_COL)
-                ld   (ix+E_X), a
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                ld   a, STOREYS - 1            ; going up: arrive on storey 2
-                jr   z, .stand
-                xor  a                         ; going down: storey 0
-.stand:         ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b
-                add  a, 6
-                ld   b, a
-                KFIELD KT_BH
-                ld   c, a
-                ld   a, b
-                sub  c
-                ld   (ix+E_Y), a
-                ret
-
-;==============================================================================
-; arrival_conflicts — after a transition: any non-pending monster in CUR_ROOM
-; whose box overlaps the hero's arrival box becomes PENDING in place (§3.6).
-;==============================================================================
-arrival_conflicts:
-                ld   ix, P_ENTITIES
-                call get_box                   ; hero arrival box
-                ld   ix, P_ENTITIES + P_ENT_STRIDE
-                ld   a, 1
-.l:             push af
-                push bc
-                push de
-                ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING | EF_DYING
-                cp   EF_ACTIVE
-                jr   nz, .n
-                ld   a, (CUR_ROOM)
-                cp   (ix+E_ROOM)
-                jr   nz, .n
-                call box_vs_ix
-                jr   nc, .n
-                set  EF_PENDING_BIT, (ix+E_FLAGS)
-.n:             ld   de, P_ENT_STRIDE
-                add  ix, de
-                pop  de
-                pop  bc
-                pop  af
-                inc  a
-                cp   P_MAX_ENT
-                jr   c, .l
-                ret
-
-;==============================================================================
 ; POTIONS (prototype §6.6) — end-of-turn pickup. Player standing, body cols
 ; cover a potion cell (row 7s+5) of its storey, potions < 9.
 ;==============================================================================
@@ -2064,7 +1653,7 @@ potion_pickup:
                 push de
                 ld   a, ROOM_MAP >> 8
                 ld   (TMP1), a
-                call build_room_map.cell       ; HL = ROOM_MAP cell
+                call map_cell                  ; HL = ROOM_MAP cell
                 ld   a, (hl)
                 cp   T_POTION
                 jr   z, .take
@@ -2242,7 +1831,7 @@ hud_room:
                 call print_str
                 ld   a, (CUR_ROOM)
                 add  a, 'A'
-                jp   print_char
+                jp   print_char_hud            ; A7: HUD tracking
 
 ; msg_begin — clear the message row; B/C = its first cell.  Clobbers: A, DE, HL
 msg_begin:

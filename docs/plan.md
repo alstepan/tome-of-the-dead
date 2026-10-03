@@ -42,6 +42,8 @@ squash of `feat/project-scaffold` @ `238af0c`; tape sha256 `6fa4629d…`).
 |---|-------|-------|-------|
 | B1 | Heavy fight = 154,852 T = **109%** of the 2-frame tick (ZEsarUX, contention emulated) | staff | **E0 RENDER_FIRST: 125,067 T = 88%, 0 overruns** (manager-verified 2026-10-01); still M1 encounter cap for double-buffer + AY headroom |
 | B2 | **Single-buffer flicker — top bug** | staff | Stage 2 E1; `budget.md` §3 |
+| B7 ✅ (A7: root cause = render-first used stale visible list; fix vis_room_sync; test #52; user confirmed in Fuse 2026-10-02) | **Old-room monsters visible for ~1 frame after a room transition** when they're left alive (user, 2026-10-02) | staff (A7) | Root-cause + regression test + fix folded into A7 |
+| B8 ✅ (A7: `91cf829` + `5ee9ccf`, tests #55–#59) | **Stair softlock: Ghost (flyer) parks on a ladder end and the hero cannot pass** (user, 2026-10-02). Ghost speed 1 is per spec and stays (user) | staff (A7) | Fix (user): **flyers never stop in a ladder's top/bottom box** (mirror of the climber "yield ladder ends" rule, prototype §6.4); regression test. **Follow-up (user, 2026-10-02):** (a) flyers MAY cross a ladder shaft but never end a turn in a ladder-end box (91cf829 walled shafts off — revert that part); (b) a **blocked climb counts as a wait** (costs a turn, monsters act) |
 | B3 | Draft 3 art (32 frames + tiles) not yet reviewed on the canvas | user → artist | Imported provisionally from `assets/gfx/source/draft3_frames.html` |
 | B4 | Spec §6.4 text for the new ladder rules | designer | |
 | B5 | Fuse / real-hardware tape load not yet tried | user | |
@@ -186,11 +188,12 @@ Tags: **[S]** z80-staff-engineer (Opus), **[J]** z80-junior (Sonnet). Phases
 | A4 ✅ `4593389` (feat/zx0-tools) | ZX0 sprite sources: tool side (pack per frame in `gfx_convert`/`svg_sprites`, sjasmplus include) | J | A2 | round-trip decode test bit-exact |
 | A5 ✅ review: ship (feat/zx0-engine) | ZX0 engine side: decompressor in fixed RAM, generator unpacks per frame into `GEN_SRC` | S | A3, A4 | pool bytes identical to today; boot time measured |
 | A6 ✅ review: ship | Raise `FRT_MAX` (to the M1 number) + tile ids 32 → 64 | S | A3 | tests green; memory-map |
-| A7 | Double buffer (E1, option A/B — decide after A1 eyeball): bank-7 clean bg rebased to `$E000`, present/flip | S | A3 | flicker.py = 0 events; budget measured; user confirms on hardware |
+| A7 ✅ review: fix-then-ship → fixed (`91cf829`, `5ee9ccf`), merged 2026-10-03 | Double buffer (E1, option A/B — decide after A1 eyeball): bank-7 clean bg rebased to `$E000`, present/flip | S | A3 | flicker.py = 0 events; budget measured; user confirms on hardware |
+| A7b ✅ impl `d8c354f` (feat/a7b-render-opt): mix 140.2k → 121.4k T, heavy 144.9k → 121.0k, flicker a 146.0k → 122.1k, 0 overruns; review pending | **Renderer optimisation** (erase + overlap repair; render is 98k T of the worst tick) — **hard prerequisite for A8** (A7 re-review 2026-10-02: present = 26.4k T of the worst mix tick, render 98k → 107k, mix worst 98.8%; flicker-a worst 125.8k → 144.5k T, overruns; overrun ticks present mid-frame without HALT) and before 3D adds projectiles | S | A7 | worst within-cap tick ≤ ~126k T (141.8k − 13k AY − 1k stub − margin); ideas: attr-only present for DIRTY_ATTR cells, merged move rects; bank-2 room via boot-copy of present/pmark to $B200 |
 | A8 | IM2 + ISR stub + silent AY player slot (8 KB reserved bank 3), `SYS_FRAMES`/ROM chain kept | S | A3 | tests green; ISR cost measured; no DI windows |
 | A9 | Real-hardware gate (E2): tape load + contended worst tick on the user's 128K | user + S | A7, A8 | recorded |
 
-Parallel: A4 ‖ A3; A6 ‖ A7 ‖ A8 after A3.
+Parallel: A4 ‖ A3; A6 ‖ A7 ‖ A8 after A3. **User 2026-10-02: once A7 is merged, start 3B in parallel with A8 + A9** (3B does not touch the ISR).
 
 A3 review carry-overs (z80-reviewer, 2026-10-02):
 - **A6:** `ASSERT start == lowram_code` clashes with descriptors placed below

@@ -145,11 +145,18 @@ class Run:
         wizard's first block — over garbage in GEN_SCRATCH."""
         S = self.S
         fid0 = S["FID_wizard_idle"]
-        # the block whose first frame is fid0 (zblk_N_first = FRM index = fid);
-        # raw build: no blocks -> 0 (the poke is then a no-op for the cache)
-        n = [k[:-6] for k, v in S.items()
-             if k.startswith("zblk_") and k.endswith("_first") and v == fid0]
-        blk = S[n[0]] if n else 0
+        if "fdesc_tab" in S:
+            # A6+: the block the generator would look up = fdesc_tab[fid0].FD_BLK
+            # (bank 5 low RAM, always mapped); raw build: the virtual frame
+            # address. Either way it must be non-zero (asserted in main), or
+            # the poke would equal "no cached block" and test nothing.
+            m = self.z.read_memory(S["fdesc_tab"] + fid0 * S["FDESC_STRIDE"] + S["FD_BLK"], 2)
+            blk = m[0] | m[1] << 8
+        else:
+            # pre-A6 baseline: the block whose first frame is fid0
+            n = [k[:-6] for k, v in S.items()
+                 if k.startswith("zblk_") and k.endswith("_first") and v == fid0]
+            blk = S[n[0]] if n else 0
         self.z.cmd("write-memory %d %d %d" % (S["GEN_ZBLK"], blk & 0xFF, blk >> 8))
         n = S["GEN_SCRATCH_LEN"]
         junk = [(i * 37 + 11) & 0xFF for i in range(n)]
@@ -197,6 +204,7 @@ def scenario(h, sna, S):
     print(f"  stale-cache poke: GEN_ZBLK={blk:#06x}, GEN_SCRATCH garbage")
     tm["stale select '2'->tick"] = r.select_hero("2")
     out["stale"] = r.dump()
+    out["stale"]["blk"] = blk
     return out, tm
 
 
@@ -284,6 +292,11 @@ def main():
         st = S["FRT_STRIDE"]
         rows = lambda d: b"".join(d["FRT"][f * st:(f + 1) * st] for f in wz)  # noqa: E731
         vb = variants_of(b_, wz, st)
+        blk = res[name][0]["stale"]["blk"]
+        print(f"[{'PASS' if blk else 'FAIL'}] {name} stale-cache poke uses a real block "
+              f"(fdesc_tab[FID_wizard_idle].FD_BLK = {blk:#06x}, non-zero)")
+        if not blk:
+            fails.append(f"{name}/stale-blk")
         for pt in ("k->w", "stale"):
             a_ = res[name][0][pt]
             va = variants_of(a_, wz, st)

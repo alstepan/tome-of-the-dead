@@ -17,6 +17,23 @@ contains the scan time of any pixel row of its erased rect or drawn rect, in
 any frame of the tick.  "strict" = window [erase end, draw start] (sprite
 completely gone), a lower bound.
 
+A7 double buffer (option A): render composes in bank 5 while the ULA shows
+bank 7, so an erase->draw window is only an event if it happens on the
+DISPLAYED bank ($7FFD bit 3 = 0 at the erase; PORT_7FFD_SHADOW is read there).
+"flicker_events" = sprite-absent events on the displayed bank (target 0).
+Tear events (reported separately): present copies changed cells bank 5 -> 7
+row by row; a row tears if the beam scans any of its 8 pixel lines while the
+row is being copied ([present.probe_row, present.probe_row_end]); split into
+playfield rows (0-20, sprites) and HUD rows (21-23, text). Conservative: the
+whole char row counts even if the beam is in another column.
+Late rows (A7 review): a row whose copy STARTS after the beam already scanned
+all its 8 lines in that frame shows the OLD content for the whole frame; if
+the same present also copied a row before the beam reached it (an "early"
+row: NEW content in that frame), the frame mixes old and new rows (a sprite
+spanning both is split across char rows for one frame). Reported as
+late_rows (all) / split (late rows of presents that also have an early row
+in the same frame). Gated: any split late row fails the run (exit 1).
+
 Usage: FL=abc python3 tests/flicker.py      (scenarios a b c)
 """
 import os
@@ -44,6 +61,11 @@ BP = {
     "blit_end": S["draw_slot.probe_blit_ret"],
     "wait_tick": S["wait_tick"],
 }
+if "probe_presented" in S:                         # A7: bank 7 == bank 5 here
+    BP["presented"] = S["probe_presented"]
+if "present.probe_row" in S:                       # A7 builds
+    BP["prow"] = S["present.probe_row"]
+    BP["prow_end"] = S["present.probe_row_end"]
 INV = {}
 for k, v in BP.items():
     INV.setdefault(v, []).append(k)
@@ -91,7 +113,8 @@ class Rec:
                 break
         base = t                                   # frame offset at tick start
         z.cmd("reset-tstates-partial")
-        ev = dict(start=base, erases=[], draws=[], render=None, rend=None)
+        ev = dict(start=base, erases=[], draws=[], render=None, rend=None, rows=[])
+        prow = None
         pend = {}
         cur = {}
         while True:
@@ -107,7 +130,8 @@ class Rec:
                 if ret == S["render.probe_e2_ret"]:
                     row, rows = r["BC"] >> 8, r["DE"] & 0xFF
                     pend = dict(slot=self.p.rb("ANIM_SLOT"), t0=now,
-                                y0=row * 8, y1=(row + rows) * 8 - 1)
+                                y0=row * 8, y1=(row + rows) * 8 - 1,
+                                shown=not self.p.rb("PORT_7FFD_SHADOW") & 0x08)
             elif n == "erase_end":
                 if pend:
                     pend["t1"] = now
@@ -121,11 +145,35 @@ class Rec:
             elif n == "blit_end":
                 cur["t1"] = now
                 ev["draws"].append(cur)
+            elif n == "prow":
+                prow = dict(row=r["AF"] >> 8, t0=now)
+            elif n == "prow_end":
+                if prow:
+                    prow["t1"] = now
+                    ev["rows"].append(prow)
+                    prow = None
+            elif n == "presented":
+                ev["mismatch"] = self.banks_differ()
             elif n == "wait_tick":
                 ev["end"] = now
                 break
         self.ticks.append(ev)
         return ev
+
+    def banks_differ(self):
+        """A7 invariant right after the tick-start present (probe_presented):
+        displayed bank 7 == composed bank 5.
+        Returns the number of differing screen bytes (0 if bank 5 is shown)."""
+        if not self.p.rb("PORT_7FFD_SHADOW") & 0x08:
+            return 0
+        z = self.z
+        z.cmd("set-memory-zone 0")
+        try:
+            b5 = z.read_memory(5 * 16384, 6912)
+            b7 = z.read_memory(7 * 16384, 6912)
+        finally:
+            z.cmd("set-memory-zone -1")
+        return sum(1 for a, b in zip(b5, b7) if a != b)
 
     def close(self):
         for i in range(self.nbp):
@@ -145,6 +193,8 @@ def beam_in(y0, y1, a, b, frames=3):
 def analyse(ev):
     flick = strict = 0
     for e in ev["erases"]:
+        if not e.get("shown", True):
+            continue                               # composed off-screen (bank 7 shown)
         for d in ev["draws"]:
             if d["slot"] != e["slot"]:
                 continue
@@ -155,6 +205,32 @@ def analyse(ev):
                 strict += 1
             break
     return flick, strict
+
+
+def tears(ev):
+    """(playfield rows, HUD rows) copied by present while the beam scanned them."""
+    pf = hud = 0
+    for w in ev["rows"]:
+        y0 = w["row"] * 8
+        if beam_in(y0, y0 + 7, w["t0"], w["t1"]):
+            if w["row"] < 21:
+                pf += 1
+            else:
+                hud += 1
+    return pf, hud
+
+
+def late_rows(ev):
+    """(late rows, late rows of a split present): see the module doc."""
+    late, early = [], []
+    for w in ev["rows"]:
+        y0 = w["row"] * 8
+        f = w["t0"] // FRAME
+        if FIRST_LINE_T + (y0 + 7) * LINE + f * FRAME < w["t0"]:
+            late.append(f)
+        elif w["t1"] < FIRST_LINE_T + y0 * LINE + f * FRAME:
+            early.append(f)
+    return len(late), sum(1 for f in late if f in early)
 
 
 def run(h, name):
@@ -203,23 +279,44 @@ def run(h, name):
     rs = [e["render"] for e in T if e["render"] is not None and e["draws"]]
     re_ = [e["rend"] for e in T if e["rend"] is not None and e["draws"]]
     worst = max(e["end"] for e in T)
+    tr = [tears(e) for e in T]
+    nrows = sum(len(e["rows"]) for e in T)
+    shown = sum(1 for e in T for x in e["erases"] if x.get("shown", True))
+    lr = [late_rows(e) for e in T]
+    nlate, nsplit = sum(a for a, _ in lr), sum(b for _, b in lr)
 
     def mm(v):
         return "%d/%d/%d" % (min(v), sum(v) // len(v), max(v)) if v else "-"
     print(f"== {label}")
     print(f"ticks={len(T)} (with draws={len(rs)}) sprites_drawn={dr} flicker_events={fl}"
           f" (ticks affected={ftk}) strict={st}")
+    print(f"erases on the displayed bank={shown}; present rows copied={nrows}"
+          f" tear_events playfield={sum(a for a, _ in tr)} hud={sum(b for _, b in tr)}"
+          f" (ticks affected={sum(1 for a, b in tr if a or b)})")
+    print(f"late_rows={nlate} split={nsplit}"
+          f" (ticks affected={sum(1 for a, _ in lr if a)})")
+    ps = [w["t0"] for e in T for w in e["rows"]]
+    pe = [w["t1"] for e in T for w in e["rows"]]
+    print(f"present row start min/mean/max: {mm(ps)}  end: {mm(pe)}")
+    mis = [e.get("mismatch", 0) for e in T]
+    print(f"bank7 != bank5 after the tick-start present: {sum(1 for m in mis if m)} ticks"
+          f" ({sum(mis)} bytes)")
     print(f"tick start   min/mean/max: {mm([e['start'] for e in T])}")
     print(f"render start min/mean/max (ticks that draw): {mm(rs)}")
     print(f"render end   min/mean/max (ticks that draw): {mm(re_)}")
     print(f"worst tick T={worst}  OVERRUN={p.rw('OVERRUN_COUNT')}", flush=True)
+    return nsplit
 
 
 def main():
+    split = 0
     with Harness() as h:
         h.launch(EMU_ARGS)
         for w in WHICH:
-            run(h, w)
+            split += run(h, w)
+    if split:
+        print(f"[FAIL] flicker: {split} split late rows (present fell behind the beam)")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

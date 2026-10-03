@@ -29,6 +29,7 @@ CMD_TIMEOUT = float(os.environ.get("GAME_CMD_TIMEOUT", "30"))
 # `run` opcode limit: a tick is <= ~40k opcodes, boot's pool gen ~1M. A run
 # that hits the limit without reaching a probe is an anomaly (logged, retried).
 RUN_LIMIT = 4000000
+SCREEN_FRAME_LEN = 6912         # bitmap + attrs
 MAX_RUN_RETRIES = 3            # consecutive non-probe returns before failing
 # ZEsarUX flags for the tick-exact suites. Results never depend on wall-clock
 # pacing (every advance is a breakpoint-bounded `run`), so let the emulator run
@@ -144,8 +145,60 @@ class Proto:
         for k, v in kw.items():
             self.h.write_byte(base + E[k], v)
 
-    def frame(self):
+    # A7 double buffer: bank 7 (displayed) trails the composed bank 5 by one
+    # tick (present runs at the next tick start). At settled points (every
+    # golden) they must be equal: tests/game.py records differences here.
+    present_checks = 0
+    present_mismatch = []
+
+    def composed_frame(self):
+        """The bank-5 screen ($4000): what render composes (shown only while
+        $7FFD bit 3 = 0: boot, select, transitions)."""
         return self.h.frame_bytes()
+
+    def frame(self):
+        """The DISPLAYED screen (A7): bank 7's screen 2 when PORT_7FFD_SHADOW
+        bit 3 = 1 (play), else bank 5. Read from the 128K RAM zone, whatever
+        bank is paged at $C000. Same byte layout as frame_bytes()."""
+        shadow = self.rb("PORT_7FFD_SHADOW")
+        if not shadow & 0x08:
+            return self.h.frame_bytes()
+        self.z.cmd("set-memory-zone 0")              # 128K machine RAM, banks 0-7
+        try:
+            fr = self.z.read_memory(7 * 16384 + (S["SCREEN7_BITMAP"] - 0xC000),
+                                    SCREEN_FRAME_LEN)
+        finally:
+            self.z.cmd("set-memory-zone -1")
+        return fr
+
+    def banks_differ(self):
+        """Screen bytes where bank 7 (displayed) != bank 5 (composed)."""
+        self.z.cmd("set-memory-zone 0")
+        try:
+            b5 = self.z.read_memory(5 * 16384, SCREEN_FRAME_LEN)
+            b7 = self.z.read_memory(7 * 16384, SCREEN_FRAME_LEN)
+        finally:
+            self.z.cmd("set-memory-zone -1")
+        return sum(1 for a, b in zip(b5, b7) if a != b)
+
+    def present_watch(self, on):
+        """A7: check banks_differ at every probe_presented (breakpoint 4)
+        while on; samples collected in self.present_samples."""
+        if on:
+            self.present_samples = []
+            self.present_probe = S["probe_presented"]
+            self.z.cmd("set-breakpoint 4 PC=%d" % self.present_probe)
+        else:
+            self.present_probe = None
+            self.z.cmd("set-breakpoint 4")
+
+    def check_synced(self, tag):
+        """A7: displayed == composed (settled screen). Recorded, asserted at the end."""
+        fr, comp = self.frame(), self.composed_frame()
+        Proto.present_checks += 1
+        if fr != comp:
+            bad = [i for i in range(SCREEN_FRAME_LEN) if fr[i] != comp[i]]
+            Proto.present_mismatch.append((tag, len(bad), bad[0]))
 
     # --- stepping -----------------------------------------------------------
     # Stop PCs a `run` may legitimately return on. Tests that add their own
@@ -215,6 +268,10 @@ class Proto:
                 r = self.z.cmd("run %d" % RUN_LIMIT)  # `run` re-fires on the current PC
                 m = re.search(r"^PC=([0-9a-fA-F]{4})", r, re.M)
                 pc = int(m.group(1), 16) if m else self.pc()
+                if pc == getattr(self, "present_probe", None):
+                    self.present_samples.append(self.banks_differ())
+                    self.z.cmd("cpu-step")    # not a tick boundary: run on
+                    continue
                 if pc in self.probes:
                     break
                 Proto.anomalies += 1
