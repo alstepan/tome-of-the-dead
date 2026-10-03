@@ -79,10 +79,10 @@ def bitrev(b):
 
 
 def ladder_segs(p, room_label):
-    """[(col, s)] ladder segments of a room descriptor (RD_LADDERS = 6)."""
-    desc = S[room_label]
-    n = p.rb(desc + 6)
-    return [(p.rb(desc + 7 + 2 * i), p.rb(desc + 8 + 2 * i)) for i in range(n)]
+    """[(col, s)] ladder segments of a room descriptor (offset RD_LADDERS)."""
+    desc = S[room_label] + S["RD_LADDERS"]
+    n = p.rb(desc)
+    return [(p.rb(desc + 1 + 2 * i), p.rb(desc + 2 + 2 * i)) for i in range(n)]
 
 
 def body(p, kind):

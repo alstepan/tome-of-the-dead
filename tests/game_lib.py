@@ -103,6 +103,7 @@ KEYS = {
     "L": (6, 1), "K": (6, 2), "J": (6, 3), "H": (6, 4), "ENTER": (6, 0),
     "P": (5, 0), "O": (5, 1), "Q": (2, 0), "A": (1, 0), "G": (1, 4),
     "SPACE": (7, 0), "1": (3, 0), "2": (3, 1), "3": (3, 2),
+    "C": (0, 3),                              # B3B-5: close door (3B stand-in)
 }
 HERO_KEY = {0: "1", 1: "2"}                  # id 2 (Rogue) retired: hole in the K_* ids
 
@@ -457,9 +458,16 @@ ROOM_LADDERS = {0: [(5, 1), (23, 1)], 1: [(4, 1), (11, 1), (24, 2)],
                 2: [(24, 0), (24, 1), (6, 1)], 3: [(22, 1), (8, 1)]}
 
 
+# B3B-5 storey-0 pits per room (mirror of data.asm RD_PITCOL): left hole col p
+ROOM_PITS = {1: 20}
+
+
 def holes(room):
-    """Floor-row hole cells: segment {col, s} -> row 9s-1 (s >= 1)."""
+    """Floor-row hole cells: segment {col, s} -> row 9s-1 (s >= 1), plus the
+    storey-0 pit holes p..p+2 (B3B-5)."""
     cells = set()
+    if room in ROOM_PITS:
+        cells |= {(c, FLOOR_ROWS[0]) for c in range(ROOM_PITS[room], ROOM_PITS[room] + 3)}
     for col, s in ROOM_LADDERS[room]:
         row = STOREY_ROWS * s - 1
         if 0 <= row < PLAY_ROWS:

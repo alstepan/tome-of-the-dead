@@ -486,6 +486,12 @@ new_game:
                 ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1
                 ld   (hl), 0
                 ldir
+                ld   hl, edge_init             ; B3B-5: door states (both rooms
+                ld   de, EDGE_TAB              ; read EDGE_TAB; stand-in until the
+                ld   c, EDGES_H                ; B3B-7 generator writes it)
+                ldir                           ; (B = 0 after the ldir above)
+                ld   hl, $FFFF                 ; no jump refused (game.md §2.4 "not
+                ld   (JUMP_TURN), hl           ; two turns in a row")
                 ; --- hero, slot 0 ---
                 ld   ix, P_ENTITIES
                 ld   a, (HERO_KIND)
@@ -812,6 +818,10 @@ arrival_conflicts:
 ; s1 (bottom: the hero's start / exit storey), s1 -> s0, s0 -> s0. One col
 ; moved (skeleton C) so the reference route keeps the PROTO shape: the
 ; skeleton climbs the far shaft while the hero takes potion 2.
+; B3B-5 hand-room edges (data.asm): A|B door open, D|C door closed.
+edge_init:      DB EG_LINK | EG_DOOR | EG_OPEN, 0, EG_LINK | EG_DOOR, 0, 0, 0
+                ASSERT $ - edge_init == EDGES_H && EDGE_AB == 0 && EDGE_DC == 2
+
 HERO_START_COL  EQU 2
 HERO_START_S    EQU 1
 spawn_tab:

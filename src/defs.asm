@@ -262,6 +262,8 @@ MSG_BUF         EQU $BFA0           ; 32 B message line composition
 TIMING_MARK     EQU $BFC0           ; spare
 CLIMB_BLK       EQU $BFC1           ; 1 = this input's climb was blocked by an entity (-> wait turn)
 AY_CALLS        EQU $BFC2           ; A8 word: AY_PLAY calls (the silent stub counts; test-observable)
+JUMP_TURN       EQU $BFC4           ; B3B-5 word: TURN_COUNTER value on which a jump is refused (the turn
+                                    ;   right after a jump: "not two turns in a row", game.md §2.4); $FFFF = none
 
 ; Game states (GAME_STATE). 2/3/4 shared with constants.asm.
 GS_SELECT       EQU $05
@@ -333,6 +335,9 @@ M_REST          EQU 0
 M_MOVE          EQU 1
 M_SEQ           EQU 2
 M_HOLD          EQU 3               ; player dead: hold the final frame
+M_FALL          EQU 4               ; B3B-5: walk step (4 px/tick) then the drop (FALL_STEP px/tick, game.md §2.5)
+M_JUMP          EQU 5               ; B3B-5: the §2.4 arc, E_TMR = arc tick 0..JUMP_TICKS-1
+                ASSERT M_FALL > M_HOLD && M_JUMP > M_HOLD   ; anim_entity: cp M_FALL / jr nc
 
 ; E_REACT
 RC_NONE         EQU 0
@@ -408,6 +413,7 @@ KF_TALL         EQU %00000100
 KF_HERO         EQU %00001000
 KF_BAT          EQU %00010000       ; bat jitter / wander
 KF_ZAP          EQU %00100000       ; wizard zap overlay on impact
+KF_OPENER       EQU %01000000       ; B3B-5: opens closed unlocked doors by bumping (game.md §9.1)
 
 ;------------------------------------------------------------------------------
 ; Frame table (static, bank 2 image, frame_tab) — FT_STRIDE (4) B/fid.
@@ -518,6 +524,13 @@ TICK_FRAMES     EQU 2               ; 25 Hz
 RENDER_FIRST    EQU 1                           ;     (build with -DRENDER_FIRST=0 for the old order)
     ENDIF
 TWEEN_STEP      EQU 4               ; px per tick
+FALL_STEP       EQU 8               ; B3B-5: px per tick of a pit fall (game.md §2.5: 9 rows, 9 ticks)
+FALL_DIE        EQU 4               ; fall damage 1d4, ignores DEF
+JUMP_COLS       EQU 6               ; B3B-5 jump (game.md §2.4): body x..x+2 -> x+6..x+8
+JUMP_TICKS      EQU 14              ; tick 0 / 13 JUMP1 aligned, 1..12 JUMP2 (x += 4 px)
+JUMP_RISE       EQU 2               ; swept box rows top-2 .. bottom
+ATTR_DOOR       EQU $06             ; door arch / planks (concept-screen §3.1)
+ATTR_RUBBLE     EQU ATTR_WALL       ; concept-screen §3.3 #12
 
 ; KFIELD off — A = kind_tab[kind(IX) + off].  Clobbers: A, HL   (~45 T)
 ; off is a KT_* constant: its page is folded into H at assembly time.

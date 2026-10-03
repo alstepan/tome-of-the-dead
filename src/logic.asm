@@ -298,6 +298,82 @@ map_cell:
                 ld   l, a
                 ret
 
+;==============================================================================
+; B3B-5 TERRAIN (D2): TILE_FLAGS of the room map. Input / AI path only (the
+; per-tick renderer never reads it). Ladders stay on the descriptor fields.
+;------------------------------------------------------------------------------
+; cell_addr — HL = ROOM_MAP + B*32 + C (row B 0..17, col C 0..31). The map is
+; page-aligned, so H = page + row>>3 and L = (row&7)<<5 | col (no add).
+; Preserves BC, DE.  Clobbers: A.   67 T + call
+;------------------------------------------------------------------------------
+cell_addr:
+                ld   a, b
+                rrca
+                rrca
+                rrca                           ; bits 7-5 = row&7, bits 1-0 = row>>3
+                ld   l, a
+                and  3
+                add  a, ROOM_MAP >> 8
+                ld   h, a
+                ld   a, l
+                and  $E0
+                or   c
+                ld   l, a
+                ret
+                ASSERT (ROOM_MAP & $FF) == 0
+
+;------------------------------------------------------------------------------
+; cell_blocked — col C, row B: A = TILE_FLAGS of that ROOM_MAP cell, CF =
+; TF_SOLID. Preserves BC, DE.  Clobbers: A, HL.   ~135 T incl. the call
+;------------------------------------------------------------------------------
+cell_blocked:
+                call cell_addr
+                ld   a, (hl)                   ; tile id 0..63
+                add  a, tile_flags & $FF       ; tile_flags ends on its page: no carry
+                ld   l, a
+                ld   h, tile_flags >> 8
+                ld   a, (hl)
+                rrca                           ; CF = bit 0 = TF_SOLID
+                rlca                           ; A back, CF kept (bit 7 of the rotated = bit 0)
+                ret
+                ASSERT TF_SOLID == 1
+
+;------------------------------------------------------------------------------
+; lead_cell — the cell a horizontal step runs into: box C = new x, B = y,
+; D = w, E = h, A = dx (1 / $FF). Leading col = C + D - 1 (right) / C (left),
+; row = y + h - 1, the body's lowest row: every solid structure of an air band
+; (room-edge wall, dead-end block, door planks; arch + lintel above them)
+; spans it, so one cell decides (D2). Out: A = flags, CF = TF_SOLID.
+; Preserves BC, DE.  Clobbers: A, HL.   ~210 T
+;------------------------------------------------------------------------------
+lead_cell:
+                push bc
+                dec  a                         ; Z: dx = 1 (right)
+                jr   nz, .row
+                ld   a, c
+                add  a, d
+                dec  a
+                ld   c, a
+.row:           ld   a, b
+                add  a, e
+                dec  a
+                ld   b, a
+                call cell_blocked
+                pop  bc
+                ret
+
+; desc_byte — A = the byte at offset A of the current room's descriptor.
+; Clobbers: A, DE, HL.   ~170 T
+desc_byte:
+                push af
+                call cur_room_desc
+                pop  de
+                ld   e, d
+                ld   d, 0
+                add  hl, de
+                ld   a, (hl)
+                ret
+
 ; bitmask — A = 1 << A (A = 0..7).  Clobbers: A, D
 bitmask:
                 ld   d, a
@@ -332,8 +408,9 @@ snap_pxpy:
 
 ;==============================================================================
 ; PLAYER TURN — try_player_turn: resolve the sampled keys (PLAYER_DIR/DISC).
-; Chords (§9): vertical wins if a climb is legal, else horizontal, else G, else
-; wait. A climb blocked by an ENTITY counts as a wait (rule by user 2026-10-02,
+; Chords (§9): B3B-5: UP + LEFT / RIGHT is always a jump (game.md §2.4,
+; try_jump); else vertical wins if a climb is legal, else horizontal, else
+; C (close door, 3B stand-in), else G, else wait. A climb blocked by an ENTITY counts as a wait (rule by user 2026-10-02,
 ; §6.4: the blocker gets its turn to move off), at wait priority. Illegal
 ; (terrain / no ladder) -> CF = 0, nothing changed (no turn).
 ; Out: CF = 1 turn used.
@@ -348,7 +425,12 @@ try_player_turn:
                 ld   a, (ix+E_FLAGS)
                 and  EF_DYING
                 ret  nz                        ; dead heroes don't act (CF=0)
-                ld   a, (PLAYER_DIR)
+                ld   a, (PLAYER_DIR)           ; B3B-5: UP + LEFT / RIGHT is always a
+                bit  DIR_N_BIT, a              ; jump (game.md §2.4), legal or not
+                jr   z, .nj
+                and  (1 << DIR_E_BIT) | (1 << DIR_W_BIT)
+                jp   nz, try_jump              ; lowram: A = E/W bits; CF = 1 jumped
+.nj:            ld   a, (PLAYER_DIR)
                 and  (1 << DIR_N_BIT) | (1 << DIR_S_BIT)
                 cp   1 << DIR_N_BIT
                 jr   nz, .nu
@@ -377,7 +459,12 @@ try_player_turn:
                 ret  c
 .disc:
                 ld   a, (PLAYER_DISC)
-                bit  DK_QUAFF_BIT, a
+                bit  DK_CLOSE_BIT, a           ; B3B-5 stand-in key C (game.md §1.4)
+                jr   z, .ncl
+                call try_close                 ; lowram: CF = 1 closed
+                ret  c
+                ld   a, (PLAYER_DISC)
+.ncl:           bit  DK_QUAFF_BIT, a
                 jr   z, .nq
                 call try_quaff
                 ret  c
@@ -474,6 +561,10 @@ try_climb:
 
 ;------------------------------------------------------------------------------
 ; try_horizontal — IX = player, D = dx. Attack (bump) or move / exit.
+; B3B-5: the leading cell (lead_cell) decides terrain first: a wall / block =
+; no turn; a closed door plank = hero_door (open: 1 turn, no move; locked: a
+; message, no turn). A step onto x == the pit col on the storey-0 floor
+; falls (hero_fall, game.md §2.5).
 ;------------------------------------------------------------------------------
 try_horizontal:
                 call on_ladder
@@ -494,6 +585,9 @@ try_horizontal:
                 ld   a, (TMP6)
                 add  a, c
                 ld   c, a                      ; nx
+                ld   a, (TMP6)                 ; B3B-5: terrain at the leading col
+                call lead_cell
+                jr   c, .solid
                 ld   a, (TMP6)
                 cp   1
                 jr   z, .right
@@ -538,8 +632,20 @@ try_horizontal:
                 ld   (ix+E_X), c
                 call face_tmp6
                 ld   (ix+E_MODE), M_MOVE
-                scf
+                ld   a, b                      ; B3B-5 pit (game.md §2.5): standing on
+                add  a, e                      ; storey 0 with x == the pit col -> fall
+                cp   FLOOR_ROW0
+                jr   nz, .ok
+                ld   a, RD_PITCOL
+                call desc_byte                 ; (0 = none; x >= 1 never matches)
+                cp   c
+                jp   z, hero_fall              ; lowram: CF = 1
+.ok:            scf
                 ret
+.solid:         and  TF_DOOR                   ; wall / block: CF = 0 (and), no turn
+                ret  z
+                ld   a, (TMP6)
+                jp   hero_door                 ; lowram: opened (CF = 1) / locked (0)
 .blocked:       xor  a
                 ld   (EXIT_KIND), a            ; CF = 0 (xor)
                 ret
@@ -1172,8 +1278,13 @@ attack_if_reach:
 ; The flyer band is NOT checked here: callers keep it by construction (chase
 ; targets 9s+1, wander uses clamp_band).
 ; try_step_face also sets facing from dx. CF = 1 if moved.
+; B3B-5 (horizontal steps only): the leading cell's TILE_FLAGS (lead_cell):
+; solid = blocked, except a closed door plank, which mon_door opens for an
+; opener (the step is spent, CF = 1, nothing moves; game.md §9.1); and a
+; walker never steps onto x == the pit col on the storey-0 floor (§2.5).
 ; Clobbers: A, BC, DE, HL, TMP6 (try_step_face), TMP7 (flyer_lcost)
-; Cost of the flyer rule: 24 T when FLY_INBOX = 0 (the common case).
+; Cost of the flyer rule: 24 T when FLY_INBOX = 0 (the common case); B3B-5
+; terrain ~300 T a horizontal step (+~250 T for a storey-0 walker).
 ;------------------------------------------------------------------------------
 try_step_face:
                 ld   a, d
@@ -1211,7 +1322,27 @@ try_step:
                 ld   b, a
                 cp   PLAY_ROWS
                 jr   nc, .no
+                ld   a, h                      ; B3B-5 terrain (horizontal steps only:
+                or   a                         ; climbs / flyer bobs stay in their shaft
+                jr   z, .tok                   ; or band)
                 push hl
+                call lead_cell                 ; A = dx
+                jr   c, .solid
+                KFIELD KT_FLAGS                ; walkers never step onto x == the pit
+                and  KF_FLYER                  ; col on storey 0 (game.md §2.5);
+                jr   nz, .tpop                 ; flyers ignore pits
+                ld   a, b
+                add  a, e
+                cp   FLOOR_ROW0
+                jr   nz, .tpop
+                push de
+                ld   a, RD_PITCOL
+                call desc_byte
+                pop  de
+                cp   c
+                jr   z, .npop
+.tpop:          pop  hl
+.tok:           push hl
                 call box_free
                 pop  hl
                 jr   c, .no
@@ -1229,8 +1360,14 @@ try_step:
                 ld   (ix+E_MODE), M_MOVE
                 scf
                 ret
+.npop:          pop  hl
 .no:            or   a
                 ret
+.solid:         and  TF_DOOR                   ; a closed door: mon_door (lowram)
+                jr   z, .npop                  ; decides (game.md §9.1)
+                pop  hl
+                ld   a, h                      ; dx = the door's side
+                jp   mon_door
 .inbox:         ; H = dx. Keep crossing (dx = facing) or leave the box.
                 ld   a, h
                 or   a

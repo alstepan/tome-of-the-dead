@@ -18,18 +18,21 @@ DK_ENTER        EQU %00000100
 DK_1            EQU %00001000
 DK_2            EQU %00010000
 DK_3            EQU %00100000
+DK_CLOSE        EQU %01000000       ; B3B-5: C = close door (3B stand-in, game.md §1.4)
 DK_QUAFF_BIT    EQU 0
 DK_WAIT_BIT     EQU 1
 DK_ENTER_BIT    EQU 2
 DK_1_BIT        EQU 3
 DK_2_BIT        EQU 4
 DK_3_BIT        EQU 5
+DK_CLOSE_BIT    EQU 6
 
 KB_1_BIT        EQU 0               ; KBROW_12345
 KB_2_BIT        EQU 1
 KB_3_BIT        EQU 2
 KB_SYM_BIT      EQU 1               ; KBROW_SPACE
 KB_M_BIT        EQU 2
+KB_C_BIT        EQU 3               ; KBROW_CAPSV (CAPS Z X C V)
 
 ;==============================================================================
 ; scan_matrix — copy the 8 keyboard half-rows into KBD_MATRIX, unless
@@ -117,7 +120,11 @@ sample_input:
 .n2:            bit  KB_3_BIT, a
                 jr   nz, .n3
                 set  DK_3_BIT, e
-.n3:            ld   a, e
+.n3:            ld   a, (KBD_MATRIX + KBROW_CAPSV)
+                bit  KB_C_BIT, a
+                jr   nz, .nC
+                set  DK_CLOSE_BIT, e
+.nC:            ld   a, e
                 ld   (PLAYER_DISC), a
                 ld   hl, PLAYER_DIR
                 or   (hl)

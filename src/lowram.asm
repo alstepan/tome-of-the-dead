@@ -374,6 +374,30 @@ build_room_map:
                 ld   c, 31
                 call .open
                 pop  hl
+                ; B3B-5 doors (concept-screen §3.1; state in EDGE_TAB, shared
+                ; by both rooms), the storey-0 pit and the dead-end block
+                push hl
+                ld   c, 0
+                ld   de, (RD_EXL_S << 8) | RD_EDGE_L
+                call .door
+                pop  hl
+                push hl
+                ld   c, ROOM_COLS - DOOR_COLS
+                ld   de, (RD_EXR_S << 8) | RD_EDGE_R
+                call .door
+                pop  hl
+                push hl
+                ld   de, RD_PITCOL
+                add  hl, de
+                ld   a, (hl)                   ; pit col (0 = none)
+                or   a
+                inc  hl                        ; -> RD_BLOCK
+                push hl
+                call nz, .pit
+                pop  hl
+                ld   a, (hl)
+                call .block
+                pop  hl
                 ld   de, RD_LADDERS
                 add  hl, de
                 ; ladders
@@ -454,6 +478,126 @@ build_room_map:
                 jr   nz, .o
                 ret
 
+.door:          ; HL = descriptor, C = door col (0 / 30), D = exit-storey
+                ; offset, E = edge offset. A door edge: lintel WALL row 9s, arch
+                ; row 9s+1, planks 9s+2..9s+7 closed (T_DOOR_L / _R, _LOCK if
+                ; locked or sealed) or left AIR (open; .open cleared them)
+                ld   b, d
+                push hl
+                ld   d, 0
+                add  hl, de
+                ld   a, (hl)                   ; edge index (EDGE_NONE: no exit)
+                pop  hl
+                cp   EDGES_H
+                ret  nc
+                add  a, EDGE_TAB & $FF
+                ld   e, a
+                ld   d, EDGE_TAB >> 8
+                ld   a, (de)
+                bit  EG_DOOR_BIT, a
+                ret  z                         ; open passage: no door cells
+                ld   e, a                      ; E = edge state
+                ld   a, l
+                add  a, b
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a
+                ld   a, (hl)                   ; exit storey s
+                MUL_STOREY b
+                ld   b, a                      ; lintel row 9s
+                call map_cell
+                ld   (hl), T_BRICK
+                inc  hl
+                ld   (hl), T_BRICK
+                inc  b
+                call map_cell
+                ld   (hl), T_DOOR_ARCH_L
+                inc  hl
+                ld   (hl), T_DOOR_ARCH_R
+                bit  EG_OPEN_BIT, e
+                ret  nz
+                ld   d, T_DOOR_R
+                ld   a, e
+                and  EG_LOCK | EG_SEAL
+                jr   z, .dk
+                ld   d, T_DOOR_LOCK
+.dk:            ld   e, DOOR_PLANK_H
+.dp:            inc  b
+                call map_cell
+                ld   (hl), T_DOOR_L
+                inc  hl
+                ld   (hl), d
+                dec  e
+                jr   nz, .dp
+                ret
+                ASSERT DOOR_ARCH_DY == 1 && DOOR_PLANK_DY == 2 && DOOR_COLS == 2
+
+.pit:           ; A = p (game.md §2.5): row FLOOR_ROW0, cap T_PIT_L at p-1,
+                ; holes p..p+2 AIR, cap T_PIT_R at p+3
+                dec  a
+                ld   c, a
+                ld   b, FLOOR_ROW0
+                call map_cell
+                ld   (hl), T_PIT_L
+                inc  hl
+                ld   (hl), T_AIR
+                inc  hl
+                ld   (hl), T_AIR
+                inc  hl
+                ld   (hl), T_AIR
+                inc  hl
+                ld   (hl), T_PIT_R
+                ret
+                ASSERT FEAT_W == 3
+
+.block:         ; A = RD_BLOCK (level_defs.asm): w cols at the left / right
+                ; edge of storey s, rows 9s..9s+7 WALL, floor row WALLF,
+                ; RUBBLE at its foot (row 9s+7, col w / 31-w)
+                ld   e, a
+                and  RDB_WMASK
+                ret  z
+                ld   d, a                      ; D = w
+                ld   c, 0
+                bit  RDB_RIGHT_BIT, e
+                jr   z, .bl
+                ld   a, ROOM_COLS
+                sub  d
+                ld   c, a                      ; 32 - w
+.bl:            xor  a
+                bit  RDB_S1_BIT, e
+                jr   z, .bs
+                ld   a, STOREY_ROWS
+.bs:            ld   b, a                      ; 9s
+                ld   e, STOREY_ROWS            ; 8 air rows + the floor row
+.br:            call map_cell
+                ld   a, e
+                dec  a
+                ld   a, T_BRICK
+                jr   nz, .bt
+                ld   a, T_WALLF
+.bt:            push bc
+                ld   b, d
+.bc:            ld   (hl), a
+                inc  hl
+                djnz .bc
+                pop  bc
+                inc  b
+                dec  e
+                jr   nz, .br
+                dec  b
+                dec  b                         ; row 9s+7
+                ld   a, c
+                or   a
+                ld   a, d                      ; left: col w
+                jr   z, .rc
+                ld   a, c
+                dec  a                         ; right: col 31-w
+.rc:            ld   c, a
+                call map_cell
+                ld   (hl), T_RUBBLE
+                ret
+
 .ladder:        ; C = col, A = s: rows 9s-1..9s+7 clipped to 0..17
                                                ; ({c,0} rows 0-7, {c,1} 8-16, {c,2} row 17)
                 MUL_STOREY b                   ; 9s
@@ -507,6 +651,411 @@ build_room_map:
                 ret
 
 
+
+;==============================================================================
+; B3B-5 DOORS, FALLS, JUMP (game.md §2.3-2.5, §9.1). They run only on the turn
+; that opens / closes / falls / jumps (input tick), so they live here in
+; bank-5 low RAM, not in bank 2; the per-step tests (lead_cell, the pit col)
+; stay in bank 2 (logic.asm).
+;==============================================================================
+;------------------------------------------------------------------------------
+; door_find — A = dx (1 right / $FF left): the door on that side of CUR_ROOM.
+; Out: HL = its EDGE_TAB byte, C = its left col (30 / 0), B = its top plank
+; row (9s + DOOR_PLANK_DY, s = that exit's storey); CF = 1 if the side has an
+; edge (CF = 0: no exit there; HL / B are garbage).  Clobbers: A, DE.
+;------------------------------------------------------------------------------
+door_find:
+                ld   bc, (RD_EXR_S << 8) | (ROOM_COLS - DOOR_COLS)
+                ld   e, RD_EDGE_R
+                dec  a
+                jr   z, .r
+                ld   bc, (RD_EXL_S << 8) | 0
+                ld   e, RD_EDGE_L
+.r:             push de
+                call cur_room_desc             ; HL (clobbers A, DE)
+                pop  de
+                push hl
+                ld   a, l
+                add  a, b
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a
+                ld   a, (hl)                   ; exit storey s (EXIT_NONE: no exit)
+                MUL_STOREY b
+                add  a, DOOR_PLANK_DY
+                ld   b, a
+                pop  hl
+                ld   d, 0
+                add  hl, de
+                ld   a, (hl)                   ; edge index / EDGE_NONE
+                cp   EDGES_H
+                ret  nc
+                add  a, EDGE_TAB & $FF
+                ld   l, a
+                ld   h, EDGE_TAB >> 8
+                scf
+                ret
+                ASSERT (EDGE_TAB >> 8) == ((EDGE_TAB + EDGES_H - 1) >> 8)
+
+;------------------------------------------------------------------------------
+; door_paint — the planks of the door at cols C, C+1, rows B .. B+5: A = 0
+; open (AIR) / else closed (T_DOOR_L / T_DOOR_R: never called on a locked
+; door). ROOM_MAP, the bank-7 clean-background shadow (shadow_rect), then
+; PEND_DMG so the next render restores the 2 x 6 cells (the potion-pickup
+; path; a closed door's cells are free of bodies, an opened one's too).
+; Clobbers: all but IX.   ~7k T (measured: tests/world.py W5)
+;------------------------------------------------------------------------------
+door_paint:
+                or   a
+                ld   de, (T_AIR << 8) | T_AIR
+                jr   z, .p
+                ld   de, (T_DOOR_L << 8) | T_DOOR_R
+.p:             push bc
+                ld   a, DOOR_PLANK_H
+.r:             push af
+                call cell_addr                 ; (bank 2) HL; keeps BC, DE
+                ld   (hl), d
+                inc  l                         ; col 0 -> 1 / 30 -> 31: same row
+                ld   (hl), e
+                inc  b
+                pop  af
+                dec  a
+                jr   nz, .r
+                pop  bc
+                ld   de, (DOOR_COLS << 8) | DOOR_PLANK_H
+                push bc
+                push de
+                call shadow_rect
+                pop  de
+                pop  bc
+                jp   queue_damage
+
+;------------------------------------------------------------------------------
+; door_open — A = dx of a body whose step runs into a closed plank (that
+; side's door). Locked / sealed: CF = 0, nothing changes. Else EG_OPEN is set
+; (both rooms read it) and the planks become AIR: CF = 1 (the turn is spent,
+; nothing moves: game.md §2.3, §9.1).  Clobbers: all but IX.
+;------------------------------------------------------------------------------
+door_open:
+                call door_find
+                ld   a, (hl)
+                and  EG_LOCK | EG_SEAL
+                ret  nz                        ; CF = 0 (and)
+                set  EG_OPEN_BIT, (hl)
+                xor  a
+                call door_paint
+                scf
+                ret
+
+;------------------------------------------------------------------------------
+; mon_door — try_step's step into a closed plank, IX = monster, A = dx: an
+; opener (KF_OPENER, never a flyer) opens it instead of moving, spending its
+; turn (CF = 1, nothing moves); a non-opener, a flyer or a locked / sealed
+; door: blocked (CF = 0; its AI tries its next choice or waits, §9.1).
+; Clobbers: all but IX.
+;------------------------------------------------------------------------------
+mon_door:
+                ld   b, a
+                KFIELD KT_FLAGS
+                and  KF_OPENER | KF_FLYER
+                cp   KF_OPENER
+                ld   a, b
+                jr   z, door_open
+                or   a
+                ret
+
+;------------------------------------------------------------------------------
+; hero_door — try_horizontal's bump into a closed plank, IX = hero, A = dx.
+; Opens it and faces it (CF = 1: 1 turn, 2 ticks), or prints that it is
+; locked (CF = 0: no turn, F4).  Clobbers: all but IX.
+;------------------------------------------------------------------------------
+hero_door:
+                call door_open
+                jr   nc, .locked
+                call face_tmp6
+                scf
+                ret
+.locked:        call msg_begin
+                ld   hl, str_locked
+                call print_str
+                or   a
+                ret
+str_locked:     DB "THE DOOR IS LOCKED", 0
+
+;------------------------------------------------------------------------------
+; try_close — key C (3B stand-in, game.md §1.4 / §2.3), IX = hero. Legal
+; when standing, no hostile in reach on either side, and the faced side has
+; an open (so unlocked) door on the hero's storey, adjacent (x + w = 30 /
+; x = 2), its 2 x 8 cells (lintel .. planks) free of bodies. CF = 1 closed
+; (1 turn), CF = 0 refused (no turn).  Clobbers: all but IX; TMP0..TMP7.
+;------------------------------------------------------------------------------
+try_close:
+                call is_standing
+                jr   nz, .no
+                ld   a, 1                      ; no hostile in reach, either side
+                ld   (TMP6), a
+                call find_target
+                inc  a
+                jr   nz, .no
+                ld   a, $FF
+                ld   (TMP6), a
+                call find_target
+                inc  a
+                jr   nz, .no
+                ld   a, 1                      ; dx = facing
+                bit  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   z, .f
+                ld   a, $FF
+.f:             ld   (TMP6), a
+                call get_box                   ; C = x, D = w
+                ld   a, (TMP6)
+                dec  a
+                ld   a, c
+                jr   nz, .lft
+                add  a, d
+                cp   ROOM_COLS - DOOR_COLS     ; right: x + w == 30
+                jr   .adj
+.lft:           cp   DOOR_COLS                 ; left: x == 2
+.adj:           jr   nz, .no
+                call storey_ref
+                ld   (TMP7), a
+                ld   a, (TMP6)
+                call door_find
+                jr   nc, .no                   ; no exit on that side
+                ld   a, (hl)
+                and  EG_DOOR | EG_OPEN | EG_LOCK | EG_SEAL
+                cp   EG_DOOR | EG_OPEN
+                jr   nz, .no
+                ld   a, (TMP7)                 ; the door is on the hero's storey
+                MUL_STOREY d
+                add  a, DOOR_PLANK_DY
+                cp   b
+                jr   nz, .no
+                push hl
+                push bc
+                ld   a, b
+                sub  DOOR_PLANK_DY
+                ld   b, a                      ; from the lintel: the whole 2 x 8 door
+                ld   de, (DOOR_COLS << 8) | STOREY_AIR
+                call box_free                  ; (LIVE_LIST: try_player_turn)
+                pop  bc
+                pop  hl
+                jr   c, .no
+                res  EG_OPEN_BIT, (hl)
+                ld   a, 1
+                call door_paint
+                scf
+                ret
+.no:            or   a
+                ret
+
+;------------------------------------------------------------------------------
+; hero_fall — try_horizontal moved the hero (IX) onto x == the pit col on the
+; storey-0 floor (game.md §2.5): it lands on storey 1, same x (y += 9; the
+; anim plays the step, then the 9-row drop: M_FALL), a monster in the landing
+; box goes PENDING in place (arrival_conflicts, prototype §3.6), 1d4 damage
+; ignoring DEF (HURT on landing, DEATH at 0 HP). CF = 1 (the walk's turn).
+; Clobbers: all; IX = hero on return.
+;------------------------------------------------------------------------------
+hero_fall:
+                ld   (ix+E_MODE), M_FALL
+                ld   a, (ix+E_Y)
+                add  a, STOREY_ROWS
+                ld   (ix+E_Y), a
+                ld   hl, arrival_conflicts     ; bank 3 (the hero's new box)
+                call far3
+                call build_live                ; PENDING ones stop colliding
+                ld   ix, P_ENTITIES
+                ld   c, FALL_DIE
+                call rng_mod
+                inc  a
+                ld   b, a
+                ld   a, (ix+E_HP)
+                sub  b
+                jr   nc, .hp
+                xor  a                         ; saturating
+.hp:            ld   (ix+E_HP), a
+                ld   (ix+E_REACTAT), 0         ; plays on landing (anim: REST again)
+                ld   c, RC_HURT
+                or   a
+                jr   nz, .r
+                set  EF_DYING_BIT, (ix+E_FLAGS)
+                ld   c, RC_DEATH
+.r:             ld   (ix+E_REACT), c
+                call msg_begin
+                ld   hl, str_fall
+                call print_str
+                scf
+                ret
+str_fall:       DB "YOU FALL INTO A PIT", 0
+
+;------------------------------------------------------------------------------
+; try_jump — UP + LEFT / RIGHT (game.md §2.4), IX = hero, A = the PLAYER_DIR
+; E/W bits (E wins: dx 1, else -1). Legal when
+; standing (not mid-ladder), not on the turn right after a jump (JUMP_TURN),
+; the landing box x' = x + 6dx inside the body limits (cols 1..30: no exit by
+; jumping), not x' == the pit col on storey 0, free of every body, and the
+; swept box (cols x+1 .. x'+w-1 / x' .. x+w-2, rows y-2 .. y+h-1) holding no
+; solid cell (wall, block, door / arch / lintel) and no body but low ones
+; (h <= 2 rows, w <= 3 cols, standing: the Slime, a Bat in the 2 band rows
+; above the floor). CF = 1: x = x', M_JUMP (the 14-tick arc); CF = 0: no turn.
+; Not modelled in 3B (no such systems yet): 2 FOOD, Weak, frozen.
+; Clobbers: all; IX = hero on return; TMP6 (dx), TMP7 (x').
+;------------------------------------------------------------------------------
+try_jump:
+                and  1 << DIR_E_BIT            ; A = the E/W bits: E -> dx 1, W -> $FF
+                jr   nz, .dx
+                dec  a
+.dx:            ld   (TMP6), a
+                call is_standing
+                jp   nz, .no
+                ld   hl, (TURN_COUNTER)
+                ld   de, (JUMP_TURN)
+                or   a
+                sbc  hl, de
+                jp   z, .no                    ; not two turns in a row
+                call get_box                   ; C = x, B = y, D = w, E = h
+                ld   a, (TMP6)
+                dec  a
+                ld   a, c
+                jr   nz, .lft
+                add  a, JUMP_COLS
+                jr   .x1
+.lft:           sub  JUMP_COLS
+.x1:            ld   (TMP7), a                 ; x'
+                dec  a                         ; legal: 1 <= x' <= 31 - w, i.e.
+                ld   l, a                      ; x' - 1 < 31 - w unsigned (x' <= 0
+                ld   a, ROOM_COLS - 1          ; wraps x' - 1 high)
+                sub  d
+                cp   l
+                jr   c, .no
+                jr   z, .no
+                ld   a, b
+                add  a, e
+                cp   FLOOR_ROW0
+                jr   nz, .np
+                push de
+                ld   a, RD_PITCOL
+                call desc_byte                 ; (keeps BC)
+                pop  de
+                ld   hl, TMP7
+                cp   (hl)
+                jr   z, .no                    ; never land on x == the pit col
+.np:            push bc
+                ld   a, (TMP7)
+                ld   c, a
+                call box_free                  ; landing box: no body at all
+                pop  bc
+                jr   c, .no
+                ld   a, (TMP6)                 ; swept box
+                dec  a
+                ld   a, (TMP7)                 ; left: from x'
+                jr   nz, .s0
+                ld   a, c
+                inc  a                         ; right: from x + 1
+.s0:            ld   c, a
+                ld   a, d
+                add  a, JUMP_COLS - 1
+                ld   d, a                      ; w + 5 cols
+                ld   a, b
+                sub  JUMP_RISE
+                ld   b, a                      ; rows y - 2 ..
+                ld   a, e
+                add  a, JUMP_RISE
+                ld   e, a                      ; .. y + h - 1
+                call jump_terrain
+                jr   c, .no
+                call jump_bodies
+                ld   ix, P_ENTITIES
+                jr   c, .no
+                ld   a, (TMP7)
+                ld   (ix+E_X), a
+                ld   (ix+E_MODE), M_JUMP
+                ld   (ix+E_TMR), 0             ; arc tick
+                ld   a, (TMP6)
+                call face_a
+                ld   hl, (TURN_COUNTER)
+                inc  hl
+                ld   (JUMP_TURN), hl           ; the next turn may not jump
+                scf
+                ret
+.no:            or   a
+                ret
+
+; jump_terrain — CF = 1 if a cell of box C,B,D,E is TF_SOLID (~45 T a cell;
+; 64 cells for the hero ~3.5k T).  Keeps BC, DE.  Clobbers: A, HL
+jump_terrain:
+                push bc
+                push de
+.tr:            call cell_addr                 ; HL = the row's first cell
+                push bc
+                ld   b, d
+.tc:            ld   a, (hl)
+                push hl
+                add  a, tile_flags & $FF
+                ld   l, a
+                ld   h, tile_flags >> 8
+                ld   a, (hl)
+                pop  hl
+                rrca                           ; CF = TF_SOLID
+                jr   c, .x
+                inc  l                         ; cols stay inside the row
+                djnz .tc
+                pop  bc
+                inc  b
+                dec  e
+                jr   nz, .tr
+                or   a
+                jr   .out
+.x:             pop  bc
+.out:           pop  de
+                pop  bc
+                ret
+
+; jump_bodies — CF = 1 if a LIVE_LIST body (not the hero, not DYING) overlaps
+; box C,B,D,E and is not low (h <= 2, w <= 3, standing).
+; Keeps BC, DE.  Clobbers: A, HL, IX
+jump_bodies:
+                ld   hl, LIVE_LIST
+                ld   a, (LIVE_N)
+.l:             or   a
+                ret  z                         ; CF = 0
+                push af
+                push hl
+                ld   a, (hl)
+                or   a
+                jr   z, .n                     ; slot 0: the hero
+                inc  hl
+                ld   a, (hl)
+                ld   ixl, a
+                inc  hl
+                ld   a, (hl)
+                ld   ixh, a
+                bit  EF_DYING_BIT, (ix+E_FLAGS)
+                jr   nz, .n
+                call box_vs_ix
+                jr   nc, .n
+                KFIELD KT_BH
+                cp   3
+                jr   nc, .hit
+                KFIELD KT_BW
+                cp   4
+                jr   nc, .hit
+                call is_standing
+                jr   nz, .hit
+.n:             pop  hl
+                ld   a, l
+                add  a, 5                      ; LIVE_LIST stride (one page)
+                ld   l, a
+                pop  af
+                dec  a
+                jr   .l
+.hit:           pop  hl
+                pop  af
+                scf
+                ret
+                ASSERT (LIVE_LIST & $FF) + P_MAX_ENT * 5 <= 256
 
 ;==============================================================================
 ; hud_clear_mark — clear_row's A7 hook: A = the new attr, B = row, C = 0.
@@ -1342,7 +1891,7 @@ init_tiles:
                 ldir
                 ld   hl, tile_attr_src
                 ld   de, TILE_ATTRS
-                ld   bc, T_COUNT
+                ld   bc, T_INIT_N
                 ldir
                 ld   hl, tile_src_tab
                 ld   b, TILE_SRC_N
@@ -1445,6 +1994,15 @@ gl_lad_m:       DB $00,$FF,$00,$00,$00,$FF,$00,$00   ; rungs
 gl_lad_r:       DB $03,$FF,$03,$03,$03,$FF,$03,$03   ; right rail + rungs
 gl_zap1:        DB $00,$00,$08,$D4,$23,$00,$00,$00   ; bolt, staff row
 gl_zap2:        DB $00,$00,$10,$2B,$C4,$00,$00,$00
+; B3B-5 stand-ins for the door ids and rubble: the bytes of the B3B-2 common
+; set (feat/3b-tiles assets/gfx/tiles/tiles_common.asm, ids 21-25, 27) until
+; B3B-8 loads that set; init_tiles only, no runtime reader.
+gl_arch_l:      DB $07,$18,$27,$4C,$50,$90,$A0,$A0
+gl_arch_r:      DB $E0,$18,$E4,$32,$0A,$09,$05,$05
+gl_door_l:      DB $AD,$AD,$A0,$AF,$A0,$AD,$AD,$AD
+gl_door_r:      DB $B5,$B5,$05,$F5,$05,$B5,$B5,$B5
+gl_door_lock:   DB $B5,$B5,$05,$F5,$05,$8D,$75,$8D
+gl_rubble:      DB $00,$00,$00,$00,$10,$3A,$7D,$FF
 
 ; TILE_ATTRS source (copied to the page-aligned RAM table at boot)
 tile_attr_src:  DB ATTR_AIR, ATTR_FLOOR, ATTR_WALL, ATTR_FLOOR
@@ -1454,7 +2012,11 @@ tile_attr_src:  DB ATTR_AIR, ATTR_FLOOR, ATTR_WALL, ATTR_FLOOR
                 DB ATTR_TORCH, ATTR_TORCH, ATTR_ZAP, ATTR_ZAP
                 DB ATTR_FLOOR, ATTR_FLOOR
                 ASSERT $ - tile_attr_src == T_COUNT
-                ASSERT T_COUNT <= TILE_COMMON  ; init_tiles/.pick/zap: id*8 < 256
+                ; B3B-5: door ids 21-25, grate 26 (unused in 3B-5: no glyph), rubble 27
+                DB ATTR_DOOR, ATTR_DOOR, ATTR_DOOR, ATTR_DOOR, ATTR_DOOR, ATTR_AIR, ATTR_RUBBLE
+T_INIT_N        EQU $ - tile_attr_src
+                ASSERT T_INIT_N == T_RUBBLE + 1 && T_DOOR_ARCH_L == T_COUNT
+                ASSERT T_INIT_N <= TILE_COMMON  ; init_tiles/.pick/zap: id*8 < 256
 
 ;------------------------------------------------------------------------------
 ; Tile glyph sources, stand-in rule: the artist's tile (banked sheet source,
@@ -1484,6 +2046,12 @@ tile_src_tab:
                 TSRC T_ZAP2,    tiles_fx_zap2,          gl_zap2
                 TSRC T_END_L,   tiles_bg_platform_end_l, bg_tiles_floor
                 TSRC T_END_R,   tiles_bg_platform_end_r, bg_tiles_floor
+                TSRC T_DOOR_ARCH_L, tiles_door_arch_l,  gl_arch_l
+                TSRC T_DOOR_ARCH_R, tiles_door_arch_r,  gl_arch_r
+                TSRC T_DOOR_L,  tiles_door_l,           gl_door_l
+                TSRC T_DOOR_R,  tiles_door_r,           gl_door_r
+                TSRC T_DOOR_LOCK, tiles_door_lock,      gl_door_lock
+                TSRC T_RUBBLE,  tiles_rubble,           gl_rubble
 TILE_SRC_N      EQU ($ - tile_src_tab) / 4
 
 ; bg_tiles_floor: the PLATFORM stand-in glyph (init_tiles only)

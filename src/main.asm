@@ -383,6 +383,39 @@ enter_select:
 ; pages, K_MAX (32) B per array; no array crosses a page (KFIELD, feet_mod).
 ;==============================================================================
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
+                DS   (-($ + TILE_IDS)) & $FF, 0    ; B3B-5: tile_flags ends on the page
+;------------------------------------------------------------------------------
+; tile_flags — TILE_FLAGS[64] (D2, level_defs.asm TF_*), static, by tile id;
+; the 64 B right below kind_tab (low byte $C0: cell_blocked adds the id with
+; no carry, H constant). Placed in the ALIGN pad, so it costs no bank-2 bytes
+; beyond its 64. Per-level ids 32..59 = 0 (decor), 60..63 = lectern / Book.
+; Rubble and the wall set (dither / patch / fade) are background decor on the
+; air band (concept-screen §3.3), not solid; T_BRICK (= T_WALL_DARK) is the
+; solid wall (room edge, block, lintel).
+;------------------------------------------------------------------------------
+tile_flags:
+                DB 0                                   ;  0 T_AIR
+                DB TF_FLOOR                            ;  1 T_PLAT
+                DB TF_SOLID                            ;  2 T_BRICK (wall, lintel, block)
+                DB TF_SOLID | TF_FLOOR                 ;  3 T_WALLF
+                DB TF_LADDER, TF_LADDER, TF_LADDER     ;  4-6 T_LAD_L/M/R
+                DB TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE ; 7-9 T_HOLE_*
+                DB 0                                   ; 10 T_POTION (floor item)
+                DB 0, 0, 0, 0                          ; 11-14 chest / cobweb, chain, skulls, moss
+                DB TF_ANIM, TF_ANIM                    ; 15-16 T_TORCH_T/B
+                DB TF_ANIM, TF_ANIM                    ; 17-18 T_DRIP1/2 (PROTO zap: overlay only)
+                DB TF_FLOOR, TF_FLOOR                  ; 19-20 T_END_L/R = pit caps
+                DB TF_SOLID, TF_SOLID                  ; 21-22 T_DOOR_ARCH_L/R
+                DB TF_SOLID | TF_DOOR, TF_SOLID | TF_DOOR   ; 23-24 T_DOOR_L/R (closed planks)
+                DB TF_SOLID | TF_DOOR | TF_LOCK        ; 25 T_DOOR_LOCK
+                DB TF_FLOOR                            ; 26 T_GRATE (closed)
+                DB 0                                   ; 27 T_RUBBLE (decor at a block's foot)
+                DB 0, 0, 0                             ; 28-30 wall set (air-band decor)
+                DB TF_ANIM                             ; 31 T_CANDLES
+                DS T_LVL_OBJ - TILE_COMMON, 0          ; 32-59 per-level decor
+                DS T_LVL_OBJ_N, TF_SOLID | TF_ATTACK   ; 60-63 lectern / Book
+                ASSERT $ - tile_flags == TILE_IDS
+                ASSERT (tile_flags & $FF) + TILE_IDS == $100     ; one page, ends on it
                 ALIGN 256
 kind_tab:
                 ASSERT K_COUNT <= K_MAX            ; A6 review: every kind has a column
@@ -397,7 +430,9 @@ kind_tab:
                 KROW   0,  1,  1,  0,  0,  0,  0,  0,  0          ; KT_BONUS
                 KROW   1,  3,  1,  1,  1,  1,  1,  1,  1          ; KT_REACH
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  2          ; KT_PERIOD
-                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER|KF_ZAP, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL, KF_CLIMBER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0  ; KT_FLAGS
+                ; B3B-5: skeleton + goblin are openers (game.md §9.1); the heroes
+                ; open by bump in try_horizontal, not through KF_OPENER
+                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER|KF_ZAP, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0  ; KT_FLAGS
                 KROW $47,$45,$44,$47,$44,$45,$06,$43,$44          ; KT_ATTR
                 KROW KFID_KNIGHT, KFID_WIZARD, 0, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME   ; KT_FID0
                 KROW KFCNT_KNIGHT, KFCNT_WIZARD, 0, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME ; KT_FCNT
@@ -426,7 +461,7 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
                 ASSERT LOWRAM_END <= LOWRAM_FREE_END
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, kind_tab - kind_tab_pad, " B kind_tab ALIGN pad); free runtime RAM ", /H, BANK2_FREE, "..", /H, BANK2_FREE_END - 1, ": ", /D, BANK2_FREE_END - BANK2_FREE
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, tile_flags - kind_tab_pad, " B kind_tab ALIGN pad); free runtime RAM ", /H, BANK2_FREE, "..", /H, BANK2_FREE_END - 1, ": ", /D, BANK2_FREE_END - BANK2_FREE
 
 ;------------------------------------------------------------------------------
 ; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"
