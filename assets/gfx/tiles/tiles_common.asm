@@ -8,9 +8,8 @@
 ; Size        : 256 + 32 = 288 B.   Clash: one ink+paper per tile by construction.
 ; Aliases     : T_WALL_DARK = T_BRICK (2), T_PIT_R = T_END_L (19), T_PIT_L = T_END_R (20).
 ; Retired ids : 11-14 / 17-18 were chest / zap: 11/14 = open-door jambs, 12/13/17/18 =
-;               decor (cobweb/moss moved per-level). Load this table only once B3B-13
-;               removed their last users.  Id 10 = potion until 3E.
-; Pending enum: T_DOOR_JAMB_L/R (11/14) replace T_COBWEB/T_MOSS in src/level_defs.asm.
+;               decor (cobweb/moss moved per-level). B3B-8 loads this table at boot
+;               (init_tiles) and re-patches the zap glyphs 17/18 until B3B-13.  Id 10 = potion.
 ; ============================================================================
 tiles_common_glyphs:
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ;  0 T_AIR

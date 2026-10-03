@@ -3,8 +3,8 @@
 ;   paging + the bank-3 far-call trampoline, masked blit at any (px multiple
 ;   of 4, py) (§5.1), exact-footprint attr stamp (§4.2), tile-map
 ;   erase/restore (§4.3), HUD text, room draw. The boot-time generator and
-;   init_tiles live in lowram.asm (bank 5); the transition scrolls in
-;   bank3.asm.
+;   the level tile load live in lowram.asm (bank 5); the transition scrolls,
+;   init_tiles and build_room_map (B3B-8) in bank3.asm.
 ; Conventions: IX preserved unless stated; IY never touched (= $5C3A, kept for
 ; the optional ISR_ROM_CHAIN; the default A8 IM 2 ISR does not use it).
 ;==============================================================================

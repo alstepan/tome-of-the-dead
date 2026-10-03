@@ -72,15 +72,15 @@ NEXT_MAP        EQU $6300           ; 672 B buffer: destination room during a tr
 TILE_GLYPHS     EQU $6600           ; 512 B: 64 tiles x 8 B ($6600..$67FF)
 BITREV_TAB      EQU $6800           ; 256 B: bit-reversed byte (page-aligned)
 TILE_ATTRS      EQU $6900           ; 64 B : attr per tile id (one page: ld h, TILE_ATTRS>>8)
-GEN_SRC         EQU $6940           ; 512 B: source frame copied out of its bank (raw build; init_tiles items)
+GEN_SRC         EQU $6940           ; 512 B: source frame copied out of its bank (raw build)
 GEN_MIR         EQU $6B40           ; 512 B: mirrored copy (left-facing)
 LOWRAM_END      EQU $6D40
 TILE_IDS        EQU 64              ; tile id capacity (glyphs/attrs above)
 TILE_COMMON     EQU 32              ; ids 0..31: engine/common tiles (init_tiles)
-; ids 32..63: per-level decor slots (game.md §1.2). HOOK (Stage 3B, not built):
-; at level start copy the level's 32 glyphs + 32 attrs (32 x 9 B = 288 B per
-; set, 8 sets = 2,304 B in bank 7 spare) to TILE_LEVEL_GLYPHS / TILE_LEVEL_ATTRS
-; — the glyph half is exactly the second page of TILE_GLYPHS (one 256-B LDIR).
+; ids 32..63: per-level slots (game.md §1.2). B3B-8: level_load_tiles copies
+; the depth's bank-7 slot (TSET_*, level_defs.asm: 32 glyphs + 32 attrs + 32
+; flags) to TILE_LEVEL_GLYPHS / TILE_LEVEL_ATTRS / tile_flags + 32 — the glyph
+; half is exactly the second page of TILE_GLYPHS (one 256-B LDIR).
 TILE_LEVEL_GLYPHS EQU TILE_GLYPHS + TILE_COMMON * 8
 TILE_LEVEL_ATTRS  EQU TILE_ATTRS + TILE_COMMON
 ; Bank-5 low-RAM fit (ASSERTed in main.asm, docs/memory-map.md "Bank 5 low RAM"):
@@ -185,9 +185,9 @@ ISR_SAVE_ALT    EQU 0                           ;     (needed once BOTH the play
 ;------------------------------------------------------------------------------
 TURN_PHASE      EQU $BF10           ; 0 = INPUT, 1 = ANIM          (test-observable)
 TICK_COUNTER    EQU $BF11           ; word: 25 Hz ticks elapsed    (test-observable)
-CUR_ROOM        EQU $BF13           ; 0..3 = A..D                  (test-observable)
+CUR_ROOM        EQU $BF13           ; room id = grid cell 0..8 (B3B-8; A 0 B 1 D 3 C 4) (test-observable)
 HERO_KIND       EQU $BF14           ; K_KNIGHT/K_WIZARD (2 = retired)   (test-observable)
-POTIONS_TAKEN   EQU $BF15           ; bitmask of level potion ids  (test-observable)
+POTIONS_TAKEN   EQU $BF15           ; bitmask of taken FLOOR_LIST entries 0..7 (test-observable)
 INPUT_REPEAT    EQU $BF16           ; 1 = hold repeats (default); 0 = edge-triggered
 ANIM_FREEZE     EQU $BF17           ; 1 = resting sprites hold IDLE frame 0
 PORT_7FFD_SHADOW EQU $BF18          ; last value written to $7FFD

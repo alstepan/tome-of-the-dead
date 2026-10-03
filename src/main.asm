@@ -33,8 +33,8 @@
 
 ;==============================================================================
 ; SPRITE SOURCES — banks 1 and 3, assembled contiguously at virtual $8000..$FFFF
-; (slot 2 = page 1, slot 3 = page 3). Read only by the boot generator (and
-; init_tiles) via copy_virt (virtual < $C000 -> bank 1 at +$4000, else bank 3
+; (slot 2 = page 1, slot 3 = page 3). Read only by the boot generator via
+; copy_virt (B3B-8: init_tiles no longer reads the raw items / tiles) (virtual < $C000 -> bank 1 at +$4000, else bank 3
 ; as-is). ZX0_SOURCES = 1 (default): the generator frames are ZX0 blocks
 ; (build/zx0/sprites_zx0.asm, written by tools/zx0_sources.py — tools/build.sh
 ; runs it); their per-frame block/offset are EQUs folded into the bank-5
@@ -92,6 +92,25 @@ ay_code_end:
 AY_LEN          EQU ay_code_end - AY_RESERVE
                 ASSERT ay_code_end <= AY_RESERVE_END
                 DISPLAY "GAME AY slot (bank 3): ", /H, AY_RESERVE, "..", /H, ay_code_end - 1, " (", /D, AY_LEN, " B), free in the 7 KB reserve: ", /D, AY_RESERVE_END - ay_code_end, "; ISR ", /D, ISR_LEN, " B at ", /H, ISR_ADDR
+
+;==============================================================================
+; LEVEL TILESETS (B3B-8) — the 8 per-level tile sets (tools/tiles_convert.py,
+; slot format TSET_* in level_defs.asm) in the bank-7 spare: slots 0-3 above
+; screen 2 (TSET_LO), 4-7 above the shadow attrs (TSET_HI; TSET_SPLIT, a
+; macro the generated file invokes between D4 and D5). Two headerless tape
+; blocks (`start` .t7lo / .t7hi); level_load_tiles copies one slot per level.
+;==============================================================================
+                MMU  3, BANK_TSET
+    MACRO TSET_SPLIT
+tsets_lo_end:
+                ORG  TSET_HI
+    ENDM
+                ORG  TSET_LO
+                INCLUDE "../assets/gfx/tiles/tilesets.asm"
+                ASSERT tileset_d1 == TSET_LO && tileset_d5 == TSET_HI
+                ASSERT tileset_d2 - tileset_d1 == TSET_STRIDE && TILESET_SLOT_LEN == TSET_STRIDE
+                ASSERT tsets_lo_end == TSET_LO + TSET_HALF_LEN && tilesets_end == TSET_HI + TSET_HALF_LEN
+                ASSERT tsets_lo_end <= SHADOW_BITMAP && tilesets_end <= $10000
 
 ;==============================================================================
 ; BANK-5 LOW-RAM COLD CODE — tape entry, boot, generator, init_tiles, game
@@ -298,14 +317,15 @@ do_exit:
                 ld   (GAME_STATE), a
                 ld   h, NEXT_MAP >> 8
                 ld   a, (EXIT_DEST)
-                call build_room_map
+                call build_room                ; B3B-8: far3 -> bank-3 build_room_map v2
                 ld   a, (EXIT_KIND)            ; scroll arg: the exit direction
                 ld   hl, hscroll_room          ; both scrolls live in bank 3
                 cp   EX_UP
                 jr   c, .h
                 ld   hl, vscroll_room
 .h:             call far3
-                call shadow_room               ; clean background of the new room
+                call room_shadow               ; clean background of the new room + its
+                                               ; row-17 ornament (the scroll drew the screen's)
                 ld   a, (EXIT_DEST)
                 ld   (CUR_ROOM), a
                 ld   ix, P_ENTITIES
@@ -389,13 +409,13 @@ kind_tab_pad:                                  ; ALIGN padding starts here (head
 ; tile_flags — TILE_FLAGS[64] (D2, level_defs.asm TF_*), static, by tile id;
 ; the 64 B right below kind_tab (low byte $C0: cell_blocked adds the id with
 ; no carry, H constant). Placed in the ALIGN pad, so it costs no bank-2 bytes
-; beyond its 64. Per-level ids 32..59 = 0 (decor), 60..63 = lectern / Book.
+; beyond its 64. Per-level ids 32..59 = 0 (decor), 60..63 = lectern / Book
+; until the first level_load_tiles (B3B-8) overwrites 32..63 from the slot.
 ; Solidity belongs to the cell class (game.md §1.2 "Solidity of decor",
 ; designer 2026-10-03): the wall set (DARK = T_BRICK, DITHER, PATCH, FADE) is
 ; SOLID and only ever replaces wall cells; rubble / skulls / moss / cobweb /
-; chain / torch / candles / drips are not. Per-level wall variants (window,
-; bookshelf, ids 32..59) need per-level flags: B3B-8 loads them with the
-; tileset (this static table has 0 there).
+; chain / torch / candles / drips are not. Per-level wall variants (pillar,
+; plaster patches in 32..59) carry TF_SOLID in their tileset slot's flags.
 ;------------------------------------------------------------------------------
 tile_flags:
                 DB 0                                   ;  0 T_AIR
@@ -514,5 +534,8 @@ tap_loader_len  EQU  $ - tap_loader
                 MMU  3, BANK_COLD3             ; source tail + bank-3 cold code
                 SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, BANK3_LEN
                 SAVETAP  "build/wazhack.tap", HEADLESS, AY_RESERVE, AY_LEN   ; A8 AY slot (BANK_AY = 3)
+                MMU  3, BANK_TSET              ; B3B-8: level tilesets (2 x 1,280 B)
+                SAVETAP  "build/wazhack.tap", HEADLESS, TSET_LO, TSET_HALF_LEN
+                SAVETAP  "build/wazhack.tap", HEADLESS, TSET_HI, TSET_HALF_LEN
                 MMU  3, 0
                 SAVESNA  "build/wazhack.sna", boot

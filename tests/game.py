@@ -27,7 +27,8 @@ from game_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at
                        GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION,
                        EF_LEFT, EF_PENDING, EF_ACTIVE, EF_HOSTILE,
                        K_KNIGHT, K_WIZARD, K_SKELETON, K_GOBLIN, K_RAT,
-                       K_BAT, K_SLIME, K_GHOST)
+                       K_BAT, K_SLIME, K_GHOST, ROOM_A, ROOM_C, ROOM_D)
+import room_model  # noqa: E402
 
 GOLDEN_DIR = os.path.join(HERE, "golden")
 UPDATE = "--update-golden" in sys.argv
@@ -78,11 +79,11 @@ def bitrev(b):
     return int(f"{b:08b}"[::-1], 2)
 
 
-def ladder_segs(p, room_label):
-    """[(col, s)] ladder segments of a room descriptor (offset RD_LADDERS)."""
-    desc = S[room_label] + S["RD_LADDERS"]
-    n = p.rb(desc)
-    return [(p.rb(desc + 1 + 2 * i), p.rb(desc + 2 + 2 * i)) for i in range(n)]
+def ladder_segs(p, room):
+    """[(col, s)] ladder segments of room `room` (B3B-8: the 6 shaft / ladder
+    col bytes of its ROOM_DESC entry, tests/room_model.py)."""
+    import room_model
+    return room_model.segments(room_model.read_block(p), room)
 
 
 def body(p, kind):
@@ -180,20 +181,23 @@ class T(Proto):
         self.set_ent(slot, **kw)
         self.settle()
 
+    def bg_tables(self):
+        """(ROOM_MAP, TILE_GLYPHS, TILE_ATTRS, ORN_GLYPHS) from memory."""
+        z = self.z
+        return (z.read_memory(S["ROOM_MAP"], MAP_LEN), z.read_memory(S["TILE_GLYPHS"], S["TILE_IDS"] * 8),
+                z.read_memory(S["TILE_ATTRS"], S["TILE_IDS"]), z.read_memory(S["ORN_GLYPHS"], 64))
+
     def is_bg(self, frame, c, r):
-        """Cell (c,r) shows exactly its tile-map background (glyph + attr)."""
-        tile = self.h.read_byte(S["ROOM_MAP"] + r * 32 + c)
-        glyph = self.z.read_memory(S["TILE_GLYPHS"] + tile * 8, 8)
-        attr = self.h.read_byte(S["TILE_ATTRS"] + tile)
-        return attr_at(frame, c, r) == attr and cell_bytes(frame, c, r) == glyph
+        """Cell (c,r) shows exactly its tile-map background (glyph + attr; B3B-8:
+        the row-17 ornament over its floor cells)."""
+        g, a = room_model.expected_cell(*self.bg_tables(), c, r)
+        return attr_at(frame, c, r) == a and bytes(cell_bytes(frame, c, r)) == g
 
     def bg_mismatch(self):
         """Cells of rows 0-17 that differ from the tile-map background, outside
         every drawn sprite footprint (transition / erase correctness)."""
         fr = self.frame()
-        rmap = self.z.read_memory(S["ROOM_MAP"], MAP_LEN)
-        glyphs = self.z.read_memory(S["TILE_GLYPHS"], S["TILE_IDS"] * 8)
-        attrs = self.z.read_memory(S["TILE_ATTRS"], S["TILE_IDS"])
+        tabs = self.bg_tables()
         covered = set()
         for s_ in range(16):
             e = self.ent(s_)
@@ -205,8 +209,8 @@ class T(Proto):
             for c in range(32):
                 if (c, r) in covered:
                     continue
-                t = rmap[r * 32 + c]
-                if attr_at(fr, c, r) != attrs[t] or cell_bytes(fr, c, r) != glyphs[t * 8:t * 8 + 8]:
+                g, a = room_model.expected_cell(*tabs, c, r)
+                if attr_at(fr, c, r) != a or bytes(cell_bytes(fr, c, r)) != g:
                     bad.append((c, r))
         return bad
 
@@ -592,7 +596,7 @@ def main():
             p.settle()
             h.expect("21 new game POTIONS_TAKEN = 0", p.rb("POTIONS_TAKEN"), 0)
             h.expect("21 new game hero hp 22", p.ent(0)["HP"], 22)
-            h.expect("21 new game skeleton back in C", (p.ent(SLOT_SKC)["ROOM"], p.ent(SLOT_SKC)["HP"]), (2, 10))
+            h.expect("21 new game skeleton back in C", (p.ent(SLOT_SKC)["ROOM"], p.ent(SLOT_SKC)["HP"]), (ROOM_C, 10))
             h.expect("21 new game RNG reseeded", p.rw("RNG_STATE"), 0xA55A)
 
         # ---------------- 19. wizard reach-3 zap ---------------------------
@@ -724,11 +728,11 @@ def main():
             p.place(SLOT_BATB, 28, R1 - 3, room=1)  # bat in storey-1 band, gap 1
             p.turn("J")                          # down-exit: step + transition
             e = p.ent(0)
-            h.expect("35 B col 24 J -> C", p.rb("CUR_ROOM"), 2)
+            h.expect("35 B col 24 J -> C", p.rb("CUR_ROOM"), ROOM_C)
             h.expect("35 arrive s0 x=24", (e["X"], e["Y"]), (24, Y0))
             h.expect("35 after B->C scroll: screen == room C tiles", p.bg_mismatch()[:4], [])
             g = p.ent(SLOT_GOBLIN)
-            h.expect("26 goblin room = C, pending", (g["ROOM"], bool(g["FLAGS"] & EF_PENDING)), (2, True))
+            h.expect("26 goblin room = C, pending", (g["ROOM"], bool(g["FLAGS"] & EF_PENDING)), (ROOM_C, True))
             h.expect("26 bat does not follow", p.ent(SLOT_BATB)["ROOM"], 1)
             for _ in range(4):
                 if not p.ent(SLOT_GOBLIN)["FLAGS"] & EF_PENDING:
@@ -736,7 +740,7 @@ def main():
                 p.turn("H")
             g = p.ent(SLOT_GOBLIN)
             h.expect("26 goblin materialised at s0 x=24", (bool(g["FLAGS"] & EF_PENDING), g["X"], g["Y"]), (False, 24, G0))
-            h.expect("8 floor band C", floor_band_ok(p.frame(), holes(2)), [])
+            h.expect("8 floor band C", floor_band_ok(p.frame(), holes(ROOM_C)), [])
             # 35 back up
             p.set_ent(SLOT_GOBLIN, ROOM=NOWHERE)
             p.place(0, 24, Y0)
@@ -839,7 +843,7 @@ def main():
             p.isolate()
             p.place(SLOT_SLIME, 16, R0, room=1)     # B storey 0, far from the shafts
             p.place(0, 24, Y1)
-            ghost_check("B->C (vertical)", SLOT_SLIME, "J", 2)
+            ghost_check("B->C (vertical)", SLOT_SLIME, "J", ROOM_C)
 
         # ---------------- 53 (review A7) present keeps up: zap, potion, quaff
         # Per tick, right after the tick-start present (probe_presented):
@@ -933,7 +937,7 @@ def main():
         # their top end boxes are on storey 0). Fixed seed; flyer speeds unchanged.
         if want(55) or want(56) or want(57) or want(58):
             p.boot(K_KNIGHT)
-            segs = ladder_segs(p, "room_a")
+            segs = ladder_segs(p, ROOM_A)
             moved_in = []                         # violations: in a box, x kept
 
             def track(slot, prev, tag):
@@ -1637,6 +1641,10 @@ def tape_rest(h, p):
     ayo = 3 * 16384 + S["AY_RESERVE"] - 0xC000
     h.expect("50 bank 3 AY slot (A8 tape block) == .sna", ram[ayo:ayo + S["AY_LEN"]] ==
              SNA_RAM[ayo:ayo + S["AY_LEN"]], True)
+    for nm in ("TSET_LO", "TSET_HI"):            # B3B-8: the bank-7 tileset blocks
+        o = 7 * 16384 + S[nm] - 0xC000
+        h.expect(f"50 bank 7 tilesets {nm} (B3B-8 tape block) == .sna",
+                 ram[o:o + S["TSET_HALF_LEN"]] == SNA_RAM[o:o + S["TSET_HALF_LEN"]], True)
     h.expect("50 tape: IM 2 installed by boot", " IM2 " in p.z.cmd("get-registers"), True)
     # CODE block starts in bank 5 low RAM (boot, generator) and runs into bank 2
     lo5 = S["lowram_code"] - 0x4000
@@ -1683,7 +1691,7 @@ def walkthrough(h, p, check14=False):
     # B3B-3 route (2 storeys; rooms re-authored from §8.2, same shape):
     go_room(1, "L")                  # A -> B (storey 1)
     go_x(24)
-    go_room(2, "J")                  # B {24,2} -> C (s0, col 24)
+    go_room(ROOM_C, "J")             # B {24,2} -> C (s0, col 24)
     sk_y0 = p.ent(5)["Y"]
     go_x(27)                         # potion 2 (C col 29, storey 0)
     def foe_left():
@@ -1715,7 +1723,7 @@ def walkthrough(h, p, check14=False):
                  sk_y0 - min_y >= STOREY_ROWS, True)
     go_x(24)
     climb("J", 1)                    # {24,1} down to storey 1
-    go_room(3, "H")                  # C -> D (s1)
+    go_room(ROOM_D, "H")             # C -> D (s1)
     go_x(22)
     climb("K", 0)                    # {22,1} up to storey 0 (potion 3 at col 17)
     go_x(3)

@@ -212,6 +212,8 @@ LVL_STATE_END   EQU LVL_STATE + $140
 ; which run without bank 3 — hence a fixed low-RAM home). Filled at boot.
 ORN_GLYPHS      EQU LVL_STATE_END   ; 64 B ($6E80..$6EBF)
 ORN_COUNT       EQU 8
+ORN_MID_COL     EQU 14              ; wing_l skull_l skull_r wing_r at cols 14..17 (concept_r4)
+ORN_MID_N       EQU 4               ; (glyph indices ORN_* = panel_orn.asm, bank 3)
 LOWRAM_END_3B   EQU ORN_GLYPHS + ORN_COUNT * 8   ; $6EC0: = LOWRAM_FREE_END (defs.asm)
 
 LF_GRATE_OPEN   EQU %00000001       ; lair grate open (3B: set at level start, game.md §1.4)
@@ -294,22 +296,28 @@ TF_ANIM_BIT     EQU 6
 TF_FLOOR_BIT    EQU 7
 
 ;------------------------------------------------------------------------------
-; Bank-7 tileset slots (game.md §1.2/§11.2): 8 x 288 B, slot = depth - 1.
-;   slot layout: +0 glyphs of ids 32..63 (32 x 8 B, id order), +256 attrs (32 B)
-;   -> one LDIR of 256 to TILE_LEVEL_GLYPHS, one of 32 to TILE_LEVEL_ATTRS.
-;   slots 0–3 at TSET_LO ($DB00..$DF7F, above screen 2), 4–7 at TSET_HI
-;   ($FAA0..$FF1F, above the shadow attrs). Address = (slot < 4 ? TSET_LO :
-;   TSET_HI) + (slot & 3) * 288. Cold data, loaded from tape into bank 7
-;   (B3B-2 / B3B-8: a headerless block; bank 7 is not loaded today).
+; Bank-7 tileset slots (game.md §1.2/§11.2): 8 x 320 B, slot = depth - 1.
+;   slot layout: +0 glyphs of ids 32..63 (32 x 8 B, id order), +256 attrs (32 B),
+;   +288 TILE_FLAGS of ids 32..63 (32 B; B3B-8: per-level solidity / anim bits)
+;   -> LDIRs of 256 to TILE_LEVEL_GLYPHS, 32 to TILE_LEVEL_ATTRS, 32 to
+;   tile_flags + 32 (level_load_tiles, lowram.asm).
+;   slots 0–3 at TSET_LO ($DB00..$DFFF, above screen 2), 4–7 at TSET_HI
+;   ($FAA0..$FF9F, above the shadow attrs). Address = (slot < 4 ? TSET_LO :
+;   TSET_HI) + (slot & 3) * 320. Cold data; B3B-8: two headerless tape blocks
+;   loaded by `start` (bank 7 paged), and in the .sna.
 ;------------------------------------------------------------------------------
 BANK_TSET       EQU 7
 TSET_GLYPHS     EQU 0
 TSET_ATTRS      EQU 256
-TSET_STRIDE     EQU 288
+TSET_FLAGS      EQU 288
+TSET_STRIDE     EQU 320
 TSET_PER_HALF   EQU 4
+TSET_HALF_LEN   EQU TSET_PER_HALF * TSET_STRIDE   ; 1,280 B per tape block
 TSET_LO         EQU $DB00           ; right above screen 2 ($C000..$DAFF)
 TSET_HI         EQU $FAA0           ; right above the shadow attrs (PROTO rows 0–20; 3B 0–17)
-                ASSERT TSET_ATTRS == (TILE_IDS - TILE_COMMON) * 8 && TSET_STRIDE == TSET_ATTRS + TILE_IDS - TILE_COMMON
+                ASSERT TSET_ATTRS == (TILE_IDS - TILE_COMMON) * 8 && TSET_FLAGS == TSET_ATTRS + TILE_IDS - TILE_COMMON
+                ASSERT TSET_STRIDE == TSET_FLAGS + TILE_IDS - TILE_COMMON
+                ASSERT TSET_STRIDE == 5 * 64    ; level_load_tiles: (slot&3) * 320 = slot*256 + slot*64
                 ASSERT TSET_LO >= SCREEN7_ATTR + SCREEN_ATTR_LEN
                 ASSERT TSET_HI >= SHADOW_ATTR + PLAY_ROWS * ATTR_STRIDE   ; (+3 PROTO rows of slack)
                 ASSERT TSET_LO + TSET_PER_HALF * TSET_STRIDE <= SHADOW_BITMAP

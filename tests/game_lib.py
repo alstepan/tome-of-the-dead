@@ -451,15 +451,19 @@ def floor_band_ok(frame, room_holes, open_cells=()):
     return bad
 
 
-# ladder segments per room (mirror of src/data.asm room_a..room_d; tests/world.py
-# W0 checks this table against the descriptors in memory). {col,0} up-exit,
+# B3B-8: PROTO room ids = 3x3 grid cells (data.asm): A 0, B 1, D 3, C 4.
+ROOM_A, ROOM_B, ROOM_C, ROOM_D = 0, 1, 4, 3
+ROOM_LETTER = {ROOM_A: "A", ROOM_B: "B", ROOM_C: "C", ROOM_D: "D"}
+# ladder segments per room in descriptor order (RD_UPCOL, RD_DNCOL, RD_ARRCOL,
+# RD_EXITCOL, RD_LAD1, RD_LAD2; mirror of bank3.asm proto_rooms; tests/world.py
+# W0 checks this table against ROOM_DESC in memory). {col,0} up-exit,
 # {col,1} internal, {col,2} down-exit hole.
-ROOM_LADDERS = {0: [(5, 1), (23, 1)], 1: [(4, 1), (11, 1), (24, 2)],
-                2: [(24, 0), (24, 1), (6, 1)], 3: [(22, 1), (8, 1)]}
+ROOM_LADDERS = {ROOM_A: [(5, 1), (23, 1)], ROOM_B: [(24, 2), (4, 1), (11, 1)],
+                ROOM_C: [(24, 0), (24, 1), (6, 1)], ROOM_D: [(22, 1), (8, 1)]}
 
 
-# B3B-5 storey-0 pits per room (mirror of data.asm RD_PITCOL): left hole col p
-ROOM_PITS = {1: 20}
+# B3B-5 storey-0 pits per room (mirror of proto_rooms RD_PITCOL): left hole col p
+ROOM_PITS = {ROOM_B: 20}
 
 
 def holes(room):

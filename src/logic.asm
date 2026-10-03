@@ -216,65 +216,121 @@ box_free:
 ;==============================================================================
 ; ROOM DESCRIPTOR QUERIES (current room unless noted)
 ;==============================================================================
-; room_desc — HL = descriptor of room A.  Clobbers: A, DE, HL
+;------------------------------------------------------------------------------
+; B3B-8: every room query reads the 3B ROOM_DESC (level_defs.asm) — rooms A-D
+; are a PROTO level written by new_game (bank 3), generated levels by
+; level_gen. Room id = grid cell r (A 0, B 1, D 3, C 4).
+;------------------------------------------------------------------------------
+; room_desc — HL = ROOM_DESC + A*16 (A = room 0..8; one page, 16-aligned, so
+; L's low nibble = the field offset).  Clobbers: A, HL.   46 T
 room_desc:
                 add  a, a
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, ROOM_DESC & $FF
                 ld   l, a
-                ld   h, 0
-                ld   de, room_tab
-                add  hl, de
-                ld   a, (hl)
-                inc  hl
-                ld   h, (hl)
-                ld   l, a
+                ld   h, ROOM_DESC >> 8
                 ret
+                ASSERT (ROOM_DESC & (RD_STRIDE - 1)) == 0 && RD_STRIDE == 16
 
 cur_room_desc:
                 ld   a, (CUR_ROOM)
                 jr   room_desc
 
+; seg_storey — the 6 shaft / ladder col bytes RD_UPCOL..RD_LAD2 of a
+; descriptor are the room's ladder segments {col, s}: UP {c,0}, DN {c,2},
+; ARR {c,0}, EXIT {c,2} (level exit under the grate), LAD1/LAD2 {c,1}. In: HL
+; -> one of them (L low nibble = its offset). Out: A = its storey.
+; Preserves all but A, F.   ~45 T
+seg_storey:
+                ld   a, l
+                and  RD_STRIDE - 1
+                sub  RD_LAD1
+                ld   a, 1
+                ret  nc                        ; LAD1 / LAD2: {c,1}
+                ld   a, l
+                and  1                         ; DN (3) / EXIT (5): {c,2}; UP (2) / ARR (4): {c,0}
+                add  a, a
+                ret
+                ASSERT RD_UPCOL == 2 && RD_DNCOL == 3 && RD_ARRCOL == 4 && RD_EXITCOL == 5
+                ASSERT RD_LAD1 == 6 && RD_LAD2 == 7
+
 ; ladder_exists — CF = 1 if segment {col C, storey B} exists in the current room.
-; Preserves BC. Clobbers: A, DE, HL
+; Preserves BC. Clobbers: A, HL
 ladder_exists:
                 call cur_room_desc
-                ld   de, RD_LADDERS
-                add  hl, de
-                ld   d, (hl)                   ; count
-                inc  hl
-                inc  d
-.l:             dec  d
-                jr   z, .nf
+                inc  l                         ; -> RD_EXITS; the loop pre-increments
+.l:             inc  l
+                ld   a, l
+                and  RD_STRIDE - 1
+                cp   RD_LAD2 + 1
+                ret  nc                        ; past RD_LAD2: not found (CF = 0)
                 ld   a, (hl)
-                inc  hl
                 cp   c
-                ld   a, (hl)
-                inc  hl
                 jr   nz, .l
+                or   a
+                jr   z, .l                     ; col 0 = none (C = 0 never matches)
+                call seg_storey
                 cp   b
                 jr   nz, .l
                 scf
-                ret
-.nf:            or   a                         ; CF = 0: not found
                 ret
 
-; exit_h — A = EX_LEFT / EX_RIGHT, B = storey. CF = 1 if open; A = dest.
-; Clobbers: A, DE, HL
-exit_h:
-                push af
+; room_side — A = RDX_L (1) / RDX_R (2): that side of the current room.
+; Out: CF = 1 if it has an exit: A = the neighbour room (r -/+ 1), B = the
+; exit storey (RDX_LS1 / RDX_RS1), E = its EDGE_TAB index (left edge of r =
+; right edge of r-1 = (r-1) - gy, right edge = r - gy). CF = 0: no exit.
+; Clobbers: A, B, DE, HL.   ~250 T
+room_side:
+                ld   d, a
                 call cur_room_desc
-                pop  af
-                cp   EX_LEFT
-                jr   z, .l
-                inc  hl
-                inc  hl
-.l:             ld   a, (hl)                   ; exit storey
-                cp   b
-                jr   nz, .no
-                inc  hl
+                inc  l                         ; RD_EXITS
                 ld   a, (hl)
-                scf
+                and  d
+                ret  z                         ; CF = 0 (and)
+                ld   b, 0
+                ld   a, d
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, a                      ; RDX_L -> RDX_LS1, RDX_R -> RDX_RS1
+                and  (hl)
+                jr   z, .s0
+                inc  b
+.s0:            ld   a, (CUR_ROOM)
+                dec  d
+                jr   nz, .rt
+                dec  a                         ; left: the edge is r-1's right edge
+.rt:            ld   e, a                      ; E = m - (m div 3), m = edge's left room
+                ld   d, a
+.g:             sub  GRID_W
+                jr   c, .x
+                dec  e
+                jr   .g
+.x:             ld   a, d                      ; neighbour: left = m, right = m + 1
+                ld   hl, CUR_ROOM
+                cp   (hl)
+                jr   nz, .n                    ; left (m = r - 1)
+                inc  a
+.n:             scf
                 ret
-.no:            or   a
+                ASSERT RDX_L == 1 && RDX_R == 2 && RDX_LS1 == RDX_L << 4 && RDX_RS1 == RDX_R << 4
+                ASSERT EX_LEFT == RDX_L && EX_RIGHT == RDX_R
+
+; exit_h — A = EX_LEFT / EX_RIGHT, B = storey. CF = 1 if open; A = dest.
+; Clobbers: A, BC, DE, HL
+exit_h:
+                ld   c, b
+                call room_side
+                ret  nc
+                ld   e, a
+                ld   a, b
+                cp   c
+                ld   a, e
+                scf
+                ret  z
+                or   a                         ; another storey: CF = 0
                 ret
 
 ; map_cell — HL = map(TMP1 page) + B*32 + C (build_room_map, potion_pickup:
@@ -542,12 +598,10 @@ try_climb:
                 ld   a, b
                 or   a
                 jr   nz, .mid
-                call cur_room_desc             ; {x,0}: up-exit (player only)
-                ld   de, RD_EXU_D
-                add  hl, de
-                ld   a, (hl)
-                cp   EXIT_NONE
-                jr   z, .no
+                ld   a, RDX_U                  ; {x,0}: the up-exit (player only;
+                call .vexit                    ; ARR is a {c,0} without an exit)
+                jr   nz, .no
+                sub  GRID_W                    ; r - 3
                 ld   (EXIT_DEST), a
                 ld   a, EX_UP
                 ld   (EXIT_KIND), a
@@ -565,12 +619,10 @@ try_climb:
                 ld   a, b
                 cp   STOREY_COUNT
                 jr   nz, .mid
-                call cur_room_desc             ; {x,2}: down-exit
-                ld   de, RD_EXD_D
-                add  hl, de
-                ld   a, (hl)
-                cp   EXIT_NONE
-                jr   z, .no
+                ld   a, RDX_D                  ; {x,2}: the down-exit (the level
+                call .vexit                    ; exit EXITCOL: B3B-12)
+                jr   nz, .no
+                add  a, GRID_W                 ; r + 3
                 ld   (EXIT_DEST), a
                 ld   a, EX_DOWN
                 ld   (EXIT_KIND), a
@@ -599,6 +651,26 @@ try_climb:
                 ld   (CLIMB_BLK), a            ; try_player_turn makes it a wait
                 xor  a                         ; CF = 0
                 ret
+.vexit:         ; A = RDX_U / RDX_D, C = x: Z = that exit exists and its
+                ; shaft col (RD_UPCOL / RD_DNCOL) == x; A = CUR_ROOM then.
+                ; Clobbers: E, HL
+                ld   e, a
+                call cur_room_desc
+                inc  l                         ; RD_EXITS
+                ld   a, (hl)
+                and  e
+                xor  e                         ; Z iff the exit bit is set
+                ret  nz
+                inc  l                         ; RD_UPCOL
+                bit  RDX_D_BIT, e
+                jr   z, .vu
+                inc  l                         ; RD_DNCOL
+.vu:            ld   a, (hl)
+                cp   c
+                ret  nz
+                ld   a, (CUR_ROOM)
+                ret
+                ASSERT RD_EXITS == 1 && RD_UPCOL == 2 && RD_DNCOL == 3
 
 ;------------------------------------------------------------------------------
 ; try_horizontal — IX = player, D = dx. Attack (bump) or move / exit.
@@ -1172,43 +1244,35 @@ ai_monster:
                 ld   e, 0
                 jp   try_step_face
 
-; nearest_ladder — nearest segment with storey B in the current room to IX.x.
+; nearest_ladder — nearest segment with storey B in the current room to IX.x
+; (descriptor order RD_UPCOL..RD_LAD2; a tie keeps the first, as the PROTO
+; list did: rooms A-D keep LAD1/LAD2 in their old list order).
 ; Out: A = col or $FF.  Preserves B.  Clobbers: A, C, DE, HL
 nearest_ladder:
-                push bc
                 call cur_room_desc
-                ld   de, RD_LADDERS
-                add  hl, de
-                ld   c, (hl)
-                inc  hl
-                ld   a, $FF
-                ld   (TMP5), a                 ; best col
-                ld   (TMP7), a                 ; best dist
-                inc  c
-.l:             dec  c
-                jr   z, .done
-                ld   e, (hl)                   ; col
-                inc  hl
-                ld   a, (hl)                   ; s
-                inc  hl
+                inc  l                         ; -> RD_EXITS; the loop pre-increments
+                ld   de, $FFFF                 ; D = best col, E = best dist
+.l:             inc  l
+                ld   a, l
+                and  RD_STRIDE - 1
+                cp   RD_LAD2 + 1
+                jr   nc, .done
+                call seg_storey
                 cp   b
                 jr   nz, .l
-                ld   a, e
+                ld   a, (hl)                   ; col
+                or   a
+                jr   z, .l                     ; none
+                ld   c, a
                 sub  (ix+E_X)
                 jr   nc, .p
                 neg
-.p:             ld   d, a
-                ld   a, (TMP7)
-                cp   d
-                jr   c, .l
-                jr   z, .l
-                ld   a, d
-                ld   (TMP7), a
-                ld   a, e
-                ld   (TMP5), a
+.p:             cp   e
+                jr   nc, .l                    ; not strictly nearer
+                ld   e, a
+                ld   d, c
                 jr   .l
-.done:          pop  bc
-                ld   a, (TMP5)
+.done:          ld   a, d
                 ret
 
 ; box_vs_ix — CF = 1 if box (C,B,D,E) overlaps IX's body.  Clobbers: A, HL
@@ -1625,8 +1689,9 @@ ai_flyer:
 ; decide. 0 = clear. Exit shafts count ({col,0} bottom, {col,2} top); a
 ; stacked shaft counts twice (harmless: only 0 / non-0 is used).
 ; Called once per flyer turn (ai_flyer) + once per reversal tried inside a box.
-; Preserves BC, DE, IX.  Clobbers: A, HL, TMP7.  ~330 T + ~75 T per segment
-; (~95 T for one of this storey).
+; B3B-8: the segments are the descriptor's 6 shaft / ladder col bytes
+; (seg_storey). Preserves BC, DE, IX.  Clobbers: A, HL.  ~0.6k T (6 col
+; bytes, ~95 T more for one of this storey)
 ;------------------------------------------------------------------------------
 flyer_lcost:
                 push bc
@@ -1634,29 +1699,22 @@ flyer_lcost:
                 ld   e, d                      ; E = w
                 call storey_ref                ; A = t (flyer: its band's storey)
                 ld   b, a
-                push de
-                call cur_room_desc             ; HL = descriptor (A, DE)
-                pop  de
-                ld   a, l
-                add  a, RD_LADDERS
-                ld   l, a
-                adc  a, h
-                sub  l
-                ld   h, a                      ; HL -> n_ladders
+                call cur_room_desc             ; HL = descriptor (A, HL)
+                inc  l                         ; -> RD_EXITS; the loop pre-increments
                 ld   d, 0                      ; D = overlap count
+.l:             inc  l
+                ld   a, l
+                and  RD_STRIDE - 1
+                cp   RD_LAD2 + 1
+                jr   nc, .done
                 ld   a, (hl)
-.l:             or   a
-                jr   z, .done
-                ld   (TMP7), a                 ; segments left
-                inc  hl
-                inc  hl                        ; -> s
-                ld   a, (hl)
+                or   a
+                jr   z, .l                     ; no segment
+                call seg_storey
                 sub  b
                 cp   2                         ; s == t or t + 1?
-                jr   nc, .n
-                dec  hl
+                jr   nc, .l
                 ld   a, (hl)                   ; col
-                inc  hl
                 sub  c                         ; k - x for k = col .. col+2:
                 cp   e                         ; inside the body iff < w
                 jr   nc, $+3                   ; (unsigned: k < x wraps high)
@@ -1669,8 +1727,6 @@ flyer_lcost:
                 cp   e
                 jr   nc, $+3
                 inc  d
-.n:             ld   a, (TMP7)
-                dec  a
                 jr   .l
 .done:          ld   a, d
                 pop  de
@@ -1837,47 +1893,46 @@ potion_pickup:
                 ret
 .take:          pop  de
                 pop  bc
-                push hl                        ; map cell: cleared only once the
-                push bc                        ; id is found (else it would vanish
-                ; potion id from the room list (col C, storey TMP4)   untracked)
-                call cur_room_desc
-                ld   de, RD_LADDERS
-                add  hl, de
-                ld   a, (hl)
-                add  a, a
-                inc  a
-                ld   e, a
-                ld   d, 0
-                add  hl, de                    ; -> potion count
-                ld   b, (hl)
-                inc  hl
-                ld   a, b
-                or   a
-                jr   z, .none                  ; empty list: djnz would run 256x
-.pl:            ld   a, (hl)                   ; id
-                inc  hl
-                ld   e, (hl)                   ; col
-                inc  hl
-                ld   d, (hl)                   ; s
-                inc  hl
-                push af
-                ld   a, e
-                cp   c
-                jr   nz, .pn
+                push hl                        ; map cell: cleared only once the entry
+                push bc                        ; is found (else it would vanish untracked)
+                ; B3B-8: its FLOOR_LIST entry (room CUR_ROOM, FL_S1 = storey TMP4,
+                ; col C) -> FL_EMPTY; POTIONS_TAKEN bit = the entry index (0..7:
+                ; the PROTO potion ids 0..3 are entries 0..3, new_game)
                 ld   a, (TMP4)
-                cp   d
+                rrca
+                ld   e, a                      ; E = FL_S1 or 0
+                ld   a, (CUR_ROOM)
+                or   e
+                ld   e, a                      ; E = the FL_ROOM byte to find
+                ld   hl, FLOOR_LIST
+                ld   b, FLOOR_MAX
+.pl:            ld   a, (hl)
+                cp   e
+                jr   nz, .pn
+                inc  l
+                ld   a, (hl)                   ; FL_COL
+                dec  l
+                cp   c
                 jr   z, .found
-.pn:            pop  af
+.pn:            ld   a, l
+                add  a, FL_STRIDE
+                ld   l, a
                 djnz .pl
-.none:          pop  bc                        ; map/list mismatch: leave the tile
+                pop  bc                        ; map/list mismatch: leave the tile
                 pop  hl
                 ret
-.found:         pop  af
+                ASSERT FL_ROOM == 0 && FL_COL == 1 && FL_S1 == $80 && (FLOOR_LIST & $FF) == 0
+                ASSERT FLOOR_MAX * FL_STRIDE <= 256
+.found:         ld   (hl), FL_EMPTY
+                ld   a, FLOOR_MAX
+                sub  b                         ; entry index
+                cp   8
+                jr   nc, .nobit                ; > 8 entries: no POTIONS_TAKEN bit
                 call bitmask
                 ld   hl, POTIONS_TAKEN
                 or   (hl)
                 ld   (hl), a
-                inc  (ix+E_POT)
+.nobit:         inc  (ix+E_POT)
                 pop  bc
                 pop  hl
                 ld   (hl), T_AIR
@@ -2001,9 +2056,14 @@ hud_room:
                 ld   c, 0
                 ld   hl, str_room
                 call print_str
-                ld   a, (CUR_ROOM)
-                add  a, 'A'
+                ld   a, (CUR_ROOM)             ; PROTO letter (B3B-8: grid ids A 0,
+                cp   ROOM_D                    ; B 1, D 3, C 4 -> 6 - r for D / C;
+                jr   c, .l                     ; HUD text until B3B-11)
+                neg
+                add  a, ROOM_D + ROOM_C - 1    ; D -> 3, C -> 2
+.l:             add  a, 'A'
                 jp   print_char_hud            ; A7: HUD tracking
+                ASSERT ROOM_A == 0 && ROOM_B == 1 && ROOM_D == 3 && ROOM_C == 4
 
 ; msg_begin — clear the message row; B/C = its first cell.  Clobbers: A, DE, HL
 msg_begin:

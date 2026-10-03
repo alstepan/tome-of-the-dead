@@ -224,86 +224,31 @@ nm_bat:         DB "BAT", 0
 nm_slime:       DB "SLIME", 0
 
 ;==============================================================================
-; ROOMS — prototype §8.2 re-authored for 2 storeys x 9 rows (B3B-3, game.md
-; §2.1). Same route, exits, potions and population; storeys mapped PROTO s2
-; -> s1 (bottom), s1 -> s0, s0 -> s0. Descriptor:
-;   DB exitL_storey, exitL_dest, exitR_storey, exitR_dest, exitU_dest, exitD_dest
-;   DB edgeL, edgeR                  ; B3B-5: EDGE_TAB index of the L / R exit
-;                                    ; (EDGE_NONE = no exit); the door state lives
-;                                    ; in EDGE_TAB, shared by both rooms
-;   DB pit_col, block                ; B3B-5: at RD_PITCOL / RD_BLOCK, the SAME
-;                                    ; offsets and formats as the 3B ROOM_DESC
-;                                    ; (level_defs.asm), so the pit / block code
-;                                    ; survives the B3B-8 descriptor switch
-;   DB n_ladders, (col, s)*          ; {col,0} = up-exit shaft (rows 0-7),
-;                                    ; {col,1} = internal (hole row 8, rows 8-16),
-;                                    ; {col,2} = down-exit hole (row 17)
-;   DB n_potions, (id, col, s)*      ; potion cell = (col, 9s+7)
-;   DB n_decor,   (tile, col, row)*
-; EXIT_NONE ($FF) = no exit. Room ids: 0=A 1=B 2=C 3=D. Same-storey ladder
-; footprints keep |c1 - c2| >= FEAT_GAP (7), the generator's rule.
+; ROOMS — prototype §8.2 on 2 storeys (B3B-3). B3B-8: rooms A-D are a PROTO
+; *level* in the 3B level state (ROOM_DESC / EDGE_TAB / FLOOR_LIST, written by
+; new_game from bank-3 proto_level, bank3.asm) and built by build_room_map v2
+; like any generated room. Room id = 3x3 grid cell r = gy*3 + gx:
 ;
-;   A (0,0) <-> B (1,0)       <-> = horizontal exit on storey 1 (bottom)
-;                 v              v = B's down-exit {24,2} -> C's up-exit {24,0}
-;   D (0,1) <-> C (1,1)
+;   A (0,0) r0 <-> B (1,0) r1       <-> = horizontal exit on storey 1 (bottom)
+;                    v                v = B's down-exit {24,2} -> C's up-exit {24,0}
+;   D (0,1) r3 <-> C (1,1) r4
 ;
-; B3B-5 features (so doors / pits / blocks run before the B3B-8 generator):
-;   A <-> B  door, starts OPEN (edge 0): the PROTO suites keep walking A -> B
-;            unchanged; W5/W7 close and re-open it.
-;   D <-> C  door, starts CLOSED (edge 2): the walkthrough bumps it open.
-;   B        pit p = 20 on the storey-0 floor (holes 20..22, caps 19 / 23;
-;            |p - 4|, |p - 11| >= FEAT_GAP): off the reference route.
-;   D        dead-end block, right edge of storey 0 (no exit there), 3 cols
-;            29..31, rubble at (28, 7): off the route (the hero climbs {22,1}
-;            and walks left).
-; Edge ids follow the 3B grid formula (level_defs.asm) for A (0,0), B (1,0),
-; D (0,1), C (1,1): A|B = e0, D|C = e2.
+; (the only placement with A|B, B over C, D|C: A = a, B = a+1, C = a+4,
+; D = a+3; a = 0). Edges A|B = e0, D|C = e2 (level_defs.asm formula).
+; B3B-5 features: A|B door starts OPEN, D|C door CLOSED (the walkthrough bumps
+; it), B pit p = 20 (storey 0, off the route), D dead-end block (right edge,
+; storey 0, cols 29..31, rubble (28, 7)). Potions = FLOOR_LIST entries 0..3
+; (POTIONS_TAKEN bit = entry index). Decor (A torch, D chest) = proto_decor.
 ;==============================================================================
-RD_EXL_S        EQU 0
-RD_EXL_D        EQU 1
-RD_EXR_S        EQU 2
-RD_EXR_D        EQU 3
-RD_EXU_D        EQU 4
-RD_EXD_D        EQU 5
-RD_EDGE_L       EQU 6               ; B3B-5 stand-in (B3B-8: e from the room id)
-RD_EDGE_R       EQU 7
-                                    ; 8 = RD_PITCOL, 9 = RD_BLOCK (level_defs.asm)
-RD_LADDERS      EQU 10
-                ASSERT RD_PITCOL == RD_EDGE_R + 1 && RD_BLOCK == RD_PITCOL + 1
-                ASSERT RD_LADDERS == RD_BLOCK + 1
-EDGE_NONE       EQU $FF
+ROOM_A          EQU 0
+ROOM_B          EQU 1
+ROOM_D          EQU 3
+ROOM_C          EQU 4
 EDGE_AB         EQU 0               ; A (0,0) | B (1,0): e = gy*2 + gx = 0
 EDGE_DC         EQU 2               ; D (0,1) | C (1,1): e = 2
 PIT_B           EQU 20              ; room B storey-0 pit, left hole col
+                ASSERT ROOM_B == ROOM_A + 1 && ROOM_C == ROOM_B + GRID_W && ROOM_D == ROOM_C - 1
                 ASSERT EDGE_AB < EDGES_H && EDGE_DC < EDGES_H
-
-ROOM_A          EQU 0
-ROOM_B          EQU 1
-ROOM_C          EQU 2
-ROOM_D          EQU 3
-
-room_tab:       DW room_a, room_b, room_c, room_d
-
-room_a:         DB EXIT_NONE, EXIT_NONE, 1, ROOM_B, EXIT_NONE, EXIT_NONE
-                DB EDGE_NONE, EDGE_AB, 0, 0
-                DB 2, 5, 1, 23, 1
-                DB 1, 0, 28, 0
-                DB 2, T_TORCH_T, 0, 14, T_TORCH_B, 0, 15
-room_b:         DB 1, ROOM_A, EXIT_NONE, EXIT_NONE, EXIT_NONE, ROOM_C
-                DB EDGE_AB, EDGE_NONE, PIT_B, 0
-                DB 3, 4, 1, 11, 1, 24, 2
-                DB 1, 1, 1, 0
-                DB 0
-room_c:         DB 1, ROOM_D, EXIT_NONE, EXIT_NONE, ROOM_B, EXIT_NONE
-                DB EDGE_DC, EDGE_NONE, 0, 0
-                DB 3, 24, 0, 24, 1, 6, 1
-                DB 1, 2, 29, 0
-                DB 0
-room_d:         DB EXIT_NONE, EXIT_NONE, 1, ROOM_C, EXIT_NONE, EXIT_NONE
-                DB EDGE_NONE, EDGE_DC, 0, RDB_RIGHT | 3   ; block: right edge, storey 0, 3 cols
-                DB 2, 22, 1, 8, 1
-                DB 1, 3, 17, 0
-                DB 4, T_CHEST_TL, 2, 6, T_CHEST_TR, 3, 6, T_CHEST_BL, 2, 7, T_CHEST_BR, 3, 7
 
 WIN_ROOM        EQU ROOM_D
 WIN_MAX_X       EQU 3               ; standing on storey 0 with x <= 3 (chest cols)

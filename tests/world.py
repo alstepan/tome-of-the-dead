@@ -31,8 +31,21 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
   W9  walkers never step onto x == p (rat patrol in B), flyers cross it (bat);
       at a closed door an opener (goblin) opens it spending its step, a
       non-opener (rat) and a flyer (bat) are blocked (try_step unit stubs).
+  B3B-8 (build_room_map v2 + level themes; rooms A-D are a PROTO level state
+  since B3B-8, W0/W3 compare their maps with tests/room_model.py, W4 knows the
+  row-17 ornament). Generated levels run through far3 level_gen +
+  level_load_tiles + room_show + present_full (stubs; B3B-12 wires play):
+  W11 per depth 1..8: floor / wall attrs == game.md §1.2, ids 32..63 (glyphs,
+      attrs, TILE_FLAGS) == the bank-7 slot, every room: map == model, floor
+      rows hold floor-class tiles only, both screens == map (+ ornament), all
+      playfield attrs legal for the depth.
+  W12 re-entry: 24 generated rooms built, left (another room shown), rebuilt:
+      ROOM_MAP, bank 5, screen 2 and the shadow byte-identical.
+  W12M 40 random (depth, seed, master): the Z80 block == levelgen.py and every
+      room's engine map == the model of levelgen.py's block (doors, pits,
+      blocks, arrival / exit shafts, 2nd ladders all seen); build T-states.
 
-Usage: ZRCP_PORT=10001 python3 tests/world.py [W1 W3 ...]
+Usage: ZRCP_PORT=10001 python3 tests/world.py [W1 W3 W11 ...]
 """
 import os
 import sys
@@ -42,35 +55,19 @@ sys.path.insert(0, HERE)
 _argv = sys.argv[1:]
 sys.argv = [sys.argv[0], "999"]               # keep game.py's item filter inert
 import game  # noqa: E402
+import room_model  # noqa: E402
 from game_lib import (Harness, S, EMU_ARGS, attr_at, cell_bytes, split_frame,  # noqa: E402
                       stand_y, is_standing, item_row, ladder_rows, ROOM_LADDERS,
+                      ROOM_A, ROOM_B, ROOM_C, ROOM_D, ROOM_LETTER,
                       STOREY_ROWS, STOREY_AIR, STOREY_COUNT, PLAY_ROWS, PANEL_ROW,
                       MAP_LEN, GS_PLAYING, GS_DEAD, K_KNIGHT, EF_LEFT, EF_ACTIVE,
                       EF_PLAYER, EF_HOSTILE, EF_PENDING)
 
 ONLY = {a.upper() for a in _argv}
-ROOMS = ("room_a", "room_b", "room_c", "room_d")
-EXIT_NONE = 0xFF
 
 
 def want(tag):
     return not ONLY or tag in ONLY
-
-
-def desc(p, r):
-    """Parsed PROTO descriptor (data.asm layout) of room r."""
-    a = S[ROOMS[r]]
-    b = p.z.read_memory(a, 64)
-    exits = dict(Ls=b[0], Ld=b[1], Rs=b[2], Rd=b[3], U=b[4], D=b[5],
-                 eL=b[S["RD_EDGE_L"]], eR=b[S["RD_EDGE_R"]],
-                 pit=b[S["RD_PITCOL"]], block=b[S["RD_BLOCK"]])
-    n = b[S["RD_LADDERS"]]
-    o = S["RD_LADDERS"] + 1
-    lad = [(b[o + 2 * i], b[o + 2 * i + 1]) for i in range(n)]
-    o += 2 * n
-    npot = b[o]
-    pots = [tuple(b[o + 1 + 3 * i:o + 4 + 3 * i]) for i in range(npot)]
-    return exits, lad, pots
 
 
 class W(game.T):
@@ -82,9 +79,7 @@ class W(game.T):
         if fr != comp:
             diff = [i for i in range(len(fr)) if fr[i] != comp[i]]
             bad.append((tag, "displayed != composed", len(diff), diff[0]))
-        rmap = self.z.read_memory(S["ROOM_MAP"], MAP_LEN)
-        glyphs = self.z.read_memory(S["TILE_GLYPHS"], S["TILE_IDS"] * 8)
-        attrs = self.z.read_memory(S["TILE_ATTRS"], S["TILE_IDS"])
+        tabs = self.bg_tables()
         covered = set()
         for s_ in range(16):
             e = self.ent(s_)
@@ -99,110 +94,239 @@ class W(game.T):
                 for c in range(32):
                     if (c, r) in covered:
                         continue
-                    t = rmap[r * 32 + c]
-                    if attr_at(f, c, r) != attrs[t] or cell_bytes(f, c, r) != glyphs[t * 8:t * 8 + 8]:
-                        cells.append((c, r, t))
+                    g, a = room_model.expected_cell(*tabs, c, r)
+                    if attr_at(f, c, r) != a or bytes(cell_bytes(f, c, r)) != g:
+                        cells.append((c, r, tabs[0][r * 32 + c]))
             if cells:
                 bad.append((tag, scr + " cells != ROOM_MAP", len(cells), cells[:4]))
         return bad
 
 
-def feature_cells(p, exits):
-    """B3B-5: {(col, row): tile} of the doors (EDGE_TAB state), the storey-0
-    pit and the dead-end block of a room (concept-screen §3.1, game.md §2.5,
-    level_defs.asm RD_BLOCK)."""
-    out = {}
-    edge = p.z.read_memory(S["EDGE_TAB"], S["EDGES_H"])
-    for side, c0 in (("L", 0), ("R", 32 - S["DOOR_COLS"])):
-        e, st = exits["e" + side], exits[side + "s"]
-        if e >= S["EDGES_H"] or not edge[e] & S["EG_DOOR"]:
-            continue
-        top = STOREY_ROWS * st
-        out[(c0, top)] = out[(c0 + 1, top)] = S["T_BRICK"]
-        out[(c0, top + 1)], out[(c0 + 1, top + 1)] = S["T_DOOR_ARCH_L"], S["T_DOOR_ARCH_R"]
-        lock = edge[e] & (S["EG_LOCK"] | S["EG_SEAL"])
-        for row in range(top + 2, top + STOREY_AIR):
-            if edge[e] & S["EG_OPEN"]:                # B10: open = the jambs
-                out[(c0, row)], out[(c0 + 1, row)] = S["T_DOOR_JAMB_L"], S["T_DOOR_JAMB_R"]
-            else:
-                out[(c0, row)] = S["T_DOOR_L"]
-                out[(c0 + 1, row)] = S["T_DOOR_LOCK"] if lock else S["T_DOOR_R"]
-    pit = exits["pit"]
-    if pit:
-        f0 = STOREY_AIR
-        out[(pit - 1, f0)], out[(pit + 3, f0)] = S["T_PIT_L"], S["T_PIT_R"]
-        for c in range(pit, pit + 3):
-            out[(c, f0)] = S["T_AIR"]
-    blk = exits["block"]
-    w = blk & S["RDB_WMASK"]
-    if w:
-        st = 1 if blk & S["RDB_S1"] else 0
-        cols = range(32 - w, 32) if blk & S["RDB_RIGHT"] else range(w)
-        for c in cols:
-            for row in range(STOREY_ROWS * st, STOREY_ROWS * st + STOREY_AIR):
-                out[(c, row)] = S["T_BRICK"]
-            out[(c, STOREY_ROWS * st + STOREY_AIR)] = S["T_WALLF"]
-        out[((31 - w) if blk & S["RDB_RIGHT"] else w, STOREY_ROWS * st + STOREY_AIR - 1)] = S["T_RUBBLE"]
-    return out
-
-
 def map_structure(p, r):
-    """W0: the engine-built ROOM_MAP of room r (CUR_ROOM) against its descriptor."""
-    T = {k: S[k] for k in ("T_AIR", "T_PLAT", "T_BRICK", "T_WALLF", "T_LAD_L", "T_HOLE_L",
-                           "T_POTION", "T_END_L", "T_END_R")}
-    m = p.z.read_memory(S["ROOM_MAP"], MAP_LEN)
-    exits, lad, pots = desc(p, r)
-    cell = lambda c, row: m[row * 32 + c]
-    bad = []
-    ladder_cells = {}
-    for col, s in lad:
-        for row in ladder_rows(s):
-            for k in range(3):
-                floor = (row + 1) % STOREY_ROWS == 0
-                ladder_cells[(col + k, row)] = (T["T_HOLE_L"] if floor else T["T_LAD_L"]) + k
-    taken = p.rb("POTIONS_TAKEN")
-    pot_cells = {(col, item_row(s)) for pid, col, s in pots if not taken & (1 << pid)}
-    special = feature_cells(p, exits)
-    open_rows = {0: set(), 31: set()}
-    for side, col in (("L", 0), ("R", 31)):
-        s = exits[side + "s"]
-        if s != EXIT_NONE:
-            open_rows[col] = set(range(STOREY_ROWS * s, STOREY_ROWS * s + STOREY_AIR))
-    for row in range(PLAY_ROWS):
-        floor = (row + 1) % STOREY_ROWS == 0
-        for c in range(32):
-            t = cell(c, row)
-            if (c, row) in special:
-                if t != special[(c, row)]:
-                    bad.append((r, c, row, t, special[(c, row)], "B3B-5 feature"))
+    """W0 / W3 / W5 / W8 (B3B-8): the engine-built ROOM_MAP of room r (CUR_ROOM)
+    == the spec model of room r (tests/room_model.py render_room) over the
+    level state in memory (descriptors, EDGE_TAB door states, FLOOR_LIST)."""
+    m = p.z.read_memory(S["ROOM_MAP"], MAP_LEN)[:32 * PLAY_ROWS]
+    want = room_model.render_room(room_model.read_block(p), r)
+    return [(r, i % 32, i // 32, m[i], want[i]) for i in range(len(want)) if m[i] != want[i]]
+
+
+# ---------------------------------------------------------------------------
+# B3B-8 (W11 / W12 / W12M): generated levels through the real engine path.
+# A stub (free low RAM above LOWRAM_END_3B) runs far3 level_gen +
+# level_load_tiles, then room_show + present_full per room (the B3B-12 level
+# entry, not wired into play yet), or only far3 build_room_map (T-states).
+# ---------------------------------------------------------------------------
+STUB_ORG = S["LOWRAM_END_3B"]
+
+
+def w16(v):
+    return [v & 255, v >> 8]
+
+
+def run_code(p, code, limit=4000000):
+    """Run raw Z80 at STUB_ORG under DI up to its end (jr $). -> (ok, T)."""
+    code = bytes(code) + b"\x18\xfe"
+    end = STUB_ORG + len(code) - 2
+    p.z.cmd("write-memory %d %s" % (STUB_ORG, " ".join(str(b) for b in code)))
+    p.z.cmd("set-breakpoint 3 PC=%d" % end)
+    p.extra_probes = {end}
+    p.z.cmd("set-register PC=%d" % STUB_ORG)
+    p.z.cmd("reset-tstates-partial")
+    p.z.cmd("run %d" % limit)
+    ts = int(p.z.cmd("get-tstates-partial"))
+    ok = p.pc() == end
+    p.z.cmd("set-breakpoint 3")
+    p.extra_probes = set()
+    return ok, ts
+
+
+def head():
+    return [0xF3, 0x31] + w16(S["WORKSTORE_TOP"])             # di ; ld sp,WORKSTORE_TOP
+
+
+def gen_level(p, depth, seed, master=0):
+    """Z80 level_gen (far3) + level_load_tiles. -> (ok, T gen, T tiles, block)."""
+    p.z.cmd("write-memory %d %d %d" % (S["LVL_SEED"], seed & 255, seed >> 8))
+    p.z.cmd("write-memory %d %d %d" % (S["MASTER_SEED"], master & 255, master >> 8))
+    ok1, t1 = run_code(p, head() + [0x3E, depth, 0x21] + w16(S["level_gen"]) + [0xCD] + w16(S["far3"]))
+    ok2, t2 = run_code(p, head() + [0x3A] + w16(S["LVL_DEPTH"]) + [0xCD] + w16(S["level_load_tiles"]))
+    return ok1 and ok2, t1, t2, room_model.read_block(p)
+
+
+def build_only(p, r):
+    """far3 build_room_map (room r -> ROOM_MAP). -> (ok, T, map)."""
+    ok, t = run_code(p, head() + [0x3E, r, 0x16, S["ROOM_MAP"] >> 8, 0x21] + w16(S["build_room_map"])
+                     + [0xCD] + w16(S["far3"]))
+    return ok, t, bytes(p.z.read_memory(S["ROOM_MAP"], 32 * PLAY_ROWS))
+
+
+def show_room(p, r):
+    """room_show + present_full (bank 5, shadow, screen 2). -> (ok, T)."""
+    return run_code(p, head() + [0x3E, r, 0xCD] + w16(S["room_show"]) + [0xCD] + w16(S["present_full"]))
+
+
+def bank7(p, addr, n):
+    p.z.cmd("set-memory-zone 0")
+    try:
+        return bytes(p.z.read_memory(7 * 16384 + addr - 0xC000, n))
+    finally:
+        p.z.cmd("set-memory-zone -1")
+
+
+def snapshot(p):
+    """ROOM_MAP + bank-5 screen + screen 2 + the shadow's rows 0-17."""
+    sh = bank7(p, S["SHADOW_BITMAP"], 6144) + bank7(p, S["SHADOW_ATTR"], 32 * PLAY_ROWS)
+    return (bytes(p.z.read_memory(S["ROOM_MAP"], 32 * PLAY_ROWS)), bytes(p.composed_frame()),
+            bytes(p.frame()), sh)
+
+
+def present_rooms(blk):
+    return [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]]
+
+
+def run_gen_suites(p, check):
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
+    import levelgen as G
+    from game_lib import SNA_RAM
+    T = room_model.T
+    worst = {}
+
+    def note(k, v, tag):
+        if v > worst.get(k, (0, ""))[0]:
+            worst[k] = (v, tag)
+
+    p.boot(K_KNIGHT)
+    # ---------------- W11: per-depth theme + floor-row legality ------------
+    if want("W11"):
+        for d in range(1, 9):
+            seed = (0x2B3B * d) & 0xFFFF
+            ok, tg, tt, blk = gen_level(p, d, seed, master=d)
+            check(f"W11 D{d}: level_gen + level_load_tiles ran, block == levelgen.py",
+                  ok and blk == G.generate(d, seed, d), (ok, d, seed))
+            note("level_load_tiles", tt, f"D{d}")
+            fl, wl = room_model.THEME[d]
+            attrs = p.z.read_memory(S["TILE_ATTRS"], S["TILE_IDS"])
+            glyphs = p.z.read_memory(S["TILE_GLYPHS"], S["TILE_IDS"] * 8)
+            flags = p.z.read_memory(S["tile_flags"], S["TILE_IDS"])
+            check(f"W11 D{d}: floor ids attr == ATTR_FLOOR {fl:#04x}, wall ids == ATTR_WALL {wl:#04x}",
+                  all(attrs[T[k]] == fl for k in room_model.FLOOR_IDS)
+                  and all(attrs[T[k]] == wl for k in room_model.WALL_IDS),
+                  [hex(attrs[T[k]]) for k in room_model.FLOOR_IDS + room_model.WALL_IDS])
+            slot = d - 1
+            so = 7 * 16384 + (S["TSET_LO"] if slot < 4 else S["TSET_HI"]) - 0xC000 + (slot & 3) * S["TSET_STRIDE"]
+            sl = SNA_RAM[so:so + S["TSET_STRIDE"]]
+            check(f"W11 D{d}: ids 32..63 glyphs / attrs / TILE_FLAGS == the bank-7 slot {slot}",
+                  (bytes(glyphs[256:]), bytes(attrs[32:]), bytes(flags[32:]))
+                  == (sl[:256], sl[256:288], sl[288:320]), "")
+            floor_cls = {T[k] for k in ("T_PLAT", "T_WALLF", "T_END_L", "T_END_R", "T_HOLE_L",
+                                        "T_HOLE_M", "T_HOLE_R", "T_GRATE", "T_AIR")}
+            legal = {fl, wl, S["ATTR_AIR"], S["ATTR_LADDER"], S["ATTR_DOOR"], S["ATTR_GRATE"],
+                     S["ATTR_POTION"]}
+            for r in present_rooms(blk):
+                ok, tb, m = build_only(p, r)
+                note("build_room_map", tb, f"D{d} r{r}")
+                want_m = room_model.render_room(blk, r)
+                bad = [(i % 32, i // 32, m[i], want_m[i]) for i in range(len(want_m)) if m[i] != want_m[i]]
+                check(f"W11 D{d} r{r}: map == the spec model", ok and not bad, bad[:4])
+                ok, ts = show_room(p, r)
+                note("room_show + present_full", ts, f"D{d} r{r}")
+                rows = [(c, row, m[row * 32 + c]) for row in (S["FLOOR_ROW0"], S["FLOOR_ROW1"])
+                        for c in range(32) if m[row * 32 + c] not in floor_cls]
+                check(f"W11 D{d} r{r}: floor rows 8 / 17 hold only floor-class tiles (no decor)",
+                      ok and not rows, rows[:4])
+                pit_air = [c for c in range(32) if m[S["FLOOR_ROW1"] * 32 + c] == T["T_AIR"]]
+                check(f"W11 D{d} r{r}: no AIR in row 17 (pits are storey-0 only)", not pit_air, pit_air[:3])
+                comp, disp = p.composed_frame(), p.frame()
+                tabs = p.bg_tables()
+                badc, bada = [], []
+                for row in range(PLAY_ROWS):
+                    for c in range(32):
+                        g, a = room_model.expected_cell(*tabs, c, row)
+                        for f in (comp, disp):
+                            if attr_at(f, c, row) != a or bytes(cell_bytes(f, c, row)) != g:
+                                badc.append((c, row))
+                            if attr_at(f, c, row) not in legal:
+                                bada.append((c, row, hex(attr_at(f, c, row))))
+                        if row in (S["FLOOR_ROW0"], S["FLOOR_ROW1"]) and \
+                                m[row * 32 + c] in (T["T_PLAT"], T["T_WALLF"], T["T_END_L"], T["T_END_R"]) \
+                                and a != fl:
+                            bada.append((c, row, "floor attr", hex(a)))
+                check(f"W11 D{d} r{r}: both screens == map tiles (+ row-17 ornament)", not badc, badc[:4])
+                check(f"W11 D{d} r{r}: playfield attrs legal for D{d} (floor = ATTR_FLOOR)", not bada, bada[:4])
+            # the lair's level exit with the grate CLOSED (3B always opens it,
+            # game.md §1.4; the closed branch is the 3F boss rule): T_GRATE x 3
+            lair = blk[S["LVL_LAIR"] - S["LVL_STATE"]]
+            fo = S["LVL_FLAGS"] - S["LVL_STATE"]
+            p.wb(S["LVL_FLAGS"], blk[fo] & ~S["LF_GRATE_OPEN"] & 255)
+            ok, _, m = build_only(p, lair)
+            closed = bytearray(blk)
+            closed[fo] &= ~S["LF_GRATE_OPEN"] & 255
+            want_m = room_model.render_room(bytes(closed), lair)
+            xc = room_model.field(blk, lair, "RD_EXITCOL")
+            check(f"W11 D{d} lair r{lair}: grate closed -> T_GRATE over the exit hole, map == model",
+                  ok and m == bytes(want_m) and xc and m[S["FLOOR_ROW1"] * 32 + xc] == T["T_GRATE"],
+                  (ok, xc))
+            p.wb(S["LVL_FLAGS"], blk[fo])
+    # ---------------- W12: re-entry byte-identical ------------------------
+    if want("W12"):
+        n = 0
+        rng = __import__("random").Random(0xB3B8)
+        while n < 24:
+            d = 1 + n % 8
+            seed = rng.randrange(65536)
+            ok, _, _, blk = gen_level(p, d, seed)
+            rooms = present_rooms(blk)
+            for r in rooms[:3]:
+                other = rooms[-1] if rooms[-1] != r else rooms[0]
+                ok1, _ = show_room(p, r)
+                a = snapshot(p)
+                ok2, _ = show_room(p, other)
+                ok3, _ = show_room(p, r)
+                b = snapshot(p)
+                check(f"W12 D{d} seed {seed:#06x} r{r} (via r{other}): re-entry == first entry "
+                      "(ROOM_MAP, bank 5, screen 2, shadow)",
+                      ok and ok1 and ok2 and ok3 and a == b,
+                      [i for i in range(4) if a[i] != b[i]])
+                n += 1
+    # ---------------- W12M: engine rooms == the spec model, many seeds -----
+    if want("W12M"):
+        rng = __import__("random").Random(0x12B)
+        nroom = bad_n = 0
+        feats = dict(doors=0, pits=0, blocks=0, arr=0, exit=0, lad2=0)
+        for i in range(40):
+            d, seed, master = rng.randint(1, 8), rng.randrange(65536), rng.randrange(65536)
+            want_blk = G.generate(d, seed, master)
+            ok, _, _, blk = gen_level(p, d, seed, master)
+            if not ok or blk != want_blk:
+                check(f"W12M d{d} seed {seed:#06x}: Z80 block == levelgen.py", False, ok)
                 continue
-            if (c, row) in ladder_cells:
-                want_t = ladder_cells[(c, row)]
-            elif (c, row) in pot_cells:
-                want_t = T["T_POTION"]
-            elif c in (0, 31):
-                want_t = T["T_AIR"] if row in open_rows[c] else (T["T_WALLF"] if floor else T["T_BRICK"])
-                if not floor and t in (S["T_TORCH_T"], S["T_TORCH_B"]):
-                    continue                     # decor on a wall cell (room A)
-            elif floor:
-                want_t = (T["T_PLAT"], T["T_END_L"], T["T_END_R"])
-            else:
-                want_t = None                    # air band: air or decor
-            if isinstance(want_t, tuple):
-                if t not in want_t:
-                    bad.append((r, c, row, t, "floor"))
-            elif want_t is not None and t != want_t:
-                bad.append((r, c, row, t, want_t))
-            if not floor and want_t is None and t in (T["T_PLAT"], T["T_WALLF"]):
-                bad.append((r, c, row, t, "floor tile in an air row"))
-    # holes only in floor rows and only under a ladder; the down-exit hole only
-    # in row 17 and only when the room has a down exit
-    for col, s in lad:
-        if s == STOREY_COUNT and exits["D"] == EXIT_NONE:
-            bad.append((r, "down-exit hole without a D exit", col))
-        if s == 0 and exits["U"] == EXIT_NONE:
-            bad.append((r, "up-exit shaft without a U exit", col))
-    return bad
+            for r in present_rooms(want_blk):
+                ok, tb, m = build_only(p, r)
+                note("build_room_map", tb, f"D{d} seed {seed:#06x} r{r}")
+                want_m = room_model.render_room(want_blk, r)
+                nroom += 1
+                bad = [(j % 32, j // 32, m[j], want_m[j]) for j in range(len(want_m)) if m[j] != want_m[j]]
+                if bad or not ok:
+                    bad_n += 1
+                    check(f"W12M D{d} seed {seed:#06x} r{r}: engine map == model(levelgen.py)", False, bad[:4])
+                fld = lambda k: room_model.field(want_blk, r, k)
+                feats["pits"] += bool(fld("RD_PITCOL"))
+                feats["blocks"] += bool(fld("RD_BLOCK") & 3)
+                feats["arr"] += bool(fld("RD_ARRCOL"))
+                feats["exit"] += bool(fld("RD_EXITCOL"))
+                feats["lad2"] += bool(fld("RD_LAD2"))
+                feats["doors"] += sum(1 for side in ("L", "R")
+                                      if fld("RD_EXITS") & S["RDX_" + side]
+                                      and want_blk[room_model.OFF_EDGE + room_model.edge_index(r, side)]
+                                      & S["EG_DOOR"])
+        print(f"[info] W12M: {nroom} rooms of 40 levels, features seen {feats}", flush=True)
+        check(f"W12M: every built room == the model ({nroom} rooms, every feature kind seen)",
+              bad_n == 0 and nroom > 250 and all(feats.values()), (bad_n, nroom, feats))
+    if worst:
+        print("[info] B3B-8 measured (DI, contended): " + ", ".join(
+            f"{k} worst {v[0]} T ({v[1]})" for k, v in worst.items()), flush=True)
+    p.load()
 
 
 def main():
@@ -229,10 +353,11 @@ def main():
         kw, kh = game.body(p, K_KNIGHT)          # from kind_tab (after the load)
         # ---------------- W0 rooms ----------------------------------------
         if want("W0") or want("W3"):
-            for r in range(4):
-                _, lad, _ = desc(p, r)
-                check(f"W0 room {'ABCD'[r]} ladders == game_lib.ROOM_LADDERS", lad == ROOM_LADDERS[r],
-                      (lad, ROOM_LADDERS[r]))
+            blk = room_model.read_block(p)
+            for r in (ROOM_A, ROOM_B, ROOM_C, ROOM_D):
+                lad = room_model.segments(blk, r)
+                check(f"W0 room {ROOM_LETTER[r]} ladders (ROOM_DESC) == game_lib.ROOM_LADDERS",
+                      lad == ROOM_LADDERS[r], (lad, ROOM_LADDERS[r]))
             e = hero()
             check("W0 start: room A, x 2, standing on storey 1 (y = 9+8-h)",
                   (p.rb("CUR_ROOM"), e["X"], e["Y"]) == (0, 2, stand_y(1, kh)), (e["X"], e["Y"]))
@@ -313,7 +438,7 @@ def main():
                         and p.rb("GAME_STATE") == GS_PLAYING, 600)
                 p.settle()
                 e = hero()
-                check(f"W3 {tag}: CUR_ROOM {'ABCD'[dest]}, arrival (x, y) = {want_xy}",
+                check(f"W3 {tag}: CUR_ROOM {ROOM_LETTER[dest]}, arrival (x, y) = {want_xy}",
                       (p.rb("CUR_ROOM"), e["X"], e["Y"]) == (dest, *want_xy),
                       (p.rb("CUR_ROOM"), e["X"], e["Y"]))
                 check(f"W3 {tag}: exit took one turn", p.rw("TURN_COUNTER") - t0 == 1,
@@ -325,14 +450,14 @@ def main():
                 check(f"W3 {tag}: panel rows 18-22 unchanged by the transition",
                       rows_18_22(pn0) == rows_18_22(pn1), "")
                 bad = map_structure(p, dest)
-                check(f"W3 {tag}: room {'ABCD'[dest]} map structure", bad == [], bad[:4])
+                check(f"W3 {tag}: room {ROOM_LETTER[dest]} map == the spec model", bad == [], bad[:4])
                 w4(tag)
                 p.isolate()
 
             p.place(0, 32 - 1 - kw, y1)             # A, right edge of storey 1
             go("L", 1, "R exit A->B", (1, y1))
             p.place(0, 24, y1)                      # B: down-exit {24,2}
-            go("J", 2, "D exit B->C", (24, y0))
+            go("J", ROOM_C, "D exit B->C", (24, y0))
             go("K", 1, "U exit C->B", (24, y1))
             p.place(0, 1, y1)
             go("H", 0, "L exit B->A", (32 - 1 - kw, y1))
@@ -340,7 +465,7 @@ def main():
             p.place(0, 32 - 1 - kw, y1)
             go("L", 1, "R exit A->B (2)", (1, y1))
             p.place(0, 24, y1)
-            go("J", 2, "D exit B->C (2)", (24, y0))
+            go("J", ROOM_C, "D exit B->C (2)", (24, y0))
             # C's left exit is on storey 1, behind the D|C door (B3B-5: starts
             # closed): bump it open from x = 2 (1 turn), step into it, exit
             p.place(0, 2, y1, flags=EF_ACTIVE | EF_PLAYER | EF_LEFT)
@@ -351,8 +476,8 @@ def main():
                    p.rb(S["EDGE_TAB"] + S["EDGE_DC"]) & S["EG_OPEN"]) == (1, 2, S["EG_OPEN"]),
                   (p.rw("TURN_COUNTER") - t0, hero()["X"], p.rb(S["EDGE_TAB"] + S["EDGE_DC"])))
             p.turn("H")
-            go("H", 3, "L exit C->D", (32 - 1 - kw, y1))
-            go("L", 2, "R exit D->C", (1, y1))
+            go("H", ROOM_D, "L exit C->D", (32 - 1 - kw, y1))
+            go("L", ROOM_C, "R exit D->C", (1, y1))
 
         # ================= B3B-5: doors, pits, blocks, jump ================
         import budget                                 # Stepper: per-tick T-states
@@ -610,14 +735,14 @@ def main():
             p.isolate()
             p.place(0, 24, y1)
             p.turn("J")
-            p.until(lambda: p.rb("CUR_ROOM") == 2 and p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+            p.until(lambda: p.rb("CUR_ROOM") == ROOM_C and p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
             p.isolate()
             p.place(0, 2, y1, flags=HERO_R | EF_LEFT)
             for _ in range(3):
                 p.turn("H")
-            p.until(lambda: p.rb("CUR_ROOM") == 3 and p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+            p.until(lambda: p.rb("CUR_ROOM") == ROOM_D and p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
             p.isolate()
-            check("W8 reached room D", p.rb("CUR_ROOM") == 3, p.rb("CUR_ROOM"))
+            check("W8 reached room D", p.rb("CUR_ROOM") == ROOM_D, p.rb("CUR_ROOM"))
             p.place(0, 22, y0, flags=HERO_R)
             check("W8 jump refused: the dead-end block in the swept box", p.no_turn("K", "L"), "")
             p.place(0, 26, y0, flags=HERO_R)               # cols 26-28 (rubble at 28: decor)
@@ -691,6 +816,10 @@ def main():
                   (r, p.ent(SLOT_BATB)["X"]) == (0, 27), (r, p.ent(SLOT_BATB)["X"]))
             p.settle(4)
             w4("W9 bat at the door")
+
+        # ================= B3B-8: generated rooms + level themes ===========
+        if want("W11") or want("W12") or want("W12M"):
+            run_gen_suites(p, check)
 
         if worst:
             print("[info] B3B-5 measured: " + ", ".join(f"{k} {v[0]} T (input {v[1]})"
