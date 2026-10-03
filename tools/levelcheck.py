@@ -216,7 +216,7 @@ def check(b, stats=None):
     if not 2 <= fn <= 3: v.append(f"potion count {fn}")
     try:
         sx = G.start_x(b)
-        rm0 = G.Room(); rm0.up = rd(b, start, "RD_UPCOL"); rm0.arr = rd(b, start, "RD_ARRCOL")
+        rm0 = G.Room(); rm0.up = rd(b, start, "RD_UPCOL"); rm0.arr = 0     # arrival shaft exempt (hero stands at arr+1)
         rm0.lad1 = rd(b, start, "RD_LAD1"); rm0.lad2 = rd(b, start, "RD_LAD2")
         rm0.pit = rd(b, start, "RD_PITCOL"); rm0.block = rd(b, start, "RD_BLOCK")
         if not 2 <= sx <= 29 or any(not item_free(rm0, c) for c in (sx - 1, sx, sx + 1)):

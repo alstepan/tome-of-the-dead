@@ -415,7 +415,8 @@ def generate(depth, seed, master=0):
 
 def start_x(b):
     """Hero start col (storey 0, DFS-root room); a pure function of the block.
-    D1: 14; D2+: arrival col + 1. If that col is not 'legal' it moves to the
+    D1: 14; D2+: arrival col + 1 (arrival shaft exempt from the legality test).
+    If that col is not 'legal' (other footprints) it moves to the
     nearest legal col (distance d = 1.., left first). Legal: 2..29 and cols
     x-1, x, x+1 touch no storey-0 footprint (up/arr/ladders; pit holes+caps)
     and no storey-0 block (cols 0..w / 31-w..31)."""
@@ -423,8 +424,8 @@ def start_x(b):
         return b[OFF_DESC + r * D["RD_STRIDE"] + D[k]]
     st = b[H["LVL_START"]]
     depth = b[H["LVL_DEPTH"]]
-    spans = [(f, f + 2) for f in (rd(st, "RD_UPCOL"), rd(st, "RD_ARRCOL"),
-                                  rd(st, "RD_LAD1"), rd(st, "RD_LAD2")) if f]
+    # the arrival shaft itself is exempt (hero stands at arr+1 by rule, game.md 1.1)
+    spans = [(f, f + 2) for f in (rd(st, "RD_UPCOL"), rd(st, "RD_LAD1"), rd(st, "RD_LAD2")) if f]
     p = rd(st, "RD_PITCOL")
     if p:
         spans.append((p - 1, p + 3))
