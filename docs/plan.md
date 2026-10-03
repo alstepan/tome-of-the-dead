@@ -254,10 +254,10 @@ geometry. **Exit:** walk a generated level, doors open, decor animates, log show
 | B3B-5 ✅ fixes `7dc84c2` + hardening/B10 `af48101` (goldens `05eb7e6`), re-review: ship; user OK in Fuse — impl `355fd3e` (+ nits `6f55bb6`, goldens `cf85eaf`), review: fix-then-ship (flyer body-box vs door arch 🔴; PENDING bodies in close check; jump test gaps) — fixes in progress. Generator contract (→ levelcheck): a pit's landing cols p..p+2 on storey 1 must be floor with no ladder hole/block. UP+diagonal at a ladder foot now jumps (spec) | Collision, doors, pits, dead-end blocks | S | B3B-3 | W5–W9; mix ≤ 126k |
 | B3B-6 ✅ `556969a` (feat/3b-levelgen): 8,000/8,000; full 65,536×8 scan: max 4 restarts, 15 reseeds, 774 rnd calls | Python reference generator + invariant checker | J | B3B-1 contract | 1,000 seeds pass |
 | B3B-7 ✅ `8b62e17` (feat/3b-levelgen-z80; reviewed, fixes + pit geometry in): byte-exact Z80==Python (10,243 cases incl. 10k retry seeds), full 65,536×8 scan clean; ~1.7 KB bank 3; worst 1.36M T; pits/level 3.25 → 1.84 after the pit rules. **Exhausting d8 seeds now 55352–55354 → `level_gen` B=1/CF: B3B-12 loops until B=0.** B3B-12 also: LG_* scratch aliases GEN_SCRATCH → call before build_room_map, then alloc_* + gen_kind; check MASTER_SEED→LVL_SEED mixing; ≥1 Heal → 3E | Z80 level generator (bank 3) | J (→S) | B3B-1, -6 | W10: dump == levelgen.py, 20 seeds |
-| B3B-8 in progress (staff, feat/3b-world @ d4aa319: B3B-5 + B10 + merged generator & tiles) | `build_room_map` v2 + theme load | S | B3B-5, -7 | W11, W12 |
-| B3B-9 | Decor deriver (bank 3) | J | B3B-8 | W13 |
+| B3B-8 ✅ `0d5cb81` + goldens `3068162` + review fixes `8f6c0a4` (review: ship): room builder v2 in bank 3, PROTO rooms as a level state (ids A0 B1 D3 C4), tilesets in bank 7 via 2 new tape blocks; user OK in Fuse | `build_room_map` v2 + theme load | S | B3B-5, -7 | W11, W12 |
+| B3B-9 in progress (junior, feat/3b-decor) | Decor deriver (bank 3) | J | B3B-8 | W13 |
 | B3B-10 | `decor_tick` | S | B3B-8 | W14; flicker 0; mix ≤ 126k |
-| B3B-11 | Panel engine (`print6`, `log_push`, bars, `PANEL_DIRTY` queue) | S | B3B-3, -2 | W15; panel golden; mix ≤ 126k |
+| B3B-11 in progress (staff, feat/3b-world) | Panel engine (`print6`, `log_push`, bars, `PANEL_DIRTY` queue) | S | B3B-3, -2 | W15; panel golden; mix ≤ 126k |
 | B3B-12 (note from B3B-3 review: arriving via a shaft puts the hero inside a ladder-end box where a flyer is "fully boxed" and may attack every turn — keep flyer spawns away from the arrival shaft; designer to confirm) | Level change (`level_enter`: start + descend) | S | B3B-8, -11 | W16; `GEN_TRAP` 0 |
 | B3B-13 | Message strings via `log_push`; drop PROTO-only code | J | B3B-11, -5 | strings ≤ 32 chars (ASSERT) |
 
