@@ -403,11 +403,24 @@ def present_rooms(blk):
     return [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]]
 
 
-def invariants(blk, r, m):
+def wall_decor_ids(d):
+    """Tile ids of the wall-class decor objects (tools/decorgen.py: placed on
+    T_BRICK cells only, so also on block cells) of depth d, common + per level."""
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
+    import decorgen as DG
+    ids = set()
+    for name, base, w, h, fl in DG.COMMON + DG.level_objects()[d]:
+        if fl & DG.F_WALL:
+            ids |= set(range(base, base + w * h))
+    return ids
+
+
+def invariants(blk, r, m, d):
     """W12M (review B3B-8): order-free checks on an engine map, from the
     descriptor alone (room_model applies features in the Z80's order, so an
     ordering bug would match there): footprints never overlap, ladder / hole
-    cells exactly on the segments, block cells all wall, end caps only beside a
+    cells exactly on the segments, block cells all wall (B3B-9: or wall-class
+    decor of depth d, which the deriver puts on T_BRICK cells), end caps only beside a
     row-8 hole or at p-1 / p+3, door tiles only in cols 0-1 / 30-31 of a door's
     exit storey, row 17 only floor / hole / grate (ornament never on a hole)."""
     T = room_model.T
@@ -447,6 +460,7 @@ def invariants(blk, r, m):
     grate_open = blk[S["LVL_FLAGS"] - S["LVL_STATE"]] & S["LF_GRATE_OPEN"]
     xc = fld("RD_EXITCOL")
     holes8 = {c for (c, row) in lad if row == F0}
+    wall_ok = {T["T_BRICK"], T["T_WALLF"]} | wall_decor_ids(d)
     for row in range(PLAY_ROWS):
         for c in range(32):
             t = m[row * 32 + c]
@@ -459,7 +473,7 @@ def invariants(blk, r, m):
                 on_lad = False                 # the arrival shaft's rubble cap
             if (t in ladder_ids) != on_lad:
                 bad.append(("ladder cell", c, row, t))
-            if (c, row) in blkc and t not in (T["T_BRICK"], T["T_WALLF"]):
+            if (c, row) in blkc and t not in wall_ok:
                 bad.append(("block cell", c, row, t))
             if t in door_ids and (c, row) not in door:
                 bad.append(("door tile", c, row, t))
@@ -604,7 +618,7 @@ def run_gen_suites(p, check):
                 if bad or not ok:
                     bad_n += 1
                     check(f"W12M D{d} seed {seed:#06x} r{r}: engine map == model(levelgen.py)", False, bad[:4])
-                inv = invariants(want_blk, r, m)
+                inv = invariants(want_blk, r, m, d)
                 if inv:
                     bad_n += 1
                     check(f"W12M D{d} seed {seed:#06x} r{r}: order-free invariants", False, inv[:4])
