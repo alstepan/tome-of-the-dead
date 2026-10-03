@@ -398,11 +398,13 @@ box_solid:
                 pop  bc
                 ret
 
+                ; lead_cell's one-cell rule: every non-flyer kind has KT_BH <=
+                ; STOREY_AIR - DOOR_PLANK_DY. Checked for ALL kinds by a DUP
+                ; over the assembled kind_tab rows, right after kind_tab
+                ; (main.asm "walker height"): a new tall walker fails the build.
+
 ; desc_byte — A = the byte at offset A of the current room's descriptor.
 ; Clobbers: A, DE, HL.   ~170 T
-                ASSERT BH_K_KNIGHT <= STOREY_AIR - DOOR_PLANK_DY && BH_K_WIZARD <= STOREY_AIR - DOOR_PLANK_DY
-                ASSERT BH_K_SKELETON <= STOREY_AIR - DOOR_PLANK_DY && BH_K_GOBLIN <= STOREY_AIR - DOOR_PLANK_DY
-                ASSERT BH_K_RAT <= STOREY_AIR - DOOR_PLANK_DY && BH_K_SLIME <= STOREY_AIR - DOOR_PLANK_DY
 desc_byte:
                 push af
                 call cur_room_desc
@@ -1365,6 +1367,10 @@ try_step:
                 KFIELD KT_FLAGS
                 and  KF_FLYER
                 jr   z, .walk
+                ld   a, b                      ; flyer: the new box must end in
+                add  a, e                      ; the playfield (box_solid reads
+                cp   PLAY_ROWS + 1             ; ROOM_MAP rows y .. y+h-1)
+                jr   nc, .npop
                 call box_solid                 ; flyer: every cell of the new box
                 jr   c, .npop                  ; (arch / lintel of an open door, §9.1;
                 jr   .tpop                     ; doors never open for flyers); no pits

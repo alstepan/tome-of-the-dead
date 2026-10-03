@@ -254,11 +254,12 @@ T_WALL_DITHER   EQU 28              ; wall set (concept-screen §3.3)
 T_WALL_PATCH    EQU 29
 T_WALL_FADE     EQU 30
 T_CANDLES       EQU 31              ; animated (attr cycle)
-; small decor on retired PROTO ids (valid after B3B-13)
-T_COBWEB        EQU 11              ; was T_CHEST_TL
-T_CHAIN         EQU 12              ; was T_CHEST_TR
-T_SKULLS        EQU 13              ; was T_CHEST_BL
-T_MOSS          EQU 14              ; was T_CHEST_BR
+; B10 (user option B, designer 2026-10-03): open-door jambs on ids 11 / 14,
+; non-solid, ink $06; cobweb / moss move to the per-level sets.
+T_DOOR_JAMB_L   EQU 11              ; `#.#.....` x 8: the left arch's outer strokes, continued
+T_CHAIN         EQU 12              ; small decor (valid after B3B-13)
+T_SKULLS        EQU 13
+T_DOOR_JAMB_R   EQU 14              ; `.....#.#` x 8
 T_DRIP1         EQU 17              ; was T_ZAP1 (animated: glyph swap)
 T_DRIP2         EQU 18              ; was T_ZAP2
 ; T_POTION (10) stays while potions are a floor tile (3B stand-in); 10 is the

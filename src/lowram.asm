@@ -481,7 +481,7 @@ build_room_map:
 .door:          ; HL = descriptor, C = door col (0 / 30), D = exit-storey
                 ; offset, E = edge offset. A door edge: lintel WALL row 9s, arch
                 ; row 9s+1, planks 9s+2..9s+7 closed (T_DOOR_L / _R, _LOCK if
-                ; locked or sealed) or left AIR (open; .open cleared them)
+                ; locked or sealed) or the jambs T_DOOR_JAMB_L / _R (open, B10)
                 ld   b, d
                 push hl
                 ld   d, 0
@@ -515,8 +515,9 @@ build_room_map:
                 ld   (hl), T_DOOR_ARCH_L
                 inc  hl
                 ld   (hl), T_DOOR_ARCH_R
+                ld   d, T_DOOR_JAMB_R          ; open: jambs (B10)
                 bit  EG_OPEN_BIT, e
-                ret  nz
+                jr   nz, .dk
                 ld   d, T_DOOR_R
                 ld   a, e
                 and  EG_LOCK | EG_SEAL
@@ -525,7 +526,12 @@ build_room_map:
 .dk:            ld   e, DOOR_PLANK_H
 .dp:            inc  b
                 call map_cell
-                ld   (hl), T_DOOR_L
+                ld   a, d                      ; left col: jamb with the open
+                cp   T_DOOR_JAMB_R             ; door, else the plain plank
+                ld   a, T_DOOR_JAMB_L
+                jr   z, .dl
+                ld   a, T_DOOR_L
+.dl:            ld   (hl), a
                 inc  hl
                 ld   (hl), d
                 dec  e
@@ -700,7 +706,7 @@ door_find:
 
 ;------------------------------------------------------------------------------
 ; door_paint — the planks of the door at cols C, C+1, rows B .. B+5: A = 0
-; open (AIR) / else closed (T_DOOR_L / T_DOOR_R: never called on a locked
+; open (jambs T_DOOR_JAMB_L / _R, non-solid) / else closed (T_DOOR_L / T_DOOR_R: never called on a locked
 ; door). ROOM_MAP, the bank-7 clean-background shadow (shadow_rect), then
 ; PEND_DMG so the next render restores the 2 x 6 cells (the potion-pickup
 ; path; a closed door's cells are free of bodies, an opened one's too).
@@ -708,7 +714,7 @@ door_find:
 ;------------------------------------------------------------------------------
 door_paint:
                 or   a
-                ld   de, (T_AIR << 8) | T_AIR
+                ld   de, (T_DOOR_JAMB_L << 8) | T_DOOR_JAMB_R   ; open: the jambs (B10)
                 jr   z, .p
                 ld   de, (T_DOOR_L << 8) | T_DOOR_R
 .p:             push bc
@@ -1926,6 +1932,11 @@ init_tiles:
                 ld   de, TILE_ATTRS
                 ld   bc, T_INIT_N
                 ldir
+                ld   hl, TILE_ATTRS + T_CHEST_TL   ; B10: the PROTO chest's attrs
+                ld   b, 4                          ; (per-level ids 32..35)
+.ca:            ld   (hl), ATTR_CHEST
+                inc  l
+                djnz .ca
                 ld   hl, tile_src_tab
                 ld   b, TILE_SRC_N
 .ts:            push bc
@@ -1995,12 +2006,17 @@ init_tiles:
                 ld   a, T_CHEST_BR
                 ld   c, 4
                 jp   .pick
-.pick:          ; 8 bytes from HL with stride C into tile A
-                add  a, a
-                add  a, a
-                add  a, a
-                ld   e, a
-                ld   d, TILE_GLYPHS >> 8
+.pick:          ; 8 bytes from HL with stride C into tile A (any id 0..63)
+                push hl
+                ld   l, a
+                ld   h, 0
+                add  hl, hl
+                add  hl, hl
+                add  hl, hl
+                ld   de, TILE_GLYPHS
+                add  hl, de
+                ex   de, hl
+                pop  hl
                 ld   b, 8
                 push bc
                 ld   b, 0
@@ -2036,20 +2052,26 @@ gl_door_l:      DB $AD,$AD,$A0,$AF,$A0,$AD,$AD,$AD
 gl_door_r:      DB $B5,$B5,$05,$F5,$05,$B5,$B5,$B5
 gl_door_lock:   DB $B5,$B5,$05,$F5,$05,$8D,$75,$8D
 gl_rubble:      DB $00,$00,$00,$00,$10,$3A,$7D,$FF
+; B10 (user option B, designer 2026-10-03): open-door jambs (they continue
+; the arch glyphs' outer double stroke: arch L rows 6-7 `#.#.....`, arch R
+; `.....#.#`; the same arch on both room sides, so no mirroring) + the grate
+gl_jamb_l:      DB $A0,$A0,$A0,$A0,$A0,$A0,$A0,$A0
+gl_jamb_r:      DB $05,$05,$05,$05,$05,$05,$05,$05
+gl_grate:       DB $FF,$66,$66,$FF,$66,$66,$66,$FF
 
 ; TILE_ATTRS source (copied to the page-aligned RAM table at boot)
 tile_attr_src:  DB ATTR_AIR, ATTR_FLOOR, ATTR_WALL, ATTR_FLOOR
                 DB ATTR_LADDER, ATTR_LADDER, ATTR_LADDER
                 DB ATTR_LADDER, ATTR_LADDER, ATTR_LADDER
-                DB ATTR_POTION, ATTR_CHEST, ATTR_CHEST, ATTR_CHEST, ATTR_CHEST
+                DB ATTR_POTION, ATTR_DOOR, ATTR_AIR, ATTR_AIR, ATTR_DOOR  ; 11 / 14 jambs (B10)
                 DB ATTR_TORCH, ATTR_TORCH, ATTR_ZAP, ATTR_ZAP
                 DB ATTR_FLOOR, ATTR_FLOOR
                 ASSERT $ - tile_attr_src == T_COUNT
-                ; B3B-5: door ids 21-25, grate 26 (unused in 3B-5: no glyph), rubble 27
-                DB ATTR_DOOR, ATTR_DOOR, ATTR_DOOR, ATTR_DOOR, ATTR_DOOR, ATTR_AIR, ATTR_RUBBLE
+                ; B3B-5: door ids 21-25, grate 26 (B10 glyph; placed from B3B-8), rubble 27
+                DB ATTR_DOOR, ATTR_DOOR, ATTR_DOOR, ATTR_DOOR, ATTR_DOOR, ATTR_GRATE, ATTR_RUBBLE
 T_INIT_N        EQU $ - tile_attr_src
                 ASSERT T_INIT_N == T_RUBBLE + 1 && T_DOOR_ARCH_L == T_COUNT
-                ASSERT T_INIT_N <= TILE_COMMON  ; init_tiles/.pick/zap: id*8 < 256
+                ASSERT T_INIT_N <= TILE_COMMON  ; zap overlay: id*8 < 256 (.pick is 16-bit)
 
 ;------------------------------------------------------------------------------
 ; Tile glyph sources, stand-in rule: the artist's tile (banked sheet source,
@@ -2085,6 +2107,9 @@ tile_src_tab:
                 TSRC T_DOOR_R,  tiles_door_r,           gl_door_r
                 TSRC T_DOOR_LOCK, tiles_door_lock,      gl_door_lock
                 TSRC T_RUBBLE,  tiles_rubble,           gl_rubble
+                TSRC T_DOOR_JAMB_L, tiles_door_jamb_l,  gl_jamb_l
+                TSRC T_DOOR_JAMB_R, tiles_door_jamb_r,  gl_jamb_r
+                TSRC T_GRATE,   tiles_grate,            gl_grate
 TILE_SRC_N      EQU ($ - tile_src_tab) / 4
 
 ; bg_tiles_floor: the PLATFORM stand-in glyph (init_tiles only)

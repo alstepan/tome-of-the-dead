@@ -405,7 +405,7 @@ tile_flags:
                 DB TF_LADDER, TF_LADDER, TF_LADDER     ;  4-6 T_LAD_L/M/R
                 DB TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE ; 7-9 T_HOLE_*
                 DB 0                                   ; 10 T_POTION (floor item)
-                DB 0, 0, 0, 0                          ; 11-14 chest / cobweb, chain, skulls, moss
+                DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12-13 chain, skulls
                 DB TF_ANIM, TF_ANIM                    ; 15-16 T_TORCH_T/B
                 DB TF_ANIM, TF_ANIM                    ; 17-18 T_DRIP1/2 (PROTO zap: overlay only)
                 DB TF_FLOOR, TF_FLOOR                  ; 19-20 T_END_L/R = pit caps
@@ -441,6 +441,12 @@ kind_tab:
                 KROW KFID_KNIGHT, KFID_WIZARD, 0, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME   ; KT_FID0
                 KROW KFCNT_KNIGHT, KFCNT_WIZARD, 0, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME ; KT_FCNT
                 ASSERT $ - kind_tab == KT_MOD9
+                ; walker height (B3B-5 lead_cell, logic.asm): a non-flyer body
+                ; never reaches a door's arch / lintel rows. Reads the bytes
+                ; just assembled ({b}), so it covers every kind automatically.
+                DUP K_COUNT, n
+                ASSERT ({b kind_tab + KT_FLAGS + n} & KF_FLYER) || ({b kind_tab + KT_BH + n} <= STOREY_AIR - DOOR_PLANK_DY)
+                EDUP
                 ASSERT (KT_MOD9 >> 8) == ((KT_DIV9 + 23) >> 8)    ; feet_mod: one H for both
                 ASSERT (KT_FID0 >> 8) == (KT_FCNT >> 8)            ; gen_kind: one H for both
                 DUP 24, n

@@ -484,10 +484,14 @@ T_HOLE_L        EQU 7               ; ladder cells in a floor row
 T_HOLE_M        EQU 8
 T_HOLE_R        EQU 9
 T_POTION        EQU 10
-T_CHEST_TL      EQU 11
-T_CHEST_TR      EQU 12
-T_CHEST_BL      EQU 13
-T_CHEST_BR      EQU 14
+; B10: the PROTO chest (room D decor) moved off common ids 11-14 onto the
+; first per-level ids (blank until a level tileset loads; stand-in until
+; B3B-13 retires the chest / B3B-8 loads tilesets): ids 11 / 14 are the door
+; jambs now (level_defs.asm).
+T_CHEST_TL      EQU T_LVL_BASE + 0
+T_CHEST_TR      EQU T_LVL_BASE + 1
+T_CHEST_BL      EQU T_LVL_BASE + 2
+T_CHEST_BR      EQU T_LVL_BASE + 3
 T_TORCH_T       EQU 15
 T_TORCH_B       EQU 16
 T_ZAP1          EQU 17              ; overlay only (never in a room map)
@@ -533,6 +537,7 @@ JUMP_TICKS      EQU 14              ; tick 0 / 13 JUMP1 aligned, 1..12 JUMP2 (x 
 JUMP_RISE       EQU 2               ; swept box rows top-2 .. bottom
 ATTR_DOOR       EQU $06             ; door arch / planks (concept-screen §3.1)
 ATTR_RUBBLE     EQU ATTR_WALL       ; concept-screen §3.3 #12
+ATTR_GRATE      EQU $07             ; lair grate (B10 glyph)
 
 ; KFIELD off — A = kind_tab[kind(IX) + off].  Clobbers: A, HL   (~45 T)
 ; off is a KT_* constant: its page is folded into H at assembly time.

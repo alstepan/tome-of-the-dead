@@ -122,8 +122,8 @@ def feature_cells(p, exits):
         out[(c0, top + 1)], out[(c0 + 1, top + 1)] = S["T_DOOR_ARCH_L"], S["T_DOOR_ARCH_R"]
         lock = edge[e] & (S["EG_LOCK"] | S["EG_SEAL"])
         for row in range(top + 2, top + STOREY_AIR):
-            if edge[e] & S["EG_OPEN"]:
-                out[(c0, row)] = out[(c0 + 1, row)] = S["T_AIR"]
+            if edge[e] & S["EG_OPEN"]:                # B10: open = the jambs
+                out[(c0, row)], out[(c0 + 1, row)] = S["T_DOOR_JAMB_L"], S["T_DOOR_JAMB_R"]
             else:
                 out[(c0, row)] = S["T_DOOR_L"]
                 out[(c0 + 1, row)] = S["T_DOOR_LOCK"] if lock else S["T_DOOR_R"]
@@ -375,8 +375,10 @@ def main():
         def closed(pl, c0=32 - S["DOOR_COLS"]):
             return all(t == (S["T_DOOR_L"] if c == c0 else S["T_DOOR_R"]) for (c, _), t in pl.items())
 
-        def is_open(pl):
-            return all(t == S["T_AIR"] for t in pl.values())
+        def is_open(pl, c0=32 - S["DOOR_COLS"]):
+            """B10: an open door's opening rows show the jambs (non-solid)."""
+            return all(t == (S["T_DOOR_JAMB_L"] if c == c0 else S["T_DOOR_JAMB_R"])
+                       for (c, _), t in pl.items())
 
         def measured(tag, *keys):
             """One turn under budget.Stepper: worst tick, its read_turn_input."""
@@ -425,7 +427,7 @@ def main():
         if want("W5"):
             p.boot(K_KNIGHT)
             p.isolate()
-            check("W5 A|B door starts open (LINK|DOOR|OPEN), planks AIR in A",
+            check("W5 A|B door starts open (LINK|DOOR|OPEN), jambs in A (B10)",
                   (p.rb(e_ab), is_open(planks())) == (LINK | DOOR | OPEN, True), p.rb(e_ab))
             p.place(0, 27, y1, flags=HERO_R)          # adjacent: x + w = 30, facing it
             t0 = p.rw("TURN_COUNTER")
@@ -438,7 +440,7 @@ def main():
             t0 = p.rw("TURN_COUNTER")
             measured("W5 bump open (L)", "L")
             e = hero()
-            check("W5 bump opens it: 1 turn, no move, OPEN set, planks AIR",
+            check("W5 bump opens it: 1 turn, no move, OPEN set, jambs (B10)",
                   (p.rw("TURN_COUNTER") - t0, e["X"], p.rb(e_ab), is_open(planks()))
                   == (1, 27, LINK | DOOR | OPEN, True), (p.rw("TURN_COUNTER") - t0, e["X"], p.rb(e_ab)))
             p.settle()
@@ -449,8 +451,8 @@ def main():
             p.until(lambda: p.rb("CUR_ROOM") == 1 and p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
             p.settle()
             pl = planks(0)
-            check("W5 B after the exit: the shared door shows open (cols 0-1 AIR, arch, lintel)",
-                  is_open(pl) and p.rb(S["ROOM_MAP"] + 10 * 32) == S["T_DOOR_ARCH_L"]
+            check("W5 B after the exit: the shared door shows open (cols 0-1 jambs, arch, lintel)",
+                  is_open(pl, 0) and p.rb(S["ROOM_MAP"] + 10 * 32) == S["T_DOOR_ARCH_L"]
                   and p.rb(S["ROOM_MAP"] + 9 * 32 + 1) == S["T_BRICK"], pl)
             bad = map_structure(p, 1)
             check("W5 room B map structure (door open, pit)", bad == [], bad[:4])
