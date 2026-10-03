@@ -327,7 +327,7 @@ outweighing the +8 T per redrawn background cell of the 64-id glyph address.)
 
 | Range | Symbol | Contents |
 |-------|--------|----------|
-| `$8000..$A3CF` | `image_start`…`code_end` | HOT code + static tables (9,168 B incl. 157 B pad + the 64-B `tile_flags` before `kind_tab`; `ASSERT code_end <= FRT`). **Headroom (B3B-5): 560 B to `FRT` + 157 B pad = 717 B** for code/static tables (B3B-5 used 350 B of the 1,067: `tile_flags` 64, `cell_addr` / `cell_blocked` / `lead_cell` / `desc_byte` 57, terrain + pit + door hooks in `try_horizontal` / `try_step` ~85, jump chord + key C in `try_player_turn` / `sample_input` ~30, `M_FALL` / `M_JUMP` anim 83 + `jump_dy` 12, room descriptors +16; the rest of B3B-5 is bank-5 low RAM. Before: A7b rebased on the B8 rev 816 B to `FRT` + 251 B pad = 1,067 B; A7 review: 993 B; A7b: code −78 B net — the one-pass record render (−138 B) and the blit rewrite (−46 B) pay for the erase row stepping (+26), `stamp_rect` / the 16-bit blit entry patch (+19) and the present `.full8` path (+61); A6: 677 B; A7: 111 B after present / pmark / HUD tracking / in-place rect dedupe / paging +566 B; the review moved 1,062 B of cold code out — `build_room_map` 254 B to bank-5 low RAM, `new_game` + `init_ent_common` + `spawn_tab` and follower selection + arrival conflicts 794 B to bank 3, net of the `far3` call sites — and added the B8 flyer ladder-end rule +159 B and the bank-2 `map_cell` +21 B; the 2026-10-02 cross-or-leave flyer rule + blocked-climb wait: +4 B net), plus the 1,536 B free runtime RAM `$B200..$B7FF` below. Code bytes `$8000..kind_tab_pad` 8,193 (A7 review 8,271; A7 9,153; A6 8,587). `kind_tab` page-aligned at `$A100` (moves with the code: tests read it from the `.sym`), **2 pages** (`KT_SIZE` `$200`): 13 parallel **32-B** kind arrays (`K_MAX` 32; ids 0..8 used, 2 = Rogue hole) + `KT_MOD9`/`KT_DIV9` tables (n mod/div `STOREY_ROWS`, n = 0..23; B3B-3, were MOD7/DIV7 at the same offsets), `KT_END` `$1D0` → `$A2D0..$A2FF` 48 B spare in its page (resistances, 3F). No array crosses a page: `KFIELD` folds the page into `H`. `frame_tab` **4 B/fid** (`FT_COLS`, `FT_H`, `FT_OFFR`, `FT_OFFL`: only what the renderer reads; 68 fids = 272 B). `far3` / `restore_page` / `blit_keep` / `enter_select`: the bank-3 trampolines (48 B). |
+| `$8000..$A3CF` | `image_start`…`code_end` | HOT code + static tables (9,168 B incl. 111 B pad + the 64-B `tile_flags` before `kind_tab`; `ASSERT code_end <= FRT`). **Headroom (B3B-5 + review): 560 B to `FRT` + 111 B pad = 671 B** for code/static tables (B3B-5 used 396 B of the 1,067: `tile_flags` 64, `cell_addr` / `cell_blocked` / `lead_cell` / `desc_byte` 57, `box_solid` (flyer steps, jump swept box) 34, `LOCK_SHOWN` clear 3, terrain + pit + door hooks in `try_horizontal` / `try_step` ~85, jump chord + key C in `try_player_turn` / `sample_input` ~30, `M_FALL` / `M_JUMP` anim 83 + `jump_dy` 12, room descriptors +16; the rest of B3B-5 is bank-5 low RAM. Before: A7b rebased on the B8 rev 816 B to `FRT` + 251 B pad = 1,067 B; A7 review: 993 B; A7b: code −78 B net — the one-pass record render (−138 B) and the blit rewrite (−46 B) pay for the erase row stepping (+26), `stamp_rect` / the 16-bit blit entry patch (+19) and the present `.full8` path (+61); A6: 677 B; A7: 111 B after present / pmark / HUD tracking / in-place rect dedupe / paging +566 B; the review moved 1,062 B of cold code out — `build_room_map` 254 B to bank-5 low RAM, `new_game` + `init_ent_common` + `spawn_tab` and follower selection + arrival conflicts 794 B to bank 3, net of the `far3` call sites — and added the B8 flyer ladder-end rule +159 B and the bank-2 `map_cell` +21 B; the 2026-10-02 cross-or-leave flyer rule + blocked-climb wait: +4 B net), plus the 1,536 B free runtime RAM `$B200..$B7FF` below. Code bytes `$8000..kind_tab_pad` 8,193 (A7 review 8,271; A7 9,153; A6 8,587). `kind_tab` page-aligned at `$A100` (moves with the code: tests read it from the `.sym`), **2 pages** (`KT_SIZE` `$200`): 13 parallel **32-B** kind arrays (`K_MAX` 32; ids 0..8 used, 2 = Rogue hole) + `KT_MOD9`/`KT_DIV9` tables (n mod/div `STOREY_ROWS`, n = 0..23; B3B-3, were MOD7/DIV7 at the same offsets), `KT_END` `$1D0` → `$A2D0..$A2FF` 48 B spare in its page (resistances, 3F). No array crosses a page: `KFIELD` folds the page into `H`. `frame_tab` **4 B/fid** (`FT_COLS`, `FT_H`, `FT_OFFR`, `FT_OFFL`: only what the renderer reads; 68 fids = 272 B). `far3` / `restore_page` / `blit_keep` / `enter_select`: the bank-3 trampolines (48 B). |
 | `$A600..$AFFF` | `FRT` | frame runtime table (A6: moved from `$B200`): 16 B/fid (4 variants × bank,lo,hi), **`FRT_MAX` 160** (68 used); `FRT = P_ENTITIES − FRT_MAX × 16` |
 | `$B000..$B1FF` | `P_ENTITIES` | 16 slots × **32 B** (layout below); slot 0 = hero |
 | `$B200..$B7FF` | `BANK2_FREE` | the vacated A5 `FRT` (1,536 B, runtime RAM, not in the image/tape; `BANK2_FREE_END` = `SLOTREC`). **B3B-1 (D8): fully reserved** — `FONT6` `$B200..$B4FF` (6×8 text font, 96 × 8 = 768 B, boot copy target, B3B-11) + `HOT_COPY` `$B500..$B7FF` (768 B, boot-copied hot code, risk R2). Unused until those tasks |
@@ -370,8 +370,8 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6B40` | `GEN_MIR` | 512 | generator: mirrored frame (`LOWRAM_END` = `LOWRAM_FREE_END` `$6D40`) |
 | `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+10 spare), `ROOM_DESC` 9 × 16, 16 spare, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts". Runtime only (not on tape); unused until B3B-7 |
 | `$6E80..$6EBF` | `ORN_GLYPHS` | 64 | B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because the transition scrolls redraw row 17 without bank 3. `LOWRAM_END_3B` = `LOWRAM_FREE_END` = `$6EC0` |
-| `$6EC0..$7289` | free | 970 | of which 460 B are kept for descriptor growth (below); **510 spare** (`LOWRAM_SPARE` DISPLAY; B3B-5 took 916 B, see the cold block). `tests/world.py` W6/W9 run their `try_step` unit stubs at `LOWRAM_END_3B` (`$6EC0`) |
-| `$728A..$7FFF` | `lowram_code` (`start` first) | 3,446 | **cold block**, ends exactly at `$8000` (`src/lowram.asm`): code 3,106 B (B3B-5 +916: `build_room_map` doors / pit / block ~210, `door_find` / `door_paint` / `door_open` / `mon_door` / `hero_door` / `try_close` / `hero_fall` / `try_jump` + `jump_terrain` / `jump_bodies` ~620 incl. 2 strings, door + rubble stand-in glyphs / attrs / `TSRC` rows ~80; B3B-8's bank-3 `build_room_map` v2 frees the PROTO one; A8 +103: `isr_install` 31 + 1 for its call replacing `im 1`, the ISR image 56, the AY tape block load 15; A7b +8: `vis_reset` / `vis_room_sync` walk the 16-B `SLOTREC` records; A7 review +295: `build_room_map` 254 out of bank 2, `vis_reset` + RLIST rebuild 41; A7 +193: `hud_clear_mark`, `vis_room_sync`, `set_screen`/`show_bank5`/`present_full`, boot HUD init, 0-frame `gen_kind` guard; A6 1,591; A5 1,572: + session cache clears in `alloc_reset`/`alloc_restore` 11, − `gen_kind` clear 6, + 64-attr clear in `init_tiles` 13, `zx0_frame` 53 → 39, `gen_frame` descriptor read +15), then **`fdesc_tab..fdesc_end`** (A6): frame descriptors, `FDESC_STRIDE` **5 B** × 68 = 340 B (`FD_BLK` word = virtual packed block / raw: virtual frame, `FD_FRM` word = `GEN_SCRATCH` + in-block offset, `FD_FLAGS`), generated from the same `src/frames.asm` list as `frame_tab` (ASSERT counts equal). Raw build: 3,348 B at `$72EC` (B3B-5; 480 spare) |
+| `$6EC0..$7252` | free | 915 | of which 460 B are kept for descriptor growth (below); **455 spare** (`LOWRAM_SPARE` DISPLAY; B3B-5 took 971 B, see the cold block). `tests/world.py` W6/W9 run their `try_step` unit stubs at `LOWRAM_END_3B` (`$6EC0`) |
+| `$7253..$7FFF` | `lowram_code` (`start` first) | 3,501 | **cold block**, ends exactly at `$8000` (`src/lowram.asm`): code 3,161 B (B3B-5 +971: `build_room_map` doors / pit / block ~210, `door_find` / `door_paint` / `door_open` / `mon_door` / `hero_door` / `try_close` + `room_bodies` / `hero_fall` / `try_jump` + `jump_bodies` ~680 incl. 2 strings, door + rubble stand-in glyphs / attrs / `TSRC` rows ~80; B3B-8's bank-3 `build_room_map` v2 frees the PROTO one; A8 +103: `isr_install` 31 + 1 for its call replacing `im 1`, the ISR image 56, the AY tape block load 15; A7b +8: `vis_reset` / `vis_room_sync` walk the 16-B `SLOTREC` records; A7 review +295: `build_room_map` 254 out of bank 2, `vis_reset` + RLIST rebuild 41; A7 +193: `hud_clear_mark`, `vis_room_sync`, `set_screen`/`show_bank5`/`present_full`, boot HUD init, 0-frame `gen_kind` guard; A6 1,591; A5 1,572: + session cache clears in `alloc_reset`/`alloc_restore` 11, − `gen_kind` clear 6, + 64-attr clear in `init_tiles` 13, `zx0_frame` 53 → 39, `gen_frame` descriptor read +15), then **`fdesc_tab..fdesc_end`** (A6): frame descriptors, `FDESC_STRIDE` **5 B** × 68 = 340 B (`FD_BLK` word = virtual packed block / raw: virtual frame, `FD_FRM` word = `GEN_SCRATCH` + in-block offset, `FD_FLAGS`), generated from the same `src/frames.asm` list as `frame_tab` (ASSERT counts equal). Raw build: 3,348 B at `$72EC` (B3B-5; 480 spare) |
 | inside the cold block | A5 `zx0_code..zx0_code_end` | 107 | `zx0_frame` 39 + `dzx0_standard` 68 (ASSERT ≤ `ZX0_BUDGET` 128; `ZX0_RESERVE` = 0 in ZX0 builds, 128 in `-DZX0_SOURCES=0` builds) |
 | `$6000..$65FF` (alias) | A5 `GEN_SCRATCH` | 1,536 | ZX0 unpack target **aliasing `ROOM_MAP`+`NEXT_MAP`** (ends exactly at `TILE_GLYPHS`, ASSERTed): the generator runs only at boot, hero start and (3F) level start, before the room map is built — never mid-room. Guard: `GEN_TRAP` (state block) counts `gen_frame` calls while `GAME_STATE` is PLAYING/TRANSITION; tests assert 0 |
 
@@ -386,8 +386,8 @@ bank-5 cold code (pages bank 7 at `$C000`).
 Fit (ASSERTed: `lowram_code − ZX0_RESERVE − (FRT_MAX − FDESC_COUNT) ×
 FDESC_STRIDE ≥ LOWRAM_FREE_END`, and `fdesc_end == lowram_code_end`): 3,392
 fixed buffers (incl. the 64-id tiles) + 384 B3B level state / ornament
-(B3B-1: `LOWRAM_FREE_END` = `LOWRAM_END_3B`) + 3,446 cold block + 460 descriptor
-growth to 160 frames = 7,682 of 8,192 B → **510 spare** (B3B-5; B3B-1: 1,426; before it 1,810; A8: 1,913; A7 review: 1,921; A7: 2,216; A6: 2,409; A5: 1,308 with
+(B3B-1: `LOWRAM_FREE_END` = `LOWRAM_END_3B`) + 3,501 cold block + 460 descriptor
+growth to 160 frames = 7,737 of 8,192 B → **455 spare** (B3B-5; B3B-1: 1,426; before it 1,810; A8: 1,913; A7 review: 1,921; A7: 2,216; A6: 2,409; A5: 1,308 with
 its 1,920 B ≤ 12-B descriptor reserve), room for the ~0.6 KB level state with
 ~1.3 KB margin. A separate 1.5 KB ZX0 scratch would now fit, but would eat
 most of that margin — the alias stays. `$5B00-$5BFF` and `$5CC0-$5FFF` (~1,088 B, E: free once `boot` has
@@ -432,7 +432,8 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 | `$BFC0` | `TIMING_MARK` | spare |
 | `$BFC2` | `AY_CALLS` | A8 word: `AY_PLAY` calls (the silent stub counts them; = frames since boot's `EI`). Test-observable |
 | `$BFC4` | `JUMP_TURN` | B3B-5 word: the `TURN_COUNTER` value on which a jump is refused (= the turn after a jump; game.md §2.4 "not two turns in a row"); `$FFFF` = none (`new_game`) |
-| `$BFC6..$BFCF` | — | spare (general) |
+| `$BFC6` | `LOCK_SHOWN` | B3B-5: 1 = the locked-door message was printed for the key still held (once per press); `read_turn_input` clears it when no key is held |
+| `$BFC7..$BFCF` | — | spare (general) |
 | `$BFD0..$BFFF` | **3B sub-range** (`STATE_3B`, B3B-1) | `PANEL_DIRTY $BFD0` (D5 `PD_*` bits), `$BFD1` spare, `HUD4_EXT $BFD2` (4 B) / `HUD4_PW $BFD6` (4 B): rows 20..23, the B3B-11 successors of `HUD_EXT`/`HUD_PW` (old ones stay in use until then), `LOG_QN $BFDA`, `$BFDB..$BFDF` spare, `LOG_Q $BFE0` (8 B, layout B3B-11), `$BFE8..$BFFF` spare. Test-observable |
 | `$BFC1` | `CLIMB_BLK` | 1 = this input's climb was blocked by an entity → `try_player_turn` makes it a WAIT (prototype §6.4, rule 2026-10-02); cleared at every `try_player_turn` |
 
@@ -600,15 +601,23 @@ holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
   `kind_tab − 1`; it sits in the ALIGN pad). Values: AIR 0, PLAT / END caps /
   GRATE `TF_FLOOR`, BRICK `TF_SOLID`, WALLF `SOLID|FLOOR`, LAD `TF_LADDER`, HOLE
   `LADDER|HOLE`, arch `SOLID`, planks `SOLID|DOOR`, LOCK `SOLID|DOOR|LOCK`,
-  torch / drip / candles `TF_ANIM`, RUBBLE and the wall set (dither / patch /
-  fade) 0 (air-band decor, concept-screen §3.3), 32..59 0, 60..63
-  `SOLID|ATTACK`. **The decor deriver must not put wall-set / rubble ids on
-  solid cells** (they would become passable).
+  torch / drip / candles `TF_ANIM`, the wall set (DARK = BRICK, DITHER,
+  PATCH, FADE) `TF_SOLID`, RUBBLE 0, 32..59 0, 60..63 `SOLID|ATTACK`
+  (game.md §1.2 "Solidity of decor": solidity = the cell class; wall-set ids
+  only replace wall cells, non-solid decor only non-solid cells). Per-level
+  wall variants (window, bookshelf in 32..59) need per-level flags: B3B-8
+  loads them with the tileset.
 - `cell_addr` (B = row, C = col → HL = `ROOM_MAP` cell; 67 T), `cell_blocked`
   (→ A = flags, CF = `TF_SOLID`; keeps BC/DE, clobbers A/HL; ~135 T),
-  `lead_cell` (box + dx → the leading col at row `y+h−1`; ~210 T): bank 2.
-  Only horizontal steps test terrain (hero `try_horizontal`, monsters
-  `try_step`); a closed plank → `hero_door` / `mon_door` (bank-5 low RAM).
+  `lead_cell` (box + dx → the leading col at row `y+h−1`; ~210 T),
+  `box_solid` (every cell of a box; ~60 T a cell): bank 2. Walkers test the
+  leading cell on horizontal steps only (safe: body h ≤ 6 never reaches the
+  arch / lintel rows, ASSERTed); flyers test their whole new box on every
+  step (game.md §9.1: an open door only through its opening rows). A closed
+  plank → `hero_door` / `mon_door` (bank-5 low RAM; never on a yield step).
+- Close (key C, game.md §2.3): door cells free of every body of the room
+  incl. PENDING (`room_bodies`), no living hostile with a gap ≤ 2 cols to the
+  hero or the door. Locked bump: message once per press (`LOCK_SHOWN`).
 - Doors: state = `EDGE_TAB`; `door_find` (dx → the edge byte, door col, top
   plank row), `door_paint` (6 × 2 planks in `ROOM_MAP` + `shadow_rect` +
   `queue_damage`), `door_open` / `try_close` (key C); `build_room_map` draws

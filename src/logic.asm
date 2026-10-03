@@ -339,11 +339,13 @@ cell_blocked:
                 ASSERT TF_SOLID == 1
 
 ;------------------------------------------------------------------------------
-; lead_cell — the cell a horizontal step runs into: box C = new x, B = y,
-; D = w, E = h, A = dx (1 / $FF). Leading col = C + D - 1 (right) / C (left),
-; row = y + h - 1, the body's lowest row: every solid structure of an air band
-; (room-edge wall, dead-end block, door planks; arch + lintel above them)
-; spans it, so one cell decides (D2). Out: A = flags, CF = TF_SOLID.
+; lead_cell — the cell a WALKER's horizontal step runs into: box C = new x,
+; B = y, D = w, E = h, A = dx (1 / $FF). Leading col = C + D - 1 (right) / C
+; (left), row = y + h - 1. One cell is enough for a standing body: its rows
+; are 9s+8-h .. 9s+7 with h <= 6 (ASSERTed below), so it never reaches the
+; arch / lintel rows 9s+1 / 9s; walls, blocks and (wall-set) wall decor span
+; the whole air band and planks rows 9s+2..9s+7, so the lowest row decides.
+; Flyers use box_solid (any band row). Out: A = flags, CF = TF_SOLID.
 ; Preserves BC, DE.  Clobbers: A, HL.   ~210 T
 ;------------------------------------------------------------------------------
 lead_cell:
@@ -362,8 +364,45 @@ lead_cell:
                 pop  bc
                 ret
 
+;------------------------------------------------------------------------------
+; box_solid — CF = 1 if any cell of box C,B,D,E (in the map) is TF_SOLID.
+; Flyers' steps (§9.1: a body passes an open door only through its opening
+; rows) and the jump's swept box. ~60 T a cell (bat 6 cells ~0.5k T, ghost
+; 12 ~0.9k T).  Keeps BC, DE.  Clobbers: A, HL
+;------------------------------------------------------------------------------
+box_solid:
+                push bc
+                push de
+.row:           call cell_addr                 ; HL = the row's first cell
+                push bc
+                ld   b, d
+.col:           ld   a, (hl)
+                push hl
+                add  a, tile_flags & $FF
+                ld   l, a
+                ld   h, tile_flags >> 8
+                ld   a, (hl)
+                pop  hl
+                rrca                           ; CF = TF_SOLID
+                jr   c, .x
+                inc  l                         ; cols stay inside the row
+                djnz .col
+                pop  bc
+                inc  b
+                dec  e
+                jr   nz, .row
+                or   a
+                jr   .out
+.x:             pop  bc
+.out:           pop  de
+                pop  bc
+                ret
+
 ; desc_byte — A = the byte at offset A of the current room's descriptor.
 ; Clobbers: A, DE, HL.   ~170 T
+                ASSERT BH_K_KNIGHT <= STOREY_AIR - DOOR_PLANK_DY && BH_K_WIZARD <= STOREY_AIR - DOOR_PLANK_DY
+                ASSERT BH_K_SKELETON <= STOREY_AIR - DOOR_PLANK_DY && BH_K_GOBLIN <= STOREY_AIR - DOOR_PLANK_DY
+                ASSERT BH_K_RAT <= STOREY_AIR - DOOR_PLANK_DY && BH_K_SLIME <= STOREY_AIR - DOOR_PLANK_DY
 desc_byte:
                 push af
                 call cur_room_desc
@@ -1322,16 +1361,22 @@ try_step:
                 ld   b, a
                 cp   PLAY_ROWS
                 jr   nc, .no
-                ld   a, h                      ; B3B-5 terrain (horizontal steps only:
-                or   a                         ; climbs / flyer bobs stay in their shaft
-                jr   z, .tok                   ; or band)
+                push hl                        ; B3B-5 terrain
+                KFIELD KT_FLAGS
+                and  KF_FLYER
+                jr   z, .walk
+                call box_solid                 ; flyer: every cell of the new box
+                jr   c, .npop                  ; (arch / lintel of an open door, §9.1;
+                jr   .tpop                     ; doors never open for flyers); no pits
+.walk:          pop  hl
                 push hl
+                ld   a, h                      ; walkers: horizontal steps only (a
+                or   a                         ; climb stays in its shaft)
+                jr   z, .tpop
                 call lead_cell                 ; A = dx
                 jr   c, .solid
-                KFIELD KT_FLAGS                ; walkers never step onto x == the pit
-                and  KF_FLYER                  ; col on storey 0 (game.md §2.5);
-                jr   nz, .tpop                 ; flyers ignore pits
-                ld   a, b
+                ld   a, b                      ; walkers never step onto x == the pit
+                                               ; col on storey 0 (game.md §2.5)
                 add  a, e
                 cp   FLOOR_ROW0
                 jr   nz, .tpop

@@ -401,18 +401,24 @@ def main():
             p.settle()
             p.isolate()
 
-        def stub_step(slot, dx):
-            """try_step(IX = slot, D = dx, E = 0) in place (lowram spare);
-            MSG_BUF = $FF if it returned CF = 1. The caller reloads after."""
+        def stub_step(slot, dx, dy=0, yld=0):
+            """try_step(IX = slot, D = dx, E = dy) in place (lowram spare),
+            YIELD_FLAG = yld during the call; MSG_BUF = $FF if it returned
+            CF = 1. Entered from the wait_tick probe, so play resumes there
+            afterwards (PC put back; no register is live across that call)."""
             def w(v):
                 return [v & 0xFF, v >> 8]
+            pc0 = p.pc()
             code = ([0xCD] + w(S["build_live"]) + [0xCD] + w(S["cache_player"]) +
                     [0x3E, slot, 0x32] + w(S["ACT_SLOT"]) +
+                    [0x3E, yld, 0x32] + w(S["YIELD_FLAG"]) +
                     [0xDD, 0x21] + w(S["P_ENTITIES"] + 32 * slot) +
-                    [0x16, dx & 0xFF, 0x1E, 0x00, 0xCD] + w(S["try_step"]) +
-                    [0x9F, 0x32] + w(S["MSG_BUF"]))
+                    [0x16, dx & 0xFF, 0x1E, dy & 0xFF, 0xCD] + w(S["try_step"]) +
+                    [0x9F, 0x32] + w(S["MSG_BUF"]) +
+                    [0xAF, 0x32] + w(S["YIELD_FLAG"]))
             ok = p.run_stub(code, org=S["LOWRAM_END_3B"])
             check(f"W9 stub (slot {slot}) ran", ok, "")
+            p.z.cmd("set-register PC=%d" % pc0)
             return p.rb("MSG_BUF")
 
         # ---------------- W5 door: close (C), bump opens, shared state -----
@@ -464,6 +470,17 @@ def main():
             row = S["HUD_ROW"] + 1
             ink = any(cell_bytes(p.composed_frame(), c, row) != bytes(8) for c in range(18))
             check("W6 the message row shows text (THE DOOR IS LOCKED)", ink, "")
+            p.wb("INPUT_REPEAT", 1)                    # held: printed once per press
+            t0 = p.rw("TURN_COUNTER")
+            p.hold("L")
+            p.tick(2)
+            shown = p.rb("LOCK_SHOWN")
+            p.release()
+            p.tick(2)
+            check("W6 locked message latched while held (LOCK_SHOWN 1), cleared on release, no turn",
+                  (shown, p.rb("LOCK_SHOWN"), p.rw("TURN_COUNTER") - t0) == (1, 0, 0),
+                  (shown, p.rb("LOCK_SHOWN")))
+            p.wb("INPUT_REPEAT", 0)
             p.place(0, 10, y1, flags=HERO_R)
             p.place(SLOT_GOBLIN, 27, stand_y(1, 4), room=0, flags=MON_R)
             r = stub_step(SLOT_GOBLIN, 1)
@@ -488,6 +505,19 @@ def main():
             check("W7 C adjacent, facing, free: closes (1 turn)",
                   p.turn("C") and p.rb(e_ab) == LINK | DOOR, p.rb(e_ab))
             check("W7 C on a closed door: no turn", p.no_turn("C"), "")
+            # designer 2026-10-03: a PENDING body in the door cells blocks the
+            # close; a living hostile within 2 cols of the hero or the door too
+            p.turn("L")                                # bump: open again
+            p.place(SLOT_GOBLIN, 29, stand_y(1, 4) - 4, room=0, flags=EF_ACTIVE | EF_PENDING)  # not hostile
+            check("W7 C with a PENDING body in the door cells: no turn",
+                  p.no_turn("C") and p.rb(e_ab) == LINK | DOOR | OPEN, p.rb(e_ab))
+            p.set_ent(SLOT_GOBLIN, ROOM=NOWHERE)
+            p.place(SLOT_RAT, 21, stand_y(1, 2), room=0, flags=MON_R)   # cols 21-24: gap 2
+            check("W7 C with a hostile 2 cols from the hero: no turn", p.no_turn("C"), "")
+            p.place(SLOT_RAT, 20, stand_y(1, 2), room=0, flags=MON_R)   # gap 3
+            check("W7 C with the nearest hostile 3 cols away: closes",
+                  p.turn("C") and p.rb(e_ab) == LINK | DOOR, p.rb(e_ab))
+            p.set_ent(SLOT_RAT, ROOM=NOWHERE)
             p.settle()
             w4("W7 closed")
 
@@ -549,6 +579,47 @@ def main():
             check("W8 jump onto x == p refused (no turn)", p.no_turn("K", "L"), "")
             p.place(0, pit + 1, y0, flags=HERO_R | EF_LEFT)
             measured("W8 fall", "H")
+            # more jump legality (game.md §2.4)
+            p.isolate()
+            p.place(0, pit + 5, y0, flags=HERO_R | EF_LEFT)
+            check("W8 jump left (K+H): x - 6", p.turn("K", "H") and hero()["X"] == pit - 1, hero()["X"])
+            p.turn("SPACE")
+            p.place(0, 6, y0, flags=HERO_R | EF_LEFT)
+            check("W8 jump to x' = 0 refused", p.no_turn("K", "H"), "")
+            p.place(0, 7, y0, flags=HERO_R | EF_LEFT)
+            check("W8 jump to x' = 1 allowed", p.turn("K", "H") and hero()["X"] == 1, hero()["X"])
+            p.turn("SPACE")
+            p.place(0, 23, y0, flags=HERO_R)
+            check("W8 jump to x' + w > 31 refused", p.no_turn("K", "L"), "")
+            p.place(0, pit - 4, y0, flags=HERO_R)
+            p.place(SLOT_GOBLIN, pit - 1, stand_y(0, 4), room=1, flags=MON_L)
+            check("W8 jump refused: a tall body (goblin) in the swept box", p.no_turn("K", "L"), "")
+            p.set_ent(SLOT_GOBLIN, ROOM=NOWHERE)
+            p.place(2, pit - 1, stand_y(0, 2), room=1, flags=MON_L)          # the slime
+            check("W8 jump over a Slime (low body) allowed",
+                  p.turn("K", "L") and hero()["X"] == pit + 2, hero()["X"])
+            p.set_ent(2, ROOM=NOWHERE)
+            # a wall / dead-end block in the swept box (room D, block cols 29-31, s0)
+            p.boot(K_KNIGHT)
+            p.isolate()
+            p.place(0, 32 - 1 - kw, y1)
+            p.turn("L")
+            p.until(lambda: p.rb("CUR_ROOM") == 1 and p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+            p.isolate()
+            p.place(0, 24, y1)
+            p.turn("J")
+            p.until(lambda: p.rb("CUR_ROOM") == 2 and p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+            p.isolate()
+            p.place(0, 2, y1, flags=HERO_R | EF_LEFT)
+            for _ in range(3):
+                p.turn("H")
+            p.until(lambda: p.rb("CUR_ROOM") == 3 and p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+            p.isolate()
+            check("W8 reached room D", p.rb("CUR_ROOM") == 3, p.rb("CUR_ROOM"))
+            p.place(0, 22, y0, flags=HERO_R)
+            check("W8 jump refused: the dead-end block in the swept box", p.no_turn("K", "L"), "")
+            p.place(0, 26, y0, flags=HERO_R)               # cols 26-28 (rubble at 28: decor)
+            check("W8 walk into the block: no turn", p.no_turn("L") and hero()["X"] == 26, hero()["X"])
             # a fall at 1 HP kills
             enter_b()
             p.place(0, pit + 1, y0, flags=HERO_R | EF_LEFT)
@@ -594,10 +665,30 @@ def main():
             p.set_ent(SLOT_BATB, ROOM=NOWHERE)
             p.set_ent(SLOT_GOBLIN, ROOM=0, X=27, Y=stand_y(1, 4), PX=27 * 8, PY=stand_y(1, 4) * 8,
                       FLAGS=MON_R)
+            r = stub_step(SLOT_GOBLIN, 1, yld=1)
+            check("W9 opener on a YIELD step: no door opening (blocked)",
+                  (r, p.rb(e_ab), p.ent(SLOT_GOBLIN)["X"]) == (0, LINK | DOOR, 27), (r, p.rb(e_ab)))
             r = stub_step(SLOT_GOBLIN, 1)
             check("W9 opener (goblin) at a closed door: opens it, spends the step (no move)",
                   (r, p.rb(e_ab), is_open(planks()), p.ent(SLOT_GOBLIN)["X"])
                   == (0xFF, LINK | DOOR | OPEN, True, 27), (r, p.rb(e_ab)))
+            p.settle(4)                                # play resumes: repaint + present
+            w4("W9 door opened by the goblin")
+            # flyers and the open door's arch / lintel (game.md §9.1, whole body box)
+            p.set_ent(SLOT_GOBLIN, ROOM=NOWHERE)
+            p.set_ent(SLOT_BATB, ROOM=0, X=27, Y=11, PX=27 * 8, PY=88, FLAGS=MON_R, MODE=0)
+            r = stub_step(SLOT_BATB, 1)
+            check("W9 bat into the open door's opening rows (11-12): allowed",
+                  (r, p.ent(SLOT_BATB)["X"]) == (0xFF, 28), (r, p.ent(SLOT_BATB)["X"]))
+            r = stub_step(SLOT_BATB, 0, -1)
+            check("W9 bat up into the arch row (col 30 row 10): refused",
+                  (r, p.ent(SLOT_BATB)["Y"]) == (0, 11), (r, p.ent(SLOT_BATB)["Y"]))
+            p.set_ent(SLOT_BATB, X=27, Y=9, PX=27 * 8, PY=72, MODE=0)
+            r = stub_step(SLOT_BATB, 1)
+            check("W9 bat sideways into the lintel / arch rows (9-10): refused",
+                  (r, p.ent(SLOT_BATB)["X"]) == (0, 27), (r, p.ent(SLOT_BATB)["X"]))
+            p.settle(4)
+            w4("W9 bat at the door")
 
         if worst:
             print("[info] B3B-5 measured: " + ", ".join(f"{k} {v[0]} T (input {v[1]})"

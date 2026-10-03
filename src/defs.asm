@@ -262,6 +262,8 @@ MSG_BUF         EQU $BFA0           ; 32 B message line composition
 TIMING_MARK     EQU $BFC0           ; spare
 CLIMB_BLK       EQU $BFC1           ; 1 = this input's climb was blocked by an entity (-> wait turn)
 AY_CALLS        EQU $BFC2           ; A8 word: AY_PLAY calls (the silent stub counts; test-observable)
+LOCK_SHOWN      EQU $BFC6           ; B3B-5: 1 = the locked-door message was printed for the key
+                                    ;   still held (read_turn_input clears it on release)
 JUMP_TURN       EQU $BFC4           ; B3B-5 word: TURN_COUNTER value on which a jump is refused (the turn
                                     ;   right after a jump: "not two turns in a row", game.md §2.4); $FFFF = none
 

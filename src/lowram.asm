@@ -757,6 +757,9 @@ door_open:
 ;------------------------------------------------------------------------------
 mon_door:
                 ld   b, a
+                ld   a, (YIELD_FLAG)           ; a yield step never opens a door:
+                or   a                         ; blocked, so the yield tries the
+                ret  nz                        ; other side (CF = 0: or a)
                 KFIELD KT_FLAGS
                 and  KF_OPENER | KF_FLYER
                 cp   KF_OPENER
@@ -776,7 +779,12 @@ hero_door:
                 call face_tmp6
                 scf
                 ret
-.locked:        call msg_begin
+.locked:        ld   hl, LOCK_SHOWN            ; once per press: read_turn_input
+                ld   a, (hl)                   ; clears it when no key is held
+                or   a
+                ret  nz                        ; CF = 0
+                inc  (hl)
+                call msg_begin
                 ld   hl, str_locked
                 call print_str
                 or   a
@@ -793,22 +801,14 @@ str_locked:     DB "THE DOOR IS LOCKED", 0
 try_close:
                 call is_standing
                 jr   nz, .no
-                ld   a, 1                      ; no hostile in reach, either side
-                ld   (TMP6), a
-                call find_target
-                inc  a
-                jr   nz, .no
-                ld   a, $FF
-                ld   (TMP6), a
-                call find_target
-                inc  a
-                jr   nz, .no
                 ld   a, 1                      ; dx = facing
                 bit  EF_LEFT_BIT, (ix+E_FLAGS)
                 jr   z, .f
                 ld   a, $FF
 .f:             ld   (TMP6), a
                 call get_box                   ; C = x, D = w
+                ld   a, d
+                ld   (TMP4), a                 ; w
                 ld   a, (TMP6)
                 dec  a
                 ld   a, c
@@ -821,7 +821,7 @@ try_close:
                 call storey_ref
                 ld   (TMP7), a
                 ld   a, (TMP6)
-                call door_find
+                call door_find                 ; HL = edge, C = door col, B = plank top
                 jr   nc, .no                   ; no exit on that side
                 ld   a, (hl)
                 and  EG_DOOR | EG_OPEN | EG_LOCK | EG_SEAL
@@ -836,10 +836,32 @@ try_close:
                 push bc
                 ld   a, b
                 sub  DOOR_PLANK_DY
-                ld   b, a                      ; from the lintel: the whole 2 x 8 door
+                ld   b, a                      ; B = 9s (lintel row)
+                ; door cells (2 x 8 from the lintel) free of EVERY body of the
+                ; room, PENDING arrivals included (a follower parked at x = 1)
                 ld   de, (DOOR_COLS << 8) | STOREY_AIR
-                call box_free                  ; (LIVE_LIST: try_player_turn)
-                pop  bc
+                xor  a
+                call room_bodies
+                jr   c, .nop
+                ; no living hostile within 2 cols of the hero or the door
+                ; (game.md §2.3, designer 2026-10-03): gap <= 2 empty cols, so
+                ; the hero + door span widened by 3 cols, over the storey's air
+                ; rows (the other side of the span is the room edge)
+                ld   a, c
+                or   a
+                ld   a, (P_ENTITIES + E_X)
+                jr   z, .hl
+                sub  3                         ; right door: from x - 3, 32 cols (the
+                ld   c, a                      ; excess right of col 31 holds nobody)
+                ld   d, ROOM_COLS
+                jr   .hs
+.hl:            ld   hl, TMP4                  ; left door: cols 0 .. x + w + 2
+                add  a, (hl)
+                add  a, 3
+                ld   d, a
+.hs:            ld   a, EF_HOSTILE
+                call room_bodies
+.nop:           pop  bc
                 pop  hl
                 jr   c, .no
                 res  EG_OPEN_BIT, (hl)
@@ -848,6 +870,46 @@ try_close:
                 scf
                 ret
 .no:            or   a
+                ret
+
+;------------------------------------------------------------------------------
+; room_bodies — CF = 1 if an entity in slots 1..15 is ACTIVE, in CUR_ROOM,
+; not DYING, has every flag of A (0 = any body; PENDING ones count), and its
+; box overlaps box C,B,D,E.  Keeps BC, DE.  Clobbers: A, HL, IX (= hero on
+; return), TMP5.
+;------------------------------------------------------------------------------
+room_bodies:
+                or   EF_ACTIVE
+                ld   (TMP5), a
+                ld   ix, P_ENTITIES
+                ld   l, P_MAX_ENT - 1
+.l:             push hl
+                push de
+                ld   de, P_ENT_STRIDE
+                add  ix, de
+                pop  de
+                ld   a, (TMP5)
+                ld   h, a
+                ld   a, (ix+E_FLAGS)
+                and  h
+                cp   h
+                jr   nz, .n
+                bit  EF_DYING_BIT, (ix+E_FLAGS)
+                jr   nz, .n
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   nz, .n
+                call box_vs_ix                 ; keeps BC, DE
+                jr   c, .hit
+.n:             pop  hl
+                dec  l
+                jr   nz, .l
+                ld   ix, P_ENTITIES
+                or   a
+                ret
+.hit:           pop  hl
+                ld   ix, P_ENTITIES
+                scf
                 ret
 
 ;------------------------------------------------------------------------------
@@ -904,6 +966,7 @@ str_fall:       DB "YOU FALL INTO A PIT", 0
 ; Clobbers: all; IX = hero on return; TMP6 (dx), TMP7 (x').
 ;------------------------------------------------------------------------------
 try_jump:
+                ASSERT DIR_E_BIT == 0          ; the AND below yields dx 1 for E
                 and  1 << DIR_E_BIT            ; A = the E/W bits: E -> dx 1, W -> $FF
                 jr   nz, .dx
                 dec  a
@@ -964,7 +1027,7 @@ try_jump:
                 ld   a, e
                 add  a, JUMP_RISE
                 ld   e, a                      ; .. y + h - 1
-                call jump_terrain
+                call box_solid                 ; (bank 2)
                 jr   c, .no
                 call jump_bodies
                 ld   ix, P_ENTITIES
@@ -981,36 +1044,6 @@ try_jump:
                 scf
                 ret
 .no:            or   a
-                ret
-
-; jump_terrain — CF = 1 if a cell of box C,B,D,E is TF_SOLID (~45 T a cell;
-; 64 cells for the hero ~3.5k T).  Keeps BC, DE.  Clobbers: A, HL
-jump_terrain:
-                push bc
-                push de
-.tr:            call cell_addr                 ; HL = the row's first cell
-                push bc
-                ld   b, d
-.tc:            ld   a, (hl)
-                push hl
-                add  a, tile_flags & $FF
-                ld   l, a
-                ld   h, tile_flags >> 8
-                ld   a, (hl)
-                pop  hl
-                rrca                           ; CF = TF_SOLID
-                jr   c, .x
-                inc  l                         ; cols stay inside the row
-                djnz .tc
-                pop  bc
-                inc  b
-                dec  e
-                jr   nz, .tr
-                or   a
-                jr   .out
-.x:             pop  bc
-.out:           pop  de
-                pop  bc
                 ret
 
 ; jump_bodies — CF = 1 if a LIVE_LIST body (not the hero, not DYING) overlaps

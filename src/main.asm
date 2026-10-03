@@ -220,6 +220,7 @@ read_turn_input:
                 jr   nz, .held
                 xor  a
                 ld   (NEED_RELEASE), a
+                ld   (LOCK_SHOWN), a           ; B3B-5: next bump may print again
                 ret
 .held:          ld   a, (INPUT_REPEAT)
                 or   a
@@ -389,9 +390,12 @@ kind_tab_pad:                                  ; ALIGN padding starts here (head
 ; the 64 B right below kind_tab (low byte $C0: cell_blocked adds the id with
 ; no carry, H constant). Placed in the ALIGN pad, so it costs no bank-2 bytes
 ; beyond its 64. Per-level ids 32..59 = 0 (decor), 60..63 = lectern / Book.
-; Rubble and the wall set (dither / patch / fade) are background decor on the
-; air band (concept-screen §3.3), not solid; T_BRICK (= T_WALL_DARK) is the
-; solid wall (room edge, block, lintel).
+; Solidity belongs to the cell class (game.md §1.2 "Solidity of decor",
+; designer 2026-10-03): the wall set (DARK = T_BRICK, DITHER, PATCH, FADE) is
+; SOLID and only ever replaces wall cells; rubble / skulls / moss / cobweb /
+; chain / torch / candles / drips are not. Per-level wall variants (window,
+; bookshelf, ids 32..59) need per-level flags: B3B-8 loads them with the
+; tileset (this static table has 0 there).
 ;------------------------------------------------------------------------------
 tile_flags:
                 DB 0                                   ;  0 T_AIR
@@ -410,7 +414,7 @@ tile_flags:
                 DB TF_SOLID | TF_DOOR | TF_LOCK        ; 25 T_DOOR_LOCK
                 DB TF_FLOOR                            ; 26 T_GRATE (closed)
                 DB 0                                   ; 27 T_RUBBLE (decor at a block's foot)
-                DB 0, 0, 0                             ; 28-30 wall set (air-band decor)
+                DB TF_SOLID, TF_SOLID, TF_SOLID        ; 28-30 wall set DITHER / PATCH / FADE
                 DB TF_ANIM                             ; 31 T_CANDLES
                 DS T_LVL_OBJ - TILE_COMMON, 0          ; 32-59 per-level decor
                 DS T_LVL_OBJ_N, TF_SOLID | TF_ATTACK   ; 60-63 lectern / Book
