@@ -603,7 +603,7 @@ SYM             EQU FF_SYM
                 INCLUDE "level_defs.asm"
 
 ; MUL_STOREY r — A = A * STOREY_ROWS (A = storey 0..2), r = the old A.  Clobbers: r.
-; 8a + a: 4 ops, 20 T (the PROTO 7a was 8a - a at the same cost).
+; ld r,a + 8a + a: 5 ops, 20 T (the PROTO 7a was 8a - a at the same cost).
                 ASSERT STOREY_ROWS == 9
     MACRO MUL_STOREY r
                 ld   r, a

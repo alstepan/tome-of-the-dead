@@ -1699,8 +1699,13 @@ def walkthrough(h, p, check14=False):
         return False
 
     min_y = sk_y0
-    for _ in range(30):              # let C's skeleton come up {24,1}; the ghost
-        min_y = min(min_y, p.ent(5)["Y"])   # (boxed on its top end) is fought off
+    # Let C's skeleton come up {6,1} (spawn col 12: its nearest climb, away
+    # from the hero's arrival shaft {24,0}/{24,1}); the ghost (boxed on its
+    # top end) is fought off. B3B-3 made this wait reactive on purpose (an
+    # intended change from the PROTO fixed script): attack only when a live
+    # hostile actually touches the hero's left side (foe_left), else wait.
+    for _ in range(30):
+        min_y = min(min_y, p.ent(5)["Y"])
         if sk_y0 - min_y >= STOREY_ROWS:
             break
         act("H" if foe_left() else "SPACE")

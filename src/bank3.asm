@@ -521,8 +521,11 @@ new_game:
                 ld   (ix+E_FLAGS), a
                 inc  hl
                 push hl
-                ld   a, c
-                MUL_STOREY c
+                ld   a, c                      ; 9s = 8s + s (MUL_STOREY inlined:
+                add  a, a                      ; C already holds s, so the
+                add  a, a                      ; macro's ld c,a would be dead)
+                add  a, a
+                add  a, c
                 ld   c, a                      ; 9s
                 KFIELD KT_FLAGS
                 and  KF_FLYER

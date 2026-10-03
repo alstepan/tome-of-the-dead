@@ -179,6 +179,10 @@ def main():
             pf, pn = split_frame(p.frame())
             check("W0 panel rows 18-20 blank at start (only HUD text on 21-23)",
                   all(b == 0 for b in pn[:3 * 8 * 32]), "")
+            # split_frame panel = 6 rows x 256 bitmap B, then 6 x 32 attrs
+            pa = pn[6 * 256:6 * 256 + 3 * 32]
+            check("W0 panel rows 18-20 attrs == ATTR_HUD (3 x 32 cells)",
+                  all(b == S["ATTR_HUD"] for b in pa), sorted({hex(b) for b in pa}))
 
         # ---------------- W1 walk -----------------------------------------
         if want("W1"):
