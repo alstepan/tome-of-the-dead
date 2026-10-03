@@ -20,6 +20,17 @@ def rd(b, r, k):
     return b[OFF_DESC + r * D["RD_STRIDE"] + D[k]]
 
 
+def item_free(rm, c):
+    """col c on storey 0 touches no footprint/pit cap/storey-0 block"""
+    for f in (rm.up, rm.arr, rm.lad1, rm.lad2):
+        if f and f <= c <= f + 2: return False
+    if rm.pit and rm.pit - 1 <= c <= rm.pit + 3: return False
+    if rm.block and not (rm.block >> 6) & 1:
+        w = rm.block & D["RDB_WMASK"]
+        if (c >= 31 - w) if rm.block & D["RDB_RIGHT"] else (c <= w): return False
+    return True
+
+
 def check(b, stats=None):
     v = []
     if len(b) != BLOCK_LEN:
@@ -109,7 +120,8 @@ def check(b, stats=None):
             w = bl & D["RDB_WMASK"]; s = (bl >> 6) & 1; right = bool(bl & D["RDB_RIGHT"])
             if bl & 0x3C or w not in (2, 3): v.append(f"room {r} block byte")
             bit, sbit = (D["RDX_R"], D["RDX_RS1"]) if right else (D["RDX_L"], D["RDX_LS1"])
-            if ex & bit and bool(ex & sbit) == bool(s): v.append(f"room {r} block on an exit")
+            if r in (start, lair): v.append(f"room {r} block in start/lair")
+            if ex & bit: v.append(f"room {r} block on an exit edge")
             lo, hi = (32 - w - 1, 31) if right else (0, w)
             for f in (s0 if s == 0 else s1):
                 if not (f + 2 < lo or f > hi): v.append(f"room {r} block hits feature {f}")
@@ -133,8 +145,11 @@ def check(b, stats=None):
     for r in present:
         if bool(rd(b, r, "RD_FLAGS") & D["RDF_DEADEND"]) != (deg[r] == 1): v.append(f"room {r} DEADEND flag != leaf")
     def has_h(r): return bool(rd(b, r, "RD_EXITS") & (D["RDX_L"] | D["RDX_R"]))
-    pools = ([r for r in present if deg[r] == 1 and r != start and has_h(r)],
-             [r for r in present if r != start and has_h(r)], [r for r in present if r != start])
+    def san(r):
+        if depth != 8 or not G.SANCTUM_CELL_RULE: return True
+        return (r % 3 > 0 and r - 1 not in pset) or (r % 3 < 2 and r + 1 not in pset)
+    pools = ([r for r in present if deg[r] == 1 and r != start and has_h(r) and san(r)],
+             [r for r in present if r != start and has_h(r) and san(r)])
     pool = next((p for p in pools if p), [])
     fallback = pool is not pools[0]
     if lair not in pool: v.append("lair not in candidate pool")
@@ -198,8 +213,17 @@ def check(b, stats=None):
             rm.lad1 = rd(b, r, "RD_LAD1"); rm.lad2 = rd(b, r, "RD_LAD2")
             rm.pit = rd(b, r, "RD_PITCOL"); rm.block = rd(b, r, "RD_BLOCK")
             if not G.item_col_ok(rm, s, ent[1]): v.append(f"floor {i} illegal cell col {ent[1]} s{s}")
-    if not 1 <= fn <= 3:  # 2-3 placed; an item may be dropped after 8 tries
-        v.append(f"potion count {fn}")
+    if not 2 <= fn <= 3: v.append(f"potion count {fn}")
+    try:
+        sx = G.start_x(b)
+        rm0 = G.Room(); rm0.up = rd(b, start, "RD_UPCOL"); rm0.arr = rd(b, start, "RD_ARRCOL")
+        rm0.lad1 = rd(b, start, "RD_LAD1"); rm0.lad2 = rd(b, start, "RD_LAD2")
+        rm0.pit = rd(b, start, "RD_PITCOL"); rm0.block = rd(b, start, "RD_BLOCK")
+        if not 2 <= sx <= 29 or any(not item_free(rm0, c) for c in (sx - 1, sx, sx + 1)):
+            v.append(f"start x {sx} illegal")
+        if depth == 1 and abs(sx - 14) > 12: v.append("start x far from 14")
+    except RuntimeError as ex_:
+        v.append(str(ex_))
     if stats is not None:
         hedges = [b[OFF_EDGE + e] for e in range(6) if b[OFF_EDGE + e] & D["EG_LINK"]]
         stats["rooms"][n] += 1

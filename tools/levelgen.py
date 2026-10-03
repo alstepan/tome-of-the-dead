@@ -15,6 +15,9 @@ GEN_RNG (port bit-exactly)
 x never becomes 0 from a non-zero start.
 Seeding: GEN_RNG = LVL_SEED ^ (depth * $0101); if that is 0 it becomes 1.
 LVL_SEED itself (= f(MASTER_SEED, depth)) is the caller's business (CLI SEED).
+RESEED: if no lair candidate exists (see step 6) the whole generation restarts
+with seed+1 (fresh GEN_RNG from the formula above), at most RESEED_MAX=16
+tries; the header LVL_SEED holds the seed actually used.
 The header stores the FINAL GEN_RNG state (after room seeds).
 Call order (every rnd call, in this order; a restart does NOT reseed):
  1. n_rooms = 7 + rnd(3);  start = rnd(9)
@@ -26,18 +29,27 @@ Call order (every rnd call, in this order; a restart does NOT reseed):
  4. horizontal edges e=0..5 (present only): storey = rnd(2); door = (rnd(3)==0).
  5. vertical links r=0..5 with r+3 linked: col = SHAFT_MIN + rnd(SHAFT_N)
     (stored as DNCOL of r and UPCOL of r+3).
- 6. lair/start selection uses BFS only (no rnd).  D2+: arrival col (start),
-    then level-exit col (lair): pick_feature(mandatory).
+ 6. lair selection uses BFS only (no rnd): tier (a) farthest non-start leaf
+    with a horizontal edge, else (b) farthest non-start room with a horizontal
+    edge (ties: lowest id); no tier (c) -> RESEED. D8: the lair must also have
+    a free (absent) horizontal grid neighbour (Sanctum cell) or it is not a
+    candidate. D2+: arrival col (start), then level-exit col (lair):
+    pick_feature(mandatory).
  7. per present room r=0..8: LAD1 (mandatory), then each optional gated by
-    rnd(2)==0: PIT, LAD2, BLOCK.
- 8. potions: n = 2 + rnd(2); each: room = non-start present rooms[rnd(len)],
-    storey = rnd(2), col tries (8): 2 + rnd(28) must be legal; drop otherwise.
+    rnd(2)==0: PIT, LAD2, BLOCK. BLOCK is never tried in the start or lair
+    room, and only on a side with NO horizontal exit (either storey).
+ 8. potions: total = 2 + rnd(2); each: room = non-start present
+    rooms[rnd(len)], storey = rnd(2), col tries 2 + rnd(28) must be legal: up
+    to 32 tries for the first two (failing -> Restart), 8 for the optional
+    third (dropped). FL_ITEM = IT_POTION for all (no Heal subtype field exists
+    in the 4-byte entry; 3E owns the enum).
  9. room seeds r=0..8 present: rnd16.
 pick_feature: up to FEAT_TRIES=8 tries of lo + rnd(hi-lo+1) accepted if
 |c - f| >= FEAT_GAP for every footprint f already on the storeys it touches;
 mandatory features then scan lo..hi for the first legal col; if none, the
 whole level RESTARTS from step 1 (RNG continues). Optional -> dropped.
-Block tries: side=rnd(2), storey=rnd(2), w=2+rnd(2) (8 tries).
+Hero start x is NOT stored (derived: start_x(block), pure function of the
+descriptors, see its docstring). Block tries: side=rnd(2), storey=rnd(2), w=2+rnd(2) (8 tries).
 Port notes: hardest bits are the DFS neighbour collection, BFS lair choice
 and the legality test (footprint lists per storey) - all small loops, depth <= 9.
 """
@@ -133,7 +145,7 @@ class Rng:
         return self.step()
 
 
-LAST = (0, 0)               # (restarts, rnd calls) of the last generate()
+LAST = (0, 0, 0)            # (restarts, rnd calls, reseeds) of the last generate()
 
 
 class Room:
@@ -157,6 +169,14 @@ def legal(room, c, storeys):
 
 class Restart(Exception):
     pass
+
+
+class Reseed(Exception):
+    pass
+
+
+RESEED_MAX = 16
+SANCTUM_CELL_RULE = True    # D8: lair needs a free horizontal neighbour cell
 
 
 def pick_feature(rng, room, lo, hi, storeys, mandatory):
@@ -270,13 +290,20 @@ def attempt(rng, depth):
     def has_h(r):
         return bool(rooms[r].exits & (D["RDX_L"] | D["RDX_R"]))
     leaves = [r for r in visited if len(adj[r]) == 1]
+
+    def sanctum_ok(r):
+        if depth != 8 or not SANCTUM_CELL_RULE:
+            return True
+        gx = r % 3
+        return (gx > 0 and r - 1 not in visited) or (gx < 2 and r + 1 not in visited)
     lair = None
-    for pool in ([r for r in leaves if r != start and has_h(r)],
-                 [r for r in visited if r != start and has_h(r)],
-                 [r for r in visited if r != start]):
+    for pool in ([r for r in leaves if r != start and has_h(r) and sanctum_ok(r)],
+                 [r for r in visited if r != start and has_h(r) and sanctum_ok(r)]):
         if pool:
             lair = max(pool, key=lambda r: (dist[r], -r))
             break
+    if lair is None:
+        raise Reseed
     rooms[start].start = True
     rooms[lair].lair = True
     for r in leaves:
@@ -296,10 +323,10 @@ def attempt(rng, depth):
         if rng.rnd(2) == 0:
             rm.lad2 = pick_feature(rng, rm, D["LAD_COL_MIN"], D["LAD_COL_MAX"], (0, 1), False)
         if rng.rnd(2) == 0:
-            for _ in range(D["FEAT_TRIES"]):
+            for _ in range(0 if (r == start or r == lair) else D["FEAT_TRIES"]):
                 right = rng.rnd(2); s = rng.rnd(2); w = 2 + rng.rnd(2)
                 bit = (D["RDX_R"], D["RDX_RS1"]) if right else (D["RDX_L"], D["RDX_LS1"])
-                if rm.exits & bit[0] and bool(rm.exits & bit[1]) == bool(s):
+                if rm.exits & bit[0]:        # the side must have no exit at all
                     continue
                 if block_hits(rm, s, right, w):
                     continue
@@ -308,33 +335,45 @@ def attempt(rng, depth):
     # potions
     floor = []
     cands = sorted(r for r in visited if r != start)
-    for _ in range(POTIONS_MIN + rng.rnd(2)):
+    for k in range(POTIONS_MIN + rng.rnd(2)):
         r = cands[rng.rnd(len(cands))]
         s = rng.rnd(2)
-        for _ in range(D["FEAT_TRIES"]):
+        for _ in range(32 if k < POTIONS_MIN else D["FEAT_TRIES"]):
             col = 2 + rng.rnd(28)
             if item_col_ok(rooms[r], s, col):
                 floor.append((r | (D["FL_S1"] if s else 0), col, D["IT_POTION"], 1))
                 break
+        else:
+            if k < POTIONS_MIN:
+                raise Restart
     for r in sorted(visited):
         rooms[r].seed = rng.rnd16()
     return rooms, edges, floor, start, lair, len(visited)
 
 
 def generate(depth, seed, master=0):
-    rng = Rng(seed, depth)
     global LAST
-    restarts = 0
-    for _ in range(MAX_RESTARTS):
+    restarts = reseeds = calls = 0
+    for k in range(RESEED_MAX):
+        rng = Rng(seed + k, depth)
         try:
-            rooms, edges, floor, start, lair, n = attempt(rng, depth)
+            for _ in range(MAX_RESTARTS):
+                try:
+                    rooms, edges, floor, start, lair, n = attempt(rng, depth)
+                    break
+                except Restart:
+                    restarts += 1
+            else:
+                raise RuntimeError("levelgen: too many restarts")
             break
-        except Restart:
-            restarts += 1
-            continue
+        except Reseed:
+            reseeds += 1
+            calls += rng.calls
     else:
-        raise RuntimeError("levelgen: too many restarts")
-    LAST = (restarts, rng.calls)
+        raise RuntimeError("levelgen: no lair after 16 reseeds")
+    seed = (seed + k) & 0xFFFF
+    rng.calls += calls
+    LAST = (restarts, rng.calls, reseeds)
     b = bytearray(BLOCK_LEN)
     b[H["LVL_DEPTH"]] = depth
     b[H["LVL_SEED"]:H["LVL_SEED"] + 2] = (seed & 0xFFFF).to_bytes(2, "little")
@@ -374,11 +413,39 @@ def generate(depth, seed, master=0):
     return bytes(b)
 
 
+def start_x(b):
+    """Hero start col (storey 0, DFS-root room); a pure function of the block.
+    D1: 14; D2+: arrival col + 1. If that col is not 'legal' it moves to the
+    nearest legal col (distance d = 1.., left first). Legal: 2..29 and cols
+    x-1, x, x+1 touch no storey-0 footprint (up/arr/ladders; pit holes+caps)
+    and no storey-0 block (cols 0..w / 31-w..31)."""
+    def rd(r, k):
+        return b[OFF_DESC + r * D["RD_STRIDE"] + D[k]]
+    st = b[H["LVL_START"]]
+    depth = b[H["LVL_DEPTH"]]
+    spans = [(f, f + 2) for f in (rd(st, "RD_UPCOL"), rd(st, "RD_ARRCOL"),
+                                  rd(st, "RD_LAD1"), rd(st, "RD_LAD2")) if f]
+    p = rd(st, "RD_PITCOL")
+    if p:
+        spans.append((p - 1, p + 3))
+    bl = rd(st, "RD_BLOCK")
+    if bl and not (bl >> 6) & 1:
+        w = bl & D["RDB_WMASK"]
+        spans.append((32 - w - 1, 31) if bl & D["RDB_RIGHT"] else (0, w))
+    ok = lambda x: 2 <= x <= 29 and not any(not (x + 1 < a or x - 1 > c) for a, c in spans)
+    x0 = 14 if depth == 1 else rd(st, "RD_ARRCOL") + 1
+    for d in range(0, 32):
+        for x in (x0 - d, x0 + d):
+            if ok(x):
+                return x
+    raise RuntimeError("no legal start col")
+
+
 def render(b):
     g = lambda r, k: b[OFF_DESC + r * D["RD_STRIDE"] + D["%s" % k]]
     hdr = lambda k: b[H[k]]
     out = [f"depth {hdr('LVL_DEPTH')} seed {int.from_bytes(b[H['LVL_SEED']:H['LVL_SEED']+2],'little'):04X}"
-           f" rooms {hdr('LVL_NROOMS')} start {hdr('LVL_START')} lair {hdr('LVL_LAIR')}"]
+           f" rooms {hdr('LVL_NROOMS')} start {hdr('LVL_START')} lair {hdr('LVL_LAIR')} startx {start_x(b)}"]
     for gy in range(3):
         row = vert = ""
         for gx in range(3):
