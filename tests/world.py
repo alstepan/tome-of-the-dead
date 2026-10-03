@@ -44,6 +44,9 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
   W12M 40 random (depth, seed, master): the Z80 block == levelgen.py and every
       room's engine map == the model of levelgen.py's block (doors, pits,
       blocks, arrival / exit shafts, 2nd ladders all seen); build T-states.
+  W13 decor deriver (B3B-9): 12 generated levels (depths 1..8), every room: ROOM_MAP and
+      ANIM_LIST == tools/decorgen.py byte for byte + an independent rules checker
+      (cell class / solidity / rows / ladders / budgets); decor_room T-states.
 
 Usage: ZRCP_PORT=10001 python3 tests/world.py [W1 W3 W11 ...]
 """
@@ -223,6 +226,9 @@ def run_gen_suites(p, check):
                                         "T_HOLE_M", "T_HOLE_R", "T_GRATE", "T_AIR")}
             legal = {fl, wl, S["ATTR_AIR"], S["ATTR_LADDER"], S["ATTR_DOOR"], S["ATTR_GRATE"],
                      S["ATTR_POTION"]}
+            # B3B-9 decor: the level's own decor ids + the common small decor
+            legal |= {attrs[i] for i in range(S["T_LVL_BASE"], S["T_LVL_OBJ"])}
+            legal |= {attrs[T[k]] for k in ("T_CHAIN", "T_SKULLS", "T_TORCH_T", "T_TORCH_B", "T_CANDLES")}
             for r in present_rooms(blk):
                 ok, tb, m = build_only(p, r)
                 note("build_room_map", tb, f"D{d} r{r}")
@@ -323,6 +329,115 @@ def run_gen_suites(p, check):
         print(f"[info] W12M: {nroom} rooms of 40 levels, features seen {feats}", flush=True)
         check(f"W12M: every built room == the model ({nroom} rooms, every feature kind seen)",
               bad_n == 0 and nroom > 250 and all(feats.values()), (bad_n, nroom, feats))
+    # ---------------- W13: decor deriver (B3B-9) ----------------------------
+    # Z80 decor_room == tools/decorgen.py (ROOM_MAP + ANIM_LIST byte for byte), and
+    # the rules re-checked from the docs (concept-screen 3.3 / game.md 1.2), not
+    # from the generator: only AIR / BRICK cells change, solidity (TILE_FLAGS read
+    # from the machine) follows the cell class, never in a floor row or the 2
+    # rows above one, lintel row, ladder neighbourhood, budgets, ANIM_LIST sane.
+    if want("W13"):
+        rng = __import__("random").Random(0xB39)
+        nroom = nplaced = 0
+        sizes = {"anim": 0, "wall": 0, "air": 0}
+        SOLID, ANIMF = S["TF_SOLID"], S["TF_ANIM"]
+        T_AIR, T_BRICK = T["T_AIR"], T["T_BRICK"]
+        lad = set(range(T["T_LAD_L"], T["T_HOLE_R"] + 1))
+        dT = []
+        for i in range(12):
+            d = 1 + i % 8
+            seed, master = rng.randrange(65536), rng.randrange(65536)
+            ok, _, _, blk = gen_level(p, d, seed, master)
+            if not ok or blk != G.generate(d, seed, master):
+                check(f"W13 D{d} seed {seed:#06x}: level generated", False, ok)
+                continue
+            flags = bytes(p.z.read_memory(S["tile_flags"], 64))
+            for r in present_rooms(blk):
+                base = room_model.render_room(blk, r, decor=False)
+                al = []
+                want_m = room_model.render_room(blk, r, anim=al)
+                ok, t1, m = build_only(p, r)
+                n = p.z.read_memory(S["ANIM_N"], 1)[0]
+                got_al = list(p.z.read_memory(S["ANIM_LIST"], 4 * n)) if n else []
+                nroom += 1
+                m = list(m)
+                bad = [(j % 32, j // 32, m[j], want_m[j]) for j in range(576) if m[j] != want_m[j]]
+                check(f"W13 D{d} seed {seed:#06x} r{r}: ROOM_MAP == decorgen.py", ok and not bad, bad[:3])
+                check(f"W13 D{d} seed {seed:#06x} r{r}: ANIM_LIST == decorgen.py", got_al == al, (n, got_al[:52], al))
+                if i < 3 and r % 3 == 0:                  # decor cost: build with RD_SEED zeroed
+                    da = S["ROOM_DESC"] + r * S["RD_STRIDE"] + S["RD_SEED"]
+                    sv = bytes(p.z.read_memory(da, 2))
+                    p.z.cmd("write-memory %d 0 0" % da)
+                    _, t0, _ = build_only(p, r)
+                    p.z.cmd("write-memory %d %d %d" % (da, sv[0], sv[1]))
+                    dT.append(t1 - t0)
+                # ---- independent rules ----
+                errs = []
+                ch = [j for j in range(576) if m[j] != base[j]]
+                for j in ch:
+                    c, row = j % 32, j // 32
+                    if base[j] == T_AIR:
+                        sizes["air"] += 1
+                        if flags[m[j]] & SOLID:
+                            errs.append(("solid decor on an air cell", c, row))
+                    elif base[j] == T_BRICK:
+                        sizes["wall"] += 1
+                        if not flags[m[j]] & SOLID:
+                            errs.append(("non-solid decor on a wall cell", c, row))
+                        if row % 9 == 0:
+                            errs.append(("wall decor on the lintel row", c, row))
+                    else:
+                        errs.append(("decor on a structural cell", c, row, base[j]))
+                    if row % 9 > 5:
+                        errs.append(("decor in the 2 rows above a floor / floor row", c, row))
+                    for dr in (-1, 0, 1):
+                        for dc in (-1, 0, 1):
+                            rr, cc = row + dr, c + dc
+                            if 0 <= rr < 18 and 0 <= cc < 32 and base[rr * 32 + cc] in lad:
+                                errs.append(("decor adjacent to a ladder", c, row))
+                wallc = sum(1 for j in ch if base[j] == T_BRICK)
+                if wallc > 6:
+                    errs.append(("more than 6 wall-class cells", wallc))
+                ents = [got_al[k:k + 4] for k in range(0, len(got_al), 4)]
+                gl = [e for e in ents if e[2] >= 16]
+                at = [e for e in ents if e[2] < 16]
+                if len(gl) > 4 or len(at) > 8 or n > 12:
+                    errs.append(("anim budget", len(gl), len(at)))
+                cells = {(e[0], e[1]) for e in ents}
+                for e in ents:
+                    if e[0] > 31 or e[1] > 17:
+                        errs.append(("ANIM entry off the map", e))
+                        continue
+                    if m[e[1] * 32 + e[0]] == base[e[1] * 32 + e[0]] or e[2] == 0:
+                        errs.append(("ANIM entry not on a decor cell", e))
+                    if e[2] >= 16 and not flags[m[e[1] * 32 + e[0]]] & ANIMF:
+                        errs.append(("glyph-swap entry on a non-TF_ANIM id", e))
+                for j in ch:
+                    if flags[m[j]] & ANIMF and (j % 32, j // 32) not in cells:
+                        errs.append(("TF_ANIM decor cell missing from ANIM_LIST", j % 32, j // 32))
+                # large animated objects: 4-connected clusters holding a glyph entry
+                gset = {(e[0], e[1]) for e in gl}
+                seen, nclu = set(), 0
+                for cell in cells:
+                    if cell in seen:
+                        continue
+                    stack, comp = [cell], set()
+                    while stack:
+                        x = stack.pop()
+                        if x in comp or x not in cells:
+                            continue
+                        comp.add(x)
+                        stack += [(x[0] + 1, x[1]), (x[0] - 1, x[1]), (x[0], x[1] + 1), (x[0], x[1] - 1)]
+                    seen |= comp
+                    nclu += bool(comp & gset)
+                if nclu > 2:
+                    errs.append(("more than 2 large animated objects", nclu))
+                nplaced += len(ch)
+                sizes["anim"] += n
+                check(f"W13 D{d} seed {seed:#06x} r{r}: decor rules (independent checker)", not errs, errs[:3])
+        print(f"[info] W13: {nroom} rooms, {nplaced} decor cells (air {sizes['air']}, wall {sizes['wall']}), "
+              f"{sizes['anim']} anim entries; decor_room cost T = {sorted(dT)}", flush=True)
+        check("W13: >= 50 rooms over depths 1..8, decor present and animated",
+              nroom >= 50 and nplaced > 100 and sizes["anim"] > 0 and sizes["wall"] > 0, (nroom, nplaced, sizes))
     if worst:
         print("[info] B3B-8 measured (DI, contended): " + ", ".join(
             f"{k} worst {v[0]} T ({v[1]})" for k, v in worst.items()), flush=True)
@@ -818,7 +933,7 @@ def main():
             w4("W9 bat at the door")
 
         # ================= B3B-8: generated rooms + level themes ===========
-        if want("W11") or want("W12") or want("W12M"):
+        if want("W11") or want("W12") or want("W12M") or want("W13"):
             run_gen_suites(p, check)
 
         if worst:

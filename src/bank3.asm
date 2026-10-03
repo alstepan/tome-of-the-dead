@@ -1312,7 +1312,7 @@ build_room_map:
                 ASSERT T_HOLE_M == T_HOLE_L + 1 && T_HOLE_R == T_HOLE_L + 2
 
 ;==============================================================================
-; decor_room — B3B-9 hook, a stub until then. build_room_map calls it for a
+; decor_room — B3B-9 (src/decor_gen.asm). build_room_map calls it for a
 ; seeded room (RD_SEED != 0) once every structural cell is placed: A = room,
 ; IX = its descriptor, (TMP1) = the map page (map_cell). Contract: re-derive
 ; everything from RD_SEED (re-entry must rebuild the identical map, W12);
@@ -1322,7 +1322,7 @@ build_room_map:
 ; only for the room being built into ROOM_MAP. Keep IX.
 ;==============================================================================
 decor_room:
-                ret
+                INCLUDE "decor_gen.asm"         ; B3B-9: the deriver (code from the label on)
 
 ;==============================================================================
 ; init_tiles — boot (far3): the common tile set, ids 0..31 (B3B-2

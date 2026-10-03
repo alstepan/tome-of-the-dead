@@ -11,7 +11,12 @@ concept-screen §3.1, docs/memory-map.md "3B contracts"), NOT from the Z80.
 Every number comes from the .sym (game_lib.S) or tools/levelgen.py's parse of
 src/level_defs.asm, never typed here.
 """
-from game_lib import S
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
+import decorgen  # noqa: E402
+from game_lib import S  # noqa: E402
 
 ROWS, COLS = S["PLAY_ROWS"], 32
 F0, F1 = S["FLOOR_ROW0"], S["FLOOR_ROW1"]
@@ -76,7 +81,9 @@ def expected_cell(rmap, glyphs, attrs, orn, c, r, logical_col=None):
     return bytes(g), attrs[t]
 
 
-def render_room(blk, r):
+def render_room(blk, r, decor=True, anim=None):
+    """decor=True applies the B3B-9 deriver (tools/decorgen.py); anim, if a list, receives
+    its ANIM_LIST bytes (the room built into ROOM_MAP)."""
     m = [[T["T_AIR"]] * COLS for _ in range(ROWS)]
     for row in range(ROWS):
         floor = row in (F0, F1)
@@ -155,10 +162,15 @@ def render_room(blk, r):
             s = 1 if room & S["FL_S1"] else 0
             m[SR * s + SA - 1][col] = T["T_POTION"]
     seed = d[S["RD_SEED"]] | d[S["RD_SEED"] + 1] << 8
+    flat = [t for row in m for t in row]
     if seed == 0:
         for name, c, row in PROTO_DECOR.get(r, []):
-            m[row][c] = T[name]
-    return [t for row in m for t in row]
+            flat[row * COLS + c] = T[name]
+    elif decor:
+        flat, al = decorgen.decorate(flat, blk[S["LVL_DEPTH"] - BASE], seed)
+        if anim is not None:
+            anim[:] = al
+    return flat
 
 
 def read_block(p):
