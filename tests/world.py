@@ -43,7 +43,8 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
       ROOM_MAP, bank 5, screen 2 and the shadow byte-identical.
   W12M 40 random (depth, seed, master): the Z80 block == levelgen.py and every
       room's engine map == the model of levelgen.py's block (doors, pits,
-      blocks, arrival / exit shafts, 2nd ladders all seen); build T-states.
+      blocks, arrival / exit shafts, 2nd ladders all seen) and passes the
+      order-free invariants (invariants()); build T-states.
 
 Usage: ZRCP_PORT=10001 python3 tests/world.py [W1 W3 W11 ...]
 """
@@ -185,6 +186,79 @@ def present_rooms(blk):
     return [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]]
 
 
+def invariants(blk, r, m):
+    """W12M (review B3B-8): order-free checks on an engine map, from the
+    descriptor alone (room_model applies features in the Z80's order, so an
+    ordering bug would match there): footprints never overlap, ladder / hole
+    cells exactly on the segments, block cells all wall, end caps only beside a
+    row-8 hole or at p-1 / p+3, door tiles only in cols 0-1 / 30-31 of a door's
+    exit storey, row 17 only floor / hole / grate (ornament never on a hole)."""
+    T = room_model.T
+    F0, F1, SR, SA = S["FLOOR_ROW0"], S["FLOOR_ROW1"], STOREY_ROWS, STOREY_AIR
+    fld = lambda k: room_model.field(blk, r, k)
+    bad = []
+    lad = {}                                   # (c, row) -> segment
+    for col, st in room_model.segments(blk, r):
+        for row in range(SR * st - 1, SR * st + SA):
+            if 0 <= row < PLAY_ROWS:
+                for k in range(3):
+                    lad[(col + k, row)] = (col, st)
+    pit = set()
+    p_ = fld("RD_PITCOL")
+    if p_:
+        pit = {(c, F0) for c in range(p_ - 1, p_ + 4)}
+    door = set()
+    ex = fld("RD_EXITS")
+    for side, bit, sbit, c0 in (("L", "RDX_L", "RDX_LS1", 0), ("R", "RDX_R", "RDX_RS1", 30)):
+        if ex & S[bit] and blk[room_model.OFF_EDGE + room_model.edge_index(r, side)] & S["EG_DOOR"]:
+            st = 1 if ex & S[sbit] else 0
+            door |= {(c, row) for c in (c0, c0 + 1) for row in range(SR * st, SR * st + SA)}
+    blkc = set()
+    b = fld("RD_BLOCK")
+    w = b & S["RDB_WMASK"]
+    if w:
+        st = 1 if b & S["RDB_S1"] else 0
+        cols = range(32 - w, 32) if b & S["RDB_RIGHT"] else range(w)
+        blkc = {(c, row) for c in cols for row in range(SR * st, SR * st + SA + 1)}
+    for a_, b_, n in ((blkc, door, "block/door"), (blkc, set(lad), "block/ladder"), (blkc, pit, "block/pit"),
+                      (pit, set(lad), "pit/ladder"), (door, set(lad), "door/ladder")):
+        if a_ & b_:
+            bad.append(("overlap " + n, sorted(a_ & b_)[:2]))
+    ladder_ids = {T[k] for k in ("T_LAD_L", "T_LAD_M", "T_LAD_R", "T_HOLE_L", "T_HOLE_M", "T_HOLE_R")}
+    door_ids = {T[k] for k in ("T_DOOR_ARCH_L", "T_DOOR_ARCH_R", "T_DOOR_L", "T_DOOR_R", "T_DOOR_LOCK",
+                               "T_DOOR_JAMB_L", "T_DOOR_JAMB_R")}
+    grate_open = blk[S["LVL_FLAGS"] - S["LVL_STATE"]] & S["LF_GRATE_OPEN"]
+    xc = fld("RD_EXITCOL")
+    holes8 = {c for (c, row) in lad if row == F0}
+    for row in range(PLAY_ROWS):
+        for c in range(32):
+            t = m[row * 32 + c]
+            on_lad = (c, row) in lad
+            if xc and not grate_open and row == F1 and xc <= c < xc + 3:
+                on_lad = False                 # under the closed grate
+                if t != T["T_GRATE"]:
+                    bad.append(("grate", c, row, t))
+            if row == 0 and fld("RD_ARRCOL") and fld("RD_ARRCOL") <= c < fld("RD_ARRCOL") + 3:
+                on_lad = False                 # the arrival shaft's rubble cap
+            if (t in ladder_ids) != on_lad:
+                bad.append(("ladder cell", c, row, t))
+            if (c, row) in blkc and t not in (T["T_BRICK"], T["T_WALLF"]):
+                bad.append(("block cell", c, row, t))
+            if t in door_ids and (c, row) not in door:
+                bad.append(("door tile", c, row, t))
+            if t in (T["T_END_L"], T["T_END_R"]):
+                ok = row == F0 and ((t == T["T_PIT_L"] and c == p_ - 1) or (t == T["T_PIT_R"] and c == p_ + 3)
+                                    or (t == T["T_END_R"] and c + 1 in holes8)
+                                    or (t == T["T_END_L"] and c - 1 in holes8))
+                if not ok:
+                    bad.append(("cap", c, row, t))
+            if row == F1 and t not in ladder_ids | {T["T_PLAT"], T["T_WALLF"], T["T_GRATE"]}:
+                bad.append(("row 17", c, row, t))
+            if row == F1 and t in (T["T_PLAT"], T["T_WALLF"]) and on_lad:
+                bad.append(("ornament over a hole", c, row, t))
+    return bad
+
+
 def run_gen_suites(p, check):
     sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
     import levelgen as G
@@ -310,6 +384,10 @@ def run_gen_suites(p, check):
                 if bad or not ok:
                     bad_n += 1
                     check(f"W12M D{d} seed {seed:#06x} r{r}: engine map == model(levelgen.py)", False, bad[:4])
+                inv = invariants(want_blk, r, m)
+                if inv:
+                    bad_n += 1
+                    check(f"W12M D{d} seed {seed:#06x} r{r}: order-free invariants", False, inv[:4])
                 fld = lambda k: room_model.field(want_blk, r, k)
                 feats["pits"] += bool(fld("RD_PITCOL"))
                 feats["blocks"] += bool(fld("RD_BLOCK") & 3)
@@ -321,7 +399,7 @@ def run_gen_suites(p, check):
                                       and want_blk[room_model.OFF_EDGE + room_model.edge_index(r, side)]
                                       & S["EG_DOOR"])
         print(f"[info] W12M: {nroom} rooms of 40 levels, features seen {feats}", flush=True)
-        check(f"W12M: every built room == the model ({nroom} rooms, every feature kind seen)",
+        check(f"W12M: every built room == the model + order-free invariants ({nroom} rooms, every feature kind seen)",
               bad_n == 0 and nroom > 250 and all(feats.values()), (bad_n, nroom, feats))
     if worst:
         print("[info] B3B-8 measured (DI, contended): " + ", ".join(

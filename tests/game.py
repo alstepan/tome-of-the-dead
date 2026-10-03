@@ -1455,6 +1455,17 @@ def main():
             if want(38):
                 res2 = walkthrough(h, p, check14=False)
                 h.expect("38 determinism: identical end state", res2["state"], res1["state"])
+                # B3B-8: no runtime write into the bank-7 tilesets (before B3B-12)
+                from game_lib import SNA_RAM
+                p.z.cmd("set-memory-zone 0")
+                try:
+                    for nm in ("TSET_LO", "TSET_HI"):
+                        o = 7 * 16384 + S[nm] - 0xC000
+                        n = S["TSET_HALF_LEN"]
+                        h.expect(f"38 end: bank-7 tilesets {nm} == .sna",
+                                 bytes(p.z.read_memory(o, n)) == SNA_RAM[o:o + n], True)
+                finally:
+                    p.z.cmd("set-memory-zone -1")
 
         t0 = getattr(Proto, "_t0", None)
         if t0:

@@ -1907,7 +1907,8 @@ potion_pickup:
                 ld   hl, FLOOR_LIST
                 ld   b, FLOOR_MAX
 .pl:            ld   a, (hl)
-                cp   e
+                and  FL_ROOM_MASK | FL_S1      ; as build_room_map: bits 4-6 ignored
+                cp   e                         ; (FL_EMPTY -> $8F: never a room)
                 jr   nz, .pn
                 inc  l
                 ld   a, (hl)                   ; FL_COL
@@ -1922,6 +1923,7 @@ potion_pickup:
                 pop  hl
                 ret
                 ASSERT FL_ROOM == 0 && FL_COL == 1 && FL_S1 == $80 && (FLOOR_LIST & $FF) == 0
+                ASSERT ((FL_EMPTY & (FL_ROOM_MASK | FL_S1)) & FL_ROOM_MASK) >= GRID_CELLS
                 ASSERT FLOOR_MAX * FL_STRIDE <= 256
 .found:         ld   (hl), FL_EMPTY
                 ld   a, FLOOR_MAX

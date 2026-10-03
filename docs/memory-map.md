@@ -394,7 +394,7 @@ pages bank 7 and copies the depth's slot: 32 glyphs → `TILE_LEVEL_GLYPHS`
 attrs of the common floor ids (`T_PLAT`, `T_WALLF`, `T_END_L/R`) to
 `LVL_ATTR_FLOOR` and of the wall ids (`T_BRICK`, `T_WALL_DITHER/PATCH/FADE`,
 `T_RUBBLE`) to `LVL_ATTR_WALL` (`theme_ids`); restores the caller's `$C000`
-bank; ~8.5k T. Depth 0 (rooms A–D) = D1's slot + the **chest stand-in** over
+bank; 11.7k T worst (measured). Depth 0 (rooms A–D) = D1's slot + the **chest stand-in** over
 ids 32..35 (`chest_glyphs` = `item_chest` data cells, `ATTR_CHEST`, flags 0):
 the simplest way to keep the PROTO walkthrough winnable now that the tileset
 load owns 32..63 (no common id is free); B3B-13 retires it with the PROTO win.
@@ -677,8 +677,9 @@ holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
   `T_GRATE` ×3 unless `LF_GRATE_OPEN`, always set in 3B: game.md §1.4 →
   the open hole) → `FLOOR_LIST` potions → decor: `RD_SEED` ≠ 0 →
   `decor_room` (B3B-9 hook, stub `ret`; contract in its header), seed 0 →
-  `proto_decor` (A torch, D chest). Measured (DI, ZEsarUX): see W11/W12M
-  `[info]` (cold: room entry only).
+  `proto_decor` (A torch, D chest). Measured (DI, ZEsarUX, contended): 45.4k T
+  worst per room (cold: room entry only). `potion_pickup` / the builder both
+  read `FL_ROOM` through `FL_ROOM_MASK | FL_S1` (bits 4–6 reserved, ignored).
 - `room_show` (A = room) = build + `draw_room` + ornament (screen + shadow):
   the room-entry path of `start_game` and of the B3B-12 level entry. Test
   entry for generated levels (until B3B-12): a stub `far3 level_gen` →

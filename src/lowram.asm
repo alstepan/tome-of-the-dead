@@ -455,7 +455,7 @@ orn_cells:
 ; TILE_LEVEL_ATTRS / tile_flags + 32, then sets the common floor / wall ids'
 ; attrs to LVL_ATTR_FLOOR / LVL_ATTR_WALL (level_gen / new_game write them).
 ; Before the room is built and drawn. Puts the caller's $C000 bank back.
-; Clobbers: A, BC, DE, HL.   ~8.5k T (measured: tests/world.py W11)
+; Clobbers: A, BC, DE, HL.   11.7k T worst (measured, DI: tests/world.py W11)
 ;------------------------------------------------------------------------------
 level_load_tiles:
                 ld   b, a

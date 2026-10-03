@@ -964,7 +964,7 @@ SPAWN_COUNT     EQU ($ - spawn_tab) / 5
 ;            LF_GRATE_OPEN (always set in 3B, §1.4: an open grate = the hole)
 ;   potions  FLOOR_LIST entries of this room (IT_POTION) -> T_POTION, row 9s+7
 ;   decor    RD_SEED != 0: decor_room (B3B-9); seed 0 (PROTO): proto_decor
-; Clobbers: A, BC, DE, HL (IX, IY kept).   ~25k T (tests/world.py W12)
+; Clobbers: A, BC, DE, HL (IX, IY kept).   45.4k T worst (measured, DI, contended: W11 / W12M)
 ;==============================================================================
 build_room_map:
                 push ix
