@@ -753,7 +753,7 @@ def main():
         # ---------------- 52 (user bug B7) no old-room monster after a transition
         # Root cause: render runs first in a tick (A1 RENDER_FIRST), so the
         # first render after do_exit used the PREVIOUS tick's anim_tick output
-        # (N_VIS / RLIST of the old room): every monster of the room just left
+        # (N_VIS, now SLOTREC R_VIS / RLIST of the old room): every monster of the room just left
         # was drawn at its old position on the new room for one tick, then
         # erased. Followers are irrelevant; the slime (slow, never follows)
         # shows it. Both scroll directions.
@@ -836,7 +836,7 @@ def main():
                      [i for i, d in enumerate(s_) if d][:5], [])
 
         # ---------------- 54 (review A7, B7b) new game after death: no stale slot
-        # new_game rewrote the entity table but left N_VIS / N_FID / RLIST of
+        # new_game rewrote the entity table but left N_VIS / N_FID (now R_VIS / R_FID) / RLIST of
         # the dead game, so the first (render-first) tick of the new game drew
         # skeleton C (room C, parked in room A by die()) at its old position
         # and the hero with the DEAD knight's frame id from a pool that now
@@ -1020,6 +1020,96 @@ def main():
             p.place(0, 5, 7)                        # top of {5,2} (storey 1)
             h.expect("59 UP at a down-only shaft top: no turn", p.no_turn("K"), True)
             h.expect("59 CLIMB_BLK clear after a terrain block", p.rb("CLIMB_BLK"), 0)
+
+        # ---------------- 60 (A7b review) merged move rects ------------------
+        def dmg():
+            n = p.rb("DMG_COUNT")
+            b = p.z.read_memory(S["DMG_LIST"], n * 4) if n else []
+            return [tuple(b[i * 4:i * 4 + 4]) for i in range(n)]
+
+        # (a) DMG_LIST of a lone hero move: one union rect when old/new
+        # footprints overlap or touch, two rects across a gap. DMG_LIST rows are
+        # (c0, c1, r0, r1) with exclusive ends.
+        if want(60):
+            p.boot(K_KNIGHT)
+            p.isolate()
+            p.place(0, 3, 14)
+            fp0 = lambda e: (e["DCOL"], e["DCOL"] + e["DCOLS"], e["DROW"], e["DROW"] + e["DROWS"])
+
+            def move(**kw):
+                a = fp0(p.ent(0))
+                p.set_ent(0, **kw)
+                p.tick()
+                return a, fp0(p.ent(0)), dmg()
+
+            u = lambda a, b: (min(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), max(a[3], b[3]))
+            px0 = p.ent(0)["PX"]
+            a, b, d = move(PX=px0 + 2)
+            h.expect("60 horizontal move: one union rect", d, [u(a, b)])
+            px = p.ent(0)["PX"]
+            p.set_ent(0, PX=px & 0xF8)
+            p.tick(2)
+            px = p.ent(0)["PX"]
+            a, b, d = move(PX=px + 8 * (p.ent(0)["DCOLS"]))
+            h.expect("60 touching footprints: one union rect", (len(d), d[0] == u(a, b)), (1, True))
+            px = p.ent(0)["PX"]
+            a, b, d = move(PX=px + 8 * (p.ent(0)["DCOLS"] + 3))
+            h.expect("60 gap: two rects (old, new)", sorted(d), sorted([a, b]))
+            p.place(0, 3, 14)
+            p.tick(2)
+            py = p.ent(0)["PY"]
+            a, b, d = move(PY=py - 2)
+            h.expect("60 vertical (ladder) move: one union rect", d, [u(a, b)])
+
+        # (b) per tick, for two adjacent sprites moving together (+ ladder-style
+        # vertical and teleport-gap phases): the composed AND displayed screens
+        # equal a full recomposition. The reference run forces a whole-playfield
+        # PEND_DMG every tick, so the engine erases to background and repairs
+        # every sprite in slot order; the incremental run must match it tick
+        # for tick.
+        if want(60):
+            def phases(full):
+                p.boot(K_KNIGHT)
+                p.isolate(keep=(SLOT_RAT,))
+                p.place(0, 3, 14)
+                p.place(SLOT_RAT, 7, 14, flags=EF_ACTIVE | EF_LEFT)
+                p.settle()
+                out, moved = [], set()
+                hx, rx = p.ent(0)["PX"], p.ent(SLOT_RAT)["PX"]
+                hy = p.ent(0)["PY"]
+                for t in range(60):
+                    if t < 24:                        # side by side, both +2 px/tick
+                        p.set_ent(0, PX=hx + 2 * t)
+                        p.set_ent(SLOT_RAT, PX=rx + 2 * t)
+                    elif t < 36:                      # hero vertical, rat horizontal
+                        p.set_ent(0, PX=hx + 48, PY=hy - 2 * (t - 24))
+                        p.set_ent(SLOT_RAT, PX=rx + 48 + 2 * (t - 24))
+                    else:                             # hero teleports (gap), rat walks
+                        p.set_ent(0, PX=hx + (96 if t & 1 else 0), PY=hy)
+                        p.set_ent(SLOT_RAT, PX=rx + 72 + 2 * (t - 36))
+                    if full:
+                        p.z.cmd("write-memory %d 0 0 32 21" % S["PEND_DMG"])
+                        p.wb("PEND_DMG_COUNT", 1)
+                    p.tick()
+                    moved |= {(s_, p.ent(s_)["DCOL"]) for s_ in (0, SLOT_RAT)}
+                    out.append((p.composed_frame(), p.frame()))
+                    if full and (0, 32, 0, 21) not in dmg():
+                        moved.add(("nofull", t))      # forced rect did not reach DMG_LIST
+                return out, moved
+
+            inc, moved = phases(False)
+            ref, rmoved = phases(True)
+            bad_c = [t for t in range(60) if inc[t][0] != ref[t][0]]
+            bad_d = [t for t in range(60) if inc[t][1] != ref[t][1]]
+            h.expect("60 both sprites moved over the run", len({m for m in moved if m[0] == 0}) > 6
+                     and len({m for m in moved if m[0] != 0}) > 6, True)
+            h.expect("60 reference run: whole-playfield rect in DMG_LIST every tick",
+                     [m for m in rmoved if m[0] == "nofull"][:3], [])
+            h.expect("60 screens differ tick to tick (sprites really move)",
+                     len({f[0] for f in inc}) > 30, True)
+            h.expect("60 composed == full recomposition at every tick (60)", bad_c[:5], [])
+            h.expect("60 displayed == full recomposition at every tick (60)", bad_d[:5], [])
+            h.expect("60 DMG_OVERFLOW 0", p.rb("DMG_OVERFLOW"), 0)
 
         # ---------------- 32 / 33 quaff & full pack --------------------------
         if want(32) or want(33):

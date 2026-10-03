@@ -42,7 +42,7 @@
 ## World-state changes (render resync contract)
 
 - The play loop renders FIRST in a tick, from the previous tick's `anim_tick`
-  output (`N_VIS` / `N_FID` / `RLIST`). Every path that **rewrites the entity
+  output (`SLOTREC` `R_VIS` / `R_FID` / `RLIST`). Every path that **rewrites the entity
   table** (new game; Stage 3B level change / stairs) must end with
   `vis_reset`, and every path that **changes `CUR_ROOM` with the slots kept**
   (room exit) with `vis_room_sync` (both `src/lowram.asm`, always mapped).

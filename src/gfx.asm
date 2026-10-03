@@ -118,7 +118,11 @@ attr_addr:
 ; stamp_rect — fill an attribute rectangle.
 ; In : A = attr, C = col (0..31), B = row, D = cols, E = rows (D,E >= 1).
 ; C + D > 32 is clamped to the row end and counted in CLIP_TRAP (debug trap).
-; Clobbers: A, B, D, E, HL.   ~ 30 T/cell + 40 T/row + 30 T
+; Clobbers: A, B, D, E, HL.   ~150 T + 26 T/cell + 55 T/row
+; A7b: row step = add (32 - cols) to the row end (SMC) instead of push/pop +
+; add hl,32 (79 -> 55 T/row); inc hl (not inc l): a row ending at col 31 of
+; a third's last char row ends on a page boundary.
+; SMC: .step+1 = 32 - cols, patched per call.
 ;==============================================================================
 stamp_rect:
                 push af
@@ -132,19 +136,21 @@ stamp_rect:
                 ld   hl, CLIP_TRAP
                 inc  (hl)
 .inx:           call attr_addr
+                ld   a, ATTR_STRIDE
+                sub  d
+                ld   (.step+1), a              ; SMC: 32 - cols
                 pop  af
-.row:
-                push de
-                push hl
-.col:
-                ld   (hl), a
+.row:           ld   b, d
+.col:           ld   (hl), a
                 inc  hl
-                dec  d
-                jr   nz, .col
-                pop  hl
-                ld   de, 32
-                add  hl, de
-                pop  de
+                djnz .col
+                ld   b, a                      ; (B free between rows: the attr)
+                ld   a, l
+.step:          add  a, 0                      ; SMC: 32 - cols -> next row start
+                ld   l, a
+                jr   nc, .nc
+                inc  h
+.nc:            ld   a, b
                 dec  e
                 jr   nz, .row
                 ret
@@ -269,8 +275,11 @@ shadow_rect:
 ; screen 2), so source and destination share the low byte and differ by +$A0
 ; in the high byte.
 ; In : C = col, B = row, D = cols, E = rows.  Clobbers: A, BC, DE, HL (IX kept)
-; ~231 T/cell (vs ~290 T for the tile-map path: no map/glyph/attr lookups).
-; SMC: .cols+1, .rows+1, .bh/.dh/.ah/.dah+1 patched per call / per row.
+; ~280 T + 231 T/cell + 74 T/row (+~110 T per third crossed). A7b: the row
+; addresses step incrementally (low byte += 32; a carry = next third: bitmap
+; high += 8, attr high += 1) instead of being rebuilt from the row number
+; (218 -> 74 T per row; heavy fight: 26 rows/tick).
+; SMC: .cols+1, .rows+1 per call; .bh/.dh/.ah/.dah+1 per call / third.
 ;==============================================================================
 erase_rect:
                 push bc
@@ -281,7 +290,7 @@ erase_rect:
                 ld   (.cols+1), a
                 ld   a, e
                 ld   (.rows+1), a
-.row:           ld   a, b
+                ld   a, b
                 and  $18
                 or   SCREEN_BITMAP >> 8
                 ld   (.bh+1), a
@@ -300,9 +309,9 @@ erase_rect:
                 ld   a, e
                 and  $E0
                 or   c
-                ld   e, a                      ; E = low byte of the row's first cell
-                push bc
-.cols:          ld   b, 0
+                ld   c, a                      ; C = low byte of the row's first cell
+.row:           ld   e, c
+.cols:          ld   b, 0                      ; SMC: cols
 .cell:          ld   l, e
 .bh:            ld   h, 0                      ; SMC: screen bitmap high
 .dh:            ld   d, 0                      ; SMC: shadow bitmap high
@@ -320,13 +329,27 @@ erase_rect:
                 ld   (hl), a
                 inc  e
                 djnz .cell
-                pop  bc
-                inc  b
-.rows:          ld   a, 0
+.rows:          ld   a, 0                      ; SMC: rows left
                 dec  a
+                ret  z
                 ld   (.rows+1), a
-                jr   nz, .row
-                ret
+                ld   a, c
+                add  a, 32                     ; next char row: same third ...
+                ld   c, a
+                jr   nc, .row
+                ld   hl, .bh+1                 ; ... or the next one (rare)
+                ld   a, (hl)
+                add  a, 8
+                ld   (hl), a
+                ld   hl, .dh+1
+                ld   a, (hl)
+                add  a, 8
+                ld   (hl), a
+                ld   hl, .ah+1
+                inc  (hl)
+                ld   hl, .dah+1
+                inc  (hl)
+                jr   .row
 
 ;==============================================================================
 ; PRESENT — A7 double buffer, option A (docs/design/budget.md §3). During play
@@ -494,7 +517,8 @@ pm_tab:         DB   $FF, $7F, $3F, $1F, $0F, $07, $03, $01, $00   ; $FF >> n, n
 ;------------------------------------------------------------------------------
 ; pmark_dmg — mark the first DMG_PRES_N rects of render's damage list
 ; (c0,c1,r0,r1: PEND_DMG restores, erased old footprints, new footprints of
-; changed sprites) for the present at the next tick start. The overlap-repair rects appended after them
+; changed sprites — A7b: a move's old + new footprint as ONE rect when their
+; union is a rectangle) for the present at the next tick start. The overlap-repair rects appended after them
 ; are skipped: re-blitting an undamaged sprite in the same slot order rewrites
 ; the cells outside the damaged ones with the bytes already there (masked blit
 ; is idempotent, attr stamps repeat in the same order), so only cells inside
@@ -537,10 +561,11 @@ pmark_dmg:
 ; mid-copy). Leaves bank 7 paged at $C000.
 ; Clobbers: A, BC, DE, HL.
 ; Cost: ~50 T if nothing is marked; else ~65 T per clean row + ~200 T per
-; dirty row + ~60 T per non-zero mask byte + 251 T per copied cell (contended:
-; 2 accesses per byte, budget §4) + 31 T per clear bit before a byte's last.
-; SMC: .sbh/.dbh/.sah/.dah+1 (src/dst bitmap/attr high) and .rb+1 (the row's
-; low-byte base) patched per dirty row.
+; dirty row + ~75 T per non-zero mask byte + 251 T per copied cell (contended:
+; 2 accesses per byte, budget §4) + 31 T per clear bit before a byte's last;
+; a full mask byte (8 cells: HUD text) ~1.5k T by LDI lines (.full8, A7b).
+; SMC: .sbh/.dbh/.sah/.dah+1 (src/dst bitmap/attr high; .full8 reads them
+; too) and .rb+1 (the row's low-byte base) patched per dirty row.
 ;------------------------------------------------------------------------------
 present:
                 ld   a, (PRES_ANY)
@@ -629,7 +654,13 @@ present:
                 add  a, a
 .rb:            or   0                         ; SMC: row low base
                 ld   b, a                      ; B = low byte of the cell
-                dec  b                         ; (.bit pre-increments)
+                ld   a, c
+                inc  a
+                jr   nz, .bits
+                ld   a, b
+                cp   $F8                       ; (cols 24-31 of a third's last char
+                jr   nz, .full8                ; row: LDI would carry into H)
+.bits:          dec  b                         ; (.bit pre-increments)
 .bit:           inc  b
                 sla  c
                 jr   c, .copy
@@ -662,6 +693,34 @@ present:
                 or   l                         ; A = 0 here: L = 0 <=> past row 23
                 jp   nz, .rowt
                 ret
+                ; A7b: a full mask byte = 8 cells side by side (HUD text runs),
+                ; copied line by line with LDI (16 T/byte, no per-cell setup):
+                ; ~1.5k T vs ~2.1k per byte. Low byte <= $F0 here, so the 8
+                ; LDIs of a line never carry into H / D.
+.full8:         ld   a, (.sbh+1)
+                ld   h, a
+                ld   a, (.dbh+1)
+                ld   d, a
+                ld   a, b                      ; A = the first cell's low byte
+                ld   bc, $08FF                 ; B = lines; C: 64 LDIs never borrow from B
+.l8:            ld   l, a
+                ld   e, a
+                DUP  8
+                ldi
+                EDUP
+                inc  h
+                inc  d
+                djnz .l8
+                ld   l, a
+                ld   e, a
+                ld   a, (.sah+1)
+                ld   h, a
+                ld   a, (.dah+1)
+                ld   d, a
+                ld   bc, 8
+                ldir                           ; the 8 attrs
+                pop  hl
+                jr   .nextb
                 ASSERT SCREEN7_ATTR - SCREEN7_BITMAP == SCREEN_ATTR - SCREEN_BITMAP
 
 ;==============================================================================
@@ -727,13 +786,14 @@ print_char:
                 DUP  7
                 ld   a, (de)
                 ld   (hl), a
-                inc  de
+                inc  e                         ; A7b: ROM glyphs are 8-aligned (-14 T/char)
                 inc  h
                 EDUP
                 ld   a, (de)
                 ld   (hl), a
                 inc  c
                 ret
+                ASSERT (ROM_CHARSET & 7) == 0
 
 ;------------------------------------------------------------------------------
 ; hud_track — after text ending at (row B, col C-1): on a HUD row widen
@@ -869,16 +929,55 @@ clear_row:
 ; screen = (screen AND mask) OR data, width = cols (+1 spill if shifted).
 ; Clobbers: A, BC, DE, HL.  (IX/IY untouched)
 ;------------------------------------------------------------------------------
-; Cost: 52 T/byte (unrolled chain, entered at (6-width)*9 by an SMC jump) +
-; ~65 T/scanline (reposition + third crossing) + ~420 T setup.
-;   24x48 shifted  (4 cols)  : 192 B -> 10.0k + 3.1k + 0.4k = 13.5k T
-;   40x48 slash    (6 cols)  : 288 B -> 15.0k + 3.1k + 0.4k = 18.5k T
-; SMC: blit_jp+1 (chain entry), blit_sub+1 (width) — patched once per sprite.
+; A7b: DE = screen, HL = pool data (was the reverse): `and (hl)` / `or (hl)`
+; read mask and data straight from the pool, so no temp register is needed
+; (44 T/byte, was 52), and C keeps the line-start low byte, so a line ends
+; with `ld e,c` (was ld a,l / sub w / ld l,a).
+; Cost: 44 T/byte (unrolled chain, entered at (6-width)*7 by an SMC jump) +
+; 31 T/line char-aligned (54 T general path) + ~680 T setup.
+;   24x48 shifted  (4 cols)  : 192 B -> 8.4k + 1.5k + 0.7k = 10.6k T
+;   40x48 slash    (6 cols)  : 288 B -> 12.7k + 1.5k + 0.7k = 14.9k T
+; SMC: blit_jp+1 / blit_al_jp+1 (chain entry) — patched per sprite.
 ;==============================================================================
-BLIT_BLOCK      EQU 9                   ; bytes per unrolled chain block
+BLIT_BLOCK      EQU 7                   ; bytes per unrolled chain block
 BLIT_MAXW       EQU 6
 
 blit_sprite:
+                ld   a, (BL_FPX)               ; variant*3 = (left ? 6 : 0) + (shifted ? 3 : 0)
+                and  4
+                jr   z, .s0
+                ld   a, 3
+.s0:            ld   e, a
+                ld   a, (BL_LEFT)
+                or   a
+                jr   z, .r
+                ld   a, 6
+.r:             add  a, e
+                ld   e, a
+                ASSERT (FRT & $FF) == 0        ; nibble-swap lookup: FRT page-aligned
+                ASSERT FRT_STRIDE == 16        ; ... and 16 B per fid
+                ld   a, (BL_FID)               ; HL = FRT + fid*16 + variant*3
+                rrca                           ; (fid*16 by nibble swap: 70 T, was
+                rrca                           ; 4 x add hl,hl + 2 adds: 107 T)
+                rrca
+                rrca
+                ld   l, a
+                and  $0F
+                add  a, FRT >> 8
+                ld   h, a
+                ld   a, l
+                and  $F0
+                add  a, e
+                ld   l, a
+                ld   a, (hl)                   ; bank
+                cp   FRT_NONE
+                jp   z, blit_miss
+                inc  l                         ; (16-B rows: no carry)
+                ld   e, (hl)
+                inc  l
+                ld   d, (hl)                   ; DE = pre-shifted frame
+                push de
+                call page_bank                 ; (A, BC)
                 ld   a, (BL_FID)
                 ld   l, a
                 ld   h, 0
@@ -890,71 +989,28 @@ blit_sprite:
                 inc  hl
                 ld   b, (hl)                   ; B = rows (H)
                 ld   a, (BL_FPX)
-                and  4                         ; shift 4?
-                jr   z, .s0
+                and  4
+                jr   z, .ns
                 inc  c                         ; spill column
-                ld   a, 1
-.s0:            ld   e, a                      ; E = shift flag (0/1)
-                ld   a, (BL_LEFT)
-                or   a
-                jr   z, .r
-                ld   a, 2
-.r:             add  a, e                      ; A = variant 0..3
-                ld   e, a
-                add  a, a
-                add  a, e                      ; *3
-                ld   e, a
-                ld   a, (BL_FID)
-                ld   l, a
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl                    ; fid*16
-                ld   d, 0
-                add  hl, de
-                ld   de, FRT
-                add  hl, de
-                ld   a, (hl)                   ; bank
-                cp   FRT_NONE
-                jp   z, blit_miss
-                inc  hl
-                ld   e, (hl)
-                inc  hl
-                ld   d, (hl)                   ; DE = pre-shifted frame
-                push bc
-                call page_bank
-                pop  bc
-                ; SMC: width -> chain entry + reposition amount
-                ld   a, c
-                ld   (blit_sub+1), a
-                ld   a, BLIT_MAXW
-                sub  c
-                ld   l, a
-                add  a, a
-                add  a, a
-                add  a, a
-                add  a, l                      ; (6-w)*9
-                ld   l, a
-                ld   h, 0
-                push de
-                ld   de, blit_chain
-                add  hl, de
-                ld   (blit_jp+1), hl
-                pop  de
-                ; screen address of the top-left
-                ld   a, (BL_FPX)
+.ns:            ld   a, (BL_FPX)
                 rrca
                 rrca
                 rrca
                 and  $1F
-                ld   c, a                      ; C = byte col; both paths below
-                ld   a, (blit_sub+1)           ; debug trap: col + width > 32
-                add  a, c                      ; would wrap into the next row
-                cp   ROOM_COLS + 1             ; (unreachable today: wide ATTACK
-                jp   nc, blit_clip             ; frames only face a target)
-                ld   a, (BL_FPY)               ; compute HL themselves (review A1:
-                and  7                         ; the shared call here was dead)
+                ld   e, a                      ; E = byte col
+                add  a, c                      ; debug trap: col + width > 32
+                cp   ROOM_COLS + 1             ; would wrap into the next row
+                jp   nc, blit_clip_pop         ; (unreachable today)
+                ld   a, c
+                add  a, a
+                add  a, a
+                add  a, a
+                sub  c
+                ld   d, a                      ; D = 7 * width
+                ld   c, e                      ; C = byte col
+                ld   a, (BL_FPY)
+                ld   e, a
+                and  7
                 jr   nz, .gen                  ; flyer between cells: general path
                 ld   a, b
                 and  7
@@ -965,93 +1021,103 @@ blit_sprite:
                 rrca
                 rrca
                 ld   (BLIT_CROWS), a           ; char rows
-                push de
-                ld   hl, (blit_jp+1)           ; same entry offset in the twin chain
-                ld   de, blit_chain_al - blit_chain
-                add  hl, de
-                ld   (blit_al_jp+1), hl
-                pop  de
-                ld   a, (blit_sub+1)
-                ld   (blit_al_sub+1), a
-                ld   a, (BL_FPY)
-                call scr_addr_py
+                ld   a, blit_chain_al_end & $FF
+                sub  d
+                ld   l, a
+                ld   a, blit_chain_al_end >> 8
+                sbc  a, 0
+                ld   h, a
+                ld   (blit_al_jp+1), hl        ; SMC: entry = chain end - 7 * width
                 ld   b, 8
+                ld   a, e
+                call scr_addr_py               ; HL = screen (BC, DE kept)
+                ex   de, hl                    ; DE = screen
+                pop  hl                        ; HL = pool data
+                ld   c, e                      ; C = line-start low byte
                 jp   blit_al_jp
-.gen:           ld   a, (BL_FPY)
+.gen:           ld   a, blit_chain_end & $FF
+                sub  d
+                ld   l, a
+                ld   a, blit_chain_end >> 8
+                sbc  a, 0
+                ld   h, a
+                ld   (blit_jp+1), hl           ; SMC: entry = chain end - 7 * width
+                ld   a, e
                 call scr_addr_py
+                ex   de, hl
+                pop  hl
+                ld   c, e
 blit_rowloop:
 blit_jp:        jp   blit_chain                ; SMC: entry for this width
 blit_chain:
                 DUP  BLIT_MAXW
-                ld   a, (de)                   ; mask
-                inc  de
-                and  (hl)
-                ld   c, a
-                ld   a, (de)                   ; data
-                or   c
-                ld   (hl), a
-                inc  de
-                inc  l
+                ld   a, (de)                   ; screen
+                and  (hl)                      ; mask
+                inc  hl
+                or   (hl)                      ; data
+                inc  hl
+                ld   (de), a
+                inc  e
                 EDUP
-blit_sub_pre:   ld   a, l
-blit_sub:       sub  0                         ; SMC: width
-                ld   l, a
-                inc  h                         ; next pixel line
-                ld   a, h
+blit_chain_end:
+                ld   e, c                      ; back to the line start
+                inc  d                         ; next pixel line
+                ld   a, d
                 and  7
                 jr   nz, .nx
-                ld   a, l                      ; crossed a char row
+                ld   a, c                      ; crossed a char row
                 add  a, 32
-                ld   l, a
-                jr   c, .nx                    ; crossed a third: H already right
-                ld   a, h
+                ld   c, a
+                ld   e, a
+                jr   c, .nx                    ; crossed a third: D already right
+                ld   a, d
                 sub  8
-                ld   h, a
+                ld   d, a
 .nx:            djnz blit_rowloop
                 ret
+blit_clip_pop:  pop  de                        ; (the pushed frame pointer)
 blit_clip:
-                ld   hl, CLIP_TRAP             ; not drawn (stack balanced here)
+                ld   hl, CLIP_TRAP             ; not drawn
                 inc  (hl)
                 ret
 blit_miss:
                 ld   hl, BLIT_MISS             ; stationary frame at a missing shift
                 inc  (hl)                      ; (§5.1 debug trap) -> not drawn
                 ret
-                ASSERT (blit_sub_pre - blit_chain) == BLIT_BLOCK * BLIT_MAXW
+                ASSERT (blit_chain_end - blit_chain) == BLIT_BLOCK * BLIT_MAXW
 
-; char-aligned continuation (~42 T/line vs ~65): B = lines left in this char
+; char-aligned continuation (31 T/line vs 54): B = lines left in this char
 ; row; the char-row / third fix-up runs once per 8 lines.
-; SMC: blit_al_jp+1 (chain entry), blit_al_sub+1 (width) copied per sprite.
+; SMC: blit_al_jp+1 (chain entry) per sprite.
 blit_chain_al:                                 ; twin chain: falls into the
                 DUP  BLIT_MAXW                 ; aligned continuation below
                 ld   a, (de)
-                inc  de
                 and  (hl)
-                ld   c, a
-                ld   a, (de)
-                or   c
-                ld   (hl), a
-                inc  de
-                inc  l
+                inc  hl
+                or   (hl)
+                inc  hl
+                ld   (de), a
+                inc  e
                 EDUP
-                ld   a, l
-blit_al_sub:    sub  0                         ; SMC: width
-                ld   l, a
-                inc  h
+blit_chain_al_end:
+                ld   e, c
+                inc  d
                 djnz blit_al_jp
-                ld   a, l                      ; next char row
+                ld   a, c                      ; next char row
                 add  a, 32
-                ld   l, a
+                ld   c, a
+                ld   e, a
                 jr   c, .third
-                ld   a, h
+                ld   a, d
                 sub  8
-                ld   h, a
+                ld   d, a
 .third:         ld   b, 8
                 ld   a, (BLIT_CROWS)
                 dec  a
                 ret  z
                 ld   (BLIT_CROWS), a
-blit_al_jp:     jp   blit_chain                ; SMC: entry for this width
+blit_al_jp:     jp   blit_chain_al             ; SMC: entry for this width
+                ASSERT (blit_chain_al_end - blit_chain_al) == BLIT_BLOCK * BLIT_MAXW
 
 ;==============================================================================
 ; frame_footprint — exact cell footprint of frame A at (fpx E, fpy D).
