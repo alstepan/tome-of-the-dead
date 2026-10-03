@@ -123,7 +123,7 @@ of logic leaves the heaviest render tick.
   restore → `jp $0038` (ROM keeps `SYS_FRAMES`, keyboard scan, `IY`, `EI`).
   `wait_tick` unchanged. Overhead ≈ 0.5k + ROM ≈ 1k.
 - Placement: vector table + stub from the 1 KB stack reservation (measure depth
-  first). **Player + songs + FX: 8 KB at bank 3 `$E000-$FFFF`** (contended
+  first). **Player + songs + FX: 7 KB at bank 3 `$E400-$FFFF`** (user-approved, game.md §11.2; contended
   fetches ~+10%).
 - **Hold back 13k T per tick** (2 calls × ~6.5k ≈ 9% of the tick).
 - Trap: `DI` windows stall music → no SP-trick blits.
@@ -133,8 +133,8 @@ of logic leaves the heaviest render tick.
 | Store | Free | For | |
 |---|---|---|---|
 | Pre-shift pool 0/4/6 | **10,976** | hero frames beyond 12,608, new monsters, boss, projectiles/FX | M |
-| Sources banks 1+3 | 32,768 − 16,899 − 8,192 = **7,677** | unshifted source of every new frame | M+E |
-| ↳ **after A3+A5 (measured 2026-10-02)** | ZX0 sources 7,219 B (68 frames, 23 blocks, 2.40×): **bank 1 9,165 free**, **bank 3 7,232 free** below the AY reserve (`$E000`, 7 KB per user) | new frame sources (packed), menus/menu font, strings, icons | M |
+| Sources banks 1+3 | 32,768 − 16,899 − 7,168 = **8,701** (AY 7 KB) | unshifted source of every new frame | M+E |
+| ↳ **after A3+A5 (measured 2026-10-02)** | ZX0 sources 7,219 B (68 frames, 23 blocks, 2.40×): **bank 1 9,165 free**, **bank 3 8,256 free** below the AY reserve (`$E400`, 7 KB per user; 7,232 was measured to `$E000`) | new frame sources (packed), menus/menu font, strings, icons | M |
 | Frame ids | **28** | all new frames together | M |
 | Bank 2 | ~**870 B** (+~2.1 KB if cold code moves out → ~3 KB) | hot code only | M+E |
 | Bank 5 low RAM | 5,088 + ~1,000 | cold code (menu, inventory, generator), font, level state, item tables, tiles | M+E |
@@ -185,7 +185,7 @@ by the generator) for ~1.7–2× source capacity.
 ## 8. Hard limits for the designer
 
 - Pool 49,152 B; **10,976 free** after Rogue removal.
-- Sprite sources ≤ 32,768 B; **7,677 free** with the AY reserve in bank 3.
+- Sprite sources ≤ 32,768 B; **8,701 free** with the 7 KB AY reserve (`$E400-$FFFF`) in bank 3.
 - **≤ 28 new frame ids** (`FRT_MAX` 96; raising costs 16 B/id in bank 2).
 - Frame width ≤ 40 px, multiple of 8; source frame ≤ 512 B; anchors multiple of 4.
 - 16 entity slots per level incl. hero (projectiles count if they are entities).

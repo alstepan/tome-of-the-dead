@@ -282,9 +282,9 @@ The panel is the always-visible *use* surface. Gear management happens only on t
 | (7, 21) drop · (8–11, 21) **MP bar 32 px** · (12–13, 21) MP number (≤ 2 digits) | | `$45` |
 | (14, 21) drumstick · (15–18, 21) **FOOD bar 32 px** · (19–23, 21) **hunger stage word** (`FED`, `OK`, `HUNGRY`, `WEAK`; 6 chars max = 36 px) | stage attr `$44`/`$46`/`$42`/`$42` | |
 | (24–31, 21) **Warrior ammo** `D6 A12` (daggers, arrows; blank for the Mage; a count at 0 shows in `$02`) | | `$47` |
-| (0–23, 22–23) **message log**, 2 rows × 32 chars (6×8 font). Newest on row 23; a new message scrolls row 23 → 22 (192 px × 8 lines ≈ 192 B bitmap + attr copy, ~4k T, input tick) | | `$07` (row 22) / `$47` (row 23) |
+| (0–23, 22–23) **message log**, 2 rows × 32 chars (6×8 font). Newest on row 23; a new message scrolls row 23 → 22 (192 px × 8 lines ≈ 192 B bitmap + attr copy, ~4k T; a queued panel item, drained in a non-input tick, game.md §3.3) | | `$07` (row 22) / `$47` (row 23) |
 | (24–31, 22–23) **worn gear, 4 × 16×16**: weapon 24–25, armour 26–27, helmet 28–29, charm 30–31. An empty slot is a dotted outline | item ink / `$01` |
-| row 17 (storey-1 floor) | panel **ornament** | `ATTR_FLOOR` |
+| row 17 (storey-1 floor) | panel **ornament**: 8 fixed glyphs, not tile ids; the down-exit hole/grate cells override it (game.md §3.3) | `ATTR_FLOOR` |
 
 **Icon order** (full table: game.md §3.5). Warrior (9 + 1 spare): 1 sword · 2 Power Strike ·
 3 Whirlwind · 4 daggers · 5 bow · 6 quick food · 7 quick potion · 8 quick scroll · 9 bag ·
@@ -323,8 +323,9 @@ always in the digits. The selected icon's PAPER blue spans its 3×2 cells (rows 
 - Text is written with a glyph blit that shifts by `(x mod 8)`; each char costs 8 byte-writes
   + a masked merge on the straddled cell. Black paper only on text rows (log, info line,
   page), so no ink/paper clash.
-- Fonts are drawn into **both** screens (double buffer) so glyph data sits in **always-mapped
-  bank 2** (768 B + menu font TBD; game.md §11.2).
+- Text is drawn only into the bank-5 screen and presented (A7). The text font (768 B) sits
+  in bank 2 (`$B200`); the menu font (≤ 1.5 KB raw) stays in bank 3 cold data (game.md §3.4,
+  revised 2026-10-03).
 - **Messages:** one log line, ≤ 32 chars, upper case, no wrapping. Examples:
   `GOBLIN ATTACKS YOU AND MISSES.` (30) · `THE FIREBOLT FLIES.` · `THE VAMPIRE TURNS INTO A BAT!`
   (28) · `NO ARROWS.` · `YOU PICK UP 3 ARROWS.`. Messages longer than 32 chars are not allowed.

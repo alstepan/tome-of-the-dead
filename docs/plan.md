@@ -191,7 +191,7 @@ Tags: **[S]** z80-staff-engineer (Opus), **[J]** z80-junior (Sonnet). Phases
 | A6 ✅ review: ship | Raise `FRT_MAX` (to the M1 number) + tile ids 32 → 64 | S | A3 | tests green; memory-map |
 | A7 ✅ review: fix-then-ship → fixed (`91cf829`, `5ee9ccf`), merged 2026-10-03 | Double buffer (E1, option A/B — decide after A1 eyeball): bank-7 clean bg rebased to `$E000`, present/flip | S | A3 | flicker.py = 0 events; budget measured; user confirms on hardware |
 | A7b ✅ review: ship → follow-ups `709dd67`, merged 2026-10-03: mix 140.2k → 121.4k T, heavy 144.9k → 121.0k, flicker a 146.0k → 122.1k, 0 overruns; test #60 (merged rects vs full recomposition) | **Renderer optimisation** (erase + overlap repair; render is 98k T of the worst tick) — **hard prerequisite for A8** (A7 re-review 2026-10-02: present = 26.4k T of the worst mix tick, render 98k → 107k, mix worst 98.8%; flicker-a worst 125.8k → 144.5k T, overruns; overrun ticks present mid-frame without HALT) and before 3D adds projectiles | S | A7 | worst within-cap tick ≤ ~126k T (141.8k − 13k AY − 1k stub − margin); ideas: attr-only present for DIRTY_ATTR cells, merged move rects; bank-2 room via boot-copy of present/pmark to $B200 |
-| A8 | IM2 + ISR stub + silent AY player slot (8 KB reserved bank 3), `SYS_FRAMES`/ROM chain kept | S | A3 | tests green; ISR cost measured; no DI windows |
+| A8 impl `5a3922d` (feat/a8-isr), review pending: ISR 620 T/frame, worst mix 120.8k T, headroom for a 6.5k T/frame player ≈ 7.3k T | IM2 + ISR stub + silent AY player slot (**7 KB** reserved bank 3 at `$E400`, game.md §11.2), `SYS_FRAMES`/ROM chain kept | S | A3 | tests green; ISR cost measured; no DI windows |
 | A9 | Real-hardware gate (E2): tape load + contended worst tick on the user's 128K | user + S | A7, A8 | recorded |
 
 Parallel: A4 ‖ A3; A6 ‖ A7 ‖ A8 after A3. **User 2026-10-02: once A7 is merged, start 3B in parallel with A8 + A9** (3B does not touch the ISR).
@@ -241,6 +241,26 @@ A5 review carry-overs (z80-reviewer, 2026-10-02; done in A6):
 per-level floor colours; decor tiles (static, animated, large multi-cell, brick
 walls); doors (2-col); dead ends; level generator; room transitions for the new
 geometry. **Exit:** walk a generated level, doors open, decor animates, log shows.
+
+**3B breakdown** (z80-architect, 2026-10-03). Decisions: D1 room id = 3×3 grid cell, fixed 16-B descriptor + 6-entry door edge table, level state ≈ 290 B in low RAM `$6D40..`; D2 `TILE_FLAGS[64]` collision via `map_cell`; D3 2 storeys × 9 rows (`ROOM_ROWS` 18, MOD9/DIV9 tables); D4 rows 0–17 playfield (row 17 scrolls), rows 18–23 panel only, HUD tracking for text rows 20–23; **D5 (user 2026-10-03): panel updates queued, one item per tick, never in the input tick, ≤ ~3 ticks latency**; D6 animated decor `ANIM_LIST` ≤ 12 cells, `decor_tick` ≤ 2 glyph + 3 attr cells/tick, writes bank 5 + bank-7 shadow, occupancy mask skips cells under sprites; D7 generator / `build_room_map` v2 / decor deriver / `panel_init` in bank 3 via `far3`; D8 6×8 font boot-copied to `$B200..$B4FF`, `$B500..$B7FF` kept for boot-copied hot code; D9 own `GEN_RNG`; **D10 (user 2026-10-03) stand-ins accepted**: potions only floor items, fixed per-room population with today's kinds, lair grate open, D8 descend = win, keyboard close-door until 3C. Budget: ≤ 126k T worst tick after A8 (~4.5k for all of 3B). Goldens: split playfield (rows 0–17) / panel (18–23) hashes; rebase only in separate `test: rebase goldens` commits after a PNG look.
+
+| ID | Task | Tag | Deps | Exit |
+|---|---|---|---|---|
+| B3B-1 | Layout allocation (`src/level_defs.asm`, memory-map), no behaviour change | S | A8 merged | build clean, suite unchanged |
+| B3B-2 | Tiles / icons converter + level tilesets (`tools/tiles_convert.py`) | J | B3B-1 (id enum) | attr legality, no decor in floor rows, byte counts |
+| B3B-3 | 2×9 geometry switch; rooms A–D re-authored as 2-storey | S | B3B-1 | `tests/world.py` W1–W4 |
+| B3B-4 | Port game/budget/flicker suites to 2×9 | J | B3B-3 | all green; budget recorded |
+| B3B-5 | Collision, doors, pits, dead-end blocks | S | B3B-3 | W5–W9; mix ≤ 126k |
+| B3B-6 | Python reference generator + invariant checker | J | B3B-1 contract | 1,000 seeds pass |
+| B3B-7 | Z80 level generator (bank 3) | J (→S) | B3B-1, -6 | W10: dump == levelgen.py, 20 seeds |
+| B3B-8 | `build_room_map` v2 + theme load | S | B3B-5, -7 | W11, W12 |
+| B3B-9 | Decor deriver (bank 3) | J | B3B-8 | W13 |
+| B3B-10 | `decor_tick` | S | B3B-8 | W14; flicker 0; mix ≤ 126k |
+| B3B-11 | Panel engine (`print6`, `log_push`, bars, `PANEL_DIRTY` queue) | S | B3B-3, -2 | W15; panel golden; mix ≤ 126k |
+| B3B-12 | Level change (`level_enter`: start + descend) | S | B3B-8, -11 | W16; `GEN_TRAP` 0 |
+| B3B-13 | Message strings via `log_push`; drop PROTO-only code | J | B3B-11, -5 | strings ≤ 32 chars (ASSERT) |
+
+Merge order: A8 → B3B-1 → B3B-3 (all budget numbers count after A8). Risks: tick budget (R1), bank-2 bytes ~1 KB new hot code vs 1,067 B (R2: boot-copy to `$B500`, delete PROTO code), bank 3 ≈ 4.1 KB of 7.4 KB (R3), golden churn (R4), Python↔Z80 generator byte equality (R5).
 
 ### 3C — Hero, controls & menu (needs game.md §2–4)
 Main menu, redefine keys, joystick select (Kempston/Sinclair/keys); icon bar +

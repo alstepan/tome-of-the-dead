@@ -42,6 +42,7 @@
 | Key room | the farthest other leaf (else the farthest non-start room): holds the **level key**. The lair edge is a **locked door** |
 | D8 Sanctum | an extra leaf off the lair behind a **sealed door** (opens on the Archmage's death); holds the Book. D8 has no exit |
 | In-room | 1–2 internal ladders `{c,1}`, `c ∈ 3..26`, ≥ 4 cols from ladders/pits · optional **pit** (3 cols, storey-0 floor, ≥ 3 clear cols on each side) · optional **dead-end block** (2–3 wall cols at an exitless edge, rubble at its foot) · decor **re-derived from the room seed** (never stored; rules in concept-screen §3.3) |
+| Ladder/pit placement (designer decision 2026-10-03) | **Internal ladders are in addition to the exit shafts** (up-exit `{c,0}`, down-exit `{c,2}`, the D2+ arrival shaft). **A shaft col is never an internal-ladder col** (no continuous 2-segment ladders: keeps one ladder segment per col and no "stand over a hole with ladders both ways" state). Every ladder, shaft and pit is a **3-col footprint `c … c+2`, `c` = its left col** (pit: the 3 hole cols; caps at `c−1`/`c+3` are floor). Two footprints that touch the same storey (storey 0: up-exit, internal-ladder hole in row 8, pit; storey 1: internal ladder, down-exit hole in row 17) keep **≥ 4 clear cols between them: `|c1 − c2| ≥ 7`**. Placement order: exits → 1st internal ladder → pit → 2nd internal ladder → dead-end block; an optional feature that finds no legal `c` in 8 seeded tries is dropped (deterministic) |
 | Reachability | storeys span the full width except pits and edge blocks; ≥ 1 internal ladder; a pit is always jumpable, and falling only leads to storey 1. The hero can reach every exit; monsters may be cut off by a pit (intended) |
 | Stored per level | room descriptors (exits, ladders, pits, blocks, door/grate bits), the floor-item list, the 16 entity slots. Population §9.4, items §8.5 |
 
@@ -75,6 +76,17 @@
   turn, ignores DEF).
 - At 0 it turns to ash (rubble glyph) → `THE BOOK IS DESTROYED` → `GS_WIN`.
 - It is a tile with an `ATTACKABLE` flag, not an entity.
+
+### 1.4 Stage 3B stand-ins (user, 2026-10-03; temporary, replaced in 3C+)
+
+| Area | 3B stand-in | Final rule |
+|---|---|---|
+| Floor items | **potions only** | §8.5 |
+| Population | a **fixed per-room table** using today's (prototype) kinds | §9.4 |
+| Lair | the **grate is always open** (boss death not required) | §1.1, §8.6 |
+| Key / locked door | no key exists (potions only), so the lair door is an **ordinary unlocked door** (designer decision 2026-10-03) | §1.1 |
+| D8 | D8 gets a lair exit like D1–D7; **descending from D8 = `GS_WIN`** | §1.3 |
+| Close door | keyboard key **`C`** (1 turn, §2.3 legality; not redefinable, not on joystick) until the 3C icon bar adds FIRE on the melee icon (designer decision 2026-10-03: the key) | §3.1 |
 
 ---
 
@@ -113,7 +125,7 @@
 | Bump attack | 1 | 6–7 | a hostile in reach, facing it (prototype §6.1) |
 | Use icon (FIRE tap) | 1 | per action | §3, §6 |
 | Open door (bump it) | 1 | 2 | a closed door is adjacent in the facing direction. Locked: needs the key (consumed) |
-| Close door (FIRE on the melee icon) | 1 | 2 | an open door is adjacent and faced, and no hostile is in reach |
+| Close door (FIRE on the melee icon) | 1 | 2 | an open door is adjacent and faced, its cells are free of bodies, and no hostile is in reach. Only the hero closes doors (§9.1). 3B stand-in key: §1.4 |
 | Wait (↓ where no ladder goes down) | 1 | 2 | always |
 | Eat / drink (quick slot) | 1 | 2 | refused, at no turn, at FOOD = 100 (food) or HP = max (Heal) |
 | Page verb (eat, read, equip…) | 1, applied on return to play | — | play is paused on the page |
@@ -147,6 +159,14 @@ in a row" caps flight speed at 7 cols per 2 turns.
 - **Fall:** 9 rows at 8 px/tick to storey 1, same x, **1d4 damage** (ignores DEF). An
   occupied landing box puts that monster PENDING in place (prototype §3.6).
 - Walkers never step onto `x == pit col`. Flyers ignore pits.
+- **Geometry (designer decision 2026-10-03).** `pit col` = `p`, the pit's **left** hole col;
+  holes `p … p+2` (AIR `$00`), caps `PIT_L` at `p−1` and `PIT_R` at `p+3` (solid floor). Only
+  `x == p` is special, for every body width: the hero (3 cols) falls there; a walker of any
+  width (24 or 32 px) refuses the step that would make `x == p`, and every other overlapping
+  `x` stands normally (at least one body col is on floor). Because walking moves 1 col per
+  turn, refusing `x == p` alone cuts a walker off at the pit. Generation, follower entry,
+  PENDING placement, teleport/fear arrivals and jump landings never put a walker or the hero
+  at `x == p` on storey 0.
 - F9: `px = col×8` while falling (snap invariant).
 
 ---
@@ -195,6 +215,21 @@ bars (32 px each) with numbers, the **hunger stage word**, the Warrior's ammo. R
 2-row message log (cols 0–23) + **4 worn-gear icons 16×16** (cols 24–31). Row 17 (the
 storey-1 floor) carries the panel ornament.
 
+**Update timing (user, 2026-10-03).** Panel changes (bars, numbers, hunger word, ammo, log
+lines, icon states, key/depth) are **queued** and drained **one item per tick, never in the
+input tick**. Up to ~3 ticks of display latency is accepted. Logic reads the real values,
+never the panel.
+
+**Row 17 (designer decision 2026-10-03).** Only row 17 differs from the normal floor. In the
+room map its cells stay logical PLATFORM (solid; the down-exit `{c,2}` cells are the hole /
+grate). The room builder draws row 17's PLATFORM cells from the fixed **8-glyph ornament
+pattern** (`assets/gfx/concept/grid/panel_r4.tiles`: cap_l col 0, cap_r col 31, wing/skull/
+skull/wing cols 14–17, link/bar alternating elsewhere), and the hole/grate cells override it.
+Ornament glyphs are **not tile ids** (64 B, the same on every level), with attr
+`ATTR_FLOOR[depth]`, so only the colour changes per level. The storey-0 floor (row 8) uses the
+common PLATFORM glyph (+ PIT caps, ladder hole) on every level; the floor glyph never varies
+per level.
+
 ### 3.4 Text and fonts (user, round 5)
 
 | Font | Cell | Used for | Capacity |
@@ -216,9 +251,18 @@ Examples (all ≤ 32): `YOU HIT THE GOBLIN.` · `THE GOBLIN MISSES YOU.` ·
 `FOOD: HUNGRY.` The death line moves to the menu font: `KILLED BY …` ≤ 32 chars, with the
 monster name abbreviated by a table if longer than the budget.
 
-**Placement (memory).** Both fonts are drawn into **both** screens (double buffer), so the
-glyph data must live in **always-mapped RAM (bank 2)**, not in a paged bank. Budget table:
-§11.2.
+**Placement (memory; revised 2026-10-03, designer decision, after A7).** Since the A7
+double buffer, all text (panel, page, menus, cards) is drawn **only into the bank-5 screen**
+and reaches the ULA screen through `present`; bank 7 holds the playfield's clean background
+only. So:
+- The **text font** (768 B) is used every turn and stays boot-copied into bank 2 (`$B200`).
+- The **menu font** is drawn only on static screens (menus, pause, `DEPTH n` card, death/win).
+  It stays in **bank 3** cold data and is paged in while those screens draw. The ≤ 0.8 KB
+  limit is **dropped**. New limit: **≤ 1.5 KB raw** (e.g. 64 glyphs × 16 B + a few 16×16
+  title glyphs), counted in the banks 1+3 cold-data row of §11.2. The artist picks the
+  glyph count.
+
+Budget table: §11.2.
 
 ### 3.5 Icon bars (10 slots; `$` = ink, concept-screen §6)
 
@@ -544,6 +588,18 @@ ids:** WALK1, WALK2, CLEAVE, BLOCK, DEAD (the rev-2 WIND-UP is dropped; HURT = f
 Opener = it can open closed doors (1 turn). Locked/sealed doors stop all monsters. The
 Ogre and Death Knight scale by depth like the rest.
 
+**Door rules for monsters (designer decision 2026-10-03).**
+- A closed door's plank cells block movement like a wall for every body.
+- An **opener** whose chosen step would enter a closed, unlocked door's cells opens it
+  instead: the whole turn is spent (2 ticks, it does not move), the connection's door bit
+  is set (open in both rooms), and it moves on a later turn. Same cost as the hero (§2.3).
+- **Non-openers and every flyer** (Bat, Ghost, the Vampire in bat form) are blocked; their
+  step is simply illegal and their AI picks its next choice or waits. No movement, bump,
+  follow, fall or knock-on ever opens a door without the opener flag.
+- **Only the hero closes doors.** Closing also needs the door's cells free of bodies.
+- Following is unaffected: the follow rule runs on the hero's exit turn, when the door the
+  hero walked through is open by construction.
+
 **Resistances** (N blank; R resist, I immune, W weak, X reflect):
 
 | Kind | PHYS | FIRE | COLD | SHOCK | DRAIN | DARK |
@@ -703,7 +759,7 @@ therefore needs the **Bat set resident too** (D6 and D8; D3 already has it): +2.
 |---|---|---|---|
 | Frame ids | 28 free (`FRT_MAX` 96, 68 used) | 68 + 75 = **143** | **`FRT_MAX` → 160**: +64 × 16 B = **+1,024 B bank 2**. 16 spare |
 | Kind ids | 16 | 2 heroes + Rogue hole + 12 monster kinds + Archmage + Ogre + Death Knight = **18** | **`kind_tab` → 32**: **+256 B bank 2**. The resistance table adds ~60 B (3 B/kind) |
-| Bank 2 | ~0.87K + ~2.1K freed by the cold-code move ≈ 3.0K | FRT +1,024, kinds +256, resist ~60 = **1.34K**; **text font 768 B** (6×8 × 96, rev 3); **menu font ~1 KB (size TBD by the artist)** | Fonts must be in always-mapped RAM (drawn into both screens). 1.34 + 0.77 = 2.11K, **~0.9K left** — the ~1 KB menu font would **not fit** on top. **Open (engineer/artist):** menu font ≤ ~0.8 KB (≈ 50 glyphs × 16 B: caps, digits, minimal punctuation), or menu screens draw into one screen only and the menu font lives in a paged bank (menus are static, no double buffer needed). The text font is fixed. **The static frame descriptors (24 B/frame) must leave bank 2**: 146 × 24 = 3.5K. The engineer trims them to ≤ 12 B (W, H, ax, class/sym, source bank+offset) → 144 × 12 ≈ 1.75K, moved to **bank 5** next to the generator that alone reads them |
+| Bank 2 | ~0.87K + ~2.1K freed by the cold-code move ≈ 3.0K | FRT +1,024, kinds +256, resist ~60 = **1.34K**; **text font 768 B** (6×8 × 96, rev 3) | 1.34 + 0.77 = 2.11K, **~0.9K left**. **Resolved 2026-10-03 (§3.4):** text is drawn only into bank 5 since A7; the text font stays in bank 2 (`$B200`); the **menu font moves to bank 3 cold data (≤ 1.5 KB raw)**, so it costs bank 2 nothing and the ≤ 0.8 KB cap is dropped. The text font is fixed. **The static frame descriptors (24 B/frame) must leave bank 2**: 146 × 24 = 3.5K. The engineer trims them to ≤ 12 B (W, H, ax, class/sym, source bank+offset) → 144 × 12 ≈ 1.75K, moved to **bank 5** next to the generator that alone reads them |
 | Bank 5 low RAM | ~6.1K | generator + boot ~2.1K, ZX0 + `GEN_SRC` 0.6K (rev 3: the scratch is the 1.5 KB `GEN_SCRATCH`, **aliasing `ROOM_MAP`/`NEXT_MAP` → 0 extra bytes**; only the decompressor ~0.1K stays here), tile glyphs 0.6K, level state 0.6K, frame descriptors ~1.75K | ~5.65K, fits, **0.45K margin** |
 | Sources + cold data (banks 1+3) | 32,768 − AY reserve | existing 16,899 → ~9.9K ZX0 + new ~10.1K ZX0 + menus code ~2.0K + icons ~2.7K → 1.6K ZX0 + strings ~2.9K → 1.7K ZX0 = **25.3K** | With AY at 8 KB (24.6K free): **0.7K over**. **AY reserve 7 KB (user: approved)** (player ~2K + in-game music ~4K + FX ~1K still fit, budget §5) → 25.6K, ~0.3K margin **at the conservative 1.7×**. With the rev-3 block packing (2.71× measured on kind data) the expected total is ~18–20K, i.e. ≥ 5K of real margin; the 1.7× row stays the build gate until A5 reports actual sizes |
 | Bank 7 spare | 2,656 | **8 per-level tilesets 2,304** | Fits (cold, copied at level start; never drawn into bank 7) |
@@ -749,6 +805,5 @@ Knight; the 8 colour schemes.
 3. **Vampire (§9.1–9.2):** hp 14, atk 2, 1d6 drain bite, slow in humanoid form, bat form to
    flee (hp ≤ 5, 8 turns, once) or to close distance. Confirm numbers.
 4. **Hunger stage 2 is named `OK`** (§7). Alternative `SNACKY`/`PECKIS`. OK?
-5. **Menu font size** (§11.2): bank 2 has room for ~0.8 KB of it, not 1 KB. Artist decides
-   the glyph count, or menus move to one-screen drawing.
+5. ~~Menu font size~~ — resolved 2026-10-03 (§3.4): the menu font lives in bank 3, ≤ 1.5 KB raw.
 6. The Bat set is now resident on D6 and D8 (+2.0 KB pool; D8 = 23.9 KB, still fits).
