@@ -933,7 +933,7 @@ dmg_add:
                 inc  hl
                 ld   (hl), 0                   ; r0
                 inc  hl
-                ld   (hl), ROOM_ROWS           ; r1
+                ld   (hl), PLAY_ROWS           ; r1
                 ret
 
 ; dmg_hit — CF = 1 if rect C,B,D(cols),E(rows) intersects any damage rect.

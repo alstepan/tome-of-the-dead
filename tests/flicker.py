@@ -237,7 +237,7 @@ def run(h, name):
     p = game.T(h)
     p.boot(K_KNIGHT, freeze=0)
     p.isolate()
-    p.place(0, 12, 14)
+    p.place(0, 12, budget.HERO_Y)
     if name == "a":
         scen = budget.SCENARIOS["heavy"]
         keys = scen[2]
@@ -249,7 +249,8 @@ def run(h, name):
         label = "b: hero alone walking"
     else:
         keys = [("L", 10), ("H", 10)]
-        for slot, x, y, fl in ((1, 22, 18, budget.HOSTILE), (3, 25, 16, budget.HOSTILE)):
+        for slot, x, y, fl in ((1, 22, budget.stand_y(1, 2), budget.HOSTILE),
+                               (3, 25, budget.stand_y(1, 4), budget.HOSTILE)):
             p.place(slot, x, y, room=0, flags=fl)
         label = "c: hero + rat + goblin walking"
     r = Rec(p)

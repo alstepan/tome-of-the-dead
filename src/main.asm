@@ -330,9 +330,9 @@ do_exit:
                 ld   b, a
                 ld   a, (EXIT_KIND)
                 cp   EX_UP
-                ld   a, (STOREYS - 1) * STOREY_H + 6   ; up: stand on storey 2
+                ld   a, FLOOR_ROW1             ; up: stand on the bottom storey (9s+8-h, s 1)
                 jr   z, .vy
-                ld   a, 6                      ; down: stand on storey 0
+                ld   a, FLOOR_ROW0             ; down: stand on storey 0
 .vy:            sub  b
                 ld   (ix+E_Y), a
 .pos:           call snap_pxpy
@@ -401,15 +401,15 @@ kind_tab:
                 KROW $47,$45,$44,$47,$44,$45,$06,$43,$44          ; KT_ATTR
                 KROW KFID_KNIGHT, KFID_WIZARD, 0, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME   ; KT_FID0
                 KROW KFCNT_KNIGHT, KFCNT_WIZARD, 0, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME ; KT_FCNT
-                ASSERT $ - kind_tab == KT_MOD7
-                ASSERT (KT_MOD7 >> 8) == ((KT_DIV7 + 23) >> 8)    ; feet_mod: one H for both
+                ASSERT $ - kind_tab == KT_MOD9
+                ASSERT (KT_MOD9 >> 8) == ((KT_DIV9 + 23) >> 8)    ; feet_mod: one H for both
                 ASSERT (KT_FID0 >> 8) == (KT_FCNT >> 8)            ; gen_kind: one H for both
                 DUP 24, n
-                DB   n % 7                     ; KT_MOD7
+                DB   n % STOREY_ROWS           ; KT_MOD9
                 EDUP
-                ASSERT $ - kind_tab == KT_DIV7
+                ASSERT $ - kind_tab == KT_DIV9
                 DUP 24, n
-                DB   n / 7                     ; KT_DIV7
+                DB   n / STOREY_ROWS           ; KT_DIV9
                 EDUP
                 ASSERT $ - kind_tab == KT_END
                 ASSERT KT_END <= KT_SIZE           ; $1D0..$1FF spare (resistances, 3F)

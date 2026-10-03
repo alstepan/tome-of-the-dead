@@ -54,31 +54,31 @@ get_box:
                 ld   b, (ix+E_Y)
                 ret
 
-; feet_mod — A = (y+h) mod 7, L = (y+h) div 7 (raw).  Clobbers: A, H, L
+; feet_mod — A = (y+h) mod 9, L = (y+h) div 9 (raw; STOREY_ROWS).  Clobbers: A, H, L
 feet_mod:
                 KFIELD KT_BH
                 add  a, (ix+E_Y)
                 ld   l, a
-                ld   h, (kind_tab + KT_MOD7) >> 8   ; KT_MOD7/KT_DIV7: one page
+                ld   h, (kind_tab + KT_MOD9) >> 8   ; KT_MOD9/KT_DIV9: one page
                 push hl
                 ld   a, l
-                add  a, KT_DIV7 & $FF
+                add  a, KT_DIV9 & $FF
                 ld   l, a
                 ld   a, (hl)
                 pop  hl
                 push af
                 ld   a, l
-                add  a, KT_MOD7 & $FF
+                add  a, KT_MOD9 & $FF
                 ld   l, a
                 ld   a, (hl)
                 pop  hl
-                ld   l, h                      ; L = div7
+                ld   l, h                      ; L = div9
                 ret
 
-; is_standing — Z if IX stands on a floor ((y+h) mod 7 == 6).  Clobbers: A, HL
+; is_standing — Z if IX stands on a floor ((y+h) mod 9 == 8, game.md §2.1).  Clobbers: A, HL
 is_standing:
                 call feet_mod
-                cp   6
+                cp   STOREY_AIR
                 ret
 
 ; on_ladder — Z if IX is mid-ladder (non-flyer, not standing).  Clobbers: A, HL
@@ -94,13 +94,13 @@ on_ladder:
 .free:          or   1                         ; NZ
                 ret
 
-; storey_ref — A = min(2, (y+h) div 7).  Clobbers: A, HL
+; storey_ref — A = min(1, (y+h) div 9) (prototype §6.4 on 2 storeys).  Clobbers: A, HL
 storey_ref:
                 call feet_mod
                 ld   a, l
-                cp   3
+                cp   STOREY_COUNT
                 ret  c
-                ld   a, 2
+                ld   a, STOREY_COUNT - 1
                 ret
 
 ;==============================================================================
@@ -308,15 +308,11 @@ bitmask:
                 add  a, a
                 jr   .b
 
-; storey_row5 — A = 7*A + 5 (potion row of storey A).
-storey_row5:
+; storey_row — A = 9*A + 7: the standing (potion / floor-item) row of storey A.
+storey_row:
                 push bc
-                ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b
-                add  a, 5
+                MUL_STOREY b
+                add  a, STOREY_AIR - 1
                 pop  bc
                 ret
 
@@ -397,7 +393,7 @@ try_player_turn:
 ;------------------------------------------------------------------------------
 ; try_climb — IX = player, D = dy ($FF up / 1 down). CF = 1 if done (§3.4).
 ; Standing: UP needs {x,s} ({x,0} = up-exit, no step), DOWN needs {x,s+1}
-; ({x,3} = down-exit, first step animated). Mid-ladder: continue or reverse.
+; ({x,2} = down-exit, first step animated). Mid-ladder: continue or reverse.
 ; Step blocked by an entity: CF = 0 and CLIMB_BLK = 1 (the caller turns it
 ; into a wait); no ladder: CF = 0, CLIMB_BLK untouched.
 ; Clobbers: A, BC, DE, HL, TMP6
@@ -439,9 +435,9 @@ try_climb:
                 call ladder_exists
                 ret  nc
                 ld   a, b
-                cp   STOREYS
+                cp   STOREY_COUNT
                 jr   nz, .mid
-                call cur_room_desc             ; {x,3}: down-exit
+                call cur_room_desc             ; {x,2}: down-exit
                 ld   de, RD_EXD_D
                 add  hl, de
                 ld   a, (hl)
@@ -452,7 +448,7 @@ try_climb:
                 ld   (EXIT_KIND), a
                 ld   a, (ix+E_X)
                 ld   (EXIT_COL), a
-                ld   a, STOREYS - 1
+                ld   a, STOREY_COUNT - 1
                 ld   (EXIT_STOREY), a
                 call .mid                      ; animate the first step down
                 ret  c
@@ -974,10 +970,10 @@ ai_monster:
                 cp   b
                 ret  z
                 jr   c, .wantup
-                ; want down: segment {col, s+1}, s+1 <= 2
+                ; want down: segment {col, s+1}, s+1 < STOREY_COUNT (exit excluded)
                 ld   a, b
                 inc  a
-                cp   STOREYS
+                cp   STOREY_COUNT
                 ret  nc
                 ld   b, a
                 ld   a, 1
@@ -1000,16 +996,12 @@ ai_monster:
                 jp   try_step_face
 .at:            ; at the shaft: climb only if the segment is clear (no head-on)
                 ld   c, a                      ; B = segment storey (its lower end)
-                ld   a, b                      ; shaft rect: rows 7(B-1) .. +12
-                dec  a
+                ld   a, b                      ; shaft rect: rows 9(B-1) .. 9B+7
+                dec  a                         ; (upper standing top .. lower air bottom)
+                MUL_STOREY b
                 ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b
-                ld   b, a
-                ld   d, 3
-                ld   e, 13
+                ld   d, FEAT_W
+                ld   e, 2 * STOREY_ROWS - 1
                 call box_free
                 ret  c                         ; someone on it -> wait
                 ld   d, 0
@@ -1178,7 +1170,7 @@ attack_if_reach:
 ; never a reversal that stays inside. Entering a box is free. Yield steps
 ; (YIELD_FLAG) never see the rule (FLY_INBOX = 0 outside ai_flyer).
 ; The flyer band is NOT checked here: callers keep it by construction (chase
-; targets 7s+1, wander uses clamp_band).
+; targets 9s+1, wander uses clamp_band).
 ; try_step_face also sets facing from dx. CF = 1 if moved.
 ; Clobbers: A, BC, DE, HL, TMP6 (try_step_face), TMP7 (flyer_lcost)
 ; Cost of the flyer rule: 24 T when FLY_INBOX = 0 (the common case).
@@ -1217,7 +1209,7 @@ try_step:
                 ld   a, b
                 add  a, l
                 ld   b, a
-                cp   ROOM_ROWS
+                cp   PLAY_ROWS
                 jr   nc, .no
                 push hl
                 call box_free
@@ -1292,7 +1284,7 @@ cork_check:
                 ret
 
 ;------------------------------------------------------------------------------
-; ai_flyer — Bat / Ghost (prototype §6.4). Band: 7s <= y <= 7s+6-h.
+; ai_flyer — Bat / Ghost (prototype §6.4). Band: 9s <= y <= 9s+8-h (game.md §2.1).
 ; Ladder ends (§3.5, rule by user 2026-10-02): flyers may cross a shaft but
 ; never block the hero. FLY_INBOX = overlap with a ladder-end box at turn
 ; start (flyer_lcost, the turn's only call unless a reversal is tried inside
@@ -1369,14 +1361,10 @@ ai_flyer:
                 pop  de
                 jr   nc, .dy
                 ld   d, 0
-.dy:            ; dy = sign(7s+1 - y)
+.dy:            ; dy = sign(9s+1 - y)
                 ld   a, (TMP4)
-                ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b
-                inc  a                         ; 7s+1
+                MUL_STOREY b
+                inc  a                         ; 9s+1: the cruising row
                 ld   e, 0
                 cp   (ix+E_Y)
                 jr   z, .try
@@ -1446,7 +1434,7 @@ ai_flyer:
 ; segment, the box the climbers' "no head-on" rule keeps clear (§6.4): the
 ; bottom end of {col, t} and the top end of {col, t+1}, cols col..col+2. A
 ; flyer's band lies inside its storey's standing rows, so only the cols
-; decide. 0 = clear. Exit shafts count ({col,0} bottom, {col,3} top); a
+; decide. 0 = clear. Exit shafts count ({col,0} bottom, {col,2} top); a
 ; stacked shaft counts twice (harmless: only 0 / non-0 is used).
 ; Called once per flyer turn (ai_flyer) + once per reversal tried inside a box.
 ; Preserves BC, DE, IX.  Clobbers: A, HL, TMP7.  ~330 T + ~75 T per segment
@@ -1504,12 +1492,8 @@ flyer_lcost:
 ; clamp_band — E = dy clamped so IX stays in its storey air band.  Clobbers A, B, HL
 clamp_band:
                 ld   a, (TMP4)                 ; storey
-                ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b
-                ld   b, a                      ; 7s
+                MUL_STOREY b
+                ld   b, a                      ; 9s
                 ld   a, (ix+E_Y)
                 add  a, e
                 cp   b
@@ -1518,8 +1502,8 @@ clamp_band:
                 KFIELD KT_BH
                 ld   h, a
                 ld   a, b
-                add  a, 6
-                sub  h                         ; 7s+6-h
+                add  a, STOREY_AIR
+                sub  h                         ; 9s+8-h
                 ld   h, a
                 pop  af
                 cp   h
@@ -1631,7 +1615,7 @@ cache_player:
 
 ;==============================================================================
 ; POTIONS (prototype §6.6) — end-of-turn pickup. Player standing, body cols
-; cover a potion cell (row 7s+5) of its storey, potions < 9.
+; cover a potion cell (row 9s+7) of its storey, potions < 9.
 ;==============================================================================
 potion_pickup:
                 ld   ix, P_ENTITIES
@@ -1647,7 +1631,7 @@ potion_pickup:
                 ld   (TMP4), a
                 call get_box                   ; C = x, D = w (B clobbered)
                 ld   a, (TMP4)
-                call storey_row5
+                call storey_row
                 ld   b, a
 .c:             push bc
                 push de
@@ -1799,7 +1783,7 @@ queue_damage:
                 ret
 
 ;==============================================================================
-; HUD (rows 21..23, fixed attrs, never touched by sprites).
+; HUD (PROTO text on panel rows 21..23 until B3B-11; never touched by sprites).
 ;==============================================================================
 hud_status:
                 ld   b, HUD_ROW

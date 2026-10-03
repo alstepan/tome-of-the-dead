@@ -224,12 +224,21 @@ nm_bat:         DB "BAT", 0
 nm_slime:       DB "SLIME", 0
 
 ;==============================================================================
-; ROOMS (prototype §8.2). Descriptor:
+; ROOMS — prototype §8.2 re-authored for 2 storeys x 9 rows (B3B-3, game.md
+; §2.1). Same route, exits, potions and population; storeys mapped PROTO s2
+; -> s1 (bottom), s1 -> s0, s0 -> s0. Descriptor:
 ;   DB exitL_storey, exitL_dest, exitR_storey, exitR_dest, exitU_dest, exitD_dest
-;   DB n_ladders, (col, s)*          ; {col,0} = up-exit shaft, {col,3} = down-exit hole
-;   DB n_potions, (id, col, s)*
+;   DB n_ladders, (col, s)*          ; {col,0} = up-exit shaft (rows 0-7),
+;                                    ; {col,1} = internal (hole row 8, rows 8-16),
+;                                    ; {col,2} = down-exit hole (row 17)
+;   DB n_potions, (id, col, s)*      ; potion cell = (col, 9s+7)
 ;   DB n_decor,   (tile, col, row)*
-; EXIT_NONE ($FF) = no exit. Room ids: 0=A 1=B 2=C 3=D.
+; EXIT_NONE ($FF) = no exit. Room ids: 0=A 1=B 2=C 3=D. Same-storey ladder
+; footprints keep |c1 - c2| >= FEAT_GAP (7), the generator's rule.
+;
+;   A (0,0) <-> B (1,0)       <-> = horizontal exit on storey 1 (bottom)
+;                 v              v = B's down-exit {24,2} -> C's up-exit {24,0}
+;   D (0,1) <-> C (1,1)
 ;==============================================================================
 RD_EXL_S        EQU 0
 RD_EXL_D        EQU 1
@@ -246,22 +255,22 @@ ROOM_D          EQU 3
 
 room_tab:       DW room_a, room_b, room_c, room_d
 
-room_a:         DB EXIT_NONE, EXIT_NONE, 2, ROOM_B, EXIT_NONE, EXIT_NONE
-                DB 2, 5, 2, 23, 1
+room_a:         DB EXIT_NONE, EXIT_NONE, 1, ROOM_B, EXIT_NONE, EXIT_NONE
+                DB 2, 5, 1, 23, 1
                 DB 1, 0, 28, 0
-                DB 2, T_TORCH_T, 0, 16, T_TORCH_B, 0, 17
-room_b:         DB 2, ROOM_A, EXIT_NONE, EXIT_NONE, EXIT_NONE, ROOM_C
-                DB 3, 10, 2, 4, 1, 24, 3
+                DB 2, T_TORCH_T, 0, 14, T_TORCH_B, 0, 15
+room_b:         DB 1, ROOM_A, EXIT_NONE, EXIT_NONE, EXIT_NONE, ROOM_C
+                DB 3, 4, 1, 11, 1, 24, 2
                 DB 1, 1, 1, 0
                 DB 0
-room_c:         DB 2, ROOM_D, EXIT_NONE, EXIT_NONE, ROOM_B, EXIT_NONE
-                DB 3, 24, 0, 24, 1, 6, 2
-                DB 1, 2, 29, 1
+room_c:         DB 1, ROOM_D, EXIT_NONE, EXIT_NONE, ROOM_B, EXIT_NONE
+                DB 3, 24, 0, 24, 1, 6, 1
+                DB 1, 2, 29, 0
                 DB 0
-room_d:         DB EXIT_NONE, EXIT_NONE, 2, ROOM_C, EXIT_NONE, EXIT_NONE
-                DB 2, 22, 2, 8, 1
-                DB 1, 3, 17, 1
-                DB 4, T_CHEST_TL, 2, 4, T_CHEST_TR, 3, 4, T_CHEST_BL, 2, 5, T_CHEST_BR, 3, 5
+room_d:         DB EXIT_NONE, EXIT_NONE, 1, ROOM_C, EXIT_NONE, EXIT_NONE
+                DB 2, 22, 1, 8, 1
+                DB 1, 3, 17, 0
+                DB 4, T_CHEST_TL, 2, 6, T_CHEST_TR, 3, 6, T_CHEST_BL, 2, 7, T_CHEST_BR, 3, 7
 
 WIN_ROOM        EQU ROOM_D
 WIN_MAX_X       EQU 3               ; standing on storey 0 with x <= 3 (chest cols)

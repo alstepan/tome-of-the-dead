@@ -389,10 +389,59 @@ def cell_bytes(frame, col, row):
     return bytes(out)
 
 
+# --- B3B-3 geometry (game.md §2.1), read from the .sym: never hard-coded ---
+STOREY_ROWS = S["STOREY_ROWS"]          # 9: 8 air rows + 1 floor row
+STOREY_AIR = S["STOREY_AIR"]            # 8
+STOREY_COUNT = S["STOREY_COUNT"]        # 2 (s = 0 is the TOP storey)
+PLAY_ROWS = S["PLAY_ROWS"]              # 18: playfield rows 0..17
+PANEL_ROW = S["PANEL_ROW"]              # 18: panel rows 18..23 (never stamped / scrolled)
+FLOOR_ROWS = tuple(STOREY_ROWS * s + STOREY_AIR for s in range(STOREY_COUNT))   # (8, 17)
+MAP_LEN = 32 * PLAY_ROWS
+
+
+def stand_y(s, h):
+    """Standing top row of a body of height h on storey s: 9s+8-h."""
+    return STOREY_ROWS * s + STOREY_AIR - h
+
+
+def is_standing(y, h):
+    return (y + h) % STOREY_ROWS == STOREY_AIR
+
+
+def storey_of(y, h):
+    """storey_ref: min(STOREY_COUNT-1, (y+h) div 9)."""
+    return min(STOREY_COUNT - 1, (y + h) // STOREY_ROWS)
+
+
+def item_row(s):
+    """Potion / floor-item cell row of storey s (the standing row 9s+7)."""
+    return STOREY_ROWS * s + STOREY_AIR - 1
+
+
+def ladder_rows(s):
+    """Rows of segment {col, s}: 9s-1 .. 9s+7 clipped to the playfield."""
+    return [r for r in range(STOREY_ROWS * s - 1, STOREY_ROWS * s + STOREY_AIR) if 0 <= r < PLAY_ROWS]
+
+
+def split_frame(frame):
+    """(playfield, panel) bytes of a 6912-B screen: char rows 0..PLAY_ROWS-1 and
+    PANEL_ROW..23, bitmap lines + attrs each (B3B-3 golden split, plan R4)."""
+    def rows(rr):
+        out = bytearray()
+        for r in rr:
+            for line in range(8):
+                a = (((r & 0x18) | line) << 8) | ((r & 7) << 5)
+                out += frame[a:a + 32]
+        for r in rr:
+            out += frame[6144 + r * 32:6144 + r * 32 + 32]
+        return bytes(out)
+    return rows(range(PLAY_ROWS)), rows(range(PANEL_ROW, 24))
+
+
 def floor_band_ok(frame, room_holes, open_cells=()):
-    """Every cell of floor rows 6/13/20 outside hole cells is ATTR_FLOOR."""
+    """Every cell of the floor rows (8 / 17) outside hole cells is ATTR_FLOOR."""
     bad = []
-    for row in (6, 13, 20):
+    for row in FLOOR_ROWS:
         for col in range(32):
             if (col, row) in room_holes or (col, row) in open_cells:
                 continue
@@ -401,16 +450,44 @@ def floor_band_ok(frame, room_holes, open_cells=()):
     return bad
 
 
-# hole cells per room: ladder segments {col, s} -> floor row 7s-1 (s>=1)
-ROOM_LADDERS = {0: [(5, 2), (23, 1)], 1: [(10, 2), (4, 1), (24, 3)],
-                2: [(24, 0), (24, 1), (6, 2)], 3: [(22, 2), (8, 1)]}
+# ladder segments per room (mirror of src/data.asm room_a..room_d; tests/world.py
+# W0 checks this table against the descriptors in memory). {col,0} up-exit,
+# {col,1} internal, {col,2} down-exit hole.
+ROOM_LADDERS = {0: [(5, 1), (23, 1)], 1: [(4, 1), (11, 1), (24, 2)],
+                2: [(24, 0), (24, 1), (6, 1)], 3: [(22, 1), (8, 1)]}
 
 
 def holes(room):
+    """Floor-row hole cells: segment {col, s} -> row 9s-1 (s >= 1)."""
     cells = set()
     for col, s in ROOM_LADDERS[room]:
-        row = 7 * s - 1
-        if 0 <= row <= 20:
+        row = STOREY_ROWS * s - 1
+        if 0 <= row < PLAY_ROWS:
             for c in range(col, col + 3):
                 cells.add((c, row))
     return cells
+
+
+def frame_png(frame, path, scale=2):
+    """Write a 6912-B Spectrum screen as a PNG (needs Pillow; FLASH ignored).
+    Used by `tests/game.py --update-golden --png DIR` to dump every golden for
+    a human look before a rebase (plan R4)."""
+    from PIL import Image
+    pal = []
+    for bright in (0xD7, 0xFF):
+        for c in range(8):
+            pal.append(((c >> 1 & 1) * bright, (c >> 2 & 1) * bright, (c & 1) * bright))
+    img = Image.new("RGB", (256, 192))
+    px = img.load()
+    for y in range(192):
+        base = ((y & 0xC0) << 5) | ((y & 7) << 8) | ((y & 0x38) << 2)
+        for cx in range(32):
+            b = frame[base + cx]
+            a = frame[6144 + (y >> 3) * 32 + cx]
+            br = 8 if a & 0x40 else 0
+            ink, paper = pal[br + (a & 7)], pal[br + (a >> 3 & 7)]
+            for bit in range(8):
+                px[cx * 8 + bit, y] = ink if b & (0x80 >> bit) else paper
+    if scale != 1:
+        img = img.resize((256 * scale, 192 * scale), Image.NEAREST)
+    img.save(path)

@@ -52,8 +52,8 @@ AY_MIX_OFF      EQU %00111111       ; every tone + noise off (I/O port bits 6/7 
 ; in the high byte, low bytes equal.
 SCREEN7_BITMAP  EQU $C000           ; bank 7: displayed bitmap (copy of $4000)
 SCREEN7_ATTR    EQU $D800           ; bank 7: displayed attrs  (copy of $5800)
-SHADOW_BITMAP   EQU $E000           ; bank 7: room tiles in screen layout (rows 0..20: $E000..$F79F)
-SHADOW_ATTR     EQU $F800           ; bank 7: room tile attrs in screen layout ($F800..$FA9F)
+SHADOW_BITMAP   EQU $E000           ; bank 7: room tiles in screen layout (B3B-3: rows 0..17 used)
+SHADOW_ATTR     EQU $F800           ; bank 7: room tile attrs in screen layout ($F800..$FA3F used)
 BANK_WINDOW     EQU $C000
 FT_BLOCKER      EQU $FE             ; find_target: nearest body is mid-ladder (not a slot)
 PAGING_PROBE    EQU $A5             ; check_paging: bank-1 marker (bank 0 gets ~)
@@ -63,8 +63,9 @@ SRC_VIRT_BASE   EQU $8000           ; sources are assembled at virtual $8000..$F
 ; Low-RAM buffers (bank 5, $6000-$7FFF; free after the loader's CLEAR 24575).
 ; Contended, but only touched off the blit's inner loop (1 read/erased cell).
 ;------------------------------------------------------------------------------
-ROOM_MAP        EQU $6000           ; 672 B: current room tile ids, 32x21 row-major
-NEXT_MAP        EQU $6300           ; 672 B: destination room during a transition
+ROOM_MAP        EQU $6000           ; 672 B buffer: current room tile ids, 32 x PLAY_ROWS (18)
+NEXT_MAP        EQU $6300           ; 672 B buffer: destination room during a transition
+                                    ; (B3B-3: 576 B used per map, PLAY_CELLS; rows 0..17)
 ; A6: tile ids 32 -> 64. TILE_GLYPHS is 512-ALIGNED so glyph(id) = base + id*8
 ; is formed as E = id*8 (low 8 bits), D = (base >> 9) RL carry (= id bit 5):
 ; +8 T per drawn cell vs the 32-id `ld d, base>>8` (tile_rect).
@@ -108,9 +109,11 @@ GEN_SCRATCH_LEN EQU NEXT_MAP + $300 - ROOM_MAP
 
 ROOM_COLS       EQU 32
 ATTR_STRIDE     EQU 32              ; bytes per attribute row (screen layout)
-ROOM_ROWS       EQU 21
-ROOM_CELLS      EQU ROOM_COLS * ROOM_ROWS   ; 672
-HUD_ROW         EQU 21              ; rows 21..23 = HUD (never scrolled/stamped)
+MAP_BUF_LEN     EQU $2A0            ; 672 B per map buffer (PROTO 32x21; B3B-3 uses PLAY_CELLS)
+; B3B-3: playfield = rows 0..PLAY_ROWS-1 (0..17), panel = rows 18..23 (level_defs.asm).
+; The PROTO HUD text (hud_status / msg_begin / hud_room, rows 21..23) lives on
+; the panel's STAT/LOG rows until the B3B-11 panel engine replaces it.
+HUD_ROW         EQU STAT_ROW        ; 21: first PROTO HUD text row (never scrolled/stamped)
 
 ;------------------------------------------------------------------------------
 ; Bank-2 runtime storage. The image must end below ENTITIES (ASSERTed).
@@ -393,8 +396,8 @@ KT_FLAGS        EQU $120
 KT_ATTR         EQU $140
 KT_FID0         EQU $160            ; first frame id of the kind
 KT_FCNT         EQU $180            ; frame count of the kind
-KT_MOD7         EQU $1A0            ; 24 B: n mod 7   (n = y+h, 0..23)
-KT_DIV7         EQU $1B8            ; 24 B: n div 7   (same page as KT_MOD7: feet_mod)
+KT_MOD9         EQU $1A0            ; 24 B: n mod STOREY_ROWS (9)  (n = y+h or a row, 0..23)
+KT_DIV9         EQU $1B8            ; 24 B: n div STOREY_ROWS      (same page as KT_MOD9: feet_mod)
 KT_END          EQU $1D0            ; $1D0..$1FF: 48 B spare in page 1
 KT_SIZE         EQU $200
 
@@ -499,9 +502,7 @@ ATTR_ZAP        EQU $45
 ATTR_HUD        EQU $47             ; bright white on black (rows 21..23)
 ATTR_HUD_DIM    EQU $07
 
-; room geometry
-STOREYS         EQU 3
-STOREY_H        EQU 7
+; room geometry: STOREY_COUNT / STOREY_ROWS / PLAY_ROWS ... (level_defs.asm, B3B-3)
 MAX_POTIONS     EQU 9
 QUAFF_HEAL      EQU 8
 FOLLOW_GAP      EQU 4
@@ -600,3 +601,14 @@ SYM             EQU FF_SYM
 ; Stage 3B data contracts (B3B-1): EQUs + ASSERTs only, no bytes.
 ;------------------------------------------------------------------------------
                 INCLUDE "level_defs.asm"
+
+; MUL_STOREY r — A = A * STOREY_ROWS (A = storey 0..2), r = the old A.  Clobbers: r.
+; 8a + a: 4 ops, 20 T (the PROTO 7a was 8a - a at the same cost).
+                ASSERT STOREY_ROWS == 9
+    MACRO MUL_STOREY r
+                ld   r, a
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, r
+    ENDM

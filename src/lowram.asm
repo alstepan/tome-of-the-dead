@@ -329,17 +329,18 @@ build_room_map:
                 ld   (GEN_ZBLK), de            ; GEN_SCRATCH is about to be overwritten
                 ld   a, h
                 ld   (TMP1), a                 ; map page
-                ; base fill: rows 0..20
+                ; base fill: rows 0..PLAY_ROWS-1 (0..17; row 17 = the bottom floor,
+                ; logical PLATFORM: the ornament glyphs are a later render detail)
                 ld   l, 0
                 ld   b, 0                      ; row
 .r:             push hl
-                ld   h, (kind_tab + KT_MOD7) >> 8
+                ld   h, (kind_tab + KT_MOD9) >> 8
                 ld   a, b
-                add  a, KT_MOD7 & $FF
+                add  a, KT_MOD9 & $FF
                 ld   l, a
                 ld   a, (hl)
                 pop  hl
-                cp   6
+                cp   STOREY_AIR                ; floor rows 8 / 17
                 ld   e, T_AIR
                 ld   d, T_BRICK
                 jr   nz, .air
@@ -347,7 +348,7 @@ build_room_map:
                 ld   d, T_WALLF
 .air:           ld   (hl), d                   ; col 0
                 inc  hl
-                ld   c, 30
+                ld   c, ROOM_COLS - 2
 .c:             ld   (hl), e
                 inc  hl
                 dec  c
@@ -356,7 +357,7 @@ build_room_map:
                 inc  hl
                 inc  b
                 ld   a, b
-                cp   ROOM_ROWS
+                cp   PLAY_ROWS
                 jr   nz, .r
                 ; exits L / R: open the air rows of that storey
                 ld   a, (TMP0)
@@ -410,7 +411,7 @@ build_room_map:
                 and  (hl)
                 jr   nz, .taken
                 ld   a, e
-                call storey_row5               ; A = 7s+5
+                call storey_row                ; A = 9s+7
                 ld   b, a
                 call map_cell                  ; HL = map cell (B,C)
                 ld   (hl), T_POTION
@@ -440,16 +441,12 @@ build_room_map:
                 pop  bc
                 jr   .dec
 
-.open:          ; A = storey (or EXIT_NONE), C = col: rows 7s..7s+5 -> T_AIR
+.open:          ; A = storey (or EXIT_NONE), C = col: rows 9s..9s+7 -> T_AIR
                 cp   EXIT_NONE
                 ret  z
+                MUL_STOREY b                   ; 9s
                 ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b                         ; 7s
-                ld   b, a
-                ld   e, 6
+                ld   e, STOREY_AIR
 .o:             call map_cell
                 ld   (hl), T_AIR
                 inc  b
@@ -457,28 +454,25 @@ build_room_map:
                 jr   nz, .o
                 ret
 
-.ladder:        ; C = col, A = s: rows 7s-1..7s+5 clipped to 0..20
+.ladder:        ; C = col, A = s: rows 9s-1..9s+7 clipped to 0..17
+                                               ; ({c,0} rows 0-7, {c,1} 8-16, {c,2} row 17)
+                MUL_STOREY b                   ; 9s
+                dec  a                         ; 9s-1 (may be $FF)
                 ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b                         ; 7s
-                dec  a                         ; 7s-1 (may be $FF)
-                ld   b, a
-                ld   e, 7
+                ld   e, STOREY_ROWS
 .lr:            ld   a, b
-                cp   ROOM_ROWS                 ; $FF / >20 -> skip
+                cp   PLAY_ROWS                 ; $FF / > 17 -> skip
                 jr   nc, .lskip
                 push de
                 call map_cell
                 push hl
-                ld   h, (kind_tab + KT_MOD7) >> 8
+                ld   h, (kind_tab + KT_MOD9) >> 8
                 ld   a, b
-                add  a, KT_MOD7 & $FF
+                add  a, KT_MOD9 & $FF
                 ld   l, a
                 ld   a, (hl)
                 pop  hl
-                cp   6
+                cp   STOREY_AIR
                 ld   a, T_LAD_L
                 jr   nz, .la
                 ; floor row: caps on the platform cells either side of the hole

@@ -20,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.argv = [sys.argv[0]] + ["999"]           # keep game.py's item filter inert
 import game  # noqa: E402
-from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, EF_ACTIVE, EF_HOSTILE, EF_LEFT  # noqa: E402
+from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, EF_ACTIVE, EF_HOSTILE, EF_LEFT, stand_y  # noqa: E402
 
 BUDGET = 2 * 70908
 PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "wait_tick"]
@@ -104,20 +104,23 @@ KEYS = [("L", 6), ("H", 4), ("SPACE", 4)]        # slash the skeleton, walk away
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix",)
+# B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
+# storey-2 layout moved up 3 rows (the floor row 20 -> 17).
+HERO_Y = stand_y(1, 6)                            # 11
 SCENARIOS = {
     # hero + 4 monsters in A (cap), all visible, all close enough to act
     "mix": ("knight + skeleton, rat, goblin, bat", [
-        (5, 15, 14, HOSTILE),                     # skeleton adjacent (gap 0)
-        (1, 22, 18, HOSTILE),                     # rat walking in
-        (3, 25, 16, HOSTILE),                     # goblin walking in
-        (4, 8, 15, HOSTILE)], KEYS),              # bat, storey-2 band
+        (5, 15, stand_y(1, 6), HOSTILE),          # skeleton adjacent (gap 0)
+        (1, 22, stand_y(1, 2), HOSTILE),          # rat walking in
+        (3, 25, stand_y(1, 4), HOSTILE),          # goblin walking in
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS),  # bat, storey-1 band
     # review A1 worst mix: 2 skeletons (both 40-px attacks), goblin, ghost
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
-        (5, 15, 14, HOSTILE),                     # skeleton C right, gap 0
-        (7, 8, 14, RIGHT),                        # skeleton D left, gap 1
-        (3, 20, 16, HOSTILE),                     # goblin
-        (6, 4, 15, RIGHT)], KEYS),                # ghost, storey-2 band, starts in
-                                                  # {5,2}'s end box (legal again: flyers
+        (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
+        (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
+        (3, 20, stand_y(1, 4), HOSTILE),          # goblin
+        (6, 4, stand_y(1, 4) - 1, RIGHT)], KEYS),  # ghost, storey-1 band, starts in
+                                                  # {5,1}'s end box (legal again: flyers
                                                   # cross shafts, rule 2026-10-02)
 }
 
@@ -127,7 +130,7 @@ def run_scenario(h, scen):
     p = game.T(h)
     p.boot(K_KNIGHT, freeze=0)
     p.isolate()
-    p.place(0, 12, 14)
+    p.place(0, 12, HERO_Y)
     for slot, x, y, flags in placements:
         p.place(slot, x, y, room=0, flags=flags)
     st = Stepper(p)

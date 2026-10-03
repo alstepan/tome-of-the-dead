@@ -162,7 +162,7 @@ stamp_rect:
 ; the tile map (prototype §4.3). Target = the screen, or the bank-7 clean-
 ; background shadow (set_tile_target). Used for room draws, transition columns
 ; and shadow upkeep; per-tick sprite erase uses the faster erase_rect below.
-; In : C = col, B = row, D = cols, E = rows (inside 0..31 x 0..20).
+; In : C = col, B = row, D = cols, E = rows (inside 0..31 x 0..PLAY_ROWS-1).
 ; Clobbers: A, BC, DE, HL.   ~290 T/cell (listing: 8 glyph rows unrolled).
 ;------------------------------------------------------------------------------
 ; Screen bitmap, attrs and the page-aligned map share the low byte
@@ -726,19 +726,19 @@ present:
                 ASSERT SCREEN7_ATTR - SCREEN7_BITMAP == SCREEN_ATTR - SCREEN_BITMAP
 
 ;==============================================================================
-; draw_room — full redraw of rows 0..20 from ROOM_MAP.  ~195k T (boot/room only)
+; draw_room — full redraw of rows 0..17 (PLAY_ROWS) from ROOM_MAP.  ~167k T (boot/room only)
 ;==============================================================================
 draw_room:
                 ld   a, ROOM_MAP >> 8
                 call set_tile_map
                 ld   bc, 0                     ; row 0, col 0
-                ld   de, (ROOM_COLS << 8) | ROOM_ROWS
+                ld   de, (ROOM_COLS << 8) | PLAY_ROWS
                 call tile_rect
                 ; fall through: rebuild the clean-background shadow too
-; shadow_room — whole-room shadow rebuild (~195k T; room entry only).
+; shadow_room — whole-room shadow rebuild (~167k T; room entry only).
 shadow_room:
                 ld   bc, 0
-                ld   de, (ROOM_COLS << 8) | ROOM_ROWS
+                ld   de, (ROOM_COLS << 8) | PLAY_ROWS
                 jp   shadow_rect
 
 ;==============================================================================

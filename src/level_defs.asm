@@ -1,15 +1,15 @@
 ;==============================================================================
 ; level_defs.asm — Stage 3B data contracts (B3B-1). EQUs + ASSERTs only: this
-; file emits NO bytes and no code references it yet (behaviour unchanged).
+; file emits NO bytes. B3B-3: the engine runs on the geometry below (the PROTO
+; STOREYS / STOREY_H / ROOM_ROWS / ROOM_CELLS / KT_MOD7 names are gone).
 ;
 ; INCLUDEd once, at the end of defs.asm. Every fixed address below is recorded
 ; in docs/memory-map.md "3B contracts" (the tables juniors code against).
 ; Design refs: game.md §1.1 / §1.2 / §2.1 / §2.5 / §3.3–3.5 / §8.5 / §9.1,
 ; concept-screen.md §3.1 / §3.3 / §5, plan.md "3B breakdown" D1–D10.
 ;
-; Naming: the 3B geometry gets NEW permanent names (STOREY_COUNT, PLAY_ROWS…)
-; next to the PROTO ones (STOREYS, STOREY_H, ROOM_ROWS…). B3B-3 switches the
-; engine to the new names and deletes the old ones — nobody renames later.
+; Naming: the 3B geometry has permanent names (STOREY_COUNT, PLAY_ROWS…);
+; B3B-3 switched the engine to them and deleted the PROTO ones.
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
@@ -18,14 +18,14 @@
 ;   storey s in {0,1}: air rows 9s .. 9s+7, floor row 9s+8 (8, 17).
 ;   s = 0 is the TOP storey; falling (pits) only leads to s = 1.
 ;------------------------------------------------------------------------------
-STOREY_COUNT    EQU 2               ; replaces STOREYS (3)
-STOREY_ROWS     EQU 9               ; replaces STOREY_H (7): 8 air + 1 floor
+STOREY_COUNT    EQU 2               ; (PROTO: 3 storeys)
+STOREY_ROWS     EQU 9               ; 8 air + 1 floor (PROTO: 7)
 STOREY_AIR      EQU 8               ; air rows per storey
 FLOOR_ROW0      EQU 8               ; storey-0 floor (PLATFORM glyph, pit caps, ladder holes)
 FLOOR_ROW1      EQU 17              ; storey-1 floor (row-17 ornament, down-exit hole / grate)
-PLAY_ROWS       EQU STOREY_COUNT * STOREY_ROWS  ; 18: replaces ROOM_ROWS (21)
-PLAY_CELLS      EQU ROOM_COLS * PLAY_ROWS       ; 576: replaces ROOM_CELLS (672)
-PANEL_ROW       EQU PLAY_ROWS       ; 18: first panel row; replaces HUD_ROW (21)
+PLAY_ROWS       EQU STOREY_COUNT * STOREY_ROWS  ; 18 (PROTO ROOM_ROWS: 21)
+PLAY_CELLS      EQU ROOM_COLS * PLAY_ROWS       ; 576 (PROTO: 672)
+PANEL_ROW       EQU PLAY_ROWS       ; 18: first panel row (never stamped / scrolled)
 PANEL_ROWS      EQU 6               ; rows 18..23
 ICON_ROW        EQU 18              ; rows 18–19: 10 icons 24x16 (cols 3i..3i+2), depth/key cols 30–31
 INFO_ROW        EQU 20              ; info line (6x8 text, 42 chars)
@@ -35,10 +35,10 @@ TEXT_ROW        EQU INFO_ROW        ; first text row tracked by HUD4_EXT / HUD4_
 TEXT_ROWS       EQU 4               ; rows 20..23
                 ASSERT FLOOR_ROW0 == STOREY_AIR && FLOOR_ROW1 == STOREY_ROWS + STOREY_AIR
                 ASSERT PANEL_ROW + PANEL_ROWS == 24 && TEXT_ROW + TEXT_ROWS == 24
-                ASSERT PLAY_CELLS <= ROOM_CELLS          ; 3B maps fit the PROTO 672-B buffers
-                ; MOD9/DIV9 (D3): B3B-3 rewrites KT_MOD7/KT_DIV7 IN PLACE (n mod 9 /
-                ; n div 9, n = 0..23, same offsets $1A0/$1B8); kind_tab $1D0..$1FF
-                ; stays the 3F resistance spare. No new symbols until then.
+                ASSERT PLAY_CELLS <= MAP_BUF_LEN         ; 3B maps fit the 672-B map buffers
+                ; MOD9/DIV9 (D3): KT_MOD9 / KT_DIV9 (defs.asm, n = 0..23, offsets
+                ; $1A0/$1B8 where KT_MOD7/KT_DIV7 were); kind_tab $1D0..$1FF stays
+                ; the 3F resistance spare.
 
 ;------------------------------------------------------------------------------
 ; D1 room grid: 3x3 cells, room id r = gy*3 + gx (0..8).
@@ -310,7 +310,7 @@ TSET_LO         EQU $DB00           ; right above screen 2 ($C000..$DAFF)
 TSET_HI         EQU $FAA0           ; right above the shadow attrs (PROTO rows 0–20; 3B 0–17)
                 ASSERT TSET_ATTRS == (TILE_IDS - TILE_COMMON) * 8 && TSET_STRIDE == TSET_ATTRS + TILE_IDS - TILE_COMMON
                 ASSERT TSET_LO >= SCREEN7_ATTR + SCREEN_ATTR_LEN
-                ASSERT TSET_HI >= SHADOW_ATTR + ROOM_ROWS * ATTR_STRIDE
+                ASSERT TSET_HI >= SHADOW_ATTR + PLAY_ROWS * ATTR_STRIDE   ; (+3 PROTO rows of slack)
                 ASSERT TSET_LO + TSET_PER_HALF * TSET_STRIDE <= SHADOW_BITMAP
                 ASSERT TSET_HI + TSET_PER_HALF * TSET_STRIDE <= $10000
                 ASSERT 2 * TSET_PER_HALF == LEVELS

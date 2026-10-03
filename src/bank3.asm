@@ -127,7 +127,8 @@ str_keys:       DB "1            2", 0
 
 ;==============================================================================
 ; TRANSITION SCROLLS (prototype §3.6; foundations F5/F6). Gameplay frozen,
-; sprites already erased, HUD rows 21..23 never touched. ROOM_MAP is shifted in
+; sprites already erased, panel rows 18..23 never touched (B3B-3: playfield rows
+; 0..17 only, row 17 = the bottom floor scrolls with the room). ROOM_MAP is shifted in
 ; lock-step so it always mirrors the screen; at the end ROOM_MAP == NEXT_MAP.
 ; Clobbers: A, BC, DE, HL, IX (documented; IY untouched).
 ;==============================================================================
@@ -149,7 +150,7 @@ hscroll_room:
                 call shift_attr_left
                 ; ROOM_MAP rows <- HSTEP cols; cols 32-HSTEP.. = NEXT_MAP k*HSTEP..
                 ld   hl, ROOM_MAP
-                ld   b, ROOM_ROWS
+                ld   b, PLAY_ROWS
 .ml:            push bc
                 ld   d, h
                 ld   e, l
@@ -180,7 +181,7 @@ hscroll_room:
                 call shift_bmp_right
                 call shift_attr_right
                 ld   hl, ROOM_MAP
-                ld   b, ROOM_ROWS
+                ld   b, PLAY_ROWS
 .mr:            push bc
                 push hl                        ; row base
                 ld   de, 31 - HSTEP
@@ -215,7 +216,7 @@ hscroll_room:
                 ld   a, ROOM_MAP >> 8
                 call set_tile_map
                 ld   b, 0
-                ld   de, (HSTEP << 8) | ROOM_ROWS
+                ld   de, (HSTEP << 8) | PLAY_ROWS
                 call tile_rect
                 ld   hl, TMP5
                 inc  (hl)
@@ -225,8 +226,8 @@ hscroll_room:
                 ret
                 ASSERT HSTEP == 2
 
-; scanline walker for rows 0..20: IX = base, returns NC while valid.
-; shift_bmp_left — every scanline of char rows 0..20: bytes 1..31 -> 0..30.
+; scanline walker for rows 0..PLAY_ROWS-1: IX = base, returns NC while valid.
+; shift_bmp_left — every scanline of char rows 0..17: bytes 2..31 -> 0..29.
 shift_bmp_left:
                 ld   ix, SCREEN_BITMAP
 .scan:          push ix
@@ -238,7 +239,7 @@ shift_bmp_left:
                 DUP  32 - HSTEP
                 ldi
                 EDUP
-                call next_scan20
+                call next_scan_play
                 jr   nc, .scan
                 ret
 
@@ -255,12 +256,12 @@ shift_bmp_right:
                 DUP  32 - HSTEP
                 ldd
                 EDUP
-                call next_scan20
+                call next_scan_play
                 jr   nc, .scan
                 ret
 
-; next_scan20 — IX -> next scanline base inside char rows 0..20; CF = 1 when done.
-next_scan20:
+; next_scan_play — IX -> next scanline base inside char rows 0..PLAY_ROWS-1; CF = 1 when done.
+next_scan_play:
                 ld   a, ixl
                 add  a, 32
                 ld   ixl, a
@@ -270,7 +271,7 @@ next_scan20:
                 ccf
                 ret  nc                        ; thirds 0/1: all 8 char rows valid
                 ld   a, ixl
-                cp   (ROOM_ROWS - 16) * 32     ; third 2: rows 16..20 only
+                cp   (PLAY_ROWS - 16) * 32     ; third 2: rows 16..17 only
                 ccf
                 ret  nc
 .page:          ld   ixl, 0
@@ -282,7 +283,7 @@ next_scan20:
 
 shift_attr_left:
                 ld   hl, SCREEN_ATTR
-                ld   b, ROOM_ROWS
+                ld   b, PLAY_ROWS
 .r:             push bc
                 ld   d, h
                 ld   e, l
@@ -297,7 +298,7 @@ shift_attr_left:
 
 shift_attr_right:
                 ld   hl, SCREEN_ATTR + 31 - HSTEP
-                ld   b, ROOM_ROWS
+                ld   b, PLAY_ROWS
 .r:             push bc
                 push hl
                 ld   d, h
@@ -316,7 +317,7 @@ shift_attr_right:
 
 ;------------------------------------------------------------------------------
 ; vscroll_room — A = EX_DOWN (content moves up, new rows enter at the bottom)
-; or EX_UP (content moves down, new rows enter at the top). 21 char-row steps.
+; or EX_UP (content moves down, new rows enter at the top). PLAY_ROWS (18) char-row steps.
 ;------------------------------------------------------------------------------
 vscroll_room:
                 ld   (TMP4), a
@@ -326,51 +327,51 @@ vscroll_room:
                 ld   a, (TMP4)
                 cp   EX_DOWN
                 jr   nz, .up
-                ; --- content up: rows 1..20 -> 0..19 ---
+                ; --- content up: rows 1..17 -> 0..16 ---
                 ld   b, 0                      ; dest row
 .bu:            push bc
                 call move_char_row_up          ; row B+1 -> row B
                 pop  bc
                 inc  b
                 ld   a, b
-                cp   ROOM_ROWS - 1
+                cp   PLAY_ROWS - 1
                 jr   nz, .bu
                 ld   hl, SCREEN_ATTR + 32
                 ld   de, SCREEN_ATTR
-                ld   bc, (ROOM_ROWS - 1) * 32
+                ld   bc, (PLAY_ROWS - 1) * 32
                 ldir
                 ld   hl, ROOM_MAP + 32
                 ld   de, ROOM_MAP
-                ld   bc, (ROOM_ROWS - 1) * 32
+                ld   bc, (PLAY_ROWS - 1) * 32
                 ldir
-                ; ROOM_MAP row 20 = NEXT_MAP row k
+                ; ROOM_MAP row 17 = NEXT_MAP row k
                 ld   a, (TMP5)
                 call next_map_row              ; HL = NEXT_MAP + k*32
-                ld   de, ROOM_MAP + (ROOM_ROWS - 1) * 32
+                ld   de, ROOM_MAP + (PLAY_ROWS - 1) * 32
                 ld   bc, 32
                 ldir
-                ld   b, ROOM_ROWS - 1
+                ld   b, PLAY_ROWS - 1
                 jr   .draw
 .up:
-                ld   b, ROOM_ROWS - 1          ; dest row 20..1
+                ld   b, PLAY_ROWS - 1          ; dest row 17..1
 .bd:            push bc
                 call move_char_row_down        ; row B-1 -> row B
                 pop  bc
                 dec  b
                 jr   nz, .bd
-                ld   hl, SCREEN_ATTR + (ROOM_ROWS - 1) * 32 - 1
-                ld   de, SCREEN_ATTR + ROOM_ROWS * 32 - 1
-                ld   bc, (ROOM_ROWS - 1) * 32
+                ld   hl, SCREEN_ATTR + (PLAY_ROWS - 1) * 32 - 1
+                ld   de, SCREEN_ATTR + PLAY_ROWS * 32 - 1
+                ld   bc, (PLAY_ROWS - 1) * 32
                 lddr
-                ld   hl, ROOM_MAP + (ROOM_ROWS - 1) * 32 - 1
-                ld   de, ROOM_MAP + ROOM_ROWS * 32 - 1
-                ld   bc, (ROOM_ROWS - 1) * 32
+                ld   hl, ROOM_MAP + (PLAY_ROWS - 1) * 32 - 1
+                ld   de, ROOM_MAP + PLAY_ROWS * 32 - 1
+                ld   bc, (PLAY_ROWS - 1) * 32
                 lddr
                 ld   a, (TMP5)
                 ld   c, a
-                ld   a, ROOM_ROWS - 1
+                ld   a, PLAY_ROWS - 1
                 sub  c
-                call next_map_row              ; NEXT_MAP row 20-k
+                call next_map_row              ; NEXT_MAP row 17-k
                 ld   de, ROOM_MAP
                 ld   bc, 32
                 ldir
@@ -384,7 +385,7 @@ vscroll_room:
                 ld   hl, TMP5
                 inc  (hl)
                 ld   a, (hl)
-                cp   ROOM_ROWS
+                cp   PLAY_ROWS
                 jp   c, .step
                 ret
 
@@ -495,8 +496,8 @@ new_game:
                 ld   (ix+E_POT), 1
                 KFIELD KT_BH
                 ld   b, a
-                ld   a, HERO_START_S * STOREY_H + 6
-                sub  b
+                ld   a, HERO_START_S * STOREY_ROWS + STOREY_AIR
+                sub  b                         ; 9s+8-h
                 ld   (ix+E_Y), a
                 call init_ent_common
                 ; --- monsters from spawn_tab, slots 1.. ---
@@ -521,22 +522,19 @@ new_game:
                 inc  hl
                 push hl
                 ld   a, c
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  c
-                ld   c, a                      ; 7s
+                MUL_STOREY c
+                ld   c, a                      ; 9s
                 KFIELD KT_FLAGS
                 and  KF_FLYER
                 jr   z, .walker
                 ld   a, c
-                inc  a                         ; flyer cruises at 7s+1
+                inc  a                         ; flyer cruises at 9s+1
                 jr   .sety
 .walker:        KFIELD KT_BH
                 ld   b, a
                 ld   a, c
-                add  a, 6
-                sub  b                         ; 7s+6-h
+                add  a, STOREY_AIR
+                sub  b                         ; 9s+8-h
 .sety:          ld   (ix+E_Y), a
                 call init_ent_common
                 pop  hl
@@ -574,14 +572,10 @@ follow_select:
                 ld   a, (EXIT_COL)
                 ld   c, a
                 ld   a, (EXIT_STOREY)
-                ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b
-                add  a, 6
+                MUL_STOREY b
+                add  a, STOREY_AIR
                 sub  e
-                ld   b, a                      ; standing y on the exit storey
+                ld   b, a                      ; standing y on the exit storey (9s+8-h)
 .hbox:          ld   a, c
                 ld   (TMP0), a                 ; ref x
                 ld   a, d
@@ -762,15 +756,11 @@ place_follower:
                 ld   (ix+E_X), a
                 ld   a, (EXIT_KIND)
                 cp   EX_UP
-                ld   a, STOREYS - 1            ; going up: arrive on storey 2
+                ld   a, STOREY_COUNT - 1       ; going up: arrive on the bottom storey
                 jr   z, .stand
                 xor  a                         ; going down: storey 0
-.stand:         ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b
-                add  a, 6
+.stand:         MUL_STOREY b
+                add  a, STOREY_AIR             ; 9s+8
                 ld   b, a
                 KFIELD KT_BH
                 ld   c, a
@@ -815,15 +805,21 @@ arrival_conflicts:
 ; Spawns (used ONCE at new-game init; slots are the truth afterwards, §3.7).
 ;   DB kind, room, col, storey, flags(EF_LEFT or 0) ; slot = 1 + index
 ;------------------------------------------------------------------------------
+; B3B-3 (2 storeys): the prototype §8.2 population, storeys mapped PROTO s2 ->
+; s1 (bottom: the hero's start / exit storey), s1 -> s0, s0 -> s0. One col
+; moved (skeleton C) so the reference route keeps the PROTO shape: the
+; skeleton climbs the far shaft while the hero takes potion 2.
 HERO_START_COL  EQU 2
-HERO_START_S    EQU 2
+HERO_START_S    EQU 1
 spawn_tab:
-                DB K_RAT,      ROOM_A, 16, 2, EF_LEFT
-                DB K_SLIME,    ROOM_A, 14, 1, EF_LEFT
-                DB K_GOBLIN,   ROOM_B, 16, 2, EF_LEFT
-                DB K_BAT,      ROOM_B, 18, 1, EF_LEFT
-                DB K_SKELETON, ROOM_C, 16, 2, EF_LEFT
-                DB K_GHOST,    ROOM_C, 12, 1, EF_LEFT
+                DB K_RAT,      ROOM_A, 16, 1, EF_LEFT
+                DB K_SLIME,    ROOM_A, 14, 0, EF_LEFT
+                DB K_GOBLIN,   ROOM_B, 16, 1, EF_LEFT
+                DB K_BAT,      ROOM_B, 18, 0, EF_LEFT
+                DB K_SKELETON, ROOM_C, 12, 1, EF_LEFT  ; col 16 -> 12: its nearest
+                                                       ; climb is {6,1}, away from the
+                                                       ; hero's arrival shaft {24,0}/{24,1}
+                DB K_GHOST,    ROOM_C, 12, 0, EF_LEFT
                 DB K_SKELETON, ROOM_D, 12, 0, EF_LEFT
-                DB K_BAT,      ROOM_D, 12, 2, EF_LEFT
+                DB K_BAT,      ROOM_D, 12, 1, EF_LEFT
 SPAWN_COUNT     EQU ($ - spawn_tab) / 5
