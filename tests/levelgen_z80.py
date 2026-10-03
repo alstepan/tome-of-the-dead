@@ -22,10 +22,10 @@ RES = ORG + 40                                          # result bytes
 BASE = G.BASE
 
 
-def stub(depth):
+def stub(depth, ei=False):
     sp = S["WORKSTORE_TOP"]
     far3 = S["far3"]
-    code = [0xF3,                                       # di: T-state count = generator only
+    code = [0xFB if ei else 0xF3,                       # di: T-state count = generator only (ei: ISR + AY slot run too)
             0x31, sp & 255, sp >> 8,                    # ld sp,WORKSTORE_TOP
             0x3E, depth,                                # ld a,depth
             0x21, S["level_gen"] & 255, S["level_gen"] >> 8,
@@ -39,8 +39,8 @@ def stub(depth):
 
 
 class T(Proto):
-    def run(self, depth, seed, master):
-        code = bytes(stub(depth))
+    def run(self, depth, seed, master, ei=False):
+        code = bytes(stub(depth, ei))
         end = ORG + len(code) - 1                       # the NOP: probe, then jr $
         code += b"\x18\xfe"
         z = self.z
@@ -61,10 +61,10 @@ class T(Proto):
         return ok, ts, blk, r[0], r[1]
 
 
-def case(h, p, depth, seed, master=0, tag=""):
+def case(h, p, depth, seed, master=0, tag="", ei=False):
     want = G.generate(depth, seed, master)
     wx = G.start_x(want)
-    ok, ts, blk, rc, sx = p.run(depth, seed, master)
+    ok, ts, blk, rc, sx = p.run(depth, seed, master, ei)
     good = ok and rc == 0 and blk == want and sx == wx
     if not good:
         d = next((i for i in range(len(want)) if blk[i] != want[i]), None)
@@ -73,6 +73,27 @@ def case(h, p, depth, seed, master=0, tag=""):
               f" startx {sx}/{wx}", flush=True)
     h.expect(f"d{depth} seed {seed:#06x} {tag}", good, True) if not good else None
     return good, ts
+
+
+def _lastscan(seeds):
+    out = []
+    for seed in seeds:
+        for d in range(1, 9):
+            try:
+                G.generate(d, seed)
+            except RuntimeError:
+                continue
+            if G.LAST[0] or G.LAST[2]:
+                out.append((d, seed))
+    return out
+
+
+def retry_cases():
+    """every (depth, seed) of the full scan that needed a restart or a reseed"""
+    from multiprocessing import Pool
+    chunks = [range(i, min(i + 1024, 65536)) for i in range(0, 65536, 1024)]
+    with Pool() as pool:
+        return sorted(x for part in pool.map(_lastscan, chunks) for x in part)
 
 
 def worst_seeds():
@@ -115,15 +136,29 @@ def main():
         # calls / reseeds (15) d8 seed 31306; d8 seeds 28962/55353/55354 exhaust
         # the 16 reseeds (Python raises, Z80 returns B=1)
         pairs += [(6, 2184), (8, 31306), (8, 2609)]
+        pairs += [(d, d * 0x0101) for d in range(1, 9)]        # seed ^ depth*$0101 == 0 -> x = 1
         for d, s in pairs:
             ts = go(d, s, master=(s * 7) & 0xFFFF, tag="fixed")
             if (d, s) in ((8, 12634), (8, 31306), (6, 2184), (8, 2609)):
                 print(f"  T-states d{d} seed {s}: {ts}", flush=True)
+        for d, sd in ((5, 0x1234), (8, 2609)):                 # interrupts on: ISR + AY slot during gen
+            good, ts = case(h, p, d, sd, 0x55AA, "ei", ei=True)
+            npass += good
+            nfail += not good
         for seed in (28962, 55353, 55354):
             ok, ts, blk, rc, sx = p.run(8, seed, 0)
             h.expect(f"d8 seed {seed} exhausts reseeds (B=1)", bool(ok and rc == 1), True)
             print(f"  exhaust d8 seed {seed}: {ts} T rc={rc}", flush=True)
         print(f"fixed: {npass} pass {nfail} fail; worst {worst}", flush=True)
+        if "--all-retries" in sys.argv:
+            t0 = time.monotonic()
+            cases = retry_cases()
+            print(f"retry/reseed cases: {len(cases)} (scan {time.monotonic() - t0:.0f}s)", flush=True)
+            t0 = time.monotonic()
+            f0 = nfail
+            for d, sd in cases:
+                go(d, sd, (sd * 3) & 0xFFFF, "retry")
+            print(f"all retry/reseed cases: {len(cases)} run, {nfail - f0} fail, {time.monotonic() - t0:.0f}s", flush=True)
         rng = random.Random(0x3B7)
         t0 = time.monotonic()
         for _ in range(nrand):

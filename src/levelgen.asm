@@ -11,8 +11,11 @@
 ;                     Clobbers all but IY, SP (far3 itself clobbers A/F on return).
 ; level_start_x  In : block generated.  Out: A = B = hero start col (storey 0).
 ;
-; Scratch: LG_* below, in GEN_SCRATCH (= ROOM_MAP, $6000..$605F). Not live: the
-; generator runs between levels, before build_room_map. Stack use <= ~16 B.
+; Scratch: LG_* below, in GEN_SCRATCH (= ROOM_MAP + NEXT_MAP, $6000..$604F).
+; CONTRACT: call only before build_room_map / never mid-room (ROOM_MAP, NEXT_MAP
+; and the ZX0 frame cache all live there). level_gen zeroes GEN_ZBLK on entry
+; (cache invalidation); the caller re-runs alloc_* + gen_kind afterwards.
+; Stack use <= ~16 B.
 ; No DI, no port writes. restart/reseed unwind with SP = LG_SP (set in attempt).
 ;
 ; Room desc pointer: rdp (page-aligned ROOM_DESC, L = $60 + 16 r). The adjacency
@@ -70,10 +73,21 @@ lg_step:                                ; xorshift 7,9,8 -> HL, stored in GEN_RN
                 ld   (GEN_RNG), hl
                 ret
 rnd:                                    ; A = n -> A = (x & $FF) mod n. Clobbers A, HL, F
-                push bc
+                push bc                 ; n = 1 / 2 fast paths (most calls): exact, no loop
                 ld   c, a
                 call lg_step
+                ld   a, c
+                dec  a
+                jr   z, .z
+                dec  a
+                jr   nz, .g
                 ld   a, l
+                and  1
+                pop  bc
+                ret
+.z:             pop  bc                 ; A = 0
+                ret
+.g:             ld   a, l
 .m:             sub  c
                 jr   nc, .m
                 add  a, c
@@ -869,6 +883,8 @@ attempt:        ld   (LG_SP), sp
 ; level_gen (see header)
 ;==============================================================================
 level_gen:      ld   (LVL_DEPTH), a
+                ld   hl, 0
+                ld   (GEN_ZBLK), hl     ; GEN_SCRATCH is about to be overwritten
                 ld   a, RESEED_MAX
                 ld   (LG_RES), a
 .seed:          ld   a, MAX_RESTARTS

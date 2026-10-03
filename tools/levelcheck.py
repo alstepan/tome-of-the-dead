@@ -8,6 +8,7 @@ falling goes storey 0 -> 1 only; ladders/vertical links are two-way; horizontal
 exits join (room,s) to (neighbour,s). Walkers cannot cross a pit (stat only).
 
 CLI: levelcheck.py [N_SEEDS=1000] [DEPTH_MAX=8]  (run all, print stats)
+     levelcheck.py --full   (all 65,536 seeds x depths 1..8, multiprocessing)
 """
 import sys
 from collections import Counter
@@ -20,15 +21,76 @@ def rd(b, r, k):
     return b[OFF_DESC + r * D["RD_STRIDE"] + D[k]]
 
 
-def item_free(rm, c):
-    """col c on storey 0 touches no footprint/pit cap/storey-0 block"""
-    for f in (rm.up, rm.arr, rm.lad1, rm.lad2):
-        if f and f <= c <= f + 2: return False
-    if rm.pit and rm.pit - 1 <= c <= rm.pit + 3: return False
-    if rm.block and not (rm.block >> 6) & 1:
-        w = rm.block & D["RDB_WMASK"]
-        if (c >= 31 - w) if rm.block & D["RDB_RIGHT"] else (c <= w): return False
-    return True
+# Checker constants, written from docs/design/game.md (NOT imported from the
+# generator): sections 1.1 (rules), 1.2 (attrs), 2.4 (jump). Layout offsets/bit
+# values (level_defs.asm) come from levelgen.D, which only parses the contract.
+SHAFT_LO, SHAFT_HI = 5, 24                       # 1.1 "Shaft cols"
+ATTRS_REF = {1: (0x0F, 0x01), 2: (0x27, 0x04), 3: (0x17, 0x02), 4: (0x28, 0x05),
+             5: (0x30, 0x06), 6: (0x38, 0x07), 7: (0x4F, 0x41), 8: (0x1F, 0x03)}  # 1.2
+BODY_MIN, BODY_MAX = 1, 28                       # 1.1: hero stands at x = 1 .. x = 28
+DOOR_P, DOOR_TOL = 1 / 3, 0.02                   # 1.1 "1 in 3 carry a door"
+
+
+def feats(b, r, s):
+    """left cols of the footprints on storey s of room r (0 = none dropped)"""
+    ks = ("RD_UPCOL", "RD_ARRCOL", "RD_LAD1", "RD_LAD2") if s == 0 else \
+         ("RD_DNCOL", "RD_EXITCOL", "RD_LAD1", "RD_LAD2")
+    return [rd(b, r, k) for k in ks if rd(b, r, k)]
+
+
+def block_span(b, r, s):
+    """(lo, hi) wall cols incl. the rubble col of the storey-s block, else None"""
+    bl = rd(b, r, "RD_BLOCK")
+    if not bl or ((bl >> 6) & 1) != s:
+        return None
+    w = bl & 3
+    return (31 - w, 31) if bl & 0x80 else (0, w)
+
+
+def blocked(b, r, s, lo, hi, exempt_arr=False):
+    """cols lo..hi touch a storey-s footprint (3 cols), the pit incl. its caps
+    (storey 0: p-1 .. p+3) or the storey-s block"""
+    fs = feats(b, r, s)
+    if exempt_arr and s == 0 and rd(b, r, "RD_ARRCOL") in fs:
+        fs.remove(rd(b, r, "RD_ARRCOL"))
+    if any(not (f + 2 < lo or f > hi) for f in fs):
+        return True
+    p = rd(b, r, "RD_PITCOL")
+    if s == 0 and p and not (p + 3 < lo or p - 1 > hi):
+        return True
+    bs = block_span(b, r, s)
+    return bool(bs) and not (bs[1] < lo or bs[0] > hi)
+
+
+def item_ok(b, r, s, col):
+    """a floor item may stand on col: 2..29, not on a footprint / pit + caps / block"""
+    return 2 <= col <= 29 and not blocked(b, r, s, col, col)
+
+
+def start_legal(b, st, x):
+    return 2 <= x <= 29 and not blocked(b, st, 0, x - 1, x + 1, exempt_arr=True)
+
+
+def pit_jumps(b, r):
+    """[(side, ok)] for both crossings of the storey-0 pit of room r (2.4: jump = 6
+    cols, body x..x+2 -> x+6..x+8, body on floor before and after). Launch/landing
+    bodies must be inside BODY_MIN..BODY_MAX and clear of the other storey-0
+    footprints and the block. Left->right launches at p-3, right->left at p+3."""
+    p = rd(b, r, "RD_PITCOL")
+    if not p:
+        return []
+    def standable(x):
+        return BODY_MIN <= x <= BODY_MAX and not blocked_nopit(b, r, x, x + 2)
+    return [("L->R", standable(p - 3) and standable(p + 3)),
+            ("R->L", standable(p + 3) and standable(p - 3))]
+
+
+def blocked_nopit(b, r, lo, hi):
+    fs = feats(b, r, 0)
+    if any(not (f + 2 < lo or f > hi) for f in fs):
+        return True
+    bs = block_span(b, r, 0)
+    return bool(bs) and not (bs[1] < lo or bs[0] > hi)
 
 
 def check(b, stats=None):
@@ -46,7 +108,7 @@ def check(b, stats=None):
     if b[H["LVL_KEYROOM"]] != D["ROOM_NONE"] or b[H["LVL_SANCTUM"]] != D["ROOM_NONE"]:
         v.append("key/sanctum must be ROOM_NONE in 3B")
     if b[H["LVL_FLAGS"]] != D["LF_GRATE_OPEN"]: v.append("LVL_FLAGS")
-    if (b[H["LVL_ATTR_FLOOR"]], b[H["LVL_ATTR_WALL"]]) != G.ATTRS.get(depth): v.append("attrs")
+    if (b[H["LVL_ATTR_FLOOR"]], b[H["LVL_ATTR_WALL"]]) != ATTRS_REF.get(depth): v.append("attrs")
     for i in range(H["MASTER_SEED"] + 2, D["LVL_HDR_LEN"]):
         if b[i]: v.append("header spare")
     for i in range(OFF_EDGE + 6, OFF_DESC):
@@ -90,7 +152,7 @@ def check(b, stats=None):
                                          (D["RDX_D"], dn, r + 3, r < 6, "RD_UPCOL")):
             if ex & bit:
                 if not ok or nb not in pset: v.append(f"room {r} vertical to nowhere"); continue
-                if not G.SHAFT_MIN <= col <= G.SHAFT_MAX: v.append(f"room {r} shaft col {col} out of range")
+                if not SHAFT_LO <= col <= SHAFT_HI: v.append(f"room {r} shaft col {col} out of range")
                 if rd(b, nb, ncolk) != col: v.append(f"link {r}-{nb} shaft cols differ")
                 if not rd(b, nb, "RD_EXITS") & (D["RDX_D"] if bit == D["RDX_U"] else D["RDX_U"]):
                     v.append(f"link {r}-{nb} one-sided")
@@ -101,7 +163,7 @@ def check(b, stats=None):
         if bool(arr) != (r == start and depth >= 2): v.append(f"room {r} arrival col presence")
         if bool(ec) != (r == lair): v.append(f"room {r} exit col presence")
         for nm, c in (("arr", arr), ("exitcol", ec)):
-            if c and not G.SHAFT_MIN <= c <= G.SHAFT_MAX: v.append(f"room {r} {nm} range")
+            if c and not SHAFT_LO <= c <= SHAFT_HI: v.append(f"room {r} {nm} range")
         l1, l2, pit = rd(b, r, "RD_LAD1"), rd(b, r, "RD_LAD2"), rd(b, r, "RD_PITCOL")
         if not l1: v.append(f"room {r} no ladder")
         for nm, c in (("lad1", l1), ("lad2", l2)):
@@ -146,7 +208,7 @@ def check(b, stats=None):
         if bool(rd(b, r, "RD_FLAGS") & D["RDF_DEADEND"]) != (deg[r] == 1): v.append(f"room {r} DEADEND flag != leaf")
     def has_h(r): return bool(rd(b, r, "RD_EXITS") & (D["RDX_L"] | D["RDX_R"]))
     def san(r):
-        if depth != 8 or not G.SANCTUM_CELL_RULE: return True
+        if depth != 8: return True
         return (r % 3 > 0 and r - 1 not in pset) or (r % 3 < 2 and r + 1 not in pset)
     pools = ([r for r in present if deg[r] == 1 and r != start and has_h(r) and san(r)],
              [r for r in present if r != start and has_h(r) and san(r)])
@@ -186,8 +248,11 @@ def check(b, stats=None):
         if ex & D["RDX_U"]: targets.add((r, 0, side(r, 0, rd(b, r, "RD_UPCOL"))))
         if ex & D["RDX_D"]: targets.add((r, 1, 0))
     targets.add((lair, 1, 0))
-    a = rd(b, start, "RD_ARRCOL")
-    src = (start, 0, side(start, 0, a if a else 1))
+    try:
+        sx = G.start_x(b)
+    except RuntimeError as ex_:
+        v.append(str(ex_)); sx = 14
+    src = (start, 0, side(start, 0, sx))
     cut = {}
     for walker in (False, True):
         E = graph(walker); reach = {src}; q = [src]
@@ -207,23 +272,31 @@ def check(b, stats=None):
         r = ent[0] & 15; s = ent[0] >> 7
         if ent[0] & 0x70 or r not in pset or r == start: v.append(f"floor {i} room")
         elif ent[2] != D["IT_POTION"] or ent[3] < 1: v.append(f"floor {i} item/qty")
-        else:
-            rm = G.Room(); rm.up = rd(b, r, "RD_UPCOL"); rm.dn = rd(b, r, "RD_DNCOL")
-            rm.arr = rd(b, r, "RD_ARRCOL"); rm.exitcol = rd(b, r, "RD_EXITCOL")
-            rm.lad1 = rd(b, r, "RD_LAD1"); rm.lad2 = rd(b, r, "RD_LAD2")
-            rm.pit = rd(b, r, "RD_PITCOL"); rm.block = rd(b, r, "RD_BLOCK")
-            if not G.item_col_ok(rm, s, ent[1]): v.append(f"floor {i} illegal cell col {ent[1]} s{s}")
+        elif not item_ok(b, r, s, ent[1]): v.append(f"floor {i} illegal cell col {ent[1]} s{s}")
     if not 2 <= fn <= 3: v.append(f"potion count {fn}")
-    try:
-        sx = G.start_x(b)
-        rm0 = G.Room(); rm0.up = rd(b, start, "RD_UPCOL"); rm0.arr = 0     # arrival shaft exempt (hero stands at arr+1)
-        rm0.lad1 = rd(b, start, "RD_LAD1"); rm0.lad2 = rd(b, start, "RD_LAD2")
-        rm0.pit = rd(b, start, "RD_PITCOL"); rm0.block = rd(b, start, "RD_BLOCK")
-        if not 2 <= sx <= 29 or any(not item_free(rm0, c) for c in (sx - 1, sx, sx + 1)):
-            v.append(f"start x {sx} illegal")
-        if depth == 1 and abs(sx - 14) > 12: v.append("start x far from 14")
-    except RuntimeError as ex_:
-        v.append(str(ex_))
+    arr0 = rd(b, start, "RD_ARRCOL")
+    if depth >= 2:
+        if sx != arr0 + 1: v.append(f"start x {sx} != arrival col {arr0} + 1")
+    elif not start_legal(b, start, sx):
+        v.append(f"start x {sx} illegal")
+    else:                                   # D1: x = 14 unless illegal, else the nearest legal col
+        if start_legal(b, start, 14):
+            if sx != 14: v.append(f"start x {sx} != 14 although 14 is legal")
+        else:
+            d = abs(sx - 14)
+            if any(start_legal(b, start, x) for x in range(14 - d + 1, 14 + d)):
+                v.append(f"start x {sx} not the nearest legal col")
+    if stats is not None:
+        stats["jump_bad"] += sum(1 for r in present for _, ok in pit_jumps(b, r) if not ok)
+        for r in present:                   # B3B-5: fall landing p..p+2 on storey 1 must be plain floor
+            pp = rd(b, r, "RD_PITCOL")
+            if pp and blocked(b, r, 1, pp, pp + 2):
+                stats["land_bad"] += 1
+                if len(stats["land_bad_ex"]) < 5: stats["land_bad_ex"].append((depth, int.from_bytes(b[H["LVL_SEED"]:H["LVL_SEED"] + 2], "little"), r))
+        stats["pits_n"] += sum(1 for r in present if rd(b, r, "RD_PITCOL"))
+        if stats["jump_bad_ex"] is not None and len(stats["jump_bad_ex"]) < 5 and \
+                any(not ok for r in present for _, ok in pit_jumps(b, r)):
+            stats["jump_bad_ex"].append((depth, int.from_bytes(b[H["LVL_SEED"]:H["LVL_SEED"] + 2], "little")))
     if stats is not None:
         hedges = [b[OFF_EDGE + e] for e in range(6) if b[OFF_EDGE + e] & D["EG_LINK"]]
         stats["rooms"][n] += 1
@@ -240,9 +313,76 @@ def check(b, stats=None):
     return v
 
 
+def new_stats():
+    return {"rooms": Counter(), "h_edges": 0, "doors": 0, "pits": 0, "dead": 0, "loops": 0,
+            "lair_fallback": 0, "walker_cut": 0, "blocks": 0, "lad2": 0, "potions": 0,
+            "jump_bad": 0, "pits_n": 0, "jump_bad_ex": [], "land_bad": 0, "land_bad_ex": []}
+
+
+def merge(a, b):
+    for k, v in b.items():
+        if k in ("jump_bad_ex", "land_bad_ex"): a[k] = (a[k] + v)[:5]
+        elif k == "rooms": a[k].update(v)
+        else: a[k] += v
+
+
+def report(st, tot, fails):
+    print(f"{tot - len(fails)}/{tot} pass")
+    for f in fails[:10]: print("FAIL", f)
+    ratio = st["doors"] / max(1, st["h_edges"])
+    print("rooms", dict(sorted(st["rooms"].items())),
+          f"doors {st['doors']}/{st['h_edges']} ({ratio:.3f})")
+    print({k: round(st[k] / tot, 2) for k in ("pits", "dead", "loops", "lair_fallback", "walker_cut", "blocks", "lad2", "potions")}, "(per level)")
+    print(f"jump-infeasible pit crossings (body {BODY_MIN}..{BODY_MAX}, not a generator-rule change): "
+          f"{st['jump_bad']} of {2 * st['pits_n']}; e.g. {st['jump_bad_ex']}")
+    print(f"pit landings (storey 1, cols p..p+2) on a ladder hole / shaft / block: {st['land_bad']} of "
+          f"{st['pits_n']} pits; e.g. {st['land_bad_ex']}")
+    # door odds bound: 1 in 3 per horizontal edge (game.md 1.1). Over N edges the
+    # sd of the fraction is sqrt(2/9/N): 524k-level scan (~2M edges) 0.0003, the
+    # 8,000-level run (~30k edges) 0.0027, so +-0.02 is > 7 sd in both.
+    bad = st["h_edges"] >= 5000 and abs(ratio - DOOR_P) > DOOR_TOL
+    if bad: print(f"FAIL door fraction {ratio:.3f} outside 1/3 +- {DOOR_TOL}")
+    return bool(fails) or bad
+
+
+def _scan(args):
+    """(seeds slice, depths) -> (stats, fails, maxima, exhausted)"""
+    seeds, dmax = args
+    st = new_stats(); fails = []; mx = {"restarts": (0,), "reseeds": (0,), "calls": (0,)}; ex = []; tot = 0
+    for seed in seeds:
+        for depth in range(1, dmax + 1):
+            try:
+                b = G.generate(depth, seed)
+            except RuntimeError:
+                ex.append((depth, seed)); continue
+            rs, calls, rsd = G.LAST
+            for k, v in (("restarts", rs), ("reseeds", rsd), ("calls", calls)):
+                if v > mx[k][0]: mx[k] = (v, depth, seed)
+            tot += 1
+            viol = check(b, st)
+            if viol: fails.append((depth, seed, viol[:3]))
+    return st, fails, mx, ex, tot
+
+
+def full(dmax=8):
+    import time
+    from multiprocessing import Pool
+    t0 = time.time()
+    chunks = [(range(i, min(i + 512, 65536)), dmax) for i in range(0, 65536, 512)]
+    st = new_stats(); fails = []; mx = {"restarts": (0,), "reseeds": (0,), "calls": (0,)}; ex = []; tot = 0
+    with Pool() as pool:
+        for s2, f2, m2, e2, t2 in pool.imap_unordered(_scan, chunks):
+            merge(st, s2); fails += f2; ex += e2; tot += t2
+            for k in mx:
+                if m2[k][0] > mx[k][0]: mx[k] = m2[k]
+    print(f"full scan 65536 seeds x depths 1..{dmax}: {time.time() - t0:.0f}s")
+    print("max (value, depth, seed):", mx)
+    print(f"seeds exhausting the 16 reseeds: {sorted(ex)}")
+    return 1 if report(st, tot, fails) else 0
+
+
 def run(nseeds=1000, dmax=8):
-    st = {"rooms": Counter(), "h_edges": 0, "doors": 0, "pits": 0, "dead": 0, "loops": 0,
-          "lair_fallback": 0, "walker_cut": 0, "blocks": 0, "lad2": 0, "potions": 0}
+    st = new_stats()
     fails = []
     tot = 0
     for depth in range(1, dmax + 1):
@@ -254,14 +394,11 @@ def run(nseeds=1000, dmax=8):
             tot += 1
             if viol:
                 fails.append((depth, seed, viol[:3]))
-    print(f"{tot - len(fails)}/{tot} pass")
-    for f in fails[:10]: print("FAIL", f)
-    print("rooms", dict(sorted(st["rooms"].items())),
-          f"doors {st['doors']}/{st['h_edges']} ({st['doors'] / max(1, st['h_edges']):.2f})")
-    print({k: round(st[k] / tot, 2) for k in ("pits", "dead", "loops", "lair_fallback", "walker_cut", "blocks", "lad2", "potions")}, "(per level)")
-    return 1 if fails else 0
+    return 1 if report(st, tot, fails) else 0
 
 
 if __name__ == "__main__":
     a = sys.argv
+    if len(a) > 1 and a[1] == "--full":
+        sys.exit(full())
     sys.exit(run(int(a[1]) if len(a) > 1 else 1000, int(a[2]) if len(a) > 2 else 8))
