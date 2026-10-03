@@ -93,6 +93,7 @@ GEN_SCRATCH     EQU ROOM_MAP        ; A5: 1,536 B generator-time scratch (alias,
 GEN_SCRATCH_LEN EQU NEXT_MAP + $300 - ROOM_MAP
 
 ROOM_COLS       EQU 32
+ATTR_STRIDE     EQU 32              ; bytes per attribute row (screen layout)
 ROOM_ROWS       EQU 21
 ROOM_CELLS      EQU ROOM_COLS * ROOM_ROWS   ; 672
 HUD_ROW         EQU 21              ; rows 21..23 = HUD (never scrolled/stamped)

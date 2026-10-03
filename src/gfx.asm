@@ -136,7 +136,7 @@ stamp_rect:
                 ld   hl, CLIP_TRAP
                 inc  (hl)
 .inx:           call attr_addr
-                ld   a, ROOM_COLS
+                ld   a, ATTR_STRIDE
                 sub  d
                 ld   (.step+1), a              ; SMC: 32 - cols
                 pop  af
@@ -954,6 +954,8 @@ blit_sprite:
                 ld   a, 6
 .r:             add  a, e
                 ld   e, a
+                ASSERT (FRT & $FF) == 0        ; nibble-swap lookup: FRT page-aligned
+                ASSERT FRT_STRIDE == 16        ; ... and 16 B per fid
                 ld   a, (BL_FID)               ; HL = FRT + fid*16 + variant*3
                 rrca                           ; (fid*16 by nibble swap: 70 T, was
                 rrca                           ; 4 x add hl,hl + 2 adds: 107 T)
@@ -1019,10 +1021,10 @@ blit_sprite:
                 rrca
                 rrca
                 ld   (BLIT_CROWS), a           ; char rows
-                ld   a, (blit_chain_al_end) & $FF
+                ld   a, blit_chain_al_end & $FF
                 sub  d
                 ld   l, a
-                ld   a, (blit_chain_al_end) >> 8
+                ld   a, blit_chain_al_end >> 8
                 sbc  a, 0
                 ld   h, a
                 ld   (blit_al_jp+1), hl        ; SMC: entry = chain end - 7 * width
@@ -1033,10 +1035,10 @@ blit_sprite:
                 pop  hl                        ; HL = pool data
                 ld   c, e                      ; C = line-start low byte
                 jp   blit_al_jp
-.gen:           ld   a, (blit_chain_end) & $FF
+.gen:           ld   a, blit_chain_end & $FF
                 sub  d
                 ld   l, a
-                ld   a, (blit_chain_end) >> 8
+                ld   a, blit_chain_end >> 8
                 sbc  a, 0
                 ld   h, a
                 ld   (blit_jp+1), hl           ; SMC: entry = chain end - 7 * width

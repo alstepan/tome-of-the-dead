@@ -845,6 +845,7 @@ draw_slot:
                 push ix
                 pop  de
                 ld   a, e
+                ASSERT (P_ENTITIES & $FF) == 0 ; no carry: records 32-B aligned
                 add  a, E_DFID                 ; (32-B records: no carry)
                 ld   e, a
                 ld   bc, R_ROWS - R_FID + 1

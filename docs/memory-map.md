@@ -185,7 +185,7 @@ cap, reported) 124,729 → 143,471 T (101.2%, 1 tick). A7 review: mix
 (x 4 is inside `{5,2}`'s end box, B8), so the fight geometry differs. **A7b (renderer optimisation, hard prerequisite of A8)**, same tests:
 budget mix worst 140,170 → **121,395 T (85.6%)**, heavy 144,913 (2 overruns)
 → **121,049 T (85.4%, 0 overruns)**; `tests/flicker.py` worst tick a
-145,966 (2 overruns) → 122,100, b 64,377 → 58,747, c 109,010 → 96,194, all 0
+145,966 (2 overruns) → 122,100, b 64,377 → 58,747, c 109,010 → 96,129, all 0
 events / tears / split; means mix 71,716 → 61,139, heavy 52,256 → 44,472.
 Levers, in measured order: `erase_rect` steps rows incrementally (218 → 74 T
 per row; −1.2k / −2.4k); per-slot render state as one 16-B record per slot
