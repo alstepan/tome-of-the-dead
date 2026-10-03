@@ -5,14 +5,16 @@
 ;   erase/restore (§4.3), HUD text, room draw. The boot-time generator and
 ;   init_tiles live in lowram.asm (bank 5); the transition scrolls in
 ;   bank3.asm.
-; Conventions: IX preserved unless stated; IY never touched (= $5C3A, ROM ISR).
+; Conventions: IX preserved unless stated; IY never touched (= $5C3A, kept for
+; the optional ISR_ROM_CHAIN; the default A8 IM 2 ISR does not use it).
 ;==============================================================================
 
 ;==============================================================================
 ; page_bank — page RAM bank A (0..7) at $C000; 48K ROM; the displayed screen
 ; (bit 3) is KEPT (A7: set_screen patches it into the OR below, so paging costs
-; nothing extra). Shadow before OUT (an ISR re-OUTing the shadow is never
-; stale); bit 4 = 1, bit 5 never set.
+; nothing extra). Shadow before OUT (the A8 ISR re-OUTs the shadow after its
+; AY call, so it is never stale; an interrupt between the two just makes the
+; OUT below a repeat); bit 4 = 1, bit 5 never set. No DI needed.
 ; In : A = bank (0..7).   Clobbers: A, BC.   48 T
 ; SMC: .scr+1 = P7FFD_ROM48 | screen bit, patched only by set_screen.
 ;==============================================================================

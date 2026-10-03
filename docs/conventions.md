@@ -31,6 +31,9 @@
 
 - Paging port is `$7FFD` (write-only — keep a shadow byte in RAM, never read-modify
   the port). Record the current bank shadow location in `docs/memory-map.md`.
+- Write order is always **shadow first, then `OUT`**, through `page_bank` /
+  `set_screen` only: the IM 2 ISR pages bank 3 for the AY player and restores
+  the port from the shadow (protocol under "Interrupts").
 - Document which bank any far data lives in, and the bank-switch cost around it.
 - Hot (per-tick) code lives in bank 2. Cold code that pages `$C000` lives in
   bank 5 low RAM (`src/lowram.asm`); cold code that needs no other `$C000`
@@ -56,18 +59,54 @@
 - One logical routine per block, with a banner header comment.
 - Comments explain *why* and cost, not the opcode mnemonic.
 
-## Interrupts
+## Interrupts (A8: IM 2)
 
-- IM and ISR setup is documented in one place once it exists.
-- Routines that must run with interrupts disabled document the `di`/`ei` window
-  and keep it as short as possible.
-- **`IY` = `$5C3A` invariant.** The engine runs under the ROM IM1 ISR (e.g. the
-  chord-capture `halt` in the input layer relies on the ROM keyboard scan), which
-  addresses system variables via `IY`. Both the `.tap` (USR-from-BASIC) and `.sna`
-  entry paths leave `IY=$5C3A`, and the engine never reloads it — so it works
-  today. If any routine ever repurposes `IY` or the `$5C00` system-var region
-  while interrupts are enabled, the ROM ISR becomes memory-corrupting. Either keep
-  `IY=$5C3A` whenever `ei` is in effect, or install a custom ISR first.
+Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
+
+- **IM 2**, installed by `boot` (`isr_install`, under boot's `DI`): 257-byte
+  vector table `ISR_VEC_TABLE` (`I` = `$BB`, bank 2) of `ISR_VEC_BYTE`, ISR
+  copied to `ISR_ADDR` `$BCBC`. The tape entry `start` runs before that under
+  the ROM IM1 ISR (LD-BYTES ends with `EI`), with `IY = $5C3A`.
+- **The ISR** (`isr`, `src/lowram.asm`, runs from bank 2): `SYS_FRAMES += 1`
+  exactly as the ROM did (3 bytes; `wait_tick` paces on the low byte), then
+  pages `BANK_AY` and calls `AY_PLAY` once per frame, then re-OUTs the shadow.
+  It saves AF, BC, DE, HL, IX, IY (+ AF'..HL' with `ISR_SAVE_ALT=1`). No ROM
+  chain by default: input is read straight from the ports (`scan_matrix`),
+  nothing reads the ROM keyboard variables, so the ROM handler would only cost
+  ~0.9k T/frame. `ISR_ROM_CHAIN=1` (assemble-only, untested at runtime: test #61's probe sets IY, invalid under ROM chain) ends the ISR with `jp $0038` instead (then
+  `IY` must be `$5C3A` whenever interrupts are on — keep it there anyway: the
+  engine never touches `IY`).
+- **Paging protocol (race-free without `DI`).** Every `$7FFD` write in main
+  code goes **shadow first, then `OUT`** (`page_bank`, `set_screen`; never a
+  bare `OUT`, never "OUT then shadow"). The ISR **never writes the shadow**:
+  it OUTs `(PORT_7FFD_SHADOW & ~7) | BANK_AY` (keeps screen bit 3 and ROM bit
+  4), calls the player, then OUTs `PORT_7FFD_SHADOW` **as it is now**. An
+  interrupt between a shadow write and its `OUT` therefore puts the new value
+  on the port a few T early and the main code's `OUT` repeats it; an
+  interrupt anywhere else restores exactly what was paged. The screen bit is
+  never touched by the ISR (`tests/game.py` #61 checks port == shadow at every
+  ISR exit across a 7 → 5 → 7 screen flip).
+- **AY player slot contract** (`AY_PLAY` = `AY_RESERVE` `$E400`, bank 3, 7 KB
+  to `$FFFF`; `src/ay.asm`, silent stub today): called with interrupts off,
+  bank 3 paged at `$C000`, any stack depth. May clobber AF, BC, DE, HL, IX, IY.
+  Must not: write the shadow or `$7FFD`, `EI`, touch `$C000` data of other
+  banks, use the alternate set unless `ISR_SAVE_ALT=1` (assemble-only, untested at runtime) (or main code never
+  uses `EXX` / `EX AF,AF'` — true today), take more than ~6.5k T (budget.md
+  §5: the tick keeps 13k T per 2 frames for it).
+  Main code never touches the AY ports ($FFFD select / $BFFD data): the
+  select+write pair is not atomic against the ISR — sound effects are queued
+  to the player (or, if ever unavoidable, DI around the pair).
+- **No `DI` windows in runtime code** (they would stall the music). The only
+  sites: `start` (tape entry; the ROM loader), `boot` (`DI` … `EI` around the
+  SP reset, `isr_install` and the first shadow write — the ISR must not run
+  before the shadow is valid), `check_paging.locked` (`DI` + `HALT`: the
+  deliberate stop when paging is locked). The ISR itself runs with
+  interrupts off (~0.6k T, in the top border). New routines that need `DI`
+  document the window and keep it as short as possible; SP tricks (stack
+  blits) are out unless they run under `DI` with that cost accepted.
+- **`IY` = `$5C3A`**: still set by `start` / `boot` and never changed — needed
+  by the tape path (ROM IM1 ISR) and by `ISR_ROM_CHAIN=1`; the default IM 2
+  ISR does not use it.
 
 ## Testing hook
 

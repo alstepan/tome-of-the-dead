@@ -9,14 +9,16 @@
 ;------------------------------------------------------------------------------
 ; ROM / system variables (48K BASIC ROM = 128K ROM 1, paged via $7FFD bit 4)
 ;------------------------------------------------------------------------------
-IY_SYSVAR       EQU $5C3A           ; conventions: IY stays here (ROM IM1 ISR)
-SYS_FRAMES      EQU $5C78           ; ROM ISR 50 Hz frame counter (low byte used)
+IY_SYSVAR       EQU $5C3A           ; conventions: IY stays here (tape path IM1; ISR_ROM_CHAIN)
+SYS_FRAMES      EQU $5C78           ; 50 Hz frame counter, 3 B (low byte paces the tick); A8: the
+                                    ; IM2 ISR increments it exactly as the ROM ISR did
+ROM_ISR         EQU $0038           ; 48K ROM IM1 handler (ISR_ROM_CHAIN=1 jumps there)
 ROM_CHARSET     EQU $3D00           ; 48K ROM font, char 32 first, 8 B/char
 ROM_LD_BYTES    EQU $0556           ; ROM tape loader (IX=dst, DE=len, A=flag, CF=1)
 
 ;------------------------------------------------------------------------------
 ; 128K paging. $7FFD is write-only: always write through PORT_7FFD_SHADOW.
-;   bit 4 = 1 -> 48K BASIC ROM (IM1 ISR + charset + LD-BYTES live there)
+;   bit 4 = 1 -> 48K BASIC ROM (charset, LD-BYTES, ISR_ROM_CHAIN handler)
 ;   bit 3     -> displayed screen: 0 = bank 5 ($4000; boot, select, transition
 ;                scrolls), 1 = bank 7 (A7 double buffer: during play). Only
 ;                set_screen changes it (also via show_bank5 / present_full);
@@ -32,7 +34,18 @@ BANK_POOL2      EQU 6
 BANK_SHADOW     EQU 7               ; clean-background shadow (R-1 erase lever), $E000..
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
 BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
-AY_RESERVE      EQU $E000           ; bank 3 $E000..$FFFF: AY player/music reserve (A8); cold code + sources end below
+AY_RESERVE      EQU $E400           ; A8: bank 3 $E400..$FFFF = 7 KB AY player/music/FX reserve (game.md
+                                    ;     §11.2, user-approved 7 KB); cold code + sources end below
+AY_RESERVE_END  EQU $10000
+BANK_AY         EQU BANK_COLD3      ; the ISR pages it in around every AY_PLAY call
+AY_PLAY         EQU AY_RESERVE      ; A8 player slot entry, called once per frame by the ISR
+                                    ; (contract: docs/conventions.md "Interrupts")
+; AY-3-8912 (128K): select a register on $FFFD, write it on $BFFD
+AY_REG_PORT     EQU $FFFD
+AY_DATA_PORT    EQU $BFFD
+AY_R_MIXER      EQU 7               ; R7: bits 0-5 = tone/noise A-C off when set
+AY_R_VOL_A      EQU 8               ; R8..R10: channel volumes A, B, C
+AY_MIX_OFF      EQU %00111111       ; every tone + noise off (I/O port bits 6/7 = input)
 ; Bank 7 (A7): screen 2 at $C000 (what the ULA shows during play; written only
 ; by present / present_full), the clean background rebased to $E000: both in
 ; screen layout, so screen -> screen 2 is +$80 and screen -> shadow is +$A0
@@ -146,7 +159,21 @@ SEL_FRT_SAVE    EQU $BA80           ; 2 x FRT_STRIDE: boot FRT rows of the selec
 MSG_Q           EQU $BA78           ; queued impact message: attacker slot + 1 (0 = none)
 PRES_MASK       EQU $BAA0           ; A7: present dirty-cell mask, 24 rows x 4 B ($BAA0..$BAFF);
 PRES_LEN        EQU 24 * 4          ;     byte row*4 + col/8, bit 7 - col%8 (bit 7 = leftmost)
-STACK_BOTTOM    EQU $BB00           ; stack grows down from $BF00 to here
+; A8 IM2 (docs/memory-map.md "Interrupts"): carved from the bottom of the old
+; 1 KB stack reservation (measured max depth 40 B). Bank 2 = uncontended and
+; always mapped; I = $BB is outside $40-$7F (128K snow) and $C0-$FF (paged).
+ISR_VEC_TABLE   EQU $BB00           ; 257 B, every byte = ISR_VEC_BYTE ($BB00..$BC00):
+ISR_VEC_LEN     EQU 257             ;     works whatever byte the floating bus supplies
+ISR_ADDR        EQU $BCBC           ; the ISR (copied here at boot from isr_image, lowram.asm)
+ISR_VEC_BYTE    EQU ISR_ADDR & $FF
+ISR_ADDR_END    EQU $BD00           ; ISR bytes end below this (ASSERTed)
+STACK_BOTTOM    EQU $BD00           ; stack grows down from $BF00 to here (768 B)
+    IFNDEF ISR_ROM_CHAIN                        ; A8: 1 = the ISR ends with jp ROM_ISR (ROM
+ISR_ROM_CHAIN   EQU 0                           ;     FRAMES + keyboard scan, needs IY = $5C3A,
+    ENDIF                                       ;     ~+0.92k T/frame (measured 1.54k vs 0.62k)); 0 = FRAMES only (default)
+    IFNDEF ISR_SAVE_ALT                         ; A8: 1 = the ISR also saves AF'/BC'/DE'/HL'
+ISR_SAVE_ALT    EQU 0                           ;     (needed once BOTH the player and main
+    ENDIF                                       ;     code use EXX / EX AF,AF'; neither does yet)
 
 ;------------------------------------------------------------------------------
 ; State block $BF00.. (above initial SP). $BF00-$BF0D shared with main.asm:
@@ -230,6 +257,7 @@ GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSIT
 MSG_BUF         EQU $BFA0           ; 32 B message line composition
 TIMING_MARK     EQU $BFC0           ; spare
 CLIMB_BLK       EQU $BFC1           ; 1 = this input's climb was blocked by an entity (-> wait turn)
+AY_CALLS        EQU $BFC2           ; A8 word: AY_PLAY calls (the silent stub counts; test-observable)
 
 ; Game states (GAME_STATE). 2/3/4 shared with constants.asm.
 GS_SELECT       EQU $05

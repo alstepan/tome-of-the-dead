@@ -5,8 +5,9 @@
 ; Target : ZX Spectrum 128K.   Build:
 ;   tools/build.sh   (zx0_sources.py, then sjasmplus src/main.asm --fullpath
 ;                     --lst/--sld/--sym=build/wazhack.* -i src; fails on warnings)
-;   -> build/wazhack.tap (BASIC loader + CODE lowram_code..code_end + 2
-;      headerless blocks: bank 1 sources, bank 3 source tail + cold code)
+;   -> build/wazhack.tap (BASIC loader + CODE lowram_code..code_end + 3
+;      headerless blocks: bank 1 sources, bank 3 source tail + cold code,
+;      bank 3 AY slot)
 ;   -> build/wazhack.sna (128K snapshot; entry = boot, all banks preloaded)
 ;
 ; Memory (docs/memory-map.md "PROTO"): HOT code+tables $8000..(< FRT, bank
@@ -19,7 +20,7 @@
 ; $8000..$FFFF); mirrored + pre-shifted sprite POOL generated at boot into
 ; banks 0/4/6.
 ;
-; Loop: 25 Hz tick (2 frames, ROM IM1 FRAMES counter). TURN_PHASE INPUT samples
+; Loop: 25 Hz tick (2 frames of SYS_FRAMES, bumped by the A8 IM 2 ISR). TURN_PHASE INPUT samples
 ; keys and resolves a whole turn instantly (player, then monsters in slot order,
 ; then pending materialise); TURN_PHASE ANIM replays it (tweens, attack /
 ; reaction / death sequences) until every queue is done (>= 2 ticks).
@@ -79,6 +80,18 @@ BANK3_LEN       EQU bank3_end - BANK_WINDOW
 BANK3_CODE_LEN  EQU bank3_end - bank3_code
                 ASSERT bank3_end <= AY_RESERVE
                 DISPLAY "GAME bank-3 cold code: ", /H, bank3_code, "..", /H, bank3_end - 1, " (", /D, BANK3_CODE_LEN, " B), free to AY reserve: ", /D, AY_RESERVE - bank3_end
+
+;==============================================================================
+; AY PLAYER SLOT (A8) — bank 3 AY_RESERVE..$FFFF (7 KB): called by the IM 2
+; ISR once per frame (ay.asm: silent stub for now). Own headerless tape block.
+;==============================================================================
+                ORG  AY_RESERVE
+ay_code:
+                INCLUDE "ay.asm"
+ay_code_end:
+AY_LEN          EQU ay_code_end - AY_RESERVE
+                ASSERT ay_code_end <= AY_RESERVE_END
+                DISPLAY "GAME AY slot (bank 3): ", /H, AY_RESERVE, "..", /H, ay_code_end - 1, " (", /D, AY_LEN, " B), free in the 7 KB reserve: ", /D, AY_RESERVE_END - ay_code_end, "; ISR ", /D, ISR_LEN, " B at ", /H, ISR_ADDR
 
 ;==============================================================================
 ; BANK-5 LOW-RAM COLD CODE — tape entry, boot, generator, init_tiles, game
@@ -165,7 +178,8 @@ probe_render_done:
                 jr   play_loop
 
 ;------------------------------------------------------------------------------
-; wait_tick — pace to 2 frames per tick. Arriving with >= 2 frames already gone
+; wait_tick — pace to 2 frames per tick (SYS_FRAMES: the A8 IM 2 ISR bumps it at
+; every frame start, like the ROM IM1 ISR did). Arriving with >= 2 frames already gone
 ; means this tick blew its 141.8k T budget: OVERRUN_COUNT++ (presentation only).
 ; Clobbers: A, B, HL
 ;------------------------------------------------------------------------------
@@ -454,5 +468,6 @@ tap_loader_len  EQU  $ - tap_loader
                 SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, SRC_LEN_LO
                 MMU  3, BANK_COLD3             ; source tail + bank-3 cold code
                 SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, BANK3_LEN
+                SAVETAP  "build/wazhack.tap", HEADLESS, AY_RESERVE, AY_LEN   ; A8 AY slot (BANK_AY = 3)
                 MMU  3, 0
                 SAVESNA  "build/wazhack.sna", boot
