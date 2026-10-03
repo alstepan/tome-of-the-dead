@@ -384,3 +384,61 @@ PD_LOG          EQU %00010000       ; log: scroll 23 -> 22 + newest line (LOG_Q 
 PD_ICONS        EQU %00100000       ; icon states (select / grey)
 PD_INFO         EQU %01000000       ; info line
 PD_DEPTH        EQU %10000000       ; depth + key icon (cols 30–31, rows 18–19)
+
+;------------------------------------------------------------------------------
+; B3B-11 panel engine (concept-screen §5, game.md §3.3–3.5; src/panel.asm).
+;------------------------------------------------------------------------------
+; State bytes in the 3B sub-range (test-observable):
+PANEL_HP_SH     EQU $BFD1           ; hero HP last drawn ($FF = never: forces PD_HP)
+PANEL_POT_SH    EQU $BFDB           ; hero potions last drawn ($FF = never: forces PD_ICONS)
+P_NUMBUF        EQU $BFDC           ; 3 B: num2 / depth text ("NN", 0)
+P_LIM           EQU $BFDF           ; this step's print limit (0 = whole line, else LOG_CHUNK)
+; LOG_Q layout (8 B): the ring of pending messages is LOG_TXT; LOG_QN counts them
+; (incl. the one being printed). One message = scroll step + print step(s).
+LQ_RD           EQU 0               ; ring slot of the oldest pending message (0..LOG_SLOTS-1)
+LQ_STEP         EQU 1               ; 0 = scroll next, 1 = printing
+LQ_X            EQU 2               ; printing: pixel x of the next char on row 23
+LQ_PTR          EQU 3               ; word: printing: next char in the slot
+LQ_DROP         EQU 5               ; saturating count of messages dropped (ring full; expect 0)
+                ASSERT LQ_DROP < LOG_Q_LEN
+; Message text ring: bank-5 printer buffer (runtime-only RAM, free after boot;
+; contended, but read once per char).
+LOG_TXT         EQU $5B00           ; LOG_SLOTS x LOG_SLOT_LEN, page-aligned
+LOG_SLOTS       EQU 4
+LOG_SLOT_LEN    EQU 64              ; slot = LOG_TXT + idx * 64 (idx rrca rrca)
+LOG_MAX         EQU 32              ; chars per message (game.md §3.4), + 0 terminator
+LOG_COLS        EQU 24              ; log text cols 0..23 (32 chars x 6 px = 192 px)
+LOG_CHUNK       EQU 12              ; chars per print step when the tick is already in its 2nd frame
+                ASSERT (LOG_TXT & $FF) == 0 && LOG_SLOTS * LOG_SLOT_LEN <= 256
+                ASSERT LOG_MAX * 6 == LOG_COLS * 8 && LOG_MAX < LOG_SLOT_LEN
+                ASSERT LOG_SLOTS == 4 && LOG_SLOT_LEN == 64     ; slot address = idx rrca rrca
+                ASSERT (P_NUMBUF >> 8) == ((P_NUMBUF + 2) >> 8)
+; Row 21 fields (concept-screen §5): label cell, 32-px bar (4 cells), number (2 cells)
+HP_LBL_COL      EQU 0
+HP_BAR_COL      EQU 1
+HP_NUM_COL      EQU 5
+MP_LBL_COL      EQU 7
+MP_BAR_COL      EQU 8
+MP_NUM_COL      EQU 12
+FOOD_LBL_COL    EQU 14
+FOOD_BAR_COL    EQU 15
+HUNGER_COL      EQU 19              ; hunger stage word, cols 19–23
+BAR_CELLS       EQU 4
+GEAR_COL        EQU 24              ; worn gear 4 x 16x16, cols 24–31, rows 22–23
+DEPTH_COL       EQU 30              ; "Dn", row 18
+ICON_SLOTS      EQU 10              ; slot i at cols 3i..3i+2, rows 18–19
+ICON_W          EQU 3
+ATTR_P_HP       EQU $42
+ATTR_P_MP       EQU $45
+ATTR_P_FED      EQU $44             ; FOOD bar + "FED" (stand-in stage until 3E)
+ATTR_LOG_OLD    EQU $07             ; row 22
+ATTR_LOG_NEW    EQU $47             ; row 23
+ATTR_P_GREY     EQU $07             ; greyed slot (concept-screen §5 icon states)
+ATTR_P_SEL      EQU $08             ; OR: selected slot = PAPER blue
+                ASSERT LOG_ROW + 1 == 23 && (LOG_ROW & $18) == (23 & $18)   ; rows 22/23 share a bitmap third
+PD_HP_BIT       EQU 0
+PD_LOG_BIT      EQU 4
+PD_ICONS_BIT    EQU 5
+PD_DEPTH_BIT    EQU 7
+                ASSERT PD_HP == 1 << PD_HP_BIT && PD_LOG == 1 << PD_LOG_BIT
+                ASSERT PD_ICONS == 1 << PD_ICONS_BIT && PD_DEPTH == 1 << PD_DEPTH_BIT

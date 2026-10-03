@@ -1361,3 +1361,4 @@ init_tiles:
                 MODULE b3fx                     ; the sheet's zap tiles (labels
                 INCLUDE "../assets/gfx/sprites/tiles_fx.asm"   ; also in sprite_src)
                 ENDMODULE
+                INCLUDE "panel.asm"            ; B3B-11 panel engine (cold part + the HOT_COPY image)

@@ -794,9 +794,8 @@ try_quaff:
                 dec  (ix+E_POT)
                 ld   (ix+E_FLT), FLASH_TICKS
                 ld   (ix+E_FLA), ATTR_HEAL
-                call msg_begin
                 ld   hl, str_quaff
-                call print_str
+                call log_push                  ; B3B-11: queued (panel_tick)
                 scf
                 ret
 
@@ -1944,9 +1943,8 @@ potion_pickup:
                 pop  bc
                 ld   de, $0101
                 call queue_damage              ; redraw the cell next render
-                call msg_begin
                 ld   hl, str_found
-                jp   print_str
+                jp   log_push                  ; B3B-11: queued (panel_tick)
 
 ; queue_damage — C = col, B = row, D = cols, E = rows -> PEND_DMG (next render
 ; restores tiles there and repairs overlapping sprites). Full queue: the last
@@ -2028,106 +2026,78 @@ queue_damage:
                 ret
 
 ;==============================================================================
-; HUD (PROTO text on panel rows 21..23 until B3B-11; never touched by sprites).
+; MESSAGES (B3B-11): composed into MSG_BUF and queued with log_push; the panel
+; engine (panel.asm) draws them one item per tick.
 ;==============================================================================
-hud_status:
-                ld   b, HUD_ROW
-                ld   a, ATTR_HUD
-                call clear_row
-                ld   c, 0
-                ld   a, (HERO_KIND)
-                call kind_name                 ; HL = name
-                call print_str
-                ld   hl, str_hp
-                call print_str
-                ld   a, (P_ENTITIES + E_HP)
-                call print_dec
-                ld   a, '/'
-                call print_char
-                ld   a, (P_ENTITIES + E_MAXHP)
-                call print_dec
-                ld   hl, str_pot
-                call print_str
-                ld   a, (P_ENTITIES + E_POT)
-                jp   print_dec
-
-hud_room:
-                ld   b, HUD_ROW + 2
-                ld   a, ATTR_HUD_DIM
-                call clear_row
-                ld   c, 0
-                ld   hl, str_room
-                call print_str
-                ld   a, (CUR_ROOM)             ; PROTO letter (B3B-8: grid ids A 0,
-                cp   ROOM_D                    ; B 1, D 3, C 4 -> 6 - r for D / C;
-                jr   c, .l                     ; HUD text until B3B-11)
-                neg
-                add  a, ROOM_D + ROOM_C - 1    ; D -> 3, C -> 2
-.l:             add  a, 'A'
-                jp   print_char_hud            ; A7: HUD tracking
-                ASSERT ROOM_A == 0 && ROOM_B == 1 && ROOM_D == 3 && ROOM_C == 4
-
-; msg_begin — clear the message row; B/C = its first cell.  Clobbers: A, DE, HL
-msg_begin:
-                ld   b, HUD_ROW + 1
-                ld   a, ATTR_HUD
-                call clear_row
-                ld   c, 0
-                ret
-
-; kind_name — HL = name string of kind A.  Clobbers: A, DE, HL
+; kind_name — HL = name string of kind A.  Clobbers: A, HL
 kind_name:
                 add  a, a
+                add  a, kind_names & $FF
                 ld   l, a
-                ld   h, 0
-                ld   de, kind_names
-                add  hl, de
+                adc  a, kind_names >> 8
+                sub  l
+                ld   h, a
                 ld   a, (hl)
                 inc  hl
                 ld   h, (hl)
                 ld   l, a
                 ret
 
-; show_impact_msg — IX = attacker at IMPACT: print its E_MSG line.
+; str_cat — append string HL (0-terminated, the 0 not copied) at DE; DE -> its
+; end.  Clobbers: A, DE, HL
+str_cat:
+                ld   a, (hl)
+                or   a
+                ret  z
+                ld   (de), a
+                inc  hl
+                inc  de
+                jr   str_cat
+
+; show_impact_msg — IX = attacker at IMPACT: queue its E_MSG line ("YOU HIT
+; THE RAT", "THE RAT MISSES"; <= 21 chars < LOG_MAX).  Clobbers: A, BC, DE, HL
 show_impact_msg:
                 ld   a, (ix+E_MSG)
                 or   a
                 ret  z
-                push af
-                call msg_begin
-                pop  af
+                ld   de, MSG_BUF
                 cp   MSG_M_HIT
                 jr   nc, .mon
-                push af
                 ld   hl, str_you
-                call print_str
-                pop  af
+                call str_cat
                 ld   hl, str_hit
+                ld   a, (ix+E_MSG)             ; (str_cat returns A = 0)
                 cp   MSG_P_HIT
                 jr   z, .pv
                 ld   hl, str_miss
                 cp   MSG_P_MISS
                 jr   z, .pv
                 ld   hl, str_kill
-.pv:            call print_str
+.pv:            call str_cat
                 ld   hl, str_the
-                call print_str
+                call str_cat
                 push ix
+                push de
                 ld   a, (ix+E_TGT)
-                call ent_ix
+                call ent_ix                    ; (clobbers E)
                 ld   a, (ix+E_KIND)
+                pop  de
                 pop  ix
-                call kind_name
-                jp   print_str
-.mon:           push af
-                ld   hl, str_the
-                call print_str
+                jr   .name
+.mon:           ld   hl, str_the
+                call str_cat
                 ld   a, (ix+E_KIND)
                 call kind_name
-                call print_str
-                pop  af
+                call str_cat
                 ld   hl, str_hits_you
+                ld   a, (ix+E_MSG)
                 cp   MSG_M_HIT
-                jr   z, .mv
+                jr   z, .tail
                 ld   hl, str_misses
-.mv:            jp   print_str
+                jr   .tail
+.name:          call kind_name
+.tail:          call str_cat
+                xor  a
+                ld   (de), a
+                ld   hl, MSG_BUF
+                jp   log_push

@@ -255,11 +255,8 @@ WIN_MAX_X       EQU 3               ; standing on storey 0 with x <= 3 (chest co
 
 
 ;------------------------------------------------------------------------------
-; Strings (0-terminated, upper case; ROM charset).
+; Strings (0-terminated, upper case, <= LOG_MAX chars; log lines via log_push, B3B-11).
 ;------------------------------------------------------------------------------
-str_hp:         DB "  HP ", 0
-str_pot:        DB "  POT ", 0
-str_room:       DB "ROOM ", 0
 str_you:        DB "YOU ", 0
 str_hit:        DB "HIT ", 0
 str_miss:       DB "MISS ", 0

@@ -187,6 +187,17 @@ probe_render_done:
                 call pmark_dmg
 probe_render_done:
     ENDIF
+                ; B3B-11 (D5, user 2026-10-03): one panel item per tick, in ANIM
+                ; ticks >= 1 and idle ticks, never in a turn's input tick (TURN_PHASE
+                ; = ANIM with TURN_TICK still 0: read_turn_input just started it)
+                ld   a, (TURN_PHASE)
+                or   a
+                jr   z, .panel
+                ld   a, (TURN_TICK)
+                or   a
+                jr   z, panel_done
+.panel:         call panel_tick
+panel_done:                                    ; test probe (no code): panel item done
                 ld   a, (TURN_PHASE)
                 or   a
                 jr   z, play_loop
@@ -262,7 +273,7 @@ read_turn_input:
 
 ;------------------------------------------------------------------------------
 ; end_turn — ANIM finished: transition (if exiting), TURN_COUNTER++, potion
-; pickup, HUD, death / win checks, back to INPUT.  Clobbers: all but IY.
+; pickup, death / win checks (B3B-11: messages via log_push), back to INPUT.  Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 end_turn:
                 ld   a, (EXIT_KIND)
@@ -271,18 +282,16 @@ end_turn:
                 ld   hl, (TURN_COUNTER)
                 inc  hl
                 ld   (TURN_COUNTER), hl
-                call potion_pickup
-                call hud_status
-                xor  a
+                call potion_pickup             ; (B3B-11: HP / potions reach the panel by
+                xor  a                         ; panel_tick's poll, not from here)
                 ld   (TURN_PHASE), a
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
                 jr   z, .alive
                 ld   a, GS_DEAD
                 ld   (GAME_STATE), a
-                call msg_begin
                 ld   hl, str_died
-                jp   print_str
+                jp   log_push                  ; B3B-11: end_screen drains it
 .alive:         ; win: standing on storey 0 of room D with x <= 3 (§8.2)
                 ld   a, (CUR_ROOM)
                 cp   WIN_ROOM
@@ -298,9 +307,8 @@ end_turn:
                 ret  nc
                 ld   a, GS_WIN
                 ld   (GAME_STATE), a
-                call msg_begin
                 ld   hl, str_win
-                jp   print_str
+                jp   log_push
 
 ;------------------------------------------------------------------------------
 ; do_exit — follower selection (§3.7), frozen Cauldron transition (§3.6),
@@ -360,7 +368,6 @@ do_exit:
                 ld   (ix+E_MODE), M_REST
                 ld   hl, arrival_conflicts     ; bank 3 (cold)
                 call far3
-                call hud_room
                 call vis_room_sync             ; B7: no old-room sprite in the next render
                 call present_full              ; A7: bank 5 -> 7 (6,912 B), show bank 7
                 xor  a
@@ -374,6 +381,7 @@ do_exit:
 ; the same fixed seed, §6.5).
 ;------------------------------------------------------------------------------
 end_screen:
+                call panel_tick                ; B3B-11: the death / win line, HP 0
                 call scan_matrix
                 call sample_input
                 ld   a, (PLAYER_DISC)
@@ -398,6 +406,7 @@ enter_select:
                 INCLUDE "logic.asm"
                 INCLUDE "anim.asm"
                 INCLUDE "data.asm"
+                INCLUDE "panel2.asm"            ; B3B-11 panel engine, bank-2 part
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two

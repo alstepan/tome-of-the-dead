@@ -92,20 +92,16 @@ boot:
                 ld   (PEND_DMG_COUNT), a
                 ld   (CUR_ROOM), a
                 ld   (YIELD_FLAG), a
-                ld   hl, HUD_PW                ; A7 HUD tracking: nothing pending,
-                ld   (hl), a                   ; ink extents unknown (= whole rows)
-                inc  l
-                ld   (hl), a
-                inc  l
-                ld   (hl), a
-                ld   a, ROOM_COLS
-                ld   hl, HUD_EXT
+                ld   (PANEL_DIRTY), a          ; B3B-11: no panel work / log until
+                ld   (LOG_QN), a               ; panel_init (start_game)
+                ld   hl, HUD4_PW               ; text rows: nothing pending
                 ld   (hl), a
                 inc  l
                 ld   (hl), a
                 inc  l
                 ld   (hl), a
-                xor  a
+                inc  l
+                ld   (hl), a
                 ld   hl, 0
                 ld   (OVERRUN_COUNT), hl
                 ld   (TICK_COUNTER), hl
@@ -133,6 +129,8 @@ boot:
                 call build_bitrev
                 ld   hl, init_tiles            ; B3B-8: bank 3 (the common set,
                 call far3                      ; ornament, PROTO zap glyphs)
+                ld   hl, panel_boot            ; B3B-11: FONT6 + the panel hot code
+                call far3                      ; -> bank-2 runtime RAM
                 call alloc_reset
                 ; monsters: every kind's frames, both facings (§5.2)
                 ld   a, K_SKELETON
@@ -318,11 +316,9 @@ start_game:
                 call clear_screen
                 ld   a, (CUR_ROOM)
                 call room_show                 ; build + draw + ornament (screen, shadow)
-                call hud_status
-                call hud_room
-                call msg_begin
-                ld   hl, str_welcome
-                call print_str
+                ld   de, str_welcome           ; B3B-11: the panel (rows 18-23) + the
+                ld   hl, panel_init            ; first log line, drawn now (bank 3)
+                call far3
                 call present_full              ; A7: bank 5 -> 7, display bank 7
                 ld   a, 1
                 ld   (NEED_RELEASE), a         ; the select key must be released
@@ -661,9 +657,8 @@ hero_door:
                 or   a
                 ret  nz                        ; CF = 0
                 inc  (hl)
-                call msg_begin
                 ld   hl, str_locked
-                call print_str
+                call log_push                  ; B3B-11: queued (panel_tick)
                 or   a
                 ret
 str_locked:     DB "THE DOOR IS LOCKED", 0
@@ -822,9 +817,8 @@ hero_fall:
                 set  EF_DYING_BIT, (ix+E_FLAGS)
                 ld   c, RC_DEATH
 .r:             ld   (ix+E_REACT), c
-                call msg_begin
                 ld   hl, str_fall
-                call print_str
+                call log_push                  ; B3B-11: queued (panel_tick)
                 scf
                 ret
 str_fall:       DB "YOU FALL INTO A PIT", 0
@@ -968,59 +962,6 @@ jump_bodies:
                 ASSERT (LIVE_LIST & $FF) + P_MAX_ENT * 5 <= 256
 
 ;==============================================================================
-; hud_clear_mark — clear_row's A7 hook: A = the new attr, B = row, C = 0.
-; Out: A = cols clear_row must blank (0..32: the old ink extent; 32 if the
-; attr changes or the row is not a HUD row).
-; HUD row: the cols present must copy grow to the old ink extent (HUD_EXT) —
-; or to the whole row if the row's attr changes (compared with bank 5 col 0) —
-; and HUD_EXT restarts at 0 (print_char widens both again). Any other row:
-; the whole row is marked (unused in play). Cold-ish (≤ 3 per turn), so it
-; lives here, not in bank 2.  Clobbers: A, DE, HL (BC kept).
-;==============================================================================
-hud_clear_mark:
-                ld   d, a                      ; D = new attr
-                ld   a, b
-                sub  HUD_ROW
-                jr   c, .whole
-                ld   e, a                      ; E = HUD row index
-                call attr_addr                 ; HL = attr of (B, 0); keeps BC, DE
-                ld   a, (hl)
-                sub  d
-                ld   d, a                      ; D = 0: same attr
-                ld   a, e
-                add  a, HUD_EXT & $FF
-                ld   l, a
-                ld   h, HUD_EXT >> 8
-                ld   a, (hl)                   ; old ink extent
-                ld   (hl), 0
-                cp   ROOM_COLS + 1             ; clamp: clear_row's chain entry
-                jr   c, .ext                   ; must stay inside the chain
-                ld   a, ROOM_COLS
-.ext:
-                inc  d
-                dec  d
-                jr   z, .same
-                ld   a, ROOM_COLS              ; attr changes: every cell
-.same:          or   a
-                ret  z                         ; row was blank, attr unchanged
-                ld   e, a
-                ld   a, l
-                add  a, HUD_ROWS
-                ld   l, a                      ; -> HUD_PW
-                ld   a, e
-                cp   (hl)
-                ret  c
-                ld   (hl), a                   ; PW = max(PW, extent)
-                ld   a, 1
-                ld   (PRES_ANY), a
-                ld   a, e
-                ret
-.whole:         ld   de, (ROOM_COLS << 8) | 1
-                call pmark_rect
-                ld   a, ROOM_COLS
-                ret
-
-;==============================================================================
 ; vis_reset / vis_room_sync — THE render-state resync of every "new world
 ; state" path. CONTRACT (A7 review, bugs B7/B7b): render runs FIRST in a tick
 ; (RENDER_FIRST) from the previous tick's anim_tick output (R_VIS / R_FID /
@@ -1138,12 +1079,14 @@ present_full:
                 inc  l
                 djnz .c
                 ld   (PRES_ANY), a
-                ld   hl, HUD_PW
+                ld   hl, HUD4_PW
                 ld   (hl), a
                 inc  l
                 ld   (hl), a
                 inc  l
-                ld   (hl), a                   ; HUD rows are in sync too
+                ld   (hl), a
+                inc  l
+                ld   (hl), a                   ; text rows are in sync too
                 dec  a
                 ld   (PRES_RMIN), a            ; $FF: no marked row
                 ld   a, P7FFD_SCREEN7

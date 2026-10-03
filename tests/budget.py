@@ -23,12 +23,15 @@ import game  # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, EF_ACTIVE, EF_HOSTILE, EF_LEFT, stand_y  # noqa: E402
 
 BUDGET = 2 * 70908
-PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "wait_tick"]
+# B3B-11: panel_tick .. play_loop.nopanel = the tick's panel item (D5: one per
+# tick, never in a turn's input tick); its present lands in the next tick_work.
+PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "panel_tick",
+          "panel_done", "wait_tick"]
 if os.environ.get("GAME_PROFILE"):                # finer split for optimisation work
     PHASES = ["tick_work", "read_turn_input", "try_player_turn", "resolve_monsters",
               "materialise", "anim_tick", "render", "render.nopend", "render.sdone",
               "render.f3done", "render.drdone", "draw_zap", "pmark_dmg", "present",
-              "wait_tick"]
+              "panel_tick", "panel_done", "wait_tick"]
     PHASES += [n for n in os.environ["GAME_PROFILE"].split(",") if n in S]
 
 
