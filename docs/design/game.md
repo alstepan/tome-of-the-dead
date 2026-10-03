@@ -80,8 +80,9 @@
   wall_brk_top/bot and any other wall variant) are **SOLID** and may replace only cells that
   are already solid wall (brick). (b) **Rubble, skulls, moss, cobweb, chain, banner, torch,
   candles, drips, window, bookshelf** are **non-solid** (walkable or overlay) and may be placed only
-  on cells that are already non-solid (floor-row standing cells or air-band cells); a
-  solid-wall decor (window, bookshelf, torch bracket) is a wall-set variant and follows (a).
+  on cells that are already non-solid (floor-row standing cells or air-band cells); window and
+  bookshelf are placed only on air cells. Pillar and plaster-patch are **SOLID** and placed on
+  wall cells (they follow (a)). Solidity follows the cell class.
   (c) The B3B-9 deriver never places on door/arch/lintel/ladder/pit/cap cells, nor changes a
   cell's TILE_FLAGS. TILE_FLAGS solid must therefore be set on every wall-set id (the 3B
   non-solid wall_worn/wall_brk ids are a bug); rubble stays non-solid.
