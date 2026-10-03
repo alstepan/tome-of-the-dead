@@ -8,6 +8,9 @@
 > line, 16×16 gear); custom 6×8 text font + 8×16 menu font (§3.4); Mage keeps BAG (10 icons);
 > Zombie → **Vampire**; gold glow = SYNC; ZX0 in blocks of 3–4 frames (§11); **finite
 > ammunition** (§6.3, §8.5); Death Knight redesigned (5 frames); hunger stage names.
+> **Rev 4 (2026-10-03):** user 2026-10-03 adds **status effects** (§6.4, 3D), **traps** (§1.5,
+> 3E), **blessed/cursed gear as known states** (§8.7, 3E) and **light identification** of
+> potions/scrolls (§8.8, 3E); details are designer decisions 2026-10-03.
 > It supersedes `prototype.md` wherever they differ. Anything not restated here keeps the
 > PROTO rule: turn phases §3.2, ladders §3.4, the follow and materialise rules §3.7, F9
 > zoning §4, frame rules §5.1–§5.4, line of attack §6.1, AI §6.4, the animation state
@@ -47,7 +50,8 @@
 | Reachability | storeys span the full width except pits and edge blocks; ≥ 1 internal ladder; a pit is always jumpable, and falling only leads to storey 1. The hero can reach every exit; monsters may be cut off by a pit (intended) |
 | Shaft cols (designer decision 2026-10-03) | Exit shafts (up-exit, down-exit, arrival, level exit) use left col **`c ∈ 5..24`** (footprint cols 5..26), a subset of the internal-ladder range 3..26. Why: door cells occupy cols 0–1 / 30–31, and a hero arriving through a horizontal exit stands at x = 1 (cols 1..3) or x = 28 (cols 28..30); `c ≥ 5` / `c+2 ≤ 26` leaves ≥ 1 solid-floor col (4 / 27) so arrival never overlaps a hole. The ≥ 4-clear-cols (`\|c1−c2\| ≥ 7`) rule applies unchanged between shafts and internal ladders/pits on the same storey |
 | Generator gaps (designer decision 2026-10-03) | **(1) Lair tiers:** (a) farthest non-start leaf with a horizontal edge; else (b) farthest non-start room with a horizontal edge (it keeps its other exits; the boss never follows, so a through-room lair is fine; on D8 the Sanctum leaf needs a free horizontal neighbour cell, else tier fails); there is **no tier (c)**: if neither exists, the generator **reseeds** (seed+1, ≤ 16 tries). The lair edge must be horizontal so the lair has its door. Key room (§1.4: unused in 3B) follows the same fallback. **(2) Potions: minimum 2** per level (≥ 1 Heal); up to 32 seeded placement tries each for the first two, the 3rd is optional and dropped after 8 tries. **(3) Dead-end block:** only in rooms that are **not start, lair or Sanctum**, and only at an edge with no exit. **(4) Start:** hero begins in the DFS-root room on **storey 0** (top); D1 x = col 14, D2+ x = arrival-shaft `c+1`; if x falls on a pit/ladder/shaft footprint, move to the nearest solid-floor col with ≥ 1 clear col. **Designer clarification 2026-10-03:** the arrival shaft is a storey-0 feature (it descends from above into the start room's storey 0, rubble-capped overhead), so the hero arrives on **storey 0, standing on solid floor at x = `c+1`, not mid-climb** (option a). The footprint-move rule **does not apply to the arrival shaft itself**; it applies only to the *other* footprints (pit, internal ladder, up/down-exit), and since placement already keeps those ≥ 4 clear cols (`\|c1−c2\| ≥ 7`) from the arrival shaft, in practice the move rule can only trigger on D1 (x = 14). **(5) 3B level block** needs nothing beyond the descriptors, floor-item list and hero start; population is the fixed per-room stand-in table keyed by room id and depth, not stored |
-| Stored per level | room descriptors (exits, ladders, pits, blocks, door/grate bits), the floor-item list, the 16 entity slots. Population §9.4, items §8.5 |
+| Traps (3E) | placed **last**, after the floor items, so every earlier generator output stays byte-identical to B3B-7 (Python == Z80). Rules §1.5 |
+| Stored per level | room descriptors (exits, ladders, pits, blocks, door/grate bits), the floor-item list, the **trap list (≤ 6 × 2 B, §1.5)**, the 16 entity slots. Population §9.4, items §8.5 |
 
 ### 1.2 Level themes: colours and decor tilesets (attr-only; floor rows never under sprites)
 
@@ -71,8 +75,9 @@
   retired chest/zap ids; **designer decision 2026-10-03 + user 2026-10-03 option B:** ids 11/14
   = open-door jambs L/R, cobweb and moss move to per-level ids, see concept-screen §3.3). Per-level decor ids **32..59 = 28 per level for D1–D7**; **60..63 are
   reserved for attackable objects** (D8 lectern = 4). The cap is 28 decor ids per set; if
-  a set exceeds it, cut the arched window and the pillar variants first. Spare: common id 10
-  (freed when potions stop being a map tile in 3E).
+  a set exceeds it, cut the arched window and the pillar variants first. Common id 10
+  (freed when potions stop being a map tile in 3E) becomes **`T_TRAP`** (revealed trap,
+  designer decision 2026-10-03, §1.5). After 3E the common ids are completely full.
 - Walls are **black-background** with occasional dithered brick patches (concept-screen §3.3).
 - **Solidity of decor (designer decision 2026-10-03).** Solidity belongs to the map cell
   class, never to the glyph: a decor glyph must have the same solidity as the cell it
@@ -110,6 +115,71 @@
 | D8 | D8 gets a lair exit like D1–D7; **descending from D8 = `GS_WIN`** | §1.3 |
 | Close door | keyboard key **`C`** (1 turn, §2.3 legality; not redefinable, not on joystick) until the 3C icon bar adds FIRE on the melee icon (designer decision 2026-10-03: the key) | §3.1 |
 
+### 1.5 Traps (3E; user 2026-10-03 scope, designer decision 2026-10-03 details)
+
+**Model.** A trap is a **1-col pressure plate in a storey's standing row** (row `9s+7`, the
+air row directly above the floor), the same row skulls and rubble use. It is not an entity and
+not a map tile while hidden: it lives in the per-level **trap list**; the room map keeps the
+cell's normal id. **Only the hero triggers traps** (monsters know their dungeon: no AI or
+pathing change, no off-screen events).
+
+| Type | Depths | Effect on the hero | After triggering | Message (≤ 32) |
+|---|---|---|---|---|
+| **DART** | D1+ | 1d4+1 PHYS (DEF applies) + **POISON 6** (§6.4); impact = `arrow_hit` sprite at the hero | **re-arms** (stays, now known) | `A DART HITS YOU!` |
+| **GAS** | D2+ | **ASLEEP 4** (§6.4); hero flashes `$44` one step (no new art) | **one-shot** (removed) | `SLEEPING GAS! YOU FALL ASLEEP.` (30) |
+| **TELEPORT** | D3+ | as the Teleport scroll (§8): random free spot, random room, never the lair while its boss lives; attr flash as the Archmage's | one-shot | `YOU ARE TELEPORTED!` |
+| **ALARM** | D5+ | while the boss lives: one **wave** = the §9.5 idle-wave spawn (1 + (rnd & 1) of the level's kinds at the room's doors/exits, awake, `F_RESPAWN`, slot + §9.3 cap rules), runs even with `IDLE_WAVE` off; border flashes red 2 ticks. Boss dead: nothing comes | one-shot | `AN ALARM BELL RINGS!` / `A BELL RINGS. NOTHING COMES.` (28) |
+
+ALARM's wave code lands in 3F; in 3E the trap is generated and prints the "nothing comes"
+line (the generator must not change between 3E and 3F).
+
+**Trigger.** A trap fires when a hero move **first brings its col under the body** (walk,
+bump-free step, jump landing, fall landing, ladder step-off onto the storey). Standing on it,
+turning, or waiting does not re-fire; walking off and back on does (DART). A **jump clears
+it** when the trap col is within the cleared cols `x+3 … x+5` (§2.4): jumping is the way
+past a known DART. Teleport/fear arrivals never land with a trap col under the body.
+
+**Finding (hidden → known).** All traps are generated hidden. A known trap draws `T_TRAP`
+(common id 10) in its cell; the room builder sets its attr from a 4-entry type table (DART
+`$42`, GAS `$44`, TELEPORT `$43`, ALARM `$46`; ink on black, joins the legality set). A trap
+becomes known when:
+1. it **triggers** (DART stays known; one-shot traps are removed and the cell redraws as its
+   normal id);
+2. **Search = Wait** (↓ with no ladder below, §2.3; no new key, joystick-complete): each
+   hidden trap in the current room on the hero's storey within **6 cols** of the body is
+   found with **1 in 2** (gameplay RNG);
+3. **Mage trap sense** (class ability, passive): at the end of every Mage turn, hidden traps
+   within **2 cols** of his body on his storey are found (100 %). The Warrior must search.
+
+Message on find: `YOU FIND A DART TRAP.` · `… A GAS TRAP.` · `… AN ALARM TRAP.` ·
+`YOU FIND A TELEPORT TRAP.` (25). A known trap overrides any derived decor in its cell
+(decor is cosmetic and re-derived on room entry, never stored).
+
+**Counts and types per level (seeded from the level seed, `GEN_RNG`).**
+
+| Depth | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 |
+|---|---|---|---|---|---|---|---|---|
+| Traps | 1 | 2 | 2 | 3 | 3 | 3 | 4 | 4 |
+| Type pool (uniform) | DART | DART, GAS | DART, GAS, TELEPORT | same | + ALARM | all 4 | all 4 | all 4 |
+
+**Placement (generator, after floor items; each trap ≤ 8 seeded tries, else dropped).**
+- Room: not start, not lair, not Sanctum; **≤ 1 trap per room**.
+- Storey `s ∈ {0,1}` (random), col **`t ∈ 6..25`** (keeps the arrival bodies at x = 1 / 28
+  and every door/arch col clear by ≥ 2 cols).
+- For every footprint on that storey (ladder, shaft, hole, pit, arrival shaft, all
+  `c … c+2`): `t ∉ [c−1, c+3]` (excludes caps and ladder-end cells). Not under or adjacent
+  to a dead-end block or its rubble col. On storey 1, `t ∉ [p−1, p+3]` (pit landing zone).
+  D1: not within the hero start body ±1.
+- Not on a floor-item cell.
+- Storage: **trap list ≤ 6 entries × 2 B**: room (4 bits), storey (1), col (5), type (2),
+  known (1), spent (1), 2 bits spare. Spent entries are skipped (never compacted mid-level).
+
+**Levelcheck invariants (B3B-6 checker extension).** Per seed and depth: trap count = table
+(minus dropped tries, reported); ≤ 1 per room; none in start/lair/Sanctum; every `t` passes
+the col rules above against the final room descriptors; types within the depth pool; all
+generated hidden; no trap under a pit landing zone; Python == Z80 trap list byte-exact;
+generator outputs before the trap step unchanged vs B3B-7.
+
 ---
 
 ## 2. Geometry and turn model
@@ -134,7 +204,15 @@
   projectiles included. **Why:** logic resolved the player first, so a target must not
   visibly walk away from a bolt that already hit it. It also keeps monsters static, at zero
   render cost, while the player's spell flies (§9.3).
-- End of turn, in order: pickups → aura → poison → hunger → regen → panel.
+- **Status step (3D, §6.4):** each entity runs its status step at the **start of its own
+  action phase** (hero: when its turn begins; monsters: in slot order, current room only),
+  every game turn, including turns an "acts every 2" monster does not act. Poison damage
+  happens here.
+- End of turn, in order: pickups → aura → hunger → regen → Mage trap sense (§1.5) → panel.
+  (Poison moved into the status step.)
+- **Held hero (3D):** while the hero is FROZEN / ASLEEP / STUNNED (§6.4) the loop runs his
+  turns automatically, **one turn per 4 ticks**, each a Wait without search; input is ignored
+  except Pause.
 
 ### 2.3 Actions and costs
 
@@ -148,13 +226,15 @@
 | Use icon (FIRE tap) | 1 | per action | §3, §6 |
 | Open door (bump it) | 1 | 2 | a closed door is adjacent in the facing direction. Locked: needs the key (consumed) |
 | Close door (FIRE on the melee icon) | 1 | 2 | an open door is adjacent and faced, its cells are free of bodies, and no hostile is in reach. Only the hero closes doors (§9.1). 3B stand-in key: §1.4. **"In reach" (designer decision 2026-10-03):** a living hostile in the hero's current room whose box is within **2 cols** (melee reach) of the hero *or of the door cells* counts, whichever side of the door it stands on within this room (the door is a room-edge connection, so only the current room is checked; the other room is frozen). Door cells must also be body-free |
-| Wait (↓ where no ladder goes down) | 1 | 2 | always |
+| Wait (↓ where no ladder goes down) | 1 | 2 | always. **Also searches** for hidden traps (§1.5, 3E) |
 | Eat / drink (quick slot) | 1 | 2 | refused, at no turn, at FOOD = 100 (food) or HP = max (Heal) |
 | Page verb (eat, read, equip…) | 1, applied on return to play | — | play is paused on the page |
 | Fall (stepping onto a pit) | part of the walk | 2 + 9 | §2.5 |
 | Exit room | part of the walk/climb | — | prototype §3.6 |
 
-Illegal actions cost no turn (F4). A **frozen** entity skips its action.
+Illegal actions cost no turn (F4). A **held** entity (FROZEN, ASLEEP or STUNNED, §6.4) skips
+its action. Exception to F4: a CONFUSED hero's reversed action that turns out illegal costs
+the turn (`YOU STUMBLE.`, §6.4).
 
 ### 2.4 Jump (user: agreed)
 
@@ -317,7 +397,7 @@ Budget table: §11.2.
 - The Warrior has 9 icons (a spare 10th). The Mage has all 10.
 - **Quick scroll** (new slot, needed to hold the scroll icon the approved panel shows): FIRE
   reads the quick scroll (1 turn; same effect as `READ` on the page). Auto-fill: the stack
-  with the most scrolls, ties → Teleport, Fear, Enchant. `QUICK` on the page pins a type.
+  with the most scrolls, ties → Teleport, Fear, Sleep, Enchant (known types only, §8.8). `QUICK` on the page pins a type.
   It greys out with no scroll.
 - Unlearned ability slots draw an empty outline and are skipped by the cursor.
 
@@ -412,7 +492,7 @@ sprite. **≤ 3 tracks at once**; more are queued.
 
 | Spell | Book | MP | Range | Dmg / type | Bounces | Effect | Projectile → impact sprites |
 |---|---|---|---|---|---|---|---|
-| **Spark** | D1 | 1 | 6 | 1d4+1 SHOCK | 0 | — | spark_fly1/2 8×8 `$43` → spark_fizz1/2 8×8 |
+| **Spark** | D1 | 1 | 6 | 1d4+1 SHOCK | 0 | **1 in 4: CONFUSED 3** (§6.4; 3D) | spark_fly1/2 8×8 `$43` → spark_fizz1/2 8×8 |
 | **Firebolt** | D2 | 3 | 12 | 1d8+2 FIRE | 0 | **burst**: bodies within 1 col of impact take 1d4 FIRE, **caster included** at point-blank | firebolt_fly1/2 16×8 `$46` → firebolt_burst1/2 16×16 |
 | **Frost Shard** | D3 | 3 | 12 | 1d6 COLD | **1** | **freeze 2 turns** (bosses 1); can freeze the caster after a bounce | frost_fly 8×8 `$45` → frost_crack 16×16 |
 | **Drain Life** | D4 | 3 | 5 | 1d6+1 DRAIN | 0 | **caster heals the damage dealt** (to max HP); useless on undead (I) | **drain_fly1/2 16×8 `$43` → drain_hit 16×16 (new art)**; the caster flashes `$44` |
@@ -428,7 +508,7 @@ sprite. **≤ 3 tracks at once**; more are queued.
 | Ability | Book | MP | Target | Effect | Frames |
 |---|---|---|---|---|---|
 | Melee | — | 0 | in reach | F1/F2, weapon die, PHYS | Warrior WIND-UP → SLASH → FOLLOW; Mage CAST1 → **STAFF_SWING** + staff_bonk 16×16 |
-| **Power Strike** | D1 | 3 | in reach | to-hit +2, **damage ×2** | WIND-UP → **POWER_STRIKE** 40×48 + power_burst 16×16 |
+| **Power Strike** | D1 | 3 | in reach | to-hit +2, **damage ×2**; a hit that does not kill **STUNS 1** (§6.4; the Warrior's stun bash, no new icon or art) | WIND-UP → **POWER_STRIKE** 40×48 + power_burst 16×16 |
 | **Whirlwind** | D3 | 4 | **every** hostile in reach, both sides | to-hit each, dmg +1 | **WHIRL** 40×48 + spark_fizz each side |
 
 A power attack with no target is illegal (no turn, no MP).
@@ -470,6 +550,110 @@ attack. Rules:
   Archer's own drop is the supply (§8.5, §9.1).
 - The **Mage has no ammunition**; his limit is MP and the found books/scrolls.
 
+### 6.4 Status effects (3D; user 2026-10-03 scope, designer decision 2026-10-03 details)
+
+Seven effects in **four groups**. Effects in one group are exclusive; groups combine freely.
+
+| Group | Effects | Field |
+|---|---|---|
+| **HOLD** (cannot act) | FROZEN · ASLEEP · STUNNED | 2-bit kind + 4-bit turns |
+| **MIND** | FEAR · CONFUSED | 2-bit kind + 4-bit turns |
+| **POISON** | POISON | 1 bit + 4-bit turns |
+| **WEAK** | WEAK (curse) | 1 bit + 4-bit turns |
+
+**Data shape (per entity, 3 B + 1 spare; the engineer assigns layout in memory-map):**
+- `STATUS`: bits 0–1 HOLD (0 none, 1 FROZEN, 2 ASLEEP, 3 STUNNED) · bits 2–3 MIND (0 none,
+  1 FEAR, 2 CONFUSED, 3 reserved) · bit 4 POISON · bit 5 WEAK · bit 6 **STUN_GUARD** · bit 7
+  reserved. Invariant: a group bit/kind is set ⇔ its timer nibble ≠ 0. `STATUS = 0` is the
+  fast path (skip the whole step).
+- `STMR1`: high nibble HOLD turns, low nibble MIND turns. `STMR2`: high nibble POISON turns,
+  low nibble WEAK turns. **Max 15 turns** per effect.
+- Per kind: an **immunity mask** (1 B: bits SLEEP, STUN, CONFUSE, FEAR, POISON), §9.1. The
+  hero's mask = OR of worn gear (Silk Cloak: POISON).
+- **Where (budget):** the 32-B entity record has **no free byte** (+0..+31 all assigned; +8
+  POT frees only when the 3E bag replaces it). Recommended: a parallel **`ENT_STAT` table,
+  16 slots × 4 B = 64 B in `BANK2_FREE`** (`slot*4`), byte 3 spare (e.g. the Vampire's
+  fled-once bit). Engineer's choice; the record format stays.
+
+**Status step** (start of the entity's own action phase, §2.2), in order:
+1. POISON: decrement; if the new value is a multiple of 3, lose **1 HP** (ignores DEF and
+   resistances; **never below 1 HP**: no source poisons monsters, so poison never kills).
+2. WEAK, MIND: decrement; at 0 clear (end message, hero only).
+3. HOLD: if set → decrement, **skip the action** (cooldowns do not tick); at 0 clear. If
+   STUNNED just cleared, set STUN_GUARD.
+4. Otherwise act; after the action, clear STUN_GUARD.
+
+Because the step runs before the action, "duration *n*" = the entity loses exactly its next
+*n* action phases, whether applied in phase 1 (a hero spell on a monster) or phase 2 (a
+monster hit on the hero), with no "applied this turn" flag. Monsters in other rooms are
+frozen in time: their timers pause.
+
+| Effect | Does | Ends | Durations / sources |
+|---|---|---|---|
+| **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 (COLD hit, also self after a bounce) |
+| **ASLEEP** | skip action; eva 0 | timer, or **any HP loss** (incl. poison, aura) wakes it | Sleep scroll 8 (room), GAS trap 4 (hero) |
+| **STUNNED** | skip action; eva 0; cannot parry | timer. **STUN_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero) |
+| **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action is illegal the turn is spent (`YOU STUMBLE.`). Climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 → 3; Ghost touch 1 in 4 → 4 (hero) |
+| **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) → illegal, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; ranged, spells, items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll 6 (room); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
+| **POISON** | −1 HP every 3rd turn (step 1) | timer; Cure | Spider bite 9 (= 3 HP; Spider Queen 12), DART trap 6 |
+| **WEAK** | the hunger-WEAK penalties (§7: atk −2, eva −1, dmg −1 min 1, no MP regen, no jump); **not cumulative** with hunger WEAK (the same penalties apply once) | timer; Cure | **Mummy curse** (below) 12 |
+
+**Mummy curse (defines §10's "curse").** A Mummy (and the Golden Pharaoh) hit drains 5 FOOD
+as before and, **1 in 3**, curses: WEAK 12. `THE MUMMY CURSES YOU!` WEAK is a hero-only
+effect (no source targets monsters).
+
+**Stacking / refresh.** Same effect again → timer = **max(current, new)**, never added. A
+different effect in the same group **overwrites** kind and timer (a Frost Shard on a sleeper:
+the COLD damage wakes it, then FROZEN applies). Groups are independent.
+
+**Bosses** (`BOSS` flag: golden bosses, Ogre, Death Knight, Archmage): **immune to ASLEEP and
+FEAR**; HOLD and MIND durations are **halved, round down; 0 = no effect** (Frost 2 → 1, as
+before; Power Strike stun 1 → none; Spark confusion 3 → 1). POISON full.
+
+**Resistances (§6.0) for effects carried by a typed hit:** the effect applies only if the hit
+dealt ≥ 1 damage (a parry, I or X gives nothing); response **I/X → no effect**, **R →
+duration halved (round down, 0 = none)**, N/W → full. So: Frost freeze follows COLD, Spark
+confusion SHOCK (a reflected Spark can confuse the Mage), Power Strike stun PHYS (Slime,
+Ghost, Mummy, Ogre resist PHYS → no stun), Dark Bolt fear DARK (Ring of the Grave, Mirror
+Helm block it), Ghost confusion DRAIN (Gravecloak halves 4 → 2). Typeless sources (scrolls,
+traps) use only the immunity mask and the boss rule.
+
+**Indication.**
+- **Sprite tint (monsters and hero):** the entity's stamp attr ink is replaced while HOLD or
+  CONFUSED is set: FROZEN `$45`, ASLEEP `$41`, STUNNED `$07`, CONFUSED `$43` (black paper,
+  F9; `$46`/`$47` are avoided: they read as the gold boss glow, `$42` is the hit flash). If a
+  tint equals the body's base attr it uses its BRIGHT-toggled twin (`attr XOR $40`; e.g. a confused
+  Bat `$43` → `$03`). Priority: hit flash > HOLD tint > CONFUSED tint > gold glow > base attr.
+  Cost: the footprint attrs are rewritten once when the tint changes (~0.12k T/cell, ≤ 2.9k T,
+  like one glow step); redraws use the current attr at 0 extra. `$41`, `$07` join the
+  legality set.
+  FEAR, POISON, WEAK have no tint (behaviour and the panel show them).
+- **Hero panel icons:** row 21, **cols 30–31** (free on both bars: the Warrior's ammo text
+  ends at col 28), up to **2 × 8×8 status icons**, priority HOLD > MIND > POISON > WEAK, one
+  attr per cell (no clash): FROZEN `$45`, ASLEEP `$41`, STUNNED `$07`, CONFUSED `$43`, FEAR
+  `$42`, POISON `$44`, WEAK `$42`. **7 glyphs × 8 B = 56 B**, panel glyphs like the row-17
+  ornament, **not tile ids** (concept-screen §5). Updated via the panel queue (§3.3).
+- No overhead "Zz" FX: a persistent FX track would cost ~5k T/tick and a track slot.
+
+**Messages (all ≤ 32, upper case; monster lines only for monsters in the current room, with
+the ≤ 12-char short name from the KILLED-BY abbreviation table: `THE ` + 12 + suffix ≤ 30):**
+
+| Event | Hero | Monster suffix |
+|---|---|---|
+| FROZEN | `YOU ARE FROZEN SOLID!` | ` IS FROZEN.` |
+| ASLEEP / wakes | `YOU FALL ASLEEP.` / `YOU WAKE UP.` | ` FALLS ASLEEP.` / ` WAKES UP.` |
+| STUNNED | `YOU ARE STUNNED!` | ` IS STUNNED.` |
+| HOLD ends (frozen/stunned) | `YOU CAN MOVE AGAIN.` | — (tint drops) |
+| CONFUSED / ends / misstep | `YOU FEEL CONFUSED.` / `YOUR HEAD CLEARS.` / `YOU STUMBLE.` | ` IS CONFUSED.` |
+| FEAR / ends / blocked | `YOU ARE TERRIFIED!` / `YOU REGAIN YOUR NERVE.` / `YOU ARE TOO AFRAID TO FIGHT!` (28) | ` FLEES!` |
+| POISON / ends | `YOU ARE POISONED!` / `THE POISON WEARS OFF.` | — |
+| WEAK curse / ends | `THE MUMMY CURSES YOU!` / `YOU FEEL STRONGER.` | — |
+| immune | — | ` IS UNAFFECTED.` |
+
+**Cost.** Status step: `STATUS = 0` fast path ~20 T/entity; active ~150–250 T; ≤ 16 entities
+≈ ≤ 4k T per turn in the input tick (E0 margin). Code ~0.45 KB (hold/skip/eva checks hot in
+bank 2 ~150 B; apply/clear/messages/tint in bank 3 via `far3`, ~300 B). Strings ~0.45 KB raw.
+
 ---
 
 ## 7. Stats, hunger, food
@@ -492,6 +676,10 @@ distinct stages, each name ≤ 6 chars:**
 | **OK** (was Peckish) | 25–49 | no HP regen | `$46` |
 | **HUNGRY** | 10–24 | atk −1, MP regen halved | `$42` |
 | **WEAK** | 0–9 | atk −2, eva −1, dmg −1 (min 1), no MP regen, no jump | `$42` + message every 50 turns (`YOU ARE WEAK WITH HUNGER.`) |
+
+The Mummy curse applies the same penalties as the WEAK **status** (§6.4), not cumulative with
+this stage. The panel hunger word stays FOOD-derived; the curse shows as a status icon.
+**Worn cursed gear** (§8.7) switches the FED HP regen off.
 
 | Food | FOOD | Source |
 |---|---|---|
@@ -527,17 +715,24 @@ Per level (E): ~450 turns ≈ 75 FOOD burned. Supply: 3–4 floor items + drops 
 Weapons are class-locked; everything else is not.
 
 **Consumables:**
-- Potions: **Heal** +10 HP · **Mana** +8 MP · **Cure** (poison off, +4 HP).
+- Potions: **Heal** +10 HP · **Mana** +8 MP · **Cure** (clears POISON, WEAK, CONFUSED and
+  FEAR, §6.4; +4 HP). No harmful or throwable potions (designer decision 2026-10-03: a throw
+  verb needs an aim mode and item projectile art; a known-bad potion is junk).
 - Scrolls (read on the page): **Teleport** (random free spot in a random room, never the lair
-  while its boss lives) · **Fear** (the room's monsters flee 6 turns) · **Enchant** (weapon
-  dmg +1, max +3).
+  while its boss lives) · **Fear** (the room's monsters flee 6 turns) · **Sleep** (new, 3D/3E:
+  the room's monsters fall ASLEEP 8 turns, §6.4) · **Enchant** (if any worn item is cursed:
+  **uncurses all worn gear** instead (`THE CURSE LIFTS.`); else weapon dmg +1, max +3).
+  Floor scrolls pick the type uniformly from the four.
 - The **key** opens the lair door and is consumed.
 
 **Quick slots auto-fill** (user):
 - FOOD: the smallest FOOD value first.
 - POTION: Heal, else Mana, else Cure.
 - `QUICK` on the page pins a type until its stack runs out.
-- SCROLL: the largest stack, ties Teleport → Fear → Enchant (§3.5). Quick scroll = read.
+- SCROLL: the largest stack, ties Teleport → Fear → Sleep → Enchant (§3.5). Quick scroll = read.
+- **Unknown types (§8.8) never auto-fill**: auto-fill considers only known types; if the bag
+  holds only unknown potions/scrolls the quick slot greys out. `QUICK` on the page may pin
+  an unknown type (deliberate use); the info line then shows its appearance name.
 
 ### 8.5 Per-level placement (floor list ≤ 32 entries)
 
@@ -589,6 +784,78 @@ not a replacement for the sword. The stack caps (9 / 24) make hoarding a loss.
 Uniques on the floor shimmer with the same cycle (it counts toward the room's attr-cycle
 cells). Panel and page use hardware FLASH.
 
+### 8.7 Blessed and cursed gear (3E; user 2026-10-03: known states, no identification)
+
+Every **found gear item** (weapon, armour, helmet, charm) has a visible state: **BLESSED,
+normal or CURSED**. Start kit and boss uniques are always normal.
+
+| State | Effect | Unequip |
+|---|---|---|
+| **BLESSED** | **+1 to its main stat**: weapon dmg +1 · armour/helmet DEF +1 (Robe/Hood: MP +1) · charm max HP +2 | free |
+| normal | as §8 | free |
+| **CURSED** | **also +1 to its main stat** (dark power), but **sticky** and, while any cursed item is worn, **no FED HP regen** (§7) | **impossible** (`IT IS CURSED! YOU CANNOT.` 25) until an **Enchant** scroll is read: all worn gear becomes normal (loses the +1) |
+
+**Why the upside on cursed (designer decision 2026-10-03):** with the state visible, a pure
+penalty item is never worn and is just floor junk. "Stronger, but it locks the slot and stops
+your regen until you spend an Enchant" is a real choice and makes Enchant matter twice.
+Equipping a cursed item prints `IT CLINGS TO YOU. CURSED!` (24). If the user prefers the
+plain variant (cursed = −1 main stat, sticky), only this table row changes.
+
+**Odds per found gear item (seeded, out of 16):**
+
+| Depth | D1–D3 | D4–D6 | D7–D8 |
+|---|---|---|---|
+| BLESSED | 2 | 3 | 4 |
+| CURSED | 2 | 3 | 4 |
+
+≈ 12 gear items per run → ~3 blessed, ~3 cursed.
+
+**Display.** The item's 16×16 icon (page, worn-gear panel cells) and its 8×8 floor glyph take
+the state colour on all their cells: **BLESSED `$45`**, **CURSED `$42`**, normal = the item's own
+attr (cell-uniform, no clash; uniques keep FLASH). Page description row prefixes `BLESSED ` /
+`CURSED `; the info line note field shows `STICKY` for a worn cursed item. Pickup line:
+`YOU PICK UP A CURSED HELM.`
+
+### 8.8 Light identification (3E; user 2026-10-03)
+
+**Potions and scrolls have per-run shuffled appearances**; a **type** becomes known on its
+**first use** (drink/read; free, automatic). Gear is never unidentified (§8.7). Food, books,
+ammo, the key: always known.
+
+| Class | Types | Appearance pool (name ≤ 7 chars, floor/icon ink) |
+|---|---|---|
+| Potion | Heal, Mana, Cure | RUBY `$02` · AZURE `$05` · EMERALD `$04` · AMBER `$06` · VIOLET `$03` · MILKY `$07` (6) |
+| Scroll | Teleport, Fear, Sleep, Enchant | labels ZORAK · VELMIS · OSTRUN · KAPPU · MIRADEL · THUNE · YOLQ · ABRAXA (8); scroll ink always `$07` |
+
+- **Per-run table:** at START, a shuffle seeded from `f(master seed, 255)` (a "depth 255"
+  derivation, so no level seed and no generator output changes) maps each type to a distinct
+  appearance. State: potion map 3 B + scroll map 4 B + **`KNOWN` 1 B** (bits 0–2 potions,
+  3–6 scrolls) = **8 B** in the state block, kept across levels.
+- **Known at start:** the hero's start-kit types (both: Heal; Mage: Mana). **Elimination:**
+  when all but one type of a class are known, the last becomes known automatically.
+- **Naming:** unknown → `RUBY POTION`, `SCROLL VELMIS`; known → `POTION OF HEAL`, `SCROLL OF
+  FEAR` (page/info line); appearance ink is kept after identification. Log: `YOU PICK UP A
+  RUBY POTION.` · `YOU DRINK THE RUBY POTION.` → `IT WAS A POTION OF HEAL.` · `YOU READ
+  VELMIS.` → `IT WAS A SCROLL OF TELEPORT.` (28). All ≤ 32.
+- **Using unknowns:** effects are identical to known use; the risk is timing only.
+  Unknown potions are **never refused** (the HP = max / FOOD rules apply only to known types;
+  a wasted Heal still identifies). An unknown **Teleport** teleports, **Fear**/**Sleep** hit
+  the room's monsters (an empty room: no effect, still identified), **Enchant** uncurses or
+  enchants as §8. Read unknown in the lair: Teleport still never lands in the lair.
+- **Quick slots:** §8 "Quick slots auto-fill" (unknowns never auto-fill; pinnable).
+- **Budget (bank 3):** appearance strings ~90 B, ID messages ~60 B, shuffle + naming code
+  ~150 B; 8 B state; 0 tile ids (potions/scrolls are item glyphs recoloured).
+
+### 8.9 Item record (designer decision 2026-10-03; layout by the engineer)
+
+Floor-list entries, bag slots and worn slots all carry the same item fields:
+`TYPE` (item type id) · `QTY` (stack 1–9; ammo counts live outside the bag) · `ISTATE`:
+bits 0–1 BUC (0 normal, 1 blessed, 2 cursed, 3 reserved) · bit 2 **UNKNOWN (reserved, always
+0)** · bits 3–4 weapon enchant +0..3 · bits 5–7 spare. Stacks merge only on equal `TYPE` and
+`ISTATE`. Potion/scroll knowledge is **per type** (the `KNOWN` byte, §8.8), so no per-item
+flag is needed now; bit 2 is reserved so a later per-item unknown (e.g. unknown BUC on gear)
+needs no format change: the display layer would test it, logic ignores it.
+
 ---
 
 ## 9. Monsters
@@ -603,15 +870,15 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Bat | 24×16 | 3 | 1 | 4 | 0 | 1d2 | 2 | flyer | erratic | — | D1–D3 |
 | Slime | 24×16 | 6 | 0 | 0 | 1 | 1d3 | 2 | walker, acts every 2 | chase | — | D1 |
 | Goblin | 24×32 | 6 | 1 | 1 | 0 | 1d4 | 3 | walker, climber, opener | chase | Apple 1/4 | D1, D2 |
-| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker | hit **poisons** (−1 HP / 3 turns, ×3) | — | D2, D4, D5 |
+| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker | hit **poisons**: POISON 9 (= −1 HP / 3 turns ×3, §6.4) | — | D2, D4, D5 |
 | Skeleton | 24×48 | 10 | 2 | 2 | 1 | 1d6 | 5 | walker, climber, opener | chase | — | D3, D5, D8 |
 | **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | walker, opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
-| Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift | — | D3, D6–D8 |
+| Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch 1 in 4 → CONFUSED 4 (§6.4) | — | D3, D6–D8 |
 | Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, climber, opener | chase | Meat 1/3 | D4, D6, D7 |
 | Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, climber, opener | ranged | Arrows ×3 1/2 (W) | D4, D5, D7 |
-| Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, acts every 2 | hit drains 5 FOOD | — | D5 |
-| Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener | ranged, cooldown 2 | Mana 1/3 | D6–D8 |
-| **Ogre Warlord** (unique) | **32×48** | 40 | 5 | 1 | 2 | 1d10+2 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg | unique | D4 |
+| Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5 |
+| Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener | ranged, cooldown 2; Dark Bolt hit 1 in 3 → FEAR 3 (§6.4) | Mana 1/3 | D6–D8 |
+| **Ogre Warlord** (unique) | **32×48** | 40 | 5 | 1 | 2 | 1d10+2 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg, a hit STUNS 1 (§6.4) | unique | D4 |
 | **Death Knight** (unique) | 24×48 | 50 | 6 | 3 | 3 | 1d10+3 | 5 | walker, climber, lair only | chase; **parries** 1 in 3 PHYS hits (BLOCK frame, 0 dmg) | unique | D7 |
 
 **Death Knight silhouette (round 4/5):** an evil twin of the Warrior with a clearly distinct
@@ -667,6 +934,18 @@ Design intent:
 - The Archmage reflects Frost and Lightning, so the Mage must fight it with Firebolt and
   the staff, and the Warrior with steel.
 - Reflected Death Bolts (Mirror Helm) deal ½ to the Archmage.
+
+**Status immunity mask (3D, designer decision 2026-10-03; §6.4).** FROZEN follows COLD (no
+mask bit); WEAK targets only the hero.
+
+| Kind | Immune to |
+|---|---|
+| Rat, Bat, Goblin, Spider, Orc, Necromancer | — |
+| Slime (mindless) | SLEEP, CONFUSE, FEAR |
+| Undead: Skeleton, Skeleton Archer, Vampire (both forms), Ghost, Mummy | SLEEP, POISON |
+| Bosses (`BOSS`) | SLEEP, FEAR (+ the kind's own), HOLD/MIND halved (§6.4) |
+| Hero | — (OR of gear: Silk Cloak → POISON) |
+| Tiers (§9.6) | as their base kind, plus the noted extras |
 
 ### 9.2 Behaviours (on top of prototype §6.4)
 
@@ -817,6 +1096,72 @@ then open).
 the hero's or previous room; no spawn after the boss dies; a spawned monster drops nothing
 and awards half XP; same seed and inputs reproduce the same spawns.
 
+### 9.6 Monster tiers (3F; user 2026-10-03 scope, designer decision 2026-10-03 details)
+
+A tier is a **colour variant of a base kind**: the same frames (0 new frame ids, 0 pool), its
+own ink, stats and one small ability, and **its own `kind_tab` row**. Rows: 32 − 18 used = 14
+free (15 if the Rogue hole, id 2, is reclaimed); **12 tiers** below → 30 used, 2 spare.
+Short names ≤ 12 chars (messages, §6.4).
+
+| Base (ink) | Tier 2 | Tier 3 | Stats hp/atk/eva/DEF/dmg | Ink | Ability (mechanic reused) |
+|---|---|---|---|---|---|
+| Rat (`$06`) | **Giant Rat** | | 5/1/1/0/1d3 | `$02` | bite 1 in 4 → POISON 6 (Spider poison) |
+| | | **Rabbit Rat** | 8/2/3/0/1d4 | `$47` | **breeds**: hit and survives → 1 in 4 spawns one base **Rat** in the nearest legal cell (summon code, slot + §9.3 cap; `F_RESPAWN`); once per Rabbit Rat (`ENT_STAT` spare bit) |
+| Bat (`$43`) | **Screech Bat** | | 5/2/4/0/1d3 | `$05` | bite 1 in 4 → CONFUSED 2 |
+| Goblin (`$44`) | **Goblin Slinger** | | 8/2/1/0/1d4; rock 1d3 PHYS r6 | `$06` | ranged AI as the Archer (cooldown 2); rock = `dagger_spin` frames at `$06`, not recoverable; weight 3 + 1 |
+| Spider | **Black Widow** | | 10/4/3/0/1d4 | `$02` | POISON 12; bite 1 in 4 → ASLEEP 2 |
+| Skeleton (`$47`) | **Skeleton Guard** | | 14/3/2/2/1d6 | `$05` | **parries 1 in 4** PHYS hits (Death Knight parry; 0 dmg, `PARRIED`, no BLOCK frame: the hit flash is skipped) |
+| | | **Skeleton Knight** | 18/4/2/3/1d8 | `$44` | parries 1 in 3; hit 1 in 4 → STUNNED 1 |
+| Ghost (`$45`) | **Poltergeist** | | 11/3/3/0/1d4 DRAIN | `$03` | touch 1 in 3 → FEAR 3 (replaces the Ghost's confusion) |
+| Orc | **Orc Berserker** | | 18/4/0/1/1d8+2 | `$02` | FEAR-immune; **rage**: hp ≤ ½ max → atk +2 |
+| | | **Orc Bouncer** | 24/5/1/2/1d10 | `$03` | hit 1 in 3 → STUNNED 1 (a "bouncer" throws you out cold) |
+| Skeleton Archer | **Skeleton Sniper** | | 10/3/2/0/1d4; arrow 1d8 r14 | `$04` | stands its ground (skips the "gap < 3 → step away" rule); Arrows ×3 drop 1/2 |
+| Necromancer | **Bone Caller** | | 14/3/2/0/1d4; Dark Bolt as base | `$06` | **summons** one base Skeleton (Archmage summon code: cooldown 8, ≤ 1 live summon, slot + cap; `F_RESPAWN`) |
+
+Untiered: Slime (D1 only), Vampire, Mummy (both already complex), uniques, the Archmage.
+Depth scaling (§9.1) applies to tiers as to their base. A tier keeps its base kind's
+resistances, movement flags, body, behaviour and weight (except the Slinger's +1).
+
+**Ink rules.** On black paper, one ink per sprite cell (no new clash). Tier inks avoid `$42`
+(hit flash), `$46` (gold boss glow), the status tints `$41`/`$45`/`$43`/`$07` (§6.4), and the
+base kind's own ink; within one base the tiers differ. Allowed tier palette: `$02 $03 $04 $05
+$06 $44 $47` (`$06`/`$47` are static here, so they never read as the cycling gold glow). The
+artist's base inks for the new kinds (Spider, Orc, Archer, Necromancer…) must differ from
+their tiers' inks; if one clashes, the tier ink moves within the palette.
+
+**Spawn roll (initial population §9.4 and respawns §9.5; bosses, escorts, summons and
+breeding are never rolled).** For each monster of a kind that has tiers:
+- **Hero power level** `PL` = boss kills + class books read (the per-level class book, incl.
+  Vigor/Power tomes; other-class books do not count). **Expected** `PL_EXP(d) = 2 × (d − 1)`
+  (one boss + one book per level, §4/§10). `Δ = clamp(PL − PL_EXP(d), −2, +2)`.
+- Odds out of 256, `T2 = clamp(T2_BASE[d] + 16·Δ, 0, 160)`, `T3 = clamp(T3_BASE[d] + 8·Δ, 0,
+  80)` if `d ≥ TIER3_MIN_DEPTH` else 0. Roll `r` (gameplay RNG for respawns, `GEN_RNG` for
+  the initial population): `r < T3` → tier 3 (if the kind has one, else tier 2); `r < T3 +
+  T2` → tier 2; else base.
+
+| Constant | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 |
+|---|---|---|---|---|---|---|---|---|
+| `T2_BASE` | 24 | 48 | 64 | 72 | 80 | 88 | 96 | 96 |
+| `T3_BASE` | 0 | 0 | 0 | 16 | 24 | 32 | 40 | 48 |
+
+`TIER3_MIN_DEPTH = 4` (D1–D3 never elite), `TIER_SHIFT2 = 16`, `TIER_SHIFT3 = 8`,
+`TIER_DELTA_MAX = 2`, `T2_CAP = 160`, `T3_CAP = 80`. A tier counts with its base for the
+"≤ 4 kinds" rule (the pool loads base frames only). The initial-population roll uses the
+`PL` at level entry; the levelcheck/population reference takes `PL` as an input.
+
+**Rewards.** XP (where §9.5 applies it): ×1.5 tier 2, ×2 tier 3 (round down). Drops: the
+base drop numerator +1 per tier above 1 (Cheese 1/4 → 2/4 → 3/4; Arrows 1/2 → 2/2); a tier
+whose base has no drop drops a random food (Carrot/Apple/Pear) 1 in 4. `F_RESPAWN` still
+cancels drops.
+
+**Budget.** `kind_tab` +12 rows (inside the 32). New per-kind arrays (resistances 3, status
+immunity 1, on-hit effect 2 [effect+chance, duration], parry 1, tier-up id 1 ≈ 8 × 32 B)
+need a **third `kind_tab` page: +256 B bank 2** (the current page has 48 B spare). Code (E):
+generic on-hit status apply ~80 B (shared with Spider/Ghost/Mummy/Ogre/Necro, §6.4), parry
+by row ~20 B, rage ~25 B, Sniper/Slinger flags ~30 B, breed + Bone Caller via the summon
+routine ~100 B (bank 3), tier roll ~70 B (bank 3) → **~0.33 KB**. Names ~130 B raw strings.
+Render: **0 per tick** (ink from `KT_ATTR`); turn logic +≤ 0.2k T per hit for the rolls.
+
 ---
 
 ## 10. Balance sketch
@@ -830,7 +1175,7 @@ keeps pace.
 | D2 | 27/7 · 19/13 | poison | Cure; Firebolt (Spider W) |
 | D3 | 33/9 · 22/14 | first undead: Frost/Drain are useless | Firebolt (Vampire W); Whirlwind |
 | D4 | 36/10 · 25/15 | archers, Ogre 43 hp | Drain Life on living Orcs/Ogre; close doors; bow |
-| D5 | 42/12 · 28/16 | Mummy PHYS R, curse | Lightning; fire on Mummies; Scarab next |
+| D5 | 42/12 · 28/16 | Mummy PHYS R, curse (WEAK 12, §6.4); first ALARM traps | Lightning; fire on Mummies; Cure; Scarab next |
 | D6 | 48/14 · 31/17 | casters, ghost reflecting Lightning | Ring of the Grave; Firebolt on ghosts |
 | D7 | 54/16 · 35/21 | Death Knight (parry, fire reflect) | Lightning (W); Power Strike through parries |
 | D8 | 60/18 · 39/25 | Archmage + summons + bouncing bolt; reflects Frost/Lightning | Mirror Helm; Firebolt; potions saved |
@@ -840,7 +1185,13 @@ keeps pace.
 
 **Run:** ~450 turns per level, ~3,600 turns ≈ 60–65 min.
 
-**Tuning knobs, in order:** Heal amount, food per level, depth scaling, boss multiplier.
+**Rev 4 additions (E):** status effects mostly cost the hero tempo (≤ 4 lost turns per
+event) and Cure now answers four effects; traps cost ~2–4 HP per level (DART) plus position
+(TELEPORT) and ~1 extra wave (ALARM, D5+); tiers raise threat by ~10 % (D2) to ~25 % (D8) of
+monsters being tougher, self-correcting through `Δ` for a hero who skips books or bosses.
+
+**Tuning knobs, in order:** Heal amount, food per level, depth scaling, boss multiplier,
+`T2_BASE`/`T3_BASE`, trap counts.
 Verify with ≥ 5 seeds × 2 heroes before Stage 3 exit.
 
 ---
@@ -889,7 +1240,8 @@ therefore needs the **Bat set resident too** (D6 and D8; D3 already has it): +2.
 | Sources + cold data (banks 1+3) | 32,768 − AY reserve | existing 16,899 → ~9.9K ZX0 + new ~10.1K ZX0 + menus code ~2.0K + icons ~2.7K → 1.6K ZX0 + strings ~2.9K → 1.7K ZX0 = **25.3K** | With AY at 8 KB (24.6K free): **0.7K over**. **AY reserve 7 KB (user: approved)** (player ~2K + in-game music ~4K + FX ~1K still fit, budget §5) → 25.6K, ~0.3K margin **at the conservative 1.7×**. With the rev-3 block packing (2.71× measured on kind data) the expected total is ~18–20K, i.e. ≥ 5K of real margin; the 1.7× row stays the build gate until A5 reports actual sizes |
 | Bank 7 spare | 2,656 | **8 per-level tilesets 2,304** | Fits (cold, copied at level start; never drawn into bank 7) |
 | Pool per level (0/4/6) | 49,152 − hero **18,176** (Knight 12,608 + Warrior 5,568 **M**) − straddle 1,728 − projectiles ~2.4K = **26.8K** | max **D8 23.9K** (§11.3; includes the Bat set for the Vampire's bat form) | **Fits, ≥ 2.9K slack** on every level. Build ASSERT per level |
-| Tile ids | 64 | 29 common + ≤ 32 per level | fits (§1.2) |
+| Tile ids | 64 | 29 common + ≤ 32 per level | fits (§1.2). Rev 4: common id 10 = `T_TRAP` → common ids full |
+| **Rev 4 (designer decision 2026-10-03)** | — | kind rows 18 + 12 tiers = **30 of 32**; 3rd `kind_tab` page **+256 B bank 2** (resist, immunity, on-hit, parry, tier-up); `ENT_STAT` 64 B in `BANK2_FREE`; status hot code ~150 B bank 2 | bank 2: +256 + ~150 B against the ~0.9K left (+64 B in `BANK2_FREE`, which is outside the image). Cold, bank 3: status apply/messages ~300 B, traps (gen + trigger + search) ~350 B, BUC + ID ~250 B, tiers ~170 B, strings ~1.1 KB raw (status 0.45, traps 0.2, ID/BUC 0.25, tier names 0.13, scroll/potion names) → **~2.2 KB raw, ~1.4 KB at 1.7×** against bank 3's 7.4 KB free (R3 had 4.1 KB planned). Glyphs: 7 status icons 56 B (panel), trap glyph 8 B. Level state: trap list 12 B; state block: ID tables 8 B, `PL` 1 B. Render: tints = one-off attr rewrites; tiers 0 |
 | Render tick | ~114k T | §9.3 weights incl. projectiles; gold glow ≤ 1.5k/tick | by construction; E2 measures |
 
 **Risk.** Sources are the tightest store, and the ZX0 ratio is an estimate. At 1.5× instead
@@ -932,3 +1284,7 @@ Knight; the 8 colour schemes.
 4. **Hunger stage 2 is named `OK`** (§7). Alternative `SNACKY`/`PECKIS`. OK?
 5. ~~Menu font size~~ — resolved 2026-10-03 (§3.4): the menu font lives in bank 3, ≤ 1.5 KB raw.
 6. The Bat set is now resident on D6 and D8 (+2.0 KB pool; D8 = 23.9 KB, still fits).
+7. **Cursed gear (§8.7, rev 4):** designer chose "cursed = +1 main stat, sticky, no FED
+   regen until Enchant" over a plain penalty, because the state is visible. Confirm.
+8. **Hero power level (§9.6):** the doc has no XP (§4), so tiers use `PL` = boss kills +
+   class books read. Confirm, or define an XP level instead (§9.5 still mentions kind XP).

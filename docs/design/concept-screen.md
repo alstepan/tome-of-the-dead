@@ -85,14 +85,14 @@ info text use 6-px glyphs, 4 chars per 3 cells.)
 18   111222333444555666777888999000D7
 19   111222333444555666777888999000K.
 20   FIREBOLT 3MP RANGE 12 FIRE BURST
-21   h####14m####12f####FED..........
+21   h####14m####12f####FED........SS
 22   LLLLLLLLLLLLLLLLLLLLLLLLWWAAHHCC
 23   LLLLLLLLLLLLLLLLLLLLLLLLWWAAHHCC
 ```
 Every grid line is exactly 32 cells. Panel rows: icons `1–9, 0` (24×16 each; the Mage's
 selected icon is slot 3, Firebolt) · `D7` depth · `K.` key icon · row 20 info line · row 21
-`h` heart, `####` 32-px bars, numbers, `m` drop, `f` drumstick, `FED` hunger word, cols 24–31
-blank here: the Warrior shows `D3 A06` (daggers 3, arrows 6); the Mage mock has none · `L` log (24 cells = 32 chars) ·
+`h` heart, `####` 32-px bars, numbers, `m` drop, `f` drumstick, `FED` hunger word, `SS` hero
+status icons (cols 30–31, rev 4), cols 24–29 blank here: the Warrior shows `D3 A06` (daggers 3, arrows 6); the Mage mock has none · `L` log (24 cells = 32 chars) ·
 `WWAAHHCC` worn gear (weapon, armour, helmet, charm). Row 17 is the storey-1 floor and
 carries the panel **ornament** (a decorative border in `ATTR_FLOOR`, same cells, no new
 attrs; approved round 4).
@@ -156,6 +156,13 @@ Glyph swap ~0.55k T/cell/step, attr cycle ~0.12k T/cell/step (budget §6).
 (D1's 28-id example fits exactly); ids 60..63 are reserved for attackable objects (D8 lectern).
 Pit caps alias the platform-end glyphs (end shape facing the hole, game.md §2.5), DARK
 aliases the brick glyph, and common id 10 is the reserved spare once potions leave the map.
+**Rev 4 (designer decision 2026-10-03):** common id 10 = **`T_TRAP`**, a revealed trap: one
+8×8 pressure-plate glyph in the standing row (row 7 / 16, like skulls), low in the cell; attr by
+trap type from a 4-entry table (DART `$42`, GAS `$44`, TELEPORT `$43`, ALARM `$46`), game.md
+§1.5. Sprites stamp over it like any standing-row decor. **Status tints** (game.md §6.4) recolour
+a body's stamp attr: FROZEN `$45`, ASLEEP `$41`, STUNNED `$07`, CONFUSED `$43`. **Gear state**
+(§8.7): BLESSED icons/glyphs `$45`, CURSED `$42`, cell-uniform. **Tier inks** (§9.6): palette
+`$02 $03 $04 $05 $06 $44 $47`, same frames.
 Any set over 28: drop the arched window and pillar first.
 
 **Open-door jambs and lair grate (designer decision 2026-10-03; user 2026-10-03: option B):**
@@ -314,7 +321,8 @@ The panel is the always-visible *use* surface. Gear management happens only on t
 | (0, 21) heart · (1–4, 21) **HP bar 32 px** · (5–6, 21) HP number (≤ 2 digits) | | `$42` |
 | (7, 21) drop · (8–11, 21) **MP bar 32 px** · (12–13, 21) MP number (≤ 2 digits) | | `$45` |
 | (14, 21) drumstick · (15–18, 21) **FOOD bar 32 px** · (19–23, 21) **hunger stage word** (`FED`, `OK`, `HUNGRY`, `WEAK`; 6 chars max = 36 px) | stage attr `$44`/`$46`/`$42`/`$42` | |
-| (24–31, 21) **Warrior ammo** `D6 A12` (daggers, arrows; blank for the Mage; a count at 0 shows in `$02`) | | `$47` |
+| (24–29, 21) **Warrior ammo** `D6 A12` (daggers, arrows, 36 px; blank for the Mage; a count at 0 shows in `$02`) | | `$47` |
+| (30–31, 21) **hero status icons** (rev 4, game.md §6.4): up to 2 × 8×8, priority HOLD > MIND > POISON > WEAK; panel glyphs (7 × 8 B), not tile ids; blank when none | | per icon: FROZEN `$45`, ASLEEP `$41`, STUNNED `$07`, CONFUSED `$43`, FEAR `$42`, POISON `$44`, WEAK `$42` |
 | (0–23, 22–23) **message log**, 2 rows × 32 chars (6×8 font). Newest on row 23; a new message scrolls row 23 → 22 (192 px × 8 lines ≈ 192 B bitmap + attr copy, ~4k T; a queued panel item, drained in a non-input tick, game.md §3.3) | | `$07` (row 22) / `$47` (row 23) |
 | (24–31, 22–23) **worn gear, 4 × 16×16**: weapon 24–25, armour 26–27, helmet 28–29, charm 30–31. An empty slot is a dotted outline | item ink / `$01` |
 | row 17 (storey-1 floor) | panel **ornament**: 8 fixed glyphs, not tile ids; the down-exit hole/grate cells override it (game.md §3.3) | `ATTR_FLOOR` |

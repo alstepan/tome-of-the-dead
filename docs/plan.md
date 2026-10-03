@@ -272,17 +272,32 @@ bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
 Projectile entities (range, wall reflection, can hit caster); spells; Warrior
 power attacks ×2, throw, bow; mana; impact FX. **Exit:** spell/missile table
 reproduced by tests.
+3D also implements **status effects** (game.md §6.4, user 2026-10-03): `ENT_STAT` 16 × 4 B,
+status step at each entity's phase start, HOLD/MIND/POISON/WEAK, held-hero auto-turns, tints
++ 2 panel icons, boss/resistance/immunity rules (§9.1 mask; 3rd `kind_tab` page). Tests:
+seeded Frost freeze = exactly 2 skipped actions; sleeper wakes on damage; STUN_GUARD; poison
+never below 1 HP; confused reversal + `YOU STUMBLE.`; boss halving.
 
 ### 3E — Items, inventory & survival (needs game.md §7–8)
 Inventory page (bank-5 screen), equip, quick slots auto-fill, food/hunger,
 books → learning spells/power attacks, potions/scrolls, boss unique loot.
 **Exit:** pick up → equip → eat → learn spell, all tested.
+3E also implements (user 2026-10-03): **traps** (game.md §1.5: generator step placed last,
+`T_TRAP` = id 10, search on Wait, Mage trap sense, levelcheck invariants; ALARM effect waits
+for 3F's wave code), **blessed/cursed gear** (§8.7: odds, sticky curse, Enchant uncurses),
+**light identification** (§8.8: per-run appearance shuffle, `KNOWN` byte, naming, unknowns
+never auto-fill), the **item record** (§8.9) and the Sleep scroll / extended Cure (§8).
+Tests: trap placement 1,000 seeds Python == Z80; trigger/search/jump-over; cursed unequip
+refused until Enchant; identify-on-use + elimination.
 
 ### 3F — Monsters, bosses & win (needs game.md §9–10)
 Per-level pool generation (≤ 4 kinds + boss); new monsters (zombie, mummy, orc,
 skeleton-archer, necromancer, giant spider) + ranged AI; level bosses; Necromancer
 Archmage + Book of Absolute Death Magic → win. **Exit:** full run start → win.
 3F also implements game.md §9.5 (respawn trickle while the boss lives; idle wave behind `IDLE_WAVE`, default off).
+3F also implements **monster tiers** (game.md §9.6, user 2026-10-03): 12 tier rows (30/32
+kinds), spawn roll from `T2_BASE`/`T3_BASE` + `Δ` (PL vs `PL_EXP`), tier abilities (on-hit
+status, parry, rage, breed, summon, sniper/slinger), drop/XP scaling, and the ALARM trap wave.
 
 ### 3G — Sound & polish (later)
 AY music + FX on the A8 slot; balance pass; hardware hardening.
