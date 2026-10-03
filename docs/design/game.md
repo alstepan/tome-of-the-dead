@@ -72,6 +72,17 @@
   a set exceeds it, cut the arched window and the pillar variants first. Spare: common id 10
   (freed when potions stop being a map tile in 3E).
 - Walls are **black-background** with occasional dithered brick patches (concept-screen §3.3).
+- **Solidity of decor (designer decision 2026-10-03).** Solidity belongs to the map cell
+  class, never to the glyph: a decor glyph must have the same solidity as the cell it
+  replaces. (a) **Wall-set glyphs** (DARK = BRICK id, DITHER, PATCH, FADE, wall_worn,
+  wall_brk_top/bot and any other wall variant) are **SOLID** and may replace only cells that
+  are already solid wall (brick). (b) **Rubble, skulls, moss, cobweb, chain, banner, torch,
+  candles, drips, window, bookshelf** are **non-solid** (walkable or overlay) and may be placed only
+  on cells that are already non-solid (floor-row standing cells or air-band cells); a
+  solid-wall decor (window, bookshelf, torch bracket) is a wall-set variant and follows (a).
+  (c) The B3B-9 deriver never places on door/arch/lintel/ladder/pit/cap cells, nor changes a
+  cell's TILE_FLAGS. TILE_FLAGS solid must therefore be set on every wall-set id (the 3B
+  non-solid wall_worn/wall_brk ids are a bug); rubble stays non-solid.
 
 ### 1.3 The Book of Absolute Death Magic
 
@@ -133,7 +144,7 @@
 | Bump attack | 1 | 6–7 | a hostile in reach, facing it (prototype §6.1) |
 | Use icon (FIRE tap) | 1 | per action | §3, §6 |
 | Open door (bump it) | 1 | 2 | a closed door is adjacent in the facing direction. Locked: needs the key (consumed) |
-| Close door (FIRE on the melee icon) | 1 | 2 | an open door is adjacent and faced, its cells are free of bodies, and no hostile is in reach. Only the hero closes doors (§9.1). 3B stand-in key: §1.4 |
+| Close door (FIRE on the melee icon) | 1 | 2 | an open door is adjacent and faced, its cells are free of bodies, and no hostile is in reach. Only the hero closes doors (§9.1). 3B stand-in key: §1.4. **"In reach" (designer decision 2026-10-03):** a living hostile in the hero's current room whose box is within **2 cols** (melee reach) of the hero *or of the door cells* counts, whichever side of the door it stands on within this room (the door is a room-edge connection, so only the current room is checked; the other room is frozen). Door cells must also be body-free |
 | Wait (↓ where no ladder goes down) | 1 | 2 | always |
 | Eat / drink (quick slot) | 1 | 2 | refused, at no turn, at FOOD = 100 (food) or HP = max (Heal) |
 | Page verb (eat, read, equip…) | 1, applied on return to play | — | play is paused on the page |
@@ -155,6 +166,12 @@ Illegal actions cost no turn (F4). A **frozen** entity skips its action.
 | Restrictions | standing only. **Not from a ladder** (landing on a hole is fine). Not when Weak. **Not two turns in a row**. Not while frozen |
 | Arc | tick 0: JUMP1 (aligned). Ticks 1–12: JUMP2, x += 4 px/tick, y offsets −4,−8,−12,−16,−16,−16,−16,−16,−12,−8,−4,0. Tick 13: JUMP1 (aligned) |
 | F9 | the body only rises inside its own storey's air rows (top ≥ `9s`) |
+
+**Art backlog (designer decision 2026-10-03):** Warrior and Mage JUMP1 (aligned, 24x48) and
+JUMP2 (airborne, 24x48) are missing. 3B placeholder: climb pose for JUMP2 and the walk cycle
+for JUMP1. Needed from graphics-artist before the 3E polish pass (not blocking 3B/3D).
+**Scope:** the jump's FOOD cost, Weak and frozen restrictions are **3E (FOOD/Weak) and 3D
+(frozen)**; 3B implements only geometry, swept-box legality and the not-twice rule.
 
 **Why 6:** the smallest jump that clears a 3-col pit and a 3-col low monster. "Not twice
 in a row" caps flight speed at 7 cols per 2 turns.
@@ -609,6 +626,13 @@ Ogre and Death Knight scale by depth like the rest.
   step is simply illegal and their AI picks its next choice or waits. No movement, bump,
   follow, fall or knock-on ever opens a door without the opener flag.
 - **Only the hero closes doors.** Closing also needs the door's cells free of bodies.
+- **Locks (designer decision 2026-10-03):** the lock lives only in `EDGE_TAB` (per edge) and is
+  the single source of truth; the door tile merely displays it and no tile flag is ever read
+  for gameplay. Unlocking clears the EDGE_TAB lock, then the tile redraws.
+- **Flyers and open doors (designer decision 2026-10-03):** an open door is passable to
+  flyers only through its opening rows; the arch and lintel cells above it are solid for
+  every body, so collision must test the whole body box (all cells), not one cell. A flyer
+  too tall for the opening is blocked. Closed/locked doors block flyers (above).
 - Following is unaffected: the follow rule runs on the hero's exit turn, when the door the
   hero walked through is open by construction.
 

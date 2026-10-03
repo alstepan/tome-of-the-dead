@@ -158,6 +158,11 @@ Pit caps alias the platform-end glyphs (end shape facing the hole, game.md §2.5
 aliases the brick glyph, and common id 10 is the reserved spare once potions leave the map.
 Any set over 28: drop the arched window and pillar first.
 
+**Solidity (designer decision 2026-10-03):** wall-set glyphs (#14-15: DARK, DITHER, PATCH,
+FADE, worn/broken variants) are SOLID and replace only already-solid wall cells; rubble,
+skulls, moss, cobweb, chain, banner, candles, drips are non-solid and go only on non-solid
+cells. Decor never changes a cell's solidity (game.md §1.2).
+
 **Tile ids: 64 = 32 common + 32 per-level** (game.md §1.2). The artist's round 1+2 decor
 comes to 93 ids, so the large objects live in **per-level sets**. A set's glyphs and attrs
 are copied in from bank 7 spare at level start (8 sets, 2,304 B).
