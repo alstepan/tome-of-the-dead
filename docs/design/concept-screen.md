@@ -158,6 +158,17 @@ Pit caps alias the platform-end glyphs (end shape facing the hole, game.md §2.5
 aliases the brick glyph, and common id 10 is the reserved spare once potions leave the map.
 Any set over 28: drop the arched window and pillar first.
 
+**Open-door jambs and lair grate (designer decision 2026-10-03; user 2026-10-03: option B):**
+`door_jamb_l` = `#.#.....` x8 rows, `door_jamb_r` = `.....#.#` x8 rows, ink `$06` on black,
+non-solid; the same glyph down all 6 opening rows (rows 11-16) of a 2-col door, replacing the
+AIR the opened planks leave. They are **common ids 11 (`T_DOOR_JAMB_L`) and 14
+(`T_DOOR_JAMB_R`)**, since every level has doors. `T_COBWEB` (was 11) and `T_MOSS` (was 14)
+leave the common range and become ordinary **per-level** decor ids (32..59), spent only by
+levels that use them. A set over 28 drops the arched window and pillar first. `T_SKULLS` (13),
+`T_CHAIN` (12), `T_DRIP1/2` (17/18) stay common. Id 10 remains the reserved spare (potions
+unchanged). Lair grate = common id 26 `T_GRATE`, ink `$07`, over the 3-col down-exit hole on
+floor row 17 (no change). Source: `assets/gfx/concept/grid/b10_door_grate.tiles` (branch feat/3b-tiles).
+
 **Solidity (designer decision 2026-10-03):** wall-set glyphs (#14-15: DARK, DITHER, PATCH,
 FADE, worn/broken variants) are SOLID and replace only already-solid wall cells; rubble,
 skulls, moss, cobweb, chain, banner, candles, drips are non-solid and go only on non-solid

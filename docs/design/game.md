@@ -67,8 +67,9 @@
   glyphs and attrs (32 × 9 B) are copied in from cold storage. 8 sets = 2,304 B, stored in
   bank 7 spare (§11.2).
 - **Id budget (designer decision 2026-10-03):** common ids 0..31 are full (aliases allowed:
-  pit caps = platform-end glyphs, DARK = `T_BRICK`; cobweb/chain/skulls/moss/drips reuse the
-  retired chest/zap ids). Per-level decor ids **32..59 = 28 per level for D1–D7**; **60..63 are
+  pit caps = platform-end glyphs, DARK = `T_BRICK`; chain/skulls/drips reuse the
+  retired chest/zap ids; **designer decision 2026-10-03 + user 2026-10-03 option B:** ids 11/14
+  = open-door jambs L/R, cobweb and moss move to per-level ids, see concept-screen §3.3). Per-level decor ids **32..59 = 28 per level for D1–D7**; **60..63 are
   reserved for attackable objects** (D8 lectern = 4). The cap is 28 decor ids per set; if
   a set exceeds it, cut the arched window and the pillar variants first. Spare: common id 10
   (freed when potions stop being a map tile in 3E).
