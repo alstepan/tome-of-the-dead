@@ -44,6 +44,7 @@
 | In-room | 1–2 internal ladders `{c,1}`, `c ∈ 3..26`, ≥ 4 cols from ladders/pits · optional **pit** (3 cols, storey-0 floor, ≥ 3 clear cols on each side) · optional **dead-end block** (2–3 wall cols at an exitless edge, rubble at its foot) · decor **re-derived from the room seed** (never stored; rules in concept-screen §3.3) |
 | Ladder/pit placement (designer decision 2026-10-03) | **Internal ladders are in addition to the exit shafts** (up-exit `{c,0}`, down-exit `{c,2}`, the D2+ arrival shaft). **A shaft col is never an internal-ladder col** (no continuous 2-segment ladders: keeps one ladder segment per col and no "stand over a hole with ladders both ways" state). Every ladder, shaft and pit is a **3-col footprint `c … c+2`, `c` = its left col** (pit: the 3 hole cols; caps at `c−1`/`c+3` are floor). Two footprints that touch the same storey (storey 0: up-exit, internal-ladder hole in row 8, pit; storey 1: internal ladder, down-exit hole in row 17) keep **≥ 4 clear cols between them: `|c1 − c2| ≥ 7`**. Placement order: exits → 1st internal ladder → pit → 2nd internal ladder → dead-end block; an optional feature that finds no legal `c` in 8 seeded tries is dropped (deterministic) |
 | Reachability | storeys span the full width except pits and edge blocks; ≥ 1 internal ladder; a pit is always jumpable, and falling only leads to storey 1. The hero can reach every exit; monsters may be cut off by a pit (intended) |
+| Shaft cols (designer decision 2026-10-03) | Exit shafts (up-exit, down-exit, arrival, level exit) use left col **`c ∈ 5..24`** (footprint cols 5..26), a subset of the internal-ladder range 3..26. Why: door cells occupy cols 0–1 / 30–31, and a hero arriving through a horizontal exit stands at x = 1 (cols 1..3) or x = 28 (cols 28..30); `c ≥ 5` / `c+2 ≤ 26` leaves ≥ 1 solid-floor col (4 / 27) so arrival never overlaps a hole. The ≥ 4-clear-cols (`\|c1−c2\| ≥ 7`) rule applies unchanged between shafts and internal ladders/pits on the same storey |
 | Stored per level | room descriptors (exits, ladders, pits, blocks, door/grate bits), the floor-item list, the 16 entity slots. Population §9.4, items §8.5 |
 
 ### 1.2 Level themes: colours and decor tilesets (attr-only; floor rows never under sprites)
@@ -63,6 +64,12 @@
 - **Tile ids:** 64 = **32 common + 32 per-level decor slots**. At level start, a level's
   glyphs and attrs (32 × 9 B) are copied in from cold storage. 8 sets = 2,304 B, stored in
   bank 7 spare (§11.2).
+- **Id budget (designer decision 2026-10-03):** common ids 0..31 are full (aliases allowed:
+  pit caps = platform-end glyphs, DARK = `T_BRICK`; cobweb/chain/skulls/moss/drips reuse the
+  retired chest/zap ids). Per-level decor ids **32..59 = 28 per level for D1–D7**; **60..63 are
+  reserved for attackable objects** (D8 lectern = 4). The cap is 28 decor ids per set; if
+  a set exceeds it, cut the arched window and the pillar variants first. Spare: common id 10
+  (freed when potions stop being a map tile in 3E).
 - Walls are **black-background** with occasional dithered brick patches (concept-screen §3.3).
 
 ### 1.3 The Book of Absolute Death Magic
@@ -167,6 +174,10 @@ in a row" caps flight speed at 7 cols per 2 turns.
   turn, refusing `x == p` alone cuts a walker off at the pit. Generation, follower entry,
   PENDING placement, teleport/fear arrivals and jump landings never put a walker or the hero
   at `x == p` on storey 0.
+- **Cap glyphs (designer decision 2026-10-03).** The pit caps may share the platform-end
+  glyphs (`T_END_L`/`T_END_R`) provided the rounded end faces the hole: the cap at `p−1`
+  shows the right-end shape, the cap at `p+3` the left-end shape. Semantically a pit is a gap
+  in the platform, so no separate id is needed.
 - F9: `px = col×8` while falling (snap invariant).
 
 ---
