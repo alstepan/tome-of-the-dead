@@ -364,7 +364,7 @@ def generate(depth, seed, master=0):
                 except Restart:
                     restarts += 1
             else:
-                raise RuntimeError("levelgen: too many restarts")
+                raise Reseed            # restart cap hit: same as no lair -> seed+1
             break
         except Reseed:
             reseeds += 1

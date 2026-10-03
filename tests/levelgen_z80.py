@@ -111,14 +111,18 @@ def main():
 
         pairs = [(d, s) for d in range(1, 9) for s in (0x0001, 0x1234, 0xBEEF)]
         pairs += [(8, 12634), (8, 0), (8, 0xFFFF), (1, 0xFFFE)]
-        wb = worst_seeds()
-        print("worst (python):", {k: v for k, v in wb.items()}, flush=True)
-        for k in ("restarts", "reseeds", "calls"):
-            pairs.append((wb[k + "_d"], wb[k][1]))
+        # full 65,536-seed scan (depths 1..8): max restarts d6 seed 2184, max rnd
+        # calls / reseeds (15) d8 seed 31306; d8 seeds 28962/55353/55354 exhaust
+        # the 16 reseeds (Python raises, Z80 returns B=1)
+        pairs += [(6, 2184), (8, 31306), (8, 2609)]
         for d, s in pairs:
             ts = go(d, s, master=(s * 7) & 0xFFFF, tag="fixed")
-            if (d, s) in ((8, 12634), (wb["reseeds_d"], wb["reseeds"][1])):
+            if (d, s) in ((8, 12634), (8, 31306), (6, 2184), (8, 2609)):
                 print(f"  T-states d{d} seed {s}: {ts}", flush=True)
+        for seed in (28962, 55353, 55354):
+            ok, ts, blk, rc, sx = p.run(8, seed, 0)
+            h.expect(f"d8 seed {seed} exhausts reseeds (B=1)", bool(ok and rc == 1), True)
+            print(f"  exhaust d8 seed {seed}: {ts} T rc={rc}", flush=True)
         print(f"fixed: {npass} pass {nfail} fail; worst {worst}", flush=True)
         rng = random.Random(0x3B7)
         t0 = time.monotonic()

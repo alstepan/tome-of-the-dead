@@ -36,9 +36,11 @@ LG_NC           EQU GEN_SCRATCH + 73    ; potion candidates
 LG_PT           EQU GEN_SCRATCH + 74    ; potions to place
 LG_K            EQU GEN_SCRATCH + 75
 LG_X            EQU GEN_SCRATCH + 76
+LG_RST          EQU GEN_SCRATCH + 77    ; restarts left this seed
 LG_SP           EQU GEN_SCRATCH + 78    ; word
 RESEED_MAX      EQU 16
 DOOR_ODDS       EQU 3
+MAX_RESTARTS    EQU 64
 SHAFT_MIN       EQU 5
 SHAFT_N         EQU 20
 LG_ROOMS_END    EQU (ROOM_DESC + GRID_CELLS * RD_STRIDE) & $FF
@@ -869,7 +871,9 @@ attempt:        ld   (LG_SP), sp
 level_gen:      ld   (LVL_DEPTH), a
                 ld   a, RESEED_MAX
                 ld   (LG_RES), a
-.seed:          ld   a, (LVL_DEPTH)
+.seed:          ld   a, MAX_RESTARTS
+                ld   (LG_RST), a
+                ld   a, (LVL_DEPTH)
                 ld   hl, (LVL_SEED)
                 xor  h
                 ld   h, a
@@ -882,10 +886,14 @@ level_gen:      ld   (LVL_DEPTH), a
 .nz:            ld   (GEN_RNG), hl
 .try:           call attempt
                 cp   1
-                jr   z, .try
-                or   a
+                jr   nz, .nr
+                ld   hl, LG_RST         ; restart cap: treat as a reseed (never loops forever)
+                dec  (hl)
+                jr   nz, .try
+                jr   .rs
+.nr:            or   a
                 jr   z, .done
-                ld   hl, (LVL_SEED)
+.rs:                ld   hl, (LVL_SEED)
                 inc  hl
                 ld   (LVL_SEED), hl
                 ld   hl, LG_RES
