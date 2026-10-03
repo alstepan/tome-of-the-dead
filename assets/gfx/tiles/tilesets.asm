@@ -7,7 +7,7 @@
 ; Attr rule: wall-ink objects (pillar, plaster patches) carry ATTR_WALL[depth]; paper black.
 ; ============================================================================
 tilesets:
-tileset_d1:                       ; D1: ATTR_FLOOR $0F ATTR_WALL $01, 26 decor ids
+tileset_d1:                       ; D1: ATTR_FLOOR $0F ATTR_WALL $01, 28 decor ids
         DEFB $01,$01,$03,$03,$13,$17,$37,$37    ; id 32
         DEFB $00,$00,$10,$10,$98,$98,$B8,$F8    ; id 33
         DEFB $2F,$6E,$7E,$7C,$3C,$3C,$1E,$0F    ; id 34
@@ -34,8 +34,8 @@ tileset_d1:                       ; D1: ATTR_FLOOR $0F ATTR_WALL $01, 26 decor i
         DEFB $04,$12,$01,$22,$02,$11,$01,$0A    ; id 55
         DEFB $FF,$7E,$7E,$66,$5A,$5A,$66,$7E    ; id 56
         DEFB $7E,$7E,$7E,$7E,$66,$66,$42,$42    ; id 57
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 58
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 59
+        DEFB $FF,$CA,$AA,$9C,$E8,$A8,$90,$C0    ; id 58
+        DEFB $DE,$96,$92,$12,$10,$10,$00,$00    ; id 59
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 60
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 61
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 62
@@ -44,8 +44,8 @@ tileset_d1:                       ; D1: ATTR_FLOOR $0F ATTR_WALL $01, 26 decor i
         DEFB $46,$46,$46,$46,$06,$06,$07,$07
         DEFB $46,$46,$05,$05,$05,$05,$05,$05
         DEFB $05,$05,$05,$05,$05,$05,$01,$01
-        DEFB $43,$43,$00,$00,$00,$00,$00,$00
-tileset_d2:                       ; D2: ATTR_FLOOR $27 ATTR_WALL $04, 23 decor ids
+        DEFB $43,$43,$07,$04,$00,$00,$00,$00
+tileset_d2:                       ; D2: ATTR_FLOOR $27 ATTR_WALL $04, 25 decor ids
         DEFB $10,$1F,$1F,$38,$77,$72,$72,$E2    ; id 32
         DEFB $04,$7C,$BA,$1E,$EF,$27,$23,$22    ; id 33
         DEFB $EF,$E8,$F0,$F8,$5D,$7E,$7F,$40    ; id 34
@@ -69,8 +69,8 @@ tileset_d2:                       ; D2: ATTR_FLOOR $27 ATTR_WALL $04, 23 decor i
         DEFB $EE,$EE,$EE,$EE,$EE,$EE,$EE,$00    ; id 52
         DEFB $FF,$7E,$7E,$66,$5A,$5A,$66,$7E    ; id 53
         DEFB $7E,$7E,$7E,$7E,$66,$66,$42,$42    ; id 54
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 55
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 56
+        DEFB $FF,$CA,$AA,$9C,$E8,$A8,$90,$C0    ; id 55
+        DEFB $DE,$96,$92,$12,$10,$10,$00,$00    ; id 56
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 57
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 58
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 59
@@ -81,9 +81,9 @@ tileset_d2:                       ; D2: ATTR_FLOOR $27 ATTR_WALL $04, 23 decor i
         ; attrs D2
         DEFB $04,$04,$04,$04,$04,$04,$04,$04
         DEFB $04,$04,$46,$06,$07,$46,$44,$44
-        DEFB $44,$46,$07,$46,$05,$43,$43,$00
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00
-tileset_d3:                       ; D3: ATTR_FLOOR $17 ATTR_WALL $02, 27 decor ids
+        DEFB $44,$46,$07,$46,$05,$43,$43,$07
+        DEFB $04,$00,$00,$00,$00,$00,$00,$00
+tileset_d3:                       ; D3: ATTR_FLOOR $17 ATTR_WALL $02, 28 decor ids
         DEFB $04,$04,$0C,$4C,$5D,$6D,$6F,$7F    ; id 32
         DEFB $10,$10,$98,$98,$BA,$B2,$EE,$FE    ; id 33
         DEFB $6D,$7F,$7F,$7E,$3F,$3D,$1F,$FF    ; id 34
@@ -111,7 +111,7 @@ tileset_d3:                       ; D3: ATTR_FLOOR $17 ATTR_WALL $02, 27 decor i
         DEFB $30,$48,$84,$90,$40,$48,$88,$80    ; id 56
         DEFB $04,$12,$01,$22,$02,$11,$01,$0A    ; id 57
         DEFB $FF,$B5,$B5,$B5,$B7,$B7,$B7,$FF    ; id 58
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 59
+        DEFB $FF,$CA,$AA,$9C,$E8,$A8,$90,$C0    ; id 59
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 60
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 61
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 62
@@ -120,7 +120,7 @@ tileset_d3:                       ; D3: ATTR_FLOOR $17 ATTR_WALL $02, 27 decor i
         DEFB $46,$46,$46,$46,$06,$06,$07,$07
         DEFB $46,$46,$06,$06,$42,$42,$42,$42
         DEFB $42,$42,$42,$42,$02,$02,$02,$02
-        DEFB $02,$02,$06,$00,$00,$00,$00,$00
+        DEFB $02,$02,$06,$07,$00,$00,$00,$00
 tileset_d4:                       ; D4: ATTR_FLOOR $28 ATTR_WALL $05, 28 decor ids
         DEFB $01,$01,$03,$03,$13,$17,$37,$37    ; id 32
         DEFB $00,$00,$10,$10,$98,$98,$B8,$F8    ; id 33
@@ -197,7 +197,7 @@ tileset_d5:                       ; D5: ATTR_FLOOR $30 ATTR_WALL $06, 28 decor i
         DEFB $46,$46,$05,$05,$05,$05,$05,$05
         DEFB $05,$05,$05,$05,$05,$05,$06,$06
         DEFB $06,$06,$06,$06,$00,$00,$00,$00
-tileset_d6:                       ; D6: ATTR_FLOOR $38 ATTR_WALL $07, 20 decor ids
+tileset_d6:                       ; D6: ATTR_FLOOR $38 ATTR_WALL $07, 22 decor ids
         DEFB $10,$10,$34,$34,$76,$7E,$7E,$3C    ; id 32
         DEFB $FF,$7E,$5A,$3C,$3C,$18,$18,$18    ; id 33
         DEFB $18,$7E,$5A,$7E,$18,$18,$18,$3C    ; id 34
@@ -218,8 +218,8 @@ tileset_d6:                       ; D6: ATTR_FLOOR $38 ATTR_WALL $07, 20 decor i
         DEFB $FF,$88,$88,$08,$DF,$E0,$FF,$C0    ; id 49
         DEFB $FA,$8A,$86,$8E,$DE,$3B,$FF,$01    ; id 50
         DEFB $EE,$EE,$EE,$EE,$EE,$EE,$EE,$00    ; id 51
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 52
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 53
+        DEFB $FF,$CA,$AA,$9C,$E8,$A8,$90,$C0    ; id 52
+        DEFB $DE,$96,$92,$12,$10,$10,$00,$00    ; id 53
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 54
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 55
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 56
@@ -233,7 +233,7 @@ tileset_d6:                       ; D6: ATTR_FLOOR $38 ATTR_WALL $07, 20 decor i
         ; attrs D6
         DEFB $46,$06,$07,$46,$07,$07,$06,$43
         DEFB $43,$07,$07,$07,$07,$07,$07,$07
-        DEFB $07,$07,$07,$05,$00,$00,$00,$00
+        DEFB $07,$07,$07,$05,$07,$04,$00,$00
         DEFB $00,$00,$00,$00,$00,$00,$00,$00
 tileset_d7:                       ; D7: ATTR_FLOOR $4F ATTR_WALL $41, 28 decor ids
         DEFB $01,$01,$03,$03,$13,$17,$37,$37    ; id 32
@@ -273,7 +273,7 @@ tileset_d7:                       ; D7: ATTR_FLOOR $4F ATTR_WALL $41, 28 decor i
         DEFB $46,$46,$41,$41,$06,$06,$42,$42
         DEFB $42,$42,$42,$42,$42,$42,$41,$41
         DEFB $41,$41,$41,$41,$00,$00,$00,$00
-tileset_d8:                       ; D8: ATTR_FLOOR $1F ATTR_WALL $03, 27 decor ids + lectern 60..63
+tileset_d8:                       ; D8: ATTR_FLOOR $1F ATTR_WALL $03, 28 decor ids + lectern 60..63
         DEFB $04,$04,$0C,$4C,$5D,$6D,$6F,$7F    ; id 32
         DEFB $10,$10,$98,$98,$BA,$B2,$EE,$FE    ; id 33
         DEFB $6D,$7F,$7F,$7E,$3F,$3D,$1F,$FF    ; id 34
@@ -301,7 +301,7 @@ tileset_d8:                       ; D8: ATTR_FLOOR $1F ATTR_WALL $03, 27 decor i
         DEFB $FF,$7E,$5A,$3C,$3C,$18,$18,$18    ; id 56
         DEFB $18,$7E,$5A,$7E,$18,$18,$18,$3C    ; id 57
         DEFB $08,$28,$2C,$6C,$7C,$7E,$7E,$3C    ; id 58
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; id 59
+        DEFB $FF,$CA,$AA,$9C,$E8,$A8,$90,$C0    ; id 59
         DEFB $00,$02,$3D,$42,$5A,$42,$5A,$7E    ; id 60
         DEFB $00,$40,$BC,$42,$DA,$42,$5A,$7E    ; id 61
         DEFB $FF,$7F,$0F,$03,$03,$03,$07,$1F    ; id 62
@@ -310,7 +310,7 @@ tileset_d8:                       ; D8: ATTR_FLOOR $1F ATTR_WALL $03, 27 decor i
         DEFB $46,$46,$46,$46,$06,$06,$07,$07
         DEFB $46,$46,$03,$03,$06,$06,$06,$42
         DEFB $42,$42,$42,$42,$42,$42,$42,$46
-        DEFB $06,$07,$46,$00,$43,$43,$06,$06
+        DEFB $06,$07,$46,$07,$43,$43,$06,$06
 tilesets_end:
 TILESET_SLOT_LEN EQU 288
 TILESETS_LEN EQU tilesets_end - tilesets

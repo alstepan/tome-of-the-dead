@@ -1,17 +1,17 @@
-# WazHack/ZX B10 open-door jambs + lair exit grate — DRAFT for user review (2026-10-03).
+# WazHack/ZX B10 open-door jambs + lair exit grate — APPROVED by user 2026-10-03 (option B).
 # Format = tools/gfx_convert.py --mode tile (same as door.tiles).
 # Open door (plan B10): the opening rows 9s+2..9s+7 stamp door_jamb_l / door_jamb_r instead
 # of AIR. Both are NON-solid, ink $06 on black like the arch. One glyph per side, repeated
-# down all 6 opening rows (2 new tile ids).
-#   door_jamb_l  = proposal A: arch outer double stroke (cols 0,2) continued + the open
-#                  leaf seen edge-on (cols 4-5, hinge side = left; the lock is on the right
-#                  plank) with a hinge strap on band row 3 (the planks' iron band row).
-#   door_jamb_lp = proposal B (staff): plain double stroke, no leaf. Same id, pick one.
-#   door_jamb_r  = arch outer double stroke (cols 5,7) continued.
-# Grate (T_GRATE, id 26): per game.md §1.1/§3.3 and concept-screen §3.3 the lair grate lies
+# down all 6 opening rows.
+#   door_jamb_l      = APPROVED (user 2026-10-03, option B): arch outer double stroke
+#                      (cols 0,2) continued. Common id 11 T_DOOR_JAMB_L.
+#   door_jamb_r      = APPROVED: arch outer double stroke (cols 5,7). Common id 14 T_DOOR_JAMB_R.
+#   door_jamb_l_leaf = REJECTED option A (open leaf edge-on + hinge strap); review HTML only,
+#                      never packed.
+# Grate (T_GRATE, id 26, APPROVED): per game.md §1.1/§3.3 and concept-screen §3.3 the lair grate lies
 # OVER the down-exit hole {c,2} in floor row 17 (3x1, one glyph repeated, attr $07). Side
 # view: top bar (walkable), crossbar, 2-px iron bars with the black shaft between them.
-=== door_jamb_l ink:yellow paper:black
+=== door_jamb_l_leaf ink:yellow paper:black
 #.#.##..
 #.#.##..
 #.#.##..
@@ -21,7 +21,7 @@
 #.#.##..
 #.#.##..
 
-=== door_jamb_lp ink:yellow paper:black
+=== door_jamb_l ink:yellow paper:black
 #.#.....
 #.#.....
 #.#.....

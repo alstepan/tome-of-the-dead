@@ -56,6 +56,7 @@ INK_MAP = {
     "#FF3030": (2, True),
     "#0000D7": (1, False),   # dim blue: WALL glyph (ATTR_WALL $01), prototype.md §4.1
     "#D70000": (2, False),   # dim red: LADDER_L/M/R (ATTR_LADDER $02)
+    "#D7D7D7": (7, False),   # dim white: lair grate T_GRATE ($07), B10 2026-10-03
 }
 INK_HEX = {v: k for k, v in INK_MAP.items()}
 GRID_STROKE = "#2a2a44"

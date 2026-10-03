@@ -34,6 +34,8 @@ TS1_PILLAR_F1_R0C0                 EQU 54
 TS1_PILLAR_F1_R0C1                 EQU 55
 TS1_BANNER_F1_R0C0                 EQU 56
 TS1_BANNER_F1_R1C0                 EQU 57
+TS1_COBWEB_F1_R0C0                 EQU 58
+TS1_MOSS_F1_R0C0                   EQU 59
 TS2_PATCH_A_F1_R0C0                EQU 32
 TS2_PATCH_A_F1_R0C1                EQU 33
 TS2_PATCH_A_F1_R1C0                EQU 34
@@ -64,6 +66,8 @@ TS2_WINDOW_BAR_F1_R1C0             EQU 52
 TS2_WINDOW_BAR_F1_R1C1             EQU 52
 TS2_BANNER_F1_R0C0                 EQU 53
 TS2_BANNER_F1_R1C0                 EQU 54
+TS2_COBWEB_F1_R0C0                 EQU 55
+TS2_MOSS_F1_R0C0                   EQU 56
 TS3_BRAZIER_BIG_F1_R0C0            EQU 32
 TS3_BRAZIER_BIG_F1_R0C1            EQU 33
 TS3_BRAZIER_BIG_F1_R1C0            EQU 34
@@ -100,6 +104,7 @@ TS3_BOOKSHELF_F1_R0C0              EQU 58
 TS3_BOOKSHELF_F1_R0C1              EQU 58
 TS3_BOOKSHELF_F1_R1C0              EQU 58
 TS3_BOOKSHELF_F1_R1C1              EQU 58
+TS3_COBWEB_F1_R0C0                 EQU 59
 TS4_TORCH_TALL_F1_R0C0             EQU 32
 TS4_TORCH_TALL_F1_R0C1             EQU 33
 TS4_TORCH_TALL_F1_R1C0             EQU 34
@@ -200,6 +205,8 @@ TS6_WINDOW_BAR_F1_R0C0             EQU 51
 TS6_WINDOW_BAR_F1_R0C1             EQU 51
 TS6_WINDOW_BAR_F1_R1C0             EQU 51
 TS6_WINDOW_BAR_F1_R1C1             EQU 51
+TS6_COBWEB_F1_R0C0                 EQU 52
+TS6_MOSS_F1_R0C0                   EQU 53
 TS7_TORCH_TALL_F1_R0C0             EQU 32
 TS7_TORCH_TALL_F1_R0C1             EQU 33
 TS7_TORCH_TALL_F1_R1C0             EQU 34
@@ -272,6 +279,7 @@ TS8_TORCH_SLIM_F1_R2C0             EQU 57
 TS8_TORCH_SLIM_F2_R0C0             EQU 58
 TS8_TORCH_SLIM_F2_R1C0             EQU 56
 TS8_TORCH_SLIM_F2_R2C0             EQU 57
+TS8_COBWEB_F1_R0C0                 EQU 59
 TS8_LECTERN_R0C0                   EQU 60
 TS8_LECTERN_R0C1                   EQU 61
 TS8_LECTERN_R1C0                   EQU 62

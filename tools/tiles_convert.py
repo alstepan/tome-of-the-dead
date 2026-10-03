@@ -61,10 +61,10 @@ COMMON = [
     (8,  "T_HOLE_M",     ("live", "tiles_bg_ladder_m", A_LAD)),
     (9,  "T_HOLE_R",     ("live", "tiles_bg_ladder_r", A_LAD)),
     (10, "T_POTION",     ("item", "item_potion", 0, 0x42)),             # stays until 3E (spare after)
-    (11, "T_COBWEB",     ("grid", "decor.tiles", "cobweb")),            # retired chest TL id
+    (11, "T_DOOR_JAMB_L", ("grid", "b10_door_grate.tiles", "door_jamb_l")),  # B10 open door (was cobweb)
     (12, "T_CHAIN",      ("grid", "decor.tiles", "chain")),             # chest TR
     (13, "T_SKULLS",     ("grid", "decor.tiles", "skulls")),            # chest BL
-    (14, "T_MOSS",       ("grid", "decor.tiles", "moss")),              # chest BR
+    (14, "T_DOOR_JAMB_R", ("grid", "b10_door_grate.tiles", "door_jamb_r")),  # B10 open door (was moss)
     (15, "T_TORCH_T",    ("item", "item_torch", 0, 0x46)),
     (16, "T_TORCH_B",    ("item", "item_torch", 8, 0x46)),
     (17, "T_DRIP1",      ("grid", "decor.tiles", "drip1")),             # retired zap id
@@ -76,8 +76,7 @@ COMMON = [
     (23, "T_DOOR_L",     ("grid", "door.tiles", "door_l")),
     (24, "T_DOOR_R",     ("grid", "door.tiles", "door_r")),
     (25, "T_DOOR_LOCK",  ("grid", "door.tiles", "door_r_ring")),        # plank-R + ring/lock plate
-    (26, "T_GRATE",      ("placeholder", 0x07, ["########", "#.#.#.#.", "########", ".#.#.#.#",
-                                                 "########", "#.#.#.#.", "########", ".#.#.#.#"])),
+    (26, "T_GRATE",      ("grid", "b10_door_grate.tiles", "grate")),    # lair exit, row 17 x3
     (27, "T_RUBBLE",     ("grid", "walls_r4.tiles", "rubble")),
     # contract ids 28..30 were the round-3 dither set; the approved round-4 art replaced it
     # with ragged wall fragments (concept walls_r4.tiles): mapping below, designer may remap.
@@ -90,9 +89,13 @@ COMMON = [
 FLOOR_IDS = {1, 3, 19, 20}              # platform, wall-in-floor-row, end caps (= pit caps)
 WALL_IDS = {2, 28, 29, 30}
 ANIM_IDS = {15, 16, 17, 18, 31}         # glyph swap / attr cycle (TF_ANIM)
-DECOR_IDS = {11, 12, 13, 14, 15, 16, 17, 18, 31}   # air-band decor: never in a floor row
+DECOR_IDS = {12, 13, 15, 16, 17, 18, 31}   # air-band decor: never in a floor row
 LIVE_UNCHANGED = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 19, 20}   # byte-identical to init_tiles
-LEGACY_ALIASED = {11, 12, 13, 14, 17, 18}   # chest/zap ids reused by decor (B3B-13)
+LEGACY_ALIASED = {11, 12, 13, 14, 17, 18}   # chest/zap ids reused by decor / door jambs (B3B-13)
+# Common names the designer assigned (concept-screen §3.3, 2026-10-03) that src/level_defs.asm
+# does not define yet (staff renames T_COBWEB/T_MOSS there). Accepted only while the enum
+# lacks the name; once defined it must match.
+PENDING_ENUM = {"T_DOOR_JAMB_L": 11, "T_DOOR_JAMB_R": 14}
 
 # Per-level colour schemes (game.md §1.2): (ATTR_FLOOR, ATTR_WALL)
 SCHEME = [(0x0F, 0x01), (0x27, 0x04), (0x17, 0x02), (0x28, 0x05),
@@ -120,17 +123,25 @@ OBJ_SPEC = {
                                                      ["bookshelf", "bookshelf"]]]),
     "CAULDRON":    (False, "tiles", "decor.tiles", [[["cauldron_l", "cauldron_r1"]],
                                                     [["cauldron_l", "cauldron_r2"]]]),
+    # left the common range 2026-10-03 (ids 11/14 = door jambs): 1 per-level id each
+    "COBWEB":      (False, "tiles", "decor.tiles", [[["cobweb"]]]),
+    "MOSS":        (False, "tiles", "decor.tiles", [[["moss"]]]),
 }
 # PROPOSAL (the docs leave the per-level picks to G2; designer reviews). <= 28 ids each.
+# COBWEB / MOSS (per-level since 2026-10-03) are appended last so earlier ids stay stable;
+# they go only where the set has room (D4 / D5 / D7 are full at 28: adding them there would
+# mean cutting WINDOW_ARCH / PILLAR first, per concept-screen §3.3 -- designer's call).
 LEVEL_OBJECTS = [
-    ["TORCH_TALL", "WINDOW_ARCH", "PILLAR", "BANNER"],                    # D1 Blue Keep
-    ["PATCH_A", "PATCH_B", "TORCH_SLIM", "CAULDRON", "BRAZIER", "WINDOW_BAR", "BANNER"],  # D2
-    ["BRAZIER_BIG", "BANNER_TALL", "PATCH_A", "PILLAR", "BOOKSHELF"],     # D3 Red Crypt
+    ["TORCH_TALL", "WINDOW_ARCH", "PILLAR", "BANNER", "COBWEB", "MOSS"],  # D1 Blue Keep
+    ["PATCH_A", "PATCH_B", "TORCH_SLIM", "CAULDRON", "BRAZIER", "WINDOW_BAR", "BANNER",
+     "COBWEB", "MOSS"],                                                   # D2
+    ["BRAZIER_BIG", "BANNER_TALL", "PATCH_A", "PILLAR", "BOOKSHELF", "COBWEB"],  # D3 Red Crypt
     ["TORCH_TALL", "BANNER_TALL", "WINDOW_BAR", "CAULDRON", "PATCH_A"],  # D4 Warrens
     ["BRAZIER_BIG", "WINDOW_ARCH", "PILLAR", "PATCH_A"],                  # D5 Sandstone
-    ["TORCH_SLIM", "PILLAR", "BOOKSHELF", "BANNER", "PATCH_A", "PATCH_B", "WINDOW_BAR"],  # D6
+    ["TORCH_SLIM", "PILLAR", "BOOKSHELF", "BANNER", "PATCH_A", "PATCH_B", "WINDOW_BAR",
+     "COBWEB", "MOSS"],                                                   # D6
     ["TORCH_TALL", "PILLAR", "BANNER_TALL", "PATCH_B"],        # D7 Fortress
-    ["BRAZIER_BIG", "PILLAR", "BOOKSHELF", "BANNER_TALL", "TORCH_SLIM"],  # D8 Sanctum (+ lectern)
+    ["BRAZIER_BIG", "PILLAR", "BOOKSHELF", "BANNER_TALL", "TORCH_SLIM", "COBWEB"],  # D8 (+ lectern)
 ]
 LECTERN = ("decor_r4.grid", "lectern")      # D8 only, ids 60..63 (slot 28..31), 2x2 attackable
 
@@ -295,7 +306,7 @@ def build_common(enum):
     glyphs, attrs, names = [bytes(8)] * 32, [0] * 32, [""] * 32
     notes = [""] * 32
     for i, n, src in COMMON:
-        if enum.get(n) != i:
+        if enum.get(n, PENDING_ENUM.get(n)) != i:
             fail(f"common id {i} {n}: level_defs/defs enum says {enum.get(n)}")
         names[i] = n
         k = src[0]
@@ -430,8 +441,10 @@ def emit_common(g, a, names, notes):
          ";               = 32 B (default depth-1 attrs: engine patches ATTR_FLOOR/ATTR_WALL ids).",
          "; Size        : 256 + 32 = 288 B.   Clash: one ink+paper per tile by construction.",
          "; Aliases     : T_WALL_DARK = T_BRICK (2), T_PIT_R = T_END_L (19), T_PIT_L = T_END_R (20).",
-         "; Retired ids : 11-14 / 17-18 hold decor here (were chest / zap): load this table only",
-         ";               once B3B-13 removed their last users.  Id 10 = potion until 3E.",
+         "; Retired ids : 11-14 / 17-18 were chest / zap: 11/14 = open-door jambs, 12/13/17/18 =",
+         ";               decor (cobweb/moss moved per-level). Load this table only once B3B-13",
+         ";               removed their last users.  Id 10 = potion until 3E.",
+         "; Pending enum: T_DOOR_JAMB_L/R (11/14) replace T_COBWEB/T_MOSS in src/level_defs.asm.",
          "; ============================================================================",
          "tiles_common_glyphs:"]
     for i in range(32):

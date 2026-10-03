@@ -7,8 +7,10 @@
 ;               = 32 B (default depth-1 attrs: engine patches ATTR_FLOOR/ATTR_WALL ids).
 ; Size        : 256 + 32 = 288 B.   Clash: one ink+paper per tile by construction.
 ; Aliases     : T_WALL_DARK = T_BRICK (2), T_PIT_R = T_END_L (19), T_PIT_L = T_END_R (20).
-; Retired ids : 11-14 / 17-18 hold decor here (were chest / zap): load this table only
-;               once B3B-13 removed their last users.  Id 10 = potion until 3E.
+; Retired ids : 11-14 / 17-18 were chest / zap: 11/14 = open-door jambs, 12/13/17/18 =
+;               decor (cobweb/moss moved per-level). Load this table only once B3B-13
+;               removed their last users.  Id 10 = potion until 3E.
+; Pending enum: T_DOOR_JAMB_L/R (11/14) replace T_COBWEB/T_MOSS in src/level_defs.asm.
 ; ============================================================================
 tiles_common_glyphs:
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ;  0 T_AIR
@@ -22,10 +24,10 @@ tiles_common_glyphs:
         DEFB $00,$FF,$00,$00,$00,$FF,$00,$00    ;  8 T_HOLE_M
         DEFB $06,$FE,$06,$06,$06,$FE,$06,$06    ;  9 T_HOLE_R
         DEFB $38,$10,$38,$5C,$BE,$FE,$FE,$7C    ; 10 T_POTION
-        DEFB $FF,$CA,$AA,$9C,$E8,$A8,$90,$C0    ; 11 T_COBWEB
+        DEFB $A0,$A0,$A0,$A0,$A0,$A0,$A0,$A0    ; 11 T_DOOR_JAMB_L
         DEFB $18,$24,$24,$24,$18,$18,$18,$18    ; 12 T_CHAIN
         DEFB $00,$00,$38,$7D,$55,$7D,$2B,$DD    ; 13 T_SKULLS
-        DEFB $DE,$96,$92,$12,$10,$10,$00,$00    ; 14 T_MOSS
+        DEFB $05,$05,$05,$05,$05,$05,$05,$05    ; 14 T_DOOR_JAMB_R
         DEFB $10,$30,$3A,$5C,$7C,$38,$38,$7C    ; 15 T_TORCH_T
         DEFB $38,$28,$38,$28,$38,$10,$00,$00    ; 16 T_TORCH_B
         DEFB $3C,$18,$18,$3C,$3C,$18,$00,$00    ; 17 T_DRIP1
@@ -37,7 +39,7 @@ tiles_common_glyphs:
         DEFB $AD,$AD,$A0,$AF,$A0,$AD,$AD,$AD    ; 23 T_DOOR_L
         DEFB $B5,$B5,$05,$F5,$05,$B5,$B5,$B5    ; 24 T_DOOR_R
         DEFB $B5,$B5,$05,$F5,$05,$8D,$75,$8D    ; 25 T_DOOR_LOCK
-        DEFB $FF,$AA,$FF,$55,$FF,$AA,$FF,$55    ; 26 T_GRATE  [PLACEHOLDER (no approved art)]
+        DEFB $FF,$66,$66,$FF,$66,$66,$66,$FF    ; 26 T_GRATE
         DEFB $00,$00,$00,$00,$10,$3A,$7D,$FF    ; 27 T_RUBBLE
         DEFB $EF,$88,$80,$88,$DD,$20,$22,$02    ; 28 T_WALL_DITHER
         DEFB $00,$06,$C1,$88,$EF,$32,$22,$22    ; 29 T_WALL_PATCH
@@ -55,10 +57,10 @@ tiles_common_attrs:
         DEFB $02    ;  8 T_HOLE_M
         DEFB $02    ;  9 T_HOLE_R
         DEFB $42    ; 10 T_POTION
-        DEFB $07    ; 11 T_COBWEB
+        DEFB $06    ; 11 T_DOOR_JAMB_L
         DEFB $07    ; 12 T_CHAIN
         DEFB $47    ; 13 T_SKULLS
-        DEFB $04    ; 14 T_MOSS
+        DEFB $06    ; 14 T_DOOR_JAMB_R
         DEFB $46    ; 15 T_TORCH_T
         DEFB $46    ; 16 T_TORCH_B
         DEFB $45    ; 17 T_DRIP1

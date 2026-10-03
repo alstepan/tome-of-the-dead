@@ -51,9 +51,9 @@ def door_scene(state: str):
     if state == "closed":
         l, r = glyph("door.tiles", "door_l"), glyph("door.tiles", "door_r")
     elif state == "openA":
-        l, r = glyph(SRC, "door_jamb_l"), glyph(SRC, "door_jamb_r")
+        l, r = glyph(SRC, "door_jamb_l_leaf"), glyph(SRC, "door_jamb_r")
     elif state == "openB":
-        l, r = glyph(SRC, "door_jamb_lp"), glyph(SRC, "door_jamb_r")
+        l, r = glyph(SRC, "door_jamb_l"), glyph(SRC, "door_jamb_r")
     else:  # today: planks -> AIR
         l = r = AIR
     rows = [[PLAT] * 4, [AIR, BRICK, BRICK, AIR], [AIR, arch_l, arch_r, AIR]]
@@ -121,16 +121,16 @@ YEL = "#D7D700"           # $06 dim yellow, canvas INK_MAP value
 WHT = "#D7D7D7"           # $07 dim white: not in INK_MAP (tiles are not imported)
 
 GLYPHS = [
-    ("door_jamb_l", YEL, "Open door, left side, rows 9s+2..9s+7. Proposal A: double stroke + "
-                         "open leaf edge-on + hinge strap. Non-solid, $06."),
-    ("door_jamb_lp", YEL, "Proposal B (staff): plain double stroke. Same id as A; pick one."),
-    ("door_jamb_r", YEL, "Open door, right side. Non-solid, $06."),
-    ("grate", WHT, "T_GRATE id 26, over the down-exit hole in row 17, x3. $07, solid while "
+    ("door_jamb_l", YEL, "APPROVED (option B): T_DOOR_JAMB_L id 11, rows 9s+2..9s+7. "
+                         "Non-solid, $06."),
+    ("door_jamb_r", YEL, "APPROVED: T_DOOR_JAMB_R id 14. Non-solid, $06."),
+    ("door_jamb_l_leaf", YEL, "Rejected option A (open leaf + hinge strap): review only."),
+    ("grate", WHT, "APPROVED: T_GRATE id 26, over the down-exit hole in row 17, x3. $07, solid while "
                    "closed."),
 ]
 
 SCENES_DOOR = [("closed", "closed (today)"), ("air", "open today: planks -> AIR (B10 bug)"),
-               ("openA", "open, proposal A (leaf)"), ("openB", "open, proposal B (plain)")]
+               ("openB", "open, APPROVED option B"), ("openA", "open, rejected option A (leaf)")]
 SCENES_GRATE = [("closed", "lair exit, grate closed"), ("open", "boss dead: hole (T_HOLE_L/M/R)")]
 
 
@@ -141,7 +141,7 @@ def main() -> None:
     css = ("font-family:'Press Start 2P',monospace;background:#12121c;color:#e6e4f0;"
            "padding:24px;display:flex;flex-direction:column;gap:28px;")
     h = [f'<div style="{css}">',
-         '<h2 style="margin:0;font-size:14px;">B10 OPEN DOOR + LAIR GRATE (DRAFT)</h2>',
+         '<h2 style="margin:0;font-size:14px;">B10 OPEN DOOR + LAIR GRATE (APPROVED: OPTION B)</h2>',
          '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">']
     h += [artboard(SRC, n, ink, note) for n, ink, note in GLYPHS]
     h += ['</div>', '<h2 style="margin:0;font-size:12px;">DOOR IN CONTEXT · rows 9s-1..9s+8</h2>',
