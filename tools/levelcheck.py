@@ -71,26 +71,27 @@ def start_legal(b, st, x):
     return 2 <= x <= 29 and not blocked(b, st, 0, x - 1, x + 1, exempt_arr=True)
 
 
-def pit_jumps(b, r):
-    """[(side, ok)] for both crossings of the storey-0 pit of room r (2.4: jump = 6
-    cols, body x..x+2 -> x+6..x+8, body on floor before and after). Launch/landing
-    bodies must be inside BODY_MIN..BODY_MAX and clear of the other storey-0
-    footprints and the block. Left->right launches at p-3, right->left at p+3."""
+def pit_violations(b, r):
+    """game.md 1.1 'Pit geometry' (1)-(4), modelled exactly: the crossing is
+    x = p-3 <-> p+3 (bodies p-3..p-1 and p+3..p+5, both x in 2..27); storey-0 zones
+    p-4..p-1 / p+3..p+6 hold no footprint; a block keeps the zone (left: p >= w+4,
+    right: p <= 25-w, either storey); every storey-1 footprint has |c-p| >= 7."""
     p = rd(b, r, "RD_PITCOL")
+    out = []
     if not p:
-        return []
-    def standable(x):
-        return BODY_MIN <= x <= BODY_MAX and not blocked_nopit(b, r, x, x + 2)
-    return [("L->R", standable(p - 3) and standable(p + 3)),
-            ("R->L", standable(p + 3) and standable(p - 3))]
-
-
-def blocked_nopit(b, r, lo, hi):
-    fs = feats(b, r, 0)
-    if any(not (f + 2 < lo or f > hi) for f in fs):
-        return True
-    bs = block_span(b, r, 0)
-    return bool(bs) and not (bs[1] < lo or bs[0] > hi)
+        return out
+    if not 5 <= p <= 24: out.append(f"pit col {p} outside 5..24")
+    if not (2 <= p - 3 and p + 3 <= 27): out.append("crossing x outside 2..27")
+    for lo, hi in ((p - 4, p - 1), (p - 3, p - 1), (p + 3, p + 6), (p + 3, p + 5)):
+        if any(not (f + 2 < lo or f > hi) for f in feats(b, r, 0)):
+            out.append(f"storey-0 footprint in jump zone {lo}..{hi}")
+    for f in feats(b, r, 1):
+        if abs(f - p) < 7: out.append(f"storey-1 footprint {f} within 7 of pit {p} (landing)")
+    bl = rd(b, r, "RD_BLOCK")
+    if bl:
+        w = bl & 3
+        if (p > 25 - w) if bl & 0x80 else (p < w + 4): out.append(f"block w{w} too close to pit {p}")
+    return out
 
 
 def check(b, stats=None):
@@ -168,7 +169,7 @@ def check(b, stats=None):
         if not l1: v.append(f"room {r} no ladder")
         for nm, c in (("lad1", l1), ("lad2", l2)):
             if c and not D["LAD_COL_MIN"] <= c <= D["LAD_COL_MAX"]: v.append(f"room {r} {nm} range")
-        if pit and not 3 <= pit <= 26: v.append(f"room {r} pit range / clear cols")
+        for pv in pit_violations(b, r): v.append(f"room {r}: {pv}")
         s0 = [f for f in (up, arr, l1, l2, pit) if f]
         s1 = [f for f in (dn, ec, l1, l2) if f]
         for lst, s in ((s0, 0), (s1, 1)):
@@ -287,16 +288,7 @@ def check(b, stats=None):
             if any(start_legal(b, start, x) for x in range(14 - d + 1, 14 + d)):
                 v.append(f"start x {sx} not the nearest legal col")
     if stats is not None:
-        stats["jump_bad"] += sum(1 for r in present for _, ok in pit_jumps(b, r) if not ok)
-        for r in present:                   # B3B-5: fall landing p..p+2 on storey 1 must be plain floor
-            pp = rd(b, r, "RD_PITCOL")
-            if pp and blocked(b, r, 1, pp, pp + 2):
-                stats["land_bad"] += 1
-                if len(stats["land_bad_ex"]) < 5: stats["land_bad_ex"].append((depth, int.from_bytes(b[H["LVL_SEED"]:H["LVL_SEED"] + 2], "little"), r))
         stats["pits_n"] += sum(1 for r in present if rd(b, r, "RD_PITCOL"))
-        if stats["jump_bad_ex"] is not None and len(stats["jump_bad_ex"]) < 5 and \
-                any(not ok for r in present for _, ok in pit_jumps(b, r)):
-            stats["jump_bad_ex"].append((depth, int.from_bytes(b[H["LVL_SEED"]:H["LVL_SEED"] + 2], "little")))
     if stats is not None:
         hedges = [b[OFF_EDGE + e] for e in range(6) if b[OFF_EDGE + e] & D["EG_LINK"]]
         stats["rooms"][n] += 1
@@ -316,13 +308,12 @@ def check(b, stats=None):
 def new_stats():
     return {"rooms": Counter(), "h_edges": 0, "doors": 0, "pits": 0, "dead": 0, "loops": 0,
             "lair_fallback": 0, "walker_cut": 0, "blocks": 0, "lad2": 0, "potions": 0,
-            "jump_bad": 0, "pits_n": 0, "jump_bad_ex": [], "land_bad": 0, "land_bad_ex": []}
+            "pits_n": 0}
 
 
 def merge(a, b):
     for k, v in b.items():
-        if k in ("jump_bad_ex", "land_bad_ex"): a[k] = (a[k] + v)[:5]
-        elif k == "rooms": a[k].update(v)
+        if k == "rooms": a[k].update(v)
         else: a[k] += v
 
 
@@ -333,10 +324,6 @@ def report(st, tot, fails):
     print("rooms", dict(sorted(st["rooms"].items())),
           f"doors {st['doors']}/{st['h_edges']} ({ratio:.3f})")
     print({k: round(st[k] / tot, 2) for k in ("pits", "dead", "loops", "lair_fallback", "walker_cut", "blocks", "lad2", "potions")}, "(per level)")
-    print(f"jump-infeasible pit crossings (body {BODY_MIN}..{BODY_MAX}, not a generator-rule change): "
-          f"{st['jump_bad']} of {2 * st['pits_n']}; e.g. {st['jump_bad_ex']}")
-    print(f"pit landings (storey 1, cols p..p+2) on a ladder hole / shaft / block: {st['land_bad']} of "
-          f"{st['pits_n']} pits; e.g. {st['land_bad_ex']}")
     # door odds bound: 1 in 3 per horizontal edge (game.md 1.1). Over N edges the
     # sd of the fraction is sqrt(2/9/N): 524k-level scan (~2M edges) 0.0003, the
     # 8,000-level run (~30k edges) 0.0027, so +-0.02 is > 7 sd in both.

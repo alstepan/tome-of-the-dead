@@ -67,6 +67,8 @@ POTIONS_MIN = 2
 LOOP_EDGE_ODDS = 2       # 1 in 2
 DOOR_ODDS = 3            # 1 in 3
 MAX_RESTARTS = 64
+PIT_MIN = 5              # pit col 5..24 (game.md 1.1 Pit geometry (1))
+PIT_MAX = 24
 
 
 def load_defs(paths=None):
@@ -319,7 +321,7 @@ def attempt(rng, depth):
         rm = rooms[r]
         rm.lad1 = pick_feature(rng, rm, D["LAD_COL_MIN"], D["LAD_COL_MAX"], (0, 1), True)
         if rng.rnd(2) == 0:
-            rm.pit = pick_feature(rng, rm, 3, 26, (0,), False)
+            rm.pit = pick_feature(rng, rm, PIT_MIN, PIT_MAX, (0, 1), False)   # pit geometry (1),(4)
         if rng.rnd(2) == 0:
             rm.lad2 = pick_feature(rng, rm, D["LAD_COL_MIN"], D["LAD_COL_MAX"], (0, 1), False)
         if rng.rnd(2) == 0:
@@ -328,6 +330,8 @@ def attempt(rng, depth):
                 bit = (D["RDX_R"], D["RDX_RS1"]) if right else (D["RDX_L"], D["RDX_LS1"])
                 if rm.exits & bit[0]:        # the side must have no exit at all
                     continue
+                if rm.pit and ((rm.pit > 25 - w) if right else (rm.pit < w + 4)):
+                    continue                 # pit geometry (3)/(4): keep the jump / landing zone
                 if block_hits(rm, s, right, w):
                     continue
                 rm.block = w | (D["RDB_S1"] if s else 0) | (D["RDB_RIGHT"] if right else 0)

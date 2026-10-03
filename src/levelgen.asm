@@ -43,6 +43,8 @@ LG_RST          EQU GEN_SCRATCH + 77    ; restarts left this seed
 LG_SP           EQU GEN_SCRATCH + 78    ; word
 RESEED_MAX      EQU 16
 DOOR_ODDS       EQU 3
+PIT_COL_MIN     EQU 5
+PIT_COL_MAX     EQU 24
 MAX_RESTARTS    EQU 64
 SHAFT_MIN       EQU 5
 SHAFT_N         EQU 20
@@ -530,8 +532,20 @@ block_try:      bit  1, (ix+RD_FLAGS)
                 jr   nz, .next
                 ld   a, b
                 and  RDB_WMASK
-                ld   e, a
-                ld   d, 0
+                ld   e, a               ; w
+                ld   a, (ix+RD_PITCOL)
+                or   a
+                jr   z, .np
+                bit  7, b               ; game.md 1.1 pit geometry (3)/(4): left needs
+                jr   nz, .rp            ; p >= w+4, right needs p <= 25-w
+                sub  e
+                cp   4
+                jr   c, .next
+                jr   .np
+.rp:            add  a, e
+                cp   26
+                jr   nc, .next
+.np:            ld   d, 0
                 bit  7, b
                 jr   z, .go
                 ld   a, 31
@@ -761,9 +775,9 @@ attempt:        ld   (LG_SP), sp
                 call rnd
                 or   a
                 jr   nz, .nopit
-                ld   b, $75
-                ld   d, 3
-                ld   e, 26
+                ld   b, $7F             ; both storeys: the fall lands on storey 1 (|c-p| >= 7)
+                ld   d, PIT_COL_MIN
+                ld   e, PIT_COL_MAX
                 call pick_opt
                 ld   (ix+RD_PITCOL), a
 .nopit:         ld   a, 2
