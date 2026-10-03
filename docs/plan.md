@@ -248,16 +248,16 @@ geometry. **Exit:** walk a generated level, doors open, decor animates, log show
 |---|---|---|---|---|
 | B3B-1 ✅ `95d6d44` (feat/3b-world; image byte-identical) | Layout allocation (`src/level_defs.asm`, memory-map), no behaviour change | S | A8 merged | build clean, suite unchanged |
 | B3B-2 ✅ `4e813b9` (feat/3b-tiles); user to review previews; `T_GRATE` art missing (placeholder) | Tiles / icons converter + level tilesets (`tools/tiles_convert.py`) | J | B3B-1 (id enum) | attr legality, no decor in floor rows, byte counts |
-| B3B-3 ✅ impl `422ea2f` + goldens `a7a10e0` (feat/3b-world), review pending: world W0–W4, game.py 269/269, worst 121.1k T | 2×9 geometry switch; rooms A–D re-authored as 2-storey | S | B3B-1 | `tests/world.py` W1–W4 |
+| B3B-3 ✅ review: ship (`422ea2f` + goldens `a7a10e0`, feat/3b-world; nits folded into B3B-5): world W0–W4, game.py 269/269, worst 121.1k T | 2×9 geometry switch; rooms A–D re-authored as 2-storey | S | B3B-1 | `tests/world.py` W1–W4 |
 | B3B-4 ✅ folded into B3B-3 (every scenario ported, no skips) | Port game/budget/flicker suites to 2×9 | J | B3B-3 | all green; budget recorded |
-| B3B-5 | Collision, doors, pits, dead-end blocks | S | B3B-3 | W5–W9; mix ≤ 126k |
+| B3B-5 in progress (staff, feat/3b-world) | Collision, doors, pits, dead-end blocks | S | B3B-3 | W5–W9; mix ≤ 126k |
 | B3B-6 ✅ `556969a` (feat/3b-levelgen): 8,000/8,000; full 65,536×8 scan: max 4 restarts, 15 reseeds, 774 rnd calls | Python reference generator + invariant checker | J | B3B-1 contract | 1,000 seeds pass |
 | B3B-7 ✅ impl `c1ea4f9` (feat/3b-levelgen-z80), review pending: 1,657 B bank 3, byte-exact vs Python (231 + exhaust checks), worst 2.24M T (d8 seed 31306). **3 d8 seeds (28962, 55353, 55354) exhaust 16 reseeds → `level_gen` returns B=1/CF: B3B-12 `level_enter` must handle it** (e.g. retry with a derived seed; verify exhaustively in Python) | Z80 level generator (bank 3) | J (→S) | B3B-1, -6 | W10: dump == levelgen.py, 20 seeds |
 | B3B-8 | `build_room_map` v2 + theme load | S | B3B-5, -7 | W11, W12 |
 | B3B-9 | Decor deriver (bank 3) | J | B3B-8 | W13 |
 | B3B-10 | `decor_tick` | S | B3B-8 | W14; flicker 0; mix ≤ 126k |
 | B3B-11 | Panel engine (`print6`, `log_push`, bars, `PANEL_DIRTY` queue) | S | B3B-3, -2 | W15; panel golden; mix ≤ 126k |
-| B3B-12 | Level change (`level_enter`: start + descend) | S | B3B-8, -11 | W16; `GEN_TRAP` 0 |
+| B3B-12 (note from B3B-3 review: arriving via a shaft puts the hero inside a ladder-end box where a flyer is "fully boxed" and may attack every turn — keep flyer spawns away from the arrival shaft; designer to confirm) | Level change (`level_enter`: start + descend) | S | B3B-8, -11 | W16; `GEN_TRAP` 0 |
 | B3B-13 | Message strings via `log_push`; drop PROTO-only code | J | B3B-11, -5 | strings ≤ 32 chars (ASSERT) |
 
 Merge order: A8 → B3B-1 → B3B-3 (all budget numbers count after A8). Risks: tick budget (R1), bank-2 bytes ~1 KB new hot code vs 1,067 B (R2: boot-copy to `$B500`, delete PROTO code), bank 3 ≈ 4.1 KB of 7.4 KB (R3), golden churn (R4), Python↔Z80 generator byte equality (R5).
