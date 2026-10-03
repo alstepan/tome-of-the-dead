@@ -73,7 +73,7 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   It saves AF, BC, DE, HL, IX, IY (+ AF'..HL' with `ISR_SAVE_ALT=1`). No ROM
   chain by default: input is read straight from the ports (`scan_matrix`),
   nothing reads the ROM keyboard variables, so the ROM handler would only cost
-  ~0.9k T/frame. `ISR_ROM_CHAIN=1` ends the ISR with `jp $0038` instead (then
+  ~0.9k T/frame. `ISR_ROM_CHAIN=1` (assemble-only, untested at runtime: test #61's probe sets IY, invalid under ROM chain) ends the ISR with `jp $0038` instead (then
   `IY` must be `$5C3A` whenever interrupts are on — keep it there anyway: the
   engine never touches `IY`).
 - **Paging protocol (race-free without `DI`).** Every `$7FFD` write in main
@@ -90,9 +90,12 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   to `$FFFF`; `src/ay.asm`, silent stub today): called with interrupts off,
   bank 3 paged at `$C000`, any stack depth. May clobber AF, BC, DE, HL, IX, IY.
   Must not: write the shadow or `$7FFD`, `EI`, touch `$C000` data of other
-  banks, use the alternate set unless `ISR_SAVE_ALT=1` (or main code never
+  banks, use the alternate set unless `ISR_SAVE_ALT=1` (assemble-only, untested at runtime) (or main code never
   uses `EXX` / `EX AF,AF'` — true today), take more than ~6.5k T (budget.md
   §5: the tick keeps 13k T per 2 frames for it).
+  Main code never touches the AY ports ($FFFD select / $BFFD data): the
+  select+write pair is not atomic against the ISR — sound effects are queued
+  to the player (or, if ever unavoidable, DI around the pair).
 - **No `DI` windows in runtime code** (they would stall the music). The only
   sites: `start` (tape entry; the ROM loader), `boot` (`DI` … `EI` around the
   SP reset, `isr_install` and the first shadow write — the ISR must not run

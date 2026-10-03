@@ -16,7 +16,7 @@
 ;------------------------------------------------------------------------------
 ; ay_play — SILENT STUB (until the real player): counts the call in AY_CALLS
 ; (test-observable) and writes a silent AY state — mixer all off (R7), volumes
-; A/B/C = 0 (R8..R10). Clobbers: AF, BC, DE, HL.   ~330 T (+ contention)
+; A/B/C = 0 (R8..R10). Clobbers: AF, BC, DE, HL.   286 T measured (+ contention)
 ;------------------------------------------------------------------------------
 ay_play:
                 ASSERT ay_play == AY_PLAY

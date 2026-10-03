@@ -170,7 +170,7 @@ ISR_ADDR_END    EQU $BD00           ; ISR bytes end below this (ASSERTed)
 STACK_BOTTOM    EQU $BD00           ; stack grows down from $BF00 to here (768 B)
     IFNDEF ISR_ROM_CHAIN                        ; A8: 1 = the ISR ends with jp ROM_ISR (ROM
 ISR_ROM_CHAIN   EQU 0                           ;     FRAMES + keyboard scan, needs IY = $5C3A,
-    ENDIF                                       ;     ~+0.5k T/frame); 0 = FRAMES only (default)
+    ENDIF                                       ;     ~+0.92k T/frame (measured 1.54k vs 0.62k)); 0 = FRAMES only (default)
     IFNDEF ISR_SAVE_ALT                         ; A8: 1 = the ISR also saves AF'/BC'/DE'/HL'
 ISR_SAVE_ALT    EQU 0                           ;     (needed once BOTH the player and main
     ENDIF                                       ;     code use EXX / EX AF,AF'; neither does yet)

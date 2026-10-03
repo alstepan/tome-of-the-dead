@@ -226,9 +226,9 @@ Sequence per frame (interrupts off): IM 2 acknowledge (19 T) → push AF, HL →
 third byte) → push BC, DE, IX, IY → `OUT ($7FFD), (shadow & ~7) | BANK_AY` →
 `call AY_PLAY` → `OUT ($7FFD), shadow` → `isr.done` → pops → `EI` / `RET`.
 Build options (`src/defs.asm`): `ISR_SAVE_ALT=1` also saves AF'..HL' (+8 B,
-+~60 T); `ISR_ROM_CHAIN=1` skips the counter and ends with `jp $0038` (ROM
++~60 T; assemble-only, untested at runtime); `ISR_ROM_CHAIN=1` skips the counter and ends with `jp $0038` (ROM
 FRAMES + keyboard scan; needs `IY = $5C3A`; −14 B, ISR ~1.54k T/frame
-measured). Default: neither. Input never depended on the ROM ISR
+measured; assemble-only, untested at runtime). Default: neither. Input never depended on the ROM ISR
 (`scan_matrix` reads the ports), so the chain is not needed.
 
 **Paging race protocol** (no `DI`): see `docs/conventions.md` "Interrupts".
@@ -247,16 +247,18 @@ bank 3 runtime code.
 **Cost (measured, ZEsarUX, breakpoints at `isr` / `AY_PLAY` / `isr.done`):**
 acknowledge + HALT exit 19 T, entry → `AY_PLAY` 198 T, stub 286 T, restoring
 `OUT` 35 T, pops + `EI`/`RET` 82 T: **620 T per frame**, of which the ISR's own
-overhead is **334 T** + 19 ack (the rest is the stub). The ROM IM1 handler it
+overhead is **334 T** (315 T own instructions + 19 T acknowledge; the other 286 T is the stub). The ROM IM1 handler it
 replaces cost ~990 T (tick start after the HALT: 1,051 → 688 T in
 `tests/flicker.py`). It runs in the top border (frame T 0–620), so bank-3
 fetches see no contention. Worst ticks, A7b → A8 (same tests): budget mix
 121,395 → **120,849 T**, heavy 121,047 → **120,726 T**, `tests/flicker.py` a
 122,100 → **121,416**, b 58,747 → 58,304, c 96,129 → 95,386; 0 overruns /
 flicker events / tears / split rows. **Headroom for a real player** at ~6.5k T
-per call: per tick two ISRs of 334 + 19 + 6,500 = 6,853 T = 13.7k T count
-against the 141,816 T; worst work without ISRs ≈ 121,416 − 620 = 120.8k →
-**~7.3k T (5.2 %) left**. Caveat for the player task: a 6.5k player in the
+per call: per 2-frame tick two ISRs of 334 + 6,500 = 6,834 T → 2 × 6,834 ≈
+13.7k T count against the 141,816 T. The measured worst tick 120,849 T (budget
+mix) already holds 2 × 620 = 1,240 T of stub ISRs (the stub itself is
+2 × 286 = 572 T of that), so work without ISRs ≈ 119.6k; with the player
+119.6k + 13.7k ≈ 133.3k → **~8.5k T (6.0 %) left**. Caveat for the player task: a 6.5k player in the
 HALT-side ISR starts `present` ~6.2k T later in the frame (still inside the
 14.3k T top border, but re-run `tests/flicker.py` for late rows / tears).
 

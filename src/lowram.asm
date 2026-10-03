@@ -205,8 +205,8 @@ isr_install:
 ;     and the main code's own OUT then rewrites the same byte. No DI needed.
 ; Saves every register it or the player may touch: AF, BC, DE, HL, IX, IY
 ; (+ the alternate set if ISR_SAVE_ALT). Stack: 12 B + the player's (+8 alt).
-; Cost (measured): 334 T + 19 T acknowledge + AY_PLAY (stub 286 T) = 620 T
-; per frame, in the top border (docs/memory-map.md "Interrupts (A8)").
+; Cost (measured): ISR own instructions 315 T + 19 T acknowledge = 334 T overhead,
+; + AY_PLAY (stub 286 T) = 620 T per frame, in the top border (docs/memory-map.md "Interrupts (A8)").
 ;------------------------------------------------------------------------------
 isr_image:
                 DISP ISR_ADDR
