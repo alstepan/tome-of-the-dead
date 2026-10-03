@@ -248,8 +248,8 @@ geometry. **Exit:** walk a generated level, doors open, decor animates, log show
 |---|---|---|---|---|
 | B3B-1 ✅ `95d6d44` (feat/3b-world; image byte-identical) | Layout allocation (`src/level_defs.asm`, memory-map), no behaviour change | S | A8 merged | build clean, suite unchanged |
 | B3B-2 ✅ `4e813b9` (feat/3b-tiles); user to review previews; `T_GRATE` art missing (placeholder) | Tiles / icons converter + level tilesets (`tools/tiles_convert.py`) | J | B3B-1 (id enum) | attr legality, no decor in floor rows, byte counts |
-| B3B-3 in progress (staff, feat/3b-world) | 2×9 geometry switch; rooms A–D re-authored as 2-storey | S | B3B-1 | `tests/world.py` W1–W4 |
-| B3B-4 | Port game/budget/flicker suites to 2×9 | J | B3B-3 | all green; budget recorded |
+| B3B-3 ✅ impl `422ea2f` + goldens `a7a10e0` (feat/3b-world), review pending: world W0–W4, game.py 269/269, worst 121.1k T | 2×9 geometry switch; rooms A–D re-authored as 2-storey | S | B3B-1 | `tests/world.py` W1–W4 |
+| B3B-4 ✅ folded into B3B-3 (every scenario ported, no skips) | Port game/budget/flicker suites to 2×9 | J | B3B-3 | all green; budget recorded |
 | B3B-5 | Collision, doors, pits, dead-end blocks | S | B3B-3 | W5–W9; mix ≤ 126k |
 | B3B-6 ✅ `556969a` (feat/3b-levelgen): 8,000/8,000; full 65,536×8 scan: max 4 restarts, 15 reseeds, 774 rnd calls | Python reference generator + invariant checker | J | B3B-1 contract | 1,000 seeds pass |
 | B3B-7 ✅ impl `c1ea4f9` (feat/3b-levelgen-z80), review pending: 1,657 B bank 3, byte-exact vs Python (231 + exhaust checks), worst 2.24M T (d8 seed 31306). **3 d8 seeds (28962, 55353, 55354) exhaust 16 reseeds → `level_gen` returns B=1/CF: B3B-12 `level_enter` must handle it** (e.g. retry with a derived seed; verify exhaustively in Python) | Z80 level generator (bank 3) | J (→S) | B3B-1, -6 | W10: dump == levelgen.py, 20 seeds |
