@@ -174,6 +174,17 @@ FADE, worn/broken variants) are SOLID and replace only already-solid wall cells;
 skulls, moss, cobweb, chain, banner, candles, drips are non-solid and go only on non-solid
 cells. Decor never changes a cell's solidity (game.md §1.2).
 
+**B3B-8 answers (designer decision 2026-10-03):**
+1. Rule is solidity by the class of the cell a tile is placed on, never per art type. Pillar and
+   plaster-patch placed on wall cells: SOLID (ok). Window and bookshelf: NON-solid, placed
+   only on air (room-interior) cells, as in game.md §1.2. If the builder ever puts them on
+   wall cells they must become SOLID; never mix.
+2. Row 17: no end caps beside down-exit holes; ornament runs to the hole edge. Approved.
+   Caps stay on pits only.
+3. Arrival shaft: rubble in row 0 above the ladder. Approved.
+4. 3B stand-in: lair grate always open, drawn as an open hole; `T_GRATE` unseen until 3F. Confirmed.
+5. Dropping raw item/tile data from the sprite sources in B3B-13: acknowledged (engineering call).
+
 **Tile ids: 64 = 32 common + 32 per-level** (game.md §1.2). The artist's round 1+2 decor
 comes to 93 ids, so the large objects live in **per-level sets**. A set's glyphs and attrs
 are copied in from bank 7 spare at level start (8 sets, 2,304 B).
