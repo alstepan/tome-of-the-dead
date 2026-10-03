@@ -1,7 +1,7 @@
 ;==============================================================================
 ; bank3.asm — COLD code paged in at $C000 from bank 3 (docs/memory-map.md
 ; "Bank 3"). Assembled right after the sprite-source tail, below the AY
-; reserve (AY_RESERVE, $E000). Entered ONLY through far3 (gfx.asm), which pages
+; reserve (AY_RESERVE, $E400, A8). Entered ONLY through far3 (gfx.asm), which pages
 ; bank 3 in and puts the caller's $C000 bank back on return.
 ;
 ; Rule: nothing here may page $C000 directly (it would unmap the code that is

@@ -15,9 +15,11 @@
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; start — .tap entry (RANDOMIZE USR start): pull the two headerless blocks off
-; tape with the ROM loader (bank 1 = sources; bank 3 = source tail + bank-3
-; cold code), then boot. The .sna enters at boot.
+; start — .tap entry (RANDOMIZE USR start): pull the three headerless blocks
+; off tape with the ROM loader (bank 1 = sources; bank 3 = source tail + bank-3
+; cold code; A8: bank 3 AY slot at AY_RESERVE), then boot. The .sna enters at
+; boot. Runs under the ROM IM1 ISR (LD-BYTES ends with EI; IY = $5C3A here):
+; boot installs IM 2.
 ;------------------------------------------------------------------------------
 start:
                 di
@@ -40,6 +42,13 @@ start:
                 scf
                 call ROM_LD_BYTES
                 jr   nc, .hi
+.ay:                                           ; A8: the AY slot (bank 3 still paged)
+                ld   ix, AY_RESERVE
+                ld   de, AY_LEN
+                ld   a, $FF
+                scf
+                call ROM_LD_BYTES
+                jr   nc, .ay
 start_loaded:                                  ; falls straight into boot:
                 ASSERT start_loaded == boot    ; nothing may be inserted here
 
@@ -49,8 +58,8 @@ start_loaded:                                  ; falls straight into boot:
 boot:
                 di
                 ld   sp, WORKSTORE_TOP
-                ld   iy, IY_SYSVAR             ; ROM ISR invariant (conventions)
-                im   1
+                ld   iy, IY_SYSVAR             ; kept for ISR_ROM_CHAIN (conventions)
+                call isr_install               ; A8: IM 2 (EI below, once the shadow is valid)
                 ld   a, BANK_POOL0
                 call page_bank
                 xor  a
@@ -158,6 +167,114 @@ check_paging:
                 halt
 
 str_lock:       DB "LOAD FROM 128 BASIC", 0     ; check_paging: $7FFD locked
+;==============================================================================
+; isr_install — A8 IM 2 setup (boot, under its DI): fill the 257-B vector
+; table (every byte ISR_VEC_BYTE, so whatever the floating bus puts on the
+; data bus the CPU fetches ISR_ADDR), copy the ISR image to ISR_ADDR, I = the
+; table page, IM 2. Interrupts stay disabled: boot's EI comes after
+; PORT_7FFD_SHADOW is valid (the ISR re-OUTs it). Placement + protocol:
+; docs/memory-map.md "Interrupts (A8)", docs/conventions.md "Interrupts".
+; Clobbers: A, BC, DE, HL.   ~6.8k T (two LDIRs, boot only)
+;==============================================================================
+isr_install:
+                ld   hl, ISR_VEC_TABLE
+                ld   de, ISR_VEC_TABLE + 1
+                ld   bc, ISR_VEC_LEN - 1
+                ld   (hl), ISR_VEC_BYTE
+                ldir
+                ld   hl, isr_image
+                ld   de, ISR_ADDR
+                ld   bc, ISR_LEN
+                ldir
+                ld   a, ISR_VEC_TABLE >> 8
+                ld   i, a
+                im   2
+                ret
+
+;------------------------------------------------------------------------------
+; isr — IM 2 handler, runs at ISR_ADDR (bank 2: uncontended, always mapped),
+; once per frame (50 Hz), interrupts disabled on entry.
+;  1. SYS_FRAMES += 1 exactly as the ROM's MASK-INT (3-byte counter; the tick
+;     pacing reads the low byte) — unless ISR_ROM_CHAIN, where the ROM does it.
+;  2. Pages BANK_AY at $C000 by OUT only: (PORT_7FFD_SHADOW & ~7) | BANK_AY
+;     keeps the shadow's screen bit 3 and ROM bit 4; the shadow is never
+;     written. Calls AY_PLAY (bank 3).
+;  3. Re-OUTs PORT_7FFD_SHADOW as it is NOW (not a saved port value). Race
+;     with the main code's "shadow first, then OUT" (page_bank / set_screen):
+;     an interrupt between the two leaves the port already at the new value,
+;     and the main code's own OUT then rewrites the same byte. No DI needed.
+; Saves every register it or the player may touch: AF, BC, DE, HL, IX, IY
+; (+ the alternate set if ISR_SAVE_ALT). Stack: 12 B + the player's (+8 alt).
+; Cost (measured): 334 T + 19 T acknowledge + AY_PLAY (stub 286 T) = 620 T
+; per frame, in the top border (docs/memory-map.md "Interrupts (A8)").
+;------------------------------------------------------------------------------
+isr_image:
+                DISP ISR_ADDR
+isr:
+                push af
+                push hl
+    IF !ISR_ROM_CHAIN
+                ld   hl, (SYS_FRAMES)
+                inc  hl
+                ld   (SYS_FRAMES), hl
+                ld   a, h
+                or   l
+                jr   nz, .frames
+                ld   hl, SYS_FRAMES + 2        ; ROM: INC (IY+$40)
+                inc  (hl)
+.frames:
+    ENDIF
+                push bc
+                push de
+                push ix
+                push iy
+    IF ISR_SAVE_ALT
+                ex   af, af'
+                push af
+                exx
+                push bc
+                push de
+                push hl
+    ENDIF
+                ld   a, (PORT_7FFD_SHADOW)
+                and  ~7 & $FF                  ; keep screen bit 3 + ROM bit 4
+                or   BANK_AY
+                ld   bc, PORT_7FFD
+                out  (c), a                    ; shadow untouched
+.page:          call AY_PLAY                   ; bank 3, contended fetches
+                ld   a, (PORT_7FFD_SHADOW)     ; the CURRENT shadow (see 3. above)
+                ld   bc, PORT_7FFD
+                out  (c), a
+.done:                                         ; test probe: port == shadow here
+    IF ISR_SAVE_ALT
+                pop  hl
+                pop  de
+                pop  bc
+                exx
+                pop  af
+                ex   af, af'
+    ENDIF
+                pop  iy
+                pop  ix
+                pop  de
+                pop  bc
+                pop  hl
+                pop  af
+    IF ISR_ROM_CHAIN
+                jp   ROM_ISR                   ; FRAMES, keyboard scan, EI, RET (IY!)
+    ELSE
+                ei
+                ret
+    ENDIF
+isr_end:
+                ENT
+ISR_LEN         EQU isr_end - isr
+                ASSERT ISR_ADDR + ISR_LEN <= ISR_ADDR_END
+                ASSERT (ISR_ADDR >> 8) == ISR_VEC_BYTE          ; vector byte = both address bytes
+                ASSERT ISR_VEC_TABLE + ISR_VEC_LEN <= ISR_ADDR
+                ASSERT (ISR_VEC_TABLE & $FF) == 0
+                ASSERT (ISR_VEC_TABLE >> 8) >= $80 && (ISR_VEC_TABLE >> 8) < $C0  ; I: bank 2
+                ASSERT ISR_ADDR_END <= STACK_BOTTOM
 
 ; select-screen entries: fid, body col, attr, name (5 B; read by sel_run in
 ; bank 3 and by sel_frt_copy at boot -> must be in always-mapped RAM)
@@ -526,8 +643,9 @@ vis_room_sync:
 ; A7 display switching (cold; bank 5 low RAM is always mapped, so bank-2 and
 ; bank-5 callers alike reach it). page_bank / present stay in bank 2 (hot).
 ; set_screen — show bank 5 (A = 0) or bank 7 (A = P7FFD_SCREEN7); the $C000
-; bank stays as it is. Order: page_bank SMC, shadow, port (shadow before OUT;
-; no ISR pages $C000, so SMC vs shadow can never be seen out of step).
+; bank stays as it is. Order: page_bank SMC, shadow, port (shadow before OUT:
+; the A8 ISR re-OUTs the shadow as it finds it and never reads the SMC, so an
+; interrupt anywhere in here at worst shows the new screen a few T early).
 ; Clobbers: A, BC.   ~90 T
 ;==============================================================================
 set_screen:

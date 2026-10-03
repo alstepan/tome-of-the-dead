@@ -1157,6 +1157,10 @@ def main():
             h.expect("15 bat y always in 7..11", all(7 <= y <= 11 for y in ys), True)
 
         # ---------------- 41 (extra, §3.1) hold-to-repeat -------------------
+        # ---------------- 61 (A8) IM 2 + ISR + silent AY player slot ------
+        if want(61):
+            isr_tests(h, p)
+
         # ---------------- 43 (review A2) $7FFD paging lock at the tape entry
         if want(43):
             p.load()
@@ -1295,6 +1299,8 @@ def main():
             p.z.cmd("set-memory-zone 0")                 # scrub banks 1/3: sources
             for b in (1, 3):                             # must come off the tape
                 p.z.cmd("write-memory %d %s" % (b * 16384, " ".join(["0"] * 64)))
+            ayo = 3 * 16384 + S["AY_RESERVE"] - 0xC000   # A8: the AY slot block too
+            p.z.cmd("write-memory %d %s" % (ayo, " ".join(["0"] * S["AY_LEN"])))
             p.z.cmd("set-memory-zone -1")
             p.z.cmd("disable-breakpoints")
             p.z.cmd("exit-cpu-step")
@@ -1422,6 +1428,156 @@ def main():
 
 
 
+def mmu_c000(regs):
+    """Bank at $C000 from get-registers' 128K MMU field (segment 3)."""
+    import re
+    return int(re.search(r"MMU=([0-9a-fA-F]+)", regs).group(1)[12:16], 16)
+
+
+def port_7ffd(p):
+    """The value last written to $7FFD as the emulator holds it (not the shadow)."""
+    for line in p.z.cmd("get-io-ports").splitlines():
+        if line.startswith("Spectrum 7FFD port:"):
+            return int(line.split(":")[1].strip(), 16)
+    raise RuntimeError("get-io-ports: no 7FFD line")
+
+
+def isr_regs(regs):
+    import re
+    return {k: int(v, 16) for k, v in re.findall(r"(\b[A-Z]{2}'?)=([0-9a-f]{4})\b", regs)}
+
+
+def isr_tests(h, p):
+    """#61 (A8): IM 2 active; SYS_FRAMES / AY_PLAY at 50 Hz; the ISR preserves
+    every register and the $C000 bank / screen bit for every bank paged; across
+    a room transition (screen bit flips 1 -> 0 -> 1) the ISR pages bank 3 for
+    the player and restores exactly PORT_7FFD_SHADOW; no code ever runs at
+    $C000+ with a bank other than 3 paged (A3 review carry-over)."""
+    ay, done = S["AY_PLAY"], S["isr.done"]
+    # A3 carry-over: executing $C000+ with any bank but 3 = a paging bug. A
+    # conditional (non-optimised) breakpoint: armed from the snapshot load
+    # (boot, select, game start) through the transition below.
+    p.load()
+    p.z.cmd("set-breakpoint 7 PC>=C000H and RAM<>3")
+    p.extra_probes = set()
+    p.wait_state(GS_SELECT)
+    p.wb("INPUT_REPEAT", 0)
+    p.wb("ANIM_FREEZE", 1)
+    p.wb("INPUT_SRC", 1)
+    p.hold("1")
+    p.wait_state(GS_PLAYING)
+    p.release()
+    p.settle(3)
+    regs = p.z.cmd("get-registers")
+    h.expect("61 IM 2 active", " IM2 " in regs, True)
+    h.expect("61 I = vector table page", int(regs.split(" I=")[1][:2], 16),
+             S["ISR_VEC_TABLE"] >> 8)
+    h.expect("61 vector table: 257 x ISR_VEC_BYTE",
+             set(p.z.read_memory(S["ISR_VEC_TABLE"], S["ISR_VEC_LEN"])), {S["ISR_VEC_BYTE"]})
+    h.expect("61 ISR copied to ISR_ADDR", p.z.read_memory(S["ISR_ADDR"], S["ISR_LEN"]) ==
+             p.z.read_memory(S["isr_image"], S["ISR_LEN"]), True)
+    # 50 Hz: 50 idle ticks = 100 frames = 100 AY_PLAY calls, ~70,908 T each
+    def frames():
+        b = p.z.read_memory(S["SYS_FRAMES"], 3)
+        return b[0] | b[1] << 8 | b[2] << 16
+    f0, a0, o0 = frames(), p.rw("AY_CALLS"), p.rw("OVERRUN_COUNT")
+    p.z.cmd("reset-tstates-partial")
+    p.tick(50)
+    t = int(p.z.cmd("get-tstates-partial"))
+    df, da = frames() - f0, p.rw("AY_CALLS") - a0
+    print(f"[info] 61 50 ticks: SYS_FRAMES +{df}, AY_CALLS +{da}, {t} T"
+          f" ({t / max(df, 1):.0f} T/frame)", flush=True)
+    h.expect("61 SYS_FRAMES: 2 frames per tick (50 ticks, no overrun)",
+             (df, p.rw("OVERRUN_COUNT") - o0), (100, 0))
+    h.expect("61 SYS_FRAMES at 50 Hz (|T - frames x 70,908| < 1 frame)",
+             abs(t - df * 70908) < 70908, True)
+    h.expect("61 AY_PLAY once per frame", da, df)
+    # room transition: hero at A's right edge walks right (do_exit: show_bank5,
+    # scroll, present_full -> bank 7). Stop in every ISR at AY_PLAY (bank 3
+    # paged by OUT only) and at isr.done (port restored from the shadow).
+    # Held L repeats (INPUT_REPEAT 1): the hero keeps walking in room B for
+    # 30 ticks after arrival, so the ISR also lands in blits (pool banks).
+    p.isolate()
+    p.place(0, 28, 14)
+    p.settle()
+    p.wb("INPUT_REPEAT", 1)
+    p.z.cmd("set-breakpoint 5 PC=%d" % ay)
+    p.z.cmd("set-breakpoint 6 PC=%d" % done)
+    bad, banks, scr, n_ay, n_done, ticks, a7, after = [], set(), [], 0, 0, 0, [], 0
+    p.hold("L")
+    while ticks < 400:
+        p.z.cmd("cpu-step")
+        p.z.cmd("run %d" % 4000000)
+        regs = p.z.cmd("get-registers")
+        pc = int(regs[3:7], 16)
+        if pc in (ay, done):
+            sh, port, c000 = p.rb("PORT_7FFD_SHADOW"), port_7ffd(p), mmu_c000(regs)
+            if pc == ay:
+                n_ay += 1
+                banks.add(sh & 7)
+                if not scr or scr[-1] != sh & 8:
+                    scr.append(sh & 8)
+                if (port, c000) != ((sh & 0xF8) | S["BANK_AY"], S["BANK_AY"]):
+                    bad.append(("ay", hex(sh), hex(port), c000))
+            else:
+                n_done += 1
+                if (port, c000) != (sh, sh & 7):
+                    bad.append(("done", hex(sh), hex(port), c000))
+            continue
+        if pc == S["wait_tick"]:
+            ticks += 1
+            if p.rb("CUR_ROOM") == 1 and p.rb("GAME_STATE") == GS_PLAYING:
+                after += 1
+                if after == 30:
+                    break
+            continue
+        a7.append(hex(pc))                       # breakpoint 7 (or a stray return)
+        break
+    p.release()
+    p.wb("INPUT_REPEAT", 0)
+    for n in (5, 6, 7):
+        p.z.cmd("set-breakpoint %d" % n)
+    print(f"[info] 61 transition: {ticks} ticks, ISR stops ay={n_ay} done={n_done},"
+          f" interrupted $C000 banks {sorted(banks)}, screen bit sequence {scr}", flush=True)
+    h.expect("61 transition reached room B", p.rb("CUR_ROOM"), 1)
+    h.expect("61 no code at $C000+ with bank != 3 (boot..transition)", a7, [])
+    h.expect("61 every ISR: bank 3 for AY_PLAY, port == shadow after", bad[:4], [])
+    h.expect("61 ISR ran on both screens across the flip (bit 3: 8 -> 0 -> 8)",
+             scr[:3] == [8, 0, 8] and n_ay == n_done and n_ay > 50, True)
+    h.expect("61 ISR interrupted the transition + play with >= 3 different $C000 banks",
+             len(banks) >= 3, True)
+    # register probe per bank: page it, load patterns into every register
+    # (alternate set too), EI + 2 HALTs = exactly 2 ISRs, all must survive.
+    pb = S["page_bank"]
+    want_regs = {"AF": 0xA5C3, "BC": 0xB1C1, "DE": 0xD1E1, "HL": 0x4151, "IX": 0x1A2B,
+                 "IY": 0x3C4D, "AF'": 0x1357, "BC'": 0x2468, "DE'": 0x9ABC, "HL'": 0xDEF0}
+    sh0 = p.rb("PORT_7FFD_SHADOW")
+    # ZEsarUX quirk (also on the IM 1 baseline): the first HALT executed after
+    # a wait_tick stop falls through without an interrupt. A throwaway
+    # ei/halt/halt stub first, so every probe starts from the same state.
+    p.run_stub([0xFB, 0x76, 0x76])
+    for bank in (0, 1, 3, 4, 6, 7):
+        code = [0xF3, 0x3E, bank, 0xCD, pb & 0xFF, pb >> 8,         # di; ld a,b; call page_bank
+                0x21, 0x57, 0x13, 0xE5, 0xF1, 0x08,                 # AF' = 1357
+                0xD9, 0x01, 0x68, 0x24, 0x11, 0xBC, 0x9A, 0x21, 0xF0, 0xDE, 0xD9,
+                0x21, 0xC3, 0xA5, 0xE5, 0xF1,                       # AF = A5C3
+                0x01, 0xC1, 0xB1, 0x11, 0xE1, 0xD1, 0x21, 0x51, 0x41,
+                0xDD, 0x21, 0x2B, 0x1A, 0xFD, 0x21, 0x4D, 0x3C,
+                0xFB, 0x76, 0x76]                                   # ei; halt; halt
+        sp0 = isr_regs(p.z.cmd("get-registers"))["SP"]
+        a0 = p.rw("AY_CALLS")
+        ran = p.run_stub(code)
+        regs = p.z.cmd("get-registers")
+        r = isr_regs(regs)
+        got = {k: r.get(k) for k in want_regs}
+        sh = p.rb("PORT_7FFD_SHADOW")
+        h.expect(f"61 bank {bank}: 2 ISRs, every register preserved",
+                 (ran, p.rw("AY_CALLS") - a0, got, r["SP"]), (True, 2, want_regs, sp0))
+        h.expect(f"61 bank {bank}: $C000 bank + port == shadow (screen bit kept)",
+                 (mmu_c000(regs), port_7ffd(p), sh), (bank, sh, (sh0 & 0xF8) | bank))
+    p.load()                                     # IY / room map / bank clobbered
+
+
 def tape_rest(h, p):
     """#50 after the tape reached GS_SELECT: screen, pool, banks, play."""
     p.tick(2)                                    # park on select_tick
@@ -1440,6 +1596,10 @@ def tape_rest(h, p):
     b3 = S.get("BANK3_LEN", hi)
     h.expect("50 bank 3 sprite sources + cold code == .sna", ram[3 * 16384:3 * 16384 + b3] ==
              SNA_RAM[3 * 16384:3 * 16384 + b3], True)
+    ayo = 3 * 16384 + S["AY_RESERVE"] - 0xC000
+    h.expect("50 bank 3 AY slot (A8 tape block) == .sna", ram[ayo:ayo + S["AY_LEN"]] ==
+             SNA_RAM[ayo:ayo + S["AY_LEN"]], True)
+    h.expect("50 tape: IM 2 installed by boot", " IM2 " in p.z.cmd("get-registers"), True)
     # CODE block starts in bank 5 low RAM (boot, generator) and runs into bank 2
     lo5 = S["lowram_code"] - 0x4000
     h.expect("50 bank 5 low-RAM cold code == .sna", ram[5 * 16384 + lo5:6 * 16384] ==
