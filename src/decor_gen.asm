@@ -6,13 +6,17 @@
 ;
 ; decor_room: A = room (unused), IX = descriptor (kept), (TMP1) = map page.
 ;   Re-derived from RD_SEED only (own xorshift state dg_rng, never GEN_RNG /
-;   RNG_STATE), so re-entry rebuilds the identical map. ANIM_N / ANIM_LIST are
-;   written only when building into ROOM_MAP (the NEXT_MAP build leaves them).
+;   RNG_STATE), so re-entry rebuilds the identical map. The animated cells go
+;   to the list build_room_map chose by the map page (dg_dst, count already
+;   zeroed): ROOM_MAP -> ANIM_N / ANIM_LIST, NEXT_MAP -> ANIM_N2 / ANIM_LIST2
+;   (B3B-9 review: do_exit's room_shadow copies it over ANIM_LIST after the
+;   scroll; before, the NEXT_MAP build left the old room's list live).
 ;   12 attempts x 4 rnd calls; an attempt places one object iff the budgets
 ;   (<= 2 large animated, 4 glyph + 8 attr cells, 6 wall-class cells) and the
 ;   fit test (footprint == T_AIR (air-class) / T_BRICK (wall-class), no ladder
 ;   cell in the 1-cell ring) allow; objects sit in rows 9s..9s+5 only.
-; Clobbers: A, BC, DE, HL.  Cold path (room entry), ~40k T worst case.
+; Clobbers: A, BC, DE, HL.  Cold path (room entry): measured 47-72k T
+; (W13, DI, contended: build with decor - build with RD_SEED 0).
 ;==============================================================================
 F_WALL          EQU 1               ; record flags (tools/decorgen.py)
 F_TILED         EQU 2
@@ -29,12 +33,7 @@ DG_MAX_WALL     EQU 6
                 ld   (dg_ng), a
                 ld   (dg_na), a
                 ld   (dg_nw), a
-                ld   a, (TMP1)
-                sub  ROOM_MAP >> 8
-                ld   (dg_nolive), a            ; 0 = building ROOM_MAP: fill ANIM_LIST
-                jr   nz, .nl
-                ld   (ANIM_N), a
-.nl:            ld   a, (LVL_DEPTH)
+                ld   a, (LVL_DEPTH)
                 dec  a
                 ld   e, a
                 ld   d, 0
@@ -304,9 +303,6 @@ dg_nr:          ld   a, l                      ; HL += 32 (next map row, same co
 ; ANIM_LIST entry (col, row, type, phase) if the object animates it.
 ; Keeps BC, DE.
 dg_cell:
-                ld   a, (dg_nolive)
-                or   a
-                ret  nz
                 ld   a, (dg_fl)
                 ld   l, a
                 ld   a, d
@@ -338,14 +334,16 @@ dg_cell:
                 inc  a
 .em:            push de
                 ld   d, a
-                ld   hl, ANIM_N
+                ld   a, (dg_dst)               ; ANIM_N or ANIM_N2 (build_room_map)
+                ld   l, a
+                ld   h, ANIM_N >> 8
                 ld   a, (hl)
                 inc  (hl)
                 add  a, a
                 add  a, a
-                add  a, ANIM_LIST & $FF        ; <= 12 entries: no carry (ASSERT)
+                inc  a                         ; the entries follow their count byte
+                add  a, l                      ; <= 12 entries: no carry (ASSERT)
                 ld   l, a
-                ld   h, ANIM_LIST >> 8
                 ld   (hl), c
                 inc  l
                 ld   (hl), b
@@ -457,7 +455,7 @@ DG_NREC         EQU 56
 
 ; state (bank 3 is RAM). dg_da before dg_dg (one `ld (dg_da), bc`).
 dg_rng:         DW   0
-dg_nolive:      DB   0
+dg_dst:         DB   0                 ; low byte of the list's count: ANIM_N / ANIM_N2
 dg_first:       DB   0
 dg_n:           DB   0
 dg_nl:          DB   0
@@ -480,6 +478,7 @@ dg_da:          DB   0
 dg_dg:          DB   0
                 ASSERT T_AIR == 0 && T_BRICK == 2 && F_WALL == 1 && F_TILED == 2
                 ASSERT T_HOLE_R == T_LAD_L + 5 && ANIM_MAX == 12 && AL_STRIDE == 4
-                ASSERT (ANIM_LIST >> 8) == ((ANIM_LIST + ANIM_MAX * AL_STRIDE) >> 8) && PLAY_ROWS < 32
+                ASSERT (ANIM_N >> 8) == ((ANIM_LIST + ANIM_MAX * AL_STRIDE) >> 8) && PLAY_ROWS < 32
+                ASSERT (ANIM_N2 >> 8) == ((ANIM_LIST2 + ANIM_MAX * AL_STRIDE) >> 8) && ANIM_LIST2 == ANIM_N2 + 1
                 ASSERT dg_dg == dg_da + 1
                 ASSERT (dg_recs - dg_start) == 9 && DG_NREC * 3 < 256

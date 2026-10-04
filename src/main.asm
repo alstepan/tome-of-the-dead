@@ -203,6 +203,12 @@ probe_render_done:
                 call pmark_dmg
 probe_render_done:
     ENDIF
+                ; B3B-10: animated decor. After this tick's render (the drawn
+                ; footprints R_COL..R_ROWS it tests are render's; anim_tick only
+                ; rewrites R_VIS / R_FID) and, with RENDER_FIRST, after the turn
+                ; logic: a heavy input tick is then usually in its 2nd frame,
+                ; where decor_tick holds (it never lengthens such a tick)
+                call decor_tick
                 ; B3B-11 (D5, user 2026-10-03): one panel item per tick, in ANIM
                 ; ticks >= 1 and idle ticks, never in a turn's input tick (TURN_PHASE
                 ; = ANIM with TURN_TICK still 0: read_turn_input just started it)
@@ -307,7 +313,7 @@ end_turn:
                 ld   a, GS_DEAD
                 ld   (GAME_STATE), a
                 ld   hl, str_died
-                jp   log_push_end              ; never dropped (B3B-11b)                  ; B3B-11: end_screen drains it
+                jp   log_push_end              ; never dropped (B3B-11b); end_screen drains it
 .alive:         ; win: standing on storey 0 of room D with x <= 3 (§8.2)
                 ld   a, (CUR_ROOM)
                 cp   WIN_ROOM
@@ -423,13 +429,24 @@ enter_select:
                 INCLUDE "anim.asm"
                 INCLUDE "data.asm"
                 INCLUDE "panel2.asm"            ; B3B-11 panel engine, bank-2 part
+                INCLUDE "decor.asm"             ; B3B-10 animated decor (decor_tick)
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
 ; pages, K_MAX (32) B per array; no array crosses a page (KFIELD, feet_mod).
 ;==============================================================================
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
-                DS   (-($ + TILE_IDS)) & $FF, 0    ; B3B-5: tile_flags ends on the page
+                DS   (-($ + TILE_IDS + DT_ATTR_LEN)) & $FF, 0    ; B3B-5: tile_flags ends on the page
+;------------------------------------------------------------------------------
+; dt_attr_tab — B3B-10 decor_tick attr cycles, 8 steps per kind (concept-screen
+; §3.3): kind 1 flame ($46 -> $42 -> $06: small / tall torch bodies), kind 2
+; candle (8-step flicker). In the pad below tile_flags: never crosses a page.
+;------------------------------------------------------------------------------
+dt_attr_tab:
+                DB   $46, $42, $06, $46, $42, $06, $46, $42        ; 1 flame
+                DB   $46, $46, $06, $46, $42, $46, $46, $06        ; 2 candle
+DT_ATTR_LEN     EQU  DT_KINDS * 8
+                ASSERT $ - dt_attr_tab == DT_ATTR_LEN && (dt_attr_tab >> 8) == (($ - 1) >> 8)
 ;------------------------------------------------------------------------------
 ; tile_flags — TILE_FLAGS[64] (D2, level_defs.asm TF_*), static, by tile id;
 ; the 64 B right below kind_tab (low byte $C0: cell_blocked adds the id with
@@ -516,7 +533,7 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
                 ASSERT LOWRAM_END <= LOWRAM_FREE_END
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, tile_flags - kind_tab_pad, " B kind_tab ALIGN pad); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, dt_attr_tab - kind_tab_pad, " B kind_tab ALIGN pad); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
 
 ;------------------------------------------------------------------------------
 ; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"

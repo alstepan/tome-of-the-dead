@@ -23,8 +23,9 @@ item_log:
                 ld   l, a
                 ld   h, LOG_TXT >> 8
                 ld   b, LOG_ROW + 1
-                ld   e, 0
+                ld   e, 0                      ; (x 0: a multiple of 8; 32 chars = 192 px)
                 call print6
+                ASSERT LOG_ROW + 1 < 24 && 6 * LOG_MAX <= 256
                 ld   a, e
                 add  a, 7
                 rrca
@@ -55,6 +56,9 @@ item_log:
 ;------------------------------------------------------------------------------
 ; item_icons — 3B: the quick-potion slot (count digit at (col+2, 19); attrs:
 ; glyph cell ATTR_POTION + digit ATTR_HUD, both greyed at 0). HL = PANEL_DIRTY.
+; print6 x rule (B3B-11b): x = (pot_col + 2) * 8 is a multiple of 8 by
+; construction; pot_col is a slot's left col set by panel_init (<= 29, so the
+; one digit ends by x + 6 <= 256). The only runtime print6 x: keep it a cell.
 ; ~1k T
 ;------------------------------------------------------------------------------
 item_icons:
@@ -98,7 +102,7 @@ pot_col:        DB   0                         ; quick-potion slot col (panel_in
 ;------------------------------------------------------------------------------
 ; print6g — print6 fed by a getter (the interface kept open for B3B-13's
 ; dictionary-token decoder; nothing calls it yet): HL = getter (out A = next
-; char, 0 = end; its state in BC; keeps DE; may clobber HL), BC = its initial
+; char 32..127 only, 0 = end; its state in BC; keeps DE; may clobber HL), BC = its initial
 ; state, A = char row, E = pixel x (x & 7 = 0). Patches print6's 4 fetch
 ; sites to `call getter` (print6 puts the inline fetch back by itself).
 ; Out / clobbers: as print6.  +23 T per char vs the inline fetch.

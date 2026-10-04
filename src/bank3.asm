@@ -963,7 +963,10 @@ SPAWN_COUNT     EQU ($ - spawn_tab) / 5
 ;            up, game.md §1.1). EXIT: the level exit, T_GRATE over it unless
 ;            LF_GRATE_OPEN (always set in 3B, §1.4: an open grate = the hole)
 ;   potions  FLOOR_LIST entries of this room (IT_POTION) -> T_POTION, row 9s+7
-;   decor    RD_SEED != 0: decor_room (B3B-9); seed 0 (PROTO): proto_decor
+;   decor    RD_SEED != 0: decor_room (B3B-9); seed 0 (PROTO): proto_decor.
+;            The animated cells go to ANIM_N/ANIM_LIST (ROOM_MAP) or
+;            ANIM_N2/ANIM_LIST2 (NEXT_MAP: do_exit's room_shadow copies it
+;            after the scroll); the list is emptied first (PROTO: stays 0)
 ; Clobbers: A, BC, DE, HL (IX, IY kept).   45.4k T worst (measured, DI, contended: W11 / W12M)
 ;==============================================================================
 build_room_map:
@@ -971,6 +974,14 @@ build_room_map:
                 ld   (TMP0), a                 ; room
                 ld   a, d
                 ld   (TMP1), a                 ; map page (map_cell)
+                cp   ROOM_MAP >> 8             ; B3B-9 review: the decor list of this map
+                ld   a, ANIM_N & $FF           ; (ROOM_MAP -> ANIM_N, NEXT_MAP -> ANIM_N2),
+                jr   z, .an                    ; emptied for every build (PROTO seed 0
+                ld   a, ANIM_N2 & $FF          ; rooms keep it empty)
+.an:            ld   (dg_dst), a
+                ld   l, a
+                ld   h, ANIM_N >> 8
+                ld   (hl), 0
                 ld   hl, 0
                 ld   (GEN_ZBLK), hl            ; GEN_SCRATCH is about to be overwritten
                 ld   a, (TMP0)
@@ -1319,7 +1330,8 @@ build_room_map:
 ; game.md §1.2 "Solidity of decor" + concept-screen §3.3 (never in floor rows
 ; or on door / arch / lintel / ladder / pit / cap / rubble cells; wall-set ids
 ; only on solid wall cells, others only on non-solid ones); fill ANIM_LIST
-; only for the room being built into ROOM_MAP. Keep IX.
+; into the list chosen by the map page (dg_dst, set + zeroed by
+; build_room_map: ROOM_MAP -> ANIM_N, NEXT_MAP -> ANIM_N2). Keep IX.
 ;==============================================================================
 decor_room:
                 INCLUDE "decor_gen.asm"         ; B3B-9: the deriver (code from the label on)

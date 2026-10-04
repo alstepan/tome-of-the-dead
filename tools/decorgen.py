@@ -99,8 +99,6 @@ def level_objects():
             assert all(v == base for v in g.values()), (d, name)
         else:
             assert all(g[(r, c)] == base + r * w + c for r in range(h) for c in range(w)), (d, name)
-        if fl & F_AALL or fl & F_LARGE:
-            pass
         if 2 in fr:                       # glyph frames: alt = base + area + k (k-th swapped cell)
             diff = [(r, c) for (r, c) in sorted(g) if fr[2][(r, c)] != g[(r, c)]]
             assert all(r == 0 for r, c in diff), (d, name)

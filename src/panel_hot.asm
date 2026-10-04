@@ -26,7 +26,9 @@ panel_hot:
 ; `ld a, (bc) / inc bc / nop` on the string (BC). print6g (panel2.asm)
 ; patches them to `call getter` for a feeding decoder (B3B-13 dictionary
 ; tokens): getter out A = next char (0 = end), state in BC, keeps DE, may
-; clobber HL; it is not called again after it returned 0.
+; clobber HL; it is not called again after it returned 0. The getter must
+; emit only chars 32..127 (FONT6 has planes for those only: any other code
+; reads the free plane holes / HOT_COPY as glyph bits).
 ; Out: E = x after the last char (x + 6n, mod 256).
 ; Clobbers: A, BC, D, HL, E (out).
 ; SMC: .g0...g3 (fetch sites, print6g / p6_inline), .c0a...c3b (the quad's
@@ -374,6 +376,7 @@ item_hp:
                 ld   b, STAT_ROW
                 ld   e, HP_NUM_COL * 8
                 call print6
+                ASSERT ((HP_NUM_COL * 8) & 7) == 0 && HP_NUM_COL * 8 + 6 * 2 <= 256   ; print6 x rule
                 ld   bc, (STAT_ROW << 8) | HP_BAR_COL
                 ld   de, ((HP_NUM_COL + 2 - HP_BAR_COL) << 8) | 1
                 jp   pmark_rect
@@ -399,6 +402,7 @@ item_depth:
                 ld   b, ICON_ROW
                 ld   e, DEPTH_COL * 8
                 call print6
+                ASSERT ((DEPTH_COL * 8) & 7) == 0 && DEPTH_COL * 8 + 6 * 2 <= 256     ; print6 x rule
                 ld   bc, (ICON_ROW << 8) | DEPTH_COL
                 ld   de, (2 << 8) | 1
                 jp   pmark_rect

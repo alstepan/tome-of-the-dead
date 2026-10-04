@@ -26,13 +26,13 @@ BUDGET = 2 * 70908
 CAP = 126000                                      # D5: worst tick incl. the panel item
 # B3B-11: panel_tick .. play_loop.nopanel = the tick's panel item (D5: one per
 # tick, never in a turn's input tick); its present lands in the next tick_work.
-PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "panel_tick",
+PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "decor_tick", "panel_tick",
           "panel_done", "wait_tick"]
 if os.environ.get("GAME_PROFILE"):                # finer split for optimisation work
     PHASES = ["tick_work", "read_turn_input", "try_player_turn", "resolve_monsters",
               "materialise", "anim_tick", "render", "render.nopend", "render.sdone",
               "render.f3done", "render.drdone", "draw_zap", "pmark_dmg", "present",
-              "panel_tick", "panel_done", "wait_tick"]
+              "decor_tick", "panel_tick", "panel_done", "wait_tick"]
     PHASES += [n for n in os.environ["GAME_PROFILE"].split(",") if n in S]
 
 
@@ -145,6 +145,35 @@ SCENARIOS = {
 }
 
 
+# B3B-10: the PROTO rooms carry no animated decor (RD_SEED 0), so the
+# scenarios get a synthetic FULL ANIM_LIST in room A (4 glyph swaps + 8 attr
+# cycles = the deriver's budget maximum, ALL with the same stagger so the
+# per-tick caps bind and the deferred steps pile into the following ticks),
+# placed in the fight band (storey 1, rows 11-14) and storey 0. BUDGET_DECOR=0
+# measures without it.
+DECOR = os.environ.get("BUDGET_DECOR", "1") != "0"
+DECOR_GLYPH = [(10, 12), (18, 13), (12, 3), (20, 4)]
+DECOR_ATTR = [(9, 12), (14, 13), (16, 11), (20, 14), (11, 2), (15, 4), (27, 3), (27, 12)]
+
+
+def inject_decor(p):
+    """Synthetic ANIM_LIST for room A (in ROOM_MAP): glyph cells get the D1
+    tall-torch body id 36 in the map and its tip id 40 as the swap partner
+    (both non-solid, ids >= 16); attr cells kinds 1 / 2. Phase 3 = all due on
+    the next tick. Cells must be AIR (asserted)."""
+    al = []
+    for c, r in DECOR_GLYPH:
+        a = S["ROOM_MAP"] + r * 32 + c
+        assert p.rb(a) == S["T_AIR"], (c, r)
+        p.wb(a, 36)
+        al += [c, r, 40, 3]
+    for k, (c, r) in enumerate(DECOR_ATTR):
+        assert p.rb(S["ROOM_MAP"] + r * 32 + c) == S["T_AIR"], (c, r)
+        al += [c, r, 1 + (k & 1), 3]
+    p.z.cmd("write-memory %d %s" % (S["ANIM_LIST"], " ".join(str(b) for b in al)))
+    p.wb("ANIM_N", len(al) // 4)
+
+
 def run_scenario(h, scen):
     name, placements, keys = scen
     p = game.T(h)
@@ -153,6 +182,8 @@ def run_scenario(h, scen):
     p.place(0, 12, HERO_Y)
     for slot, x, y, flags in placements:
         p.place(slot, x, y, room=0, flags=flags)
+    if DECOR:
+        inject_decor(p)
     st = Stepper(p)
     for key, n in keys:
         for _ in range(n):
@@ -169,6 +200,9 @@ def run_scenario(h, scen):
     print(f"worst split    : " + ", ".join(f"{k}={v}" for k, v in worst[1].items()))
     print(f"ticks > budget : {len(over)}")
     print(f"OVERRUN_COUNT  : {ovc}  BLIT_MISS: {p.rb('BLIT_MISS')}", flush=True)
+    dts = [sp.get("decor_tick", 0) for _, sp in st.ticks]
+    print(f"decor_tick     : {'on' if DECOR else 'off'}, max {max(dts)} T, mean {sum(dts) // len(dts)} T"
+          f" (incl. the call / panel test to panel_tick)", flush=True)
     cap = [t for t in totals if t > CAP]
     lat = st.lat
     print(f"ticks > {CAP} : {len(cap)}  (D5 cap)")

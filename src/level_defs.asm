@@ -345,23 +345,30 @@ HOT_COPY_END    EQU BANK2_FREE_END      ; = SLOTREC
                 ASSERT FONT6 == $B200 && HOT_COPY == $B5E0 && HOT_COPY_END == $B800
                 ASSERT (FONT6 & $FF) == 0 && FONT6_FIRST + 95 + FONT6_WB <= 255
 
-; D6: occupancy mask + animated-decor list, in the spare after the IM 2
-; vector table ($BC01..$BCBB, 187 B; the ISR starts at ISR_ADDR $BCBC).
-OCC_MASK        EQU $BC10           ; rows 0–17 x 4 B = 72 B ($BC10..$BC57): byte row*4 + col/8,
-OCC_LEN         EQU PLAY_ROWS * 4   ;   bit 7 - col%8 (PRES_MASK layout); 1 = a sprite covers the cell
-ANIM_N          EQU $BC58           ; ANIM_LIST entries used (0..12)
-ANIM_RR         EQU $BC59           ; decor_tick round-robin index
+; D6: the animated-decor lists, in the spare after the IM 2 vector table
+; ($BC01..$BCBB, 187 B; the ISR starts at ISR_ADDR $BCBC). Each list = its
+; count byte followed by up to 12 entries (one LDIR copies N2 + LIST2 over
+; N + LIST). B3B-10: the occupancy test is direct (decor_tick tests a due cell
+; against the drawn SLOTREC footprints, ~50-90 T per sprite, only for the <= 3
+; cells tested per tick), so the B3B-1 OCC_MASK (72 B, cleared + rebuilt per
+; tick: ~0.9k + ~0.5k per sprite) was dropped; its bytes hold ANIM_N2/LIST2.
+ANIM_N2         EQU $BC10           ; B3B-10: entries of the NEXT_MAP build's list
+ANIM_LIST2      EQU ANIM_N2 + 1     ;   ($BC11..$BC40): do_exit (room_shadow) copies it
+ANIM_N          EQU $BC5F           ; ANIM_LIST entries used (0..12)
 ANIM_LIST       EQU $BC60           ; 12 x 4 B = 48 B ($BC60..$BC8F)
 ANIM_MAX        EQU 12
 AL_STRIDE       EQU 4
+ANIM_COPY_LEN   EQU 1 + ANIM_MAX * AL_STRIDE   ; count + entries (49 B)
 AL_COL          EQU 0
 AL_ROW          EQU 1
-AL_TYPE         EQU 2               ; anim type id (glyph-swap / attr-cycle table, B3B-9/-10)
-AL_PHASE        EQU 3               ; step counter (initial value = stagger)
-                ASSERT OCC_MASK > ISR_VEC_TABLE + ISR_VEC_LEN - 1
-                ASSERT (OCC_MASK >> 8) == ((OCC_MASK + OCC_LEN - 1) >> 8)
-                ASSERT OCC_MASK + OCC_LEN <= ANIM_N
-                ASSERT ANIM_RR < ANIM_LIST
+AL_TYPE         EQU 2               ; 1..15 attr-cycle kind (1 flame, 2 candle); >= 16 glyph swap:
+                                    ;   the OTHER tile id (decor_tick swaps it with the map cell)
+AL_PHASE        EQU 3               ; tick counter (initial value = stagger (col+row)&7 of the
+                                    ;   object): steps when & 3 == 0, cycle index = bits 4..2
+AL_GLYPH_MIN    EQU 16              ; AL_TYPE >= this: glyph swap
+                ASSERT ANIM_N2 > ISR_VEC_TABLE + ISR_VEC_LEN - 1
+                ASSERT ANIM_LIST2 + ANIM_MAX * AL_STRIDE <= ANIM_N && ANIM_LIST == ANIM_N + 1
+                ASSERT (ANIM_N2 >> 8) == (ANIM_N >> 8)
                 ASSERT ANIM_LIST + ANIM_MAX * AL_STRIDE <= ISR_ADDR
                 ASSERT (ANIM_LIST >> 8) == ((ANIM_LIST + ANIM_MAX * AL_STRIDE - 1) >> 8)
 

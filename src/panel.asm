@@ -206,6 +206,7 @@ panel_init:
                 ld   b, STAT_ROW
                 ld   e, HUNGER_COL * 8
                 call print6
+                ASSERT ((HUNGER_COL * 8) & 7) == 0 && HUNGER_COL * 8 + 6 * 3 <= 256  ; print6 x rule ("FED")
                 ; rows 22-23: log attrs, worn-gear outlines
                 ld   a, ATTR_LOG_OLD
                 ld   bc, LOG_ROW << 8

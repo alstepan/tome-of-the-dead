@@ -48,6 +48,17 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
   W13 decor deriver (B3B-9): 12 generated levels (depths 1..8), every room: ROOM_MAP and
       ANIM_LIST == tools/decorgen.py byte for byte + an independent rules checker
       (cell class / solidity / rows / ladders / budgets); decor_room T-states.
+      B3B-10: every room also built into NEXT_MAP (-> ANIM_N2 / ANIM_LIST2 only);
+      a wall-heavy Python sweep (rooms with block / pit / door) and synthetic
+      maps (structural cells inside the decor ring; 24 also through the Z80
+      decor_room) under the same checker; large objects counted by their lead
+      glyph cell (tileset_ids.inc), not 4-connected clusters.
+  W14 decor_tick (B3B-10): room A of the PROTO level made a seeded depth-1
+      room and played: 32 ticks against a Python model of decor_tick (lists,
+      map, bank-5 cells, the shadow), displayed == composed at every present,
+      shadow == map; a due cell under the hero holds, then steps once it left;
+      decor_tick T (mean <= 2.5k, max <= 4k); the scroll A -> B brings room B's
+      ANIM_LIST (B3B-9 review fix) and B animates.
 
   B3B-11 (panel engine, concept-screen §5; D5 queue: one item per tick, never
   in a turn's input tick):
@@ -172,11 +183,132 @@ def gen_level(p, depth, seed, master=0):
     return ok1 and ok2, t1, t2, room_model.read_block(p)
 
 
-def build_only(p, r):
-    """far3 build_room_map (room r -> ROOM_MAP). -> (ok, T, map)."""
-    ok, t = run_code(p, head() + [0x3E, r, 0x16, S["ROOM_MAP"] >> 8, 0x21] + w16(S["build_room_map"])
+def build_only(p, r, page=None):
+    """far3 build_room_map (room r -> ROOM_MAP, or the map at `page`). -> (ok, T, map)."""
+    page = S["ROOM_MAP"] >> 8 if page is None else page
+    ok, t = run_code(p, head() + [0x3E, r, 0x16, page, 0x21] + w16(S["build_room_map"])
                      + [0xCD] + w16(S["far3"]))
-    return ok, t, bytes(p.z.read_memory(S["ROOM_MAP"], 32 * PLAY_ROWS))
+    return ok, t, bytes(p.z.read_memory(page << 8, 32 * PLAY_ROWS))
+
+
+def bank3_poke(p, addr, v):
+    """Write one byte of bank 3 ($C000 window address) whatever is paged."""
+    p.z.cmd("set-memory-zone 0")
+    try:
+        p.z.cmd("write-memory %d %d" % (3 * 16384 + addr - 0xC000, v))
+    finally:
+        p.z.cmd("set-memory-zone -1")
+
+
+_DFLAGS = {}
+
+
+def depth_flags(p, d):
+    """TILE_FLAGS of depth d as level_load_tiles leaves them: the machine's
+    common ids 0..31 (static) + the bank-7 slot's ids 32..63 (from the .sna)."""
+    if d not in _DFLAGS:
+        from game_lib import SNA_RAM
+        slot = d - 1
+        so = 7 * 16384 + (S["TSET_LO"] if slot < 4 else S["TSET_HI"]) - 0xC000 + (slot & 3) * S["TSET_STRIDE"]
+        _DFLAGS[d] = bytes(p.z.read_memory(S["tile_flags"], 32)) + SNA_RAM[so + 288:so + 320]
+    return _DFLAGS[d]
+
+
+_LEAD = {}
+
+
+def lead_ids(d):
+    """Depth d's large animated objects -> the F1 id of each one's FIRST glyph-swap
+    cell (row-major), parsed from assets/gfx/tiles/tileset_ids.inc (frame 1 vs 2):
+    exactly one per placed object, so counting them never merges neighbours."""
+    if not _LEAD:
+        import re
+        pat = re.compile(r"TS(\d)_([A-Z_]+?)_F(\d)_R(\d)C(\d)\s+EQU (\d+)")
+        objs = {}
+        path = os.path.join(os.path.dirname(HERE), "assets", "gfx", "tiles", "tileset_ids.inc")
+        for line in open(path):
+            mm = pat.match(line)
+            if mm:
+                dd, name, f, r, c, v = mm.groups()
+                objs.setdefault((int(dd), name), {}).setdefault(int(f), {})[(int(r), int(c))] = int(v)
+        for (dd, name), fr in objs.items():
+            if 2 in fr:
+                diff = sorted(k for k in fr[1] if fr[2][k] != fr[1][k])
+                _LEAD.setdefault(dd, set()).add(fr[1][diff[0]])
+    return _LEAD.get(d, set())
+
+
+def decor_rules(m, base, flags, al, d, sizes):
+    """W13 independent decor checker (docs, not the generator): -> [errors].
+    m / base = the room with / without decor, flags = TILE_FLAGS[64] of the
+    depth, al = ANIM_LIST bytes; sizes (dict) accumulates air / wall / anim /
+    large counts."""
+    T = room_model.T
+    SOLID, ANIMF = S["TF_SOLID"], S["TF_ANIM"]
+    T_AIR, T_BRICK = T["T_AIR"], T["T_BRICK"]
+    lad = set(range(T["T_LAD_L"], T["T_HOLE_R"] + 1))
+    errs = []
+    ch = [j for j in range(576) if m[j] != base[j]]
+    for j in ch:
+        c, row = j % 32, j // 32
+        if base[j] == T_AIR:
+            sizes["air"] += 1
+            if flags[m[j]] & SOLID:
+                errs.append(("solid decor on an air cell", c, row))
+        elif base[j] == T_BRICK:
+            sizes["wall"] += 1
+            if not flags[m[j]] & SOLID:
+                errs.append(("non-solid decor on a wall cell", c, row))
+            if row % 9 == 0:
+                errs.append(("wall decor on the lintel row", c, row))
+        else:
+            errs.append(("decor on a structural cell", c, row, base[j]))
+        if row % 9 > 5:
+            errs.append(("decor in the 2 rows above a floor / floor row", c, row))
+        for dr in (-1, 0, 1):
+            for dc in (-1, 0, 1):
+                rr, cc = row + dr, c + dc
+                if 0 <= rr < 18 and 0 <= cc < 32 and base[rr * 32 + cc] in lad:
+                    errs.append(("decor adjacent to a ladder", c, row))
+    wallc = sum(1 for j in ch if base[j] == T_BRICK)
+    if wallc > 6:
+        errs.append(("more than 6 wall-class cells", wallc))
+    n = len(al) // 4
+    ents = [al[k:k + 4] for k in range(0, len(al), 4)]
+    gl = [e for e in ents if e[2] >= 16]
+    at = [e for e in ents if e[2] < 16]
+    if len(gl) > 4 or len(at) > 8 or n > 12:
+        errs.append(("anim budget", len(gl), len(at)))
+    cells = {(e[0], e[1]) for e in ents}
+    for e in ents:
+        if e[0] > 31 or e[1] > 17:
+            errs.append(("ANIM entry off the map", e))
+            continue
+        j = e[1] * 32 + e[0]
+        if m[j] == base[j] or e[2] == 0:
+            errs.append(("ANIM entry not on a decor cell", e))
+        if e[2] >= 16 and not flags[m[j]] & ANIMF:
+            errs.append(("glyph-swap entry on a non-TF_ANIM id", e))
+        if e[2] >= 16 and (not flags[e[2]] & ANIMF or flags[e[2]] & SOLID):
+            errs.append(("glyph-swap alternate id not a non-solid TF_ANIM id", e))
+        if e[2] < 16 and e[2] not in (1, 2):
+            errs.append(("attr-cycle kind not 1 / 2", e))
+        if e[3] != (e[3] & 7):
+            errs.append(("AL_PHASE not a 0..7 stagger", e))
+    for j in ch:
+        if flags[m[j]] & ANIMF and (j % 32, j // 32) not in cells:
+            errs.append(("TF_ANIM decor cell missing from ANIM_LIST", j % 32, j // 32))
+    # large animated objects: one lead glyph cell each (B3B-9 review: the old
+    # 4-connected cluster count merged touching objects)
+    lead = lead_ids(d)
+    nlarge = sum(1 for e in gl if m[e[1] * 32 + e[0]] in lead)
+    if nlarge > 2:
+        errs.append(("more than 2 large animated objects", nlarge))
+    if gl and not nlarge:
+        errs.append(("glyph-swap entries without a large object", gl[:2]))
+    sizes["anim"] += n
+    sizes["large"] += nlarge
+    return errs
 
 
 def show_room(p, r):
@@ -443,6 +575,228 @@ def w15(p, check):
           len(p.h.failures) == n0, p.h.failures[n0:])
 
 
+# ---------------------------------------------------------------------------
+# B3B-10 (W14): decor_tick. The PROTO level is turned into a depth-1 level with
+# seeded rooms A and B (LVL_DEPTH 1 + RD_SEED, D1 tileset), A rebuilt in place
+# (room_show + present_full from the wait_tick probe), then played.
+# ---------------------------------------------------------------------------
+def dt_sim(ents, rmap, covered, tab):
+    """Model of one decor_tick (written from the B3B-10 contract, src/decor.asm
+    header): every AL_PHASE += 1; due when & 3 == 0; per tick caps 1 glyph /
+    2 attr steps and 3 occupancy tries; a due entry past a cap waits a tick
+    (phase - 1), a tried entry under a sprite skips the step (cell holds); a
+    glyph swap exchanges the map id with AL_TYPE. -> {entry index: attr shown}."""
+    caps = {"g": S["DT_MAX_GLYPH"], "a": S["DT_MAX_ATTR"], "t": S["DT_MAX_TRIES"]}
+    shown = {}
+    for k, e in enumerate(ents):
+        e[3] = (e[3] + 1) & 255
+        if e[3] & S["DT_STEP_MASK"]:
+            continue
+        kind = "g" if e[2] >= S["AL_GLYPH_MIN"] else "a"
+        if caps[kind] == 0 or caps["t"] == 0:
+            e[3] = (e[3] - 1) & 255
+            continue
+        caps["t"] -= 1
+        if covered(e[0], e[1]):
+            continue
+        caps[kind] -= 1
+        if kind == "g":
+            j = e[1] * 32 + e[0]
+            rmap[j], e[2] = e[2], rmap[j]
+            shown[k] = None                       # = TILE_ATTRS[new id]
+        else:
+            shown[k] = tab[(e[2] - 1) * 8 + ((e[3] >> 2) & 7)]
+    return shown
+
+
+def shadow_frame(p):
+    """The bank-7 clean-background shadow in frame_bytes() layout (rows 0-17;
+    rows 18-23 of the bitmap / attrs are not part of it)."""
+    bm = bank7(p, S["SHADOW_BITMAP"], 6144)
+    at = bank7(p, S["SHADOW_ATTR"], 32 * PLAY_ROWS)
+    return bm + at + bytes(768 - len(at))
+
+
+def w14(p, check):
+    BASE = room_model.BASE
+    T = room_model.T
+    kw, kh = game.body(p, K_KNIGHT)
+    y1 = stand_y(1, kh)
+    p.boot(K_KNIGHT)
+    p.isolate()
+    blk = bytearray(room_model.read_block(p))
+    blk[S["LVL_DEPTH"] - BASE] = 1
+    so = lambda r: room_model.OFF_DESC + r * S["RD_STRIDE"] + S["RD_SEED"]
+    hero0 = p.ent(0)
+    hbox = {(c, r) for c in range(hero0["DCOL"], hero0["DCOL"] + hero0["DCOLS"])
+            for r in range(hero0["DROW"], hero0["DROW"] + hero0["DROWS"])}
+
+    def pick(r, cond):
+        for sd in range(1, 6000):
+            b = bytearray(blk)
+            b[so(r)], b[so(r) + 1] = sd & 255, sd >> 8
+            al = []
+            room_model.render_room(bytes(b), r, anim=al)
+            ents = [al[k:k + 4] for k in range(0, len(al), 4)]
+            if cond(ents):
+                return sd, al
+        raise RuntimeError("W14: no seed for room %d" % r)
+    sa, ala = pick(ROOM_A, lambda e: sum(x[2] >= 16 for x in e) >= 2 and sum(x[2] < 16 for x in e) >= 3
+                   and not any((x[0], x[1]) in hbox for x in e))
+    sb, alb = pick(ROOM_B, lambda e: len(e) >= 2)
+    blk[so(ROOM_A)], blk[so(ROOM_A) + 1] = sa & 255, sa >> 8
+    blk[so(ROOM_B)], blk[so(ROOM_B) + 1] = sb & 255, sb >> 8
+    p.z.cmd("write-memory %d %s" % (BASE, " ".join(str(b) for b in blk)))
+    pc0 = p.pc()
+    ok = p.run_stub([0x3E, 1, 0xCD] + w16(S["level_load_tiles"])
+                    + [0x3E, ROOM_A, 0xCD] + w16(S["room_show"]) + [0xCD] + w16(S["present_full"]),
+                    org=S["LOWRAM_END_3B"])
+    p.z.cmd("set-register PC=%d" % pc0)
+    n = p.rb("ANIM_N")
+    got = list(p.z.read_memory(S["ANIM_LIST"], 4 * n)) if n else []
+    p.set_ent(0, DVIS=0)                          # room_show painted over the hero: redraw it
+    want_ma = room_model.render_room(bytes(blk), ROOM_A)
+    check(f"W14 room A seeded (D1, seed {sa:#06x}): rebuilt, ROOM_MAP == model, ANIM_LIST == decorgen "
+          f"({len(ala) // 4} entries)",
+          ok and got == ala and list(p.z.read_memory(S["ROOM_MAP"], 576)) == want_ma, (ok, n, got, ala))
+    p.settle(3)
+    # ---- N ticks against the model (dt_sim), every tick ------------------
+    tab = list(p.z.read_memory(S["dt_attr_tab"], 16))
+    check("W14 attr tables: flame cycles $46/$42/$06 only, candle the same inks",
+          set(tab[:8]) == {0x46, 0x42, 0x06} and set(tab[8:]) <= {0x46, 0x42, 0x06}, tab)
+    ents = [list(p.z.read_memory(S["ANIM_LIST"] + 4 * k, 4)) for k in range(n)]
+    rmap = list(p.z.read_memory(S["ROOM_MAP"], 576))
+    glyphs = p.z.read_memory(S["TILE_GLYPHS"], 512)
+    attrs = p.z.read_memory(S["TILE_ATTRS"], 64)
+    comp0 = p.composed_frame()
+    shown = {k: attr_at(comp0, e[0], e[1]) for k, e in enumerate(ents)}
+    cov = set()
+    for s_ in range(16):
+        e = p.ent(s_)
+        if e["DVIS"] & 1:
+            cov |= {(c, r) for c in range(e["DCOL"], e["DCOL"] + e["DCOLS"])
+                    for r in range(e["DROW"], e["DROW"] + e["DROWS"])}
+    bad, steps, seen = [], [0] * n, [set() for _ in range(n)]
+    p.present_watch(True)
+    for t in range(32):
+        st_ = dt_sim(ents, rmap, lambda c, r: (c, r) in cov, tab)
+        p.tick()
+        for k, v in st_.items():
+            steps[k] += 1
+            shown[k] = attrs[rmap[ents[k][1] * 32 + ents[k][0]]] if v is None else v
+        zl = [list(p.z.read_memory(S["ANIM_LIST"] + 4 * k, 4)) for k in range(n)]
+        zm = list(p.z.read_memory(S["ROOM_MAP"], 576))
+        comp = p.composed_frame()
+        shf = shadow_frame(p)
+        if zl != ents or zm != rmap:
+            bad.append((t, "list / map != model", zl, ents))
+        for k, e in enumerate(ents):
+            c, r = e[0], e[1]
+            g = bytes(glyphs[rmap[r * 32 + c] * 8:rmap[r * 32 + c] * 8 + 8])
+            seen[k].add((attr_at(comp, c, r), bytes(cell_bytes(comp, c, r))))
+            if attr_at(comp, c, r) != shown[k] or bytes(cell_bytes(comp, c, r)) != g:
+                bad.append((t, "cell", c, r, hex(attr_at(comp, c, r)), hex(shown[k])))
+            if attr_at(shf, c, r) != attr_at(comp, c, r) or cell_bytes(shf, c, r) != cell_bytes(comp, c, r):
+                bad.append((t, "shadow != screen", c, r))
+    p.present_watch(False)
+    check("W14 32 ticks: ANIM_LIST + ROOM_MAP == the decor_tick model every tick, each cell shows "
+          "its cycle attr / swapped glyph on bank 5 and the shadow", not bad, bad[:3])
+    check("W14 every entry stepped 6-8 times in 32 ticks (period 4; a capped step waits a tick), "
+          "attr cells took >= 2 attrs, glyph cells both frames", all(x in (6, 7, 8) for x in steps) and all(len(x) >= 2 for x in seen), (steps, [len(x) for x in seen]))
+    ps = p.present_samples
+    check("W14 displayed == composed at every tick-start present (probe_presented)",
+          ps and not any(ps), (len(ps), [x for x in ps if x][:4]))
+    sm = shadow_frame(p)
+    tabs = p.bg_tables()
+    acells = {(e[0], e[1]) for e in ents if e[2] < 16}
+    sbad = []
+    for r in range(PLAY_ROWS):
+        for c in range(32):
+            g, a = room_model.expected_cell(*tabs, c, r)
+            if bytes(cell_bytes(sm, c, r)) != g or ((c, r) not in acells and attr_at(sm, c, r) != a):
+                sbad.append((c, r))
+    check("W14 shadow == ROOM_MAP after animation (glyphs everywhere; attrs except the cycling cells)",
+          not sbad, sbad[:4])
+    # ---- a cell under a sprite holds -------------------------------------
+    h = p.ent(0)
+    hc, hr = h["DCOL"] + 1, h["DROW"] + 1
+    k = min(n, S["ANIM_MAX"] - 1)
+    p.z.cmd("write-memory %d %d %d 1 3" % (S["ANIM_LIST"] + 4 * k, hc, hr))
+    p.wb("ANIM_N", k + 1)
+    a0 = attr_at(p.composed_frame(), hc, hr)
+    g0 = bytes(cell_bytes(p.composed_frame(), hc, hr))
+    held = []
+    for _ in range(9):
+        p.tick()
+        f = p.composed_frame()
+        held.append((p.rb(S["ANIM_LIST"] + 4 * k + 3), attr_at(f, hc, hr), bytes(cell_bytes(f, hc, hr)) == g0))
+    check("W14 a cell under the hero holds: its due steps (phases 4, 8) are skipped, the hero's "
+          "attr / pixels stay", [x[0] for x in held] == list(range(4, 13))
+          and all(x[1:] == (a0, True) for x in held), held)
+    p.place(0, h["X"] + 6, h["Y"])
+    p.tick(4)
+    ph = p.rb(S["ANIM_LIST"] + 4 * k + 3)
+    want_a = tab[(ph >> 2) & 7]
+    check("W14 ... and steps once the hero has left (attr = the flame cycle at its phase)",
+          attr_at(p.composed_frame(), hc, hr) == want_a, (ph, hex(attr_at(p.composed_frame(), hc, hr))))
+    p.wb("ANIM_N", n)
+    # ---- decor_tick cost (idle room A, budget.Stepper) ---------------------
+    import budget
+    stp = budget.Stepper(p)
+    for _ in range(24):
+        stp.tick()
+    stp.close()
+    dts = [sp.get("decor_tick", 0) for _, sp in stp.ticks]
+    print(f"[info] W14 decor_tick ({n} entries, hero only): max {max(dts)} T, mean {sum(dts) // len(dts)} T", flush=True)
+    check("W14 decor_tick: mean <= 2.5k T per tick, every tick <= 4k (budget.md 6; idle room, real D1 decor)",
+          sum(dts) <= 2500 * len(dts) and max(dts) <= 4000, dts)
+    # ---- room change by scroll: ANIM_LIST follows (B3B-9 review fix) -------
+    p.place(0, 32 - 1 - kw, y1)
+    p.turn("L")
+    p.until(lambda: p.rb("CUR_ROOM") == ROOM_B and p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+    nb = p.rb("ANIM_N")
+    gb = list(p.z.read_memory(S["ANIM_LIST"], 4 * nb)) if nb else []
+    gb0 = [gb[i] if i % 4 != 3 else 0 for i in range(len(gb))]
+    alb0 = [alb[i] if i % 4 != 3 else 0 for i in range(len(alb))]
+    check(f"W14 after the scroll A -> B: ANIM_LIST == room B's (seed {sb:#06x}, {len(alb) // 4} entries; "
+          f"A had {len(ala) // 4}): cols / rows match",
+          nb == len(alb) // 4 and alb != ala and all(
+              gb[i] == alb[i] for i in range(len(alb)) if i % 4 in (0, 1)), (nb, gb, alb))
+    mb = list(p.z.read_memory(S["ROOM_MAP"], 576))
+    want_mb = room_model.render_room(bytes(blk), ROOM_B)
+    # the map differs from the build only at glyph-swap cells (swapped with their entry)
+    sw = {(gb[i], gb[i + 1]): gb[i + 2] for i in range(0, len(gb), 4) if gb[i + 2] >= 16}
+    mbad = [(j % 32, j // 32) for j in range(576)
+            if mb[j] != want_mb[j] and not ((j % 32, j // 32) in sw and sw[(j % 32, j // 32)] == want_mb[j])]
+    check("W14 room B: ROOM_MAP == model (glyph cells possibly swapped with their entry)", not mbad, mbad[:4])
+    p.present_watch(True)
+    ph0 = [gb[i + 3] for i in range(0, len(gb), 4)]
+    p.tick(16)
+    p.present_watch(False)
+    gb2 = list(p.z.read_memory(S["ANIM_LIST"], 4 * nb))
+    ph1 = [gb2[i + 3] for i in range(0, len(gb2), 4)]
+    hb = p.ent(0)
+    hbx = {(c, r) for c in range(hb["DCOL"], hb["DCOL"] + hb["DCOLS"])
+           for r in range(hb["DROW"], hb["DROW"] + hb["DROWS"])}
+    check("W14 room B animates (every phase not under the hero advanced) and displayed == composed "
+          "at every present",
+          all(((b - a) & 255) >= 12 or (gb2[4 * i], gb2[4 * i + 1]) in hbx
+              for i, (a, b) in enumerate(zip(ph0, ph1))) and not any(p.present_samples),
+          (ph0, ph1, [x for x in p.present_samples if x][:4]))
+    comp = p.composed_frame()
+    sm = shadow_frame(p)
+    tabs = p.bg_tables()
+    acells = {(gb2[i], gb2[i + 1]) for i in range(0, len(gb2), 4) if gb2[i + 2] < 16}
+    sbad = []
+    for r in range(PLAY_ROWS):
+        for c in range(32):
+            g, a = room_model.expected_cell(*tabs, c, r)
+            if bytes(cell_bytes(sm, c, r)) != g or (attr_at(sm, c, r) != (attr_at(comp, c, r) if (c, r) in acells else a)):
+                sbad.append((c, r))
+    check("W14 room B: shadow == ROOM_MAP (attr-cycle cells == the screen's attr)", not sbad, sbad[:4])
+    p.load()
+
+
 def present_rooms(blk):
     return [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]]
 
@@ -685,13 +1039,14 @@ def run_gen_suites(p, check):
     # from the generator: only AIR / BRICK cells change, solidity (TILE_FLAGS read
     # from the machine) follows the cell class, never in a floor row or the 2
     # rows above one, lintel row, ladder neighbourhood, budgets, ANIM_LIST sane.
+    # B3B-10 (B3B-9 review): every room is also built into NEXT_MAP (-> ANIM_N2 /
+    # ANIM_LIST2, ANIM_LIST untouched); a wall-heavy Python sweep and synthetic
+    # maps (ladder / door / pit / block / rubble / potion cells inside the decor
+    # ring) run the same checker, the synthetic ones also through the Z80.
     if want("W13"):
         rng = __import__("random").Random(0xB39)
         nroom = nplaced = 0
-        sizes = {"anim": 0, "wall": 0, "air": 0}
-        SOLID, ANIMF = S["TF_SOLID"], S["TF_ANIM"]
-        T_AIR, T_BRICK = T["T_AIR"], T["T_BRICK"]
-        lad = set(range(T["T_LAD_L"], T["T_HOLE_R"] + 1))
+        sizes = {"anim": 0, "wall": 0, "air": 0, "large": 0}
         dT = []
         for i in range(12):
             d = 1 + i % 8
@@ -713,6 +1068,18 @@ def run_gen_suites(p, check):
                 bad = [(j % 32, j // 32, m[j], want_m[j]) for j in range(576) if m[j] != want_m[j]]
                 check(f"W13 D{d} seed {seed:#06x} r{r}: ROOM_MAP == decorgen.py", ok and not bad, bad[:3])
                 check(f"W13 D{d} seed {seed:#06x} r{r}: ANIM_LIST == decorgen.py", got_al == al, (n, got_al[:52], al))
+                # the NEXT_MAP build (do_exit) fills ANIM_N2 / ANIM_LIST2 only
+                p.z.cmd("write-memory %d 99" % S["ANIM_N2"])
+                okn, _, mn = build_only(p, r, page=S["NEXT_MAP"] >> 8)
+                n2 = p.z.read_memory(S["ANIM_N2"], 1)[0]
+                got2 = list(p.z.read_memory(S["ANIM_LIST2"], 4 * n2)) if 0 < n2 <= 12 else ([] if n2 == 0 else None)
+                after = list(p.z.read_memory(S["ANIM_LIST"], 4 * n)) if n else []
+                check(f"W13 D{d} seed {seed:#06x} r{r}: NEXT_MAP build == decorgen.py, ANIM_LIST2 == its list, "
+                      "ANIM_N / ANIM_LIST untouched",
+                      okn and list(mn) == want_m and got2 == al
+                      and p.z.read_memory(S["ANIM_N"], 1)[0] == n and after == got_al,
+                      (okn, n2, len(al) // 4, list(mn) == want_m, n, p.z.read_memory(S["ANIM_N"], 1)[0],
+                       after == got_al, got2, al))
                 if i < 3 and r % 3 == 0:                  # decor cost: build with RD_SEED zeroed
                     da = S["ROOM_DESC"] + r * S["RD_STRIDE"] + S["RD_SEED"]
                     sv = bytes(p.z.read_memory(da, 2))
@@ -720,74 +1087,78 @@ def run_gen_suites(p, check):
                     _, t0, _ = build_only(p, r)
                     p.z.cmd("write-memory %d %d %d" % (da, sv[0], sv[1]))
                     dT.append(t1 - t0)
-                # ---- independent rules ----
-                errs = []
-                ch = [j for j in range(576) if m[j] != base[j]]
-                for j in ch:
-                    c, row = j % 32, j // 32
-                    if base[j] == T_AIR:
-                        sizes["air"] += 1
-                        if flags[m[j]] & SOLID:
-                            errs.append(("solid decor on an air cell", c, row))
-                    elif base[j] == T_BRICK:
-                        sizes["wall"] += 1
-                        if not flags[m[j]] & SOLID:
-                            errs.append(("non-solid decor on a wall cell", c, row))
-                        if row % 9 == 0:
-                            errs.append(("wall decor on the lintel row", c, row))
-                    else:
-                        errs.append(("decor on a structural cell", c, row, base[j]))
-                    if row % 9 > 5:
-                        errs.append(("decor in the 2 rows above a floor / floor row", c, row))
-                    for dr in (-1, 0, 1):
-                        for dc in (-1, 0, 1):
-                            rr, cc = row + dr, c + dc
-                            if 0 <= rr < 18 and 0 <= cc < 32 and base[rr * 32 + cc] in lad:
-                                errs.append(("decor adjacent to a ladder", c, row))
-                wallc = sum(1 for j in ch if base[j] == T_BRICK)
-                if wallc > 6:
-                    errs.append(("more than 6 wall-class cells", wallc))
-                ents = [got_al[k:k + 4] for k in range(0, len(got_al), 4)]
-                gl = [e for e in ents if e[2] >= 16]
-                at = [e for e in ents if e[2] < 16]
-                if len(gl) > 4 or len(at) > 8 or n > 12:
-                    errs.append(("anim budget", len(gl), len(at)))
-                cells = {(e[0], e[1]) for e in ents}
-                for e in ents:
-                    if e[0] > 31 or e[1] > 17:
-                        errs.append(("ANIM entry off the map", e))
-                        continue
-                    if m[e[1] * 32 + e[0]] == base[e[1] * 32 + e[0]] or e[2] == 0:
-                        errs.append(("ANIM entry not on a decor cell", e))
-                    if e[2] >= 16 and not flags[m[e[1] * 32 + e[0]]] & ANIMF:
-                        errs.append(("glyph-swap entry on a non-TF_ANIM id", e))
-                for j in ch:
-                    if flags[m[j]] & ANIMF and (j % 32, j // 32) not in cells:
-                        errs.append(("TF_ANIM decor cell missing from ANIM_LIST", j % 32, j // 32))
-                # large animated objects: 4-connected clusters holding a glyph entry
-                gset = {(e[0], e[1]) for e in gl}
-                seen, nclu = set(), 0
-                for cell in cells:
-                    if cell in seen:
-                        continue
-                    stack, comp = [cell], set()
-                    while stack:
-                        x = stack.pop()
-                        if x in comp or x not in cells:
-                            continue
-                        comp.add(x)
-                        stack += [(x[0] + 1, x[1]), (x[0] - 1, x[1]), (x[0], x[1] + 1), (x[0], x[1] - 1)]
-                    seen |= comp
-                    nclu += bool(comp & gset)
-                if nclu > 2:
-                    errs.append(("more than 2 large animated objects", nclu))
-                nplaced += len(ch)
-                sizes["anim"] += n
+                errs = decor_rules(m, base, flags, got_al, d, sizes)
+                nplaced += sum(1 for j in range(576) if m[j] != base[j])
                 check(f"W13 D{d} seed {seed:#06x} r{r}: decor rules (independent checker)", not errs, errs[:3])
         print(f"[info] W13: {nroom} rooms, {nplaced} decor cells (air {sizes['air']}, wall {sizes['wall']}), "
-              f"{sizes['anim']} anim entries; decor_room cost T = {sorted(dT)}", flush=True)
+              f"{sizes['anim']} anim entries, {sizes['large']} large animated objects; "
+              f"decor_room cost T = {sorted(dT)}", flush=True)
         check("W13: >= 50 rooms over depths 1..8, decor present and animated",
               nroom >= 50 and nplaced > 100 and sizes["anim"] > 0 and sizes["wall"] > 0, (nroom, nplaced, sizes))
+        # ---- wall-heavy sweep (Python deriver, same checker): rooms with a
+        # dead-end block / door / pit, 400 levels
+        sw = {"rooms": 0, "wall": 0, "air": 0, "anim": 0, "large": 0}
+        sbad = []
+        rng = __import__("random").Random(0xB3B10)
+        for i in range(400):
+            d, seed, master = 1 + i % 8, rng.randrange(65536), rng.randrange(65536)
+            blk = G.generate(d, seed, master)
+            fl = depth_flags(p, d)
+            for r in present_rooms(blk):
+                dd = room_model.desc(blk, r)
+                if not (dd[S["RD_BLOCK"]] & 3 or dd[S["RD_PITCOL"]] or dd[S["RD_EXITS"]] & 3):
+                    continue
+                base = room_model.render_room(blk, r, decor=False)
+                al = []
+                m = room_model.render_room(blk, r, anim=al)
+                sw["rooms"] += 1
+                e = decor_rules(m, base, fl, al, d, sw)
+                if e:
+                    sbad.append((d, seed, master, r, e[:2]))
+        print(f"[info] W13 sweep: {sw}", flush=True)
+        check(f"W13 wall-heavy sweep: {sw['rooms']} rooms (block / pit / door), checker clean",
+              not sbad and sw["rooms"] > 1000 and sw["wall"] > 0, sbad[:3])
+        # ---- synthetic maps: structural cells scattered inside the decor rows
+        # (rows 9s..9s+5 and their ring) -> Python checker on 600 maps, the Z80
+        # deriver == Python on 24 of them (decor_room called directly: TMP1 =
+        # ROOM_MAP page, IX = descriptor, dg_dst = ANIM_N)
+        struct = [T[k] for k in ("T_LAD_L", "T_LAD_M", "T_LAD_R", "T_HOLE_L", "T_HOLE_R",
+                                 "T_DOOR_ARCH_L", "T_DOOR_R", "T_DOOR_JAMB_L", "T_PIT_L",
+                                 "T_PIT_R", "T_RUBBLE", "T_POTION", "T_DOOR_LOCK", "T_WALLF")]
+        rng = __import__("random").Random(0x5E7)
+        ybad, zbad, nsyn, nz = [], [], 0, 0
+        for i in range(600):
+            d, seed, master = 1 + i % 8, rng.randrange(65536), rng.randrange(65536)
+            blk = G.generate(d, seed, master)
+            r = rng.choice(present_rooms(blk))
+            base = room_model.render_room(blk, r, decor=False)
+            for _ in range(rng.randint(3, 12)):
+                row = 9 * rng.randint(0, 1) + rng.randint(0, 6)
+                base[row * 32 + rng.randint(1, 30)] = rng.choice(struct)
+            rs = room_model.desc(blk, r)[S["RD_SEED"]] | room_model.desc(blk, r)[S["RD_SEED"] + 1] << 8
+            m, al = room_model.decorgen.decorate(base, d, rs)
+            nsyn += 1
+            fl = depth_flags(p, d)
+            e = decor_rules(m, base, fl, al, d, {"wall": 0, "air": 0, "anim": 0, "large": 0})
+            if e:
+                ybad.append((d, seed, r, e[:2]))
+            if i % 25 == 0:
+                okg, _, _, _ = gen_level(p, d, seed, master)
+                nz += 1
+                p.z.cmd("write-memory %d %s" % (S["ROOM_MAP"], " ".join(str(b) for b in base)))
+                bank3_poke(p, S["dg_dst"], S["ANIM_N"] & 255)
+                p.wb("ANIM_N", 0)
+                ok, _ = run_code(p, head() + [0x3E, S["ROOM_MAP"] >> 8, 0x32] + w16(S["TMP1"])
+                                 + [0xDD, 0x21] + w16(S["ROOM_DESC"] + r * S["RD_STRIDE"])
+                                 + [0x3E, r, 0x21] + w16(S["decor_room"]) + [0xCD] + w16(S["far3"]))
+                zm = list(p.z.read_memory(S["ROOM_MAP"], 576))
+                zn = p.rb("ANIM_N")
+                zal = list(p.z.read_memory(S["ANIM_LIST"], 4 * zn)) if 0 < zn <= 12 else []
+                if not (okg and ok and zm == m and zal == al):
+                    zbad.append((d, seed, r, okg, ok, zm == m, zal, al))
+        check(f"W13 synthetic maps: {nsyn} maps with structural cells in the decor ring, checker clean",
+              not ybad, ybad[:3])
+        check(f"W13 synthetic maps: Z80 decor_room == decorgen.py on {nz} of them", not zbad, zbad[:2])
     if worst:
         print("[info] B3B-8 measured (DI, contended): " + ", ".join(
             f"{k} worst {v[0]} T ({v[1]})" for k, v in worst.items()), flush=True)
@@ -1274,6 +1645,10 @@ def main():
                   (r, p.ent(SLOT_BATB)["X"]) == (0, 27), (r, p.ent(SLOT_BATB)["X"]))
             p.settle(4)
             w4("W9 bat at the door")
+
+        # ================= B3B-10: animated decor (W14) =====================
+        if want("W14"):
+            w14(p, check)
 
         # ================= B3B-11: panel engine (W15) =====================
         if want("W15"):

@@ -253,6 +253,9 @@ def run(h, name):
                                (3, 25, budget.stand_y(1, 4), budget.HOSTILE)):
             p.place(slot, x, y, room=0, flags=fl)
         label = "c: hero + rat + goblin walking"
+    if budget.DECOR:                              # B3B-10: synthetic full decor list
+        budget.inject_decor(p)                    # in room A (BUDGET_DECOR=0: off)
+        label += " + decor"
     r = Rec(p)
 
     def turn(key):

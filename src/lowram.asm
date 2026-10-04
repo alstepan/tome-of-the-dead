@@ -360,12 +360,18 @@ room_show:
                 jr   orn_row
 
 ;------------------------------------------------------------------------------
-; room_shadow — do_exit after the scroll: the clean-background shadow of the
-; new room (shadow_room) + its row-17 ornament (the scroll already drew the
-; ornament on the screen, orn_cells calls in bank3.asm). Leaves bank 7 paged.
-; Clobbers: A, BC, DE, HL.
+; room_shadow — do_exit after the scroll: the new room's animated-decor list
+; (B3B-9 review: its NEXT_MAP build filled ANIM_N2 / ANIM_LIST2; one LDIR of
+; the count + 12 entries over ANIM_N / ANIM_LIST, ~1k T), then the
+; clean-background shadow of the new room (shadow_room) + its row-17 ornament
+; (the scroll already drew the ornament on the screen, orn_cells calls in
+; bank3.asm). Leaves bank 7 paged. Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 room_shadow:
+                ld   hl, ANIM_N2
+                ld   de, ANIM_N
+                ld   bc, ANIM_COPY_LEN
+                ldir
                 call shadow_room
                 ld   a, SHADOW_BITMAP >> 8
                 ; fall through
