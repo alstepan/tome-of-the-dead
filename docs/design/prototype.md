@@ -598,8 +598,22 @@ ladder end** in its current climb direction.
   the hero has not yet left the floor.
 - **Vertical fallback:** a flyer whose two sideways steps are blocked tries up, then
   down, within its band, ending off the climb path; else it waits.
-- **Known residual (accepted):** a flyer with a wall on one side and an immovable body
-  on the other still waits. The hero can always fight or step back, so no softlock.
+- **Known residual (superseded by the squeeze below):** a flyer with a wall on one side
+  and an immovable body on the other would wait.
+- **Squeeze past (designer decision 2026-10-04, hard anti-softlock guarantee).** The
+  hero keeps `climb_block_id` (blocker entity id) and `climb_block_n`. Each climb
+  start/continue blocked by an entity E: if `E == climb_block_id` then `n++` else
+  `climb_block_id = E, n = 1`. Any other hero action, or a climb that succeeds, clears
+  both. On the **2nd consecutive** block by the same E, instead of a wait: the hero
+  and E **swap cells** (E takes the hero's foot cell; hero takes the cell E occupied,
+  the first rung cell, and is mid-ladder), costing the hero's turn; clear counters.
+  The swap is legal for every entity kind including bosses, sleepers and flyers (the
+  swap is the guarantee; no exclusions), only if the hero's destination is the cell E
+  occupies. If E sits further along the climb path, the hero swaps with the first
+  blocker on it. Monsters get **no free attack** from the swap; they act normally
+  afterwards (a reach monster hits as usual). E keeps its facing and is not stunned.
+  Message `YOU SQUEEZE PAST THE <NAME>` (names <= 8 chars, total <= 32). A blocker
+  that yields on the first wait never triggers the swap (the normal case).
 
 Monsters get their fights when the hero steps off: the player acts first each turn,
 and in-reach monsters then attack.

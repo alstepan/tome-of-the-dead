@@ -1171,6 +1171,9 @@ prototype §6.4 "B14 fix rules": facing-side tie-break for yields on the shaft c
 forced yield when a blocked climb becomes a wait; flyer vertical fallback (up, then down,
 in band, off the climb path, else wait). Accepted residual: a flyer between a wall and an
 immovable body waits (the hero can fight or step back).
+Designer decision 2026-10-04: a climb blocked twice in a row by the same entity swaps
+hero and blocker (no exclusions, no free attack, costs the hero's turn); see prototype
+§6.4 "Squeeze past". This removes the residual: no ladder can stay blocked.
 
 **Ranged** (Archer, Necromancer), first match:
 1. In melee reach → melee.
