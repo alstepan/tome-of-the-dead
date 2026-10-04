@@ -52,7 +52,7 @@ DG_MAX_WALL     EQU 6
                 call dg_try
                 pop  bc
                 djnz .t
-                ret
+                jp   dg_drips                  ; B3B-13b: drips go last (same dg_rng)
 
 ; dg_try — one attempt (the 4 rnd calls always happen, in this order).
 dg_try:
@@ -289,6 +289,178 @@ dg_try:
                 ld   (dg_nw), a
                 ret
 
+;------------------------------------------------------------------------------
+; dg_drips — B3B-13b (concept-screen 3.3 "Drip placement"; mirror of
+; decorgen.drips): after the 12 decor attempts, DG_DRIP_N[depth-1] drips
+; (D1/4/7 1, D2/3/5/6 2, D8 0), each skipped when the room already has 4
+; glyph-swap cells. A drip = up to DG_DTRIES attempts of 3 rnd calls
+; (col = rnd 32, storey = rnd 2, storey row = rnd 3), stopping at the first
+; that fits: the cell is T_AIR, storey row 0..2 of a map row >= 1 (so never a
+; floor row / the 2 above it), the cell above is T_PLAT / T_BRICK / T_WALLF
+; (solid base ids 1..3), the cell below T_AIR, no ladder / hole / jamb / pit
+; cap / door / lock / grate / rubble cell in cols col-1..col+1 of the whole
+; storey (9 rows), and >= 6 cols from an earlier drip. Spawns are never in
+; storey rows 0..2 (feet on the floor), so they need no test. The map keeps
+; T_DRIP1, the entry's AL_TYPE is T_DRIP2, phase (col + row) & 7.
+; Clobbers: A, BC, DE, HL.
+;------------------------------------------------------------------------------
+DG_DTRIES       EQU 8
+DG_DMIN         EQU 6                ; min col distance between drips
+dg_drips:
+                ld   a, (LVL_DEPTH)
+                dec  a
+                ld   e, a
+                ld   d, 0
+                ld   hl, dg_dn
+                add  hl, de
+                ld   b, (hl)
+                xor  a
+                ld   (dg_np), a
+                inc  b
+                dec  b
+                ret  z                         ; D8: none
+.d:             push bc
+                ld   a, (dg_ng)
+                cp   DG_MAX_GLYPH
+                jr   nc, .sk                   ; room already at 4 glyph-swap cells
+                ld   b, DG_DTRIES
+.t:             push bc
+                call dg_dat
+                pop  bc
+                or   a
+                jr   nz, .sk                   ; placed
+                djnz .t
+.sk:            pop  bc
+                djnz .d
+                ret
+
+; dg_dat — one drip attempt (always 3 rnd calls) -> A = 1 placed, 0 not.
+dg_dat:
+                ld   a, 32
+                call dg_rnd
+                ld   (dg_dcol), a
+                ld   a, 2
+                call dg_rnd
+                ld   e, a
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, e                      ; 9 * storey
+                ld   e, a
+                ld   a, 3
+                call dg_rnd
+                add  a, e
+                ld   (dg_drow), a
+                jp   z, dg_dno                 ; row 0: nothing above it on the map
+                ld   b, a
+                ld   a, (dg_dcol)
+                ld   c, a
+                call map_cell
+                ld   a, (hl)
+                or   a
+                jp   nz, dg_dno                ; cell must be T_AIR
+                ld   de, ROOM_COLS
+                or   a
+                sbc  hl, de
+                ld   a, (hl)
+                dec  a
+                cp   3
+                jp   nc, dg_dno                ; above: T_PLAT / T_BRICK / T_WALLF
+                add  hl, de
+                add  hl, de
+                ld   a, (hl)
+                or   a
+                jp   nz, dg_dno                ; below must be T_AIR
+                ld   a, (dg_np)
+                or   a
+                jr   z, .far
+                ld   b, a
+                ld   hl, dg_dcs
+.f:             ld   a, (dg_dcol)
+                sub  (hl)
+                jr   nc, .p
+                neg
+.p:             cp   DG_DMIN
+                jp   c, dg_dno
+                inc  hl
+                djnz .f
+.far:           ; structural scan: 9 rows of the storey x cols col-1..col+1 (clipped)
+                ld   a, (dg_drow)
+                ld   b, 0
+                cp   STOREY_ROWS
+                jr   c, .s0
+                ld   b, STOREY_ROWS
+.s0:            ld   a, (dg_dcol)
+                or   a
+                jr   z, .c0
+                dec  a
+.c0:            ld   c, a                      ; C = first col
+                ld   a, (dg_dcol)
+                inc  a
+                cp   ROOM_COLS
+                jr   c, .c1
+                dec  a                         ; clip to col 31
+.c1:            sub  c
+                inc  a
+                ld   e, a                      ; E = cols
+                ld   d, STOREY_ROWS
+                call map_cell
+.sr:            push hl
+                ld   b, e
+.sc:            ld   a, (hl)
+                sub  T_LAD_L
+                cp   T_HOLE_R - T_LAD_L + 1
+                jr   c, .bad                   ; ladder / hole 4..9
+                cp   T_DOOR_JAMB_L - T_LAD_L
+                jr   z, .bad
+                cp   T_DOOR_JAMB_R - T_LAD_L
+                jr   z, .bad
+                sub  T_END_L - T_LAD_L         ; pit caps .. rubble 19..27
+                cp   T_RUBBLE - T_END_L + 1
+                jr   c, .bad
+                inc  hl
+                djnz .sc
+                pop  hl
+                call dg_nr
+                dec  d
+                jr   nz, .sr
+                ; place
+                ld   a, (dg_drow)
+                ld   b, a
+                ld   a, (dg_dcol)
+                ld   c, a
+                call map_cell
+                ld   (hl), T_DRIP1
+                ld   a, c
+                add  a, b
+                and  7
+                ld   (dg_ph), a
+                ld   a, (dg_ng)
+                inc  a
+                ld   (dg_ng), a
+                ld   a, (dg_np)
+                ld   e, a
+                inc  a
+                ld   (dg_np), a
+                ld   d, 0
+                ld   hl, dg_dcs
+                add  hl, de
+                ld   (hl), c
+                ld   a, T_DRIP2
+                call dg_cell.em
+                ld   a, 1
+                ret
+.bad:           pop  hl
+dg_dno:         xor  a
+                ret
+
+; drips per room by depth 1..8; scratch (dg_dcs = columns of the placed drips)
+dg_dn:          DEFB 1, 2, 2, 1, 2, 2, 1, 0
+dg_np:          DB   0
+dg_dcol:        DB   0
+dg_drow:        DB   0
+dg_dcs:         DB   0, 0
+
 ; .rf-style exit of the fit loops (one row pointer pushed) and the row step.
 dg_rf:          pop  hl
                 ret
@@ -481,4 +653,6 @@ dg_dg:          DB   0
                 ASSERT (ANIM_N >> 8) == ((ANIM_LIST + ANIM_MAX * AL_STRIDE) >> 8) && PLAY_ROWS < 32
                 ASSERT (ANIM_N2 >> 8) == ((ANIM_LIST2 + ANIM_MAX * AL_STRIDE) >> 8) && ANIM_LIST2 == ANIM_N2 + 1
                 ASSERT dg_dg == dg_da + 1
+                ASSERT T_END_L == 19 && T_RUBBLE == 27 && T_DOOR_JAMB_L == 11 && T_DOOR_JAMB_R == 14 && T_DRIP2 == T_DRIP1 + 1
+                ASSERT T_PLAT == 1 && T_WALLF == 3 && STOREY_ROWS == 9
                 ASSERT (dg_recs - dg_start) == 9 && DG_NREC * 3 < 256

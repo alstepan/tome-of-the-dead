@@ -34,7 +34,7 @@ ANIM_LIST contract for B3B-10 (AL_TYPE): 1 .. 15 = attr cycle kind (1 flame
 $46 -> $42 -> $06, 2 candle); >= 16 = glyph swap, the value is the ALTERNATE
 tile id (the map keeps frame 1; decor_tick toggles map id <-> AL_TYPE).
 AL_PHASE = (col + row) & 7 of the object's top-left (an object swaps in step).
-Entries are emitted per object, row-major.
+Entries are emitted per object, row-major; the drips' entries (AL_TYPE = T_DRIP2) come last.
 """
 import re
 import sys
@@ -49,6 +49,13 @@ TRIES = 12
 ROWS, COLS = D["PLAY_ROWS"], 32
 T_AIR, T_BRICK = D["T_AIR"], D["T_BRICK"]
 T_LAD_L, T_HOLE_R = D["T_LAD_L"], D["T_HOLE_R"]
+T_DRIP1, T_DRIP2 = D["T_DRIP1"], D["T_DRIP2"]
+DRIP_TRIES, DRIP_DIST, STOREY = 8, 6, D["STOREY_ROWS"]
+DRIP_N = {1: 1, 2: 2, 3: 2, 4: 1, 5: 2, 6: 2, 7: 1, 8: 0}     # per room, by depth
+# structural base ids a drip keeps 1 col clear of (whole storey): ladder / hole 4..9, door
+# jambs 11 / 14, pit caps .. rubble 19..27 (door arches / planks / lock, grate, rubble)
+DRIP_AVOID = frozenset(list(range(T_LAD_L, T_HOLE_R + 1)) + [D["T_DOOR_JAMB_L"], D["T_DOOR_JAMB_R"]]
+                       + list(range(D["T_END_L"], D["T_RUBBLE"] + 1)))
 MAX_LARGE, MAX_GLYPH, MAX_ATTR, MAX_WALL = 2, 4, 8, 6
 
 # flags byte of an object record
@@ -64,8 +71,7 @@ COMMON = [
     ("WALL_PATCH", D["T_WALL_PATCH"], 1, 1, F_WALL),
     ("WALL_FADE", D["T_WALL_FADE"], 1, 1, F_WALL),
 ]
-# (T_DRIP1/2: ids 17/18 hold the drip glyphs since B3B-13 (the zap overlay has its own
-# ZAP_GLYPHS); still not placed: drip placement rules are a designer follow-up.)
+# (T_DRIP1/2: ids 17/18, placed by drips() below, last.)
 WALL_OBJ = ("PILLAR", "PATCH_A", "PATCH_B")
 TILED_OBJ = ("BOOKSHELF", "WINDOW_BAR")
 ANIM_FLAGS = {"TORCH_TALL": F_GROW0 | F_AROW1 | F_LARGE, "BRAZIER_BIG": F_GROW0 | F_AROW1 | F_LARGE,
@@ -207,7 +213,42 @@ def decorate(m, depth, seed, live=True):
         ng += dg
         na += da
         nw += area if wall else 0
+    drips(m, depth, rng, anim, ng, live)
     return m, anim
+
+
+def drips(m, depth, rng, anim, ng, live):
+    """B3B-13b (concept-screen 3.3 "Drip placement"), mirror of dg_drips. After the decor:
+    DRIP_N[depth] drips, each skipped if the room holds 4 glyph-swap cells already. A drip =
+    <= 8 attempts of exactly 3 rnd calls (col = rnd 32, storey = rnd 2, storey row = rnd 3),
+    stopping at the first that fits: map row >= 1, cell T_AIR, above T_PLAT/T_BRICK/T_WALLF
+    (ids 1..3), below T_AIR, no DRIP_AVOID id in cols col-1..col+1 of the whole storey, >= 6
+    cols from an earlier drip. Map keeps T_DRIP1; AL_TYPE = T_DRIP2, AL_PHASE (col+row)&7.
+    (Spawns stand on floors, never in storey rows 0..2: no test.)"""
+    cols = []
+    for _ in range(DRIP_N[depth]):
+        if ng >= MAX_GLYPH:
+            continue
+        for _ in range(DRIP_TRIES):
+            col = rng.rnd(32)
+            s = rng.rnd(2)
+            row = STOREY * s + rng.rnd(3)
+            if row == 0:
+                continue
+            j = row * COLS + col
+            if m[j] != T_AIR or not T_AIR < m[j - COLS] <= 3 or m[j + COLS] != T_AIR:
+                continue
+            if any(abs(col - c) < DRIP_DIST for c in cols):
+                continue
+            if any(m[rr * COLS + cc] in DRIP_AVOID for rr in range(STOREY * s, STOREY * s + STOREY)
+                   for cc in range(max(col - 1, 0), min(col + 1, COLS - 1) + 1)):
+                continue
+            m[j] = T_DRIP1
+            ng += 1
+            cols.append(col)
+            if live:
+                anim += [col, row, T_DRIP2, (col + row) & 7]
+            break
 
 
 def emit_asm():

@@ -628,7 +628,7 @@ theme_ids:      DB T_PLAT, T_WALLF, T_END_L, T_END_R, 0
 ; msg_push — queue string A (TX_*) for the log: log_push copies its stream
 ; into the LOG_TXT ring as is. msg_push_end — the same through log_push_end
 ; (GS_DEAD / GS_WIN lines: never dropped). Any bank paged, any caller.
-; Clobbers: A, BC, DE, HL.   ~0.35k T + log_push (~25 T per stream byte)
+; Clobbers: A, BC, DE, HL (BC too: page_bank / log_push use it).   ~0.35k T + log_push (~25 T per stream byte)
 ;------------------------------------------------------------------------------
 msg_push_end:
                 ld   de, log_push_end
@@ -726,6 +726,9 @@ show_impact_msg:
 imp_pre:        DB   TX_YOU_HIT, TX_YOU_MISS, TX_YOU_KILL, TX_THE, TX_THE
 imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES
                 ASSERT MSG_P_HIT == 1 && MSG_P_MISS == 2 && MSG_P_KILL == 3 && MSG_M_HIT == 4 && MSG_M_MISS == 5
+                ; K_ROGUE (kind 2) is retired: TX_NM_ROGUE is an empty string and no entity may carry
+                ; that kind, else the impact line would lose its name (B3B-13b)
+                ASSERT TX_NM_ROGUE == TX_NM_KNIGHT + 2 && TXL_NM_ROGUE == 0 && K_WIZARD == 1 && K_SKELETON == 3
                 ; kind names: TX_NM_KNIGHT + kind (src/strings.txt order)
                 ASSERT TX_NM_WIZARD == TX_NM_KNIGHT + K_WIZARD && TX_NM_SKELETON == TX_NM_KNIGHT + K_SKELETON
                 ASSERT TX_NM_GOBLIN == TX_NM_KNIGHT + K_GOBLIN && TX_NM_GHOST == TX_NM_KNIGHT + K_GHOST

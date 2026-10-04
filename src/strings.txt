@@ -6,7 +6,7 @@
 # Format: one string per line, `name "TEXT"`; the id is TX_<NAME> (upper),
 # its decoded length TXL_<NAME>. '#' starts a comment line. Text: ASCII
 # 32..126, upper case, no '"'; every string is ONE log line (game.md §3.4:
-# <= 32 chars, LOG_MAX, ASSERTed). Order = id order (ids are stable only
+# <= 32 chars, LOG_MAX, ASSERTed). Style: present tense, no trailing full stop. Order = id order (ids are stable only
 # within one build: code uses the TX_* names, never numbers).
 #
 # Composed lines (show_impact_msg, lowram.asm): pre + kind name + post, so
@@ -16,7 +16,7 @@
 # --- whole log lines ----------------------------------------------------------
 welcome         "YOU ENTER THE DUNGEON"
 descend         "YOU DESCEND DEEPER"
-found           "YOU FOUND A POTION"
+found           "YOU PICK UP A POTION"
 quaff           "YOU DRINK A POTION"
 locked          "THE DOOR IS LOCKED"
 fall            "YOU FALL INTO A PIT"
@@ -36,6 +36,7 @@ empty           ""
 # Rogue's hole) --------------------------------------------------------------------
 nm_knight       "KNIGHT"
 nm_wizard       "WIZARD"
+# kind 2: never printed (K_ROGUE is retired, no entity has it; ASSERTed in lowram.asm)
 nm_rogue        ""
 nm_skeleton     "SKELETON"
 nm_goblin       "GOBLIN"

@@ -134,7 +134,8 @@ print6t:
 ; nesting). Two modes switched by the opcode at .sw: main (TK_MAIN `ld h, n`,
 ; falls through to the stream) and entry (TK_ENTRY `jr .ent`; BC walks the
 ; entry, the stream pointer parked in .back+1).
-; SMC: .sw (opcode), .back+1 (parked stream pointer).
+; SMC: .sw (opcode), .back+1 (parked stream pointer). NEVER call from the ISR (the SMC
+; mode switch is not re-entrant: an interrupt mid-entry would corrupt the walk).
 ; Cost per char (+17 T call, vs 17 T for the inline fetch): literal 35 T,
 ; entry char 40 T, an entry's last char 81 T, token 135 T + its first char.
 ;------------------------------------------------------------------------------
