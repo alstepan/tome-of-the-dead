@@ -272,6 +272,23 @@ Main menu, redefine keys, joystick select (Kempston/Sinclair/keys); icon bar +
 bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
 **Exit:** whole game driveable by joystick alone (scripted ZRCP test per input).
 
+
+**3C breakdown** (z80-architect, 2026-10-04): D1 one STICK byte from redefinable KEYTAB + Sinclair presets + Kempston (JOY_MIRROR for tests); D2 turn-intent machine (FIRE tap / hold+←→ cursor / FIRE+↓ bag / FIRE+↑ pause, ↓ = wait, turn-around 0 turns); D3 icon bar polled like HP; D4 menu/pause/end screens in **bank 1** via `far1`; D5 pause = 3-row overlay saved in GEN_SRC+GEN_MIR; D6 seed entropy from a busy-loop counter in the menu; D7 HERO_ST block (reserves 3D's LVL/XP/ranks/MP). **User 2026-10-04:** title "TOME OF THE DEAD"; Sinclair disables its half of the 1–0 shortcuts; pause Quit confirms; XP/levels/ranks logic in 3D (3C shows level digit + LV/XP line).
+
+| ID | Task | Tag | Deps |
+|---|---|---|---|
+| C3-0 | layout (HERO_ST, JOY_MIRROR, KEYTAB, bank-1 ui1_code) + `far1` + helpers restore the caller's bank | S | – (in progress) |
+| C3-1 | `read_stick` input (keys/Sinclair/Kempston) | S | C3-0 |
+| C3-2 | turn-intent machine + icon dispatch | S | C3-1 |
+| C3-3 | icon bar state, cursor, info line, level digit | S | C3-0, C3-4 |
+| C3-4 | info/refusal/menu strings + ZX0 long text | J | – |
+| C3-5 | menu fonts/title/torch art convert | J/artist | – |
+| C3-6 | menu, redefine, pause overlay, end screens, seed entropy (bank 1) | S | C3-0/1/4/5 |
+| C3-7 | JUMP1/2 + Mage STAFF_SWING frames (art first) | S | art |
+| C3-8a/b | port suites to the menu start + joystick-only exit runs | J | C3-1/2/6, C3-3 |
+
+Bugs B11 (invisible pit) and B14 (ghost blocks ladder) to be fixed before C3-8b (joystick walkthrough).
+
 ### 3D — Combat & magic (needs game.md §4–6)
 Projectile entities (range, wall reflection, can hit caster); spells; Warrior
 power attacks ×2, throw, bow; mana; impact FX. **Exit:** spell/missile table
