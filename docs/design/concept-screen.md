@@ -190,6 +190,17 @@ cells. Decor never changes a cell's solidity (game.md §1.2).
    Caps stay on pits only.
 3. Arrival shaft: rubble in row 0 above the ladder. Approved.
 4. 3B stand-in: lair grate always open, drawn as an open hole; `T_GRATE` unseen until 3F. Confirmed.
+   **SUPERSEDED, designer decision 2026-10-04 (B12):** the level exit must read as distinct.
+   Common id 26 `T_GRATE` becomes the **raised-portcullis frame**, drawn from 3B on over the 3
+   cells of the exit hole on row 17: glyph = a 3-px bar across rows 0-2 of each cell with 2-px
+   teeth hanging at cols 0,3,6 down to row 4, rows 5-7 clear (the hole stays see-through and
+   walkable), ink **`$46`** (bright yellow) on black, non-solid. No ordinary hole uses `$46` or
+   this glyph. Plus a lit marker: the standing row (row 16) cell above the hole centre gets
+   the existing `T_CANDLES`-style glow only if free; otherwise none. 3F closed state = a
+   second glyph (full bars, ink `$07`), a new common id taken by dropping the per-level window
+   or pillar; open/closed swap is a tile-id swap on the same 3 cells. Artist: 1 glyph now
+   (id 26 redraw), 1 in 3F. Log hint: first entry to the lair room each level, one line
+   `A GATE GLEAMS. THE WAY DOWN.` (28 chars); in 3F while closed: `THE GATE IS BARRED.`
 5. Dropping raw item/tile data from the sprite sources in B3B-13: acknowledged (engineering call).
 
 **Tile ids: 64 = 32 common + 32 per-level** (game.md §1.2). The artist's round 1+2 decor

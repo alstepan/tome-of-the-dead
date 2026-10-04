@@ -116,7 +116,7 @@
 |---|---|---|
 | Floor items | **potions only** | §8.5 |
 | Population | a **fixed per-room table** using today's (prototype) kinds | §9.4 |
-| Lair | the **grate is always open** (boss death not required) | §1.1, §8.6 |
+| Lair | the **grate is always open** (boss death not required), but drawn as the distinct raised-portcullis frame (id 26, ink `$46`, concept-screen §3.3 B3B-8 #4) with a first-entry hint `A GATE GLEAMS. THE WAY DOWN.` (designer decision 2026-10-04, B12); ordinary down-exit holes stay plain | §1.1, §8.6 |
 | Key / locked door | no key exists (potions only), so the lair door is an **ordinary unlocked door** (designer decision 2026-10-03) | §1.1 |
 | D8 | D8 gets a lair exit like D1–D7; **descending from D8 = `GS_WIN`** | §1.3 |
 | Close door | keyboard key **`C`** (1 turn, §2.3 legality; not redefinable, not on joystick) until the 3C icon bar adds FIRE on the melee icon (designer decision 2026-10-03: the key) | §3.1 |
