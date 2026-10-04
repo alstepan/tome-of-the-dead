@@ -119,3 +119,9 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   `tick_work`, `wait_tick`, `select_tick` in `src/main.asm`) is commented
   "test probe" at its definition and listed in `docs/memory-map.md`. Never place
   a probe on a `HALT`: ZEsarUX's `run` re-fires on the halted PC without progress.
+
+
+## Message API (B3B-13)
+
+- `msg_push` / `msg_push_end` (low RAM) clobber **AF, BC, DE, HL** (C is no longer preserved, unlike the old `log_push`); callers in bank 3 get their bank back (restore_page).
+- `tk_get` uses an SMC mode switch (`tk_get.sw`): never call the text printer from the ISR.
