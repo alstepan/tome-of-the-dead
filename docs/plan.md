@@ -278,7 +278,7 @@ bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
 | ID | Task | Tag | Deps |
 |---|---|---|---|
 | C3-0 ✅ `3ab9232` | layout (HERO_ST, JOY_MIRROR, KEYTAB, bank-1 ui1_code) + `far1` + helpers restore the caller's bank | S | – |
-| C3-1 in progress | `read_stick` input (keys/Sinclair/Kempston) | S | C3-0 |
+| C3-1 ✅ `d49ed46` (review pending; stack shrunk to 256 B for a key lookup page — under review) | `read_stick` input (keys/Sinclair/Kempston) | S | C3-0 |
 | C3-2 | turn-intent machine + icon dispatch | S | C3-1 |
 | C3-3 | icon bar state, cursor, info line, level digit | S | C3-0, C3-4 |
 | C3-4 ✅ `61ac18f` (feat/3c-strings; 85 strings 1,312 → 1,141 B, 33 tokens; ZX0 long-text blocks; **C3-6 must INCLUDE build/text/longtext.asm DISPed in bank 1 and size the unpack buffer LT_BUF_MAX; 42-char info lines must not use the 32-B MSG_BUF**) | info/refusal/menu strings + ZX0 long text | J | – |
