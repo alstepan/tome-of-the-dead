@@ -372,6 +372,15 @@ Examples (all ≤ 32): `YOU HIT THE GOBLIN.` · `THE GOBLIN MISSES YOU.` ·
 `FOOD: HUNGRY.` The death line moves to the menu font: `KILLED BY …` ≤ 32 chars, with the
 monster name abbreviated by a table if longer than the budget.
 
+**Message list (designer decision 2026-10-04; src/strings.txt, B3B-13).** Final wording:
+`YOU ENTER THE DUNGEON` (welcome) · `YOU WIN! PRESS ENTER` (win) · `YOU DESCEND DEEPER` ·
+`THE DOOR IS LOCKED` · `YOU FALL INTO A PIT` · `YOU DIED - PRESS ENTER`. Style: present tense,
+second person, upper case, **no trailing full stop** (the "." in the examples above is dropped;
+"!" only for wins, parries and transformations). Change: `found "YOU FOUND A POTION"` becomes
+`YOU PICK UP A POTION` (20; matches `YOU PICK UP 3 ARROWS`; one verb for all pickups). Impact
+pieces (`YOU HIT THE ` / ` HITS YOU` / ` MISSES`) are approved; the longest composition
+(`YOU KILL THE SKELETON` = 21) is far under 32. Empty `nm_rogue` and `empty` are fine.
+
 **Placement (memory; revised 2026-10-03, designer decision, after A7).** Since the A7
 double buffer, all text (panel, page, menus, cards) is drawn **only into the bank-5 screen**
 and reaches the ULA screen through `present`; bank 7 holds the playfield's clean background

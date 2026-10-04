@@ -261,6 +261,23 @@ Patches and WALL2 follow the wall ink.
 ≤ 4 glyph-swap cells + ≤ 8 attr-cycle cells. That includes a unique item's floor shimmer.
 The worst case is 4 × 0.55 + 8 × 0.12 ≈ **3.2k T ≤ 4.0k**.
 
+**Drip placement (designer decision 2026-10-04; for tools/decorgen.py + src/decor_gen.asm).**
+`T_DRIP1`/`T_DRIP2` (common 17/18, `$45`, non-solid) are one animated pair:
+- **Levels:** D1..D7 all; themes D2 Green Caves, D3 Red Crypt, D5 Sandstone Tombs, D6 Catacombs
+  get up to 2 per room, the rest (D1, D4, D7) up to 1; D8 Sanctum none.
+- **Cell:** an AIR (non-solid) cell whose cell directly above is SOLID (storey ceiling, or the
+  floor-row platform above); the cell below is AIR and the drip is in the **upper half of its
+  storey**: storey row 0..2 only (never rows 3..7), so it reads as hanging from the ceiling.
+- **Never:** in a floor row; in the 2 rows above a floor row (sprite feet/heads); on or adjacent
+  (col +-1) to a ladder column, door cell, jamb, grate, pit cap, exit hole; on a cell holding any
+  other decor, item, trap or spawn; adjacent to another drip (min 6 cols apart).
+- **Animation:** one ANIM_LIST entry per drip, type **glyph swap 2 frames** DRIP1<->DRIP2, hold
+  12 ticks, phase staggered by cell index. Counts against the room budget (<= 4 glyph-swap cells,
+  <= 2 large animated objects not affected): the deriver places drips **last**, only if the
+  room's glyph-swap total stays <= 4; otherwise skip. Paused under a sprite footprint (rule §1).
+- Deterministic: candidate cells scanned left-to-right, top-to-bottom, chosen by the level-seed
+  LCG; same seed gives the same drips.
+
 **In the mock scene:**
 
 | Decor | Cols | Rows |
