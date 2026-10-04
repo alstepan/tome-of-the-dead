@@ -589,6 +589,18 @@ ladder end** in its current climb direction.
    starts and flyer moves. A monster never steps back onto the path it just left, so
    yielding cannot oscillate.
 
+**B14 fix rules (engineering rule 2026-10-04 (B14), designer-confirmed).**
+- **Facing tie-break:** a yielding monster standing exactly on the shaft column steps
+  toward its **facing side** (replaces the "roomier side" tie-break, which oscillated
+  5->6->5 beside a wall).
+- **Forced yield:** when the hero's climb is blocked by an entity (the turn becomes a
+  wait), the monsters in that turn yield and may not step onto the climb path, even if
+  the hero has not yet left the floor.
+- **Vertical fallback:** a flyer whose two sideways steps are blocked tries up, then
+  down, within its band, ending off the climb path; else it waits.
+- **Known residual (accepted):** a flyer with a wall on one side and an immovable body
+  on the other still waits. The hero can always fight or step back, so no softlock.
+
 Monsters get their fights when the hero steps off: the player acts first each turn,
 and in-reach monsters then attack.
 

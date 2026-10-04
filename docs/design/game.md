@@ -1166,6 +1166,12 @@ mask bit); WEAK targets only the hero.
 
 ### 9.2 Behaviours (on top of prototype §6.4)
 
+Flyers and ladders: engineering rule 2026-10-04 (B14), designer-confirmed. Full text in
+prototype §6.4 "B14 fix rules": facing-side tie-break for yields on the shaft column;
+forced yield when a blocked climb becomes a wait; flyer vertical fallback (up, then down,
+in band, off the climb path, else wait). Accepted residual: a flyer between a wall and an
+immovable body waits (the hero can fight or step back).
+
 **Ranged** (Archer, Necromancer), first match:
 1. In melee reach → melee.
 2. Hero in line (vertical overlap, not mid-ladder), `gap ≤ range`, the first body in line
