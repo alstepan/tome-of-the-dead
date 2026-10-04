@@ -277,17 +277,17 @@ bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
 
 | ID | Task | Tag | Deps |
 |---|---|---|---|
-| C3-0 | layout (HERO_ST, JOY_MIRROR, KEYTAB, bank-1 ui1_code) + `far1` + helpers restore the caller's bank | S | – (in progress) |
-| C3-1 | `read_stick` input (keys/Sinclair/Kempston) | S | C3-0 |
+| C3-0 ✅ `3ab9232` | layout (HERO_ST, JOY_MIRROR, KEYTAB, bank-1 ui1_code) + `far1` + helpers restore the caller's bank | S | – |
+| C3-1 in progress | `read_stick` input (keys/Sinclair/Kempston) | S | C3-0 |
 | C3-2 | turn-intent machine + icon dispatch | S | C3-1 |
 | C3-3 | icon bar state, cursor, info line, level digit | S | C3-0, C3-4 |
-| C3-4 | info/refusal/menu strings + ZX0 long text | J | – |
-| C3-5 | menu fonts/title/torch art convert | J/artist | – |
+| C3-4 ✅ `61ac18f` (feat/3c-strings; 85 strings 1,312 → 1,141 B, 33 tokens; ZX0 long-text blocks; **C3-6 must INCLUDE build/text/longtext.asm DISPed in bank 1 and size the unpack buffer LT_BUF_MAX; 42-char info lines must not use the 32-B MSG_BUF**) | info/refusal/menu strings + ZX0 long text | J | – |
+| C3-5 ✅ `3b6f6ae` (feat/3c-menuart; 1,104 B: font 656 + title 277 + torch 107 + map 64) | menu fonts/title/torch art convert | J/artist | – |
 | C3-6 | menu, redefine, pause overlay, end screens, seed entropy (bank 1) | S | C3-0/1/4/5 |
 | C3-7 | JUMP1/2 + Mage STAFF_SWING frames (art first) | S | art |
 | C3-8a/b | port suites to the menu start + joystick-only exit runs | J | C3-1/2/6, C3-3 |
 
-Bugs B11 (invisible pit) and B14 (ghost blocks ladder) to be fixed before C3-8b (joystick walkthrough).
+Bugs B11 (invisible pit) and B14 (ghost blocks ladder): fix in progress on fix/b11-b14 (before C3-8b). B12 gate art drafts on the canvas (board B12, `9d3b091` feat/3c-gate) awaiting the user.
 
 ### 3D — Combat & magic (needs game.md §4–6)
 Projectile entities (range, wall reflection, can hit caster); spells; Warrior
