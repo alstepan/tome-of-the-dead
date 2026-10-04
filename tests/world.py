@@ -54,7 +54,7 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
       decor_room) under the same checker; large objects counted by their lead
       glyph cell (tileset_ids.inc), not 4-connected clusters.
   W14 decor_tick (B3B-10): room A of the PROTO level made a seeded depth-1
-      room and played: 32 ticks against a Python model of decor_tick (lists,
+      room and played: 40 ticks against a Python model of decor_tick (lists,
       map, bank-5 cells, the shadow), displayed == composed at every present,
       shadow == map; a due cell under the hero holds, then steps once it left;
       decor_tick T (mean <= 2.5k, max <= 4k); the scroll A -> B brings room B's
@@ -758,7 +758,7 @@ def w17(p, check):
 # ---------------------------------------------------------------------------
 def dt_sim(ents, rmap, covered, tab):
     """Model of one decor_tick (written from the B3B-10 contract, src/decor.asm
-    header): every AL_PHASE += 1; due when & 3 == 0; per tick caps 1 glyph /
+    header): every AL_PHASE += 1; due when & 3 == 0 (glyph swaps: & 15 == 0); per tick caps 1 glyph /
     2 attr steps and 3 occupancy tries; a due entry past a cap waits a tick
     (phase - 1), a tried entry under a sprite skips the step (cell holds); a
     glyph swap exchanges the map id with AL_TYPE. -> {entry index: attr shown}."""
@@ -769,6 +769,8 @@ def dt_sim(ents, rmap, covered, tab):
         if e[3] & S["DT_STEP_MASK"]:
             continue
         kind = "g" if e[2] >= S["AL_GLYPH_MIN"] else "a"
+        if kind == "g" and e[3] & (S["DT_GLYPH_HOLD"] - 1):
+            continue                              # drips hold 16 ticks
         if caps[kind] == 0 or caps["t"] == 0:
             e[3] = (e[3] - 1) & 255
             continue
@@ -854,7 +856,7 @@ def w14(p, check):
                     for r in range(e["DROW"], e["DROW"] + e["DROWS"])}
     bad, steps, seen = [], [0] * n, [set() for _ in range(n)]
     p.present_watch(True)
-    for t in range(32):
+    for t in range(40):
         st_ = dt_sim(ents, rmap, lambda c, r: (c, r) in cov, tab)
         p.tick()
         for k, v in st_.items():
@@ -875,10 +877,11 @@ def w14(p, check):
             if attr_at(shf, c, r) != attr_at(comp, c, r) or cell_bytes(shf, c, r) != cell_bytes(comp, c, r):
                 bad.append((t, "shadow != screen", c, r))
     p.present_watch(False)
-    check("W14 32 ticks: ANIM_LIST + ROOM_MAP == the decor_tick model every tick, each cell shows "
+    check("W14 40 ticks: ANIM_LIST + ROOM_MAP == the decor_tick model every tick, each cell shows "
           "its cycle attr / swapped glyph on bank 5 and the shadow", not bad, bad[:3])
-    check("W14 every entry stepped 6-8 times in 32 ticks (period 4; a capped step waits a tick), "
-          "attr cells took >= 2 attrs, glyph cells both frames", all(x in (6, 7, 8) for x in steps) and all(len(x) >= 2 for x in seen), (steps, [len(x) for x in seen]))
+    check("W14 in 40 ticks attr entries stepped 8-10 times (period 4; a capped step waits a tick), "
+          "drips 2-3 times (hold 16), attr cells took >= 2 attrs, glyph cells both frames",
+          all((x in (2, 3)) if ents[k][2] >= 16 else (x in (8, 9, 10)) for k, x in enumerate(steps)) and all(len(x) >= 2 for x in seen), (steps, [len(x) for x in seen]))
     ps = p.present_samples
     check("W14 displayed == composed at every tick-start present (probe_presented)",
           ps and not any(ps), (len(ps), [x for x in ps if x][:4]))

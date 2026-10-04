@@ -8,6 +8,7 @@
 ;   main.asm's kind_tab ALIGN pad.
 ;==============================================================================
 DT_STEP_MASK    EQU 3               ; an entry steps when AL_PHASE & 3 == 0: every 4th tick
+DT_GLYPH_HOLD   EQU 16              ; glyph swaps (drips) step every 16th tick (designer ~12)
 DT_MAX_GLYPH    EQU 1               ; per tick: <= 1 glyph swap and <= 2 attr steps (D6
 DT_MAX_ATTR     EQU 2               ; allows 2 + 3; measured ~1.2k / ~0.75k T per step, so
                                     ; 1 + 2 keeps a tick <= ~3.5k T). The deriver's maxima
@@ -33,7 +34,8 @@ DT_CAPS         EQU (DT_MAX_TRIES << 6) | (DT_MAX_GLYPH << 4) | DT_MAX_ATTR   ; 
 ; RENDER_FIRST also after read_turn_input / anim_tick, which leave R_COL..
 ; R_ROWS alone) and before panel_tick: SLOTREC's R_COL..R_ROWS are the
 ; footprints on the bank-5 screen. Every entry's AL_PHASE += 1; a
-; due entry (AL_PHASE & 3 == 0) steps: attr kinds take the next colour of
+; due entry (AL_PHASE & 3 == 0; glyph swaps only when AL_PHASE & 15 == 0,
+; i.e. drips hold 16 ticks per frame) steps: attr kinds take the next colour of
 ; their 8-step cycle (index = AL_PHASE bits 4..2), glyph swaps exchange the
 ; map id with AL_TYPE and draw the new glyph + its TILE_ATTRS attr. Each step
 ; writes the bank-5 cell AND the bank-7 clean-background shadow (else the next
@@ -88,6 +90,10 @@ decor_tick:
                 cp   AL_GLYPH_MIN
                 ld   a, c
                 jr   c, .ka
+                ld   a, (hl)                   ; drips hold DT_GLYPH_HOLD ticks: step only
+                and  DT_GLYPH_HOLD - 1         ; when AL_PHASE & 15 == 0 (the staggered
+                jr   nz, .nx                   ; phase keeps them apart); no cap spent
+                ld   a, c
                 and  $30
                 jr   z, .capd
                 ld   a, -$10 - $40

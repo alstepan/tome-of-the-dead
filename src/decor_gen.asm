@@ -302,6 +302,7 @@ dg_try:
 ; storey (9 rows), and >= 6 cols from an earlier drip. Spawns are never in
 ; storey rows 0..2 (feet on the floor), so they need no test. The map keeps
 ; T_DRIP1, the entry's AL_TYPE is T_DRIP2, phase (col + row) & 7.
+; decor_tick holds drip entries 16 ticks per frame (steps at AL_PHASE & 15 == 0).
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 DG_DTRIES       EQU 8

@@ -379,7 +379,8 @@ AL_ROW          EQU 1
 AL_TYPE         EQU 2               ; 1..15 attr-cycle kind (1 flame, 2 candle); >= 16 glyph swap:
                                     ;   the OTHER tile id (decor_tick swaps it with the map cell)
 AL_PHASE        EQU 3               ; tick counter (initial value = stagger (col+row)&7 of the
-                                    ;   object): steps when & 3 == 0, cycle index = bits 4..2
+                                    ;   object): steps when & 3 == 0 (glyph swaps / drips: & 15 == 0, i.e. they
+                                    ;   hold 16 ticks), cycle index = bits 4..2
 AL_GLYPH_MIN    EQU 16              ; AL_TYPE >= this: glyph swap
                 ASSERT ANIM_N2 > ISR_VEC_TABLE + ISR_VEC_LEN - 1
                 ASSERT ANIM_LIST2 + ANIM_MAX * AL_STRIDE <= ANIM_N && ANIM_LIST == ANIM_N + 1

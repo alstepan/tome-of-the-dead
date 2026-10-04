@@ -708,7 +708,7 @@ holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
   `dt_attr_tab`, 8 steps each), ≥ `AL_GLYPH_MIN` 16 = glyph swap holding the
   OTHER tile id (the deriver writes the alternate frame; `decor_tick`
   exchanges it with the `ROOM_MAP` cell, so the map always holds the shown
-  id). `AL_PHASE` = the object's stagger `(col + row) & 7` at build, then a
+  id); drip entries hold 16 ticks (glyph entries step only at `AL_PHASE & 15 == 0`, `DT_GLYPH_HOLD`). `AL_PHASE` = the object's stagger `(col + row) & 7` at build, then a
   tick counter (+1 per serviced tick; due when `& 3 == 0`; cycle index = bits
   4..2).
 - **NEXT_MAP rule** (B3B-9 review 🔴): a build into `ROOM_MAP` fills `ANIM_N` /
