@@ -58,9 +58,20 @@ vdata:
                 INCLUDE "panel_hot.asm"                       ; -> HOT_COPY (panel_boot)
                 INCLUDE "../assets/gfx/tiles/tiles_common.asm" ; init_tiles (boot)
                 INCLUDE "../assets/gfx/panel/panel_orn.asm"    ; init_tiles -> ORN_GLYPHS
-                MODULE b3fx                                    ; init_tiles: the zap tiles
-                INCLUDE "../assets/gfx/sprites/tiles_fx.asm"   ; (labels also in sprite_src)
+                MODULE b3fx                                    ; init_tiles: the zap glyphs
+                INCLUDE "../assets/gfx/sprites/tiles_fx.asm"   ; (-> ZAP_GLYPHS)
                 ENDMODULE
+                ; B3B-13: the text block (tools/textpack.py from src/strings.txt):
+                ; string table, dictionary, token streams. Read at runtime with
+                ; BANK_TEXT paged (msg_push / show_impact_msg / print6t), so its
+                ; labels are DISPed to the runtime $C000.. address.
+text_img:
+                DISP $ + TEXT_DISP
+                INCLUDE "../build/text/strings.asm"
+                ENT
+text_img_end:
+                ASSERT text_img_end <= BANK_WINDOW             ; all in bank 1 (virtual < $C000)
+                ASSERT text_base == text_img + TEXT_DISP
 vdata_end:
 VDATA_LEN       EQU vdata_end - vdata
 VIRT_TOTAL      EQU vdata_end - sprite_src
@@ -72,6 +83,7 @@ SRC_LEN_LO      EQU VIRT_TOTAL
 SRC_LEN_HI      EQU VIRT_TOTAL - SRC_LEN_LO
                 ASSERT VIRT_TOTAL <= $8000
                 DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B + vdata ", /D, VDATA_LEN, " B (bank1 ", /D, SRC_LEN_LO, ", free ", /D, $4000 - SRC_LEN_LO, "; bank3 ", /D, SRC_LEN_HI, ")"
+                DISPLAY "GAME text (bank 1): ", /D, TX_COUNT, " strings, ", /D, TX_TOKENS, " tokens, raw ", /D, TEXT_RAW, " -> ", /D, TEXT_PACKED, " B packed at ", /H, text_base
                 DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed; total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
 
 
@@ -290,7 +302,8 @@ read_turn_input:
 
 ;------------------------------------------------------------------------------
 ; end_turn — ANIM finished: transition (if exiting), TURN_COUNTER++, potion
-; pickup, death / win checks (B3B-11: messages via log_push), back to INPUT.  Clobbers: all but IY.
+; pickup, death check (B3B-11: messages via the log; B3B-13: msg_push), back
+; to INPUT.  Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 end_turn:
                 ld   a, (EXIT_KIND)
@@ -305,31 +318,12 @@ end_turn:
                 ld   (TURN_PHASE), a
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
-                jr   z, .alive
+                ret  z                         ; (B3B-13: the PROTO chest win is gone; a run
+                                               ; wins by descending from D8, level_descend)
                 ld   a, GS_DEAD
                 ld   (GAME_STATE), a
-                ld   hl, str_died
-                jp   log_push_end              ; never dropped (B3B-11b); end_screen drains it
-.alive:         ; win: standing on storey 0 of room D with x <= 3 (§8.2) —
-                ld   a, (LVL_DEPTH)            ; PROTO rooms only (LVL_DEPTH 0); a
-                or   a                         ; generated run wins by descending
-                ret  nz                        ; from D8 (level_descend, B3B-12)
-                ld   a, (CUR_ROOM)
-                cp   WIN_ROOM
-                ret  nz
-                ld   ix, P_ENTITIES
-                call is_standing
-                ret  nz
-                call storey_ref
-                or   a
-                ret  nz
-                ld   a, (ix+E_X)
-                cp   WIN_MAX_X + 1
-                ret  nc
-                ld   a, GS_WIN
-                ld   (GAME_STATE), a
-                ld   hl, str_win
-                jp   log_push_end
+                ld   a, TX_DIED
+                jp   msg_push_end              ; never dropped (B3B-11b); end_screen drains it
 
 ;------------------------------------------------------------------------------
 ; do_exit — A = EXIT_KIND. EX_LEVEL: level_descend (B3B-12). Else follower

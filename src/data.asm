@@ -213,15 +213,7 @@ kind_seqs:
 ; resting frame per kind (select screen, HOLD fallback)
 kind_rest:      DB KN_REST, WZ_REST, 0, SK_REST, GB_REST, GH_REST, RT_REST, BT_REST, SL_REST
 
-kind_names:     DW nm_knight, nm_wizard, 0, nm_skeleton, nm_goblin, nm_ghost, nm_rat, nm_bat, nm_slime
-nm_knight:      DB "KNIGHT", 0
-nm_wizard:      DB "WIZARD", 0
-nm_skeleton:    DB "SKELETON", 0
-nm_goblin:      DB "GOBLIN", 0
-nm_ghost:       DB "GHOST", 0
-nm_rat:         DB "RAT", 0
-nm_bat:         DB "BAT", 0
-nm_slime:       DB "SLIME", 0
+; (B3B-13: the kind names are strings TX_NM_* in src/strings.txt, bank-1 text block)
 
 ;==============================================================================
 ; ROOMS — prototype §8.2 on 2 storeys (B3B-3). B3B-8: rooms A-D are a PROTO
@@ -238,7 +230,8 @@ nm_slime:       DB "SLIME", 0
 ; B3B-5 features: A|B door starts OPEN, D|C door CLOSED (the walkthrough bumps
 ; it), B pit p = 20 (storey 0, off the route), D dead-end block (right edge,
 ; storey 0, cols 29..31, rubble (28, 7)). Potions = FLOOR_LIST entries 0..3
-; (POTIONS_TAKEN bit = entry index). Decor (A torch, D chest) = proto_decor.
+; (POTIONS_TAKEN bit = entry index). Decor (A torch) = proto_decor (B3B-13:
+; the room-D chest and the PROTO win are gone).
 ;==============================================================================
 ROOM_A          EQU 0
 ROOM_B          EQU 1
@@ -250,20 +243,9 @@ PIT_B           EQU 20              ; room B storey-0 pit, left hole col
                 ASSERT ROOM_B == ROOM_A + 1 && ROOM_C == ROOM_B + GRID_W && ROOM_D == ROOM_C - 1
                 ASSERT EDGE_AB < EDGES_H && EDGE_DC < EDGES_H
 
-WIN_ROOM        EQU ROOM_D
-WIN_MAX_X       EQU 3               ; standing on storey 0 with x <= 3 (chest cols)
 
-
-;------------------------------------------------------------------------------
-; Strings (0-terminated, upper case, <= LOG_MAX chars; log lines via log_push, B3B-11).
-;------------------------------------------------------------------------------
-; (B3B-R2: the combat message words moved to bank-3 turn3.asm; these two stay:
-; tests/world.py W15 pushes them from a stub with any bank paged)
-str_found:      DB "YOU FOUND A POTION", 0
-str_quaff:      DB "YOU DRINK A POTION", 0
-str_died:       DB "YOU DIED - PRESS ENTER", 0
-str_win:        DB "TREASURE! PRESS ENTER", 0
-str_welcome:    DB "FIND THE TREASURE", 0
+; (B3B-13: every game message is a token stream from src/strings.txt — TX_*
+; ids, bank-1 text block; msg_push / show_impact_msg, lowram.asm.)
 
 ; per-kind stats (prototype §6.3) — emitted into the page-aligned kind_tab,
 ; one K_MAX (32) B array per KROW (ids 9..31 = 0 until Stage 3F kinds land)

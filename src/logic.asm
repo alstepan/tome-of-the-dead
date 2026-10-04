@@ -4,8 +4,8 @@
 ;   quaff / wait / exits), combat rolls, monster AI (walker / climber / flyer +
 ;   yield rule), pending materialise, follow selection, potions, HUD.
 ;   B3B-R2: the monster phase (resolve_monsters / ai_monster / ai_flyer /
-;   materialise), do_attack, show_impact_msg, potion_pickup and try_quaff
-;   now live in bank 3 (src/turn3.asm, entered via far3); what stays here is
+;   materialise), do_attack, potion_pickup and try_quaff now live in bank 3
+;   (src/turn3.asm, entered via far3; B3B-13: show_impact_msg -> lowram.asm); what stays here is
 ;   per-tick or shared with the hero path / tests (try_step, cork_check,
 ;   flyer_lcost, find_target, cache_player, ...).
 ; All logic is cell-granular and resolved instantly at turn start; the anim

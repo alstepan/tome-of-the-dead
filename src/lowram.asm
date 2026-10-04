@@ -294,9 +294,9 @@ ISR_LEN         EQU isr_end - isr
 ; select-screen entries: fid, body col, attr, name (5 B; read by sel_run in
 ; bank 3 and by sel_frt_copy at boot -> must be in always-mapped RAM)
 sel_tab:        DB   FID_knight_idle1, 8,  $47
-                DW   nm_knight
+                DW   sel_nm_knight             ; (bank 3, read by sel_run only)
                 DB   FID_wizard_idle,  21, $45
-                DW   nm_wizard
+                DW   sel_nm_wizard
 
 ;==============================================================================
 ; start_game — C = hero kind. Generate its frames (§5.2: only the chosen
@@ -312,12 +312,12 @@ start_game:
                 call gen_kind
                 ld   hl, new_game              ; bank 3 (A7 review: cold, out of bank 2):
                 call far3                      ; hero slot, PROTO level / master seed
-                ld   de, str_welcome           ; the first log line (panel_init)
+                ld   de, TX_WELCOME            ; the first log line (panel_init)
                 ld   a, (proto_start)
                 or   a
                 jr   z, .gen
                 xor  a                         ; depth 0: the PROTO rooms' theme
-                call level_show                ; (D1 set + the chest)
+                call level_show                ; (the D1 set)
                 jr   .go
 .gen:           inc  a                         ; A = 1: D1
                 call level_enter
@@ -349,7 +349,8 @@ seed_fixed:     DB   SEED_FIXED
 seed_value:     DW   SEED_VALUE
 
 ;------------------------------------------------------------------------------
-; level_enter — B3B-12: enter depth A (1..8) of the run; DE = first log line.
+; level_enter — B3B-12: enter depth A (1..8) of the run; E = first log line
+; (TX_*, TX_NONE = none; B3B-13: was a pointer in DE).
 ; New game (start_game, A = 1) and descend (level_descend) alike:
 ;   card     clear the bank-5 screen, "DEPTH n" (level_card), present_full:
 ;            the card stays on screen 2 while everything below is composed
@@ -381,7 +382,7 @@ level_enter:
                 ld   a, (LVL_DEPTH)
                 ; fall through
 ;------------------------------------------------------------------------------
-; level_show — A = depth (0 = PROTO), DE = first log line, CUR_ROOM + the
+; level_show — A = depth (0 = PROTO), E = first log line (TX_*), CUR_ROOM + the
 ; level state + the entity table set: theme tiles, the room built into
 ; ROOM_MAP + drawn (screen + shadow), panel (depth Dn, HP, log), vis_reset
 ; (render-state resync after an entity-table rewrite: conventions.md), then
@@ -414,7 +415,7 @@ level_descend:
                 cp   LEVELS
                 jr   nc, .win
                 inc  a
-                ld   de, str_descend
+                ld   de, TX_DESCEND
                 call level_enter
                 ld   a, 1                      ; like start_game: a key still held
                 ld   (NEED_RELEASE), a         ; through the card must be released
@@ -423,8 +424,8 @@ level_descend:
                 jp   resync_tick
 .win:           ld   a, GS_WIN
                 ld   (GAME_STATE), a
-                ld   hl, str_win
-                jp   log_push_end              ; never dropped; end_screen drains it
+                ld   a, TX_WIN
+                jp   msg_push_end              ; never dropped; end_screen drains it
 
 ;==============================================================================
 ; ROOM ENTRY / THEME (B3B-8). build_room_map v2 lives in bank 3 (D7); these
@@ -595,23 +596,7 @@ level_load_tiles:
                 ld   a, (LVL_ATTR_WALL)
                 call .patch
                 pop  bc
-                ld   a, b
-                or   a
-                jr   nz, .x
-                ld   hl, chest_glyphs          ; PROTO: the chest over ids 32..35
-                ld   de, TILE_GLYPHS + T_CHEST_TL * 8
-                ld   bc, 4 * 8
-                ldir
-                ld   hl, TILE_ATTRS + T_CHEST_TL
-                ld   de, tile_flags + T_CHEST_TL
-                ld   b, 4
-.c:             ld   (hl), ATTR_CHEST
-                inc  l
-                xor  a
-                ld   (de), a                   ; non-solid (as B10)
-                inc  e
-                djnz .c
-.x:             pop  af
+                pop  af
                 jp   restore_page
 .patch:         ; A = attr -> TILE_ATTRS[id] for the ids at HL up to a 0 (T_AIR)
                 ld   e, (hl)
@@ -623,21 +608,137 @@ level_load_tiles:
                 ld   (de), a
                 jr   .patch
                 ASSERT (TILE_ATTRS & $FF) == 0 && T_AIR == 0
-                ASSERT T_CHEST_TL == T_LVL_BASE && T_CHEST_BR == T_LVL_BASE + 3
                 ASSERT ((tile_flags + TILE_IDS - 1) >> 8) == (tile_flags >> 8)
                 ASSERT TSET_PER_HALF == 4      ; (slot & 3) * 64 by two rrca
 ; the common ids whose attr is the depth's (tools/tiles_convert.py FLOOR_IDS /
 ; WALL_IDS, + rubble = ATTR_WALL, concept-screen §3.3 #12)
 theme_ids:      DB T_PLAT, T_WALLF, T_END_L, T_END_R, 0
                 DB T_BRICK, T_WALL_DITHER, T_WALL_PATCH, T_WALL_FADE, T_RUBBLE, 0
-; PROTO room D chest stand-in (B10: per-level ids 32..35, re-laid by every
-; depth-0 load): the data bytes of assets/gfx/sprites/item_chest.asm (16x16,
-; [mask, data] pairs), cells TL / TR (rows 0-7) and BL / BR (rows 8-15).
-; B3B-13 retires it with the PROTO win.
-chest_glyphs:   DB $00,$00,$00,$00,$3F,$7F,$FF,$AA     ; TL
-                DB $00,$00,$00,$00,$FC,$FE,$FF,$AB     ; TR
-                DB $FF,$FE,$FD,$FE,$FF,$FF,$AA,$FF     ; BL
-                DB $FF,$7F,$BF,$7F,$7F,$FF,$AB,$FF     ; BR
+
+;==============================================================================
+; TEXT (B3B-13). Message strings are dictionary-token streams in the bank-1
+; text block (tools/textpack.py from src/strings.txt; format + layout:
+; docs/memory-map.md "Text (B3B-13)"); the log ring holds streams and
+; print6t (panel2.asm) decodes them when the line is drawn. These helpers
+; page BANK_TEXT around the read and hand $C000 back as they found it
+; (conventions.md: callable from bank-3 code). Low RAM: mapped while bank 1
+; is at $C000.
+;==============================================================================
+;------------------------------------------------------------------------------
+; msg_push — queue string A (TX_*) for the log: log_push copies its stream
+; into the LOG_TXT ring as is. msg_push_end — the same through log_push_end
+; (GS_DEAD / GS_WIN lines: never dropped). Any bank paged, any caller.
+; Clobbers: A, BC, DE, HL.   ~0.35k T + log_push (~25 T per stream byte)
+;------------------------------------------------------------------------------
+msg_push_end:
+                ld   de, log_push_end
+                jr   msg_go
+msg_push:
+                ld   de, log_push
+msg_go:
+                ld   h, a
+                ld   a, (PORT_7FFD_SHADOW)
+                push af                        ; caller's page
+                ld   a, BANK_TEXT
+                call page_bank                 ; (A, BC)
+                ld   a, h
+                call .go                       ; -> the pusher, HL = the stream
+                pop  af
+                jp   restore_page
+.go:            push de                        ; tx_ptr's ret enters the pusher
+                ; fall through
+;------------------------------------------------------------------------------
+; tx_ptr — HL = the stream of string A (TX_*, < 128) in the text block
+; (BANK_TEXT must be paged).  Clobbers: A.   55 T
+;------------------------------------------------------------------------------
+tx_ptr:
+                add  a, a
+                add  a, tx_tab & $FF
+                ld   l, a
+                adc  a, tx_tab >> 8
+                sub  l
+                ld   h, a
+                ld   a, (hl)
+                inc  hl
+                ld   h, (hl)
+                ld   l, a
+                ret
+
+;------------------------------------------------------------------------------
+; show_impact_msg — IX = attacker at IMPACT (anim_tick, MSG_Q): queue its
+; E_MSG line, composed in MSG_BUF as pre + kind name + post (imp_pre /
+; imp_post): "YOU HIT THE RAT", "THE RAT MISSES". Token streams concatenate
+; into a valid stream, decoded at print time. B3B-13: moved here from bank 3
+; (one page switch for the 3 pieces instead of a far3).
+; Clobbers: A, BC, DE, HL (IX kept).   ~1.4k T
+;------------------------------------------------------------------------------
+show_impact_msg:
+                ld   a, (ix+E_MSG)
+                or   a
+                ret  z
+                ld   c, (ix+E_KIND)            ; monster line: its own name
+                cp   MSG_M_HIT
+                jr   nc, .k
+                push ix
+                ld   a, (ix+E_TGT)
+                call ent_ix                    ; (A, E)
+                ld   c, (ix+E_KIND)            ; hero line: the target's name
+                pop  ix
+                ld   a, (ix+E_MSG)
+.k:             ld   b, a                      ; B = E_MSG 1..5, C = kind
+                ld   a, (PORT_7FFD_SHADOW)
+                push af                        ; caller's page
+                push bc
+                ld   a, BANK_TEXT
+                call page_bank
+                pop  bc
+                ld   de, MSG_BUF
+                ld   a, b
+                ld   hl, imp_pre - 1
+                call .tab
+                ld   a, c
+                add  a, TX_NM_KNIGHT
+                call .cat
+                ld   a, b
+                ld   hl, imp_post - 1
+                call .tab
+                xor  a
+                ld   (de), a
+                ld   hl, MSG_BUF
+                call log_push                  ; (any bank: the ring is bank 5)
+                pop  af
+                jp   restore_page
+.tab:           add  a, l                      ; A = (HL + A): the piece's id
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a
+                ld   a, (hl)
+.cat:           call tx_ptr                    ; append stream A at DE (no 0)
+.c:             ld   a, (hl)
+                or   a
+                ret  z
+                ld   (de), a
+                inc  hl
+                inc  de
+                jr   .c
+; pieces by E_MSG 1..5 (MSG_P_HIT, MSG_P_MISS, MSG_P_KILL, MSG_M_HIT, MSG_M_MISS)
+imp_pre:        DB   TX_YOU_HIT, TX_YOU_MISS, TX_YOU_KILL, TX_THE, TX_THE
+imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES
+                ASSERT MSG_P_HIT == 1 && MSG_P_MISS == 2 && MSG_P_KILL == 3 && MSG_M_HIT == 4 && MSG_M_MISS == 5
+                ; kind names: TX_NM_KNIGHT + kind (src/strings.txt order)
+                ASSERT TX_NM_WIZARD == TX_NM_KNIGHT + K_WIZARD && TX_NM_SKELETON == TX_NM_KNIGHT + K_SKELETON
+                ASSERT TX_NM_GOBLIN == TX_NM_KNIGHT + K_GOBLIN && TX_NM_GHOST == TX_NM_KNIGHT + K_GHOST
+                ASSERT TX_NM_RAT == TX_NM_KNIGHT + K_RAT && TX_NM_BAT == TX_NM_KNIGHT + K_BAT
+                ASSERT TX_NM_SLIME == TX_NM_KNIGHT + K_SLIME && K_KNIGHT == 0 && K_COUNT == 9
+                ; the longest composition + its 0 fits MSG_BUF (32 B); a
+                ; stream is never longer than its text, so chars bound bytes
+                ASSERT TXL_NM_SKELETON >= TXL_NM_KNIGHT && TXL_NM_SKELETON >= TXL_NM_WIZARD
+                ASSERT TXL_NM_SKELETON >= TXL_NM_GOBLIN && TXL_NM_SKELETON >= TXL_NM_GHOST
+                ASSERT TXL_NM_SKELETON >= TXL_NM_RAT && TXL_NM_SKELETON >= TXL_NM_BAT && TXL_NM_SKELETON >= TXL_NM_SLIME
+                ASSERT TXL_YOU_HIT + TXL_NM_SKELETON + TXL_EMPTY < 32 && TXL_YOU_MISS + TXL_NM_SKELETON < 32
+                ASSERT TXL_YOU_KILL + TXL_NM_SKELETON < 32 && TXL_THE + TXL_NM_SKELETON + TXL_HITS_YOU < 32
+                ASSERT TXL_THE + TXL_NM_SKELETON + TXL_MISSES < 32 && MSG_BUF + 32 <= TIMING_MARK
 
 ;==============================================================================
 ; B3B-5 DOORS, FALLS, JUMP (game.md §2.3-2.5, §9.1). They run only on the turn
@@ -765,11 +866,10 @@ hero_door:
                 or   a
                 ret  nz                        ; CF = 0
                 inc  (hl)
-                ld   hl, str_locked
-                call log_push                  ; B3B-11: queued (panel_tick)
+                ld   a, TX_LOCKED
+                call msg_push                  ; B3B-11: queued (panel_tick)
                 or   a
                 ret
-str_locked:     DB "THE DOOR IS LOCKED", 0
 
 ;------------------------------------------------------------------------------
 ; try_close — key C (3B stand-in, game.md §1.4 / §2.3), IX = hero. Legal
@@ -925,11 +1025,10 @@ hero_fall:
                 set  EF_DYING_BIT, (ix+E_FLAGS)
                 ld   c, RC_DEATH
 .r:             ld   (ix+E_REACT), c
-                ld   hl, str_fall
-                call log_push                  ; B3B-11: queued (panel_tick)
+                ld   a, TX_FALL
+                call msg_push                  ; B3B-11: queued (panel_tick)
                 scf
                 ret
-str_fall:       DB "YOU FALL INTO A PIT", 0
 
 ;------------------------------------------------------------------------------
 ; try_jump — UP + LEFT / RIGHT (game.md §2.4), IX = hero, A = the PLAYER_DIR

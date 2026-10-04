@@ -5,7 +5,7 @@
 ; each routine; the bank-2 helpers they call (try_step / try_step_face /
 ; cork_check / flyer_lcost / box_free / box_vs_ix / get_box / on_ladder /
 ; is_standing / storey_ref / build_live / snap_pxpy / rng_mod / ent_ix /
-; kind_seq_ptr / start_seq / queue_damage / log_push ...) stay in bank 2 and
+; kind_seq_ptr / start_seq / queue_damage / msg_push ...) stay in bank 2 / 5 and
 ; page nothing, so they run fine under bank 3. The one exception reachable
 ; from here — try_step -> mon_door -> door_open -> door_paint -> shadow_rect
 ; (pages bank 7) — re-pages the caller's bank (door_paint, lowram.asm).
@@ -17,7 +17,6 @@
 ;                     ai_monster calls, materialise and the monster attacks'
 ;                     do_attack stay inside bank 3)
 ;   do_attack         try_horizontal (the hero's bump attack; A = target slot)
-;   show_impact_msg   anim_tick (IX = attacker at IMPACT)
 ;   potion_pickup     end_turn
 ;   try_quaff         try_player_turn (result in L, see there)
 ; Contention: bank 3 is contended, so these bodies pay ULA contention on code
@@ -27,7 +26,7 @@
 ;------------------------------------------------------------------------------
 ; try_quaff — G (far3 from try_player_turn), IX = hero: hp < max and potions
 ; > 0 -> heal 8 (capped), 1 turn. Out: L = 1 quaffed (turn used) / 0 refused
-; (far3 clobbers F, so the result can't be CF).  Clobbers: A, B, DE, HL
+; (far3 clobbers F, so the result can't be CF).  Clobbers: A, BC, DE, HL
 ;------------------------------------------------------------------------------
 try_quaff:
                 ld   l, 0
@@ -45,8 +44,8 @@ try_quaff:
                 dec  (ix+E_POT)
                 ld   (ix+E_FLT), FLASH_TICKS
                 ld   (ix+E_FLA), ATTR_HEAL
-                ld   hl, str_quaff
-                call log_push                  ; B3B-11: queued (panel_tick)
+                ld   a, TX_QUAFF
+                call msg_push                  ; B3B-11: queued (panel_tick)
                 ld   l, 1
                 ret
 
@@ -781,100 +780,14 @@ potion_pickup:
                 ld   de, $0101
                 call queue_damage              ; redraw the cell next render (keeps BC, DE)
                 push bc
-                ld   hl, str_found
-                call log_push                  ; B3B-11: queued (panel_tick)
+                ld   a, TX_FOUND
+                call msg_push                  ; B3B-11: queued (panel_tick; lowram,
+                                               ; re-pages bank 3)
                 pop  bc
                 ld   de, $0101
                 jp   shadow_rect               ; the clean background loses it too. LAST and
                                                ; a tail jump: it pages bank 7, so nothing in
                                                ; bank 3 may run after it (far3 re-pages)
 
-;==============================================================================
-; MESSAGES (B3B-11): composed into MSG_BUF and queued with log_push; the panel
-; engine (panel.asm) draws them one item per tick.
-;==============================================================================
-; kind_name — HL = name string of kind A.  Clobbers: A, HL
-kind_name:
-                add  a, a
-                add  a, kind_names & $FF
-                ld   l, a
-                adc  a, kind_names >> 8
-                sub  l
-                ld   h, a
-                ld   a, (hl)
-                inc  hl
-                ld   h, (hl)
-                ld   l, a
-                ret
-
-; str_cat — append string HL (0-terminated, the 0 not copied) at DE; DE -> its
-; end.  Clobbers: A, DE, HL
-str_cat:
-                ld   a, (hl)
-                or   a
-                ret  z
-                ld   (de), a
-                inc  hl
-                inc  de
-                jr   str_cat
-
-; show_impact_msg — IX = attacker at IMPACT: queue its E_MSG line ("YOU HIT
-; THE RAT", "THE RAT MISSES"; <= 21 chars < LOG_MAX). far3 from anim_tick.
-; Clobbers: A, BC, DE, HL
-show_impact_msg:
-                ld   a, (ix+E_MSG)
-                or   a
-                ret  z
-                ld   de, MSG_BUF
-                cp   MSG_M_HIT
-                jr   nc, .mon
-                ld   hl, str_you
-                call str_cat
-                ld   hl, str_hit
-                ld   a, (ix+E_MSG)             ; (str_cat returns A = 0)
-                cp   MSG_P_HIT
-                jr   z, .pv
-                ld   hl, str_miss
-                cp   MSG_P_MISS
-                jr   z, .pv
-                ld   hl, str_kill
-.pv:            call str_cat
-                ld   hl, str_the
-                call str_cat
-                push ix
-                push de
-                ld   a, (ix+E_TGT)
-                call ent_ix                    ; (clobbers E)
-                ld   a, (ix+E_KIND)
-                pop  de
-                pop  ix
-                jr   .name
-.mon:           ld   hl, str_the
-                call str_cat
-                ld   a, (ix+E_KIND)
-                call kind_name
-                call str_cat
-                ld   hl, str_hits_you
-                ld   a, (ix+E_MSG)
-                cp   MSG_M_HIT
-                jr   z, .tail
-                ld   hl, str_misses
-                jr   .tail
-.name:          call kind_name
-.tail:          call str_cat
-                xor  a
-                ld   (de), a
-                ld   hl, MSG_BUF
-                jp   log_push
-
-;------------------------------------------------------------------------------
-; Strings of the moved routines (0-terminated, upper case, <= LOG_MAX chars;
-; log_push copies them into the bank-2 LOG_TXT ring while bank 3 is paged).
-;------------------------------------------------------------------------------
-str_you:        DB "YOU ", 0
-str_hit:        DB "HIT ", 0
-str_miss:       DB "MISS ", 0
-str_kill:       DB "KILL ", 0
-str_the:        DB "THE ", 0
-str_hits_you:   DB " HITS YOU", 0
-str_misses:     DB " MISSES", 0
+; (B3B-13: show_impact_msg + kind_name / str_cat and the combat message words
+; moved to lowram.asm / src/strings.txt: the strings are token streams in bank 1.)

@@ -58,6 +58,9 @@ BANK_WINDOW     EQU $C000
 FT_BLOCKER      EQU $FE             ; find_target: nearest body is mid-ladder (not a slot)
 PAGING_PROBE    EQU $A5             ; check_paging: bank-1 marker (bank 0 gets ~)
 SRC_VIRT_BASE   EQU $8000           ; sources are assembled at virtual $8000..$FFFF
+BANK_TEXT       EQU BANK_SRC_LO     ; B3B-13: the text block (strings + dictionary), after vdata
+TEXT_DISP       EQU BANK_WINDOW - SRC_VIRT_BASE   ; virtual bank-1 address -> runtime ($C000..)
+TX_NONE         EQU $FF             ; level_enter / level_show / panel_init: E = no first line
 
 ;------------------------------------------------------------------------------
 ; Low-RAM buffers (bank 5, $6000-$7FFF; free after the loader's CLEAR 24575).
@@ -479,18 +482,11 @@ T_HOLE_L        EQU 7               ; ladder cells in a floor row
 T_HOLE_M        EQU 8
 T_HOLE_R        EQU 9
 T_POTION        EQU 10
-; B10: the PROTO chest (room D decor) moved off common ids 11-14 onto the
-; first per-level ids (blank until a level tileset loads; stand-in until
-; B3B-13 retires the chest / B3B-8 loads tilesets): ids 11 / 14 are the door
-; jambs now (level_defs.asm).
-T_CHEST_TL      EQU T_LVL_BASE + 0
-T_CHEST_TR      EQU T_LVL_BASE + 1
-T_CHEST_BL      EQU T_LVL_BASE + 2
-T_CHEST_BR      EQU T_LVL_BASE + 3
+; (B3B-13: the PROTO chest stand-in T_CHEST_* (per-level ids 32..35) and the
+; zap tile ids T_ZAP1/2 (now T_DRIP1/2; the zap glyphs moved to ZAP_GLYPHS,
+; level_defs.asm) are gone.)
 T_TORCH_T       EQU 15
 T_TORCH_B       EQU 16
-T_ZAP1          EQU 17              ; overlay only (never in a room map)
-T_ZAP2          EQU 18
 T_END_L         EQU 19              ; PLATFORM_END_L: floor cell right of a hole
 T_END_R         EQU 20              ; PLATFORM_END_R: floor cell left of a hole
 T_COUNT         EQU 21
@@ -501,7 +497,6 @@ ATTR_WALL       EQU $01
 ATTR_FLOOR      EQU $0F
 ATTR_LADDER     EQU $02
 ATTR_POTION     EQU $42
-ATTR_CHEST      EQU $06
 ATTR_TORCH      EQU $46
 ATTR_HIT        EQU $42
 ATTR_HEAL       EQU $44
@@ -611,6 +606,9 @@ SYM             EQU FF_SYM
 ; Stage 3B data contracts (B3B-1): EQUs + ASSERTs only, no bytes.
 ;------------------------------------------------------------------------------
                 INCLUDE "level_defs.asm"
+; B3B-13: message string ids TX_* / decoded lengths TXL_* (+ ASSERT <= LOG_MAX),
+; generated from src/strings.txt by tools/textpack.py (tools/build.sh)
+                INCLUDE "../build/text/strings_ids.inc"
 
 ; MUL_STOREY r — A = A * STOREY_ROWS (A = storey 0..2), r = the old A.  Clobbers: r.
 ; ld r,a + 8a + a: 5 ops, 20 T (the PROTO 7a was 8a - a at the same cost).

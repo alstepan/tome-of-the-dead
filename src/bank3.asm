@@ -125,6 +125,10 @@ row_attr_fill:  ld   c, 0
 
 str_title:      DB "CHOOSE YOUR HERO", 0
 str_keys:       DB "1            2", 0
+; hero names for the select screen (ROM charset, plain text: not log messages;
+; B3B-13 moved the kind names to the token strings, src/strings.txt)
+sel_nm_knight:  DB "KNIGHT", 0
+sel_nm_wizard:  DB "WIZARD", 0
 
 ;==============================================================================
 ; TRANSITION SCROLLS (prototype §3.6; foundations F5/F6). Gameplay frozen,
@@ -958,9 +962,7 @@ PROTO_ROOMS     EQU ($ - proto_rooms) / (PROTO_DESC_LEN + 1)
                 ASSERT RD_FLAGS == 0 && RD_BLOCK == 9 && RD_LAD1 == 6 && RD_PITCOL == 8
 ; PROTO decor (seed-0 rooms only): room, tile, col, row; $FF ends
 proto_decor:    DB   ROOM_A, T_TORCH_T, 0, 14,  ROOM_A, T_TORCH_B, 0, 15
-                DB   ROOM_D, T_CHEST_TL, 2, 6,  ROOM_D, T_CHEST_TR, 3, 6
-                DB   ROOM_D, T_CHEST_BL, 2, 7,  ROOM_D, T_CHEST_BR, 3, 7
-                DB   $FF
+                DB   $FF                       ; (B3B-13: the room-D chest is gone)
 
 HERO_START_COL  EQU 2
 HERO_START_S    EQU 1
@@ -998,8 +1000,6 @@ level_card:
                 add  a, '0'
                 jp   print_char
 str_depth:      DB   "DEPTH ", 0
-; first log line after a descend (panel_init DE; read with bank 3 paged)
-str_descend:    DB   "YOU DESCEND DEEPER", 0
 
 ;------------------------------------------------------------------------------
 ; level_new — A = depth 1..8: LVL_SEED = MASTER_SEED + depth * LVL_SEED_MUL
@@ -1626,8 +1626,8 @@ decor_room:
 ; init_tiles — boot (far3): the common tile set, ids 0..31 (B3B-2
 ; tiles_common: glyphs + depth-1 attrs; level_load_tiles re-themes the floor /
 ; wall ids per level) into TILE_GLYPHS / TILE_ATTRS, the row-17 ornament into
-; ORN_GLYPHS, then the PROTO zap glyphs over ids 17/18 (T_ZAP1/2, still drawn
-; by draw_zap; the common set has T_DRIP1/2 there, B3B-13). The per-level ids
+; ORN_GLYPHS, the wizard zap glyphs into ZAP_GLYPHS (B3B-13: no longer over
+; ids 17/18, which keep the common set's T_DRIP1/2). The per-level ids
 ; 32..63 come from level_load_tiles (start_game). Clobbers: A, BC, DE, HL.
 ;==============================================================================
 init_tiles:                                    ; (B3B-11b: the data is in vdata, main.asm)
@@ -1644,14 +1644,13 @@ init_tiles:                                    ; (B3B-11b: the data is in vdata,
                 ld   bc, ORN_COUNT * 8
                 call copy_virt3
                 ld   hl, b3fx.tiles_fx_zap1
-                ld   de, TILE_GLYPHS + T_ZAP1 * 8
+                ld   de, ZAP_GLYPHS
                 ld   bc, 2 * 8
                 jp   copy_virt3
                 ASSERT tiles_common_attrs == tiles_common_glyphs + TILE_COMMON * 8
                 ASSERT TILES_COMMON_LEN == TILE_COMMON * 9
                 ASSERT orn_glyphs_end - orn_glyphs == ORN_COUNT * 8
-                ASSERT T_ZAP2 == T_ZAP1 + 1 && b3fx.tiles_fx_zap2 == b3fx.tiles_fx_zap1 + 8
-                ASSERT T_ZAP1 == T_DRIP1 && T_ZAP2 == T_DRIP2 && ATTR_ZAP == $45
+                ASSERT b3fx.tiles_fx_zap2 == b3fx.tiles_fx_zap1 + 8
 
 ; (cold tile data: B3B-11b moved it to main.asm vdata, read via copy_virt3)
                 INCLUDE "panel.asm"            ; B3B-11 panel engine (cold part + the HOT_COPY image)

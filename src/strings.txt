@@ -1,0 +1,45 @@
+# src/strings.txt — every game message (B3B-13). THE single source:
+# tools/textpack.py (tools/build.sh step) packs it into dictionary-token
+# streams (build/text/strings.asm, bank-1 text block; ids / lengths in
+# build/text/strings_ids.inc) and round-trips the emitted bytes at build time.
+#
+# Format: one string per line, `name "TEXT"`; the id is TX_<NAME> (upper),
+# its decoded length TXL_<NAME>. '#' starts a comment line. Text: ASCII
+# 32..126, upper case, no '"'; every string is ONE log line (game.md §3.4:
+# <= 32 chars, LOG_MAX, ASSERTed). Order = id order (ids are stable only
+# within one build: code uses the TX_* names, never numbers).
+#
+# Composed lines (show_impact_msg, lowram.asm): pre + kind name + post, so
+# the pieces keep their spaces. The longest composition is ASSERTed against
+# LOG_MAX in lowram.asm.
+
+# --- whole log lines ----------------------------------------------------------
+welcome         "YOU ENTER THE DUNGEON"
+descend         "YOU DESCEND DEEPER"
+found           "YOU FOUND A POTION"
+quaff           "YOU DRINK A POTION"
+locked          "THE DOOR IS LOCKED"
+fall            "YOU FALL INTO A PIT"
+died            "YOU DIED - PRESS ENTER"
+win             "YOU WIN! PRESS ENTER"
+
+# --- impact line pieces (show_impact_msg: pre + name + post) ---------------------
+you_hit         "YOU HIT THE "
+you_miss        "YOU MISS THE "
+you_kill        "YOU KILL THE "
+the             "THE "
+hits_you        " HITS YOU"
+misses          " MISSES"
+empty           ""
+
+# --- kind names, in kind id order (TX_NM_KNIGHT + kind; kind 2 = the removed
+# Rogue's hole) --------------------------------------------------------------------
+nm_knight       "KNIGHT"
+nm_wizard       "WIZARD"
+nm_rogue        ""
+nm_skeleton     "SKELETON"
+nm_goblin       "GOBLIN"
+nm_ghost        "GHOST"
+nm_rat          "RAT"
+nm_bat          "BAT"
+nm_slime        "SLIME"

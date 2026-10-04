@@ -1443,7 +1443,9 @@ def main():
         # ---------------- 36 / 37 / 38 / 40 walkthrough ---------------------
         if any(want(n) for n in (14, 36, 37, 38, 40)):
             res1 = walkthrough(h, p, check14=want(14))
-            h.expect("37 walkthrough reaches GS_WIN (bounded)", res1["gs"], GS_WIN)
+            h.expect("37 walkthrough reaches room D storey 0 x 3, still playing (bounded; "
+                     "B3B-13: no PROTO chest win)", (res1["gs"], res1["end"]),
+                     (GS_PLAYING, (ROOM_D, 3, 0)))
             print(f"[info] walkthrough: {res1['turns']} turns, OVERRUN_COUNT={res1['overrun']}, "
                   f"BLIT_MISS={res1['miss']}, hero hp={res1['hp']}")
             h.expect("40 OVERRUN_COUNT reported (target 0)", res1["overrun"], 0)
@@ -1451,7 +1453,7 @@ def main():
             h.expect("40 CLIP_TRAP 0 over the walkthrough", res1["clip"], 0)
             h.expect("40 GEN_TRAP 0 over the walkthrough (rooms built + scrolled)",
                      res1["gentrap"], 0)
-            h.expect("36 WIN: ENTER -> GS_SELECT", res1["select"], True)
+            h.expect("36 WIN (GS_WIN end screen): ENTER -> GS_SELECT", res1["select"], True)
             if want(38):
                 res2 = walkthrough(h, p, check14=False)
                 h.expect("38 determinism: identical end state", res2["state"], res1["state"])
@@ -1738,14 +1740,20 @@ def walkthrough(h, p, check14=False):
     go_room(ROOM_D, "H")             # C -> D (s1)
     go_x(22)
     climb("K", 0)                    # {22,1} up to storey 0 (potion 3 at col 17)
-    go_x(3)
-    p.until(lambda: p.rb("GAME_STATE") != GS_PLAYING, 40)
-    res = dict(gs=p.rb("GAME_STATE"), turns=p.rw("TURN_COUNTER"),
+    go_x(3)                          # B3B-13: the old chest spot (the PROTO win is gone)
+    p.until(lambda: p.idle(), 40)
+    e0 = p.ent(0)
+    res = dict(gs=p.rb("GAME_STATE"), end=(p.rb("CUR_ROOM"), e0["X"], storey_of(e0["Y"], body(p, K_KNIGHT)[1])),
+               turns=p.rw("TURN_COUNTER"),
                overrun=p.rw("OVERRUN_COUNT"), miss=p.rb("BLIT_MISS"), hp=p.ent(0)["HP"],
                dmgov=p.rb("DMG_OVERFLOW"), clip=p.rb("CLIP_TRAP"), gentrap=p.rb("GEN_TRAP"))
     res["state"] = (p.rw("RNG_STATE"), p.rw("TURN_COUNTER"), p.rb("POTIONS_TAKEN"),
                     tuple((e["ROOM"], e["X"], e["Y"], e["HP"], e["FLAGS"] & 0x7F)
                           for e in (p.ent(s) for s in range(9))))
+    # the end screen of a win (GS_WIN, as level_descend sets it from D8; the
+    # real D8 descend is tests/world.py W16): ENTER -> hero select
+    p.wb("GAME_STATE", GS_WIN)
+    p.tick(2)
     p.hold("ENTER")
     res["select"] = p.wait_state(GS_SELECT)
     p.release()

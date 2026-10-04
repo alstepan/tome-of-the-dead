@@ -64,7 +64,8 @@ COMMON = [
     ("WALL_PATCH", D["T_WALL_PATCH"], 1, 1, F_WALL),
     ("WALL_FADE", D["T_WALL_FADE"], 1, 1, F_WALL),
 ]
-# (T_DRIP1/2 are left out until B3B-13: ids 17/18 still hold the PROTO zap glyphs.)
+# (T_DRIP1/2: ids 17/18 hold the drip glyphs since B3B-13 (the zap overlay has its own
+# ZAP_GLYPHS); still not placed: drip placement rules are a designer follow-up.)
 WALL_OBJ = ("PILLAR", "PATCH_A", "PATCH_B")
 TILED_OBJ = ("BOOKSHELF", "WINDOW_BAR")
 ANIM_FLAGS = {"TORCH_TALL": F_GROW0 | F_AROW1 | F_LARGE, "BRAZIER_BIG": F_GROW0 | F_AROW1 | F_LARGE,

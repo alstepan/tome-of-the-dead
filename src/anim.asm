@@ -76,8 +76,7 @@ anim_tick:
                 ret  z
                 dec  a
                 call ent_ix
-                ld   hl, show_impact_msg       ; B3B-R2: bank 3 (IX = attacker)
-                call far3
+                call show_impact_msg           ; B3B-13: lowram (IX = attacker)
                 xor  a
                 ld   (MSG_Q), a
                 ret
@@ -1064,12 +1063,11 @@ draw_zap:
                 ld   b, a
                 ld   a, (TICK_COUNTER)
                 and  1
-                add  a, T_ZAP1
                 add  a, a
                 add  a, a
                 add  a, a
-                ld   l, a
-                ld   h, TILE_GLYPHS >> 8       ; T_ZAP1/2 < TILE_COMMON (32): first page
+                ld   l, a                      ; (ZAP_GLYPHS & $FF) == 0: L = frame * 8
+                ld   h, ZAP_GLYPHS >> 8        ; B3B-13: own glyphs, ids 17/18 = drips
                 ld   a, ATTR_ZAP
                 call draw_glyph
 .skip:          pop  bc

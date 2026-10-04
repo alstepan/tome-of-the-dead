@@ -8,6 +8,9 @@
 #    rewritten only when it changes). Needs tools/bin/zx0 (tools/setup_zx0.sh).
 #    (B3B-12: the raw-sources build -DZX0_SOURCES=0 is retired; defs.asm
 #    stops with an error if it is asked for.)
+# 1b. tools/textpack.py -> build/text/strings.asm + strings_ids.inc (B3B-13:
+#    src/strings.txt as dictionary-token streams); it re-parses its output and
+#    fails on any round-trip mismatch / char outside 32..127 / > LOG_MAX.
 # 2. sjasmplus src/main.asm with the project flags. Run in OUTDIR (default: the
 #    repo root), so the artefacts land in OUTDIR/build/: wazhack.tap, .sna,
 #    .sym, .sld, .lst.
@@ -22,6 +25,7 @@ if [ "${1:-}" = "-o" ]; then
     shift 2
 fi
 python3 "$ROOT/tools/zx0_sources.py"
+python3 "$ROOT/tools/textpack.py"
 mkdir -p "$OUT/build"
 LOG="$OUT/build/sjasmplus.log"
 cd "$OUT"

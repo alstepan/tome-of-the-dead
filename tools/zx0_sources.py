@@ -20,8 +20,10 @@ Format (docs/memory-map.md "Sprite sources (ZX0)"):
     (cols*h*2; NO trailing ATTR byte — the raw build's nm_len includes it).
     The FRM list assembles them into the bank-5 frame descriptors (fdesc_tab:
     DW nm, DW GEN_SCRATCH + nm_zoff, DB flags; src/defs.asm FD_*).
-  * Items + tiles (read by init_tiles via copy_virt, never by the generator)
-    stay raw: their .asm files are INCLUDEd verbatim, first.
+  * Items + tiles (index.asm entries that are not generator frames) are NOT
+    emitted (B3B-13): nothing at runtime reads them since B3B-8 (init_tiles
+    takes tiles_common / the zap glyphs from the vdata block; the tools read
+    the .asm files from disk).
   * index.asm's per-kind tables (<kind>_frames/_meta/_flags/...) are not
     emitted: nothing in the engine reads them.
 Build-time metadata per block (EQUs, also in the .sym): zblk_N_raw,
@@ -179,11 +181,10 @@ def main():
         "; docs/memory-map.md \"Sprite sources (ZX0)\".",
         "; " + "=" * 76,
         "",
-        "; ---- raw (items + tiles: init_tiles reads them with copy_virt) ----",
+        f"; (B3B-13: the {len(raw_files)} raw item / tile files of index.asm are not emitted:",
+        "; nothing at runtime reads them.)",
+        "",
     ]
-    for n in raw_files:
-        lines.append(f'        INCLUDE "../../assets/gfx/sprites/{n}.asm"')
-    lines.append("")
 
     blocks, desc, tot_raw, tot_pk, rt = [], [], 0, 0, 0
     with tempfile.TemporaryDirectory() as tmp:

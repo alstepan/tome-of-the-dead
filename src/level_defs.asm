@@ -354,6 +354,11 @@ HOT_COPY        EQU FONT6 + (FONT6_PAGES - 1) * 256 + FONT6_FIRST + FONT6_WB + 9
 HOT_COPY_END    EQU BANK2_FREE_END      ; = SLOTREC
                 ASSERT FONT6 == $B200 && HOT_COPY == $B5E0 && HOT_COPY_END == $B800
                 ASSERT (FONT6 & $FF) == 0 && FONT6_FIRST + 95 + FONT6_WB <= 255
+; B3B-13: the wizard zap overlay's 2 glyphs (8 B each, filled by init_tiles
+; from bank-1 vdata) in the first plane hole (offsets 0..31 of page 0), so
+; tile ids 17/18 are T_DRIP1/2 (concept-screen §3.3). draw_zap: L = frame * 8.
+ZAP_GLYPHS      EQU FONT6
+                ASSERT (ZAP_GLYPHS & $FF) == 0 && 2 * 8 <= FONT6_FIRST
 
 ; D6: the animated-decor lists, in the spare after the IM 2 vector table
 ; ($BC01..$BCBB, 187 B; the ISR starts at ISR_ADDR $BCBC). Each list = its

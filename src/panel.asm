@@ -73,7 +73,8 @@ panel_boot:
 ; panel_init — new game (far3 from start_game): the static panel of HERO_KIND
 ; (icon bar, labels, bar frames, placeholders, gear outlines, attrs) on rows
 ; 18..23 of bank 5 — the rows must be blank (start_game's clear_screen) —
-; panel state reset, then DE (0 = none) pushed to the log and everything
+; panel state reset, then string E (TX_*, TX_NONE = none; B3B-13: was a
+; pointer in DE) pushed to the log and everything
 ; queued drawn at once (panel_flush). The caller presents (present_full).
 ; Placeholders until 3C/3E: MP bar empty, FOOD bar full + "FED", no ammo, no
 ; info line, empty gear outlines; quick slots outlined except the potion slot
@@ -224,10 +225,10 @@ panel_init:
                 ld   a, c
                 cp   ROOM_COLS
                 jr   c, .gear
-                pop  hl                        ; the first message
-                ld   a, h
-                or   l
-                call nz, log_push
+                pop  hl                        ; L = the first message (TX_*)
+                ld   a, l
+                cp   TX_NONE
+                call nz, msg_push              ; (lowram: re-pages bank 3)
                 ; fall through
 ;------------------------------------------------------------------------------
 ; panel_flush — drain the whole queue now, whole log lines (cold: new game).

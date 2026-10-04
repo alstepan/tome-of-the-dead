@@ -71,6 +71,11 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
       drops + counts, log_push_end replaces the newest; print6 tails exact; HP bar fill
       == round(32 * hp / max); T of a whole log item (scroll + 32 chars) and
       of print6 per char; the Mage's panel golden (w15_panel_mage).
+  B3B-13 (token text, src/strings.txt -> tools/textpack.py):
+  W17 every string decoded by tk_get into a buffer == its text (exact, 32..127)
+      + the decode cost per char; every string pushed by id (msg_push) and
+      drawn by item_log / print6t == the reference render; $C000 handed back;
+      composed impact lines (show_impact_msg) == text; T per log item.
 
 Usage: ZRCP_PORT=10001 python3 tests/world.py [W1 W3 W11 ...] [--update-golden [--png DIR]]
 """
@@ -83,6 +88,9 @@ _argv = sys.argv[1:]
 sys.argv = [sys.argv[0], "999"]               # keep game.py's item filter inert
 import game  # noqa: E402
 import room_model  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
+import textpack  # noqa: E402
+STRINGS = textpack.read_strings()           # [(name, text)], id order (B3B-13)
 from game_lib import (Harness, S, EMU_ARGS, attr_at, cell_bytes, split_frame,  # noqa: E402
                       stand_y, is_standing, item_row, ladder_rows, ROOM_LADDERS,
                       ROOM_A, ROOM_B, ROOM_C, ROOM_D, ROOM_LETTER,
@@ -369,10 +377,11 @@ def bar_bytes(fill):
 
 
 def w15(p, check):
-    MSG = {k: S[k] for k in ("str_found", "str_locked", "str_fall", "str_died", "str_quaff")}
-    TXT = {"str_found": "YOU FOUND A POTION", "str_locked": "THE DOOR IS LOCKED",
-           "str_fall": "YOU FALL INTO A PIT", "str_died": "YOU DIED - PRESS ENTER",
-           "str_quaff": "YOU DRINK A POTION"}
+    # B3B-13: messages are token streams pushed by id (msg_push); the expected
+    # text comes from src/strings.txt
+    TXT = {"str_" + n: t for n, t in STRINGS if n in ("found", "locked", "fall", "died", "quaff")}
+    MSG = {k: S["TX_" + k[4:].upper()] for k in TXT}
+    WELCOME = dict(STRINGS)["welcome"]
     STUB = S["LOWRAM_END_3B"]
 
     def w(v):
@@ -393,7 +402,10 @@ def w15(p, check):
     def push(*names):
         code = []
         for n in names:
-            code += [0x21] + w(MSG[n]) + [0xCD] + w(S["log_push"])
+            if n in TXT:                          # a string id: msg_push (B3B-13)
+                code += [0x3E, MSG[n], 0xCD] + w(S["msg_push"])
+            else:                                 # plain text in RAM: log_push
+                code += [0x21] + w(MSG[n]) + [0xCD] + w(S["log_push"])
         stub(code, "push " + ",".join(names))
 
     def step(c):
@@ -415,8 +427,8 @@ def w15(p, check):
     p.boot(K_KNIGHT)
     p.isolate()
     fr = p.frame()
-    check("W15 start: log row 23 = FIND THE TREASURE, row 22 blank",
-          (log_row(fr, 23), log_row(fr, 22)) == (text6("FIND THE TREASURE"), text6("")), "")
+    check(f"W15 start: log row 23 = {WELCOME}, row 22 blank",
+          (log_row(fr, 23), log_row(fr, 22)) == (text6(WELCOME), text6("")), "")
     check("W15 start: log attrs row 22 $07 / row 23 $47 (cols 0-23)",
           [attr_at(fr, c, 22) for c in range(24)] + [attr_at(fr, c, 23) for c in range(24)]
           == [S["ATTR_LOG_OLD"]] * 24 + [S["ATTR_LOG_NEW"]] * 24, "")
@@ -457,8 +469,8 @@ def w15(p, check):
           all(seen.get(k, 99) <= 3 for k in ("log", "hp", "pot")), seen)
     check("W15 quaff: the log line displayed one tick after it is composed",
           seen.get("shown", 99) == seen.get("log", 0) + 1, seen)
-    check("W15 quaff: scroll: row 22 = the previous newest line (FIND THE TREASURE)",
-          log_row(p.composed_frame(), 22) == text6("FIND THE TREASURE"), "")
+    check(f"W15 quaff: scroll: row 22 = the previous newest line ({WELCOME})",
+          log_row(p.composed_frame(), 22) == text6(WELCOME), "")
 
     # --- 3 messages: 2-row scroll ----------------------------------------
     push("str_found", "str_locked", "str_fall")
@@ -495,7 +507,7 @@ def w15(p, check):
 
     # --- GS_DEAD / GS_WIN lines are never dropped (log_push_end) -------------
     push("str_found", "str_locked", "str_fall", "str_quaff")
-    stub([0x21] + w(MSG["str_died"]) + [0xCD] + w(S["log_push_end"]), "log_push_end")
+    stub([0x3E, MSG["str_died"], 0xCD] + w(S["msg_push_end"]), "msg_push_end")
     check("W15 ring full: log_push_end replaces the newest pending (LOG_QN 4, LQ_DROP 1)",
           (p.rb("LOG_QN"), p.rb(S["LOG_Q"] + S["LQ_DROP"])) == (4, 1), "")
     p.until(drained, 12)
@@ -573,6 +585,129 @@ def w15(p, check):
     game.golden(p.h, "w15_panel_mage", p.frame())
     check("W15 golden w15_panel_mage (the Mage's start screen: play + panel hashes)",
           len(p.h.failures) == n0, p.h.failures[n0:])
+
+
+def w17(p, check):
+    """B3B-13: the token text. (a) tk_get decodes every string of
+    src/strings.txt into a buffer == its text (exact bytes, 0-terminated), +
+    the decode cost vs a plain-fetch getter over the same text; (b) every
+    string pushed by id (msg_push) and drawn by the real item_log (print6t)
+    == the reference 6x8 render of its text on row 23, $C000 handed back, T
+    per item; (c) composed impact lines (show_impact_msg, all 5 kinds x the
+    monster names) drawn == their text."""
+    STUB = S["LOWRAM_END_3B"]
+    w = w16
+    texts = [t for _, t in STRINGS]
+    n_chars = sum(len(t) for t in texts)
+
+    def stub(code, tag, measure=False):
+        pc0 = p.pc()
+        if measure:
+            p.z.cmd("reset-tstates-partial")
+        ok = p.run_stub([0xF3] + code + [0xFB], org=STUB)
+        t = int(p.z.cmd("get-tstates-partial")) if measure else 0
+        check(f"W17 stub {tag} ran", ok, "")
+        p.z.cmd("set-register PC=%d" % pc0)
+        return t
+
+    def asm(items):
+        """tiny assembler: ints = bytes, ('L', name) = label, ('jr', cc, name)
+        = relative jump (cc opcode)."""
+        out, labels, fix = [], {}, []
+        for it in items:
+            if isinstance(it, int):
+                out.append(it)
+            elif it[0] == "L":
+                labels[it[1]] = len(out)
+            else:
+                out += [it[1], 0]
+                fix.append((len(out) - 1, it[2]))
+        for at, nm in fix:
+            out[at] = (labels[nm] - (at + 1)) & 0xFF
+        return out
+
+    p.boot(K_KNIGHT)
+    p.isolate()
+    p.settle(2)
+    # --- (a) decode every string into a buffer --------------------------------
+    BUF, GET = STUB + 0x100, STUB + 0xF0
+    plain_get = [0x0A, 0x03, 0xB7, 0xC9]          # ld a,(bc) / inc bc / or a / ret
+    p.z.cmd("write-memory %d %s" % (GET, " ".join(map(str, plain_get))))
+
+    def decode_loop(getter, plain):
+        return asm([0x3A] + w(S["PORT_7FFD_SHADOW"]) + [0xF5,               # ld a,(shadow) / push af
+                    0x3E, S["BANK_TEXT"], 0xCD] + w(S["page_bank"]) +
+                   [0x11] + w(BUF + (0x200 if plain else 0)) +             # ld de, out
+                   ([0x01] + w(BUF) if plain else []) +                     # plain: BC walks BUF
+                   [0xAF, ("L", "lp"), 0xF5, 0xCD] + w(S["tx_ptr"]) +       # xor a / push af / call tx_ptr
+                   ([0x00, 0x00] if plain else [0x44, 0x4D]) +              # (nop nop) / ld b,h / ld c,l
+                   [("L", "in"), 0xCD] + w(getter) + [0x12, 0x13, 0xB7, ("jr", 0x20, "in"),
+                    0xF1, 0x3C, 0xFE, S["TX_COUNT"], ("jr", 0x38, "lp"),
+                    0xF1, 0xCD] + w(S["restore_page"]))
+    sh0 = p.rb("PORT_7FFD_SHADOW")
+    t_tk = stub(decode_loop(S["tk_get"], False), "tk_get decode loop", measure=True)
+    got = bytes(p.z.read_memory(BUF, n_chars + len(texts)))
+    want = b"".join(t.encode() + b"\0" for t in texts)
+    check(f"W17 tk_get: all {len(texts)} strings decode bit-exact (0-terminated, in id order)",
+          got == want, [(i, a, b) for i, (a, b) in enumerate(zip(got, want)) if a != b][:4])
+    check("W17 tk_get: decoded chars are 32..127 only",
+          all(c == 0 or 32 <= c <= 127 for c in got), "")
+    check("W17 decode loop: the caller's $C000 bank handed back", p.rb("PORT_7FFD_SHADOW") == sh0,
+          (sh0, p.rb("PORT_7FFD_SHADOW")))
+    t_pl = stub(decode_loop(GET, True), "plain getter loop", measure=True)
+    check("W17 plain-getter loop re-reads the same text", bytes(p.z.read_memory(BUF + 0x200, len(want))) == want, "")
+    per = (t_tk - t_pl) / n_chars
+    # --- (b) every string through msg_push + item_log (print6t) ---------------
+    row_ok, worst, sh_bad = [], (0, ""), []
+    for sid, (nm, txt) in enumerate(STRINGS):
+        sh0 = p.rb("PORT_7FFD_SHADOW")
+        t = stub([0x3E, sid, 0xCD] + w(S["msg_push"]) + [0x21] + w(S["PANEL_DIRTY"]) +
+                 [0xCD] + w(S["item_log"]), f"msg_push + item_log {nm}", measure=True)
+        if p.rb("PORT_7FFD_SHADOW") != sh0:
+            sh_bad.append(nm)
+        if log_row(p.composed_frame(), 23) != text6(txt):
+            row_ok.append(nm)
+        if t > worst[0]:
+            worst = (t, nm)
+    check(f"W17 every string ({len(STRINGS)}) drawn by item_log == the reference render of its text",
+          row_ok == [], row_ok)
+    check("W17 msg_push + item_log hand the caller's $C000 bank back", sh_bad == [], sh_bad)
+    check("W17 log queue drained (LOG_QN 0, nothing dropped)",
+          (p.rb("LOG_QN"), p.rb(S["LOG_Q"] + S["LQ_DROP"])) == (0, 0), "")
+    check("W17 worst push + log item <= 25k T", worst[0] <= 25000, worst)
+    # --- (c) composed impact lines ------------------------------------------
+    T_ = dict(STRINGS)
+    names = {k: T_["nm_" + k] for k in ("skeleton", "goblin", "ghost", "rat", "bat", "slime")}
+    pre = {1: T_["you_hit"], 2: T_["you_miss"], 3: T_["you_kill"], 4: T_["the"], 5: T_["the"]}
+    post = {1: "", 2: "", 3: "", 4: T_["hits_you"], 5: T_["misses"]}
+    ent = lambda sl, k: S["P_ENTITIES"] + sl * 32 + S[k]
+    bad, t_imp = [], 0
+    for kn, nmtxt in names.items():
+        kind = S["K_" + kn.upper()]
+        for m in (1, 2, 3, 4, 5):
+            p.wb(ent(1, "E_KIND"), kind)
+            if m < 4:
+                p.wb(ent(0, "E_MSG"), m)
+                p.wb(ent(0, "E_TGT"), 1)
+                slot = 0
+            else:
+                p.wb(ent(1, "E_MSG"), m)
+                slot = 1
+            ix = S["P_ENTITIES"] + slot * 32
+            t = stub([0xDD, 0x21] + w(ix) + [0xCD] + w(S["show_impact_msg"]) + [0x21] + w(S["PANEL_DIRTY"]) +
+                     [0xCD] + w(S["item_log"]), f"impact {kn} {m}", measure=True)
+            t_imp = max(t_imp, t)
+            exp = pre[m] + nmtxt + post[m]
+            if log_row(p.composed_frame(), 23) != text6(exp):
+                bad.append((kn, m, exp))
+    p.wb(ent(0, "E_MSG"), 0)
+    p.wb(ent(1, "E_MSG"), 0)
+    check("W17 composed impact lines (5 kinds x 6 monsters) drawn == text", bad == [], bad[:4])
+    print(f"[info] W17 measured (contended, ZEsarUX): tk_get decode loop {t_tk} T vs plain getter {t_pl} T"
+          f" over {n_chars} chars -> decode +{per:.1f} T/char (vs a called plain fetch);"
+          f" worst msg_push + log item {worst[0]} T ({worst[1]}); worst impact compose + item {t_imp} T",
+          flush=True)
+    p.tick(2)
 
 
 # ---------------------------------------------------------------------------
@@ -1574,7 +1709,7 @@ def w16_level(p, check):
         # ---- cost: level_enter alone (DI), D2 of this run ---------------
         p.z.cmd("reset-tstates-partial")
         pc0 = p.pc()
-        ok = p.run_stub([0xF3, 0x3E, 2, 0x11] + w16(S["str_descend"]) + [0xCD] + w16(S["level_enter"]) + [0xFB],
+        ok = p.run_stub([0xF3, 0x3E, 2, 0x11] + w16(S["TX_DESCEND"]) + [0xCD] + w16(S["level_enter"]) + [0xFB],
                         org=STUB)
         t = int(p.z.cmd("get-tstates-partial"))
         p.z.cmd("set-register PC=%d" % pc0)
@@ -2116,6 +2251,10 @@ def main():
         # ================= B3B-11: panel engine (W15) =====================
         if want("W15"):
             w15(p, check)
+
+        # ================= B3B-13: token text (W17) ======================
+        if want("W17"):
+            w17(p, check)
 
         # ================= B3B-12: level change (W16) =======================
         if want("W16"):
