@@ -416,7 +416,9 @@ level_descend:
                 inc  a
                 ld   de, str_descend
                 call level_enter
-                ld   a, GS_PLAYING
+                ld   a, 1                      ; like start_game: a key still held
+                ld   (NEED_RELEASE), a         ; through the card must be released
+                ld   a, GS_PLAYING             ; (edge-triggered input) first
                 ld   (GAME_STATE), a
                 jp   resync_tick
 .win:           ld   a, GS_WIN

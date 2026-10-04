@@ -1205,6 +1205,8 @@ def pop_model(p, blk, depth):
         pit = rd(r, "RD_PITCOL")
         if s_ == 0 and pit and pit - 1 <= hi and pit + 3 >= lo:
             return True
+        if s_ == 1 and pit and pit <= hi and pit + 2 >= lo:     # the fall's landing cols
+            return True
         bl = rd(r, "RD_BLOCK")
         if bl and (bl >> 6) & 1 == s_:
             w = bl & S["RDB_WMASK"]
@@ -1289,6 +1291,9 @@ def w16_level(p, check):
         check(f"W16 {tag}: population == the stand-in rule ({len(mods)} monsters, start room empty)",
               got[:len(mods)] == mods and all(g is None for g in got[len(mods):])
               and not any(m[1] == st for m in mods), (got, mods))
+        bad = placement_props(blk)
+        check(f"W16 {tag}: every monster clear of holes / ladders / pit cells in its built room "
+              "(property check on the engine's maps)", bad == [], bad[:4])
         p.settle(2)
         fr = p.frame()
         check(f"W16 {tag}: panel depth D{d} at (30, 18)", log_row(fr, 18, 30, 2) == text6("D%d" % d, 0, 2), "")
@@ -1298,6 +1303,50 @@ def w16_level(p, check):
         check(f"W16 {tag}: first play tick: ROOM_MAP == model, ANIM_LIST == the start room's, "
               "screens == map (before any decor_tick)", fresh.get(d) == [], fresh.get(d))
         return blk
+
+    def placement_props(blk):
+        """Independent of pop_model: build every room holding monsters into
+        NEXT_MAP (scratch while playing; the build fills ANIM_N2 only) and test
+        each body on the ENGINE's map + tile_flags: no TF_LADDER / TF_HOLE cell
+        in its storey rows within its margin (walker 1 col, flyer 3), walkers'
+        floor cells under the body TF_FLOOR, no hole / air cell in the floor
+        rows bounding its storey within the margin (pit holes, the cols a fall
+        from storey 0 lands on), no solid cell in its body box."""
+        tf = p.z.read_memory(S["tile_flags"], 64)
+        LAD, HOLE, FLOOR, SOLID = S["TF_LADDER"], S["TF_HOLE"], S["TF_FLOOR"], S["TF_SOLID"]
+        kt = S["kind_tab"]
+        rooms = {}
+        for s_ in range(1, 16):
+            e = p.ent(s_)
+            if e["FLAGS"] & EF_ACTIVE:
+                rooms.setdefault(e["ROOM"], []).append(e)
+        bad = []
+        page = S["NEXT_MAP"] >> 8
+        for r, ents in rooms.items():
+            ingame([0x3E, r, 0x16, page, 0x21] + w16(S["build_room_map"]) + [0xCD] + w16(S["far3"]),
+                   f"build room {r} -> NEXT_MAP")
+            m = p.z.read_memory(S["NEXT_MAP"], 576)
+            for e in ents:
+                k = e["KIND"]
+                w, h = p.rb(kt + S["KT_BW"] + k), p.rb(kt + S["KT_BH"] + k)
+                fly = p.rb(kt + S["KT_FLAGS"] + k) & S["KF_FLYER"]
+                mg = 3 if fly else 1
+                s_ = 1 if e["Y"] >= 9 else 0
+                c0, c1 = max(0, e["X"] - mg), min(31, e["X"] + w - 1 + mg)
+                cell = lambda c, rr: tf[m[rr * 32 + c]]  # noqa: E731
+                for rr in range(9 * s_, 9 * s_ + 9):
+                    for c in range(c0, c1 + 1):
+                        if cell(c, rr) & (LAD | HOLE):
+                            bad.append((r, k, e["X"], s_, "ladder/hole", c, rr))
+                for fr_ in ((8,) if s_ == 0 else (8, 17)):
+                    for c in range(c0, c1 + 1):
+                        if not cell(c, fr_) & FLOOR:
+                            bad.append((r, k, e["X"], s_, "floor gap", c, fr_))
+                for rr in range(e["Y"], e["Y"] + h):
+                    for c in range(e["X"], e["X"] + w):
+                        if cell(c, rr) & SOLID:
+                            bad.append((r, k, e["X"], s_, "solid", c, rr))
+        return bad
 
     fresh = {}
 
@@ -1319,16 +1368,25 @@ def w16_level(p, check):
         errs += p.screen_vs_map(tag)
         fresh[d] = errs
 
-    def to_exit(blk, tag, walk=True):
+    def to_exit(blk, tag, walk=True, adjacent=False):
         """Teleport the hero next to the lair's level exit (storey 1), the
         lair's monsters out, walk onto {EXITCOL,2}, J: descend. -> (frames
         while the card was shown at level_new, T of the turn's ticks)."""
         lair = blk[S["LVL_LAIR"] - room_model.BASE]
         ex = room_model.field(blk, lair, "RD_EXITCOL")
         x = ex - 2 if ex - 2 >= 2 else ex + 2
-        for s_ in range(1, 16):
-            if p.ent(s_)["ROOM"] == lair:
+        mons = [s_ for s_ in range(1, 16) if p.ent(s_)["FLAGS"] & EF_ACTIVE and p.ent(s_)["ROOM"] == lair]
+        for s_ in mons:
+            if not adjacent:
                 p.set_ent(s_, ROOM=GEN_NOWHERE)
+        if adjacent:                              # the lair keeps its monsters; one
+            s_ = mons[0] if mons else 1           # walker right beside the hero
+            k = S["K_GOBLIN"]
+            gh = p.rb(S["kind_tab"] + S["KT_BH"] + k)
+            gx = ex + kw if ex + kw + 2 <= 29 else ex - 2
+            p.set_ent(s_, KIND=k, ROOM=lair, FLAGS=EF_ACTIVE | EF_HOSTILE | EF_LEFT, X=gx,
+                      Y=stand_y(1, gh), PX=gx * 8, PY=stand_y(1, gh) * 8, MODE=0, DVIS=0,
+                      HP=p.rb(S["kind_tab"] + S["KT_HP"] + k))
         p.z.cmd("write-memory %d %d" % (S["CUR_ROOM"], lair))
         p.set_ent(0, ROOM=lair, X=x if walk else ex, Y=y1, PX=(x if walk else ex) * 8, PY=y1 * 8,
                   MODE=0, DVIS=0)
@@ -1451,7 +1509,11 @@ def w16_level(p, check):
         blk = room_model.read_block(p)
         for d in range(3, 8):
             hero_k = tuple(p.ent(0)[k] for k in ("HP", "MAXHP", "POT", "KIND"))
-            ran, cards, fr_n = to_exit(blk, f"D{d - 1}", walk=False)
+            ran, cards, fr_n = to_exit(blk, f"D{d - 1}", walk=False, adjacent=(d == 3))
+            if d == 3:
+                check("W16 D2 -> D3 with the lair's monsters present and a goblin adjacent: "
+                      "one turn, descended, HP unchanged (monsters don't act on an exit turn)",
+                      ran and p.rb("LVL_DEPTH") == 3 and p.ent(0)["HP"] == hero_k[0], (ran, p.rb("LVL_DEPTH")))
             check(f"W16 D{d - 1} -> D{d}: card DEPTH {d} shown", len(cards) == 1 and card_ok(cards[0][0], d), "")
             blk = level_ok(d, M, f"D{d}", hero_keep=hero_k)
         # ---- D7 -> D8 with the reseed-exhausting seeds (level_gen B = 1) -
@@ -1470,6 +1532,45 @@ def w16_level(p, check):
         check("W16 D8: descending = GS_WIN (game.md §1.4 stand-in), no card, depth stays 8",
               (p.rb("GAME_STATE"), p.rb("LVL_DEPTH"), len(cards), p.rb("EXIT_KIND")) == (S["GS_WIN"], 8, 0, 0),
               (p.rb("GAME_STATE"), p.rb("LVL_DEPTH"), len(cards)))
+        # ---- win -> new game: fresh D1, a new master seed ---------------
+        def new_game_from_end(tag, prev_master):
+            p.hold("ENTER")
+            p.wait_state(S["GS_SELECT"])
+            p.release()
+            p.tick(3)
+            p.wb("seed_fixed", 0)                     # the real seed source
+            p.hold("1")
+            p.wait_state(GS_PLAYING)
+            fresh.pop(1, None)
+            fresh_ok(tag)
+            p.release()
+            p.settle(3)
+            ms = p.rw("MASTER_SEED")
+            hp = p.rb(S["kind_tab"] + S["KT_HP"] + K_KNIGHT)
+            e = p.ent(0)
+            check(f"W16 {tag}: new game = fresh D1 (HP {hp}/{hp}, 1 potion, turn 0), new master seed",
+                  (p.rb("LVL_DEPTH"), e["HP"], e["MAXHP"], e["POT"]) == (1, hp, hp, 1)
+                  and p.rw("TURN_COUNTER") == 0 and ms != prev_master, (e, hex(ms), hex(prev_master)))
+            level_ok(1, ms, tag)
+            return ms
+        ms = new_game_from_end("after the win", m8)
+        # ---- descend, then die -> new game: fresh D1 -------------------
+        blk = room_model.read_block(p)
+        to_exit(blk, "new game D1", walk=False)
+        check("W16 new game: descended to D2", p.rb("LVL_DEPTH") == 2, p.rb("LVL_DEPTH"))
+        e = p.ent(0)
+        k = S["K_SKELETON"]
+        sh = p.rb(S["kind_tab"] + S["KT_BH"] + k)
+        sx = e["X"] + kw if e["X"] + kw + 3 <= 29 else e["X"] - 3
+        p.set_ent(1, KIND=k, ROOM=p.rb("CUR_ROOM"), FLAGS=EF_ACTIVE | EF_HOSTILE | (EF_LEFT if sx > e["X"] else 0),
+                  X=sx, Y=stand_y(0, sh), PX=sx * 8, PY=stand_y(0, sh) * 8, MODE=0, DVIS=0, HP=20)
+        p.set_ent(0, HP=1, POT=0)
+        for _ in range(30):
+            if p.rb("GAME_STATE") == GS_DEAD:
+                break
+            p.turn("SPACE")
+        check("W16 D2: the hero dies (GS_DEAD)", p.rb("GAME_STATE") == GS_DEAD, p.rb("GAME_STATE"))
+        new_game_from_end("after death on D2", ms)
         # ---- cost: level_enter alone (DI), D2 of this run ---------------
         p.z.cmd("reset-tstates-partial")
         pc0 = p.pc()

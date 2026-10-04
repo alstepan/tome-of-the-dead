@@ -6,8 +6,13 @@
 ;
 ; level_gen      In : A = depth 1..8; LVL_SEED / MASTER_SEED already set.
 ;                Out: block at LVL_STATE == levelgen.generate(depth, seed, master);
-;                     LVL_SEED = seed actually used. B = 0 ok; B = 1 + CF = failed
-;                     (16 reseeds, cannot happen for the verified seed space).
+;                     LVL_SEED = seed actually used. B = 0 ok; B = 1 + CF = failed:
+;                     16 reseeds exhausted, LVL_SEED left at seed + 16. This DOES
+;                     happen (D8 seeds 55352..55354, tests/levelgen_z80.py).
+;                     level_new (bank3.asm) calls again from seed + 16; that ends
+;                     in <= 2 calls: tools/levelgen_runs.py scans all 65,536
+;                     seeds per depth — D1-D7 never fail, D8's longest run of
+;                     consecutive failing seeds is 18 (< 32). No hard cap.
 ;                     Clobbers all but IY, SP (far3 itself clobbers A/F on return).
 ; level_start_x  In : block generated.  Out: A = B = hero start col (storey 0).
 ;

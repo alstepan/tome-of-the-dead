@@ -630,10 +630,20 @@ try_climb:
                 ld   a, RDX_D                  ; {x,2}: the down-exit ...
                 call .vexit
                 jr   z, .dn
-                ld   a, EX_LEVEL               ; ... else the level exit {EXITCOL,2}
-                jr   .dk                       ; (B3B-12: the only other {c,2} segment
-.dn:            add  a, GRID_W                 ; ladder_exists finds; a DNCOL always
-                ld   (EXIT_DEST), a            ; has RDX_D) — dest r + 3
+                ld   a, (LVL_FLAGS)            ; ... else the level exit (B3B-12):
+                and  LF_GRATE_OPEN             ; only through an open grate (3B: always
+                jr   z, .no                    ; open, game.md §1.4; 3F: the boss's death)
+                call cur_room_desc             ; and only at x == RD_EXITCOL
+                ld   a, l
+                add  a, RD_EXITCOL             ; (descriptor: one page)
+                ld   l, a
+                ld   a, (hl)
+                cp   c
+                jr   nz, .no
+                ld   a, EX_LEVEL
+                jr   .dk
+.dn:            add  a, GRID_W                 ; dest r + 3
+                ld   (EXIT_DEST), a
                 ld   a, EX_DOWN
 .dk:            ld   (EXIT_KIND), a
                 ld   a, (ix+E_X)

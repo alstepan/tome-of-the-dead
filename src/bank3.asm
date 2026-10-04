@@ -532,6 +532,9 @@ new_game:
                 or   a
                 jr   nz, .ms
                 ld   hl, (SYS_FRAMES)          ; frames since boot at the choice
+                ld   a, r                      ; + R (B3B-12 review): little extra entropy
+                xor  h                         ; (the select loop is HALT-synchronised),
+                ld   h, a                      ; the 20 ms keypress frame is the real source
 .ms:            ld   (MASTER_SEED), hl
                 ret
 .proto:         call proto_level               ; B3B-8: rooms A-D = a 3B level state
@@ -1002,7 +1005,8 @@ str_descend:    DB   "YOU DESCEND DEEPER", 0
 ; level_new — A = depth 1..8: LVL_SEED = MASTER_SEED + depth * LVL_SEED_MUL
 ; (level_defs.asm: why additive), level_gen until it succeeds (B = 1 + CF:
 ; 16 reseeds exhausted, LVL_SEED already advanced by 16 -> just call again;
-; tests/levelgen_z80.py: D8 seeds 55352..55354 exhaust once), then the
+; D8 seeds 55352..55354 exhaust once; at most 2 calls: the longest run of
+; failing seeds is 18 < 32, tools/levelgen_runs.py), then the
 ; stand-in population (level_populate). LG_* scratch = GEN_SCRATCH: called
 ; only before the first room is built (level_enter). No gen_kind here: the 3B
 ; stand-in kinds are all in the boot pool (3F's per-level pool goes between
@@ -1034,11 +1038,15 @@ level_new:
 ; order; a 9-room level drops its last room's 2nd monster). Col: the table's,
 ; else +3 (wrapping in POP_XMIN..POP_XMAX) up to POP_TRIES times, until
 ; `hits` finds no footprint of that storey (ladder / shaft / hole / pit /
-; block) within 1 col of the body (walkers) or 3 cols (flyers: designer
+; block; storey 1 also the pit's landing cols p..p+2) within 1 col of the body (walkers) or 3 cols (flyers: designer
 ; note — a flyer never waits at an arrival shaft or a ladder end); none
 ; legal -> the monster is dropped (deterministic). Facing: toward the room
 ; centre. Clobbers: all but IY.
 ;------------------------------------------------------------------------------
+; Hero E_FLAGS bits carried over a descend (everything else is rebuilt:
+; ACTIVE | PLAYER set, DYING / WALKIN / PENDING dropped). 3D: the status
+; effects (ENT_STAT / timers) must be carried here too, explicitly.
+HERO_CARRY      EQU EF_LEFT
 POP_XMIN        EQU 6                   ; clear of the door cells / horizontal arrivals
 POP_XMAX        EQU 24                  ; body right col <= 27
 POP_TRIES       EQU 7
@@ -1050,7 +1058,7 @@ level_populate:
                 push hl
                 ld   b, (ix+E_POT)
                 ld   a, (ix+E_FLAGS)
-                and  EF_LEFT
+                and  HERO_CARRY                ; flags that survive a descend
                 ld   c, a
                 push bc
                 call level_reset
@@ -1162,7 +1170,24 @@ pop_one:
                 push ix
                 ld   ix, (TMP2)                ; IX = room descriptor (hits)
                 call hits                      ; CF = a footprint in lo..hi
-                pop  ix
+                jr   c, .ht
+                dec  c                         ; storey 1: + the pit's landing zone
+                jr   nz, .ht                   ; p..p+2 (game.md §1.1 pit rule (4):
+                ld   a, (ix+RD_PITCOL)         ; a fall from storey 0 lands there;
+                or   a                         ; `hits` stays the generator's test)
+                jr   z, .ht                    ; (CF = 0)
+                ld   b, a
+                ld   a, e
+                cp   b
+                jr   c, .clr                   ; hi < p
+                ld   a, b
+                add  a, 2
+                cp   d
+                jr   c, .clr                   ; p + 2 < lo
+                scf
+                jr   .ht
+.clr:           or   a
+.ht:            pop  ix
                 pop  bc
                 jr   nc, .ok
                 ld   a, (TMP6)                 ; x += 3, wrapping in XMIN..XMAX
