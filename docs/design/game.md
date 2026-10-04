@@ -310,6 +310,20 @@ in a row" caps flight speed at 7 cols per 2 turns.
 | Close door, hit the Book | FIRE on the melee icon / bump | — | — |
 | Pickups | automatic at the end of a turn | — | — |
 
+**Stage 3C decisions (user 2026-10-04 / designer decision 2026-10-04).**
+- Redefined keys stay live while a joystick is selected (joystick and keys are ORed).
+- Turn-around costs 0 turns (1 tick). A held direction then walks only after the key-repeat
+  delay (10 ticks), so a tap only turns.
+- FIRE on BAG or FIRE+↓ before 3E's bag page exists: no turn, message `NO BAG YET`.
+- Bow icon before the bow is found (D2), and quick food before 3E food: drawn greyed,
+  selectable by the cursor, FIRE is illegal, costs no turn and prints `NO BOW` / `NO FOOD`.
+- Legacy PROTO keys (H/J/K/L, G, C, 1/2/3 hero select) are dropped once the new input lands.
+- Pause: an overlay box over the playfield with Resume / Quit; **Quit asks for confirmation**
+  (`QUIT? Y/N`; FIRE = yes, any other = no).
+- Shortcut keys confirmed: ENTER, `1`–`0`, `I`, BREAK, `.`. Default map Q/A/O/P/SPACE.
+- Sinclair 1 or 2 selected: the `1`–`0` slot shortcuts on that joystick's half of the number
+  row are disabled (S1 = 6–0, S2 = 1–5). The other half and the icon bar keep working.
+
 - ↙/↘ act as ←/→. Opposite keys cancel (F7). The cursor **skips unlearned slots** (empty
   outlines) but **does not skip greyed ones** (you may select a greyed icon to read its info
   line; FIRE on it is illegal, costs no turn, and prints the reason, e.g. `NO ARROWS`).
@@ -327,6 +341,10 @@ WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|
 - **Sinclair 1** = keys 6 L, 7 R, 8 D, 9 U, 0 F. **Sinclair 2** = keys 1 L, 2 R, 3 D, 4 U, 5 F.
 - Redefine asks for UP, DOWN, LEFT, RIGHT, FIRE (no duplicates).
 - START seeds the RNG → generates D1 → play.
+- **Title (user 2026-10-04):** the menu/title screen reads **"TOME OF THE DEAD"** (the concept
+  screen's title), not WAZHACK. Torches animated and hero previews on the select screen follow
+  `concept_menu` / `screen_menu.png` (designer decision 2026-10-04). Death `KILLED BY …`
+  killer tracking is 3D (designer decision).
 
 ### 3.3 Panel at a glance (layout: concept-screen §5; approved round 5)
 
@@ -416,6 +434,8 @@ Budget table: §11.2.
   with the most scrolls, ties → Teleport, Fear, Sleep, Enchant (known types only, §8.8). `QUICK` on the page pins a type.
   It greys out with no scroll.
 - Unlearned ability slots draw an empty outline and are skipped by the cursor.
+- 3C (designer decision 2026-10-04): the Bow slot and quick food are greyed-but-selectable
+  until found (see §3.1), not skipped.
 
 ---
 
@@ -443,6 +463,9 @@ Budget table: §11.2.
   and +3/+2 (M) plus ~3 late Vigor tomes (W) land at W ~61/16, M ~37/26 (§10).
 
 ### 4.1 Experience and levels (user 2026-10-03: add XP; numbers designer decision 2026-10-03)
+
+**Staging (user 2026-10-04).** XP gain, level-ups and ability ranks are built in **3D**. 3C
+only shows the level digit and the `LV`/`XP` info line from reserved state.
 
 **Award.** Every monster death awards the hero `KXP[kind]` (per-kind byte in `kind_tab`,
 tiers have their own rows). `F_RESPAWN` monsters (respawns, ALARM/idle waves, summons,
@@ -1508,3 +1531,7 @@ Knight; the 8 colour schemes.
 9. ~~Bow as a bag item~~ — resolved 2026-10-04 (user): not in the start kit; guaranteed on D2
    with a 6-arrow bundle (§8.5, §6.3, §4).
 10. ~~2nd class book 1 in 2 on D4–D7~~ — approved 2026-10-04 (user; §5).
+11. ~~Stage 3C input/menu questions~~ — resolved 2026-10-04 (user + designer decision):
+    title "TOME OF THE DEAD", Sinclair shortcut disabling, pause overlay with confirmed Quit,
+    XP in 3D, redefined keys live with joysticks, greyed Bow/food, `NO BAG YET`, turn-around
+    repeat delay, PROTO keys dropped (§3.1–3.2, §3.5, §4.1).
