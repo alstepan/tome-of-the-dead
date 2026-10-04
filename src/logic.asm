@@ -586,8 +586,11 @@ try_player_turn:
 ; try_climb — IX = player, D = dy ($FF up / 1 down). CF = 1 if done (§3.4).
 ; Standing: UP needs {x,s} ({x,0} = up-exit, no step), DOWN needs {x,s+1}
 ; ({x,2} = down-exit, first step animated). Mid-ladder: continue or reverse.
-; Step blocked by an entity: CF = 0 and CLIMB_BLK = 1 (the caller turns it
-; into a wait); no ladder: CF = 0, CLIMB_BLK untouched.
+; Step blocked by an entity: climb_blocked (lowram, B14): the first time
+; CF = 0, CLIMB_BLK = 1 (the caller turns it into a wait) and E_AIDIR = the
+; attempted dy (the monster phase yields to that climb, cork_check); the 2nd
+; consecutive time by the same body the hero squeezes past (CF = 1). No
+; ladder: CF = 0, CLIMB_BLK untouched.
 ; Clobbers: A, BC, DE, HL, TMP6
 ;------------------------------------------------------------------------------
 try_climb:
@@ -667,10 +670,8 @@ try_climb:
                 ld   (ix+E_MODE), M_MOVE
                 scf
                 ret
-.blk:           ld   a, 1                      ; blocked by an entity: no step;
-                ld   (CLIMB_BLK), a            ; try_player_turn makes it a wait
-                xor  a                         ; CF = 0
-                ret
+.blk:           jp   climb_blocked             ; B14 (lowram): wait + forced yield,
+                                               ; or the 2nd time: squeeze past
 .vexit:         ; A = RDX_U / RDX_D, C = x: Z = that exit exists and its
                 ; shaft col (RD_UPCOL / RD_DNCOL) == x; A = CUR_ROOM then.
                 ; Clobbers: E, HL
@@ -771,8 +772,10 @@ try_horizontal:
                 cp   FLOOR_ROW0
                 jr   nz, .ok
                 ld   a, RD_PITCOL
-                call desc_byte                 ; (0 = none; x >= 1 never matches)
-                cp   c
+                call desc_byte                 ; 0 = no pit
+                or   a                         ; B11: a left-exit step lands on
+                jr   z, .ok                    ; x == 0, which matched "no pit" =
+                cp   c                         ; 0 and dropped the hero a storey
                 jp   z, hero_fall              ; lowram: CF = 1
 .ok:            scf
                 ret
@@ -1095,13 +1098,21 @@ try_step:
 ;------------------------------------------------------------------------------
 ; cork_check — CF = 1 if box (C,B,D,E) overlaps any box on the hero's remaining
 ; climb path (next step .. the ladder-end standing box) while the hero is
-; mid-ladder. Complements the §6.4 yield rule so a yielded monster can't step
-; straight back onto the shaft end (no ladder corking, no forced waits).
-; Preserves BC, DE, IX.  Clobbers: A, HL
+; mid-ladder, or (B14) while the hero's climb this turn was blocked by an
+; entity (CLIMB_BLK: also a blocked START from a standing hero, whose E_AIDIR
+; try_climb set to the attempted dy). Complements the §6.4 yield rule so a
+; yielded monster can't step straight back onto the shaft end (no ladder
+; corking, no forced waits); with CLIMB_BLK it makes the blocker yield even
+; though the hero is still standing (B14: a flyer hovering over the foot of a
+; shaft, boxed by a wall, never had to move: the hero waited forever).
+; CLIMB_BLK is cleared by try_player_turn, so it only counts in the monster
+; phase of the turn whose climb was blocked.
+; Preserves BC, DE, IX.  Clobbers: A, HL.  Fast path (hero not climbing) 30 T
 ;------------------------------------------------------------------------------
 cork_check:
                 ld   a, (PL_LADDER)            ; fast path: hero not mid-ladder
-                or   a
+                ld   hl, CLIMB_BLK             ; and no blocked climb this turn
+                or   (hl)
                 ret  z                         ; CF = 0
                 push ix
                 push bc

@@ -580,6 +580,7 @@ level_reset:
                 ld   (PEND_DMG_COUNT), a
                 ld   (FLY_INBOX), a            ; 0 outside ai_flyer (try_step reads it)
                 ld   (YIELD_FLAG), a
+                ld   (CLIMB_BLK_N), a          ; B14: no run of blocked climbs
                 ld   hl, $FFFF                 ; no jump refused (game.md §2.4 "not
                 ld   (JUMP_TURN), hl           ; two turns in a row")
                 ld   hl, P_ENTITIES

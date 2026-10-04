@@ -196,7 +196,10 @@ class T(Proto):
     def bg_mismatch(self):
         """Cells of rows 0-17 that differ from the tile-map background, outside
         every drawn sprite footprint (transition / erase correctness)."""
-        fr = self.frame()
+        return self.bg_mismatch_in(self.frame())
+
+    def bg_mismatch_in(self, fr):
+        """bg_mismatch of a given 6912-B screen (displayed or composed)."""
         tabs = self.bg_tables()
         covered = set()
         for s_ in range(16):
@@ -1061,6 +1064,143 @@ def main():
             p.place(0, 5, Y0)                       # top of {5,1} (storey 0)
             h.expect("59 UP at a down-only shaft top: no turn", p.no_turn("K"), True)
             h.expect("59 CLIMB_BLK clear after a terrain block", p.rb("CLIMB_BLK"), 0)
+
+        # 62 (B14, user 2026-10-04: "a ghost blocks the ladder when a wall is
+        # nearby"). Room A {5,1} (top box storey 0 cols 5..7, bottom box
+        # storey 1); a solid column poked into ROOM_MAP (logic only, the
+        # screen is not redrawn). The hero climbs K from the foot (x 5,
+        # storey 1) and must stand on storey 0 within N turns.
+        #  a: Ghost on the top box, wall at col 9 (one free col past the box):
+        #     the yield went right (roomier side) 5 -> 6, the wall stopped
+        #     it, the fallback went back 6 -> 5, "roomier" again ... for ever.
+        #     Now, on the shaft col, the yield keeps its facing.
+        #  b / c: Bat hovering over the hero's head at the foot (storey-1 band
+        #     top, in the bottom box), wall left / right: the climb START is
+        #     blocked (a wait), but the hero was standing, so no yield rule
+        #     applied and the boxed bat stayed for ever. Now a blocked climb
+        #     makes the monster phase yield to it (CLIMB_BLK -> cork_check).
+        if want(62):
+            def b14(tag, wall_col, wall_rows, slot, gx, gy, flags, n):
+                p.boot(K_KNIGHT)
+                p.isolate()
+                for r_ in wall_rows:
+                    p.wb(S["ROOM_MAP"] + 32 * r_ + wall_col, S["T_BRICK"])
+                p.place(0, 5, Y1)
+                p.place(slot, gx, gy, room=0, flags=flags)
+                t0, path = p.rw("TURN_COUNTER"), []
+                for _ in range(n):
+                    if p.ent(0)["Y"] == Y0:
+                        break
+                    if not p.turn("K"):
+                        p.turn("SPACE")
+                    path.append((p.ent(0)["Y"], p.ent(slot)["X"], p.ent(slot)["Y"]))
+                h.expect(f"62{tag}: hero reaches storey 0 on {{5,1}} within {n} turns",
+                         (p.ent(0)["X"], p.ent(0)["Y"], p.rw("TURN_COUNTER") - t0 <= n), (5, Y0, True))
+                return path
+            # bounds: 9 climbing turns + the waits (a: none, the ghost yields
+            # while the hero is still below it; b / c: 1 wait + the squeeze)
+            path = b14("a ghost on the top box, wall col 9", 9, range(0, 8), SLOT_GHOST, 5, 1,
+                       EF_ACTIVE | EF_HOSTILE, 9)
+            h.expect("62a ghost never steps back toward the wall (x non-increasing)",
+                     all(b[1] <= a[1] for a, b in zip(path, path[1:])), True)
+            b14("b bat over the foot, wall col 4", 4, range(9, 17), SLOT_BATB, 5, 9,
+                EF_ACTIVE | EF_HOSTILE | EF_LEFT, 11)
+            b14("c bat over the foot, wall col 8", 8, range(9, 17), SLOT_BATB, 5, 9,
+                EF_ACTIVE | EF_HOSTILE, 11)
+
+        # 63 (B14 review): two-body livelocks and the squeeze-past guarantee
+        # (designer 2026-10-04, prototype §6.4 "B14 fix rules"). Walls poked
+        # into ROOM_MAP as in #62. Room A {5,1}, hero at its foot climbing K.
+        if want(63):
+            import textpack
+            names = [n for n, _ in textpack.read_strings()]
+            ents, strs = textpack.encode([t for _, t in textpack.read_strings()])
+
+            def msg_text():
+                raw = p.z.read_memory(S["MSG_BUF"], 32)
+                out = ""
+                for b_ in raw:
+                    if b_ == 0:
+                        break
+                    out += "".join(chr(c & 0x7F) for c in ents[b_ - 0x80]) if b_ >= 0x80 else chr(b_)
+                return out
+
+            def setup(walls, bodies):
+                p.boot(K_KNIGHT)
+                p.isolate()
+                for col, rows in walls:
+                    for r_ in rows:
+                        p.wb(S["ROOM_MAP"] + 32 * r_ + col, S["T_BRICK"])
+                p.place(0, 5, Y1)
+                for slot, kind, x, y, fl in bodies:
+                    p.set_ent(slot, KIND=kind, HP=p.rb(S["kind_tab"] + S["KT_HP"] + kind))
+                    p.place(slot, x, y, room=0, flags=fl)
+
+            def climb(n):
+                t0 = p.rw("TURN_COUNTER")
+                for _ in range(n):
+                    if p.ent(0)["Y"] == Y0:
+                        break
+                    if not p.turn("K"):
+                        p.turn("SPACE")
+                return p.ent(0)["Y"] == Y0 and p.rw("TURN_COUNTER") - t0 <= n
+
+            HB = EF_ACTIVE | EF_HOSTILE
+            # (a) squeeze past: a Bat over the hero's head in a 3-col corridor
+            # (walls at cols 4 and 8, storey 1): it can neither leave sideways
+            # nor up. 1st K: a wait; 2nd K: the squeeze.
+            setup([(4, range(9, 17)), (8, range(9, 17))], [(SLOT_BATB, K_BAT, 5, 9, HB | EF_LEFT)])
+            t0 = p.rw("TURN_COUNTER")
+            p.turn("K")
+            e, b = p.ent(0), p.ent(SLOT_BATB)
+            h.expect("63a 1st blocked climb: a wait (1 turn), hero still at the foot, CLIMB_BLK_N 1",
+                     (p.rw("TURN_COUNTER") - t0, e["Y"], p.rb("CLIMB_BLK_N")), (1, Y1, 1))
+            hp0 = e["HP"]
+            p.turn("K")
+            e, b = p.ent(0), p.ent(SLOT_BATB)
+            h.expect("63a 2nd blocked climb by the same bat: squeeze (1 turn), hero y 10 "
+                     "mid-ladder, bat PENDING at the foot (x 5, standing y 15), counter cleared",
+                     (p.rw("TURN_COUNTER") - t0, e["Y"], bool(b["FLAGS"] & EF_PENDING), b["X"], b["Y"],
+                      p.rb("CLIMB_BLK_N")), (2, Y1 - 1, True, 5, R1, 0))
+            h.expect("63a no free attack from the squeeze (HP kept)", e["HP"], hp0)
+            h.expect("63a log line", msg_text(), "YOU SQUEEZE PAST THE BAT")
+            h.expect("63a hero then reaches storey 0 (8 more turns)", climb(8), True)
+            p.turn("SPACE")
+            p.turn("SPACE")
+            b = p.ent(SLOT_BATB)
+            h.expect("63a the bat materialised again once its box was free",
+                     bool(b["FLAGS"] & EF_PENDING), False)
+            # (b) a Ghost filling a 3-col corridor on the top box (walls at
+            # cols 4 and 8, storey 0): it yields neither way; the hero waits
+            # once when his head reaches it, then squeezes past.
+            setup([(4, range(0, 8)), (8, range(0, 8))], [(SLOT_GHOST, K_GHOST, 5, 1, HB)])
+            h.expect("63b ghost in a corridor: hero reaches storey 0 within 11 turns", climb(11), True)
+            h.expect("63b it was a squeeze", msg_text(), "YOU SQUEEZE PAST THE GHOST")
+            # (c) two-body livelock: Ghost on the top box, a Bat right beside it
+            # (the ghost's facing side), a wall on the other side.
+            setup([(4, range(0, 8))], [(SLOT_GHOST, K_GHOST, 5, 1, HB),
+                                       (SLOT_BATB, K_BAT, 8, 1, HB)])
+            h.expect("63c ghost + bat + wall: hero reaches storey 0 within 12 turns", climb(12), True)
+            # (d) two bats over the foot (storey 1), wall left
+            setup([(4, range(9, 17))], [(SLOT_BATB, K_BAT, 5, 9, HB | EF_LEFT),
+                                        (SLOT_BATD, K_BAT, 7, 9, HB | EF_LEFT)])
+            h.expect("63d two bats + wall: hero reaches storey 0 within 12 turns", climb(12), True)
+            # (e) the vertical fallback (yield only, B8 ladder-end rule): a Bat
+            # (3 cols wide) filling a 3-col corridor (walls 4 / 8) on the top
+            # box at rows 1..2; hero mid-ladder below. Both x steps blocked: it
+            # may only move up out of the climb path (y 0: rows 0..1, above the
+            # standing box rows 2..7), never stay on it.
+            setup([(4, range(0, 8)), (8, range(0, 8))], [(SLOT_BATB, K_BAT, 5, 1, HB)])
+            p.place(0, 5, Y1 - 3)
+            p.set_ent(0, AIDIR=0xFF)
+            ys = []
+            for _ in range(4):
+                p.turn("K")
+                ys.append((p.ent(SLOT_BATB)["X"], p.ent(SLOT_BATB)["Y"],
+                           bool(p.ent(SLOT_BATB)["FLAGS"] & EF_PENDING)))
+            h.expect("63e bat's vertical yield ends off the path (x 5, y 0), never pending "
+                     "(no squeeze needed)", ys, [(5, 0, False)] * 4)
+            h.expect("63e hero reaches storey 0 within 9 turns", climb(9), True)
 
         # ---------------- 60 (A7b review) merged move rects ------------------
         def dmg():

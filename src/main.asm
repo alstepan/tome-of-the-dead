@@ -288,6 +288,11 @@ read_turn_input:
                 ret  nz
 .go:            call try_player_turn
                 ret  nc                        ; illegal: no turn consumed
+                ld   a, (CLIMB_BLK)            ; B14: any turn but a blocked-climb
+                or   a                         ; wait ends the run of blocks
+                jr   nz, .blk                  ; (climb_blocked)
+                ld   (CLIMB_BLK_N), a
+.blk:
                 ld   a, 1
                 ld   (NEED_RELEASE), a
                 ld   a, (EXIT_KIND)

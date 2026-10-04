@@ -232,17 +232,19 @@ ai_monster:
                 ld   (YIELD_FLAG), a
                 ret
 .yside:
-                ld   a, (P_ENTITIES + E_X)
-                ld   (TMP5), a                 ; shaft col
-                ; step away from the shaft col (x only)
-                ld   a, (TMP5)
+                ; step away from the shaft col (x only). Exactly on the shaft
+                ; col: the facing side (B14: was "the roomier side", which
+                ; sent a monster that had just fallen back across the shaft
+                ; from a wall straight back toward that wall: x c+1 -> c ->
+                ; c+1 ... for ever; the fallback step below sets the facing,
+                ; so the crossing now goes on out of the other side)
+                ld   a, (P_ENTITIES + E_X)     ; shaft col
                 cp   (ix+E_X)
                 ld   d, 1
                 jr   c, .ya                    ; shaft left of me -> go right
                 jr   nz, .yl
-                ld   a, (TMP5)                 ; exactly on the shaft: toward
-                cp   16                        ; the roomier side
-                jr   c, .ya
+                bit  EF_LEFT_BIT, (ix+E_FLAGS) ; on the shaft col: facing
+                jr   z, .ya
 .yl:            ld   d, $FF
 .ya:            ld   e, 0
                 ld   a, 1
@@ -252,11 +254,37 @@ ai_monster:
                 pop  de
                 jr   c, .yend
                 ld   a, d                      ; that side blocked (a neighbour):
-                neg                            ; try the other one, else wait —
+                neg                            ; try the other one —
                 ld   d, a                      ; two monsters side by side can't
                 ld   e, 0                      ; pin the hero on the ladder
                 call try_step_face
+                jr   c, .yend
+                ; B14 / §6.4 rule 2 ("flyers may use any in-band move that
+                ; leaves the path"): both x steps blocked (a wall / block on
+                ; one side, a body on the other) -> a flyer tries up, then
+                ; down, inside its band; these steps must END off the path
+                ; (YIELD_FLAG 0: try_step's cork_check). Else wait. (A Ghost,
+                ; 4 rows in a 5-row band, can't clear a 6-row path that way;
+                ; a Bat can.)
+                KFIELD KT_FLAGS
+                and  KF_FLYER
+                jr   z, .yend
+                xor  a
+                ld   (YIELD_FLAG), a
+                call storey_ref
+                ld   (TMP4), a                 ; clamp_band's storey
+                ld   e, $FF
+                call .yv
+                jr   c, .yend
+                ld   e, 1
+                call .yv
                 jr   .yend
+.yv:            call clamp_band                ; E = 0: out of the band
+                ld   a, e
+                or   a
+                ret  z                         ; CF = 0
+                ld   d, 0
+                jp   try_step
 .ny2:
                 KFIELD KT_FLAGS
                 and  KF_FLYER

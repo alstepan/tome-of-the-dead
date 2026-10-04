@@ -30,6 +30,7 @@ you_kill        "YOU KILL THE "
 the             "THE "
 hits_you        " HITS YOU"
 misses          " MISSES"
+you_squeeze     "YOU SQUEEZE PAST THE "
 empty           ""
 
 # --- kind names, in kind id order (TX_NM_KNIGHT + kind; kind 2 = the removed

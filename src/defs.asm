@@ -258,6 +258,8 @@ FLY_INBOX       EQU $BF98           ; ai_flyer: overlap with a ladder-end box at
 GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
 MSG_BUF         EQU $BFA0           ; 32 B: impact message composition (show_impact_msg -> log_push)
 TIMING_MARK     EQU $BFC0           ; spare
+CLIMB_BLK_ID    EQU $BFC7           ; B14: slot of the last entity that blocked the hero's climb
+CLIMB_BLK_N     EQU $BFC8           ; B14: consecutive blocked climbs by CLIMB_BLK_ID (0 = none)
 CLIMB_BLK       EQU $BFC1           ; 1 = this input's climb was blocked by an entity (-> wait turn)
 AY_CALLS        EQU $BFC2           ; A8 word: AY_PLAY calls (the silent stub counts; test-observable)
 LOCK_SHOWN      EQU $BFC6           ; B3B-5: 1 = the locked-door message was printed for the key
@@ -359,6 +361,7 @@ MSG_P_MISS      EQU 2
 MSG_P_KILL      EQU 3
 MSG_M_HIT       EQU 4
 MSG_M_MISS      EQU 5
+MSG_SQUEEZE     EQU 6               ; B14 squeeze past (impact_line, never an E_MSG)
 
 ;------------------------------------------------------------------------------
 ; Kinds (prototype §2/§6.3). Parallel byte tables, page-aligned (kind_tab).

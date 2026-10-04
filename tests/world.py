@@ -76,6 +76,14 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
       + the decode cost per char; every string pushed by id (msg_push) and
       drawn by item_log / print6t == the reference render; $C000 handed back;
       composed impact lines (show_impact_msg) == text; T per log item.
+  B11 (user bug: the hero fell a storey where the floor is drawn, walking
+  into the left room):
+  W21 generated D1s (seed_fixed, 2 masters): every storey-0 horizontal exit,
+      both ways: the exit turn never enters M_FALL, the hero arrives standing
+      on storey 0 at x = 1 / 31-w with its HP, the new room's map == model and
+      both screens == map; then walking on, the hero falls only at x == the
+      pit col, onto a hole the screen shows (before the fix a left-exit step
+      landed on x == 0 == "no pit" RD_PITCOL and dropped the hero).
 
 Usage: ZRCP_PORT=10001 python3 tests/world.py [W1 W3 W11 ...] [--update-golden [--png DIR]]
 """
@@ -1765,6 +1773,101 @@ def w16_level(p, check):
     print("[info] W16 measured: " + ", ".join(f"{k} {v:,}" for k, v in info.items()), flush=True)
 
 
+def w21_exits(p, check):
+    """W21 (B11): walk every storey-0 horizontal exit of generated D1s both
+    ways (hero teleported next to it, monsters out, doors opened), then on
+    across the room until the pit (if any)."""
+    kw, kh = game.body(p, K_KNIGHT)
+    y0 = stand_y(0, kh)
+    F0 = S["FLOOR_ROW0"]
+    p.proto_start = 0
+    n_exits = n_pits = 0
+    try:
+        for M in (0x0007, 0x1234):
+            p.load()
+            p.wait_state(S["GS_SELECT"])
+            p.wb("seed_fixed", 1)
+            p.z.cmd("write-memory %d %d %d" % (S["seed_value"], M & 255, M >> 8))
+            p.wb("INPUT_REPEAT", 0)
+            p.wb("ANIM_FREEZE", 1)
+            p.wb("INPUT_SRC", 1)
+            p.hold("1")
+            p.wait_state(GS_PLAYING)
+            p.release()
+            p.settle(3)
+            blk = room_model.read_block(p)
+            et = S["EDGE_TAB"]
+            for i in range(S["EDGES_H"]):              # every door open: walk through
+                v = blk[et - room_model.BASE + i]
+                if v & S["EG_DOOR"]:
+                    p.wb(et + i, (v | S["EG_OPEN"]) & ~(S["EG_LOCK"] | S["EG_SEAL"]) & 255)
+            for s_ in range(1, 16):
+                p.set_ent(s_, ROOM=GEN_NOWHERE)
+            for r in present_rooms(blk):
+                ex = room_model.field(blk, r, "RD_EXITS")
+                for bit, s1, key, x0, dst, xa in (("RDX_L", "RDX_LS1", "H", 3, r - 1, 31 - kw),
+                                                  ("RDX_R", "RDX_RS1", "L", 29 - kw, r + 1, 1)):
+                    if not ex & S[bit] or ex & S[s1]:
+                        continue
+                    tag = f"M{M:#06x} {r}->{dst}"
+                    p.z.cmd("write-memory %d %d" % (S["CUR_ROOM"], r))
+                    p.set_ent(0, ROOM=r, X=x0, Y=y0, PX=x0 * 8, PY=y0 * 8, MODE=0, DVIS=0)
+                    pc0 = p.pc()
+                    ok = p.run_stub([0xF3, 0x3E, r, 0xCD] + w16(S["room_show"]) + [0xCD]
+                                    + w16(S["vis_reset"]) + [0xCD] + w16(S["present_full"]) + [0xFB],
+                                    org=S["LOWRAM_END_3B"])
+                    p.z.cmd("set-register PC=%d" % pc0)
+                    p.settle(2)
+                    hp0 = p.ent(0)["HP"]
+                    modes = set()
+                    for _ in range(8):
+                        if p.rb("CUR_ROOM") != r:
+                            break
+                        p.turn(key, per_tick=lambda fr, e: modes.add(e["MODE"]))
+                    p.settle(2)
+                    e = p.ent(0)
+                    n_exits += 1
+                    check(f"W21 {tag}: storey-0 exit, no fall, arrival (room, x, y, HP) = "
+                          f"({dst}, {xa}, {y0}, {hp0})",
+                          ok and S["M_FALL"] not in modes
+                          and (p.rb("CUR_ROOM"), e["X"], e["Y"], e["HP"]) == (dst, xa, y0, hp0),
+                          (sorted(modes), p.rb("CUR_ROOM"), e["X"], e["Y"], e["HP"]))
+                    n = p.rb("ANIM_N")                    # animated decor cells step
+                    al = p.z.read_memory(S["ANIM_LIST"], 4 * n) if 0 < n <= 12 else b""
+                    anim = {(al[i], al[i + 1]) for i in range(0, len(al), 4)}
+                    bad = map_structure(p, dst)
+                    for scr, fr in (("displayed", p.frame()), ("composed", p.composed_frame())):
+                        cells = [(c, r_) for c, r_ in p.bg_mismatch_in(fr) if (c, r_) not in anim]
+                        if cells:
+                            bad.append((scr, len(cells), cells[:4]))
+                    check(f"W21 {tag}: map == model, both screens == map (bar sprites and "
+                          "animated decor cells)", bad == [], bad[:3])
+                    pit = room_model.field(blk, dst, "RD_PITCOL")
+                    if not pit or p.rb("CUR_ROOM") != dst:
+                        continue
+                    n_pits += 1
+                    shown = None
+                    for _ in range(32):                  # walk on to the pit
+                        e = p.ent(0)
+                        if e["Y"] != y0:
+                            break
+                        tabs = p.bg_tables()
+                        fr = p.frame()
+                        shown = [(c, p.is_bg(fr, c, F0)) for c in range(pit, pit + 3)
+                                 if not e["X"] <= c < e["X"] + kw]
+                        p.turn(key)
+                    e = p.ent(0)
+                    check(f"W21 {tag}: falls only at x == p {pit}, from a visible hole (uncovered "
+                          "hole cells == map)", e["Y"] != y0 and e["X"] == pit and shown
+                          and all(v for _, v in shown) and tabs[0][F0 * 32 + pit] == S["T_AIR"],
+                          (e["X"], e["Y"], shown))
+        check("W21 exercised >= 6 storey-0 exits and >= 3 pits", n_exits >= 6 and n_pits >= 3,
+              (n_exits, n_pits))
+    finally:
+        p.proto_start = 1
+        p.load()
+
+
 def main():
     fails = []
     with Harness() as h:
@@ -2300,6 +2403,10 @@ def main():
         # ================= B3B-13: token text (W17) ======================
         if want("W17"):
             w17(p, check)
+
+        # ================= B11: storey-0 exits, invisible pit (W21) ========
+        if want("W21"):
+            w21_exits(p, check)
 
         # ================= B3B-12: level change (W16) =======================
         if want("W16"):

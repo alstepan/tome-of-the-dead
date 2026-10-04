@@ -686,6 +686,11 @@ show_impact_msg:
                 pop  ix
                 ld   a, (ix+E_MSG)
 .k:             ld   b, a                      ; B = E_MSG 1..5, C = kind
+                ; fall through
+; impact_line — B = message code (MSG_P_HIT .. MSG_SQUEEZE), C = kind: the
+; line pre + kind name + post queued to the log (B14: "YOU SQUEEZE PAST THE
+; RAT" uses it from the input phase). Clobbers: A, BC, DE, HL (IX kept).
+impact_line:
                 ld   a, (PORT_7FFD_SHADOW)
                 push af                        ; caller's page
                 push bc
@@ -723,9 +728,10 @@ show_impact_msg:
                 inc  de
                 jr   .c
 ; pieces by E_MSG 1..5 (MSG_P_HIT, MSG_P_MISS, MSG_P_KILL, MSG_M_HIT, MSG_M_MISS)
-imp_pre:        DB   TX_YOU_HIT, TX_YOU_MISS, TX_YOU_KILL, TX_THE, TX_THE
-imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES
+imp_pre:        DB   TX_YOU_HIT, TX_YOU_MISS, TX_YOU_KILL, TX_THE, TX_THE, TX_YOU_SQUEEZE
+imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EMPTY
                 ASSERT MSG_P_HIT == 1 && MSG_P_MISS == 2 && MSG_P_KILL == 3 && MSG_M_HIT == 4 && MSG_M_MISS == 5
+                ASSERT MSG_SQUEEZE == 6 && TXL_YOU_SQUEEZE + TXL_NM_SKELETON < 32
                 ; K_ROGUE (kind 2) is retired: TX_NM_ROGUE is an empty string and no entity may carry
                 ; that kind, else the impact line would lose its name (B3B-13b)
                 ASSERT TX_NM_ROGUE == TX_NM_KNIGHT + 2 && TXL_NM_ROGUE == 0 && K_WIZARD == 1 && K_SKELETON == 3
@@ -994,6 +1000,111 @@ room_bodies:
                 ld   ix, P_ENTITIES
                 scf
                 ret
+
+;------------------------------------------------------------------------------
+; climb_blocked — try_climb's step (IX = hero, box C = x, B = the NEW y,
+; D = w, E = h; TMP6 = dy) overlaps a body; HL -> that body's LIVE_LIST
+; entry, h byte (box_free's hit). B14 rules (prototype §6.4 "B14 fix rules",
+; designer 2026-10-04):
+;  - first block by this body (CLIMB_BLK_ID / CLIMB_BLK_N): a WAIT turn
+;    (CLIMB_BLK = 1, CF = 0; try_player_turn makes it the wait) whose monster
+;    phase yields to the climb: E_AIDIR = dy, cork_check reads CLIMB_BLK;
+;  - the 2nd consecutive block by the SAME body: SQUEEZE PAST. The hero takes
+;    the step (mid-ladder, M_MOVE; costs his turn, CF = 1); every body in the
+;    hero's new box is moved to the standing box at the shaft col on the
+;    storey the climb leaves (x = the hero's, y = 9t+8-h: "the hero's foot
+;    cell") and goes PENDING in place (the §3.6 arrival-conflict mechanism:
+;    hidden, collides with nothing, does not act — no free attack — and
+;    materialises when that box is free; facing kept). Any kind, no exclusions.
+;    Log: "YOU SQUEEZE PAST THE <NAME>" (impact_line, MSG_SQUEEZE).
+; read_turn_input clears CLIMB_BLK_N after every other consumed turn
+; (CLIMB_BLK = 0: a move, a wait, a climb that went through); level_reset
+; too. (A chord DOWN + L/R whose climb is blocked keeps the count even if its
+; horizontal fallback moves: the hero insisted on the climb.)
+; Clobbers: all; IX = hero on return.  Cold (input tick of a blocked climb).
+;------------------------------------------------------------------------------
+climb_blocked:
+                dec  hl
+                dec  hl
+                dec  hl
+                dec  hl                        ; -> the entry's slot byte
+                ld   a, (hl)
+                ld   hl, CLIMB_BLK_ID
+                cp   (hl)
+                ld   (hl), a                   ; (ld / inc rr keep Z)
+                inc  hl                        ; -> CLIMB_BLK_N
+                jr   nz, .one
+                ld   a, (hl)
+                or   a
+                jr   nz, .squeeze
+.one:           ld   (hl), 1
+                ld   a, (TMP6)                 ; the climb the monster phase
+                ld   (ix+E_AIDIR), a           ; yields to (cork_check)
+                ld   a, 1
+                ld   (CLIMB_BLK), a
+                xor  a                         ; CF = 0: the caller's wait
+                ret
+.squeeze:       ld   (hl), 0
+                ld   a, (TMP6)
+                ld   (ix+E_AIDIR), a
+                inc  a                         ; Z: up ($FF)
+                ld   a, (ix+E_Y)               ; down: the storey of the top row
+                jr   nz, .dn
+                add  a, e
+                dec  a                         ; up: the storey of the bottom row
+.dn:            add  a, KT_DIV9 & $FF
+                ld   l, a
+                ld   h, (kind_tab + KT_DIV9) >> 8
+                ld   a, (hl)                   ; t (rows 0..17: 0 / 1)
+                call storey_row                ; 9t+7 (keeps BC)
+                inc  a
+                ld   (TMP7), a                 ; the floor row the bodies stand on
+                ld   (ix+E_Y), b               ; the hero's step
+                ld   (ix+E_MODE), M_MOVE
+                ld   a, $FF
+                ld   (TMP5), a                 ; kind of the first body moved
+                ld   ix, P_ENTITIES + P_ENT_STRIDE
+                ld   a, 1
+.l:             push af
+                ld   a, (ix+E_FLAGS)
+                and  EF_ACTIVE | EF_PENDING | EF_DYING
+                cp   EF_ACTIVE
+                jr   nz, .n
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   nz, .n
+                call box_vs_ix                 ; in the hero's new box?
+                jr   nc, .n
+                ld   (ix+E_X), c
+                KFIELD KT_BH
+                ld   h, a
+                ld   a, (TMP7)
+                sub  h
+                ld   (ix+E_Y), a
+                ld   (ix+E_MODE), M_REST
+                set  EF_PENDING_BIT, (ix+E_FLAGS)
+                ld   a, (TMP5)
+                inc  a
+                jr   nz, .n
+                ld   a, (ix+E_KIND)
+                ld   (TMP5), a
+.n:             push de
+                ld   de, P_ENT_STRIDE
+                add  ix, de
+                pop  de
+                pop  af
+                inc  a
+                cp   P_MAX_ENT
+                jr   c, .l
+                call build_live                ; PENDING ones stop colliding
+                ld   a, (TMP5)
+                ld   c, a
+                ld   b, MSG_SQUEEZE
+                call impact_line
+                ld   ix, P_ENTITIES
+                scf
+                ret
+                ASSERT CLIMB_BLK_N == CLIMB_BLK_ID + 1
 
 ;------------------------------------------------------------------------------
 ; hero_fall — try_horizontal moved the hero (IX) onto x == the pit col on the
