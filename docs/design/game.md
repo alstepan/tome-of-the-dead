@@ -338,7 +338,8 @@ storey-1 floor) carries the panel ornament.
 
 **Update timing (user, 2026-10-03).** Panel changes (bars, numbers, hunger word, ammo, log
 lines, icon states, key/depth) are **queued** and drained **one item per tick, never in the
-input tick**. Up to ~3 ticks of display latency is accepted. Logic reads the real values,
+input tick**. Accepted latency (user 2026-10-04): **≤ 3 ticks** outside heavy animation; in
+heavy fights a log message may wait **up to ~6 ticks (≈ 0.25 s)**. Logic reads the real values,
 never the panel.
 
 **Row 17 (designer decision 2026-10-03).** Only row 17 differs from the normal floor. In the
@@ -429,7 +430,7 @@ Budget table: §11.2.
 | Mana use | 2 power attacks (§6.2) | 5 spells (§6.1) |
 | Finite supplies | daggers, arrows (§6.3) | spell books/scrolls are found, never bought (§5) |
 | Ranged | **throwing daggers** (range 6) + **bow** (range 14), both **finite** (§6.3) | spells |
-| Start kit | **Bow** (bag item, 1 slot, rev 5), **3 daggers, 6 arrows**, 1 Heal, 1 Apple | 1 Heal, 1 Mana, 1 Apple |
+| Start kit | **3 daggers, 0 arrows, no bow** (user 2026-10-04: the bow is found on D2, §8.5), 1 Heal, 1 Apple | 1 Heal, 1 Mana, 1 Apple |
 | Ability unlock depth (rev 5: earliest depth; §5 read-time rule) | Power Strike D1 · Whirlwind D3; other books rank them up, then Vigor | Spark D1 · Firebolt D2 · Frost Shard D3 · **Drain Life** D4 · Lightning D5; other books rank them up, then Power |
 | Without a book (user 2026-10-03) | sword melee only; daggers need DAGGERS > 0; bow needs the **bow** (bag item, start kit) **and** ARROWS > 0 | **staff swing only**: no spell at all until a book is read |
 
@@ -625,7 +626,7 @@ A power attack with no target is illegal (no turn, no MP).
 | | Throw dagger | Bow |
 |---|---|---|
 | Ammo (counter) | `DAGGERS` **0–9** | `ARROWS` **0–24** |
-| Start | **3** | **6** |
+| Start (user 2026-10-04) | **3** | **0** (no bow either; the bow + 6 arrows are found on D2, §8.5) |
 | Range / to-hit / dmg | 6 / atk+1 / 1d4+2 PHYS | 14 / atk / 1d6+1 PHYS |
 | Frames | WIND-UP → **THROW** 32×48 | **BOW** 32×48 |
 | Projectile sprites | dagger_spin1/2 8×8 `$47` | arrow1/2 16×8 `$07` → arrow_hit 8×8 |
@@ -652,7 +653,7 @@ attack. Rules:
   illegal (no turn, no MP) and prints `NO DAGGERS.` / `NO ARROWS.`. **Melee is always
   available** (the sword icon never greys). Info line shows `NONE LEFT`.
 - **No bow (rev 5, user 2026-10-03: no weapon → no ranged):** the **bow is a bag item** (1
-  slot, start kit; can be dropped, never worn, never worn down or shattered). Without it in the
+  slot; **not in the start kit: guaranteed find on D2**, user 2026-10-04, §8.5; can be dropped, never worn, never worn down or shattered). Without it in the
   bag the bow icon greys exactly as at 0 arrows and FIRE prints `NO BOW.`; arrows are still
   picked up. Daggers are both weapon and ammo, so `DAGGERS = 0` is the only dagger gate.
 - Dropped-ammo floor items merge into one stack per cell and are drawn as the 8×8
@@ -857,11 +858,12 @@ key 1 · **ammunition (rev 3; Warrior runs only: a Mage run generates no ammo en
 |---|---|---|
 | **Dagger stack** | **1 stack of 2–3** (`1d2+1`) on D1–D7; none on D8 | placed in a random non-start, non-lair room |
 | **Arrow stack** | **1 stack of 5–8** (`1d4+4`) on D1–D7; D8 none | same |
+| **Bow (user 2026-10-04; Warrior runs only)** | **Exactly 1 on D2**: a floor-list entry in a random non-start, non-lair room, **plus a 6-arrow bundle placed in the same cell** (extra to D2's normal 5–8 stack; the two merge on pickup per the one-stack-per-cell rule, capped 24). Generated regardless of RNG; never on other depths. If the bow is dropped it stays findable; if lost (pit fall) it is gone, and the run continues melee/daggers only | Pre-bow arrows (D1 stack) are picked up and kept; the bow icon stays greyed until the bow is in the bag |
 | Skeleton Archer drop | Arrows ×3, 1/2 | D4, D5, D7 (§9.1) |
 | Thrown-and-recovered | per §6.3 | not a placement; uses floor-list slots |
 
 Supply estimate (E, whole run): daggers ≈ 3 + 7 × 2.5 ≈ 20 found + recoveries (×4 throws
-each ≈ 80 throws if all are used); arrows ≈ 6 + 7 × 6.5 ≈ 52 found + ~9 from Archers.
+each ≈ 80 throws if all are used); arrows ≈ 6 (D2 bundle) + 7 × 6.5 ≈ 52 found (start 0; D1 is dagger-only play, which the D1 balance row already assumes) + ~9 from Archers.
 With ~14 monsters per level and ~65 % to-hit, a level's ~6 arrows kill about one monster, so
 ranged play is a **tool for the dangerous kinds** (archers, casters, the Ogre's approach),
 not a replacement for the sword. The stack caps (9 / 24) make hoarding a loss.
@@ -1503,8 +1505,6 @@ Knight; the 8 colour schemes.
    penalty.
 8. ~~Hero power level~~ — resolved 2026-10-03 (user, rev 5): XP and levels (§4.1) replace
    `PL`; tiers use `LVL − d` (§9.6).
-9. **Bow as a bag item (§6.3, rev 5):** the designer kept it in the start kit (droppable) so
-   the "no bow → no arrows" gate holds without delaying the Warrior's ranged play. The
-   alternative is a guaranteed bow find on D2 (start with daggers only). Confirm.
-10. **2nd class book 1 in 2 on D4–D7 (§5, rev 5):** added so repeat-book ranks are reachable
-   (else the Mage would see ~2 rank-ups per run). Confirm, or tune after the playtest.
+9. ~~Bow as a bag item~~ — resolved 2026-10-04 (user): not in the start kit; guaranteed on D2
+   with a 6-arrow bundle (§8.5, §6.3, §4).
+10. ~~2nd class book 1 in 2 on D4–D7~~ — approved 2026-10-04 (user; §5).
