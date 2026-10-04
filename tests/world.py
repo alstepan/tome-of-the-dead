@@ -55,8 +55,9 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
       quaff: the input tick leaves the panel untouched, the HP number / bar,
       the log line and the potion count are composed <= 3 ticks after it and
       displayed one tick later; 3 pushed messages: 2-row scroll (rows 22 / 23
-      == the last two, attrs $07 / $47); the 2nd-frame budget path (scroll,
-      then LOG_CHUNK chars per step); ring overflow drops + counts; HP bar fill
+      == the last two, attrs $07 / $47); B3B-11b: 2nd-frame ticks draw small
+      items only, the log waits for a 1st-frame tick; ring overflow
+      drops + counts, log_push_end replaces the newest; print6 tails exact; HP bar fill
       == round(32 * hp / max); T of a whole log item (scroll + 32 chars) and
       of print6 per char; the Mage's panel golden (w15_panel_mage).
 
@@ -263,9 +264,10 @@ def w15(p, check):
             code += [0x21] + w(MSG[n]) + [0xCD] + w(S["log_push"])
         stub(code, "push " + ",".join(names))
 
-    def step(lim):
-        return stub([0x3E, lim, 0x32] + w(S["P_LIM"]) + [0xCD] + w(S["panel_step"]), f"panel_step lim {lim}",
-                    measure=True)
+    def step(c):
+        """panel_step with C = c (0: any item, as in a 1st-frame tick; else
+        small items only, as in a 2nd-frame tick) -> T-states."""
+        return stub([0x0E, c, 0xCD] + w(S["panel_step"]), f"panel_step c {c}", measure=True)
 
     def drained():
         return p.rb("LOG_QN") == 0 and not p.rb("PANEL_DIRTY")
@@ -336,31 +338,43 @@ def w15(p, check):
         n += 1
     p.tick()
     fr = p.frame()
-    check("W15 3 messages drained in 3 idle ticks (one item per tick)", n == 3, n)
+    check("W15 3 messages drained in 1 idle tick (B3B-11b: items while in the 1st frame)", n == 1, n)
     check("W15 scroll after 3: row 22 = THE DOOR IS LOCKED, row 23 = YOU FALL INTO A PIT (displayed)",
           (log_row(fr, 22), log_row(fr, 23)) == (text6(TXT["str_locked"]), text6(TXT["str_fall"])), "")
     check("W15 displayed == composed after the drain", fr == p.composed_frame(), "")
 
-    # --- 2nd-frame budget path: scroll, then LOG_CHUNK chars per step -----
-    chunk = S["LOG_CHUNK"]
-    died = TXT["str_died"]
+    # --- 2nd-frame rule (B3B-11b): small items only, the log waits ----------
     push("str_died")
-    t_scroll = step(chunk)
+    p.set_ent(0, HP=6)
+    t_hp2 = step(1)
     comp = p.composed_frame()
-    check("W15 chunked: step 1 = scroll only (row 22 = old 23, row 23 blank)",
-          (log_row(comp, 22), log_row(comp, 23)) == (text6(TXT["str_fall"]), text6("")), "")
-    t_c1 = step(chunk)
-    check(f"W15 chunked: step 2 = the first {chunk} chars", log_row(p.composed_frame(), 23) == text6(died[:chunk]), "")
-    t_c2 = step(chunk)
-    check("W15 chunked: step 3 = the whole line, queue empty",
-          (log_row(p.composed_frame(), 23), p.rb("LOG_QN"), p.rb("PANEL_DIRTY") & S["PD_LOG"]) ==
-          (text6(died), 0, 0), "")
+    check("W15 2nd frame: HP drawn, log item left queued (LOG_QN 1, PD_LOG)",
+          (hp_ok(comp), p.rb("LOG_QN"), p.rb("PANEL_DIRTY") & S["PD_LOG"]) == (True, 1, S["PD_LOG"]),
+          (p.rb("LOG_QN"), p.rb("PANEL_DIRTY")))
+    t_none = step(1)
+    check("W15 2nd frame: a waiting log item alone is not drawn (row 23 = old line)",
+          (log_row(p.composed_frame(), 23), p.rb("LOG_QN")) == (text6(TXT["str_fall"]), 1), "")
+    step(0)
+    check("W15 1st frame: the whole line in one item, queue empty",
+          (log_row(p.composed_frame(), 22), log_row(p.composed_frame(), 23), p.rb("LOG_QN"),
+           p.rb("PANEL_DIRTY") & S["PD_LOG"]) == (text6(TXT["str_fall"]), text6(TXT["str_died"]), 0, 0), "")
     p.tick(2)
-    check("W15 chunked: displayed == composed", p.frame() == p.composed_frame(), "")
+    check("W15 displayed == composed", p.frame() == p.composed_frame(), "")
+
+    # --- GS_DEAD / GS_WIN lines are never dropped (log_push_end) -------------
+    push("str_found", "str_locked", "str_fall", "str_quaff")
+    stub([0x21] + w(MSG["str_died"]) + [0xCD] + w(S["log_push_end"]), "log_push_end")
+    check("W15 ring full: log_push_end replaces the newest pending (LOG_QN 4, LQ_DROP 1)",
+          (p.rb("LOG_QN"), p.rb(S["LOG_Q"] + S["LQ_DROP"])) == (4, 1), "")
+    p.until(drained, 12)
+    p.tick()
+    check("W15 log_push_end: newest shown = YOU DIED (after THE FALL line)",
+          (log_row(p.frame(), 22), log_row(p.frame(), 23)) == (text6(TXT["str_fall"]), text6(TXT["str_died"])), "")
+    p.wb(S["LOG_Q"] + S["LQ_DROP"], 0)
 
     # --- ring overflow -----------------------------------------------------
     push("str_found", "str_locked", "str_fall", "str_quaff", "str_died")
-    check("W15 ring full: 5th push dropped (LOG_QN 4, LQ_DROP 1)",
+    check("W15 ring full: 5th push (log_push) dropped (LOG_QN 4, LQ_DROP 1)",
           (p.rb("LOG_QN"), p.rb(S["LOG_Q"] + S["LQ_DROP"])) == (4, 1), "")
     p.until(drained, 12)
     p.tick()
@@ -373,17 +387,47 @@ def w15(p, check):
     MSG["long"] = STUB + 0x100
     push("long")
     t_whole = step(0)
-    check("W15 32-char line drawn whole (P_LIM 0)", log_row(p.composed_frame(), 23) == text6(long32), "")
-    push("long")
-    t_s = step(chunk)                            # scroll alone
-    t_p = step(0)                                # 32 chars alone
+    check("W15 32-char line drawn whole", log_row(p.composed_frame(), 23) == text6(long32), "")
+    t_s = stub([0xCD] + w(S["log_scroll"]), "log_scroll", measure=True)
+    pr = lambda n: stub([0x21] + w(MSG["long"] + 32 - n) + [0x06, 23, 0x1E, 0, 0xCD] + w(S["print6"]),
+                        f"print6 {n}", measure=True)
+    t_p = pr(32)
+    check("W15 print6 32 chars (direct) == the font", log_row(p.composed_frame(), 23) == text6(long32), "")
+    t_p4 = pr(4)
+    row23 = S["SCREEN_BITMAP"] + ((23 & 0x18) << 8) + ((23 & 7) << 5)
+
+    def clear23():
+        """row 23 bitmap -> 0, marked whole for present (EXT / PW 23 = 24)."""
+        for ln in range(8):
+            p.z.cmd("write-memory %d %s" % (row23 + ln * 256, " ".join(["0"] * 32)))
+        p.wb(S["HUD4_EXT"] + 3, LOG_COLS)
+        p.wb(S["HUD4_PW"] + 3, LOG_COLS)
+        p.wb("PRES_ANY", 1)
+    # odd-length tails and an x > 0 start: exact bytes, neighbours untouched
+    for n, x in ((1, 8), (2, 16), (3, 0), (5, 40), (7, 64)):
+        txt = long32[:n]
+        p.z.cmd("write-memory %d %s" % (STUB + 0x140, " ".join(str(ord(c)) for c in txt + "\0")))
+        clear23()
+        # sentinel ink on row 23 after the run's last byte
+        nb = (6 * n + 7) // 8
+        sent = row23 + x // 8 + nb
+        for ln in range(8):
+            p.wb(sent + ln * 256, 0xA5)
+        ex = stub([0x21] + w(STUB + 0x140) + [0x06, 23, 0x1E, x, 0xCD] + w(S["print6"],) + [0x7B, 0x32] + w(STUB + 0x13F),
+                  f"print6 tail {n}")
+        got = log_row(p.composed_frame(), 23)
+        want = text6(txt, x)
+        ok = all(got[ln][:x // 8 + nb] == want[ln][:x // 8 + nb] and got[ln][x // 8 + nb] == 0xA5 for ln in range(8))
+        check(f"W15 print6 {n} chars at x {x}: exact bytes, next byte untouched, E out = x + 6n",
+              ok and p.rb(STUB + 0x13F) == x + 6 * n, (n, x, p.rb(STUB + 0x13F)))
+    clear23()
     p.tick(2)
     print(f"[info] W15 measured (contended, ZEsarUX): whole log item scroll + 32 chars {t_whole} T;"
-          f" scroll of 24 cols {t_s} T; print 32 chars {t_p} T (~{t_p // 32} T/char incl. step);"
-          f" chunked 22-char line: scroll {t_scroll} + {t_c1} + {t_c2} T", flush=True)
-    check("W15 whole log item <= 30k T (first-frame ticks only: < 70.9k T used before it)", t_whole <= 30000, t_whole)
-    check(f"W15 2nd-frame log steps <= 9k T each", max(t_scroll, t_c1, t_c2, t_s) <= 9000,
-          (t_scroll, t_c1, t_c2, t_s))
+          f" scroll of 24 cols {t_s} T; print6 32 chars {t_p} T (~{t_p // 32} T/char), 4 chars {t_p4} T;"
+          f" 2nd-frame HP item {t_hp2} T, idle step {t_none} T", flush=True)
+    check("W15 whole log item <= 25k T (1st-frame ticks only: < 70.9k T used before it)", t_whole <= 25000, t_whole)
+    check("W15 2nd-frame small item (HP) <= 5k T (worst 2nd-frame pre-panel ~117k + 5k < 126k cap)", t_hp2 <= 5000, t_hp2)
+    check("W15 print6 <= 500 T/char (32 chars)", t_p <= 500 * 32, t_p)
 
     # --- bars follow HP ------------------------------------------------------
     for hp in (1, 7, 13, 22):

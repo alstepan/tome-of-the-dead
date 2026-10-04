@@ -23,6 +23,7 @@ import game  # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, EF_ACTIVE, EF_HOSTILE, EF_LEFT, stand_y  # noqa: E402
 
 BUDGET = 2 * 70908
+CAP = 126000                                      # D5: worst tick incl. the panel item
 # B3B-11: panel_tick .. play_loop.nopanel = the tick's panel item (D5: one per
 # tick, never in a turn's input tick); its present lands in the next tick_work.
 PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "panel_tick",
@@ -42,6 +43,9 @@ class Stepper:
     def __init__(self, p):
         self.p, self.z = p, p.z
         self.ticks = []                       # (total, {phase: T})
+        # B3B-11b log latency: FIFO ring -> drawn = LQ_RD advances, pushed = drawn + LOG_QN
+        self.rd, self.drawn, self.pushed = p.rb(S["LOG_Q"] + S["LQ_RD"]), 0, p.rb("LOG_QN")
+        self.push_tick, self.lat = [0] * self.pushed, []
         z = self.z
         z.cmd("enter-cpu-step")
         z.cmd("enable-breakpoints")
@@ -77,6 +81,19 @@ class Stepper:
             if n == "wait_tick":
                 break
         self.ticks.append((prev, split))
+        k = len(self.ticks)
+        rd, qn = self.p.rb(S["LOG_Q"] + S["LQ_RD"]), self.p.rb("LOG_QN")
+        self.drawn += (rd - self.rd) % S["LOG_SLOTS"]
+        self.rd = rd
+        for _ in range(self.drawn + qn - self.pushed):
+            self.push_tick.append(k)
+        self.pushed = self.drawn + qn
+        if os.environ.get("LOG_TRACE"):
+            pre = sum(v for n_, v in split.items() if n_ not in ("panel_tick", "panel_done", "wait_tick"))
+            print(f"[trace] t{k} {prev} pre-panel {pre} panel {split.get('panel_tick', 0)} qn {qn}"
+                  f" ph {self.p.rb('TURN_PHASE')}/{self.p.rb('TURN_TICK')}")
+        while len(self.lat) < self.drawn:
+            self.lat.append(k - self.push_tick[len(self.lat)])
         return prev
 
     def turn(self, *keys, max_ticks=80):
@@ -152,6 +169,12 @@ def run_scenario(h, scen):
     print(f"worst split    : " + ", ".join(f"{k}={v}" for k, v in worst[1].items()))
     print(f"ticks > budget : {len(over)}")
     print(f"OVERRUN_COUNT  : {ovc}  BLIT_MISS: {p.rb('BLIT_MISS')}", flush=True)
+    cap = [t for t in totals if t > CAP]
+    lat = st.lat
+    print(f"ticks > {CAP} : {len(cap)}  (D5 cap)")
+    print(f"log latency    : {len(lat)} messages drawn, max {max(lat) if lat else 0} ticks after the push"
+          f" (histogram {dict(sorted({v: lat.count(v) for v in lat}.items()))}), still queued {p.rb('LOG_QN')},"
+          f" dropped {p.rb(S['LOG_Q'] + S['LQ_DROP'])}", flush=True)
     return st, over
 
 

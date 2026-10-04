@@ -329,12 +329,21 @@ TSET_HI         EQU $FAA0           ; right above the shadow attrs (PROTO rows 0
 ; Bank-2 runtime RAM (D6/D8). Uncontended, always mapped, not in the image.
 ;------------------------------------------------------------------------------
 ; D8: BANK2_FREE $B200..$B7FF is now fully reserved:
-FONT6           EQU BANK2_FREE      ; $B200: 6x8 text font, ASCII 32..127, 8 B/char
-FONT6_LEN       EQU 96 * 8          ;        768 B, boot-copied (B3B-11)
+; B3B-11b: FONT6 is PLANAR for the quad printer (print6): line l of char c
+; (32..127) at FONT6 + (l >> 1) * 256 + c + (l & 1) * FONT6_WB, i.e. 4 pages,
+; two 96-B windows per page (even lines at offsets 32..127, odd at 128..223),
+; so a line's 4 chars are reached with `ld l, code` under one H. Built at boot
+; by panel_boot from the char-major font6x8 (bits 1..0 masked off). Free in
+; the planes: offsets 0..31 / 224..255 of each page; the last 32 B
+; ($B5E0..$B5FF) start HOT_COPY.
+FONT6           EQU BANK2_FREE      ; $B200
 FONT6_FIRST     EQU 32
-HOT_COPY        EQU FONT6 + FONT6_LEN   ; $B500..$B7FF: boot-copied hot code (R2 lever)
+FONT6_WB        EQU 96              ; odd-line window: code + 96 (128..223)
+FONT6_PAGES     EQU 4
+HOT_COPY        EQU FONT6 + (FONT6_PAGES - 1) * 256 + FONT6_FIRST + FONT6_WB + 96   ; $B5E0
 HOT_COPY_END    EQU BANK2_FREE_END      ; = SLOTREC
-                ASSERT FONT6 == $B200 && HOT_COPY == $B500 && HOT_COPY_END == $B800
+                ASSERT FONT6 == $B200 && HOT_COPY == $B5E0 && HOT_COPY_END == $B800
+                ASSERT (FONT6 & $FF) == 0 && FONT6_FIRST + 95 + FONT6_WB <= 255
 
 ; D6: occupancy mask + animated-decor list, in the spare after the IM 2
 ; vector table ($BC01..$BCBB, 187 B; the ISR starts at ISR_ADDR $BCBC).
@@ -367,7 +376,7 @@ HUD4_PW         EQU $BFD6           ; 4 B, rows 20..23: cols changed since prese
 LOG_QN          EQU $BFDA           ; pending log messages in LOG_Q
 LOG_Q           EQU $BFE0           ; 8 B: pending log messages (layout: B3B-11)
 LOG_Q_LEN       EQU 8
-STATE_3B_END    EQU $C000           ; $BFDB..$BFDF, $BFE8..$BFFF spare
+STATE_3B_END    EQU $C000           ; $BFD1, $BFDF, $BFEA..$BFFF spare
                 ASSERT AY_CALLS + 2 <= STATE_3B
                 ASSERT HUD4_PW == HUD4_EXT + TEXT_ROWS
                 ASSERT (HUD4_EXT >> 8) == ((HUD4_PW + TEXT_ROWS - 1) >> 8)
@@ -389,17 +398,14 @@ PD_DEPTH        EQU %10000000       ; depth + key icon (cols 30–31, rows 18–
 ; B3B-11 panel engine (concept-screen §5, game.md §3.3–3.5; src/panel.asm).
 ;------------------------------------------------------------------------------
 ; State bytes in the 3B sub-range (test-observable):
-PANEL_HP_SH     EQU $BFD1           ; hero HP last drawn ($FF = never: forces PD_HP)
+PANEL_HP_SH     EQU $BFE8           ; 2 B: hero HP, MAXHP last drawn ($FF = never: forces PD_HP)
 PANEL_POT_SH    EQU $BFDB           ; hero potions last drawn ($FF = never: forces PD_ICONS)
 P_NUMBUF        EQU $BFDC           ; 3 B: num2 / depth text ("NN", 0)
-P_LIM           EQU $BFDF           ; this step's print limit (0 = whole line, else LOG_CHUNK)
-; LOG_Q layout (8 B): the ring of pending messages is LOG_TXT; LOG_QN counts them
-; (incl. the one being printed). One message = scroll step + print step(s).
+                ASSERT E_MAXHP == E_HP + 1          ; one 16-bit poll / store
+; LOG_Q layout (8 B): the ring of pending messages is LOG_TXT; LOG_QN counts them.
+; One message = one panel item (scroll + whole line, B3B-11b).
 LQ_RD           EQU 0               ; ring slot of the oldest pending message (0..LOG_SLOTS-1)
-LQ_STEP         EQU 1               ; 0 = scroll next, 1 = printing
-LQ_X            EQU 2               ; printing: pixel x of the next char on row 23
-LQ_PTR          EQU 3               ; word: printing: next char in the slot
-LQ_DROP         EQU 5               ; saturating count of messages dropped (ring full; expect 0)
+LQ_DROP         EQU 1               ; saturating count of messages dropped / replaced (ring full; expect 0)
                 ASSERT LQ_DROP < LOG_Q_LEN
 ; Message text ring: bank-5 printer buffer (runtime-only RAM, free after boot;
 ; contended, but read once per char).
@@ -408,7 +414,6 @@ LOG_SLOTS       EQU 4
 LOG_SLOT_LEN    EQU 64              ; slot = LOG_TXT + idx * 64 (idx rrca rrca)
 LOG_MAX         EQU 32              ; chars per message (game.md §3.4), + 0 terminator
 LOG_COLS        EQU 24              ; log text cols 0..23 (32 chars x 6 px = 192 px)
-LOG_CHUNK       EQU 12              ; chars per print step when the tick is already in its 2nd frame
                 ASSERT (LOG_TXT & $FF) == 0 && LOG_SLOTS * LOG_SLOT_LEN <= 256
                 ASSERT LOG_MAX * 6 == LOG_COLS * 8 && LOG_MAX < LOG_SLOT_LEN
                 ASSERT LOG_SLOTS == 4 && LOG_SLOT_LEN == 64     ; slot address = idx rrca rrca

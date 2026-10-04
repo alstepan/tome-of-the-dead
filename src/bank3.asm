@@ -1332,33 +1332,28 @@ decor_room:
 ; by draw_zap; the common set has T_DRIP1/2 there, B3B-13). The per-level ids
 ; 32..63 come from level_load_tiles (start_game). Clobbers: A, BC, DE, HL.
 ;==============================================================================
-init_tiles:
+init_tiles:                                    ; (B3B-11b: the data is in vdata, main.asm)
                 ld   hl, tiles_common_glyphs
                 ld   de, TILE_GLYPHS
                 ld   bc, TILE_COMMON * 8
-                ldir
-                ld   de, TILE_ATTRS            ; tiles_common_attrs follow
-                ld   c, TILE_COMMON
-                ldir
+                call copy_virt3
+                ld   hl, tiles_common_attrs
+                ld   de, TILE_ATTRS
+                ld   bc, TILE_COMMON
+                call copy_virt3
                 ld   hl, orn_glyphs
                 ld   de, ORN_GLYPHS
-                ld   c, ORN_COUNT * 8
-                ldir
+                ld   bc, ORN_COUNT * 8
+                call copy_virt3
                 ld   hl, b3fx.tiles_fx_zap1
                 ld   de, TILE_GLYPHS + T_ZAP1 * 8
-                ld   c, 2 * 8
-                ldir
-                ret
+                ld   bc, 2 * 8
+                jp   copy_virt3
                 ASSERT tiles_common_attrs == tiles_common_glyphs + TILE_COMMON * 8
                 ASSERT TILES_COMMON_LEN == TILE_COMMON * 9
                 ASSERT orn_glyphs_end - orn_glyphs == ORN_COUNT * 8
                 ASSERT T_ZAP2 == T_ZAP1 + 1 && b3fx.tiles_fx_zap2 == b3fx.tiles_fx_zap1 + 8
                 ASSERT T_ZAP1 == T_DRIP1 && T_ZAP2 == T_DRIP2 && ATTR_ZAP == $45
 
-; cold tile data (bank 3, read once at boot)
-                INCLUDE "../assets/gfx/tiles/tiles_common.asm"
-                INCLUDE "../assets/gfx/panel/panel_orn.asm"
-                MODULE b3fx                     ; the sheet's zap tiles (labels
-                INCLUDE "../assets/gfx/sprites/tiles_fx.asm"   ; also in sprite_src)
-                ENDMODULE
+; (cold tile data: B3B-11b moved it to main.asm vdata, read via copy_virt3)
                 INCLUDE "panel.asm"            ; B3B-11 panel engine (cold part + the HOT_COPY image)

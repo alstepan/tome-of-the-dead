@@ -52,14 +52,30 @@ sprite_src:
     ENDIF
 sprite_src_end:
 SRC_TOTAL       EQU sprite_src_end - sprite_src
-    IF SRC_TOTAL > $4000
+; B3B-11b (bank-3 relief): boot / new-game cold DATA, read only through
+; copy_virt / copy_virt3 (virtual address -> bank 1 or 3), right after the
+; sources: bank 1 with ZX0 sources; the raw build's sources fill bank 1, so
+; there it lands in the bank-3 tail (as before B3B-11b). Same tape blocks.
+vdata:
+                INCLUDE "../assets/gfx/fonts/font6x8.asm"     ; -> FONT6 planes (panel_boot)
+                INCLUDE "../assets/gfx/panel/panel_icons.asm" ; panel_init (pblit via GEN_SRC)
+                INCLUDE "panel_hot.asm"                       ; -> HOT_COPY (panel_boot)
+                INCLUDE "../assets/gfx/tiles/tiles_common.asm" ; init_tiles (boot)
+                INCLUDE "../assets/gfx/panel/panel_orn.asm"    ; init_tiles -> ORN_GLYPHS
+                MODULE b3fx                                    ; init_tiles: the zap tiles
+                INCLUDE "../assets/gfx/sprites/tiles_fx.asm"   ; (labels also in sprite_src)
+                ENDMODULE
+vdata_end:
+VDATA_LEN       EQU vdata_end - vdata
+VIRT_TOTAL      EQU vdata_end - sprite_src
+    IF VIRT_TOTAL > $4000
 SRC_LEN_LO      EQU $4000
     ELSE
-SRC_LEN_LO      EQU SRC_TOTAL
+SRC_LEN_LO      EQU VIRT_TOTAL
     ENDIF
-SRC_LEN_HI      EQU SRC_TOTAL - SRC_LEN_LO
-                ASSERT SRC_TOTAL <= $8000
-                DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B (bank1 ", /D, SRC_LEN_LO, ", bank3 ", /D, SRC_LEN_HI, ")"
+SRC_LEN_HI      EQU VIRT_TOTAL - SRC_LEN_LO
+                ASSERT VIRT_TOTAL <= $8000
+                DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B + vdata ", /D, VDATA_LEN, " B (bank1 ", /D, SRC_LEN_LO, ", free ", /D, $4000 - SRC_LEN_LO, "; bank3 ", /D, SRC_LEN_HI, ")"
     IF ZX0_SOURCES
                 DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed; total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
     ENDIF
@@ -291,7 +307,7 @@ end_turn:
                 ld   a, GS_DEAD
                 ld   (GAME_STATE), a
                 ld   hl, str_died
-                jp   log_push                  ; B3B-11: end_screen drains it
+                jp   log_push_end              ; never dropped (B3B-11b)                  ; B3B-11: end_screen drains it
 .alive:         ; win: standing on storey 0 of room D with x <= 3 (§8.2)
                 ld   a, (CUR_ROOM)
                 cp   WIN_ROOM
@@ -308,7 +324,7 @@ end_turn:
                 ld   a, GS_WIN
                 ld   (GAME_STATE), a
                 ld   hl, str_win
-                jp   log_push
+                jp   log_push_end
 
 ;------------------------------------------------------------------------------
 ; do_exit — follower selection (§3.7), frozen Cauldron transition (§3.6),
@@ -500,7 +516,7 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
                 ASSERT LOWRAM_END <= LOWRAM_FREE_END
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, tile_flags - kind_tab_pad, " B kind_tab ALIGN pad); free runtime RAM ", /H, BANK2_FREE, "..", /H, BANK2_FREE_END - 1, ": ", /D, BANK2_FREE_END - BANK2_FREE
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, tile_flags - kind_tab_pad, " B kind_tab ALIGN pad); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
 
 ;------------------------------------------------------------------------------
 ; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"

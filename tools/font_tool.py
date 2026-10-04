@@ -243,6 +243,11 @@ def emit(name: str, glyphs: dict, order: list[int], w: int, h: int, header: list
         b = pack_rows(glyphs[c])
         if not np.array_equal(unpack_rows(b, w, h), glyphs[c]):
             raise SystemExit(f"{name}: pack round-trip mismatch on {c}")
+        if name == "font6x8" and any(v & 3 for v in b):
+            # print6 (src/panel_hot.asm) composes 4 chars per 3 bytes: bits 1..0
+            # would land in the next char's pixels (panel_boot masks them off
+            # anyway, so they would silently vanish).
+            raise SystemExit(f"{name}: glyph {c} uses bits 1..0 (6-px cells only)")
         blob += b
         lab = chr(c) if 33 <= c < 127 and chr(c) not in ";'\"\\" else f"#{c}"
         asm.append(f"    DEFB {', '.join(f'${v:02X}' for v in b)}   ; {c:3d} {lab}")

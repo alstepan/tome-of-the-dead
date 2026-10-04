@@ -1,14 +1,14 @@
 ;==============================================================================
-; PANEL ENGINE, bank-2 part (B3B-11): the log steps, bars and numbers. The
-; rest of the hot panel code is boot-copied to HOT_COPY (panel.asm); both are
-; uncontended bank-2 RAM, split only by what fits HOT_COPY's 768 B.
+; PANEL ENGINE, bank-2 part (B3B-11): the log item, items, bars, numbers, the
+; print6 source switch. The rest of the hot panel code is boot-copied to
+; HOT_COPY (panel_hot.asm); both are uncontended bank-2 RAM, split only by
+; what fits HOT_COPY.
 ;==============================================================================
 ;------------------------------------------------------------------------------
-; item_log — the oldest pending message: step 0 scrolls row 23 -> 22 and
-; clears row 23 (log_scroll); then print6n on row 23 from LQ_PTR / LQ_X, at
-; most P_LIM chars (0 = all). With P_LIM = 0 both steps run in this tick.
-; Message done: next ring slot, LOG_QN -= 1, PD_LOG cleared at 0.
-; HL = PANEL_DIRTY.
+; item_log — the oldest pending message as ONE item (B3B-11b: no chunked
+; steps): log_scroll (row 23 -> 22, row 23 cleared), then the whole line on
+; row 23 (print6), next ring slot, LOG_QN -= 1, PD_LOG cleared at 0.
+; HL = PANEL_DIRTY. Clobbers: all but IX, IY.  ~23k T for 32 chars (W15)
 ;------------------------------------------------------------------------------
 item_log:
                 ld   a, (LOG_QN)
@@ -16,57 +16,29 @@ item_log:
                 jr   nz, .go
                 res  PD_LOG_BIT, (hl)
                 ret
-.go:            ld   a, (LOG_Q + LQ_STEP)
-                or   a
-                jr   nz, .print
-                call log_scroll
-                ld   a, 1
-                ld   (LOG_Q + LQ_STEP), a
-                xor  a
-                ld   (LOG_Q + LQ_X), a
+.go:            call log_scroll
                 ld   a, (LOG_Q + LQ_RD)
                 rrca
                 rrca                           ; * LOG_SLOT_LEN
                 ld   l, a
                 ld   h, LOG_TXT >> 8
-                ld   (LOG_Q + LQ_PTR), hl
-                ld   a, (P_LIM)
-                or   a
-                ret  nz                        ; 2nd frame: the scroll was this tick's step
-.print:         ld   hl, (LOG_Q + LQ_PTR)
-                ld   a, (LOG_Q + LQ_X)
-                ld   e, a
                 ld   b, LOG_ROW + 1
-                ld   a, (P_LIM)
-                call print6n
-                ld   (LOG_Q + LQ_PTR), hl
+                ld   e, 0
+                call print6
                 ld   a, e
-                ld   (LOG_Q + LQ_X), a
                 add  a, 7
                 rrca
                 rrca
                 rrca
-                and  $1F                       ; cols holding ink now
-                ld   b, a
-                ld   de, HUD4_EXT + 3          ; row 23
-                ld   a, (de)
-                cp   b
-                jr   nc, .e
-                ld   a, b
-                ld   (de), a
-.e:             ld   e, (HUD4_PW + 3) & $FF
-                ld   a, (de)
-                cp   b
-                jr   nc, .w
-                ld   a, b
-                ld   (de), a
+                and  $1F                       ; cols holding ink now (row 23 was cleared)
+                ld   hl, HUD4_EXT + 3          ; row 23
+                ld   (hl), a
+                ld   l, (HUD4_PW + 3) & $FF
+                cp   (hl)
+                jr   c, .w
+                ld   (hl), a
 .w:             ld   a, 1
                 ld   (PRES_ANY), a
-                ld   a, (hl)
-                or   a
-                ret  nz                        ; chunk limit: more next tick
-                xor  a                         ; message done
-                ld   (LOG_Q + LQ_STEP), a
                 ld   hl, LOG_Q + LQ_RD
                 ld   a, (hl)
                 inc  a
@@ -79,6 +51,100 @@ item_log:
                 res  PD_LOG_BIT, (hl)
                 ret
                 ASSERT (HUD4_EXT >> 8) == ((HUD4_PW + 3) >> 8)
+
+;------------------------------------------------------------------------------
+; item_icons — 3B: the quick-potion slot (count digit at (col+2, 19); attrs:
+; glyph cell ATTR_POTION + digit ATTR_HUD, both greyed at 0). HL = PANEL_DIRTY.
+; ~1k T
+;------------------------------------------------------------------------------
+item_icons:
+                res  PD_ICONS_BIT, (hl)
+                ld   a, (P_ENTITIES + E_POT)
+                ld   (PANEL_POT_SH), a
+                cp   10
+                jr   c, .d
+                ld   a, 9
+.d:             add  a, '0'
+                ld   hl, P_NUMBUF
+                ld   (hl), a
+                inc  l
+                ld   (hl), 0
+                dec  l
+                ld   a, (pot_col)
+                add  a, 2
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   e, a                      ; x of cell col + 2
+                ld   b, ICON_ROW + 1
+                call print6
+                ld   a, (pot_col)
+                ld   c, a
+                ld   b, ICON_ROW + 1
+                call attr_addr                 ; HL = attr (19, col); keeps BC
+                ld   de, (ATTR_POTION << 8) | ATTR_HUD
+                ld   a, (PANEL_POT_SH)
+                or   a
+                jr   nz, .a
+                ld   de, (ATTR_P_GREY << 8) | ATTR_P_GREY
+.a:             ld   (hl), d
+                inc  l
+                inc  l
+                ld   (hl), e
+                ld   de, (ICON_W << 8) | 1
+                jp   pmark_rect                ; (B, C = row 19, slot col)
+pot_col:        DB   0                         ; quick-potion slot col (panel_init)
+
+;------------------------------------------------------------------------------
+; print6g — print6 fed by a getter (the interface kept open for B3B-13's
+; dictionary-token decoder; nothing calls it yet): HL = getter (out A = next
+; char, 0 = end; its state in BC; keeps DE; may clobber HL), BC = its initial
+; state, A = char row, E = pixel x (x & 7 = 0). Patches print6's 4 fetch
+; sites to `call getter` (print6 puts the inline fetch back by itself).
+; Out / clobbers: as print6.  +23 T per char vs the inline fetch.
+; p6_inline — restore the inline `ld a, (bc) / inc bc / nop` fetch sites.
+; Keeps B, C, E, HL.  Clobbers: A, D.
+;------------------------------------------------------------------------------
+print6g:
+                push af
+                push bc
+                push de
+                ex   de, hl                    ; DE = getter
+                ld   hl, P6_SITE0
+                ld   c, P6_SITES
+.s:             ld   (hl), $CD                 ; call getter
+                inc  hl
+                ld   (hl), e
+                inc  hl
+                ld   (hl), d
+                ld   a, l
+                add  a, P6_SITE_STEP - 2
+                ld   l, a
+                jr   nc, .n
+                inc  h
+.n:             dec  c
+                jr   nz, .s
+                pop  de
+                pop  bc
+                pop  af
+                jp   print6_go
+p6_inline:
+                push hl
+                push bc
+                ld   hl, P6_SITE0
+                ld   d, P6_SITES
+.s:             ld   (hl), P6_LDBC
+                inc  hl
+                ld   (hl), P6_INCBC
+                inc  hl
+                ld   (hl), 0                   ; nop
+                ld   bc, P6_SITE_STEP - 2
+                add  hl, bc
+                dec  d
+                jr   nz, .s
+                pop  bc
+                pop  hl
+                ret
 
 ;------------------------------------------------------------------------------
 ; log_scroll — row 23 -> row 22 (n = max(EXT22, EXT23) cols: row 23 is blank

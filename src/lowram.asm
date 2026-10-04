@@ -129,7 +129,7 @@ boot:
                 call build_bitrev
                 ld   hl, init_tiles            ; B3B-8: bank 3 (the common set,
                 call far3                      ; ornament, PROTO zap glyphs)
-                ld   hl, panel_boot            ; B3B-11: FONT6 + the panel hot code
+                ld   hl, panel_boot            ; B3B-11: FONT6 planes + the panel hot code
                 call far3                      ; -> bank-2 runtime RAM
                 call alloc_reset
                 ; monsters: every kind's frames, both facings (§5.2)
@@ -1202,6 +1202,14 @@ build_bitrev:
                 inc  l
                 jr   nz, .next
                 ret
+
+; copy_virt3 — copy_virt for bank-3 (far3) callers: pages bank 3 back before
+; returning (B3B-11b: panel_boot / pblit read the vdata block in bank 1).
+; Clobbers: A, BC, DE, HL
+copy_virt3:
+                call copy_virt
+                ld   a, BANK_COLD3
+                jp   page_bank
 
 ; copy_virt — copy BC bytes from VIRTUAL sprite-source address HL (banks 1/3,
 ; assembled at $8000..$FFFF) to DE (bank 2/5 RAM). Handles the $C000 straddle.
