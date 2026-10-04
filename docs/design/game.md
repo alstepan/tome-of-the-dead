@@ -1183,6 +1183,13 @@ Bosses never follow, so the Lord's bat form stays in its lair.
 
 Followers: prototype §3.7 + this cap. **Bosses never follow.**
 
+**Level descent: nobody follows (designer decision 2026-10-04).** The follower rule covers
+room exits only. On EX_LEVEL every monster of the old level is discarded, adjacent or not;
+no PENDING entries carry over. The new level is generated with its normal §9.4 population,
+start room 0 monsters, and the usual §9.5 respawn and trap/arrival rules. The DEPTH card is
+a clean break. Rationale: it keeps the §9.3 cap and the slot budget trivially valid at
+arrival, and it makes descending a valid escape.
+
 ### 9.4 Per-level population (≤ 4 kinds + boss; hero + ≤ 15 slots)
 
 | Depth | Kinds | Monsters (incl. boss) | Boss |
