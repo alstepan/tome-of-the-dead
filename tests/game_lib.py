@@ -121,6 +121,12 @@ class Proto:
     explicit `tick()`, so scenarios are deterministic and never race the
     renderer (no wall-clock sleeps)."""
 
+    # B3B-12: new games start on a generated D1 by default; the suites written
+    # for the PROTO rooms A-D (walkthrough, budget, flicker, W0-W15) poke the
+    # cold-block flag proto_start = 1 right after every load (see load()).
+    # Set proto_start = 0 on an instance for the generated start (W16).
+    proto_start = 1
+
     def __init__(self, h):
         self.h = h
         self.z = h.z
@@ -248,6 +254,7 @@ class Proto:
                   f" $C000 bank {c000}", flush=True)
         else:
             raise RuntimeError("snapshot reload failed %d times" % attempts)
+        self.wb("proto_start", self.proto_start)     # B3B-12 (after the RAM check)
         self.load_breakpoints()
 
     def load_breakpoints(self):

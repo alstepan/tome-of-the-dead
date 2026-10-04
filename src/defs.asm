@@ -72,7 +72,7 @@ NEXT_MAP        EQU $6300           ; 672 B buffer: destination room during a tr
 TILE_GLYPHS     EQU $6600           ; 512 B: 64 tiles x 8 B ($6600..$67FF)
 BITREV_TAB      EQU $6800           ; 256 B: bit-reversed byte (page-aligned)
 TILE_ATTRS      EQU $6900           ; 64 B : attr per tile id (one page: ld h, TILE_ATTRS>>8)
-GEN_SRC         EQU $6940           ; 512 B: source frame copied out of its bank (raw build)
+GEN_SRC         EQU $6940           ; 512 B: staging for vdata reads (panel_boot / pblit, copy_virt)
 GEN_MIR         EQU $6B40           ; 512 B: mirrored copy (left-facing)
 LOWRAM_END      EQU $6D40
 TILE_IDS        EQU 64              ; tile id capacity (glyphs/attrs above)
@@ -96,13 +96,12 @@ TILE_LEVEL_ATTRS  EQU TILE_ATTRS + TILE_COMMON
 LOWRAM_FREE_END EQU LOWRAM_END_3B   ; B3B-1: end of the fixed low-RAM buffers incl. the 3B level
                                     ; state + ornament glyphs ($6D40..$6EBF, level_defs.asm)
 ZX0_BUDGET      EQU 128             ; A5: decompressor (68 B) + glue, max
-    IFNDEF ZX0_SOURCES                          ; A5: 1 = sprite sources ZX0-packed
-ZX0_SOURCES     EQU 1                           ;     (build/zx0/sprites_zx0.asm from tools/zx0_sources.py);
-    ENDIF                                       ;     -DZX0_SOURCES=0 = raw index.asm (A/B)
-    IF ZX0_SOURCES
-ZX0_RESERVE     EQU 0               ; consumed: the code is inside the cold block
-    ELSE
-ZX0_RESERVE     EQU ZX0_BUDGET      ; raw build keeps the same fit margin
+; B3B-12: the raw-sources A/B build (-DZX0_SOURCES=0) is retired; tests/zx0_pool.py
+; checks the pools against a Python reference built from the raw frame data.
+    IFDEF ZX0_SOURCES
+      IF ZX0_SOURCES == 0
+        ERROR "ZX0_SOURCES=0 (raw sprite sources) was retired in B3B-12"
+      ENDIF
     ENDIF
 GEN_SCRATCH     EQU ROOM_MAP        ; A5: 1,536 B generator-time scratch (alias, rooms dead)
 GEN_SCRATCH_LEN EQU NEXT_MAP + $300 - ROOM_MAP
@@ -277,6 +276,7 @@ EX_LEFT         EQU 1
 EX_RIGHT        EQU 2
 EX_UP           EQU 3
 EX_DOWN         EQU 4
+EX_LEVEL        EQU 5               ; B3B-12: down the lair's level exit {EXITCOL,2} -> next depth
 
 ;------------------------------------------------------------------------------
 ; Entity record — 32-byte stride (prototype §11.1; the 16 B P3 stride doesn't
@@ -427,11 +427,10 @@ FT_STRIDE       EQU 4
 ;------------------------------------------------------------------------------
 ; Frame descriptor (A6; bank 5 low RAM, fdesc_tab at the end of the cold block,
 ; read only by gen_frame) — 5 B/fid:
-;   FD_BLK   word: ZX0 build = VIRTUAL address of the frame's packed block
-;                  (banks 1/3; also the GEN_ZBLK cache key);
-;                  raw build = virtual address of the raw frame
-;   FD_FRM   word: ZX0 build = the frame's address inside GEN_SCRATCH once its
-;                  block is unpacked (GEN_SCRATCH + in-block offset); raw: 0
+;   FD_BLK   word: VIRTUAL address of the frame's packed block
+;                  (banks 1/3; also the GEN_ZBLK cache key)
+;   FD_FRM   word: the frame's address inside GEN_SCRATCH once its
+;                  block is unpacked (GEN_SCRATCH + in-block offset)
 ;   FD_FLAGS byte: FF_*
 ;------------------------------------------------------------------------------
 FD_BLK          EQU 0
@@ -575,11 +574,7 @@ FRM_OK = 1
       IF FRM_OK
 FCTR = FCTR + 1
         DW   nm                                ; FD_BLK
-        IF ZX0_SOURCES
-          DW   GEN_SCRATCH + nm_zoff           ; FD_FRM
-        ELSE
-          DW   0
-        ENDIF
+        DW   GEN_SCRATCH + nm_zoff             ; FD_FRM
         DB   flg                               ; FD_FLAGS
       ENDIF
     ELSE

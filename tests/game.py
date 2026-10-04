@@ -1664,6 +1664,7 @@ def tape_rest(h, p):
     p.wb("INPUT_REPEAT", 0)
     p.wb("ANIM_FREEZE", 1)
     p.wb("INPUT_SRC", 1)
+    p.wb("proto_start", p.proto_start)           # B3B-12: the tape loaded the default 0
     p.hold("1")
     h.expect("50 tape: '1' starts the game", p.wait_state(GS_PLAYING), True)
     p.release()

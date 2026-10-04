@@ -300,7 +300,9 @@ sel_tab:        DB   FID_knight_idle1, 8,  $47
 
 ;==============================================================================
 ; start_game — C = hero kind. Generate its frames (§5.2: only the chosen
-; hero), new game, first render, then the play loop (bank 2, never returns).
+; hero), new game, first level (B3B-12: a generated D1 through level_enter;
+; proto_start = 1: the PROTO rooms A-D through level_show), then the play
+; loop (bank 2, never returns).
 ;==============================================================================
 start_game:
                 ld   a, c
@@ -309,24 +311,118 @@ start_game:
                 ld   a, (HERO_KIND)
                 call gen_kind
                 ld   hl, new_game              ; bank 3 (A7 review: cold, out of bank 2):
-                call far3                      ; B3B-8: also the PROTO level state
+                call far3                      ; hero slot, PROTO level / master seed
+                ld   de, str_welcome           ; the first log line (panel_init)
+                ld   a, (proto_start)
+                or   a
+                jr   z, .gen
                 xor  a                         ; depth 0: the PROTO rooms' theme
-                call level_load_tiles          ; (D1 set + the chest)
-                ld   a, ATTR_HUD
-                call clear_screen
-                ld   a, (CUR_ROOM)
-                call room_show                 ; build + draw + ornament (screen, shadow)
-                ld   de, str_welcome           ; B3B-11: the panel (rows 18-23) + the
-                ld   hl, panel_init            ; first log line, drawn now (bank 3)
-                call far3
-                call present_full              ; A7: bank 5 -> 7, display bank 7
-                ld   a, 1
+                call level_show                ; (D1 set + the chest)
+                jr   .go
+.gen:           inc  a                         ; A = 1: D1
+                call level_enter
+.go:            ld   a, 1
                 ld   (NEED_RELEASE), a         ; the select key must be released
                 ld   a, GS_PLAYING
                 ld   (GAME_STATE), a
                 ld   a, (SYS_FRAMES)
                 ld   (LAST_TICK_FRAME), a
                 jp   play_loop
+
+; B3B-12 run configuration (on tape, in this cold block; tests poke them right
+; after the snapshot load / tape boot, docs/memory-map.md "Level entry"):
+;   proto_start  1 = new games start in the PROTO rooms A-D (tests/game.py's
+;                walkthrough, budget, flicker); 0 (default) = a generated D1
+;   seed_fixed   1 = MASTER_SEED = seed_value (game.md §1 SEED_FIXED, F3);
+;                0 (default) = SYS_FRAMES when the hero is chosen
+    IFNDEF PROTO_START
+PROTO_START     EQU 0                   ; -DPROTO_START=1: PROTO rooms by default
+    ENDIF
+    IFNDEF SEED_FIXED
+SEED_FIXED      EQU 0                   ; -DSEED_FIXED=1 [-DSEED_VALUE=n]
+    ENDIF
+    IFNDEF SEED_VALUE
+SEED_VALUE      EQU $1234
+    ENDIF
+proto_start:    DB   PROTO_START
+seed_fixed:     DB   SEED_FIXED
+seed_value:     DW   SEED_VALUE
+
+;------------------------------------------------------------------------------
+; level_enter — B3B-12: enter depth A (1..8) of the run; DE = first log line.
+; New game (start_game, A = 1) and descend (level_descend) alike:
+;   card     clear the bank-5 screen, "DEPTH n" (level_card), present_full:
+;            the card stays on screen 2 while everything below is composed
+;            in bank 5 (game.md §11)
+;   level    far3 level_new: LVL_SEED from MASTER_SEED, level_gen (retried
+;            on B = 1), the stand-in population, hero on the start (GAME_STATE
+;            = TRANSITION meanwhile: a gen_frame here would count in GEN_TRAP)
+;   show     level_show: tiles, first room into ROOM_MAP (so ANIM_LIST is the
+;            new room's), panel, vis_reset (entity table rewritten), present
+; The caller sets GAME_STATE and resyncs the tick. Leaves bank 7 paged.
+; Clobbers: all but IY.   Cold: ~1.3-2.0M T (tests/world.py W16 reports)
+;------------------------------------------------------------------------------
+level_enter:
+                push de
+                push af
+                ld   a, GS_TRANSITION
+                ld   (GAME_STATE), a
+                ld   a, ATTR_HUD
+                call clear_screen
+                pop  af
+                push af
+                ld   hl, level_card            ; bank 3: "DEPTH n"
+                call far3
+                call present_full              ; the card -> screen 2, shown
+                pop  af
+                ld   hl, level_new             ; bank 3: generate + populate
+                call far3
+                pop  de
+                ld   a, (LVL_DEPTH)
+                ; fall through
+;------------------------------------------------------------------------------
+; level_show — A = depth (0 = PROTO), DE = first log line, CUR_ROOM + the
+; level state + the entity table set: theme tiles, the room built into
+; ROOM_MAP + drawn (screen + shadow), panel (depth Dn, HP, log), vis_reset
+; (render-state resync after an entity-table rewrite: conventions.md), then
+; present_full. Leaves bank 7 paged. Clobbers: all but IY.
+;------------------------------------------------------------------------------
+level_show:
+                push de
+                call level_load_tiles
+                ld   a, ATTR_HUD
+                call clear_screen
+                ld   a, (CUR_ROOM)
+                call room_show                 ; build + draw + ornament (screen, shadow)
+                pop  de
+                ld   hl, panel_init            ; B3B-11: rows 18-23 + the first log line (bank 3)
+                call far3
+                call vis_reset
+                jp   present_full              ; A7: bank 5 -> 7, display bank 7
+
+;------------------------------------------------------------------------------
+; level_descend — do_exit with EXIT_KIND = EX_LEVEL (the hero took the
+; lair's level exit, logic.asm try_climb): D8 -> GS_WIN (game.md §1.4
+; stand-in), else level_enter (depth + 1). Back in end_turn, which finishes
+; the turn (potion pickup on the new level, TURN_PHASE 0).
+; Clobbers: all but IY.
+;------------------------------------------------------------------------------
+level_descend:
+                xor  a
+                ld   (EXIT_KIND), a
+                ld   a, (LVL_DEPTH)
+                cp   LEVELS
+                jr   nc, .win
+                inc  a
+                ld   de, str_descend
+                call level_enter
+                ld   a, GS_PLAYING
+                ld   (GAME_STATE), a
+                jp   resync_tick
+.win:           ld   a, GS_WIN
+                ld   (GAME_STATE), a
+                ld   hl, str_win
+                jp   log_push_end              ; never dropped; end_screen drains it
 
 ;==============================================================================
 ; ROOM ENTRY / THEME (B3B-8). build_room_map v2 lives in bank 3 (D7); these
@@ -1116,8 +1212,8 @@ init_kbd_mirror:
 
 ;==============================================================================
 ; BOOT-TIME GENERATOR (prototype §5.1/§5.2). Per frame: get the unshifted
-; right-facing source out of banks 1/3 (ZX0_SOURCES: unpack its block into
-; GEN_SCRATCH once, zx0_frame; raw: copy_virt to GEN_SRC), then emit each needed variant
+; right-facing source out of banks 1/3 (unpack its ZX0 block into
+; GEN_SCRATCH once, zx0_frame), then emit each needed variant
 ; (facing x shift) into the pool banks 0/4/6 with a bump allocator. No variant
 ; straddles a bank (allocator skips to the next bank). ~70-100 T/output byte.
 ;==============================================================================
@@ -1133,11 +1229,9 @@ alloc_reset:
                 ld   (GEN_OVERFLOW), a
                 ld   hl, BANK_WINDOW
                 ld   (ALLOC_PTR), hl
-    IF ZX0_SOURCES
                 ld   l, a
                 ld   h, a
                 ld   (GEN_ZBLK), hl            ; no cached block
-    ENDIF
                 ret
 
 ; alloc_mark / alloc_restore — remember/rewind the pool top (hero regen).
@@ -1153,10 +1247,8 @@ alloc_restore:
                 ld   (ALLOC_IDX), a
                 ld   hl, (ALLOC_MARK_PTR)
                 ld   (ALLOC_PTR), hl
-    IF ZX0_SOURCES
                 ld   hl, 0
                 ld   (GEN_ZBLK), hl            ; no cached block
-    ENDIF
                 ret
 
 ; alloc — reserve BC bytes. Out: A = bank, HL = addr, CF = 1 if the pool is full.
@@ -1318,7 +1410,7 @@ gen_kind:
 
 ;------------------------------------------------------------------------------
 ; gen_frame — generate all variants of frame A into the pool; fill FRT[A].
-; ZX0_SOURCES: the frame is read from its block unpacked in GEN_SCRATCH, which
+; The frame is read from its ZX0 block unpacked in GEN_SCRATCH, which
 ; aliases ROOM_MAP/NEXT_MAP — callable only while no room is built (boot, hero
 ; start; 3F: level start before build_room_map). A call while GAME_STATE is
 ; PLAYING/TRANSITION bumps GEN_TRAP (saturating; tests assert 0). The block
@@ -1377,22 +1469,7 @@ gen_frame:
                 inc  hl
                 ld   a, (hl)                   ; FD_FLAGS
                 ld   (GEN_FLAGS), a
-    IF ZX0_SOURCES
                 call zx0_frame                 ; HL = frame in GEN_SCRATCH (no copy)
-    ELSE
-                ; source bytes = cols * H * 2
-                push de
-                call gen_rowbytes              ; A = cols*2
-                ld   c, a
-                ld   a, (GEN_H)
-                call mul8                      ; HL = A * C
-                ld   b, h
-                ld   c, l
-                pop  hl                        ; HL = virt src
-                ld   de, GEN_SRC
-                call copy_virt
-                ld   hl, GEN_SRC
-    ENDIF
                 ; --- right facing --- (GEN_BASE = the unmirrored source until
                 ; mirror_src has read it; gen_variant only reads it)
                 ld   (GEN_BASE), hl
@@ -1583,7 +1660,7 @@ gen_variant:
                 ret
 
 ; mirror_src — (GEN_BASE) -> GEN_MIR, each row's columns reversed + bit-reversed.
-; GEN_BASE = GEN_SRC (raw sources) or the frame inside GEN_SCRATCH (ZX0).
+; GEN_BASE = the frame inside GEN_SCRATCH (ZX0 block).
 ; Clobbers: A, BC, DE, HL
 mirror_src:
                 ld   hl, (GEN_BASE)
@@ -1649,7 +1726,6 @@ mul8:
 .n:             djnz .m
                 ret
 
-    IF ZX0_SOURCES
 ;------------------------------------------------------------------------------
 ; zx0_frame — DE = VIRTUAL address of the frame's packed block (FD_BLK), BC =
 ; the frame's address in GEN_SCRATCH (FD_FRM). Unpacks the block into
@@ -1690,7 +1766,6 @@ zx0_frame:
                 INCLUDE "dzx0_standard.asm"
 zx0_code_end:
                 ASSERT zx0_code_end - zx0_code <= ZX0_BUDGET
-    ENDIF
 
 ; frt_ptr — HL = FRT + A*16 ; frt_ptr_cur uses GEN_FID.  Clobbers: A, DE, HL
 ;------------------------------------------------------------------------------

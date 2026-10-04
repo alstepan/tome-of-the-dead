@@ -220,6 +220,16 @@ LF_GRATE_OPEN   EQU %00000001       ; lair grate open (3B: set at level start, g
 LF_KEY_TAKEN    EQU %00000010       ; (3E+)
 LF_SEAL_OPEN    EQU %00000100       ; (3F)
 
+; B3B-12 level seed (game.md §1 "Seed"): LVL_SEED = MASTER_SEED + depth * LVL_SEED_MUL
+; (16-bit). Additive with an ODD constant, NOT an XOR with depth * $0101: level_gen
+; seeds GEN_RNG = LVL_SEED ^ (depth * $0101), so an XOR mix would cancel and give
+; every depth of a game the same GEN_RNG (= MASTER_SEED). For a fixed depth the map
+; master -> seed is a bijection (the whole 16-bit seed space is reachable, incl. the
+; reseed-exhausting seeds), and the 8 depths of one game never share a seed
+; (d * MUL mod 65536 differs for d = 1..8 because MUL is odd).
+LVL_SEED_MUL    EQU $9E37           ; 2^16 / golden ratio, odd
+                ASSERT (LVL_SEED_MUL & 1) == 1
+
                 ASSERT LVL_STATE == LOWRAM_END
                 ASSERT EDGE_TAB >= LVL_STATE + LVL_HDR_LEN
                 ASSERT EDGE_TAB + EDGES_H <= ROOM_DESC

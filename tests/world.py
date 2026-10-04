@@ -1165,6 +1165,325 @@ def run_gen_suites(p, check):
     p.load()
 
 
+# ---------------------------------------------------------------------------
+# B3B-12 (W16): level change. New game on a generated D1 (proto_start = 0,
+# seed_fixed + seed_value), descend through the lair's level exit, D1 -> D8,
+# the reseed-exhausting D8 seeds, D8 descend = GS_WIN.
+# ---------------------------------------------------------------------------
+LVL_MUL = S["LVL_SEED_MUL"]
+GEN_NOWHERE = 15                               # not a room id of a generated level
+
+
+def lvl_seed(master, d):
+    return (master + d * LVL_MUL) & 0xFFFF
+
+
+def bank3_bytes(p, addr, n):
+    p.z.cmd("set-memory-zone 0")
+    try:
+        return bytes(p.z.read_memory(3 * 16384 + addr - 0xC000, n))
+    finally:
+        p.z.cmd("set-memory-zone -1")
+
+
+def pop_model(p, blk, depth):
+    """The stand-in population (bank3.asm level_populate), written from its
+    rule: [(kind, room, x, y, flags, hp)] in slot order 1..15."""
+    kinds = bank3_bytes(p, S["pop_kinds"], S["POP_KINDS"])
+    cols = bank3_bytes(p, S["pop_cols"], 18)
+    kt = S["kind_tab"]
+    rd = lambda r, k: room_model.field(blk, r, k)  # noqa: E731
+    start = blk[S["LVL_START"] - room_model.BASE]
+
+    def hits(r, s_, lo, hi):
+        fp = ("RD_UPCOL", "RD_ARRCOL", "RD_LAD1", "RD_LAD2") if s_ == 0 else \
+             ("RD_DNCOL", "RD_EXITCOL", "RD_LAD1", "RD_LAD2")
+        for k in fp:
+            f = rd(r, k)
+            if f and f <= hi and f + 2 >= lo:
+                return True
+        pit = rd(r, "RD_PITCOL")
+        if s_ == 0 and pit and pit - 1 <= hi and pit + 3 >= lo:
+            return True
+        bl = rd(r, "RD_BLOCK")
+        if bl and (bl >> 6) & 1 == s_:
+            w = bl & S["RDB_WMASK"]
+            if (bl & 0x80 and hi + w >= 31) or (not bl & 0x80 and w >= lo):
+                return True
+        return False
+    out = []
+    for r in range(9):
+        if r == start or not rd(r, "RD_FLAGS") & S["RDF_PRESENT"]:
+            continue
+        for e in range(2):
+            if len(out) == 15:
+                return out
+            k = kinds[(r + 3 * e + depth) % 6]
+            w, h = p.rb(kt + S["KT_BW"] + k), p.rb(kt + S["KT_BH"] + k)
+            fly = p.rb(kt + S["KT_FLAGS"] + k) & S["KF_FLYER"]
+            m, s_, x = (3 if fly else 1), 1 - e, cols[2 * r + e]
+            for _ in range(S["POP_TRIES"]):
+                if not hits(r, s_, x - m, x + w - 1 + m):
+                    y = 9 * s_ + 1 if fly else 9 * s_ + 8 - h
+                    fl = EF_ACTIVE | EF_HOSTILE | (EF_LEFT if x >= 15 else 0)
+                    out.append((k, r, x, y, fl, p.rb(kt + S["KT_HP"] + k)))
+                    break
+                x += 3
+                if x > S["POP_XMAX"]:
+                    x -= S["POP_XMAX"] + 1 - S["POP_XMIN"]
+    return out
+
+
+def w16_level(p, check):
+    import levelgen as G
+    kw, kh = game.body(p, K_KNIGHT)
+    y0, y1 = stand_y(0, kh), stand_y(1, kh)
+    M = 0x1234
+    rom = bytes(p.z.read_memory(S["ROM_CHARSET"], 96 * 8))
+    STUB = S["LOWRAM_END_3B"]
+    info = {}
+
+    def ingame(code, tag):
+        """Run code (DI ... EI) from the wait_tick probe, play resumes there."""
+        pc0 = p.pc()
+        ok = p.run_stub([0xF3] + code + [0xFB], org=STUB)
+        p.z.cmd("set-register PC=%d" % pc0)
+        check(f"W16 stub {tag} ran", ok, "")
+
+    def card_ok(fr, d):
+        txt = "DEPTH %d" % d
+        r, c0 = S["CARD_ROW"], S["CARD_COL"]
+        return all(bytes(cell_bytes(fr, c0 + i, r)) == rom[(ord(ch) - 32) * 8:(ord(ch) - 31) * 8]
+                   for i, ch in enumerate(txt))
+
+    def level_ok(d, master, tag, hero_keep=None, seed=None):
+        """Everything a fresh level must satisfy (tag: where we are)."""
+        blk = room_model.read_block(p)
+        want = G.generate(d, lvl_seed(master, d) if seed is None else seed, master)
+        check(f"W16 {tag}: LVL_DEPTH {d}, block == levelgen.generate({d}, master + {d} * MUL)",
+              p.rb("LVL_DEPTH") == d and blk == want, (p.rb("LVL_DEPTH"), hex(p.rw("LVL_SEED"))))
+        st = blk[S["LVL_START"] - room_model.BASE]
+        e = p.ent(0)
+        check(f"W16 {tag}: hero on the start room, x = start_x, standing on storey 0",
+              (p.rb("CUR_ROOM"), e["ROOM"], e["X"], e["Y"]) == (st, st, G.start_x(blk), y0),
+              (p.rb("CUR_ROOM"), st, e["X"], e["Y"], G.start_x(blk)))
+        if hero_keep:
+            check(f"W16 {tag}: HP / MAXHP / potions / kind carried over",
+                  (e["HP"], e["MAXHP"], e["POT"], e["KIND"]) == hero_keep, (e, hero_keep))
+        check(f"W16 {tag}: GS_PLAYING, EXIT_KIND 0, GEN_TRAP 0, GEN_OVERFLOW 0",
+              (p.rb("GAME_STATE"), p.rb("EXIT_KIND"), p.rb("GEN_TRAP"), p.rb("GEN_OVERFLOW"))
+              == (GS_PLAYING, 0, 0, 0),
+              (p.rb("GAME_STATE"), p.rb("EXIT_KIND"), p.rb("GEN_TRAP"), p.rb("GEN_OVERFLOW")))
+        fa, wa = room_model.THEME[d]
+        lvl = S["TILE_GLYPHS"] + S["T_LVL_BASE"] * 8
+        slot = (S["TSET_LO"] if d <= 4 else S["TSET_HI"]) + ((d - 1) & 3) * S["TSET_STRIDE"]
+        check(f"W16 {tag}: theme D{d} (floor / wall attrs, ids 32..63 == bank-7 slot {d - 1})",
+              (p.rb("LVL_ATTR_FLOOR"), p.rb("LVL_ATTR_WALL")) == (fa, wa)
+              and bytes(p.z.read_memory(lvl, 256)) == bank7(p, slot, 256),
+              (hex(p.rb("LVL_ATTR_FLOOR")), hex(p.rb("LVL_ATTR_WALL"))))
+        mods = pop_model(p, blk, d)
+        got = []
+        for s_ in range(1, 16):
+            q = p.ent(s_)
+            got.append((q["KIND"], q["ROOM"], q["X"], q["Y"], q["FLAGS"], q["HP"]) if q["FLAGS"] else None)
+        check(f"W16 {tag}: population == the stand-in rule ({len(mods)} monsters, start room empty)",
+              got[:len(mods)] == mods and all(g is None for g in got[len(mods):])
+              and not any(m[1] == st for m in mods), (got, mods))
+        p.settle(2)
+        fr = p.frame()
+        check(f"W16 {tag}: panel depth D{d} at (30, 18)", log_row(fr, 18, 30, 2) == text6("D%d" % d, 0, 2), "")
+        stale = [s_ for s_ in range(16) if p.ent(s_)["DVIS"] & 1 and
+                 (p.ent(s_)["ROOM"] != p.rb("CUR_ROOM") or not p.ent(s_)["FLAGS"] & EF_ACTIVE)]
+        check(f"W16 {tag}: no stale sprite (B7: every drawn slot is in CUR_ROOM)", stale == [], stale)
+        check(f"W16 {tag}: first play tick: ROOM_MAP == model, ANIM_LIST == the start room's, "
+              "screens == map (before any decor_tick)", fresh.get(d) == [], fresh.get(d))
+        return blk
+
+    fresh = {}
+
+    def fresh_ok(tag):
+        """At the first wait_tick of a new level (no decor_tick / render yet):
+        ROOM_MAP, ANIM_LIST (phases = the build's stagger) and both screens."""
+        d = p.rb("LVL_DEPTH")
+        blk = room_model.read_block(p)
+        st = p.rb("CUR_ROOM")
+        errs = []
+        al = []
+        want_m = room_model.render_room(blk, st, anim=al)
+        n = p.rb("ANIM_N")
+        got_al = list(p.z.read_memory(S["ANIM_LIST"], 4 * n)) if 0 < n <= 12 else []
+        if list(p.z.read_memory(S["ROOM_MAP"], 576)) != want_m:
+            errs.append("ROOM_MAP != model")
+        if got_al != al or n != len(al) // 4:
+            errs.append(("ANIM_LIST", n, got_al[:12], al[:12]))
+        errs += p.screen_vs_map(tag)
+        fresh[d] = errs
+
+    def to_exit(blk, tag, walk=True):
+        """Teleport the hero next to the lair's level exit (storey 1), the
+        lair's monsters out, walk onto {EXITCOL,2}, J: descend. -> (frames
+        while the card was shown at level_new, T of the turn's ticks)."""
+        lair = blk[S["LVL_LAIR"] - room_model.BASE]
+        ex = room_model.field(blk, lair, "RD_EXITCOL")
+        x = ex - 2 if ex - 2 >= 2 else ex + 2
+        for s_ in range(1, 16):
+            if p.ent(s_)["ROOM"] == lair:
+                p.set_ent(s_, ROOM=GEN_NOWHERE)
+        p.z.cmd("write-memory %d %d" % (S["CUR_ROOM"], lair))
+        p.set_ent(0, ROOM=lair, X=x if walk else ex, Y=y1, PX=(x if walk else ex) * 8, PY=y1 * 8,
+                  MODE=0, DVIS=0)
+        ingame([0x3E, lair, 0xCD] + w16(S["room_show"]) + [0xCD] + w16(S["vis_reset"])
+               + [0xCD] + w16(S["present_full"]), "teleport " + tag)
+        p.settle(2)
+        if walk:
+            check(f"W16 {tag}: walked to the level exit col {ex}", p.walk_to(ex), (p.ent(0)["X"], ex))
+        cards = []
+        p.z.cmd("set-breakpoint 4 PC=%d" % S["level_new"])
+        p.extra_probes = {S["level_new"]}
+
+        d0 = p.rb("LVL_DEPTH")
+
+        def per(fr, e):
+            if p.pc() == S["level_new"]:
+                cards.append((fr, p.rb("LVL_DEPTH"), p.rw("SYS_FRAMES")))
+            elif p.pc() == S["wait_tick"] and p.rb("LVL_DEPTH") != d0 and p.rb("LVL_DEPTH") not in fresh:
+                fresh_ok(tag)
+        f0 = p.rw("SYS_FRAMES")
+        ran = p.turn("J", per_tick=per)
+        p.z.cmd("set-breakpoint 4")
+        p.extra_probes = set()
+        p.until(lambda: p.idle(), 100)
+        return ran, cards, (p.rw("SYS_FRAMES") - f0) & 0xFFFF
+
+    # ---- new game on a generated D1 --------------------------------------
+    p.proto_start = 0
+    try:
+        p.load()
+        p.wait_state(S["GS_SELECT"])
+        p.wb("seed_fixed", 1)
+        p.z.cmd("write-memory %d %d %d" % (S["seed_value"], M & 255, M >> 8))
+        p.wb("INPUT_REPEAT", 0)
+        p.wb("ANIM_FREEZE", 1)
+        p.wb("INPUT_SRC", 1)
+        p.hold("1")
+        p.wait_state(GS_PLAYING)
+        fresh_ok("D1 start")                     # the first wait_tick of the game
+        p.release()
+        p.settle(3)
+        check("W16 new game: MASTER_SEED = seed_value (seed_fixed), LVL_SEED = master + MUL",
+              (p.rw("MASTER_SEED"), p.rb("LVL_DEPTH")) == (M, 1), hex(p.rw("MASTER_SEED")))
+        blk = level_ok(1, M, "D1 start")
+        hero_k = tuple(p.ent(0)[k] for k in ("HP", "MAXHP", "POT", "KIND"))
+        # level_enter cost (cold), measured on its own (DI: no ISR; screen /
+        # card / generator / build / panel / presents), D2 of this game
+        d1 = room_model.read_block(p)
+        # ---- descend D1 -> D2 by walking onto the exit -----------------
+        ran, cards, fr_n = to_exit(blk, "D1")
+        check("W16 D1 -> D2: J on {EXITCOL,2} is one turn (first step animated) + the level change",
+              ran, "")
+        check("W16 D1 -> D2: the DEPTH 2 card is displayed while the level is generated",
+              len(cards) == 1 and cards[0][1] in (1, 2) and card_ok(cards[0][0], 2), len(cards))
+        info["descend D1->D2 frames (input tick .. idle)"] = fr_n
+        blk2 = level_ok(2, M, "D2 after descend", hero_keep=hero_k)
+        check("W16 D2: colours / tileset differ from D1",
+              d1[S["LVL_ATTR_FLOOR"] - room_model.BASE] != blk2[S["LVL_ATTR_FLOOR"] - room_model.BASE], "")
+        # ---- room change + re-entry on the new level -------------------
+        for s_ in range(1, 16):
+            p.set_ent(s_, FLAGS=0)                    # nobody interferes with the walk
+        st = blk2[S["LVL_START"] - room_model.BASE]
+        ex = room_model.field(blk2, st, "RD_EXITS")
+        if ex & (S["RDX_R"] | S["RDX_L"]):
+            side = "R" if ex & S["RDX_R"] else "L"
+            s_ = 1 if ex & (S["RDX_RS1"] if side == "R" else S["RDX_LS1"]) else 0
+            key, back = ("L", "H") if side == "R" else ("H", "L")
+            dest = st + (1 if side == "R" else -1)
+            pos = (32 - 2 - kw if side == "R" else 2, stand_y(s_, kh),
+                   EF_ACTIVE | EF_PLAYER | (0 if side == "R" else EF_LEFT))
+        elif ex & S["RDX_U"]:
+            side, key, back, dest = "U", "K", "J", st - 3
+            pos = (room_model.field(blk2, st, "RD_UPCOL"), y0, EF_ACTIVE | EF_PLAYER)
+        else:
+            side, key, back, dest = "D", "J", "K", st + 3
+            pos = (room_model.field(blk2, st, "RD_DNCOL"), y1, EF_ACTIVE | EF_PLAYER)
+        m0 = bytes(p.z.read_memory(S["ROOM_MAP"], 576))
+        al0 = []
+        room_model.render_room(room_model.read_block(p), st, anim=al0)
+        p.place(0, pos[0], pos[1], flags=pos[2])
+
+        def go(k, target):
+            for _ in range(24):
+                if p.rb("CUR_ROOM") == target:
+                    break
+                p.turn(k)
+            p.until(lambda: p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+
+        def anim_cells():
+            """ANIM_LIST as {(col, row): {type, map id}} (decor_tick swaps / steps
+            between the build and now: compare cells + id pairs, not phases)."""
+            n = p.rb("ANIM_N")
+            raw = p.z.read_memory(S["ANIM_LIST"], 4 * n)
+            m = p.z.read_memory(S["ROOM_MAP"], 576)
+            return {(raw[i], raw[i + 1]): frozenset((raw[i + 2], m[raw[i + 1] * 32 + raw[i]]))
+                    for i in range(0, 4 * n, 4)}
+
+        def model_cells(blk, r):
+            al = []
+            mm = room_model.render_room(blk, r, anim=al)
+            return {(al[i], al[i + 1]): frozenset((al[i + 2], mm[al[i + 1] * 32 + al[i]]))
+                    for i in range(0, len(al), 4)}
+        go(key, dest)
+        p.settle()
+        blk_now = room_model.read_block(p)
+        check(f"W16 D2: room change {st} -> {dest} ({side}): CUR_ROOM, ANIM_LIST cells == the room's, GEN_TRAP 0",
+              p.rb("CUR_ROOM") == dest and anim_cells() == model_cells(blk_now, dest) and p.rb("GEN_TRAP") == 0,
+              (p.rb("CUR_ROOM"), sorted(anim_cells()), sorted(model_cells(blk_now, dest))))
+        go(back, st)
+        p.settle()
+        mm = bytes(p.z.read_memory(S["ROOM_MAP"], 576))
+        # cells under ANIM_LIST may hold the other glyph frame: compare the rest
+        cells = {(al0[i], al0[i + 1]) for i in range(0, len(al0), 4)}
+        same = all(mm[i] == m0[i] for i in range(576) if (i % 32, i // 32) not in cells)
+        check(f"W16 D2: re-entry {dest} -> {st}: ROOM_MAP == the first build (decor cells aside), "
+              "ANIM_LIST cells == the room's, GEN_TRAP 0",
+              p.rb("CUR_ROOM") == st and same and anim_cells() == model_cells(blk_now, st)
+              and p.rb("GEN_TRAP") == 0, p.rb("CUR_ROOM"))
+        # ---- D2 .. D7: descend on the exit (teleported onto it) ---------
+        blk = room_model.read_block(p)
+        for d in range(3, 8):
+            hero_k = tuple(p.ent(0)[k] for k in ("HP", "MAXHP", "POT", "KIND"))
+            ran, cards, fr_n = to_exit(blk, f"D{d - 1}", walk=False)
+            check(f"W16 D{d - 1} -> D{d}: card DEPTH {d} shown", len(cards) == 1 and card_ok(cards[0][0], d), "")
+            blk = level_ok(d, M, f"D{d}", hero_keep=hero_k)
+        # ---- D7 -> D8 with the reseed-exhausting seeds (level_gen B = 1) -
+        for bad_seed in (55352, 55353, 55354):
+            m8 = (bad_seed - 8 * LVL_MUL) & 0xFFFF
+            p.z.cmd("write-memory %d %d %d" % (S["MASTER_SEED"], m8 & 255, m8 >> 8))
+            p.wb("LVL_DEPTH", 7)
+            fresh.pop(8, None)
+            ran, cards, fr_n = to_exit(blk, f"D7 (seed {bad_seed})", walk=False)
+            info[f"descend D7->D8 seed {bad_seed} frames"] = fr_n
+            blk = level_ok(8, m8, f"D8 from exhausting seed {bad_seed}", seed=bad_seed + 16)
+            check(f"W16 D8 seed {bad_seed}: LVL_SEED moved past the 16 exhausted seeds",
+                  p.rw("LVL_SEED") >= bad_seed + 16, p.rw("LVL_SEED"))
+        # ---- D8 descend = GS_WIN (stand-in) -----------------------------
+        ran, cards, fr_n = to_exit(blk, "D8", walk=False)
+        check("W16 D8: descending = GS_WIN (game.md §1.4 stand-in), no card, depth stays 8",
+              (p.rb("GAME_STATE"), p.rb("LVL_DEPTH"), len(cards), p.rb("EXIT_KIND")) == (S["GS_WIN"], 8, 0, 0),
+              (p.rb("GAME_STATE"), p.rb("LVL_DEPTH"), len(cards)))
+        # ---- cost: level_enter alone (DI), D2 of this run ---------------
+        p.z.cmd("reset-tstates-partial")
+        pc0 = p.pc()
+        ok = p.run_stub([0xF3, 0x3E, 2, 0x11] + w16(S["str_descend"]) + [0xCD] + w16(S["level_enter"]) + [0xFB],
+                        org=STUB)
+        t = int(p.z.cmd("get-tstates-partial"))
+        p.z.cmd("set-register PC=%d" % pc0)
+        info["level_enter D2 T (DI)"] = t
+        check("W16 level_enter (D2, DI) ran, cold path < 3.5M T (~1 s)", ok and t < 3500000, t)
+    finally:
+        p.proto_start = 1
+    print("[info] W16 measured: " + ", ".join(f"{k} {v:,}" for k, v in info.items()), flush=True)
+
+
 def main():
     fails = []
     with Harness() as h:
@@ -1646,6 +1965,49 @@ def main():
             p.settle(4)
             w4("W9 bat at the door")
 
+        # ========== B3B-R2 review: a monster opens a door inside the bank-3
+        # monster phase (try_step -> mon_door -> door_paint -> shadow_rect
+        # pages bank 7) — the real resolve_monsters via far3 (W9R) ==========
+        if want("W9") or want("W9R"):
+            p.boot(K_KNIGHT)
+            p.isolate()
+            p.place(0, 27, y1, flags=HERO_R)
+            p.turn("C")                                 # close the A|B door
+            check("W9R A|B door closed", p.rb(e_ab) == LINK | DOOR, p.rb(e_ab))
+            p.place(0, 10, y0, flags=HERO_R)            # hero on the other storey
+            ktf = S["kind_tab"] + S["KT_FLAGS"] + S["K_GOBLIN"]
+            gf = p.rb(ktf)
+            p.wb(ktf, gf & ~S["KF_CLIMBER"] & 0xFF)     # patrol (facing) instead of
+            gw = game.body(p, S["K_GOBLIN"])[0]         # seeking a ladder: walks into the door
+            gx = 32 - S["DOOR_COLS"] - gw
+            p.place(SLOT_GOBLIN, gx, stand_y(1, game.body(p, S["K_GOBLIN"])[1]), room=0, flags=MON_R)
+            p.place(SLOT_BATB, 20, 1, room=0, flags=MON_L)   # a later slot: must still act
+            bx0 = p.ent(SLOT_BATB)["X"]
+            probe = S["resolve_monsters.next"]
+            p.z.cmd("set-breakpoint 4 PC=%d" % probe)
+            p.extra_probes = {probe}
+            seen = {}
+            p.hold("SPACE")
+            for _ in range(12):
+                p.tick()
+                if p.pc() == probe:
+                    seen[p.rb("MON_SLOT")] = p.rb("PORT_7FFD_SHADOW") & 7
+                    if 4 in seen:
+                        break
+            p.release()
+            p.z.cmd("set-breakpoint 4")
+            p.extra_probes = set()
+            p.until(lambda: p.idle(), 100)
+            p.wb(ktf, gf)
+            check("W9R goblin opened the door through the real monster phase (no move)",
+                  (p.rb(e_ab), p.ent(SLOT_GOBLIN)["X"]) == (LINK | DOOR | OPEN, gx), (p.rb(e_ab), p.ent(SLOT_GOBLIN)["X"]))
+            check("W9R bank 3 paged after the goblin's door opening (PORT_7FFD_SHADOW & 7 == 3), "
+                  "the phase continued to slot 4", seen.get(SLOT_GOBLIN) == 3 and seen.get(SLOT_BATB) == 3, seen)
+            check("W9R the bat (slot 4, after the goblin) acted", p.ent(SLOT_BATB)["X"] != bx0,
+                  (bx0, p.ent(SLOT_BATB)["X"]))
+            p.settle(4)
+            w4("W9R door opened in the monster phase")
+
         # ================= B3B-10: animated decor (W14) =====================
         if want("W14"):
             w14(p, check)
@@ -1653,6 +2015,10 @@ def main():
         # ================= B3B-11: panel engine (W15) =====================
         if want("W15"):
             w15(p, check)
+
+        # ================= B3B-12: level change (W16) =======================
+        if want("W16"):
+            w16_level(p, check)
 
         # ================= B3B-8: generated rooms + level themes ===========
         if want("W11") or want("W12") or want("W12M") or want("W13"):

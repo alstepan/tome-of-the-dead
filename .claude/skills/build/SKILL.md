@@ -11,7 +11,7 @@ Assemble the project for the ZX Spectrum 128K.
 
 ```sh
 tools/build.sh                       # pack sprites + assemble into build/
-tools/build.sh -DZX0_SOURCES=0       # raw-sources A/B build (extra args -> sjasmplus)
+tools/build.sh -DPROTO_START=1       # extra args -> sjasmplus (B3B-12 run flags below)
 tools/build.sh -o DIR [-D...]        # artefacts into DIR/build/ (tests use this)
 ```
 
@@ -20,7 +20,7 @@ all use it, so a build can never assemble stale packed art. It runs:
 
 1. `tools/zx0_sources.py` — packs the generator's sprite frames into ZX0
    blocks → `build/zx0/sprites_zx0.asm` of the checkout, which `main.asm`
-   includes as the bank-1/3 sprite sources (default `ZX0_SOURCES=1`). Needs
+   includes as the bank-1/3 sprite sources. Needs
    `tools/bin/zx0`: if missing it stops with "run tools/setup_zx0.sh"
    (one-time, needs network for the pinned clone; the build itself never
    does). Deterministic; rewritten only when it changes. Strict input
@@ -31,8 +31,15 @@ all use it, so a build can never assemble stale packed art. It runs:
    output dir. Exit 1 on any error **or warning**; prints the `DISPLAY`
    lines (full log: `build/sjasmplus.log`).
 
-`tests/zx0_pool.py` builds the `=1` and `=0` variants with it and proves the
-pre-shift pool identical.
+`tests/zx0_pool.py` builds with it and proves the pre-shift pool bit-exact to
+a Python reference made from the raw frame data. B3B-12 retired the raw-sources
+build (`-DZX0_SOURCES=0` now stops with an assembler ERROR).
+
+Run flags (B3B-12, `src/lowram.asm`; bytes in the cold block, tests poke the
+labels `proto_start` / `seed_fixed` / `seed_value` instead of rebuilding):
+`-DPROTO_START=1` new games start in the PROTO rooms A-D (default 0: a
+generated D1); `-DSEED_FIXED=1 [-DSEED_VALUE=n]` fixed master seed (default:
+`SYS_FRAMES` when the hero is chosen).
 - `src/main.asm` is the single entry the assembler walks (it `INCLUDE`s the rest).
 - Emits `build/wazhack.tap` (BASIC loader + one CODE block = bank-5 low-RAM
   cold code + bank-2 image, then two headerless blocks: bank 1 sources, bank 3

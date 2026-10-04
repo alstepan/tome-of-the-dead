@@ -627,13 +627,15 @@ try_climb:
                 ld   a, b
                 cp   STOREY_COUNT
                 jr   nz, .mid
-                ld   a, RDX_D                  ; {x,2}: the down-exit (the level
-                call .vexit                    ; exit EXITCOL: B3B-12)
-                jr   nz, .no
-                add  a, GRID_W                 ; r + 3
-                ld   (EXIT_DEST), a
+                ld   a, RDX_D                  ; {x,2}: the down-exit ...
+                call .vexit
+                jr   z, .dn
+                ld   a, EX_LEVEL               ; ... else the level exit {EXITCOL,2}
+                jr   .dk                       ; (B3B-12: the only other {c,2} segment
+.dn:            add  a, GRID_W                 ; ladder_exists finds; a DNCOL always
+                ld   (EXIT_DEST), a            ; has RDX_D) — dest r + 3
                 ld   a, EX_DOWN
-                ld   (EXIT_KIND), a
+.dk:            ld   (EXIT_KIND), a
                 ld   a, (ix+E_X)
                 ld   (EXIT_COL), a
                 ld   a, STOREY_COUNT - 1

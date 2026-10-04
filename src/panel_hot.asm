@@ -2,7 +2,7 @@
 ; PANEL HOT IMAGE (B3B-11, B3B-11b) — assembled for HOT_COPY (bank 2 runtime
 ; RAM, uncontended, always mapped) and copied there by panel_boot. Its load
 ; image sits in the boot-only cold data (main.asm `vdata`: bank 1 after the
-; ZX0 sprite sources; raw build: the bank-3 tail), read through copy_virt.
+; ZX0 sprite sources), read through copy_virt.
 ; Labels are the runtime addresses (DISP).
 ;==============================================================================
 panel_hot_img:

@@ -1,12 +1,13 @@
 #!/bin/sh
 # tools/build.sh — THE build entry point (A6): sprite packer, then sjasmplus.
 #
-#   tools/build.sh [-o OUTDIR] [extra sjasmplus args, e.g. -DZX0_SOURCES=0]
+#   tools/build.sh [-o OUTDIR] [extra sjasmplus args, e.g. -DPROTO_START=1]
 #
 # 1. tools/zx0_sources.py -> build/zx0/sprites_zx0.asm of THIS checkout (always
 #    regenerated, so a build never assembles stale packed art; the file is
 #    rewritten only when it changes). Needs tools/bin/zx0 (tools/setup_zx0.sh).
-#    Skipped for -DZX0_SOURCES=0 (the raw build never includes the file).
+#    (B3B-12: the raw-sources build -DZX0_SOURCES=0 is retired; defs.asm
+#    stops with an error if it is asked for.)
 # 2. sjasmplus src/main.asm with the project flags. Run in OUTDIR (default: the
 #    repo root), so the artefacts land in OUTDIR/build/: wazhack.tap, .sna,
 #    .sym, .sld, .lst.
@@ -20,19 +21,7 @@ if [ "${1:-}" = "-o" ]; then
     OUT=$(cd "$2" && pwd)
     shift 2
 fi
-# The raw build (-DZX0_SOURCES=0) does not include the packed file: no packer
-# run (and no tools/bin/zx0 needed) for it.
-PACK=1
-for a in "$@"; do
-    case "$a" in
-        -DZX0_SOURCES=0) PACK=0 ;;
-    esac
-done
-if [ $PACK -eq 1 ]; then
-    python3 "$ROOT/tools/zx0_sources.py"
-else
-    echo "build.sh: -DZX0_SOURCES=0 -> raw sources, packer skipped"
-fi
+python3 "$ROOT/tools/zx0_sources.py"
 mkdir -p "$OUT/build"
 LOG="$OUT/build/sjasmplus.log"
 cd "$OUT"

@@ -7,7 +7,7 @@
 ;   2. (B3B-11b) the boot / new-game cold DATA — font6x8, the panel icons, the
 ;      hot image (panel_hot.asm: print6, log_push, panel_tick, item_hp) — is
 ;      NOT here: main.asm `vdata` puts it in bank 1 after the ZX0 sprite
-;      sources (raw build: the bank-3 tail); bank-3 code reads it only through
+;      sources; bank-3 code reads it only through
 ;      copy_virt3 (lowram), into GEN_SRC or straight to its bank-2 target.
 ; D5 (user 2026-10-03): panel changes are queued (PANEL_DIRTY bits + the
 ; LOG_Q message ring) and drained ONE item per tick by panel_tick, never in a

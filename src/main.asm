@@ -35,27 +35,23 @@
 ; SPRITE SOURCES — banks 1 and 3, assembled contiguously at virtual $8000..$FFFF
 ; (slot 2 = page 1, slot 3 = page 3). Read only by the boot generator via
 ; copy_virt (B3B-8: init_tiles no longer reads the raw items / tiles) (virtual < $C000 -> bank 1 at +$4000, else bank 3
-; as-is). ZX0_SOURCES = 1 (default): the generator frames are ZX0 blocks
+; as-is). The generator frames are ZX0 blocks
 ; (build/zx0/sprites_zx0.asm, written by tools/zx0_sources.py — tools/build.sh
 ; runs it); their per-frame block/offset are EQUs folded into the bank-5
 ; fdesc_tab (A6); items/tiles stay raw.
-; ZX0_SOURCES = 0: the raw index.asm, as before A5 (A/B, tests/zx0_pool.py).
+; (B3B-12: the raw index.asm A/B build is retired; tests/zx0_pool.py checks the
+; pool against a Python reference made from the raw frame data.)
 ;==============================================================================
                 MMU  2, BANK_SRC_LO
                 MMU  3, BANK_SRC_HI
                 ORG  SRC_VIRT_BASE
 sprite_src:
-    IF ZX0_SOURCES
                 INCLUDE "../build/zx0/sprites_zx0.asm"
-    ELSE
-                INCLUDE "../assets/gfx/sprites/index.asm"
-    ENDIF
 sprite_src_end:
 SRC_TOTAL       EQU sprite_src_end - sprite_src
 ; B3B-11b (bank-3 relief): boot / new-game cold DATA, read only through
 ; copy_virt / copy_virt3 (virtual address -> bank 1 or 3), right after the
-; sources: bank 1 with ZX0 sources; the raw build's sources fill bank 1, so
-; there it lands in the bank-3 tail (as before B3B-11b). Same tape blocks.
+; sources, in bank 1. Same tape blocks.
 vdata:
                 INCLUDE "../assets/gfx/fonts/font6x8.asm"     ; -> FONT6 planes (panel_boot)
                 INCLUDE "../assets/gfx/panel/panel_icons.asm" ; panel_init (pblit via GEN_SRC)
@@ -76,9 +72,7 @@ SRC_LEN_LO      EQU VIRT_TOTAL
 SRC_LEN_HI      EQU VIRT_TOTAL - SRC_LEN_LO
                 ASSERT VIRT_TOTAL <= $8000
                 DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B + vdata ", /D, VDATA_LEN, " B (bank1 ", /D, SRC_LEN_LO, ", free ", /D, $4000 - SRC_LEN_LO, "; bank3 ", /D, SRC_LEN_HI, ")"
-    IF ZX0_SOURCES
                 DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed; total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
-    ENDIF
 
 
 ;==============================================================================
@@ -143,8 +137,8 @@ LOWRAM_CODE_LEN EQU lowram_code_end - lowram_code
                 ; the descriptors are the tail of the cold block: room for the
                 ; remaining FRT_MAX - FDESC_COUNT ones is kept free below it
 FDESC_GROW      EQU (FRT_MAX - FDESC_COUNT) * FDESC_STRIDE
-LOWRAM_SPARE    EQU lowram_code - ZX0_RESERVE - FDESC_GROW - LOWRAM_FREE_END
-                ASSERT lowram_code - ZX0_RESERVE - FDESC_GROW >= LOWRAM_FREE_END
+LOWRAM_SPARE    EQU lowram_code - FDESC_GROW - LOWRAM_FREE_END
+                ASSERT lowram_code - FDESC_GROW >= LOWRAM_FREE_END
                 ASSERT fdesc_end == lowram_code_end
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= TILE_GLYPHS  ; the lowest buffer above the alias
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= BITREV_TAB
@@ -316,7 +310,10 @@ end_turn:
                 ld   (GAME_STATE), a
                 ld   hl, str_died
                 jp   log_push_end              ; never dropped (B3B-11b); end_screen drains it
-.alive:         ; win: standing on storey 0 of room D with x <= 3 (§8.2)
+.alive:         ; win: standing on storey 0 of room D with x <= 3 (§8.2) —
+                ld   a, (LVL_DEPTH)            ; PROTO rooms only (LVL_DEPTH 0); a
+                or   a                         ; generated run wins by descending
+                ret  nz                        ; from D8 (level_descend, B3B-12)
                 ld   a, (CUR_ROOM)
                 cp   WIN_ROOM
                 ret  nz
@@ -335,12 +332,14 @@ end_turn:
                 jp   log_push_end
 
 ;------------------------------------------------------------------------------
-; do_exit — follower selection (§3.7), frozen Cauldron transition (§3.6),
-; arrival, arrival conflicts. A7: shows bank 5 for the scroll (bank-3 code
+; do_exit — A = EXIT_KIND. EX_LEVEL: level_descend (B3B-12). Else follower
+; selection (§3.7), frozen Cauldron transition (§3.6), arrival, arrival conflicts. A7: shows bank 5 for the scroll (bank-3 code
 ; scrolls $4000), then present_full copies it to bank 7 and shows bank 7.
 ; Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 do_exit:
+                cp   EX_LEVEL                  ; A = EXIT_KIND (end_turn)
+                jp   z, level_descend          ; B3B-12: the level exit (lowram)
                 ld   hl, follow_select         ; bank 3 (cold)
                 call far3
                 call hide_sprites              ; every sprite hidden, hero too
@@ -432,14 +431,6 @@ enter_select:
                 INCLUDE "data.asm"
                 INCLUDE "panel2.asm"            ; B3B-11 panel engine, bank-2 part
                 INCLUDE "decor.asm"             ; B3B-10 animated decor (decor_tick)
-    IF !ZX0_SOURCES
-                ; B3B-R2: the raw A/B build (ZX0_SOURCES=0, tests/zx0_pool.py)
-                ; has only ~675 B left in bank 3 (the raw sprite tail + vdata
-                ; take 2,942 B there), so its turn3.asm stays in bank 2 as before
-                ; R2. far3 into a bank-2 target works unchanged (it only pages
-                ; bank 3 around the call); the shipping build has it in bank 3.
-                INCLUDE "turn3.asm"
-    ENDIF
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
