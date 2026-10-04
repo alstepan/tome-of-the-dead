@@ -279,8 +279,8 @@ bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
 |---|---|---|---|
 | C3-0 ✅ `3ab9232` | layout (HERO_ST, JOY_MIRROR, KEYTAB, bank-1 ui1_code) + `far1` + helpers restore the caller's bank | S | – |
 | C3-1 ✅ `d49ed46` + review fixes `4dcea7c` (review: fix-then-ship → fixed; KROW removed, stack back to 768 B (measured max 40 B, W20), per-tick STICK, BREAK priority) | `read_stick` input (keys/Sinclair/Kempston) | S | C3-0 |
-| C3-2 in progress | turn-intent machine + icon dispatch | S | C3-1 |
-| C3-3 | icon bar state, cursor, info line, level digit | S | C3-0, C3-4 |
+| C3-2 ✅ `8f7c9b0` (review pending; `legacy_input` flag keeps old controls for the suites until C3-8a; bank 2 +391 B) | turn-intent machine + icon dispatch | S | C3-1 |
+| C3-3 in progress (after merging main into 3c-hero) | icon bar state, cursor, info line, level digit | S | C3-0, C3-4 |
 | C3-4 ✅ `61ac18f` (feat/3c-strings; 85 strings 1,312 → 1,141 B, 33 tokens; ZX0 long-text blocks; **C3-6 must INCLUDE build/text/longtext.asm DISPed in bank 1 and size the unpack buffer LT_BUF_MAX; 42-char info lines must not use the 32-B MSG_BUF**) | info/refusal/menu strings + ZX0 long text | J | – |
 | C3-5 ✅ `3b6f6ae` (feat/3c-menuart; 1,104 B: font 656 + title 277 + torch 107 + map 64) | menu fonts/title/torch art convert | J/artist | – |
 | C3-6 | menu, redefine, pause overlay, end screens, seed entropy (bank 1) | S | C3-0/1/4/5 |
