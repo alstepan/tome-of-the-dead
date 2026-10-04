@@ -16,6 +16,15 @@ DT_MAX_ATTR     EQU 2               ; allows 2 + 3; measured ~1.2k / ~0.75k T pe
 DT_MAX_TRIES    EQU 3               ; per tick: <= 3 due entries reach the occupancy test
                                     ; (~0.1k per RLIST slot each); the rest wait a tick
 DT_KINDS        EQU 2               ; attr-cycle kinds in dt_attr_tab (1 flame, 2 candle)
+; dt_attr_tab colours (main.asm). A step writes the WHOLE attr byte, so the
+; cell's paper becomes black: fine, every attr-cycled cell (candles 31, small
+; torch 15/16, the large torches' / braziers' row-1 cells in all 8 tileset
+; slots) already has paper 0 in its TILE_ATTRS / tileset attr (checked
+; 2026-10-04: $46 or $06), and the deriver never puts decor on floor rows.
+DT_HOT          EQU ATTR_TORCH      ; $46 bright yellow on black (the base attr)
+DT_RED          EQU $42             ; bright red on black
+DT_DIM          EQU $06             ; yellow on black (no BRIGHT)
+                ASSERT DT_HOT == $46 && (DT_HOT & $38) == 0 && (DT_RED & $38) == 0 && (DT_DIM & $38) == 0
 DT_CAPS         EQU (DT_MAX_TRIES << 6) | (DT_MAX_GLYPH << 4) | DT_MAX_ATTR   ; C: tries
                                     ; left (bits 7-6), glyph steps (5-4), attr steps (1-0)
 
@@ -44,9 +53,12 @@ DT_CAPS         EQU (DT_MAX_TRIES << 6) | (DT_MAX_GLYPH << 4) | DT_MAX_ATTR   ; 
 ; the decor holds there, so it never adds to a tick that is already long.
 ; Leaves bank 7 paged if it stepped anything (every later user pages itself).
 ; Clobbers: A, BC, DE, HL.
-; Cost (W14 / budget.py, contended): ~0.1k + ~60 T per entry; per step ~0.75k
-; (attr) / ~1.2k (glyph) incl. ~90 T per RLIST slot (occupancy; 1 slot) and the
-; present mark (~0.2k); + ~0.1k to page bank 7 once.
+; Cost (contended): ~0.1k + ~60 T per entry; per step ~0.75k (attr) / ~1.2k
+; (glyph) incl. ~90 T per RLIST slot (occupancy; 1 slot) and the present mark
+; (~0.2k); + ~0.1k to page bank 7 once. Measured per tick: tests/world.py W14
+; (D1 room, its 8 real entries, hero only) max 3,534 / mean 2,458 T;
+; tests/budget.py (synthetic full list, 12 entries, 5 sprites; incl. the call
+; and the panel test) max 5,364 T, mean 2,487 T (mix) / 1,117 T (heavy).
 ;------------------------------------------------------------------------------
 decor_tick:
                 ld   a, (ANIM_N)

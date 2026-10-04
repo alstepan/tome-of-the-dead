@@ -286,7 +286,8 @@ read_turn_input:
                 ld   (NEED_RELEASE), a
                 ld   a, (EXIT_KIND)
                 or   a
-                call z, resolve_monsters       ; exit turn: monsters don't act
+                ld   hl, resolve_monsters      ; B3B-R2: bank 3, one far3 a turn
+                call z, far3                   ; exit turn: monsters don't act
                 ld   a, TP_ANIM
                 ld   (TURN_PHASE), a
                 xor  a
@@ -304,7 +305,8 @@ end_turn:
                 ld   hl, (TURN_COUNTER)
                 inc  hl
                 ld   (TURN_COUNTER), hl
-                call potion_pickup             ; (B3B-11: HP / potions reach the panel by
+                ld   hl, potion_pickup         ; B3B-R2: bank 3 (B3B-11: HP / potions
+                call far3                      ; reach the panel by
                 xor  a                         ; panel_tick's poll, not from here)
                 ld   (TURN_PHASE), a
                 ld   a, (P_ENTITIES + E_FLAGS)
@@ -430,6 +432,14 @@ enter_select:
                 INCLUDE "data.asm"
                 INCLUDE "panel2.asm"            ; B3B-11 panel engine, bank-2 part
                 INCLUDE "decor.asm"             ; B3B-10 animated decor (decor_tick)
+    IF !ZX0_SOURCES
+                ; B3B-R2: the raw A/B build (ZX0_SOURCES=0, tests/zx0_pool.py)
+                ; has only ~675 B left in bank 3 (the raw sprite tail + vdata
+                ; take 2,942 B there), so its turn3.asm stays in bank 2 as before
+                ; R2. far3 into a bank-2 target works unchanged (it only pages
+                ; bank 3 around the call); the shipping build has it in bank 3.
+                INCLUDE "turn3.asm"
+    ENDIF
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
@@ -439,12 +449,14 @@ kind_tab_pad:                                  ; ALIGN padding starts here (head
                 DS   (-($ + TILE_IDS + DT_ATTR_LEN)) & $FF, 0    ; B3B-5: tile_flags ends on the page
 ;------------------------------------------------------------------------------
 ; dt_attr_tab — B3B-10 decor_tick attr cycles, 8 steps per kind (concept-screen
-; §3.3): kind 1 flame ($46 -> $42 -> $06: small / tall torch bodies), kind 2
-; candle (8-step flicker). In the pad below tile_flags: never crosses a page.
+; §3.3): kind 1 flame (DT_HOT -> DT_RED -> DT_DIM: small / tall torch bodies),
+; kind 2 candle (8-step flicker). Whole attr bytes: they override the cell's
+; paper (black on every cycled cell, see decor.asm DT_HOT). In the pad below
+; tile_flags: never crosses a page.
 ;------------------------------------------------------------------------------
 dt_attr_tab:
-                DB   $46, $42, $06, $46, $42, $06, $46, $42        ; 1 flame
-                DB   $46, $46, $06, $46, $42, $46, $46, $06        ; 2 candle
+                DB   DT_HOT, DT_RED, DT_DIM, DT_HOT, DT_RED, DT_DIM, DT_HOT, DT_RED   ; 1 flame
+                DB   DT_HOT, DT_HOT, DT_DIM, DT_HOT, DT_RED, DT_HOT, DT_HOT, DT_DIM   ; 2 candle
 DT_ATTR_LEN     EQU  DT_KINDS * 8
                 ASSERT $ - dt_attr_tab == DT_ATTR_LEN && (dt_attr_tab >> 8) == (($ - 1) >> 8)
 ;------------------------------------------------------------------------------

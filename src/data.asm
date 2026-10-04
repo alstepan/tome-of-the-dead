@@ -257,13 +257,8 @@ WIN_MAX_X       EQU 3               ; standing on storey 0 with x <= 3 (chest co
 ;------------------------------------------------------------------------------
 ; Strings (0-terminated, upper case, <= LOG_MAX chars; log lines via log_push, B3B-11).
 ;------------------------------------------------------------------------------
-str_you:        DB "YOU ", 0
-str_hit:        DB "HIT ", 0
-str_miss:       DB "MISS ", 0
-str_kill:       DB "KILL ", 0
-str_the:        DB "THE ", 0
-str_hits_you:   DB " HITS YOU", 0
-str_misses:     DB " MISSES", 0
+; (B3B-R2: the combat message words moved to bank-3 turn3.asm; these two stay:
+; tests/world.py W15 pushes them from a stub with any bank paged)
 str_found:      DB "YOU FOUND A POTION", 0
 str_quaff:      DB "YOU DRINK A POTION", 0
 str_died:       DB "YOU DIED - PRESS ENTER", 0

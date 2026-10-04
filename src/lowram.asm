@@ -603,11 +603,15 @@ door_paint:
                 jr   nz, .r
                 pop  bc
                 ld   de, (DOOR_COLS << 8) | DOOR_PLANK_H
-                push bc
-                push de
+                ld   a, (PORT_7FFD_SHADOW)     ; B3B-R2: the caller's $C000 bank back
+                push af                        ; after shadow_rect (bank 7): a monster
+                push bc                        ; opening a door runs under the bank-3
+                push de                        ; monster phase (try_step -> mon_door)
                 call shadow_rect
                 pop  de
                 pop  bc
+                pop  af
+                call restore_page              ; keeps BC, DE
                 jp   queue_damage
 
 ;------------------------------------------------------------------------------

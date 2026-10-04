@@ -11,7 +11,8 @@
 ; FORBIDDEN callees from here (they page $C000): page_bank, shadow_rect,
 ; shadow_room, erase_rect, hide_sprites, draw_room, blit_sprite (use blit_keep),
 ; present / present_full (A7), and every bank-5 generator
-; routine (gen_*, alloc*, copy_virt, mirror_src).
+; routine (gen_*, alloc*, copy_virt, mirror_src). (B3B-R2: shadow_rect only as a
+; tail jump — potion_pickup; door_paint re-pages the caller's bank itself.)
 ; A7: everything here draws on the $4000 (bank 5) screen, which is the one
 ; displayed while it runs (enter_select / do_exit call show_bank5 first).
 ;
@@ -1369,3 +1370,6 @@ init_tiles:                                    ; (B3B-11b: the data is in vdata,
 
 ; (cold tile data: B3B-11b moved it to main.asm vdata, read via copy_virt3)
                 INCLUDE "panel.asm"            ; B3B-11 panel engine (cold part + the HOT_COPY image)
+    IF ZX0_SOURCES
+                INCLUDE "turn3.asm"            ; B3B-R2 turn logic: monster phase, attacks, potions
+    ENDIF                                      ; (raw A/B build: bank 2, main.asm — see there)

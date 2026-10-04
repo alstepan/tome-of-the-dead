@@ -76,7 +76,8 @@ anim_tick:
                 ret  z
                 dec  a
                 call ent_ix
-                call show_impact_msg
+                ld   hl, show_impact_msg       ; B3B-R2: bank 3 (IX = attacker)
+                call far3
                 xor  a
                 ld   (MSG_Q), a
                 ret
