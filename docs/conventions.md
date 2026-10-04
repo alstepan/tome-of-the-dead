@@ -41,6 +41,15 @@
   (HL = target, A = arg; restores the caller's page from the shadow). Bank-3
   code never pages `$C000` itself — it calls bank-2 helpers that re-page it
   (`blit_keep`). See `docs/memory-map.md` "Cold code placement".
+- **Bank-2 / low-RAM helpers reachable from bank-3 code must hand `$C000`
+  back as they found it** (B3B-R2 review). Since R2 the monster phase runs in
+  bank 3, so anything `try_step` can reach (today `mon_door` → `door_open` →
+  `door_paint` → `shadow_rect`, which pages bank 7) saves `PORT_7FFD_SHADOW`
+  before paging and `restore_page`s it before returning; otherwise the return
+  lands in another bank's bytes. The same holds for any helper a far3 target
+  calls. `tests/world.py` W9R runs a goblin opening a door through the real
+  `resolve_monsters` and asserts bank 3 is paged afterwards (it crashes with
+  the restore removed).
 
 ## World-state changes (render resync contract)
 

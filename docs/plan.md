@@ -237,7 +237,7 @@ A5 review carry-overs (z80-reviewer, 2026-10-02; done in A6):
 - A6: fold block+offset into the low-RAM FDESC descriptors; drop the banked
   4-B descriptors + `copy_virt` in `zx0_frame`.
 
-### 3B — World & screen (needs game.md §1–2 + revised layout)
+### 3B — World & screen · `DONE` (squash-merged 2026-10-04; feat/3b-world @ `a791918`)
 2-storey rooms + new panel rows (icon bar, bars, worn gear, 2-row message log);
 per-level floor colours; decor tiles (static, animated, large multi-cell, brick
 walls); doors (2-col); dead ends; level generator; room transitions for the new

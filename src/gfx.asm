@@ -3,8 +3,8 @@
 ;   paging + the bank-3 far-call trampoline, masked blit at any (px multiple
 ;   of 4, py) (§5.1), exact-footprint attr stamp (§4.2), tile-map
 ;   erase/restore (§4.3), HUD text, room draw. The boot-time generator and
-;   init_tiles live in lowram.asm (bank 5); the transition scrolls in
-;   bank3.asm.
+;   the level tile load live in lowram.asm (bank 5); the transition scrolls,
+;   init_tiles and build_room_map (B3B-8) in bank3.asm.
 ; Conventions: IX preserved unless stated; IY never touched (= $5C3A, kept for
 ; the optional ISR_ROM_CHAIN; the default A8 IM 2 ISR does not use it).
 ;==============================================================================
@@ -162,7 +162,7 @@ stamp_rect:
 ; the tile map (prototype §4.3). Target = the screen, or the bank-7 clean-
 ; background shadow (set_tile_target). Used for room draws, transition columns
 ; and shadow upkeep; per-tick sprite erase uses the faster erase_rect below.
-; In : C = col, B = row, D = cols, E = rows (inside 0..31 x 0..20).
+; In : C = col, B = row, D = cols, E = rows (inside 0..31 x 0..PLAY_ROWS-1).
 ; Clobbers: A, BC, DE, HL.   ~290 T/cell (listing: 8 glyph rows unrolled).
 ;------------------------------------------------------------------------------
 ; Screen bitmap, attrs and the page-aligned map share the low byte
@@ -362,8 +362,8 @@ erase_rect:
 ;   - render's damage list (pmark_dmg): erased old footprints, new / forced
 ;     footprints, attr-only stamps, PEND_DMG restores (potion, zap end);
 ;   - draw_zap (the overlay is not in the damage list);
-;   - the HUD rows (clear_row + print_char keep HUD_EXT / HUD_PW per row: only
-;     the cols that held or now hold text are copied, not all 32).
+;   - the panel (B3B-11, panel.asm): log rows via HUD4_PW (cols 0..PW-1 of
+;     text rows 20..23), the other items by pmark_rect.
 ; Full-screen paths (start_game, room transitions) use present_full instead;
 ; select / transitions draw while bank 5 itself is shown (show_bank5).
 ; Invariant (tests): at the wait_tick probe screen 2 == the bank-5 screen.
@@ -573,8 +573,8 @@ present:
                 ld   a, (PRES_ANY)
                 or   a
                 ret  z
-                ld   hl, HUD_PW                ; HUD rows: mark cols 0..PW-1
-                ld   b, HUD_ROW
+                ld   hl, HUD4_PW               ; B3B-11 text rows 20..23: mark cols 0..PW-1
+                ld   b, TEXT_ROW
 .hud:           ld   a, (hl)
                 or   a
                 jr   z, .hn
@@ -588,7 +588,7 @@ present:
 .hn:            inc  l
                 inc  b
                 ld   a, b
-                cp   HUD_ROW + HUD_ROWS
+                cp   TEXT_ROW + TEXT_ROWS
                 jr   c, .hud
                 xor  a
                 ld   (PRES_ANY), a             ; (after the marks: they set it)
@@ -726,19 +726,19 @@ present:
                 ASSERT SCREEN7_ATTR - SCREEN7_BITMAP == SCREEN_ATTR - SCREEN_BITMAP
 
 ;==============================================================================
-; draw_room — full redraw of rows 0..20 from ROOM_MAP.  ~195k T (boot/room only)
+; draw_room — full redraw of rows 0..17 (PLAY_ROWS) from ROOM_MAP.  ~167k T (boot/room only)
 ;==============================================================================
 draw_room:
                 ld   a, ROOM_MAP >> 8
                 call set_tile_map
                 ld   bc, 0                     ; row 0, col 0
-                ld   de, (ROOM_COLS << 8) | ROOM_ROWS
+                ld   de, (ROOM_COLS << 8) | PLAY_ROWS
                 call tile_rect
                 ; fall through: rebuild the clean-background shadow too
-; shadow_room — whole-room shadow rebuild (~195k T; room entry only).
+; shadow_room — whole-room shadow rebuild (~167k T; room entry only).
 shadow_room:
                 ld   bc, 0
-                ld   de, (ROOM_COLS << 8) | ROOM_ROWS
+                ld   de, (ROOM_COLS << 8) | PLAY_ROWS
                 jp   shadow_rect
 
 ;==============================================================================
@@ -760,10 +760,11 @@ clear_screen:
                 ret
 
 ;==============================================================================
-; TEXT (ROM charset, 48K ROM paged).
-; print_char — A = ASCII 32..127 at cell (row B, col C); C advances. A7: no
-; HUD tracking here (callers end with hud_track: print_str, print_dec,
-; print_char_hud).  Clobbers: A, DE, HL.
+; TEXT (ROM charset, 48K ROM paged): the select screen and the paging-lock
+; message only (both drawn on the displayed bank-5 screen, no present). Play
+; text is the 6x8 panel font (print6, panel.asm; B3B-11).
+; print_char — A = ASCII 32..127 at cell (row B, col C); C advances.
+; Clobbers: A, DE, HL.
 ;==============================================================================
 print_char:
                 ld   l, a
@@ -797,133 +798,17 @@ print_char:
                 ret
                 ASSERT (ROM_CHARSET & 7) == 0
 
-;------------------------------------------------------------------------------
-; hud_track — after text ending at (row B, col C-1): on a HUD row widen
-; HUD_EXT / HUD_PW to C (A7: present copies the row's first HUD_PW cells).
-; Called once per string (print_str end, print_dec, print_char_hud), not per
-; char.  Clobbers: A, HL.   ~22 T off the HUD, ~85 T on it.
-;------------------------------------------------------------------------------
-; print_char_hud — print_char + hud_track (a lone char ending a HUD line).
-print_char_hud:
-                call print_char
-hud_track:
-                ld   a, b
-                sub  HUD_ROW
-                ret  c                         ; not a HUD row
-                add  a, HUD_EXT & $FF
-                ld   l, a
-                ld   h, HUD_EXT >> 8
-                ld   a, c
-                cp   (hl)
-                jr   c, .pw
-                ld   (hl), a                   ; EXT = max(EXT, C)
-.pw:            ld   a, l
-                add  a, HUD_ROWS
-                ld   l, a                      ; -> HUD_PW of the row
-                ld   a, c
-                cp   (hl)
-                ret  c
-                ld   (hl), a                   ; PW = max(PW, C)
-                ld   a, 1
-                ld   (PRES_ANY), a
-                ret
-                ASSERT HUD_PW == HUD_EXT + HUD_ROWS && HUD_ROW + HUD_ROWS == 24
-                ASSERT (HUD_EXT >> 8) == ((HUD_PW + HUD_ROWS - 1) >> 8)
-
 ; print_str — HL = 0-terminated string at (row B, col C). C advances.
 ; Clobbers: A, C, DE, HL
 print_str:
                 ld   a, (hl)
                 or   a
-                jr   z, hud_track              ; A7: once per string
+                ret  z
                 push hl
                 call print_char
                 pop  hl
                 inc  hl
                 jr   print_str
-
-; print_dec — A (0..255) in decimal, no leading zeros, at (B, C). C advances.
-; Clobbers: A, DE, HL
-print_dec:
-                ld   l, 0                      ; L = "printed a digit" flag
-                ld   h, 100
-                call .digit
-                ld   h, 10
-                call .digit
-                add  a, '0'
-                call print_char
-                jp   hud_track                 ; A7
-.digit:
-                ld   e, '0' - 1
-.sub:           inc  e
-                sub  h
-                jr   nc, .sub
-                add  a, h                      ; A = remainder
-                ld   d, a
-                ld   a, e
-                cp   '0'
-                jr   nz, .out
-                bit  0, l
-                jr   z, .skip                  ; leading zero -> nothing
-.out:           ld   l, 1
-                push hl
-                push de
-                ld   a, e
-                call print_char
-                pop  de
-                pop  hl
-.skip:          ld   a, d
-                ret
-
-; clear_row — blank the bitmap of char row B and set its 32 attrs to A; tells
-; present what changed (A7, hud_clear_mark). A7: on a HUD row only the cols
-; that can hold ink (HUD_EXT) are blanked — the rest is blank already.
-; Unrolled fill: ~0.4k + 88 T per blanked col (3.3k for a whole row).
-; Clobbers: A, DE, HL (BC kept)
-; SMC: .lj+1 = entry into the unrolled blanking chain (32 - cols stores in).
-clear_row:
-                push bc
-                ld   c, 0
-                push af
-                call hud_clear_mark            ; A7: A = cols to blank (low RAM)
-                ld   e, a
-                ld   a, ROOM_COLS
-                sub  e
-                add  a, a                      ; 2 B per store (ld (hl),a / inc l)
-                ld   l, a
-                ld   h, 0
-                ld   de, .chain
-                add  hl, de
-                ld   (.lj+1), hl
-                call attr_addr
-                pop  af
-                DUP  32
-                ld   (hl), a
-                inc  l
-                EDUP
-                ld   a, b
-                and  $18
-                or   SCREEN_BITMAP >> 8
-                ld   h, a
-                ld   a, b
-                rrca
-                rrca
-                rrca
-                and  $E0
-                ld   e, a                      ; E = row low byte
-                ld   c, 8
-                xor  a
-.line:          ld   l, e
-.lj:            jp   .chain                    ; SMC: chain entry
-.chain:         DUP  32
-                ld   (hl), a
-                inc  l
-                EDUP
-                inc  h
-                dec  c
-                jr   nz, .line
-                pop  bc
-                ret
 
 ;==============================================================================
 ; MASKED BLIT (prototype §5.1): frame BL_FID, facing BL_LEFT, top-left

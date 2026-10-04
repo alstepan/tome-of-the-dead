@@ -20,15 +20,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.argv = [sys.argv[0]] + ["999"]           # keep game.py's item filter inert
 import game  # noqa: E402
-from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, EF_ACTIVE, EF_HOSTILE, EF_LEFT  # noqa: E402
+from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, EF_ACTIVE, EF_HOSTILE, EF_LEFT, stand_y  # noqa: E402
 
 BUDGET = 2 * 70908
-PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "wait_tick"]
+CAP = 126000                                      # D5: worst tick incl. the panel item
+# B3B-11: panel_tick .. play_loop.nopanel = the tick's panel item (D5: one per
+# tick, never in a turn's input tick); its present lands in the next tick_work.
+PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "decor_tick", "panel_tick",
+          "panel_done", "wait_tick"]
 if os.environ.get("GAME_PROFILE"):                # finer split for optimisation work
     PHASES = ["tick_work", "read_turn_input", "try_player_turn", "resolve_monsters",
               "materialise", "anim_tick", "render", "render.nopend", "render.sdone",
               "render.f3done", "render.drdone", "draw_zap", "pmark_dmg", "present",
-              "wait_tick"]
+              "decor_tick", "panel_tick", "panel_done", "wait_tick"]
     PHASES += [n for n in os.environ["GAME_PROFILE"].split(",") if n in S]
 
 
@@ -39,6 +43,9 @@ class Stepper:
     def __init__(self, p):
         self.p, self.z = p, p.z
         self.ticks = []                       # (total, {phase: T})
+        # B3B-11b log latency: FIFO ring -> drawn = LQ_RD advances, pushed = drawn + LOG_QN
+        self.rd, self.drawn, self.pushed = p.rb(S["LOG_Q"] + S["LQ_RD"]), 0, p.rb("LOG_QN")
+        self.push_tick, self.lat = [0] * self.pushed, []
         z = self.z
         z.cmd("enter-cpu-step")
         z.cmd("enable-breakpoints")
@@ -74,6 +81,19 @@ class Stepper:
             if n == "wait_tick":
                 break
         self.ticks.append((prev, split))
+        k = len(self.ticks)
+        rd, qn = self.p.rb(S["LOG_Q"] + S["LQ_RD"]), self.p.rb("LOG_QN")
+        self.drawn += (rd - self.rd) % S["LOG_SLOTS"]
+        self.rd = rd
+        for _ in range(self.drawn + qn - self.pushed):
+            self.push_tick.append(k)
+        self.pushed = self.drawn + qn
+        if os.environ.get("LOG_TRACE"):
+            pre = sum(v for n_, v in split.items() if n_ not in ("panel_tick", "panel_done", "wait_tick"))
+            print(f"[trace] t{k} {prev} pre-panel {pre} panel {split.get('panel_tick', 0)} qn {qn}"
+                  f" ph {self.p.rb('TURN_PHASE')}/{self.p.rb('TURN_TICK')}")
+        while len(self.lat) < self.drawn:
+            self.lat.append(k - self.push_tick[len(self.lat)])
         return prev
 
     def turn(self, *keys, max_ticks=80):
@@ -104,22 +124,54 @@ KEYS = [("L", 6), ("H", 4), ("SPACE", 4)]        # slash the skeleton, walk away
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix",)
+# B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
+# storey-2 layout moved up 3 rows (the floor row 20 -> 17).
+HERO_Y = stand_y(1, 6)                            # 11
 SCENARIOS = {
     # hero + 4 monsters in A (cap), all visible, all close enough to act
     "mix": ("knight + skeleton, rat, goblin, bat", [
-        (5, 15, 14, HOSTILE),                     # skeleton adjacent (gap 0)
-        (1, 22, 18, HOSTILE),                     # rat walking in
-        (3, 25, 16, HOSTILE),                     # goblin walking in
-        (4, 8, 15, HOSTILE)], KEYS),              # bat, storey-2 band
+        (5, 15, stand_y(1, 6), HOSTILE),          # skeleton adjacent (gap 0)
+        (1, 22, stand_y(1, 2), HOSTILE),          # rat walking in
+        (3, 25, stand_y(1, 4), HOSTILE),          # goblin walking in
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS),  # bat, storey-1 band
     # review A1 worst mix: 2 skeletons (both 40-px attacks), goblin, ghost
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
-        (5, 15, 14, HOSTILE),                     # skeleton C right, gap 0
-        (7, 8, 14, RIGHT),                        # skeleton D left, gap 1
-        (3, 20, 16, HOSTILE),                     # goblin
-        (6, 4, 15, RIGHT)], KEYS),                # ghost, storey-2 band, starts in
-                                                  # {5,2}'s end box (legal again: flyers
+        (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
+        (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
+        (3, 20, stand_y(1, 4), HOSTILE),          # goblin
+        (6, 4, stand_y(1, 4) - 1, RIGHT)], KEYS),  # ghost, storey-1 band, starts in
+                                                  # {5,1}'s end box (legal again: flyers
                                                   # cross shafts, rule 2026-10-02)
 }
+
+
+# B3B-10: the PROTO rooms carry no animated decor (RD_SEED 0), so the
+# scenarios get a synthetic FULL ANIM_LIST in room A (4 glyph swaps + 8 attr
+# cycles = the deriver's budget maximum, ALL with the same stagger so the
+# per-tick caps bind and the deferred steps pile into the following ticks),
+# placed in the fight band (storey 1, rows 11-14) and storey 0. BUDGET_DECOR=0
+# measures without it.
+DECOR = os.environ.get("BUDGET_DECOR", "1") != "0"
+DECOR_GLYPH = [(10, 12), (18, 13), (12, 3), (20, 4)]
+DECOR_ATTR = [(9, 12), (14, 13), (16, 11), (20, 14), (11, 2), (15, 4), (27, 3), (27, 12)]
+
+
+def inject_decor(p):
+    """Synthetic ANIM_LIST for room A (in ROOM_MAP): glyph cells get the D1
+    tall-torch body id 36 in the map and its tip id 40 as the swap partner
+    (both non-solid, ids >= 16); attr cells kinds 1 / 2. Phase 3 = all due on
+    the next tick. Cells must be AIR (asserted)."""
+    al = []
+    for c, r in DECOR_GLYPH:
+        a = S["ROOM_MAP"] + r * 32 + c
+        assert p.rb(a) == S["T_AIR"], (c, r)
+        p.wb(a, 36)
+        al += [c, r, 40, 3]
+    for k, (c, r) in enumerate(DECOR_ATTR):
+        assert p.rb(S["ROOM_MAP"] + r * 32 + c) == S["T_AIR"], (c, r)
+        al += [c, r, 1 + (k & 1), 3]
+    p.z.cmd("write-memory %d %s" % (S["ANIM_LIST"], " ".join(str(b) for b in al)))
+    p.wb("ANIM_N", len(al) // 4)
 
 
 def run_scenario(h, scen):
@@ -127,9 +179,11 @@ def run_scenario(h, scen):
     p = game.T(h)
     p.boot(K_KNIGHT, freeze=0)
     p.isolate()
-    p.place(0, 12, 14)
+    p.place(0, 12, HERO_Y)
     for slot, x, y, flags in placements:
         p.place(slot, x, y, room=0, flags=flags)
+    if DECOR:
+        inject_decor(p)
     st = Stepper(p)
     for key, n in keys:
         for _ in range(n):
@@ -146,6 +200,15 @@ def run_scenario(h, scen):
     print(f"worst split    : " + ", ".join(f"{k}={v}" for k, v in worst[1].items()))
     print(f"ticks > budget : {len(over)}")
     print(f"OVERRUN_COUNT  : {ovc}  BLIT_MISS: {p.rb('BLIT_MISS')}", flush=True)
+    dts = [sp.get("decor_tick", 0) for _, sp in st.ticks]
+    print(f"decor_tick     : {'on' if DECOR else 'off'}, max {max(dts)} T, mean {sum(dts) // len(dts)} T"
+          f" (incl. the call / panel test to panel_tick)", flush=True)
+    cap = [t for t in totals if t > CAP]
+    lat = st.lat
+    print(f"ticks > {CAP} : {len(cap)}  (D5 cap)")
+    print(f"log latency    : {len(lat)} messages drawn, max {max(lat) if lat else 0} ticks after the push"
+          f" (histogram {dict(sorted({v: lat.count(v) for v in lat}.items()))}), still queued {p.rb('LOG_QN')},"
+          f" dropped {p.rb(S['LOG_Q'] + S['LQ_DROP'])}", flush=True)
     return st, over
 
 

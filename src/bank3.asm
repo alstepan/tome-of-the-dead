@@ -11,7 +11,8 @@
 ; FORBIDDEN callees from here (they page $C000): page_bank, shadow_rect,
 ; shadow_room, erase_rect, hide_sprites, draw_room, blit_sprite (use blit_keep),
 ; present / present_full (A7), and every bank-5 generator
-; routine (gen_*, alloc*, copy_virt, mirror_src).
+; routine (gen_*, alloc*, copy_virt, mirror_src). (B3B-R2: shadow_rect only as a
+; tail jump — potion_pickup; door_paint re-pages the caller's bank itself.)
 ; A7: everything here draws on the $4000 (bank 5) screen, which is the one
 ; displayed while it runs (enter_select / do_exit call show_bank5 first).
 ;
@@ -124,10 +125,15 @@ row_attr_fill:  ld   c, 0
 
 str_title:      DB "CHOOSE YOUR HERO", 0
 str_keys:       DB "1            2", 0
+; hero names for the select screen (ROM charset, plain text: not log messages;
+; B3B-13 moved the kind names to the token strings, src/strings.txt)
+sel_nm_knight:  DB "KNIGHT", 0
+sel_nm_wizard:  DB "WIZARD", 0
 
 ;==============================================================================
 ; TRANSITION SCROLLS (prototype §3.6; foundations F5/F6). Gameplay frozen,
-; sprites already erased, HUD rows 21..23 never touched. ROOM_MAP is shifted in
+; sprites already erased, panel rows 18..23 never touched (B3B-3: playfield rows
+; 0..17 only, row 17 = the bottom floor scrolls with the room). ROOM_MAP is shifted in
 ; lock-step so it always mirrors the screen; at the end ROOM_MAP == NEXT_MAP.
 ; Clobbers: A, BC, DE, HL, IX (documented; IY untouched).
 ;==============================================================================
@@ -149,7 +155,7 @@ hscroll_room:
                 call shift_attr_left
                 ; ROOM_MAP rows <- HSTEP cols; cols 32-HSTEP.. = NEXT_MAP k*HSTEP..
                 ld   hl, ROOM_MAP
-                ld   b, ROOM_ROWS
+                ld   b, PLAY_ROWS
 .ml:            push bc
                 ld   d, h
                 ld   e, l
@@ -180,7 +186,7 @@ hscroll_room:
                 call shift_bmp_right
                 call shift_attr_right
                 ld   hl, ROOM_MAP
-                ld   b, ROOM_ROWS
+                ld   b, PLAY_ROWS
 .mr:            push bc
                 push hl                        ; row base
                 ld   de, 31 - HSTEP
@@ -212,11 +218,26 @@ hscroll_room:
                 djnz .mr
                 ld   c, 0
 .col:
+                push bc
                 ld   a, ROOM_MAP >> 8
                 call set_tile_map
                 ld   b, 0
-                ld   de, (HSTEP << 8) | ROOM_ROWS
+                ld   de, (HSTEP << 8) | PLAY_ROWS
                 call tile_rect
+                pop  bc                        ; C = the entering screen col
+                ld   a, (TMP5)                 ; B3B-8: their row-17 ornament, by the
+                add  a, a                      ; NEXT room's col (east: 2k, west:
+                ld   e, a                      ; 32 - HSTEP - 2k)
+                ld   a, (TMP4)
+                cp   EX_RIGHT
+                jr   z, .lg
+                ld   a, ROOM_COLS - HSTEP
+                sub  e
+                ld   e, a
+.lg:            ld   b, FLOOR_ROW1
+                ld   d, HSTEP
+                ld   a, SCREEN_BITMAP >> 8
+                call orn_cells                 ; (lowram; pages nothing)
                 ld   hl, TMP5
                 inc  (hl)
                 ld   a, (hl)
@@ -225,8 +246,8 @@ hscroll_room:
                 ret
                 ASSERT HSTEP == 2
 
-; scanline walker for rows 0..20: IX = base, returns NC while valid.
-; shift_bmp_left — every scanline of char rows 0..20: bytes 1..31 -> 0..30.
+; scanline walker for rows 0..PLAY_ROWS-1: IX = base, returns NC while valid.
+; shift_bmp_left — every scanline of char rows 0..17: bytes 2..31 -> 0..29.
 shift_bmp_left:
                 ld   ix, SCREEN_BITMAP
 .scan:          push ix
@@ -238,7 +259,7 @@ shift_bmp_left:
                 DUP  32 - HSTEP
                 ldi
                 EDUP
-                call next_scan20
+                call next_scan_play
                 jr   nc, .scan
                 ret
 
@@ -255,12 +276,12 @@ shift_bmp_right:
                 DUP  32 - HSTEP
                 ldd
                 EDUP
-                call next_scan20
+                call next_scan_play
                 jr   nc, .scan
                 ret
 
-; next_scan20 — IX -> next scanline base inside char rows 0..20; CF = 1 when done.
-next_scan20:
+; next_scan_play — IX -> next scanline base inside char rows 0..PLAY_ROWS-1; CF = 1 when done.
+next_scan_play:
                 ld   a, ixl
                 add  a, 32
                 ld   ixl, a
@@ -270,7 +291,7 @@ next_scan20:
                 ccf
                 ret  nc                        ; thirds 0/1: all 8 char rows valid
                 ld   a, ixl
-                cp   (ROOM_ROWS - 16) * 32     ; third 2: rows 16..20 only
+                cp   (PLAY_ROWS - 16) * 32     ; third 2: rows 16..17 only
                 ccf
                 ret  nc
 .page:          ld   ixl, 0
@@ -282,7 +303,7 @@ next_scan20:
 
 shift_attr_left:
                 ld   hl, SCREEN_ATTR
-                ld   b, ROOM_ROWS
+                ld   b, PLAY_ROWS
 .r:             push bc
                 ld   d, h
                 ld   e, l
@@ -297,7 +318,7 @@ shift_attr_left:
 
 shift_attr_right:
                 ld   hl, SCREEN_ATTR + 31 - HSTEP
-                ld   b, ROOM_ROWS
+                ld   b, PLAY_ROWS
 .r:             push bc
                 push hl
                 ld   d, h
@@ -316,7 +337,7 @@ shift_attr_right:
 
 ;------------------------------------------------------------------------------
 ; vscroll_room — A = EX_DOWN (content moves up, new rows enter at the bottom)
-; or EX_UP (content moves down, new rows enter at the top). 21 char-row steps.
+; or EX_UP (content moves down, new rows enter at the top). PLAY_ROWS (18) char-row steps.
 ;------------------------------------------------------------------------------
 vscroll_room:
                 ld   (TMP4), a
@@ -326,65 +347,79 @@ vscroll_room:
                 ld   a, (TMP4)
                 cp   EX_DOWN
                 jr   nz, .up
-                ; --- content up: rows 1..20 -> 0..19 ---
+                ; --- content up: rows 1..17 -> 0..16 ---
                 ld   b, 0                      ; dest row
 .bu:            push bc
                 call move_char_row_up          ; row B+1 -> row B
                 pop  bc
                 inc  b
                 ld   a, b
-                cp   ROOM_ROWS - 1
+                cp   PLAY_ROWS - 1
                 jr   nz, .bu
                 ld   hl, SCREEN_ATTR + 32
                 ld   de, SCREEN_ATTR
-                ld   bc, (ROOM_ROWS - 1) * 32
+                ld   bc, (PLAY_ROWS - 1) * 32
                 ldir
                 ld   hl, ROOM_MAP + 32
                 ld   de, ROOM_MAP
-                ld   bc, (ROOM_ROWS - 1) * 32
+                ld   bc, (PLAY_ROWS - 1) * 32
                 ldir
-                ; ROOM_MAP row 20 = NEXT_MAP row k
+                ; ROOM_MAP row 17 = NEXT_MAP row k
                 ld   a, (TMP5)
                 call next_map_row              ; HL = NEXT_MAP + k*32
-                ld   de, ROOM_MAP + (ROOM_ROWS - 1) * 32
+                ld   de, ROOM_MAP + (PLAY_ROWS - 1) * 32
                 ld   bc, 32
                 ldir
-                ld   b, ROOM_ROWS - 1
+                ld   b, PLAY_ROWS - 1
                 jr   .draw
 .up:
-                ld   b, ROOM_ROWS - 1          ; dest row 20..1
+                ld   b, PLAY_ROWS - 1          ; dest row 17..1
 .bd:            push bc
                 call move_char_row_down        ; row B-1 -> row B
                 pop  bc
                 dec  b
                 jr   nz, .bd
-                ld   hl, SCREEN_ATTR + (ROOM_ROWS - 1) * 32 - 1
-                ld   de, SCREEN_ATTR + ROOM_ROWS * 32 - 1
-                ld   bc, (ROOM_ROWS - 1) * 32
+                ld   hl, SCREEN_ATTR + (PLAY_ROWS - 1) * 32 - 1
+                ld   de, SCREEN_ATTR + PLAY_ROWS * 32 - 1
+                ld   bc, (PLAY_ROWS - 1) * 32
                 lddr
-                ld   hl, ROOM_MAP + (ROOM_ROWS - 1) * 32 - 1
-                ld   de, ROOM_MAP + ROOM_ROWS * 32 - 1
-                ld   bc, (ROOM_ROWS - 1) * 32
+                ld   hl, ROOM_MAP + (PLAY_ROWS - 1) * 32 - 1
+                ld   de, ROOM_MAP + PLAY_ROWS * 32 - 1
+                ld   bc, (PLAY_ROWS - 1) * 32
                 lddr
                 ld   a, (TMP5)
                 ld   c, a
-                ld   a, ROOM_ROWS - 1
+                ld   a, PLAY_ROWS - 1
                 sub  c
-                call next_map_row              ; NEXT_MAP row 20-k
+                call next_map_row              ; NEXT_MAP row 17-k
                 ld   de, ROOM_MAP
                 ld   bc, 32
                 ldir
                 ld   b, 0
 .draw:
+                push bc
                 ld   a, ROOM_MAP >> 8
                 call set_tile_map
                 ld   c, 0
                 ld   de, (ROOM_COLS << 8) | 1
                 call tile_rect
-                ld   hl, TMP5
+                pop  bc                        ; B = the entering screen row
+                ld   a, (TMP4)                 ; B3B-8: is it the next room's row 17
+                cp   EX_DOWN                   ; (down: k = 17 at the bottom; up:
+                ld   a, (TMP5)                 ; k = 0 at the top)? -> its ornament
+                jr   nz, .up0
+                cp   PLAY_ROWS - 1
+                jr   .orn
+.up0:           or   a
+.orn:           jr   nz, .nx
+                ld   c, 0
+                ld   de, ROOM_COLS << 8        ; 32 cells, logical col 0
+                ld   a, SCREEN_BITMAP >> 8
+                call orn_cells
+.nx:            ld   hl, TMP5
                 inc  (hl)
                 ld   a, (hl)
-                cp   ROOM_ROWS
+                cp   PLAY_ROWS
                 jp   c, .step
                 ret
 
@@ -449,10 +484,15 @@ move_char_row:
 ; queries + vis_reset in bank-5 low RAM).
 ;==============================================================================
 ;==============================================================================
-; NEW GAME (prototype §6.5: fixed seed reseeded; all rooms, monsters, potions
-; re-initialised). HERO_KIND already set. A7 review: bank 3 (cold; entered
-; via far3 from start_game). Ends with vis_reset (the render-state resync
-; contract, lowram.asm).  Clobbers: all but IY.
+; NEW GAME (prototype §6.5: fixed gameplay RNG seed; all rooms, monsters,
+; potions re-initialised). HERO_KIND already set. A7 review: bank 3 (cold;
+; entered via far3 from start_game). Hero slot 0: kind, flags, 1 potion, HP.
+; B3B-12: proto_start = 1 (test path, docs/memory-map.md "Level entry"): the
+; PROTO rooms A-D as before (proto_level + spawn_tab, ends with vis_reset).
+; Else (default): MASTER_SEED = SYS_FRAMES at the hero choice (game.md §1
+; "Seed"; seed_fixed = 1 forces seed_value) and nothing else — start_game's
+; level_enter generates D1, populates it and ends with vis_reset.
+; Clobbers: all but IY.
 ;==============================================================================
 new_game:
                 ld   hl, RNG_SEED
@@ -470,21 +510,10 @@ new_game:
                 ld   (BLIT_MISS), a
                 ld   (DMG_OVERFLOW), a
                 ld   (CLIP_TRAP), a
-                ld   (POTIONS_TAKEN), a
                 ld   (CUR_ROOM), a
-                ld   (EXIT_KIND), a
-                ld   (ZAP_T), a
-                ld   (MSG_Q), a
-                ld   (PEND_DMG_COUNT), a
                 ld   (TURN_PHASE), a
                 ld   (NEED_RELEASE), a
-                ld   (FLY_INBOX), a            ; 0 outside ai_flyer (try_step reads it)
-                ld   (YIELD_FLAG), a
-                ld   hl, P_ENTITIES
-                ld   de, P_ENTITIES + 1
-                ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1
-                ld   (hl), 0
-                ldir
+                call level_reset               ; per-level state + the entity table
                 ; --- hero, slot 0 ---
                 ld   ix, P_ENTITIES
                 ld   a, (HERO_KIND)
@@ -495,50 +524,41 @@ new_game:
                 ld   (ix+E_POT), 1
                 KFIELD KT_BH
                 ld   b, a
-                ld   a, HERO_START_S * STOREY_H + 6
-                sub  b
+                ld   a, HERO_START_S * STOREY_ROWS + STOREY_AIR
+                sub  b                         ; 9s+8-h
                 ld   (ix+E_Y), a
                 call init_ent_common
+                ld   a, (proto_start)
+                or   a
+                jr   nz, .proto
+                ld   hl, (seed_value)          ; generated: the master seed
+                ld   a, (seed_fixed)
+                or   a
+                jr   nz, .ms
+                ld   hl, (SYS_FRAMES)          ; frames since boot at the choice
+                ld   a, r                      ; + R (B3B-12 review): little extra entropy
+                xor  h                         ; (the select loop is HALT-synchronised),
+                ld   h, a                      ; the 20 ms keypress frame is the real source
+.ms:            ld   (MASTER_SEED), hl
+                ret
+.proto:         call proto_level               ; B3B-8: rooms A-D = a 3B level state
                 ; --- monsters from spawn_tab, slots 1.. ---
                 ld   hl, spawn_tab
                 ld   b, SPAWN_COUNT
                 ld   ix, P_ENTITIES + P_ENT_STRIDE
 .sp:            push bc
-                ld   a, (hl)
-                ld   (ix+E_KIND), a
+                ld   a, (hl)                   ; kind
                 inc  hl
-                ld   a, (hl)
-                ld   (ix+E_ROOM), a
+                ld   d, (hl)                   ; room
                 inc  hl
-                ld   a, (hl)
-                ld   (ix+E_X), a
+                ld   e, (hl)                   ; col
                 inc  hl
                 ld   c, (hl)                   ; storey
                 inc  hl
-                ld   a, (hl)
-                or   EF_ACTIVE | EF_HOSTILE
-                ld   (ix+E_FLAGS), a
+                ld   b, (hl)                   ; flags
                 inc  hl
                 push hl
-                ld   a, c
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  c
-                ld   c, a                      ; 7s
-                KFIELD KT_FLAGS
-                and  KF_FLYER
-                jr   z, .walker
-                ld   a, c
-                inc  a                         ; flyer cruises at 7s+1
-                jr   .sety
-.walker:        KFIELD KT_BH
-                ld   b, a
-                ld   a, c
-                add  a, 6
-                sub  b                         ; 7s+6-h
-.sety:          ld   (ix+E_Y), a
-                call init_ent_common
+                call spawn_one
                 pop  hl
                 ld   de, P_ENT_STRIDE
                 add  ix, de
@@ -546,6 +566,61 @@ new_game:
                 djnz .sp
                 jp   vis_reset                 ; B7b: no stale render slot (lowram)
 
+;------------------------------------------------------------------------------
+; level_reset — per-level / per-game transient state + an empty entity table
+; (new_game; level_populate keeps the hero's carried fields itself).
+; Clobbers: A, BC, DE, HL.
+;------------------------------------------------------------------------------
+level_reset:
+                xor  a
+                ld   (POTIONS_TAKEN), a        ; bits index this level's FLOOR_LIST
+                ld   (EXIT_KIND), a
+                ld   (ZAP_T), a
+                ld   (MSG_Q), a
+                ld   (PEND_DMG_COUNT), a
+                ld   (FLY_INBOX), a            ; 0 outside ai_flyer (try_step reads it)
+                ld   (YIELD_FLAG), a
+                ld   hl, $FFFF                 ; no jump refused (game.md §2.4 "not
+                ld   (JUMP_TURN), hl           ; two turns in a row")
+                ld   hl, P_ENTITIES
+                ld   de, P_ENTITIES + 1
+                ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1
+                ld   (hl), a
+                ldir
+                ret
+
+;------------------------------------------------------------------------------
+; spawn_one — IX = free slot: A = kind, D = room, E = body-left col, C =
+; storey 0/1, B = extra flags (EF_LEFT or 0). Walkers stand on the storey's
+; floor (9s+8-h), flyers cruise at 9s+1; HP from the kind, render state reset.
+; Clobbers: A, BC, HL.
+;------------------------------------------------------------------------------
+spawn_one:
+                ld   (ix+E_KIND), a
+                ld   (ix+E_ROOM), d
+                ld   (ix+E_X), e
+                ld   a, b
+                or   EF_ACTIVE | EF_HOSTILE
+                ld   (ix+E_FLAGS), a
+                ld   a, c                      ; 9s = 8s + s (MUL_STOREY inlined:
+                add  a, a                      ; C already holds s, so the
+                add  a, a                      ; macro's ld c,a would be dead)
+                add  a, a
+                add  a, c
+                ld   c, a                      ; 9s
+                KFIELD KT_FLAGS
+                and  KF_FLYER
+                jr   z, .walker
+                ld   a, c
+                inc  a                         ; flyer cruises at 9s+1
+                jr   .sety
+.walker:        KFIELD KT_BH
+                ld   b, a
+                ld   a, c
+                add  a, STOREY_AIR
+                sub  b                         ; 9s+8-h
+.sety:          ld   (ix+E_Y), a
+                ; fall through
 ; init_ent_common — hp/max from the kind, px/py from x/y, render state reset.
 init_ent_common:
                 KFIELD KT_HP
@@ -574,14 +649,10 @@ follow_select:
                 ld   a, (EXIT_COL)
                 ld   c, a
                 ld   a, (EXIT_STOREY)
-                ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b
-                add  a, 6
+                MUL_STOREY b
+                add  a, STOREY_AIR
                 sub  e
-                ld   b, a                      ; standing y on the exit storey
+                ld   b, a                      ; standing y on the exit storey (9s+8-h)
 .hbox:          ld   a, c
                 ld   (TMP0), a                 ; ref x
                 ld   a, d
@@ -762,15 +833,11 @@ place_follower:
                 ld   (ix+E_X), a
                 ld   a, (EXIT_KIND)
                 cp   EX_UP
-                ld   a, STOREYS - 1            ; going up: arrive on storey 2
+                ld   a, STOREY_COUNT - 1       ; going up: arrive on the bottom storey
                 jr   z, .stand
                 xor  a                         ; going down: storey 0
-.stand:         ld   b, a
-                add  a, a
-                add  a, a
-                add  a, a
-                sub  b
-                add  a, 6
+.stand:         MUL_STOREY b
+                add  a, STOREY_AIR             ; 9s+8
                 ld   b, a
                 KFIELD KT_BH
                 ld   c, a
@@ -815,15 +882,776 @@ arrival_conflicts:
 ; Spawns (used ONCE at new-game init; slots are the truth afterwards, §3.7).
 ;   DB kind, room, col, storey, flags(EF_LEFT or 0) ; slot = 1 + index
 ;------------------------------------------------------------------------------
+; B3B-3 (2 storeys): the prototype §8.2 population, storeys mapped PROTO s2 ->
+; s1 (bottom: the hero's start / exit storey), s1 -> s0, s0 -> s0. One col
+; moved (skeleton C) so the reference route keeps the PROTO shape: the
+; skeleton climbs the far shaft while the hero takes potion 2.
+;==============================================================================
+; proto_level — B3B-8: the PROTO rooms A-D (data.asm map) as a 3B level state
+; at LVL_STATE: header (LVL_DEPTH 0 = PROTO: level_load_tiles takes D1's set +
+; the chest; D1 colours), EDGE_TAB (A|B door open, D|C closed), the 4 room
+; descriptors (RD_SEED 0: build_room_map lays proto_decor instead of calling
+; decor_room), FLOOR_LIST = the 4 potions (entry i = PROTO potion id i =
+; POTIONS_TAKEN bit i). Until B3B-12 generates real levels for a game.
+; Clobbers: A, BC, DE, HL.
+;==============================================================================
+proto_level:
+                ld   hl, LVL_STATE
+                ld   de, LVL_STATE + 1
+                ld   bc, FLOOR_LIST - LVL_STATE - 1
+                ld   (hl), 0
+                ldir                           ; header, edges, all 9 descriptors
+                ld   hl, FLOOR_LIST
+                ld   de, FLOOR_LIST + 1
+                ld   bc, FLOOR_MAX * FL_STRIDE - 1
+                ld   (hl), FL_EMPTY
+                ldir
+                ld   hl, proto_hdr             ; header + EDGE_TAB (contiguous)
+                ld   de, LVL_STATE
+                ld   bc, PROTO_HDR_LEN
+                ldir
+                ld   de, FLOOR_LIST            ; the potions
+                ld   c, PROTO_FLOOR_LEN
+                ldir                           ; (HL runs on into proto_rooms)
+                ld   a, PROTO_ROOMS
+.r:             push af
+                ld   a, (hl)                   ; room id
+                inc  hl
+                push hl
+                call room_desc                 ; (bank 2) HL = its descriptor
+                ex   de, hl
+                pop  hl
+                ld   bc, PROTO_DESC_LEN
+                ldir
+                pop  af
+                dec  a
+                jr   nz, .r
+                ret
+
+proto_hdr:      DB   0                         ; LVL_DEPTH: 0 = PROTO
+                DW   0, 0                      ; LVL_SEED, GEN_RNG
+                DB   ATTR_FLOOR, ATTR_WALL     ; = D1's (game.md §1.2)
+                DB   ROOM_A, ROOM_NONE, ROOM_NONE, ROOM_NONE   ; start, lair, key, sanctum
+                DB   PROTO_ROOMS, 0, PROTO_POTIONS             ; NROOMS, FLAGS, FLOOR_N
+                DW   0                         ; MASTER_SEED
+                DB   EG_LINK | EG_DOOR | EG_OPEN, 0, EG_LINK | EG_DOOR, 0, 0, 0   ; EDGE_TAB
+PROTO_HDR_LEN   EQU $ - proto_hdr
+                ASSERT PROTO_HDR_LEN == EDGE_TAB + EDGES_H - LVL_STATE
+                ASSERT EDGE_TAB == LVL_STATE + LVL_HDR_LEN && EDGE_AB == 0 && EDGE_DC == 2
+                ASSERT LVL_ATTR_FLOOR - LVL_STATE == 5 && FLOOR_N - LVL_STATE == 13
+proto_floor:    ; FL_ROOM, FL_COL, FL_ITEM, FL_QTY: potion ids 0..3 (all storey 0)
+                DB   ROOM_A, 28, IT_POTION, 1
+                DB   ROOM_B, 1,  IT_POTION, 1
+                DB   ROOM_C, 29, IT_POTION, 1
+                DB   ROOM_D, 17, IT_POTION, 1
+PROTO_FLOOR_LEN EQU $ - proto_floor
+PROTO_POTIONS   EQU PROTO_FLOOR_LEN / FL_STRIDE
+proto_rooms:    ; room id, then RD_FLAGS .. RD_BLOCK (seed / spare stay 0)
+                DB   ROOM_A, RDF_PRESENT | RDF_START | RDF_DEADEND, RDX_R | RDX_RS1
+                DB   0, 0, 0, 0, 5, 23, 0, 0                  ; LAD1 {5,1}, LAD2 {23,1}
+                DB   ROOM_B, RDF_PRESENT, RDX_L | RDX_LS1 | RDX_D
+                DB   0, 24, 0, 0, 4, 11, PIT_B, 0             ; DN {24,2}; {4,1} {11,1}
+                DB   ROOM_C, RDF_PRESENT, RDX_L | RDX_LS1 | RDX_U
+                DB   24, 0, 0, 0, 24, 6, 0, 0                 ; UP {24,0}; {24,1} {6,1}
+                DB   ROOM_D, RDF_PRESENT | RDF_DEADEND, RDX_R | RDX_RS1
+                DB   0, 0, 0, 0, 22, 8, 0, RDB_RIGHT | 3      ; {22,1} {8,1}; block
+PROTO_DESC_LEN  EQU RD_BLOCK + 1
+PROTO_ROOMS     EQU ($ - proto_rooms) / (PROTO_DESC_LEN + 1)
+                ASSERT PROTO_ROOMS == 4 && proto_rooms == proto_floor + PROTO_FLOOR_LEN
+                ASSERT proto_floor == proto_hdr + PROTO_HDR_LEN
+                ASSERT RD_FLAGS == 0 && RD_BLOCK == 9 && RD_LAD1 == 6 && RD_PITCOL == 8
+; PROTO decor (seed-0 rooms only): room, tile, col, row; $FF ends
+proto_decor:    DB   ROOM_A, T_TORCH_T, 0, 14,  ROOM_A, T_TORCH_B, 0, 15
+                DB   $FF                       ; (B3B-13: the room-D chest is gone)
+
 HERO_START_COL  EQU 2
-HERO_START_S    EQU 2
+HERO_START_S    EQU 1
 spawn_tab:
-                DB K_RAT,      ROOM_A, 16, 2, EF_LEFT
-                DB K_SLIME,    ROOM_A, 14, 1, EF_LEFT
-                DB K_GOBLIN,   ROOM_B, 16, 2, EF_LEFT
-                DB K_BAT,      ROOM_B, 18, 1, EF_LEFT
-                DB K_SKELETON, ROOM_C, 16, 2, EF_LEFT
-                DB K_GHOST,    ROOM_C, 12, 1, EF_LEFT
+                DB K_RAT,      ROOM_A, 16, 1, EF_LEFT
+                DB K_SLIME,    ROOM_A, 14, 0, EF_LEFT
+                DB K_GOBLIN,   ROOM_B, 16, 1, EF_LEFT
+                DB K_BAT,      ROOM_B, 18, 0, EF_LEFT
+                DB K_SKELETON, ROOM_C, 12, 1, EF_LEFT  ; col 16 -> 12: its nearest
+                                                       ; climb is {6,1}, away from the
+                                                       ; hero's arrival shaft {24,0}/{24,1}
+                DB K_GHOST,    ROOM_C, 12, 0, EF_LEFT
                 DB K_SKELETON, ROOM_D, 12, 0, EF_LEFT
-                DB K_BAT,      ROOM_D, 12, 2, EF_LEFT
+                DB K_BAT,      ROOM_D, 12, 1, EF_LEFT
 SPAWN_COUNT     EQU ($ - spawn_tab) / 5
+
+;==============================================================================
+; LEVEL ENTRY, bank-3 part (B3B-12; the low-RAM driver is level_enter in
+; lowram.asm, which pages tiles / screens around these far3 calls).
+;==============================================================================
+;------------------------------------------------------------------------------
+; level_card — the "DEPTH n" card (game.md §11: shown while the level is
+; regenerated), A = depth 1..8, on the cleared bank-5 screen (ROM charset;
+; level_enter presents it to screen 2 before the generator runs; the 8x16
+; menu font is 3C). Pages nothing.  Clobbers: A, BC, DE, HL.
+;------------------------------------------------------------------------------
+CARD_ROW        EQU 11
+CARD_COL        EQU 12                  ; "DEPTH n" = 7 cells, centred
+level_card:
+                push af
+                ld   hl, str_depth
+                ld   bc, (CARD_ROW << 8) | CARD_COL
+                call print_str                 ; C advances, B kept
+                pop  af
+                add  a, '0'
+                jp   print_char
+str_depth:      DB   "DEPTH ", 0
+
+;------------------------------------------------------------------------------
+; level_new — A = depth 1..8: LVL_SEED = MASTER_SEED + depth * LVL_SEED_MUL
+; (level_defs.asm: why additive), level_gen until it succeeds (B = 1 + CF:
+; 16 reseeds exhausted, LVL_SEED already advanced by 16 -> just call again;
+; D8 seeds 55352..55354 exhaust once; at most 2 calls: the longest run of
+; failing seeds is 18 < 32, tools/levelgen_runs.py), then the
+; stand-in population (level_populate). LG_* scratch = GEN_SCRATCH: called
+; only before the first room is built (level_enter). No gen_kind here: the 3B
+; stand-in kinds are all in the boot pool (3F's per-level pool goes between
+; level_gen and the build, after alloc_restore). Pages nothing.
+; Clobbers: all but IY.   level_gen ~0.1-0.6M T per call (W16 reports)
+;------------------------------------------------------------------------------
+level_new:
+                ld   (LVL_DEPTH), a
+                ld   b, a
+                ld   hl, (MASTER_SEED)
+                ld   de, LVL_SEED_MUL
+.m:             add  hl, de                    ; + depth * MUL (16-bit wrap)
+                djnz .m
+                ld   (LVL_SEED), hl
+.g:             ld   a, (LVL_DEPTH)
+                call level_gen                 ; B = 0 ok / 1 exhausted
+                dec  b
+                jr   z, .g                     ; 1 -> retry from LVL_SEED + 16
+                ; fall through
+;------------------------------------------------------------------------------
+; level_populate — the hero and the 3B stand-in monsters (game.md §1.4: a
+; fixed per-room table, today's kinds) into an emptied entity table.
+; Hero (slot 0): kind / HP / MAXHP / potions / facing carried over, room =
+; LVL_START, x = level_start_x, standing on storey 0 (game.md §1.1 gaps (4)),
+; CUR_ROOM = LVL_START. Monsters: every present room but the start room
+; (0 monsters) gets pop_cols' 2 entries — entry e on storey 1 - e, kind =
+; pop_kinds[(r + 3e + depth) mod 6] (a walker / flyer-or-slime pair per room,
+; rotating with the depth) — until the 15 monster slots are full (rooms in id
+; order; a 9-room level drops its last room's 2nd monster). Col: the table's,
+; else +3 (wrapping in POP_XMIN..POP_XMAX) up to POP_TRIES times, until
+; `hits` finds no footprint of that storey (ladder / shaft / hole / pit /
+; block; storey 1 also the pit's landing cols p..p+2) within 1 col of the body (walkers) or 3 cols (flyers: designer
+; note — a flyer never waits at an arrival shaft or a ladder end); none
+; legal -> the monster is dropped (deterministic). Facing: toward the room
+; centre. Clobbers: all but IY.
+;------------------------------------------------------------------------------
+; Hero E_FLAGS bits carried over a descend (everything else is rebuilt:
+; ACTIVE | PLAYER set, DYING / WALKIN / PENDING dropped). 3D: the status
+; effects (ENT_STAT / timers) must be carried here too, explicitly.
+HERO_CARRY      EQU EF_LEFT
+POP_XMIN        EQU 6                   ; clear of the door cells / horizontal arrivals
+POP_XMAX        EQU 24                  ; body right col <= 27
+POP_TRIES       EQU 7
+POP_KINDS       EQU 6
+level_populate:
+                ld   ix, P_ENTITIES
+                ld   l, (ix+E_HP)
+                ld   h, (ix+E_MAXHP)
+                push hl
+                ld   b, (ix+E_POT)
+                ld   a, (ix+E_FLAGS)
+                and  HERO_CARRY                ; flags that survive a descend
+                ld   c, a
+                push bc
+                call level_reset
+                call level_start_x             ; A = col (clobbers IX)
+                ld   ix, P_ENTITIES
+                ld   (ix+E_X), a
+                ld   a, (LVL_START)
+                ld   (CUR_ROOM), a
+                ld   (ix+E_ROOM), a
+                ld   a, (HERO_KIND)
+                ld   (ix+E_KIND), a
+                pop  bc
+                ld   (ix+E_POT), b
+                ld   a, c
+                or   EF_ACTIVE | EF_PLAYER
+                ld   (ix+E_FLAGS), a
+                KFIELD KT_BH
+                ld   b, a
+                ld   a, FLOOR_ROW0             ; storey 0: 8 - h
+                sub  b
+                ld   (ix+E_Y), a
+                call init_ent_common
+                pop  hl
+                ld   (ix+E_HP), l
+                ld   (ix+E_MAXHP), h
+                ; --- monsters ---
+                ld   ix, P_ENTITIES + P_ENT_STRIDE
+                xor  a
+.room:          ld   (TMP0), a                 ; TMP0 = room r
+                ld   hl, LVL_START
+                cp   (hl)
+                jr   z, .nroom                 ; the start room stays empty
+                call room_desc                 ; (bank 2) HL = descriptor
+                bit  RDF_PRESENT_BIT, (hl)
+                jr   z, .nroom
+                ld   (TMP2), hl                ; TMP2/3 = descriptor
+                xor  a
+.ent:           ld   (TMP1), a                 ; TMP1 = entry e
+                push ix
+                pop  hl
+                ld   de, -(P_ENTITIES + P_MAX_ENT * P_ENT_STRIDE)
+                add  hl, de
+                ret  c                         ; slots full (IX = the end)
+                call pop_one
+.nent:          ld   a, (TMP1)
+                inc  a
+                cp   2
+                jr   c, .ent
+.nroom:         ld   a, (TMP0)
+                inc  a
+                cp   GRID_CELLS
+                jr   c, .room
+                ret
+
+; pop_one — entry TMP1 of room TMP0 (descriptor at TMP2), IX = free slot:
+; place it if a legal col exists (IX += stride). Clobbers: all but IX, IY.
+pop_one:
+                ld   a, (TMP0)                 ; kind = pop_kinds[(r + 3e + d) mod 6]
+                ld   b, a
+                ld   a, (TMP1)
+                ld   c, a
+                add  a, a
+                add  a, c
+                add  a, b
+                ld   hl, LVL_DEPTH
+                add  a, (hl)
+.md:            sub  POP_KINDS
+                jr   nc, .md
+                add  a, POP_KINDS
+                ld   hl, pop_kinds
+                ld   e, a
+                ld   d, 0
+                add  hl, de
+                ld   a, (hl)
+                ld   (ix+E_KIND), a            ; (KFIELD reads it; spawn_one rewrites)
+                ld   (TMP4), a
+                KFIELD KT_BW
+                ld   (TMP5), a                 ; body width
+                ld   a, (TMP0)                 ; col = pop_cols[2r + e]
+                add  a, a
+                ld   hl, TMP1
+                add  a, (hl)
+                ld   hl, pop_cols
+                ld   e, a
+                add  hl, de                    ; (D = 0)
+                ld   a, (hl)
+                ld   (TMP6), a                 ; TMP6 = x
+                KFIELD KT_FLAGS
+                and  KF_FLYER
+                ld   a, 1                      ; margin: walker 1, flyer 3
+                jr   z, .mg
+                ld   a, 3
+.mg:            ld   (TMP7), a
+                ld   b, POP_TRIES
+.try:           push bc
+                ld   a, (TMP1)                 ; storey = 1 - e
+                xor  1
+                ld   c, a
+                ld   hl, TMP7
+                ld   a, (TMP6)
+                sub  (hl)
+                ld   d, a                      ; lo = x - margin
+                ld   a, (TMP5)
+                dec  a
+                add  a, (hl)
+                ld   hl, TMP6
+                add  a, (hl)
+                ld   e, a                      ; hi = x + w - 1 + margin
+                push ix
+                ld   ix, (TMP2)                ; IX = room descriptor (hits)
+                call hits                      ; CF = a footprint in lo..hi
+                jr   c, .ht
+                dec  c                         ; storey 1: + the pit's landing zone
+                jr   nz, .ht                   ; p..p+2 (game.md §1.1 pit rule (4):
+                ld   a, (ix+RD_PITCOL)         ; a fall from storey 0 lands there;
+                or   a                         ; `hits` stays the generator's test)
+                jr   z, .ht                    ; (CF = 0)
+                ld   b, a
+                ld   a, e
+                cp   b
+                jr   c, .clr                   ; hi < p
+                ld   a, b
+                add  a, 2
+                cp   d
+                jr   c, .clr                   ; p + 2 < lo
+                scf
+                jr   .ht
+.clr:           or   a
+.ht:            pop  ix
+                pop  bc
+                jr   nc, .ok
+                ld   a, (TMP6)                 ; x += 3, wrapping in XMIN..XMAX
+                add  a, 3
+                cp   POP_XMAX + 1
+                jr   c, .nx
+                sub  POP_XMAX + 1 - POP_XMIN
+.nx:            ld   (TMP6), a
+                djnz .try
+                ld   (ix+E_KIND), 0            ; dropped: the slot stays free
+                ret
+.ok:            ld   a, (TMP1)
+                xor  1
+                ld   c, a                      ; storey
+                ld   a, (TMP6)
+                ld   e, a                      ; col
+                ld   b, 0                      ; face right ...
+                cp   16 - 1
+                jr   c, .fr
+                ld   b, EF_LEFT                ; ... or left, toward the centre
+.fr:            ld   a, (TMP0)
+                ld   d, a                      ; room
+                ld   a, (TMP4)                 ; kind
+                call spawn_one
+                ld   de, P_ENT_STRIDE
+                add  ix, de
+                ret
+
+; stand-in kinds (game.md §1.4: today's), paired 3 apart: walker / flyer or slime
+pop_kinds:      DB   K_RAT, K_GOBLIN, K_SKELETON, K_BAT, K_SLIME, K_GHOST
+                ASSERT $ - pop_kinds == POP_KINDS
+; per room id 0..8: entry 0 (storey 1) col, entry 1 (storey 0) col
+pop_cols:       DB   16, 12,  18, 10,  14, 20
+                DB   12, 18,  20, 14,  10, 16
+                DB   18, 12,  14, 20,  16, 10
+                ASSERT $ - pop_cols == 2 * GRID_CELLS
+
+                INCLUDE "levelgen.asm"          ; B3B-7: level_gen, level_start_x
+
+;==============================================================================
+; build_room_map — B3B-8 v2 (plan D7; game.md §1.1 / §2.1 / §2.5 / §3.3 /
+; §1.4, concept-screen §3.1): the tile map of room A (0..8) from ROOM_DESC +
+; EDGE_TAB + FLOOR_LIST (+ LVL_FLAGS for the grate) into the map at page D
+; (ROOM_MAP / NEXT_MAP >> 8). Entered via far3 (lowram `build_room` keeps the
+; A / H signature for do_exit and room_show). Pages nothing.
+; Overwrites GEN_SCRATCH (aliases both maps): the ZX0 cache GEN_ZBLK is dropped.
+;   base     cols 0 / 31 wall (WALLF in the floor rows 8 / 17), the rest AIR /
+;            PLAT (row 17 stays logical PLATFORM: orn_cells draws its ornament)
+;   exits    L / R: that storey's air rows opened in col 0 / 31; a door edge
+;            (EDGE_TAB, index from the room id) = lintel WALL row 9s, arch 9s+1,
+;            planks 9s+2..9s+7 (closed / LOCK plank if locked or sealed / the
+;            open-door jambs, B10)
+;   pit      row 8: T_PIT_L p-1, AIR p..p+2, T_PIT_R p+3
+;   block    RD_BLOCK: w cols WALL (WALLF floor row), RUBBLE at its foot
+;   segments the 6 col bytes RD_UPCOL..RD_LAD2 as {c,s} (seg_storey): ladder
+;            rows 9s-1..9s+7 clipped; row 8 = HOLE + T_END_R / T_END_L caps on
+;            the platform either side; row 17 = HOLE, no caps (the ornament
+;            runs to the hole). ARR: + RUBBLE over the shaft in row 0 (no exit
+;            up, game.md §1.1). EXIT: the level exit, T_GRATE over it unless
+;            LF_GRATE_OPEN (always set in 3B, §1.4: an open grate = the hole)
+;   potions  FLOOR_LIST entries of this room (IT_POTION) -> T_POTION, row 9s+7
+;   decor    RD_SEED != 0: decor_room (B3B-9); seed 0 (PROTO): proto_decor.
+;            The animated cells go to ANIM_N/ANIM_LIST (ROOM_MAP) or
+;            ANIM_N2/ANIM_LIST2 (NEXT_MAP: do_exit's room_shadow copies it
+;            after the scroll); the list is emptied first (PROTO: stays 0)
+; Clobbers: A, BC, DE, HL (IX, IY kept).   45.4k T worst (measured, DI, contended: W11 / W12M)
+;==============================================================================
+build_room_map:
+                push ix
+                ld   (TMP0), a                 ; room
+                ld   a, d
+                ld   (TMP1), a                 ; map page (map_cell)
+                cp   ROOM_MAP >> 8             ; B3B-9 review: the decor list of this map
+                ld   a, ANIM_N & $FF           ; (ROOM_MAP -> ANIM_N, NEXT_MAP -> ANIM_N2),
+                jr   z, .an                    ; emptied for every build (PROTO seed 0
+                ld   a, ANIM_N2 & $FF          ; rooms keep it empty)
+.an:            ld   (dg_dst), a
+                ld   l, a
+                ld   h, ANIM_N >> 8
+                ld   (hl), 0
+                ld   hl, 0
+                ld   (GEN_ZBLK), hl            ; GEN_SCRATCH is about to be overwritten
+                ld   a, (TMP0)
+                call room_desc                 ; (bank 2) A, HL
+                push hl
+                pop  ix                        ; IX = descriptor
+                ; base fill, rows 0..17 (the map rows are contiguous, 32 B each)
+                ld   h, d
+                ld   l, 0
+                ld   b, 0                      ; row
+.r:             ld   de, (T_BRICK << 8) | T_AIR
+                ld   a, b
+                cp   FLOOR_ROW0
+                jr   z, .fl
+                cp   FLOOR_ROW1
+                jr   nz, .air
+.fl:            ld   de, (T_WALLF << 8) | T_PLAT
+.air:           ld   (hl), d                   ; col 0
+                inc  hl
+                ld   c, ROOM_COLS - 2
+.c:             ld   (hl), e
+                inc  hl
+                dec  c
+                jr   nz, .c
+                ld   (hl), d                   ; col 31
+                inc  hl
+                inc  b
+                ld   a, b
+                cp   PLAY_ROWS
+                jr   nz, .r
+                ; horizontal exits + doors
+                ld   bc, 0                     ; C = col 0
+                ld   e, RDX_L
+                call .side
+                ld   c, ROOM_COLS - 1
+                ld   e, RDX_R
+                call .side
+                ; pit, block
+                ld   a, (ix+RD_PITCOL)
+                or   a
+                call nz, .pit
+                ld   a, (ix+RD_BLOCK)
+                call .block
+                ; shafts and ladders: RD_UPCOL .. RD_LAD2 as {c, s}
+                push ix
+                pop  hl
+                inc  l                         ; -> RD_EXITS; the loop pre-increments
+.sg:            inc  l
+                ld   a, l
+                and  RD_STRIDE - 1
+                cp   RD_LAD2 + 1
+                jr   nc, .sgd
+                push hl
+                call seg_storey                ; (bank 2) A = s
+                ld   e, a
+                ld   a, (hl)
+                call .lad
+                pop  hl
+                jr   .sg
+.sgd:           ld   a, (ix+RD_ARRCOL)         ; arrival shaft: rubble-capped (row 0)
+                ld   d, T_RUBBLE
+                ld   b, 0
+                call .three
+                ld   a, (LVL_FLAGS)            ; level exit: the grate unless open
+                and  LF_GRATE_OPEN
+                jr   nz, .pots
+                ld   a, (ix+RD_EXITCOL)
+                ld   d, T_GRATE
+                ld   b, FLOOR_ROW1
+                call .three
+.pots:          ; potions (3B stand-in: floor tiles, game.md §1.4)
+                ld   hl, FLOOR_LIST
+                ld   b, FLOOR_MAX
+.pt:            ld   a, (hl)                   ; FL_ROOM ($FF & $0F = 15: never a room)
+                and  FL_ROOM_MASK
+                ld   c, a
+                ld   a, (TMP0)
+                cp   c
+                jr   nz, .pn
+                inc  l
+                inc  l
+                ld   a, (hl)                   ; FL_ITEM
+                dec  l
+                ld   c, (hl)                   ; FL_COL
+                dec  l
+                cp   IT_POTION
+                jr   nz, .pn
+                push hl
+                push bc
+                ld   a, (hl)
+                rlca                           ; FL_S1 -> bit 0
+                and  1
+                call storey_row                ; (bank 2) A = 9s+7, keeps BC
+                ld   b, a
+                call map_cell
+                ld   (hl), T_POTION
+                pop  bc
+                pop  hl
+.pn:            ld   a, l
+                add  a, FL_STRIDE
+                ld   l, a
+                djnz .pt
+                ; decor
+                ld   a, (ix+RD_SEED)
+                or   (ix+RD_SEED + 1)
+                jr   z, .proto
+                ld   a, (TMP0)
+                call decor_room                ; B3B-9 (IX = descriptor)
+                pop  ix
+                ret
+.proto:         ld   hl, proto_decor           ; seed 0: the PROTO rooms' list
+.pd:            ld   a, (hl)
+                cp   $FF
+                jr   z, .x
+                ld   d, a                      ; room
+                inc  hl
+                ld   e, (hl)                   ; tile
+                inc  hl
+                ld   c, (hl)                   ; col
+                inc  hl
+                ld   b, (hl)                   ; row
+                inc  hl
+                ld   a, (TMP0)
+                cp   d
+                jr   nz, .pd
+                push hl
+                call map_cell
+                ld   (hl), e
+                pop  hl
+                jr   .pd
+.x:             pop  ix
+                ret
+                ASSERT FL_ROOM == 0 && FL_COL == 1 && FL_ITEM == 2 && FL_S1 == $80
+                ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE <= 256
+                ASSERT (FL_EMPTY & FL_ROOM_MASK) >= GRID_CELLS
+
+.three:         ; A = left col (0: none), B = row, D = tile: 3 cells
+                or   a
+                ret  z
+                ld   c, a
+                call map_cell
+                ld   (hl), d
+                inc  hl
+                ld   (hl), d
+                inc  hl
+                ld   (hl), d
+                ret
+
+.side:          ; E = RDX_L / RDX_R, C = edge col 0 / 31
+                ld   a, (ix+RD_EXITS)
+                and  e
+                ret  z
+                ld   a, e
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, a                      ; -> RDX_LS1 / RDX_RS1
+                and  (ix+RD_EXITS)
+                jr   z, .s0
+                ld   a, 1
+.s0:            MUL_STOREY b                   ; A = 9s
+                ld   b, a
+                push bc
+                ld   d, STOREY_AIR
+.o:             call map_cell
+                ld   (hl), T_AIR
+                inc  b
+                dec  d
+                jr   nz, .o
+                pop  bc                        ; B = 9s, C = edge col
+                ld   a, (TMP0)                 ; edge index: right edge of m =
+                bit  RDX_L_BIT, e              ; m - m div 3, m = r (R) / r-1 (L)
+                jr   z, .em
+                dec  a
+.em:            ld   l, a
+.eg:            sub  GRID_W
+                jr   c, .ex
+                dec  l
+                jr   .eg
+.ex:            ld   a, l
+                add  a, EDGE_TAB & $FF
+                ld   l, a
+                ld   h, EDGE_TAB >> 8
+                ld   a, (hl)                   ; edge state
+                bit  EG_DOOR_BIT, a
+                ret  z                         ; open passage: no door cells
+                ld   e, a
+                ld   a, c
+                or   a
+                jr   z, .dc
+                dec  a                         ; right door: cols 30-31
+.dc:            ld   c, a
+                call map_cell                  ; lintel, row 9s
+                ld   (hl), T_BRICK
+                inc  hl
+                ld   (hl), T_BRICK
+                inc  b
+                call map_cell                  ; arch, row 9s+1
+                ld   (hl), T_DOOR_ARCH_L
+                inc  hl
+                ld   (hl), T_DOOR_ARCH_R
+                ld   a, e
+                ld   de, (T_DOOR_JAMB_L << 8) | T_DOOR_JAMB_R   ; open (B10)
+                bit  EG_OPEN_BIT, a
+                jr   nz, .dk
+                ld   de, (T_DOOR_L << 8) | T_DOOR_R
+                and  EG_LOCK | EG_SEAL
+                jr   z, .dk
+                ld   e, T_DOOR_LOCK
+.dk:            ld   a, DOOR_PLANK_H
+.dp:            inc  b                         ; planks, rows 9s+2 .. 9s+7
+                push af
+                call map_cell
+                ld   (hl), d
+                inc  hl
+                ld   (hl), e
+                pop  af
+                dec  a
+                jr   nz, .dp
+                ret
+                ASSERT DOOR_ARCH_DY == 1 && DOOR_PLANK_DY == 2 && DOOR_COLS == 2
+                ASSERT RDX_LS1 == RDX_L << 4 && RDX_RS1 == RDX_R << 4
+
+.pit:           ; A = p (game.md §2.5): row 8, cap T_PIT_L at p-1, holes p..p+2
+                ; AIR, cap T_PIT_R at p+3
+                dec  a
+                ld   c, a
+                ld   b, FLOOR_ROW0
+                call map_cell
+                ld   (hl), T_PIT_L
+                inc  hl
+                ld   (hl), T_AIR
+                inc  hl
+                ld   (hl), T_AIR
+                inc  hl
+                ld   (hl), T_AIR
+                inc  hl
+                ld   (hl), T_PIT_R
+                ret
+                ASSERT FEAT_W == 3
+
+.block:         ; A = RD_BLOCK: w cols at the left / right edge of storey s,
+                ; rows 9s..9s+7 WALL, floor row WALLF, RUBBLE at its foot (row
+                ; 9s+7, col w / 31-w)
+                ld   e, a
+                and  RDB_WMASK
+                ret  z
+                ld   d, a                      ; D = w
+                ld   c, 0
+                bit  RDB_RIGHT_BIT, e
+                jr   z, .bl
+                ld   a, ROOM_COLS
+                sub  d
+                ld   c, a                      ; 32 - w
+.bl:            xor  a
+                bit  RDB_S1_BIT, e
+                jr   z, .bs
+                ld   a, STOREY_ROWS
+.bs:            ld   b, a                      ; 9s
+                ld   e, STOREY_ROWS            ; 8 air rows + the floor row
+.br:            call map_cell
+                ld   a, e
+                dec  a
+                ld   a, T_BRICK
+                jr   nz, .bt
+                ld   a, T_WALLF
+.bt:            push bc
+                ld   b, d
+.bc:            ld   (hl), a
+                inc  hl
+                djnz .bc
+                pop  bc
+                inc  b
+                dec  e
+                jr   nz, .br
+                dec  b
+                dec  b                         ; row 9s+7
+                ld   a, c
+                or   a
+                ld   a, d                      ; left: col w
+                jr   z, .rc
+                ld   a, c
+                dec  a                         ; right: col 31-w
+.rc:            ld   c, a
+                call map_cell
+                ld   (hl), T_RUBBLE
+                ret
+
+.lad:           ; A = col (0: none), E = s: {c,s} rows 9s-1 .. 9s+7 clipped
+                or   a
+                ret  z
+                ld   c, a
+                ld   a, e
+                MUL_STOREY b                   ; 9s
+                dec  a                         ; 9s-1 ($FF for s = 0)
+                ld   b, a
+                ld   e, STOREY_ROWS
+.lr:            ld   a, b
+                cp   PLAY_ROWS                 ; $FF / > 17: clipped
+                jr   nc, .lskip
+                call map_cell
+                ld   a, b
+                cp   FLOOR_ROW1
+                ld   a, T_HOLE_L               ; row 17: hole, no caps
+                jr   z, .la
+                ld   a, b
+                cp   FLOOR_ROW0
+                ld   a, T_LAD_L
+                jr   nz, .la
+                dec  hl                        ; row 8: caps on the platform
+                ld   a, (hl)                   ; cells either side of the hole
+                cp   T_PLAT
+                jr   nz, .nc1
+                ld   (hl), T_END_R             ; platform ends at the hole's left
+.nc1:           inc  hl
+                inc  hl
+                inc  hl
+                inc  hl
+                ld   a, (hl)
+                cp   T_PLAT
+                jr   nz, .nc2
+                ld   (hl), T_END_L             ; platform resumes at its right
+.nc2:           dec  hl
+                dec  hl
+                dec  hl
+                ld   a, T_HOLE_L
+.la:            ld   (hl), a
+                inc  hl
+                inc  a
+                ld   (hl), a
+                inc  hl
+                inc  a
+                ld   (hl), a
+.lskip:         inc  b
+                dec  e
+                jr   nz, .lr
+                ret
+                ASSERT T_LAD_M == T_LAD_L + 1 && T_LAD_R == T_LAD_L + 2
+                ASSERT T_HOLE_M == T_HOLE_L + 1 && T_HOLE_R == T_HOLE_L + 2
+
+;==============================================================================
+; decor_room — B3B-9 (src/decor_gen.asm). build_room_map calls it for a
+; seeded room (RD_SEED != 0) once every structural cell is placed: A = room,
+; IX = its descriptor, (TMP1) = the map page (map_cell). Contract: re-derive
+; everything from RD_SEED (re-entry must rebuild the identical map, W12);
+; game.md §1.2 "Solidity of decor" + concept-screen §3.3 (never in floor rows
+; or on door / arch / lintel / ladder / pit / cap / rubble cells; wall-set ids
+; only on solid wall cells, others only on non-solid ones); fill ANIM_LIST
+; into the list chosen by the map page (dg_dst, set + zeroed by
+; build_room_map: ROOM_MAP -> ANIM_N, NEXT_MAP -> ANIM_N2). Keep IX.
+;==============================================================================
+decor_room:
+                INCLUDE "decor_gen.asm"         ; B3B-9: the deriver (code from the label on)
+
+;==============================================================================
+; init_tiles — boot (far3): the common tile set, ids 0..31 (B3B-2
+; tiles_common: glyphs + depth-1 attrs; level_load_tiles re-themes the floor /
+; wall ids per level) into TILE_GLYPHS / TILE_ATTRS, the row-17 ornament into
+; ORN_GLYPHS, the wizard zap glyphs into ZAP_GLYPHS (B3B-13: no longer over
+; ids 17/18, which keep the common set's T_DRIP1/2). The per-level ids
+; 32..63 come from level_load_tiles (start_game). Clobbers: A, BC, DE, HL.
+;==============================================================================
+init_tiles:                                    ; (B3B-11b: the data is in vdata, main.asm)
+                ld   hl, tiles_common_glyphs
+                ld   de, TILE_GLYPHS
+                ld   bc, TILE_COMMON * 8
+                call copy_virt3
+                ld   hl, tiles_common_attrs
+                ld   de, TILE_ATTRS
+                ld   bc, TILE_COMMON
+                call copy_virt3
+                ld   hl, orn_glyphs
+                ld   de, ORN_GLYPHS
+                ld   bc, ORN_COUNT * 8
+                call copy_virt3
+                ld   hl, b3fx.tiles_fx_zap1
+                ld   de, ZAP_GLYPHS
+                ld   bc, 2 * 8
+                jp   copy_virt3
+                ASSERT tiles_common_attrs == tiles_common_glyphs + TILE_COMMON * 8
+                ASSERT TILES_COMMON_LEN == TILE_COMMON * 9
+                ASSERT orn_glyphs_end - orn_glyphs == ORN_COUNT * 8
+                ASSERT b3fx.tiles_fx_zap2 == b3fx.tiles_fx_zap1 + 8
+
+; (cold tile data: B3B-11b moved it to main.asm vdata, read via copy_virt3)
+                INCLUDE "panel.asm"            ; B3B-11 panel engine (cold part + the HOT_COPY image)
+                INCLUDE "turn3.asm"            ; B3B-R2 turn logic: monster phase, attacks, potions

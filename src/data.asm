@@ -213,78 +213,39 @@ kind_seqs:
 ; resting frame per kind (select screen, HOLD fallback)
 kind_rest:      DB KN_REST, WZ_REST, 0, SK_REST, GB_REST, GH_REST, RT_REST, BT_REST, SL_REST
 
-kind_names:     DW nm_knight, nm_wizard, 0, nm_skeleton, nm_goblin, nm_ghost, nm_rat, nm_bat, nm_slime
-nm_knight:      DB "KNIGHT", 0
-nm_wizard:      DB "WIZARD", 0
-nm_skeleton:    DB "SKELETON", 0
-nm_goblin:      DB "GOBLIN", 0
-nm_ghost:       DB "GHOST", 0
-nm_rat:         DB "RAT", 0
-nm_bat:         DB "BAT", 0
-nm_slime:       DB "SLIME", 0
+; (B3B-13: the kind names are strings TX_NM_* in src/strings.txt, bank-1 text block)
 
 ;==============================================================================
-; ROOMS (prototype §8.2). Descriptor:
-;   DB exitL_storey, exitL_dest, exitR_storey, exitR_dest, exitU_dest, exitD_dest
-;   DB n_ladders, (col, s)*          ; {col,0} = up-exit shaft, {col,3} = down-exit hole
-;   DB n_potions, (id, col, s)*
-;   DB n_decor,   (tile, col, row)*
-; EXIT_NONE ($FF) = no exit. Room ids: 0=A 1=B 2=C 3=D.
+; ROOMS — prototype §8.2 on 2 storeys (B3B-3). B3B-8: rooms A-D are a PROTO
+; *level* in the 3B level state (ROOM_DESC / EDGE_TAB / FLOOR_LIST, written by
+; new_game from bank-3 proto_level, bank3.asm) and built by build_room_map v2
+; like any generated room. Room id = 3x3 grid cell r = gy*3 + gx:
+;
+;   A (0,0) r0 <-> B (1,0) r1       <-> = horizontal exit on storey 1 (bottom)
+;                    v                v = B's down-exit {24,2} -> C's up-exit {24,0}
+;   D (0,1) r3 <-> C (1,1) r4
+;
+; (the only placement with A|B, B over C, D|C: A = a, B = a+1, C = a+4,
+; D = a+3; a = 0). Edges A|B = e0, D|C = e2 (level_defs.asm formula).
+; B3B-5 features: A|B door starts OPEN, D|C door CLOSED (the walkthrough bumps
+; it), B pit p = 20 (storey 0, off the route), D dead-end block (right edge,
+; storey 0, cols 29..31, rubble (28, 7)). Potions = FLOOR_LIST entries 0..3
+; (POTIONS_TAKEN bit = entry index). Decor (A torch) = proto_decor (B3B-13:
+; the room-D chest and the PROTO win are gone).
 ;==============================================================================
-RD_EXL_S        EQU 0
-RD_EXL_D        EQU 1
-RD_EXR_S        EQU 2
-RD_EXR_D        EQU 3
-RD_EXU_D        EQU 4
-RD_EXD_D        EQU 5
-RD_LADDERS      EQU 6
-
 ROOM_A          EQU 0
 ROOM_B          EQU 1
-ROOM_C          EQU 2
 ROOM_D          EQU 3
-
-room_tab:       DW room_a, room_b, room_c, room_d
-
-room_a:         DB EXIT_NONE, EXIT_NONE, 2, ROOM_B, EXIT_NONE, EXIT_NONE
-                DB 2, 5, 2, 23, 1
-                DB 1, 0, 28, 0
-                DB 2, T_TORCH_T, 0, 16, T_TORCH_B, 0, 17
-room_b:         DB 2, ROOM_A, EXIT_NONE, EXIT_NONE, EXIT_NONE, ROOM_C
-                DB 3, 10, 2, 4, 1, 24, 3
-                DB 1, 1, 1, 0
-                DB 0
-room_c:         DB 2, ROOM_D, EXIT_NONE, EXIT_NONE, ROOM_B, EXIT_NONE
-                DB 3, 24, 0, 24, 1, 6, 2
-                DB 1, 2, 29, 1
-                DB 0
-room_d:         DB EXIT_NONE, EXIT_NONE, 2, ROOM_C, EXIT_NONE, EXIT_NONE
-                DB 2, 22, 2, 8, 1
-                DB 1, 3, 17, 1
-                DB 4, T_CHEST_TL, 2, 4, T_CHEST_TR, 3, 4, T_CHEST_BL, 2, 5, T_CHEST_BR, 3, 5
-
-WIN_ROOM        EQU ROOM_D
-WIN_MAX_X       EQU 3               ; standing on storey 0 with x <= 3 (chest cols)
+ROOM_C          EQU 4
+EDGE_AB         EQU 0               ; A (0,0) | B (1,0): e = gy*2 + gx = 0
+EDGE_DC         EQU 2               ; D (0,1) | C (1,1): e = 2
+PIT_B           EQU 20              ; room B storey-0 pit, left hole col
+                ASSERT ROOM_B == ROOM_A + 1 && ROOM_C == ROOM_B + GRID_W && ROOM_D == ROOM_C - 1
+                ASSERT EDGE_AB < EDGES_H && EDGE_DC < EDGES_H
 
 
-;------------------------------------------------------------------------------
-; Strings (0-terminated, upper case; ROM charset).
-;------------------------------------------------------------------------------
-str_hp:         DB "  HP ", 0
-str_pot:        DB "  POT ", 0
-str_room:       DB "ROOM ", 0
-str_you:        DB "YOU ", 0
-str_hit:        DB "HIT ", 0
-str_miss:       DB "MISS ", 0
-str_kill:       DB "KILL ", 0
-str_the:        DB "THE ", 0
-str_hits_you:   DB " HITS YOU", 0
-str_misses:     DB " MISSES", 0
-str_found:      DB "YOU FOUND A POTION", 0
-str_quaff:      DB "YOU DRINK A POTION", 0
-str_died:       DB "YOU DIED - PRESS ENTER", 0
-str_win:        DB "TREASURE! PRESS ENTER", 0
-str_welcome:    DB "FIND THE TREASURE", 0
+; (B3B-13: every game message is a token stream from src/strings.txt — TX_*
+; ids, bank-1 text block; msg_push / show_impact_msg, lowram.asm.)
 
 ; per-kind stats (prototype §6.3) — emitted into the page-aligned kind_tab,
 ; one K_MAX (32) B array per KROW (ids 9..31 = 0 until Stage 3F kinds land)

@@ -52,34 +52,38 @@ AY_MIX_OFF      EQU %00111111       ; every tone + noise off (I/O port bits 6/7 
 ; in the high byte, low bytes equal.
 SCREEN7_BITMAP  EQU $C000           ; bank 7: displayed bitmap (copy of $4000)
 SCREEN7_ATTR    EQU $D800           ; bank 7: displayed attrs  (copy of $5800)
-SHADOW_BITMAP   EQU $E000           ; bank 7: room tiles in screen layout (rows 0..20: $E000..$F79F)
-SHADOW_ATTR     EQU $F800           ; bank 7: room tile attrs in screen layout ($F800..$FA9F)
+SHADOW_BITMAP   EQU $E000           ; bank 7: room tiles in screen layout (B3B-3: rows 0..17 used)
+SHADOW_ATTR     EQU $F800           ; bank 7: room tile attrs in screen layout ($F800..$FA3F used)
 BANK_WINDOW     EQU $C000
 FT_BLOCKER      EQU $FE             ; find_target: nearest body is mid-ladder (not a slot)
 PAGING_PROBE    EQU $A5             ; check_paging: bank-1 marker (bank 0 gets ~)
 SRC_VIRT_BASE   EQU $8000           ; sources are assembled at virtual $8000..$FFFF
+BANK_TEXT       EQU BANK_SRC_LO     ; B3B-13: the text block (strings + dictionary), after vdata
+TEXT_DISP       EQU BANK_WINDOW - SRC_VIRT_BASE   ; virtual bank-1 address -> runtime ($C000..)
+TX_NONE         EQU $FF             ; level_enter / level_show / panel_init: E = no first line
 
 ;------------------------------------------------------------------------------
 ; Low-RAM buffers (bank 5, $6000-$7FFF; free after the loader's CLEAR 24575).
 ; Contended, but only touched off the blit's inner loop (1 read/erased cell).
 ;------------------------------------------------------------------------------
-ROOM_MAP        EQU $6000           ; 672 B: current room tile ids, 32x21 row-major
-NEXT_MAP        EQU $6300           ; 672 B: destination room during a transition
+ROOM_MAP        EQU $6000           ; 672 B buffer: current room tile ids, 32 x PLAY_ROWS (18)
+NEXT_MAP        EQU $6300           ; 672 B buffer: destination room during a transition
+                                    ; (B3B-3: 576 B used per map, PLAY_CELLS; rows 0..17)
 ; A6: tile ids 32 -> 64. TILE_GLYPHS is 512-ALIGNED so glyph(id) = base + id*8
 ; is formed as E = id*8 (low 8 bits), D = (base >> 9) RL carry (= id bit 5):
 ; +8 T per drawn cell vs the 32-id `ld d, base>>8` (tile_rect).
 TILE_GLYPHS     EQU $6600           ; 512 B: 64 tiles x 8 B ($6600..$67FF)
 BITREV_TAB      EQU $6800           ; 256 B: bit-reversed byte (page-aligned)
 TILE_ATTRS      EQU $6900           ; 64 B : attr per tile id (one page: ld h, TILE_ATTRS>>8)
-GEN_SRC         EQU $6940           ; 512 B: source frame copied out of its bank (raw build; init_tiles items)
+GEN_SRC         EQU $6940           ; 512 B: staging for vdata reads (panel_boot / pblit, copy_virt)
 GEN_MIR         EQU $6B40           ; 512 B: mirrored copy (left-facing)
 LOWRAM_END      EQU $6D40
 TILE_IDS        EQU 64              ; tile id capacity (glyphs/attrs above)
 TILE_COMMON     EQU 32              ; ids 0..31: engine/common tiles (init_tiles)
-; ids 32..63: per-level decor slots (game.md §1.2). HOOK (Stage 3B, not built):
-; at level start copy the level's 32 glyphs + 32 attrs (32 x 9 B = 288 B per
-; set, 8 sets = 2,304 B in bank 7 spare) to TILE_LEVEL_GLYPHS / TILE_LEVEL_ATTRS
-; — the glyph half is exactly the second page of TILE_GLYPHS (one 256-B LDIR).
+; ids 32..63: per-level slots (game.md §1.2). B3B-8: level_load_tiles copies
+; the depth's bank-7 slot (TSET_*, level_defs.asm: 32 glyphs + 32 attrs + 32
+; flags) to TILE_LEVEL_GLYPHS / TILE_LEVEL_ATTRS / tile_flags + 32 — the glyph
+; half is exactly the second page of TILE_GLYPHS (one 256-B LDIR).
 TILE_LEVEL_GLYPHS EQU TILE_GLYPHS + TILE_COMMON * 8
 TILE_LEVEL_ATTRS  EQU TILE_ATTRS + TILE_COMMON
 ; Bank-5 low-RAM fit (ASSERTed in main.asm, docs/memory-map.md "Bank 5 low RAM"):
@@ -92,24 +96,24 @@ TILE_LEVEL_ATTRS  EQU TILE_ATTRS + TILE_COMMON
 ;                         ASSERTed); A5 ZX0 scratch aliases ROOM_MAP..NEXT_MAP
 ;                         ($6000..$65FF, 1,536 B) — the generator only runs
 ;                         while no room is built
-LOWRAM_FREE_END EQU LOWRAM_END      ; end of the fixed low-RAM buffers
+LOWRAM_FREE_END EQU LOWRAM_END_3B   ; B3B-1: end of the fixed low-RAM buffers incl. the 3B level
+                                    ; state + ornament glyphs ($6D40..$6EBF, level_defs.asm)
 ZX0_BUDGET      EQU 128             ; A5: decompressor (68 B) + glue, max
-    IFNDEF ZX0_SOURCES                          ; A5: 1 = sprite sources ZX0-packed
-ZX0_SOURCES     EQU 1                           ;     (build/zx0/sprites_zx0.asm from tools/zx0_sources.py);
-    ENDIF                                       ;     -DZX0_SOURCES=0 = raw index.asm (A/B)
-    IF ZX0_SOURCES
-ZX0_RESERVE     EQU 0               ; consumed: the code is inside the cold block
-    ELSE
-ZX0_RESERVE     EQU ZX0_BUDGET      ; raw build keeps the same fit margin
+; B3B-12: the raw-sources A/B build (-DZX0_SOURCES=0) is retired; tests/zx0_pool.py
+; checks the pools against a Python reference built from the raw frame data.
+    IFDEF ZX0_SOURCES
+      IF ZX0_SOURCES == 0
+        ERROR "ZX0_SOURCES=0 (raw sprite sources) was retired in B3B-12"
+      ENDIF
     ENDIF
 GEN_SCRATCH     EQU ROOM_MAP        ; A5: 1,536 B generator-time scratch (alias, rooms dead)
 GEN_SCRATCH_LEN EQU NEXT_MAP + $300 - ROOM_MAP
 
 ROOM_COLS       EQU 32
 ATTR_STRIDE     EQU 32              ; bytes per attribute row (screen layout)
-ROOM_ROWS       EQU 21
-ROOM_CELLS      EQU ROOM_COLS * ROOM_ROWS   ; 672
-HUD_ROW         EQU 21              ; rows 21..23 = HUD (never scrolled/stamped)
+MAP_BUF_LEN     EQU $2A0            ; 672 B per map buffer (PROTO 32x21; B3B-3 uses PLAY_CELLS)
+; B3B-3: playfield = rows 0..PLAY_ROWS-1 (0..17), panel = rows 18..23 (level_defs.asm;
+; B3B-11 panel engine: panel.asm).
 
 ;------------------------------------------------------------------------------
 ; Bank-2 runtime storage. The image must end below ENTITIES (ASSERTed).
@@ -181,9 +185,9 @@ ISR_SAVE_ALT    EQU 0                           ;     (needed once BOTH the play
 ;------------------------------------------------------------------------------
 TURN_PHASE      EQU $BF10           ; 0 = INPUT, 1 = ANIM          (test-observable)
 TICK_COUNTER    EQU $BF11           ; word: 25 Hz ticks elapsed    (test-observable)
-CUR_ROOM        EQU $BF13           ; 0..3 = A..D                  (test-observable)
+CUR_ROOM        EQU $BF13           ; room id = grid cell 0..8 (B3B-8; A 0 B 1 D 3 C 4) (test-observable)
 HERO_KIND       EQU $BF14           ; K_KNIGHT/K_WIZARD (2 = retired)   (test-observable)
-POTIONS_TAKEN   EQU $BF15           ; bitmask of level potion ids  (test-observable)
+POTIONS_TAKEN   EQU $BF15           ; bitmask of taken FLOOR_LIST entries 0..7 (test-observable)
 INPUT_REPEAT    EQU $BF16           ; 1 = hold repeats (default); 0 = edge-triggered
 ANIM_FREEZE     EQU $BF17           ; 1 = resting sprites hold IDLE frame 0
 PORT_7FFD_SHADOW EQU $BF18          ; last value written to $7FFD
@@ -250,14 +254,16 @@ PRES_ANY        EQU $BF95           ; A7: 1 = PRES_MASK has a bit set (present h
 DMG_PRES_N      EQU $BF96           ; A7: DMG_LIST rects pmark_dmg marks (before overlap repair)
 PRES_RMIN       EQU $BF97           ; A7: first marked row ($FF = none); present starts there
 FLY_INBOX       EQU $BF98           ; ai_flyer: overlap with a ladder-end box at turn start (0 outside ai_flyer)
-HUD_EXT         EQU $BF9A           ; A7: 3 B, per HUD row: cols 0..EXT-1 may hold ink in bank 5
-HUD_PW          EQU $BF9D           ; A7: 3 B, per HUD row: cols 0..PW-1 changed since the last present
-HUD_ROWS        EQU 3               ;     (rows HUD_ROW..23; HUD_PW = HUD_EXT + HUD_ROWS)
+; $BF9A..$BF9F: spare (B3B-11: were the A7 HUD_EXT / HUD_PW, now HUD4_EXT / HUD4_PW)
 GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
-MSG_BUF         EQU $BFA0           ; 32 B message line composition
+MSG_BUF         EQU $BFA0           ; 32 B: impact message composition (show_impact_msg -> log_push)
 TIMING_MARK     EQU $BFC0           ; spare
 CLIMB_BLK       EQU $BFC1           ; 1 = this input's climb was blocked by an entity (-> wait turn)
 AY_CALLS        EQU $BFC2           ; A8 word: AY_PLAY calls (the silent stub counts; test-observable)
+LOCK_SHOWN      EQU $BFC6           ; B3B-5: 1 = the locked-door message was printed for the key
+                                    ;   still held (read_turn_input clears it on release)
+JUMP_TURN       EQU $BFC4           ; B3B-5 word: TURN_COUNTER value on which a jump is refused (the turn
+                                    ;   right after a jump: "not two turns in a row", game.md §2.4); $FFFF = none
 
 ; Game states (GAME_STATE). 2/3/4 shared with constants.asm.
 GS_SELECT       EQU $05
@@ -273,6 +279,7 @@ EX_LEFT         EQU 1
 EX_RIGHT        EQU 2
 EX_UP           EQU 3
 EX_DOWN         EQU 4
+EX_LEVEL        EQU 5               ; B3B-12: down the lair's level exit {EXITCOL,2} -> next depth
 
 ;------------------------------------------------------------------------------
 ; Entity record — 32-byte stride (prototype §11.1; the 16 B P3 stride doesn't
@@ -329,6 +336,9 @@ M_REST          EQU 0
 M_MOVE          EQU 1
 M_SEQ           EQU 2
 M_HOLD          EQU 3               ; player dead: hold the final frame
+M_FALL          EQU 4               ; B3B-5: walk step (4 px/tick) then the drop (FALL_STEP px/tick, game.md §2.5)
+M_JUMP          EQU 5               ; B3B-5: the §2.4 arc, E_TMR = arc tick 0..JUMP_TICKS-1
+                ASSERT M_FALL > M_HOLD && M_JUMP > M_HOLD   ; anim_entity: cp M_FALL / jr nc
 
 ; E_REACT
 RC_NONE         EQU 0
@@ -392,8 +402,8 @@ KT_FLAGS        EQU $120
 KT_ATTR         EQU $140
 KT_FID0         EQU $160            ; first frame id of the kind
 KT_FCNT         EQU $180            ; frame count of the kind
-KT_MOD7         EQU $1A0            ; 24 B: n mod 7   (n = y+h, 0..23)
-KT_DIV7         EQU $1B8            ; 24 B: n div 7   (same page as KT_MOD7: feet_mod)
+KT_MOD9         EQU $1A0            ; 24 B: n mod STOREY_ROWS (9)  (n = y+h or a row, 0..23)
+KT_DIV9         EQU $1B8            ; 24 B: n div STOREY_ROWS      (same page as KT_MOD9: feet_mod)
 KT_END          EQU $1D0            ; $1D0..$1FF: 48 B spare in page 1
 KT_SIZE         EQU $200
 
@@ -404,6 +414,7 @@ KF_TALL         EQU %00000100
 KF_HERO         EQU %00001000
 KF_BAT          EQU %00010000       ; bat jitter / wander
 KF_ZAP          EQU %00100000       ; wizard zap overlay on impact
+KF_OPENER       EQU %01000000       ; B3B-5: opens closed unlocked doors by bumping (game.md §9.1)
 
 ;------------------------------------------------------------------------------
 ; Frame table (static, bank 2 image, frame_tab) — FT_STRIDE (4) B/fid.
@@ -419,11 +430,10 @@ FT_STRIDE       EQU 4
 ;------------------------------------------------------------------------------
 ; Frame descriptor (A6; bank 5 low RAM, fdesc_tab at the end of the cold block,
 ; read only by gen_frame) — 5 B/fid:
-;   FD_BLK   word: ZX0 build = VIRTUAL address of the frame's packed block
-;                  (banks 1/3; also the GEN_ZBLK cache key);
-;                  raw build = virtual address of the raw frame
-;   FD_FRM   word: ZX0 build = the frame's address inside GEN_SCRATCH once its
-;                  block is unpacked (GEN_SCRATCH + in-block offset); raw: 0
+;   FD_BLK   word: VIRTUAL address of the frame's packed block
+;                  (banks 1/3; also the GEN_ZBLK cache key)
+;   FD_FRM   word: the frame's address inside GEN_SCRATCH once its
+;                  block is unpacked (GEN_SCRATCH + in-block offset)
 ;   FD_FLAGS byte: FF_*
 ;------------------------------------------------------------------------------
 FD_BLK          EQU 0
@@ -472,14 +482,11 @@ T_HOLE_L        EQU 7               ; ladder cells in a floor row
 T_HOLE_M        EQU 8
 T_HOLE_R        EQU 9
 T_POTION        EQU 10
-T_CHEST_TL      EQU 11
-T_CHEST_TR      EQU 12
-T_CHEST_BL      EQU 13
-T_CHEST_BR      EQU 14
+; (B3B-13: the PROTO chest stand-in T_CHEST_* (per-level ids 32..35) and the
+; zap tile ids T_ZAP1/2 (now T_DRIP1/2; the zap glyphs moved to ZAP_GLYPHS,
+; level_defs.asm) are gone.)
 T_TORCH_T       EQU 15
 T_TORCH_B       EQU 16
-T_ZAP1          EQU 17              ; overlay only (never in a room map)
-T_ZAP2          EQU 18
 T_END_L         EQU 19              ; PLATFORM_END_L: floor cell right of a hole
 T_END_R         EQU 20              ; PLATFORM_END_R: floor cell left of a hole
 T_COUNT         EQU 21
@@ -490,17 +497,13 @@ ATTR_WALL       EQU $01
 ATTR_FLOOR      EQU $0F
 ATTR_LADDER     EQU $02
 ATTR_POTION     EQU $42
-ATTR_CHEST      EQU $06
 ATTR_TORCH      EQU $46
 ATTR_HIT        EQU $42
 ATTR_HEAL       EQU $44
 ATTR_ZAP        EQU $45
-ATTR_HUD        EQU $47             ; bright white on black (rows 21..23)
-ATTR_HUD_DIM    EQU $07
+ATTR_HUD        EQU $47             ; bright white on black (screen clear; panel text, depth)
 
-; room geometry
-STOREYS         EQU 3
-STOREY_H        EQU 7
+; room geometry: STOREY_COUNT / STOREY_ROWS / PLAY_ROWS ... (level_defs.asm, B3B-3)
 MAX_POTIONS     EQU 9
 QUAFF_HEAL      EQU 8
 FOLLOW_GAP      EQU 4
@@ -516,6 +519,14 @@ TICK_FRAMES     EQU 2               ; 25 Hz
 RENDER_FIRST    EQU 1                           ;     (build with -DRENDER_FIRST=0 for the old order)
     ENDIF
 TWEEN_STEP      EQU 4               ; px per tick
+FALL_STEP       EQU 8               ; B3B-5: px per tick of a pit fall (game.md §2.5: 9 rows, 9 ticks)
+FALL_DIE        EQU 4               ; fall damage 1d4, ignores DEF
+JUMP_COLS       EQU 6               ; B3B-5 jump (game.md §2.4): body x..x+2 -> x+6..x+8
+JUMP_TICKS      EQU 14              ; tick 0 / 13 JUMP1 aligned, 1..12 JUMP2 (x += 4 px)
+JUMP_RISE       EQU 2               ; swept box rows top-2 .. bottom
+ATTR_DOOR       EQU $06             ; door arch / planks (concept-screen §3.1)
+ATTR_RUBBLE     EQU ATTR_WALL       ; concept-screen §3.3 #12
+ATTR_GRATE      EQU $07             ; lair grate (B10 glyph)
 
 ; KFIELD off — A = kind_tab[kind(IX) + off].  Clobbers: A, HL   (~45 T)
 ; off is a KT_* constant: its page is folded into H at assembly time.
@@ -558,11 +569,7 @@ FRM_OK = 1
       IF FRM_OK
 FCTR = FCTR + 1
         DW   nm                                ; FD_BLK
-        IF ZX0_SOURCES
-          DW   GEN_SCRATCH + nm_zoff           ; FD_FRM
-        ELSE
-          DW   0
-        ENDIF
+        DW   GEN_SCRATCH + nm_zoff             ; FD_FRM
         DB   flg                               ; FD_FLAGS
       ENDIF
     ELSE
@@ -594,3 +601,22 @@ FID_nm EQU -1
 MOT             EQU FF_MOTION
 STA             EQU 0
 SYM             EQU FF_SYM
+
+;------------------------------------------------------------------------------
+; Stage 3B data contracts (B3B-1): EQUs + ASSERTs only, no bytes.
+;------------------------------------------------------------------------------
+                INCLUDE "level_defs.asm"
+; B3B-13: message string ids TX_* / decoded lengths TXL_* (+ ASSERT <= LOG_MAX),
+; generated from src/strings.txt by tools/textpack.py (tools/build.sh)
+                INCLUDE "../build/text/strings_ids.inc"
+
+; MUL_STOREY r — A = A * STOREY_ROWS (A = storey 0..2), r = the old A.  Clobbers: r.
+; ld r,a + 8a + a: 5 ops, 20 T (the PROTO 7a was 8a - a at the same cost).
+                ASSERT STOREY_ROWS == 9
+    MACRO MUL_STOREY r
+                ld   r, a
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, r
+    ENDM

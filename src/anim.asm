@@ -76,7 +76,7 @@ anim_tick:
                 ret  z
                 dec  a
                 call ent_ix
-                call show_impact_msg
+                call show_impact_msg           ; B3B-13: lowram (IX = attacker)
                 xor  a
                 ld   (MSG_Q), a
                 ret
@@ -123,11 +123,64 @@ anim_entity:
                 jp   z, .move
                 cp   M_SEQ
                 jp   z, .seq
+                cp   M_FALL
+                jr   nc, .fj                   ; B3B-5: M_FALL / M_JUMP
                 cp   M_HOLD
                 jr   nz, .rest
                 ld   a, (ix+E_WPH)             ; HOLD: the final death frame
                 ld   b, 1
                 ret
+.fj:            ; B3B-5 FALL / JUMP. C = 8x (target px), D = 8y (target py)
+                ld   b, a
+                ld   a, (ix+E_X)
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   c, a
+                ld   a, (ix+E_Y)
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   d, a
+                ld   a, b
+                cp   M_JUMP
+                jr   z, .jump
+                ; FALL (game.md §2.5): the walk step first (4 px/tick, walk
+                ; cycle), then FALL_STEP px/tick straight down (F9: px = 8x)
+                ; in the CLIMB1 / WALK1 pose; landing = M_REST (hero_fall's
+                ; HURT / DEATH reaction, E_REACTAT 0, starts on the next tick)
+                ld   a, (ix+E_PX)
+                cp   c
+                jr   nz, .fpx
+                ld   a, (ix+E_PY)
+                add  a, FALL_STEP
+                ld   (ix+E_PY), a
+                cp   d
+                jr   nz, .crest
+.land:          ld   (ix+E_MODE), M_REST
+                jr   .crest
+.jump:          ; JUMP (game.md §2.4): arc tick t = E_TMR. t 0 and 13: JUMP1,
+                ; aligned (stand-in: the CLIMB1 / WALK1 pose); t 1..12: JUMP2
+                ; (stand-in: the walk cycle), px += 4, py = 8y + jump_dy[t-1]
+                ld   a, (ix+E_TMR)
+                inc  (ix+E_TMR)
+                or   a
+                jr   z, .crest
+                cp   JUMP_TICKS - 1
+                jr   nc, .land
+                ld   hl, jump_dy - 1
+                ld   e, a
+                ld   a, d
+                ld   d, 0
+                add  hl, de
+                add  a, (hl)                   ; signed rise (<= 0)
+                ld   (ix+E_PY), a
+.fpx:           ld   b, c                      ; px 4 px toward 8x, walk cycle
+                ld   a, (ix+E_PX)
+                call tween
+                ld   (ix+E_PX), a
+                ld   c, KS_MOVE
+                jp   .mv
 .rest:
                 ld   a, (ix+E_REACT)
                 or   a
@@ -163,7 +216,7 @@ anim_entity:
 .idle:
                 call on_ladder
                 jr   nz, .cyc
-                call kind_seq_ptr              ; resting mid-ladder: CLIMB1
+.crest:         call kind_seq_ptr              ; resting mid-ladder: CLIMB1
                 ld   de, KS_CLIMBREST
                 add  hl, de
                 ld   a, (hl)
@@ -300,6 +353,11 @@ anim_entity:
 .out:           ld   a, c
                 ret
 
+; jump_dy — the §2.4 arc: py offset of jump ticks 1..12 (game.md §2.4)
+jump_dy:        DB -4, -8, -12, -16, -16, -16, -16, -16, -12, -8, -4, 0
+                ASSERT $ - jump_dy == JUMP_TICKS - 2
+                ASSERT (JUMP_TICKS - 2) * TWEEN_STEP == JUMP_COLS * 8
+
 ; tween — A = cur, B = target: step 4 toward.  Clobbers: A
 tween:
                 cp   b
@@ -392,12 +450,12 @@ turn_done:
                 ld   a, (CUR_ROOM)
                 cp   (ix+E_ROOM)
                 jr   nz, .n
-                ld   a, (ix+E_MODE)
-                cp   M_MOVE
-                ret  z                         ; CF = 0 (cp equal)
-                cp   M_SEQ
-                ret  z
-                ld   a, (ix+E_REACT)
+                ld   a, (ix+E_MODE)            ; busy unless REST / HOLD (B3B-5:
+                cp   M_HOLD                    ; MOVE, SEQ, FALL, JUMP)
+                jr   z, .rs
+                or   a
+                ret  nz                        ; CF = 0 (or)
+.rs:            ld   a, (ix+E_REACT)
                 or   a
                 ret  nz                        ; CF = 0 (or)
 .n:             ld   de, P_ENT_STRIDE
@@ -933,7 +991,7 @@ dmg_add:
                 inc  hl
                 ld   (hl), 0                   ; r0
                 inc  hl
-                ld   (hl), ROOM_ROWS           ; r1
+                ld   (hl), PLAY_ROWS           ; r1
                 ret
 
 ; dmg_hit — CF = 1 if rect C,B,D(cols),E(rows) intersects any damage rect.
@@ -1005,12 +1063,11 @@ draw_zap:
                 ld   b, a
                 ld   a, (TICK_COUNTER)
                 and  1
-                add  a, T_ZAP1
                 add  a, a
                 add  a, a
                 add  a, a
-                ld   l, a
-                ld   h, TILE_GLYPHS >> 8       ; T_ZAP1/2 < TILE_COMMON (32): first page
+                ld   l, a                      ; (ZAP_GLYPHS & $FF) == 0: L = frame * 8
+                ld   h, ZAP_GLYPHS >> 8        ; B3B-13: own glyphs, ids 17/18 = drips
                 ld   a, ATTR_ZAP
                 call draw_glyph
 .skip:          pop  bc

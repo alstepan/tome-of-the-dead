@@ -21,15 +21,30 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from game_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at,  # noqa: E402
-                       cell_bytes, TILE_ATTRS, FLASH_ATTRS, KIND_ATTR,
+                       cell_bytes, TILE_ATTRS, FLASH_ATTRS, KIND_ATTR, split_frame, frame_png,
+                       stand_y, is_standing, storey_of, item_row, STOREY_ROWS, STOREY_COUNT,
+                       PLAY_ROWS, FLOOR_ROWS, MAP_LEN,
                        GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION,
                        EF_LEFT, EF_PENDING, EF_ACTIVE, EF_HOSTILE,
                        K_KNIGHT, K_WIZARD, K_SKELETON, K_GOBLIN, K_RAT,
-                       K_BAT, K_SLIME, K_GHOST)
+                       K_BAT, K_SLIME, K_GHOST, ROOM_A, ROOM_C, ROOM_D)
+import room_model  # noqa: E402
 
 GOLDEN_DIR = os.path.join(HERE, "golden")
 UPDATE = "--update-golden" in sys.argv
+PNG_DIR = sys.argv[sys.argv.index("--png") + 1] if "--png" in sys.argv else None
 ONLY = {int(a) for a in sys.argv[1:] if a.isdigit()}
+
+# B3B-3 (2 storeys x 9 rows): every coordinate below comes from the geometry
+# helpers (game_lib, read from the .sym). Hero / skeleton (h 6), goblin /
+# ghost (h 4), rat / bat / slime (h 2) standing rows:
+Y1, Y0 = stand_y(1, 6), stand_y(0, 6)          # hero: bottom storey 11, top 2
+G1, G0 = stand_y(1, 4), stand_y(0, 4)          # goblin 13 / 4
+R1, R0 = stand_y(1, 2), stand_y(0, 2)          # rat / slime 15 / 6
+
+# Scenarios not ported to 2x9 by B3B-3: {id: reason}. B3B-4 ports them; a
+# skipped id is reported, never silently dropped.
+SKIP = {}
 
 FID = {k[4:]: v for k, v in S.items() if k.startswith("FID_")}
 SLOT_RAT, SLOT_SLIME, SLOT_GOBLIN, SLOT_BATB, SLOT_SKC, SLOT_GHOST, SLOT_SKD, SLOT_BATD = range(1, 9)
@@ -48,7 +63,15 @@ def _expect(self, name, got, want):
 Harness.expect = _expect
 
 
+_SKIPPED = set()
+
+
 def want(n):
+    if n in SKIP and (not ONLY or n in ONLY):
+        if n not in _SKIPPED:
+            _SKIPPED.add(n)
+            print(f"[SKIP] {n}: {SKIP[n]}", flush=True)
+        return False
     return not ONLY or n in ONLY
 
 
@@ -56,11 +79,11 @@ def bitrev(b):
     return int(f"{b:08b}"[::-1], 2)
 
 
-def ladder_segs(p, room_label):
-    """[(col, s)] ladder segments of a room descriptor (RD_LADDERS = 6)."""
-    desc = S[room_label]
-    n = p.rb(desc + 6)
-    return [(p.rb(desc + 7 + 2 * i), p.rb(desc + 8 + 2 * i)) for i in range(n)]
+def ladder_segs(p, room):
+    """[(col, s)] ladder segments of room `room` (B3B-8: the 6 shaft / ladder
+    col bytes of its ROOM_DESC entry, tests/room_model.py)."""
+    import room_model
+    return room_model.segments(room_model.read_block(p), room)
 
 
 def body(p, kind):
@@ -73,7 +96,7 @@ def in_end_box(p, e, segs):
     """Cols of entity e's body inside a ladder-end box of its storey
     (flyer_lcost's test: bottom end of {col,t}, top end of {col,t+1})."""
     w, h_ = body(p, e["KIND"])
-    t = min(2, (e["Y"] + h_) // S["STOREY_H"])
+    t = storey_of(e["Y"], h_)
     cols = set(range(e["X"], e["X"] + w))
     return sorted(cols & {c + k for c, s in segs if s - t in (0, 1) for k in range(3)})
 
@@ -113,7 +136,7 @@ def legal_attrs(p):
 
 
 def attr_violations(frame, legal):
-    return [(c, r, hex(attr_at(frame, c, r))) for r in range(21) for c in range(32)
+    return [(c, r, hex(attr_at(frame, c, r))) for r in range(PLAY_ROWS) for c in range(32)
             if attr_at(frame, c, r) not in legal]
 
 
@@ -121,19 +144,31 @@ GOLDEN_PROTO = []                             # the Proto in use (A7 sync check)
 
 
 def golden(h, name, data):
+    """B3B-3 (plan R4): two hashes per golden, playfield (rows 0-17) and panel
+    (rows 18-23), one `play <sha>` / `panel <sha>` line each, so a panel-only
+    change (B3B-11) does not invalidate the room goldens and vice versa.
+    --png DIR also dumps the screen for a human look before a rebase."""
     if GOLDEN_PROTO:
         GOLDEN_PROTO[0].check_synced(name)
-    sha = hashlib.sha256(data).hexdigest()
+    play, panel = split_frame(bytes(data))
+    got = {"play": hashlib.sha256(play).hexdigest(), "panel": hashlib.sha256(panel).hexdigest()}
     path = os.path.join(GOLDEN_DIR, name + ".hash")
+    if PNG_DIR:
+        os.makedirs(PNG_DIR, exist_ok=True)
+        frame_png(bytes(data), os.path.join(PNG_DIR, name + ".png"))
     if UPDATE:
-        open(path, "w").write(sha + "\n")
+        open(path, "w").write("".join(f"{k} {v}\n" for k, v in got.items()))
         print(f"[golden] wrote {path}")
         return
     try:
-        h.expect(f"golden {name}", sha, open(path).read().strip())
+        lines = open(path).read().split("\n")
     except FileNotFoundError:
         print(f"[FAIL] golden missing: {path} (run --update-golden)")
         h.failures.append(name)
+        return
+    ref = dict(l.split() for l in lines if len(l.split()) == 2)
+    for k in ("play", "panel"):
+        h.expect(f"golden {name} {k}", got[k], ref.get(k, "<old single-hash format>"))
 
 
 class T(Proto):
@@ -146,20 +181,23 @@ class T(Proto):
         self.set_ent(slot, **kw)
         self.settle()
 
+    def bg_tables(self):
+        """(ROOM_MAP, TILE_GLYPHS, TILE_ATTRS, ORN_GLYPHS) from memory."""
+        z = self.z
+        return (z.read_memory(S["ROOM_MAP"], MAP_LEN), z.read_memory(S["TILE_GLYPHS"], S["TILE_IDS"] * 8),
+                z.read_memory(S["TILE_ATTRS"], S["TILE_IDS"]), z.read_memory(S["ORN_GLYPHS"], 64))
+
     def is_bg(self, frame, c, r):
-        """Cell (c,r) shows exactly its tile-map background (glyph + attr)."""
-        tile = self.h.read_byte(S["ROOM_MAP"] + r * 32 + c)
-        glyph = self.z.read_memory(S["TILE_GLYPHS"] + tile * 8, 8)
-        attr = self.h.read_byte(S["TILE_ATTRS"] + tile)
-        return attr_at(frame, c, r) == attr and cell_bytes(frame, c, r) == glyph
+        """Cell (c,r) shows exactly its tile-map background (glyph + attr; B3B-8:
+        the row-17 ornament over its floor cells)."""
+        g, a = room_model.expected_cell(*self.bg_tables(), c, r)
+        return attr_at(frame, c, r) == a and bytes(cell_bytes(frame, c, r)) == g
 
     def bg_mismatch(self):
-        """Cells of rows 0-20 that differ from the tile-map background, outside
+        """Cells of rows 0-17 that differ from the tile-map background, outside
         every drawn sprite footprint (transition / erase correctness)."""
         fr = self.frame()
-        rmap = self.z.read_memory(S["ROOM_MAP"], 672)
-        glyphs = self.z.read_memory(S["TILE_GLYPHS"], S["TILE_IDS"] * 8)
-        attrs = self.z.read_memory(S["TILE_ATTRS"], S["TILE_IDS"])
+        tabs = self.bg_tables()
         covered = set()
         for s_ in range(16):
             e = self.ent(s_)
@@ -167,12 +205,12 @@ class T(Proto):
                 covered |= {(c, r) for c in range(e["DCOL"], e["DCOL"] + e["DCOLS"])
                             for r in range(e["DROW"], e["DROW"] + e["DROWS"])}
         bad = []
-        for r in range(21):
+        for r in range(PLAY_ROWS):
             for c in range(32):
                 if (c, r) in covered:
                     continue
-                t = rmap[r * 32 + c]
-                if attr_at(fr, c, r) != attrs[t] or cell_bytes(fr, c, r) != glyphs[t * 8:t * 8 + 8]:
+                g, a = room_model.expected_cell(*tabs, c, r)
+                if attr_at(fr, c, r) != a or bytes(cell_bytes(fr, c, r)) != g:
                     bad.append((c, r))
         return bad
 
@@ -186,7 +224,7 @@ class T(Proto):
         self.settle()
 
     def stand_y(self, s, h=6):
-        return 7 * s + 6 - h
+        return stand_y(s, h)
 
     def walk_to(self, x, limit=40):
         for _ in range(limit):
@@ -197,12 +235,12 @@ class T(Proto):
                 self.turn("SPACE")
         return self.ent(0)["X"] == x
 
-    def climb(self, key, limit=16):
+    def climb(self, key, limit=20):
         """Climb until standing again (waits if briefly blocked)."""
         moved = False
         for _ in range(limit):
             e = self.ent(0)
-            if moved and (e["Y"] + 6) % 7 == 6:
+            if moved and is_standing(e["Y"], 6):
                 return True
             if self.turn(key):
                 moved = True
@@ -254,7 +292,7 @@ class T(Proto):
     def die(self):
         """Hero at 1 hp next to skeleton C; wait until GS_DEAD."""
         self.isolate()
-        self.place(SLOT_SKC, self.ent(0)["X"] + 4, 14, room=0)
+        self.place(SLOT_SKC, self.ent(0)["X"] + 4, Y1, room=0)
         self.set_ent(0, HP=1)
         for _ in range(16):
             self.turn("SPACE")
@@ -299,7 +337,7 @@ def main():
             h.expect("1 HERO_KIND knight", p.rb("HERO_KIND"), K_KNIGHT)
             h.expect("1 CUR_ROOM A", p.rb("CUR_ROOM"), 0)
             h.expect("1 x", e["X"], 2)
-            h.expect("1 y", e["Y"], 14)
+            h.expect("1 y", e["Y"], Y1)
             h.expect("1 hp", e["HP"], 22)
             h.expect("1 potions", e["POT"], 1)
             golden(h, "game_start", p.frame())
@@ -325,12 +363,12 @@ def main():
             h.expect("2 >=2 WALK frames traced", len(walks) >= 2, True)
             h.expect("2 final px", e["PX"], 24)
             # 3. mirror: same idle pose, right at x=12 vs left at x=12
-            p.place(0, 12, 14)
+            p.place(0, 12, Y1)
             p.settle()
             fr = p.frame()
-            right = [[cell_bytes(fr, 12 + c, 14 + r) for c in range(3)] for r in range(6)]
+            right = [[cell_bytes(fr, 12 + c, Y1 + r) for c in range(3)] for r in range(6)]
             p.turn("H")                         # -> x=11 facing left
-            p.place(0, 12, 14)
+            p.place(0, 12, Y1)
             p.settle()
             fl = p.frame()
             h.expect("3 facing left", p.ent(0)["FLAGS"] & EF_LEFT, EF_LEFT)
@@ -338,57 +376,57 @@ def main():
             for r in range(6):
                 for line in range(8):
                     rb = [right[r][c][line] for c in range(3)]
-                    lb = [cell_bytes(fl, 12 + c, 14 + r)[line] for c in range(3)]
+                    lb = [cell_bytes(fl, 12 + c, Y1 + r)[line] for c in range(3)]
                     if lb != [bitrev(b) for b in reversed(rb)]:
                         mirrored = False
             h.expect("3 sprite region == bit-mirrored render", mirrored, True)
             # 4. wall
-            p.place(0, 1, 14)
+            p.place(0, 1, Y1)
             h.expect("4 wall blocks, no turn", p.no_turn("H"), True)
             h.expect("4 x stays 1", p.ent(0)["X"], 1)
             # 7. no ladder no climb
-            p.place(0, 2, 14)
+            p.place(0, 2, Y1)
             h.expect("7 K at col 2: no turn", p.no_turn("K"), True)
-            h.expect("7 y unchanged", p.ent(0)["Y"], 14)
-            # 5 + 9. climb up at col 5, floor band during the climb
-            p.place(0, 5, 14)
+            h.expect("7 y unchanged", p.ent(0)["Y"], Y1)
+            # 5 + 9. climb up at col 5 ({5,1}), floor band (row 8) during the climb
+            p.place(0, 5, Y1)
             tc = p.rw("TURN_COUNTER")
             bad, misal, samples = [], [], [0]
 
             def chk(frame, e):
                 samples[0] += 1
                 for c in range(32):
-                    if c in (5, 6, 7):
+                    if (c, FLOOR_ROWS[0]) in holes(0):   # {5,1} and {23,1} holes
                         continue
-                    if attr_at(frame, c, 13) != 0x0F:
-                        bad.append((c, hex(attr_at(frame, c, 13))))
+                    if attr_at(frame, c, FLOOR_ROWS[0]) != 0x0F:
+                        bad.append((c, hex(attr_at(frame, c, FLOOR_ROWS[0]))))
                 if e["PX"] & 7:
                     misal.append(e["PX"])
             p.sample_during_turn("K", chk)
             h.expect("5 after first step: L no turn", p.no_turn("L"), True)
             h.expect("5 after first step: H no turn", p.no_turn("H"), True)
-            for _ in range(6):
+            for _ in range(STOREY_ROWS - 1):
                 p.sample_during_turn("K", chk)
                 chk(p.frame(), p.ent(0))
-            h.expect("5 climb y 14->7", p.ent(0)["Y"], 7)
-            h.expect("5 TURN_COUNTER += 7", p.rw("TURN_COUNTER") - tc, 7)
-            h.expect("9 row 13 outside cols 5-7 all $0F", bad[:4], [])
+            h.expect("5 climb y 11->2", p.ent(0)["Y"], Y0)
+            h.expect("5 TURN_COUNTER += 9", p.rw("TURN_COUNTER") - tc, STOREY_ROWS)
+            h.expect("9 row 8 outside the hole cells all $0F", bad[:4], [])
             h.expect("9 >= 4 mid-turn samples", samples[0] >= 4, True)
             h.expect("9 px AND 7 == 0 throughout", misal, [])
             # 6. climb down
-            for _ in range(7):
+            for _ in range(STOREY_ROWS):
                 p.turn("J")
-            h.expect("6 climb down y = 14", p.ent(0)["Y"], 14)
+            h.expect("6 climb down y = 11", p.ent(0)["Y"], Y1)
             h.expect("8 floor band A after climbing", floor_band_ok(p.frame(), holes(0)), [])
 
         # ---------------- 10 / 16 / 18. knight slash next to the hole --------
         if want(10) or want(16) or want(18):
             p.boot(K_KNIGHT)
             p.isolate(keep=(SLOT_RAT,))
-            p.place(0, 9, 14)
+            p.place(0, 9, Y1)
             p.turn("H")                          # face left, x=8
-            p.place(0, 9, 14)
-            p.place(SLOT_RAT, 5, 18)             # rat cols 5-8, gap 0
+            p.place(0, 9, Y1)
+            p.place(SLOT_RAT, 5, R1)             # rat cols 5-8, gap 0
             p.set_ent(SLOT_RAT, FLAGS=EF_ACTIVE | EF_HOSTILE)
             p.settle()
             ok_feet = {art_feet_line(n, 9 * 8, left=True, bw=24)[72:96] for n in
@@ -400,7 +438,7 @@ def main():
 
             def chk10(frame, e):
                 floor_bad.extend(floor_band_ok(frame, holes(0)))
-                line = screen_line_bits(frame, 159)[72:96]     # hero body cols 9-11
+                line = screen_line_bits(frame, (Y1 + 6) * 8 - 1)[72:96]   # hero feet, cols 9-11
                 if line not in ok_feet:
                     feet_bad.append((line, e["DFID"], e["DFPX"]))
             p.sample_during_turn("H", chk10)
@@ -413,7 +451,7 @@ def main():
             hit = p.ent(0)["HIT"]
             h.expect("16 seeded roll: hit => rat hp reduced, miss => unchanged",
                      (rat["HP"] < hp0) if hit else (rat["HP"] == hp0), True)
-            h.expect("10 rows 13/20 intact on every sampled frame", floor_bad[:4], [])
+            h.expect("10 rows 8/17 intact on every sampled frame", floor_bad[:4], [])
             # The sheet's attack frames use a wide lunge stance, so the literal
             # "feet == IDLE" can't hold; the engine-owned property is that the
             # drawn feet line equals the art's feet line at px - ax(_L).
@@ -423,9 +461,9 @@ def main():
         if want(11):
             p.boot(K_KNIGHT)
             p.isolate(keep=(SLOT_RAT,))
-            p.place(0, 5, 14)
-            p.turn("K")                          # y=13, mid-ladder
-            p.place(SLOT_RAT, 8, 18)             # gap 0, rows overlap at 18
+            p.place(0, 5, Y1)
+            p.turn("K")                          # y=10, mid-ladder
+            p.place(SLOT_RAT, 8, R1)             # gap 0, rows overlap at 15
             hp_p, hp_r = p.ent(0)["HP"], p.ent(SLOT_RAT)["HP"]
             p.clear_trace()
             for _ in range(5):
@@ -439,36 +477,36 @@ def main():
         if want(12):
             p.boot(K_KNIGHT)
             p.isolate(keep=(SLOT_RAT,))
-            p.place(0, 5, 14)
-            p.turn("K")                          # y=13 climbing up
-            p.place(SLOT_RAT, 4, 11, room=0)     # parked on the top ladder-end box
+            p.place(0, 5, Y1)
+            p.turn("K")                          # y=10 climbing up
+            p.place(SLOT_RAT, 4, R0, room=0)     # parked on the top ladder-end box
             x0 = p.ent(SLOT_RAT)["X"]
             p.turn("SPACE")
             h.expect("12 monster moves off within 1 turn", p.ent(SLOT_RAT)["X"] != x0, True)
             h.expect("12 hero completes the climb", p.climb("K"), True)
-            h.expect("12 hero standing on storey 1", p.ent(0)["Y"], 7)
+            h.expect("12 hero standing on storey 0", p.ent(0)["Y"], Y0)
             # 12b (review B 🔴): a MID-LADDER monster in the hero's path yields
             # along the ladder, never sideways off it. Goblin (h=4) just started
-            # up A's {5,2} shaft (y=15, bottom climb row) as the hero starts down.
+            # up A's {5,1} shaft (y=12, bottom climb row) as the hero starts down.
             p.boot(K_KNIGHT)
             p.isolate()
-            p.place(0, 5, 7)                     # hero standing on storey 1 at the shaft
-            p.place(SLOT_GOBLIN, 5, 15, room=0, flags=EF_ACTIVE | EF_HOSTILE)
+            p.place(0, 5, Y0)                    # hero standing on storey 0 at the shaft
+            p.place(SLOT_GOBLIN, 5, G1 - 1, room=0, flags=EF_ACTIVE | EF_HOSTILE)
             p.set_ent(SLOT_GOBLIN, AIDIR=0xFF)   # climbing up (head-on)
             p.settle()
             off = []
 
             def gob_ok():
                 g = p.ent(SLOT_GOBLIN)
-                if g["X"] != 5 and (g["Y"] + 4) % 7 != 6:
+                if g["X"] != 5 and not is_standing(g["Y"], 4):
                     off.append((g["X"], g["Y"]))
             p.turn("J")
             gob_ok()
-            h.expect("12b goblin yields along the ladder (x 5, y 15 -> 16)",
-                     (p.ent(SLOT_GOBLIN)["X"], p.ent(SLOT_GOBLIN)["Y"]), (5, 16))
+            h.expect("12b goblin yields along the ladder (x 5, y 12 -> 13)",
+                     (p.ent(SLOT_GOBLIN)["X"], p.ent(SLOT_GOBLIN)["Y"]), (5, G1))
             done = False
-            for _ in range(16):
-                if p.ent(0)["Y"] == 14:
+            for _ in range(20):
+                if p.ent(0)["Y"] == Y1:
                     done = True
                     break
                 if not p.turn("J"):
@@ -497,7 +535,7 @@ def main():
         if want(17) or want(20):
             p.boot(K_KNIGHT)
             p.isolate()
-            p.place(SLOT_SKC, 6, 14, room=0)     # skeleton from C, adjacent (gap 1)
+            p.place(SLOT_SKC, 6, Y1, room=0)     # skeleton from C, adjacent (gap 1)
             p.clear_trace()
             hp0 = p.ent(0)["HP"]
             hit = False
@@ -540,7 +578,7 @@ def main():
         if want(21) or want(22):
             p.boot(K_KNIGHT)
             p.isolate()
-            p.place(SLOT_SKC, 6, 14, room=0)
+            p.place(SLOT_SKC, 6, Y1, room=0)
             p.set_ent(0, HP=1)
             for _ in range(12):
                 p.turn("SPACE")
@@ -558,26 +596,27 @@ def main():
             p.settle()
             h.expect("21 new game POTIONS_TAKEN = 0", p.rb("POTIONS_TAKEN"), 0)
             h.expect("21 new game hero hp 22", p.ent(0)["HP"], 22)
-            h.expect("21 new game skeleton back in C", (p.ent(SLOT_SKC)["ROOM"], p.ent(SLOT_SKC)["HP"]), (2, 10))
+            h.expect("21 new game skeleton back in C", (p.ent(SLOT_SKC)["ROOM"], p.ent(SLOT_SKC)["HP"]), (ROOM_C, 10))
             h.expect("21 new game RNG reseeded", p.rw("RNG_STATE"), 0xA55A)
 
         # ---------------- 19. wizard reach-3 zap ---------------------------
         if want(19):
             p.boot(K_WIZARD)
             p.isolate(keep=(SLOT_RAT,))
-            p.place(0, 6, 14)
-            p.place(SLOT_RAT, 12, 18)            # wizard cols 6-8: gap 3
+            p.place(0, 6, Y1)
+            p.place(SLOT_RAT, 12, R1)            # wizard cols 6-8: gap 3
             p.clear_trace()
             zap, over_rat = [0], []
+            zr = Y1 + S["ZAP_ROW_OFF"]           # staff row
 
             def chkz(frame, e):
-                if any(attr_at(frame, c, 16) == 0x45 and any(cell_bytes(frame, c, 16))
+                if any(attr_at(frame, c, zr) == 0x45 and any(cell_bytes(frame, c, zr))
                        for c in (10, 11)):
                     zap[0] += 1
                 r = p.ent(SLOT_RAT)             # the bolt never paints over the target
-                if r["DVIS"] & 1 and r["DROW"] <= 16 < r["DROW"] + r["DROWS"]:
+                if r["DVIS"] & 1 and r["DROW"] <= zr < r["DROW"] + r["DROWS"]:
                     over_rat.extend(c for c in range(r["DCOL"], r["DCOL"] + r["DCOLS"])
-                                    if attr_at(frame, c, 16) == 0x45)
+                                    if attr_at(frame, c, zr) == 0x45)
             p.sample_during_turn("L", chkz)
             h.expect("19 wizard attacked (CAST traced)", FID["wizard_cast2"] in p.trace_fids(0), True)
             h.expect("19 x unchanged", p.ent(0)["X"], 6)
@@ -587,25 +626,26 @@ def main():
         # ---------------- 23/24/25/30/31/34/29/39 A <-> B ------------------
         if any(want(n) for n in (23, 24, 25, 29, 30, 31, 34, 39)):
             p.boot(K_KNIGHT)
-            # 30. potion 0 in A (col 28, storey 0)
-            p.place(0, 24, 0)
+            # 30. potion 0 in A (col 28, storey 0, cell row 7)
+            pr0 = item_row(0)
+            p.place(0, 24, Y0)
             for _ in range(3):
                 p.turn("L")
             e = p.ent(0)
             fr = p.frame()
             h.expect("30 potions 1 -> 2", e["POT"], 2)
             h.expect("30 POTIONS_TAKEN bit0", p.rb("POTIONS_TAKEN") & 1, 1)
-            p.place(0, 20, 0)
+            p.place(0, 20, Y0)
             p.settle()
             fr = p.frame()
-            h.expect("30 potion cell -> ATTR_AIR", attr_at(fr, 28, 5), 0x00)
-            h.expect("30 potion cell bitmap blank", any(cell_bytes(fr, 28, 5)), False)
+            h.expect("30 potion cell -> ATTR_AIR", attr_at(fr, 28, pr0), 0x00)
+            h.expect("30 potion cell bitmap blank", any(cell_bytes(fr, 28, pr0)), False)
             # 23. damage the slime, remember it
             p.set_ent(SLOT_SLIME, HP=3)
             sl0 = p.ent(SLOT_SLIME)
-            # 24. lure the rat: hero at x=28 s2, rat gap 1
-            p.place(0, 28, 14)
-            p.place(SLOT_RAT, 23, 18)
+            # 24. lure the rat: hero at x=28 s1, rat gap 1
+            p.place(0, 28, Y1)
+            p.place(SLOT_RAT, 23, R1)
             hud0 = p.frame()[0:6144]
             legal = legal_attrs(p)
             trans_viol, trans_samples = [], [0]
@@ -628,7 +668,7 @@ def main():
             e = p.ent(0)
             h.expect("34 CUR_ROOM = B", p.rb("CUR_ROOM"), 1)
             h.expect("34 hero x = 1", e["X"], 1)
-            h.expect("34 hero storey 2 (y 14)", e["Y"], 14)
+            h.expect("34 hero storey 1 (y 11)", e["Y"], Y1)
             fr = p.frame()
 
             def hud_rows(f, rows):
@@ -642,7 +682,7 @@ def main():
                      hud_rows(fr, (21,)) == hud_rows(hud0 + bytes(768), (21,)), True)
             h.expect("34 after A->B scroll: screen == room B tiles", p.bg_mismatch()[:4], [])
             h.expect("29 >= 1 frame sampled in GS_TRANSITION", trans_samples[0] >= 1, True)
-            h.expect("29 no sprite attr in rows 0-20 during transition", trans_viol[:4], [])
+            h.expect("29 no sprite attr in rows 0-17 during transition", trans_viol[:4], [])
             rat = p.ent(SLOT_RAT)
             h.expect("24 rat room = B", rat["ROOM"], 1)
             h.expect("24 rat PENDING", rat["FLAGS"] & EF_PENDING, EF_PENDING)
@@ -655,7 +695,7 @@ def main():
                 steps += 1
             rat = p.ent(SLOT_RAT)
             h.expect("24 rat materialised within 4 hero steps", steps <= 4 and not rat["FLAGS"] & EF_PENDING, True)
-            h.expect("24 rat x = 1 storey 2", (rat["X"], rat["Y"]), (1, 18))
+            h.expect("24 rat x = 1 storey 1", (rat["X"], rat["Y"]), (1, R1))
             h.expect("24 rat faces right", rat["FLAGS"] & EF_LEFT, 0)
             h.expect("24 walk-in traced", any(f in (FID["rat_run1"], FID["rat_run2"])
                                               for f in p.trace_fids(SLOT_RAT)), True)
@@ -663,7 +703,7 @@ def main():
             h.expect("8 floor band B", floor_band_ok(p.frame(), holes(1)), [])
             # back to A: 23 persistence + 31 potion absent
             p.isolate()
-            p.place(0, 2, 14)
+            p.place(0, 2, Y1)
             p.turn("H")
             p.turn("H")
             p.until(lambda: p.rb("GAME_STATE") == GS_PLAYING and p.idle())
@@ -672,54 +712,54 @@ def main():
             sl = p.ent(SLOT_SLIME)
             h.expect("23 slime hp/x/y persisted", (sl["HP"], sl["X"], sl["Y"]), (sl0["HP"], sl0["X"], sl0["Y"]))
             fr = p.frame()
-            h.expect("31 potion 0 still absent", attr_at(fr, 28, 5), 0x00)
+            h.expect("31 potion 0 still absent", attr_at(fr, 28, item_row(0)), 0x00)
 
         # ---------------- 26 / 35 vertical follow + transitions -------------
         if want(26) or want(35):
             p.boot(K_KNIGHT)
             # walk into B for real, then set up at the shaft
             p.isolate()
-            p.place(0, 28, 14)
+            p.place(0, 28, Y1)
             p.turn("L")
             p.turn("L")
             p.until(lambda: p.rb("CUR_ROOM") == 1 and p.idle())
-            p.place(0, 24, 14)
-            p.place(SLOT_GOBLIN, 20, 16, room=1)   # gap 1, storey 2
-            p.place(SLOT_BATB, 28, 15, room=1)     # bat in storey-2 band, gap 1
+            p.place(0, 24, Y1)
+            p.place(SLOT_GOBLIN, 20, G1, room=1)   # gap 1, storey 1
+            p.place(SLOT_BATB, 28, R1 - 3, room=1)  # bat in storey-1 band, gap 1
             p.turn("J")                          # down-exit: step + transition
             e = p.ent(0)
-            h.expect("35 B col 24 J -> C", p.rb("CUR_ROOM"), 2)
-            h.expect("35 arrive s0 x=24", (e["X"], e["Y"]), (24, 0))
+            h.expect("35 B col 24 J -> C", p.rb("CUR_ROOM"), ROOM_C)
+            h.expect("35 arrive s0 x=24", (e["X"], e["Y"]), (24, Y0))
             h.expect("35 after B->C scroll: screen == room C tiles", p.bg_mismatch()[:4], [])
             g = p.ent(SLOT_GOBLIN)
-            h.expect("26 goblin room = C, pending", (g["ROOM"], bool(g["FLAGS"] & EF_PENDING)), (2, True))
+            h.expect("26 goblin room = C, pending", (g["ROOM"], bool(g["FLAGS"] & EF_PENDING)), (ROOM_C, True))
             h.expect("26 bat does not follow", p.ent(SLOT_BATB)["ROOM"], 1)
             for _ in range(4):
                 if not p.ent(SLOT_GOBLIN)["FLAGS"] & EF_PENDING:
                     break
                 p.turn("H")
             g = p.ent(SLOT_GOBLIN)
-            h.expect("26 goblin materialised at s0 x=24", (bool(g["FLAGS"] & EF_PENDING), g["X"], g["Y"]), (False, 24, 2))
-            h.expect("8 floor band C", floor_band_ok(p.frame(), holes(2)), [])
+            h.expect("26 goblin materialised at s0 x=24", (bool(g["FLAGS"] & EF_PENDING), g["X"], g["Y"]), (False, 24, G0))
+            h.expect("8 floor band C", floor_band_ok(p.frame(), holes(ROOM_C)), [])
             # 35 back up
             p.set_ent(SLOT_GOBLIN, ROOM=NOWHERE)
-            p.place(0, 24, 0)
+            p.place(0, 24, Y0)
             p.turn("K")                          # up-exit: immediate transition
             e = p.ent(0)
-            h.expect("35 K -> back in B s2 x=24", (p.rb("CUR_ROOM"), e["X"], e["Y"]), (1, 24, 14))
+            h.expect("35 K -> back in B s1 x=24", (p.rb("CUR_ROOM"), e["X"], e["Y"]), (1, 24, Y1))
             h.expect("35 after C->B scroll: screen == room B tiles", p.bg_mismatch()[:4], [])
 
         # ---------------- 27 cap / 28 arrival conflict ----------------------
         if want(27) or want(28):
             p.boot(K_KNIGHT)
             # B holds 3: goblin, bat, + skeleton D poked in. Two candidates in A
-            # after the exit step (hero x=29): bat D (band rows 14-15, cols 25-27,
+            # after the exit step (hero x=29): bat D (band rows 11-12, cols 25-27,
             # gap 1) and the rat (cols 21-24, gap 4). Only 1 fits (3 + 1 = 4).
-            p.place(SLOT_SKD, 12, 0, room=1)
+            p.place(SLOT_SKD, 12, Y0, room=1)
             p.isolate()
-            p.place(0, 28, 14)
-            p.place(SLOT_BATD, 25, 14, room=0)
-            p.place(SLOT_RAT, 21, 18, room=0)
+            p.place(0, 28, Y1)
+            p.place(SLOT_BATD, 25, Y1, room=0)
+            p.place(SLOT_RAT, 21, R1, room=0)
             p.turn("L")
             p.until(lambda: p.rb("CUR_ROOM") == 1 and p.idle())
             h.expect("27 cap: nearest (bat) follows", p.ent(SLOT_BATD)["ROOM"], 1)
@@ -727,24 +767,24 @@ def main():
             # tall cap: B has skeleton D + goblin turned skeleton; skeleton C candidate refused
             p2 = p
             p2.boot(K_KNIGHT)
-            p2.place(SLOT_SKD, 12, 0, room=1)
+            p2.place(SLOT_SKD, 12, Y0, room=1)
             p2.set_ent(SLOT_GOBLIN, KIND=K_SKELETON)
             p2.set_ent(SLOT_BATB, ROOM=NOWHERE)
             p2.isolate()
-            p2.place(0, 28, 14)
-            p2.place(SLOT_SKC, 24, 14, room=0)    # gap 1
+            p2.place(0, 28, Y1)
+            p2.place(SLOT_SKC, 24, Y1, room=0)    # gap 1
             p2.turn("L")
             p2.until(lambda: p2.rb("CUR_ROOM") == 1 and p2.idle())
             h.expect("27 tall cap: skeleton refused (B has 2 tall)", p2.ent(SLOT_SKC)["ROOM"], 0)
             # 28 arrival conflict: goblin parked on B's arrival box
             p.boot(K_KNIGHT)
             p.isolate()
-            p.place(SLOT_GOBLIN, 1, 16, room=1)
-            p.place(0, 28, 14)
+            p.place(SLOT_GOBLIN, 1, G1, room=1)
+            p.place(0, 28, Y1)
             p.turn("L")
             p.until(lambda: p.rb("CUR_ROOM") == 1 and p.idle())
             g = p.ent(SLOT_GOBLIN)
-            h.expect("28 conflicting monster PENDING in place", (bool(g["FLAGS"] & EF_PENDING), g["X"], g["Y"]), (True, 1, 16))
+            h.expect("28 conflicting monster PENDING in place", (bool(g["FLAGS"] & EF_PENDING), g["X"], g["Y"]), (True, 1, G1))
             for _ in range(4):
                 p.turn("L")
             g = p.ent(SLOT_GOBLIN)
@@ -798,12 +838,12 @@ def main():
 
             p.boot(K_KNIGHT)
             p.isolate(keep=(SLOT_SLIME,))
-            p.place(0, 28, 14)                      # A storey 2 -> right exit
+            p.place(0, 28, Y1)                      # A storey 1 -> right exit
             ghost_check("A->B (horizontal)", SLOT_SLIME, "L", 1)
             p.isolate()
-            p.place(SLOT_SLIME, 8, 4, room=1)       # B storey 0, far from the shaft
-            p.place(0, 24, 14)
-            ghost_check("B->C (vertical)", SLOT_SLIME, "J", 2)
+            p.place(SLOT_SLIME, 16, R0, room=1)     # B storey 0, far from the shafts
+            p.place(0, 24, Y1)
+            ghost_check("B->C (vertical)", SLOT_SLIME, "J", ROOM_C)
 
         # ---------------- 53 (review A7) present keeps up: zap, potion, quaff
         # Per tick, right after the tick-start present (probe_presented):
@@ -813,14 +853,14 @@ def main():
         if want(53):
             p.boot(K_WIZARD)
             p.isolate(keep=(SLOT_RAT,))
-            p.place(0, 6, 14)
-            p.place(SLOT_RAT, 12, 18)            # gap 3: zap
+            p.place(0, 6, Y1)
+            p.place(SLOT_RAT, 12, R1)            # gap 3: zap
             p.present_watch(True)
             p.clear_trace()
             p.turn("L")
             zapped = FID["wizard_cast2"] in p.trace_fids(0)
             p.set_ent(SLOT_RAT, ROOM=NOWHERE)
-            p.place(0, 24, 0)                    # potion 0 at col 28, storey 0
+            p.place(0, 24, Y0)                   # potion 0 at col 28, storey 0
             for _ in range(3):
                 p.turn("L")
             pot = p.ent(0)["POT"]
@@ -893,10 +933,11 @@ def main():
         # attack or reverse inside one; one inside at turn start must move
         # (keep crossing or step out). Fully boxed (both x steps illegal) it
         # may stay / attack. A climb blocked by an entity is a WAIT turn.
-        # Room A ladders {5,2}, {23,1}. Fixed seed; flyer speeds unchanged.
+        # Room A ladders {5,1}, {23,1} (B3B-3: both link storey 1 to storey 0;
+        # their top end boxes are on storey 0). Fixed seed; flyer speeds unchanged.
         if want(55) or want(56) or want(57) or want(58):
             p.boot(K_KNIGHT)
-            segs = ladder_segs(p, "room_a")
+            segs = ladder_segs(p, ROOM_A)
             moved_in = []                         # violations: in a box, x kept
 
             def track(slot, prev, tag):
@@ -907,8 +948,8 @@ def main():
 
         if want(55):
             p.isolate()
-            p.place(0, 5, 14)                       # foot of {5,2}, storey 2
-            p.place(SLOT_GHOST, 5, 8, room=0)       # INSIDE the top end box
+            p.place(0, 5, Y1)                       # foot of {5,1}, storey 1
+            p.place(SLOT_GHOST, 5, G0 - 1, room=0)  # INSIDE the top end box (storey 0)
             g_in = in_end_box(p, p.ent(SLOT_GHOST), segs)
             out_after = None
             g = p.ent(SLOT_GHOST)
@@ -919,31 +960,31 @@ def main():
                 p.turn("SPACE")
                 g = track(SLOT_GHOST, g, "wait%d" % w_)
             ys = []
-            for i in range(7):                      # climb up: 7 moving turns
+            for i in range(STOREY_ROWS):            # climb up: 9 moving turns
                 p.turn("K")
                 ys.append(p.ent(0)["Y"])
                 g = track(SLOT_GHOST, g, "up%d" % i)
             for _ in range(3):
-                p.turn("SPACE")                     # ghost chases on storey 1
+                p.turn("SPACE")                     # ghost chases on storey 0
                 g = track(SLOT_GHOST, g, "top")
             ys2 = []
-            for i in range(7):                      # and back down
+            for i in range(STOREY_ROWS):            # and back down
                 p.turn("J")
                 ys2.append(p.ent(0)["Y"])
                 g = track(SLOT_GHOST, g, "down%d" % i)
-            h.expect("55 setup: ghost placed inside the top end box of {5,2}",
+            h.expect("55 setup: ghost placed inside the top end box of {5,1}",
                      len(g_in) == 3, True)
             h.expect("55 ghost moves out of the ladder-end box within 3 turns",
                      out_after is not None and out_after <= 3, True)
-            h.expect("55 hero climbs {5,2} up: one row per turn",
-                     ys, list(range(13, 6, -1)))
+            h.expect("55 hero climbs {5,1} up: one row per turn",
+                     ys, list(range(Y1 - 1, Y0 - 1, -1)))
             h.expect("55 hero climbs back down: one row per turn",
-                     ys2, list(range(8, 15)))
+                     ys2, list(range(Y0 + 1, Y1 + 1)))
             # bat wander/jitter (other storey) may cross shafts, never idles in
             # a box, keeps moving
             p.isolate()
-            p.place(0, 14, 14)                      # hero on storey 2
-            p.place(SLOT_BATB, 12, 8, room=0)       # bat B on storey 1
+            p.place(0, 14, Y1)                      # hero on storey 1
+            p.place(SLOT_BATB, 12, R0 - 3, room=0)  # bat B on storey 0
             xs, crossed = set(), 0
             b = p.ent(SLOT_BATB)
             for i in range(40):
@@ -956,13 +997,13 @@ def main():
             h.expect("55 bat keeps moving (>= 4 distinct cols in 40 turns)", len(xs) >= 4, True)
             h.expect("55 bat crosses a shaft (turns ended in a box > 0)", crossed > 0, True)
 
-        # 56: the Ghost crosses the {23,1} shaft (storey 1 box cols 23..25) to
+        # 56: the Ghost crosses the {23,1} shaft (storey 0 box cols 23..25) to
         # reach the hero (91cf829 made shafts walls: it stopped at x 26).
         if want(56):
             moved_in.clear()
             p.isolate()
-            p.place(0, 12, p.stand_y(1))            # hero storey 1, cols 12..14
-            p.place(SLOT_GHOST, 27, 8, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+            p.place(0, 12, Y0)                      # hero storey 0, cols 12..14
+            p.place(SLOT_GHOST, 27, G0 - 1, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
             gx, inbox = [], 0
             g = p.ent(SLOT_GHOST)
             for i in range(16):
@@ -977,14 +1018,14 @@ def main():
             h.expect("56 no x-kept turn inside a box", moved_in[:3], [])
 
         # 57: in a box the Ghost moves instead of attacking: hero at x 2
-        # (cols 2..4) beside {5,2}'s top box (cols 5..7). Ghost from x 9:
+        # (cols 2..4) beside {5,1}'s top box (cols 5..7). Ghost from x 9:
         # 8 (gap 3) -> 7 (in, gap 2) -> 6 (in, gap 1: in reach, moves on) ->
         # 5 (in, gap 0) -> fully boxed (left = hero, right = a reversal that
         # stays inside): stays and may attack (the documented exception).
         if want(57):
             p.isolate()
-            p.place(0, 2, p.stand_y(1))
-            p.place(SLOT_GHOST, 9, 8, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+            p.place(0, 2, Y0)
+            p.place(SLOT_GHOST, 9, G0 - 1, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
             hp0 = p.ent(0)["HP"]
             seq = []
             for i in range(6):
@@ -996,28 +1037,28 @@ def main():
                      first_hit is None or first_hit >= 4, True)
 
         # 58 (rule b): a climb blocked by an entity is a WAIT (monsters act; the
-        # blocker yields), not a free no-op. Hero mid-ladder on {5,2} at y 11
-        # climbing up; ghost parked on the next step (5,7).
+        # blocker yields), not a free no-op. Hero mid-ladder on {5,1} at y 6
+        # climbing up; ghost (rows 2..5) parked on the next step (y 5).
         if want(58):
             p.isolate()
-            p.place(0, 5, 11)
+            p.place(0, 5, Y0 + 4)
             p.set_ent(0, AIDIR=0xFF)
-            p.place(SLOT_GHOST, 5, 7, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+            p.place(SLOT_GHOST, 5, Y0, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
             tc = p.rw("TURN_COUNTER")
             p.turn("K")
             h.expect("58 blocked climb consumes a turn", p.rw("TURN_COUNTER") - tc, 1)
-            h.expect("58 hero did not move (y 11)", p.ent(0)["Y"], 11)
+            h.expect("58 hero did not move (y 6)", p.ent(0)["Y"], Y0 + 4)
             h.expect("58 blocker moved off (x != 5)", p.ent(SLOT_GHOST)["X"] != 5, True)
             h.expect("58 hero then reaches the top", p.climb("K"), True)
-            h.expect("58 hero standing on storey 1 (y 7)", p.ent(0)["Y"], 7)
+            h.expect("58 hero standing on storey 0 (y 2)", p.ent(0)["Y"], Y0)
 
         # 59 (rule b): terrain-blocked / illegal climbs stay free (no turn).
         if want(59):
             p.boot(K_KNIGHT)
-            p.isolate()                             # hero x 2, storey 2: no ladder
+            p.isolate()                             # hero x 2, storey 1: no ladder
             h.expect("59 UP without a ladder: no turn", p.no_turn("K"), True)
             h.expect("59 DOWN on the bottom storey, no hole: no turn", p.no_turn("J"), True)
-            p.place(0, 5, 7)                        # top of {5,2} (storey 1)
+            p.place(0, 5, Y0)                       # top of {5,1} (storey 0)
             h.expect("59 UP at a down-only shaft top: no turn", p.no_turn("K"), True)
             h.expect("59 CLIMB_BLK clear after a terrain block", p.rb("CLIMB_BLK"), 0)
 
@@ -1033,7 +1074,7 @@ def main():
         if want(60):
             p.boot(K_KNIGHT)
             p.isolate()
-            p.place(0, 3, 14)
+            p.place(0, 3, Y1)
             fp0 = lambda e: (e["DCOL"], e["DCOL"] + e["DCOLS"], e["DROW"], e["DROW"] + e["DROWS"])
 
             def move(**kw):
@@ -1055,7 +1096,7 @@ def main():
             px = p.ent(0)["PX"]
             a, b, d = move(PX=px + 8 * (p.ent(0)["DCOLS"] + 3))
             h.expect("60 gap: two rects (old, new)", sorted(d), sorted([a, b]))
-            p.place(0, 3, 14)
+            p.place(0, 3, Y1)
             p.tick(2)
             py = p.ent(0)["PY"]
             a, b, d = move(PY=py - 2)
@@ -1071,8 +1112,8 @@ def main():
             def phases(full):
                 p.boot(K_KNIGHT)
                 p.isolate(keep=(SLOT_RAT,))
-                p.place(0, 3, 14)
-                p.place(SLOT_RAT, 7, 14, flags=EF_ACTIVE | EF_LEFT)
+                p.place(0, 3, Y1)
+                p.place(SLOT_RAT, 7, Y1, flags=EF_ACTIVE | EF_LEFT)
                 p.settle()
                 out, moved = [], set()
                 hx, rx = p.ent(0)["PX"], p.ent(SLOT_RAT)["PX"]
@@ -1088,12 +1129,12 @@ def main():
                         p.set_ent(0, PX=hx + (96 if t & 1 else 0), PY=hy)
                         p.set_ent(SLOT_RAT, PX=rx + 72 + 2 * (t - 36))
                     if full:
-                        p.z.cmd("write-memory %d 0 0 32 21" % S["PEND_DMG"])
+                        p.z.cmd("write-memory %d 0 0 32 %d" % (S["PEND_DMG"], PLAY_ROWS))
                         p.wb("PEND_DMG_COUNT", 1)
                     p.tick()
                     moved |= {(s_, p.ent(s_)["DCOL"]) for s_ in (0, SLOT_RAT)}
                     out.append((p.composed_frame(), p.frame()))
-                    if full and (0, 32, 0, 21) not in dmg():
+                    if full and (0, 32, 0, PLAY_ROWS) not in dmg():
                         moved.add(("nofull", t))      # forced rect did not reach DMG_LIST
                 return out, moved
 
@@ -1128,24 +1169,24 @@ def main():
             p.turn("G")
             h.expect("32 heal capped at max", p.ent(0)["HP"], 22)
             p.set_ent(0, POT=9)
-            p.place(0, 24, 0)
+            p.place(0, 24, Y0)
             for _ in range(3):
                 p.turn("L")
             h.expect("33 full pack stays 9", p.ent(0)["POT"], 9)
-            p.place(0, 20, 0)
+            p.place(0, 20, Y0)
             p.settle()
-            h.expect("33 potion stays on the floor", attr_at(p.frame(), 28, 5), 0x42)
+            h.expect("33 potion stays on the floor", attr_at(p.frame(), 28, item_row(0)), 0x42)
             h.expect("33 POTIONS_TAKEN unchanged", p.rb("POTIONS_TAKEN") & 1, 0)
 
         # ---------------- 15 flyer 2D in B ---------------------------------
         if want(15):
             p.boot(K_KNIGHT)
             p.isolate()
-            p.place(0, 28, 14)
+            p.place(0, 28, Y1)
             p.turn("L")
             p.turn("L")
             p.until(lambda: p.rb("CUR_ROOM") == 1 and p.idle())
-            p.place(SLOT_GOBLIN, 3, 16, room=NOWHERE)
+            p.place(SLOT_GOBLIN, 3, G1, room=NOWHERE)
             xs, ys = set(), set()
             for _ in range(10):
                 p.turn("SPACE")
@@ -1154,7 +1195,8 @@ def main():
                 ys.add(b["Y"])
             h.expect("15 bat x changes", len(xs) > 1, True)
             h.expect("15 bat y takes >= 2 values", len(ys) >= 2, True)
-            h.expect("15 bat y always in 7..11", all(7 <= y <= 11 for y in ys), True)
+            band = (STOREY_ROWS * 0, R0)          # bat B on storey 0: 9s .. 9s+8-h
+            h.expect("15 bat y always in its band 0..6", all(band[0] <= y <= band[1] for y in ys), True)
 
         # ---------------- 41 (extra, §3.1) hold-to-repeat -------------------
         # ---------------- 61 (A8) IM 2 + ISR + silent AY player slot ------
@@ -1224,7 +1266,7 @@ def main():
             h.expect("45 stub (dmg_add full)", p.run_stub(
                 [0x01, 0x03, 0x04, 0x11, 0x01, 0x01, 0xCD, da & 0xFF, da >> 8]), True)
             h.expect("45 full DMG_LIST: last rect = whole playfield",
-                     tuple(p.z.read_memory(S["DMG_LIST"] + 47 * 4, 4)), (0, 32, 0, 21))
+                     tuple(p.z.read_memory(S["DMG_LIST"] + 47 * 4, 4)), (0, 32, 0, PLAY_ROWS))
             h.expect("45 DMG_OVERFLOW counted both", p.rb("DMG_OVERFLOW"), 2)
 
         # ---------------- 46 (review B) a mid-ladder body blocks the zap line
@@ -1232,15 +1274,15 @@ def main():
             def zap_past_climber(with_goblin):
                 p.boot(K_WIZARD)
                 p.isolate()
-                p.place(0, 28, 14)
+                p.place(0, 28, Y1)
                 p.turn("L")
                 p.turn("L")
                 p.until(lambda: p.rb("CUR_ROOM") == 1 and p.idle())
                 p.isolate()
-                p.place(0, 1, 7)                 # storey 1, facing right, cols 1-3
-                p.place(SLOT_RAT, 7, 11, room=1, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+                p.place(0, 1, Y1)                # storey 1 (the shaft foot), cols 1-3
+                p.place(SLOT_RAT, 7, R1, room=1, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
                 if with_goblin:                  # mid-ladder on B's {4,1} shaft, cols 4-6
-                    p.place(SLOT_GOBLIN, 4, 8, room=1, flags=EF_ACTIVE | EF_HOSTILE)
+                    p.place(SLOT_GOBLIN, 4, G1 - 1, room=1, flags=EF_ACTIVE | EF_HOSTILE)
                     p.set_ent(SLOT_GOBLIN, AIDIR=0xFF)
                 p.settle()
                 hp0 = p.ent(SLOT_RAT)["HP"]
@@ -1257,19 +1299,19 @@ def main():
         if want(47):
             p.boot(K_KNIGHT)
             p.isolate()
-            p.place(0, 5, 14)
-            p.turn("K")                          # y=13, climbing up A's {5,2}
-            p.place(SLOT_RAT, 4, 11, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
-            p.place(SLOT_GOBLIN, 1, 9, room=0, flags=EF_ACTIVE | EF_HOSTILE)  # blocks the left
-            h.expect("47 corked hero still completes the climb", p.climb("K", limit=24), True)
-            h.expect("47 hero standing on storey 1", p.ent(0)["Y"], 7)
+            p.place(0, 5, Y1)
+            p.turn("K")                          # y=10, climbing up A's {5,1}
+            p.place(SLOT_RAT, 4, R0, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+            p.place(SLOT_GOBLIN, 1, G0, room=0, flags=EF_ACTIVE | EF_HOSTILE)  # blocks the left
+            h.expect("47 corked hero still completes the climb", p.climb("K", limit=28), True)
+            h.expect("47 hero standing on storey 0", p.ent(0)["Y"], Y0)
 
         # ---------------- 48 (review B) potion tile with no list entry
         if want(48):
             p.boot(K_KNIGHT)
             p.isolate()
-            p.place(0, 10, 14)
-            cell = S["ROOM_MAP"] + 19 * 32 + 11      # storey 2 potion row, under the hero
+            p.place(0, 10, Y1)
+            cell = S["ROOM_MAP"] + item_row(1) * 32 + 11   # storey 1 potion row, under the hero
             p.wb(cell, S["T_POTION"])
             p.turn("SPACE")
             h.expect("48 unlisted potion tile: not taken", p.ent(0)["POT"], 1)
@@ -1363,7 +1405,7 @@ def main():
             def skel_turn(toggle):
                 p.boot(K_KNIGHT)
                 p.isolate()
-                p.place(SLOT_SKC, 5, 14, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+                p.place(SLOT_SKC, 5, Y1, room=0, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
                 frames, overlap = [], [0]
                 flip = [0]
 
@@ -1401,7 +1443,9 @@ def main():
         # ---------------- 36 / 37 / 38 / 40 walkthrough ---------------------
         if any(want(n) for n in (14, 36, 37, 38, 40)):
             res1 = walkthrough(h, p, check14=want(14))
-            h.expect("37 walkthrough reaches GS_WIN (bounded)", res1["gs"], GS_WIN)
+            h.expect("37 walkthrough reaches room D storey 0 x 3, still playing (bounded; "
+                     "B3B-13: no PROTO chest win)", (res1["gs"], res1["end"]),
+                     (GS_PLAYING, (ROOM_D, 3, 0)))
             print(f"[info] walkthrough: {res1['turns']} turns, OVERRUN_COUNT={res1['overrun']}, "
                   f"BLIT_MISS={res1['miss']}, hero hp={res1['hp']}")
             h.expect("40 OVERRUN_COUNT reported (target 0)", res1["overrun"], 0)
@@ -1409,10 +1453,21 @@ def main():
             h.expect("40 CLIP_TRAP 0 over the walkthrough", res1["clip"], 0)
             h.expect("40 GEN_TRAP 0 over the walkthrough (rooms built + scrolled)",
                      res1["gentrap"], 0)
-            h.expect("36 WIN: ENTER -> GS_SELECT", res1["select"], True)
+            h.expect("36 WIN (GS_WIN end screen): ENTER -> GS_SELECT", res1["select"], True)
             if want(38):
                 res2 = walkthrough(h, p, check14=False)
                 h.expect("38 determinism: identical end state", res2["state"], res1["state"])
+                # B3B-8: no runtime write into the bank-7 tilesets (before B3B-12)
+                from game_lib import SNA_RAM
+                p.z.cmd("set-memory-zone 0")
+                try:
+                    for nm in ("TSET_LO", "TSET_HI"):
+                        o = 7 * 16384 + S[nm] - 0xC000
+                        n = S["TSET_HALF_LEN"]
+                        h.expect(f"38 end: bank-7 tilesets {nm} == .sna",
+                                 bytes(p.z.read_memory(o, n)) == SNA_RAM[o:o + n], True)
+                finally:
+                    p.z.cmd("set-memory-zone -1")
 
         t0 = getattr(Proto, "_t0", None)
         if t0:
@@ -1498,7 +1553,7 @@ def isr_tests(h, p):
     # Held L repeats (INPUT_REPEAT 1): the hero keeps walking in room B for
     # 30 ticks after arrival, so the ISR also lands in blits (pool banks).
     p.isolate()
-    p.place(0, 28, 14)
+    p.place(0, 28, Y1)
     p.settle()
     p.wb("INPUT_REPEAT", 1)
     p.z.cmd("set-breakpoint 5 PC=%d" % ay)
@@ -1599,6 +1654,10 @@ def tape_rest(h, p):
     ayo = 3 * 16384 + S["AY_RESERVE"] - 0xC000
     h.expect("50 bank 3 AY slot (A8 tape block) == .sna", ram[ayo:ayo + S["AY_LEN"]] ==
              SNA_RAM[ayo:ayo + S["AY_LEN"]], True)
+    for nm in ("TSET_LO", "TSET_HI"):            # B3B-8: the bank-7 tileset blocks
+        o = 7 * 16384 + S[nm] - 0xC000
+        h.expect(f"50 bank 7 tilesets {nm} (B3B-8 tape block) == .sna",
+                 ram[o:o + S["TSET_HALF_LEN"]] == SNA_RAM[o:o + S["TSET_HALF_LEN"]], True)
     h.expect("50 tape: IM 2 installed by boot", " IM2 " in p.z.cmd("get-registers"), True)
     # CODE block starts in bank 5 low RAM (boot, generator) and runs into bank 2
     lo5 = S["lowram_code"] - 0x4000
@@ -1607,6 +1666,7 @@ def tape_rest(h, p):
     p.wb("INPUT_REPEAT", 0)
     p.wb("ANIM_FREEZE", 1)
     p.wb("INPUT_SRC", 1)
+    p.wb("proto_start", p.proto_start)           # B3B-12: the tape loaded the default 0
     p.hold("1")
     h.expect("50 tape: '1' starts the game", p.wait_state(GS_PLAYING), True)
     p.release()
@@ -1638,40 +1698,62 @@ def walkthrough(h, p, check14=False):
     def climb(key, storey):
         while budget[0] > 0 and p.rb("GAME_STATE") == GS_PLAYING:
             e = p.ent(0)
-            if (e["Y"] + 6) % 7 == 6 and (e["Y"] + 6) // 7 == storey:
+            if is_standing(e["Y"], 6) and storey_of(e["Y"], 6) == storey:
                 return
             act(key)
 
-    go_room(1, "L")                  # A -> B
+    # B3B-3 route (2 storeys; rooms re-authored from §8.2, same shape):
+    go_room(1, "L")                  # A -> B (storey 1)
     go_x(24)
-    go_room(2, "J")                  # B -> C (s0, col 24)
+    go_room(ROOM_C, "J")             # B {24,2} -> C (s0, col 24)
     sk_y0 = p.ent(5)["Y"]
-    climb("J", 1)
-    go_x(27)                         # potion 2 (C col 29, storey 1)
+    go_x(27)                         # potion 2 (C col 29, storey 0)
+    def foe_left():
+        """A live hostile body touching the hero's left side (gap 0)."""
+        e = p.ent(0)
+        for s_ in range(1, 16):
+            m = p.ent(s_)
+            if (m["FLAGS"] & (EF_ACTIVE | EF_HOSTILE | EF_PENDING | 16) == EF_ACTIVE | EF_HOSTILE
+                    and m["ROOM"] == p.rb("CUR_ROOM")):
+                w, hh = body(p, m["KIND"])
+                if m["X"] + w == e["X"] and m["Y"] < e["Y"] + 6 and e["Y"] < m["Y"] + hh:
+                    return True
+        return False
+
     min_y = sk_y0
-    for _ in range(30):              # let C's skeleton come up the ladder
+    # Let C's skeleton come up {6,1} (spawn col 12: its nearest climb, away
+    # from the hero's arrival shaft {24,0}/{24,1}); the ghost (boxed on its
+    # top end) is fought off. B3B-3 made this wait reactive on purpose (an
+    # intended change from the PROTO fixed script): attack only when a live
+    # hostile actually touches the hero's left side (foe_left), else wait.
+    for _ in range(30):
         min_y = min(min_y, p.ent(5)["Y"])
-        if sk_y0 - min_y >= 7:
+        if sk_y0 - min_y >= STOREY_ROWS:
             break
-        act("SPACE")
+        act("H" if foe_left() else "SPACE")
     if check14:
         print(f"[info] 14: C skeleton y {sk_y0} -> min {min_y}")
-        h.expect("14 C skeleton climbs: y decreases by >= 7 within 30 turns", sk_y0 - min_y >= 7, True)
-    go_x(6)
-    climb("J", 2)
-    go_room(3, "H")                  # C -> D (s2)
+        h.expect("14 C skeleton climbs: y decreases by >= 9 within 30 turns",
+                 sk_y0 - min_y >= STOREY_ROWS, True)
+    go_x(24)
+    climb("J", 1)                    # {24,1} down to storey 1
+    go_room(ROOM_D, "H")             # C -> D (s1)
     go_x(22)
-    climb("K", 1)
-    go_x(8)
-    climb("K", 0)
-    go_x(3)
-    p.until(lambda: p.rb("GAME_STATE") != GS_PLAYING, 40)
-    res = dict(gs=p.rb("GAME_STATE"), turns=p.rw("TURN_COUNTER"),
+    climb("K", 0)                    # {22,1} up to storey 0 (potion 3 at col 17)
+    go_x(3)                          # B3B-13: the old chest spot (the PROTO win is gone)
+    p.until(lambda: p.idle(), 40)
+    e0 = p.ent(0)
+    res = dict(gs=p.rb("GAME_STATE"), end=(p.rb("CUR_ROOM"), e0["X"], storey_of(e0["Y"], body(p, K_KNIGHT)[1])),
+               turns=p.rw("TURN_COUNTER"),
                overrun=p.rw("OVERRUN_COUNT"), miss=p.rb("BLIT_MISS"), hp=p.ent(0)["HP"],
                dmgov=p.rb("DMG_OVERFLOW"), clip=p.rb("CLIP_TRAP"), gentrap=p.rb("GEN_TRAP"))
     res["state"] = (p.rw("RNG_STATE"), p.rw("TURN_COUNTER"), p.rb("POTIONS_TAKEN"),
                     tuple((e["ROOM"], e["X"], e["Y"], e["HP"], e["FLAGS"] & 0x7F)
                           for e in (p.ent(s) for s in range(9))))
+    # the end screen of a win (GS_WIN, as level_descend sets it from D8; the
+    # real D8 descend is tests/world.py W16): ENTER -> hero select
+    p.wb("GAME_STATE", GS_WIN)
+    p.tick(2)
     p.hold("ENTER")
     res["select"] = p.wait_state(GS_SELECT)
     p.release()

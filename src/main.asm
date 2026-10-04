@@ -33,36 +33,58 @@
 
 ;==============================================================================
 ; SPRITE SOURCES — banks 1 and 3, assembled contiguously at virtual $8000..$FFFF
-; (slot 2 = page 1, slot 3 = page 3). Read only by the boot generator (and
-; init_tiles) via copy_virt (virtual < $C000 -> bank 1 at +$4000, else bank 3
-; as-is). ZX0_SOURCES = 1 (default): the generator frames are ZX0 blocks
+; (slot 2 = page 1, slot 3 = page 3). Read only by the boot generator via
+; copy_virt (B3B-8: init_tiles no longer reads the raw items / tiles) (virtual < $C000 -> bank 1 at +$4000, else bank 3
+; as-is). The generator frames are ZX0 blocks
 ; (build/zx0/sprites_zx0.asm, written by tools/zx0_sources.py — tools/build.sh
 ; runs it); their per-frame block/offset are EQUs folded into the bank-5
 ; fdesc_tab (A6); items/tiles stay raw.
-; ZX0_SOURCES = 0: the raw index.asm, as before A5 (A/B, tests/zx0_pool.py).
+; (B3B-12: the raw index.asm A/B build is retired; tests/zx0_pool.py checks the
+; pool against a Python reference made from the raw frame data.)
 ;==============================================================================
                 MMU  2, BANK_SRC_LO
                 MMU  3, BANK_SRC_HI
                 ORG  SRC_VIRT_BASE
 sprite_src:
-    IF ZX0_SOURCES
                 INCLUDE "../build/zx0/sprites_zx0.asm"
-    ELSE
-                INCLUDE "../assets/gfx/sprites/index.asm"
-    ENDIF
 sprite_src_end:
 SRC_TOTAL       EQU sprite_src_end - sprite_src
-    IF SRC_TOTAL > $4000
+; B3B-11b (bank-3 relief): boot / new-game cold DATA, read only through
+; copy_virt / copy_virt3 (virtual address -> bank 1 or 3), right after the
+; sources, in bank 1. Same tape blocks.
+vdata:
+                INCLUDE "../assets/gfx/fonts/font6x8.asm"     ; -> FONT6 planes (panel_boot)
+                INCLUDE "../assets/gfx/panel/panel_icons.asm" ; panel_init (pblit via GEN_SRC)
+                INCLUDE "panel_hot.asm"                       ; -> HOT_COPY (panel_boot)
+                INCLUDE "../assets/gfx/tiles/tiles_common.asm" ; init_tiles (boot)
+                INCLUDE "../assets/gfx/panel/panel_orn.asm"    ; init_tiles -> ORN_GLYPHS
+                MODULE b3fx                                    ; init_tiles: the zap glyphs
+                INCLUDE "../assets/gfx/sprites/tiles_fx.asm"   ; (-> ZAP_GLYPHS)
+                ENDMODULE
+                ; B3B-13: the text block (tools/textpack.py from src/strings.txt):
+                ; string table, dictionary, token streams. Read at runtime with
+                ; BANK_TEXT paged (msg_push / show_impact_msg / print6t), so its
+                ; labels are DISPed to the runtime $C000.. address.
+text_img:
+                DISP $ + TEXT_DISP
+                INCLUDE "../build/text/strings.asm"
+                ENT
+text_img_end:
+                ASSERT text_img_end <= BANK_WINDOW             ; all in bank 1 (virtual < $C000)
+                ASSERT text_base == text_img + TEXT_DISP
+vdata_end:
+VDATA_LEN       EQU vdata_end - vdata
+VIRT_TOTAL      EQU vdata_end - sprite_src
+    IF VIRT_TOTAL > $4000
 SRC_LEN_LO      EQU $4000
     ELSE
-SRC_LEN_LO      EQU SRC_TOTAL
+SRC_LEN_LO      EQU VIRT_TOTAL
     ENDIF
-SRC_LEN_HI      EQU SRC_TOTAL - SRC_LEN_LO
-                ASSERT SRC_TOTAL <= $8000
-                DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B (bank1 ", /D, SRC_LEN_LO, ", bank3 ", /D, SRC_LEN_HI, ")"
-    IF ZX0_SOURCES
+SRC_LEN_HI      EQU VIRT_TOTAL - SRC_LEN_LO
+                ASSERT VIRT_TOTAL <= $8000
+                DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B + vdata ", /D, VDATA_LEN, " B (bank1 ", /D, SRC_LEN_LO, ", free ", /D, $4000 - SRC_LEN_LO, "; bank3 ", /D, SRC_LEN_HI, ")"
+                DISPLAY "GAME text (bank 1): ", /D, TX_COUNT, " strings, ", /D, TX_TOKENS, " tokens, raw ", /D, TEXT_RAW, " -> ", /D, TEXT_PACKED, " B packed at ", /H, text_base
                 DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed; total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
-    ENDIF
 
 
 ;==============================================================================
@@ -94,6 +116,25 @@ AY_LEN          EQU ay_code_end - AY_RESERVE
                 DISPLAY "GAME AY slot (bank 3): ", /H, AY_RESERVE, "..", /H, ay_code_end - 1, " (", /D, AY_LEN, " B), free in the 7 KB reserve: ", /D, AY_RESERVE_END - ay_code_end, "; ISR ", /D, ISR_LEN, " B at ", /H, ISR_ADDR
 
 ;==============================================================================
+; LEVEL TILESETS (B3B-8) — the 8 per-level tile sets (tools/tiles_convert.py,
+; slot format TSET_* in level_defs.asm) in the bank-7 spare: slots 0-3 above
+; screen 2 (TSET_LO), 4-7 above the shadow attrs (TSET_HI; TSET_SPLIT, a
+; macro the generated file invokes between D4 and D5). Two headerless tape
+; blocks (`start` .t7lo / .t7hi); level_load_tiles copies one slot per level.
+;==============================================================================
+                MMU  3, BANK_TSET
+    MACRO TSET_SPLIT
+tsets_lo_end:
+                ORG  TSET_HI
+    ENDM
+                ORG  TSET_LO
+                INCLUDE "../assets/gfx/tiles/tilesets.asm"
+                ASSERT tileset_d1 == TSET_LO && tileset_d5 == TSET_HI
+                ASSERT tileset_d2 - tileset_d1 == TSET_STRIDE && TILESET_SLOT_LEN == TSET_STRIDE
+                ASSERT tsets_lo_end == TSET_LO + TSET_HALF_LEN && tilesets_end == TSET_HI + TSET_HALF_LEN
+                ASSERT tsets_lo_end <= SHADOW_BITMAP && tilesets_end <= $10000
+
+;==============================================================================
 ; BANK-5 LOW-RAM COLD CODE — tape entry, boot, generator, init_tiles, game
 ; start (lowram.asm). ORGed so it ends exactly at $8000 (no ALIGN inside, so
 ; its size does not depend on its base): contiguous with the bank-2 image.
@@ -108,8 +149,8 @@ LOWRAM_CODE_LEN EQU lowram_code_end - lowram_code
                 ; the descriptors are the tail of the cold block: room for the
                 ; remaining FRT_MAX - FDESC_COUNT ones is kept free below it
 FDESC_GROW      EQU (FRT_MAX - FDESC_COUNT) * FDESC_STRIDE
-LOWRAM_SPARE    EQU lowram_code - ZX0_RESERVE - FDESC_GROW - LOWRAM_FREE_END
-                ASSERT lowram_code - ZX0_RESERVE - FDESC_GROW >= LOWRAM_FREE_END
+LOWRAM_SPARE    EQU lowram_code - FDESC_GROW - LOWRAM_FREE_END
+                ASSERT lowram_code - FDESC_GROW >= LOWRAM_FREE_END
                 ASSERT fdesc_end == lowram_code_end
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= TILE_GLYPHS  ; the lowest buffer above the alias
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= BITREV_TAB
@@ -168,6 +209,23 @@ probe_render_done:
                 call pmark_dmg
 probe_render_done:
     ENDIF
+                ; B3B-10: animated decor. After this tick's render (the drawn
+                ; footprints R_COL..R_ROWS it tests are render's; anim_tick only
+                ; rewrites R_VIS / R_FID) and, with RENDER_FIRST, after the turn
+                ; logic: a heavy input tick is then usually in its 2nd frame,
+                ; where decor_tick holds (it never lengthens such a tick)
+                call decor_tick
+                ; B3B-11 (D5, user 2026-10-03): one panel item per tick, in ANIM
+                ; ticks >= 1 and idle ticks, never in a turn's input tick (TURN_PHASE
+                ; = ANIM with TURN_TICK still 0: read_turn_input just started it)
+                ld   a, (TURN_PHASE)
+                or   a
+                jr   z, .panel
+                ld   a, (TURN_TICK)
+                or   a
+                jr   z, panel_done
+.panel:         call panel_tick
+panel_done:                                    ; test probe (no code): panel item done
                 ld   a, (TURN_PHASE)
                 or   a
                 jr   z, play_loop
@@ -220,6 +278,7 @@ read_turn_input:
                 jr   nz, .held
                 xor  a
                 ld   (NEED_RELEASE), a
+                ld   (LOCK_SHOWN), a           ; B3B-5: next bump may print again
                 ret
 .held:          ld   a, (INPUT_REPEAT)
                 or   a
@@ -233,7 +292,8 @@ read_turn_input:
                 ld   (NEED_RELEASE), a
                 ld   a, (EXIT_KIND)
                 or   a
-                call z, resolve_monsters       ; exit turn: monsters don't act
+                ld   hl, resolve_monsters      ; B3B-R2: bank 3, one far3 a turn
+                call z, far3                   ; exit turn: monsters don't act
                 ld   a, TP_ANIM
                 ld   (TURN_PHASE), a
                 xor  a
@@ -242,7 +302,8 @@ read_turn_input:
 
 ;------------------------------------------------------------------------------
 ; end_turn — ANIM finished: transition (if exiting), TURN_COUNTER++, potion
-; pickup, HUD, death / win checks, back to INPUT.  Clobbers: all but IY.
+; pickup, death check (B3B-11: messages via the log; B3B-13: msg_push), back
+; to INPUT.  Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 end_turn:
                 ld   a, (EXIT_KIND)
@@ -251,44 +312,28 @@ end_turn:
                 ld   hl, (TURN_COUNTER)
                 inc  hl
                 ld   (TURN_COUNTER), hl
-                call potion_pickup
-                call hud_status
-                xor  a
+                ld   hl, potion_pickup         ; B3B-R2: bank 3 (B3B-11: HP / potions
+                call far3                      ; reach the panel by
+                xor  a                         ; panel_tick's poll, not from here)
                 ld   (TURN_PHASE), a
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
-                jr   z, .alive
+                ret  z                         ; (B3B-13: the PROTO chest win is gone; a run
+                                               ; wins by descending from D8, level_descend)
                 ld   a, GS_DEAD
                 ld   (GAME_STATE), a
-                call msg_begin
-                ld   hl, str_died
-                jp   print_str
-.alive:         ; win: standing on storey 0 of room D with x <= 3 (§8.2)
-                ld   a, (CUR_ROOM)
-                cp   WIN_ROOM
-                ret  nz
-                ld   ix, P_ENTITIES
-                call is_standing
-                ret  nz
-                call storey_ref
-                or   a
-                ret  nz
-                ld   a, (ix+E_X)
-                cp   WIN_MAX_X + 1
-                ret  nc
-                ld   a, GS_WIN
-                ld   (GAME_STATE), a
-                call msg_begin
-                ld   hl, str_win
-                jp   print_str
+                ld   a, TX_DIED
+                jp   msg_push_end              ; never dropped (B3B-11b); end_screen drains it
 
 ;------------------------------------------------------------------------------
-; do_exit — follower selection (§3.7), frozen Cauldron transition (§3.6),
-; arrival, arrival conflicts. A7: shows bank 5 for the scroll (bank-3 code
+; do_exit — A = EXIT_KIND. EX_LEVEL: level_descend (B3B-12). Else follower
+; selection (§3.7), frozen Cauldron transition (§3.6), arrival, arrival conflicts. A7: shows bank 5 for the scroll (bank-3 code
 ; scrolls $4000), then present_full copies it to bank 7 and shows bank 7.
 ; Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 do_exit:
+                cp   EX_LEVEL                  ; A = EXIT_KIND (end_turn)
+                jp   z, level_descend          ; B3B-12: the level exit (lowram)
                 ld   hl, follow_select         ; bank 3 (cold)
                 call far3
                 call hide_sprites              ; every sprite hidden, hero too
@@ -297,14 +342,15 @@ do_exit:
                 ld   (GAME_STATE), a
                 ld   h, NEXT_MAP >> 8
                 ld   a, (EXIT_DEST)
-                call build_room_map
+                call build_room                ; B3B-8: far3 -> bank-3 build_room_map v2
                 ld   a, (EXIT_KIND)            ; scroll arg: the exit direction
                 ld   hl, hscroll_room          ; both scrolls live in bank 3
                 cp   EX_UP
                 jr   c, .h
                 ld   hl, vscroll_room
 .h:             call far3
-                call shadow_room               ; clean background of the new room
+                call room_shadow               ; clean background of the new room + its
+                                               ; row-17 ornament (the scroll drew the screen's)
                 ld   a, (EXIT_DEST)
                 ld   (CUR_ROOM), a
                 ld   ix, P_ENTITIES
@@ -330,16 +376,15 @@ do_exit:
                 ld   b, a
                 ld   a, (EXIT_KIND)
                 cp   EX_UP
-                ld   a, (STOREYS - 1) * STOREY_H + 6   ; up: stand on storey 2
+                ld   a, FLOOR_ROW1             ; up: stand on the bottom storey (9s+8-h, s 1)
                 jr   z, .vy
-                ld   a, 6                      ; down: stand on storey 0
+                ld   a, FLOOR_ROW0             ; down: stand on storey 0
 .vy:            sub  b
                 ld   (ix+E_Y), a
 .pos:           call snap_pxpy
                 ld   (ix+E_MODE), M_REST
                 ld   hl, arrival_conflicts     ; bank 3 (cold)
                 call far3
-                call hud_room
                 call vis_room_sync             ; B7: no old-room sprite in the next render
                 call present_full              ; A7: bank 5 -> 7 (6,912 B), show bank 7
                 xor  a
@@ -353,6 +398,7 @@ do_exit:
 ; the same fixed seed, §6.5).
 ;------------------------------------------------------------------------------
 end_screen:
+                call panel_tick                ; B3B-11: the death / win line, HP 0
                 call scan_matrix
                 call sample_input
                 ld   a, (PLAYER_DISC)
@@ -377,12 +423,62 @@ enter_select:
                 INCLUDE "logic.asm"
                 INCLUDE "anim.asm"
                 INCLUDE "data.asm"
+                INCLUDE "panel2.asm"            ; B3B-11 panel engine, bank-2 part
+                INCLUDE "decor.asm"             ; B3B-10 animated decor (decor_tick)
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
 ; pages, K_MAX (32) B per array; no array crosses a page (KFIELD, feet_mod).
 ;==============================================================================
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
+                DS   (-($ + TILE_IDS + DT_ATTR_LEN)) & $FF, 0    ; B3B-5: tile_flags ends on the page
+;------------------------------------------------------------------------------
+; dt_attr_tab — B3B-10 decor_tick attr cycles, 8 steps per kind (concept-screen
+; §3.3): kind 1 flame (DT_HOT -> DT_RED -> DT_DIM: small / tall torch bodies),
+; kind 2 candle (8-step flicker). Whole attr bytes: they override the cell's
+; paper (black on every cycled cell, see decor.asm DT_HOT). In the pad below
+; tile_flags: never crosses a page.
+;------------------------------------------------------------------------------
+dt_attr_tab:
+                DB   DT_HOT, DT_RED, DT_DIM, DT_HOT, DT_RED, DT_DIM, DT_HOT, DT_RED   ; 1 flame
+                DB   DT_HOT, DT_HOT, DT_DIM, DT_HOT, DT_RED, DT_HOT, DT_HOT, DT_DIM   ; 2 candle
+DT_ATTR_LEN     EQU  DT_KINDS * 8
+                ASSERT $ - dt_attr_tab == DT_ATTR_LEN && (dt_attr_tab >> 8) == (($ - 1) >> 8)
+;------------------------------------------------------------------------------
+; tile_flags — TILE_FLAGS[64] (D2, level_defs.asm TF_*), static, by tile id;
+; the 64 B right below kind_tab (low byte $C0: cell_blocked adds the id with
+; no carry, H constant). Placed in the ALIGN pad, so it costs no bank-2 bytes
+; beyond its 64. Per-level ids 32..59 = 0 (decor), 60..63 = lectern / Book
+; until the first level_load_tiles (B3B-8) overwrites 32..63 from the slot.
+; Solidity belongs to the cell class (game.md §1.2 "Solidity of decor",
+; designer 2026-10-03): the wall set (DARK = T_BRICK, DITHER, PATCH, FADE) is
+; SOLID and only ever replaces wall cells; rubble / skulls / moss / cobweb /
+; chain / torch / candles / drips are not. Per-level wall variants (pillar,
+; plaster patches in 32..59) carry TF_SOLID in their tileset slot's flags.
+;------------------------------------------------------------------------------
+tile_flags:
+                DB 0                                   ;  0 T_AIR
+                DB TF_FLOOR                            ;  1 T_PLAT
+                DB TF_SOLID                            ;  2 T_BRICK (wall, lintel, block)
+                DB TF_SOLID | TF_FLOOR                 ;  3 T_WALLF
+                DB TF_LADDER, TF_LADDER, TF_LADDER     ;  4-6 T_LAD_L/M/R
+                DB TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE ; 7-9 T_HOLE_*
+                DB 0                                   ; 10 T_POTION (floor item)
+                DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12-13 chain, skulls
+                DB TF_ANIM, TF_ANIM                    ; 15-16 T_TORCH_T/B
+                DB TF_ANIM, TF_ANIM                    ; 17-18 T_DRIP1/2 (PROTO zap: overlay only)
+                DB TF_FLOOR, TF_FLOOR                  ; 19-20 T_END_L/R = pit caps
+                DB TF_SOLID, TF_SOLID                  ; 21-22 T_DOOR_ARCH_L/R
+                DB TF_SOLID | TF_DOOR, TF_SOLID | TF_DOOR   ; 23-24 T_DOOR_L/R (closed planks)
+                DB TF_SOLID | TF_DOOR | TF_LOCK        ; 25 T_DOOR_LOCK
+                DB TF_FLOOR                            ; 26 T_GRATE (closed)
+                DB 0                                   ; 27 T_RUBBLE (decor at a block's foot)
+                DB TF_SOLID, TF_SOLID, TF_SOLID        ; 28-30 wall set DITHER / PATCH / FADE
+                DB TF_ANIM                             ; 31 T_CANDLES
+                DS T_LVL_OBJ - TILE_COMMON, 0          ; 32-59 per-level decor
+                DS T_LVL_OBJ_N, TF_SOLID | TF_ATTACK   ; 60-63 lectern / Book
+                ASSERT $ - tile_flags == TILE_IDS
+                ASSERT (tile_flags & $FF) + TILE_IDS == $100     ; one page, ends on it
                 ALIGN 256
 kind_tab:
                 ASSERT K_COUNT <= K_MAX            ; A6 review: every kind has a column
@@ -397,19 +493,27 @@ kind_tab:
                 KROW   0,  1,  1,  0,  0,  0,  0,  0,  0          ; KT_BONUS
                 KROW   1,  3,  1,  1,  1,  1,  1,  1,  1          ; KT_REACH
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  2          ; KT_PERIOD
-                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER|KF_ZAP, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL, KF_CLIMBER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0  ; KT_FLAGS
+                ; B3B-5: skeleton + goblin are openers (game.md §9.1); the heroes
+                ; open by bump in try_horizontal, not through KF_OPENER
+                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER|KF_ZAP, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0  ; KT_FLAGS
                 KROW $47,$45,$44,$47,$44,$45,$06,$43,$44          ; KT_ATTR
                 KROW KFID_KNIGHT, KFID_WIZARD, 0, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME   ; KT_FID0
                 KROW KFCNT_KNIGHT, KFCNT_WIZARD, 0, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME ; KT_FCNT
-                ASSERT $ - kind_tab == KT_MOD7
-                ASSERT (KT_MOD7 >> 8) == ((KT_DIV7 + 23) >> 8)    ; feet_mod: one H for both
+                ASSERT $ - kind_tab == KT_MOD9
+                ; walker height (B3B-5 lead_cell, logic.asm): a non-flyer body
+                ; never reaches a door's arch / lintel rows. Reads the bytes
+                ; just assembled ({b}), so it covers every kind automatically.
+                DUP K_COUNT, n
+                ASSERT ({b kind_tab + KT_FLAGS + n} & KF_FLYER) || ({b kind_tab + KT_BH + n} <= STOREY_AIR - DOOR_PLANK_DY)
+                EDUP
+                ASSERT (KT_MOD9 >> 8) == ((KT_DIV9 + 23) >> 8)    ; feet_mod: one H for both
                 ASSERT (KT_FID0 >> 8) == (KT_FCNT >> 8)            ; gen_kind: one H for both
                 DUP 24, n
-                DB   n % 7                     ; KT_MOD7
+                DB   n % STOREY_ROWS           ; KT_MOD9
                 EDUP
-                ASSERT $ - kind_tab == KT_DIV7
+                ASSERT $ - kind_tab == KT_DIV9
                 DUP 24, n
-                DB   n / 7                     ; KT_DIV7
+                DB   n / STOREY_ROWS           ; KT_DIV9
                 EDUP
                 ASSERT $ - kind_tab == KT_END
                 ASSERT KT_END <= KT_SIZE           ; $1D0..$1FF spare (resistances, 3F)
@@ -426,7 +530,7 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
                 ASSERT LOWRAM_END <= LOWRAM_FREE_END
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, kind_tab - kind_tab_pad, " B kind_tab ALIGN pad); free runtime RAM ", /H, BANK2_FREE, "..", /H, BANK2_FREE_END - 1, ": ", /D, BANK2_FREE_END - BANK2_FREE
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, dt_attr_tab - kind_tab_pad, " B kind_tab ALIGN pad); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
 
 ;------------------------------------------------------------------------------
 ; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"
@@ -469,5 +573,8 @@ tap_loader_len  EQU  $ - tap_loader
                 MMU  3, BANK_COLD3             ; source tail + bank-3 cold code
                 SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, BANK3_LEN
                 SAVETAP  "build/wazhack.tap", HEADLESS, AY_RESERVE, AY_LEN   ; A8 AY slot (BANK_AY = 3)
+                MMU  3, BANK_TSET              ; B3B-8: level tilesets (2 x 1,280 B)
+                SAVETAP  "build/wazhack.tap", HEADLESS, TSET_LO, TSET_HALF_LEN
+                SAVETAP  "build/wazhack.tap", HEADLESS, TSET_HI, TSET_HALF_LEN
                 MMU  3, 0
                 SAVESNA  "build/wazhack.sna", boot

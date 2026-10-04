@@ -56,7 +56,8 @@ python3 tests/game.py 5 9 30          # only the listed checklist items
 python3 tests/game.py --update-golden # refresh game_select / game_start hashes
 python3 tests/budget.py          # per-tick T-state budget (exit 1 if > 2 frames)
 GAME_PROFILE=1 python3 tests/budget.py   # + per-phase split of the worst tick
-python3 tests/zx0_pool.py       # A5/A6: builds ZX0_SOURCES=1 and =0 itself (tools/build.sh -o tmp), pool banks 0/4/6 + FRT byte-identical at boot / each hero start / hero regen after a game / regen over a poked STALE GEN_ZBLK + garbage GEN_SCRATCH (A6 negative cache test); GEN_TRAP 0; prints cold-path T-states (--baseline DIR: also an old checkout, e.g. a `git archive` of it)
+python3 tests/zx0_pool.py       # pool banks 0/4/6 + FRT + SEL_FRT_SAVE + allocator bit-exact vs a Python reference generator over the RAW frame data (B3B-12; the raw -DZX0_SOURCES=0 build is retired) at boot / each hero start / hero regen after a game / regen over a poked STALE GEN_ZBLK + garbage GEN_SCRATCH; GEN_TRAP 0; prints cold-path T-states (--baseline DIR: an old checkout against the same reference)
+python3 tests/world.py [W16 ...] # 3B world suite; W16 = level change (generated D1, descend D1->D8, win), W9R = door opened in the bank-3 monster phase
 python3 tests/zx0_roundtrip.py   # A4: every frame / kind block packs + unpacks bit-exact with the reference dzx0
 FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scenarios a/b/c); MEASUREMENT, not a pass/fail gate; A/B the order with -DRENDER_FIRST=0
 ```
@@ -91,4 +92,9 @@ FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scena
   Loader autoload (the only test of the real `start` path; the .sna enters at
   `boot`): GS_SELECT, select golden, GEN_OVERFLOW 0, banks 1/3 == .sna, then a
   game start golden. It free-runs briefly (polls GAME_STATE, 60 s cap).
-- Regression gate: `game.py` + `budget.py` green.
+- Regression gate: `game.py` + `world.py` + `budget.py` + `zx0_pool.py` green.
+- **B3B-12 start mode:** new games start on a generated D1 by default.
+  `game_lib.Proto.load()` pokes `proto_start = 1` after every load (and #50
+  after the tape boot), so every PROTO-room scenario keeps rooms A-D; set
+  `p.proto_start = 0` for a generated start (W16 also pokes `seed_fixed` /
+  `seed_value` for a reproducible master seed).
