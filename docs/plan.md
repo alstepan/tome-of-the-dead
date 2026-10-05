@@ -294,7 +294,7 @@ bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
 | C3-2b ✅ `7c58ca7` (review pending) | **icon mode via DOWN+FIRE** replaces FIRE-held cursor moves (user 2026-10-05; designer defines §3.1/§3.5) — rework of C3-2's intent machine after C3-3 | S | C3-3 |
 | C3-8a/b | port suites to the menu start + joystick-only exit runs | J | C3-1/2/6, C3-3 |
 
-Bugs B11/B14 fixed on main (squash 2026-10-04). **Merging main into feat/3c-hero needs an address fix: B14's CLIMB_BLK_ID/N at $BFC7/$BFC8 clash with C3-1's PLAYER_SC at $BFC7 — reallocate one side.** B12 gate art: **user 2026-10-05 chose variant B** (lattice bar, `gate_raised_b`, `9d3b091` feat/3c-gate); marker above the exit: **glow** (user 2026-10-05; needs a tile id — designer to allocate); closed 3F gate as drawn unless the user changes it.
+Bugs B11/B14 fixed on main (squash 2026-10-04). **Merging main into feat/3c-hero needs an address fix: B14's CLIMB_BLK_ID/N at $BFC7/$BFC8 clash with C3-1's PLAYER_SC at $BFC7 — reallocate one side.** B12 gate art: **user 2026-10-05 chose variant B** (lattice bar, `gate_raised_b`, `9d3b091` feat/3c-gate); marker above the exit: **glow** as a per-level id on every level (user 2026-10-05, option a; D5/D7 drop PILLAR, D4 drops one decor item); COBWEB_R + gate variant B in tiles `f8a78c8` (feat/d1-decor); staff to draw id 26 on the open lair exit (flag TF_LADDER|TF_HOLE, not TF_FLOOR) + glow + lair hint; closed 3F gate as drawn unless the user changes it.
 
 ### 3D — Combat & magic (needs game.md §4–6)
 Projectile entities (range, wall reflection, can hit caster); spells; Warrior
