@@ -291,6 +291,7 @@ bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
 | C3-5 ✅ `3b6f6ae` (feat/3c-menuart; 1,104 B: font 656 + title 277 + torch 107 + map 64) | menu fonts/title/torch art convert | J/artist | – |
 | C3-6 | menu, redefine, pause overlay, end screens, seed entropy (bank 1) | S | C3-0/1/4/5 |
 | C3-7 | JUMP1/2 + Mage STAFF_SWING frames (art first) | S | art |
+| C3-2b | **icon mode via DOWN+FIRE** replaces FIRE-held cursor moves (user 2026-10-05; designer defines §3.1/§3.5) — rework of C3-2's intent machine after C3-3 | S | C3-3 |
 | C3-8a/b | port suites to the menu start + joystick-only exit runs | J | C3-1/2/6, C3-3 |
 
 Bugs B11/B14 fixed on main (squash 2026-10-04). **Merging main into feat/3c-hero needs an address fix: B14's CLIMB_BLK_ID/N at $BFC7/$BFC8 clash with C3-1's PLAYER_SC at $BFC7 — reallocate one side.** B12 gate art: **user 2026-10-05 chose variant B** (lattice bar, `gate_raised_b`, `9d3b091` feat/3c-gate); marker above the exit: **glow** (user 2026-10-05; needs a tile id — designer to allocate); closed 3F gate as drawn unless the user changes it.
