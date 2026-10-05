@@ -287,7 +287,7 @@ bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
 | C3-7 | JUMP1/2 + Mage STAFF_SWING frames (art first) | S | art |
 | C3-8a/b | port suites to the menu start + joystick-only exit runs | J | C3-1/2/6, C3-3 |
 
-Bugs B11/B14 fixed on main (squash 2026-10-04). **Merging main into feat/3c-hero needs an address fix: B14's CLIMB_BLK_ID/N at $BFC7/$BFC8 clash with C3-1's PLAYER_SC at $BFC7 — reallocate one side.** B12 gate art drafts on the canvas (board B12, `9d3b091` feat/3c-gate) awaiting the user.
+Bugs B11/B14 fixed on main (squash 2026-10-04). **Merging main into feat/3c-hero needs an address fix: B14's CLIMB_BLK_ID/N at $BFC7/$BFC8 clash with C3-1's PLAYER_SC at $BFC7 — reallocate one side.** B12 gate art: **user 2026-10-05 chose variant B** (lattice bar, `gate_raised_b`, `9d3b091` feat/3c-gate); marker above the exit (glow / candles / none) still open; closed 3F gate as drawn unless the user changes it.
 
 ### 3D — Combat & magic (needs game.md §4–6)
 Projectile entities (range, wall reflection, can hit caster); spells; Warrior
