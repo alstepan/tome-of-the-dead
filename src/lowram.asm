@@ -1016,6 +1016,10 @@ room_bodies:
 ;    cell") and goes PENDING in place (the §3.6 arrival-conflict mechanism:
 ;    hidden, collides with nothing, does not act — no free attack — and
 ;    materialises when that box is free; facing kept). Any kind, no exclusions.
+;    B16: a FLYER of the other storey (s != t) keeps its x / y and only goes
+;    PENDING — the foot cell is not in its air band; moving it there dropped
+;    a ghost over the top box onto the floor below (flyers never leave their
+;    band, prototype §3.5). Same storey: the foot cell is its band bottom.
 ;    Log: "YOU SQUEEZE PAST THE <NAME>" (impact_line, MSG_SQUEEZE).
 ; read_turn_input clears CLIMB_BLK_N after every other consumed turn
 ; (CLIMB_BLK = 0: a move, a wait, a climb that went through); level_reset
@@ -1075,15 +1079,24 @@ climb_blocked:
                 jr   nz, .n
                 call box_vs_ix                 ; in the hero's new box?
                 jr   nc, .n
-                ld   (ix+E_X), c
+                ld   (ix+E_MODE), M_REST
+                set  EF_PENDING_BIT, (ix+E_FLAGS)
+                KFIELD KT_FLAGS                ; B16: the foot cell is in a flyer's
+                and  KF_FLYER                  ; band only on its own storey: one
+                jr   z, .mv                    ; of the other storey stays PENDING
+                call storey_ref                ; in place (else it was dropped onto
+                call storey_row                ; the floor below / lifted above;
+                inc  a                         ; flyers never leave their band,
+                ld   hl, TMP7                  ; §3.5). A = 9s+8 vs 9t+8
+                cp   (hl)
+                jr   nz, .kind
+.mv:            ld   (ix+E_X), c
                 KFIELD KT_BH
                 ld   h, a
                 ld   a, (TMP7)
                 sub  h
                 ld   (ix+E_Y), a
-                ld   (ix+E_MODE), M_REST
-                set  EF_PENDING_BIT, (ix+E_FLAGS)
-                ld   a, (TMP5)
+.kind:          ld   a, (TMP5)
                 inc  a
                 jr   nz, .n
                 ld   a, (ix+E_KIND)

@@ -614,6 +614,11 @@ ladder end** in its current climb direction.
   afterwards (a reach monster hits as usual). E keeps its facing and is not stunned.
   Message `YOU SQUEEZE PAST THE <NAME>` (names <= 8 chars, total <= 32). A blocker
   that yields on the first wait never triggers the swap (the normal case).
+  **B16 (engineering rule 2026-10-05):** a *flyer* of the other storey (its band is
+  not the storey the climb leaves) is not moved — the foot cell lies outside its air
+  band, and moving it dropped a ghost over the top box onto the floor below. It goes
+  PENDING in place (hidden, non-colliding) and materialises once its box is free.
+  Flyers never leave their band. `tests/game.py` #64 / #65.
 
 Monsters get their fights when the hero steps off: the player acts first each turn,
 and in-reach monsters then attack.

@@ -1202,6 +1202,139 @@ def main():
                      "(no squeeze needed)", ys, [(5, 0, False)] * 4)
             h.expect("63e hero reaches storey 0 within 9 turns", climb(9), True)
 
+        # 64 / 65 shared setup: room A {5,1} (top box storey 0 cols 5..7,
+        # bottom box storey 1), walls poked into ROOM_MAP (logic only).
+        HB = EF_ACTIVE | EF_HOSTILE
+
+        def fly_setup(walls, hero, bodies):
+            p.boot(K_KNIGHT)
+            p.isolate()
+            for col, rows in walls:
+                for r_ in rows:
+                    p.wb(S["ROOM_MAP"] + 32 * r_ + col, S["T_BRICK"])
+            p.place(0, *hero)
+            for slot, kind, x, y, fl in bodies:
+                p.set_ent(slot, KIND=kind, HP=p.rb(S["kind_tab"] + S["KT_HP"] + kind))
+                p.place(slot, x, y, room=0, flags=fl)
+
+        def band_of(slot):
+            """(storey, lo, hi) of a flyer's air band from its current y."""
+            e = p.ent(slot)
+            _, h_ = body(p, e["KIND"])
+            s_ = storey_of(e["Y"], h_)
+            return s_, STOREY_ROWS * s_, STOREY_ROWS * s_ + STOREY_ROWS - 1 - h_
+
+        def drive(key, goal_y, n, slots):
+            """Press key (SPACE if illegal) until the hero stands at goal_y or
+            n turns pass. Returns (reached in <= n turns, [band violations]):
+            a violation = a flyer (pending or not) outside the air band of the
+            storey it started in, or in another room."""
+            bands = {s_: band_of(s_) for s_ in slots}
+            bad, t0 = [], p.rw("TURN_COUNTER")
+            for _ in range(n + 4):
+                if p.ent(0)["Y"] == goal_y and is_standing(goal_y, 6):
+                    break
+                if not p.turn(key):
+                    p.turn("SPACE")
+                for s_, (st, lo, hi) in bands.items():
+                    e = p.ent(s_)
+                    if not (lo <= e["Y"] <= hi) or e["ROOM"] != 0:
+                        bad.append((s_, e["X"], e["Y"], e["ROOM"]))
+            return p.ent(0)["Y"] == goal_y and p.rw("TURN_COUNTER") - t0 <= n, bad[:3]
+
+        # 64 (B15, user 2026-10-05, seen on a build without the B14 fixes):
+        # the hero on the TOP of {5,1} climbing DOWN, a flyer beside the
+        # shaft with a wall on its far side. The B14 rules (forced yield,
+        # squeeze past) must work for a downward climb exactly as upward.
+        # A storey-0 flyer can never overlap a down climb from the top (the
+        # hero's own standing box covers rows 2..7), so the blockers that
+        # matter hover over the FOOT (storey 1, the hero's path rows 9..16);
+        # the literal report (ghost left of the top box, wall left) is case e.
+        if want(64):
+            cases = [  # tag, walls, slot, kind, x, y, flags
+                ("a ghost storey 1 left of the shaft, wall left", [(2, range(9, 17))],
+                 SLOT_GHOST, K_GHOST, 3, 10, HB),
+                ("b ghost storey 1 right of the shaft, wall right", [(10, range(9, 17))],
+                 SLOT_GHOST, K_GHOST, 7, 10, HB | EF_LEFT),
+                ("c bat storey 1 left, wall left", [(2, range(9, 17))],
+                 SLOT_BATB, K_BAT, 3, 9, HB),
+                ("d bat storey 1 right, wall right", [(10, range(9, 17))],
+                 SLOT_BATB, K_BAT, 7, 9, HB | EF_LEFT),
+                ("e ghost storey 0 left of the top box, wall left", [(1, range(0, 8))],
+                 SLOT_GHOST, K_GHOST, 2, 1, HB),
+                ("f ghost storey 0 right of the top box, wall right", [(11, range(0, 8))],
+                 SLOT_GHOST, K_GHOST, 8, 1, HB | EF_LEFT),
+                ("g ghost on the shaft col over the foot, wall left", [(4, range(9, 17))],
+                 SLOT_GHOST, K_GHOST, 5, 9, HB),
+                ("h ghost storey 1 corridor (walls 4 / 8): squeeze", [(4, range(9, 17)), (8, range(9, 17))],
+                 SLOT_GHOST, K_GHOST, 5, 10, HB),
+            ]
+            for tag, walls, slot, kind, x, y, fl in cases:
+                fly_setup(walls, (5, Y0), [(slot, kind, x, y, fl)])
+                ok, bad = drive("J", Y1, 12, [slot])
+                h.expect(f"64{tag}: hero descends {{5,1}} to storey 1 within 12 turns", ok, True)
+                h.expect(f"64{tag}: the flyer stays in its band", bad, [])
+
+        # 65 (B16, user 2026-10-05: "a ghost sometimes falls to the floor
+        # below"): flyers never leave their storey band. Root cause: the B14
+        # squeeze moved every blocker to the hero's foot cell on the storey
+        # the climb LEAVES, so a flyer of the other storey (a ghost over the
+        # top box when the hero climbs up from storey 1) was dropped onto
+        # the floor below. (a) the #63b corridor squeeze, up; (b) down;
+        # (c) a deterministic fuzz: flyers anywhere near both shafts of room
+        # A, the hero climbing / walking / waiting around them.
+        if want(65):
+            fly_setup([(4, range(0, 8)), (8, range(0, 8))], (5, Y1),
+                      [(SLOT_GHOST, K_GHOST, 5, 1, HB)])
+            ok, bad = drive("K", Y0, 11, [SLOT_GHOST])
+            h.expect("65a ghost squeezed on the up climb: hero on storey 0 within 11 turns", ok, True)
+            h.expect("65a the ghost never leaves its storey-0 band", bad, [])
+            fly_setup([(4, range(0, 8)), (8, range(0, 8))], (5, Y1),
+                      [(SLOT_BATB, K_BAT, 5, 3, HB)])
+            ok, bad = drive("K", Y0, 11, [SLOT_BATB])
+            h.expect("65a' bat (rows 3..4) in the top corridor: hero up within 11 turns", ok, True)
+            h.expect("65a' the bat never leaves its storey-0 band", bad, [])
+            fly_setup([(4, range(9, 17)), (8, range(9, 17))], (5, Y0),
+                      [(SLOT_BATB, K_BAT, 5, 13, HB)])
+            ok, bad = drive("J", Y1, 12, [SLOT_BATB])
+            h.expect("65b bat squeezed on the down climb: hero on storey 1 within 12 turns", ok, True)
+            h.expect("65b the bat never leaves its storey-1 band", bad, [])
+            import random
+            rnd = random.Random(16)
+            viol = []
+            for it in range(int(os.environ.get("FUZZ65", "24"))):
+                col = rnd.choice((5, 23))
+                kind, slot = rnd.choice(((K_GHOST, SLOT_GHOST), (K_BAT, SLOT_BATB)))
+                _, fh = body(p, kind)
+                fs = rnd.randint(0, 1)
+                fy = rnd.randint(STOREY_ROWS * fs, STOREY_ROWS * fs + STOREY_ROWS - 1 - fh)
+                fx = max(1, min(27, col + rnd.randint(-4, 4)))
+                walls = []
+                if rnd.random() < 0.6:
+                    wc = fx - 1 if rnd.random() < 0.5 else fx + 3
+                    if 1 <= wc <= 30 and not (col - 1 <= wc <= col + 3):
+                        walls.append((wc, range(STOREY_ROWS * fs, STOREY_ROWS * fs + STOREY_ROWS - 1)))
+                hero_s = rnd.randint(0, 1)
+                hy = Y0 if hero_s == 0 else Y1
+                fw = body(p, kind)[0]
+                if fx < col + 3 and col < fx + fw and fy < hy + 6 and hy < fy + fh:
+                    continue                        # starts inside the hero
+                fly_setup(walls, (col, hy),
+                          [(slot, kind, fx, fy, HB | (EF_LEFT if rnd.random() < 0.5 else 0))])
+                fl = p.ent(slot)
+                if fl["FLAGS"] & EF_PENDING:
+                    continue
+                st, lo, hi = band_of(slot)
+                for t_ in range(14):
+                    k_ = rnd.choice(("J", "K") * 3 + ("H", "L", "SPACE"))
+                    if not p.turn(k_):
+                        p.turn("SPACE")
+                    e = p.ent(slot)
+                    if not (lo <= e["Y"] <= hi) or e["ROOM"] != 0:
+                        viol.append((it, col, kind, fx, fy, t_, e["X"], e["Y"]))
+                        break
+            h.expect("65c fuzz: no flyer ever leaves its storey band", viol[:3], [])
+
         # ---------------- 60 (A7b review) merged move rects ------------------
         def dmg():
             n = p.rb("DMG_COUNT")
