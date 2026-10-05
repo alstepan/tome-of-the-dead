@@ -22,6 +22,9 @@ locked          "THE DOOR IS LOCKED"
 fall            "YOU FALL INTO A PIT"
 died            "YOU DIED - PRESS ENTER"
 win             "YOU WIN! PRESS ENTER"
+# B12 (concept-screen B3B-8 #4, game.md §1.4): first entry to the lair per level;
+# the designer's exact line (its stops are part of it)
+gate_gleams     "A GATE GLEAMS, THE WAY DOWN"
 
 # --- impact line pieces (show_impact_msg: pre + name + post) ---------------------
 you_hit         "YOU HIT THE "

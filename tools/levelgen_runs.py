@@ -4,6 +4,7 @@ cap) and the longest run of consecutive failing seeds over all 65,536 (16-bit
 wrap). level_gen fails (B = 1) only if 16 consecutive seeds fail; level_new
 then retries from seed + 16, so it needs a run < 32 to finish in <= 2 calls.
 Measured 2026-10-04: D1-D7 0 failing seeds; D8 41,096 failing, longest run 18.
+After L1 (2026-10-05, lair always on the bottom row): 0 failing seeds at every depth.
 Usage: python3 tools/levelgen_runs.py   (~10 s on 8 cores)
 """
 import os

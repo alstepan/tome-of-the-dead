@@ -132,23 +132,18 @@ def main():
 
         pairs = [(d, s) for d in range(1, 9) for s in (0x0001, 0x1234, 0xBEEF)]
         pairs += [(8, 12634), (8, 0), (8, 0xFFFF), (1, 0xFFFE)]
-        # full 65,536-seed scan (depths 1..8): max restarts d1 seed 409, max rnd
-        # calls d8 seed 64298, reseeds (15) d8 seed 55355; d8 seeds 55352/55353/55354 exhaust
-        # the 16 reseeds (Python raises, Z80 returns B=1)
-        pairs += [(1, 409), (8, 64298), (8, 55355), (6, 2184), (8, 2609)]
+        # full 65,536-seed scan after L1: max restarts d8 seed 770, max rnd calls d7
+        # seed 8823; no seed reseeds (lair reseeds 0, nothing exhausts the 16)
+        pairs += [(8, 770), (7, 8823), (8, 55355), (8, 55352)]
         pairs += [(d, d * 0x0101) for d in range(1, 9)]        # seed ^ depth*$0101 == 0 -> x = 1
         for d, s in pairs:
             ts = go(d, s, master=(s * 7) & 0xFFFF, tag="fixed")
-            if (d, s) in ((8, 12634), (8, 64298), (1, 409), (8, 55355)):
+            if (d, s) in ((8, 12634), (8, 770), (7, 8823)):
                 print(f"  T-states d{d} seed {s}: {ts}", flush=True)
         for d, sd in ((5, 0x1234), (8, 2609)):                 # interrupts on: ISR + AY slot during gen
             good, ts = case(h, p, d, sd, 0x55AA, "ei", ei=True)
             npass += good
             nfail += not good
-        for seed in (55352, 55353, 55354):
-            ok, ts, blk, rc, sx = p.run(8, seed, 0)
-            h.expect(f"d8 seed {seed} exhausts reseeds (B=1)", bool(ok and rc == 1), True)
-            print(f"  exhaust d8 seed {seed}: {ts} T rc={rc}", flush=True)
         print(f"fixed: {npass} pass {nfail} fail; worst {worst}", flush=True)
         if "--all-retries" in sys.argv:
             t0 = time.monotonic()

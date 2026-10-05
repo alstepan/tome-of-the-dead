@@ -211,10 +211,21 @@ def check(b, stats=None):
     def san(r):
         if depth != 8: return True
         return (r % 3 > 0 and r - 1 not in pset) or (r % 3 < 2 and r + 1 not in pset)
-    pools = ([r for r in present if deg[r] == 1 and r != start and has_h(r) and san(r)],
-             [r for r in present if r != start and has_h(r) and san(r)])
+    pools = ([r for r in present if r >= 6 and deg[r] == 1 and has_h(r) and san(r)],
+             [r for r in present if r >= 6 and has_h(r) and san(r)])
     pool = next((p for p in pools if p), [])
     fallback = pool is not pools[0]
+    # L1 (game.md 1.1 "L1 rules"): entry on the top row, lair on the bottom row, a
+    # bottom-row horizontal edge, D8 Sanctum cell reserved (lair 7, one bottom end absent)
+    if start > 2: v.append(f"L1: start {start} not on the top row")
+    if rd(b, start, "RD_EXITS") & D["RDX_U"] or rd(b, start, "RD_UPCOL"): v.append("L1: start has an up exit")
+    if lair < 6: v.append(f"L1: lair {lair} not on the bottom row")
+    if not (7 in adj.get(6, ()) or 8 in adj.get(7, ())): v.append("L1: no horizontal edge between bottom-row rooms")
+    if not pools[0] and not pools[1]: v.append("L1: no lair candidate")
+    if depth == 8:
+        ends = [c in pset for c in (6, 8)]
+        if lair != 7 or 7 not in pset or sum(ends) != 1: v.append(f"L1: D8 lair {lair} / Sanctum cell not reserved")
+        if n > 8: v.append("L1: D8 rooms > 8")
     if lair not in pool: v.append("lair not in candidate pool")
     elif dist.get(lair, -1) != max(dist.get(r, 0) for r in pool): v.append("lair not farthest candidate")
     def side(r, s, col):
@@ -338,11 +349,13 @@ def _scan(args):
     st = new_stats(); fails = []; mx = {"restarts": (0,), "reseeds": (0,), "calls": (0,)}; ex = []; tot = 0
     for seed in seeds:
         for depth in range(1, dmax + 1):
+            lr0 = G.LAIR_RESEEDS
             try:
                 b = G.generate(depth, seed)
             except RuntimeError:
                 ex.append((depth, seed)); continue
             rs, calls, rsd = G.LAST
+            if G.LAIR_RESEEDS != lr0: fails.append((depth, seed, ["L1: lair reseed (no bottom-row candidate)"]))
             for k, v in (("restarts", rs), ("reseeds", rsd), ("calls", calls)):
                 if v > mx[k][0]: mx[k] = (v, depth, seed)
             tot += 1
@@ -375,8 +388,10 @@ def run(nseeds=1000, dmax=8):
     for depth in range(1, dmax + 1):
         for i in range(nseeds):
             seed = (i * 0x9E37 + depth * 0x3D) & 0xFFFF or 1
+            lr0 = G.LAIR_RESEEDS
             b = G.generate(depth, seed)
             assert b == G.generate(depth, seed), "non-deterministic"
+            assert G.LAIR_RESEEDS == lr0, f"L1: lair reseed d{depth} seed {seed:#06x}"
             viol = check(b, st)
             tot += 1
             if viol:

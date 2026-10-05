@@ -20,18 +20,21 @@ with seed+1 (fresh GEN_RNG from the formula above), at most RESEED_MAX=16
 tries; the header LVL_SEED holds the seed actually used.
 The header stores the FINAL GEN_RNG state (after room seeds).
 Call order (every rnd call, in this order; a restart does NOT reseed):
- 1. n_rooms = 7 + rnd(3);  start = rnd(9)
- 2. DFS (stack): at cell, neighbours in order L,R,U,D that are unvisited; if
-    k > 0: pick = rnd(k); link; push; stop when n_rooms visited. Else pop.
- 3. loop edge: if rnd(2)==0: candidate non-tree adjacent present pairs in
-    order r=0..8 (right pair r,r+1 if gx<2, then down pair r,r+3 if gy<2);
-    if any: pick = rnd(count).
+ 1. (L1) n_rooms = 7 + rnd(3) (D8: min(n, 8));  start = rnd(3) (top row);
+    D8 only: sanctum S = 6 + 2*rnd(2) (reserved, never visited).
+ 2. DFS (stack): at cell, neighbours in order L,R,U,D that are unvisited (and
+    not S); if k > 0: pick = rnd(k); link; push; stop when n_rooms visited AND
+    cell 7 and (6 or 8) visited. Else pop.
+ 3. loop edge: if no tree edge joins 6-7 / 7-8 it is MANDATORY (no odds roll,
+    candidates from r=6..8 only); else if rnd(2)==0: candidate non-tree adjacent
+    present pairs in order r=0..8 (right pair r,r+1 if gx<2, then down pair
+    r,r+3 if gy<2); if any: pick = rnd(count).
  4. horizontal edges e=0..5 (present only): storey = rnd(2); door = (rnd(3)==0).
  5. vertical links r=0..5 with r+3 linked: col = SHAFT_MIN + rnd(SHAFT_N)
     (stored as DNCOL of r and UPCOL of r+3).
- 6. lair selection uses BFS only (no rnd): tier (a) farthest non-start leaf
-    with a horizontal edge, else (b) farthest non-start room with a horizontal
-    edge (ties: lowest id); no tier (c) -> RESEED. D8: the lair must also have
+ 6. lair selection uses BFS only (no rnd): tier (a) farthest BOTTOM-ROW leaf
+    with a horizontal edge, else (b) farthest bottom-row room with a horizontal
+    edge (ties: lowest id; always exists by 2+3); no tier (c) -> RESEED. D8: the lair must also have
     a free (absent) horizontal grid neighbour (Sanctum cell) or it is not a
     candidate. D2+: arrival col (start), then level-exit col (lair):
     pick_feature(mandatory).
@@ -147,6 +150,7 @@ class Rng:
         return self.step()
 
 
+LAIR_RESEEDS = 0            # L1: times no lair candidate existed (must stay 0)
 LAST = (0, 0, 0)            # (restarts, rnd calls, reseeds) of the last generate()
 
 
@@ -237,14 +241,20 @@ def attempt(rng, depth):
     rooms = [Room() for _ in range(9)]
     edges = [0] * 6
     n = 7 + rng.rnd(3)
-    start = rng.rnd(9)
+    if depth == 8:
+        n = min(n, 8)                   # L1 (2): the Sanctum cell is reserved
+    start = rng.rnd(3)                  # L1 (1): top grid row, nothing above it
+    sanct = 6 + 2 * rng.rnd(2) if depth == 8 else None    # L1 (5): never visited
     # DFS tree
     adj = {r: set() for r in range(9)}
     visited = {start}
     stack = [start]
-    while stack and len(visited) < n:
+
+    def done():                         # L1 (3): n rooms AND two adjacent bottom cells
+        return len(visited) >= n and 7 in visited and (6 in visited or 8 in visited)
+    while stack and not done():
         cur = stack[-1]
-        free = [x for x in nbrs(cur) if x not in visited]
+        free = [x for x in nbrs(cur) if x not in visited and x != sanct]
         if not free:
             stack.pop()
             continue
@@ -254,10 +264,12 @@ def attempt(rng, depth):
         stack.append(nx)
     for r in visited:
         rooms[r].present = True
-    # loop edge
-    if rng.rnd(LOOP_EDGE_ODDS) == 0:
+    # loop edge; L1 (4): mandatory (from the bottom-row pairs only) when no tree
+    # edge joins two bottom-row rooms, and then the odds roll is skipped
+    mand = not (7 in adj[6] or 8 in adj[7])
+    if mand or rng.rnd(LOOP_EDGE_ODDS) == 0:
         cand = []
-        for r in range(9):
+        for r in (range(6, 9) if mand else range(9)):
             if r not in visited:
                 continue
             if r % 3 < 2 and r + 1 in visited and r + 1 not in adj[r]:
@@ -299,12 +311,14 @@ def attempt(rng, depth):
         gx = r % 3
         return (gx > 0 and r - 1 not in visited) or (gx < 2 and r + 1 not in visited)
     lair = None
-    for pool in ([r for r in leaves if r != start and has_h(r) and sanctum_ok(r)],
-                 [r for r in visited if r != start and has_h(r) and sanctum_ok(r)]):
+    for pool in ([r for r in leaves if r >= 6 and has_h(r) and sanctum_ok(r)],     # L1 (6): bottom row
+                 [r for r in visited if r >= 6 and has_h(r) and sanctum_ok(r)]):
         if pool:
             lair = max(pool, key=lambda r: (dist[r], -r))
             break
     if lair is None:
+        global LAIR_RESEEDS
+        LAIR_RESEEDS += 1
         raise Reseed
     rooms[start].start = True
     rooms[lair].lair = True

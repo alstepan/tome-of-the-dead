@@ -1228,6 +1228,12 @@ pop_cols:       DB   16, 12,  18, 10,  14, 20
 
                 INCLUDE "levelgen.asm"          ; B3B-7: level_gen, level_start_x
 
+; glow_ids — B12: the per-level GLOW tile id (tileset_ids.inc), by depth - 1;
+; build_room_map stamps it above the middle cell of the open level exit.
+glow_ids:       DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_GLOW_F1_R0C0
+                DB   TS5_GLOW_F1_R0C0, TS6_GLOW_F1_R0C0, TS7_GLOW_F1_R0C0, TS8_GLOW_F1_R0C0
+                ASSERT $ - glow_ids == LEVELS
+
 ;==============================================================================
 ; build_room_map — B3B-8 v2 (plan D7; game.md §1.1 / §2.1 / §2.5 / §3.3 /
 ; §1.4, concept-screen §3.1): the tile map of room A (0..8) from ROOM_DESC +
@@ -1247,13 +1253,16 @@ pop_cols:       DB   16, 12,  18, 10,  14, 20
 ;            rows 9s-1..9s+7 clipped; row 8 = HOLE + T_END_R / T_END_L caps on
 ;            the platform either side; row 17 = HOLE, no caps (the ornament
 ;            runs to the hole). ARR: + RUBBLE over the shaft in row 0 (no exit
-;            up, game.md §1.1). EXIT: the level exit, T_GRATE over it unless
-;            LF_GRATE_OPEN (always set in 3B, §1.4: an open grate = the hole)
+;            up, game.md §1.1). EXIT: the level exit; closed (LF_GRATE_OPEN = 0,
+;            3F) T_GRATE_SHUT over it before the deriver
 ;   potions  FLOOR_LIST entries of this room (IT_POTION) -> T_POTION, row 9s+7
 ;   decor    RD_SEED != 0: decor_room (B3B-9); seed 0 (PROTO): proto_decor.
 ;            The animated cells go to ANIM_N/ANIM_LIST (ROOM_MAP) or
 ;            ANIM_N2/ANIM_LIST2 (NEXT_MAP: do_exit's room_shadow copies it
 ;            after the scroll); the list is emptied first (PROTO: stays 0)
+;   gate     B12, after the deriver, open grate only (always in 3B): T_GRATE
+;            (raised, LADDER|HOLE) over the 3 exit cells + glow_ids[depth] on
+;            row 16 above the middle one if T_AIR
 ; Clobbers: A, BC, DE, HL (IX, IY kept).   45.4k T worst (measured, DI, contended: W11 / W12M)
 ;==============================================================================
 build_room_map:
@@ -1332,11 +1341,11 @@ build_room_map:
                 ld   d, T_RUBBLE
                 ld   b, 0
                 call .three
-                ld   a, (LVL_FLAGS)            ; level exit: the grate unless open
-                and  LF_GRATE_OPEN
-                jr   nz, .pots
+                ld   a, (LVL_FLAGS)            ; level exit, CLOSED grate (3F; 3B never):
+                and  LF_GRATE_OPEN             ; drawn before the deriver as before. The
+                jr   nz, .pots                 ; open gate is stamped after it (.gate)
                 ld   a, (ix+RD_EXITCOL)
-                ld   d, T_GRATE
+                ld   d, T_GRATE_SHUT           ; TODO 3F: own closed id (level_defs.asm)
                 ld   b, FLOOR_ROW1
                 call .three
 .pots:          ; potions (3B stand-in: floor tiles, game.md §1.4)
@@ -1377,12 +1386,37 @@ build_room_map:
                 jr   z, .proto
                 ld   a, (TMP0)
                 call decor_room                ; B3B-9 (IX = descriptor)
+                ; B12 (concept-screen B3B-8 #4): the OPEN level exit = the raised gate
+                ; T_GRATE over its 3 hole cells + the depth's GLOW on the standing row
+                ; above the middle cell if that is still T_AIR. After the deriver, so its
+                ; ring rule still saw HOLE_* there: the decor stays byte-identical to
+                ; before (and nothing is ever placed beside / above the exit).
+.gate:          ld   a, (LVL_FLAGS)            ; (PROTO rooms come here too: no exit)
+                and  LF_GRATE_OPEN
+                jr   z, .x
+                ld   a, (ix+RD_EXITCOL)        ; 0 = not the lair (.three: none)
+                ld   d, T_GRATE
+                ld   b, FLOOR_ROW1
+                call .three                    ; HL = the right cell (col c+2)
+                jr   z, .x                     ; (Z from .three's or a: no exit)
+                ld   de, -(ROOM_COLS + 1)      ; -> row 16, col c+1
+                add  hl, de
+                ld   a, (hl)
+                or   a                         ; T_AIR only (decor / potion: no glow)
+                jr   nz, .x
+                ex   de, hl
+                ld   a, (LVL_DEPTH)            ; 1..8 (a lair exists only on D1..D8)
+                ld   hl, glow_ids - 1
+                call hla
+                ld   a, (hl)
+                ld   (de), a
                 pop  ix
                 ret
+                ASSERT T_AIR == 0
 .proto:         ld   hl, proto_decor           ; seed 0: the PROTO rooms' list
 .pd:            ld   a, (hl)
                 cp   $FF
-                jr   z, .x
+                jr   z, .gate
                 ld   d, a                      ; room
                 inc  hl
                 ld   e, (hl)                   ; tile
@@ -1405,7 +1439,8 @@ build_room_map:
                 ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE <= 256
                 ASSERT (FL_EMPTY & FL_ROOM_MASK) >= GRID_CELLS
 
-.three:         ; A = left col (0: none), B = row, D = tile: 3 cells
+.three:         ; A = left col (0: none -> Z), B = row, D = tile: 3 cells; drawn ->
+                ; NZ (map_cell's `or c`, C >= 1) and HL = the 3rd cell (B12 .gate)
                 or   a
                 ret  z
                 ld   c, a

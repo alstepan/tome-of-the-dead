@@ -151,9 +151,10 @@ def render_room(blk, r, decor=True, anim=None):
         for k in range(3):
             m[0][arr + k] = T["T_RUBBLE"]
     xc = d[S["RD_EXITCOL"]]
-    if xc and not blk[S["LVL_FLAGS"] - BASE] & S["LF_GRATE_OPEN"]:
+    grate_open = blk[S["LVL_FLAGS"] - BASE] & S["LF_GRATE_OPEN"]
+    if xc and not grate_open:                  # 3F closed gate (own id: TODO 3F)
         for k in range(3):
-            m[F1][xc + k] = T["T_GRATE"]
+            m[F1][xc + k] = T["T_GRATE_SHUT"]
     for i in range(S["FLOOR_MAX"]):
         o = OFF_FLOOR + i * S["FL_STRIDE"]
         room, col, item = blk[o], blk[o + 1], blk[o + 2]
@@ -169,7 +170,21 @@ def render_room(blk, r, decor=True, anim=None):
         flat, al = decorgen.decorate(flat, blk[S["LVL_DEPTH"] - BASE], seed)
         if anim is not None:
             anim[:] = al
+    if xc and grate_open:
+        # B12 (concept-screen B3B-8 #4): the open level exit = the raised gate over
+        # its 3 hole cells, after the decor (whose ring rule saw the holes), + the
+        # depth's GLOW on the standing row above the middle cell if it is still air
+        for k in range(3):
+            flat[F1 * COLS + xc + k] = T["T_GRATE"]
+        g = (F1 - 1) * COLS + xc + 1
+        if flat[g] == T["T_AIR"]:
+            flat[g] = glow_id(blk[S["LVL_DEPTH"] - BASE])
     return flat
+
+
+def glow_id(depth):
+    """B12: the per-level GLOW tile id (assets/gfx/tiles/tileset_ids.inc)."""
+    return S[f"TS{depth}_GLOW_F1_R0C0"]
 
 
 def read_block(p):

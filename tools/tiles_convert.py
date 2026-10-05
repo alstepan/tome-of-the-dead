@@ -76,7 +76,7 @@ COMMON = [
     (23, "T_DOOR_L",     ("grid", "door.tiles", "door_l")),
     (24, "T_DOOR_R",     ("grid", "door.tiles", "door_r")),
     (25, "T_DOOR_LOCK",  ("grid", "door.tiles", "door_r_ring")),        # plank-R + ring/lock plate
-    (26, "T_GRATE",      ("grid", "b10_door_grate.tiles", "grate")),    # lair exit, row 17 x3
+    (26, "T_GRATE",      ("grid", "b12_gate.tiles", "gate_raised_b")),  # B12 raised portcullis, row 17 x3
     (27, "T_RUBBLE",     ("grid", "walls_r4.tiles", "rubble")),
     # contract ids 28..30 were the round-3 dither set; the approved round-4 art replaced it
     # with ragged wall fragments (concept walls_r4.tiles): mapping below, designer may remap.
@@ -120,24 +120,32 @@ OBJ_SPEC = {
     "CAULDRON":    (False, "tiles", "decor.tiles", [[["cauldron_l", "cauldron_r1"]],
                                                     [["cauldron_l", "cauldron_r2"]]]),
     # left the common range 2026-10-03 (ids 11/14 = door jambs): 1 per-level id each
-    "COBWEB":      (False, "tiles", "decor.tiles", [[["cobweb"]]]),
+    "COBWEB":      (False, "tiles", "decor.tiles", [[["cobweb"]]]),     # left corner (top-left anchor)
+    "COBWEB_R":    (False, "mirror", "decor.tiles", [[["cobweb"]]]),    # right corner = h-mirror
+    # B12 lair-exit marker (user 2026-10-05, option a): 1 per-level id on EVERY level, stamped
+    # by the room builder on row 16 above the exit hole centre; never placed by decorgen.
+    "GLOW":        (False, "tiles", "b12_gate.tiles", [[["gate_glow"]]]),
     "MOSS":        (False, "tiles", "decor.tiles", [[["moss"]]]),
 }
 # PROPOSAL (the docs leave the per-level picks to G2; designer reviews). <= 28 ids each.
 # COBWEB / MOSS (per-level since 2026-10-03) are appended last so earlier ids stay stable;
 # they go only where the set has room (D4 / D5 / D7 are full at 28: adding them there would
 # mean cutting WINDOW_ARCH / PILLAR first, per concept-screen §3.3 -- designer's call).
+# COBWEB_R (D1 decor rules 2026-10-05, concept-screen §3.3 corner rule) goes with every
+# COBWEB; D1 / D3 / D8 were at the cap and drop PILLAR (2 ids) to fit it.
+# GLOW (B12, user 2026-10-05 option a) is last in every set: D5 / D7 drop PILLAR, D4 drops
+# WINDOW_BAR (1 id, the least-used item there) to fit it.
 LEVEL_OBJECTS = [
-    ["TORCH_TALL", "WINDOW_ARCH", "PILLAR", "BANNER", "COBWEB", "MOSS"],  # D1 Blue Keep
+    ["TORCH_TALL", "WINDOW_ARCH", "BANNER", "COBWEB", "MOSS", "COBWEB_R", "GLOW"],  # D1 Blue Keep
     ["PATCH_A", "PATCH_B", "TORCH_SLIM", "CAULDRON", "BRAZIER", "WINDOW_BAR", "BANNER",
-     "COBWEB", "MOSS"],                                                   # D2
-    ["BRAZIER_BIG", "BANNER_TALL", "PATCH_A", "PILLAR", "BOOKSHELF", "COBWEB"],  # D3 Red Crypt
-    ["TORCH_TALL", "BANNER_TALL", "WINDOW_BAR", "CAULDRON", "PATCH_A"],  # D4 Warrens
-    ["BRAZIER_BIG", "WINDOW_ARCH", "PILLAR", "PATCH_A"],                  # D5 Sandstone
+     "COBWEB", "MOSS", "COBWEB_R", "GLOW"],                               # D2
+    ["BRAZIER_BIG", "BANNER_TALL", "PATCH_A", "BOOKSHELF", "COBWEB", "COBWEB_R", "GLOW"],  # D3
+    ["TORCH_TALL", "BANNER_TALL", "CAULDRON", "PATCH_A", "GLOW"],         # D4 Warrens (-WINDOW_BAR)
+    ["BRAZIER_BIG", "WINDOW_ARCH", "PATCH_A", "GLOW"],                    # D5 Sandstone (-PILLAR)
     ["TORCH_SLIM", "PILLAR", "BOOKSHELF", "BANNER", "PATCH_A", "PATCH_B", "WINDOW_BAR",
-     "COBWEB", "MOSS"],                                                   # D6
-    ["TORCH_TALL", "PILLAR", "BANNER_TALL", "PATCH_B"],        # D7 Fortress
-    ["BRAZIER_BIG", "PILLAR", "BOOKSHELF", "BANNER_TALL", "TORCH_SLIM", "COBWEB"],  # D8 (+ lectern)
+     "COBWEB", "MOSS", "COBWEB_R", "GLOW"],                               # D6
+    ["TORCH_TALL", "BANNER_TALL", "PATCH_B", "GLOW"],                     # D7 Fortress (-PILLAR)
+    ["BRAZIER_BIG", "BOOKSHELF", "BANNER_TALL", "TORCH_SLIM", "COBWEB", "COBWEB_R", "GLOW"],  # D8
 ]
 LECTERN = ("decor_r4.grid", "lectern")      # D8 only, ids 60..63 (slot 28..31), 2x2 attackable
 
@@ -340,6 +348,9 @@ def obj_frames(name):
     else:
         for fr in spec:
             frames.append([[tile8(fname, bn) for bn in row] for row in fr])
+        if kind == "mirror":            # horizontal mirror of each cell, cells right-to-left
+            flip = lambda g: bytes(int(f"{b:08b}"[::-1], 2) for b in g)  # noqa: E731
+            frames = [[[(flip(g), a) for g, a in row[::-1]] for row in fr] for fr in frames]
     return follow, frames
 
 
@@ -398,7 +409,7 @@ def level_flags(d, ids, lect, enum):
         for grid in frames:
             for row in grid:
                 for v in row:
-                    if follow:
+                    if follow and not on.startswith("PATCH"):
                         fl[v] |= enum["TF_SOLID"]
         for f in frames[1:]:
             for r, row in enumerate(f):

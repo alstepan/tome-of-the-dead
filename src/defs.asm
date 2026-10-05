@@ -529,7 +529,7 @@ JUMP_TICKS      EQU 14              ; tick 0 / 13 JUMP1 aligned, 1..12 JUMP2 (x 
 JUMP_RISE       EQU 2               ; swept box rows top-2 .. bottom
 ATTR_DOOR       EQU $06             ; door arch / planks (concept-screen §3.1)
 ATTR_RUBBLE     EQU ATTR_WALL       ; concept-screen §3.3 #12
-ATTR_GRATE      EQU $07             ; lair grate (B10 glyph)
+ATTR_GRATE      EQU $46             ; lair gate, raised (B12 variant B; tiles_common id 26)
 
 ; KFIELD off — A = kind_tab[kind(IX) + off].  Clobbers: A, HL   (~45 T)
 ; off is a KT_* constant: its page is folded into H at assembly time.

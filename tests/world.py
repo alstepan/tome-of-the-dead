@@ -294,7 +294,58 @@ def drip_rules(m, base, flags, ents, d):
     return errs
 
 
-def decor_rules(m, base, flags, al, d, sizes):
+DECOR_MOUNT = {"TORCH_TALL", "TORCH_SLIM", "WINDOW_ARCH", "WINDOW_BAR", "BANNER", "BANNER_TALL",
+               "BOOKSHELF", "TORCH_SMALL"}
+DECOR_CEIL = {"CHAIN", "MOSS"}
+DECOR_FLOOR = {"SKULLS", "CANDLES", "CAULDRON", "BRAZIER", "BRAZIER_BIG"}
+DECOR_PATCH = {"PATCH_A", "PATCH_B", "WALL_DITHER", "WALL_PATCH", "WALL_FADE"}
+DECOR_BRICK = {"PILLAR"}
+DECOR_COB = {"COBWEB", "COBWEB_R"}
+_OBJS = {}
+
+
+def decor_objs(d):
+    """(id -> object name, shape(id, comp, r0, c0) -> the {cell: id} the whole object would
+    occupy at the component's top-left, None if unknown) of depth d: frame-1 ids parsed
+    from tileset_ids.inc + the common small decor (concept-screen 3.3 catalogue)."""
+    import re
+    T = room_model.T
+    if d not in _OBJS:
+        objs = {}                                   # name -> {(r, c): id}
+        path = os.path.join(os.path.dirname(HERE), "assets", "gfx", "tiles", "tileset_ids.inc")
+        for line in open(path):
+            mm = re.match(r"TS(\d)_([A-Z_]+?)_(?:F(\d)_)?R(\d)C(\d)\s+EQU (\d+)", line)
+            if mm and int(mm.group(1)) == d and int(mm.group(3) or 1) == 1:
+                objs.setdefault(mm.group(2), {})[(int(mm.group(4)), int(mm.group(5)))] = int(mm.group(6))
+        objs["CHAIN"] = {(0, 0): T["T_CHAIN"], (1, 0): T["T_CHAIN"]}
+        objs["SKULLS"] = {(0, 0): T["T_SKULLS"]}
+        objs["TORCH_SMALL"] = {(0, 0): T["T_TORCH_T"], (1, 0): T["T_TORCH_B"]}
+        objs["CANDLES"] = {(0, 0): T["T_CANDLES"]}
+        for nm, k in (("WALL_DITHER", "T_WALL_DITHER"), ("WALL_PATCH", "T_WALL_PATCH"),
+                      ("WALL_FADE", "T_WALL_FADE")):
+            objs[nm] = {(0, 0): T[k]}
+        names = {}
+        for nm, g in objs.items():
+            if nm == "LECTERN":
+                continue
+            for v in g.values():
+                names.setdefault(v, nm)
+        _OBJS[d] = (names, objs)
+    names, objs = _OBJS[d]
+    T = room_model.T
+    comp_ids = (T["T_WALL_PATCH"], T["T_WALL_FADE"], T["T_WALL_DITHER"])
+
+    def shape(i, comp, r0, c0):
+        nm = names.get(i)
+        if nm in ("WALL_DITHER", "WALL_PATCH", "WALL_FADE") and len(comp) == 3:
+            return {r0 * 32 + c0: comp_ids[0], r0 * 32 + c0 + 1: comp_ids[1], (r0 + 1) * 32 + c0: comp_ids[2]}
+        if nm is None:
+            return None
+        return {(r0 + r) * 32 + c0 + c: v for (r, c), v in objs[nm].items()}
+    return names, shape
+
+
+def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
     """W13 independent decor checker (docs, not the generator): -> [errors].
     m / base = the room with / without decor, flags = TILE_FLAGS[64] of the
     depth, al = ANIM_LIST bytes; sizes (dict) accumulates air / wall / anim /
@@ -305,30 +356,102 @@ def decor_rules(m, base, flags, al, d, sizes):
     lad = set(range(T["T_LAD_L"], T["T_HOLE_R"] + 1))
     errs = []
     ch = [j for j in range(576) if m[j] != base[j]]
-    for j in ch:
+    names, shape = decor_objs(d)
+    drip = {T["T_DRIP1"], T["T_DRIP2"]}
+    floorish = lambda t: t in (T["T_PLAT"], T["T_WALLF"])          # noqa: E731
+    for j in ch:                                                    # per cell: base class vs solidity
         c, row = j % 32, j // 32
-        if base[j] == T_AIR:
-            sizes["air"] += 1
+        if m[j] in drip:
+            continue                                # drips: drip_rules()
+        nm = names.get(m[j])
+        if nm is None:
+            errs.append(("unknown decor id", c, row, m[j]))
+            continue
+        patch = nm in DECOR_PATCH
+        want_base = T_BRICK if nm in DECOR_BRICK else T_AIR
+        if base[j] != want_base:
+            errs.append((f"{nm} on a {base[j]} cell (wants {want_base})", c, row))
+        sizes["wall" if base[j] == T_BRICK else "air"] = sizes.get("wall" if base[j] == T_BRICK else "air", 0) + 1
+        if patch:
+            # game.md 1.2 (D1 amendment): back-wall patches are NON-solid, on T_AIR. The TILE_FLAGS
+            # solid bit of their ids is staff data: counted, not failed, while still set.
             if flags[m[j]] & SOLID:
-                errs.append(("solid decor on an air cell", c, row))
-        elif base[j] == T_BRICK:
-            sizes["wall"] += 1
+                sizes["patch_solid"] = sizes.get("patch_solid", 0) + 1
+        elif nm in DECOR_BRICK:
             if not flags[m[j]] & SOLID:
-                errs.append(("non-solid decor on a wall cell", c, row))
-            if row % 9 == 0:
-                errs.append(("wall decor on the lintel row", c, row))
-        else:
-            errs.append(("decor on a structural cell", c, row, base[j]))
-        if row % 9 > 5:
-            errs.append(("decor in the 2 rows above a floor / floor row", c, row))
+                errs.append(("pillar not solid", c, row))
+        elif flags[m[j]] & SOLID:
+            errs.append(("solid decor on an air cell", c, row))
+        if nm in DECOR_FLOOR:
+            pass                                    # floor class: exempt from the 2-rows-above rule
+        elif row % 9 > 5:
+            errs.append((f"{nm} in the 2 rows above a floor / floor row", c, row))
         for dr in (-1, 0, 1):
             for dc in (-1, 0, 1):
                 rr, cc = row + dr, c + dc
                 if 0 <= rr < 18 and 0 <= cc < 32 and base[rr * 32 + cc] in lad:
                     errs.append(("decor adjacent to a ladder", c, row))
-    wallc = sum(1 for j in ch if base[j] == T_BRICK)
-    if wallc > 6:
-        errs.append(("more than 6 wall-class cells", wallc))
+    # components (8-connected, drips apart: their own rules): one whole object each, by class
+    cells = {j for j in ch if m[j] not in drip and m[j] in names}
+    seen, ncob, npatch_cells, npatch = set(), 0, 0, 0
+    for j0 in sorted(cells):
+        if j0 in seen:
+            continue
+        comp, stack = set(), [j0]
+        while stack:
+            x = stack.pop()
+            if x in comp or x not in cells:
+                continue
+            comp.add(x)
+            for dr in (-1, 0, 1):
+                for dc in (-1, 0, 1):
+                    rr, cc = x // 32 + dr, x % 32 + dc
+                    if 0 <= rr < 18 and 0 <= cc < 32:
+                        stack.append(rr * 32 + cc)
+        seen |= comp
+        r0, c0 = min(x // 32 for x in comp), min(x % 32 for x in comp)
+        r1 = max(x // 32 for x in comp)
+        nm = names[m[j0]]
+        want = shape(m[min(comp)], comp, r0, c0)
+        if want is None or want != {x: m[x] for x in comp}:
+            errs.append(("decor cells are not exactly one whole object (touching objects?)", c0, r0, nm))
+            continue
+        top, bot = r0 % 9, r1 % 9
+        cols_ok = lambda lo, hi: all(lo <= x % 32 <= hi for x in comp)      # noqa: E731
+        if nm in DECOR_MOUNT:
+            if top != 1 or not cols_ok(1, 30):
+                errs.append((f"{nm}: mount top row must be storey row 1, cols 1..30", c0, r0))
+        elif nm in DECOR_CEIL:
+            above = base[(r0 - 1) * 32 + c0] if r0 else None
+            if top != 0 or not cols_ok(1, 30) or (above is None and (nm == "MOSS")) \
+                    or (above is not None and not floorish(above)):
+                errs.append((f"{nm}: ceiling row 0, hung from T_PLAT / T_WALLF (chain also screen top)", c0, r0))
+        elif nm in DECOR_FLOOR:
+            if bot != 7 or not cols_ok(1, 30) or \
+                    not all(floorish(base[(r1 + 1) * 32 + x % 32]) for x in comp if x // 32 == r1):
+                errs.append((f"{nm}: floor object must end on row 7 over T_PLAT / T_WALLF", c0, r0))
+        elif nm in DECOR_PATCH:
+            npatch += 1
+            npatch_cells += len(comp)
+            if top < 1 or bot > 5 or not cols_ok(2, 29):
+                errs.append((f"{nm}: patch inside storey rows 1..5, cols 2..29", c0, r0))
+        elif nm in DECOR_BRICK:
+            npatch_cells += len(comp)
+            if top < 1 or bot > 5:
+                errs.append(("pillar inside storey rows 1..5", c0, r0))
+        elif nm in DECOR_COB:
+            ncob += 1
+            ok_l = all(base[(r0 + k) * 32 + c0 - 1] == T_BRICK for k in range(3)) if c0 else False
+            ok_r = all(base[(r0 + k) * 32 + c0 + 1] == T_BRICK for k in range(3)) if c0 < 31 else False
+            above = base[(r0 - 1) * 32 + c0] if r0 else None
+            if top != 0 or not (ok_l or ok_r) or (above is not None and not floorish(above)):
+                errs.append(("cobweb outside a corner (row 0, brick column in rows 0..2, ceiling above)", c0, r0))
+    if ncob > 2:
+        errs.append(("more than 2 cobwebs", ncob))
+    if npatch_cells > 6:
+        errs.append(("more than 6 patch / pillar cells", npatch_cells))
+    if need_patch and not npatch:
+        errs.append(("no back-wall patch in the room (>= 1 guaranteed)",))
     n = len(al) // 4
     ents = [al[k:k + 4] for k in range(0, len(al), 4)]
     gl = [e for e in ents if e[2] >= 16]
@@ -828,7 +951,7 @@ def w14(p, check):
                 return sd, al
         raise RuntimeError("W14: no seed for room %d" % r)
     sa, ala = pick(ROOM_A, lambda e: sum(x[2] >= 16 for x in e) >= 2 and sum(x[2] < 16 for x in e) >= 3
-                   and not any((x[0], x[1]) in hbox for x in e))
+                   and not any((x[0], x[1]) in hbox for x in e) and len(e) <= 7)   # D1: a short list, so the round robin visits the injected entry every tick
     sb, alb = pick(ROOM_B, lambda e: len(e) >= 2)
     blk[so(ROOM_A)], blk[so(ROOM_A) + 1] = sa & 255, sa >> 8
     blk[so(ROOM_B)], blk[so(ROOM_B) + 1] = sb & 255, sb >> 8
@@ -989,13 +1112,13 @@ def present_rooms(blk):
 
 
 def wall_decor_ids(d):
-    """Tile ids of the wall-class decor objects (tools/decorgen.py: placed on
-    T_BRICK cells only, so also on block cells) of depth d, common + per level."""
+    """Tile ids of the brick-class decor (D1: only the pillar goes on T_BRICK cells, so also
+    on block cells; back-wall patches moved to T_AIR) of depth d."""
     sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
     import decorgen as DG
     ids = set()
-    for name, base, w, h, fl in DG.COMMON + DG.level_objects()[d]:
-        if fl & DG.F_WALL:
+    for name, base, w, h, fl, cls in DG.COMMON + DG.LEVEL[d]:
+        if cls == DG.C_BRICK:
             ids |= set(range(base, base + w * h))
     return ids
 
@@ -1050,10 +1173,15 @@ def invariants(blk, r, m, d):
         for c in range(32):
             t = m[row * 32 + c]
             on_lad = (c, row) in lad
-            if xc and not grate_open and row == F1 and xc <= c < xc + 3:
-                on_lad = False                 # under the closed grate
-                if t != T["T_GRATE"]:
+            if xc and row == F1 and xc <= c < xc + 3:
+                on_lad = False                 # under the gate: raised (open, B12) / closed
+                if t != (T["T_GRATE"] if grate_open else T["T_GRATE_SHUT"]):
                     bad.append(("grate", c, row, t))
+            if t == T["T_GRATE"] and not (xc and row == F1 and xc <= c < xc + 3):
+                bad.append(("gate tile off the level exit", c, row, t))
+            if d and t == room_model.glow_id(d) and not (
+                    xc and grate_open and row == F1 - 1 and c == xc + 1):
+                bad.append(("glow off the exit's middle cell", c, row, t))
             if row == 0 and fld("RD_ARRCOL") and fld("RD_ARRCOL") <= c < fld("RD_ARRCOL") + 3:
                 on_lad = False                 # the arrival shaft's rubble cap
             if (t in ladder_ids) != on_lad:
@@ -1123,6 +1251,16 @@ def run_gen_suites(p, check):
                 want_m = room_model.render_room(blk, r)
                 bad = [(i % 32, i // 32, m[i], want_m[i]) for i in range(len(want_m)) if m[i] != want_m[i]]
                 check(f"W11 D{d} r{r}: map == the spec model", ok and not bad, bad[:4])
+                # B12: the raised gate only on the lair's 3 exit cells, its glow above the middle
+                lair = blk[S["LVL_LAIR"] - S["LVL_STATE"]]
+                gates = [i for i in range(576) if m[i] == T["T_GRATE"]]
+                glows = [i for i in range(576) if m[i] == room_model.glow_id(d)]
+                xc = room_model.field(blk, r, "RD_EXITCOL")
+                F1 = S["FLOOR_ROW1"]
+                want_g = [F1 * 32 + xc + k for k in range(3)] if r == lair else []
+                check(f"W11 D{d} r{r}: gate (id {T['T_GRATE']}) {'+ glow on the level exit' if r == lair else 'nowhere: not the lair'}",
+                      bool(xc) == (r == lair) and gates == want_g
+                      and glows == ([(F1 - 1) * 32 + xc + 1] if r == lair else []), (xc, gates, glows))
                 ok, ts = show_room(p, r)
                 note("room_show + present_full", ts, f"D{d} r{r}")
                 rows = [(c, row, m[row * 32 + c]) for row in (S["FLOOR_ROW0"], S["FLOOR_ROW1"])
@@ -1280,16 +1418,19 @@ def run_gen_suites(p, check):
                 check(f"W13 D{d} seed {seed:#06x} r{r}: decor rules (independent checker)", not errs, errs[:3])
         print(f"[info] W13: {nroom} rooms, {nplaced} decor cells (air {sizes['air']}, wall {sizes['wall']}), "
               f"{sizes['anim']} anim entries, {sizes['large']} large animated objects; "
-              f"decor_room cost T = {sorted(dT)}", flush=True)
+              f"decor_room cost T = {sorted(dT)}; patch cells still TF_SOLID in the tileset flags "
+              f"(staff: clear per game.md 1.2 D1): {sizes.get('patch_solid', 0)}", flush=True)
         check("W13: >= 50 rooms over depths 1..8, decor present and animated",
-              nroom >= 50 and nplaced > 100 and sizes["anim"] > 0 and sizes["wall"] > 0, (nroom, nplaced, sizes))
+              nroom >= 50 and nplaced > 100 and sizes["anim"] > 0, (nroom, nplaced, sizes))
         # ---- wall-heavy sweep (Python deriver, same checker): rooms with a
-        # dead-end block / door / pit, 400 levels
+        # dead-end block / door / pit, 400 levels (D1 rules: patches are non-solid AIR decor, so
+        # the only wall-class (T_BRICK, solid) decor left is a level's PILLAR - D6 after the
+        # set cuts - hence 400 extra D6 levels to exercise that path)
         sw = {"rooms": 0, "wall": 0, "air": 0, "anim": 0, "large": 0}
         sbad = []
         rng = __import__("random").Random(0xB3B10)
-        for i in range(400):
-            d, seed, master = 1 + i % 8, rng.randrange(65536), rng.randrange(65536)
+        for i in range(800):
+            d, seed, master = (6 if i >= 400 else 1 + i % 8), rng.randrange(65536), rng.randrange(65536)
             blk = G.generate(d, seed, master)
             fl = depth_flags(p, d)
             for r in present_rooms(blk):
@@ -1327,7 +1468,7 @@ def run_gen_suites(p, check):
             m, al = room_model.decorgen.decorate(base, d, rs)
             nsyn += 1
             fl = depth_flags(p, d)
-            e = decor_rules(m, base, fl, al, d, {"wall": 0, "air": 0, "anim": 0, "large": 0})
+            e = decor_rules(m, base, fl, al, d, {"wall": 0, "air": 0, "anim": 0, "large": 0}, need_patch=False)
             if e:
                 ybad.append((d, seed, r, e[:2]))
             if i % 25 == 0:
@@ -1601,6 +1742,95 @@ def w16_level(p, check):
         p.until(lambda: p.idle(), 100)
         return ran, cards, (p.rw("SYS_FRAMES") - f0) & 0xFFFF
 
+    HINT = dict(STRINGS)["gate_gleams"]
+
+    def lair_visit(tag):
+        """B12: walk into the lair (real do_exit) from its door-side neighbour,
+        twice: the gate hint is logged on the first entry only; the lair shows
+        the raised gate + glow (map == model, screens == map); J on the exit col
+        with the grate closed is no exit (EX_LEVEL only through LF_GRATE_OPEN)."""
+        blk = room_model.read_block(p)
+        lair = blk[S["LVL_LAIR"] - room_model.BASE]
+        ex = room_model.field(blk, lair, "RD_EXITS")
+        side = "L" if ex & S["RDX_L"] else "R"
+        nb = lair - 1 if side == "L" else lair + 1
+        s_ = 1 if ex & S["RDX_LS1" if side == "L" else "RDX_RS1"] else 0
+        ei = S["EDGE_TAB"] + room_model.edge_index(lair, side)
+        p.wb(ei, p.rb(ei) & ~(S["EG_LOCK"] | S["EG_SEAL"]) & 255)   # test: never a locked way in
+        for k in range(1, 16):
+            p.set_ent(k, FLAGS=0)                 # nobody in the way, nothing else logs
+        x, key, back = (32 - 2 - kw, "L", "H") if side == "L" else (2, "H", "L")
+        fl = EF_ACTIVE | EF_PLAYER | (0 if side == "L" else EF_LEFT)
+
+        def to_nb():
+            p.z.cmd("write-memory %d %d" % (S["CUR_ROOM"], nb))
+            p.set_ent(0, ROOM=nb, X=x, Y=stand_y(s_, kh), PX=x * 8, PY=stand_y(s_, kh) * 8,
+                      FLAGS=fl, MODE=0, DVIS=0)
+            ingame([0x3E, nb, 0xCD] + w16(S["room_show"]) + [0xCD] + w16(S["vis_reset"])
+                   + [0xCD] + w16(S["present_full"]), "lair neighbour " + tag)
+            p.settle(2)
+
+        def walk_in():
+            for _ in range(24):
+                if p.rb("CUR_ROOM") == lair:
+                    break
+                p.turn(key)
+            p.until(lambda: p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+            p.until(lambda: p.rb("LOG_QN") == 0, 200)
+            p.settle(4)
+        check(f"W16 {tag}: LF_GATE_HINT clear on a fresh level",
+              not p.rb("LVL_FLAGS") & S["LF_GATE_HINT"], hex(p.rb("LVL_FLAGS")))
+        to_nb()
+        walk_in()
+        fr = p.frame()
+        if game.PNG_DIR:                          # --png DIR: the lair as entered, for a look
+            from game_lib import frame_png
+            os.makedirs(game.PNG_DIR, exist_ok=True)
+            frame_png(bytes(fr), os.path.join(game.PNG_DIR, f"b12_lair_{tag}.png"))
+        check(f"W16 {tag}: first entry to the lair r{lair}: '{HINT}' logged, LF_GATE_HINT set",
+              p.rb("CUR_ROOM") == lair and log_row(fr, 23) == text6(HINT)
+              and bool(p.rb("LVL_FLAGS") & S["LF_GATE_HINT"]),
+              (p.rb("CUR_ROOM"), hex(p.rb("LVL_FLAGS")), log_row(fr, 23) == text6(HINT)))
+        xc = room_model.field(blk, lair, "RD_EXITCOL")
+        m = p.z.read_memory(S["ROOM_MAP"], 576)
+        F1 = S["FLOOR_ROW1"]
+        check(f"W16 {tag}: lair (do_exit build) map == model: gate x3 on the exit, the glow above",
+              not map_structure(p, lair) and all(m[F1 * 32 + xc + k] == S["T_GRATE"] for k in range(3))
+              and m[(F1 - 1) * 32 + xc + 1] == room_model.glow_id(p.rb("LVL_DEPTH")),
+              (map_structure(p, lair)[:3], list(m[F1 * 32 + xc:F1 * 32 + xc + 3]), m[(F1 - 1) * 32 + xc + 1]))
+        # the gate / glow cells and row 17 on both screens (the whole-room check
+        # would trip over the torches' attr cycle, decor_tick)
+        tabs = p.bg_tables()
+        cells = [(c, F1) for c in range(32)] + [(xc + 1, F1 - 1)]
+        bad = [(scr, c, r_) for scr, f in (("displayed", p.frame()), ("composed", p.composed_frame()))
+               for c, r_ in cells
+               if (attr_at(f, c, r_), bytes(cell_bytes(f, c, r_))) != room_model.expected_cell(*tabs, c, r_)[::-1]]
+        check(f"W16 {tag}: lair screens == map on row 17 + the glow cell (gate $46, glow, ornament)",
+              not bad and p.rb(S["TILE_ATTRS"] + S["T_GRATE"]) == S["ATTR_GRATE"], bad[:4])
+        # a marker line, then out and back in: no second hint
+        ingame([0x3E, S["TX_FOUND"], 0xCD] + w16(S["msg_push"]), "marker " + tag)
+        p.until(lambda: p.rb("LOG_QN") == 0, 200)
+        p.settle(4)
+        for _ in range(24):
+            if p.rb("CUR_ROOM") == nb:
+                break
+            p.turn(back)
+        p.until(lambda: p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+        walk_in()
+        check(f"W16 {tag}: second entry to the lair: no second hint (row 23 = the marker)",
+              p.rb("CUR_ROOM") == lair and log_row(p.frame(), 23) == text6(dict(STRINGS)["found"]),
+              p.rb("CUR_ROOM"))
+        # the exit col with the grate CLOSED: J is no exit (and no turn)
+        fo = p.rb("LVL_FLAGS")
+        p.wb("LVL_FLAGS", fo & ~S["LF_GRATE_OPEN"] & 255)
+        p.place(0, xc, y1, room=lair, flags=EF_ACTIVE | EF_PLAYER)
+        d0 = p.rb("LVL_DEPTH")
+        nt = p.no_turn("J")
+        check(f"W16 {tag}: grate closed: J on the exit col {xc} = no turn, no EX_LEVEL",
+              nt and p.rb("EXIT_KIND") == 0 and p.rb("LVL_DEPTH") == d0, (nt, p.rb("EXIT_KIND")))
+        p.wb("LVL_FLAGS", fo)
+        return blk
+
     # ---- new game on a generated D1 --------------------------------------
     p.proto_start = 0
     try:
@@ -1623,6 +1853,7 @@ def w16_level(p, check):
         # level_enter cost (cold), measured on its own (DI: no ISR; screen /
         # card / generator / build / panel / presents), D2 of this game
         d1 = room_model.read_block(p)
+        lair_visit("D1")                        # B12
         # ---- descend D1 -> D2 by walking onto the exit -----------------
         ran, cards, fr_n = to_exit(blk, "D1")
         check("W16 D1 -> D2: J on {EXITCOL,2} is one turn (first step animated) + the level change",
@@ -1693,6 +1924,7 @@ def w16_level(p, check):
               "ANIM_LIST cells == the room's, GEN_TRAP 0",
               p.rb("CUR_ROOM") == st and same and anim_cells() == model_cells(blk_now, st)
               and p.rb("GEN_TRAP") == 0, p.rb("CUR_ROOM"))
+        lair_visit("D2")                        # B12: once per level, again on D2
         # ---- D2 .. D7: descend on the exit (teleported onto it) ---------
         blk = room_model.read_block(p)
         for d in range(3, 8):
@@ -1704,7 +1936,9 @@ def w16_level(p, check):
                       ran and p.rb("LVL_DEPTH") == 3 and p.ent(0)["HP"] == hero_k[0], (ran, p.rb("LVL_DEPTH")))
             check(f"W16 D{d - 1} -> D{d}: card DEPTH {d} shown", len(cards) == 1 and card_ok(cards[0][0], d), "")
             blk = level_ok(d, M, f"D{d}", hero_keep=hero_k)
-        # ---- D7 -> D8 with the reseed-exhausting seeds (level_gen B = 1) -
+        # ---- D7 -> D8 with the seeds that exhausted the 16 reseeds before L1
+        # (2026-10-05: the L1 level shape never reseeds, so level_new's retry
+        # path is no longer reachable by any seed; these now generate first time)
         for bad_seed in (55352, 55353, 55354):
             m8 = (bad_seed - 8 * LVL_MUL) & 0xFFFF
             p.z.cmd("write-memory %d %d %d" % (S["MASTER_SEED"], m8 & 255, m8 >> 8))
@@ -1712,9 +1946,9 @@ def w16_level(p, check):
             fresh.pop(8, None)
             ran, cards, fr_n = to_exit(blk, f"D7 (seed {bad_seed})", walk=False)
             info[f"descend D7->D8 seed {bad_seed} frames"] = fr_n
-            blk = level_ok(8, m8, f"D8 from exhausting seed {bad_seed}", seed=bad_seed + 16)
-            check(f"W16 D8 seed {bad_seed}: LVL_SEED moved past the 16 exhausted seeds",
-                  p.rw("LVL_SEED") >= bad_seed + 16, p.rw("LVL_SEED"))
+            blk = level_ok(8, m8, f"D8 from former exhausting seed {bad_seed}", seed=bad_seed)
+            check(f"W16 D8 seed {bad_seed}: generated first time (no reseed under L1)",
+                  p.rw("LVL_SEED") == bad_seed, p.rw("LVL_SEED"))
         # ---- D8 descend = GS_WIN (stand-in) -----------------------------
         ran, cards, fr_n = to_exit(blk, "D8", walk=False)
         check("W16 D8: descending = GS_WIN (game.md §1.4 stand-in), no card, depth stays 8",

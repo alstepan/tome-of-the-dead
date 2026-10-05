@@ -7,16 +7,14 @@
 ; level_gen      In : A = depth 1..8; LVL_SEED / MASTER_SEED already set.
 ;                Out: block at LVL_STATE == levelgen.generate(depth, seed, master);
 ;                     LVL_SEED = seed actually used. B = 0 ok; B = 1 + CF = failed:
-;                     16 reseeds exhausted, LVL_SEED left at seed + 16. This DOES
-;                     happen (D8 seeds 55352..55354, tests/levelgen_z80.py).
-;                     level_new (bank3.asm) calls again from seed + 16; that ends
-;                     in <= 2 calls: tools/levelgen_runs.py scans all 65,536
-;                     seeds per depth — D1-D7 never fail, D8's longest run of
-;                     consecutive failing seeds is 18 (< 32). No hard cap.
+;                     16 reseeds exhausted, LVL_SEED left at seed + 16. With the L1
+;                     level shape the lair always exists (no lair reseeds) and
+;                     tools/levelgen_runs.py finds 0 failing seeds at every depth;
+;                     level_new (bank3.asm) still retries from seed + 16.
 ;                     Clobbers all but IY, SP (far3 itself clobbers A/F on return).
 ; level_start_x  In : block generated.  Out: A = B = hero start col (storey 0).
 ;
-; Scratch: LG_* below, in GEN_SCRATCH (= ROOM_MAP + NEXT_MAP, $6000..$604F).
+; Scratch: LG_* below, in GEN_SCRATCH (= ROOM_MAP + NEXT_MAP, $6000..$6051).
 ; CONTRACT: call only before build_room_map / never mid-room (ROOM_MAP, NEXT_MAP
 ; and the ZX0 frame cache all live there). level_gen zeroes GEN_ZBLK on entry
 ; (cache invalidation); the caller re-runs alloc_* + gen_kind afterwards.
@@ -46,6 +44,8 @@ LG_K            EQU GEN_SCRATCH + 75
 LG_X            EQU GEN_SCRATCH + 76
 LG_RST          EQU GEN_SCRATCH + 77    ; restarts left this seed
 LG_SP           EQU GEN_SCRATCH + 78    ; word
+LG_S            EQU GEN_SCRATCH + 80    ; D8 reserved Sanctum cell (never visited), $FF = none
+LG_LS           EQU GEN_SCRATCH + 81    ; first row-major cell scanned by loopc (6 = mandatory bottom edge)
 RESEED_MAX      EQU 16
 DOOR_ODDS       EQU 3
 PIT_COL_MIN     EQU 5
@@ -149,6 +149,25 @@ dir_tab:        DB   RDX_L, $FF, RDX_R, 1, RDX_U, -3, RDX_D, 3, 0   ; (bit, delt
 hedge_tab:      DB   0, 1, 0, 2, 3, 0, 4, 5, 0
 attr_tab:       DB   $0F, $01, $27, $04, $17, $02, $28, $05, $30, $06, $38, $07, $4F, $41, $1F, $03
 
+; dfs_done: Z = DFS finished: |visited| >= n and cell 7 and (6 or 8) visited
+dfs_done:       ld   a, (LG_CNT)
+                ld   hl, LG_N
+                cp   (hl)
+                jr   c, .no
+                ld   a, 7
+                call ispres
+                jr   z, .no
+                ld   a, 6
+                call ispres
+                jr   nz, .yes
+                ld   a, 8
+                call ispres
+                jr   z, .no
+.yes:           xor  a
+                ret
+.no:            or   1
+                ret
+
 ; nbrs_free: In A = cell, B = want. Out A = number of unvisited grid neighbours;
 ; LG_RID/LG_RBIT = neighbour #want (L,R,U,D order).
 nbrs_free:      ld   (LG_CUR), a
@@ -169,6 +188,10 @@ nbrs_free:      ld   (LG_CUR), a
                 ld   a, (LG_CUR)
                 add  a, e
                 ld   e, a
+                ld   a, (LG_S)          ; L1: the reserved Sanctum cell is never entered
+                cp   e
+                jr   z, .l
+                ld   a, e
                 push hl
                 call ispres
                 pop  hl
@@ -188,7 +211,8 @@ nbrs_free:      ld   (LG_CUR), a
 ; loopc: In B = want. Out A = number of loop-edge candidates (r right/down
 ; present, not yet linked, r ascending, right before down); LG_RID/LG_RBIT = #want.
 loopc:          ld   d, 0
-                ld   c, 0
+                ld   a, (LG_LS)
+                ld   c, a
 .r:             ld   a, c
                 call ispres
                 jr   z, .nr
@@ -319,11 +343,8 @@ sanct:          ld   hl, valid_tab
 lair:           ld   e, 1
 .pass:          ld   d, $FF
                 ld   b, 0
-                ld   c, 0
-.r:             ld   a, (LVL_START)
-                cp   c
-                jr   z, .nx
-                ld   a, c
+                ld   c, 6               ; L1: bottom row only (never the start)
+.r:             ld   a, c
                 call rdp
                 bit  0, (hl)
                 jr   z, .nx
@@ -587,9 +608,25 @@ attempt:        ld   (LG_SP), sp
                 call rnd
                 add  a, ROOMS_MIN
                 ld   (LG_N), a
-                ld   a, GRID_CELLS
+                ld   a, 3               ; L1: start on the top grid row
                 call rnd
                 ld   (LVL_START), a
+                ld   a, $FF
+                ld   (LG_S), a
+                ld   a, (LVL_DEPTH)
+                cp   8
+                jr   nz, .nos
+                ld   a, (LG_N)          ; D8: n = min(n, 8), Sanctum cell S = 6 + 2 rnd(2)
+                cp   9
+                jr   nz, .n8
+                dec  a
+                ld   (LG_N), a
+.n8:            ld   a, 2
+                call rnd
+                add  a, a
+                add  a, 6
+                ld   (LG_S), a
+.nos:           ld   a, (LVL_START)
                 ; 2. DFS
                 call setpres
                 ld   a, 1
@@ -597,9 +634,7 @@ attempt:        ld   (LG_SP), sp
                 ld   ix, LG_STK
                 ld   a, (LVL_START)
                 ld   (ix+0), a
-.dfs:           ld   a, (LG_N)
-                ld   hl, LG_CNT
-                cp   (hl)
+.dfs:           call dfs_done           ; n rooms AND two adjacent bottom cells
                 jr   z, .dfsd
                 ld   a, (ix+0)
                 ld   b, $FF
@@ -629,11 +664,26 @@ attempt:        ld   (LG_SP), sp
                 ld   hl, LG_CNT
                 inc  (hl)
                 jr   .dfs
-.dfsd:          ; 3. loop edge
+.dfsd:          ; 3. loop edge: mandatory (bottom pairs only, no roll) when no tree
+                ; edge joins 6-7 / 7-8
+                ld   a, 6
+                call rdp
+                inc  hl
+                ld   b, (hl)
+                ld   a, 7
+                call rdp
+                inc  hl
+                ld   a, (hl)
+                or   b
+                and  RDX_R
+                ld   a, 6
+                jr   z, .mand
                 ld   a, 2
                 call rnd
                 or   a
                 jr   nz, .noloop
+                xor  a
+.mand:          ld   (LG_LS), a
                 ld   b, $FF
                 call loopc
                 or   a

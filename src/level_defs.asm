@@ -219,6 +219,9 @@ LOWRAM_END_3B   EQU ORN_GLYPHS + ORN_COUNT * 8   ; $6EC0: = LOWRAM_FREE_END (def
 LF_GRATE_OPEN   EQU %00000001       ; lair grate open (3B: set at level start, game.md §1.4)
 LF_KEY_TAKEN    EQU %00000010       ; (3E+)
 LF_SEAL_OPEN    EQU %00000100       ; (3F)
+LF_GATE_HINT    EQU %00001000       ; B12: "A GATE GLEAMS" already logged this level (do_exit;
+                                    ; level_gen rewrites LVL_FLAGS, so it resets per level)
+LF_GATE_HINT_BIT EQU 3
 
 ; B3B-12 level seed (game.md §1 "Seed"): LVL_SEED = MASTER_SEED + depth * LVL_SEED_MUL
 ; (16-bit). Additive with an ODD constant, NOT an XOR with depth * $0101: level_gen
@@ -260,7 +263,11 @@ T_DOOR_ARCH_R   EQU 22
 T_DOOR_L        EQU 23              ; closed plank, left col
 T_DOOR_R        EQU 24              ; closed plank, right col
 T_DOOR_LOCK     EQU 25              ; plank-R with lock plate (locked / sealed; sealed attr $02)
-T_GRATE         EQU 26              ; over the lair's level-exit hole in row 17 (3 cells, 1 glyph)
+T_GRATE         EQU 26              ; B12: the RAISED gate (variant B, ink $46) over the lair's
+                                    ; open level-exit hole in row 17 (3 cells, 1 glyph; LADDER|HOLE)
+T_GRATE_SHUT    EQU T_GRATE         ; TODO 3F: the closed gate needs its own common id (full bars,
+                                    ; ink $07, TF_FLOOR; concept-screen B3B-8 #4) - until then the
+                                    ; closed branch draws the raised glyph (3B never closes it)
 T_RUBBLE        EQU 27              ; block foot, arrival-shaft cap, ash of the Book
 T_WALL_DITHER   EQU 28              ; wall set (concept-screen §3.3)
 T_WALL_PATCH    EQU 29

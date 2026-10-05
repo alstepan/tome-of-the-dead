@@ -1,0 +1,54 @@
+# WazHack/ZX B12 level-exit gate (designer decision 2026-10-04, concept-screen §3.3 B3B-8 #4,
+# game.md §1.4 Lair row). USER 2026-10-05: variant B + glow approved. Format = tools/gfx_convert.py --mode tile.
+# Drawn over the 3 row-17 cells of the lair's level-exit hole (one glyph repeated x3), in place
+# of T_HOLE_L/M/R. No ordinary hole uses these glyphs or $46.
+#   gate_raised  = REJECTED (spec bar; merges with light floors): raised portcullis, 3-px bar rows 0-2,
+#                  1-px-wide teeth at cols 0,3,6 hanging 2 px (rows 3-4), rows 5-7 clear so the
+#                  hole stays see-through and walkable. Ink $46 on black, NON-solid.
+#   gate_raised_b = APPROVED -> common id 26 T_GRATE (tiles_convert). Same, but the bar is a 3-px open frame (rails rows 0 and 2,
+#                  bar stubs on row 1) so it never reads as a flat floor stretch on light floors
+#                  (D5 $30 yellow paper: the solid bar merges with the floor).
+#   gate_closed  = 3F closed state, source only (no id yet) (new common id, designer: freed by dropping a per-level
+#                  window/pillar): portcullis lowered, bars at cols 0,3,6 full height with the
+#                  top bar and a crossbar. Ink $07 on black, SOLID. Open/closed = tile-id swap.
+#   gate_glow    = APPROVED -> per-level GLOW id (TS<d>_GLOW, tiles_convert) lit marker on the standing row (row 16) above the hole centre,
+#                  ink $46: a sparkle with rising motes. Zero-id alternative: reuse T_CANDLES.
+=== gate_raised ink:yellow paper:black bright
+########
+########
+########
+#..#..#.
+#..#..#.
+........
+........
+........
+
+=== gate_raised_b ink:yellow paper:black bright
+########
+#..#..#.
+########
+#..#..#.
+#..#..#.
+........
+........
+........
+
+=== gate_closed ink:white paper:black
+########
+#..#..#.
+#..#..#.
+#..#..#.
+########
+#..#..#.
+#..#..#.
+#..#..#.
+
+=== gate_glow ink:yellow paper:black bright
+...#....
+...#..#.
+..###...
+###.###.
+..###...
+...#....
+#..#....
+......#.

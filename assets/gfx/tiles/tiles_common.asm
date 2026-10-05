@@ -38,7 +38,7 @@ tiles_common_glyphs:
         DEFB $AD,$AD,$A0,$AF,$A0,$AD,$AD,$AD    ; 23 T_DOOR_L
         DEFB $B5,$B5,$05,$F5,$05,$B5,$B5,$B5    ; 24 T_DOOR_R
         DEFB $B5,$B5,$05,$F5,$05,$8D,$75,$8D    ; 25 T_DOOR_LOCK
-        DEFB $FF,$66,$66,$FF,$66,$66,$66,$FF    ; 26 T_GRATE
+        DEFB $FF,$92,$FF,$92,$92,$00,$00,$00    ; 26 T_GRATE
         DEFB $00,$00,$00,$00,$10,$3A,$7D,$FF    ; 27 T_RUBBLE
         DEFB $EF,$88,$80,$88,$DD,$20,$22,$02    ; 28 T_WALL_DITHER
         DEFB $00,$06,$C1,$88,$EF,$32,$22,$22    ; 29 T_WALL_PATCH
@@ -71,7 +71,7 @@ tiles_common_attrs:
         DEFB $06    ; 23 T_DOOR_L
         DEFB $06    ; 24 T_DOOR_R
         DEFB $06    ; 25 T_DOOR_LOCK
-        DEFB $07    ; 26 T_GRATE
+        DEFB $46    ; 26 T_GRATE
         DEFB $07    ; 27 T_RUBBLE
         DEFB $01    ; 28 T_WALL_DITHER
         DEFB $01    ; 29 T_WALL_PATCH

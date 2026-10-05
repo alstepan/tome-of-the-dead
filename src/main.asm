@@ -30,6 +30,7 @@
 
                 INCLUDE "constants.asm"
                 INCLUDE "defs.asm"
+                INCLUDE "../assets/gfx/tiles/tileset_ids.inc" ; TS<d>_* ids (EQUs only; B12 glow_ids)
 
 ;==============================================================================
 ; SPRITE SOURCES — banks 1 and 3, assembled contiguously at virtual $8000..$FFFF
@@ -358,6 +359,7 @@ do_exit:
                                                ; row-17 ornament (the scroll drew the screen's)
                 ld   a, (EXIT_DEST)
                 ld   (CUR_ROOM), a
+                call lair_hint                 ; B12 (lowram: 3 B here, kind_tab pad)
                 ld   ix, P_ENTITIES
                 ld   (ix+E_ROOM), a
                 ld   a, (EXIT_KIND)
@@ -476,9 +478,9 @@ tile_flags:
                 DB TF_SOLID, TF_SOLID                  ; 21-22 T_DOOR_ARCH_L/R
                 DB TF_SOLID | TF_DOOR, TF_SOLID | TF_DOOR   ; 23-24 T_DOOR_L/R (closed planks)
                 DB TF_SOLID | TF_DOOR | TF_LOCK        ; 25 T_DOOR_LOCK
-                DB TF_FLOOR                            ; 26 T_GRATE (closed)
+                DB TF_LADDER | TF_HOLE                 ; 26 T_GRATE (B12: raised = the open exit hole)
                 DB 0                                   ; 27 T_RUBBLE (decor at a block's foot)
-                DB TF_SOLID, TF_SOLID, TF_SOLID        ; 28-30 wall set DITHER / PATCH / FADE
+                DB 0, 0, 0                             ; 28-30 EXPERIMENT
                 DB TF_ANIM                             ; 31 T_CANDLES
                 DS T_LVL_OBJ - TILE_COMMON, 0          ; 32-59 per-level decor
                 DS T_LVL_OBJ_N, TF_SOLID | TF_ATTACK   ; 60-63 lectern / Book

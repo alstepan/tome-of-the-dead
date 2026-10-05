@@ -402,6 +402,28 @@ level_show:
                 jp   present_full              ; A7: bank 5 -> 7, display bank 7
 
 ;------------------------------------------------------------------------------
+; lair_hint — B12 (concept-screen B3B-8 #4): A = the room just entered
+; (do_exit). The first entry to the level's lair logs "A GATE GLEAMS, THE WAY
+; DOWN" once; LF_GATE_HINT in LVL_FLAGS remembers it (level_gen rewrites
+; LVL_FLAGS, so it resets per level; PROTO: LVL_LAIR = ROOM_NONE, never a
+; room). Low RAM, not do_exit itself: bank 2 has a 4-B kind_tab ALIGN pad.
+; Keeps A. Clobbers: F, BC, DE, HL.   ~60 T, the one logging entry ~0.4k T + log_push
+;------------------------------------------------------------------------------
+lair_hint:
+                ld   hl, LVL_LAIR
+                cp   (hl)
+                ret  nz
+                ld   hl, LVL_FLAGS
+                bit  LF_GATE_HINT_BIT, (hl)
+                ret  nz
+                set  LF_GATE_HINT_BIT, (hl)
+                push af
+                ld   a, TX_GATE_GLEAMS
+                call msg_push
+                pop  af
+                ret
+                ASSERT LF_GATE_HINT == 1 << LF_GATE_HINT_BIT
+
 ; level_descend — do_exit with EXIT_KIND = EX_LEVEL (the hero took the
 ; lair's level exit, logic.asm try_climb): D8 -> GS_WIN (game.md §1.4
 ; stand-in), else level_enter (depth + 1). Back in end_turn, which finishes
