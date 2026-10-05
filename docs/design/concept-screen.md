@@ -179,7 +179,8 @@ floor row 17 (no change). Source: `assets/gfx/concept/grid/b10_door_grate.tiles`
 **Solidity (designer decision 2026-10-03):** wall-set glyphs (#14-15: DARK, DITHER, PATCH,
 FADE, worn/broken variants) are SOLID and replace only already-solid wall cells; rubble,
 skulls, moss, cobweb, chain, banner, candles, drips are non-solid and go only on non-solid
-cells. Decor never changes a cell's solidity (game.md §1.2).
+cells. Decor never changes a cell's solidity (game.md §1.2). **Amended 2026-10-05:** the
+back-wall patches (DITHER, PATCH, FADE, PATCH_A/B) are non-solid and go on `T_AIR`.
 
 **B3B-8 answers (designer decision 2026-10-03):**
 1. Rule is solidity by the class of the cell a tile is placed on, never per art type. Pillar and
@@ -248,7 +249,8 @@ Patches combine them into irregular shapes up to 2×3. Ink is the level's wall i
 reads as light brick, `$01` as dark.
 A sprite passing over a patch recolours its bricks (attribute-follow, F9), the same
 accepted artefact as any decor.
-Patch rules:
+Patch rules (**amended 2026-10-05:** patches go on the black back wall = `T_AIR`, non-solid,
+≥ 1 per room guaranteed; see "Decor placement (D1)" below):
 - ≤ 6 patch cells per room;
 - never in the 2 rows directly above a floor row (keeps the sprites' feet clean);
 - never adjacent to a ladder.
@@ -288,6 +290,52 @@ The worst case is 4 × 0.55 + 8 × 0.12 ≈ **3.2k T ≤ 4.0k**.
   room's glyph-swap total stays <= 4; otherwise skip. Paused under a sprite footprint (rule §1).
 - Deterministic: candidate cells scanned left-to-right, top-to-bottom, chosen by the level-seed
   LCG; same seed gives the same drips.
+
+**Decor placement (D1; user 2026-10-05 points marked *user*, the rest designer decision
+2026-10-05; for tools/decorgen.py + src/decor_gen.asm, Python == Z80).** Supersedes the
+random `r0` row for every class except back-wall patches and brick decor.
+
+*User 2026-10-05:* heights must look deliberate: windows and torches share one height per
+storey; candles one height; the cobweb is a corner sprite and goes only in a corner; the
+plaster patches must actually appear; anything standing on the floor sits on the floor, never
+floating.
+
+Storey rows `0..7` (map row = `9s + r`); row 7 = **standing row**, row 8 = floor.
+
+| Class | Objects | Row rule (no rng) | Cell rule |
+|---|---|---|---|
+| **Mount** | small/slim/tall torch, barred + arched window, banner, tall banner, bookshelf | **top row = storey row 1** for every object (torch 1×2 → rows 1–2, tall torch / arched window → 1–4, tall banner → 1–5) | footprint all `T_AIR`, cols 1..30 |
+| **Ceiling** | chain, moss | **storey row 0**; cell above solid floor (`T_PLAT`/`T_WALLF`) or, for chain only, map row 0 (screen top = ceiling) | `T_AIR`; moss only map row 9 |
+| **Floor** | skulls, candles, cauldron, brazier, big brazier | **bottom row = standing row 7** (brazier 1×2 → 6–7, big brazier → 4–7) | footprint `T_AIR`; **every cell directly below the bottom row is `T_PLAT` or `T_WALLF`** (never hole, pit, cap, ladder hole, grate, door); not on a trap/item cell |
+| **Corner** | cobweb | storey row 0 only | see corner rule |
+| **Back-wall patch** | `T_WALL_DITHER/PATCH/FADE`, `PATCH_A/B` (non-solid, game.md §1.2) | `r0` random, footprint inside storey rows **1..5** | footprint all `T_AIR`, cols 2..29 |
+| **Brick** | pillar | unchanged (`T_BRICK` only) | unchanged |
+
+- **The "2 rows above a floor" exclusion applies to Mount, Ceiling, Corner and Patch only**
+  (they cannot reach rows 6–7 by construction). Floor-class objects are exempt by definition:
+  they must end on row 7 (sprites stamp over them, attribute-follow, as with skulls/T_TRAP).
+- Kept for all classes: footprint never on door/arch/lintel/jamb/ladder/pit/cap/rubble/grate/
+  item cells (exact base-tile match), no ladder cell in the 1-cell ring, budgets (≤ 2 large
+  animated, ≤ 4 glyph, ≤ 8 attr, ≤ 6 patch cells), and new: **no other decor in the 1-cell
+  ring** (objects never touch).
+- **Corner rule:** cell `(9s, c)`, `T_AIR`, ceiling above as in Ceiling. **Left corner:**
+  col `c−1` is `T_BRICK` in storey rows 0, 1 and 2 (room edge or dead-end block face;
+  excludes door lintels). **Right corner:** same with col `c+1`. Glyphs: existing `COBWEB` =
+  the **left** corner (web anchored top-left; artist confirms orientation), new per-level
+  **`COBWEB_R`** = its horizontal mirror, produced by the import tool (no new art). Sets
+  at the 28-id cap (D1, D3, D8) drop **PILLAR** (2 ids) to fit it, per the existing cut order.
+- **Pass order and rng:** (1) **patch pass**, (2) **cobweb pass**, (3) the 12-try menu loop
+  (cobweb removed from the menu), (4) drips (unchanged). Every menu try still makes exactly
+  4 rnd calls (`o, col, s, r0`); `r0` is used only by Patch/Brick classes.
+- **(1) Patch pass, guaranteed:** every room gets **≥ 1 patch**. Up to 8 tries, each
+  exactly 4 calls: `o = rnd(k)` over the level's `PATCH_A/PATCH_B` (k = 1–2), `col = 2 +
+  rnd(29 − w)`, `s = rnd(2)`, `r0 = 1 + rnd(6 − h)`; first legal placement wins. Levels
+  without `PATCH_A/B` (D1, D8): a 3-cell patch, `T_WALL_PATCH` at (row, col), `T_WALL_FADE`
+  at (row, col+1), `T_WALL_DITHER` at (row+1, col), placed as one object (all 3 cells legal,
+  w = 2, h = 2 for the ring check). Then a **2nd patch with 50 %** (`rnd(2) == 0`, same 8-try
+  loop) if the ≤ 6 patch-cell budget allows. The menu may add more 1×1 patch cells.
+- **(2) Cobweb pass** (levels with `COBWEB`): scan corner candidates left-to-right,
+  top-to-bottom; each takes one `rnd(2)`, placed on 0; **≤ 2 cobwebs per room**.
 
 **In the mock scene:**
 

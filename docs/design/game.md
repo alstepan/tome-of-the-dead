@@ -99,6 +99,12 @@
   (c) The B3B-9 deriver never places on door/arch/lintel/ladder/pit/cap cells, nor changes a
   cell's TILE_FLAGS. TILE_FLAGS solid must therefore be set on every wall-set id (the 3B
   non-solid wall_worn/wall_brk ids are a bug); rubble stays non-solid.
+  **Amended, designer decision 2026-10-05 (D1):** the plaster patches never appeared because
+  2×2/3×2 brick footprints exist almost only in dead-end blocks. The black air band *is* the
+  back wall, so **back-wall patches** (common `T_WALL_DITHER/PATCH/FADE` 28–30 and per-level
+  `PATCH_A/PATCH_B`) are **NON-solid and placed only on `T_AIR` cells**; clear their
+  TILE_FLAGS solid bit. DARK (= `T_BRICK`), wall_worn/wall_brk and pillar stay SOLID on brick.
+  Placement rules: concept-screen §3.3 "Decor placement (D1)".
 
 ### 1.3 The Book of Absolute Death Magic
 
