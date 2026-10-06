@@ -56,11 +56,17 @@ POOL_NEED       EQU POOL_MONSTERS + POOL_HERO_MAX + 2 * 576 + 3 * 576
                 ROLE KN_HURT,   FID_knight_hurt,   KN_REST
                 ROLE KN_BLOCK,  FID_knight_block,  KN_REST
                 ROLE KN_DEAD,   FID_knight_dead,   KN_REST
+                ROLE KN_JUMP1,  FID_knight_jump1,  KN_REST      ; C3-7 (3B stand-in: CLIMB1 / walk)
+                ROLE KN_JUMP2,  FID_knight_jump2,  FID_knight_walk1
 
                 ROLE WZ_REST,   FID_wizard_idle,   FID_wizard_idle
                 ROLE WZ_IDLE2,  FID_wizard_idle2,  WZ_REST
                 ROLE WZ_HURT,   FID_wizard_hurt,   WZ_REST
                 ROLE WZ_DEAD,   FID_wizard_dead,   WZ_REST
+                ROLE WZ_JUMP1,  FID_wizard_jump1,  WZ_REST
+                ROLE WZ_JUMP2,  FID_wizard_jump2,  FID_wizard_walk1
+                ROLE WZ_SRAISE, FID_wizard_staffraise, FID_wizard_cast1
+                ROLE WZ_SSWING, FID_wizard_staffswing, FID_wizard_cast2
 
                 ROLE SK_REST,   FID_skeleton_walk1, FID_skeleton_walk1
                 ROLE SK_HURT,   FID_skeleton_hurt, SK_REST
@@ -140,7 +146,14 @@ wz_idle:        DB 32, WZ_REST, 16, WZ_IDLE2, 16, SEQ_END
 wz_move:        DB 4, FID_wizard_walk1, 1, FID_wizard_walk2, 1, FID_wizard_walk3, 1, FID_wizard_walk4, 1, SEQ_END
 wz_climb:       CLIMBCYC FID_wizard_climb1, FID_wizard_climb2, FID_wizard_walk1, FID_wizard_walk2, FID_wizard_walk3, FID_wizard_walk4
 wz_climbrest:   CLIMBREST FID_wizard_climb1, FID_wizard_walk1
-wz_attack:      DB FID_wizard_cast1, 2, 0, FID_wizard_cast2, 3, SF_IMPACT, SEQ_END
+                ; C3-7: KS_ATTACK = the staff melee (gap 0, game.md §6.2: STAFF_RAISE
+                ; wind-up -> STAFF_SWING strike, IMPACT on the swing). The PROTO
+                ; ranged zap (gap > 0, KF_ZAP; 3D replaces it with spells) keeps
+                ; CAST1 -> CAST2: do_attack swaps in wz_zap. Both IMPACT after
+                ; KS_IMPACT (2) ticks — one kind_seqs entry serves both.
+WZ_WIND         EQU 2                          ; wind-up ticks = the wizard's KS_IMPACT
+wz_attack:      DB WZ_SRAISE, WZ_WIND, 0, WZ_SSWING, 3, SF_IMPACT, SEQ_END
+wz_zap:         DB FID_wizard_cast1, WZ_WIND, 0, FID_wizard_cast2, 3, SF_IMPACT, SEQ_END
 wz_hurt:        DB WZ_HURT, 3, 0, SEQ_END
 wz_death:       DEATHSEQ WZ_HURT, WZ_DEAD, FID_wizard_dead, WZ_REST
 ; --- Skeleton ---
@@ -194,7 +207,7 @@ kind_seqs:
                 DW kn_idle, kn_move, kn_climb, kn_climbrest, kn_attack, kn_hurt, kn_block, kn_death
                 DB 2
                 DW wz_idle, wz_move, wz_climb, wz_climbrest, wz_attack, wz_hurt, wz_hurt, wz_death
-                DB 2
+                DB WZ_WIND
                 DS KS_STRIDE, 0                ; K_ROGUE retired (hole keeps K_* ids stable)
                 DW sk_idle, sk_move, sk_climb, sk_climbrest, sk_attack, sk_hurt, sk_hurt, sk_death
                 DB 3
@@ -209,6 +222,12 @@ kind_seqs:
                 DW sl_idle, sl_move, sl_move, sl_climbrest, sl_attack, sl_hurt, sl_hurt, sl_death
                 DB 2
                 ASSERT $ - kind_seqs == K_COUNT * KS_STRIDE
+
+; hero_jump — the §2.4 arc frames per hero kind (anim_entity .jump; only the
+; hero jumps, try_jump): 2 B/kind {JUMP1 (ticks 0 / 13, aligned), JUMP2
+; (ticks 1..12, airborne)}, indexed E_KIND * 2.
+hero_jump:      DB KN_JUMP1, KN_JUMP2, WZ_JUMP1, WZ_JUMP2
+                ASSERT K_KNIGHT == 0 && K_WIZARD == 1
 
 ; resting frame per kind (select screen, HOLD fallback)
 kind_rest:      DB KN_REST, WZ_REST, 0, SK_REST, GB_REST, GH_REST, RT_REST, BT_REST, SL_REST

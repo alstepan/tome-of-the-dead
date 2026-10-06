@@ -144,7 +144,7 @@ anim_entity:
                 ld   d, a
                 ld   a, b
                 cp   M_JUMP
-                jr   z, .jump
+                jp   z, .jump                  ; (out of line: keeps .fj's jr in range)
                 ; FALL (game.md §2.5): the walk step first (4 px/tick, walk
                 ; cycle), then FALL_STEP px/tick straight down (F9: px = 8x)
                 ; in the CLIMB1 / WALK1 pose; landing = M_REST (hero_fall's
@@ -159,23 +159,7 @@ anim_entity:
                 jr   nz, .crest
 .land:          ld   (ix+E_MODE), M_REST
                 jr   .crest
-.jump:          ; JUMP (game.md §2.4): arc tick t = E_TMR. t 0 and 13: JUMP1,
-                ; aligned (stand-in: the CLIMB1 / WALK1 pose); t 1..12: JUMP2
-                ; (stand-in: the walk cycle), px += 4, py = 8y + jump_dy[t-1]
-                ld   a, (ix+E_TMR)
-                inc  (ix+E_TMR)
-                or   a
-                jr   z, .crest
-                cp   JUMP_TICKS - 1
-                jr   nc, .land
-                ld   hl, jump_dy - 1
-                ld   e, a
-                ld   a, d
-                ld   d, 0
-                add  hl, de
-                add  a, (hl)                   ; signed rise (<= 0)
-                ld   (ix+E_PY), a
-.fpx:           ld   b, c                      ; px 4 px toward 8x, walk cycle
+.fpx:           ld   b, c                      ; FALL: px 4 px toward 8x, walk cycle
                 ld   a, (ix+E_PX)
                 call tween
                 ld   (ix+E_PX), a
@@ -351,6 +335,42 @@ anim_entity:
                 jr   .out
 .free:          ld   (ix+E_FLAGS), 0           ; slot freed; renderer erases it
 .out:           ld   a, c
+                ret
+.jump:          ; JUMP (game.md §2.4): arc tick t = E_TMR. t 0 and 13: JUMP1,
+                ; aligned; t 1..12: JUMP2 (C3-7 art; MOTION frame: drawn at
+                ; shift 4 too), px += 4, py = 8y + jump_dy[t-1]. Frame =
+                ; hero_jump[E_KIND * 2 + (airborne)] (only the hero jumps).
+                ; ~220 T on an airborne tick (the walk-cycle stand-in was ~330).
+                ld   a, (ix+E_TMR)
+                inc  (ix+E_TMR)
+                ld   e, 0                      ; JUMP1 (ld keeps the flags)
+                or   a
+                jr   z, .jfid
+                cp   JUMP_TICKS - 1
+                jr   nc, .jland
+                ld   hl, jump_dy - 1
+                ld   e, a
+                ld   a, d
+                ld   d, 0
+                add  hl, de
+                add  a, (hl)                   ; signed rise (<= 0)
+                ld   (ix+E_PY), a
+                ld   b, c
+                ld   a, (ix+E_PX)
+                call tween
+                ld   (ix+E_PX), a
+                ld   e, 1                      ; JUMP2
+                jr   .jfid
+.jland:         ld   (ix+E_MODE), M_REST       ; t 13: landed, E = 0 (JUMP1)
+.jfid:          ld   a, (ix+E_KIND)
+                add  a, a
+                add  a, e
+                ld   e, a
+                ld   d, 0
+                ld   hl, hero_jump
+                add  hl, de
+                ld   a, (hl)
+                ld   b, 1
                 ret
 
 ; jump_dy — the §2.4 arc: py offset of jump ticks 1..12 (game.md §2.4)

@@ -465,7 +465,7 @@ do_exit:
                 jp   resync_tick
 
 ;------------------------------------------------------------------------------
-; end_screen — GS_DEAD / GS_WIN: wait for ENTER -> hero select (new game uses
+; end_screen — GS_DEAD / GS_WIN: wait for 1..0 / ENTER -> menu (new game uses
 ; the same fixed seed, §6.5).
 ;------------------------------------------------------------------------------
 end_screen:
@@ -478,20 +478,14 @@ end_screen:
                 ld   hl, end_card              ; bank 1 (menu1.asm)
                 call far1
 .shown:         call panel_tick                ; B3B-11: the death / win line, HP 0
-                call sample_input              ; play_loop ran input_tick
-                ld   a, (PLAYER_DISC)
-                bit  DK_ENTER_BIT, a
+                call keys_down                 ; C3-6b: raw 1..0 / ENTER (not FIRE: a
+                ld   hl, END_SHOWN             ; held FIRE / joystick cannot skip it)
+                jr   z, .none
+                bit  1, (hl)                   ; END_SHOWN 2 = armed (all released once)
                 jr   nz, .go
-                ld   hl, STICK                 ; C3-6: or a FIRE press
-                ld   a, (hl)
-                inc  l
-                ld   c, (hl)
-                ld   b, a
-                ld   a, c
-                cpl
-                and  b
-                bit  JOY_F_BIT, a
-                jp   z, play_loop
+                jp   play_loop
+.none:          ld   (hl), 2                   ; released: from now on a key returns
+                jp   play_loop
 .go:
                 ; ENTER: fall through into enter_select
 

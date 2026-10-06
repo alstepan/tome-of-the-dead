@@ -24,6 +24,9 @@ POOLACC = 0
                 FRM knight_climb1,  K_KNIGHT, 24, STA|SYM
                 FRM knight_climb2,  K_KNIGHT, 24, STA|SYM
                 FRM knight_dead,    K_KNIGHT, 24, STA
+                ; C3-7: jump (game.md §2.4). JUMP2 is drawn mid-tween (x += 4 px/tick)
+                FRM knight_jump1,   K_KNIGHT, 24, STA
+                FRM knight_jump2,   K_KNIGHT, 24, MOT
 KFCNT_KNIGHT = FCTR - KFID_KNIGHT
 POOL_KNIGHT = POOLACC
 
@@ -41,6 +44,11 @@ POOLACC = 0
                 FRM wizard_climb2,  K_WIZARD, 24, STA|SYM
                 FRM wizard_hurt,    K_WIZARD, 24, STA
                 FRM wizard_dead,    K_WIZARD, 24, STA
+                ; C3-7: jump + staff melee (game.md §2.4 / §6.2)
+                FRM wizard_jump1,   K_WIZARD, 24, STA
+                FRM wizard_jump2,   K_WIZARD, 24, MOT
+                FRM wizard_staffraise, K_WIZARD, 24, STA
+                FRM wizard_staffswing, K_WIZARD, 24, STA
 KFCNT_WIZARD = FCTR - KFID_WIZARD
 POOL_WIZARD = POOLACC
 

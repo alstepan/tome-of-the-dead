@@ -149,6 +149,8 @@ do_attack:
                 ret  z
                 ld   (ZAP_LEN), a
                 ld   (ix+E_ZAP), 1
+                ld   hl, wz_zap                ; C3-7: ranged zap = CAST1 -> CAST2;
+                call start_seq                 ; KS_ATTACK is the staff melee (gap 0)
                 ld   a, (ix+E_Y)
                 add  a, ZAP_ROW_OFF
                 ld   (ZAP_ROW), a

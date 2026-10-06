@@ -13,6 +13,7 @@ Usage:
 """
 import hashlib
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -304,9 +305,7 @@ class T(Proto):
         return False
 
     def enter_to_select(self):
-        self.hold("FIRE")                       # C3-8a: FIRE (or ENTER) leaves the end card
-        ok = self.wait_state(GS_SELECT)
-        self.release()
+        ok = self.end_to_menu()                 # C3-6b: a digit / ENTER after a release
         self.settle()
         return ok
 
@@ -591,9 +590,7 @@ def main():
                     break
             h.expect("21 hero dies -> GS_DEAD", p.rb("GAME_STATE"), GS_DEAD)
             h.expect("22 hp never underflows (0)", p.ent(0)["HP"], 0)
-            p.hold("ENTER")
-            h.expect("21 ENTER -> GS_SELECT", p.wait_state(GS_SELECT), True)
-            p.release()
+            h.expect("21 ENTER -> GS_SELECT", p.end_to_menu(), True)
             p.settle()
             p.hold("1")
             p.wait_state(GS_PLAYING)
@@ -627,6 +624,82 @@ def main():
             h.expect("19 x unchanged", p.ent(0)["X"], 6)
             h.expect("19 ZAP tiles in the gap during impact", zap[0] > 0, True)
             h.expect("19 no ZAP attr inside the target's drawn footprint", over_rat[:4], [])
+
+        # ---------------- 66. C3-7 hero frames: Mage staff melee + jump arcs ---
+        if want(66):
+            def runs(seq):
+                out = []
+                for f in seq:
+                    if not out or out[-1][0] != f:
+                        out.append([f, 0])
+                    out[-1][1] += 1
+                return out
+
+            def jump_check(tag, hero, keys, x0, left):
+                j1, j2 = FID[hero + "_jump1"], FID[hero + "_jump2"]
+                p.isolate()
+                p.place(0, x0, Y1, flags=EF_ACTIVE | 2 | (EF_LEFT if left else 0))
+                p.turn("WAIT")                   # no two jumps in a row (§2.4)
+                p.settle()
+                smp, want_f = [], []
+
+                def jt(fr, e):
+                    smp.append((e["DFID"], e["DFPX"], e["DCOL"]))
+                    want_f.append(p.rb(S["SLOTREC"] + 1))   # slot 0 R_FID (anim output)
+                ok = p.turn(*keys, per_tick=jt)
+                r = runs([d for d in want_f if d in (j1, j2)])
+                h.expect(f"66 {tag}: jump ran, x {'-' if left else '+'}6",
+                         (ok, p.ent(0)["X"]), (True, x0 - 6 if left else x0 + 6))
+                h.expect(f"66 {tag}: arc frames JUMP1 -> JUMP2 x12 -> JUMP1",
+                         [(f, n if f == j2 else 1) for f, n in r], [(j1, 1), (j2, 12), (j1, 1)])
+                h.expect(f"66 {tag}: drawn JUMP2 x12, then the landing JUMP1",
+                         ([n for f, n in runs([d for d, _, _ in smp if d in (j1, j2)]) if f == j2],
+                          p.ent(0)["DFID"], bool(p.ent(0)["FLAGS"] & EF_LEFT)), ([12], j1, left))
+                h.expect(f"66 {tag}: JUMP2 drawn at shift 4 (MOTION frame)",
+                         any(d == j2 and px % 8 == 4 for d, px, _ in smp), True)
+                # ax = ax_L = 0 (24-px frames): the frame box is the body box
+                # in both facings, so the drawn column == px // 8 every tick
+                h.expect(f"66 {tag}: frame box == body box (no jump of the body)",
+                         [(d, px, c) for d, px, c in smp if d in (j1, j2) and c != px // 8][:2], [])
+
+            # Mage melee (gap 0): STAFF_RAISE wind-up -> STAFF_SWING, IMPACT on the swing
+            p.boot(K_WIZARD)
+            p.isolate(keep=(SLOT_RAT,))
+            p.place(0, 6, Y1)
+            p.place(SLOT_RAT, 9, R1)             # wizard cols 6-8, rat 9-12: gap 0
+            p.set_ent(SLOT_RAT, FLAGS=EF_ACTIVE | EF_HOSTILE)
+            p.settle()
+            p.clear_trace()
+            # a breakpoint on do_impact (an extra probe: tick() returns there
+            # once mid-tick): HL = the sequence entry carrying SF_IMPACT
+            p.z.cmd("set-breakpoint 5 PC=%d" % S["do_impact"])
+            p.extra_probes = {S["do_impact"]}
+            imps = []
+
+            def chk66(frame, e):
+                if p.pc() == S["do_impact"]:
+                    r = p.z.cmd("get-registers")
+                    hl = int(re.search(r"HL=([0-9a-fA-F]{4})", r).group(1), 16)
+                    ix = int(re.search(r"IX=([0-9a-fA-F]{4})", r).group(1), 16)
+                    imps.append((ix, p.rb(hl), p.rb(hl + 2), p.rb(hl - 3), p.rb(hl - 2)))
+            ok = p.turn("L", per_tick=chk66)
+            p.load_breakpoints()
+            tr = [f for f in p.trace_fids(0)
+                  if f in (FID["wizard_staffraise"], FID["wizard_staffswing"],
+                           FID["wizard_cast1"], FID["wizard_cast2"])]
+            h.expect("66 wizard melee: drawn STAFF_RAISE -> STAFF_SWING (no CAST)",
+                     (ok, tr), (True, [FID["wizard_staffraise"], FID["wizard_staffswing"]]))
+            # (hero IX, impact entry fid, its flags & SF_IMPACT, previous fid, its ticks)
+            h.expect("66 wizard melee: one IMPACT, on the STAFF_SWING entry after a 2-tick STAFF_RAISE",
+                     [(f, fl & 1, pf, pt) for ix, f, fl, pf, pt in imps if ix == S["P_ENTITIES"]],
+                     [(FID["wizard_staffswing"], 1, FID["wizard_staffraise"], 2)])   # (the rat may hit back)
+            h.expect("66 wizard melee: x unchanged, no zap", (p.ent(0)["X"], p.rb("ZAP_T")), (6, 0))
+            p.set_ent(SLOT_RAT, ROOM=NOWHERE)
+            jump_check("wizard right", "wizard", ("K", "L"), 12, False)
+            jump_check("wizard left (mirrored)", "wizard", ("K", "H"), 20, True)
+            p.boot(K_KNIGHT)
+            jump_check("knight right", "knight", ("K", "L"), 12, False)
+            jump_check("knight left (mirrored)", "knight", ("K", "H"), 20, True)
 
         # ---------------- 23/24/25/30/31/34/29/39 A <-> B ------------------
         if any(want(n) for n in (23, 24, 25, 29, 30, 31, 34, 39)):
@@ -895,9 +968,7 @@ def main():
                    for r in range(sk["DROW"], sk["DROW"] + sk["DROWS"])}
             h.expect("54 setup: knight died, skeleton C drawn in room A",
                      (died, sk["DVIS"] & 1, sk["ROOM"]), (True, 1, 0))
-            p.hold("ENTER")
-            p.wait_state(GS_SELECT)
-            p.release()
+            p.end_to_menu()
             p.settle()
             p.menu_start(K_WIZARD, settle=None)  # '2' toggles HERO, '1' starts (C3-6 menu)
             wz0 = p.rb(S["kind_tab"] + S["KT_FID0"] + K_WIZARD)
@@ -2047,9 +2118,7 @@ def walkthrough(h, p, check14=False):
     # real D8 descend is tests/world.py W16): ENTER -> hero select
     p.wb("GAME_STATE", GS_WIN)
     p.tick(2)
-    p.hold("FIRE")                    # C3-8a: FIRE (or ENTER) leaves an end card
-    res["select"] = p.wait_state(GS_SELECT)
-    p.release()
+    res["select"] = p.end_to_menu()   # C3-6b: a digit / ENTER (after a release) leaves an end card
     p.settle()
     p.wb("ANIM_FREEZE", 1)
     p.tick(4)                         # C3-6: the torches hold frame 0

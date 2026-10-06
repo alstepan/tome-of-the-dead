@@ -65,12 +65,18 @@ scan_matrix:
 ; BREAK (CAPS + SPACE) clears FIRE: with the default KEYTAB SPACE is FIRE,
 ; and SC_BREAK has priority (sample_input reports it). FIRE stays cleared
 ; (FIRE_LOCK) until FIRE itself is released, whichever key goes first.
+; C3-6b: GAME_STATE != GS_PLAYING -> STICK = 0 (no read_stick at all).
 ; Clobbers: A, BC, DE, HL     ~0.5k + read_stick (live, keys: ~0.95k T)
 ;==============================================================================
 input_tick:
                 call scan_matrix
-                call read_stick
+                ld   a, (GAME_STATE)          ; C3-6b: menu / redefine / end screens
+                cp   GS_PLAYING               ; read the raw matrix only: no KEYTAB,
+                ld   c, 0                     ; Sinclair or Kempston port ($1F floats
+                jr   nz, .nrd                 ; on a bare machine). The pause overlay
+                call read_stick               ; runs in GS_PLAYING: in-game controls.
                 ld   c, a
+.nrd:
                 ld   a, (KBD_MATRIX + KBROW_CAPSV)
                 ld   hl, KBD_MATRIX + KBROW_SPACE
                 or   (hl)
@@ -255,6 +261,23 @@ sample_input:
                 or   d
                 ld   hl, PLAYER_DIR
                 or   (hl)
+                ret
+
+;==============================================================================
+; keys_down — C3-6b end screens: Z iff none of 1..0 / ENTER is down in
+; KBD_MATRIX (raw: JOY_MODE's Sinclair half-masking does not apply).
+; Out: A = 0 if none.  Clobbers: A, HL     ~0.15k T
+;==============================================================================
+keys_down:
+                ld   a, (KBD_MATRIX + KBROW_HJKL)
+                or   ~(1 << KB_ENTER_BIT) & $FF   ; only ENTER's bit can be low
+                ld   hl, KBD_MATRIX + KBROW_12345
+                and  (hl)
+                inc  l
+                ASSERT KBROW_09876 == KBROW_12345 + 1 && (KBD_MATRIX >> 8) == ((KBD_MATRIX + KBROW_09876) >> 8)
+                and  (hl)
+                and  SC_ROWKEYS               ; bits 5-7 (EAR) are not keys
+                xor  SC_ROWKEYS               ; a low bit (down) -> 1
                 ret
 
 ;==============================================================================

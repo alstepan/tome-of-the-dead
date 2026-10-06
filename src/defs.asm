@@ -124,7 +124,7 @@ P_ENTITIES      EQU $B000           ; 16 slots x 32 B = 512 B ($B000..$B1FF)
 P_ENT_STRIDE    EQU 32
 P_MAX_ENT       EQU 16
 FRT_STRIDE      EQU 16
-FRT_MAX         EQU 160             ; A6 (game.md §11.2): 68 used today
+FRT_MAX         EQU 160             ; A6 (game.md §11.2): 74 used (C3-7)
 FRT             EQU P_ENTITIES - FRT_MAX * FRT_STRIDE   ; $A600..$AFFF: frame runtime
                                     ; table, 16 B/fid (4 variants x bank,lo,hi + 4 pad);
                                     ; directly below ENTITIES, the image ends below it

@@ -3,9 +3,8 @@
 ; #50 masks exactly ui1_vars..ui1_vars_end when it compares bank 1 to the .sna).
 ;==============================================================================
 ui1_vars:
-menu_sel:       DB   0                         ; cursor item 0..3
 menu_hero:      DB   K_KNIGHT                  ; HERO choice (persists between games)
-menu_sc_old:    DB   0
+menu_sc_old:    DB   0                         ; last menu_read (key edges)
 torch_t:        DB   1
 torch_k:        DB   0
 pv_i:           DB   0

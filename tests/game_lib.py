@@ -342,6 +342,16 @@ class Proto:
         if settle:
             self.settle(settle)
 
+    def end_to_menu(self, key="ENTER"):
+        """End screen (GS_DEAD / GS_WIN) -> the menu (C3-6b: a digit / ENTER,
+        accepted only after every key was released once; FIRE does not)."""
+        self.release()
+        self.tick(3)
+        self.hold(key)
+        ok = self.wait_state(GS_SELECT)
+        self.release()
+        return ok
+
     def tap(self, *keys, n=1, step=None):
         """Press for n ticks, release for 1 (edge-driven consumers: menu,
         number keys, FIRE). step() advances one tick (default tick(); the

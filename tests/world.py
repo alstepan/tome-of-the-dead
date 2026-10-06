@@ -112,10 +112,10 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
       cost no turn; ENTER uses the icon; I = NO BAG YET; the FIRE melee tick's
       T vs the 126k budget.
   C3-6 (bank 1 menu1.asm):
-  W24 menu golden; cursor / controls / hero / Sinclair digit masking;
+  W24 menu golden (no cursor); digits-only controls / hero (C3-6b);
       redefine (duplicates refused, KEYTAB written when complete); seed
       entropy (MENU_SPIN) vs seed_fixed; pause overlay restored byte for
-      byte, QUIT asks Y/N; the death card (menu font) and FIRE back to menu.
+      byte, QUIT asks Y/N; the death card (menu font), digit-after-release back to menu.
   W20 stack low-water: $BD00..$BEFF pattern-filled before boot, then boot,
       a generated D1 start and 80 seeded random turns (walk / climb / jump /
       wait, fights, exits); the lowest byte touched must leave >= 512 B of
@@ -907,10 +907,9 @@ def w19(p, check):
     STUB = S["LOWRAM_END_3B"]
     RES = S["MSG_BUF"]
     w = w16
-    # C3-8a: the menu with JM_SINC2 selected: its half of the number row (1-5)
-    # acts as the joystick, NOT as menu digits ('2' = HERO toggle is masked and
-    # '1' does not start), while ENTER still starts (game.md §3.2). Was: the
-    # PROTO select read the raw 1 / 2 keys (C3-1 review).
+    # C3-6b (game.md §3.2): the menu reads raw digits only. With JM_SINC2 the
+    # '2' (a joystick key in game) still toggles HERO and '1' still starts; a
+    # Kempston FIRE (JOY_MIRROR) does nothing and STICK stays 0 in the menu.
     p.load()
     p.wait_state(GS_SELECT)
     p.wb("INPUT_SRC", 1)
@@ -919,17 +918,23 @@ def w19(p, check):
     p.tick(6)
     p.release()
     p.tick(2)
-    masked = p.rb("GAME_STATE") == GS_SELECT and p.rb("menu_hero") == K_KNIGHT
-    p.hold("1")
+    tog = p.rb("menu_hero") == K_WIZARD
+    p.wb("JOY_MODE", 1)
+    p.wb("JOY_MIRROR", 0x10)   # JOY_F (Kempston bit 4)
+    p.tick(8)
+    kemp = p.rb("GAME_STATE") == GS_SELECT and p.rb("STICK") == 0
+    p.wb("JOY_MIRROR", 0)
+    p.wb("JOY_MODE", 3)
+    p.hold("2")
     p.tick(6)
     p.release()
     p.tick(2)
-    masked = masked and p.rb("GAME_STATE") == GS_SELECT
-    p.hold("ENTER")
+    tog = tog and p.rb("menu_hero") == K_KNIGHT
+    p.hold("1")
     sel_ok = p.wait_state(GS_PLAYING, 200)
     p.release()
-    check("W19 menu in JM_SINC2: 1 / 2 are the joystick half (no start, no HERO toggle), ENTER starts",
-          masked and sel_ok and p.rb("HERO_KIND") == K_KNIGHT, (masked, sel_ok, p.rb("HERO_KIND")))
+    check("W19 menu in JM_SINC2: '2' toggles HERO and '1' starts (digits are raw); Kempston FIRE ignored, STICK 0",
+          tog and kemp and sel_ok and p.rb("HERO_KIND") == K_KNIGHT, (tog, kemp, sel_ok, p.rb("HERO_KIND")))
     p.boot(K_KNIGHT)
     p.isolate()
     p.settle(2)
@@ -1659,28 +1664,28 @@ def w24(p, check):
         game.golden(p.h, "w24_menu", fr)
         check("W24 menu: title / items in the menu font ('1 START' at (4, 8), 'HERO: WARRIOR')",
               menu_text_ok(p, fr, 8, 4, "1 START") and menu_text_ok(p, fr, 11, 4, "2 HERO: WARRIOR"), "")
-        # cursor + controls
+        # no cursor; '3' cycles the controls (keys > Kempston > S1 > S2 > keys); other
+        # keys, FIRE and a Kempston FIRE do nothing
         tap("A")
-        tap("A")
-        s1 = p.rb("menu_sel")
         tap("SPACE")
-        j1 = p.rb("JOY_MODE")
-        tap("3")
-        tap("3")
-        j2 = p.rb("JOY_MODE")                        # Sinclair 2: that '3' was its DOWN too
-        tap("Q")                                     # (the cursor went to 4): back to 3
-        tap("SPACE")
-        j3 = p.rb("JOY_MODE")
+        p.wb("JOY_MIRROR", 0x10)   # JOY_F (Kempston bit 4)
         tap("Q")
-        check("W24 DOWN x2 -> CONTROLS, FIRE / '3' cycle JOY_MODE keys -> Kempston -> S1 -> S2 -> keys; UP moves back",
-              (s1, j1, j2, j3, p.rb("menu_sel")) == (2, 1, 3, 0, 1), (s1, j1, j2, j3, p.rb("menu_sel")))
-        # Sinclair 2: key 1 is the joystick (LEFT): no START
+        p.wb("JOY_MIRROR", 0)
+        idle = p.rb("GAME_STATE") == GS_SELECT and p.rb("JOY_MODE") == 0 and p.rb("menu_hero") == K_KNIGHT
+        modes = []
+        for _ in range(4):
+            tap("3")
+            modes.append(p.rb("JOY_MODE"))
+        check("W24 digits only: A / FIRE / Kempston FIRE ignored; '3' x4 cycles JOY_MODE 1, 2, 3, 0",
+              idle and modes == [1, 2, 3, 0], (idle, modes))
+        # Sinclair 2 selected: '1' / '2' are still the menu digits (HERO toggles)
         p.wb("JOY_MODE", 3)
-        tap("1")
-        st = p.rb("GAME_STATE")
+        tap("2")
+        tg = p.rb("menu_hero")
+        tap("2")
         p.wb("JOY_MODE", 0)
-        check("W24 Sinclair 2: key '1' does not START (its half of the digits is the joystick)",
-              st == GS_SELECT, st)
+        check("W24 Sinclair 2 selected: key '2' still toggles HERO (menu is raw digits)",
+              tg == K_WIZARD and p.rb("menu_hero") == K_KNIGHT and p.rb("GAME_STATE") == GS_SELECT, tg)
         # redefine: M Z V T, a duplicate M and reserved ENTER / 5 refused, then B
         kt0 = bytes(p.z.read_memory(S["KEYTAB"], 10))
         tap("4")
@@ -1778,14 +1783,28 @@ def w24(p, check):
         tap("1")
         p.wait_state(GS_PLAYING, 400)
         p.settle(2)
+        hold("2")                                    # a digit still down when the hero dies
         p.wb("GAME_STATE", GS_DEAD)
         p.tick(4)
         fr = p.frame()
-        check("W24 death: the 'YOU DIED' card (menu font, rows 8-9), FIRE -> the menu",
-              p.rb("END_SHOWN") == 1 and menu_text_ok(p, fr, 8, 12, "YOU DIED"), p.rb("END_SHOWN"))
+        card = p.rb("END_SHOWN") == 1 and menu_text_ok(p, fr, 8, 12, "YOU DIED")
+        p.tick(4)
+        held = p.rb("GAME_STATE") == GS_DEAD         # no release yet: not accepted
+        hold()
+        p.tick(3)
+        armed = p.rb("END_SHOWN") == 2
         tap("SPACE")
+        p.wb("JOY_MIRROR", 0x10)   # JOY_F (Kempston bit 4)
+        p.tick(4)
+        p.wb("JOY_MIRROR", 0)
+        still = p.rb("GAME_STATE") == GS_DEAD        # FIRE (key or stick) does not return
+        check("W24 death: the 'YOU DIED' card (menu font, rows 8-9); a held digit, FIRE and a stick "
+              "press do not return to the menu",
+              card and held and armed and still, (card, held, armed, still))
+        tap("2")
         p.tick(6)
-        check("W24 death card: FIRE returns to the menu", p.rb("GAME_STATE") == GS_SELECT, p.rb("GAME_STATE"))
+        check("W24 death card: a digit after a release returns to the menu", p.rb("GAME_STATE") == GS_SELECT,
+              p.rb("GAME_STATE"))
     finally:
         p.proto_start = keep_p
 
@@ -1803,9 +1822,8 @@ W25_DIR = {"R": 0, "L": 1, "D": 2, "U": 3, "F": 4}
 
 
 def w25(p, check):
-    """Every step is driven only by the source's own 5 inputs (the menu
-    included, bar the one-off mode / REDEFINE selection that needs a working
-    source: the default keys). PROTO rooms: walk, turn-around (0 turns), jump
+    """Every in-game step is driven only by the source's own 5 inputs (the
+    menu is digits-only, C3-6b: '3' selects the mode, '4' REDEFINE, '1' START). PROTO rooms: walk, turn-around (0 turns), jump
     (UP + side), close the A|B door (FIRE, melee), quaff (ICON MODE: DOWN +
     FIRE, cursor R to the potion, FIRE), pause + resume (FIRE held + UP).
     Generated D1 (fixed seed): walk to the lair exit, DOWN descends."""
@@ -1864,6 +1882,19 @@ def w25(p, check):
         idle()
         return tc() - t0
 
+    def dhold(*keys):
+        rows = [0xFF] * 8
+        for k in keys:
+            r, bit = W22_KEYS[k]
+            rows[r] &= ~(1 << bit) & 0xFF
+        p.z.cmd("write-memory %d %s" % (S["KBD_MATRIX"], " ".join(map(str, rows))))
+
+    def dtap(*keys, n=2):
+        dhold(*keys)
+        p.tick(n)
+        dhold()
+        p.tick(2)
+
     def start_menu(src, proto, fixed_seed=False):
         """Boot to the menu and START using only `src`."""
         p.proto_start = proto
@@ -1874,13 +1905,11 @@ def w25(p, check):
         p.wb("INPUT_REPEAT", 1)                   # the game's default
         if fixed_seed:
             p.wb("seed_fixed", 1)                 # seed_value = the default $1234
-        hold("keys")
+        dhold()
         p.tick(4)
         mode, keys = W25_SRC[src]
-        if src == "redef":                        # item 4 (3 DOWN, FIRE) with the default keys
-            for _ in range(3):
-                tap("keys", "D")
-            tap("keys", "F")
+        if src == "redef":                        # item 4 (REDEFINE) by its digit
+            dtap("4")
             for d in ("U", "D", "L", "R", "F"):   # the prompts: UP DOWN LEFT RIGHT FIRE
                 tap("redef", d)
             p.tick(4)
@@ -1888,24 +1917,16 @@ def w25(p, check):
             row = lambda r: (S["KBD_MATRIX"] & 0xFF) + r
             want = bytes([row(2), 1 << 4, row(0), 1 << 4, row(0), 1 << 1, row(7), 1 << 2, row(7), 1 << 4])
             check("W25 redef: KEYTAB made in the REDEFINE menu (U=M D=Z L=V R=T F=B)", kt == want, kt.hex())
-        elif mode:                                # CONTROLS (item 3): FIRE cycles the mode
-            tap("keys", "D")
-            tap("keys", "D")
-            for _ in range(mode):
-                tap("keys", "F")
-        sel = p.rb("menu_sel")
-        for _ in range(sel):
-            tap(src, "U")                         # back up to 1 START with the source's UP
-        up = p.rb("menu_sel")
-        hold(src, "F")
+        for _ in range(mode):                     # CONTROLS (item 3): '3' cycles the mode
+            dtap("3")
+        dhold("ENTER")                            # START (key 1 would be Sinclair 2's LEFT in game)
         p.tick(1)
-        hold(src)
+        dhold()
         ok = p.wait_state(GS_PLAYING, 600)
         p.tick(3)
-        check(f"W25 {src}: menu navigated and START with the source's own inputs (JOY_MODE {mode}, "
-              f"cursor {sel}->{up}, Knight)",
-              ok and up == 0 and p.rb("JOY_MODE") == mode and p.rb("HERO_KIND") == K_KNIGHT,
-              (ok, sel, up, p.rb("JOY_MODE"), p.rb("HERO_KIND")))
+        check(f"W25 {src}: menu driven by digits, START; the source is live in game (JOY_MODE {mode}, Knight)",
+              ok and p.rb("JOY_MODE") == mode and p.rb("HERO_KIND") == K_KNIGHT,
+              (ok, p.rb("JOY_MODE"), p.rb("HERO_KIND")))
 
     def ingame(code):
         pc0 = p.pc()
@@ -2017,11 +2038,11 @@ def w25(p, check):
             p.wait_state(GS_SELECT)
             p.wb("INPUT_SRC", 1)
             p.wb("ANIM_FREEZE", 1)
-            hold("keys")
+            dhold()
             p.tick(wait)
-            hold("keys", "F")                     # START (cursor on item 0)
+            dhold("1")                            # START
             p.tick(1)
-            hold("keys")
+            dhold()
             p.wait_state(GS_PLAYING, 600)
             seeds.append(p.rw("MASTER_SEED"))
         check("W25 seed: START at menu frame 7 vs 19 -> different MASTER_SEEDs; the same timing repeats",

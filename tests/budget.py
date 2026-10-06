@@ -20,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.argv = [sys.argv[0]] + ["999"]           # keep game.py's item filter inert
 import game  # noqa: E402
-from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, EF_ACTIVE, EF_HOSTILE, EF_LEFT, stand_y  # noqa: E402
+from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, EF_ACTIVE, EF_HOSTILE, EF_LEFT, stand_y  # noqa: E402
 
 BUDGET = 2 * 70908
 CAP = 126000                                      # D5: worst tick incl. the panel item
@@ -133,7 +133,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # "heavy" (hero + 2 skeletons + goblin + ghost = 5+5+3+3 = 16 > 12) is OVER
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
-GATED = ("mix",)
+GATED = ("mix", "mage")
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
 HERO_Y = stand_y(1, 6)                            # 11
@@ -144,6 +144,13 @@ SCENARIOS = {
         (1, 22, stand_y(1, 2), HOSTILE),          # rat walking in
         (3, 25, stand_y(1, 4), HOSTILE),          # goblin walking in
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS),  # bat, storey-1 band
+    # C3-7: the same cap mix with the Mage: STAFF_RAISE -> the 40-px STAFF_SWING
+    # (gap 0 melee) on the skeleton while everything else moves / attacks
+    "mage": ("mage + skeleton, rat, goblin, bat", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_WIZARD),
     # review A1 worst mix: 2 skeletons (both 40-px attacks), goblin, ghost
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
@@ -185,9 +192,9 @@ def inject_decor(p):
 
 
 def run_scenario(h, scen):
-    name, placements, keys = scen
+    name, placements, keys = scen[:3]
     p = game.T(h)
-    p.boot(K_KNIGHT, freeze=0)
+    p.boot(scen[3] if len(scen) > 3 else K_KNIGHT, freeze=0)
     p.isolate()
     p.place(0, 12, HERO_Y)
     for slot, x, y, flags in placements:
@@ -195,9 +202,12 @@ def run_scenario(h, scen):
     if DECOR:
         inject_decor(p)
     st = Stepper(p)
+    swing = 0
     for key, n in keys:
         for _ in range(n):
+            p.clear_trace()
             st.turn(key)
+            swing += S["FID_wizard_staffswing"] in p.trace_fids(0)
     st.close()
     totals = [t for t, _ in st.ticks]
     worst = max(st.ticks, key=lambda x: x[0])
@@ -210,6 +220,8 @@ def run_scenario(h, scen):
     print(f"worst split    : " + ", ".join(f"{k}={v}" for k, v in worst[1].items()))
     print(f"ticks > budget : {len(over)}")
     print(f"OVERRUN_COUNT  : {ovc}  BLIT_MISS: {p.rb('BLIT_MISS')}", flush=True)
+    if len(scen) > 3:                             # C3-7: did the staff swing run?
+        print(f"staff swings   : {swing} turns drew STAFF_SWING", flush=True)
     dts = [sp.get("decor_tick", 0) for _, sp in st.ticks]
     print(f"decor_tick     : {'on' if DECOR else 'off'}, max {max(dts)} T, mean {sum(dts) // len(dts)} T"
           f" (incl. the call / panel test to panel_tick)", flush=True)
@@ -226,7 +238,7 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in ("mix", "heavy"):
+        for key in ("mix", "mage", "heavy"):
             _, bad = run_scenario(h, SCENARIOS[key])
             if bad and key in GATED:
                 fails.append(key)

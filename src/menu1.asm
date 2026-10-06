@@ -18,7 +18,7 @@ MENU_KEYS_ROW   EQU 20              ; UP Q  DOWN A ... (6x8)
 MENU_PREV_ROW   EQU 9               ; hero previews (body top)
 MENU_A_DIGIT    EQU $45
 MENU_A_LABEL    EQU $47
-MENU_A_SEL      EQU $46             ; selected label + the ">" cursor
+MENU_A_SEL      EQU $46             ; the pause box choice / QUIT? ask
 MENU_A_SUB      EQU $45             ; subtitle, ornament, keys row
 MENU_A_CTL      EQU $47
 MENU_A_CTL_SEL  EQU $4F             ; the chosen control: PAPER blue
@@ -42,86 +42,61 @@ menu_run:
                 ld   (LAST_TICK_FRAME), a
                 ld   a, GS_SELECT
                 ld   (GAME_STATE), a
-                ld   a, (PLAYER_SC)
-                ld   (menu_sc_old), a
+                call menu_read                 ; keys still down from the end screen
+                ld   (menu_sc_old), a          ; (the digit that got here) give no edge
 .loop:          call menu_wait
-                call sample_input
-                ld   hl, menu_sc_old           ; key edges: slot digit / ENTER
-                ld   a, (PLAYER_SC)
+                call menu_read                 ; A = 1..4 / ENTER down, raw
+                ld   hl, menu_sc_old
                 ld   c, (hl)
                 ld   (hl), a
                 ld   b, a
-.new:           ld   a, b                      ; digit pressed this tick?
-                and  SC_SLOT_MASK
-                jr   z, .nd
-                ld   d, a
                 ld   a, c
-                and  SC_SLOT_MASK
-                cp   d
-                jr   z, .nd
-                ld   a, d
-                dec  a
-                cp   4
-                jr   nc, .nd                   ; 1..4 only
-                ld   (menu_sel), a
-                jr   .act
-.nd:            ld   a, c                      ; ENTER pressed this tick?
                 cpl
-                and  b
-                bit  SC_ENTER_BIT, a
-                jr   nz, .actc
-                ld   hl, STICK                 ; stick: UP / DOWN move, FIRE acts
-                ld   a, (hl)
-                inc  l
-                ld   e, a
-                ld   a, (hl)
-                cpl
-                and  e                         ; pressed this tick
-                bit  JOY_F_BIT, a
-                jr   nz, .actc
-                ld   hl, menu_sel
-                bit  JOY_U_BIT, a
-                jr   z, .nu
-                ld   a, (hl)
-                dec  a
-                and  3
-                jr   .mv
-.nu:            bit  JOY_D_BIT, a
+                and  b                         ; A = pressed this frame (lowest wins)
                 jr   z, .loop
-                ld   a, (hl)
-                inc  a
-                and  3
-.mv:            ld   (hl), a
-                call menu_items
+                rra
+                jr   c, .start                 ; 1 / ENTER
+                rra
+                jr   c, .hero                  ; 2
+                rra
+                jr   c, .ctl                   ; 3
+                call redefine                  ; 4 (A bit 3: the only one left)
+                call menu_keys
                 jr   .loop
-.actc:          ld   a, (menu_sel)
-.act:           call menu_items                ; the cursor follows a digit
-                ld   a, (menu_sel)
-                or   a
-                jr   nz, .n1
-                ld   a, (menu_hero)            ; 1 START
+.start:         ld   a, (menu_hero)
                 ld   c, a
                 ret
-.n1:            dec  a
-                jr   nz, .n2
-                ld   a, (menu_hero)            ; 2 HERO: toggle
+.hero:          ld   a, (menu_hero)            ; 2 HERO: toggle
                 xor  1
                 ld   (menu_hero), a
                 call menu_items
                 call menu_previews
-                jp   .loop
-.n2:            dec  a
-                jr   nz, .n3
-                ld   a, (JOY_MODE)             ; 3 CONTROLS: next mode
-                inc  a
-                and  3
+                jr   .loop
+.ctl:           ld   a, (JOY_MODE)             ; 3 CONTROLS: next mode (live only
+                inc  a                         ; from START: input_tick reads no
+                and  3                         ; stick outside GS_PLAYING)
                 ld   (JOY_MODE), a
                 call menu_ctl
-                jp   .loop
-.n3:            call redefine                  ; 4 REDEFINE KEYS
-                call menu_keys
-                jp   .loop
+                jr   .loop
                 ASSERT JM_KEYS == 0 && JM_SINC2 == 3 && K_KNIGHT == 0 && K_WIZARD == 1
+
+;------------------------------------------------------------------------------
+; menu_read — the menu's only input (C3-6b, game.md §3.2): the raw matrix, so
+; neither the stick nor JOY_MODE's Sinclair half-masking matters.
+; Out: A = bit n = key n+1 down (1..4); ENTER is ORed onto bit 0 (= START).
+; Clobbers: A, C, HL
+;------------------------------------------------------------------------------
+menu_read:
+                ld   a, (KBD_MATRIX + KBROW_12345)
+                cpl
+                and  %00001111                 ; keys 1..4 (bit 0..3), active high
+                ld   c, a
+                ld   a, (KBD_MATRIX + KBROW_HJKL)
+                cpl
+                and  1 << KB_ENTER_BIT
+                or   c
+                ret
+                ASSERT KB_ENTER_BIT == 0 && KB_1_BIT == 0
 
 
 ;------------------------------------------------------------------------------
@@ -366,31 +341,14 @@ menu_torch:
                 ret
 
 ;------------------------------------------------------------------------------
-; menu_items — the 4 items (menu font) + the ">" cursor on menu_sel.
+; menu_items — the 4 items (menu font); no cursor (digits-only, C3-6b).
 ;------------------------------------------------------------------------------
 menu_items:
                 ld   b, MENU_ITEM_ROW0
                 ld   c, 0
-.i:             push bc
-                ld   a, c
-                ld   hl, menu_sel
-                cp   (hl)
-                ld   a, '>'
-                jr   z, .cur
-                ld   a, ' '
-.cur:           ld   c, 2
-                ld   e, MENU_A_SEL
-                call mf_char
-                pop  bc
-                push bc
-                ld   a, c
-                ld   hl, menu_sel
-                cp   (hl)
-                ld   e, MENU_A_LABEL
-                jr   nz, .ns
-                ld   e, MENU_A_SEL
-.ns:            ld   a, e
+                ld   a, MENU_A_LABEL
                 ld   (mf_lattr), a
+.i:             push bc
                 ld   a, c
                 add  a, TX_M_START             ; the items' ids are consecutive
                 ld   c, 4
@@ -967,7 +925,7 @@ pause_copy:     ld   (pc_dir), a
 
 ;------------------------------------------------------------------------------
 ; end_card — far1 from end_screen (first tick of GS_DEAD / GS_WIN): A = the
-; state. "YOU DIED" / "YOU WIN!" (menu font) + "PRESS ENTER OR FIRE" over
+; state. "YOU DIED" / "YOU WIN!" (menu font) + "PRESS 1-4 OR ENTER" over
 ; playfield rows 7-11 of the bank-5 screen, marked for present.
 ;------------------------------------------------------------------------------
 end_card:       ld   c, a

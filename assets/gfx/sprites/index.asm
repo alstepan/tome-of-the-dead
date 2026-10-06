@@ -32,6 +32,8 @@
         INCLUDE "knight_climb1.asm"
         INCLUDE "knight_climb2.asm"
         INCLUDE "knight_dead.asm"
+        INCLUDE "knight_jump1.asm"
+        INCLUDE "knight_jump2.asm"
         INCLUDE "wizard_idle.asm"
         INCLUDE "wizard_walk1.asm"
         INCLUDE "wizard_walk2.asm"
@@ -44,6 +46,10 @@
         INCLUDE "wizard_climb2.asm"
         INCLUDE "wizard_hurt.asm"
         INCLUDE "wizard_dead.asm"
+        INCLUDE "wizard_jump1.asm"
+        INCLUDE "wizard_jump2.asm"
+        INCLUDE "wizard_staffraise.asm"
+        INCLUDE "wizard_staffswing.asm"
         INCLUDE "skeleton_walk1.asm"
         INCLUDE "skeleton_walk2.asm"
         INCLUDE "skeleton_walk3.asm"
@@ -99,7 +105,7 @@
 FRAME_F_MOTION    EQU 1
 FRAME_F_SYMMETRIC EQU 2
 
-; ---- knight: 14 frames, 4686 bytes
+; ---- knight: 16 frames, 5264 bytes
 knight_frames:
         DEFW knight_idle1
         DEFW knight_idle2
@@ -115,6 +121,8 @@ knight_frames:
         DEFW knight_climb1
         DEFW knight_climb2
         DEFW knight_dead
+        DEFW knight_jump1
+        DEFW knight_jump2
 knight_meta:
         DEFB 3,48,0,0        ; knight_idle1           24x48
         DEFB 3,48,0,0        ; knight_idle2           24x48
@@ -130,6 +138,8 @@ knight_meta:
         DEFB 3,48,0,0        ; knight_climb1          24x48
         DEFB 3,48,0,0        ; knight_climb2          24x48
         DEFB 5,16,8,-32        ; knight_dead            40x16
+        DEFB 3,48,0,0        ; knight_jump1           24x48
+        DEFB 3,48,0,0        ; knight_jump2           24x48
 KNIGHT_IDLE1_IDX EQU 0
 KNIGHT_IDLE2_IDX EQU 1
 KNIGHT_WALK1_IDX EQU 2
@@ -144,12 +154,14 @@ KNIGHT_HURT_IDX EQU 10
 KNIGHT_CLIMB1_IDX EQU 11
 KNIGHT_CLIMB2_IDX EQU 12
 KNIGHT_DEAD_IDX EQU 13
+KNIGHT_JUMP1_IDX EQU 14
+KNIGHT_JUMP2_IDX EQU 15
 knight_flags:
-        DEFB 0,0,1,1,1,1,0,0,0,0,0,2,2,0
-knight_frame_count EQU 14
-knight_bytes       EQU knight_idle1_len + knight_idle2_len + knight_walk1_len + knight_walk2_len + knight_walk3_len + knight_walk4_len + knight_windup_len + knight_slash_len + knight_follow_len + knight_block_len + knight_hurt_len + knight_climb1_len + knight_climb2_len + knight_dead_len   ; = 4686
+        DEFB 0,0,1,1,1,1,0,0,0,0,0,2,2,0,0,0
+knight_frame_count EQU 16
+knight_bytes       EQU knight_idle1_len + knight_idle2_len + knight_walk1_len + knight_walk2_len + knight_walk3_len + knight_walk4_len + knight_windup_len + knight_slash_len + knight_follow_len + knight_block_len + knight_hurt_len + knight_climb1_len + knight_climb2_len + knight_dead_len + knight_jump1_len + knight_jump2_len   ; = 5264
 
-; ---- wizard: 12 frames, 3628 bytes
+; ---- wizard: 16 frames, 4976 bytes
 wizard_frames:
         DEFW wizard_idle
         DEFW wizard_walk1
@@ -163,6 +175,10 @@ wizard_frames:
         DEFW wizard_climb2
         DEFW wizard_hurt
         DEFW wizard_dead
+        DEFW wizard_jump1
+        DEFW wizard_jump2
+        DEFW wizard_staffraise
+        DEFW wizard_staffswing
 wizard_meta:
         DEFB 3,48,0,0        ; wizard_idle            24x48
         DEFB 3,48,0,0        ; wizard_walk1           24x48
@@ -176,6 +192,10 @@ wizard_meta:
         DEFB 3,48,0,0        ; wizard_climb2          24x48
         DEFB 4,48,8,0        ; wizard_hurt            32x48
         DEFB 5,16,8,-32        ; wizard_dead            40x16
+        DEFB 3,48,0,0        ; wizard_jump1           24x48
+        DEFB 3,48,0,0        ; wizard_jump2           24x48
+        DEFB 3,48,0,0        ; wizard_staffraise      24x48
+        DEFB 5,48,0,0        ; wizard_staffswing      40x48
 WIZARD_IDLE_IDX EQU 0
 WIZARD_WALK1_IDX EQU 1
 WIZARD_WALK2_IDX EQU 2
@@ -188,10 +208,14 @@ WIZARD_CLIMB1_IDX EQU 8
 WIZARD_CLIMB2_IDX EQU 9
 WIZARD_HURT_IDX EQU 10
 WIZARD_DEAD_IDX EQU 11
+WIZARD_JUMP1_IDX EQU 12
+WIZARD_JUMP2_IDX EQU 13
+WIZARD_STAFFRAISE_IDX EQU 14
+WIZARD_STAFFSWING_IDX EQU 15
 wizard_flags:
-        DEFB 0,1,1,1,1,0,0,0,2,2,0,0
-wizard_frame_count EQU 12
-wizard_bytes       EQU wizard_idle_len + wizard_walk1_len + wizard_walk2_len + wizard_walk3_len + wizard_walk4_len + wizard_cast1_len + wizard_cast2_len + wizard_idle2_len + wizard_climb1_len + wizard_climb2_len + wizard_hurt_len + wizard_dead_len   ; = 3628
+        DEFB 0,1,1,1,1,0,0,0,2,2,0,0,0,0,0,0
+wizard_frame_count EQU 16
+wizard_bytes       EQU wizard_idle_len + wizard_walk1_len + wizard_walk2_len + wizard_walk3_len + wizard_walk4_len + wizard_cast1_len + wizard_cast2_len + wizard_idle2_len + wizard_climb1_len + wizard_climb2_len + wizard_hurt_len + wizard_dead_len + wizard_jump1_len + wizard_jump2_len + wizard_staffraise_len + wizard_staffswing_len   ; = 4976
 
 ; ---- skeleton: 10 frames, 2986 bytes
 skeleton_frames:
@@ -393,5 +417,5 @@ item_flags:
 item_frame_count EQU 6
 item_bytes       EQU item_potion_len + item_scroll_len + item_sword_len + item_key_len + item_chest_len + item_torch_len   ; = 166
 
-sprites_frame_count EQU 74
-sprites_total_bytes EQU knight_bytes + wizard_bytes + skeleton_bytes + goblin_bytes + ghost_bytes + rat_bytes + bat_bytes + slime_bytes + item_bytes   ; = 16282 (unshifted, masked, incl. descriptors)
+sprites_frame_count EQU 80
+sprites_total_bytes EQU knight_bytes + wizard_bytes + skeleton_bytes + goblin_bytes + ghost_bytes + rat_bytes + bat_bytes + slime_bytes + item_bytes   ; = 18208 (unshifted, masked, incl. descriptors)

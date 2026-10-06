@@ -12,7 +12,7 @@
 
 | Region | Size | Used | Free | |
 |---|---|---|---|---|
-| Banks 0/4/6 pre-shift pool | 49,152 | 38,752 (`POOL_NEED`: monsters 22,688 + hero max 12,608 Knight + 3 select idles 1,728 + straddle 1,728) | **10,400** | M |
+| Banks 0/4/6 pre-shift pool | 49,152 | 40,096 (`POOL_NEED`: monsters 22,688 + hero max 14,528 Knight (C3-7 +1,920) + 2 select idles 1,152 + straddle 1,728) | **9,056** | M |
 | Bank 1 sources (low) | 16,384 | 16,384 | **0** | M |
 | Bank 3 sources (high) | 16,384 | 4,227 | **12,157** | M |
 | Bank 2 `$8000-$BFFF` | 16,384 | code+data `$8000-$AC72` 11,379; pad 141; `kind_tab` 256 @`$AD00`; tables `$B000-$BAAF`; stack 1,024; state 256 | code headroom **653** (to `$AF00`); table gaps ~180 | M |
