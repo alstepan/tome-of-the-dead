@@ -123,8 +123,8 @@ of logic leaves the heaviest render tick.
   restore → `jp $0038` (ROM keeps `SYS_FRAMES`, keyboard scan, `IY`, `EI`).
   `wait_tick` unchanged. Overhead ≈ 0.5k + ROM ≈ 1k.
 - Placement: vector table + stub from the 1 KB stack reservation (measure depth
-  first). **Player + songs + FX: 7 KB at bank 3 `$E400-$FFFF`** (user-approved, game.md §11.2; contended
-  fetches ~+10%).
+  first). **Player + songs + FX: 4 KB at bank 3 `$F000-$FFFF`** (user 2026-10-06, cut from 7 KB at `$E400`; designer decision 2026-10-06: holds a compact tracker player 1-1.5 KB + effects ~0.3 KB + 1-3 KB in-game loop; the PT3 player at 1.6-2.0 KB still fits only with a ~1 KB loop; contended
+  fetches ~+10%). Sources gain +3,072 B: free = 8,701 + 3,072 = **11,773 B** (section 6/8 figures with 7 KB are superseded).
 - **Hold back 13k T per tick** (2 calls × ~6.5k ≈ 9% of the tick).
 - Trap: `DI` windows stall music → no SP-trick blits.
 

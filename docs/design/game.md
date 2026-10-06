@@ -1527,7 +1527,7 @@ therefore needs the **Bat set resident too** (D6 and D8; D3 already has it): +2.
 | Kind ids | 16 | 2 heroes + Rogue hole + 12 monster kinds + Archmage + Ogre + Death Knight = **18** | **`kind_tab` → 32**: **+256 B bank 2**. The resistance table adds ~60 B (3 B/kind) |
 | Bank 2 | ~0.87K + ~2.1K freed by the cold-code move ≈ 3.0K | FRT +1,024, kinds +256, resist ~60 = **1.34K**; **text font 768 B** (6×8 × 96, rev 3) | 1.34 + 0.77 = 2.11K, **~0.9K left**. **Resolved 2026-10-03 (§3.4):** text is drawn only into bank 5 since A7; the text font stays in bank 2 (`$B200`); the **menu font moves to bank 3 cold data (≤ 1.5 KB raw)**, so it costs bank 2 nothing and the ≤ 0.8 KB cap is dropped. The text font is fixed. **The static frame descriptors (24 B/frame) must leave bank 2**: 146 × 24 = 3.5K. The engineer trims them to ≤ 12 B (W, H, ax, class/sym, source bank+offset) → 144 × 12 ≈ 1.75K, moved to **bank 5** next to the generator that alone reads them |
 | Bank 5 low RAM | ~6.1K | generator + boot ~2.1K, ZX0 + `GEN_SRC` 0.6K (rev 3: the scratch is the 1.5 KB `GEN_SCRATCH`, **aliasing `ROOM_MAP`/`NEXT_MAP` → 0 extra bytes**; only the decompressor ~0.1K stays here), tile glyphs 0.6K, level state 0.6K, frame descriptors ~1.75K | ~5.65K, fits, **0.45K margin** |
-| Sources + cold data (banks 1+3) | 32,768 − AY reserve | existing 16,899 → ~9.9K ZX0 + new ~10.1K ZX0 + menus code ~2.0K + icons ~2.7K → 1.6K ZX0 + strings ~2.9K → 1.7K ZX0 = **25.3K** | With AY at 8 KB (24.6K free): **0.7K over**. **AY reserve 7 KB (user: approved)** (player ~2K + in-game music ~4K + FX ~1K still fit, budget §5) → 25.6K, ~0.3K margin **at the conservative 1.7×**. With the rev-3 block packing (2.71× measured on kind data) the expected total is ~18–20K, i.e. ≥ 5K of real margin; the 1.7× row stays the build gate until A5 reports actual sizes |
+| Sources + cold data (banks 1+3) | 32,768 − AY reserve | existing 16,899 → ~9.9K ZX0 + new ~10.1K ZX0 + menus code ~2.0K + icons ~2.7K → 1.6K ZX0 + strings ~2.9K → 1.7K ZX0 = **25.3K** | **AY reserve 4 KB, `AY_RESERVE` `$E400` → `$F000` (user 2026-10-06; supersedes 7 KB)**: compact tracker player 1–1.5 KB + effects ~0.3 KB + 1–3 KB in-game loop; sources get **+3 KB** (28.7K free vs 25.3K need → ~3.4K margin even at 1.7×). Earlier: AY 8 KB 0.7K over, 7 KB (user: approved) ~0.3K margin. With the rev-3 block packing (2.71× measured on kind data) the expected total is ~18–20K, i.e. ≥ 5K of real margin; the 1.7× row stays the build gate until A5 reports actual sizes |
 | Bank 7 spare | 2,656 | **8 per-level tilesets 2,304** | Fits (cold, copied at level start; never drawn into bank 7) |
 | Pool per level (0/4/6) | 49,152 − hero **18,176** (Knight 12,608 + Warrior 5,568 **M**) − straddle 1,728 − projectiles ~2.4K = **26.8K** | max **D8 23.9K** (§11.3; includes the Bat set for the Vampire's bat form) | **Fits, ≥ 2.9K slack** on every level. Build ASSERT per level |
 | Tile ids | 64 | 29 common + ≤ 32 per level | fits (§1.2). Rev 4: common id 10 = `T_TRAP` → common ids full |
@@ -1540,7 +1540,17 @@ of 1.7×, sources grow by ~2.3K. The levers, cheapest first:
 1. Arrows/daggers/bonk back to 8×8 glyph cells: −6 ids, ~0.3K.
 2. Monster HURT → flash: −5 ids, ~1.4K source, ~2.9K pool.
 3. Shared DEAD frame: −5 ids, ~0.6K.
-4. AY reserve 7 → 6 KB.
+4. ~~AY reserve 7 → 6 KB~~ (taken: now 4 KB, user 2026-10-06).
+
+### 11.4 Stage 3D decisions (designer decision 2026-10-06; user decisions marked)
+
+- **user 2026-10-06:** (a) AY reserve 4 KB (see §11.2). (b) PROTO wizard "zap" melee removed; Mage melee = STAFF_RAISE → STAFF_SWING (staff bonk). (c) A measurement spike on dropping the bank-7 clean-background copy runs during 3D; decision before 3E.
+- **Ammo glyphs (designer decision 2026-10-06):** no new tile ids (common ids full). 3D: thrown daggers and arrows are consumed (no floor drop). Recovery is deferred to 3E floor-item records (spent arrows / thrown daggers become floor items, drawn by the item glyph path).
+- **DEF (designer decision 2026-10-06):** 3D implements hero DEF (armour, e.g. Leather 1) in the damage formula. Monster DEF is 0 in 3D; the KX table adds it in 3E (no `kind_tab` change in 3D).
+- **dagger_spin:** 2 frames (as §11.1); the other two drawn grids stay unused source.
+- **Animation order:** monster animations start only after the hero's projectile lands (no overlap). Costs latency, protects the tick budget.
+- **3D tests:** poison, WEAK, FEAR, SLEEP, book reading and bow pickup have no source until 3E/3F; 3D tests them by poking state.
+- **Knight POWER_STRIKE 40x48:** confirmed needed; artist drafts it.
 
 ### 11.3 Pool per level (KB; existing kinds E scaled from the measured 22,688; new **M**)
 
