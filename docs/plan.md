@@ -321,6 +321,7 @@ threshold; respawn half XP; rank 2/3 values per ability; no spell before the fir
 | ID | Task | Tag | Deps |
 |---|---|---|---|
 | D3-0 | layout + relief (AY 4 KB, zap removal, state homes, KX layout, HERO_CARRY) | S | C3-6b, C3-7 merged |
+| LP | **Lazy monster population** (user 2026-10-06; rules game.md §9.4.1–9.4.7, cross-refs §9.3/§9.5/§9.6/§8.6/§1.4, prototype §3.7): level budget + 9 room records (~100 B, layout in memory-map.md), quota split at gen (after traps, byte-identical earlier output), bank-on-leave / spawn-on-entry in the room build, followers admitted after residents, slot invariant `room = CUR_ROOM`; Python spawn reference + levelcheck quotas + ZRCP tests §9.4.7. Runs right after D3-0, before D3-4 | S | D3-0 |
 | D3-1 | rank / XP / KX / ability tables + transcription test | J | D3-0 |
 | D3-2 | 3D strings | J | – |
 | D3-3 ✅ `3ab2f5b` (feat/3d-art; user 2026-10-06: frames approved; frost_crack stays 8×8 (playtest feedback later); Firebolt keeps the yellow/red alternation; full set kept incl. fizz2/burst2; 1,322 B ZX0) | art import: projectiles/impacts, Warrior throw/bow/whirl, POWER_STRIKE (to draw), 7 status icons, ammo floor glyphs → canvas review | artist | – |

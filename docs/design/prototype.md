@@ -278,6 +278,18 @@ hole), `POTION` (1 cell), `CHEST` (2×2 cells), `TORCH` (1×2, optional).
 
 ### 3.7 Persistent monsters & following between rooms (user change 2)
 
+> **Superseded in part: lazy population (user 2026-10-06; details designer decision
+> 2026-10-06; game.md §9.4.1–9.4.7, plan task LP).** Only the monsters of `CUR_ROOM` live in
+> the slots. On leave, the survivors that are not following are banked into the old room's
+> record (kind, exact hp, flags) and their slots are freed. On entry, the residents are
+> spawned first, from the record or from the FRESH quota, at legal cells ≥ 8 cols from the
+> arrival. **Then the followers are admitted:** the rules below (candidates, order, ≤ 2 per
+> exit, entry position, materialise) are unchanged. The admission check now counts the
+> destination's **spawned residents + admitted followers** against the game.md §9.3 cap
+> (≤ 4 monsters, Σ ≤ 12, tall ≤ 2). Followers are counted against the new room's max.
+> Rejected candidates are banked into the room being left. Nobody follows on descent
+> (game.md §9.3). The "Persistence" paragraph below describes PROTO/3B only.
+
 **Persistence (where state lives, what it costs):** every monster, in every room,
 lives permanently in the **existing 16-slot entity array**. Its `room` field says
 which room it is in, and x/y/hp/facing/ai_dir persist exactly as last left. There

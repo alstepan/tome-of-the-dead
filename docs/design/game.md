@@ -59,7 +59,7 @@
 | Shaft cols (designer decision 2026-10-03) | Exit shafts (up-exit, down-exit, arrival, level exit) use left col **`c ∈ 5..24`** (footprint cols 5..26), a subset of the internal-ladder range 3..26. Why: door cells occupy cols 0–1 / 30–31, and a hero arriving through a horizontal exit stands at x = 1 (cols 1..3) or x = 28 (cols 28..30); `c ≥ 5` / `c+2 ≤ 26` leaves ≥ 1 solid-floor col (4 / 27) so arrival never overlaps a hole. The ≥ 4-clear-cols (`\|c1−c2\| ≥ 7`) rule applies unchanged between shafts and internal ladders/pits on the same storey |
 | Generator gaps (designer decision 2026-10-03) | **(1) Lair tiers** (superseded by the L1 rules row, 2026-10-05: both tiers are restricted to the bottom row; the D8 Sanctum cell is reserved up front)**:** (a) farthest non-start leaf with a horizontal edge; else (b) farthest non-start room with a horizontal edge (it keeps its other exits; the boss never follows, so a through-room lair is fine; on D8 the Sanctum leaf needs a free horizontal neighbour cell, else tier fails); there is **no tier (c)**: if neither exists, the generator **reseeds** (seed+1, ≤ 16 tries). The lair edge must be horizontal so the lair has its door. Key room (§1.4: unused in 3B) follows the same fallback. **(2) Potions: minimum 2** per level (≥ 1 Heal); up to 32 seeded placement tries each for the first two, the 3rd is optional and dropped after 8 tries. **(3) Dead-end block:** only in rooms that are **not start, lair or Sanctum**, and only at an edge with no exit. **(4) Start:** hero begins in the DFS-root room on **storey 0** (top); D1 x = col 14, D2+ x = arrival-shaft `c+1`; if x falls on a pit/ladder/shaft footprint, move to the nearest solid-floor col with ≥ 1 clear col. **Designer clarification 2026-10-03:** the arrival shaft is a storey-0 feature (it descends from above into the start room's storey 0, rubble-capped overhead), so the hero arrives on **storey 0, standing on solid floor at x = `c+1`, not mid-climb** (option a). The footprint-move rule **does not apply to the arrival shaft itself**; it applies only to the *other* footprints (pit, internal ladder, up/down-exit), and since placement already keeps those ≥ 4 clear cols (`\|c1−c2\| ≥ 7`) from the arrival shaft, in practice the move rule can only trigger on D1 (x = 14). **(5) 3B level block** needs nothing beyond the descriptors, floor-item list and hero start; population is the fixed per-room stand-in table keyed by room id and depth, not stored |
 | Traps (3E) | placed **last**, after the floor items, so every earlier generator output stays byte-identical to B3B-7 (Python == Z80). Rules §1.5 |
-| Stored per level | room descriptors (exits, ladders, pits, blocks, door/grate bits), the floor-item list, the **trap list (≤ 6 × 2 B, §1.5)**, the 16 entity slots. Population §9.4, items §8.5 |
+| Stored per level | room descriptors (exits, ladders, pits, blocks, door/grate bits), the floor-item list, the **trap list (≤ 6 × 2 B, §1.5)**, the **population budget + 9 room records (~100 B, §9.4.1–9.4.2, user 2026-10-06)**; the 16 entity slots hold only the current room. Population §9.4, items §8.5 |
 
 ### 1.2 Level themes: colours and decor tilesets (attr-only; floor rows never under sprites)
 
@@ -123,7 +123,7 @@
 | Area | 3B stand-in | Final rule |
 |---|---|---|
 | Floor items | **potions only** | §8.5 |
-| Population | a **fixed per-room table** using today's (prototype) kinds | §9.4 |
+| Population | a **fixed per-room table** using today's (prototype) kinds | §9.4 **lazy population** (user 2026-10-06; plan task LP): budget + per-room records, spawned on room entry (§9.4.1–9.4.3) |
 | Lair | the **grate is always open** (boss death not required), but drawn as the distinct raised-portcullis frame (id 26, ink `$46`, concept-screen §3.3 B3B-8 #4) with a first-entry hint `A GATE GLEAMS. THE WAY DOWN.` (designer decision 2026-10-04, B12); ordinary down-exit holes stay plain | §1.1, §8.6 |
 | Key / locked door | no key exists (potions only), so the lair door is an **ordinary unlocked door** (designer decision 2026-10-03) | §1.1 |
 | D8 | D8 gets a lair exit like D1–D7; **descending from D8 = `GS_WIN`** | §1.3 |
@@ -962,6 +962,11 @@ not a replacement for the sword. The stack caps (9 / 24) make hoarding a loss.
   - The hit flash overrides it. `$06`/`$46`/`$47` join the legality set.
   - Weight +1 (§9.3).
 
+**Lair population (user 2026-10-06 lazy population; designer decision 2026-10-06, §9.4.4).**
+The boss and its 1 escort are created on the **first lair entry**, not at level start. When
+the hero leaves the lair, the boss is banked in the lair record with its **exact hp**. It does
+not regenerate and is never rerolled. Archmage summons are discarded on leave.
+
 Uniques on the floor shimmer with the same cycle (it counts toward the room's attr-cycle
 cells). Panel and page use hardware FLASH.
 
@@ -1262,8 +1267,8 @@ Bosses never follow, so the Lord's bat form stays in its lair.
 |---|---|
 | **Phase 2** (monsters + their projectiles) | room **Σ weight ≤ 12 and ≤ 4 monsters**, current room, alive, incl. pending → ≤ 72k + hero idle |
 | **Phase 1** (hero action + its projectile/impacts + reacting targets) | hero ~30k + projectile ~5k + impact ~7k + 1 reacting tall ~28k ≈ 70k. Lightning piercing several targets staggers the reactions by impact tick. A rare overlap → one 3-frame tick (no flicker with the double buffer) |
-| Initial population | Σ ≤ 8 per room; start room 0; lair = boss + ≤ 1 escort, Σ ≤ 12 |
-| Enforced at | generation, follow admission (prototype §3.7 step 3), summons, fear/teleport arrivals |
+| Initial population | Σ ≤ 8 per room; start room 0; lair = boss + ≤ 1 escort, Σ ≤ 12. Applied at the **first-entry spawn** (§9.4.3, lazy population user 2026-10-06), not at generation |
+| Enforced at | room-entry spawn (§9.4.3), follow admission (prototype §3.7 step 3, after residents spawn), summons, fear/teleport arrivals, trickle into a record (§9.5) |
 | Projectile tracks | ≤ 3 at once (queued beyond) |
 | Overrun | presentation-only 3-frame tick; logic unaffected |
 
@@ -1271,7 +1276,7 @@ Followers: prototype §3.7 + this cap. **Bosses never follow.**
 
 **Level descent: nobody follows (designer decision 2026-10-04).** The follower rule covers
 room exits only. On EX_LEVEL every monster of the old level is discarded, adjacent or not;
-no PENDING entries carry over. The new level is generated with its normal §9.4 population,
+no PENDING entries carry over. All room records and the level budget are rebuilt (§9.4.1). The new level is generated with its normal §9.4 population,
 start room 0 monsters, and the usual §9.5 respawn and trap/arrival rules. The DEPTH card is
 a clean break. Rationale: it keeps the §9.3 cap and the slot budget trivially valid at
 arrival, and it makes descending a valid escape.
@@ -1288,6 +1293,153 @@ arrival, and it makes descending a valid escape.
 | D6 | Vampire, Ghost, Necromancer, Orc | 14 | Golden High Necromancer |
 | D7 | Orc, Skeleton Archer, Ghost, Necromancer | 14 | **Death Knight** |
 | D8 | Necromancer, Skeleton, Ghost, Vampire | 10 + Archmage (+ ≤ 2 summons) | Archmage |
+
+**Lazy population (principle: user 2026-10-06; details: designer decision 2026-10-06; plan
+task LP).** A level stores no monster list. It stores a **budget** (count, kinds, per-room
+max) and a small **record per room**; monsters occupy entity slots **only while the hero is
+in their room**. They are spawned in the room build when the hero enters. This replaces
+prototype §3.7 "Persistence" (all monsters permanently in the slots) and the 3B fixed
+per-room stand-in table (§1.4).
+
+#### 9.4.1 Level budget (built at level generation, `GEN_RNG`, after traps)
+
+Placed after traps, so every earlier generator output stays byte-identical (Python == Z80).
+
+| Field | Value |
+|---|---|
+| `LP_KINDS[4]` | the depth's 4 kinds, in the table order above (tiers are rolled at spawn) |
+| `LP_BOSS` | boss kind row |
+| `LP_TOTAL` | the table count incl. boss (tests/levelcheck only) |
+| `LP_LVL` | hero `LVL` at level entry (the §9.6 tier input for the whole level) |
+| `LP_RESPAWNS` | trickle spawns this level (§9.5 `RESPAWN_MAX`) |
+| `LP_DISCARD` | units lost to the split or to the Σ cap (tests only) |
+| `ROOM_MAX[d]` | constant: **D1–D2 = 2, D3–D8 = 3** monsters per room (initial population) |
+
+**Split (quota per room).** `N = count − 1 (boss) − 1 (escort)`, so D1 = 9 … D6/D7 = 12, D8 = 9.
+`R` = present rooms except the start, the lair and the Sanctum (|R| ≥ 5).
+1. If `N ≥ |R|`, every room in `R` gets 1. Otherwise the `N` rooms farthest from the start
+   (BFS distance; ties go to the lowest id) get 1.
+2. Each remaining unit: a weighted pick over the rooms in `R` with quota < `ROOM_MAX[d]`,
+   weight = BFS distance from the start (≥ 1). If no room is eligible, the rest goes to
+   `LP_DISCARD`. With these counts that never happens (worst case D2: 10 = 5 × 2).
+
+The start room gets 0. The lair gets boss + 1 escort (§9.4.4). The quota is stored as the
+room record's count (FRESH). No kinds are chosen at generation.
+
+#### 9.4.2 Room record (option b: exact survivors)
+
+Per room: state `FRESH | VISITED`, a count 0–4, and up to **4 entries** = {kind row (tier
+included), **exact hp**, `F_RESPAWN`, the Rabbit Rat "bred" bit}. A FRESH room's count is
+its quota and it has no entries yet. Fields, not bytes: about 9 × 9 B + `ROOM_VISITS[9]` + the
+header ≈ **100 B**. The engineer lays it out in `memory-map.md`.
+
+**On leave**, every monster slot of the old room is handled as follows, except admitted
+followers:
+- If it is alive and not summon-made, it is **appended** to the record with its current hp.
+  Position, facing, AI state, statuses and PENDING are dropped.
+- The slot is freed. The record becomes VISITED.
+- **Summon-made monsters** (Archmage and Bone Caller summons, Rabbit Rat offspring) are
+  discarded, not banked.
+- **Dead monsters are never written**, so they never return. The only way back is the §9.5
+  trickle.
+
+Why not (a) "bank survivors into the level budget, full hp": leaving and coming back would
+heal monsters and reroll their kinds and tiers. That is two exploits: leaving to heal, and
+leaving to turn a tier-3 monster into a base one. Option (b) costs ~80 B.
+
+Accepted residue:
+- Positions are re-placed on re-entry (at least 8 cols away, §9.4.3).
+- Statuses are lost both ways (a poisoned monster recovers; a frozen one thaws).
+
+#### 9.4.3 Spawn on entry (room build, `GS_TRANSITION`, before the scroll)
+
+**Order:**
+1. Bank the old room (§9.4.2). Keep the follower candidates aside.
+2. Spawn the destination's residents.
+3. Admit the candidates (prototype §3.7) against the **real** resident count and the §9.3
+   cap. Rejected candidates are appended to the old room's record.
+4. `ROOM_VISITS[r] += 1`. This happens after the spawn, so the first visit uses 0.
+
+**Spawn stream.** A local generator (the same algorithm as `GEN_RNG`, its own state) seeded
+from `f(level seed, room id, ROOM_VISITS[r])`. `RNG_STATE` (combat) and `GEN_RNG` are
+untouched. A room's first-visit contents therefore do not depend on the order in which rooms
+are visited.
+
+**FRESH room**, repeated `quota` times:
+- kind = `LP_KINDS[rnd & 3]`, then the §9.6 tier roll (with `LP_LVL`, from the spawn stream).
+- If its weight would break **Σ ≤ 8** (§9.3 initial), try the other `LP_KINDS` in list order
+  once each, at base tier. If none fits, the unit is lost (`LP_DISCARD`; a playtest knob).
+
+**VISITED room:** the entries are recreated in order, with their stored kind, hp and flags.
+
+**Placement**, per monster: up to **8 candidate cells** from the spawn stream; the first legal
+cell wins. Legal means:
+- the §9.5 placement rules hold: walker on a floor-standing cell; not a ladder, pit or door
+  cell; not in a ladder-end box; not occupied; flyers inside their band;
+- it is **not inside any arrival box** of the room: cols 1–4 and 27–30 on a storey with a
+  horizontal exit, and every shaft or up-exit footprint ±1 col;
+- on the hero's arrival storey, there is a **body gap ≥ 8 cols** to the hero's arrival box.
+
+If no cell is legal, the monster stays in the record (a FRESH unit becomes an entry) and is
+retried on the next entry. Nothing is lost, and arrival-conflict PENDING never applies to
+residents.
+
+Created monsters have full hp (FRESH) and the generator's initial state, and they face the
+hero. A teleport into a room (trap or scroll) is an entry with no followers; its arrival
+point is the teleport cell.
+
+**Cost:** ≤ 4 monsters × 8 tries × ~0.4k T + rolls ≈ **≤ 15k T, once per transition**, while
+gameplay is frozen. No tick budget is used and the pool is not touched.
+
+#### 9.4.4 Lair and bosses
+
+- **Created on the first lair entry:** the boss (`LP_BOSS`) plus 1 escort (`LP_KINDS[rnd & 3]`,
+  base tier, never tier-rolled), within Σ ≤ 12. The boss takes the legal cell farthest from
+  the hero.
+- **Banked like any room:** the boss's **exact hp persists** and it does not regenerate. The
+  escort is banked too.
+- Archmage summons are discarded on leave (their cooldown resets).
+- The boss never follows. Its death sets the boss-dead flag: the grate opens and the trickle
+  stops (§9.5).
+
+#### 9.4.5 Hard ceilings
+
+- **Slots:** hero + 15 stays the ceiling. In practice only the current room's monsters,
+  pending followers and summons hold slots, so ≤ 4 by the §9.3 cap.
+- **Invariant:** after every transition, every active non-hero slot has `room = CUR_ROOM`.
+- 3D projectile and FX tracks are render-only and use no slots.
+- Shrinking the slot array is possible later, as an engineer + manager decision. It is not
+  part of LP.
+
+#### 9.4.6 Sprite pool
+
+The pool holds only `LP_KINDS` (tiers share base frames), `LP_BOSS` and the §11.3 extras
+(Vampire bat form, Archer HURT/DEAD). Every spawn path (entry, trickle, idle wave, breed,
+summon, fear/teleport arrivals) creates only those kinds, so the engine can build the pool
+per level from `LP_KINDS` + `LP_BOSS`.
+
+**Fix:** the Bone Caller summons a base **Skeleton if Skeleton ∈ `LP_KINDS`, else a base
+Ghost**. D6 and D7 have no Skeleton set (§11.3).
+
+#### 9.4.7 Test hooks (`SEED_FIXED`)
+
+- **Levelcheck (Python, seed sweep):** the start quota is 0; each quota ≤ `ROOM_MAX`;
+  Σ quotas = N; `LP_DISCARD` (split) = 0.
+- **Spawn reference (Python == Z80):** for the inputs (seed, room, visits), the list of
+  kinds, tiers and x/y.
+- **ZRCP checks:**
+  1. A FRESH room's slots equal the reference.
+  2. The slot invariant (§9.4.5) holds after every transition.
+  3. Damage a monster, leave and re-enter: the same kind and hp, and the same count.
+  4. Kill one, leave and re-enter: the count is −1.
+  5. The same snapshot with the same inputs gives identical spawns.
+  6. A different room-visit order gives the same first-visit contents.
+  7. No resident spawns within 8 cols of the arrival on the arrival storey, or in a
+     pit/ladder-end/door/arrival cell.
+  8. The boss's hp is unchanged across leave and re-enter.
+  9. Summons are gone after re-entry.
+  10. The trickle changes only VISITED records, never slots, and stops after the boss's
+      death (§9.5).
 
 ### 9.5 Respawn trickle
 
@@ -1308,10 +1460,20 @@ permanently the turn the boss dies (the flag is not re-armed on revisit or reloa
 | `IDLE_TURNS` | 60 | idle-wave trigger |
 | `IDLE_WAVE_MAX` | 2 | monsters per wave: 1 + (rnd & 1) |
 
+**Lazy population (designer decision 2026-10-06, §9.4.2).** The trickle **appends an entry
+to a room record and never touches the slots**. The entry has a rolled kind, a §9.6 tier
+(gameplay RNG), full hp and `F_RESPAWN`. The monster is placed by §9.4.3 on the hero's next
+entry, so the "Placement" rules below now apply through §9.4.3. The trickle adds to the
+records; it does not draw from the generation budget `N`. A hard cap
+**`RESPAWN_MAX` = 6 per level** (`LP_RESPAWNS`) applies. Only **VISITED** rooms are eligible,
+because a FRESH room already holds its quota. The idle wave spawns straight into slots (it
+is the current room) and is banked on leave like anyone.
+
 **Hard limits (U).** A spawn is skipped (no retry until the next check) unless all hold:
-1. A free entity slot exists (hero + ≤ 15 slots, §9.4); never evict or reuse a live one.
+1. The target room is VISITED, its record has < 4 entries, and `LP_RESPAWNS < RESPAWN_MAX`
+   (replaces "free slot", user 2026-10-06 lazy population).
 2. The target room satisfies the §9.3 cap with the new body added (Σ weight ≤ 12, ≤ 4
-   monsters, incl. pending). Initial-population Σ ≤ 8 is not applied.
+   monsters, counted from the record). Initial-population Σ ≤ 8 is not applied.
 3. The target room is not the hero's current room and not the room the hero just left (the
    previous room, for the turn after a transition and until the hero enters a third
    room; `prev_room` is updated on every room change).
@@ -1361,7 +1523,7 @@ playtesting shows camping (waiting in a cleared room to regen, or farming) is a 
   the whole point, but not the cap.
 
 **Saves and revisits (D).** Levels are regenerated from the seed; respawned monsters exist
-only in the entity slots and are not stored in the seed or the level image. Leaving a
+only in the room records (§9.4.2) and are not stored in the seed or the level image. Leaving a
 level discards them, and a regenerated level restores the original population with
 only the boss-alive state as saved. The turn-counter phase, `prev_room` and
 `idle_turns` are runtime-only and reset on level entry. A boss-dead flag stops the
@@ -1392,7 +1554,7 @@ Short names ≤ 12 chars (messages, §6.4).
 | Orc | **Orc Berserker** | | 18/4/0/1/1d8+2 | `$02` | FEAR-immune; **rage**: hp ≤ ½ max → atk +2 |
 | | | **Orc Bouncer** | 24/5/1/2/1d10 | `$03` | hit 1 in 3 → STUNNED 1 (a "bouncer" throws you out cold) |
 | Skeleton Archer | **Skeleton Sniper** | | 10/3/2/0/1d4; arrow 1d8 r14 | `$04` | stands its ground (skips the "gap < 3 → step away" rule); Arrows ×3 drop 1/2 |
-| Necromancer | **Bone Caller** | | 14/3/2/0/1d4; Dark Bolt as base | `$06` | **summons** one base Skeleton (Archmage summon code: cooldown 8, ≤ 1 live summon, slot + cap; `F_RESPAWN`) |
+| Necromancer | **Bone Caller** | | 14/3/2/0/1d4; Dark Bolt as base | `$06` | **summons** one base Skeleton if Skeleton ∈ `LP_KINDS`, else a base Ghost (designer decision 2026-10-06, §9.4.6: D6/D7 pools have no Skeleton) (Archmage summon code: cooldown 8, ≤ 1 live summon, slot + cap; `F_RESPAWN`) |
 
 Untiered: Slime (D1 only), Vampire, Mummy (both already complex), uniques, the Archmage.
 Depth scaling (§9.1) applies to tiers as to their base. A tier keeps its base kind's
@@ -1412,8 +1574,9 @@ breeding are never rolled).** For each monster of a kind that has tiers:
   whole depth of progress (rev 4's `PL` unit was half); the shifts stay 16/8 and are a
   playtest knob (§10).
 - Odds out of 256, `T2 = clamp(T2_BASE[d] + 16·Δ, 0, 160)`, `T3 = clamp(T3_BASE[d] + 8·Δ, 0,
-  80)` if `d ≥ TIER3_MIN_DEPTH` else 0. Roll `r` (gameplay RNG for respawns, `GEN_RNG` for
-  the initial population): `r < T3` → tier 3 (if the kind has one, else tier 2); `r < T3 +
+  80)` if `d ≥ TIER3_MIN_DEPTH` else 0. Roll `r` (gameplay RNG for respawns; the **room spawn
+  stream** for the initial population, rolled at first entry with `LP_LVL`, §9.4.3, designer
+  decision 2026-10-06): `r < T3` → tier 3 (if the kind has one, else tier 2); `r < T3 +
   T2` → tier 2; else base.
 
 | Constant | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 |
