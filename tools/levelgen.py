@@ -464,6 +464,267 @@ def start_x(b):
     raise RuntimeError("no legal start col")
 
 
+
+# ---- LP: lazy monster population (game.md §9.4.1-9.4.7) ----------------------
+# Reference for the Z80 lp_budget / lp_enter (src/lpop3.asm), byte-exact.
+#
+# lp_budget(block, lvl): the LP_STATE block (LP_LEN B at LP_STATE) right after
+#   generation: LP_KINDS / LP_BOSS / LP_TOTAL from LP_TAB[depth], LP_LVL = lvl,
+#   LP_RMAX, every other header / scratch byte 0, ROOM_VISITS 0, every record
+#   FRESH with its quota. Split (§9.4.1): N = total - 2; R = present rooms but
+#   start / lair / Sanctum (id order); N >= |R| -> every room in R gets 1, the
+#   rest one by one by a weighted pick (weight = BFS distance from the start)
+#   over the rooms of R with quota < ROOM_MAX, v = rnd(sum) on a COPY of the
+#   final GEN_RNG (the header keeps the post-generation state, so every earlier
+#   output stays byte-identical); no eligible room -> LP_DISCARD. N < |R| -> the
+#   N farthest (ties: lowest id) get 1. Lair quota = 2 (boss + escort).
+# lp_enter(block, lp, r, hs, hx, hw): one room entry (§9.4.3) -> (lp', placed)
+#   placed = [(kind_byte, hp, storey, col, facing_left)] in slot-fill order.
+#   Stream: x = (LVL_SEED ^ ((r*16 + $0F) << 8) ^ ROOM_VISITS[r]) or 1, the
+#   GEN_RNG algorithm. FRESH lair: [boss, escort = fit(rnd(4), cap 12)];
+#   FRESH room: count x fit(rnd(4), SIGMA_INIT = max(8, ROOM_MAX * minW),
+#   reserving left * minW for the units still to roll: the rolled kind, else the
+#   other LP_KINDS in list order; the lightest always fits, so nothing is lost);
+#   VISITED: its entries. Then
+#   per unit, in order: LP_TRIES candidates, one GEN_RNG step v each: s = bit 8
+#   of v, x = LP_XMIN + (v & $FF) mod (29 - w)
+#   arrival gap >= LP_GAP (8) on tries 1-4, >= LP_GAP2 (5) on 5-8; a candidate
+#   failing ONLY the gap is re-tested at the same x on the other storey
+#   (the fresh lair's boss: all 8, the legal one farthest from the hero wins:
+#   |x - hx| + 32 if another storey, first on ties; everyone else: the first
+#   legal one). Unplaced units stay in the record (in order). Record -> VISITED.
+#   ROOM_VISITS is NOT incremented here (the caller does it after admission).
+LP_TAB = {1: (("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 11),
+          2: (("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 12),
+          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT"), "K_BOSS_D3", 12),
+          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER"), "K_BOSS_D4", 13),
+          5: (("K_MUMMY", "K_SKELETON", "K_ARCHER", "K_SPIDER"), "K_BOSS_D5", 13),
+          6: (("K_VAMPIRE", "K_GHOST", "K_NECRO", "K_ORC"), "K_BOSS_D6", 14),
+          7: (("K_ORC", "K_ARCHER", "K_GHOST", "K_NECRO"), "K_BOSS_D7", 14),
+          8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE"), "K_BOSS_D8", 11)}
+# kind_tab mirror (main.asm KROW KT_BW / KT_HP / KF_FLYER; tests/lp.py checks
+# it against the build): kind -> (body width, hp, flyer)
+KINFO = {"K_SKELETON": (3, 10, False), "K_GOBLIN": (3, 6, False), "K_GHOST": (3, 7, True),
+         "K_RAT": (4, 3, False), "K_BAT": (3, 3, True), "K_SLIME": (3, 5, False)}
+
+
+def lp_kinfo(k):
+    for n, v in KINFO.items():
+        if D[n] == k:
+            return v
+    raise KeyError(k)
+
+
+def lp_wt(k):
+    for n in KINFO:
+        if D[n] == k:
+            return D["WT_" + n]
+    raise KeyError(k)
+
+
+def lp_off(name):
+    return D[name] - D["LP_STATE"]
+
+
+def _rd(b, r, k):
+    return b[OFF_DESC + r * D["RD_STRIDE"] + D[k]]
+
+
+def lp_bfs(b):
+    start = b[H["LVL_START"]]
+    dist = {start: 0}
+    q = [start]
+    steps = ((D["RDX_L"], -1), (D["RDX_R"], 1), (D["RDX_U"], -3), (D["RDX_D"], 3))
+    for r in q:
+        ex = _rd(b, r, "RD_EXITS")
+        for bit, dd in steps:
+            if ex & bit and r + dd not in dist:
+                dist[r + dd] = dist[r] + 1
+                q.append(r + dd)
+    return dist
+
+
+def lp_budget(b, lvl=0):
+    depth = b[H["LVL_DEPTH"]]
+    start, lair, sanct = b[H["LVL_START"]], b[H["LVL_LAIR"]], b[H["LVL_SANCTUM"]]
+    kinds, boss, total = LP_TAB[depth]
+    rmax = D["ROOM_MAX_LO"] if depth <= 2 else D["ROOM_MAX_HI"]
+    dist = lp_bfs(b)
+    R = [r for r in range(9) if _rd(b, r, "RD_FLAGS") & D["RDF_PRESENT"] and r not in (start, lair, sanct)]
+    n = total - 2
+    quota = [0] * 9
+    if n >= len(R):
+        for r in R:
+            quota[r] = 1
+        rem = n - len(R)
+    else:
+        for r in sorted(R, key=lambda r: (-dist[r], r))[:n]:
+            quota[r] = 1
+        rem = 0
+    rng = Rng(0, 0)
+    rng.x = int.from_bytes(b[H["GEN_RNG"]:H["GEN_RNG"] + 2], "little")
+    discard = 0
+    while rem:
+        elig = [r for r in R if quota[r] < rmax]
+        if not elig:
+            discard += rem
+            break
+        v = rng.rnd(sum(dist[r] for r in elig))
+        for r in elig:
+            if v < dist[r]:
+                quota[r] += 1
+                break
+            v -= dist[r]
+        rem -= 1
+    quota[lair] = 2
+    lp = bytearray(D["LP_LEN"])
+    for i, k in enumerate(kinds):
+        lp[lp_off("LP_KINDS") + i] = D[k]
+    lp[lp_off("LP_BOSS")] = D[boss]
+    lp[lp_off("LP_TOTAL")] = total
+    lp[lp_off("LP_LVL")] = lvl
+    lp[lp_off("LP_DISCARD")] = discard
+    lp[lp_off("LP_RMAX")] = rmax
+    for r in range(9):
+        lp[lp_off("LP_REC") + r * D["LR_STRIDE"]] = quota[r]
+    return bytes(lp)
+
+
+def lp_hits(b, r, s, lo, hi):
+    """bank-3 `hits` (levelgen.asm): storey-s footprints f..f+2, the storey-0
+    pit p-1..p+3, the storey-s block, against cols lo..hi."""
+    fp = ("RD_UPCOL", "RD_ARRCOL", "RD_LAD1", "RD_LAD2") if s == 0 else \
+         ("RD_DNCOL", "RD_EXITCOL", "RD_LAD1", "RD_LAD2")
+    for k in fp:
+        f = _rd(b, r, k)
+        if f and f <= hi and f + 2 >= lo:
+            return True
+    p = _rd(b, r, "RD_PITCOL")
+    if s == 0 and p and p - 1 <= hi and p + 3 >= lo:
+        return True
+    bl = _rd(b, r, "RD_BLOCK")
+    if bl and (bl >> 6) & 1 == s:
+        w = bl & D["RDB_WMASK"]
+        if bl & D["RDB_RIGHT"]:
+            if hi + w >= 31:
+                return True
+        elif w >= lo:
+            return True
+    return False
+
+
+def lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap=8):
+    """§9.4.3 placement legality -> "ok" / "gap" (fails ONLY the arrival-gap
+    test: the caller re-tests the same x on the other storey) / "bad"."""
+    for ps, plo, phi in placed:                         # occupied (same storey, cols)
+        if ps == s and plo <= x + w - 1 and x <= phi:
+            return "bad"
+    ex = _rd(b, r, "RD_EXITS")
+    if ex & D["RDX_L"] and bool(ex & D["RDX_LS1"]) == (s == 1) and x <= 4:
+        return "bad"                                    # left arrival box cols 1..4
+    if ex & D["RDX_R"] and bool(ex & D["RDX_RS1"]) == (s == 1) and x + w - 1 >= 27:
+        return "bad"                                    # right arrival box cols 27..30
+    m = 1                                               # §9.4.3: footprints +-1 col (walkers and flyers)
+    lo, hi = max(0, x - m), x + w - 1 + m
+    if lp_hits(b, r, s, lo, hi):
+        return "bad"
+    p = _rd(b, r, "RD_PITCOL")
+    if s == 1 and p and p <= hi and p + 2 >= lo:        # a fall from storey 0 lands here
+        return "bad"
+    if s == hs and not (x >= hx + hw + gap or x + w + gap <= hx):
+        return "gap"                                    # body gap to the arrival box
+    return "ok"
+
+
+def lp_seed(b, lp, r):
+    seed = int.from_bytes(b[H["LVL_SEED"]:H["LVL_SEED"] + 2], "little")
+    v = lp[lp_off("ROOM_VISITS") + r]
+    x = seed ^ (((r * 16 + 0x0F) & 0xFF) << 8) ^ v
+    return x or 1
+
+
+LP_CALLS = 0                # rnd calls of the last lp_enter (tests: cost)
+
+
+def lp_enter(b, lp, r, hs, hx, hw):
+    lp = bytearray(lp)
+    rng = Rng(0, 0)
+    rng.x = lp_seed(b, lp, r)
+    lp[lp_off("LP_RNG"):lp_off("LP_RNG") + 2] = rng.x.to_bytes(2, "little")
+    ro = lp_off("LP_REC") + r * D["LR_STRIDE"]
+    hdr = lp[ro]
+    kinds = [lp[lp_off("LP_KINDS") + i] for i in range(4)]
+    sig = [0]
+
+    minw = min(lp_wt(k) for k in kinds)
+    sigi = max(D["LP_SIGMA_INIT"], lp[lp_off("LP_RMAX")] * minw)
+
+    def fit(cap, left=0):
+        """reservation fit (§9.4.3, designer 2026-10-06): accept a kind only if
+        sum + w + left * minW <= cap; rolled first, then the others in list order."""
+        i = rng.rnd(4)
+        order = [i] + [j for j in range(4) if j != i]
+        for j in order:
+            k = kinds[j]
+            if sig[0] + lp_wt(k) + left * minw <= cap:
+                sig[0] += lp_wt(k)
+                return k
+        lp[lp_off("LP_DISCARD")] += 1
+        return None
+    boss = False
+    if not hdr & D["LR_VISITED"]:
+        units = []
+        if r == b[H["LVL_LAIR"]]:
+            k = lp[lp_off("LP_BOSS")]
+            units.append((k, lp_kinfo(k)[1]))
+            sig[0] = lp_wt(k)
+            boss = True
+            k = fit(D["LP_SIGMA_CAP"])
+            if k is not None:
+                units.append((k, lp_kinfo(k)[1]))
+        else:
+            n = hdr & D["LR_CNT_MASK"]
+            for u in range(n):
+                k = fit(sigi, n - 1 - u)
+                if k is not None:
+                    units.append((k, lp_kinfo(k)[1]))
+    else:
+        units = [(lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i]) for i in range(hdr & D["LR_CNT_MASK"])]
+    placed, out, left = [], [], []
+    for i, (kb, hp) in enumerate(units):
+        w, _, fly = lp_kinfo(kb & D["LEK_KIND_MASK"])
+        best = None
+        for t in range(D["LP_TRIES"]):
+            v = rng.rnd16()                             # one step per candidate
+            s = (v >> 8) & 1
+            x = D["LP_XMIN"] + (v & 0xFF) % (D["LP_XMAX"] - w)
+            gap = D["LP_GAP"] if t < D["LP_TRIES"] // 2 else D["LP_GAP2"]
+            res = lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap)
+            if res == "gap":                            # other-storey retry, same x
+                s ^= 1
+                res = lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap)
+            if res != "ok":
+                continue
+            if not (boss and i == 0):
+                best = (s, x)
+                break
+            d = abs(x - hx) + (32 if s != hs else 0)
+            if best is None or d > best[2]:
+                best = (s, x, d)
+        if best is None:
+            left.append((kb, hp))
+            continue
+        s, x = best[0], best[1]
+        placed.append((s, x, x + w - 1))
+        out.append((kb, hp, s, x, x > hx))
+    lp[ro] = D["LR_VISITED"] | len(left)
+    global LP_CALLS
+    LP_CALLS = rng.calls
+    for i in range(D["LR_MAX"]):
+        kb, hp = left[i] if i < len(left) else (0, 0)
+        lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i] = kb, hp
+    return bytes(lp), out
+
 def render(b):
     g = lambda r, k: b[OFF_DESC + r * D["RD_STRIDE"] + D["%s" % k]]
     hdr = lambda k: b[H[k]]
@@ -508,7 +769,7 @@ def render(b):
 
 def main(argv):
     if len(argv) < 3:
-        print(__doc__.split("\n")[0]); print("usage: levelgen.py DEPTH SEED [--hex|--ascii]"); return 2
+        print(__doc__.split("\n")[0]); print("usage: levelgen.py DEPTH SEED [--hex|--ascii] [--lp]"); return 2
     depth, seed = int(argv[1], 0), int(argv[2], 0)
     b = generate(depth, seed)
     if "--hex" in argv:
@@ -516,6 +777,14 @@ def main(argv):
             print(f"{BASE + i:04X}: " + " ".join(f"{x:02X}" for x in b[i:i + 16]))
     if "--ascii" in argv or "--hex" not in argv:
         print(render(b))
+    if "--lp" in argv:                  # LP budget + every room's first entry from its left edge / x 1
+        lp = lp_budget(b, 1)
+        o = D["LP_REC"] - D["LP_STATE"]
+        print("LP quotas", [lp[o + 9 * r] for r in range(9)], "discard", lp[D["LP_DISCARD"] - D["LP_STATE"]])
+        for r in range(9):
+            if r != b[H["LVL_START"]] and _rd(b, r, "RD_FLAGS") & D["RDF_PRESENT"]:
+                lp2, out = lp_enter(b, lp, r, 0, 1, 3)
+                print(f"  room {r}: placed (kind, hp, s, x, left) {out}  left {lp2[o + 9 * r] & 7}")
     return 0
 
 

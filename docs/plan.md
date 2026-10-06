@@ -337,7 +337,7 @@ threshold; respawn half XP; rank 2/3 values per ability; no spell before the fir
 | D3-9a | info line ranks/MP | J | D3-0 |
 | D3-9b | XP, levels, MP regen/bar, learn/rank-up | S | D3-6a |
 | D3-10 | scenario tests per feature | J | each |
-| D3-S ✅ `38a8aef` (feat/3d-spike, not merged): feasible — frees $E000..$F7FF 6,144 B (6.8 KB if the 576-B attr shadow moves too); +37 T per erased cell, worst tick +1.6–3.0k (mage 121.4k). **User 2026-10-06: adopt in principle; decide after D3-5 measures the 3D FX worst tick, before 3E** | spike: drop the bank-7 clean background (6 KB) — erase from ROOM_MAP; measure | S | – |
+| D3-0/D3-1/D3-2/LP/B17 merged to main 2026-10-06 (squash of feat/3d-core @ `768d827`) · D3-S ✅ `38a8aef` (feat/3d-spike, not merged): feasible — frees $E000..$F7FF 6,144 B (6.8 KB if the 576-B attr shadow moves too); +37 T per erased cell, worst tick +1.6–3.0k (mage 121.4k). **User 2026-10-06: adopt in principle; decide after D3-5 measures the 3D FX worst tick, before 3E** | spike: drop the bank-7 clean background (6 KB) — erase from ROOM_MAP; measure | S | – |
 
 ### 3E — Items, inventory & survival (needs game.md §7–8)
 Inventory page (bank-5 screen), equip, quick slots auto-fill, food/hunger,

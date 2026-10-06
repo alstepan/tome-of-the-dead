@@ -267,7 +267,7 @@ class Ref:
         self.ft, (self.fs, self.oc, self.oh) = init["FT"], init["FTL"]
         st = init["static"]
         self.kt, self.fdesc = st["kt"], st["fdesc"]
-        self.idx, self.ptr, self.mark, self.save = 0, 0xC000, (0, 0xC000), bytearray(32)
+        self.idx, self.ptr, self.mark, self.save = 0, S["POOL_START"], (0, S["POOL_START"]), bytearray(32)
         self.overflow = 0
 
     def alloc(self, n):
@@ -350,7 +350,7 @@ class Ref:
 
     def boot(self):
         S, st = self.S, self.S["FRT_STRIDE"]
-        self.idx, self.ptr = 0, 0xC000
+        self.idx, self.ptr = 0, S["POOL_START"]   # D3-TX: the text block is under bank 0's pool
         for k in range(S["K_SKELETON"], S["K_COUNT"]):
             self.kind(k)
         for f in self.idles():

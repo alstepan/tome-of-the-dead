@@ -1,8 +1,7 @@
 ;==============================================================================
 ; info1.asm — the info line item, bank 1 (C3 review "bank-3 relief": moved
-; from panel.asm; entered by far1 from panel_more). The text block is this
-; bank, so print6x's BANK_TEXT paging is a no-op here; print6x / print6 /
-; MSG_BUF are bank 2.
+; from panel.asm; entered by far1 from panel_more). print6x pages BANK_TEXT
+; (D3-TX: bank 0) and hands bank 1 back; print6x / print6 / MSG_BUF are bank 2.
 ;==============================================================================
 ;------------------------------------------------------------------------------
 ; item_info — far1 from panel_more (PD_INFO, 1st frame only): the info line

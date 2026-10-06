@@ -15,11 +15,13 @@
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; start — .tap entry (RANDOMIZE USR start): pull the five headerless blocks
+; start — .tap entry (RANDOMIZE USR start): pull the six headerless blocks
 ; off tape with the ROM loader (bank 1 = sources; bank 3 = source tail + bank-3
 ; cold code; A8: bank 3 AY slot at AY_RESERVE; B3B-8: bank 7 tilesets at
 ; TSET_LO / TSET_HI — nothing there is live yet: screen 2 is not shown, the
-; 128 editor's bank-7 workspace is abandoned with BASIC), then boot. The .sna enters at
+; 128 editor's bank-7 workspace is abandoned with BASIC; D3-TX: the text block
+; at the bottom of bank 0 — check_paging's probe byte there is overwritten),
+; then boot. The .sna enters at
 ; boot. Runs under the ROM IM1 ISR (LD-BYTES ends with EI; IY = $5C3A here):
 ; boot installs IM 2.
 ;------------------------------------------------------------------------------
@@ -65,6 +67,14 @@ start:
                 scf
                 call ROM_LD_BYTES
                 jr   nc, .t7hi
+.txt:           ld   a, BANK_TEXT              ; D3-TX: the text block, bottom of
+                call page_bank                 ; pool bank 0 (the pool starts above it)
+                ld   ix, TEXT_ADDR
+                ld   de, TEXT_LEN
+                ld   a, $FF
+                scf
+                call ROM_LD_BYTES
+                jr   nc, .txt
 start_loaded:                                  ; falls straight into boot:
                 ASSERT start_loaded == boot    ; nothing may be inserted here
 
@@ -92,7 +102,6 @@ boot:
                 ld   (CLIP_TRAP), a
                 ld   (GEN_TRAP), a             ; since boot (like GEN_OVERFLOW)
                 ld   (TURN_PHASE), a
-                ld   (ZAP_T), a
                 ld   (PEND_DMG_COUNT), a
                 ld   (CUR_ROOM), a
                 ld   (YIELD_FLAG), a
@@ -136,7 +145,7 @@ boot:
                 ei
                 call build_bitrev
                 ld   hl, init_tiles            ; B3B-8: bank 3 (the common set,
-                call far3                      ; ornament, PROTO zap glyphs)
+                call far3                      ; ornament)
                 ld   hl, panel_boot            ; B3B-11: FONT6 planes + the panel hot code
                 call far3                      ; -> bank-2 runtime RAM
                 call alloc_reset
@@ -645,13 +654,13 @@ theme_ids:      DB T_PLAT, T_WALLF, T_END_L, T_END_R, 0
                 DB T_BRICK, T_WALL_DITHER, T_WALL_PATCH, T_WALL_FADE, T_RUBBLE, 0
 
 ;==============================================================================
-; TEXT (B3B-13). Message strings are dictionary-token streams in the bank-1
-; text block (tools/textpack.py from src/strings.txt; format + layout:
+; TEXT (B3B-13). Message strings are dictionary-token streams in the
+; BANK_TEXT text block (D3-TX: bank 0 bottom, was bank 1) (tools/textpack.py from src/strings.txt; format + layout:
 ; docs/memory-map.md "Text (B3B-13)"); the log ring holds streams and
 ; print6t (panel2.asm) decodes them when the line is drawn. These helpers
 ; page BANK_TEXT around the read and hand $C000 back as they found it
-; (conventions.md: callable from bank-3 code). Low RAM: mapped while bank 1
-; is at $C000.
+; (conventions.md: callable from bank-3 / bank-1 code). Low RAM: mapped
+; while BANK_TEXT is at $C000.
 ;==============================================================================
 ;------------------------------------------------------------------------------
 ; msg_push — queue string A (TX_*) for the log: log_push copies its stream
@@ -677,20 +686,57 @@ msg_go:
 .go:            push de                        ; tx_ptr's ret enters the pusher
                 ; fall through
 ;------------------------------------------------------------------------------
-; tx_ptr — HL = the stream of string A (TX_*, < 128) in the text block
-; (BANK_TEXT must be paged).  Clobbers: A.   55 T
+; tx_ptr — HL = the stream of string A (TX_*, 0..255) in the text block
+; (BANK_TEXT must be paged).  Clobbers: A.   86 T
+; tx_ptr_hl — the same for a 16-bit id in HL (D3-0: the path for > 256 ids;
+; no caller yet: every id is still a byte in A / DB tables, textpack caps
+; TX_COUNT at 256).
+; D3-0: 16-bit index (was `add a, a`: ids < 128); +31 T, +5 B; once per
+; message / info line, never per tick.
 ;------------------------------------------------------------------------------
 tx_ptr:
-                add  a, a
+                ld   l, a
+                ld   h, 0
+tx_ptr_hl:
+                add  hl, hl
+                ld   a, l
                 add  a, tx_tab & $FF
                 ld   l, a
+                ld   a, h
                 adc  a, tx_tab >> 8
-                sub  l
                 ld   h, a
                 ld   a, (hl)
                 inc  hl
                 ld   h, (hl)
                 ld   l, a
+                ret
+
+;------------------------------------------------------------------------------
+; tx_dec — A = string id (TX_*): its decoded text, 0-terminated, in TX_DEC
+; (bank 5, readable with any bank paged). D3-TX: for bank-1 UI code, which
+; can no longer read the text block in place (menu1 mf_tx / tx_copy). Pages
+; BANK_TEXT and hands $C000 back as it found it.
+; Out: HL = TX_DEC.  Clobbers: A, BC, DE, HL.   ~0.4k T + ~60 T per char
+;------------------------------------------------------------------------------
+tx_dec:
+                ld   h, a
+                ld   a, (PORT_7FFD_SHADOW)
+                push af                        ; caller's page
+                ld   a, BANK_TEXT
+                call page_bank                 ; (A, BC)
+                ld   a, h
+                call tx_ptr
+                ld   b, h
+                ld   c, l                      ; BC = the stream (tk_get state)
+                ld   de, TX_DEC
+.n:             call tk_get                    ; keeps DE
+                ld   (de), a
+                inc  de
+                or   a
+                jr   nz, .n
+                pop  af
+                call restore_page
+                ld   hl, TX_DEC
                 ret
 
 ;------------------------------------------------------------------------------
@@ -1484,7 +1530,7 @@ alloc_reset:
                 xor  a
                 ld   (ALLOC_IDX), a
                 ld   (GEN_OVERFLOW), a
-                ld   hl, BANK_WINDOW
+                ld   hl, POOL_START            ; D3-TX: bank 0 starts above the text
                 ld   (ALLOC_PTR), hl
                 ld   l, a
                 ld   h, a

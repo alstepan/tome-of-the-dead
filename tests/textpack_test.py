@@ -51,6 +51,13 @@ class Style(unittest.TestCase):
         self.bad('b "' + "A" * 33 + '"\n')
         parse('info_ok "' + "NAME".ljust(16) + "MP1 RNG6".ljust(12) + "NOTE" + '"\n')
 
+    def test_id_count(self):
+        # D3-0: ids are bytes indexed 16-bit by tx_ptr: 256 strings, not 128
+        many = lambda n: "".join(f's{i} "X"\n' for i in range(n))
+        self.assertEqual(len(parse(many(200))[0]), 200)
+        parse(many(tp.MAX_STRINGS))
+        self.bad(many(tp.MAX_STRINGS + 1))
+
 
 class RoundTrip(unittest.TestCase):
     def test_tokens(self):

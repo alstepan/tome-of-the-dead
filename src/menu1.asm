@@ -2,9 +2,10 @@
 ; menu1.asm — C3-6 main menu, redefine keys, pause overlay, end / DEPTH cards
 ; (bank 1, ui1.asm; game.md §3.1 / §3.2 / §4.1, concept screen_menu.png).
 ; Everything draws into the bank-5 screen (shown: show_bank5 / play's
-; present). Pages nothing at $C000 (bank 1 stays paged: the text block and the
-; menu art are read in place); helpers used: print6x / print6 / tk_get /
-; stamp_rect / blit_keep / input_tick / sample_input (bank 2), tx_ptr (low RAM).
+; present). Pages nothing at $C000 (bank 1 stays paged: the menu art is read
+; in place; D3-TX: the text (bank 0) only through tx_dec, which decodes into
+; TX_DEC); helpers used: print6x / print6 / stamp_rect / blit_keep /
+; input_tick / sample_input (bank 2), tx_dec (low RAM).
 ;
 ; Frame pacing: menu_wait busy-waits for the next frame (counting MENU_SPIN:
 ; the seed entropy, game.md §1 "Seed") and passes the test probe select_tick
@@ -757,6 +758,7 @@ PAUSE_ROW       EQU 7
 PAUSE_SAVE      EQU GEN_SRC
 PAUSE_LEN       EQU 3 * 256 + 3 * 32
                 ASSERT PAUSE_SAVE + PAUSE_LEN <= GEN_MIR + 512
+                ASSERT PAUSE_SAVE + PAUSE_LEN <= TX_DEC      ; D3-TX: menu text decodes while paused
 pause_run:
                 ld   a, 1
                 ld   (PAUSED), a
@@ -1004,13 +1006,12 @@ mf_tx_attr:     ld   d, a
                 ld   (mf_split), a
                 ld   a, d
 mf_go:          ld   (mf_row), bc              ; C = col, B = row
-                call tx_ptr                    ; HL = the stream (bank 1 = the text)
-                ld   b, h
-                ld   c, l
-.n:             call tk_get                    ; A = next char, BC = state
+                call tx_dec                    ; HL = TX_DEC (D3-TX: the text is in bank 0)
+.n:             ld   a, (hl)
+                inc  hl
                 or   a
                 ret  z
-                ld   (mf_bc), bc
+                ld   (mf_bc), hl
                 ld   hl, mf_split
                 ld   e, a
                 ld   a, (hl)
@@ -1022,7 +1023,7 @@ mf_go:          ld   (mf_row), bc              ; C = col, B = row
                 ld   (mf_attr), a
 .t:             ld   a, e
                 call mf_char_e
-                ld   bc, (mf_bc)
+                ld   hl, (mf_bc)
                 jr   .n
 mf_char:        ld   (mf_row), bc
                 push af
@@ -1128,18 +1129,17 @@ row_clear:      push bc
                 pop  bc
                 ret
 ; tx_copy — A = TX id: its decoded text at (DE) .. DE out (no terminator).
+; D3-TX: decoded by tx_dec (low RAM) into TX_DEC, then copied here: DE may
+; point into bank 1 (mk_buf), which tx_dec pages out.
 ; Clobbers: A, BC, HL
 tx_copy:        push de
-                call tx_ptr
-                ld   b, h
-                ld   c, l
+                call tx_dec                    ; HL = TX_DEC
                 pop  de
-.n:             push de
-                call tk_get                    ; keeps DE
-                pop  de
+.n:             ld   a, (hl)
                 or   a
                 ret  z
                 ld   (de), a
+                inc  hl
                 inc  de
                 jr   .n
 

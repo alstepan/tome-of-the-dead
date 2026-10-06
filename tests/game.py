@@ -601,29 +601,24 @@ def main():
             h.expect("21 new game skeleton back in C", (p.ent(SLOT_SKC)["ROOM"], p.ent(SLOT_SKC)["HP"]), (ROOM_C, 10))
             h.expect("21 new game RNG reseeded", p.rw("RNG_STATE"), 0xA55A)
 
-        # ---------------- 19. wizard reach-3 zap ---------------------------
+        # ---------------- 19. D3-0: no ranged attack without a spell ----------
+        # (was the PROTO reach-3 zap; game.md §5 / §11.4: a Mage with no spell
+        # has only the staff melee). A rat at gap 3: L walks, nothing swings.
         if want(19):
             p.boot(K_WIZARD)
             p.isolate(keep=(SLOT_RAT,))
             p.place(0, 6, Y1)
             p.place(SLOT_RAT, 12, R1)            # wizard cols 6-8: gap 3
+            p.settle()
+            hp0 = p.ent(SLOT_RAT)["HP"]
             p.clear_trace()
-            zap, over_rat = [0], []
-            zr = Y1 + S["ZAP_ROW_OFF"]           # staff row
-
-            def chkz(frame, e):
-                if any(attr_at(frame, c, zr) == 0x45 and any(cell_bytes(frame, c, zr))
-                       for c in (10, 11)):
-                    zap[0] += 1
-                r = p.ent(SLOT_RAT)             # the bolt never paints over the target
-                if r["DVIS"] & 1 and r["DROW"] <= zr < r["DROW"] + r["DROWS"]:
-                    over_rat.extend(c for c in range(r["DCOL"], r["DCOL"] + r["DCOLS"])
-                                    if attr_at(frame, c, zr) == 0x45)
-            p.sample_during_turn("L", chkz)
-            h.expect("19 wizard attacked (CAST traced)", FID["wizard_cast2"] in p.trace_fids(0), True)
-            h.expect("19 x unchanged", p.ent(0)["X"], 6)
-            h.expect("19 ZAP tiles in the gap during impact", zap[0] > 0, True)
-            h.expect("19 no ZAP attr inside the target's drawn footprint", over_rat[:4], [])
+            p.turn("L")
+            atk = {FID[n] for n in ("wizard_cast1", "wizard_cast2",
+                                    "wizard_staffraise", "wizard_staffswing")}
+            h.expect("19 wizard at gap 3: no attack frame traced",
+                     [f for f in p.trace_fids(0) if f in atk], [])
+            h.expect("19 wizard walked (x 6 -> 7), rat untouched",
+                     (p.ent(0)["X"], p.ent(SLOT_RAT)["HP"]), (7, hp0))
 
         # ---------------- 66. C3-7 hero frames: Mage staff melee + jump arcs ---
         if want(66):
@@ -693,7 +688,7 @@ def main():
             h.expect("66 wizard melee: one IMPACT, on the STAFF_SWING entry after a 2-tick STAFF_RAISE",
                      [(f, fl & 1, pf, pt) for ix, f, fl, pf, pt in imps if ix == S["P_ENTITIES"]],
                      [(FID["wizard_staffswing"], 1, FID["wizard_staffraise"], 2)])   # (the rat may hit back)
-            h.expect("66 wizard melee: x unchanged, no zap", (p.ent(0)["X"], p.rb("ZAP_T")), (6, 0))
+            h.expect("66 wizard melee: x unchanged", p.ent(0)["X"], 6)
             p.set_ent(SLOT_RAT, ROOM=NOWHERE)
             jump_check("wizard right", "wizard", ("K", "L"), 12, False)
             jump_check("wizard left (mirrored)", "wizard", ("K", "H"), 20, True)
@@ -923,20 +918,20 @@ def main():
             p.place(0, 24, Y1)
             ghost_check("B->C (vertical)", SLOT_SLIME, "J", ROOM_C)
 
-        # ---------------- 53 (review A7) present keeps up: zap, potion, quaff
+        # ---------------- 53 (review A7) present keeps up: melee, potion, quaff
         # Per tick, right after the tick-start present (probe_presented):
-        # displayed bank 7 == composed bank 5, through a wizard zap (overlay
-        # not in DMG_LIST), a potion pickup (shadow_rect + PEND_DMG + message)
-        # and a quaff (attr flash + HUD).
+        # displayed bank 7 == composed bank 5, through a wizard staff melee
+        # (D3-0: was the zap overlay), a potion pickup (shadow_rect + PEND_DMG +
+        # message) and a quaff (attr flash + HUD).
         if want(53):
             p.boot(K_WIZARD)
             p.isolate(keep=(SLOT_RAT,))
             p.place(0, 6, Y1)
-            p.place(SLOT_RAT, 12, R1)            # gap 3: zap
+            p.place(SLOT_RAT, 9, R1)             # gap 0: staff melee
             p.present_watch(True)
             p.clear_trace()
             p.turn("L")
-            zapped = FID["wizard_cast2"] in p.trace_fids(0)
+            zapped = FID["wizard_staffswing"] in p.trace_fids(0)
             p.set_ent(SLOT_RAT, ROOM=NOWHERE)
             p.place(0, 24, Y0)                   # potion 0 at col 28, storey 0
             for _ in range(3):
@@ -947,7 +942,7 @@ def main():
             p.settle()
             s_ = p.present_samples
             p.present_watch(False)
-            h.expect("53 setup: zap cast, potion taken, quaff", (zapped,
+            h.expect("53 setup: staff swing, potion taken, quaff", (zapped,
                      pot >= 2, p.ent(0)["HP"] > 5), (True, True, True))
             h.expect("53 probe_presented sampled every tick", len(s_) >= 20, True)
             h.expect("53 bank 7 == bank 5 after every tick-start present",
@@ -1615,9 +1610,11 @@ def main():
                      tuple(p.z.read_memory(S["DMG_LIST"] + 47 * 4, 4)), (0, 32, 0, PLAY_ROWS))
             h.expect("45 DMG_OVERFLOW counted both", p.rb("DMG_OVERFLOW"), 2)
 
-        # ---------------- 46 (review B) a mid-ladder body blocks the zap line
+        # ---------------- 46 (review B) a mid-ladder body blocks the reach line
+        # (D3-0: was the zap line at gap 3; with reach 1 the climber sits at
+        # gap 0 in front of a rat at gap 1, overlapping its cols).
         if want(46):
-            def zap_past_climber(with_goblin):
+            def swing_past_climber(with_goblin):
                 p.boot(K_WIZARD)
                 p.isolate()
                 p.place(0, 28, Y1)
@@ -1626,7 +1623,7 @@ def main():
                 p.until(lambda: p.rb("CUR_ROOM") == 1 and p.idle())
                 p.isolate()
                 p.place(0, 1, Y1)                # storey 1 (the shaft foot), cols 1-3
-                p.place(SLOT_RAT, 7, R1, room=1, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+                p.place(SLOT_RAT, 5, R1, room=1, flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
                 if with_goblin:                  # mid-ladder on B's {4,1} shaft, cols 4-6
                     p.place(SLOT_GOBLIN, 4, G1 - 1, room=1, flags=EF_ACTIVE | EF_HOSTILE)
                     p.set_ent(SLOT_GOBLIN, AIDIR=0xFF)
@@ -1634,11 +1631,11 @@ def main():
                 hp0 = p.ent(SLOT_RAT)["HP"]
                 p.clear_trace()
                 p.turn("L")
-                return FID["wizard_cast2"] in p.trace_fids(0), hp0
-            cast, _ = zap_past_climber(False)
-            h.expect("46 control: rat at gap 3 is zapped", cast, True)
-            cast, hp0 = zap_past_climber(True)
-            h.expect("46 climbing goblin in the gap: no CAST", cast, False)
+                return FID["wizard_staffswing"] in p.trace_fids(0), hp0
+            cast, _ = swing_past_climber(False)
+            h.expect("46 control: rat at gap 1 is struck", cast, True)
+            cast, hp0 = swing_past_climber(True)
+            h.expect("46 climbing goblin in the gap: no swing", cast, False)
             h.expect("46 rat untouched", p.ent(SLOT_RAT)["HP"], hp0)
 
         # ---------------- 47 (review B) yield falls back to the other side
@@ -1689,6 +1686,8 @@ def main():
                 p.z.cmd("write-memory %d %s" % (b * 16384, " ".join(["0"] * 64)))
             ayo = 3 * 16384 + S["AY_RESERVE"] - 0xC000   # A8: the AY slot block too
             p.z.cmd("write-memory %d %s" % (ayo, " ".join(["0"] * S["AY_LEN"])))
+            p.z.cmd("write-memory %d %s" % (S["BANK_TEXT"] * 16384 + S["TEXT_ADDR"] - 0xC000,
+                                            " ".join(["0"] * 64)))  # D3-TX text block (tx_tab)
             p.z.cmd("set-memory-zone -1")
             p.z.cmd("disable-breakpoints")
             p.z.cmd("exit-cpu-step")
@@ -1862,7 +1861,11 @@ def isr_tests(h, p):
     the player and restores exactly PORT_7FFD_SHADOW; no code ever runs at
     $C000+ with a bank other than 3 paged (A3 review carry-over), except the
     bank-1 UI code region with bank 1 paged (C3 review: far1 targets)."""
-    ay, done = S["AY_PLAY"], S["isr.done"]
+    # D3-0: stop at the ISR's `call AY_PLAY` (isr.page, bank 2, after the OUT)
+    # rather than at AY_PLAY itself: with the 4 KB AY slot at $F000 the bank-1
+    # UI code (ui1_code..ui1_end) covers the same addresses, and a PC probe
+    # fires in whichever bank is paged (the scrolls run there).
+    ay, done = S["isr.page"], S["isr.done"]
     # A3 carry-over: executing $C000+ with any bank but 3 = a paging bug. A
     # conditional (non-optimised) breakpoint: armed from the snapshot load
     # (boot, select, game start) through the transition below.
@@ -1906,7 +1909,7 @@ def isr_tests(h, p):
              abs(t - df * 70908) < 70908, True)
     h.expect("61 AY_PLAY once per frame", da, df)
     # room transition: hero at A's right edge walks right (do_exit: show_bank5,
-    # scroll, present_full -> bank 7). Stop in every ISR at AY_PLAY (bank 3
+    # scroll, present_full -> bank 7). Stop in every ISR at its AY_PLAY call (bank 3
     # paged by OUT only) and at isr.done (port restored from the shadow).
     # Held L repeats (INPUT_REPEAT 1): the hero keeps walking in room B for
     # 30 ticks after arrival, so the ISR also lands in blits (pool banks).
@@ -2010,7 +2013,7 @@ def tape_rest(h, p):
     v0, v1 = S["ui1_vars"] - 0xC000, S["ui1_vars_end"] - 0xC000
     b1, s1 = bytearray(ram[16384:16384 + lo]), bytearray(SNA_RAM[16384:16384 + lo])
     b1[v0:v1] = s1[v0:v1] = bytes(v1 - v0)
-    h.expect("50 bank 1 block (sources, data, text, UI code bar ui1_vars) == .sna", b1 == s1, True)
+    h.expect("50 bank 1 block (sources, data, UI code bar ui1_vars) == .sna", b1 == s1, True)
     # bank 3 block = source tail + bank-3 cold code (select, scrolls): BANK3_LEN >= hi
     b3 = S.get("BANK3_LEN", hi)
     h.expect("50 bank 3 sprite sources + cold code == .sna", ram[3 * 16384:3 * 16384 + b3] ==
@@ -2022,6 +2025,9 @@ def tape_rest(h, p):
         o = 7 * 16384 + S[nm] - 0xC000
         h.expect(f"50 bank 7 tilesets {nm} (B3B-8 tape block) == .sna",
                  ram[o:o + S["TSET_HALF_LEN"]] == SNA_RAM[o:o + S["TSET_HALF_LEN"]], True)
+    to = S["BANK_TEXT"] * 16384 + S["TEXT_ADDR"] - 0xC000   # D3-TX: the text block, bank 0
+    h.expect("50 bank 0 text block (D3-TX tape block) == .sna", ram[to:to + S["TEXT_LEN"]] ==
+             SNA_RAM[to:to + S["TEXT_LEN"]], True)
     h.expect("50 tape: IM 2 installed by boot", " IM2 " in p.z.cmd("get-registers"), True)
     # CODE block starts in bank 5 low RAM (boot, generator) and runs into bank 2
     lo5 = S["lowram_code"] - 0x4000

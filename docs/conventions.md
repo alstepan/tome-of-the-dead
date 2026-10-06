@@ -115,8 +115,8 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   interrupt anywhere else restores exactly what was paged. The screen bit is
   never touched by the ISR (`tests/game.py` #61 checks port == shadow at every
   ISR exit across a 7 → 5 → 7 screen flip).
-- **AY player slot contract** (`AY_PLAY` = `AY_RESERVE` `$E400`, bank 3, 7 KB
-  to `$FFFF`; `src/ay.asm`, silent stub today): called with interrupts off,
+- **AY player slot contract** (`AY_PLAY` = `AY_RESERVE` `$F000`, bank 3, 4 KB
+  to `$FFFF` since D3-0 (was 7 KB from `$E400`); `src/ay.asm`, silent stub today): called with interrupts off,
   bank 3 paged at `$C000`, any stack depth. May clobber AF, BC, DE, HL, IX, IY.
   Must not: write the shadow or `$7FFD`, `EI`, touch `$C000` data of other
   banks, use the alternate set unless `ISR_SAVE_ALT=1` (assemble-only, untested at runtime) (or main code never
@@ -154,3 +154,6 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
 
 - `msg_push` / `msg_push_end` (low RAM) clobber **AF, BC, DE, HL** (C is no longer preserved, unlike the old `log_push`); callers in any paged bank (bank 3, bank-1 UI code) get their bank back (restore_page; W18 checks it from bank 1).
 - `tk_get` uses an SMC mode switch (`tk_get.sw`): never call the text printer from the ISR.
+- D3-TX: the text block lives in bank 0 (`BANK_TEXT`, under the pool). Never read it in place —
+  not even from bank-1 code: go through `msg_push`, `print6t` / `print6x`, or `tx_dec`
+  (decodes a string into `TX_DEC`, bank 5) — they page `BANK_TEXT` and restore the caller's bank.

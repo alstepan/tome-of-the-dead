@@ -59,20 +59,7 @@ vdata:
                 INCLUDE "panel_hot.asm"                       ; -> HOT_COPY (panel_boot)
                 INCLUDE "../assets/gfx/tiles/tiles_common.asm" ; init_tiles (boot)
                 INCLUDE "../assets/gfx/panel/panel_orn.asm"    ; init_tiles -> ORN_GLYPHS
-                MODULE b3fx                                    ; init_tiles: the zap glyphs
-                INCLUDE "../assets/gfx/sprites/tiles_fx.asm"   ; (-> ZAP_GLYPHS)
-                ENDMODULE
-                ; B3B-13: the text block (tools/textpack.py from src/strings.txt):
-                ; string table, dictionary, token streams. Read at runtime with
-                ; BANK_TEXT paged (msg_push / show_impact_msg / print6t), so its
-                ; labels are DISPed to the runtime $C000.. address.
-text_img:
-                DISP $ + TEXT_DISP
-                INCLUDE "../build/text/strings.asm"
-                ENT
-text_img_end:
-                ASSERT text_img_end <= BANK_WINDOW             ; all in bank 1 (virtual < $C000)
-                ASSERT text_base == text_img + TEXT_DISP
+                ; (D3-TX: the text block moved out to bank 0, see TEXT below)
 vdata_end:
 VDATA_LEN       EQU vdata_end - vdata
 ; C3-0 (plan "3C breakdown" D4): bank-1 UI code (menus / pause / end screens),
@@ -100,7 +87,6 @@ SRC_LEN_HI      EQU VIRT_TOTAL - SRC_LEN_LO
                 ASSERT VIRT_TOTAL <= $8000
                 DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B + vdata ", /D, VDATA_LEN, " B (bank1 ", /D, SRC_LEN_LO, ", free ", /D, $4000 - SRC_LEN_LO, "; bank3 ", /D, SRC_LEN_HI, ")"
                 DISPLAY "GAME bank-1 UI code: ", /H, ui1_code, "..", /H, ui1_end, " (", /D, UI1_LEN, " B), bank 1 free: ", /D, UI1_LIMIT - ui1_end
-                DISPLAY "GAME text (bank 1): ", /D, TX_COUNT, " strings, ", /D, TX_TOKENS, " tokens, raw ", /D, TEXT_RAW, " -> ", /D, TEXT_PACKED, " B packed at ", /H, text_base
                 DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed; total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
 
 
@@ -121,7 +107,7 @@ BANK3_CODE_LEN  EQU bank3_end - bank3_code
                 DISPLAY "GAME bank-3 cold code: ", /H, bank3_code, "..", /H, bank3_end - 1, " (", /D, BANK3_CODE_LEN, " B), free to AY reserve: ", /D, AY_RESERVE - bank3_end
 
 ;==============================================================================
-; AY PLAYER SLOT (A8) — bank 3 AY_RESERVE..$FFFF (7 KB): called by the IM 2
+; AY PLAYER SLOT (A8) — bank 3 AY_RESERVE..$FFFF (4 KB since D3-0): called by the IM 2
 ; ISR once per frame (ay.asm: silent stub for now). Own headerless tape block.
 ;==============================================================================
                 ORG  AY_RESERVE
@@ -130,7 +116,7 @@ ay_code:
 ay_code_end:
 AY_LEN          EQU ay_code_end - AY_RESERVE
                 ASSERT ay_code_end <= AY_RESERVE_END
-                DISPLAY "GAME AY slot (bank 3): ", /H, AY_RESERVE, "..", /H, ay_code_end - 1, " (", /D, AY_LEN, " B), free in the 7 KB reserve: ", /D, AY_RESERVE_END - ay_code_end, "; ISR ", /D, ISR_LEN, " B at ", /H, ISR_ADDR
+                DISPLAY "GAME AY slot (bank 3): ", /H, AY_RESERVE, "..", /H, ay_code_end - 1, " (", /D, AY_LEN, " B), free in the 4 KB reserve: ", /D, AY_RESERVE_END - ay_code_end, "; ISR ", /D, ISR_LEN, " B at ", /H, ISR_ADDR
 
 ;==============================================================================
 ; LEVEL TILESETS (B3B-8) — the 8 per-level tile sets (tools/tiles_convert.py,
@@ -150,6 +136,25 @@ tsets_lo_end:
                 ASSERT tileset_d2 - tileset_d1 == TSET_STRIDE && TILESET_SLOT_LEN == TSET_STRIDE
                 ASSERT tsets_lo_end == TSET_LO + TSET_HALF_LEN && tilesets_end == TSET_HI + TSET_HALF_LEN
                 ASSERT tsets_lo_end <= SHADOW_BITMAP && tilesets_end <= $10000
+
+;==============================================================================
+; TEXT (B3B-13; D3-TX: bank 1 -> bank 0) — the text block (tools/textpack.py
+; from src/strings.txt: string table, dictionary, token streams) at the BOTTOM
+; of pool bank 0, TEXT_ADDR..POOL_START; the pre-shift pool starts above it
+; (alloc_reset), so the pool never overwrites it. Read at runtime only with
+; BANK_TEXT paged (msg_push / impact_line / print6t / print6x / tx_dec). Own
+; headerless tape block (`start` .txt).
+;==============================================================================
+                MMU  3, BANK_TEXT
+                ORG  TEXT_ADDR
+text_img:
+                INCLUDE "../build/text/strings.asm"
+text_img_end:
+TEXT_LEN        EQU text_img_end - text_img
+POOL_START      EQU text_img_end               ; alloc_reset: first pool byte in bank 0
+                ASSERT text_base == TEXT_ADDR && TEXT_LEN == TEXT_PACKED
+                ASSERT text_img_end <= tap_loader      ; the BASIC loader scratch ($E000, page 0)
+                DISPLAY "GAME text (bank 0): ", /D, TX_COUNT, " strings, ", /D, TX_TOKENS, " tokens, raw ", /D, TEXT_RAW, " -> ", /D, TEXT_PACKED, " B packed at ", /H, text_base, "; pool from ", /H, POOL_START
 
 ;==============================================================================
 ; BANK-5 LOW-RAM COLD CODE — tape entry, boot, generator, init_tiles, game
@@ -397,7 +402,9 @@ end_turn:
 
 ;------------------------------------------------------------------------------
 ; do_exit — A = EXIT_KIND. EX_LEVEL: level_descend (B3B-12). Else follower
-; selection (§3.7), frozen Cauldron transition (§3.6), arrival, arrival conflicts. A7: shows bank 5 for the scroll (bank-3 code
+; selection (§3.7; LP: candidates only), lp_transition (LP, game.md §9.4.3:
+; bank the old room, spawn the destination's residents, admit the followers),
+; frozen Cauldron transition (§3.6), arrival, arrival conflicts. A7: shows bank 5 for the scroll (bank-3 code
 ; scrolls $4000), then present_full copies it to bank 7 and shows bank 7.
 ; Clobbers: all but IY.
 ;------------------------------------------------------------------------------
@@ -410,6 +417,8 @@ do_exit:
                 call show_bank5                ; A7: the scroll runs on the $4000 screen
                 ld   a, GS_TRANSITION          ; (state flips once none is drawn)
                 ld   (GAME_STATE), a
+                ld   hl, lp_transition         ; LP (bank 3): bank the old room, spawn the
+                call far3                      ; new one's residents, admit the followers
                 ld   h, NEXT_MAP >> 8
                 ld   a, (EXIT_DEST)
                 call build_room                ; B3B-8: far3 -> bank-3 build_room_map v2
@@ -550,7 +559,7 @@ tile_flags:
                 DB 0                                   ; 10 T_POTION (floor item)
                 DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12-13 chain, skulls
                 DB TF_ANIM, TF_ANIM                    ; 15-16 T_TORCH_T/B
-                DB TF_ANIM, TF_ANIM                    ; 17-18 T_DRIP1/2 (PROTO zap: overlay only)
+                DB TF_ANIM, TF_ANIM                    ; 17-18 T_DRIP1/2
                 DB TF_FLOOR, TF_FLOOR                  ; 19-20 T_END_L/R = pit caps
                 DB TF_SOLID, TF_SOLID                  ; 21-22 T_DOOR_ARCH_L/R
                 DB TF_SOLID | TF_DOOR, TF_SOLID | TF_DOOR   ; 23-24 T_DOOR_L/R (closed planks)
@@ -576,11 +585,11 @@ kind_tab:
                 KROW   2,  1,  3,  2,  1,  3,  1,  4,  0          ; KT_EVA
                 KROW   6,  6,  4,  4,  3,  4,  2,  2,  3          ; KT_DIE
                 KROW   0,  1,  1,  0,  0,  0,  0,  0,  0          ; KT_BONUS
-                KROW   1,  3,  1,  1,  1,  1,  1,  1,  1          ; KT_REACH
+                KROW   1,  1,  1,  1,  1,  1,  1,  1,  1          ; KT_REACH (D3-0: the Mage's PROTO reach-3 zap is gone, game.md §11.4)
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  2          ; KT_PERIOD
                 ; B3B-5: skeleton + goblin are openers (game.md §9.1); the heroes
                 ; open by bump in try_horizontal, not through KF_OPENER
-                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER|KF_ZAP, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0  ; KT_FLAGS
+                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0  ; KT_FLAGS
                 KROW $47,$45,$44,$47,$44,$45,$06,$43,$44          ; KT_ATTR
                 KROW KFID_KNIGHT, KFID_WIZARD, 0, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME   ; KT_FID0
                 KROW KFCNT_KNIGHT, KFCNT_WIZARD, 0, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME ; KT_FCNT
@@ -622,7 +631,8 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
 ; CLEAR 24575 frees $6000..$7FFF for the room maps / generator buffers and the
 ; low-RAM cold code. The USR address is emitted as 5 ASCII digits of `start`.
 ; Tokenised in a scratch ORG (page 0 at $E000; not part of the runtime image —
-; bank 0 is overwritten by the pre-shift pool at boot).
+; bank 0 is overwritten by the pre-shift pool at boot; D3-TX: above the text
+; block at the bottom of bank 0, ASSERTed).
 ;------------------------------------------------------------------------------
 TAPE_CLEAR      EQU 24575
                 ORG  $E000
@@ -661,5 +671,7 @@ tap_loader_len  EQU  $ - tap_loader
                 MMU  3, BANK_TSET              ; B3B-8: level tilesets (2 x 1,280 B)
                 SAVETAP  "build/wazhack.tap", HEADLESS, TSET_LO, TSET_HALF_LEN
                 SAVETAP  "build/wazhack.tap", HEADLESS, TSET_HI, TSET_HALF_LEN
+                MMU  3, BANK_TEXT              ; D3-TX: the text block (bank 0 bottom)
+                SAVETAP  "build/wazhack.tap", HEADLESS, TEXT_ADDR, TEXT_LEN
                 MMU  3, 0
                 SAVESNA  "build/wazhack.sna", boot

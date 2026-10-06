@@ -31,7 +31,7 @@ PHASES = ["tick_work", "intent_tick", "read_turn_input", "anim_tick", "render", 
 if os.environ.get("GAME_PROFILE"):                # finer split for optimisation work
     PHASES = ["tick_work", "intent_tick", "read_turn_input", "try_player_turn", "resolve_monsters",
               "materialise", "anim_tick", "render", "render.nopend", "render.sdone",
-              "render.f3done", "render.drdone", "draw_zap", "pmark_dmg", "present",
+              "render.f3done", "render.drdone", "render.nopl", "pmark_dmg", "present",
               "decor_tick", "panel_tick", "panel_done", "wait_tick"]
     PHASES += [n for n in os.environ["GAME_PROFILE"].split(",") if n in S]
 

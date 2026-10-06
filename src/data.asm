@@ -41,9 +41,10 @@ POOL_HERO_MAX = POOL_KNIGHT
 POOL_HERO_MAX = POOL_WIZARD
     ENDIF
 POOL_NEED       EQU POOL_MONSTERS + POOL_HERO_MAX + 2 * 576 + 3 * 576
-                ASSERT POOL_NEED <= 3 * 16384
+POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW)   ; D3-TX: the text block sits under bank 0's pool
+                ASSERT POOL_NEED <= POOL_CAP
                 ASSERT FID_COUNT <= FRT_MAX
-                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of 49152 (monsters ", /D, POOL_MONSTERS, ", hero max ", /D, POOL_HERO_MAX, ")"
+                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (monsters ", /D, POOL_MONSTERS, ", hero max ", /D, POOL_HERO_MAX, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0)"
 
 ;==============================================================================
 ; ROLE TABLES (per-kind state -> frame). Stand-ins per prototype §7/§10:
@@ -147,13 +148,11 @@ wz_move:        DB 4, FID_wizard_walk1, 1, FID_wizard_walk2, 1, FID_wizard_walk3
 wz_climb:       CLIMBCYC FID_wizard_climb1, FID_wizard_climb2, FID_wizard_walk1, FID_wizard_walk2, FID_wizard_walk3, FID_wizard_walk4
 wz_climbrest:   CLIMBREST FID_wizard_climb1, FID_wizard_walk1
                 ; C3-7: KS_ATTACK = the staff melee (gap 0, game.md §6.2: STAFF_RAISE
-                ; wind-up -> STAFF_SWING strike, IMPACT on the swing). The PROTO
-                ; ranged zap (gap > 0, KF_ZAP; 3D replaces it with spells) keeps
-                ; CAST1 -> CAST2: do_attack swaps in wz_zap. Both IMPACT after
-                ; KS_IMPACT (2) ticks — one kind_seqs entry serves both.
+                ; wind-up -> STAFF_SWING strike, IMPACT on the swing). D3-0: the
+                ; PROTO ranged zap (CAST1 -> CAST2 at gap > 0) is gone: a Mage
+                ; with no spell has no ranged attack (game.md §5 / §11.4).
 WZ_WIND         EQU 2                          ; wind-up ticks = the wizard's KS_IMPACT
 wz_attack:      DB WZ_SRAISE, WZ_WIND, 0, WZ_SSWING, 3, SF_IMPACT, SEQ_END
-wz_zap:         DB FID_wizard_cast1, WZ_WIND, 0, FID_wizard_cast2, 3, SF_IMPACT, SEQ_END
 wz_hurt:        DB WZ_HURT, 3, 0, SEQ_END
 wz_death:       DEATHSEQ WZ_HURT, WZ_DEAD, FID_wizard_dead, WZ_REST
 ; --- Skeleton ---

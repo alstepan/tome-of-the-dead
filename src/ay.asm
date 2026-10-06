@@ -1,6 +1,6 @@
 ;==============================================================================
-; ay.asm — A8 AY player slot: bank 3, AY_RESERVE..AY_RESERVE_END (7 KB, game.md
-; §11.2) = player + songs + FX. Loaded by its own headerless tape block
+; ay.asm — A8 AY player slot: bank 3, AY_RESERVE..AY_RESERVE_END (4 KB since
+; D3-0, user 2026-10-06; game.md §11.2) = player + songs + FX. Loaded by its own headerless tape block
 ; (AY_LEN from AY_RESERVE, `start`).
 ;
 ; Slot contract (docs/conventions.md "Interrupts"): the IM 2 ISR (lowram.asm

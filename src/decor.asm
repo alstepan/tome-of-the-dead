@@ -46,7 +46,7 @@ DT_CAPS         EQU (DT_MAX_TRIES << 6) | (DT_MAX_GLYPH << 4) | DT_MAX_ATTR   ; 
 ; cap for its kind (DT_MAX_GLYPH / DT_MAX_ATTR) or its occupancy tries
 ; (DT_MAX_TRIES) are spent: a same-stagger bunch spreads over ticks. A tried
 ; entry whose cell is under a drawn sprite (RLIST footprints, R_COL..R_ROWS)
-; or the zap overlay SKIPS this step: the cell holds (nothing written), the
+; SKIPS this step: the cell holds (nothing written), the
 ; next try comes at its next due tick (a stationary sprite costs one test per
 ; entry per 4 ticks, not one per tick). Panel rows are never touched (the
 ; deriver's rows are 9s..9s+5).
@@ -114,11 +114,7 @@ decor_tick:
                 ld   b, (hl)                   ; B = row
                 dec  l
                 ld   c, (hl)                   ; C = col
-                ; ---- occupancy: the zap run, then every RLIST footprint ----
-                ld   a, (ZAP_T)
-                or   a
-                call nz, dt_zap                ; CF = in the zap run (zap ticks only)
-                jr   c, .skip
+                ; ---- occupancy: every RLIST footprint ----
                 ld   a, (RLIST_N)
                 or   a
                 jr   z, .free
@@ -305,23 +301,3 @@ decor_tick:
                 ASSERT (RLIST >> 8) == ((RLIST + P_MAX_ENT - 1) >> 8)
                 ASSERT DT_MAX_GLYPH <= 3 && DT_MAX_ATTR <= 3 && DT_MAX_TRIES <= 3 && DT_MAX_TRIES >= 1
 
-;------------------------------------------------------------------------------
-; dt_zap — CF = 1 if cell (row B, col C) lies in the zap overlay's run (the
-; overlay is drawn over the background, not in SLOTREC). Keeps BC.
-; Clobbers: A, DE.
-;------------------------------------------------------------------------------
-dt_zap:
-                ld   a, (ZAP_ROW)
-                cp   b
-                jr   nz, .no
-                ld   a, (ZAP_COL)
-                ld   e, a
-                ld   a, (ZAP_LEN)
-                ld   d, a
-                ld   a, c
-                sub  e
-                jr   c, .no                    ; left of the run
-                cp   d
-                ret                            ; CF = col - zap col < zap len
-.no:            or   a
-                ret

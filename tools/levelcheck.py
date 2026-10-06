@@ -313,13 +313,66 @@ def check(b, stats=None):
         stats["blocks"] += sum(1 for r in present if rd(b, r, "RD_BLOCK"))
         stats["lad2"] += sum(1 for r in present if rd(b, r, "RD_LAD2"))
         stats["potions"] += fn
+    v += lp_check(b, stats)
+    return v
+
+
+def lp_check(b, stats=None):
+    """LP (game.md §9.4.7 levelcheck): the budget split's quotas, then every
+    room's first entry from each of its horizontal exits (the spawn rules hold:
+    sum weight <= 8 / lair <= 12, count <= quota, body gap >= 8 to the arrival)."""
+    v = []
+    depth = b[G.H["LVL_DEPTH"]]
+    st, lair = b[G.H["LVL_START"]], b[G.H["LVL_LAIR"]]
+    lp = G.lp_budget(b, 1)
+    o = lambda n: D[n] - D["LP_STATE"]                       # noqa: E731
+    q = [lp[o("LP_REC") + r * D["LR_STRIDE"]] for r in range(9)]
+    rmax = D["ROOM_MAX_LO"] if depth <= 2 else D["ROOM_MAX_HI"]
+    n = G.LP_TAB[depth][2] - 2
+    if q[st] != 0:
+        v.append(f"LP: start quota {q[st]}")
+    if q[lair] != 2:
+        v.append(f"LP: lair quota {q[lair]}")
+    if any(q[r] > rmax for r in range(9) if r != lair):
+        v.append(f"LP: quota > ROOM_MAX {q}")
+    if sum(q[r] for r in range(9) if r != lair) != n:
+        v.append(f"LP: sum quotas {sum(q) - 2} != N {n}")
+    if lp[o("LP_DISCARD")]:
+        v.append(f"LP: split discard {lp[o('LP_DISCARD')]}")
+    for r in range(9):
+        if not rd(b, r, "RD_FLAGS") & D["RDF_PRESENT"] or r == st:
+            continue
+        ex = rd(b, r, "RD_EXITS")
+        arr = [(1 if ex & D["RDX_LS1"] else 0, 1)] if ex & D["RDX_L"] else []
+        arr += [(1 if ex & D["RDX_RS1"] else 0, 28)] if ex & D["RDX_R"] else []
+        arr += [(0, rd(b, r, "RD_UPCOL"))] if ex & D["RDX_U"] else []
+        arr += [(1, rd(b, r, "RD_DNCOL"))] if ex & D["RDX_D"] else []
+        for hs, hx in arr:
+            lp2, out = G.lp_enter(b, lp, r, hs, hx, 3)
+            ws = sum(G.lp_wt(kb & 31) for kb, *_ in out)
+            ws += sum(G.lp_wt(e & 31) for e in lp2[o("LP_REC") + 9 * r + 1:o("LP_REC") + 9 * r + 9:2] if e)
+            minw = min(G.lp_wt(D[k]) for k in G.LP_TAB[depth][0])
+            cap = D["LP_SIGMA_CAP"] if r == lair else max(D["LP_SIGMA_INIT"], rmax * minw)
+            if lp2[o("LP_DISCARD")]:
+                v.append(f"LP: room {r} lost {lp2[o('LP_DISCARD')]} unit(s) to the sum cap")
+            if ws > cap or len(out) > max(q[r], 1 if r == lair else 0) + (1 if r == lair else 0):
+                v.append(f"LP: room {r} spawn sum {ws} / {len(out)} units")
+            for kb, hp, s, x, _ in out:
+                w = G.lp_kinfo(kb & 31)[0]
+                if s == hs and not (x >= hx + 3 + 5 or x + w + 5 <= hx):
+                    v.append(f"LP: room {r} spawn x{x} s{s} within 5 of the arrival x{hx}")
+            if stats is not None:
+                stats["lp_units"] += len(out)
+                stats["lp_left"] += lp2[o("LP_REC") + 9 * r] & 7
+                stats["lp_lost"] += lp2[o("LP_DISCARD")]
+                stats["lp_entries"] += 1
     return v
 
 
 def new_stats():
     return {"rooms": Counter(), "h_edges": 0, "doors": 0, "pits": 0, "dead": 0, "loops": 0,
             "lair_fallback": 0, "walker_cut": 0, "blocks": 0, "lad2": 0, "potions": 0,
-            "pits_n": 0}
+            "pits_n": 0, "lp_units": 0, "lp_left": 0, "lp_lost": 0, "lp_entries": 0}
 
 
 def merge(a, b):
@@ -335,6 +388,9 @@ def report(st, tot, fails):
     print("rooms", dict(sorted(st["rooms"].items())),
           f"doors {st['doors']}/{st['h_edges']} ({ratio:.3f})")
     print({k: round(st[k] / tot, 2) for k in ("pits", "dead", "loops", "lair_fallback", "walker_cut", "blocks", "lad2", "potions")}, "(per level)")
+    u = st["lp_units"] + st["lp_left"]
+    print("LP first entries:", st["lp_entries"], "units", u, "placed", st["lp_units"], "wait (no legal cell)",
+          st["lp_left"], f"({100 * st['lp_left'] / max(1, u):.1f}%)", "lost to the sum cap", st["lp_lost"])
     # door odds bound: 1 in 3 per horizontal edge (game.md 1.1). Over N edges the
     # sd of the fraction is sqrt(2/9/N): 524k-level scan (~2M edges) 0.0003, the
     # 8,000-level run (~30k edges) 0.0027, so +-0.02 is > 7 sd in both.

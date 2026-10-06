@@ -851,9 +851,11 @@ face_a:         or   a
 ;------------------------------------------------------------------------------
 ; find_target — IX = attacker, TMP6 = direction (+1/-1). Nearest hostile-to-IX
 ; entity in reach in that direction (prototype §6.1). A mid-ladder body is never
-; a target but still ends the scan if it is the nearest (review B: the Wizard's
-; zap can't pass a climber). Out: A = slot or $FF, TMP3 = its gap. The player scans the LIVE_LIST for EF_HOSTILE; a monster
-; only ever targets the player (slot 0), so it checks that one entity.
+; a target but still ends the scan if it is the nearest (review B: nothing in
+; reach passes a climber). Out: A = slot or $FF (D3-0: the gap output that only
+; the PROTO zap read is gone; LAST_HIT_SLOT = the best gap is scratch). The
+; player scans the LIVE_LIST for EF_HOSTILE; a monster only ever targets the
+; player (slot 0), so it checks that one entity.
 ; Clobbers: A, BC, DE, HL (IX preserved)
 ;------------------------------------------------------------------------------
 find_target:
@@ -906,8 +908,6 @@ find_target:
                 pop  bc
                 djnz .pl
 .done:          pop  ix
-                ld   a, (LAST_HIT_SLOT)
-                ld   (TMP3), a                 ; best gap (for the zap)
                 ld   a, (TMP5)
                 cp   FT_BLOCKER
                 ret  nz
@@ -920,7 +920,7 @@ find_target:
                 pop  bc
                 jr   nz, .cv
                 ld   c, FT_BLOCKER             ; no combat on ladders, but its body
-.cv:            push bc                        ; still blocks the line (zap/reach
+.cv:            push bc                        ; still blocks the line (reach
                                                ; can't pass it). Vertical overlap:
                 KFIELD KT_BH                   ;   ty <= ay+ah-1 && ay <= ty+th-1
                 pop  bc
@@ -1275,7 +1275,7 @@ cache_player:
 ; restores tiles there and repairs overlapping sprites). Full queue: the last
 ; rect grows to the bounding box of itself + this one (a larger restore is
 ; always safe: every sprite it touches is repaired) and DMG_OVERFLOW counts it,
-; so e.g. a zap-end restore can never be dropped.  Clobbers: A, HL
+; so e.g. a potion restore can never be dropped.  Clobbers: A, HL
 queue_damage:
                 ld   a, (PEND_DMG_COUNT)
                 cp   PEND_DMG_MAX

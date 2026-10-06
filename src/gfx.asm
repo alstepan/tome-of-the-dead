@@ -371,8 +371,7 @@ erase_rect:
 ; last present from bank 5 to screen 2, so the beam never sees an erased
 ; sprite. Changed cells are marked in PRES_MASK (pmark_rect) by:
 ;   - render's damage list (pmark_dmg): erased old footprints, new / forced
-;     footprints, attr-only stamps, PEND_DMG restores (potion, zap end);
-;   - draw_zap (the overlay is not in the damage list);
+;     footprints, attr-only stamps, PEND_DMG restores (potion);
 ;   - the panel (B3B-11, panel.asm): log rows via HUD4_PW (cols 0..PW-1 of
 ;     text rows 20..23), the other items by pmark_rect.
 ; Full-screen paths (start_game, room transitions) use present_full instead;

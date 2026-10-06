@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B3B-7 (W10): Z80 level_gen / level_start_x vs tools/levelgen.py, byte-exact.
+"""B3B-7 (W10): Z80 level_gen / level_start_x (+ LP lp_budget) vs tools/levelgen.py, byte-exact.
 
 Loads build/wazhack.sna, then for each (depth, seed[, master]) pokes the header
 seed, runs a probe stub (far3 -> level_gen, far3 -> level_start_x) and compares
@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import levelgen as G                                    # noqa: E402
 from game_lib import Harness, Proto, S, EMU_ARGS        # noqa: E402
 
-ORG = 0x6EC0                                            # free low RAM (above ORN_GLYPHS)
+ORG = S["LOWRAM_END_3B"]                                # free low RAM (above the LP state)
 RES = ORG + 40                                          # result bytes
 BASE = G.BASE
 
@@ -34,6 +34,8 @@ def stub(depth, ei=False):
             0x21, S["level_start_x"] & 255, S["level_start_x"] >> 8,
             0xCD, far3 & 255, far3 >> 8,
             0x78, 0x32, (RES + 1) & 255, (RES + 1) >> 8,
+            0x21, S["lp_budget"] & 255, S["lp_budget"] >> 8,    # LP (game.md §9.4.1)
+            0xCD, far3 & 255, far3 >> 8,
             0x00]
     return code
 
@@ -58,19 +60,22 @@ class T(Proto):
         self.extra_probes = set()
         blk = bytes(z.read_memory(BASE, G.BLOCK_LEN))
         r = bytes(z.read_memory(RES, 2))
-        return ok, ts, blk, r[0], r[1]
+        lp = bytes(z.read_memory(S["LP_STATE"], S["LP_LEN"]))
+        return ok, ts, blk, r[0], r[1], lp
 
 
 def case(h, p, depth, seed, master=0, tag="", ei=False):
     want = G.generate(depth, seed, master)
     wx = G.start_x(want)
-    ok, ts, blk, rc, sx = p.run(depth, seed, master, ei)
-    good = ok and rc == 0 and blk == want and sx == wx
+    ok, ts, blk, rc, sx, lp = p.run(depth, seed, master, ei)
+    wlp = G.lp_budget(want, p.rb("LVL"))
+    good = ok and rc == 0 and blk == want and sx == wx and lp == wlp
     if not good:
         d = next((i for i in range(len(want)) if blk[i] != want[i]), None)
         print(f"  FAIL d{depth} seed {seed:#06x} {tag}: ran={ok} rc={rc} first diff @{d}"
               f" got {blk[d] if d is not None else '-'} want {want[d] if d is not None else '-'}"
-              f" startx {sx}/{wx}", flush=True)
+              f" startx {sx}/{wx} lp_budget {'ok' if lp == wlp else lp.hex() + ' want ' + wlp.hex()}",
+              flush=True)
     h.expect(f"d{depth} seed {seed:#06x} {tag}", good, True) if not good else None
     return good, ts
 

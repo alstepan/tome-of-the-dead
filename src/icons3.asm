@@ -4,6 +4,9 @@
 ; intent3.asm, panel.asm). icon_poll / icon_sig / panel_more / print6x stay
 ; in bank 2 (icons.asm).
 ;==============================================================================
+                IF (($ & $FF) + 2 * ICON_SLOTS) > 256    ; LP: keep the table in one page
+                DS   256 - ($ & $FF), 0
+                ENDIF
 slot_act_tab:
                 ; Warrior: Sword, Power Strike, Whirlwind, Daggers, Bow, food, potion, scroll, Bag, -
                 DB SA_MELEE, SA_ABIL + 0, SA_ABIL + 1, SA_DAGGERS, SA_BOW

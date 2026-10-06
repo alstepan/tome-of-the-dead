@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""D3-1 combat-table check (no emulator). Reads the bank-3 block out of
+build/wazhack.tap (6th tape block: BASIC hdr/data, CODE hdr/data, bank-1
+headless, bank-3 headless at $C000), locates tables via build/wazhack.sym and
+compares every byte with a Python transcription written straight from
+docs/design/game.md (§4.1, §5, §6.0-6.3, §9.1, §11.4). Build first.
+Run: python3 tests/combat_tables.py"""
+import os
+import re
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE = 0xC000
+
+
+def load():
+    sym = {}
+    for ln in open(os.path.join(REPO, "build/wazhack.sym")):
+        m = re.match(r"(\S+): EQU 0x([0-9A-Fa-f]+)", ln)
+        if m:
+            sym[m.group(1)] = int(m.group(2), 16)
+    tap = open(os.path.join(REPO, "build/wazhack.tap"), "rb").read()
+    blocks, i = [], 0
+    while i < len(tap):
+        n = tap[i] | tap[i + 1] << 8
+        blocks.append(tap[i + 2:i + 2 + n])
+        i += 2 + n
+    b3 = blocks[5]
+    assert b3[0] == 0xFF, "bank-3 block flag"
+    return sym, b3[1:-1]
+
+
+# ---- independent transcription (game.md text) --------------------------------
+# damage types order §6.0: PHYS FIRE COLD SHOCK DRAIN DARK
+TYPES = ["PHYS", "FIRE", "COLD", "SHOCK", "DRAIN", "DARK"]
+RESP = {"N": 0, "R": 1, "I": 2, "X": 3}
+SLEEP, STUN, CONFUSE, FEAR, POISON = 1, 2, 4, 8, 16
+
+# kind id -> (name, {type: R/I/X/W}, imm mask, KXP) ; ids from defs.asm
+KINDS = {
+    0: ("Knight", {}, 0, 0),
+    1: ("Wizard", {}, 0, 0),
+    3: ("Skeleton", {"COLD": "I", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 6),
+    4: ("Goblin", {}, 0, 3),
+    5: ("Ghost", {"PHYS": "R", "COLD": "I", "SHOCK": "X", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 6),
+    6: ("Rat", {}, 0, 2),
+    7: ("Bat", {"SHOCK": "W"}, 0, 2),
+    8: ("Slime", {"PHYS": "R", "FIRE": "W"}, SLEEP | CONFUSE | FEAR, 3),
+}
+
+
+def kx_row(res, imm, xp):
+    b = [0, 0, 0]
+    for t, r in res.items():
+        i = TYPES.index(t)
+        if r == "W":
+            b[2] |= 1 << i
+        else:
+            b[i // 4] |= RESP[r] << (2 * (i % 4))
+    return b + [imm, xp, 0]   # DEF = 0 in 3D (§11.4)
+
+
+XP_NEXT = [40, 100, 200, 340, 500, 700, 920, 1150]          # levels 2..9
+LEVELUP = [(4, 1), (3, 2)]                                   # Warrior, Mage (HP, MP)
+STEPS = {4: (1, 0), 6: (0, 1), 8: (1, 0)}                    # level -> (atk, eva)
+
+# rank table, §5: (MP, range, die, bonus, bounces, effect) per rank 1..3, cumulative
+# effect: status = chance<<4 | turns; Firebolt = burst die (|$80 spare); Whirlwind = to-hit
+RANKS = {
+    "Spark":     [(1, 6, 4, 1, 0, 0x43), (1, 8, 4, 2, 0, 0x43), (1, 8, 4, 3, 0, 0x23)],
+    "Firebolt":  [(3, 12, 8, 2, 0, 4), (3, 12, 8, 3, 0, 6), (3, 12, 8, 4, 0, 0x86)],
+    "Frost":     [(3, 12, 6, 0, 1, 2), (3, 12, 6, 0, 2, 3), (3, 12, 6, 2, 2, 4)],
+    "Drain":     [(3, 5, 6, 1, 0, 0), (3, 8, 6, 2, 0, 0), (2, 8, 6, 3, 0, 0)],
+    "Lightning": [(5, 28, 8, 3, 2, 0), (5, 28, 8, 4, 2, 0), (4, 28, 8, 4, 3, 0)],
+    "Power":     [(3, 0, 0, 0, 0, 1), (2, 0, 0, 0, 0, 1), (2, 0, 0, 0, 0, 2)],
+    "Whirl":     [(4, 0, 0, 1, 0, 0), (4, 0, 0, 2, 0, 0), (3, 0, 0, 2, 0, 2)],
+}
+AMMO = [(0, 6, 4, 2, 0, 0), (0, 14, 6, 1, 0, 0)]             # dagger r6 1d4+2, bow r14 1d6+1
+
+# ab_def rows: dty, att1, att2, speed, flags, hit   (fids are FXF_NONE until D3-4)
+SPELL, PIERCE, BURST, HEAL, DMGX2, AOE, MELEE, AMMOF = 1, 2, 4, 8, 16, 32, 64, 128
+DEFS = [
+    (3, 0x43, 0x43, 8, SPELL, 0),                 # Spark SHOCK
+    (1, 0x46, 0x42, 8, SPELL | BURST, 0),         # Firebolt FIRE yellow/red
+    (2, 0x45, 0x45, 8, SPELL, 0),                 # Frost COLD
+    (4, 0x43, 0x43, 8, SPELL | HEAL, 0),          # Drain DRAIN
+    (3, 0x47, 0x47, 16, SPELL | PIERCE, 0),       # Lightning SHOCK 16 px/tick
+    (0, 0, 0, 0, MELEE | DMGX2, 2),               # Power Strike to-hit +2
+    (0, 0, 0, 0, MELEE | AOE, 0),                 # Whirlwind
+    (0, 0x47, 0x47, 8, AMMOF, 1),                 # dagger atk+1
+    (0, 0x07, 0x07, 8, AMMOF, 0),                 # bow
+]
+
+
+def main():
+    sym, m = load()
+    fails = []
+
+    def at(name):
+        return sym[name] - BASE
+
+    def chk(what, got, want):
+        if list(got) != list(want):
+            fails.append(f"{what}: got {list(got)} want {list(want)}")
+
+    chk("kx_tab base", [sym["kx_tab"]], [BASE])
+    kx = at("kx_tab")
+    for k in range(32):
+        want = kx_row(*KINDS[k][1:]) if k in KINDS else [0] * 6
+        chk(f"kx[{k}]", m[kx + 6 * k:kx + 6 * k + 6], want)
+    chk("kx_tab length (xpn_tab follows)", [sym["xpn_tab"] - sym["kx_tab"]], [192])
+
+    x = at("xpn_tab")
+    chk("xp_next", [m[x + 2 * i] | m[x + 2 * i + 1] << 8 for i in range(8)], XP_NEXT)
+    lu = at("lvlup_tab")
+    chk("lvlup", [(m[lu + 2 * c], m[lu + 2 * c + 1]) for c in (0, 1)], LEVELUP)
+    ls = at("lvl_step_tab")
+    chk("lvl_step", [(m[ls + 2 * i], m[ls + 2 * i + 1]) for i in range(8)],
+        [STEPS.get(lv, (0, 0)) for lv in range(2, 10)])
+
+    rk = at("ab_rank")
+    for a, (name, rows) in enumerate(RANKS.items()):
+        for r, row in enumerate(rows):
+            o = rk + (a * 3 + r) * 6
+            chk(f"rank {name} {r + 1}", m[o:o + 6], row)
+    am = at("ab_ammo")
+    for i, row in enumerate(AMMO):
+        chk(f"ammo {i}", m[am + 6 * i:am + 6 * i + 6], row)
+
+    df = at("ab_def")
+    for i, (dty, a1, a2, spd, fl, hit) in enumerate(DEFS):
+        r = m[df + 10 * i:df + 10 * i + 10]
+        chk(f"def {i} dty", [r[0]], [dty])
+        chk(f"def {i} attr/speed/flags/hit", r[5:10], [a1, a2, spd, fl, hit])
+        # fids: all four are the FXF_NONE placeholder (TODO D3-4) or a valid fid
+        if any(f != 0xFF and f >= 255 for f in r[1:5]):
+            fails.append(f"def {i} fid out of range")
+
+    n = 32 + 8 + 2 + 8 + 21 + 2 + 9
+    if fails:
+        print("combat_tables: FAIL")
+        for f in fails:
+            print("  ", f)
+        return 1
+    print(f"combat_tables: PASS ({n} table groups; kx 192 B, rank 126 B, ammo 12 B, ab_def 90 B)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -58,6 +58,7 @@ python3 tests/budget.py          # per-tick T-state budget (exit 1 if > 2 frames
 GAME_PROFILE=1 python3 tests/budget.py   # + per-phase split of the worst tick
 python3 tests/zx0_pool.py       # pool banks 0/4/6 + FRT + SEL_FRT_SAVE + allocator bit-exact vs a Python reference generator over the RAW frame data (B3B-12; the raw -DZX0_SOURCES=0 build is retired) at boot / each hero start / hero regen after a game / regen over a poked STALE GEN_ZBLK + garbage GEN_SCRATCH; GEN_TRAP 0; prints cold-path T-states (--baseline DIR: an old checkout against the same reference)
 python3 tests/world.py [W16 ...] # 3B world suite; W16 = level change (generated D1, descend D1->D8, win), W9R = door opened in the bank-3 monster phase
+python3 tests/gfx_integrity.py   # every runtime graphics table (tile glyphs / attrs / flags, ORN, FONT6 planes, vdata, menu art, bank-7 tilesets, bank-0 text, sprite pool + FRT) == its assembled source, at the menu and D1..D8 entry + play; playfield == ROOM_MAP in source glyphs (fix/3d-artefacts)
 python3 tests/zx0_roundtrip.py   # A4: every frame / kind block packs + unpacks bit-exact with the reference dzx0
 FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scenarios a/b/c); MEASUREMENT, not a pass/fail gate; A/B the order with -DRENDER_FIRST=0
 ```

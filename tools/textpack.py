@@ -80,6 +80,7 @@ WIDE_PREFIXES = ("info_", "ft_")
 INFO_FIELDS = (16, 28)  # info line: numbers from char 16, notes from char 28
 LOG_MAX = 32            # src/level_defs.asm (ASSERTed in the output too)
 MAX_TOKENS = 128
+MAX_STRINGS = 256      # D3-0: tx_ptr indexes 16-bit (ld l,a / add hl,hl); ids stay bytes
 MAX_ENTRY = 16          # longest dictionary entry considered
 
 
@@ -166,8 +167,9 @@ def read_source(path=SRC):
         out.append((name, text))
     if cur is not None:
         fail(f"{path}: @long {cur[0]} has no @end")
-    if len(out) > 128:
-        fail("more than 128 strings: tx_ptr indexes with `add a, a`")
+    if len(out) > MAX_STRINGS:
+        fail(f"more than {MAX_STRINGS} strings: ids are bytes (A / DB tables); "
+             "beyond that use tx_ptr_hl with 16-bit ids")
     if len(longs) > 64:
         fail("more than 64 long blocks")
     return out, longs
@@ -178,7 +180,8 @@ def read_strings(path=SRC):
 
 
 def count_uses(streams, cand):
-    """Non-overlapping left-to-right uses of literal `cand` in literal runs."""
+    """Non-overlapping left-to-right uses of literal `cand` in literal runs
+    (the reference definition; build_dict keeps the same counts incrementally)."""
     n, L = 0, len(cand)
     for st in streams:
         i = 0
@@ -192,27 +195,65 @@ def count_uses(streams, cand):
     return n
 
 
+def stream_counts(st):
+    """{substring: non-overlapping greedy uses} for every literal substring of
+    2..MAX_ENTRY chars of one stream = count_uses per candidate, in one pass:
+    positions ascend, so an occurrence counts iff it starts at or after the
+    end of the last counted one (per run; runs never share an occurrence)."""
+    cnt = {}
+    run = []
+    for it in st + [None]:
+        if isinstance(it, str):
+            run.append(it)
+            continue
+        r = "".join(run)
+        last = {}
+        n = len(r)
+        for i in range(n - 1):
+            for L in range(2, min(MAX_ENTRY, n - i) + 1):
+                c = r[i:i + L]
+                if last.get(c, 0) <= i:
+                    last[c] = i + L
+                    cnt[c] = cnt.get(c, 0) + 1
+        run = []
+    return cnt
+
+
 def build_dict(texts):
+    """Greedy dictionary (see the module docstring). Same choices as the
+    original full rescan (every candidate's count_uses each round, ~3 min on
+    200 strings), but the counts are kept incrementally: per-stream count maps
+    summed into `total`; a round re-counts only the streams the chosen entry
+    was substituted into, and the best is searched among the candidates used
+    at least twice (one use never saves: (L-1) - (L+2) < 0)."""
     streams = [list(t) for t in texts]
+    per = [stream_counts(st) for st in streams]
+    total, multi = {}, set()
+
+    def add(cnt, sign):
+        for c, n in cnt.items():
+            v = total.get(c, 0) + sign * n
+            if v:
+                total[c] = v
+            else:
+                del total[c]
+            if v >= 2:
+                multi.add(c)
+            else:
+                multi.discard(c)
+
+    for cnt in per:
+        add(cnt, 1)
     entries = []
     while len(entries) < MAX_TOKENS:
-        cands = set()
-        for st in streams:
-            run = []
-            for it in st + [None]:
-                if isinstance(it, str):
-                    run.append(it)
-                    continue
-                r = "".join(run)
-                for i in range(len(r)):
-                    for L in range(2, min(MAX_ENTRY, len(r) - i) + 1):
-                        cands.add(r[i:i + L])
-                run = []
         best = None
-        for c in cands:
-            g = count_uses(streams, c) * (len(c) - 1) - (len(c) + 2)
-            key = (g, len(c), [-ord(ch) for ch in c])
-            if g > 0 and (best is None or key > best[0]):
+        for c in multi:
+            L = len(c)
+            g = total[c] * (L - 1) - (L + 2)
+            if g <= 0 or (best is not None and (g, L) < best[0][:2]):
+                continue
+            key = (g, L, [-ord(ch) for ch in c])
+            if best is None or key > best[0]:
                 best = (key, c)
         if best is None:
             break
@@ -220,13 +261,18 @@ def build_dict(texts):
         tok = len(entries)
         entries.append(c)
         L = len(c)
-        for st in streams:
+        for k, st in enumerate(streams):
+            if c not in per[k]:
+                continue
             i = 0
             while i <= len(st) - L:
-                if all(isinstance(st[i + k], str) for k in range(L)) and \
+                if all(isinstance(st[i + j], str) for j in range(L)) and \
                         "".join(st[i:i + L]) == c:
                     st[i:i + L] = [tok]
                 i += 1
+            add(per[k], -1)
+            per[k] = stream_counts(st)
+            add(per[k], 1)
     return entries, streams
 
 
@@ -308,7 +354,7 @@ def emit(names, texts, ents, strs):
     ids += [f"TX_COUNT         EQU {n_s}", f"TX_TOKENS        EQU {n_t}",
             f"TEXT_RAW         EQU {raw}          ; 0-terminated plain strings",
             f"TEXT_PACKED      EQU {len(img)}     ; the whole text block (tables included)",
-            "                ASSERT TX_COUNT <= 128 && TX_TOKENS <= 128", ""]
+            f"                ASSERT TX_COUNT <= {MAX_STRINGS} && TX_TOKENS <= {MAX_TOKENS}", ""]
     asm = [
         "; " + "=" * 76,
         "; strings.asm — GENERATED by tools/textpack.py from src/strings.txt (B3B-13).",

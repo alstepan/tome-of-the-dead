@@ -34,8 +34,9 @@ BANK_POOL2      EQU 6
 BANK_SHADOW     EQU 7               ; clean-background shadow (R-1 erase lever), $E000..
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
 BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
-AY_RESERVE      EQU $E400           ; A8: bank 3 $E400..$FFFF = 7 KB AY player/music/FX reserve (game.md
-                                    ;     §11.2, user-approved 7 KB); cold code + sources end below
+AY_RESERVE      EQU $F000           ; A8 / D3-0: bank 3 $F000..$FFFF = 4 KB AY player/music/FX reserve
+                                    ;     (game.md §11.2, user 2026-10-06: 7 KB -> 4 KB, was $E400);
+                                    ;     cold code + sources end below
 AY_RESERVE_END  EQU $10000
 BANK_AY         EQU BANK_COLD3      ; the ISR pages it in around every AY_PLAY call
 AY_PLAY         EQU AY_RESERVE      ; A8 player slot entry, called once per frame by the ISR
@@ -58,8 +59,14 @@ BANK_WINDOW     EQU $C000
 FT_BLOCKER      EQU $FE             ; find_target: nearest body is mid-ladder (not a slot)
 PAGING_PROBE    EQU $A5             ; check_paging: bank-1 marker (bank 0 gets ~)
 SRC_VIRT_BASE   EQU $8000           ; sources are assembled at virtual $8000..$FFFF
-BANK_TEXT       EQU BANK_SRC_LO     ; B3B-13: the text block (strings + dictionary), after vdata
-TEXT_DISP       EQU BANK_WINDOW - SRC_VIRT_BASE   ; virtual bank-1 address -> runtime ($C000..)
+; D3-TX: the text block (strings + dictionary, B3B-13) moved out of bank 1 to
+; the BOTTOM of pool bank 0 (TEXT_ADDR..POOL_START, own headerless tape block);
+; the pre-shift pool starts above it (alloc_reset: ALLOC_PTR = POOL_START).
+; Read only through the helpers that page BANK_TEXT and hand $C000 back
+; (msg_push, impact_line, print6t, print6x, tx_dec); never in place.
+BANK_TEXT       EQU BANK_POOL0      ; uncontended (bank 1 was contended)
+TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
+TEXT_DISP       EQU BANK_WINDOW - SRC_VIRT_BASE   ; virtual bank-1 address -> runtime ($C000..): vdata, ui1_code
 BANK_UI1        EQU BANK_SRC_LO     ; C3-0: bank-1 UI code (ui1_code, after vdata; via far1)
 UI1_LIMIT       EQU $10000          ; ui1_code runs at $C000.. (DISPed by TEXT_DISP), ends below this
 TX_NONE         EQU $FF             ; level_enter / level_show / panel_init: E = no first line
@@ -80,6 +87,13 @@ TILE_ATTRS      EQU $6900           ; 64 B : attr per tile id (one page: ld h, T
 GEN_SRC         EQU $6940           ; 512 B: staging for vdata reads (panel_boot / pblit, copy_virt)
 GEN_MIR         EQU $6B40           ; 512 B: mirrored copy (left-facing)
 LOWRAM_END      EQU $6D40
+; D3-TX: tx_dec's decode buffer (a whole string, 0-terminated, readable with any
+; bank paged: bank-1 UI code can no longer read the text in place). The top of
+; GEN_MIR: transient (filled and consumed inside one menu call), above the
+; pause overlay's save (PAUSE_SAVE..+PAUSE_LEN, ASSERTed in menu1.asm); the
+; generator (its other user) never runs inside a menu text call.
+TX_DEC_LEN      EQU 43              ; textpack WIDE_MAX 42 + the 0
+TX_DEC          EQU LOWRAM_END - TX_DEC_LEN   ; $6D15..$6D3F
 TILE_IDS        EQU 64              ; tile id capacity (glyphs/attrs above)
 TILE_COMMON     EQU 32              ; ids 0..31: engine/common tiles (init_tiles)
 ; ids 32..63: per-level slots (game.md §1.2). B3B-8: level_load_tiles copies
@@ -207,10 +221,7 @@ ALLOC_IDX       EQU $BF42           ; pool bank index 0..2
 ALLOC_PTR       EQU $BF43           ; word: next free byte in the paged pool bank
 ALLOC_MARK_IDX  EQU $BF45           ; allocator mark after monsters+hero idles
 ALLOC_MARK_PTR  EQU $BF46           ; word
-ZAP_T           EQU $BF48           ; zap overlay ticks left
-ZAP_ROW         EQU $BF49
-ZAP_COL         EQU $BF4A
-ZAP_LEN         EQU $BF4B
+; $BF48..$BF4B: spare (D3-0: were ZAP_T / ZAP_ROW / ZAP_COL / ZAP_LEN, the PROTO zap)
 DMG_COUNT       EQU $BF4C           ; rects in DMG_LIST this render
 PEND_DMG_COUNT  EQU $BF4D
 EXIT_DEST       EQU $BF4E           ; destination room of the pending exit
@@ -327,7 +338,7 @@ E_FLA           EQU 19              ; flash attr
 E_MSG           EQU 20              ; message code shown at IMPACT
 E_TGT           EQU 21              ; IMPACT target slot
 E_HIT           EQU 22              ; IMPACT: 1 = hit (flash)
-E_ZAP           EQU 23              ; IMPACT: zap gap cells (wizard)
+; +23 spare (D3-0: was E_ZAP, the PROTO wizard zap)
 E_DVIS          EQU 24              ; drawn: bit0 visible, bit3 = facing left (EF_LEFT)
 E_DFID          EQU 25              ; drawn frame id
 E_DFPX          EQU 26              ; drawn frame px
@@ -348,6 +359,8 @@ EF_LEFT_BIT     EQU 3
 EF_PENDING_BIT  EQU 6
 EF_DYING_BIT    EQU 4
 EF_WALKIN_BIT   EQU 5
+EF_RESPAWN      EQU %10000000       ; LP: F_RESPAWN (game.md §9.5; no drops / half XP = 3F),
+EF_RESPAWN_BIT  EQU 7               ; carried through the room records (LEK_RESPAWN)
 
 ; E_MODE
 M_REST          EQU 0
@@ -393,6 +406,33 @@ K_RAT           EQU 6
 K_BAT           EQU 7
 K_SLIME         EQU 8
 K_COUNT         EQU 9
+; LP (game.md §9.4) stand-in aliases: the per-depth kind / boss rows that do not
+; exist yet map onto today's kinds of a similar body (3F adds the real rows and
+; replaces these EQUs; the LP tables in bank3.asm and tools/levelgen.py use the
+; names, so only this block changes).
+K_SPIDER        EQU K_RAT           ; small walker
+K_VAMPIRE       EQU K_SKELETON      ; tall walker
+K_ORC           EQU K_GOBLIN
+K_ARCHER        EQU K_SKELETON
+K_MUMMY         EQU K_SKELETON
+K_NECRO         EQU K_GOBLIN
+K_BOSS_D1       EQU K_GOBLIN        ; Golden Goblin King
+K_BOSS_D2       EQU K_SPIDER        ; Golden Spider Queen
+K_BOSS_D3       EQU K_VAMPIRE       ; Golden Vampire Lord
+K_BOSS_D4       EQU K_SKELETON      ; Ogre Warlord
+K_BOSS_D5       EQU K_MUMMY         ; Golden Pharaoh
+K_BOSS_D6       EQU K_NECRO         ; Golden High Necromancer
+K_BOSS_D7       EQU K_SKELETON      ; Death Knight
+K_BOSS_D8       EQU K_SKELETON      ; Archmage
+; §9.3 encounter weights (game.md §9.1 W column): lp_wt (bank 3) per kind row
+WT_K_KNIGHT     EQU 0
+WT_K_WIZARD     EQU 0
+WT_K_SKELETON   EQU 5
+WT_K_GOBLIN     EQU 3
+WT_K_GHOST      EQU 3
+WT_K_RAT        EQU 2
+WT_K_BAT        EQU 2
+WT_K_SLIME      EQU 2
 K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 18 needed)
 ; body height in cells per kind (single source: kind_tab KT_BH row and the FRM
 ; frame-height ASSERT both use these; named BH_<kind> so FRM can paste `kind`)
@@ -432,7 +472,7 @@ KF_CLIMBER      EQU %00000010
 KF_TALL         EQU %00000100
 KF_HERO         EQU %00001000
 KF_BAT          EQU %00010000       ; bat jitter / wander
-KF_ZAP          EQU %00100000       ; wizard zap overlay on impact
+; %00100000 spare (D3-0: was KF_ZAP, the PROTO wizard zap)
 KF_OPENER       EQU %01000000       ; B3B-5: opens closed unlocked doors by bumping (game.md §9.1)
 
 ;------------------------------------------------------------------------------
@@ -502,8 +542,7 @@ T_HOLE_M        EQU 8
 T_HOLE_R        EQU 9
 T_POTION        EQU 10
 ; (B3B-13: the PROTO chest stand-in T_CHEST_* (per-level ids 32..35) and the
-; zap tile ids T_ZAP1/2 (now T_DRIP1/2; the zap glyphs moved to ZAP_GLYPHS,
-; level_defs.asm) are gone.)
+; zap tile ids T_ZAP1/2 (now T_DRIP1/2) are gone; D3-0: the zap itself too.)
 T_TORCH_T       EQU 15
 T_TORCH_B       EQU 16
 T_END_L         EQU 19              ; PLATFORM_END_L: floor cell right of a hole
@@ -519,7 +558,6 @@ ATTR_POTION     EQU $42
 ATTR_TORCH      EQU $46
 ATTR_HIT        EQU $42
 ATTR_HEAL       EQU $44
-ATTR_ZAP        EQU $45
 ATTR_HUD        EQU $47             ; bright white on black (screen clear; panel text, depth)
 
 ; room geometry: STOREY_COUNT / STOREY_ROWS / PLAY_ROWS ... (level_defs.asm, B3B-3)
@@ -529,8 +567,6 @@ FOLLOW_GAP      EQU 4
 FOLLOW_MAX      EQU 2
 ROOM_CAP        EQU 4               ; monsters per room (on-screen cap)
 TALL_CAP        EQU 2
-ZAP_ROW_OFF     EQU 2               ; wizard staff row, body-relative (cast2 orb)
-ZAP_TICKS       EQU 3
 FLASH_TICKS     EQU 2
 EXIT_NONE       EQU $FF
 TICK_FRAMES     EQU 2               ; 25 Hz
@@ -626,6 +662,7 @@ SYM             EQU FF_SYM
 ;------------------------------------------------------------------------------
                 INCLUDE "level_defs.asm"
                 INCLUDE "hero_defs.asm"         ; C3-0: Stage 3C contracts (HERO_ST, JOY_MIRROR, KEYTAB)
+                INCLUDE "combat_defs.asm"       ; D3-0: Stage 3D state homes + layouts (ST_*, FXREC, KX, ...)
 ; B3B-13: message string ids TX_* / decoded lengths TXL_* (+ ASSERT <= LOG_MAX),
 ; generated from src/strings.txt by tools/textpack.py (tools/build.sh)
                 INCLUDE "../build/text/strings_ids.inc"

@@ -1133,7 +1133,7 @@ def w20(p, check):
 
 
 
-W22_KEYS = dict(W19_KEYS, SYM=(7, 1), B=(7, 4))
+W22_KEYS = dict(W19_KEYS, SYM=(7, 1), B=(7, 4), Y=(5, 4))
 
 
 def w22_23(p, check, which):
@@ -1778,6 +1778,22 @@ def w24(p, check):
         p.tick(10)
         check("W24 BREAK pauses; QUIT asks Y/N, another key = no, FIRE = yes -> the menu",
               asked and back and p.rb("GAME_STATE") == GS_SELECT, (asked, back, p.rb("GAME_STATE")))
+        # D3-0 (user): the Y key is yes too
+        hold()
+        tap("1")
+        p.wait_state(GS_PLAYING, 400)
+        p.settle(2)
+        hold("CAPS", "SPACE")
+        p.tick(2)
+        hold()
+        p.tick(3)
+        tap("P")                                     # -> QUIT
+        tap("SPACE")                                 # QUIT? Y/N
+        asked = menu_text_ok(p, p.frame(), 8, 11, "QUIT? Y/N")
+        tap("Y")                                     # yes
+        p.tick(10)
+        check("W24 QUIT? Y/N: the Y key = yes -> the menu (D3-0)",
+              asked and p.rb("GAME_STATE") == GS_SELECT, (asked, p.rb("GAME_STATE")))
         # death card
         hold()
         tap("1")
@@ -2831,54 +2847,20 @@ def bank3_bytes(p, addr, n):
         p.z.cmd("set-memory-zone -1")
 
 
-def pop_model(p, blk, depth):
-    """The stand-in population (bank3.asm level_populate), written from its
-    rule: [(kind, room, x, y, flags, hp)] in slot order 1..15."""
-    kinds = bank3_bytes(p, S["pop_kinds"], S["POP_KINDS"])
-    cols = bank3_bytes(p, S["pop_cols"], 18)
-    kt = S["kind_tab"]
-    rd = lambda r, k: room_model.field(blk, r, k)  # noqa: E731
-    start = blk[S["LVL_START"] - room_model.BASE]
-
-    def hits(r, s_, lo, hi):
-        fp = ("RD_UPCOL", "RD_ARRCOL", "RD_LAD1", "RD_LAD2") if s_ == 0 else \
-             ("RD_DNCOL", "RD_EXITCOL", "RD_LAD1", "RD_LAD2")
-        for k in fp:
-            f = rd(r, k)
-            if f and f <= hi and f + 2 >= lo:
-                return True
-        pit = rd(r, "RD_PITCOL")
-        if s_ == 0 and pit and pit - 1 <= hi and pit + 3 >= lo:
-            return True
-        if s_ == 1 and pit and pit <= hi and pit + 2 >= lo:     # the fall's landing cols
-            return True
-        bl = rd(r, "RD_BLOCK")
-        if bl and (bl >> 6) & 1 == s_:
-            w = bl & S["RDB_WMASK"]
-            if (bl & 0x80 and hi + w >= 31) or (not bl & 0x80 and w >= lo):
-                return True
-        return False
-    out = []
-    for r in range(9):
-        if r == start or not rd(r, "RD_FLAGS") & S["RDF_PRESENT"]:
-            continue
-        for e in range(2):
-            if len(out) == 15:
-                return out
-            k = kinds[(r + 3 * e + depth) % 6]
-            w, h = p.rb(kt + S["KT_BW"] + k), p.rb(kt + S["KT_BH"] + k)
-            fly = p.rb(kt + S["KT_FLAGS"] + k) & S["KF_FLYER"]
-            m, s_, x = (3 if fly else 1), 1 - e, cols[2 * r + e]
-            for _ in range(S["POP_TRIES"]):
-                if not hits(r, s_, x - m, x + w - 1 + m):
-                    y = 9 * s_ + 1 if fly else 9 * s_ + 8 - h
-                    fl = EF_ACTIVE | EF_HOSTILE | (EF_LEFT if x >= 15 else 0)
-                    out.append((k, r, x, y, fl, p.rb(kt + S["KT_HP"] + k)))
-                    break
-                x += 3
-                if x > S["POP_XMAX"]:
-                    x -= S["POP_XMAX"] + 1 - S["POP_XMIN"]
-    return out
+def lp_model(p, blk):
+    """LP (game.md §9.4.1): the level budget + the start room's entry (quota 0:
+    no monster; record VISITED, ROOM_VISITS[start] = 1), from tools/levelgen.py.
+    The scratch bytes LP_HX..ROOM_VISITS are masked."""
+    import levelgen as G
+    st = blk[S["LVL_START"] - room_model.BASE]
+    kw = p.rb(S["kind_tab"] + S["KT_BW"] + p.ent(0)["KIND"])
+    lp, out = G.lp_enter(blk, G.lp_budget(blk, p.rb("LVL")), st, 0, p.ent(0)["X"], kw)
+    lp = bytearray(lp)
+    lp[S["ROOM_VISITS"] - S["LP_STATE"] + st] += 1
+    got = bytearray(p.z.read_memory(S["LP_STATE"], S["LP_LEN"]))
+    for i in range(S["LP_HX"] - S["LP_STATE"], S["ROOM_VISITS"] - S["LP_STATE"]):
+        lp[i] = got[i] = 0
+    return bytes(got), bytes(lp), out
 
 
 def w16_level(p, check):
@@ -2926,14 +2908,11 @@ def w16_level(p, check):
               (p.rb("LVL_ATTR_FLOOR"), p.rb("LVL_ATTR_WALL")) == (fa, wa)
               and bytes(p.z.read_memory(lvl, 256)) == bank7(p, slot, 256),
               (hex(p.rb("LVL_ATTR_FLOOR")), hex(p.rb("LVL_ATTR_WALL"))))
-        mods = pop_model(p, blk, d)
-        got = []
-        for s_ in range(1, 16):
-            q = p.ent(s_)
-            got.append((q["KIND"], q["ROOM"], q["X"], q["Y"], q["FLAGS"], q["HP"]) if q["FLAGS"] else None)
-        check(f"W16 {tag}: population == the stand-in rule ({len(mods)} monsters, start room empty)",
-              got[:len(mods)] == mods and all(g is None for g in got[len(mods):])
-              and not any(m[1] == st for m in mods), (got, mods))
+        got_lp, want_lp, out = lp_model(p, blk)
+        got = [s_ for s_ in range(1, 16) if p.ent(s_)["FLAGS"]]
+        check(f"W16 {tag}: LP block == levelgen.lp_budget + the start room's entry; "
+              "no monster slot (start quota 0, game.md §9.4.1)",
+              got_lp == want_lp and out == [] and got == [], (got_lp.hex(), want_lp.hex(), got))
         bad = placement_props(blk)
         check(f"W16 {tag}: every monster clear of holes / ladders / pit cells in its built room "
               "(property check on the engine's maps)", bad == [], bad[:4])
@@ -3156,6 +3135,19 @@ def w16_level(p, check):
         p.wb("INPUT_REPEAT", 0)
         p.wb("ANIM_FREEZE", 1)
         p.wb("INPUT_SRC", 1)
+        # D3-0: the 3D status arrays + HERO3D are runtime RAM (garbage at
+        # boot): new_game must zero all of them, slot 0 included
+        ST = ("ST_FLAGS", "ST_T1", "ST_T2", "ST_X")
+        h3 = S["HERO3D_END"] - S["HERO3D"]
+
+        def st_poke(v):
+            for a in ST:
+                p.z.cmd("write-memory %d %s" % (S[a], " ".join([str(v)] * 16)))
+
+        def st_read():
+            return {a: list(p.z.read_memory(S[a], 16)) for a in ST}
+        st_poke(0xA5)
+        p.z.cmd("write-memory %d %s" % (S["HERO3D"], " ".join(["165"] * h3)))
         p.hold("1")
         p.wait_state(GS_PLAYING)
         fresh_ok("D1 start")                     # the first wait_tick of the game
@@ -3163,6 +3155,9 @@ def w16_level(p, check):
         p.settle(3)
         check("W16 new game: MASTER_SEED = seed_value (seed_fixed), LVL_SEED = master + MUL",
               (p.rw("MASTER_SEED"), p.rb("LVL_DEPTH")) == (M, 1), hex(p.rw("MASTER_SEED")))
+        check("W16 new game (D3-0): ST_* arrays (all 16 slots) and HERO3D zeroed",
+              (st_read(), list(p.z.read_memory(S["HERO3D"], h3)))
+              == ({a: [0] * 16 for a in ST}, [0] * h3), st_read())
         blk = level_ok(1, M, "D1 start")
         hero_k = tuple(p.ent(0)[k] for k in ("HP", "MAXHP", "POT", "KIND"))
         # level_enter cost (cold), measured on its own (DI: no ISR; screen /
@@ -3170,6 +3165,7 @@ def w16_level(p, check):
         d1 = room_model.read_block(p)
         lair_visit("D1")                        # B12
         # ---- descend D1 -> D2 by walking onto the exit -----------------
+        st_poke(0x5A)                           # D3-0: hero status must carry
         ran, cards, fr_n = to_exit(blk, "D1")
         check("W16 D1 -> D2: J on {EXITCOL,2} is one turn (first step animated) + the level change",
               ran, "")
@@ -3177,6 +3173,9 @@ def w16_level(p, check):
               len(cards) == 1 and cards[0][1] in (1, 2) and card_ok(cards[0][0], 2), len(cards))
         info["descend D1->D2 frames (input tick .. idle)"] = fr_n
         blk2 = level_ok(2, M, "D2 after descend", hero_keep=hero_k)
+        check("W16 D2 (D3-0 HERO_CARRY): ST_* slot 0 carried, slots 1..15 cleared by level_reset",
+              st_read() == {a: [0x5A] + [0] * 15 for a in ST}, st_read())
+        st_poke(0)
         check("W16 D2: colours / tileset differ from D1",
               d1[S["LVL_ATTR_FLOOR"] - room_model.BASE] != blk2[S["LVL_ATTR_FLOOR"] - room_model.BASE], "")
         # ---- room change + re-entry on the new level -------------------

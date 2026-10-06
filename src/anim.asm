@@ -7,7 +7,7 @@
 ; the desired frame into R_VIS/R_FID (SLOTREC). render then diffs desired vs drawn:
 ;   erase changed sprites (tile-map restore = bitmap + attr, §4.3), repair
 ;   overlapping sprites (FORCE re-blit, cascading), draw in slot order with the
-;   player last, stamp exact-footprint attrs, overlay the zap, tick timers.
+;   player last, stamp exact-footprint attrs, tick timers.
 ;==============================================================================
 
 ; KFIELD variant that preserves HL.
@@ -430,7 +430,7 @@ cycle_frame:
 
 ;------------------------------------------------------------------------------
 ; do_impact — IX = attacker reaching its IMPACT entry (§6.5): target hit flash,
-; wizard zap overlay, HUD message.  Clobbers: all but IX.
+; HUD message.  Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 do_impact:
                 ld   a, (ix+E_HIT)
@@ -442,12 +442,7 @@ do_impact:
                 ld   (ix+E_FLT), FLASH_TICKS
                 ld   (ix+E_FLA), ATTR_HIT
                 pop  ix
-.nohit:         ld   a, (ix+E_ZAP)
-                or   a
-                jr   z, .nozap
-                ld   a, ZAP_TICKS
-                ld   (ZAP_T), a
-.nozap:         call ix_slot                   ; queue the HUD line: printed once
+.nohit:         call ix_slot                   ; queue the HUD line: printed once
                 inc  a                         ; at the end of anim_tick (the last
                 ld   (MSG_Q), a                ; impact of a tick wins)
                 ret
@@ -844,10 +839,9 @@ render:
                 call draw_slot
 .nopl:
 
-                ; ---------------- 5. zap overlay, 6. timers ---------------------
-                call frozen                    ; C3-2b: ICON MODE holds the zap
-                ret  z                         ; frames and the timers
-                call draw_zap
+                ; ---------------- 5. timers (D3-0: the zap overlay is gone) ----
+                call frozen                    ; C3-2b: ICON MODE holds the
+                ret  z                         ; timers
                 ld   hl, P_ENTITIES + E_FLT    ; A7b: HL walk, 47 T/slot (was 63)
                 ld   de, P_ENT_STRIDE
                 ld   b, P_MAX_ENT
@@ -857,20 +851,7 @@ render:
                 dec  (hl)
 .tn:            add  hl, de
                 djnz .t
-                ld   a, (ZAP_T)
-                or   a
-                ret  z
-                dec  a
-                ld   (ZAP_T), a
-                ret  nz
-                ld   a, (ZAP_COL)              ; zap over: restore its cells next tick
-                ld   c, a
-                ld   a, (ZAP_ROW)
-                ld   b, a
-                ld   a, (ZAP_LEN)
-                ld   d, a
-                ld   e, 1
-                jp   queue_damage
+                ret
 
 ;------------------------------------------------------------------------------
 ; draw_slot — blit/stamp ANIM_SLOT per its dirty class; update drawn state.
@@ -1058,112 +1039,7 @@ dmg_hit:
                 ret                            ; CF = 0 from the failing jr nc
 
 ;------------------------------------------------------------------------------
-; draw_zap — wizard zap overlay: ZAP1/ZAP2 alternating per tick in the gap
-; cells of the staff row, skipping cells under any drawn sprite (zap_covered);
-; marks the run for present (A7).
-; Clobbers: A, BC, DE, HL, IX
-;------------------------------------------------------------------------------
-draw_zap:
-                ld   a, (ZAP_T)
-                or   a
-                ret  z
-                ld   a, (ZAP_LEN)
-                ld   b, a
-                ld   a, (ZAP_COL)
-                ld   c, a
-                push bc                        ; A7: the overlay is not in DMG_LIST:
-                ld   d, b                      ; mark its whole row run for present
-                ld   e, 1
-                ld   a, (ZAP_ROW)
-                ld   b, a
-                call pmark_rect
-                pop  bc
-.l:             push bc
-                call zap_covered               ; a drawn sprite's cell (hero,
-                jr   c, .skip                  ; or a wide / HURT target): keep it
-                ld   a, (ZAP_ROW)
-                ld   b, a
-                ld   a, (TICK_COUNTER)
-                and  1
-                add  a, a
-                add  a, a
-                add  a, a
-                ld   l, a                      ; (ZAP_GLYPHS & $FF) == 0: L = frame * 8
-                ld   h, ZAP_GLYPHS >> 8        ; B3B-13: own glyphs, ids 17/18 = drips
-                ld   a, ATTR_ZAP
-                call draw_glyph
-.skip:          pop  bc
-                inc  c
-                djnz .l
-                ret
-
-; zap_covered — CF = 1 if cell (col C, ZAP_ROW) lies in any drawn sprite's
-; footprint. The bolt only fills empty gap cells (§6.5): it never overwrites a
-; sprite's pixels or attrs (review C A5). ~90 T per RLIST entry, zap ticks only.
-; Preserves BC.  Clobbers: A, DE, HL, IX
-zap_covered:
-                ld   a, (RLIST_N)
-                or   a
-                ret  z                         ; CF = 0
-                ld   d, a
-                ld   hl, RLIST
-.l:             ld   a, (hl)
-                push de
-                call ent_ix
-                pop  de
-                bit  0, (ix+E_DVIS)
-                jr   z, .n
-                ld   a, (ZAP_ROW)
-                sub  (ix+E_DROW)
-                jr   c, .n
-                cp   (ix+E_DROWS)
-                jr   nc, .n
-                ld   a, c
-                sub  (ix+E_DCOL)
-                jr   c, .n
-                cp   (ix+E_DCOLS)
-                jr   nc, .n
-                scf
-                ret
-.n:             inc  hl
-                dec  d
-                jr   nz, .l
-                or   a                         ; CF = 0
-                ret
-
-; draw_glyph — 8 B glyph HL into cell (row B, col C) with attr A.
-; Clobbers: A, DE, HL
-draw_glyph:
-                push hl
-                push af
-                call attr_addr
-                pop  af
-                ld   (hl), a
-                ld   a, b
-                and  $18
-                or   SCREEN_BITMAP >> 8
-                ld   d, a
-                ld   a, b
-                rrca
-                rrca
-                rrca
-                and  $E0
-                or   c
-                ld   e, a
-                pop  hl
-                ld   a, 8
-.g:             push af
-                ld   a, (hl)
-                ld   (de), a
-                inc  hl
-                inc  d
-                pop  af
-                dec  a
-                jr   nz, .g
-                ret
-
-;------------------------------------------------------------------------------
-; hide_sprites — erase every drawn sprite + the zap + queued damage (before a
+; hide_sprites — erase every drawn sprite + queued damage (before a
 ; transition: "all sprites are hidden", §3.6). Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 hide_sprites:
@@ -1183,20 +1059,7 @@ hide_sprites:
                 inc  a
                 cp   P_MAX_ENT
                 jr   c, .l
-                ld   a, (ZAP_T)
-                or   a
-                jr   z, .nz
-                xor  a
-                ld   (ZAP_T), a
-                ld   a, (ZAP_COL)
-                ld   c, a
-                ld   a, (ZAP_ROW)
-                ld   b, a
-                ld   a, (ZAP_LEN)
-                ld   d, a
-                ld   e, 1
-                call erase_rect
-.nz:            ld   a, (PEND_DMG_COUNT)
+                ld   a, (PEND_DMG_COUNT)
                 or   a
                 ret  z
                 ld   b, a

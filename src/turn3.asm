@@ -53,7 +53,7 @@ try_quaff:
 ; do_attack — IX = attacker, A = target slot. Rolls to-hit (d20+atk >= 10+eva)
 ; then damage (1dN+bonus, saturating) — prototype §6.2, foundations F1/F2.
 ; Sets the attacker's ATTACK sequence + IMPACT info and the target's reaction.
-; TMP3 = gap (from find_target, for the wizard zap). Clobbers: all but IX.
+; Clobbers: all but IX.
 ; Entered by far3 from try_horizontal (hero) and directly from attack_if_reach
 ; (monsters, already in bank 3).
 ;------------------------------------------------------------------------------
@@ -139,32 +139,7 @@ do_attack:
                 inc  hl
                 ld   h, (hl)
                 ld   l, a
-                call start_seq
-                ld   (ix+E_ZAP), 0             ; wizard zap: gap cells, staff row
-                KFIELD KT_FLAGS
-                and  KF_ZAP
-                ret  z
-                ld   a, (TMP3)                 ; gap
-                or   a
-                ret  z
-                ld   (ZAP_LEN), a
-                ld   (ix+E_ZAP), 1
-                ld   hl, wz_zap                ; C3-7: ranged zap = CAST1 -> CAST2;
-                call start_seq                 ; KS_ATTACK is the staff melee (gap 0)
-                ld   a, (ix+E_Y)
-                add  a, ZAP_ROW_OFF
-                ld   (ZAP_ROW), a
-                bit  EF_LEFT_BIT, (ix+E_FLAGS)
-                jr   nz, .zl
-                KFIELD KT_BW
-                add  a, (ix+E_X)
-                ld   (ZAP_COL), a              ; right of the body
-                ret
-.zl:            ld   a, (ix+E_X)
-                ld   hl, ZAP_LEN
-                sub  (hl)
-                ld   (ZAP_COL), a              ; left of the body
-                ret
+                jp   start_seq
 
 ;------------------------------------------------------------------------------
 ; set_reaction_at — IX = target, C = RC_*, attacker = (ATK_PTR). Priority:

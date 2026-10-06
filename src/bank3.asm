@@ -1,7 +1,7 @@
 ;==============================================================================
 ; bank3.asm — COLD code paged in at $C000 from bank 3 (docs/memory-map.md
 ; "Bank 3"). Assembled right after the sprite-source tail, below the AY
-; reserve (AY_RESERVE, $E400, A8). Entered ONLY through far3 (gfx.asm), which pages
+; reserve (AY_RESERVE, $F000 since D3-0; A8). Entered ONLY through far3 (gfx.asm), which pages
 ; bank 3 in and puts the caller's $C000 bank back on return.
 ;
 ; Rule: nothing here may page $C000 directly (it would unmap the code that is
@@ -20,6 +20,15 @@
 ; the select screen idles in HALT; the scrolls are dominated by contended
 ; screen LDI anyway).
 ;==============================================================================
+
+;------------------------------------------------------------------------------
+; kx_tab — D3-0 (R2): the per-kind extension table (combat_defs.asm "KX"),
+; K_MAX rows x KX_STRIDE B, first in bank 3 so it sits in one page (`ld h`,
+; L = kind * 6). Reserved here, zero = no resistance / immunity, 0 XP, DEF 0;
+; D3-1: combat_data3.asm defines kx_tab here (+ the other combat tables).
+;------------------------------------------------------------------------------
+                INCLUDE "combat_data3.asm"    ; D3-1: kx_tab rows + XP / level-up / ability tables
+                ASSERT (kx_tab & $FF) + KX_LEN <= 256
 
 ; sel_run (the PROTO hero select): replaced by the C3-6 menu (menu1.asm, bank 1).
 
@@ -61,7 +70,7 @@ new_game:
                 ld   (CUR_ROOM), a
                 ld   (TURN_PHASE), a
                 ld   (NEED_RELEASE), a
-                call level_reset               ; per-level state + the entity table
+                call level_reset_new           ; per-level state + the entity table (+ hero 3D state)
                 ; --- hero, slot 0 ---
                 ld   ix, P_ENTITIES
                 ld   a, (HERO_KIND)
@@ -126,7 +135,6 @@ level_reset:
                 xor  a
                 ld   (POTIONS_TAKEN), a        ; bits index this level's FLOOR_LIST
                 ld   (EXIT_KIND), a
-                ld   (ZAP_T), a
                 ld   (MSG_Q), a
                 ld   (PEND_DMG_COUNT), a
                 ld   (FLY_INBOX), a            ; 0 outside ai_flyer (try_step reads it)
@@ -139,7 +147,39 @@ level_reset:
                 ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1
                 ld   (hl), a
                 ldir
+                ; D3-0: status arrays, slots 1..15 (slot 0 = the hero's,
+                ; carried over a descend: HERO_CARRY rule; new_game clears it
+                ; through level_reset_new). A = 0. ~1.4k T, once per level.
+                ld   hl, ST_FLAGS + 1
+                call .st
+                ld   l, (ST_T1 + 1) & $FF      ; same page (combat_defs ASSERT)
+                call .st
+                ld   l, (ST_T2 + 1) & $FF
+                call .st
+                ld   hl, ST_X + 1
+.st:            ld   b, ST_SLOTS - 1
+.stl:           ld   (hl), a
+                inc  l                         ; one page per array (FONT6_HOLE)
+                djnz .stl
                 ret
+
+;------------------------------------------------------------------------------
+; level_reset_new — new_game: level_reset + the hero's own 3D state (slot 0's
+; status bytes, HERO3D: MP regen, resistances, immunity, panel shadows).
+; Clobbers: A, BC, DE, HL.
+;------------------------------------------------------------------------------
+level_reset_new:
+                xor  a
+                ld   (ST_FLAGS), a
+                ld   (ST_T1), a
+                ld   (ST_T2), a
+                ld   (ST_X), a
+                ld   hl, HERO3D
+                ld   b, HERO3D_END - HERO3D
+.z:             ld   (hl), a
+                inc  l
+                djnz .z
+                jr   level_reset
 
 ;------------------------------------------------------------------------------
 ; spawn_one — IX = free slot: A = kind, D = room, E = body-left col, C =
@@ -270,8 +310,18 @@ follow_select:
                 inc  a
                 cp   P_MAX_ENT
                 jp   c, .cl
-                ; --- destination population ---
-                call dest_counts               ; TMP3 = alive, TMP4 = tall
+                ld   a, (LVL_DEPTH)            ; LP (game.md §9.4.3): the candidates
+                or   a                         ; wait; lp_transition admits them after
+                ret  nz                        ; the destination's residents spawned
+;------------------------------------------------------------------------------
+; follow_admit — the admission half of follow_select (CAND_LIST / CAND_GAP
+; filled): candidates in (gap, slot) order against the destination's
+; population (dest_counts) until FOLLOW_MAX: PROTO rooms <= ROOM_CAP alive and
+; <= TALL_CAP tall; LP <= ROOM_CAP and sum weight <= LP_SIGMA_CAP (§9.3).
+; Admitted -> place_follower. Clobbers: all but IY.
+;------------------------------------------------------------------------------
+follow_admit:
+                call dest_counts               ; TMP3 = alive, TMP4 = tall (LP: sum weight)
                 ; --- admit in (gap, slot) order ---
 .pick:          ld   a, (FOLLOW_N)
                 cp   FOLLOW_MAX
@@ -308,11 +358,24 @@ follow_select:
                 add  hl, de
                 ld   (hl), $FF
                 call ent_ix
-                ; caps: alive + 1 <= ROOM_CAP ; tall + 1 <= TALL_CAP
+                ; caps: alive + 1 <= ROOM_CAP ; tall + 1 <= TALL_CAP (PROTO)
+                ; or sum weight + w <= LP_SIGMA_CAP (LP, §9.3)
                 ld   a, (TMP3)
                 cp   ROOM_CAP
                 jr   nc, .pick                 ; rejected, stays
-                KFIELD KT_FLAGS
+                ld   a, (LVL_DEPTH)
+                or   a
+                jr   z, .tall
+                ld   a, (ix+E_KIND)
+                ld   hl, lp_wt
+                call hla
+                ld   a, (TMP4)
+                add  a, (hl)
+                cp   LP_SIGMA_CAP + 1
+                jr   nc, .pick
+                ld   (TMP4), a
+                jr   .admit
+.tall:          KFIELD KT_FLAGS
                 and  KF_TALL
                 jr   z, .admit
                 ld   a, (TMP4)
@@ -327,7 +390,10 @@ follow_select:
                 call place_follower
                 jr   .pick
 
-; dest_counts — TMP3 = active monsters (incl. pending) in EXIT_DEST, TMP4 = tall.
+; dest_counts — TMP3 = active monsters (incl. pending) in EXIT_DEST, TMP4 =
+; tall (PROTO) / sum weight (LP: + the residents still in the destination's
+; record, the ones lp_enter found no cell for, so a room never exceeds the
+; §9.3 cap when they spawn next time).
 dest_counts:
                 xor  a
                 ld   (TMP3), a
@@ -344,6 +410,10 @@ dest_counts:
                 jr   nz, .n
                 ld   hl, TMP3
                 inc  (hl)
+                ld   a, (LVL_DEPTH)
+                or   a
+                ld   a, (ix+E_KIND)
+                jr   nz, .w
                 KFIELD KT_FLAGS
                 and  KF_TALL
                 jr   z, .n
@@ -353,6 +423,35 @@ dest_counts:
                 inc  a
                 cp   P_MAX_ENT
                 jr   c, .l
+                ld   a, (LVL_DEPTH)
+                or   a
+                ret  z
+                ld   a, (EXIT_DEST)            ; LP: + the record's entries
+                call lp_rec
+                ld   a, (hl)
+                and  LR_CNT_MASK
+                ret  z
+                ld   b, a
+                ld   a, (TMP3)
+                add  a, b
+                ld   (TMP3), a
+.r:             inc  hl
+                ld   a, (hl)                   ; LE_KIND
+                inc  hl
+                and  LEK_KIND_MASK
+                call .wt
+                djnz .r
+                ret
+.w:             call .wt
+                jr   .n
+; .wt: A = kind -> TMP4 += lp_wt[kind]. Keeps BC, HL.
+.wt:            push hl
+                ld   hl, lp_wt
+                call hla
+                ld   a, (TMP4)
+                add  a, (hl)
+                ld   (TMP4), a
+                pop  hl
                 ret
 
 ; place_follower — IX = admitted follower: room <- dest, PENDING, entry spot.
@@ -542,11 +641,12 @@ SPAWN_COUNT     EQU ($ - spawn_tab) / 5
 ; (level_defs.asm: why additive), level_gen until it succeeds (B = 1 + CF:
 ; 16 reseeds exhausted, LVL_SEED already advanced by 16 -> just call again;
 ; D8 seeds 55352..55354 exhaust once; at most 2 calls: the longest run of
-; failing seeds is 18 < 32, tools/levelgen_runs.py), then the
-; stand-in population (level_populate). LG_* scratch = GEN_SCRATCH: called
-; only before the first room is built (level_enter). No gen_kind here: the 3B
-; stand-in kinds are all in the boot pool (3F's per-level pool goes between
-; level_gen and the build, after alloc_restore). Pages nothing.
+; failing seeds is 18 < 32, tools/levelgen_runs.py), then level_populate
+; (hero + the LP budget, game.md §9.4.1). LG_* scratch = GEN_SCRATCH: called
+; only before the first room is built (level_enter). No gen_kind here: every
+; kind of lp_dtab (stand-in aliases included) is in the boot pool (3F's
+; per-level pool from LP_KINDS + LP_BOSS goes between level_gen and the
+; build, after alloc_restore). Pages nothing.
 ; Clobbers: all but IY.   level_gen ~0.1-0.6M T per call (W16 reports)
 ;------------------------------------------------------------------------------
 level_new:
@@ -563,30 +663,19 @@ level_new:
                 jr   z, .g                     ; 1 -> retry from LVL_SEED + 16
                 ; fall through
 ;------------------------------------------------------------------------------
-; level_populate — the hero and the 3B stand-in monsters (game.md §1.4: a
-; fixed per-room table, today's kinds) into an emptied entity table.
-; Hero (slot 0): kind / HP / MAXHP / potions / facing carried over, room =
-; LVL_START, x = level_start_x, standing on storey 0 (game.md §1.1 gaps (4)),
-; CUR_ROOM = LVL_START. Monsters: every present room but the start room
-; (0 monsters) gets pop_cols' 2 entries — entry e on storey 1 - e, kind =
-; pop_kinds[(r + 3e + depth) mod 6] (a walker / flyer-or-slime pair per room,
-; rotating with the depth) — until the 15 monster slots are full (rooms in id
-; order; a 9-room level drops its last room's 2nd monster). Col: the table's,
-; else +3 (wrapping in POP_XMIN..POP_XMAX) up to POP_TRIES times, until
-; `hits` finds no footprint of that storey (ladder / shaft / hole / pit /
-; block; storey 1 also the pit's landing cols p..p+2) within 1 col of the body (walkers) or 3 cols (flyers: designer
-; note — a flyer never waits at an arrival shaft or a ladder end); none
-; legal -> the monster is dropped (deterministic). Facing: toward the room
-; centre. Clobbers: all but IY.
+; level_populate — the hero into an emptied entity table, then the LP level
+; budget (lp_budget: game.md §9.4.1, replaces the B3B-12 stand-in table) and
+; the start room's entry (lp_enter: quota 0, so no monster; record VISITED,
+; ROOM_VISITS = 1). Monsters spawn when the hero enters their room (do_exit
+; -> lp_transition). Hero (slot 0): kind / HP / MAXHP / potions / facing
+; carried over, room = LVL_START, x = level_start_x, standing on storey 0
+; (game.md §1.1 gaps (4)), CUR_ROOM = LVL_START. Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 ; Hero E_FLAGS bits carried over a descend (everything else is rebuilt:
-; ACTIVE | PLAYER set, DYING / WALKIN / PENDING dropped). 3D: the status
-; effects (ENT_STAT / timers) must be carried here too, explicitly.
+; ACTIVE | PLAYER set, DYING / WALKIN / PENDING dropped). D3-0: the hero's
+; status (ST_FLAGS / ST_T1 / ST_T2 / ST_X slot 0, combat_defs.asm) and
+; HERO3D carry by not being touched: level_reset clears slots 1..15 only.
 HERO_CARRY      EQU EF_LEFT
-POP_XMIN        EQU 6                   ; clear of the door cells / horizontal arrivals
-POP_XMAX        EQU 24                  ; body right col <= 27
-POP_TRIES       EQU 7
-POP_KINDS       EQU 6
 level_populate:
                 ld   ix, P_ENTITIES
                 ld   l, (ix+E_HP)
@@ -620,148 +709,29 @@ level_populate:
                 pop  hl
                 ld   (ix+E_HP), l
                 ld   (ix+E_MAXHP), h
-                ; --- monsters ---
-                ld   ix, P_ENTITIES + P_ENT_STRIDE
-                xor  a
-.room:          ld   (TMP0), a                 ; TMP0 = room r
-                ld   hl, LVL_START
-                cp   (hl)
-                jr   z, .nroom                 ; the start room stays empty
-                call room_desc                 ; (bank 2) HL = descriptor
-                bit  RDF_PRESENT_BIT, (hl)
-                jr   z, .nroom
-                ld   (TMP2), hl                ; TMP2/3 = descriptor
-                xor  a
-.ent:           ld   (TMP1), a                 ; TMP1 = entry e
-                push ix
-                pop  hl
-                ld   de, -(P_ENTITIES + P_MAX_ENT * P_ENT_STRIDE)
-                add  hl, de
-                ret  c                         ; slots full (IX = the end)
-                call pop_one
-.nent:          ld   a, (TMP1)
-                inc  a
-                cp   2
-                jr   c, .ent
-.nroom:         ld   a, (TMP0)
-                inc  a
-                cp   GRID_CELLS
-                jr   c, .room
-                ret
-
-; pop_one — entry TMP1 of room TMP0 (descriptor at TMP2), IX = free slot:
-; place it if a legal col exists (IX += stride). Clobbers: all but IX, IY.
-pop_one:
-                ld   a, (TMP0)                 ; kind = pop_kinds[(r + 3e + d) mod 6]
-                ld   b, a
-                ld   a, (TMP1)
-                ld   c, a
-                add  a, a
-                add  a, c
-                add  a, b
-                ld   hl, LVL_DEPTH
-                add  a, (hl)
-.md:            sub  POP_KINDS
-                jr   nc, .md
-                add  a, POP_KINDS
-                ld   hl, pop_kinds
-                ld   e, a
-                ld   d, 0
-                add  hl, de
-                ld   a, (hl)
-                ld   (ix+E_KIND), a            ; (KFIELD reads it; spawn_one rewrites)
-                ld   (TMP4), a
+                ; --- monsters: LP (game.md §9.4.1 / §9.4.3) ---
+                call lp_budget                 ; the per-room quotas (LG_* still valid)
+                ld   ix, P_ENTITIES            ; lp_budget clobbers IX (bfs walks LG_Q
+                                               ; with it): without this reload LP_HX /
+                                               ; LP_HW were garbage and lp_cmap's gap
+                                               ; zone ORed LPC_BODY into TILE_GLYPHS
+                                               ; (fix/3d-artefacts, lp.py LP-HX)
+                ld   a, (ix+E_X)               ; the start room = an entry: hero on
+                ld   (LP_HX), a                ; storey 0 at its start col (quota 0:
+                xor  a                         ; nothing spawns; the record becomes
+                ld   (LP_HS), a                ; VISITED, ROOM_VISITS = 1)
                 KFIELD KT_BW
-                ld   (TMP5), a                 ; body width
-                ld   a, (TMP0)                 ; col = pop_cols[2r + e]
-                add  a, a
-                ld   hl, TMP1
-                add  a, (hl)
-                ld   hl, pop_cols
-                ld   e, a
-                add  hl, de                    ; (D = 0)
-                ld   a, (hl)
-                ld   (TMP6), a                 ; TMP6 = x
-                KFIELD KT_FLAGS
-                and  KF_FLYER
-                ld   a, 1                      ; margin: walker 1, flyer 3
-                jr   z, .mg
-                ld   a, 3
-.mg:            ld   (TMP7), a
-                ld   b, POP_TRIES
-.try:           push bc
-                ld   a, (TMP1)                 ; storey = 1 - e
-                xor  1
-                ld   c, a
-                ld   hl, TMP7
-                ld   a, (TMP6)
-                sub  (hl)
-                ld   d, a                      ; lo = x - margin
-                ld   a, (TMP5)
-                dec  a
-                add  a, (hl)
-                ld   hl, TMP6
-                add  a, (hl)
-                ld   e, a                      ; hi = x + w - 1 + margin
-                push ix
-                ld   ix, (TMP2)                ; IX = room descriptor (hits)
-                call hits                      ; CF = a footprint in lo..hi
-                jr   c, .ht
-                dec  c                         ; storey 1: + the pit's landing zone
-                jr   nz, .ht                   ; p..p+2 (game.md §1.1 pit rule (4):
-                ld   a, (ix+RD_PITCOL)         ; a fall from storey 0 lands there;
-                or   a                         ; `hits` stays the generator's test)
-                jr   z, .ht                    ; (CF = 0)
-                ld   b, a
-                ld   a, e
-                cp   b
-                jr   c, .clr                   ; hi < p
-                ld   a, b
-                add  a, 2
-                cp   d
-                jr   c, .clr                   ; p + 2 < lo
-                scf
-                jr   .ht
-.clr:           or   a
-.ht:            pop  ix
-                pop  bc
-                jr   nc, .ok
-                ld   a, (TMP6)                 ; x += 3, wrapping in XMIN..XMAX
-                add  a, 3
-                cp   POP_XMAX + 1
-                jr   c, .nx
-                sub  POP_XMAX + 1 - POP_XMIN
-.nx:            ld   (TMP6), a
-                djnz .try
-                ld   (ix+E_KIND), 0            ; dropped: the slot stays free
+                ld   (LP_HW), a
+                ld   a, (LVL_START)
+                call lp_enter
+                ld   a, (LVL_START)
+                ld   hl, ROOM_VISITS
+                call hla
+                inc  (hl)
                 ret
-.ok:            ld   a, (TMP1)
-                xor  1
-                ld   c, a                      ; storey
-                ld   a, (TMP6)
-                ld   e, a                      ; col
-                ld   b, 0                      ; face right ...
-                cp   16 - 1
-                jr   c, .fr
-                ld   b, EF_LEFT                ; ... or left, toward the centre
-.fr:            ld   a, (TMP0)
-                ld   d, a                      ; room
-                ld   a, (TMP4)                 ; kind
-                call spawn_one
-                ld   de, P_ENT_STRIDE
-                add  ix, de
-                ret
-
-; stand-in kinds (game.md §1.4: today's), paired 3 apart: walker / flyer or slime
-pop_kinds:      DB   K_RAT, K_GOBLIN, K_SKELETON, K_BAT, K_SLIME, K_GHOST
-                ASSERT $ - pop_kinds == POP_KINDS
-; per room id 0..8: entry 0 (storey 1) col, entry 1 (storey 0) col
-pop_cols:       DB   16, 12,  18, 10,  14, 20
-                DB   12, 18,  20, 14,  10, 16
-                DB   18, 12,  14, 20,  16, 10
-                ASSERT $ - pop_cols == 2 * GRID_CELLS
 
                 INCLUDE "levelgen.asm"          ; B3B-7: level_gen, level_start_x
+                INCLUDE "lpop3.asm"             ; LP: lazy monster population (game.md §9.4)
 
 ; glow_ids — B12: the per-level GLOW tile id (tileset_ids.inc), by depth - 1;
 ; build_room_map stamps it above the middle cell of the open level exit.
@@ -1197,8 +1167,7 @@ decor_room:
 ; init_tiles — boot (far3): the common tile set, ids 0..31 (B3B-2
 ; tiles_common: glyphs + depth-1 attrs; level_load_tiles re-themes the floor /
 ; wall ids per level) into TILE_GLYPHS / TILE_ATTRS, the row-17 ornament into
-; ORN_GLYPHS, the wizard zap glyphs into ZAP_GLYPHS (B3B-13: no longer over
-; ids 17/18, which keep the common set's T_DRIP1/2). The per-level ids
+; ORN_GLYPHS (D3-0: the PROTO wizard zap glyphs are gone). The per-level ids
 ; 32..63 come from level_load_tiles (start_game). Clobbers: A, BC, DE, HL.
 ;==============================================================================
 init_tiles:                                    ; (B3B-11b: the data is in vdata, main.asm)
@@ -1213,15 +1182,10 @@ init_tiles:                                    ; (B3B-11b: the data is in vdata,
                 ld   hl, orn_glyphs
                 ld   de, ORN_GLYPHS
                 ld   bc, ORN_COUNT * 8
-                call copy_virt3
-                ld   hl, b3fx.tiles_fx_zap1
-                ld   de, ZAP_GLYPHS
-                ld   bc, 2 * 8
                 jp   copy_virt3
                 ASSERT tiles_common_attrs == tiles_common_glyphs + TILE_COMMON * 8
                 ASSERT TILES_COMMON_LEN == TILE_COMMON * 9
                 ASSERT orn_glyphs_end - orn_glyphs == ORN_COUNT * 8
-                ASSERT b3fx.tiles_fx_zap2 == b3fx.tiles_fx_zap1 + 8
 
 ; (cold tile data: B3B-11b moved it to main.asm vdata, read via copy_virt3)
                 INCLUDE "panel.asm"            ; B3B-11 panel engine (cold part + the HOT_COPY image)

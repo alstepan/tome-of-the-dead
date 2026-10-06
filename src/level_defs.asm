@@ -214,7 +214,79 @@ ORN_GLYPHS      EQU LVL_STATE_END   ; 64 B ($6E80..$6EBF)
 ORN_COUNT       EQU 8
 ORN_MID_COL     EQU 14              ; wing_l skull_l skull_r wing_r at cols 14..17 (concept_r4)
 ORN_MID_N       EQU 4               ; (glyph indices ORN_* = panel_orn.asm, bank 3)
-LOWRAM_END_3B   EQU ORN_GLYPHS + ORN_COUNT * 8   ; $6EC0: = LOWRAM_FREE_END (defs.asm)
+;------------------------------------------------------------------------------
+; LP — lazy monster population (game.md §9.4.1-9.4.7, user 2026-10-06). Per
+; level: a budget header + ROOM_VISITS + 9 room records; the 16 entity slots
+; hold only the current room's monsters. Built by lp_budget (bank 3) after
+; level_gen, read / written by lp_bank / lp_enter on every room change.
+; Runtime only, bank 5 (always mapped: ZRCP reads it directly).
+;   record r = LP_REC + r * LR_STRIDE:
+;     +0 LR_HDR   bit 7 LR_VISITED (0 = FRESH), bits 0-2 = count 0..4
+;                 (FRESH: the quota, no entries; VISITED: entries used)
+;     +1 4 x {LE_KIND, LE_HP}: kind row (bits 0-4) | LEK_RESPAWN | LEK_BRED, exact hp
+;------------------------------------------------------------------------------
+LP_STATE        EQU ORN_GLYPHS + ORN_COUNT * 8   ; $6EC0
+LP_KINDS        EQU LP_STATE + 0    ; 4 B: the depth's kinds (game.md §9.4 table order)  (test-observable)
+LP_BOSS         EQU LP_STATE + 4    ; boss kind row
+LP_TOTAL        EQU LP_STATE + 5    ; the table count incl. boss (tests / levelcheck)
+LP_LVL          EQU LP_STATE + 6    ; hero LVL at level entry (§9.6 tier input, 3F)
+LP_RESPAWNS     EQU LP_STATE + 7    ; trickle spawns this level (§9.5, RESPAWN_MAX; 3F)
+LP_DISCARD      EQU LP_STATE + 8    ; units lost to the split / the sum cap / a full record (tests)
+LP_RMAX         EQU LP_STATE + 9    ; ROOM_MAX[depth] (2 / 3)
+LP_RNG          EQU LP_STATE + 10   ; word: the spawn stream's seed of the last entry (test-observable)
+; lp_enter / lp_budget scratch (+12 .. +23)
+LP_HX           EQU LP_STATE + 12   ; hero arrival col
+LP_HS           EQU LP_STATE + 13   ;   ... storey
+LP_HW           EQU LP_STATE + 14   ;   ... body width
+LP_SIG          EQU LP_STATE + 15   ; sum weight of the room's units so far
+LP_RECP         EQU LP_STATE + 16   ; word: the record being entered
+LP_W            EQU LP_STATE + 18   ; unit body width
+LP_GAPV         EQU LP_STATE + 19   ; arrival gap of the current try (LP_GAP / LP_GAP2)
+LP_BEST         EQU LP_STATE + 20   ; boss: best distance + 1 (0 = none yet)
+LP_BS           EQU LP_STATE + 21   ; boss: best storey
+LP_BX           EQU LP_STATE + 22   ; boss: best col
+LP_RES          EQU LP_STATE + 23   ; reservation: units still to roll x minW (lp_fit)
+ROOM_VISITS     EQU LP_STATE + 24   ; 9 B: entries per room this level (spawn-stream input)  (test-observable)
+LP_REC          EQU LP_STATE + 33   ; 9 records x LR_STRIDE                                   (test-observable)
+LR_STRIDE       EQU 9
+LR_HDR          EQU 0
+LR_ENT          EQU 1               ; first entry
+LE_KIND         EQU 0
+LE_HP           EQU 1
+LE_STRIDE       EQU 2
+LR_MAX          EQU 4               ; entries per record (= ROOM_CAP)
+LR_VISITED      EQU %10000000
+LR_VISITED_BIT  EQU 7
+LR_CNT_MASK     EQU %00000111
+LEK_KIND_MASK   EQU %00011111
+LEK_RESPAWN     EQU %10000000       ; F_RESPAWN (§9.5): no drops, half XP (3F); = EF_RESPAWN (ASSERTed)
+LEK_BRED        EQU %01000000       ; Rabbit Rat "bred" (§9.6, 3F; record only today)
+LP_LEN          EQU 33 + GRID_CELLS * LR_STRIDE  ; 114 B
+LP_END          EQU LP_STATE + LP_LEN            ; $6F32
+; budget constants (game.md §9.3 / §9.4.1)
+ROOM_MAX_LO     EQU 2               ; D1-D2 monsters per room (initial population)
+ROOM_MAX_HI     EQU 3               ; D3-D8
+LP_SIGMA_INIT   EQU 8               ; sum weight cap of a FRESH room: max(8, ROOM_MAX x minW)
+LP_SIGMA_CAP    EQU 12              ; §9.3 phase-2 cap: lair, follow admission, trickle
+LP_TRIES        EQU 8               ; candidate cells per monster (§9.4.3)
+LP_GAP          EQU 8               ; body gap to the hero's arrival box, arrival storey, tries 1-4
+LP_GAP2         EQU 5               ;   ... tries 5-8 (designer decision 2026-10-06)
+LP_XMIN         EQU 2               ; body cols 2 .. 29: clear of the door cells 0-1 / 30-31
+LP_XMAX         EQU 29
+; lp_enter's cell map (lp_cmap): 2 storeys x LP_CMW cols, bit 0 = a footprint
+; (ladder / shaft / its end box, pit + caps, the storey-1 landing cols, the
+; block), bit 1 = a body may not cover it (arrival box, the hero's 8-col gap
+; zone, a body placed this entry). In NEXT_MAP's unused tail (rows 18..20 of
+; the 672-B buffer): lp_enter runs before do_exit builds NEXT_MAP, and before
+; any room exists at level start (GEN_SCRATCH's LG_* sit at $6000..$6051).
+LP_CMW          EQU 33              ; cols 0..32 (a flyer's margin reaches col 32)
+LP_CMAP         EQU NEXT_MAP + PLAY_CELLS        ; $6540..$6581
+LPC_BAD         EQU 1               ; a body may not cover the col
+                ASSERT LP_CMAP + 2 * LP_CMW <= NEXT_MAP + MAP_BUF_LEN
+RESPAWN_MAX     EQU 6               ; §9.5 trickle cap per level (3F)
+                ASSERT LR_MAX * LE_STRIDE + 1 == LR_STRIDE && LP_REC == ROOM_VISITS + GRID_CELLS
+
+LOWRAM_END_3B   EQU LP_END          ; = LOWRAM_FREE_END (defs.asm); test stubs run here
 
 LF_GRATE_OPEN   EQU %00000001       ; lair grate open (3B: set at level start, game.md §1.4)
 LF_KEY_TAKEN    EQU %00000010       ; (3E+)
@@ -363,11 +435,8 @@ HOT_COPY        EQU FONT6 + (FONT6_PAGES - 1) * 256 + FONT6_FIRST + FONT6_WB + 9
 HOT_COPY_END    EQU BANK2_FREE_END      ; = SLOTREC
                 ASSERT FONT6 == $B200 && HOT_COPY == $B5E0 && HOT_COPY_END == $B800
                 ASSERT (FONT6 & $FF) == 0 && FONT6_FIRST + 95 + FONT6_WB <= 255
-; B3B-13: the wizard zap overlay's 2 glyphs (8 B each, filled by init_tiles
-; from bank-1 vdata) in the first plane hole (offsets 0..31 of page 0), so
-; tile ids 17/18 are T_DRIP1/2 (concept-screen §3.3). draw_zap: L = frame * 8.
-ZAP_GLYPHS      EQU FONT6
-                ASSERT (ZAP_GLYPHS & $FF) == 0 && 2 * 8 <= FONT6_FIRST
+; (B3B-13..C3-7: ZAP_GLYPHS sat in the first plane hole FONT6+0..15; D3-0
+; removed the zap: the plane holes are the 3D state homes, combat_defs.asm.)
 
 ; D6: the animated-decor lists, in the spare after the IM 2 vector table
 ; ($BC01..$BCBB, 187 B; the ISR starts at ISR_ADDR $BCBC). Each list = its
