@@ -58,6 +58,7 @@ squash of `feat/project-scaffold` @ `238af0c`; tape sha256 `6fa4629d…`).
 | H1 | **Vertical room transitions:** the hero should visibly climb to the top before the scroll up, and appear at the top of the ladder after the scroll down (user, 2026-10-05) — minor, later | 3G | – |
 | S1 | **Instruction screen + story screen** (story and the goal) — add once mechanics, bosses and monsters are confirmed (user 2026-10-06); ZX0 long text (C3-4 packer) + menu entry | designer → staff | 3G (after 3F) |
 | M1 | **Memory levers approved by the user (2026-10-06)** if space runs out: (a) drop some background decor; (b) lazy monster population — store per level only the total count, the kinds, and a max per screen/room, and spawn monsters on room entry instead of a full slot list at level start | designer → staff | evaluate with the D3-S spike result before 3E/3F |
+| J1 | **Movement rules (user 2026-10-06):** a jump may land in a pit → the hero falls; Rats are jumpable; flyers move freely over ladders and through pits (B8 ladder-end no-stop rule likely dropped now that squeeze-past exists) — designer writing exact rules with L2 | designer → staff | after LP (same files: logic/turn3) |
 | B3 | Draft 3 art (32 frames + tiles) not yet reviewed on the canvas | user → artist | Imported provisionally from `assets/gfx/source/draft3_frames.html` |
 | B4 | Spec §6.4 text for the new ladder rules | designer | |
 | B5 | Fuse / real-hardware tape load not yet tried | user | |
