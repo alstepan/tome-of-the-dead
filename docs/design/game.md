@@ -667,8 +667,8 @@ sprite. **≤ 3 tracks at once**; more are queued.
 | Spell | Book | MP | Range | Dmg / type | Bounces | Effect | Projectile → impact sprites |
 |---|---|---|---|---|---|---|---|
 | **Spark** | D1 | 1 | 6 | 1d4+1 SHOCK | 0 | **1 in 4: CONFUSED 3** (§6.4; 3D) | spark_fly1/2 8×8 `$43` → spark_fizz1/2 8×8 |
-| **Firebolt** | D2 | 3 | 12 | 1d8+2 FIRE | 0 | **burst**: bodies within 1 col of impact take 1d4 FIRE, **caster included** at point-blank | firebolt_fly1/2 16×8 `$46` → firebolt_burst1/2 16×16 |
-| **Frost Shard** | D3 | 3 | 12 | 1d6 COLD | **1** | **freeze 2 turns** (bosses 1); can freeze the caster after a bounce | frost_fly 8×8 `$45` → frost_crack 16×16 |
+| **Firebolt** | D2 | 3 | 12 | 1d8+2 FIRE | 0 | **burst**: bodies within 1 col of impact take 1d4 FIRE, **caster included** at point-blank | firebolt_fly1/2 16×8 alternating yellow `$46` / red `$42` per frame (**user 2026-10-06**) → firebolt_burst1/2 16×16 |
+| **Frost Shard** | D3 | 3 | 12 | 1d6 COLD | **1** | **freeze 2 turns** (bosses 1); can freeze the caster after a bounce | frost_fly 8×8 `$45` → frost_crack **8×8** (**user 2026-10-06**: stays 8×8, not 16×16; revisit after playtesting) |
 | **Drain Life** | D4 | 3 | 5 | 1d6+1 DRAIN | 0 | **caster heals the damage dealt** (to max HP); useless on undead (I) | **drain_fly1/2 16×8 `$43` → drain_hit 16×16 (new art)**; the caster flashes `$44` |
 | **Lightning** | D5 | 5 | 28 | 1d8+3 SHOCK | **2** | **pierces** (each body once per pass) | lightning_fly1/2 16×8 `$47` (16 px/tick) → lightning_flash 16×16 |
 
@@ -1551,6 +1551,7 @@ of 1.7×, sources grow by ~2.3K. The levers, cheapest first:
 - **Animation order:** monster animations start only after the hero's projectile lands (no overlap). Costs latency, protects the tick budget.
 - **3D tests:** poison, WEAK, FEAR, SLEEP, book reading and bow pickup have no source until 3E/3F; 3D tests them by poking state.
 - **Knight POWER_STRIKE 40x48:** confirmed needed; artist drafts it.
+- **3D art (user 2026-10-06):** frost_crack impact stays 8×8 (revisit after playtesting); Firebolt fly frames alternate yellow `$46` and red `$42`; the full effect set is kept, including fizz2 and burst2; Knight POWER_STRIKE 40×48 and the 7 status icons are approved as drawn. Packed total 1,322 B (unchanged; §11.1 figures not altered).
 
 ### 11.3 Pool per level (KB; existing kinds E scaled from the measured 22,688; new **M**)
 
