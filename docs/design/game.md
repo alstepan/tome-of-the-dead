@@ -331,8 +331,10 @@ in a row" caps flight speed at 7 cols per 2 turns.
   (`QUIT? Y/N`; FIRE = yes, any other = no).
 - Shortcut keys confirmed: ENTER, `1`–`0`, `I`, BREAK, `.`. Default map Q/A/O/P/SPACE.
   Redefine rejects these (see §3.2, manager ruling 2026-10-05, designer-confirmed).
-- Sinclair 1 or 2 selected: the `1`–`0` slot shortcuts on that joystick's half of the number
-  row are disabled (S1 = 6–0, S2 = 1–5). The other half and the icon bar keep working.
+- Sinclair 1 or 2 selected: in game, the `1`–`0` slot shortcuts on that joystick's half of
+  the number row are disabled (S1 = 6–0, S2 = 1–5); the other half and the icon bar keep
+  working. This applies only in game; the menu (§3.2, user 2026-10-06) never reads joysticks.
+- The joystick/redefined keys documented here are active from START only (menu: §3.2).
 
 - ↙/↘ act as ←/→. Opposite keys cancel (F7). The cursor **skips unlearned slots** (empty
   outlines) but **does not skip greyed ones** (you may select a greyed icon to read its info
@@ -357,10 +359,21 @@ in a row" caps flight speed at 7 cols per 2 turns.
 WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|SINCLAIR 2   4 REDEFINE KEYS
 ```
 
-- **Number keys + ENTER work** (amended, manager ruling 2026-10-05, designer-confirmed): when a
-  Sinclair joystick is selected, its half of the number row (S1 = 6–0, S2 = 1–5) acts as the
-  joystick (navigation/FIRE) and NOT as menu digits; the other digits and ENTER still work as
-  menu shortcuts. Once a joystick is chosen, ↑/↓ + FIRE also work.
+- **Digits-only menu (user 2026-10-06; supersedes the 2026-10-05 Sinclair-half ruling).** The
+  menu and its sub-screens are driven by the number keys only; no cursor, no up/down, and no
+  FIRE / Kempston / Sinclair / redefined-key (KEYTAB) input is read on any menu screen. Keys:
+  `1` START (ENTER = START too, convenience); `2` toggles HERO (WARRIOR/MAGE); `3` cycles
+  CONTROLS KEYS > KEMPSTON > SINCLAIR 1 > SINCLAIR 2 > KEYS (no sub-menu; current value shown
+  on the line); `4` REDEFINE KEYS. All other keys are ignored. The selected source (joystick
+  and/or redefined keys) takes effect only from START; Kempston port `$1F` is not polled in
+  the menu at all.
+- **REDEFINE prompts** read raw keys (not digits, since digits are reserved, see below); BREAK
+  cancels and keeps the old set (kept). A redefine screen therefore ignores joystick input.
+- **End screens (death/win)** return to the menu on any digit or ENTER (not FIRE, so a
+  held-FIRE or joystick press cannot skip them accidentally; keys are only accepted after
+  all keys have been released once).
+- **Pause overlay (in game)** keeps in-game controls (it is part of play): directions/FIRE
+  choose Resume/Quit; `QUIT? Y/N` stays FIRE or `Y` = yes, anything else = no (§3.1).
 - **Kempston** (port `$1F`: bit 0 R, 1 L, 2 D, 3 U, 4 F) is read **only after it is
   selected**, because the port floats on a bare machine.
 - **Sinclair 1** = keys 6 L, 7 R, 8 D, 9 U, 0 F. **Sinclair 2** = keys 1 L, 2 R, 3 D, 4 U, 5 F.
