@@ -223,7 +223,18 @@ hole), `POTION` (1 cell), `CHEST` (2×2 cells), `TORCH` (1×2, optional).
 - y is clamped to the storey's **air band**: `7s ≤ y ≤ 7s+6−h`. Bat: 5 rows of
   freedom, Ghost: 3. Flyers never enter a floor row and never pass through walls
   or entities. Ghosts do not phase.
-- **Ladder ends (B8; rule by user 2026-10-02, as built — supersedes the
+- **Flyers and ladders (user 2026-10-06: free flight, SUPERSEDES the B8
+  ladder-end rules below, which are kept only as history).** Final rule: a
+  flyer's movement is exactly the band/wall/entity rules above, plus pits are
+  ignored (never fall) and ladder shafts and ladder-end boxes are **ordinary
+  air**: it may enter, cross, stop (dx = 0), wait, reverse, idle and attack
+  inside a box, with no forced move and no RNG change. The only ladder
+  constraints left protect the hero's climb (§6.4): while the hero is
+  mid-ladder, no monster move (flyers included) may end on a box of the
+  remaining climb path (anti-cork); forced yield when a climb is blocked;
+  vertical fallback; squeeze past; B16. Nothing else restricts a flyer. Old
+  "must move / no attack inside a box" text below is void.
+- *History:* **Ladder ends (B8; rule by user 2026-10-02, as built — supersedes the
   91cf829 "shafts are walls" rule):** flyers **may cross** a ladder shaft but
   must **never block the hero**. A *ladder-end box* = the standing box at
   either end of a segment, cols `col … col+2` in that storey (the box the
@@ -664,7 +675,8 @@ yields (§6.4 yield rule) instead of the hero being frozen by a free no-op. A
 chord falls back to its horizontal move first; the blocked climb has wait
 priority (after G). The player can always reverse on a ladder (a reversal
 blocked by a climber behind is also a wait). Monsters yield ladder ends and
-never start a head-on climb; flyers never idle in a ladder-end box (§3.5).
+never start a head-on climb; flyers may idle anywhere, including ladder-end boxes, but
+never end a move on the hero's remaining climb path (§3.5, user 2026-10-06).
 Pending monsters never block anything. `tests/game.py` #58 / #59.
 
 ### 6.5 Hit feedback & reactions
