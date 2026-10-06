@@ -321,10 +321,10 @@ threshold; respawn half XP; rank 2/3 values per ability; no spell before the fir
 
 | ID | Task | Tag | Deps |
 |---|---|---|---|
-| D3-0 | layout + relief (AY 4 KB, zap removal, state homes, KX layout, HERO_CARRY) | S | C3-6b, C3-7 merged |
+| D3-0 ✅ `270fb68` (review pending) | layout + relief (AY 4 KB, zap removal, state homes, KX layout, HERO_CARRY) | S | C3-6b, C3-7 merged |
 | LP | **Lazy monster population** (user 2026-10-06; rules game.md §9.4.1–9.4.7, cross-refs §9.3/§9.5/§9.6/§8.6/§1.4, prototype §3.7): level budget + 9 room records (~100 B, layout in memory-map.md), quota split at gen (after traps, byte-identical earlier output), bank-on-leave / spawn-on-entry in the room build, followers admitted after residents, slot invariant `room = CUR_ROOM`; Python spawn reference + levelcheck quotas + ZRCP tests §9.4.7. Runs right after D3-0, before D3-4 | S | D3-0 |
 | L2 | **Mid-room blocks + wide pits** (user 2026-10-06; rules game.md §1.1 "Mid-room block" / "Wide pit" / "L2 invariants", §2.4 Clears, §2.5): last generator pass after traps and LP (earlier output byte-identical), only in rooms with exactly 2 internal ladders, pit descriptor gains a width, wide-hole fall/refuse range, jump-span check; Python reference + levelcheck I1–I6 (walk+climb strong connectivity), ZRCP tests | S | LP |
-| D3-1 | rank / XP / KX / ability tables + transcription test | J | D3-0 |
+| D3-1 ✅ `705e7da` (feat/3d-tables; ~456 B bank 3; FX fids TODO(D3-4); **XP thresholds duplicated: xpn_tab (bank 3) vs xp_next (bank 1 info1.asm) — unify in D3-9**) | rank / XP / KX / ability tables + transcription test | J | D3-0 |
 | D3-2 | 3D strings | J | – |
 | D3-3 ✅ `3ab2f5b` (feat/3d-art; user 2026-10-06: frames approved; frost_crack stays 8×8 (playtest feedback later); Firebolt keeps the yellow/red alternation; full set kept incl. fizz2/burst2; 1,322 B ZX0) | art import: projectiles/impacts, Warrior throw/bow/whirl, POWER_STRIKE (to draw), 7 status icons, ammo floor glyphs → canvas review | artist | – |
 | D3-4 | frames + class FX kinds (pool) | S | D3-0, D3-3 |
