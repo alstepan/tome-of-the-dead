@@ -103,7 +103,8 @@ KEYS = {
     "L": (6, 1), "K": (6, 2), "J": (6, 3), "H": (6, 4), "ENTER": (6, 0),
     "P": (5, 0), "O": (5, 1), "Q": (2, 0), "A": (1, 0), "G": (1, 4),
     "SPACE": (7, 0), "1": (3, 0), "2": (3, 1), "3": (3, 2),
-    "C": (0, 3),                              # B3B-5: close door (3B stand-in)
+    "FIRE": (7, 0), "I": (5, 2), "CAPS": (0, 0),
+    "4": (3, 3), "5": (3, 4), "0": (4, 0), "9": (4, 1), "8": (4, 2), "7": (4, 3), "6": (4, 4),
 }
 HERO_KEY = {0: "1", 1: "2"}                  # id 2 (Rogue) retired: hole in the K_* ids
 
@@ -117,7 +118,8 @@ K_KNIGHT, K_WIZARD, _K_RETIRED, K_SKELETON, K_GOBLIN, K_GHOST, K_RAT, K_BAT, K_S
 class Proto:
     """Tick-exact driver. After load() ZEsarUX stays in cpu-step mode with
     breakpoints on wait_tick (once per 25 Hz game tick, render complete) and
-    select_loop (once per frame on the hero-select screen); every advance is an
+    select_tick (menu_frame, bank 2: once per frame in the C3-6 menu, redefine
+    and pause loops); every advance is an
     explicit `tick()`, so scenarios are deterministic and never race the
     renderer (no wall-clock sleeps)."""
 
@@ -126,6 +128,16 @@ class Proto:
     # cold-block flag proto_start = 1 right after every load (see load()).
     # Set proto_start = 0 on an instance for the generated start (W16).
     proto_start = 1
+    # C3-8a: every suite plays the turn-intent controls (default KEYTAB).
+    # The scenario vocabulary of the PROTO suites is kept as aliases that
+    # hold() maps onto the real keys: L/H = right/left (P / O), K/J = up/down
+    # (Q / A), WAIT = '.' (SYMBOL SHIFT + M). SPACE and FIRE are the FIRE key.
+    # turn() / no_turn() add the new rules around them (see there): a tap
+    # that turns the hero around first (0 turns), "C" = close door = FIRE with
+    # the melee icon selected, "G" = quaff = select the potion slot, FIRE.
+    NEW_KEYS = {"L": "P", "H": "O", "K": "Q", "J": "A", "WAIT": "."}
+    POTION_SLOT = {0: 6, 1: 7}               # icon slot (0-based) per hero kind, game.md §3.5
+    SLOT_KEY = "1234567890"                  # number key of slot i
 
     def __init__(self, h):
         self.h = h
@@ -306,15 +318,40 @@ class Proto:
 
     # --- boot / select ------------------------------------------------------
     def boot(self, hero=K_KNIGHT, repeat=0, freeze=1):
+        """Fresh load, then START through the C3-6 main menu."""
         self.load()
         self.wait_state(GS_SELECT)
         self.wb("INPUT_REPEAT", repeat)
         self.wb("ANIM_FREEZE", freeze)
         self.wb("INPUT_SRC", 1)
-        self.hold(HERO_KEY[hero])
+        self.menu_start(hero)
+
+    def menu_start(self, hero=K_KNIGHT, settle=3):
+        """From the menu (GS_SELECT, INPUT_SRC = 1): '2' toggles HERO until it
+        is `hero` (menu_hero persists between games), '1' starts. settle=None:
+        return right after GS_PLAYING (first-ticks tests)."""
+        self.release()
+        self.tick(2)
+        for _ in range(2):
+            if self.rb("menu_hero") == hero:
+                break
+            self.tap("2")
+        self.hold("1")
         self.wait_state(GS_PLAYING)
         self.release()
-        self.settle(3)
+        if settle:
+            self.settle(settle)
+
+    def tap(self, *keys, n=1, step=None):
+        """Press for n ticks, release for 1 (edge-driven consumers: menu,
+        number keys, FIRE). step() advances one tick (default tick(); the
+        budget / flicker recorders pass their own so the tap is measured)."""
+        step = step or self.tick
+        self.hold(*keys)
+        for _ in range(n):
+            step()
+        self.release()
+        step()
 
     # --- input --------------------------------------------------------------
     def release(self):
@@ -323,18 +360,65 @@ class Proto:
     def hold(self, *keys):
         rows = [0xFF] * 8
         for k in keys:
-            r, bit = KEYS[k]
+            k = self.NEW_KEYS.get(k, k)
+            if k == ".":                      # SYMBOL SHIFT + M
+                rows[7] &= ~0x06 & 0xFF
+                continue
+            r, bit = KEYS["FIRE" if k == "SPACE" else k]
             rows[r] &= ~(1 << bit) & 0xFF
         self.z.cmd("write-memory %d %s" % (S["KBD_MATRIX"], " ".join(str(x) for x in rows)))
+
+    def select_slot(self, slot, step=None):
+        """Icon cursor onto `slot` (number key; selects only, no turn)."""
+        step = step or self.tick
+        if self.rb("SEL_SLOT") != slot:
+            self.tap(self.SLOT_KEY[slot], step=step)
+            step()
+            step()
+
+    def _prep(self, keys, step=None):
+        """Translate the PROTO scenario keys to the C3 controls (0-turn
+        taps happen here): returns (keys to hold, fire?).
+        - "C" (close door) = FIRE with the melee icon (slot 0) selected;
+        - "G" (quaff) = the potion slot selected, then FIRE;
+        - L / H against the facing: a tap first turns the hero around
+          (0 turns, game.md §3.1), then the key walks as before."""
+        keys = list(keys)
+        fire = False
+        if "C" in keys:
+            keys.remove("C")
+            self.select_slot(0, step)
+            fire = True
+        if "G" in keys:
+            keys.remove("G")
+            self.select_slot(self.POTION_SLOT[self.rb("HERO_KIND")], step)
+            fire = True
+        if "FIRE" in keys or "SPACE" in keys:
+            fire = True
+        e = self.ent(0)
+        side = [k for k in keys if self.NEW_KEYS.get(k, k) in ("P", "O")]
+        if len(side) == 1 and "K" not in keys and "Q" not in keys and e["FLAGS"] & EF_ACTIVE:
+            right = self.NEW_KEYS.get(side[0], side[0]) == "P"
+            if right == bool(e["FLAGS"] & EF_LEFT):
+                self.tap(side[0], step=step)      # turn-around: 0 turns
+                (step or self.tick)()             # key release latched
+        if fire:
+            keys.append("FIRE")
+        return keys, fire
 
     def turn(self, *keys, per_tick=None, max_ticks=600):
         """Hold keys until a turn starts, then run it to completion (incl. any
         transition). True if a turn ran. per_tick(frame, hero) is called on
-        every tick of the turn (render complete)."""
+        every tick of the turn (render complete). FIRE acts on release (a
+        1-tick tap); DOWN alone is deferred 3 ticks, so the start window is 5."""
+        keys, fire = self._prep(keys)
         t0 = self.rw("TURN_COUNTER")
         self.hold(*keys)
         started = False
-        for _ in range(3):                    # INPUT is sampled every tick
+        if fire:
+            self.tick()
+            self.release()
+        for _ in range(5):                    # INPUT is sampled every tick
             self.tick()
             if self.rb("TURN_PHASE") == 1 or self.rw("TURN_COUNTER") != t0:
                 started = True
@@ -353,16 +437,17 @@ class Proto:
         return True
 
     def no_turn(self, *keys):
+        keys, fire = self._prep(keys)
         t0 = self.rw("TURN_COUNTER")
         self.hold(*keys)
-        self.tick(6)
+        self.tick(2 if fire else 6)
         self.release()
-        self.tick(2)
+        self.tick(3)
         return self.rw("TURN_COUNTER") == t0 and self.rb("TURN_PHASE") == 0
 
     def wait(self, n=1):
         for _ in range(n):
-            self.turn("SPACE")
+            self.turn("WAIT")
 
     # --- trace --------------------------------------------------------------
     def clear_trace(self):

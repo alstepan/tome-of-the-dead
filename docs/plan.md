@@ -273,7 +273,7 @@ geometry. **Exit:** walk a generated level, doors open, decor animates, log show
 
 Merge order: A8 → B3B-1 → B3B-3 (all budget numbers count after A8). Risks: tick budget (R1), bank-2 bytes ~1 KB new hot code vs 1,067 B (R2: boot-copy to `$B500`, delete PROTO code), bank 3 ≈ 4.1 KB of 7.4 KB (R3), golden churn (R4), Python↔Z80 generator byte equality (R5).
 
-### 3C — Hero, controls & menu (needs game.md §2–4)
+### 3C — Hero, controls & menu · `DONE` except C3-7 art (squash-merged 2026-10-06; feat/3c-hero @ `d92d0a4`) (needs game.md §2–4)
 Main menu, redefine keys, joystick select (Kempston/Sinclair/keys); icon bar +
 bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
 **Exit:** whole game driveable by joystick alone (scripted ZRCP test per input).
@@ -292,7 +292,7 @@ bump-to-attack + FIRE modes; jump; Warrior/Mage new frames (jump, staff swing).
 | C3-6 ✅ `054a4ef` + goldens `84550da` + review fixes `9b78990` (main merged `72c5f81`; pause torch damage fixed, reserved keys, BREAK cancels, real seed entropy; headroom bank 1 1,816 / bank 2 ~880 / bank 3 970 / low RAM 711 B) | menu, redefine, pause overlay, end screens, seed entropy (bank 1) | S | C3-0/1/4/5 |
 | C3-7 art drafts on the canvas (board C37, `aca88de` feat/3c-c37art), awaiting the user | JUMP1/2 + Mage STAFF_SWING frames (art first) | S | art |
 | C3-2b ✅ `7c58ca7` (review fixes `20cf8c3`, main merge `7300255`, bank-3 relief `3b0c326`: scrolls + info line → bank 1; headroom bank 1 4,958 / bank 2 952 / bank 3 1,456 B; new-controls budget worst 120.4k T) | **icon mode via DOWN+FIRE** replaces FIRE-held cursor moves (user 2026-10-05; designer defines §3.1/§3.5) — rework of C3-2's intent machine after C3-3 | S | C3-3 |
-| C3-8a ✅ `98c9aa3` (all suites on the new menu + controls, legacy_input removed; budget worst 114.8k T); C3-8b in progress | port suites to the menu start + joystick-only exit runs | J | C3-1/2/6, C3-3 |
+| C3-8a ✅ `98c9aa3` (all suites on the new menu + controls, legacy_input removed; budget worst 114.8k T); C3-8b ✅ (W25 joystick-only runs per input source, seed entropy) | port suites to the menu start + joystick-only exit runs | J | C3-1/2/6, C3-3 |
 
 Bugs B11/B14 fixed on main (squash 2026-10-04). **Merging main into feat/3c-hero needs an address fix: B14's CLIMB_BLK_ID/N at $BFC7/$BFC8 clash with C3-1's PLAYER_SC at $BFC7 — reallocate one side.** B12 gate art: **user 2026-10-05 chose variant B** (lattice bar, `gate_raised_b`, `9d3b091` feat/3c-gate); marker above the exit: **glow** as a per-level id on every level (user 2026-10-05, option a; D5/D7 drop PILLAR, D4 drops one decor item); COBWEB_R + gate variant B in tiles `f8a78c8` (feat/d1-decor); staff to draw id 26 on the open lair exit (flag TF_LADDER|TF_HOLE, not TF_FLOOR) + glow + lair hint; closed 3F gate as drawn unless the user changes it.
 

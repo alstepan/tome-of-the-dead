@@ -268,6 +268,8 @@ T_GRATE         EQU 26              ; B12: the RAISED gate (variant B, ink $46) 
 T_GRATE_SHUT    EQU T_GRATE         ; TODO 3F: the closed gate needs its own common id (full bars,
                                     ; ink $07, TF_FLOOR; concept-screen B3B-8 #4) - until then the
                                     ; closed branch draws the raised glyph (3B never closes it)
+                ASSERT T_GRATE_SHUT == T_GRATE  ; TODO 3F: give the closed gate its own TF_SOLID
+                                                ; common id, then drop this ASSERT
 T_RUBBLE        EQU 27              ; block foot, arrival-shaft cap, ash of the Book
 T_WALL_DITHER   EQU 28              ; wall set (concept-screen §3.3)
 T_WALL_PATCH    EQU 29
@@ -406,7 +408,7 @@ HUD4_PW         EQU $BFD6           ; 4 B, rows 20..23: cols changed since prese
 LOG_QN          EQU $BFDA           ; pending log messages in LOG_Q
 LOG_Q           EQU $BFE0           ; 8 B: pending log messages (layout: B3B-11)
 LOG_Q_LEN       EQU 8
-STATE_3B_END    EQU $C000           ; $BFD1, $BFDF, $BFEA..$BFFF spare
+STATE_3B_END    EQU $C000           ; $BFEB..$BFFF spare (C3-0: JOY_MIRROR $BFEA, hero_defs.asm; C3-2b: EXIT_LOCK $BFD1, FIRE_LOCK $BFDF, defs.asm)
                 ASSERT AY_CALLS + 2 <= STATE_3B
                 ASSERT HUD4_PW == HUD4_EXT + TEXT_ROWS
                 ASSERT (HUD4_EXT >> 8) == ((HUD4_PW + TEXT_ROWS - 1) >> 8)
@@ -474,6 +476,15 @@ ATTR_P_SEL      EQU $08             ; OR: selected slot = PAPER blue
 PD_HP_BIT       EQU 0
 PD_LOG_BIT      EQU 4
 PD_ICONS_BIT    EQU 5
+PD_INFO_BIT     EQU 6
 PD_DEPTH_BIT    EQU 7
                 ASSERT PD_HP == 1 << PD_HP_BIT && PD_LOG == 1 << PD_LOG_BIT
                 ASSERT PD_ICONS == 1 << PD_ICONS_BIT && PD_DEPTH == 1 << PD_DEPTH_BIT
+                ASSERT PD_INFO == 1 << PD_INFO_BIT
+; C3-3 info line fields (game.md §3.4: name chars 0-15, numbers 16-27, notes 28-41)
+INFO_NUM_COL    EQU 12              ; char 16 = 96 px
+INFO_NOTE_COL   EQU 21              ; char 28 = 168 px
+ATTR_INFO_NAME  EQU $47
+ATTR_INFO_NUM   EQU $46
+ATTR_INFO_NOTE  EQU $45
+ATTR_LVL        EQU $46             ; the level digit at (31, 19) (game.md §4.1)

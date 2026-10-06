@@ -81,6 +81,10 @@ boot:
                 xor  a
                 out  (PORT_BORDER), a
                 ld   (INPUT_SRC), a
+                ld   (JOY_MODE), a             ; C3-1: JM_KEYS until the menu says
+                ld   (JOY_MIRROR), a           ; otherwise; nothing held
+                ld   (STICK), a
+                ld   (STICK_OLD), a
                 ld   (ANIM_FREEZE), a
                 ld   (ANIM_TRACE_IDX), a
                 ld   (BLIT_MISS), a
@@ -118,6 +122,10 @@ boot:
                 ld   (hl), $FF
                 ldir
                 call init_kbd_mirror
+                ld   hl, keytab_defaults       ; C3-1: Q / A / O / P / SPACE
+                ld   de, KEYTAB
+                ld   bc, KEYTAB_N * KEYTAB_STRIDE
+                ldir
                 ld   a, ATTR_HUD
                 call clear_screen
                 ld   hl, P_ENTITIES            ; nothing drawn / alive yet
@@ -182,6 +190,8 @@ check_paging:
                 halt
 
 str_lock:       DB "LOAD FROM 128 BASIC", 0     ; check_paging: $7FFD locked
+keytab_defaults:                               ; C3-1: boot -> KEYTAB (hero_defs.asm)
+                KEYTAB_DEFAULTS
 ;==============================================================================
 ; isr_install — A8 IM 2 setup (boot, under its DI): fill the 257-B vector
 ; table (every byte ISR_VEC_BYTE, so whatever the floating bus puts on the
@@ -291,12 +301,9 @@ ISR_LEN         EQU isr_end - isr
                 ASSERT (ISR_VEC_TABLE >> 8) >= $80 && (ISR_VEC_TABLE >> 8) < $C0  ; I: bank 2
                 ASSERT ISR_ADDR_END <= STACK_BOTTOM
 
-; select-screen entries: fid, body col, attr, name (5 B; read by sel_run in
-; bank 3 and by sel_frt_copy at boot -> must be in always-mapped RAM)
-sel_tab:        DB   FID_knight_idle1, 8,  $47
-                DW   sel_nm_knight             ; (bank 3, read by sel_run only)
-                DB   FID_wizard_idle,  21, $45
-                DW   sel_nm_wizard
+; the menu's hero idles: fid only is read (sel_frt_copy: their boot FRT rows,
+; saved at boot, restored by menu_run; C3-6: the menu draws them, menu1.asm)
+sel_tab:        DB   FID_knight_idle1, FID_wizard_idle
 
 ;==============================================================================
 ; start_game — C = hero kind. Generate its frames (§5.2: only the chosen
@@ -372,8 +379,8 @@ level_enter:
                 call clear_screen
                 pop  af
                 push af
-                ld   hl, level_card            ; bank 3: "DEPTH n"
-                call far3
+                ld   hl, level_card            ; C3-6: bank 1, the menu font
+                call far1
                 call present_full              ; the card -> screen 2, shown
                 pop  af
                 ld   hl, level_new             ; bank 3: generate + populate
@@ -1555,13 +1562,18 @@ build_bitrev:
                 jr   nz, .next
                 ret
 
-; copy_virt3 — copy_virt for bank-3 (far3) callers: pages bank 3 back before
-; returning (B3B-11b: panel_boot / pblit read the vdata block in bank 1).
-; Clobbers: A, BC, DE, HL
+; copy_virt_keep (= copy_virt3, the B3B-11b name its bank-3 callers use) —
+; copy_virt for code running from a paged bank (far3 / far1 targets: panel_boot
+; / pblit read the vdata block in bank 1): hands $C000 back as it found it
+; (C3-0: the caller's saved bank, was a hard-coded bank 3 — wrong from bank-1
+; code). Out: DE past the copy.  Clobbers: A, F, BC, DE, HL.   copy + ~140 T
+copy_virt_keep:
 copy_virt3:
+                ld   a, (PORT_7FFD_SHADOW)
+                push af                        ; caller's page (restore_page)
                 call copy_virt
-                ld   a, BANK_COLD3
-                jp   page_bank
+                pop  af
+                jp   restore_page
 
 ; copy_virt — copy BC bytes from VIRTUAL sprite-source address HL (banks 1/3,
 ; assembled at $8000..$FFFF) to DE (bank 2/5 RAM). Handles the $C000 straddle.
@@ -2047,8 +2059,7 @@ sel_frt_copy:
                 jr   z, .nx
                 ex   de, hl                    ; DE = save cursor again
 .nx:            pop  hl
-                ld   bc, 5                     ; sel_tab stride
-                add  hl, bc
+                inc  hl                        ; sel_tab: 1 B per hero
                 pop  bc
                 djnz .l
                 ret

@@ -527,59 +527,105 @@ try_player_turn:
                 ld   a, (ix+E_FLAGS)
                 and  EF_DYING
                 ret  nz                        ; dead heroes don't act (CF=0)
-                ld   a, (PLAYER_DIR)           ; B3B-5: UP + LEFT / RIGHT is always a
-                bit  DIR_N_BIT, a              ; jump (game.md §2.4), legal or not
-                jr   z, .nj
+
+;------------------------------------------------------------------------------
+; tpt_intent — C3-2 player turn (game.md §2.3 / §3.1), from try_player_turn
+; (IX = hero, live list built). Order: a pending icon use (INTENT, set by
+; intent_tick) -> use_icon (bank 3); UP + LEFT / RIGHT -> jump; one of LEFT /
+; RIGHT (DOWN ignored: a low diagonal acts as the side) -> against the
+; facing: turn around, 0 turns, and a held key waits TURN_DELAY ticks before
+; it walks; along it: walk / bump attack / door (try_horizontal); UP -> climb;
+; DOWN -> climb, else wait; '.' -> wait. Opposite keys cancel.
+; Out: CF = 1 turn used.  Clobbers: all but IX, IY.
+;------------------------------------------------------------------------------
+tpt_intent:
+                ld   hl, DN_COMMIT             ; a released DOWN acts on THIS turn
+                ld   b, (hl)                   ; only, and only if nothing else is
+                ld   (hl), 0                   ; asked (review: no stale buffer)
+                ld   a, (INTENT)
+                or   a
+                jr   z, .move
+                xor  a
+                ld   (INTENT), a
+                ld   hl, use_icon              ; bank 3: L = 1 turn used
+                call far3
+                ld   a, l
+                rrca                           ; CF = L bit 0
+                ret  nc                        ; refused: ICON MODE stays (§3.1)
+                ld   a, (ICON_MODE)
+                or   a
+                call nz, mode_exit             ; a used turn returns to play
+                scf
+                ret
+.move:          ld   a, (PLAYER_DIR)
+                ld   c, a
                 and  (1 << DIR_E_BIT) | (1 << DIR_W_BIT)
+                bit  DIR_N_BIT, c
+                jr   z, .nj
+                or   a
                 jp   nz, try_jump              ; lowram: A = E/W bits; CF = 1 jumped
-.nj:            ld   a, (PLAYER_DIR)
+.nj:            ld   d, 1
+                cp   1 << DIR_E_BIT
+                jr   z, .side
+                ld   d, $FF
+                cp   1 << DIR_W_BIT
+                jr   z, .side
+                xor  a
+                ld   (TURN_HOLD), a            ; no side held: no pending delay
+                or   b                         ; B: DOWN tapped < DN_DEFER ticks
+                ld   a, 1 << DIR_S_BIT         ; (released): act on it now
+                jr   nz, .dc
+                ld   a, c
                 and  (1 << DIR_N_BIT) | (1 << DIR_S_BIT)
-                cp   1 << DIR_N_BIT
+                cp   1 << DIR_S_BIT
+                jr   nz, .dc
+                ld   a, (DN_T)                 ; DOWN held: wait for the ICON MODE
+                cp   DN_DEFER                  ; window (FIRE may still join)
+                jr   nc, .dact
+                or   a                         ; CF = 0: nothing yet
+                ret
+.dact:          ld   a, 1 << DIR_S_BIT
+.dc:            cp   1 << DIR_N_BIT
                 jr   nz, .nu
                 ld   d, $FF
                 call try_climb
                 ret  c
-                jr   .horiz
+                jr   .wt
 .nu:            cp   1 << DIR_S_BIT
-                jr   nz, .horiz
+                jr   nz, .wt
                 ld   d, 1
                 call try_climb
                 ret  c
-.horiz:
-                ld   a, (PLAYER_DIR)
-                and  (1 << DIR_E_BIT) | (1 << DIR_W_BIT)
-                cp   1 << DIR_E_BIT
-                jr   nz, .nr
-                ld   d, 1
-                call try_horizontal
-                ret  c
-                jr   .disc
-.nr:            cp   1 << DIR_W_BIT
-                jr   nz, .disc
-                ld   d, $FF
-                call try_horizontal
-                ret  c
-.disc:
-                ld   a, (PLAYER_DISC)
-                bit  DK_CLOSE_BIT, a           ; B3B-5 stand-in key C (game.md §1.4)
-                jr   z, .ncl
-                call try_close                 ; lowram: CF = 1 closed
-                ret  c
-                ld   a, (PLAYER_DISC)
-.ncl:           bit  DK_QUAFF_BIT, a
-                jr   z, .nq
-                ld   hl, try_quaff             ; B3B-R2: bank 3, L = 1 quaffed
-                call far3
-                ld   a, l
-                rrca
-                ret  c                         ; CF = 1: turn used
-                ld   a, (PLAYER_DISC)
-.nq:            bit  DK_WAIT_BIT, a
-                jr   nz, .wait
-                ld   a, (CLIMB_BLK)            ; climb blocked by an entity:
-                or   a                         ; a wait (else CF = 0, no turn)
-                ret  z
-.wait:          scf                            ; WAIT: a 2-tick turn, nothing moves
+                scf                            ; DOWN with no climb: wait (§2.3)
+                ret
+.wt:            ld   a, (PLAYER_DISC)
+                and  DK_WAIT                   ; '.'
+                scf
+                ret  nz
+                ld   a, (CLIMB_BLK)            ; climb blocked by an entity: wait
+                or   a
+                ret  z                         ; CF = 0: nothing legal
+                scf
+                ret
+.side:          ld   a, d                      ; D = dx: against the facing?
+                bit  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   z, .fr
+                dec  a                         ; facing left, dx = +1
+                jr   z, .turn
+                jr   .along
+.fr:            inc  a                         ; facing right, dx = -1
+                jr   z, .turn
+.along:         ld   hl, TURN_HOLD
+                ld   a, (hl)
+                or   a                         ; CF = 0
+                jp   z, try_horizontal         ; D = dx
+                dec  (hl)                      ; still in the turn-around delay
+                ret
+.turn:          ld   a, d
+                call face_a
+                ld   a, TURN_DELAY
+                ld   (TURN_HOLD), a
+                or   a                         ; CF = 0: no turn (anim_tick redraws)
                 ret
 
 ;------------------------------------------------------------------------------

@@ -75,7 +75,22 @@ text_img_end:
                 ASSERT text_base == text_img + TEXT_DISP
 vdata_end:
 VDATA_LEN       EQU vdata_end - vdata
-VIRT_TOTAL      EQU vdata_end - sprite_src
+; C3-0 (plan "3C breakdown" D4): bank-1 UI code (menus / pause / end screens),
+; right after vdata, entered only through far1 (gfx.asm). Assembled at its
+; runtime $C000.. address (DISP by TEXT_DISP, like the text block); the bytes
+; stay in the bank-1 tape block. Bank-1 code obeys the bank-3 rules: it never
+; pages $C000 itself, the helpers it calls hand $C000 back.
+ui1_img:
+                DISP $ + TEXT_DISP
+ui1_code:
+                INCLUDE "ui1.asm"
+ui1_end:
+                ENT
+ui1_img_end:
+UI1_LEN         EQU ui1_img_end - ui1_img
+                ASSERT ui1_img_end <= BANK_WINDOW              ; all in bank 1 (virtual < $C000)
+                ASSERT ui1_code == ui1_img + TEXT_DISP && ui1_end <= UI1_LIMIT
+VIRT_TOTAL      EQU ui1_img_end - sprite_src
     IF VIRT_TOTAL > $4000
 SRC_LEN_LO      EQU $4000
     ELSE
@@ -84,6 +99,7 @@ SRC_LEN_LO      EQU VIRT_TOTAL
 SRC_LEN_HI      EQU VIRT_TOTAL - SRC_LEN_LO
                 ASSERT VIRT_TOTAL <= $8000
                 DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B + vdata ", /D, VDATA_LEN, " B (bank1 ", /D, SRC_LEN_LO, ", free ", /D, $4000 - SRC_LEN_LO, "; bank3 ", /D, SRC_LEN_HI, ")"
+                DISPLAY "GAME bank-1 UI code: ", /H, ui1_code, "..", /H, ui1_end, " (", /D, UI1_LEN, " B), bank 1 free: ", /D, UI1_LIMIT - ui1_end
                 DISPLAY "GAME text (bank 1): ", /D, TX_COUNT, " strings, ", /D, TX_TOKENS, " tokens, raw ", /D, TEXT_RAW, " -> ", /D, TEXT_PACKED, " B packed at ", /H, text_base
                 DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed; total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
 
@@ -186,9 +202,11 @@ probe_presented:                               ; test probe (no code): bank 7 ==
                 ld   hl, (TICK_COUNTER)
                 inc  hl
                 ld   (TICK_COUNTER), hl
+                call input_tick                ; C3-1: STICK / STICK_OLD once per tick
                 ld   a, (GAME_STATE)
                 cp   GS_PLAYING
                 jp   nz, end_screen
+                call intent_tick               ; C3-2: FIRE / cursor / shortcuts, every tick
     IF RENDER_FIRST
                 ; E0 experiment: draw right after the HALT sync, so the erase->draw
                 ; window of every sprite sits at a fixed early point of the frame
@@ -200,12 +218,12 @@ probe_render_done:
                 ld   a, (TURN_PHASE)
                 or   a
                 call z, read_turn_input        ; INPUT: maybe start a turn
-                call anim_tick
+                call anim_gate                 ; C3-2b: frozen in ICON MODE
     ELSE
                 ld   a, (TURN_PHASE)
                 or   a
                 call z, read_turn_input        ; INPUT: maybe start a turn
-                call anim_tick
+                call anim_gate                 ; C3-2b: frozen in ICON MODE
                 call render
                 call pmark_dmg
 probe_render_done:
@@ -215,7 +233,7 @@ probe_render_done:
                 ; rewrites R_VIS / R_FID) and, with RENDER_FIRST, after the turn
                 ; logic: a heavy input tick is then usually in its 2nd frame,
                 ; where decor_tick holds (it never lengthens such a tick)
-                call decor_tick
+                call decor_gate                ; C3-2b: frozen in ICON MODE
                 ; B3B-11 (D5, user 2026-10-03): one panel item per tick, in ANIM
                 ; ticks >= 1 and idle ticks, never in a turn's input tick (TURN_PHASE
                 ; = ANIM with TURN_TICK still 0: read_turn_input just started it)
@@ -235,6 +253,27 @@ panel_done:                                    ; test probe (no code): panel ite
                 call turn_done
                 call c, end_turn
                 jr   play_loop
+
+;------------------------------------------------------------------------------
+; anim_gate / decor_gate — C3-2b (game.md §3.1): in ICON MODE between turns
+; (INPUT phase) nothing animates and no decor timer runs; a mode entered
+; during a turn's animation lets that turn finish first.  Clobbers: as callee
+;------------------------------------------------------------------------------
+anim_gate:      call frozen
+                jp   nz, anim_tick
+                ret
+decor_gate:     call frozen
+                jp   nz, decor_tick
+                ret
+frozen:         ld   a, (ICON_MODE)            ; Z = frozen (ICON MODE, INPUT phase)
+                or   a
+                jr   z, .n
+                ld   a, (TURN_PHASE)
+                or   a
+                ret
+.n:             inc  a                         ; NZ
+                ret
+                ASSERT TP_INPUT == 0
 
 ;------------------------------------------------------------------------------
 ; wait_tick — pace to 2 frames per tick (SYS_FRAMES: the A8 IM 2 ISR bumps it at
@@ -271,15 +310,40 @@ resync_tick:
 ;------------------------------------------------------------------------------
 ; read_turn_input — INPUT phase. Held keys repeat unless INPUT_REPEAT = 0 (then
 ; a release is required between turns, the P3 rule). A legal action resolves
-; the whole turn now and enters the ANIM phase.  Clobbers: all but IY.
+; the whole turn now and enters the ANIM phase. C3-2:
+; intent_tick already sampled this tick; a pending icon use (INTENT) goes
+; straight to try_player_turn; while FIRE is held the stick is the cursor's;
+; only directions and '.' count as held.  Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 read_turn_input:
-                call scan_matrix
-                call sample_input
-                jr   nz, .held
+                ld   a, (INTENT)
+                or   a
+                jr   nz, .go
+                ld   a, (ICON_MODE)            ; C3-2b: play frozen in ICON MODE
+                ld   hl, FIRE_ST
+                or   (hl)
+                ret  nz
+                ld   a, (DN_COMMIT)            ; a released DOWN: a fresh press, not
+                or   a                         ; gated by NEED_RELEASE (review: the
+                jr   nz, .go                   ; INPUT_REPEAT = 0 soft lock)
+                ld   hl, EXIT_LOCK
+                or   (hl)                      ; C3-2b: the key that left ICON MODE
+                                               ; does nothing until released
+                jr   z, .nlk
+                ld   a, (PLAYER_DIR)
+                or   a
+                ret  nz
+                ld   (hl), a                   ; released: unlocked
+.nlk:
+                ld   a, (PLAYER_DISC)
+                and  DK_WAIT
+                ld   hl, PLAYER_DIR
+                or   (hl)
+.test:          jr   nz, .held
                 xor  a
                 ld   (NEED_RELEASE), a
                 ld   (LOCK_SHOWN), a           ; B3B-5: next bump may print again
+                ld   (TURN_HOLD), a            ; C3-2: a released key ends the delay
                 ret
 .held:          ld   a, (INPUT_REPEAT)
                 or   a
@@ -350,11 +414,11 @@ do_exit:
                 ld   a, (EXIT_DEST)
                 call build_room                ; B3B-8: far3 -> bank-3 build_room_map v2
                 ld   a, (EXIT_KIND)            ; scroll arg: the exit direction
-                ld   hl, hscroll_room          ; both scrolls live in bank 3
+                ld   hl, hscroll_room          ; both scrolls live in bank 1 (scroll1.asm)
                 cp   EX_UP
                 jr   c, .h
                 ld   hl, vscroll_room
-.h:             call far3
+.h:             call far1
                 call room_shadow               ; clean background of the new room + its
                                                ; row-17 ornament (the scroll drew the screen's)
                 ld   a, (EXIT_DEST)
@@ -405,23 +469,41 @@ do_exit:
 ; the same fixed seed, §6.5).
 ;------------------------------------------------------------------------------
 end_screen:
-                call panel_tick                ; B3B-11: the death / win line, HP 0
-                call scan_matrix
-                call sample_input
+                ld   a, (END_SHOWN)            ; C3-6: the death / win card, once
+                or   a
+                jr   nz, .shown
+                inc  a
+                ld   (END_SHOWN), a
+                ld   a, (GAME_STATE)
+                ld   hl, end_card              ; bank 1 (menu1.asm)
+                call far1
+.shown:         call panel_tick                ; B3B-11: the death / win line, HP 0
+                call sample_input              ; play_loop ran input_tick
                 ld   a, (PLAYER_DISC)
                 bit  DK_ENTER_BIT, a
+                jr   nz, .go
+                ld   hl, STICK                 ; C3-6: or a FIRE press
+                ld   a, (hl)
+                inc  l
+                ld   c, (hl)
+                ld   b, a
+                ld   a, c
+                cpl
+                and  b
+                bit  JOY_F_BIT, a
                 jp   z, play_loop
+.go:
                 ; ENTER: fall through into enter_select
 
 ;==============================================================================
-; enter_select — hero select (bank 3: sel_run via far3), then start_game (bank
-; 5 low RAM) with C = the chosen kind. Reached by jp only (boot, end_screen),
+; enter_select — the C3-6 main menu (bank 1: menu_run via far1), then
+; start_game (bank 5 low RAM) with C = the chosen kind. Reached by jp only (boot, end_screen),
 ; so the stack is at its base level here.
 ;==============================================================================
 enter_select:
-                call show_bank5                ; A7: select draws on (and shows) bank 5
-                ld   hl, sel_run
-                call far3                      ; C = hero kind
+                call show_bank5                ; A7: the menu draws on (and shows) bank 5
+                ld   hl, menu_run              ; C3-6: bank 1 (menu1.asm)
+                call far1                      ; C = hero kind
                 jp   start_game
 
 
@@ -431,6 +513,7 @@ enter_select:
                 INCLUDE "anim.asm"
                 INCLUDE "data.asm"
                 INCLUDE "panel2.asm"            ; B3B-11 panel engine, bank-2 part
+                INCLUDE "icons.asm"             ; C3-3 icon bar state, info / level items
                 INCLUDE "decor.asm"             ; B3B-10 animated decor (decor_tick)
 
 ;==============================================================================
@@ -480,7 +563,8 @@ tile_flags:
                 DB TF_SOLID | TF_DOOR | TF_LOCK        ; 25 T_DOOR_LOCK
                 DB TF_LADDER | TF_HOLE                 ; 26 T_GRATE (B12: raised = the open exit hole)
                 DB 0                                   ; 27 T_RUBBLE (decor at a block's foot)
-                DB 0, 0, 0                             ; 28-30 EXPERIMENT
+                DB 0, 0, 0                             ; 28-30 T_WALL_DITHER / PATCH / FADE:
+                                                       ; non-solid back-wall patches (D1 decor rule)
                 DB TF_ANIM                             ; 31 T_CANDLES
                 DS T_LVL_OBJ - TILE_COMMON, 0          ; 32-59 per-level decor
                 DS T_LVL_OBJ_N, TF_SOLID | TF_ATTACK   ; 60-63 lectern / Book

@@ -98,78 +98,49 @@ panel_init:
                 ld   (PANEL_HP_SH), a          ; $FF: never drawn -> PD_HP / PD_ICONS
                 ld   (PANEL_HP_SH + 1), a
                 ld   (PANEL_POT_SH), a
-                ld   a, PD_HP | PD_ICONS | PD_DEPTH
+                ld   (LVL_SH), a               ; level digit: never drawn
+                ld   (ICON_SIG), a             ; (no real signature is $FF)
+                ld   a, PD_HP | PD_ICONS | PD_DEPTH | PD_INFO
                 ld   (PANEL_DIRTY), a
-                ; icon bar (rows 18-19): 10 slots of 3 x 2 cells
-                ld   hl, bar_knight
-                ld   a, (HERO_KIND)
-                or   a
-                jr   z, .bar
-                ld   hl, bar_wizard
-.bar:           ld   c, 0                      ; C = slot col
-.slot:          ld   a, (hl)
-                inc  hl
-                push hl
-                push bc
-                cp   SLOT_POTION
-                jr   z, .pot
-                ld   hl, icon_empty24
-                cp   SLOT_EMPTY
-                jr   z, .blit
-                ld   hl, icon_tab              ; icon_tab + id * ICON_LEN (cold)
-                ld   de, ICON_LEN
-                or   a
-                jr   z, .blit
-                ld   b, a
-.mul:           add  hl, de
-                djnz .mul
-.blit:          ld   b, ICON_ROW
-                ld   de, (2 << 8) | ICON_W
-                call pblit
-                jr   .snext
-.pot:           ld   b, ICON_ROW + 1           ; T_POTION glyph (bitmap only; attrs:
-                call cell_bm                   ; item_icons) in the slot's bottom-left cell
-                ex   de, hl
-                ld   hl, TILE_GLYPHS + T_POTION * 8
-                ld   b, 8
-.pg:            ld   a, (hl)
-                ld   (de), a
-                inc  hl
-                inc  d
-                djnz .pg
-                pop  bc
-                push bc
-                ld   a, c
-                ld   (pot_col), a              ; item_icons draws the count / attrs here
-                ld   b, ICON_ROW
-                ld   de, (ICON_W << 8) | 2
-                xor  a                         ; the slot's attrs: black until item_icons
-                call stamp_rect
-.snext:         pop  bc
-                pop  hl
-                ld   a, c
-                add  a, ICON_W
-                ld   c, a
-                cp   ICON_SLOTS * ICON_W
-                jr   c, .slot
-                ; slot 0 (melee) selected: PAPER blue over its 3 x 2 cells
-                ld   bc, ICON_ROW << 8
-                call attr_addr
-                ld   de, ATTR_STRIDE - ICON_W
-                ld   c, 2
-.sr:            ld   b, ICON_W
-.sc:            ld   a, (hl)
-                or   ATTR_P_SEL
-                ld   (hl), a
+                ; C3-3: the icon bar is drawn by item_icons (icon_state vs
+                ; ICON_SH): every slot "never drawn" -> slot_redraw each
+                ld   hl, ICON_SH
+                ld   b, ICON_SLOTS
+                ld   a, IS_NONE
+.ish:           ld   (hl), a
                 inc  l
-                djnz .sc
-                add  hl, de
-                dec  c
-                jr   nz, .sr
+                djnz .ish
+                ld   b, 0                      ; the quick-potion slot
+.ps:            ld   a, b
+                call slot_act
+                cp   SA_POTION
+                jr   z, .psf
+                inc  b
+                jr   .ps
+.psf:           ld   a, b
+                ld   (pot_slot), a
+                ; info line fields (game.md §3.4): name chars 0-15, numbers 16-27,
+                ; notes 28-41 = cols 0-11 / 12-20 / 21-31
+                ld   a, ATTR_INFO_NAME
+                ld   bc, INFO_ROW << 8
+                ld   de, (INFO_NUM_COL << 8) | 1
+                call stamp_rect
+                ld   a, ATTR_INFO_NUM
+                ld   bc, (INFO_ROW << 8) | INFO_NUM_COL
+                ld   de, ((INFO_NOTE_COL - INFO_NUM_COL) << 8) | 1
+                call stamp_rect
+                ld   a, ATTR_INFO_NOTE
+                ld   bc, (INFO_ROW << 8) | INFO_NOTE_COL
+                ld   de, ((ROOM_COLS - INFO_NOTE_COL) << 8) | 1
+                call stamp_rect
                 ; depth cell row 19 (key icon until 3F: none) -> black
                 ld   bc, ((ICON_ROW + 1) << 8) | DEPTH_COL
                 ld   de, (2 << 8) | 1
                 xor  a
+                call stamp_rect
+                ld   a, ATTR_LVL               ; C3-3: the level digit at (31, 19)
+                ld   bc, ((ICON_ROW + 1) << 8) | LVL_COL
+                ld   de, (1 << 8) | 1
                 call stamp_rect
                 ; row 21: labels + bar frames + attrs
                 ld   hl, label_heart
@@ -327,6 +298,140 @@ cell_bm:
                 or   SCREEN_BITMAP >> 8
                 ld   h, a
                 ret
+
+;------------------------------------------------------------------------------
+; slot_redraw — far3 from item_icons: A = slot, E = its state (IS_* | IS_SEL).
+; Draws the slot's 3 x 2 cells from scratch: an outline (IS_HIDDEN or no icon
+; art: the 3E quick food / scroll), the quick potion (T_POTION glyph + count,
+; ATTR_POTION / ATTR_HUD) or the bar icon (pblit, its own attrs); IS_GREY
+; -> all 6 attrs ATTR_P_GREY; IS_SEL -> PAPER blue (sel_paint, which marks).
+; Clobbers: all but IX, IY.   ~3k T (pblit through GEN_SRC)
+;------------------------------------------------------------------------------
+slot_redraw:
+                ld   b, a
+                push de                        ; E = state
+                push bc                        ; B = slot
+                ld   a, b
+                add  a, a
+                add  a, b
+                ld   c, a                      ; C = col
+                ld   hl, bar_knight
+                ld   a, (HERO_KIND)
+                or   a
+                jr   z, .k
+                ld   hl, bar_wizard
+.k:             ld   a, b
+                add  a, l
+                ld   l, a
+                jr   nc, .k2
+                inc  h
+.k2:            ld   a, e
+                and  3
+                ld   a, (hl)                   ; A = icon id / SLOT_*
+                jr   z, .out                   ; IS_HIDDEN
+                cp   SLOT_POTION
+                jr   z, .pot
+                cp   SLOT_EMPTY
+                jr   z, .out
+                ld   hl, icon_tab              ; icon_tab + id * ICON_LEN (cold)
+                ld   de, ICON_LEN
+                or   a
+                jr   z, .blit
+                ld   b, a
+.mul:           add  hl, de
+                djnz .mul
+                jr   .blit
+.out:           ld   hl, icon_empty24
+.blit:          ld   b, ICON_ROW
+                ld   de, (2 << 8) | ICON_W
+                push bc
+                call pblit
+                pop  bc
+                jr   .attrs
+.pot:           ld   b, ICON_ROW               ; blank 3 x 2, then the glyph + count
+                call .clr
+                ld   b, ICON_ROW + 1
+                call .clr
+                push bc
+                call cell_bm                   ; (19, col)
+                ex   de, hl
+                ld   hl, TILE_GLYPHS + T_POTION * 8
+                ld   b, 8
+.pg:            ld   a, (hl)
+                ld   (de), a
+                inc  hl
+                inc  d
+                djnz .pg
+                ld   a, (P_ENTITIES + E_POT)
+                cp   10
+                jr   c, .d
+                ld   a, 9
+.d:             add  a, '0'
+                ld   hl, P_NUMBUF
+                ld   (hl), a
+                inc  l
+                ld   (hl), 0
+                dec  l
+                pop  bc
+                push bc
+                ld   a, c
+                add  a, 2
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   e, a                      ; x of (col + 2): a cell (print6 x rule)
+                ld   b, ICON_ROW + 1
+                call print6
+                pop  bc
+                push bc
+                ld   b, ICON_ROW
+                ld   de, (ICON_W << 8) | 2
+                xor  a
+                call stamp_rect
+                pop  bc
+                push bc
+                ld   b, ICON_ROW + 1
+                call attr_addr
+                ld   (hl), ATTR_POTION
+                inc  l
+                inc  l
+                ld   (hl), ATTR_HUD
+                pop  bc
+.attrs:         pop  af                        ; A = slot (B of the push)
+                pop  de                        ; E = state
+                push af
+                ld   a, e
+                and  3
+                cp   IS_GREY
+                jr   nz, .ng
+                push de
+                ld   b, ICON_ROW
+                ld   de, (ICON_W << 8) | 2
+                ld   a, ATTR_P_GREY
+                call stamp_rect                ; (C kept)
+                pop  de
+.ng:            pop  bc                        ; B = slot
+                ld   d, 0                      ; drawn fresh: plain attrs
+                jp   sel_paint                 ; E: PAPER blue / inverse; marks the slot
+; .clr — 3 cells of char row B from col C: bitmap 0.  Keeps BC.
+.clr:           push bc
+                call cell_bm
+                ld   c, 8
+.cl:            xor  a
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                dec  l
+                dec  l
+                inc  h
+                dec  c
+                jr   nz, .cl
+                pop  bc
+                ret
+
+; item_info / dec16 / xp_next / info_tab: bank 1 since the C3 review (info1.asm).
 
 ; icon bars by class (game.md §3.5): icon ids (panel_icons.asm) / outline / potion slot
 SLOT_EMPTY      EQU $FE

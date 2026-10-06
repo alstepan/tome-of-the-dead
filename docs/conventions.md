@@ -37,12 +37,32 @@
 - Document which bank any far data lives in, and the bank-switch cost around it.
 - Hot (per-tick) code lives in bank 2. Cold code that pages `$C000` lives in
   bank 5 low RAM (`src/lowram.asm`); cold code that needs no other `$C000`
-  bank lives in bank 3 (`src/bank3.asm`) and is entered only through `far3`
-  (HL = target, A = arg; restores the caller's page from the shadow). Bank-3
-  code never pages `$C000` itself — it calls bank-2 helpers that re-page it
-  (`blit_keep`). See `docs/memory-map.md` "Cold code placement".
-- **Bank-2 / low-RAM helpers reachable from bank-3 code must hand `$C000`
-  back as they found it** (B3B-R2 review). Since R2 the monster phase runs in
+  bank lives in bank 3 (`src/bank3.asm`) and is entered only through `far3`;
+  the 3C UI (menus / pause / end screens) lives in bank 1 (`src/ui1.asm`,
+  `ui1_code` after `vdata`) and is entered only through `far1`. Both are
+  2-byte bank loads in front of **`farb`** (bank 2, `gfx.asm`): HL = target,
+  A = arg (passed in), C = bank (`farb` only); DE / IX pass in, BC does not;
+  the target's BC / DE / HL / IX pass out; clobbers A, F; restores the
+  caller's bank (bits 0-2 of the saved shadow, screen bit kept). Far calls
+  nest (a bank-1 target may `far3`, and vice versa). Paged-bank code (bank 1
+  or 3) never pages `$C000` itself — it calls helpers that re-page it
+  (`blit_keep`). See `docs/memory-map.md` "Cold code placement" / "3C
+  contracts".
+- **Helpers restore the caller's bank.** Every bank-2 / low-RAM helper that
+  pages `$C000` and returns, and is reachable from paged-bank code (bank 3 or
+  bank 1), saves `PORT_7FFD_SHADOW` before paging and ends with
+  `restore_page` (bits 0-2 of the saved value) — never a hard-coded
+  `page_bank BANK_x` (C3-0 audit: `copy_virt3` re-paged bank 3, now
+  `copy_virt_keep`; the others — `msg_push(_end)`, `show_impact_msg`,
+  `print6t`, `level_load_tiles`, `door_paint`, `blit_keep`, `far*` — already
+  did). Helpers that leave another bank paged (`shadow_rect`, `erase_rect`,
+  `blit_sprite`, `present`, `draw_room`, `present_full`, the generator) are
+  forbidden from paged-bank code except as its tail jump (`potion_pickup` →
+  `shadow_rect`: `farb` re-pages). `tests/world.py` W18 calls `msg_push`,
+  `copy_virt3` (pages bank 3) and a nested `far1` from a bank-1 target
+  entered by `far1` with bank 0 paged and asserts bank 1 / bank 0 afterwards
+  (it crashes with the old `copy_virt3`).
+- History (B3B-R2 review), the rule as first written for bank 3: since R2 the monster phase runs in
   bank 3, so anything `try_step` can reach (today `mon_door` → `door_open` →
   `door_paint` → `shadow_rect`, which pages bank 7) saves `PORT_7FFD_SHADOW`
   before paging and `restore_page`s it before returning; otherwise the return
@@ -132,5 +152,5 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
 
 ## Message API (B3B-13)
 
-- `msg_push` / `msg_push_end` (low RAM) clobber **AF, BC, DE, HL** (C is no longer preserved, unlike the old `log_push`); callers in bank 3 get their bank back (restore_page).
+- `msg_push` / `msg_push_end` (low RAM) clobber **AF, BC, DE, HL** (C is no longer preserved, unlike the old `log_push`); callers in any paged bank (bank 3, bank-1 UI code) get their bank back (restore_page; W18 checks it from bank 1).
 - `tk_get` uses an SMC mode switch (`tk_get.sw`): never call the text printer from the ISR.

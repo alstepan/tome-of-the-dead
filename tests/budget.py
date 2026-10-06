@@ -26,10 +26,10 @@ BUDGET = 2 * 70908
 CAP = 126000                                      # D5: worst tick incl. the panel item
 # B3B-11: panel_tick .. play_loop.nopanel = the tick's panel item (D5: one per
 # tick, never in a turn's input tick); its present lands in the next tick_work.
-PHASES = ["tick_work", "read_turn_input", "anim_tick", "render", "decor_tick", "panel_tick",
+PHASES = ["tick_work", "intent_tick", "read_turn_input", "anim_tick", "render", "decor_tick", "panel_tick",
           "panel_done", "wait_tick"]
 if os.environ.get("GAME_PROFILE"):                # finer split for optimisation work
-    PHASES = ["tick_work", "read_turn_input", "try_player_turn", "resolve_monsters",
+    PHASES = ["tick_work", "intent_tick", "read_turn_input", "try_player_turn", "resolve_monsters",
               "materialise", "anim_tick", "render", "render.nopend", "render.sdone",
               "render.f3done", "render.drdone", "draw_zap", "pmark_dmg", "present",
               "decor_tick", "panel_tick", "panel_done", "wait_tick"]
@@ -97,14 +97,22 @@ class Stepper:
         return prev
 
     def turn(self, *keys, max_ticks=80):
+        """One scripted action on the C3 controls, every tick measured: the
+        0-turn turn-around tap / slot select (_prep) and FIRE taps included."""
+        keys, fire = self.p._prep(keys, step=self.tick)
         t0 = self.p.rw("TURN_COUNTER")
         self.p.hold(*keys)
+        if fire:                                  # FIRE acts on release
+            self.tick()
+            self.p.release()
         for i in range(max_ticks):
             self.tick()
             if i == 1:
                 self.p.release()
             if self.p.rw("TURN_COUNTER") != t0 and self.p.rb("TURN_PHASE") == 0:
                 break
+            if i >= 6 and self.p.rw("TURN_COUNTER") == t0 and self.p.rb("TURN_PHASE") == 0:
+                break                             # nothing legal: no turn
         self.p.release()
         self.tick()
 
@@ -116,7 +124,9 @@ class Stepper:
 
 HOSTILE = EF_ACTIVE | EF_HOSTILE | EF_LEFT
 RIGHT = EF_ACTIVE | EF_HOSTILE
-KEYS = [("L", 6), ("H", 4), ("SPACE", 4)]        # slash the skeleton, walk away, wait
+# C3-8a: FIRE taps (melee icon via use_icon / far3) + a bump, a turn-around tap
+# then the walk away, '.' waits: the whole intent_tick path is measured.
+KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # Gate: "mix" must keep every tick within the 2-frame budget. It is the M1
 # encounter cap exactly (game.md §9.3: skeleton tall 5 + goblin medium 3 + rat
 # small 2 + bat small 2 = 12, 4 monsters) with the hero's slash on top.

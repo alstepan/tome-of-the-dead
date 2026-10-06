@@ -26,20 +26,31 @@ page_bank:
                 ret
 
 ;==============================================================================
-; far3 — call the bank-3 cold routine at HL with bank 3 paged in at $C000, then
-; put the caller's $C000 bank back (saved PORT_7FFD_SHADOW value, bits 0-2).
-; In : HL = target (bank3.asm), A = passed to the target in A.
+; farb — call the routine at HL with bank C paged in at $C000, then put the
+; caller's $C000 bank back (saved PORT_7FFD_SHADOW value, bits 0-2). C3-0
+; generalised far3 (bank in C) so the bank-1 UI code (ui1_code, far1) shares
+; one trampoline; far3 / far1 are 2-byte bank loads in front of it.
+; In : HL = target, A = passed to the target in A, C = bank (0..7; farb only).
+;      BC is NOT passed (page_bank uses it); DE, IX pass in.
 ; Out: the target's BC, DE, HL, IX (passed through).  Clobbers: A, F.
-; ~220 T + target. Not re-entrant into another bank (bank-3 code must not page
-; $C000 itself — see bank3.asm; it blits through blit_keep).
+; ~220 T + target (far3 / far1: +7 / +19 T). Nestable: the target may far-call
+; again (each level restores its caller's bank). Paged-bank code must not page
+; $C000 itself — see bank3.asm; it blits through blit_keep, and every helper
+; it calls hands $C000 back as it found it (conventions.md "Banking").
 ;==============================================================================
+far1:
+                ld   c, BANK_UI1
+                jr   farb
 far3:
+                ld   c, BANK_COLD3
+                ; fall through
+farb:
                 ld   b, a
                 ld   a, (PORT_7FFD_SHADOW)
                 push af                        ; caller's page (restore_page uses bits 0-2)
                 ld   a, b
                 push af                        ; target's A
-                ld   a, BANK_COLD3
+                ld   a, c
                 call page_bank
                 pop  af
                 call jp_hl

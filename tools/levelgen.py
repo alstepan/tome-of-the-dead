@@ -17,7 +17,11 @@ Seeding: GEN_RNG = LVL_SEED ^ (depth * $0101); if that is 0 it becomes 1.
 LVL_SEED itself (= f(MASTER_SEED, depth)) is the caller's business (CLI SEED).
 RESEED: if no lair candidate exists (see step 6) the whole generation restarts
 with seed+1 (fresh GEN_RNG from the formula above), at most RESEED_MAX=16
-tries; the header LVL_SEED holds the seed actually used.
+tries; the header LVL_SEED holds the seed actually used. Under the L1 level
+shape this path is unreachable (tier (b) always has a candidate: the bottom row
+is always present and reached by a horizontal edge, steps 2 + 3;
+LAIR_RESEEDS stays 0, tools/levelgen_runs.py checks it); it is kept as a cheap
+guard, mirrored by the Z80 port.
 The header stores the FINAL GEN_RNG state (after room seeds).
 Call order (every rnd call, in this order; a restart does NOT reseed):
  1. (L1) n_rooms = 7 + rnd(3) (D8: min(n, 8));  start = rnd(3) (top row);
@@ -34,7 +38,7 @@ Call order (every rnd call, in this order; a restart does NOT reseed):
     (stored as DNCOL of r and UPCOL of r+3).
  6. lair selection uses BFS only (no rnd): tier (a) farthest BOTTOM-ROW leaf
     with a horizontal edge, else (b) farthest bottom-row room with a horizontal
-    edge (ties: lowest id; always exists by 2+3); no tier (c) -> RESEED. D8: the lair must also have
+    edge (ties: lowest id; always exists by 2+3; none = RESEED, unreachable under L1). D8: the lair must also have
     a free (absent) horizontal grid neighbour (Sanctum cell) or it is not a
     candidate. D2+: arrival col (start), then level-exit col (lair):
     pick_feature(mandatory).

@@ -62,6 +62,12 @@ python3 tests/zx0_roundtrip.py   # A4: every frame / kind block packs + unpacks 
 FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scenarios a/b/c); MEASUREMENT, not a pass/fail gate; A/B the order with -DRENDER_FIRST=0
 ```
 
+- **Controls (C3-8a)**: every suite boots through the C3-6 menu (`Proto.boot` ->
+  `menu_start`: `2` toggles HERO, `1` starts) and plays the default KEYTAB
+  (Q/A/O/P, SPACE = FIRE). `Proto.hold/turn` keep the scenario aliases
+  L/H/K/J = P/O/Q/A and `WAIT` = `.`; `turn()` adds a 0-turn tap when the key
+  opposes the facing, `C` = FIRE on the melee icon, `G` = select the potion
+  slot + FIRE. The `legacy_input` flag / `GAME_LEGACY_INPUT` switch are gone.
 - **Tick-exact**: `tests/game_lib.py` keeps ZEsarUX in cpu-step mode with
   breakpoints on the test-probe labels (`wait_tick`, `select_tick`) and advances
   one 25 Hz tick per `run`, so scenarios are deterministic (no sleeps, no racing

@@ -334,14 +334,8 @@ panel_step:
                 ld   hl, PANEL_DIRTY
                 jr   z, .p1
                 set  PD_HP_BIT, (hl)
-.p1:            ld   a, (P_ENTITIES + E_POT)
-                ld   de, PANEL_POT_SH
-                ex   de, hl
-                cp   (hl)
-                ex   de, hl
-                jr   z, .p2
-                set  PD_ICONS_BIT, (hl)
-.p2:            ld   a, (hl)
+.p1:            call icon_poll                 ; C3-3 (icons.asm): potions, level, slots
+                ld   a, (hl)
                 or   a
                 ret  z
                 rrca
@@ -352,13 +346,10 @@ panel_step:
                 dec  c
                 jp   z, item_log               ; 1st frame only
 .nl:            bit  PD_ICONS_BIT, (hl)
-                jp   nz, item_icons
+                jp   nz, item_icons_far        ; C3-3: bank 3 (icons3.asm)
                 bit  PD_DEPTH_BIT, (hl)
                 jp   nz, item_depth
-                ld   a, (hl)
-                and  PD_LOG                    ; MP / FOOD / AMMO / INFO: 3C / 3E
-                ld   (hl), a                   ; (a waiting log item stays queued)
-                ret
+                jp   panel_more                ; C3-3 (icons.asm): INFO; MP / FOOD / AMMO 3D / 3E
 
 ;------------------------------------------------------------------------------
 ; item_hp — HP bar + 2-digit number (row 21, cols 1..6). HL = PANEL_DIRTY.

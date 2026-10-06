@@ -60,6 +60,8 @@ PAGING_PROBE    EQU $A5             ; check_paging: bank-1 marker (bank 0 gets ~
 SRC_VIRT_BASE   EQU $8000           ; sources are assembled at virtual $8000..$FFFF
 BANK_TEXT       EQU BANK_SRC_LO     ; B3B-13: the text block (strings + dictionary), after vdata
 TEXT_DISP       EQU BANK_WINDOW - SRC_VIRT_BASE   ; virtual bank-1 address -> runtime ($C000..)
+BANK_UI1        EQU BANK_SRC_LO     ; C3-0: bank-1 UI code (ui1_code, after vdata; via far1)
+UI1_LIMIT       EQU $10000          ; ui1_code runs at $C000.. (DISPed by TEXT_DISP), ends below this
 TX_NONE         EQU $FF             ; level_enter / level_show / panel_init: E = no first line
 
 ;------------------------------------------------------------------------------
@@ -262,6 +264,20 @@ CLIMB_BLK_ID    EQU $BFC7           ; B14: slot of the last entity that blocked 
 CLIMB_BLK_N     EQU $BFC8           ; B14: consecutive blocked climbs by CLIMB_BLK_ID (0 = none)
 CLIMB_BLK       EQU $BFC1           ; 1 = this input's climb was blocked by an entity (-> wait turn)
 AY_CALLS        EQU $BFC2           ; A8 word: AY_PLAY calls (the silent stub counts; test-observable)
+PLAYER_SC       EQU $BFC9           ; C3-1: shortcut keys this tick (SC_* bits, io.asm)
+                ASSERT PLAYER_SC != CLIMB_BLK_ID && PLAYER_SC != CLIMB_BLK_N
+ICON_SIG        EQU $BFCB           ; C3-3: icon_sig as last drawn (icon_poll)
+ICON_MODE       EQU $BFCC           ; C3-2b: 1 = ICON MODE (play frozen, cursor on the stick)
+DN_T            EQU $BFCD           ; C3-2b: ticks DOWN alone has been held (ICON MODE window)
+DN_COMMIT       EQU $BFCE           ; C3-2b: 1 = a DOWN released inside the window: act once
+PRE_N           EQU $BFCF           ; C3-2b: info line ">" prefix getter state (pre_get)
+EXIT_LOCK       EQU $BFD1           ; C3-2b: 1 = directions ignored until released (ICON MODE exit)
+FIRE_LOCK       EQU $BFDF           ; C3-2b review: 1 = FIRE masked after BREAK until released
+MENU_SPIN       EQU $BF9A           ; C3-6: word, frames x busy-wait passes in the menu (seed entropy)
+PAUSED          EQU $BF9C           ; C3-6: 1 while the pause overlay is up (test-observable)
+END_SHOWN       EQU $BF9D
+MENU_IN_SIG     EQU $BF9E           ; C3-6 review: last input fold seen by menu_frame           ; C3-6: 1 = the death / win card is drawn
+LVL_SH          EQU $BFCA           ; C3-3: hero level digit last drawn ($FF = never)
 LOCK_SHOWN      EQU $BFC6           ; B3B-5: 1 = the locked-door message was printed for the key
                                     ;   still held (read_turn_input clears it on release)
 JUMP_TURN       EQU $BFC4           ; B3B-5 word: TURN_COUNTER value on which a jump is refused (the turn
@@ -609,6 +625,7 @@ SYM             EQU FF_SYM
 ; Stage 3B data contracts (B3B-1): EQUs + ASSERTs only, no bytes.
 ;------------------------------------------------------------------------------
                 INCLUDE "level_defs.asm"
+                INCLUDE "hero_defs.asm"         ; C3-0: Stage 3C contracts (HERO_ST, JOY_MIRROR, KEYTAB)
 ; B3B-13: message string ids TX_* / decoded lengths TXL_* (+ ASSERT <= LOG_MAX),
 ; generated from src/strings.txt by tools/textpack.py (tools/build.sh)
                 INCLUDE "../build/text/strings_ids.inc"

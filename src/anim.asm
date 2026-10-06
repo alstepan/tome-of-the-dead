@@ -825,6 +825,8 @@ render:
 .nopl:
 
                 ; ---------------- 5. zap overlay, 6. timers ---------------------
+                call frozen                    ; C3-2b: ICON MODE holds the zap
+                ret  z                         ; frames and the timers
                 call draw_zap
                 ld   hl, P_ENTITIES + E_FLT    ; A7b: HL walk, 47 T/slot (was 63)
                 ld   de, P_ENT_STRIDE

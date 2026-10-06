@@ -108,7 +108,6 @@ TILED_OBJ = ("BOOKSHELF", "WINDOW_BAR")
 ANIM_FLAGS = {"TORCH_TALL": F_GROW0 | F_AROW1 | F_LARGE, "BRAZIER_BIG": F_GROW0 | F_AROW1 | F_LARGE,
               "TORCH_SLIM": F_GROW0 | F_AROW1 | F_LARGE, "BRAZIER": F_GROW0 | F_LARGE,
               "CAULDRON": F_GLAST | F_LARGE}
-COBWEB_R_PLACEHOLDER = False  # COBWEB_R in tileset_ids.inc since 2026-10-05 (tiles_convert mirror)
 
 
 def level_objects():
@@ -163,9 +162,8 @@ def level_objects():
     for d in out:
         out[d].sort(key=lambda o: o[0] not in ("PATCH_A", "PATCH_B"))   # stable: patches first
         assert len(out[d]) >= 3          # D5 / D7: 3 since PILLAR made room for GLOW (B12)
-    for d, c in list(cob.items()):
-        if c and c[1] is None:
-            cob[d] = (c[0], c[0])         # COBWEB_R_PLACEHOLDER
+    for d, c in cob.items():
+        assert not c or c[1] is not None, f"D{d}: COBWEB without COBWEB_R"   # both ids exist
     return out, cob
 
 
@@ -405,8 +403,7 @@ def emit_asm():
     out.append("                DEFB " + ", ".join(str(LEVEL_FIRST[d]) for d in range(1, 10)))
     out.append("dg_pk:          ; PATCH_A/B records at the head of each level's records (0 = composite)")
     out.append("                DEFB " + ", ".join(str(PATCHK[d]) for d in range(1, 9)))
-    out.append("dg_cob:         ; COBWEB left / right corner id per depth (0 = none)"
-               + ("; COBWEB_R_PLACEHOLDER: right id = left id until the artist adds COBWEB_R" if COBWEB_R_PLACEHOLDER else ""))
+    out.append("dg_cob:         ; COBWEB left / right corner id per depth (0 = none)")
     for d in range(1, 9):
         l, r = COBWEB[d] or (0, 0)
         out.append(f"                DEFB {l:3d}, {r:3d}")

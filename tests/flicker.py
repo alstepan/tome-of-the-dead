@@ -259,13 +259,19 @@ def run(h, name):
     r = Rec(p)
 
     def turn(key):
+        keys, fire = p._prep((key,), step=r.tick)    # C3-8a: turn-around tap (0 turns)
         t0 = p.rw("TURN_COUNTER")
-        p.hold(key)
+        p.hold(*keys)
+        if fire:
+            r.tick()
+            p.release()
         for i in range(80):
             r.tick()
             if i == 1:
                 p.release()
             if p.rw("TURN_COUNTER") != t0 and p.rb("TURN_PHASE") == 0:
+                break
+            if i >= 6 and p.rw("TURN_COUNTER") == t0 and p.rb("TURN_PHASE") == 0:
                 break
         p.release()
         r.tick()

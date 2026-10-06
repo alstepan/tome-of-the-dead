@@ -11,6 +11,8 @@
 ;                     level shape the lair always exists (no lair reseeds) and
 ;                     tools/levelgen_runs.py finds 0 failing seeds at every depth;
 ;                     level_new (bank3.asm) still retries from seed + 16.
+;                     The reseed path is therefore unreachable under L1; it stays
+;                     as a cheap guard (bit-exact with tools/levelgen.py).
 ;                     Clobbers all but IY, SP (far3 itself clobbers A/F on return).
 ; level_start_x  In : block generated.  Out: A = B = hero start col (storey 0).
 ;

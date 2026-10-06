@@ -54,51 +54,7 @@ item_log:
                 ret
                 ASSERT (HUD4_EXT >> 8) == ((HUD4_PW + 3) >> 8)
 
-;------------------------------------------------------------------------------
-; item_icons — 3B: the quick-potion slot (count digit at (col+2, 19); attrs:
-; glyph cell ATTR_POTION + digit ATTR_HUD, both greyed at 0). HL = PANEL_DIRTY.
-; print6 x rule (B3B-11b): x = (pot_col + 2) * 8 is a multiple of 8 by
-; construction; pot_col is a slot's left col set by panel_init (<= 29, so the
-; one digit ends by x + 6 <= 256). The only runtime print6 x: keep it a cell.
-; ~1k T
-;------------------------------------------------------------------------------
-item_icons:
-                res  PD_ICONS_BIT, (hl)
-                ld   a, (P_ENTITIES + E_POT)
-                ld   (PANEL_POT_SH), a
-                cp   10
-                jr   c, .d
-                ld   a, 9
-.d:             add  a, '0'
-                ld   hl, P_NUMBUF
-                ld   (hl), a
-                inc  l
-                ld   (hl), 0
-                dec  l
-                ld   a, (pot_col)
-                add  a, 2
-                add  a, a
-                add  a, a
-                add  a, a
-                ld   e, a                      ; x of cell col + 2
-                ld   b, ICON_ROW + 1
-                call print6
-                ld   a, (pot_col)
-                ld   c, a
-                ld   b, ICON_ROW + 1
-                call attr_addr                 ; HL = attr (19, col); keeps BC
-                ld   de, (ATTR_POTION << 8) | ATTR_HUD
-                ld   a, (PANEL_POT_SH)
-                or   a
-                jr   nz, .a
-                ld   de, (ATTR_P_GREY << 8) | ATTR_P_GREY
-.a:             ld   (hl), d
-                inc  l
-                inc  l
-                ld   (hl), e
-                ld   de, (ICON_W << 8) | 1
-                jp   pmark_rect                ; (B, C = row 19, slot col)
-pot_col:        DB   0                         ; quick-potion slot col (panel_init)
+; item_icons: C3-3, icons.asm.
 
 ;------------------------------------------------------------------------------
 ; print6t — print6 of a dictionary-token stream (B3B-13; format: tools/

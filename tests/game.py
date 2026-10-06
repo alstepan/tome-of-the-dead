@@ -235,7 +235,7 @@ class T(Proto):
             if cur == x:
                 return True
             if not self.turn("L" if x > cur else "H"):
-                self.turn("SPACE")
+                self.turn("WAIT")
         return self.ent(0)["X"] == x
 
     def climb(self, key, limit=20):
@@ -248,7 +248,7 @@ class T(Proto):
             if self.turn(key):
                 moved = True
             else:
-                self.turn("SPACE")
+                self.turn("WAIT")
         return False
 
     def run_stub(self, code, org=0x6000):
@@ -298,13 +298,13 @@ class T(Proto):
         self.place(SLOT_SKC, self.ent(0)["X"] + 4, Y1, room=0)
         self.set_ent(0, HP=1)
         for _ in range(16):
-            self.turn("SPACE")
+            self.turn("WAIT")
             if self.rb("GAME_STATE") == GS_DEAD:
                 return True
         return False
 
     def enter_to_select(self):
-        self.hold("ENTER")
+        self.hold("FIRE")                       # C3-8a: FIRE (or ENTER) leaves the end card
         ok = self.wait_state(GS_SELECT)
         self.release()
         self.settle()
@@ -333,6 +333,8 @@ def main():
         if want(1):
             p.load()
             h.expect("1 boot GS_SELECT", p.wait_state(GS_SELECT), True)
+            p.wb("ANIM_FREEZE", 1)
+            p.tick(4)                         # C3-6: the torches hold frame 0
             golden(h, "game_select", p.frame())
             p.boot(K_KNIGHT)
             e = p.ent(0)
@@ -470,7 +472,7 @@ def main():
             hp_p, hp_r = p.ent(0)["HP"], p.ent(SLOT_RAT)["HP"]
             p.clear_trace()
             for _ in range(5):
-                p.turn("SPACE")
+                p.turn("WAIT")
             h.expect("11 hero hp unchanged x5 waits", p.ent(0)["HP"], hp_p)
             h.expect("11 rat hp unchanged", p.ent(SLOT_RAT)["HP"], hp_r)
             h.expect("11 no rat attack frames", FID["rat_bite"] in p.trace_fids(SLOT_RAT), False)
@@ -484,7 +486,7 @@ def main():
             p.turn("K")                          # y=10 climbing up
             p.place(SLOT_RAT, 4, R0, room=0)     # parked on the top ladder-end box
             x0 = p.ent(SLOT_RAT)["X"]
-            p.turn("SPACE")
+            p.turn("WAIT")
             h.expect("12 monster moves off within 1 turn", p.ent(SLOT_RAT)["X"] != x0, True)
             h.expect("12 hero completes the climb", p.climb("K"), True)
             h.expect("12 hero standing on storey 0", p.ent(0)["Y"], Y0)
@@ -513,7 +515,7 @@ def main():
                     done = True
                     break
                 if not p.turn("J"):
-                    p.turn("SPACE")
+                    p.turn("WAIT")
                 gob_ok()
             h.expect("12b hero completes the climb down", done, True)
             h.expect("12b goblin never off-shaft while mid-ladder", off, [])
@@ -525,7 +527,7 @@ def main():
             p.clear_trace()
             attacked = False
             for _ in range(20):
-                p.turn("SPACE")
+                p.turn("WAIT")
                 xs.append(p.ent(SLOT_RAT)["X"])
                 if FID["rat_bite"] in p.trace_fids(SLOT_RAT) or p.ent(0)["HP"] < 22:
                     attacked = True
@@ -543,7 +545,7 @@ def main():
             hp0 = p.ent(0)["HP"]
             hit = False
             for _ in range(6):
-                p.turn("SPACE")
+                p.turn("WAIT")
                 tr = p.trace_fids(SLOT_SKC)
                 if FID["skeleton_raise"] in tr and FID["skeleton_cut"] in tr:
                     hit = True
@@ -584,7 +586,7 @@ def main():
             p.place(SLOT_SKC, 6, Y1, room=0)
             p.set_ent(0, HP=1)
             for _ in range(12):
-                p.turn("SPACE")
+                p.turn("WAIT")
                 if p.rb("GAME_STATE") == GS_DEAD:
                     break
             h.expect("21 hero dies -> GS_DEAD", p.rb("GAME_STATE"), GS_DEAD)
@@ -897,9 +899,7 @@ def main():
             p.wait_state(GS_SELECT)
             p.release()
             p.settle()
-            p.hold("2")                         # wizard
-            p.wait_state(GS_PLAYING)
-            p.release()
+            p.menu_start(K_WIZARD, settle=None)  # '2' toggles HERO, '1' starts (C3-6 menu)
             wz0 = p.rb(S["kind_tab"] + S["KT_FID0"] + K_WIZARD)
             wzn = p.rb(S["kind_tab"] + S["KT_FCNT"] + K_WIZARD)
             stale, badfid, badbg = [], [], []
@@ -960,7 +960,7 @@ def main():
                 if not in_end_box(p, g, segs):
                     out_after = w_
                     break
-                p.turn("SPACE")
+                p.turn("WAIT")
                 g = track(SLOT_GHOST, g, "wait%d" % w_)
             ys = []
             for i in range(STOREY_ROWS):            # climb up: 9 moving turns
@@ -968,7 +968,7 @@ def main():
                 ys.append(p.ent(0)["Y"])
                 g = track(SLOT_GHOST, g, "up%d" % i)
             for _ in range(3):
-                p.turn("SPACE")                     # ghost chases on storey 0
+                p.turn("WAIT")                     # ghost chases on storey 0
                 g = track(SLOT_GHOST, g, "top")
             ys2 = []
             for i in range(STOREY_ROWS):            # and back down
@@ -991,7 +991,7 @@ def main():
             xs, crossed = set(), 0
             b = p.ent(SLOT_BATB)
             for i in range(40):
-                p.turn("SPACE")
+                p.turn("WAIT")
                 b = track(SLOT_BATB, b, "bat%d" % i)
                 xs.add(b["X"])
                 crossed += bool(in_end_box(p, b, segs))
@@ -1010,7 +1010,7 @@ def main():
             gx, inbox = [], 0
             g = p.ent(SLOT_GHOST)
             for i in range(16):
-                p.turn("SPACE")
+                p.turn("WAIT")
                 g = track(SLOT_GHOST, g, "cross%d" % i)
                 gx.append(g["X"])
                 inbox += bool(in_end_box(p, g, segs))
@@ -1032,7 +1032,7 @@ def main():
             hp0 = p.ent(0)["HP"]
             seq = []
             for i in range(6):
-                p.turn("SPACE")
+                p.turn("WAIT")
                 seq.append((p.ent(SLOT_GHOST)["X"], p.ent(0)["HP"] < hp0))
             first_hit = next((i for i, (_, hit) in enumerate(seq) if hit), None)
             h.expect("57 ghost x per turn 8,7,6,5,5,5", [x for x, _ in seq], [8, 7, 6, 5, 5, 5])
@@ -1060,7 +1060,9 @@ def main():
             p.boot(K_KNIGHT)
             p.isolate()                             # hero x 2, storey 1: no ladder
             h.expect("59 UP without a ladder: no turn", p.no_turn("K"), True)
-            h.expect("59 DOWN on the bottom storey, no hole: no turn", p.no_turn("J"), True)
+            # C3-8a: DOWN with no ladder below is a WAIT now (game.md §2.3 / §3.1,
+            # deferred 3 ticks): it used to be a free no-op in the PROTO input.
+            h.expect("59 DOWN on the bottom storey, no hole: a wait (1 turn)", p.turn("J"), True)
             p.place(0, 5, Y0)                       # top of {5,1} (storey 0)
             h.expect("59 UP at a down-only shaft top: no turn", p.no_turn("K"), True)
             h.expect("59 CLIMB_BLK clear after a terrain block", p.rb("CLIMB_BLK"), 0)
@@ -1092,7 +1094,7 @@ def main():
                     if p.ent(0)["Y"] == Y0:
                         break
                     if not p.turn("K"):
-                        p.turn("SPACE")
+                        p.turn("WAIT")
                     path.append((p.ent(0)["Y"], p.ent(slot)["X"], p.ent(slot)["Y"]))
                 h.expect(f"62{tag}: hero reaches storey 0 on {{5,1}} within {n} turns",
                          (p.ent(0)["X"], p.ent(0)["Y"], p.rw("TURN_COUNTER") - t0 <= n), (5, Y0, True))
@@ -1142,7 +1144,7 @@ def main():
                     if p.ent(0)["Y"] == Y0:
                         break
                     if not p.turn("K"):
-                        p.turn("SPACE")
+                        p.turn("WAIT")
                 return p.ent(0)["Y"] == Y0 and p.rw("TURN_COUNTER") - t0 <= n
 
             HB = EF_ACTIVE | EF_HOSTILE
@@ -1165,8 +1167,8 @@ def main():
             h.expect("63a no free attack from the squeeze (HP kept)", e["HP"], hp0)
             h.expect("63a log line", msg_text(), "YOU SQUEEZE PAST THE BAT")
             h.expect("63a hero then reaches storey 0 (8 more turns)", climb(8), True)
-            p.turn("SPACE")
-            p.turn("SPACE")
+            p.turn("WAIT")
+            p.turn("WAIT")
             b = p.ent(SLOT_BATB)
             h.expect("63a the bat materialised again once its box was free",
                      bool(b["FLAGS"] & EF_PENDING), False)
@@ -1235,7 +1237,7 @@ def main():
                 if p.ent(0)["Y"] == goal_y and is_standing(goal_y, 6):
                     break
                 if not p.turn(key):
-                    p.turn("SPACE")
+                    p.turn("WAIT")
                 for s_, (st, lo, hi) in bands.items():
                     e = p.ent(s_)
                     if not (lo <= e["Y"] <= hi) or e["ROOM"] != 0:
@@ -1326,9 +1328,9 @@ def main():
                     continue
                 st, lo, hi = band_of(slot)
                 for t_ in range(14):
-                    k_ = rnd.choice(("J", "K") * 3 + ("H", "L", "SPACE"))
+                    k_ = rnd.choice(("J", "K") * 3 + ("H", "L", "WAIT"))
                     if not p.turn(k_):
-                        p.turn("SPACE")
+                        p.turn("WAIT")
                     e = p.ent(slot)
                     if not (lo <= e["Y"] <= hi) or e["ROOM"] != 0:
                         viol.append((it, col, kind, fx, fy, t_, e["X"], e["Y"]))
@@ -1462,7 +1464,7 @@ def main():
             p.place(SLOT_GOBLIN, 3, G1, room=NOWHERE)
             xs, ys = set(), set()
             for _ in range(10):
-                p.turn("SPACE")
+                p.turn("WAIT")
                 b = p.ent(SLOT_BATB)
                 xs.add(b["X"])
                 ys.add(b["Y"])
@@ -1586,7 +1588,7 @@ def main():
             p.place(0, 10, Y1)
             cell = S["ROOM_MAP"] + item_row(1) * 32 + 11   # storey 1 potion row, under the hero
             p.wb(cell, S["T_POTION"])
-            p.turn("SPACE")
+            p.turn("WAIT")
             h.expect("48 unlisted potion tile: not taken", p.ent(0)["POT"], 1)
             h.expect("48 unlisted potion tile stays in the map", p.rb(cell), S["T_POTION"])
             h.expect("48 POTIONS_TAKEN unchanged", p.rb("POTIONS_TAKEN"), 0)
@@ -1647,9 +1649,15 @@ def main():
             p.boot(K_KNIGHT)
             h.expect("51 knight dies", p.die(), True)
             h.expect("51 ENTER -> GS_SELECT", p.enter_to_select(), True)
+            p.wb("ANIM_FREEZE", 1)
+            p.tick(4)                         # C3-6: the torches hold frame 0
             golden(h, "game_select", p.frame())
-            p.hold("2")
-            h.expect("51 '2' starts a wizard game", p.wait_state(GS_PLAYING), True)
+            p.hold("2")                       # C3-6 menu: '2' only toggles HERO ...
+            p.tick()
+            p.release()
+            p.tick()
+            p.hold("1")                       # ... '1' starts the game
+            h.expect("51 HERO: WIZARD + '1' starts a wizard game", p.wait_state(GS_PLAYING), True)
             p.release()
             p.settle(3)
             h.expect("51 2nd game wizard start screen == fresh wizard boot",
@@ -1662,11 +1670,12 @@ def main():
                      p.rb("GEN_TRAP"), 0)
             h.expect("51 wizard dies", p.die(), True)
             h.expect("51 ENTER -> GS_SELECT (after 2 heroes)", p.enter_to_select(), True)
-            golden(h, "game_select", p.frame())
-            p.hold("1")
-            p.wait_state(GS_PLAYING)
-            p.release()
-            p.settle(3)
+            p.wb("ANIM_FREEZE", 1)
+            p.tick(4)                         # C3-6: the torches hold frame 0
+            # C3-8a: HERO persists across games, so after the wizard game the
+            # menu shows HERO: MAGE (no longer == the knight select frame)
+            golden(h, "game_select_mage", p.frame())
+            p.menu_start(K_KNIGHT)             # HERO persisted as WIZARD: toggle back, start
             golden(h, "game_start", p.frame())
 
         # ---------------- 42 (review C R1) overlap repair of a DIRTY_ATTR sprite
@@ -1692,7 +1701,7 @@ def main():
                         flip[0] ^= 1
                         p.set_ent(0, FLT=4, FLA=0x42 if flip[0] else 0x44)
                 for _ in range(4):
-                    p.turn("SPACE", per_tick=cb)
+                    p.turn("WAIT", per_tick=cb)
                 return frames, overlap[0]
             fa, ova = skel_turn(False)
             fb, _ = skel_turn(True)
@@ -1780,13 +1789,18 @@ def isr_tests(h, p):
     every register and the $C000 bank / screen bit for every bank paged; across
     a room transition (screen bit flips 1 -> 0 -> 1) the ISR pages bank 3 for
     the player and restores exactly PORT_7FFD_SHADOW; no code ever runs at
-    $C000+ with a bank other than 3 paged (A3 review carry-over)."""
+    $C000+ with a bank other than 3 paged (A3 review carry-over), except the
+    bank-1 UI code region with bank 1 paged (C3 review: far1 targets)."""
     ay, done = S["AY_PLAY"], S["isr.done"]
     # A3 carry-over: executing $C000+ with any bank but 3 = a paging bug. A
     # conditional (non-optimised) breakpoint: armed from the snapshot load
     # (boot, select, game start) through the transition below.
     p.load()
-    p.z.cmd("set-breakpoint 7 PC>=C000H and RAM<>3")
+    # C3 review: bank-1 code (ui1_code..ui1_end: the scrolls, the info line,
+    # entered by far1) is the one other bank allowed to run at $C000+.
+    p.z.cmd("set-breakpoint 7 PC>=C000H and RAM<>3 and RAM<>1")
+    p.z.cmd("set-breakpoint 8 RAM=1 and PC>=C000H and PC<%XH" % S["ui1_code"])
+    p.z.cmd("set-breakpoint 9 RAM=1 and PC>=%XH" % S["ui1_end"])
     p.extra_probes = set()
     p.wait_state(GS_SELECT)
     p.wb("INPUT_REPEAT", 0)
@@ -1863,12 +1877,12 @@ def isr_tests(h, p):
         break
     p.release()
     p.wb("INPUT_REPEAT", 0)
-    for n in (5, 6, 7):
+    for n in (5, 6, 7, 8, 9):
         p.z.cmd("set-breakpoint %d" % n)
     print(f"[info] 61 transition: {ticks} ticks, ISR stops ay={n_ay} done={n_done},"
           f" interrupted $C000 banks {sorted(banks)}, screen bit sequence {scr}", flush=True)
     h.expect("61 transition reached room B", p.rb("CUR_ROOM"), 1)
-    h.expect("61 no code at $C000+ with bank != 3 (boot..transition)", a7, [])
+    h.expect("61 no code at $C000+ with bank != 3, bar bank-1 UI code (boot..transition)", a7, [])
     h.expect("61 every ISR: bank 3 for AY_PLAY, port == shadow after", bad[:4], [])
     h.expect("61 ISR ran on both screens across the flip (bit 3: 8 -> 0 -> 8)",
              scr[:3] == [8, 0, 8] and n_ay == n_done and n_ay > 50, True)
@@ -1909,6 +1923,8 @@ def isr_tests(h, p):
 def tape_rest(h, p):
     """#50 after the tape reached GS_SELECT: screen, pool, banks, play."""
     p.tick(2)                                    # park on select_tick
+    p.wb("ANIM_FREEZE", 1)
+    p.tick(4)                         # C3-6: the torches hold frame 0
     golden(h, "game_select", p.frame())
     h.expect("50 tape GEN_OVERFLOW 0", p.rb("GEN_OVERFLOW"), 0)
     from game_lib import SNA_RAM
@@ -1918,8 +1934,12 @@ def tape_rest(h, p):
     finally:
         p.z.cmd("set-memory-zone -1")
     lo, hi = S["SRC_LEN_LO"], S["SRC_LEN_HI"]
-    h.expect("50 bank 1 sprite sources == .sna", ram[1 * 16384:1 * 16384 + lo] ==
-             SNA_RAM[1 * 16384:1 * 16384 + lo], True)
+    # C3-6 review: the bank-1 UI keeps its variables in one block (ui1_vars):
+    # everything else of the bank-1 block must equal the .sna
+    v0, v1 = S["ui1_vars"] - 0xC000, S["ui1_vars_end"] - 0xC000
+    b1, s1 = bytearray(ram[16384:16384 + lo]), bytearray(SNA_RAM[16384:16384 + lo])
+    b1[v0:v1] = s1[v0:v1] = bytes(v1 - v0)
+    h.expect("50 bank 1 block (sources, data, text, UI code bar ui1_vars) == .sna", b1 == s1, True)
     # bank 3 block = source tail + bank-3 cold code (select, scrolls): BANK3_LEN >= hi
     b3 = S.get("BANK3_LEN", hi)
     h.expect("50 bank 3 sprite sources + cold code == .sna", ram[3 * 16384:3 * 16384 + b3] ==
@@ -1958,7 +1978,7 @@ def walkthrough(h, p, check14=False):
         if p.ent(0)["HP"] < 9 and p.ent(0)["POT"] > 0:
             p.turn("G")
         if not p.turn(key):
-            p.turn("SPACE")
+            p.turn("WAIT")
 
     def go_x(x):
         while p.ent(0)["X"] != x and budget[0] > 0 and p.rb("GAME_STATE") == GS_PLAYING:
@@ -2003,7 +2023,7 @@ def walkthrough(h, p, check14=False):
         min_y = min(min_y, p.ent(5)["Y"])
         if sk_y0 - min_y >= STOREY_ROWS:
             break
-        act("H" if foe_left() else "SPACE")
+        act("H" if foe_left() else "WAIT")
     if check14:
         print(f"[info] 14: C skeleton y {sk_y0} -> min {min_y}")
         h.expect("14 C skeleton climbs: y decreases by >= 9 within 30 turns",
@@ -2027,10 +2047,12 @@ def walkthrough(h, p, check14=False):
     # real D8 descend is tests/world.py W16): ENTER -> hero select
     p.wb("GAME_STATE", GS_WIN)
     p.tick(2)
-    p.hold("ENTER")
+    p.hold("FIRE")                    # C3-8a: FIRE (or ENTER) leaves an end card
     res["select"] = p.wait_state(GS_SELECT)
     p.release()
     p.settle()
+    p.wb("ANIM_FREEZE", 1)
+    p.tick(4)                         # C3-6: the torches hold frame 0
     golden(h, "game_select", p.frame())             # after a WIN -> ENTER
     return res
 

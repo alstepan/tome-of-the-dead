@@ -115,10 +115,12 @@ ATTR_PLAYER         EQU COL_YELLOW | (COL_BLACK << PAPER_SHIFT) | ATTR_BRIGHT ; 
 ; The sampler sums held movement keys into a bitset; dirs_to_step turns the
 ; bitset into a signed (dx,dy), each component in {-1,0,+1}.
 ;------------------------------------------------------------------------------
-DIR_E_BIT           EQU 0               ; east  (L or P)
-DIR_W_BIT           EQU 1               ; west  (H or O)
-DIR_N_BIT           EQU 2               ; north (K or Q)
-DIR_S_BIT           EQU 3               ; south (J or A)
+; C3-1: the JOY_* (Kempston) bit order, so PLAYER_DIR = STICK & JOY_DIRS
+; (hero_defs.asm ASSERTs the match; N / S swapped vs PROTO).
+DIR_E_BIT           EQU 0               ; east  (JOY_R)
+DIR_W_BIT           EQU 1               ; west  (JOY_L)
+DIR_S_BIT           EQU 2               ; south (JOY_D)
+DIR_N_BIT           EQU 3               ; north (JOY_U)
 
 ; Action codes returned by get_action (design §3 engine contract).
 ACT_NONE            EQU 0
@@ -157,6 +159,8 @@ KB_A_BIT            EQU 0               ; KBROW_ASDFG
 KB_D_BIT            EQU 2               ; KBROW_ASDFG (descend)
 KB_G_BIT            EQU 4               ; KBROW_ASDFG (quaff)
 KB_SPACE_BIT        EQU 0               ; KBROW_SPACE (wait)
+KB_I_BIT            EQU 2               ; KBROW_POIUY (C3-1: inventory shortcut)
+KB_CAPS_BIT         EQU 0               ; KBROW_CAPSV (C3-1: BREAK = CAPS + SPACE)
 
 KBD_RELEASED        EQU $FF             ; mirror byte with no key held
 

@@ -178,8 +178,23 @@ class Run:
         return blk
 
     def select_hero(self, key):
+        """C3-8a: through the C3-6 menu. '2' toggles HERO (menu_hero persists
+        between games: toggled only if it is not the wanted hero), '1' = START;
+        the returned T-states are START -> the first play tick (the timed
+        generator cold path), as before."""
         self.wb("INPUT_SRC", 1)
-        self.hold(key)
+        want = 1 if key == "2" else 0
+        if "menu_hero" not in self.S:               # --baseline: a pre-C3-6 checkout
+            self.hold(key)
+            t = self.run_to("tick_work")
+            self.hold()
+            return t
+        if self.rb("menu_hero") != want:
+            self.hold("2")
+            self.run_to("select_tick")
+            self.hold()
+            self.run_to("select_tick")
+        self.hold("1")
         t = self.run_to("tick_work")
         self.hold()
         return t

@@ -76,6 +76,50 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
       + the decode cost per char; every string pushed by id (msg_push) and
       drawn by item_log / print6t == the reference render; $C000 handed back;
       composed impact lines (show_impact_msg) == text; T per log item.
+  C3-0 (bank-1 UI code, far1):
+  W18 a target in free bank 1 entered via far1 from a stub with bank 0 paged:
+      bank 1 paged + A passed in it; still bank 1 after msg_push (queued),
+      copy_virt3 (from virtual $C000: pages bank 3) and a nested far1; back in
+      the stub bank 0 is paged and the target's BC / DE / HL passed through.
+  C3-1 (read_stick, game.md §3.1 / §3.2):
+  W19 each source — default KEYTAB (Q/A/O/P/SPACE), a redefined KEYTAB
+      (M/Z/V/T/ENTER: half-rows $7F/$FE/$FB/$BF), Sinclair 1 (6-0), Sinclair 2
+      (1-5), Kempston via JOY_MIRROR — gives STICK == the one JOY bit for each
+      of R/L/D/U/F, PLAYER_DIR == STICK & $0F, FIRE never sets DK_WAIT (C3-8a:
+      FIRE is intent_tick's, the PROTO "FIRE = wait" went with legacy_input); keys stay live
+      (ORed) with every joystick; (the PROTO H/J/K/L aliases are gone, C3-8a); shortcuts 1-0 / I /
+      BREAK -> PLAYER_SC, a Sinclair half turns off its 1-0 shortcuts (and
+      DK_1..3 for Sinclair 2); JOY_MIRROR is ignored unless JM_KEMPSTON, and
+      with INPUT_SRC = 0 the IN ($1F) is reached only in JM_KEMPSTON; a
+      Kempston byte with bits 5-7 set is ignored; read_stick T per mode;
+      STICK follows every tick (ANIM too); BREAK masks FIRE; hero select
+      works in JM_SINC2.
+  C3-2 (turn-intent machine; game.md §2.3 / §3.1 / §3.5):
+  W22 FIRE tap (release < 10 ticks) uses the icon on release; a longer hold
+      or FIRE + a direction does not; ICON MODE (C3-2b, game.md §3.1): DOWN +
+      FIRE either first within 3 ticks enters it (no turn, play frozen: timers
+      held, slot inverse, info line '>' prefix), R/L move the cursor at once,
+      after 10 ticks, then every 4 (unlearned / empty skipped, wrap), 1-0
+      jump, FIRE on a greyed icon refuses and stays, BREAK / UP leave (no
+      pause), a turn-costing use (potion) returns to play; FIRE + UP = pause
+      request; BREAK priority; DOWN alone waits 3 ticks (a shorter tap commits
+      on release); a reverse tap only turns (0 turns), a held reverse key
+      walks after 10 ticks; DOWN with no ladder = wait; a low diagonal acts
+      as the side; '.' waits; shortcuts select (unlearned: NOT LEARNED).
+  W23 icon use: melee attacks the faced monster / closes the faced door /
+      else NO TARGET (no turn); quick potion drinks (1 turn) then NO POTION;
+      Bow / food / scroll / Bag / daggers-at-0 refusals print their line and
+      cost no turn; ENTER uses the icon; I = NO BAG YET; the FIRE melee tick's
+      T vs the 126k budget.
+  C3-6 (bank 1 menu1.asm):
+  W24 menu golden; cursor / controls / hero / Sinclair digit masking;
+      redefine (duplicates refused, KEYTAB written when complete); seed
+      entropy (MENU_SPIN) vs seed_fixed; pause overlay restored byte for
+      byte, QUIT asks Y/N; the death card (menu font) and FIRE back to menu.
+  W20 stack low-water: $BD00..$BEFF pattern-filled before boot, then boot,
+      a generated D1 start and 80 seeded random turns (walk / climb / jump /
+      wait, fights, exits); the lowest byte touched must leave >= 512 B of
+      the 768-B stack unused (reports the measured max depth).
   B11 (user bug: the hero fell a storey where the floor is drawn, walking
   into the left room):
   W21 generated D1s (seed_fixed, 2 masters): every storey-0 horizontal exit,
@@ -88,6 +132,7 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
 Usage: ZRCP_PORT=10001 python3 tests/world.py [W1 W3 W11 ...] [--update-golden [--png DIR]]
 """
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -103,7 +148,7 @@ from game_lib import (Harness, S, EMU_ARGS, attr_at, cell_bytes, split_frame,  #
                       stand_y, is_standing, item_row, ladder_rows, ROOM_LADDERS,
                       ROOM_A, ROOM_B, ROOM_C, ROOM_D, ROOM_LETTER,
                       STOREY_ROWS, STOREY_AIR, STOREY_COUNT, PLAY_ROWS, PANEL_ROW,
-                      MAP_LEN, GS_PLAYING, GS_DEAD, K_KNIGHT, K_WIZARD, EF_LEFT, EF_ACTIVE,
+                      MAP_LEN, GS_PLAYING, GS_DEAD, GS_SELECT, K_KNIGHT, K_WIZARD, EF_LEFT, EF_ACTIVE,
                       EF_PLAYER, EF_HOSTILE, EF_PENDING)
 
 ONLY = {a.upper() for a in _argv if not a.startswith("--") and not os.path.isdir(a)}
@@ -504,6 +549,28 @@ def bank7(p, addr, n):
         p.z.cmd("set-memory-zone -1")
 
 
+def bank_bytes(p, bank, addr, n):
+    p.z.cmd("set-memory-zone 0")
+    try:
+        return bytes(p.z.read_memory(bank * 16384 + addr - 0xC000, n))
+    finally:
+        p.z.cmd("set-memory-zone -1")
+
+
+def menu_text_ok(p, fr, row, col, txt):
+    """C3-6: txt drawn in the 8x16 menu font (bank-1 menu_font / _map) at
+    cell (col, row): each char = 2 cells (rows row, row+1), 1 col."""
+    fmap = bank_bytes(p, 1, S["menu_font_map"], 64)
+    font = bank_bytes(p, 1, S["menu_font"], S["MENU_FONT_COUNT"] * 16)
+    for i, ch in enumerate(txt):
+        g = fmap[ord(ch) - 32]
+        g = 0 if g == 0xFF else g
+        gl = font[g * 16:g * 16 + 16]
+        if bytes(cell_bytes(fr, col + i, row)) != gl[:8] or bytes(cell_bytes(fr, col + i, row + 1)) != gl[8:]:
+            return False
+    return True
+
+
 def snapshot(p):
     """ROOM_MAP + bank-5 screen + screen 2 + the shadow's rows 0-17."""
     sh = bank7(p, S["SHADOW_BITMAP"], 6144) + bank7(p, S["SHADOW_ATTR"], 32 * PLAY_ROWS)
@@ -614,11 +681,16 @@ def w15(p, check):
     p.settle(2)                                   # HP 5 shown (poll: idle ticks)
     check("W15 HP poke reaches the panel within 2 idle ticks", hp_ok(p.composed_frame()), "")
     panel = lambda f: split_frame(f)[1]
+    # C3-8a: quaff = the potion slot selected (key 7: selects only), then a FIRE tap;
+    # the turn starts in the tick that sees FIRE released (the "input tick").
+    p.select_slot(6)
+    p.settle(4)                                   # the cursor / info line repaint is done
     before = panel(p.composed_frame())
     tc0 = p.rw("TURN_COUNTER")
-    p.hold("G")
+    p.hold("FIRE")
     p.tick()
     p.release()
+    p.tick()
     in_input = p.rb("TURN_PHASE") == 1 or p.rw("TURN_COUNTER") != tc0
     check("W15 quaff: the turn started in this tick (HP healed)", in_input and p.ent(0)["HP"] > 5,
           (p.rb("TURN_PHASE"), p.ent(0)["HP"]))
@@ -742,7 +814,8 @@ def w15(p, check):
           f" scroll of 24 cols {t_s} T; print6 32 chars {t_p} T (~{t_p // 32} T/char), 4 chars {t_p4} T;"
           f" 2nd-frame HP item {t_hp2} T, idle step {t_none} T", flush=True)
     check("W15 whole log item <= 25k T (1st-frame ticks only: < 70.9k T used before it)", t_whole <= 25000, t_whole)
-    check("W15 2nd-frame small item (HP) <= 5k T (worst 2nd-frame pre-panel ~117k + 5k < 126k cap)", t_hp2 <= 5000, t_hp2)
+    check("W15 2nd-frame small item (HP) <= 5.2k T (worst 2nd-frame pre-panel ~117k + 5.2k < 126k cap; C3-3: + icon_poll ~0.1k)",
+          t_hp2 <= 5200, t_hp2)
     check("W15 print6 <= 500 T/char (32 chars)", t_p <= 500 * 32, t_p)
 
     # --- bars follow HP ------------------------------------------------------
@@ -759,12 +832,1211 @@ def w15(p, check):
           len(p.h.failures) == n0, p.h.failures[n0:])
 
 
+def w18(p, check):
+    """C3-0: far1 + "helpers hand $C000 back as they found it" from bank-1 code
+    (the B3B-R2 W9R pattern for bank 1). The target is copied into free bank 1
+    (ui1_end..) by the stub, entered through far1 with bank 0 paged."""
+    STUB = S["LOWRAM_END_3B"]
+    w = w16
+    SH, RES = S["PORT_7FFD_SHADOW"], S["MSG_BUF"]
+    T = S["ui1_end"]                      # free bank-1 RAM at runtime (C3-0: ui1 empty)
+    RET = T + 0x80                        # a lone RET: the nested far1's target
+    DATA = STUB + 0x100
+    SID = 0
+    tgt = ([0x32] + w(RES) +                                       # ld (RES+0),a: the arg
+           [0x3A] + w(SH) + [0x32] + w(RES + 1) +                  # bank inside the target
+           [0x3A] + w(RES) + [0xCD] + w(S["msg_push"]) +
+           [0x3A] + w(SH) + [0x32] + w(RES + 2) +
+           [0x21] + w(0xC000) + [0x11] + w(S["GEN_SRC"]) +         # virtual $C000 = bank 3
+           [0x01] + w(8) + [0xCD] + w(S["copy_virt3"]) +
+           [0x3A] + w(SH) + [0x32] + w(RES + 3) +
+           [0x21] + w(RET) + [0xCD] + w(S["far1"]) +               # nested far1
+           [0x3A] + w(SH) + [0x32] + w(RES + 4) +
+           [0x01] + w(0x9ABC) + [0x11] + w(0x5678) + [0x21] + w(0x1234) + [0xC9])
+    assert RET >= T + len(tgt) and RET < 0x10000
+    code = ([0x3A] + w(SH) + [0xF5] +                              # ld a,(sh) / push af
+            [0x3E, S["BANK_UI1"], 0xCD] + w(S["page_bank"]) +
+            [0x21] + w(DATA) + [0x11] + w(T) + [0x01] + w(len(tgt)) + [0xED, 0xB0] +
+            [0x3E, 0xC9, 0x32] + w(RET) +
+            [0x3E, S["BANK_POOL0"], 0xCD] + w(S["page_bank"]) +    # the caller's bank: 0
+            [0x21] + w(T) + [0x3E, SID, 0xCD] + w(S["far1"]) +
+            [0xED, 0x43] + w(RES + 5) + [0xED, 0x53] + w(RES + 7) + [0x22] + w(RES + 9) +
+            [0x3A] + w(SH) + [0x32] + w(RES + 11) +
+            [0xF1, 0xCD] + w(S["restore_page"]))                   # play's bank back
+    p.boot(K_KNIGHT)
+    p.isolate()
+    p.settle(2)
+    q0 = (p.rb("LOG_QN"), p.rb(S["LOG_Q"] + S["LQ_DROP"]))
+    p.z.cmd("write-memory %d %s" % (DATA, " ".join(map(str, tgt))))
+    pc0 = p.pc()
+    ok = p.run_stub(code, org=STUB)
+    p.z.cmd("set-register PC=%d" % pc0)
+    check("W18 stub ran (far1 into bank 1 returned)", ok, "")
+    r = p.z.read_memory(RES, 12)
+    q1 = (p.rb("LOG_QN"), p.rb(S["LOG_Q"] + S["LQ_DROP"]))
+    b1 = S["BANK_UI1"]
+    check("W18 far1: bank 1 paged in the target, A passed through",
+          (r[1] & 7, r[0]) == (b1, SID), (r[1] & 7, r[0]))
+    check("W18 msg_push from bank-1 code: bank 1 paged afterwards, message queued",
+          r[2] & 7 == b1 and (q1[0] == q0[0] + 1 or q1[1] == q0[1] + 1), (r[2] & 7, q0, q1))
+    check("W18 copy_virt3 (pages bank 3) from bank-1 code: bank 1 paged afterwards",
+          r[3] & 7 == b1, r[3] & 7)
+    check("W18 nested far1: bank 1 paged afterwards", r[4] & 7 == b1, r[4] & 7)
+    check("W18 far1 hands the caller's bank (0) back; BC / DE / HL of the target pass through",
+          (r[11] & 7, r[5] | r[6] << 8, r[7] | r[8] << 8, r[9] | r[10] << 8)
+          == (S["BANK_POOL0"], 0x9ABC, 0x5678, 0x1234),
+          (r[11] & 7, hex(r[5] | r[6] << 8), hex(r[7] | r[8] << 8), hex(r[9] | r[10] << 8)))
+    check("W18 screen bit kept (shadow bit 3 == displayed bank 7 in play)",
+          all(x & 0x18 == 0x18 for x in (r[1], r[2], r[3], r[4], r[11])), [hex(x) for x in r[1:5]])
+
+
+
+# C3-1 key positions: name -> (KBD_MATRIX row, bit)
+W19_KEYS = {
+    "Q": (2, 0), "A": (1, 0), "O": (5, 1), "P": (5, 0), "SPACE": (7, 0),
+    "M": (7, 2), "Z": (0, 1), "V": (0, 4), "T": (2, 4), "ENTER": (6, 0),
+    "H": (6, 4), "J": (6, 3), "K": (6, 2), "L": (6, 1), "I": (5, 2), "CAPS": (0, 0),
+    "1": (3, 0), "2": (3, 1), "3": (3, 2), "4": (3, 3), "5": (3, 4),
+    "0": (4, 0), "9": (4, 1), "8": (4, 2), "7": (4, 3), "6": (4, 4),
+}
+W19_ROW = [(S["KBD_MATRIX"] & 0xFF) + r for r in range(8)]   # KEYTAB row byte of row r
+
+
+def w19(p, check):
+    """C3-1: read_stick / sample_input over injected KBD_MATRIX + JOY_MIRROR."""
+    STUB = S["LOWRAM_END_3B"]
+    RES = S["MSG_BUF"]
+    w = w16
+    # C3-8a: the menu with JM_SINC2 selected: its half of the number row (1-5)
+    # acts as the joystick, NOT as menu digits ('2' = HERO toggle is masked and
+    # '1' does not start), while ENTER still starts (game.md §3.2). Was: the
+    # PROTO select read the raw 1 / 2 keys (C3-1 review).
+    p.load()
+    p.wait_state(GS_SELECT)
+    p.wb("INPUT_SRC", 1)
+    p.wb("JOY_MODE", 3)
+    p.hold("2")
+    p.tick(6)
+    p.release()
+    p.tick(2)
+    masked = p.rb("GAME_STATE") == GS_SELECT and p.rb("menu_hero") == K_KNIGHT
+    p.hold("1")
+    p.tick(6)
+    p.release()
+    p.tick(2)
+    masked = masked and p.rb("GAME_STATE") == GS_SELECT
+    p.hold("ENTER")
+    sel_ok = p.wait_state(GS_PLAYING, 200)
+    p.release()
+    check("W19 menu in JM_SINC2: 1 / 2 are the joystick half (no start, no HERO toggle), ENTER starts",
+          masked and sel_ok and p.rb("HERO_KIND") == K_KNIGHT, (masked, sel_ok, p.rb("HERO_KIND")))
+    p.boot(K_KNIGHT)
+    p.isolate()
+    p.settle(2)
+    # STICK follows every tick, ANIM ticks included (C3-1 review: C3-2's edges)
+    p.hold("P")                                   # a walk: several ANIM ticks
+    p.until(lambda: p.rb("TURN_PHASE") == 1, 6)
+    p.hold("H")
+    ph = p.rb("TURN_PHASE")                       # 1: the next tick is an ANIM tick
+    p.tick()
+    an = (ph, p.rb("STICK"), p.rb("STICK_OLD"))
+    p.release()
+    p.tick()
+    an2 = (p.rb("STICK"), p.rb("STICK_OLD"))
+    check("W19 STICK / STICK_OLD update every tick (in ANIM too)",
+          an == (1, 2, 1) and an2 == (0, 2), (an, an2))   # P -> O (left) -> none
+    p.settle(6)
+    pc0 = p.pc()
+    sp0 = int(re.search(r"SP=([0-9a-fA-F]{4})", p.z.cmd("get-registers")).group(1), 16)
+    code = ([0xCD] + w(S["input_tick"]) + [0xCD] + w(S["sample_input"]) +
+            [0x32] + w(RES))
+
+    def keytab(keys):
+        b = []
+        for k in keys:
+            r, bit = W19_KEYS[k]
+            b += [W19_ROW[r], 1 << bit]
+        p.z.cmd("write-memory %d %s" % (S["KEYTAB"], " ".join(map(str, b))))
+
+    def sample(keys=(), mode=0, mirror=0, src=1):
+        rows = [0xFF] * 8
+        for k in keys:
+            r, bit = W19_KEYS[k]
+            rows[r] &= ~(1 << bit) & 0xFF
+        p.z.cmd("write-memory %d %s" % (S["KBD_MATRIX"], " ".join(map(str, rows))))
+        p.wb("JOY_MODE", mode)
+        p.wb("JOY_MIRROR", mirror)
+        p.wb("INPUT_SRC", src)
+        ok = p.run_stub(code, org=STUB)
+        return dict(ok=ok, a=p.rb(RES), stick=p.rb("STICK"), old=p.rb("STICK_OLD"),
+                    dir=p.rb("PLAYER_DIR"), disc=p.rb("PLAYER_DISC"), sc=p.rb("PLAYER_SC"))
+
+    DEF = ["P", "O", "A", "Q", "SPACE"]                 # R L D U F (JOY bit order)
+    RED = ["M", "Z", "V", "T", "ENTER"]
+    S1 = ["7", "6", "8", "9", "0"]
+    S2 = ["2", "1", "3", "4", "5"]
+    JM = dict(keys=0, kemp=1, s1=2, s2=3)
+    dkw = S["DK_WAIT"]
+    kt0 = list(p.z.read_memory(S["KEYTAB"], 10))
+    want_kt = []
+    for k in DEF:
+        r, bit = W19_KEYS[k]
+        want_kt += [W19_ROW[r], 1 << bit]
+    check("W19 boot KEYTAB == KEYTAB_DEFAULTS (P/O/A/Q/SPACE), JOY_MODE keys",
+          kt0 == want_kt and p.rb("JOY_MODE") == 0, (kt0, p.rb("JOY_MODE")))
+
+    def source(tag, mode, keys=None, mirror=False):
+        bad = []
+        for i in range(5):
+            r = sample((keys[i],) if keys else (), JM[mode], (1 << i) if mirror else 0)
+            want = 1 << i
+            # C3-8a: sample_input's A (NZ iff held) counts directions only: FIRE
+            # is intent_tick's (FIRE_ST), no longer the PROTO "FIRE = wait" (ENTER, as a
+            # redefined FIRE key, is still the ENTER shortcut)
+            if not (r["ok"] and r["stick"] == want and r["dir"] == want & 0x0F and
+                    not r["disc"] & dkw and (r["a"] != 0) == (i < 4 or bool(keys) and keys[i] == "ENTER")):
+                bad.append((i, r))
+        r = sample((), JM[mode])
+        if not (r["stick"] == 0 and r["dir"] == 0 and r["a"] == 0):
+            bad.append(("idle", r))
+        check(f"W19 {tag}: STICK == the JOY bit for R/L/D/U/F, DIR == STICK & $0F, no DK_WAIT",
+              bad == [], bad[:2])
+
+    source("default keys", "keys", DEF)
+    source("default keys (Kempston selected)", "kemp", DEF)
+    source("Sinclair 1 (6-0)", "s1", S1)
+    source("Sinclair 2 (1-5)", "s2", S2)
+    source("Kempston via JOY_MIRROR", "kemp", mirror=True)
+    keytab(RED)
+    source("redefined KEYTAB M/Z/V/T/ENTER", "keys", RED)
+    r = sample(("P",), 0)
+    check("W19 redefined KEYTAB: the old default key P is dead", r["stick"] == 0, r)
+    keytab(DEF)
+
+    # ORing: keys + joystick, STICK_OLD
+    r = sample(("O",), JM["kemp"], 1 << 0)
+    check("W19 OR: key O + Kempston R -> R|L (opposites both reported)", r["stick"] == 3, r)
+    r = sample(("P", "9"), JM["s1"])
+    check("W19 OR: key P + Sinclair 1 U(9) -> R|U", r["stick"] == 0x09, r)
+    r = sample(("Q", "5"), JM["s2"])
+    check("W19 OR: key Q + Sinclair 2 F(5) -> U|F (FIRE is not DK_WAIT, C3-8a)", r["stick"] == 0x18 and not r["disc"] & dkw, r)
+    r2 = sample(("A",), 0)
+    check("W19 STICK_OLD = the previous sample", r2["old"] == 0x18 and r2["stick"] == 0x04, r2)
+    # C3-8a: the PROTO H/J/K/L aliases were removed with legacy_input: the keys are dead
+    bad = [(k, sample((k,), JM["s2"])["stick"]) for k in ("L", "H", "J", "K")]
+    check("W19 PROTO aliases L/H/J/K are gone (C3-8a): no stick bit", all(s_ == 0 for _, s_ in bad), bad)
+
+    # Kempston not read unless selected; floating-bus guard
+    bad = []
+    for m in ("keys", "s1", "s2"):
+        r = sample((), JM[m], 0x1F)
+        if r["stick"] != 0:
+            bad.append((m, r["stick"]))
+    check("W19 JOY_MIRROR ignored unless JM_KEMPSTON", bad == [], bad)
+    bad = [(v, sample((), JM["kemp"], v)["stick"]) for v in (0xFF, 0x20 | 1, 0x40 | 2, 0x80 | 0x10)]
+    check("W19 Kempston byte with bits 5-7 set ignored (absent interface / floating bus)",
+          all(x == 0 for _, x in bad), bad)
+    r = sample(("P",), JM["kemp"], 0xFF)
+    check("W19 ignored Kempston byte keeps the keys", r["stick"] == 1, r)
+    # INPUT_SRC = 0: break on the IN ($1F)
+    rs = [0xCD] + w(S["read_stick"]) + [0x32] + w(RES)
+    p.z.cmd("set-breakpoint 4 PC=%d" % S["read_stick.port"])
+    hit = {}
+    for m in ("keys", "s1", "s2", "kemp"):
+        p.wb("JOY_MODE", JM[m])
+        p.wb("INPUT_SRC", 0)
+        ok = p.run_stub(rs, org=STUB)
+        hit[m] = (not ok) and p.pc() == S["read_stick.port"]
+        p.z.cmd("set-register SP=%d" % sp0)
+    p.z.cmd("set-breakpoint 4")
+    p.wb("INPUT_SRC", 1)
+    check("W19 live (INPUT_SRC 0): IN ($1F) reached only in JM_KEMPSTON",
+          hit == dict(keys=False, s1=False, s2=False, kemp=True), hit)
+
+    # shortcuts
+    exp = {"1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "0": 10}
+    dk = {"1": S["DK_1"], "2": S["DK_2"], "3": S["DK_3"]}
+    for mode, off in (("keys", ""), ("kemp", ""), ("s1", "67890"), ("s2", "12345")):
+        bad = []
+        for k, slot in exp.items():
+            r = sample((k,), JM[mode])
+            want = 0 if k in off else slot
+            wdk = 0 if k in off else dk.get(k, 0)
+            if (r["sc"] & 0x0F) != want or (r["disc"] & (S["DK_1"] | S["DK_2"] | S["DK_3"])) != wdk:
+                bad.append((k, r["sc"], r["disc"]))
+        check(f"W19 shortcuts 1-0 in {mode}: slot n (0 = 10){', off: ' + off if off else ''}",
+              bad == [], bad[:3])
+    r = sample(("3", "7"), 0)
+    check("W19 two digits held: the lower slot wins", r["sc"] & 0x0F == 3, r)
+    r = sample(("I",), 0)
+    r2 = sample(("CAPS", "SPACE"), 0)
+    check("W19 I -> SC_INV, CAPS+SPACE -> SC_BREAK (FIRE masked: BREAK has priority), A NZ",
+          r["sc"] == 1 << S["SC_INV_BIT"] and r["a"] != 0 and r2["sc"] == 1 << S["SC_BREAK_BIT"]
+          and r2["stick"] == 0 and not r2["disc"] & dkw, (r["sc"], r2))
+    r = sample(("CAPS", "O"), 0)
+    check("W19 CAPS alone does not mask FIRE / directions", r["stick"] == 2, r)
+
+    # cost (DI, uncontended bank-2 routine; stub overhead subtracted)
+    t = {}
+    for m in ("keys", "kemp", "s1"):
+        p.wb("JOY_MODE", JM[m])
+        _, ts = run_code(p, [0xF3, 0xCD] + w(S["read_stick"]) + [0xFB])
+        t[m] = ts - 8
+    p.wb("JOY_MODE", 0)
+    _, ts_s = run_code(p, [0xF3, 0xCD] + w(S["input_tick"]) + [0xFB])
+    _, ts_i = run_code(p, [0xF3, 0xCD] + w(S["sample_input"]) + [0xFB])
+    print(f"[info] W19 measured: read_stick {t} T; input_tick (injected, keys) {ts_s - 8} T;"
+          f" sample_input {ts_i - 8} T",
+          flush=True)
+    check("W19 read_stick <= 1.0k T in every mode", max(t.values()) <= 1000, t)
+    p.z.cmd("set-register SP=%d" % sp0)
+    p.z.cmd("set-register PC=%d" % pc0)
+
+
+def w20(p, check):
+    """C3-1 review: measured stack depth (pattern fill below WORKSTORE_TOP)."""
+    import random
+    lo, top = S["STACK_BOTTOM"], S["WORKSTORE_TOP"]
+    PAT = 0x5A
+    keep = p.proto_start
+    p.proto_start = 0                               # generated D1: level_gen too
+    p.load()
+    p.proto_start = keep
+    p.z.cmd("write-memory %d %s" % (lo, " ".join([str(PAT)] * (top - lo))))
+    p.wait_state(GS_SELECT)
+    p.wb("INPUT_REPEAT", 0)
+    p.wb("ANIM_FREEZE", 1)
+    p.wb("INPUT_SRC", 1)
+    p.hold("1")
+    p.wait_state(GS_PLAYING)
+    p.release()
+    p.settle(3)
+    rnd = random.Random(0xC31)
+    keys = [("P",), ("O",), ("Q",), ("A",), ("Q", "P"), ("Q", "O"), ("SPACE",), ("P",), ("O",)]
+    turns = 0
+    for _ in range(80):
+        if p.rb("GAME_STATE") != GS_PLAYING:
+            break
+        turns += p.turn(*rnd.choice(keys))
+    m = p.z.read_memory(lo, top - lo)
+    low = next((lo + i for i, b in enumerate(m) if b != PAT), top)
+    depth = top - low
+    print(f"[info] W20 measured: max stack depth {depth} B (lowest byte touched {low:#06x}) over boot,"
+          f" a generated D1 start and {turns} turns (rooms visited end {p.rb('CUR_ROOM')})", flush=True)
+    check("W20 stack: max depth <= 256 B of the 768-B stack (STACK_BOTTOM never reached)",
+          0 < depth <= 256, depth)
+
+
+
+W22_KEYS = dict(W19_KEYS, SYM=(7, 1), B=(7, 4))
+
+
+def w22_23(p, check, which):
+    from game_lib import K_RAT
+    """C3-2: the turn-intent machine, driven through KBD_MATRIX (default
+    KEYTAB: P R, O L, A D, Q U, SPACE F)."""
+    import budget
+    TXT = dict(STRINGS)
+    kw, kh = game.body(p, K_KNIGHT)
+    y1 = stand_y(1, kh)
+
+    def hold(*keys):
+        rows = [0xFF] * 8
+        for k in keys:
+            if k == ".":
+                rows[7] &= ~0x06 & 0xFF               # SYM + M
+                continue
+            r, bit = W22_KEYS[k]
+            rows[r] &= ~(1 << bit) & 0xFF
+        p.z.cmd("write-memory %d %s" % (S["KBD_MATRIX"], " ".join(map(str, rows))))
+
+    def tap(*keys, n=1):
+        hold(*keys)
+        p.tick(n)
+        hold()
+        p.tick()
+
+    def log_line():
+        """The log line drawn last (row 23) once the queue is drained."""
+        p.until(lambda: p.rb("LOG_QN") == 0, 20)
+        p.tick(2)
+        return log_row(p.composed_frame(), 23)
+
+    def shows(name):
+        return log_line() == text6(TXT[name])
+
+    def fresh(x=12):
+        p.boot(K_KNIGHT)
+        p.isolate()
+        p.wb("INPUT_REPEAT", 1)                       # the game's default
+        p.place(0, x, y1, flags=EF_ACTIVE | EF_PLAYER)   # facing right
+        p.settle(2)
+
+    tc = lambda: p.rw("TURN_COUNTER")
+    hero = lambda: p.ent(0)
+
+    if which == "W22":
+        fresh()
+        pc0 = p.pc()
+        hold()
+        _, t_idle = run_code(p, [0xF3, 0xCD] + w16(S["intent_tick"]) + [0xFB])
+        hold("SPACE", "P")                            # FIRE + R pressed: a cursor step (far3)
+        _, t_cur = run_code(p, [0xF3, 0xCD] + w16(S["input_tick"]) + [0xCD] + w16(S["intent_tick"]) + [0xFB])
+        _, t_in = run_code(p, [0xF3, 0xCD] + w16(S["input_tick"]) + [0xFB])
+        hold()
+        p.z.cmd("set-register PC=%d" % pc0)
+        p.wb("SEL_SLOT", 0)
+        p.wb("FIRE_ST", 0)
+        p.settle(2)
+        print(f"[info] W22 measured: intent_tick idle {t_idle - 8} T; intent_tick with a cursor step"
+              f" {t_cur - t_in} T (input_tick {t_in - 8} T)", flush=True)
+        check("W22 intent_tick idle + cursor step within the +1.5k T input allowance",
+              t_idle - 8 <= 1500, t_idle - 8)
+        # --- FIRE tap / hold ---
+        t0 = tc()
+        tap("SPACE", n=2)
+        check("W22 FIRE tap (2 ticks): melee on nothing -> NO TARGET, no turn",
+              shows("no_target") and tc() == t0 and p.rb("INTENT") == 0, (tc() - t0, p.rb("INTENT")))
+        p.wb("LOG_QN", 0)
+        q0 = p.rb(S["LOG_Q"] + S["LQ_RD"])
+        hold("SPACE")
+        p.tick(12)
+        st = p.rb("FIRE_ST")
+        hold()
+        p.tick(3)
+        check("W22 FIRE held 12 ticks: not a tap (FIRE_ST USED), nothing on release",
+              st == S["FS_USED"] and p.rb("INTENT") == 0 and p.rb("LOG_QN") == 0
+              and p.rb(S["LOG_Q"] + S["LQ_RD"]) == q0 and tc() == t0, (st, p.rb("LOG_QN")))
+        # --- outside ICON MODE: FIRE + side does not move the cursor (C3-2b) ---
+        hold("SPACE", "P")
+        p.tick(3)
+        hold()
+        p.tick(2)
+        check("W22 outside ICON MODE: FIRE + R neither moves the cursor nor uses the icon",
+              (p.rb("SEL_SLOT"), p.rb("INTENT"), tc() - t0, p.rb("ICON_MODE")) == (0, 0, 0, 0),
+              (p.rb("SEL_SLOT"), p.rb("INTENT"), p.rb("ICON_MODE")))
+        # --- ICON MODE: DOWN first, FIRE within 3 ticks ---
+        p.wb(S["P_ENTITIES"] + S["E_FLT"], 0)
+        hold("A")
+        p.tick()
+        hold("A", "SPACE")
+        p.tick()
+        hold()
+        p.tick()
+        fr = p.composed_frame()
+        inv = [fr[6144 + r * 32 + c] for r in (18, 19) for c in range(3)]
+        sword = TXT["info_sword"]
+        pref = ">" + sword[:15] + sword[16:]
+        log_line()
+        fr = p.composed_frame()
+        check("W22 DOWN then FIRE: ICON MODE, no turn, slot 1 inverse, info line '>' + sword line",
+              p.rb("ICON_MODE") == 1 and tc() == t0 and log_row(fr, 20, 0, 32) == text6(pref, 0, 32)
+              and all(x & 0x38 and not x & 0x07 for x in
+                      [fr[6144 + r * 32 + c] for r in (18, 19) for c in range(3)]),
+              (p.rb("ICON_MODE"), tc() - t0, inv))
+        # frozen world: a flash timer does not run down, no turn
+        p.wb(S["P_ENTITIES"] + S["E_FLT"], 10)
+        p.tick(5)
+        check("W22 ICON MODE freezes play (hero flash timer held, no turn)",
+              p.rb(S["P_ENTITIES"] + S["E_FLT"]) == 10 and tc() == t0, p.rb(S["P_ENTITIES"] + S["E_FLT"]))
+        p.wb(S["P_ENTITIES"] + S["E_FLT"], 0)
+        # cursor: R at once, +10 ticks, then every 4 (1-2 unlearned skipped, 9 empty)
+        hold("P")
+        seq = []
+        for _ in range(30):
+            p.tick()
+            seq.append(p.rb("SEL_SLOT"))
+        hold()
+        p.tick(2)
+        moves = [(i, v) for i, v in enumerate(seq) if i == 0 or v != seq[i - 1]]
+        want = [(0, 3), (10, 4), (14, 5), (18, 6), (22, 7), (26, 8)]
+        check("W22 ICON MODE R: cursor 0 -> 3 at once (1-2 unlearned skipped), +10 ticks, then every 4",
+              moves == want and p.rb("ICON_MODE") == 1, moves)
+        tap("P")
+        check("W22 cursor wraps 8 -> 0 (slot 9 empty skipped)", p.rb("SEL_SLOT") == 0, p.rb("SEL_SLOT"))
+        tap("O")
+        check("W22 cursor wraps 0 -> 8 leftwards", p.rb("SEL_SLOT") == 8, p.rb("SEL_SLOT"))
+        tap("5")
+        check("W22 ICON MODE: key 5 jumps the cursor to slot 4", p.rb("SEL_SLOT") == 4, p.rb("SEL_SLOT"))
+        p.wb("LOG_QN", 0)
+        tap("SPACE")
+        check("W22 ICON MODE: FIRE on the greyed bow = NO BOW, no turn, the mode stays",
+              shows("no_bow") and tc() == t0 and p.rb("ICON_MODE") == 1, (tc() - t0, p.rb("ICON_MODE")))
+        pr = p.rb("PAUSE_REQ")
+        tap("CAPS", "SPACE")
+        check("W22 BREAK in ICON MODE: exits, no pause request, no turn",
+              (p.rb("ICON_MODE"), p.rb("PAUSE_REQ") - pr, tc() - t0) == (0, 0, 0),
+              (p.rb("ICON_MODE"), p.rb("PAUSE_REQ") - pr))
+        log_line()
+        check("W22 after the exit: the info line has no '>' (bow line), selection kept",
+              log_row(p.composed_frame(), 20, 0, 32) == text6(TXT["info_bow"], 0, 32) and p.rb("SEL_SLOT") == 4, "")
+        # FIRE first, DOWN within 3 ticks; UP exits
+        hold("SPACE")
+        p.tick()
+        hold("SPACE", "A")
+        p.tick()
+        m1 = p.rb("ICON_MODE")
+        hold()
+        p.tick(2)
+        tap("Q")
+        check("W22 FIRE then DOWN: ICON MODE; UP exits (no use, no turn)",
+              (m1, p.rb("ICON_MODE"), tc() - t0, p.rb("INTENT")) == (1, 0, 0, 0), (m1, p.rb("ICON_MODE")))
+        # DOWN late (> 3 ticks after FIRE): no mode
+        hold("SPACE")
+        p.tick(4)
+        hold("SPACE", "A")
+        p.tick()
+        m2 = p.rb("ICON_MODE")
+        hold()
+        p.tick(2)
+        check("W22 FIRE held 4 ticks, then DOWN: no ICON MODE, no use", (m2, tc() - t0) == (0, 0), m2)
+        # use from the mode: potion (slot 7) drinks -> turn, back to play
+        hp_a = S["P_ENTITIES"] + S["E_HP"]
+        p.wb(hp_a, 5)
+        hold("A")
+        p.tick()
+        hold("A", "SPACE")
+        p.tick()
+        hold()
+        p.tick()
+        tap("7")
+        tap("SPACE")
+        p.until(lambda: p.idle(), 40)
+        check("W22 ICON MODE: FIRE on the potion drinks it (1 turn) and returns to play",
+              (tc() - t0, p.rb("ICON_MODE"), hero()["HP"] > 5) == (1, 0, True), (tc() - t0, p.rb("ICON_MODE")))
+        t0 = tc()
+        p.wb("SEL_SLOT", 0)
+        # --- FIRE + UP = pause (outside the mode) ---
+        pr = p.rb("PAUSE_REQ")
+        hold("SPACE")
+        p.tick()
+        hold("SPACE", "Q")
+        p.tick()
+        hold()
+        p.tick(2)
+        check("W22 FIRE+UP: a pause request (C3-6: the overlay is up), no turn, no tap",
+              p.rb("PAUSE_REQ") == pr + 1 and p.rb("PAUSED") == 1 and tc() == t0 and p.rb("INTENT") == 0,
+              (p.rb("PAUSE_REQ") - pr, p.rb("PAUSED")))
+        tap("SPACE")                                  # RESUME
+        p.tick(2)
+        # --- BREAK priority ---
+        p.wb("LOG_QN", 0)
+        hold("SPACE")
+        p.tick()
+        hold("SPACE", "CAPS")
+        p.tick()
+        hold()
+        p.tick(3)
+        check("W22 BREAK (CAPS+SPACE) after FIRE: pause request, the FIRE tap is cancelled",
+              p.rb("PAUSE_REQ") == pr + 2 and tc() == t0 and p.rb("LOG_QN") == 0, (p.rb("PAUSE_REQ") - pr,))
+        tap("SPACE")                                  # RESUME
+        p.tick(2)
+        # --- DOWN alone: held back 3 ticks; a shorter tap commits on release ---
+        hold("A")
+        ph = []
+        for _ in range(3):
+            p.tick()
+            ph.append(p.rb("TURN_PHASE"))
+        hold()
+        p.until(lambda: p.idle(), 20)
+        check("W22 DOWN held: the wait starts on the 3rd tick (ICON MODE window)",
+              ph == [0, 0, 1] and tc() - t0 == 1, (ph, tc() - t0))
+        t0 = tc()
+        tap("A")
+        p.until(lambda: p.idle() and tc() != t0, 20)
+        check("W22 DOWN tapped 1 tick: the wait still happens (commit on release)", tc() - t0 == 1, tc() - t0)
+        t0 = tc()
+        # --- turn-around (0 turns), held reverse walks after 10 ticks ---
+        x0 = hero()["X"]
+        tap("O")
+        e = hero()
+        check("W22 reverse tap: turns left, no move, 0 turns",
+              (e["FLAGS"] & EF_LEFT, e["X"], tc() - t0) == (EF_LEFT, x0, 0), (e["FLAGS"], e["X"], tc() - t0))
+        hold("P")                                     # from facing left
+        n = 0
+        while hero()["X"] == x0 and n < 30:
+            p.tick()
+            n += 1
+        hold()
+        p.until(lambda: p.idle(), 40)
+        check("W22 held reverse key: turns, then walks after the 10-tick delay (1 turn)",
+              10 <= n <= 12 and not hero()["FLAGS"] & EF_LEFT and tc() - t0 >= 1, (n, tc() - t0))
+        p.settle(2)
+        # --- DOWN with no ladder = wait; '.' = wait; low diagonal = side ---
+        t1, e0 = tc(), hero()
+        p.turn("A")
+        e = hero()
+        check("W22 DOWN with no ladder below: a wait (1 turn, no move)",
+              (tc() - t1, e["X"], e["Y"]) == (1, e0["X"], e0["Y"]), (tc() - t1, e["X"], e["Y"]))
+        t1 = tc()
+        hold(".")
+        p.until(lambda: tc() != t1, 4)
+        hold()
+        p.until(lambda: p.idle(), 20)
+        check("W22 '.' waits (1 turn)", tc() - t1 == 1, tc() - t1)
+        x1 = hero()["X"]
+        hold("A", "P")
+        p.until(lambda: hero()["X"] != x1, 6)
+        hold()
+        p.until(lambda: p.idle(), 20)
+        check("W22 DOWN+RIGHT walks right (no wait)", hero()["X"] == x1 + 1, hero()["X"] - x1)
+        # --- shortcuts ---
+        p.wb("LOG_QN", 0)
+        tap("5")
+        a = p.rb("SEL_SLOT")
+        tap("2")
+        b = p.rb("SEL_SLOT")
+        nl = shows("not_learned")
+        tap("0")
+        c = p.rb("SEL_SLOT")
+        check("W22 shortcuts: 5 selects slot 4 (greyed bow), 2 = NOT LEARNED (stays), 0 = empty (stays)",
+              (a, b, nl, c) == (4, 4, True, 4), (a, b, nl, c))
+        # --- review fixes (C3-2b) ---
+        hp_a = S["P_ENTITIES"] + S["E_HP"]
+
+        def enter_mode():
+            hold("A")
+            p.tick()
+            hold("A", "SPACE")
+            p.tick()
+            hold()
+            p.tick(2)
+
+        pot_a = S["P_ENTITIES"] + S["E_POT"]
+        p.wb(pot_a, 3)                                # potions to drink (a tap would)
+        p.wb(hp_a, 5)
+        p.wb("SEL_SLOT", 6)
+        p.settle(2)
+        t0, pr = tc(), p.rb("PAUSE_REQ")
+        hold("CAPS", "SPACE")
+        p.tick(2)
+        hold("SPACE")                                 # CAPS lifted first
+        p.tick(2)
+        hold()
+        p.until(lambda: p.idle(), 40)
+        p.tick(2)
+        check("W22r BREAK, CAPS lifted before SPACE: a pause request, no tap (no potion, no turn)",
+              (tc() - t0, p.rb("PAUSE_REQ") - pr, p.rb(hp_a)) == (0, 1, 5), (tc() - t0, p.rb(hp_a)))
+        tap("SPACE")                                  # RESUME (C3-6 overlay)
+        p.tick(2)
+        enter_mode()
+        m = p.rb("ICON_MODE")
+        hold("CAPS", "SPACE")
+        p.tick(2)
+        hold("SPACE")
+        p.tick(2)
+        hold()
+        p.until(lambda: p.idle(), 40)
+        p.tick(2)
+        check("W22r BREAK in ICON MODE, CAPS lifted first: mode left, no use, no pause",
+              (m, p.rb("ICON_MODE"), tc() - t0, p.rb("PAUSE_REQ") - pr, p.rb(hp_a)) == (1, 0, 0, 1, 5),
+              (m, p.rb("ICON_MODE"), tc() - t0, p.rb(hp_a)))
+        enter_mode()
+        x1 = hero()["X"]
+        hold("SPACE")
+        p.tick()
+        hold("P")                                     # FIRE released, RIGHT held at once
+        p.until(lambda: hero()["X"] != x1 and p.idle(), 60)
+        hold()
+        p.until(lambda: p.idle(), 20)
+        check("W22r FIRE use from ICON MODE (potion), then RIGHT held: the hero walks (no exit lock)",
+              p.rb(hp_a) > 5 and hero()["X"] > x1 and p.rb("EXIT_LOCK") == 0, (p.rb(hp_a), hero()["X"] - x1))
+        t0, x1 = tc(), hero()["X"]
+        p.wb("DN_COMMIT", 1)                          # a buffered DOWN tap ...
+        hold("P")                                     # ... and RIGHT asked this tick
+        p.until(lambda: tc() != t0, 6)
+        hold()
+        p.until(lambda: p.idle(), 20)
+        p.tick(6)
+        check("W22r buffered DOWN + RIGHT: the walk only, the DOWN is dropped (1 turn, no later wait)",
+              (tc() - t0, hero()["X"] - x1, p.rb("DN_COMMIT")) == (1, 1, 0), (tc() - t0, hero()["X"] - x1))
+        p.wb("INPUT_REPEAT", 0)
+        p.wb("NEED_RELEASE", 1)
+        t0 = tc()
+        p.wb("DN_COMMIT", 1)
+        p.until(lambda: tc() != t0, 6)
+        p.until(lambda: p.idle(), 20)
+        p.tick(2)
+        t1, x1 = tc(), hero()["X"]
+        hold("P")
+        p.until(lambda: tc() != t1, 6)
+        hold()
+        p.until(lambda: p.idle(), 20)
+        check("W22r INPUT_REPEAT 0 + NEED_RELEASE + a buffered DOWN: the wait runs, then input works",
+              (t1 - t0, tc() - t1, hero()["X"] - x1) == (1, 1, 1), (t1 - t0, tc() - t1, hero()["X"] - x1))
+        p.wb("INPUT_REPEAT", 1)
+        return
+
+    # ---------------- W23: icon use ------------------------------------------
+    def refusal(key_slot, name):
+        """Shortcut to a slot, tap FIRE: the line `name`, no turn."""
+        tap(key_slot)
+        t1 = tc()
+        p.wb("LOG_QN", 0)
+        tap("SPACE")
+        ok = shows(name) and tc() == t1
+        return ok
+
+    fresh(x=12)
+    rat = 1
+    _, rh = game.body(p, K_RAT)
+    p.place(rat, 12 + kw, stand_y(1, rh), room=p.rb("CUR_ROOM"), flags=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+    p.settle(2)
+    t0 = tc()
+    st = budget.Stepper(p)
+    n0 = len(st.ticks)
+    st.turn("SPACE")
+    st.close()
+    worst = max(t for t, _ in st.ticks[n0:])
+    tgt = p.rb(S["P_ENTITIES"] + S["E_TGT"])
+    p.until(lambda: p.idle(), 60)
+    print(f"[info] W23 measured: FIRE melee attack, worst tick {worst} T over {len(st.ticks) - n0} ticks",
+          flush=True)
+    check("W23 FIRE on the sword, rat faced: an attack on it (1 turn)",
+          (tc() - t0, tgt) == (1, rat), (tc() - t0, tgt))
+    check("W23 FIRE melee turn: worst tick <= 126k T", worst <= 126000, worst)
+    # melee with nothing faced next to the A|B door: closes it
+    fresh(x=12)
+    e_ab = S["EDGE_TAB"] + S["EDGE_AB"]
+    OPEN = S["EG_OPEN"]
+    p.place(0, 30 - kw, y1, flags=EF_ACTIVE | EF_PLAYER)
+    t0 = tc()
+    tap("SPACE")
+    p.until(lambda: p.idle(), 40)
+    check("W23 FIRE on the sword facing the open door: closes it (1 turn; replaces key C)",
+          (tc() - t0, p.rb(e_ab) & OPEN) == (1, 0), (tc() - t0, p.rb(e_ab)))
+    # quick potion (Warrior slot 7 = key 7)
+    fresh(x=12)
+    hpa = S["P_ENTITIES"] + S["E_HP"]
+    p.wb(hpa, 5)
+    tap("7")
+    sel = p.rb("SEL_SLOT")
+    t0 = tc()
+    tap("SPACE")
+    p.until(lambda: p.idle(), 40)
+    e = hero()
+    check("W23 key 7 + FIRE: quick potion drunk (1 turn, HP up, potion used)",
+          (sel, tc() - t0, e["HP"] > 5, e["POT"]) == (6, 1, True, 0), (sel, tc() - t0, e["HP"], e["POT"]))
+    t0 = tc()
+    p.wb("LOG_QN", 0)
+    tap("SPACE")
+    check("W23 again with no potion: NO POTION, no turn", shows("no_potion") and tc() == t0, tc() - t0)
+    # greyed / missing refusals
+    bad = []
+    for key, name in (("5", "no_bow"), ("6", "no_food"), ("8", "no_scroll"), ("9", "no_bag")):
+        if not refusal(key, name):
+            bad.append(name)
+    p.wb("DAGGERS", 0)
+    if not refusal("4", "no_daggers"):
+        bad.append("no_daggers")
+    check("W23 refusals (bow, food, scroll, bag, daggers at 0): their line, no turn", bad == [], bad)
+    # ENTER uses the icon; I = the bag
+    tap("9")
+    t0 = tc()
+    p.wb("LOG_QN", 0)
+    tap("ENTER")
+    a = shows("no_bag")
+    p.wb("LOG_QN", 0)
+    tap("I")
+    b = shows("no_bag")
+    check("W23 ENTER uses the selected icon (Bag: NO BAG YET); I = NO BAG YET; no turn",
+          (a, b, tc() - t0) == (True, True, 0), (a, b, tc() - t0))
+
+
+def w15_icons(p, check):
+    """C3-3: icon bar states (concept-screen §5), cursor attr move, info line
+    text per icon (row 20, 42 chars, game.md §3.4), level digit (31, 19)."""
+    TXT = dict(STRINGS)
+    p.boot(K_KNIGHT)
+    p.isolate()
+    p.settle(4)
+
+    def attrs(fr, slot):
+        return [fr[6144 + r * 32 + 3 * slot + c] for r in (18, 19) for c in range(3)]
+
+    def cells(fr, slot):
+        return [bytes(cell_bytes(fr, 3 * slot + c, r)) for r in (18, 19) for c in range(3)] + [attrs(fr, slot)]
+
+    def info(fr):
+        return log_row(fr, 20, 0, 32)
+
+    def line(*fields):
+        """42-char info line from (char pos, text) pieces."""
+        t = [" "] * 42
+        for at, txt in fields:
+            t[at:at + len(txt)] = list(txt)
+        return "".join(t).rstrip()
+
+    def settle_panel():
+        p.until(lambda: p.rb("PANEL_DIRTY") == 0, 20)
+        p.tick(2)
+        return p.frame()
+
+    fr = settle_panel()
+    a = {i: attrs(fr, i) for i in range(10)}
+    sel = all(x & 0x38 == 0x08 for x in a[0])
+    others_black = all(x & 0x38 == 0 for i in range(1, 10) for x in a[i])
+    hidden = cells(fr, 1) == cells(fr, 2) == cells(fr, 9)
+    grey = all(x == S["ATTR_P_GREY"] for i in (4, 5, 7) for x in a[i])
+    normal = all(x != S["ATTR_P_GREY"] for i in (3, 8) for x in a[i])
+    pot = (a[6][3], a[6][5], log_row(fr, 19, 20, 1) == text6("1", 0, 1))
+    check("W15i Warrior start: slot 1 selected (PAPER blue), others black paper",
+          sel and others_black, a[0])
+    check("W15i unlearned Power / Whirl = the empty outline (== spare slot 10)", hidden, "")
+    check("W15i greyed: bow (not found), quick food, quick scroll ($07); daggers (3) and Bag normal",
+          grey and normal, (a[4], a[5], a[7], a[3], a[8]))
+    check("W15i quick potion: glyph ATTR_POTION, count '1' (ATTR_HUD)",
+          pot == (S["ATTR_POTION"], S["ATTR_HUD"], True), pot)
+    check("W15i level digit '1' at (31, 19), attr $46",
+          log_row(fr, 19, 31, 1) == text6("1", 0, 1) and fr[6144 + 19 * 32 + 31] == 0x46, "")
+    check("W15i info line = the sword's line (row 20), field attrs $47 / $46 / $45",
+          info(fr) == text6(TXT["info_sword"], 0, 32) and
+          [fr[6144 + 20 * 32 + c] for c in (0, 11, 12, 20, 21, 31)] == [0x47, 0x47, 0x46, 0x46, 0x45, 0x45],
+          "")
+    # cursor move = attr move + info line
+    p.wb("SEL_SLOT", 3)
+    fr = settle_panel()
+    check("W15i cursor -> slot 4 (daggers): PAPER blue moves, slot 1 back to black, info = daggers",
+          all(x & 0x38 == 0x08 for x in attrs(fr, 3)) and all(x & 0x38 == 0 for x in attrs(fr, 0))
+          and info(fr) == text6(TXT["info_daggers"], 0, 32), (attrs(fr, 3), attrs(fr, 0)))
+    p.wb("DAGGERS", 0)
+    fr = settle_panel()
+    check("W15i daggers at 0: selected + greyed = $0F", all(x == 0x0F for x in attrs(fr, 3)), attrs(fr, 3))
+    p.wb("SEL_SLOT", 6)
+    fr = settle_panel()
+    check("W15i potion line: 'POTION  X1  FIRE: DRINK' (count in the numbers field)",
+          info(fr) == text6(line((0, "POTION"), (16, "X1"), (28, "FIRE: DRINK")), 0, 32), "")
+    p.wb("SEL_SLOT", 8)
+    fr = settle_panel()
+    check("W15i Bag line: 'BAG  LV 1  XP 0/40' (game.md §4.1)",
+          info(fr) == text6(line((0, "BAG"), (16, "LV 1"), (28, "XP 0/40")), 0, 32), "")
+    p.wb("XP", 39)
+    p.wb(S["XP"] + 1, 1)                          # 295
+    p.wb("LVL", 4)
+    p.wb("SEL_SLOT", 3)
+    settle_panel()
+    p.wb("SEL_SLOT", 8)
+    fr = settle_panel()
+    check("W15i Bag line follows LVL / XP; level digit follows LVL",
+          info(fr) == text6(line((0, "BAG"), (16, "LV 4"), (28, "XP 295/340")), 0, 32)
+          and log_row(fr, 19, 31, 1) == text6("4", 0, 1), "")
+    check("W15i displayed == composed", fr == p.composed_frame(), "")
+
+
+def w24(p, check):
+    """C3-6 (bank 1, menu1.asm; game.md §3.1 / §3.2): the menu (golden), cursor
+    + controls + hero, Sinclair digit masking, redefine (duplicates refused,
+    KEYTAB only when complete), seed entropy (MENU_SPIN; seed_fixed exact),
+    the pause overlay (rows restored byte for byte, QUIT asks Y/N), the death
+    card."""
+    keep_p = p.proto_start
+
+    def hold(*keys):
+        rows = [0xFF] * 8
+        for k in keys:
+            r, bit = W22_KEYS[k]
+            rows[r] &= ~(1 << bit) & 0xFF
+        p.z.cmd("write-memory %d %s" % (S["KBD_MATRIX"], " ".join(map(str, rows))))
+
+    def tap(*keys, n=2):
+        hold(*keys)
+        p.tick(n)
+        hold()
+        p.tick(2)
+
+    def to_menu(proto=1):
+        p.proto_start = proto
+        p.load()
+        p.wait_state(GS_SELECT)
+        p.wb("INPUT_SRC", 1)
+        p.wb("ANIM_FREEZE", 1)                       # the torches hold frame 0 (golden)
+        hold()
+        p.tick(4)
+
+    try:
+        to_menu()
+        fr = p.frame()
+        game.golden(p.h, "w24_menu", fr)
+        check("W24 menu: title / items in the menu font ('1 START' at (4, 8), 'HERO: WARRIOR')",
+              menu_text_ok(p, fr, 8, 4, "1 START") and menu_text_ok(p, fr, 11, 4, "2 HERO: WARRIOR"), "")
+        # cursor + controls
+        tap("A")
+        tap("A")
+        s1 = p.rb("menu_sel")
+        tap("SPACE")
+        j1 = p.rb("JOY_MODE")
+        tap("3")
+        tap("3")
+        j2 = p.rb("JOY_MODE")                        # Sinclair 2: that '3' was its DOWN too
+        tap("Q")                                     # (the cursor went to 4): back to 3
+        tap("SPACE")
+        j3 = p.rb("JOY_MODE")
+        tap("Q")
+        check("W24 DOWN x2 -> CONTROLS, FIRE / '3' cycle JOY_MODE keys -> Kempston -> S1 -> S2 -> keys; UP moves back",
+              (s1, j1, j2, j3, p.rb("menu_sel")) == (2, 1, 3, 0, 1), (s1, j1, j2, j3, p.rb("menu_sel")))
+        # Sinclair 2: key 1 is the joystick (LEFT): no START
+        p.wb("JOY_MODE", 3)
+        tap("1")
+        st = p.rb("GAME_STATE")
+        p.wb("JOY_MODE", 0)
+        check("W24 Sinclair 2: key '1' does not START (its half of the digits is the joystick)",
+              st == GS_SELECT, st)
+        # redefine: M Z V T, a duplicate M and reserved ENTER / 5 refused, then B
+        kt0 = bytes(p.z.read_memory(S["KEYTAB"], 10))
+        tap("4")
+        for k in ("M", "Z", "V", "T"):
+            tap(k)
+        mid = bytes(p.z.read_memory(S["KEYTAB"], 10))
+        refused = []
+        for k in ("M", "ENTER", "5", "I", "CAPS"):
+            tap(k)
+            p.tick(30)                               # the "KEY IN USE / RESERVED" beat
+            refused.append(p.rb("rd_i"))
+        tap("B")
+        p.tick(4)
+        kt = bytes(p.z.read_memory(S["KEYTAB"], 10))
+        row = lambda r: (S["KBD_MATRIX"] & 0xFF) + r
+        want = bytes([row(2), 1 << 4, row(0), 1 << 4, row(0), 1 << 1, row(7), 1 << 2, row(7), 1 << 4])
+        check("W24 redefine U=M D=Z L=V R=T F=B: KEYTAB unchanged until complete; duplicate M and the "
+              "reserved ENTER / 5 / I / CAPS refused",
+              mid == kt0 and refused == [4] * 5 and kt == want, (kt0.hex(), mid.hex(), refused, kt.hex()))
+        # BREAK cancels a redefine: the old KEYTAB stays
+        tap("4")
+        tap("M")
+        tap("CAPS", "SPACE")
+        p.tick(4)
+        check("W24 BREAK at a redefine prompt cancels it (KEYTAB unchanged)",
+              bytes(p.z.read_memory(S["KEYTAB"], 10)) == want and p.rb("GAME_STATE") == GS_SELECT, "")
+        p.z.cmd("write-memory %d %s" % (S["KEYTAB"], " ".join(map(str, kt0))))
+        # hero toggle + START
+        tap("2")
+        tap("1")
+        ok = p.wait_state(GS_PLAYING, 400)
+        check("W24 '2' toggles the hero, '1' starts: the Mage plays", ok and p.rb("HERO_KIND") == K_WIZARD,
+              (ok, p.rb("HERO_KIND")))
+        # seed entropy (generated start): START on the same menu frame, a DOWN
+        # tapped earlier at different frames -> different seeds (the key-edge
+        # mixing, not only the START frame); the same timing -> the same seed
+        seeds = []
+        for down_at, fixed in ((5, 0), (11, 0), (5, 0), (5, 1)):
+            to_menu(proto=0)
+            p.wb("seed_fixed", fixed)
+            p.tick(down_at)
+            tap("A")
+            tap("Q")
+            p.tick(30 - down_at)
+            hold("1")
+            p.wait_state(GS_PLAYING, 600)
+            hold()
+            seeds.append(p.rw("MASTER_SEED"))
+        check("W24 seed: an earlier keypress's timing changes MASTER_SEED (same START frame); same timing = "
+              "same seed; seed_fixed = seed_value",
+              seeds[0] != seeds[1] and seeds[0] == seeds[2] and seeds[3] == p.rw("seed_value"),
+              [hex(x) for x in seeds])
+        # pause: overlay, resume restores rows 7-9 byte for byte
+        to_menu()
+        tap("1")
+        p.wait_state(GS_PLAYING, 400)
+        p.isolate()
+        p.settle(4)
+
+        def rows79():
+            return (bytes(p.composed_frame()), bytes(p.frame()))   # C3-6 review: whole screens
+        before = rows79()
+        hold("SPACE")
+        p.tick()
+        hold("SPACE", "Q")
+        p.tick(2)
+        hold()
+        p.tick(3)
+        fr = p.frame()
+        paused = p.rb("PAUSED")
+        boxed = menu_text_ok(p, fr, 8, 6, "RESUME") and menu_text_ok(p, fr, 8, 20, "QUIT")
+        tap("SPACE")
+        p.tick(4)
+        check("W24 FIRE+UP: pause overlay (RESUME / QUIT); FIRE on RESUME: the whole composed and displayed "
+              "screens restored byte for byte (no torch in row 0)",
+              paused == 1 and boxed and p.rb("PAUSED") == 0 and rows79() == before
+              and p.frame() == p.composed_frame(), (paused, boxed, p.rb("PAUSED")))
+        # QUIT: Y/N, "no" returns to the box, FIRE = yes -> the menu
+        hold("CAPS", "SPACE")
+        p.tick(2)
+        hold()
+        p.tick(3)
+        tap("P")                                     # -> QUIT
+        tap("SPACE")                                 # QUIT? Y/N
+        asked = menu_text_ok(p, p.frame(), 8, 11, "QUIT? Y/N")
+        tap("A")                                     # any other: no
+        back = p.rb("PAUSED") == 1 and p.rb("GAME_STATE") == GS_PLAYING
+        tap("SPACE")
+        tap("SPACE")                                 # yes
+        p.tick(10)
+        check("W24 BREAK pauses; QUIT asks Y/N, another key = no, FIRE = yes -> the menu",
+              asked and back and p.rb("GAME_STATE") == GS_SELECT, (asked, back, p.rb("GAME_STATE")))
+        # death card
+        hold()
+        tap("1")
+        p.wait_state(GS_PLAYING, 400)
+        p.settle(2)
+        p.wb("GAME_STATE", GS_DEAD)
+        p.tick(4)
+        fr = p.frame()
+        check("W24 death: the 'YOU DIED' card (menu font, rows 8-9), FIRE -> the menu",
+              p.rb("END_SHOWN") == 1 and menu_text_ok(p, fr, 8, 12, "YOU DIED"), p.rb("END_SHOWN"))
+        tap("SPACE")
+        p.tick(6)
+        check("W24 death card: FIRE returns to the menu", p.rb("GAME_STATE") == GS_SELECT, p.rb("GAME_STATE"))
+    finally:
+        p.proto_start = keep_p
+
+# C3-8b: the 3C exit gate (W25): one joystick-only run per input source.
+# Source = the 5 inputs R L D U F: default keys, a redefined KEYTAB (made in
+# the REDEFINE menu), Sinclair 1 / 2 (number-row halves), Kempston (JOY_MIRROR).
+W25_SRC = {                                   # name -> (JOY_MODE, [R, L, D, U, F] keys)
+    "keys": (0, ["P", "O", "A", "Q", "SPACE"]),
+    "redef": (0, ["T", "V", "Z", "M", "B"]),       # UP M, DOWN Z, LEFT V, RIGHT T, FIRE B
+    "s1": (2, ["7", "6", "8", "9", "0"]),
+    "s2": (3, ["2", "1", "3", "4", "5"]),
+    "kemp": (1, None),
+}
+W25_DIR = {"R": 0, "L": 1, "D": 2, "U": 3, "F": 4}
+
+
+def w25(p, check):
+    """Every step is driven only by the source's own 5 inputs (the menu
+    included, bar the one-off mode / REDEFINE selection that needs a working
+    source: the default keys). PROTO rooms: walk, turn-around (0 turns), jump
+    (UP + side), close the A|B door (FIRE, melee), quaff (ICON MODE: DOWN +
+    FIRE, cursor R to the potion, FIRE), pause + resume (FIRE held + UP).
+    Generated D1 (fixed seed): walk to the lair exit, DOWN descends."""
+    kw, kh = game.body(p, K_KNIGHT)
+    y0, y1 = stand_y(0, kh), stand_y(1, kh)
+    keep = p.proto_start
+    e_ab = S["EDGE_TAB"] + S["EDGE_AB"]
+    LINK, DOOR, OPEN = S["EG_LINK"], S["EG_DOOR"], S["EG_OPEN"]
+    tc = lambda: p.rw("TURN_COUNTER")
+    hero = lambda: p.ent(0)
+
+    def hold(src, *dirs):
+        mode, keys = W25_SRC[src]
+        if keys is None:                          # Kempston: the JOY_MIRROR byte
+            p.wb("JOY_MIRROR", sum(1 << W25_DIR[d] for d in dirs))
+            dirs = ()
+            keys = []
+        rows = [0xFF] * 8
+        for d in dirs:
+            r, bit = W22_KEYS[keys[W25_DIR[d]]]
+            rows[r] &= ~(1 << bit) & 0xFF
+        p.z.cmd("write-memory %d %s" % (S["KBD_MATRIX"], " ".join(map(str, rows))))
+
+    def tap(src, *dirs, n=2):
+        hold(src, *dirs)
+        p.tick(n)
+        hold(src)
+        p.tick(2)
+
+    def idle():
+        p.until(lambda: p.idle(), 80)
+        p.tick(2)
+
+    def step(src, *dirs):
+        """Press until a turn starts, release, run it out. -> turns taken."""
+        t0 = tc()
+        hold(src, *dirs)
+        for _ in range(8):
+            p.tick()
+            if p.rb("TURN_PHASE") == 1 or tc() != t0:
+                break
+        hold(src)
+        idle()
+        return tc() - t0
+
+    def fire(src):
+        """FIRE tap (acts on release). -> turns taken."""
+        t0 = tc()
+        hold(src, "F")
+        p.tick()
+        hold(src)
+        for _ in range(4):
+            p.tick()
+            if p.rb("TURN_PHASE") == 1 or tc() != t0:
+                break
+        idle()
+        return tc() - t0
+
+    def start_menu(src, proto, fixed_seed=False):
+        """Boot to the menu and START using only `src`."""
+        p.proto_start = proto
+        p.load()
+        p.wait_state(GS_SELECT)
+        p.wb("INPUT_SRC", 1)
+        p.wb("ANIM_FREEZE", 1)
+        p.wb("INPUT_REPEAT", 1)                   # the game's default
+        if fixed_seed:
+            p.wb("seed_fixed", 1)                 # seed_value = the default $1234
+        hold("keys")
+        p.tick(4)
+        mode, keys = W25_SRC[src]
+        if src == "redef":                        # item 4 (3 DOWN, FIRE) with the default keys
+            for _ in range(3):
+                tap("keys", "D")
+            tap("keys", "F")
+            for d in ("U", "D", "L", "R", "F"):   # the prompts: UP DOWN LEFT RIGHT FIRE
+                tap("redef", d)
+            p.tick(4)
+            kt = bytes(p.z.read_memory(S["KEYTAB"], 10))
+            row = lambda r: (S["KBD_MATRIX"] & 0xFF) + r
+            want = bytes([row(2), 1 << 4, row(0), 1 << 4, row(0), 1 << 1, row(7), 1 << 2, row(7), 1 << 4])
+            check("W25 redef: KEYTAB made in the REDEFINE menu (U=M D=Z L=V R=T F=B)", kt == want, kt.hex())
+        elif mode:                                # CONTROLS (item 3): FIRE cycles the mode
+            tap("keys", "D")
+            tap("keys", "D")
+            for _ in range(mode):
+                tap("keys", "F")
+        sel = p.rb("menu_sel")
+        for _ in range(sel):
+            tap(src, "U")                         # back up to 1 START with the source's UP
+        up = p.rb("menu_sel")
+        hold(src, "F")
+        p.tick(1)
+        hold(src)
+        ok = p.wait_state(GS_PLAYING, 600)
+        p.tick(3)
+        check(f"W25 {src}: menu navigated and START with the source's own inputs (JOY_MODE {mode}, "
+              f"cursor {sel}->{up}, Knight)",
+              ok and up == 0 and p.rb("JOY_MODE") == mode and p.rb("HERO_KIND") == K_KNIGHT,
+              (ok, sel, up, p.rb("JOY_MODE"), p.rb("HERO_KIND")))
+
+    def ingame(code):
+        pc0 = p.pc()
+        ok = p.run_stub([0xF3] + code + [0xFB], org=S["LOWRAM_END_3B"])
+        p.z.cmd("set-register PC=%d" % pc0)
+        return ok
+
+    try:
+        for src in W25_SRC:
+            # ---------------- PROTO rooms ----------------------------------
+            start_menu(src, 1)
+            p.isolate()
+            p.settle(3)
+            e = hero()
+            t0 = tc()
+            n = sum(step(src, "R") for _ in range(3))
+            check(f"W25 {src}: walk R x3: x + 3, 3 turns", (hero()["X"], n) == (e["X"] + 3, 3),
+                  (hero()["X"], n))
+            tap(src, "L")
+            e2 = hero()
+            check(f"W25 {src}: L tap turns around (0 turns, no move)",
+                  (bool(e2["FLAGS"] & EF_LEFT), e2["X"], tc() - t0) == (True, e["X"] + 3, 3), (e2["FLAGS"], tc() - t0))
+            n = step(src, "L")
+            check(f"W25 {src}: L walks left (1 turn)", (hero()["X"], n) == (e["X"] + 2, 1), (hero()["X"], n))
+            # jump: UP + side
+            p.place(0, 9, y1, flags=EF_ACTIVE | EF_PLAYER)
+            n = step(src, "U", "R")
+            e3 = hero()
+            check(f"W25 {src}: jump UP+R: x + 6, back on storey 1, 1 turn",
+                  (e3["X"], e3["Y"], n) == (15, y1, 1), (e3["X"], e3["Y"], n))
+            # close the A|B door with melee (FIRE, slot 0)
+            p.place(0, 27, y1, flags=EF_ACTIVE | EF_PLAYER)
+            was = p.rb(e_ab)
+            n = fire(src)
+            check(f"W25 {src}: FIRE (melee) facing the open A|B door closes it (1 turn)",
+                  (was, p.rb(e_ab), n) == (LINK | DOOR | OPEN, LINK | DOOR, 1), (was, p.rb(e_ab), n))
+            # quaff via ICON MODE
+            pot0 = hero()["POT"]
+            p.set_ent(0, HP=5)
+            p.settle(2)
+            t0 = tc()
+            hold(src, "D")
+            p.tick()
+            hold(src, "D", "F")
+            p.tick()
+            hold(src)
+            p.tick(2)
+            mode = p.rb("ICON_MODE")
+            seq = []
+            for _ in range(4):
+                tap(src, "R")
+                seq.append(p.rb("SEL_SLOT"))
+            n = fire(src)
+            e4 = hero()
+            check(f"W25 {src}: ICON MODE (DOWN+FIRE), R x4 to the potion (slots {seq}), FIRE drinks it: "
+                  "HP up, one potion used, back in play, 1 turn",
+                  (mode, seq, e4["HP"] > 5, e4["POT"], p.rb("ICON_MODE"), tc() - t0)
+                  == (1, [3, 4, 5, 6], True, pot0 - 1, 0, 1), (mode, seq, e4["HP"], e4["POT"], tc() - t0))
+            # pause + resume
+            t0 = tc()
+            hold(src, "F")
+            p.tick()
+            hold(src, "F", "U")
+            p.tick(2)
+            hold(src)
+            p.tick(3)
+            paused = (p.rb("PAUSED"), tc() - t0)
+            tap(src, "F")                         # RESUME is the default item
+            p.tick(3)
+            check(f"W25 {src}: FIRE held + UP pauses (no turn); FIRE on RESUME plays on",
+                  paused == (1, 0) and p.rb("PAUSED") == 0 and tc() == t0 and p.rb("GAME_STATE") == GS_PLAYING,
+                  (paused, p.rb("PAUSED")))
+            # ---------------- generated D1: descend ------------------------
+            start_menu(src, 0, fixed_seed=True)
+            blk = room_model.read_block(p)
+            lair = blk[S["LVL_LAIR"] - room_model.BASE]
+            ex = room_model.field(blk, lair, "RD_EXITCOL")
+            for s_ in range(1, 16):
+                p.set_ent(s_, FLAGS=0)            # nobody interferes (a fixed, hazard-free route)
+            x = ex - 2 if ex - 2 >= 2 else ex + 2
+            p.z.cmd("write-memory %d %d" % (S["CUR_ROOM"], lair))
+            p.set_ent(0, ROOM=lair, X=x, Y=y1, PX=x * 8, PY=y1 * 8,
+                      FLAGS=EF_ACTIVE | EF_PLAYER | (EF_LEFT if x > ex else 0), MODE=0, DVIS=0)
+            ok = ingame([0x3E, lair, 0xCD] + w16(S["room_show"]) + [0xCD] + w16(S["vis_reset"])
+                        + [0xCD] + w16(S["present_full"]))
+            p.settle(3)
+            d0, hp0 = p.rb("LVL_DEPTH"), hero()["HP"]
+            t0 = tc()
+            key = "R" if ex > x else "L"
+            n = sum(step(src, key) for _ in range(abs(ex - x)))
+            check(f"W25 {src}: walk to the lair exit col {ex} ({abs(ex - x)} turns)",
+                  ok and (hero()["X"], n) == (ex, abs(ex - x)), (ok, hero()["X"], n))
+            hold(src, "D")
+            for _ in range(700):
+                p.tick()
+                if p.rb("LVL_DEPTH") != d0:
+                    break
+            hold(src)
+            p.until(lambda: p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+            p.settle(3)
+            check(f"W25 {src}: DOWN on the exit descends D1 -> D2 (descend = 1 turn after the walk)",
+                  (d0, p.rb("LVL_DEPTH"), tc() - t0, hero()["HP"] >= hp0)
+                  == (1, 2, abs(ex - x) + 1, True), (d0, p.rb("LVL_DEPTH"), tc() - t0))
+        # ---------------- seed entropy: START timing on the real input path
+        seeds = []
+        for wait in (7, 19, 7):
+            p.proto_start = 0
+            p.load()
+            p.wait_state(GS_SELECT)
+            p.wb("INPUT_SRC", 1)
+            p.wb("ANIM_FREEZE", 1)
+            hold("keys")
+            p.tick(wait)
+            hold("keys", "F")                     # START (cursor on item 0)
+            p.tick(1)
+            hold("keys")
+            p.wait_state(GS_PLAYING, 600)
+            seeds.append(p.rw("MASTER_SEED"))
+        check("W25 seed: START at menu frame 7 vs 19 -> different MASTER_SEEDs; the same timing repeats",
+              seeds[0] != seeds[1] and seeds[0] == seeds[2], [hex(s_) for s_ in seeds])
+    finally:
+        p.proto_start = keep
+
+
 def w17(p, check):
     """B3B-13: the token text. (a) tk_get decodes every string of
     src/strings.txt into a buffer == its text (exact bytes, 0-terminated), +
     the decode cost vs a plain-fetch getter over the same text; (b) every
     string pushed by id (msg_push) and drawn by the real item_log (print6t)
-    == the reference 6x8 render of its text on row 23, $C000 handed back, T
+    == the reference 6x8 render of its text on row 23 (C3-4: all but the
+    info_* / ft_* lines, which are up to 42 chars and never go to the log), $C000 handed back, T
     per item; (c) composed impact lines (show_impact_msg, all 5 kinds x the
     monster names) drawn == their text."""
     STUB = S["LOWRAM_END_3B"]
@@ -802,36 +2074,59 @@ def w17(p, check):
     p.isolate()
     p.settle(2)
     # --- (a) decode every string into a buffer --------------------------------
-    BUF, GET = STUB + 0x100, STUB + 0xF0
+    # C3-4 grew the text to ~1.3 KB and B14 grew the cold block down: the
+    # buffer below lowram_code no longer holds it all, so the strings are
+    # decoded in id batches that fit (stub area 0x3C B; the plain loop reads
+    # and writes the buffer in place: same bytes, same cost per char).
+    BUF, GET = STUB + 0x40, STUB + 0x3C
+    room = S["lowram_code"] - BUF
     plain_get = [0x0A, 0x03, 0xB7, 0xC9]          # ld a,(bc) / inc bc / or a / ret
     p.z.cmd("write-memory %d %s" % (GET, " ".join(map(str, plain_get))))
 
-    def decode_loop(getter, plain):
+    def decode_loop(getter, plain, first, last):
         return asm([0x3A] + w(S["PORT_7FFD_SHADOW"]) + [0xF5,               # ld a,(shadow) / push af
                     0x3E, S["BANK_TEXT"], 0xCD] + w(S["page_bank"]) +
-                   [0x11] + w(BUF + (0x200 if plain else 0)) +             # ld de, out
+                   [0x11] + w(BUF) +                                        # ld de, out (plain: in place)
                    ([0x01] + w(BUF) if plain else []) +                     # plain: BC walks BUF
-                   [0xAF, ("L", "lp"), 0xF5, 0xCD] + w(S["tx_ptr"]) +       # xor a / push af / call tx_ptr
+                   [0x3E, first, ("L", "lp"), 0xF5, 0xCD] + w(S["tx_ptr"]) +  # ld a,first / push af / call tx_ptr
                    ([0x00, 0x00] if plain else [0x44, 0x4D]) +              # (nop nop) / ld b,h / ld c,l
                    [("L", "in"), 0xCD] + w(getter) + [0x12, 0x13, 0xB7, ("jr", 0x20, "in"),
-                    0xF1, 0x3C, 0xFE, S["TX_COUNT"], ("jr", 0x38, "lp"),
+                    0xF1, 0x3C, 0xFE, last, ("jr", 0x38, "lp"),
                     0xF1, 0xCD] + w(S["restore_page"]))
+    assert len(decode_loop(GET, True, 0, 1)) + 4 <= GET - STUB, "W17: stub overlaps GET"
+    batches, i = [], 0
+    while i < len(texts):
+        j, n = i, 0
+        while j < len(texts) and n + len(texts[j]) + 1 <= room:
+            n += len(texts[j]) + 1
+            j += 1
+        assert j > i, "W17: one string longer than the buffer"
+        batches.append((i, j))
+        i = j
     sh0 = p.rb("PORT_7FFD_SHADOW")
-    t_tk = stub(decode_loop(S["tk_get"], False), "tk_get decode loop", measure=True)
-    got = bytes(p.z.read_memory(BUF, n_chars + len(texts)))
-    want = b"".join(t.encode() + b"\0" for t in texts)
-    check(f"W17 tk_get: all {len(texts)} strings decode bit-exact (0-terminated, in id order)",
-          got == want, [(i, a, b) for i, (a, b) in enumerate(zip(got, want)) if a != b][:4])
-    check("W17 tk_get: decoded chars are 32..127 only",
-          all(c == 0 or 32 <= c <= 127 for c in got), "")
+    t_tk = t_pl = 0
+    bad, bad_pl, bad_rng = [], [], False
+    for first, last in batches:
+        want_b = b"".join(t.encode() + b"\0" for t in texts[first:last])
+        t_tk += stub(decode_loop(S["tk_get"], False, first, last), f"tk_get decode loop {first}..{last}", measure=True)
+        got = bytes(p.z.read_memory(BUF, len(want_b)))
+        bad += [(first, k, x, y) for k, (x, y) in enumerate(zip(got, want_b)) if x != y][:4]
+        bad_rng |= not all(c == 0 or 32 <= c <= 127 for c in got)
+        t_pl += stub(decode_loop(GET, True, first, last), f"plain getter loop {first}..{last}", measure=True)
+        if bytes(p.z.read_memory(BUF, len(want_b))) != want_b:
+            bad_pl.append(first)
+    check(f"W17 tk_get: all {len(texts)} strings decode bit-exact (0-terminated, in id order; "
+          f"{len(batches)} batches)", bad == [], bad[:4])
+    check("W17 tk_get: decoded chars are 32..127 only", not bad_rng, "")
     check("W17 decode loop: the caller's $C000 bank handed back", p.rb("PORT_7FFD_SHADOW") == sh0,
           (sh0, p.rb("PORT_7FFD_SHADOW")))
-    t_pl = stub(decode_loop(GET, True), "plain getter loop", measure=True)
-    check("W17 plain-getter loop re-reads the same text", bytes(p.z.read_memory(BUF + 0x200, len(want))) == want, "")
+    check("W17 plain-getter loop re-reads the same text", bad_pl == [], bad_pl)
     per = (t_tk - t_pl) / n_chars
     # --- (b) every string through msg_push + item_log (print6t) ---------------
     row_ok, worst, sh_bad = [], (0, ""), []
-    for sid, (nm, txt) in enumerate(STRINGS):
+    log_ids = [(sid, nm, txt) for sid, (nm, txt) in enumerate(STRINGS)
+               if not nm.startswith(("info_", "ft_"))]
+    for sid, nm, txt in log_ids:
         sh0 = p.rb("PORT_7FFD_SHADOW")
         t = stub([0x3E, sid, 0xCD] + w(S["msg_push"]) + [0x21] + w(S["PANEL_DIRTY"]) +
                  [0xCD] + w(S["item_log"]), f"msg_push + item_log {nm}", measure=True)
@@ -841,7 +2136,7 @@ def w17(p, check):
             row_ok.append(nm)
         if t > worst[0]:
             worst = (t, nm)
-    check(f"W17 every string ({len(STRINGS)}) drawn by item_log == the reference render of its text",
+    check(f"W17 every log-width string ({len(log_ids)} of {len(STRINGS)}) drawn by item_log == the reference render of its text",
           row_ok == [], row_ok)
     check("W17 msg_push + item_log hand the caller's $C000 bank back", sh_bad == [], sh_bad)
     check("W17 log queue drained (LOG_QN 0, nothing dropped)",
@@ -1582,10 +2877,8 @@ def w16_level(p, check):
         check(f"W16 stub {tag} ran", ok, "")
 
     def card_ok(fr, d):
-        txt = "DEPTH %d" % d
-        r, c0 = S["CARD_ROW"], S["CARD_COL"]
-        return all(bytes(cell_bytes(fr, c0 + i, r)) == rom[(ord(ch) - 32) * 8:(ord(ch) - 31) * 8]
-                   for i, ch in enumerate(txt))
+        """C3-6: "DEPTH n" in the menu font at (12, 11) (level_card, bank 1)."""
+        return menu_text_ok(p, fr, 11, 12, "DEPTH %d" % d)
 
     def level_ok(d, master, tag, hero_keep=None, seed=None):
         """Everything a fresh level must satisfy (tag: where we are)."""
@@ -1820,13 +3113,14 @@ def w16_level(p, check):
         check(f"W16 {tag}: second entry to the lair: no second hint (row 23 = the marker)",
               p.rb("CUR_ROOM") == lair and log_row(p.frame(), 23) == text6(dict(STRINGS)["found"]),
               p.rb("CUR_ROOM"))
-        # the exit col with the grate CLOSED: J is no exit (and no turn)
+        # the exit col with the grate CLOSED: J is no exit (C3-8a: DOWN with no
+        # ladder / exit below is a plain wait, 1 turn; it used to be no turn)
         fo = p.rb("LVL_FLAGS")
         p.wb("LVL_FLAGS", fo & ~S["LF_GRATE_OPEN"] & 255)
         p.place(0, xc, y1, room=lair, flags=EF_ACTIVE | EF_PLAYER)
         d0 = p.rb("LVL_DEPTH")
-        nt = p.no_turn("J")
-        check(f"W16 {tag}: grate closed: J on the exit col {xc} = no turn, no EX_LEVEL",
+        nt = p.turn("J")
+        check(f"W16 {tag}: grate closed: J on the exit col {xc} = a wait, no EX_LEVEL",
               nt and p.rb("EXIT_KIND") == 0 and p.rb("LVL_DEPTH") == d0, (nt, p.rb("EXIT_KIND")))
         p.wb("LVL_FLAGS", fo)
         return blk
@@ -1990,7 +3284,7 @@ def w16_level(p, check):
         for _ in range(30):
             if p.rb("GAME_STATE") == GS_DEAD:
                 break
-            p.turn("SPACE")
+            p.turn("WAIT")
         check("W16 D2: the hero dies (GS_DEAD)", p.rb("GAME_STATE") == GS_DEAD, p.rb("GAME_STATE"))
         new_game_from_end("after death on D2", ms)
         # ---- cost: level_enter alone (DI), D2 of this run ---------------
@@ -2188,7 +3482,8 @@ def main():
                 down.append(hero()["Y"])
             check("W2 climb down: one row per turn back to storey 1",
                   down == list(range(stand_y(0, kh) + 1, y1 + 1)), down)
-            check("W2 J at the bottom storey, no hole: no turn", p.no_turn("J"), "")
+            # C3-8a: DOWN with no ladder below is a wait now (game.md §2.3): a turn
+            check("W2 J at the bottom storey, no hole: a wait (1 turn)", p.turn("J"), "")
             w4("climb bottom")
 
         # ---------------- W3 exits L/R/U/D ----------------------------------
@@ -2465,7 +3760,7 @@ def main():
             check("W8 jump arc: py offsets -4,-8,-12,-16 x5,-12,-8,-4 (px 4 px/tick)",
                   rise == [-4, -8, -12, -16, -16, -16, -16, -16, -12, -8, -4], samples)
             check("W8 jump refused on the next turn", p.no_turn("K", "L"), "")
-            p.turn("SPACE")
+            p.turn("WAIT")
             measured("W8 jump", "K", "L")
             check("W8 jump again after a non-jump turn: x + 6", hero()["X"] == pit + 8, hero()["X"])
             p.place(0, pit - 6, y0, flags=HERO_R)
@@ -2476,12 +3771,12 @@ def main():
             p.isolate()
             p.place(0, pit + 5, y0, flags=HERO_R | EF_LEFT)
             check("W8 jump left (K+H): x - 6", p.turn("K", "H") and hero()["X"] == pit - 1, hero()["X"])
-            p.turn("SPACE")
+            p.turn("WAIT")
             p.place(0, 6, y0, flags=HERO_R | EF_LEFT)
             check("W8 jump to x' = 0 refused", p.no_turn("K", "H"), "")
             p.place(0, 7, y0, flags=HERO_R | EF_LEFT)
             check("W8 jump to x' = 1 allowed", p.turn("K", "H") and hero()["X"] == 1, hero()["X"])
-            p.turn("SPACE")
+            p.turn("WAIT")
             p.place(0, 23, y0, flags=HERO_R)
             check("W8 jump to x' + w > 31 refused", p.no_turn("K", "L"), "")
             p.place(0, pit - 4, y0, flags=HERO_R)
@@ -2526,7 +3821,7 @@ def main():
             p.place(SLOT_RAT, pit + 3, stand_y(0, 2), room=1, flags=MON_L)
             xs = []
             for _ in range(10):
-                p.turn("SPACE")
+                p.turn("WAIT")
                 xs.append(p.ent(SLOT_RAT)["X"])
             check("W9 rat patrol on storey 0 never steps onto x == p (reverses at p+1)",
                   pit not in xs and min(xs) == pit + 1, xs)
@@ -2534,7 +3829,7 @@ def main():
             p.place(SLOT_BATB, pit + 3, stand_y(0, 2), room=1, flags=MON_L)
             xs = []
             for _ in range(8):
-                p.turn("SPACE")
+                p.turn("WAIT")
                 xs.append(p.ent(SLOT_BATB)["X"])
             check("W9 bat flies over the pit (x == p and beyond)", pit in xs and min(xs) < pit, xs)
             p.settle()
@@ -2605,7 +3900,7 @@ def main():
             p.z.cmd("set-breakpoint 4 PC=%d" % probe)
             p.extra_probes = {probe}
             seen = {}
-            p.hold("SPACE")
+            p.hold("WAIT")
             for _ in range(12):
                 p.tick()
                 if p.pc() == probe:
@@ -2633,10 +3928,36 @@ def main():
         # ================= B3B-11: panel engine (W15) =====================
         if want("W15"):
             w15(p, check)
+            w15_icons(p, check)
 
         # ================= B3B-13: token text (W17) ======================
         if want("W17"):
             w17(p, check)
+
+        # ================= C3-0: far1 / bank-1 code (W18) =====================
+        if want("W18"):
+            w18(p, check)
+
+        # ================= C3-1: read_stick input (W19) =====================
+        if want("W19"):
+            w19(p, check)
+
+        # ================= C3-2: turn-intent machine (W22 / W23) ============
+        for tag in ("W22", "W23"):
+            if want(tag):
+                w22_23(p, check, tag)
+
+        # ================= C3-6: menu / pause / cards (W24) =================
+        if want("W24"):
+            w24(p, check)
+
+        # ================= C3-8b: joystick-only runs (W25) ===================
+        if want("W25"):
+            w25(p, check)
+
+        # ================= C3-1 review: stack low-water (W20) =================
+        if want("W20"):
+            w20(p, check)
 
         # ================= B11: storey-0 exits, invisible pit (W21) ========
         if want("W21"):

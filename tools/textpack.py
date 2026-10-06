@@ -33,22 +33,51 @@ are used. Deterministic (ties: longer, then lexicographically smaller).
 Dynamic parts (kind names, numbers) are composed into MSG_BUF from whole
 streams (concatenating streams keeps a valid stream: tokens are 1 byte and
 self-contained) or as literal digits; the getter decodes at print time.
-3C long static text (menus, help, books): the same token streams, ZX0-packed
-per text and unpacked into a buffer that print6t streams (tk_get state = a
-plain pointer, so a buffer is just another stream source).
 
-Usage: tools/textpack.py [--report]
+Long static text (3C, C3-4: help pages, later book/scroll descriptions): a
+second output class, `@long NAME ... @end` blocks in src/strings.txt. Each block
+is plain ASCII lines (32..126, upper case, <= 42 chars, the 6x8 page width);
+it is NOT dictionary-tokenised (ZX0 already finds the repeated words, and the
+block then needs no shared dictionary). Raw image of a block:
+  byte 0      number of lines N (a blank line is just its 0 terminator)
+  then N lines, each 0-terminated (a plain tk_get stream: all chars < 128)
+The image is ZX0-packed (tools/bin/zx0: v2, optimal, forward, no header,
+decompress with the standard dzx0) and every block is round-tripped through
+tools/bin/dzx0 at build time. Emitted:
+  build/text/longtext.asm   lt_base: lt_tab (stride 4: DW packed ptr, DW raw
+                            length) then the packed blocks; DISP it like
+                            strings.asm (words = lt_base + offset)
+  strings_ids.inc           LT_<NAME> id, LTR_/LTP_<NAME> raw/packed bytes,
+                            LT_COUNT, LT_BUF_MAX (largest raw image = the
+                            unpack buffer size), LONG_RAW, LONG_PACKED
+Runtime: unpack block i to a buffer, then stream lines from buffer+1 (tk_get
+state is a plain pointer, so a buffer is just another stream source).
+
+Style checks (fail the build): every string upper case, 32..126, no '"', no
+trailing full stop, no double spaces (info_* excepted: field padding), length
+<= LIMIT (32; 42 for info_* / ft_*, the 6x8-font lines); info_* fields land on
+the 16 / 28 boundaries (see src/strings.txt).
+
+Usage: tools/textpack.py [--report] [--src FILE]
 """
 import argparse
 import os
 import re
+import subprocess
 import sys
+import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(REPO, "src/strings.txt")
 OUT_DIR = os.path.join(REPO, "build/text")
 OUT_IDS = os.path.join(OUT_DIR, "strings_ids.inc")
 OUT_ASM = os.path.join(OUT_DIR, "strings.asm")
+OUT_LONG = os.path.join(OUT_DIR, "longtext.asm")
+ZX0 = os.path.join(REPO, "tools/bin/zx0")
+DZX0 = os.path.join(REPO, "tools/bin/dzx0")
+WIDE_MAX = 42           # 6x8-font lines (info line, footers, long text rows)
+WIDE_PREFIXES = ("info_", "ft_")
+INFO_FIELDS = (16, 28)  # info line: numbers from char 16, notes from char 28
 LOG_MAX = 32            # src/level_defs.asm (ASSERTed in the output too)
 MAX_TOKENS = 128
 MAX_ENTRY = 16          # longest dictionary entry considered
@@ -58,31 +87,94 @@ def fail(msg):
     sys.exit(f"textpack: {msg}")
 
 
-def read_strings(path=SRC):
-    """-> [(name, text)] in file order."""
-    out, seen = [], set()
+def limit_for(name):
+    return WIDE_MAX if name.lower().startswith(WIDE_PREFIXES) else LOG_MAX
+
+
+def style_check(where, name, text, limit, full_stop=True):
+    """Style rules shared by every string (game.md §3.4); fails the build."""
+    bad = [c for c in text if not 32 <= ord(c) <= 126 or c == '"']
+    if bad:
+        fail(f"{where}: {name}: chars outside 32..126 (or a quote): {bad!r}")
+    if any("a" <= c <= "z" for c in text):
+        fail(f"{where}: {name}: upper case only (game.md §3.4)")
+    if full_stop and text.endswith("."):
+        fail(f"{where}: {name}: no trailing full stop (game.md §3.4)")
+    if len(text) > limit:
+        fail(f"{where}: {name}: {len(text)} chars > {limit}")
+
+
+def info_check(where, name, text):
+    """info_* = name | numbers | notes, pre-padded to the info-line fields."""
+    if text != text.rstrip():
+        fail(f"{where}: {name}: trailing space (pad only between fields)")
+    if not text.strip() or text[0] == " ":
+        fail(f"{where}: {name}: info line must start with the name")
+    n0, n1 = INFO_FIELDS
+    if len(text) > n0 and text[n0 - 1] != " ":
+        fail(f"{where}: {name}: name field longer than {n0 - 1} chars")
+    if len(text) > n0 and text[n0:n1].strip() and text[n0] == " ":
+        fail(f"{where}: {name}: numbers must start at char {n0}")
+    if len(text) > n1:
+        if text[n1 - 1] != " ":
+            fail(f"{where}: {name}: numbers field longer than {n1 - n0 - 1} chars")
+        if text[n1] == " ":
+            fail(f"{where}: {name}: notes must start at char {n1}")
+
+
+def read_source(path=SRC):
+    """-> ([(name, text)] short strings in file order, [(name, [lines])] long)."""
+    out, longs, seen = [], [], set()
+    cur = None
     for n, line in enumerate(open(path), 1):
         s = line.rstrip("\n")
+        where = f"{path}:{n}"
+        if cur is not None:
+            if s.strip() == "@end":
+                if not cur[1]:
+                    fail(f"{where}: empty @long block {cur[0]}")
+                longs.append(cur)
+                cur = None
+            elif s.lstrip().startswith("#"):
+                fail(f"{where}: '#' comments are not allowed inside @long")
+            else:
+                style_check(where, cur[0], s, WIDE_MAX, full_stop=False)
+                cur[1].append(s)
+            continue
         if not s.strip() or s.lstrip().startswith("#"):
+            continue
+        m = re.match(r"^@long\s+(\w+)\s*$", s)
+        if m:
+            name = m.group(1)
+            if name.lower() in seen:
+                fail(f"{where}: duplicate name {name}")
+            seen.add(name.lower())
+            cur = (name, [])
             continue
         m = re.match(r'^(\w+)\s+"([^"]*)"\s*$', s)
         if not m:
-            fail(f"{path}:{n}: expected `name \"TEXT\"`: {s!r}")
+            fail(f"{where}: expected `name \"TEXT\"` or @long: {s!r}")
         name, text = m.group(1), m.group(2)
         if name.lower() in seen:
-            fail(f"{path}:{n}: duplicate name {name}")
+            fail(f"{where}: duplicate name {name}")
         seen.add(name.lower())
-        bad = [c for c in text if not 32 <= ord(c) <= 126]
-        if bad:
-            fail(f"{path}:{n}: {name}: chars outside 32..126: {bad!r}")
-        if any("a" <= c <= "z" for c in text):
-            fail(f"{path}:{n}: {name}: upper case only (game.md §3.4)")
-        if len(text) > LOG_MAX:
-            fail(f"{path}:{n}: {name}: {len(text)} chars > LOG_MAX {LOG_MAX}")
+        style_check(where, name, text, limit_for(name))
+        if name.lower().startswith("info_"):
+            info_check(where, name, text)
+        elif "  " in text:
+            fail(f"{where}: {name}: double space (only info_* pads)")
         out.append((name, text))
+    if cur is not None:
+        fail(f"{path}: @long {cur[0]} has no @end")
     if len(out) > 128:
         fail("more than 128 strings: tx_ptr indexes with `add a, a`")
-    return out
+    if len(longs) > 64:
+        fail("more than 64 long blocks")
+    return out, longs
+
+
+def read_strings(path=SRC):
+    return read_source(path)[0]
 
 
 def count_uses(streams, cand):
@@ -179,7 +271,7 @@ def decode(img, n_strings, sid, base=0):
     p = int.from_bytes(img[2 * sid:2 * sid + 2], "little") - base
     t0 = 2 * n_strings
     out = []
-    for _ in range(4 * LOG_MAX):
+    for _ in range(4 * WIDE_MAX):
         a = img[p]
         p += 1
         if a == 0:
@@ -211,7 +303,8 @@ def emit(names, texts, ents, strs):
         ids.append(f"TX_{nm.upper():<16} EQU {i}")
     for nm, t in zip(names, texts):
         ids.append(f"TXL_{nm.upper():<15} EQU {len(t)}")
-        ids.append(f"                ASSERT TXL_{nm.upper()} <= LOG_MAX")
+        lim = "LOG_MAX" if limit_for(nm) == LOG_MAX else str(limit_for(nm))
+        ids.append(f"                ASSERT TXL_{nm.upper()} <= {lim}")
     ids += [f"TX_COUNT         EQU {n_s}", f"TX_TOKENS        EQU {n_t}",
             f"TEXT_RAW         EQU {raw}          ; 0-terminated plain strings",
             f"TEXT_PACKED      EQU {len(img)}     ; the whole text block (tables included)",
@@ -265,6 +358,108 @@ def parse_emitted(path):
     return bytes(img)
 
 
+def long_image(lines):
+    """Raw image of one @long block: line count, then 0-terminated lines."""
+    return bytes([len(lines)]) + b"".join(l.encode() + b"\0" for l in lines)
+
+
+def long_unpack(img):
+    """Reference reader of the raw image -> [lines]."""
+    n, p, out = img[0], 1, []
+    for _ in range(n):
+        q = img.index(0, p)
+        out.append(img[p:q].decode())
+        p = q + 1
+    if p != len(img):
+        fail("long image has trailing bytes")
+    return out
+
+
+def zx0_pack(data):
+    with tempfile.TemporaryDirectory() as d:
+        i, o = os.path.join(d, "in.bin"), os.path.join(d, "out.zx0")
+        open(i, "wb").write(data)
+        subprocess.run([ZX0, "-f", i, o], check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return open(o, "rb").read()
+
+
+def zx0_unpack(packed):
+    with tempfile.TemporaryDirectory() as d:
+        i, o = os.path.join(d, "in.zx0"), os.path.join(d, "out.bin")
+        open(i, "wb").write(packed)
+        subprocess.run([DZX0, "-f", i, o], check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return open(o, "rb").read()
+
+
+def pack_longs(longs):
+    """-> [(name, lines, raw image, packed)]; round-trips every block."""
+    if longs and not (os.path.exists(ZX0) and os.path.exists(DZX0)):
+        fail("tools/bin/zx0 / dzx0 missing: run tools/setup_zx0.sh")
+    out = []
+    for name, lines in longs:
+        raw = long_image(lines)
+        packed = zx0_pack(raw)
+        if zx0_unpack(packed) != raw:
+            fail(f"long block {name}: ZX0 round trip mismatch")
+        if long_unpack(zx0_unpack(packed)) != lines:
+            fail(f"long block {name}: line round trip mismatch")
+        out.append((name, lines, raw, packed))
+    return out
+
+
+def emit_long(blocks):
+    """-> (ids lines, longtext.asm text)."""
+    n = len(blocks)
+    ids = [f"LT_{nm.upper():<17} EQU {i}" for i, (nm, *_r) in enumerate(blocks)]
+    for nm, lines, raw, packed in blocks:
+        ids.append(f"LTR_{nm.upper():<16} EQU {len(raw)}")
+        ids.append(f"LTP_{nm.upper():<16} EQU {len(packed)}")
+    raw_t = sum(len(b[2]) for b in blocks)
+    pk_t = sum(len(b[3]) for b in blocks)
+    ids += [f"LT_COUNT         EQU {n}",
+            f"LT_BUF_MAX       EQU {max((len(b[2]) for b in blocks), default=0)}"
+            "          ; largest raw image = unpack buffer size",
+            f"LONG_RAW         EQU {raw_t}",
+            f"LONG_PACKED      EQU {pk_t + 4 * n}     ; packed blocks + lt_tab"]
+    off = 4 * n
+    offs = []
+    for b in blocks:
+        offs.append(off)
+        off += len(b[3])
+    asm = ["; " + "=" * 76,
+           "; longtext.asm — GENERATED by tools/textpack.py from src/strings.txt (C3-4).",
+           "; DO NOT EDIT. ZX0 (v2, forward, no header) blocks; format: the tool's docstring.",
+           "; Words are lt_base + offset; place like strings.asm (DISP to the runtime address).",
+           f"; {n} blocks: raw {raw_t} B -> {pk_t} B packed (+ {4 * n} B table)",
+           "; " + "=" * 76,
+           "lt_base:", "lt_tab:                 ; stride 4: DW packed ptr, DW raw length"]
+    for i, (b, o) in enumerate(zip(blocks, offs)):
+        asm.append(f"        DW lt_base + {o}, {len(b[2])}    ; {i} {b[0]}")
+    for b in blocks:
+        asm.append(f"lt_{b[0].lower()}:    ; {len(b[2])} -> {len(b[3])} B")
+        for i in range(0, len(b[3]), 16):
+            asm.append("        DB " + ",".join(f"${c:02X}" for c in b[3][i:i + 16]))
+    asm += ["lt_end:", f"        ASSERT lt_end - lt_base == {off}", ""]
+    return ids, "\n".join(asm), off
+
+
+def parse_long_asm(text):
+    """Rebuild the long block image (base 0) from the emitted DW / DB lines."""
+    img = bytearray()
+    for line in text.splitlines():
+        code = line.split(";")[0].strip()
+        if code.startswith("DW "):
+            m = re.fullmatch(r"DW lt_base \+ (\d+), (\d+)", code)
+            if not m:
+                fail(f"emitted long DW not understood: {code!r}")
+            img += int(m.group(1)).to_bytes(2, "little") + int(m.group(2)).to_bytes(2, "little")
+        elif code.startswith("DB "):
+            img += bytes(int(t.strip()[1:], 16) for t in code[3:].split(","))
+    return bytes(img)
+
+
 def write_if_changed(path, text):
     old = open(path).read() if os.path.exists(path) else None
     if old != text:
@@ -275,16 +470,21 @@ def write_if_changed(path, text):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--report", action="store_true")
+    ap.add_argument("--src", default=SRC)
     a = ap.parse_args()
-    pairs = read_strings()
+    pairs, longs = read_source(a.src)
     names = [n for n, _ in pairs]
     texts = [t for _, t in pairs]
     ents, strs = encode(texts)
     ids, asm, img, raw = emit(names, texts, ents, strs)
+    blocks = pack_longs(longs)
+    lt_ids, lt_asm, lt_len = emit_long(blocks)
+    ids += "\n" + "\n".join(lt_ids) + "\n"
     os.makedirs(OUT_DIR, exist_ok=True)
     write_if_changed(OUT_IDS, ids)
     write_if_changed(OUT_ASM, asm)
-    # round trip on the EMITTED file
+    write_if_changed(OUT_LONG, lt_asm)
+    # round trip on the EMITTED files
     back = parse_emitted(OUT_ASM)
     if back != img:
         fail("emitted strings.asm does not re-parse to the packed image")
@@ -294,14 +494,27 @@ def main():
             fail(f"{names[i]}: decodes to a char outside 32..127: {got}")
         if bytes(got) != t.encode():
             fail(f"{names[i]}: round trip mismatch: {bytes(got)!r} != {t!r}")
-        if len(got) > LOG_MAX:
-            fail(f"{names[i]}: {len(got)} chars > LOG_MAX")
+        if len(got) > limit_for(names[i]):
+            fail(f"{names[i]}: {len(got)} chars > {limit_for(names[i])}")
+    lb = parse_long_asm(open(OUT_LONG).read())
+    if len(lb) != lt_len:
+        fail("emitted longtext.asm size mismatch")
+    for i, (nm, lines, rawimg, packed) in enumerate(blocks):
+        p, rl = (int.from_bytes(lb[4 * i + k:4 * i + k + 2], "little") for k in (0, 2))
+        if rl != len(rawimg) or long_unpack(zx0_unpack(lb[p:p + len(packed)])) != lines:
+            fail(f"long block {nm}: emitted longtext.asm does not round-trip")
     print(f"textpack: {len(texts)} strings, {len(ents)} tokens, raw {raw} -> packed "
           f"{len(img)} B (streams {sum(map(len, strs))} + dict {sum(map(len, ents))} + "
           f"tables {2 * (len(strs) + len(ents))}); round-trip ok; -> build/text/")
+    if blocks:
+        print(f"textpack: {len(blocks)} long blocks, raw {sum(len(b[2]) for b in blocks)} -> "
+              f"ZX0 {sum(len(b[3]) for b in blocks)} B (+ {4 * len(blocks)} B table); "
+              f"round-trip ok")
     if a.report:
         for i, e in enumerate(ents):
             print(f"  ${0x80 + i:02X} {entries_txt(e)!r}")
+        for nm, lines, rawimg, packed in blocks:
+            print(f"  long {nm}: {len(rawimg)} -> {len(packed)} B")
 
 
 if __name__ == "__main__":

@@ -5,9 +5,23 @@
 #
 # Format: one string per line, `name "TEXT"`; the id is TX_<NAME> (upper),
 # its decoded length TXL_<NAME>. '#' starts a comment line. Text: ASCII
-# 32..126, upper case, no '"'; every string is ONE log line (game.md §3.4:
-# <= 32 chars, LOG_MAX, ASSERTed). Style: present tense, no trailing full stop. Order = id order (ids are stable only
-# within one build: code uses the TX_* names, never numbers).
+# 32..126, upper case, no '"'; every string is ONE line (game.md §3.4). Style:
+# present tense, no trailing full stop. Order = id order (ids are stable only
+# within one build: code uses the TX_* names, never numbers). The first 24
+# strings keep their order (TX_NM_KNIGHT + kind arithmetic); new ones append.
+#
+# Length limits (tools/textpack.py style check, fails the build; the same limit
+# is ASSERTed in strings_ids.inc): 32 chars (LOG_MAX) for every string except
+# the 6x8-font lines named info_* and ft_* (info line / footers: 42 chars).
+# info_* are pre-padded to the info-line fields (game.md §3.4): name = chars
+# 0-15, numbers = 16-27, notes = 28-41; the tool checks that each non-empty
+# field starts exactly on its boundary and that there is no trailing space.
+#
+# Long static text (help pages, book/scroll descriptions later) uses a
+# block form instead, ZX0-packed per block (tools/textpack.py docstring):
+#   @long NAME
+#   UPPER CASE LINE, <= 42 chars, one per row of the page
+#   @end
 #
 # Composed lines (show_impact_msg, lowram.asm): pre + kind name + post, so
 # the pieces keep their spaces. The longest composition is ASSERTed against
@@ -48,3 +62,96 @@ nm_ghost        "GHOST"
 nm_rat          "RAT"
 nm_bat          "BAT"
 nm_slime        "SLIME"
+
+# === 3C (C3-4) ================================================================
+# --- info line, one per icon slot (game.md §3.5; Warrior 1-9, Mage 1-10) --------
+# name (16) | numbers MP / range (12) | notes (14)
+info_sword      "SWORD           MP0 RNG1    WEAPON DIE"
+info_staff      "STAFF           MP0 RNG1    BONK"
+info_power      "POWER STRIKE    MP3 RNG1    X2 DMG STUN"
+info_whirl      "WHIRLWIND       MP4 RNG1    BOTH SIDES"
+info_daggers    "THROW DAGGER    MP0 RNG6    1D4+2"
+info_bow        "BOW             MP0 RNG14   1D6+1"
+info_spark      "SPARK           MP1 RNG6    SHOCK 1D4+1"
+info_firebolt   "FIREBOLT        MP3 RNG12   BURST"
+info_frost      "FROST SHARD     MP3 RNG12   FREEZE BOUNCE1"
+info_drain      "DRAIN LIFE      MP3 RNG5    HEALS YOU"
+info_lightning  "LIGHTNING       MP5 RNG28   PIERCE BOUNCE2"
+info_food       "QUICK FOOD                  FIRE: EAT"
+info_potion     "POTION                      FIRE: DRINK"
+info_scroll     "QUICK SCROLL                FIRE: READ"
+info_bag        "BAG"
+# state note replacing the notes field at 0 ammo (game.md §6.3)
+none_left       "NONE LEFT"
+
+# --- refusals: illegal FIRE, no turn passes (game.md §3.1, §6.3) ----------------
+no_arrows       "NO ARROWS"
+no_daggers      "NO DAGGERS"
+no_bow          "NO BOW"
+no_food         "NO FOOD"
+no_potion       "NO POTION"
+no_scroll       "NO SCROLL"
+no_bag          "NO BAG YET"
+not_learned     "NOT LEARNED"
+no_mana         "NO MANA"
+no_target       "NO TARGET"
+quiver_full     "QUIVER FULL"
+
+# --- hunger stage words (panel row 21, <= 6 chars; game.md §7) ------------------
+hg_fed          "FED"
+hg_ok           "OK"
+hg_hungry       "HUNGRY"
+hg_weak         "WEAK"
+
+# --- pause overlay (game.md §3.1) -----------------------------------------------
+paused          "PAUSED"
+resume          "RESUME"
+quit            "QUIT"
+quit_ask        "QUIT? Y/N"
+
+# --- main menu (menu font; concept screen_menu.png, game.md §3.2) ---------------
+m_title         "TOME OF THE DEAD"
+m_start         "1 START"
+m_hero          "2 HERO: "
+m_controls      "3 CONTROLS"
+m_redefine      "4 REDEFINE KEYS"
+cls_warrior     "WARRIOR"
+cls_mage        "MAGE"
+ctl_keys        "KEYS"
+ctl_kempston    "KEMPSTON"
+ctl_sinclair1   "SINCLAIR 1"
+ctl_sinclair2   "SINCLAIR 2"
+key_up          "UP"
+key_down        "DOWN"
+key_left        "LEFT"
+key_right       "RIGHT"
+key_fire        "FIRE"
+key_press       "PRESS KEY FOR "
+key_used        "KEY IN USE"
+key_reserved    "KEY RESERVED"
+ft_subtitle     "A ROGUELIKE FOR THE ZX SPECTRUM 128K"
+ft_press        "PRESS 1-4 OR FIRE - JOYSTICK OK"
+ft_credit       "(C) 2026 TOME OF THE DEAD"
+
+# --- death / win screens and the DEPTH card (menu font; pieces take a number/name) -
+end_dead        "YOU DIED"
+end_killed      "KILLED BY "
+end_win         "YOU WIN!"
+end_press       "PRESS ENTER OR FIRE"
+card_depth      "DEPTH "
+
+# === long static text (ZX0 blocks) ==============================================
+# Placeholder help page; exercises the packer (real text lands with 3C menus).
+@long help
+CONTROLS
+ LEFT RIGHT  WALK, TURN, BUMP TO ATTACK
+ UP DOWN     CLIMB A LADDER AT ONE
+ UP-LEFT/RIGHT  JUMP
+ FIRE TAP    USE THE SELECTED ICON
+ FIRE+LEFT/RIGHT  MOVE THE ICON CURSOR
+ FIRE+DOWN   INVENTORY PAGE
+ FIRE+UP     PAUSE
+
+PLACEHOLDER PAGE - REAL TEXT COMES WITH
+THE 3C MENUS
+@end
