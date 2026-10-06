@@ -313,6 +313,26 @@ never below 1 HP; confused reversal + `YOU STUMBLE.`; boss halving.
 panel digit at (31,19), BAG info line). Tests: seeded kill → XP and level-up at the
 threshold; respawn half XP; rank 2/3 values per ability; no spell before the first book.
 
+
+**3D breakdown** (z80-architect, 2026-10-06). **User 2026-10-06: AY reserve cut 7 → 4 KB (AY_RESERVE $E400 → $F000, +3,072 B bank 3); spike the bank-7 clean-background removal during 3D (measure erase-from-ROOM_MAP tick cost) before 3E; remove the PROTO wizard zap.** Relief R1 (zap), R2 (KX table in bank 3), R3 (3D state in FONT6 holes $B2E0.., $BC41..), R4 (ZX0-pack boot-only vdata). Projectiles: logic resolved at cast time in bank 3 (`proj_fire`), rendering via ≤ 3 render-only FX tracks (`fx_render` after bodies); status step at the top of each monster's AI turn + hero fast path; XP award in `deal_hit` (new src/combat3.asm); MP panel item PD_MP.
+
+| ID | Task | Tag | Deps |
+|---|---|---|---|
+| D3-0 | layout + relief (AY 4 KB, zap removal, state homes, KX layout, HERO_CARRY) | S | C3-6b, C3-7 merged |
+| D3-1 | rank / XP / KX / ability tables + transcription test | J | D3-0 |
+| D3-2 | 3D strings | J | – |
+| D3-3 | art import: projectiles/impacts, Warrior throw/bow/whirl, POWER_STRIKE (to draw), 7 status icons, ammo floor glyphs → canvas review | artist | – |
+| D3-4 | frames + class FX kinds (pool) | S | D3-0, D3-3 |
+| D3-5 | FX engine (tracks, fx_render, budget case "Lightning + 4 monsters") | S | D3-4 |
+| D3-6a | `deal_hit` (resist, DEF, drain, effects, kill/XP) | S | D3-0, D3-1 |
+| D3-6b | `proj_fire` (bounces, reflect, pierce, absorb) — the spell/missile table reproduced by tests = stage exit | S | D3-5, D3-6a |
+| D3-7 | abilities (5 spells, Power Strike, Whirlwind, throw, bow, pickup, staff bonk) | S | D3-6b, D3-2 |
+| D3-8 | status effects | S | D3-6a, after D3-7 |
+| D3-9a | info line ranks/MP | J | D3-0 |
+| D3-9b | XP, levels, MP regen/bar, learn/rank-up | S | D3-6a |
+| D3-10 | scenario tests per feature | J | each |
+| D3-S | **spike: drop the bank-7 clean background (6 KB) — erase from ROOM_MAP; measure** | S | – |
+
 ### 3E — Items, inventory & survival (needs game.md §7–8)
 Inventory page (bank-5 screen), equip, quick slots auto-fill, food/hunger,
 books → learning spells/power attacks, potions/scrolls, boss unique loot.
