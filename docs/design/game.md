@@ -1381,8 +1381,15 @@ are visited.
 
 **FRESH room**, repeated `quota` times:
 - kind = `LP_KINDS[rnd & 3]`, then the §9.6 tier roll (with `LP_LVL`, from the spawn stream).
-- If its weight would break **Σ ≤ 8** (§9.3 initial), try the other `LP_KINDS` in list order
-  once each, at base tier. If none fits, the unit is lost (`LP_DISCARD`; a playtest knob).
+- **Reservation fit (designer decision 2026-10-06, replaces "try the others, else lose").** Let
+  `SIGMA_INIT[d] = max(8, ROOM_MAX[d] × lightest LP_KINDS weight)` (D1–D4 = 8; D5–D8 = 9 if the
+  lightest kind weighs 3), `minW` = the lightest weight in `LP_KINDS`, `left` = units still to
+  roll after this one. A kind is accepted only if `Σ + w + left × minW ≤ SIGMA_INIT[d]`. The
+  rolled kind (with its tier roll) is tried first; if rejected, the other `LP_KINDS` in list
+  order at base tier; the lightest kind always passes. A unit is therefore **never lost**
+  (`LP_DISCARD` stays 0, and levelcheck asserts it); the cost is a mild bias to light kinds in
+  rooms that rolled heavy. Order-independent, no extra RNG steps. Lair: unchanged (cap 12,
+  boss + escort).
 
 **VISITED room:** the entries are recreated in order, with their stored kind, hp and flags.
 
@@ -1392,7 +1399,14 @@ cell wins. Legal means:
   cell; not in a ladder-end box; not occupied; flyers inside their band;
 - it is **not inside any arrival box** of the room: cols 1–4 and 27–30 on a storey with a
   horizontal exit, and every shaft or up-exit footprint ±1 col;
-- on the hero's arrival storey, there is a **body gap ≥ 8 cols** to the hero's arrival box.
+- on the hero's arrival storey, there is a **body gap** to the hero's arrival box: **≥ 8 cols on
+  tries 1–4, ≥ 5 cols on tries 5–8** (designer decision 2026-10-06; 5 is still outside the
+  3-wide arrival box plus one melee reach and the hero's first move).
+
+**Other-storey retry (designer decision 2026-10-06).** If a candidate fails *only* the arrival
+gap test, re-test the **same x on the other storey** before spending the next try (no new RNG
+step; the storey bit of the stream is then used only for the first test). The test is cheap and
+the other storey has no gap rule. Tries stay at 8, so the worst case cost is unchanged.
 
 If no cell is legal, the monster stays in the record (a FRESH unit becomes an entry) and is
 retried on the next entry. Nothing is lost, and arrival-conflict PENDING never applies to
@@ -1402,8 +1416,12 @@ Created monsters have full hp (FRESH) and the generator's initial state, and the
 hero. A teleport into a room (trap or scroll) is an entry with no followers; its arrival
 point is the teleport cell.
 
-**Cost:** ≤ 4 monsters × 8 tries × ~0.4k T + rolls ≈ **≤ 15k T, once per transition**, while
-gameplay is frozen. No tick budget is used and the pool is not touched.
+**Cost (revised 2026-10-06 after LP measurement: mean 20k, worst 38.6k T).** **Accepted: mean
+≤ 20k, worst ≤ 40k T once per transition.** 40k T is 0.57 of a 50 Hz frame, on a frozen screen
+already paying ~45k room build + 100–130k decor, so it is under 25% of the transition. No
+tick budget is used and the pool is not touched. Do not add tries to chase fewer waits. A
+wait is cheap (the unit is retried on the next entry) and a few missing monsters on first
+visit is acceptable. Target: waits ≤ 8% of first-entry units.
 
 #### 9.4.4 Lair and bosses
 
@@ -1438,7 +1456,7 @@ Ghost**. D6 and D7 have no Skeleton set (§11.3).
 #### 9.4.7 Test hooks (`SEED_FIXED`)
 
 - **Levelcheck (Python, seed sweep):** the start quota is 0; each quota ≤ `ROOM_MAX`;
-  Σ quotas = N; `LP_DISCARD` (split) = 0.
+  Σ quotas = N; `LP_DISCARD` (split **and** Σ fit) = 0 on every seed.
 - **Spawn reference (Python == Z80):** for the inputs (seed, room, visits), the list of
   kinds, tiers and x/y.
 - **ZRCP checks:**
