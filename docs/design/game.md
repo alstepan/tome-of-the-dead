@@ -330,6 +330,7 @@ in a row" caps flight speed at 7 cols per 2 turns.
 - Pause: an overlay box over the playfield with Resume / Quit; **Quit asks for confirmation**
   (`QUIT? Y/N`; FIRE = yes, any other = no).
 - Shortcut keys confirmed: ENTER, `1`–`0`, `I`, BREAK, `.`. Default map Q/A/O/P/SPACE.
+  Redefine rejects these (see §3.2, manager ruling 2026-10-05, designer-confirmed).
 - Sinclair 1 or 2 selected: the `1`–`0` slot shortcuts on that joystick's half of the number
   row are disabled (S1 = 6–0, S2 = 1–5). The other half and the icon bar keep working.
 
@@ -356,11 +357,18 @@ in a row" caps flight speed at 7 cols per 2 turns.
 WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|SINCLAIR 2   4 REDEFINE KEYS
 ```
 
-- **Number keys + ENTER always work.** Once a joystick is chosen, ↑/↓ + FIRE also work.
+- **Number keys + ENTER work** (amended, manager ruling 2026-10-05, designer-confirmed): when a
+  Sinclair joystick is selected, its half of the number row (S1 = 6–0, S2 = 1–5) acts as the
+  joystick (navigation/FIRE) and NOT as menu digits; the other digits and ENTER still work as
+  menu shortcuts. Once a joystick is chosen, ↑/↓ + FIRE also work.
 - **Kempston** (port `$1F`: bit 0 R, 1 L, 2 D, 3 U, 4 F) is read **only after it is
   selected**, because the port floats on a bare machine.
 - **Sinclair 1** = keys 6 L, 7 R, 8 D, 9 U, 0 F. **Sinclair 2** = keys 1 L, 2 R, 3 D, 4 U, 5 F.
 - Redefine asks for UP, DOWN, LEFT, RIGHT, FIRE (no duplicates).
+  (Manager ruling 2026-10-05, designer-confirmed.) Reserved keys are rejected with the message
+  `KEY RESERVED`: ENTER, `1`–`0`, `I`, CAPS SHIFT, SYMBOL SHIFT, and any key BREAK uses. The
+  prompt stays on the same action. BREAK at any redefine prompt cancels the whole redefinition
+  and keeps the previous key set.
 - START seeds the RNG → generates D1 → play.
 - **Title (user 2026-10-04):** the menu/title screen reads **"TOME OF THE DEAD"** (the concept
   screen's title), not WAZHACK. Torches animated and hero previews on the select screen follow
