@@ -329,8 +329,8 @@ threshold; respawn half XP; rank 2/3 values per ability; no spell before the fir
 | D3-2 | 3D strings | J | – |
 | D3-3 ✅ `3ab2f5b` (feat/3d-art; user 2026-10-06: frames approved; frost_crack stays 8×8 (playtest feedback later); Firebolt keeps the yellow/red alternation; full set kept incl. fizz2/burst2; 1,322 B ZX0) | art import: projectiles/impacts, Warrior throw/bow/whirl, POWER_STRIKE (to draw), 7 status icons, ammo floor glyphs → canvas review | artist | – |
 | D3-4 ✅ `c62bd95` (merged 2026-10-07; FRT 101/160, pool 44.1 of 46.5 KB, bank 1 783 B free) | frames + class FX kinds (pool) | S | D3-0, D3-3 |
-| D3-5 | FX engine (tracks, fx_render, budget case "Lightning + 4 monsters") | S | D3-4 |
-| D3-6a | `deal_hit` (resist, DEF, drain, effects, kill/XP) | S | D3-0, D3-1 |
+| D3-5 in progress (staff, feat/d35-fx; D3-S decision point) | FX engine (tracks, fx_render, budget case "Lightning + 4 monsters") | S | D3-4 |
+| D3-6a in progress (staff, feat/d36a-hit) | `deal_hit` (resist, DEF, drain, effects, kill/XP) | S | D3-0, D3-1 |
 | D3-6b | `proj_fire` (bounces, reflect, pierce, absorb) — the spell/missile table reproduced by tests = stage exit | S | D3-5, D3-6a |
 | D3-7 | abilities (5 spells, Power Strike, Whirlwind, throw, bow, pickup, staff bonk) | S | D3-6b, D3-2 |
 | D3-8 | status effects | S | D3-6a, after D3-7 |
