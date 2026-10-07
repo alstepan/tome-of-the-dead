@@ -12,7 +12,7 @@
 
 | Region | Size | Used | Free | |
 |---|---|---|---|---|
-| Banks 0/4/6 pre-shift pool | 49,152 | 40,096 (`POOL_NEED`: monsters 22,688 + hero max 14,528 Knight (C3-7 +1,920) + 2 select idles 1,152 + straddle 1,728) | **9,056** | M |
+| Banks 0/4/6 pre-shift pool | 49,152 | 44,096 (`POOL_NEED`: monsters 22,688 + hero max 18,528 = Knight 18,176 (D3-4 +3,648: THROW / BOW / WHIRL / POWER_STRIKE) + its class FX kind `K_FXW` 352 (Mage: `K_FXM` 1,152) + 2 select idles 1,152 + straddle 1,728; text block 2,684 under bank 0 → `POOL_CAP` 46,468) | **2,372** | M |
 | Bank 1 sources (low) | 16,384 | 16,384 | **0** | M |
 | Bank 3 sources (high) | 16,384 | 4,227 | **12,157** | M |
 | Bank 2 `$8000-$BFFF` | 16,384 | code+data `$8000-$AC72` 11,379; pad 141; `kind_tab` 256 @`$AD00`; tables `$B000-$BAAF`; stack 1,024; state 256 | code headroom **653** (to `$AF00`); table gaps ~180 | M |

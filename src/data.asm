@@ -36,14 +36,19 @@ FRM_EMIT = FRM_HOT
                 ; Pool budget (prototype §5.2 / R-2): monsters + the largest
                 ; hero + the 2 select-screen idles + worst per-bank straddle
                 ; waste (<= 1 largest variant, 6 cols x 48 x 2 = 576) x 3 banks.
-POOL_HERO_MAX = POOL_KNIGHT
-    IF POOL_WIZARD > POOL_HERO_MAX
-POOL_HERO_MAX = POOL_WIZARD
+                ; D3-4: a hero is generated with its class FX kind (start_game),
+                ; so the hero term is max(Knight + K_FXW, Wizard + K_FXM).
+                ASSERT KFCNT_FXM == 17 && KFCNT_FXW == 8 && KFID_FXW + 2 == KFID_FXM + KFCNT_FXM
+                ASSERT FID_knight_powerstrike >= 0 && FID_spark_fizz2 >= 0 && FID_arrow_hit >= 0
+POOL_HERO_MAX = POOL_KNIGHT + POOL_FXW
+    IF POOL_WIZARD + POOL_FXM > POOL_HERO_MAX
+POOL_HERO_MAX = POOL_WIZARD + POOL_FXM
     ENDIF
 POOL_NEED       EQU POOL_MONSTERS + POOL_HERO_MAX + 2 * 576 + 3 * 576
 POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW)   ; D3-TX: the text block sits under bank 0's pool
                 ASSERT POOL_NEED <= POOL_CAP
                 ASSERT FID_COUNT <= FRT_MAX
+                DISPLAY "GAME class FX pool: warrior ", /D, POOL_FXW, " (", /D, KFCNT_FXW, " frames), mage ", /D, POOL_FXM, " (", /D, KFCNT_FXM, " frames); knight ", /D, POOL_KNIGHT, ", wizard ", /D, POOL_WIZARD
                 DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (monsters ", /D, POOL_MONSTERS, ", hero max ", /D, POOL_HERO_MAX, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0)"
 
 ;==============================================================================
@@ -272,4 +277,11 @@ KROW_W          EQU 9                   ; kinds per KROW (its parameter count)
     MACRO KROW v0, v1, v2, v3, v4, v5, v6, v7, v8
                 DB v0, v1, v2, v3, v4, v5, v6, v7, v8
                 DS K_MAX - KROW_W, 0
+    ENDM
+; KROWFX v0..v8, fxw, fxm — KROW plus the two class FX kinds' columns (the
+; last two ids, defs.asm K_FXW / K_FXM; D3-4: only KT_FID0 / KT_FCNT use it)
+    MACRO KROWFX v0, v1, v2, v3, v4, v5, v6, v7, v8, fxw, fxm
+                DB v0, v1, v2, v3, v4, v5, v6, v7, v8
+                DS K_FXW - KROW_W, 0
+                DB fxw, fxm
     ENDM

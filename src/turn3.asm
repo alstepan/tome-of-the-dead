@@ -3,7 +3,7 @@
 ; relief; docs/memory-map.md "Cold code placement"). INCLUDEd at the end of
 ; bank3.asm. Moved verbatim from logic.asm except for the entry glue noted at
 ; each routine; the bank-2 helpers they call (try_step / try_step_face /
-; cork_check / flyer_lcost / box_free / box_vs_ix / get_box / on_ladder /
+; cork_check / box_free / box_vs_ix / get_box / on_ladder /
 ; is_standing / storey_ref / build_live / snap_pxpy / rng_mod / ent_ix /
 ; kind_seq_ptr / start_seq / queue_damage / msg_push ...) stay in bank 2 / 5 and
 ; page nothing, so they run fine under bank 3. The one exception reachable
@@ -460,46 +460,11 @@ attack_if_reach:
 
 ;------------------------------------------------------------------------------
 ; ai_flyer — Bat / Ghost (prototype §6.4). Band: 9s <= y <= 9s+8-h (game.md §2.1).
-; Ladder ends (§3.5, rule by user 2026-10-02): flyers may cross a shaft but
-; never block the hero. FLY_INBOX = overlap with a ladder-end box at turn
-; start (flyer_lcost, the turn's only call unless a reversal is tried inside
-; a box); try_step enforces "keep crossing or leave". Inside a box the flyer
-; moves before anything else, x only: chase dx first (0: facing), then the
-; other way. Neither legal (fully boxed by entities) -> attack if in reach,
-; else stay. FLY_INBOX is 0 again on return.
+; Ladders are ordinary air (J1, user 2026-10-06, prototype §3.5: the B8
+; ladder-end rule is gone); only try_step's anti-cork protects a climb.
 ; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 ai_flyer:
-                call get_box
-                call flyer_lcost
-                ld   (FLY_INBOX), a
-                call .body
-                xor  a
-                ld   (FLY_INBOX), a
-                ret
-.body:          or   a
-                jr   z, .free
-                call dx_to_player              ; preferred dx: the chase
-                ld   a, d
-                or   a
-                jr   nz, .esc
-                inc  d                         ; aligned: facing
-                bit  EF_LEFT_BIT, (ix+E_FLAGS)
-                jr   z, .esc
-                ld   d, $FF
-.esc:           ld   e, 0
-                push de
-                call try_step_face
-                pop  de
-                ret  c
-                ld   a, d
-                neg
-                ld   d, a
-                ld   e, 0
-                call try_step_face
-                ret  c
-                jp   attack_if_reach           ; fully boxed: may attack, else stays
-.free:
                 call attack_if_reach
                 ret  c
                 call storey_ref

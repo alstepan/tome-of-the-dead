@@ -77,7 +77,22 @@ RANKS = {
 }
 AMMO = [(0, 6, 4, 2, 0, 0), (0, 14, 6, 1, 0, 0)]             # dagger r6 1d4+2, bow r14 1d6+1
 
-# ab_def rows: dty, att1, att2, speed, flags, hit   (fids are FXF_NONE until D3-4)
+# ab_def fids (D3-4, game.md §6.1-6.3): projectile 1/2, impact 1/2 by frame name
+# (None = FXF_NONE $FF: melee has no projectile, the dagger no impact sprite);
+# and the class whose FX kind must contain them (Whirlwind: the Warrior's).
+FIDS = [
+    (("spark_fly1", "spark_fly2", "spark_fizz1", "spark_fizz2"), "FXM"),
+    (("firebolt_fly1", "firebolt_fly2", "firebolt_burst1", "firebolt_burst2"), "FXM"),
+    (("frost_fly", "frost_fly", "frost_crack", "frost_crack"), "FXM"),
+    (("drain_fly1", "drain_fly2", "drain_hit", "drain_hit"), "FXM"),
+    (("lightning_fly1", "lightning_fly2", "lightning_flash", "lightning_flash"), "FXM"),
+    ((None, None, "power_burst", "power_burst"), "FXW"),
+    ((None, None, "spark_fizz1", "spark_fizz2"), "FXW"),
+    (("dagger_spin1", "dagger_spin2", None, None), "FXW"),
+    (("arrow_fly1", "arrow_fly2", "arrow_hit", "arrow_hit"), "FXW"),
+]
+
+# ab_def rows: dty, att1, att2, speed, flags, hit
 SPELL, PIERCE, BURST, HEAL, DMGX2, AOE, MELEE, AMMOF = 1, 2, 4, 8, 16, 32, 64, 128
 DEFS = [
     (3, 0x43, 0x43, 8, SPELL, 0),                 # Spark SHOCK
@@ -132,9 +147,14 @@ def main():
         r = m[df + 10 * i:df + 10 * i + 10]
         chk(f"def {i} dty", [r[0]], [dty])
         chk(f"def {i} attr/speed/flags/hit", r[5:10], [a1, a2, spd, fl, hit])
-        # fids: all four are the FXF_NONE placeholder (TODO D3-4) or a valid fid
-        if any(f != 0xFF and f >= 255 for f in r[1:5]):
-            fails.append(f"def {i} fid out of range")
+        # fids (D3-4): the named frames, never the placeholder where a sprite
+        # exists, each inside its class FX kind's range (generated with the hero)
+        names, cls = FIDS[i]
+        chk(f"def {i} fids", r[1:5], [0xFF if n is None else sym[f"FID_{n}"] for n in names])
+        f0, fn = sym[f"KFID_{cls}"], sym[f"KFCNT_{cls}"]
+        for n in names:
+            if n is not None and not f0 <= sym[f"FID_{n}"] < f0 + fn:
+                fails.append(f"def {i} fid {n} outside K_{cls} [{f0}, {f0 + fn})")
 
     n = 32 + 8 + 2 + 8 + 21 + 2 + 9
     if fails:

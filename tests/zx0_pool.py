@@ -21,7 +21,8 @@ the pool banks 0/4/6 (whole 16 KB each), the whole FRT (FRT_MAX x 16 B),
 SEL_FRT_SAVE and the allocator state (ALLOC_IDX/PTR, mark). The reference
 replays the same generator sessions (boot: alloc_reset, every monster kind,
 the two select idles, save + mark; each game: select restores the idles' FRT
-rows, alloc_restore, gen_kind(hero)) over the bank / FRT bytes the snapshot
+rows, alloc_restore, gen_kind(hero), gen_kind(hero + K_FX_BASE) — D3-4: the
+class FX kind with its overlapping fid range) over the bank / FRT bytes the snapshot
 starts with: allocator, variant choice (MOTION: shift 0 + 4; else the anchor's
 one shift; SYM: left = right entries), mirror (bit-reversed bytes, reversed
 column pairs), the 4-px shift with its spill column. Geometry (frame_tab cols,
@@ -364,6 +365,8 @@ class Ref:
             self.frt[f * st:(f + 1) * st] = self.save[i * st:(i + 1) * st]
         self.idx, self.ptr = self.mark                 # alloc_restore
         self.kind(hero)
+        if "K_FX_BASE" in self.S:                      # D3-4: + the class FX kind
+            self.kind(hero + self.S["K_FX_BASE"])
 
     def dump(self):
         a = bytes((self.idx, self.ptr & 0xFF, self.ptr >> 8,

@@ -138,7 +138,7 @@ P_ENTITIES      EQU $B000           ; 16 slots x 32 B = 512 B ($B000..$B1FF)
 P_ENT_STRIDE    EQU 32
 P_MAX_ENT       EQU 16
 FRT_STRIDE      EQU 16
-FRT_MAX         EQU 160             ; A6 (game.md §11.2): 74 used (C3-7)
+FRT_MAX         EQU 160             ; A6 (game.md §11.2): 101 used (D3-4)
 FRT             EQU P_ENTITIES - FRT_MAX * FRT_STRIDE   ; $A600..$AFFF: frame runtime
                                     ; table, 16 B/fid (4 variants x bank,lo,hi + 4 pad);
                                     ; directly below ENTITIES, the image ends below it
@@ -266,7 +266,10 @@ GEN_ZBLK        EQU $BF93           ; word: virtual addr of the ZX0 block now un
 PRES_ANY        EQU $BF95           ; A7: 1 = PRES_MASK has a bit set (present has work)
 DMG_PRES_N      EQU $BF96           ; A7: DMG_LIST rects pmark_dmg marks (before overlap repair)
 PRES_RMIN       EQU $BF97           ; A7: first marked row ($FF = none); present starts there
-FLY_INBOX       EQU $BF98           ; ai_flyer: overlap with a ladder-end box at turn start (0 outside ai_flyer)
+JUMP_ARC        EQU $BF98           ; J1: the hero's jump arc for anim (try_jump writes it; was FLY_INBOX, B8):
+JA_N            EQU $1F             ;   bits 0-4: airborne ticks n = 2 |x_f - x| (12 / 14, less when cut short)
+JA_D7_BIT       EQU 6               ;   set: D = 7 arc shape (N = 14), else D = 6 (N = 12)
+JA_FALL_BIT     EQU 7               ;   set: the jump ends in a pit fall (E_Y already = storey 1)
 ; $BF9A..$BF9F: spare (B3B-11: were the A7 HUD_EXT / HUD_PW, now HUD4_EXT / HUD4_PW)
 GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
 MSG_BUF         EQU $BFA0           ; 32 B: impact message composition (show_impact_msg -> log_push)
@@ -368,7 +371,7 @@ M_MOVE          EQU 1
 M_SEQ           EQU 2
 M_HOLD          EQU 3               ; player dead: hold the final frame
 M_FALL          EQU 4               ; B3B-5: walk step (4 px/tick) then the drop (FALL_STEP px/tick, game.md §2.5)
-M_JUMP          EQU 5               ; B3B-5: the §2.4 arc, E_TMR = arc tick 0..JUMP_TICKS-1
+M_JUMP          EQU 5               ; B3B-5: the §2.4 arc, E_TMR = arc tick 0..n+1 (JUMP_ARC)
                 ASSERT M_FALL > M_HOLD && M_JUMP > M_HOLD   ; anim_entity: cp M_FALL / jr nc
 
 ; E_REACT
@@ -434,6 +437,17 @@ WT_K_RAT        EQU 2
 WT_K_BAT        EQU 2
 WT_K_SLIME      EQU 2
 K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 18 needed)
+; D3-4: the class FX kinds (render-only projectile / impact frames, game.md §6;
+; never an entity's kind): the LAST two kind ids, so 3F's monster rows grow
+; up from K_COUNT without moving them (3F has 30 ids left: 0..29). Generated
+; with the hero only (start_game: gen_kind(HERO_KIND + K_FX_BASE)), so the
+; pool holds the current class's FX only. Their fid ranges OVERLAP in
+; frames.asm (spark_fizz1/2: Spark impact and Whirlwind impact): K_FXM =
+; [mage-only | shared], K_FXW = [shared | warrior-only].
+K_FXW           EQU K_MAX - 2       ; Warrior FX (= K_FX_BASE + K_KNIGHT)
+K_FXM           EQU K_MAX - 1       ; Mage FX    (= K_FX_BASE + K_WIZARD)
+K_FX_BASE       EQU K_FXW - K_KNIGHT
+                ASSERT K_FXM == K_FX_BASE + K_WIZARD && K_FXW > K_COUNT
 ; body height in cells per kind (single source: kind_tab KT_BH row and the FRM
 ; frame-height ASSERT both use these; named BH_<kind> so FRM can paste `kind`)
 BH_K_KNIGHT     EQU 6
@@ -444,6 +458,8 @@ BH_K_GHOST      EQU 4
 BH_K_RAT        EQU 2
 BH_K_BAT        EQU 2
 BH_K_SLIME      EQU 2
+BH_K_FXW        EQU 2               ; D3-4: FX frames are <= 16 px tall (FRM ASSERT only)
+BH_K_FXM        EQU 2
 
 ; offsets of the parallel arrays inside kind_tab: 2 pages, 32 B per array
 ; (K_MAX). An array never crosses a page (kind < 32, offsets multiple of $20),
@@ -577,8 +593,9 @@ TWEEN_STEP      EQU 4               ; px per tick
 FALL_STEP       EQU 8               ; B3B-5: px per tick of a pit fall (game.md §2.5: 9 rows, 9 ticks)
 FALL_DIE        EQU 4               ; fall damage 1d4, ignores DEF
 JUMP_COLS       EQU 6               ; B3B-5 jump (game.md §2.4): body x..x+2 -> x+6..x+8
-JUMP_TICKS      EQU 14              ; tick 0 / 13 JUMP1 aligned, 1..12 JUMP2 (x += 4 px)
+JUMP_COLS7      EQU 7               ; J1: the low-body extension (Rat / Spider adjacent, game.md §2.4)
 JUMP_RISE       EQU 2               ; swept box rows top-2 .. bottom
+JUMP_APEX       EQU 4               ; J1: arc steps of 4 px to the 16-px apex (dy = -4 min(t, N-t, 4))
 ATTR_DOOR       EQU $06             ; door arch / planks (concept-screen §3.1)
 ATTR_RUBBLE     EQU ATTR_WALL       ; concept-screen §3.3 #12
 ATTR_GRATE      EQU $46             ; lair gate, raised (B12 variant B; tiles_common id 26)

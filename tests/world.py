@@ -3783,8 +3783,107 @@ def main():
             p.turn("WAIT")
             measured("W8 jump", "K", "L")
             check("W8 jump again after a non-jump turn: x + 6", hero()["X"] == pit + 8, hero()["X"])
+            # J1 (user 2026-10-06, §2.4): a jump landing on x == p falls (1d4)
+            def free_jump():
+                p.wb("JUMP_TURN", 0xFF)                # "not twice in a row" off
+                p.wb(S["JUMP_TURN"] + 1, 0xFF)
+            for left in (False, True):
+                tag = "left (K+H)" if left else "right (K+L)"
+                p.isolate()
+                free_jump()
+                p.place(0, pit + 6 if left else pit - 6, y0, flags=HERO_R | (EF_LEFT if left else 0))
+                p.set_ent(0, HP=20)
+                t0 = p.rw("TURN_COUNTER")
+                samples = []
+                ok = p.turn("K", "H" if left else "L",
+                            per_tick=lambda fr, e: samples.append((e["PX"], e["PY"], e["MODE"])))
+                e = hero()
+                check(f"W8 jump {tag} onto x == p: falls to storey 1 at x = p, 1 turn",
+                      (ok, e["X"], e["Y"], p.rw("TURN_COUNTER") - t0, e["MODE"]) == (True, pit, y1, 1, 0),
+                      (ok, e["X"], e["Y"], p.rw("TURN_COUNTER") - t0, e["MODE"]))
+                check(f"W8 jump {tag} into the pit: 1d4 damage", 1 <= 20 - e["HP"] <= 4, e["HP"])
+                pys = [py for _, py, _ in samples]
+                rise = [v - 8 * y0 for v in pys if v < 8 * y0]
+                drop = [(px, py) for px, py, _ in samples if py > 8 * y0]
+                last_up = max(i for i, v in enumerate(pys) if v < 8 * y0)
+                first_dn = min(i for i, v in enumerate(pys) if v > 8 * y0)
+                check(f"W8 jump {tag} into the pit: the full D = 6 arc, then the 9-row drop at px = 8p",
+                      rise == [-4, -8, -12, -16, -16, -16, -16, -16, -12, -8, -4]
+                      and [py for _, py in drop if py < 8 * y1] + [8 * y1]
+                      == list(range(8 * y0 + 8, 8 * y1 + 1, 8))
+                      and all(px == 8 * pit for px, _ in drop) and first_dn > last_up, samples)
+                p.settle()
+            w4("W8 jump fall")
+            # wide pit (L2 not built yet: pit_w's immediate poked to W = 5, logic
+            # only, holes p..p+4): a jump whose span holds a hole is cut short
+            # and falls at x_f = p+W-3 (right) / p (left), arc 2 |x_f - x| ticks
+            p.wb(S["pit_w"] + 1, 5)
+            for left, x0, xf in ((False, pit - 3, pit + 2), (True, pit + 5, pit)):
+                p.isolate()
+                free_jump()
+                p.place(0, x0, y0, flags=HERO_R | (EF_LEFT if left else 0))
+                p.set_ent(0, HP=20)
+                samples = []
+                ok = p.turn("K", "H" if left else "L",
+                            per_tick=lambda fr, e: samples.append((e["PX"], e["PY"])))
+                e = hero()
+                rise = [py - 8 * y0 for _, py in samples if py < 8 * y0]
+                check(f"W8 wide pit (W 5 poked) {'left' if left else 'right'}: cut short, falls at x_f",
+                      (ok, e["X"], e["Y"], rise) == (True, xf, y1, [-4, -8, -12, -16, -16, -16, -16, -16, -12, -8]),
+                      (ok, e["X"], e["Y"], rise))
+                p.settle()
+            p.wb(S["pit_w"] + 1, 3)
+            p.isolate()
+            free_jump()
             p.place(0, pit - 6, y0, flags=HERO_R)
-            check("W8 jump onto x == p refused (no turn)", p.no_turn("K", "L"), "")
+            measured("W8 jump into the pit", "K", "L")
+            p.settle()
+            # J1 low-body extension (§2.4): Rat / Spider (K_SPIDER == K_RAT, 32x16)
+            def jtry(x0, left, bodies):
+                """Hero at x0 on storey 0, bodies = [(slot, x, h)]: K+H / K+L.
+                Returns the hero's x after the jump, None when no turn ran;
+                jtry.rise = the arc's py offsets, one per tick."""
+                p.isolate()
+                free_jump()
+                for slot, bx, bh in bodies:
+                    p.place(slot, bx, stand_y(0, bh), room=1, flags=MON_L)
+                p.place(0, x0, y0, flags=HERO_R | (EF_LEFT if left else 0))
+                p.set_ent(0, HP=20)                    # the falls / rat bites add up
+                samples = []
+                ok = p.turn("K", "H" if left else "L", per_tick=lambda fr, e: samples.append(e["PY"]))
+                x = hero()["X"] if ok else None
+                for slot, _, _ in bodies:
+                    p.set_ent(slot, ROOM=NOWHERE)
+                p.settle()
+                jtry.rise = [v - 8 * y0 for v in samples if v < 8 * y0]
+                return x
+            xr = 3
+            xj = jtry(xr, False, [(SLOT_RAT, xr + 3, 2)])
+            check("W8 jump over an adjacent Rat (r = x+3): D = 7, lands at x + 7", xj == xr + 7, xj)
+            samples7 = jtry.rise
+            free_jump()
+            p.place(0, xr, y0, flags=HERO_R)
+            p.place(SLOT_RAT, xr + 3, stand_y(0, 2), room=1, flags=MON_L)
+            measured("W8 jump D = 7", "K", "L")
+            p.set_ent(SLOT_RAT, ROOM=NOWHERE)
+            p.settle()
+            check("W8 D = 7 arc: -4,-8,-12,-16 x7,-12,-8,-4 (14 airborne ticks)",
+                  samples7 == [-4, -8, -12] + [-16] * 7 + [-12, -8, -4], samples7)
+            check("W8 jump left over an adjacent Rat/Spider (mirror): lands at x - 7",
+                  jtry(xr + 10, True, [(SLOT_RAT, xr + 10 - 4, 2)]) == xr + 3, hero()["X"])
+            check("W8 jump refused: a Rat at r = x+4 (overlaps x+7)",
+                  jtry(xr, False, [(SLOT_RAT, xr + 4, 2)]) is None, hero()["X"])
+            check("W8 jump refused (left): a Rat at r = x-5 (overlaps x-7 .. x-5)",
+                  jtry(xr + 10, True, [(SLOT_RAT, xr + 10 - 5, 2)]) is None, hero()["X"])
+            check("W8 jump over an adjacent Slime (3 wide): D = 6",
+                  jtry(xr, False, [(2, xr + 3, 2)]) == xr + 6, hero()["X"])
+            check("W8 jump refused: adjacent Rat, a Goblin in the D = 7 landing box",
+                  jtry(xr, False, [(SLOT_RAT, xr + 3, 2), (SLOT_GOBLIN, xr + 9, 4)]) is None, hero()["X"])
+            check("W8 jump refused: a Goblin in the D = 6 landing box",
+                  jtry(xr, False, [(SLOT_GOBLIN, xr + 6, 4)]) is None, hero()["X"])
+            p.isolate()
+            free_jump()
+            p.set_ent(0, HP=20)
             p.place(0, pit + 1, y0, flags=HERO_R | EF_LEFT)
             measured("W8 fall", "H")
             # more jump legality (game.md §2.4)

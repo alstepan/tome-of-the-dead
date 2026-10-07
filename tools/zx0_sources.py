@@ -7,7 +7,7 @@ of assets/gfx/sprites/index.asm when ZX0_SOURCES = 1 (the default).
 
 Format (docs/memory-map.md "Sprite sources (ZX0)"):
   * Generator frames (every frame named in a src/frames.asm FRM line) are grouped
-    per kind, in FRM order (= fid order = gen_kind order, so the generator's
+    per kind (the FRM kind argument; D3-4), in FRM order (= fid order = gen_kind order, so the generator's
     one-block cache never thrashes), into blocks of <= ZX0_MAX_FRAMES
     consecutive frames whose raw size is <= GEN_SCRATCH_LEN (1,536 B, the
     generator-time scratch they unpack into). The partition per kind is the
@@ -59,14 +59,20 @@ def fail(msg):
     sys.exit(f"zx0_sources: {msg}")
 
 
+def frm_list():
+    """[(name, kind)] in src/frames.asm FRM order (= fid order); kind = the
+    FRM kind argument (K_*)."""
+    out = []
+    for line in open(DATA_ASM):
+        m = re.match(r"\s+FRM\s+(\w+)\s*,\s*(\w+)\s*,", line.split(";")[0])
+        if m:
+            out.append((m.group(1), m.group(2)))
+    return out
+
+
 def frm_order():
     """Frame names in src/frames.asm FRM order (= fid order)."""
-    names = []
-    for line in open(DATA_ASM):
-        m = re.match(r"\s+FRM\s+(\w+)\s*,", line.split(";")[0])
-        if m:
-            names.append(m.group(1))
-    return names
+    return [n for n, _ in frm_list()]
 
 
 def meta(name):
@@ -168,10 +174,13 @@ def main():
     packed_set = set(order)
     raw_files = [n for n in index_names if n not in packed_set]
 
-    # group by kind, keeping first-appearance order of kinds in FRM order
+    # group by the FRM kind argument (D3-4: the FX kinds mix name prefixes),
+    # keeping first-appearance order of kinds in FRM order; a block never
+    # mixes kinds (one gen_kind unpacks only its own blocks)
+    fkind = dict(frm_list())
     kinds = {}
     for n in order:
-        kinds.setdefault(zp.kind(n), []).append(n)
+        kinds.setdefault(fkind[n], []).append(n)
 
     lines = [
         "; " + "=" * 76,

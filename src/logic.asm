@@ -7,7 +7,7 @@
 ;   materialise), do_attack, potion_pickup and try_quaff now live in bank 3
 ;   (src/turn3.asm, entered via far3; B3B-13: show_impact_msg -> lowram.asm); what stays here is
 ;   per-tick or shared with the hero path / tests (try_step, cork_check,
-;   flyer_lcost, find_target, cache_player, ...).
+;   find_target, cache_player, ...).
 ; All logic is cell-granular and resolved instantly at turn start; the anim
 ; layer only replays it. Deterministic: RNG consumed only here, in the order of
 ; prototype §6.2.
@@ -1018,12 +1018,9 @@ box_vs_ix:
 ;------------------------------------------------------------------------------
 ; try_step_face / try_step — move IX by (D=dx, E=dy) if legal: body limits
 ; (cols 1..30; monsters treat 0/31 as walls), no sideways step while mid-ladder
-; (§3.4 snap), box_free, cork_check, and the flyer ladder-end rule (§3.5, rule
-; by user 2026-10-02): a flyer that started its turn inside a ladder-end box
-; (FLY_INBOX != 0, set by ai_flyer) may only keep crossing (dx = its facing)
-; or step out of the box (flyer_lcost at the new x = 0); never dx = 0 and
-; never a reversal that stays inside. Entering a box is free. Yield steps
-; (YIELD_FLAG) never see the rule (FLY_INBOX = 0 outside ai_flyer).
+; (§3.4 snap), box_free, cork_check. Flyers have no ladder rule (J1, user
+; 2026-10-06, prototype §3.5: ladder shafts / end boxes are ordinary air; the
+; B8 cross-or-leave rule and flyer_lcost are gone); only anti-cork binds them.
 ; The flyer band is NOT checked here: callers keep it by construction (chase
 ; targets 9s+1, wander uses clamp_band).
 ; try_step_face also sets facing from dx. CF = 1 if moved.
@@ -1031,9 +1028,8 @@ box_vs_ix:
 ; solid = blocked, except a closed door plank, which mon_door opens for an
 ; opener (the step is spent, CF = 1, nothing moves; game.md §9.1); and a
 ; walker never steps onto x == the pit col on the storey-0 floor (§2.5).
-; Clobbers: A, BC, DE, HL, TMP6 (try_step_face), TMP7 (flyer_lcost)
-; Cost of the flyer rule: 24 T when FLY_INBOX = 0 (the common case); B3B-5
-; terrain ~300 T a horizontal step (+~250 T for a storey-0 walker).
+; Clobbers: A, BC, DE, HL, TMP6 (try_step_face)
+; B3B-5 terrain ~300 T a horizontal step (+~250 T for a storey-0 walker).
 ;------------------------------------------------------------------------------
 try_step_face:
                 ld   a, d
@@ -1105,10 +1101,7 @@ try_step:
                 call box_free
                 pop  hl
                 jr   c, .no
-                ld   a, (FLY_INBOX)            ; flyer inside a ladder-end box?
-                or   a
-                jr   nz, .inbox
-.cork:          ld   a, (YIELD_FLAG)
+                ld   a, (YIELD_FLAG)
                 or   a
                 jr   nz, .go
                 call cork_check                ; never re-cork a climbing hero
@@ -1127,19 +1120,6 @@ try_step:
                 pop  hl
                 ld   a, h                      ; dx = the door's side
                 jp   mon_door
-.inbox:         ; H = dx. Keep crossing (dx = facing) or leave the box.
-                ld   a, h
-                or   a
-                jr   z, .no                    ; x kept: would stay inside
-                bit  EF_LEFT_BIT, (ix+E_FLAGS)
-                jr   z, .fr
-                neg                            ; facing left: dx -1 -> 1
-.fr:            dec  a
-                jr   z, .cork                  ; continuing the crossing
-                call flyer_lcost               ; reversal: only out of the box
-                or   a                         ; (C = new x, D = w)
-                jr   nz, .no
-                jr   .cork
 
 ;------------------------------------------------------------------------------
 ; cork_check — CF = 1 if box (C,B,D,E) overlaps any box on the hero's remaining
@@ -1185,62 +1165,6 @@ cork_check:
 .out:           pop  de
                 pop  bc
                 pop  ix
-                ret
-
-;------------------------------------------------------------------------------
-; flyer_lcost — B8 (user bug: the Ghost parked on a ladder end and the hero
-; could not get past; rule by user 2026-10-02, §3.5: flyers may cross a shaft
-; but never wait / attack / stop / reverse inside a ladder-end box).
-; A = how many of the cols C .. C+D-1 lie in a
-; ladder-end box of IX's storey t = the standing box at either end of a
-; segment, the box the climbers' "no head-on" rule keeps clear (§6.4): the
-; bottom end of {col, t} and the top end of {col, t+1}, cols col..col+2. A
-; flyer's band lies inside its storey's standing rows, so only the cols
-; decide. 0 = clear. Exit shafts count ({col,0} bottom, {col,2} top); a
-; stacked shaft counts twice (harmless: only 0 / non-0 is used).
-; Called once per flyer turn (ai_flyer) + once per reversal tried inside a box.
-; B3B-8: the segments are the descriptor's 6 shaft / ladder col bytes
-; (seg_storey). Preserves BC, DE, IX.  Clobbers: A, HL.  ~0.6k T (6 col
-; bytes, ~95 T more for one of this storey)
-;------------------------------------------------------------------------------
-flyer_lcost:
-                push bc
-                push de
-                ld   e, d                      ; E = w
-                call storey_ref                ; A = t (flyer: its band's storey)
-                ld   b, a
-                call cur_room_desc             ; HL = descriptor (A, HL)
-                inc  l                         ; -> RD_EXITS; the loop pre-increments
-                ld   d, 0                      ; D = overlap count
-.l:             inc  l
-                ld   a, l
-                and  RD_STRIDE - 1
-                cp   RD_LAD2 + 1
-                jr   nc, .done
-                ld   a, (hl)
-                or   a
-                jr   z, .l                     ; no segment
-                call seg_storey
-                sub  b
-                cp   2                         ; s == t or t + 1?
-                jr   nc, .l
-                ld   a, (hl)                   ; col
-                sub  c                         ; k - x for k = col .. col+2:
-                cp   e                         ; inside the body iff < w
-                jr   nc, $+3                   ; (unsigned: k < x wraps high)
-                inc  d
-                inc  a
-                cp   e
-                jr   nc, $+3
-                inc  d
-                inc  a
-                cp   e
-                jr   nc, $+3
-                inc  d
-                jr   .l
-.done:          ld   a, d
-                pop  de
-                pop  bc
                 ret
 
 ;------------------------------------------------------------------------------

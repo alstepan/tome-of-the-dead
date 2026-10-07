@@ -316,7 +316,7 @@ sel_tab:        DB   FID_knight_idle1, FID_wizard_idle
 
 ;==============================================================================
 ; start_game — C = hero kind. Generate its frames (§5.2: only the chosen
-; hero), new game, first level (B3B-12: a generated D1 through level_enter;
+; hero) and its class FX kind (D3-4: K_FX_BASE + hero), new game, first level (B3B-12: a generated D1 through level_enter;
 ; proto_start = 1: the PROTO rooms A-D through level_show), then the play
 ; loop (bank 2, never returns).
 ;==============================================================================
@@ -326,7 +326,10 @@ start_game:
                 call alloc_restore
                 ld   a, (HERO_KIND)
                 call gen_kind
-                ld   hl, new_game              ; bank 3 (A7 review: cold, out of bank 2):
+                ld   a, (HERO_KIND)            ; D3-4: + the class FX kind
+                add  a, K_FX_BASE              ; (K_FXW / K_FXM: only this class's
+                call gen_kind                  ; projectiles / impacts in the pool)
+                ld   hl, new_game             ; bank 3 (A7 review: cold, out of bank 2):
                 call far3                      ; hero slot, PROTO level / master seed
                 ld   de, TX_WELCOME            ; the first log line (panel_init)
                 ld   a, (proto_start)
@@ -1233,17 +1236,27 @@ hero_fall:
                 ret
 
 ;------------------------------------------------------------------------------
-; try_jump — UP + LEFT / RIGHT (game.md §2.4), IX = hero, A = the PLAYER_DIR
-; E/W bits (E wins: dx 1, else -1). Legal when
-; standing (not mid-ladder), not on the turn right after a jump (JUMP_TURN),
-; the landing box x' = x + 6dx inside the body limits (cols 1..30: no exit by
-; jumping), not x' == the pit col on storey 0, free of every body, and the
-; swept box (cols x+1 .. x'+w-1 / x' .. x+w-2, rows y-2 .. y+h-1) holding no
-; solid cell (wall, block, door / arch / lintel) and no body but low ones
-; (h <= 2 rows, w <= 3 cols, standing: the Slime, a Bat in the 2 band rows
-; above the floor). CF = 1: x = x', M_JUMP (the 14-tick arc); CF = 0: no turn.
-; Not modelled in 3B (no such systems yet): 2 FOOD, Weak, frozen.
-; Clobbers: all; IX = hero on return; TMP6 (dx), TMP7 (x').
+; try_jump — UP + LEFT / RIGHT (game.md §2.4, J1 2026-10-06), IX = hero, A =
+; the PLAYER_DIR E/W bits (E wins: dx 1, else -1). Legal when standing (not
+; mid-ladder), not on the turn right after a jump (JUMP_TURN), and:
+; - D: the box at x + 6dx free -> D = 6; holding only low bodies (jump_bodies:
+;   h <= 2 rows, w <= 4 cols, standing: Slime, Rat / Spider, a Bat in the 2
+;   band rows above the floor) -> D = 7, legal iff the box at x + 7dx holds
+;   no body (an adjacent Rat is cleared, one at r >= x+4 blocks); any other
+;   body there -> illegal.
+; - x' = x + D dx inside the body limits (cols 1..30: no exit by jumping).
+; - storey-0 pit p (width W, pit_w): x' in p .. p+W-3 (body fully over holes)
+;   -> the hero falls at x_f = x'; a WIDE pit (W >= 4) with a hole col in the
+;   cleared span (x+3 .. x'-1 / x'+3 .. x-1) cuts the arc short: x_f = p+W-3
+;   (right) / p (left). Else x_f = x'.
+; - the landing box at x_f free of every body, the swept box (cols x+1 ..
+;   x_f+w-1 / x_f .. x+w-2, rows y-2 .. y+h-1) holding no solid cell (wall,
+;   block, door / arch / lintel) and no body but low ones.
+; CF = 1: x = x_f, M_JUMP, JUMP_ARC = n (2 |x_f - x| airborne ticks) | D7 |
+; FALL; a fall also runs hero_fall (y += 9, 1d4, landing conflicts) with the
+; mode kept M_JUMP (anim plays the arc, then M_FALL). CF = 0: no turn.
+; Not modelled yet: 2 FOOD, Weak, frozen.
+; Clobbers: all; IX = hero on return; TMP6 (dx), TMP7 (x_f).  Cold (once a turn).
 ;------------------------------------------------------------------------------
 try_jump:
                 ASSERT DIR_E_BIT == 0          ; the AND below yields dx 1 for E
@@ -1260,13 +1273,32 @@ try_jump:
                 jp   z, .no                    ; not two turns in a row
                 call get_box                   ; C = x, B = y, D = w, E = h
                 ld   a, (TMP6)
-                dec  a
-                ld   a, c
-                jr   nz, .lft
-                add  a, JUMP_COLS
-                jr   .x1
-.lft:           sub  JUMP_COLS
-.x1:            ld   (TMP7), a                 ; x'
+                ld   l, a
+                add  a, a
+                add  a, l
+                add  a, a                      ; 6 dx
+                add  a, c
+                ld   (TMP7), a                 ; x + 6 dx
+                ld   a, 2 * JUMP_COLS
+                ld   (JUMP_ARC), a             ; D 6, no fall
+                push bc
+                ld   a, (TMP7)
+                ld   c, a
+                call box_free                  ; (keeps BC, DE, IX)
+                jr   nc, .d6
+                call jump_bodies               ; only low bodies there?
+                ld   ix, P_ENTITIES
+                jp   c, .nobc
+                ld   a, (TMP6)
+                add  a, c
+                ld   c, a
+                ld   (TMP7), a                 ; x + 7 dx
+                call box_free                  ; .. must hold no body at all
+                jp   c, .nobc
+                ld   a, (2 * JUMP_COLS7) | (1 << JA_D7_BIT)
+                ld   (JUMP_ARC), a
+.d6:            pop  bc
+                ld   a, (TMP7)                 ; x'
                 dec  a                         ; legal: 1 <= x' <= 31 - w, i.e.
                 ld   l, a                      ; x' - 1 < 31 - w unsigned (x' <= 0
                 ld   a, ROOM_COLS - 1          ; wraps x' - 1 high)
@@ -1277,30 +1309,27 @@ try_jump:
                 ld   a, b
                 add  a, e
                 cp   FLOOR_ROW0
-                jr   nz, .np
-                push de
-                ld   a, RD_PITCOL
-                call desc_byte                 ; (keeps BC)
-                pop  de
-                ld   hl, TMP7
-                cp   (hl)
-                jr   z, .no                    ; never land on x == the pit col
-.np:            push bc
+                call z, jump_pit               ; storey 0: TMP7 = x_f, JUMP_ARC
+                push bc
                 ld   a, (TMP7)
                 ld   c, a
                 call box_free                  ; landing box: no body at all
                 pop  bc
                 jr   c, .no
-                ld   a, (TMP6)                 ; swept box
+                ld   a, (JUMP_ARC)
+                and  JA_N
+                rra                            ; |x_f - x| (n even, CF = 0)
                 dec  a
-                ld   a, (TMP7)                 ; left: from x'
+                add  a, d
+                ld   h, a                      ; swept cols: |x_f - x| + w - 1
+                ld   a, (TMP6)
+                dec  a
+                ld   a, (TMP7)                 ; left: from x_f
                 jr   nz, .s0
                 ld   a, c
                 inc  a                         ; right: from x + 1
 .s0:            ld   c, a
-                ld   a, d
-                add  a, JUMP_COLS - 1
-                ld   d, a                      ; w + 5 cols
+                ld   d, h
                 ld   a, b
                 sub  JUMP_RISE
                 ld   b, a                      ; rows y - 2 ..
@@ -1321,13 +1350,91 @@ try_jump:
                 ld   hl, (TURN_COUNTER)
                 inc  hl
                 ld   (JUMP_TURN), hl           ; the next turn may not jump
+                ld   a, (JUMP_ARC)
+                bit  JA_FALL_BIT, a
+                scf                            ; (keeps Z)
+                ret  z
+                call hero_fall                 ; y += 9, 1d4, conflicts; IX = hero
+                ld   (ix+E_MODE), M_JUMP       ; the arc plays first (anim)
                 scf
                 ret
+.nobc:          pop  bc
 .no:            or   a
                 ret
 
+;------------------------------------------------------------------------------
+; jump_pit — try_jump on the storey-0 floor: C = x, TMP6 = dx, TMP7 = x',
+; JUMP_ARC = n | D7. Pit p, width W (pit_w; game.md §2.4 "Landing in a pit",
+; §2.5): x' in p .. p+W-3 -> fall at x'; else W >= 4 and a hole col in the
+; cleared span -> fall at x_f = p+W-3 (right) / p (left), n = 2 |x_f - x|.
+; Sets JA_FALL_BIT on a fall.  Keeps BC, DE.  Clobbers: A, HL
+;------------------------------------------------------------------------------
+jump_pit:
+                push de
+                ld   a, RD_PITCOL
+                call desc_byte                 ; 0 = no pit (keeps BC)
+                pop  de
+                or   a
+                ret  z
+                ld   h, a                      ; H = p
+                call pit_w
+                sub  2
+                ld   l, a                      ; L = W - 2: fall-range size
+                ld   a, (TMP7)
+                sub  h
+                cp   l
+                jr   c, .fall                  ; p <= x' <= p+W-3: x_f = x'
+                ld   a, l
+                cp   2
+                ret  c                         ; narrow: never cut short
+                ld   a, (TMP6)
+                dec  a
+                jr   nz, .left
+                ld   a, (TMP7)                 ; right: hole in x+3 .. x'-1 iff
+                dec  a                         ; p <= x'-1 and p+W-1 >= x+3
+                cp   h
+                ret  c
+                ld   a, h
+                add  a, l
+                sub  2
+                cp   c
+                ret  c
+                ld   a, h
+                add  a, l
+                dec  a                         ; x_f = p+W-3
+                jr   .cut
+.left:          ld   a, h                      ; left: hole in x'+3 .. x-1 iff
+                cp   c                         ; p <= x-1 and p+W-1 >= x'+3
+                ret  nc
+                add  a, l
+                dec  a
+                ld   l, a
+                ld   a, (TMP7)
+                cp   l
+                ret  nc
+                ld   a, h                      ; x_f = p
+.cut:           ld   (TMP7), a
+                sub  c
+                jr   nc, .ab
+                neg                            ; |x_f - x|
+.ab:            add  a, a
+                ld   l, a                      ; n = 2 |x_f - x|
+                ld   a, (JUMP_ARC)
+                and  ~JA_N & $FF
+                or   l
+                ld   (JUMP_ARC), a
+.fall:          ld   a, (JUMP_ARC)
+                set  JA_FALL_BIT, a
+                ld   (JUMP_ARC), a
+                ret
+
+; pit_w — A = the current room's pit width W (holes p .. p+W-1). L2 will read
+; the descriptor's width field; today every pit is narrow.  Clobbers: A
+pit_w:          ld   a, PIT_W_NARROW
+                ret
+
 ; jump_bodies — CF = 1 if a LIVE_LIST body (not the hero, not DYING) overlaps
-; box C,B,D,E and is not low (h <= 2, w <= 3, standing).
+; box C,B,D,E and is not low (h <= 2, w <= 4 (J1: Rat / Spider), standing).
 ; Keeps BC, DE.  Clobbers: A, HL, IX
 jump_bodies:
                 ld   hl, LIVE_LIST
@@ -1353,7 +1460,7 @@ jump_bodies:
                 cp   3
                 jr   nc, .hit
                 KFIELD KT_BW
-                cp   4
+                cp   5                         ; J1: 32-px Rat / Spider are low
                 jr   nc, .hit
                 call is_standing
                 jr   nz, .hit

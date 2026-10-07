@@ -87,6 +87,8 @@ RD_LAD2         EQU 7               ; 2nd internal ladder (0 = none)
 RD_PITCOL       EQU 8               ; pit: left HOLE col p (holes p..p+2 in row FLOOR_ROW0,
                                     ;      caps at p-1 / p+3); 0 = none. Storey-0 floor only
                                     ;      (game.md §2.5), so no storey byte
+PIT_W_NARROW    EQU 3               ; J1: pit width W (holes p..p+W-1). No descriptor width field yet
+                                    ;      (L2 adds it, 3 = narrow): pit_w returns this constant
 RD_BLOCK        EQU 9               ; dead-end block: RDB_* below (0 = none)
 RD_SEED         EQU 10              ; word: room seed (decor re-derived from it; never 0)
 RD_SPARE        EQU 12              ; 12..15 spare (zeroed by the generator)

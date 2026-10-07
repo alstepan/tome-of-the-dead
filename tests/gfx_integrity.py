@@ -16,7 +16,8 @@ source (read from the .sna the suite loads, never from the running machine):
        the GI0 tables again (TILE_ATTRS minus the theme_ids, which follow the
        depth), ids 32..63 glyphs / attrs / tile_flags == the bank-7 slot,
        the sprite pool (bank 0 POOL_START.., banks 4 / 6) + FRT == as built at
-       the hero start, and the displayed playfield == ROOM_MAP drawn from the
+       the hero start (D3-4: which includes the hero's class FX kind, checked
+       generated — one variant per facing for each fid of its range — once), and the displayed playfield == ROOM_MAP drawn from the
        SOURCE glyphs (every cell not under a sprite; row 17 may hold an
        ornament glyph) + the panel's potion glyph == the source T_POTION.
 Run with ZRCP_PORT=<port>.  `--depths N` (default 8).
@@ -156,6 +157,27 @@ def pool_check(p, check, tag, snap0):
               bad == [], bad[:6])
 
 
+def fx_check(p, check):
+    """D3-4: the hero's class FX kind (K_FX_BASE + HERO_KIND) is resident at the
+    hero start: every fid of its KT_FID0/KT_FCNT range has a right (v0/v1) and a
+    left (v2/v3) variant in a pool bank whose bytes lie inside the pool."""
+    hk = p.rb("HERO_KIND")
+    k = S["K_FX_BASE"] + hk
+    f0 = p.z.read_memory(S["kind_tab"] + S["KT_FID0"] + k, 1)[0]
+    fc = p.z.read_memory(S["kind_tab"] + S["KT_FCNT"] + k, 1)[0]
+    want = ("KFID_FXW", "KFCNT_FXW") if hk == S["K_KNIGHT"] else ("KFID_FXM", "KFCNT_FXM")
+    check(f"GI FX: kind {k} range == {want[0]}", (f0, fc) == (S[want[0]], S[want[1]]), (f0, fc))
+    frt = bytes(p.z.read_memory(S["FRT"] + f0 * S["FRT_STRIDE"], fc * S["FRT_STRIDE"]))
+    bad = []
+    for i in range(fc):
+        row = frt[i * S["FRT_STRIDE"]:(i + 1) * S["FRT_STRIDE"]]
+        for side in (0, 2):
+            vs = [row[3 * v:3 * v + 3] for v in (side, side + 1) if row[3 * v] != S["FRT_NONE"]]
+            if len(vs) != 1 or vs[0][0] not in (0, 4, 6) or (vs[0][1] | vs[0][2] << 8) < 0xC000:
+                bad.append((f0 + i, side))
+    check(f"GI FX: hero {hk} class FX frames ({fc}) generated, one variant per facing", bad == [], bad[:6])
+
+
 def screen_check(p, check, tag, depth):
     """Displayed playfield == ROOM_MAP drawn with the SOURCE glyphs."""
     fr = p.frame()
@@ -218,6 +240,7 @@ def main():
         p.release()
         p.settle(3)
         snap0 = pool_snap(p)
+        fx_check(p, check)
         for d in range(1, depths + 1):
             if d > 1:
                 pc0 = p.pc()

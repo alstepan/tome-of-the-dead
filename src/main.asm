@@ -59,6 +59,13 @@ vdata:
                 INCLUDE "panel_hot.asm"                       ; -> HOT_COPY (panel_boot)
                 INCLUDE "../assets/gfx/tiles/tiles_common.asm" ; init_tiles (boot)
                 INCLUDE "../assets/gfx/panel/panel_orn.asm"    ; init_tiles -> ORN_GLYPHS
+                ; D3-4: the 7 status icons (game.md §6.4; panel row 21 cols 30-31,
+                ; tints): 8 B glyph each (FROZEN, ASLEEP, STUNNED, CONFUSED, FEAR,
+                ; POISON, WEAK = status_icons + 8 * i), then 7 attrs
+                ; (status_icons_attr). Data only; D3-8 draws them (copy_virt3).
+                INCLUDE "../assets/gfx/sprites/status_icons.asm"
+                ASSERT status_icons_count == 7 && status_icons_attr - status_icons == 7 * 8
+                ASSERT $ - status_icons == 7 * 9                ; 63 B
                 ; (D3-TX: the text block moved out to bank 0, see TEXT below)
 vdata_end:
 VDATA_LEN       EQU vdata_end - vdata
@@ -591,8 +598,10 @@ kind_tab:
                 ; open by bump in try_horizontal, not through KF_OPENER
                 KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0  ; KT_FLAGS
                 KROW $47,$45,$44,$47,$44,$45,$06,$43,$44          ; KT_ATTR
-                KROW KFID_KNIGHT, KFID_WIZARD, 0, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME   ; KT_FID0
-                KROW KFCNT_KNIGHT, KFCNT_WIZARD, 0, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME ; KT_FCNT
+                ; D3-4: + the class FX kinds K_FXW / K_FXM (ids 30 / 31, overlapping ranges)
+                KROWFX KFID_KNIGHT, KFID_WIZARD, 0, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME, KFID_FXW, KFID_FXM     ; KT_FID0
+                KROWFX KFCNT_KNIGHT, KFCNT_WIZARD, 0, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME, KFCNT_FXW, KFCNT_FXM ; KT_FCNT
+                ASSERT K_FXW == K_MAX - 2 && K_FXM == K_MAX - 1    ; KROWFX: the last two columns
                 ASSERT $ - kind_tab == KT_MOD9
                 ; walker height (B3B-5 lead_cell, logic.asm): a non-flyer body
                 ; never reaches a door's arch / lintel rows. Reads the bytes

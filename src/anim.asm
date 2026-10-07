@@ -336,32 +336,58 @@ anim_entity:
 .free:          ld   (ix+E_FLAGS), 0           ; slot freed; renderer erases it
 .out:           ld   a, c
                 ret
-.jump:          ; JUMP (game.md §2.4): arc tick t = E_TMR. t 0 and 13: JUMP1,
-                ; aligned; t 1..12: JUMP2 (C3-7 art; MOTION frame: drawn at
-                ; shift 4 too), px += 4, py = 8y + jump_dy[t-1]. Frame =
-                ; hero_jump[E_KIND * 2 + (airborne)] (only the hero jumps).
-                ; ~220 T on an airborne tick (the walk-cycle stand-in was ~330).
+.jump:          ; JUMP (game.md §2.4; J1 2026-10-06). Arc tick t = E_TMR, n =
+                ; JUMP_ARC airborne ticks, N = 12 (D 6) / 14 (D 7). t 0: JUMP1,
+                ; aligned; t 1..n: JUMP2 (MOTION frame: drawn at shift 4 too),
+                ; px += 4, py = 8y - 4 min(t, N-t, 4) (= the §2.4 dy lists for
+                ; both D; a cut-short arc stops at n < N); t n+1: JUMP1, landed
+                ; (M_REST) or, JA_FALL (the hero already sits on storey 1:
+                ; base py - 72), py snapped to storey 0 and M_FALL drops it.
+                ; Frame = hero_jump[E_KIND * 2 + (airborne)] (only the hero jumps).
+                ; ~260 T on an airborne tick (the old py table: ~220).
                 ld   a, (ix+E_TMR)
                 inc  (ix+E_TMR)
                 ld   e, 0                      ; JUMP1 (ld keeps the flags)
                 or   a
                 jr   z, .jfid
-                cp   JUMP_TICKS - 1
-                jr   nc, .jland
-                ld   hl, jump_dy - 1
-                ld   e, a
-                ld   a, d
-                ld   d, 0
-                add  hl, de
-                add  a, (hl)                   ; signed rise (<= 0)
-                ld   (ix+E_PY), a
+                ld   b, a                      ; t
+                ld   a, (JUMP_ARC)
+                ld   l, a
+                and  JA_N
+                cp   b
+                jr   c, .jland                 ; t > n
+                ld   a, 2 * JUMP_COLS
+                bit  JA_D7_BIT, l
+                jr   z, .jn
+                ld   a, 2 * JUMP_COLS7
+.jn:            sub  b                         ; N - t (t <= n <= N)
+                cp   b
+                jr   c, .jm
+                ld   a, b                      ; min(t, N - t)
+.jm:            cp   JUMP_APEX
+                jr   c, .jr
+                ld   a, JUMP_APEX           ; .. capped at 4 (16 px)
+.jr:            add  a, a
+                add  a, a
+                neg
+                add  a, d                      ; py = 8y - 4m
+                bit  JA_FALL_BIT, l
+                jr   z, .jp
+                sub  STOREY_ROWS * 8           ; falling: the arc is a storey up
+.jp:            ld   (ix+E_PY), a
                 ld   b, c
                 ld   a, (ix+E_PX)
                 call tween
                 ld   (ix+E_PX), a
                 ld   e, 1                      ; JUMP2
                 jr   .jfid
-.jland:         ld   (ix+E_MODE), M_REST       ; t 13: landed, E = 0 (JUMP1)
+.jland:         ld   (ix+E_MODE), M_REST       ; landed, E = 0 (JUMP1)
+                bit  JA_FALL_BIT, l
+                jr   z, .jfid
+                ld   (ix+E_MODE), M_FALL       ; F9 snap: py = the storey-0 top
+                ld   a, d                      ; (px = 8 x_f already: n tween
+                sub  STOREY_ROWS * 8           ; steps of 4 px), then the drop
+                ld   (ix+E_PY), a
 .jfid:          ld   a, (ix+E_KIND)
                 add  a, a
                 add  a, e
@@ -372,11 +398,7 @@ anim_entity:
                 ld   a, (hl)
                 ld   b, 1
                 ret
-
-; jump_dy — the §2.4 arc: py offset of jump ticks 1..12 (game.md §2.4)
-jump_dy:        DB -4, -8, -12, -16, -16, -16, -16, -16, -12, -8, -4, 0
-                ASSERT $ - jump_dy == JUMP_TICKS - 2
-                ASSERT (JUMP_TICKS - 2) * TWEEN_STEP == JUMP_COLS * 8
+                ASSERT JUMP_APEX * TWEEN_STEP == JUMP_RISE * 8   ; the apex = the swept-box rise
 
 ; tween — A = cur, B = target: step 4 toward.  Clobbers: A
 tween:

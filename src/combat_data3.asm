@@ -155,9 +155,11 @@ ab_ammo:        RANK 0, 6, 4, 2, 0, 0
 
 ;------------------------------------------------------------------------------
 ; ab_def: per-ability constants (rank-independent), row = ab_def + ability * ABD_STRIDE.
-; Frame ids: FX frames do not exist until D3-4. The FXF_* EQUs are the only
-; place to edit then (TODO(D3-4): replace each FXF_NONE by the real FID_<name>;
-; FID_COUNT <= FRT_MAX so a fid fits a byte). A one-frame sprite repeats its fid.
+; Frame ids (D3-4): the FXF_* EQUs name the class FX kinds' frames (frames.asm
+; K_FXM / K_FXW; FID_COUNT <= FRT_MAX so a fid fits a byte); FXF_NONE = no
+; sprite (melee: no projectile; dagger: no impact). A one-frame sprite repeats
+; its fid. Every non-NONE fid is in its class's FX kind range (ASSERTed below),
+; i.e. generated with that hero.
 ;------------------------------------------------------------------------------
 ABD_DTY         EQU 0               ; damage type DTY_*
 ABD_PF1         EQU 1               ; projectile frames (alternate per tick)
@@ -181,28 +183,59 @@ ABF_MELEE       EQU %01000000       ; no projectile; target in reach
 ABF_AMMO        EQU %10000000       ; consumes DAGGERS / ARROWS
 
 FXF_NONE        EQU $FF
-FXF_SPARK_FLY1  EQU FXF_NONE        ; TODO(D3-4): FID_spark_fly1
-FXF_SPARK_FLY2  EQU FXF_NONE        ; TODO(D3-4): FID_spark_fly2
-FXF_SPARK_FIZ1  EQU FXF_NONE        ; TODO(D3-4): FID_spark_fizz1
-FXF_SPARK_FIZ2  EQU FXF_NONE        ; TODO(D3-4): FID_spark_fizz2
-FXF_FIRE_FLY1   EQU FXF_NONE        ; TODO(D3-4): FID_firebolt_fly1
-FXF_FIRE_FLY2   EQU FXF_NONE        ; TODO(D3-4): FID_firebolt_fly2
-FXF_FIRE_BRST1  EQU FXF_NONE        ; TODO(D3-4): FID_firebolt_burst1
-FXF_FIRE_BRST2  EQU FXF_NONE        ; TODO(D3-4): FID_firebolt_burst2
-FXF_FROST_FLY   EQU FXF_NONE        ; TODO(D3-4): FID_frost_fly
-FXF_FROST_CRACK EQU FXF_NONE        ; TODO(D3-4): FID_frost_crack
-FXF_DRAIN_FLY1  EQU FXF_NONE        ; TODO(D3-4): FID_drain_fly1
-FXF_DRAIN_FLY2  EQU FXF_NONE        ; TODO(D3-4): FID_drain_fly2
-FXF_DRAIN_HIT   EQU FXF_NONE        ; TODO(D3-4): FID_drain_hit
-FXF_LIGHT_FLY1  EQU FXF_NONE        ; TODO(D3-4): FID_lightning_fly1
-FXF_LIGHT_FLY2  EQU FXF_NONE        ; TODO(D3-4): FID_lightning_fly2
-FXF_LIGHT_FLASH EQU FXF_NONE        ; TODO(D3-4): FID_lightning_flash
-FXF_POWER_BURST EQU FXF_NONE        ; TODO(D3-4): FID_power_burst
-FXF_DAGGER1     EQU FXF_NONE        ; TODO(D3-4): FID_dagger_spin1
-FXF_DAGGER2     EQU FXF_NONE        ; TODO(D3-4): FID_dagger_spin2
-FXF_ARROW1      EQU FXF_NONE        ; TODO(D3-4): FID_arrow1
-FXF_ARROW2      EQU FXF_NONE        ; TODO(D3-4): FID_arrow2
-FXF_ARROW_HIT   EQU FXF_NONE        ; TODO(D3-4): FID_arrow_hit
+FXF_SPARK_FLY1  EQU FID_spark_fly1  ; D3-4
+FXF_SPARK_FLY2  EQU FID_spark_fly2  ; D3-4
+FXF_SPARK_FIZ1  EQU FID_spark_fizz1 ; D3-4
+FXF_SPARK_FIZ2  EQU FID_spark_fizz2 ; D3-4
+FXF_FIRE_FLY1   EQU FID_firebolt_fly1 ; D3-4
+FXF_FIRE_FLY2   EQU FID_firebolt_fly2 ; D3-4
+FXF_FIRE_BRST1  EQU FID_firebolt_burst1 ; D3-4
+FXF_FIRE_BRST2  EQU FID_firebolt_burst2 ; D3-4
+FXF_FROST_FLY   EQU FID_frost_fly   ; D3-4
+FXF_FROST_CRACK EQU FID_frost_crack ; D3-4
+FXF_DRAIN_FLY1  EQU FID_drain_fly1  ; D3-4
+FXF_DRAIN_FLY2  EQU FID_drain_fly2  ; D3-4
+FXF_DRAIN_HIT   EQU FID_drain_hit   ; D3-4
+FXF_LIGHT_FLY1  EQU FID_lightning_fly1 ; D3-4
+FXF_LIGHT_FLY2  EQU FID_lightning_fly2 ; D3-4
+FXF_LIGHT_FLASH EQU FID_lightning_flash ; D3-4
+FXF_POWER_BURST EQU FID_power_burst ; D3-4
+FXF_DAGGER1     EQU FID_dagger_spin1 ; D3-4
+FXF_DAGGER2     EQU FID_dagger_spin2 ; D3-4
+FXF_ARROW1      EQU FID_arrow_fly1  ; D3-4
+FXF_ARROW2      EQU FID_arrow_fly2  ; D3-4
+FXF_ARROW_HIT   EQU FID_arrow_hit   ; D3-4
+; FXM_IN / FXW_IN f — f is generated with the Mage / Warrior (its FX kind range)
+    MACRO FXM_IN f
+                ASSERT (f) >= KFID_FXM && (f) < KFID_FXM + KFCNT_FXM
+    ENDM
+    MACRO FXW_IN f
+                ASSERT (f) >= KFID_FXW && (f) < KFID_FXW + KFCNT_FXW
+    ENDM
+                FXM_IN FXF_SPARK_FLY1
+                FXM_IN FXF_SPARK_FLY2
+                FXM_IN FXF_SPARK_FIZ1
+                FXM_IN FXF_SPARK_FIZ2
+                FXM_IN FXF_FIRE_FLY1
+                FXM_IN FXF_FIRE_FLY2
+                FXM_IN FXF_FIRE_BRST1
+                FXM_IN FXF_FIRE_BRST2
+                FXM_IN FXF_FROST_FLY
+                FXM_IN FXF_FROST_CRACK
+                FXM_IN FXF_DRAIN_FLY1
+                FXM_IN FXF_DRAIN_FLY2
+                FXM_IN FXF_DRAIN_HIT
+                FXM_IN FXF_LIGHT_FLY1
+                FXM_IN FXF_LIGHT_FLY2
+                FXM_IN FXF_LIGHT_FLASH
+                FXW_IN FXF_SPARK_FIZ1               ; Whirlwind's impact: shared range
+                FXW_IN FXF_SPARK_FIZ2
+                FXW_IN FXF_POWER_BURST
+                FXW_IN FXF_DAGGER1
+                FXW_IN FXF_DAGGER2
+                FXW_IN FXF_ARROW1
+                FXW_IN FXF_ARROW2
+                FXW_IN FXF_ARROW_HIT
 
 ab_def:
 ; Spark: SHOCK, spark_fly1/2 `$43` -> spark_fizz1/2

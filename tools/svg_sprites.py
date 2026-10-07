@@ -57,6 +57,7 @@ INK_MAP = {
     "#0000D7": (1, False),   # dim blue: WALL glyph (ATTR_WALL $01), prototype.md §4.1
     "#D70000": (2, False),   # dim red: LADDER_L/M/R (ATTR_LADDER $02)
     "#D7D7D7": (7, False),   # dim white: lair grate T_GRATE ($07), B10 2026-10-03
+    "#0000FF": (1, True),    # bright blue: ASLEEP status icon/tint $41 (game.md §6.4, D3-3)
 }
 INK_HEX = {v: k for k, v in INK_MAP.items()}
 GRID_STROKE = "#2a2a44"
@@ -66,7 +67,15 @@ CHAR_PREFIX = {
     "KNIGHT": "knight", "WIZARD": "wizard", "ROGUE": "rogue",
     "SKELETON": "skeleton", "GOBLIN": "goblin", "GHOST": "ghost",
     "GIANT RAT": "rat", "BAT": "bat", "SLIME": "slime",
+    # Stage 3D projectile/impact FX (game.md §6.1-6.3; render-only, no kind id)
+    "SPARK": "spark", "FIREBOLT": "firebolt", "FROST": "frost", "DRAIN": "drain",
+    "LIGHTNING": "lightning", "POWER STRIKE": "power", "DAGGER": "dagger",
+    "ARROW": "arrow", "STAFF": "staff",
 }
+# FX "characters": cell-aligned, placed by the FX track (px, py), not by a body
+# box, so every FX frame's ax is declared 0 (ANCHOR_X below) and body_w = 8.
+FX_PREFIXES = ("spark", "firebolt", "frost", "drain", "lightning", "power", "dagger",
+               "arrow", "staff")
 
 # Characters present on the vendored canvas / draft sheets but dropped from the
 # build (out of scope; G1 budget docs/design/budget.md §2). The sheets stay
@@ -84,16 +93,19 @@ OUTLINE = True
 # stable. Once a frame exists on the canvas, an identical draft copy is skipped;
 # a differing one is an error (the canvas and the draft disagree).
 DRAFT_SHEETS = [os.path.join(REPO, "assets/gfx/source/draft3_frames.html"),
-                os.path.join(REPO, "assets/gfx/source/c37_frames.svg.html")]
+                os.path.join(REPO, "assets/gfx/source/c37_frames.svg.html"),
+                os.path.join(REPO, "assets/gfx/source/d3_frames.svg.html")]
 # Generator named in the emitted .asm header per draft sheet (default
 # tools/gen_missing_frames.py). C3-7 hero frames: tools/gen_c37_frames.py.
-DRAFT_GEN = {"assets/gfx/source/c37_frames.svg.html": "tools/gen_c37_frames.py"}
+DRAFT_GEN = {"assets/gfx/source/c37_frames.svg.html": "tools/gen_c37_frames.py",
+             "assets/gfx/source/d3_frames.svg.html": "tools/gen_d3_art.py"}
 
 # Canvas sections whose 8x8 artboards are background/FX TILES (tile mode:
 # 8 bitmap bytes + 1 attribute each), not sprites. The canvas draws every tile
 # as one ink on black; the in-game attribute (which may have a non-black
 # paper, e.g. the blue floor band) is declared here per tile, never guessed.
-TILE_SECTIONS = {"FX TILES": "tiles_fx", "BG TILES": "tiles_bg"}
+TILE_SECTIONS = {"FX TILES": "tiles_fx", "BG TILES": "tiles_bg",
+                 "STATUS ICONS": "status_icons"}
 TILE_ATTR = {
     "zap1": 0x45, "zap2": 0x45,            # bright cyan on black (§10.2 #33-34)
     "platform": 0x0F,                      # ATTR_FLOOR: white ink on BLUE paper
@@ -102,11 +114,15 @@ TILE_ATTR = {
     "wall": 0x01,                          # ATTR_WALL (air rows); the engine uses
                                            # ATTR_FLOOR $0F for the same glyph in floor rows
     "ladder_l": 0x02, "ladder_m": 0x02, "ladder_r": 0x02,   # ATTR_LADDER, also hole cells
+    # status icons (game.md §6.4 panel glyphs, row 21 cols 30-31; black paper)
+    "frozen": 0x45, "asleep": 0x41, "stunned": 0x07, "confused": 0x43,
+    "fear": 0x42, "poison": 0x44, "weak": 0x42,
 }
 
 # Body box width per kind (docs/design/prototype.md §2) for the §5.3 anchor rule.
 BODY_W = {"knight": 24, "wizard": 24, "rogue": 24, "skeleton": 24, "goblin": 24,
-          "ghost": 24, "rat": 32, "bat": 24, "slime": 24}
+          "ghost": 24, "rat": 32, "bat": 24, "slime": 24,
+          **{p: 8 for p in FX_PREFIXES}}
 
 # Explicit horizontal anchors (prototype.md §5.3/§10.2), overriding the head-band
 # IoU measurement. Used for frames where the IoU is meaningless (lying/DEAD,
@@ -125,6 +141,14 @@ ANCHOR_X = {
     "rat_bite": 0, "rat_hurt": 0, "rat_dead": 0,
     "bat_dive": 0, "bat_hurt": 0, "bat_dead": 0,
     "slime_lunge": 0, "slime_hurt": 0, "slime_dead": 0,
+    # Stage 3D FX (D3-3): engine-placed, see FX_PREFIXES
+    **{f"{p}_{c}": 0 for p, cs in (
+        ("spark", ("fly1", "fly2", "fizz1", "fizz2")),
+        ("firebolt", ("fly1", "fly2", "burst1", "burst2")),
+        ("frost", ("fly", "crack")), ("drain", ("fly1", "fly2", "hit")),
+        ("lightning", ("fly1", "fly2", "flash")), ("power", ("burst",)),
+        ("dagger", ("spin1", "spin2")), ("arrow", ("fly1", "fly2", "hit")),
+        ("staff", ("bonk",))) for c in cs},
 }
 
 # Re-pads of canvas frames whose measured ax is not a multiple of 4 (§10.3):
@@ -664,6 +688,10 @@ def merge_drafts(frames: list[Frame], drafts: list[str]) -> list[Frame]:
             if d.kind == "sprite":
                 last = max((i for i, f in enumerate(out)
                             if f.kind == "sprite" and f.character == d.character), default=None)
+                if last is None and CHAR_PREFIX.get(d.character) in FX_PREFIXES:
+                    out.append(d)         # D3-4: FX characters exist only on a draft sheet
+                    canvas[key] = d
+                    continue
                 if last is None:
                     raise SystemExit(f"draft frame {key}: character has no canvas frames")
                 out.insert(last + 1, d)
@@ -816,6 +844,8 @@ TILE_USE = {
     "tiles_fx": "Wizard CAST2 bolt: ZAP1/ZAP2 alternate per tick in the gap cells on the "
                 "staff row (body cell row 2; bolt joins on in-cell row 5 = frame row 21, CAST2 staff hand)",
     "tiles_bg": "PROTO room tiles via draw_cell (prototype.md §3.3/§4.1)",
+    "status_icons": "panel glyphs (NOT tile ids): row 21 cols 30-31, priority "
+                    "HOLD > MIND > POISON > WEAK (game.md §6.4)",
 }
 
 
