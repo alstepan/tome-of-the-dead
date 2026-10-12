@@ -206,8 +206,11 @@ hero_st_init:
                 ld   a, (HERO_KIND)
                 or   a
                 ld   a, 0
-                jr   nz, .d
+                jr   nz, .d                    ; Mage: no daggers, DEF 0 (HERO3D zeroed)
+                ld   a, WARRIOR_DEF
+                ld   (HERO_DEF), a             ; D3-6a: Leather (game.md §4, §11.4)
                 ld   a, WARRIOR_DAGGERS
 .d:             ld   (DAGGERS), a
                 ret
 WARRIOR_DAGGERS EQU 3
+WARRIOR_DEF     EQU 1                          ; Leather; gear replaces it in 3E

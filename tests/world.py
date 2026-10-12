@@ -3179,9 +3179,11 @@ def w16_level(p, check):
         p.settle(3)
         check("W16 new game: MASTER_SEED = seed_value (seed_fixed), LVL_SEED = master + MUL",
               (p.rw("MASTER_SEED"), p.rb("LVL_DEPTH")) == (M, 1), hex(p.rw("MASTER_SEED")))
-        check("W16 new game (D3-0): ST_* arrays (all 16 slots) and HERO3D zeroed",
+        h3_want = [0] * h3                       # D3-6a: but the Warrior's HERO_DEF = 1 (Leather)
+        h3_want[S["HERO_DEF"] - S["HERO3D"]] = 1 if p.ent(0)["KIND"] == S["K_KNIGHT"] else 0
+        check("W16 new game (D3-0): ST_* arrays (all 16 slots) and HERO3D zeroed (D3-6a: HERO_DEF = class DEF)",
               (st_read(), list(p.z.read_memory(S["HERO3D"], h3)))
-              == ({a: [0] * 16 for a in ST}, [0] * h3), st_read())
+              == ({a: [0] * 16 for a in ST}, h3_want), (st_read(), list(p.z.read_memory(S["HERO3D"], h3))))
         blk = level_ok(1, M, "D1 start")
         hero_k = tuple(p.ent(0)[k] for k in ("HP", "MAXHP", "POT", "KIND"))
         # level_enter cost (cold), measured on its own (DI: no ISR; screen /

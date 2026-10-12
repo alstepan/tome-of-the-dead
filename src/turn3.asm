@@ -50,9 +50,13 @@ try_quaff:
                 ret
 
 ;------------------------------------------------------------------------------
-; do_attack — IX = attacker, A = target slot. Rolls to-hit (d20+atk >= 10+eva)
-; then damage (1dN+bonus, saturating) — prototype §6.2, foundations F1/F2.
-; Sets the attacker's ATTACK sequence + IMPACT info and the target's reaction.
+; do_attack — IX = attacker, A = target slot: one melee blow (D3-6a: on the
+; shared core, combat3.asm). hit_roll (F1, the d20 first), then damage 1dN +
+; bonus (kind_tab, prototype §6.2 / F2) dealt by deal_hit with the attacker's
+; kx_melee row (type + on-hit effect: PHYS; the Ghost's DRAIN touch, CONFUSED
+; 4 at 1 in 4). Sets the attacker's ATTACK sequence + IMPACT info (E_HIT = 1
+; iff HP was lost: an immune target does not flash; E_MSG hit / miss / kill)
+; and the target's reaction (deal_hit: HURT / DEATH; a missed Knight: BLOCK).
 ; Clobbers: all but IX.
 ; Entered by far3 from try_horizontal (hero) and directly from attack_if_reach
 ; (monsters, already in bank 3).
@@ -61,46 +65,39 @@ do_attack:
                 ld   (ix+E_TGT), a
                 ld   (TMP2), a                 ; target slot
                 ld   (ATK_PTR), ix
-                ld   c, 20                     ; to-hit: d20
-                call rng_mod
-                inc  a
-                ld   b, a
-                KFIELD KT_ATK
-                add  a, b
-                ld   (TMP0), a                 ; d20 + atk
-                ld   a, (TMP2)
-                call ent_ix                    ; IX = target
-                KFIELD KT_EVA
-                add  a, 10
-                ld   b, a
-                ld   a, (TMP0)
-                cp   b
-                jr   c, .miss
-                ld   ix, (ATK_PTR)             ; damage: 1dN + bonus
-                KFIELD KT_DIE
+                ld   b, 0                      ; melee: no to-hit modifier
+                call hit_roll
+                ld   (TMP0), a                 ; 1 hit / 0 miss (message)
+                jr   z, .miss
+                ld   a, (ix+E_KIND)            ; C / E = the kind's melee row
+                add  a, a
+                ld   e, a
+                ld   d, 0
+                ld   hl, kx_melee
+                add  hl, de
+                ld   c, (hl)
+                inc  hl
+                ld   e, (hl)
+                push bc
+                KFIELD KT_DIE                  ; damage: 1dN + bonus
                 ld   c, a
-                call rng_mod
+                call rng_mod                   ; (keeps DE)
                 inc  a
-                ld   b, a
+                ld   d, a
                 KFIELD KT_BONUS
-                add  a, b
+                add  a, d
+                pop  bc
                 ld   b, a
                 ld   a, (TMP2)
-                call ent_ix
-                ld   a, (ix+E_HP)
-                sub  b
-                jr   nc, .nz
-                xor  a                         ; saturating: HP never underflows
-.nz:            ld   (ix+E_HP), a
-                ld   c, RC_HURT
+                call deal_hit                  ; L = HP lost; IX = attacker
+                ld   a, l
                 or   a
-                jr   nz, .alive
-                set  EF_DYING_BIT, (ix+E_FLAGS) ; out of collision at once (§3.2.4)
-                ld   c, RC_DEATH
-.alive:         call set_reaction_at
+                jr   z, .res                   ; nothing lost (immune): no flash
                 ld   a, 1
                 jr   .res
-.miss:          ld   a, (ix+E_KIND)            ; IX = target
+.miss:          ld   a, (TMP2)
+                call ent_ix                    ; IX = target
+                ld   a, (ix+E_KIND)
                 cp   K_KNIGHT
                 jr   nz, .m0
                 ld   c, RC_BLOCK               ; a miss on the Knight: BLOCK (§6.5)
@@ -108,7 +105,8 @@ do_attack:
 .m0:            xor  a
 .res:           ld   ix, (ATK_PTR)
                 ld   (ix+E_HIT), a
-                ld   b, a
+                ld   a, (TMP0)
+                ld   b, a                      ; B = hit (message), as before
                 ; message code
                 ld   a, (ix+E_FLAGS)
                 and  EF_PLAYER

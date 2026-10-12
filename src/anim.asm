@@ -471,13 +471,17 @@ do_impact:
 
 ;------------------------------------------------------------------------------
 ; turn_done — CF = 1 when every live entity of CUR_ROOM rests (or holds) with no
-; reaction pending/running, and >= 2 ticks have elapsed.  Clobbers: A, DE, IX
+; reaction pending/running, no FX track is live or drawn (D3-5), and >= 2
+; ticks have elapsed.  Clobbers: A, DE, IX
 ;------------------------------------------------------------------------------
 turn_done:
                 ld   a, (TURN_TICK)
                 cp   2
                 ccf
                 ret  nc
+                ld   a, (FX_BUSY)              ; D3-5: FX tracks live or still drawn
+                or   a
+                ret  nz                        ; CF = 0 (or)
                 ld   ix, P_ENTITIES
                 ld   b, P_MAX_ENT
 .l:             ld   a, (ix+E_FLAGS)
@@ -795,6 +799,9 @@ render:
                 ld   (ix+E_DVIS), 0
                 ret
 .sdone:
+                ld   a, (FX_BUSY)              ; D3-5: changed FX erased here, so their
+                or   a                         ; rects are presented and the bodies
+                call nz, fx_erase              ; under them repaired (phase 3)
                 ld   a, (DMG_COUNT)            ; A7: present needs only these rects:
                 ld   (DMG_PRES_N), a           ; a forced re-blit (below) only rewrites
                                                ; cells outside them with identical
@@ -860,6 +867,9 @@ render:
                 ld   hl, SLOTREC               ; slot 0's record
                 call draw_slot
 .nopl:
+                ld   a, (FX_BUSY)              ; D3-5: FX drawn last, over every body
+                or   a
+                call nz, fx_draw
 
                 ; ---------------- 5. timers (D3-0: the zap overlay is gone) ----
                 call frozen                    ; C3-2b: ICON MODE holds the
@@ -1061,10 +1071,11 @@ dmg_hit:
                 ret                            ; CF = 0 from the failing jr nc
 
 ;------------------------------------------------------------------------------
-; hide_sprites — erase every drawn sprite + queued damage (before a
+; hide_sprites — erase every drawn sprite + FX + queued damage (before a
 ; transition: "all sprites are hidden", §3.6). Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 hide_sprites:
+                call fx_hide                   ; D3-5: FX erased, tracks + queue cleared
                 xor  a
 .l:             ld   (ANIM_SLOT), a
                 call ent_ix

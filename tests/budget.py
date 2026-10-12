@@ -134,6 +134,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
+CAP_GATED = ("lightning",)                        # D3-5: worst tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
 HERO_Y = stand_y(1, 6)                            # 11
@@ -151,6 +152,12 @@ SCENARIOS = {
         (1, 22, stand_y(1, 2), HOSTILE),
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_WIZARD),
+    # D3-5: the mage mix with a Lightning (+ 2 flashes, 3 tracks) every turn
+    "lightning": ("mage + 4 monsters + Lightning every turn", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_WIZARD, "fx"),
     # review A1 worst mix: 2 skeletons (both 40-px attacks), goblin, ghost
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
@@ -191,6 +198,73 @@ def inject_decor(p):
     p.wb("ANIM_N", len(al) // 4)
 
 
+def fx_cast(p):
+    """Queue the hero's Lightning (+ flashes on slots 3 and 1) through ZRCP
+    from the wait_tick probe; returns the fx_start accept flags."""
+    import combat
+    e = p.ent(0)
+    row = e["Y"] + 2
+    if e["FLAGS"] & EF_LEFT:
+        col, segs = e["X"] - 1, (e["X"] - 2, 28 - (e["X"] - 2))
+    else:
+        col, segs = e["X"] + 3, (30 - (e["X"] + 3), 28 - (30 - (e["X"] + 3)))
+    out = [combat.C.fx_call(p, combat.desc("lightning_fly1", "lightning_fly2", "lightning_flash",
+                                           "lightning_flash", col, row, left=bool(e["FLAGS"] & EF_LEFT),
+                                           fast=True, impt=2, segs=segs))[0]]
+    for slot, delay in ((3, 3), (1, 5)):
+        m = p.ent(slot)
+        if m["FLAGS"] & EF_ACTIVE and m["ROOM"] == 0:
+            out.append(combat.C.fx_call(p, combat.desc(None, None, "lightning_flash", "lightning_flash",
+                                                        m["X"], min(row, 16), delay=delay, impt=4))[0])
+    return out
+
+
+class FxStepper(Stepper):
+    """D3-5 "lightning": every turn of the Mage starts a Lightning (16 px/tick,
+    2 bounces, range 28, 16x16 flash) from the hero's staff row plus two
+    impact-only flashes on the struck bodies (3 tracks = the cap), queued by
+    fx_start through ZRCP on the turn's first tick (tests/combat.py fx_call;
+    abilities come in D3-7). Also counts the cells erase_rect restores per
+    tick (D3-S: dropping the bank-7 clean background costs ~+37 T per cell)."""
+
+    def __init__(self, p):
+        self.erase_cells, self.cur_cells, self.turn_seen = [], 0, None
+        self.casts, self.fx_ticks = [], 0
+        super().__init__(p)
+        self.z.cmd("set-breakpoint %d PC=%d" % (len(PHASES) + 1, S["erase_rect"]))
+
+    def _run(self):
+        while True:
+            self.z.cmd("run")
+            r = self.z.cmd("get-registers")
+            pc = int(r[3:7], 16)
+            if pc == S["erase_rect"]:
+                de = int(r.split("DE=")[1][:4], 16)
+                self.cur_cells += (de >> 8) * (de & 0xFF)
+                self.z.cmd("cpu-step")
+                continue
+            return self.inv.get(pc), int(self.z.cmd("get-tstates-partial"))
+
+    def tick(self):
+        self.cur_cells = 0
+        v = super().tick()
+        self.erase_cells.append(self.cur_cells)
+        p = self.p
+        self.fx_ticks += p.rb("FX_BUSY") != 0
+        tc = p.rw("TURN_COUNTER")
+        if p.rb("TURN_PHASE") == 1 and self.turn_seen != tc:
+            self.turn_seen = tc
+            self.cast()
+        return v
+
+    def cast(self):
+        self.casts += fx_cast(self.p)
+
+    def close(self):
+        self.z.cmd("set-breakpoint %d" % (len(PHASES) + 1))
+        super().close()
+
+
 def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     p = game.T(h)
@@ -201,7 +275,7 @@ def run_scenario(h, scen):
         p.place(slot, x, y, room=0, flags=flags)
     if DECOR:
         inject_decor(p)
-    st = Stepper(p)
+    st = (FxStepper if len(scen) > 4 and scen[4] == "fx" else Stepper)(p)
     swing = 0
     for key, n in keys:
         for _ in range(n):
@@ -220,6 +294,14 @@ def run_scenario(h, scen):
     print(f"worst split    : " + ", ".join(f"{k}={v}" for k, v in worst[1].items()))
     print(f"ticks > budget : {len(over)}")
     print(f"OVERRUN_COUNT  : {ovc}  BLIT_MISS: {p.rb('BLIT_MISS')}", flush=True)
+    if isinstance(st, FxStepper):
+        wi = totals.index(worst[0])
+        ec = st.erase_cells
+        print(f"fx lightning   : worst tick {worst[0]} T, headroom to {CAP}: {CAP - worst[0]} T;"
+              f" erased cells worst tick {ec[wi]}, max/tick {max(ec)} -> D3-S (+37 T/cell):"
+              f" worst tick +{37 * ec[wi]} T = {worst[0] + 37 * ec[wi]} T,"
+              f" max over ticks {max(t + 37 * c for t, c in zip(totals, ec))} T;"
+              f" {sum(st.casts)}/{len(st.casts)} fx_start accepted, {st.fx_ticks} ticks with FX live", flush=True)
     if len(scen) > 3:                             # C3-7: did the staff swing run?
         print(f"staff swings   : {swing} turns drew STAFF_SWING", flush=True)
     dts = [sp.get("decor_tick", 0) for _, sp in st.ticks]
@@ -238,14 +320,16 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in ("mix", "mage", "heavy"):
-            _, bad = run_scenario(h, SCENARIOS[key])
-            if bad and key in GATED:
+        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning").split(","):
+            st, bad = run_scenario(h, SCENARIOS[key])
+            if key in CAP_GATED and max(t for t, _ in st.ticks) > CAP:
+                fails.append(key)
+            elif bad and key in GATED:
                 fails.append(key)
             elif bad:
                 print(f"[info] {key}: {len(bad)} ticks over budget (reported, not gated)")
     print(f"[{'FAIL' if fails else 'PASS'}] budget gate (every tick <= budget in"
-          f" {', '.join(GATED)}): {fails or 'ok'}")
+          f" {', '.join(GATED)}; <= {CAP} in {', '.join(CAP_GATED)}): {fails or 'ok'}")
     return 1 if fails else 0
 
 

@@ -148,7 +148,9 @@ decor_tick:
 .ns:            inc  e
                 dec  d
                 jr   nz, .s
-.free:          ld   a, (PORT_7FFD_SHADOW)     ; the shadow: bank 7 at $C000 (paged
+.free:          call fx_occ                    ; D3-5: never paint over a drawn FX
+                jr   c, .skip
+                ld   a, (PORT_7FFD_SHADOW)     ; the shadow: bank 7 at $C000 (paged
                 and  7                         ; once per tick: render paged a pool
                 cp   BANK_SHADOW               ; bank since)
                 jr   z, .p7

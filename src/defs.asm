@@ -394,6 +394,15 @@ MSG_P_KILL      EQU 3
 MSG_M_HIT       EQU 4
 MSG_M_MISS      EQU 5
 MSG_SQUEEZE     EQU 6               ; B14 squeeze past (impact_line, never an E_MSG)
+; D3-6a: deal_hit's monster lines "THE " + name + suffix (impact_line only, never an E_MSG)
+MSG_M_UNAFF     EQU 7               ; " IS UNAFFECTED"
+MSG_M_FROZEN    EQU 8
+MSG_M_ASLEEP    EQU 9
+MSG_M_STUNNED   EQU 10
+MSG_M_FLEES     EQU 11              ; FEAR
+MSG_M_CONFUSED  EQU 12
+MSG_M_WAKE      EQU 13
+MSG_M_THAW      EQU 14
 
 ;------------------------------------------------------------------------------
 ; Kinds (prototype §2/§6.3). Parallel byte tables, page-aligned (kind_tab).

@@ -806,8 +806,16 @@ impact_line:
                 inc  de
                 jr   .c
 ; pieces by E_MSG 1..5 (MSG_P_HIT, MSG_P_MISS, MSG_P_KILL, MSG_M_HIT, MSG_M_MISS)
+; D3-6a: + MSG_M_UNAFF .. MSG_M_THAW (deal_hit, combat3.asm): "THE " + name + status suffix
 imp_pre:        DB   TX_YOU_HIT, TX_YOU_MISS, TX_YOU_KILL, TX_THE, TX_THE, TX_YOU_SQUEEZE
+                DB   TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE
 imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EMPTY
+                DB   TX_CMB_UNAFFECTED, TX_ST_M_FROZEN, TX_ST_M_ASLEEP, TX_ST_M_STUNNED
+                DB   TX_ST_M_FLEES, TX_ST_M_CONFUSED, TX_ST_M_WAKE, TX_ST_M_THAW
+                ASSERT imp_post - imp_pre == MSG_M_THAW && $ - imp_post == MSG_M_THAW
+                ASSERT MSG_M_UNAFF == 7 && MSG_M_FROZEN == 8 && MSG_M_ASLEEP == 9 && MSG_M_STUNNED == 10
+                ASSERT MSG_M_FLEES == 11 && MSG_M_CONFUSED == 12 && MSG_M_WAKE == 13 && MSG_M_THAW == 14
+                ASSERT TXL_THE + TXL_NM_SKELETON + TXL_CMB_UNAFFECTED < 32   ; the longest D3-6a line
                 ASSERT MSG_P_HIT == 1 && MSG_P_MISS == 2 && MSG_P_KILL == 3 && MSG_M_HIT == 4 && MSG_M_MISS == 5
                 ASSERT MSG_SQUEEZE == 6 && TXL_YOU_SQUEEZE + TXL_NM_SKELETON < 32
                 ; K_ROGUE (kind 2) is retired: TX_NM_ROGUE is an empty string and no entity may carry
@@ -1532,6 +1540,7 @@ jump_bodies:
 ; Cold (room change / new game only).  Clobbers: A, BC, DE, HL, IX.
 ;==============================================================================
 vis_reset:
+                call fx_reset                  ; D3-5: no FX track survives a world rewrite
                 ld   hl, SLOTREC + R_VIS
                 ld   b, P_MAX_ENT
 .z:             ld   (hl), 0

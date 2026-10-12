@@ -50,23 +50,81 @@ STS_GUARD_BIT   EQU 6               ; STUN_GUARD
 STS_MAX_TURNS   EQU 15              ; one nibble per timer
 
 ;------------------------------------------------------------------------------
-; FX tracks (render-only projectile / impact tracks, D3-5 owns the fields):
-; FX_TRACKS records of FXREC_STRIDE B; record i = FXREC + i * 16 (linear;
-; each record inside one page). FX queue: FXQ_N descriptors of FXQ_STRIDE B
-; (proj_fire -> fx_render hand-off; D3-5 owns the fields).
+; FX tracks (D3-5, src/fx.asm; game.md §6 "real sprites, render-only"):
+; FX_TRACKS records of FXT_STRIDE 32 B, each in ONE FONT6 plane hole (IX +
+; field): the first FXD_LEN 16 B are the caller's descriptor (fx_start copies it
+; verbatim; the flight mutates FXD_COL / FXD_FLAGS / FXD_DELAY / FXD_IMPT /
+; FXD_NSEG / FXD_SEGS in place), then the render state (desired FX_FID..FX_ATTR,
+; drawn FX_DFID..FX_DATTR in the same order, drawn footprint FX_DCOL..).
+; Queue: FXQ_MAX descriptors of FXD_LEN B (FIFO FXQ0, FXQ1).
 ;------------------------------------------------------------------------------
-FXREC           EQU $B2E0           ; $B2E0..$B30F
 FX_TRACKS       EQU 3
-FXREC_STRIDE    EQU 16
-                FONT6_HOLE FXREC, FXREC_STRIDE
-                FONT6_HOLE FXREC + FXREC_STRIDE, FXREC_STRIDE
-                FONT6_HOLE FXREC + 2 * FXREC_STRIDE, FXREC_STRIDE
-                ASSERT FX_TRACKS == 3 && FXREC + FX_TRACKS * FXREC_STRIDE <= ST_FLAGS
-FXQ             EQU $B410           ; $B410..$B41F
-FXQ_N           EQU 2
-FXQ_STRIDE      EQU 8
-                FONT6_HOLE FXQ, FXQ_N * FXQ_STRIDE
-                ASSERT FXQ >= ST_X + ST_SLOTS
+FXT_STRIDE      EQU 32
+FXT0            EQU $B2E0           ; $B2E0..$B2FF (page $B2 hole 224..255)
+FXT1            EQU $B200           ; $B200..$B21F (page $B2 hole 0..31)
+FXT2            EQU $B500           ; $B500..$B51F (page $B5 hole 0..31)
+FXREC           EQU FXT0            ; (D3-0 name of the block)
+FXQ_MAX         EQU 2
+FXQ0            EQU $B410           ; $B410..$B41F (D3-0 FXQ)
+FXQ1            EQU $B300           ; $B300..$B30F
+FXQ             EQU FXQ0
+FX_BUSY         EQU $B4FE           ; bit i = track i live or still drawn (0 = FX idle)
+FXQ_N           EQU $B4FF           ; queued descriptors (0..FXQ_MAX)
+                FONT6_HOLE FXT0, FXT_STRIDE
+                FONT6_HOLE FXT1, FXT_STRIDE
+                FONT6_HOLE FXT2, FXT_STRIDE
+                FONT6_HOLE FXQ0, 16
+                FONT6_HOLE FXQ1, 16
+                FONT6_HOLE FX_BUSY, 2
+                ASSERT FXQ1 + 16 <= ST_FLAGS && FXQ0 >= ST_X + ST_SLOTS
+; descriptor (fx_start HL; 16 B; game.md §6, plan "3D breakdown" decision P)
+FXD_FIDA         EQU 0               ; flight frame, even visible ticks
+FXD_FIDB         EQU 1               ; flight frame, odd ticks (= FIDA: one frame)
+FXD_IMPA         EQU 2               ; impact frame, even ticks (FX_NONE: no impact)
+FXD_IMPB         EQU 3               ; impact frame, odd ticks
+FXD_ATTR         EQU 4               ; 0 = each frame's own attr (fx_meta), else this attr
+FXD_COL          EQU 5               ; anchor cell col (the 8-px body cell; 16-wide frames
+                                    ; extend one cell AHEAD: right c..c+1, left c-1..c)
+FXD_ROW          EQU 6               ; flight row (frame top = 8 row - ay, ay 0 / 8)
+FXD_FLAGS        EQU 7               ; FXDF_*: direction + speed
+FXD_DELAY        EQU 8               ; ticks hidden before the first frame
+FXD_IMPT         EQU 9               ; impact ticks (0: none)
+FXD_NSEG         EQU 10              ; segments 1..FXD_SEGMAX (a reversal between each)
+FXD_SEGS         EQU 11              ; cells per segment (0 allowed)
+FXD_SEGMAX       EQU 5
+FXD_LEN          EQU 16
+FXDF_LEFT        EQU 1               ; travelling left (bit 0; flips at each reversal)
+FXDF_FAST        EQU 2               ; 16 px (2 cells) per tick (Lightning), else 8
+FXDF_FAST_BIT    EQU 1
+                ASSERT FXD_SEGS + FXD_SEGMAX == FXD_LEN
+; render state (after the descriptor). FX frames are cell-aligned (ax, the
+; left offset and ay multiples of 8: ASSERTed per frame at fx_meta), so a
+; frame's position IS its footprint origin: desired / drawn = fid, attr,
+; facing, footprint col, row, cols, rows (7 B each, same order).
+FX_ST           EQU 16              ; FXS_*
+FX_PH           EQU 17              ; frame alternation phase
+FX_FID          EQU 18              ; desired: fid (FX_NONE hidden)
+FX_ATTR         EQU 19              ;   attr
+FX_LEFT         EQU 20              ;   facing (0 / FXDF_LEFT)
+FX_COL          EQU 21              ;   footprint: frame px = 8 col, py = 8 row
+FX_ROW          EQU 22
+FX_COLS         EQU 23
+FX_ROWS         EQU 24
+FX_DFID         EQU 25              ; drawn (FX_NONE: nothing on the bank-5 screen)
+FX_DATTR        EQU 26
+FX_DLEFT        EQU 27
+FX_DCOL         EQU 28              ; drawn footprint C, B, D, E
+FX_DROW         EQU 29
+FX_DCOLS        EQU 30
+FX_DROWS        EQU 31
+FX_STATE_LEN    EQU FX_DFID - FX_FID    ; 7
+                ASSERT FX_DROWS - FX_DFID == FX_ROWS - FX_FID && FX_DROWS == FXT_STRIDE - 1
+FXS_IDLE        EQU 0
+FXS_WAIT        EQU 1
+FXS_FLY         EQU 2
+FXS_IMP         EQU 3
+FX_NONE         EQU $FF
+FX_SLOT0        EQU P_MAX_ENT       ; ANIM_SLOT = 16 + track while render erases / draws it (flicker.py)
 
 ;------------------------------------------------------------------------------
 ; RANK_ROWS — the hero's current-rank rows (game.md §5 "Data / cost"): one
@@ -94,7 +152,9 @@ HERO_RES        EQU HERO3D + 1      ; 3 B: the hero's resistances (RES_* format 
 HERO_IMM        EQU HERO3D + 4      ; status immunity mask (IMMF_*; OR of gear, 3E)
 MP_SH           EQU HERO3D + 5      ; panel: MP as last drawn (PD_MP item, like PANEL_HP_SH)
 STAT_SH         EQU HERO3D + 6      ; panel: status icons as last drawn (row 21, cols 30-31)
-HERO3D_END      EQU HERO3D + 7
+HERO_DEF        EQU HERO3D + 7      ; D3-6a: the hero's DEF (armour; Warrior Leather 1, Mage 0: hero_st_init; gear 3E)
+XP_UP           EQU HERO3D + 8      ; D3-6a: 1 = deal_hit added XP (D3-9's level-up check pending; D3-9 clears it)
+HERO3D_END      EQU HERO3D + 9
                 ASSERT HERO3D >= ANIM_LIST2 + ANIM_MAX * AL_STRIDE && HERO3D_END <= ANIM_N
                 ASSERT (HERO3D >> 8) == ((HERO3D_END - 1) >> 8)
 
@@ -143,3 +203,29 @@ KX_XP           EQU 4               ; KXP: XP awarded on death (game.md §4.1)
 KX_DEF          EQU 5               ; monster DEF (0 in 3D, game.md §11.4)
 KX_LEN          EQU K_MAX * KX_STRIDE   ; 192 B
                 ASSERT KX_RES + RES_LEN == KX_IMM && KX_LEN <= 256
+
+;------------------------------------------------------------------------------
+; deal_hit (combat3.asm, D3-6a) argument C: damage type | flags | effect id.
+; E = the effect parameter in the RK_EFFECT status format (combat_data3.asm):
+; high nibble = chance "1 in N" (0 = always), low nibble = turns.
+;------------------------------------------------------------------------------
+DH_TYPE         EQU %00000111       ; DTY_* (0..5)
+DH_NODEF_BIT    EQU 3               ; ignore DEF (spells; DEF applies to PHYS only anyway)
+DH_NODEF        EQU 1 << DH_NODEF_BIT
+DH_EFX_SHIFT    EQU 4               ; bits 4-6: EFX_* effect id applied on a non-lethal hit
+DH_EFX          EQU %01110000
+DH_HEAL_BIT     EQU 7               ; the attacker heals the HP lost (Drain Life, Vampire bite)
+DH_HEAL         EQU 1 << DH_HEAL_BIT
+; effect ids (game.md §6.4); HOLD ids == the STATUS HOLD kinds
+EFX_NONE        EQU 0
+EFX_FROZEN      EQU 1
+EFX_ASLEEP      EQU 2
+EFX_STUNNED     EQU 3
+EFX_FEAR        EQU 4
+EFX_CONFUSED    EQU 5
+EFX_POISON      EQU 6
+EFX_WEAK        EQU 7
+                ASSERT EFX_FROZEN == HOLD_FROZEN && EFX_ASLEEP == HOLD_ASLEEP && EFX_STUNNED == HOLD_STUNNED
+                ASSERT DTY_COUNT <= DH_TYPE + 1
+XP_MAX          EQU 9999            ; game.md §4.1: XP saturates
+                ASSERT HERO_IMM == HERO_RES + KX_IMM   ; deal_hit: one record layout (RES 3 B, IMM) for hero + kx row

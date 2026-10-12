@@ -34,17 +34,17 @@ spanning both is split across char rows for one frame). Reported as
 late_rows (all) / split (late rows of presents that also have an early row
 in the same frame). Gated: any split late row fails the run (exit 1).
 
-Usage: FL=abc python3 tests/flicker.py      (scenarios a b c)
+Usage: FL=abcd python3 tests/flicker.py     (scenarios a b c d; d = D3-5 FX)
 """
 import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-WHICH = os.environ.get("FL", "abc")
+WHICH = os.environ.get("FL", "abcd")
 sys.argv = [sys.argv[0]] + ["999"]
 import game  # noqa: E402
-from game_lib import Harness, S, EMU_ARGS, K_KNIGHT  # noqa: E402
+from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD  # noqa: E402
 import budget  # noqa: E402
 
 FRAME = 70908
@@ -59,6 +59,7 @@ BP = {
     "erase_end": S["render.probe_e2_ret"],
     "blit": S["blit_sprite"],
     "blit_end": S["draw_slot.probe_blit_ret"],
+    "fx_blit_end": S["fx_blit.probe_ret"],       # D3-5: FX tracks (ANIM_SLOT 16 + track)
     "wait_tick": S["wait_tick"],
 }
 if "probe_presented" in S:                         # A7: bank 7 == bank 5 here
@@ -127,7 +128,7 @@ class Rec:
             elif n == "erase":
                 m = z.read_memory(r["SP"], 2)
                 ret = m[0] | (m[1] << 8)
-                if ret == S["render.probe_e2_ret"]:
+                if ret in (S["render.probe_e2_ret"], S["fx_trk_erase.probe_ret"]):
                     row, rows = r["BC"] >> 8, r["DE"] & 0xFF
                     pend = dict(slot=self.p.rb("ANIM_SLOT"), t0=now,
                                 y0=row * 8, y1=(row + rows) * 8 - 1,
@@ -142,7 +143,7 @@ class Rec:
                 fpy = self.p.rb("BL_FPY")
                 h = self.p.rb(S["frame_tab"] + fid * S["FT_STRIDE"] + S["FT_H"])
                 cur = dict(slot=self.p.rb("ANIM_SLOT"), t0=now, y0=fpy, y1=fpy + h - 1)
-            elif n == "blit_end":
+            elif n in ("blit_end", "fx_blit_end"):
                 cur["t1"] = now
                 ev["draws"].append(cur)
             elif n == "prow":
@@ -235,7 +236,7 @@ def late_rows(ev):
 
 def run(h, name):
     p = game.T(h)
-    p.boot(K_KNIGHT, freeze=0)
+    p.boot(K_WIZARD if name == "d" else K_KNIGHT, freeze=0)
     p.isolate()
     p.place(0, 12, budget.HERO_Y)
     if name == "a":
@@ -247,6 +248,12 @@ def run(h, name):
     elif name == "b":
         keys = [("L", 10), ("H", 10)]
         label = "b: hero alone walking"
+    elif name == "d":                             # D3-5: FX tracks over bodies
+        keys = [("WAIT", 3), ("L", 2), ("H", 3)]
+        for slot, x, y, fl in ((1, 22, budget.stand_y(1, 2), budget.HOSTILE),
+                               (3, 25, budget.stand_y(1, 4), budget.HOSTILE)):
+            p.place(slot, x, y, room=0, flags=fl)
+        label = "d: mage + rat + goblin, Lightning + 2 flashes every turn"
     else:
         keys = [("L", 10), ("H", 10)]
         for slot, x, y, fl in ((1, 22, budget.stand_y(1, 2), budget.HOSTILE),
@@ -257,16 +264,24 @@ def run(h, name):
         budget.inject_decor(p)                    # in room A (BUDGET_DECOR=0: off)
         label += " + decor"
     r = Rec(p)
+    fxn = [0, 0]
+
+    def rtick():
+        ev = r.tick()
+        if name == "d" and p.rb("TURN_PHASE") == 1 and fxn[1] != p.rw("TURN_COUNTER") + 1:
+            fxn[1] = p.rw("TURN_COUNTER") + 1
+            fxn[0] += sum(budget.fx_cast(p))
+        return ev
 
     def turn(key):
-        keys, fire = p._prep((key,), step=r.tick)    # C3-8a: turn-around tap (0 turns)
+        keys, fire = p._prep((key,), step=rtick)    # C3-8a: turn-around tap (0 turns)
         t0 = p.rw("TURN_COUNTER")
         p.hold(*keys)
         if fire:
-            r.tick()
+            rtick()
             p.release()
         for i in range(80):
-            r.tick()
+            rtick()
             if i == 1:
                 p.release()
             if p.rw("TURN_COUNTER") != t0 and p.rb("TURN_PHASE") == 0:
@@ -274,7 +289,7 @@ def run(h, name):
             if i >= 6 and p.rw("TURN_COUNTER") == t0 and p.rb("TURN_PHASE") == 0:
                 break
         p.release()
-        r.tick()
+        rtick()
 
     for key, n in keys:
         for _ in range(n):
@@ -314,7 +329,8 @@ def run(h, name):
     print(f"tick start   min/mean/max: {mm([e['start'] for e in T])}")
     print(f"render start min/mean/max (ticks that draw): {mm(rs)}")
     print(f"render end   min/mean/max (ticks that draw): {mm(re_)}")
-    print(f"worst tick T={worst}  OVERRUN={p.rw('OVERRUN_COUNT')}", flush=True)
+    print(f"worst tick T={worst}  OVERRUN={p.rw('OVERRUN_COUNT')}"
+          + (f"  fx_start accepted={fxn[0]}" if name == "d" else ""), flush=True)
     return nsplit
 
 

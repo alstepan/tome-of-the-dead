@@ -272,8 +272,9 @@ panel_done:                                    ; test probe (no code): panel ite
 ; during a turn's animation lets that turn finish first.  Clobbers: as callee
 ;------------------------------------------------------------------------------
 anim_gate:      call frozen
-                jp   nz, anim_tick
-                ret
+                ret  z
+                call anim_tick
+                jp   fx_tick                   ; D3-5: FX tracks advance with the bodies
 decor_gate:     call frozen
                 jp   nz, decor_tick
                 ret
@@ -525,6 +526,7 @@ enter_select:
                 INCLUDE "panel2.asm"            ; B3B-11 panel engine, bank-2 part
                 INCLUDE "icons.asm"             ; C3-3 icon bar state, info / level items
                 INCLUDE "decor.asm"             ; B3B-10 animated decor (decor_tick)
+                INCLUDE "fx.asm"                ; D3-5 FX tracks (fx_start / fx_tick / fx_render)
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two

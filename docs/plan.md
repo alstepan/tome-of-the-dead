@@ -329,15 +329,15 @@ threshold; respawn half XP; rank 2/3 values per ability; no spell before the fir
 | D3-2 | 3D strings | J | – |
 | D3-3 ✅ `3ab2f5b` (feat/3d-art; user 2026-10-06: frames approved; frost_crack stays 8×8 (playtest feedback later); Firebolt keeps the yellow/red alternation; full set kept incl. fizz2/burst2; 1,322 B ZX0) | art import: projectiles/impacts, Warrior throw/bow/whirl, POWER_STRIKE (to draw), 7 status icons, ammo floor glyphs → canvas review | artist | – |
 | D3-4 ✅ `c62bd95` (merged 2026-10-07; FRT 101/160, pool 44.1 of 46.5 KB, bank 1 783 B free) | frames + class FX kinds (pool) | S | D3-0, D3-3 |
-| D3-5 in progress (staff, feat/d35-fx; D3-S decision point) | FX engine (tracks, fx_render, budget case "Lightning + 4 monsters") | S | D3-4 |
-| D3-6a in progress (staff, feat/d36a-hit) | `deal_hit` (resist, DEF, drain, effects, kill/XP) | S | D3-0, D3-1 |
+| D3-5 ✅ `ef38432` (merged 2026-10-12; Lightning + 4 monsters worst 110.8k T; bank 2 nearly full)  | FX engine (tracks, fx_render, budget case "Lightning + 4 monsters") | S | D3-4 |
+| D3-6a ✅ `91df322` (merged 2026-10-12; Ghost drains + confuses, no heal — Vampire heals per §9.1) | `deal_hit` (resist, DEF, drain, effects, kill/XP) | S | D3-0, D3-1 |
 | D3-6b | `proj_fire` (bounces, reflect, pierce, absorb) — the spell/missile table reproduced by tests = stage exit | S | D3-5, D3-6a |
 | D3-7 | abilities (5 spells, Power Strike, Whirlwind, throw, bow, pickup, staff bonk) | S | D3-6b, D3-2 |
 | D3-8 | status effects | S | D3-6a, after D3-7 |
 | D3-9a | info line ranks/MP | J | D3-0 |
 | D3-9b | XP, levels, MP regen/bar, learn/rank-up | S | D3-6a |
 | D3-10 | scenario tests per feature | J | each |
-| D3-0/D3-1/D3-2/LP/B17 merged to main 2026-10-06 (squash of feat/3d-core @ `768d827`) · D3-S ✅ `38a8aef` (feat/3d-spike, not merged): feasible — frees $E000..$F7FF 6,144 B (6.8 KB if the 576-B attr shadow moves too); +37 T per erased cell, worst tick +1.6–3.0k (mage 121.4k). **User 2026-10-06: adopt in principle; decide after D3-5 measures the 3D FX worst tick, before 3E** | spike: drop the bank-7 clean background (6 KB) — erase from ROOM_MAP; measure | S | – |
+| D3-0/D3-1/D3-2/LP/B17 merged to main 2026-10-06 (squash of feat/3d-core @ `768d827`) · D3-S ✅ `38a8aef` (feat/3d-spike, not merged): feasible — frees $E000..$F7FF 6,144 B (6.8 KB if the 576-B attr shadow moves too); +37 T per erased cell, worst tick +1.6–3.0k (mage 121.4k). **User 2026-10-12: GO — drop the bank-7 copy (FX worst 110.8k → ~113.2k T) and move per-turn code from bank 2 into freed bank 7** | spike: drop the bank-7 clean background (6 KB) — erase from ROOM_MAP; measure | S | – |
 
 ### 3E — Items, inventory & survival (needs game.md §7–8)
 Inventory page (bank-5 screen), equip, quick slots auto-fill, food/hunger,
