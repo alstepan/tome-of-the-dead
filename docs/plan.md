@@ -331,7 +331,7 @@ threshold; respawn half XP; rank 2/3 values per ability; no spell before the fir
 | D3-4 ✅ `c62bd95` (merged 2026-10-07; FRT 101/160, pool 44.1 of 46.5 KB, bank 1 783 B free) | frames + class FX kinds (pool) | S | D3-0, D3-3 |
 | D3-5 ✅ `ef38432` (merged 2026-10-12; Lightning + 4 monsters worst 110.8k T; bank 2 nearly full)  | FX engine (tracks, fx_render, budget case "Lightning + 4 monsters") | S | D3-4 |
 | D3-6a ✅ `91df322` (merged 2026-10-12; Ghost drains + confuses, no heal — Vampire heals per §9.1) | `deal_hit` (resist, DEF, drain, effects, kill/XP) | S | D3-0, D3-1 |
-| D3-6b | `proj_fire` (bounces, reflect, pierce, absorb) — the spell/missile table reproduced by tests = stage exit | S | D3-5, D3-6a |
+| D3-6b ✅ feat/d3-6b-proj-fire (not merged; `tests/proj3.py` P0–P8: the §6.1/§6.3 table at every rank + 120-case fuzz vs a Python model; bank 3 now **30 B free**, scratch in `PF_RAM` `$5E00` (bank 5, runtime only); a cast costs 10–30k T, worst seen ~66k — D3-7 must budget the cast tick; pierce flashes dropped for room) | `proj_fire` (bounces, reflect, pierce, absorb) — the spell/missile table reproduced by tests = stage exit | S | D3-5, D3-6a |
 | D3-7 | abilities (5 spells, Power Strike, Whirlwind, throw, bow, pickup, staff bonk) | S | D3-6b, D3-2 |
 | D3-8 | status effects | S | D3-6a, after D3-7 |
 | D3-9a | info line ranks/MP | J | D3-0 |

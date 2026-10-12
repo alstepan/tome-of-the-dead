@@ -229,3 +229,26 @@ EFX_WEAK        EQU 7
                 ASSERT DTY_COUNT <= DH_TYPE + 1
 XP_MAX          EQU 9999            ; game.md §4.1: XP saturates
                 ASSERT HERO_IMM == HERO_RES + KX_IMM   ; deal_hit: one record layout (RES 3 B, IMM) for hero + kx row
+
+;------------------------------------------------------------------------------
+; proj_fire (proj3.asm, D3-6b; game.md §6 "Logic (instant at cast time)"):
+; the projectile walk resolved at cast time, results in bank-3 scratch
+; (pf_stop / pf_col / pf_tgt / pf_lost / pf_itick, read by D3-7 and the
+; tests). Stop reasons (pf_stop, also returned in L):
+;------------------------------------------------------------------------------
+PFS_RANGE       EQU 0               ; range spent: impact on the last cell
+PFS_WALL        EQU 1               ; solid cell ahead, no bounce left: impact on the free cell in front
+PFS_BODY        EQU 2               ; struck a body (non-piercing): impact on its cell, pf_tgt = it
+PFS_ABSORB      EQU 3               ; a mid-ladder body absorbed it harmlessly (pf_tgt stays $FF)
+PFS_EXIT        EQU 4               ; flew into an open exit edge (col 0 / 31): no impact
+PFS_LOOP        EQU 5               ; loop guard: PF_MAXREV reversals spent (impact on the current cell)
+PF_MAXREV       EQU 4               ; game.md §6.0 "max 4 reversals per projectile"
+PF_ROW_DY       EQU 2               ; flight row = caster top + 2 (staff tip / bow)
+PF_IMPT         EQU 2               ; impact ticks of a projectile FX (IMPA, IMPB)
+                ASSERT PF_MAXREV + 1 == FXD_SEGMAX     ; a reversal between each FX segment
+; proj_fire scratch (proj3.asm pf_*: state, results, the 16-B FX descriptor,
+; the candidate list): runtime RAM in bank 5's dead BASIC area (free once
+; boot moved SP to $BF00; never on tape, never paged: bank 3 stays full).
+PF_RAM          EQU $5E00
+PF_RAM_LEN      EQU $100
+                ASSERT PF_RAM >= $5CC0 && PF_RAM + PF_RAM_LEN <= $6000

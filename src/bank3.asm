@@ -1221,5 +1221,6 @@ init_tiles:                                    ; (B3B-11b: the data is in vdata,
                 INCLUDE "panel.asm"            ; B3B-11 panel engine (cold part + the HOT_COPY image)
                 INCLUDE "turn3.asm"            ; B3B-R2 turn logic: monster phase, attacks, potions
                 INCLUDE "combat3.asm"          ; D3-6a: hit_roll, deal_hit (shared damage core)
+                INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
                 INCLUDE "intent3.asm"          ; C3-2 icon bar: cursor, shortcuts, icon use
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing

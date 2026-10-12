@@ -170,20 +170,8 @@ deal_hit:
                 ld   (dh_weak), a
                 dec  hl
                 dec  hl
-                ; response: (RES_B(t / 4) >> 2 (t % 4)) & 3
-                ld   a, c
-                cp   4
-                jr   c, .b0
-                inc  hl
-.b0:            and  3
-                ld   b, a
-                inc  b
-                ld   a, (hl)
-                jr   .r2
-.r1:            rrca
-                rrca
-.r2:            djnz .r1
-                and  3
+                ld   b, c
+                call rsp_hl                    ; response (D3-6b: shared with proj_fire)
                 ld   (dh_rsp), a
                 cp   RSP_I
                 jr   c, .dmg
