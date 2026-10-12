@@ -1370,20 +1370,15 @@ try_jump:
 ; Sets JA_FALL_BIT on a fall.  Keeps BC, DE.  Clobbers: A, HL
 ;------------------------------------------------------------------------------
 jump_pit:
-                push de
-                ld   a, RD_PITCOL
-                call desc_byte                 ; 0 = no pit (keeps BC)
-                pop  de
-                or   a
-                ret  z
-                ld   h, a                      ; H = p
-                call pit_w
-                sub  2
-                ld   l, a                      ; L = W - 2: fall-range size
+                push bc
                 ld   a, (TMP7)
-                sub  h
-                cp   l
+                ld   c, a
+                call pit_range                 ; H = p, L = W - 2 (p = 0: no pit)
+                pop  bc
                 jr   c, .fall                  ; p <= x' <= p+W-3: x_f = x'
+                inc  h
+                dec  h
+                ret  z                         ; no pit
                 ld   a, l
                 cp   2
                 ret  c                         ; narrow: never cut short
@@ -1428,10 +1423,46 @@ jump_pit:
                 ld   (JUMP_ARC), a
                 ret
 
-; pit_w — A = the current room's pit width W (holes p .. p+W-1). L2 will read
-; the descriptor's width field; today every pit is narrow.  Clobbers: A
-pit_w:          ld   a, PIT_W_NARROW
+; pit_range — C = x of a body standing on the storey-0 floor (game.md §2.5,
+; §1.1 "Wide pit" (4)): CF = 1 iff the room has a pit p and p <= x <= p+W-3
+; (a 3-col hero body fully over holes: it falls; walkers refuse every such
+; x). Out: H = p (0 = no pit, CF = 0), L = W - 2 (the fall-range size).
+; Keeps BC, DE.  Clobbers: A, HL.   ~150 T
+pit_range:
+                call cur_room_desc             ; (bank 2) HL = descriptor
+                ld   a, l
+                add  a, RD_PITCOL
+                ld   l, a
+                ld   a, (hl)
+                push af                        ; p
+                call pit_w.d                   ; A = W
+                sub  2
+                ld   l, a
+                pop  af
+                ld   h, a
+                or   a
+                ret  z                         ; no pit: CF = 0
+                ld   a, c
+                sub  h                         ; x - p (x < p wraps high: no carry)
+                cp   l
                 ret
+
+; pit_w — A = the current room's pit width W (holes p .. p+W-1): the
+; descriptor's L2_PITW (4..6, the L2 wide pit), 0 there = PIT_W_NARROW.
+; .d: HL -> the descriptor's RD_PITCOL byte (same 16-B page).  Clobbers: A, HL
+pit_w:          call cur_room_desc
+                ld   a, l
+                add  a, RD_PITCOL
+                ld   l, a
+.d:             ld   a, l
+                add  a, L2_PITW - RD_PITCOL
+                ld   l, a
+                ld   a, (hl)
+                or   a
+                ret  nz
+                ld   a, PIT_W_NARROW
+                ret
+                ASSERT (ROOM_DESC & (RD_STRIDE - 1)) == 0 && L2_PITW < RD_STRIDE && RD_PITCOL < L2_PITW
 
 ; jump_bodies — CF = 1 if a LIVE_LIST body (not the hero, not DYING) overlaps
 ; box C,B,D,E and is not low (h <= 2, w <= 4 (J1: Rat / Spider), standing).

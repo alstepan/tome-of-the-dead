@@ -87,11 +87,18 @@ RD_LAD2         EQU 7               ; 2nd internal ladder (0 = none)
 RD_PITCOL       EQU 8               ; pit: left HOLE col p (holes p..p+2 in row FLOOR_ROW0,
                                     ;      caps at p-1 / p+3); 0 = none. Storey-0 floor only
                                     ;      (game.md §2.5), so no storey byte
-PIT_W_NARROW    EQU 3               ; J1: pit width W (holes p..p+W-1). No descriptor width field yet
-                                    ;      (L2 adds it, 3 = narrow): pit_w returns this constant
+PIT_W_NARROW    EQU 3               ; J1: pit width W (holes p..p+W-1) when L2_PITW = 0 (pit_w)
 RD_BLOCK        EQU 9               ; dead-end block: RDB_* below (0 = none)
 RD_SEED         EQU 10              ; word: room seed (decor re-derived from it; never 0)
-RD_SPARE        EQU 12              ; 12..15 spare (zeroed by the generator)
+RD_SPARE        EQU 12              ; 12..15: the L2 fields below + 1 spare (zeroed by the generator)
+; L2 (game.md §1.1 "Mid-room block" / "Wide pit"; written by the generator's
+; last pass, read by build_room_map, pit_w / pit_range, lp_cmap)
+L2_PITW         EQU RD_SPARE + 0    ; wide-pit width W 4..6 (holes RD_PITCOL .. +W-1, caps p-1 / p+W);
+                                    ;      0 = RD_PITCOL is the ordinary 3-col pit (PIT_W_NARROW)
+L2_MIDB         EQU RD_SPARE + 1    ; mid-room block left col b, storey 0 only (0 = none): cols
+                                    ;      b..b+w-1 rows 0..7 WALL, row 8 WALLF, RUBBLE at row 7
+                                    ;      cols b-1 and b+w (both faces)
+L2_MIDW         EQU RD_SPARE + 2    ; mid-room block width w 2..3
 RD_STRIDE       EQU 16
 
 ; RD_FLAGS

@@ -393,8 +393,8 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+10 spare), `ROOM_DESC` 9 × 16, 16 spare, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
 | `$6E80..$6EBF` | `ORN_GLYPHS` | 64 | B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). `LOWRAM_END_3B` = `LOWRAM_FREE_END` = `$6EC0` |
 | `$6EC0..$6F31` | `LP_STATE` | 114 | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
-| `$6F32..$71E8` | free | 695 | of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **400 spare** (`LOWRAM_SPARE` DISPLAY, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
-| `$71E9..$7FFF` | `lowram_code` (`start` first) | 3,607 | **cold block**, ends exactly at `$8000` (`src/lowram.asm`): code 3,102 B + 101 frame descriptors 505 B (D3-4 +8: `start_game` → `gen_kind(HERO_KIND + K_FX_BASE)`; J1 +145: `try_jump` D 6 / 7 + `jump_pit` + `pit_w`; earlier: D3-TX `tx_dec` + `.txt`, B12 +21, B14 +175, C3-2 +1, C3-1 +33, C3-0 +3, B3B-13 +37) |
+| `$6F32..$71CC` | free | 667 | of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **372 spare** (`LOWRAM_SPARE` DISPLAY; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
+| `$71CD..$7FFF` | `lowram_code` (`start` first) | 3,635 | **cold block**, ends exactly at `$8000` (`src/lowram.asm`): code 3,130 B + 101 frame descriptors 505 B (L2 engine +28: `pit_range` / `pit_w`; D3-4 +8: `start_game` → `gen_kind(HERO_KIND + K_FX_BASE)`; J1 +145: `try_jump` D 6 / 7 + `jump_pit` + `pit_w`; earlier: D3-TX `tx_dec` + `.txt`, B12 +21, B14 +175, C3-2 +1, C3-1 +33, C3-0 +3, B3B-13 +37) |
 | inside the cold block | A5 `zx0_code..zx0_code_end` | 107 | `zx0_frame` 39 + `dzx0_standard` 68 (ASSERT ≤ `ZX0_BUDGET` 128) |
 | `$6000..$65FF` (alias) | A5 `GEN_SCRATCH` | 1,536 | ZX0 unpack target **aliasing `ROOM_MAP`+`NEXT_MAP`** (ends exactly at `TILE_GLYPHS`, ASSERTed): the generator runs only at boot, hero start and (3F) level start, before the room map is built — never mid-room. Guard: `GEN_TRAP` (state block) counts `gen_frame` calls while `GAME_STATE` is PLAYING/TRANSITION; tests assert 0 |
 
@@ -572,10 +572,13 @@ footprints: `|c1 − c2| ≥ FEAT_GAP` (7).
 | 4 | `RD_ARRCOL` | D2+ start room: arrival shaft `{c,0}`, rubble-capped (no exit bit) |
 | 5 | `RD_EXITCOL` | lair: level-exit shaft `{c,2}` under `T_GRATE` (no exit bit; grate state = `LF_GRATE_OPEN`) |
 | 6 / 7 | `RD_LAD1` / `RD_LAD2` | internal ladders `{c,1}` (hole in row 8, rows 8–16), `c ∈ 3..26`; LAD1 ≥ 1 always, LAD2 0 = none. Never a shaft col |
-| 8 | `RD_PITCOL` | pit: left hole col `p` (holes `p..p+2` in row 8, caps `T_PIT_L` at `p−1`, `T_PIT_R` at `p+3`); storey-0 floor only (game.md §2.5) → no storey byte |
+| 8 | `RD_PITCOL` | pit: left hole col `p` (holes `p..p+W−1` in row 8, caps `T_PIT_L` at `p−1`, `T_PIT_R` at `p+W`; W = 3, or `L2_PITW`); storey-0 floor only (game.md §2.5) → no storey byte |
 | 9 | `RD_BLOCK` | dead-end block: bits 0–1 width (0 none / 2 / 3), `RDB_S1` bit 6 storey, `RDB_RIGHT` bit 7 side; cols `0..w−1` or `32−w..31`, WALL + WALLF in the floor row, `T_RUBBLE` at its foot |
 | 10–11 | `RD_SEED` | room seed (word, ≠ 0): decor is re-derived from it, never stored |
-| 12–15 | `RD_SPARE` | zero |
+| 12 | `L2_PITW` (`RD_SPARE`+0) | L2 wide pit (game.md §1.1): width W 4..6 of the `RD_PITCOL` pit; 0 = the narrow 3-col pit (`PIT_W_NARROW`) |
+| 13 | `L2_MIDB` | L2 mid-room block, storey 0: left col b (0 = none); cols `b..b+w−1` rows 0–7 WALL, row 8 WALLF, `T_RUBBLE` at row 7 cols `b−1` and `b+w` |
+| 14 | `L2_MIDW` | its width w 2..3 |
+| 15 | — | zero (spare) |
 
 ### `EDGE_TAB` (`$6D50`, 6 B) — horizontal edges only
 
@@ -677,20 +680,31 @@ holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
   `queue_damage`), `door_open` / `try_close` (key C); `build_room_map` draws
   lintel / arch / planks from the edge state. Measured (W5): close turn worst
   tick 31.8k T (input phase 18.6k), bump-open 31.8k (input 17.7k).
-- Pit: `RD_PITCOL` of the current room's descriptor (`desc_byte`; 0 = none:
+- Pit: `RD_PITCOL` of the current room's descriptor (0 = none:
   B11, `try_horizontal` skips the test then — a left-exit step lands on x 0,
   which used to match and drop the hero a storey at the doorway); `hero_fall`
   (`M_FALL`: 2 walk ticks + 9 × 8 px; 1d4; landing box → PENDING); walkers
-  refuse `x == p` in `try_step`. Jump (`try_jump`, `M_JUMP`, 14-tick arc,
+  refuse `x == p` in `try_step` (**L2:** the whole fall range, below). Jump (`try_jump`, `M_JUMP`, 14-tick arc,
   `jump_dy`): W8 worst tick 60.3k T; fall turn 39.5k T.
   **J1 (2026-10-06):** `try_jump` picks D = 6 / 7 (low-body extension,
   `jump_bodies` low = h ≤ 2, w ≤ 4), `jump_pit` (lowram) lets a landing on the
   fall range `p .. p+W−3` fall (and cuts the arc short at a wide pit, W ≥ 4)
-  via `hero_fall` with the mode kept `M_JUMP`; `pit_w` (lowram, `ld a,
-  PIT_W_NARROW`) is the one place L2 replaces with the descriptor's width
-  field (W8 pokes its immediate to 5 to test the cut-short path). The arc py
+  via `hero_fall` with the mode kept `M_JUMP`; `pit_w` (lowram) = the
+  descriptor's `L2_PITW`, 0 → `PIT_W_NARROW` (W8 pokes room B's `L2_PITW` to 5
+  to test the cut-short path). The arc py
   is computed (`8y − 4·min(t, N−t, JUMP_APEX)`), `jump_dy` is gone. W8:
   D 6 jump 48.7k T, jump into the pit 56.4k T, D 7 68.7k T.
+  **L2 engine (2026-10-12; `tests/world.py` W26):** `pit_range` (lowram, C = x
+  → CF = 1 iff `p ≤ x ≤ p+W−3`, H = p, L = W−2; keeps BC/DE, ~150 T) is the one
+  fall-range test: `try_horizontal` (hero falls), `try_step` (walkers refuse;
+  flyers skip it), `jump_pit`. `desc_byte` is gone (no callers left). The
+  mid-room block needs no logic: its cells are `T_BRICK` / `T_WALLF`
+  (`TF_SOLID`), so `lead_cell` and the jump's `box_solid` stop at it like an
+  edge block. `build_room_map` draws W holes + caps (`.pit`) and the mid-block
+  through the edge block's `.wall` + `T_RUBBLE` at both feet (`.mid`), before
+  the segments and decor (the deriver only places on exact `T_AIR` / `T_BRICK`
+  cells with ring tests, so rubble / caps / holes never carry decor; the block's
+  `T_BRICK` cells may take wall-class decor exactly like an edge block).
 
 **As built in B3B-8** (`tests/world.py` W0/W3 + W11/W12/W12M, `tests/room_model.py`):
 - One descriptor format: the PROTO rooms are a level state (`proto_level`,

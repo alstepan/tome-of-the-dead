@@ -735,14 +735,34 @@ lp_cmap:        ld   hl, LP_CMAP               ; clear: 3 stores / loop, ~15 T/B
                 jr   c, .s
                 ld   a, (ix+RD_PITCOL)
                 or   a
-                jr   z, .bl
-                push af
+                jr   z, .mb
+                ld   a, (ix+L2_PITW)           ; L2: wide pit W holes (0 = the ordinary 3)
+                or   a
+                jr   nz, .pw
+                ld   a, 3
+.pw:            ld   d, a
+                add  a, 4
+                ld   b, a                      ; s0: holes + caps p-1..p+W, +-1 = W+4 cols from p-2
+                ld   a, (ix+RD_PITCOL)
                 sub  2
-                ld   bc, (7 << 8) | 0          ; s0: holes + caps p-1..p+3, +-1
+                ld   c, 0
                 call lp_mark
-                pop  af
+                ld   a, d
+                add  a, 2
+                ld   b, a                      ; s1: the fall's landing cols p..p+W-1, +-1
+                ld   a, (ix+RD_PITCOL)
                 dec  a
-                ld   bc, (5 << 8) | 1          ; s1: the fall's landing cols p..p+2, +-1
+                ld   c, 1
+                call lp_mark
+.mb:            ld   a, (ix+L2_MIDB)           ; L2 mid-block (storey 0): b..b+w-1 + rubble b-1 / b+w,
+                or   a                         ; +-1 = w+4 cols from b-2
+                jr   z, .bl
+                ld   a, (ix+L2_MIDW)
+                add  a, 4
+                ld   b, a
+                ld   a, (ix+L2_MIDB)
+                sub  2
+                ld   c, 0
                 call lp_mark
 .bl:            ld   a, (ix+RD_BLOCK)
                 or   a

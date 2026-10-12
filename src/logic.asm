@@ -464,18 +464,6 @@ box_solid:
                 ; over the assembled kind_tab rows, right after kind_tab
                 ; (main.asm "walker height"): a new tall walker fails the build.
 
-; desc_byte — A = the byte at offset A of the current room's descriptor.
-; Clobbers: A, DE, HL.   ~170 T
-desc_byte:
-                push af
-                call cur_room_desc
-                pop  de
-                ld   e, d
-                ld   d, 0
-                add  hl, de
-                ld   a, (hl)
-                ret
-
 ; bitmask — A = 1 << A (A = 0..7).  Clobbers: A, D
 bitmask:
                 ld   d, a
@@ -814,15 +802,11 @@ try_horizontal:
                 call face_tmp6
                 ld   (ix+E_MODE), M_MOVE
                 ld   a, b                      ; B3B-5 pit (game.md §2.5): standing on
-                add  a, e                      ; storey 0 with x == the pit col -> fall
-                cp   FLOOR_ROW0
-                jr   nz, .ok
-                ld   a, RD_PITCOL
-                call desc_byte                 ; 0 = no pit
-                or   a                         ; B11: a left-exit step lands on
-                jr   z, .ok                    ; x == 0, which matched "no pit" =
-                cp   c                         ; 0 and dropped the hero a storey
-                jp   z, hero_fall              ; lowram: CF = 1
+                add  a, e                      ; storey 0 with the body fully over
+                cp   FLOOR_ROW0                ; holes (p <= x <= p+W-3; L2 wide pit)
+                jr   nz, .ok                   ; -> fall. pit_range: p = 0 = no pit
+                call pit_range                 ; (B11: x == 0 never matches it)
+                jp   c, hero_fall              ; lowram: CF = 1
 .ok:            scf
                 ret
 .solid:         and  TF_DOOR                   ; wall / block: CF = 0 (and), no turn
@@ -1085,17 +1069,13 @@ try_step:
                 jr   z, .tpop
                 call lead_cell                 ; A = dx
                 jr   c, .solid
-                ld   a, b                      ; walkers never step onto x == the pit
-                                               ; col on storey 0 (game.md §2.5)
-                add  a, e
+                ld   a, b                      ; walkers never step onto a fall-range
+                                               ; x on storey 0 (p <= x <= p+W-3,
+                add  a, e                      ; game.md §2.5 / §1.1 "Wide pit" (4))
                 cp   FLOOR_ROW0
                 jr   nz, .tpop
-                push de
-                ld   a, RD_PITCOL
-                call desc_byte
-                pop  de
-                cp   c
-                jr   z, .npop
+                call pit_range                 ; (lowram; keeps BC, DE)
+                jr   c, .npop
 .tpop:          pop  hl
 .tok:           push hl
                 call box_free

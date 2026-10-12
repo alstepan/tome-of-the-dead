@@ -140,6 +140,19 @@ def main():
         # full 65,536-seed scan after L1: max restarts d8 seed 770, max rnd calls d7
         # seed 8823; no seed reseeds (lair reseeds 0, nothing exhausts the 16)
         pairs += [(8, 770), (7, 8823), (8, 55355), (8, 55352)]
+        # L2: seeds with a wide pit / a mid-block / both (and none) at every depth 2..8
+        for d in range(2, 9):
+            nw = nm = 0
+            for sd in range(1, 20000):
+                if nw >= 3 and nm >= 3:
+                    break
+                bb = G.generate(d, sd)
+                kw = any(bb[G.OFF_DESC + 16 * r + G.L2_PITW] for r in range(9))
+                km = any(bb[G.OFF_DESC + 16 * r + G.L2_MIDB] for r in range(9))
+                if (kw and nw < 3) or (km and nm < 3):
+                    pairs.append((d, sd))
+                    nw += kw
+                    nm += km
         pairs += [(d, d * 0x0101) for d in range(1, 9)]        # seed ^ depth*$0101 == 0 -> x = 1
         for d, s in pairs:
             ts = go(d, s, master=(s * 7) & 0xFFFF, tag="fixed")

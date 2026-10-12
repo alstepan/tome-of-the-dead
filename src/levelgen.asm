@@ -16,7 +16,7 @@
 ;                     Clobbers all but IY, SP (far3 itself clobbers A/F on return).
 ; level_start_x  In : block generated.  Out: A = B = hero start col (storey 0).
 ;
-; Scratch: LG_* below, in GEN_SCRATCH (= ROOM_MAP + NEXT_MAP, $6000..$6051).
+; Scratch: LG_* below, in GEN_SCRATCH (= ROOM_MAP + NEXT_MAP, $6000..$6066).
 ; CONTRACT: call only before build_room_map / never mid-room (ROOM_MAP, NEXT_MAP
 ; and the ZX0 frame cache all live there). level_gen zeroes GEN_ZBLK on entry
 ; (cache invalidation); the caller re-runs alloc_* + gen_kind afterwards.
@@ -48,6 +48,20 @@ LG_RST          EQU GEN_SCRATCH + 77    ; restarts left this seed
 LG_SP           EQU GEN_SCRATCH + 78    ; word
 LG_S            EQU GEN_SCRATCH + 80    ; D8 reserved Sanctum cell (never visited), $FF = none
 LG_LS           EQU GEN_SCRATCH + 81    ; first row-major cell scanned by loopc (6 = mandatory bottom edge)
+LG_RNG0         EQU GEN_SCRATCH + 82    ; word: GEN_RNG before the L2 pass (restored after it)
+LG_ODDS         EQU GEN_SCRATCH + 84    ; 2 B: odds wide, mid-block (1 in N)
+LG_C1           EQU GEN_SCRATCH + 87    ; the room's two ladders, c1 < c2
+LG_C2           EQU GEN_SCRATCH + 88
+LG_P            EQU GEN_SCRATCH + 89    ; candidate p (wide pit) / b (mid-block)
+LG_W            EQU GEN_SCRATCH + 90    ; candidate W / w
+LG_NW           EQU GEN_SCRATCH + 91    ; wide pits placed
+LG_NB           EQU GEN_SCRATCH + 92    ; mid-blocks placed (LG_NW + kind)
+LG_K2           EQU GEN_SCRATCH + 93    ; kind: 0 wide, 1 mid
+LG_NL           EQU GEN_SCRATCH + 94    ; the 2nd ladder added this try (0 = none)
+LG_KP           EQU GEN_SCRATCH + 95    ; 7 B: the l2_kind_tab entry
+LG_SVP          EQU GEN_SCRATCH + 102   ; the narrow pit col removed while trying
+; L2 descriptor fields L2_PITW / L2_MIDB / L2_MIDW: level_defs.asm
+L2_MAX          EQU 2                   ; per feature per level
 RESEED_MAX      EQU 16
 DOOR_ODDS       EQU 3
 PIT_COL_MIN     EQU 5
@@ -947,7 +961,266 @@ attempt:        ld   (LG_SP), sp
                 ld   a, ixl
                 cp   LG_ROOMS_END
                 jr   nz, .sd
+                call l2_pass            ; L2: last pass; GEN_RNG restored (earlier output intact)
                 xor  a
+                ret
+
+;==============================================================================
+; L2 (game.md 1.1 "Mid-room block" / "Wide pit"), bit-exact with levelgen.l2_pass.
+;==============================================================================
+; l2_clear: IX = room, B = footprint mask (bit k-2 <-> RD offset k), D = left
+; clearance L, E = x + width + right clearance, x = (LG_P). CF = a footprint f has
+; f + L > x and f < E (too close).  Clobbers A, B, C, HL.
+l2_clear:       push ix
+                pop  hl
+                inc  hl
+                inc  hl
+.l:             srl  b
+                jr   nc, .n
+                ld   a, (hl)
+                or   a
+                jr   z, .n
+                cp   e
+                jr   nc, .n
+                add  a, d
+                ld   c, a
+                ld   a, (LG_P)
+                cp   c
+                jr   nc, .n
+                scf
+                ret
+.n:             inc  hl
+                ld   a, b
+                or   a
+                jr   nz, .l
+                ret                     ; NC (or a from the last test)
+
+; l2_items: IX = room, D = lo, E = hi. CF = a storey-0 floor item of the room in lo..hi.
+; Clobbers A, BC, HL.
+l2_items_s1:    ld   a, ixl             ; storey-1 items of the room (FL_ROOM = id | $80)
+                sub  ROOM_DESC & $FF
+                rrca
+                rrca
+                rrca
+                rrca
+                or   $80
+                jr   l2_items_c
+l2_items:       ld   a, ixl             ; storey-0 items (FL_ROOM == id)
+                sub  ROOM_DESC & $FF
+                rrca
+                rrca
+                rrca
+                rrca
+l2_items_c:     ld   c, a
+                ld   a, (FLOOR_N)
+                or   a
+                ret  z
+                ld   b, a
+                ld   hl, FLOOR_LIST
+.l:             ld   a, (hl)
+                cp   c
+                jr   nz, .n
+                inc  hl
+                ld   a, (hl)
+                dec  hl
+                cp   d
+                jr   c, .n
+                ld   a, e
+                inc  hl
+                cp   (hl)
+                dec  hl
+                jr   c, .n
+                scf
+                ret
+.n:             inc  hl
+                inc  hl
+                inc  hl
+                inc  hl
+                djnz .l
+                or   a
+                ret
+
+; l2_kind_tab: per L2 kind (0 wide pit, 1 mid-block), 8 B: N (W = base + rnd N), base,
+; left clearance L, right clearance R, clear-mask (up, down, arrival, exit / up,
+; arrival: the ladders fit by construction), field A, field B, pad.
+l2_kind_tab:       DB   3, 4, 7, 4, $0F, RD_PITCOL, L2_PITW, 0
+                DB   2, 2, 6, 3, $05, L2_MIDB, L2_MIDW, 0
+
+; l2_kind: In A = kind, IX = room. One kind: cap, odds roll, then up to 8 tries (W, the
+; added 2nd-ladder col if the room has one ladder, p are rolled in that order every
+; try). A narrow pit is removed meanwhile (restored on failure).  Out CF = placed.
+l2_kind:        ld   (LG_K2), a
+                ld   c, a
+                ld   b, 0
+                ld   hl, LG_NW
+                add  hl, bc
+                ld   a, (hl)
+                cp   L2_MAX
+                ret  nc                 ; cap reached (NC)
+                ld   hl, LG_ODDS
+                add  hl, bc
+                ld   a, (hl)
+                call rnd
+                or   a
+                ret  nz                 ; odds missed (NC)
+                ld   a, (LG_K2)
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   hl, l2_kind_tab
+                call hla
+                ld   de, LG_KP
+                ld   bc, 7
+                ldir
+                ld   a, (ix+RD_PITCOL)
+                ld   (LG_SVP), a
+                ld   (ix+RD_PITCOL), 0
+                ld   a, FEAT_TRIES
+                ld   (LG_TRY), a
+.t:             ld   a, (LG_KP)
+                call rnd
+                ld   hl, LG_KP + 1
+                add  a, (hl)
+                ld   (LG_W), a
+                xor  a
+                ld   (LG_NL), a
+                ld   a, (ix+RD_LAD2)
+                or   a
+                jr   nz, .have
+                ld   a, LAD_COL_MAX - LAD_COL_MIN + 1
+                call rnd
+                add  a, LAD_COL_MIN
+                ld   (LG_NL), a
+                ld   b, $7F
+                call legal              ; FEAT_GAP vs every footprint, both storeys
+                jp   c, .nt
+                ld   a, (LG_NL)
+                ld   d, a
+                add  a, 2
+                ld   e, a
+                call l2_items           ; nothing under the new ladder (either storey)
+                jp   c, .nt
+                call l2_items_s1
+                jp   c, .nt
+                ld   c, 0
+                call hits               ; not on an edge block (footprints already clear)
+                jp   c, .nt
+                ld   c, 1
+                call hits
+                jp   c, .nt
+.have:          ld   a, (ix+RD_LAD2)
+                or   a
+                jr   nz, .l2
+                ld   a, (LG_NL)
+.l2:            ld   b, a
+                ld   a, (ix+RD_LAD1)
+                cp   b
+                jr   c, .srt
+                ld   c, a               ; lad1 >= other: c1 = other
+                ld   a, b
+                ld   b, c
+.srt:           ld   (LG_C1), a         ; A = c1 < B = c2
+                ld   a, b
+                ld   (LG_C2), a
+                ld   a, (LG_KP + 2)
+                ld   hl, LG_C1
+                add  a, (hl)
+                ld   d, a               ; lo = c1 + L
+                ld   a, (LG_C2)
+                ld   hl, LG_W
+                sub  (hl)
+                ld   hl, LG_KP + 3
+                sub  (hl)
+                ld   e, a               ; hi = c2 - W - R
+                sub  d
+                jp   c, .nt
+                inc  a
+                call rnd
+                add  a, d
+                ld   (LG_P), a
+                ld   hl, LG_W
+                add  a, (hl)
+                ld   hl, LG_KP + 3
+                add  a, (hl)
+                ld   e, a               ; p + W + R
+                ld   a, (LG_KP + 4)
+                ld   b, a
+                ld   a, (LG_KP + 2)
+                ld   d, a
+                call l2_clear
+                jp   c, .nt
+                ld   a, (LG_P)
+                dec  a
+                ld   d, a               ; p - 1
+                ld   a, (LG_P)
+                ld   hl, LG_W
+                add  a, (hl)
+                ld   e, a               ; p + W
+                call l2_items
+                jp   c, .nt
+                ld   a, (LG_NL)
+                or   a
+                jr   z, .nn
+                ld   (ix+RD_LAD2), a
+.nn:            push ix
+                pop  hl
+                ld   a, (LG_KP + 5)
+                call hla
+                ld   a, (LG_P)
+                ld   (hl), a
+                push ix
+                pop  hl
+                ld   a, (LG_KP + 6)
+                call hla
+                ld   a, (LG_W)
+                ld   (hl), a
+                ld   a, (LG_K2)
+                ld   c, a
+                ld   b, 0
+                ld   hl, LG_NW
+                add  hl, bc
+                inc  (hl)
+                scf
+                ret
+.nt:            ld   hl, LG_TRY
+                dec  (hl)
+                jp   nz, .t
+                ld   a, (LG_SVP)
+                ld   (ix+RD_PITCOL), a
+                or   a
+                ret
+
+l2_pass:        ld   a, (LVL_DEPTH)
+                cp   2
+                ret  c                  ; D1: none
+                ld   hl, (GEN_RNG)
+                ld   (LG_RNG0), hl
+                ld   hl, $0804          ; odds wide 1/4, mid-block 1/8 (D2-3), tuned on a sweep
+                cp   4
+                jr   c, .o
+                ld   hl, $0201          ; D4-8: wide 1/1, mid-block 1/2
+.o:             ld   (LG_ODDS), hl
+                xor  a
+                ld   (LG_NW), a
+                ld   (LG_NB), a
+                ld   ix, ROOM_DESC
+.room:          bit  0, (ix+RD_FLAGS)
+                jr   z, .rn
+                ld   a, (ix+RD_FLAGS)
+                and  RDF_START | RDF_LAIR
+                jr   nz, .rn
+                xor  a
+                call l2_kind
+                jr   c, .rn
+                ld   a, 1
+                call l2_kind
+.rn:            ld   de, RD_STRIDE
+                add  ix, de
+                ld   a, ixl
+                cp   LG_ROOMS_END
+                jr   nz, .room
+                ld   hl, (LG_RNG0)
+                ld   (GEN_RNG), hl
                 ret
 
 ;==============================================================================

@@ -129,6 +129,15 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
       pit col, onto a hole the screen shows (before the fix a left-exit step
       landed on x == 0 == "no pit" RD_PITCOL and dropped the hero).
 
+  L2 (game.md §1.1 "Mid-room block" / "Wide pit", §2.4 / §2.5):
+  W26 Python: room_model maps of a D2-D8 seed sweep == levelcheck's storey-0
+      divider model (walk components, fall x = p .. p+W-3). Emulator, forced L2
+      rooms (W 4/5/6, w 2/3): map == model, screens == map (bar animated
+      decor cells), the hero falls only
+      over the span (walk from both sides, cut-short jumps), walkers refuse it,
+      a flyer crosses; the mid-block stops walking and jumping from both faces
+      and walkers; re-entry byte-identical.
+
 Usage: ZRCP_PORT=10001 python3 tests/world.py [W1 W3 W11 ...] [--update-golden [--png DIR]]
 """
 import os
@@ -2475,8 +2484,12 @@ def invariants(blk, r, m, d):
                     lad[(col + k, row)] = (col, st)
     pit = set()
     p_ = fld("RD_PITCOL")
+    pw = room_model.pit_width(room_model.desc(blk, r))      # L2: wide pit W 4..6
     if p_:
-        pit = {(c, F0) for c in range(p_ - 1, p_ + 4)}
+        pit = {(c, F0) for c in range(p_ - 1, p_ + pw + 1)}
+        for c in range(p_, p_ + pw):
+            if m[F0 * 32 + c] != T["T_AIR"]:
+                bad.append(("pit hole", c, F0, m[F0 * 32 + c]))
     door = set()
     ex = fld("RD_EXITS")
     for side, bit, sbit, c0 in (("L", "RDX_L", "RDX_LS1", 0), ("R", "RDX_R", "RDX_RS1", 30)):
@@ -2490,6 +2503,15 @@ def invariants(blk, r, m, d):
         st = 1 if b & S["RDB_S1"] else 0
         cols = range(32 - w, 32) if b & S["RDB_RIGHT"] else range(w)
         blkc = {(c, row) for c in cols for row in range(SR * st, SR * st + SA + 1)}
+    mb, mw = fld("L2_MIDB"), fld("L2_MIDW")
+    if mb:                                     # L2 mid-room block: storey 0, rubble both faces
+        midc = {(c, row) for c in range(mb, mb + mw) for row in range(SA + 1)}
+        if blkc & midc:
+            bad.append(("overlap block/mid-block", sorted(blkc & midc)[:2]))
+        blkc |= midc
+        for c in (mb - 1, mb + mw):
+            if m[(SA - 1) * 32 + c] != T["T_RUBBLE"]:
+                bad.append(("mid-block rubble", c, SA - 1, m[(SA - 1) * 32 + c]))
     for a_, b_, n in ((blkc, door, "block/door"), (blkc, set(lad), "block/ladder"), (blkc, pit, "block/pit"),
                       (pit, set(lad), "pit/ladder"), (door, set(lad), "door/ladder")):
         if a_ & b_:
@@ -2523,7 +2545,7 @@ def invariants(blk, r, m, d):
             if t in door_ids and (c, row) not in door:
                 bad.append(("door tile", c, row, t))
             if t in (T["T_END_L"], T["T_END_R"]):
-                ok = row == F0 and ((t == T["T_PIT_L"] and c == p_ - 1) or (t == T["T_PIT_R"] and c == p_ + 3)
+                ok = row == F0 and ((t == T["T_PIT_L"] and c == p_ - 1) or (t == T["T_PIT_R"] and c == p_ + pw)
                                     or (t == T["T_END_R"] and c + 1 in holes8)
                                     or (t == T["T_END_L"] and c - 1 in holes8))
                 if not ok:
@@ -2657,7 +2679,7 @@ def run_gen_suites(p, check):
     if want("W12M"):
         rng = __import__("random").Random(0x12B)
         nroom = bad_n = 0
-        feats = dict(doors=0, pits=0, blocks=0, arr=0, exit=0, lad2=0)
+        feats = dict(doors=0, pits=0, blocks=0, arr=0, exit=0, lad2=0, wide=0, mid=0)
         for i in range(40):
             d, seed, master = rng.randint(1, 8), rng.randrange(65536), rng.randrange(65536)
             want_blk = G.generate(d, seed, master)
@@ -2684,6 +2706,8 @@ def run_gen_suites(p, check):
                 feats["arr"] += bool(fld("RD_ARRCOL"))
                 feats["exit"] += bool(fld("RD_EXITCOL"))
                 feats["lad2"] += bool(fld("RD_LAD2"))
+                feats["wide"] += bool(fld("L2_PITW"))            # L2 (W26 plays them)
+                feats["mid"] += bool(fld("L2_MIDB"))
                 feats["doors"] += sum(1 for side in ("L", "R")
                                       if fld("RD_EXITS") & S["RDX_" + side]
                                       and want_blk[room_model.OFF_EDGE + room_model.edge_index(r, side)]
@@ -3415,6 +3439,214 @@ def w21_exits(p, check):
         p.proto_start = 1
         p.load()
 
+L2_CASES = (("wide", 4, 13, 7), ("wide", 4, 1, 7), ("wide", 4, 5, 0),     # W 4 / 5 / 6
+            ("mid", 4, 4, 4), ("mid", 4, 2, 8))                           # w 2 / 3
+
+
+def l2_walk_parts(m, kh):
+    """W26 (Python): the storey-0 hero walk graph read off a built map (decor off):
+    x in 1..28 stands iff the body cells (rows 8-kh..7, cols x..x+2) hold no solid
+    tile and not all 3 floor cells below are T_AIR (body fully over holes = a fall).
+    -> (standing x set, fall x set, components as sorted lists)."""
+    T = room_model.T
+    F0, SA = S["FLOOR_ROW0"], S["STOREY_AIR"]
+    solid = {T[k] for k in ("T_BRICK", "T_WALLF", "T_DOOR_ARCH_L", "T_DOOR_ARCH_R", "T_DOOR_L",
+                            "T_DOOR_R", "T_DOOR_LOCK")}
+    stand, fall = set(), set()
+    for x in range(1, 29):
+        if any(m[row * 32 + c] in solid for row in range(SA - kh, SA) for c in range(x, x + 3)):
+            continue
+        if all(m[F0 * 32 + c] == T["T_AIR"] for c in range(x, x + 3)):
+            fall.add(x)
+        else:
+            stand.add(x)
+    comps, seen = [], set()
+    for x in sorted(stand):
+        if x in seen:
+            continue
+        comp, y = [], x
+        while y in stand:
+            comp.append(y)
+            seen.add(y)
+            y += 1
+        comps.append(comp)
+    return stand, fall, comps
+
+
+def w26_l2(p, check):
+    """W26 (L2 engine, game.md §1.1 "Mid-room block" / "Wide pit", §2.4 / §2.5).
+    Python: the room_model maps of a seed sweep (D2-D8) agree with levelcheck's
+    storey-0 model (one divider at p / b: walk components {x < d} / {x >= d}; the
+    fall x set == p .. p+W-3; no divider = one component). Emulator, per forced
+    L2 room (L2_CASES, generated by the Z80 level_gen into a PROTO game, then
+    room_show): map == model, both screens == map; wide pit: walking in falls at
+    x == p (from the left) / p+W-3 (from the right) and stands at p-1 / p+W-2,
+    a jump over it is cut short and falls at p+W-3 / p; walkers (try_step) refuse
+    p / p+W-3 and take p-1 / p+W-2, a flyer crosses; mid-block: walking into
+    either face = no turn, the rubble col is walkable, a jump across = no turn,
+    walkers refuse both faces; re-entry: ROOM_MAP + both screens + shadow
+    byte-identical."""
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
+    import levelgen as G
+    T = room_model.T
+    kw, kh = game.body(p, K_KNIGHT)
+    # ---- Python: levelcheck's divider model == the room_model map ----------
+    nl2 = nbad = 0
+    for d in range(2, 9):
+        for sd in range(1, 41):
+            blk = G.generate(d, sd, 0)
+            for r in present_rooms(blk):
+                m = room_model.render_room(blk, r, decor=False)
+                stand, fall, comps = l2_walk_parts(m, kh)
+                dsc = room_model.desc(blk, r)
+                div = dsc[S["RD_PITCOL"]] or dsc[S["L2_MIDB"]]
+                nl2 += bool(dsc[S["L2_PITW"]] or dsc[S["L2_MIDB"]])
+                want_c = [[x for x in sorted(stand) if x < div], [x for x in sorted(stand) if x >= div]] \
+                    if div else [sorted(stand)]
+                if comps != want_c or fall != set(room_model.fall_range(blk, r)):
+                    nbad += 1
+                    if nbad <= 3:
+                        check(f"W26 D{d} seed {sd} r{r}: map walk graph == levelcheck divider", False,
+                              (div, comps, sorted(fall), list(room_model.fall_range(blk, r))))
+    check(f"W26 Python sweep D2-D8 x 40 seeds: storey-0 walk components / fall x of every "
+          f"room map == levelcheck's divider model ({nl2} L2 rooms)", nbad == 0 and nl2 >= 40, (nbad, nl2))
+    # ---- emulator: forced L2 rooms ------------------------------------------
+    y0, y1 = stand_y(0, kh), stand_y(1, kh)
+    HERO_R = EF_ACTIVE | EF_PLAYER
+
+    def stub_step(slot, x, y, dx):
+        """try_step(IX = slot at (x, y), D = dx) in place; -> 0xFF moved / 0 refused."""
+        p.set_ent(slot, ROOM=p.rb("CUR_ROOM"), X=x, Y=y, PX=8 * x, PY=8 * y, MODE=0,
+                  FLAGS=EF_ACTIVE | EF_HOSTILE | (EF_LEFT if dx < 0 else 0))
+        pc0 = p.pc()
+        code = ([0xF3, 0xCD] + w16(S["build_live"]) + [0xCD] + w16(S["cache_player"]) +
+                [0x3E, slot, 0x32] + w16(S["ACT_SLOT"]) + [0xAF, 0x32] + w16(S["YIELD_FLAG"]) +
+                [0xDD, 0x21] + w16(S["P_ENTITIES"] + 32 * slot) +
+                [0x16, dx & 0xFF, 0x1E, 0, 0xCD] + w16(S["try_step"]) +
+                [0x9F, 0x32] + w16(S["MSG_BUF"]) + [0xFB])
+        ok = p.run_stub(code, org=S["LOWRAM_END_3B"])
+        p.z.cmd("set-register PC=%d" % pc0)
+        res = p.rb("MSG_BUF")
+        p.set_ent(slot, ROOM=GEN_NOWHERE)
+        return res if ok else None
+
+    def hero_at(x, y=None, left=False):
+        p.set_ent(0, X=x, Y=y0 if y is None else y, PX=8 * x, PY=8 * (y0 if y is None else y), MODE=0,
+                  HP=20, FLAGS=HERO_R | (EF_LEFT if left else 0))
+        p.wb("JUMP_TURN", 0xFF)
+        p.wb(S["JUMP_TURN"] + 1, 0xFF)
+        p.settle()
+
+    def screens_ok(tag):
+        """W4 bar the animated decor cells (decor_tick steps them; W14 owns those)."""
+        n = p.rb("ANIM_N")
+        al = p.z.read_memory(S["ANIM_LIST"], 4 * n) if 0 < n <= 12 else b""
+        anim = {(al[i], al[i + 1]) for i in range(0, len(al), 4)}
+        bad = []
+        for scr, fr in (("displayed", p.frame()), ("composed", p.composed_frame())):
+            cells = [(c, r_) for c, r_ in p.bg_mismatch_in(fr) if (c, r_) not in anim]
+            if cells:
+                bad.append((tag, scr, len(cells), cells[:4]))
+        return bad
+
+    try:
+        for kind, d, sd, r in L2_CASES:
+            want_blk = G.generate(d, sd, 0)
+            dsc = room_model.desc(want_blk, r)
+            p.boot(K_KNIGHT)
+            kinds = {s_: p.ent(s_)["KIND"] for s_ in range(1, 16)}
+            for s_ in range(1, 16):
+                p.set_ent(s_, ROOM=GEN_NOWHERE)
+            p.z.cmd("write-memory %d %d %d" % (S["LVL_SEED"], sd & 255, sd >> 8))
+            p.z.cmd("write-memory %d 0 0" % S["MASTER_SEED"])
+            pc0 = p.pc()
+            ok = p.run_stub([0xF3, 0x3E, d, 0x21] + w16(S["level_gen"]) + [0xCD] + w16(S["far3"])
+                            + [0x3A] + w16(S["LVL_DEPTH"]) + [0xCD] + w16(S["level_load_tiles"])
+                            + [0x3E, r, 0x32] + w16(S["CUR_ROOM"])
+                            + [0x3E, r, 0xCD] + w16(S["room_show"]) + [0xCD] + w16(S["vis_reset"])
+                            + [0xCD] + w16(S["present_full"]) + [0xFB], org=S["LOWRAM_END_3B"])
+            p.z.cmd("set-register PC=%d" % pc0)
+            p.set_ent(0, ROOM=r)
+            blk = room_model.read_block(p)
+            tag = f"W26 {kind} D{d} seed {sd} r{r}"
+            check(f"{tag}: Z80 level_gen == levelgen.py, the L2 room shown", ok and blk == want_blk, ok)
+            # hero somewhere safe first (storey 1, x = 2..) for the screen check
+            hero_at(14, y1)
+            bad = map_structure(p, r) + invariants(blk, r, bytes(p.z.read_memory(S["ROOM_MAP"], 576)), d)
+            bad += screens_ok(tag)
+            check(f"{tag}: map == model + invariants, both screens == ROOM_MAP", bad == [], bad[:3])
+            walker = [s_ for s_, k in kinds.items() if k == S["K_GOBLIN"]][0]
+            wide4 = [s_ for s_, k in kinds.items() if k == S["K_RAT"]][0]
+            flyer = [s_ for s_, k in kinds.items() if k == S["K_BAT"]][0]
+            gy = stand_y(0, game.body(p, S["K_GOBLIN"])[1])
+            ry = stand_y(0, game.body(p, S["K_RAT"])[1])
+            if kind == "wide":
+                pp, W = dsc[S["RD_PITCOL"]], dsc[S["L2_PITW"]]
+                for left, x0, keys, xs_stand, xf in ((False, pp - 3, "L", (pp - 2, pp - 1), pp),
+                                                      (True, pp + W, "H", (pp + W - 1, pp + W - 2), pp + W - 3)):
+                    hero_at(x0, left=left)
+                    xs = []
+                    for _ in range(4):
+                        p.turn(keys)
+                        e = p.ent(0)
+                        xs.append((e["X"], e["Y"]))
+                        if e["Y"] != y0:
+                            break
+                    e = p.ent(0)
+                    check(f"{tag} (p {pp}, W {W}): walking {'left' if left else 'right'} stands at "
+                          f"{xs_stand}, falls at x {xf} onto storey 1, 1d4",
+                          xs == [(xs_stand[0], y0), (xs_stand[1], y0), (xf, y1)] and 16 <= e["HP"] <= 19
+                          and e["MODE"] == 0, (xs, e["HP"], e["MODE"]))
+                    p.settle()
+                    bad = screens_ok(tag + " fell")
+                    check(f"{tag}: after the fall both screens == ROOM_MAP", bad == [], bad[:3])
+                for left, x0, xf in ((False, pp - 3, pp + W - 3), (True, pp + W, pp)):
+                    hero_at(x0, left=left)
+                    ok = p.turn("K", "H" if left else "L")
+                    e = p.ent(0)
+                    check(f"{tag}: a jump {'left' if left else 'right'} from x {x0} is cut short, falls at {xf}",
+                          (ok, e["X"], e["Y"]) == (True, xf, y1) and e["HP"] < 20, (ok, e["X"], e["Y"], e["HP"]))
+                    p.settle()
+                hero_at(14, y1)
+                res = [stub_step(walker, pp - 2, gy, 1), stub_step(walker, pp - 1, gy, 1),
+                       stub_step(wide4, pp + W - 1, ry, -1), stub_step(wide4, pp + W - 2, ry, -1)]
+                check(f"{tag}: walkers take p-1 / p+W-2, refuse p / p+W-3 (goblin, rat)",
+                      res == [0xFF, 0, 0xFF, 0], res)
+                fy = stand_y(0, game.body(p, S["K_BAT"])[1])
+                res = [stub_step(flyer, pp - 1, fy, 1), stub_step(flyer, pp + 1, fy, 1)]
+                check(f"{tag}: a flyer crosses the span", res == [0xFF, 0xFF], res)
+            else:
+                b, w = dsc[S["L2_MIDB"]], dsc[S["L2_MIDW"]]
+                hero_at(b - 4)
+                ok1 = p.turn("L") and p.ent(0)["X"] == b - 3
+                ok2 = p.no_turn("L") and p.ent(0)["X"] == b - 3
+                ok3 = p.no_turn("K", "L") and p.ent(0)["X"] == b - 3
+                hero_at(b - 6)
+                ok4 = p.no_turn("K", "L")
+                hero_at(b + w + 1, left=True)
+                ok5 = p.turn("H") and p.ent(0)["X"] == b + w
+                ok6 = p.no_turn("H") and p.ent(0)["X"] == b + w
+                ok7 = p.no_turn("K", "H") and p.ent(0)["X"] == b + w
+                check(f"{tag} (b {b}, w {w}): walks onto the rubble cols, the block stops walking "
+                      "and jumping from both faces (no turn)", (ok1, ok2, ok3, ok4, ok5, ok6, ok7) == (True,) * 7,
+                      (ok1, ok2, ok3, ok4, ok5, ok6, ok7, p.ent(0)["X"]))
+                hero_at(14, y1)
+                rw = game.body(p, S["K_RAT"])[0]
+                res = [stub_step(wide4, b - rw - 1, ry, 1), stub_step(wide4, b - rw, ry, 1),
+                       stub_step(walker, b + w + 1, gy, -1), stub_step(walker, b + w, gy, -1)]
+                check(f"{tag}: walkers stop at both faces (rat, goblin)", res == [0xFF, 0, 0xFF, 0], res)
+            # re-entry byte-identical (W12): build, leave via another room, rebuild
+            other = [x for x in present_rooms(blk) if x != r][0]
+            ok1, _ = show_room(p, r)
+            a = snapshot(p)
+            ok2, _ = show_room(p, other)
+            ok3, _ = show_room(p, r)
+            b_ = snapshot(p)
+            check(f"{tag}: re-entry == first entry (ROOM_MAP, bank 5, screen 2, shadow)",
+                  ok1 and ok2 and ok3 and a == b_, [i for i in range(4) if a[i] != b_[i]])
+    finally:
+        p.load()
+
 
 def main():
     fails = []
@@ -3814,10 +4046,12 @@ def main():
                       and all(px == 8 * pit for px, _ in drop) and first_dn > last_up, samples)
                 p.settle()
             w4("W8 jump fall")
-            # wide pit (L2 not built yet: pit_w's immediate poked to W = 5, logic
-            # only, holes p..p+4): a jump whose span holds a hole is cut short
-            # and falls at x_f = p+W-3 (right) / p (left), arc 2 |x_f - x| ticks
-            p.wb(S["pit_w"] + 1, 5)
+            # wide pit (room B's L2_PITW poked to W = 5, logic only: the map
+            # keeps 3 holes; W26 plays real generated wide pits): a jump whose
+            # span holds a hole is cut short and falls at x_f = p+W-3 (right) /
+            # p (left), arc 2 |x_f - x| ticks
+            pitw_b = S["ROOM_DESC"] + S["RD_STRIDE"] + S["L2_PITW"]
+            p.wb(pitw_b, 5)
             for left, x0, xf in ((False, pit - 3, pit + 2), (True, pit + 5, pit)):
                 p.isolate()
                 free_jump()
@@ -3828,11 +4062,11 @@ def main():
                             per_tick=lambda fr, e: samples.append((e["PX"], e["PY"])))
                 e = hero()
                 rise = [py - 8 * y0 for _, py in samples if py < 8 * y0]
-                check(f"W8 wide pit (W 5 poked) {'left' if left else 'right'}: cut short, falls at x_f",
+                check(f"W8 wide pit (L2_PITW 5 poked) {'left' if left else 'right'}: cut short, falls at x_f",
                       (ok, e["X"], e["Y"], rise) == (True, xf, y1, [-4, -8, -12, -16, -16, -16, -16, -16, -12, -8]),
                       (ok, e["X"], e["Y"], rise))
                 p.settle()
-            p.wb(S["pit_w"] + 1, 3)
+            p.wb(pitw_b, 0)
             p.isolate()
             free_jump()
             p.place(0, pit - 6, y0, flags=HERO_R)
@@ -4081,6 +4315,10 @@ def main():
         # ================= B11: storey-0 exits, invisible pit (W21) ========
         if want("W21"):
             w21_exits(p, check)
+
+        # ================= L2: wide pits + mid-room blocks (W26) ============
+        if want("W26"):
+            w26_l2(p, check)
 
         # ================= B3B-12: level change (W16) =======================
         if want("W16"):

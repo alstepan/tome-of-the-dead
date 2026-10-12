@@ -8,6 +8,7 @@ concept-screen §3.1, docs/memory-map.md "3B contracts"), NOT from the Z80.
   orn_index(col)       -> ORN_GLYPHS index of logical col `col` (row 17)
   expected_cell(...)   -> (glyph 8 B, attr) the screen must show for a map cell
   segments(blk, r)     -> [(col, s)] ladder segments in descriptor order
+  fall_range(blk, r)   -> the storey-0 x range the hero falls at (L2 wide pits)
 Every number comes from the .sym (game_lib.S) or tools/levelgen.py's parse of
 src/level_defs.asm, never typed here.
 """
@@ -46,6 +47,19 @@ def desc(blk, r):
 
 def field(blk, r, name):
     return desc(blk, r)[S[name]]
+
+
+def pit_width(d):
+    """W of the descriptor's storey-0 pit: L2_PITW (wide, 4..6), 0 there = the narrow 3."""
+    return d[S["L2_PITW"]] or 3
+
+
+def fall_range(blk, r):
+    """game.md §2.5 / §1.1 "Wide pit" (4): the storey-0 x a 3-col hero falls at (body fully
+    over holes) and every walker refuses: p .. p+W-3 (empty without a pit)."""
+    d = desc(blk, r)
+    p = d[S["RD_PITCOL"]]
+    return range(p, p + pit_width(d) - 2) if p else range(0)
 
 
 def segments(blk, r):
@@ -115,9 +129,10 @@ def render_room(blk, r, decor=True, anim=None):
                 m[row][dcol + 1] = T["T_DOOR_LOCK"] if st & (S["EG_LOCK"] | S["EG_SEAL"]) \
                     else T["T_DOOR_R"]
     p = d[S["RD_PITCOL"]]
-    if p:
-        m[F0][p - 1], m[F0][p + 3] = T["T_PIT_L"], T["T_PIT_R"]
-        for c in range(p, p + 3):
+    if p:                                      # L2 (game.md §1.1 "Wide pit"): W holes
+        pw = pit_width(d)
+        m[F0][p - 1], m[F0][p + pw] = T["T_PIT_L"], T["T_PIT_R"]
+        for c in range(p, p + pw):
             m[F0][c] = T["T_AIR"]
     blk_b = d[S["RD_BLOCK"]]
     w = blk_b & S["RDB_WMASK"]
@@ -130,6 +145,14 @@ def render_room(blk, r, decor=True, anim=None):
                 m[row][c] = T["T_BRICK"]
             m[SR * s + SA][c] = T["T_WALLF"]
         m[SR * s + SA - 1][31 - w if right else w] = T["T_RUBBLE"]
+    b = d[S["L2_MIDB"]]
+    if b:                                      # L2 mid-room block (game.md §1.1): storey 0,
+        w = d[S["L2_MIDW"]]                    # wall like an edge block, rubble on both faces
+        for c in range(b, b + w):
+            for row in range(SA):
+                m[row][c] = T["T_BRICK"]
+            m[F0][c] = T["T_WALLF"]
+        m[SA - 1][b - 1] = m[SA - 1][b + w] = T["T_RUBBLE"]
     for col, s in segments(blk, r):
         for row in range(SR * s - 1, SR * s + SA):
             if not 0 <= row < ROWS:

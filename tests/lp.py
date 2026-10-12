@@ -155,6 +155,14 @@ def props(p, blk, r, slots, hs, hx, hw, tf):
                 bad.append((k, x, s_, "arrival box", lo))
         if s_ == hs and not (x >= hx + hw + 5 or x + w + 5 <= hx):
             bad.append((k, x, s_, "within 5 cols of the arrival (8 on tries 1-4)", hx))
+        # L2 (game.md 1.1): written from the rules, straight off the descriptor bytes
+        o = G.OFF_DESC + r * 16
+        mb, mw, pw, pp = blk[o + G.L2_MIDB], blk[o + G.L2_MIDW], blk[o + G.L2_PITW], blk[o + G.D["RD_PITCOL"]]
+        if s_ == 0 and mb and x <= mb + mw and x + w - 1 >= mb - 1:
+            bad.append((k, x, s_, "inside / against the mid-block", mb, mw))
+        if pw and ((s_ == 0 and x <= pp + pw and x + w - 1 >= pp - 1) or
+                   (s_ == 1 and x <= pp + pw - 1 and x + w - 1 >= pp)):
+            bad.append((k, x, s_, "on a wide-pit fall column", pp, pw))
     return bad
 
 
@@ -169,6 +177,20 @@ def part_a(h, p, check, nrand):
     rng = random.Random(0x1F9)
     pairs = [(d, s) for d in range(1, 9) for s in (0x0001, 0x1234, 0xBEEF)]
     pairs += [(rng.randint(1, 8), rng.randrange(65536)) for _ in range(nrand)]
+    l2set = set()                                   # targeted L2 levels: outside the T mean (they are worst cases)
+    for d in range(2, 9):                           # L2: levels with a wide pit / a mid-block
+        nw = nm = 0
+        for sd in range(1, 20000):
+            if nw >= 2 and nm >= 2:
+                break
+            bb = G.generate(d, sd)
+            kw = any(bb[G.OFF_DESC + 16 * r + G.L2_PITW] for r in range(9))
+            km = any(bb[G.OFF_DESC + 16 * r + G.L2_MIDB] for r in range(9))
+            if (kw and nw < 2) or (km and nm < 2):
+                pairs.append((d, sd))
+                l2set.add((d, sd))
+                nw += kw
+                nm += km
     worst = (0, "")
     nb = ne = 0
     tss = []
@@ -207,7 +229,8 @@ def part_a(h, p, check, nrand):
                   good, (ok, sl, ws, got2.hex(), wl2.hex()))
             bad = props(p, blk, r, sl, hs, hx, hw, tf)
             check(f"A3 d{d} seed {seed:#06x} room {r}: placement properties", bad == [], bad[:3])
-            tss.append(ts)
+            if (d, seed) not in l2set:
+                tss.append(ts)
             if ts > worst[0]:
                 worst = (ts, f"d{d} {seed:#06x} r{r} n{len(sl)} rnd calls {G.LP_CALLS}")
             lp_ = got2
@@ -215,9 +238,11 @@ def part_a(h, p, check, nrand):
     print(f"[lp] A1 {nb}/{len(pairs)} budgets, A2 {ne} entries ok; lp_enter (DI, incl. far3 ~0.4k) "
           f"mean {sum(tss) // len(tss)} T, median {tss[len(tss) // 2]}, 90% {tss[len(tss) * 9 // 10]}, "
           f"worst {worst[0]} T ({worst[1]})", flush=True)
-    # game.md §9.4.3 (revised 2026-10-06): accepted mean <= 20k, worst <= 40k T
-    check(f"A2 lp_enter worst {worst[0]} T <= {LP_T_GUARD}, mean {sum(tss) // len(tss)} <= 20000",
-          worst[0] <= LP_T_GUARD and sum(tss) // len(tss) <= 20000, worst)
+    # game.md §9.4.3 (revised 2026-10-06): accepted mean <= 20k, worst <= 40k T.
+    # Mean limit 21k since L2 (manager 2026-10-07): mid-blocks / wide pits add obstacles
+    # (measured 20,119 T); the worst limit is unchanged.
+    check(f"A2 lp_enter worst {worst[0]} T <= {LP_T_GUARD}, mean {sum(tss) // len(tss)} <= 21000",
+          worst[0] <= LP_T_GUARD and sum(tss) // len(tss) <= 21000, worst)
     return worst
 
 

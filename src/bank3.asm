@@ -751,8 +751,11 @@ glow_ids:       DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_G
 ;            (EDGE_TAB, index from the room id) = lintel WALL row 9s, arch 9s+1,
 ;            planks 9s+2..9s+7 (closed / LOCK plank if locked or sealed / the
 ;            open-door jambs, B10)
-;   pit      row 8: T_PIT_L p-1, AIR p..p+2, T_PIT_R p+3
+;   pit      row 8: T_PIT_L p-1, AIR p..p+W-1, T_PIT_R p+W (W = L2_PITW: the
+;            L2 wide pit, 4..6; 0 = the narrow 3). Storey 1 below is plain floor
 ;   block    RD_BLOCK: w cols WALL (WALLF floor row), RUBBLE at its foot
+;   mid      L2_MIDB (L2 mid-room block, storey 0): cols b..b+w-1 as a block,
+;            RUBBLE at both feet (row 7, cols b-1 and b+w)
 ;   segments the 6 col bytes RD_UPCOL..RD_LAD2 as {c,s} (seg_storey): ladder
 ;            rows 9s-1..9s+7 clipped; row 8 = HOLE + T_END_R / T_END_L caps on
 ;            the platform either side; row 17 = HOLE, no caps (the ornament
@@ -825,6 +828,9 @@ build_room_map:
                 call nz, .pit
                 ld   a, (ix+RD_BLOCK)
                 call .block
+                ld   a, (ix+L2_MIDB)
+                or   a
+                call nz, .mid
                 ; shafts and ladders: RD_UPCOL .. RD_LAD2 as {c, s}
                 push ix
                 pop  hl
@@ -1031,23 +1037,41 @@ build_room_map:
                 ASSERT DOOR_ARCH_DY == 1 && DOOR_PLANK_DY == 2 && DOOR_COLS == 2
                 ASSERT RDX_LS1 == RDX_L << 4 && RDX_RS1 == RDX_R << 4
 
-.pit:           ; A = p (game.md §2.5): row 8, cap T_PIT_L at p-1, holes p..p+2
-                ; AIR, cap T_PIT_R at p+3
+.pit:           ; A = p (game.md §2.5, §1.1 "Wide pit"): row 8, cap T_PIT_L at
+                ; p-1, holes p..p+W-1 AIR, cap T_PIT_R at p+W
                 dec  a
                 ld   c, a
                 ld   b, FLOOR_ROW0
                 call map_cell
                 ld   (hl), T_PIT_L
-                inc  hl
+                ld   a, (ix+L2_PITW)
+                or   a
+                jr   nz, .pw
+                ld   a, PIT_W_NARROW
+.pw:            ld   b, a
+.ph:            inc  hl
                 ld   (hl), T_AIR
-                inc  hl
-                ld   (hl), T_AIR
-                inc  hl
-                ld   (hl), T_AIR
+                djnz .ph
                 inc  hl
                 ld   (hl), T_PIT_R
                 ret
-                ASSERT FEAT_W == 3
+                ASSERT PIT_W_NARROW == FEAT_W
+
+.mid:           ; A = b (game.md §1.1 "Mid-room block"): storey 0, cols b..b+w-1
+                ; rows 0..7 WALL, row 8 WALLF (.wall), RUBBLE at row 7 cols b-1
+                ; and b+w
+                ld   c, a
+                ld   d, (ix+L2_MIDW)
+                ld   b, 0
+                call .wall                     ; B = row 7
+                dec  c
+                call map_cell
+                ld   (hl), T_RUBBLE
+                ld   a, d
+                inc  a
+                call hla                       ; -> col b+w
+                ld   (hl), T_RUBBLE
+                ret
 
 .block:         ; A = RD_BLOCK: w cols at the left / right edge of storey s,
                 ; rows 9s..9s+7 WALL, floor row WALLF, RUBBLE at its foot (row
@@ -1067,6 +1091,20 @@ build_room_map:
                 jr   z, .bs
                 ld   a, STOREY_ROWS
 .bs:            ld   b, a                      ; 9s
+                call .wall                     ; B = row 9s+7
+                ld   a, c
+                or   a
+                ld   a, d                      ; left: col w
+                jr   z, .rc
+                ld   a, c
+                dec  a                         ; right: col 31-w
+.rc:            ld   c, a
+                call map_cell
+                ld   (hl), T_RUBBLE
+                ret
+
+.wall:          ; B = 9s, C = left col, D = w: rows 9s..9s+7 WALL, the floor row
+                ; 9s+8 WALLF (edge and mid blocks). Out: B = 9s+7; C, D kept
                 ld   e, STOREY_ROWS            ; 8 air rows + the floor row
 .br:            call map_cell
                 ld   a, e
@@ -1085,15 +1123,6 @@ build_room_map:
                 jr   nz, .br
                 dec  b
                 dec  b                         ; row 9s+7
-                ld   a, c
-                or   a
-                ld   a, d                      ; left: col w
-                jr   z, .rc
-                ld   a, c
-                dec  a                         ; right: col 31-w
-.rc:            ld   c, a
-                call map_cell
-                ld   (hl), T_RUBBLE
                 ret
 
 .lad:           ; A = col (0: none), E = s: {c,s} rows 9s-1 .. 9s+7 clipped

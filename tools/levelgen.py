@@ -158,6 +158,20 @@ LAIR_RESEEDS = 0            # L1: times no lair candidate existed (must stay 0)
 LAST = (0, 0, 0)            # (restarts, rnd calls, reseeds) of the last generate()
 
 
+# ---- L2 (game.md 1.1 "Mid-room block" / "Wide pit"): a LAST pass ------------------
+# Descriptor fields in the RD_SPARE bytes (level_defs.asm): L2_PITW = wide-pit width W
+# (4..6; 0 = RD_PITCOL is the ordinary 3-col pit), L2_MIDB = mid-block left col b
+# (0 = none), L2_MIDW = its width w (2..3). RD_SPARE+3 stays 0.
+L2_PITW = sym("L2_PITW")
+L2_MIDB = sym("L2_MIDB")
+L2_MIDW = sym("L2_MIDW")
+# tuned on a 300-seed sweep (per level: mid-block / wide pit): D2-3 0.22 / 0.09, D4-8 ~0.65 / ~0.30
+# (wide = 1 in 1: every eligible room tries; the geometry, not the odds, caps it near 0.3)
+L2_ODDS_W = {2: 4, 3: 4, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}        # wide pit: 1 in N per room; none on D1
+L2_ODDS_M = {2: 8, 3: 8, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2}        # mid-block
+L2_MAX = 2                                                     # per feature per level
+
+
 class Room:
     def __init__(self):
         self.present = False
@@ -166,6 +180,7 @@ class Room:
         self.up = self.dn = self.arr = self.exitcol = 0
         self.lad1 = self.lad2 = self.pit = self.block = 0
         self.seed = 0
+        self.pitw = self.midb = self.midw = 0
 
     def fps(self, s):
         if s == 0:
@@ -241,7 +256,71 @@ def item_col_ok(room, s, col):
     return 2 <= col <= 29
 
 
-def attempt(rng, depth):
+def l2_clear(room, mask_cols, x, lft, wd, rgt):
+    """every footprint f of `mask_cols` keeps f+lft <= x or f >= x+wd+rgt"""
+    return all(f + lft <= x or f >= x + wd + rgt for f in mask_cols if f)
+
+
+def l2_items(floor, r, lo, hi):
+    return any(e[0] == r and lo <= e[1] <= hi for e in floor)          # storey-0 items
+
+
+def l2_pass(rng, rooms, floor, depth, start, lair):
+    """L2 (designer 2026-10-07): per non-start/lair room in id order, wide pit
+    first, else mid-block. A narrow pit is removed while trying (restored on
+    failure); a 1-ladder room gets a 2nd ladder at a seeded col per try (3..26,
+    FEAT_GAP both storeys, no item under it, not on an edge block), kept only
+    if the feature fits. 8 tries; W / w, the ladder col, then p / b are rolled
+    in that order every try."""
+    odds = (L2_ODDS_W.get(depth, 0), L2_ODDS_M.get(depth, 0))
+    if not (odds[0] or odds[1]):
+        return
+    cnt = [0, 0]
+    for r in range(9):
+        rm = rooms[r]
+        if not rm.present or r == start or r == lair:
+            continue
+        for kind in (0, 1):                                    # 0 wide pit, 1 mid-block
+            if rm.pitw or rm.midb:
+                break
+            if cnt[kind] >= L2_MAX or not odds[kind] or rng.rnd(odds[kind]):
+                continue
+            n_w, base, lft, rgt = ((3, 4, 7, 4), (2, 2, 6, 3))[kind]
+            pit0 = rm.pit
+            rm.pit = 0                                         # a narrow pit makes way
+            for _ in range(D["FEAT_TRIES"]):
+                W = base + rng.rnd(n_w)
+                new = 0
+                if not rm.lad2:                                # add the missing 2nd ladder
+                    n = D["LAD_COL_MIN"] + rng.rnd(D["LAD_COL_MAX"] - D["LAD_COL_MIN"] + 1)
+                    if not legal(rm, n, (0, 1)) or any((e[0] & 15) == r and n <= e[1] <= n + 2 for e in floor):
+                        continue
+                    if rm.block:
+                        bw = rm.block & D["RDB_WMASK"]
+                        blo, bhi = (31 - bw, 31) if rm.block & D["RDB_RIGHT"] else (0, bw)
+                        if not (n + 2 < blo or n > bhi):
+                            continue
+                    new = n
+                c1, c2 = min(rm.lad1, rm.lad2 or new), max(rm.lad1, rm.lad2 or new)
+                lo, hi = c1 + lft, c2 - W - rgt
+                if hi < lo:
+                    continue
+                p = lo + rng.rnd(hi - lo + 1)
+                cols = (rm.up, rm.dn, rm.arr, rm.exitcol) if kind == 0 else (rm.up, rm.arr)
+                if l2_clear(rm, cols, p, lft, W, rgt) and not l2_items(floor, r, p - 1, p + W):
+                    if new:
+                        rm.lad2 = new
+                    if kind == 0:
+                        rm.pit, rm.pitw = p, W
+                    else:
+                        rm.midb, rm.midw = p, W
+                    cnt[kind] += 1
+                    break
+            else:
+                rm.pit = pit0
+
+
+def attempt(rng, depth, l2=True):
     rooms = [Room() for _ in range(9)]
     edges = [0] * 6
     n = 7 + rng.rnd(3)
@@ -370,10 +449,14 @@ def attempt(rng, depth):
                 raise Restart
     for r in sorted(visited):
         rooms[r].seed = rng.rnd16()
+    if l2:
+        x0 = rng.x                       # the header keeps the pre-L2 GEN_RNG: LP budgets
+        l2_pass(rng, rooms, floor, depth, start, lair)     # (and all earlier output) unchanged
+        rng.x = x0
     return rooms, edges, floor, start, lair, len(visited)
 
 
-def generate(depth, seed, master=0):
+def generate(depth, seed, master=0, l2=True):
     global LAST
     restarts = reseeds = calls = 0
     for k in range(RESEED_MAX):
@@ -381,7 +464,7 @@ def generate(depth, seed, master=0):
         try:
             for _ in range(MAX_RESTARTS):
                 try:
-                    rooms, edges, floor, start, lair, n = attempt(rng, depth)
+                    rooms, edges, floor, start, lair, n = attempt(rng, depth, l2)
                     break
                 except Restart:
                     restarts += 1
@@ -427,6 +510,9 @@ def generate(depth, seed, master=0):
         b[o + D["RD_LAD2"]] = rm.lad2
         b[o + D["RD_PITCOL"]] = rm.pit
         b[o + D["RD_BLOCK"]] = rm.block
+        b[o + L2_PITW] = rm.pitw
+        b[o + L2_MIDB] = rm.midb
+        b[o + L2_MIDW] = rm.midw
         b[o + D["RD_SEED"]:o + D["RD_SEED"] + 2] = rm.seed.to_bytes(2, "little")
     for i in range(D["FLOOR_MAX"]):
         o = OFF_FLOOR + i * D["FL_STRIDE"]
@@ -530,6 +616,10 @@ def _rd(b, r, k):
     return b[OFF_DESC + r * D["RD_STRIDE"] + D[k]]
 
 
+def _rb(b, r, off):
+    return b[OFF_DESC + r * D["RD_STRIDE"] + off]
+
+
 def lp_bfs(b):
     start = b[H["LVL_START"]]
     dist = {start: 0}
@@ -600,7 +690,11 @@ def lp_hits(b, r, s, lo, hi):
         if f and f <= hi and f + 2 >= lo:
             return True
     p = _rd(b, r, "RD_PITCOL")
-    if s == 0 and p and p - 1 <= hi and p + 3 >= lo:
+    pw = _rb(b, r, L2_PITW) or 3
+    if s == 0 and p and p - 1 <= hi and p + pw >= lo:       # holes + caps (wide: W holes)
+        return True
+    mb, mw = _rb(b, r, L2_MIDB), _rb(b, r, L2_MIDW)
+    if s == 0 and mb and mb - 1 <= hi and mb + mw >= lo:    # mid-block + both rubble cols
         return True
     bl = _rd(b, r, "RD_BLOCK")
     if bl and (bl >> 6) & 1 == s:
@@ -629,7 +723,7 @@ def lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap=8):
     if lp_hits(b, r, s, lo, hi):
         return "bad"
     p = _rd(b, r, "RD_PITCOL")
-    if s == 1 and p and p <= hi and p + 2 >= lo:        # a fall from storey 0 lands here
+    if s == 1 and p and p <= hi and p + (_rb(b, r, L2_PITW) or 3) - 1 >= lo:   # a fall from storey 0 lands here
         return "bad"
     if s == hs and not (x >= hx + hw + gap or x + w + gap <= hx):
         return "gap"                                    # body gap to the arrival box

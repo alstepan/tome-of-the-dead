@@ -27,6 +27,9 @@ def rd(b, r, k):
 SHAFT_LO, SHAFT_HI = 5, 24                       # 1.1 "Shaft cols"
 ATTRS_REF = {1: (0x0F, 0x01), 2: (0x27, 0x04), 3: (0x17, 0x02), 4: (0x28, 0x05),
              5: (0x30, 0x06), 6: (0x38, 0x07), 7: (0x4F, 0x41), 8: (0x1F, 0x03)}  # 1.2
+# L2 descriptor fields (RD_SPARE bytes; written from game.md 1.1, not imported)
+L2_PITW, L2_MIDB, L2_MIDW = D["RD_SPARE"], D["RD_SPARE"] + 1, D["RD_SPARE"] + 2
+L2_ODDS_MAX = 2
 BODY_MIN, BODY_MAX = 1, 28                       # 1.1: hero stands at x = 1 .. x = 28
 DOOR_P, DOOR_TOL = 1 / 3, 0.02                   # 1.1 "1 in 3 carry a door"
 
@@ -56,7 +59,11 @@ def blocked(b, r, s, lo, hi, exempt_arr=False):
     if any(not (f + 2 < lo or f > hi) for f in fs):
         return True
     p = rd(b, r, "RD_PITCOL")
-    if s == 0 and p and not (p + 3 < lo or p - 1 > hi):
+    pw = b[OFF_DESC + r * 16 + L2_PITW] or 3
+    if s == 0 and p and not (p + pw < lo or p - 1 > hi):          # holes + caps
+        return True
+    mb, mw = b[OFF_DESC + r * 16 + L2_MIDB], b[OFF_DESC + r * 16 + L2_MIDW]
+    if s == 0 and mb and not (mb + mw < lo or mb - 1 > hi):       # mid-block + rubble faces
         return True
     bs = block_span(b, r, s)
     return bool(bs) and not (bs[1] < lo or bs[0] > hi)
@@ -96,6 +103,7 @@ def pit_violations(b, r):
 
 def check(b, stats=None):
     v = []
+    depth_l2 = {}
     if len(b) != BLOCK_LEN:
         return [f"length {len(b)} != {BLOCK_LEN}"]
     depth = b[H["LVL_DEPTH"]]
@@ -125,8 +133,39 @@ def check(b, stats=None):
         if r not in pset:
             if any(b[o:o + 16]): v.append(f"absent room {r} not zero")
             continue
-        for i in range(D["RD_SPARE"], 16):
-            if b[o + i]: v.append(f"room {r} spare byte {i}")
+        if b[o + D["RD_SPARE"] + 3]: v.append(f"room {r} spare byte 15")
+        pitw, midb, midw = b[o + L2_PITW], b[o + L2_MIDB], b[o + L2_MIDW]
+        l2 = []
+        if pitw: l2.append("wide pit")
+        if midb: l2.append("mid-block")
+        if len(l2) > 1: v.append(f"room {r}: two L2 features")
+        if midw and not midb: v.append(f"room {r}: mid width without block")
+        if l2:                                          # I2 / I4
+            n_l2 = depth_l2.setdefault(tuple(l2), 0)
+            depth_l2[tuple(l2)] = n_l2 + 1
+            ld1, ld2 = rd(b, r, "RD_LAD1"), rd(b, r, "RD_LAD2")
+            c1, c2 = min(ld1, ld2), max(ld1, ld2)
+            if depth < 2: v.append(f"room {r}: L2 feature on D1")
+            if r in (start, lair) or not (ld1 and ld2): v.append(f"room {r}: L2 feature in an ineligible room")
+            fl0 = [f for f in (rd(b, r, "RD_UPCOL"), rd(b, r, "RD_ARRCOL"), ld1, ld2) if f]
+            allf = fl0 + [f for f in (rd(b, r, "RD_DNCOL"), rd(b, r, "RD_EXITCOL")) if f]
+            items = [(e[1]) for e in (b[OFF_FLOOR + 4 * i:OFF_FLOOR + 4 * i + 4] for i in range(b[H["FLOOR_N"]]))
+                     if e[0] == r]                      # storey-0 items of the room
+            if pitw:
+                p = rd(b, r, "RD_PITCOL")
+                if not 4 <= pitw <= 6 or not p: v.append(f"room {r}: wide pit W {pitw} / col {p}")
+                else:
+                    if not (p >= c1 + 7 and p + pitw + 4 <= c2): v.append(f"room {r}: wide pit {p}/{pitw} outside the ladders")
+                    for f in allf:
+                        if not (f <= p - 7 or f >= p + pitw + 4): v.append(f"room {r}: footprint {f} too close to wide pit {p}/{pitw}")
+                    if any(p - 1 <= c <= p + pitw for c in items): v.append(f"room {r}: item on the wide pit span")
+            else:
+                if not 2 <= midw <= 3: v.append(f"room {r}: mid-block width {midw}")
+                if rd(b, r, "RD_PITCOL"): v.append(f"room {r}: mid-block with a pit")
+                if not (midb >= c1 + 6 and midb + midw + 3 <= c2): v.append(f"room {r}: mid-block {midb}/{midw} outside the ladders")
+                for f in fl0:
+                    if not (f + 6 <= midb or f >= midb + midw + 3): v.append(f"room {r}: footprint {f} too close to the mid-block")
+                if any(midb - 1 <= c <= midb + midw for c in items): v.append(f"room {r}: item on the mid-block span")
         fl = rd(b, r, "RD_FLAGS")
         if fl & ~(D["RDF_PRESENT"] | D["RDF_START"] | D["RDF_LAIR"] | D["RDF_DEADEND"]): v.append(f"room {r} flags")
         if bool(fl & D["RDF_START"]) != (r == start) or bool(fl & D["RDF_LAIR"]) != (r == lair):
@@ -169,7 +208,8 @@ def check(b, stats=None):
         if not l1: v.append(f"room {r} no ladder")
         for nm, c in (("lad1", l1), ("lad2", l2)):
             if c and not D["LAD_COL_MIN"] <= c <= D["LAD_COL_MAX"]: v.append(f"room {r} {nm} range")
-        for pv in pit_violations(b, r): v.append(f"room {r}: {pv}")
+        if not b[OFF_DESC + r * 16 + L2_PITW]:
+            for pv in pit_violations(b, r): v.append(f"room {r}: {pv}")
         s0 = [f for f in (up, arr, l1, l2, pit) if f]
         s1 = [f for f in (dn, ec, l1, l2) if f]
         for lst, s in ((s0, 0), (s1, 1)):
@@ -228,8 +268,8 @@ def check(b, stats=None):
         if n > 8: v.append("L1: D8 rooms > 8")
     if lair not in pool: v.append("lair not in candidate pool")
     elif dist.get(lair, -1) != max(dist.get(r, 0) for r in pool): v.append("lair not farthest candidate")
-    def side(r, s, col):
-        p = rd(b, r, "RD_PITCOL")
+    def side(r, s, col):                    # storey-0 floor divider: a pit (col p) or the mid-block (col b)
+        p = rd(b, r, "RD_PITCOL") or b[OFF_DESC + r * 16 + L2_MIDB]
         return 1 if (s == 0 and p and col >= p) else 0
     def graph(walker):
         E = {}
@@ -237,9 +277,9 @@ def check(b, stats=None):
             E.setdefault(a, set()).add(c)
             if both: E.setdefault(c, set()).add(a)
         for r in present:
-            if rd(b, r, "RD_PITCOL") and not walker:
-                link((r, 0, 0), (r, 0, 1))                                   # jump
-                link((r, 0, 0), (r, 1, 0), False); link((r, 0, 1), (r, 1, 0), False)  # fall
+            if rd(b, r, "RD_PITCOL") and not walker and not b[OFF_DESC + r * 16 + L2_PITW]:
+                link((r, 0, 0), (r, 0, 1))      # jump: ONLY across a narrow pit (I5); falls are
+                                                # one-way shortcuts and never needed, so not modelled
             for k in ("RD_LAD1", "RD_LAD2"):
                 c = rd(b, r, k)
                 if c: link((r, 0, side(r, 0, c)), (r, 1, 0))
@@ -273,6 +313,15 @@ def check(b, stats=None):
                 if x not in reach: reach.add(x); q.append(x)
         cut[walker] = [t for t in targets if t not in reach]
     if cut[False]: v.append(f"hero cannot reach {sorted(cut[False])}")
+    # I5: walk + climb (+ narrow jumps) join EVERY (room, storey, side) node; the edges are
+    # two-way, so reachability from the start is strong connectivity
+    nodes = {(r, 0, 0) for r in present} | {(r, 1, 0) for r in present}
+    nodes |= {(r, 0, 1) for r in present if rd(b, r, "RD_PITCOL") or b[OFF_DESC + r * 16 + L2_MIDB]}
+    Eh = graph(False); reach = {src}; q = [src]
+    for nd in q:
+        for x in Eh.get(nd, ()):
+            if x not in reach: reach.add(x); q.append(x)
+    if nodes - reach: v.append(f"I5: not strongly connected by walk+climb: {sorted(nodes - reach)[:4]}")
     fn = b[H["FLOOR_N"]]
     if fn > D["FLOOR_MAX"]: v.append("FLOOR_N > 32"); fn = 0
     for i in range(D["FLOOR_MAX"]):
@@ -300,7 +349,27 @@ def check(b, stats=None):
                 v.append(f"start x {sx} not the nearest legal col")
     if stats is not None:
         stats["pits_n"] += sum(1 for r in present if rd(b, r, "RD_PITCOL"))
+    for k, nm in ((("wide pit",), "wide pits"), (("mid-block",), "mid-blocks")):
+        if depth_l2.get(k, 0) > L2_ODDS_MAX: v.append(f"I2: {depth_l2[k]} {nm} on one level")
+    # I3: L2 is a last pass: everything else is byte-identical to the pre-L2 block
+    seed_used = int.from_bytes(b[H["LVL_SEED"]:H["LVL_SEED"] + 2], "little")
+    master = int.from_bytes(b[H["MASTER_SEED"]:H["MASTER_SEED"] + 2], "little")
+    pre = G.generate(depth, seed_used, master, l2=False)
+    m = bytearray(b)
+    for r in range(9):
+        o = OFF_DESC + r * 16
+        if m[o + L2_PITW] or m[o + L2_MIDB]:      # designer 2026-10-07: only L2 rooms may differ,
+            m[o + D["RD_PITCOL"]] = 0             # in the narrow pit / 2nd ladder fields
+            m[o + D["RD_LAD2"]] = 0
+            pre_o = bytearray(pre)
+            pre_o[o + D["RD_PITCOL"]] = 0
+            pre_o[o + D["RD_LAD2"]] = 0
+            pre = bytes(pre_o)
+        m[o + L2_PITW] = m[o + L2_MIDB] = m[o + L2_MIDW] = 0
+    if bytes(m) != pre: v.append("I3: pre-L2 output changed outside the L2 rooms' pit / lad2")
     if stats is not None:
+        stats["l2_wide"] += sum(1 for r in present if b[OFF_DESC + r * 16 + L2_PITW])
+        stats["l2_mid"] += sum(1 for r in present if b[OFF_DESC + r * 16 + L2_MIDB])
         hedges = [b[OFF_EDGE + e] for e in range(6) if b[OFF_EDGE + e] & D["EG_LINK"]]
         stats["rooms"][n] += 1
         stats["h_edges"] += len(hedges)
@@ -361,6 +430,15 @@ def lp_check(b, stats=None):
                 w = G.lp_kinfo(kb & 31)[0]
                 if s == hs and not (x >= hx + 3 + 5 or x + w + 5 <= hx):
                     v.append(f"LP: room {r} spawn x{x} s{s} within 5 of the arrival x{hx}")
+                # I6 (L2): nobody spawns inside / against a mid-block, on a wide pit's fall
+                # columns (storey 0: holes + caps) or on its storey-1 landing columns
+                pw, mb, mw = b[OFF_DESC + r * 16 + L2_PITW], b[OFF_DESC + r * 16 + L2_MIDB], b[OFF_DESC + r * 16 + L2_MIDW]
+                pp = rd(b, r, "RD_PITCOL")
+                if s == 0 and mb and x <= mb + mw and x + w - 1 >= mb - 1:
+                    v.append(f"I6: room {r} spawn x{x} touches the mid-block {mb}/{mw}")
+                if pw and ((s == 0 and x <= pp + pw and x + w - 1 >= pp - 1) or
+                           (s == 1 and x <= pp + pw - 1 and x + w - 1 >= pp)):
+                    v.append(f"I6: room {r} spawn s{s} x{x} on the wide pit {pp}/{pw} span")
             if stats is not None:
                 stats["lp_units"] += len(out)
                 stats["lp_left"] += lp2[o("LP_REC") + 9 * r] & 7
@@ -372,7 +450,7 @@ def lp_check(b, stats=None):
 def new_stats():
     return {"rooms": Counter(), "h_edges": 0, "doors": 0, "pits": 0, "dead": 0, "loops": 0,
             "lair_fallback": 0, "walker_cut": 0, "blocks": 0, "lad2": 0, "potions": 0,
-            "pits_n": 0, "lp_units": 0, "lp_left": 0, "lp_lost": 0, "lp_entries": 0}
+            "pits_n": 0, "l2_wide": 0, "l2_mid": 0, "lp_units": 0, "lp_left": 0, "lp_lost": 0, "lp_entries": 0}
 
 
 def merge(a, b):
@@ -387,7 +465,7 @@ def report(st, tot, fails):
     ratio = st["doors"] / max(1, st["h_edges"])
     print("rooms", dict(sorted(st["rooms"].items())),
           f"doors {st['doors']}/{st['h_edges']} ({ratio:.3f})")
-    print({k: round(st[k] / tot, 2) for k in ("pits", "dead", "loops", "lair_fallback", "walker_cut", "blocks", "lad2", "potions")}, "(per level)")
+    print({k: round(st[k] / tot, 2) for k in ("pits", "dead", "loops", "lair_fallback", "walker_cut", "blocks", "lad2", "potions", "l2_wide", "l2_mid")}, "(per level)")
     u = st["lp_units"] + st["lp_left"]
     print("LP first entries:", st["lp_entries"], "units", u, "placed", st["lp_units"], "wait (no legal cell)",
           st["lp_left"], f"({100 * st['lp_left'] / max(1, u):.1f}%)", "lost to the sum cap", st["lp_lost"])
