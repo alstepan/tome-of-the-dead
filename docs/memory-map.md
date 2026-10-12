@@ -427,7 +427,7 @@ fixed buffers (incl. the 64-id tiles) + 384 B3B level state / ornament
 growth to 160 frames = 7,185 of 8,192 B → **1,007 spare** (B3B-12; B3B-10: 1,115; B3B-11: 1,134; B3B-8: 1,066; B10: 391; B3B-5: 455; B3B-1: 1,426; before it 1,810; A8: 1,913; A7 review: 1,921; A7: 2,216; A6: 2,409; A5: 1,308 with
 its 1,920 B ≤ 12-B descriptor reserve), room for the ~0.6 KB level state with
 ~1.3 KB margin. A separate 1.5 KB ZX0 scratch would now fit, but would eat
-most of that margin — the alias stays. `$5B00-$5BFF` and `$5CC0-$5FFF` (~1,088 B, E: free once `boot` has
+most of that margin — the alias stays. `$5B00-$5BFF` and `$5CC0-$5FFF` (~832 B after D3-6b PF_RAM $5E00..$5EFF, E: free once `boot` has
 moved SP off the BASIC stack) are a further runtime-only (not tape-loadable)
 reserve (B3B-11: `$5B00` = `LOG_TXT`; **D3-6b: `$5E00-$5EFF` = `PF_RAM`**, the
 proj_fire scratch — never touched before `boot`). A8: after `boot` nothing uses the system variables but
