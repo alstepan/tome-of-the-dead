@@ -40,6 +40,8 @@ labels `proto_start` / `seed_fixed` / `seed_value` instead of rebuilding):
 `-DPROTO_START=1` new games start in the PROTO rooms A-D (default 0: a
 generated D1); `-DSEED_FIXED=1 [-DSEED_VALUE=n]` fixed master seed (default:
 `SYS_FRAMES` when the hero is chosen).
+`-DDEBUG_KIT=0` (D3-7): no debug start kit — the build the test suites and
+goldens need (default 1 = the designer's debug kit, never in a release tape).
 - `src/main.asm` is the single entry the assembler walks (it `INCLUDE`s the rest).
 - Emits `build/wazhack.tap` (BASIC loader + one CODE block = bank-5 low-RAM
   cold code + bank-2 image, then two headerless blocks: bank 1 sources, bank 3

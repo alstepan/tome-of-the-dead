@@ -322,8 +322,8 @@ intent_tick:
                 jr   z, .nSlot                ; same slot key still held
                 ld   a, d
                 push de
-                ld   hl, sel_key
-                call far3
+                ld   hl, sel_key              ; bank 7 (intent7.asm, D3-7 T0)
+                call far7
                 pop  de
 .nSlot:         bit  SC_BREAK_BIT, e
                 jr   z, .nBrk

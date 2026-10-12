@@ -198,6 +198,10 @@ ISR_ROM_CHAIN   EQU 0                           ;     FRAMES + keyboard scan, ne
     IFNDEF ISR_SAVE_ALT                         ; A8: 1 = the ISR also saves AF'/BC'/DE'/HL'
 ISR_SAVE_ALT    EQU 0                           ;     (needed once BOTH the player and main
     ENDIF                                       ;     code use EXX / EX AF,AF'; neither does yet)
+    IFNDEF DEBUG_KIT                            ; D3-7: 1 = new games get the designer's debug
+DEBUG_KIT       EQU 1                           ;     start kit (game.md §1.4 "Start kit", never in a
+    ENDIF                                       ;     release tape); suites + goldens run on -DDEBUG_KIT=0
+KIT_DEBUG       EQU DEBUG_KIT                   ; (.sym: tests/game_lib.py refuses a kit build)
 
 ;------------------------------------------------------------------------------
 ; State block $BF00.. (above initial SP). $BF00-$BF0D shared with main.asm:

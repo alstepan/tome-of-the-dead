@@ -100,6 +100,11 @@ FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scena
   `boot`): GS_SELECT, select golden, GEN_OVERFLOW 0, banks 1/3 == .sna, then a
   game start golden. It free-runs briefly (polls GAME_STATE, 60 s cap).
 - Regression gate: `game.py` + `world.py` + `budget.py` + `zx0_pool.py` green.
+- **D3-7: build the suites' snapshot with `tools/build.sh -DDEBUG_KIT=0`.**
+  The default build carries the designer's debug start kit (`DEBUG_KIT` 1,
+  game.md §1.4); `tests/game_lib.py` refuses such a `.sna` (`.sym`
+  `KIT_DEBUG` = 1; `GAME_ALLOW_DEBUG_KIT=1` overrides for kit scenarios), and
+  `zx0_pool.py` builds its private copy with `DEBUG_KIT=0`.
 - **B3B-12 start mode:** new games start on a generated D1 by default.
   `game_lib.Proto.load()` pokes `proto_start = 1` after every load (and #50
   after the tape boot), so every PROTO-room scenario keeps rooms A-D; set

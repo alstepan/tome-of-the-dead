@@ -476,7 +476,7 @@ face_a:         or   a
 ;==============================================================================
 ; COMBAT
 ;------------------------------------------------------------------------------
-; (D3-S2: find_target moved to bank7.asm; intent3 reaches it by far7.)
+; (D3-S2: find_target moved to bank7.asm; D3-7: intent7.asm, also bank 7, calls it.)
 
 ; kind_seq_ptr — HL = kind_seqs + kind(IX)*KS_STRIDE.  Clobbers: A, B, DE, HL
 kind_seq_ptr:

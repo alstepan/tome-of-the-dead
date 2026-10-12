@@ -270,6 +270,9 @@ probe_render_done:
                 ld   a, (TURN_TICK)
                 or   a
                 jr   z, panel_done
+                ld   a, (TURN_PEND)            ; D3-7: nor in an ability's fire tick
+                and  TP_FIRE                   ; (act_fire + its proj_fire: the cast tick)
+                jr   nz, panel_done
 .panel:         call panel_tick
 panel_done:                                    ; test probe (no code): panel item done
                 ld   a, (TURN_PHASE)
@@ -287,14 +290,31 @@ panel_done:                                    ; test probe (no code): panel ite
 ; anim_gate / decor_gate — C3-2b (game.md §3.1): in ICON MODE between turns
 ; (INPUT phase) nothing animates and no decor timer runs; a mode entered
 ; during a turn's animation lets that turn finish first.  Clobbers: as callee
+; D3-7: anim_gate first runs the split ability turn while TURN_PEND != 0
+; (act_pend: the release at ACT_AT, then the deferred monster phase), before
+; anim_tick / fx_tick, so what it starts animates from this tick as on the
+; input tick. Idle cost 27 T. decor_gate holds the decor on the fire tick.
 ;------------------------------------------------------------------------------
-anim_gate:      call frozen
+anim_gate:      ld   a, (TURN_PEND)
+                or   a
+                call nz, pend_far
+                call frozen
                 ret  z
                 call anim_tick
                 jp   fx_tick                   ; D3-5: FX tracks advance with the bodies
-decor_gate:     call frozen
+decor_gate:     ld   a, (TURN_PEND)            ; D3-7: no decor step on the fire tick
+                and  TP_FIRE
+                ret  nz
+                call frozen
                 jp   nz, decor_tick
                 ret
+; pend_far — the TURN_PEND hook's far entry (act7.asm act_pend, bank 7).
+; Clobbers: all but IY.
+pend_far:       ld   hl, act_pend
+                jp   far7
+; probe_act_fire — test probe (budget.py "cast" class): act_pend calls it on
+; the fire tick, right before act_fire (bank-7 code cannot carry a probe).
+probe_act_fire: ret
 frozen:         ld   a, (ICON_MODE)            ; Z = frozen (ICON MODE, INPUT phase)
                 or   a
                 jr   z, .n

@@ -54,7 +54,7 @@
   (`ld c, BANK_COLD7` → `farb`; nests from bank 3 / bank 1 too). Rules:
   never per-tick render / present / ISR code (bank 7 is contended; a far
   call costs ~0.25k T); far7 loses A and F, so results come back in L or
-  memory (`find_target_far`); every callee must return with bank 7 paged —
+  memory; every callee must return with bank 7 paged —
   helpers that restore the caller's bank, far calls, or the ones that leave
   bank 7 paged (`erase_rect`, `shadow_rect`, `room_shadow`, `present_full`,
   `level_enter`); a helper that leaves another bank paged (`blit_sprite`,

@@ -471,8 +471,9 @@ do_impact:
 
 ;------------------------------------------------------------------------------
 ; turn_done — CF = 1 when every live entity of CUR_ROOM rests (or holds) with no
-; reaction pending/running, no FX track is live or drawn (D3-5), and >= 2
-; ticks have elapsed.  Clobbers: A, DE, IX
+; reaction pending/running, no FX track is live or drawn (D3-5), no split
+; ability turn pending (D3-7: TURN_PEND, the fire or the deferred monster
+; phase), and >= 2 ticks have elapsed.  Clobbers: A, DE, IX
 ;------------------------------------------------------------------------------
 turn_done:
                 ld   a, (TURN_TICK)
@@ -480,6 +481,9 @@ turn_done:
                 ccf
                 ret  nc
                 ld   a, (FX_BUSY)              ; D3-5: FX tracks live or still drawn
+                or   a
+                ret  nz                        ; CF = 0 (or)
+                ld   a, (TURN_PEND)            ; D3-7
                 or   a
                 ret  nz                        ; CF = 0 (or)
                 ld   ix, P_ENTITIES

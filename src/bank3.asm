@@ -14,7 +14,7 @@
 ; routine (gen_*, alloc*, copy_virt, mirror_src). (B3B-R2: shadow_rect only as a
 ; tail jump — potion_pickup; door_paint re-pages the caller's bank itself.)
 ; D3-S2: bank-7 code (bank7.asm: find_target, the player turn, ...) only via
-; far7 (nests: bank 3 comes back), e.g. intent3 ic_melee -> find_target_far.
+; far7 (nests: bank 3 comes back), e.g. new_game -> hero_st_init (intent7.asm).
 ; A7: everything here draws on the $4000 (bank 5) screen, which is the one
 ; displayed while it runs (enter_select / do_exit call show_bank5 first).
 ;
@@ -87,7 +87,8 @@ new_game:
                 sub  b                         ; 9s+8-h
                 ld   (ix+E_Y), a
                 call init_ent_common
-                call hero_st_init              ; C3-2 (intent3.asm)
+                ld   hl, hero_st_init          ; C3-2 (intent7.asm: bank 7 since D3-7 T0;
+                call far7                      ; IX passes through, A, F lost)
                 ld   a, (proto_start)
                 or   a
                 jr   nz, .proto
@@ -176,7 +177,7 @@ level_reset_new:
                 ld   (ST_T2), a
                 ld   (ST_X), a
                 ld   hl, HERO3D
-                ld   b, HERO3D_END - HERO3D
+                ld   b, TURN_PEND_END - HERO3D ; D3-7: + the TURN_PEND block
 .z:             ld   (hl), a
                 inc  l
                 djnz .z
@@ -1222,5 +1223,5 @@ init_tiles:                                    ; (B3B-11b: the data is in vdata,
                 INCLUDE "turn3.asm"            ; B3B-R2 turn logic: monster phase, attacks, potions
                 INCLUDE "combat3.asm"          ; D3-6a: hit_roll, deal_hit (shared damage core)
                 INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
-                INCLUDE "intent3.asm"          ; C3-2 icon bar: cursor, shortcuts, icon use
+                INCLUDE "rank3.asm"            ; D3-7: abil_load (ABIL_DESC for the bank-7 ability code)
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing

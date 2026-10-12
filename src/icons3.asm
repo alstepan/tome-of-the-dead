@@ -1,52 +1,11 @@
 ;==============================================================================
 ; icons3.asm — C3-3 icon bar state, bank 3 (moved out of bank 2 for headroom:
 ; entered by far3 only when PD_ICONS is drained, or called from bank-3 code:
-; intent3.asm, panel.asm). icon_poll / icon_sig / panel_more / print6x stay
+; panel.asm). icon_poll / icon_sig / panel_more / print6x stay
 ; in bank 2 (icons.asm).
 ;==============================================================================
-                IF (($ & $FF) + 2 * ICON_SLOTS) > 256    ; LP: keep the table in one page
-                DS   256 - ($ & $FF), 0
-                ENDIF
-slot_act_tab:
-                ; Warrior: Sword, Power Strike, Whirlwind, Daggers, Bow, food, potion, scroll, Bag, -
-                DB SA_MELEE, SA_ABIL + 0, SA_ABIL + 1, SA_DAGGERS, SA_BOW
-                DB SA_FOOD, SA_POTION, SA_SCROLL, SA_BAG, SA_EMPTY
-                ; Mage: Staff, Spark, Firebolt, Frost Shard, Drain Life, Lightning, food, potion, scroll, Bag
-                DB SA_MELEE, SA_ABIL + 0, SA_ABIL + 1, SA_ABIL + 2, SA_ABIL + 3
-                DB SA_ABIL + 4, SA_FOOD, SA_POTION, SA_SCROLL, SA_BAG
-                ASSERT K_KNIGHT == 0 && K_WIZARD == 1
-                ASSERT (slot_act_tab >> 8) == ((slot_act_tab + 2 * ICON_SLOTS - 1) >> 8)
-
-;------------------------------------------------------------------------------
-; slot_act — A = slot 0..9 -> A = its SA_* for HERO_KIND.  Clobbers: A, HL
-;------------------------------------------------------------------------------
-slot_act:
-                ld   l, a
-                ld   a, (HERO_KIND)
-                or   a
-                ld   a, l
-                jr   z, .k
-                add  a, ICON_SLOTS
-.k:             add  a, slot_act_tab & $FF     ; one page (ASSERTed)
-                ld   l, a
-                ld   h, slot_act_tab >> 8
-                ld   a, (hl)
-                ret
-
-; abil_rank — A = ability index k -> A = its rank 0..3 (ARANK bits 2k..2k+1),
-; Z = unlearned.  Clobbers: A, C, HL
-abil_rank:
-                ld   hl, (ARANK)
-                add  a, a
-                jr   z, .r
-                ld   c, a
-.sh:            srl  h
-                rr   l
-                dec  c
-                jr   nz, .sh
-.r:             ld   a, l
-                and  3
-                ret
+; slot_act_tab / slot_act / abil_rank: bank 2 since D3-7 T0 (icons.asm), so
+; the bank-7 icon logic (intent7.asm) calls them directly too.
 
 ;------------------------------------------------------------------------------
 ; icon_state — A = slot -> A = IS_HIDDEN / IS_GREY / IS_NORMAL (concept-screen

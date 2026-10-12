@@ -70,7 +70,8 @@ fx_meta:        FXMETA spark_fly1,      $43
 ; any bank (pages nothing).
 ; In : HL = descriptor (FXD_LEN 16 B, combat_defs.asm FXD_*; copied, so it may
 ;      be transient). FXD_NSEG must be 1..FXD_SEGMAX.
-; Out: CF = 1 accepted, CF = 0 dropped (3 tracks live + FXQ_MAX queued).
+; Out: CF = 1 accepted, CF = 0 dropped (3 tracks live + FXQ_MAX queued;
+;      D3-7: FX_DROP += 1).
 ;      Started now: A = impact tick = FXD_DELAY + ceil(cells / speed) + 1, counted
 ;      in fx_tick calls from the next one (0 = the next fx_tick; a turn's input
 ;      tick runs read_turn_input BEFORE anim_gate, so A = the TURN_TICK on which
@@ -104,7 +105,7 @@ fx_start:
                 ret
 .queue:         ld   a, (FXQ_N)
                 cp   FXQ_MAX
-                ret  nc                        ; CF = 0: dropped
+                jr   nc, .drop
                 ld   de, FXQ0
                 or   a
                 jr   z, .q0
@@ -115,6 +116,9 @@ fx_start:
                 ldir
                 ld   a, FX_NONE
                 scf
+                ret
+.drop:          ld   hl, FX_DROP               ; D3-7: counted (tests assert 0); inc
+                inc  (hl)                      ; keeps CF = 0
                 ret
                 ASSERT FXQ_MAX == 2
 

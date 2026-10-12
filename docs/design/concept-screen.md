@@ -172,7 +172,8 @@ AIR the opened planks leave. They are **common ids 11 (`T_DOOR_JAMB_L`) and 14
 (`T_DOOR_JAMB_R`)**, since every level has doors. `T_COBWEB` (was 11) and `T_MOSS` (was 14)
 leave the common range and become ordinary **per-level** decor ids (32..59), spent only by
 levels that use them. A set over 28 drops the arched window and pillar first. `T_SKULLS` (13),
-`T_CHAIN` (12), `T_DRIP1/2` (17/18) stay common. Id 10 remains the reserved spare (potions
+`T_CHAIN` (12) stays common. Ids 17/18 (were `T_DRIP1/2`) become the ammo item glyphs
+`T_DAGGERS` / `T_ARROWS` (game.md §6.3, 2026-10-12); drips become per-level decor if they are ever placed. Id 10 remains the reserved spare (potions
 unchanged). Lair grate = common id 26 `T_GRATE`, ink `$07`, over the 3-col down-exit hole on
 floor row 17 (no change). Source: `assets/gfx/concept/grid/b10_door_grate.tiles` (branch feat/3b-tiles).
 

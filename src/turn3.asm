@@ -142,7 +142,9 @@ do_attack:
 ;------------------------------------------------------------------------------
 ; set_reaction_at — IX = target, C = RC_*, attacker = (ATK_PTR). Priority:
 ; DEATH > HURT > BLOCK. react_at = the attacker's IMPACT tick (so the HURT
-; follows the blow). Clobbers: A, B, DE, HL
+; follows the blow) + TURN_TICK (D3-7: a blow struck in a later tick of the
+; turn, the deferred monster phase / a power attack at its release; 0 on the
+; input tick). Clobbers: A, B, DE, HL
 ;------------------------------------------------------------------------------
 set_reaction_at:
                 ld   hl, (ATK_PTR)
@@ -152,7 +154,9 @@ set_reaction_at:
                 ld   b, KS_STRIDE
 .m:             add  hl, de                    ; + kind * KS_STRIDE
                 djnz .m
-                ld   b, (hl)                   ; impact tick
+                ld   a, (TURN_TICK)
+                add  a, (hl)
+                ld   b, a                      ; impact tick (TURN_TICK units)
                 ld   a, (ix+E_REACT)
                 cp   RC_DEATH
                 ret  z                         ; death sticks

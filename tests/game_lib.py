@@ -72,6 +72,11 @@ def _private_snapshot():
     if pc != S["boot"]:
         raise RuntimeError(f"wazhack.sna entry {pc:#06x} != wazhack.sym boot {S['boot']:#06x}:"
                            " .sna and .sym are from different builds (rebuild with --sym)")
+    if S.get("KIT_DEBUG", 0) and not os.environ.get("GAME_ALLOW_DEBUG_KIT"):
+        # D3-7: the suites and goldens assume the release start kit
+        raise RuntimeError("build/wazhack.sna was built with DEBUG_KIT=1 (the default):"
+                           " rebuild with tools/build.sh -DDEBUG_KIT=0 for the suites"
+                           " (GAME_ALLOW_DEBUG_KIT=1 overrides)")
     return path, hashlib.sha256(data).hexdigest(), b"".join(banks[i] for i in range(8)), p7ffd
 
 

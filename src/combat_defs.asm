@@ -159,6 +159,35 @@ HERO3D_END      EQU HERO3D + 9
                 ASSERT (HERO3D >> 8) == ((HERO3D_END - 1) >> 8)
 
 ;------------------------------------------------------------------------------
+; TURN_PEND block (D3-7) — the split ability turn, right after HERO3D in the
+; same spare ($BC4A..$BC4E; level_reset_new zeroes HERO3D..TURN_PEND_END).
+; Tick contract (T1, built; memory-map.md "Projectiles"): the input tick pays
+; the cost, starts the hero's sequence and calls act_begin (act7.asm): no
+; resolve_monsters there (turn_input skips it while MON_AT != 0). The
+; anim_gate hook (TURN_PEND != 0 -> pend_far -> far7 act_pend) runs act_fire
+; on TURN_TICK == ACT_AT, then the monster phase on the first tick with
+; TURN_TICK >= MON_AT and FX_BUSY == 0 (designer 2026-10-12: after the hero's
+; FX is idle, not at a fixed f+1), skipped if the hero is DYING; then
+; TURN_PEND = MON_AT = 0. turn_done waits while TURN_PEND != 0.
+;------------------------------------------------------------------------------
+TURN_PEND       EQU HERO3D_END      ; TP_* bits below
+ACT_ABL         EQU TURN_PEND + 1   ; ABL_* of the pending ability
+ACT_AT          EQU TURN_PEND + 2   ; TURN_TICK of its release (fire tick f)
+MON_AT          EQU TURN_PEND + 3   ; != 0: monster phase deferred; earliest TURN_TICK for it (f + 1)
+FX_DROP         EQU TURN_PEND + 4   ; FX descriptors fx_start dropped (3 tracks + 2 queued busy),
+                                    ; mod 256, zeroed per level (level_reset_new) — tests assert 0
+TURN_PEND_END   EQU TURN_PEND + 5
+TP_ACT_BIT      EQU 0               ; ability logic pending (act_fire at ACT_AT)
+TP_MON_BIT      EQU 1               ; monster phase pending
+TP_FIRE_BIT     EQU 2               ; this is the fire tick: panel item + decor_tick skipped
+TP_ACT          EQU 1 << TP_ACT_BIT
+TP_MON          EQU 1 << TP_MON_BIT
+TP_FIRE         EQU 1 << TP_FIRE_BIT
+ACT_FIRE_TICK   EQU 2               ; release tick f of every ability (game.md §6.1 "Release ticks")
+                ASSERT TURN_PEND == $BC4A && TURN_PEND_END <= ANIM_N
+                ASSERT (HERO3D >> 8) == ((TURN_PEND_END - 1) >> 8)
+
+;------------------------------------------------------------------------------
 ; Damage types (game.md §6.0) and the 3-B resistance record (KX_RES /
 ; HERO_RES): a 2-bit response per type + a weak mask.
 ;   RES_B0: PHYS bits 1-0, FIRE 3-2, COLD 5-4, SHOCK 7-6
@@ -252,3 +281,11 @@ PF_IMPT         EQU 2               ; impact ticks of a projectile FX (IMPA, IMP
 PF_RAM          EQU $5E00
 PF_RAM_LEN      EQU $100
                 ASSERT PF_RAM >= $5CC0 && PF_RAM + PF_RAM_LEN <= $6000
+; ABIL_DESC (D3-7) — the ability being used, filled by abil_load (bank 3,
+; rank3.asm) for the bank-7 ability code, which cannot read bank 3: the
+; ab_def row (ABD_*, 10 B) then its rank row (RK_*, 6 B: ab_rank at the
+; hero's rank, or ab_ammo). In PF_RAM's free middle ($5E5D..$5EDF), clear
+; of the pf_* block and PF_ROWF (ASSERTed in proj3.asm).
+ABIL_DESC       EQU PF_RAM + $60    ; $5E60..$5E6F
+ABIL_RK         EQU ABIL_DESC + 10  ; = + ABD_STRIDE: the rank row (proj_fire HL)
+ABIL_DESC_LEN   EQU 16

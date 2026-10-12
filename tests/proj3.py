@@ -30,11 +30,21 @@ RNG state after the cast (=> the exact draw order), the FX descriptor
   P4  loop guard: reflecting hero (HERO_RES SHOCK X) + Ghost -> 4 reversals
   P5  pierce: Lightning hits each body once per pass, again after a bounce;
       a reflector ends the piercing (reverses)
-  P6  a mid-ladder body absorbs harmlessly; open exit edge ends it (no impact)
+  P6  a mid-ladder body absorbs harmlessly (D3-7 T4: no Firebolt burst
+      after it); Drain reflected onto its caster hits without healing (D3-7
+      T4); open exit edge ends it (no impact)
   P7  FX row: a Rat below the flight row -> its nearest row
   P8  fuzz: 120 random rooms (walls, exits, 1-5 bodies incl. flyers /
       mid-ladder / reflectors, both facings, every ability and rank, delays,
       seeds) == model
+  P9  D3-7 T1 (the split ability turn): TURN_TICK is 0 after boot; casts at
+      TURN_TICK 5 shift pf_itick / every struck body's E_REACTAT by 5 (model
+      == Z80: Spark, Lightning pierce + bounce, Firebolt burst);
+      set_reaction_at adds TURN_TICK; act_begin (bank 7, far7) refuses a
+      lead col 0 / 31 (L = 0, TURN_PEND untouched) and accepts 1 / 30
+      (TURN_PEND = TP_ACT | TP_MON, ACT_ABL, ACT_AT = 2, MON_AT = 3);
+      act_fire fizzles (L = 0) at lead col 0 / 31; fx_start's drop counts
+      in FX_DROP
 Run: ZRCP_PORT=<port> python3 tests/proj3.py
 """
 import random
@@ -143,11 +153,14 @@ class World:
         self.hero_res, self.hero_def = list(hero_res), hero_def
         self.row = [T_AIR] * 32      # the flight row's tiles
         self.row[0] = self.row[31] = T_BRICK
+        self.kx_over = {}            # kind -> RES 3 B poked into kx_tab for one case
 
     def resp(self, b, t):
         """(response, weak) of body b to type t."""
         if b.flags & EF_PLAYER:
             rb = self.hero_res
+        elif b.kind in self.kx_over:
+            rb = self.kx_over[b.kind]
         else:
             rb = CT.kx_row(*CT.KINDS[b.kind][1:])[:3] if b.kind in CT.KINDS else [0, 0, 0]
         return (rb[t // 4] >> (2 * (t % 4))) & 3, (rb[2] >> t) & 1
@@ -158,6 +171,7 @@ class World:
         return CT.KINDS[b.kind][2] if b.kind in CT.KINDS else 0
 
     hero_imm = 0
+    turn_tick = 0                # D3-7 T1: TURN_TICK at the cast (pf_tick adds it)
 
     def deal(self, rng, att, tgt, dmg, c, e):
         """combat3.asm deal_hit (HP, death, reaction, FROZEN / CONFUSED, heal)."""
@@ -252,7 +266,7 @@ class World:
         left_cells = rng_
 
         def tick(m):
-            return delay + ((m + 1) // 2 if fast else m) + 1
+            return self.turn_tick + delay + ((m + 1) // 2 if fast else m) + 1
 
         def rowof(s):
             b = self.bodies[s]
@@ -294,7 +308,8 @@ class World:
                         continue
                 setrow(cd["s"])
                 dmg = rng.mod(die) + 1 + bonus
-                lost = self.deal(rng, cs, cd["s"], dmg, dhc, eff)
+                # D3-7 T4 (game.md §6): Drain on its own caster heals nothing
+                lost = self.deal(rng, cs, cd["s"], dmg, dhc & ~HEAL if cd["s"] == cs else dhc, eff)
                 if res["tgt"] == NONE:
                     res["tgt"], res["lost"] = cd["s"], lost
                 tk = tick(m)
@@ -355,7 +370,7 @@ class World:
         if stop == "EXIT":
             fids[2] = NONE
         itick = tick(moves)
-        if d["flags"] & BURSTF and stop != "EXIT":
+        if d["flags"] & BURSTF and stop not in ("EXIT", "ABSORB"):   # D3-7 T4: no burst after an absorb
             for cd in cands:
                 if not cd["x0"] - 1 <= pos <= cd["x1"] + 1:
                     continue
@@ -432,6 +447,7 @@ class T(Proto):
         row0 = hero.y + ROW_DY
         self.wmem(S["ROOM_MAP"] + row0 * 32, w.row)
         self.wmem(S["RNG_STATE"], w16(seed))
+        self.wb("TURN_TICK", w.turn_tick)
 
     def fire(self, cs, abl, rank, delay):
         inner = ([0xCD] + w16(S["fx_reset"]) + [0xCD] + w16(S["build_live"]) +   # (try_player_turn does)
@@ -500,6 +516,7 @@ def main():
         check("P0 pf_dhc_tab == doc type / NODEF / HEAL / effect per ability", list(tab) == want, (list(tab), want))
 
         p.boot(K_KNIGHT)
+        tt_boot = p.rb("TURN_TICK")                  # P9: 0 throughout INPUT
         kt = p.kinds()
         hero0 = p.ent(0)
         hy, hx = hero0["Y"], 10
@@ -703,6 +720,30 @@ def main():
         w.bodies[1] = Body(1, K_GOBLIN, hx + 7, stand(K_GOBLIN) - 1, 50)      # feet off the floor: mid-ladder
         case("P6 mid-ladder Goblin absorbs harmlessly", w, SPARK, 1,
              must=lambda res, w: res["stop"] == PFS["ABSORB"] and w.bodies[1].hp == 50 and res["tgt"] == NONE)
+        # D3-7 T4 (game.md §6 "no Firebolt burst" after an absorb): a Rat inside the
+        # mid-ladder Goblin's burst radius takes nothing
+        w = world()
+        w.bodies[1] = Body(1, K_GOBLIN, hx + 7, stand(K_GOBLIN) - 1, 50)
+        w.bodies[2] = Body(2, K_RAT, hx + 8, stand(K_RAT), 50)
+        case("P6 Firebolt absorbed mid-ladder: no burst", w, FIREBOLT, 1,
+             must=lambda res, w: res["stop"] == PFS["ABSORB"] and w.bodies[1].hp == 50 and w.bodies[2].hp == 50)
+        # D3-7 T4 (game.md §6): Drain Life reflected onto its caster is a normal
+        # DRAIN hit with no heal (a Ghost poked to reflect DRAIN in kx_tab)
+        kxa = 3 * 16384 + S["kx_tab"] - 0xC000 + K_GHOST * 6
+        p.z.cmd("set-memory-zone 0")
+        kx_old = list(p.z.read_memory(kxa, 3))
+        drx = list(kx_old)
+        drx[1] = (drx[1] & ~3) | X                      # DRAIN (type 4): byte 1 bits 1-0
+        p.wmem(kxa, drx)
+        p.z.cmd("set-memory-zone -1")
+        w = world(hero_hp=100)
+        w.kx_over = {K_GHOST: drx}
+        w.bodies[1] = Body(1, K_GHOST, hx + 5, hy + 1, 50)
+        case("P6 Drain reflected onto the caster: hit, no heal", w, DRAINL, 1,
+             must=lambda res, w: res["tgt"] == 0 and 0 < res["lost"] and w.bodies[0].hp == 100 - res["lost"])
+        p.z.cmd("set-memory-zone 0")
+        p.wmem(kxa, kx_old)
+        p.z.cmd("set-memory-zone -1")
         w = world(hero_x=25)
         w.row[31] = T_AIR
         case("P6 open exit edge: enter col 31, no impact", w, LIGHTNING, 1,
@@ -762,6 +803,95 @@ def main():
             res = case(f"P8 #{i}", w, abl, rank, seed=rnd.randrange(1, 65536), delay=rnd.randint(0, 6))
             stops[PFS_NAME[res["stop"]]] = stops.get(PFS_NAME[res["stop"]], 0) + 1
         check(f"P8 fuzz 120 random casts == model (stops {stops})", not allbad, allbad[:3])
+
+        # --- P9 D3-7 T1: the split ability turn -------------------------------
+        p9_bad = []
+        p.setup(world(), 1)
+        p.wb("TURN_TICK", 0)
+        for tt in (5,):
+            w = world(hero_x=3)
+            w.turn_tick = tt
+            w.bodies[1] = Body(1, K_RAT, 9, stand(K_RAT), 200)
+            case(f"P9 Spark at TURN_TICK {tt}", w, SPARK, 1,
+                 must=lambda res, w: res["itick"] > tt and w.bodies[1].reactat == res["itick"])
+            w = world(hero_x=3)
+            w.turn_tick = tt
+            w.bodies[1] = Body(1, K_RAT, 10, stand(K_RAT), 200)
+            w.bodies[2] = Body(2, K_GOBLIN, 16, stand(K_GOBLIN), 200)
+            case(f"P9 Lightning pierce + bounce at TURN_TICK {tt}", w, LIGHTNING, 1, delay=0)
+            w = world()
+            w.turn_tick = tt
+            w.row[hx + 3 + 6] = T_BRICK
+            w.bodies[1] = Body(1, K_RAT, hx + 3 + 3, stand(K_RAT), 100)
+            w.bodies[2] = Body(2, K_SLIME, hx + 3 + 7, stand(K_SLIME), 100)
+            case(f"P9 Firebolt burst at TURN_TICK {tt}", w, FIREBOLT, 2, delay=0)
+        # the same cast at TURN_TICK 0 and 5: E_REACTAT / pf_itick differ by 5
+        got = []
+        for tt in (0, 5):
+            w = world(hero_x=3)
+            w.turn_tick = tt
+            w.bodies[1] = Body(1, K_RAT, 9, stand(K_RAT), 200)
+            p.setup(w, 0x1111)
+            p.fire(0, SPARK, 1, 2)
+            got.append((p.rb("pf_itick"), p.rb(S["P_ENTITIES"] + STRIDE + E_REACTAT)))
+        if got[1] != (got[0][0] + 5, got[0][1] + 5):
+            p9_bad.append(("shift", got))
+        p.wb("TURN_TICK", 0)
+        # set_reaction_at: impact tick + TURN_TICK
+        imp = p.rb(S["kind_seqs"] + S["KS_IMPACT"] + K_KNIGHT * S["KS_STRIDE"])
+        for tt in (0, 3):
+            p.setup(two(K_RAT, SPARK), 1)
+            p.wb("TURN_TICK", tt)
+            inner = ([0x21] + w16(S["P_ENTITIES"]) + [0x22] + w16(S["ATK_PTR"]) +
+                     [0xDD, 0x21] + w16(S["P_ENTITIES"] + STRIDE) + [0x0E, S["RC_HURT"], 0xCD] + w16(S["set_reaction_at"]))
+            assert p.code(p.bank3(inner)), "set_reaction_at stub"
+            ra = p.rb(S["P_ENTITIES"] + STRIDE + E_REACTAT)
+            if ra != imp + tt:
+                p9_bad.append(("set_reaction_at", tt, ra, imp + tt))
+        p.wb("TURN_TICK", 0)
+
+        # act_begin / act_fire (bank 7 via far7): lead col guard
+        bw = kt[K_KNIGHT]["bw"]
+        pend = S["TURN_PEND"]
+
+        def call7(label, a=0, b=0):
+            """Bank-7 routine called with bank 7 paged (far7 does not pass B)."""
+            p.wmem(pend, [0] * 4)
+            inner = ([0xDD, 0x21] + w16(S["P_ENTITIES"]) + [0x3E, a, 0x06, b, 0xCD] + w16(S[label]) +
+                     [0x7D, 0x32] + w16(RES))
+            code = ([0x3A] + w16(S["PORT_7FFD_SHADOW"]) + [0xF5, 0x3E, S["BANK_COLD7"], 0xCD] + w16(S["page_bank"])
+                    + inner + [0xF1, 0xCD] + w16(S["restore_page"]))
+            assert p.code(code), label + " stub"
+            return p.rb(RES), list(p.z.read_memory(pend, 4))
+
+        for left, x, ok in ((True, 0, 0), (False, 31 - bw + 1, 0), (True, 1, 1), (False, 30 - bw + 1, 1)):
+            p.setup(world(hero_left=left, hero_x=x), 1)
+            l, blk = call7("act_begin", b=SPARK + 3)
+            want = (ok, [3, SPARK + 3, 2, 3] if ok else [0, 0, 0, 0])
+            if (l, blk) != want:
+                p9_bad.append(("act_begin", left, x, (l, blk), want))
+            l, _ = call7("act_fire", a=LIGHTNING)
+            if l != ok:
+                p9_bad.append(("act_fire guard", left, x, l, ok))
+        if tt_boot != 0:
+            p9_bad.append(("TURN_TICK after boot", tt_boot))
+        if (S["TP_ACT"], S["TP_MON"], S["ACT_FIRE_TICK"]) != (1, 2, 2):
+            p9_bad.append(("TP_* / ACT_FIRE_TICK", S["TP_ACT"], S["TP_MON"], S["ACT_FIRE_TICK"]))
+        p.wmem(pend, [0] * 5)
+        # FX_DROP: 3 tracks + 2 queued busy, a 6th descriptor is dropped and counted
+        p.wb("FX_DROP", 0)
+        p.setup(world(), 1)
+        inner = [0xCD] + w16(S["fx_reset"])
+        for i in range(6):
+            inner += [0x21] + w16(S["pf_desc"]) + [0xCD] + w16(S["fx_start"])
+        assert p.code(inner), "fx_start x6 stub"
+        if p.rb("FX_DROP") != 1:
+            p9_bad.append(("FX_DROP", p.rb("FX_DROP")))
+        p.wb("FX_DROP", 0)
+        assert p.code([0xCD] + w16(S["fx_reset"]))
+        check(f"P9 D3-7 split turn: TURN_TICK shift (pf_itick / E_REACTAT / set_reaction_at), act_begin /"
+              f" act_fire lead-col guard, FX_DROP ({len(allbad)} model / {len(p9_bad)} other bad)",
+              not allbad and not p9_bad, (allbad[:3], p9_bad[:4]))
 
         print(f"proj3: worst cast {T.worst[0]} T ({T.worst[1]} r{T.worst[2]}; incl. ~3k T of stub: paging, fx_reset, build_live"
               "; deal_hit messages included)", flush=True)

@@ -23,7 +23,8 @@
 ;         a dagger / arrow rolls hit_roll (ab_def ABD_HIT) and on a miss flies
 ;         on; a hit deals 1d(die) + bonus via deal_hit; a non-piercing
 ;         projectile stops there (PFS_BODY), Lightning (ABF_PIERCE) goes on;
-;   * the caster is a valid target only after the first reversal;
+;   * the caster is a valid target only after the first reversal (Drain Life
+;     on its caster: a normal DRAIN hit, no heal — D3-7 T4, game.md §6);
 ;   * at most PF_MAXREV reversals (bounces + reflections), then PFS_LOOP.
 ; Candidates = the LIVE_LIST bodies (not dying) whose rows overlap the
 ; caster's body rows (the "line": find_target's vertical rule, so a short Rat
@@ -31,11 +32,13 @@
 ; the lower slot decides first). The FX flies at the flight row, or at the
 ; nearest row of the first body it interacts with (§6 "if the hit body
 ; doesn't cover that row").
-; Firebolt (ABF_BURST): at the impact (not PFS_EXIT) every candidate within 1
+; Firebolt (ABF_BURST): at the impact (not PFS_EXIT / PFS_ABSORB: D3-7 T4,
+; game.md §6 "no Firebolt burst" after an absorb) every candidate within 1
 ; col of the impact cell, except the body that stopped it, takes 1d(RK_EFFECT
 ; low nibble) FIRE; the caster too unless RKE_SPARE (rank 3).
 ; Every struck body's reaction is moved to the tick the FX reaches it
-; (E_REACTAT = FXD_DELAY + ceil(moves / speed) + 1, fx_start's formula), so
+; (E_REACTAT = TURN_TICK + FXD_DELAY + ceil(moves / speed) + 1, fx_start's
+; formula from the cast's tick; D3-7), so
 ; the HURT / DEATH plays under the impact. One FX track per cast (no extra
 ; impact flashes on pierced bodies: bank-3 room).
 ; Assumes every kind's KT_BW >= 2 (all 3D kinds are 3 or 4 cells): a body
@@ -67,7 +70,8 @@ PFB_STOP        EQU 2
 ;      projectile appears: the cast frames, D3-7).
 ; Out: L = pf_stop (PFS_*); pf_col = impact col; pf_tgt = first body that
 ;      lost the hit roll / took the spell ($FF none), pf_lost = its HP lost;
-;      pf_itick = impact tick (E_REACTAT units); pf_desc = the FX descriptor
+;      pf_itick = impact tick (E_REACTAT units: TURN_TICK-based, D3-7);
+;      pf_desc = the FX descriptor
 ;      (started: fx_start; dropped if 3 tracks + 2 queued are busy).
 ;      IX = caster. MP / ammo are the caller's (D3-7).
 ; RNG (prototype §6.2 order): per body struck, [d20 (missiles)], 1dN, then
@@ -519,9 +523,14 @@ pf_strike:
                 ld   b, a                      ; 1dN + bonus
                 ld   a, (pf_dhc)
                 ld   c, a
-                ld   a, (pf_eff)
+                ld   a, (pf_cslot)
+                ld   hl, pf_cur
+                cp   (hl)
+                jr   nz, .nh
+                res  DH_HEAL_BIT, c            ; Drain on its own caster: no heal (§6)
+.nh:            ld   a, (pf_eff)
                 ld   e, a
-                ld   a, (pf_cur)
+                ld   a, (hl)
                 call deal_hit                  ; L = HP lost, IX = caster
                 ld   a, (pf_tgt)
                 inc  a
@@ -550,12 +559,14 @@ pf_strike:
 ;------------------------------------------------------------------------------
 ; pf_burst — Firebolt: candidates within 1 col of pf_col (not the stopper; the
 ; caster unless RKE_SPARE) take 1d(RK_EFFECT & 15) FIRE (no DEF); reaction at
-; pf_itick. Not after PFS_EXIT.  Clobbers: all but IX
+; pf_itick. Not after PFS_EXIT / PFS_ABSORB (D3-7 T4).  Clobbers: all but IX
 ;------------------------------------------------------------------------------
 pf_burst:
                 ld   a, (pf_stop)
-                cp   PFS_EXIT
-                ret  z
+                sub  PFS_ABSORB                ; no burst after an absorb (game.md
+                cp   2                         ; §6 "Logic", designer) or an exit
+                ret  c
+                ASSERT PFS_EXIT == PFS_ABSORB + 1 && PFS_LOOP > PFS_EXIT && PFS_WALL < PFS_ABSORB && PFS_BODY < PFS_ABSORB
                 ld   hl, pf_cand
 .l:             ld   a, (pf_col)
                 ld   c, a
@@ -656,8 +667,11 @@ pf_reverse:
                 inc  (hl)
                 ret
 
-; pf_tick — A = move index -> A = FXD_DELAY + ceil(moves / speed) + 1 (the
-; fx_tick on which the FX shows its impact there).  Clobbers: A, HL
+; pf_tick — A = move index -> A = TURN_TICK + FXD_DELAY + ceil(moves / speed)
+; + 1 (the TURN_TICK on which the FX shows its impact there: fx_start counts
+; from the next fx_tick, which runs on this TURN_TICK — D3-7: proj_fire also
+; runs at a release tick f > 0, from the anim_gate hook before fx_tick).
+; Clobbers: A, HL
 pf_tick:
                 ld   hl, pf_desc + FXD_FLAGS
                 bit  FXDF_FAST_BIT, (hl)
@@ -667,6 +681,8 @@ pf_tick:
 .s:             ld   hl, pf_desc + FXD_DELAY
                 add  a, (hl)
                 inc  a
+                ld   hl, TURN_TICK
+                add  a, (hl)
                 ret
 
 ; pf_react — slot A: a pending reaction (deal_hit's HURT / DEATH) plays at
@@ -773,3 +789,5 @@ PF_ZN           EQU pf_cand - pf_fxrow          ; (0-initialised: pf_fxrow .. pf
 PF_RAM_END      EQU pf_cand + P_MAX_ENT * PFC_STRIDE + 1
 PF_ROWF         EQU PF_RAM + PF_RAM_LEN - ROOM_COLS ; the flight row's cell flags (32-aligned, ends its page)
                 ASSERT PF_RAM_END <= PF_ROWF && (PF_ROWF & $FF) == $100 - ROOM_COLS && TF_SOLID == 1
+                ASSERT PF_RAM_END <= ABIL_DESC && ABIL_DESC + ABIL_DESC_LEN <= PF_ROWF   ; D3-7
+                ASSERT ABIL_RK == ABIL_DESC + ABD_STRIDE && ABIL_DESC_LEN == ABD_STRIDE + RK_STRIDE

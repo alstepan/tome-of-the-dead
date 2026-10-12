@@ -82,7 +82,7 @@ SA_POTION       EQU 5               ; quick potion
 SA_SCROLL       EQU 6               ; quick scroll (3E)
 SA_BAG          EQU 7
 SA_ABIL         EQU 8               ; + ability index k (ARANK bits 2k..2k+1)
-SA_COUNT        EQU SA_ABIL + 1     ; intent3.asm handler table entries
+SA_COUNT        EQU SA_ABIL + 1     ; SA_* count (intent7.asm use_icon dispatch)
 ; Icon states (C3-3; icon_state, ICON_SH = state | IS_SEL as last drawn)
 IS_HIDDEN       EQU 0               ; empty outline (empty slot, unlearned ability)
 IS_GREY         EQU 1               ; greyed: no ammo / no item / not found

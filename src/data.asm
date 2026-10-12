@@ -233,6 +233,44 @@ kind_seqs:
 hero_jump:      DB KN_JUMP1, KN_JUMP2, WZ_JUMP1, WZ_JUMP2
                 ASSERT K_KNIGHT == 0 && K_WIZARD == 1
 
+;------------------------------------------------------------------------------
+; D3-7 ability animation sequences (game.md §6.1-6.3). Same (fid,ticks,flags)*
+; format as the attack seqs. The projectile / strike is released on the entry
+; named in abl_seq's fire tick (= sum of the ticks before it); the cast and the
+; ranged seqs carry no SF_IMPACT (the projectile's own hit is the impact).
+; Designer rulings (game.md §6): every ability releases at tick 2 (FXD_DELAY 2).
+;------------------------------------------------------------------------------
+wz_cast:        DB FID_wizard_cast1, 2, 0, FID_wizard_cast2, 3, 0, SEQ_END
+kn_power:       DB FID_knight_windup, 2, 0, FID_knight_powerstrike, 3, SF_IMPACT, SEQ_END
+kn_whirl:       DB FID_knight_windup, 2, 0, FID_knight_whirl, 3, SF_IMPACT, SEQ_END
+kn_throw:       DB FID_knight_windup, 2, 0, FID_knight_throw, 3, 0, SEQ_END
+kn_bow:         DB FID_knight_bow, 2, 0, FID_knight_bow, 2, 0, SEQ_END   ; 4 ticks, arrow released on tick 2
+wz_bonk:        DB FID_wizard_cast1, 2, 0, WZ_SSWING, 3, SF_IMPACT, SEQ_END   ; staff bonk (no abl_seq row)
+
+; abl_seq: ABL_COUNT x 3 B {DW seq, DB fire tick}, indexed ability * 3.
+ABS_STRIDE      EQU 3
+abl_seq:
+                DW wz_cast
+                DB 2                            ; Spark
+                DW wz_cast
+                DB 2                            ; Firebolt
+                DW wz_cast
+                DB 2                            ; Frost
+                DW wz_cast
+                DB 2                            ; Drain
+                DW wz_cast
+                DB 2                            ; Lightning
+                DW kn_power
+                DB 2                            ; Power Strike
+                DW kn_whirl
+                DB 2                            ; Whirlwind
+                DW kn_throw
+                DB 2                            ; Dagger
+                DW kn_bow
+                DB 2                            ; Bow
+                ASSERT $ - abl_seq == ABL_COUNT * ABS_STRIDE
+                ASSERT ABL_SPARK == 0 && ABL_LIGHTNING == 4 && ABL_POWER == 5 && ABL_WHIRL == 6 && ABL_DAGGER == 7 && ABL_BOW == 8
+
 ; resting frame per kind (select screen, HOLD fallback)
 kind_rest:      DB KN_REST, WZ_REST, 0, SK_REST, GB_REST, GH_REST, RT_REST, BT_REST, SL_REST
 

@@ -24,12 +24,19 @@ from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, EF_ACTIVE, EF_HOS
 
 BUDGET = 2 * 70908
 CAP = 126000                                      # D5: worst tick incl. the panel item
+# D3-7 T1: the split ability turn. Ticks from the fire tick (probe_act_fire)
+# until the deferred monster phase has run (TURN_PEND back to 0) are class
+# "cast": they carry act_fire (proj_fire, 10-30k T, worst ~66k) or the moved
+# resolve_monsters on top of the render. Gate: <= CAST_CAP (hard limit BUDGET);
+# every other tick keeps its scenario's gate (CAP / BUDGET).
+CAST_CAP = 128000
 # B3B-11: panel_tick .. play_loop.nopanel = the tick's panel item (D5: one per
 # tick, never in a turn's input tick); its present lands in the next tick_work.
-PHASES = ["tick_work", "intent_tick", "read_turn_input", "anim_tick", "render", "decor_tick", "panel_tick",
-          "panel_done", "wait_tick"]
+PHASES = ["tick_work", "intent_tick", "read_turn_input", "pend_far", "probe_act_fire", "anim_tick", "render",
+          "decor_tick", "panel_tick", "panel_done", "wait_tick"]
 if os.environ.get("GAME_PROFILE"):                # finer split for optimisation work
-    PHASES = ["tick_work", "intent_tick", "read_turn_input", "try_player_turn", "resolve_monsters",
+    PHASES = ["tick_work", "intent_tick", "read_turn_input", "pend_far", "probe_act_fire",
+              "try_player_turn", "resolve_monsters",
               "materialise", "anim_tick", "render", "render.nopend", "render.sdone",
               "render.f3done", "render.drdone", "render.nopl", "pmark_dmg", "present",
               "decor_tick", "panel_tick", "panel_done", "wait_tick"]
@@ -43,6 +50,8 @@ class Stepper:
     def __init__(self, p):
         self.p, self.z = p, p.z
         self.ticks = []                       # (total, {phase: T})
+        self.cast_ix, self.casting = set(), False  # D3-7: indices of "cast" class ticks
+        self.fire_t = []                      # D3-7 T4: the fire ticks' totals
         # B3B-11b log latency: FIFO ring -> drawn = LQ_RD advances, pushed = drawn + LOG_QN
         self.rd, self.drawn, self.pushed = p.rb(S["LOG_Q"] + S["LQ_RD"]), 0, p.rb("LOG_QN")
         self.push_tick, self.lat = [0] * self.pushed, []
@@ -82,6 +91,13 @@ class Stepper:
                 break
         self.ticks.append((prev, split))
         k = len(self.ticks)
+        if "probe_act_fire" in split:         # D3-7: the fire tick opens the cast class
+            self.casting = True
+            self.fire_t.append(prev)
+        if self.casting:
+            self.cast_ix.add(k - 1)
+            if self.p.rb("TURN_PEND") == 0:   # monsters resolved (or the hero died): closed
+                self.casting = False
         rd, qn = self.p.rb(S["LOG_Q"] + S["LQ_RD"]), self.p.rb("LOG_QN")
         self.drawn += (rd - self.rd) % S["LOG_SLOTS"]
         self.rd = rd
@@ -134,7 +150,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
-CAP_GATED = ("lightning",)                        # D3-5: worst tick <= CAP
+CAP_GATED = ("lightning", "cast", "lcast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
 HERO_Y = stand_y(1, 6)                            # 11
@@ -159,6 +175,23 @@ SCENARIOS = {
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_WIZARD, "fx"),
     # review A1 worst mix: 2 skeletons (both 40-px attacks), goblin, ghost
+    # D3-7 T1: "lightning" with the monster phase deferred past the hero's FX
+    "cast": ("mage + 4 monsters + Lightning, split turn (monsters after the FX)", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_WIZARD, "cast"),
+    # D3-7 T4: the real cast through the controls — Lightning r3 (4 MP, range
+    # 28, 3 bounces, pierce) from x 14 facing left through 4 monsters in line
+    # (60 HP each) to the room's left wall (13 cells), bounced back through
+    # all 4 AND the caster (HP 200): 9 hits — the worst proj_fire (~66-70k T
+    # in tests/proj3.py) + deal_hit messages on the fire tick; the deferred
+    # monster phase after the FX
+    "lcast": ("mage Lightning r3 through 4 monsters + the caster in line", [
+        (5, 1, stand_y(1, 6), RIGHT),
+        (3, 5, stand_y(1, 4), RIGHT),
+        (2, 8, stand_y(1, 2), RIGHT),
+        (1, 11, stand_y(1, 2), RIGHT)], [("FIRE", 3)], K_WIZARD, None, "lcast"),
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
         (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
@@ -260,9 +293,44 @@ class FxStepper(Stepper):
     def cast(self):
         self.casts += fx_cast(self.p)
 
+
+class CastStepper(FxStepper):
+    """D3-7 T1 "cast": the lightning scenario as a split ability turn. Before
+    every action the TURN_PEND block is poked as act_begin leaves it (Lightning,
+    ACT_AT 2, MON_AT 3), so turn_input skips resolve_monsters, act_pend fires at
+    tick 2 (spell_fire: a T1 stub) and runs the monster phase once the Lightning
+    FX (queued on the turn's first tick, as in "lightning") is idle."""
+
+    def turn(self, *keys, **kw):
+        p = self.p
+        p.z.cmd("write-memory %d %d %d %d %d" % (S["TURN_PEND"], S["TP_ACT"] | S["TP_MON"], S["ABL_LIGHTNING"],
+                                                  S["ACT_FIRE_TICK"], S["ACT_FIRE_TICK"] + 1))
+        # D3-7 T4: spell_fire is real now; a range-0 Lightning row keeps this
+        # scenario the engine-only measurement ("lcast" is the real cast)
+        p.z.cmd("write-memory %d %s" % (S["RANK_ROWS"] + 6 * S["ABL_LIGHTNING"], " ".join(["0"] * 6)))
+        super().turn(*keys, **kw)
+
     def close(self):
         self.z.cmd("set-breakpoint %d" % (len(PHASES) + 1))
         super().close()
+
+
+def lcast_setup(p, placements):
+    """"lcast": the hero at x 14 facing left (HP 200), the monsters 60 HP,
+    Lightning learned at rank 3 (ARANK + its RANK_ROWS row, as rank_sync),
+    MP 40, the Lightning slot selected (no turn)."""
+    import combat_tables as CT
+    sym, b3 = CT.load()
+    k, r = S["ABL_LIGHTNING"], 3
+    row = sym["ab_rank"] - CT.BASE + (k * 3 + r - 1) * 6
+    p.set_ent(0, X=14, PX=14 * 8, FLAGS=EF_ACTIVE | 2 | EF_LEFT, HP=200, MAXHP=200)
+    for slot, *_ in placements:
+        p.set_ent(slot, HP=60, MAXHP=60)
+    p.z.cmd("write-memory %d %s" % (S["RANK_ROWS"] + 6 * k, " ".join(str(b) for b in b3[row:row + 6])))
+    p.z.cmd("write-memory %d %d %d" % (S["ARANK"], (r << (2 * k)) & 255, (r << (2 * k)) >> 8))
+    p.wb("MP", 40)
+    p.wb("MAXMP", 40)
+    p.select_slot(k + 1)
 
 
 def run_scenario(h, scen):
@@ -275,7 +343,10 @@ def run_scenario(h, scen):
         p.place(slot, x, y, room=0, flags=flags)
     if DECOR:
         inject_decor(p)
-    st = (FxStepper if len(scen) > 4 and scen[4] == "fx" else Stepper)(p)
+    if len(scen) > 5 and scen[5] == "lcast":
+        lcast_setup(p, placements)
+    mode = scen[4] if len(scen) > 4 else None
+    st = {"fx": FxStepper, "cast": CastStepper}.get(mode, Stepper)(p)
     swing = 0
     for key, n in keys:
         for _ in range(n):
@@ -286,6 +357,8 @@ def run_scenario(h, scen):
     totals = [t for t, _ in st.ticks]
     worst = max(st.ticks, key=lambda x: x[0])
     over = [t for t in totals if t > BUDGET]
+    casts = [totals[i] for i in sorted(st.cast_ix)]
+    ordinary = [t for i, t in enumerate(totals) if i not in st.cast_ix]
     ovc = p.rw("OVERRUN_COUNT")
     print(f"== {name}")
     print(f"ticks measured : {len(totals)}")
@@ -306,9 +379,17 @@ def run_scenario(h, scen):
     dts = [sp.get("decor_tick", 0) for _, sp in st.ticks]
     print(f"decor_tick     : {'on' if DECOR else 'off'}, max {max(dts)} T, mean {sum(dts) // len(dts)} T"
           f" (incl. the call / panel test to panel_tick)", flush=True)
-    cap = [t for t in totals if t > CAP]
+    cap = [t for t in ordinary if t > CAP]
     lat = st.lat
-    print(f"ticks > {CAP} : {len(cap)}  (D5 cap)")
+    print(f"ticks > {CAP} : {len(cap)}  (D5 cap, ordinary ticks)")
+    print(f"cast ticks     : {len(casts)} (fire tick .. monsters resolved), max {max(casts) if casts else 0} T"
+          f" (cap {CAST_CAP}), {sum(1 for t in casts if t > CAST_CAP)} over; ordinary max"
+          f" {max(ordinary) if ordinary else 0} T", flush=True)
+    st.casts_t, st.ordinary_t = casts, ordinary
+    print(f"FX_DROP        : {p.rb('FX_DROP')}; fire ticks {st.fire_t} T", flush=True)
+    if len(scen) > 5:
+        print("HP after       : " + ", ".join(f"slot {sl} {p.ent(sl)['HP']}" for sl in [0] + [q[0] for q in placements]),
+              flush=True)
     print(f"log latency    : {len(lat)} messages drawn, max {max(lat) if lat else 0} ticks after the push"
           f" (histogram {dict(sorted({v: lat.count(v) for v in lat}.items()))}), still queued {p.rb('LOG_QN')},"
           f" dropped {p.rb(S['LOG_Q'] + S['LQ_DROP'])}", flush=True)
@@ -319,16 +400,20 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning").split(","):
+        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
-            if key in CAP_GATED and max(t for t, _ in st.ticks) > CAP:
+            if any(t > CAST_CAP for t in st.casts_t):
+                fails.append(key + " (cast)")
+            elif key in ("cast", "lcast") and not st.casts_t:
+                fails.append(key + " (no cast tick seen)")
+            elif key in CAP_GATED and max(st.ordinary_t) > CAP:
                 fails.append(key)
             elif bad and key in GATED:
                 fails.append(key)
             elif bad:
                 print(f"[info] {key}: {len(bad)} ticks over budget (reported, not gated)")
     print(f"[{'FAIL' if fails else 'PASS'}] budget gate (every tick <= budget in"
-          f" {', '.join(GATED)}; <= {CAP} in {', '.join(CAP_GATED)}): {fails or 'ok'}")
+          f" {', '.join(GATED)}; <= {CAP} in {', '.join(CAP_GATED)}; cast ticks <= {CAST_CAP}): {fails or 'ok'}")
     return 1 if fails else 0
 
 

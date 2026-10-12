@@ -1,7 +1,8 @@
 ;==============================================================================
 ; icons.asm — C3-3 icon bar state, bank 2 (architect D3; game.md §3.3–3.5,
 ; concept-screen §5 icon states). The slot table is shared with C3-2's
-; intent3.asm (bank 3: cursor / shortcuts / FIRE dispatch).
+; intent7.asm (bank 7 since D3-7: cursor / shortcuts / FIRE dispatch) and the
+; bank-3 panel code.
 ;
 ; The panel polls icon_state for the 10 slots against ICON_SH (state | IS_SEL
 ; as last drawn, HERO_ST) — "polled like HP" — and redraws only what changed:
@@ -11,6 +12,51 @@
 ; item_info (bank 3) via panel_more. The state / drawing code is bank 3
 ; (icons3.asm); item_icons_far is panel_step's entry to it.
 ;==============================================================================
+
+slot_act_tab:
+                ; Warrior: Sword, Power Strike, Whirlwind, Daggers, Bow, food, potion, scroll, Bag, -
+                DB SA_MELEE, SA_ABIL + 0, SA_ABIL + 1, SA_DAGGERS, SA_BOW
+                DB SA_FOOD, SA_POTION, SA_SCROLL, SA_BAG, SA_EMPTY
+                ; Mage: Staff, Spark, Firebolt, Frost Shard, Drain Life, Lightning, food, potion, scroll, Bag
+                DB SA_MELEE, SA_ABIL + 0, SA_ABIL + 1, SA_ABIL + 2, SA_ABIL + 3
+                DB SA_ABIL + 4, SA_FOOD, SA_POTION, SA_SCROLL, SA_BAG
+                ASSERT K_KNIGHT == 0 && K_WIZARD == 1
+
+;------------------------------------------------------------------------------
+; slot_act — A = slot 0..9 -> A = its SA_* for HERO_KIND (D3-7 T0: bank 2,
+; called from bank 3 (icons3 / panel) and bank 7 (intent7); 16-bit index, so
+; the table needs no page pad).  Clobbers: A, HL
+;------------------------------------------------------------------------------
+slot_act:
+                ld   l, a
+                ld   a, (HERO_KIND)
+                or   a
+                ld   a, l
+                jr   z, .k
+                add  a, ICON_SLOTS
+.k:             ld   hl, slot_act_tab
+                add  a, l
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a
+                ld   a, (hl)
+                ret
+
+; abil_rank — A = ability index k -> A = its rank 0..3 (ARANK bits 2k..2k+1),
+; Z = unlearned.  Clobbers: A, C, HL
+abil_rank:
+                ld   hl, (ARANK)
+                add  a, a
+                jr   z, .r
+                ld   c, a
+.sh:            srl  h
+                rr   l
+                dec  c
+                jr   nz, .sh
+.r:             ld   a, l
+                and  3
+                ret
 
 ; item_icons_far — panel_step (HOT_COPY): the icon item, bank 3.
 item_icons_far: ld   hl, item_icons

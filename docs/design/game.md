@@ -131,6 +131,7 @@
 | Key / locked door | no key exists (potions only), so the lair door is an **ordinary unlocked door** (designer decision 2026-10-03) | §1.1 |
 | D8 | D8 gets a lair exit like D1–D7; **descending from D8 = `GS_WIN`** | §1.3 |
 | Close door | keyboard key **`C`** (1 turn, §2.3 legality; not redefinable, not on joystick) until the 3C icon bar adds FIRE on the melee icon (designer decision 2026-10-03: the key) | §3.1 |
+| Start kit (3D, D3-7 debug; designer decision 2026-10-12) | Behind a debug build flag only, never in a release tape. **Mage:** all 5 spells rank 1, MP 40/40. **Warrior:** Power Strike + Whirlwind rank 1, bow in the bag, **ARROWS 20, DAGGERS 8**, MP 20/20. The near-cap ammo lets the D1 floor stacks trigger `QUIVER FULL.` | §4 start kit (3E) |
 
 ### 1.5 Traps (3E; user 2026-10-03 scope, designer decision 2026-10-03 details)
 
@@ -221,6 +222,11 @@ generator outputs before the trap step unchanged vs B3B-7.
   projectiles included. **Why:** logic resolved the player first, so a target must not
   visibly walk away from a bolt that already hit it. It also keeps monsters static, at zero
   render cost, while the player's spell flies (§9.3).
+- **Casts and missiles (designer decision 2026-10-12):** the hero's ability logic (`proj_fire`,
+  power attacks) may resolve on its **release tick f** (§6.1–6.3) rather than the input tick, and
+  monster logic then resolves at f+1. Logic order stays hero-first. **Phase 2 still starts
+  only when the hero's FX is idle**, after the last impact and its reactions, not at f+1.
+  Monsters stand still for the whole flight; Lightning, the worst case, takes about 0.8 s.
 - **Status step (3D, §6.4):** each entity runs its status step at the **start of its own
   action phase** (hero: when its turn begins; monsters: in slot order, current room only),
   every game turn, including turns an "acts every 2" monster does not act. Poison damage
@@ -639,8 +645,15 @@ sprite. **≤ 3 tracks at once**; more are queued.
   `range` cells in total.
 - **Flight row** = caster top + 2 (staff tip / bow). If the hit body doesn't cover that
   row, it flies at the nearest row of that body.
-- The **first body** whose box contains the row is struck. A mid-ladder body absorbs it
-  harmlessly.
+- **In line** = a living body whose rows overlap the **caster's body rows**, the same vertical
+  rule as melee `find_target`, so a Rat on the caster's floor is in line. The first such body
+  whose cols the projectile enters is struck. A mid-ladder body absorbs it harmlessly: **no
+  Firebolt burst** and no drop rule beyond §6.3's miss landing.
+- Each body is struck **at most once per pass**. A reversal starts a new pass, so a bounce
+  right behind a body hits it again on the way back. This is intended: it is the payoff of
+  bounces, with no per-cast cap.
+- **Drain Life striking its own caster** (after a reflection or bounce): a normal DRAIN hit
+  on the caster with the normal hero-hit line. **No self-heal.**
 - At a **solid cell** (wall, closed door, block, lectern, room edge) it reverses if bounces
   remain (keeping the remaining range), else stops. An open exit edge ends it.
 - **After any reversal, the caster is a valid target.**
@@ -677,13 +690,20 @@ sprite. **≤ 3 tracks at once**; more are queued.
 | Spell | Book | MP | Range | Dmg / type | Bounces | Effect | Projectile → impact sprites |
 |---|---|---|---|---|---|---|---|
 | **Spark** | D1 | 1 | 6 | 1d4+1 SHOCK | 0 | **1 in 4: CONFUSED 3** (§6.4; 3D) | spark_fly1/2 8×8 `$43` → spark_fizz1/2 8×8 |
-| **Firebolt** | D2 | 3 | 12 | 1d8+2 FIRE | 0 | **burst**: bodies within 1 col of impact take 1d4 FIRE, **caster included** at point-blank | firebolt_fly1/2 16×8 alternating yellow `$46` / red `$42` per frame (**user 2026-10-06**) → firebolt_burst1/2 16×16 |
+| **Firebolt** | D2 | 3 | 12 | 1d8+2 FIRE | 0 | **burst**: bodies within 1 col of impact take 1d4 FIRE, **caster included** at point-blank (impact within 1 col of the caster's front col; ranks 1–2, intended; rank 3 spares him) | firebolt_fly1/2 16×8 alternating yellow `$46` / red `$42` per frame (**user 2026-10-06**) → firebolt_burst1/2 16×16 |
 | **Frost Shard** | D3 | 3 | 12 | 1d6 COLD | **1** | **freeze 2 turns** (bosses 1); can freeze the caster after a bounce | frost_fly 8×8 `$45` → frost_crack **8×8** (**user 2026-10-06**: stays 8×8, not 16×16; revisit after playtesting) |
 | **Drain Life** | D4 | 3 | 5 | 1d6+1 DRAIN | 0 | **caster heals the damage dealt** (to max HP); useless on undead (I) | **drain_fly1/2 16×8 `$43` → drain_hit 16×16 (new art)**; the caster flashes `$44` |
 | **Lightning** | D5 | 5 | 28 | 1d8+3 SHOCK | **2** | **pierces** (each body once per pass) | lightning_fly1/2 16×8 `$47` (16 px/tick) → lightning_flash 16×16 |
 
 - Cast: CAST1 2 → CAST2 3 ticks, with the hero flashing the spell ink. The projectile spawns
-  on the CAST2 tick. No per-spell cast frames.
+  on the CAST2 tick, so the release tick f = 2 (`FXD_DELAY` 2). No per-spell cast frames.
+- **Release ticks, all abilities (designer decision 2026-10-12):** every strike or release
+  falls on **tick 2**, as melee SLASH does:
+  - Throw: WIND-UP 2 → THROW 3.
+  - Bow: BOW 4, with the arrow on tick 2.
+  - Power Strike: WIND-UP 2 → POWER_STRIKE 3, with power_burst 2 ticks on the target.
+  - Whirlwind: WIND-UP 2 → WHIRL 3, with spark_fizz 2 ticks on each side.
+  - Staff bonk: CAST1 2 → STAFF_SWING 3.
 - **Mage bar = staff + 5 spells + food + potion + scroll + bag** (10 slots, §3.5). Drain
   Life is **added**, not swapped for anything.
 
@@ -733,7 +753,20 @@ attack. Rules:
   bag the bow icon greys exactly as at 0 arrows and FIRE prints `NO BOW.`; arrows are still
   picked up. Daggers are both weapon and ammo, so `DAGGERS = 0` is the only dagger gate.
 - Dropped-ammo floor items merge into one stack per cell and are drawn as the 8×8
-  dagger/arrow item glyph.
+  dagger/arrow item glyph: **common tile ids 17 `T_DAGGERS` (ink `$47`) and 18 `T_ARROWS`
+  (ink `$07`)**, taken from `T_DRIP1/2` permanently. Drips become per-level decor if they are
+  ever placed (designer decision 2026-10-12).
+- **"Under the target's feet"** = the impact col on the target's storey item row (`9s+7`).
+  This also covers **flyers**: the dagger drops straight down to that storey's floor. The cell
+  must be non-solid, with solid floor below. Otherwise try 1, then 2 cols back toward the
+  caster; if neither works, the dagger is lost. A pit col is always a loss.
+- **Shared cells:** a dropped stack may share a cell with any other floor item, such as a
+  potion. Each item keeps its own floor-list entry; same-type ammo merges. Stepping on the
+  cell picks up every entry by its own rule. The **last live entry in list order** is drawn,
+  and it is re-stamped when a pickup leaves anything behind. The D2 bow + 6-arrow bundle
+  already relies on this rule.
+- `QUIVER FULL.` is one string for both counters. It prints on any pickup that leaves ammo on
+  the floor, in the same way as `BAG FULL.`.
 - Skeleton Archers' arrows are not recoverable (monster projectiles leave no item); the
   Archer's own drop is the supply (§8.5, §9.1).
 - The **Mage has no ammunition**; his limit is MP and the found books/scrolls.

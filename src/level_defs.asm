@@ -190,6 +190,8 @@ FL_S1_BIT       EQU 7
 FL_EMPTY        EQU $FF
 IT_NONE         EQU 0
 IT_POTION       EQU 1               ; 3B stand-in (game.md §1.4); 3E replaces the enum
+IT_DAGGER       EQU 2               ; D3-7: dropped daggers, FL_QTY = count (tile T_DAGGERS)
+IT_ARROW        EQU 3               ; D3-7: dropped arrows, FL_QTY = count (tile T_ARROWS)
 
 ;------------------------------------------------------------------------------
 ; Level state block — bank 5 low RAM, LVL_STATE..LVL_STATE_END (320 B), right
@@ -362,8 +364,16 @@ T_DOOR_JAMB_L   EQU 11              ; `#.#.....` x 8: the left arch's outer stro
 T_CHAIN         EQU 12              ; small decor (valid after B3B-13)
 T_SKULLS        EQU 13
 T_DOOR_JAMB_R   EQU 14              ; `.....#.#` x 8
-T_DRIP1         EQU 17              ; was T_ZAP1 (animated: glyph swap)
-T_DRIP2         EQU 18              ; was T_ZAP2
+; D3-7 (designer 2026-10-12, game.md §6.3): ids 17 / 18 are permanently the
+; dropped-ammo floor glyphs (one stack per cell, 8x8 item glyph).
+T_DAGGERS       EQU 17              ; ink $47
+T_ARROWS        EQU 18              ; ink $07
+; TODO(D3-7): the drip decor still stamps ids 17 / 18 (decor_gen, tiles_common
+; glyphs, main.asm TF_ANIM) until its own task moves drips to per-level decor
+; ("if they are ever placed", game.md §6.3) and the art swaps the glyphs; the
+; old names stay as aliases until then so T0 changes no output.
+T_DRIP1         EQU T_DAGGERS       ; was T_ZAP1 (animated: glyph swap)
+T_DRIP2         EQU T_ARROWS        ; was T_ZAP2
 ; T_POTION (10) stays while potions are a floor tile (3B stand-in); 10 is the
 ; one id left for a future common glyph.
 T_COMMON_USED   EQU 32
@@ -552,13 +562,14 @@ ATTR_P_GREY     EQU $07             ; greyed slot (concept-screen §5 icon state
 ATTR_P_SEL      EQU $08             ; OR: selected slot = PAPER blue
                 ASSERT LOG_ROW + 1 == 23 && (LOG_ROW & $18) == (23 & $18)   ; rows 22/23 share a bitmap third
 PD_HP_BIT       EQU 0
+PD_MP_BIT       EQU 1               ; D3-7 T4: a cast pays MP (no MP item drawn yet: cleared)
 PD_LOG_BIT      EQU 4
 PD_ICONS_BIT    EQU 5
 PD_INFO_BIT     EQU 6
 PD_DEPTH_BIT    EQU 7
                 ASSERT PD_HP == 1 << PD_HP_BIT && PD_LOG == 1 << PD_LOG_BIT
                 ASSERT PD_ICONS == 1 << PD_ICONS_BIT && PD_DEPTH == 1 << PD_DEPTH_BIT
-                ASSERT PD_INFO == 1 << PD_INFO_BIT
+                ASSERT PD_INFO == 1 << PD_INFO_BIT && PD_MP == 1 << PD_MP_BIT
 ; C3-3 info line fields (game.md §3.4: name chars 0-15, numbers 16-27, notes 28-41)
 INFO_NUM_COL    EQU 12              ; char 16 = 96 px
 INFO_NOTE_COL   EQU 21              ; char 28 = 168 px

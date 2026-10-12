@@ -4,7 +4,8 @@
 ; Per-turn / per-event logic moved out of bank 2 (docs/memory-map.md "Cold
 ; code placement"): the player turn (turn_input -> try_player_turn ->
 ; tpt_intent / try_climb / try_horizontal / find_target), end_turn + do_exit
-; + hide_sprites (room exit), the pause overlay entry.
+; + hide_sprites (room exit), the pause overlay entry; D3-7: the icon bar
+; logic (intent7.asm) and the ability / pickup code (abil_*7.asm, pickup7.asm).
 ; Rules (docs/conventions.md "Banking"):
 ;  - Entered only through far7 (bank 2: ld c, BANK_COLD7 / farb) — from
 ;    bank-2, low-RAM, or (nested) bank-3 / bank-1 code. far7 loses A and F:
@@ -29,7 +30,9 @@
 ; turns, the P3 rule). A legal action resolves the whole turn now and enters
 ; the ANIM phase. C3-2: intent_tick already sampled this tick; a pending icon
 ; use (INTENT) goes straight to try_player_turn; while FIRE is held the stick
-; is the cursor's; only directions and '.' count as held.
+; is the cursor's; only directions and '.' count as held. D3-7: an ability
+; turn (act_begin, act7.asm: MON_AT != 0) leaves its release and the monster
+; phase to act_pend (the anim_gate hook) instead.
 ; Clobbers: all but IY (far7: A, F lost; nothing is returned).
 ;------------------------------------------------------------------------------
 turn_input:
@@ -68,7 +71,9 @@ turn_input:
                 ld   a, (NEED_RELEASE)
                 or   a
                 ret  nz
-.go:            call try_player_turn
+.go:            xor  a                         ; D3-7: the input tick is TURN_TICK 0
+                ld   (TURN_TICK), a            ; (set_reaction_at / pf_tick add it)
+                call try_player_turn
                 ret  nc                        ; illegal: no turn consumed
                 ld   a, (CLIMB_BLK)            ; B14: any turn but a blocked-climb
                 or   a                         ; wait ends the run of blocks
@@ -78,18 +83,17 @@ turn_input:
                 ld   a, 1
                 ld   (NEED_RELEASE), a
                 ld   a, (EXIT_KIND)
-                or   a
+                ld   hl, MON_AT                ; D3-7: an ability turn (act_begin) defers
+                or   (hl)                      ; the monster phase to act_pend
                 ld   hl, resolve_monsters      ; B3B-R2: bank 3, one far3 a turn
                 call z, far3                   ; exit turn: monsters don't act
                 ld   a, TP_ANIM
                 ld   (TURN_PHASE), a
-                xor  a
-                ld   (TURN_TICK), a
                 ret
 
 ;------------------------------------------------------------------------------
 ; end_turn — ANIM finished (play_loop: turn_done CF -> far7): transition (if
-; exiting), TURN_COUNTER++, potion pickup, death check (B3B-11: messages via
+; exiting), TURN_COUNTER++, potion + ammo pickup, death check (B3B-11: messages via
 ; the log; B3B-13: msg_push), back to INPUT.  Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 end_turn:
@@ -100,9 +104,12 @@ end_turn:
                 inc  hl
                 ld   (TURN_COUNTER), hl
                 ld   hl, potion_pickup         ; B3B-R2: bank 3 (B3B-11: HP / potions
-                call far3                      ; reach the panel by
-                xor  a                         ; panel_tick's poll, not from here)
+                call far3                      ; reach the panel by panel_tick's poll)
+                call ammo_pickup               ; D3-7 (pickup7.asm, this bank)
+                xor  a
                 ld   (TURN_PHASE), a
+                ld   (TURN_TICK), a            ; D3-7: 0 throughout INPUT, so the input
+                                               ; tick's set_reaction_at / pf_tick add 0
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
                 ret  z                         ; (B3B-13: the PROTO chest win is gone; a run
@@ -208,7 +215,7 @@ try_player_turn:
 ;------------------------------------------------------------------------------
 ; tpt_intent — C3-2 player turn (game.md §2.3 / §3.1), from try_player_turn
 ; (IX = hero, live list built). Order: a pending icon use (INTENT, set by
-; intent_tick) -> use_icon (bank 3); UP + LEFT / RIGHT -> jump; one of LEFT /
+; intent_tick) -> use_icon (intent7.asm); UP + LEFT / RIGHT -> jump; one of LEFT /
 ; RIGHT (DOWN ignored: a low diagonal acts as the side) -> against the
 ; facing: turn around, 0 turns, and a held key waits TURN_DELAY ticks before
 ; it walks; along it: walk / bump attack / door (try_horizontal); UP -> climb;
@@ -224,8 +231,7 @@ tpt_intent:
                 jr   z, .move
                 xor  a
                 ld   (INTENT), a
-                ld   hl, use_icon              ; bank 3: L = 1 turn used
-                call far3
+                call use_icon                  ; intent7.asm (D3-7 T0: bank 7): L = 1 turn used
                 ld   a, l
                 rrca                           ; CF = L bit 0
                 ret  nc                        ; refused: ICON MODE stays (§3.1)
@@ -660,13 +666,6 @@ find_target:
                 ld   (TMP5), a
                 ret
 
-; find_target_far — find_target for bank-3 callers (intent3 ic_melee): far7
-; loses A, so the slot comes back in L.  Clobbers: as find_target + L.
-find_target_far:
-                call find_target
-                ld   l, a
-                ret
-
 ;------------------------------------------------------------------------------
 ; hide_sprites — erase every drawn sprite + FX + queued damage (before a
 ; transition: "all sprites are hidden", §3.6). Clobbers: all but IY.
@@ -739,7 +738,7 @@ pause_run7:     ld   hl, PAUSE_REQ
 ; far7; play is frozen in ICON MODE, so the far call never lands in a busy
 ; tick). In: D = STICK, E = pressed this tick. FIRE -> INTENT (use the
 ; selected icon); UP / DOWN -> mode_exit; a held side steps the cursor
-; (CUR_DELAY1 then CUR_DELAY2 repeat; cursor_step, bank 3).
+; (CUR_DELAY1 then CUR_DELAY2 repeat; cursor_step, intent7.asm).
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 intent_icon7:
@@ -776,5 +775,14 @@ intent_icon7:
                 ld   b, CUR_DELAY2
 .step:          ld   (hl), b
                 ld   a, c
-                ld   hl, cursor_step
-                jp   far3
+                jp   cursor_step               ; intent7.asm (this bank)
+
+;==============================================================================
+; D3-7 (abilities; T0 layout: refusing stubs, T1 fills them in)
+;==============================================================================
+                INCLUDE "intent7.asm"          ; C3-2 icon bar (D3-7 T0: from bank 3)
+                INCLUDE "abil_spell7.asm"      ; the 5 Mage spells (cast -> proj_fire)
+                INCLUDE "abil_melee7.asm"      ; Power Strike, Whirlwind, the staff bonk slot
+                INCLUDE "abil_ammo7.asm"       ; dagger throw, bow shot
+                INCLUDE "pickup7.asm"          ; ammo pickup (end_turn)
+                INCLUDE "act7.asm"             ; D3-7 T1: the split ability turn (act_begin / act_pend / act_fire)

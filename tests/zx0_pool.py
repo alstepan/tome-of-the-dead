@@ -408,9 +408,10 @@ def main():
     ap.add_argument("--baseline", help="source root of another checkout to compare too")
     a = ap.parse_args()
     tmp = tempfile.mkdtemp(prefix="zx0pool_")
-    variants = [("zx0", REPO, [])]
-    if a.baseline:
-        variants.append(("baseline", os.path.abspath(a.baseline), []))
+    kit = ["DEBUG_KIT=0"]          # D3-7: suites run on the release start kit
+    variants = [("zx0", REPO, kit)]
+    if a.baseline:                 # (an older checkout ignores the unknown define)
+        variants.append(("baseline", os.path.abspath(a.baseline), kit))
     res, fails = {}, []
     for name, root, defs in variants:
         sna, S, disp = build(root, defs, os.path.join(tmp, name))

@@ -1,16 +1,20 @@
 ;==============================================================================
-; intent3.asm — C3-2 icon bar logic, bank 3 (cold: entered by far3 only on an
-; event — a cursor step, a slot shortcut, an icon use; game.md §3.1 / §3.5).
-; The per-tick FIRE machine is intent_tick (io.asm, bank 2); the movement
-; rules are tpt_intent (logic.asm).
+; intent7.asm — C3-2 icon bar logic, bank 7 since D3-7 T0 (was intent3.asm,
+; bank 3; moved for bank-3 relief). Cold: entered only on an event — a cursor
+; step, a slot shortcut, an icon use; game.md §3.1 / §3.5. INCLUDEd by
+; bank7.asm, so its rules hold here: no data, no SMC, far7 entries from bank 2
+; / bank 3 (intent_tick: sel_key; new_game: hero_st_init), plain calls from
+; bank-7 code (tpt_intent: use_icon; intent_icon7: cursor_step); bank-3
+; targets via far3 (do_attack, try_quaff, abil_load). The per-tick FIRE
+; machine is intent_tick (io.asm, bank 2); the movement rules tpt_intent.
 ;
 ; Slot actions (SA_*) by class, one byte per slot (game.md §3.5). The panel
 ; draws its own bars (panel.asm bar_knight / bar_wizard, C3-3); these say
 ; what FIRE does and whether the cursor may stop there.
 ;==============================================================================
 
-; SA_* (hero_defs.asm), slot_act_tab / slot_act / abil_rank: bank 2 (icons.asm),
-; shared with the panel's icon poll.
+; SA_* (hero_defs.asm), slot_act_tab / slot_act / abil_rank: bank 2 (icons.asm,
+; D3-7 T0: moved from icons3.asm), shared with the bank-3 icon / panel code.
 
 ;------------------------------------------------------------------------------
 ; slot_ok — A = slot -> NZ if the cursor may stop there (not empty, not an
@@ -27,7 +31,7 @@ slot_ok:
                 or   a                         ; NZ
                 ret
 ;------------------------------------------------------------------------------
-; cursor_step — far3, A = +1 / -1: move SEL_SLOT to the next selectable slot
+; cursor_step — intent_icon7 (plain call), A = +1 / -1: move SEL_SLOT to the next selectable slot
 ; that way, wrapping 10 -> 1 / 1 -> 10 (none other: unchanged). No turn.
 ; Clobbers: A, BC, DE, HL
 ;------------------------------------------------------------------------------
@@ -55,7 +59,7 @@ cursor_step:
                 ret
 
 ;------------------------------------------------------------------------------
-; sel_key — far3, A = shortcut 1..10 (key 1..9, 0): select that slot if the
+; sel_key — far7 from intent_tick (bank 2), A = shortcut 1..10 (key 1..9, 0): select that slot if the
 ; cursor may stop there; an unlearned ability prints NOT LEARNED. No turn.
 ; Clobbers: A, BC, DE, HL
 ;------------------------------------------------------------------------------
@@ -74,32 +78,42 @@ sel_key:
                 jp   msg_push
 
 ;------------------------------------------------------------------------------
-; use_icon — far3 from tpt_intent (IX = hero, live list built): FIRE on the
-; selected slot. Out: L = 1 turn used, 0 refused (no turn; usually a message).
+; use_icon — tpt_intent (plain call, both bank 7; IX = hero, live list built):
+; FIRE on the selected slot. Out: L = 1 turn used, 0 refused (no turn; usually
+; a message). Bank 7 holds no data (gfx_integrity), so the SA_* dispatch is a
+; cp chain, not a jump table (about the bytes of the 18-B DW table + its
+; index code it replaces; cold: one use per FIRE).
 ; Clobbers: all but IX, IY.
 ;------------------------------------------------------------------------------
 use_icon:
                 ld   a, (SEL_SLOT)
-                call slot_act
+                call slot_act                  ; bank 2
                 cp   SA_ABIL
-                jr   c, .t
-                sub  SA_ABIL
-                ld   (TMP7), a                 ; ability index for ic_abil
-                ld   a, SA_ABIL
-.t:             add  a, a
-                ld   e, a
-                ld   d, 0
-                ld   hl, icon_jt
-                add  hl, de
-                ld   a, (hl)
-                inc  hl
-                ld   h, (hl)
-                ld   l, a
-                jp   (hl)
-
-icon_jt:        DW ic_none, ic_melee, ic_daggers, ic_bow, ic_food
-                DW ic_potion, ic_scroll, ic_bag, ic_abil
-                ASSERT ($ - icon_jt) / 2 == SA_COUNT
+                jp   nc, ic_abil               ; A = SA_ABIL + k
+                cp   SA_MELEE
+                jr   z, ic_melee
+                cp   SA_DAGGERS
+                jr   z, ic_daggers
+                cp   SA_BOW
+                jr   z, ic_bow
+                cp   SA_POTION
+                jr   z, ic_potion
+                ld   e, TX_NO_FOOD             ; 3E: food
+                cp   SA_FOOD
+                jr   z, .rf
+                ld   e, TX_NO_SCROLL           ; 3E: scrolls
+                cp   SA_SCROLL
+                jr   z, .rf
+                ld   e, TX_NO_BAG              ; 3E: the bag page
+                cp   SA_BAG
+                jr   nz, ic_none               ; SA_EMPTY
+.rf:            ld   a, e
+ic_refuse:      call msg_push
+                ld   l, 0
+                ret
+ic_none:        ld   l, 0
+                ret
+                ASSERT SA_EMPTY == 0 && SA_ABIL == SA_COUNT - 1 && SA_BAG < SA_ABIL
 
 ; melee (sword / staff): the nearest hostile in reach on the faced side, else
 ; close the faced door (game.md §2.3, replaces the 3B key C), else NO TARGET.
@@ -112,12 +126,12 @@ ic_melee:
                 jr   z, .f
                 ld   a, $FF
 .f:             ld   (TMP6), a
-                ld   hl, find_target_far       ; D3-S2: bank 7 (L = slot / $FF)
-                call far7
-                ld   a, l
+                call find_target               ; bank 7: A = slot / $FF
                 cp   $FF
                 jr   z, .door
-                call do_attack                 ; turn3.asm (this bank)
+                ld   hl, do_attack             ; turn3.asm, bank 3 (A = target slot)
+                call far3
+                call melee_bonk                ; D3-7 slot: the Mage staff bonk (abil_melee7.asm)
                 ld   l, 1
                 ret
 .door:          call try_close                 ; lowram: CF = 1 closed
@@ -131,14 +145,16 @@ ic_potion:
                 or   a
                 ld   a, TX_NO_POTION
                 jr   z, ic_refuse
-                jp   try_quaff                 ; L = 1 drunk / 0 (HP full: no turn)
+                ld   hl, try_quaff             ; bank 3: L = 1 drunk / 0 (HP full: no turn)
+                jp   far3
 
 ic_daggers:
                 ld   a, (DAGGERS)
                 or   a
                 ld   a, TX_NO_DAGGERS
                 jr   z, ic_refuse
-                jr   ic_none                   ; 3D: the throw
+                ld   a, ABL_DAGGER
+                jr   ic_disp
 
 ic_bow:
                 ld   a, (HAS_BOW)
@@ -149,30 +165,43 @@ ic_bow:
                 or   a
                 ld   a, TX_NO_ARROWS
                 jr   z, ic_refuse
-                jr   ic_none                   ; 3D: the shot
+                ld   a, ABL_BOW
+                jr   ic_disp
 
-ic_food:        ld   a, TX_NO_FOOD             ; 3E: food
-                jr   ic_refuse
-ic_scroll:      ld   a, TX_NO_SCROLL           ; 3E: scrolls
-                jr   ic_refuse
-ic_bag:         ld   a, TX_NO_BAG              ; 3E: the bag page
-                jr   ic_refuse
-
+; ic_abil — A = SA_ABIL + k (k = the class's ability index, ARANK bits
+; 2k..2k+1): unlearned -> NOT LEARNED; else ABL_* = k (Mage: Spark ..
+; Lightning) or ABL_POWER + k (Warrior: Power Strike, Whirlwind).
 ic_abil:
-                ld   a, (TMP7)
-                call abil_rank
+                sub  SA_ABIL
+                ld   b, a                      ; k
+                call abil_rank                 ; bank 2 (A, C, HL)
                 ld   a, TX_NOT_LEARNED
                 jr   z, ic_refuse
-                ; 3D: cast / power attack (fall through: no turn)
-ic_none:        ld   l, 0
-                ret
-
-ic_refuse:      call msg_push
-                ld   l, 0
-                ret
+                ld   a, (HERO_KIND)
+                or   a
+                ld   a, b
+                jr   nz, ic_disp               ; Mage
+                add  a, ABL_POWER              ; Warrior
+                ASSERT K_KNIGHT == 0 && ABL_SPARK == 0 && ABL_WHIRL == ABL_POWER + 1
+; ic_disp — A = ABL_*: abil_load (bank 3, rank3.asm) fills ABIL_DESC (the
+; ab_def row + the rank / ammo row) and returns L = its ABF_* flags, B = the
+; ABL_* (far3 passes BC / L out); dispatch by the flags: ABF_MELEE ->
+; abil_melee, ABF_AMMO -> abil_ammo, else (ABF_SPELL) -> abil_spell. Each:
+; IX = hero, B = ABL_*, ABIL_DESC loaded -> L = 1 turn used / 0 refused.
+ic_disp:
+                ld   hl, abil_load
+                call far3
+                bit  ABF_MELEE_BIT, l
+                jp   nz, abil_melee
+                bit  ABF_AMMO_BIT, l
+                jp   nz, abil_ammo
+                jp   abil_spell
+ABF_MELEE_BIT   EQU 6
+ABF_AMMO_BIT    EQU 7
+                ASSERT ABF_MELEE == 1 << ABF_MELEE_BIT && ABF_AMMO == 1 << ABF_AMMO_BIT
 
 ;------------------------------------------------------------------------------
-; hero_st_init — new_game: the C3-2 intent state + the start kit counters the
+; hero_st_init — far7 from new_game (bank 3): the C3-2 intent state + the start kit counters the
 ; icon handlers read (game.md §4: Warrior 3 daggers, no bow, 0 arrows; no
 ; ability learned). STICK / KEYTAB / JOY_MODE persist (boot), ICON_SH is the
 ; panel's (C3-3), LVL / XP / MP 3D's.  Clobbers: A, B, HL
@@ -208,11 +237,23 @@ hero_st_init:
                 ld   a, (HERO_KIND)
                 or   a
                 ld   a, 0
+                ld   b, MAGE_MP
                 jr   nz, .d                    ; Mage: no daggers, DEF 0 (HERO3D zeroed)
+                ld   b, WARRIOR_MP
                 ld   a, WARRIOR_DEF
                 ld   (HERO_DEF), a             ; D3-6a: Leather (game.md §4, §11.4)
                 ld   a, WARRIOR_DAGGERS
 .d:             ld   (DAGGERS), a
+                ld   a, b                      ; D3-7 T3: base MP (game.md §4)
+                ld   (MP), a
+                ld   (MAXMP), a
+    IF DEBUG_KIT
+                ld   hl, debug_kit             ; bank 3; IX passes through
+                jp   far3                      ; (farb returns to our caller)
+    ELSE
                 ret
-WARRIOR_DAGGERS EQU 3
+    ENDIF
+WARRIOR_MP      EQU 6
+MAGE_MP         EQU 12
+WARRIOR_DAGGERS EQU 3                          ; (EQUs: no bytes in bank 7)
 WARRIOR_DEF     EQU 1                          ; Leather; gear replaces it in 3E
