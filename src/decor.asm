@@ -38,10 +38,10 @@ DT_CAPS         EQU (DT_MAX_TRIES << 6) | (DT_MAX_GLYPH << 4) | DT_MAX_ATTR   ; 
 ; i.e. drips hold 16 ticks per frame) steps: attr kinds take the next colour of
 ; their 8-step cycle (index = AL_PHASE bits 4..2), glyph swaps exchange the
 ; map id with AL_TYPE and draw the new glyph + its TILE_ATTRS attr. Each step
-; writes the bank-5 cell AND the bank-7 clean-background shadow (else the next
-; erase would restore a stale frame) and marks the cell for present.
-; ROOM_MAP keeps the shown id, so the shadow / screens stay == the map
-; (glyphs; attrs follow the cycle).
+; writes the bank-5 cell (glyph / attr) AND the bank-7 attr shadow (else the
+; next erase would restore a stale colour) and marks the cell for present.
+; ROOM_MAP keeps the shown id (erase_rect redraws its glyph, D3-S2), so the
+; screens stay == the map (glyphs; attrs follow the cycle).
 ; A due entry WAITS a tick (AL_PHASE - 1, due again next tick) when the tick's
 ; cap for its kind (DT_MAX_GLYPH / DT_MAX_ATTR) or its occupancy tries
 ; (DT_MAX_TRIES) are spent: a same-stagger bunch spreads over ticks. A tried
@@ -221,30 +221,23 @@ decor_tick:
                 ld   a, TILE_GLYPHS >> 9
                 rla
                 ld   h, a
-                push bc                        ; B = row, C = new id
-                push de                        ; D = third, E = low byte
-                ld   a, d
+                push de                        ; D = third, E = low byte (B = row,
+                ld   a, d                      ; C = new id: kept)
                 add  a, a
                 add  a, a
                 add  a, a
                 or   SCREEN_BITMAP >> 8
                 ld   d, a                      ; DE = bank-5 bitmap, line 0
-                add  a, (SHADOW_BITMAP - SCREEN_BITMAP) >> 8
-                ld   b, a
-                ld   c, e                      ; BC = the shadow's
-.ln:            DUP  4                         ; 33 T/line to both screens; the glyph
-                ld   a, (hl)                   ; is 8-aligned: L & 7 = 0 after 8 lines
-                ld   (de), a
-                ld   (bc), a
-                inc  l
+.ln:            DUP  4                         ; the glyph is 8-aligned: L & 7 = 0
+                ld   a, (hl)                   ; after 8 lines. D3-S2: no bitmap
+                ld   (de), a                   ; shadow (erase_rect redraws the
+                inc  l                         ; map id swapped above)
                 inc  d
-                inc  b
                 EDUP
                 ld   a, l
                 and  7
                 jr   nz, .ln
                 pop  de
-                pop  bc
                 ld   l, c
                 ld   h, TILE_ATTRS >> 8
                 ld   c, (hl)                   ; C = the new id's attr
@@ -296,7 +289,6 @@ decor_tick:
                 ASSERT (pm_tab >> 8) == ((pm_tab + 8) >> 8)
                 ASSERT (TILE_GLYPHS & $1FF) == 0 && TILE_IDS <= 64
                 ASSERT (ROOM_MAP & $FF) == 0 && (SCREEN_ATTR & $FF) == 0 && (SHADOW_ATTR & $FF) == 0
-                ASSERT (SHADOW_BITMAP & $FF) == 0 && (SHADOW_BITMAP - SCREEN_BITMAP) == (SHADOW_ATTR - SCREEN_ATTR)
                 ASSERT PLAY_ROWS * 4 <= PRES_LEN && (ANIM_LIST & 3) == 0
                 ASSERT R_COL == 4 && R_ROW == 5 && R_COLS == 6 && R_ROWS == 7
                 ASSERT SLOTREC_STRIDE == 16 && (SLOTREC & $FF) == 0

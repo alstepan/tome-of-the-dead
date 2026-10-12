@@ -54,9 +54,9 @@ start:
                 call ROM_LD_BYTES
                 jr   nc, .ay
 .t7lo:          ld   a, BANK_TSET              ; B3B-8: the level tilesets, bank 7
-                call page_bank                 ; spare above screen 2 ...
-                ld   ix, TSET_LO
-                ld   de, TSET_HALF_LEN
+                call page_bank                 ; spare above screen 2 ... (D3-S2: + the
+                ld   ix, TSET_LO               ; bank-7 cold code right after them)
+                ld   de, B7_TAPE_LEN
                 ld   a, $FF
                 scf
                 call ROM_LD_BYTES
@@ -485,36 +485,32 @@ build_room:
 
 ;------------------------------------------------------------------------------
 ; room_show — A = room: build it into ROOM_MAP, draw it on the bank-5 screen
-; and the bank-7 clean-background shadow, ornament on both (start_game; the
-; B3B-12 level entry). Does not present (callers end with present_full).
+; (+ the row-17 ornament) and the bank-7 attr shadow (start_game; the B3B-12
+; level entry). Does not present (callers end with present_full).
 ; Leaves bank 7 paged. Clobbers: A, BC, DE, HL (IX, IY kept).  ~0.4M T
 ; (draw_room ~334k T + the build, tests/world.py W12)
 ;------------------------------------------------------------------------------
 room_show:
                 ld   h, ROOM_MAP >> 8
                 call build_room
-                call draw_room                 ; screen + shadow (leaves bank 7 paged)
+                call draw_room                 ; screen + attr shadow (leaves bank 7 paged)
                 ld   a, SCREEN_BITMAP >> 8
-                call orn_row
-                ld   a, SHADOW_BITMAP >> 8     ; bank 7 still paged (shadow_rect)
                 jr   orn_row
 
 ;------------------------------------------------------------------------------
 ; room_shadow — do_exit after the scroll: the new room's animated-decor list
 ; (B3B-9 review: its NEXT_MAP build filled ANIM_N2 / ANIM_LIST2; one LDIR of
 ; the count + 12 entries over ANIM_N / ANIM_LIST, ~1k T), then the
-; clean-background shadow of the new room (shadow_room) + its row-17 ornament
-; (the scroll already drew the ornament on the screen, orn_cells calls in
-; bank3.asm). Leaves bank 7 paged. Clobbers: A, BC, DE, HL.
+; attr shadow of the new room (shadow_room; D3-S2: no bitmap shadow, so no
+; ornament here — the scroll drew the screen's, orn_cells calls in
+; scroll1.asm). Leaves bank 7 paged. Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 room_shadow:
                 ld   hl, ANIM_N2
                 ld   de, ANIM_N
                 ld   bc, ANIM_COPY_LEN
                 ldir
-                call shadow_room
-                ld   a, SHADOW_BITMAP >> 8
-                ; fall through
+                jp   shadow_room
 ; orn_row — the whole row 17 of ROOM_MAP, A = bitmap base high.
 orn_row:
                 ld   bc, FLOOR_ROW1 << 8       ; row 17, col 0
@@ -527,8 +523,7 @@ orn_row:
 ; cap_l at 0, cap_r at 31, wing_l skull_l skull_r wing_r at ORN_MID_COL..+3,
 ; link (odd) / bar (even) elsewhere (tools/concept_r4.py). Bitmap only: the
 ; attr stays TILE_ATTRS[T_PLAT / T_WALLF] = LVL_ATTR_FLOOR = the ornament attr.
-; In : A = bitmap base high (SCREEN_BITMAP >> 8, or SHADOW_BITMAP >> 8 with
-;      bank 7 paged), B = map / screen row, C = first col, D = cells, E = the
+; In : A = bitmap base high (SCREEN_BITMAP >> 8), B = map / screen row, C = first col, D = cells, E = the
 ;      logical col of the first cell (the scrolls draw a room's cols at other
 ;      screen cols). Pages nothing: callable from bank 3 (the scrolls).
 ; Clobbers: A, BC, DE, HL.   ~0.3k T per ornament cell (cold: room entry)
@@ -587,7 +582,7 @@ orn_cells:
                 ASSERT ORN_CAP_L == 0 && ORN_BAR == ORN_LINK + 1 && ORN_LINK == 1
                 ASSERT ORN_SKULL_L == ORN_WING_L + 1 && ORN_WING_R == ORN_WING_L + ORN_MID_N - 1
                 ASSERT (ORN_GLYPHS >> 8) == ((ORN_GLYPHS + ORN_COUNT * 8 - 1) >> 8)
-                ASSERT (SHADOW_BITMAP & $18FF) == 0 && (SCREEN_BITMAP & $18FF) == 0
+                ASSERT (SCREEN_BITMAP & $18FF) == 0
 
 ;------------------------------------------------------------------------------
 ; level_load_tiles — the level theme (game.md §1.2): A = depth 1..8, or 0 =
@@ -874,7 +869,7 @@ door_find:
 ;------------------------------------------------------------------------------
 ; door_paint — the planks of the door at cols C, C+1, rows B .. B+5: A = 0
 ; open (jambs T_DOOR_JAMB_L / _R, non-solid) / else closed (T_DOOR_L / T_DOOR_R: never called on a locked
-; door). ROOM_MAP, the bank-7 clean-background shadow (shadow_rect), then
+; door). ROOM_MAP, the bank-7 attr shadow (shadow_rect), then
 ; PEND_DMG so the next render restores the 2 x 6 cells (the potion-pickup
 ; path; a closed door's cells are free of bodies, an opened one's too).
 ; Clobbers: all but IX.   ~7k T (measured: tests/world.py W5)
@@ -1588,6 +1583,77 @@ vis_room_sync:
                 ret
                 ASSERT (SLOTREC & $FF) == 0 && R_VIS == 0 && P_MAX_ENT * SLOTREC_STRIDE == 256
                 ASSERT (RLIST & $FF) + P_MAX_ENT <= 256
+
+;==============================================================================
+; clear_screen — bitmap 0, attrs = A.   Clobbers: BC, DE, HL
+; (D3-S2: clear_screen / print_char / print_str moved here from bank 2 —
+; cold: boot, the paging-lock message, level cards, menus.)
+;==============================================================================
+clear_screen:
+                push af
+                ld   hl, SCREEN_BITMAP
+                ld   de, SCREEN_BITMAP + 1
+                ld   bc, SCREEN_BITMAP_LEN - 1
+                ld   (hl), 0
+                ldir
+                pop  af
+                ld   hl, SCREEN_ATTR
+                ld   de, SCREEN_ATTR + 1
+                ld   bc, SCREEN_ATTR_LEN - 1
+                ld   (hl), a
+                ldir
+                ret
+
+;==============================================================================
+; TEXT (ROM charset, 48K ROM paged): the select screen and the paging-lock
+; message only (both drawn on the displayed bank-5 screen, no present). Play
+; text is the 6x8 panel font (print6, panel.asm; B3B-11).
+; print_char — A = ASCII 32..127 at cell (row B, col C); C advances.
+; Clobbers: A, DE, HL.
+;==============================================================================
+print_char:
+                ld   l, a
+                ld   h, 0
+                add  hl, hl
+                add  hl, hl
+                add  hl, hl
+                ld   de, ROM_CHARSET - 32 * 8
+                add  hl, de
+                ex   de, hl                    ; DE = glyph
+                ld   a, b
+                and  $18
+                or   SCREEN_BITMAP >> 8
+                ld   h, a
+                ld   a, b
+                rrca
+                rrca
+                rrca
+                and  $E0
+                or   c
+                ld   l, a
+                DUP  7
+                ld   a, (de)
+                ld   (hl), a
+                inc  e                         ; A7b: ROM glyphs are 8-aligned (-14 T/char)
+                inc  h
+                EDUP
+                ld   a, (de)
+                ld   (hl), a
+                inc  c
+                ret
+                ASSERT (ROM_CHARSET & 7) == 0
+
+; print_str — HL = 0-terminated string at (row B, col C). C advances.
+; Clobbers: A, C, DE, HL
+print_str:
+                ld   a, (hl)
+                or   a
+                ret  z
+                push hl
+                call print_char
+                pop  hl
+                inc  hl
+                jr   print_str
 
 ;==============================================================================
 ; A7 display switching (cold; bank 5 low RAM is always mapped, so bank-2 and

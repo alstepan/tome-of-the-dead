@@ -420,7 +420,7 @@ TSET_HI         EQU $FAA0           ; right above the shadow attrs (PROTO rows 0
                 ASSERT TSET_STRIDE == 5 * 64    ; level_load_tiles: (slot&3) * 320 = slot*256 + slot*64
                 ASSERT TSET_LO >= SCREEN7_ATTR + SCREEN_ATTR_LEN
                 ASSERT TSET_HI >= SHADOW_ATTR + PLAY_ROWS * ATTR_STRIDE   ; (+3 PROTO rows of slack)
-                ASSERT TSET_LO + TSET_PER_HALF * TSET_STRIDE <= SHADOW_BITMAP
+                ASSERT TSET_LO + TSET_PER_HALF * TSET_STRIDE <= B7_CODE
                 ASSERT TSET_HI + TSET_PER_HALF * TSET_STRIDE <= $10000
                 ASSERT 2 * TSET_PER_HALF == LEVELS
                 ASSERT BANK_TSET == BANK_SCREEN7 && BANK_TSET == BANK_SHADOW

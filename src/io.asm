@@ -356,42 +356,8 @@ intent_tick:
                 ld   a, (ICON_MODE)
                 or   a
                 jr   z, .play
-                ; --- ICON MODE ---
-                bit  JOY_F_BIT, e
-                jr   z, .mNoF
-                ld   a, FS_USED               ; the release is not a tap
-                ld   (FIRE_ST), a
-                ld   a, IN_FIRE
-                ld   (INTENT), a
-                ret
-.mNoF:          bit  JOY_F_BIT, d
-                jr   nz, .mF
-                xor  a                        ; FIRE up: the next press is new
-                ld   (FIRE_ST), a
-.mF:            ld   a, e
-                and  (1 << JOY_U_BIT) | (1 << JOY_D_BIT)
-                jp   nz, mode_exit
-                bit  JOY_F_BIT, d
-                ret  nz                       ; FIRE still held from the entry
-                ld   a, d
-                and  (1 << JOY_R_BIT) | (1 << JOY_L_BIT)
-                cp   1 << JOY_R_BIT
-                ld   c, 1
-                jr   z, .cur
-                cp   1 << JOY_L_BIT
-                ld   c, $FF
-                ret  nz
-.cur:           and  e                        ; the held side is new?
-                ld   hl, CUR_REP
-                ld   b, CUR_DELAY1
-                jr   nz, .step
-                dec  (hl)
-                ret  nz
-                ld   b, CUR_DELAY2
-.step:          ld   (hl), b
-                ld   a, c
-                ld   hl, cursor_step
-                jp   far3
+                ld   hl, intent_icon7          ; D3-S2: ICON MODE (frozen play) in
+                jp   far7                      ; bank 7; D, E pass in
                 ; --- play ---
 .play:          ld   hl, FIRE_ST
                 bit  JOY_F_BIT, d
@@ -540,26 +506,10 @@ fire_used:      ld   a, (FIRE_ST)
 bag_msg:        ld   a, TX_NO_BAG
                 jp   msg_push
 
-; pause_hook — FIRE+UP / BREAK (outside ICON MODE): counts the request
-; (PAUSE_REQ, test-observable) and runs the C3-6 pause overlay (pause_run,
-; bank 1) on the shown bank-5 screen; resume -> present_full + resync_tick,
-; quit -> the menu (stack reset). Clobbers: all but IX, IY.
-pause_hook:     ld   hl, PAUSE_REQ
-                inc  (hl)
-                call show_bank5                ; C3-6: the overlay on the composed screen
-                ld   hl, pause_run             ; bank 1 (menu1.asm): L = 0 resume / 1 quit
-                call far1
-                ld   a, l
-                or   a
-                jr   nz, .quit
-                ld   a, FS_USED                ; the FIRE / ENTER that resumed is not a
-                ld   (FIRE_ST), a              ; tap or an ENTER use back in play
-                ld   a, (PLAYER_SC)
-                ld   (SC_OLD), a
-                call present_full              ; bank 5 (rows restored) -> screen 2, shown
-                jp   resync_tick               ; the paused time is not a tick overrun
-.quit:          ld   sp, WORKSTORE_TOP         ; abandon the game: back to the menu
-                jp   enter_select
+; pause_hook — FIRE+UP / BREAK (outside ICON MODE): D3-S2: the body is
+; bank-7 pause_run7 (far7). Clobbers: all but IX, IY.
+pause_hook:     ld   hl, pause_run7
+                jp   far7
 
 ;==============================================================================
 ; rng_next — xorshift16, triplet (7,9,8) (J. Metcalf's Z80 form).

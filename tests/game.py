@@ -1832,7 +1832,8 @@ def isr_tests(h, p):
     a room transition (screen bit flips 1 -> 0 -> 1) the ISR pages bank 3 for
     the player and restores exactly PORT_7FFD_SHADOW; no code ever runs at
     $C000+ with a bank other than 3 paged (A3 review carry-over), except the
-    bank-1 UI code region with bank 1 paged (C3 review: far1 targets)."""
+    bank-1 UI code region with bank 1 paged (C3 review: far1 targets) and (D3-S2)
+    the bank-7 cold code region with bank 7 paged (far7 targets)."""
     # D3-0: stop at the ISR's `call AY_PLAY` (isr.page, bank 2, after the OUT)
     # rather than at AY_PLAY itself: with the 4 KB AY slot at $F000 the bank-1
     # UI code (ui1_code..ui1_end) covers the same addresses, and a PC probe
@@ -1844,9 +1845,12 @@ def isr_tests(h, p):
     p.load()
     # C3 review: bank-1 code (ui1_code..ui1_end: the scrolls, the info line,
     # entered by far1) is the one other bank allowed to run at $C000+.
-    p.z.cmd("set-breakpoint 7 PC>=C000H and RAM<>3 and RAM<>1")
+    # D3-S2: and the bank-7 cold code (b7_code..b7_end, entered by far7).
+    p.z.cmd("set-breakpoint 7 PC>=C000H and RAM<>3 and RAM<>1 and RAM<>7")
     p.z.cmd("set-breakpoint 8 RAM=1 and PC>=C000H and PC<%XH" % S["ui1_code"])
     p.z.cmd("set-breakpoint 9 RAM=1 and PC>=%XH" % S["ui1_end"])
+    p.z.cmd("set-breakpoint 10 RAM=7 and PC>=C000H and PC<%XH" % S["b7_code"])
+    p.z.cmd("set-breakpoint 11 RAM=7 and PC>=%XH" % S["b7_end"])
     p.extra_probes = set()
     p.wait_state(GS_SELECT)
     p.wb("INPUT_REPEAT", 0)
@@ -1923,12 +1927,12 @@ def isr_tests(h, p):
         break
     p.release()
     p.wb("INPUT_REPEAT", 0)
-    for n in (5, 6, 7, 8, 9):
+    for n in (5, 6, 7, 8, 9, 10, 11):
         p.z.cmd("set-breakpoint %d" % n)
     print(f"[info] 61 transition: {ticks} ticks, ISR stops ay={n_ay} done={n_done},"
           f" interrupted $C000 banks {sorted(banks)}, screen bit sequence {scr}", flush=True)
     h.expect("61 transition reached room B", p.rb("CUR_ROOM"), 1)
-    h.expect("61 no code at $C000+ with bank != 3, bar bank-1 UI code (boot..transition)", a7, [])
+    h.expect("61 no code at $C000+ with bank != 3, bar bank-1 UI / bank-7 cold code (boot..transition)", a7, [])
     h.expect("61 every ISR: bank 3 for AY_PLAY, port == shadow after", bad[:4], [])
     h.expect("61 ISR ran on both screens across the flip (bit 3: 8 -> 0 -> 8)",
              scr[:3] == [8, 0, 8] and n_ay == n_done and n_ay > 50, True)
@@ -1997,6 +2001,9 @@ def tape_rest(h, p):
         o = 7 * 16384 + S[nm] - 0xC000
         h.expect(f"50 bank 7 tilesets {nm} (B3B-8 tape block) == .sna",
                  ram[o:o + S["TSET_HALF_LEN"]] == SNA_RAM[o:o + S["TSET_HALF_LEN"]], True)
+    o = 7 * 16384 + S["B7_CODE"] - 0xC000       # D3-S2: the bank-7 cold code (same block as TSET_LO)
+    h.expect("50 bank 7 cold code (D3-S2, TSET_LO tape block) == .sna",
+             ram[o:o + S["B7_LEN"]] == SNA_RAM[o:o + S["B7_LEN"]], True)
     to = S["BANK_TEXT"] * 16384 + S["TEXT_ADDR"] - 0xC000   # D3-TX: the text block, bank 0
     h.expect("50 bank 0 text block (D3-TX tape block) == .sna", ram[to:to + S["TEXT_LEN"]] ==
              SNA_RAM[to:to + S["TEXT_LEN"]], True)

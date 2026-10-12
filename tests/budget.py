@@ -225,7 +225,7 @@ class FxStepper(Stepper):
     impact-only flashes on the struck bodies (3 tracks = the cap), queued by
     fx_start through ZRCP on the turn's first tick (tests/combat.py fx_call;
     abilities come in D3-7). Also counts the cells erase_rect restores per
-    tick (D3-S: dropping the bank-7 clean background costs ~+37 T per cell)."""
+    tick (D3-S2 dropped the bank-7 bitmap shadow: ~+37 T per cell, measured in)."""
 
     def __init__(self, p):
         self.erase_cells, self.cur_cells, self.turn_seen = [], 0, None
@@ -298,9 +298,8 @@ def run_scenario(h, scen):
         wi = totals.index(worst[0])
         ec = st.erase_cells
         print(f"fx lightning   : worst tick {worst[0]} T, headroom to {CAP}: {CAP - worst[0]} T;"
-              f" erased cells worst tick {ec[wi]}, max/tick {max(ec)} -> D3-S (+37 T/cell):"
-              f" worst tick +{37 * ec[wi]} T = {worst[0] + 37 * ec[wi]} T,"
-              f" max over ticks {max(t + 37 * c for t, c in zip(totals, ec))} T;"
+              f" erased cells worst tick {ec[wi]}, max/tick {max(ec)} (D3-S2: erase redraws from"
+              f" ROOM_MAP, +37 T/cell, already in these ticks);"
               f" {sum(st.casts)}/{len(st.casts)} fx_start accepted, {st.fx_ticks} ticks with FX live", flush=True)
     if len(scen) > 3:                             # C3-7: did the staff swing run?
         print(f"staff swings   : {swing} turns drew STAFF_SWING", flush=True)

@@ -9,7 +9,9 @@ source (read from the .sna the suite loads, never from the running machine):
        TILE_ATTRS 0..31 == tiles_common_attrs, ORN_GLYPHS == orn_glyphs,
        FONT6 planes == font6x8 re-laid (bits 1..0 masked, holes skipped),
        bank-1 vdata, the bank-1 menu art (menu_font .. menu_torch_end),
-       bank-7 tileset slots 0..7, bank-0 text block — all == the .sna
+       bank-7 tileset slots 0..7, the bank-7 cold code B7_CODE..B7_LIMIT (D3-S2:
+       the old bitmap shadow; canary — no SMC / data writes there), bank-0
+       text block — all == the .sna
   GI1  generated new game (seed_fixed) and every depth D1..D8 entered through
        the real level_descend (in-game stub), each followed by play (walk
        left / right through the rooms: room changes + LP spawns):
@@ -133,6 +135,8 @@ def tables(p, check, tag, depth):
             (1, S["menu_font"], S["menu_torch_end"], "bank-1 menu art (font, title, torch)"),
             (7, S["TSET_LO"], S["TSET_LO"] + 4 * S["TSET_STRIDE"], "bank-7 tilesets 0..3"),
             (7, S["TSET_HI"], S["TSET_HI"] + 4 * S["TSET_STRIDE"], "bank-7 tilesets 4..7"),
+            (7, S["B7_CODE"], S["B7_LIMIT"], "bank-7 cold code + unused tail (D3-S2: the "
+             "freed bitmap shadow $E000..$F7FF is never written)"),
             (0, S["text_img"], S["text_img_end"], "bank-0 text block")):
         got = bank_read(p, b, lo, hi - lo)
         bad = diff_ranges(got, sna_bank(b, lo, hi - lo), lo)

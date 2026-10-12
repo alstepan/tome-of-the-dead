@@ -31,7 +31,8 @@ BANK_SRC_HI     EQU 3               ; sprite SOURCES, virtual $C000-$FFFF (conte
 BANK_POOL0      EQU 0               ; pre-shift pool (uncontended), boot-generated
 BANK_POOL1      EQU 4
 BANK_POOL2      EQU 6
-BANK_SHADOW     EQU 7               ; clean-background shadow (R-1 erase lever), $E000..
+BANK_SHADOW     EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect's attrs)
+BANK_COLD7      EQU 7               ; D3-S2: bank-7 cold code B7_CODE..B7_LIMIT (via far7)
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
 BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
 AY_RESERVE      EQU $F000           ; A8 / D3-0: bank 3 $F000..$FFFF = 4 KB AY player/music/FX reserve
@@ -48,12 +49,15 @@ AY_R_MIXER      EQU 7               ; R7: bits 0-5 = tone/noise A-C off when set
 AY_R_VOL_A      EQU 8               ; R8..R10: channel volumes A, B, C
 AY_MIX_OFF      EQU %00111111       ; every tone + noise off (I/O port bits 6/7 = input)
 ; Bank 7 (A7): screen 2 at $C000 (what the ULA shows during play; written only
-; by present / present_full), the clean background rebased to $E000: both in
-; screen layout, so screen -> screen 2 is +$80 and screen -> shadow is +$A0
-; in the high byte, low bytes equal.
+; by present / present_full) and the room's ATTR shadow at $F800 (screen-attr
+; layout: screen attr -> shadow attr is +$A0 in the high byte, low bytes
+; equal). D3-S2: the bitmap shadow ($E000..$F7FF) is gone — erase_rect redraws
+; TILE_GLYPHS[ROOM_MAP] — and its 6 KB hold the bank-7 cold code (far7).
 SCREEN7_BITMAP  EQU $C000           ; bank 7: displayed bitmap (copy of $4000)
 SCREEN7_ATTR    EQU $D800           ; bank 7: displayed attrs  (copy of $5800)
-SHADOW_BITMAP   EQU $E000           ; bank 7: room tiles in screen layout (B3B-3: rows 0..17 used)
+B7_CODE         EQU $E000           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), tape
+                                    ;     block joined to the TSET_LO tilesets below it
+B7_LIMIT        EQU $F800           ; ... up to the attr shadow (ASSERTed)
 SHADOW_ATTR     EQU $F800           ; bank 7: room tile attrs in screen layout ($F800..$FA3F used)
 BANK_WINDOW     EQU $C000
 FT_BLOCKER      EQU $FE             ; find_target: nearest body is mid-ladder (not a slot)

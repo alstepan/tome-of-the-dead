@@ -337,7 +337,7 @@ threshold; respawn half XP; rank 2/3 values per ability; no spell before the fir
 | D3-9a | info line ranks/MP | J | D3-0 |
 | D3-9b | XP, levels, MP regen/bar, learn/rank-up | S | D3-6a |
 | D3-10 | scenario tests per feature | J | each |
-| D3-0/D3-1/D3-2/LP/B17 merged to main 2026-10-06 (squash of feat/3d-core @ `768d827`) · D3-S ✅ `38a8aef` (feat/3d-spike, not merged): feasible — frees $E000..$F7FF 6,144 B (6.8 KB if the 576-B attr shadow moves too); +37 T per erased cell, worst tick +1.6–3.0k (mage 121.4k). **User 2026-10-12: GO — drop the bank-7 copy (FX worst 110.8k → ~113.2k T) and move per-turn code from bank 2 into freed bank 7** | spike: drop the bank-7 clean background (6 KB) — erase from ROOM_MAP; measure | S | – |
+| D3-0/D3-1/D3-2/LP/B17 merged to main 2026-10-06 (squash of feat/3d-core @ `768d827`) · D3-S ✅ `38a8aef` (feat/3d-spike, not merged): feasible — frees $E000..$F7FF 6,144 B (6.8 KB if the 576-B attr shadow moves too); +37 T per erased cell, worst tick +1.6–3.0k (mage 121.4k). **DONE `6ca2221` (merged 2026-10-12; bank 2 1,577 B free, bank-7 code region $E000 4.9 KB free; worst tick 119.4k T; review: ship — notes: budget.py PROFILE probe at a bank-7 address, #61 bank-7 coverage gap, idle-tick far7 pre-check ~300–400 T saving) — User 2026-10-12: GO — drop the bank-7 copy (FX worst 110.8k → ~113.2k T) and move per-turn code from bank 2 into freed bank 7** | spike: drop the bank-7 clean background (6 KB) — erase from ROOM_MAP; measure | S | – |
 
 ### 3E — Items, inventory & survival (needs game.md §7–8)
 Inventory page (bank-5 screen), equip, quick slots auto-fill, food/hunger,

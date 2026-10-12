@@ -48,6 +48,23 @@
   or 3) never pages `$C000` itself — it calls helpers that re-page it
   (`blit_keep`). See `docs/memory-map.md` "Cold code placement" / "3C
   contracts".
+- **Bank-7 cold code (D3-S2).** Per-turn / per-event logic that needs no
+  other `$C000` bank lives in bank 7 `$E000..$F7FF` (`src/bank7.asm`, the
+  space of the dropped bitmap shadow), entered only through **`far7`**
+  (`ld c, BANK_COLD7` → `farb`; nests from bank 3 / bank 1 too). Rules:
+  never per-tick render / present / ISR code (bank 7 is contended; a far
+  call costs ~0.25k T); far7 loses A and F, so results come back in L or
+  memory (`find_target_far`); every callee must return with bank 7 paged —
+  helpers that restore the caller's bank, far calls, or the ones that leave
+  bank 7 paged (`erase_rect`, `shadow_rect`, `room_shadow`, `present_full`,
+  `level_enter`); a helper that leaves another bank paged (`blit_sprite`,
+  `render`, the generator, `page_bank`) is wrapped in `ld c, BANK_COLD7` /
+  `call farb`. Paging bank 7 in never changes the displayed screen (that is
+  `$7FFD` bit 3, kept by `page_bank`). No SMC and no data in bank 7 code:
+  `tests/gfx_integrity.py` asserts `B7_CODE..B7_LIMIT` == the .sna. Test
+  probes never go there (a PC breakpoint at `$E000+` also fires in bank-3 /
+  bank-1 code at the same address): keep a bank-2 stub as the probe
+  (`read_turn_input`, `pause_hook`).
 - **Helpers restore the caller's bank.** Every bank-2 / low-RAM helper that
   pages `$C000` and returns, and is reachable from paged-bank code (bank 3 or
   bank 1), saves `PORT_7FFD_SHADOW` before paging and ends with

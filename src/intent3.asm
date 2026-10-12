@@ -112,7 +112,9 @@ ic_melee:
                 jr   z, .f
                 ld   a, $FF
 .f:             ld   (TMP6), a
-                call find_target               ; A = slot / $FF
+                ld   hl, find_target_far       ; D3-S2: bank 7 (L = slot / $FF)
+                call far7
+                ld   a, l
                 cp   $FF
                 jr   z, .door
                 call do_attack                 ; turn3.asm (this bank)

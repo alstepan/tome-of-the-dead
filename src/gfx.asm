@@ -29,7 +29,8 @@ page_bank:
 ; farb — call the routine at HL with bank C paged in at $C000, then put the
 ; caller's $C000 bank back (saved PORT_7FFD_SHADOW value, bits 0-2). C3-0
 ; generalised far3 (bank in C) so the bank-1 UI code (ui1_code, far1) shares
-; one trampoline; far3 / far1 are 2-byte bank loads in front of it.
+; one trampoline; far3 / far1 / far7 (D3-S2: bank-7 cold code) are 2-byte
+; bank loads in front of it.
 ; In : HL = target, A = passed to the target in A, C = bank (0..7; farb only).
 ;      BC is NOT passed (page_bank uses it); DE, IX pass in.
 ; Out: the target's BC, DE, HL, IX (passed through).  Clobbers: A, F.
@@ -38,6 +39,9 @@ page_bank:
 ; $C000 itself — see bank3.asm; it blits through blit_keep, and every helper
 ; it calls hands $C000 back as it found it (conventions.md "Banking").
 ;==============================================================================
+far7:                                          ; D3-S2: bank-7 cold code (bank7.asm)
+                ld   c, BANK_COLD7
+                jr   farb
 far1:
                 ld   c, BANK_UI1
                 jr   farb
@@ -170,9 +174,9 @@ stamp_rect:
 
 ;==============================================================================
 ; tile_rect — draw the background tiles (glyph AND attr) of a cell rect from
-; the tile map (prototype §4.3). Target = the screen, or the bank-7 clean-
-; background shadow (set_tile_target). Used for room draws, transition columns
-; and shadow upkeep; per-tick sprite erase uses the faster erase_rect below.
+; the tile map (prototype §4.3) on the bank-5 screen. Used for room draws and
+; transition columns; per-tick sprite erase uses erase_rect below (D3-S2: the
+; bank-7 bitmap shadow it could also target is gone).
 ; In : C = col, B = row, D = cols, E = rows (inside 0..31 x 0..PLAY_ROWS-1).
 ; Clobbers: A, BC, DE, HL.   ~290 T/cell (listing: 8 glyph rows unrolled).
 ;------------------------------------------------------------------------------
@@ -196,11 +200,11 @@ tile_rect:
 .mhi:           add  a, ROOM_MAP >> 8         ; SMC: map page (ROOM_MAP / NEXT_MAP)
                 ld   (.mh+1), a
                 ld   a, d
-.aor:           or   SCREEN_ATTR >> 8          ; SMC: $58 screen / $F8 shadow (A7)
+                or   SCREEN_ATTR >> 8
                 ld   (.ah+1), a
                 ld   a, b
                 and  $18
-.bor:           or   SCREEN_BITMAP >> 8        ; SMC: $40 screen / $E0 shadow (A7)
+                or   SCREEN_BITMAP >> 8
                 ld   (.sh+1), a
                 ld   a, e
                 and  $E0
@@ -250,56 +254,78 @@ set_tile_map:
                 ld   (tile_rect.mhi+1), a
                 ret
 
-; set_tile_target — A = 0: tile_rect draws to the screen; else to the shadow
-; (bank 7 $E000/$F800 — the caller pages bank 7).
-; Clobbers: A
-set_tile_target:
-                or   a
-                ld   a, SCREEN_ATTR >> 8
-                jr   z, .s
-                ld   a, SHADOW_ATTR >> 8
-.s:             ld   (tile_rect.aor+1), a
-                sub  (SCREEN_ATTR - SCREEN_BITMAP) >> 8
-                ld   (tile_rect.bor+1), a
-                ret
-                ; tile_rect ORs the row bits into these bases
-                ASSERT SHADOW_ATTR - SHADOW_BITMAP == SCREEN_ATTR - SCREEN_BITMAP
-                ASSERT (SHADOW_BITMAP & $17FF) == 0 && (SHADOW_ATTR & $3FF) == 0
-
-; shadow_rect — redraw rect C,B,D,E of the clean-background shadow (bank 7)
-; from ROOM_MAP (room entry, potion taken).  Clobbers: A, BC, DE, HL
+;------------------------------------------------------------------------------
+; shadow_rect — redraw rect C,B,D,E of the bank-7 ATTR shadow ($F800, screen-
+; attr layout) from ROOM_MAP: TILE_ATTRS[id] (room entry, door planks, potion
+; taken). D3-S2: there is no bitmap shadow (erase_rect redraws the glyphs from
+; the map). Leaves bank 7 paged.
+; Clobbers: A, BC, DE, HL.   ~0.2k + ~95 T/cell (cold)
+;------------------------------------------------------------------------------
 shadow_rect:
                 push bc
                 ld   a, BANK_SHADOW
                 call page_bank
                 pop  bc
-                ld   a, ROOM_MAP >> 8
-                call set_tile_map
-                ld   a, 1
-                call set_tile_target
-                call tile_rect
-                xor  a
-                jp   set_tile_target
+.row:           push bc
+                push de
+                call cell_addr                 ; HL = ROOM_MAP (B, C); keeps BC, DE
+                ld   b, h                      ; B = the row's map page
+.c:             ld   h, b
+                ld   a, (hl)                   ; tile id
+                ld   c, l
+                ld   l, a
+                ld   h, TILE_ATTRS >> 8
+                ld   e, (hl)                   ; E = its attr
+                ld   l, c                      ; same low byte in the attr shadow
+                ld   a, b
+                add  a, (SHADOW_ATTR - ROOM_MAP) >> 8
+                ld   h, a
+                ld   (hl), e
+                inc  l
+                dec  d
+                jr   nz, .c
+                pop  de
+                pop  bc
+                inc  b
+                dec  e
+                jr   nz, .row
+                ret
+                ASSERT (ROOM_MAP & $FF) == 0 && (SHADOW_ATTR & $FF) == 0
 
 ;==============================================================================
-; erase_rect — restore a cell rect (bitmap + attrs) from the clean-background
-; shadow in bank 7 (prototype R-1 lever: "clean-background copy for erase").
-; Shadow = the room's tiles in screen layout at $E000/$F800 (A7: rebased above
-; screen 2), so source and destination share the low byte and differ by +$A0
-; in the high byte.
-; In : C = col, B = row, D = cols, E = rows.  Clobbers: A, BC, DE, HL (IX kept)
-; ~280 T + 231 T/cell + 74 T/row (+~110 T per third crossed). A7b: the row
-; addresses step incrementally (low byte += 32; a carry = next third: bitmap
-; high += 8, attr high += 1) instead of being rebuilt from the row number
-; (218 -> 74 T per row; heavy fight: 26 rows/tick).
-; SMC: .cols+1, .rows+1 per call; .bh/.dh/.ah/.dah+1 per call / third.
+; erase_rect — restore a cell rect on the bank-5 screen (D3-S2, adopted from
+; the D3-S spike): bitmap = TILE_GLYPHS[ROOM_MAP id] (the map is the truth:
+; decor glyph swaps, door planks / jambs, potions, the B12 gate / glow, L2
+; pits / blocks and the per-level ids 32..63 all live in it), attr = the
+; bank-7 attr shadow ($F800: keeps the decor attr-cycle colours exactly), row
+; 17 = the floor ornament (orn_cells, only when the rect reaches it). ROOM_MAP,
+; the screen bitmap / attrs and the attr shadow share the low byte
+; ((row & 7) << 5 | col): per cell only high bytes change, L walks the row.
+; In : C = col, B = row, D = cols, E = rows (rows 0..17).
+; Out: bank 7 paged.  Clobbers: A, BC, DE, HL (IX kept)
+; ~280 T + ~268 T/cell (+37 vs the old bitmap-shadow copy) + 74 T/row
+; (+~110 T per third crossed; + orn_cells ~0.3k per row-17 ornament cell).
+; SMC: .cols/.rows+1 per call; .mh/.bh/.ah/.dah+1 per call / third.
 ;==============================================================================
 erase_rect:
                 push bc
-                ld   a, BANK_SHADOW
+                ld   a, BANK_SHADOW            ; the attr shadow
                 call page_bank
                 pop  bc
-                ld   a, d
+                ld   a, b
+                add  a, e
+                cp   FLOOR_ROW1 + 1
+                jr   c, .main                  ; rect above row 17 (nearly always)
+                push bc
+                push de
+                call .main
+                pop  de
+                pop  bc
+                ld   e, c                      ; logical col = screen col in play
+                ld   b, FLOOR_ROW1
+                ld   a, SCREEN_BITMAP >> 8
+                jp   orn_cells                 ; over its PLAT / WALLF cells only
+.main:          ld   a, d
                 ld   (.cols+1), a
                 ld   a, e
                 ld   (.rows+1), a
@@ -307,14 +333,16 @@ erase_rect:
                 and  $18
                 or   SCREEN_BITMAP >> 8
                 ld   (.bh+1), a
-                add  a, (SHADOW_BITMAP - SCREEN_BITMAP) >> 8
-                ld   (.dh+1), a
                 ld   a, b
                 rrca
                 rrca
                 rrca
                 ld   e, a
                 and  3
+                ld   d, a
+                add  a, ROOM_MAP >> 8
+                ld   (.mh+1), a
+                ld   a, d
                 or   SCREEN_ATTR >> 8
                 ld   (.ah+1), a
                 add  a, (SHADOW_ATTR - SCREEN_ATTR) >> 8
@@ -323,24 +351,32 @@ erase_rect:
                 and  $E0
                 or   c
                 ld   c, a                      ; C = low byte of the row's first cell
-.row:           ld   e, c
+.row:           ld   l, c
 .cols:          ld   b, 0                      ; SMC: cols
-.cell:          ld   l, e
+.cell:
+.mh:            ld   h, 0                      ; SMC: ROOM_MAP page of this third
+                ld   a, (hl)                   ; tile id (< 64)
+                add  a, a
+                add  a, a
+                add  a, a                      ; CF = id bit 5
+                ld   e, a
+                ld   a, TILE_GLYPHS >> 9
+                rla
+                ld   d, a                      ; DE = TILE_GLYPHS + id*8
 .bh:            ld   h, 0                      ; SMC: screen bitmap high
-.dh:            ld   d, 0                      ; SMC: shadow bitmap high
                 DUP  7
                 ld   a, (de)
                 ld   (hl), a
+                inc  e
                 inc  h
-                inc  d
                 EDUP
                 ld   a, (de)
                 ld   (hl), a
+.dah:           ld   h, 0                      ; SMC: attr shadow high
+                ld   a, (hl)
 .ah:            ld   h, 0                      ; SMC: screen attr high
-.dah:           ld   d, 0                      ; SMC: shadow attr high
-                ld   a, (de)
                 ld   (hl), a
-                inc  e
+                inc  l
                 djnz .cell
 .rows:          ld   a, 0                      ; SMC: rows left
                 dec  a
@@ -354,15 +390,15 @@ erase_rect:
                 ld   a, (hl)
                 add  a, 8
                 ld   (hl), a
-                ld   hl, .dh+1
-                ld   a, (hl)
-                add  a, 8
-                ld   (hl), a
+                ld   hl, .mh+1
+                inc  (hl)
                 ld   hl, .ah+1
                 inc  (hl)
                 ld   hl, .dah+1
                 inc  (hl)
                 jr   .row
+                ASSERT (TILE_GLYPHS & $1FF) == 0 && TILE_IDS <= 64 && (ROOM_MAP & $FF) == 0
+                ASSERT (SCREEN_ATTR & $3FF) == 0 && (SHADOW_ATTR & $3FF) == 0 && FLOOR_ROW1 + 1 == PLAY_ROWS
 
 ;==============================================================================
 ; PRESENT — A7 double buffer, option A (docs/design/budget.md §3). During play
@@ -744,81 +780,12 @@ draw_room:
                 ld   bc, 0                     ; row 0, col 0
                 ld   de, (ROOM_COLS << 8) | PLAY_ROWS
                 call tile_rect
-                ; fall through: rebuild the clean-background shadow too
-; shadow_room — whole-room shadow rebuild (~167k T; room entry only).
+                ; fall through: rebuild the attr shadow too
+; shadow_room — whole-room attr-shadow rebuild (~60k T; room entry only).
 shadow_room:
                 ld   bc, 0
                 ld   de, (ROOM_COLS << 8) | PLAY_ROWS
                 jp   shadow_rect
-
-;==============================================================================
-; clear_screen — bitmap 0, attrs = A.   Clobbers: BC, DE, HL
-;==============================================================================
-clear_screen:
-                push af
-                ld   hl, SCREEN_BITMAP
-                ld   de, SCREEN_BITMAP + 1
-                ld   bc, SCREEN_BITMAP_LEN - 1
-                ld   (hl), 0
-                ldir
-                pop  af
-                ld   hl, SCREEN_ATTR
-                ld   de, SCREEN_ATTR + 1
-                ld   bc, SCREEN_ATTR_LEN - 1
-                ld   (hl), a
-                ldir
-                ret
-
-;==============================================================================
-; TEXT (ROM charset, 48K ROM paged): the select screen and the paging-lock
-; message only (both drawn on the displayed bank-5 screen, no present). Play
-; text is the 6x8 panel font (print6, panel.asm; B3B-11).
-; print_char — A = ASCII 32..127 at cell (row B, col C); C advances.
-; Clobbers: A, DE, HL.
-;==============================================================================
-print_char:
-                ld   l, a
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                ld   de, ROM_CHARSET - 32 * 8
-                add  hl, de
-                ex   de, hl                    ; DE = glyph
-                ld   a, b
-                and  $18
-                or   SCREEN_BITMAP >> 8
-                ld   h, a
-                ld   a, b
-                rrca
-                rrca
-                rrca
-                and  $E0
-                or   c
-                ld   l, a
-                DUP  7
-                ld   a, (de)
-                ld   (hl), a
-                inc  e                         ; A7b: ROM glyphs are 8-aligned (-14 T/char)
-                inc  h
-                EDUP
-                ld   a, (de)
-                ld   (hl), a
-                inc  c
-                ret
-                ASSERT (ROM_CHARSET & 7) == 0
-
-; print_str — HL = 0-terminated string at (row B, col C). C advances.
-; Clobbers: A, C, DE, HL
-print_str:
-                ld   a, (hl)
-                or   a
-                ret  z
-                push hl
-                call print_char
-                pop  hl
-                inc  hl
-                jr   print_str
 
 ;==============================================================================
 ; MASKED BLIT (prototype §5.1): frame BL_FID, facing BL_LEFT, top-left

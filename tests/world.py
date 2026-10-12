@@ -582,9 +582,31 @@ def menu_text_ok(p, fr, row, col, txt):
     return True
 
 
+def shadow_bitmap(p):
+    """D3-S2: there is no bitmap shadow — erase_rect redraws ROOM_MAP glyphs
+    (+ the row-17 ornament) — so the 'virtual shadow' (6,144 B, screen layout)
+    is that model. Its old home, bank 7 B7_CODE..B7_LIMIT, now holds the
+    bank-7 cold code: it must still equal the .sna image (AssertionError
+    otherwise: something wrote the code / its unused tail)."""
+    import game_lib
+    lo, n = S["B7_CODE"], S["B7_LIMIT"] - S["B7_CODE"]
+    raw = bank7(p, lo, n)
+    img = game_lib.SNA_RAM[7 * 16384 + lo - 0xC000:7 * 16384 + lo - 0xC000 + n]
+    bad = [i for i in range(n) if raw[i] != img[i]]
+    assert not bad, f"D3-S2: bank-7 code area written at {[hex(lo + i) for i in bad[:4]]}"
+    tabs = p.bg_tables()
+    bm = bytearray(6144)
+    for r in range(PLAY_ROWS):
+        for c in range(32):
+            g, _ = room_model.expected_cell(*tabs, c, r)
+            for ln in range(8):
+                bm[((r & 0x18) << 8) | ((r & 7) << 5) | c | (ln << 8)] = g[ln]
+    return bytes(bm)
+
+
 def snapshot(p):
-    """ROOM_MAP + bank-5 screen + screen 2 + the shadow's rows 0-17."""
-    sh = bank7(p, S["SHADOW_BITMAP"], 6144) + bank7(p, S["SHADOW_ATTR"], 32 * PLAY_ROWS)
+    """ROOM_MAP + bank-5 screen + screen 2 + the (virtual) shadow's rows 0-17."""
+    sh = shadow_bitmap(p) + bank7(p, S["SHADOW_ATTR"], 32 * PLAY_ROWS)
     return (bytes(p.z.read_memory(S["ROOM_MAP"], 32 * PLAY_ROWS)), bytes(p.composed_frame()),
             bytes(p.frame()), sh)
 
@@ -2262,9 +2284,10 @@ def dt_sim(ents, rmap, covered, tab):
 
 
 def shadow_frame(p):
-    """The bank-7 clean-background shadow in frame_bytes() layout (rows 0-17;
-    rows 18-23 of the bitmap / attrs are not part of it)."""
-    bm = bank7(p, S["SHADOW_BITMAP"], 6144)
+    """The clean background in frame_bytes() layout (rows 0-17; rows 18-23 of
+    the bitmap / attrs are not part of it): the ROOM_MAP glyph model (D3-S2,
+    shadow_bitmap) + the bank-7 attr shadow."""
+    bm = shadow_bitmap(p)
     at = bank7(p, S["SHADOW_ATTR"], 32 * PLAY_ROWS)
     return bm + at + bytes(768 - len(at))
 

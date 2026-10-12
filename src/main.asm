@@ -142,7 +142,22 @@ tsets_lo_end:
                 ASSERT tileset_d1 == TSET_LO && tileset_d5 == TSET_HI
                 ASSERT tileset_d2 - tileset_d1 == TSET_STRIDE && TILESET_SLOT_LEN == TSET_STRIDE
                 ASSERT tsets_lo_end == TSET_LO + TSET_HALF_LEN && tilesets_end == TSET_HI + TSET_HALF_LEN
-                ASSERT tsets_lo_end <= SHADOW_BITMAP && tilesets_end <= $10000
+                ASSERT tsets_lo_end <= B7_CODE && tilesets_end <= $10000
+
+;==============================================================================
+; BANK-7 COLD CODE (D3-S2) — B7_CODE ($E000, right after tileset slot 3)
+; .. B7_LIMIT ($F800, the attr shadow): the 6 KB the dropped bitmap shadow
+; freed. Entered only through far7 (rules: src/bank7.asm). On tape it is ONE
+; block with the low tilesets (TSET_LO .. b7_end, start .t7lo).
+;==============================================================================
+                ORG  B7_CODE
+b7_code:
+                INCLUDE "bank7.asm"
+b7_end:
+B7_LEN          EQU b7_end - b7_code
+B7_TAPE_LEN     EQU b7_end - TSET_LO           ; tilesets 0..3 + the code, one tape block
+                ASSERT tsets_lo_end == B7_CODE && b7_end <= B7_LIMIT && B7_LIMIT == SHADOW_ATTR
+                DISPLAY "GAME bank-7 cold code: ", /H, b7_code, "..", /H, b7_end - 1, " (", /D, B7_LEN, " B), free to the attr shadow: ", /D, B7_LIMIT - b7_end
 
 ;==============================================================================
 ; TEXT (B3B-13; D3-TX: bank 1 -> bank 0) — the text block (tools/textpack.py
@@ -263,7 +278,9 @@ panel_done:                                    ; test probe (no code): panel ite
                 ld   hl, TURN_TICK
                 inc  (hl)
                 call turn_done
-                call c, end_turn
+                jr   nc, play_loop
+                ld   hl, end_turn              ; D3-S2: bank 7 (bank7.asm)
+                call far7
                 jr   play_loop
 
 ;------------------------------------------------------------------------------
@@ -321,165 +338,13 @@ resync_tick:
                 ret
 
 ;------------------------------------------------------------------------------
-; read_turn_input — INPUT phase. Held keys repeat unless INPUT_REPEAT = 0 (then
-; a release is required between turns, the P3 rule). A legal action resolves
-; the whole turn now and enters the ANIM phase. C3-2:
-; intent_tick already sampled this tick; a pending icon use (INTENT) goes
-; straight to try_player_turn; while FIRE is held the stick is the cursor's;
-; only directions and '.' count as held.  Clobbers: all but IY.
+; read_turn_input — INPUT phase, from play_loop (TURN_PHASE 0, every such
+; tick). D3-S2: the body is bank-7 turn_input (bank7.asm, far7); this label
+; stays the budget phase probe. Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 read_turn_input:
-                ld   a, (INTENT)
-                or   a
-                jr   nz, .go
-                ld   a, (ICON_MODE)            ; C3-2b: play frozen in ICON MODE
-                ld   hl, FIRE_ST
-                or   (hl)
-                ret  nz
-                ld   a, (DN_COMMIT)            ; a released DOWN: a fresh press, not
-                or   a                         ; gated by NEED_RELEASE (review: the
-                jr   nz, .go                   ; INPUT_REPEAT = 0 soft lock)
-                ld   hl, EXIT_LOCK
-                or   (hl)                      ; C3-2b: the key that left ICON MODE
-                                               ; does nothing until released
-                jr   z, .nlk
-                ld   a, (PLAYER_DIR)
-                or   a
-                ret  nz
-                ld   (hl), a                   ; released: unlocked
-.nlk:
-                ld   a, (PLAYER_DISC)
-                and  DK_WAIT
-                ld   hl, PLAYER_DIR
-                or   (hl)
-.test:          jr   nz, .held
-                xor  a
-                ld   (NEED_RELEASE), a
-                ld   (LOCK_SHOWN), a           ; B3B-5: next bump may print again
-                ld   (TURN_HOLD), a            ; C3-2: a released key ends the delay
-                ret
-.held:          ld   a, (INPUT_REPEAT)
-                or   a
-                jr   nz, .go
-                ld   a, (NEED_RELEASE)
-                or   a
-                ret  nz
-.go:            call try_player_turn
-                ret  nc                        ; illegal: no turn consumed
-                ld   a, (CLIMB_BLK)            ; B14: any turn but a blocked-climb
-                or   a                         ; wait ends the run of blocks
-                jr   nz, .blk                  ; (climb_blocked)
-                ld   (CLIMB_BLK_N), a
-.blk:
-                ld   a, 1
-                ld   (NEED_RELEASE), a
-                ld   a, (EXIT_KIND)
-                or   a
-                ld   hl, resolve_monsters      ; B3B-R2: bank 3, one far3 a turn
-                call z, far3                   ; exit turn: monsters don't act
-                ld   a, TP_ANIM
-                ld   (TURN_PHASE), a
-                xor  a
-                ld   (TURN_TICK), a
-                ret
-
-;------------------------------------------------------------------------------
-; end_turn — ANIM finished: transition (if exiting), TURN_COUNTER++, potion
-; pickup, death check (B3B-11: messages via the log; B3B-13: msg_push), back
-; to INPUT.  Clobbers: all but IY.
-;------------------------------------------------------------------------------
-end_turn:
-                ld   a, (EXIT_KIND)
-                or   a
-                call nz, do_exit
-                ld   hl, (TURN_COUNTER)
-                inc  hl
-                ld   (TURN_COUNTER), hl
-                ld   hl, potion_pickup         ; B3B-R2: bank 3 (B3B-11: HP / potions
-                call far3                      ; reach the panel by
-                xor  a                         ; panel_tick's poll, not from here)
-                ld   (TURN_PHASE), a
-                ld   a, (P_ENTITIES + E_FLAGS)
-                and  EF_DYING
-                ret  z                         ; (B3B-13: the PROTO chest win is gone; a run
-                                               ; wins by descending from D8, level_descend)
-                ld   a, GS_DEAD
-                ld   (GAME_STATE), a
-                ld   a, TX_DIED
-                jp   msg_push_end              ; never dropped (B3B-11b); end_screen drains it
-
-;------------------------------------------------------------------------------
-; do_exit — A = EXIT_KIND. EX_LEVEL: level_descend (B3B-12). Else follower
-; selection (§3.7; LP: candidates only), lp_transition (LP, game.md §9.4.3:
-; bank the old room, spawn the destination's residents, admit the followers),
-; frozen Cauldron transition (§3.6), arrival, arrival conflicts. A7: shows bank 5 for the scroll (bank-3 code
-; scrolls $4000), then present_full copies it to bank 7 and shows bank 7.
-; Clobbers: all but IY.
-;------------------------------------------------------------------------------
-do_exit:
-                cp   EX_LEVEL                  ; A = EXIT_KIND (end_turn)
-                jp   z, level_descend          ; B3B-12: the level exit (lowram)
-                ld   hl, follow_select         ; bank 3 (cold)
-                call far3
-                call hide_sprites              ; every sprite hidden, hero too
-                call show_bank5                ; A7: the scroll runs on the $4000 screen
-                ld   a, GS_TRANSITION          ; (state flips once none is drawn)
-                ld   (GAME_STATE), a
-                ld   hl, lp_transition         ; LP (bank 3): bank the old room, spawn the
-                call far3                      ; new one's residents, admit the followers
-                ld   h, NEXT_MAP >> 8
-                ld   a, (EXIT_DEST)
-                call build_room                ; B3B-8: far3 -> bank-3 build_room_map v2
-                ld   a, (EXIT_KIND)            ; scroll arg: the exit direction
-                ld   hl, hscroll_room          ; both scrolls live in bank 1 (scroll1.asm)
-                cp   EX_UP
-                jr   c, .h
-                ld   hl, vscroll_room
-.h:             call far1
-                call room_shadow               ; clean background of the new room + its
-                                               ; row-17 ornament (the scroll drew the screen's)
-                ld   a, (EXIT_DEST)
-                ld   (CUR_ROOM), a
-                call lair_hint                 ; B12 (lowram: 3 B here, kind_tab pad)
-                ld   ix, P_ENTITIES
-                ld   (ix+E_ROOM), a
-                ld   a, (EXIT_KIND)
-                cp   EX_RIGHT
-                jr   nz, .nl
-                ld   (ix+E_X), 1               ; entered from the left edge
-                res  EF_LEFT_BIT, (ix+E_FLAGS)
-                jr   .pos
-.nl:            cp   EX_LEFT
-                jr   nz, .vert
-                KFIELD KT_BW
-                ld   b, a
-                ld   a, ROOM_COLS - 1
-                sub  b
-                ld   (ix+E_X), a               ; 31 - w
-                set  EF_LEFT_BIT, (ix+E_FLAGS)
-                jr   .pos
-.vert:          ld   a, (EXIT_COL)
-                ld   (ix+E_X), a
-                KFIELD KT_BH
-                ld   b, a
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                ld   a, FLOOR_ROW1             ; up: stand on the bottom storey (9s+8-h, s 1)
-                jr   z, .vy
-                ld   a, FLOOR_ROW0             ; down: stand on storey 0
-.vy:            sub  b
-                ld   (ix+E_Y), a
-.pos:           call snap_pxpy
-                ld   (ix+E_MODE), M_REST
-                ld   hl, arrival_conflicts     ; bank 3 (cold)
-                call far3
-                call vis_room_sync             ; B7: no old-room sprite in the next render
-                call present_full              ; A7: bank 5 -> 7 (6,912 B), show bank 7
-                xor  a
-                ld   (EXIT_KIND), a
-                ld   a, GS_PLAYING
-                ld   (GAME_STATE), a
-                jp   resync_tick
+                ld   hl, turn_input
+                jp   far7
 
 ;------------------------------------------------------------------------------
 ; end_screen — GS_DEAD / GS_WIN: wait for 1..0 / ENTER -> menu (new game uses
@@ -680,7 +545,7 @@ tap_loader_len  EQU  $ - tap_loader
                 SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, BANK3_LEN
                 SAVETAP  "build/wazhack.tap", HEADLESS, AY_RESERVE, AY_LEN   ; A8 AY slot (BANK_AY = 3)
                 MMU  3, BANK_TSET              ; B3B-8: level tilesets (2 x 1,280 B)
-                SAVETAP  "build/wazhack.tap", HEADLESS, TSET_LO, TSET_HALF_LEN
+                SAVETAP  "build/wazhack.tap", HEADLESS, TSET_LO, B7_TAPE_LEN   ; + D3-S2 bank-7 code
                 SAVETAP  "build/wazhack.tap", HEADLESS, TSET_HI, TSET_HALF_LEN
                 MMU  3, BANK_TEXT              ; D3-TX: the text block (bank 0 bottom)
                 SAVETAP  "build/wazhack.tap", HEADLESS, TEXT_ADDR, TEXT_LEN

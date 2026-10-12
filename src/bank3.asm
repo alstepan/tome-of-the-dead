@@ -13,6 +13,8 @@
 ; present / present_full (A7), and every bank-5 generator
 ; routine (gen_*, alloc*, copy_virt, mirror_src). (B3B-R2: shadow_rect only as a
 ; tail jump — potion_pickup; door_paint re-pages the caller's bank itself.)
+; D3-S2: bank-7 code (bank7.asm: find_target, the player turn, ...) only via
+; far7 (nests: bank 3 comes back), e.g. intent3 ic_melee -> find_target_far.
 ; A7: everything here draws on the $4000 (bank 5) screen, which is the one
 ; displayed while it runs (enter_select / do_exit call show_bank5 first).
 ;
