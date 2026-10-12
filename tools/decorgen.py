@@ -19,6 +19,8 @@ menu loop, (4) drips.  Class rules (storey row r = map row - 9s; row 7 = standin
            rows 1..5 (r0 random)
   Brick    pillar: T_BRICK (unchanged), r0 random
   Cobweb   own pass: corner cells only, see cobwebs()
+NO DECOR ON WALLS (user 2026-10-12): every footprint is T_AIR; the brick class (PILLAR) is
+dropped from the menu (the Z80's DC_BRICK paths are unreachable: no record uses them).
 Every placement: footprint exactly the base tile, no ladder cell and NO other decor in the
 1-cell ring (objects never touch), budgets.  Per attempt of the menu loop / patch pass the
 4 rnd calls are o, col, s, r0 (r0 = rnd(6 - h), used only by Patch / Brick).
@@ -122,7 +124,7 @@ def level_objects():
         if not m:
             continue
         d, name, f, r, c, v = m.groups()
-        if name in ("LECTERN", "GLOW"):     # GLOW: B12 exit marker, stamped by the room builder
+        if name in ("LECTERN", "GLOW", "PILLAR"):   # GLOW: B12 exit marker; PILLAR dropped (user 2026-10-12)
             continue
         objs.setdefault((int(d), name), {}).setdefault(int(f or 1), {})[(int(r), int(c))] = int(v)
     out = {d: [] for d in range(1, 9)}

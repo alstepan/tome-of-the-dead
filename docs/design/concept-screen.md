@@ -311,6 +311,8 @@ Storey rows `0..7` (map row = `9s + r`); row 7 = **standing row**, row 8 = floor
 | **Back-wall patch** | `T_WALL_DITHER/PATCH/FADE`, `PATCH_A/B` (non-solid, game.md §1.2) | `r0` random, footprint inside storey rows **1..5** | footprint all `T_AIR`, cols 2..29 |
 | **Brick** | pillar | unchanged (`T_BRICK` only) | unchanged |
 
+**No decor on walls (user 2026-10-12):** decor never goes on a wall cell (room walls, edge or mid-room dead-end blocks); every footprint is `T_AIR`. The Brick class is dropped: PILLAR (D6) is removed from the decor menu.
+
 - **The "2 rows above a floor" exclusion applies to Mount, Ceiling, Corner and Patch only**
   (they cannot reach rows 6–7 by construction). Floor-class objects are exempt by definition:
   they must end on row 7 (sprites stamp over them, attribute-follow, as with skulls/T_TRAP).

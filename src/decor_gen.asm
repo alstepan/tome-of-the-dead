@@ -864,7 +864,7 @@ dg_rnd:
 ;                 col, 4 attr row 1, 5 attr all, 6 attr type 2, 7 large animated)
 ; class 0 mount, 1 ceiling, 2 floor, 3 patch, 4 brick, 5 composite patch
 dg_start:       ; first per-level record of depth 1..8, then the end
-                DEFB 7, 11, 19, 23, 27, 30, 38, 41, 45
+                DEFB 7, 11, 19, 23, 27, 30, 37, 40, 44
 dg_pk:          ; PATCH_A/B records at the head of each level's records (0 = composite)
                 DEFB 0, 2, 1, 1, 1, 2, 1, 0
 dg_cob:         ; COBWEB left / right corner id per depth (0 = none)
@@ -918,20 +918,19 @@ dg_recs:
                 DEFB  41, 106, $00      ; 30 D6 PATCH_A
                 DEFB  45, 107, $00      ; 31 D6 PATCH_B
                 DEFB  32,  13, $94      ; 32 D6 TORCH_SLIM
-                DEFB  36, 134, $00      ; 33 D6 PILLAR
-                DEFB  38,  10, $02      ; 34 D6 BOOKSHELF
-                DEFB  39,   9, $00      ; 35 D6 BANNER
-                DEFB  51,  10, $02      ; 36 D6 WINDOW_BAR
-                DEFB  53,  37, $01      ; 37 D6 MOSS
-                DEFB  52, 107, $00      ; 38 D7 PATCH_B
-                DEFB  32,  18, $94      ; 39 D7 TORCH_TALL
-                DEFB  42,  22, $00      ; 40 D7 BANNER_TALL
-                DEFB  32,  82, $94      ; 41 D8 BRAZIER_BIG
-                DEFB  42,  10, $02      ; 42 D8 BOOKSHELF
-                DEFB  43,  22, $00      ; 43 D8 BANNER_TALL
-                DEFB  53,  13, $94      ; 44 D8 TORCH_SLIM
+                DEFB  38,  10, $02      ; 33 D6 BOOKSHELF
+                DEFB  39,   9, $00      ; 34 D6 BANNER
+                DEFB  51,  10, $02      ; 35 D6 WINDOW_BAR
+                DEFB  53,  37, $01      ; 36 D6 MOSS
+                DEFB  52, 107, $00      ; 37 D7 PATCH_B
+                DEFB  32,  18, $94      ; 38 D7 TORCH_TALL
+                DEFB  42,  22, $00      ; 39 D7 BANNER_TALL
+                DEFB  32,  82, $94      ; 40 D8 BRAZIER_BIG
+                DEFB  42,  10, $02      ; 41 D8 BOOKSHELF
+                DEFB  43,  22, $00      ; 42 D8 BANNER_TALL
+                DEFB  53,  13, $94      ; 43 D8 TORCH_SLIM
 DG_NCOM         EQU 7
-DG_NREC         EQU 45
+DG_NREC         EQU 44
 
 ; state (bank 3 is RAM). dg_da before dg_dg (one `ld (dg_da), bc`).
 dg_cmin:        DEFB 1, 1, 1, 2, 0, 2     ; col minimum by class (mount ceiling floor patch brick composite)

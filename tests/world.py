@@ -421,8 +421,10 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
         if nm is None:
             errs.append(("unknown decor id", c, row, m[j]))
             continue
+        if nm in DECOR_BRICK:
+            errs.append(("pillar (wall-class decor) must not be placed: no decor on walls", c, row))
         patch = nm in DECOR_PATCH
-        want_base = T_BRICK if nm in DECOR_BRICK else T_AIR
+        want_base = T_AIR                           # user 2026-10-12: never on a wall / block cell
         if base[j] != want_base:
             errs.append((f"{nm} on a {base[j]} cell (wants {want_base})", c, row))
         sizes["wall" if base[j] == T_BRICK else "air"] = sizes.get("wall" if base[j] == T_BRICK else "air", 0) + 1
@@ -2779,14 +2781,13 @@ def run_gen_suites(p, check):
         check("W13: >= 50 rooms over depths 1..8, decor present and animated",
               nroom >= 50 and nplaced > 100 and sizes["anim"] > 0, (nroom, nplaced, sizes))
         # ---- wall-heavy sweep (Python deriver, same checker): rooms with a
-        # dead-end block / door / pit, 400 levels (D1 rules: patches are non-solid AIR decor, so
-        # the only wall-class (T_BRICK, solid) decor left is a level's PILLAR - D6 after the
-        # set cuts - hence 400 extra D6 levels to exercise that path)
+        # dead-end block (edge / L2 mid-room) / door / pit, 800 levels; user 2026-10-12: decor
+        # never on a wall cell, so "wall" (decor over a T_BRICK / T_WALLF base) must stay 0
         sw = {"rooms": 0, "wall": 0, "air": 0, "anim": 0, "large": 0}
         sbad = []
         rng = __import__("random").Random(0xB3B10)
         for i in range(800):
-            d, seed, master = (6 if i >= 400 else 1 + i % 8), rng.randrange(65536), rng.randrange(65536)
+            d, seed, master = (1 + i % 8), rng.randrange(65536), rng.randrange(65536)
             blk = G.generate(d, seed, master)
             fl = depth_flags(p, d)
             for r in present_rooms(blk):
@@ -2802,7 +2803,7 @@ def run_gen_suites(p, check):
                     sbad.append((d, seed, master, r, e[:2]))
         print(f"[info] W13 sweep: {sw}", flush=True)
         check(f"W13 wall-heavy sweep: {sw['rooms']} rooms (block / pit / door), checker clean",
-              not sbad and sw["rooms"] > 1000 and sw["wall"] > 0, sbad[:3])
+              not sbad and sw["rooms"] > 1000 and sw["wall"] == 0, sbad[:3])
         # ---- synthetic maps: structural cells scattered inside the decor rows
         # (rows 9s..9s+5 and their ring) -> Python checker on 600 maps, the Z80
         # deriver == Python on 24 of them (decor_room called directly: TMP1 =
