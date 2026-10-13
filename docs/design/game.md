@@ -1143,6 +1143,40 @@ spawns come at f+1 or later, the Whirlwind fire tick gets nothing extra. Code ~2
 (bank 7; +~40 B for the sign glyph, signed same-sign merge, heal colour and the heal hooks). Readout: ~150–200 B code, 0 B data. If a gated scenario still
 exceeds the budget, **lower the live cap to 2 before anything else**.
 
+### 6.5.1 Cast-time resolution timing (designer decision 2026-10-13)
+
+The engine resolves a projectile's first ≤ 8 strikes on the **accept tick** and the rest on
+the release tick (budget split). The rule is **logic early, visible output at impact**:
+
+- **Logic at accept is fine.** HP, the DYING flag, XP/level, status application and the
+  hero's self-hit HP may all change on the accept tick. The game already resolves at cast
+  time (§6.1, §6.3), and flight time already puts impacts several ticks after the logic.
+  The extra 2 ticks (≈ 80 ms) are not visible on their own. Nothing is held back in the
+  logic, and the logic stays deterministic for the tests.
+- **A struck body still looks alive until its impact tick.** A DYING monster keeps its
+  current pose until its stored reaction tick. Only then does the death or reaction
+  animation start. It takes no actions in between, because it is dead in the logic.
+  **Hero death** (game-over flow) starts no earlier than the impact tick of the self-hit
+  that killed him.
+- **Damage numbers (Q2): spawn at the impact tick.** A pending number gets a due tick of
+  `max(strike reaction tick, resolve tick + 1)`. The FIFO releases at most 1 entry per tick,
+  and only once the entry is due. The order on screen is then bolt → flash → number. The
+  4-tick age drop counts from the **due** tick, not the resolve tick; otherwise a long
+  flight would drop every number. Drain Life's caster `+n` is due at the target's due tick
+  + 1. Cost: 1 B per FIFO entry (4 B) and a compare in the drain.
+- **Log, target readout and hero HP bar (Q1/Q3): one gate, not per-line timestamps.** On
+  accept, the cast sets `COMBAT_NOT_BEFORE` to the cast's **first** impact tick. Until that
+  tick, `panel_tick` draws **no log line, no `TGT_NAME`/`TGT_HP`, and no hero HP bar**.
+  Lines are still **pushed** at resolve time in their current order, so the ring and
+  `LT_HOLD` work unchanged. After the gate the lines drain at the normal 1 per tick and
+  trail the bolt naturally. A Lightning kill on its 3rd target may print 1–2 ticks before
+  the bolt reaches that target. This is accepted; per-line due ticks are not worth the ring
+  rework. Cost: 1 B and 1 compare per tick. If gating the whole panel queue is simpler, the
+  engineer may do that instead; non-combat items losing a few ticks is harmless.
+- **Bound:** the gate expires after at most 8 ticks past the release tick, even if no impact
+  has come yet (for example, a long Lightning flight). This keeps the log from backing up
+  into `LOG_WAIT_MAX`. A miss with no body struck sets no gate.
+
 ---
 
 ## 7. Stats, hunger, food
