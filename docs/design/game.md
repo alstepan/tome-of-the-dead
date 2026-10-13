@@ -334,7 +334,8 @@ in a row" caps flight speed at 7 cols per 2 turns.
 | **Enter ICON MODE** (user 2026-10-05) | ↓ + FIRE (either pressed first, both down within 3 ticks) | A + SPACE | — |
 | In ICON MODE: move cursor / use / exit | ← → (repeat after 10 ticks, then every 4) / FIRE (use + return to play) / ↑ or ↓ or BREAK (exit, no use) | same | `1`–`9`, `0` (= slot 10) move the cursor |
 | Inventory page | FIRE on the BAG icon (FIRE+↓ no longer opens it) | — | `I` |
-| Pause (Resume / Quit) | FIRE held + ↑ | — | BREAK |
+| Pause (Resume / Sound / Quit, §3.6) | FIRE held + ↑ | — | BREAK |
+| Cycle sound ALL ON > SFX ONLY > OFF (§3.6; no turn) | via Pause → SOUND | — | `S` |
 | Page: move / verb / confirm / back | directions / ← → / FIRE / ↓ + FIRE | same | — |
 | Close door, hit the Book | FIRE on the melee icon / bump | — | — |
 | Pickups | automatic at the end of a turn | — | — |
@@ -349,7 +350,7 @@ in a row" caps flight speed at 7 cols per 2 turns.
 - Legacy PROTO keys (H/J/K/L, G, C, 1/2/3 hero select) are dropped once the new input lands.
 - Pause: an overlay box over the playfield with Resume / Quit; **Quit asks for confirmation**
   (`QUIT? Y/N`; FIRE = yes, any other = no).
-- Shortcut keys confirmed: ENTER, `1`–`0`, `I`, BREAK, `.`. Default map Q/A/O/P/SPACE.
+- Shortcut keys confirmed: ENTER, `1`–`0`, `I`, BREAK, `.`, `S` (sound, §3.6). Default map Q/A/O/P/SPACE.
   Redefine rejects these (see §3.2, manager ruling 2026-10-05, designer-confirmed).
 - Sinclair 1 or 2 selected: in game, the `1`–`0` slot shortcuts on that joystick's half of
   the number row are disabled (S1 = 6–0, S2 = 1–5); the other half and the icon bar keep
@@ -376,8 +377,10 @@ in a row" caps flight speed at 7 cols per 2 turns.
 ### 3.2 Main menu (bank 3, cold)
 
 ```
-WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|SINCLAIR 2   4 REDEFINE KEYS
+WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|SINCLAIR 2   4 REDEFINE KEYS   5 SOUND: ALL ON|SFX ONLY|OFF
 ```
+
+(`5 SOUND`: §3.6, designer decision 2026-10-13. `S` is a reserved key, see the redefine bullet below.)
 
 - **Digits-only menu (user 2026-10-06; supersedes the 2026-10-05 Sinclair-half ruling).** The
   menu and its sub-screens are driven by the number keys only; no cursor, no up/down, and no
@@ -393,13 +396,13 @@ WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|
   held-FIRE or joystick press cannot skip them accidentally; keys are only accepted after
   all keys have been released once).
 - **Pause overlay (in game)** keeps in-game controls (it is part of play): directions/FIRE
-  choose Resume/Quit; `QUIT? Y/N` stays FIRE or `Y` = yes, anything else = no (§3.1).
+  choose Resume/Sound/Quit (Sound cycles in place, §3.6); `QUIT? Y/N` stays FIRE or `Y` = yes, anything else = no (§3.1).
 - **Kempston** (port `$1F`: bit 0 R, 1 L, 2 D, 3 U, 4 F) is read **only after it is
   selected**, because the port floats on a bare machine.
 - **Sinclair 1** = keys 6 L, 7 R, 8 D, 9 U, 0 F. **Sinclair 2** = keys 1 L, 2 R, 3 D, 4 U, 5 F.
 - Redefine asks for UP, DOWN, LEFT, RIGHT, FIRE (no duplicates).
   (Manager ruling 2026-10-05, designer-confirmed.) Reserved keys are rejected with the message
-  `KEY RESERVED`: ENTER, `1`–`0`, `I`, CAPS SHIFT, SYMBOL SHIFT, and any key BREAK uses. The
+  `KEY RESERVED`: ENTER, `1`–`0`, `I`, `S` (§3.6), CAPS SHIFT, SYMBOL SHIFT, and any key BREAK uses. The
   prompt stays on the same action. BREAK at any redefine prompt cancels the whole redefinition
   and keeps the previous key set.
 - START seeds the RNG → generates D1 → play.
@@ -499,6 +502,85 @@ Budget table: §11.2.
 - The cursor moves only in ICON MODE (↓ + FIRE, §3.1) or via `1`–`0`; the BAG icon opens the bag when used there.
 - 3C (designer decision 2026-10-04): the Bow slot and quick food are greyed-but-selectable
   until found (see §3.1), not skipped.
+
+### 3.6 Sound settings (designer decision 2026-10-13; audio itself: sound.md)
+
+**One setting, 3 states, one cycle:** `ALL ON` > `SFX ONLY` > `OFF` > `ALL ON`. There are no
+separate Music and SFX toggles. Why: one menu line, one hotkey, and at most 2 presses to reach
+any state. The likely reason to mute in game is that the short loops start to grate
+(sound.md §1.2), and turning music off while keeping effects covers it. "Music only" (effects
+off) has no gameplay use. The state is stored as two flag bits, so a 4th state could be added
+later without touching the player.
+
+| Item | Decision |
+|---|---|
+| State byte | `SND_MODE`, 1 B: bit 0 `SND_MUSIC`, bit 1 `SND_SFX`, bit 7 `SND_HOLD` (pause, below). Values: ALL ON = 3, SFX ONLY = 2, OFF = 0. Home: **bank 2, next to the `MUS_REQ` / `SFX_REQ` mailbox** (sound.md §0), so the ISR can read it whatever bank is paged. Engineer assigns the address in memory-map.md |
+| Default | `ALL ON`, set at boot |
+| Persistence | **Per power-on.** Kept across death, quit, win and new games (like `JOY_MODE` / `KEYTAB`). `new_game` / `hero_st_init` never write it. No tape save |
+| Menu | Item **`5`** cycles it (digits-only menu, §3.2). It is drawn in the menu font at rows 21–22, which follows the 3-row item pitch: item 4 is at 18–19 and the KEYTAB names are on row 20. The footer `TX_FT_PRESS` line on row 22 is dropped because the digit labels are enough. The credit stays on row 23. The value is shown on the line, and the item ignores joystick input like the rest of the menu |
+| In-game hotkey | **`S`** (Sound), edge-triggered. Holding S cycles once, with no repeat. S is not a default key, is not on either Sinclair half and has no SYM/CAPS meaning that we use. Redefine rejects it (`KEY RESERVED`). Not `M`, because the `.` wait key is SYMBOL+M |
+| Where `S` works | Wherever `intent_tick` runs: normal play, ICON MODE, and also during ANIM ticks of a turn. It does not work on the bag page, level card, end screens or menu, and in pause it is replaced by the SOUND item |
+| Turn / input safety | A UI event like `I` / `1`–`0`: it costs **0 turns**, never sets `INTENT`, never touches `FIRE_ST`, `TURN_HOLD`, `DN_T` or `NEED_RELEASE`, and is not a turn input. So a held direction keeps walking while S is pressed, and S held does not block the next turn. Edge source: a `SC_SOUND` bit in `PLAYER_SC` vs `SC_OLD` |
+| Joystick-only path | **Pause box** (FIRE + ↑): `RESUME   SOUND: …   QUIT`. ←/→ move over 3 items and wrap. FIRE/ENTER on SOUND cycles it, redraws the box and **stays paused**. `S` also cycles while paused |
+| Feedback | In game, a log line through the normal panel queue (§3.3). In the menu and pause, the value text on the line. **No panel icon:** the panel has no free cell, the state can be heard, and the log confirms it. The info line is not used, because it belongs to the icon or the target readout |
+
+**Audio behaviour (the ISR player sees `SND_MODE`; it tracks its own last copy to act on edges).**
+- **Music off** (bit 0 cleared): on the next frame, write volume 0 to the music channels (which
+  also drops envelope mode) and mask them in R7. From then on the sequencer **does not run**,
+  which saves its ~1.5k T a frame. `MUS_REQ` is still accepted and remembered. One-shots that
+  were requested while muted (stinger, win, game over) are dropped.
+- **Music back on:** the **current requested looping tune** (explore, danger or boss) restarts
+  from **bar 1** with the 8-frame fade-in. It does not resume the old position, because the
+  tune may have changed meanwhile (danger has ended, boss is dead).
+- **SFX off** (bit 1 cleared): the playing effect is cut at once and the steal channel (V1,
+  the inner voice) goes back to music or to silence. `sfx_req` drops requests while the bit is
+  clear (a ~10 T test). With SFX ONLY, effects still play on V1 and the other voices stay silent.
+  When no effect is playing, R7 is `$3F`.
+- **OFF:** the player writes silence once, then returns at about stub cost (~0.3k T).
+- **Pause (`SND_HOLD`):** `pause_run` sets bit 7 on entry and clears it on resume or quit.
+  While it is set, all volumes are 0, the sequencer is **frozen** (not reset) and SFX are
+  dropped. On resume, music **continues from the frozen position**, because a pause is short
+  and the tune cannot change. A setting changed in the pause box takes effect at resume
+  (music turned on in pause → restarts at bar 1, as above).
+- **Title/menu:** the title tune (sound.md §3 B, X:1 or the Lament) plays while
+  `SND_MUSIC` is set. Pressing `5` applies immediately: turning music off silences it, and
+  turning music back on restarts the title tune at bar 1. Menu blips (sound.md §4
+  move/select/cancel) obey `SND_SFX`. START hands over to the level tune as usual.
+- **End screens:** X:5 / X:6 obey `SND_MUSIC`, and the screens stay silent with music off.
+
+**Strings (upper case, no full stop, §3.4).** Use one shared prefix token `SOUND: ` and 3 value
+tokens: `ALL ON` · `SFX ONLY` · `OFF`.
+
+| Where | Font | Text (max length) |
+|---|---|---|
+| Menu item 5 | 8×16 | `5 SOUND: ALL ON` / `5 SOUND: SFX ONLY` / `5 SOUND: OFF` (17) |
+| Pause box, row 8–9 | 8×16 | `RESUME` col 1 · `SOUND: SFX ONLY` cols 9–23 · `QUIT` col 27 (30 wide in total) |
+| Log, in game | 6×8 | `SOUND: ALL ON` / `SOUND: SFX ONLY` / `SOUND: OFF` (15) |
+
+**Byte costs (E; placement is the engineer's).**
+
+| Piece | Bank | Bytes E |
+|---|---|---|
+| `SND_MODE` + boot init | 2 (byte) / low RAM boot | 1 + ~4 |
+| `S` read into `PLAYER_SC` (`sample_input`) + the edge in `intent_tick` → far call | 2 | ~12 (bank 2 has ~48 B free: keep only the stub here) |
+| `snd_cycle` (3 → 2 → 0 → 3, queue the log line), shared by the hotkey, menu and pause | 1 | ~20 |
+| Menu item 5: draw + `5` in `menu_read`; drop the footer line | 1 | ~35 |
+| Pause: 3 items with wrap, SOUND cycles in place, set/clear `SND_HOLD` | 1 | ~45 |
+| Redefine: `S` added to the reserved set | 1 | ~6 |
+| Strings: prefix + 3 values (shared by menu, pause and log) | text block | ~30 |
+| Player: edge handling, silence, restart at bar 1, hold/freeze, `sfx_req` test | 3 (AY slot) | ~50, inside sound.md's player estimate |
+| **Total** | | **~200 B; about 12 of them in bank 2** |
+
+**Checks (`test`):**
+1. Boot → `SND_MODE` = 3.
+2. In play, S ×3 → 2, 0, 3. `TURN_COUNTER`, `NEED_RELEASE` and `FIRE_ST` are unchanged, and
+   the log shows each string.
+3. Holding S for 50 ticks → one change only.
+4. Holding O and tapping S → the hero keeps walking.
+5. Menu `5` ×3 cycles; the state survives death → menu → START.
+6. Pause, → to SOUND, FIRE → cycles and is still paused. BREAK resumes.
+7. Redefining a key to S → `KEY RESERVED`.
+8. OFF, or `SND_HOLD` set → the player's AY shadow has R8–R10 = 0 (sound.md T4).
 
 ---
 
