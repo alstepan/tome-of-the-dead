@@ -220,7 +220,14 @@ HELD_T          EQU TURN_PEND_END + 1   ; held hero: INPUT-phase ticks counted; 
                                     ; starts on the HELD_WAIT-th (game.md §2.2 "one turn per 4
                                     ; ticks": a Wait turn with nothing moving spans 2 ticks, input +
                                     ; turn_done; measured, tests/status.py H1)
-ST_HERO_END     EQU TURN_PEND_END + 2
+COMBAT_NOT_BEFORE EQU TURN_PEND_END + 2   ; D3-8e2 (game.md §6.5.1): != 0: panel_tick draws
+                                    ; nothing (log, target readout, HP bar) while TURN_TICK <= it.
+                                    ; act_begin: a cast that struck a body at the accept = min(the
+                                    ; first impact tick pf_ftick, ACT_FIRE_TICK + CNB_MAX), a miss 0;
+                                    ; end_turn: 0 (with TURN_TICK); act_pend's log wait counts from
+                                    ; max(MON_AT, it)
+CNB_MAX         EQU 8               ; ticks past the release the gate holds at most (§6.5.1 "Bound")
+ST_HERO_END     EQU TURN_PEND_END + 3
 HELD_WAIT       EQU 3
 LT_SERVED       EQU 1
 LT_HOLD_BIT     EQU 1
@@ -332,13 +339,14 @@ PF_RAM_LEN      EQU $100
 ; ABIL_DESC (D3-7) — the ability being used, filled by abil_load (bank 3,
 ; rank3.asm) for the bank-7 ability code, which cannot read bank 3: the
 ; ab_def row (ABD_*, 10 B) then its rank row (RK_*, 6 B: ab_rank at the
-; hero's rank, or ab_ammo). In PF_RAM's free middle ($5E5D..$5EDF), clear
+; hero's rank, or ab_ammo). In PF_RAM's free middle ($5E63..$5EDF; D3-8e: was
+; $5E60, the pf_* block grew to $5E62), clear
 ; of the pf_* block and PF_ROWF (ASSERTed in proj3.asm).
-ABIL_DESC       EQU PF_RAM + $60    ; $5E60..$5E6F
+ABIL_DESC       EQU PF_RAM + $68    ; $5E68..$5E77 (D3-8e; was $5E60)
 ABIL_RK         EQU ABIL_DESC + 10  ; = + ABD_STRIDE: the rank row (proj_fire HL)
 ABIL_DESC_LEN   EQU 16
 ; ABIL_TGT (D3-7 T5) — word: the power attack's target slot mask (bit s =
 ; slot s), found by melee_scan at the accept (abil_melee7.asm) and struck by
 ; power_fire on the fire tick (nothing moves in between: the monster phase is
 ; deferred), so the fire tick does not scan again. Right after ABIL_DESC.
-ABIL_TGT        EQU ABIL_DESC + ABIL_DESC_LEN   ; $5E70..$5E71
+ABIL_TGT        EQU ABIL_DESC + ABIL_DESC_LEN   ; $5E78..$5E79 (D3-8e; was $5E70)

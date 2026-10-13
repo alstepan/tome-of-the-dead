@@ -270,6 +270,15 @@ probe_render_done:
                 ld   a, (TURN_TICK)
                 or   a
                 jr   z, panel_done
+                dec  a                         ; D3-8e2 (game.md §6.5.1): nor up to the
+                ld   hl, COMBAT_NOT_BEFORE     ; cast's first impact tick — the whole queue
+                cp   (hl)                      ; (log, target readout, HP bar) waits; 0 = no
+                jr   c, panel_done             ; gate; end_turn clears it. TURN_TICK <= the
+                                               ; gate (dec): a panel item drawn in tick t is
+                                               ; presented at t + 1, the impact anim_tick
+                                               ; computes in tick t is rendered at t + 1 and
+                                               ; presented at t + 2 (RENDER_FIRST): from t + 1
+                                               ; both show together (+7 B, 28 T)
                 ld   a, (TURN_PEND)            ; D3-7: nor in an ability's fire tick
                 and  TP_FIRE                   ; (act_fire + its proj_fire: the cast tick)
                 jr   nz, panel_done
@@ -315,6 +324,10 @@ pend_far:       ld   hl, act_pend
 ; probe_act_fire — test probe (budget.py "cast" class): act_pend calls it on
 ; the fire tick, right before act_fire (bank-7 code cannot carry a probe).
 probe_act_fire: ret
+; probe_act_prep — test probe (D3-8e): act_begin calls it on the input tick,
+; right before far3 proj_pre (the accept's share of the cast: the abil /
+; abil_ammo suites seed the RNG and snapshot the model there).
+probe_act_prep: ret
 frozen:         ld   a, (ICON_MODE)            ; Z = frozen (ICON MODE, INPUT phase)
                 or   a
                 jr   z, .n

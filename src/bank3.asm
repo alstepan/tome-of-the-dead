@@ -142,6 +142,7 @@ level_reset:
                 ld   (PEND_DMG_COUNT), a
                 ld   (YIELD_FLAG), a
                 ld   (CLIMB_BLK_N), a          ; B14: no run of blocked climbs
+                ld   (pf_prep), a              ; D3-8e2: no cast set up across a level
                 ld   hl, $FFFF                 ; no jump refused (game.md §2.4 "not
                 ld   (JUMP_TURN), hl           ; two turns in a row")
                 ld   hl, P_ENTITIES
@@ -177,7 +178,7 @@ level_reset_new:
                 ld   (ST_T2), a
                 ld   (ST_X), a
                 ld   hl, HERO3D
-                ld   b, ST_HERO_END - HERO3D   ; D3-7: + the TURN_PEND block; D3-8: + HST_DONE / HELD_T
+                ld   b, ST_HERO_END - HERO3D   ; D3-7: + the TURN_PEND block; D3-8: + HST_DONE / HELD_T; D3-8e2: + COMBAT_NOT_BEFORE
 .z:             ld   (hl), a
                 inc  l
                 djnz .z

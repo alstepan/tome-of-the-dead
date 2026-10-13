@@ -151,8 +151,8 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
-CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fcast", "wcast", "wcast4", "acast")
-CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
+CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")
+CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
 HERO_Y = stand_y(1, 6)                            # 11
@@ -221,6 +221,26 @@ SCENARIOS = {
         (2, 19, stand_y(1, 4), RIGHT),
         (3, 24, stand_y(1, 2), RIGHT),
         (4, 21, stand_y(1, 2), RIGHT)], [("FIRE", 3)], K_WIZARD, None, "advcast"),
+    # D3-8e: the worst ROOM_CAP-legal casts of a model search over 2M layouts
+    # (tests/proj3.py P11 mirrors them; box_free-disjoint bodies, no ladder
+    # bodies): a SHOCK-reflecting Ghost and 2 Bats + a Rat / Slime stacked
+    # between it and a wall, so the Lightning ping-pongs through the stack and
+    # the caster until the range runs out (16 strikes; the HP keep every one).
+    # "fzcast": Lightning r1 from x 23 facing left, bricks at cols 4 / 27 — the
+    # stack overlaps the caster's box, so the fire tick's render is ~70k T on
+    # its own (148.1k T before D3-8e: proj_fire ~97k on the fire tick).
+    # "fzcast2": r3 from x 18 facing right, bricks at cols 12 / 31.
+    # Kinds / HP / bricks are set by fzcast_setup (FZ).
+    "fzcast": ("mage Lightning r1: Ghost <-> wall ping-pong through Rat + 2 Bats + the caster, 16 strikes", [
+        (1, 26, 15, RIGHT),
+        (2, 20, 15, RIGHT),
+        (3, 17, 16, RIGHT),
+        (4, 20, 10, RIGHT)], [("FIRE", 3)], K_WIZARD, None, "fzcast"),
+    "fzcast2": ("mage Lightning r3: wall <-> Ghost ping-pong through Slime + 2 Bats + the caster, 16 strikes", [
+        (1, 15, 15, RIGHT),
+        (2, 12, 14, RIGHT),
+        (3, 21, 15, RIGHT),
+        (4, 14, 12, RIGHT)], [("FIRE", 3)], K_WIZARD, None, "fzcast2"),
     # D3-8 review: Frost Shard r2 (2 bounces, freeze 3) from x 7 facing left to
     # the left wall: the bounce comes back and freezes the caster (self-freeze
     # 1, §6.4.1: hero tint + panel icon + a held turn); Rat, Goblin, Skeleton,
@@ -415,6 +435,32 @@ def advcast_setup(p, placements):
     p.settle()
 
 
+# D3-8e "fzcast" / "fzcast2" (tests/proj3.py P11 mirrors them): the
+# caster's x / facing, the Lightning rank, (slot, K_*, HP) re-kinding the
+# placements (99 HP: the real cast's own rolls keep all 16 strikes), the
+# flight-row brick cols (every other col of the row = air)
+FZ = {"fzcast": dict(x=23, left=True, rank=1, brick=(4, 27),
+                     bodies=((1, 6, 99), (2, 7, 99), (3, 5, 99), (4, 7, 99))),      # Rat, Bat, Ghost, Bat
+      "fzcast2": dict(x=18, left=False, rank=3, brick=(12, 31),
+                      bodies=((1, 8, 99), (2, 7, 99), (3, 5, 99), (4, 7, 99)))}     # Slime, Bat, Ghost, Bat
+
+
+def fzcast_setup(p, placements, key):
+    """"fzcast" / "fzcast2": Lightning learned at the FZ rank, the hero at FZ x /
+    facing (HP 200), the 4 slots re-kinded at the placements' rows with FZ's
+    HP, the flight row = air but FZ's brick cols."""
+    fz = FZ[key]
+    lcast_setup(p, placements, r=fz["rank"], x=fz["x"])
+    if not fz["left"]:
+        p.set_ent(0, FLAGS=EF_ACTIVE | 2)
+    for slot, kind, hp in fz["bodies"]:
+        p.set_ent(slot, KIND=kind, HP=hp, MAXHP=hp)
+    row = S["ROOM_MAP"] + (HERO_Y + S["PF_ROW_DY"]) * 32
+    for c in range(32):
+        p.wb(row + c, S["T_BRICK"] if c in fz["brick"] else S["T_AIR"])
+    p.settle()
+
+
 def wcast_setup(p, placements):
     """"wcast": the hero at x 12 facing right (HP 200), the monsters 60 HP,
     Whirlwind learned at rank 3 (ARANK + its RANK_ROWS row, as rank_sync),
@@ -465,6 +511,8 @@ def run_scenario(h, scen):
             p.wb(S["ST_T1"] + slot, int(os.environ.get("BUDGET_ST1", "0x10"), 0))
     if len(scen) > 5 and scen[5] == "advcast":
         advcast_setup(p, placements)
+    if len(scen) > 5 and scen[5] in FZ:
+        fzcast_setup(p, placements, scen[5])
     if len(scen) > 5 and scen[5] == "fcast":
         lcast_setup(p, placements, k=S["ABL_FROST"], r=2, x=7)
     if len(scen) > 5 and scen[5] == "wcast":
@@ -526,7 +574,7 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fcast,wcast,wcast4,acast").split(","):
+        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if any(t > CAST_CAP for t in st.casts_t):
                 fails.append(key + " (cast)")

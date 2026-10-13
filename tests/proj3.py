@@ -50,6 +50,13 @@ RNG state after the cast (=> the exact draw order), the FX descriptor
       cols 3 / 31) == model + the PF_ROWF invariant (flags = solid | edge,
       count = candidates not DONE; struck-dead ones stay DONE), its T printed;
       pf_cands' x1 guard (a body poked to x 30, 3 wide: x1 clamped to 31)
+  P11 D3-8e: the re-review's 5-body fuzz worst casts #666 / #678 and the
+      ROOM_CAP-legal worst of a model search (tests/budget.py "fzcast" /
+      "fzcast2": Ghost <-> wall ping-pong through a stack, 16 strikes) ==
+      model + the PF_ROWF invariant, their T printed; the split cast
+      (proj_pre at TURN_TICK 0, proj_rel at ACT_FIRE_TICK) == the one-shot
+      model at the fire tick (pf_part PFP_MID / PFP_DONE after the accept,
+      pf_prep used up); a stale set-up of another ability is re-cast whole
 Run: ZRCP_PORT=<port> python3 tests/proj3.py
 """
 import random
@@ -954,6 +961,98 @@ def main():
             p10_bad.append(("x1 not clamped", cand[:7]))
         check(f"P10 adversarial: fuzz #208 (Lightning r2, reflecting Ghost + 2 Slimes + Bat over the caster,"
               f" 3 kills) == model, PF_ROWF invariant, {t208} T; pf_cands x1 clamp", not p10_bad, p10_bad[:4])
+
+        # --- P11 D3-8e: the budget-fuzz geometries + the split cast ------------
+        p11_bad, p11_t = [], {}
+
+        def geo(hero, bodies, bricks, hres=(0, 0, 0)):
+            """World from (x, left, hp) + [(slot, kind, x, y, hp)], flight row =
+            air but the brick cols."""
+            w = World(kt, hres)
+            x, left, hp = hero
+            w.bodies[0] = Body(0, K_KNIGHT, x, hy, hp, 200, EF_ACTIVE | EF_PLAYER | (EF_LEFT if left else 0))
+            for s, k, bx, by, bhp in bodies:
+                w.bodies[s] = Body(s, k, bx, by, bhp, max(bhp, 30))
+            w.row = [T_BRICK if c in bricks else T_AIR for c in range(32)]
+            return w
+
+        # the re-review's 5-body fuzz worst casts (scratch adv2, NB 3..5, seeds
+        # 0x444 #666 / 0x555 #678: 74.7k / 73.7k T then). 5 monsters: over
+        # ROOM_CAP (4), so a model check only; the budget gate is "fzcast"
+        FZ666 = ((7, True, 24), [(1, K_RAT, 5, 15, 6), (2, K_SKELETON, 0, 11, 11), (3, K_RAT, 12, 15, 12),
+                                 (4, K_BAT, 0, 14, 18), (5, K_SLIME, 5, 15, 5)], (0, 14))
+        FZ678 = ((1, True, 43), [(1, K_GOBLIN, 29, 11, 28), (2, K_RAT, 27, 15, 3), (3, K_GHOST, 9, 11, 1),
+                                 (4, K_RAT, 0, 15, 1), (5, K_GOBLIN, 5, 13, 22)], (0, 31))
+        for tag, g, rank, seed, delay in (("#666", FZ666, 1, 10267, 3), ("#678", FZ678, 3, 7378, 0)):
+            w = geo(*g)
+            bad, res = run("P11 " + tag, w, LIGHTNING, rank, seed=seed, delay=delay)
+            p11_t[tag] = p.tstates
+            p11_bad += [(tag,) + tuple(b) for b in bad] + [(tag, "inv") + i for i in rowf_inv(w)]
+        # the ROOM_CAP-legal worst of a 2M-layout model search (box_free-disjoint
+        # bodies, no ladder bodies, all 60 HP): tests/budget.py "fzcast" (the
+        # real cast, render-heavy stack) and "fzcast2" mirror these
+        FZC = ((23, True, 200), [(1, K_RAT, 26, 15, 60), (2, K_BAT, 20, 15, 60), (3, K_GHOST, 17, 16, 60),
+                                 (4, K_BAT, 20, 10, 60)], (4, 27))
+        FZC2 = ((18, False, 200), [(1, K_SLIME, 15, 15, 60), (2, K_BAT, 12, 14, 60), (3, K_GHOST, 21, 15, 60),
+                                   (4, K_BAT, 14, 12, 60)], (12, 31))
+        for tag, g, rank, seed in (("fzcast", FZC, 1, 44133), ("fzcast2", FZC2, 3, 18038)):
+            w = geo(*g)
+            bad, res = run("P11 " + tag, w, LIGHTNING, rank, seed=seed, delay=0)
+            p11_t[tag] = p.tstates
+            p11_bad += [(tag,) + tuple(b) for b in bad] + [(tag, "inv") + i for i in rowf_inv(w)]
+
+        # the split cast (D3-8e): proj_pre on the input tick (TURN_TICK 0: the
+        # set-up + PF_PRE_HITS strikes, E = ACT_FIRE_TICK), proj_rel on the fire
+        # tick (TURN_TICK = ACT_FIRE_TICK: the rest + the FX) == the model's
+        # one-shot cast at the fire tick (delay 0): same draws, HP, E_REACTAT,
+        # pf_itick, descriptor. pf_part after the accept: PFP_MID (parked) for
+        # 16 strikes, PFP_DONE for a short cast (its FX waits for the release)
+        aft = S["ACT_FIRE_TICK"]
+
+        def split(tag, w, abl, rank, seed, rel_abl=None, want_part=None):
+            w.turn_tick = 0
+            p.setup(w, seed)
+            row = row_addr(abl, rank)
+            assert p.code(p.bank3([0xCD] + w16(S["fx_reset"]) + [0xCD] + w16(S["build_live"]) +
+                                  [0xDD, 0x21] + w16(S["P_ENTITIES"]) + [0x3E, abl, 0x11] + w16(row) +
+                                  [0xCD] + w16(S["proj_pre"]))), tag + " proj_pre stub"
+            t_pre = p.tstates
+            part = p.rb("pf_part")
+            if want_part is not None and part != want_part:
+                p11_bad.append((tag, "pf_part", part, want_part))
+            p.wb("TURN_TICK", aft)
+            rel_abl = abl if rel_abl is None else rel_abl
+            assert p.code(p.bank3([0xDD, 0x21] + w16(S["P_ENTITIES"]) + [0x3E, rel_abl, 0x11] +
+                                  w16(row_addr(rel_abl, rank)) + [0xCD] + w16(S["proj_rel"]) +
+                                  [0x7D, 0x32] + w16(RES) +            # pf_prep is bank-3 data:
+                                  [0x3A] + w16(S["pf_prep"]) + [0x32] + w16(RES + 1))), tag + " proj_rel stub"
+            w.turn_tick = aft
+            rng = Rng(seed)
+            res = w.fire(rng, 0, rel_abl, rank, 0, solid)
+            want = expect(w, res, rng.st)
+            bad = compare(p.result(w), want)
+            if p.rb(RES) != res["stop"]:
+                bad.append(("L", p.rb(RES), res["stop"]))
+            if p.rb(RES + 1) != 0:                 # (read while bank 3 was paged)
+                bad.append(("pf_prep not used up", p.rb(RES + 1)))
+            p11_bad.extend((tag,) + tuple(b) for b in bad)
+            p11_t[tag] = (t_pre, p.tstates)
+            w.turn_tick = 0
+
+        split("split fzcast", geo(*FZC), LIGHTNING, 1, 44133, want_part=S["PFP_MID"])
+        split("split fzcast2", geo(*FZC2), LIGHTNING, 3, 18038, want_part=S["PFP_MID"])
+        w = world(hero_x=hx)
+        w.bodies[1] = Body(1, K_GOBLIN, hx + 5, stand(K_GOBLIN), 50)
+        split("split short", w, SPARK, 1, 0x2468, want_part=S["PFP_DONE"])
+        # a stale set-up (another ability) is never walked: proj_rel runs the
+        # whole cast (Spark r1 set up with nothing in its range, Lightning released)
+        w = world(hero_x=2)
+        w.bodies[1] = Body(1, K_GOBLIN, 20, stand(K_GOBLIN), 50)
+        split("split stale", w, SPARK, 1, 0x1357, rel_abl=LIGHTNING)
+        p.wb("TURN_TICK", 0)
+        check(f"P11 D3-8e: fuzz #666 / #678 (5 bodies) and the ROOM_CAP worst fzcast / fzcast2 == model +"
+              f" PF_ROWF invariant ({p11_t}); the split cast (proj_pre at the accept, proj_rel at the fire tick)"
+              f" == the one-shot model, pf_part parked / done, a stale set-up re-cast", not p11_bad, p11_bad[:4])
 
         print(f"proj3: worst cast {T.worst[0]} T ({T.worst[1]} r{T.worst[2]}; incl. ~3k T of stub: paging, fx_reset, build_live"
               "; deal_hit messages included)", flush=True)

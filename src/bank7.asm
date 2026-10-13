@@ -194,6 +194,7 @@ end_turn:
                 ld   (TURN_PHASE), a
                 ld   (TURN_TICK), a            ; D3-7: 0 throughout INPUT, so the input
                                                ; tick's set_reaction_at / pf_tick add 0
+                ld   (COMBAT_NOT_BEFORE), a    ; D3-8e2: the panel gate is per turn
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
                 ret  z                         ; (B3B-13: the PROTO chest win is gone; a run

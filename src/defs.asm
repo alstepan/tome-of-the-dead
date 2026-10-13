@@ -163,6 +163,8 @@ R_ATTR          EQU 9               ; desired attr
 R_DATTR         EQU 10              ; attr last stamped
 R_DIRTY         EQU 11              ; DIRTY_* class this tick
 R_LOG           EQU 12              ; 1 = log this draw in ANIM_TRACE
+R_TINT          EQU 13              ; D3-8e2: the body attr (kind / status tint) last shown with
+                                    ; no reaction pending: kept while one is (render; R_ATTR | 4)
 DMG_LIST        EQU $B900           ; damage rects: 4 B each (col,row,cols,rows)
 DMG_MAX         EQU 48              ; $B900..$B9BF
 PEND_DMG        EQU $B9C0           ; queued damage for next render: 4 rects ($B9C0..$B9CF)

@@ -564,6 +564,7 @@ turn_done:
                 ASSERT R_ROW == R_FID + 4 && R_COLS == R_FID + 5 && R_ROWS == R_FID + 6
                 ASSERT R_LEFT == R_ROWS + 1 && R_ATTR == R_LEFT + 1 && R_DATTR == R_ATTR + 1
                 ASSERT R_DIRTY == R_DATTR + 1 && R_LOG == R_DIRTY + 1
+                ASSERT R_TINT == R_ATTR | 4 && (R_ATTR & 4) == 0 && RC_NONE == 0
                 ASSERT DIRTY_ATTR == DIRTY_NONE + 1 && DIRTY_FULL == 2
 
 render:
@@ -692,6 +693,17 @@ render:
                 or   a
                 ld   a, (ix+E_FLA)
                 jr   nz, .fl
+                ; D3-8e2 (game.md §6.5.1, visible output at impact): while a
+                ; reaction is pending (E_REACT 1..$7F: struck, its impact tick
+                ; not reached) the body keeps the attr it showed before the strike
+                ; (R_TINT): a new FROZEN / CONFUSED tint appears at the impact, a
+                ; killed body's tint (deal_hit clears its STATUS) stays until its
+                ; DEATH starts. +13 B, ~45 T a drawn slot (~30 T while pending)
+                ld   a, (ix+E_REACT)
+                dec  a                         ; pending -> 0..$7E: P
+                set  2, l                      ; R_TINT (SET / LD keep the flags)
+                ld   a, (hl)
+                jp   p, .ro
                 ld   a, (ANIM_SLOT)            ; D3-8: HOLD / CONFUSED tint from the slot's
                 add  a, ST_FLAGS & $FF         ; STATUS (game.md §6.4; +57 T a drawn slot
                 ld   e, a                      ; without one). DE free here (fpx / fpy
@@ -700,8 +712,10 @@ render:
                 and  STS_TINTED
                 jr   z, .kat
                 call st_tint                   ; (keeps B, HL)
-                jr   .fl
+                jr   .tsh
 .kat:           KFIELD_KEEPHL KT_ATTR
+.tsh:           ld   (hl), a                   ; R_TINT = shown now
+.ro:            res  2, l                      ; back to R_ATTR
 .fl:            ld   (hl), a                   ; R_ATTR
                 inc  l
                 ld   c, DIRTY_NONE

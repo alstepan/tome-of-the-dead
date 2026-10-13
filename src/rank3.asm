@@ -136,10 +136,34 @@ rank_sync:
 ; FXD_DELAY 0 (the release tick: the projectile appears now). far3 takes HL
 ; as its target, so the row comes in DE.  Out / Clobbers: proj_fire's.
 ;------------------------------------------------------------------------------
+; D3-8e: when the accept already ran proj_prep for this ability (act_prep,
+; pf_prep = A + 1), only the walk runs here (proj_go: ~10k T of set-up and
+; pf_cands off the fire tick); otherwise (a poked test turn) the whole cast.
 proj_rel:
                 ex   de, hl
                 ld   e, 0
+                ld   c, a
+                ld   a, (pf_prep)
+                dec  a
+                cp   c
+                ld   a, c
+                jp   z, proj_go
                 jp   proj_fire
+
+; proj_pre — far3 from the bank-7 accept (act_begin): A = ABL_*, DE = its
+; rank row -> proj_part (HL = DE, E = FXD_DELAY = ACT_FIRE_TICK - TURN_TICK:
+; the ticks to the release): the set-up, the candidates and the first
+; PF_PRE_HITS strikes, valid until the release (nothing moves in between:
+; the monster phase is deferred).  Clobbers: all but IX
+proj_pre:
+                ex   de, hl
+                ld   c, a
+                ld   a, (TURN_TICK)            ; (0 on the input tick)
+                neg
+                add  a, ACT_FIRE_TICK
+                ld   e, a
+                ld   a, c
+                jp   proj_part
 
 ;------------------------------------------------------------------------------
 ; melee_hit — far3 from the bank-7 power attacks (abil_melee7.asm

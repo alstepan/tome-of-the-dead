@@ -70,7 +70,8 @@ spell_row:
 ; game.md §6 "Logic"), the hero flashes ATTR_HEAL from the release until
 ; FLASH_TICKS after the impact.
 ; In: IX = hero, B = ABL_SPARK..ABL_LIGHTNING (= ACT_ABL). Out: L = 1 fired.
-; Clobbers: all but IY.   ~0.4k T + proj_fire (10-66k T, contended)
+; Clobbers: all but IY.   ~0.4k T + proj_go (the walk left after the accept's
+; proj_pre: <= ~45k T for 16 strikes, contended)
 ;------------------------------------------------------------------------------
 spell_fire:
                 call spell_row

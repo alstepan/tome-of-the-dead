@@ -45,7 +45,14 @@ act_lead_ok:
 ; Out: L = 1 accepted: TURN_PEND = TP_ACT | TP_MON, ACT_ABL = B, ACT_AT =
 ;      ACT_FIRE_TICK, MON_AT = ACT_FIRE_TICK + 1 (the caller pays the cost and
 ;      starts the sequence); L = 0 refused, nothing changed (lead col 0 / 31:
-;      no turn, the caller prints nothing or its own message).
+;      no turn, the caller prints nothing or its own message). D3-8e: an
+;      accepted projectile also runs far3 proj_pre (proj_fire's set-up + its
+;      first PF_PRE_HITS strikes: ~10k T + ~3.5k a strike, up to ~60k T with
+;      8 message-bearing strikes, on this otherwise light tick; the release
+;      walks the rest: proj_rel). D3-8e2 (game.md §6.5.1): those strikes'
+;      lines / HP must not show before the bolt -> COMBAT_NOT_BEFORE = the
+;      first impact tick (pf_ftick; at most ACT_FIRE_TICK + CNB_MAX), 0 when
+;      nothing was struck (a miss sets no gate).
 ; act_begin_ok: the same without the lead-col guard (always L = 1): the power
 ;      attacks, which fire no projectile (act_fire skips the guard for them).
 ; Clobbers: A, HL (B, C, DE, IX kept)
@@ -56,6 +63,28 @@ act_begin:
                 pop  bc
                 ld   l, 0
                 ret  nc
+                push bc                        ; D3-8e: proj_fire's set-up + candidates
+                push de                        ; now (far3 proj_pre: ~10k T on this
+                ld   de, ABIL_RK               ; light input tick), the release walks
+                ld   a, b                      ; only (proj_rel): the fire tick of a
+                cp   ABL_DAGGER                ; Lightning through 4 bodies is the
+                jr   nc, .rk                   ; heaviest of the game. Ammo: the ab_ammo
+                call spell_row                 ; row (ammo_fire's); spells: the RANK_ROWS
+                ex   de, hl                    ; row (spell_fire's)
+.rk:            call probe_act_prep            ; bank-2 test probe (abil / abil_ammo)
+                ld   a, b
+                ld   hl, proj_pre
+                call far3                      ; (all but IX)
+                ld   a, (pf_tgt)               ; D3-8e2: the panel gate (main.asm)
+                inc  a
+                jr   z, .cnb                   ; nothing struck: A = 0, no gate
+                ld   a, (pf_ftick)
+                cp   ACT_FIRE_TICK + CNB_MAX + 1
+                jr   c, .cnb
+                ld   a, ACT_FIRE_TICK + CNB_MAX    ; bound: a long flight
+.cnb:           ld   (COMBAT_NOT_BEFORE), a
+                pop  de
+                pop  bc
 act_begin_ok:   ld   hl, TURN_PEND
                 ld   (hl), TP_ACT | TP_MON
                 inc  l
@@ -89,7 +118,7 @@ act_seq:
 ;------------------------------------------------------------------------------
 ; act_pend — far7 from bank-2 pend_far (anim_gate, TURN_PEND != 0).
 ; T7: the monster phase also waits while LOG_QN > LOG_MON_MAX (at most
-; LOG_WAIT_MAX ticks), so panel_tick can drain the cast's lines on the rest
+; LOG_WAIT_MAX ticks past max(MON_AT, COMBAT_NOT_BEFORE)), so panel_tick can drain the cast's lines on the rest
 ; ticks before the replies arrive (a Whirlwind on 4 bodies: 4 + 4 lines).
 ; Clobbers: all but IY.  ~0.3k T a waiting tick (far7 included), + <= ~23k
 ; T a log line
@@ -134,7 +163,12 @@ act_pend:
                 cp   LOG_MON_MAX + 1           ; while more than LOG_MON_MAX are pending
                 jr   c, .go                    ; the monsters wait (<= LOG_WAIT_MAX ticks
                 ld   a, (MON_AT)               ; past MON_AT), so their lines find ring
-                add  a, LOG_WAIT_MAX           ; slots. No line is drawn here: panel_tick's
+                ld   b, a                      ; D3-8e2: or past COMBAT_NOT_BEFORE when
+                ld   a, (COMBAT_NOT_BEFORE)    ; later (the gated lines can only start
+                cp   b                         ; to drain at gate + 1: the cap is 1 tick short)
+                jr   nc, .w
+                ld   a, b
+.w:             add  a, LOG_WAIT_MAX           ; slots. No line is drawn here: panel_tick's
                 ld   b, a                      ; 1st-frame rule drains them on the light
                 ld   a, (TURN_TICK)            ; rest ticks (review: a line drawn here on top
                 cp   b                         ; of a heavy repaint passed the cast cap in

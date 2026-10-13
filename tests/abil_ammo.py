@@ -14,8 +14,10 @@ consumed, no floor drop), §2.3 (no throws / shots mid-ladder), §6 "Logic"
       every refusal: no turn, the counters / TURN_PEND untouched, the line
   F1..F7  throws / shots: the accept spends 1 (DAGGERS / ARROWS), TURN_PEND
       = TP_ACT | TP_MON, ABL, 2, 3, the kn_throw / kn_bow sequence, PD_AMMO;
-      on the fire tick (probe_act_fire, TURN_TICK 2; the RNG poked with a seed
-      the proj3 model picks) pf_stop / pf_col / pf_tgt / pf_lost / pf_itick /
+      the RNG poked with a seed the proj3 model picks at probe_act_prep
+      (D3-8e: the flight starts in the accept, act_begin -> proj_pre; the
+      model = a one-shot cast at the release, TURN_TICK 2); after the fire
+      tick (probe_act_fire, TURN_TICK 2) pf_stop / pf_col / pf_tgt / pf_lost / pf_itick /
       pf_desc, the RNG and every body == the model; the line == "YOUR DAGGER
       / ARROW HITS THE <kind>" / "YOU KILL THE <kind>" / "... MISSES"; the
       monsters only after the FX; FX_DROP 0; the turn ends.
@@ -131,6 +133,7 @@ def main():
 def run(h, p, check):
     kt = {}
     probe = S["probe_act_fire"]
+    prep = S["probe_act_prep"]                    # D3-8e: act_begin, before proj_pre
     slots = {}
 
     def stand(kind, cls=K_KNIGHT):
@@ -231,7 +234,26 @@ def run(h, p, check):
         p.select_slot(SLOT[abl])
         t0 = p.rw("TURN_COUNTER")
         p.wb("PANEL_DIRTY", 0)
-        p.tap("FIRE")
+        p.z.cmd("set-breakpoint 3 PC=%d" % prep)  # D3-8e: the flight starts in the accept
+        p.extra_probes = {prep}
+        p.tap("FIRE")                             # (stops at the probe, mid input tick)
+        at_prep = p.pc() == prep
+        w0, solid = model_world()                 # the world before the first strike
+        w0.turn_tick = S["ACT_FIRE_TICK"]         # a one-shot cast at the release
+        for seed in range(1, 30000):
+            w = copy.deepcopy(w0)
+            rng = Rng(seed)
+            res = w.fire(rng, 0, abl, 1, 0, solid)
+            if want(res, w):
+                break
+        else:
+            raise AssertionError("no seed")
+        p.wmem(S["RNG_STATE"], w16(seed))
+        p.z.cmd("set-breakpoint 3")
+        p.extra_probes = set()
+        if at_prep:
+            p.tick()                              # the rest of the input tick
+        check(f"{tag}: the accept reaches proj_pre (probe_act_prep)", at_prep, p.pc())
         e0 = p.z.read_memory(S["P_ENTITIES"], STRIDE)
         seq = S["kn_throw" if abl == DAGGER else "kn_bow"]
         acc = dict(c=counters(), pend=list(p.z.read_memory(S["TURN_PEND"], 4)), ph=p.rb("TURN_PHASE"),
@@ -251,17 +273,7 @@ def run(h, p, check):
             p.z.cmd("set-breakpoint 3")
             p.extra_probes = set()
             return None
-        w0, solid = model_world()
-        for seed in range(1, 30000):
-            w = copy.deepcopy(w0)
-            rng = Rng(seed)
-            res = w.fire(rng, 0, abl, 1, 0, solid)
-            if want(res, w):
-                break
-        else:
-            raise AssertionError("no seed")
-        p.wmem(S["RNG_STATE"], w16(seed))
-        wr0, qn0 = ring()
+        wr0, qn0 = ring()                         # (the lines come with the release)
         p.z.cmd("set-breakpoint 3")
         p.extra_probes = set()
         p.tick()                                  # the rest of the fire tick
@@ -378,15 +390,18 @@ def run(h, p, check):
             p.set_ent(gob, FLAGS=EF_ACTIVE | EF_HOSTILE)
             p.tick()
         p.select_slot(SLOT[abl])
+        p.z.cmd("set-breakpoint 3 PC=%d" % prep)  # D3-8e: the d20 is drawn in the accept
+        p.extra_probes = {prep}
         p.tap("FIRE")
+        at = p.pc() == prep
+        p.wmem(S["RNG_STATE"], w16(d20_seed(d20)))
         p.z.cmd("set-breakpoint 3 PC=%d" % probe)
         p.extra_probes = {probe}
         for _ in range(6):
             p.tick()
             if p.pc() == probe:
                 break
-        at = p.pc() == probe
-        p.wmem(S["RNG_STATE"], w16(d20_seed(d20)))
+        at = at and p.pc() == probe
         wr0, qn0 = ring()
         p.z.cmd("set-breakpoint 3")
         p.extra_probes = set()

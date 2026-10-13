@@ -14,10 +14,12 @@ src/abil_spell7.asm) and the staff bonk (melee_bonk), played through the real
 controls (number key + FIRE) in PROTO room A, release build (DEBUG_KIT=0):
   S1..S5  Spark r1 / Firebolt r1 (burst) / Frost r2 (freeze) / Drain r1 (heal)
       / Lightning r3 (pierce + bounce): the accept pays RR_MP (MP, TURN_PEND
-      = TP_ACT | TP_MON, the hero flashes the spell ink ABD_AT1); at the
-      release (probe_act_fire, TURN_TICK 2) the proj3 Python model is run on
-      the live state (bodies, flight row, RNG, TURN_TICK) and after the fire
-      tick pf_stop / pf_col / pf_tgt / pf_lost / pf_itick / pf_desc, the RNG,
+      = TP_ACT | TP_MON, the hero flashes the spell ink ABD_AT1); D3-8e: the
+      cast's strikes start in the accept (act_begin -> proj_pre), so the
+      proj3 Python model is run on the state at probe_act_prep (bodies,
+      flight row, RNG) as a one-shot cast at the release (TURN_TICK 2,
+      delay 0), the release is reached (probe_act_fire, TURN_TICK 2) and
+      after the fire tick pf_stop / pf_col / pf_tgt / pf_lost / pf_itick / pf_desc, the RNG,
       every body's HP / DYING / E_REACTAT / ST_FLAGS / ST_T1 == the model; the
       struck monsters' reactions start on their E_REACTAT (the FX tick; the
       first target's = pf_itick unless it pierced); the monster phase
@@ -238,7 +240,19 @@ def spells(h, p, check):
         mp0 = p.rb("MP")
         p.select_slot(k + 1)
         t0 = p.rw("TURN_COUNTER")
-        p.tap("FIRE")
+        prep = S["probe_act_prep"]                # D3-8e: the strikes start in the accept
+        p.z.cmd("set-breakpoint 3 PC=%d" % prep)
+        p.extra_probes = {prep}
+        p.tap("FIRE")                             # (stops at the probe, mid input tick)
+        at_prep = p.pc() == prep
+        w, solid = model_world()                  # the world before the first strike
+        w.turn_tick = S["ACT_FIRE_TICK"]          # a one-shot cast at the release
+        seed = p.rw("RNG_STATE")
+        p.z.cmd("set-breakpoint 3")
+        p.extra_probes = set()
+        if at_prep:
+            p.tick()                              # the rest of the input tick
+        check(f"S{k + 1} {tag}: the accept reaches proj_pre (probe_act_prep)", at_prep, p.pc())
         hero = p.ent(0)
         acc = dict(mp=p.rb("MP"), pend=list(p.z.read_memory(S["TURN_PEND"], 4)), fla=hero["FLA"],
                    flt=hero["FLT"], ph=p.rb("TURN_PHASE"))
@@ -259,8 +273,6 @@ def spells(h, p, check):
             p.z.cmd("set-breakpoint 3")
             p.extra_probes = set()
             return None
-        w, solid = model_world()
-        seed = p.rw("RNG_STATE")
         rng = Rng(seed)
         res = w.fire(rng, 0, k, rank, 0, solid)
         p.z.cmd("set-breakpoint 3")

@@ -152,6 +152,7 @@ deal_hit:
                 ld   (dh_lost), a
                 ld   a, d
                 call ent_ix                    ; IX = target
+                ld   (dh_tix), ix              ; D3-8e: pf_strike reads the target here
                 ld   a, (ix+E_HP)
                 or   a
                 jp   z, .out                   ; already at 0 (dying): nothing
@@ -309,7 +310,7 @@ deal_hit:
 .heal:          ld   ix, (ATK_PTR)
                 ld   a, (dh_flags)
                 and  DH_HEAL
-                jr   z, .out
+                jr   z, .ox                    ; (IX = the attacker already: -20 T a hit)
                 ld   a, (ix+E_HP)
                 or   a
                 jr   z, .out                   ; a dying attacker stays dead
@@ -326,7 +327,7 @@ deal_hit:
                 ld   a, TX_SPL_DRAIN_HEAL
                 call msg_push
 .out:           ld   ix, (ATK_PTR)
-                ld   a, (dh_lost)
+.ox:            ld   a, (dh_lost)
                 ld   l, a
                 ret
 
@@ -589,3 +590,8 @@ dh_efx:         DB   0
 dh_tmr:         DB   0
 dh_htx:         DB   0
 dh_mmsg:        DB   0
+dh_tix:         DW   0                         ; D3-8e: the last target's entity (no ent_ix
+                                               ; again in pf_strike)
+dh_rtick:       DB   0                         ; D3-8e: set_reaction_at's tick when not 0
+                                               ; (pf_strike's impact tick; 0 = the attacker's
+                                               ; IMPACT: every other caller; back to 0 after)

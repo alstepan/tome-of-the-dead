@@ -118,9 +118,14 @@ do_attack:
 ; DEATH > HURT > BLOCK. react_at = the attacker's IMPACT tick (so the HURT
 ; follows the blow) + TURN_TICK (D3-7: a blow struck in a later tick of the
 ; turn, the deferred monster phase / a power attack at its release; 0 on the
-; input tick). Clobbers: A, B, DE, HL
+; input tick). D3-8e: dh_rtick != 0 (proj_fire's strike) = that tick instead.
+; Clobbers: A, B, DE, HL
 ;------------------------------------------------------------------------------
 set_reaction_at:
+                ld   a, (dh_rtick)             ; D3-8e: proj_fire's strike passes its
+                ld   b, a                      ; impact tick (the attacker-kind lookup
+                or   a                         ; below would be overwritten: ~0.15k T a
+                jr   nz, .tick                 ; projectile hit); +24 T otherwise
                 ld   hl, (ATK_PTR)
                 ld   a, (hl)                   ; attacker kind (E_KIND = 0)
                 ld   e, a
@@ -137,7 +142,7 @@ set_reaction_at:
                 ld   a, (TURN_TICK)
                 add  a, (hl)
                 ld   b, a                      ; impact tick (TURN_TICK units)
-                ld   a, (ix+E_REACT)
+.tick:          ld   a, (ix+E_REACT)
                 cp   RC_DEATH
                 ret  z                         ; death sticks
                 ld   a, c
