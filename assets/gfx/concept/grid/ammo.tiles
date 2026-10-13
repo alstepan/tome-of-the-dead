@@ -1,0 +1,30 @@
+# WazHack/ZX D3-7 T6 dropped-ammo floor glyphs (game.md §6.3, level_defs.asm T_DAGGERS/T_ARROWS).
+# DRAFT 2026-10-13 for user review on the Design canvas (fragment: assets/gfx/tiles/ammo.svg.html,
+# tools/ammo_preview.py). Format = tools/gfx_convert.py --mode tile: 8x8, 1 ink on black paper.
+# Drawn in the air cell standing on the floor row (one stack per cell); the art sits on rows 1-7
+# with row 7 = the resting edge. Own attr (not FLOOR_IDS): black paper, so no clash with any
+# depth's floor paper. Non-solid, flags 0.
+#   daggers = common id 17 T_DAGGERS: pile of 3 -- two crossed leaning daggers over one lying
+#             flat (blade right, guard col 5). Ink $47 bright white = the DAGGERS bar icon.
+#   arrows  = common id 18 T_ARROWS: two arrows lying parallel, heads right, fletching left,
+#             the lower one offset 1 px back (a loose bundle). Ink $07 white (game.md §6.3);
+#             review option: $06 yellow (wood, = the BOW bar icon) -- a designer/doc change.
+=== daggers ink:white paper:black bright
+........
+......#.
+.....#..
+#...#...
+.#.#....
+..#..#..
+.#.#####
+#....#..
+
+=== arrows ink:white paper:black
+........
+#.#...#.
+.#######
+#.#...#.
+........
+#.#..#..
+.######.
+#.#..#..

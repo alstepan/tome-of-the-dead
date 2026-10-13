@@ -4,7 +4,8 @@
 ;   quaff / wait / exits), combat rolls, monster AI (walker / climber / flyer +
 ;   yield rule), pending materialise, follow selection, potions, HUD.
 ;   B3B-R2: the monster phase (resolve_monsters / ai_monster / ai_flyer /
-;   materialise), do_attack, potion_pickup and try_quaff now live in bank 3
+;   materialise) and do_attack now live in bank 3 (floor_pickup / try_quaff:
+;   bank 7 since D3-7 T5)
 ;   (src/turn3.asm, entered via far3; B3B-13: show_impact_msg -> lowram.asm); what stays here is
 ;   per-tick or shared with the hero path / tests (try_step, cork_check,
 ;   find_target, cache_player, ...).
@@ -302,7 +303,7 @@ room_side:
                 ASSERT RDX_L == 1 && RDX_R == 2 && RDX_LS1 == RDX_L << 4 && RDX_RS1 == RDX_R << 4
                 ASSERT EX_LEFT == RDX_L && EX_RIGHT == RDX_R
 
-; map_cell — HL = map(TMP1 page) + B*32 + C (build_room_map, potion_pickup:
+; map_cell — HL = map(TMP1 page) + B*32 + C (build_room_map, ap_stamp:
 ; bank 2 so the per-turn pickup stays uncontended).  Clobbers: A
 map_cell:
                 ld   a, b

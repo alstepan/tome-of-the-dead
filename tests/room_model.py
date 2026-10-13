@@ -181,9 +181,11 @@ def render_room(blk, r, decor=True, anim=None):
     for i in range(S["FLOOR_MAX"]):
         o = OFF_FLOOR + i * S["FL_STRIDE"]
         room, col, item = blk[o], blk[o + 1], blk[o + 2]
-        if room & S["FL_ROOM_MASK"] == r and item == S["IT_POTION"]:
+        tile = {S["IT_POTION"]: T["T_POTION"], S["IT_DAGGER"]: T["T_DAGGERS"],   # D3-7 T6: ammo stacks
+                S["IT_ARROW"]: T["T_ARROWS"]}.get(item)
+        if room & S["FL_ROOM_MASK"] == r and tile is not None:
             s = 1 if room & S["FL_S1"] else 0
-            m[SR * s + SA - 1][col] = T["T_POTION"]
+            m[SR * s + SA - 1][col] = tile
     seed = d[S["RD_SEED"]] | d[S["RD_SEED"] + 1] << 8
     flat = [t for row in m for t in row]
     if seed == 0:

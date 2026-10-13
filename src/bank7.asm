@@ -64,15 +64,43 @@ turn_input:
                 ld   (NEED_RELEASE), a
                 ld   (LOCK_SHOWN), a           ; B3B-5: next bump may print again
                 ld   (TURN_HOLD), a            ; C3-2: a released key ends the delay
-                ret
+                ld   hl, LOG_PDIR              ; T7 review: a tap released while the log
+                or   (hl)                      ; hold kept the turn: replay it now
+                ret  z
+                and  JOY_DIRS
+                ld   (PLAYER_DIR), a
+                bit  7, (hl)
+                jr   z, .go
+                ld   hl, PLAYER_DISC
+                set  DK_WAIT_BIT, (hl)
+                jr   .go
+                ASSERT (JOY_DIRS & $80) == 0 && DK_WAIT == 1 << 1
 .held:          ld   a, (INPUT_REPEAT)
                 or   a
                 jr   nz, .go
                 ld   a, (NEED_RELEASE)
                 or   a
                 ret  nz
-.go:            xor  a                         ; D3-7: the input tick is TURN_TICK 0
-                ld   (TURN_TICK), a            ; (set_reaction_at / pf_tick add it)
+.go:            ld   a, (LOG_TURN)             ; T7: a starved log (end_turn) holds the turn:
+                and  LT_HOLD                   ; one line per tick, drawn HERE (before render:
+                jr   z, .run                   ; this tick is idle, ~85-90k T worst seen + <= ~23k T
+                ld   a, (LOG_QN)               ; the line < the 126k cap; budget.py "wcast"),
+                or   a                         ; until the queue is empty. INTENT / the held key
+                jr   z, .run                   ; are kept: the turn starts on the tick after.
+                ld   a, (PLAYER_DISC)          ; latch what is held now (a short tap is
+                and  DK_WAIT                   ; released before the hold ends)
+                rrca
+                rrca                           ; DK_WAIT -> bit 7
+                ld   hl, PLAYER_DIR
+                or   (hl)
+                jr   z, .hl
+                ld   (LOG_PDIR), a
+.hl:            ld   hl, PANEL_DIRTY
+                jp   item_log                  ; (bank 2; print6t restores bank 7)
+.run:           ld   (LOG_TURN), a             ; A = 0: LT_SERVED / LT_HOLD clear for this turn
+                ld   (LOG_PDIR), a             ; (a replayed tap is spent)
+                ld   (TURN_TICK), a            ; D3-7: the input tick is TURN_TICK 0
+                                               ; (set_reaction_at / pf_tick add it)
                 call try_player_turn
                 ret  nc                        ; illegal: no turn consumed
                 ld   a, (CLIMB_BLK)            ; B14: any turn but a blocked-climb
@@ -93,19 +121,36 @@ turn_input:
 
 ;------------------------------------------------------------------------------
 ; end_turn — ANIM finished (play_loop: turn_done CF -> far7): transition (if
-; exiting), TURN_COUNTER++, potion + ammo pickup, death check (B3B-11: messages via
+; exiting), TURN_COUNTER++, the floor pickup (potions + ammo), death check (B3B-11: messages via
 ; the log; B3B-13: msg_push), back to INPUT.  Clobbers: all but IY.
 ;------------------------------------------------------------------------------
+LOG_HOLD_MIN    EQU 2
 end_turn:
+                ; T7 log drain (a heavy fight: every tick of the turn in its 2nd
+                ; frame, so panel_tick never draws a line and LOG_SLOTS drops the
+                ; newest; budget.py "wcast" dropped 14): LOG_HOLD_MIN+ lines
+                ; pending, or any and none drawn since the turn started -> LT_HOLD: turn_input draws one per
+                ; tick and starts no turn until the queue is empty. Lines this
+                ; end_turn pushes (pickup, death) do not count.  ~60 T
+                ld   hl, LOG_TURN
+                ld   a, (LOG_QN)
+                cp   LOG_HOLD_MIN
+                jr   nc, .lh                   ; 2+ pending: hold anyway (the next cast's
+                or   a                         ; lines would not fit)
+                jr   z, .ls
+                bit  0, (hl)
+                jr   nz, .ls                   ; LT_SERVED: a line was drawn this turn
+                ASSERT LT_SERVED == 1
+.lh:            ld   (hl), LT_HOLD
+.ls:
                 ld   a, (EXIT_KIND)
                 or   a
                 call nz, do_exit
                 ld   hl, (TURN_COUNTER)
                 inc  hl
                 ld   (TURN_COUNTER), hl
-                ld   hl, potion_pickup         ; B3B-R2: bank 3 (B3B-11: HP / potions
-                call far3                      ; reach the panel by panel_tick's poll)
-                call ammo_pickup               ; D3-7 (pickup7.asm, this bank)
+                call floor_pickup              ; pickup7.asm (D3-7 T6: potions + ammo, list-driven;
+                                               ; HP / potions reach the panel by panel_tick's poll)
                 xor  a
                 ld   (TURN_PHASE), a
                 ld   (TURN_TICK), a            ; D3-7: 0 throughout INPUT, so the input

@@ -259,7 +259,7 @@ class World:
             ladder = not k["fly"] and (b.y + k["bh"]) % 9 != 8
             cands.append(dict(x0=b.x, x1=b.x + k["bw"] - 1, s=s, ladder=ladder,
                               refl=self.resp(b, t)[0] == X, done=False))
-        res = dict(tgt=NONE, lost=0, stopper=NONE)
+        res = dict(tgt=NONE, lost=0, stopper=NONE, miss=NONE)
         segs, anchor, fxleft = [], None, None
         fxrow = [None]
         rev, cok, moves = 0, False, 0
@@ -305,6 +305,14 @@ class World:
                     return "REFLECT"
                 if not d["flags"] & SPELLF:
                     if not self.hit_roll(rng, cs, cd["s"], d["hit"]):
+                        # T7: a miss flies on; the first one is pf_miss, every missed
+                        # body dodges (RC_DODGE 4) when the FX passes, unless a
+                        # reaction is pending already
+                        if res["miss"] == NONE:
+                            res["miss"] = cd["s"]
+                        mb = self.bodies[cd["s"]]
+                        if not mb.react:
+                            mb.react, mb.reactat = 4, tick(m)
                         continue
                 setrow(cd["s"])
                 dmg = rng.mod(die) + 1 + bonus
@@ -461,7 +469,7 @@ class T(Proto):
         return self.rb(RES)
 
     def result(self, w):
-        g = {k: self.rb(k) for k in ("pf_stop", "pf_col", "pf_tgt", "pf_lost", "pf_itick")}
+        g = {k: self.rb(k) for k in ("pf_stop", "pf_col", "pf_tgt", "pf_lost", "pf_itick", "pf_miss")}
         g["desc"] = list(self.z.read_memory(S["pf_desc"], 16))
         g["rng"] = self.rw("RNG_STATE")
         g["busy"] = self.rb("FX_BUSY")
@@ -477,7 +485,7 @@ class T(Proto):
 
 def expect(w, res, seed_end):
     m = {"pf_stop": res["stop"], "pf_col": res["col"], "pf_tgt": res["tgt"], "pf_lost": res["lost"],
-         "pf_itick": res["itick"], "desc": res["desc"], "rng": seed_end}
+         "pf_itick": res["itick"], "pf_miss": res["miss"], "desc": res["desc"], "rng": seed_end}
     m["busy"] = 1                                  # one track: the projectile
     m["tracks"] = [res["desc"]]
     m["bodies"] = {s: (b.hp, bool(b.flags & EF_DYING), b.reactat if b.react else None, b.stf, b.st1)

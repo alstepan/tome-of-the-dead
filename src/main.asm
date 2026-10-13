@@ -440,7 +440,7 @@ DT_ATTR_LEN     EQU  DT_KINDS * 8
 ; Solidity belongs to the cell class (game.md §1.2 "Solidity of decor",
 ; designer 2026-10-03): the wall set (DARK = T_BRICK, DITHER, PATCH, FADE) is
 ; SOLID and only ever replaces wall cells; rubble / skulls / moss / cobweb /
-; chain / torch / candles / drips are not. Per-level wall variants (pillar,
+; chain / torch / candles / floor items are not. Per-level wall variants (pillar,
 ; plaster patches in 32..59) carry TF_SOLID in their tileset slot's flags.
 ;------------------------------------------------------------------------------
 tile_flags:
@@ -453,7 +453,7 @@ tile_flags:
                 DB 0                                   ; 10 T_POTION (floor item)
                 DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12-13 chain, skulls
                 DB TF_ANIM, TF_ANIM                    ; 15-16 T_TORCH_T/B
-                DB TF_ANIM, TF_ANIM                    ; 17-18 T_DRIP1/2
+                DB 0, 0                                ; 17-18 T_DAGGERS / T_ARROWS (floor items, D3-7)
                 DB TF_FLOOR, TF_FLOOR                  ; 19-20 T_END_L/R = pit caps
                 DB TF_SOLID, TF_SOLID                  ; 21-22 T_DOOR_ARCH_L/R
                 DB TF_SOLID | TF_DOOR, TF_SOLID | TF_DOOR   ; 23-24 T_DOOR_L/R (closed planks)

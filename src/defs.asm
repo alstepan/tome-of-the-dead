@@ -387,6 +387,7 @@ RC_NONE         EQU 0
 RC_HURT         EQU 1
 RC_BLOCK        EQU 2
 RC_DEATH        EQU 3
+RC_DODGE        EQU 4               ; T7: a missile missed it: no sequence, the ATTR_MISS flash at E_REACTAT
 
 ; R_DIRTY classes
 DIRTY_NONE      EQU 0
@@ -591,6 +592,7 @@ ATTR_POTION     EQU $42
 ATTR_TORCH      EQU $46
 ATTR_HIT        EQU $42
 ATTR_HEAL       EQU $44
+ATTR_MISS       EQU $46             ; T7: dodge flash (bright yellow: no kind uses it)
 ATTR_HUD        EQU $47             ; bright white on black (screen clear; panel text, depth)
 
 ; room geometry: STOREY_COUNT / STOREY_ROWS / PLAY_ROWS ... (level_defs.asm, B3B-3)
@@ -601,6 +603,7 @@ FOLLOW_MAX      EQU 2
 ROOM_CAP        EQU 4               ; monsters per room (on-screen cap)
 TALL_CAP        EQU 2
 FLASH_TICKS     EQU 2
+MISS_FLASH      EQU 3               ; T7: dodge flash ticks (the 1-cell/tick arrow crosses a 3-cell body)
 EXIT_NONE       EQU $FF
 TICK_FRAMES     EQU 2               ; 25 Hz
     IFNDEF RENDER_FIRST                         ; E0: 1 = render right after wait_tick

@@ -1,24 +1,202 @@
 ;==============================================================================
-; abil_ammo7.asm — D3-7, bank 7 (bank7.asm rules: no data, no SMC): the
-; dagger throw and the bow shot (game.md §6.3). T0: refusing stub, T1
-; implements them.
+; abil_ammo7.asm — D3-7 T6, bank 7 (bank7.asm rules: no data, no SMC): the
+; Warrior's dagger throw and bow shot (game.md §6.3) as a split ability turn
+; (act7.asm: the accept on the input tick, the release on the fire tick f = 2:
+; kn_throw WIND-UP 2 -> THROW 3, kn_bow BOW 4). The flight is proj_fire's
+; (bank 3, via proj_rel): the ab_ammo row, to-hit ABD_HIT (dagger +1), PHYS,
+; a miss flies on. 3D: the spent dagger / arrow is consumed (game.md §11.4:
+; the floor drop + 1-in-4 loss of §6.3 is 3E, with the floor-item records).
+; Also the composed log lines (msg_cat / msg_kind / msg_end, shared with
+; pickup7.asm).
 ;==============================================================================
 
+PD_AMMO_BIT     EQU 3
+                ASSERT PD_AMMO == 1 << PD_AMMO_BIT
+                ASSERT ARROWS == DAGGERS + 1 && (ARROWS >> 8) == (DAGGERS >> 8)
+
 ;------------------------------------------------------------------------------
-; abil_ammo — intent7 ic_disp (ABF_AMMO; ic_daggers / ic_bow checked the
-; counters), IX = hero, B = ABL_DAGGER / ABL_BOW, ABIL_DESC loaded (abil_load).
-; Out: L = 1 turn used / 0 refused (no turn).
-; T0 stub: L = 0.  Clobbers: L
+; abil_ammo — intent7 ic_disp (ABF_AMMO; ic_daggers / ic_bow already refused
+; DAGGERS = 0 -> NO DAGGERS, no bow -> NO BOW, ARROWS = 0 -> NO ARROWS), IX =
+; hero, B = ABL_DAGGER / ABL_BOW, ABIL_DESC loaded (abil_load: ABIL_RK = the
+; ab_ammo row).
+; Refused (L = 0, no turn, nothing spent): mid-ladder (game.md §2.3) -> NO
+; TARGET (as the spells); act_begin's lead col 0 / 31 -> L = 0, no message.
+; Accepted (input tick): act_begin (TURN_PEND, ACT_ABL = B, ACT_AT, MON_AT),
+; DAGGERS / ARROWS -= 1, PD_AMMO, the abl_seq sequence (kn_throw / kn_bow).
+; L = 1.  Clobbers: A, C, DE, HL (B, IX kept; a refusal: msg_push's AF, BC,
+; DE, HL).   ~1k T
 ;------------------------------------------------------------------------------
 abil_ammo:
-                ld   l, 0
+                call on_ladder                 ; Z = mid-ladder (A, HL)
+                ld   a, TX_NO_TARGET
+                jp   z, ic_refuse
+                call act_begin                 ; L = 0: lead col 0 / 31 (A, HL; B kept)
+                dec  l
+                inc  l
+                ret  z                         ; no turn, no message
+                ld   hl, DAGGERS
+                ld   a, b
+                sub  ABL_DAGGER                ; 0 dagger / 1 bow
+                add  a, l
+                ld   l, a                      ; -> DAGGERS / ARROWS (same page)
+                dec  (hl)                      ; (> 0: ic_daggers / ic_bow checked it)
+                ld   hl, PANEL_DIRTY
+                set  PD_AMMO_BIT, (hl)         ; (no ammo item drawn yet: the panel clears it;
+                                               ; the icons grey through icon_poll's ICON_SIG)
+                call act_seq                   ; (A, DE, HL)
+                ld   l, 1
+                ret
+                ASSERT ABL_BOW == ABL_DAGGER + 1
+
+;------------------------------------------------------------------------------
+; ammo_fire — the release (act_fire, fire tick f = 2): proj_fire via far3
+; proj_rel (A = B, DE = ABIL_RK, the ab_ammo row abil_load copied; E = 0: the
+; projectile appears now; fx_start's drop counts in FX_DROP). Then the lines
+; (T7: a miss used to be one generic line, easy to lose in a busy log — the
+; user's "flies through the Goblin" report was a designed missed roll):
+;   pf_miss a monster (the first body that won its roll; the missile flew on,
+;   proj_fire made it dodge) and not the body hit -> "YOUR DAGGER / ARROW
+;   MISSES THE <kind>";
+;   pf_tgt a monster -> "YOUR DAGGER / ARROW HITS THE <kind>", killed -> "YOU
+;   KILL THE <kind>"; none ($FF) and no named miss -> "YOUR DAGGER / ARROW
+;   MISSES" (absorbed / range / wall / exit); the hero (slot 0, after a
+;   reflection) -> deal_hit's own hero line only.
+; In: IX = hero, B = ABL_DAGGER / ABL_BOW (= ACT_ABL). Out: L = 1 fired.
+; Clobbers: all but IY (IX kept).   ~2-6k T + proj_fire (10-30k T, contended)
+;------------------------------------------------------------------------------
+ammo_fire:
+                push bc
+                ld   de, ABIL_RK               ; far3 takes HL as its target: the row in DE
+                ld   a, b
+                ld   hl, proj_rel
+                call far3                      ; L = pf_stop; IX = hero
+                pop  bc
+                ld   c, 0                      ; C = 1: a named miss line went out
+                ld   a, (pf_miss)
+                or   a
+                jr   z, .t                     ; the hero (a reflection): no line
+                inc  a
+                jr   z, .t                     ; $FF: nothing missed
+                dec  a
+                ld   hl, pf_tgt
+                cp   (hl)
+                jr   z, .t                     ; missed, then hit on a later pass
+                push bc
+                call ent_kind                  ; C = its kind
+                ld   a, b
+                call miss_pre                  ; DE = MSG_BUF + "YOUR ARROW MISSES"
+                ld   a, ' '
+                ld   (de), a
+                inc  de
+                ld   a, TX_THE
+                push bc
+                call msg_cat                   ; + "THE "
+                pop  bc
+                call msg_kind
+                call msg_end
+                pop  bc
+                inc  c
+.t:             ld   a, (pf_tgt)
+                or   a
+                jr   z, .out                   ; the hero: deal_hit logged it
+                inc  a
+                jr   z, .none                  ; $FF: nothing struck
+                dec  a
+                push bc
+                call ent_kind                  ; C = kind, A = HP
+                pop  de
+                ld   b, d                      ; B = ABL_*
+                or   a
+                jr   nz, .hit
+                ld   b, MSG_P_KILL
+                call impact_line               ; "YOU KILL THE <kind>" (A, BC, DE, HL)
+                jr   .out
+.hit:           ld   a, b
+                cp   ABL_DAGGER
+                ld   a, TX_CMB_DAG_HIT
+                jr   z, .h
+                ld   a, TX_CMB_ARR_HIT
+.h:             ld   de, MSG_BUF
+                push bc
+                call msg_cat                   ; "YOUR DAGGER HITS THE "
+                pop  bc
+                call msg_kind                  ; + the kind name
+                call msg_end
+                jr   .out
+.none:          dec  c
+                jr   z, .out                   ; the named miss line said it
+                ld   a, b
+                call miss_pre
+                call msg_end                   ; "YOUR DAGGER / ARROW MISSES"
+.out:           ld   l, 1
+                ret
+
+; ent_kind — slot A -> C = its E_KIND, A = its E_HP.  Clobbers: A, C, E (IX kept)
+ent_kind:
+                push ix
+                call ent_ix                    ; (A, E)
+                ld   c, (ix+E_KIND)
+                ld   a, (ix+E_HP)
+                pop  ix
+                ret
+
+; miss_pre — A = ABL_DAGGER / ABL_BOW -> MSG_BUF = "YOUR DAGGER / ARROW
+; MISSES", DE = its end.  Clobbers: A, DE, HL (BC kept)
+miss_pre:
+                cp   ABL_DAGGER
+                ld   a, TX_CMB_DAG_MISS
+                jr   z, .m
+                ld   a, TX_CMB_ARR_MISS
+.m:             ld   de, MSG_BUF
+                push bc
+                call msg_cat
+                pop  bc
                 ret
 
 ;------------------------------------------------------------------------------
-; ammo_fire — the dagger / arrow release (act_fire, fire tick): proj_fire via
-; far3 + the drop rule (game.md §6.3). In: IX = hero, B = ABL_DAGGER / ABL_BOW.
-; Out: L = 1 fired.  T1 stub (T6 implements): L = 1.  Clobbers: L
+; Composed log lines in MSG_BUF (bank 7 cannot page the text block: it runs in
+; $C000, so the pieces come decoded through low-RAM tx_dec; plain ASCII is a
+; valid log stream, tk_get passes chars < $80 through). Cold: once per event.
+; msg_cat — append the text of string A (TX_*) at DE.  Out: DE advanced.
+;           Clobbers: A, BC, HL   (~0.4k T + ~70 T per char)
+; msg_kind — append kind C's name (TX_NM_KNIGHT + C).  Same.
+; msg_dec — append A = 0..99 in decimal (no leading 0).  Clobbers: A, BC
+; msg_end — 0-terminate at DE and log_push MSG_BUF.  Clobbers: A, B, DE, HL
 ;------------------------------------------------------------------------------
-ammo_fire:
-                ld   l, 1
+msg_kind:
+                ld   a, c
+                add  a, TX_NM_KNIGHT
+msg_cat:
+                push de
+                call tx_dec                    ; HL = TX_DEC (A, BC, DE, HL)
+                pop  de
+.c:             ld   a, (hl)
+                or   a
+                ret  z
+                ld   (de), a
+                inc  hl
+                inc  de
+                jr   .c
+msg_dec:
+                ld   b, '0' - 1
+.t:             inc  b
+                sub  10
+                jr   nc, .t
+                add  a, '0' + 10
+                ld   c, a                      ; C = the units digit
+                ld   a, b
+                cp   '0'
+                jr   z, .u                     ; < 10: one digit
+                ld   (de), a
+                inc  de
+.u:             ld   a, c
+                ld   (de), a
+                inc  de
                 ret
+msg_end:
+                xor  a
+                ld   (de), a
+                ld   hl, MSG_BUF
+                jp   log_push                  ; (any bank: the ring is bank 5)
+                ASSERT TXL_CMB_ARR_HIT + TXL_NM_SKELETON < 32 && TXL_CMB_DAG_HIT + TXL_NM_SKELETON < 32
+                ASSERT TXL_CMB_DAG_MISS + 1 + TXL_THE + TXL_NM_SKELETON <= LOG_MAX && TXL_CMB_ARR_MISS <= TXL_CMB_DAG_MISS

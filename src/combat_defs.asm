@@ -160,7 +160,7 @@ HERO3D_END      EQU HERO3D + 9
 
 ;------------------------------------------------------------------------------
 ; TURN_PEND block (D3-7) — the split ability turn, right after HERO3D in the
-; same spare ($BC4A..$BC4E; level_reset_new zeroes HERO3D..TURN_PEND_END).
+; same spare ($BC4A..$BC50; level_reset_new zeroes HERO3D..TURN_PEND_END).
 ; Tick contract (T1, built; memory-map.md "Projectiles"): the input tick pays
 ; the cost, starts the hero's sequence and calls act_begin (act7.asm): no
 ; resolve_monsters there (turn_input skips it while MON_AT != 0). The
@@ -176,7 +176,16 @@ ACT_AT          EQU TURN_PEND + 2   ; TURN_TICK of its release (fire tick f)
 MON_AT          EQU TURN_PEND + 3   ; != 0: monster phase deferred; earliest TURN_TICK for it (f + 1)
 FX_DROP         EQU TURN_PEND + 4   ; FX descriptors fx_start dropped (3 tracks + 2 queued busy),
                                     ; mod 256, zeroed per level (level_reset_new) — tests assert 0
-TURN_PEND_END   EQU TURN_PEND + 5
+LOG_TURN        EQU TURN_PEND + 5   ; T7 log drain: bit 0 LT_SERVED (item_log drew a line since the
+                                    ; last end_turn), bit 1 LT_HOLD (end_turn: a turn passed with lines
+                                    ; pending and none drawn -> turn_input holds the next turn until
+                                    ; item_log draws one; that idle tick drains in its 1st frame)
+LOG_PDIR        EQU TURN_PEND + 6   ; T7 review: the input a log hold swallowed (PLAYER_DIR bits 0-3,
+                                    ; bit 7 = DK_WAIT): a tap released during the hold is replayed
+TURN_PEND_END   EQU TURN_PEND + 7
+LT_SERVED       EQU 1
+LT_HOLD_BIT     EQU 1
+LT_HOLD         EQU 1 << LT_HOLD_BIT
 TP_ACT_BIT      EQU 0               ; ability logic pending (act_fire at ACT_AT)
 TP_MON_BIT      EQU 1               ; monster phase pending
 TP_FIRE_BIT     EQU 2               ; this is the fire tick: panel item + decor_tick skipped
@@ -289,3 +298,8 @@ PF_RAM_LEN      EQU $100
 ABIL_DESC       EQU PF_RAM + $60    ; $5E60..$5E6F
 ABIL_RK         EQU ABIL_DESC + 10  ; = + ABD_STRIDE: the rank row (proj_fire HL)
 ABIL_DESC_LEN   EQU 16
+; ABIL_TGT (D3-7 T5) — word: the power attack's target slot mask (bit s =
+; slot s), found by melee_scan at the accept (abil_melee7.asm) and struck by
+; power_fire on the fire tick (nothing moves in between: the monster phase is
+; deferred), so the fire tick does not scan again. Right after ABIL_DESC.
+ABIL_TGT        EQU ABIL_DESC + ABIL_DESC_LEN   ; $5E70..$5E71

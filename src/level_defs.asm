@@ -177,6 +177,13 @@ DOOR_PLANK_H    EQU 6
 ; free slot (pickups mark, never compact mid-level). FL_COL = item cell col;
 ; the row is the storey's standing row 9s+7. FL_ITEM = item id (3E owns the
 ; enum; 3B stand-in: potions only, IT_POTION). FL_QTY = stack count.
+; INVARIANT (T7; floor_pickup's pre-filter relies on it): every live entry of
+; the current room shows on its cell (FL_COL, row 9s+7) in ROOM_MAP — the
+; glyph (T_POTION / T_DAGGERS / T_ARROWS) of the LAST live entry of that cell
+; in list order. Kept by build_room_map (stamps every entry), ap_stamp
+; (re-stamps a cell after any pickup), and decor landing on T_AIR only. Any
+; new writer of an entry (3E drops, §6.3 ammo landing) or of row 9s+7 must
+; keep it. Checked: tests/gfx_integrity.py floor_check (D1..D8, entry + play).
 ;------------------------------------------------------------------------------
 FLOOR_MAX       EQU 32
 FL_STRIDE       EQU 4
@@ -368,12 +375,8 @@ T_DOOR_JAMB_R   EQU 14              ; `.....#.#` x 8
 ; dropped-ammo floor glyphs (one stack per cell, 8x8 item glyph).
 T_DAGGERS       EQU 17              ; ink $47
 T_ARROWS        EQU 18              ; ink $07
-; TODO(D3-7): the drip decor still stamps ids 17 / 18 (decor_gen, tiles_common
-; glyphs, main.asm TF_ANIM) until its own task moves drips to per-level decor
-; ("if they are ever placed", game.md §6.3) and the art swaps the glyphs; the
-; old names stay as aliases until then so T0 changes no output.
-T_DRIP1         EQU T_DAGGERS       ; was T_ZAP1 (animated: glyph swap)
-T_DRIP2         EQU T_ARROWS        ; was T_ZAP2
+; D3-7 T6: the B3B-13b drips (T_DRIP1/2) are no longer placed (the per-level
+; sets have no free ids; "if they are ever placed": per-level decor).
 ; T_POTION (10) stays while potions are a floor tile (3B stand-in); 10 is the
 ; one id left for a future common glyph.
 T_COMMON_USED   EQU 32

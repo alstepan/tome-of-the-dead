@@ -308,46 +308,6 @@ def lead_ids(d):
     return _LEAD.get(d, set())
 
 
-def drip_rules(m, base, flags, ents, d):
-    """W13 independent drip checker, from concept-screen 3.3 "Drip placement": -> [errors]."""
-    T = room_model.T
-    SOLID = S["TF_SOLID"]
-    D1, D2 = T["T_DRIP1"], T["T_DRIP2"]
-    cells = [(j % 32, j // 32) for j in range(576) if m[j] == D1]
-    errs = []
-    if len(cells) > {1: 1, 2: 2, 3: 2, 4: 1, 5: 2, 6: 2, 7: 1, 8: 0}[d]:
-        errs.append(("too many drips for the depth", d, len(cells)))
-    # structural cells: ladder / hole, door jambs, pit caps, door arch / planks / lock, grate, rubble
-    avoid = set(range(T["T_LAD_L"], T["T_HOLE_R"] + 1)) | {T["T_DOOR_JAMB_L"], T["T_DOOR_JAMB_R"]} \
-        | set(range(T["T_PIT_R"], T["T_RUBBLE"] + 1))
-    for c, row in cells:
-        j = row * 32 + c
-        if base[j] != T["T_AIR"]:
-            errs.append(("drip on a non-air base cell (decor / item / trap)", c, row))
-        if row % 9 > 2 or row == 0:
-            errs.append(("drip outside storey rows 0..2 (or no cell above)", c, row))
-            continue
-        if not flags[m[j - 32]] & (SOLID | S["TF_FLOOR"]):    # ceiling brick or the platform above
-            errs.append(("drip: cell above not solid", c, row))
-        if flags[m[j + 32]] & SOLID or m[j + 32] != T["T_AIR"]:
-            errs.append(("drip: cell below not air", c, row))
-        st = row // 9 * 9
-        for rr in range(st, st + 9):
-            for cc in (c - 1, c, c + 1):
-                if 0 <= cc < 32 and base[rr * 32 + cc] in avoid:
-                    errs.append(("drip within 1 col of a ladder / door / jamb / grate / cap / hole", c, row))
-        for c2, r2 in cells:
-            if (c2, r2) != (c, row) and abs(c2 - c) < 6:
-                errs.append(("drips < 6 cols apart", c, c2))
-        if [list(e) for e in ents if (e[0], e[1]) == (c, row)] != [[c, row, D2, (c + row) & 7]]:
-            errs.append(("drip ANIM_LIST entry wrong (one glyph swap -> DRIP2, phase (col+row)&7)", c, row))
-    if d == 8 and cells:
-        errs.append(("drip on D8", cells))
-    if sum(1 for e in ents if e[2] >= 16) > 4:
-        errs.append(("more than 4 glyph-swap entries with drips", len(ents)))
-    return errs
-
-
 DECOR_MOUNT = {"TORCH_TALL", "TORCH_SLIM", "WINDOW_ARCH", "WINDOW_BAR", "BANNER", "BANNER_TALL",
                "BOOKSHELF", "TORCH_SMALL"}
 DECOR_CEIL = {"CHAIN", "MOSS"}
@@ -411,12 +371,13 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
     errs = []
     ch = [j for j in range(576) if m[j] != base[j]]
     names, shape = decor_objs(d)
-    drip = {T["T_DRIP1"], T["T_DRIP2"]}
+    drip = {T["T_DAGGERS"], T["T_ARROWS"]}                         # D3-7 T6: the drips are gone
     floorish = lambda t: t in (T["T_PLAT"], T["T_WALLF"])          # noqa: E731
     for j in ch:                                                    # per cell: base class vs solidity
         c, row = j % 32, j // 32
         if m[j] in drip:
-            continue                                # drips: drip_rules()
+            errs.append(("the deriver placed an ammo floor glyph (17 / 18: no drips since D3-7 T6)", c, row))
+            continue
         nm = names.get(m[j])
         if nm is None:
             errs.append(("unknown decor id", c, row, m[j]))
@@ -447,7 +408,7 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
                 rr, cc = row + dr, c + dc
                 if 0 <= rr < 18 and 0 <= cc < 32 and base[rr * 32 + cc] in lad:
                     errs.append(("decor adjacent to a ladder", c, row))
-    # components (8-connected, drips apart: their own rules): one whole object each, by class
+    # components (8-connected): one whole object each, by class
     cells = {j for j in ch if m[j] not in drip and m[j] in names}
     seen, ncob, npatch_cells, npatch = set(), 0, 0, 0
     for j0 in sorted(cells):
@@ -539,9 +500,8 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
     nlarge = sum(1 for e in gl if m[e[1] * 32 + e[0]] in lead)
     if nlarge > 2:
         errs.append(("more than 2 large animated objects", nlarge))
-    if [e for e in gl if e[2] != T["T_DRIP2"]] and not nlarge:
+    if gl and not nlarge:
         errs.append(("glyph-swap entries without a large object", gl[:2]))
-    errs += drip_rules(m, base, flags, ents, d)
     sizes["anim"] += n
     sizes["large"] += nlarge
     return errs
@@ -2266,7 +2226,7 @@ def dt_sim(ents, rmap, covered, tab):
             continue
         kind = "g" if e[2] >= S["AL_GLYPH_MIN"] else "a"
         if kind == "g" and e[3] & (S["DT_GLYPH_HOLD"] - 1):
-            continue                              # drips hold 16 ticks
+            continue                              # glyph swaps hold 16 ticks
         if caps[kind] == 0 or caps["t"] == 0:
             e[3] = (e[3] - 1) & 255
             continue
@@ -2377,7 +2337,7 @@ def w14(p, check):
     check("W14 40 ticks: ANIM_LIST + ROOM_MAP == the decor_tick model every tick, each cell shows "
           "its cycle attr / swapped glyph on bank 5 and the shadow", not bad, bad[:3])
     check("W14 in 40 ticks attr entries stepped 8-10 times (period 4; a capped step waits a tick), "
-          "drips 2-3 times (hold 16), attr cells took >= 2 attrs, glyph cells both frames",
+          "glyph swaps 2-3 times (hold 16), attr cells took >= 2 attrs, glyph cells both frames",
           all((x in (2, 3)) if ents[k][2] >= 16 else (x in (8, 9, 10)) for k, x in enumerate(steps)) and all(len(x) >= 2 for x in seen), (steps, [len(x) for x in seen]))
     ps = p.present_samples
     check("W14 displayed == composed at every tick-start present (probe_presented)",
@@ -2623,7 +2583,7 @@ def run_gen_suites(p, check):
             # B3B-9 decor: the level's own decor ids + the common small decor
             legal |= {attrs[i] for i in range(S["T_LVL_BASE"], S["T_LVL_OBJ"])}
             legal |= {attrs[T[k]] for k in ("T_CHAIN", "T_SKULLS", "T_TORCH_T", "T_TORCH_B", "T_CANDLES",
-                                    "T_DRIP1", "T_DRIP2")}      # B3B-13b drips
+                                    "T_DAGGERS", "T_ARROWS")}   # D3-7 T6: ammo floor stacks
             for r in present_rooms(blk):
                 ok, tb, m = build_only(p, r)
                 note("build_room_map", tb, f"D{d} r{r}")

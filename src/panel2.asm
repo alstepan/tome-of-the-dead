@@ -41,6 +41,9 @@ item_log:
                 ld   (hl), a
 .w:             ld   a, 1
                 ld   (PRES_ANY), a
+                ld   hl, LOG_TURN              ; T7: LT_SERVED (end_turn: the log was
+                set  0, (hl)                   ; not starved this turn)
+                ASSERT LT_SERVED == 1
                 ld   hl, LOG_Q + LQ_RD
                 ld   a, (hl)
                 inc  a

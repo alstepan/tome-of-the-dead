@@ -9,7 +9,7 @@ decorate(m, depth, seed, live=True) -> (m', anim)
 
 D1 REWORK (user + designer 2026-10-05; concept-screen 3.3 "Decor placement (D1)"):
 classes decide the row, not rng; order: (1) patch pass, (2) cobweb pass, (3) 12-try
-menu loop, (4) drips.  Class rules (storey row r = map row - 9s; row 7 = standing row):
+menu loop (D3-7 T6: (4) the drips removed).  Class rules (storey row r = map row - 9s; row 7 = standing row):
   Mount    torches / windows / banners / bookshelf: top row = storey row 1, T_AIR, cols 1..30
   Ceiling  chain, moss: storey row 0, T_AIR, cols 1..30; the cell above is T_PLAT/T_WALLF
            (chain also at map row 0; moss only map row 9)
@@ -52,7 +52,7 @@ ANIM_LIST contract for B3B-10 (AL_TYPE): 1 .. 15 = attr cycle kind (1 flame
 $46 -> $42 -> $06, 2 candle); >= 16 = glyph swap, the value is the ALTERNATE
 tile id (the map keeps frame 1; decor_tick toggles map id <-> AL_TYPE).
 AL_PHASE = (col + row) & 7 of the object's top-left (an object swaps in step).
-Entries are emitted per object, row-major; the drips' entries (AL_TYPE = T_DRIP2) come last.
+Entries are emitted per object, row-major.
 """
 import re
 import sys
@@ -67,13 +67,7 @@ TRIES = 12
 ROWS, COLS = D["PLAY_ROWS"], 32
 T_AIR, T_BRICK = D["T_AIR"], D["T_BRICK"]
 T_LAD_L, T_HOLE_R = D["T_LAD_L"], D["T_HOLE_R"]
-T_DRIP1, T_DRIP2 = D["T_DRIP1"], D["T_DRIP2"]
-DRIP_TRIES, DRIP_DIST, STOREY = 8, 6, D["STOREY_ROWS"]
-DRIP_N = {1: 1, 2: 2, 3: 2, 4: 1, 5: 2, 6: 2, 7: 1, 8: 0}     # per room, by depth
-# structural base ids a drip keeps 1 col clear of (whole storey): ladder / hole 4..9, door
-# jambs 11 / 14, pit caps .. rubble 19..27 (door arches / planks / lock, grate, rubble)
-DRIP_AVOID = frozenset(list(range(T_LAD_L, T_HOLE_R + 1)) + [D["T_DOOR_JAMB_L"], D["T_DOOR_JAMB_R"]]
-                       + list(range(D["T_END_L"], D["T_RUBBLE"] + 1)))
+# D3-7 T6: the B3B-13b drips are gone (ids 17 / 18 = the ammo floor glyphs, game.md §6.3)
 MAX_LARGE, MAX_GLYPH, MAX_ATTR, MAX_WALL = 2, 4, 8, 6
 
 # object classes (record wh byte bits 5..7)
@@ -208,9 +202,10 @@ def counts(w, h, fl):
 
 
 def is_decor(t):
-    """a tile id the 1-cell ring must not hold (placed decor): chain, skulls, torch, drips,
-    candles and everything per-level / wall-set (>= 28)."""
-    return t >= 28 or 12 <= t <= 13 or 15 <= t <= 18
+    """a tile id the 1-cell ring must not hold (placed decor): chain, skulls, torch,
+    candles and everything per-level / wall-set (>= 28). D3-7 T6: not 17 / 18 (the ammo
+    floor glyphs: items, like the potion 10)."""
+    return t >= 28 or 12 <= t <= 13 or 15 <= t <= 16
 
 
 def floorish(t):
@@ -358,42 +353,7 @@ def decorate(m, depth, seed, live=True):
     for _ in range(TRIES):
         o = mn[rng.rnd(len(mn))]
         room.try_place(rng, o, None)
-    drips(room.m, depth, rng, room.anim, room.ng, live)
     return room.m, room.anim
-
-
-def drips(m, depth, rng, anim, ng, live):
-    """B3B-13b (concept-screen 3.3 "Drip placement"), mirror of dg_drips. After the decor:
-    DRIP_N[depth] drips, each skipped if the room holds 4 glyph-swap cells already. A drip =
-    <= 8 attempts of exactly 3 rnd calls (col = rnd 32, storey = rnd 2, storey row = rnd 3),
-    stopping at the first that fits: map row >= 1, cell T_AIR, above T_PLAT/T_BRICK/T_WALLF
-    (ids 1..3), below T_AIR, no DRIP_AVOID id in cols col-1..col+1 of the whole storey, >= 6
-    cols from an earlier drip. Map keeps T_DRIP1; AL_TYPE = T_DRIP2, AL_PHASE (col+row)&7.
-    (Spawns stand on floors, never in storey rows 0..2: no test.)"""
-    cols = []
-    for _ in range(DRIP_N[depth]):
-        if ng >= MAX_GLYPH:
-            continue
-        for _ in range(DRIP_TRIES):
-            col = rng.rnd(32)
-            s = rng.rnd(2)
-            row = STOREY * s + rng.rnd(3)
-            if row == 0:
-                continue
-            j = row * COLS + col
-            if m[j] != T_AIR or not T_AIR < m[j - COLS] <= 3 or m[j + COLS] != T_AIR:
-                continue
-            if any(abs(col - c) < DRIP_DIST for c in cols):
-                continue
-            if any(m[rr * COLS + cc] in DRIP_AVOID for rr in range(STOREY * s, STOREY * s + STOREY)
-                   for cc in range(max(col - 1, 0), min(col + 1, COLS - 1) + 1)):
-                continue
-            m[j] = T_DRIP1
-            ng += 1
-            cols.append(col)
-            if live:
-                anim += [col, row, T_DRIP2, (col + row) & 7]
-            break
 
 
 def emit_asm():

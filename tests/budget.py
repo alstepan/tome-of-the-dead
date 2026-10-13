@@ -107,6 +107,7 @@ class Stepper:
         if os.environ.get("LOG_TRACE"):
             pre = sum(v for n_, v in split.items() if n_ not in ("panel_tick", "panel_done", "wait_tick"))
             print(f"[trace] t{k} {prev} pre-panel {pre} panel {split.get('panel_tick', 0)} qn {qn}"
+                  f" render {split.get('render', 0)} pend {split.get('pend_far', 0)} present {split.get('tick_work', 0)}"
                   f" ph {self.p.rb('TURN_PHASE')}/{self.p.rb('TURN_TICK')}")
         while len(self.lat) < self.drawn:
             self.lat.append(k - self.push_tick[len(self.lat)])
@@ -150,7 +151,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
-CAP_GATED = ("lightning", "cast", "lcast")        # D3-5: worst ordinary tick <= CAP
+CAP_GATED = ("lightning", "cast", "lcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
 HERO_Y = stand_y(1, 6)                            # 11
@@ -192,6 +193,30 @@ SCENARIOS = {
         (3, 5, stand_y(1, 4), RIGHT),
         (2, 8, stand_y(1, 2), RIGHT),
         (1, 11, stand_y(1, 2), RIGHT)], [("FIRE", 3)], K_WIZARD, None, "lcast"),
+    # D3-7 T5: the real Whirlwind r3 (3 MP) through the controls, 3 bodies in
+    # reach (Skeleton left gap 0; Rat + Bat over it right gap 0), all 60 HP: 3
+    # blows + 3 lines + 2 spark_fizz FX on the fire tick; a Goblin walking in
+    "wcast": ("knight Whirlwind r3 on Skeleton + Rat + Bat", [
+        (5, 9, stand_y(1, 6), RIGHT),
+        (1, 15, stand_y(1, 2), HOSTILE),
+        (4, 15, stand_y(1, 6), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE)], [("FIRE", 3)], K_KNIGHT, None, "wcast"),
+    # T7 review: the Whirlwind worst case at the room cap (ROOM_CAP 4, all in reach:
+    # 2 per side, overlapping — Skeleton + Goblin left, Skeleton + Rat right, gap 0):
+    # 4 blows + 4 lines + 2 FX on the fire tick, 4 replies after the log drain
+    "wcast4": ("knight Whirlwind r3 on 2 Skeletons + Goblin + Rat (ROOM_CAP, all in reach)", [
+        (5, 9, stand_y(1, 6), RIGHT),
+        (3, 9, stand_y(1, 4), RIGHT),
+        (7, 15, stand_y(1, 6), HOSTILE),
+        (1, 15, stand_y(1, 2), HOSTILE)], [("FIRE", 3)], K_KNIGHT, None, "wcast"),
+    # D3-7 T6: the real bow shot through the controls (range 14), 4 monsters in
+    # line to the right (60 HP; missed rolls fly on: up to 4 hit rolls + deal_hit
+    # on the fire tick), a Skeleton behind walking in, 3 shots
+    "acast": ("knight bow shots through Rat, Goblin, Slime, Skeleton in line", [
+        (1, 17, stand_y(1, 2), HOSTILE),
+        (3, 20, stand_y(1, 4), HOSTILE),
+        (2, 23, stand_y(1, 2), HOSTILE),
+        (5, 26, stand_y(1, 6), HOSTILE)], [("FIRE", 3)], K_KNIGHT, None, "acast"),
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
         (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
@@ -333,6 +358,36 @@ def lcast_setup(p, placements):
     p.select_slot(k + 1)
 
 
+def wcast_setup(p, placements):
+    """"wcast": the hero at x 12 facing right (HP 200), the monsters 60 HP,
+    Whirlwind learned at rank 3 (ARANK + its RANK_ROWS row, as rank_sync),
+    MP 40, the Whirlwind slot selected (no turn)."""
+    import combat_tables as CT
+    sym, b3 = CT.load()
+    a, r = S["ABL_WHIRL"], 3
+    k = a - S["ABL_POWER"]
+    row = sym["ab_rank"] - CT.BASE + (a * 3 + r - 1) * 6
+    p.set_ent(0, HP=200, MAXHP=200)
+    for slot, *_ in placements:
+        p.set_ent(slot, HP=60, MAXHP=60)
+    p.z.cmd("write-memory %d %s" % (S["RANK_ROWS"] + 6 * k, " ".join(str(b) for b in b3[row:row + 6])))
+    p.z.cmd("write-memory %d %d %d" % (S["ARANK"], (r << (2 * k)) & 255, (r << (2 * k)) >> 8))
+    p.wb("MP", 40)
+    p.wb("MAXMP", 40)
+    p.select_slot(k + 1)
+
+
+def acast_setup(p, placements):
+    """"acast": the hero at x 12 facing right (HP 200), the monsters 60 HP,
+    the bow in the bag, ARROWS 24, the bow slot selected (no turn)."""
+    p.set_ent(0, HP=200, MAXHP=200)
+    for slot, *_ in placements:
+        p.set_ent(slot, HP=60, MAXHP=60)
+    p.wb("HAS_BOW", 1)
+    p.wb("ARROWS", 24)
+    p.select_slot(4)
+
+
 def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     p = game.T(h)
@@ -345,6 +400,10 @@ def run_scenario(h, scen):
         inject_decor(p)
     if len(scen) > 5 and scen[5] == "lcast":
         lcast_setup(p, placements)
+    if len(scen) > 5 and scen[5] == "wcast":
+        wcast_setup(p, placements)
+    if len(scen) > 5 and scen[5] == "acast":
+        acast_setup(p, placements)
     mode = scen[4] if len(scen) > 4 else None
     st = {"fx": FxStepper, "cast": CastStepper}.get(mode, Stepper)(p)
     swing = 0
@@ -400,11 +459,11 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast").split(","):
+        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,wcast,wcast4,acast").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if any(t > CAST_CAP for t in st.casts_t):
                 fails.append(key + " (cast)")
-            elif key in ("cast", "lcast") and not st.casts_t:
+            elif key in ("cast", "lcast", "wcast", "wcast4", "acast") and not st.casts_t:
                 fails.append(key + " (no cast tick seen)")
             elif key in CAP_GATED and max(st.ordinary_t) > CAP:
                 fails.append(key)

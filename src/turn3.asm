@@ -17,37 +17,11 @@
 ;                     ai_monster calls, materialise and the monster attacks'
 ;                     do_attack stay inside bank 3)
 ;   do_attack         try_horizontal (the hero's bump attack; A = target slot)
-;   potion_pickup     end_turn
-;   try_quaff         try_player_turn (result in L, see there)
 ; Contention: bank 3 is contended, so these bodies pay ULA contention on code
 ; fetches (measured in tests/budget.py; the bank-2 helpers they call do not).
 ;==============================================================================
 
-;------------------------------------------------------------------------------
-; try_quaff — G (far3 from try_player_turn), IX = hero: hp < max and potions
-; > 0 -> heal 8 (capped), 1 turn. Out: L = 1 quaffed (turn used) / 0 refused
-; (far3 clobbers F, so the result can't be CF).  Clobbers: A, BC, DE, HL
-;------------------------------------------------------------------------------
-try_quaff:
-                ld   l, 0
-                ld   a, (ix+E_POT)
-                or   a
-                ret  z                         ; L = 0
-                ld   a, (ix+E_HP)
-                cp   (ix+E_MAXHP)
-                ret  nc                        ; hp >= max -> refuse (L = 0)
-                add  a, QUAFF_HEAL
-                cp   (ix+E_MAXHP)
-                jr   c, .ok
-                ld   a, (ix+E_MAXHP)
-.ok:            ld   (ix+E_HP), a
-                dec  (ix+E_POT)
-                ld   (ix+E_FLT), FLASH_TICKS
-                ld   (ix+E_FLA), ATTR_HEAL
-                ld   a, TX_QUAFF
-                call msg_push                  ; B3B-11: queued (panel_tick)
-                ld   l, 1
-                ret
+; (try_quaff: D3-7 T5 moved into bank-7 intent7.asm ic_potion.)
 
 ;------------------------------------------------------------------------------
 ; do_attack — IX = attacker, A = target slot: one melee blow (D3-6a: on the
@@ -164,6 +138,8 @@ set_reaction_at:
                 cp   RC_BLOCK
                 jr   nz, .set
                 ld   a, (ix+E_REACT)
+                cp   RC_DODGE                  ; T7: a pending missile dodge is no real
+                jr   z, .set                   ; reaction: a BLOCK replaces it
                 or   a
                 ret  nz                        ; never downgrade to BLOCK
 .set:           ld   (ix+E_REACT), c
@@ -666,100 +642,7 @@ resolve_monsters:
                 jr   c, .lp
                 jp   materialise
 
-;==============================================================================
-; POTIONS (prototype §6.6) — end-of-turn pickup. Player standing, body cols
-; cover a potion cell (row 9s+7) of its storey, potions < 9. far3 from end_turn;
-; a pickup ends in a tail jump to shadow_rect (pages bank 7; far3 re-pages).
-; Clobbers: all but IY (IX = hero on return).
-;==============================================================================
-potion_pickup:
-                ld   ix, P_ENTITIES
-                ld   a, (ix+E_FLAGS)
-                and  EF_DYING
-                ret  nz
-                call is_standing
-                ret  nz
-                ld   a, (ix+E_POT)
-                cp   MAX_POTIONS
-                ret  nc                        ; full pack: leave it on the floor
-                call storey_ref
-                ld   (TMP4), a
-                call get_box                   ; C = x, D = w (B clobbered)
-                ld   a, (TMP4)
-                call storey_row
-                ld   b, a
-.c:             push bc
-                push de
-                ld   a, ROOM_MAP >> 8
-                ld   (TMP1), a
-                call map_cell                  ; HL = ROOM_MAP cell
-                ld   a, (hl)
-                cp   T_POTION
-                jr   z, .take
-                pop  de
-                pop  bc
-                inc  c
-                dec  d
-                jr   nz, .c
-                ret
-.take:          pop  de
-                pop  bc
-                push hl                        ; map cell: cleared only once the entry
-                push bc                        ; is found (else it would vanish untracked)
-                ; B3B-8: its FLOOR_LIST entry (room CUR_ROOM, FL_S1 = storey TMP4,
-                ; col C) -> FL_EMPTY; POTIONS_TAKEN bit = the entry index (0..7:
-                ; the PROTO potion ids 0..3 are entries 0..3, new_game)
-                ld   a, (TMP4)
-                rrca
-                ld   e, a                      ; E = FL_S1 or 0
-                ld   a, (CUR_ROOM)
-                or   e
-                ld   e, a                      ; E = the FL_ROOM byte to find
-                ld   hl, FLOOR_LIST
-                ld   b, FLOOR_MAX
-.pl:            ld   a, (hl)
-                and  FL_ROOM_MASK | FL_S1      ; as build_room_map: bits 4-6 ignored
-                cp   e                         ; (FL_EMPTY -> $8F: never a room)
-                jr   nz, .pn
-                inc  l
-                ld   a, (hl)                   ; FL_COL
-                dec  l
-                cp   c
-                jr   z, .found
-.pn:            ld   a, l
-                add  a, FL_STRIDE
-                ld   l, a
-                djnz .pl
-                pop  bc                        ; map/list mismatch: leave the tile
-                pop  hl
-                ret
-                ASSERT FL_ROOM == 0 && FL_COL == 1 && FL_S1 == $80 && (FLOOR_LIST & $FF) == 0
-                ASSERT ((FL_EMPTY & (FL_ROOM_MASK | FL_S1)) & FL_ROOM_MASK) >= GRID_CELLS
-                ASSERT FLOOR_MAX * FL_STRIDE <= 256
-.found:         ld   (hl), FL_EMPTY
-                ld   a, FLOOR_MAX
-                sub  b                         ; entry index
-                cp   8
-                jr   nc, .nobit                ; > 8 entries: no POTIONS_TAKEN bit
-                call bitmask
-                ld   hl, POTIONS_TAKEN
-                or   (hl)
-                ld   (hl), a
-.nobit:         inc  (ix+E_POT)
-                pop  bc
-                pop  hl
-                ld   (hl), T_AIR
-                ld   de, $0101
-                call queue_damage              ; redraw the cell next render (keeps BC, DE)
-                push bc
-                ld   a, TX_FOUND
-                call msg_push                  ; B3B-11: queued (panel_tick; lowram,
-                                               ; re-pages bank 3)
-                pop  bc
-                ld   de, $0101
-                jp   shadow_rect               ; the clean background loses it too. LAST and
-                                               ; a tail jump: it pages bank 7, so nothing in
-                                               ; bank 3 may run after it (far3 re-pages)
+; (POTIONS: potion_pickup moved to bank-7 pickup7.asm, D3-7 T5; T6: floor_pickup.)
 
 ; (B3B-13: show_impact_msg + kind_name / str_cat and the combat message words
 ; moved to lowram.asm / src/strings.txt: the strings are token streams in bank 1.)

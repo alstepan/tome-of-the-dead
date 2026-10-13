@@ -5,7 +5,7 @@
 ; bank7.asm, so its rules hold here: no data, no SMC, far7 entries from bank 2
 ; / bank 3 (intent_tick: sel_key; new_game: hero_st_init), plain calls from
 ; bank-7 code (tpt_intent: use_icon; intent_icon7: cursor_step); bank-3
-; targets via far3 (do_attack, try_quaff, abil_load). The per-tick FIRE
+; targets via far3 (do_attack, abil_load). The per-tick FIRE
 ; machine is intent_tick (io.asm, bank 2); the movement rules tpt_intent.
 ;
 ; Slot actions (SA_*) by class, one byte per slot (game.md §3.5). The panel
@@ -140,13 +140,14 @@ ic_melee:
 .nt:            ld   a, TX_NO_TARGET
                 jr   ic_refuse
 
+; potion (quick slot): hp < max -> heal QUAFF_HEAL (capped), 1 turn; HP full:
+; refused, no turn, no message (D3-7 T5: try_quaff moved here from bank 3).
 ic_potion:
                 ld   a, (ix+E_POT)
                 or   a
                 ld   a, TX_NO_POTION
                 jr   z, ic_refuse
-                ld   hl, try_quaff             ; bank 3: L = 1 drunk / 0 (HP full: no turn)
-                jp   far3
+                jp   ic_quaff
 
 ic_daggers:
                 ld   a, (DAGGERS)
@@ -248,8 +249,7 @@ hero_st_init:
                 ld   (MP), a
                 ld   (MAXMP), a
     IF DEBUG_KIT
-                ld   hl, debug_kit             ; bank 3; IX passes through
-                jp   far3                      ; (farb returns to our caller)
+                jr   debug_kit
     ELSE
                 ret
     ENDIF
@@ -257,3 +257,54 @@ WARRIOR_MP      EQU 6
 MAGE_MP         EQU 12
 WARRIOR_DAGGERS EQU 3                          ; (EQUs: no bytes in bank 7)
 WARRIOR_DEF     EQU 1                          ; Leather; gear replaces it in 3E
+
+    IF DEBUG_KIT
+;------------------------------------------------------------------------------
+; debug_kit — the tail of hero_st_init (game.md §1.4 start kit, debug builds
+; only; 3E: delete this block, the jump in hero_st_init and DEBUG_KIT; D3-7
+; T5: moved from bank-3 rank3.asm for bank-3 room).
+; Mage: 5 spells rank 1, MP 40/40. Warrior: bow, 20 arrows, 8 daggers, Power
+; Strike + Whirlwind rank 1, MP 20/20. Then rank_sync.
+; Clobbers: A, BC, DE, HL
+;------------------------------------------------------------------------------
+debug_kit:
+                ld   a, (HERO_KIND)
+                or   a
+                ld   hl, %0101                 ; Warrior: k0, k1 rank 1
+                ld   b, 20
+                jr   nz, .m
+                ld   a, 1
+                ld   (HAS_BOW), a
+                ld   a, 20
+                ld   (ARROWS), a
+                ld   a, 8
+                ld   (DAGGERS), a
+                jr   .s
+.m:             ld   hl, %0101010101           ; Mage: k0..4 rank 1
+                ld   b, 40
+.s:             ld   (ARANK), hl
+                ld   a, b
+                ld   (MP), a
+                ld   (MAXMP), a
+                ld   hl, rank_sync             ; bank 3
+                jp   far3
+    ENDIF
+
+; ic_quaff — ic_potion's drink (out of line: keeps the jr chains in range).
+ic_quaff:
+                ld   l, 0
+                ld   a, (ix+E_HP)
+                cp   (ix+E_MAXHP)
+                ret  nc                        ; hp >= max -> refuse (L = 0)
+                add  a, QUAFF_HEAL
+                cp   (ix+E_MAXHP)
+                jr   c, .ok
+                ld   a, (ix+E_MAXHP)
+.ok:            ld   (ix+E_HP), a
+                dec  (ix+E_POT)
+                ld   (ix+E_FLT), FLASH_TICKS
+                ld   (ix+E_FLA), ATTR_HEAL
+                ld   a, TX_QUAFF
+                call msg_push                  ; queued (panel_tick)
+                ld   l, 1
+                ret

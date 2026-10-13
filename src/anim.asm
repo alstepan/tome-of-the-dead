@@ -175,8 +175,11 @@ anim_entity:
                 ld   a, (TURN_TICK)
                 cp   (ix+E_REACTAT)
                 jr   c, .idle
-                ; start the pending reaction (HURT / BLOCK / DEATH)
+                ; start the pending reaction (HURT / BLOCK / DEATH; T7 DODGE:
+                ; no sequence, a flash: 18 B, +14 T to the other reactions)
                 ld   a, (ix+E_REACT)
+                cp   RC_DODGE
+                jr   z, .dodge
                 ld   c, KS_HURT
                 cp   RC_HURT
                 jr   z, .rs
@@ -197,6 +200,9 @@ anim_entity:
                 ld   l, a
                 call start_seq
                 jp   .seq
+.dodge:         ld   (ix+E_REACT), RC_NONE
+                ld   (ix+E_FLT), MISS_FLASH
+                ld   (ix+E_FLA), ATTR_MISS
 .idle:
                 call on_ladder
                 jr   nz, .cyc
@@ -473,7 +479,7 @@ do_impact:
 ; turn_done — CF = 1 when every live entity of CUR_ROOM rests (or holds) with no
 ; reaction pending/running, no FX track is live or drawn (D3-5), no split
 ; ability turn pending (D3-7: TURN_PEND, the fire or the deferred monster
-; phase), and >= 2 ticks have elapsed.  Clobbers: A, DE, IX
+; phase), and >= 2 ticks have elapsed.  Clobbers: A, B, DE, IX
 ;------------------------------------------------------------------------------
 turn_done:
                 ld   a, (TURN_TICK)
@@ -593,8 +599,21 @@ render:
                 inc  hl                        ; FT_OFFL
 .offr:          ld   a, (hl)
                 add  a, (ix+E_PX)
-                ld   e, a                      ; E = fpx
-                KFIELD KT_BH
+                ld   e, a                      ; E = fpx (mod 256)
+                ; T7 edge clamp: a frame wider than the body (the Knight's 40-px
+                ; WHIRL / POWER_STRIKE / SLASH at col 0 or 29) would wrap below x 0
+                ; or run past x 255 -> blit_clip, the sprite vanished (CLIP_TRAP).
+                ; Clamp the frame into the screen instead, keeping its shift
+                ; (fpx & 4): x 0 / 4, or 256 - W - shift (a shifted frame spans
+                ; cols + 1). +30 T per drawn slot; the clamp itself ~70 T.
+                ld   a, c
+                add  a, a
+                add  a, a
+                add  a, a                      ; W = cols * 8 (<= 40)
+                add  a, e
+                jp   c, .edge                  ; fpx + W > 255 (or a wrap; jp: no spot
+                                               ; for .edge within jr range of here)
+.fpx:           KFIELD KT_BH
                 add  a, a
                 add  a, a
                 add  a, a
@@ -684,6 +703,19 @@ render:
                 jp   nz, .s                    ; NONE: nothing to erase or add
                 RFIELD R_COL                   ; ATTR: re-stamped in place
                 jp   .addn
+.edge:          ld   d, a                      ; D = fpx + W - 256 (right edge: the overhang)
+                ld   a, e
+                and  4
+                ld   l, a                      ; L = the shift (a STATIONARY frame with
+                ld   a, (ix+E_PX)              ; ax 4 has only shift 4: keep it)
+                rla                            ; CF = px >= 128: the right edge
+                ld   a, l
+                jr   nc, .ecl                  ; left: wrapped below x 0 -> x 0 / 4
+                ld   a, e
+                sub  d
+                sub  l                         ; 256 - W - shift (D = 0, unshifted: exact fit)
+.ecl:           ld   e, a
+                jp   .fpx
 .full_log:      RFIELD R_LOG
                 ld   (hl), 1
                 jr   .fullc

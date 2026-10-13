@@ -74,8 +74,8 @@
   `print6t`, `level_load_tiles`, `door_paint`, `blit_keep`, `far*` — already
   did). Helpers that leave another bank paged (`shadow_rect`, `erase_rect`,
   `blit_sprite`, `present`, `draw_room`, `present_full`, the generator) are
-  forbidden from paged-bank code except as its tail jump (`potion_pickup` →
-  `shadow_rect`: `farb` re-pages). `tests/world.py` W18 calls `msg_push`,
+  forbidden from paged-bank code except as its tail jump (`ap_stamp` →
+  `shadow_rect`, bank 7: `farb` re-pages; was `potion_pickup`). `tests/world.py` W18 calls `msg_push`,
   `copy_virt3` (pages bank 3) and a nested `far1` from a bank-1 target
   entered by `far1` with bank 0 paged and asserts bank 1 / bank 0 afterwards
   (it crashes with the old `copy_virt3`).

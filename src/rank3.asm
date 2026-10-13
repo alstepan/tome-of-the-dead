@@ -141,32 +141,70 @@ proj_rel:
                 ld   e, 0
                 jp   proj_fire
 
-    IF DEBUG_KIT
 ;------------------------------------------------------------------------------
-; debug_kit — far3 at the end of hero_st_init (game.md §1.4 start kit, debug
-; builds only; 3E: delete this block, the call in hero_st_init and DEBUG_KIT).
-; Mage: 5 spells rank 1, MP 40/40. Warrior: bow, 20 arrows, 8 daggers, Power
-; Strike + Whirlwind rank 1, MP 20/20. Then rank_sync.
-; Clobbers: A, BC, DE, HL
+; melee_hit — far3 from the bank-7 power attacks (abil_melee7.asm
+; melee_strike): one Power Strike / Whirlwind blow (game.md §6.2) of IX =
+; hero on slot A, ABIL_DESC loaded (abil_load). hit_roll with B = ABD_HIT
+; (Power Strike +2; Whirlwind 0 + its RK_EFFECT: the rank-3 to-hit +2); a
+; hit: dmg = 1d(KT_DIE) + KT_BONUS (the weapon, kind_tab: the 3E gear joins
+; there) + RK_BONUS (Whirlwind +1 / +2), x 2 with ABF_DMGX2 (saturating),
+; then deal_hit, C = ABD_DTY (PHYS); Power Strike also EFX_STUNNED, E =
+; RK_EFFECT (always; turns 1 / 1 / 2: deal_hit applies it to a survivor
+; only, halves it on R, refuses it under STUN_GUARD / IMMF_STUN).
+; RNG (prototype §6.2 order): d20, 1dN, deal_hit's effect chance.
+; Out: L = HP lost, H = 1 hit / 0 miss (far3 passes HL out); IX = hero.
+; Clobbers: all but IX.   ~1.3k T + deal_hit (~0.7k + ~1.5k per message)
 ;------------------------------------------------------------------------------
-debug_kit:
-                ld   a, (HERO_KIND)
-                or   a
-                ld   hl, %0101                 ; Warrior: k0, k1 rank 1
-                ld   b, 20
-                jr   nz, .m
-                ld   a, 1
-                ld   (HAS_BOW), a
-                ld   a, 20
-                ld   (ARROWS), a
-                ld   a, 8
-                ld   (DAGGERS), a
-                jr   .s
-.m:             ld   hl, %0101010101           ; Mage: k0..4 rank 1
-                ld   b, 40
-.s:             ld   (ARANK), hl
-                ld   a, b
-                ld   (MP), a
-                ld   (MAXMP), a
-                jr   rank_sync
-    ENDIF
+melee_hit:
+                push af                        ; the target slot
+                ld   hl, ABIL_DESC + ABD_FLAGS
+                ld   c, (hl)                   ; C = ABF_*
+                inc  hl
+                ld   b, (hl)                   ; B = ABD_HIT
+                ld   a, (ABIL_RK + RK_EFFECT)
+                ld   e, a                      ; E = RK_EFFECT
+                bit  ABF_DMGX2_B3, c
+                jr   nz, .h
+                add  a, b                      ; Whirlwind: + the rank's to-hit
+                ld   b, a
+                ld   e, 0                      ; (no effect)
+.h:             pop  af
+                push af
+                push de
+                push bc
+                call hit_roll                  ; Z = miss (A, BC, DE, HL)
+                pop  bc
+                pop  de
+                ld   hl, 0
+                jr   z, .x                     ; miss: L = 0, H = 0
+                push de
+                push bc
+                KFIELD KT_DIE
+                ld   c, a
+                call rng_mod                   ; 0..N-1 (keeps C, DE)
+                inc  a
+                ld   d, a
+                KFIELD KT_BONUS
+                add  a, d
+                ld   hl, ABIL_RK + RK_BONUS
+                add  a, (hl)
+                pop  bc                        ; C = ABF_*
+                pop  de                        ; E = the effect parameter
+                ld   b, a                      ; B = dmg
+                ld   a, (ABIL_DESC + ABD_DTY)
+                bit  ABF_DMGX2_B3, c
+                ld   c, a
+                jr   z, .d
+                sla  b                         ; Power Strike: x 2
+                jr   nc, .s
+                ld   b, $FF
+.s:             or   EFX_STUNNED << DH_EFX_SHIFT
+                ld   c, a
+.d:             pop  af                        ; A = slot
+                call deal_hit                  ; L = HP lost (all but IX)
+                ld   h, 1
+                ret
+.x:             pop  af
+                ret
+ABF_DMGX2_B3    EQU 4
+                ASSERT ABF_DMGX2 == 1 << ABF_DMGX2_B3 && ABD_HIT == ABD_FLAGS + 1 && DTY_PHYS == 0

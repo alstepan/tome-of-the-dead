@@ -21,7 +21,7 @@
 ;         one) without using a bounce; it takes nothing;
 ;       - else: a spell always hits (deal_hit handles I: 0 dmg, UNAFFECTED);
 ;         a dagger / arrow rolls hit_roll (ab_def ABD_HIT) and on a miss flies
-;         on; a hit deals 1d(die) + bonus via deal_hit; a non-piercing
+;         on (T7: pf_miss, the body dodges: RC_DODGE when the FX passes); a hit deals 1d(die) + bonus via deal_hit; a non-piercing
 ;         projectile stops there (PFS_BODY), Lightning (ABF_PIERCE) goes on;
 ;   * the caster is a valid target only after the first reversal (Drain Life
 ;     on its caster: a normal DRAIN hit, no heal — D3-7 T4, game.md §6);
@@ -70,6 +70,7 @@ PFB_STOP        EQU 2
 ;      projectile appears: the cast frames, D3-7).
 ; Out: L = pf_stop (PFS_*); pf_col = impact col; pf_tgt = first body that
 ;      lost the hit roll / took the spell ($FF none), pf_lost = its HP lost;
+;      pf_miss = first body that won the hit roll (missiles; $FF none; T7);
 ;      pf_itick = impact tick (E_REACTAT units: TURN_TICK-based, D3-7);
 ;      pf_desc = the FX descriptor
 ;      (started: fx_start; dropped if 3 tracks + 2 queued are busy).
@@ -511,7 +512,24 @@ pf_strike:
                 ld   b, a
                 ld   a, (pf_cur)
                 call hit_roll                  ; F1 (one d20); Z = miss
-                ret  z                         ; A = 0: flies on
+                jr   nz, .hit
+                ; T7: a miss flies on (game.md §6 "Logic"), but visibly: the first
+                ; body missed -> pf_miss (the "MISSES THE <kind>" line), and every
+                ; missed body dodges (RC_DODGE: the ATTR_MISS flash) on the tick
+                ; the FX passes its first col
+                ld   hl, pf_miss
+                ld   a, (hl)
+                inc  a
+                jr   nz, .m1
+                ld   a, (pf_cur)
+                ld   (hl), a
+.m1:            ld   a, (pf_mnext)
+                call pf_tick
+                ld   b, a
+                ld   a, (pf_cur)
+                call pf_dodge
+                xor  a                         ; PFB_NONE: flies on
+                ret
 .hit:           ld   a, (pf_cur)
                 call pf_row
                 ld   a, (pf_die)
@@ -687,15 +705,26 @@ pf_tick:
 
 ; pf_react — slot A: a pending reaction (deal_hit's HURT / DEATH) plays at
 ; tick B.  Clobbers: A, E
+; pf_dodge — slot A missed by a missile (T7): RC_DODGE at tick B unless a
+; reaction is already pending (a hit / death always wins: deal_hit's
+; set_reaction_at overwrites a DODGE).  Clobbers: A, E
 pf_react:
                 push ix
                 call ent_ix
                 ld   a, (ix+E_REACT)
                 or   a
-                jr   z, .x
-                ld   (ix+E_REACTAT), b
-.x:             pop  ix
+                jr   z, pf_rx
+pf_rat:         ld   (ix+E_REACTAT), b
+pf_rx:          pop  ix
                 ret
+pf_dodge:
+                push ix
+                call ent_ix
+                ld   a, (ix+E_REACT)
+                or   a
+                jr   nz, pf_rx
+                ld   (ix+E_REACT), RC_DODGE
+                jr   pf_rat
 
 ; pf_row — slot A: the FX row := its nearest row to pf_row0, once (the
 ; first body the projectile interacts with).  Clobbers: A, B, E, HL
@@ -775,8 +804,9 @@ pf_col          EQU pf_stop + 1                 ;   impact col
 pf_itick        EQU pf_col + 1                  ;   impact tick
 pf_tgt          EQU pf_itick + 1                ;   first body struck ($FF none)
 pf_stopper      EQU pf_tgt + 1                  ;   body that stopped it ($FF none)
-PF_FFN          EQU 2                           ; ($FF-initialised: pf_tgt, pf_stopper)
-pf_fxrow        EQU pf_stopper + 1              ; 1 = FXD_ROW taken from a body
+pf_miss         EQU pf_stopper + 1              ;   T7: first body a missile missed ($FF none)
+PF_FFN          EQU 3                           ; ($FF-initialised: pf_tgt, pf_stopper, pf_miss)
+pf_fxrow        EQU pf_miss + 1                 ; 1 = FXD_ROW taken from a body
 pf_lost         EQU pf_fxrow + 1                ;   HP lost by pf_tgt (0: none)
 pf_rev          EQU pf_lost + 1                 ; reversals so far
 pf_cok          EQU pf_rev + 1                  ; 1 = the caster is a target
@@ -785,9 +815,9 @@ pf_desc         EQU pf_moves + 1                ; the FX descriptor
 pf_cand         EQU pf_desc + FXD_LEN           ; candidates (+ $FF end)
 PF_ZN           EQU pf_cand - pf_fxrow          ; (0-initialised: pf_fxrow .. pf_desc)
                 ASSERT PF_ZN < 256
-                ASSERT pf_stopper == pf_tgt + 1 && pf_fxrow == pf_tgt + PF_FFN
+                ASSERT pf_stopper == pf_tgt + 1 && pf_miss == pf_tgt + 2 && pf_fxrow == pf_tgt + PF_FFN
 PF_RAM_END      EQU pf_cand + P_MAX_ENT * PFC_STRIDE + 1
 PF_ROWF         EQU PF_RAM + PF_RAM_LEN - ROOM_COLS ; the flight row's cell flags (32-aligned, ends its page)
                 ASSERT PF_RAM_END <= PF_ROWF && (PF_ROWF & $FF) == $100 - ROOM_COLS && TF_SOLID == 1
-                ASSERT PF_RAM_END <= ABIL_DESC && ABIL_DESC + ABIL_DESC_LEN <= PF_ROWF   ; D3-7
+                ASSERT PF_RAM_END <= ABIL_DESC && ABIL_TGT + 2 <= PF_ROWF   ; D3-7 (+ T5 ABIL_TGT)
                 ASSERT ABIL_RK == ABIL_DESC + ABD_STRIDE && ABIL_DESC_LEN == ABD_STRIDE + RK_STRIDE

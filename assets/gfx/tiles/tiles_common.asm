@@ -7,9 +7,9 @@
 ;               = 32 B (default depth-1 attrs: engine patches ATTR_FLOOR/ATTR_WALL ids).
 ; Size        : 256 + 32 = 288 B.   Clash: one ink+paper per tile by construction.
 ; Aliases     : T_WALL_DARK = T_BRICK (2), T_PIT_R = T_END_L (19), T_PIT_L = T_END_R (20).
-; Retired ids : 11-14 / 17-18 were chest / zap: 11/14 = open-door jambs, 12/13/17/18 =
-;               decor (cobweb/moss moved per-level). B3B-8 loads this table at boot
-;               (init_tiles) and re-patches the zap glyphs 17/18 until B3B-13.  Id 10 = potion.
+; Retired ids : 11-14 / 17-18 were chest / zap: 11/14 = open-door jambs, 12/13 = decor
+;               (cobweb/moss moved per-level), 17/18 = dropped-ammo stacks T_DAGGERS /
+;               T_ARROWS (D3-7 T6, concept ammo.tiles).  Id 10 = potion.
 ; ============================================================================
 tiles_common_glyphs:
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ;  0 T_AIR
@@ -29,8 +29,8 @@ tiles_common_glyphs:
         DEFB $05,$05,$05,$05,$05,$05,$05,$05    ; 14 T_DOOR_JAMB_R
         DEFB $10,$30,$3A,$5C,$7C,$38,$38,$7C    ; 15 T_TORCH_T
         DEFB $38,$28,$38,$28,$38,$10,$00,$00    ; 16 T_TORCH_B
-        DEFB $3C,$18,$18,$3C,$3C,$18,$00,$00    ; 17 T_DRIP1
-        DEFB $3C,$18,$00,$00,$10,$38,$38,$10    ; 18 T_DRIP2
+        DEFB $00,$02,$04,$88,$50,$24,$5F,$84    ; 17 T_DAGGERS
+        DEFB $00,$A2,$7F,$A2,$00,$A4,$7E,$A4    ; 18 T_ARROWS
         DEFB $FF,$90,$90,$90,$FF,$81,$81,$81    ; 19 T_END_L
         DEFB $FF,$11,$11,$11,$FF,$01,$01,$01    ; 20 T_END_R
         DEFB $07,$18,$27,$4C,$50,$90,$A0,$A0    ; 21 T_DOOR_ARCH_L
@@ -62,8 +62,8 @@ tiles_common_attrs:
         DEFB $06    ; 14 T_DOOR_JAMB_R
         DEFB $46    ; 15 T_TORCH_T
         DEFB $46    ; 16 T_TORCH_B
-        DEFB $45    ; 17 T_DRIP1
-        DEFB $45    ; 18 T_DRIP2
+        DEFB $47    ; 17 T_DAGGERS
+        DEFB $07    ; 18 T_ARROWS
         DEFB $0F    ; 19 T_END_L
         DEFB $0F    ; 20 T_END_R
         DEFB $06    ; 21 T_DOOR_ARCH_L

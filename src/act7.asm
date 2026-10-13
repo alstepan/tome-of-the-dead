@@ -46,6 +46,8 @@ act_lead_ok:
 ;      ACT_FIRE_TICK, MON_AT = ACT_FIRE_TICK + 1 (the caller pays the cost and
 ;      starts the sequence); L = 0 refused, nothing changed (lead col 0 / 31:
 ;      no turn, the caller prints nothing or its own message).
+; act_begin_ok: the same without the lead-col guard (always L = 1): the power
+;      attacks, which fire no projectile (act_fire skips the guard for them).
 ; Clobbers: A, HL (B, C, DE, IX kept)
 ;------------------------------------------------------------------------------
 act_begin:
@@ -54,7 +56,7 @@ act_begin:
                 pop  bc
                 ld   l, 0
                 ret  nc
-                ld   hl, TURN_PEND
+act_begin_ok:   ld   hl, TURN_PEND
                 ld   (hl), TP_ACT | TP_MON
                 inc  l
                 ld   (hl), b                   ; ACT_ABL
@@ -67,10 +69,41 @@ act_begin:
                 ASSERT ACT_ABL == TURN_PEND + 1 && ACT_AT == TURN_PEND + 2 && MON_AT == TURN_PEND + 3
                 ASSERT (TURN_PEND >> 8) == (MON_AT >> 8) && ACT_FIRE_TICK > 0
 
+; act_seq — IX = hero, B = ABL_*: start its abl_seq sequence (row B: {DW seq,
+; DB fire tick}; the accept, after act_begin).  Clobbers: A, DE, HL (B, C kept)
+act_seq:
+                ld   a, b
+                add  a, a
+                add  a, b
+                ld   e, a
+                ld   d, 0
+                ld   hl, abl_seq
+                add  hl, de
+                ld   a, (hl)
+                inc  hl
+                ld   h, (hl)
+                ld   l, a
+                jp   start_seq                 ; bank 2 (A)
+                ASSERT ABS_STRIDE == 3
+
 ;------------------------------------------------------------------------------
 ; act_pend — far7 from bank-2 pend_far (anim_gate, TURN_PEND != 0).
-; Clobbers: all but IY.  ~0.3k T a waiting tick (far7 included)
+; T7: the monster phase also waits while LOG_QN > LOG_MON_MAX (at most
+; LOG_WAIT_MAX ticks), so panel_tick can drain the cast's lines on the rest
+; ticks before the replies arrive (a Whirlwind on 4 bodies: 4 + 4 lines).
+; Clobbers: all but IY.  ~0.3k T a waiting tick (far7 included), + <= ~23k
+; T a log line
 ;------------------------------------------------------------------------------
+; Lines left pending when the monsters act: 0, so the ring has LOG_SLOTS free
+; for their replies. ROOM_CAP monsters give at most ROOM_CAP melee lines (one
+; per impact via MSG_Q, spread over the anim ticks: panel / end_turn's hold
+; drain them); the residual overflow is deal_hit's on-hit status lines, pushed
+; at once in resolve_monsters (3D: only the Ghost's 1-in-4 CONFUSED; a 5th
+; line needs >= 1 such proc with 4 monsters all hitting) — dropped and counted
+; in LQ_DROP, never a corrupt ring.
+LOG_MON_MAX     EQU 0
+LOG_WAIT_MAX    EQU 8                          ; ticks (320 ms): progress if the log cannot drain
+                ASSERT ROOM_CAP + LOG_MON_MAX <= LOG_SLOTS
 act_pend:
                 ld   hl, TURN_PEND
                 res  TP_FIRE_BIT, (hl)         ; the fire tick is over
@@ -97,7 +130,16 @@ act_pend:
                 ld   a, (TURN_TICK)
                 cp   b
                 ret  c
-                xor  a
+                ld   a, (LOG_QN)               ; T7 log drain: the cast's lines first —
+                cp   LOG_MON_MAX + 1           ; while more than LOG_MON_MAX are pending
+                jr   c, .go                    ; the monsters wait (<= LOG_WAIT_MAX ticks
+                ld   a, (MON_AT)               ; past MON_AT), so their lines find ring
+                add  a, LOG_WAIT_MAX           ; slots. No line is drawn here: panel_tick's
+                ld   b, a                      ; 1st-frame rule drains them on the light
+                ld   a, (TURN_TICK)            ; rest ticks (review: a line drawn here on top
+                cp   b                         ; of a heavy repaint passed the cast cap in
+                ret  c                         ; "wcast4": cost-safe by construction now)
+.go:            xor  a
                 ld   (hl), a                   ; TURN_PEND = 0: turn_done may end it
                 ld   (MON_AT), a               ; turn_input calls resolve_monsters again
                 ld   a, (P_ENTITIES + E_FLAGS)
@@ -107,26 +149,29 @@ act_pend:
                 jp   far3                      ; position / HP as the cast left them)
 
 ;------------------------------------------------------------------------------
-; act_fire — the release (act_pend, fire tick): A = ABL_*. Guard: the hero's
-; lead col must be 1..30 (act_begin refused it at the accept; a fizzle here,
-; L = 0, only if something moved him since). Dispatch: ABL_DAGGER / ABL_BOW
-; -> ammo_fire, ABL_POWER / ABL_WHIRL -> power_fire, else (spells) ->
-; spell_fire; each: IX = hero, B = ABL_*, ABIL_DESC as abil_load left it,
-; L = 1 fired. (proj_fire's fx_start drop counts in FX_DROP.)
+; act_fire — the release (act_pend, fire tick): A = ABL_*. Dispatch:
+; ABL_POWER / ABL_WHIRL -> power_fire (no projectile: no guard); else the
+; guard: the hero's lead col must be 1..30 (act_begin refused it at the
+; accept; a fizzle here, L = 0, only if something moved him since), then
+; ABL_DAGGER / ABL_BOW -> ammo_fire, else (spells) -> spell_fire; each: IX =
+; hero, B = ABL_*, ABIL_DESC as abil_load left it, L = 1 fired. (proj_fire's
+; fx_start drop counts in FX_DROP.)
 ; Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 act_fire:
                 ld   ix, P_ENTITIES
-                ld   c, a
+                ld   b, a
+                sub  ABL_POWER
+                cp   ABL_WHIRL - ABL_POWER + 1
+                jp   c, power_fire
+                push bc
                 call act_lead_ok
+                pop  bc
                 ld   l, 0
                 ret  nc                        ; fizzle (the turn stands)
-                ld   a, c
-                ld   b, a
+                ld   a, b
                 cp   ABL_DAGGER
                 jp   nc, ammo_fire
-                cp   ABL_POWER
-                jp   nc, power_fire
                 jp   spell_fire
                 ASSERT ABL_DAGGER > ABL_WHIRL && ABL_WHIRL > ABL_POWER && ABL_POWER > ABL_LIGHTNING
                 ASSERT ABL_BOW == ABL_COUNT - 1 && ABL_DAGGER == ABL_BOW - 1

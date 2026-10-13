@@ -67,8 +67,10 @@ COMMON = [
     (14, "T_DOOR_JAMB_R", ("grid", "b10_door_grate.tiles", "door_jamb_r")),  # B10 open door (was moss)
     (15, "T_TORCH_T",    ("item", "item_torch", 0, 0x46)),
     (16, "T_TORCH_B",    ("item", "item_torch", 8, 0x46)),
-    (17, "T_DRIP1",      ("grid", "decor.tiles", "drip1")),             # retired zap id
-    (18, "T_DRIP2",      ("grid", "decor.tiles", "drip2")),
+    # D3-7 T6 (game.md §6.3): ids 17 / 18 = the dropped-ammo floor glyphs (were the drips,
+    # no longer placed). Concept ammo.tiles (draft 2026-10-13, canvas review pending).
+    (17, "T_DAGGERS",    ("grid", "ammo.tiles", "daggers")),            # $47, = DAGGERS icon ink
+    (18, "T_ARROWS",     ("grid", "ammo.tiles", "arrows")),             # $07 (game.md §6.3)
     (19, "T_END_L",      ("live", "tiles_bg_platform_end_l", A_FLOOR)), # = T_PIT_R (cap at p+3)
     (20, "T_END_R",      ("live", "tiles_bg_platform_end_r", A_FLOOR)), # = T_PIT_L (cap at p-1)
     (21, "T_DOOR_ARCH_L", ("grid", "door.tiles", "door_arch_l")),
@@ -88,10 +90,10 @@ COMMON = [
 # ids whose attr follows ATTR_FLOOR[depth] / ATTR_WALL[depth] at runtime (engine patches)
 FLOOR_IDS = {1, 3, 19, 20}              # platform, wall-in-floor-row, end caps (= pit caps)
 WALL_IDS = {2, 28, 29, 30}
-ANIM_IDS = {15, 16, 17, 18, 31}         # glyph swap / attr cycle (TF_ANIM)
-DECOR_IDS = {12, 13, 15, 16, 17, 18, 31}   # air-band decor: never in a floor row
+ANIM_IDS = {15, 16, 31}         # glyph swap / attr cycle (TF_ANIM)
+DECOR_IDS = {12, 13, 15, 16, 31}   # air-band decor: never in a floor row
 LIVE_UNCHANGED = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 19, 20}   # byte-identical to init_tiles
-LEGACY_ALIASED = {11, 12, 13, 14, 17, 18}   # chest/zap ids reused by decor / door jambs (B3B-13)
+LEGACY_ALIASED = {11, 12, 13, 14, 17, 18}   # chest/zap ids reused by decor / door jambs (B3B-13) / ammo (D3-7)
 
 # Per-level colour schemes (game.md §1.2): (ATTR_FLOOR, ATTR_WALL)
 SCHEME = [(0x0F, 0x01), (0x27, 0x04), (0x17, 0x02), (0x28, 0x05),
@@ -480,9 +482,9 @@ def emit_common(g, a, names, notes):
          ";               = 32 B (default depth-1 attrs: engine patches ATTR_FLOOR/ATTR_WALL ids).",
          "; Size        : 256 + 32 = 288 B.   Clash: one ink+paper per tile by construction.",
          "; Aliases     : T_WALL_DARK = T_BRICK (2), T_PIT_R = T_END_L (19), T_PIT_L = T_END_R (20).",
-         "; Retired ids : 11-14 / 17-18 were chest / zap: 11/14 = open-door jambs, 12/13/17/18 =",
-         ";               decor (cobweb/moss moved per-level). B3B-8 loads this table at boot",
-         ";               (init_tiles) and re-patches the zap glyphs 17/18 until B3B-13.  Id 10 = potion.",
+         "; Retired ids : 11-14 / 17-18 were chest / zap: 11/14 = open-door jambs, 12/13 = decor",
+         ";               (cobweb/moss moved per-level), 17/18 = dropped-ammo stacks T_DAGGERS /",
+         ";               T_ARROWS (D3-7 T6, concept ammo.tiles).  Id 10 = potion.",
          "; ============================================================================",
          "tiles_common_glyphs:"]
     for i in range(32):

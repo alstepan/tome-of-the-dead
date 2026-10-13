@@ -215,6 +215,58 @@ def screen_check(p, check, tag, depth):
           any(cell_bytes(fr, c, 19) == pg for c in range(32)), "")
 
 
+def floor_check(p, check, tag, room=None, m=None):
+    """T7 review: the FLOOR_LIST invariant floor_pickup's pre-filter relies on
+    (level_defs.asm FLOOR_LIST): every live entry of the room shows on its cell
+    (row 9s+7) — the glyph of the LAST live entry of that cell in list order.
+    Default: CUR_ROOM in the live ROOM_MAP; else room `room` built into `m`."""
+    fl = p.z.read_memory(S["FLOOR_LIST"], S["FLOOR_MAX"] * S["FL_STRIDE"])
+    if m is None:
+        m = bytes(p.z.read_memory(S["ROOM_MAP"], 32 * S["PLAY_ROWS"]))
+        room = p.rb("CUR_ROOM")
+    tile = {S["IT_POTION"]: S["T_POTION"], S["IT_DAGGER"]: S["T_DAGGERS"], S["IT_ARROW"]: S["T_ARROWS"]}
+    want = {}
+    for i in range(S["FLOOR_MAX"]):
+        r, col, item = fl[i * 4], fl[i * 4 + 1], fl[i * 4 + 2]
+        if r == S["FL_EMPTY"] or (r & S["FL_ROOM_MASK"]) != room or item not in tile:
+            continue
+        sto = 1 if r & S["FL_S1"] else 0
+        want[(col, 9 * sto + 7)] = tile[item]
+    bad = [(c, r, m[r * 32 + c], t) for (c, r), t in want.items() if m[r * 32 + c] != t]
+    check(f"GI {tag}: FLOOR_LIST live entries ({len(want)} cells) all show their glyph in ROOM_MAP", bad == [], bad)
+    return len(want)
+
+
+def floor_build_check(p, check, tag):
+    """Every room of the level, seeded with a dagger stack (storey 0, col 16), an
+    arrow stack under a potion (storey 1, col 20: the potion is the last entry)
+    and a potion under arrows (storey 1, col 24): build_room_map (into NEXT_MAP)
+    stamps the last live entry of each cell. The seeds are removed after."""
+    free = [i for i in range(S["FLOOR_MAX"]) if p.rb(S["FLOOR_LIST"] + 4 * i) == S["FL_EMPTY"]][:5]
+    if len(free) < 5:
+        check(f"GI {tag}: FLOOR_LIST has 5 free entries for the build check", False, free)
+        return
+    D, A, P, S1 = S["IT_DAGGER"], S["IT_ARROW"], S["IT_POTION"], S["FL_S1"]
+    n, bad = 0, []
+    for room in range(p.rb("LVL_NROOMS")):
+        seeds = [(room, 16, D), (room | S1, 20, A), (room | S1, 20, P), (room | S1, 24, P), (room | S1, 24, A)]
+        for i, (r, c, it) in zip(free, seeds):
+            p.wmem(S["FLOOR_LIST"] + 4 * i, [r, c, it, 2])
+        pc0 = p.pc()                          # (in play at the tick probe, as the
+        ok, _ = p.code([0x3E, room, 0x16, S["NEXT_MAP"] >> 8, 0x21] + w16(S["build_room_map"])
+                       + [0xCD] + w16(S["far3"]), game=True)      # descend stub)
+        p.z.cmd("set-register PC=%d" % pc0)
+        m = bytes(p.z.read_memory(S["NEXT_MAP"], 32 * S["PLAY_ROWS"]))
+        got = (m[7 * 32 + 16], m[16 * 32 + 20], m[16 * 32 + 24])
+        if not ok or got != (S["T_DAGGERS"], S["T_POTION"], S["T_ARROWS"]):
+            bad.append((room, ok, got))
+        n += 1
+        for i in free:
+            p.wb(S["FLOOR_LIST"] + 4 * i, S["FL_EMPTY"])
+    check(f"GI {tag}: build_room_map stamps every seeded entry, the last of a shared cell ({n} rooms)",
+          n >= 1 and bad == [], bad)
+
+
 def main():
     depths = 8
     if "--depths" in sys.argv:
@@ -257,6 +309,7 @@ def main():
             tag = f"GI1 D{d} entry"
             tables(p, check, tag, d)
             screen_check(p, check, tag, d)
+            floor_check(p, check, tag)
             pool_check(p, check, tag, snap0)
             # play: walk right then left (room changes, LP spawns); keep the hero alive
             for key in ("L", "H"):
@@ -273,7 +326,9 @@ def main():
             tag = f"GI1 D{d} after play (room {p.rb('CUR_ROOM')})"
             tables(p, check, tag, d)
             screen_check(p, check, tag, d)
+            floor_check(p, check, tag)
             pool_check(p, check, tag, snap0)
+            floor_build_check(p, check, tag)
             if p.rb("GAME_STATE") != S["GS_PLAYING"]:
                 print(f"[info] D{d}: GAME_STATE {p.rb('GAME_STATE')} — stop", flush=True)
                 break

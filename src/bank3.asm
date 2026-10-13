@@ -12,7 +12,7 @@
 ; shadow_room, erase_rect, hide_sprites, draw_room, blit_sprite (use blit_keep),
 ; present / present_full (A7), and every bank-5 generator
 ; routine (gen_*, alloc*, copy_virt, mirror_src). (B3B-R2: shadow_rect only as a
-; tail jump — potion_pickup; door_paint re-pages the caller's bank itself.)
+; tail jump — floor_pickup (ap_stamp); door_paint re-pages the caller's bank itself.)
 ; D3-S2: bank-7 code (bank7.asm: find_target, the player turn, ...) only via
 ; far7 (nests: bank 3 comes back), e.g. new_game -> hero_st_init (intent7.asm).
 ; A7: everything here draws on the $4000 (bank 5) screen, which is the one
@@ -765,7 +765,8 @@ glow_ids:       DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_G
 ;            runs to the hole). ARR: + RUBBLE over the shaft in row 0 (no exit
 ;            up, game.md §1.1). EXIT: the level exit; closed (LF_GRATE_OPEN = 0,
 ;            3F) T_GRATE_SHUT over it before the deriver
-;   potions  FLOOR_LIST entries of this room (IT_POTION) -> T_POTION, row 9s+7
+;   potions  FLOOR_LIST entries of this room (IT_POTION) -> T_POTION, row 9s+7;
+;            D3-7 T6: IT_DAGGER / IT_ARROW -> T_DAGGERS / T_ARROWS the same way
 ;   decor    RD_SEED != 0: decor_room (B3B-9); seed 0 (PROTO): proto_decor.
 ;            The animated cells go to ANIM_N/ANIM_LIST (ROOM_MAP) or
 ;            ANIM_N2/ANIM_LIST2 (NEXT_MAP: do_exit's room_shadow copies it
@@ -876,17 +877,23 @@ build_room_map:
                 dec  l
                 ld   c, (hl)                   ; FL_COL
                 dec  l
+                ld   e, T_POTION
                 cp   IT_POTION
-                jr   nz, .pn
-                push hl
+                jr   z, .pi
+                sub  IT_DAGGER                 ; D3-7 T6: ammo stacks -> T_DAGGERS / T_ARROWS
+                cp   IT_ARROW - IT_DAGGER + 1
+                jr   nc, .pn
+                add  a, T_DAGGERS
+                ld   e, a
+.pi:            push hl
                 push bc
                 ld   a, (hl)
                 rlca                           ; FL_S1 -> bit 0
                 and  1
-                call storey_row                ; (bank 2) A = 9s+7, keeps BC
+                call storey_row                ; (bank 2) A = 9s+7, keeps BC, DE
                 ld   b, a
                 call map_cell
-                ld   (hl), T_POTION
+                ld   (hl), e                   ; (list order: the last live entry of a cell shows)
                 pop  bc
                 pop  hl
 .pn:            ld   a, l

@@ -41,24 +41,13 @@ abil_spell:
                 ld   (MP), a
                 ld   hl, PANEL_DIRTY
                 set  PD_MP_BIT, (hl)
-                ld   a, b                      ; abl_seq row B: {DW seq, DB fire tick}
-                add  a, a
-                add  a, b
-                ld   e, a
-                ld   d, 0
-                ld   hl, abl_seq
-                add  hl, de
-                ld   a, (hl)
-                inc  hl
-                ld   h, (hl)
-                ld   l, a
-                call start_seq                 ; bank 2 (A)
+                call act_seq                   ; the abl_seq sequence (A, DE, HL)
                 ld   a, (ABIL_DESC + ABD_AT1)
                 ld   (ix+E_FLA), a
                 ld   (ix+E_FLT), SPELL_FLASH
                 ld   l, 1
                 ret
-                ASSERT ABS_STRIDE == 3 && RR_MP == 0 && ABL_SPARK == 0
+                ASSERT RR_MP == 0 && ABL_SPARK == 0
 
 ; spell_row — B = ABL_SPARK..ABL_LIGHTNING -> HL = RANK_ROWS + B * RR_STRIDE
 ; (the hero's current-rank row, rank_sync).  Clobbers: A, HL
