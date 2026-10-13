@@ -1712,6 +1712,83 @@ Ghost**. D6 and D7 have no Skeleton set (§11.3).
   10. The trickle changes only VISITED records, never slots, and stops after the boss's
       death (§9.5).
 
+#### 9.4.8 D-AI1 playtest notes (designer 2026-10-13; NOTED, not scheduled)
+
+The user reported four monster-movement issues in playtest. These are the designer's rulings for
+when the work is picked up. Nothing here is built yet, and the current rules stay in force until it is.
+
+**(a) Shared cells: no.** §6.1 "body boxes never overlap" stays. Reasons: (1) clash, because a shared cell
+shows only the last-drawn ink (§4.2 prototype); (2) cost, because each overlap forces an overlap-repair
+re-blit, the most expensive render path (A7b); (3) rules, because "nearest body in line", reach, the
+target readout and anti-cork all assume one body per box. The turn model already resolves moves in slot
+order, which acts as a reservation, so a separate reservation table adds nothing. Pushing is rejected
+(chain pushes, wall cases). **Swap** is allowed in one case only, the ladder deadlock in (b). PENDING
+bodies stay the only legal overlap.
+
+**(b) Ladder deadlock: priority yield, with a swap after a timeout.** Typical case: walker A at the foot
+wants to go up, and walker B in the far-end box wants to go down. The "no head-on climb" rule (prototype
+§6.4 walker 3) makes both wait forever. Ranked options:
+1. **Chosen: right of way to the lower slot id.** A climber that waits because of a lower-slot climber
+   which occupies or targets the same segment steps 1 cell out of the ladder-end box. It uses the
+   prototype §6.4 rule 2 side order (facing side first, then the other side). It must not re-enter that
+   box while the other climber is mid-ladder on the segment. No RNG is used.
+2. **Backstop: a timeout swap.** A monster blocked by the same body on 2 consecutive turns at a ladder
+   end swaps cells with it. This is the hero's squeeze rule (prototype §6.4) applied monster-to-monster.
+   It guarantees that no ladder stays jammed.
+3. Rejected: ignoring collision on ladder cells. That reintroduces the overlap ruled out in (a), and it
+   breaks the snap and line-of-attack rules.
+
+Cost: a 2-bit wait counter per slot (the spare bits in `ENT_STAT` byte 3), about 80–120 B of bank-2 AI
+code, and nothing per tick. The rule runs only on a turn when a climb start is refused. Risk: low. It
+needs a seeded ZRCP case with two climbers placed head-on.
+
+**(c) Hero descending onto monsters below.** By the rules this should not happen: prototype §6.4 rules
+2–3 cover the whole remaining path, including the standing box at the foot. If the hero overlaps a
+monster there, it is a §6.1 violation, not a design trade-off. Ranked options:
+1. **Cheapest: find why rule 2 misses the monster.** The likely cause is a filter by storey or
+   `storey_ref` that skips monsters of the lower storey. Fix the filter. Cost is near zero.
+2. **Guarantee: a landing shove.** If a body still intersects the foot box when the hero takes his last
+   rung step, move that body to the nearest free legal cell on its storey. Search ±1…±4 cols outward,
+   facing side first. Flyers stay in their band, and B16 PENDING is the fallback. If no cell is free, the
+   hero's step becomes a wait, and the existing squeeze swap resolves it on the next turn. Cost: about
+   60 B, no RNG.
+3. Rejected: an arrival offset, or the hero landing on the nearest free cell. Either one breaks the snap
+   invariant (prototype §3.4) and the vertical-arrival contract (`x = col`).
+4. Rejected: attack on arrival. It breaks the "no combat on ladders" rule and gives monsters free hits.
+5. Keeping the overlap is the fallback only. It causes clash, ambiguous targeting and the repair cost
+   from (a).
+
+**(d) Re-entry continuity.** Monsters seem to jump because §9.4.2 drops positions and §9.4.3 re-places
+them ≥ 8 cols from the arrival. They seem to vanish because a placement wait leaves the unit in the
+record. Ranked options:
+1. **Chosen: store each banked monster's position.** Add 1 byte per record entry: x (5 bits), storey
+   (2 bits), facing (1 bit). That is 36 B for 9 × 4 entries, and the room record grows to about 136 B.
+   On re-entry, the stored cell is **try 0**: it is used if it passes the §9.4.3 legality and arrival-gap
+   tests. If it fails, tries 1–8 run unchanged. Try 0 draws no RNG, so FRESH spawns and the
+   Python == Z80 reference stay identical. A flyer returns at its band default y. A VISITED entry whose
+   9 tries all fail goes **PENDING in place at its stored cell**, instead of waiting in the record. So a
+   banked monster can no longer vanish. Cost: about 40 B code plus 36 B data. Re-entry gets cheaper on
+   average, because try 0 usually wins.
+2. **Chosen too: a "waited by the door" touch.** When a monster that was chasing is banked (a rejected
+   follower, or awake within 8 cols of the exit), store its x clamped to the exit side, just outside the
+   arrival box. Try 0 then fails the gap test on the arrival storey only. On re-entry it reads as "it
+   waited for you". Cost: about 20 B.
+3. **Not chosen: every monster that noticed the hero follows.** The caps make it hollow: ≤ 4 monsters,
+   Σ ≤ 12 and ≤ 2 tall per room (§9.3), and ≤ 2 per exit, so most "noticed" monsters would be rejected
+   anyway. Where it did work, it would remove escape by exit, which is the main fleeing tool apart from
+   descent (§9.3). It would also queue several PENDING bodies on one edge cell, so the follow-in would
+   take 4+ hero steps. A milder version is acceptable if playtests still want more pursuit: widen
+   candidate rule 1 from gap ≤ 4 to **gap ≤ 6 and awake/chasing**, and keep the 2-per-exit and §9.3 caps.
+   Cost: a few bytes. It changes balance (§10 fleeing), so it needs the user's approval.
+
+What persists across leave/re-enter after (d)1: kind, tier, exact hp, flags and now position/facing.
+Statuses are still dropped (§9.4.2), and AI state resets to "awake and facing the hero". Respawning
+on leave stays rejected (the heal and reroll exploits, §9.4.2).
+
+**Engine work, cheapest first:** (c)1 bug hunt → (d)1+2 record byte and try 0 (record layout in
+`memory-map.md`, the Python spawn reference, ZRCP #3 extended to check the same x/storey) → (b) priority
+yield and swap → (c)2 shove. (a) needs no work.
+
 ### 9.5 Respawn trickle
 
 Implemented in 3F. Tags: **U** = user 2026-10-03, **D** = designer decision 2026-10-03.
