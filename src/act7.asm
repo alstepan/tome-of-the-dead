@@ -176,6 +176,9 @@ act_pend:
 .go:            xor  a
                 ld   (hl), a                   ; TURN_PEND = 0: turn_done may end it
                 ld   (MON_AT), a               ; turn_input calls resolve_monsters again
+                ld   hl, ST_FLAGS              ; D3-8f: the hero's action is resolved (his
+                res  STS_GUARD_BIT, (hl)       ; own bounced Frost was refused under it):
+                                               ; HOLD_GUARD clears before the monster phase
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
                 ret  nz                        ; the hero died of his own cast

@@ -46,7 +46,7 @@ MIND_FEAR       EQU 1 << 2
 MIND_CONFUSED   EQU 2 << 2          ; (3 << 2 reserved)
 STS_POISON_BIT  EQU 4
 STS_WEAK_BIT    EQU 5
-STS_GUARD_BIT   EQU 6               ; STUN_GUARD
+STS_GUARD_BIT   EQU 6               ; HOLD_GUARD (game.md §6.4.1 B1)
 STS_MAX_TURNS   EQU 15              ; one nibble per timer
 ; D3-8 sprite tints (game.md §6.4 "Indication"): HOLD kind 1..3, else CONFUSED.
 ; render (anim.asm) derives the tint from ST_FLAGS every tick (no tint state);

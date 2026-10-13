@@ -96,8 +96,8 @@ hit_roll:
 
 ;------------------------------------------------------------------------------
 ; deal_hit — apply one damaging hit (game.md §6.0 / §7 / §6.4 / §4.1).
-; In : IX = attacker, A = target slot, B = damage rolled (>= 1; D3-8: a WEAK
-;      hero attacker's B - 1, min 1),
+; In : IX = attacker, A = target slot, B = damage rolled (>= 1; Power Strike's
+;      x 2 already applied),
 ;      C = DTY_* | DH_NODEF | EFX_* << DH_EFX_SHIFT | DH_HEAL, E = effect parameter
 ;      (high nibble: chance "1 in N", 0 = always; low nibble: turns).
 ; Out: L = HP the target actually lost (0: immune, or already at 0 HP).
@@ -108,18 +108,23 @@ hit_roll:
 ;     (a reflected type outside proj_fire counts as I) -> 0 damage, no side
 ;     effect, "YOU ARE UNAFFECTED" / "THE <kind> IS UNAFFECTED".
 ;  3. dmg = B; R: dmg / 2, min 1; W: dmg x 2 (sat. 255); PHYS without
-;     DH_NODEF: dmg - DEF (hero HERO_DEF; monster KX_DEF = 0 in 3D), min 1.
+;     DH_NODEF: dmg - DEF (hero HERO_DEF; monster KX_DEF = 0 in 3D), min 1;
+;     a WEAK hero attacker's DEF counts + 1 there (D3-8f, game.md §6.4.2 R1:
+;     max(1, roll x mult x resist - DEF - 1) on his physical hits only —
+;     spells, Drain, his own bounced / reflected bolt carry DH_NODEF).
 ;  4. HP -= dmg, saturating at 0; L = the HP lost.
 ;  5. HP 0: EF_DYING + RC_DEATH; status slot cleared; a monster awards the
 ;     hero KXP (EF_RESPAWN: KXP / 2, min 1) into XP (sat. XP_MAX), XP_UP = 1.
 ;     Else RC_HURT; ASLEEP wakes (any HP loss); FIRE thaws FROZEN; then the
-;     effect (if any): chance roll (rng_mod N, 0 = success), R halves the
-;     turns, a boss (KX_IMM bit 7) halves HOLD / MIND again (0 = none; D3-8),
-;     the immunity mask (a boss: + SLEEP / FEAR) -> UNAFFECTED; D3-8c: a Frost
-;     Shard on its own caster freezes 1; no HOLD on a held body; FROZEN /
-;     STUNNED refused while HOLD_GUARD (set when either ends, a FIRE thaw
-;     too); same effect -> timer max(cur, new) (POISON: cur + new, cap 15),
-;     another effect of the group -> overwritten; groups independent.
+;     effect (if any): chance roll (rng_mod N, 0 = success), then the
+;     game.md §6.4.2 R2 order (D3-8f): (1) the immunity mask (a boss: +
+;     SLEEP / FEAR) -> UNAFFECTED, stop; (2) R halves the turns; (3) a boss
+;     (KX_IMM bit 7) halves HOLD / MIND again (0 after 2-3: silent); D3-8c: a
+;     Frost Shard on its own caster freezes 1; (4) no HOLD on a held body,
+;     FROZEN / STUNNED refused while HOLD_GUARD (set when either ends, a FIRE
+;     thaw too) — both silent; same effect -> timer max(cur, new) (POISON:
+;     cur + new, cap 15), another effect of the group -> overwritten; groups
+;     independent.
 ;  6. DH_HEAL (Drain Life, the Vampire's bite; NOT the Ghost's touch, game.md
 ;     §9.1): the attacker heals the HP lost (to its max; the hero also gets
 ;     "YOU FEEL HEALTHIER").
@@ -130,17 +135,7 @@ hit_roll:
 ;------------------------------------------------------------------------------
 deal_hit:
                 ld   (ATK_PTR), ix
-                ld   d, a
-                ld   a, (ST_FLAGS)             ; D3-8: a WEAK hero deals dmg - 1, min 1
-                and  STS_WEAK                  ; (slot 0's WEAK first: ~40 T when clear)
-                ld   a, d
-                jr   z, .wk
-                bit  EF_PLAYER_BIT, (ix+E_FLAGS)
-                jr   z, .wk
-                dec  b
-                jr   nz, .wk
-                inc  b
-.wk:            ld   (dh_slot), a
+                ld   (dh_slot), a
                 ld   d, a
                 ld   a, c
                 ld   (dh_flags), a
@@ -148,10 +143,17 @@ deal_hit:
                 ld   (dh_eff), a
                 ld   a, b
                 ld   (dh_dmg), a
-                xor  a
+                ld   b, 0                      ; B = a WEAK hero's extra DEF (D3-8f, game.md
+                ld   a, (ST_FLAGS)             ; §6.4.2 R1: -1 on the DEF path only; slot 0's
+                and  STS_WEAK                  ; WEAK first: ~30 T when clear). B survives
+                jr   z, .wk                    ; ent_ix to .rec (dh_dmg holds the roll)
+                bit  EF_PLAYER_BIT, (ix+E_FLAGS)
+                jr   z, .wk
+                inc  b
+.wk:            xor  a
                 ld   (dh_lost), a
                 ld   a, d
-                call ent_ix                    ; IX = target
+                call ent_ix                    ; IX = target (A, E)
                 ld   (dh_tix), ix              ; D3-8e: pf_strike reads the target here
                 ld   a, (ix+E_HP)
                 or   a
@@ -175,7 +177,8 @@ deal_hit:
                 ld   e, a                      ; L + offset, no push / add hl: one page)
                 ld   d, h
                 ld   a, (de)
-.rec:           ld   (dh_def), a
+.rec:           add  a, b                      ; DEF + 1 for a WEAK hero attacker: only the
+                ld   (dh_def), a               ; PHYS-without-DH_NODEF path reads dh_def
                 ld   a, l
                 add  a, KX_IMM
                 ld   e, a
@@ -380,51 +383,19 @@ dh_status:
                 call rng_mod
                 or   a
                 ret  nz                        ; only a 0 roll applies it
-.sure:          ld   a, (dh_eff)
-                and  $0F
-                ld   d, a                      ; D = turns
-                ld   a, (dh_rsp)
-                cp   RSP_R
-                jr   nz, .full
-                srl  d                         ; R: duration / 2 (0 = none)
-.full:          ld   a, (dh_imm)               ; D3-8: a boss halves HOLD / MIND again
-                rla                            ; (IMMF_BOSS_BIT 7 -> CF)
-                ASSERT IMMF_BOSS_BIT == 7 && EFX_POISON == EFX_CONFUSED + 1
-                jr   nc, .nbh
-                ld   a, (dh_efx)
-                cp   EFX_POISON
-                jr   nc, .nbh                  ; POISON / WEAK: full
-                srl  d
-.nbh:           ld   a, d
-                or   a
-                ret  z
-                ld   a, (dh_efx)
-                cp   EFX_FROZEN
-                jr   nz, .nsf
-                ld   hl, (ATK_PTR)             ; D3-8c: a Frost Shard on its own caster
-                ld   a, ixl                    ; (bounce / reflection) freezes 1 turn
-                cp   l
-                jr   nz, .nsf
-                ld   a, ixh
-                cp   h
-                jr   nz, .nsf
-                ld   d, 1
-.nsf:
-                ld   a, (dh_efx)               ; row = efx_tab + (id - 1) * EF_STRIDE
+.sure:          ld   a, (dh_efx)               ; row = efx_tab + (id - 1) * EF_STRIDE
                 dec  a
                 ld   l, a
                 add  a, a
                 add  a, l
                 add  a, a
                 ld   e, a
-                push de
                 ld   d, 0
                 ld   hl, efx_tab
                 add  hl, de
-                pop  de                        ; D = turns again
-                ld   a, (dh_imm)
-                and  (hl)                      ; EFR_IMM
-                jr   z, .notimm
+                ld   a, (dh_imm)               ; D3-8f R2 (1): immunity first, so a boss's
+                and  (hl)                      ; ASLEEP / FEAR prints even when the halving
+                jr   z, .notimm                ; below would reach 0 (EFR_IMM)
                 ld   b, TX_ST_UNAFFECTED
                 ld   c, MSG_M_UNAFF
                 jp   dh_msg
@@ -441,7 +412,36 @@ dh_status:
                 inc  hl
                 ld   a, (hl)
                 ld   (dh_mmsg), a              ; EFR_MMSG
-                call dh_stp                    ; HL = ST_FLAGS + slot
+                ld   a, (dh_eff)               ; (B, C kept to .ng)
+                and  $0F
+                ld   d, a                      ; D = turns
+                ld   a, (dh_rsp)               ; (2) R: duration / 2 (0 = none, silent)
+                cp   RSP_R
+                jr   nz, .full
+                srl  d
+.full:          ld   a, (dh_imm)               ; (3) a boss halves HOLD / MIND again
+                rla                            ; (IMMF_BOSS_BIT 7 -> CF)
+                ASSERT IMMF_BOSS_BIT == 7 && EFX_POISON == EFX_CONFUSED + 1
+                jr   nc, .nbh
+                ld   a, (dh_efx)
+                cp   EFX_POISON
+                jr   nc, .nbh                  ; POISON / WEAK: full
+                srl  d
+.nbh:           ld   a, d
+                or   a
+                ret  z                         ; halved to 0: silent (R2)
+                ld   a, (dh_efx)
+                cp   EFX_FROZEN
+                jr   nz, .nsf
+                ld   hl, (ATK_PTR)             ; D3-8c: a Frost Shard on its own caster
+                ld   a, ixl                    ; (bounce / reflection) freezes 1 turn
+                cp   l
+                jr   nz, .nsf
+                ld   a, ixh
+                cp   h
+                jr   nz, .nsf
+                ld   d, 1
+.nsf:           call dh_stp                    ; HL = ST_FLAGS + slot; (4) below: silent
                 ld   a, (dh_efx)
                 cp   EFX_FEAR
                 jr   nc, .ng                   ; MIND / POISON / WEAK: no hold rules

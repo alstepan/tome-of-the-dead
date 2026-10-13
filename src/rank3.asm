@@ -174,7 +174,7 @@ proj_pre:
 ; there) + RK_BONUS (Whirlwind +1 / +2), x 2 with ABF_DMGX2 (saturating),
 ; then deal_hit, C = ABD_DTY (PHYS); Power Strike also EFX_STUNNED, E =
 ; RK_EFFECT (always; turns 1 / 1 / 2: deal_hit applies it to a survivor
-; only, halves it on R, refuses it under STUN_GUARD / IMMF_STUN).
+; only, halves it on R, refuses it under HOLD_GUARD / IMMF_STUN).
 ; RNG (prototype §6.2 order): d20, 1dN, deal_hit's effect chance.
 ; Out: L = HP lost, H = 1 hit / 0 miss (far3 passes HL out); IX = hero.
 ; Clobbers: all but IX.   ~1.3k T + deal_hit (~0.7k + ~1.5k per message)

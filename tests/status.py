@@ -20,7 +20,7 @@ breakpoint, decoded from the token stream).
       loss at 3)
   G   HOLD_GUARD (D3-8c: FROZEN too; HG1-HG8 below: no HOLD on a held body, guard after
       a thaw, self-freeze 1, POISON adds cap 15):
-      STUN_GUARD: deal_hit STUNNED 1 (stub) -> the next monster phase skips
+      the guard: deal_hit STUNNED 1 (stub) -> the next monster phase skips
       and sets the guard; a 2nd stun is refused; after the Goblin acted (the
       guard cleared) a 3rd stun lands
   P   poison: POISON 9 on the hero at HP 10 -> HP 7 after 9 turns (losses at
@@ -35,6 +35,13 @@ breakpoint, decoded from the token stream).
   X   FEAR hero: a bump attack is refused (no turn, "YOU ARE TOO AFRAID TO
       FIGHT!"); a fearful Goblin next to the hero steps away; WEAK hero: no
       jump (no turn), deal_hit dmg - 1 (min 1)
+  D   D3-8f rulings (game.md §6.4.2): R1 WEAK -1 on the hero's DEF path only
+      (after R; not NODEF / spells / a monster's hit); R2 immunity before the
+      halving (boss ASLEEP / FEAR 1 -> UNAFFECTED), halved-to-0 / held body /
+      HOLD_GUARD silent; the hero's HOLD_GUARD clears after his action (his
+      reflected Frost refused on the guarded turn); R4 confused Whirlwind
+      never rolls (no target: plain NO TARGET); R3 HOLD / FEAR bodies do not
+      follow, CONFUSED ones do
   R   review fixes: woken by the step on the held path with a walk key held
       (INPUT_REPEAT 0) -> no walk until released; CONFUSED mid-ladder never
       rolls; a reversed icon action refused with a line (NO MANA) -> no
@@ -53,7 +60,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
-from game_lib import (Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_GOBLIN, K_SLIME,  # noqa: E402
+from game_lib import (Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_GOBLIN, K_SLIME, K_GHOST, K_RAT,  # noqa: E402
                       stand_y, RUN_LIMIT, attr_at, cell_bytes)
 from proj3 import T, w16, Rng  # noqa: E402
 import combat_tables as CT  # noqa: E402
@@ -287,7 +294,7 @@ def run(h, p, check):
           p.ent(g)["HP"] == hp0 - 1 and s[0] == POISON and s[2] == 0x30 and p.ent(g)["X"] == HX + 7
           and "THE GOBLIN" + TXT["st_m_wake"] in lines, (p.ent(g)["HP"], s, p.ent(g)["X"], lines))
 
-    # ======================= G: STUN_GUARD =========================================
+    # ======================= G: HOLD_GUARD =========================================
     g, = scene(K_KNIGHT, [(K_GOBLIN, HX + 6, 60, True)])
     STUNC = 0 | (EFX["STUNNED"] << S["DH_EFX_SHIFT"])
     deal(0, g, 1, STUNC, 1)
@@ -303,7 +310,7 @@ def run(h, p, check):
     x2 = p.ent(g)["X"]
     deal(0, g, 1, STUNC, 1)
     e = st(g)
-    check("G1: STUNNED 1, then its phase: skipped, cleared, STUN_GUARD set",
+    check("G1: STUNNED 1, then its phase: skipped, cleared, HOLD_GUARD set",
           a[0] == STUNNED and a[1] == 0x10 and b[0] == GUARD and b[1] == 0 and x1 == x0, (a, b, x0, x1))
     check("G2: a stun under the guard is refused", c == b, c)
     check("G3: the Goblin acts (walks), the guard clears; a new stun lands",
@@ -484,6 +491,103 @@ def run(h, p, check):
     l3 = deal(0, g, 3, 0, 0)
     l1 = deal(0, g, 1, 0, 0)
     check("X4: WEAK hero: deal_hit dmg 3 -> 2, 1 -> 1 (min 1)", (l3, l1) == (2, 1), (l3, l1, hp0))
+
+    # ======================= D: D3-8f rulings (game.md §6.4.2) =====================
+    def kx_set(kind, off, v):
+        """poke kx_tab[kind * KX_STRIDE + off] (bank 3) -> the old value."""
+        z = 3 * 16384 + S["kx_tab"] + kind * S["KX_STRIDE"] + off - 0xC000
+        p.z.cmd("set-memory-zone 0")
+        try:
+            old = p.z.read_memory(z, 1)[0]
+            p.z.cmd("write-memory %d %d" % (z, v))
+        finally:
+            p.z.cmd("set-memory-zone -1")
+        return old
+    NODEF, FIRE_T = S["DH_NODEF"], S["DTY_FIRE"]
+    # D1 (R1): WEAK -1 on the DEF path only (hero PHYS without DH_NODEF), after R / W
+    g, sl = scene(K_KNIGHT, [(K_GOBLIN, HX + 8, 90, True), (K_SLIME, HX + 14, 90, True)])
+    setst(0, WEAK, 0, 0x0C)
+    l_phys, l_nodef, l_fire, l_slime = (deal(0, g, 3, 0, 0), deal(0, g, 3, NODEF, 0),
+                                        deal(0, g, 3, FIRE_T | NODEF, 0), deal(0, sl, 5, 0, 0))
+    hw = deal(g, 0, 5, 0, 0)
+    setst(0, 0)
+    hn = deal(g, 0, 5, 0, 0)
+    check("D1: WEAK hero: PHYS 3 -> 2; PHYS + NODEF 3 and a spell (FIRE) 3 full; Slime PHYS R 5 -> 5/2 - 1 = 1;"
+          " a monster's hit on him unchanged",
+          (l_phys, l_nodef, l_fire, l_slime) == (2, 3, 3, 1) and hw == hn, (l_phys, l_nodef, l_fire, l_slime, hw, hn))
+    # D2 (R2): immunity before the halving (boss ASLEEP / FEAR 1 -> UNAFFECTED);
+    # a boss halved to 0, a held body, HOLD_GUARD: silent
+    g, = scene(K_KNIGHT, [(K_GOBLIN, HX + 8, 90, True)])
+    imm0 = kx_set(K_GOBLIN, S["KX_IMM"], 0x80)
+    got = {}
+    for name, turns, st0 in (("ASLEEP", 1, 0), ("FEAR", 1, 0), ("STUNNED", 1, 0), ("FROZEN", 1, 0)):
+        setst(g, st0)
+        lines.clear()
+        deal(0, g, 1, EFX[name] << S["DH_EFX_SHIFT"], turns)
+        got[name] = (st(g)[0], list(lines))
+    kx_set(K_GOBLIN, S["KX_IMM"], imm0)
+    unaff = ["THE GOBLIN" + TXT["cmb_unaffected"]]
+    check("D2: boss ASLEEP 1 / FEAR 1 -> 'IS UNAFFECTED' (immunity first); STUNNED 1 / FROZEN 1 halved to 0: silent",
+          got == {"ASLEEP": (0, unaff), "FEAR": (0, unaff), "STUNNED": (0, []), "FROZEN": (0, [])}, got)
+    got = []
+    for st0, name in ((FROZEN, "STUNNED"), (GUARD, "FROZEN"), (GUARD, "STUNNED")):
+        setst(g, st0, 0x20 if st0 == FROZEN else 0)
+        lines.clear()
+        deal(0, g, 1, EFX[name] << S["DH_EFX_SHIFT"], 2)
+        got.append((st(g)[0], list(lines)))
+    check("D2: a held body / HOLD_GUARD block is silent", got == [(FROZEN, []), (GUARD, []), (GUARD, [])], got)
+    # D3 (§6.4 step 4 / B1): the hero's HOLD_GUARD clears AFTER his action — his
+    # own Frost reflected by a Ghost (COLD poked to X) on the guarded turn is
+    # refused; without the guard it freezes him 1 (self-freeze)
+    res = []
+    for guard in (True, False):
+        gh, = scene(K_WIZARD, [(K_GHOST, HX + 5, 60, True)], learn={FROST: 3})
+        r0 = kx_set(K_GHOST, 0, 0)
+        kx_set(K_GHOST, 0, r0 | (3 << 4))            # COLD (type 2): byte 0 bits 5-4 = X
+        if guard:
+            setst(0, GUARD)
+        ok = cast(3)
+        res.append((ok, st(0)[0] & (3 | GUARD), st(0)[1] & 0xF0))
+        kx_set(K_GHOST, 0, r0)
+    check("D3: guarded hero: his reflected Frost r3 is refused, the guard cleared after the action;"
+          " unguarded: FROZEN 1 (self)", res == [(True, 0, 0), (True, FROZEN, 0x10)], res)
+    # D4 (R4): a CONFUSED Warrior's Whirlwind never rolls; no target = the plain
+    # refusal (NO TARGET, no turn, no MP, facing kept, RNG untouched)
+    WHIRL = S["ABL_WHIRL"]
+    scene(K_KNIGHT, [], learn={WHIRL: 1})
+    setst(0, CONF, 0x0F)
+    p.wmem(S["RNG_STATE"], w16(rev))
+    p.select_slot(2)
+    lines.clear()
+    mp0, f0 = p.rb("MP"), p.ent(0)["FLAGS"]
+    nt = p.no_turn("FIRE")
+    check("D4: confused Whirlwind, no target: no roll, NO TARGET, no turn, no MP, no stumble, facing kept",
+          nt and p.rw("RNG_STATE") == rev and TXT["no_target"] in lines and TXT["st_stumble"] not in lines
+          and p.rb("MP") == mp0 and p.ent(0)["FLAGS"] == f0, (nt, hex(p.rw("RNG_STATE")), lines, p.rb("MP")))
+    g, = scene(K_KNIGHT, [(K_GOBLIN, HX - 4, 90, False)], learn={WHIRL: 1})
+    setst(0, CONF, 0x0F)
+    p.wmem(S["RNG_STATE"], w16(rev))
+    p.select_slot(2)
+    lines.clear()
+    tc0, mp0 = p.rw("TURN_COUNTER"), p.rb("MP")
+    p.turn("FIRE")
+    check("D4: confused Whirlwind with a body behind: struck as usual (a turn, MP spent), no stumble, facing kept",
+          p.rw("TURN_COUNTER") == tc0 + 1 and p.rb("MP") < mp0 and TXT["st_stumble"] not in lines
+          and not p.ent(0)["FLAGS"] & EF_LEFT, (p.rw("TURN_COUNTER") - tc0, p.rb("MP"), lines))
+    # D5 (R3): HOLD / FEAR bodies are not follow candidates, CONFUSED ones are
+    # (a Rat gap 3 behind the hero on room A's right exit, cf. game.py #27)
+    res = {}
+    for name, f, t1 in (("none", 0, 0), ("FROZEN", FROZEN, 0x50), ("ASLEEP", ASLEEP, 0x50),
+                        ("FEAR", FEAR, 0x05), ("CONFUSED", CONF, 0x05)):
+        rt, = scene(K_KNIGHT, [(K_RAT, 21, 30, False)], hx=28)
+        setst(rt, f, t1)
+        room0 = p.rb("CUR_ROOM")
+        p.turn("L")
+        p.until(lambda: p.rb("CUR_ROOM") != room0 and p.idle())
+        res[name] = (p.ent(rt)["ROOM"] != room0, st(rt))
+    check("D5: follow: plain / CONFUSED follow (status kept), FROZEN / ASLEEP / FEAR stay",
+          [res[k][0] for k in ("none", "FROZEN", "ASLEEP", "FEAR", "CONFUSED")] == [True, False, False, False, True]
+          and res["CONFUSED"][1][0] == CONF, res)
 
     # ======================= R: review fixes (fix pass) ============================
     # R1: woken by the status step (ASLEEP 5 + POISON 4: 4 -> 3 costs 1 HP) on the

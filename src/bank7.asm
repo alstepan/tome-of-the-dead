@@ -141,6 +141,11 @@ turn_input:
                 jr   .spent
 .act:           call try_player_turn
                 ret  nc                        ; illegal: no turn consumed
+                ld   a, (MON_AT)               ; D3-8f: he acted -> his HOLD_GUARD clears
+                or   a                         ; (game.md §6.4 step 4: after the action,
+                jr   nz, .spent                ; before the monster phase); an ability
+                ld   hl, ST_FLAGS              ; turn resolves at its release: act_pend
+                res  STS_GUARD_BIT, (hl)       ; clears it then. (.hw: no action, kept)
 .spent:         xor  a
                 ld   (HST_DONE), a             ; the next turn steps again
                 ld   a, (CLIMB_BLK)            ; B14: any turn but a blocked-climb
@@ -857,6 +862,17 @@ follow_select:
                 ld   a, (CUR_ROOM)
                 cp   (ix+E_ROOM)
                 jr   nz, .cn
+                ld   a, (TMP7)                 ; D3-8f (game.md §6.4.2 R3): a HOLD or
+                add  a, ST_FLAGS & $FF         ; FEAR body is not a candidate (CONFUSED
+                ld   l, a                      ; may follow)
+                ld   h, ST_FLAGS >> 8
+                ld   a, (hl)
+                and  STS_HOLD
+                jr   nz, .cn
+                ld   a, (hl)
+                and  STS_MIND
+                cp   MIND_FEAR
+                jr   z, .cn
                 call on_ladder
                 jr   z, .cn                    ; must be standing / flying
                 call storey_ref

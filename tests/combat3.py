@@ -14,7 +14,7 @@ Knight game (PROTO room A, every monster parked). Rules: game.md §4.1 (XP),
   C6  FIRE thaws FROZEN, COLD does not; any HP loss wakes ASLEEP
   C7  effect apply: HOLD / MIND / POISON / WEAK fields, same effect = max,
       group overwrite, groups independent, R halves (1 -> none), immunity
-      mask, STUN_GUARD, kill -> no effect + status cleared, chance 1 in 1
+      mask, HOLD_GUARD, kill -> no effect + status cleared, chance 1 in 1
   C8  XP: kill awards KXP, EF_RESPAWN KXP/2 min 1, XP_MAX saturation,
       XP_UP set; the hero's death awards nothing
   C9  hit_roll == d20 + atk + mod >= 10 + eva (d20 drawn from the same seed),

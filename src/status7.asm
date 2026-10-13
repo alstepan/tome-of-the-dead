@@ -23,8 +23,11 @@
 ;  3. HOLD set: timer - 1, the action is skipped (L = 1); at 0 clear (ASLEEP:
 ;     "WAKES UP" / "YOU WAKE UP", FROZEN / STUNNED: "YOU CAN MOVE AGAIN", hero
 ;     only); a FROZEN / STUNNED that just cleared sets HOLD_GUARD (D3-8c).
-;  4. Else L = 0 (the entity acts) and HOLD_GUARD clears ("after the action":
-;     nothing between here and its action can freeze / stun it).
+;  4. Else L = 0 (the entity acts). A monster's HOLD_GUARD clears here (its
+;     own action cannot freeze / stun it, so this is "after the action"); the
+;     hero's is cleared by turn_input / act_pend AFTER his action (game.md §6.4 step 4,
+;     §6.4.1 B1; D3-8f): his own bounced / reflected Frost must not re-freeze
+;     him on the guarded turn.
 ; Invariant kept: a group bit / kind is set <=> its timer nibble != 0.
 ; Out: L = 1 held (skip the action), 0 act. IX kept.
 ; Clobbers: A, BC, DE, HL.   ~0.25k T (+ ~1.5k per line)
@@ -131,8 +134,10 @@ st_step:
 .held:          ld   l, 1
                 ret
                 ; --- 4. act ---
-.act:           res  STS_GUARD_BIT, (hl)
-                ld   l, 0
+.act:           bit  EF_PLAYER_BIT, (ix+E_FLAGS)
+                jr   nz, .ha                   ; the hero: after his action (turn_input / act_pend)
+                res  STS_GUARD_BIT, (hl)
+.ha:            ld   l, 0
                 ret
 ; .hclr — HOLD kind and timer of HL's slot to 0.  Clobbers: A, DE
 .hclr:          ld   a, (hl)

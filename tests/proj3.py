@@ -219,25 +219,26 @@ class World:
                 if ch:
                     ok = rng.mod(ch) == 0
                 turns = e & 15
+                imm_bit = {FROZEN: 0, CONFUSED: S["IMMF_CONFUSE"]}[efx]
+                if self.imm(T) & imm_bit:
+                    ok = False                             # D3-8f R2 (1): immunity first
                 if ok and rsp == R:
                     turns //= 2
                 if ok and turns:
-                    imm_bit = {FROZEN: 0, CONFUSED: S["IMMF_CONFUSE"]}[efx]
-                    if not (self.imm(T) & imm_bit):
-                        if efx == FROZEN and (T.stf & 3 or T.stf & 0x40):
-                            pass                           # D3-8c: held body / HOLD_GUARD
-                        elif efx == FROZEN:
-                            if att == tgt:
-                                turns = 1                  # D3-8c: self-freeze
-                            same = (T.stf & 3) == FROZEN
-                            cur = T.st1 >> 4
-                            T.stf = (T.stf & ~3) | FROZEN
-                            T.st1 = (T.st1 & 0x0F) | (max(cur, turns) if same else turns) << 4
-                        else:
-                            same = (T.stf & 0x0C) == (2 << 2)
-                            cur = T.st1 & 15
-                            T.stf = (T.stf & ~0x0C) | (2 << 2)
-                            T.st1 = (T.st1 & 0xF0) | (max(cur, turns) if same else turns)
+                    if efx == FROZEN and (T.stf & 3 or T.stf & 0x40):
+                        pass                               # D3-8c: held body / HOLD_GUARD
+                    elif efx == FROZEN:
+                        if att == tgt:
+                            turns = 1                      # D3-8c: self-freeze
+                        same = (T.stf & 3) == FROZEN
+                        cur = T.st1 >> 4
+                        T.stf = (T.stf & ~3) | FROZEN
+                        T.st1 = (T.st1 & 0x0F) | (max(cur, turns) if same else turns) << 4
+                    else:
+                        same = (T.stf & 0x0C) == (2 << 2)
+                        cur = T.st1 & 15
+                        T.stf = (T.stf & ~0x0C) | (2 << 2)
+                        T.st1 = (T.st1 & 0xF0) | (max(cur, turns) if same else turns)
         A = self.bodies[att]
         if c & HEAL and A.hp > 0:
             A.hp = min(A.maxhp, A.hp + lost)
@@ -765,6 +766,19 @@ def main():
         w.bodies[1] = Body(1, K_GHOST, hx + 5, hy + 1, 50)
         case("P6 Drain reflected onto the caster: hit, no heal", w, DRAINL, 1,
              must=lambda res, w: res["tgt"] == 0 and 0 < res["lost"] and w.bodies[0].hp == 100 - res["lost"])
+        # D3-8f (game.md §6.4.1 B3): a Ghost poked to reflect COLD sends a rank-3
+        # Frost Shard (FROZEN 4) back onto the hero: the self-freeze is 1 turn
+        frx = list(kx_old)
+        frx[0] = (frx[0] & ~(3 << (2 * COLD))) | (X << (2 * COLD))
+        p.z.cmd("set-memory-zone 0")
+        p.wmem(kxa, frx)
+        p.z.cmd("set-memory-zone -1")
+        w = world()
+        w.kx_over = {K_GHOST: frx}
+        w.bodies[1] = Body(1, K_GHOST, hx + 5, hy + 1, 50)
+        case("P6 Ghost reflects rank-3 Frost onto the hero: FROZEN 1 (self-freeze), the Ghost unhurt", w, FROST, 3,
+             must=lambda res, w: res["tgt"] == 0 and w.bodies[0].stf == FROZEN and w.bodies[0].st1 == 0x10
+             and w.bodies[1].hp == 50)
         p.z.cmd("set-memory-zone 0")
         p.wmem(kxa, kx_old)
         p.z.cmd("set-memory-zone -1")

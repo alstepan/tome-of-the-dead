@@ -90,8 +90,8 @@ sel_key:
 use_icon:
                 ld   a, (SEL_SLOT)
                 call slot_act                  ; bank 2
-                ; D3-8: a CONFUSED hero's facing actions (melee, abilities, throw,
-                ; bow) are reversed 1 in 3 (never mid-ladder: conf_roll): turn
+                ; D3-8: a CONFUSED hero's facing actions (melee, abilities but
+                ; Whirlwind, throw, bow) are reversed 1 in 3 (never mid-ladder: conf_roll): turn
                 ; around, then use it. Refused that way: a refusal with a line
                 ; (L = IC_REFUSED: no MP / ammo, unlearned, AFRAID — not the
                 ; direction's fault) faces back, no turn; one the direction
@@ -107,7 +107,13 @@ use_icon:
                 cp   SA_BOW
                 jr   nz, .go
 .fa:            ld   b, a
-                call conf_roll                 ; status7.asm (keeps B)
+                cp   SA_ABIL + ABL_WHIRL - ABL_POWER
+                jr   nz, .rl
+                ld   a, (HERO_KIND)            ; D3-8f (game.md §6.4.2 R4): the Warrior's
+                or   a                         ; Whirlwind never rolls (it strikes both
+                ld   a, b                      ; sides): no target = the plain refusal
+                jr   z, .go
+.rl:            call conf_roll                 ; status7.asm (keeps B)
                 ld   a, b
                 jr   nc, .go
                 ld   a, (ix+E_FLAGS)

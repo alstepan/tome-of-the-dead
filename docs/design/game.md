@@ -870,7 +870,7 @@ Seven effects in **four groups**. Effects in one group are exclusive; groups com
 
 **Data shape (per entity, 3 B + 1 spare; the engineer assigns layout in memory-map):**
 - `STATUS`: bits 0–1 HOLD (0 none, 1 FROZEN, 2 ASLEEP, 3 STUNNED) · bits 2–3 MIND (0 none,
-  1 FEAR, 2 CONFUSED, 3 reserved) · bit 4 POISON · bit 5 WEAK · bit 6 **STUN_GUARD** (generalised
+  1 FEAR, 2 CONFUSED, 3 reserved) · bit 4 POISON · bit 5 WEAK · bit 6 **HOLD_GUARD** (was STUN_GUARD; generalised
   to **HOLD_GUARD**, §6.4.1) · bit 7
   reserved. Invariant: a group bit/kind is set ⇔ its timer nibble ≠ 0. `STATUS = 0` is the
   fast path (skip the whole step).
@@ -888,8 +888,8 @@ Seven effects in **four groups**. Effects in one group are exclusive; groups com
    resistances; **never below 1 HP**: no source poisons monsters, so poison never kills).
 2. WEAK, MIND: decrement; at 0 clear (end message, hero only).
 3. HOLD: if set → decrement, **skip the action** (cooldowns do not tick); at 0 clear. If
-   STUNNED just cleared, set STUN_GUARD (§6.4.1: FROZEN too, = HOLD_GUARD).
-4. Otherwise act; after the action, clear STUN_GUARD.
+   STUNNED just cleared, set HOLD_GUARD (§6.4.1: FROZEN too).
+4. Otherwise act; after the action, clear HOLD_GUARD.
 
 Because the step runs before the action, "duration *n*" = the entity loses exactly its next
 *n* action phases, whether applied in phase 1 (a hero spell on a monster) or phase 2 (a
@@ -900,7 +900,7 @@ monster hit on the hero), with no "applied this turn" flag. A banked monster (ot
 |---|---|---|---|
 | **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 / 3 / 4 by rank (COLD hit); self after a bounce or reflection **1** (§6.4.1) |
 | **ASLEEP** | skip action; eva 0 | timer, or **any HP loss** (incl. poison, aura) wakes it | Sleep scroll 8 (room), GAS trap 4 (hero) |
-| **STUNNED** | skip action; eva 0; cannot parry | timer. **STUN_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero) |
+| **STUNNED** | skip action; eva 0; cannot parry | timer. **HOLD_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero) |
 | **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action fails because of the direction the turn is spent (`YOU STUMBLE.`); a non-direction refusal costs no turn and faces back (§2.3, §6.4.2 R4). Whirlwind, climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
 | **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) → illegal, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; ranged, spells, items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll 6 (room); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
 | **POISON** | −1 HP every 3rd turn (step 1) | timer; Cure | **adds per application, cap 15** (§6.4.1): Spider bite **6** (was 9), Spider Queen **9** (was 12), DART trap 6 |
@@ -973,7 +973,7 @@ bank 2 ~150 B; apply/clear/messages/tint in bank 3 via `far3`, ~300 B). Strings 
 | # | Change | Why |
 |---|---|---|
 | B1 | **HOLD_GUARD** replaces STUN_GUARD: set when FROZEN or STUNNED ends (timer or FIRE thaw); while set, FROZEN and STUNNED do not apply (`IS UNAFFECTED.` is **not** printed: silent). Cleared after the body's next action, as before. ASLEEP is not guarded (damage already breaks it) | Frost recast on the last frozen turn chain-locked any COLD-N monster for 3 MP per 2–4 turns: zero monster actions while MP lasts. Guarded uptime is capped at n/(n+1): 67 / 75 / 80 % by rank |
-| B2 | **No HOLD lands on a held body:** FROZEN/STUNNED on a body whose HOLD is set → no effect (damage still applies). A sleeper is woken by the hit first, so Frost on a sleeper still freezes | Refresh (max) and overwrite (Stun → Frost) were the other ways to extend a lock |
+| B2 | **No HOLD lands on a held body:** FROZEN/STUNNED/ASLEEP on a body whose HOLD is set → no effect (damage still applies). A sleeper is woken by the hit first, so Frost on a sleeper still freezes | Refresh (max) and overwrite (Stun → Frost) were the other ways to extend a lock |
 | B3 | **Self-freeze = 1 turn** at every rank: a Frost Shard striking its own caster (bounce, Ghost/Archmage reflection) freezes for 1, whatever the rank | Rank-ups added bounces *and* length, so rank 3 punished its own caster with 4 eva-0 turns; the Archmage reflects Frost (§9.1), which at rank 3 was a near-certain death. The risk stays, the spike goes |
 | B4 | **Spark CONFUSED 3 → 4** (all ranks; rank 3 chance 1 in 2 unchanged; bosses 4 → 2) | A confused monster loses only 1 in 2 actions, so 3 turns ≈ 1.5 lost actions on a 1-in-4 proc ≈ 0.4 per cast: invisible. 4 ≈ 2 lost actions; the boss value goes from 1 (≈ 0.5, unnoticeable) to 2 |
 | B5 | **POISON adds** per application, cap 15 (still −1 HP every 3rd turn, never below 1 HP). Spider **6** per bite (was 9), Spider Queen **9** (was 12), DART 6 | With max() a long Spider fight cost the same 3 HP as one bite: more bites must hurt more. 1 bite = 2 HP (was 3), 2 bites = 4, 3+ = 5 (cap). Safe because poison cannot kill |
