@@ -312,7 +312,8 @@ reset** on re-entry.
 
 **Follow rule (evaluated once, on the player's exit turn, before the transition):**
 
-1. **Candidates** = alive, standing (not mid-ladder), non-pending monsters in the
+1. **Candidates** = alive, standing (not mid-ladder), non-pending monsters, with no HOLD
+   or FEAR status (game.md §6.4.2 R3), in the
    room being left that are on the **same storey the player exited from**, with
    **gap ≤ 4 cells** to the player's body (either direction; for a vertical exit,
    measured to the shaft col's body box). A **vertical exit** also requires the

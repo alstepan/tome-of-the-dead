@@ -256,8 +256,12 @@ generator outputs before the trap step unchanged vs B3B-7.
 | Exit room | part of the walk/climb | — | prototype §3.6 |
 
 Illegal actions cost no turn (F4). A **held** entity (FROZEN, ASLEEP or STUNNED, §6.4) skips
-its action. Exception to F4: a CONFUSED hero's reversed action that turns out illegal costs
-the turn (`YOU STUMBLE.`, §6.4).
+its action. Exception to F4, and only for a **direction** failure: a CONFUSED hero's reversed
+action that fails because of the new direction (blocked walk or jump, no target for a
+directional melee, bump or Power Strike) costs the turn (`YOU STUMBLE.`); he stays facing the
+reversed way. A reversed action refused for a **non-direction** reason (NO MANA, NOT LEARNED,
+AFRAID, no ammo/bow) costs no turn, and he faces back to his original direction (user,
+confirmed). Whirlwind never rolls. See §6.4.2 R4.
 
 ### 2.4 Jump (user: agreed)
 
@@ -807,18 +811,18 @@ Seven effects in **four groups**. Effects in one group are exclusive; groups com
 
 Because the step runs before the action, "duration *n*" = the entity loses exactly its next
 *n* action phases, whether applied in phase 1 (a hero spell on a monster) or phase 2 (a
-monster hit on the hero), with no "applied this turn" flag. Monsters in other rooms are
-frozen in time: their timers pause.
+monster hit on the hero), with no "applied this turn" flag. A banked monster (other room)
+**loses its status**; an admitted follower keeps it (§6.4.2 R3).
 
 | Effect | Does | Ends | Durations / sources |
 |---|---|---|---|
 | **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 / 3 / 4 by rank (COLD hit); self after a bounce or reflection **1** (§6.4.1) |
 | **ASLEEP** | skip action; eva 0 | timer, or **any HP loss** (incl. poison, aura) wakes it | Sleep scroll 8 (room), GAS trap 4 (hero) |
 | **STUNNED** | skip action; eva 0; cannot parry | timer. **STUN_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero) |
-| **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action is illegal the turn is spent (`YOU STUMBLE.`). Climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
+| **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action fails because of the direction the turn is spent (`YOU STUMBLE.`); a non-direction refusal costs no turn and faces back (§2.3, §6.4.2 R4). Whirlwind, climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
 | **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) → illegal, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; ranged, spells, items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll 6 (room); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
 | **POISON** | −1 HP every 3rd turn (step 1) | timer; Cure | **adds per application, cap 15** (§6.4.1): Spider bite **6** (was 9), Spider Queen **9** (was 12), DART trap 6 |
-| **WEAK** | the hunger-WEAK penalties (§7: atk −2, eva −1, dmg −1 min 1, no MP regen, no jump); **not cumulative** with hunger WEAK (the same penalties apply once) | timer; Cure | **Mummy curse** (below) 12 |
+| **WEAK** | the hunger-WEAK penalties (§7: atk −2, eva −1, dmg −1 min 1 on **physical hits only**, §6.4.2 R1, no MP regen, no jump); **not cumulative** with hunger WEAK (the same penalties apply once) | timer; Cure | **Mummy curse** (below) 12 |
 
 **Mummy curse (defines §10's "curse").** A Mummy (and the Golden Pharaoh) hit drains 5 FOOD
 as before and, **1 in 3**, curses: WEAK 12. `THE MUMMY CURSES YOU!` WEAK is a hero-only
@@ -831,7 +835,8 @@ the COLD damage wakes it, then FROZEN applies). Groups are independent.
 
 **Bosses** (`BOSS` flag: golden bosses, Ogre, Death Knight, Archmage): **immune to ASLEEP and
 FEAR**; HOLD and MIND durations are **halved, round down; 0 = no effect** (Frost 2 → 1, as
-before; Power Strike stun 1 → none; Spark confusion 3 → 1). POISON full.
+before; Power Strike stun 1 → none; Spark confusion 3 → 1). POISON full. Check order and
+messages: §6.4.2 R2.
 
 **Resistances (§6.0) for effects carried by a typed hit:** the effect applies only if the hit
 dealt ≥ 1 damage (a parry, I or X gives nothing); response **I/X → no effect**, **R →
@@ -953,6 +958,15 @@ water). It must never be `$44` or `$43` (the heal and poison colours), and never
 (the mark colours). **The poison-trap drip variant is rejected:** over a hidden trap it would
 reveal it and break §1.5 trap finding, and over a known trap it repeats the `T_TRAP` glyph.
 
+### 6.4.2 Status rulings (designer decision 2026-10-13)
+
+| # | Question | Ruling | Why |
+|---|---|---|---|
+| R1 | Scope of WEAK `dmg −1` (curse **and** hunger stage, one rule) | Applies to **hero-dealt PHYS damage only** = exactly where DEF applies: melee, Mage staff bonk, Power Strike, Whirlwind, thrown daggers, arrows. Order: `max(1, roll × mult × resist − DEF − 1)` (Power Strike: after ×2). **Not** to spells (they ignore DEF): Spark, Firebolt + burst, Frost, Drain Life (heal = damage dealt, unreduced), Lightning, and a hero spell bounced/reflected onto himself. Not to traps, poison, monster hits. `atk −2` still applies to every hero to-hit roll | WEAK is lost strength; MP-regen halt is already the Mage's penalty. Gate = "DEF path", no extra source flag |
+| R2 | Boss + short ASLEEP/FEAR (halving runs before the immunity check, so nothing prints) | Fixed check order in `dh_status`: **(1) immunity mask + boss ASLEEP/FEAR immunity → ` IS UNAFFECTED.`** (stop); (2) typed-hit resistance I/X → none, R → halve; (3) boss halve; (4) B2 held-body / HOLD_GUARD. A result of 0 in steps 2–3 and any step-4 block are **silent** | Immunity is a fact the player should learn; a halved-to-0 stun on a boss is a partial resist already shown by the damage number, and printing it after every Power Strike is log spam |
+| R3 | Status of monsters leaving the room | **Accept the deviation:** banked monsters lose all status (§9.4.2 residue); no pause storage. **Admitted followers keep** their full 4-B status record (kind bits, timers, HOLD_GUARD), copied with the slot; timers do not tick during the transition. **HOLD or FEAR bodies are not follow candidates** (prototype §3.7 step 1); CONFUSED ones may follow | Pause would cost ≤ 4 × 9 rooms × 3 B ≈ 108 B of the 235 B bank-3 free for no visible gain (re-entry already re-places and keeps hp). A frozen monster walking through the door, or a fleeing one chasing, reads as a bug |
+| R4 | Confused hero + Whirlwind with no target | Whirlwind **never rolls** confusion (it strikes both sides; reversal is meaningless). No target → the plain §6.2 refusal: no turn, no MP. General reversed-path rule (§2.3): **direction failure → `YOU STUMBLE.`, turn spent, stays reversed**; **non-direction refusal (NO MANA, NOT LEARNED, AFRAID, no ammo/bow) → no turn, faces back** (user, confirmed) | A stumble must be caused by the confusion; Whirlwind's miss never is |
+
 ### 6.5 Hit feedback: damage numbers and target readout (D3-11; user 2026-10-13 numbers; designer decision 2026-10-13 rest)
 
 Enemy health is shown in two ways: **flying numbers** over the body that was hit (what this hit
@@ -1068,7 +1082,7 @@ distinct stages, each name ≤ 6 chars:**
 | **FED** | 50–100 | **HP +1 per 12 turns** (user: agreed) | `$44` |
 | **OK** (was Peckish) | 25–49 | no HP regen | `$46` |
 | **HUNGRY** | 10–24 | atk −1, MP regen halved | `$42` |
-| **WEAK** | 0–9 | atk −2, eva −1, dmg −1 (min 1), no MP regen, no jump | `$42` + message every 50 turns (`YOU ARE WEAK WITH HUNGER.`) |
+| **WEAK** | 0–9 | atk −2, eva −1, dmg −1 (min 1; physical hits only, §6.4.2 R1), no MP regen, no jump | `$42` + message every 50 turns (`YOU ARE WEAK WITH HUNGER.`) |
 
 The Mummy curse applies the same penalties as the WEAK **status** (§6.4), not cumulative with
 this stage. The panel hunger word stays FOOD-derived; the curse shows as a status icon.
@@ -1587,7 +1601,8 @@ leaving to turn a tier-3 monster into a base one. Option (b) costs ~80 B.
 
 Accepted residue:
 - Positions are re-placed on re-entry (at least 8 cols away, §9.4.3).
-- Statuses are lost both ways (a poisoned monster recovers; a frozen one thaws).
+- Statuses are lost both ways (a poisoned monster recovers; a frozen one thaws). Admitted
+  followers keep theirs (§6.4.2 R3).
 
 #### 9.4.3 Spawn on entry (room build, `GS_TRANSITION`, before the scroll)
 
