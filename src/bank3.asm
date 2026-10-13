@@ -39,8 +39,9 @@
 ;==============================================================================
 ; A7 review: cold game-state code moved out of bank 2 (bank-2 headroom for
 ; Stage-3 hot code): new_game (+ init_ent_common, spawn_tab), the follower
-; selection and arrival conflicts. None of it pages $C000 (only bank-2
-; queries + vis_reset in bank-5 low RAM).
+; admission (L-RELIEF: the candidate scan, place_follower and the arrival
+; conflicts are bank 7 now). None of it pages $C000 (only bank-2 queries +
+; vis_reset in bank-5 low RAM).
 ;==============================================================================
 ;==============================================================================
 ; NEW GAME (prototype §6.5: fixed gameplay RNG seed; all rooms, monsters,
@@ -227,95 +228,12 @@ init_ent_common:
                 ret
 
 ;==============================================================================
-; FOLLOW SELECTION (prototype §3.7) — on the player's exit turn, before the
-; transition. EXIT_KIND/DEST/STOREY/COL set. No RNG; deterministic order
-; (gap ascending, ties lower slot). A7 review: bank 3 (cold), do_exit enters
-; it and arrival_conflicts via far3.  Clobbers: all but IY.
+; FOLLOW SELECTION (prototype §3.7). L-RELIEF: the candidate scan
+; follow_select, place_follower and arrival_conflicts are bank-7 code now
+; (bank7.asm, room exit = cold); the admission half stays here (lp_wt / lp_rec
+; are bank-3 data): follow_select far3s follow_admit (PROTO), lp_transition
+; calls it directly; it far7s place_follower.
 ;==============================================================================
-follow_select:
-                xor  a
-                ld   (FOLLOW_N), a
-                ; reference box: player (horizontal) or the shaft standing box
-                ld   ix, P_ENTITIES
-                call get_box
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                jr   c, .hbox
-                ld   a, (EXIT_COL)
-                ld   c, a
-                ld   a, (EXIT_STOREY)
-                MUL_STOREY b
-                add  a, STOREY_AIR
-                sub  e
-                ld   b, a                      ; standing y on the exit storey (9s+8-h)
-.hbox:          ld   a, c
-                ld   (TMP0), a                 ; ref x
-                ld   a, d
-                ld   (TMP2), a                 ; ref w
-                ; --- candidate gaps ---
-                ld   a, 1
-.cl:            ld   (TMP7), a
-                ld   hl, CAND_LIST
-                ld   e, a
-                ld   d, 0
-                add  hl, de
-                ld   (hl), $FF
-                call ent_ix
-                ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING | EF_DYING
-                cp   EF_ACTIVE
-                jr   nz, .cn
-                ld   a, (CUR_ROOM)
-                cp   (ix+E_ROOM)
-                jr   nz, .cn
-                call on_ladder
-                jr   z, .cn                    ; must be standing / flying
-                call storey_ref
-                ld   hl, EXIT_STOREY
-                cp   (hl)
-                jr   nz, .cn
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                jr   c, .hz
-                KFIELD KT_FLAGS                ; vertical: climbers only
-                and  KF_CLIMBER
-                jr   z, .cn
-.hz:            ; gap = |boxes| distance
-                ld   a, (TMP0)
-                cp   (ix+E_X)
-                jr   c, .mright
-                KFIELD KT_BW
-                add  a, (ix+E_X)
-                ld   b, a
-                ld   a, (TMP0)
-                sub  b                         ; ref.x - (m.x+m.w)
-                jr   .g
-.mright:        ld   a, (TMP0)
-                ld   hl, TMP2
-                add  a, (hl)
-                ld   b, a
-                ld   a, (ix+E_X)
-                sub  b                         ; m.x - (ref.x+ref.w)
-.g:             jr   c, .cn
-                cp   FOLLOW_GAP + 1
-                jr   nc, .cn
-                ld   b, a
-                ld   a, (TMP7)
-                ld   e, a
-                ld   d, 0
-                ld   hl, CAND_GAP
-                add  hl, de
-                ld   (hl), b
-                ld   hl, CAND_LIST
-                add  hl, de
-                ld   (hl), a
-.cn:            ld   a, (TMP7)
-                inc  a
-                cp   P_MAX_ENT
-                jp   c, .cl
-                ld   a, (LVL_DEPTH)            ; LP (game.md §9.4.3): the candidates
-                or   a                         ; wait; lp_transition admits them after
-                ret  nz                        ; the destination's residents spawned
 ;------------------------------------------------------------------------------
 ; follow_admit — the admission half of follow_select (CAND_LIST / CAND_GAP
 ; filled): candidates in (gap, slot) order against the destination's
@@ -390,8 +308,9 @@ follow_admit:
                 inc  (hl)
                 ld   hl, FOLLOW_N
                 inc  (hl)
-                call place_follower
-                jr   .pick
+                ld   hl, place_follower        ; L-RELIEF: bank 7 (IX passes in; A, F lost:
+                call far7                      ; .pick reloads them)
+                jp   .pick                     ; (+3 B of far call: out of jr range)
 
 ; dest_counts — TMP3 = active monsters (incl. pending) in EXIT_DEST, TMP4 =
 ; tall (PROTO) / sum weight (LP: + the residents still in the destination's
@@ -455,81 +374,6 @@ dest_counts:
                 add  a, (hl)
                 ld   (TMP4), a
                 pop  hl
-                ret
-
-; place_follower — IX = admitted follower: room <- dest, PENDING, entry spot.
-place_follower:
-                ld   a, (EXIT_DEST)
-                ld   (ix+E_ROOM), a
-                set  EF_PENDING_BIT, (ix+E_FLAGS)
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                jr   nc, .vert
-                ; horizontal: x = 1 (arrive at left edge) or 31-w; face in
-                cp   EX_RIGHT
-                jr   nz, .fromleft
-                ld   (ix+E_X), 1
-                res  EF_LEFT_BIT, (ix+E_FLAGS)
-                jr   .hy
-.fromleft:      KFIELD KT_BW
-                ld   b, a
-                ld   a, ROOM_COLS - 1
-                sub  b
-                ld   (ix+E_X), a
-                set  EF_LEFT_BIT, (ix+E_FLAGS)
-.hy:            set  EF_WALKIN_BIT, (ix+E_FLAGS)
-                KFIELD KT_FLAGS
-                and  KF_FLYER
-                ret  nz                        ; flyers keep their band offset (same s)
-                ld   a, (EXIT_STOREY)
-                jr   .stand
-.vert:          ld   a, (EXIT_COL)
-                ld   (ix+E_X), a
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                ld   a, STOREY_COUNT - 1       ; going up: arrive on the bottom storey
-                jr   z, .stand
-                xor  a                         ; going down: storey 0
-.stand:         MUL_STOREY b
-                add  a, STOREY_AIR             ; 9s+8
-                ld   b, a
-                KFIELD KT_BH
-                ld   c, a
-                ld   a, b
-                sub  c
-                ld   (ix+E_Y), a
-                ret
-
-;==============================================================================
-; arrival_conflicts — after a transition: any non-pending monster in CUR_ROOM
-; whose box overlaps the hero's arrival box becomes PENDING in place (§3.6).
-;==============================================================================
-arrival_conflicts:
-                ld   ix, P_ENTITIES
-                call get_box                   ; hero arrival box
-                ld   ix, P_ENTITIES + P_ENT_STRIDE
-                ld   a, 1
-.l:             push af
-                push bc
-                push de
-                ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING | EF_DYING
-                cp   EF_ACTIVE
-                jr   nz, .n
-                ld   a, (CUR_ROOM)
-                cp   (ix+E_ROOM)
-                jr   nz, .n
-                call box_vs_ix
-                jr   nc, .n
-                set  EF_PENDING_BIT, (ix+E_FLAGS)
-.n:             ld   de, P_ENT_STRIDE
-                add  ix, de
-                pop  de
-                pop  bc
-                pop  af
-                inc  a
-                cp   P_MAX_ENT
-                jr   c, .l
                 ret
 
 ;------------------------------------------------------------------------------

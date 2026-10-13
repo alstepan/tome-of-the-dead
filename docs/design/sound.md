@@ -135,18 +135,17 @@ without a transposition (free in the converter).
 - **Cost E:** ~1.5k typical, ≤ 2.5k worst → **+4.4k T a tick worst**. Ordinary 120.0k → ~124.4k (cap 126k). "advcast" 126.0k → ~130.4k: **over the 128k cast cap**, still under the 141.8k hard limit. Re-derive the caps from the measured player.
 - **Driven from the ISR, not the main loop:** tempo stays steady when a tick runs to 3 frames.
 
-### Balance finding from the web-audio concept player (user ear check, 2026-10-13)
+### Reference = the tsx player, not the ABC (user ear check, 2026-10-13)
 
-User: "legato is shy while staccato is loud". Cause in `assets/sfx/concepts/player-js/main.tsx` (l.1197–1214):
-both articulations sit at the same AY level (13; bass 14) but legato notes **glide** (`setTargetAtTime` on frequency,
-no re-trigger, no attack) while a staccato note is cut at 45 % of its length — so the plucked voice gets an audible
-onset on every note and the legato voice has none. Loudness is perceived at the attack, not at the sustain level.
-**Rules for the real player:** (1) balance by *peak vs sustain*, not by one shared level: pluck peak ≈ 12–13 decaying
-fast, legato/organ sustain 13–14 with its own 2–3-frame attack ramp (9,11,13); (2) every legato note boundary still
-re-triggers the volume table (a 1-frame dip to ~−2 steps, no envelope restart) so repeated pitches are heard;
-(3) never gate legato below 100 % of its row; (4) staccato blocks pass between voices, so the mix must hold with the
-pluck on V1 *and* on V3 — tune by ear in `ay_render.py --compare` with the staccato/legato level offset as a CLI knob
-(`--stac-offset`, default −1). The AY log table (3 dB/step) means 1 step ≈ 1.4× amplitude: a 1-step shift is audible.
+User: the web-audio player `assets/sfx/concepts/player-js/main.tsx` **sounds right in the browser**; the ABC renders
+had legato shy / staccato loud. So the tsx is the **ground truth** for notes (its `Note[]` arrays: pitch, duration,
+staccato flag) and for the intended balance; the `.abc` exports are the lossy copy. (An earlier note here blamed the
+tsx gain model — withdrawn.) Playback model to match in `ay_render.py` / the real player: every voice at AY level 13
+(bass 14), legato = sustain at that level with a ~6 ms frequency glide, staccato = level 0 after 45 % of the note
+(l.1197–1210; `AY_VOL_TABLE` l.809). Open: the tsx shows both articulations at equal level, so the ABC renders'
+imbalance is likely their synth's per-note attack/velocity — keep levels equal and do not add an extra attack to legato.
+**Action for T1 (`abc2wzm.py`):** cross-check parsed ABC notes against the tsx arrays (pitch, duration, staccato) and
+report any disagreement; where they differ, the tsx wins and the ABC is regenerated from it (or `--source tsx`).
 
 ### Timbres (instrument tables, ~25–40 B each)
 

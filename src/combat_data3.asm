@@ -42,6 +42,13 @@ kx_tab:
                 DS   KX_LEN - K_COUNT * KX_STRIDE, 0                      ; ids 9..31 (3F)
                 ASSERT kx_tab == BANK_WINDOW && $ - kx_tab == KX_LEN
 
+; L-RELIEF: decor_gen.asm's dg_bad (64 B, 64-aligned lookup) sits here, at
+; $C000 + KX_LEN = $C0C0: aligned by construction, so no ALIGN pad whatever the
+; bank-3 code size (it was an ALIGN 64 inside decor_gen.asm: 0..63 B of pad that
+; moved with every byte of code before it). Bank 3 data, read by bank-3 code only.
+                INCLUDE "dg_bad3.asm"           ; GENERATED: tools/decorgen.py --asm-bad
+                ASSERT dg_bad == kx_tab + KX_LEN && (dg_bad & 63) == 0 && $ - dg_bad == TILE_IDS
+
 ;------------------------------------------------------------------------------
 ; xpn_tab = XP_NEXT (§4.1; info1.asm keeps its own xp_next for the display): total XP to reach level 2..9, 16-bit LE. Row = (LVL - 2) * 2.
 ;------------------------------------------------------------------------------

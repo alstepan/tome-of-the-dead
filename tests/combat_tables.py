@@ -123,7 +123,7 @@ def main():
     for k in range(32):
         want = kx_row(*KINDS[k][1:]) if k in KINDS else [0] * 6
         chk(f"kx[{k}]", m[kx + 6 * k:kx + 6 * k + 6], want)
-    chk("kx_tab length (xpn_tab follows)", [sym["xpn_tab"] - sym["kx_tab"]], [192])
+    chk("kx_tab length (dg_bad follows, L-RELIEF)", [sym["dg_bad"] - sym["kx_tab"]], [192])
 
     x = at("xpn_tab")
     chk("xp_next", [m[x + 2 * i] | m[x + 2 * i + 1] << 8 for i in range(8)], XP_NEXT)

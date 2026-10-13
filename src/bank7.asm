@@ -4,7 +4,8 @@
 ; Per-turn / per-event logic moved out of bank 2 (docs/memory-map.md "Cold
 ; code placement"): the player turn (turn_input -> try_player_turn ->
 ; tpt_intent / try_climb / try_horizontal / find_target), end_turn + do_exit
-; + hide_sprites (room exit), the pause overlay entry; D3-7: the icon bar
+; + hide_sprites (room exit) + the follower scan / arrival conflicts
+; (L-RELIEF, from bank 3), the pause overlay entry; D3-7: the icon bar
 ; logic (intent7.asm) and the ability / pickup code (abil_*7.asm, pickup7.asm).
 ; Rules (docs/conventions.md "Banking"):
 ;  - Entered only through far7 (bank 2: ld c, BANK_COLD7 / farb) — from
@@ -215,8 +216,7 @@ end_turn:
 do_exit:
                 cp   EX_LEVEL                  ; A = EXIT_KIND (end_turn)
                 jp   z, level_descend          ; B3B-12: the level exit (lowram)
-                ld   hl, follow_select         ; bank 3 (cold)
-                call far3
+                call follow_select             ; L-RELIEF: this bank (PROTO: far3 follow_admit)
                 call hide_sprites              ; every sprite hidden, hero too
                 call show_bank5                ; A7: the scroll runs on the $4000 screen
                 ld   a, GS_TRANSITION          ; (state flips once none is drawn)
@@ -267,8 +267,7 @@ do_exit:
                 ld   (ix+E_Y), a
 .pos:           call snap_pxpy
                 ld   (ix+E_MODE), M_REST
-                ld   hl, arrival_conflicts     ; bank 3 (cold)
-                call far3
+                call arrival_conflicts         ; L-RELIEF: this bank
                 call vis_room_sync             ; B7: no old-room sprite in the next render
                 call present_full              ; A7: bank 5 -> 7 (6,912 B), show bank 7
                 xor  a
@@ -806,6 +805,186 @@ hide_sprites:
                 djnz .p
                 xor  a
                 ld   (PEND_DMG_COUNT), a
+                ret
+
+
+;==============================================================================
+; L-RELIEF (bank-3 relief): the room-exit follower code moved here from
+; bank3.asm — follow_select (candidate scan), place_follower, arrival_conflicts.
+;==============================================================================
+;==============================================================================
+; FOLLOW SELECTION (prototype §3.7) — on the player's exit turn, before the
+; transition. EXIT_KIND/DEST/STOREY/COL set. No RNG; deterministic order
+; (gap ascending, ties lower slot). L-RELIEF: bank 7 (was bank 3, far3 from
+; do_exit): a plain call from do_exit; PROTO (LVL_DEPTH 0) admits at once
+; through far3 follow_admit (bank 3: lp_wt / lp_rec), LP leaves the candidates
+; to lp_transition. Cold (once per room exit): the contended fetches and the
+; far3 (~0.25k T) do not touch a tick.  Clobbers: all but IY.
+;==============================================================================
+follow_select:
+                xor  a
+                ld   (FOLLOW_N), a
+                ; reference box: player (horizontal) or the shaft standing box
+                ld   ix, P_ENTITIES
+                call get_box
+                ld   a, (EXIT_KIND)
+                cp   EX_UP
+                jr   c, .hbox
+                ld   a, (EXIT_COL)
+                ld   c, a
+                ld   a, (EXIT_STOREY)
+                MUL_STOREY b
+                add  a, STOREY_AIR
+                sub  e
+                ld   b, a                      ; standing y on the exit storey (9s+8-h)
+.hbox:          ld   a, c
+                ld   (TMP0), a                 ; ref x
+                ld   a, d
+                ld   (TMP2), a                 ; ref w
+                ; --- candidate gaps ---
+                ld   a, 1
+.cl:            ld   (TMP7), a
+                ld   hl, CAND_LIST
+                ld   e, a
+                ld   d, 0
+                add  hl, de
+                ld   (hl), $FF
+                call ent_ix
+                ld   a, (ix+E_FLAGS)
+                and  EF_ACTIVE | EF_PENDING | EF_DYING
+                cp   EF_ACTIVE
+                jr   nz, .cn
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   nz, .cn
+                call on_ladder
+                jr   z, .cn                    ; must be standing / flying
+                call storey_ref
+                ld   hl, EXIT_STOREY
+                cp   (hl)
+                jr   nz, .cn
+                ld   a, (EXIT_KIND)
+                cp   EX_UP
+                jr   c, .hz
+                KFIELD KT_FLAGS                ; vertical: climbers only
+                and  KF_CLIMBER
+                jr   z, .cn
+.hz:            ; gap = |boxes| distance
+                ld   a, (TMP0)
+                cp   (ix+E_X)
+                jr   c, .mright
+                KFIELD KT_BW
+                add  a, (ix+E_X)
+                ld   b, a
+                ld   a, (TMP0)
+                sub  b                         ; ref.x - (m.x+m.w)
+                jr   .g
+.mright:        ld   a, (TMP0)
+                ld   hl, TMP2
+                add  a, (hl)
+                ld   b, a
+                ld   a, (ix+E_X)
+                sub  b                         ; m.x - (ref.x+ref.w)
+.g:             jr   c, .cn
+                cp   FOLLOW_GAP + 1
+                jr   nc, .cn
+                ld   b, a
+                ld   a, (TMP7)
+                ld   e, a
+                ld   d, 0
+                ld   hl, CAND_GAP
+                add  hl, de
+                ld   (hl), b
+                ld   hl, CAND_LIST
+                add  hl, de
+                ld   (hl), a
+.cn:            ld   a, (TMP7)
+                inc  a
+                cp   P_MAX_ENT
+                jp   c, .cl
+                ld   a, (LVL_DEPTH)            ; LP (game.md §9.4.3): the candidates
+                or   a                         ; wait; lp_transition admits them after
+                ret  nz                        ; the destination's residents spawned
+                ld   hl, follow_admit          ; PROTO: admit now (bank 3; far3 nests,
+                jp   far3                      ; bank 7 comes back)
+
+; place_follower — IX = admitted follower: room <- dest, PENDING, entry spot.
+; L-RELIEF: bank 7, far7 from bank-3 follow_admit (IX passes in).
+; Clobbers: A, BC.
+place_follower:
+                ld   a, (EXIT_DEST)
+                ld   (ix+E_ROOM), a
+                set  EF_PENDING_BIT, (ix+E_FLAGS)
+                ld   a, (EXIT_KIND)
+                cp   EX_UP
+                jr   nc, .vert
+                ; horizontal: x = 1 (arrive at left edge) or 31-w; face in
+                cp   EX_RIGHT
+                jr   nz, .fromleft
+                ld   (ix+E_X), 1
+                res  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   .hy
+.fromleft:      KFIELD KT_BW
+                ld   b, a
+                ld   a, ROOM_COLS - 1
+                sub  b
+                ld   (ix+E_X), a
+                set  EF_LEFT_BIT, (ix+E_FLAGS)
+.hy:            set  EF_WALKIN_BIT, (ix+E_FLAGS)
+                KFIELD KT_FLAGS
+                and  KF_FLYER
+                ret  nz                        ; flyers keep their band offset (same s)
+                ld   a, (EXIT_STOREY)
+                jr   .stand
+.vert:          ld   a, (EXIT_COL)
+                ld   (ix+E_X), a
+                ld   a, (EXIT_KIND)
+                cp   EX_UP
+                ld   a, STOREY_COUNT - 1       ; going up: arrive on the bottom storey
+                jr   z, .stand
+                xor  a                         ; going down: storey 0
+.stand:         MUL_STOREY b
+                add  a, STOREY_AIR             ; 9s+8
+                ld   b, a
+                KFIELD KT_BH
+                ld   c, a
+                ld   a, b
+                sub  c
+                ld   (ix+E_Y), a
+                ret
+
+;==============================================================================
+; arrival_conflicts — after a transition: any non-pending monster in CUR_ROOM
+; whose box overlaps the hero's arrival box becomes PENDING in place (§3.6).
+; L-RELIEF: bank 7 (was bank 3): a plain call from do_exit, far7 from lowram
+; hero_fall. Bank-2 queries only (get_box, box_vs_ix).  Clobbers: A, BC, DE, IX.
+;==============================================================================
+arrival_conflicts:
+                ld   ix, P_ENTITIES
+                call get_box                   ; hero arrival box
+                ld   ix, P_ENTITIES + P_ENT_STRIDE
+                ld   a, 1
+.l:             push af
+                push bc
+                push de
+                ld   a, (ix+E_FLAGS)
+                and  EF_ACTIVE | EF_PENDING | EF_DYING
+                cp   EF_ACTIVE
+                jr   nz, .n
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   nz, .n
+                call box_vs_ix
+                jr   nc, .n
+                set  EF_PENDING_BIT, (ix+E_FLAGS)
+.n:             ld   de, P_ENT_STRIDE
+                add  ix, de
+                pop  de
+                pop  bc
+                pop  af
+                inc  a
+                cp   P_MAX_ENT
+                jr   c, .l
                 ret
 
 ;------------------------------------------------------------------------------

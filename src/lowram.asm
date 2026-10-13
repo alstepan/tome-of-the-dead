@@ -1213,8 +1213,8 @@ hero_fall:
                 ld   a, (ix+E_Y)
                 add  a, STOREY_ROWS
                 ld   (ix+E_Y), a
-                ld   hl, arrival_conflicts     ; bank 3 (the hero's new box)
-                call far3
+                ld   hl, arrival_conflicts     ; bank 7 since L-RELIEF (the hero's new box;
+                call far7                      ; far7 = far3 +12 T, its jr to farb)
                 call build_live                ; PENDING ones stop colliding
                 ld   ix, P_ENTITIES
                 ld   c, FALL_DIE

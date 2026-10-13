@@ -34,7 +34,7 @@ page_bank:
 ; In : HL = target, A = passed to the target in A, C = bank (0..7; farb only).
 ;      BC is NOT passed (page_bank uses it); DE, IX pass in.
 ; Out: the target's BC, DE, HL, IX (passed through).  Clobbers: A, F.
-; ~220 T + target (far3 / far1: +7 / +19 T). Nestable: the target may far-call
+; ~220 T + target (far3 / far1 / far7: +7 / +19 / +19 T). Nestable: the target may far-call
 ; again (each level restores its caller's bank). Paged-bank code must not page
 ; $C000 itself — see bank3.asm; it blits through blit_keep, and every helper
 ; it calls hands $C000 back as it found it (conventions.md "Banking").
