@@ -116,10 +116,10 @@ RKE_SPARE       EQU $80
     ENDM
 
 ab_rank:
-; Spark: 1 MP r6 1d4+1 SHOCK, 1 in 4 CONFUSED 3 | r2 1d4+2 range 8 | r3 1d4+3, CONFUSED 1 in 2
-                RANK 1, 6, 4, 1, 0, (4 << 4) | 3
-                RANK 1, 8, 4, 2, 0, (4 << 4) | 3
-                RANK 1, 8, 4, 3, 0, (2 << 4) | 3
+; Spark: 1 MP r6 1d4+1 SHOCK, 1 in 4 CONFUSED 4 (D3-8c) | r2 1d4+2 range 8 | r3 1d4+3, CONFUSED 1 in 2 (4)
+                RANK 1, 6, 4, 1, 0, (4 << 4) | 4
+                RANK 1, 8, 4, 2, 0, (4 << 4) | 4
+                RANK 1, 8, 4, 3, 0, (2 << 4) | 4
 ; Firebolt: 3 MP r12 1d8+2, burst 1d4 | 1d8+3, burst 1d6 | 1d8+4, burst spares caster
                 RANK 3, 12, 8, 2, 0, 4
                 RANK 3, 12, 8, 3, 0, 6

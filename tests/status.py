@@ -18,7 +18,9 @@ breakpoint, decoded from the token stream).
   W   a sleeper wakes on damage: Spark on an ASLEEP Goblin -> HOLD clear, "THE
       GOBLIN WAKES UP"; poison wakes too (ASLEEP + POISON 4: the step's HP
       loss at 3)
-  G   STUN_GUARD: deal_hit STUNNED 1 (stub) -> the next monster phase skips
+  G   HOLD_GUARD (D3-8c: FROZEN too; HG1-HG8 below: no HOLD on a held body, guard after
+      a thaw, self-freeze 1, POISON adds cap 15):
+      STUN_GUARD: deal_hit STUNNED 1 (stub) -> the next monster phase skips
       and sets the guard; a 2nd stun is refused; after the Goblin acted (the
       guard cleared) a 3rd stun lands
   P   poison: POISON 9 on the hero at HP 10 -> HP 7 after 9 turns (losses at
@@ -231,7 +233,7 @@ def run(h, p, check):
     s2, x2 = st(g), p.ent(g)["X"]
     p.tick(2)
     check("F2: the 2nd skipped action: HOLD cleared at 0, still not moved, tint back to the kind attr",
-          s2[0] == 0 and s2[1] == 0 and x2 == x0 and tint(g) == kattr(K_GOBLIN), (s2, x2, hex(tint(g))))
+          s2[0] == GUARD and s2[1] == 0 and x2 == x0 and tint(g) == kattr(K_GOBLIN), (s2, x2, hex(tint(g))))
     wait_turn()
     x3 = p.ent(g)["X"]
     check("F3: the 3rd turn: the Goblin walks again (exactly 2 actions lost)", x3 == x0 - 1, (x0, x3))
@@ -254,7 +256,7 @@ def run(h, p, check):
     p.release()
     tick(3)
     check("H1: exactly 2 automatic turns while held, a walk key held: the hero never moves",
-          len(ends) == 2 and set(xs) == {HX} and st(0) == (0, 0, 0), (ends, xs, st(0)))
+          len(ends) == 2 and set(xs) == {HX} and st(0) == (GUARD, 0, 0), (ends, xs, st(0)))
     check("H1: held turns 4 ticks apart (HELD_WAIT 3 idle + the Wait turn)", len(ends) == 2 and ends[1] - ends[0] == 4, ends)
     check("H1: 'YOU CAN MOVE AGAIN' once", lines.count(TXT["st_move"]) == 1, lines)
     check("H2: while held: STAT_SH = FROZEN (1), panel (30, 21) attr $45 with a glyph, hero tint $45",
@@ -306,6 +308,65 @@ def run(h, p, check):
     check("G2: a stun under the guard is refused", c == b, c)
     check("G3: the Goblin acts (walks), the guard clears; a new stun lands",
           x2 == x0 - 1 and d[0] == 0 and e[0] == STUNNED and e[1] == 0x10, (x2, d, e))
+
+
+    # ======================= H8c: HOLD_GUARD, self-freeze, poison stacking (D3-8c) ====
+    FRZC = EFX["FROZEN"] << S["DH_EFX_SHIFT"]
+    SLPC = EFX["ASLEEP"] << S["DH_EFX_SHIFT"]
+    POIC = EFX["POISON"] << S["DH_EFX_SHIFT"]
+    g, = scene(K_KNIGHT, [(K_GOBLIN, HX + 6, 60, True)])
+    deal(0, g, 1, FRZC, 2)
+    a = st(g)
+    deal(0, g, 1, FRZC, 3)                         # a recast on the frozen body (the chain lock)
+    b = st(g)
+    deal(0, g, 1, STUNC, 1)                        # a stun on it
+    c = st(g)
+    check("HG1: FROZEN 2, then FROZEN 3 / STUNNED 1 on the held body: no effect (damage applies)",
+          a == (FROZEN, 0x20, 0) and b == a and c == a and p.ent(g)["HP"] == 57, (a, b, c, p.ent(g)["HP"]))
+    g, = scene(K_KNIGHT, [(K_GOBLIN, HX + 6, 60, True)])
+    deal(0, g, 1, STUNC, 2)
+    deal(0, g, 1, FRZC, 3)
+    check("HG2: STUNNED, then FROZEN: no overwrite", st(g) == (STUNNED, 0x20, 0), st(g))
+    setst(g, ASLEEP, 0x80)
+    deal(0, g, 1, FRZC, 2)
+    check("HG3: a sleeper is woken by the hit and then frozen", st(g) == (FROZEN, 0x20, 0), st(g))
+    g, = scene(K_KNIGHT, [(K_GOBLIN, HX + 6, 60, True)])
+    deal(0, g, 1, FRZC, 1)
+    wait_turn()
+    a = st(g)
+    deal(0, g, 1, FRZC, 3)
+    b = st(g)
+    deal(0, g, 1, STUNC, 1)
+    c = st(g)
+    deal(0, g, 1, SLPC, 4)                         # ASLEEP is not guarded
+    d = st(g)
+    check("HG4: FROZEN ends -> HOLD_GUARD set; a re-freeze / stun under it is refused, a sleep lands",
+          a == (GUARD, 0, 0) and b == a and c == a and d[0] == GUARD | ASLEEP, (a, b, c, d))
+    setst(g, GUARD)
+    wait_turn()
+    deal(0, g, 1, FRZC, 3)
+    check("HG5: the body acted -> the guard cleared; a freeze lands", st(g) == (FROZEN, 0x30, 0), st(g))
+    deal(0, g, 1, S["DTY_FIRE"] | (0 << S["DH_EFX_SHIFT"]), 0)
+    check("HG6: a FIRE hit thaws it and sets the guard", st(g)[0] == GUARD and st(g)[1] == 0, st(g))
+    deal(0, g, 1, FRZC, 2)
+    check("HG6: ...so an immediate re-freeze is refused", st(g)[0] == GUARD, st(g))
+    # self-freeze: the caster struck by his own shard is held 1 turn at any rank
+    scene(K_KNIGHT, [])
+    deal(0, 0, 1, FRZC, 4)
+    check("HG7: Frost on its own caster (rank 3, 4 turns): FROZEN 1", st(0) == (FROZEN, 0x10, 0), st(0))
+    g, = scene(K_KNIGHT, [(K_GOBLIN, HX + 6, 60, True)])
+    deal(g, g, 1, FRZC, 4)
+    deal(g, 0, 1, FRZC, 4)
+    check("HG7: a Goblin reflecting onto itself: 1; onto the hero (other attacker): full 4",
+          st(g) == (FROZEN, 0x10, 0) and st(0) == (FROZEN, 0x40, 0), (st(g), st(0)))
+    # POISON stacks per hit, cap 15
+    g, = scene(K_KNIGHT, [(K_GOBLIN, HX + 6, 60, True)])
+    seq = []
+    for _ in range(4):
+        deal(g, 0, 1, POIC, 6)
+        seq.append(st(0)[2] >> 4)
+    check("HG8: POISON 6 per bite adds: 6, 12, 15 (cap), 15", seq == [6, 12, 15, 15], seq)
+    check("HG8: ...with the flag set and no other effect", st(0)[0] == POISON, st(0))
 
     # ======================= P: poison =============================================
     scene(K_KNIGHT, [], hp=10)

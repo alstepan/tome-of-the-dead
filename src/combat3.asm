@@ -115,9 +115,11 @@ hit_roll:
 ;     Else RC_HURT; ASLEEP wakes (any HP loss); FIRE thaws FROZEN; then the
 ;     effect (if any): chance roll (rng_mod N, 0 = success), R halves the
 ;     turns, a boss (KX_IMM bit 7) halves HOLD / MIND again (0 = none; D3-8),
-;     the immunity mask (a boss: + SLEEP / FEAR) -> UNAFFECTED, STUNNED refused
-;     while STUN_GUARD; same effect -> timer max(cur, new), another effect of
-;     the group -> overwritten; groups independent.
+;     the immunity mask (a boss: + SLEEP / FEAR) -> UNAFFECTED; D3-8c: a Frost
+;     Shard on its own caster freezes 1; no HOLD on a held body; FROZEN /
+;     STUNNED refused while HOLD_GUARD (set when either ends, a FIRE thaw
+;     too); same effect -> timer max(cur, new) (POISON: cur + new, cap 15),
+;     another effect of the group -> overwritten; groups independent.
 ;  6. DH_HEAL (Drain Life, the Vampire's bite; NOT the Ghost's touch, game.md
 ;     §9.1): the attacker heals the HP lost (to its max; the hero also gets
 ;     "YOU FEEL HEALTHIER").
@@ -345,6 +347,7 @@ dh_status:
                 cp   DTY_FIRE
                 jr   nz, .eff                  ; FIRE >= 1 thaws
                 ld   bc, (TX_ST_THAW << 8) | MSG_M_THAW
+                set  STS_GUARD_BIT, (hl)       ; HOLD_GUARD: no re-freeze before it acts
                 jr   .clr
 .wake:          ld   bc, (TX_ST_WAKE << 8) | MSG_M_WAKE
 .clr:           ld   a, (hl)
@@ -394,6 +397,18 @@ dh_status:
 .nbh:           ld   a, d
                 or   a
                 ret  z
+                ld   a, (dh_efx)
+                cp   EFX_FROZEN
+                jr   nz, .nsf
+                ld   hl, (ATK_PTR)             ; D3-8c: a Frost Shard on its own caster
+                ld   a, ixl                    ; (bounce / reflection) freezes 1 turn
+                cp   l
+                jr   nz, .nsf
+                ld   a, ixh
+                cp   h
+                jr   nz, .nsf
+                ld   d, 1
+.nsf:
                 ld   a, (dh_efx)               ; row = efx_tab + (id - 1) * EF_STRIDE
                 dec  a
                 ld   l, a
@@ -427,10 +442,17 @@ dh_status:
                 ld   (dh_mmsg), a              ; EFR_MMSG
                 call dh_stp                    ; HL = ST_FLAGS + slot
                 ld   a, (dh_efx)
-                cp   EFX_STUNNED
-                jr   nz, .ng
+                cp   EFX_FEAR
+                jr   nc, .ng                   ; MIND / POISON / WEAK: no hold rules
+                ld   a, (hl)
+                and  STS_HOLD
+                ret  nz                        ; D3-8c: no HOLD on a held body (a sleeper
+                                               ; was woken by dh_status already)
+                ld   a, (dh_efx)
+                cp   EFX_ASLEEP
+                jr   z,  .ng                   ; ASLEEP is not guarded
                 bit  STS_GUARD_BIT, (hl)
-                ret  nz                        ; STUN_GUARD: no second stun yet
+                ret  nz                        ; HOLD_GUARD: no FROZEN / STUNNED yet
 .ng:            ld   a, (hl)
                 and  b
                 sub  c
@@ -459,7 +481,18 @@ dh_status:
                 inc  e
                 dec  e
                 jr   nz, .set                  ; another effect: overwrite
-                cp   d
+                ld   c, a
+                ld   a, (dh_efx)
+                cp   EFX_POISON
+                ld   a, c
+                jr   nz, .mx
+                add  a, d                      ; D3-8c: POISON adds per hit, cap 15
+                cp   16
+                jr   c, .pc
+                ld   a, 15
+.pc:            ld   d, a
+                jr   .set
+.mx:            cp   d
                 jr   c, .set
                 ld   d, a                      ; same effect: max(cur, new)
 .set:           ld   a, (hl)

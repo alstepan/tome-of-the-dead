@@ -203,7 +203,7 @@ class World:
         else:
             T.react = T.react if T.react == 3 else 1
             if T.stf & 3 == FROZEN and t == FIRE:          # thaw
-                T.stf &= ~3
+                T.stf = (T.stf & ~3) | 0x40                # HOLD_GUARD (D3-8c)
                 T.st1 &= 0x0F
             efx = (c >> EFS) & 7
             if efx:
@@ -217,7 +217,11 @@ class World:
                 if ok and turns:
                     imm_bit = {FROZEN: 0, CONFUSED: S["IMMF_CONFUSE"]}[efx]
                     if not (self.imm(T) & imm_bit):
-                        if efx == FROZEN:
+                        if efx == FROZEN and (T.stf & 3 or T.stf & 0x40):
+                            pass                           # D3-8c: held body / HOLD_GUARD
+                        elif efx == FROZEN:
+                            if att == tgt:
+                                turns = 1                  # D3-8c: self-freeze
                             same = (T.stf & 3) == FROZEN
                             cur = T.st1 >> 4
                             T.stf = (T.stf & ~3) | FROZEN
@@ -665,7 +669,7 @@ def main():
             w = two(K_GOBLIN, SPARK, hp=200)
             res = case("P2 Spark confusion rate", w, SPARK, 1, seed=(0x0303 + 977 * i) & 0xFFFF)
             conf += w.bodies[1].stf == (2 << 2)
-        check("P2 Spark CONFUSED 3 on some hits only (1 in 4): %d of 24" % conf, 0 < conf < 24)
+        check("P2 Spark CONFUSED 4 on some hits only (1 in 4): %d of 24" % conf, 0 < conf < 24)
         w = two(K_GOBLIN, FROST)
         case("P2 Frost freezes 2 (Goblin)", w, FROST, 1,
              must=lambda res, w: w.bodies[1].stf == FROZEN and w.bodies[1].st1 == 0x20)

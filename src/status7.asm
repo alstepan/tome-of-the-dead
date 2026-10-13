@@ -22,9 +22,9 @@
 ;  2. WEAK, then MIND: timer - 1, at 0 clear (the hero's end line).
 ;  3. HOLD set: timer - 1, the action is skipped (L = 1); at 0 clear (ASLEEP:
 ;     "WAKES UP" / "YOU WAKE UP", FROZEN / STUNNED: "YOU CAN MOVE AGAIN", hero
-;     only); a STUNNED that just cleared sets STUN_GUARD.
-;  4. Else L = 0 (the entity acts) and STUN_GUARD clears ("after the action":
-;     nothing between here and its action can stun it).
+;     only); a FROZEN / STUNNED that just cleared sets HOLD_GUARD (D3-8c).
+;  4. Else L = 0 (the entity acts) and HOLD_GUARD clears ("after the action":
+;     nothing between here and its action can freeze / stun it).
 ; Invariant kept: a group bit / kind is set <=> its timer nibble != 0.
 ; Out: L = 1 held (skip the action), 0 act. IX kept.
 ; Clobbers: A, BC, DE, HL.   ~0.25k T (+ ~1.5k per line)
@@ -121,12 +121,11 @@ st_step:
                 and  ~STS_HOLD & $FF
                 ld   (hl), a
                 ld   a, c
-                cp   HOLD_STUNNED
-                jr   nz, .ng
-                set  STS_GUARD_BIT, (hl)       ; one action before the next stun
-.ng:            cp   HOLD_ASLEEP
+                cp   HOLD_ASLEEP
                 ld   bc, (TX_ST_WAKE << 8) | MSG_M_WAKE
                 jr   z, .hm
+                set  STS_GUARD_BIT, (hl)       ; HOLD_GUARD (D3-8c): one action before the
+                                               ; next freeze / stun
                 ld   bc, TX_ST_MOVE << 8       ; frozen / stunned: the tint drops
 .hm:            call .msg
 .held:          ld   l, 1

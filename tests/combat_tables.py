@@ -67,7 +67,7 @@ STEPS = {4: (1, 0), 6: (0, 1), 8: (1, 0)}                    # level -> (atk, ev
 # rank table, §5: (MP, range, die, bonus, bounces, effect) per rank 1..3, cumulative
 # effect: status = chance<<4 | turns; Firebolt = burst die (|$80 spare); Whirlwind = to-hit
 RANKS = {
-    "Spark":     [(1, 6, 4, 1, 0, 0x43), (1, 8, 4, 2, 0, 0x43), (1, 8, 4, 3, 0, 0x23)],
+    "Spark":     [(1, 6, 4, 1, 0, 0x44), (1, 8, 4, 2, 0, 0x44), (1, 8, 4, 3, 0, 0x24)],
     "Firebolt":  [(3, 12, 8, 2, 0, 4), (3, 12, 8, 3, 0, 6), (3, 12, 8, 4, 0, 0x86)],
     "Frost":     [(3, 12, 6, 0, 1, 2), (3, 12, 6, 0, 2, 3), (3, 12, 6, 2, 2, 4)],
     "Drain":     [(3, 5, 6, 1, 0, 0), (3, 8, 6, 2, 0, 0), (2, 8, 6, 3, 0, 0)],

@@ -238,8 +238,8 @@ def main():
         p.mon(1, K_RAT, 3)
         p.deal(1, 0, 1, PHYS)
         d = p.gst(0)
-        check("C6 FIRE thaws FROZEN; COLD keeps it; any HP loss wakes ASLEEP (MIND kept)",
-              a[:2] == (0, 0) and b[:2] == (FROZEN, 0x23) and c[:2] == (2 << 2, 0x02) and d[:2] == (0, 0),
+        check("C6 FIRE thaws FROZEN (sets HOLD_GUARD); COLD keeps it; any HP loss wakes ASLEEP (MIND kept)",
+              a[:2] == (0x40, 0) and b[:2] == (FROZEN, 0x23) and c[:2] == (2 << 2, 0x02) and d[:2] == (0, 0),
               (a, b, c, d))
 
         # --- C7 effect apply (hero target, attacker Rat) ---
@@ -257,15 +257,18 @@ def main():
         r.append(("refresh 5 -> 5", eff(CONFUSED, 5), (2 << 2, 0x05, 0)))
         r.append(("FEAR overwrites MIND", eff(FEAR, 2), (1 << 2, 0x02, 0)))
         r.append(("FROZEN independent (HOLD)", eff(FROZEN, 2), ((1 << 2) | FROZEN, 0x22, 0)))
-        r.append(("STUNNED overwrites HOLD", eff(STUNNED, 1), ((1 << 2) | STUNNED, 0x12, 0)))
-        r.append(("POISON 9", eff(POISON, 9), ((1 << 2) | STUNNED | 0x10, 0x12, 0x90)))
-        r.append(("WEAK 12", eff(WEAK, 12), ((1 << 2) | STUNNED | 0x30, 0x12, 0x9C)))
-        r.append(("POISON refresh 4 keeps 9", eff(POISON, 4), ((1 << 2) | STUNNED | 0x30, 0x12, 0x9C)))
+        r.append(("STUNNED refused on a held body (D3-8c)", eff(STUNNED, 1), ((1 << 2) | FROZEN, 0x22, 0)))
+        r.append(("POISON 9", eff(POISON, 9), ((1 << 2) | FROZEN | 0x10, 0x22, 0x90)))
+        r.append(("WEAK 12", eff(WEAK, 12), ((1 << 2) | FROZEN | 0x30, 0x22, 0x9C)))
+        r.append(("POISON adds 4 to 9 -> 13", eff(POISON, 4), ((1 << 2) | FROZEN | 0x30, 0x22, 0xDC)))
+        r.append(("POISON caps at 15", eff(POISON, 4), ((1 << 2) | FROZEN | 0x30, 0x22, 0xFC)))
+        r.append(("STUNNED overwrites nothing: HOLD clear -> lands", eff(STUNNED, 1, st=(0, 0, 0)), (STUNNED, 0x10, 0)))
         r.append(("R halves 3 -> 1", eff(CONFUSED, 3, res=res_bytes(PHYS, R), st=(0, 0, 0)), (2 << 2, 0x01, 0)))
         r.append(("R halves 1 -> none", eff(CONFUSED, 1, res=res_bytes(PHYS, R), st=(0, 0, 0)), (0, 0, 0)))
         r.append(("immune mask CONFUSE", eff(CONFUSED, 3, imm=S["IMMF_CONFUSE"], st=(0, 0, 0)), (0, 0, 0)))
         r.append(("I type: no effect", eff(FROZEN, 2, t=COLD, res=res_bytes(COLD, I), st=(0, 0, 0)), (0, 0, 0)))
-        r.append(("STUN_GUARD refuses", eff(STUNNED, 1, st=(0x40, 0, 0)), (0x40, 0, 0)))
+        r.append(("HOLD_GUARD refuses STUNNED", eff(STUNNED, 1, st=(0x40, 0, 0)), (0x40, 0, 0)))
+        r.append(("HOLD_GUARD refuses FROZEN", eff(FROZEN, 2, st=(0x40, 0, 0)), (0x40, 0, 0)))
         r.append(("chance 1 in 1 applies", eff(FROZEN, 2, chance=1, st=(0, 0, 0)), (FROZEN, 0x20, 0)))
         r.append(("kill: no effect, status cleared", eff(FROZEN, 2, hp=1, st=(0x31, 0x45, 0x67)), (0, 0, 0)))
         bad = [(n, g, w) for n, g, w in r if g != w]
