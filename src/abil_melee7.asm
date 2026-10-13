@@ -13,9 +13,10 @@ EF_HOSTILE_BIT  EQU 2
 ;------------------------------------------------------------------------------
 ; abil_melee — intent7 ic_disp (ABF_MELEE), IX = hero, B = ABL_POWER /
 ; ABL_WHIRL, ABIL_DESC loaded (abil_load: ABIL_RK = the hero's rank row).
-; Refused (L = 0, no turn, a message, game.md §6.2 / §2.3): unlearned -> NOT
-; LEARNED; MP < RK_MP -> NO MANA; mid-ladder or no target (melee_scan) -> NO
-; TARGET ("a power attack with no target is illegal: no turn, no MP").
+; Refused (L = IC_REFUSED with its line, 0 silent; no turn, a message, game.md §6.2 / §2.3): unlearned -> NOT
+; LEARNED; MP < RK_MP -> NO MANA; mid-ladder or no target (melee_scan) ->
+; L = IC_NOTGT, no line ("a power attack with no target is illegal: no turn,
+; no MP"; use_icon pushes NO TARGET, or a reversed CONFUSED hero stumbles).
 ; Accepted (input tick): ABIL_TGT = the mask, act_begin_ok (TURN_PEND,
 ; ACT_ABL = B, ACT_AT, MON_AT), MP -= RK_MP, PD_MP, the abl_seq sequence
 ; (kn_power / kn_whirl).
@@ -54,8 +55,8 @@ abil_melee:
                 call act_seq                   ; the abl_seq sequence (A, DE, HL)
                 ld   l, 1
                 ret
-.nt:            ld   a, TX_NO_TARGET
-                jp   ic_refuse
+.nt:            ld   l, IC_NOTGT               ; use_icon pushes NO TARGET (or the
+                ret                            ; reversed hero stumbles)
 
 ;------------------------------------------------------------------------------
 ; melee_scan — IX = hero (LIVE_LIST current: built at the turn start; nothing

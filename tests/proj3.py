@@ -45,6 +45,11 @@ RNG state after the cast (=> the exact draw order), the FX descriptor
       (TURN_PEND = TP_ACT | TP_MON, ACT_ABL, ACT_AT = 2, MON_AT = 3);
       act_fire fizzles (L = 0) at lead col 0 / 31; fx_start's drop counts
       in FX_DROP
+  P10 D3-8 review 2: the adversarial fuzz case #208 (Lightning r2, a
+      reflecting Ghost + 2 Slimes + a Bat over the caster, 3 kills, walls at
+      cols 3 / 31) == model + the PF_ROWF invariant (flags = solid | edge,
+      count = candidates not DONE; struck-dead ones stay DONE), its T printed;
+      pf_cands' x1 guard (a body poked to x 30, 3 wide: x1 clamped to 31)
 Run: ZRCP_PORT=<port> python3 tests/proj3.py
 """
 import random
@@ -900,6 +905,51 @@ def main():
         check(f"P9 D3-7 split turn: TURN_TICK shift (pf_itick / E_REACTAT / set_reaction_at), act_begin /"
               f" act_fire lead-col guard, FX_DROP ({len(allbad)} model / {len(p9_bad)} other bad)",
               not allbad and not p9_bad, (allbad[:3], p9_bad[:4]))
+
+        # --- P10 D3-8 review 2: the adversarial PF_ROWF geometry ---------------
+        def rowf_inv(w):
+            """PF_ROWF after a cast: low bits = TF_SOLID | edge, count = the
+            candidates not DONE (PFCF_DEAD ones stay DONE) covering the col."""
+            rowf = list(p.z.read_memory(S["PF_ROWF"], 32))
+            cand = list(p.z.read_memory(S["pf_cand"], 3 * 17 + 1))
+            cnt, j = [0] * 32, 0
+            while cand[j] != 0xFF:
+                x0, x1, f = cand[j:j + 3]
+                if not f & 0x40:
+                    for c in range(x0, x1 + 1):
+                        cnt[c] += 1
+                j += 3
+            return [(c, rowf[c], cnt[c]) for c in range(32)
+                    if rowf[c] >> 3 != cnt[c] or rowf[c] & 7 != ((w.row[c] in solid) | (4 if c in (0, 31) else 0))]
+
+        p10_bad = []
+        # fuzz #208 (the reviewer's adversarial run, ROOM_CAP 4): Lightning r2 from
+        # x 26 facing right, a Bat (HP 1) over the caster, a SHOCK-reflecting Ghost,
+        # 2 Slimes; walls at cols 3 / 31 (+ 0): bounces + reflections walk the line
+        # 4 times over the caster, 3 kills. tests/budget.py "advcast" = the real cast.
+        w = World(kt, (0, 1, 0))
+        w.bodies[0] = Body(0, K_KNIGHT, 26, hy, 40, 200, EF_ACTIVE | EF_PLAYER)
+        for s, k, x, hp in ((1, K_BAT, 28, 1), (2, K_GHOST, 19, 6), (3, K_SLIME, 24, 6), (4, K_SLIME, 21, 23)):
+            w.bodies[s] = Body(s, k, x, 15, hp, 30)
+        w.row[3] = T_BRICK
+        bad, res = run("P10 #208", w, LIGHTNING, 2, seed=8705, delay=2)
+        t208 = p.tstates
+        dead = sum(1 for s in range(1, 5) if w.bodies[s].flags & EF_DYING)
+        p10_bad += bad + [("inv",) + i for i in rowf_inv(w)]
+        if dead != 3 or res["stop"] != PFS["RANGE"]:
+            p10_bad.append(("#208 shape", dead, PFS_NAME[res["stop"]]))
+        # pf_cands' x1 guard: a body poked past col 31 (x 30, 3 wide) is clamped
+        # to col 31 — no count lands past PF_ROWF's page end (= PF_RAM's start)
+        w = world(hero_x=20)
+        w.bodies[1] = Body(1, K_GOBLIN, 30, stand(K_GOBLIN), 50)
+        w.row[31] = T_AIR
+        bad, res = run("P10 x1 guard", w, LIGHTNING, 1)
+        cand = list(p.z.read_memory(S["pf_cand"], 7))
+        p10_bad += bad + [("inv",) + i for i in rowf_inv(w)]
+        if cand[3:5] != [30, 31]:
+            p10_bad.append(("x1 not clamped", cand[:7]))
+        check(f"P10 adversarial: fuzz #208 (Lightning r2, reflecting Ghost + 2 Slimes + Bat over the caster,"
+              f" 3 kills) == model, PF_ROWF invariant, {t208} T; pf_cands x1 clamp", not p10_bad, p10_bad[:4])
 
         print(f"proj3: worst cast {T.worst[0]} T ({T.worst[1]} r{T.worst[2]}; incl. ~3k T of stub: paging, fx_reset, build_live"
               "; deal_hit messages included)", flush=True)

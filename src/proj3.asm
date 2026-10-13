@@ -52,8 +52,13 @@ PFCF_LADDER_BIT EQU 4
 PFCF_LADDER     EQU 1 << PFCF_LADDER_BIT ; mid-ladder: absorbs
 PFCF_REFL       EQU $20                 ; reflects the projectile's type
 PFCF_DONE_BIT   EQU 6                   ; struck / tested in the current pass
-PFR_BODY_BIT    EQU 1                   ; PF_ROWF bits (bit 0 = TF_SOLID)
-PFR_EDGE_BIT    EQU 2
+PFCF_DEAD_BIT   EQU 7                   ; struck dead this cast: DONE for good
+PFR_EDGE_BIT    EQU 2                   ; PF_ROWF bits (bit 0 = TF_SOLID)
+PFR_BODY1       EQU 8                   ; bits 3-7: the count of candidates not DONE
+PFR_BODYM       EQU $F8
+                                        ; on the col (pf_cands +1, pf_bdone -1,
+                                        ; pf_reverse +1 back; <= P_MAX_ENT < 32)
+                ASSERT P_MAX_ENT * PFR_BODY1 + 7 <= 255
 PFB_NONE        EQU 0                   ; pf_bodies results
 PFB_REFLECT     EQU 1
 PFB_STOP        EQU 2
@@ -198,15 +203,52 @@ proj_fire:
                 inc  e
                 dec  e
                 jr   z, .cell
-.en:            push bc                        ; enter them, then look again
+                ; enter them, then look again: the first through pf_enter (the FX
+                ; anchor if nothing was entered yet), the other B - 1 in bulk =
+                ; pf_enter's .more B - 1 times (D3-8 review 2: ~0.3k T a cell
+                ; -> ~0.25k a run)
                 ld   a, (pf_pos)
                 ld   hl, pf_dir
                 add  a, (hl)
                 ld   (pf_next), a
-                call pf_enter
-                pop  bc
-                djnz .en
-                jr   .walk
+                call pf_enter                  ; (A, HL; B kept)
+                dec  b
+                jr   z, .nxt
+                ld   hl, pf_left               ; range -= B (B <= range: the .ff bound)
+                ld   a, (hl)
+                sub  b
+                ld   (hl), a
+                ld   hl, pf_moves              ; moves += B
+                ld   a, (hl)
+                add  a, b
+                ld   (hl), a
+                ld   a, (pf_desc + FXD_NSEG)   ; SEGS[NSEG - 1] += B (NSEG >= 1 now;
+                add  a, (pf_desc + FXD_SEGS - 1) & $FF ; one page, H = PF_RAM's)
+                ld   l, a
+                ld   a, (hl)
+                add  a, b
+                ld   (hl), a
+                ld   a, (pf_dir)               ; pos += B * dir (dir = +1 / $FF)
+                rla
+                ld   a, (pf_pos)
+                jr   c, .pl
+                add  a, b
+                jr   .ps
+.pl:            sub  b
+.ps:            ld   (pf_pos), a
+                ; the run ended on a non-plain cell unless the range ran out
+                ; (the .ff bound): go straight to it (saves the .walk set-up)
+.nxt:           ld   b, PFS_RANGE
+                ld   a, (pf_left)
+                or   a
+                jp   z, .stop
+                ld   a, (pf_dir)
+                ld   hl, pf_pos
+                add  a, (hl)
+                or   PF_ROWF & $FF
+                ld   l, a
+                ld   h, PF_ROWF >> 8
+                ld   a, (hl)                   ; (not 0)
                 ; the next cell decides: A = its PF_ROWF flags, L = its col
 .cell:          rrca
                 jr   c, .solid                 ; (solid edge: a wall)
@@ -231,7 +273,7 @@ proj_fire:
                 call pf_enter
                 pop  af
                 or   a
-                jr   z, .walk
+                jp   z, .walk
                 jr   .end                      ; PFB_STOP: pf_stop set
 .exit:          call pf_enter
                 ld   b, PFS_EXIT
@@ -287,8 +329,10 @@ proj_fire:
 ; pf_cands — PF_ROWF (the flight row: TF_SOLID, edges, candidate cols);
 ; pf_cand = the bodies in line (LIVE_LIST as built at turn start, not dying, rows
 ; overlapping pf_ly0..pf_ly1), slot order; flags: mid-ladder, reflects the
-; projectile's type. Terminated by x0 = $FF.
-; Clobbers: A, BC, DE, HL (IX kept).  ~2.5k T + ~1.4k per body in line (contended)
+; projectile's type. Terminated by x0 = $FF. x1 is clamped to col 31 (a
+; body poked / straddling past the edge can never push a count past
+; PF_ROWF's page end into PF_RAM's start).
+; Clobbers: A, BC, DE, HL (IX kept).  ~2.4k T + ~1k per body in line (contended)
 ;------------------------------------------------------------------------------
 pf_cands:
                 ld   a, (pf_row0)              ; PF_ROWF = TF_SOLID of the flight row
@@ -297,7 +341,8 @@ pf_cands:
                 call cell_addr                 ; HL = ROOM_MAP (row0, col 0)
                 ld   bc, PF_ROWF
                 ld   d, tile_flags >> 8
-.r:             ld   a, (hl)                   ; 59 T a cell
+.r:             REPT 2                         ; 2 cells a pass (32 even: C wraps
+                ld   a, (hl)                   ; on the 2nd inc): 53 T a cell
                 add  a, tile_flags & $FF       ; (tile_flags ends on its page)
                 ld   e, a
                 ld   a, (de)
@@ -305,7 +350,9 @@ pf_cands:
                 ld   (bc), a
                 inc  l
                 inc  c
+                ENDR
                 jr   nz, .r                    ; PF_ROWF ends its page
+                ASSERT (ROOM_COLS & 1) == 0
                 ld   hl, PF_ROWF               ; + the edge cols (exit or wall)
                 set  PFR_EDGE_BIT, (hl)
                 ld   l, (PF_ROWF + ROOM_COLS - 1) & $FF
@@ -313,7 +360,7 @@ pf_cands:
                 ld   de, pf_cand
                 ld   a, (LIVE_N)
                 or   a
-                jr   z, .end
+                jp   z, .end                   ; (jp: the x1 guard put .end out of jr range)
                 push ix
                 ld   b, a
                 ld   hl, LIVE_LIST
@@ -328,30 +375,40 @@ pf_cands:
                 ld   ixh, a
                 bit  EF_DYING_BIT, (ix+E_FLAGS)
                 jr   nz, .n
+                inc  hl
+                ld   b, (hl)                   ; B = w (LIVE_LIST's cached KT_BW / KT_BH)
+                inc  hl
                 ld   a, (pf_ly1)
                 cp   (ix+E_Y)
                 jr   c, .n                     ; top below the line
-                KFIELD KT_BH
+                ld   a, (hl)
                 add  a, (ix+E_Y)
                 dec  a                         ; bottom row
                 ld   hl, pf_ly0
                 cp   (hl)
                 jr   c, .n                     ; bottom above the line
-                KFIELD KT_BW
-                ld   b, a                      ; B = w
                 ld   a, (ix+E_X)
                 ld   (de), a                   ; x0
                 inc  de
                 add  a, b
                 dec  a
-                ld   (de), a                   ; x1
+                cp   ROOM_COLS                 ; guard: x1 > 31 would run .o / pf_bdone /
+                jr   c, .x1                    ; pf_reverse past PF_ROWF's page end into
+                ld   a, ROOM_COLS              ; PF_RAM: clamp to col 31 (B = 32 - x0; E_X
+                                               ; <= 31 is the room invariant, x0 kept)
+                sub  (ix+E_X)
+                ld   b, a
+                ld   a, ROOM_COLS - 1
+.x1:            ld   (de), a                   ; x1
                 inc  de
                 sub  b
                 inc  a
                 or   PF_ROWF & $FF             ; PF_ROWF x0..x1: a candidate
                 ld   l, a
                 ld   h, PF_ROWF >> 8
-.o:             set  PFR_BODY_BIT, (hl)
+.o:             ld   a, (hl)                   ; + 1 body on the col (pf_bdone: - 1)
+                add  a, PFR_BODY1
+                ld   (hl), a
                 inc  l
                 djnz .o
                 call on_ladder                 ; Z = mid-ladder
@@ -402,56 +459,88 @@ rsp_hl:         ld   a, b
                 cp   4
                 jr   c, .b0
                 inc  hl                        ; DRAIN / DARK: RES_B1
-.b0:            and  3
+.b0:            and  3                         ; k = t % 4: A = (byte >> 2k) & 3
                 ld   b, a
-                inc  b
                 ld   a, (hl)
-                jr   .s2
-.s1:            rrca
+                jr   z, .x                     ; k 0 (ld keeps the flags)
+                djnz .k2
+                rrca                           ; k 1: >> 2
                 rrca
-.s2:            djnz .s1
-                and  3
+                jr   .x
+.k2:            djnz .k3
+                rrca                           ; k 2: >> 4
+                rrca
+                rrca
+                rrca
+                jr   .x
+.k3:            rlca                           ; k 3: >> 6 = rlca x 2
+                rlca
+.x:             and  3                         ; (was a djnz loop: ~20 T per k saved)
                 ret
                 ASSERT KX_RES == 0 && RES_B0 == 0 && RES_B1 == 1
 
 ;------------------------------------------------------------------------------
 ; pf_bodies — the candidates containing col pf_next, in list order, not yet
-; done this pass (the caster only once pf_cok), not dying.
+; done this pass (the caster only once pf_cok). A body struck dead (pf_strike
+; on the pierce path) is marked PFCF_DEAD: it stays DONE through every later
+; reversal (pf_reverse skips it), so its cols read plain and fast-forward.
+; Stops scanning once the col's PF_ROWF count of bodies not DONE (K, read on
+; entry) is used up (D3-8 review 2 budget: the scan was ~0.5k T a call).
 ; Out: A = PFB_NONE (none, missed, pierced) / PFB_REFLECT / PFB_STOP (pf_stop
 ; = PFS_BODY or PFS_ABSORB).  Clobbers: all but IX
+; ~75 T a candidate passed + ~0.4k a body processed (+ pf_strike), contended
 ;------------------------------------------------------------------------------
 pf_bodies:
-                ld   hl, pf_cand
-.l:             ld   a, (pf_next)
-                ld   c, a
-                ld   d, 0
-                call pf_nin
-                ld   a, PFB_NONE
-                ret  c                         ; end
+                ld   a, (pf_next)
+                ld   c, a                      ; C = col
+                or   PF_ROWF & $FF
+                ld   l, a
+                ld   h, PF_ROWF >> 8
                 ld   a, (hl)
-                bit  PFCF_DONE_BIT, a
-                jr   nz, .n1
+                rrca
+                rrca
+                rrca
+                and  PFR_BODYM >> 3
+                ld   b, a                      ; B = K (>= 1: .cell's flags are not 0,
+                ld   hl, pf_cand               ; and not solid / edge)
+.l:             ld   a, (hl)                   ; x0
+                cp   $FF
+                jr   z, .none                  ; (only with a broken count)
+                ld   a, c
+                cp   (hl)
+                inc  hl
+                jr   c, .s1                    ; col < x0
+                ld   a, (hl)
+                cp   c
+                jr   c, .s1                    ; x1 < col
+                inc  hl                        ; HL -> slot | flags
+                bit  PFCF_DONE_BIT, (hl)
+                jr   z, .bd
+.s2:            inc  hl
+                jr   .l
+.s1:            inc  hl
+                inc  hl
+                jr   .l
+.bd:            dec  b                         ; one of the K
+                push bc
+                ld   a, (hl)
                 and  PFCF_SLOT
-                ld   b, a
+                ld   e, a
                 ld   a, (pf_cslot)
-                cp   b
+                cp   e
                 jr   nz, .nc
                 ld   a, (pf_cok)               ; the caster: after a reversal only
                 or   a
-                jr   z, .n1
-.nc:            push ix
-                ld   a, b
-                call ent_ix                    ; (A, E)
-                ld   a, (ix+E_FLAGS)
-                pop  ix
-                and  EF_DYING
-                jr   nz, .n1
-                set  PFCF_DONE_BIT, (hl)
+                jr   z, .nx                    ; (stays not DONE: still counted)
+.nc:            set  PFCF_DONE_BIT, (hl)
+                call pf_bdone                  ; its body count off its cols (A, B, DE)
                 ld   a, (hl)
                 and  PFCF_REFL | PFCF_LADDER
                 jr   z, .hit
+                pop  bc                        ; (a return: K no longer needed)
                 ld   c, a                      ; C = flags
-                ld   a, b
+                ld   a, (hl)
+                and  PFCF_SLOT
                 ld   (pf_cur), a
                 push bc
                 call pf_row                    ; the FX flies at it
@@ -466,13 +555,28 @@ pf_bodies:
                 ld   a, PFB_STOP
                 ret
 .hit:           push hl
-                ld   a, b
+                ld   a, (hl)
+                and  PFCF_SLOT
                 call pf_strike                 ; A = PFB_NONE / PFB_STOP
                 pop  hl
                 or   a
-                ret  nz
-.n1:            inc  hl
-                jr   .l
+                jr   nz, .ret                  ; (pop bc keeps A)
+                push ix                        ; pierced / missed: struck dead?
+                ld   a, (pf_cur)
+                call ent_ix                    ; (A, E)
+                bit  EF_DYING_BIT, (ix+E_FLAGS)
+                pop  ix
+                jr   z, .nx
+                set  PFCF_DEAD_BIT, (hl)       ; DONE for good (pf_reverse)
+.nx:            pop  bc
+                inc  b
+                dec  b
+                jr   nz, .s2                   ; more of the K left
+.none:          xor  a                         ; PFB_NONE
+                ret
+.ret:           pop  bc
+                ret
+                ASSERT PFB_NONE == 0
 
 ; pf_nin — from candidate HL (its x0) on, the next one with x0 - D <= C <=
 ; x1 + D (D = 0 / 1). Out: CF = 0: HL -> its slot byte (resume at HL + 1);
@@ -628,7 +732,7 @@ pf_burst:
 ;------------------------------------------------------------------------------
 ; pf_enter — the projectile enters col pf_next: pf_pos, range - 1, the FX path
 ; (first cell: anchor + facing, 1 segment of 0; else one more move).
-; Clobbers: A, DE, HL
+; Clobbers: A, HL
 pf_enter:
                 ld   a, (pf_next)
                 ld   (pf_pos), a
@@ -650,17 +754,17 @@ pf_enter:
                 ret
 .more:          ld   hl, pf_moves
                 inc  (hl)
-                ld   hl, pf_desc + FXD_SEGS - 1
-                ld   e, a
-                ld   d, 0
-                add  hl, de
+                add  a, (pf_desc + FXD_SEGS - 1) & $FF
+                ld   l, a                      ; (PF_RAM: one page, H kept)
                 inc  (hl)                      ; SEGS[NSEG - 1] += 1
                 ret
+                ASSERT (pf_moves >> 8) == (PF_RAM >> 8) && ((pf_desc + FXD_LEN) >> 8) == (PF_RAM >> 8)
                 ASSERT FXDF_LEFT == 1
 
 ; pf_reverse — a bounce / reflection: direction flips, the caster becomes a
-; target, a new pass (marks cleared), a new FX segment once a cell was entered.
-; Clobbers: A, HL
+; target, a new pass (marks cleared: a DONE body counts on its PF_ROWF cols
+; again; a PFCF_DEAD one stays DONE), a new FX segment once a cell was entered.
+; Clobbers: A, B, E, HL
 pf_reverse:
                 ld   hl, pf_rev
                 inc  (hl)
@@ -670,19 +774,67 @@ pf_reverse:
                 ld   a, 1
                 ld   (pf_cok), a
                 ld   hl, pf_cand
-.c:             ld   a, (hl)
+.c:             ld   a, (hl)                   ; x0
                 inc  a
                 jr   z, .seg
+                ld   e, (hl)
                 inc  hl
+                ld   a, (hl)                   ; x1
                 inc  hl
+                bit  PFCF_DONE_BIT, (hl)
+                jr   z, .nd
+                bit  PFCF_DEAD_BIT, (hl)
+                jr   nz, .nd                   ; dead: DONE for good
                 res  PFCF_DONE_BIT, (hl)
-                inc  hl
+                push hl                        ; a DONE body counts on its cols again
+                sub  e
+                inc  a
+                ld   b, a
+                ld   a, e
+                or   PF_ROWF & $FF
+                ld   l, a
+                ld   h, PF_ROWF >> 8
+.a:             ld   a, (hl)
+                add  a, PFR_BODY1
+                ld   (hl), a
+                inc  l
+                djnz .a
+                pop  hl
+.nd:            inc  hl
                 jr   .c
 .seg:           ld   hl, pf_desc + FXD_NSEG
                 ld   a, (hl)
                 or   a
                 ret  z                         ; nothing entered: no segment yet
                 inc  (hl)
+                ret
+
+; pf_bdone — candidate HL (its slot byte) was just marked DONE: its cols'
+; PF_ROWF body counts drop by one, so a col only DONE bodies cover reads 0
+; (plain) and the walk's fast-forward skips it (pf_bodies would return
+; PFB_NONE there). D3-8 budget review: Lightning r3 through 4 bodies + the
+; bounce ("lcast") called pf_bodies on 26 cells at ~0.9k T each (contended);
+; this is ~0.15k T a DONE.  Keeps C, HL.  Clobbers: A, B, DE (pf_bodies,
+; its only caller, holds its B / C on the stack)
+pf_bdone:
+                push hl
+                dec  hl
+                ld   a, (hl)                   ; x1
+                dec  hl
+                ld   e, (hl)                   ; x0
+                sub  e
+                inc  a
+                ld   b, a                      ; w
+                ld   a, e
+                or   PF_ROWF & $FF
+                ld   l, a
+                ld   h, PF_ROWF >> 8
+.c:             ld   a, (hl)
+                sub  PFR_BODY1
+                ld   (hl), a
+                inc  l
+                djnz .c
+                pop  hl
                 ret
 
 ; pf_tick — A = move index -> A = TURN_TICK + FXD_DELAY + ceil(moves / speed)

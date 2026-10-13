@@ -19,7 +19,7 @@ PD_AMMO_BIT     EQU 3
 ; DAGGERS = 0 -> NO DAGGERS, no bow -> NO BOW, ARROWS = 0 -> NO ARROWS), IX =
 ; hero, B = ABL_DAGGER / ABL_BOW, ABIL_DESC loaded (abil_load: ABIL_RK = the
 ; ab_ammo row).
-; Refused (L = 0, no turn, nothing spent): mid-ladder (game.md §2.3) -> NO
+; Refused (L = IC_REFUSED with its line, 0 silent; no turn, nothing spent): mid-ladder (game.md §2.3) -> NO
 ; TARGET (as the spells); act_begin's lead col 0 / 31 -> L = 0, no message.
 ; Accepted (input tick): act_begin (TURN_PEND, ACT_ABL = B, ACT_AT, MON_AT),
 ; DAGGERS / ARROWS -= 1, PD_AMMO, the abl_seq sequence (kn_throw / kn_bow).

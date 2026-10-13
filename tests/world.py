@@ -3175,7 +3175,10 @@ def w16_level(p, check):
         d1 = room_model.read_block(p)
         lair_visit("D1")                        # B12
         # ---- descend D1 -> D2 by walking onto the exit -----------------
-        st_poke(0x5A)                           # D3-0: hero status must carry
+        st_poke(0x5A)                           # D3-0: hero status must carry; D3-8: slot 0
+        for a_, v_ in (("ST_FLAGS", 0x20), ("ST_T1", 0), ("ST_T2", 0x0F)):   # a valid WEAK 15
+            p.wb(S[a_], v_)                      # (the status step runs every hero turn now)
+        tc_carry = p.rw("TURN_COUNTER")
         ran, cards, fr_n = to_exit(blk, "D1")
         check("W16 D1 -> D2: J on {EXITCOL,2} is one turn (first step animated) + the level change",
               ran, "")
@@ -3183,8 +3186,15 @@ def w16_level(p, check):
               len(cards) == 1 and cards[0][1] in (1, 2) and card_ok(cards[0][0], 2), len(cards))
         info["descend D1->D2 frames (input tick .. idle)"] = fr_n
         blk2 = level_ok(2, M, "D2 after descend", hero_keep=hero_k)
+        n_ = p.rw("TURN_COUNTER") - tc_carry    # D3-8: WEAK 15 stepped once per turn
+        want_ = {a: [v_] + [0] * 15 for a, v_ in zip(ST, (0x20, 0, 0x0F - n_, 0x5A))}
         check("W16 D2 (D3-0 HERO_CARRY): ST_* slot 0 carried, slots 1..15 cleared by level_reset",
-              st_read() == {a: [0x5A] + [0] * 15 for a in ST}, st_read())
+              0 < n_ < 15 and st_read() == want_, (n_, st_read()))
+        p.tick(4)                               # D3-8 review: panel_init (level_show) resets
+        fr_ = p.composed_frame()                # STAT_SH to $FF, so the carried WEAK icon redraws
+        check("W16 D2: carried WEAK icon redrawn after level_show (STAT_SH 7, a glyph at (30, 21))",
+              p.rb("STAT_SH") == 7 and any(cell_bytes(fr_, 30, 21)),
+              (p.rb("STAT_SH"), cell_bytes(fr_, 30, 21)))
         st_poke(0)
         check("W16 D2: colours / tileset differ from D1",
               d1[S["LVL_ATTR_FLOOR"] - room_model.BASE] != blk2[S["LVL_ATTR_FLOOR"] - room_model.BASE], "")

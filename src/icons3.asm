@@ -81,6 +81,14 @@ slot_want:
 item_icons:
                 ld   hl, PANEL_DIRTY
                 res  PD_ICONS_BIT, (hl)
+                call st_sig                    ; D3-8: the hero's status icons changed:
+                ld   hl, STAT_SH               ; redraw both cells (bank 1, ~1k T)
+                cp   (hl)
+                jr   z, .ns
+                ld   (hl), a
+                ld   hl, st_icons_draw
+                call far1                      ; A = the sig
+.ns:
                 call icon_sig
                 ld   (ICON_SIG), a             ; (a slot left for the next item
                                                ; re-sets PD_ICONS itself)

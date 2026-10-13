@@ -11,5 +11,6 @@
 ;==============================================================================
                 INCLUDE "scroll1.asm"
                 INCLUDE "info1.asm"
+                INCLUDE "stat1.asm"            ; D3-8: the hero's status icons (row 21)
                 INCLUDE "menu1.asm"
                 INCLUDE "ui1_vars.asm"

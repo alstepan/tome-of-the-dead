@@ -72,6 +72,10 @@ item_icons_far: ld   hl, item_icons
 ;------------------------------------------------------------------------------
 icon_poll:
                 ex   de, hl
+                call st_sig                    ; D3-8: the 2 status icons (row 21)
+                ld   hl, STAT_SH
+                cp   (hl)
+                jr   nz, .dirty
                 ld   a, (P_ENTITIES + E_POT)
                 ld   hl, PANEL_POT_SH
                 cp   (hl)
@@ -114,6 +118,58 @@ icon_sig:
 .m:             ld   a, l
                 ret
                 ASSERT ICON_SLOTS <= 16
+
+;------------------------------------------------------------------------------
+; st_sig — D3-8: the hero's 2 panel status icons (game.md §6.4, priority HOLD >
+; MIND > POISON > WEAK) packed as icon index + 1 (combat_defs.asm SI_*; 0 =
+; blank): low nibble = col 30, high nibble = col 31. 0 = no status.
+; Keeps BC, DE, HL.  Clobbers: A.   ~0.1k T (STATUS 0: ~40 T)
+;------------------------------------------------------------------------------
+st_sig:
+                ld   a, (ST_FLAGS)
+                and  ~(1 << STS_GUARD_BIT) & $FF
+                ret  z
+                push bc
+                push de
+                ld   c, a                      ; C = STATUS
+                ld   b, 0                      ; B = the sig so far
+                and  STS_HOLD                  ; HOLD kind 1..3 = FROZEN / ASLEEP / STUNNED
+                call nz, .add                  ; (index + 1 = the kind)
+                ld   a, c
+                and  STS_MIND
+                jr   z, .p
+                cp   MIND_FEAR
+                ld   a, SI_FEAR
+                jr   z, .m
+                ld   a, SI_CONFUSED
+.m:             call .add
+.p:             bit  STS_POISON_BIT, c
+                ld   a, SI_POISON
+                call nz, .add
+                bit  STS_WEAK_BIT, c
+                ld   a, SI_WEAK
+                call nz, .add
+                ld   a, b
+                pop  de
+                pop  bc
+                ret
+.add:           ld   e, a                      ; the first goes low, the second high,
+                ld   a, b                      ; any further one is dropped
+                or   a
+                jr   nz, .hi
+                ld   b, e
+                ret
+.hi:            and  $F0
+                ret  nz
+                ld   a, e
+                rlca
+                rlca
+                rlca
+                rlca
+                or   b
+                ld   b, a
+                ret
+                ASSERT HOLD_FROZEN == 1 && HOLD_ASLEEP == 2 && HOLD_STUNNED == 3
 
 ;------------------------------------------------------------------------------
 ; panel_more — panel_step's tail (HOT_COPY) after HP / LOG / ICONS / DEPTH:

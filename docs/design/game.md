@@ -407,7 +407,7 @@ WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|
 ### 3.3 Panel at a glance (layout: concept-screen §5; approved round 5)
 
 Rows 18–19: **10 icons 24×16** (cols `3i … 3i+2`), cols 30–31 = depth + key icon. Row 20: the
-**info line** (selected icon's name, MP cost, range, bounces/notes). Row 21: HP / MP / FOOD
+**info line** (selected icon's name, MP cost, range, bounces/notes; after an attack it temporarily shows the **target readout**, §6.5). Row 21: HP / MP / FOOD
 bars (32 px each) with numbers, the **hunger stage word**, the Warrior's ammo. Rows 22–23:
 2-row message log (cols 0–23) + **4 worn-gear icons 16×16** (cols 24–31). Row 17 (the
 storey-1 floor) carries the panel ornament.
@@ -689,9 +689,9 @@ sprite. **≤ 3 tracks at once**; more are queued.
 
 | Spell | Book | MP | Range | Dmg / type | Bounces | Effect | Projectile → impact sprites |
 |---|---|---|---|---|---|---|---|
-| **Spark** | D1 | 1 | 6 | 1d4+1 SHOCK | 0 | **1 in 4: CONFUSED 3** (§6.4; 3D) | spark_fly1/2 8×8 `$43` → spark_fizz1/2 8×8 |
+| **Spark** | D1 | 1 | 6 | 1d4+1 SHOCK | 0 | **1 in 4: CONFUSED 4** (§6.4; 3D; was 3, §6.4.1) | spark_fly1/2 8×8 `$43` → spark_fizz1/2 8×8 |
 | **Firebolt** | D2 | 3 | 12 | 1d8+2 FIRE | 0 | **burst**: bodies within 1 col of impact take 1d4 FIRE, **caster included** at point-blank (impact within 1 col of the caster's front col; ranks 1–2, intended; rank 3 spares him) | firebolt_fly1/2 16×8 alternating yellow `$46` / red `$42` per frame (**user 2026-10-06**) → firebolt_burst1/2 16×16 |
-| **Frost Shard** | D3 | 3 | 12 | 1d6 COLD | **1** | **freeze 2 turns** (bosses 1); can freeze the caster after a bounce | frost_fly 8×8 `$45` → frost_crack **8×8** (**user 2026-10-06**: stays 8×8, not 16×16; revisit after playtesting) |
+| **Frost Shard** | D3 | 3 | 12 | 1d6 COLD | **1** | **freeze 2 turns** (bosses 1); can freeze the caster after a bounce or reflection: **1 turn at any rank** (§6.4.1) | frost_fly 8×8 `$45` → frost_crack **8×8** (**user 2026-10-06**: stays 8×8, not 16×16; revisit after playtesting) |
 | **Drain Life** | D4 | 3 | 5 | 1d6+1 DRAIN | 0 | **caster heals the damage dealt** (to max HP); useless on undead (I) | **drain_fly1/2 16×8 `$43` → drain_hit 16×16 (new art)**; the caster flashes `$44` |
 | **Lightning** | D5 | 5 | 28 | 1d8+3 SHOCK | **2** | **pierces** (each body once per pass) | lightning_fly1/2 16×8 `$47` (16 px/tick) → lightning_flash 16×16 |
 
@@ -784,7 +784,8 @@ Seven effects in **four groups**. Effects in one group are exclusive; groups com
 
 **Data shape (per entity, 3 B + 1 spare; the engineer assigns layout in memory-map):**
 - `STATUS`: bits 0–1 HOLD (0 none, 1 FROZEN, 2 ASLEEP, 3 STUNNED) · bits 2–3 MIND (0 none,
-  1 FEAR, 2 CONFUSED, 3 reserved) · bit 4 POISON · bit 5 WEAK · bit 6 **STUN_GUARD** · bit 7
+  1 FEAR, 2 CONFUSED, 3 reserved) · bit 4 POISON · bit 5 WEAK · bit 6 **STUN_GUARD** (generalised
+  to **HOLD_GUARD**, §6.4.1) · bit 7
   reserved. Invariant: a group bit/kind is set ⇔ its timer nibble ≠ 0. `STATUS = 0` is the
   fast path (skip the whole step).
 - `STMR1`: high nibble HOLD turns, low nibble MIND turns. `STMR2`: high nibble POISON turns,
@@ -801,7 +802,7 @@ Seven effects in **four groups**. Effects in one group are exclusive; groups com
    resistances; **never below 1 HP**: no source poisons monsters, so poison never kills).
 2. WEAK, MIND: decrement; at 0 clear (end message, hero only).
 3. HOLD: if set → decrement, **skip the action** (cooldowns do not tick); at 0 clear. If
-   STUNNED just cleared, set STUN_GUARD.
+   STUNNED just cleared, set STUN_GUARD (§6.4.1: FROZEN too, = HOLD_GUARD).
 4. Otherwise act; after the action, clear STUN_GUARD.
 
 Because the step runs before the action, "duration *n*" = the entity loses exactly its next
@@ -811,19 +812,20 @@ frozen in time: their timers pause.
 
 | Effect | Does | Ends | Durations / sources |
 |---|---|---|---|
-| **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 (COLD hit, also self after a bounce) |
+| **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 / 3 / 4 by rank (COLD hit); self after a bounce or reflection **1** (§6.4.1) |
 | **ASLEEP** | skip action; eva 0 | timer, or **any HP loss** (incl. poison, aura) wakes it | Sleep scroll 8 (room), GAS trap 4 (hero) |
 | **STUNNED** | skip action; eva 0; cannot parry | timer. **STUN_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero) |
-| **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action is illegal the turn is spent (`YOU STUMBLE.`). Climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 → 3; Ghost touch 1 in 4 → 4 (hero) |
+| **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action is illegal the turn is spent (`YOU STUMBLE.`). Climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
 | **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) → illegal, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; ranged, spells, items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll 6 (room); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
-| **POISON** | −1 HP every 3rd turn (step 1) | timer; Cure | Spider bite 9 (= 3 HP; Spider Queen 12), DART trap 6 |
+| **POISON** | −1 HP every 3rd turn (step 1) | timer; Cure | **adds per application, cap 15** (§6.4.1): Spider bite **6** (was 9), Spider Queen **9** (was 12), DART trap 6 |
 | **WEAK** | the hunger-WEAK penalties (§7: atk −2, eva −1, dmg −1 min 1, no MP regen, no jump); **not cumulative** with hunger WEAK (the same penalties apply once) | timer; Cure | **Mummy curse** (below) 12 |
 
 **Mummy curse (defines §10's "curse").** A Mummy (and the Golden Pharaoh) hit drains 5 FOOD
 as before and, **1 in 3**, curses: WEAK 12. `THE MUMMY CURSES YOU!` WEAK is a hero-only
 effect (no source targets monsters).
 
-**Stacking / refresh.** Same effect again → timer = **max(current, new)**, never added. A
+**Stacking / refresh.** Same effect again → timer = **max(current, new)**, never added
+(**exceptions, §6.4.1:** POISON adds, cap 15; no HOLD lands on a body already held). A
 different effect in the same group **overwrites** kind and timer (a Frost Shard on a sleeper:
 the COLD damage wakes it, then FROZEN applies). Groups are independent.
 
@@ -854,7 +856,9 @@ traps) use only the immunity mask and the boss rule.
   attr per cell (no clash): FROZEN `$45`, ASLEEP `$41`, STUNNED `$07`, CONFUSED `$43`, FEAR
   `$42`, POISON `$44`, WEAK `$42`. **7 glyphs × 8 B = 56 B**, panel glyphs like the row-17
   ornament, **not tile ids** (concept-screen §5). Updated via the panel queue (§3.3).
-- No overhead "Zz" FX: a persistent FX track would cost ~5k T/tick and a track slot.
+- No overhead "Zz" **FX track**: a persistent FX track would cost ~5k T/tick and a track slot.
+  **Superseded 2026-10-13 by §6.4.1:** a cell-aligned overhead **status mark** with its own
+  list (not an FX track), drawn only on change.
 
 **Messages (all ≤ 32, upper case; monster lines only for monsters in the current room, with
 the ≤ 12-char short name from the KILLED-BY abbreviation table: `THE ` + 12 + suffix ≤ 30):**
@@ -874,6 +878,174 @@ the ≤ 12-char short name from the KILLED-BY abbreviation table: `THE ` + 12 + 
 **Cost.** Status step: `STATUS = 0` fast path ~20 T/entity; active ~150–250 T; ≤ 16 entities
 ≈ ≤ 4k T per turn in the input tick (E0 margin). Code ~0.45 KB (hold/skip/eva checks hot in
 bank 2 ~150 B; apply/clear/messages/tint in bank 3 via `far3`, ~300 B). Strings ~0.45 KB raw.
+
+### 6.4.1 Status review: durations and on-body cues (designer decision 2026-10-13)
+
+**Balance changes** (everything not listed keeps its §6.4 value):
+
+| # | Change | Why |
+|---|---|---|
+| B1 | **HOLD_GUARD** replaces STUN_GUARD: set when FROZEN or STUNNED ends (timer or FIRE thaw); while set, FROZEN and STUNNED do not apply (`IS UNAFFECTED.` is **not** printed: silent). Cleared after the body's next action, as before. ASLEEP is not guarded (damage already breaks it) | Frost recast on the last frozen turn chain-locked any COLD-N monster for 3 MP per 2–4 turns: zero monster actions while MP lasts. Guarded uptime is capped at n/(n+1): 67 / 75 / 80 % by rank |
+| B2 | **No HOLD lands on a held body:** FROZEN/STUNNED on a body whose HOLD is set → no effect (damage still applies). A sleeper is woken by the hit first, so Frost on a sleeper still freezes | Refresh (max) and overwrite (Stun → Frost) were the other ways to extend a lock |
+| B3 | **Self-freeze = 1 turn** at every rank: a Frost Shard striking its own caster (bounce, Ghost/Archmage reflection) freezes for 1, whatever the rank | Rank-ups added bounces *and* length, so rank 3 punished its own caster with 4 eva-0 turns; the Archmage reflects Frost (§9.1), which at rank 3 was a near-certain death. The risk stays, the spike goes |
+| B4 | **Spark CONFUSED 3 → 4** (all ranks; rank 3 chance 1 in 2 unchanged; bosses 4 → 2) | A confused monster loses only 1 in 2 actions, so 3 turns ≈ 1.5 lost actions on a 1-in-4 proc ≈ 0.4 per cast: invisible. 4 ≈ 2 lost actions; the boss value goes from 1 (≈ 0.5, unnoticeable) to 2 |
+| B5 | **POISON adds** per application, cap 15 (still −1 HP every 3rd turn, never below 1 HP). Spider **6** per bite (was 9), Spider Queen **9** (was 12), DART 6 | With max() a long Spider fight cost the same 3 HP as one bite: more bites must hurt more. 1 bite = 2 HP (was 3), 2 bites = 4, 3+ = 5 (cap). Safe because poison cannot kill |
+
+**Reviewed, unchanged.**
+- Power Strike stun 1 / 1 / 2 (bosses — / — / 1; PHYS-R kinds — / — / 1; Ogre: none). It is a bonus on a ×2 hit.
+- Ogre SLAM stun 1 (hero).
+- Ghost CONFUSED 4 (hero; Gravecloak 2).
+- Necromancer FEAR 3 (hero) and Fear scroll 6 (room).
+- Sleep scroll 8 (room). The first hit wakes, so the value is one free strike per sleeper plus repositioning.
+- GAS ASLEEP 4 (hero). It costs approach turns, and one near-sure hit wakes him.
+- Mummy WEAK 12. It covers the Mummy fight and about half of the next one.
+- **Whirlwind applies no status.** Slow monsters ("acts every 2") lose about half as many real
+  actions to any timer. This is accepted, because timers count game turns.
+
+**On-body cues.** Colour is not enough. **Every HOLD/MIND body (hero and monsters) also gets
+(V1) a frozen pose and (V2) an overhead status mark.** POISON and WEAK are hero-only and slow,
+so they stay on the panel icons plus the magenta `-1` poison number (§6.5).
+
+| Rank | Cue | Effects | Art | Cost |
+|---|---|---|---|---|
+| **V1** | **Hold the pose:** a HOLD body's idle loop stops (`idle_phase` → 0 while HOLD), so bats stop flapping and the hero stops breathing | FROZEN, ASLEEP, STUNNED | none | ~15 B, ~40 T per drawn slot. It **saves** the idle-frame redraws (12–28k T each) |
+| **V2** | **Status mark:** one 8×8 glyph above the head that alternates frame A / frame B every **8 ticks**. Frame A is the existing panel icon. Until frame B art lands, frame B = blank, so the mark blinks | FROZEN ✻, ASLEEP Zz, STUNNED stars, CONFUSED ?, FEAR skull (one per body, HOLD > MIND) | **A: existing** (`status_icons` 0–4). **B: new**, 5 × 8 B (graphics-artist) | ~0.5–0.6k T per change (restore 1 background cell + OR 8 B + 1 attr); ~250 B code, 80 B glyph copy, ~32 B RAM |
+| V3 | **Apply moment:** reuse the hit's own impact (frost_crack, power_burst, spark_fizz, Ghost touch). Sleep scroll and GAS give a 1-step `$41` attr flash. Fear scroll: the mark appearing is the cue | all | existing | ~0 (flash mechanism exists) |
+
+**Rejected.**
+- Shake/jitter: a 1-px move is a full shifted body redraw, 12–28k T per body per tick.
+- Alternating tint: the attr channel is already full (§6.5), a flicker reads as the hit flash, and it costs ≤ 2.9k T per body per toggle.
+- Persistent FX-track overlays: they take 1 of the 3 tracks and ~5k T per tick.
+- Ice-shell overlay sprite: a second masked body draw.
+- Green poison bubbles: green means "HP gained" (§6.5), and poison is hero-only and already covered.
+
+**Status mark rules (V2).**
+- **Place:** the body's centre column (`x + (w−1) div 2` cells, rendered x rounded to a cell), on
+  the row above the body's top cell. The glyph uses the effect's tint attr (`$45` / `$41` / `$07` /
+  `$43` / `$42`) on black paper. As with numbers, a decor or ladder cell under it is accepted clash.
+  **Hidden** when that row is above the storey band (a flyer at `y = 9s`; it keeps its tint and
+  frozen pose) or when the cell lies inside another body's footprint.
+- **Follows** a moving body (CONFUSED/FEAR walk): erase plus draw when the cell column changes, at
+  most once per cell step.
+- **Own list, not an FX track:** one record per slot `{drawn, frame, col, row}`, derived from
+  `ST_FLAGS`. A record changes on apply, clear, move or the 8-tick toggle. Toggle phase = `(TICK + slot × 3) & 15`, so
+  marks do not all toggle together.
+- **≤ 2 mark operations per tick.** Extra operations wait a tick, round-robin. **None on a
+  `TP_FIRE` tick** (like panel and decor), so the cast worst case (`lcast` 126.8k) is untouched.
+  Worst ordinary tick: +~1.2k T for 2 operations, plus a ~0.3–0.6k T scan. Skip the scan when no
+  live body has HOLD/MIND set.
+- **Draw order:** bodies → FX tracks (including the D3-8b drip) → **marks** → numbers. An FX or
+  number erase that overlaps a mark cell re-stamps the mark in the same tick (~0.3k T).
+- **Damage numbers (D3-11):** a live number over a body **hides that body's mark** for the
+  number's 12 ticks. Both use the row above the body: the number is the event, the mark is the
+  state. The mark is re-stamped when the number ends.
+- **Room change** clears all marks. The marks are rebuilt from `ST_FLAGS` on entry.
+
+**Frame B brief (graphics-artist; 8×8, 1-bit, same ink as frame A).**
+- Zz: the small z rises and the big Z sinks, giving a drifting motion.
+- Stars: rotated 45°, so the two frames read as orbiting.
+- Snowflake: a diagonal-arm sparkle variant.
+- `?`: shifted 1 px and tilted, so it wobbles.
+- Skull: 1 px lower with the jaw open, so it trembles.
+
+**Decorative drip (D3-8b).** The drip stays ambient. Its attr is **`$01` or `$05`** (dim
+water). It must never be `$44` or `$43` (the heal and poison colours), and never `$45` or `$41`
+(the mark colours). **The poison-trap drip variant is rejected:** over a hidden trap it would
+reveal it and break §1.5 trap finding, and over a known trap it repeats the `T_TRAP` glyph.
+
+### 6.5 Hit feedback: damage numbers and target readout (D3-11; user 2026-10-13 numbers; designer decision 2026-10-13 rest)
+
+Enemy health is shown in two ways: **flying numbers** over the body that was hit (what this hit
+did), and a **target readout** on the info line (what is left). **No overhead HP bars:** each
+moving monster would need its own overlay redrawn on every tween (~1k T per monster per tick),
+it would fight the numbers for the 16-px headroom, and flyers at `y = 9s` have no headroom at
+all. **No HP-threshold tints:** the attr channel already carries the hit flash, four status
+tints and the gold glow (§6.4), and one more meaning in a 2-colour cell is unreadable.
+
+**Numbers (render-only, own list, not FX tracks).**
+- **Text (user 2026-10-13: signed):** the HP change, with a sign, for hero and monsters alike:
+  `-n` for HP lost (damage after resistances), `+n` for HP gained (the HP actually gained,
+  after the max-HP clamp). 1–2 digits, magnitude capped at 99, from the 6-px text font (`+`
+  and `-` are already in ASCII 32–127; no new glyphs). `MISS` (24 px = exactly 3 cells) for a
+  missed roll or a parry. `0` (no sign) for I/X (immune/reflect). A heal that gains 0 HP
+  (caster already at max) shows **nothing**, never `0`: `0` means "immune".
+- **Heal sources that emit `+n`:** **Heal potion** (drinker), **Drain Life** (caster, on the
+  tick after the target's `-n`), **Vampire drain bite** (the Vampire), and any later
+  monster potion (§9.2 idea). **Silent:** FED regen (+1 per 12 turns: a `+1` every 12 turns
+  would hold a live slot and drown the real hits during waits and corridor walks; the panel
+  HP bar already shows it), level-up and Vigor/Power tomes (max-HP raises, not heals; their
+  log line carries them). Rule for any future source: a number only for a heal **caused by an
+  action this turn**, never for a timed trickle.
+- **Colours (black paper, BRIGHT):** damage to a monster `$47` white · damage to the hero `$42`
+  red (any source: melee, spells, own burst/bounce, traps, falls, aura) · **heal (any body)
+  `$44` green** · poison tick **`$43` magenta** (hero only, since nothing poisons monsters;
+  moved off green so green means only "HP gained"; magenta is already the affliction colour:
+  CONFUSED tint, Drain bolt) · `MISS` and `0` `$45` cyan ("nothing happened", both sides).
+  Clash: numbers sit in air cells (black paper) like before, so a heal costs no new clash
+  case; `$43` and `$44` are already in the legality set (traps, §1.5). The POISON panel icon
+  stays `$44` (static, on the panel, not confusable with a flying `+n`).
+- **Placement:** cell-aligned horizontally (no shifting), centred on the body's cols, clamped to
+  cols 0..32−w. Width w (sign included, 6 px per char): **2 cells** for `-9`/`+9` (12 px,
+  2-px side pad), **3 cells** for `-99`/`+99` (18 px, 3-px side pad), 1 cell for `0`, 3 cells
+  for `MISS`. The widest case is still 3 cells, so the clamp (cols 0..29 worst case) and the
+  24-B compose buffer are unchanged.
+  Starts on the row above the body top and **rises 1 px per tick for 8 ticks, then holds 4**:
+  **12 ticks (≈ 0.5 s)** in total. Vertical moves cost nothing extra; at most 2 attr rows are
+  touched. If the row above is not air (a flyer at `y = 9s`, or row −1), the number starts on
+  the body's top row and overdraws it; this is accepted clash, like the hit flash. Numbers draw
+  **last**, over bodies and FX. They stay where they were spawned and do not follow the body.
+- **One number per body:** a new HP change on a body whose number is still live, **with the same
+  sign**, replaces it with the **sum** (a `MISS` or `0` is replaced by the new value) and
+  restarts the 12 ticks; colour = the newest contributor's colour (so a poison tick merging into
+  a red hit turns it magenta, which is fine). This merges a Lightning bounce or Firebolt burst
+  into one figure. An HP change of the **opposite sign replaces** the live number outright (no
+  netting): a `-5` then `+5` netted to `0` would read as "immune", and the player wants to see
+  the heal happen. Sum magnitude caps at 99.
+- **Spawning:** on the tick **after** the damage is resolved (never on the fire/release tick,
+  which is the budget peak), with **at most 1 spawn per tick**. Pending spawns wait in a FIFO of
+  4, and an entry older than 4 ticks is dropped (the log still carries it). **Whirlwind** on
+  several targets therefore spawns as a 1-tick ripple, nearest first. **≤ 3 live numbers**; a
+  spawn into a full list ends the oldest live number.
+- **Non-blocking:** numbers never hold input and are **not** hero FX for the phase-2 gate
+  (§2.2). A room change clears them all.
+- **Data (engineer lays out):** 3 entries × {body slot, col, start row, px offset, ticks left,
+  attr, width, value} + a pre-composed bitmap of ≤ 3 cells × 8 lines (24 B), composed once at
+  spawn from the font. `value` is a signed byte (−99..+99; `MISS` and `0` as flag values).
+  About 90 B RAM (unchanged).
+
+**Target readout (info line, row 20, transient).** The info line normally describes the
+selected icon (§3.3). After the hero attacks a monster (hit, miss, parry or immune), it switches
+to that monster:
+
+```
+row 20  chars 0-15 ($47)    chars 16-27 ($42)        chars 28-41 ($45)
+        SKELETON GUARD      [########----] 9/14      FROZEN
+        ^short name <=12    ^32-px bar, cells 12-15  ^HOLD/MIND word, else blank
+                             number from char 22
+```
+
+- **Which monster:** the one the hero's action struck. If it struck several (Whirlwind, pierce,
+  burst), it is the **surviving struck monster with the lowest HP**, with ties going to the
+  first in slot order. If no monster is set yet, a monster that hits the hero sets it.
+- **Clears** (back to icon info) when the target dies or leaves the room, on a room change, or
+  when the player moves the icon cursor (ICON MODE or `1`–`0`). It comes back on the next attack.
+- **Updates** on any HP change of the target and on HOLD/MIND changes (notes word).
+- **Panel queue (§3.3):** two items: `TGT_NAME` (name + notes, only when the target changes,
+  ~5k T) and `TGT_HP` (bar + number, ~2.5k T). Both drain like any panel item: one per tick,
+  never in the input tick. The bar reuses the row-21 32-px bar routine, and the name comes from
+  the existing ≤ 12-char short-name table.
+- The notes word (`FROZEN` / `ASLEEP` / `STUNNED` / `CONFUSED` / `AFRAID`) can be deferred to a
+  later pass at no layout cost (blank field). The engineer decides.
+
+**Cost (estimates; re-gate against `wcast4` 118.3k of ~126k).** Numbers: ~1.0–1.3k T per live
+number per tick (erase + draw ≤ 3 cells × 2 rows + attrs), ≤ ~3.9k with 3 live, + ~0.7k for a
+spawn's compose (one more glyph for the sign). The worst case is unchanged (3 cells was already
+the `MISS` width); the sign makes the typical number 2–3 cells instead of 1–2, about +0.3k T
+per live number on average. Heals add spawns, but they go through the same 1-per-tick FIFO, so
+the per-tick peak does not grow (Drain Life: target `-n` at f+1, caster `+n` at f+2). Because
+spawns come at f+1 or later, the Whirlwind fire tick gets nothing extra. Code ~290–400 B
+(bank 7; +~40 B for the sign glyph, signed same-sign merge, heal colour and the heal hooks). Readout: ~150–200 B code, 0 B data. If a gated scenario still
+exceeds the budget, **lower the live cap to 2 before anything else**.
 
 ---
 
@@ -1178,7 +1350,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Bat | 24×16 | 3 | 1 | 4 | 0 | 1d2 | 2 | flyer | erratic | — | D1–D3 |
 | Slime | 24×16 | 6 | 0 | 0 | 1 | 1d3 | 2 | walker, acts every 2 | chase | — | D1 |
 | Goblin | 24×32 | 6 | 1 | 1 | 0 | 1d4 | 3 | walker, climber, opener | chase | Apple 1/4 | D1, D2 |
-| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker | hit **poisons**: POISON 9 (= −1 HP / 3 turns ×3, §6.4) | — | D2, D4, D5 |
+| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker | hit **poisons**: POISON +6 per bite, cap 15 (= −1 HP / 3 turns; §6.4.1) | — | D2, D4, D5 |
 | Skeleton | 24×48 | 10 | 2 | 2 | 1 | 1d6 | 5 | walker, climber, opener | chase | — | D3, D5, D8 |
 | **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | walker, opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
 | Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch 1 in 4 → CONFUSED 4 (§6.4) | — | D3, D6–D8 |
@@ -1302,6 +1474,25 @@ Flying over a pit is fine (flyer rules); on a ladder it cannot attack, as for an
 Bosses never follow, so the Lord's bat form stays in its lair.
 **Ogre:** a SLAM turn plays RAISE → SLAM.
 **Death Knight:** a parry plays BLOCK and prints `PARRIED`.
+
+**Idea (not scheduled; designer note 2026-10-13): monsters drink potions.** Shape if built:
+only **Goblin, Orc, Necromancer** (hands, opener-humanoids); at spawn 1 in 4 carries **one
+Heal potion** (1 bit in the spare `ENT_STAT` byte 3, beside the Vampire's fled bit). First-match
+rule 0: hp ≤ ⅓ max and it has a potion → drink (whole turn, +10 hp to max, `+n` green number
+§6.5, `$44` attr flash, `THE ORC DRINKS A POTION`); killed before drinking → the potion
+drops (normal floor-list entry, identified as Heal). Bosses never carry one.
+- **Pros:** WazHack-like "monsters use items"; a readable tell and a choice (burst it down
+  before it drinks, or let it waste the turn); turns the potion drop into a visible reward;
+  gives the new `+n` numbers a monster use beyond the Vampire.
+- **Cons:** longer fights at D4–D7 where Orcs are already the attrition wall (§10); stacks with
+  Vampire self-heal to make "heal" a common monster trait; one more source of loot variance
+  (a drunk potion is a lost drop); a test hook (`SEED_FIXED` carry flag) is needed.
+- **Cost:** ~120–160 B code (bank 2 rule check ~40 B hot, drink/drop/message via `far3`),
+  1 bit per slot, 1 string (~24 B). No art (attr flash), no new frame, no layout change.
+- **Recommendation: yes, but not before playtests of the finished 3D/3E balance.** Schedule it
+  in 3F alongside monster tiers (§9.6) if playtests report mid-depth fights as samey or too
+  short; drop it if they already run long. It needs the 3E potion item record and D3-11 `+n`
+  numbers in place first.
 
 ### 9.3 Encounter cap (budget §4 + E0; projectiles included)
 

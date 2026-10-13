@@ -36,7 +36,20 @@
 ; Clobbers: all but IY (far7: A, F lost; nothing is returned).
 ;------------------------------------------------------------------------------
 turn_input:
-                ld   a, (INTENT)
+                ld   a, (ST_FLAGS)             ; D3-8 held hero (FROZEN / ASLEEP / STUNNED,
+                and  STS_HOLD                  ; game.md §2.2): input ignored (Pause still
+                jr   z, .free                  ; works: intent_tick), a Wait turn without
+                xor  a                         ; search every 4 ticks (HELD_WAIT; a pending
+                ld   (INTENT), a               ; icon use / DOWN is dropped)
+                ld   (DN_COMMIT), a
+                ld   hl, HELD_T
+                inc  (hl)
+                ld   a, (hl)
+                cp   HELD_WAIT
+                ret  c
+                ld   (hl), 0
+                jr   .go
+.free:          ld   a, (INTENT)
                 or   a
                 jr   nz, .go
                 ld   a, (ICON_MODE)            ; C3-2b: play frozen in ICON MODE
@@ -101,8 +114,34 @@ turn_input:
                 ld   (LOG_PDIR), a             ; (a replayed tap is spent)
                 ld   (TURN_TICK), a            ; D3-7: the input tick is TURN_TICK 0
                                                ; (set_reaction_at / pf_tick add it)
-                call try_player_turn
+                ld   hl, HST_DONE              ; D3-8: the hero's status step, at the
+                or   (hl)                      ; start of his phase (game.md §6.4), once
+                jr   nz, .act                  ; per turn: an illegal try (no turn) does
+                inc  (hl)                      ; not step again on the next try
+                ld   ix, P_ENTITIES
+                ld   a, (ST_FLAGS)
+                and  STS_HOLD
+                push af                        ; NZ: held at the step (the held path)
+                xor  a                         ; A = 0 = slot 0
+                call st_step                   ; (status7.asm)
+                pop  af
+                jr   z, .act                   ; free: L = 0 (a step never sets HOLD)
+                dec  l
+                jr   z, .hw                    ; still held (or cleared now): the Wait
+                ld   a, 1                      ; review: woken by the step (poison HP loss):
+                ld   (NEED_RELEASE), a         ; no action this tick (the input was ignored);
+                ret                            ; HST_DONE stays 1, so the next tick takes
+                                               ; .free: a held key is released first unless
+                                               ; INPUT_REPEAT
+.hw:            call build_live                ; held: the action is skipped = a Wait
+                xor  a                         ; without search (try_player_turn's
+                ld   (ACT_SLOT), a             ; turn-start state for the monster phase)
+                ld   (CLIMB_BLK), a
+                jr   .spent
+.act:           call try_player_turn
                 ret  nc                        ; illegal: no turn consumed
+.spent:         xor  a
+                ld   (HST_DONE), a             ; the next turn steps again
                 ld   a, (CLIMB_BLK)            ; B14: any turn but a blocked-climb
                 or   a                         ; wait ends the run of blocks
                 jr   nz, .blk                  ; (climb_blocked)
@@ -291,7 +330,8 @@ tpt_intent:
                 bit  DIR_N_BIT, c
                 jr   z, .nj
                 or   a
-                jp   nz, try_jump              ; lowram: A = E/W bits; CF = 1 jumped
+                jp   nz, h_jump                ; D3-8 (WEAK / CONFUSED) -> lowram try_jump:
+                                               ; A = E/W bits; CF = 1 jumped
 .nj:            ld   d, 1
                 cp   1 << DIR_E_BIT
                 jr   z, .side
@@ -346,7 +386,7 @@ tpt_intent:
 .along:         ld   hl, TURN_HOLD
                 ld   a, (hl)
                 or   a                         ; CF = 0
-                jp   z, try_horizontal         ; D = dx
+                jp   z, h_walk                 ; D = dx (D3-8: CONFUSED -> try_horizontal)
                 dec  (hl)                      ; still in the turn-around delay
                 ret
 .turn:          ld   a, d
@@ -483,6 +523,8 @@ try_horizontal:
                 cp   $FF
                 jr   z, .move
                 ld   b, a
+                call fear_chk                  ; D3-8: FEAR -> no bump attack (illegal,
+                jp   z, .afraid                ; no turn, game.md §6.4)
                 call face_tmp6
                 ld   a, b
                 ld   hl, do_attack             ; B3B-R2: bank 3 (A = target slot)
@@ -555,6 +597,15 @@ try_horizontal:
                 jp   hero_door                 ; lowram: opened (CF = 1) / locked (0)
 .blocked:       xor  a
                 ld   (EXIT_KIND), a            ; CF = 0 (xor)
+                ret
+.afraid:        ld   hl, LOCK_SHOWN            ; once per press, as the locked door
+                ld   a, (hl)                   ; (turn_input clears it on a release)
+                or   a
+                ret  nz                        ; CF = 0
+                inc  (hl)
+                ld   a, TX_ST_AFRAID
+                call msg_push
+                or   a                         ; CF = 0
                 ret
 
 ; exit_h — A = EX_LEFT / EX_RIGHT, B = storey. CF = 1 if open; A = dest.
@@ -831,3 +882,4 @@ intent_icon7:
                 INCLUDE "abil_ammo7.asm"       ; dagger throw, bow shot
                 INCLUDE "pickup7.asm"          ; ammo pickup (end_turn)
                 INCLUDE "act7.asm"             ; D3-7 T1: the split ability turn (act_begin / act_pend / act_fire)
+                INCLUDE "status7.asm"          ; D3-8: the status step, held / confused / fearful hero and monsters

@@ -79,8 +79,10 @@ sel_key:
 
 ;------------------------------------------------------------------------------
 ; use_icon — tpt_intent (plain call, both bank 7; IX = hero, live list built):
-; FIRE on the selected slot. Out: L = 1 turn used, 0 refused (no turn; usually
-; a message). Bank 7 holds no data (gfx_integrity), so the SA_* dispatch is a
+; FIRE on the selected slot. Out: L = 1 turn used; L bit 0 = 0 refused (no
+; turn): IC_REFUSED with a message (ic_refuse; NO TARGET included), 0 silent.
+; use_slot's handlers may also return IC_NOTGT (NO TARGET, line not pushed):
+; use_icon turns it into the line, or into a stumble on the reversed path. Bank 7 holds no data (gfx_integrity), so the SA_* dispatch is a
 ; cp chain, not a jump table (about the bytes of the 18-B DW table + its
 ; index code it replaces; cold: one use per FIRE).
 ; Clobbers: all but IX, IY.
@@ -88,6 +90,51 @@ sel_key:
 use_icon:
                 ld   a, (SEL_SLOT)
                 call slot_act                  ; bank 2
+                ; D3-8: a CONFUSED hero's facing actions (melee, abilities, throw,
+                ; bow) are reversed 1 in 3 (never mid-ladder: conf_roll): turn
+                ; around, then use it. Refused that way: a refusal with a line
+                ; (L = IC_REFUSED: no MP / ammo, unlearned, AFRAID — not the
+                ; direction's fault) faces back, no turn; one the direction
+                ; caused (L = IC_NOTGT: melee / power attack NO TARGET; 0: the
+                ; silent act_begin lead col 0 / 31) -> YOU STUMBLE instead of
+                ; the line, the turn is spent (game.md §2.3 / §6.4)
+                cp   SA_ABIL
+                jr   nc, .fa
+                cp   SA_MELEE
+                jr   z, .fa
+                cp   SA_DAGGERS
+                jr   z, .fa
+                cp   SA_BOW
+                jr   nz, .go
+.fa:            ld   b, a
+                call conf_roll                 ; status7.asm (keeps B)
+                ld   a, b
+                jr   nc, .go
+                ld   a, (ix+E_FLAGS)
+                xor  EF_LEFT
+                ld   (ix+E_FLAGS), a
+                ld   a, b
+                call use_slot
+                ld   a, l
+                dec  a
+                ret  z                         ; L = 1: used
+                cp   IC_REFUSED - 1
+                jr   z, .back                  ; IC_REFUSED: no turn, facing restored
+                call h_stumble                 ; 0 / IC_NOTGT: the direction's fault
+                ld   l, 1
+                ret
+.back:          ld   a, (ix+E_FLAGS)
+                xor  EF_LEFT
+                ld   (ix+E_FLAGS), a
+                ret                            ; (L = IC_REFUSED)
+.go:            call use_slot                  ; not reversed: IC_NOTGT -> the line
+                ld   a, l
+                cp   IC_NOTGT
+                ret  nz
+                ld   a, TX_NO_TARGET
+                jr   ic_refuse
+; use_slot — use_icon's dispatch, A = SA_*.
+use_slot:
                 cp   SA_ABIL
                 jp   nc, ic_abil               ; A = SA_ABIL + k
                 cp   SA_MELEE
@@ -109,11 +156,16 @@ use_icon:
                 jr   nz, ic_none               ; SA_EMPTY
 .rf:            ld   a, e
 ic_refuse:      call msg_push
-                ld   l, 0
+                ld   l, IC_REFUSED
                 ret
 ic_none:        ld   l, 0
                 ret
                 ASSERT SA_EMPTY == 0 && SA_ABIL == SA_COUNT - 1 && SA_BAG < SA_ABIL
+IC_REFUSED      EQU $80                        ; ic_refuse's L: refused with a line
+                                               ; (bit 0 = 0: tpt_intent's rrca test)
+IC_NOTGT        EQU $82                        ; NO TARGET, line not yet pushed: use_icon
+                                               ; pushes it, or stumbles if reversed
+                ASSERT (IC_NOTGT & 1) == 0 && IC_NOTGT != IC_REFUSED
 
 ; melee (sword / staff): the nearest hostile in reach on the faced side, else
 ; close the faced door (game.md §2.3, replaces the 3B key C), else NO TARGET.
@@ -129,6 +181,11 @@ ic_melee:
                 call find_target               ; bank 7: A = slot / $FF
                 cp   $FF
                 jr   z, .door
+                ld   b, a
+                call fear_chk                  ; D3-8: FEAR: no melee (illegal, no turn)
+                ld   a, TX_ST_AFRAID
+                jr   z, ic_refuse
+                ld   a, b
                 ld   hl, do_attack             ; turn3.asm, bank 3 (A = target slot)
                 call far3
                 call melee_bonk                ; D3-7 slot: the Mage staff bonk (abil_melee7.asm)
@@ -137,8 +194,8 @@ ic_melee:
 .door:          call try_close                 ; lowram: CF = 1 closed
                 ld   l, 1
                 ret  c
-.nt:            ld   a, TX_NO_TARGET
-                jr   ic_refuse
+.nt:            ld   l, IC_NOTGT               ; use_icon: the line, or a stumble
+                ret
 
 ; potion (quick slot): hp < max -> heal QUAFF_HEAL (capped), 1 turn; HP full:
 ; refused, no turn, no message (D3-7 T5: try_quaff moved here from bank 3).
@@ -188,13 +245,18 @@ ic_abil:
 ; ab_def row + the rank / ammo row) and returns L = its ABF_* flags, B = the
 ; ABL_* (far3 passes BC / L out); dispatch by the flags: ABF_MELEE ->
 ; abil_melee, ABF_AMMO -> abil_ammo, else (ABF_SPELL) -> abil_spell. Each:
-; IX = hero, B = ABL_*, ABIL_DESC loaded -> L = 1 turn used / 0 refused.
+; IX = hero, B = ABL_*, ABIL_DESC loaded -> L = 1 turn used / IC_REFUSED (a line) /
+; IC_NOTGT (abil_melee: no target, no line yet) / 0 (silent) refused.
 ic_disp:
                 ld   hl, abil_load
                 call far3
                 bit  ABF_MELEE_BIT, l
-                jp   nz, abil_melee
-                bit  ABF_AMMO_BIT, l
+                jr   z, .nm
+                call fear_chk                  ; D3-8: FEAR: no Power Strike / Whirlwind
+                ld   a, TX_ST_AFRAID
+                jp   z, ic_refuse
+                jp   abil_melee
+.nm:            bit  ABF_AMMO_BIT, l
                 jp   nz, abil_ammo
                 jp   abil_spell
 ABF_MELEE_BIT   EQU 6

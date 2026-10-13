@@ -8,8 +8,9 @@
 ; Both are entered from bank-3 code only (do_attack is far3'd for the hero's
 ; bump). Callees: bank-2 rng_mod / ent_ix / KFIELD, low-RAM msg_push /
 ; impact_line (they restore the caller's bank: conventions "Banking").
-; Not here yet: the BOSS halving / ASLEEP-FEAR immunity (§6.4: no BOSS flag
-; before 3F), WEAK's atk / eva / dmg penalties (D3-8 with the status step).
+; D3-8: the BOSS rules (KX_IMM bit 7, IMMF_BOSS_BIT: ASLEEP / FEAR immune,
+; HOLD / MIND halved after R) and WEAK's hero penalties (hit_roll atk -2 /
+; eva -1, deal_hit dmg -1 min 1); the status step itself is status7.asm.
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
@@ -40,7 +41,8 @@ kx_melee:
 ; In : IX = attacker, A = target slot, B = to-hit modifier (signed: melee 0,
 ;      Power Strike +2, dagger +1). eva counts 0 against a target with a HOLD
 ;      effect (FROZEN / ASLEEP / STUNNED, §6.4). atk / eva: kind_tab (the
-;      hero's level steps join in D3-9).
+;      hero's level steps join in D3-9). D3-8: a WEAK hero attacks at -2 and
+;      his eva counts -1 (signed; §6.4 / §7).
 ; Out: A = 1 hit (NZ) / 0 miss (Z). IX kept.
 ; RNG: exactly one d20 (the first draw of an attack, prototype §6.2 order).
 ; Clobbers: A, BC, DE, HL.   ~0.45k T (+0.1k for a non-held target's eva)
@@ -48,7 +50,14 @@ kx_melee:
 hit_roll:
                 ld   e, a                      ; E = target slot
                 ld   d, b                      ; D = modifier
-                ld   c, 20
+                ld   a, (ST_FLAGS)             ; D3-8: a WEAK hero (§6.4 / §7) attacks at -2
+                and  STS_WEAK                  ; (slot 0's WEAK first: 32 T when clear)
+                jr   z, .nw
+                bit  EF_PLAYER_BIT, (ix+E_FLAGS)
+                jr   z, .nw
+                dec  d
+                dec  d
+.nw:            ld   c, 20
                 call rng_mod                   ; 0..19 (keeps C, DE)
                 inc  a
                 add  a, d
@@ -65,11 +74,16 @@ hit_roll:
                 ld   a, (hl)
                 and  STS_HOLD
                 jr   nz, .cmp
-                push ix
+                ld   a, (hl)                   ; D3-8: WEAK (the hero only): eva - 1
+                and  STS_WEAK
+                jr   z, .e0
+                dec  b
+.e0:            push ix
                 ld   a, e
                 call ent_ix                    ; (A, E)
                 KFIELD KT_EVA
                 pop  ix
+                add  a, b
                 ld   b, a
 .cmp:           ld   a, d
                 sub  b                         ; >= 0 (signed) <=> hit
@@ -82,7 +96,8 @@ hit_roll:
 
 ;------------------------------------------------------------------------------
 ; deal_hit — apply one damaging hit (game.md §6.0 / §7 / §6.4 / §4.1).
-; In : IX = attacker, A = target slot, B = damage rolled (>= 1),
+; In : IX = attacker, A = target slot, B = damage rolled (>= 1; D3-8: a WEAK
+;      hero attacker's B - 1, min 1),
 ;      C = DTY_* | DH_NODEF | EFX_* << DH_EFX_SHIFT | DH_HEAL, E = effect parameter
 ;      (high nibble: chance "1 in N", 0 = always; low nibble: turns).
 ; Out: L = HP the target actually lost (0: immune, or already at 0 HP).
@@ -99,7 +114,8 @@ hit_roll:
 ;     hero KXP (EF_RESPAWN: KXP / 2, min 1) into XP (sat. XP_MAX), XP_UP = 1.
 ;     Else RC_HURT; ASLEEP wakes (any HP loss); FIRE thaws FROZEN; then the
 ;     effect (if any): chance roll (rng_mod N, 0 = success), R halves the
-;     turns (0 = none), the immunity mask -> UNAFFECTED, STUNNED refused
+;     turns, a boss (KX_IMM bit 7) halves HOLD / MIND again (0 = none; D3-8),
+;     the immunity mask (a boss: + SLEEP / FEAR) -> UNAFFECTED, STUNNED refused
 ;     while STUN_GUARD; same effect -> timer max(cur, new), another effect of
 ;     the group -> overwritten; groups independent.
 ;  6. DH_HEAL (Drain Life, the Vampire's bite; NOT the Ghost's touch, game.md
@@ -112,7 +128,17 @@ hit_roll:
 ;------------------------------------------------------------------------------
 deal_hit:
                 ld   (ATK_PTR), ix
-                ld   (dh_slot), a
+                ld   d, a
+                ld   a, (ST_FLAGS)             ; D3-8: a WEAK hero deals dmg - 1, min 1
+                and  STS_WEAK                  ; (slot 0's WEAK first: ~40 T when clear)
+                ld   a, d
+                jr   z, .wk
+                bit  EF_PLAYER_BIT, (ix+E_FLAGS)
+                jr   z, .wk
+                dec  b
+                jr   nz, .wk
+                inc  b
+.wk:            ld   (dh_slot), a
                 ld   d, a
                 ld   a, c
                 ld   (dh_flags), a
@@ -142,34 +168,36 @@ deal_hit:
                 add  a, kx_tab & $FF
                 ld   l, a
                 ld   h, kx_tab >> 8
-                push hl
-                ld   de, KX_DEF
-                add  hl, de
-                ld   a, (hl)
-                pop  hl
+                add  a, KX_DEF                 ; (D3-8 review 2: the record's fields by
+                ld   e, a                      ; L + offset, no push / add hl: one page)
+                ld   d, h
+                ld   a, (de)
 .rec:           ld   (dh_def), a
-                push hl
-                ld   de, KX_IMM
-                add  hl, de
-                ld   a, (hl)
-                ld   (dh_imm), a
-                pop  hl
-                ld   a, (dh_flags)
+                ld   a, l
+                add  a, KX_IMM
+                ld   e, a
+                ld   d, h
+                ld   a, (de)
+                bit  IMMF_BOSS_BIT, a
+                jr   z, .nb
+                or   IMMF_SLEEP | IMMF_FEAR    ; D3-8: bosses never sleep or fear (§6.4)
+.nb:            ld   (dh_imm), a
+                ld   a, c                      ; (C = the flags since the entry)
                 and  DH_TYPE
                 ld   c, a                      ; C = type t
-                ; weak: RES_B2 bit t
-                inc  hl
-                inc  hl
-                ld   b, c
-                inc  b
-                ld   a, (hl)
-                jr   .w2
-.w1:            rrca
-.w2:            djnz .w1
-                and  1
-                ld   (dh_weak), a
-                dec  hl
-                dec  hl
+                ld   a, l                      ; weak: RES_B2 bit t (dh_bit: 1 << t)
+                add  a, RES_B2
+                ld   e, a
+                ld   a, (de)
+                ld   b, a
+                ld   a, c
+                add  a, dh_bit & $FF
+                ld   e, a
+                ld   d, dh_bit >> 8
+                ld   a, (de)
+                and  b
+                ld   (dh_weak), a              ; 0 / not 0
+                ASSERT HERO_IMM == HERO_RES + KX_IMM && (HERO_RES & $FF) + KX_IMM < 256 && KX_IMM > RES_B2
                 ld   b, c
                 call rsp_hl                    ; response (D3-6b: shared with proj_fire)
                 ld   (dh_rsp), a
@@ -355,7 +383,15 @@ dh_status:
                 cp   RSP_R
                 jr   nz, .full
                 srl  d                         ; R: duration / 2 (0 = none)
-.full:          ld   a, d
+.full:          ld   a, (dh_imm)               ; D3-8: a boss halves HOLD / MIND again
+                rla                            ; (IMMF_BOSS_BIT 7 -> CF)
+                ASSERT IMMF_BOSS_BIT == 7 && EFX_POISON == EFX_CONFUSED + 1
+                jr   nc, .nbh
+                ld   a, (dh_efx)
+                cp   EFX_POISON
+                jr   nc, .nbh                  ; POISON / WEAK: full
+                srl  d
+.nbh:           ld   a, d
                 or   a
                 ret  z
                 ld   a, (dh_efx)               ; row = efx_tab + (id - 1) * EF_STRIDE
@@ -513,6 +549,8 @@ dh_lost:        DB   0
 dh_def:         DB   0
 dh_imm:         DB   0
 dh_weak:        DB   0
+dh_bit:         DB   1, 2, 4, 8, 16, 32, 64, 128   ; deal_hit's weak test: 1 << t
+                ASSERT (dh_bit >> 8) == ((dh_bit + 7) >> 8)
 dh_rsp:         DB   0
 dh_efx:         DB   0
 dh_tmr:         DB   0

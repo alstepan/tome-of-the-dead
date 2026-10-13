@@ -115,8 +115,11 @@ HERO_KEY = {0: "1", 1: "2"}                  # id 2 (Rogue) retired: hole in the
 
 ATTR_AIR, ATTR_WALL, ATTR_FLOOR, ATTR_LADDER = 0x00, 0x01, 0x0F, 0x02
 TILE_ATTRS = {0x00, 0x01, 0x0F, 0x02, 0x42, 0x06, 0x46}
-FLASH_ATTRS = {0x42, 0x44, 0x46}          # ATTR_HIT, ATTR_HEAL, ATTR_MISS (T7 dodge) (D3-0: the zap's $45 is gone)
 KIND_ATTR = {0: 0x47, 1: 0x45, 2: 0x44, 3: 0x47, 4: 0x44, 5: 0x45, 6: 0x06, 7: 0x43, 8: 0x44}
+ST_TINTS = {0x45, 0x41, 0x07, 0x43}       # D3-8 status tints FROZEN / ASLEEP / STUNNED / CONFUSED
+FLASH_ATTRS = ({0x42, 0x44, 0x46}         # ATTR_HIT, ATTR_HEAL, ATTR_MISS (T7 dodge) (D3-0: the zap's $45 is gone)
+               | ST_TINTS                 # + the BRIGHT twin of a tint equal to a kind attr (st_tint),
+               | {t ^ 0x40 for t in ST_TINTS if t in KIND_ATTR.values()})   # only those can occur
 K_KNIGHT, K_WIZARD, _K_RETIRED, K_SKELETON, K_GOBLIN, K_GHOST, K_RAT, K_BAT, K_SLIME = range(9)
 
 

@@ -122,12 +122,18 @@ do_attack:
 ;------------------------------------------------------------------------------
 set_reaction_at:
                 ld   hl, (ATK_PTR)
-                ld   e, (hl)                   ; attacker kind (E_KIND = 0)
+                ld   a, (hl)                   ; attacker kind (E_KIND = 0)
+                ld   e, a
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, e                      ; kind * 17 (was a 17-step add loop:
+                ld   e, a                      ; ~0.4k T, ~0.6k contended, a hit)
                 ld   d, 0
                 ld   hl, kind_seqs + KS_IMPACT
-                ld   b, KS_STRIDE
-.m:             add  hl, de                    ; + kind * KS_STRIDE
-                djnz .m
+                add  hl, de
+                ASSERT KS_STRIDE == 17 && (K_COUNT - 1) * KS_STRIDE < 256 && E_KIND == 0
                 ld   a, (TURN_TICK)
                 add  a, (hl)
                 ld   b, a                      ; impact tick (TURN_TICK units)
@@ -617,7 +623,8 @@ materialise:
 
 ;==============================================================================
 ; resolve_monsters — step 2: every non-pending, living monster in CUR_ROOM acts
-; in slot order. Then step 3 materialise.  Clobbers: all but IY.
+; in slot order (D3-8: after its status step, mon_status, unless STATUS = 0).
+; Then step 3 materialise.  Clobbers: all but IY.
 ; far3 from read_turn_input (B3B-R2): one bank switch per turn, not per monster.
 ;==============================================================================
 resolve_monsters:
@@ -635,7 +642,20 @@ resolve_monsters:
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
                 jr   nz, .next                 ; player already dying: stand down
-                call ai_monster
+                ld   a, (MON_SLOT)             ; D3-8: the status step at the start of its
+                add  a, ST_FLAGS & $FF         ; phase (game.md §2.2 / §6.4); STATUS 0 =
+                ld   l, a                      ; the fast path (~50 T)
+                ld   h, ST_FLAGS >> 8
+                ld   a, (hl)
+                or   a
+                jr   z, .ai
+                ld   a, (MON_SLOT)
+                ld   hl, mon_status            ; bank 7 (status7.asm): L = 1 the action is
+                call far7                      ; spent (held / confused step / fear)
+                ld   a, l
+                or   a
+                jr   nz, .next
+.ai:            call ai_monster
 .next:          ld   a, (MON_SLOT)
                 inc  a
                 cp   P_MAX_ENT

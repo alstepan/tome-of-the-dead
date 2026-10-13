@@ -151,7 +151,8 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
-CAP_GATED = ("lightning", "cast", "lcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
+CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fcast", "wcast", "wcast4", "acast")
+CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
 HERO_Y = stand_y(1, 6)                            # 11
@@ -193,6 +194,43 @@ SCENARIOS = {
         (3, 5, stand_y(1, 4), RIGHT),
         (2, 8, stand_y(1, 2), RIGHT),
         (1, 11, stand_y(1, 2), RIGHT)], [("FIRE", 3)], K_WIZARD, None, "lcast"),
+    # D3-8 review: "lcast" with all 4 monsters FROZEN 1 — tinted ($45 / the
+    # BRIGHT twin) through the fire tick, the HOLD expiring in the deferred
+    # monster phase (st_step: the tint drops, 4 bodies re-stamped)
+    "lcastf": ("mage Lightning r3 through 4 FROZEN-1 monsters + the caster in line", [
+        (5, 1, stand_y(1, 6), RIGHT),
+        (3, 5, stand_y(1, 4), RIGHT),
+        (2, 8, stand_y(1, 2), RIGHT),
+        (1, 11, stand_y(1, 2), RIGHT)], [("FIRE", 3)], K_WIZARD, None, "lcastf"),
+    # D3-8 review 2: "lcastf" with all 4 monsters ASLEEP (ST_FLAGS 2): the
+    # Lightning wakes each one -> 4 wake lines on the fire tick (was measured
+    # with BUDGET_STF=2 only)
+    "lcasts": ("mage Lightning r3 through 4 ASLEEP monsters (4 wake lines) + the caster", [
+        (5, 1, stand_y(1, 6), RIGHT),
+        (3, 5, stand_y(1, 4), RIGHT),
+        (2, 8, stand_y(1, 2), RIGHT),
+        (1, 11, stand_y(1, 2), RIGHT)], [("FIRE", 3)], K_WIZARD, None, "lcasts"),
+    # D3-8 review 2: the adversarial PF_ROWF fuzz worst case (#208, mirrored in
+    # tests/proj3.py P10) through the real cast: ROOM_CAP 4 — Lightning r2 from
+    # x 26 facing right, a Bat over the caster (x 28, HP 1), a reflecting Ghost
+    # (x 19, HP 6), Slimes at x 24 (HP 6) / x 21 (HP 23); flight-row walls at
+    # cols 0, 3 and 31 (poked): bounces + the Ghost's reflections walk the line
+    # back and forth over the caster, 3 kills. Kinds are set by advcast_setup.
+    "advcast": ("mage Lightning r2: reflecting Ghost + 2 Slimes + Bat around the caster, 3 kills", [
+        (1, 28, stand_y(1, 2), RIGHT),
+        (2, 19, stand_y(1, 4), RIGHT),
+        (3, 24, stand_y(1, 2), RIGHT),
+        (4, 21, stand_y(1, 2), RIGHT)], [("FIRE", 3)], K_WIZARD, None, "advcast"),
+    # D3-8 review: Frost Shard r2 (2 bounces, freeze 3) from x 7 facing left to
+    # the left wall: the bounce comes back and freezes the caster (self-freeze
+    # 1, §6.4.1: hero tint + panel icon + a held turn); Rat, Goblin, Skeleton,
+    # Bat walking in from the right. The caster is the first body on the way
+    # back (pierce-less), so 1 of the 2 bounces is the most a real cast uses.
+    "fcast": ("mage Frost Shard r2 bounce -> self-freeze, 4 monsters", [
+        (1, 24, stand_y(1, 2), HOSTILE),
+        (3, 16, stand_y(1, 4), HOSTILE),
+        (5, 20, stand_y(1, 6), HOSTILE),
+        (4, 12, stand_y(1, 2) - 3, HOSTILE)], [("FIRE", 3)], K_WIZARD, None, "fcast"),
     # D3-7 T5: the real Whirlwind r3 (3 MP) through the controls, 3 bodies in
     # reach (Skeleton left gap 0; Rat + Bat over it right gap 0), all 60 HP: 3
     # blows + 3 lines + 2 spark_fizz FX on the fire tick; a Goblin walking in
@@ -340,15 +378,15 @@ class CastStepper(FxStepper):
         super().close()
 
 
-def lcast_setup(p, placements):
-    """"lcast": the hero at x 14 facing left (HP 200), the monsters 60 HP,
-    Lightning learned at rank 3 (ARANK + its RANK_ROWS row, as rank_sync),
-    MP 40, the Lightning slot selected (no turn)."""
+def lcast_setup(p, placements, k=None, r=3, x=14):
+    """"lcast": the hero at x facing left (HP 200), the monsters 60 HP,
+    spell k (default Lightning) learned at rank r (ARANK + its RANK_ROWS row,
+    as rank_sync), MP 40, its slot selected (no turn)."""
     import combat_tables as CT
     sym, b3 = CT.load()
-    k, r = S["ABL_LIGHTNING"], 3
+    k = S["ABL_LIGHTNING"] if k is None else k
     row = sym["ab_rank"] - CT.BASE + (k * 3 + r - 1) * 6
-    p.set_ent(0, X=14, PX=14 * 8, FLAGS=EF_ACTIVE | 2 | EF_LEFT, HP=200, MAXHP=200)
+    p.set_ent(0, X=x, PX=x * 8, FLAGS=EF_ACTIVE | 2 | EF_LEFT, HP=200, MAXHP=200)
     for slot, *_ in placements:
         p.set_ent(slot, HP=60, MAXHP=60)
     p.z.cmd("write-memory %d %s" % (S["RANK_ROWS"] + 6 * k, " ".join(str(b) for b in b3[row:row + 6])))
@@ -356,6 +394,25 @@ def lcast_setup(p, placements):
     p.wb("MP", 40)
     p.wb("MAXMP", 40)
     p.select_slot(k + 1)
+
+
+ADV_BODIES = ((1, 7, 1), (2, 5, 6), (3, 8, 6), (4, 8, 23))   # (slot, K_*, HP): Bat, Ghost, Slime, Slime
+
+
+def advcast_setup(p, placements):
+    """"advcast": Lightning r2 learned, the hero at x 26 facing right (HP 40,
+    as fuzz #208), the 4 slots re-kinded (Bat, Ghost, Slime, Slime) standing on
+    the hero's floor with the fuzz HP; flight row cols 0 / 3 / 31 = brick."""
+    lcast_setup(p, placements, r=2, x=26)
+    p.set_ent(0, FLAGS=EF_ACTIVE | 2, HP=40)
+    floor = HERO_Y + p.rb(S["kind_tab"] + S["KT_BH"] + K_WIZARD)
+    for slot, kind, hp in ADV_BODIES:
+        y = floor - p.rb(S["kind_tab"] + S["KT_BH"] + kind)
+        p.set_ent(slot, KIND=kind, Y=y, PY=y * 8, HP=hp, MAXHP=60)
+    row = S["ROOM_MAP"] + (HERO_Y + S["PF_ROW_DY"]) * 32
+    for c in (0, 3, 31):
+        p.wb(row + c, S["T_BRICK"])
+    p.settle()
 
 
 def wcast_setup(p, placements):
@@ -398,8 +455,18 @@ def run_scenario(h, scen):
         p.place(slot, x, y, room=0, flags=flags)
     if DECOR:
         inject_decor(p)
-    if len(scen) > 5 and scen[5] == "lcast":
+    if len(scen) > 5 and scen[5] in ("lcast", "lcastf", "lcasts"):
         lcast_setup(p, placements)
+    if len(scen) > 5 and scen[5] in ("lcastf", "lcasts"):  # FROZEN 1 / ASLEEP (ST_FLAGS kind 1 / 2,
+        # ST_T1 high nibble); BUDGET_STF / BUDGET_ST1 override for variants
+        stf = os.environ.get("BUDGET_STF", "1" if scen[5] == "lcastf" else "2")
+        for slot, *_ in placements:
+            p.wb(S["ST_FLAGS"] + slot, int(stf, 0))
+            p.wb(S["ST_T1"] + slot, int(os.environ.get("BUDGET_ST1", "0x10"), 0))
+    if len(scen) > 5 and scen[5] == "advcast":
+        advcast_setup(p, placements)
+    if len(scen) > 5 and scen[5] == "fcast":
+        lcast_setup(p, placements, k=S["ABL_FROST"], r=2, x=7)
     if len(scen) > 5 and scen[5] == "wcast":
         wcast_setup(p, placements)
     if len(scen) > 5 and scen[5] == "acast":
@@ -459,11 +526,11 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,wcast,wcast4,acast").split(","):
+        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fcast,wcast,wcast4,acast").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if any(t > CAST_CAP for t in st.casts_t):
                 fails.append(key + " (cast)")
-            elif key in ("cast", "lcast", "wcast", "wcast4", "acast") and not st.casts_t:
+            elif key in CAST_KEYS and not st.casts_t:
                 fails.append(key + " (no cast tick seen)")
             elif key in CAP_GATED and max(st.ordinary_t) > CAP:
                 fails.append(key)

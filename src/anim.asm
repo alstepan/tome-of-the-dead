@@ -476,6 +476,31 @@ do_impact:
                 ret
 
 ;------------------------------------------------------------------------------
+; st_tint — render (D3-8): A = STATUS & STS_TINTED (!= 0), IX = the entity
+; -> A = its tint (game.md §6.4: the HOLD kind's, else CONFUSED's); equal to
+; the kind's KT_ATTR -> the BRIGHT twin (XOR $40). Keeps B, C, HL.
+; Clobbers: A, DE.   ~0.15k T
+;------------------------------------------------------------------------------
+st_tint:
+                and  STS_HOLD                  ; 0 = CONFUSED only
+                add  a, st_tint_tab & $FF
+                ld   e, a
+                ld   d, st_tint_tab >> 8
+                ld   a, (de)
+                ld   d, a                      ; D = the tint
+                push hl
+                KFIELD KT_ATTR
+                pop  hl
+                cp   d
+                ld   a, d
+                ret  nz
+                xor  $40
+                ret
+st_tint_tab:    DB   TINT_CONFUSED, TINT_FROZEN, TINT_ASLEEP, TINT_STUNNED
+                ASSERT (st_tint_tab >> 8) == ((st_tint_tab + 3) >> 8)
+                ASSERT HOLD_FROZEN == 1 && HOLD_ASLEEP == 2 && HOLD_STUNNED == 3
+
+;------------------------------------------------------------------------------
 ; turn_done — CF = 1 when every live entity of CUR_ROOM rests (or holds) with no
 ; reaction pending/running, no FX track is live or drawn (D3-5), no split
 ; ability turn pending (D3-7: TURN_PEND, the fire or the deferred monster
@@ -667,7 +692,16 @@ render:
                 or   a
                 ld   a, (ix+E_FLA)
                 jr   nz, .fl
-                KFIELD_KEEPHL KT_ATTR
+                ld   a, (ANIM_SLOT)            ; D3-8: HOLD / CONFUSED tint from the slot's
+                add  a, ST_FLAGS & $FF         ; STATUS (game.md §6.4; +57 T a drawn slot
+                ld   e, a                      ; without one). DE free here (fpx / fpy
+                ld   d, ST_FLAGS >> 8          ; stored), B = the facing: kept
+                ld   a, (de)
+                and  STS_TINTED
+                jr   z, .kat
+                call st_tint                   ; (keeps B, HL)
+                jr   .fl
+.kat:           KFIELD_KEEPHL KT_ATTR
 .fl:            ld   (hl), a                   ; R_ATTR
                 inc  l
                 ld   c, DIRTY_NONE

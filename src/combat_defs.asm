@@ -48,6 +48,33 @@ STS_POISON_BIT  EQU 4
 STS_WEAK_BIT    EQU 5
 STS_GUARD_BIT   EQU 6               ; STUN_GUARD
 STS_MAX_TURNS   EQU 15              ; one nibble per timer
+; D3-8 sprite tints (game.md §6.4 "Indication"): HOLD kind 1..3, else CONFUSED.
+; render (anim.asm) derives the tint from ST_FLAGS every tick (no tint state);
+; a tint equal to the body's KT_ATTR uses its BRIGHT twin (attr XOR $40).
+; Priority: the E_FLT flash > HOLD > CONFUSED > the kind attr. FEAR / POISON /
+; WEAK: no tint.
+TINT_FROZEN     EQU $45
+TINT_ASLEEP     EQU $41
+TINT_STUNNED    EQU $07
+TINT_CONFUSED   EQU $43
+STS_TINTED      EQU STS_HOLD | MIND_CONFUSED   ; flags & this != 0 -> a tint (MIND 3 is reserved, never set)
+; D3-8 hero status icons (game.md §6.4: row 21, cols 30-31, priority HOLD >
+; MIND > POISON > WEAK): st_sig (icons.asm) packs the first two as icon index
+; + 1 (status_icons order FROZEN, ASLEEP, STUNNED, CONFUSED, FEAR, POISON,
+; WEAK; 0 = blank): low nibble -> col 30, high nibble -> col 31. STAT_SH =
+; the sig as drawn (icon_poll sets PD_ICONS on a change; item_icons draws).
+SI_FEAR         EQU 5               ; icon index + 1
+SI_CONFUSED     EQU 4
+SI_POISON       EQU 6
+SI_WEAK         EQU 7
+ST_ICON_COL     EQU 30
+; Boss flag (game.md §6.4 / §9.1; D3-8): bit 7 of the kind's KX_IMM byte
+; (bank 3, read by deal_hit only). A boss is immune to ASLEEP and FEAR (deal_hit
+; ORs IMMF_SLEEP | IMMF_FEAR in) and HOLD / MIND durations are halved (round
+; down, 0 = none) after the R halving. No kind sets it before 3F (tests poke it).
+IMMF_BOSS_BIT   EQU 7               ; (deal_hit tests it with rla: must stay bit 7)
+EF_PLAYER_BIT   EQU 1
+                ASSERT EF_PLAYER == 1 << EF_PLAYER_BIT
 
 ;------------------------------------------------------------------------------
 ; FX tracks (D3-5, src/fx.asm; game.md §6 "real sprites, render-only"):
@@ -183,6 +210,18 @@ LOG_TURN        EQU TURN_PEND + 5   ; T7 log drain: bit 0 LT_SERVED (item_log dr
 LOG_PDIR        EQU TURN_PEND + 6   ; T7 review: the input a log hold swallowed (PLAYER_DIR bits 0-3,
                                     ; bit 7 = DK_WAIT): a tap released during the hold is replayed
 TURN_PEND_END   EQU TURN_PEND + 7
+; D3-8 hero status step state (right after TURN_PEND, same spare; zeroed by
+; level_reset_new with HERO3D..ST_HERO_END):
+HST_DONE        EQU TURN_PEND_END   ; 1 = the hero's status step already ran for the turn being
+                                    ; entered (turn_input runs it before the action, once:
+                                    ; an illegal try costs no turn and must not step twice);
+                                    ; 0 again once a turn is spent
+HELD_T          EQU TURN_PEND_END + 1   ; held hero: INPUT-phase ticks counted; the Wait turn
+                                    ; starts on the HELD_WAIT-th (game.md §2.2 "one turn per 4
+                                    ; ticks": a Wait turn with nothing moving spans 2 ticks, input +
+                                    ; turn_done; measured, tests/status.py H1)
+ST_HERO_END     EQU TURN_PEND_END + 2
+HELD_WAIT       EQU 3
 LT_SERVED       EQU 1
 LT_HOLD_BIT     EQU 1
 LT_HOLD         EQU 1 << LT_HOLD_BIT
@@ -193,8 +232,8 @@ TP_ACT          EQU 1 << TP_ACT_BIT
 TP_MON          EQU 1 << TP_MON_BIT
 TP_FIRE         EQU 1 << TP_FIRE_BIT
 ACT_FIRE_TICK   EQU 2               ; release tick f of every ability (game.md §6.1 "Release ticks")
-                ASSERT TURN_PEND == $BC4A && TURN_PEND_END <= ANIM_N
-                ASSERT (HERO3D >> 8) == ((TURN_PEND_END - 1) >> 8)
+                ASSERT TURN_PEND == $BC4A && ST_HERO_END <= ANIM_N
+                ASSERT (HERO3D >> 8) == ((ST_HERO_END - 1) >> 8)
 
 ;------------------------------------------------------------------------------
 ; Damage types (game.md §6.0) and the 3-B resistance record (KX_RES /

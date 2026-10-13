@@ -177,7 +177,7 @@ level_reset_new:
                 ld   (ST_T2), a
                 ld   (ST_X), a
                 ld   hl, HERO3D
-                ld   b, TURN_PEND_END - HERO3D ; D3-7: + the TURN_PEND block
+                ld   b, ST_HERO_END - HERO3D   ; D3-7: + the TURN_PEND block; D3-8: + HST_DONE / HELD_T
 .z:             ld   (hl), a
                 inc  l
                 djnz .z

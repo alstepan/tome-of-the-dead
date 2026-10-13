@@ -10,7 +10,7 @@ SPELL_FLASH     EQU 5                          ; the cast's ticks (wz_cast: CAST
 ;------------------------------------------------------------------------------
 ; abil_spell — intent7 ic_disp (ABF_SPELL), IX = hero, B = ABL_SPARK ..
 ; ABL_LIGHTNING (= the Mage's ability index k), ABIL_DESC loaded (abil_load).
-; Refused (L = 0, no turn, a message): unlearned -> NOT LEARNED; MP < the
+; Refused (L = IC_REFUSED with its line, 0 silent; no turn, a message): unlearned -> NOT LEARNED; MP < the
 ; RANK_ROWS row's RR_MP -> NO MANA; mid-ladder (game.md §2.3) -> NO TARGET;
 ; act_begin's lead col 0 / 31 -> L = 0, no message.
 ; Accepted (input tick): act_begin (TURN_PEND, ACT_ABL = B, ACT_AT, MON_AT),

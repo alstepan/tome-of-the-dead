@@ -73,7 +73,8 @@ panel_boot:
 ; panel_init — new game (far3 from start_game): the static panel of HERO_KIND
 ; (icon bar, labels, bar frames, placeholders, gear outlines, attrs) on rows
 ; 18..23 of bank 5 — the rows must be blank (start_game's clear_screen) —
-; panel state reset, then string E (TX_*, TX_NONE = none; B3B-13: was a
+; panel state reset (the *_SH "as drawn" bytes: $FF = never drawn; STAT_SH
+; 0 = both status cells blank, as drawn here), then string E (TX_*, TX_NONE = none; B3B-13: was a
 ; pointer in DE) pushed to the log and everything
 ; queued drawn at once (panel_flush). The caller presents (present_full).
 ; Placeholders until 3C/3E: MP bar empty, FOOD bar full + "FED", no ammo, no
@@ -94,6 +95,9 @@ panel_init:
 .zq:            ld   (hl), a
                 inc  l
                 djnz .zq
+                ld   (STAT_SH), a              ; D3-8 review: sig 0 = the blank cells this
+                                               ; static panel has; a status carried over
+                                               ; level_show then differs and redraws
                 dec  a
                 ld   (PANEL_HP_SH), a          ; $FF: never drawn -> PD_HP / PD_ICONS
                 ld   (PANEL_HP_SH + 1), a
