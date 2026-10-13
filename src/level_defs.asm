@@ -467,6 +467,24 @@ HOT_COPY_END    EQU BANK2_FREE_END      ; = SLOTREC
 ; against the drawn SLOTREC footprints, ~50-90 T per sprite, only for the <= 3
 ; cells tested per tick), so the B3B-1 OCC_MASK (72 B, cleared + rebuilt per
 ; tick: ~0.9k + ~0.5k per sprite) was dropped; its bytes hold ANIM_N2/LIST2.
+; D3-8b: the decorative drip (game.md §6.4.1 "Decorative drip"; src/drip.asm
+; bank 2, src/drip7.asm bank 7) in the 15-B spare $BC01..$BC0F (bank 2,
+; uncontended; runtime only). Test-observable.
+DRIP_ST         EQU $BC01           ; DRS_* (0 idle: waiting DRIP_T ticks for the next drop)
+DRIP_T          EQU $BC02           ; first-frame ticks to the next step (>= 1)
+DRIP_COL        EQU $BC03           ; the drop's cell (ld bc, (DRIP_COL): C = col, B = row)
+DRIP_ROW        EQU $BC04
+DRIP_DRAWN      EQU $BC05           ; 1 = its glyph is on the bank-5 screen at DRIP_COL / ROW
+DRIP_N          EQU $BC06           ; sources in CUR_ROOM (0..DRIP_SRC_MAX; 0 = no drip here)
+DRIP_RND        EQU $BC07           ; own 8-bit LFSR (never 0): the game RNG is never touched
+DRIP_SRC        EQU $BC08           ; DRIP_SRC_MAX x (col, row) of the room's sources
+DRIP_SRC_MAX    EQU 2
+DRS_IDLE        EQU 0
+DRS_FORM        EQU 1               ; the hanging drop (old T_DRIP1) at the source
+DRS_DROP        EQU 2               ; let go (old T_DRIP2) at the source
+DRS_FALL        EQU 3               ; the drop alone, one cell down per tick
+                ASSERT DRIP_SRC + 2 * DRIP_SRC_MAX <= ANIM_N2 && DRIP_ST >= ISR_VEC_TABLE + ISR_VEC_LEN
+                ASSERT DRIP_ROW == DRIP_COL + 1
 ANIM_N2         EQU $BC10           ; B3B-10: entries of the NEXT_MAP build's list
 ANIM_LIST2      EQU ANIM_N2 + 1     ;   ($BC11..$BC40): do_exit (room_shadow) copies it
 ANIM_N          EQU $BC5F           ; ANIM_LIST entries used (0..12)

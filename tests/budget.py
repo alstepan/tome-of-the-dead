@@ -296,6 +296,11 @@ DECOR_GLYPH = [(10, 12), (18, 13), (12, 3), (20, 4)]
 DECOR_ATTR = [(9, 12), (14, 13), (16, 11), (20, 14), (11, 2), (15, 4), (27, 3), (27, 12)]
 
 
+# D3-8b: callables f(p) run after the scenario's setup (tests/drip.py injects a
+# drip source into PROTO room A to time drip_tick in the loaded scenarios)
+EXTRA_SETUP = []
+
+
 def inject_decor(p):
     """Synthetic ANIM_LIST for room A (in ROOM_MAP): glyph cells get the D1
     tall-torch body id 36 in the map and its tip id 40 as the swap partner
@@ -519,6 +524,8 @@ def run_scenario(h, scen):
         wcast_setup(p, placements)
     if len(scen) > 5 and scen[5] == "acast":
         acast_setup(p, placements)
+    for f in EXTRA_SETUP:
+        f(p)
     mode = scen[4] if len(scen) > 4 else None
     st = {"fx": FxStepper, "cast": CastStepper}.get(mode, Stepper)(p)
     swing = 0

@@ -1532,6 +1532,7 @@ jump_bodies:
 ; Both rebuild RLIST (ascending, slot 0 first, as anim_tick does) from the
 ; slots still visible or drawn (E_DVIS bit 0; hide_sprites / new_game cleared
 ; it, so today = the visible ones), so render never walks a stale list.
+; D3-8b: both end with drip_room (far7): the room's drip sources re-derived.
 ; Cold (room change / new game only).  Clobbers: A, BC, DE, HL, IX.
 ;==============================================================================
 vis_reset:
@@ -1580,7 +1581,8 @@ vis_room_sync:
                 ld   a, c
                 sub  RLIST & $FF
                 ld   (RLIST_N), a
-                ret
+                ld   hl, drip_room             ; D3-8b: the new room's drip sources
+                jp   far7                      ; (bank 7; forgets a drawn drop)
                 ASSERT (SLOTREC & $FF) == 0 && R_VIS == 0 && P_MAX_ENT * SLOTREC_STRIDE == 256
                 ASSERT (RLIST & $FF) + P_MAX_ENT <= 256
 

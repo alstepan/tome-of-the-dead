@@ -1021,7 +1021,9 @@ so they stay on the panel icons plus the magenta `-1` poison number (§6.5).
   `TP_FIRE` tick** (like panel and decor), so the cast worst case (`lcast` 126.8k) is untouched.
   Worst ordinary tick: +~1.2k T for 2 operations, plus a ~0.3–0.6k T scan. Skip the scan when no
   live body has HOLD/MIND set.
-- **Draw order:** bodies → FX tracks (including the D3-8b drip) → **marks** → numbers. An FX or
+- **Draw order:** bodies → FX tracks → **marks** → numbers. The D3-8b drip is not an FX track: it is
+  a one-record overlay drawn only into a cell no body or FX covers (a body or FX moving onto it
+  overlaps it for at most 1 tick, then it is dropped and the cell repaired). An FX or
   number erase that overlaps a mark cell re-stamps the mark in the same tick (~0.3k T).
 - **Damage numbers (D3-11):** a live number over a body **hides that body's mark** for the
   number's 12 ticks. Both use the row above the body: the number is the event, the mark is the

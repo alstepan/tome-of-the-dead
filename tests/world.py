@@ -150,6 +150,7 @@ _argv = sys.argv[1:]
 sys.argv = [sys.argv[0], "999"]               # keep game.py's item filter inert
 import game  # noqa: E402
 import room_model  # noqa: E402
+import game_lib  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
 import textpack  # noqa: E402
 STRINGS = textpack.read_strings()           # [(name, text)], id order (B3B-13)
@@ -180,6 +181,7 @@ class W(game.T):
             bad.append((tag, "displayed != composed", len(diff), diff[0]))
         tabs = self.bg_tables()
         covered = set()
+        drip = game_lib.drip_cells(self)             # D3-8b: screen-only overlay
         for s_ in range(16):
             e = self.ent(s_)
             if e["DVIS"] & 1:
@@ -194,7 +196,8 @@ class W(game.T):
                     if (c, r) in covered:
                         continue
                     g, a = room_model.expected_cell(*tabs, c, r)
-                    if attr_at(f, c, r) != a or bytes(cell_bytes(f, c, r)) != g:
+                    if (attr_at(f, c, r) != a or bytes(cell_bytes(f, c, r)) != g) \
+                            and not game_lib.drip_shown(f, drip, c, r):
                         cells.append((c, r, tabs[0][r * 32 + c]))
             if cells:
                 bad.append((tag, scr + " cells != ROOM_MAP", len(cells), cells[:4]))

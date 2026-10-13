@@ -21,6 +21,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import game_lib  # noqa: E402
 from game_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at,  # noqa: E402
                        cell_bytes, TILE_ATTRS, FLASH_ATTRS, KIND_ATTR, split_frame, frame_png,
                        stand_y, is_standing, storey_of, item_row, STOREY_ROWS, STOREY_COUNT,
@@ -203,6 +204,7 @@ class T(Proto):
         """bg_mismatch of a given 6912-B screen (displayed or composed)."""
         tabs = self.bg_tables()
         covered = set()
+        drip = game_lib.drip_cells(self)             # D3-8b: screen-only overlay
         for s_ in range(16):
             e = self.ent(s_)
             if e["DVIS"] & 1:
@@ -214,7 +216,8 @@ class T(Proto):
                 if (c, r) in covered:
                     continue
                 g, a = room_model.expected_cell(*tabs, c, r)
-                if attr_at(fr, c, r) != a or bytes(cell_bytes(fr, c, r)) != g:
+                if (attr_at(fr, c, r) != a or bytes(cell_bytes(fr, c, r)) != g) \
+                        and not game_lib.drip_shown(fr, drip, c, r):
                     bad.append((c, r))
         return bad
 

@@ -192,6 +192,7 @@ def screen_check(p, check, tag, depth):
     lvl = {gly[i:i + 8] for i in range(TC * 8, TILE_IDS * 8, 8)}
     orn = {SRC_ORN[i:i + 8] for i in range(0, len(SRC_ORN), 8)}
     covered = set()
+    drip = GL.drip_cells(p)                        # D3-8b: screen-only overlay
     for s_ in range(16):
         e = p.ent(s_)
         if e["DVIS"] & 1:
@@ -207,7 +208,7 @@ def screen_check(p, check, tag, depth):
         if cb == gly[t * 8:t * 8 + 8] or (r == 17 and cb in orn):
             continue
         # decor glyph swap (decor_tick): a level id may show its partner frame
-        if not (t >= TC and cb in lvl):
+        if not (t >= TC and cb in lvl) and not GL.drip_shown(fr, drip, c, r):
             bad.append((c, r, t))
     check(f"GI {tag}: playfield ({n} uncovered cells) == ROOM_MAP in source glyphs", n > 300 and bad == [], bad[:6])
     pg = SRC_GLY[S["T_POTION"] * 8:S["T_POTION"] * 8 + 8]

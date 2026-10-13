@@ -487,6 +487,30 @@ class Proto:
         return [f for s, f in self.trace() if s == slot]
 
 
+DRIP_GLYPHS = (bytes([0x3C, 0x18, 0x18, 0x3C, 0x3C, 0x18, 0x00, 0x00]),   # FORM (old T_DRIP1)
+               bytes([0x3C, 0x18, 0x00, 0x00, 0x10, 0x38, 0x38, 0x10]),   # DROP (old T_DRIP2)
+               bytes([0x00, 0x00, 0x00, 0x00, 0x10, 0x38, 0x38, 0x10]))   # FALL
+
+
+def drip_cells(p):
+    """D3-8b: the cells where the decorative drip (a screen-only overlay) may
+    legitimately show: its current / last cell and the one above (the
+    displayed screen trails the composed one by a tick). Empty when the room
+    has no source (PROTO, D8) or no drop has formed since the room was entered
+    (drip_room sets DRIP_ROW $FF)."""
+    b = p.z.read_memory(S["DRIP_COL"], 4)          # COL, ROW, DRAWN, N
+    if not b[3] or b[1] >= PLAY_ROWS:
+        return set()
+    return {(b[0], b[1]), (b[0], b[1] - 1)}
+
+
+def drip_shown(frame, cells, c, r, attr=True):
+    """A screen == ROOM_MAP mismatch at (c, r) is accepted only if the cell is
+    a drip cell showing one of the 3 drip glyphs (attr DRIP_ATTR if attr)."""
+    return ((c, r) in cells and bytes(cell_bytes(frame, c, r)) in DRIP_GLYPHS
+            and (not attr or attr_at(frame, c, r) == S["DRIP_ATTR"]))
+
+
 def attr_at(frame, col, row):
     return frame[6144 + row * 32 + col]
 

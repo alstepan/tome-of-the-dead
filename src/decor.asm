@@ -114,42 +114,8 @@ decor_tick:
                 ld   b, (hl)                   ; B = row
                 dec  l
                 ld   c, (hl)                   ; C = col
-                ; ---- occupancy: every RLIST footprint ----
-                ld   a, (RLIST_N)
-                or   a
-                jr   z, .free
-                ld   d, a
-                ld   e, RLIST & $FF
-.s:             ld   h, RLIST >> 8             ; (no R_VIS test: a slot hidden this
-                ld   l, e                      ; tick keeps its last footprint, at
-                ld   a, (hl)                   ; worst a 1-tick hold)
-                rlca
-                rlca
-                rlca
-                rlca                           ; slot * SLOTREC_STRIDE
-                or   R_COL
-                ld   l, a
-                ld   h, SLOTREC >> 8
-                ld   a, c
-                sub  (hl)
-                jr   c, .ns                    ; left of it
-                inc  l
-                inc  l                         ; R_COLS
-                cp   (hl)
-                jr   nc, .ns                   ; right of it
-                dec  l                         ; R_ROW
-                ld   a, b
-                sub  (hl)
-                jr   c, .ns                    ; above
-                inc  l
-                inc  l                         ; R_ROWS
-                cp   (hl)
-                jr   c, .skip                  ; inside
-.ns:            inc  e
-                dec  d
-                jr   nz, .s
-.free:          call fx_occ                    ; D3-5: never paint over a drawn FX
-                jr   c, .skip
+                call cell_occ                  ; a drawn sprite / FX there: skip
+                jr   c, .skip                  ; (D3-8b: shared with the drip)
                 ld   a, (PORT_7FFD_SHADOW)     ; the shadow: bank 7 at $C000 (paged
                 and  7                         ; once per tick: render paged a pool
                 cp   BANK_SHADOW               ; bank since)
@@ -286,6 +252,49 @@ decor_tick:
 .done:          pop  hl
                 pop  bc
                 jp   .nx
+
+;------------------------------------------------------------------------------
+; cell_occ — CF = 1 if cell (col C, row B) is inside a drawn body footprint
+; (every RLIST slot's R_COL..R_ROWS: no R_VIS test, a slot hidden this tick
+; keeps its last footprint — at worst a 1-tick hold) or a drawn FX (fx_occ).
+; decor_tick (B3B-10, was inline) and the D3-8b drip.
+; Clobbers: A, DE, HL (BC, IX kept).  ~60 T + ~90 T per RLIST slot + fx_occ
+;------------------------------------------------------------------------------
+cell_occ:
+                ld   a, (RLIST_N)
+                or   a
+                jr   z, .fx
+                ld   d, a
+                ld   e, RLIST & $FF
+.s:             ld   h, RLIST >> 8
+                ld   l, e
+                ld   a, (hl)
+                rlca
+                rlca
+                rlca
+                rlca                           ; slot * SLOTREC_STRIDE
+                or   R_COL
+                ld   l, a
+                ld   h, SLOTREC >> 8
+                ld   a, c
+                sub  (hl)
+                jr   c, .ns                    ; left of it
+                inc  l
+                inc  l                         ; R_COLS
+                cp   (hl)
+                jr   nc, .ns                   ; right of it
+                dec  l                         ; R_ROW
+                ld   a, b
+                sub  (hl)
+                jr   c, .ns                    ; above
+                inc  l
+                inc  l                         ; R_ROWS
+                cp   (hl)
+                ret  c                         ; inside
+.ns:            inc  e
+                dec  d
+                jr   nz, .s
+.fx:            jp   fx_occ                    ; D3-5: never paint over a drawn FX
                 ASSERT (pm_tab >> 8) == ((pm_tab + 8) >> 8)
                 ASSERT (TILE_GLYPHS & $1FF) == 0 && TILE_IDS <= 64
                 ASSERT (ROOM_MAP & $FF) == 0 && (SCREEN_ATTR & $FF) == 0 && (SHADOW_ATTR & $FF) == 0

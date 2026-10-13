@@ -311,12 +311,13 @@ anim_gate:      ld   a, (TURN_PEND)
                 ret  z
                 call anim_tick
                 jp   fx_tick                   ; D3-5: FX tracks advance with the bodies
-decor_gate:     ld   a, (TURN_PEND)            ; D3-7: no decor step on the fire tick
+decor_gate:     call frozen
+                ret  z
+                call drip_tick                 ; D3-8b (nothing at all on the fire tick)
+                ld   a, (TURN_PEND)            ; D3-7: no decor step on the fire tick
                 and  TP_FIRE
                 ret  nz
-                call frozen
-                jp   nz, decor_tick
-                ret
+                jp   decor_tick
 ; pend_far — the TURN_PEND hook's far entry (act7.asm act_pend, bank 7).
 ; Clobbers: all but IY.
 pend_far:       ld   hl, act_pend
@@ -425,6 +426,7 @@ enter_select:
                 INCLUDE "icons.asm"             ; C3-3 icon bar state, info / level items
                 INCLUDE "decor.asm"             ; B3B-10 animated decor (decor_tick)
                 INCLUDE "fx.asm"                ; D3-5 FX tracks (fx_start / fx_tick / fx_render)
+                INCLUDE "drip.asm"              ; D3-8b decorative drip (drip_tick, per tick)
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
