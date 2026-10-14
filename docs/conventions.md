@@ -140,21 +140,39 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   never touched by the ISR (`tests/game.py` #61 checks port == shadow at every
   ISR exit across a 7 → 5 → 7 screen flip).
 - **AY player slot contract** (`AY_PLAY` = `AY_RESERVE` `$F000`, bank 3, 4 KB
-  to `$FFFF` since D3-0 (was 7 KB from `$E400`); `src/ay.asm`, silent stub today): called with interrupts off,
-  bank 3 paged at `$C000`, any stack depth. May clobber AF, BC, DE, HL, IX, IY.
+  to `$FFFF` since D3-0 (was 7 KB from `$E400`); `src/ay.asm`: since SND-2 the
+  mailbox dispatcher `ay_play` + the WZM v0.3 player (`MODULE wzm`, buzzer, no
+  echo) + the songs (`MODULE mus`)): called with interrupts off,
+  bank 3 paged at `$C000`, any stack depth (it uses 6 B incl. the CALL). The slot may clobber AF, BC, DE, HL, IX, IY
+  (`ay_play` today: AF, BC, DE, HL, IX; no IY).
   Must not: write the shadow or `$7FFD`, `EI`, touch `$C000` data of other
   banks, use the alternate set unless `ISR_SAVE_ALT=1` (assemble-only, untested at runtime) (or main code never
   uses `EXX` / `EX AF,AF'` — true today), take more than ~6.5k T (budget.md
-  §5: the tick keeps 13k T per 2 frames for it).
+  §5: the tick keeps 13k T per 2 frames for it; measured worst ~5.2k, see
+  `docs/memory-map.md` "Interrupts (A8)"). `ay_play` must keep `AY_CALLS` += 1
+  per call (#61). Anything that writes an AY register outside the player
+  (e.g. `ay_silence`, which keeps `wzm.pl_regs` R8-R10 in step) must follow
+  with `wzm.pl_out_all`, or keep the mirror equal to the chip: the player
+  writes R7 / R11 / R12 only when they differ from the mirror.
   Main code never touches the AY ports ($FFFD select / $BFFD data): the
-  select+write pair is not atomic against the ISR — sound effects are queued
-  to the player (or, if ever unavoidable, DI around the pair).
+  select+write pair is not atomic against the ISR — music and sound effects are
+  requested through the mailbox (or, if ever unavoidable, DI around the pair).
+- **Sound mailbox** (bank 2 `$BFEB..$BFF0`, `src/defs.asm`; semantics in
+  `docs/memory-map.md` "State block"): main code writes only `SND_MODE`,
+  `MUS_REQ` and `MUS_SHOT` — single-byte stores (or `set` / `res` on
+  `SND_MODE`), never a 16-bit store across two of them; `MUS_REQ` is a level
+  (the looping tune wanted now, 0 = silence; write it whenever it changes,
+  never "consume" it), `MUS_SHOT` an edge (one-shot id; a final cue writes
+  `MUS_REQ` 0 first, then `MUS_SHOT`). Only the ISR writes `MUS_STATE` /
+  `MUS_CUR` and clears `MUS_SHOT`; main code only reads them. `SFX_REQ` is
+  reserved (0). Boot initialises the block before `EI`; nothing else resets it
+  (`SND_MODE` lives for the power-on).
 - **No `DI` windows in runtime code** (they would stall the music). The only
   sites: `start` (tape entry; the ROM loader), `boot` (`DI` … `EI` around the
   SP reset, `isr_install` and the first shadow write — the ISR must not run
   before the shadow is valid), `check_paging.locked` (`DI` + `HALT`: the
   deliberate stop when paging is locked). The ISR itself runs with
-  interrupts off (~0.6k T, in the top border). New routines that need `DI`
+  interrupts off (~0.6k T idle, up to ~5.5k T with a tune playing (SND-2), in the top border). New routines that need `DI`
   document the window and keep it as short as possible; SP tricks (stack
   blits) are out unless they run under `DI` with that cost accepted.
 - **`IY` = `$5C3A`**: still set by `start` / `boot` and never changed — needed

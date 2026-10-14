@@ -11,6 +11,8 @@
 # 1b. tools/textpack.py -> build/text/strings.asm + strings_ids.inc (B3B-13:
 #    src/strings.txt as dictionary-token streams); it re-parses its output and
 #    fails on any round-trip mismatch / char outside 32..127 / > LOG_MAX.
+# 1c. tools/abc2wzm.py --game -> OUTDIR/build/music_game/ (7 WZM songs + game_songs.asm),
+#    INCLUDEd by src/ay.asm through the -i OUTDIR/build/music_game search path (SND-2 T2).
 # 2. sjasmplus src/main.asm with the project flags. Run in OUTDIR (default: the
 #    repo root), so the artefacts land in OUTDIR/build/: wazhack.tap, .sna,
 #    .sym, .sld, .lst.
@@ -26,13 +28,15 @@ if [ "${1:-}" = "-o" ]; then
 fi
 python3 "$ROOT/tools/zx0_sources.py"
 python3 "$ROOT/tools/textpack.py"
-mkdir -p "$OUT/build"
+mkdir -p "$OUT/build/music_game"
+# SND-2: in-game songs (hps_* gate 30 + game_songs.asm) -> the AY slot (src/ay.asm, -i below)
+python3 "$ROOT/tools/abc2wzm.py" --game "$OUT/build/music_game" >/dev/null
 LOG="$OUT/build/sjasmplus.log"
 cd "$OUT"
 set +e
 sjasmplus "$ROOT/src/main.asm" --fullpath \
     --lst=build/wazhack.lst --sld=build/wazhack.sld --sym=build/wazhack.sym \
-    -i "$ROOT/src" "$@" >"$LOG" 2>&1
+    -i "$ROOT/src" -i "$OUT/build/music_game" "$@" >"$LOG" 2>&1
 RC=$?
 set -e
 grep -E '^>|rror|arning' "$LOG" || true

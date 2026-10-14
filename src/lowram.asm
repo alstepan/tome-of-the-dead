@@ -119,6 +119,12 @@ boot:
                 ld   (OVERRUN_COUNT), hl
                 ld   (TICK_COUNTER), hl
                 ld   (TURN_COUNTER), hl
+                ld   (MUS_REQ), hl             ; SND-2 mailbox (before EI: the ISR
+                ld   (MUS_STATE), hl           ; reads it): no tune, no shot, idle,
+                ld   (SFX_REQ), a              ; nothing sounding (A = 0)
+                ASSERT MUS_SHOT == MUS_REQ + 1 && MUS_CUR == MUS_STATE + 1
+                ld   a, SND_ALL                ; game.md §3.6: ALL ON per power-on
+                ld   (SND_MODE), a             ; (only boot writes it; new_game never)
                 ld   hl, RNG_SEED
                 ld   (RNG_STATE), hl
                 ld   a, 1
@@ -238,9 +244,10 @@ isr_install:
 ;     an interrupt between the two leaves the port already at the new value,
 ;     and the main code's own OUT then rewrites the same byte. No DI needed.
 ; Saves every register it or the player may touch: AF, BC, DE, HL, IX, IY
-; (+ the alternate set if ISR_SAVE_ALT). Stack: 12 B + the player's (+8 alt).
+; (+ the alternate set if ISR_SAVE_ALT). Stack: 12 B + AY_PLAY's 6 B (CALL 2 + player 4) (+8 alt).
 ; Cost (measured): ISR own instructions 315 T + 19 T acknowledge = 334 T overhead,
-; + AY_PLAY (stub 286 T) = 620 T per frame, in the top border (docs/memory-map.md "Interrupts (A8)").
+; + AY_PLAY (SND-2: the dispatcher + WZM player, idle ~0.2k .. worst ~5k T), in the
+; top border (docs/memory-map.md "Interrupts (A8)").
 ;------------------------------------------------------------------------------
 isr_image:
                 DISP ISR_ADDR
@@ -383,6 +390,10 @@ seed_value:     DW   SEED_VALUE
 ; Clobbers: all but IY.   Cold: ~1.3-2.0M T (tests/world.py W16 reports)
 ;------------------------------------------------------------------------------
 level_enter:
+                push af
+                ld   a, MUS_LAMENT             ; SND-3 mus_pick site (depth in A); same id as the
+                ld   (MUS_REQ), a              ; menu = the tune keeps playing, no restart
+                pop  af
                 push de
                 push af
                 ld   a, GS_TRANSITION

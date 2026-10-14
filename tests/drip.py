@@ -25,7 +25,8 @@ src/drip7.asm) on a release build (DEBUG_KIT=0), generated levels (seed_fixed).
   TL the same in the loaded budget scenarios (mix, lightning, cast, lcast,
      wcast4: 4 monsters, casts, live FX) with a source injected into PROTO
      room A next to the fight: max <= 5,000, <= 250 T on fire ticks, every
-     tick within its budget.py cap (reported per scenario)
+     tick within its budget.py cap (reported per scenario; SND-2: gated like
+     budget.py, ordinary / cast WORK vs CAP / CAST_CAP + the real deadline)
 Run: ZRCP_PORT=<port> python3 tests/drip.py
 """
 import os
@@ -384,15 +385,21 @@ def run(p, check):
         dl = [sp.get("drip_tick", 0) for _, sp in st.ticks]
         fire = [st.ticks[i][1].get("drip_tick", 0) for i in st.cast_ix]
         ft = [sp.get("drip_tick", 0) for _, sp in st.ticks if "probe_act_fire" in sp]
+        # SND-2 T5/T6: gate like budget.py: ordinary WORK (ISR time in the window removed)
+        # <= the scenario cap, cast work <= CAST_CAP, real (total + PRE_MAX) <= BUDGET
         worst[key] = (max(dl), sum(dl) // len(dl), sum(1 for x in dl if x > 200), max(fire) if fire else 0,
-                      max(t for t, _ in st.ticks), max(ft) if ft else 0)
+                      max(st.ordinary_t, default=0), max(ft) if ft else 0, max(st.casts_t, default=0),
+                      len(st.real_over))
     budget.EXTRA_SETUP[:] = []
-    print("[info] TL drip_tick in loaded rooms (max, mean, stepping ticks, max on cast-class ticks, tick max, max on fire ticks): "
+    print("[info] TL drip_tick in loaded rooms (max, mean, stepping ticks, max on cast-class ticks, ordinary work max,"
+          " max on fire ticks, cast work max, ticks over the real deadline): "
           + "; ".join(f"{k} {v}" for k, v in worst.items()), flush=True)
     caps = {k: (budget.CAP if k in budget.CAP_GATED else budget.BUDGET) for k in LOADED}
     check("TL loaded scenarios (" + ", ".join(LOADED) + ") with a drip next to the fight: drip_tick "
-          "<= 5,000 T in every tick, <= 250 T (the early exit, to the next probe) on a fire tick, every tick within its budget.py cap",
+          "<= 5,000 T in every tick, <= 250 T (the early exit, to the next probe) on a fire tick, every tick within its budget.py cap"
+          " (work: ordinary / CAST_CAP; real <= budget)",
           max(v[0] for v in worst.values()) <= 5000 and all(v[4] <= caps[k] for k, v in worst.items())
+          and all(v[6] <= budget.CAST_CAP and v[7] == 0 for v in worst.values())
           and all(v[5] <= 250 for v in worst.values()), worst)   # the early exit + decor_gate's
                                                                   # own TP_FIRE ret + the panel skip
                                                                   # to the panel_done probe (~190 T)

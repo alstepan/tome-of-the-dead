@@ -30,6 +30,16 @@ CAP = 126000                                      # D5: worst tick incl. the pan
 # resolve_monsters on top of the render. Gate: <= CAST_CAP (hard limit BUDGET);
 # every other tick keeps its scenario's gate (CAP / BUDGET).
 CAST_CAP = 128000
+# SND-2 T5: the measured window tick_work -> wait_tick INCLUDES the frame-N+1 ISR
+# (fires inside it on ticks over ~70.2k T) but EXCLUDES the HALT-side frame-N ISR
+# (runs before tick_work). Real deadline: M + 402 + P(N) <= BUDGET, M = the measured
+# total, P(N) = the worst ISR (player) time. So per tick: isr_in = time inside
+# [isr, isr.done); work = total - isr_in (gated by CAP / CAST_CAP as before);
+# real = total + PRE_MAX (gated by BUDGET), PRE_MAX = 402 + max isr_in of the
+# scenario's run, floored at PRE_FLOOR.
+PRE_FLOOR = 5300
+PRE_BASE = 402
+MUS_POKE = os.environ.get("BUDGET_MUS", "7")      # MUS_REQ poked before START ("" = no poke)
 # B3B-11: panel_tick .. play_loop.nopanel = the tick's panel item (D5: one per
 # tick, never in a turn's input tick); its present lands in the next tick_work.
 PHASES = ["tick_work", "intent_tick", "read_turn_input", "pend_far", "probe_act_fire", "anim_tick", "render",
@@ -53,6 +63,7 @@ class Stepper:
     def __init__(self, p):
         self.p, self.z = p, p.z
         self.ticks = []                       # (total, {phase: T})
+        self.isr_in = []                      # per tick: T spent in [isr, isr.done)
         self.cast_ix, self.casting = set(), False  # D3-7: indices of "cast" class ticks
         self.fire_t = []                      # D3-7 T4: the fire ticks' totals
         # B3B-11b log latency: FIFO ring -> drawn = LQ_RD advances, pushed = drawn + LOG_QN
@@ -63,7 +74,11 @@ class Stepper:
         z.cmd("enable-breakpoints")
         for i, n in enumerate(PHASES):
             z.cmd("set-breakpoint %d PC=%d" % (i + 1, S[n]))
+        # ISR breakpoints sit on ids past every other user's (erase_rect = len(PHASES)+1)
+        z.cmd("set-breakpoint %d PC=%d" % (len(PHASES) + 10, S["isr"]))
+        z.cmd("set-breakpoint %d PC=%d" % (len(PHASES) + 11, S["isr.done"]))
         self.inv = {S[n]: n for n in PHASES}
+        self.inv[S["isr"]], self.inv[S["isr.done"]] = "isr", "isr.done"
         self._to("wait_tick")
 
     def _run(self):
@@ -81,18 +96,25 @@ class Stepper:
         """Advance one tick; record its work (tick_work -> wait_tick)."""
         self._to("tick_work")
         self.z.cmd("reset-tstates-partial")
-        split, last, prev = {}, "tick_work", 0
+        split, last, prev, saved, isr_t = {}, "tick_work", 0, None, 0
         while True:
             n, v = self._run()
             split[last] = split.get(last, 0) + v - prev
+            if last == "isr":
+                isr_t += v - prev
             prev = v
-            if n in RETURNS:                  # returning into a phase: credit it
+            if n == "isr":                    # credit [isr, isr.done) to "isr", then resume
+                saved, last = last, "isr"
+            elif n == "isr.done":
+                last = saved
+            elif n in RETURNS:                  # returning into a phase: credit it
                 last = RETURNS[n]
             else:
                 last = n
             if n == "wait_tick":
                 break
         self.ticks.append((prev, split))
+        self.isr_in.append(isr_t)
         for f in TICK_HOOKS:
             f(self)
         k = len(self.ticks)
@@ -139,8 +161,8 @@ class Stepper:
         self.tick()
 
     def close(self):
-        for i in range(len(PHASES)):
-            self.z.cmd("set-breakpoint %d" % (i + 1))    # cleared, not just disabled
+        for bp in list(range(1, len(PHASES) + 1)) + [len(PHASES) + 10, len(PHASES) + 11]:
+            self.z.cmd("set-breakpoint %d" % bp)    # cleared, not just disabled
         self.p.load_breakpoints()
 
 
@@ -394,7 +416,16 @@ class FxStepper(Stepper):
         return v
 
     def cast(self):
-        self.casts += fx_cast(self.p)
+        # fx_call (tests/combat.py) runs routines by breakpoint and asserts PC: an ISR
+        # breakpoint would steal the stop, so the ISR pair is lifted around the call
+        isr_bp = (len(PHASES) + 10, len(PHASES) + 11)
+        for b in isr_bp:
+            self.z.cmd("set-breakpoint %d" % b)
+        try:
+            self.casts += fx_cast(self.p)
+        finally:
+            self.z.cmd("set-breakpoint %d PC=%d" % (isr_bp[0], S["isr"]))
+            self.z.cmd("set-breakpoint %d PC=%d" % (isr_bp[1], S["isr.done"]))
 
 
 class CastStepper(FxStepper):
@@ -528,6 +559,8 @@ def run_scenario(h, scen):
     p = game.T(h)
     p.boot(scen[3] if len(scen) > 3 else K_KNIGHT, freeze=0)
     p.isolate()
+    if MUS_POKE:                                  # SND-2 T5: T3's level hook isn't merged yet
+        p.wb("MUS_REQ", int(MUS_POKE, 0))
     p.place(0, 12, HERO_Y)
     for slot, x, y, flags in placements:
         p.place(slot, x, y, room=0, flags=flags)
@@ -557,6 +590,16 @@ def run_scenario(h, scen):
         f(p)
     mode = scen[4] if len(scen) > 4 else None
     st = {"fx": FxStepper, "cast": CastStepper}.get(mode, Stepper)(p)
+    for _ in range(6):                            # a few unmeasured ticks: the ISR picks MUS_REQ up
+        if p.rb("MUS_CUR") == S["MUS_LAMENT"]:
+            break
+        st._to("tick_work")
+        st._to("wait_tick")
+    snd, cur = p.rb("SND_MODE"), p.rb("MUS_CUR")
+    assert snd == 3 and cur == S["MUS_LAMENT"], (
+        f"budget run needs the WZM player active: SND_MODE={snd} (want 3), MUS_CUR={cur} (want"
+        f" {S['MUS_LAMENT']}); MUS_REQ={p.rb('MUS_REQ')} (BUDGET_MUS={MUS_POKE!r}: set it to the"
+        f" tune id to poke, until the level hook sets MUS_REQ)")
     swing = 0
     for key, n in keys:
         for _ in range(n):
@@ -566,9 +609,17 @@ def run_scenario(h, scen):
     st.close()
     totals = [t for t, _ in st.ticks]
     worst = max(st.ticks, key=lambda x: x[0])
+    work = [t - i for t, i in zip(totals, st.isr_in)]
+    pre_max = max(PRE_FLOOR, PRE_BASE + max(st.isr_in))
+    real = [t + pre_max for t in totals]
+    st.real_over = [r for r in real if r > BUDGET]
     over = [t for t in totals if t > BUDGET]
-    casts = [totals[i] for i in sorted(st.cast_ix)]
-    ordinary = [t for i, t in enumerate(totals) if i not in st.cast_ix]
+    casts = [work[i] for i in sorted(st.cast_ix)]          # gated on work (ISR time removed)
+    ordinary = [w for i, w in enumerate(work) if i not in st.cast_ix]
+    orig_o = [t for i, t in enumerate(totals) if i not in st.cast_ix]
+    orig_c = [totals[i] for i in sorted(st.cast_ix)]
+    real_o = [t + pre_max for t in orig_o]
+    real_c = [t + pre_max for t in orig_c]
     ovc = p.rw("OVERRUN_COUNT")
     print(f"== {name}")
     print(f"ticks measured : {len(totals)}")
@@ -576,6 +627,11 @@ def run_scenario(h, scen):
     print(f"mean tick      : {sum(totals) // len(totals)} T")
     print(f"worst split    : " + ", ".join(f"{k}={v}" for k, v in worst[1].items()))
     print(f"ticks > budget : {len(over)}")
+    print(f"ISR in window  : max {max(st.isr_in)} T, ticks with ISR {sum(1 for i in st.isr_in if i)};"
+          f" PRE_MAX {pre_max} (402 + max ISR, floor {PRE_FLOOR})")
+    print(f"old total / work / real, max: ordinary {max(orig_o, default=0)} / {max(ordinary, default=0)} /"
+          f" {max(real_o, default=0)}; cast {max(orig_c, default=0)} / {max(casts, default=0)} /"
+          f" {max(real_c, default=0)}  (real gate <= {BUDGET}: {len(st.real_over)} over)")
     print(f"OVERRUN_COUNT  : {ovc}  BLIT_MISS: {p.rb('BLIT_MISS')}", flush=True)
     if isinstance(st, FxStepper):
         wi = totals.index(worst[0])
@@ -596,6 +652,7 @@ def run_scenario(h, scen):
           f" (cap {CAST_CAP}), {sum(1 for t in casts if t > CAST_CAP)} over; ordinary max"
           f" {max(ordinary) if ordinary else 0} T", flush=True)
     st.casts_t, st.ordinary_t = casts, ordinary
+    st.work_t, st.real_t = work, real
     print(f"FX_DROP        : {p.rb('FX_DROP')}; fire ticks {st.fire_t} T", flush=True)
     if len(scen) > 5:
         print("HP after       : " + ", ".join(f"slot {sl} {p.ent(sl)['HP']}" for sl in [0] + [q[0] for q in placements]),
@@ -612,6 +669,9 @@ def main():
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
+            if st.real_over and (key in GATED or key in CAP_GATED):
+                fails.append(key + " (real)")
+                continue
             if any(t > CAST_CAP for t in st.casts_t):
                 fails.append(key + " (cast)")
             elif key in CAST_KEYS and not st.casts_t:

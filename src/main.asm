@@ -115,13 +115,17 @@ BANK3_CODE_LEN  EQU bank3_end - bank3_code
 
 ;==============================================================================
 ; AY PLAYER SLOT (A8) — bank 3 AY_RESERVE..$FFFF (4 KB since D3-0): called by the IM 2
-; ISR once per frame (ay.asm: silent stub for now). Own headerless tape block.
+; ISR once per frame. SND-2: ay_play (mailbox dispatcher) + the WZM player
+; (MODULE wzm) + its state block ay_vars + the songs (MODULE mus), in that
+; order (ay.asm). Own headerless tape block.
 ;==============================================================================
                 ORG  AY_RESERVE
 ay_code:
                 INCLUDE "ay.asm"
 ay_code_end:
 AY_LEN          EQU ay_code_end - AY_RESERVE
+                ASSERT ay_code == AY_PLAY && ay_play == AY_PLAY
+                ASSERT ay_vars > ay_play && ay_vars_end <= mus.mus_songs
                 ASSERT ay_code_end <= AY_RESERVE_END
                 DISPLAY "GAME AY slot (bank 3): ", /H, AY_RESERVE, "..", /H, ay_code_end - 1, " (", /D, AY_LEN, " B), free in the 4 KB reserve: ", /D, AY_RESERVE_END - ay_code_end, "; ISR ", /D, ISR_LEN, " B at ", /H, ISR_ADDR
 

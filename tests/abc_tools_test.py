@@ -702,5 +702,38 @@ class EchoExperiment(unittest.TestCase):
             self.assertEqual(regs[21][8], start, drop)
 
 
+class GameSongs(unittest.TestCase):
+    """abc2wzm --game: the in-game songs are the S1e hps_* entries at gate 30."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.g = tempfile.mkdtemp()
+        cls.b = tempfile.mkdtemp()
+        a2w.main(["--game", cls.g])
+        a2w.main(["--batch", cls.b, "--gate", "30"])
+        cls.names = ["hps_" + t for t in a2w.GAME_TUNES]
+
+    def test_identical_to_batch(self):
+        for n in self.names:
+            with open(os.path.join(self.g, n + ".asm")) as f1, \
+                    open(os.path.join(self.b, n + ".asm")) as f2:
+                self.assertEqual(f1.read(), f2.read(), n)
+
+    def test_total_bytes_and_table(self):
+        ents = {n: (t, kw) for n, t, kw in a2w.BATCH}
+        tot = 0
+        for n in self.names:
+            t, kw = ents[n]
+            info = a2w.convert(os.path.join(SRC, t + ".json"), name=n, source="json",
+                               **dict(kw, gate=30))
+            tot += len(info["bytes"])
+        self.assertEqual(tot, 1933)
+        with open(os.path.join(self.g, "game_songs.asm")) as f:
+            lines = [l.strip() for l in f if not l.startswith(";")]
+        self.assertEqual(lines[:7], ['INCLUDE "%s.asm"' % n for n in self.names])
+        self.assertEqual(lines[7:], ["mus_tab:"] + ["DW " + n for n in self.names]
+                         + ["mus_tab_end:"])
+
+
 if __name__ == "__main__":
     unittest.main()

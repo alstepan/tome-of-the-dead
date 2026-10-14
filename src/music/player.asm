@@ -523,7 +523,10 @@ pl_per0:
 ; player_start — start a song from frame 0 (next player_frame plays frame 0) and
 ; write R0..R12 (the per-song constant R6/R7/R11/R12 are written here; with
 ; WZM_BUZZER also R7 = $38, R11/R12 = 0 and R13 = the header's shape).
-; In: HL = song block.  Clobbers: AF, BC, DE, HL, IX.  Cold (~1.9k T).
+; In: HL = song block.  Clobbers: AF, BC, DE, HL, IX.
+; Cost: ~3.1k T measured (SND-2 T2/T4: 3 voices x ~0.7k + pl_out_all ~0.73k; the
+; old "~1.9k" was an estimate); the ISR's start frame ~3.4k T incl. ay_play.
+; Accepted by the manager at ~3.5k (SND-2 T6): a start frame has no player_frame.
 ; Must not race player_frame: call from the ISR (mailbox) or under DI.
 ;------------------------------------------------------------------------------
 player_start:

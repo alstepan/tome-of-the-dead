@@ -45,9 +45,38 @@ AY_PLAY         EQU AY_RESERVE      ; A8 player slot entry, called once per fram
 ; AY-3-8912 (128K): select a register on $FFFD, write it on $BFFD
 AY_REG_PORT     EQU $FFFD
 AY_DATA_PORT    EQU $BFFD
-AY_R_MIXER      EQU 7               ; R7: bits 0-5 = tone/noise A-C off when set
-AY_R_VOL_A      EQU 8               ; R8..R10: channel volumes A, B, C
-AY_MIX_OFF      EQU %00111111       ; every tone + noise off (I/O port bits 6/7 = input)
+AY_R_VOL_A      EQU 8               ; R8..R10: channel volumes A, B, C (ay_silence)
+; SND-2 sound mailbox (bank 2, STATE_3B spare; docs/conventions.md "Interrupts":
+; main code writes only SND_MODE / MUS_REQ / MUS_SHOT, single-byte stores or
+; set/res on SND_MODE; only the ISR (ay_play) writes MUS_STATE / MUS_CUR and
+; clears MUS_SHOT). Boot initialises it; new_game never touches it.
+SND_MODE        EQU $BFEB           ; game.md §3.6 sound setting (per power-on)
+SND_MUSIC_BIT   EQU 0
+SND_SFX_BIT     EQU 1
+SND_HOLD_BIT    EQU 7               ; pause: volumes 0, the sequencer frozen
+SND_MUSIC       EQU 1 << SND_MUSIC_BIT
+SND_SFX         EQU 1 << SND_SFX_BIT
+SND_HOLD        EQU 1 << SND_HOLD_BIT
+SND_ALL         EQU SND_MUSIC | SND_SFX ; boot default (ALL ON)
+MUS_REQ         EQU $BFEC           ; LEVEL: looping tune id (MUS_*), 0 = silence; never consumed
+MUS_SHOT        EQU $BFED           ; EDGE: one-shot id, 0 = none; main writes, the ISR clears
+MUS_STATE       EQU $BFEE           ; ISR: bits 0-1 MS_*, bit 7 MS_DONE
+MUS_CUR         EQU $BFEF           ; ISR: id sounding (0 = none)
+SFX_REQ         EQU $BFF0           ; reserved (SFX), stays 0
+MS_IDLE         EQU 0               ; MUS_STATE bits 0-1
+MS_LOOP         EQU 1
+MS_SHOT         EQU 2
+MS_MASK         EQU 3
+MS_DONE         EQU $80             ; a one-shot finished; cleared when the next shot is taken
+; tune ids (= the S1e tape keys, sound.md §S1f; order of game_songs.asm's mus_tab)
+MUS_CRAWL       EQU 1               ; Q  Dungeon Crawl      loop
+MUS_DANGER      EQU 2               ; W  Dangerous          loop
+MUS_BOSS        EQU 3               ; E  Boss Fight         loop
+MUS_LEVEL       EQU 4               ; R  Level Complete     one-shot (stinger)
+MUS_WIN         EQU 5               ; T  Game Win           one-shot (final)
+MUS_OVER        EQU 6               ; Y  Game Over          one-shot (final)
+MUS_LAMENT      EQU 7               ; U  Lament IIb         loop
+MUS_COUNT       EQU 7
 ; Bank 7 (A7): screen 2 at $C000 (what the ULA shows during play; written only
 ; by present / present_full) and the room's ATTR shadow at $F800 (screen-attr
 ; layout: screen attr -> shadow attr is +$A0 in the high byte, low bytes
@@ -290,7 +319,7 @@ TIMING_MARK     EQU $BFC0           ; spare
 CLIMB_BLK_ID    EQU $BFC7           ; B14: slot of the last entity that blocked the hero's climb
 CLIMB_BLK_N     EQU $BFC8           ; B14: consecutive blocked climbs by CLIMB_BLK_ID (0 = none)
 CLIMB_BLK       EQU $BFC1           ; 1 = this input's climb was blocked by an entity (-> wait turn)
-AY_CALLS        EQU $BFC2           ; A8 word: AY_PLAY calls (the silent stub counts; test-observable)
+AY_CALLS        EQU $BFC2           ; A8 word: AY_PLAY calls (ay_play counts every call; test-observable)
 PLAYER_SC       EQU $BFC9           ; C3-1: shortcut keys this tick (SC_* bits, io.asm)
                 ASSERT PLAYER_SC != CLIMB_BLK_ID && PLAYER_SC != CLIMB_BLK_N
 ICON_SIG        EQU $BFCB           ; C3-3: icon_sig as last drawn (icon_poll)

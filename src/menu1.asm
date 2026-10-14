@@ -29,6 +29,8 @@ MENU_A_CTL_SEL  EQU $4F             ; the chosen control: PAPER blue
 ; Out: C = hero kind.  Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 menu_run:
+                ld   a, MUS_LAMENT             ; menu tune (level-triggered; ISR starts it)
+                ld   (MUS_REQ), a
                 ld   a, GS_BOOT                ; GS_SELECT once fully drawn
                 ld   (GAME_STATE), a
                 scf                            ; the last game re-pointed its hero's
@@ -760,6 +762,8 @@ PAUSE_LEN       EQU 3 * 256 + 3 * 32
                 ASSERT PAUSE_SAVE + PAUSE_LEN <= GEN_MIR + 512
                 ASSERT PAUSE_SAVE + PAUSE_LEN <= TX_DEC      ; D3-TX: menu text decodes while paused
 pause_run:
+                ld   hl, SND_MODE              ; HOLD: ISR zeroes volumes, freezes the sequencer
+                set  SND_HOLD_BIT, (hl)
                 ld   a, 1
                 ld   (PAUSED), a
                 xor  a                         ; save: screen -> GEN_SRC
@@ -838,7 +842,9 @@ pause_run:
                 and  JOY_MASK
                 jr   nz, .no
                 jp   .redraw
-.quit:          xor  a
+.quit:          ld   hl, SND_MODE
+                res  SND_HOLD_BIT, (hl)
+                xor  a
                 ld   (PAUSED), a
                 ld   l, 1                      ; (far1 clobbers A: the result is L)
                 ret
@@ -847,6 +853,8 @@ pause_run:
                 ld   bc, PAUSE_ROW << 8
                 ld   de, (32 << 8) | 3
                 call pmark_rect
+                ld   hl, SND_MODE
+                res  SND_HOLD_BIT, (hl)
                 xor  a
                 ld   (PAUSED), a
                 ld   l, a

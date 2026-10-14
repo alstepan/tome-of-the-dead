@@ -125,8 +125,49 @@ of logic leaves the heaviest render tick.
 - Placement: vector table + stub from the 1 KB stack reservation (measure depth
   first). **Player + songs + FX: 4 KB at bank 3 `$F000-$FFFF`** (user 2026-10-06, cut from 7 KB at `$E400`; designer decision 2026-10-06: holds a compact tracker player 1-1.5 KB + effects ~0.3 KB + 1-3 KB in-game loop; the PT3 player at 1.6-2.0 KB still fits only with a ~1 KB loop; contended
   fetches ~+10%). Sources gain +3,072 B: free = 8,701 + 3,072 = **11,773 B** (section 6/8 figures with 7 KB are superseded).
-- **Hold back 13k T per tick** (2 calls × ~6.5k ≈ 9% of the tick).
+- **Hold back 13k T per tick** (2 calls × ~6.5k ≈ 9% of the tick). Measured
+  (§5.1): ≤ 8.6k T for two adjacent ISRs; the 126k / 128k caps are kept as work
+  caps and a real-deadline gate covers the rest.
 - Trap: `DI` windows stall music → no SP-trick blits.
+
+### 5.1 Measured: the WZM player in the slot (SND-2, 2026-10-14, **M**)
+
+The estimates above are superseded for our player (custom WZM v0.3, `WZM_BUZZER`,
+no echo; sound.md §2/S1e, memory-map.md "Interrupts (A8)").
+
+| Item | Measured |
+|---|---|
+| Slot (bank 3 `$F000`) | `ay_play` 208 B + player 1,082 B (code + period table 990, state 92) + dispatcher state 2 B + 7 songs 1,947 B = **3,239 B, 857 B free** of 4 KB; runtime-written part `ay_vars` 94 B |
+| ISR peak (`isr` → `isr.done`, whole ISR) | **5,243 T** single frame (Dangerous, frame 251); Lament 5,111 T; peak seen inside a budget tick window **5,336 T** (`cast`) — contract ≤ 6.5k |
+| Start frame (loop or shot) | **~3.4k T** `ay_play` (`player_start` ~3.1k, no `player_frame` that call); **accepted ≈ 3.5k** by the manager (SND-2 T6) |
+| Adjacent-frame pair (a 2-frame tick holds two ISRs) | **8,566 T** max (frames 0+1 = start + first play frame, songs 1/2/3); steady play: Lament 7,698 T |
+| Idle / music off / hold | 243 / 210 (426 T whole ISR, gate ≤ 500) / 291 T `ay_play` |
+| Stack | ISR 12 B + 6 B under `AY_PLAY` (CALL + the player's deepest 4) |
+
+**Cap policy (manager, SND-2 T6): keep the 126k ordinary / 128k cast caps as
+WORK caps** (tick work excluding the ISR time that falls inside the window).
+`tests/budget.py` (T5) adds the **real** deadline gate: `real = total + PRE_MAX`
+(PRE_MAX = 402 + the worst ISR seen, floor 5,300) **≤ 141,816**. The in-game theme
+(Lament) plays in every budget scenario.
+
+| Scenario | ordinary work / real | cast work / real |
+|---|---|---|
+| mix (knight + 4) | 119,421 / 127,472 | — |
+| mage (mage + 4) | **121,380** / 129,317 | — |
+| heavy (not gated) | 118,716 / 126,653 | — |
+| lightning | 121,259 / 129,359 | — |
+| cast (split turn) | 94,956 / 103,197 | 99,392 / 107,554 |
+| lcast / lcastf / lcasts | 92,853 / 100,790 · 102,465 / 110,402 · 98,817 / 106,754 | 96,481 / 104,581 · 95,569 / 103,669 · 95,341 / 103,441 |
+| advcast | 92,712 / 103,336 | 81,374 / 89,311 |
+| fzcast / fzcast2 | 102,842 / 110,779 · 114,368 / 122,305 | 102,110 / 110,210 · 112,748 / 120,848 |
+| fcast | 111,924 / 119,861 | 81,109 / 90,476 |
+| wcast / **wcast4** | 107,668 / 115,719 · 120,190 / **130,754** | 108,142 / 116,079 · **119,055** / **126,992** |
+| acast | 82,572 / 90,672 | 88,867 / 99,491 |
+| mkmix | 106,196 / 114,247 | — |
+
+Worst: ordinary work **121,380** (mage, 4.6k under 126k), cast work **119,055**
+(wcast4, 8.9k under 128k), real **130,754** (wcast4 ordinary; **11,062 T** under the
+2-frame deadline). 0 ticks over any gate; `OVERRUN_COUNT` 0.
 
 ## 6. Headroom for Stage 2 content (after Rogue removal, E1 option A, AY reserve)
 

@@ -1999,8 +1999,12 @@ def tape_rest(h, p):
     h.expect("50 bank 3 sprite sources + cold code == .sna", ram[3 * 16384:3 * 16384 + b3] ==
              SNA_RAM[3 * 16384:3 * 16384 + b3], True)
     ayo = 3 * 16384 + S["AY_RESERVE"] - 0xC000
-    h.expect("50 bank 3 AY slot (A8 tape block) == .sna", ram[ayo:ayo + S["AY_LEN"]] ==
-             SNA_RAM[ayo:ayo + S["AY_LEN"]], True)
+    # SND-2: the player + dispatcher state is one block (ay_vars): the ISR has
+    # run since boot, so everything else of the AY slot must equal the .sna
+    a0, a1 = S["ay_vars"] - S["AY_RESERVE"], S["ay_vars_end"] - S["AY_RESERVE"]
+    ba, sa = bytearray(ram[ayo:ayo + S["AY_LEN"]]), bytearray(SNA_RAM[ayo:ayo + S["AY_LEN"]])
+    ba[a0:a1] = sa[a0:a1] = bytes(a1 - a0)
+    h.expect("50 bank 3 AY slot (A8 tape block, bar ay_vars) == .sna", ba == sa, True)
     for nm in ("TSET_LO", "TSET_HI"):            # B3B-8: the bank-7 tileset blocks
         o = 7 * 16384 + S[nm] - 0xC000
         h.expect(f"50 bank 7 tilesets {nm} (B3B-8 tape block) == .sna",
