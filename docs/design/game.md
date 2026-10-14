@@ -582,6 +582,157 @@ tokens: `ALL ON` · `SFX ONLY` · `OFF`.
 7. Redefining a key to S → `KEY RESERVED`.
 8. OFF, or `SND_HOLD` set → the player's AY shadow has R8–R10 = 0 (sound.md T4).
 
+### 3.7 Danger music trigger (designer decision 2026-10-14; cue W, sound.md §S1f, plan SND-3)
+
+**Meaning.** The Dangerous tune (W) plays when the monsters that are pressing the hero in the
+current room could plausibly kill him within about **3 turns**, counting his healing
+reserve. It also plays when he is at **≤ ¼ max HP with any threat present**. It is a
+judgement about the next few turns, not about the room's contents.
+
+**Signals ruled out (cheap but wrong).**
+- **Raw monster count.** 4 Bats at full HP would fire, while 1 Orc Bouncer vs a 10-HP
+  Warrior would not.
+- **§9.3 render weight.** It measures render cost, not threat: a Skeleton (5) outranks a
+  Spider (2), and the Archer's 6 includes its projectile sprite.
+- **`KX_XP`.** It is an absolute reward, so it ignores hero growth and the D1 and D7
+  numbers mean different things. It also bakes in the tier ×1.5/×2 reward bonus.
+- **HP fraction alone.** It fires in an empty room after a trap, and it never fires for
+  a full-HP D7 hero facing 2 Berserkers and a Sniper.
+- **"Any awake hostile in the room"** (sound.md §3 B rev 1). It would be on in most
+  rooms, so W would turn into the explore tune.
+
+**Per-kind input: `KDNG`, a 32-B table in bank 3, indexed by kind.** It goes next to
+`kx_tab`, among the D3-1 tables. Stride 1, so no change to `KX_STRIDE`. The engineer places
+it in memory-map.md.
+- Bits 0–4 `D`: expected HP the kind takes from the hero per turn while engaged, in
+  **half-HP** (D = round(2 × avg dmg × ~0.6 hit × action rate), with on-hit statuses
+  rounded up). Hero DEF is ignored, which errs on the cautious side.
+- Bit 7 `KD_RANGED`: counts anywhere in the room.
+- Bit 6 `KD_ANYST`: counts on either storey (flyers, and the Vampire because of its bat form).
+
+| Kind | D | Flags | Kind | D | Flags | Kind | D | Flags |
+|---|---|---|---|---|---|---|---|---|
+| Warrior, Mage, hole | 0 | | Skeleton | 4 | | Skeleton Archer | 4 | R |
+| Rat | 2 | | Skeleton Guard | 5 | | Skeleton Sniper | 6 | R |
+| Giant Rat | 3 | | Skeleton Knight | 7 | | Mummy | 4 | |
+| Rabbit Rat | 4 | | Vampire | 3 | S | Necromancer | 4 | R |
+| Bat | 1 | S | Ghost | 3 | S | Bone Caller | 5 | R |
+| Screech Bat | 2 | S | Poltergeist | 4 | S | Ogre Warlord | 12 | |
+| Slime | 1 | | Orc | 6 | | Death Knight | 14 | |
+| Goblin | 3 | | Orc Berserker | 9 | | Archmage | 12 | R S |
+| Goblin Slinger | 3 | R | Orc Bouncer | 9 | | | | |
+| Spider | 4 | | Black Widow | 5 | | | | |
+
+(R = `KD_RANGED`, S = `KD_ANYST`.) Golden bosses use their base row. That is safe because a
+boss lives only in its lair, never follows (§8.6), and the BOSS tune masks DANGER there (below).
+`D` is a playtest knob, and it is 1 byte per kind.
+
+**Counted slot.** A slot counts if it is ACTIVE, HOSTILE, not DYING, hp > 0, and in the
+current room (lazy population, §9.4, makes every live slot current-room). PENDING slots
+(walking in or landing) **count**. A slot is excluded if its HOLD kind is **ASLEEP** or its
+MIND kind is **FEAR** (it is not pressing, and the relief after a Sleep or Fear scroll is
+meant to be audible). FROZEN and STUNNED monsters still count, because those last 1–4 turns.
+Reach band: `KD_RANGED` → always. Otherwise the column gap to the hero must be **≤ 10**, and
+the slot must be on the same storey or have `KD_ANYST`. Projectiles are not slots and are
+never counted.
+
+**The score (all integers, no RNG).**
+- `INC` = Σ `D` over counted slots, saturating at 63. With ≤ 4 monsters per room (§9.3) the
+  real maximum is 56.
+- `EHP` = HP − (POISON turns >> 2) + `HEAL_RES`, minimum 1. The poison term is roughly the
+  poison HP still to come. `HEAL_RES` = **10** if the quick POTION slot holds a **known Heal**
+  (count ≥ 1) and the hero is not HOLD; otherwise 0. Only one potion is counted, because
+  drinking costs a turn and the horizon is 3 turns. Cure, Mana, Teleport/Fear/Sleep scrolls
+  and MP are **not** counted. They are the player's answers, and their effect shows up in
+  the next evaluation.
+- `H` (horizon, turns) = **3**, plus **2** if the hero is HOLD (FROZEN, ASLEEP or STUNNED),
+  plus **1** if MIND (FEAR or CONFUSED) **or** WEAK is set. Maximum 6.
+- **Enter test:** `INC > 0` **and** (`2·EHP ≤ H·INC` **or** `4·HP ≤ maxHP`).
+- **Safe test:** `INC = 0` **or** (`2·EHP > (H+2)·INC` **and** `3·HP > maxHP`). The +2 turns
+  and the ¼ → ⅓ floor are the hysteresis band.
+- Products fit in 16 bits (≤ 8 × 63 = 504; 2·EHP ≤ 510). H·INC is at most 8 adds.
+
+**State machine (4 B of game state: `DNG_ON`, `DNG_DWELL`, `DNG_SAFE`, `DNG_CD`).**
+
+| Constant | Value | Rule |
+|---|---|---|
+| `DNG_MIN_DWELL` | **8 turns** | Once DANGER is on, it stays on for at least this many turns |
+| `DNG_EXIT_TURNS` | **3 turns** | The safe test must pass on this many consecutive turns, and dwell must be done, before DANGER goes off. This replaces sound.md rev 1's "room clear 2 turns" |
+| `DNG_COOLDOWN` | **6 turns** | After DANGER goes off, the enter test is ignored for this many turns, **unless the HP floor (`4·HP ≤ maxHP`) holds**. Going critical is always heard |
+
+- CALM → DANGER: the enter test passes and the cool-down is 0 (or the floor applies). Set
+  `DNG_DWELL` = 0 and `DNG_SAFE` = 0. Entry is immediate, with no confirmation turn.
+- In DANGER, each turn: `DNG_DWELL` += 1 (saturating). `DNG_SAFE` = safe ? `DNG_SAFE`+1 : 0.
+  When `DNG_DWELL ≥ 8` and `DNG_SAFE ≥ 3`, go to CALM and set `DNG_CD` = 6.
+- In CALM, `DNG_CD` −= 1 per turn, down to 0.
+- **Real-time floor.** The ISR applies a tune change at the next bar line (sound.md §3 B), and
+  a request reversed before that bar is a no-op. So the shortest audible W segment is 1 bar
+  (2.5 s at 96 bpm). A combat turn is 6–7 ticks (~0.27 s), so 8 turns of dwell plus 3 safe
+  turns is about 3 s, or 1–2 bars.
+
+**When it runs.** Once per **game turn**, at the end-of-turn step (§2.2), after the monsters'
+logic and after regen, and before the panel. HOLD auto-turns (1 per 4 ticks) also count.
+It runs once more, **without** advancing any counter, right after a room build (§9.4.3,
+after residents spawn and followers are admitted) and before the scroll, so a room entered
+into an ambush switches on the first bar. It never runs on ANIM ticks.
+
+**Tune selection (`mus_pick`, the only writer of the looping request).** It runs after the
+evaluator. Looping tune = **BOSS** (E) if a BOSS-flagged slot is alive in the room, else
+**DANGER** (W) if `DNG_ON`, else the level's **explore** tune. `MUS_REQ` is written only on
+change. One-shots (R boss dead, T win, Y game over) are requested by their own events, and
+the player's priority (WIN = GAMEOVER > BOSS > STINGER > DANGER > EXPLORE) applies. When the R
+stinger ends, the player resumes the **current** looping request. If an escort is still
+pressing a low-HP hero, that request is DANGER.
+
+**Edge cases.**
+
+| Situation | Behaviour |
+|---|---|
+| Room exit or scroll | No reset. The state machine carries on, and the room-build evaluation adds no counts. Fleeing into an empty room drops W after the dwell and 3 safe turns. Followers count in the new room. Same for Teleport, pit falls and fear/teleport arrivals |
+| Boss room | The evaluator keeps running with its counters (so the state is correct after the boss dies), but `mus_pick` picks BOSS while the boss lives. Boss death → R → resume (above) |
+| Hero death | The death event requests Y (overrides everything). There is no further evaluation. `new_game` zeroes the 4 bytes |
+| Pause, bag page, level card, menus, end screens | No turns, so no evaluation and the counters freeze. Pause audio follows §3.6 `SND_HOLD` (frozen, resumes in place) |
+| `SND_MODE` music off | The evaluator and `mus_pick` still run, and `MUS_REQ` is written and remembered (§3.6). Nothing is audible. Music back on → the **current** requested loop (possibly W) restarts at bar 1 |
+| Level change (EX_LEVEL) while on W | Descent is an escape (§9.3, nobody follows). The 4 bytes are zeroed at the level card, and the new level starts on its explore tune as sound.md specifies. DANGER never carries across a level. Start room 0 is empty, so the first evaluation is CALM |
+| Win | T overrides. No evaluation after the Archmage's death sequence |
+
+**Sanity checks (D1–D4 numbers from §4, §9.1, §10; `D` from the table).**
+
+| # | Scenario | INC | H | Result |
+|---|---|---|---|---|
+| 1 | Warrior 12/24, 2 Goblins adjacent, quick Heal | 6 | 3 | 2·22 = 44 > 18, HP > 6 → **calm**. Same without the potion (24 > 18). At **9 HP with no potion**: 18 ≤ 18 → **DANGER**. With the potion, from 6 HP (floor). Matches §10's duel: 2 Goblins cost ~5–7 HP over the fight |
+| 2 | Mage 4/16, 1 Rat | 2 | 3 | Pressure 8 > 6, but the floor holds (16 ≤ 16) → **DANGER**. At 4/14 the floor fails (16 > 14) → calm. At 3/14 without a Heal: 6 ≤ 6 → DANGER |
+| 3 | "5 Bats": the cap is ≤ 4 monsters per room (§9.3), so 4 Bats vs Mage 16/16 | 4 | 3 | 32 > 12 → **calm** (raw count would fire). At 6/16 with no potion: 12 ≤ 12 → DANGER. Compare 4 Ghosts (D3, Mage 22/22): INC 12, 44 > 36 calm; DANGER from 18 HP without a potion |
+| 4 | Warrior 20/36 (D4) ASLEEP from a GAS trap, 2 Orcs | 12 | 5 | Potion unusable (HOLD) → 40 ≤ 60 → **DANGER**. The same hero awake: H 3 → 40 > 36 calm. Status matters |
+| 5 | D4 lair: Ogre (12) + 1 Orc escort, Warrior 30/36 | 18 | 3 | 2·40 = 80 > 54 calm, but BOSS (E) plays either way. After the kill (R), only the Orc is left: INC 6 → calm → explore |
+| 6 | Exit band: case 1 entered at 9 HP, then one Goblin dies | 3 | 3 | Safe test: 18 > (3+2)·3 = 15 and 27 > 24 → safe. W ends after dwell 8 and 3 safe turns |
+
+**Cost (E).** Code in **bank 3**, next to the end-of-turn code in `turn3.asm` (far call from bank
+2 only if end-of-turn lives there: ≤ 6 B): evaluator + state machine + `mus_pick` **~140 B**.
+Data: `KDNG` 32 B in bank 3 and 4 B of state. Time per turn: slot loop ≤ 15 slots × ~90 T
+(flag tests, band test, `KDNG` lookup, add) ≈ 1.4k, plus EHP/H/multiply/compare ~0.3k,
+plus state ~0.1k, plus far call ~0.2k ≈ **2k T per turn** (well under 1 % of a turn's
+~6-tick budget). **0 T on non-turn ticks.** No RNG is used, so outcomes are deterministic
+under `SEED_FIXED`.
+
+**Checks (`test`, by poking state under `SEED_FIXED`).**
+1. Warrior HP 9/24, no potion, 2 Goblins adjacent → after 1 Wait, `DNG_ON` = 1 and `MUS_REQ` = DANGER.
+2. Same with a known Heal in the quick slot → `DNG_ON` = 0.
+3. 4 Bats around a Mage at 16/16 → 0. At 6/16 with no potion → 1.
+4. Enter, then poke all monsters dead → `DNG_ON` stays 1 for turns 1–7, goes 0 at turn 8
+   (dwell reaches 8, and the safe count is already ≥ 3). Re-enter test true at turn +2 → still 0 (cool-down). HP poked to ≤ ¼
+   → 1 at once (floor bypass).
+5. Monster ASLEEP or FEAR → not counted. The same monster FROZEN → counted.
+6. Lair with a live boss and `DNG_ON` = 1 → `MUS_REQ` = BOSS.
+7. Descend with `DNG_ON` = 1 → all 4 bytes are 0 after the card, and `MUS_REQ` = explore.
+8. `SND_MODE` = 2 (music off) → `MUS_REQ` still changes per 1. Pause → counters unchanged.
+
+**Open (user).** (a) Should the ¼-HP floor fire against a single weak monster (case 2, Mage
+4/16 vs a Rat)? Default: **yes**. (b) Should critical HP with **no** threat (after a trap,
+or starving) play W? Default: **no**, because poison never kills (§6.4) and no threat means no
+danger. (c) Is it OK that Mage MP and escape scrolls are not counted? Default: yes,
+because the next evaluation sees their effect.
+
 ---
 
 ## 4. Classes

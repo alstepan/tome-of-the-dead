@@ -358,11 +358,17 @@ Chosen on the S1e tape: **harpsichord + reverb tail S1e, staccato gate 5/16 (the
 |---|---|---|---|---|
 | **U** | Lament IIb `f_minor_staccato_theme` | **main menu, story screen**, and for now the **in-game theme** (to be replaced later) | loop | SND-2 |
 | **Q** | Dungeon Crawl | in-game, one of the proto room tunes (selection TBD) | loop | SND-3 |
-| **W** | Dangerous | **danger**: many monsters or low HP (thresholds: designer) | loop | SND-3 |
+| **W** | Dangerous | **danger**: the trigger is game.md §3.7 (threat score with hysteresis) | loop | SND-3 |
 | **E** | Boss Fight | entering a **boss room** | loop | SND-4 |
 | **R** | Level Complete | **once** when the player kills the boss | one-shot | SND-4 |
 | **T** | Game Win | **once** when the game is finished successfully | one-shot | SND-4 |
 | **Y** | Game Over | **once** when the player dies | one-shot | SND-3 |
+
+**DANGER trigger (W):** game.md §3.7 (designer 2026-10-14). It is evaluated once per game
+turn in bank 3 (~2k T per turn, ~140 B code + 32 B `KDNG`). The rule: enter when
+`2·EHP ≤ H·INC` or HP ≤ ¼ max with a threat present. W stays on for at least 8 turns and goes
+off after 3 safe turns, then a 6-turn cool-down follows. BOSS masks it. Descent resets it.
+`mus_pick` is the only writer of the looping request.
 
 Not used for now: the organ variants, the legato Lament II, Echo (J), reverb 0/50/100, gates other than 5/16. The echo
 experiment is not built into the game player. Other melodies will be added later.
@@ -390,7 +396,7 @@ Budget: player with buzzer ≈ 1.07 KB + 7 harpsichord tunes ≈ 1.93 KB = ≈ 3
 | State | Tune | Enter | Leave | Transition |
 |---|---|---|---|---|
 | EXPLORE | X:1 Dungeon Crawl. Or the **Lament** as the long explore loop, with X:1 for title/menu | level start | — | fade 12 frames, start at bar 1 |
-| DANGER | X:2 Dangerous | awake hostile in the room | room clear 2 turns (hysteresis) | **next bar** (same key → seamless) |
+| DANGER | X:2 Dangerous | game.md §3.7 enter test (supersedes "awake hostile in the room") | game.md §3.7: dwell 8 + 3 safe turns, cool-down 6 | **next bar** (same key → seamless) |
 | BOSS | X:3 Boss Fight | boss room entry | boss dead → X:4 | fade 8 frames + cut |
 | STINGER | X:4 Level Complete | descent / boss dead | end → **resume** explore (~20 B snapshot) | immediate |
 | WIN / GAME OVER | X:5 / X:6 | event | menu | immediate cut. Override everything |
@@ -464,7 +470,7 @@ player (S1).
 | **S1** player core (music only) = proto A, measure T, re-derive caps, T4 | **start of 3E**, so 3E/3F are budgeted against the real cost | z80-staff-engineer | S0; `src/ay.asm`, `MUS_REQ` in bank 2 | +~4k T a tick worst **E**; "advcast" cap re-check |
 | **S2** SFX overlay + 3B/3C/3D hooks | during 3E | staff (overlay), junior (hooks outside bank 3) | S1 | +~0.3k T a frame |
 | **S3** 3E hooks (pickup, potion, trap) | with 3E items | junior | S2 | none |
-| **S4** proto B state machine (X:1–6) | 3F (boss, win and death exist) | staff + composer | S1; designer DANGER trigger | fades ~30 T |
+| **S4** proto B state machine (X:1–6) | 3F (boss, win and death exist) | staff + composer | S1; DANGER trigger = game.md §3.7 (done) | fades ~30 T |
 | **S5** loop extensions, mix pass | 3G | composer, user in Fuse | all | none |
 
 This moves part of plan.md's "3G Sound" earlier. That is a manager/user decision.
@@ -476,4 +482,4 @@ This moves part of plan.md's "3G Sound" earlier. That is a manager/user decision
 3. Transpose the suite down an octave (recommended) or keep it as written?
 4. B's EXPLORE: X:1 Dungeon Crawl, or the Lament (X:1 then becomes the title/menu tune)?
 5. How long should the Crawl/Danger/Boss loops be (8 bars fits; 16 bars only without the Lament or with pattern reuse), and who writes the extensions (user tool vs composer)?
-6. Still open from rev 1: flowmusic.app terms; the player's real bytes and T; the DANGER trigger (game-designer); level-up as stinger or SFX; the ZRCP AY-register command and ZEsarUX audio-to-file; a GM soundfont for T5.
+6. Still open from rev 1: flowmusic.app terms; the player's real bytes and T; level-up as stinger or SFX; the ZRCP AY-register command and ZEsarUX audio-to-file; a GM soundfont for T5.
