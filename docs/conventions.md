@@ -65,6 +65,13 @@
   probes never go there (a PC breakpoint at `$E000+` also fires in bank-3 /
   bank-1 code at the same address): keep a bank-2 stub as the probe
   (`read_turn_input`, `pause_hook`).
+  **Exception (D3-8d, the status-mark ops):** `mk_op` / `mk_forget` /
+  `mk_sweep` (`src/mark7.asm`) draw / erase screen cells from bank 7. They
+  are events (apply, clear, a cell step, the 8-tick toggle), ≤ 2 ops a tick
+  plus the forgets (one per drawn mark the render touched), entered by far7
+  from the bank-2 pass, and only in a tick still in its first frame (the
+  gate is tested once at `mark_tick`'s entry): the per-tick pass itself stays
+  in bank 2. Do not extend this to other render code.
 - **Helpers restore the caller's bank.** Every bank-2 / low-RAM helper that
   pages `$C000` and returns, and is reachable from paged-bank code (bank 3 or
   bank 1), saves `PORT_7FFD_SHADOW` before paging and ends with

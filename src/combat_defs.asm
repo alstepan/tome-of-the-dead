@@ -68,6 +68,48 @@ SI_CONFUSED     EQU 4
 SI_POISON       EQU 6
 SI_WEAK         EQU 7
 ST_ICON_COL     EQU 30
+; D3-8d status marks (game.md §6.4.1 V2; src/mark.asm bank 2, src/mark7.asm
+; bank 7): one 8x8 glyph above each visible HOLD / MIND body (HOLD > MIND),
+; glyph g = status_icons index + 1 (FROZEN 1, ASLEEP 2, STUNNED 3 = the HOLD
+; kind; CONFUSED 4, FEAR 5), its own attr on black paper, frame A / B every 8
+; ticks. Per slot: SLOTREC R_MK / R_MKLO (the mark as drawn). State bytes in
+; the bank-2 spare after DRIP_SRC (test-observable):
+MK_N            EQU $BC0C           ; marks drawn now (0: cell_occ skips the map test)
+MK_RR           EQU $BC0D           ; RLIST index the next pass starts at (round robin)
+MK_OPS          EQU $BC0E           ; mark ops (draw / erase / redraw / a draw attempt whose cell
+                                    ; was covered) done by the last mark_tick: <= MK_OPS_MAX; 0 on
+                                    ; fire / 2nd-frame ticks. NOT counted: forgets (mk_forget, a
+                                    ; damaged / covered mark dropped + its cell queued, ~1.5k T
+                                    ; each, uncapped: one per drawn mark a render touched)
+MK_LEFT         EQU $BC0F           ; ops left in this mark_tick
+MK_OPS_MAX      EQU 2               ; game.md §6.4.1 "<= 2 mark operations per tick"
+                ASSERT MK_N == DRIP_SRC + 2 * DRIP_SRC_MAX && MK_LEFT < ANIM_N2
+; Runtime RAM in bank 5 ($5F00.., runtime only: the BASIC area above PF_RAM,
+; never touched before boot): the drawn-mark cell map (cell_occ: a drop /
+; decor step never lands on a mark) and the glyph copy (frame B derived).
+MK_RAM          EQU $5F00
+MK_MAP          EQU MK_RAM          ; PLAY_ROWS x 4 B: bit (7 - col & 7) of byte row * 4 + col / 8
+MK_GLYPHS       EQU MK_MAP + PLAY_ROWS * 4  ; $5F48: per glyph (0, A0..A7), then a final 0
+MK_G_STRIDE     EQU 9
+MK_KINDS        EQU 5               ; FROZEN, ASLEEP, STUNNED, CONFUSED, FEAR (status_icons 0..4)
+MK_ATTRS        EQU MK_GLYPHS + MK_KINDS * MK_G_STRIDE + 1   ; $5F76: the 5 attrs (status_icons_attr)
+MK_WAIT         EQU MK_ATTRS + MK_KINDS                      ; $5F7B: 16 B, per slot 1 = its last
+                                    ; draw attempt found the cell covered (retry gated, mark.asm)
+MK_AX           EQU MK_WAIT + P_MAX_ENT                      ; $5F8B: mk_draw's attr XOR (frame B BRIGHT)
+MK_RAM_END      EQU MK_AX + 1                                ; $5F8C
+                ASSERT (MK_MAP & $FF) == 0 && ((MK_RAM_END - 1) >> 8) == (MK_RAM >> 8)
+                ASSERT MK_RAM >= PF_RAM + PF_RAM_LEN && MK_RAM_END <= $6000
+MK_G_CONF       EQU 4               ; glyph g of CONFUSED / FEAR (HOLD: g = the HOLD kind)
+MK_G_FEAR       EQU 5
+MK_FRAME        EQU %00001000       ; R_MK bit 3: frame B (A shifted up 1 px)
+MK_THIRD        EQU %00110000       ; R_MK bits 4-5: row >> 3
+MK_GMASK        EQU %00000111       ; R_MK bits 0-2: g (0 = no mark)
+SLEEP_FLASH     EQU 1               ; V3: a typeless ASLEEP apply flashes SLEEP_FLASH_ATTR 1 tick
+SLEEP_FLASH_ATTR EQU $4F            ; bright white on blue: no kind attr / tint uses a paper
+                                    ; (all are paper 0), so it differs from every body and the
+                                    ; $41 ASLEEP tint that follows it
+MK_BRIGHT       EQU $40             ; frame B of a glyph using all 8 rows (ASLEEP, STUNNED): attr
+                                    ; XOR BRIGHT instead of the 1-px shift (manager 2026-10-14)
 ; Boss flag (game.md §6.4 / §9.1; D3-8): bit 7 of the kind's KX_IMM byte
 ; (bank 3, read by deal_hit only). A boss is immune to ASLEEP and FEAR (deal_hit
 ; ORs IMMF_SLEEP | IMMF_FEAR in) and HOLD / MIND durations are halved (round

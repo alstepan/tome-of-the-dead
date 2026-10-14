@@ -44,6 +44,9 @@ if os.environ.get("GAME_PROFILE"):                # finer split for optimisation
 
 
 RETURNS = {}
+# D3-8d: callables f(stepper) run after every measured tick (tests/marks.py
+# reads MK_OPS there: the mark ops of that tick)
+TICK_HOOKS = []
 
 
 class Stepper:
@@ -90,6 +93,8 @@ class Stepper:
             if n == "wait_tick":
                 break
         self.ticks.append((prev, split))
+        for f in TICK_HOOKS:
+            f(self)
         k = len(self.ticks)
         if "probe_act_fire" in split:         # D3-7: the fire tick opens the cast class
             self.casting = True
@@ -151,7 +156,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
-CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")
+CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix")
 CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -275,6 +280,16 @@ SCENARIOS = {
         (3, 20, stand_y(1, 4), HOSTILE),
         (2, 23, stand_y(1, 2), HOSTILE),
         (5, 26, stand_y(1, 6), HOSTILE)], [("FIRE", 3)], K_KNIGHT, None, "acast"),
+    # D3-8d: "mix" with every body under a HOLD / MIND status (15 turns): 5
+    # overhead marks — a FROZEN Skeleton (the Knight's target), an ASLEEP Bat,
+    # a CONFUSED Rat and a FEAR Goblin walking (their marks follow: erase +
+    # draw = 2 ops), the hero CONFUSED — toggling every 8 ticks; <= 2 mark
+    # ops a tick, gated <= CAP (tests/marks.py B reads MK_OPS per tick)
+    "mkmix": ("knight + 4 monsters, all with status marks", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "mkmix"),
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
         (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
@@ -496,6 +511,18 @@ def acast_setup(p, placements):
     p.select_slot(4)
 
 
+# D3-8d "mkmix": slot -> (ST_FLAGS, ST_T1): FROZEN / CONFUSED / FEAR / ASLEEP
+# 15 turns (HOLD = ST_T1 high nibble, MIND = low), the hero CONFUSED 15
+MKMIX = {5: (1, 0xF0), 1: (2 << 2, 0x0F), 3: (1 << 2, 0x0F), 4: (2, 0xF0), 0: (2 << 2, 0x0F)}
+
+
+def mkmix_setup(p):
+    for slot, (f, t1) in MKMIX.items():
+        p.wb(S["ST_FLAGS"] + slot, f)
+        p.wb(S["ST_T1"] + slot, t1)
+    p.settle()
+
+
 def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     p = game.T(h)
@@ -524,6 +551,8 @@ def run_scenario(h, scen):
         wcast_setup(p, placements)
     if len(scen) > 5 and scen[5] == "acast":
         acast_setup(p, placements)
+    if len(scen) > 5 and scen[5] == "mkmix":
+        mkmix_setup(p)
     for f in EXTRA_SETUP:
         f(p)
     mode = scen[4] if len(scen) > 4 else None
@@ -581,7 +610,7 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast").split(","):
+        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if any(t > CAST_CAP for t in st.casts_t):
                 fails.append(key + " (cast)")

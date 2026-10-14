@@ -996,7 +996,7 @@ so they stay on the panel icons plus the magenta `-1` poison number (§6.5).
 | Rank | Cue | Effects | Art | Cost |
 |---|---|---|---|---|
 | **V1** | **Hold the pose:** a HOLD body's idle loop stops (`idle_phase` → 0 while HOLD), so bats stop flapping and the hero stops breathing | FROZEN, ASLEEP, STUNNED | none | ~15 B, ~40 T per drawn slot. It **saves** the idle-frame redraws (12–28k T each) |
-| **V2** | **Status mark:** one 8×8 glyph above the head that alternates frame A / frame B every **8 ticks**. Frame A is the existing panel icon. Until frame B art lands, frame B = blank, so the mark blinks | FROZEN ✻, ASLEEP Zz, STUNNED stars, CONFUSED ?, FEAR skull (one per body, HOLD > MIND) | **A: existing** (`status_icons` 0–4). **B: new**, 5 × 8 B (graphics-artist) | ~0.5–0.6k T per change (restore 1 background cell + OR 8 B + 1 attr); ~250 B code, 80 B glyph copy, ~32 B RAM |
+| **V2** | **Status mark:** one 8×8 glyph above the head that alternates frame A / frame B every **8 ticks**. Frame A is the existing panel icon. **Frame B is derived (user / manager 2026-10-14): frame B = frame A shifted up 1 px; ASLEEP / STUNNED (full-height glyphs, the shift would clip the Z's top bar): a BRIGHT toggle (attr XOR $40)** | FROZEN ✻, ASLEEP Zz, STUNNED stars, CONFUSED ?, FEAR skull (one per body, HOLD > MIND) | **A: existing** (`status_icons` 0–4). **B: derived in code** (no new art) | ~0.5–0.6k T per change (restore 1 background cell + OR 8 B + 1 attr); ~250 B code, 80 B glyph copy, ~32 B RAM |
 | V3 | **Apply moment:** reuse the hit's own impact (frost_crack, power_burst, spark_fizz, Ghost touch). Sleep scroll and GAS give a 1-step `$41` attr flash. Fear scroll: the mark appearing is the cue | all | existing | ~0 (flash mechanism exists) |
 
 **Rejected.**
@@ -1030,7 +1030,7 @@ so they stay on the panel icons plus the magenta `-1` poison number (§6.5).
   state. The mark is re-stamped when the number ends.
 - **Room change** clears all marks. The marks are rebuilt from `ST_FLAGS` on entry.
 
-**Frame B brief (graphics-artist; 8×8, 1-bit, same ink as frame A).**
+**Frame B brief — superseded 2026-10-14 (frame B is derived: A shifted up 1 px, ASLEEP / STUNNED a BRIGHT toggle; no artist task). Kept for a later art pass:**
 - Zz: the small z rises and the big Z sinks, giving a drifting motion.
 - Stars: rotated 45°, so the two frames read as orbiting.
 - Snowflake: a diagonal-arm sparkle variant.

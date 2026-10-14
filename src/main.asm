@@ -313,6 +313,9 @@ anim_gate:      ld   a, (TURN_PEND)
                 jp   fx_tick                   ; D3-5: FX tracks advance with the bodies
 decor_gate:     call frozen
                 ret  z
+                call mark_tick                 ; D3-8d status marks: before the drip / decor
+                                               ; (their cell_occ sees the marks); nothing on
+                                               ; the fire tick
                 call drip_tick                 ; D3-8b (nothing at all on the fire tick)
                 ld   a, (TURN_PEND)            ; D3-7: no decor step on the fire tick
                 and  TP_FIRE
@@ -521,7 +524,13 @@ kind_tab:
                 DB   n / STOREY_ROWS           ; KT_DIV9
                 EDUP
                 ASSERT $ - kind_tab == KT_END
-                ASSERT KT_END <= KT_SIZE           ; $1D0..$1FF spare (resistances, 3F)
+                ASSERT KT_END <= KT_SIZE           ; (the old "$1D0..$1FF spare, resistances 3F":
+                                                   ; the resistances are bank-3 kx_tab since D3-0)
+;------------------------------------------------------------------------------
+; D3-8d: per-tick code right after kind_tab's arrays (the ALIGN pad above is
+; only 196 B: code there would move kind_tab a page). No alignment needed.
+;------------------------------------------------------------------------------
+                INCLUDE "mark.asm"              ; D3-8d status marks (mark_tick, per tick)
 
 code_end:
 IMAGE_LEN       EQU code_end - image_start

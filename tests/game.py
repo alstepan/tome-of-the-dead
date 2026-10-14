@@ -210,6 +210,7 @@ class T(Proto):
             if e["DVIS"] & 1:
                 covered |= {(c, r) for c in range(e["DCOL"], e["DCOL"] + e["DCOLS"])
                             for r in range(e["DROW"], e["DROW"] + e["DROWS"])}
+        covered |= game_lib.mark_cells(self)        # D3-8d: screen-only overlay
         bad = []
         for r in range(PLAY_ROWS):
             for c in range(32):

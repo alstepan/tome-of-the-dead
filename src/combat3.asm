@@ -511,7 +511,17 @@ dh_status:
 .wlo:           and  $F0
                 or   d
 .w:             ld   (hl), a
-                ld   a, (dh_htx)
+                ld   a, (dh_efx)               ; D3-8d V3 (game.md §6.4.1): an ASLEEP that
+                cp   EFX_ASLEEP                ; lands with no hit reaction pending (a
+                jr   nz, .nfl                  ; typeless source: Sleep scroll / GAS, 3E)
+                ld   a, (ix+E_REACT)           ; flashes $4F for one tick (the $41 tint
+                                               ; follows; a flash in the tint's own colour
+                                               ; would not show); a hit's
+                or   a                         ; own impact is its cue (the flash would
+                jr   nz, .nfl                  ; show before the impact, §6.5.1)
+                ld   (ix+E_FLT), SLEEP_FLASH
+                ld   (ix+E_FLA), SLEEP_FLASH_ATTR
+.nfl:           ld   a, (dh_htx)
                 ld   b, a
                 ld   a, (dh_mmsg)
                 ld   c, a

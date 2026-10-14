@@ -165,6 +165,9 @@ R_DIRTY         EQU 11              ; DIRTY_* class this tick
 R_LOG           EQU 12              ; 1 = log this draw in ANIM_TRACE
 R_TINT          EQU 13              ; D3-8e2: the body attr (kind / status tint) last shown with
                                     ; no reaction pending: kept while one is (render; R_ATTR | 4)
+R_MK            EQU 14              ; D3-8d: the slot's status mark as drawn (0 = none; mark.asm:
+                                    ; bits 0-2 glyph 1..5, bit 3 frame B, bits 4-5 row >> 3)
+R_MKLO          EQU 15              ; D3-8d: its cell's low byte ((row & 7) << 5 | col)
 DMG_LIST        EQU $B900           ; damage rects: 4 B each (col,row,cols,rows)
 DMG_MAX         EQU 48              ; $B900..$B9BF
 PEND_DMG        EQU $B9C0           ; queued damage for next render: 4 rects ($B9C0..$B9CF)
@@ -499,7 +502,7 @@ KT_FID0         EQU $160            ; first frame id of the kind
 KT_FCNT         EQU $180            ; frame count of the kind
 KT_MOD9         EQU $1A0            ; 24 B: n mod STOREY_ROWS (9)  (n = y+h or a row, 0..23)
 KT_DIV9         EQU $1B8            ; 24 B: n div STOREY_ROWS      (same page as KT_MOD9: feet_mod)
-KT_END          EQU $1D0            ; $1D0..$1FF: 48 B spare in page 1
+KT_END          EQU $1D0            ; D3-8d: mark.asm code follows from here (was 48 B spare)
 KT_SIZE         EQU $200
 
 ; KT_FLAGS bits

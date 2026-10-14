@@ -504,6 +504,18 @@ def drip_cells(p):
     return {(b[0], b[1]), (b[0], b[1] - 1)}
 
 
+def mark_cells(p):
+    """D3-8d: the cells holding a drawn status mark (SLOTREC R_MK / R_MKLO; a
+    screen-only overlay above a HOLD / MIND body, src/mark.asm)."""
+    b = p.z.read_memory(S["SLOTREC"], 256)
+    out = set()
+    for s_ in range(16):
+        mk, lo = b[s_ * 16 + S["R_MK"]], b[s_ * 16 + S["R_MKLO"]]
+        if mk:
+            out.add((lo & 31, ((mk & 0x30) >> 1) | (lo >> 5)))
+    return out
+
+
 def drip_shown(frame, cells, c, r, attr=True):
     """A screen == ROOM_MAP mismatch at (c, r) is accepted only if the cell is
     a drip cell showing one of the 3 drip glyphs (attr DRIP_ATTR if attr)."""

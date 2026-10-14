@@ -772,6 +772,7 @@ find_target:
 ; transition: "all sprites are hidden", §3.6). Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 hide_sprites:
+                call mk_hide                   ; D3-8d: the status marks first (above the bodies)
                 call drip_hide                 ; D3-8b: before the bodies (it is never under one)
                 call fx_hide                   ; D3-5: FX erased, tracks + queue cleared
                 xor  a
@@ -1081,3 +1082,4 @@ intent_icon7:
                 INCLUDE "act7.asm"             ; D3-7 T1: the split ability turn (act_begin / act_pend / act_fire)
                 INCLUDE "status7.asm"          ; D3-8: the status step, held / confused / fearful hero and monsters
                 INCLUDE "drip7.asm"            ; D3-8b: drip sources, spawn / let go, hide
+                INCLUDE "mark7.asm"            ; D3-8d: status marks: room reset + glyph copy, hide

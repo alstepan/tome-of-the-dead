@@ -254,13 +254,25 @@ decor_tick:
                 jp   .nx
 
 ;------------------------------------------------------------------------------
-; cell_occ — CF = 1 if cell (col C, row B) is inside a drawn body footprint
+; cell_occ — CF = 1 if cell (col C, row B) holds a drawn D3-8d status mark
+; (MK_MAP; skipped while MK_N = 0, +31 T) or is inside a drawn body footprint
 ; (every RLIST slot's R_COL..R_ROWS: no R_VIS test, a slot hidden this tick
 ; keeps its last footprint — at worst a 1-tick hold) or a drawn FX (fx_occ).
-; decor_tick (B3B-10, was inline) and the D3-8b drip.
+; decor_tick (B3B-10, was inline), the D3-8b drip, mk_new.
+; cell_bf — the same without the mark test (bodies + FX only).
 ; Clobbers: A, DE, HL (BC, IX kept).  ~60 T + ~90 T per RLIST slot + fx_occ
+; (+ ~0.15k for the map test while a mark is drawn)
 ;------------------------------------------------------------------------------
 cell_occ:
+                ld   a, (MK_N)
+                or   a
+                jr   z, cell_bf
+                call mk_bit
+                and  (hl)
+                jr   z, cell_bf
+                scf
+                ret
+cell_bf:
                 ld   a, (RLIST_N)
                 or   a
                 jr   z, .fx

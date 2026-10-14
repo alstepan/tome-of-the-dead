@@ -416,13 +416,24 @@ tween:
 .up:            add  a, TWEEN_STEP
                 ret
 
-; idle_phase — A = (ANIM_FREEZE ? 0 : TICK_COUNTER + slot*5).  Clobbers: A, E
+; idle_phase — A = (ANIM_FREEZE or the slot HOLD (FROZEN / ASLEEP / STUNNED)
+; ? 0 : TICK_COUNTER + slot*5). D3-8d V1 (game.md §6.4.1): a held body's idle
+; loop stops on its first frame (bats stop flapping, the hero stops breathing)
+; and resumes when the HOLD clears; +32 T per call, and it saves the idle-frame
+; redraws.  Clobbers: A, DE (both callers run cycle_frame next: D is free)
 idle_phase:
                 ld   a, (ANIM_FREEZE)
                 or   a
-                ld   a, 0
-                ret  nz
+                jr   nz, .z
                 ld   a, (ANIM_SLOT)
+                add  a, ST_FLAGS & $FF
+                ld   e, a
+                ld   d, ST_FLAGS >> 8
+                ld   a, (de)
+                and  STS_HOLD
+                jr   nz, .z
+                ld   a, e
+                sub  ST_FLAGS & $FF            ; the slot again
                 ld   e, a
                 add  a, a
                 add  a, a
@@ -430,6 +441,8 @@ idle_phase:
                 ld   e, a
                 ld   a, (TICK_COUNTER)
                 add  a, e
+                ret
+.z:             xor  a
                 ret
 
 ; cycle_frame — HL = cycle (DB total, (fid,ticks)*), A = phase -> A = fid.
