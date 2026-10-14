@@ -349,6 +349,25 @@ sawtooth, and the AY's tone is a square, so it is hollower (odd harmonics only).
 `tests/music_player.py` covers all 11 tape entries: the Z80 equals the oracle, including
 the buzzer's R7/R11/R12, and the 96 bpm Lament runs through its loop at 4,000 frames.
 
+### S1f. Cue assignment for the game (user ear check, 2026-10-14)
+
+Chosen on the S1e tape: **harpsichord + reverb tail S1e, staccato gate 5/16 (the tape's "30 %" and "31 %" are the same
+5/16), 96 bpm** (Boss 106) for every tune. Keys are the tape keys.
+
+| Tape key | Tune (JSON source) | Plays | Mode | Phase |
+|---|---|---|---|---|
+| **U** | Lament IIb `f_minor_staccato_theme` | **main menu, story screen**, and for now the **in-game theme** (to be replaced later) | loop | SND-2 |
+| **Q** | Dungeon Crawl | in-game, one of the proto room tunes (selection TBD) | loop | SND-3 |
+| **W** | Dangerous | **danger**: many monsters or low HP (thresholds: designer) | loop | SND-3 |
+| **E** | Boss Fight | entering a **boss room** | loop | SND-4 |
+| **R** | Level Complete | **once** when the player kills the boss | one-shot | SND-4 |
+| **T** | Game Win | **once** when the game is finished successfully | one-shot | SND-4 |
+| **Y** | Game Over | **once** when the player dies | one-shot | SND-3 |
+
+Not used for now: the organ variants, the legato Lament II, Echo (J), reverb 0/50/100, gates other than 5/16. The echo
+experiment is not built into the game player. Other melodies will be added later.
+Budget: player with buzzer ≈ 1.07 KB + 7 harpsichord tunes ≈ 1.93 KB = ≈ 3.0 KB of the 4 KB AY slot.
+
 ## 3. Prototypes (recomputed)
 
 ### A: Catacomb Lament, harpsichord and organ
