@@ -85,7 +85,7 @@ in 8 four-bar blocks. The file is intact. Every bar sums correctly in all three 
 | Staccato | `.` on 185 notes. Staccato and legato alternate per 4-bar block and pass between the voices: a built-in texture change, ~2 B a switch → ~50 B |
 | Bytes **E** | ~860 raw → **~0.85 KB** with the staccato switches and dedupe |
 | Loop | bar 32 (`_a f c' f _a4` over F) → bar 1 (F minor): clean |
-| **Accidental bug** | The file writes an explicit `_` on every Ab/Bb/Db/Eb (228 times) although `K:Fm` already flattens them. So the generator ignored the key signature. That means its **bare `e`/`d` (29 notes: V1 12, V2 17, V3 1) are meant as E♮/D♮**, but strict ABC reads them as **E♭/D♭**. The context confirms naturals: V1 bar 30 `_B g _B2 e2 c'2` is C7, and V3 bar 31 `C G, C2 C E G2` is a C-major cadence into F. **Fix:** spell them `=e` / `=d` in the source. The converter will also render both readings to WAV so the user can confirm by ear (§5) |
+| **Accidental bug** | The file writes an explicit `_` on every Ab/Bb/Db/Eb (228 times) although `K:Fm` already flattens them. So the generator ignored the key signature. That means its **bare `e`/`d` (29 notes: V1 12, V2 17, V3 1) are meant as E♮/D♮**, but strict ABC reads them as **E♭/D♭**. The context confirms naturals: V1 bar 30 `_B g _B2 e2 c'2` is C7, and V3 bar 31 `C G, C2 C E G2` is a C-major cadence into F. **Fix:** spell them `=e` / `=d` in the source. The converter will also render both readings to WAV so the user can confirm by ear (§5). **S1b: by ear the user hears the naturals as "missing flats", so strict ABC (Eb/Db) is the reading (§2 S1b)** |
 
 **Max-tempo staccato.** The shortest note is an eighth.
 
@@ -149,11 +149,205 @@ report any disagreement; where they differ, the tsx wins and the ABC is regenera
 
 ### Timbres (instrument tables, ~25–40 B each)
 
+> **Superseded for the harpsichord (S1d, below):** the reference is now the user's browser
+> player `main.tsx`, which holds a constant level for the whole note. The decaying
+> harpsichord row below is kept as the A/B "pluck" variant only; it is audibly wrong.
+
 | Timbre | Volume table (per frame) | Arp / pitch | Other |
 |---|---|---|---|
 | **Harpsichord** | 15,13,12,11,10,9,9,8,8,7,7,6,6,5,5,4,4,3… (≈1 s to 3); staccato gate → release to 0 in 1 frame | frame 1 = +12 (pluck transient), then 0 | optional 1 frame of low noise ("quill"). No vibrato |
 | **Church organ** | 9,11,13, then hold 13; release 13,9,5,0 | none (or a 50 Hz root/oct/5th "mixture", test by ear) | tremulant ±1 volume at an 8-frame cycle (~6 Hz). Pedal: triangle buzzer (shape `$0E`) on V3 only. Staccato under the organ = 75% gate, not 50% |
 | **Staccato gate** | the note sounds for ⌈rows × gate⌉ frames, then the release index | — | per-note `.` → gate 50%, legato → 100% |
+
+### Measured: S1a player core (2026-10-13, **M**)
+
+`src/music/player.asm` (WZM v0 as defined in `tools/abc2wzm.py`), run on the standalone
+test tape `src/music/testtape.asm` (`tools/build_music_test.sh` → `build/music_test.tap`
+/ `.sna`; not part of the game). It is checked against `tools/wzm_ref.py` by
+`tests/music_player.py`: the RAM register mirror for 1,024 frames of all 13 songs (the
+f6 Lament runs to 1,700 frames to cover its `$80` loop), and the AY chip registers
+(ZRCP `get-io-ports` answers open question 6) for every timed frame.
+
+| Item | Value |
+|---|---|
+| Player bytes | **890 B**: code 616, period table 192 (96 × DW), state 82 (mirror 14, 3 voices × 22, song pointer 2) |
+| T per frame, incl. CALL/RET, uncontended (bank 2 in the test) | median **1,817**, mean **1,990** over 11,203 frames (13 songs × up to 1,024 frames) |
+| by timbre | harpsichord median 1,757–1,925; organ (tremolo path) median **2,198** |
+| worst | **4,869** (organ Lament, frame 512: all three voices fetch a note on the same frame with a staccato command). Harpsichord worst 4,530; short tunes 4,163 |
+| one fetch (new note) | ~0.8–1.0k T: two period lookups (note and arp0 frame), envelope reset, staccato gate `(dur·gate8+7)>>3` by repeated addition |
+| output stage | 9 registers a frame (R0–R5, R8–R10), unrolled, 412 T. R6/R7/R11/R12 are constant and written only by `player_start` / `pl_out_all` |
+
+Against the estimates in the table above: typical is ~1.8k (E 1.5k) and the worst frame
+is ~4.9k (E ≤ 2.5k). The worst case recurs on every beat where all three voices start
+a note, so for a 2-frame tick count **~7.1k T worst** (4.9k + 2.2k), not +4.4k. That is
+inside the 13k-per-tick contract (6.5k a frame), but the "advcast" re-check in §2 must
+use 7.1k. In the game the player runs from bank 3 (contended), but inside the ISR in
+the top border, so these figures still apply as long as the ISR finishes before the
+first contended line (~14.3k T). If the cast cap gets tight, the levers are: spreading
+the three fetches over the frame before the note (a look-ahead in the player), or a
+cheaper staccato gate (a gate8 per instrument precomputed to a shift table).
+
+### S1b: accuracy audit + legato, WZM v0.1 (2026-10-13, **M**)
+
+**Accuracy audit** (`tools/abc_audit.py FILE.abc` prints a per-note table: bar.beat, token,
+decoded and heard pitch, AY period, Hz, cents error, arp0 frame, frames, flags and the
+alternative readings of every ambiguous token).
+- Period table: worst error of any note used is **+5.8 cents** (Ab5, TP 133). The 128K
+  clock (1,773,447.5 Hz) differs from the table clock (1,773,400) by 0.05 cents. No pitch
+  problem comes from the table, the 12-bit range or the arp0 clamp.
+- **Fixed bug:** short melodies without bar lines kept an in-bar accidental for the whole
+  tune. Dangerous V1 bar 2 `g2` played Gb5; per ABC it is G5. The parser now closes a bar
+  every `M:` when a voice has no bar lines.
+- **User report "missing flats" (Lament, all keys):** the strict ABC reading plays all
+  30 bare `e`/`d` (V1 12, V2 17, V3 1) as Eb/Db. The "naturals" reading (§1.3) plays them
+  E/D natural. The S1a tape used naturals on 5 of the 7 Lament keys (8, 0, Q, W, E), so
+  §1.3's naturals hypothesis is contradicted by ear. The tape is now strict everywhere
+  except keys 8 and 0, which stay naturals for A/B.
+- Short-melody octave digits (`_a4`, `_b42`, `_d5`, `G5`, `F32`): read as an octave in
+  C3 = MIDI 60 numbering (all bar sums depend on it). `_d5`, `_a5`, `_b5`, `G5` contradict
+  the letter case by one octave (the digit wins). Uppercase `_D2` is read as Db4, length 2.
+  The audit flags all of these.
+- Now handled: key signatures K: major/minor (any key; was Fm only); an accidental carried
+  across a bar by a tie; tuplets and grace notes are errors (never silently dropped);
+  boundary rounding of durations (no drift between voices when a note is not a whole
+  number of frames).
+- Not a bug, but it can be heard: the tape transposes everything −12 (§1.1), and the
+  harpsichord's first frame is +12 (an octave-high 20 ms pluck at full volume).
+
+**WZM v0.1** (format in the `tools/abc2wzm.py` docstring):
+- **`$85` legato:** the next note does not re-attack. It has no arp0 frame, and the
+  volume table and tremolo phase run on from the previous note. Only the period and the
+  note's own gate change. The converter emits it inside ABC slurs (and on ties between
+  different pitches), but never into the same pitch, where a repeat re-attacks. A slurred
+  note has full gate: its staccato is dropped, and only the last note of a slur keeps its
+  gate. `--no-legato` ignores slurs. `--legato-unmarked` also slurs every run of unmarked
+  (non-staccato) notes; the Lament's "legato blocks" (§1.3) are an interpretation.
+- **Gate:** instrument byte +5 is now `gate_sh`: the staccato gate is
+  `dur − (dur >> gate_sh)`. This gives the same frames as v0's `⌈dur·gate8/8⌉` for
+  gate8 4/6 (harpsichord 1, organ 2). Shifts replace the multiply loop.
+- A rest no longer plays the arp0 period on its frame 0. That frame has volume 0, so it is
+  inaudible, but the register stream changes and so the inline golden moved.
+- On a legato instrument, the harpsichord sustains a slur on its decayed tail (it ends at
+  volume 3). The organ is where legato pays off.
+
+| Item | S1a (v0) | S1b (v0.1) |
+|---|---|---|
+| Player bytes | 890 (code 616) | **880 (code 606)**: legato +14 B, shift gate −17 B, rest path −1 B, command chain reordered |
+| T/frame median / mean | 1,817 / 1,990 (11,203 frames) | 1,889 / 2,028 (17,347 frames, 19 versions incl. the organ Door). Per song unchanged medians; means −10 T (Lament harp 1,843 → 1,833, organ 2,273 → 2,261) |
+| worst | 4,869 (organ Lament f.512) | **4,467** (same frame: 3 fetches + staccato switches), −402. Harp Lament 4,518 → 4,170; f8/f6 4,530 → 4,318. Loop frame of the short loops 4,163 → 4,334 (+171: `$80` is now the last test in the command chain). 2-frame tick worst ~6.7k (was 7.1k) |
+| one fetch | ~0.8–1.0k | staccato gate ~50–70 T (was ~250–300); a command ~55–90 T (was ~150) |
+
+Test tape: 15 songs; `L` toggles legato and restarts the current song. Songs marked "L"
+have a `--no-legato` twin: 7 and 9 (Lament harpsichord/organ, strict, legato-unmarked)
+and R/T (*The Last Locked Door*, K:F, real ABC slurs, organ/harpsichord). Tests:
+`tests/abc_tools_test.py` (19, incl. slur events, slur oracle + golden, invalid `$85`,
+accidental and key rules, rounding) and `tests/music_player.py` (Z80 == oracle for all
+19 song versions, incl. both twins, plus the `L` key).
+
+### S1d: tsx-faithful instrument, 45 % gate, exact tempo, WZM v0.2 (2026-10-13, **M**)
+
+**Reference.** The user's browser player `assets/sfx/concepts/player-js/main.tsx` is the
+ground truth for notes *and* sound (notes: `tools/tsx_extract.py` →
+`assets/sfx/music/src/*.json`). Its gain model is the same in every mode (l.1178–1214):
+a sounding note is held at `AY_VOL_TABLE[13]` (V1, V2) or `[14]` (V3) for the whole note,
+with no decay, no tremolo and no re-attack between notes; a staccato note drops to level
+0 once it is 45 % through; a rest is 0. HARPSICHORD mode (l.1049–1057) only switches all
+three oscillators to sawtooth. `tools/tsx_model.py` samples this at 50 Hz (frame k = the
+state at k + ½) and compares a WZM register stream with it.
+
+**The S1 harpsichord is audibly wrong.** It decays 15 → 3 and only resets on an attack,
+so a legato note sits on its quiet tail while every staccato note restarts at 15.
+Per-note mean amplitude on the Lament (AY_VOL_TABLE): legato 0.156, staccato 0.141,
+against the tsx's **0.795 / 0.349**. Legato is not louder than staccato, as it is in the
+tsx, but about the same. This is the user's "legato shy, staccato loud". It is kept on
+the tape only as the A/B "pluck" entry.
+
+**New instruments** (`tools/abc2wzm.py` `INSTRUMENTS` / `INSTR_SETS`):
+- `tsx` set = per-voice map `tsx13, tsx13, tsx14`: arp0 0, volume table `[13]` (or 14)
+  held, no tremolo, rel_step 15 (0 the frame after the gate), staccato gate (1, 4). This
+  is the default for `--source json` and for the whole tape. The player needed no change
+  for the levels: equal consecutive pitches re-attack, but with a flat table and arp0 0
+  that gives the same registers as no re-attack.
+- **Gate, WZM v0.2:** the instrument header grew to 7 B: `+5 = s1+1`, `+6 = s2−s1`, and
+  `gate = (dur >> s1) − (dur >> s2)`. (0,1) and (0,2) reproduce v0.1's 50 % / 75 %
+  exactly, so the S1 goldens are unchanged. (1,4) = 7/16. For every staccato length the
+  Lament produces at 66/74/96 bpm (15–46 frames) it equals round(0.45·dur). The
+  converter rejects a gate of 0. Compared with the 50 Hz tsx model: at 96 bpm all 185
+  staccato gates are exact; at 74 bpm 153 are exact and 32 are one frame short. Those 32
+  are a frame-phase effect: round(0.45·dur) misses the same 32, so only per-note data
+  could hit them. A per-note gate byte would cost +185 B on the Lament; the two shifts
+  cost +10 B of player code. Cost: ~150 T on a staccato fetch (was ~50).
+- Header `+9` is now the song's R7 mixer (`$38`; `$3C` for the buzzer). It was `n_inst`,
+  which the player never read.
+
+**Tempo.** Frames per eighth = `Fraction(1500, bpm)` exactly (74 → 750/37). Every note
+boundary is rounded on the exact cumulative time (half up), so there is no drift and the
+voices stay aligned. One pass: Lament 5,189 frames at 74 bpm, 4,000 at 96. `--bpm`
+overrides the tune's tempo, and with `--batch` it overrides the Lament's (`WZM_BPM=… 
+tools/build_music_test.sh`). `--frames-per-eighth` takes a fraction (`750/37`).
+
+**Accidentals.** For the Lament ABC the default is now `naturals` (= the tsx: test
+`test_iib_vs_old_abc`). Other ABCs stay `strict`. The tape no longer has strict variants;
+it plays the JSON, where pitches are exact.
+
+**Tape (`tools/build_music_test.sh`, from the tracked JSON; no concept ABCs needed):**
+
+| Key | Song | Variant |
+|---|---|---|
+| 1 | Dungeon Crawl | tsx, 72 bpm, loop |
+| 2 | Dangerous | tsx, 68 bpm, loop |
+| 3 | Boss Fight | tsx, 106 bpm, loop |
+| 4 | Level Complete | tsx, 78 bpm, once |
+| 5 | Game Win | tsx, 84 bpm, once |
+| 6 | Game Over | tsx, 66 bpm, once |
+| 7 | Lament IIb | **tsx, 74 bpm** (default) |
+| 8 | Lament IIb | tsx, 96 bpm (pick by ear) |
+| 9 | Lament IIb | old pluck harpsichord, 74 bpm (A/B) |
+| 0 | Lament IIb | experiment: envelope-saw buzzer bass on V3 |
+| Q | Lament IIb | experiment: +12 on frame 0 only |
+
+SPACE stops. L restarts the current song (the twin mechanism stays, but no entry has a
+twin now).
+
+**Bytes / cycles (M).**
+
+| Item | Value |
+|---|---|
+| Player, game build (no buzzer) | **893 B** (code 616, table 192, state 85): +13 B vs S1b (gate +10, voice state +3) |
+| Player with `DEFINE WZM_BUZZER` (tape) | 970 B (code 693): buzzer +77 B |
+| 7 songs (tsx set) | **1,901 B**: Crawl 149, Dangerous 97, Boss 221, Level Complete 93, Win 91, Over 83, Lament 1,167 |
+| Player + 7 songs (game build) | **2,794 B** |
+| T/frame (tape, buzzer assembled, 256 frames × 11 entries) | median 1,945 (cues) / 1,777 (Lament tsx); worst **4,362** (tsx Lament frame 0), 4,548 with the buzzer (frame 0) |
+
+**(6) Sawtooth approximation (experiment, not the default).** The tsx timbre is a
+sawtooth, and the AY's tone is a square, so it is hollower (odd harmonics only).
+- *Envelope buzzer on V3* (key 0, instrument set `tsx-buzz`): voice C's volume table
+  holds `$10` (envelope mode), and the song's mixer is `$3C` (tone C off, so you hear the
+  pure envelope). R13 = `$0C` (rising saw ////) is written once at `player_start`. On a
+  buzzer frame the player sets R11/R12 = (TP + 8) >> 4, which gives a saw at the note's
+  pitch (rounding error ≤ ~10 cents in the bass, worse higher up: bass only). Cost:
+  +77 B (47 B frame, 30 B start), +20 T on every frame, +206 T on a buzzer frame.
+  Worst frame 4,548. It is a real sawtooth, but only on one voice: the envelope generator
+  is shared. Staccato and rests gate it to 0 like the others. Loudness is not
+  comparable: a log-DAC ramp, nominally counted as level 15. Judge by ear.
+- *+1 octave on frame 0* (key Q, `tsx-oct`): arp0 12 on the flat instrument. 0 player
+  bytes, 0 cycles. It brightens only the 20 ms attack (a click/chiff), not the
+  sustained timbre.
+- Not tried: a sustained octave mixture (there is no free voice) and per-frame arpeggios
+  (the player only has arp0).
+
+**Tests.** `tests/abc_tools_test.py` 35 (new `TsxFaithful`):
+- golden register streams for all 11 tape entries;
+- against the tsx model: pitches exact on every sounding frame, levels exact except the
+  32 pinned one-frame-short gates (74 bpm), every gate within 1 frame;
+- loudness: legato > staccato, both means and their ratio within 10 % of the tsx (the
+  Lament: 0.795 / 0.344 at 74, 0.795 / 0.347 at 96; each cue's legato mean equals the
+  tsx's);
+- the pluck harpsichord's inverted ratio is pinned as a known-wrong case;
+- the gate formula, gate-0 rejection, exact tempo and the buzzer oracle.
+
+`tests/music_player.py` covers all 11 tape entries: the Z80 equals the oracle, including
+the buzzer's R7/R11/R12, and the 96 bpm Lament runs through its loop at 4,000 frames.
 
 ## 3. Prototypes (recomputed)
 

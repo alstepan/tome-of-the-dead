@@ -28,3 +28,6 @@ __pycache__/
 # Agent worktrees (isolated checkouts)
 /.claude/worktrees/
 /tools/bin/
+
+# Rendered audio (regenerate: python3 -I tools/tsx_render.py)
+/assets/sfx/music/renders/*.wav

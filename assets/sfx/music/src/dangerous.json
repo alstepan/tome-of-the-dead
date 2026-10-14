@@ -1,0 +1,181 @@
+{
+ "title": "Dangerous",
+ "bpm": 68,
+ "loop": true,
+ "voices": {
+  "A": [
+   {
+    "midi": 65,
+    "pitch": "F4",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 66,
+    "pitch": "Gb4",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 65,
+    "pitch": "F4",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 64,
+    "pitch": "E4",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 65,
+    "pitch": "F4",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 68,
+    "pitch": "Ab4",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 67,
+    "pitch": "G4",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 64,
+    "pitch": "E4",
+    "beats": 1.0,
+    "stac": false
+   }
+  ],
+  "B": [
+   {
+    "midi": 72,
+    "pitch": "C5",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 73,
+    "pitch": "Db5",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 72,
+    "pitch": "C5",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 70,
+    "pitch": "Bb4",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 72,
+    "pitch": "C5",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 72,
+    "pitch": "C5",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 64,
+    "pitch": "E4",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 67,
+    "pitch": "G4",
+    "beats": 1.0,
+    "stac": false
+   }
+  ],
+  "C": [
+   {
+    "midi": 41,
+    "pitch": "F2",
+    "beats": 0.5,
+    "stac": false
+   },
+   {
+    "midi": 41,
+    "pitch": "F2",
+    "beats": 0.5,
+    "stac": false
+   },
+   {
+    "midi": 41,
+    "pitch": "F2",
+    "beats": 0.5,
+    "stac": false
+   },
+   {
+    "midi": 41,
+    "pitch": "F2",
+    "beats": 0.5,
+    "stac": false
+   },
+   {
+    "midi": 41,
+    "pitch": "F2",
+    "beats": 0.5,
+    "stac": false
+   },
+   {
+    "midi": 41,
+    "pitch": "F2",
+    "beats": 0.5,
+    "stac": false
+   },
+   {
+    "midi": 41,
+    "pitch": "F2",
+    "beats": 0.5,
+    "stac": false
+   },
+   {
+    "midi": 41,
+    "pitch": "F2",
+    "beats": 0.5,
+    "stac": false
+   },
+   {
+    "midi": 37,
+    "pitch": "Db2",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 46,
+    "pitch": "Bb2",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 36,
+    "pitch": "C2",
+    "beats": 1.0,
+    "stac": false
+   },
+   {
+    "midi": 36,
+    "pitch": "C2",
+    "beats": 1.0,
+    "stac": false
+   }
+  ]
+ }
+}
