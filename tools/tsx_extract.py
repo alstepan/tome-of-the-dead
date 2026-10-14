@@ -3,9 +3,11 @@
 
 main.tsx is the GROUND TRUTH for the notes; the .abc exports are corrupt (octave digits
 read as lengths, +12 shift, missing naturals, no bar lines).  Scope: the six game cues
-(dungeon_crawl .. game_over: their literal Note[] arrays) and the Catacomb Lament IIb
+(dungeon_crawl .. game_over: their literal Note[] arrays), the Catacomb Lament IIb
 (f_minor_staccato_theme = transposeNotes(BASE_*_LEGATO, 3, preferFlats) followed by
-applyStaccatoToSubject, both reimplemented here from the tsx source).
+applyStaccatoToSubject, both reimplemented here from the tsx source) and, for comparison
+(S1e), the pure-legato Lament II (f_minor_lament = the same transposeNotes, no
+staccato at all: transposeNotes forces staccato false).
 
 The pasted copy carries a line-number prefix on every line ("12  const x"); it is
 stripped (only the exact running line number, so real leading digits are safe).
@@ -34,6 +36,8 @@ OUTDIR = os.path.join(REPO, "assets/sfx/music/src")
 CUES = ["dungeon_crawl", "dangerous", "boss_fight", "level_complete", "game_win", "game_over"]
 IIB_ID = "f_minor_staccato_theme"
 IIB_TITLE = "IIb. Catacomb Lament (Staccato Theme)"
+II_ID = "f_minor_lament"
+II_TITLE = "II. Catacomb Lament (Legato)"
 IIB_BPM_RE = r"const \[bpm, setBpm\] = useState\((\d+)\)"
 VOICE_KEYS = ("A", "B", "C")
 
@@ -157,6 +161,15 @@ def build_all(src):
     voices = {k: to_json_voice(apply_staccato(tr[i], starts[i]), table)
               for i, k in enumerate(VOICE_KEYS)}
     bpm = int(re.search(IIB_BPM_RE, src).group(1))
+    v = src.index('id: "%s"' % II_ID)
+    block = src[v:src.index("\n  },", v)]
+    for n in (1, 2, 3):
+        if "v%d: transposeNotes(BASE_V%d_LEGATO, 3, true)," % (n, n) not in block:
+            raise TsxError("tsx logic changed: %s v%d" % (II_ID, n))
+    if 'name: "%s"' % II_TITLE not in block:
+        raise TsxError("tsx title changed: %s" % II_ID)
+    tunes[II_ID] = {"title": II_TITLE, "bpm": bpm, "loop": True, "_total": 128,
+                    "voices": {k: to_json_voice(tr[i], table) for i, k in enumerate(VOICE_KEYS)}}
     tunes[IIB_ID] = {"title": IIB_TITLE, "bpm": bpm, "loop": True, "voices": voices,
                      "_total": 128}
     return tunes

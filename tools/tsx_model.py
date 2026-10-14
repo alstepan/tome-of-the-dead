@@ -12,8 +12,14 @@ Sampling: frame k shows the tsx state at time (k + 1/2) frames, a note owning
 (start, end] - so a note boundary lands on round-half-up(exact frame), the same as
 tools/abc2wzm.py's cumulative boundary rounding.
 
-CLI: python3 -I tools/tsx_model.py   (every JSON tune with its batch instrument; prints
-gate / level / pitch agreement and the loudness figures - no emulator needed)
+S1e reverb variants (WZM v0.3 tails): `cut` moves the staccato cut (9/16 = the S1e
+default gate) and `tails=True` compares the flat parts only: a frame the model has at
+level 0 (staccato after the cut, rest) may carry the WZM release tail; it must not
+exceed the note's level and is excluded from the loudness means.  `transpose` (per
+voice) undoes the organ's -12 pedal for the pitch check.
+
+CLI: python3 -I tools/tsx_model.py   (every batch entry; prints gate / level / pitch
+agreement and the loudness figures - no emulator needed)
 """
 import json
 import math
@@ -25,6 +31,7 @@ AY_VOL_TABLE = [0.0, 0.007, 0.011, 0.016, 0.024, 0.035, 0.051, 0.075,
                 0.110, 0.160, 0.235, 0.345, 0.505, 0.740, 0.880, 1.0]   # main.tsx l.809
 BASE_LEVEL = (13, 13, 14)
 STAC_CUT = Fraction(45, 100)
+GATE_CUT = {30: Fraction(5, 16), 45: STAC_CUT, 56: Fraction(9, 16), 62: Fraction(5, 8), 100: Fraction(1)}   # abc2wzm.GATES
 VOICES = ("A", "B", "C")
 
 
@@ -50,9 +57,10 @@ def frames_per_beat(j, bpm=None):
     return Fraction(3000) / Fraction(bpm if bpm is not None else j["bpm"])
 
 
-def model(j, bpm=None):
+def model(j, bpm=None, cut=STAC_CUT):
     """-> (frames, owner): frames[k][v] = (midi|None, level); owner[k][v] = note index.
-    One pass of the tune (round-half-up(total beats x frames per beat) frames)."""
+    One pass of the tune (round-half-up(total beats x frames per beat) frames).
+    cut: staccato cut point (the tsx's 0.45; S1e 9/16)."""
     fpb = frames_per_beat(j, bpm)
     ns = notes(j)
     total = ns[0][-1][1]
@@ -68,7 +76,7 @@ def model(j, bpm=None):
             st, en, midi, stac = ns[v][idx[v]]
             if midi is None:
                 lvl = 0
-            elif stac and (s - st) / (en - st) > STAC_CUT:
+            elif stac and (s - st) / (en - st) > cut:
                 lvl = 0
             else:
                 lvl = BASE_LEVEL[v]
@@ -79,15 +87,15 @@ def model(j, bpm=None):
     return frames, owner
 
 
-def tsx_loudness(j):
+def tsx_loudness(j, cut=STAC_CUT):
     """Continuous tsx figures: mean amplitude of a legato note and of a staccato note
-    (per-note means over all voices; a staccato note sounds 45 % of its length)."""
+    (per-note means over all voices; a staccato note sounds `cut` of its length)."""
     leg, sta = [], []
     for v, lst in enumerate(notes(j)):
         a = AY_VOL_TABLE[BASE_LEVEL[v]]
         for _, _, midi, stac in lst:
             if midi is not None:
-                (sta if stac else leg).append(a * float(STAC_CUT) if stac else a)
+                (sta if stac else leg).append(a * float(cut) if stac else a)
     return _mean(leg), _mean(sta)
 
 
@@ -100,34 +108,49 @@ def amp(vol):
     return 1.0 if vol & 0x10 else AY_VOL_TABLE[vol & 15]
 
 
-def compare(j, regs, bpm=None, tp=None):
+def compare(j, regs, bpm=None, tp=None, cut=STAC_CUT, tails=False, transpose=(0, 0, 0)):
     """WZM register frames vs the model over one pass.  Returns a dict:
-    frames, pitch_bad (sounding frames whose period != TP[midi-12], tp given),
-    level_bad (frames whose volume != model level; envelope mode = on), gate_diffs
-    {wzm - model sounding frames: count} per staccato note, leg/stac per-note mean
-    amplitude of the WZM stream (and of the 50 Hz model)."""
-    fr, owner = model(j, bpm)
+    frames, pitch_bad (sounding frames whose period != TP[midi-12+transpose], tp given),
+    level_bad (frames whose volume != model level; envelope mode = the voice's base
+    level), gate_diffs {wzm - model full-level frames: count} per staccato note,
+    leg/stac per-note mean amplitude of the WZM stream (and of the 50 Hz model).
+    tails: a model-0 frame may hold a WZM tail (0 < level < the base level, never
+    rising within a silent run): counted in tail_frames, not in level_bad, and its
+    amplitude is left out of the means (tail_bad counts violations)."""
+    fr, owner = model(j, bpm, cut)
     ns = notes(j)
-    res = {"frames": len(fr), "pitch_bad": 0, "level_bad": 0, "gate_diffs": {}}
+    res = {"frames": len(fr), "pitch_bad": 0, "level_bad": 0, "gate_diffs": {},
+           "tail_frames": 0, "tail_bad": 0}
     per = {}          # (v, note) -> [model_on, wzm_on, n, model_amp_sum, wzm_amp_sum]
+    prev = [99, 99, 99]
     for k, row in enumerate(fr):
         r = regs[k]
         for v, (midi, lvl) in enumerate(row):
             vol = r[8 + v]
-            on = vol != 0
-            want = lvl if not (vol & 0x10) else (BASE_LEVEL[v] if lvl else 0)
-            if (vol if not (vol & 0x10) else (BASE_LEVEL[v] if on else 0)) != want:
-                res["level_bad"] += 1
-            if tp is not None and lvl and on:
+            base = BASE_LEVEL[v]
+            full = bool(vol & 0x10) or vol == base
+            got = base if vol & 0x10 else vol
+            if tails and lvl == 0 and vol and not vol & 0x10:
+                res["tail_frames"] += 1
+                if vol >= base or vol > prev[v]:
+                    res["tail_bad"] += 1
+                prev[v] = vol
+                on, a = False, 0.0
+            else:
+                prev[v] = 99
+                if got != lvl:
+                    res["level_bad"] += 1
+                on, a = (full if tails else vol != 0), amp(vol)
+            if tp is not None and lvl and vol:
                 p = r[2 * v] | r[2 * v + 1] << 8
-                if p != tp[midi - 12]:
+                if p != tp[midi - 12 + transpose[v]]:
                     res["pitch_bad"] += 1
             e = per.setdefault((v, owner[k][v]), [0, 0, 0, 0.0, 0.0])
             e[0] += lvl > 0
             e[1] += on
             e[2] += 1
             e[3] += AY_VOL_TABLE[lvl]
-            e[4] += amp(vol)
+            e[4] += a
     leg, sta, mleg, msta = [], [], [], []
     for (v, i), (m_on, w_on, n, ma, wa) in per.items():
         _, _, midi, stac = ns[v][i]
@@ -151,19 +174,21 @@ def main():
     sys.path.insert(0, here)
     import abc2wzm
     import wzm_ref
-    for name, tune, kw in abc2wzm.BATCH:
+    for name, tune, kw in abc2wzm.BATCH + abc2wzm.EXTRA:
         p = os.path.join(abc2wzm.SRC_DIR, tune + ".json")
         j = load(p)
         info = abc2wzm.convert(p, name=name, source="json", **kw)
         bpm = kw.get("bpm")
-        n = model(j, bpm)[0]
+        rev = kw.get("instr") in dict(abc2wzm.VARIANTS).values()
+        cut = GATE_CUT[abc2wzm.GATE_DEFAULT] if rev else STAC_CUT
+        n = model(j, bpm, cut)[0]
         regs = wzm_ref.play(info["bytes"], max_frames=len(n))
-        c = compare(j, regs, bpm, wzm_ref.TP)
-        tl, ts = tsx_loudness(j)
-        print("%-20s %5d fr  pitch_bad %d  level_bad %d  gate wzm-model %s  "
-              "leg %.3f stac %s (tsx %.3f / %s)"
-              % (name, c["frames"], c["pitch_bad"], c["level_bad"],
-                 dict(sorted(c["gate_diffs"].items())), c["leg"],
+        c = compare(j, regs, bpm, wzm_ref.TP, cut, rev, (0, 0, info["transpose_v3"]))
+        tl, ts = tsx_loudness(j, cut)
+        print("%-20s %5d fr  pitch_bad %d  level_bad %d  tail %d/%d bad  gate wzm-model %s  "
+              "leg %.3f stac %s (model %.3f / %s)"
+              % (name, c["frames"], c["pitch_bad"], c["level_bad"], c["tail_frames"],
+                 c["tail_bad"], dict(sorted(c["gate_diffs"].items())), c["leg"],
                  "%.3f" % c["stac"] if c["stac"] else "-", tl,
                  "%.3f" % ts if ts else "-"))
     return 0

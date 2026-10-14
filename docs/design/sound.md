@@ -349,6 +349,178 @@ sawtooth, and the AY's tone is a square, so it is hollower (odd harmonics only).
 `tests/music_player.py` covers all 11 tape entries: the Z80 equals the oracle, including
 the buzzer's R7/R11/R12, and the 96 bpm Lament runs through its loop at 4,000 frames.
 
+### S1e: organ / harpsichord with "crypt reverb" tails, 9/16 gate, tsx-max tempo, WZM v0.3 (2026-10-14, **M**)
+
+**User brief.** S1d tape: "music is much better, but staccato sounds too short". Every
+tune at the tsx's maximum tempo (slider max 96 bpm, l.2267; boss_fight's defaultBpm 106
+is above it and stays 106), in the two tsx modes with the "cathedral crypt" reverb at
+100 % (wet 1.0 / dry 0.5, l.1071-1085; IR = 2.8 s of noise × exp(−2t), l.946-962):
+GOTHIC ORGAN (A saw, B square, C triangle, lowpass 8 k) and HARPSICHORD (3 saws,
+lowpass 9.5 k).
+
+**What each variant approximates** (`tools/abc2wzm.py` `REVERB`, `GATES`, sets
+`organ-rev` / `harp-rev`):
+
+| tsx feature | AY approximation | Fidelity |
+|---|---|---|
+| Convolution reverb, wet 1.0 / dry 0.5 | **Release tail per voice**: when the gate ends (staccato cut, or the end of a note followed by a rest), the level drops by `drop` steps (the dry part stops; what remains is the wet tail), then falls 1 step (≈3 dB) every `rel_per` frames, i.e. an exponential decay. Organ: 13 → 10, 1 step / 6 frames, **1.2 s** to silence; harpsichord: 13 → 9, 1 step / 4 frames, **0.72 s**. Bass (voice C) from 11 / 10. A rest continues the tail; the next note on the same voice cuts it (it never overlaps that note's attack). A one-shot gets a final rest (67 / 41 frames) so its last chord rings out | The tsx IR decays ~17 dB/s (~1 step / 9.5 frames, ~2 s); both tails are deliberately shorter, per the brief. No diffusion, no stereo, no pitch smear: the tail is the same note at a lower level |
+| Reverb smear between consecutive notes (legato) | **Impossible.** One AY channel holds one pitch; a note's tail can only sound where its own voice is silent. The six cues have **no rests and no staccato**, so in them the reverb is audible **only at the end of the one-shots** (Level Complete / Win / Over); in the Lament it fills every staccato gap (~1,750 tail frames in one pass, all voices) |
+| Second, quieter, delayed echo | **Impossible with 3 voices**: all three carry melody; an echo needs a free channel (the SFX steal channel would be the only candidate, and only while no SFX plays) |
+| ORGAN A: sawtooth | plain square at 13 (a sustained octave/detune mixture is not ≈0: a per-frame arpeggio costs ~40 B + ~60 T/frame and a 25 Hz root/octave alternation sounds like a buzz, not a mixture; detune needs a second channel) | hollower (odd harmonics only) |
+| ORGAN B: square | square at 13 | exact |
+| ORGAN C: triangle | **envelope buzzer, shape $0E**, period ≈ TP/32. At the bass's own pitch that integer is too coarse (C3: 26.5 → ±33 cents); one octave down it is ≤16 cents on every cue and ≤1 cent on the Lament's common C3/F2/Db3. So the organ's voice C is **transposed −12 (a 16' pedal)**. The tail is a square at the same (pedal) pitch | timbre: the AY envelope is a 16-step log-DAC ramp, not a linear triangle; pitch: **an octave below the tsx** |
+| HARPSICHORD A/B: sawtooth | squares at 13 | hollower |
+| HARPSICHORD C: sawtooth | **envelope buzzer, shape $0C** (the S1d key-0 experiment, picked over the +12 "blip": it changes the sustained timbre to a real saw at the right pitch; the blip only colours 20 ms). Errors ≤19 cents except one Lament note (C4, 34 cents) | only one voice can be a saw (one envelope generator) |
+| Lowpass 8 k / 9.5 k | none | AY output is not filtered (the TV/speaker does that) |
+| Level model 13 / 13 / 14 flat | unchanged (buzzer = full envelope level) | flat parts within 10 % (tests) |
+
+**Staccato gate.** WZM v0.3 adds an *add* form, gate = round-half-up(dur >> s1) +
+(dur >> s2) (instrument +6 bit 7). `GATES`: **56 = 9/16** (S1e default: eighths at
+96 bpm are 15/16 frames → 8/9 frames on), **62 = 5/8** (the "65 %" option: no two-shift
+form gives 65 %), **100** = (0,8) subtract form, dur − (dur >> 8) = dur (S1e follow-up:
+staccato notes sound their whole row; same player path, the tail then only sounds on
+rests — at 100 % the IIb Lament is register-identical to the legato Lament II, test
+`test_gate_100`), **30 → exactly 5/16 = 31.25 %** = round(dur >> 2) + (dur >> 4) (the
+closest two-shift form; the neighbours are 1/4 and 3/8; a 96 bpm eighth of 15/16 frames
+→ 4/5 frames on; within 1 frame of round(5/16 dur) for every length),
+**45** = the S1d (1,4) subtract form. Against the 50 Hz model cut at
+9/16: 148 of 185 Lament staccato gates exact, 37 one frame short (frame phase, as in
+S1d). The gate is a build parameter (`tools/abc2wzm.py --gate`, `WZM_GATE=` for
+`tools/build_music_test.sh`) and a tape key (G). With the tail a staccato note still
+reads as separated: a 10 dB step (organ) / 13 dB (harpsichord) at the cut.
+
+**WZM v0.3 format** (abc2wzm docstring): instrument header 8 B (+4 `drop`, +7
+`rel_per`, +6 bit 7 = add gate); song header +9 = R13 shape (was the R7 mixer). A
+rest no longer forces volume 0: it runs the release (with drop ≥ 15 it is silent, so
+every S1d stream is unchanged — the S1d goldens still pass, except lament_buzz's R7 on
+silent frames). R7 is per frame in the buzzer build: $3C on a buzzer frame, else $38.
+
+**Tape (`tools/build_music_test.sh`; all songs at the tsx-max tempo):**
+
+| Key | Song | Key | Song |
+|---|---|---|---|
+| 1 | Dungeon Crawl, ORGAN + reverb, 96, loop | Q | same, HARPSICHORD + reverb |
+| 2 | Dangerous, organ, 96, loop | W | harpsichord |
+| 3 | Boss Fight, organ, 106, loop | E | harpsichord |
+| 4 | Level Complete, organ, 96, once | R | harpsichord |
+| 5 | Game Win, organ, 96, once | T | harpsichord |
+| 6 | Game Over, organ, 96, once | Y | harpsichord |
+| 7 | Lament IIb, organ, 96, loop | U | harpsichord |
+| 8 | Lament, S1d tsx-faithful 74, no reverb | 9 | Lament, S1d tsx 96, no reverb |
+| 0 | **Lament II (legato)**, organ + reverb, 96, loop | I | Lament II, harpsichord + reverb, 96 |
+| O | Lament II, tsx-faithful 74, no reverb | P | Lament II, tsx-faithful 96, no reverb |
+
+Lament II = the tsx's "II. Catacomb Lament (Legato)" (`f_minor_lament`, main.tsx
+l.728-737: `transposeNotes(BASE_V*_LEGATO, 3, true)`, no staccato), extracted by
+`tools/tsx_extract.py` to `assets/sfx/music/src/f_minor_lament.json` (+ reference
+`assets/sfx/music/ref/f_minor_lament.abc`): IIb's notes without a single staccato flag
+(test `test_lament_ii_legato`). It has no rests either, so its reverb tail never sounds
+(only the voices' timbres differ from the dry entries).
+
+**G** cycles the current song's gate 30 → 45 → 56 → 62 → 100 % (from the default 56:
+62, 100, 30, 45, 56; `WZM_GATE=30|45|56|62|100` at build time). **H** cycles the reverb
+level of the organ / harpsichord entries S1e → 0 → 50 → 100 % (`WZM_REVERB=s1e|0|50|100`;
+dry entries 8 / 9 / O / P ignore it). Both patch the current song's instrument bytes in
+RAM and restart it: no player change, 0 B / 0 T in the game build. L restarts, SPACE
+stops. **J** cycles the echo experiment off → 25 → 50 → 100 % (global; below). The screen
+shows title + tempo, mode, "Gate: n%  REVERB n%", "J ECHO experiment: n%", frame, state.
+
+**Reverb levels (key H).** The tsx reverb is a wet/dry *mix*: dry = max(0.3, 1 − wet/2),
+wet = the slider, convolver normalised (equal power), IR exp(−2t) = 17.4 dB/s. At a
+staccato cut the dry part stops and the wet part rings on, at
+wet·w / √(dry² + (wet·w)²) of the note's mix (w = the IR's build-up during the note:
+1 for a long note, ≈0.69 for a 96 bpm staccato eighth sounding ~0.16 s):
+
+| Level | tsx (wet / dry) | Tail start vs note | AY mapping (voices A/B; C buzzer drops 2 more) | Tail length from the gate |
+|---|---|---|---|---|
+| 0 % | 0 / 1.0 | silence | drop 14 (instant cut), rel_per 255 | none |
+| 50 % | 0.5 / 0.75 | −5 … −8 dB | **drop 2** (13 → 11), 1 step / **9** frames | ~2.0 s |
+| 100 % | 1.0 / 0.5 | −1 … −2 dB | **drop 1** (13 → 12), 1 step / **9** frames | 1 + 9 × 12 = 109 frames ≈ **2.2 s** (tsx ≈ 2 s audible) |
+| S1e (default, the sound so far) | — | −10 / −13 dB | organ drop 3, 1 / 6; harpsichord drop 4, 1 / 4 | 1.2 s / 0.72 s |
+
+One AY step ≈ 3 dB; 17.4 dB/s ≈ 5.8 steps/s ≈ 1 step every 8.6 frames → 9. At 50 / 100 %
+a staccato note is far less separated than at S1e (−3 / −6 dB step instead of −10 / −13):
+that is what the tsx at those settings does. **Still a release-tail approximation, not a
+wet/dry mix**: the tail is the voice's own note at a lower level, and only where that
+voice is silent (after the gate, in rests); nothing is added under a sounding note, no
+smear between notes. The cues have no rests and no staccato, so any level is audible
+only at the end of the three one-shots (their final rest now fits the longest, 100 %,
+tail: 118 frames).
+
+**Echo experiment: "why not a real wet/dry mix?" (key J, `DEFINE WZM_ECHO`, tape only).**
+A true send/return is impossible: all three channels carry melody and the AY has no
+mixer after the channels. The nearest thing is **time-sharing**: after every note
+change (attacked or legato; not into the same pitch) a voice remembers the previous
+note's period at its last level − `pl_edrop`, decaying 1 step every 9 frames (the IR's
+17.4 dB/s). On odd frames, and on every frame where the voice itself is silent (after
+the gate, in rests), it plays that old note instead of the dry one. Levels (J: off →
+25 → 50 → 100 %, global, the song restarts): `pl_edrop` 6 / 4 / 2 steps = the old note
+−18 / −12 / −6 dB (100 % ≈ the tsx's wet 1.0 vs dry 0.5). Not done: borrowing another
+voice's silent channel for an echo (it would need cross-voice routing in the player).
+
+| Measured (oracle, one pass) | Organ Lament IIb | Legato Lament II (tsx 96) | Dangerous (organ) |
+|---|---|---|---|
+| Dry frames given to the echo | 46–48 % | 47.5 % | 33.5 % |
+| **Dry note level** | **−2.8 dB** (at every wet level) | −2.8 dB | −1.7 dB |
+| Wet vs dry power, 25 / 50 / 100 % | −25 / −19 / −12 dB | −24 / −18 / −11 dB | −27 / −21 / −14 dB |
+
+| Cost | Value |
+|---|---|
+| Player bytes (tape build: buzzer + echo) | **1,200 B** (code 902): **+118 B** over the game configuration (wrapper ~45, fetch hook ~45, 4 B per voice + 2 B state). Song data: **0 B** (runtime). Game build: unaffected (no `WZM_ECHO`: 954 / 1,082 B) |
+| T/frame, echo assembled but off | median 2,384 over all entries (2,141 in the game configuration): +~80 T per voice for the wrapper |
+| T/frame, echo 100 % | organ Lament median 2,586, worst **5,871** (frame 94), adjacent-pair max **8,457**; Lament II tsx 96 median 2,437, worst 5,446. Still inside the 13k-per-tick contract |
+
+**Verdict (prediction; the user judges by ear).** It will sound like a **25 Hz
+flutter / buzz on every note after a change, not like reverb.** The dry note is cut
+off on every other frame whatever the wet level, so it loses ~3 dB and is amplitude
+modulated at 25 Hz (sidebands ±25 Hz around every partial: the "motor-boat" roughness
+of chiptune arpeggios). The old note is only 11–25 dB below, so the "wet" is barely
+audible while the chopping is fully audible. This is the same reason the earlier +octave
+mixture was rejected. On the buzzer bass (organ/harpsichord voice C) the echo frames
+switch the channel between the envelope triangle/saw and a square every frame, which
+is rougher still. The tsx's reverb is *louder* than its dry signal (wet 1.0 vs dry 0.5);
+here the wet must stay far below dry or it would take over the melody. Expect the
+release tails (key H) to be the better reverb on this chip; key J stays a curiosity.
+Off by default, so every earlier sound is unchanged (test `test_off_is_identity`).
+Note that with `WZM_ECHO` assembled into the tape, the tape's per-frame figures include
+the wrapper. The game-configuration figures below are measured on a build without it
+(`WZM_ECHO=0 tools/build_music_test.sh -o build/game_cfg`).
+
+**Bytes / cycles (M).**
+
+| Item | Value |
+|---|---|
+| Player, no buzzer (`DEFINE` absent) | **954 B** (code 671): +61 B vs S1d (release tail ~24, add-gate ~14, state +6) |
+| Player with `WZM_BUZZER` = **the game configuration** (both S1e variants need it) | **1,082 B** (code 798): +112 B vs S1d (triangle halving, per-frame R7, R11/R12 written only on change +13 B). In `MODULE wzm` (the game's `defs.asm` has its own `AY_R_MIXER` / `AY_R_VOL_A`): `constants.asm` + `defs.asm` + the player at `AY_RESERVE` assemble with 0 errors |
+| Songs per variant (7 tunes) | organ **1,933 B** = harpsichord 1,933 B: Crawl 151, Dangerous 99, Boss 223, Level Complete 101, Win 99, Over 91, Lament 1,169 |
+| Lament II (legato) | 1,155 B per entry (no staccato commands: −14 B vs IIb); the tape holds 4 (4,620 B). Tape total 14,208 B (G/H/J tape code and the echo player incl.) of the ~15.8 KB below the vector table |
+| Player (buzzer) + one variant (S1f: harpsichord, 5/16 gate) | **1,082 + 1,933 = 3,015 B** of the 4 KB slot. Both variants: streams A/B are identical (only C is transposed for the organ): a shared-stream layout would cost ~+0.7 KB, not +1.9 KB |
+| T/frame, game configuration (256 frames × 20 entries, incl. CALL/RET) | organ median **2,158**, harpsichord median **2,141** (was 2,214 / 2,197 before R11/R12 were skipped when unchanged and `VO_PITCH` was kept in B); the buzzer on voice C (~0.3k T, sounding on most frames) is most of the rise over S1d's ~1.9k. S1d tsx Lament 74: median 1,872. **Worst single frame 4,820** (organ Lament frame 0: three staccato fetches + add-gate + buzzer + R7 write; harpsichord 4,803; S1d worst 4,548). **Max over two adjacent frames 6,978** (organ Lament frames 0+1; harpsichord 6,944): the measured 2-frame tick cost, under the safe bound 2 × 4,820 ≈ 9.6k and inside the 13k contract. The echo tape build adds ~0.45k (worst 5,276, pair max 7,677 with echo off) |
+| 100 % gate cost | no new code; a staccato fetch runs the subtract path with 8 shifts (~+0.1k T on that fetch only, worst frame ≤ +0.3k if all 3 voices fetch a staccato note together); tail/step logic untouched (frame costs as above) |
+| Release cost | a tail frame without a step 54 T (v0.2 release 50 T); a step frame ~0.15k T; a note fetch +19 T (`VO_RACC`); the buzzer build +~36 T/frame for the R7 check |
+
+**Tests.** `tests/abc_tools_test.py` 51 (new `S1eReverb`, `EchoExperiment`: off = identity, alternation + decay, no echo into the same pitch, the 3 levels): goldens of the 14 S1e entries
+and the 4 Lament II entries; Lament II = IIb without staccato (128 beats, same pitches);
+the 100 % gate (= the whole note; IIb at 100 % == Lament II); every reverb level
+(`test_reverb_levels`: flat parts exact and within 10 %, tails below the note and never
+rising, tail shape = drop / rel_per, the bytes = `inst_tail`, s1e = default, dry
+entries untouched); the 30 % gate within 1 frame of 5/16;
+S1d goldens unchanged; tsx-max tempi vs the JSON; against `tools/tsx_model.py` at the
+9/16 cut with `tails=True` (pitches exact incl. the −12 pedal, levels exact except the
+37 pinned short gates, every tail below the note level and never rising); flat-part
+loudness within 10 %; gates 45/56/62/100 within 1 frame of the model; the oracle's gate
+formula = the converter's; the tail shape (13…, 10 ×6, 9 ×6…); the one-shot ring-out;
+a rest continuing the release. `tests/music_player.py`: Z80 == oracle for all 20
+entries (every 96 bpm Lament through its loop), keys 6/SPACE/Q/L/9/0/I/O/P, the G key
+(5 gates, ring == oracle on the patched bytes), the H key (stage F: 4 levels on the
+organ and harpsichord Lament, bytes == `inst_tail`, ring == oracle; a dry entry
+unchanged), the J key (stage G: 4 echo levels on the organ Lament IIb and the legato
+Lament II, ring == oracle), chip registers + T per frame (stage D, + 2 entries with echo
+100 %). 130 checks on the echo tape. The game configuration (`WZM_ECHO=0 ... -o
+build/game_cfg`, `MUSIC_BUILD=build/game_cfg/build`) runs every stage except G: 113 checks.
+Stage D prints the max over adjacent frame pairs. The R11/R12 skip changes no register
+(stages A and D compare the chip with the oracle every frame).
+
 ### S1f. Cue assignment for the game (user ear check, 2026-10-14)
 
 Chosen on the S1e tape: **harpsichord + reverb tail S1e, staccato gate 5/16 (the tape's "30 %" and "31 %" are the same

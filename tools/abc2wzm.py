@@ -5,16 +5,17 @@ Parses the ABC subset used by assets/sfx/concepts/ (own minimal parser), validat
 (bar sums, 3 monophonic voices, AY range), and emits sjasmplus DEFB data plus a JSON
 event list.  No Z80 here: this file is also the spec of the byte format below.
 
-WZM v0.2 byte format (docs/design/sound.md sec.2 only sketches it; this is the concrete
+WZM v0.3 byte format (docs/design/sound.md sec.2 only sketches it; this is the concrete
 definition the Z80 player is written against, wzm_ref.py is the oracle).  All words
 little-endian, all durations in 50 Hz frames (tempo is baked in, no tempo byte).
 
 Song block (label <name>):
   +0  DEFW stream_A, stream_B, stream_C   ; one monophonic stream per AY channel
   +6  DEFB inst_A, inst_B, inst_C         ; index into the instrument pointer list
-  +9  DEFB mixer                          ; R7 for this song: $38, or $3C = tone C off
-                                          ; for the voice-C envelope buzzer (v0.2; was
-                                          ; n_inst in v0.1, never read by the player)
+  +9  DEFB env_shape                      ; R13 for the voice-C buzzer: $0C saw, $0E
+                                          ; triangle, 0 = no buzzer (v0.3; was the R7
+                                          ; mixer in v0.2 - R7 is now per frame: $3C on
+                                          ; a buzzer frame, else $38)
   +10 DEFW inst_0 .. inst_{n-1}           ; instrument pointers
   ...streams and instruments follow (any order, referenced by label)
 
@@ -31,29 +32,42 @@ Stream = sequence of events, each starts with a byte B:
            the previous note, the gate is the new note's own.  (v0.1; invalid before
            a rest or as the first note of a stream - the converter never emits that.)
   A note occupies exactly dur frames; gate/release is inside that span (no overrun).
-  A rest has volume 0 and keeps the last period (no arp0 frame, v0.1).
+  A rest keeps the last period (no arp0 frame, v0.1) and continues the previous note's
+  release (v0.3: the reverb tail runs on into a rest; an instrument with drop >= 15
+  is silent there, as a v0.2 rest was).
 
 Instrument (per frame t = 0.. since note start):
   +0 arp0       semitones added to the pitch on frame 0 only (pluck transient)
   +1 loop_idx   volume-table index to wrap to after the last entry; $FF = hold last
   +2 trem_per   tremolo period in frames (0 = off); frames with (t mod per) >= per/2
   +3 trem_dep   ... lose trem_dep volume
-  +4 rel_step   release: volume drops by rel_step per frame after the gate, floor 0
-  +5 gate_s1p   s1 + 1 (1..7)      staccato gate = (dur >> s1) - (dur >> s2) (v0.2);
-  +6 gate_s2d   s2 - s1 (1..7)     non-staccato = dur.  (s1, s2) = (0, 1): 50 % rounded
-                up, (0, 2): 75 % (= v0.1's dur - (dur >> gate_sh)); (1, 4): 7/16 ~ 44 %,
-                the tsx's 45 % cut (frame-exact vs round(0.45 dur) for every staccato
-                length at 66/74/96 bpm).  The converter rejects a staccato gate of 0.
-  +7 ..         volume table (0..15 per frame, or $10 = AY envelope mode: voice C only,
+  +4 drop       release: the first release frame drops the volume by `drop` (floor 0)
+  +5 gate_s1p   s1 + 1 (1..7)      staccato gate, non-staccato = dur:
+  +6 gate_s2    bit 7 = 0: s2 - s1 (1..8), gate = (dur >> s1) - (dur >> s2) (v0.2;
+                (0, 8) = dur: the 100 % gate, S1e).
+                (0, 1): 50 % rounded up, (0, 2): 75 %, (1, 4): 7/16, the tsx's 45 % cut
+                (frame-exact vs round(0.45 dur) for every staccato length at 66/74/96 bpm).
+                bit 7 = 1 (v0.3, s1 >= 1): s2 (absolute), gate = round-half-up(dur >> s1)
+                + (dur >> s2): (1, 4) = 9/16 ~ 56 %, (1, 3) = 5/8 = 62.5 %.
+                The converter rejects a staccato gate of 0.
+  +7 rel_per    (v0.3) after the drop, the volume falls by 1 every rel_per frames (floor
+                0): the reverb tail.  Each AY volume step is ~3 dB, so this is an
+                exponential decay.  drop >= the level = the v0.2 instant cut (rel_per CUT = 255).
+  +8 ..         volume table (0..15 per frame, or $10 = AY envelope mode: voice C only,
                 the buzzer), terminated by $FF
   Envelope time e counts sustain frames since the last attack (a legato note does not
-  reset it): vol = table(e) - tremolo(e) while t < gate; for t >= gate the volume drops
-  by rel_step a frame from the last sustain value, floor 0.
-Rest = volume 0.  Tone only (mixer from the header, no noise).  R13 is written once by
-player_start (WZM_ENV_SHAPE, only with the buzzer assembled in); the stream holds $FF.
-Buzzer (v0.2, optional, player assembled with WZM_BUZZER = 1): a voice-C volume with bit
-4 set makes the player also write R11/R12 = (TP + 8) >> 4 that frame (envelope period
-for a sawtooth at the note's pitch); R11/R12 hold otherwise and are 0 after a start.
+  reset it): vol = table(e) - tremolo(e) while t < gate.  Release (t >= gate, and every
+  rest frame): frame 1 of the release = last volume - drop; then -1 every rel_per frames.
+  Every note (attacked or legato) restarts the release (first frame drops again); a
+  rest does not.  An envelope-mode volume ($10) minus the drop is a plain level: the
+  buzzer voice's tail is its square tone at that level.
+Tone only, no noise.  R13 is written once by player_start (header +9, only with the
+buzzer assembled in); the stream holds $FF.
+Buzzer (optional, player assembled with WZM_BUZZER): a voice-C volume with bit 4 set
+makes the player also write R11/R12 that frame: e = (TP + 8) >> 4 (sawtooth $0C at the
+note's pitch), halved again for a triangle shape (bit 1 of the shape): (e + 1) >> 1;
+R11/R12 hold otherwise and are 0 after a start.  R7 = $3C (tone C off) on a buzzer
+frame, $38 otherwise (v0.3: the tail needs tone C).
 """
 import argparse
 import hashlib
@@ -72,29 +86,104 @@ CMD_LOOP, CMD_END, CMD_STAC_ON, CMD_STAC_OFF, CMD_INST = 0x80, 0x81, 0x82, 0x83,
 CMD_LEGATO = 0x85
 MIXER_TONE, MIXER_BUZZ_C = 0x38, 0x3C     # R7: tone A/B/C; tone A/B (C = envelope only)
 VOL_ENV = 0x10                            # volume-table value: AY envelope mode (buzzer)
+ENV_SAW, ENV_TRI = 0x0C, 0x0E             # R13 shapes: //// and /\/\ (bit 1: triangle)
+
+# Staccato gates (s1, s2[, "+"]): "-" = (dur >> s1) - (dur >> s2); "+" = round(dur >> s1)
+# + (dur >> s2).  30 = 5/16 = 31.25 % (round(dur >> 2) + (dur >> 4); the closest two-shift
+# form to 30 %: 1/4 and 3/8 are the neighbours), 45 = the tsx's cut (S1d), 56 = 9/16 (S1e default, user: "a little
+# longer"), 62 = 5/8 (the "65 %" option: no two-shift form gives 65 %), 100 = dur -
+# (dur >> 8) = the whole note (S1e: staccato marks ignored, the tail only on rests).
+GATES = {30: (2, 4, "+"), 45: (1, 4), 56: (1, 4, "+"), 62: (1, 3, "+"), 100: (0, 8)}
+GATE_DEFAULT = 56
+
+# S1e reverb approximation ("cathedral crypt", main.tsx l.946-962: IR = 2.8 s noise x
+# exp(-2t), wet 1.0 / dry 0.5): after the gate the dry level drops by `drop` AY steps
+# (the dry cut; what remains is the wet tail) and then falls 1 step (~3 dB) every
+# `rel_per` frames - an exponential decay.  Tail length = rel_per x tail start level:
+# organ 6 x 10 = 60 frames (1.2 s), harpsichord 4 x 9 = 36 frames (0.72 s).  The tsx IR
+# itself falls ~17 dB/s (~1 step / 9.5 frames, ~2 s to silence from level 10): both
+# are deliberately shorter (user brief 0.5-1.2 s, organ longer).
+REVERB = {"organ": {"drop": 3, "rel_per": 6}, "harp": {"drop": 4, "rel_per": 4}}
+
+# rel_per of an instant-cut instrument (drop >= its level: silent after the first
+# release frame).  Any value gives the same registers; 255 keeps the player off its
+# step path (~0.15k T) on almost every release frame (rel_per 1 would step every frame).
+CUT = 255
+
+# Reverb levels (S1e follow-up; tape key H, --reverb, WZM_REVERB).  The tsx reverb is a
+# wet/dry MIX: dry = max(0.3, 1 - wet/2), wet = the slider (100 % = 1.0, 50 % = 0.5), the
+# convolver normalised (equal power).  At a staccato cut the dry part stops and the wet
+# part rings on: its level relative to the note's mix is
+#   wet x w / sqrt(dry^2 + (wet x w)^2),  w = the IR's build-up during the note
+# (w = 1 for a long note; a 96 bpm staccato eighth sounds ~0.16 s: w = sqrt(1 -
+# exp(-4 x 0.16)) ~ 0.69).  100 %: -1 .. -2 dB -> drop 1 AY step (~3 dB);  50 %: -5 ..
+# -8 dB -> drop 2 steps.  The IR decays exp(-2t) = 17.4 dB/s = 1 step (~3 dB) every ~9
+# frames at both levels -> rel_per 9: from the note level 13 a 100 % tail lasts 1 + 9 x 12
+# = 109 frames (2.2 s), 50 % ~2 s.  0 % = instant cut (drop past the level).  "s1e" = the
+# S1e tails above (REVERB; shorter than the tsx on purpose).  The buzzer voice (C) drops 2
+# more (its full envelope level 16 stands for the tsx's 14).  It stays a release-tail
+# approximation: the tail is the voice's own note, only where that voice is silent.
+REVERB_LEVELS = {0: {"drop": 14, "rel_per": CUT}, 50: {"drop": 2, "rel_per": 9},
+                 100: {"drop": 1, "rel_per": 9}}
+REVERB_STEPS = ("s1e", 0, 50, 100)        # the tape's H cycle (s1e = default)
 
 INSTRUMENTS = {
-    # arp0, loop_idx, trem_per, trem_dep, rel_step, (gate s1, s2), volume table
+    # arp0, loop_idx, trem_per, trem_dep, drop, gate, volume table, rel_per
     # S1 "harpsichord" (pluck): decays 15 -> 3, so an un-slurred legato note averages far
     # below a staccato one - audibly wrong against the tsx (docs/design/sound.md S1d).
     "harpsichord": (12, 0xFF, 0, 0, 15, (0, 1),
-                    [15, 13, 12, 11, 10, 9, 9, 8, 8, 7, 7, 6, 6, 5, 5, 4, 4, 3]),
-    "organ": (0, 2, 8, 1, 4, (0, 2), [9, 11, 13, 13]),
+                    [15, 13, 12, 11, 10, 9, 9, 8, 8, 7, 7, 6, 6, 5, 5, 4, 4, 3], CUT),
+    # S1 organ; v0.3 release = 13 -> 9, then -1 a frame (v0.2: -4 a frame)
+    "organ": (0, 2, 8, 1, 4, (0, 2), [9, 11, 13, 13], 1),
     # tsx-faithful (main.tsx HARPSICHORD/any mode gain model): constant AY level 13 (V1/V2)
     # or 14 (V3) for the whole note, no arp/tremolo/decay; staccato = 45 % then 0.
-    "tsx13": (0, 0xFF, 0, 0, 15, (1, 4), [13]),
-    "tsx14": (0, 0xFF, 0, 0, 15, (1, 4), [14]),
+    "tsx13": (0, 0xFF, 0, 0, 15, GATES[45], [13], CUT),
+    "tsx14": (0, 0xFF, 0, 0, 15, GATES[45], [14], CUT),
     # S1d (6) brightening experiments, never the default
-    "tsx13oct": (12, 0xFF, 0, 0, 15, (1, 4), [13]),     # +1 octave on frame 0 only
-    "tsx14oct": (12, 0xFF, 0, 0, 15, (1, 4), [14]),
-    "tsxbuzz": (0, 0xFF, 0, 0, 16, (1, 4), [VOL_ENV]),  # voice C: envelope sawtooth
+    "tsx13oct": (12, 0xFF, 0, 0, 15, GATES[45], [13], CUT),     # +1 octave on frame 0 only
+    "tsx14oct": (12, 0xFF, 0, 0, 15, GATES[45], [14], CUT),
+    "tsxbuzz": (0, 0xFF, 0, 0, 16, GATES[45], [VOL_ENV], CUT),  # voice C: envelope sawtooth
+    # S1e GOTHIC ORGAN (tsx CRYPT_ORGAN: A saw, B square, C triangle): A/B flat squares at
+    # 13; C = triangle buzzer (voice C transposed -12 by the set, see SET_V3_TRANSPOSE),
+    # nominal 14; tails from 10 (A/B) and 11 (C, a square at the buzzer's pitch).
+    "org13": (0, 0xFF, 0, 0, REVERB["organ"]["drop"], GATES[GATE_DEFAULT], [13],
+              REVERB["organ"]["rel_per"]),
+    "orgtri": (0, 0xFF, 0, 0, 16 - (14 - REVERB["organ"]["drop"]), GATES[GATE_DEFAULT],
+               [VOL_ENV], REVERB["organ"]["rel_per"]),
+    # S1e HARPSICHORD (tsx: 3 saws): A/B flat squares at 13, C = sawtooth buzzer (the S1d
+    # key-0 experiment); tails from 9 (A/B) and 10 (C).
+    "hps13": (0, 0xFF, 0, 0, REVERB["harp"]["drop"], GATES[GATE_DEFAULT], [13],
+              REVERB["harp"]["rel_per"]),
+    "hpsaw": (0, 0xFF, 0, 0, 16 - (14 - REVERB["harp"]["drop"]), GATES[GATE_DEFAULT],
+              [VOL_ENV], REVERB["harp"]["rel_per"]),
 }
 # per-voice instrument map (A, B, C); a plain instrument name means all three voices
 INSTR_SETS = {
     "tsx": ("tsx13", "tsx13", "tsx14"),
     "tsx-oct": ("tsx13oct", "tsx13oct", "tsx14oct"),
     "tsx-buzz": ("tsx13", "tsx13", "tsxbuzz"),
+    "organ-rev": ("org13", "org13", "orgtri"),
+    "harp-rev": ("hps13", "hps13", "hpsaw"),
 }
+# envelope shape of the buzzer instruments (song header +9)
+BUZZ_SHAPE = {"tsxbuzz": ENV_SAW, "orgtri": ENV_TRI, "hpsaw": ENV_SAW}
+# reverb-tail instruments -> REVERB kind (the instruments --reverb / key H retunes)
+REVERB_INST = {"org13": "organ", "orgtri": "organ", "hps13": "harp", "hpsaw": "harp"}
+
+
+def inst_tail(inst, reverb=None):
+    """(drop, rel_per) of an instrument at a reverb level (REVERB_STEPS; None = its own)."""
+    _, _, _, _, drop, _, vols, rper = INSTRUMENTS[inst]
+    if reverb is None or inst not in REVERB_INST:
+        return drop, rper
+    lv = REVERB[REVERB_INST[inst]] if reverb == "s1e" else REVERB_LEVELS[reverb]
+    env = any(v & VOL_ENV for v in vols)
+    return min(16, lv["drop"] + (2 if env else 0)), lv["rel_per"]
+# The triangle's period is ~TP / 32: at the bass's own pitch that integer is too
+# coarse (C3 = 26.5 -> +-33 cents); one octave down it is exact to <= 16 cents on every
+# cue and on the Lament's common notes.  So the organ pedal sounds an octave below the
+# tsx (a 16' pedal).  Applied by convert() unless transpose_v3 is given.
+SET_V3_TRANSPOSE = {"organ-rev": -12}
 DEFAULT_INSTR = {"json": "tsx", "abc": "harpsichord"}
 
 
@@ -107,10 +196,30 @@ def instr_map(instr):
     raise AbcError("unknown instrument %r" % instr)
 
 
-def inst_gate(inst, dur, stac):
-    """Frames of sustain of a note (the player's formula)."""
-    s1, s2 = INSTRUMENTS[inst][5]
-    return (dur >> s1) - (dur >> s2) if stac else dur
+def gate_of(g, dur):
+    """Gate formula of a GATES tuple (the player's)."""
+    if len(g) == 3:
+        s1, s2, _ = g
+        return ((dur + (1 << (s1 - 1))) >> s1) + (dur >> s2)
+    s1, s2 = g
+    return (dur >> s1) - (dur >> s2)
+
+
+def gate_bytes(g):
+    """instrument header +5/+6 of a GATES tuple."""
+    if len(g) == 3:
+        s1, s2, op = g
+        assert op == "+" and 1 <= s1 < s2 <= 7
+        return s1 + 1, 0x80 | s2
+    s1, s2 = g
+    assert 0 <= s1 < s2 <= 8 and s2 - s1 <= 8   # s2 = 8 only for the 100 % gate
+    return s1 + 1, s2 - s1
+
+
+def inst_gate(inst, dur, stac, gate=None):
+    """Frames of sustain of a note (the player's formula); gate = GATES key override."""
+    g = GATES[gate] if gate is not None else INSTRUMENTS[inst][5]
+    return gate_of(g, dur) if stac else dur
 
 PC = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 # K: tonic -> position on the circle of fifths (major); minor = relative major
@@ -572,7 +681,24 @@ class Blob:
         return "\n".join(lines) + "\n"
 
 
-def encode_stream(blob, label, events, loop):
+def tail_frames(inst):
+    """Frames the release (reverb tail) of a full-level note needs to reach 0; 1 for
+    the pre-S1e instruments (instant cut, or the S1 organ's rel_per 1: their one-shots
+    end as in v0.2).  A reverb-tail instrument: the longest over every REVERB_STEPS
+    level (the tape retunes the tails at run time; the final rest must fit them all)."""
+    vols = INSTRUMENTS[inst][6]
+    top = max(16 if v & VOL_ENV else v for v in vols)
+    out = 1
+    for lv in (REVERB_STEPS if inst in REVERB_INST else (None,)):
+        drop, rper = inst_tail(inst, lv)
+        if not (rper == 1 or top <= drop):
+            out = max(out, 1 + rper * (top - drop))
+    return out
+
+
+def encode_stream(blob, label, events, loop, tail=0):
+    """tail: one-shot only - a final rest of that many frames so the release (reverb
+    tail) of the last note plays out before END."""
     blob.label(label)
     stac = False
     slur = False
@@ -591,6 +717,10 @@ def encode_stream(blob, label, events, loop):
             if not 0 <= p < REST:
                 raise AbcError("pitch %d out of stream range" % mid)
             blob.b(p, fr)
+    if tail > 1 and not loop:
+        while tail > 0:
+            blob.b(REST, min(tail, 255))
+            tail -= 255
     if loop:
         blob.b(CMD_LOOP)
         blob.w(label)
@@ -598,8 +728,10 @@ def encode_stream(blob, label, events, loop):
         blob.b(CMD_END)
 
 
-def build_song(name, voices_events, instr, loop):
-    """voices_events: 3 event lists. instr: instrument set / name (instr_map)."""
+def build_song(name, voices_events, instr, loop, gate=None, reverb=None):
+    """voices_events: 3 event lists. instr: instrument set / name (instr_map).
+    gate: GATES key overriding every instrument's staccato gate.  reverb: REVERB_STEPS
+    level for the reverb-tail instruments (None = their own = "s1e")."""
     imap = instr_map(instr)
     uniq = list(dict.fromkeys(imap))
     for v, ins in enumerate(imap):
@@ -610,16 +742,19 @@ def build_song(name, voices_events, instr, loop):
     blob.label(name)
     for s in "abc":
         blob.w("%s_%s" % (name, s))
-    blob.b(*(uniq.index(x) for x in imap), MIXER_BUZZ_C if buzz else MIXER_TONE)
+    blob.b(*(uniq.index(x) for x in imap), BUZZ_SHAPE[imap[2]] if buzz else 0)
     for ins in uniq:
         blob.w("%s_inst_%s" % (name, ins))
+    tail = max(tail_frames(i) for i in imap)
     for i, s in enumerate("abc"):
-        encode_stream(blob, "%s_%s" % (name, s), voices_events[i], loop)
+        encode_stream(blob, "%s_%s" % (name, s), voices_events[i], loop, tail)
     for ins in uniq:
-        arp0, lp, tp, td, rel, (s1, s2), vols = INSTRUMENTS[ins]
-        assert 0 <= s1 < s2 <= 7
+        arp0, lp, tp, td, _, g, vols, _ = INSTRUMENTS[ins]
+        drop, rper = inst_tail(ins, reverb)
+        s1p, s2b = gate_bytes(GATES[gate] if gate is not None else g)
+        assert 1 <= rper <= 255 and 1 <= drop <= 16
         blob.label("%s_inst_%s" % (name, ins))
-        blob.b(arp0, lp, tp, td, rel, s1 + 1, s2 - s1, *vols, 0xFF)
+        blob.b(arp0, lp, tp, td, drop, s1p, s2b, rper, *vols, 0xFF)
     blob.label(name + "_end")
     return blob
 
@@ -634,10 +769,12 @@ def default_accidentals(path):
 
 def convert(path, tune_idx=0, accidentals=None, transpose=0, fpe=None, fit=True,
             instr=None, loop=None, name=None, transpose_v3=None, stac=True,
-            legato="slurs", source="abc", bpm=None):
+            legato="slurs", source="abc", bpm=None, gate=None, reverb=None):
     """fpe: frames per eighth (Fraction/int) overrides the tempo; default = the exact
     Fraction from bpm (or the tune's own Q:/bpm).  loop None: the JSON's loop flag (ABC:
-    one-shot).  instr None: 'tsx' for JSON, 'harpsichord' for ABC."""
+    one-shot).  instr None: 'tsx' for JSON, 'harpsichord' for ABC.  transpose_v3 None:
+    the set's SET_V3_TRANSPOSE (organ-rev: -12).  gate: GATES key (45/56/62) overriding
+    every instrument's staccato gate."""
     if source == "json":
         t = tune_from_json(path)
         accidentals = "json"      # pitches are exact; accidental rules do not apply
@@ -657,20 +794,23 @@ def convert(path, tune_idx=0, accidentals=None, transpose=0, fpe=None, fit=True,
         raise AbcError("need 3 voices")
     evs = []
     imap = instr_map(instr)
+    if transpose_v3 is None:
+        transpose_v3 = SET_V3_TRANSPOSE.get(instr)
     for i, vn in enumerate(names):
         tr = transpose + (transpose_v3 if (i == 2 and transpose_v3 is not None) else 0)
         ev = events_for(t, vn, fpe, tr, stac, legato)
         for mid, fr, st, _ in ev:
-            if mid is not None and inst_gate(imap[i], fr, st) < 1:
+            if mid is not None and inst_gate(imap[i], fr, st, gate) < 1:
                 raise AbcError("%s: staccato gate 0 for a %d-frame note" % (vn, fr))
         evs.append(ev)
     name = name or re.sub(r"\W", "_", os.path.splitext(os.path.basename(path))[0])
-    blob = build_song(name, evs, instr, loop)
+    blob = build_song(name, evs, instr, loop, gate, reverb)
     data, _ = blob.bytes_()
     info = {"tune": t, "errors": errs, "exact_fpe": exact, "fpe": fpe, "events": evs,
             "voice_names": names, "name": name, "blob": blob, "bytes": data,
             "instr": instr, "loop": loop, "accidentals": accidentals,
-            "transpose": transpose, "legato": legato,
+            "transpose": transpose, "transpose_v3": transpose_v3 or 0, "legato": legato,
+            "gate": gate, "reverb": reverb,
             "bpm": Fraction(1500) / fpe}
     return info
 
@@ -727,9 +867,11 @@ def write_asm(info, path):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w") as f:
         f.write("; generated by tools/abc2wzm.py - do not edit.  Format: see that file's docstring.\n")
-        f.write("; %s  instr=%s accidentals=%s fpe=%s (%.2f bpm) loop=%s transpose=%d legato=%s\n"
+        f.write("; %s  instr=%s accidentals=%s fpe=%s (%.2f bpm) loop=%s transpose=%d "
+                "transpose_v3=%d legato=%s gate=%s\n"
                 % (info["tune"]["title"], info["instr"], info["accidentals"], info["fpe"],
-                   float(info["bpm"]), info["loop"], info["transpose"], info["legato"]))
+                   float(info["bpm"]), info["loop"], info["transpose"], info["transpose_v3"],
+                   info["legato"], info["gate"] or "inst"))
         f.write(info["blob"].asm(info["name"]))
         f.write("%s_size EQU %s_end - %s\n" % (info["name"], info["name"], info["name"]))
 
@@ -743,32 +885,64 @@ SRC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
                        "assets/sfx/music/src")
 IIB = "f_minor_staccato_theme"
 IIB_ALT_BPM = 96        # second tape entry: the user picks 74 or 96 by ear
+II = "f_minor_lament"    # tsx "II. Catacomb Lament (Legato)": IIb without staccato
 
-# Standard Fuse-audition set = src/music/testtape.asm song_tab, in key order:
-# (label, json tune, convert() keywords).  The tsx-faithful instrument set is the default.
-BATCH = [("tune_" + n, n, {}) for n in SHORT] + [
-    ("lament_tsx", IIB, {}),                               # 74 bpm (the tsx default)
-    ("lament_tsx_96", IIB, {"bpm": IIB_ALT_BPM}),
-    ("lament_pluck", IIB, {"instr": "harpsichord"}),       # S1 pluck harpsichord, for A/B
-    ("lament_buzz", IIB, {"instr": "tsx-buzz"}),           # (6) envelope-saw bass on V3
-    ("lament_oct", IIB, {"instr": "tsx-oct"}),             # (6) +12 on frame 0 only
+# tsx tempo slider maximum (main.tsx l.2267 max={96}); a cue whose defaultBpm is above it
+# (boss_fight 106) keeps its own.  S1e plays every tune at this "tsx-max" tempo.
+TSX_SLIDER_MAX = 96
+TSX_MAX_BPM = dict({n: TSX_SLIDER_MAX for n in SHORT + [IIB, II]}, boss_fight=106)
+VARIANTS = (("org", "organ-rev"), ("hps", "harp-rev"))   # tape keys 1-7 / Q-U
+
+
+def _label(prefix, tune):
+    return "%s_%s" % (prefix, "lament" if tune == IIB else tune)
+
+
+# Standard Fuse-audition set = src/music/testtape.asm song_tab, in request order:
+# (label, json tune, convert() keywords).  S1e: 7 tunes x {organ, harpsichord} with the
+# reverb tails at the tsx-max tempo, then the two S1d tsx-faithful Lament entries, then
+# (comparison) the pure-legato Lament II: organ / harpsichord 96, tsx-faithful 74 / 96.
+BATCH = [(_label(p, t), t, {"instr": s, "bpm": TSX_MAX_BPM[t]})
+         for p, s in VARIANTS for t in SHORT + [IIB]] + [
+    ("lament_tsx", IIB, {}),                               # S1d: 74 bpm (the tsx default)
+    ("lament_tsx_96", IIB, {"bpm": IIB_ALT_BPM}),          # S1d: 96 bpm
+    ("org_lament2", II, {"instr": "organ-rev", "bpm": TSX_MAX_BPM[II]}),
+    ("hps_lament2", II, {"instr": "harp-rev", "bpm": TSX_MAX_BPM[II]}),
+    ("lament2_tsx", II, {}),                               # 74 bpm, dry
+    ("lament2_tsx_96", II, {"bpm": IIB_ALT_BPM}),          # 96 bpm, dry
+]
+# S1d entries no longer on the tape (kept for the tests / A-B by CLI)
+EXTRA = [
+    ("lament_pluck", IIB, {"instr": "harpsichord"}),       # S1 pluck harpsichord
+    ("lament_buzz", IIB, {"instr": "tsx-buzz"}),           # S1d (6) envelope-saw bass
+    ("lament_oct", IIB, {"instr": "tsx-oct"}),             # S1d (6) +12 on frame 0 only
 ]
 
 
-def batch(srcdir, outdir, iib_bpm=None):
+def batch(srcdir, outdir, iib_bpm=None, gate=None, reverb=None):
     """Emit the audition set from the tsx JSON sources (tools/tsx_extract.py output);
-    returns [(asmpath, info)].  iib_bpm overrides the Lament's tempo (default: its
-    JSON bpm, 74) for every IIb entry except lament_tsx_96."""
+    returns [(asmpath, info)].  iib_bpm overrides the tempo of the IIb entries that have
+    none of their own (lament_tsx, default its JSON 74).  gate (GATES key) overrides the
+    staccato gate of the S1e reverb entries (default GATE_DEFAULT; the S1d entries keep
+    the tsx's 45 %)."""
     res = []
     for name, tune, kw in BATCH:
         kw = dict(kw)
         if tune == IIB and iib_bpm is not None and "bpm" not in kw:
             kw["bpm"] = iib_bpm
+        if gate is not None and kw.get("instr") in dict(VARIANTS).values():
+            kw["gate"] = gate
+        if reverb is not None and kw.get("instr") in dict(VARIANTS).values():
+            kw["reverb"] = reverb
         info = convert(os.path.join(srcdir, tune + ".json"), name=name, source="json", **kw)
         p = os.path.join(outdir, name + ".asm")
         write_asm(info, p)
         res.append((p, info))
     return res
+
+
+def _reverb_arg(x):
+    return x if x == "s1e" else int(x)
 
 
 def main(argv=None):
@@ -804,6 +978,13 @@ def main(argv=None):
                     default="slurs", help="ignore slurs: every note re-attacks")
     ap.add_argument("--legato-unmarked", dest="legato", action="store_const",
                     const="unmarked", help="also slur every run of unmarked (non-staccato) notes")
+    ap.add_argument("--reverb", type=_reverb_arg, choices=REVERB_STEPS,
+                    help="reverb level of the S1e organ / harpsichord tails: s1e (default), "
+                         "0, 50 or 100 (percent of the tsx's slider; see REVERB_LEVELS)")
+    ap.add_argument("--gate", type=int, choices=sorted(GATES),
+                    help="staccato gate percent for every instrument (with --batch: the S1e "
+                         "reverb entries only); default the instrument's own (S1e: %d)"
+                         % GATE_DEFAULT)
     ap.add_argument("--name")
     ap.add_argument("-o", "--asm")
     ap.add_argument("--json")
@@ -813,14 +994,14 @@ def main(argv=None):
     a = ap.parse_args(argv)
     try:
         if a.batch:
-            for p, info in batch(a.src, a.batch, a.bpm):
+            for p, info in batch(a.src, a.batch, a.bpm, a.gate, a.reverb):
                 print(report(p, info), "->", p)
             return 0
         if not a.abc:
             ap.error("abc file required")
         info = convert(a.abc, a.tune, a.accidentals, a.transpose, a.frames_per_eighth,
                        True, a.instr, a.loop, a.name, a.transpose_v3, legato=a.legato,
-                       source=a.source, bpm=a.bpm)
+                       source=a.source, bpm=a.bpm, gate=a.gate, reverb=a.reverb)
         print(report(a.abc, info))
         if a.ref_abc:
             if a.source != "json":
