@@ -1108,6 +1108,54 @@ level_card:     push af
                 jp   mf_char_e
 
 ;------------------------------------------------------------------------------
+; stinger_wait — SND-4a: far1 from level_enter, between the level generation
+; and level_show (the "DEPTH n" card is still up). Holds the next level's start
+; while the Level Complete stinger (MUS_CUR = MUS_LEVEL, MS_SHOT) is sounding:
+; one menu_frame per loop (frame wait + input_tick; the ISR plays on). Returns
+; at once when no stinger runs (new game, music off / SFX ONLY: the ISR drops the
+; shot, MUS_STATE stays idle). A FRESH press (STICK or any key, after everything
+; was released: the move key that took the exit is still down) skips it: the
+; music bit is dropped for one ISR frame (falling edge = player_stop) and set
+; again (rising edge = the room loop restarts at bar 1). Outside the play tick.
+; Clobbers: all but IY.   Worst wait = the stinger's length less the generation.
+;------------------------------------------------------------------------------
+stinger_wait:
+                ld   de, 0                     ; D bit 0 = released once; D bits 1-2 + E = a
+.w:             ld   a, (MUS_STATE)            ; 512-frame cap (R is 385 frames: never a hang)
+                and  MS_MASK
+                cp   MS_SHOT
+                ret  nz
+                ld   a, (MUS_CUR)
+                cp   MUS_LEVEL
+                ret  nz
+                dec  e
+                jr   nz, .c
+                inc  d
+                inc  d
+.c:             bit  2, d
+                ret  nz
+                push de
+                call menu_frame
+                call read_stick                ; GS_TRANSITION: input_tick left STICK at 0, so
+                push af                        ; read the keys + the Kempston port here (the
+                call any_key                   ; matrix is fresh from menu_frame)
+                pop  bc
+                or   b
+                pop  de
+                jr   nz, .down
+                set  0, d                      ; released: a press now counts
+                jr   .w
+.down:          bit  0, d
+                jr   z, .w
+                ld   hl, SND_MODE              ; skip: stop, then restart the loop
+                res  SND_MUSIC_BIT, (hl)
+                push hl
+                call menu_frame                ; >= 1 ISR frame sees music off
+                pop  hl
+                set  SND_MUSIC_BIT, (hl)
+                ret
+
+;------------------------------------------------------------------------------
 ; Menu-font printing (8x16, 2 cells tall, one attr for both cells).
 ; mf_tx      — A = TX id at row B / col C, attr E (mf_tx_attr: the same);
 ;              mf_tx sets mf_lattr = E, then the first 2 chars ("n ") take E

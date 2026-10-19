@@ -339,4 +339,5 @@ def main():
 
 
 if __name__ == "__main__":
+    GL.Proto.snd_mode = 2                          # SND-4a: no stinger hold in descents
     sys.exit(main())

@@ -413,6 +413,8 @@ level_enter:
                 pop  af
                 ld   hl, level_new             ; bank 3: generate + populate
                 call far3
+                ld   hl, stinger_wait          ; SND-4a: hold while the stinger plays (bank 1;
+                call far1                      ; a no-op unless MUS_CUR = MUS_LEVEL shot)
                 pop  de
                 ld   a, (LVL_DEPTH)
                 ; fall through
@@ -473,6 +475,10 @@ level_descend:
                 jr   nc, .win
                 inc  a
                 ld   de, TX_DESCEND
+                ld   b, a
+                ld   a, MUS_LEVEL              ; SND-4a: Level Complete stinger (the ISR drops it
+                ld   (MUS_SHOT), a             ; with music off); level_enter holds for it
+                ld   a, b
                 call level_enter
                 ld   a, 1                      ; like start_game: a key still held
                 ld   (NEED_RELEASE), a         ; through the card must be released

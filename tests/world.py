@@ -4340,4 +4340,5 @@ def main():
 
 
 if __name__ == "__main__":
+    game_lib.Proto.snd_mode = 2                   # SND-4a: no stinger hold in descents (music not under test)
     sys.exit(main())

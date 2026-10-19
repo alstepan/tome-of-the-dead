@@ -532,7 +532,7 @@ Chosen on the S1e tape: **harpsichord + reverb tail S1e, staccato gate 5/16 (the
 | ~~Q~~ | ~~Dungeon Crawl~~ | **removed from the game by the user 2026-10-19** (unused; −151 B): id 1 is reserved and rejected by the ISR, the other ids keep their numbers; the S1 test tape keeps it | — | — |
 | **W** | Dangerous | **danger**: **implemented (SND-3)** — >= 4 awake hostiles in the hero's room or HP <= 25 % of max, hysteresis below | loop | SND-3 |
 | **E** | Boss Fight | entering a **boss room** | loop | SND-4 |
-| **R** | Level Complete | **once** when the player kills the boss | one-shot | SND-4 |
+| **R** | Level Complete | **once** when the player kills the boss; **implemented on descent (SND-4a)**, see below | one-shot | SND-4 (boss) / SND-4a (descent, done) |
 | **T** | Game Win | **once** when the game is finished successfully | one-shot | SND-4 |
 | **Y** | Game Over | **once** when the player dies — **implemented (SND-3)**: `end_turn` death branch, `MUS_REQ` 0 + `MUS_SHOT` 6 | one-shot | SND-3 |
 
@@ -597,6 +597,20 @@ Budget: player with buzzer ≈ 1.07 KB + 7 harpsichord tunes ≈ 1.93 KB = ≈ 3
 | 2 instrument sets | 0.1 KB |
 | SFX bank | 0.8 KB |
 | **Total** | **~2.65 KB of 4 KB (1.35 KB spare)** |
+
+### SND-4a as built: Level Complete on descent (2026-10-19)
+
+- `level_descend` (lowram.asm) writes `MUS_SHOT = MUS_LEVEL` before `level_enter` (not on the D8 win path; the ISR
+  drops the shot with music off / held). `level_enter` calls `stinger_wait` (far1, `menu1.asm`, 62 B) after the
+  level generation and before `level_show`, so the "DEPTH n" card stays up while R sounds. The loop runs `menu_frame`
+  (one frame, ISR keeps playing) while `MUS_STATE` is `MS_SHOT` and `MUS_CUR` is R; any other state (new game, SFX
+  ONLY, music OFF, shot already over) returns at once. Outside the play tick, so the worst-tick budget is untouched.
+- Skip: a **fresh** press (any key or Kempston, read with `read_stick` because GS_TRANSITION zeroes STICK; after everything was released once: the move key is still down on
+  entry) drops the music bit for one ISR frame (falling edge = `player_stop`) and sets it again (rising edge: the
+  room loop restarts at bar 1). No ISR change. A 512-frame cap (R is 385) means the wait can never hang. After R (finished or skipped) the dispatcher restarts the loop
+  `level_enter` already requested (`MUS_REQ` = `MUS_ROOM`); `DNG_*` are cleared there, so Dangerous never carries over.
+- Measured (`tests/snd4a.py`): R lasts 385 ISR frames (7.7 s) from the request; the generation covers ~24 of them, so the hold is
+  ~361 frames (7.2 s) worst case with no key. The boss-dead trigger stays SND-4.
 
 ### B: the six tunes switched by game events
 

@@ -318,8 +318,17 @@ class Proto:
     def settle(self, n=3):
         self.tick(n)
 
+    # SND-4a: with music on (SND_MODE 3, the boot default) every descent holds the next
+    # level for the Level Complete stinger (~361 menu frames). Suites where music is not
+    # under test set Proto.snd_mode = 2 (SFX only): applied when a game starts (the menu goldens show
+    # the setting, so it stays ALL ON until then). None = leave the boot default (snd4a / sound / snd1 / snd3).
+    snd_mode = None
+
     def wait_state(self, gs, max_ticks=600):
-        return self.until(lambda: self.rb("GAME_STATE") == gs, max_ticks)
+        ok = self.until(lambda: self.rb("GAME_STATE") == gs, max_ticks)
+        if ok and gs in (GS_PLAYING, GS_SELECT) and self.snd_mode is not None:
+            self.wb("SND_MODE", self.snd_mode if gs == GS_PLAYING else 3)
+        return ok
 
     def idle(self):
         return self.rb("TURN_PHASE") == 0 and self.rb("GAME_STATE") in (GS_PLAYING, GS_DEAD, GS_WIN)
