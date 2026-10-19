@@ -529,7 +529,7 @@ Chosen on the S1e tape: **harpsichord + reverb tail S1e, staccato gate 5/16 (the
 | Tape key | Tune (JSON source) | Plays | Mode | Phase |
 |---|---|---|---|---|
 | **U** | Lament IIb `f_minor_staccato_theme` | **main menu, story screen**, and for now the **in-game theme** (to be replaced later) | loop | SND-2 |
-| **Q** | Dungeon Crawl | in-game, one of the proto room tunes (selection TBD) | loop | SND-3 |
+| ~~Q~~ | ~~Dungeon Crawl~~ | **removed from the game by the user 2026-10-19** (unused; −151 B): id 1 is reserved and rejected by the ISR, the other ids keep their numbers; the S1 test tape keeps it | — | — |
 | **W** | Dangerous | **danger**: **implemented (SND-3)** — >= 4 awake hostiles in the hero's room or HP <= 25 % of max, hysteresis below | loop | SND-3 |
 | **E** | Boss Fight | entering a **boss room** | loop | SND-4 |
 | **R** | Level Complete | **once** when the player kills the boss | one-shot | SND-4 |
@@ -640,7 +640,7 @@ Rules:
 | SFX | Frames | Bytes **E** | Prio | Hook |
 |---|---|---|---|---|
 | melee swing / hit / miss | 5 / 6 / 4 | 12 / 18 / 10 | 2 / 4 / 2 | 3D |
-| kill / hero hurt (ducks) | 12 / 8 | 32 / 22 | 6 / 7 | 3D |
+| kill / hero hurt (ducks) | 12 / 8 | 32 / 22 | 6 / 7 (as built: kill **7**, so a level-up never cuts it; see "SFX as built") | 3D |
 | Power Strike / Whirlwind | 10 / 20 | 28 / 45 | 5 | 3D |
 | Spark / Firebolt (+ burst) / Frost Shard / Lightning / Drain Life | 8 / 14+8 / 14 / 12 / 16 | 20 / 60 / 32 / 28 / 34 | 4–5 | 3D |
 | fizz (no MP) / projectile bounce / throw | 5 / 3 / 4 | 12 / 8 / 10 | 2–3 | 3D |
@@ -654,6 +654,81 @@ Rules:
 | menu move / select / cancel | 1 / 4 / 4 | 3 / 10 / 10 | 1 | 3C |
 
 About **30 SFX ≈ 0.8 KB E**.
+
+### SFX as built (SND-5, 2026-10-19, **M**)
+
+- **Request:** `ld a, SFX_x : call sfx_req` (5 B, any bank; `src/sfx2.asm`, bank 2; keeps A / BC).
+  Ids = `prio << 5 | index` (`build/sfx/sfx_ids.inc`), so no priority table. `sfx_req` keeps the pending
+  `SFX_REQ` unless the new priority is >=; it drops the request while `SND_HOLD` is set or the SFX bit is
+  off. The ISR (`sfx_step`, `src/ay.asm`) takes `SFX_REQ` every unheld frame: it replaces the effect
+  playing if its priority is **>=** (ties replace); else dropped — except a request of prio >=
+  `SFX_DEFER_PRIO` (6), which goes to the **one deferred slot `SFX_NEXT`** (`$BFF3`; overwritten only by
+  an id of >= priority; cleared by a pause with nothing playing and on a new level) and starts the frame
+  the playing effect ends. `sfx_req` does the same for the loser of two requests in one frame (the old
+  pending one or the new one; not the same id twice). **User 2026-10-19: a KILL is never cut by the
+  level-up** — KILL is prio **7** (was 6 in the §4 table), LEVELUP 6: a kill and a level-up in one turn
+  (either order) play KILL fully, then LEVELUP (`tests/sfx.py` SFX12). HURT (7) still cuts anything
+  (a tie with KILL: the later one wins). A new effect plays its frame 0 in that ISR.
+- **V1 steal:** one effect at a time, channel A only. While it plays, `wzm.pl_regs` R0/R1/R8 hold the
+  effect's values (the mirror stays the chip's image); `player_frame` (`DEFINE WZM_SFX`) sequences V1
+  on but does not store it, so the music's note returns on the first frame after the effect, and its
+  OUT stage writes the effect's R0/R1/R8 with the music's other registers (no intra-frame V1 glitch).
+  The effect's tone/noise-A bits are merged into R7 (the music's tone B/C bits kept). R6 is written to
+  the chip AND the mirror on each noise change (a song start's `pl_out_all` mid-effect keeps it) and
+  back to the music's 0 at the end. R2-R5, R11-R13 are never written. Frames without `player_frame`
+  (music off / idle / a start frame) get the channel-A OUTs from `sfx_out`.
+- **Loudness (user 2026-10-19: effects clearly louder than the music):** the music's fixed voice levels
+  are **13** (V1 / V2 every song, the tsx gain; V3's tail <= 10; measured with the oracle over all 6
+  songs). While **any** effect plays, the music's V2 / V3 fixed volumes are **ducked by 3** (prio >= 6:
+  **by 4**), floor 0, in the mirror before the OUTs (`sfx_dk`), so the duck ends with the effect (the
+  player rewrites them each frame). Effect peaks are **14-15** (every effect, `tests/sfx.py` SFX6):
+  headroom at the peak = 14-15 vs 10 (9 for prio >= 6) = 4-6 AY steps (~6-9 dB). Not ducked: V3 in
+  envelope mode (the buzzer bass: a fixed volume there would mute it, tone C is off on a buzzer frame);
+  its peak is the envelope's 15, in the bass register.
+- **Pause / mode:** `SND_HOLD` freezes the effect with the music (R8-R10 0, `SFX_REQ` dropped every held
+  frame), the effect resumes at its next frame. SFX bit off (`SND_MODE` 0 or 1) stops a playing effect at
+  once; mode 2 (SFX only) plays effects over silence.
+- **Format** (AYFX-like, 1-3 B a frame; `tools/sfx2asm.py` docstring): B0 = volume (bits 0-3), tone off
+  (bit 4), pitch byte follows (bit 5), noise byte follows (bit 6), noise off (bit 7); pitch = index into
+  the music's period table `wzm.pl_tp` (MIDI - 12); noise = R6 0..31; `$FF` = end.
+- **Tool:** effects are text in `assets/sfx/effects.json` (per frame `v<vol> t<note|idx> n<noise> x<repeat>`;
+  no `t` = tone off, no `n` = noise off; `"like": X, "transpose": k` = a transposed copy of X).
+  `tools/build.sh` runs `tools/sfx2asm.py` into `build/sfx/` (`sfx_ids.inc` included by `main.asm`,
+  `sfx_data.asm` by `ay.asm`). Add an effect = append it to the JSON (ids are file order, max 31) and
+  call `sfx_req` with `SFX_<NAME>`.
+
+| Effect | Prio | Frames | Bytes | Hook (bank) |
+|---|---|---|---|---|
+| MENU | 1 | 4 | 7 | `menu_run` key 1-4 (1) |
+| MISS | 2 | 5 | 11 | `impact_line` → `sfx_msg` MSG_P_MISS / MSG_M_MISS (low RAM → 2) |
+| HIT | 4 | 6 | 17 | idem MSG_P_HIT |
+| KILL | **7** | 10 | 28 | idem MSG_P_KILL (melee, Power Strike, dagger / arrow) |
+| HURT | 7 | 8 | 21 | idem MSG_M_HIT (a monster's blow on the hero) |
+| FIZZ | 3 | 5 | 12 | NO MANA refusal `ic_no_mana`; a fizzled release in `act_fire` (7) |
+| LEVELUP | 6 | 16 | 21 | `xp_level` (7); behind a KILL / HURT: deferred (`SFX_NEXT`), never lost |
+| SPARK / FIREBOLT / FROST / DRAIN / LIGHTNING | 4 / 4 / 4 / 4 / 5 | 7 / 8 / 10 / 11 / 11 | 19 / 25 / 21 / 23 / 25 | `act_fire` → `sfx_abl` (the release tick; 7 → 2) |
+| POWER / WHIRL | 5 | 9 / 11 | 23 / 23 | idem |
+| THROW | 3 | 4 | 9 | idem (dagger, bow) |
+| BURST | 5 | 10 | 22 | `fx_trk_tick` impact of `firebolt_burst` (`fx_imp_sfx` in `sfx2.asm`, 2) |
+| BOUNCE | 3 | 3 | 6 | `fx_step` segment change: bounce / reflection (2) |
+| ST_STUNNED / FROZEN (+7) / ASLEEP (−7) / FEAR (−3) / CONFUSED (+4) | 4 | 6 each | 13 each | `sfx_msg` MSG_M_FROZEN .. MSG_M_CONFUSED (a monster's status line: `dh_msg` / `st_msg`) |
+| LADDER | 1 | 2 | 4 | `try_climb` step (7) |
+| JUMP / FALL | 3 / 4 | 6 / 14 | 11 / 29 | the jump / `hero_fall` (low RAM; a jump into the pit: FALL replaces JUMP) |
+| LAND | 2 | 3 | 9 | `anim_entity` jump end / fall end, the hero (2) |
+| DOOR | 4 | 10 | 25 | `door_open` (low RAM; hero or monster) |
+| **Total** | | | **510** (table 54 + data 456) | |
+
+- **Not built (no event today / held):** menu move / cancel (the main menu has no cursor; the pause box
+  runs under `SND_HOLD`, where requests are dropped by the user's rule), gate raise (3B: the grate is
+  always raised; 3F's boss death), the hero's own status lines (hero statuses go through `msg_push`, no
+  hook), step (default off), melee swing (not in this round). 3E (pickup / gold / potion / eat / trap)
+  and 3F (boss) come with those features.
+- **Space:** engine 381 B in the AY slot + data 510 B; slot **109 B free** (songs 1,794 B after the
+  Crawl removal). Elsewhere: bank 2 +122 B (free to FRT 178; `kind_tab` ALIGN pad 41 → **13 B**), low
+  RAM +25, bank 7 +36, bank 1 +7, bank 3 cold 0.
+- **Cost:** ~40 T a frame idle (music off ISR 465 T), ~0.1k T of hooks per music frame (music-only worst
+  5,381 T); effect frames ~0.4-0.9k T; worst ISR measured **6,243 T** (a prio-7 effect taken every frame
+  over the Lament; contract 6.5k); details memory-map.md "Interrupts (A8)". Tests: `tests/sfx.py`.
 
 ## 5. Tools: first-pass plan (no code yet; owner z80-junior, spec from sound-composer)
 

@@ -169,6 +169,13 @@ Worst: ordinary work **121,380** (mage, 4.6k under 126k), cast work **119,055**
 (wcast4, 8.9k under 128k), real **130,754** (wcast4 ordinary; **11,062 T** under the
 2-frame deadline). 0 ticks over any gate; `OVERRUN_COUNT` 0.
 
+**SND-5 (sound effects in the ISR, 2026-10-19, M; review round + 27 effects + duck on every effect +
+the `SFX_NEXT` deferral):** the melee / spell / throw / bounce / burst / status / movement / door / level-up
+effects fire in the budget scenarios. ISR in window max 5,926 T (PRE_MAX up to 6,328); worst ordinary
+work **121,769** (mage; cap 126k), cast work **119,197** (cap 128k), real **132,512** (wcast4 ordinary;
+**9,304 T** under 141,816); 0 over any gate. Worst single ISR with effects (tests/sfx.py SFX10) 6,243 T
+≤ 6.5k; music alone 5,381 T, pair 8,749 T; AY slot 128 B free (sound.md "SFX as built").
+
 ## 6. Headroom for Stage 2 content (after Rogue removal, E1 option A, AY reserve)
 
 | Store | Free | For | |

@@ -256,9 +256,9 @@ fx_trk_tick:
                 inc  (ix+FX_PH)
                 rra
                 ld   a, (ix+FXD_FIDA)
-                jr   nc, fx_set
+                jp   nc, fx_set                 ; (JP: SND-5 grew the gap; 10 T either way)
                 ld   a, (ix+FXD_FIDB)
-                jr   fx_set
+                jp   fx_set
 .land:          ld   a, (ix+FXD_IMPA)
                 inc  a
                 jr   z, .fin                   ; FX_NONE: no impact sprite
@@ -267,6 +267,7 @@ fx_trk_tick:
                 jr   z, .fin
                 ld   (ix+FX_ST), FXS_IMP
                 ld   (ix+FX_PH), 0
+                call fx_imp_sfx                ; SND-5 (A, F)
                 jr   .ishow
 .imp:           dec  (ix+FXD_IMPT)
                 jr   z, .fin
@@ -295,6 +296,8 @@ fx_step:
                 scf
                 ret  z                         ; last segment done: landed
                 ld   (ix+FXD_NSEG), a
+                ld   a, SFX_BOUNCE             ; SND-5: a bounce / reflection (F only)
+                call sfx_req
                 ld   a, (ix+FXD_SEGS + 1)       ; next segment (bounce / reflect)
                 ld   (ix+FXD_SEGS), a
                 ld   a, (ix+FXD_SEGS + 2)

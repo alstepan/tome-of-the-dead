@@ -33,8 +33,7 @@ abil_melee:
                 ld   a, (MP)
                 ld   hl, ABIL_RK + RK_MP
                 cp   (hl)
-                ld   a, TX_NO_MANA
-                jp   c, ic_refuse
+                jp   c, ic_no_mana             ; SND-5: + the fizz effect
                 call on_ladder                 ; Z = mid-ladder (A, HL)
                 jr   z, .nt
                 push bc

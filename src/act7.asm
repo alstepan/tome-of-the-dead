@@ -200,13 +200,18 @@ act_fire:
                 ld   b, a
                 sub  ABL_POWER
                 cp   ABL_WHIRL - ABL_POWER + 1
-                jp   c, power_fire
-                push bc
+                jr   nc, .guard
+                ld   a, b
+                call sfx_abl                   ; SND-5: the release sound by ABL_* (A, BC kept)
+                jp   power_fire
+.guard:         push bc
                 call act_lead_ok
                 pop  bc
                 ld   l, 0
-                ret  nc                        ; fizzle (the turn stands)
+                ld   a, SFX_FIZZ               ; SND-5: a fizzled release sounds FIZZ
+                jp   nc, sfx_req               ; fizzle (the turn stands; sfx_req keeps L, F)
                 ld   a, b
+                call sfx_abl                   ; SND-5: the release sound (A, BC kept)
                 cp   ABL_DAGGER
                 jp   nc, ammo_fire
                 jp   spell_fire

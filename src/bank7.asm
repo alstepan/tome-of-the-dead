@@ -499,6 +499,8 @@ try_climb:
                 ld   a, (TMP6)
                 ld   (ix+E_AIDIR), a
                 ld   (ix+E_MODE), M_MOVE
+                ld   a, SFX_LADDER             ; SND-5: a ladder step (the hero only)
+                call sfx_req
                 scf
                 ret
 .blk:           jp   climb_blocked             ; B14 (lowram): wait + forced yield,

@@ -57,6 +57,10 @@ menu_run:
                 cpl
                 and  b                         ; A = pressed this frame (lowest wins)
                 jr   z, .loop
+                ld   c, a                      ; SND-5: a menu key -> the select blip
+                ld   a, SFX_MENU               ; (sfx_req keeps BC)
+                call sfx_req
+                ld   a, c
                 rra
                 jr   c, .start                 ; 1 / ENTER
                 rra

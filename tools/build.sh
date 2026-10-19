@@ -13,6 +13,7 @@
 #    fails on any round-trip mismatch / char outside 32..127 / > LOG_MAX.
 # 1c. tools/abc2wzm.py --game -> OUTDIR/build/music_game/ (7 WZM songs + game_songs.asm),
 #    INCLUDEd by src/ay.asm through the -i OUTDIR/build/music_game search path (SND-2 T2).
+# 1d. tools/sfx2asm.py -> OUTDIR/build/sfx/ (sfx_ids.inc + sfx_data.asm, SND-5; -i path).
 # 2. sjasmplus src/main.asm with the project flags. Run in OUTDIR (default: the
 #    repo root), so the artefacts land in OUTDIR/build/: wazhack.tap, .sna,
 #    .sym, .sld, .lst.
@@ -31,12 +32,14 @@ python3 "$ROOT/tools/textpack.py"
 mkdir -p "$OUT/build/music_game"
 # SND-2: in-game songs (hps_* gate 30 + game_songs.asm) -> the AY slot (src/ay.asm, -i below)
 python3 "$ROOT/tools/abc2wzm.py" --game "$OUT/build/music_game" >/dev/null
+# SND-5: sound effects (assets/sfx/effects.json) -> sfx_ids.inc (main.asm) + sfx_data.asm (ay.asm)
+python3 "$ROOT/tools/sfx2asm.py" "$OUT/build/sfx" >/dev/null
 LOG="$OUT/build/sjasmplus.log"
 cd "$OUT"
 set +e
 sjasmplus "$ROOT/src/main.asm" --fullpath \
     --lst=build/wazhack.lst --sld=build/wazhack.sld --sym=build/wazhack.sym \
-    -i "$ROOT/src" -i "$OUT/build/music_game" "$@" >"$LOG" 2>&1
+    -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" "$@" >"$LOG" 2>&1
 RC=$?
 set -e
 grep -E '^>|rror|arning' "$LOG" || true

@@ -19,7 +19,7 @@ player_frame) is the START frame; the ISR after it plays oracle frame 0.
   SND1  boot mailbox [SND_MODE, MUS_REQ, MUS_SHOT, MUS_STATE, MUS_CUR, SFX_REQ] =
         [3,0,0,0,0,0]; at the menu MUS_REQ = MUS_CUR = 7, MS_LOOP
   SND2  menu Lament: chip R0..R12 == oracle frame for frame (4,300 frames, through the $80 loop)
-  SND3  MUS_REQ 0 -> silent within 2 frames; MUS_REQ 1 -> start frame, then oracle frame 0..
+  SND3  MUS_REQ 0 -> silent within 2 frames; id 1 (removed) rejected; MUS_REQ 3 -> start frame, then oracle 0..
   SND4  SND_MODE edges: 3 -> 2 silences; MUS_REQ changed while off sounds nothing and is
         remembered; 2 -> 3 restarts the request at bar 1 (steady and changed request)
   SND5  real pause_run: state / stream pointers frozen, R8-R10 = 0 for 50 held frames,
@@ -226,15 +226,26 @@ def snd3_4_6(h):
     s.frames(10)
     check("SND3 MUS_REQ 0: idle (MS_IDLE, CUR 0, silent) 10 frames later",
           (s.state() & MS_MASK, s.cur(), s.vol()) == (MS_IDLE, 0, ZEROS), (s.state(), s.cur()))
-    orc1 = s.oracle(1, 300)
+    # id 1 (Dungeon Crawl) was removed (user 2026-10-19): reserved, rejected as invalid
     s.wb(MUS_REQ, 1)
+    s.frames(3)
+    check("SND3 MUS_REQ 1 (removed song): rejected, idle and silent",
+          (s.state() & MS_MASK, s.cur(), s.vol()) == (MS_IDLE, 0, ZEROS), (s.state(), s.cur()))
+    s.wb(MUS_SHOT, 1)
     s.frame()
-    check("SND3 MUS_REQ 1: start frame (MUS_CUR 1, MS_LOOP)", (s.cur(), s.state() & MS_MASK) == (1, MS_LOOP),
+    check("SND3 MUS_SHOT 1 (removed song): dropped (cleared, idle, silent)",
+          (s.rb(MUS_SHOT), s.state() & MS_MASK, s.cur(), s.vol()) == (0, MS_IDLE, 0, ZEROS))
+    s.wb(MUS_REQ, 0)
+    s.frame()
+    orc1 = s.oracle(3, 300)
+    s.wb(MUS_REQ, 3)
+    s.frame()
+    check("SND3 MUS_REQ 3: start frame (MUS_CUR 3, MS_LOOP)", (s.cur(), s.state() & MS_MASK) == (3, MS_LOOP),
           (s.cur(), s.state()))
     d = s.cmp(orc1, 0, 64)
-    check("SND3 MUS_REQ 1: the frames after the start == oracle frame 0..63", d is None, diff_info(d))
+    check("SND3 MUS_REQ 3: the frames after the start == oracle frame 0..63", d is None, diff_info(d))
 
-    # SND4: SND_MODE edges (id 1 playing)
+    # SND4: SND_MODE edges (id 3 playing)
     s.wb(SND_MODE, 2)
     s.frame()
     check("SND4 SND_MODE 3 -> 2: silent at once (R8-R10 = 0, MUS_CUR 0, MS_IDLE)",
@@ -283,7 +294,8 @@ def snd3_4_6(h):
 # --- SND5 ----------------------------------------------------------------------
 def snd5(h):
     s = Snd(h).menu_start(7)
-    orc = s.oracle(7, 6000)
+    s.wb(SND_MODE, 1)                         # SND-5: music only — the menu key's SFX would steal
+    orc = s.oracle(7, 6000)                   # V1 (SFX over music: tests/sfx.py)
     st = {"k": 0, "bad": None, "held": 0}
 
     def tstep():
@@ -456,19 +468,21 @@ def snd8():
     check("SND8 ay_code_end <= $10000 (the slot ends inside bank 3)", S["ay_code_end"] <= 0x10000,
           hex(S["ay_code_end"]))
     contiguous = (S["ay_vars"] == S["wzm.pl_regs"] and S["ay_mode"] == S["wzm.player_end"]
-                  and S["ay_loop"] == S["ay_mode"] + 1 and S["ay_vars_end"] == S["ay_loop"] + 1
+                  and S["ay_loop"] == S["ay_mode"] + 1 and S["sfx_ptr"] == S["ay_loop"] + 1   # SND-5 state
+                  and S["ay_vars_end"] == S["sfx_ran"] + 2
                   and S["wzm.pl_regs"] < S["wzm.player_end"])
-    check("SND8 ay_vars = wzm.pl_regs .. ay_loop contiguous (%d B)" % (S["ay_vars_end"] - S["ay_vars"]),
+    check("SND8 ay_vars = wzm.pl_regs .. ay_loop + the SFX state contiguous (%d B)" % (S["ay_vars_end"] - S["ay_vars"]),
           contiguous, (hex(S["ay_vars"]), hex(S["ay_mode"]), hex(S["ay_loop"]), hex(S["ay_vars_end"])))
-    check("SND8 mus_tab_end - mus_tab = 14", S["mus.mus_tab_end"] - S["mus.mus_tab"] == 14,
-          S["mus.mus_tab_end"] - S["mus.mus_tab"])
+    check("SND8 mus_tab_end - mus_tab_first = 12 (6 songs, ids 2..7), mus_tab = first - 2",
+          S["mus.mus_tab_end"] - S["mus.mus_tab_first"] == 12 and S["mus.mus_tab"] == S["mus.mus_tab_first"] - 2,
+          S["mus.mus_tab_end"] - S["mus.mus_tab_first"])
 
 
 # --- SND9 ----------------------------------------------------------------------
 def snd9(h):
     worst, pair, over = (0, ""), (0, ""), []
     s = Snd(h)
-    for sid in range(1, 8):
+    for sid in range(2, 8):                   # (id 1, Dungeon Crawl, removed 2026-10-19)
         s.menu_start(7)
         s.frames(10)
         s.wb(MUS_SHOT if sid in ONE_SHOT else MUS_REQ, sid)

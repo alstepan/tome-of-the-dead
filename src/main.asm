@@ -30,6 +30,7 @@
 
                 INCLUDE "constants.asm"
                 INCLUDE "defs.asm"
+                INCLUDE "sfx_ids.inc"                         ; SND-5 SFX_* ids (tools/sfx2asm.py, build/sfx)
                 INCLUDE "../assets/gfx/tiles/tileset_ids.inc" ; TS<d>_* ids (EQUs only; B12 glow_ids)
 
 ;==============================================================================
@@ -542,6 +543,7 @@ kind_tab:
 ;------------------------------------------------------------------------------
                 INCLUDE "mark.asm"              ; D3-8d status marks (mark_tick, per tick)
                 INCLUDE "xp2.asm"               ; D3-9b XP_NEXT table + item_mp (MP bar)
+                INCLUDE "sfx2.asm"              ; SND-5 sfx_req / sfx_msg (any bank calls them)
 
 code_end:
 IMAGE_LEN       EQU code_end - image_start

@@ -161,6 +161,12 @@ use_slot:
                 cp   SA_BAG
                 jr   nz, ic_none               ; SA_EMPTY
 .rf:            ld   a, e
+                jr   ic_refuse
+; ic_no_mana — SND-5: the NO MANA refusal (abil_spell / abil_melee) with the
+; fizz effect (sfx_req keeps A).
+ic_no_mana:     ld   a, SFX_FIZZ
+                call sfx_req
+                ld   a, TX_NO_MANA
 ic_refuse:      call msg_push
                 ld   l, IC_REFUSED
                 ret

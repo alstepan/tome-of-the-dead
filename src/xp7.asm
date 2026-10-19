@@ -150,6 +150,8 @@ xp_level:
                 jr   .chk
 .msg:           bit  XPF_LVL, c
                 ret  z
+                ld   a, SFX_LEVELUP            ; SND-5 (F only)
+                call sfx_req
                 ld   hl, PANEL_DIRTY
                 set  PD_INFO_BIT, (hl)         ; (a new XP_NEXT; also PD_MP: max changed)
                 set  PD_MP_BIT, (hl)

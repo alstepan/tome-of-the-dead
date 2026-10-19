@@ -143,7 +143,7 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   to `$FFFF` since D3-0 (was 7 KB from `$E400`); `src/ay.asm`: since SND-2 the
   mailbox dispatcher `ay_play` + the WZM v0.3 player (`MODULE wzm`, buzzer, no
   echo) + the songs (`MODULE mus`)): called with interrupts off,
-  bank 3 paged at `$C000`, any stack depth (it uses 6 B incl. the CALL). The slot may clobber AF, BC, DE, HL, IX, IY
+  bank 3 paged at `$C000`, any stack depth (it uses 8 B incl. the CALL since SND-5: `ay_play` → `ay_music` / `sfx_step` → the player's 4). The slot may clobber AF, BC, DE, HL, IX, IY
   (`ay_play` today: AF, BC, DE, HL, IX; no IY).
   Must not: write the shadow or `$7FFD`, `EI`, touch `$C000` data of other
   banks, use the alternate set unless `ISR_SAVE_ALT=1` (assemble-only, untested at runtime) (or main code never
@@ -164,8 +164,10 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   (the looping tune wanted now, 0 = silence; write it whenever it changes,
   never "consume" it), `MUS_SHOT` an edge (one-shot id; a final cue writes
   `MUS_REQ` 0 first, then `MUS_SHOT`). Only the ISR writes `MUS_STATE` /
-  `MUS_CUR` and clears `MUS_SHOT`; main code only reads them. `SFX_REQ` is
-  reserved (0). Boot initialises the block before `EI`; nothing else resets it
+  `MUS_CUR` and clears `MUS_SHOT`; main code only reads them. `SFX_REQ`
+  (SND-5) is written only through `sfx_req` (`ld a, SFX_x : call sfx_req`,
+  bank 2, keeps A / BC; priority rule + hold / SFX-bit gate inside); the ISR
+  clears it. Boot initialises the block before `EI`; nothing else resets it
   (`SND_MODE` lives for the power-on).
 - **No `DI` windows in runtime code** (they would stall the music). The only
   sites: `start` (tape entry; the ROM loader), `boot` (`DI` … `EI` around the

@@ -122,6 +122,7 @@ boot:
                 ld   (MUS_REQ), hl             ; SND-2 mailbox (before EI: the ISR
                 ld   (MUS_STATE), hl           ; reads it): no tune, no shot, idle,
                 ld   (SFX_REQ), a              ; nothing sounding (A = 0)
+                ld   (SFX_NEXT), a             ; SND-5: no deferred effect
                 ASSERT MUS_SHOT == MUS_REQ + 1 && MUS_CUR == MUS_STATE + 1
                 ld   a, SND_ALL                ; game.md §3.6: ALL ON per power-on
                 ld   (SND_MODE), a             ; (only boot writes it; new_game never)
@@ -393,6 +394,8 @@ level_enter:
                 push af
                 ld   hl, 0                     ; SND-3: Dangerous off, calm count 0
                 ld   (DNG_DWELL), hl           ; (DNG_CALM = DNG_DWELL + 1)
+                xor  a
+                ld   (SFX_NEXT), a             ; SND-5: no deferred effect into a new level
                 ld   a, MUS_ROOM               ; same id as the menu = the tune keeps playing,
                 ld   (MUS_REQ), a              ; no restart (Q rotation by depth: later)
                 pop  af
@@ -777,6 +780,7 @@ show_impact_msg:
 ; line pre + kind name + post queued to the log (B14: "YOU SQUEEZE PAST THE
 ; RAT" uses it from the input phase). Clobbers: A, BC, DE, HL (IX kept).
 impact_line:
+                call sfx_msg                   ; SND-5: melee hit / miss / kill / hurt (bank 2; BC kept)
                 ld   a, (PORT_7FFD_SHADOW)
                 push af                        ; caller's page
                 push bc
@@ -928,6 +932,8 @@ door_open:
                 and  EG_LOCK | EG_SEAL
                 ret  nz                        ; CF = 0 (and)
                 set  EG_OPEN_BIT, (hl)
+                ld   a, SFX_DOOR               ; SND-5: any opener (hero or monster)
+                call sfx_req
                 xor  a
                 call door_paint
                 scf
@@ -1284,6 +1290,8 @@ climb_blocked:
 ; Clobbers: all; IX = hero on return.
 ;------------------------------------------------------------------------------
 hero_fall:
+                ld   a, SFX_FALL               ; SND-5 (a jump into the pit: replaces JUMP)
+                call sfx_req
                 ld   (ix+E_MODE), M_FALL
                 ld   a, (ix+E_Y)
                 add  a, STOREY_ROWS
@@ -1422,6 +1430,8 @@ try_jump:
                 ld   a, (TMP7)
                 ld   (ix+E_X), a
                 ld   (ix+E_MODE), M_JUMP
+                ld   a, SFX_JUMP               ; SND-5 (F only)
+                call sfx_req
                 ld   (ix+E_TMR), 0             ; arc tick
                 ld   a, (TMP6)
                 call face_a

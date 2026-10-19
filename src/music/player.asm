@@ -20,6 +20,9 @@
 ;   player_frame  once per 50 Hz frame (ISR): sequence 3 voices, write R0..R5, R8..R10
 ;   pl_out_all    write R0..R12 from the mirror (cold; after anything else touched the AY)
 ;   pl_regs       14-B register mirror of the last frame (test hook, R0..R13)
+; `DEFINE WZM_SFX` (game, SND-5; needs WZM_BUZZER): player_frame leaves V1's
+; mirror to the game's sound effect while one plays (sfx_ptr), sets sfx_ran,
+; ducks via sfx_dk and merges sfx_mix into R7 (src/ay.asm).
 ;
 ; No fixed addresses: code, period table and voice state live in this file;
 ; placement in the game (bank 3 AY slot) is a later task. Clobbers AF, BC, DE,
@@ -152,8 +155,20 @@ player_frame:
         ENDIF
                 ld   ix, pl_voice_a
                 call PL_VOICE
+        IFDEF WZM_SFX
+                ; SND-5: an effect owns V1 (src/ay.asm sfx_step put it in the mirror):
+                ; V1 is sequenced on but not stored. sfx_ran (HL = a pl_tp period,
+                ; never 0: ASSERT at pl_tp) tells sfx_out these OUTs happened. +48 T.
+                ld   (@sfx_ran), hl
+                ld   c, a
+                ld   a, (@sfx_ptr + 1)
+                or   a
+                ld   a, c
+                jr   nz, .own
+        ENDIF
                 ld   (pl_regs + 0), hl
                 ld   (pl_regs + AY_R_VOL_A + 0), a
+.own:
                 ld   ix, pl_voice_b
                 call PL_VOICE
                 ld   (pl_regs + 2), hl
@@ -203,7 +218,16 @@ player_frame:
                 ld   b, high AY_PORT_DATA
                 out  (c), l
 .envok:         ld   a, AY_MIXER_BUZZ_C
-.mix:           ld   hl, pl_regs + AY_R_MIXER
+.mix:
+        IFDEF WZM_SFX
+                ; SND-5: channel A's tone / noise bits are the effect's (src/ay.asm
+                ; sfx_mix; $08 = these same music bits when none plays): the mirror
+                ; holds what the chip has, so an R7 change here never cuts the effect
+                and  ~@SFX_MIX_A & $FF
+                ld   hl, @sfx_mix
+                or   (hl)
+        ENDIF
+                ld   hl, pl_regs + AY_R_MIXER
                 cp   (hl)
                 jr   z, .nobuzz
                 ld   (hl), a
@@ -213,6 +237,11 @@ player_frame:
                 ld   b, high AY_PORT_DATA
                 out  (c), a
 .nobuzz:
+        ENDIF
+        IFDEF WZM_SFX
+                ld   a, (@sfx_duck)
+                or   a
+                call nz, @sfx_dk        ; an effect plays: R9/R10 - 3 / 4 in the mirror (+27 T)
         ENDIF
                 ; R10..R8 then R5..R0. OUTD pre-decrements B: E = data port high + 1
                 ld   hl, pl_regs + AY_R_VOL_A + 2
@@ -672,6 +701,15 @@ pl_tp:
                 DEFW   67,   63,   59,   56,   53,   50,   47,   45   ; idx $50..
                 DEFW   42,   40,   37,   35,   33,   31,   30,   28   ; idx $58..
                 ASSERT $ - pl_tp == 2 * (WZM_PITCH_MAX + 1)
+        IFDEF WZM_SFX
+                ; sfx_ran is flagged by storing V1's period: every period is a table
+                ; entry (VO_PER / VO_PER0 / player_start's pl_tp[0]), the table is
+                ; descending, so its last entry is the smallest
+                ASSERT {pl_tp + 2 * WZM_PITCH_MAX} != 0 && {pl_tp + 2 * WZM_PITCH_MAX} < {pl_tp}
+          IFNDEF WZM_BUZZER
+                ASSERT 0, the SFX hooks need WZM_BUZZER - the R7 merge lives in the buzzer block
+          ENDIF
+        ENDIF
 
 ;------------------------------------------------------------------------------
 ; Player state. pl_regs = the AY register image of the last frame (test hook):

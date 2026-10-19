@@ -47,7 +47,7 @@ AY_REG_PORT     EQU $FFFD
 AY_DATA_PORT    EQU $BFFD
 AY_R_VOL_A      EQU 8               ; R8..R10: channel volumes A, B, C (ay_silence)
 ; SND-2 sound mailbox (bank 2, STATE_3B spare; docs/conventions.md "Interrupts":
-; main code writes only SND_MODE / MUS_REQ / MUS_SHOT, single-byte stores or
+; main code writes only SND_MODE / MUS_REQ / MUS_SHOT (+ SFX_REQ via sfx_req), single-byte stores or
 ; set/res on SND_MODE; only the ISR (ay_play) writes MUS_STATE / MUS_CUR and
 ; clears MUS_SHOT). Boot initialises it; new_game never touches it.
 SND_MODE        EQU $BFEB           ; game.md §3.6 sound setting (per power-on)
@@ -62,23 +62,35 @@ MUS_REQ         EQU $BFEC           ; LEVEL: looping tune id (MUS_*), 0 = silenc
 MUS_SHOT        EQU $BFED           ; EDGE: one-shot id, 0 = none; main writes, the ISR clears
 MUS_STATE       EQU $BFEE           ; ISR: bits 0-1 MS_*, bit 7 MS_DONE
 MUS_CUR         EQU $BFEF           ; ISR: id sounding (0 = none)
-SFX_REQ         EQU $BFF0           ; reserved (SFX), stays 0
+SFX_REQ         EQU $BFF0           ; SND-5 EDGE: SFX id (SFX_*, sfx_ids.inc), 0 = none; written
+                                    ; only by sfx_req (keeps the higher prio), cleared by the ISR
+SFX_PRIO_MASK   EQU $E0             ; SFX id bits 5-7 = priority 0..7 (sfx2asm.py)
+SFX_IDX_MASK    EQU $1F             ; bits 0-4 = index 1..SFX_COUNT into sfx_tab
+SFX_DUCK_PRIO   EQU 6 << 5          ; prio >= 6 ducks deeper
+SFX_DUCK_LO     EQU 3               ; any effect: the music's V2 / V3 fixed volumes - 3 (floor 0)
+SFX_DUCK_HI     EQU 4               ; prio >= SFX_DUCK_PRIO: - 4
 DNG_DWELL       EQU $BFF1           ; SND-3 (mus7.asm): turns since W entered (sat. 255), 0 = W off
 DNG_CALM        EQU $BFF2           ; SND-3: consecutive turns without the danger condition
+SFX_NEXT        EQU $BFF3           ; SND-5: ONE deferred SFX id (prio >= SFX_DEFER_PRIO that lost to
+                                    ; a pending / playing higher one); the ISR takes it when the
+                                    ; playing effect ends. sfx_req and the ISR write it, 0 = none
+SFX_DEFER_PRIO  EQU 6 << 5          ; LEVELUP (6) behind KILL / HURT (7) is played after, not lost
 MS_IDLE         EQU 0               ; MUS_STATE bits 0-1
 MS_LOOP         EQU 1
 MS_SHOT         EQU 2
 MS_MASK         EQU 3
 MS_DONE         EQU $80             ; a one-shot finished; cleared when the next shot is taken
 ; tune ids (= the S1e tape keys, sound.md §S1f; order of game_songs.asm's mus_tab)
-MUS_CRAWL       EQU 1               ; Q  Dungeon Crawl      loop
+                                    ; id 1 (Q Dungeon Crawl) removed 2026-10-19 (user):
+                                    ; reserved, the ISR rejects it (an invalid id)
+MUS_FIRST       EQU 2               ; the lowest song id (mus_tab has no entry below it)
 MUS_DANGER      EQU 2               ; W  Dangerous          loop
 MUS_BOSS        EQU 3               ; E  Boss Fight         loop
 MUS_LEVEL       EQU 4               ; R  Level Complete     one-shot (stinger)
 MUS_WIN         EQU 5               ; T  Game Win           one-shot (final)
 MUS_OVER        EQU 6               ; Y  Game Over          one-shot (final)
 MUS_LAMENT      EQU 7               ; U  Lament IIb         loop
-MUS_COUNT       EQU 7
+MUS_COUNT       EQU 7               ; the highest song id (6 songs: MUS_FIRST .. 7)
 MUS_ROOM        EQU MUS_LAMENT      ; the in-play room tune (SND-3: Q rotation replaces it)
 ; Bank 7 (A7): screen 2 at $C000 (what the ULA shows during play; written only
 ; by present / present_full) and the room's ATTR shadow at $F800 (screen-attr

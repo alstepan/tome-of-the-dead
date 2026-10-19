@@ -158,6 +158,10 @@ anim_entity:
                 cp   d
                 jr   nz, .crest
 .land:          ld   (ix+E_MODE), M_REST
+                bit  EF_PLAYER_BIT, (ix+E_FLAGS)   ; SND-5: the hero lands (fall)
+                jr   z, .crest
+                ld   a, SFX_LAND
+                call sfx_req
                 jr   .crest
 .fpx:           ld   b, c                      ; FALL: px 4 px toward 8x, walk cycle
                 ld   a, (ix+E_PX)
@@ -389,7 +393,11 @@ anim_entity:
                 jr   .jfid
 .jland:         ld   (ix+E_MODE), M_REST       ; landed, E = 0 (JUMP1)
                 bit  JA_FALL_BIT, l
-                jr   z, .jfid
+                jr   nz, .jfall
+                ld   a, SFX_LAND               ; SND-5 (only the hero jumps; F only)
+                call sfx_req
+                jr   .jfid
+.jfall:
                 ld   (ix+E_MODE), M_FALL       ; F9 snap: py = the storey-0 top
                 ld   a, d                      ; (px = 8 x_f already: n tween
                 sub  STOREY_ROWS * 8           ; steps of 4 px), then the drop

@@ -26,8 +26,7 @@ abil_spell:
                 call spell_row                 ; HL = the rank row (RR_MP first)
                 ld   a, (MP)
                 cp   (hl)
-                ld   a, TX_NO_MANA
-                jp   c, ic_refuse
+                jp   c, ic_no_mana             ; SND-5: + the fizz effect
                 call on_ladder                 ; Z = mid-ladder (A, HL)
                 ld   a, TX_NO_TARGET
                 jp   z, ic_refuse

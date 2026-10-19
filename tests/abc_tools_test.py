@@ -727,12 +727,14 @@ class GameSongs(unittest.TestCase):
             info = a2w.convert(os.path.join(SRC, t + ".json"), name=n, source="json",
                                **dict(kw, gate=30))
             tot += len(info["bytes"])
-        self.assertEqual(tot, 1933)
+        self.assertEqual(tot, 1933 - 151)          # Dungeon Crawl (151 B) removed (user 2026-10-19)
         with open(os.path.join(self.g, "game_songs.asm")) as f:
             lines = [l.strip() for l in f if not l.startswith(";")]
-        self.assertEqual(lines[:7], ['INCLUDE "%s.asm"' % n for n in self.names])
-        self.assertEqual(lines[7:], ["mus_tab:"] + ["DW " + n for n in self.names]
-                         + ["mus_tab_end:"])
+        k = len(self.names)
+        self.assertEqual(k, 6)
+        self.assertEqual(lines[:k], ['INCLUDE "%s.asm"' % n for n in self.names])
+        self.assertEqual(lines[k:], ["mus_tab_first:"] + ["DW " + n for n in self.names]
+                         + ["mus_tab_end:", "mus_tab EQU mus_tab_first - 2"])
 
 
 if __name__ == "__main__":
