@@ -49,38 +49,8 @@ kx_tab:
                 INCLUDE "dg_bad3.asm"           ; GENERATED: tools/decorgen.py --asm-bad
                 ASSERT dg_bad == kx_tab + KX_LEN && (dg_bad & 63) == 0 && $ - dg_bad == TILE_IDS
 
-;------------------------------------------------------------------------------
-; xpn_tab = XP_NEXT (§4.1; info1.asm keeps its own xp_next for the display): total XP to reach level 2..9, 16-bit LE. Row = (LVL - 2) * 2.
-;------------------------------------------------------------------------------
-XPN_COUNT       EQU 8
-xpn_tab:       DW   40, 100, 200, 340, 500, 700, 920, 1150
-                ASSERT $ - xpn_tab == XPN_COUNT * 2
-
-;------------------------------------------------------------------------------
-; Level-up (§4.1): max HP / max MP gain per level, row = hero kind * 2
-; (K_KNIGHT = Warrior 0, K_WIZARD = Mage 1); current HP/MP rise by the same.
-;------------------------------------------------------------------------------
-LUP_HP          EQU 0
-LUP_MP          EQU 1
-LUP_STRIDE      EQU 2
-lvlup_tab:      DB   4, 1           ; Warrior
-                DB   3, 2           ; Mage
-                ASSERT K_KNIGHT == 0 && K_WIZARD == 1 && $ - lvlup_tab == 2 * LUP_STRIDE
-
-; Step gains on reaching level 2..9, row = (new LVL - 2) * 2: atk +, eva +
-; (L4 atk +1, L6 eva +1, L8 atk +1; both classes; DEF stays gear-only).
-LST_ATK         EQU 0
-LST_EVA         EQU 1
-LST_STRIDE      EQU 2
-lvl_step_tab:   DB   0,0            ; L2
-                DB   0,0            ; L3
-                DB   1,0            ; L4
-                DB   0,0            ; L5
-                DB   0,1            ; L6
-                DB   0,0            ; L7
-                DB   1,0            ; L8
-                DB   0,0            ; L9
-                ASSERT $ - lvl_step_tab == XPN_COUNT * LST_STRIDE
+; (D3-9b: XP_NEXT = bank-2 xpn_tab (xp2.asm), the single table; the level-up
+; gains / steps are xp_turn's immediates, bank-7 xp7.asm.)
 
 ;------------------------------------------------------------------------------
 ; Abilities. Index (ABL_*): the 7 rank-able ones first (ARANK order: Mage 0..4,

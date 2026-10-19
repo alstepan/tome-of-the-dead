@@ -125,13 +125,16 @@ def main():
         chk(f"kx[{k}]", m[kx + 6 * k:kx + 6 * k + 6], want)
     chk("kx_tab length (dg_bad follows, L-RELIEF)", [sym["dg_bad"] - sym["kx_tab"]], [192])
 
-    x = at("xpn_tab")
-    chk("xp_next", [m[x + 2 * i] | m[x + 2 * i + 1] << 8 for i in range(8)], XP_NEXT)
-    lu = at("lvlup_tab")
-    chk("lvlup", [(m[lu + 2 * c], m[lu + 2 * c + 1]) for c in (0, 1)], LEVELUP)
-    ls = at("lvl_step_tab")
-    chk("lvl_step", [(m[ls + 2 * i], m[ls + 2 * i + 1]) for i in range(8)],
-        [STEPS.get(lv, (0, 0)) for lv in range(2, 10)])
+    # D3-9b: XP_NEXT is ONE table, bank-2 xpn_tab (read from the .sna: 27-B
+    # header, then RAM $4000..$FFFF with bank 2 at $8000); the bank-3 copy, the
+    # bank-1 xp_next and the bank-3 level-up tables are gone (xp7.asm immediates,
+    # checked at runtime by tests/xp.py).
+    sna = open(os.path.join(REPO, "build/wazhack.sna"), "rb").read()
+    x = 27 + sym["xpn_tab"] - 0x4000
+    chk("xpn_tab in bank 2", [0x8000 <= sym["xpn_tab"] < 0xC000], [True])
+    chk("xp_next", [sna[x + 2 * i] | sna[x + 2 * i + 1] << 8 for i in range(8)], XP_NEXT)
+    for gone in ("xp_next", "lvlup_tab", "lvl_step_tab"):
+        chk(f"{gone} removed (single source)", [gone in sym], [False])
 
     rk = at("ab_rank")
     for a, (name, rows) in enumerate(RANKS.items()):

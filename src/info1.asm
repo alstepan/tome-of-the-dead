@@ -44,6 +44,26 @@ item_info:
                 ld   a, (hl)
                 cp   TX_NONE
                 ret  z                         ; the Warrior's spare slot: blank
+                ld   b, a                      ; B = the base line
+                ld   a, (SEL_SLOT)             ; D3-9a: a ranked ability at rank 2 / 3
+                call slot_act                  ; takes its info_<name>2 / 3 line (game.md §5:
+                sub  SA_ABIL                   ; roman suffix + that rank's MP / range)
+                jr   c, .tx
+                ld   e, a                      ; E = k
+                call abil_rank                 ; A = rank (A, C, HL)
+                cp   2
+                jr   c, .tx                    ; rank 0 / 1: the base line
+                add  a, TX_INFO_SPARK2 - 2
+                ld   c, a
+                ld   a, (HERO_KIND)
+                or   a
+                ld   a, e
+                jr   nz, .mg                   ; Mage: ABL = k
+                add  a, ABL_POWER              ; Warrior: ABL = k + ABL_POWER
+.mg:            add  a, a
+                add  a, c
+                ld   b, a                      ; TX_INFO_SPARK2 + 2 * ABL + rank - 2
+.tx:            ld   a, b
                 ld   (INFO_TX), a
                 ld   b, a
                 ld   a, (ICON_MODE)            ; C3-2b: ">" prefix in ICON MODE
@@ -90,11 +110,11 @@ item_info:
                 ld   (hl), '/'
                 inc  l
                 ex   de, hl
-                dec  a                         ; LVL 1..8 -> xp_next[LVL - 1]
+                dec  a                         ; LVL 1..8 -> xpn_tab[LVL - 1]
                 add  a, a
                 ld   l, a
                 ld   h, 0
-                ld   bc, xp_next
+                ld   bc, xpn_tab               ; D3-9b: the bank-2 table (xp2.asm)
                 add  hl, bc
                 ld   a, (hl)
                 inc  hl
@@ -125,7 +145,6 @@ item_info:
 INFO_NUM_X      EQU 16 * 6                     ; char 16 (96 px, a cell: print6 x rule)
 INFO_NOTE_X     EQU 28 * 6                     ; char 28 (168 px)
                 ASSERT (INFO_NUM_X & 7) == 0 && (INFO_NOTE_X & 7) == 0 && INFO_NOTE_X + 6 * 14 <= 256
-LVL_MAX         EQU 9
 
 ; dec16 — HL = 0..65535 as decimal (no leading zeros) at (DE) .. DE out.
 ; Clobbers: A, BC, HL
@@ -166,8 +185,6 @@ dec16:
                 pop  ix
                 ret
 .pow:           DW   10000, 1000, 100, 10, 1
-
-xp_next:        DW   40, 100, 200, 340, 500, 700, 920, 1150   ; game.md §4.1, L1..L8
 
 ; info line string per class x slot (TX_NONE: blank)
 info_tab:       DB TX_INFO_SWORD, TX_INFO_POWER, TX_INFO_WHIRL, TX_INFO_DAGGERS, TX_INFO_BOW

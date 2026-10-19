@@ -68,10 +68,18 @@ item_icons_far: ld   hl, item_icons
 ; potion count, the level or the icon signature (icon_sig) differs from what
 ; is drawn. Only these inputs change a slot's state in 3C; 3D's learning /
 ; rank-up / MP greying must set PD_ICONS itself (or extend icon_sig).
-; HL = PANEL_DIRTY, kept; BC kept.  Clobbers: A, DE      ~0.15k T
+; D3-9b: also MP vs MP_SH (sets PD_MP: casts, regen, potions all redraw the
+; MP item without their own dirty bit).
+; HL = PANEL_DIRTY, kept; BC kept.  Clobbers: A, DE      ~0.2k T
 ;------------------------------------------------------------------------------
 icon_poll:
-                ex   de, hl
+                ld   a, (MP_SH)
+                ld   e, a
+                ld   a, (MP)
+                cp   e
+                jr   z, .mp
+                set  PD_MP_BIT, (hl)
+.mp:            ex   de, hl
                 call st_sig                    ; D3-8: the 2 status icons (row 21)
                 ld   hl, STAT_SH
                 cp   (hl)
@@ -174,10 +182,12 @@ st_sig:
 ;------------------------------------------------------------------------------
 ; panel_more — panel_step's tail (HOT_COPY) after HP / LOG / ICONS / DEPTH:
 ; HL = PANEL_DIRTY, C = 0 in the tick's 1st frame. The info line (~25k T, a
-; whole row of 6x8 text) draws only in a 1st frame, like a log line; MP /
-; FOOD / AMMO have nothing to draw until 3D / 3E (cleared).
+; whole row of 6x8 text) draws only in a 1st frame, like a log line; MP
+; (D3-9b) first; FOOD / AMMO have nothing to draw until 3E (cleared).
 ;------------------------------------------------------------------------------
 panel_more:
+                bit  PD_MP_BIT, (hl)           ; D3-9b: a small item (HP's size), any frame
+                jp   nz, item_mp               ; (xp2.asm, after kind_tab)
                 bit  PD_INFO_BIT, (hl)
                 jr   z, .clr
                 inc  c

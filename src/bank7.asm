@@ -37,6 +37,9 @@
 ; Clobbers: all but IY (far7: A, F lost; nothing is returned).
 ;------------------------------------------------------------------------------
 turn_input:
+                ld   a, (XP_UP)                ; D3-9b: a level-up a heavy end_turn tick
+                or   a                         ; deferred (xp_level: 1st frame only)
+                call nz, xp_level
                 ld   a, (ST_FLAGS)             ; D3-8 held hero (FROZEN / ASLEEP / STUNNED,
                 and  STS_HOLD                  ; game.md §2.2): input ignored (Pause still
                 jr   z, .free                  ; works: intent_tick), a Wait turn without
@@ -203,7 +206,8 @@ end_turn:
                 ld   (COMBAT_NOT_BEFORE), a    ; D3-8e2: the panel gate is per turn
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
-                ret  z                         ; (B3B-13: the PROTO chest win is gone; a run
+                jp   z, xp_turn                ; D3-9b: MP regen + level-up (xp7.asm)
+                                               ; (B3B-13: the PROTO chest win is gone; a run
                                                ; wins by descending from D8, level_descend)
                 ld   a, GS_DEAD
                 ld   (GAME_STATE), a
@@ -1083,3 +1087,4 @@ intent_icon7:
                 INCLUDE "status7.asm"          ; D3-8: the status step, held / confused / fearful hero and monsters
                 INCLUDE "drip7.asm"            ; D3-8b: drip sources, spawn / let go, hide
                 INCLUDE "mark7.asm"            ; D3-8d: status marks: room reset + glyph copy, hide
+                INCLUDE "xp7.asm"              ; D3-9b: MP regen, level-up, learn / rank-up

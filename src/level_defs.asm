@@ -585,7 +585,7 @@ ATTR_P_GREY     EQU $07             ; greyed slot (concept-screen §5 icon state
 ATTR_P_SEL      EQU $08             ; OR: selected slot = PAPER blue
                 ASSERT LOG_ROW + 1 == 23 && (LOG_ROW & $18) == (23 & $18)   ; rows 22/23 share a bitmap third
 PD_HP_BIT       EQU 0
-PD_MP_BIT       EQU 1               ; D3-7 T4: a cast pays MP (no MP item drawn yet: cleared)
+PD_MP_BIT       EQU 1               ; D3-9b: item_mp (icons.asm); also polled (MP vs MP_SH)
 PD_LOG_BIT      EQU 4
 PD_ICONS_BIT    EQU 5
 PD_INFO_BIT     EQU 6

@@ -77,7 +77,7 @@ panel_boot:
 ; 0 = both status cells blank, as drawn here), then string E (TX_*, TX_NONE = none; B3B-13: was a
 ; pointer in DE) pushed to the log and everything
 ; queued drawn at once (panel_flush). The caller presents (present_full).
-; Placeholders until 3C/3E: MP bar empty, FOOD bar full + "FED", no ammo, no
+; Placeholders until 3C/3E: FOOD bar full + "FED", no ammo, no
 ; info line, empty gear outlines; quick slots outlined except the potion slot
 ; (T_POTION glyph + count, the PROTO "POT n").  Clobbers: all but IX, IY.
 ;------------------------------------------------------------------------------
@@ -104,7 +104,7 @@ panel_init:
                 ld   (PANEL_POT_SH), a
                 ld   (LVL_SH), a               ; level digit: never drawn
                 ld   (ICON_SIG), a             ; (no real signature is $FF)
-                ld   a, PD_HP | PD_ICONS | PD_DEPTH | PD_INFO
+                ld   a, PD_HP | PD_MP | PD_ICONS | PD_DEPTH | PD_INFO
                 ld   (PANEL_DIRTY), a
                 ; C3-3: the icon bar is drawn by item_icons (icon_state vs
                 ; ICON_SH): every slot "never drawn" -> slot_redraw each
@@ -168,11 +168,7 @@ panel_init:
                 ld   bc, (STAT_ROW << 8) | FOOD_BAR_COL
                 ld   de, ((GEAR_COL - FOOD_BAR_COL) << 8) | 1
                 call stamp_rect
-                ld   bc, (STAT_ROW << 8) | MP_BAR_COL   ; MP placeholder: empty bar
-                call cell_bm
-                xor  a
-                ld   d, 1
-                call bars_draw
+                                               ; (D3-9b: the MP bar is item_mp's, PD_MP above)
                 ld   bc, (STAT_ROW << 8) | FOOD_BAR_COL ; FOOD placeholder: full bar
                 call cell_bm
                 ld   a, 1
@@ -435,7 +431,7 @@ slot_redraw:
                 pop  bc
                 ret
 
-; item_info / dec16 / xp_next / info_tab: bank 1 since the C3 review (info1.asm).
+; item_info / dec16 / info_tab: bank 1 since the C3 review (info1.asm).
 
 ; icon bars by class (game.md §3.5): icon ids (panel_icons.asm) / outline / potion slot
 SLOT_EMPTY      EQU $FE

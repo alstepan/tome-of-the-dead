@@ -309,8 +309,8 @@ log_drop:       push hl
 ; tick (1st frame permitting).
 ; panel_step — C = 0: any item, else small items only. Polls the hero's HP /
 ; MAXHP / potions against what is drawn (sets PD_HP / PD_ICONS), then draws
-; the first dirty item in the order HP, LOG (C = 0 only), ICONS, DEPTH (MP /
-; FOOD / AMMO / INFO: nothing to draw until 3C/3E, their bits are cleared).
+; the first dirty item in the order HP, LOG (C = 0 only), ICONS, DEPTH, then
+; panel_more: MP (D3-9b), INFO (1st frame); FOOD / AMMO cleared until 3E.
 ; Clobbers: all but IX, IY.
 ; Cost: ~200 T idle; HP ~4.5k; potion slot ~2.5k; depth ~2.5k; log: scroll up
 ; to ~7.7k (24 cols) + print6 ~460 T/char (W15) -> 32 chars + scroll ~21k.

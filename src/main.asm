@@ -490,6 +490,12 @@ tile_flags:
                 ASSERT $ - tile_flags == TILE_IDS
                 ASSERT (tile_flags & $FF) + TILE_IDS == $100     ; one page, ends on it
                 ALIGN 256
+; the heroes' base atk / eva (D3-9b: xp_turn adds the §4.1 level steps to the
+; kind_tab columns at runtime; hero_st_init writes these back on a new game)
+KN_ATK          EQU 2
+WZ_ATK          EQU 3
+KN_EVA          EQU 2
+WZ_EVA          EQU 1
 kind_tab:
                 ASSERT K_COUNT <= K_MAX            ; A6 review: every kind has a column
                 ASSERT K_COUNT <= KROW_W           ; ... and KROW emits it (widen KROW first)
@@ -497,8 +503,8 @@ kind_tab:
                 KROW   3,  3,  3,  3,  3,  3,  4,  3,  3          ; KT_BW (cells)
                 KROW BH_K_KNIGHT, BH_K_WIZARD, 0, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME ; KT_BH
                 KROW  22, 14, 18, 10,  6,  7,  3,  3,  5          ; KT_HP
-                KROW   2,  3,  5,  2,  1,  2,  0,  1,  0          ; KT_ATK
-                KROW   2,  1,  3,  2,  1,  3,  1,  4,  0          ; KT_EVA
+                KROW KN_ATK, WZ_ATK, 5, 2, 1, 2, 0, 1, 0          ; KT_ATK (hero columns: + level steps at runtime, D3-9b)
+                KROW KN_EVA, WZ_EVA, 3, 2, 1, 3, 1, 4, 0          ; KT_EVA (hero_st_init restores KN_* / WZ_*)
                 KROW   6,  6,  4,  4,  3,  4,  2,  2,  3          ; KT_DIE
                 KROW   0,  1,  1,  0,  0,  0,  0,  0,  0          ; KT_BONUS
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  1          ; KT_REACH (D3-0: the Mage's PROTO reach-3 zap is gone, game.md §11.4)
@@ -535,6 +541,7 @@ kind_tab:
 ; only 196 B: code there would move kind_tab a page). No alignment needed.
 ;------------------------------------------------------------------------------
                 INCLUDE "mark.asm"              ; D3-8d status marks (mark_tick, per tick)
+                INCLUDE "xp2.asm"               ; D3-9b XP_NEXT table + item_mp (MP bar)
 
 code_end:
 IMAGE_LEN       EQU code_end - image_start

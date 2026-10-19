@@ -300,6 +300,16 @@ hero_st_init:
                 ld   (ARANK + 1), a
                 ld   (XP), a                   ; C3-3 shows LV / XP (reserved for 3D)
                 ld   (XP + 1), a
+                ld   hl, kind_tab + KT_ATK     ; D3-9b: the level steps (xp_turn) off
+                ld   (hl), KN_ATK
+                inc  l
+                ld   (hl), WZ_ATK
+                ld   l, (KT_EVA + K_KNIGHT) & $FF
+                ld   (hl), KN_EVA
+                inc  l
+                ld   (hl), WZ_EVA
+                ASSERT K_KNIGHT == 0 && K_WIZARD == 1 && (kind_tab & $FF) == 0
+                ASSERT ((kind_tab + KT_ATK) >> 8) == ((kind_tab + KT_EVA) >> 8)
                 inc  a
                 ld   (LVL), a                  ; level 1
                 dec  a

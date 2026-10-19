@@ -222,7 +222,7 @@ HERO_IMM        EQU HERO3D + 4      ; status immunity mask (IMMF_*; OR of gear, 
 MP_SH           EQU HERO3D + 5      ; panel: MP as last drawn (PD_MP item, like PANEL_HP_SH)
 STAT_SH         EQU HERO3D + 6      ; panel: status icons as last drawn (row 21, cols 30-31)
 HERO_DEF        EQU HERO3D + 7      ; D3-6a: the hero's DEF (armour; Warrior Leather 1, Mage 0: hero_st_init; gear 3E)
-XP_UP           EQU HERO3D + 8      ; D3-6a: 1 = deal_hit added XP (D3-9's level-up check pending; D3-9 clears it)
+XP_UP           EQU HERO3D + 8      ; D3-6a: 1 = deal_hit added XP; xp_turn (end_turn, xp7.asm) checks the level-up and clears it
 HERO3D_END      EQU HERO3D + 9
                 ASSERT HERO3D >= ANIM_LIST2 + ANIM_MAX * AL_STRIDE && HERO3D_END <= ANIM_N
                 ASSERT (HERO3D >> 8) == ((HERO3D_END - 1) >> 8)
@@ -354,6 +354,7 @@ EFX_WEAK        EQU 7
                 ASSERT EFX_FROZEN == HOLD_FROZEN && EFX_ASLEEP == HOLD_ASLEEP && EFX_STUNNED == HOLD_STUNNED
                 ASSERT DTY_COUNT <= DH_TYPE + 1
 XP_MAX          EQU 9999            ; game.md §4.1: XP saturates
+LVL_MAX         EQU 9               ; game.md §4.1: levels 1..9 (D3-9b: from info1.asm)
                 ASSERT HERO_IMM == HERO_RES + KX_IMM   ; deal_hit: one record layout (RES 3 B, IMM) for hero + kx row
 
 ;------------------------------------------------------------------------------

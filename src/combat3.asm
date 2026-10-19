@@ -41,7 +41,7 @@ kx_melee:
 ; In : IX = attacker, A = target slot, B = to-hit modifier (signed: melee 0,
 ;      Power Strike +2, dagger +1). eva counts 0 against a target with a HOLD
 ;      effect (FROZEN / ASLEEP / STUNNED, §6.4). atk / eva: kind_tab (the
-;      hero's level steps join in D3-9). D3-8: a WEAK hero attacks at -2 and
+;      hero's columns carry the §4.1 level steps: xp_turn, D3-9b). D3-8: a WEAK hero attacks at -2 and
 ;      his eva counts -1 (signed; §6.4 / §7).
 ; Out: A = 1 hit (NZ) / 0 miss (Z). IX kept.
 ; RNG: exactly one d20 (the first draw of an attack, prototype §6.2 order).

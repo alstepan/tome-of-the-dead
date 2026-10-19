@@ -809,8 +809,8 @@ the monsters' atk + (d − 1) div 3, §9.1). DEF stays gear-only.
 class books (§5), repeat books raise ability ranks (§5), and the rare tomes add on top of
 the level curve. Levels are the stat floor; books are the toolkit.
 
-**Messages:** `YOU REACH LEVEL 5!` (18), then on L4/L8 `YOU STRIKE TRUER.` (17), on L6
-`YOU FEEL NIMBLE.` (16). Death/win screens show `LEVEL n`.
+**Messages:** `YOU REACH LEVEL 5!` (18), then on L4/L8 `YOU STRIKE TRUER` (16), on L6
+`YOU FEEL NIMBLE` (15). Death/win screens show `LEVEL n`.
 
 **Display.** Panel cell **(31, 19)** (free; the key icon is at (30, 19)): the level digit
 `1`–`9` in the 6×8 text font, attr `$46`; queued (§3.3). The **BAG icon's info line** shows
@@ -852,7 +852,7 @@ Daggers and the bow have no ranks (ammo is their limit).
 **Display.** Icons are unchanged (no pip: the 24×16 art fills its 3×2 cells, a digit would
 clash). The **info line name field** carries the rank as a roman suffix: `FIREBOLT II  3MP
 RANGE 12  FIRE BURST`, `POWER STRIKE III` (16 = the name field max). Messages: `YOU LEARN
-FIREBOLT!` · `FIREBOLT RISES TO RANK 2.` (25; longest `POWER STRIKE RISES TO RANK 3.` 29).
+FIREBOLT!` · `FIREBOLT RISES TO RANK 2` (24; longest `POWER STRIKE RISES TO RANK 3` 28; no full stop, strings style).
 
 **Data / cost.** Hero state `ARANK` 2 B (2 bits × up to 5 abilities; 0 = unlearned, replaces
 the learned-bit test). Rank table: 7 abilities × 3 ranks × 6 fields (MP, range, die, bonus,

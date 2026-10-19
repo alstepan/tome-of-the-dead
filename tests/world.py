@@ -3168,6 +3168,7 @@ def w16_level(p, check):
               (p.rw("MASTER_SEED"), p.rb("LVL_DEPTH")) == (M, 1), hex(p.rw("MASTER_SEED")))
         h3_want = [0] * h3                       # D3-6a: but the Warrior's HERO_DEF = 1 (Leather)
         h3_want[S["HERO_DEF"] - S["HERO3D"]] = 1 if p.ent(0)["KIND"] == S["K_KNIGHT"] else 0
+        h3_want[S["MP_SH"] - S["HERO3D"]] = p.rb("MP")  # D3-9b: item_mp drew MP since (MP_SH = MP)
         check("W16 new game (D3-0): ST_* arrays (all 16 slots) and HERO3D zeroed (D3-6a: HERO_DEF = class DEF)",
               (st_read(), list(p.z.read_memory(S["HERO3D"], h3)))
               == ({a: [0] * 16 for a in ST}, h3_want), (st_read(), list(p.z.read_memory(S["HERO3D"], h3))))
