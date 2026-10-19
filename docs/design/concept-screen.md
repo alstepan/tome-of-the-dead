@@ -134,15 +134,15 @@ Glyph swap ~0.55k T/cell/step, attr cycle ~0.12k T/cell/step (budget §6).
 
 | # | Object | Size (cols×rows) | Ink / paper | Anim | New ids |
 |---|---|---|---|---|---|
-| 1 | Wall torch (small, exists) | 1×2 | `$46` | attr cycle `$46→$42→$06`, 4 ticks | 0 |
+| 1 | ~~Wall torch (small)~~ **REMOVED 2026-10-19 (DEC1)**; ids 15/16 now BONES | — | — | — | — |
 | 2 | **Tall torch** (Barbarian / PoP), see below | **2×4** | flame `$46`/`$42`, bowl + bracket `$06` | flame tips: **glyph swap 2 frames** + attr cycle; flame body: attr cycle | **10** |
 | 3 | Brazier | 1×2 | flame `$46`, bowl `$07` | glyph swap 2 + attr cycle | 3 |
-| 4 | Candles | 1×1 | `$46` | attr cycle, 8-step table | 1 |
+| 4 | ~~Candles~~ **REMOVED 2026-10-19 (DEC1)**; id 31 now BONES | — | — | — | — |
 | 5 | Dripping water | 1×1 | `$45` | glyph swap 2, hold 12 | 2 |
 | 6 | Cobweb | 1×1 | `$07` | — | 1 |
 | 7 | Hanging chain | 1×N | `$07` | — | 1 |
 | 8 | Banner | 1×2 | `$43` | — | 2 |
-| 9 | Skulls & bones | 1×1 (standing row) | `$47` | — | 1 |
+| 9 | ~~Skulls & bones~~ **REMOVED 2026-10-19 (DEC1)**, replaced by **Dead skeleton (BONES) 4×1**, see "Dead skeleton (DEC1)" below; id 13 is its tile 0 | 4×1 (standing row) | `$47` | — | 0 new (common 13, 15, 16, 31) |
 | 10 | Barred window | 2×2 (1 glyph tiled) | `$05` | — | 1 |
 | 11 | Moss (under a floor) | 1×1 tiled | `$04` | — | 1 |
 | 12 | Rubble | 1×1 | `ATTR_WALL` | — | 1 |
@@ -307,7 +307,7 @@ Storey rows `0..7` (map row = `9s + r`); row 7 = **standing row**, row 8 = floor
 |---|---|---|---|
 | **Mount** | small/slim/tall torch, barred + arched window, banner, tall banner, bookshelf | **top row = storey row 1** for every object (torch 1×2 → rows 1–2, tall torch / arched window → 1–4, tall banner → 1–5) | footprint all `T_AIR`, cols 1..30 |
 | **Ceiling** | chain, moss | **storey row 0**; cell above solid floor (`T_PLAT`/`T_WALLF`) or, for chain only, map row 0 (screen top = ceiling) | `T_AIR`; moss only map row 9 |
-| **Floor** | skulls, candles, cauldron, brazier, big brazier | **bottom row = standing row 7** (brazier 1×2 → 6–7, big brazier → 4–7) | footprint `T_AIR`; **every cell directly below the bottom row is `T_PLAT` or `T_WALLF`** (never hole, pit, cap, ladder hole, grate, door); not on a trap/item cell |
+| **Floor** | ~~skulls, candles~~ (removed DEC1; BONES is placed by its own pass), cauldron, brazier, big brazier | **bottom row = standing row 7** (brazier 1×2 → 6–7, big brazier → 4–7) | footprint `T_AIR`; **every cell directly below the bottom row is `T_PLAT` or `T_WALLF`** (never hole, pit, cap, ladder hole, grate, door); not on a trap/item cell |
 | **Corner** | cobweb | storey row 0 only | see corner rule |
 | **Back-wall patch** | `T_WALL_DITHER/PATCH/FADE`, `PATCH_A/B` (non-solid, game.md §1.2) | `r0` random, footprint inside storey rows **1..5** | footprint all `T_AIR`, cols 2..29 |
 | **Brick** | pillar | unchanged (`T_BRICK` only) | unchanged |
@@ -339,6 +339,54 @@ Storey rows `0..7` (map row = `9s + r`); row 7 = **standing row**, row 8 = floor
   loop) if the ≤ 6 patch-cell budget allows. The menu may add more 1×1 patch cells.
 - **(2) Cobweb pass** (levels with `COBWEB`): scan corner candidates left-to-right,
   top-to-bottom; each takes one `rnd(2)`, placed on 0; **≤ 2 cobwebs per room**.
+
+**Dead skeleton, BONES (DEC1; designer decision 2026-10-19; for tools/decorgen.py + src/decor_gen.asm, Python == Z80).**
+Replaces CANDLES (31), TORCH_SMALL (15/16) and SKULLS (13). TORCH_SLIM (D2/6/8) stays.
+- **Art:** the Skeleton's DEAD frame (collapsed pile) condensed to a **4 cols x 1 row (32x8 px)** lying
+  pose, skull at the left end, ribs and a long bone toward the right. Tiles in screen order
+  (left to right) = common ids **13, 15, 16, 31**; they are NOT contiguous, so BONES is a
+  common-record with an explicit 4-id list (a `BONES_IDS` table), not `base + c`; no renumber.
+  Static (no anim, no flags, no attr cycle, adds 0 to every animation budget). Every other
+  common id stays put. Glyph pixels must keep cell-edge columns touching across tiles 0-3 so
+  it reads as one pile.
+- **Attr:** all four cells `$47` (bright-white ink on black paper). Row 7 is an air-band cell, so the
+  paper is black on every tileset; the per-level floor colour (`ATTR_FLOOR`) paints only the platform row
+  below it, so there is no per-tileset variant and no clash (one ink, black paper, bright bit set like
+  skulls were). Artist deliverable: 4 tiles in one `.grid` strip on the Design canvas, shown
+  on a black cell row sitting on a floor row in each of the 8 `ATTR_FLOOR` values for review.
+- **Behaviour (explicit):** pure decor, class **Floor**. The cells stay `T_AIR`-solidity: BONES
+  never blocks, is not solid, owns no entity slot, no state and no log line; hero and monsters walk
+  through it visually exactly as over rubble, `T_TRAP` and the former skulls: their sprites
+  stamp over it with attribute-follow (F9), restoring tile+attr on leave. An item, ammo or monster
+  drop that later lands on a BONES cell simply draws over it (placement only avoids them at
+  generation).
+- **Where:** levels whose pool contains a Skeleton-family kind (game.md §9.4): **D3 (Skeleton), D4
+  (Archer), D5 (Skeleton, Archer), D7 (Archer), D8 (Skeleton)**. None on D1, D2, D6 (the Bone Caller's
+  summon fallback does not count). Per-room chance: **1 in 2 on D3, D5, D8; 1 in 3 on D4, D7**.
+  **At most 1 per room.** BONES is NOT in the 12-try menu (the menu keeps the common records
+  CHAIN, WALL_DITHER, WALL_PATCH, WALL_FADE plus the level's set, so records for all depths lose
+  CANDLES, SKULLS and TORCH_SMALL, i.e. D1..D8 each lose all three; D2/D6/D8 keep TORCH_SLIM).
+- **Cells:** floor row (bottom row = standing row 7 of storey `s`), 4 consecutive cols `c..c+3`,
+  `c` in 1..27 so the footprint stays in cols 1..30; all 4 cells base-tile `T_AIR` (never a wall
+  cell: "no decor on walls"); every cell directly below is `T_PLAT` or `T_WALLF` (so not over a
+  pit, cap, ladder hole, grate/exit hole or door); not an item, ammo, trap or spawn cell; no
+  ladder cell and no other decor in the 1-cell ring (this excludes cells next to a ladder end
+  and keeps it clear of doors, jambs, caps); budgets unaffected.
+- **Facing: fixed, not mirrored.** A mirrored copy would cost 4 more ids (or a runtime bit-reverse
+  table); no free ids exist. The skull-left pose is deliberately readable either way. So
+  facing needs no RNG call and no stored state, and nothing is derived from RD_SEED beyond
+  the placement draws below (which already come from the RD_SEED-seeded decor LCG).
+- **Pass order and rng (fixed):** (1) patch pass, (2) cobweb pass, (3) 12-try menu loop (unchanged
+  except the menu is shorter, so `o = rnd(k)` has a new k), (4) **bones pass, last**; the old drip
+  pass is gone. Bones pass, only on D3/D4/D5/D7/D8, for every room: exactly **1 gate call**
+  `rnd(2)` (D3/D5/D8) or `rnd(3)` (D4/D7), placed on result 0; if placed, up to **6 tries**, each
+  exactly **2 calls** `s = rnd(2)` then `c = 1 + rnd(27)`; the first legal try wins and the
+  rest are not drawn. On depths D1/D2/D6 the pass draws nothing, so their streams change
+  only through the shorter menu. A storey that does not exist in the room (single-storey) is an
+  illegal try, not a re-draw. Because the pass runs last, bones see the final placed
+  decor for the ring check, and nothing downstream of the room's stream is consumed afterwards.
+- **Tool/test notes:** `is_decor(t)` must now read `t >= 28 or t in (12, 13, 15, 16, 31)`
+  (31 was not listed; it is now BONES). tests/world.py W13 and the decor goldens rebaseline.
 
 **In the mock scene:**
 

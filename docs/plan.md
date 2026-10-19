@@ -389,6 +389,21 @@ content decided at READ (§5), 2nd book 1 in 2 on D4–D7. Tests: reveal on equi
 blesses all worn cursed; seeded shatter empties the slot (fists 1d2); book read order
 (unlock → rank-up → tome); levelcheck includes the cursed value roll and extra books.
 
+**3E breakdown (z80-architect, 2026-10-19)** — hard facts: pool ≈ 46.5K vs `POOL_CAP` 46,468 (3F leaves ~0; **3E must not grow bank 0 / 4 / 6**); common tile ids full (`T_TRAP` took id 10 = `T_POTION`); bank-5 screen can't hold the page (screen 2, bank 7 `$C000..$DAFF`, is the only large transient RAM); free RAM outside the tape image `$5CC0..$5DFF` (320 B, verify) + `$5F8C..$5FFF` (116 B) + `LVL_STATE` 16 B spare. Need ≈ 4.0K code + 2.4K data (≈ 4.4K stored) vs ≈ 0.95K free → levers: (a) boot-only data (`font6x8` 768, `tiles_common` 288, `orn_glyphs` 64, hot image 503) into a pool-tail tape block +1.6K bank 1; (b) ZX0 the menu art +0.5K; (c) raise `AY_RESERVE` after T0 +0.45K; (d) boot code out of bank 7 +0.4K; (e) level_gen overlay blob +0.5K bank 3; (f) item icons as scaled 8×8 floor glyphs −0.7K need; (g) M1(c) font trim +0.2–0.3K. With (a)–(e) ≈ break-even; feature-cut candidates: DROP verb, other-class books, QUICK pin, light-ID naming.
+| T0 | SFX ids: merge the 5 status variants → 1 effect + pitch arg (frees 4 ids), assign TRAP, keep 3 for 3F | S (Sonnet) | – |
+| T1 | **SPIKE-1 memory**: `ovl_run` in low RAM (ZX0 blob → `GEN_SCRATCH` or the screen-2 window), boot-only data → pool-tail tape block, boot-only `boot7` parts out of bank 7, byte ledger | S (Opus) | – |
+| T2 | **SPIKE-2 page feasibility**: empty page from BAG/`I`, `SND_HOLD`, code in the screen-2 window, exit by recompose (or exact restore), ZX0 menu art, GO/NO-GO on levers | S | T0, T1 |
+| T3 | item defs & allocation (type enum by class, 3-B record TYPE/QTY/ISTATE, runtime RAM block ≈ 130 B: BAG 20×3, WORN 4×3, FL_IST 32, ID_MAP/KNOWN, FOOD…, trap list, `E_POT` migration) | S | T2 |
+| T4 / T5 | type tables + strings (J) / Python model items+BUC+traps+ID shuffle (J) | J | T3 |
+| T6 / T7 | level-start gen overlay (items, BUC, traps, ammo, bow, books) / `tests/items_gen.py` 1,000 seeds Python == Z80 | S / J | T3–T5, Q1, Q8 |
+| T8 | `hero_recalc` + equip/reveal/shatter/bless (single writer of `KT_ATK`/`KT_EVA` after `hero_st_init`) | S | T3, Q7 (B20) |
+| T9 | hunger (FOOD tick, stages, jump −2, regen gate, `ST_HWEAK`) | S | T8 |
+| T10 / T11 / T12 | bank-1 helpers `bag_add`/`item_name`/`qs_pick`/`id_learn` (J) / `floor_pickup` → bag, drops, quick use, EAT/GOLD/pickup SFX hooks (S) / effects incl. teleport (S) | | T3, T4, T8–T9, Q6 |
+| T13 / T14 / T15 | page skeleton+input (S) / page drawing (J) / READ books via `abil_learn` (J) | | T2, T10, Q5 |
+| T16 | traps runtime (diff check, search on Wait, Mage sense, reveal) | S | T6, T12, T0 |
+| T17 | exit gate: pick up → equip → eat → learn spell; cursed until Enchant; budgets | J | all |
+Open rulings (designer/user): Q1 floor-item rendering/ids; Q2 gold (not in game.md but `SFX_GOLD` exists); Q3 page layout/verbs/DROP; Q4 ~0.4 s redraw on closing the page OK?; Q5 16×16 item icons vs scaled glyphs; Q6 teleport/followers/LP; Q7 B20 base stats; Q8 items/traps on a separate RNG stream (keeps world goldens) vs `GEN_RNG` rebaseline; Q9 3E text in bank 0 vs the 3F pool; Q10 start bag + `DEBUG_KIT`; Q11 monster drops/boss uniques in 3E?
+
 ### 3F — Monsters, bosses & win (needs game.md §9–10)
 Per-level pool generation (≤ 4 kinds + boss); new monsters (zombie, mummy, orc,
 skeleton-archer, necromancer, giant spider) + ranged AI; level bosses; Necromancer
