@@ -31,7 +31,7 @@ SEG_FIELDS = (("RD_UPCOL", 0), ("RD_DNCOL", 2), ("RD_ARRCOL", 0), ("RD_EXITCOL",
               ("RD_LAD1", 1), ("RD_LAD2", 1))
 # PROTO decor (seed-0 rooms; mirror of bank3.asm proto_decor): room -> [(tile, col, row)]
 # (B3B-13: the room-D chest stand-in is gone with the PROTO win)
-PROTO_DECOR = {S["ROOM_A"]: [("T_TORCH_T", 0, 14), ("T_TORCH_B", 0, 15)]}
+PROTO_DECOR = {}                 # DEC1: the room-A small torch (ids 15 / 16) is gone
 # per-depth (ATTR_FLOOR, ATTR_WALL), game.md §1.2 (depth 0 = PROTO = D1)
 THEME = {1: (0x0F, 0x01), 2: (0x27, 0x04), 3: (0x17, 0x02), 4: (0x28, 0x05),
          5: (0x30, 0x06), 6: (0x38, 0x07), 7: (0x4F, 0x41), 8: (0x1F, 0x03)}

@@ -291,7 +291,7 @@ kind_rest:      DB KN_REST, WZ_REST, 0, SK_REST, GB_REST, GH_REST, RT_REST, BT_R
 ; B3B-5 features: A|B door starts OPEN, D|C door CLOSED (the walkthrough bumps
 ; it), B pit p = 20 (storey 0, off the route), D dead-end block (right edge,
 ; storey 0, cols 29..31, rubble (28, 7)). Potions = FLOOR_LIST entries 0..3
-; (POTIONS_TAKEN bit = entry index). Decor (A torch) = proto_decor (B3B-13:
+; (POTIONS_TAKEN bit = entry index). Decor = proto_decor (empty since DEC1; B3B-13:
 ; the room-D chest and the PROTO win are gone).
 ;==============================================================================
 ROOM_A          EQU 0

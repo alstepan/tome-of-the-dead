@@ -2,7 +2,7 @@
 ; decor.asm — B3B-10 animated decor (plan D6, concept-screen §3.3), bank 2.
 ;   ANIM_LIST (level_defs.asm; filled by the B3B-9 deriver for the room in
 ;   ROOM_MAP, or copied from ANIM_LIST2 by do_exit's room_shadow): per entry
-;   AL_COL, AL_ROW, AL_TYPE (1..15 attr-cycle kind: 1 flame, 2 candle; >= 16
+;   AL_COL, AL_ROW, AL_TYPE (1..15 attr-cycle kind: 1 flame; >= 16
 ;   glyph swap: the OTHER tile id), AL_PHASE (tick counter, starts at the
 ;   object's stagger (col + row) & 7). The attr tables (dt_attr_tab) sit in
 ;   main.asm's kind_tab ALIGN pad.
@@ -16,10 +16,9 @@ DT_MAX_ATTR     EQU 2               ; allows 2 + 3; measured ~1.2k / ~0.75k T pe
                                     ; still fit 4 ticks; a same-stagger bunch spreads
 DT_MAX_TRIES    EQU 3               ; per tick: <= 3 due entries reach the occupancy test
                                     ; (~0.1k per RLIST slot each); the rest wait a tick
-DT_KINDS        EQU 2               ; attr-cycle kinds in dt_attr_tab (1 flame, 2 candle)
+DT_KINDS        EQU 1               ; attr-cycle kinds in dt_attr_tab (1 flame; DEC1 dropped the candle)
 ; dt_attr_tab colours (main.asm). A step writes the WHOLE attr byte, so the
-; cell's paper becomes black: fine, every attr-cycled cell (candles 31, small
-; torch 15/16, the large torches' / braziers' row-1 cells in all 8 tileset
+; cell's paper becomes black: fine, every attr-cycled cell (the large torches' / braziers' row-1 cells in all 8 tileset
 ; slots) already has paper 0 in its TILE_ATTRS / tileset attr (checked
 ; 2026-10-04: $46 or $06), and the deriver never puts decor on floor rows.
 DT_HOT          EQU ATTR_TORCH      ; $46 bright yellow on black (the base attr)

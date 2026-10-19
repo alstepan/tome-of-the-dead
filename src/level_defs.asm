@@ -364,12 +364,12 @@ T_RUBBLE        EQU 27              ; block foot, arrival-shaft cap, ash of the 
 T_WALL_DITHER   EQU 28              ; wall set (concept-screen §3.3)
 T_WALL_PATCH    EQU 29
 T_WALL_FADE     EQU 30
-T_CANDLES       EQU 31              ; animated (attr cycle)
+T_BONES_3       EQU 31              ; DEC1: dead skeleton tile 3 (BONES ids 13/15/16/31, static)
 ; B10 (user option B, designer 2026-10-03): open-door jambs on ids 11 / 14,
 ; non-solid, ink $06; cobweb / moss move to the per-level sets.
 T_DOOR_JAMB_L   EQU 11              ; `#.#.....` x 8: the left arch's outer strokes, continued
 T_CHAIN         EQU 12              ; small decor (valid after B3B-13)
-T_SKULLS        EQU 13
+T_BONES_0       EQU 13              ; DEC1: BONES tile 0 (skull end)
 T_DOOR_JAMB_R   EQU 14              ; `.....#.#` x 8
 ; D3-7 (designer 2026-10-12, game.md §6.3): ids 17 / 18 are permanently the
 ; dropped-ammo floor glyphs (one stack per cell, 8x8 item glyph).
@@ -385,7 +385,7 @@ T_LVL_OBJ       EQU 60              ; 60..63: per-level ATTACKABLE object slots 
 T_LVL_OBJ_N     EQU 4               ;   + Book, 2x2); D1–D7 decor uses 32..59 only
                 ASSERT T_COUNT <= T_DOOR_ARCH_L        ; new ids start after the live PROTO ids
                 ASSERT T_COMMON_USED <= TILE_COMMON
-                ASSERT T_CANDLES < TILE_COMMON
+                ASSERT T_BONES_3 < TILE_COMMON
                 ASSERT T_LVL_OBJ + T_LVL_OBJ_N == TILE_IDS
 
 ; TILE_FLAGS[64] (D2) bit meanings. The table itself is B3B-5 data:
@@ -494,7 +494,7 @@ AL_STRIDE       EQU 4
 ANIM_COPY_LEN   EQU 1 + ANIM_MAX * AL_STRIDE   ; count + entries (49 B)
 AL_COL          EQU 0
 AL_ROW          EQU 1
-AL_TYPE         EQU 2               ; 1..15 attr-cycle kind (1 flame, 2 candle); >= 16 glyph swap:
+AL_TYPE         EQU 2               ; 1..15 attr-cycle kind (1 flame); >= 16 glyph swap:
                                     ;   the OTHER tile id (decor_tick swaps it with the map cell)
 AL_PHASE        EQU 3               ; tick counter (initial value = stagger (col+row)&7 of the
                                     ;   object): steps when & 3 == 0 (glyph swaps / drips: & 15 == 0, i.e. they

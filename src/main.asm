@@ -487,14 +487,13 @@ kind_tab_pad:                                  ; ALIGN padding starts here (head
                 DS   (-($ + TILE_IDS + DT_ATTR_LEN)) & $FF, 0    ; B3B-5: tile_flags ends on the page
 ;------------------------------------------------------------------------------
 ; dt_attr_tab — B3B-10 decor_tick attr cycles, 8 steps per kind (concept-screen
-; §3.3): kind 1 flame (DT_HOT -> DT_RED -> DT_DIM: small / tall torch bodies),
-; kind 2 candle (8-step flicker). Whole attr bytes: they override the cell's
+; §3.3): kind 1 flame (DT_HOT -> DT_RED -> DT_DIM: tall / slim torch bodies, braziers).
+; (DEC1: kind 2, the candle flicker, is gone with the candles.) Whole attr bytes: they override the cell's
 ; paper (black on every cycled cell, see decor.asm DT_HOT). In the pad below
 ; tile_flags: never crosses a page.
 ;------------------------------------------------------------------------------
 dt_attr_tab:
                 DB   DT_HOT, DT_RED, DT_DIM, DT_HOT, DT_RED, DT_DIM, DT_HOT, DT_RED   ; 1 flame
-                DB   DT_HOT, DT_HOT, DT_DIM, DT_HOT, DT_RED, DT_HOT, DT_HOT, DT_DIM   ; 2 candle
 DT_ATTR_LEN     EQU  DT_KINDS * 8
                 ASSERT $ - dt_attr_tab == DT_ATTR_LEN && (dt_attr_tab >> 8) == (($ - 1) >> 8)
 ;------------------------------------------------------------------------------
@@ -505,8 +504,8 @@ DT_ATTR_LEN     EQU  DT_KINDS * 8
 ; until the first level_load_tiles (B3B-8) overwrites 32..63 from the slot.
 ; Solidity belongs to the cell class (game.md §1.2 "Solidity of decor",
 ; designer 2026-10-03): the wall set (DARK = T_BRICK, DITHER, PATCH, FADE) is
-; SOLID and only ever replaces wall cells; rubble / skulls / moss / cobweb /
-; chain / torch / candles / floor items are not. Per-level wall variants (pillar,
+; SOLID and only ever replaces wall cells; rubble / bones / moss / cobweb /
+; chain / floor items are not. Per-level wall variants (pillar,
 ; plaster patches in 32..59) carry TF_SOLID in their tileset slot's flags.
 ;------------------------------------------------------------------------------
 tile_flags:
@@ -517,8 +516,8 @@ tile_flags:
                 DB TF_LADDER, TF_LADDER, TF_LADDER     ;  4-6 T_LAD_L/M/R
                 DB TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE ; 7-9 T_HOLE_*
                 DB 0                                   ; 10 T_POTION (floor item)
-                DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12-13 chain, skulls
-                DB TF_ANIM, TF_ANIM                    ; 15-16 T_TORCH_T/B
+                DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12-13 chain, bones 0
+                DB 0, 0                                ; 15-16 T_BONES_1/2 (DEC1: static)
                 DB 0, 0                                ; 17-18 T_DAGGERS / T_ARROWS (floor items, D3-7)
                 DB TF_FLOOR, TF_FLOOR                  ; 19-20 T_END_L/R = pit caps
                 DB TF_SOLID, TF_SOLID                  ; 21-22 T_DOOR_ARCH_L/R
@@ -528,7 +527,7 @@ tile_flags:
                 DB 0                                   ; 27 T_RUBBLE (decor at a block's foot)
                 DB 0, 0, 0                             ; 28-30 T_WALL_DITHER / PATCH / FADE:
                                                        ; non-solid back-wall patches (D1 decor rule)
-                DB TF_ANIM                             ; 31 T_CANDLES
+                DB 0                                   ; 31 T_BONES_3
                 DS T_LVL_OBJ - TILE_COMMON, 0          ; 32-59 per-level decor
                 DS T_LVL_OBJ_N, TF_SOLID | TF_ATTACK   ; 60-63 lectern / Book
                 ASSERT $ - tile_flags == TILE_IDS

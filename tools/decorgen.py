@@ -9,11 +9,11 @@ decorate(m, depth, seed, live=True) -> (m', anim)
 
 D1 REWORK (user + designer 2026-10-05; concept-screen 3.3 "Decor placement (D1)"):
 classes decide the row, not rng; order: (1) patch pass, (2) cobweb pass, (3) 12-try
-menu loop (D3-7 T6: (4) the drips removed).  Class rules (storey row r = map row - 9s; row 7 = standing row):
+menu loop, (4) DEC1 bones pass (D3-7 T6: the drips removed).  Class rules (storey row r = map row - 9s; row 7 = standing row):
   Mount    torches / windows / banners / bookshelf: top row = storey row 1, T_AIR, cols 1..30
   Ceiling  chain, moss: storey row 0, T_AIR, cols 1..30; the cell above is T_PLAT/T_WALLF
            (chain also at map row 0; moss only map row 9)
-  Floor    skulls, candles, cauldron, brazier(s): bottom row = row 7, T_AIR, cols 1..30,
+  Floor    cauldron, brazier(s): bottom row = row 7, T_AIR, cols 1..30,
            every cell below the bottom row is T_PLAT / T_WALLF
   Patch    T_WALL_DITHER/PATCH/FADE, PATCH_A/B: NON-solid back wall, T_AIR, cols 2..29,
            rows 1..5 (r0 random)
@@ -29,7 +29,7 @@ Algorithm (OLD text below is superseded where it says otherwise; Z80 == this fil
 ---------------------------------------------------------
 RNG: private 16-bit xorshift 7,9,8 (same step as levelgen's GEN_RNG, own state
 x = RD_SEED; never GEN_RNG / RNG_STATE), rnd(n) = step, then (x & $FF) mod n.
-Menu = 7 common objects + the depth's per-level objects (tileset_ids.inc order).
+Menu = 4 common objects + the depth's per-level objects (tileset_ids.inc order).
 TRIES = 12 attempts; EVERY attempt makes exactly 4 rnd calls, in this order,
 whether or not it places anything:
     o   = rnd(N)                       menu index
@@ -49,7 +49,7 @@ base + dy*w + dx (tiled: all base).  Solidity follows the cell class: wall-class
 ids go on T_BRICK only, air-class on T_AIR only (designer, game.md 1.2).
 
 ANIM_LIST contract for B3B-10 (AL_TYPE): 1 .. 15 = attr cycle kind (1 flame
-$46 -> $42 -> $06, 2 candle); >= 16 = glyph swap, the value is the ALTERNATE
+$46 -> $42 -> $06; 2 was the candle, gone with DEC1); >= 16 = glyph swap, the value is the ALTERNATE
 tile id (the map keeps frame 1; decor_tick toggles map id <-> AL_TYPE).
 AL_PHASE = (col + row) & 7 of the object's top-left (an object swaps in step).
 Entries are emitted per object, row-major.
@@ -75,21 +75,25 @@ C_MOUNT, C_CEIL, C_FLOOR, C_PATCH, C_BRICK, C_COMP = 0, 1, 2, 3, 4, 5
 CMIN = {C_MOUNT: 1, C_CEIL: 1, C_FLOOR: 1, C_PATCH: 2, C_BRICK: 0, C_COMP: 2}
 CLASS_OF = {"TORCH_TALL": C_MOUNT, "TORCH_SLIM": C_MOUNT, "WINDOW_ARCH": C_MOUNT,
             "WINDOW_BAR": C_MOUNT, "BANNER": C_MOUNT, "BANNER_TALL": C_MOUNT, "BOOKSHELF": C_MOUNT,
-            "TORCH_SMALL": C_MOUNT, "CHAIN": C_CEIL, "MOSS": C_CEIL, "SKULLS": C_FLOOR,
-            "CANDLES": C_FLOOR, "CAULDRON": C_FLOOR, "BRAZIER": C_FLOOR, "BRAZIER_BIG": C_FLOOR,
+            "CHAIN": C_CEIL, "MOSS": C_CEIL, "CAULDRON": C_FLOOR, "BRAZIER": C_FLOOR, "BRAZIER_BIG": C_FLOOR,
             "WALL_DITHER": C_PATCH, "WALL_PATCH": C_PATCH, "WALL_FADE": C_PATCH,
             "PATCH_A": C_PATCH, "PATCH_B": C_PATCH, "PILLAR": C_BRICK}
 PATCH_TRIES = 8
 MAX_COB = 2
 # flags byte of an object record (bit 0 = moss: a ceiling object that needs a floor above)
-F_MOSS, F_TILED, F_GROW0, F_GLAST, F_AROW1, F_AALL, F_AT2, F_LARGE = 1, 2, 4, 8, 16, 32, 64, 128
+# (bits 5 / 6 were attr-all / attr type 2: candles + small torch, gone with DEC1; never set now)
+F_MOSS, F_TILED, F_GROW0, F_GLAST, F_AROW1, F_LARGE = 1, 2, 4, 8, 16, 128
+
+# DEC1 BONES: the dead skeleton, a 4 x 1 floor pile on the standing row (own pass, last; not in
+# the menu).  Screen order left to right = the common ids below (NOT contiguous: no base + c).
+BONES_IDS = (D["T_BONES_0"], D["T_BONES_1"], D["T_BONES_2"], D["T_BONES_3"])
+BONES_W = len(BONES_IDS)
+BONES_TRIES = 6
+BONES_ODDS = {3: 2, 4: 3, 5: 2, 7: 3, 8: 2}      # depth -> n of the gate rnd(n); 0 places it
 
 # common objects (all depths): name, base, w, h, flags
 COMMON = [
-    ("CANDLES", D["T_CANDLES"], 1, 1, F_AALL | F_AT2),
-    ("SKULLS", D["T_SKULLS"], 1, 1, 0),
-    ("CHAIN", D["T_CHAIN"], 1, 2, F_TILED),
-    ("TORCH_SMALL", D["T_TORCH_T"], 1, 2, F_AALL),
+    ("CHAIN", D["T_CHAIN"], 1, 2, F_TILED),       # DEC1: CANDLES / SKULLS / TORCH_SMALL removed
     ("WALL_DITHER", D["T_WALL_DITHER"], 1, 1, 0),
     ("WALL_PATCH", D["T_WALL_PATCH"], 1, 1, 0),
     ("WALL_FADE", D["T_WALL_FADE"], 1, 1, 0),
@@ -164,8 +168,6 @@ def level_objects():
 
 
 LEVEL, COBWEB = level_objects()
-for _o in COMMON:
-    assert _o[2] == 1 or not _o[4] & (F_AALL), _o      # attr-all objects are w = 1 (area == h)
 RECORDS = COMMON + [o for d in range(1, 9) for o in LEVEL[d]]
 PATCHK = {d: sum(1 for o in LEVEL[d] if o[0] in ("PATCH_A", "PATCH_B")) for d in range(1, 9)}
 LEVEL_FIRST = {}
@@ -197,15 +199,15 @@ def counts(w, h, fl):
     """(glyph cells, attr cells) an object adds to the room budgets."""
     area = w * h
     g = w if fl & F_GROW0 else (1 if fl & F_GLAST else 0)
-    a = (w if fl & F_AROW1 else 0) + (area if fl & F_AALL else 0)
+    a = w if fl & F_AROW1 else 0
     return g, a
 
 
 def is_decor(t):
-    """a tile id the 1-cell ring must not hold (placed decor): chain, skulls, torch,
-    candles and everything per-level / wall-set (>= 28). D3-7 T6: not 17 / 18 (the ammo
-    floor glyphs: items, like the potion 10)."""
-    return t >= 28 or 12 <= t <= 13 or 15 <= t <= 16
+    """a tile id the 1-cell ring must not hold (placed decor): chain, the four BONES ids and
+    everything per-level / wall-set (>= 28). Not 17 / 18 (the ammo floor glyphs: items, like the
+    potion 10).  DEC1: 12 chain, 13 / 15 / 16 / 31 bones (31 = candles before)."""
+    return t >= 28 or t in (12, 13, 15, 16, 31)
 
 
 def floorish(t):
@@ -287,8 +289,8 @@ class Room:
                 typ = 0
                 if dy == 0 and (fl & F_GROW0 or (fl & F_GLAST and dx == w - 1)):
                     typ, alt = alt, alt + 1
-                elif dy == 1 and fl & F_AROW1 or fl & F_AALL:
-                    typ = 2 if fl & F_AT2 else 1
+                elif dy == 1 and fl & F_AROW1:
+                    typ = 1
                 if typ and self.live:
                     self.anim += [col + dx, row + dy, typ, ph]
         dg, da = counts(w, h, fl)
@@ -344,6 +346,25 @@ def cobwebs(room, rng, depth):
                 return
 
 
+def bones(room, rng, depth):
+    """(4) the dead skeleton, depths in BONES_ODDS only.  Exactly one gate call rnd(n), placed on
+    0; then up to BONES_TRIES tries of exactly 2 calls (s = rnd(2), c = 1 + rnd(27)), the first
+    legal one wins.  Legal: the 4 cells (9s + 7, c..c+3) are T_AIR, each cell below is T_PLAT /
+    T_WALLF, the 1-cell ring holds no ladder and no decor.  No state, no mirroring."""
+    n = BONES_ODDS.get(depth)
+    if not n or rng.rnd(n):
+        return
+    m = room.m
+    for _ in range(BONES_TRIES):
+        s = rng.rnd(2)
+        c = 1 + rng.rnd(27)
+        row = 9 * s + 7
+        if fits(m, row, c, BONES_W, 1, C_FLOOR, 0):
+            for k, t in enumerate(BONES_IDS):
+                m[row * COLS + c + k] = t
+            return
+
+
 def decorate(m, depth, seed, live=True):
     rng = Rng(seed)
     room = Room(m, live)
@@ -353,6 +374,7 @@ def decorate(m, depth, seed, live=True):
     for _ in range(TRIES):
         o = mn[rng.rnd(len(mn))]
         room.try_place(rng, o, None)
+    bones(room, rng, depth)
     return room.m, room.anim
 
 

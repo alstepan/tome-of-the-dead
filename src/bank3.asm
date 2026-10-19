@@ -405,8 +405,7 @@ PROTO_ROOMS     EQU ($ - proto_rooms) / (PROTO_DESC_LEN + 1)
                 ASSERT proto_floor == proto_hdr + PROTO_HDR_LEN
                 ASSERT RD_FLAGS == 0 && RD_BLOCK == 9 && RD_LAD1 == 6 && RD_PITCOL == 8
 ; PROTO decor (seed-0 rooms only): room, tile, col, row; $FF ends
-proto_decor:    DB   ROOM_A, T_TORCH_T, 0, 14,  ROOM_A, T_TORCH_B, 0, 15
-                DB   $FF                       ; (B3B-13: the room-D chest is gone)
+proto_decor:    DB   $FF                       ; (empty: B3B-13 dropped the room-D chest, DEC1 the room-A torch)
 
 HERO_START_COL  EQU 2
 HERO_START_S    EQU 1
