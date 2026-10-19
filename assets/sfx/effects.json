@@ -1,5 +1,5 @@
 {
-  "_doc": "SND-5 sound effects (channel A, 50 Hz frames). Format + tokens: tools/sfx2asm.py. Priorities: docs/design/sound.md section 4. Order = ids (append new effects at the end; index 0..31, 32 max). STEP is prio 0 (never cuts anything, dropped when anything plays). \"aliases\": extra SFX_<alias> names for an existing effect id (NO = FIZZ). Loudness: peak frames 14-15 (the music's fixed voices are 13, ducked to 10 / 9 while an effect plays).",
+  "_doc": "SND-5 sound effects (channel A, 50 Hz frames). Format + tokens: tools/sfx2asm.py. Priorities: docs/design/sound.md section 4. STATUS = the five status-apply sounds as ONE effect: the pitch is a per-request transpose (SFX_XP, sfx_msg). \"reserved\": indices kept free for 3F (SFX_IDX_<name>; the next effects appended take them in order). Order = ids (append new effects at the end; index 0..31, 32 max). STEP is prio 0 (never cuts anything, dropped when anything plays). \"aliases\": extra SFX_<alias> names for an existing effect id (NO = FIZZ). Loudness: peak frames 14-15 (the music's fixed voices are 13, ducked to 10 / 9 while an effect plays).",
   "effects": [
     {"name": "MENU", "prio": 1, "frames": ["v15 tE6", "v12 tB6", "v7 t", "v3 t"]},
     {"name": "MISS", "prio": 2, "frames": ["v9 n9", "v14 n6", "v10 n4", "v6 n2", "v2 n1"]},
@@ -28,11 +28,7 @@
                                           "v11 n16", "v8 n20", "v5 n24", "v2 n28"]},
     {"name": "THROW", "prio": 3, "frames": ["v10 n4", "v14 n2", "v10 n3", "v5 n5"]},
     {"name": "BOUNCE", "prio": 3, "frames": ["v15 tA5", "v11 tE5", "v6 t"]},
-    {"name": "ST_STUNNED", "prio": 4, "frames": ["v14 tC6", "v15 tG5", "v12 tC6", "v10 tG5", "v7 tC6", "v4 tG5"]},
-    {"name": "ST_FROZEN", "prio": 4, "like": "ST_STUNNED", "transpose": 7},
-    {"name": "ST_ASLEEP", "prio": 4, "like": "ST_STUNNED", "transpose": -7},
-    {"name": "ST_FEAR", "prio": 4, "like": "ST_STUNNED", "transpose": -3},
-    {"name": "ST_CONFUSED", "prio": 4, "like": "ST_STUNNED", "transpose": 4},
+    {"name": "STATUS", "prio": 4, "frames": ["v14 tC6", "v15 tG5", "v12 tC6", "v10 tG5", "v7 tC6", "v4 tG5"]},
     {"name": "LADDER", "prio": 1, "frames": ["v14 tC4", "v8 t"]},
     {"name": "JUMP", "prio": 3, "frames": ["v13 tC5", "v14 tE5", "v15 tG5", "v12 tC6", "v8 t", "v4 t"]},
     {"name": "LAND", "prio": 2, "frames": ["v15 tC3 n16", "v10 tA2 n20", "v4 n24"]},
@@ -45,7 +41,9 @@
     {"name": "QUAFF", "prio": 3, "frames": ["v14 tA3", "v12 tC4", "v14 tB3", "v12 tD4", "v14 tC4", "v11 tE4", "v9 tD4",
                                           "v7 tF4", "v4 tE4", "v2 tG4"]},
     {"name": "EAT", "prio": 3, "frames": ["v15 n10", "v6 n20", "v14 n8", "v6 n22", "v13 n12", "v4 n26"]},
-    {"name": "GOLD", "prio": 3, "frames": ["v15 tE7", "v13 t", "v15 tB7", "v14 t", "v12 t", "v9 t", "v6 t", "v3 t"]}
+    {"name": "TRAP", "prio": 6, "frames": ["v15 tG6 n2", "v14 tC5 n4", "v15 n8", "v13 tA3 n12", "v11 tF3 n14", "v8 n18",
+                                         "v5 n22", "v2 n26"]}
   ],
+  "reserved": ["BOSS_ROAR", "BOSS_DEATH", "SPARE3F"],
   "aliases": {"NO": "FIZZ"}
 }

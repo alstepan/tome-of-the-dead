@@ -59,7 +59,7 @@ sfx_req:
 ; sfx_msg — impact_line's hook (lowram.asm): B = the impact message code; the
 ; melee lines MSG_P_HIT .. MSG_M_MISS request hit / miss / kill / hero hurt /
 ; monster miss, the monster status lines MSG_M_FROZEN .. MSG_M_CONFUSED (dh_msg
-; / st_msg: a status applied) the status effect, pitched per status; squeeze,
+; / st_msg: a status applied) the status effect (SFX_STATUS), pitched per status through SFX_XP; squeeze,
 ; unaffected, wake, thaw: nothing. Clobbers: AF, DE, HL (BC, IX kept).
 ;------------------------------------------------------------------------------
 sfx_msg:
@@ -71,14 +71,18 @@ sfx_msg:
                 ld   d, 0
                 ld   hl, sfx_msg_tab
                 add  hl, de
+                cp   MSG_M_FROZEN - 1
                 ld   a, (hl)
-                or   a
+                jr   c, .id
+                ld   (SFX_XP), a                ; status line: the table byte is the pitch offset; it rides
+                ld   a, SFX_STATUS              ; in the mailbox beside the id (written even if the request
+                jr   sfx_req                    ; then loses: harmless, the ISR reads it only on a STATUS take)
+.id:            or   a
                 ret  z
                 jr   sfx_req
 sfx_msg_tab:    DB   SFX_HIT, SFX_MISS, SFX_KILL, SFX_HURT, SFX_MISS   ; by MSG code 1..5
                 DB   0, 0                                              ; 6 squeeze, 7 unaffected
-                DB   SFX_ST_FROZEN, SFX_ST_ASLEEP, SFX_ST_STUNNED      ; 8..10
-                DB   SFX_ST_FEAR, SFX_ST_CONFUSED                      ; 11 flees, 12
+                DB   7, -7, 0, -3, 4                                   ; 8..12 SFX_STATUS pitch: frozen, asleep, stunned, fear, confused
                 ASSERT MSG_P_HIT == 1 && MSG_P_MISS == 2 && MSG_P_KILL == 3 && MSG_M_HIT == 4 && MSG_M_MISS == 5
                 ASSERT MSG_SQUEEZE == 6 && MSG_M_UNAFF == 7 && MSG_M_FROZEN == 8 && MSG_M_ASLEEP == 9
                 ASSERT MSG_M_STUNNED == 10 && MSG_M_FLEES == 11 && MSG_M_CONFUSED == 12 && $ - sfx_msg_tab == 12

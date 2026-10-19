@@ -8,7 +8,7 @@ Part A (frame-exact ISR, the sfx.py stepper over the Lament):
   A2  STEP requested while KILL / MENU / LADDER plays: dropped, the playing effect finishes
       untouched (never cuts, not deferred); a STEP does not displace a pending higher request
   A3  SND_MODE gating of STEP's sfx_req: mode 2 accepted, 0 / 1 and SND_HOLD dropped
-  A4  ids: SFX_NO == SFX_FIZZ; GOLD / EAT exist (prio 3, peak >= 14); all new peaks 14-15
+  A4  ids: SFX_NO == SFX_FIZZ; EAT exists (prio 3, peak >= 14); all new peaks 14-15
 Part B (in play, every sfx_req logged by a patch at its entry: id order = call order):
   B1  the hero's step: one turn right in an empty room -> [STEP]
   B2  three Rats walking at him while he waits: >= 2 move, exactly ONE STEP; hero + monsters
@@ -51,11 +51,13 @@ def part_a(h, check):
     s = Snd(h).menu_start(7)
     fx = SFXT.Fx(s)
     step = EFF["STEP"]
-    check("A4 ids: SFX_NO == SFX_FIZZ, STEP prio 0, GOLD / EAT prio 3, 32 effects",
+    check("A4 ids: SFX_NO == SFX_FIZZ, STEP prio 0, EAT prio 3, reserved ids follow SFX_COUNT (3E-T0)",
           S["SFX_NO"] == S["SFX_FIZZ"] and step["prio"] == 0 and step["id"] == step["idx"]
-          and EFF["GOLD"]["prio"] == 3 and EFF["EAT"]["prio"] == 3 and S["SFX_COUNT"] == 32,
+          and EFF["EAT"]["prio"] == 3 and S["SFX_COUNT"] == len(EFF)
+          and S["SFX_IDX_BOSS_ROAR"] == S["SFX_COUNT"] and S["SFX_IDX_BOSS_DEATH"] == S["SFX_COUNT"] + 1
+          and S["SFX_IDX_SPARE3F"] == S["SFX_COUNT"] + 2 and S["SFX_COUNT"] + 3 <= 32,
           (S["SFX_NO"], S["SFX_FIZZ"]))
-    low = [n for n in ("STEP", "PICKUP", "QUAFF", "EAT", "GOLD")
+    low = [n for n in ("STEP", "PICKUP", "QUAFF", "EAT")
            if max(f[1] for f in sfx2asm.decode(EFF[n]["data"])) < 14]
     check("A4 new effects peak 14-15", not low and all(
         max(f[1] for f in sfx2asm.decode(EFF[n]["data"])) <= 15 for n in EFF), low)

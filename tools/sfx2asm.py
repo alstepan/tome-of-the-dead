@@ -49,6 +49,8 @@ PITCH_MAX = 0x5F
 END = 0xFF
 F_TOFF, F_PIT, F_NSE, F_NOFF = 0x10, 0x20, 0x40, 0x80
 MAX_EFFECTS = 32
+STATUS_NAME = "STATUS"
+STATUS_XP = (-7, 7)                           # the SFX_XP offsets sfx_msg writes (sfx_xp_tab)
 
 
 def pitch(tok):
@@ -167,6 +169,11 @@ def load(src):
             fr = parse_frames(e["frames"])
         if prio << 5 | i == 0:
             raise ValueError("%s: id 0 is 'none' (index 0 needs prio >= 1)" % name)
+        if name == STATUS_NAME:               # sfx_msg's SFX_XP offsets (src/sfx2.asm sfx_xp_tab) stay in pl_tp
+            lo = min(p for _, p, _ in fr if p is not None) + STATUS_XP[0]
+            hi = max(p for _, p, _ in fr if p is not None) + STATUS_XP[1]
+            if not (0 <= lo and hi <= PITCH_MAX):
+                raise ValueError("STATUS pitch %d..%d with SFX_XP %+d..%+d leaves 0..%d" % (lo, hi, *STATUS_XP, PITCH_MAX))
         res.append(dict(name=name, idx=i, prio=prio, id=prio << 5 | i, frames=fr, data=encode(fr)))
     return res
 
@@ -185,6 +192,15 @@ def load_aliases(src, effects):
     return out
 
 
+def load_reserved(src, effects):
+    """-> the top-level "reserved" names (indices SFX_COUNT.. kept free; SFX_IDX_<name> EQU index)."""
+    with open(src) as f:
+        r = [x.upper() for x in json.load(f).get("reserved", [])]
+    if len(effects) + len(r) > MAX_EFFECTS or len(set(r)) != len(r):
+        raise ValueError("effects + reserved > %d / duplicate reserved" % MAX_EFFECTS)
+    return r
+
+
 def write(effects, outdir, src):
     os.makedirs(outdir, exist_ok=True)
     rel = os.path.relpath(src, ROOT)
@@ -196,6 +212,8 @@ def write(effects, outdir, src):
                    % (e["name"], e["id"], e["prio"], len(e["frames"]), len(e["data"])))
     for a, t in load_aliases(src, effects):
         ids.append("SFX_%-12s EQU SFX_%s     ; alias" % (a, t["name"]))
+    for k, r in enumerate(load_reserved(src, effects)):
+        ids.append("SFX_IDX_%-8s EQU %d     ; reserved index (3F): prio << 5 | %d once authored" % (r, len(effects) + k, len(effects) + k))
     ids.append("SFX_COUNT        EQU %d" % len(effects))
     ids.append("SFX_DATA_LEN     EQU %d     ; sfx_tab + effects" % total)
     with open(os.path.join(outdir, "sfx_ids.inc"), "w") as f:

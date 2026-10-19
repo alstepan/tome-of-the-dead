@@ -83,7 +83,6 @@ ENT_GLYPH           EQU 8
 ENT_ATTR            EQU 9
 ENT_WPN_BONUS       EQU 10              ; player-only (P4); spare in slot 0
 ENT_POTIONS         EQU 11              ; player-only (P4)
-ENT_GOLD            EQU 12              ; player-only word (12-13)
 ENT_XP              EQU 14              ; player-only (P4)
 ENT_LEVEL           EQU 15              ; player-only (P4)
 ENT_STRIDE          EQU 16

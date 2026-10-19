@@ -661,7 +661,7 @@ Rules:
 | status apply (one SFX, pitch per status) | 10 | 28 + 5 | 4 | 3D |
 | step (default off) / ladder / jump / land / fall | 2 / 2 / 6 / 3 / 20 | 6 / 6 / 14 / 8 / 40 | 1–5 | 3C, J1 |
 | door / gate raise | 12 / 24 | 30 / 55 | 4 / 5 | 3B |
-| pickup / gold / potion / eat | 6 / 8 / 10 / 6 | 14 / 18 / 24 / 14 | 3 | 3E |
+| pickup / potion / eat (no gold in the game: user ruling, GOLD effect removed in 3E-T0) | 6 / 10 / 6 | 14 / 24 / 14 | 3 | 3E |
 | trap | 8 | 20 | 6 | 3E |
 | level-up (or X:4 as a stinger instead → 0 B) | 24 | 50 | 6 | 3D |
 | boss roar / boss death | 30 / 40 | 60 / 70 | 6 / 7 | 3F |
@@ -706,10 +706,10 @@ About **30 SFX ≈ 0.8 KB E**.
   (bit 4), pitch byte follows (bit 5), noise byte follows (bit 6), noise off (bit 7); pitch = index into
   the music's period table `wzm.pl_tp` (MIDI - 12); noise = R6 0..31; `$FF` = end.
 - **Tool:** effects are text in `assets/sfx/effects.json` (per frame `v<vol> t<note|idx> n<noise> x<repeat>`;
-  no `t` = tone off, no `n` = noise off; `"like": X, "transpose": k` = a transposed copy of X).
+  no `t` = tone off, no `n` = noise off; `"like": X, "transpose": k` = a transposed copy of X, unused since 3E-T0). **Pitch argument (3E-T0):** the five status sounds are one effect `STATUS`; the ISR copies the mailbox `SFX_XP` (signed semitones) into `sfx_xp` when it TAKES `SFX_STATUS` (0 for every other effect) and adds it to each pitch byte (`ld hl,sfx_xp / add a,(hl)`: +17 T per pitch byte, +~35 T per take; measured ISR peak: 6,306 T for a fresh take on the worst music frames; the DEFERRED take (a playing effect hits END with `SFX_NEXT` set and a concurrent lower-priority request stored into it: defer store + `.end` take + frame 0 of TRAP with pitch and noise bytes in one ISR) peaks at **6,515 T** with every ISR a deferred take over 300 frames (SFX10c; the review measured +175 T vs a fresh take; ~155 T of that predates T0, T0 adds ~50 T there, the 3E-T0 trims of `.end` / the defer path / the xp test saved ~35 T). That is 15 T over the 6.5k contract: proposed contract 6,550 T for that case only (manager to ratify). Real-deadline evidence: the tick gate is 141,816 T and the real tick peaks at ~132.9k T with the ISRs inside it, and a deferred take needs an END + SFX_NEXT coincidence, at most once per effect, never on consecutive ISRs) -- a pitch must stay inside 0..95. Call site: write `SFX_XP`, then `ld a, SFX_STATUS : call sfx_req` (sfx_msg does it; writing XP even if the request loses is harmless). **Reserved ids (3F):** `"reserved"` in the JSON = `SFX_IDX_BOSS_ROAR` 28, `SFX_IDX_BOSS_DEATH` 29, `SFX_IDX_SPARE3F` 30 (indices only; the 3F effects are appended in that order and set their priority). SFX_COUNT = 28 (27 + TRAP; GOLD removed: no gold in the game). `sfx2asm.py` asserts STATUS pitch + SFX_XP (-7..+7) stays in 0..95. **Known cosmetic race:** an ISR between `ld (SFX_XP)` and `sfx_req` in `sfx_msg`, while an earlier STATUS is still pending (not yet taken), takes the OLD request with the NEW pitch for one effect: harmless (a status sounds one semitone set off).
   `tools/build.sh` runs `tools/sfx2asm.py` into `build/sfx/` (`sfx_ids.inc` included by `main.asm`,
   `sfx_data.asm` by `ay.asm`). Add an effect = append it to the JSON (ids are file order, **0-based since SND-5b, max 32**; id 0 is
-  'none', so index 0 needs prio >= 1; all 32 ids are used: more effects need a wider format) and
+  'none', so index 0 needs prio >= 1; 3E-T0: 28 used + 3 reserved for 3F + 1 free of 32; more effects need a wider format) and
   call `sfx_req` with `SFX_<NAME>`. Top-level `"aliases": {"NO": "FIZZ"}` emits `SFX_NO EQU SFX_FIZZ`.
 - **SND-5b rules:** STEP is **prio 0** (lowest): `sfx_req` / the ISR drop it whenever anything else is pending or
   playing (it never cuts and is never deferred), and it replaces only another STEP. **One step sound a turn:**
@@ -733,7 +733,8 @@ About **30 SFX ≈ 0.8 KB E**.
 | THROW | 3 | 4 | 9 | idem (dagger, bow) |
 | BURST | 5 | 10 | 22 | `fx_trk_tick` impact of `firebolt_burst` (`fx_imp_sfx` in `sfx2.asm`, 2) |
 | BOUNCE | 3 | 3 | 6 | `fx_step` segment change: bounce / reflection (2) |
-| ST_STUNNED / FROZEN (+7) / ASLEEP (−7) / FEAR (−3) / CONFUSED (+4) | 4 | 6 each | 13 each | `sfx_msg` MSG_M_FROZEN .. MSG_M_CONFUSED (a monster's status line: `dh_msg` / `st_msg`) |
+| STATUS (3E-T0: ONE effect, `SFX_STATUS`; pitch = `SFX_XP` transpose: FROZEN +7 / ASLEEP −7 / STUNNED 0 / FEAR −3 / CONFUSED +4) | 4 | 6 | 13 | `sfx_msg` MSG_M_FROZEN .. MSG_M_CONFUSED (a monster's status line: `dh_msg` / `st_msg`): the table byte is the offset, written to `SFX_XP` before `sfx_req` |
+| TRAP (3E-T0, not hooked yet: 3E T16) | 6 | 8 | 21 | the trap springing (§4 row 'trap', 8 frames; click, snap, rattle fade) |
 | LADDER | 1 | 2 | 4 | `try_climb` step (7) |
 | JUMP / FALL | 3 / 4 | 6 / 14 | 11 / 29 | the jump / `hero_fall` (low RAM; a jump into the pit: FALL replaces JUMP) |
 | LAND | 2 | 3 | 9 | `anim_entity` jump end / fall end, the hero (2) |
@@ -742,15 +743,15 @@ About **30 SFX ≈ 0.8 KB E**.
 | STEP | **0** | 2 | 5 | hero: `try_horizontal` (7); every monster: `try_step` → `mv_sfx` (`logic.asm`, bank 2) |
 | PICKUP | 3 | 6 | 9 | `floor_pickup`: `pp_take` (potion), `ap_take` (ammo, when n > 0) (7) |
 | QUAFF | 3 | 10 | 21 | `ic_quaff` (7) |
-| EAT / GOLD | 3 / 3 | 6 / 8 | 13 / 11 | **not hooked** (3E): ids `SFX_EAT` / `SFX_GOLD` ready |
+| EAT | 3 | 6 | 13 | **not hooked** (3E): id `SFX_EAT` ready (GOLD removed in 3E-T0: no gold in the game) |
 | (alias) NO | = FIZZ | | | `ic_no` (7): NO POTION / FOOD / SCROLL / BAG / DAGGERS / BOW / ARROWS / MANA (`SFX_NO EQU SFX_FIZZ`) |
 | MENU (icon bar) | 1 | | | `cursor_step` (7): ICON MODE <- / ->, only when the slot changes |
-| **Total (SND-5b)** | | | **579** (table 64 + data 515); 32 of 32 ids used | |
+| **Total (SND-5b)** | | | **529** (table 56 + data 473) after 3E-T0 (was 579 / table 64 + data 515); 28 of 32 ids used, 3 reserved for 3F, 1 free | |
 
 - **Not built (no event today / held):** menu move / cancel (the main menu has no cursor; the pause box
   runs under `SND_HOLD`, where requests are dropped by the user's rule), gate raise (3B: the grate is
   always raised; 3F's boss death), the hero's own status lines (hero statuses go through `msg_push`, no
-  hook), step (default off), melee swing (not in this round). 3E (pickup / gold / potion / eat / trap)
+  hook), step (default off), melee swing (not in this round). 3E (pickup / potion / eat / trap; no gold)
   and 3F (boss) come with those features.
 - **Space:** engine 381 B in the AY slot + data 510 B; slot **109 B free** (songs 1,794 B after the
   Crawl removal). Elsewhere: bank 2 +122 B (free to FRT 178; `kind_tab` ALIGN pad 41 → **13 B**), low

@@ -76,6 +76,9 @@ DNG_CALM        EQU $BFF2           ; SND-3: consecutive turns without the dange
 SFX_NEXT        EQU $BFF3           ; SND-5: ONE deferred SFX id (prio >= SFX_DEFER_PRIO that lost to
                                     ; a pending / playing higher one); the ISR takes it when the
                                     ; playing effect ends. sfx_req and the ISR write it, 0 = none
+SFX_XP          EQU $BFF4           ; 3E-T0: transpose (signed semitones, two's complement) for the NEXT SFX_STATUS
+                                    ; take; sfx_msg writes it before sfx_req, the ISR copies it to sfx_xp
+                                    ; at the take (only for SFX_STATUS; every other effect plays at 0)
 SFX_DEFER_PRIO  EQU 6 << 5          ; LEVELUP (6) behind KILL / HURT (7) is played after, not lost
 MS_IDLE         EQU 0               ; MUS_STATE bits 0-1
 MS_LOOP         EQU 1

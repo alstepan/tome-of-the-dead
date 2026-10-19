@@ -469,7 +469,7 @@ def snd8():
           hex(S["ay_code_end"]))
     contiguous = (S["ay_vars"] == S["wzm.pl_regs"] and S["ay_mode"] == S["wzm.player_end"]
                   and S["ay_loop"] == S["ay_mode"] + 1 and S["sfx_ptr"] == S["ay_loop"] + 1   # SND-5 state
-                  and S["ay_vars_end"] == S["sfx_ran"] + 2
+                  and S["ay_vars_end"] == S["sfx_xp"] + 1 and S["sfx_xp"] == S["sfx_ran"] + 2
                   and S["wzm.pl_regs"] < S["wzm.player_end"])
     check("SND8 ay_vars = wzm.pl_regs .. ay_loop + the SFX state contiguous (%d B)" % (S["ay_vars_end"] - S["ay_vars"]),
           contiguous, (hex(S["ay_vars"]), hex(S["ay_mode"]), hex(S["ay_loop"]), hex(S["ay_vars_end"])))

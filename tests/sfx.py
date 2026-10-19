@@ -17,7 +17,7 @@ stepper: one `run` = one ISR, stopped at isr.done; music = the menu Lament vs th
   SFX6  ducking while any effect plays: R9/R10 = oracle - 3 (prio >= 6: - 4; floor 0, envelope
         volumes kept), released with the effect; loudness: at each effect's peak frame its R8 >
         every fixed music volume on the chip (R9 / R10), and its peak >= 14 > the music's 13
-  SFX12 KILL (7) then LEVELUP (6) in one turn, either order / LEVELUP during KILL: KILL plays all
+  SFX13 KILL (7) then LEVELUP (6) in one turn, either order / LEVELUP during KILL: KILL plays all
         its frames, then LEVELUP (SFX_NEXT, one deferred slot for prio >= 6)
   SFX11 R6 mirror: a MUS_SHOT start frame mid-effect (pl_out_all) keeps the effect's noise period
         on a later frame that carries it (no noise byte)
@@ -25,7 +25,7 @@ stepper: one `run` = one ISR, stopped at isr.done; music = the menu Lament vs th
         held is dropped; after the release the effect continues at the next frame
   SFX8  SND_MODE: 1 (music only) -> request dropped and a playing effect stops with the
         music restored; 2 (SFX only) -> the effect sounds with the music silent; 0 -> nothing
-  SFX9  sfx_msg: MSG 1..5 -> HIT / MISS / KILL / HURT / MISS, 8..12 -> the 5 status effects;
+  SFX9  sfx_msg: MSG 1..5 -> HIT / MISS / KILL / HURT / MISS, 8..12 -> SFX_STATUS + its pitch offset;
         sfx_abl: ABL_* -> its effect; earlier: MSG_P_HIT / P_MISS / P_KILL / M_HIT / M_MISS -> HIT / MISS / KILL / HURT /
         MISS, other codes nothing
   SFX10 cost: worst ISR (isr -> isr.done) with effects over the Lament <= 6.5k T, reported
@@ -218,7 +218,7 @@ def run(h):
     for _ in range(len(kfr) + 1):
         f.step()
 
-    # ---- SFX12 KILL then LEVELUP (user 2026-10-19): the kill plays fully, then the level-up
+    # ---- SFX13 KILL then LEVELUP (user 2026-10-19): the kill plays fully, then the level-up
     lfr = sfx2asm.decode(EFF["LEVELUP"]["data"])
     res = {}
     for order in (("KILL", "LEVELUP"), ("LEVELUP", "KILL"), ("isr",)):
@@ -243,14 +243,14 @@ def run(h):
         res["+".join(order)] = ok
         for _ in range(3):
             f.step()
-    check("SFX12 KILL + LEVELUP in one turn (either order, or LEVELUP while KILL plays): KILL plays all "
+    check("SFX13 KILL + LEVELUP in one turn (either order, or LEVELUP while KILL plays): KILL plays all "
           "%d frames, then LEVELUP all %d" % (len(kfr), len(lfr)), all(res.values()), res)
     call_at_done(s, S["sfx_req"], EFF["LEVELUP"]["id"])
     call_at_done(s, S["sfx_req"], EFF["HURT"]["id"])
     hurt_cut = (s.rb(SFX_REQ), s.rb("SFX_NEXT")) == (EFF["HURT"]["id"], EFF["LEVELUP"]["id"])
     s.wb(SFX_REQ, 0)
     s.wb("SFX_NEXT", 0)
-    check("SFX12 sfx_req: HURT over a pending LEVELUP -> REQ HURT, LEVELUP deferred to SFX_NEXT", hurt_cut)
+    check("SFX13 sfx_req: HURT over a pending LEVELUP -> REQ HURT, LEVELUP deferred to SFX_NEXT", hurt_cut)
     # the slot keeps the higher priority: KILL pending, LEVELUP loses, HURT replaces KILL ->
     # KILL (7) takes the slot over LEVELUP (6); a later LEVELUP never evicts it
     ids = {n: EFF[n]["id"] for n in ("KILL", "LEVELUP", "HURT")}
@@ -270,7 +270,7 @@ def run(h):
     for _ in range(40):
         f.step()
     s.wb("SFX_NEXT", 0)
-    check("SFX12 SFX_NEXT keeps the higher priority: sfx_req (HURT, KILL) then (HURT, KILL) after a "
+    check("SFX13 SFX_NEXT keeps the higher priority: sfx_req (HURT, KILL) then (HURT, KILL) after a "
           "LEVELUP; ISR defer keeps KILL over LEVELUP",
           a1 == (ids["HURT"], ids["KILL"]) and a2 == a1 and a3 == ids["KILL"], (a1, a2, a3))
     # stale slot: a pending pair, then a pause before any ISR took them -> nothing replays later
@@ -286,7 +286,7 @@ def run(h):
     for _ in range(len(EFF["HIT"]["frames"]) + 3):
         f.step()
     after = (s.mem(S["sfx_ptr"], 2), s.rb("SFX_NEXT"))
-    check("SFX12 pause with a pending pair and nothing playing: SFX_REQ / SFX_NEXT cleared, no replay "
+    check("SFX13 pause with a pending pair and nothing playing: SFX_REQ / SFX_NEXT cleared, no replay "
           "after the next effect", held == (0, 0) and after == (b"\0\0", 0), (held, after))
 
     # ---- SFX6 ducking (part of SFX3's all-effects run; explicit here) -----------------
@@ -395,14 +395,16 @@ def run(h):
     s.wb(SFX_REQ, 0)
     exp = {c: (EFF[n]["id"] if n else 0) for c, n in want.items()}
     check("SFX9 sfx_msg: MSG 1..5 -> HIT/MISS/KILL/HURT/MISS, 0/6/7 nothing, B kept", got == exp, (got, exp))
-    want = {8: "ST_FROZEN", 9: "ST_ASLEEP", 10: "ST_STUNNED", 11: "ST_FEAR", 12: "ST_CONFUSED", 13: None, 14: None}
+    want = {8: 7, 9: -7, 10: 0, 11: -3, 12: 4, 13: None, 14: None}   # MSG -> SFX_STATUS pitch offset
     got, exp = {}, {}
-    for code, name in want.items():
+    for code, xp in want.items():
         s.wb(SFX_REQ, 0)
+        s.wb(S["SFX_XP"], 0x55)
         call_at_done(s, S["sfx_msg"], 0, code << 8)
-        got[code], exp[code] = s.rb(SFX_REQ), (EFF[name]["id"] if name else 0)
-    check("SFX9 sfx_msg: status lines 8..12 -> the 5 status effects, 13/14 (wake/thaw) nothing", got == exp,
-          (got, exp))
+        got[code] = (s.rb(SFX_REQ), s.rb(S["SFX_XP"]))
+        exp[code] = (EFF["STATUS"]["id"], xp & 255) if xp is not None else (0, 0x55)
+    check("SFX9 sfx_msg: status lines 8..12 -> SFX_STATUS + SFX_XP (+7 -7 0 -3 +4), 13/14 (wake/thaw) nothing",
+          got == exp, (got, exp))
     abl = ["SPARK", "FIREBOLT", "FROST", "DRAIN", "LIGHTNING", "POWER", "WHIRL", "THROW", "THROW"]
     got = []
     for k, name in enumerate(abl):
@@ -412,6 +414,29 @@ def run(h):
     s.wb(SFX_REQ, 0)
     check("SFX9 sfx_abl: ABL_SPARK .. ABL_BOW -> spell / Power Strike / Whirlwind / throw, A kept",
           all(a and b for a, b in got), got)
+
+    # ---- SFX13 (3E-T0) SFX_STATUS pitch: SFX_XP is taken at the take, only by STATUS -----
+    s.menu_start(7)
+    f = Fx(s)
+    sf = sfx2asm.decode(EFF["STATUS"]["data"])
+    bad = []
+    for xp in (7, -7, -3, 4, 0):
+        s.wb(S["SFX_XP"], xp & 255)
+        s.wb(SFX_REQ, EFF["STATUS"]["id"])
+        for j, fr in enumerate(sf):
+            c, _w = f.step()
+            if not f.a_ok(c, (fr[0] + xp,) + tuple(fr[1:])):
+                bad.append((xp, j))
+        s.frames(2)
+    s.wb(S["SFX_XP"], 7)                         # a stale mailbox pitch must not leak into HIT
+    s.wb(SFX_REQ, EFF["HIT"]["id"])
+    hf = sfx2asm.decode(EFF["HIT"]["data"])
+    for j, fr in enumerate(hf):
+        c, _w = f.step()
+        if not f.a_ok(c, fr):
+            bad.append(("HIT", j))
+    check("SFX13 SFX_STATUS plays at SFX_XP (+7 -7 -3 +4 0); a following HIT ignores a stale SFX_XP",
+          not bad, bad[:4])
 
     # ---- SFX11 R6 mirror across a start frame ---------------------------------------
     s.menu_start(7)
@@ -455,10 +480,37 @@ def run(h):
             t, _ft = s.frame(timed=True)
             m = max(m, t)
         hw[song] = m
+    # (c) 3E-T0 review: the DEFERRED take - a KILL hits its END with SFX_NEXT set and a concurrent
+    # lower-priority request stored into it (defer store + .end take + frame 0 of TRAP /
+    # LEVELUP in one ISR); 13-frame cycles sweep the alignment against the song
+    dw = {}
+    nk = len(EFF["KILL"]["frames"])
+    for song in (7, 2):
+        for nxt in ("TRAP", "LEVELUP"):
+            s.menu_start(7)
+            if song != 7:
+                s.wb(S["MUS_REQ"], song)
+                s.frame()
+            m = 0
+            end = S["sfx_d_kill"] + len(EFF["KILL"]["data"]) - 1     # the $FF byte
+            for _ in range(300):                # EVERY ISR is a deferred take (all music alignments)
+                s.wb(S["sfx_ptr"], end & 255)
+                s.wb(S["sfx_ptr"] + 1, end >> 8)
+                s.wb(S["sfx_prio"], EFF["KILL"]["id"] & 0xE0)
+                s.wb(S["SFX_NEXT"], EFF["LEVELUP" if nxt == "TRAP" else "TRAP"]["id"])
+                s.wb(SFX_REQ, EFF[nxt]["id"])   # lower prio than KILL: the defer store, then the END take
+                t, _ft = s.frame(timed=True)
+                m = max(m, t)
+            dw[(song, nxt)] = m
+    print("    SFX10c deferred take at END (+ concurrent request): " + ", ".join(
+        "song %d %s %d T" % (k[0], k[1], v) for k, v in dw.items()), flush=True)
     worst = max([worst] + list(hw.values()))
     print(f"    SFX10: every effect over the Lament max {w_eff} T; HURT every frame: "
           f"Lament {hw[7]} T, Dangerous {hw[2]} T", flush=True)
     check(f"SFX10 ISR with effects over the music <= {ISR_MAX} T (worst {worst})", worst <= ISR_MAX, worst)
+    # the deferred take is a documented exception: proposed contract 6,550 T (manager decision,
+    # 3E-T0 review; real-tick gate evidence in sound.md). Every other case stays <= ISR_MAX.
+    check(f"SFX10c deferred take at END <= 6550 T (worst {max(dw.values())})", max(dw.values()) <= 6550, dw)
 
 
 def main():
