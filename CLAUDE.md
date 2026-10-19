@@ -36,6 +36,13 @@ Delegation map:
   reading; small or hard tasks go straight to staff.
 - Model overrides per spawn: `z80-reviewer` → Sonnet for data/test/tool diffs;
   `graphics-artist` → Sonnet for import/convert-only runs (authoring stays Opus).
+- Cost is a hard constraint (user 2026-10-19: token cost + session limits).
+  `z80-staff-engineer` stays Opus for frame-tick/render/paging/layout/merge
+  work; spawn with `model: sonnet` for contracted, low-risk staff tasks.
+  `z80-junior` stays Sonnet for anything touching asm; `model: haiku` only for
+  Python tests/tools, strings, and doc sync (trial: D3-2, D3-10 — keep only if
+  clean). Reviewer: Sonnet for non-asm diffs. One spawn per task, no re-spawns
+  for context the prompt could carry; reports ≤ 15 lines.
 - Task prompts name the exact doc sections and files to read; agents do not
   cold-load whole design docs.
 - Agents report test summaries (counts, failing ids), never full harness logs.
