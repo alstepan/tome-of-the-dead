@@ -206,9 +206,17 @@ end_turn:
                 ld   (COMBAT_NOT_BEFORE), a    ; D3-8e2: the panel gate is per turn
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
-                jp   z, xp_turn                ; D3-9b: MP regen + level-up (xp7.asm)
+                jr   nz, .dead
+                ld   a, (GAME_STATE)           ; not after a win (level_descend .win: GS_WIN
+                cp   GS_PLAYING                ; returns here): the end screen owns the music
+                call z, mus_pick               ; SND-3: Dangerous cue (mus7.asm), mailbox only
+                jp   xp_turn                   ; D3-9b: MP regen + level-up (xp7.asm)
                                                ; (B3B-13: the PROTO chest win is gone; a run
                                                ; wins by descending from D8, level_descend)
+.dead:          xor  a                         ; SND-3: Game Over once (GS_DEAD never reaches
+                ld   (MUS_REQ), a              ; end_turn again; end_screen only redraws): final
+                ld   a, MUS_OVER               ; cue = loop off, then the shot
+                ld   (MUS_SHOT), a
                 ld   a, GS_DEAD
                 ld   (GAME_STATE), a
                 ld   a, TX_DIED
@@ -1088,3 +1096,4 @@ intent_icon7:
                 INCLUDE "drip7.asm"            ; D3-8b: drip sources, spawn / let go, hide
                 INCLUDE "mark7.asm"            ; D3-8d: status marks: room reset + glyph copy, hide
                 INCLUDE "xp7.asm"              ; D3-9b: MP regen, level-up, learn / rank-up
+                INCLUDE "mus7.asm"             ; SND-3: Dangerous (W) cue, mus_pick

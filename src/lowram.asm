@@ -391,8 +391,10 @@ seed_value:     DW   SEED_VALUE
 ;------------------------------------------------------------------------------
 level_enter:
                 push af
-                ld   a, MUS_LAMENT             ; SND-3 mus_pick site (depth in A); same id as the
-                ld   (MUS_REQ), a              ; menu = the tune keeps playing, no restart
+                ld   hl, 0                     ; SND-3: Dangerous off, calm count 0
+                ld   (DNG_DWELL), hl           ; (DNG_CALM = DNG_DWELL + 1)
+                ld   a, MUS_ROOM               ; same id as the menu = the tune keeps playing,
+                ld   (MUS_REQ), a              ; no restart (Q rotation by depth: later)
                 pop  af
                 push de
                 push af

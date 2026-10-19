@@ -63,6 +63,8 @@ MUS_SHOT        EQU $BFED           ; EDGE: one-shot id, 0 = none; main writes, 
 MUS_STATE       EQU $BFEE           ; ISR: bits 0-1 MS_*, bit 7 MS_DONE
 MUS_CUR         EQU $BFEF           ; ISR: id sounding (0 = none)
 SFX_REQ         EQU $BFF0           ; reserved (SFX), stays 0
+DNG_DWELL       EQU $BFF1           ; SND-3 (mus7.asm): turns since W entered (sat. 255), 0 = W off
+DNG_CALM        EQU $BFF2           ; SND-3: consecutive turns without the danger condition
 MS_IDLE         EQU 0               ; MUS_STATE bits 0-1
 MS_LOOP         EQU 1
 MS_SHOT         EQU 2
@@ -77,6 +79,7 @@ MUS_WIN         EQU 5               ; T  Game Win           one-shot (final)
 MUS_OVER        EQU 6               ; Y  Game Over          one-shot (final)
 MUS_LAMENT      EQU 7               ; U  Lament IIb         loop
 MUS_COUNT       EQU 7
+MUS_ROOM        EQU MUS_LAMENT      ; the in-play room tune (SND-3: Q rotation replaces it)
 ; Bank 7 (A7): screen 2 at $C000 (what the ULA shows during play; written only
 ; by present / present_full) and the room's ATTR shadow at $F800 (screen-attr
 ; layout: screen attr -> shadow attr is +$A0 in the high byte, low bytes

@@ -530,17 +530,26 @@ Chosen on the S1e tape: **harpsichord + reverb tail S1e, staccato gate 5/16 (the
 |---|---|---|---|---|
 | **U** | Lament IIb `f_minor_staccato_theme` | **main menu, story screen**, and for now the **in-game theme** (to be replaced later) | loop | SND-2 |
 | **Q** | Dungeon Crawl | in-game, one of the proto room tunes (selection TBD) | loop | SND-3 |
-| **W** | Dangerous | **danger**: the trigger is game.md §3.7 (threat score with hysteresis) | loop | SND-3 |
+| **W** | Dangerous | **danger**: **implemented (SND-3)** — >= 4 awake hostiles in the hero's room or HP <= 25 % of max, hysteresis below | loop | SND-3 |
 | **E** | Boss Fight | entering a **boss room** | loop | SND-4 |
 | **R** | Level Complete | **once** when the player kills the boss | one-shot | SND-4 |
 | **T** | Game Win | **once** when the game is finished successfully | one-shot | SND-4 |
-| **Y** | Game Over | **once** when the player dies | one-shot | SND-3 |
+| **Y** | Game Over | **once** when the player dies — **implemented (SND-3)**: `end_turn` death branch, `MUS_REQ` 0 + `MUS_SHOT` 6 | one-shot | SND-3 |
 
-**DANGER trigger (W):** game.md §3.7 (designer 2026-10-14). It is evaluated once per game
-turn in bank 3 (~2k T per turn, ~140 B code + 32 B `KDNG`). The rule: enter when
-`2·EHP ≤ H·INC` or HP ≤ ¼ max with a threat present. W stays on for at least 8 turns and goes
-off after 3 safe turns, then a 6-turn cool-down follows. BOSS masks it. Descent resets it.
-`mus_pick` is the only writer of the looping request.
+**DANGER trigger (W), as built in SND-3 (manager decision 2026-10-19, replaces the game.md §3.7 threat
+score for now):** `mus_pick` (`src/mus7.asm`, bank 7, a plain call from `end_turn` on every surviving turn;
+mailbox writes only). Condition = **>= 4 awake hostile monsters in CUR_ROOM** (walks the `LIVE_LIST`; ACTIVE |
+HOSTILE, not PENDING / DYING, not ASLEEP; frozen / stunned count) **or hero HP <= MAXHP / 4** (integer, so
+exactly 25 % enters). Enter on the condition (`MUS_REQ` = `MUS_DANGER`); leave only when the condition has been
+false for **>= 8 consecutive turns AND >= 16 turns have passed since entering** (`DNG_DWELL`, `DNG_CALM`
+`$BFF1/$BFF2`; a turn with the condition resets the calm run); then `MUS_REQ` = `MUS_ROOM` (= Lament today; the Q
+rotation will replace it). The "or one full loop" shortcut is not used (no loop-end flag in the mailbox; calm >= 8
+already implies dwell >= 9). `level_enter` (new game, descent) clears the state. Music off / hold: `MUS_REQ` is
+still written (level-triggered), the dispatcher restarts the current request at bar 1 when music returns. After a
+room change the list is the old room's for one turn (its entries fail the room test): a one-turn lag.
+Cost ~105 T per monster entry + ~0.15k (typ. < 1k T; 761 T with 2 monsters). **Death (Y):** `end_turn`
+(the only place `GS_DEAD` is set) writes `MUS_REQ` 0 then `MUS_SHOT` `MUS_OVER` once; the end screen redraw never
+touches the mailbox. Tests: `tests/snd3.py`.
 
 Not used for now: the organ variants, the legato Lament II, Echo (J), reverb 0/50/100, gates other than 5/16. The echo
 experiment is not built into the game player. Other melodies will be added later.
