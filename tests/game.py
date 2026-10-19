@@ -1855,13 +1855,19 @@ def isr_tests(h, p):
     # C3 review: bank-1 code (ui1_code..ui1_end: the scrolls, the info line,
     # entered by far1) is the one other bank allowed to run at $C000+.
     # D3-S2: and the bank-7 cold code (b7_code..b7_end, entered by far7).
-    p.z.cmd("set-breakpoint 7 PC>=C000H and RAM<>3 and RAM<>1 and RAM<>7")
+    # 3E-T1: and, during boot only, the boot block (BOOT6_ADDR..$FFFF, bank 6,
+    # entered by farb from boot): breakpoint 7 is re-armed without bank 6 at
+    # the menu (the pool overwrites the block at the hero start)
+    p.z.cmd("set-breakpoint 7 PC>=C000H and RAM<>3 and RAM<>1 and RAM<>7 and RAM<>6")
     p.z.cmd("set-breakpoint 8 RAM=1 and PC>=C000H and PC<%XH" % S["ui1_code"])
     p.z.cmd("set-breakpoint 9 RAM=1 and PC>=%XH" % S["ui1_end"])
     p.z.cmd("set-breakpoint 10 RAM=7 and PC>=C000H and PC<%XH" % S["b7_code"])
     p.z.cmd("set-breakpoint 11 RAM=7 and PC>=%XH" % S["b7_end"])
+    p.z.cmd("set-breakpoint 12 RAM=6 and PC>=C000H and PC<%XH" % S["BOOT6_ADDR"])
     p.extra_probes = set()
     p.wait_state(GS_SELECT)
+    p.z.cmd("set-breakpoint 7 PC>=C000H and RAM<>3 and RAM<>1 and RAM<>7")
+    p.z.cmd("set-breakpoint 12")
     p.wb("INPUT_REPEAT", 0)
     p.wb("ANIM_FREEZE", 1)
     p.wb("INPUT_SRC", 1)
@@ -1875,8 +1881,10 @@ def isr_tests(h, p):
              S["ISR_VEC_TABLE"] >> 8)
     h.expect("61 vector table: 257 x ISR_VEC_BYTE",
              set(p.z.read_memory(S["ISR_VEC_TABLE"], S["ISR_VEC_LEN"])), {S["ISR_VEC_BYTE"]})
+    from game_lib import SNA_RAM                 # 3E-T1: the load image is in the boot
+    io = S["BANK_BOOT6"] * 16384 + S["isr_image"] - 0xC000   # block (bank 6 tail, pool later)
     h.expect("61 ISR copied to ISR_ADDR", p.z.read_memory(S["ISR_ADDR"], S["ISR_LEN"]) ==
-             p.z.read_memory(S["isr_image"], S["ISR_LEN"]), True)
+             SNA_RAM[io:io + S["ISR_LEN"]], True)
     # 50 Hz: 50 idle ticks = 100 frames = 100 AY_PLAY calls, ~70,908 T each
     def frames():
         b = p.z.read_memory(S["SYS_FRAMES"], 3)
@@ -2020,6 +2028,14 @@ def tape_rest(h, p):
     to = S["BANK_TEXT"] * 16384 + S["TEXT_ADDR"] - 0xC000   # D3-TX: the text block, bank 0
     h.expect("50 bank 0 text block (D3-TX tape block) == .sna", ram[to:to + S["TEXT_LEN"]] ==
              SNA_RAM[to:to + S["TEXT_LEN"]], True)
+    # 3E-T1: the boot block (bank 6 tail, last tape block). Boot-only: the
+    # hero start's pool overwrites it, but the boot pool ends in bank 4
+    # (ALLOC_IDX < 2 here, ASSERTed in main.asm as POOL_BOOT_NEED), so at the
+    # menu it is still byte-equal to the .sna — checked, not masked
+    bo = S["BANK_BOOT6"] * 16384 + S["BOOT6_ADDR"] - 0xC000
+    h.expect("50 boot block untouched by the boot pool (ALLOC_IDX < 2)", p.rb("ALLOC_IDX") < 2, True)
+    h.expect("50 bank 6 boot block (3E-T1 tape block) == .sna", ram[bo:bo + S["BOOT6_LEN"]] ==
+             SNA_RAM[bo:bo + S["BOOT6_LEN"]], True)
     h.expect("50 tape: IM 2 installed by boot", " IM2 " in p.z.cmd("get-registers"), True)
     # CODE block starts in bank 5 low RAM (boot, generator) and runs into bank 2
     lo5 = S["lowram_code"] - 0x4000

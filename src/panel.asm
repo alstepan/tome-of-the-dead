@@ -5,11 +5,11 @@
 ;      panel art + state), panel_flush, their helpers. MEM-SND: panel_boot
 ;      (boot: FONT6 planes + the hot image -> bank-2 runtime RAM) and
 ;      panel_init7 (panel_init's bank-2-only half) are bank 7 (boot7.asm).
-;   2. (B3B-11b) the boot / new-game cold DATA — font6x8, the panel icons, the
-;      hot image (panel_hot.asm: print6, log_push, panel_tick, item_hp) — is
-;      NOT here: main.asm `vdata` puts it in bank 1 after the ZX0 sprite
-;      sources; bank-3 code reads it only through
-;      copy_virt3 (lowram), into GEN_SRC or straight to its bank-2 target.
+;   2. (B3B-11b) the new-game cold DATA — the panel icons — is NOT here:
+;      main.asm `vdata` puts it in bank 1 after the ZX0 sprite sources;
+;      bank-3 code reads it only through copy_virt3 (lowram), into GEN_SRC.
+;      3E-T1: the boot-only data (font6x8, the hot image panel_hot.asm:
+;      print6, log_push, panel_tick, item_hp) is in the boot block (boot6.asm).
 ; D5 (user 2026-10-03): panel changes are queued (PANEL_DIRTY bits + the
 ; LOG_Q message ring) and drained ONE item per tick by panel_tick, never in a
 ; turn's input tick (play_loop), <= ~3 ticks latency. Logic never reads the
@@ -17,7 +17,7 @@
 ; for the log rows, pmark_rect for the rest).
 ;==============================================================================
 
-; panel_boot: bank 7 since MEM-SND (boot7.asm, far7 from boot).
+; panel_boot: bank 7 since MEM-SND, the boot block since 3E-T1 (boot6.asm boot6_tiles).
 
 ;------------------------------------------------------------------------------
 ; panel_init — new game / level (far3 from level_show): the static panel of HERO_KIND

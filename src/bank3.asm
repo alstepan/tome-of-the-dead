@@ -992,7 +992,7 @@ build_room_map:
 decor_room:
                 INCLUDE "decor_gen.asm"         ; B3B-9: the deriver (code from the label on)
 
-; init_tiles: bank 7 since MEM-SND (boot7.asm, far7 from boot).
+; init_tiles: bank 7 since MEM-SND, the boot block since 3E-T1 (boot6.asm boot6_tiles).
 ; (cold tile data: B3B-11b moved it to main.asm vdata, read via copy_virt3)
                 INCLUDE "panel.asm"            ; B3B-11 panel engine (cold part + the HOT_COPY image)
                 INCLUDE "turn3.asm"            ; B3B-R2 turn logic: monster phase, attacks, potions

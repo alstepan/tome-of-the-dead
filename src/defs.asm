@@ -31,6 +31,7 @@ BANK_SRC_HI     EQU 3               ; sprite SOURCES, virtual $C000-$FFFF (conte
 BANK_POOL0      EQU 0               ; pre-shift pool (uncontended), boot-generated
 BANK_POOL1      EQU 4
 BANK_POOL2      EQU 6
+BANK_BOOT6      EQU BANK_POOL2      ; 3E-T1: the boot block BOOT6_ADDR..$FFFF (boot6.asm), dead after boot
 BANK_SHADOW     EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect's attrs)
 BANK_COLD7      EQU 7               ; D3-S2: bank-7 cold code B7_CODE..B7_LIMIT (via far7)
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
@@ -133,7 +134,7 @@ NEXT_MAP        EQU $6300           ; 672 B buffer: destination room during a tr
 TILE_GLYPHS     EQU $6600           ; 512 B: 64 tiles x 8 B ($6600..$67FF)
 BITREV_TAB      EQU $6800           ; 256 B: bit-reversed byte (page-aligned)
 TILE_ATTRS      EQU $6900           ; 64 B : attr per tile id (one page: ld h, TILE_ATTRS>>8)
-GEN_SRC         EQU $6940           ; 512 B: staging for vdata reads (panel_boot / pblit, copy_virt)
+GEN_SRC         EQU $6940           ; 512 B: staging for vdata reads (pblit, copy_virt; 3E-T1: boot no longer)
 GEN_MIR         EQU $6B40           ; 512 B: mirrored copy (left-facing)
 LOWRAM_END      EQU $6D40
 ; D3-TX: tx_dec's decode buffer (a whole string, 0-terminated, readable with any
@@ -144,7 +145,7 @@ LOWRAM_END      EQU $6D40
 TX_DEC_LEN      EQU 43              ; textpack WIDE_MAX 42 + the 0
 TX_DEC          EQU LOWRAM_END - TX_DEC_LEN   ; $6D15..$6D3F
 TILE_IDS        EQU 64              ; tile id capacity (glyphs/attrs above)
-TILE_COMMON     EQU 32              ; ids 0..31: engine/common tiles (init_tiles)
+TILE_COMMON     EQU 32              ; ids 0..31: engine/common tiles (boot6_tiles)
 ; ids 32..63: per-level slots (game.md §1.2). B3B-8: level_load_tiles copies
 ; the depth's bank-7 slot (TSET_*, level_defs.asm: 32 glyphs + 32 attrs + 32
 ; flags) to TILE_LEVEL_GLYPHS / TILE_LEVEL_ATTRS / tile_flags + 32 — the glyph

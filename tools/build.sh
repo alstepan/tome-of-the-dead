@@ -36,19 +36,50 @@ python3 "$ROOT/tools/abc2wzm.py" --game "$OUT/build/music_game" >/dev/null
 python3 "$ROOT/tools/sfx2asm.py" "$OUT/build/sfx" >/dev/null
 LOG="$OUT/build/sjasmplus.log"
 cd "$OUT"
+# 3E-T1 overlays (main.asm "OVERLAYS"): pass 1 (-DOVL_PASS=1) assembles the
+# raw overlay images to build/ovl/*.bin (its other outputs are overwritten);
+# each is packed with tools/bin/zx0; pass 2 (the real build) INCBINs the
+# packed streams (-i build/ovl) and writes the raw images again, which must
+# equal pass 1's (else an overlay depends on the packed sizes: fail).
+OVL="$OUT/build/ovl"
+rm -rf "$OVL"
+# no stale artefacts survive a failed build (pass 1 writes none: OVL_PASS 1
+# skips main.asm's SAVETAP / SAVESNA; pass 2 writes them only on success paths)
+rm -f build/wazhack.tap build/wazhack.sna build/wazhack.sym
+mkdir -p "$OVL"
+set +e
+sjasmplus "$ROOT/src/main.asm" --fullpath --sym="$OVL/pass1.sym" \
+    -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" -i "$OVL" \
+    -DOVL_PASS=1 "$@" >"$OVL/pass1.log" 2>&1
+RC=$?
+set -e
+if [ $RC -ne 0 ] || ! grep -q 'Errors: 0, warnings: 0' "$OVL/pass1.log"; then
+    grep -E 'rror|arning' "$OVL/pass1.log" || true
+    echo "build.sh: overlay pass 1 failed, full log: $OVL/pass1.log" >&2
+    exit 1
+fi
+for f in "$OVL"/*.bin; do
+    [ -e "$f" ] || continue
+    "$ROOT/tools/bin/zx0" -f "$f" "${f%.bin}.zx0" >/dev/null 2>&1 || {
+        echo "build.sh: zx0 failed on $f (run tools/setup_zx0.sh)" >&2; exit 1; }
+    mv "$f" "${f%.bin}.raw1"
+done
 set +e
 sjasmplus "$ROOT/src/main.asm" --fullpath \
     --lst=build/wazhack.lst --sld=build/wazhack.sld --sym=build/wazhack.sym \
-    -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" "$@" >"$LOG" 2>&1
+    -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" -i "$OVL" "$@" >"$LOG" 2>&1
 RC=$?
 set -e
 grep -E '^>|rror|arning' "$LOG" || true
-if [ $RC -ne 0 ]; then
-    echo "build.sh: sjasmplus failed (exit $RC), full log: $LOG" >&2
+fail() {   # a failed pass 2 leaves no tape / snapshot / symbols behind
+    rm -f build/wazhack.tap build/wazhack.sna build/wazhack.sym
+    echo "build.sh: $1" >&2
     exit 1
-fi
-if ! grep -q 'Errors: 0, warnings: 0' "$LOG"; then
-    echo "build.sh: assembler warnings are failures, full log: $LOG" >&2
-    exit 1
-fi
+}
+[ $RC -eq 0 ] || fail "sjasmplus failed (exit $RC), full log: $LOG"
+grep -q 'Errors: 0, warnings: 0' "$LOG" || fail "assembler warnings are failures, full log: $LOG"
+for f in "$OVL"/*.raw1; do
+    [ -e "$f" ] || continue
+    cmp -s "$f" "${f%.raw1}.bin" || fail "overlay ${f%.raw1}.bin differs between the passes"
+done
 echo "build.sh: OK -> $OUT/build/wazhack.tap / .sna / .sym"

@@ -15,146 +15,71 @@
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; start — .tap entry (RANDOMIZE USR start): pull the six headerless blocks
-; off tape with the ROM loader (bank 1 = sources; bank 3 = source tail + bank-3
-; cold code; A8: bank 3 AY slot at AY_RESERVE; B3B-8: bank 7 tilesets at
-; TSET_LO / TSET_HI — nothing there is live yet: screen 2 is not shown, the
-; 128 editor's bank-7 workspace is abandoned with BASIC; D3-TX: the text block
-; at the bottom of bank 0 — check_paging's probe byte there is overwritten),
-; then boot. The .sna enters at
-; boot. Runs under the ROM IM1 ISR (LD-BYTES ends with EI; IY = $5C3A here):
-; boot installs IM 2.
+; start — .tap entry (RANDOMIZE USR start): pull the seven headerless blocks
+; off tape with the ROM loader, in `tape_tab` order (3E-T1: one table-driven
+; loop, was one 15-20 B stanza per block): bank 1 = sources + vdata + UI code;
+; bank 3 = source tail + bank-3 cold code; A8: bank 3 AY slot at AY_RESERVE;
+; B3B-8: bank 7 tilesets at TSET_LO (+ D3-S2 the bank-7 cold code) / TSET_HI —
+; nothing there is live yet: screen 2 is not shown, the 128 editor's bank-7
+; workspace is abandoned with BASIC; D3-TX: the text block at the bottom of
+; bank 0 — check_paging's probe byte there is overwritten; 3E-T1: the boot
+; block at the top of bank 6 (boot6.asm). Then boot. The .sna enters at boot.
+; Runs under the ROM IM1 ISR (LD-BYTES ends with EI; IY = $5C3A here): boot
+; installs IM 2. A tape error rewinds and retries the same block.
 ;------------------------------------------------------------------------------
 start:
                 di
                 ld   sp, WORKSTORE_TOP
                 ld   iy, IY_SYSVAR
                 call check_paging              ; stops here if $7FFD is locked
-.lo:            ld   a, BANK_SRC_LO            ; test probe (paging OK)
-                call page_bank
-                ld   ix, BANK_WINDOW
-                ld   de, SRC_LEN_LO
+                ld   hl, tape_tab
+.lo:                                           ; test probe (paging OK): once per block
+                push hl                        ; the record (retried on a tape error)
+                ld   a, (hl)                   ; TT_BANK
+                inc  hl
+                ld   e, (hl)
+                inc  hl
+                ld   d, (hl)
+                inc  hl
+                push de
+                pop  ix                        ; IX = TT_ADDR
+                ld   e, (hl)
+                inc  hl
+                ld   d, (hl)                   ; DE = TT_LEN
+                call page_bank                 ; (clobbers BC only)
                 ld   a, $FF                    ; data block flag
                 scf                            ; LOAD (not VERIFY)
                 call ROM_LD_BYTES
+                pop  hl
                 jr   nc, .lo                   ; tape error: rewind + retry
-.hi:            ld   a, BANK_COLD3             ; = BANK_SRC_HI: tail + cold code
-                call page_bank
-                ld   ix, BANK_WINDOW
-                ld   de, BANK3_LEN
-                ld   a, $FF
-                scf
-                call ROM_LD_BYTES
-                jr   nc, .hi
-.ay:                                           ; A8: the AY slot (bank 3 still paged)
-                ld   ix, AY_RESERVE
-                ld   de, AY_LEN
-                ld   a, $FF
-                scf
-                call ROM_LD_BYTES
-                jr   nc, .ay
-.t7lo:          ld   a, BANK_TSET              ; B3B-8: the level tilesets, bank 7
-                call page_bank                 ; spare above screen 2 ... (D3-S2: + the
-                ld   ix, TSET_LO               ; bank-7 cold code right after them)
-                ld   de, B7_TAPE_LEN
-                ld   a, $FF
-                scf
-                call ROM_LD_BYTES
-                jr   nc, .t7lo
-.t7hi:          ld   ix, TSET_HI               ; ... and above the shadow attrs
-                ld   de, TSET_HALF_LEN         ; (bank 7 still paged)
-                ld   a, $FF
-                scf
-                call ROM_LD_BYTES
-                jr   nc, .t7hi
-.txt:           ld   a, BANK_TEXT              ; D3-TX: the text block, bottom of
-                call page_bank                 ; pool bank 0 (the pool starts above it)
-                ld   ix, TEXT_ADDR
-                ld   de, TEXT_LEN
-                ld   a, $FF
-                scf
-                call ROM_LD_BYTES
-                jr   nc, .txt
+                ld   de, TT_STRIDE
+                add  hl, de
+                ld   a, (hl)
+                inc  a                         ; $FF: end of the table
+                jr   nz, .lo
 start_loaded:                                  ; falls straight into boot:
                 ASSERT start_loaded == boot    ; nothing may be inserted here
 
 ;==============================================================================
 ; boot — .sna entry. Cold init, pool generation (~1 s), then hero select.
+; 3E-T1: the IM 2 install, the power-on state and the tile / font / hot-image
+; copies run from the boot block (boot6.asm, bank 6 tail, farb): it must run
+; before alloc_reset — the pool overwrites that block later.
 ;==============================================================================
 boot:
                 di
                 ld   sp, WORKSTORE_TOP
                 ld   iy, IY_SYSVAR             ; kept for ISR_ROM_CHAIN (conventions)
-                call isr_install               ; A8: IM 2 (EI below, once the shadow is valid)
                 ld   a, BANK_POOL0
-                call page_bank
-                xor  a
-                out  (PORT_BORDER), a
-                ld   (INPUT_SRC), a
-                ld   (JOY_MODE), a             ; C3-1: JM_KEYS until the menu says
-                ld   (JOY_MIRROR), a           ; otherwise; nothing held
-                ld   (STICK), a
-                ld   (STICK_OLD), a
-                ld   (ANIM_FREEZE), a
-                ld   (ANIM_TRACE_IDX), a
-                ld   (BLIT_MISS), a
-                ld   (DMG_OVERFLOW), a
-                ld   (CLIP_TRAP), a
-                ld   (GEN_TRAP), a             ; since boot (like GEN_OVERFLOW)
-                ld   (TURN_PHASE), a
-                ld   (PEND_DMG_COUNT), a
-                ld   (CUR_ROOM), a
-                ld   (YIELD_FLAG), a
-                ld   (PANEL_DIRTY), a          ; B3B-11: no panel work / log until
-                ld   (LOG_QN), a               ; panel_init (start_game)
-                ld   hl, HUD4_PW               ; text rows: nothing pending
-                ld   (hl), a
-                inc  l
-                ld   (hl), a
-                inc  l
-                ld   (hl), a
-                inc  l
-                ld   (hl), a
-                ld   hl, 0
-                ld   (OVERRUN_COUNT), hl
-                ld   (TICK_COUNTER), hl
-                ld   (TURN_COUNTER), hl
-                ld   (MUS_REQ), hl             ; SND-2 mailbox (before EI: the ISR
-                ld   (MUS_STATE), hl           ; reads it): no tune, no shot, idle,
-                ld   (SFX_REQ), a              ; nothing sounding (A = 0)
-                ld   (SFX_NEXT), a             ; SND-5: no deferred effect
-                ASSERT MUS_SHOT == MUS_REQ + 1 && MUS_CUR == MUS_STATE + 1
-                ld   a, SND_ALL                ; game.md §3.6: ALL ON per power-on
-                ld   (SND_MODE), a             ; (only boot writes it; new_game never)
-                ld   hl, RNG_SEED
-                ld   (RNG_STATE), hl
-                ld   a, 1
-                ld   (INPUT_REPEAT), a         ; play default: held keys repeat
-                ld   a, GS_BOOT
-                ld   (GAME_STATE), a
-                ld   hl, ANIM_TRACE
-                ld   de, ANIM_TRACE + 1
-                ld   bc, ANIM_TRACE_LEN - 1
-                ld   (hl), $FF
-                ldir
-                call init_kbd_mirror
-                ld   hl, keytab_defaults       ; C3-1: Q / A / O / P / SPACE
-                ld   de, KEYTAB
-                ld   bc, KEYTAB_N * KEYTAB_STRIDE
-                ldir
-                ld   a, ATTR_HUD
-                call clear_screen
-                ld   hl, P_ENTITIES            ; nothing drawn / alive yet
-                ld   de, P_ENTITIES + 1
-                ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1
-                ld   (hl), 0
-                ldir
+                call page_bank                 ; a valid shadow for farb's restore
+                ld   hl, boot6_init            ; IM 2 (EI below, once the shadow is
+                ld   c, BANK_BOOT6             ; valid) + the power-on state
+                call farb
                 ei
                 call build_bitrev
-                ld   hl, init_tiles            ; B3B-8: the common set, ornament
-                call far7                      ; (MEM-SND: bank 7, boot7.asm)
-                ld   hl, panel_boot            ; B3B-11: FONT6 planes + the panel hot code
-                call far7                      ; -> bank-2 runtime RAM (bank 7)
+                ld   hl, boot6_tiles           ; the common set, ornament, the panel hot
+                ld   c, BANK_BOOT6             ; code and the FONT6 planes (B3B-8 /
+                call farb                      ; B3B-11; were bank 7 init_tiles / panel_boot)
                 call alloc_reset
                 ; monsters: every kind's frames, both facings (§5.2)
                 ld   a, K_SKELETON
@@ -173,6 +98,13 @@ boot:
                 call sel_frt_copy
                 call alloc_mark                ; hero sets regenerate from here
                 jp   enter_select              ; bank-2 trampoline -> bank 3
+
+; tape_tab — start's blocks: bank, address, length (main.asm TAPE_BLOCKS, the
+; one list the SAVETAPs expand too)
+TT_STRIDE       EQU 5
+tape_tab:       TAPE_BLOCKS 0                  ; main.asm: the same list the SAVETAPs use
+                DB   $FF                       ; end (no bank is $FF: TAPE_BLK ASSERTs < 8)
+                ASSERT $ - tape_tab == TAPE_HEADLESS_N * TT_STRIDE + 1
 
 ;------------------------------------------------------------------------------
 ; check_paging — 48 BASIC / USR 0 set $7FFD bit 5 (paging lock): every later
@@ -206,117 +138,8 @@ check_paging:
                 halt
 
 str_lock:       DB "LOAD FROM 128 BASIC", 0     ; check_paging: $7FFD locked
-keytab_defaults:                               ; C3-1: boot -> KEYTAB (hero_defs.asm)
-                KEYTAB_DEFAULTS
-;==============================================================================
-; isr_install — A8 IM 2 setup (boot, under its DI): fill the 257-B vector
-; table (every byte ISR_VEC_BYTE, so whatever the floating bus puts on the
-; data bus the CPU fetches ISR_ADDR), copy the ISR image to ISR_ADDR, I = the
-; table page, IM 2. Interrupts stay disabled: boot's EI comes after
-; PORT_7FFD_SHADOW is valid (the ISR re-OUTs it). Placement + protocol:
-; docs/memory-map.md "Interrupts (A8)", docs/conventions.md "Interrupts".
-; Clobbers: A, BC, DE, HL.   ~6.8k T (two LDIRs, boot only)
-;==============================================================================
-isr_install:
-                ld   hl, ISR_VEC_TABLE
-                ld   de, ISR_VEC_TABLE + 1
-                ld   bc, ISR_VEC_LEN - 1
-                ld   (hl), ISR_VEC_BYTE
-                ldir
-                ld   hl, isr_image
-                ld   de, ISR_ADDR
-                ld   bc, ISR_LEN
-                ldir
-                ld   a, ISR_VEC_TABLE >> 8
-                ld   i, a
-                im   2
-                ret
-
-;------------------------------------------------------------------------------
-; isr — IM 2 handler, runs at ISR_ADDR (bank 2: uncontended, always mapped),
-; once per frame (50 Hz), interrupts disabled on entry.
-;  1. SYS_FRAMES += 1 exactly as the ROM's MASK-INT (3-byte counter; the tick
-;     pacing reads the low byte) — unless ISR_ROM_CHAIN, where the ROM does it.
-;  2. Pages BANK_AY at $C000 by OUT only: (PORT_7FFD_SHADOW & ~7) | BANK_AY
-;     keeps the shadow's screen bit 3 and ROM bit 4; the shadow is never
-;     written. Calls AY_PLAY (bank 3).
-;  3. Re-OUTs PORT_7FFD_SHADOW as it is NOW (not a saved port value). Race
-;     with the main code's "shadow first, then OUT" (page_bank / set_screen):
-;     an interrupt between the two leaves the port already at the new value,
-;     and the main code's own OUT then rewrites the same byte. No DI needed.
-; Saves every register it or the player may touch: AF, BC, DE, HL, IX, IY
-; (+ the alternate set if ISR_SAVE_ALT). Stack: 12 B + AY_PLAY's 6 B (CALL 2 + player 4) (+8 alt).
-; Cost (measured): ISR own instructions 315 T + 19 T acknowledge = 334 T overhead,
-; + AY_PLAY (SND-2: the dispatcher + WZM player, idle ~0.2k .. worst ~5k T), in the
-; top border (docs/memory-map.md "Interrupts (A8)").
-;------------------------------------------------------------------------------
-isr_image:
-                DISP ISR_ADDR
-isr:
-                push af
-                push hl
-    IF !ISR_ROM_CHAIN
-                ld   hl, (SYS_FRAMES)
-                inc  hl
-                ld   (SYS_FRAMES), hl
-                ld   a, h
-                or   l
-                jr   nz, .frames
-                ld   hl, SYS_FRAMES + 2        ; ROM: INC (IY+$40)
-                inc  (hl)
-.frames:
-    ENDIF
-                push bc
-                push de
-                push ix
-                push iy
-    IF ISR_SAVE_ALT
-                ex   af, af'
-                push af
-                exx
-                push bc
-                push de
-                push hl
-    ENDIF
-                ld   a, (PORT_7FFD_SHADOW)
-                and  ~7 & $FF                  ; keep screen bit 3 + ROM bit 4
-                or   BANK_AY
-                ld   bc, PORT_7FFD
-                out  (c), a                    ; shadow untouched
-.page:          call AY_PLAY                   ; bank 3, contended fetches
-                ld   a, (PORT_7FFD_SHADOW)     ; the CURRENT shadow (see 3. above)
-                ld   bc, PORT_7FFD
-                out  (c), a
-.done:                                         ; test probe: port == shadow here
-    IF ISR_SAVE_ALT
-                pop  hl
-                pop  de
-                pop  bc
-                exx
-                pop  af
-                ex   af, af'
-    ENDIF
-                pop  iy
-                pop  ix
-                pop  de
-                pop  bc
-                pop  hl
-                pop  af
-    IF ISR_ROM_CHAIN
-                jp   ROM_ISR                   ; FRAMES, keyboard scan, EI, RET (IY!)
-    ELSE
-                ei
-                ret
-    ENDIF
-isr_end:
-                ENT
-ISR_LEN         EQU isr_end - isr
-                ASSERT ISR_ADDR + ISR_LEN <= ISR_ADDR_END
-                ASSERT (ISR_ADDR >> 8) == ISR_VEC_BYTE          ; vector byte = both address bytes
-                ASSERT ISR_VEC_TABLE + ISR_VEC_LEN <= ISR_ADDR
-                ASSERT (ISR_VEC_TABLE & $FF) == 0
-                ASSERT (ISR_VEC_TABLE >> 8) >= $80 && (ISR_VEC_TABLE >> 8) < $C0  ; I: bank 2
-                ASSERT ISR_ADDR_END <= STACK_BOTTOM
+; (3E-T1: keytab_defaults, isr_install and the ISR load image isr_image moved
+; to the boot block, boot6.asm)
 
 ; the menu's hero idles: fid only is read (sel_frt_copy: their boot FRT rows,
 ; saved at boot, restored by menu_run; C3-6: the menu draws them, menu1.asm)
@@ -2381,6 +2204,44 @@ zx0_frame:
                 INCLUDE "dzx0_standard.asm"
 zx0_code_end:
                 ASSERT zx0_code_end - zx0_code <= ZX0_BUDGET
+
+;------------------------------------------------------------------------------
+; ovl_run — 3E-T1: run a ZX0-packed OVERLAY in the GEN_SCRATCH window
+; (docs/memory-map.md "Overlays"). Unpacks the stream into its load address
+; and calls it there with the caller's $C000 bank paged; afterwards re-pages
+; the caller's bank again (the overlay may page anything: it runs in bank 5).
+; GEN_ZBLK is cleared: the window aliases the ZX0 frame cache, so a stale key
+; can never make the next zx0_frame skip its unpack.
+; Window contract: GEN_SCRATCH .. +GEN_SCRATCH_LEN aliases ROOM_MAP + NEXT_MAP
+; — only while neither map is live: boot, the menu, a level start before
+; level_show / build_room_map; never in play or during a room transition.
+; In : HL = packed stream (in bank C's $C000 window, or bank 2 / 5 RAM),
+;      C = the bank holding it, DE = load + entry address (ASSERTed in the
+;      overlay's build: load .. load + raw <= GEN_SCRATCH + GEN_SCRATCH_LEN),
+;      IX passes to the overlay (A, BC do not).
+; Out: the overlay's BC, DE, HL, IX; the caller's $C000 bank (bits 0-2 of the
+;      shadow saved at entry; the screen bit is never rolled back).
+; Clobbers: A, F (+ whatever the overlay documents).
+; Cost: dzx0 (~LDIR rate + Elias bits; tests/ovl.py reports it) + ~290 T.
+;------------------------------------------------------------------------------
+ovl_run:
+                ld   a, (PORT_7FFD_SHADOW)
+                push af                        ; caller's page (restore_page)
+                push de                        ; entry
+                ld   a, c
+                call page_bank
+                call dzx0_standard             ; HL -> DE
+                ld   l, c                      ; dzx0_standard returns ONLY through its
+                ld   h, c                      ; end marker `inc c / ret z`, so C = 0 here
+                                               ; (documented there; 1 B < ld hl, 0)
+                ld   (GEN_ZBLK), hl            ; no cached sprite block any more
+                pop  hl                        ; HL = entry
+                pop  af
+                push af
+                call restore_page              ; the overlay starts in the caller's bank
+                call jp_hl
+                pop  af
+                jp   restore_page              ; keeps BC; A, F only
 
 ; frt_ptr — HL = FRT + A*16 ; frt_ptr_cur uses GEN_FID.  Clobbers: A, DE, HL
 ;------------------------------------------------------------------------------

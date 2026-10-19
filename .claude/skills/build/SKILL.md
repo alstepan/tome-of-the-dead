@@ -29,7 +29,11 @@ all use it, so a build can never assemble stale packed art. It runs:
 2. `sjasmplus src/main.asm --fullpath --lst=build/wazhack.lst
    --sld=build/wazhack.sld --sym=build/wazhack.sym -i src [args]`, run in the
    output dir. Exit 1 on any error **or warning**; prints the `DISPLAY`
-   lines (full log: `build/sjasmplus.log`).
+   lines (full log: `build/sjasmplus.log`). 3E-T1: run TWICE — pass 1
+   (`-DOVL_PASS=1`, log `build/ovl/pass1.log`) writes the raw overlay images
+   `build/ovl/*.bin`, `tools/bin/zx0` packs each, pass 2 (the real build)
+   INCBINs them (`-i build/ovl`); a raw image that differs between the passes
+   fails the build (`docs/memory-map.md` "Overlays").
 
 `tests/zx0_pool.py` builds with it and proves the pre-shift pool bit-exact to
 a Python reference made from the raw frame data. B3B-12 retired the raw-sources

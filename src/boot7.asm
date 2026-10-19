@@ -5,92 +5,14 @@
 ; (from low RAM, or nested from bank 3), no data, no SMC; every callee hands
 ; bank 7 back (copy_virt3 / far3 restore the caller's bank; stamp_rect,
 ; slot_act, KFIELD only read / write bank 2).
-;   init_tiles   boot (far7): the common tile set + ornament
-;   panel_boot   boot (far7): HOT_COPY image + the planar FONT6
 ;   panel_init7  panel_init (bank 3, far7 per level): its bank-2-only half
 ;   new_game     start_game (far7): the per-game state, hero slot, seed
-; Cost of the move: far7 instead of far3 at boot +12 T each; panel_init's
+; 3E-T1: init_tiles / panel_boot (boot only) moved on to the boot block
+; (boot6.asm, bank-6 pool tail: boot6_tiles).
+; Cost of the move: panel_init's
 ; nested far7 ~0.3k T per level start; new_game's two nested far3 (+ a third
 ; on the PROTO path) ~0.5-0.8k T once per game. Nothing per tick.
 ;==============================================================================
-
-;==============================================================================
-; init_tiles — boot (far7): the common tile set, ids 0..31 (B3B-2
-; tiles_common: glyphs + depth-1 attrs; level_load_tiles re-themes the floor /
-; wall ids per level) into TILE_GLYPHS / TILE_ATTRS, the row-17 ornament into
-; ORN_GLYPHS (D3-0: the PROTO wizard zap glyphs are gone). The per-level ids
-; 32..63 come from level_load_tiles (start_game). The data is vdata (bank 1,
-; main.asm), read via copy_virt3 (restores bank 7). Clobbers: A, BC, DE, HL.
-;==============================================================================
-init_tiles:
-                ld   hl, tiles_common_glyphs
-                ld   de, TILE_GLYPHS
-                ld   bc, TILE_COMMON * 8
-                call copy_virt3
-                ld   hl, tiles_common_attrs
-                ld   de, TILE_ATTRS
-                ld   bc, TILE_COMMON
-                call copy_virt3
-                ld   hl, orn_glyphs
-                ld   de, ORN_GLYPHS
-                ld   bc, ORN_COUNT * 8
-                jp   copy_virt3
-                ASSERT tiles_common_attrs == tiles_common_glyphs + TILE_COMMON * 8
-                ASSERT TILES_COMMON_LEN == TILE_COMMON * 9
-                ASSERT orn_glyphs_end - orn_glyphs == ORN_COUNT * 8
-
-;------------------------------------------------------------------------------
-; panel_boot — boot (far7): the hot image -> HOT_COPY, and the planar FONT6
-; (level_defs.asm) built from the char-major font6x8, 48 chars at a time
-; through GEN_SRC (free at boot after init_tiles). Glyph bits 1..0 are masked
-; off here, so no glyph can bleed into the next char (print6).
-; Clobbers: A, BC, DE, HL.   ~45k T (boot only)
-;------------------------------------------------------------------------------
-P6_HALF         EQU 48                         ; chars per GEN_SRC pass
-panel_boot:
-                ld   hl, panel_hot_img
-                ld   de, HOT_COPY
-                ld   bc, PANEL_HOT_LEN
-                call copy_virt3
-                ld   hl, font6x8
-                ld   c, FONT6_FIRST            ; C = char code
-.half:          push hl
-                push bc
-                ld   de, GEN_SRC
-                ld   bc, P6_HALF * FONT6X8_STRIDE
-                call copy_virt3
-                pop  bc
-                ld   hl, GEN_SRC
-.ch:            ld   d, FONT6 >> 8
-                ld   b, FONT6_PAGES
-.ln:            ld   e, c                      ; even line: window A (offset = code)
-                ld   a, (hl)
-                and  $FC
-                ld   (de), a
-                inc  hl
-                ld   a, c
-                add  a, FONT6_WB               ; odd line: window B
-                ld   e, a
-                ld   a, (hl)
-                and  $FC
-                ld   (de), a
-                inc  hl
-                inc  d
-                djnz .ln
-                inc  c
-                ld   a, c
-                cp   FONT6_FIRST + P6_HALF
-                jr   z, .h2
-                cp   FONT6_FIRST + FONT6X8_COUNT
-                jr   nz, .ch
-                pop  hl
-                ret
-.h2:            pop  hl
-                ld   de, P6_HALF * FONT6X8_STRIDE
-                add  hl, de
-                jr   .half
-                ASSERT FONT6X8_COUNT == 2 * P6_HALF && FONT6X8_STRIDE == 8 && FONT6_PAGES * 2 == 8
-                ASSERT P6_HALF * FONT6X8_STRIDE <= 512  ; GEN_SRC
 
 ;------------------------------------------------------------------------------
 ; panel_init7 — far7 from panel_init (bank 3): the bank-2-only half of the

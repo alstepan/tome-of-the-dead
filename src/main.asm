@@ -27,11 +27,41 @@
 ;==============================================================================
 
                 DEVICE ZXSPECTRUM128
+    IFNDEF OVL_PASS
+OVL_PASS        EQU 2                   ; tools/build.sh: -DOVL_PASS=1 first (3E-T1 overlays)
+    ENDIF
 
                 INCLUDE "constants.asm"
                 INCLUDE "defs.asm"
                 INCLUDE "sfx_ids.inc"                         ; SND-5 SFX_* ids (tools/sfx2asm.py, build/sfx)
                 INCLUDE "../assets/gfx/tiles/tileset_ids.inc" ; TS<d>_* ids (EQUs only; B12 glow_ids)
+
+;------------------------------------------------------------------------------
+; TAPE_BLOCKS — 3E-T1 review: THE list of headerless tape blocks (bank, $C000-
+; window address, length), in tape order. Expanded twice so the loader and the
+; tape can never disagree: mode 0 = `start`'s tape_tab records (lowram.asm,
+; TT_STRIDE B each), mode 1 = the SAVETAPs (Artefacts, end of this file).
+;------------------------------------------------------------------------------
+    MACRO TAPE_BLK mode, bank, addr, len
+      IF mode == 0
+                DB   bank
+                DW   addr, len
+      ELSE
+                MMU  3, bank
+                SAVETAP  "build/wazhack.tap", HEADLESS, addr, len
+      ENDIF
+                ASSERT bank < 8 && addr >= BANK_WINDOW && len > 0 && addr + len <= $10000
+    ENDM
+    MACRO TAPE_BLOCKS mode
+                TAPE_BLK mode, BANK_SRC_LO, BANK_WINDOW, SRC_LEN_LO       ; sources, vdata, UI code, overlays
+                TAPE_BLK mode, BANK_COLD3, BANK_WINDOW, BANK3_LEN         ; source tail + bank-3 cold code
+                TAPE_BLK mode, BANK_COLD3, AY_RESERVE, AY_LEN             ; A8 AY slot (BANK_AY = 3)
+                TAPE_BLK mode, BANK_TSET, TSET_LO, B7_TAPE_LEN            ; B3B-8 tilesets 0-3 + D3-S2 bank-7 code
+                TAPE_BLK mode, BANK_TSET, TSET_HI, TSET_HALF_LEN          ; tilesets 4-7
+                TAPE_BLK mode, BANK_TEXT, TEXT_ADDR, TEXT_LEN             ; D3-TX text block (bank 0 bottom)
+                TAPE_BLK mode, BANK_BOOT6, BOOT6_ADDR, BOOT6_LEN          ; 3E-T1 boot block (bank 6 top)
+    ENDM
+TAPE_HEADLESS_N EQU 7                   ; = the TAPE_BLK lines above (tape_tab ASSERTs its size)
 
 ;==============================================================================
 ; SPRITE SOURCES — banks 1 and 3, assembled contiguously at virtual $8000..$FFFF
@@ -54,12 +84,10 @@ SRC_TOTAL       EQU sprite_src_end - sprite_src
 ; B3B-11b (bank-3 relief): boot / new-game cold DATA, read only through
 ; copy_virt / copy_virt3 (virtual address -> bank 1 or 3), right after the
 ; sources, in bank 1. Same tape blocks.
+; 3E-T1 (lever a): the boot-only part (font6x8, the HOT_COPY image,
+; tiles_common, orn_glyphs) moved to the boot block (boot6.asm, bank 6 tail).
 vdata:
-                INCLUDE "../assets/gfx/fonts/font6x8.asm"     ; -> FONT6 planes (panel_boot)
                 INCLUDE "../assets/gfx/panel/panel_icons.asm" ; panel_init (pblit via GEN_SRC)
-                INCLUDE "panel_hot.asm"                       ; -> HOT_COPY (panel_boot)
-                INCLUDE "../assets/gfx/tiles/tiles_common.asm" ; init_tiles (boot)
-                INCLUDE "../assets/gfx/panel/panel_orn.asm"    ; init_tiles -> ORN_GLYPHS
                 ; D3-4: the 7 status icons (game.md §6.4; panel row 21 cols 30-31,
                 ; tints): 8 B glyph each (FROZEN, ASLEEP, STUNNED, CONFUSED, FEAR,
                 ; POISON, WEAK = status_icons + 8 * i), then 7 attrs
@@ -85,7 +113,22 @@ ui1_img_end:
 UI1_LEN         EQU ui1_img_end - ui1_img
                 ASSERT ui1_img_end <= BANK_WINDOW              ; all in bank 1 (virtual < $C000)
                 ASSERT ui1_code == ui1_img + TEXT_DISP && ui1_end <= UI1_LIMIT
-VIRT_TOTAL      EQU ui1_img_end - sprite_src
+; 3E-T1: the packed OVERLAY streams (ovl_run; "OVERLAYS" below), last in bank 1
+; so their sizes move nothing an overlay can reference. Labels = runtime
+; $C000-window addresses (ovl_run: HL = label, C = BANK_OVL). Pass 1 of
+; tools/build.sh (OVL_PASS 1) has no packed files yet: the streams are empty.
+ovl_img:
+                DISP $ + TEXT_DISP
+ovl_blobs:
+    IF OVL_PASS == 2
+ovl_test_zx0:   INCBIN "ovl_test.zx0"                 ; 3E-T1 self-test overlay (tests/ovl.py)
+    ENDIF
+ovl_blobs_end:
+                ENT
+ovl_img_end:
+OVL_BLOBS_LEN   EQU ovl_img_end - ovl_img
+                ASSERT ovl_img_end <= BANK_WINDOW && ovl_blobs_end <= UI1_LIMIT
+VIRT_TOTAL      EQU ovl_img_end - sprite_src
     IF VIRT_TOTAL > $4000
 SRC_LEN_LO      EQU $4000
     ELSE
@@ -94,7 +137,7 @@ SRC_LEN_LO      EQU VIRT_TOTAL
 SRC_LEN_HI      EQU VIRT_TOTAL - SRC_LEN_LO
                 ASSERT VIRT_TOTAL <= $8000
                 DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B + vdata ", /D, VDATA_LEN, " B (bank1 ", /D, SRC_LEN_LO, ", free ", /D, $4000 - SRC_LEN_LO, "; bank3 ", /D, SRC_LEN_HI, ")"
-                DISPLAY "GAME bank-1 UI code: ", /H, ui1_code, "..", /H, ui1_end, " (", /D, UI1_LEN, " B), bank 1 free: ", /D, UI1_LIMIT - ui1_end
+                DISPLAY "GAME bank-1 UI code: ", /H, ui1_code, "..", /H, ui1_end, " (", /D, UI1_LEN, " B), overlay streams ", /D, OVL_BLOBS_LEN, " B, bank 1 free: ", /D, UI1_LIMIT - ovl_blobs_end
                 DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed; total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
 
 
@@ -561,6 +604,55 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
                 DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, dt_attr_tab - kind_tab_pad, " B kind_tab ALIGN pad); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
 
+;==============================================================================
+; BOOT BLOCK (3E-T1, memory levers a + d) — boot-only code + data at the TOP
+; of pool bank 6 (boot6.asm): own headerless tape block (the last in `start`'s
+; tape_tab), run by boot through farb before the pool is generated; the hero
+; start's pool overwrites it later (dead after boot by contract).
+;==============================================================================
+                MMU  3, BANK_BOOT6
+                ORG  $10000 - (boot6_end - boot6_code)
+boot6_code:
+                INCLUDE "boot6.asm"
+boot6_end:
+BOOT6_ADDR      EQU boot6_code
+BOOT6_LEN       EQU boot6_end - boot6_code
+                ASSERT boot6_end == $10000
+                ; the boot pool (every monster kind + the 2 select idles, from
+                ; POOL_START) must end below bank 6: boot6_tiles runs before it,
+                ; but tests/game.py #50 checks the block after boot, at the menu
+POOL_BOOT_NEED  EQU POOL_MONSTERS + 2 * 576 + 2 * 576   ; + 2 idles, + straddle waste
+                ASSERT POOL_BOOT_NEED <= ($10000 - POOL_START) + $4000
+                DISPLAY "GAME boot block (bank 6 tail): ", /H, boot6_code, "..$FFFF (", /D, BOOT6_LEN, " B: code ", /D, keytab_defaults - boot6_code, " + data ", /D, boot6_end - keytab_defaults, "), dead after boot"
+                MMU  3, 0
+
+;==============================================================================
+; OVERLAYS (3E-T1) — code assembled at its runtime load address, stored
+; ZX0-packed (bank 1 `ovl_blobs`), unpacked + called by ovl_run (lowram.asm;
+; the GEN_SCRATCH window; the screen-2 window is 3E-T2's, docs/memory-map.md
+; "Overlays"). Two assembler passes (tools/build.sh): OVL_PASS 1 assembles each
+; raw image here — bank 0 scratch above tap_loader, pool at runtime, never
+; loaded — and SAVEBINs it to build/ovl/<name>.bin; build.sh packs each .bin
+; with tools/bin/zx0 -> <name>.zx0; pass 2 (OVL_PASS 2, the real build)
+; INCBINs the streams and SAVEBINs the raw images again: build.sh fails if one
+; changed between the passes. Rules for an overlay: no data the caller needs
+; after it returns (the window is reused); returns like a routine; ASSERT its
+; end against the window.
+;==============================================================================
+OVL_RAW_ORG     EQU $E100                       ; bank 0 scratch (after tap_loader, ASSERTed)
+                ORG  OVL_RAW_ORG
+ovl_raw_test:
+                DISP GEN_SCRATCH
+ovl_test:
+                INCLUDE "ovl_test.asm"
+ovl_test_end:
+                ENT
+OVL_TEST_LEN    EQU ovl_test_end - ovl_test
+                ASSERT ovl_test_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
+                SAVEBIN "build/ovl/ovl_test.bin", ovl_raw_test, OVL_TEST_LEN
+OVL_RAW_END     EQU $
+                ASSERT OVL_RAW_END <= $10000
+
 ;------------------------------------------------------------------------------
 ; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"
 ; CLEAR 24575 frees $6000..$7FFF for the room maps / generator buffers and the
@@ -588,6 +680,7 @@ tap_l30_body:   DB   $F9, $C0, $B0, '"'
                 DB   '"', $0D
 tap_l30_end:
 tap_loader_len  EQU  $ - tap_loader
+                ASSERT $ <= OVL_RAW_ORG        ; 3E-T1: the overlay raw images follow
 
 ;==============================================================================
 ; Artefacts. SAVETAP dumps device memory at this point in source order (see
@@ -595,18 +688,11 @@ tap_loader_len  EQU  $ - tap_loader
 ; and slot 2 = page 2 here, so the CODE block spans low-RAM cold + bank 2. The
 ; banked blocks are saved by mapping each bank into slot 3 ($C000) in turn.
 ;==============================================================================
+    IF OVL_PASS == 2                    ; pass 1 (overlay images only) writes no tape / snapshot
                 EMPTYTAP "build/wazhack.tap"
                 SAVETAP  "build/wazhack.tap", BASIC, "wazhack", tap_loader, tap_loader_len, 10
                 SAVETAP  "build/wazhack.tap", CODE,  "wazhack", lowram_code, TAPE_CODE_LEN
-                MMU  3, BANK_SRC_LO
-                SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, SRC_LEN_LO
-                MMU  3, BANK_COLD3             ; source tail + bank-3 cold code
-                SAVETAP  "build/wazhack.tap", HEADLESS, BANK_WINDOW, BANK3_LEN
-                SAVETAP  "build/wazhack.tap", HEADLESS, AY_RESERVE, AY_LEN   ; A8 AY slot (BANK_AY = 3)
-                MMU  3, BANK_TSET              ; B3B-8: level tilesets (2 x 1,280 B)
-                SAVETAP  "build/wazhack.tap", HEADLESS, TSET_LO, B7_TAPE_LEN   ; + D3-S2 bank-7 code
-                SAVETAP  "build/wazhack.tap", HEADLESS, TSET_HI, TSET_HALF_LEN
-                MMU  3, BANK_TEXT              ; D3-TX: the text block (bank 0 bottom)
-                SAVETAP  "build/wazhack.tap", HEADLESS, TEXT_ADDR, TEXT_LEN
+                TAPE_BLOCKS 1                  ; the headerless blocks = start's tape_tab
                 MMU  3, 0
                 SAVESNA  "build/wazhack.sna", boot
+    ENDIF

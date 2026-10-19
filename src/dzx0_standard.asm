@@ -11,7 +11,8 @@
 ;
 ; WazHack use (lowram.asm, zx0_frame): HL = packed stream, DE = output.
 ; Out: HL = past the stream, DE = past the output.  Clobbers: AF, BC, DE, HL
-; (IX/IY untouched; 2 stack words). Forward, non-overlapping: the stream is in
+; (IX/IY untouched; 2 stack words). Its only exit is the end marker's
+; `inc c / ret z`, so it returns with C = 0 (ovl_run relies on it, 3E-T1). Forward, non-overlapping: the stream is in
 ; bank 1/3 at $C000+, the output in GEN_SCRATCH (bank 5). Cost ~LDIR rate for
 ; literal runs / matches + ~40 T per Elias-gamma bit pair.
 ;==============================================================================

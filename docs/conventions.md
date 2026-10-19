@@ -72,6 +72,17 @@
   from the bank-2 pass, and only in a tick still in its first frame (the
   gate is tested once at `mark_tick`'s entry): the per-tick pass itself stays
   in bank 2. Do not extend this to other render code.
+- **Boot block and overlays (3E-T1).** Boot-only code / data lives in the
+  bank-6 boot block (`src/boot6.asm`, run by `boot` via `farb` before the pool
+  is generated); nothing may read it after boot (the pool overwrites it).
+  Transient code is an **overlay**: assembled at its load address, stored
+  ZX0-packed in bank 1 (`main.asm` "OVERLAYS", two-pass `tools/build.sh`),
+  run by `ovl_run` (HL = stream, C = bank, DE = load/entry; IX in, BC/DE/HL/IX
+  out; caller's bank restored) in the `GEN_SCRATCH` window — only while no
+  room map is live (boot, menu, level start before `level_show`). The
+  screen-2 window (`ovl_run7`, 3E-T2) only while the bank-5 screen is shown
+  and nothing presents. Contracts: `docs/memory-map.md` "Boot block" /
+  "Overlays".
 - **Helpers restore the caller's bank.** Every bank-2 / low-RAM helper that
   pages `$C000` and returns, and is reachable from paged-bank code (bank 3 or
   bank 1), saves `PORT_7FFD_SHADOW` before paging and ends with

@@ -7,7 +7,8 @@ source (read from the .sna the suite loads, never from the running machine):
 
   GI0  at the menu (after boot): TILE_GLYPHS ids 0..31 == tiles_common_glyphs,
        TILE_ATTRS 0..31 == tiles_common_attrs, ORN_GLYPHS == orn_glyphs,
-       FONT6 planes == font6x8 re-laid (bits 1..0 masked, holes skipped),
+       FONT6 planes == font6x8 re-laid (bits 1..0 masked, holes skipped)
+       (3E-T1: those four sources from the .sna's boot block, bank 6 tail),
        bank-1 vdata, the bank-1 menu art (menu_font .. menu_torch_end),
        bank-7 tileset slots 0..7, the bank-7 cold code B7_CODE..B7_LIMIT (D3-S2:
        the old bitmap shadow; canary — no SMC / data writes there), bank-0
@@ -47,12 +48,19 @@ def sna_virt(v, n):
     return sna_bank(1, v + 0x4000, n) if v < 0xC000 else sna_bank(3, v, n)
 
 
+def sna_boot(addr, n):
+    """3E-T1: the boot-only data sits in the boot block (bank 6 tail,
+    BOOT6_ADDR..$FFFF) — read from the .sna, the pool overwrites it later."""
+    assert S["BOOT6_ADDR"] <= addr and addr + n <= 0x10000, hex(addr)
+    return sna_bank(S["BANK_BOOT6"], addr, n)
+
+
 TC = S["TILE_COMMON"]
 TILE_IDS = 64
-SRC_GLY = sna_virt(S["tiles_common_glyphs"], TC * 8)
-SRC_ATT = sna_virt(S["tiles_common_attrs"], TC)
-SRC_ORN = sna_virt(S["orn_glyphs"], S["ORN_COUNT"] * 8)
-SRC_FONT = sna_virt(S["font6x8"], 96 * 8)
+SRC_GLY = sna_boot(S["tiles_common_glyphs"], TC * 8)
+SRC_ATT = sna_boot(S["tiles_common_attrs"], TC)
+SRC_ORN = sna_boot(S["orn_glyphs"], S["ORN_COUNT"] * 8)
+SRC_FONT = sna_boot(S["font6x8"], 96 * 8)
 
 
 def bank_read(p, b, addr, n):
@@ -131,7 +139,7 @@ def tables(p, check, tag, depth):
     check(f"GI {tag}: FONT6 planes == font6x8 (bits 1..0 masked)", bad == [], bad[:8])
     # banked read-only data == the .sna
     for (b, lo, hi, name) in (
-            (1, S["vdata"] + 0x4000, S["vdata_end"] + 0x4000, "bank-1 vdata (font / icons / hot img / tiles / orn)"),
+            (1, S["vdata"] + 0x4000, S["vdata_end"] + 0x4000, "bank-1 vdata (panel / status icons; 3E-T1: the boot-only part is in the boot block)"),
             (1, S["menu_font"], S["menu_torch_end"], "bank-1 menu art (font, title, torch)"),
             (7, S["TSET_LO"], S["TSET_LO"] + 4 * S["TSET_STRIDE"], "bank-7 tilesets 0..3"),
             (7, S["TSET_HI"], S["TSET_HI"] + 4 * S["TSET_STRIDE"], "bank-7 tilesets 4..7"),
