@@ -1053,6 +1053,44 @@ pause_copy:     ld   (pc_dir), a
                 ret
 
 ;------------------------------------------------------------------------------
+; page_ovl — 3E-T2: far1 from page_run (low RAM; screen 2 = the backup, shown):
+; the page state (PAGE_N, PAGE_OPEN, SND_HOLD), then unpack the bag page
+; overlay (bank-1 stream ovl_page_zx0) into the bank-5 band PAGE_ORG and run
+; it there with bank 1 paged (ovl_run hands the caller's bank, 1, on).
+; page_post — far1 from page_run after the copy-back: SND_HOLD / PAGE_OPEN
+; off; nothing pressed on the page reaches play: no FIRE tap, no shortcut or
+; stick edge, a held direction waits for its release (EXIT_LOCK, as an ICON
+; MODE exit), no DOWN window, no pending use; ICON MODE is kept.
+; Clobbers: A, BC, DE, HL (IX kept).
+;------------------------------------------------------------------------------
+page_ovl:       ld   hl, PAGE_N
+                inc  (hl)
+                ld   a, 1
+                ld   (PAGE_OPEN), a
+                ld   hl, SND_MODE              ; HOLD: the ISR zeroes the volumes,
+                set  SND_HOLD_BIT, (hl)        ; freezes music + effect in place
+                ld   hl, ovl_page_zx0
+                ld   c, BANK_UI1
+                ld   de, PAGE_ORG
+                jp   ovl_run
+page_post:      ld   hl, SND_MODE
+                res  SND_HOLD_BIT, (hl)
+                xor  a
+                ld   (PAGE_OPEN), a
+                ld   (INTENT), a
+                ld   (DN_T), a
+                ld   (DN_COMMIT), a
+                ld   a, (STICK)                ; no stick edge from the page's frames
+                ld   (STICK_OLD), a
+                and  JOY_DIRS
+                ld   (EXIT_LOCK), a            ; a held direction waits for its release
+                ld   a, FS_USED                ; a held FIRE is not a tap
+                ld   (FIRE_ST), a
+                ld   a, (PLAYER_SC)            ; no shortcut edge either
+                ld   (SC_OLD), a
+                jp   resync_tick               ; the page time is not a tick overrun
+
+;------------------------------------------------------------------------------
 ; end_card — far1 from end_screen (first tick of GS_DEAD / GS_WIN): A = the
 ; state. "YOU DIED" / "YOU WIN!" (menu font) + "PRESS 1-4 OR ENTER" over
 ; playfield rows 7-11 of the bank-5 screen, marked for present.

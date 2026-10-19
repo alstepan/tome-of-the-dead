@@ -270,6 +270,11 @@ COMBAT_NOT_BEFORE EQU TURN_PEND_END + 2   ; D3-8e2 (game.md §6.5.1): != 0: pane
                                     ; max(MON_AT, it)
 CNB_MAX         EQU 8               ; ticks past the release the gate holds at most (§6.5.1 "Bound")
 ST_HERO_END     EQU TURN_PEND_END + 3
+; 3E-T2 bag page state (same spare, after ST_HERO_END; runtime RAM, garbage at
+; boot: page_ovl / page_post write PAGE_OPEN, PAGE_N only counts — tests diff it)
+PAGE_OPEN       EQU ST_HERO_END     ; 1 while the bag page is up (page_ovl / page_post, test-observable)
+PAGE_N          EQU ST_HERO_END + 1 ; bag page opens, mod 256 (test-observable)
+PAGE_END        EQU ST_HERO_END + 2
 HELD_WAIT       EQU 3
 LT_SERVED       EQU 1
 LT_HOLD_BIT     EQU 1
@@ -281,8 +286,8 @@ TP_ACT          EQU 1 << TP_ACT_BIT
 TP_MON          EQU 1 << TP_MON_BIT
 TP_FIRE         EQU 1 << TP_FIRE_BIT
 ACT_FIRE_TICK   EQU 2               ; release tick f of every ability (game.md §6.1 "Release ticks")
-                ASSERT TURN_PEND == $BC4A && ST_HERO_END <= ANIM_N
-                ASSERT (HERO3D >> 8) == ((ST_HERO_END - 1) >> 8)
+                ASSERT TURN_PEND == $BC4A && PAGE_END <= ANIM_N
+                ASSERT (HERO3D >> 8) == ((PAGE_END - 1) >> 8)
 
 ;------------------------------------------------------------------------------
 ; Damage types (game.md §6.0) and the 3-B resistance record (KX_RES /

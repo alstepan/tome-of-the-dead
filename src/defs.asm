@@ -104,6 +104,15 @@ MUS_ROOM        EQU MUS_LAMENT      ; the in-play room tune (SND-3: Q rotation r
 ; TILE_GLYPHS[ROOM_MAP] — and its 6 KB hold the bank-7 cold code (far7).
 SCREEN7_BITMAP  EQU $C000           ; bank 7: displayed bitmap (copy of $4000)
 SCREEN7_ATTR    EQU $D800           ; bank 7: displayed attrs  (copy of $5800)
+; 3E-T2 page window (docs/memory-map.md "Overlays"): while the bag page is up,
+; screen 2 holds the composed screen (the backup, present_full) and the bank-5
+; screen shows the page in char rows 0..PAGE_BAND_ROW-1; the char rows from
+; PAGE_BAND_ROW down are black (attr 0: ink = paper) and their bitmap holds the
+; page overlay's code (ovl_run, always mapped, any $C000 bank may be paged).
+PAGE_BAND_ROW   EQU 16              ; the bottom third
+PAGE_ORG        EQU SCREEN_BITMAP + PAGE_BAND_ROW * 256   ; $5000 (rows 16..23, 2,048 B)
+PAGE_LIMIT      EQU SCREEN_BITMAP + SCREEN_BITMAP_LEN     ; $5800
+                ASSERT (PAGE_BAND_ROW & 7) == 0
 B7_CODE         EQU $E000           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), tape
                                     ;     block joined to the TSET_LO tilesets below it
 B7_LIMIT        EQU $F800           ; ... up to the attr shadow (ASSERTed)

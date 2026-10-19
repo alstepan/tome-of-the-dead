@@ -79,9 +79,12 @@
   ZX0-packed in bank 1 (`main.asm` "OVERLAYS", two-pass `tools/build.sh`),
   run by `ovl_run` (HL = stream, C = bank, DE = load/entry; IX in, BC/DE/HL/IX
   out; caller's bank restored) in the `GEN_SCRATCH` window — only while no
-  room map is live (boot, menu, level start before `level_show`). The
-  screen-2 window (`ovl_run7`, 3E-T2) only while the bank-5 screen is shown
-  and nothing presents. Contracts: `docs/memory-map.md` "Boot block" /
+  room map is live (boot, menu, level start before `level_show`). 3E-T2:
+  the **page window** — `ovl_run` into the bank-5 bitmap band `PAGE_ORG`
+  (char rows 16..23, 2,048 B, attrs 0) after `present_full` has made screen 2
+  the backup; the overlay may page / far-call anything, draws only rows
+  0..15, and nothing renders / presents meanwhile; the caller copies screen 2
+  back (`page_run`). Contracts: `docs/memory-map.md` "Boot block" /
   "Overlays".
 - **Helpers restore the caller's bank.** Every bank-2 / low-RAM helper that
   pages `$C000` and returns, and is reachable from paged-bank code (bank 3 or

@@ -161,9 +161,10 @@ use_slot:
                 ld   e, TX_NO_SCROLL           ; 3E: scrolls
                 cp   SA_SCROLL
                 jr   z, .rf
-                ld   e, TX_NO_BAG              ; 3E: the bag page
                 cp   SA_BAG
                 jr   nz, ic_none               ; SA_EMPTY
+                call page_run                  ; 3E-T2: the bag page (lowram.asm), no turn,
+                jr   ic_none                   ; no line: L = 0 (ICON MODE stays)
 .rf:            ld   a, e
                 jr   ic_no
 ; ic_no_mana — SND-5: the NO MANA refusal (abil_spell / abil_melee); plays FIZZ (= NO).

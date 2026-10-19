@@ -62,6 +62,7 @@ python3 tests/world.py [W16 ...] # 3B world suite; W16 = level change (generated
 python3 tests/gfx_integrity.py   # every runtime graphics table (tile glyphs / attrs / flags, ORN, FONT6 planes, vdata, menu art, bank-7 tilesets, bank-0 text, sprite pool + FRT) == its assembled source, at the menu and D1..D8 entry + play; playfield == ROOM_MAP in source glyphs (fix/3d-artefacts)
 python3 tests/zx0_roundtrip.py   # A4: every frame / kind block packs + unpacks bit-exact with the reference dzx0
 python3 tests/drip.py           # D3-8b decorative drip: sources == model, never over a body / FX, ROOM_MAP + RNG untouched, cover / land, hide, cost <= 4k T
+python3 tests/page.py           # 3E-T2 bag page: I / BAG icon open, SND_HOLD, band overlay round trip, keys don't leak, held-direction close, 20 open/close cycles byte-identical screens; reports open / close cost
 python3 tests/marks.py          # D3-8d status cues: overhead marks per status (hero + monsters, frame A/B), clear / death / room exit / covered / drip, V1 pose hold, V3 sleep flash, budget "mkmix" (<= 2 ops / tick) + "lcastf"
 FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scenarios a/b/c); MEASUREMENT, not a pass/fail gate; A/B the order with -DRENDER_FIRST=0
 ```

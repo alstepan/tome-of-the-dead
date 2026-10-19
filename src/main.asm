@@ -120,8 +120,9 @@ UI1_LEN         EQU ui1_img_end - ui1_img
 ovl_img:
                 DISP $ + TEXT_DISP
 ovl_blobs:
+ovl_page_zx0:                                         ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG)
     IF OVL_PASS == 2
-ovl_test_zx0:   INCBIN "ovl_test.zx0"                 ; 3E-T1 self-test overlay (tests/ovl.py)
+                INCBIN "page.zx0"
     ENDIF
 ovl_blobs_end:
                 ENT
@@ -628,7 +629,8 @@ POOL_BOOT_NEED  EQU POOL_MONSTERS + 2 * 576 + 2 * 576   ; + 2 idles, + straddle 
 ;==============================================================================
 ; OVERLAYS (3E-T1) — code assembled at its runtime load address, stored
 ; ZX0-packed (bank 1 `ovl_blobs`), unpacked + called by ovl_run (lowram.asm;
-; the GEN_SCRATCH window; the screen-2 window is 3E-T2's, docs/memory-map.md
+; the GEN_SCRATCH window, or 3E-T2's page window — the bank-5 bitmap band
+; PAGE_ORG..PAGE_LIMIT while the bag page is up; docs/memory-map.md
 ; "Overlays"). Two assembler passes (tools/build.sh): OVL_PASS 1 assembles each
 ; raw image here — bank 0 scratch above tap_loader, pool at runtime, never
 ; loaded — and SAVEBINs it to build/ovl/<name>.bin; build.sh packs each .bin
@@ -640,15 +642,15 @@ POOL_BOOT_NEED  EQU POOL_MONSTERS + 2 * 576 + 2 * 576   ; + 2 idles, + straddle 
 ;==============================================================================
 OVL_RAW_ORG     EQU $E100                       ; bank 0 scratch (after tap_loader, ASSERTed)
                 ORG  OVL_RAW_ORG
-ovl_raw_test:
-                DISP GEN_SCRATCH
-ovl_test:
-                INCLUDE "ovl_test.asm"
-ovl_test_end:
+ovl_raw_page:
+                DISP PAGE_ORG
+page_ovl_main:
+                INCLUDE "page_ovl.asm"
+page_ovl_end:
                 ENT
-OVL_TEST_LEN    EQU ovl_test_end - ovl_test
-                ASSERT ovl_test_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
-                SAVEBIN "build/ovl/ovl_test.bin", ovl_raw_test, OVL_TEST_LEN
+PAGE_OVL_LEN    EQU page_ovl_end - page_ovl_main
+                ASSERT page_ovl_end <= PAGE_LIMIT
+                SAVEBIN "build/ovl/page.bin", ovl_raw_page, PAGE_OVL_LEN
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000
 

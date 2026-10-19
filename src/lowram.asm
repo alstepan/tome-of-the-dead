@@ -2243,6 +2243,45 @@ ovl_run:
                 pop  af
                 jp   restore_page              ; keeps BC; A, F only
 
+;------------------------------------------------------------------------------
+; page_run — 3E-T2 the bag page (game.md §3.1 / §8; SPIKE: an empty page),
+; from tpt_intent (INTENT = IN_BAG: the I key) or use_slot (FIRE / ENTER on
+; the BAG icon): both on the turn-intent path, INPUT phase only, never while
+; the hero is held (turn_input drops INTENT then); no turn.
+; Play and sound freeze (SND_HOLD). Open: present_full makes screen 2 the
+; composed screen and shows it — that copy is the backup —, then page_ovl
+; (bank 1) runs the page overlay in the bank-5 band PAGE_ORG, which draws the
+; page on the bank-5 screen and shows it until FIRE / BREAK / ENTER / I.
+; Close: screen 2 is shown again at once and copied back over the bank-5
+; screen, so room, bodies, panel, log, marks, FX and the cursor come back
+; byte for byte (no recompose); page_post (bank 1) resets the input latches.
+; Low RAM (not bank 7 / 1): it pages bank 7 for the copy-back and must hand
+; any caller's bank back. Out: the caller's $C000 bank (screen 2 shown).
+; Clobbers: A, BC, DE, HL (IX, IY kept: pushed here).
+; Cost: open ~0.15M T (present_full) + unpack + draw; close ~0.16M T (the
+; contended 6,912-B LDIR); tests/page.py measures both.
+;------------------------------------------------------------------------------
+page_run:
+                push ix                        ; IX kept for any caller (tpt_intent: the hero)
+                ld   a, (PORT_7FFD_SHADOW)
+                push af                        ; caller's page
+                call present_full              ; screen 2 := bank 5, shown; bank 7 paged
+                ld   hl, page_ovl              ; bank 1: state, ovl_run -> the page
+                call far1                      ; (back with bank 7 paged)
+.closed:                                       ; test probe (no code): the page closed
+                ld   a, P7FFD_SCREEN7          ; the backup on view at once ...
+                call set_screen
+                ld   hl, SCREEN7_BITMAP        ; ... then over the page
+                ld   de, SCREEN_BITMAP
+                ld   bc, SCREEN_FRAME_LEN
+                ldir
+                pop  af
+                call restore_page
+                pop  ix
+.post:                                         ; test probe (no code): copied back
+                ld   hl, page_post             ; bank 1: SND_HOLD off, input latches,
+                jp   far1                      ; resync_tick
+
 ; frt_ptr — HL = FRT + A*16 ; frt_ptr_cur uses GEN_FID.  Clobbers: A, DE, HL
 ;------------------------------------------------------------------------------
 ; sel_frt_copy — CF = 0: save the two select idles' FRT rows (boot pool,

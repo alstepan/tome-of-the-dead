@@ -71,6 +71,7 @@ CUR_DELAY1      EQU 10              ; cursor: first auto-repeat after 10 ticks .
 CUR_DELAY2      EQU 4               ; ... then every 4 (game.md §3.1)
 TURN_DELAY      EQU 10              ; held ←/→ walks this many ticks after a turn-around
 IN_FIRE         EQU 1               ; INTENT: use the selected icon
+IN_BAG          EQU 2               ; INTENT: 3E-T2 the bag page (I; tpt_intent -> page_run, no turn)
 
 ; Slot actions (C3-2/C3-3; icons.asm slot_act_tab, one byte per class x slot)
 SA_EMPTY        EQU 0               ; no icon (Warrior slot 10): never selected

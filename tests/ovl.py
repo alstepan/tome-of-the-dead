@@ -2,11 +2,12 @@
 """3E-T1 overlays: ovl_run (src/lowram.asm), the GEN_SCRATCH window
 (docs/memory-map.md "Overlays"). Drives build/wazhack.sna in ZEsarUX.
 
-  O1  the built-in self-test overlay (src/ovl_test.asm, packed in bank 1 as
-      ovl_test_zx0 by tools/build.sh's two passes), run through ovl_run from a
-      low-RAM stub at the menu under DI, with bank 3 paged, IX = $4321 and a
-      stale GEN_ZBLK: the unpacked image == build/ovl/ovl_test.bin (round
-      trip), the overlay was entered with the caller's bank (3) and IX,
+  O1  a self-test overlay (assembled here, test_overlay(): 3E-T2 dropped the
+      built-in src/ovl_test.asm once the bag page overlay existed; tests/page.py
+      round-trips that one), packed with tools/bin/zx0, poked into the free
+      bank-1 tail and run through ovl_run from a low-RAM stub at the menu under
+      DI, with bank 3 paged, IX = $4321 and a stale GEN_ZBLK: the unpacked
+      image == the raw bytes (round trip), the overlay was entered with the caller's bank (3) and IX,
       BC / DE / HL / IX pass out, the caller's bank is paged afterwards
       although the overlay paged bank 4, the screen bit is kept, GEN_ZBLK = 0,
       and the whole 128K RAM differs from before only in the overlay image,
@@ -90,6 +91,28 @@ def stub_code(caller_bank, blob, blob_bank, ix, di):
         [0xF1, 0xCD] + w(S["restore_page"]))                       # the menu's bank back
 
 
+def zx0_pack(raw):
+    with tempfile.TemporaryDirectory() as td:
+        fi, fo = os.path.join(td, "o.bin"), os.path.join(td, "o.zx0")
+        open(fi, "wb").write(raw)
+        subprocess.run([os.path.join(REPO, "tools", "bin", "zx0"), "-f", fi, fo], check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return open(fo, "rb").read()
+
+
+def test_overlay():
+    """The old src/ovl_test.asm at GEN_SCRATCH: records the shadow at entry and
+    IX (3 result bytes at its end), pages BANK_POOL1, returns BC $9ABC,
+    DE $5678, HL $1234. Returns (raw bytes, result offset)."""
+    org = S["GEN_SCRATCH"]
+    res = org + 25
+    code = ([0x3A] + w(S["PORT_7FFD_SHADOW"]) + [0x32] + w(res) +
+            [0xDD, 0x22] + w(res + 1) + [0x3E, S["BANK_POOL1"], 0xCD] + w(S["page_bank"]) +
+            [0x01, 0xBC, 0x9A, 0x11, 0x78, 0x56, 0x21, 0x34, 0x12, 0xC9])
+    assert len(code) == 25
+    return bytes(code + [0, 0, 0]), 25
+
+
 def run(p, check):
     p.load()
     p.wait_state(GS_SELECT)
@@ -101,18 +124,20 @@ def run(p, check):
     zblk = (lin(S["GEN_ZBLK"]), lin(S["GEN_ZBLK"]) + 2)
 
     # ---- O1: the built-in overlay ------------------------------------------
-    raw = open(os.path.join(REPO, "build", "ovl", "ovl_test.bin"), "rb").read()
-    n = S["OVL_TEST_LEN"]
-    res_off = S["ovl_t_res"] - S["ovl_test"]
-    check("O1 build/ovl/ovl_test.bin is OVL_TEST_LEN long", len(raw) == n, (len(raw), n))
-    code = stub_code(S["BANK_COLD3"], S["ovl_test_zx0"], S["BANK_UI1"], 0x4321, True)
+    raw, res_off = test_overlay()
+    n = len(raw)
+    packed1 = zx0_pack(raw)
+    tail = S["ovl_blobs_end"]
+    check("O1 packed self-test overlay fits the free bank-1 tail", tail + len(packed1) <= 0x10000)
+    bank_write(p, S["BANK_UI1"], tail, list(packed1))
+    code = stub_code(S["BANK_COLD3"], tail, S["BANK_UI1"], 0x4321, True)
     before = ram128(p)
     pc0 = p.pc()
     ok = p.run_stub(code, org=STUB)
     after = ram128(p)
     check("O1 stub ran (ovl_run returned)", ok)
     img = bytes(p.z.read_memory(S["GEN_SCRATCH"], n))
-    check("O1 round trip: GEN_SCRATCH == ovl_test.bin (bar its 3 result bytes)",
+    check("O1 round trip: GEN_SCRATCH == the raw overlay (bar its 3 result bytes)",
           img[:res_off] == raw[:res_off], img.hex())
     r = p.z.read_memory(RES, 9)
     check("O1 the overlay ran with the caller's bank (3) and IX $4321",
@@ -125,7 +150,8 @@ def run(p, check):
           "screen bit kept", (r[8] & 7, r[8] & 0x18) == (S["BANK_COLD3"], sh0 & 0x18), (hex(r[8]), hex(sh0)))
     check("O1 GEN_ZBLK cleared (stale key $FFFF poked before)", p.rw("GEN_ZBLK") == 0, p.rw("GEN_ZBLK"))
     win = (lin(S["GEN_SCRATCH"]), lin(S["GEN_SCRATCH"]) + n)
-    bad = diffs(before, after, [win, stack, stub_r, zblk])
+    blob = (lin(tail, S["BANK_UI1"]), lin(tail, S["BANK_UI1"]) + len(packed1))
+    bad = diffs(before, after, [win, stack, stub_r, zblk, blob])
     check("O1 nothing else in the 128K RAM changed (window, stub, GEN_ZBLK, stack aside; DI)",
           bad == [], [hex(x) for x in bad[:12]])
     p.z.cmd("set-register PC=%d" % pc0)
@@ -143,12 +169,7 @@ def run(p, check):
         else:
             big.extend(rnd.randrange(256) for _ in range(rnd.randrange(1, 12)))
     big = bytes(big[:L])
-    with tempfile.TemporaryDirectory() as td:
-        fi, fo = os.path.join(td, "big.bin"), os.path.join(td, "big.zx0")
-        open(fi, "wb").write(big)
-        subprocess.run([os.path.join(REPO, "tools", "bin", "zx0"), "-f", fi, fo], check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        packed = open(fo, "rb").read()
+    packed = zx0_pack(big)
     tail = S["ovl_blobs_end"]
     check("O2 packed blob fits the free bank-1 tail", tail + len(packed) <= 0x10000,
           (hex(tail), len(packed)))

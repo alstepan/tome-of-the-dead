@@ -1485,6 +1485,13 @@ Weapons are class-locked; everything else is not.
   holds only unknown potions/scrolls the quick slot greys out. `QUICK` on the page may pin
   an unknown type (deliberate use); the info line then shows its appearance name.
 
+**Page engine rules (3E-T2 spike, manager review 2026-10-20; layout still Q3).** The page
+opens only on the turn-intent path (`I` or FIRE / ENTER on BAG; never while the hero is
+held; no turn). While it is up the panel and log (rows 16–23) are hidden, so the page has
+its own message row for refusals inside rows 0–15. Verbs are chosen on the page but take
+effect after it closes, as the turn's action (the screen is restored exactly as it was when
+the page opened). Engineering detail: `docs/memory-map.md` "Overlays" → T13 page rules.
+
 ### 8.5 Per-level placement (floor list ≤ 32 entries)
 
 Food 3–4 · potions 2–3 (≥ 1 Heal) · **scrolls 1–2** (rev 2: 1; E: 1–2 keeps the quick

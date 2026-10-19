@@ -287,7 +287,7 @@ keys_down:
 ; 2026-10-05), every GS_PLAYING tick after input_tick (ANIM ticks too, so no
 ; press is lost). Runs sample_input
 ; (read_turn_input reuses its outputs). Never costs a turn itself.
-; Shortcut edges (both modes): 1..0 -> sel_key (select only), I -> NO BAG YET, S -> snd_cycle (SND-1),
+; Shortcut edges (both modes): 1..0 -> sel_key (select only), I -> INTENT = IN_BAG (the bag page, tpt_intent), S -> snd_cycle (SND-1),
 ;   ENTER -> INTENT (use), BREAK -> leaves ICON MODE, else pause_hook; a held
 ;   FIRE is cancelled (BREAK has priority).
 ; ICON MODE (ICON_MODE != 0; play frozen in INPUT ticks, play_loop): FIRE
@@ -340,9 +340,9 @@ intent_tick:
 .brkE:          pop  de
 .nBrk:          bit  SC_INV_BIT, e
                 jr   z, .nInv
-                push de
-                call bag_msg
-                pop  de
+                ld   a, IN_BAG                ; 3E-T2: the page opens on the turn-intent path
+                ld   (INTENT), a              ; (tpt_intent), like FIRE on the BAG icon; an
+                                              ; ENTER in the same tick wins (one action)
 .nInv:          bit  SC_SOUND_BIT, e          ; SND-1: S edge: cycle the sound setting, no turn
                 call nz, snd_hot              ; (sfx2.asm; keeps DE; touches no input state)
                 bit  SC_ENTER_BIT, e
@@ -506,9 +506,6 @@ fire_used:      ld   a, (FIRE_ST)
                 ld   (FIRE_ST), a
                 ret
 
-; bag_msg — I / FIRE on BAG before 3E's bag page (game.md §3.1).
-bag_msg:        ld   a, TX_NO_BAG
-                jp   msg_push
 
 ; pause_hook — FIRE+UP / BREAK (outside ICON MODE): D3-S2: the body is
 ; bank-7 pause_run7 (far7). Clobbers: all but IX, IY.

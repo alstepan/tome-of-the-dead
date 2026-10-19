@@ -330,8 +330,11 @@ tpt_intent:
                 ld   a, (INTENT)
                 or   a
                 jr   z, .move
+                ld   c, a
                 xor  a
                 ld   (INTENT), a
+                bit  1, c                      ; IN_BAG (I): the bag page, no turn (CF = 0)
+                jr   nz, .bag
                 call use_icon                  ; intent7.asm (D3-7 T0: bank 7): L = 1 turn used
                 ld   a, l
                 rrca                           ; CF = L bit 0
@@ -341,6 +344,10 @@ tpt_intent:
                 call nz, mode_exit             ; a used turn returns to play
                 scf
                 ret
+.bag:           call page_run                  ; (lowram.asm; restores bank 7)
+                or   a                         ; CF = 0: no turn, ICON MODE stays
+                ret
+                ASSERT IN_BAG == 2 && IN_FIRE == 1
 .move:          ld   a, (PLAYER_DIR)
                 ld   c, a
                 and  (1 << DIR_E_BIT) | (1 << DIR_W_BIT)

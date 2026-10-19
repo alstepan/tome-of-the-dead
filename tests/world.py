@@ -109,7 +109,7 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
   W23 icon use: melee attacks the faced monster / closes the faced door /
       else NO TARGET (no turn); quick potion drinks (1 turn) then NO POTION;
       Bow / food / scroll / Bag / daggers-at-0 refusals print their line and
-      cost no turn; ENTER uses the icon; I = NO BAG YET; the FIRE melee tick's
+      cost no turn; ENTER uses the icon (Bag: the page, 3E-T2); I = the page; the FIRE melee tick's
       T vs the 126k budget.
   C3-6 (bank 1 menu1.asm):
   W24 menu golden (no cursor); digits-only controls / hero (C3-6b);
@@ -1532,24 +1532,26 @@ def w22_23(p, check, which):
     check("W23 again with no potion: NO POTION, no turn", shows("no_potion") and tc() == t0, tc() - t0)
     # greyed / missing refusals
     bad = []
-    for key, name in (("5", "no_bow"), ("6", "no_food"), ("8", "no_scroll"), ("9", "no_bag")):
+    for key, name in (("5", "no_bow"), ("6", "no_food"), ("8", "no_scroll")):
         if not refusal(key, name):
             bad.append(name)
     p.wb("DAGGERS", 0)
     if not refusal("4", "no_daggers"):
         bad.append("no_daggers")
-    check("W23 refusals (bow, food, scroll, bag, daggers at 0): their line, no turn", bad == [], bad)
-    # ENTER uses the icon; I = the bag
+    check("W23 refusals (bow, food, scroll, daggers at 0): their line, no turn", bad == [], bad)
+    # ENTER uses the icon; I = the bag (3E-T2: the page opens; FIRE closes it; tests/page.py)
     tap("9")
     t0 = tc()
-    p.wb("LOG_QN", 0)
+    n0 = p.rb("PAGE_N")
     tap("ENTER")
-    a = shows("no_bag")
-    p.wb("LOG_QN", 0)
+    a = p.rb("PAGE_OPEN")
+    tap("SPACE")
     tap("I")
-    b = shows("no_bag")
-    check("W23 ENTER uses the selected icon (Bag: NO BAG YET); I = NO BAG YET; no turn",
-          (a, b, tc() - t0) == (True, True, 0), (a, b, tc() - t0))
+    b = p.rb("PAGE_OPEN")
+    tap("SPACE")
+    check("W23 ENTER uses the selected icon (Bag: the page opens); I = the page; no turn",
+          (a, b, (p.rb("PAGE_N") - n0) & 255, p.rb("PAGE_OPEN"), tc() - t0) == (1, 1, 2, 0, 0),
+          (a, b, p.rb("PAGE_N") - n0, tc() - t0))
 
 
 def w15_icons(p, check):
