@@ -113,19 +113,31 @@ storey_ref:
 ; build_live — LIVE_LIST = the entities that can collide this turn: active, in
 ; CUR_ROOM, not PENDING. 5 B/entry: slot, ptr lo, ptr hi, w, h (kind body box
 ; cached). DYING is re-checked live (it changes mid-turn). Rebuilt at turn start
-; and whenever a pending monster materialises.  ~1.3k T.  Clobbers: A, BC, DE, HL
+; and whenever a pending monster materialises. The hero (slot 0, never PENDING)
+; is always entry 0 (box_free_mon). B19: PEND_N = the PENDING bodies of
+; CUR_ROOM (pend_hit's fast path).  ~1.3k T.  Clobbers: A, BC, DE, HL
 ;==============================================================================
 build_live:
                 push ix
+                xor  a
+                ld   (PEND_N), a               ; B19: PENDING bodies of CUR_ROOM (pend_hit)
                 ld   de, LIVE_LIST
                 ld   ix, P_ENTITIES
-                ld   c, 0                      ; slot
-                ld   b, 0                      ; count
+                ld   c, a                      ; slot
+                ld   b, a                      ; count
 .l:             ld   a, (ix+E_FLAGS)
                 and  EF_ACTIVE | EF_PENDING
                 cp   EF_ACTIVE
+                jr   z, .live
+                cp   EF_ACTIVE | EF_PENDING
                 jr   nz, .n
                 ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   nz, .n
+                ld   hl, PEND_N
+                inc  (hl)
+                jr   .n
+.live:          ld   a, (CUR_ROOM)
                 cp   (ix+E_ROOM)
                 jr   nz, .n
                 ld   a, c
@@ -160,9 +172,18 @@ build_live:
 ;==============================================================================
 ; box_free — CF = 1 if box (C=x, B=y, D=w, E=h) overlaps any LIVE_LIST entity
 ; other than slot ACT_SLOT that is not DYING (prototype §6.1: pending/dying
-; never block). Preserves: BC, DE, IX.  Clobbers: A, HL
+; never block). box_free_mon: the monsters only (LIVE_LIST entry 0 = the hero
+; skipped; LIVE_N >= 1 always in play). Preserves: BC, DE, IX.  Clobbers: A, HL
 ; ~60 T + ~130 T per live entity (was ~200 T x 16 slots).
 ;==============================================================================
+box_free_mon:                                  ; B19: the same, the hero (entry 0) skipped
+                push ix
+                ld   a, (LIVE_N)
+                cp   2
+                jr   c, box_free.free          ; (review: LIVE_N 0 must not wrap)
+                dec  a
+                ld   hl, LIVE_LIST + LL_STRIDE
+                jr   box_free.lp
 box_free:
                 push ix
                 ld   a, (LIVE_N)
@@ -608,6 +629,7 @@ try_step:
 .tpop:          pop  hl
 .tok:           push hl
                 call box_free
+                call nc, pend_hit              ; B19: nor onto a hidden (PENDING) body
                 pop  hl
                 jr   c, .no
                 ld   a, (YIELD_FLAG)
@@ -629,6 +651,59 @@ try_step:
                 pop  hl
                 ld   a, h                      ; dx = the door's side
                 jp   mon_door
+
+;------------------------------------------------------------------------------
+; pend_hit — CF = 1 if box (C,B,D,E) overlaps a PENDING body of CUR_ROOM that
+; IX's current box (E_X, E_Y, same D x E) does not overlap already (B19,
+; try_step: a monster move never ends on a NEW hidden body). Such a body
+; stayed stacked under the walker, its box never free; the walker's death
+; freed it (DYING bodies don't collide) and materialise popped it on the
+; corpse: "the kill comes back". A body the mover already overlaps (stacked
+; before this rule, or by a squeeze / arrival) is ignored, so the mover can
+; walk off it and it materialises (review: no overlap freeze). The mover is
+; never PENDING (resolve_monsters skips those); a body squeezed this turn
+; (climb_blocked) is PENDING itself but overlaps its own current box.
+; Preserves BC, DE, IX.  Clobbers: A, HL.  Per try_step with PEND_N = 0 (the
+; norm): 45 T (call 17, ld 13, or 4, ret z 11); else ~1.1k T (15 slots).
+;------------------------------------------------------------------------------
+pend_hit:
+                ld   a, (PEND_N)
+                or   a
+                ret  z                         ; CF = 0
+                ld   h, (ix+E_X)
+                ld   l, (ix+E_Y)               ; the mover's current box origin
+                push ix
+                ld   ix, P_ENTITIES
+.l:             push de
+                ld   de, P_ENT_STRIDE
+                add  ix, de
+                pop  de
+                ld   a, ixh
+                cp   (P_ENTITIES + P_MAX_ENT * P_ENT_STRIDE) >> 8
+                jr   z, .out                   ; past slot 15 (Z: CF = 0)
+                ld   a, (ix+E_FLAGS)
+                and  EF_ACTIVE | EF_PENDING
+                cp   EF_ACTIVE | EF_PENDING
+                jr   nz, .l
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   nz, .l
+                push hl
+                call box_vs_ix                 ; the new box on it? (A, HL)
+                pop  hl
+                jr   nc, .l
+                push bc
+                ld   c, h
+                ld   b, l
+                push hl
+                call box_vs_ix                 ; the current box on it already?
+                pop  hl
+                pop  bc
+                jr   c, .l                     ; yes: not a step onto it
+                scf
+.out:           pop  ix
+                ret
+                ASSERT ((P_ENTITIES + P_MAX_ENT * P_ENT_STRIDE) & $FF) == 0 && (P_ENTITIES & $1FF) == 0
 
 ;------------------------------------------------------------------------------
 ; cork_check — CF = 1 if box (C,B,D,E) overlaps any box on the hero's remaining

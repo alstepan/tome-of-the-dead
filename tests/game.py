@@ -51,6 +51,7 @@ SKIP = {}
 FID = {k[4:]: v for k, v in S.items() if k.startswith("FID_")}
 SLOT_RAT, SLOT_SLIME, SLOT_GOBLIN, SLOT_BATB, SLOT_SKC, SLOT_GHOST, SLOT_SKD, SLOT_BATD = range(1, 9)
 NOWHERE = 7                                   # a room id that never exists
+SQZ_EXTRA = S["CLIMB_SQZ_N"] - 1              # B18: extra waits a yielding blocker may earn
 
 
 _orig_expect = Harness.expect
@@ -1142,15 +1143,18 @@ def main():
                          (p.ent(0)["X"], p.ent(0)["Y"], p.rw("TURN_COUNTER") - t0 <= n), (5, Y0, True))
                 return path
             # bounds: 9 climbing turns + the waits (a: none, the ghost yields
-            # while the hero is still below it; b / c: 1 wait + the squeeze)
+            # while the hero is still below it; b / c: the waits while the bat
+            # sidesteps off the 3-col path (B18: a blocker that moved since its
+            # last block earns another wait, up to CLIMB_SQZ_N blocks), then
+            # the climb (or the squeeze))
             path = b14("a ghost on the top box, wall col 9", 9, range(0, 8), SLOT_GHOST, 5, 1,
                        EF_ACTIVE | EF_HOSTILE, 9)
             h.expect("62a ghost never steps back toward the wall (x non-increasing)",
                      all(b[1] <= a[1] for a, b in zip(path, path[1:])), True)
             b14("b bat over the foot, wall col 4", 4, range(9, 17), SLOT_BATB, 5, 9,
-                EF_ACTIVE | EF_HOSTILE | EF_LEFT, 11)
+                EF_ACTIVE | EF_HOSTILE | EF_LEFT, 11 + SQZ_EXTRA)
             b14("c bat over the foot, wall col 8", 8, range(9, 17), SLOT_BATB, 5, 9,
-                EF_ACTIVE | EF_HOSTILE, 11)
+                EF_ACTIVE | EF_HOSTILE, 11 + SQZ_EXTRA)
 
         # 63 (B14 review): two-body livelocks and the squeeze-past guarantee
         # (designer 2026-10-04, prototype §6.4 "B14 fix rules"). Walls poked
@@ -1315,8 +1319,8 @@ def main():
             ]
             for tag, walls, slot, kind, x, y, fl in cases:
                 fly_setup(walls, (5, Y0), [(slot, kind, x, y, fl)])
-                ok, bad = drive("J", Y1, 12, [slot])
-                h.expect(f"64{tag}: hero descends {{5,1}} to storey 1 within 12 turns", ok, True)
+                ok, bad = drive("J", Y1, 12 + SQZ_EXTRA, [slot])   # (B18: yield waits, see 62)
+                h.expect(f"64{tag}: hero descends {{5,1}} to storey 1 within {12 + SQZ_EXTRA} turns", ok, True)
                 h.expect(f"64{tag}: the flyer stays in its band", bad, [])
 
         # 65 (B16, user 2026-10-05: "a ghost sometimes falls to the floor

@@ -378,7 +378,7 @@ outweighing the +8 T per redrawn background cell of the 64-id glyph address.)
 | `$B800..$B8FF` | `SLOTREC` | A7b: per-slot render record, 16 slots × **16 B** (one page; record = `SLOTREC + slot*16`, fields reached by `inc l`): `R_VIS +0`, `R_FID +1` (written by `anim_tick`), `R_FPX +2`, `R_FPY +3`, `R_COL +4`, `R_ROW +5`, `R_COLS +6`, `R_ROWS +7` (`R_FID..R_ROWS` = the entity's drawn block `E_DFID..E_DROWS` in the same order: `draw_slot` copies it with one LDIR; ASSERTed), `R_LEFT +8`, `R_ATTR +9`, `R_DATTR +10`, `R_DIRTY +11`, `R_LOG +12`, **D3-8e2: `R_TINT +13`** (= `R_ATTR | 4`: the body attr — kind or status tint — last shown with no reaction pending; `render` keeps showing it while `E_REACT` is pending, game.md §6.5.1), **D3-8d: `R_MK +14` / `R_MKLO +15`** (the slot's status mark as drawn: g / frame / row >> 3, the cell's low byte; "Status marks (D3-8d)"; no spare left) (was the 13 × 16-B `SLOTVARS` arrays `N_VIS`… `$B800..$B8CF`) |
 | `$B900..$B9BF` | `DMG_LIST` | per-render damage rects, 4 B each (c0,c1,r0,r1), 48 max |
 | `$B9C0..$B9CF` | `PEND_DMG` | queued damage for the next render (4 rects) |
-| `$BA00..$BA4F` | `LIVE_LIST` | per-turn collider list, 5 B/entry (slot, ptr, w, h); `LIVE_N $BA50` |
+| `$BA00..$BA4F` | `LIVE_LIST` | per-turn collider list, 5 B/entry (`LL_STRIDE`: slot, ptr, w, h); `LIVE_N $BA50`; entry 0 is always the hero (B19 `box_free_mon` skips it) |
 | `$BA60..$BA6F` | `RLIST` | per-tick render list (slots visible or still drawn); `RLIST_N $BA70`, `RL_IDX $BA71` |
 | `$BA72..$BA79` | `PL_X/Y/W/H`, `PL_STOREY`, `PL_LADDER`, `MSG_Q`, `BLIT_CROWS` | per-turn hero cache, queued impact message, aligned-blit counter |
 | `$BA80..$BA9F` | `SEL_FRT_SAVE` | 2 × 16 B: the select idles' boot FRT rows (`sel_frt_copy` saves at boot, restores on every `enter_select`; a game's `gen_kind` re-points its hero's rows above the alloc mark, which the next hero overwrites) |
@@ -470,7 +470,8 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 | `$BF1C..$BF1F` | `LAST_TICK_FRAME`, `TURN_TICK`, `NEED_RELEASE`, `EXIT_KIND` | loop internals |
 | `$BF40` | `BLIT_MISS` | count: stationary frame requested at an ungenerated shift (debug trap, expect 0) |
 | `$BF41` | `GEN_OVERFLOW` | 1 if the pre-shift pool ran out (expect 0). An allocation ending exactly at `$10000` opens the next bank for the next one |
-| `$BF42..$BF4F` | allocator, damage counts, exit dest/storey/col (`$BF48..$BF4B` spare since D3-0: were the zap overlay's `ZAP_T/ROW/COL/LEN`) | internals |
+| `$BF42..$BF4F` | allocator, damage counts, exit dest/storey/col (`$BF4A..$BF4B` spare since D3-0: were the zap overlay's `ZAP_COL/LEN`; `$BF48` below) | internals |
+| `$BF48` | `CLIMB_BLK_XY` | B18 word: `CLIMB_BLK_ID`'s (x, y) at its last block (`climb_blocked`): a repeat blocker that moved since (yielding) earns another wait, up to `CLIMB_SQZ_N` (4) blocks; one that did not move is squeezed past. Test-observable |
 | `$BF55` | `DMG_OVERFLOW` | count: `DMG_LIST` (48) full → last rect = whole playfield, or `PEND_DMG` (4) full → last rect grows to the bounding box (expect 0; was the unused `MSG_DIRTY`) |
 | `$BF80` | `CLIP_TRAP` | count: a blit would cross col 31 (not drawn) or a stamp was clamped at col 31 (debug trap, expect 0; was the unused `SEL_KEY`) |
 | `$BF51..$BF92` | blit params, generator scratch, `CAND_LIST $BF60`, `CAND_GAP $BF70`, `TMP0..7 $BF83`, `ACT_SLOT $BF8B`, `PLAYER_DIR/DISC`, `ATK_PTR $BF8E`, `MON_SLOT`, `ANIM_SLOT`, `YIELD_FLAG` | internals |
@@ -483,7 +484,7 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 | `$BF9C` | `PAUSED` | C3-6: 1 while the pause overlay is up (test-observable) |
 | `$BF9D` | `END_SHOWN` | C3-6: 1 = the death / win card is drawn, 2 = armed (all keys released once, C3-6b) (`end_screen`; cleared by `hero_st_init`) |
 | `$BF9E` | `MENU_IN_SIG` | C3-6 review: the last input fold `menu_frame` saw (key-edge seed mixing) |
-| `$BF9F` | — | spare |
+| `$BF9F` | `PEND_N` | B19: PENDING bodies of `CUR_ROOM` counted by the last `build_live`; 0 = `pend_hit`'s fast path (a monster move never ends on a PENDING body it does not already overlap: `try_step`; the squeeze's foot cell too) |
 | `$BF99` | `GEN_TRAP` | count (saturating): `gen_frame` ran while `GAME_STATE` = PLAYING/TRANSITION, i.e. while `GEN_SCRATCH` holds live room maps (debug trap, expect 0; `tests/game.py` #1/#40/#51) |
 | `$BFA0` | `MSG_BUF` | 32 B: `show_impact_msg` / `impact_line` (B14: also the squeeze line) composes the impact line here (B3B-13: a token stream, pre + name + post, ≤ 31 B + 0 ASSERTed), then `log_push` copies it (B3B-11; tests use it as a stub result byte) |
 | `$BFC0` | `TIMING_MARK` | spare |
@@ -491,7 +492,7 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 | `$BFC4` | `JUMP_TURN` | B3B-5 word: the `TURN_COUNTER` value on which a jump is refused (= the turn after a jump; game.md §2.4 "not two turns in a row"); `$FFFF` = none (`new_game`) |
 | `$BFC6` | `LOCK_SHOWN` | B3B-5: 1 = the locked-door message was printed for the key still held (once per press); `read_turn_input` clears it when no key is held |
 | `$BFC7` | `CLIMB_BLK_ID` | B14: slot of the body that blocked the hero's last climb (`climb_blocked`) |
-| `$BFC8` | `CLIMB_BLK_N` | B14: consecutive blocked climbs by `CLIMB_BLK_ID`; the 2nd = squeeze past (prototype §6.4 "B14 fix rules"). Cleared by `read_turn_input` after any other consumed turn (`CLIMB_BLK` = 0), by the squeeze and by `level_reset`. Test-observable |
+| `$BFC8` | `CLIMB_BLK_N` | B14: consecutive blocked climbs by `CLIMB_BLK_ID`; the 2nd = squeeze past (prototype §6.4 "B14 fix rules") unless the blocker moved since its last block (B18: another wait; `CLIMB_BLK_XY`); a block by another body continues the count; the `CLIMB_SQZ_N`+1th block in a row squeezes anyway. Cleared by `read_turn_input` after any other consumed turn (`CLIMB_BLK` = 0), by the squeeze and by `level_reset`. Test-observable |
 | `$BFC9` | `PLAYER_SC` | C3-1 (`$BFC7` until the B14 merge): shortcut keys this sample (`sample_input`): bits 0-3 slot 1..10 (key 1..9, 0 = 10; lowest held wins; 0 = none; the selected Sinclair half of the number row is ignored), bit 6 `SC_INV` (I), bit 7 `SC_BREAK` (CAPS + SPACE). Test-observable |
 | `$BFCA` | `LVL_SH` | C3-3: hero level digit last drawn ((31, 19); `$FF` = never) |
 | `$BFCB` | `ICON_SIG` | C3-3: `icon_sig` (SEL_SLOT, daggers 0, bow ready) as last drawn — `icon_poll` compares it, not the 10 slot states (~0.15k T a step) |

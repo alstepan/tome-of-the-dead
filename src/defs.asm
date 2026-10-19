@@ -203,6 +203,7 @@ PEND_DMG        EQU $B9C0           ; queued damage for next render: 4 rects ($B
 PEND_DMG_MAX    EQU 4
 LIVE_LIST       EQU $BA00           ; 16 x 5 B: colliders this turn ($BA00..$BA4F)
 LIVE_N          EQU $BA50           ; entries in LIVE_LIST
+LL_STRIDE       EQU 5               ; LIVE_LIST entry: slot, ptr lo, ptr hi, w, h
 RLIST           EQU $BA60           ; render list: slots drawn or visible ($BA60..$BA6F)
 RLIST_N         EQU $BA70
 RL_IDX          EQU $BA71
@@ -263,7 +264,8 @@ ALLOC_IDX       EQU $BF42           ; pool bank index 0..2
 ALLOC_PTR       EQU $BF43           ; word: next free byte in the paged pool bank
 ALLOC_MARK_IDX  EQU $BF45           ; allocator mark after monsters+hero idles
 ALLOC_MARK_PTR  EQU $BF46           ; word
-; $BF48..$BF4B: spare (D3-0: were ZAP_T / ZAP_ROW / ZAP_COL / ZAP_LEN, the PROTO zap)
+CLIMB_BLK_XY    EQU $BF48           ; B18 word: CLIMB_BLK_ID's (x, y) at its last block (climb_blocked)
+; $BF4A..$BF4B: spare (D3-0: $BF48..$BF4B were ZAP_T / ZAP_ROW / ZAP_COL / ZAP_LEN, the PROTO zap)
 DMG_COUNT       EQU $BF4C           ; rects in DMG_LIST this render
 PEND_DMG_COUNT  EQU $BF4D
 EXIT_DEST       EQU $BF4E           ; destination room of the pending exit
@@ -312,12 +314,16 @@ JUMP_ARC        EQU $BF98           ; J1: the hero's jump arc for anim (try_jump
 JA_N            EQU $1F             ;   bits 0-4: airborne ticks n = 2 |x_f - x| (12 / 14, less when cut short)
 JA_D7_BIT       EQU 6               ;   set: D = 7 arc shape (N = 14), else D = 6 (N = 12)
 JA_FALL_BIT     EQU 7               ;   set: the jump ends in a pit fall (E_Y already = storey 1)
-; $BF9A..$BF9F: spare (B3B-11: were the A7 HUD_EXT / HUD_PW, now HUD4_EXT / HUD4_PW)
+; $BF9A..$BF9F: B3B-11 freed them (were the A7 HUD_EXT / HUD_PW); now MENU_SPIN, PAUSED, END_SHOWN,
+; MENU_IN_SIG, PEND_N (below)
 GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
 MSG_BUF         EQU $BFA0           ; 32 B: impact message composition (show_impact_msg -> log_push)
 TIMING_MARK     EQU $BFC0           ; spare
 CLIMB_BLK_ID    EQU $BFC7           ; B14: slot of the last entity that blocked the hero's climb
 CLIMB_BLK_N     EQU $BFC8           ; B14: consecutive blocked climbs by CLIMB_BLK_ID (0 = none)
+CLIMB_SQZ_N     EQU 4               ; B18: the squeeze at the 2nd block when the blocker did not move,
+                                    ; at the (CLIMB_SQZ_N + 1)th anyway (a 4-wide body on the shaft col
+                                    ; clears a 3-col climb path in <= 4 yield steps)
 CLIMB_BLK       EQU $BFC1           ; 1 = this input's climb was blocked by an entity (-> wait turn)
 AY_CALLS        EQU $BFC2           ; A8 word: AY_PLAY calls (ay_play counts every call; test-observable)
 PLAYER_SC       EQU $BFC9           ; C3-1: shortcut keys this tick (SC_* bits, io.asm)
@@ -332,6 +338,7 @@ FIRE_LOCK       EQU $BFDF           ; C3-2b review: 1 = FIRE masked after BREAK 
 MENU_SPIN       EQU $BF9A           ; C3-6: word, frames x busy-wait passes in the menu (seed entropy)
 PAUSED          EQU $BF9C           ; C3-6: 1 while the pause overlay is up (test-observable)
 END_SHOWN       EQU $BF9D
+PEND_N          EQU $BF9F           ; B19: PENDING bodies of CUR_ROOM at the last build_live (pend_hit)
 MENU_IN_SIG     EQU $BF9E           ; C3-6 review: last input fold seen by menu_frame           ; C3-6: 1 = the death / win card is drawn
 LVL_SH          EQU $BFCA           ; C3-3: hero level digit last drawn ($FF = never)
 LOCK_SHOWN      EQU $BFC6           ; B3B-5: 1 = the locked-door message was printed for the key

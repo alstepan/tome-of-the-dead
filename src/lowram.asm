@@ -1101,7 +1101,11 @@ room_bodies:
 ;  - first block by this body (CLIMB_BLK_ID / CLIMB_BLK_N): a WAIT turn
 ;    (CLIMB_BLK = 1, CF = 0; try_player_turn makes it the wait) whose monster
 ;    phase yields to the climb: E_AIDIR = dy, cork_check reads CLIMB_BLK;
-;  - the 2nd consecutive block by the SAME body: SQUEEZE PAST. The hero takes
+;  - B18: a repeat block by the same body that MOVED since its last block
+;    (CLIMB_BLK_XY: it is yielding, 1 col a turn), or by another body, is
+;    another such wait, up to CLIMB_SQZ_N blocks in a row (any blockers);
+;  - a repeat block by the SAME body that did not move (or the CLIMB_SQZ_N + 1th
+;    in a row): SQUEEZE PAST. The hero takes
 ;    the step (mid-ladder, M_MOVE; costs his turn, CF = 1); every body in the
 ;    hero's new box is moved to the standing box at the shaft col on the
 ;    storey the climb leaves (x = the hero's, y = 9t+8-h: "the hero's foot
@@ -1112,6 +1116,8 @@ room_bodies:
 ;    PENDING — the foot cell is not in its air band; moving it there dropped
 ;    a ghost over the top box onto the floor below (flyers never leave their
 ;    band, prototype §3.5). Same storey: the foot cell is its band bottom.
+;    B19: a body whose foot cell already holds a live monster (box_free_mon)
+;    or a PENDING body (pend_hit) stays PENDING in place, never stacked.
 ;    Log: "YOU SQUEEZE PAST THE <NAME>" (impact_line, MSG_SQUEEZE).
 ; read_turn_input clears CLIMB_BLK_N after every other consumed turn
 ; (CLIMB_BLK = 0: a move, a wait, a climb that went through); level_reset
@@ -1121,26 +1127,66 @@ room_bodies:
 ;------------------------------------------------------------------------------
 climb_blocked:
                 dec  hl
+                dec  hl                        ; -> the entry's ptr hi
+                push de                        ; (D, E = the hero's box: the squeeze's)
+                ld   d, (hl)
                 dec  hl
-                dec  hl
+                ld   e, (hl)                   ; DE = the blocker's entity
                 dec  hl                        ; -> the entry's slot byte
                 ld   a, (hl)
                 ld   hl, CLIMB_BLK_ID
                 cp   (hl)
-                ld   (hl), a                   ; (ld / inc rr keep Z)
+                ld   (hl), a                   ; (ld / inc rr / ex keep Z)
                 inc  hl                        ; -> CLIMB_BLK_N
-                jr   nz, .one
+                ex   de, hl
+                inc  hl
+                inc  hl
+                inc  hl                        ; -> E_X
                 ld   a, (hl)
+                inc  hl
+                ld   h, (hl)                   ; E_Y
+                ld   l, a
+                ex   de, hl                    ; DE = its (x, y), HL -> CLIMB_BLK_N
+                ASSERT E_X == 3 && E_Y == 4
+                jr   z, .same
+                ld   a, (hl)                   ; another blocker in the same run of
+                or   a                         ; blocks (review: A / B alternating
+                jr   z, .one                   ; blockers): the count goes on, so
+                jr   .cap                      ; the cap still ends the run
+.same:          ld   a, (hl)
                 or   a
-                jr   nz, .squeeze
+                jr   z, .one
+                ; B18 / D-AI1a: the 2nd block squeezed even when the blocker had
+                ; just stepped aside — one 1-col yield step can't clear a 3-col
+                ; climb path (a body on the shaft col needs up to its width), so a
+                ; yielding walker was swapped onto the other storey ("the hero
+                ; lands on it", "the rat drops a storey"). Now a blocker that moved
+                ; since the last block earns another wait; the squeeze fires when it
+                ; did not move (it can't yield) or after CLIMB_SQZ_N blocks of any
+                ; bodies (the
+                ; anti-softlock guarantee stays: a yield can't oscillate for ever).
+                push hl
+                ld   hl, (CLIMB_BLK_XY)
+                or   a
+                sbc  hl, de
+                pop  hl
+                jr   z, .sqz                   ; no progress: it can't yield
+                ld   a, (hl)
+.cap:           cp   CLIMB_SQZ_N
+                jr   nc, .sqz
+                inc  (hl)
+                jr   .wt
 .one:           ld   (hl), 1
+.wt:            ld   (CLIMB_BLK_XY), de
+                pop  de
                 ld   a, (TMP6)                 ; the climb the monster phase
                 ld   (ix+E_AIDIR), a           ; yields to (cork_check)
                 ld   a, 1
                 ld   (CLIMB_BLK), a
                 xor  a                         ; CF = 0: the caller's wait
                 ret
-.squeeze:       ld   (hl), 0
+.sqz:           pop  de
+                ld   (hl), 0
                 ld   a, (TMP6)
                 ld   (ix+E_AIDIR), a
                 inc  a                         ; Z: up ($FF)
@@ -1182,11 +1228,25 @@ climb_blocked:
                 ld   hl, TMP7                  ; §3.5). A = 9s+8 vs 9t+8
                 cp   (hl)
                 jr   nz, .kind
-.mv:            ld   (ix+E_X), c
+.mv:            pop  af                        ; B19: the foot cell already holds a live
+                push af                        ; monster -> PENDING in place instead: a
+                ld   (ACT_SLOT), a             ; hidden body stacked under a live one
+                push bc                        ; popped up on its corpse when it died
+                push de                        ; (materialise: DYING bodies don't collide)
+                KFIELD KT_BW
+                ld   d, a
                 KFIELD KT_BH
-                ld   h, a
+                ld   e, a
                 ld   a, (TMP7)
-                sub  h
+                sub  e
+                ld   b, a                      ; C = the hero's col (the foot cell)
+                call box_free_mon
+                call nc, pend_hit              ; (review) or one already PENDING there
+                ld   a, b
+                pop  de
+                pop  bc
+                jr   c, .kind
+                ld   (ix+E_X), c
                 ld   (ix+E_Y), a
 .kind:          ld   a, (TMP5)
                 inc  a
@@ -1200,7 +1260,9 @@ climb_blocked:
                 pop  af
                 inc  a
                 cp   P_MAX_ENT
-                jr   c, .l
+                jp   c, .l                     ; (out of jr range since B19)
+                xor  a
+                ld   (ACT_SLOT), a             ; (the hero's turn: 0, try_player_turn)
                 call build_live                ; PENDING ones stop colliding
                 ld   a, (TMP5)
                 ld   c, a

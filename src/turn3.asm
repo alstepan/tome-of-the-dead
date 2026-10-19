@@ -164,14 +164,6 @@ set_reaction_at:
 ai_monster:
                 call ix_slot
                 ld   (ACT_SLOT), a
-                ; act every 2 turns (slime): act on even TURN_COUNTER
-                KFIELD KT_PERIOD
-                cp   2
-                jr   nz, .go
-                ld   a, (TURN_COUNTER)
-                and  1
-                ret  nz
-.go:
                 ; --- yield rule (§6.4): hero mid-ladder and I block its climb.
                 ; Checked against the hero's whole remaining path (cork_check),
                 ; not just the next step, so a monster already parked on the
@@ -252,6 +244,19 @@ ai_monster:
                 ld   d, 0
                 jp   try_step
 .ny2:
+                ; act every 2 turns (slime): act on even TURN_COUNTER. B18: after
+                ; the yield (§6.4 "checked first, all kinds"): a slime on the
+                ; climb path skipped every other yield, so the 2nd block found it
+                ; unmoved and the squeeze swapped it onto the other storey. Cost: a
+                ; slime's off turn now runs ai_monster's get_box + cork_check
+                ; first (~0.2k T; cork_check's fast path 30 T off a climb)
+                KFIELD KT_PERIOD
+                cp   2
+                jr   nz, .go
+                ld   a, (TURN_COUNTER)
+                and  1
+                ret  nz
+.go:
                 KFIELD KT_FLAGS
                 and  KF_FLYER
                 jp   nz, ai_flyer
