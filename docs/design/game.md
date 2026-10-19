@@ -759,7 +759,7 @@ because the next evaluation sees their effect.
 | HP / MP at start | 24 / 6 | 16 / 12 (10 + Robe 2) |
 | atk / eva / DEF | 3 / 2 / 1 (Leather) | 1 / 1 / 0 |
 | Melee | Short Sword 1d6, reach 1 | Oak Staff 1d4, reach 1, own **STAFF_SWING** frame. Never greys out (the 0-MP fallback) |
-| MP regen | +1 per 8 turns | +1 per 5 turns |
+| MP regen (B20, designer 2026-10-19) | every **8** turns: +1 + `MAXMP` div 16 | every **6** turns (was 5): +1 + `MAXMP` div 16 |
 | Mana use | 2 power attacks (§6.2) | 5 spells (§6.1) |
 | Finite supplies | daggers, arrows (§6.3) | spell books/scrolls are found, never bought (§5) |
 | Ranged | **throwing daggers** (range 6) + **bow** (range 14), both **finite** (§6.3) | spells |
@@ -774,6 +774,62 @@ because the next evaluation sees their effect.
 - **Why these level-up amounts:** the hero reaches about L8 at D8 entry (7 level-ups). In rev
   4, 7 boss kills (+3/+1) plus the tomes made W 60/18 and M 39/25 at D8; rev 5's +4/+1 (W)
   and +3/+2 (M) plus ~3 late Vigor tomes (W) land at W ~61/16, M ~37/26 (§10).
+
+### 4.0 Balance ruling B20 / BAL1 part 1 (designer decision 2026-10-19; playtest to tune)
+
+**Base stats (confirmed, the table above is authoritative; the code's 22/14 HP, atk 2/3 and
+Mage staff 1d6+1 were stale prototype values).** Warrior HP 24, MP 6, atk 3, eva 2, DEF 1
+(Leather), Short Sword **1d6+0**. Mage HP 16, MP 12 (10 + Robe 2), atk 1, eva 1, DEF 0, Oak
+Staff **1d4+0**. Level-up gains and steps unchanged (§4.1: W +4 HP/+1 MP, M +3/+2; L4 atk +1,
+L6 eva +1, L8 atk +1). `XP_NEXT` unchanged.
+
+**Why (F1 `d20 + atk ≥ 10 + eva`, so P(hit) = (11 + atk − eva) / 20; monster rows §9.1 incl.
+depth scaling; HP regen FED +1 / 12 turns):**
+
+| Fight (hero level = depth) | Hero hit % × avg dmg | Turns to kill | Hero HP lost | FED turns to regen |
+|---|---|---|---|---|
+| W L1 vs Goblin D1 (6 hp) | 65 % × 3.5 | ~2.6 | ~2.3 (50 % × 1.75) | ~28 |
+| W L1 vs Rat D1 (3 hp) | 65 % × 3.5 | ~2 | ~0.9 | ~11 |
+| W L3 vs Skeleton D3 (12 hp, DEF 1) | 60 % × 2.7 | ~7.5 melee · **~4.5 with 2 Power Strikes** (70 % × 6) | ~11 melee · ~6.6 with PS | 80–130 |
+| M L1 staff vs Rat D1 | 55 % × 2.5 | ~2.7 | ~2 | ~24 |
+| M L1 staff vs Goblin D1 | 55 % × 2.5 | ~5 | **~6.5 (40 % of 16)** | ~78 |
+| M L1 **Spark** vs Goblin D1 | always hits, 3.5 | ~2.2 casts = **4.4 MP**, at range | ~0 if cast before contact | — |
+| M L2 **Firebolt** vs Goblin D2 (7 hp) | always hits, 6.5 | ~1.5 casts = 4.5 MP | ~0 | — |
+| M L3 Firebolt vs Skeleton D3 (Frost/Drain I) | 6.5 | ~2 casts = 6 MP | ~0–2 | — |
+| M L3 staff vs Skeleton D3 | 50 % × 1.75 | ~14 | **~26 (death)** | — |
+
+So the Warrior wins every D1–D3 melee and spends MP only to shorten long fights; the Mage
+must open with spells and the staff is a rat-and-finisher tool. Mage melee damage per turn is
+~60 % of the Warrior's (1.4 vs 2.3) and her HP is 2/3: she out-damages him only through MP.
+
+**MP economy (first pass; playtest to tune).** The pool is the per-fight budget; regen is
+the between-rooms refill, so in-fight regen is kept small (≤ 1 Spark per ~12-turn fight).
+Regen gain per period = **1 + `MAXMP` div 16** (≤ 16 → +1, 16–31 → +2), so refill time stays
+roughly flat as the pool grows. HUNGRY doubles the period, WEAK halts it (§7), Amulet of
+Mana / Scarab halve it.
+
+| Ability | MP (rank 1) | Change |
+|---|---|---|
+| **Spark** | **2** (all ranks) | was 1: at 1 MP it out-damaged Firebolt per MP (3.5 vs 2.2) and made MP endless |
+| Firebolt · Frost Shard · Drain Life | 3 · 3 · 3 (Drain r3: 2) | unchanged |
+| Lightning | 5 (r3: 4) | unchanged |
+| Power Strike · Whirlwind | 3 (r2: 2) · 4 (r3: 3) | unchanged |
+
+| Hero / level | `MAXMP` | Fight budget | Turns to refill from 0 |
+|---|---|---|---|
+| Mage L1 | 12 | 6 Sparks ≈ 2.7 Goblins / ~5 Rats | 72 |
+| Mage L3 | 16 | 5 Firebolts ≈ 2.5 Skeletons | 48 |
+| Mage L5 | 20 | 4 Lightnings / 6 Firebolts | 60 |
+| Mage L8 | 26 | 5 Lightnings / 8 Firebolts | 78 |
+| Warrior L1 | 6 | 2 Power Strikes | 48 |
+| Warrior L4 | 9 | 3 Power Strikes / 2 Whirlwinds | 72 |
+| Warrior L8 (+~3 Vigor) | 13–16 | 4–5 Power Strikes | 104 → 64 |
+
+A Mage runs dry in a room of 3+ monsters at D1–D3 (then staff, retreat or a Mana potion) and
+is back to half-full after ~one room transit, full after ~1–2 (a level is ~450 turns).
+Resting to refill costs food: 72 turns ≈ 12 FOOD. **Knobs, in order:** Mage period 6 → 5/7;
+Spark 2 → 1 at rank 3; Mage base MP 12 → 10. **Playtest note:** `DEBUG_KIT` gives MP 40/20
+and every ability, so its builds cannot judge the MP economy; judge with a non-kit build.
 
 ### 4.1 Experience and levels (user 2026-10-03: add XP; numbers designer decision 2026-10-03)
 
@@ -856,7 +912,7 @@ header shows the same. 0 new glyphs.
 
 | Ability | Rank 2 | Rank 3 |
 |---|---|---|
-| Spark (1 MP, r6, 1d4+1) | 1d4+2, range 8 | 1d4+3, CONFUSED chance 1 in 2 |
+| Spark (**2 MP**, B20; r6, 1d4+1) | 1d4+2, range 8 | 1d4+3, CONFUSED chance 1 in 2 |
 | Firebolt (3 MP, r12, 1d8+2, burst 1d4) | 1d8+3, burst 1d6 | 1d8+4, the burst **spares the caster** |
 | Frost Shard (3 MP, r12, 1d6, 1 bounce, freeze 2) | freeze 3, 2 bounces | 1d6+2, freeze 4 (bosses halved, §6.4) |
 | Drain Life (3 MP, r5, 1d6+1) | 1d6+2, range 8 | **2 MP**, 1d6+3 |
@@ -943,7 +999,7 @@ sprite. **≤ 3 tracks at once**; more are queued.
 
 | Spell | Book | MP | Range | Dmg / type | Bounces | Effect | Projectile → impact sprites |
 |---|---|---|---|---|---|---|---|
-| **Spark** | D1 | 1 | 6 | 1d4+1 SHOCK | 0 | **1 in 4: CONFUSED 4** (§6.4; 3D; was 3, §6.4.1) | spark_fly1/2 8×8 `$43` → spark_fizz1/2 8×8 |
+| **Spark** | D1 | **2** (B20, was 1) | 6 | 1d4+1 SHOCK | 0 | **1 in 4: CONFUSED 4** (§6.4; 3D; was 3, §6.4.1) | spark_fly1/2 8×8 `$43` → spark_fizz1/2 8×8 |
 | **Firebolt** | D2 | 3 | 12 | 1d8+2 FIRE | 0 | **burst**: bodies within 1 col of impact take 1d4 FIRE, **caster included** at point-blank (impact within 1 col of the caster's front col; ranks 1–2, intended; rank 3 spares him) | firebolt_fly1/2 16×8 alternating yellow `$46` / red `$42` per frame (**user 2026-10-06**) → firebolt_burst1/2 16×16 |
 | **Frost Shard** | D3 | 3 | 12 | 1d6 COLD | **1** | **freeze 2 turns** (bosses 1); can freeze the caster after a bounce or reflection: **1 turn at any rank** (§6.4.1) | frost_fly 8×8 `$45` → frost_crack **8×8** (**user 2026-10-06**: stays 8×8, not 16×16; revisit after playtesting) |
 | **Drain Life** | D4 | 3 | 5 | 1d6+1 DRAIN | 0 | **caster heals the damage dealt** (to max HP); useless on undead (I) | **drain_fly1/2 16×8 `$43` → drain_hit 16×16 (new art)**; the caster flashes `$44` |
@@ -1355,7 +1411,8 @@ the release tick (budget split). The rule is **logic early, visible output at im
 - To-hit: `d20 + atk ≥ 10 + eva` (F1).
 - Physical damage: `max(1, roll × resist − DEF)`. Spells: `roll × resist`, no DEF.
 - Nat-20/1 stays off.
-- MP regen as §4, halted when Weak. Mana potion +8. Amulet of Mana / Scarab halve the regen
+- MP regen as §4 / §4.0 (+1 + `MAXMP` div 16 per class period), period doubled when
+  HUNGRY, halted when Weak. Mana potion +8. Amulet of Mana / Scarab halve the regen
   interval.
 
 **Hunger** (`FOOD` 0–100, start 80): burns −1 per **6 turns**, a jump −2 extra. **Never fatal.**
@@ -2268,7 +2325,8 @@ ranks and gear keep pace.
   punitive; blessing (Enchant) is the counter.
 
 **Sample duel (D1, Warrior vs Goblin):** 65 % to hit, 3.5 avg → ~2.6 turns, ~2.3 HP lost.
-**Mage:** opening with 2 Sparks at range costs ~0 HP. Mana economy is ~90 MP per level.
+**Mage:** opening with 2 Sparks at range costs ~0 HP and 4 MP (B20: Spark 2 MP; the pool is
+the per-fight budget, refill 48–84 turns, §4.0).
 
 **Run:** ~450 turns per level, ~3,600 turns ≈ 60–65 min.
 
