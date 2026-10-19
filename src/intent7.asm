@@ -55,8 +55,12 @@ cursor_step:
                 jr   nz, .set
                 djnz .l
                 ret
-.set:           ld   (SEL_SLOT), a
-                ret
+.set:           ld   hl, SEL_SLOT
+                cp   (hl)
+                ret  z                         ; SND-5b: wrapped onto itself (the only stop)
+                ld   (hl), a
+                ld   a, SFX_MENU               ; the main menu's navigation effect
+                jp   sfx_req
 
 ;------------------------------------------------------------------------------
 ; sel_key — far7 from intent_tick (bank 2), A = shortcut 1..10 (key 1..9, 0): select that slot if the
@@ -161,12 +165,16 @@ use_slot:
                 cp   SA_BAG
                 jr   nz, ic_none               ; SA_EMPTY
 .rf:            ld   a, e
-                jr   ic_refuse
-; ic_no_mana — SND-5: the NO MANA refusal (abil_spell / abil_melee) with the
-; fizz effect (sfx_req keeps A).
-ic_no_mana:     ld   a, SFX_FIZZ
+                jr   ic_no
+; ic_no_mana — SND-5: the NO MANA refusal (abil_spell / abil_melee); plays FIZZ (= NO).
+ic_no_mana:     ld   a, TX_NO_MANA
+; ic_no — SND-5b: a 'nothing to use' refusal (no potion / food / scroll / bag /
+; daggers / bow / arrows / mana) = ic_refuse + the shared NO effect (SFX_NO ==
+; SFX_FIZZ); A = the TX_ line.
+ic_no:          push af
+                ld   a, SFX_NO
                 call sfx_req
-                ld   a, TX_NO_MANA
+                pop  af
 ic_refuse:      call msg_push
                 ld   l, IC_REFUSED
                 ret
@@ -215,14 +223,14 @@ ic_potion:
                 ld   a, (ix+E_POT)
                 or   a
                 ld   a, TX_NO_POTION
-                jr   z, ic_refuse
+                jr   z, ic_no
                 jp   ic_quaff
 
 ic_daggers:
                 ld   a, (DAGGERS)
                 or   a
                 ld   a, TX_NO_DAGGERS
-                jr   z, ic_refuse
+                jr   z, ic_no
                 ld   a, ABL_DAGGER
                 jr   ic_disp
 
@@ -230,11 +238,11 @@ ic_bow:
                 ld   a, (HAS_BOW)
                 or   a
                 ld   a, TX_NO_BOW
-                jr   z, ic_refuse
+                jr   z, ic_no
                 ld   a, (ARROWS)
                 or   a
                 ld   a, TX_NO_ARROWS
-                jr   z, ic_refuse
+                jr   z, ic_no
                 ld   a, ABL_BOW
                 jr   ic_disp
 
@@ -388,6 +396,8 @@ ic_quaff:
                 dec  (ix+E_POT)
                 ld   (ix+E_FLT), FLASH_TICKS
                 ld   (ix+E_FLA), ATTR_HEAL
+                ld   a, SFX_QUAFF              ; SND-5b
+                call sfx_req
                 ld   a, TX_QUAFF
                 call msg_push                  ; queued (panel_tick)
                 ld   l, 1

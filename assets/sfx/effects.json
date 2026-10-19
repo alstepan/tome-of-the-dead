@@ -1,5 +1,5 @@
 {
-  "_doc": "SND-5 sound effects (channel A, 50 Hz frames). Format + tokens: tools/sfx2asm.py. Priorities: docs/design/sound.md section 4. Order = ids (append new effects at the end). Loudness: peak frames 14-15 (the music's fixed voices are 13, ducked to 10 / 9 while an effect plays).",
+  "_doc": "SND-5 sound effects (channel A, 50 Hz frames). Format + tokens: tools/sfx2asm.py. Priorities: docs/design/sound.md section 4. Order = ids (append new effects at the end; index 0..31, 32 max). STEP is prio 0 (never cuts anything, dropped when anything plays). \"aliases\": extra SFX_<alias> names for an existing effect id (NO = FIZZ). Loudness: peak frames 14-15 (the music's fixed voices are 13, ducked to 10 / 9 while an effect plays).",
   "effects": [
     {"name": "MENU", "prio": 1, "frames": ["v15 tE6", "v12 tB6", "v7 t", "v3 t"]},
     {"name": "MISS", "prio": 2, "frames": ["v9 n9", "v14 n6", "v10 n4", "v6 n2", "v2 n1"]},
@@ -39,6 +39,13 @@
     {"name": "FALL", "prio": 4, "frames": ["v14 tC7", "v15 tA6", "v14 tF6", "v14 tD6", "v13 tB5", "v13 tG5", "v12 tE5",
                                          "v11 tC5", "v10 tA4", "v9 tF4", "v8 tD4", "v6 tB3", "v4 tG3", "v2 tE3"]},
     {"name": "DOOR", "prio": 4, "frames": ["v14 tC3 n28", "v15 tC#3", "v13 tD3 n26", "v12 tC#3", "v11 tC3 n24", "v10 tB2",
-                                         "v8 tC3 n28", "v6 tB2", "v4 tA#2", "v2 tA2"]}
-  ]
+                                         "v8 tC3 n28", "v6 tB2", "v4 tA#2", "v2 tA2"]},
+    {"name": "STEP", "prio": 0, "frames": ["v14 n14", "v7 n22"]},
+    {"name": "PICKUP", "prio": 3, "frames": ["v15 tC6", "v12 t", "v15 tG6", "v13 t", "v10 t", "v5 t"]},
+    {"name": "QUAFF", "prio": 3, "frames": ["v14 tA3", "v12 tC4", "v14 tB3", "v12 tD4", "v14 tC4", "v11 tE4", "v9 tD4",
+                                          "v7 tF4", "v4 tE4", "v2 tG4"]},
+    {"name": "EAT", "prio": 3, "frames": ["v15 n10", "v6 n20", "v14 n8", "v6 n22", "v13 n12", "v4 n26"]},
+    {"name": "GOLD", "prio": 3, "frames": ["v15 tE7", "v13 t", "v15 tB7", "v14 t", "v12 t", "v9 t", "v6 t", "v3 t"]}
+  ],
+  "aliases": {"NO": "FIZZ"}
 }

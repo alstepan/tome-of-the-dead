@@ -694,8 +694,16 @@ About **30 SFX ≈ 0.8 KB E**.
 - **Tool:** effects are text in `assets/sfx/effects.json` (per frame `v<vol> t<note|idx> n<noise> x<repeat>`;
   no `t` = tone off, no `n` = noise off; `"like": X, "transpose": k` = a transposed copy of X).
   `tools/build.sh` runs `tools/sfx2asm.py` into `build/sfx/` (`sfx_ids.inc` included by `main.asm`,
-  `sfx_data.asm` by `ay.asm`). Add an effect = append it to the JSON (ids are file order, max 31) and
-  call `sfx_req` with `SFX_<NAME>`.
+  `sfx_data.asm` by `ay.asm`). Add an effect = append it to the JSON (ids are file order, **0-based since SND-5b, max 32**; id 0 is
+  'none', so index 0 needs prio >= 1; all 32 ids are used: more effects need a wider format) and
+  call `sfx_req` with `SFX_<NAME>`. Top-level `"aliases": {"NO": "FIZZ"}` emits `SFX_NO EQU SFX_FIZZ`.
+- **SND-5b rules:** STEP is **prio 0** (lowest): `sfx_req` / the ISR drop it whenever anything else is pending or
+  playing (it never cuts and is never deferred), and it replaces only another STEP. **One step sound a turn:**
+  the hero's step requests it; each monster move goes through `mv_sfx`, which skips when `SFX_REQ` is already
+  non-zero (the first mover's STEP or a louder effect) or the SFX bit is off / paused (horizontal step ~80 T, SFX off ~112 T, flyer vertical ~140 T, climber ~110 T and only the first pays
+  a `sfx_req` ~250 T: later climbers stop at `SFX_REQ == LADDER`). **STEP does not duck the music** (prio 0 sets
+  `sfx_duck` 0), every other effect still ducks V2/V3 by 3 (prio >= 6: 4). A vertical non-flyer move (a climber on a ladder) requests **LADDER**, the hero's
+  effect (flyers' vertical flight is a STEP). The icon-bar cursor plays MENU, the main-menu effect.
 
 | Effect | Prio | Frames | Bytes | Hook (bank) |
 |---|---|---|---|---|
@@ -716,7 +724,14 @@ About **30 SFX ≈ 0.8 KB E**.
 | JUMP / FALL | 3 / 4 | 6 / 14 | 11 / 29 | the jump / `hero_fall` (low RAM; a jump into the pit: FALL replaces JUMP) |
 | LAND | 2 | 3 | 9 | `anim_entity` jump end / fall end, the hero (2) |
 | DOOR | 4 | 10 | 25 | `door_open` (low RAM; hero or monster) |
-| **Total** | | | **510** (table 54 + data 456) | |
+| **Total (SND-5)** | | | **510** (table 54 + data 456) | |
+| STEP | **0** | 2 | 5 | hero: `try_horizontal` (7); every monster: `try_step` → `mv_sfx` (`logic.asm`, bank 2) |
+| PICKUP | 3 | 6 | 9 | `floor_pickup`: `pp_take` (potion), `ap_take` (ammo, when n > 0) (7) |
+| QUAFF | 3 | 10 | 21 | `ic_quaff` (7) |
+| EAT / GOLD | 3 / 3 | 6 / 8 | 13 / 11 | **not hooked** (3E): ids `SFX_EAT` / `SFX_GOLD` ready |
+| (alias) NO | = FIZZ | | | `ic_no` (7): NO POTION / FOOD / SCROLL / BAG / DAGGERS / BOW / ARROWS / MANA (`SFX_NO EQU SFX_FIZZ`) |
+| MENU (icon bar) | 1 | | | `cursor_step` (7): ICON MODE <- / ->, only when the slot changes |
+| **Total (SND-5b)** | | | **579** (table 64 + data 515); 32 of 32 ids used | |
 
 - **Not built (no event today / held):** menu move / cancel (the main menu has no cursor; the pause box
   runs under `SND_HOLD`, where requests are dropped by the user's rule), gate raise (3B: the grate is

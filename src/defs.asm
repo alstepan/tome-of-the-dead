@@ -66,7 +66,7 @@ MUS_CUR         EQU $BFEF           ; ISR: id sounding (0 = none)
 SFX_REQ         EQU $BFF0           ; SND-5 EDGE: SFX id (SFX_*, sfx_ids.inc), 0 = none; written
                                     ; only by sfx_req (keeps the higher prio), cleared by the ISR
 SFX_PRIO_MASK   EQU $E0             ; SFX id bits 5-7 = priority 0..7 (sfx2asm.py)
-SFX_IDX_MASK    EQU $1F             ; bits 0-4 = index 1..SFX_COUNT into sfx_tab
+SFX_IDX_MASK    EQU $1F             ; bits 0-4 = index 0..SFX_COUNT-1 into sfx_tab
 SFX_DUCK_PRIO   EQU 6 << 5          ; prio >= 6 ducks deeper
 SFX_DUCK_LO     EQU 3               ; any effect: the music's V2 / V3 fixed volumes - 3 (floor 0)
 SFX_DUCK_HI     EQU 4               ; prio >= SFX_DUCK_PRIO: - 4

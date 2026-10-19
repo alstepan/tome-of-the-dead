@@ -257,13 +257,14 @@ sfx_step:
                 cp   (hl)
                 jr   c, .defer                  ; lower than the effect playing
 .take:          ld   a, b
-                and  SFX_IDX_MASK
-                dec  a
+                and  SFX_IDX_MASK               ; 0-based index (SND-5b: 32 effects)
                 cp   SFX_COUNT
                 jr   nc, .run                   ; invalid: dropped
                 ld   l, a
                 ld   a, c
                 ld   (sfx_prio), a
+                or   a
+                jr   z, .dk                     ; SND-5b: prio 0 (STEP) does not duck: no pumping
                 cp   SFX_DUCK_PRIO
                 ld   a, SFX_DUCK_HI
                 jr   nc, .dk
@@ -281,7 +282,7 @@ sfx_step:
 .run:           ld   hl, (sfx_ptr)
                 ld   a, h
                 or   a
-                ret  z                          ; idle (effects live at $F000+: H != 0)
+                ret  z                          ; idle (effects live at $EDA0+: H != 0)
                 jr   .frame
 .defer:         ld   a, b                       ; prio >= SFX_DEFER_PRIO: after the effect
                 cp   SFX_DEFER_PRIO             ; (one slot, SFX_NEXT); else dropped
@@ -414,7 +415,7 @@ sfx_out:
 
 ;------------------------------------------------------------------------------
 ; sfx_dk — player_frame's ducking hook while any effect plays: A = sfx_duck
-; (SFX_DUCK_LO 3, SFX_DUCK_HI 4 for prio >= 6): mirror R9 / R10 -= A, floor 0;
+; (SFX_DUCK_LO 3, SFX_DUCK_HI 4 for prio >= 6; none for prio 0): mirror R9 / R10 -= A, floor 0;
 ; an envelope-mode volume (bit 4, the V3 buzzer) is left (a fixed volume
 ; there would mute it: tone C is off on a buzzer frame). The music rewrites
 ; them every frame, so the duck ends with the effect.
@@ -477,7 +478,7 @@ mus_songs_end:
 
 ;------------------------------------------------------------------------------
 ; SND-5 effects: tools/sfx2asm.py (assets/sfx/effects.json) -> OUTDIR/build/sfx/
-; (-i search path). sfx_tab: DW effect, stride 2, index order 1..SFX_COUNT.
+; (-i search path). sfx_tab: DW effect, stride 2, index order 0..SFX_COUNT-1.
 ;------------------------------------------------------------------------------
                 INCLUDE "sfx_data.asm"
                 ASSERT mus.mus_tab_end - mus.mus_tab_first == 2 * (MUS_COUNT - MUS_FIRST + 1) && mus.mus_tab == mus.mus_tab_first - 2 * (MUS_FIRST - 1)

@@ -129,7 +129,9 @@ pp_take:
                 ld   hl, POTIONS_TAKEN
                 or   (hl)
                 ld   (hl), a
-.nb:            push bc
+.nb:            ld   a, SFX_PICKUP             ; SND-5b (keeps BC / DE / HL)
+                call sfx_req
+                push bc
                 push de
                 ld   a, TX_FOUND
                 call msg_push                  ; queued (panel_tick; lowram, re-pages bank 7)
@@ -176,6 +178,8 @@ ap_take:
                 ld   a, (PANEL_DIRTY)
                 or   PD_AMMO                   ; T7: the ammo count changed (no ammo item drawn
                 ld   (PANEL_DIRTY), a          ; yet: the panel clears it, as abil_ammo's)
+                ld   a, SFX_PICKUP             ; SND-5b (keeps BC / HL)
+                call sfx_req
 .p0:            pop  hl
                 dec  l
                 dec  l                         ; -> FL_COL

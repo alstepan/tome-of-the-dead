@@ -56,7 +56,7 @@ def regs(z):
 
 
 def duck_of(e):
-    return 4 if e["prio"] >= 6 else 3
+    return 0 if e["prio"] == 0 else 4 if e["prio"] >= 6 else 3
 
 
 def call_at_done(s, addr, a=0, bc=0):
@@ -138,7 +138,7 @@ def run(h):
     tab = sfx1()
     bad = []
     for n, e in EFF.items():
-        w = s.mem(tab + 2 * (e["idx"] - 1), 2)
+        w = s.mem(tab + 2 * e["idx"], 2)
         a = w[0] | w[1] << 8
         if s.mem(a, len(e["data"])) != bytes(e["data"]):
             bad.append(n)

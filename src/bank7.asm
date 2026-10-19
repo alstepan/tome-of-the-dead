@@ -602,6 +602,8 @@ try_horizontal:
                 ld   (ix+E_X), c
                 call face_tmp6
                 ld   (ix+E_MODE), M_MOVE
+                ld   a, SFX_STEP               ; SND-5b: the hero's step (prio 0: never cuts
+                call sfx_req                   ; anything; a fall below replaces it)
                 ld   a, b                      ; B3B-5 pit (game.md §2.5): standing on
                 add  a, e                      ; storey 0 with the body fully over
                 cp   FLOOR_ROW0                ; holes (p <= x <= p+W-3; L2 wide pit)

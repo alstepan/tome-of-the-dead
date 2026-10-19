@@ -638,7 +638,8 @@ try_step:
                 call cork_check                ; never re-cork a climbing hero
                 jr   c, .no
 .go:
-                ld   (ix+E_X), c
+                call mv_sfx                    ; SND-5b: step / ladder sound (before E_X is stored;
+                ld   (ix+E_X), c               ; sfx2.asm; H is not reliable here: cork_check)
                 ld   (ix+E_Y), b
                 ld   (ix+E_MODE), M_MOVE
                 scf
@@ -651,6 +652,40 @@ try_step:
                 pop  hl
                 ld   a, h                      ; dx = the door's side
                 jp   mon_door
+
+;------------------------------------------------------------------------------
+; mv_sfx — SND-5b: try_step's committed move (monsters; also a confused hero),
+; before E_X is stored: C = the new column, IX = the mover. A vertical move of
+; a non-flyer = a climb -> SFX_LADDER (the hero's ladder sound; every climber
+; requests it: same id, one start). Anything else = SFX_STEP (prio 0), at most
+; ONE a turn: skipped when anything is already pending in SFX_REQ (the first
+; mover's step, or a louder effect), so a crowded room costs ~80 T a monster
+; (SFX off / paused ~112 T, flyer vertical ~140 T, climber ~110 T and only the
+; first pays a sfx_req ~0.25k T).
+; Here (pre-kind_tab) and not in sfx2.asm: the image tail has 4 B, the pad 100+.
+; Clobbers: A, F, HL.
+;------------------------------------------------------------------------------
+mv_sfx:
+                ld   a, c
+                xor  (ix+E_X)
+                jr   nz, .st                   ; sideways
+                KFIELD KT_FLAGS
+                and  KF_FLYER
+                jr   nz, .st                   ; free flight up / down is a flap, not a climb
+                ld   a, (SFX_REQ)
+                cp   SFX_LADDER
+                ret  z                         ; a climber already asked this turn
+                ld   a, SFX_LADDER
+                jp   sfx_req                   ; (tail call: sfx_req RETs for us)
+.st:            ld   a, (SFX_REQ)
+                or   a
+                ret  nz
+                ld   a, (SND_MODE)
+                and  SND_HOLD | SND_SFX
+                cp   SND_SFX
+                ret  nz
+                ld   a, SFX_STEP
+                jp   sfx_req
 
 ;------------------------------------------------------------------------------
 ; pend_hit — CF = 1 if box (C,B,D,E) overlaps a PENDING body of CUR_ROOM that
