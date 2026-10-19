@@ -108,6 +108,11 @@ paused          "PAUSED"
 resume          "RESUME"
 quit            "QUIT"
 quit_ask        "QUIT? Y/N"
+# SND-1 (game.md §3.6): the pause box item, the log line and (after "5 ") the menu item; order = OFF, SFX ONLY, ALL ON
+# (snd_id maps SND_MODE 0 / 2 / 3 to +0 / +1 / +2)
+snd_off         "SOUND: OFF"
+snd_sfx         "SOUND: SFX ONLY"
+snd_all         "SOUND: ALL ON"
 
 # --- main menu (menu font; concept screen_menu.png, game.md §3.2) ---------------
 m_title         "TOME OF THE DEAD"
@@ -130,7 +135,6 @@ key_press       "PRESS KEY FOR "
 key_used        "KEY IN USE"
 key_reserved    "KEY RESERVED"
 ft_subtitle     "A ROGUELIKE FOR THE ZX SPECTRUM 128K"
-ft_press        "PRESS 1-4 OR ENTER"
 ft_credit       "(C) 2026 TOME OF THE DEAD"
 
 # --- death / win screens and the DEPTH card (menu font; pieces take a number/name) -

@@ -156,6 +156,7 @@ KB_P_BIT            EQU 0               ; KBROW_POIUY
 KB_O_BIT            EQU 1
 KB_Q_BIT            EQU 0               ; KBROW_QWERT
 KB_A_BIT            EQU 0               ; KBROW_ASDFG
+KB_S_BIT            EQU 1               ; KBROW_ASDFG (SND-1: sound hotkey)
 KB_D_BIT            EQU 2               ; KBROW_ASDFG (descend)
 KB_G_BIT            EQU 4               ; KBROW_ASDFG (quaff)
 KB_SPACE_BIT        EQU 0               ; KBROW_SPACE (wait)

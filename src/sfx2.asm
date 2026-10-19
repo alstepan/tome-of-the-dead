@@ -115,3 +115,24 @@ fx_imp_sfx:
                 ret  nz
                 ld   a, SFX_BURST
                 jp   sfx_req
+
+;------------------------------------------------------------------------------
+; SND-1 (game.md §3.6) — the in-game sound hotkey `S`. Both pieces live here,
+; after kind_tab, because the ALIGN pad before it is nearly full.
+; snd_scan — sample_input: D |= SC_SOUND if S is down.  Clobbers: A  (~50 T)
+; snd_hot  — intent_tick: the S edge -> snd_cycle (bank 1, far1). Keeps DE;
+;            touches no INTENT / FIRE_ST / TURN_HOLD / DN_T / NEED_RELEASE.
+;            Clobbers: A, BC, HL
+;------------------------------------------------------------------------------
+snd_scan:
+                ld   a, (KBD_MATRIX + KBROW_ASDFG)
+                bit  KB_S_BIT, a
+                ret  nz
+                set  SC_SOUND_BIT, d
+                ret
+snd_hot:
+                push de
+                ld   hl, snd_cycle
+                call far1
+                pop  de
+                ret

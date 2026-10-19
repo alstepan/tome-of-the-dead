@@ -24,6 +24,7 @@ DK_3_BIT        EQU 5
 ; PLAYER_SC (C3-1): the shortcut keys of game.md §3.1 (C3-2 consumes them)
 SC_SLOT_MASK    EQU %00001111       ; 1..10 = key 1..9, 0 held (lowest wins); 0 = none
 SC_ENTER_BIT    EQU 5               ; ENTER (use the selected icon, C3-2)
+SC_SOUND_BIT    EQU 4               ; S (SND-1: bit 4 was free: slots 1..10 are 4 bits)
 SC_INV_BIT      EQU 6               ; I
 SC_BREAK_BIT    EQU 7               ; CAPS SHIFT + SPACE
 SC_ROWKEYS      EQU %00011111       ; the 5 keys of a half-row
@@ -245,7 +246,8 @@ sample_input:
                 bit  KB_I_BIT, a
                 jr   nz, .nI
                 set  SC_INV_BIT, d
-.nI:            ld   a, (KBD_MATRIX + KBROW_CAPSV)
+.nI:            call snd_scan                 ; SND-1: S -> SC_SOUND (sfx2.asm, after kind_tab: pad)
+                ld   a, (KBD_MATRIX + KBROW_CAPSV)
                 ld   hl, KBD_MATRIX + KBROW_SPACE
                 or   (hl)                     ; bit 0 clear iff CAPS and SPACE
                 rra
@@ -285,7 +287,7 @@ keys_down:
 ; 2026-10-05), every GS_PLAYING tick after input_tick (ANIM ticks too, so no
 ; press is lost). Runs sample_input
 ; (read_turn_input reuses its outputs). Never costs a turn itself.
-; Shortcut edges (both modes): 1..0 -> sel_key (select only), I -> NO BAG YET,
+; Shortcut edges (both modes): 1..0 -> sel_key (select only), I -> NO BAG YET, S -> snd_cycle (SND-1),
 ;   ENTER -> INTENT (use), BREAK -> leaves ICON MODE, else pause_hook; a held
 ;   FIRE is cancelled (BREAK has priority).
 ; ICON MODE (ICON_MODE != 0; play frozen in INPUT ticks, play_loop): FIRE
@@ -341,7 +343,9 @@ intent_tick:
                 push de
                 call bag_msg
                 pop  de
-.nInv:          bit  SC_ENTER_BIT, e
+.nInv:          bit  SC_SOUND_BIT, e          ; SND-1: S edge: cycle the sound setting, no turn
+                call nz, snd_hot              ; (sfx2.asm; keeps DE; touches no input state)
+                bit  SC_ENTER_BIT, e
                 jr   z, .stick
                 ld   a, IN_FIRE
                 ld   (INTENT), a

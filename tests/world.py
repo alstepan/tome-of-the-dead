@@ -891,7 +891,7 @@ def w18(p, check):
 W19_KEYS = {
     "Q": (2, 0), "A": (1, 0), "O": (5, 1), "P": (5, 0), "SPACE": (7, 0),
     "M": (7, 2), "Z": (0, 1), "V": (0, 4), "T": (2, 4), "ENTER": (6, 0),
-    "H": (6, 4), "J": (6, 3), "K": (6, 2), "L": (6, 1), "I": (5, 2), "CAPS": (0, 0),
+    "H": (6, 4), "J": (6, 3), "K": (6, 2), "L": (6, 1), "I": (5, 2), "CAPS": (0, 0), "S": (1, 1),
     "1": (3, 0), "2": (3, 1), "3": (3, 2), "4": (3, 3), "5": (3, 4),
     "0": (4, 0), "9": (4, 1), "8": (4, 2), "7": (4, 3), "6": (4, 4),
 }
@@ -1689,7 +1689,7 @@ def w24(p, check):
             tap(k)
         mid = bytes(p.z.read_memory(S["KEYTAB"], 10))
         refused = []
-        for k in ("M", "ENTER", "5", "I", "CAPS"):
+        for k in ("M", "ENTER", "5", "I", "S", "CAPS"):
             tap(k)
             p.tick(30)                               # the "KEY IN USE / RESERVED" beat
             refused.append(p.rb("rd_i"))
@@ -1699,8 +1699,8 @@ def w24(p, check):
         row = lambda r: (S["KBD_MATRIX"] & 0xFF) + r
         want = bytes([row(2), 1 << 4, row(0), 1 << 4, row(0), 1 << 1, row(7), 1 << 2, row(7), 1 << 4])
         check("W24 redefine U=M D=Z L=V R=T F=B: KEYTAB unchanged until complete; duplicate M and the "
-              "reserved ENTER / 5 / I / CAPS refused",
-              mid == kt0 and refused == [4] * 5 and kt == want, (kt0.hex(), mid.hex(), refused, kt.hex()))
+              "reserved ENTER / 5 / I / S / CAPS refused",
+              mid == kt0 and refused == [4] * 6 and kt == want, (kt0.hex(), mid.hex(), refused, kt.hex()))
         # BREAK cancels a redefine: the old KEYTAB stays
         tap("4")
         tap("M")
@@ -1752,7 +1752,7 @@ def w24(p, check):
         p.tick(3)
         fr = p.frame()
         paused = p.rb("PAUSED")
-        boxed = menu_text_ok(p, fr, 8, 6, "RESUME") and menu_text_ok(p, fr, 8, 20, "QUIT")
+        boxed = menu_text_ok(p, fr, 8, 1, "RESUME") and menu_text_ok(p, fr, 8, 27, "QUIT")
         tap("SPACE")
         p.tick(4)
         check("W24 FIRE+UP: pause overlay (RESUME / QUIT); FIRE on RESUME: the whole composed and displayed "
@@ -1764,6 +1764,7 @@ def w24(p, check):
         p.tick(2)
         hold()
         p.tick(3)
+        tap("P")                                     # -> SOUND (SND-1)
         tap("P")                                     # -> QUIT
         tap("SPACE")                                 # QUIT? Y/N
         asked = menu_text_ok(p, p.frame(), 8, 11, "QUIT? Y/N")
@@ -1783,6 +1784,7 @@ def w24(p, check):
         p.tick(2)
         hold()
         p.tick(3)
+        tap("P")                                     # -> SOUND (SND-1)
         tap("P")                                     # -> QUIT
         tap("SPACE")                                 # QUIT? Y/N
         asked = menu_text_ok(p, p.frame(), 8, 11, "QUIT? Y/N")

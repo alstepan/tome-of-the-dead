@@ -582,6 +582,23 @@ tokens: `ALL ON` · `SFX ONLY` · `OFF`.
 7. Redefining a key to S → `KEY RESERVED`.
 8. OFF, or `SND_HOLD` set → the player's AY shadow has R8–R10 = 0 (sound.md T4).
 
+**As built (SND-1, 2026-10-19; `tests/snd1.py` = checks 1–7 plus the confirmation SFX).**
+- `snd_cycle` (bank 1, `menu1.asm`) is the only writer of the setting: bits 0–1 only (`SND_HOLD`
+  stays), then `SFX_MENU` through `sfx_req` (so it plays only when the new state has SFX on and is
+  not held), then, in play (`GS_PLAYING`, not `SND_HOLD`), the log line, plain ASCII; it overwrites the newest pending
+  line when that is already a `SO...` line, so quick `S` taps use one of the 4 log slots. No log line in the menu or the pause box.
+- Strings: three whole strings `SOUND: OFF` / `SOUND: SFX ONLY` / `SOUND: ALL ON` (ids in that
+  order; `snd_id` maps `SND_MODE` 0 / 2 / 3 to +0 / +1 / +2). The same string is the pause item and
+  the log line; the menu draws `5` in the digit colour and the string after it (cols 4 / 6). The
+  dictionary packer already shares the `SOUND: ` prefix, so a separate prefix token was not needed.
+- Pause box: `RESUME` col 1, the sound item col 9, `QUIT` col 27 (menu font, rows 8–9), chosen item
+  yellow; ←/→ wrap over 3; FIRE / ENTER on SOUND cycles and stays paused; `S` cycles the setting
+  whichever item is selected. No log line is queued while paused.
+- Hotkey: `SC_SOUND` is bit 4 of `PLAYER_SC` (`snd_scan` in `sample_input`, `snd_hot` in
+  `intent_tick`; both in `sfx2.asm` after `kind_tab`). `SC_OLD` carries the edge. Held `S` = one cycle.
+- Redefine: `S` joins the reserved set (`key_reserved`).
+- Cost: bank 1 124 B, bank 2 25 B (8 before `kind_tab`), low RAM 0, bank 7 0.
+
 ### 3.7 Danger music trigger (designer decision 2026-10-14; cue W, sound.md §S1f, plan SND-3)
 
 **Meaning.** The Dangerous tune (W) plays when the monsters that are pressing the hero in the

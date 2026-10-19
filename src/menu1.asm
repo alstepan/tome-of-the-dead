@@ -15,6 +15,7 @@
 
 MENU_ITEM_ROW0  EQU 8               ; item i at rows 8 + 3i (2 rows, menu font); 4 at 18
 MENU_CTL_ROW    EQU 16              ; KEYS / KEMPSTON / SINCLAIR 1 / 2 (6x8)
+MENU_SND_ROW    EQU 21              ; item 5 (menu font, rows 21-22)
 MENU_KEYS_ROW   EQU 20              ; UP Q  DOWN A ... (6x8)
 MENU_PREV_ROW   EQU 9               ; hero previews (body top)
 MENU_A_DIGIT    EQU $45
@@ -67,8 +68,13 @@ menu_run:
                 jr   c, .hero                  ; 2
                 rra
                 jr   c, .ctl                   ; 3
-                call redefine                  ; 4 (A bit 3: the only one left)
+                rra
+                jr   nc, .snd                  ; 5 (SND-1: key 4's bit is now in CF)
+                call redefine                  ; 4
                 call menu_keys
+                jr   .loop
+.snd:           call snd_cycle                 ; 5 SOUND: next state (applies at once:
+                call menu_snd                  ; the ISR restarts / silences the title tune)
                 jr   .loop
 .start:         ld   a, (menu_hero)
                 ld   c, a
@@ -90,13 +96,13 @@ menu_run:
 ;------------------------------------------------------------------------------
 ; menu_read — the menu's only input (C3-6b, game.md §3.2): the raw matrix, so
 ; neither the stick nor JOY_MODE's Sinclair half-masking matters.
-; Out: A = bit n = key n+1 down (1..4); ENTER is ORed onto bit 0 (= START).
+; Out: A = bit n = key n+1 down (1..5); ENTER is ORed onto bit 0 (= START).
 ; Clobbers: A, C, HL
 ;------------------------------------------------------------------------------
 menu_read:
                 ld   a, (KBD_MATRIX + KBROW_12345)
                 cpl
-                and  %00001111                 ; keys 1..4 (bit 0..3), active high
+                and  %00011111                 ; keys 1..5 (bit 0..4), active high
                 ld   c, a
                 ld   a, (KBD_MATRIX + KBROW_HJKL)
                 cpl
@@ -162,10 +168,6 @@ menu_static:
                 ld   de, (32 << 8) | 2         ; rows 5-6
                 call stamp_rect
                 call menu_orn
-                ld   a, TX_FT_PRESS
-                ld   b, 22
-                ld   e, 0
-                call print6x
                 ld   a, TX_FT_CREDIT
                 ld   b, 23
                 ld   e, 0
@@ -392,9 +394,97 @@ menu_items:
                 ld   a, c
                 cp   4
                 jr   c, .i
-                ret
+                ; fall through: item 5 (the value changes, so it is also redrawn alone)
                 ASSERT TX_M_HERO == TX_M_START + 1 && TX_M_CONTROLS == TX_M_START + 2
                 ASSERT TX_M_REDEFINE == TX_M_START + 3 && TX_CLS_MAGE == TX_CLS_WARRIOR + 1
+
+; menu_snd — item 5 "5 SOUND: <state>" on rows 21-22 (menu font; the old
+; TX_FT_PRESS footer is gone, the credit stays on row 23): the rows are cleared
+; first (the values differ in length), the digit takes MENU_A_DIGIT like the
+; others. Clobbers: A, BC, DE, HL
+menu_snd:
+                ld   b, MENU_SND_ROW
+                call row_clear
+                ld   b, MENU_SND_ROW + 1
+                call row_clear
+                ld   a, '5'
+                ld   bc, (MENU_SND_ROW << 8) | 4
+                ld   e, MENU_A_DIGIT
+                call mf_char
+                call snd_id
+                ld   bc, (MENU_SND_ROW << 8) | 6
+                ld   e, MENU_A_LABEL
+                jp   mf_tx_attr
+
+; snd_id — A = the TX id of the current sound state ("SOUND: OFF / SFX ONLY /
+; ALL ON"); SND_MODE bits 1..0 = 0 / 2 / 3 -> +0 / +1 / +2 ((m + 1) >> 1).
+; Clobbers: A
+snd_id:
+                ld   a, (SND_MODE)
+                and  SND_MUSIC | SND_SFX
+                inc  a
+                srl  a
+                add  a, TX_SND_OFF
+                ret
+                ASSERT TX_SND_SFX == TX_SND_OFF + 1 && TX_SND_ALL == TX_SND_OFF + 2
+                ASSERT SND_ALL == 3 && SND_SFX == 2
+
+;------------------------------------------------------------------------------
+; snd_cycle — the one place the sound setting changes (menu 5, pause SOUND,
+; in-game S; far1 from sfx2.asm snd_hot): ALL ON (3) -> SFX ONLY (2) -> OFF (0)
+; -> ALL ON. Only bits 0-1 change (SND_HOLD stays: in the pause box the new mode
+; applies at resume, the ISR acts on its edges). Then the MENU blip (dropped by
+; sfx_req when SFX are off or held) and, in play (GS_PLAYING, not SND_HOLD: no
+; line in the pause box or the menu), the log line, replacing a pending SOUND line.
+; Clobbers: A, BC, DE, HL
+;------------------------------------------------------------------------------
+snd_cycle:
+                ld   hl, SND_MODE
+                ld   a, (hl)
+                and  SND_MUSIC | SND_SFX
+                jr   z, .all                   ; OFF -> ALL ON
+                add  a, a                      ; 3 -> 6, 2 -> 4: & 3 = 2 / 0
+                and  SND_MUSIC | SND_SFX
+                jr   .set
+.all:           ld   a, SND_ALL
+.set:           ld   c, a
+                ld   a, (hl)
+                and  ~(SND_MUSIC | SND_SFX) & $FF
+                or   c
+                ld   (hl), a
+                ld   a, SFX_MENU
+                call sfx_req
+                ld   a, (GAME_STATE)
+                cp   GS_PLAYING
+                ret  nz
+                ld   a, (SND_MODE)
+                add  a, a
+                ret  c                         ; SND_HOLD (the pause box): no log line
+                call snd_id
+                call tx_dec                    ; HL = TX_DEC: plain ASCII is a valid log stream
+                ld   a, (LOG_QN)
+                or   a
+                jr   z, .push
+                dec  a                         ; the newest pending line already "SO..."?
+                ld   b, a                      ; (no other message starts so): replace it,
+                ld   a, (LOG_Q + LQ_RD)        ; so quick S taps use one slot
+                add  a, b
+                and  LOG_SLOTS - 1
+                rrca
+                rrca                           ; * LOG_SLOT_LEN (log_push's slot address)
+                ld   e, a
+                ld   d, LOG_TXT >> 8
+                ld   a, (de)
+                cp   'S'
+                jr   nz, .push
+                inc  e
+                ld   a, (de)
+                cp   'O'
+                jr   nz, .push
+                ld   a, (LOG_QN)
+                dec  a
+                ld   (LOG_QN), a
+.push:          jp   log_push
 
 ; menu_previews — both heroes' idle frames; the chosen one BRIGHT.
 menu_previews:
@@ -693,7 +783,7 @@ rd_show:        ld   b, MENU_KEYS_ROW
                 jp   print6
 
 ; key_reserved — B = row byte, C = mask: Z if the key is reserved (C3-6 review,
-; manager ruling): the number row (slot shortcuts), ENTER, I, CAPS SHIFT
+; manager ruling): the number row (slot shortcuts), ENTER, I, S (SND-1), CAPS SHIFT
 ; (BREAK), SYMBOL SHIFT ('.').  Clobbers: A
 key_reserved:   ld   a, b
                 sub  KEYTAB_ROW
@@ -705,6 +795,8 @@ key_reserved:   ld   a, b
                 jr   z, .ent
                 cp   KBROW_POIUY
                 jr   z, .i
+                cp   KBROW_ASDFG
+                jr   z, .s
                 cp   KBROW_CAPSV
                 jr   z, .cs
                 cp   KBROW_SPACE
@@ -717,6 +809,9 @@ key_reserved:   ld   a, b
                 ret
 .i:             ld   a, c
                 cp   1 << KB_I_BIT
+                ret
+.s:             ld   a, c                      ; SND-1: S (the sound hotkey)
+                cp   1 << KB_S_BIT
                 ret
 .cs:            ld   a, c
                 cp   1 << KB_CAPS_BIT
@@ -761,6 +856,7 @@ any_key:
 ; Out: L = 0 resume / 1 quit (far1 clobbers A).  Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 PAUSE_ROW       EQU 7
+PAUSE_ITEMS     EQU 3               ; RESUME / SOUND / QUIT
 PAUSE_SAVE      EQU GEN_SRC
 PAUSE_LEN       EQU 3 * 256 + 3 * 32
                 ASSERT PAUSE_SAVE + PAUSE_LEN <= GEN_MIR + 512
@@ -789,6 +885,8 @@ pause_run:
                 ld   d, a
                 bit  SC_BREAK_BIT, d
                 jp   nz, .resume
+                bit  SC_SOUND_BIT, d           ; SND-1: S cycles here too
+                jr   nz, .snd
                 ld   hl, STICK
                 ld   a, (hl)
                 inc  l
@@ -803,14 +901,27 @@ pause_run:
                 jr   nz, .ok
                 and  (1 << JOY_L_BIT) | (1 << JOY_R_BIT)
                 jr   z, .loop
-                ld   hl, pause_sel
+                ld   hl, pause_sel             ; RESUME / SOUND / QUIT, wrapping
+                bit  JOY_R_BIT, a
+                jr   z, .left
+                inc  (hl)
                 ld   a, (hl)
-                xor  1
-                ld   (hl), a
+                cp   PAUSE_ITEMS
+                jr   c, .redraw
+                ld   (hl), 0
+                jr   .redraw
+.left:          dec  (hl)
+                jp   p, .redraw
+                ld   (hl), PAUSE_ITEMS - 1
                 jr   .redraw
 .ok:            ld   a, (pause_sel)
                 or   a
                 jr   z, .resume
+                dec  a
+                jr   nz, .ask
+.snd:           call snd_cycle                 ; SOUND: cycle in place, stay paused
+                jp   .redraw                   ; (SND_HOLD stays set: the ISR applies it at resume)
+.ask:
                 ; QUIT? Y/N
                 call pause_clear
                 ld   a, TX_QUIT_ASK
@@ -864,25 +975,29 @@ pause_run:
                 ld   l, a
                 ret
 
-; pause_box — clear the 3 rows, "RESUME   QUIT" (menu font, rows 8-9), the
-; choice yellow, a frame attr on row 7.
+; pause_box — clear the 3 rows, "RESUME  SOUND: <state>  QUIT" (menu font,
+; rows 8-9; cols 1 / 9 / 27 = 30 wide with the longest state), the choice yellow.
 pause_box:      call pause_clear
+                ld   a, TX_RESUME
+                ld   c, 1
+                ld   d, 0
+                call .it
+                call snd_id
+                ld   c, 9
+                ld   d, 1
+                call .it
+                ld   a, TX_QUIT
+                ld   c, 27
+                ld   d, 2
+.it:            ld   b, a                      ; A = id, C = col, D = item number
                 ld   a, (pause_sel)
-                or   a
+                cp   d
                 ld   e, MENU_A_SEL
                 jr   z, .a
                 ld   e, MENU_A_LABEL
-.a:             ld   a, TX_RESUME
-                ld   bc, ((PAUSE_ROW + 1) << 8) | 6
-                call mf_tx
-                ld   a, (pause_sel)
-                or   a
-                ld   e, MENU_A_LABEL
-                jr   z, .b
-                ld   e, MENU_A_SEL
-.b:             ld   a, TX_QUIT
-                ld   bc, ((PAUSE_ROW + 1) << 8) | 20
-                jp   mf_tx
+.a:             ld   a, b
+                ld   b, PAUSE_ROW + 1
+                jp   mf_tx_attr
 
 ; pause_clear — rows PAUSE_ROW..+2: bitmap 0, attrs $40 (black, bright), row 7 attr $41.
 pause_clear:    ld   b, PAUSE_ROW
