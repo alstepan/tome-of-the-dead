@@ -115,7 +115,7 @@ BANK3_CODE_LEN  EQU bank3_end - bank3_code
                 DISPLAY "GAME bank-3 cold code: ", /H, bank3_code, "..", /H, bank3_end - 1, " (", /D, BANK3_CODE_LEN, " B), free to AY reserve: ", /D, AY_RESERVE - bank3_end
 
 ;==============================================================================
-; AY PLAYER SLOT (A8) — bank 3 AY_RESERVE..$FFFF (4 KB since D3-0): called by the IM 2
+; AY PLAYER SLOT (A8) — bank 3 AY_RESERVE..$FFFF (4 KB since D3-0, 4704 B since MEM-SND): called by the IM 2
 ; ISR once per frame. SND-2: ay_play (mailbox dispatcher) + the WZM player
 ; (MODULE wzm) + its state block ay_vars + the songs (MODULE mus), in that
 ; order (ay.asm). Own headerless tape block.
@@ -128,7 +128,7 @@ AY_LEN          EQU ay_code_end - AY_RESERVE
                 ASSERT ay_code == AY_PLAY && ay_play == AY_PLAY
                 ASSERT ay_vars > ay_play && ay_vars_end <= mus.mus_songs
                 ASSERT ay_code_end <= AY_RESERVE_END
-                DISPLAY "GAME AY slot (bank 3): ", /H, AY_RESERVE, "..", /H, ay_code_end - 1, " (", /D, AY_LEN, " B), free in the 4 KB reserve: ", /D, AY_RESERVE_END - ay_code_end, "; ISR ", /D, ISR_LEN, " B at ", /H, ISR_ADDR
+                DISPLAY "GAME AY slot (bank 3): ", /H, AY_RESERVE, "..", /H, ay_code_end - 1, " (", /D, AY_LEN, " B of ", /D, AY_RESERVE_END - AY_RESERVE, "), free: ", /D, AY_RESERVE_END - ay_code_end, "; ISR ", /D, ISR_LEN, " B at ", /H, ISR_ADDR
 
 ;==============================================================================
 ; LEVEL TILESETS (B3B-8) — the 8 per-level tile sets (tools/tiles_convert.py,
@@ -538,12 +538,14 @@ kind_tab:
                 ASSERT KT_END <= KT_SIZE           ; (the old "$1D0..$1FF spare, resistances 3F":
                                                    ; the resistances are bank-3 kx_tab since D3-0)
 ;------------------------------------------------------------------------------
-; D3-8d: per-tick code right after kind_tab's arrays (the ALIGN pad above is
-; only 196 B: code there would move kind_tab a page). No alignment needed.
+; D3-8d: per-tick code right after kind_tab's arrays (code added before
+; kind_tab beyond its ALIGN pad would move kind_tab a page; MEM-SND moved
+; bars2.asm here to widen that pad for new hooks). No alignment needed.
 ;------------------------------------------------------------------------------
                 INCLUDE "mark.asm"              ; D3-8d status marks (mark_tick, per tick)
                 INCLUDE "xp2.asm"               ; D3-9b XP_NEXT table + item_mp (MP bar)
                 INCLUDE "sfx2.asm"              ; SND-5 sfx_req / sfx_msg (any bank calls them)
+                INCLUDE "bars2.asm"             ; MEM-SND bars_draw / num2 (from panel2.asm: pad headroom)
 
 code_end:
 IMAGE_LEN       EQU code_end - image_start

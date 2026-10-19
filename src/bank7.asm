@@ -1099,3 +1099,4 @@ intent_icon7:
                 INCLUDE "mark7.asm"            ; D3-8d: status marks: room reset + glyph copy, hide
                 INCLUDE "xp7.asm"              ; D3-9b: MP regen, level-up, learn / rank-up
                 INCLUDE "mus7.asm"             ; SND-3: Dangerous (W) cue, mus_pick
+                INCLUDE "boot7.asm"            ; MEM-SND: init_tiles, panel_boot, panel_init7, new_game (from bank 3)

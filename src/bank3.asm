@@ -1,7 +1,7 @@
 ;==============================================================================
 ; bank3.asm — COLD code paged in at $C000 from bank 3 (docs/memory-map.md
 ; "Bank 3"). Assembled right after the sprite-source tail, below the AY
-; reserve (AY_RESERVE, $F000 since D3-0; A8). Entered ONLY through far3 (gfx.asm), which pages
+; reserve (AY_RESERVE, $EDA0 since MEM-SND, $F000 since D3-0; A8). Entered ONLY through far3 (gfx.asm), which pages
 ; bank 3 in and puts the caller's $C000 bank back on return.
 ;
 ; Rule: nothing here may page $C000 directly (it would unmap the code that is
@@ -14,7 +14,7 @@
 ; routine (gen_*, alloc*, copy_virt, mirror_src). (B3B-R2: shadow_rect only as a
 ; tail jump — floor_pickup (ap_stamp); door_paint re-pages the caller's bank itself.)
 ; D3-S2: bank-7 code (bank7.asm: find_target, the player turn, ...) only via
-; far7 (nests: bank 3 comes back), e.g. new_game -> hero_st_init (intent7.asm).
+; far7 (nests: bank 3 comes back), e.g. panel_init -> panel_init7 (boot7.asm).
 ; A7: everything here draws on the $4000 (bank 5) screen, which is the one
 ; displayed while it runs (enter_select / do_exit call show_bank5 first).
 ;
@@ -38,74 +38,20 @@
 
 ;==============================================================================
 ; A7 review: cold game-state code moved out of bank 2 (bank-2 headroom for
-; Stage-3 hot code): new_game (+ init_ent_common, spawn_tab), the follower
+; Stage-3 hot code): new_game (bank 7 since MEM-SND; init_ent_common,
+; spawn_tab and its PROTO tail new_game_proto stay here), the follower
 ; admission (L-RELIEF: the candidate scan, place_follower and the arrival
 ; conflicts are bank 7 now). None of it pages $C000 (only bank-2 queries +
 ; vis_reset in bank-5 low RAM).
 ;==============================================================================
 ;==============================================================================
-; NEW GAME (prototype §6.5: fixed gameplay RNG seed; all rooms, monsters,
-; potions re-initialised). HERO_KIND already set. A7 review: bank 3 (cold;
-; entered via far3 from start_game). Hero slot 0: kind, flags, 1 potion, HP.
-; B3B-12: proto_start = 1 (test path, docs/memory-map.md "Level entry"): the
-; PROTO rooms A-D as before (proto_level + spawn_tab, ends with vis_reset).
-; Else (default): MASTER_SEED = SYS_FRAMES at the hero choice (game.md §1
-; "Seed"; seed_fixed = 1 forces seed_value) and nothing else — start_game's
-; level_enter generates D1, populates it and ends with vis_reset.
-; Clobbers: all but IY.
+; new_game_proto — MEM-SND: the bank-3 tail of new_game (bank 7 since MEM-SND,
+; boot7.asm), far3 from it when proto_start = 1 (test path, docs/memory-map.md
+; "Level entry"): the PROTO rooms A-D (proto_level) + the spawn_tab monsters
+; in slots 1.. (both bank-3 data), then vis_reset. Clobbers: all but IY.
 ;==============================================================================
-new_game:
-                ld   hl, RNG_SEED
-                ld   (RNG_STATE), hl
-                ld   hl, 0
-                ld   (TURN_COUNTER), hl
-                ld   (TICK_COUNTER), hl        ; per-game test observables
-                ld   hl, ANIM_TRACE            ; (OVERRUN_COUNT, GEN_OVERFLOW
-                ld   de, ANIM_TRACE + 1        ; stay "since boot")
-                ld   bc, ANIM_TRACE_LEN - 1
-                ld   (hl), $FF
-                ldir
-                xor  a
-                ld   (ANIM_TRACE_IDX), a
-                ld   (BLIT_MISS), a
-                ld   (DMG_OVERFLOW), a
-                ld   (CLIP_TRAP), a
-                ld   (CUR_ROOM), a
-                ld   (TURN_PHASE), a
-                ld   (NEED_RELEASE), a
-                call level_reset_new           ; per-level state + the entity table (+ hero 3D state)
-                ; --- hero, slot 0 ---
-                ld   ix, P_ENTITIES
-                ld   a, (HERO_KIND)
-                ld   (ix+E_KIND), a
-                ld   (ix+E_ROOM), ROOM_A
-                ld   (ix+E_FLAGS), EF_ACTIVE | EF_PLAYER
-                ld   (ix+E_X), HERO_START_COL
-                ld   (ix+E_POT), 1
-                KFIELD KT_BH
-                ld   b, a
-                ld   a, HERO_START_S * STOREY_ROWS + STOREY_AIR
-                sub  b                         ; 9s+8-h
-                ld   (ix+E_Y), a
-                call init_ent_common
-                ld   hl, hero_st_init          ; C3-2 (intent7.asm: bank 7 since D3-7 T0;
-                call far7                      ; IX passes through, A, F lost)
-                ld   a, (proto_start)
-                or   a
-                jr   nz, .proto
-                ld   hl, (seed_value)          ; generated: the master seed
-                ld   a, (seed_fixed)
-                or   a
-                jr   nz, .ms
-                ld   hl, (SYS_FRAMES)          ; frames since boot at the choice
-                ld   de, (MENU_SPIN)           ; C3-6: + the menu's busy-wait count
-                add  hl, de
-                ld   a, r                      ; + R (B3B-12 review): little extra entropy
-                xor  h                         ; (the select loop is HALT-synchronised),
-                ld   h, a                      ; the 20 ms keypress frame is the real source
-.ms:            ld   (MASTER_SEED), hl
-                ret
-.proto:         call proto_level               ; B3B-8: rooms A-D = a 3B level state
+new_game_proto:
+                call proto_level               ; B3B-8: rooms A-D = a 3B level state
                 ; --- monsters from spawn_tab, slots 1.. ---
                 ld   hl, spawn_tab
                 ld   b, SPAWN_COUNT
@@ -1046,30 +992,7 @@ build_room_map:
 decor_room:
                 INCLUDE "decor_gen.asm"         ; B3B-9: the deriver (code from the label on)
 
-;==============================================================================
-; init_tiles — boot (far3): the common tile set, ids 0..31 (B3B-2
-; tiles_common: glyphs + depth-1 attrs; level_load_tiles re-themes the floor /
-; wall ids per level) into TILE_GLYPHS / TILE_ATTRS, the row-17 ornament into
-; ORN_GLYPHS (D3-0: the PROTO wizard zap glyphs are gone). The per-level ids
-; 32..63 come from level_load_tiles (start_game). Clobbers: A, BC, DE, HL.
-;==============================================================================
-init_tiles:                                    ; (B3B-11b: the data is in vdata, main.asm)
-                ld   hl, tiles_common_glyphs
-                ld   de, TILE_GLYPHS
-                ld   bc, TILE_COMMON * 8
-                call copy_virt3
-                ld   hl, tiles_common_attrs
-                ld   de, TILE_ATTRS
-                ld   bc, TILE_COMMON
-                call copy_virt3
-                ld   hl, orn_glyphs
-                ld   de, ORN_GLYPHS
-                ld   bc, ORN_COUNT * 8
-                jp   copy_virt3
-                ASSERT tiles_common_attrs == tiles_common_glyphs + TILE_COMMON * 8
-                ASSERT TILES_COMMON_LEN == TILE_COMMON * 9
-                ASSERT orn_glyphs_end - orn_glyphs == ORN_COUNT * 8
-
+; init_tiles: bank 7 since MEM-SND (boot7.asm, far7 from boot).
 ; (cold tile data: B3B-11b moved it to main.asm vdata, read via copy_virt3)
                 INCLUDE "panel.asm"            ; B3B-11 panel engine (cold part + the HOT_COPY image)
                 INCLUDE "turn3.asm"            ; B3B-R2 turn logic: monster phase, attacks, potions

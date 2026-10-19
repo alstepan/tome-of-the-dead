@@ -269,8 +269,14 @@ def run(h, p, check):
     ok2, t9 = xp_code(1200, 1, False)
     pend = (p.rb("XP_UP"), p.rb("LVL"))
     print(f"[info] xp_turn costs (1st frame): {tt}; in a 2nd frame (level-up deferred): {t9} T", flush=True)
-    check("C1 xp_turn L1 -> L9 at once with its 3 lines + regen <= 13k T (1st frame only: <= ~84k T)",
-          tt["L1->L9 + 3 lines"] <= 13000, tt)
+    # Limit 13,500 T (was 13,000; MEM-SND fix): the cost is mostly the 3 log lines'
+    # decode / compose, which moves with the textpack dictionary: D3-9b 12,641 T,
+    # SND-5 12,737 (+96: xp_level's sfx_req SFX_LEVELUP), SND-1 13,121 (+384: the
+    # new snd_* strings retokenised the dictionary, ~+128 T per line; no xp code
+    # changed). The level-up only runs in a tick's 1st frame (~84k T bound, C2),
+    # so this is a drift guard, not a budget edge.
+    check("C1 xp_turn L1 -> L9 at once with its 3 lines + regen <= 13.5k T (1st frame only: <= ~84k T)",
+          tt["L1->L9 + 3 lines"] <= 13500, tt)
     check("C2 2nd frame: the level-up waits (XP_UP 1, LVL 1), regen only, <= 1k T",
           ok2 and pend == (1, 1) and t9 <= 1000, (ok2, pend, t9))
     # a deferred level-up lands on a later INPUT tick (turn_input -> xp_level)

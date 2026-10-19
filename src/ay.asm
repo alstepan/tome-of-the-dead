@@ -1,6 +1,6 @@
 ;==============================================================================
 ; ay.asm — A8 AY player slot: bank 3, AY_RESERVE..AY_RESERVE_END (4 KB since
-; D3-0, user 2026-10-06; game.md §11.2). SND-2 T2: the WZM v0.3 player
+; D3-0, user 2026-10-06; game.md §11.2; 4704 B from $EDA0 since MEM-SND). SND-2 T2: the WZM v0.3 player
 ; (src/music/player.asm, WZM_BUZZER, no echo) + the mailbox dispatcher ay_play
 ; + the 7 in-game songs (tools/abc2wzm.py --game -> build/music_game/). Loaded
 ; by its own headerless tape block (AY_LEN from AY_RESERVE, `start`).

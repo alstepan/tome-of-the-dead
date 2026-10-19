@@ -5,8 +5,8 @@
 Build first: tools/build.sh -DDEBUG_KIT=0  (build/wazhack.sna + .sym).
 
 Frame-exact driver: ZEsarUX in cpu-step mode with breakpoints on `isr` and `isr.done`
-(lowram.asm; never a PC breakpoint at $F000+: the bank-1 UI code shares those
-addresses). One `run` = one ISR. The CPU is stopped at isr.done, so a mailbox poke
+(lowram.asm; never a PC breakpoint at $E000+: the bank-3 AY slot ($EDA0+, MEM-SND),
+the bank-1 UI code ($EC68+) and the bank-7 cold code ($E000+) share those addresses). One `run` = one ISR. The CPU is stopped at isr.done, so a mailbox poke
 lands between two ISRs, the chip registers (ZRCP get-io-ports) are the state after that
 ISR's ay_play, and SND_MODE bit 7 read there is the value the ISR itself saw (the main
 code has not run since). Memory zone 0 (raw 128K) is selected after the load: for

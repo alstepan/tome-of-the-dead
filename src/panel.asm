@@ -1,9 +1,10 @@
 ;==============================================================================
 ; PANEL ENGINE (B3B-11) — rows 18..23 (concept-screen §5, game.md §3.3–3.5).
 ; INCLUDEd at the end of bank3.asm. Two parts:
-;   1. bank-3 cold code (entered by far3): panel_boot (boot: FONT6 planes +
-;      the hot image -> bank-2 runtime RAM), panel_init (new game: static
-;      panel art + state), panel_flush, their helpers.
+;   1. bank-3 cold code (entered by far3): panel_init (new game: static
+;      panel art + state), panel_flush, their helpers. MEM-SND: panel_boot
+;      (boot: FONT6 planes + the hot image -> bank-2 runtime RAM) and
+;      panel_init7 (panel_init's bank-2-only half) are bank 7 (boot7.asm).
 ;   2. (B3B-11b) the boot / new-game cold DATA — font6x8, the panel icons, the
 ;      hot image (panel_hot.asm: print6, log_push, panel_tick, item_hp) — is
 ;      NOT here: main.asm `vdata` puts it in bank 1 after the ZX0 sprite
@@ -16,61 +17,10 @@
 ; for the log rows, pmark_rect for the rest).
 ;==============================================================================
 
-;------------------------------------------------------------------------------
-; panel_boot — boot (far3): the hot image -> HOT_COPY, and the planar FONT6
-; (level_defs.asm) built from the char-major font6x8, 48 chars at a time
-; through GEN_SRC (free at boot after init_tiles). Glyph bits 1..0 are masked
-; off here, so no glyph can bleed into the next char (print6).
-; Clobbers: A, BC, DE, HL.   ~45k T (boot only)
-;------------------------------------------------------------------------------
-P6_HALF         EQU 48                         ; chars per GEN_SRC pass
-panel_boot:
-                ld   hl, panel_hot_img
-                ld   de, HOT_COPY
-                ld   bc, PANEL_HOT_LEN
-                call copy_virt3
-                ld   hl, font6x8
-                ld   c, FONT6_FIRST            ; C = char code
-.half:          push hl
-                push bc
-                ld   de, GEN_SRC
-                ld   bc, P6_HALF * FONT6X8_STRIDE
-                call copy_virt3
-                pop  bc
-                ld   hl, GEN_SRC
-.ch:            ld   d, FONT6 >> 8
-                ld   b, FONT6_PAGES
-.ln:            ld   e, c                      ; even line: window A (offset = code)
-                ld   a, (hl)
-                and  $FC
-                ld   (de), a
-                inc  hl
-                ld   a, c
-                add  a, FONT6_WB               ; odd line: window B
-                ld   e, a
-                ld   a, (hl)
-                and  $FC
-                ld   (de), a
-                inc  hl
-                inc  d
-                djnz .ln
-                inc  c
-                ld   a, c
-                cp   FONT6_FIRST + P6_HALF
-                jr   z, .h2
-                cp   FONT6_FIRST + FONT6X8_COUNT
-                jr   nz, .ch
-                pop  hl
-                ret
-.h2:            pop  hl
-                ld   de, P6_HALF * FONT6X8_STRIDE
-                add  hl, de
-                jr   .half
-                ASSERT FONT6X8_COUNT == 2 * P6_HALF && FONT6X8_STRIDE == 8 && FONT6_PAGES * 2 == 8
-                ASSERT P6_HALF * FONT6X8_STRIDE <= 512  ; GEN_SRC
+; panel_boot: bank 7 since MEM-SND (boot7.asm, far7 from boot).
 
 ;------------------------------------------------------------------------------
-; panel_init — new game (far3 from start_game): the static panel of HERO_KIND
+; panel_init — new game / level (far3 from level_show): the static panel of HERO_KIND
 ; (icon bar, labels, bar frames, placeholders, gear outlines, attrs) on rows
 ; 18..23 of bank 5 — the rows must be blank (start_game's clear_screen) —
 ; panel state reset (the *_SH "as drawn" bytes: $FF = never drawn; STAT_SH
@@ -80,73 +30,17 @@ panel_boot:
 ; Placeholders until 3C/3E: FOOD bar full + "FED", no ammo, no
 ; info line, empty gear outlines; quick slots outlined except the potion slot
 ; (T_POTION glyph + count, the PROTO "POT n").  Clobbers: all but IX, IY.
+; MEM-SND: the bank-2-only half (state reset, attr stamps, potion-slot scan)
+; is panel_init7 in bank 7 (boot7.asm); the stamped rects are disjoint from
+; the label / gear cells drawn here, so stamping them first changes nothing.
 ;------------------------------------------------------------------------------
 panel_init:
                 push de
-                ld   hl, HUD4_EXT              ; HUD4_EXT, HUD4_PW: rows blank, nothing pending
-                ld   b, 2 * TEXT_ROWS
-                xor  a
-.z:             ld   (hl), a
-                inc  l
-                djnz .z
-                ld   (LOG_QN), a
-                ld   hl, LOG_Q
-                ld   b, LOG_Q_LEN
-.zq:            ld   (hl), a
-                inc  l
-                djnz .zq
-                ld   (STAT_SH), a              ; D3-8 review: sig 0 = the blank cells this
-                                               ; static panel has; a status carried over
-                                               ; level_show then differs and redraws
-                dec  a
-                ld   (PANEL_HP_SH), a          ; $FF: never drawn -> PD_HP / PD_ICONS
-                ld   (PANEL_HP_SH + 1), a
-                ld   (PANEL_POT_SH), a
-                ld   (LVL_SH), a               ; level digit: never drawn
-                ld   (ICON_SIG), a             ; (no real signature is $FF)
-                ld   a, PD_HP | PD_MP | PD_ICONS | PD_DEPTH | PD_INFO
-                ld   (PANEL_DIRTY), a
-                ; C3-3: the icon bar is drawn by item_icons (icon_state vs
-                ; ICON_SH): every slot "never drawn" -> slot_redraw each
-                ld   hl, ICON_SH
-                ld   b, ICON_SLOTS
-                ld   a, IS_NONE
-.ish:           ld   (hl), a
-                inc  l
-                djnz .ish
-                ld   b, 0                      ; the quick-potion slot
-.ps:            ld   a, b
-                call slot_act
-                cp   SA_POTION
-                jr   z, .psf
-                inc  b
-                jr   .ps
-.psf:           ld   a, b
-                ld   (pot_slot), a
-                ; info line fields (game.md §3.4): name chars 0-15, numbers 16-27,
-                ; notes 28-41 = cols 0-11 / 12-20 / 21-31
-                ld   a, ATTR_INFO_NAME
-                ld   bc, INFO_ROW << 8
-                ld   de, (INFO_NUM_COL << 8) | 1
-                call stamp_rect
-                ld   a, ATTR_INFO_NUM
-                ld   bc, (INFO_ROW << 8) | INFO_NUM_COL
-                ld   de, ((INFO_NOTE_COL - INFO_NUM_COL) << 8) | 1
-                call stamp_rect
-                ld   a, ATTR_INFO_NOTE
-                ld   bc, (INFO_ROW << 8) | INFO_NOTE_COL
-                ld   de, ((ROOM_COLS - INFO_NOTE_COL) << 8) | 1
-                call stamp_rect
-                ; depth cell row 19 (key icon until 3F: none) -> black
-                ld   bc, ((ICON_ROW + 1) << 8) | DEPTH_COL
-                ld   de, (2 << 8) | 1
-                xor  a
-                call stamp_rect
-                ld   a, ATTR_LVL               ; C3-3: the level digit at (31, 19)
-                ld   bc, ((ICON_ROW + 1) << 8) | LVL_COL
-                ld   de, (1 << 8) | 1
-                call stamp_rect
-                ; row 21: labels + bar frames + attrs
+                ld   hl, panel_init7           ; MEM-SND: the state reset, every attr
+                call far7                      ; stamp, the potion-slot scan (boot7.asm;
+                ld   a, l                      ; +~0.3k T once per level), L = the slot
+                ld   (pot_slot), a             ; (bank-3 data: written here)
+                ; row 21: labels (glyph8 / pblit: bank-3 SMC + vdata via GEN_SRC)
                 ld   hl, label_heart
                 ld   bc, (STAT_ROW << 8) | HP_LBL_COL
                 call glyph8
@@ -156,19 +50,7 @@ panel_init:
                 ld   hl, label_drumstick
                 ld   bc, (STAT_ROW << 8) | FOOD_LBL_COL
                 call glyph8
-                ld   a, ATTR_P_HP
-                ld   bc, (STAT_ROW << 8) | HP_BAR_COL
-                ld   de, ((HP_NUM_COL + 2 - HP_BAR_COL) << 8) | 1
-                call stamp_rect
-                ld   a, ATTR_P_MP
-                ld   bc, (STAT_ROW << 8) | MP_BAR_COL
-                ld   de, ((MP_NUM_COL + 2 - MP_BAR_COL) << 8) | 1
-                call stamp_rect
-                ld   a, ATTR_P_FED
-                ld   bc, (STAT_ROW << 8) | FOOD_BAR_COL
-                ld   de, ((GEAR_COL - FOOD_BAR_COL) << 8) | 1
-                call stamp_rect
-                                               ; (D3-9b: the MP bar is item_mp's, PD_MP above)
+                                               ; (D3-9b: the MP bar is item_mp's, PD_MP set)
                 ld   bc, (STAT_ROW << 8) | FOOD_BAR_COL ; FOOD placeholder: full bar
                 call cell_bm
                 ld   a, 1
@@ -179,11 +61,7 @@ panel_init:
                 ld   e, HUNGER_COL * 8
                 call print6
                 ASSERT ((HUNGER_COL * 8) & 7) == 0 && HUNGER_COL * 8 + 6 * 3 <= 256  ; print6 x rule ("FED")
-                ; rows 22-23: log attrs, worn-gear outlines
-                ld   a, ATTR_LOG_OLD
-                ld   bc, LOG_ROW << 8
-                ld   de, (LOG_COLS << 8) | 1
-                call stamp_rect
+                ; rows 22-23: worn-gear outlines (the log attrs: panel_init7)
                 ld   c, GEAR_COL
 .gear:          push bc
                 ld   hl, icon_empty16

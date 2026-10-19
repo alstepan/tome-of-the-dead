@@ -151,10 +151,10 @@ boot:
                 ldir
                 ei
                 call build_bitrev
-                ld   hl, init_tiles            ; B3B-8: bank 3 (the common set,
-                call far3                      ; ornament)
+                ld   hl, init_tiles            ; B3B-8: the common set, ornament
+                call far7                      ; (MEM-SND: bank 7, boot7.asm)
                 ld   hl, panel_boot            ; B3B-11: FONT6 planes + the panel hot code
-                call far3                      ; -> bank-2 runtime RAM
+                call far7                      ; -> bank-2 runtime RAM (bank 7)
                 call alloc_reset
                 ; monsters: every kind's frames, both facings (§5.2)
                 ld   a, K_SKELETON
@@ -337,8 +337,8 @@ start_game:
                 ld   a, (HERO_KIND)            ; D3-4: + the class FX kind
                 add  a, K_FX_BASE              ; (K_FXW / K_FXM: only this class's
                 call gen_kind                  ; projectiles / impacts in the pool)
-                ld   hl, new_game             ; bank 3 (A7 review: cold, out of bank 2):
-                call far3                      ; hero slot, PROTO level / master seed
+                ld   hl, new_game              ; bank 7 (MEM-SND; was bank 3, A7 review):
+                call far7                      ; hero slot, PROTO level / master seed
                 ld   de, TX_WELCOME            ; the first log line (panel_init)
                 ld   a, (proto_start)
                 or   a

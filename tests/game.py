@@ -1843,9 +1843,10 @@ def isr_tests(h, p):
     bank-1 UI code region with bank 1 paged (C3 review: far1 targets) and (D3-S2)
     the bank-7 cold code region with bank 7 paged (far7 targets)."""
     # D3-0: stop at the ISR's `call AY_PLAY` (isr.page, bank 2, after the OUT)
-    # rather than at AY_PLAY itself: with the 4 KB AY slot at $F000 the bank-1
-    # UI code (ui1_code..ui1_end) covers the same addresses, and a PC probe
-    # fires in whichever bank is paged (the scrolls run there).
+    # rather than at AY_PLAY itself: $E000+ is shared by the bank-3 AY slot
+    # ($EDA0+ since MEM-SND), the bank-1 UI code (ui1_code..ui1_end, $EC68+)
+    # and the bank-7 cold code ($E000+), and a PC probe fires in whichever
+    # bank is paged (the scrolls run there).
     ay, done = S["isr.page"], S["isr.done"]
     # A3 carry-over: executing $C000+ with any bank but 3 = a paging bug. A
     # conditional (non-optimised) breakpoint: armed from the snapshot load

@@ -139,8 +139,8 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   interrupt anywhere else restores exactly what was paged. The screen bit is
   never touched by the ISR (`tests/game.py` #61 checks port == shadow at every
   ISR exit across a 7 → 5 → 7 screen flip).
-- **AY player slot contract** (`AY_PLAY` = `AY_RESERVE` `$F000`, bank 3, 4 KB
-  to `$FFFF` since D3-0 (was 7 KB from `$E400`); `src/ay.asm`: since SND-2 the
+- **AY player slot contract** (`AY_PLAY` = `AY_RESERVE` `$EDA0`, bank 3, 4,704 B
+  to `$FFFF` since MEM-SND (4 KB from `$F000` since D3-0, 7 KB from `$E400` before); `src/ay.asm`: since SND-2 the
   mailbox dispatcher `ay_play` + the WZM v0.3 player (`MODULE wzm`, buzzer, no
   echo) + the songs (`MODULE mus`)): called with interrupts off,
   bank 3 paged at `$C000`, any stack depth (it uses 8 B incl. the CALL since SND-5: `ay_play` → `ay_music` / `sfx_step` → the player's 4). The slot may clobber AF, BC, DE, HL, IX, IY
