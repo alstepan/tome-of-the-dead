@@ -72,7 +72,7 @@ info_power      "POWER STRIKE    MP3 RNG1    X2 DMG STUN"
 info_whirl      "WHIRLWIND       MP4 RNG1    BOTH SIDES"
 info_daggers    "THROW DAGGER    MP0 RNG6    1D4+2"
 info_bow        "BOW             MP0 RNG14   1D6+1"
-info_spark      "SPARK           MP1 RNG6    SHOCK 1D4+1"
+info_spark      "SPARK           MP2 RNG6    SHOCK 1D4+1"
 info_firebolt   "FIREBOLT        MP3 RNG12   BURST"
 info_frost      "FROST SHARD     MP3 RNG12   FREEZE BOUNCE1"
 info_drain      "DRAIN LIFE      MP3 RNG5    HEALS YOU"
@@ -163,8 +163,8 @@ THE 3C MENUS
 # === 3D (D3-2): combat, status, XP, books, wear, cursed messages ============
 # --- info lines per rank (game.md §5; rank 1 = the info_* lines above; name field
 # max 15 chars + gap, so POWER STRIKE III is POWER STRK III) -------------------
-info_spark2     "SPARK II        MP1 RNG8    SHOCK 1D4+2"
-info_spark3     "SPARK III       MP1 RNG8    1D4+3 CONFUSE"
+info_spark2     "SPARK II        MP2 RNG8    SHOCK 1D4+2"
+info_spark3     "SPARK III       MP2 RNG8    1D4+3 CONFUSE"
 info_firebolt2  "FIREBOLT II     MP3 RNG12   BURST 1D6"
 info_firebolt3  "FIREBOLT III    MP3 RNG12   SAFE BURST"
 info_frost2     "FROST SHARD II  MP3 RNG12   FRZ3 BOUNCE2"

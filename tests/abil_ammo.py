@@ -44,8 +44,8 @@ consumed, no floor drop), §2.3 (no throws / shots mid-ladder), §6 "Logic"
   T7 (fix pass):
   G   the user report "an arrow flies through the Goblin making no damage":
       model-independent sweep (seed chosen by the first d20 only) at gaps
-      0 / 1 / 3 / 9, both facings, bow and dagger: hit iff d20 >= 9 (bow) /
-      8 (dagger) — a designed missed roll, no defect; a miss now logs "YOUR
+      0 / 1 / 3 / 9, both facings, bow and dagger: hit iff d20 >= 8 (bow) /
+      7 (dagger); B20: KN_ATK 3 — a designed missed roll, no defect; a miss now logs "YOUR
       ARROW MISSES THE GOBLIN", sets pf_miss and RC_DODGE (E_REACTAT = the tick
       the FX passes) -> the ATTR_MISS flash on exactly that tick
   H   a 1-tick Right / WAIT tap during a log hold (LT_HOLD, 3 lines): held
@@ -367,8 +367,8 @@ def run(h, p, check):
     # ---- G: the user report (T7) "an arrow flies through the Goblin making no damage" ----
     # Model-independent: the seed is chosen by the FIRST d20 only (proj_fire's first
     # draw for the first body in line), every expectation comes from F1 and the
-    # geometry, not from the proj3 walk model. Bow: atk 2 + 0 vs eva 1 -> hit iff
-    # d20 >= 9; dagger +1 -> d20 >= 8. Distances: adjacent (gap 0), 1, 3, 9 cells,
+    # geometry, not from the proj3 walk model. Bow: atk 3 (B20, KN_ATK 2 -> 3) + 0 vs eva 1 -> hit iff
+    # d20 >= 8; dagger +1 -> d20 >= 7. Distances: adjacent (gap 0), 1, 3, 9 cells,
     # both facings. A miss must fly on (designed, game.md §6 "Logic") AND say so:
     # "YOUR ARROW MISSES THE GOBLIN" + the goblin's dodge flash (RC_DODGE at the tick
     # the FX passes its first col -> ATTR_MISS for MISS_FLASH ticks).
@@ -381,7 +381,7 @@ def run(h, p, check):
         raise AssertionError("no seed")
 
     def sweep(tag, abl, hx, left, gap, d20):
-        thr = 9 - (1 if abl == DAGGER else 0)
+        thr = 8 - (1 if abl == DAGGER else 0)
         hit = d20 >= thr
         x = hx - gap - 3 if left else hx + 3 + gap
         scene([(K_GOBLIN, x, 40)], daggers=3, arrows=10, bow=1, hero=(hx, HY))
@@ -438,10 +438,10 @@ def run(h, p, check):
             ok = ok and seen == want_at
         check(f"{tag} d20 {d20}: {'hit' if hit else 'miss + MISSES THE GOBLIN + dodge flash'}", ok, got)
 
-    for abl, hx, left, gap, d20s in ((BOW, HX, False, 0, (8, 9)), (BOW, HX, False, 1, (8, 9)),
-                                     (BOW, HX, False, 3, (1, 20)), (BOW, HX, False, 9, (8, 9)),
-                                     (BOW, 22, True, 0, (8, 9)), (BOW, 22, True, 1, (8, 12)),
-                                     (DAGGER, HX, False, 0, (7, 8)), (DAGGER, 22, True, 1, (7, 8))):
+    for abl, hx, left, gap, d20s in ((BOW, HX, False, 0, (7, 8)), (BOW, HX, False, 1, (7, 8)),
+                                     (BOW, HX, False, 3, (1, 20)), (BOW, HX, False, 9, (7, 8)),
+                                     (BOW, 22, True, 0, (7, 8)), (BOW, 22, True, 1, (7, 12)),
+                                     (DAGGER, HX, False, 0, (6, 7)), (DAGGER, 22, True, 1, (6, 7))):
         for d20 in d20s:
             sweep(f"G {'bow' if abl == BOW else 'dagger'} {'left' if left else 'right'} gap {gap}",
                   abl, hx, left, gap, d20)

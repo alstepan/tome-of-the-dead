@@ -14,7 +14,7 @@ item_mp + the poll (xp2.asm / icons.asm); the rank info line item_info (D3-9a).
       eva +1 (L6) in the hero's kind_tab columns; lines REACH LEVEL 8 / STRIKE
       TRUER / FEEL NIMBLE; L9 cap (XP 9999 -> L9, nothing more); a new game
       restores LVL 1 and the base atk / eva
-  M   MP regen: Warrior +1 on the 8th turn, Mage on the 5th; never above MAXMP;
+  M   MP regen: Warrior +1 on the 8th turn, Mage on the 6th (B20), +1 + MAXMP div 16; never above MAXMP;
       none while WEAK (MP_RG frozen); the panel's MP_SH follows MP
   R   abil_learn per ability (Mage k 0..4, Warrior k 0..1): ranks 1, 2, 3 ->
       RANK_ROWS row k == the ab_rank row of that rank; a 4th call returns 0;
@@ -204,17 +204,26 @@ def run(h, p, check):
           p.rb("LVL") == 1 and p.rw("XP") == 0 and katk(K_KNIGHT) == base_w, (p.rb("LVL"), katk(K_KNIGHT)))
 
     # ======================= M: MP regen ==========================================
-    for hero, per in ((K_KNIGHT, 8), (K_WIZARD, 5)):
-        scene(hero, mp=0, maxmp=2)
+    # B20 (game.md 4.0): Mage period 6; gain = 1 + MAXMP div 16 (MAXMP 16 -> +2), clamped
+    for hero, per, mx in ((K_KNIGHT, 8, 2), (K_WIZARD, 6, 2), (K_WIZARD, 6, 16)):
+        gain = 1 + (mx >> 4)
+        scene(hero, mp=0, maxmp=mx)
         got = []
         for i in range(2 * per + 2):
             p.turn("WAIT")
             got.append(p.rb("MP"))
-        want = [min(2, (i + 1) // per) for i in range(2 * per + 2)]
-        check(f"M1 {'Warrior' if hero == K_KNIGHT else 'Mage'} +1 MP per {per} turns, capped at MAXMP",
+        want = [min(mx, gain * ((i + 1) // per)) for i in range(2 * per + 2)]
+        check(f"M1 {'Warrior' if hero == K_KNIGHT else 'Mage'} MAXMP {mx}: +{gain} MP per {per} turns, capped at MAXMP",
               got == want, (got, want))
         p.tick(3)
         check("M2 panel MP_SH follows MP (item_mp)", p.rb("MP_SH") == p.rb("MP"), (p.rb("MP_SH"), p.rb("MP")))
+    # B20 clamp: MP + gain never overshoots MAXMP (MAXMP 17 gain 2; MAXMP 99 gain 7)
+    for mx, mp0, want in ((17, 16, 17), (99, 98, 99)):
+        scene(K_WIZARD, mp=mp0, maxmp=mx)
+        for i in range(6):
+            p.turn("WAIT")
+        check(f"M1 clamp: MAXMP {mx}, MP {mp0} -> {want} on the 6th turn (no overshoot)",
+              p.rb("MP") == want, p.rb("MP"))
     scene(K_WIZARD, mp=0, maxmp=12)
     p.wb(S["ST_FLAGS"], S["STS_WEAK"])
     p.wb(S["ST_T2"], 15)                               # WEAK 15 turns (low nibble)

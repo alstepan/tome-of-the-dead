@@ -6,7 +6,7 @@
 ;==============================================================================
 
 MP_REG_W        EQU 8               ; game.md §4: Warrior +1 MP per 8 turns
-MP_REG_M        EQU 5               ; Mage +1 per 5
+MP_REG_M        EQU 6               ; Mage period 6 (B20, game.md 4.0)
 LUP_W_HP        EQU 4               ; §4.1 level-up: Warrior max HP +4, max MP +1
 LUP_W_MP        EQU 1
 LUP_M_HP        EQU 3               ; Mage max HP +3, max MP +2
@@ -22,7 +22,7 @@ XPF_EVA         EQU 2               ; an eva step
 ; xp_turn — end_turn's regen + level-up step (game.md §2.2 end of turn:
 ; "... hunger -> regen -> ..."), a plain call (bank 7), skipped when the hero
 ; is DYING (end_turn tests it first).
-; MP regen: MP_RG counts turns; at the class period MP += 1 (to MAXMP) and
+; MP regen: MP_RG counts turns; at the class period MP += 1 + MAXMP div 16 (to MAXMP) and
 ; MP_RG = 0. While WEAK (ST_FLAGS slot 0) the counter is frozen (§7 "halted").
 ; Level-up (XP_UP set by deal_hit's award): while LVL < LVL_MAX and XP >=
 ; xpn_tab[LVL - 1]: LVL + 1, max/current HP and MP + the class gains, the L4 /
@@ -50,11 +50,20 @@ xp_turn:
                 jr   c, .lv
                 ld   (hl), 0
                 ld   hl, MAXMP
+                ld   a, (hl)
+                rrca
+                rrca
+                rrca
+                rrca
+                and  $0F
+                inc  a                         ; B20: gain = 1 + MAXMP div 16
+                ld   b, a
                 ld   a, (MP)
+                add  a, b                      ; MP <= MAXMP <= 99: no carry
                 cp   (hl)
-                jr   nc, .lv                   ; full (the panel polls MP: no PD_MP here)
-                inc  a
-                ld   (MP), a
+                jr   c, .rg
+                ld   a, (hl)                   ; clamp to MAXMP (the panel polls MP: no PD_MP)
+.rg:            ld   (MP), a
 .lv:            ; fall through
 ;------------------------------------------------------------------------------
 ; xp_level — the level-up check + its lines (XP_UP != 0), only while the tick

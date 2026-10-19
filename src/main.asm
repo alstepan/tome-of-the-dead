@@ -535,8 +535,8 @@ tile_flags:
                 ALIGN 256
 ; the heroes' base atk / eva (D3-9b: xp_turn adds the §4.1 level steps to the
 ; kind_tab columns at runtime; hero_st_init writes these back on a new game)
-KN_ATK          EQU 2
-WZ_ATK          EQU 3
+KN_ATK          EQU 3
+WZ_ATK          EQU 1
 KN_EVA          EQU 2
 WZ_EVA          EQU 1
 kind_tab:
@@ -545,11 +545,11 @@ kind_tab:
                 ;     KN  WZ  RG  SK  GB  GH  RT  BT  SL
                 KROW   3,  3,  3,  3,  3,  3,  4,  3,  3          ; KT_BW (cells)
                 KROW BH_K_KNIGHT, BH_K_WIZARD, 0, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME ; KT_BH
-                KROW  22, 14, 18, 10,  6,  7,  3,  3,  5          ; KT_HP
+                KROW  24, 16, 18, 10,  6,  7,  3,  3,  5          ; KT_HP
                 KROW KN_ATK, WZ_ATK, 5, 2, 1, 2, 0, 1, 0          ; KT_ATK (hero columns: + level steps at runtime, D3-9b)
                 KROW KN_EVA, WZ_EVA, 3, 2, 1, 3, 1, 4, 0          ; KT_EVA (hero_st_init restores KN_* / WZ_*)
-                KROW   6,  6,  4,  4,  3,  4,  2,  2,  3          ; KT_DIE
-                KROW   0,  1,  1,  0,  0,  0,  0,  0,  0          ; KT_BONUS
+                KROW   6,  4,  4,  4,  3,  4,  2,  2,  3          ; KT_DIE
+                KROW   0,  0,  1,  0,  0,  0,  0,  0,  0          ; KT_BONUS
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  1          ; KT_REACH (D3-0: the Mage's PROTO reach-3 zap is gone, game.md §11.4)
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  2          ; KT_PERIOD
                 ; B3B-5: skeleton + goblin are openers (game.md §9.1); the heroes

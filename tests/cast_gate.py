@@ -132,8 +132,15 @@ def main():
             # (end_turn's own lines — YOU DIED — come after the turn: ph 0)
             pushed = acc["qn"] > 0 or any(t["qn"] > 0 for t in ticks if t["ph"] == 1)
             if pushed:
-                check(f"{tag}: the cast's log lines drain after the gate",
-                      any(t["served"] for t in ticks) and all(t["qn"] == 0 for t in ticks if t["ph"] == 0),
+                # SND-5 (bisected 2026-10-20): the ISR's longer frames push the last line's
+                # draw (panel_tick's 1st-frame rule) one tick later, so ONE line may still be
+                # pending on the turn's last sample; it must drain within 4 more ticks (the
+                # next turn waits on it: LT_HOLD), never be dropped (LQ_DROP 0).
+                last = [t for t in ticks if t["ph"] == 0]
+                p.tick(4)
+                check(f"{tag}: the cast's log lines drain after the gate (<= 1 pending at the turn end, none 4 ticks later)",
+                      any(t["served"] for t in ticks) and all(t["qn"] <= 1 for t in last)
+                      and p.rb("LOG_QN") == 0 and p.rb(S["LOG_Q"] + S["LQ_DROP"]) == 0,
                       [(t["tt"], t["qn"], t["served"]) for t in ticks[:24]])
             kmon = next((i for i, t in enumerate(ticks) if t["pend"] == 0), None)
             if kmon is not None:

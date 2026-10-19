@@ -347,7 +347,7 @@ def main():
             h.expect("1 CUR_ROOM A", p.rb("CUR_ROOM"), 0)
             h.expect("1 x", e["X"], 2)
             h.expect("1 y", e["Y"], Y1)
-            h.expect("1 hp", e["HP"], 22)
+            h.expect("1 hp", e["HP"], 24)             # B20: Warrior HP 24 (game.md 4.0)
             h.expect("1 potions", e["POT"], 1)
             golden(h, "game_start", p.frame())
             h.expect("1 GEN_OVERFLOW 0 after boot + hero gen", p.rb("GEN_OVERFLOW"), 0)
@@ -533,7 +533,7 @@ def main():
             for _ in range(20):
                 p.turn("WAIT")
                 xs.append(p.ent(SLOT_RAT)["X"])
-                if FID["rat_bite"] in p.trace_fids(SLOT_RAT) or p.ent(0)["HP"] < 22:
+                if FID["rat_bite"] in p.trace_fids(SLOT_RAT) or p.ent(0)["HP"] < 24:
                     attacked = True
                     break
             h.expect("13 rat x decreases", xs[0] > xs[-1] or xs[0] < 16, True)
@@ -602,7 +602,7 @@ def main():
             p.release()
             p.settle()
             h.expect("21 new game POTIONS_TAKEN = 0", p.rb("POTIONS_TAKEN"), 0)
-            h.expect("21 new game hero hp 22", p.ent(0)["HP"], 22)
+            h.expect("21 new game hero hp 24", p.ent(0)["HP"], 24)
             h.expect("21 new game skeleton back in C", (p.ent(SLOT_SKC)["ROOM"], p.ent(SLOT_SKC)["HP"]), (ROOM_C, 10))
             h.expect("21 new game RNG reseeded", p.rw("RNG_STATE"), 0xA55A)
 
@@ -1488,7 +1488,7 @@ def main():
             h.expect("32 G with 0 potions: no turn", p.no_turn("G"), True)
             p.set_ent(0, HP=20, POT=1)
             p.turn("G")
-            h.expect("32 heal capped at max", p.ent(0)["HP"], 22)
+            h.expect("32 heal capped at max", p.ent(0)["HP"], 24)
             p.set_ent(0, POT=9)
             p.place(0, 24, Y0)
             for _ in range(3):
