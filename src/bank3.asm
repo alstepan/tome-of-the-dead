@@ -438,7 +438,8 @@ SPAWN_COUNT     EQU ($ - spawn_tab) / 5
 ; only before the first room is built (level_enter). No gen_kind here: every
 ; kind of lp_dtab (stand-in aliases included) is in the boot pool (3F's
 ; per-level pool from LP_KINDS + LP_BOSS goes between level_gen and the
-; build, after alloc_restore). Pages nothing.
+; build, after alloc_restore). 3E-T6: then the items overlay (items_ovl.asm,
+; ovl_run: unpacks from BANK_OVL_ITEMS, back in this bank).
 ; Clobbers: all but IY.   level_gen ~0.1-0.6M T per call (W16 reports)
 ;------------------------------------------------------------------------------
 level_new:
@@ -453,7 +454,13 @@ level_new:
                 call level_gen                 ; B = 0 ok / 1 exhausted
                 dec  b
                 jr   z, .g                     ; 1 -> retry from LVL_SEED + 16
-                ; fall through
+                call level_populate
+                ; 3E-T6: items + traps (+ at D1 = a new game the light-ID shuffle):
+                ; the overlay runs with this bank paged (it calls rnd / hits / rdp)
+                ld   hl, ovl_items_zx0
+                ld   de, ITEMS_ORG
+                ld   c, BANK_OVL_ITEMS
+                jp   ovl_run
 ;------------------------------------------------------------------------------
 ; level_populate — the hero into an emptied entity table, then the LP level
 ; budget (lp_budget: game.md §9.4.1, replaces the B3B-12 stand-in table) and
@@ -555,8 +562,9 @@ glow_ids:       DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_G
 ;            runs to the hole). ARR: + RUBBLE over the shaft in row 0 (no exit
 ;            up, game.md §1.1). EXIT: the level exit; closed (LF_GRATE_OPEN = 0,
 ;            3F) T_GRATE_SHUT over it before the deriver
-;   potions  FLOOR_LIST entries of this room (IT_POTION) -> T_POTION, row 9s+7;
-;            D3-7 T6: IT_DAGGER / IT_ARROW -> T_DAGGERS / T_ARROWS the same way
+;   items    FLOOR_LIST entries of this room -> their class glyph (item_glyph,
+;            3E-T6: FLASK / FOOD / WEAPON / WORN / PAGES / AMMO), row 9s+7; the
+;            ink is painted after the draw (fl_attr: item_ink(type))
 ;   decor    RD_SEED != 0: decor_room (B3B-9); seed 0 (PROTO): proto_decor.
 ;            The animated cells go to ANIM_N/ANIM_LIST (ROOM_MAP) or
 ;            ANIM_N2/ANIM_LIST2 (NEXT_MAP: do_exit's room_shadow copies it
@@ -667,14 +675,11 @@ build_room_map:
                 dec  l
                 ld   c, (hl)                   ; FL_COL
                 dec  l
-                ld   e, T_POTION
-                cp   IT_POTION
-                jr   z, .pi
-                sub  IT_DAGGER                 ; D3-7 T6: ammo stacks -> T_AMMO (both kinds)
-                cp   IT_ARROW - IT_DAGGER + 1
-                jr   nc, .pn
-                ld   e, T_AMMO
-.pi:            push hl
+                call item_glyph                ; 3E-T6: the class glyph (lowram; keeps BC, HL)
+                or   a
+                jr   z, .pn                    ; (none: IT_NONE / IT_KEY)
+                ld   e, a
+                push hl
                 push bc
                 ld   a, (hl)
                 rlca                           ; FL_S1 -> bit 0

@@ -138,9 +138,9 @@ new_game:
                 ld   (CUR_ROOM), a
                 ld   (TURN_PHASE), a
                 ld   (NEED_RELEASE), a
-                ld   hl, ITEM_RAM              ; 3E-T3: bag, worn, FL_IST, light ID,
-                ld   b, ITEM_RAM_LEN           ; hunger, quick slots := 0 (one page:
-.ir:            ld   (hl), a                   ; 9 B, ~3.2k T; level changes keep it)
+                ld   hl, ITEM_RAM              ; 3E-T3: bag, worn,
+                ld   b, ITEM_RAM_LEN           ; hunger, quick slots := 0 (81 B, one page:
+.ir:            ld   (hl), a                   ; 9 B, ~2.1k T; level changes keep it)
                 inc  l
                 djnz .ir
                 ld   hl, level_reset_new      ; bank 3 (pf_prep is bank-3 data):

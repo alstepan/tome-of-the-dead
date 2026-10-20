@@ -115,6 +115,12 @@ SCREEN7_ATTR    EQU $D800           ; bank 7: displayed attrs  (copy of $5800)
 PAGE_ORG        EQU GEN_SCRATCH
 PAGE_LIMIT      EQU GEN_SCRATCH + GEN_SCRATCH_LEN
 PAGE_MAP_SAVE   EQU GEN_SRC             ; GEN_SRC.. (no pause save / pblit / generator meanwhile)
+; 3E-T6: the level-start item / trap generator overlay (items_ovl.asm) runs
+; in the same window at a level start (after level_populate: the LG_* /
+; LP_CMAP scratch is dead), its packed stream in bank BANK_OVL_ITEMS (main.asm
+; ovl_blobs; any bank ovl_run can page: move the INCBIN + this EQU together).
+ITEMS_ORG       EQU GEN_SCRATCH
+BANK_OVL_ITEMS  EQU BANK_UI1
 B7_CODE         EQU $E000           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), tape
                                     ;     block joined to the TSET_LO tilesets below it
 B7_LIMIT        EQU $F800           ; ... up to the attr shadow (ASSERTed)

@@ -13,7 +13,7 @@
 | `$5800-$5AFF`| Screen attributes (bank 5)                  | 768 bytes, the clash grid     |
 | `$5B00-$5BFF`| Printer buffer → **`LOG_TXT`** (B3B-11)     | log message ring, 4 × 64 B (runtime only, after boot) |
 | `$5C00-$5CBF`| System variables                            |                               |
-| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`** (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D78` = `ITEM_RAM`** (bag, worn, `FL_IST`, light ID, hunger, quick slots; runtime only — "3E contracts") |
+| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`** (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D50` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification; runtime only — "3E contracts") |
 | `$8000-$BFFF`| Program origin region                       | `ORG $8000` for now           |
 | `$C000-$FFFF`| Paged bank window                           | bank selected by $7FFD bits0-2|
 
@@ -175,7 +175,9 @@ build) INCBINs the streams (`-i build/ovl`) into bank 1 **after the UI code**
 `BANK_UI1`; last in bank 1, so their sizes move nothing an overlay can
 reference) and writes the raw images again: **build.sh fails if any differs
 from pass 1**. Today: **`page`** (3E-T2, `src/page_ovl.asm` at `PAGE_ORG`,
-300 B raw → 273 B `ovl_page_zx0`; `tests/page.py` P1 round-trips it). The
+300 B raw → 273 B `ovl_page_zx0`; `tests/page.py` P1 round-trips it) and
+**`items`** (3E-T6, `src/items_ovl.asm` at `ITEMS_ORG`, 1,027 B raw → 881 B
+`ovl_items_zx0`, bank `BANK_OVL_ITEMS`; run by `level_new`, see "3E contracts"). The
 3E-T1 `ovl_test` (30 B) is dropped: `tests/ovl.py` O1 assembles the same
 self-test overlay in Python and pokes it into the free bank-1 tail.
 
@@ -661,7 +663,7 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+10 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
 | `$6E80..$6EBF` | `ORN_GLYPHS` | 64 | B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). `LOWRAM_END_3B` = `LOWRAM_FREE_END` = `$6EC0` |
 | `$6EC0..$6F31` | `LP_STATE` | 114 | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
-| `$6F32..$71A5` | free | 628 | of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
+| `$6F32..$71A5` | free | 628 | of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
 | `$71A6..$7FFF` | `lowram_code` (`start` first) | 3,674 | **cold block**, ends exactly at `$8000` (`src/lowram.asm`): **3E-T2: code 3,169 B + 101 descriptors 505 B**; 3E-T1: code 3,126 B (was 3,889 at `$70CF`); before: code 3,238 B + 101 frame descriptors 505 B (D3-S2 +89 incl. the bitmap-shadow paths' removal: + `clear_screen` / `print_char` / `print_str`, − `room_show` / `room_shadow`'s shadow ornament; L2 engine +28: `pit_range` / `pit_w`; D3-4 +8: `start_game` → `gen_kind(HERO_KIND + K_FX_BASE)`; J1 +145: `try_jump` D 6 / 7 + `jump_pit` + `pit_w`; earlier: D3-TX `tx_dec` + `.txt`, B12 +21, B14 +175, C3-2 +1, C3-1 +33, C3-0 +3, B3B-13 +37) |
 | inside the cold block | A5 `zx0_code..zx0_code_end` | 107 | `zx0_frame` 39 + `dzx0_standard` 68 (ASSERT ≤ `ZX0_BUDGET` 128) |
 | `$6000..$65FF` (alias) | A5 `GEN_SCRATCH` | 1,536 | ZX0 unpack target **aliasing `ROOM_MAP`+`NEXT_MAP`** (ends exactly at `TILE_GLYPHS`, ASSERTed): the generator runs only at boot, hero start and (3F) level start, before the room map is built — never mid-room. Guard: `GEN_TRAP` (state block) counts `gen_frame` calls while `GAME_STATE` is PLAYING/TRANSITION; tests assert 0 |
@@ -909,7 +911,7 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 `FLOOR_LIST` `$6E00..$6E7F`, `FLOOR_MAX` 32 × `FL_STRIDE` 4: `FL_ROOM` (bits
 0–3 room, bit 7 `FL_S1` storey 1; `FL_EMPTY` `$FF` = picked up / free),
 `FL_COL` (item cell col; row = the storey's standing row `9s+7`), `FL_ITEM`
-(3E-T3: the `IT_*` enum in `item_defs.asm`, ISTATE in the parallel `FL_IST`; 3B: `IT_POTION` 1; D3-7: `IT_DAGGER` 2 / `IT_ARROW` 3, `FL_QTY` = the stack's count — one entry per type and cell, an ammo stack may share a cell with another item, game.md §6.3), `FL_QTY`.
+(3E-T6: written by the level-start generator `items_ovl.asm`: all 32 entries, unused = `FL_EMPTY` × 4; the cell's glyph = `item_glyph`(type) of the last live entry, its ink = `item_ink`(type) (`it_tab`); no ISTATE on the floor (3E rev 6); 3E-T3: the `IT_*` enum in `item_defs.asm`, ISTATE in the parallel `FL_IST`; 3B: `IT_POTION` 1; D3-7: `IT_DAGGER` 2 / `IT_ARROW` 3, `FL_QTY` = the stack's count — one entry per type and cell, an ammo stack may share a cell with another item, game.md §6.3), `FL_QTY`.
 
 ### Tile ids (64; common 0..31 FULL)
 
@@ -919,17 +921,17 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 | 2 | `T_BRICK` = `T_WALL_DARK` | plain air-band wall face; re-glyphed DARK (B3B-2) |
 | 3 | `T_WALLF` | wall in a floor row (blocks, lintels in row 8/17) |
 | 4–6 / 7–9 | `T_LAD_L/M/R` / `T_HOLE_L/M/R` | ladder / ladder cells in a floor row |
-| 10 | `T_TRAP` | **3E (user-approved glyphs, `assets/gfx/concept/grid/items3e.tiles`): the revealed trap plate**, ink `$42` default (per-type ink = T6), `TILE_FLAGS` 0 (walkable, game.md §1.5). The potion moved to id 60 (`T_POTION` = `T_FLASK`). Nothing stamps traps yet (T6) |
+| 10 | `T_TRAP` | **3E (user-approved glyphs, `assets/gfx/concept/grid/items3e.tiles`): the revealed trap plate**, ink `$42` default (per-type ink = T16), `TILE_FLAGS` 0 (walkable, game.md §1.5). The potion moved to id 60 (`T_POTION` = `T_FLASK`). T6 generates the trap list; nothing stamps the plate yet (T16: revealed traps) |
 | 11, 14 | `T_DOOR_JAMB_L`, `T_DOOR_JAMB_R` | B10 (user option B): open-door jambs, `$A0` / `$05` × 8, ink `$06`, non-solid (the PROTO chest stand-in is gone, B3B-13) |
 | 12 | `T_CHAIN` | small decor; cobweb / moss move to the per-level sets |
 | 13, 15, 16, 31 | `T_BONES_0..3` | **DEC1 (user-approved 2026-10-20): the dead-skeleton floor pile**, screen order left to right = ids 13, 15, 16, 31 (`BONES_IDS` / `dg_bids`, not contiguous), ink `$47`, static (`TILE_FLAGS` 0, no `TF_ANIM`); were `T_SKULLS`, `T_TORCH_T/B` (small torch) and `T_CANDLES`, all removed. Glyphs: concept `bones.tiles` via `tools/tiles_convert.py` (`("cell", file, block, k)` source) |
-| 17, 18 | `T_AMMO` (= `T_DAGGERS` = `T_ARROWS`) / `T_PAGES` | **3E (game.md §8.11 Q1, user-approved `items3e.tiles`): 17 = the merged AMMO bundle** (daggers AND arrows, one glyph, default ink `$47`; the arrows' `$46` is T6's per-cell stamp, until then both show `$47`); **18 = PAGES** scroll glyph (ink `$07`; nothing stamps it yet). TILE_FLAGS 0 (floor items), not decor for the deriver's ring (`dg_bad` 0). `ap_stamp` / `build_room_map` store `T_AMMO` for both `IT_DAGGER` and `IT_ARROW`; `floor_pickup` tests `T_AMMO` / `T_POTION`. (D3-7 T6 history: the B3B-13b drips are no longer placed.) |
+| 17, 18 | `T_AMMO` (= `T_DAGGERS` = `T_ARROWS`) / `T_PAGES` | **3E (game.md §8.11 Q1, user-approved `items3e.tiles`): 17 = the merged AMMO bundle** (daggers AND arrows, one glyph); **18 = PAGES** (scrolls, books). TILE_FLAGS 0 (floor items), not decor for the deriver's ring (`dg_bad` 0). **3E-T6 inks:** at run time `TILE_ATTRS` of 17, 18, 60..63 is **0** (`level_load_tiles`' third `theme_ids` list: ink = paper, blank) and the real ink is painted per cell as `item_ink(type)` by `fl_attr` (see "3E contracts"); the source attrs (`$47` / `$07` / slot bytes) are unused. `ap_stamp` / `build_room_map` store `item_glyph(type)`; `floor_pickup` tests `T_AMMO` / `T_POTION`. (D3-7 T6 history: the B3B-13b drips are no longer placed.) |
 | 19, 20 | `T_END_L` = `T_PIT_R`, `T_END_R` = `T_PIT_L` | floor edge right / left of a hole: the pit caps share them |
 | 21–25 | `T_DOOR_ARCH_L/R`, `T_DOOR_L/R`, `T_DOOR_LOCK` | concept §3.1 (5 door ids) |
 | 26, 27 | `T_GRATE`, `T_RUBBLE` | B12: `T_GRATE` = the **raised** gate (variant B, ink `$46` = `ATTR_GRATE`), `TF_LADDER \| TF_HOLE`, stamped over the lair's open level exit; `T_GRATE_SHUT` = `T_GRATE` until 3F gives the closed gate its own id (TODO 3F, level_defs.asm) |
 | 28–30 | `T_WALL_DITHER/PATCH/FADE` | wall set |
 | 32..59 | `T_LVL_BASE`.. | per-level decor (bank-7 tileset) |
-| 60..63 | `T_LVL_OBJ` | **3E floor-item class glyphs on EVERY depth (slot bytes 28..31 of all 8 tilesets, flags 0)**: 60 `T_FLASK` = `T_POTION` (the old potion glyph bytes, ink `$42`), 61 `T_FOOD` (`$42`), 62 `T_WEAPON` (`$07`), 63 `T_WORN` (`$07`). `dg_bad` 0 for 60..63 (items, not decor: `is_decor` = 28..59 + chain/bones). **D8:** the lectern + Book are NOT in the D8 slot any more (they were unstamped); the T6 Sanctum swap must supply them (source `LECTERN` in `tools/tiles_convert.py`, ids `TS8_LECTERN_*` still emitted in `tileset_ids.inc`) |
+| 60..63 | `T_LVL_OBJ` | **3E floor-item class glyphs on EVERY depth (slot bytes 28..31 of all 8 tilesets, flags 0)**: 60 `T_FLASK` = `T_POTION` (the old potion glyph bytes), 61 `T_FOOD`, 62 `T_WEAPON`, 63 `T_WORN` (runtime `TILE_ATTRS` 0, inks per cell: 3E-T6, row 17/18 above). `dg_bad` 0 for 60..63 (items, not decor: `is_decor` = 28..59 + chain/bones). **D8:** the lectern + Book are NOT in the D8 slot any more (they were unstamped); the Sanctum swap must supply them (source `LECTERN` in `tools/tiles_convert.py`, ids `TS8_LECTERN_*` still emitted in `tileset_ids.inc`). **3E-T6: NOT built** — no Sanctum room is generated yet (`LVL_SANCTUM` = `ROOM_NONE`), so the swap is deferred to the Sanctum's generation (3F); proposal: the 2×2 lectern glyphs + attrs + flags (40 B) at bank 7 `$FFA0` (tileset tail, 96 B free) via `tools/tiles_convert.py`, swapped into ids 60..63 by a low-RAM hook in `room_show` / `do_exit` when the room is the Sanctum (and back on leaving), ASSERT `T_LVL_OBJ_N == 4` |
 
 Row-17 ornament: not tile ids (`ORN_GLYPHS`, 8 × 8 B, attr `LVL_ATTR_FLOOR`).
 B3B-8: a render detail of the map's row-17 `T_PLAT` / `T_WALLF` cells
@@ -2354,11 +2356,12 @@ Design: game.md §1.5, §7, §8, §8.5, §8.7–§8.9; user rulings 2026-10-19/2
 | 37..43 | charm `IT_CHARM_*` (C) | Might, Warding, Fire Ward, Amulet of Mana, Plenty, Scarab*, Ring of the Grave* |
 
 `IT_COUNT` 44 (T4 tables); * = boss unique. `IT_ID_LO..IT_ID_HI` = 10..16:
-k = type − `IT_ID_LO` indexes `ID_MAP` and is the `KNOWN` bit (0–2 potions, 3–6 scrolls).
+(3E rev 6: no identification; the `IT_ID_*` / `ID_*` / `KNOWN_*` / BUC / HIDDEN EQUs
+are still in `item_defs.asm` for the T8/T10 cleanup, nothing in the engine reads them.)
 
 **Item record** (§8.9): `IR_TYPE` / `IR_QTY` / `IR_IST`, `IR_STRIDE` 3 (bag,
-worn); a `FLOOR_LIST` entry keeps its 4-B layout (`FL_ITEM` / `FL_QTY`) +
-`FL_IST[i]`. Stacks merge on equal TYPE and ISTATE, `STACK_MAX` 9. ISTATE
+worn); a `FLOOR_LIST` entry keeps its 4-B layout (`FL_ITEM` / `FL_QTY`; rev 6: no
+ISTATE on the floor, a pickup writes 0). Stacks merge on equal TYPE and ISTATE, `STACK_MAX` 9. ISTATE
 (gear; 0 otherwise): bits 0–1 BUC (`BUC_NORMAL` 0 / `BUC_BLESSED` 1 / `BUC_CURSED`
 2, 3 reserved; bit tests `IST_BLESSED_BIT` / `IST_CURSED_BIT`), bit 2 `IST_HIDDEN`
 (display only), bits 3–4 enchant 0..`ENCH_MAX` 3, bits 5–7 `m` signed −4..+3
@@ -2366,23 +2369,20 @@ worn); a `FLOOR_LIST` entry keeps its 4-B layout (`FL_ITEM` / `FL_QTY`) +
 identified bit (identification is per type, `KNOWN`). Worn slots `WS_WEAPON` 0 /
 `WS_ARMOUR` 1 / `WS_HELM` 2 / `WS_CHARM` 3 = the gear range order.
 
-**`ITEM_RAM` `$5D00..$5D78`** (121 B, bank 5, the BASIC area free after `boot`
+**`ITEM_RAM` `$5D00..$5D50`** (81 B; 3E simplification 2026-10-20: `FL_IST` 32, `ID_MAP` 7, `KNOWN` 1 dropped, and the T6 `FL_ATTR` 32 never shipped: the floor ink is a per-draw `item_ink(type)`; was 121), bank 5, the BASIC area free after `boot`
 moved SP; one page; not on tape, garbage before `new_game`):
 
 | Addr | Symbol | Size | Lifetime |
 |---|---|---|---|
 | `$5D00` | `BAG` | 20 × 3 | game: zeroed by `new_game`, kept across levels |
 | `$5D3C` | `WORN` | 4 × 3 | game (follows `BAG`: one 24-record scan) |
-| `$5D48` | `FL_IST` | 32 | **level**: ISTATE of `FLOOR_LIST` entry i. Zeroed by `new_game`; **T6's level-start generator must write all 32**, and every later `FLOOR_LIST` writer (ammo landing, drops, T11) its entry's byte. Stale after a descent until T6 lands (no reader today) |
-| `$5D68` | `ID_MAP` | 7 | game (T6: per-run shuffle at START, f(`MASTER_SEED`, 255)) |
-| `$5D6F` | `KNOWN` | 1 | game |
-| `$5D70` | `FOOD` | 1 | game (0 after `new_game`; T9 sets `FOOD_START` 80) |
-| `$5D71` | `FOOD_TMR` | 1 | game (turns since the last burn, period `FOOD_PERIOD` 6) |
-| `$5D72` | `HSTAGE` | 1 | game (`HS_FED` 0 / `OK` / `HUNGRY` / `WEAK`; thresholds 50 / 25 / 10) |
-| `$5D73` | `QPIN` | 3 | game (pinned type per quick slot `QS_FOOD` / `QS_POTION` / `QS_SCROLL`; moved from `HERO_ST` +29, never used there) |
-| `$5D76` | `QS_CACHE` | 3 | game (the type each quick slot shows; `IT_NONE` = grey) |
+| `$5D48` | `FOOD` | 1 | game (0 after `new_game`; T9 sets `FOOD_START` 80) |
+| `$5D49` | `FOOD_TMR` | 1 | game (turns since the last burn, period `FOOD_PERIOD` 6) |
+| `$5D4A` | `HSTAGE` | 1 | game (`HS_FED` 0 / `OK` / `HUNGRY` / `WEAK`; thresholds 50 / 25 / 10) |
+| `$5D4B` | `QPIN` | 3 | game (pinned type per quick slot `QS_FOOD` / `QS_POTION` / `QS_SCROLL`; moved from `HERO_ST` +29, never used there) |
+| `$5D4E` | `QS_CACHE` | 3 | game (the type each quick slot shows; `IT_NONE` = grey) |
 
-Cleared by **`new_game`** only (bank 7, `boot7.asm`: 9-B `inc l` loop, ~3.2k T,
+Cleared by **`new_game`** only (bank 7, `boot7.asm`: 9-B `inc l` loop, ~2.1k T (81 B),
 before `level_reset_new`); `level_reset` / `level_populate` (bank 3) and
 `hero_st_init` do not touch it. Cost: bank 7 +9 B (free after 3E-T3: kit **144**, release
 **194**); banks 2 / 3 / 1 / low RAM unchanged (18 to `FRT` / 103 / 1,694 / 333). ASSERTed: one page, ≥ `$5CCB`, end ≤ `PF_RAM`.
@@ -2395,8 +2395,60 @@ the ROOM_DESC spare). Per level for free: level_gen's `attempt` zeroes
 `EDGE_TAB..LVL_STATE_END` and `proto_level` the header..`FLOOR_LIST` (R2).
 `TR_B0`: bits 0–3 room, bit 4 `TRF_S1`, 5 `TRF_KNOWN`, 6 `TRF_SPENT`; `TR_B1`:
 bits 0–4 col, 5–6 type (`TT_DART` 0, `TT_GAS` 1, `TT_TELEPORT` 2, `TT_ALARM` 3).
-Written by T6 after `level_gen`; `tools/levelgen.py`'s 320-B model keeps them 0
-until T6/T7 model the traps.
+Written by the 3E-T6 generator after `level_gen` (`tools/items_model.py`
+`gen_traps` / `apply_block`; `tools/levelgen.py`'s 320-B block keeps them 0).
+
+**3E-T6 generator + floor inks (built; reworked for the 3E simplification).**
+`src/items_ovl.asm`, an overlay at `ITEMS_ORG` = `GEN_SCRATCH` (1,027 B raw +
+53 B scratch past the image, ASSERT `ig_end` ≤ the window), ZX0 stream
+`ovl_items_zx0` **881 B in `BANK_OVL_ITEMS` = bank 1** (defs.asm; any bank
+`ovl_run` can page: move the INCBIN and the EQU together). `level_new` (bank 3)
+tails `level_populate` with `ovl_run` (LG_* / `LP_CMAP` dead by then), so the
+overlay runs with bank 3 paged and reuses bank-3 `rnd` / `rdp` / `hla` /
+`hits` (no LG_* scratch). Spec: `tools/items_model.py` rev 6 byte for byte
+(`apply_block`: FLOOR_LIST + trap list only), `tests/items_gen.py` G0 (`it_tab`
+== `ITEM_INK` / `glyph`), G1 (1,000 master seeds × D1–D8 × both heroes: the
+320-B block incl. the `FL_EMPTY` tail, the trap list and the restored
+`GEN_RNG`), G2 (the real `level_new` path). `ITEM_RNG` lives in the `GEN_RNG`
+word while the overlay runs and `GEN_RNG` is restored on its only exit, so no
+GEN_RNG-derived output moves. Food / scrolls / gear share one loop over a
+5-B descriptor table (`ig_grp`), the footprint / pit / mid-block spans one
+helper (`ig_span`).
+Floor glyph + ink = **`it_tab`** (low RAM, 44 B, one byte per type: glyph
+class << 4 | BRIGHT << 3 | ink; `it_cls` 7 B class → glyph id): `item_glyph`
+(`build_room_map` `.pots`, bank 3; `ap_stamp`, bank 7) and `item_ink`
+(`fl_attr`). `fl_attr` (low RAM: room A, plane base C = `SCREEN_ATTR` /
+`SHADOW_ATTR` high byte, signed row / col offset D / E; last entry of a cell
+wins; types without a glyph skipped; SMC `.bh`) runs from `room_show` (level
+start, both planes after `draw_room`), `room_shadow` (after a transition, the
+shadow), `ap_stamp` (after a pickup, the shadow; a cell left empty keeps
+`TILE_ATTRS[T_AIR]`), and every transition-scroll step (`scroll1.asm`: after
+the step's `tile_rect`, the entering room's inks at their current screen
+cells). `TILE_ATTRS` of the item glyph ids is 0 at run time
+(`level_load_tiles`), so between a `tile_rect` and its `fl_attr` (inside one
+scroll step) an item cell is blank, never a wrong ink; `tests/gfx_integrity.py`
+R3 checks every scroll step's visible item cells and the attr shadow of every
+live entry. `floor_pickup` takes `IT_P_*` potions like the legacy `IT_POTION`
+(→ `E_POT`, until T11) and leaves every other new type in place; **T11 must
+widen its glyph pre-filter** (today `T_POTION` / `T_AMMO` only). `POTIONS_TAKEN`
+(bit = entry index 0..7, set by `pp_take` only) has no reader in the engine
+(only `tests/abil_ammo.py` P9): entries 0..7 may now hold food / gear, so
+nothing may read a bit as "potion i".
+
+**3E-T6 byte / time ledger** (tools/build.sh DISPLAY; before = main with lever
+(c) + T4 + T5b): bank 1 free **1,635 → 718** (−917: `ovl_items_zx0` 881 + the
+two scroll hooks 36); bank 3 free to `AY_RESERVE` **616 → 609** (−7:
+`level_new` calls `level_populate` + `ovl_run` +14, `.pots` via `item_glyph`
+−7); bank 7 free kit **147 → 142** (release 192; `floor_pickup` `IT_P_*` +8,
+`ap_stamp` −3); low RAM `LOWRAM_SPARE` **324 → 119** (−205: `it_tab` 44 +
+`it_cls` 7 + `it_byte` / `item_glyph` / `item_ink` ~40, `fl_attr` + 3 entries
+~95, `room_show` / `room_shadow` / `level_load_tiles` hooks ~19); `ITEM_RAM`
+121 → 81 B (runtime); bank 2 0. Time: the overlay (unpack ~69k T +
+generation) **≤ 0.26M T per level start** (worst of 320 single-level runs, D7
+Warrior), on top of `level_gen` (0.1–0.9M T) while the DEPTH card is shown;
+`fl_attr` ~1.4k T scan + ~0.75k T per entry of the room (4.5k T measured with
+4): a room transition + ≤ 19 calls ≈ **+≤ 0.1M T** on the ~2.6M T scroll;
+`ap_stamp` + one call per pickup; per tick 0 (`tests/budget.py` gate passes).
 
 **`E_POT` migration (today's potion count → `BAG`; do NOT migrate before
 T10/T11).** Every reader / writer of `E_POT` (`P_ENTITIES + E_POT`, hero slot 0):
@@ -2405,7 +2457,7 @@ T10/T11).** Every reader / writer of `E_POT` (`P_ENTITIES + E_POT`, hero slot 0)
 |---|---|---|
 | `boot7.asm` `new_game` (`ld (ix+E_POT), 1`) | start kit: 1 potion | T11: start kit → `bag_add` (Heal ×1 + gear in `WORN`); `KNOWN` bit Heal (+ Mana for the Mage) |
 | `bank3.asm` `level_populate` (carry `E_POT` over `level_reset`) | descent carry | T11: delete the carry (the bag is outside the entity table) |
-| `pickup7.asm` `floor_pickup` / `pp_take` (`IT_POTION` → `E_POT` + 1, `MAX_POTIONS`, `POTIONS_TAKEN`) | pickup | T11: `IT_BAG_LO..` → `bag_add` (T10) with `FL_IST`, `BAG FULL.`; ammo / key stay counters |
+| `pickup7.asm` `floor_pickup` / `pp_take` (`IT_POTION` → `E_POT` + 1, `MAX_POTIONS`, `POTIONS_TAKEN`) | pickup | T11: `IT_BAG_LO..` → `bag_add` (T10) with ISTATE 0, `BAG FULL.`; ammo / key stay counters |
 | `intent7.asm` `ic_potion` / `ic_quaff` (the old `try_quaff`) | quick-slot drink | T11: `QS_CACHE[QS_POTION]` → the potion effect (T12), decrement the bag stack |
 | `icons.asm` `icon_poll` (`E_POT` vs `PANEL_POT_SH`), `icons3.asm` `icon_state` `.pot` / `item_icons` (`pot_slot` redraw), `panel.asm` `slot_redraw` (count digit) | icon / count | T11: read the quick-slot stack count (`qs_pick`, T10) instead of `E_POT`; `PANEL_POT_SH` keeps its role |
 | `boot7.asm` `panel_init7` (`PANEL_POT_SH` = $FF; `pot_slot` scan) | panel reset | unchanged (shadow semantics kept) |

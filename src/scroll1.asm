@@ -109,7 +109,16 @@ hscroll_room:
                 ld   a, ROOM_COLS - HSTEP
                 sub  e
                 ld   e, a
-.lg:            ld   b, FLOOR_ROW1
+.lg:            push bc                        ; 3E-T6: the next room's floor inks
+                push de                        ; where its cells show now (col offset
+                ld   a, c                      ; = screen col - room col)
+                sub  e
+                ld   e, a
+                ld   d, 0
+                call fl_attr_scr               ; (lowram)
+                pop  de
+                pop  bc
+                ld   b, FLOOR_ROW1
                 ld   d, HSTEP
                 ld   a, SCREEN_BITMAP >> 8
                 call orn_cells                 ; (lowram; pages nothing)
@@ -279,6 +288,20 @@ vscroll_room:
                 ld   de, (ROOM_COLS << 8) | 1
                 call tile_rect
                 pop  bc                        ; B = the entering screen row
+                push bc                        ; 3E-T6: the next room's floor inks
+                ld   a, (TMP4)                 ; where its rows show now (row offset
+                cp   EX_DOWN                   ; = B - the entering room row: k down,
+                ld   a, (TMP5)                 ; 17 - k up)
+                jr   z, .vd
+                cpl
+                add  a, PLAY_ROWS              ; 17 - k
+.vd:            ld   c, a
+                ld   a, b
+                sub  c
+                ld   d, a
+                ld   e, 0
+                call fl_attr_scr               ; (lowram)
+                pop  bc
                 ld   a, (TMP4)                 ; B3B-8: is it the next room's row 17
                 cp   EX_DOWN                   ; (down: k = 17 at the bottom; up:
                 ld   a, (TMP5)                 ; k = 0 at the top)? -> its ornament

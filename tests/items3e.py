@@ -11,8 +11,8 @@ Release build (DEBUG_KIT=0) for the emulator part; the layout part runs on any b
   R1  canary $A5 over ITEM_RAM + the rest of $5CC0..$5DFF + $5F8C..$5FFF at the menu;
       START: new_game zeroes exactly ITEM_RAM, every other canary byte survives
   R2  20 turns of play + a descent (level_descend, music off): ITEM_RAM (a written
-      pattern) is kept byte-exact (FL_IST included: stale until T6), the trap list is 0
-      (level_gen's attempt clears it), the canaries survive
+      pattern) is kept byte-exact (3E rev 6: no per-level field in it); the 3E-T6
+      generator's trap list holds TRAP_N <= TRAP_MAX entries, unused bytes 0; the canaries survive
 Run: ZRCP_PORT=<port> python3 tests/items3e.py
 """
 import sys
@@ -56,13 +56,13 @@ def layout(check):
     check("L2 m encodings", [s["IST_M_" + k] for k in ("P2", "P1", "M1", "M2", "M3")]
           == [((v & 7) << 5) for v in (2, 1, -1, -2, -3)])
     # ---- L3 ------------------------------------------------------------------
-    fields = [("BAG", 60), ("WORN", 12), ("FL_IST", 32), ("ID_MAP", 7), ("KNOWN", 1), ("FOOD", 1),
+    fields = [("BAG", 60), ("WORN", 12), ("FOOD", 1),          # 3E rev 6: no FL_IST / ID_MAP / KNOWN
               ("FOOD_TMR", 1), ("HSTAGE", 1), ("QPIN", 3), ("QS_CACHE", 3)]
     a, ok = s["ITEM_RAM"], True
     for name, n in fields:
         ok &= s[name] == a
         a += n
-    check("L3 ITEM_RAM fields", ok and a == s["ITEM_RAM_END"] and s["ITEM_RAM_LEN"] == 121,
+    check("L3 ITEM_RAM fields", ok and a == s["ITEM_RAM_END"] and s["ITEM_RAM_LEN"] == 81,
           [(n, hex(s[n])) for n, _ in fields])
     lo, hi = s["ITEM_RAM"], s["ITEM_RAM_END"]
     check("L3 one page", lo & 0xFF == 0 and (hi - 1) >> 8 == lo >> 8)
@@ -130,13 +130,17 @@ def emu(p, check):
         if p.pc() == wt:
             break
     check("R2 descended", p.rb("LVL_DEPTH") == d0 + 1, (d0, p.rb("LVL_DEPTH")))
-    check("R2 ITEM_RAM kept across the level change", mem(lo, n) == pat)
+    got = mem(lo, n)
+    check("R2 ITEM_RAM kept across the level change", got == pat)
     tl = S["TRAP_LIST"]
-    check("R2 trap list + TRAP_N cleared by level_gen", mem(tl, 13) == bytes(13), mem(tl, 13).hex())
+    tr = mem(tl, 13)
+    tn = tr[12]
+    check("R2 trap list: TRAP_N <= TRAP_MAX, unused entries 0",
+          1 <= tn <= S["TRAP_MAX"] and tr[2 * tn:12] == bytes(12 - 2 * tn), tr.hex())
     p.tick(10)
     for _ in range(10):
         p.turn("WAIT")
-    check("R2 ITEM_RAM still kept after play", mem(lo, n) == pat)
+    check("R2 ITEM_RAM still kept after play", mem(lo, n) == got)
     bad = canaries()
     check("R2 the rest of the reserve untouched", not bad, bad[:16])
 

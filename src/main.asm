@@ -124,6 +124,10 @@ ovl_page_zx0:                                         ; 3E-T2 bag page (page_ovl
     IF OVL_PASS == 2
                 INCBIN "page.zx0"
     ENDIF
+ovl_items_zx0:                                        ; 3E-T6 item / trap generator (items_ovl.asm, ITEMS_ORG)
+    IF OVL_PASS == 2
+                INCBIN "items.zx0"
+    ENDIF
 ovl_blobs_end:
                 ENT
 ovl_img_end:
@@ -653,6 +657,15 @@ PAGE_OVL_LEN    EQU page_ovl_end - page_ovl_main
                 ASSERT PAGE_MAP_SAVE + PLAY_CELLS <= TX_DEC     ; mf_tx decodes into TX_DEC on the page
                 ASSERT PAGE_MAP_SAVE >= GEN_SCRATCH + GEN_SCRATCH_LEN
                 SAVEBIN "build/ovl/page.bin", ovl_raw_page, PAGE_OVL_LEN
+ovl_raw_items:
+                DISP ITEMS_ORG
+items_ovl_main:
+                INCLUDE "items_ovl.asm"
+                ENT
+ITEMS_OVL_LEN   EQU ig_image_end - items_ovl_main
+                ASSERT ig_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
+                SAVEBIN "build/ovl/items.bin", ovl_raw_items, ITEMS_OVL_LEN
+                DISPLAY "GAME items overlay (3E-T6): ", /D, ITEMS_OVL_LEN, " B raw (+ ", /D, ig_end - ig_image_end, " B scratch) at ", /H, ITEMS_ORG, ", packed ", /D, ovl_blobs_end - ovl_items_zx0, " B in bank ", /D, BANK_OVL_ITEMS
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000
 

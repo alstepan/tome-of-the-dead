@@ -32,6 +32,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import game_lib as GL                                   # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, cell_bytes   # noqa: E402
 from lp import T, w16                                   # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+import items_model as IM                                # noqa: E402
+import room_model                                       # noqa: E402
 
 BANK = 16384
 
@@ -107,28 +110,30 @@ def tables(p, check, tag, depth):
     bad = diff_ranges(g[:TC * 8], SRC_GLY, TG)
     check(f"GI {tag}: TILE_GLYPHS ids 0..31 == tiles_common_glyphs", bad == [],
           (bad[:6], sorted({(int(r[:6], 16) - TG) // 8 for r in bad})))
-    lists, t = [], S["theme_ids"]          # floor ids, 0, wall ids, 0 (level_load_tiles .patch)
-    for _ in range(2):
+    lists, t = [], S["theme_ids"]          # floor ids, 0, wall ids, 0, item ids, 0 (level_load_tiles .patch)
+    for _ in range(3):
         ids = []
         while (v := p.rb(t)) != 0:
             ids.append(v)
             t += 1
         t += 1
         lists.append(ids)
-    theme = set(lists[0]) | set(lists[1])
+    theme = set(lists[0]) | set(lists[1]) | set(lists[2])
     ab = [i for i in range(TC) if (depth == 0 or i not in theme) and a[i] != SRC_ATT[i]]
-    check(f"GI {tag}: TILE_ATTRS ids 0..31 == tiles_common_attrs (theme ids aside)", ab == [], ab)
+    check(f"GI {tag}: TILE_ATTRS ids 0..31 == tiles_common_attrs (theme / item ids aside)", ab == [], ab)
     if depth:
         th = ([i for i in lists[0] if a[i] != p.rb("LVL_ATTR_FLOOR")]
-              + [i for i in lists[1] if a[i] != p.rb("LVL_ATTR_WALL")])
-        check(f"GI {tag}: theme ids carry LVL_ATTR_FLOOR / WALL", th == [], (lists, th))
+              + [i for i in lists[1] if a[i] != p.rb("LVL_ATTR_WALL")]
+              + [i for i in lists[2] if a[i] != 0])
+        check(f"GI {tag}: theme ids carry LVL_ATTR_FLOOR / WALL, item glyph ids 0 (3E-T6)", th == [], (lists, th))
         slot = depth - 1
         base = (S["TSET_LO"] if slot < 4 else S["TSET_HI"]) + (slot & 3) * S["TSET_STRIDE"]
         src = sna_bank(7, base, S["TSET_STRIDE"])
         n = (TILE_IDS - TC)
         tf = bytes(p.z.read_memory(S["tile_flags"] + TC, n))
         bad = (diff_ranges(g[TC * 8:], src[:n * 8], TG + TC * 8)
-               + diff_ranges(a[TC:], src[n * 8:n * 9], TA + TC)
+               + diff_ranges(a[TC:], bytes(0 if TC + i in lists[2] else v      # item ids: 0 (3E-T6)
+                                           for i, v in enumerate(src[n * 8:n * 9])), TA + TC)
                + diff_ranges(tf, src[n * 9:n * 10], S["tile_flags"] + TC))
         check(f"GI {tag}: ids 32..63 glyphs / attrs / tile_flags == bank-7 slot {slot}", bad == [], bad[:6])
     o = bytes(p.z.read_memory(S["ORN_GLYPHS"], len(SRC_ORN)))
@@ -228,22 +233,111 @@ def floor_check(p, check, tag, room=None, m=None):
     """T7 review: the FLOOR_LIST invariant floor_pickup's pre-filter relies on
     (level_defs.asm FLOOR_LIST): every live entry of the room shows on its cell
     (row 9s+7) — the glyph of the LAST live entry of that cell in list order.
-    Default: CUR_ROOM in the live ROOM_MAP; else room `room` built into `m`."""
+    Default: CUR_ROOM in the live ROOM_MAP (+ 3E-T6: each cell's item_ink(type) in the
+    attr shadow); else room `room` built into `m`."""
+    live = m is None
     fl = p.z.read_memory(S["FLOOR_LIST"], S["FLOOR_MAX"] * S["FL_STRIDE"])
     if m is None:
         m = bytes(p.z.read_memory(S["ROOM_MAP"], 32 * S["PLAY_ROWS"]))
         room = p.rb("CUR_ROOM")
-    tile = {S["IT_POTION"]: S["T_POTION"], S["IT_DAGGER"]: S["T_DAGGERS"], S["IT_ARROW"]: S["T_ARROWS"]}
-    want = {}
+    want, ink = {}, {}
     for i in range(S["FLOOR_MAX"]):
         r, col, item = fl[i * 4], fl[i * 4 + 1], fl[i * 4 + 2]
-        if r == S["FL_EMPTY"] or (r & S["FL_ROOM_MASK"]) != room or item not in tile:
+        if r == S["FL_EMPTY"] or (r & S["FL_ROOM_MASK"]) != room:
+            continue
+        try:
+            t = IM.glyph(item)                  # 3E-T6: the class glyph (items_model)
+        except ValueError:
             continue
         sto = 1 if r & S["FL_S1"] else 0
-        want[(col, 9 * sto + 7)] = tile[item]
+        want[(col, 9 * sto + 7)] = t
+        ink[(col, 9 * sto + 7)] = room_model.item_ink(item)
     bad = [(c, r, m[r * 32 + c], t) for (c, r), t in want.items() if m[r * 32 + c] != t]
     check(f"GI {tag}: FLOOR_LIST live entries ({len(want)} cells) all show their glyph in ROOM_MAP", bad == [], bad)
+    if live:                                    # 3E-T6: their ink in the attr shadow (bank 7)
+        sh = bank_read(p, 7, S["SHADOW_ATTR"], 32 * S["PLAY_ROWS"])
+        bad = [(c, r, sh[r * 32 + c], a) for (c, r), a in ink.items() if sh[r * 32 + c] != a]
+        check(f"GI {tag}: FLOOR_LIST cells carry their type's ink in the attr shadow", bad == [], bad)
     return len(want)
+
+
+SCROLL_PCS = (S["hscroll_room.step"], S["vscroll_room.step"])
+
+
+def forced_exit(p, stats):
+    """3E-T6 R3, deterministic: from CUR_ROOM take the first exit (L, R, U, D)
+    whose destination holds floor items through the real do_exit (far7, in
+    play), stopping at every scroll step (breakpoints 5 / 6) for scroll_ink
+    (the displayed bank-5 screen: every entering-room item cell already
+    scrolled in carries its type's ink; inside a step the item glyph ids'
+    TILE_ATTRS are 0: blank, never a wrong ink)."""
+    r = p.rb("CUR_ROOM")
+    d0 = S["ROOM_DESC"] + 16 * r
+    ex = p.rb(d0 + S["RD_EXITS"])
+    fl = p.z.read_memory(S["FLOOR_LIST"], 128)
+    rooms = {fl[4 * i] & 15 for i in range(32) if fl[4 * i] != S["FL_EMPTY"]}
+    for bit, kind, dd, colk in ((S["RDX_L"], S["EX_LEFT"], -1, None), (S["RDX_R"], S["EX_RIGHT"], 1, None),
+                                (S["RDX_U"], S["EX_UP"], -3, "RD_UPCOL"), (S["RDX_D"], S["EX_DOWN"], 3, "RD_DNCOL")):
+        if ex & bit and r + dd in rooms:
+            break
+    else:
+        return False
+    p.wb("EXIT_KIND", kind)
+    p.wb("EXIT_DEST", r + dd)
+    if colk:
+        p.wb("EXIT_COL", p.rb(d0 + S[colk]))
+    for n, pc in zip((5, 6), SCROLL_PCS):
+        p.z.cmd("set-breakpoint %d PC=%d" % (n, pc))
+    pc0 = p.pc()
+    code = [0xF3, 0x3E, kind, 0x21] + w16(S["do_exit"]) + [0xCD] + w16(S["far7"]) + [0xFB, 0x00, 0x18, 0xFE]
+    stub = S["LOWRAM_END_3B"]
+    end = stub + len(code) - 3
+    p.wmem(stub, code)
+    p.z.cmd("set-breakpoint 3 PC=%d" % end)
+    p.z.cmd("set-register PC=%d" % stub)
+    for _ in range(200):
+        p.z.cmd("run 50000000")
+        pc = p.pc()
+        if pc == end:
+            break
+        if pc in SCROLL_PCS:
+            scroll_ink(p, stats)
+            p.z.cmd("cpu-step")
+    ok = p.pc() == end
+    p.z.cmd("set-breakpoint 3")
+    for n in (5, 6):
+        p.z.cmd("set-breakpoint %d" % n)
+    p.z.cmd("set-register PC=%d" % pc0)
+    return ok and p.rb("CUR_ROOM") == r + dd
+
+
+def scroll_ink(p, stats):
+    k, kind, dest = p.rb("TMP5"), p.rb("TMP4"), p.rb("EXIT_DEST")
+    fl = p.z.read_memory(S["FLOOR_LIST"], 128)
+    att = p.z.read_memory(S["SCREEN_ATTR"], 32 * S["PLAY_ROWS"])
+    dc = dr = 0
+    if kind == S["EX_RIGHT"]:
+        dc = 32 - 2 * k
+    elif kind == S["EX_LEFT"]:
+        dc = 2 * k - 32
+    elif kind == S["EX_DOWN"]:
+        dr = S["PLAY_ROWS"] - k
+    else:
+        dr = k - S["PLAY_ROWS"]
+    stats["steps"] += 1
+    for i in range(32):
+        r = fl[4 * i]
+        if r == S["FL_EMPTY"] or r & 15 != dest:
+            continue
+        row, col = (16 if r & 0x80 else 7) + dr, fl[4 * i + 1] + dc
+        if 0 <= row < S["PLAY_ROWS"] and 0 <= col < 32:
+            stats["cells"] += 1
+            last = [j for j in range(32) if fl[4 * j] == r and fl[4 * j + 1] == fl[4 * i + 1]][-1]
+            want = room_model.item_ink(fl[4 * last + 2])
+            if want is None:
+                continue
+            if att[row * 32 + col] != want:
+                stats["bad"].append((kind, k, dest, i, row, col, att[row * 32 + col], want))
 
 
 def floor_build_check(p, check, tag):
@@ -306,6 +400,7 @@ def main():
         p.settle(3)
         snap0 = pool_snap(p)
         fx_check(p, check)
+        ink = {"steps": 0, "cells": 0, "bad": [], "exits": 0}
         for d in range(1, depths + 1):
             if d > 1:
                 pc0 = p.pc()
@@ -320,6 +415,10 @@ def main():
             screen_check(p, check, tag, d)
             floor_check(p, check, tag)
             pool_check(p, check, tag, snap0)
+            if forced_exit(p, ink):                # 3E-T6 R3 (+ the new room's shadow inks)
+                ink["exits"] += 1
+                p.settle(3)
+                floor_check(p, check, f"GI1 D{d} after a forced exit (room {p.rb('CUR_ROOM')})")
             # play: walk right then left (room changes, LP spawns); keep the hero alive
             for key in ("L", "H"):
                 for _ in range(6):
@@ -341,6 +440,8 @@ def main():
             if p.rb("GAME_STATE") != S["GS_PLAYING"]:
                 print(f"[info] D{d}: GAME_STATE {p.rb('GAME_STATE')} — stop", flush=True)
                 break
+        check(f"GI R3: scroll steps show the entering room's floor inks ({ink['exits']} exits, {ink['steps']} steps, "
+              f"{ink['cells']} item cells)", ink["steps"] > 0 and ink["cells"] > 0 and not ink["bad"], ink["bad"][:6])
         print(f"[info] run anomalies: {T.anomalies}", flush=True)
     print(f"gfx_integrity: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
     return 1 if fails else 0

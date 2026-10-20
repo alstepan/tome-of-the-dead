@@ -176,11 +176,11 @@ DOOR_PLANK_H    EQU 6
 ; Entry: FL_ROOM bits 0–3 room id, bit 7 = storey 1; FL_EMPTY ($FF) = taken /
 ; free slot (pickups mark, never compact mid-level). FL_COL = item cell col;
 ; the row is the storey's standing row 9s+7. FL_ITEM = item type (IT_*,
-; item_defs.asm; ISTATE in the parallel FL_IST). FL_QTY = stack count.
+; item_defs.asm; no ISTATE on the floor: m 0, 3E rev 6). FL_QTY = stack count.
 ; INVARIANT (T7; floor_pickup's pre-filter relies on it): every live entry of
 ; the current room shows on its cell (FL_COL, row 9s+7) in ROOM_MAP — the
-; glyph (T_POTION / T_DAGGERS / T_ARROWS) of the LAST live entry of that cell
-; in list order. Kept by build_room_map (stamps every entry), ap_stamp
+; glyph (item_glyph, lowram.asm; 3E-T6) of the LAST live entry of that cell
+; in list order, with its item_ink(type) (fl_attr) in the screen / attr shadow. Kept by build_room_map (stamps every entry), ap_stamp
 ; (re-stamps a cell after any pickup), and decor landing on T_AIR only. Any
 ; new writer of an entry (3E drops, §6.3 ammo landing) or of row 9s+7 must
 ; keep it. Checked: tests/gfx_integrity.py floor_check (D1..D8, entry + play).
@@ -196,7 +196,7 @@ FL_S1           EQU %10000000
 FL_S1_BIT       EQU 7
 FL_EMPTY        EQU $FF
 ; FL_ITEM ids (IT_*): item_defs.asm (3E-T3; 1..3 keep their 3B / 3D values).
-; The entry's ISTATE is FL_IST[i] (item_defs.asm, ITEM_RAM).
+; A pickup writes ISTATE 0 into the bag (game.md §8.11 3E simplification).
 
 ;------------------------------------------------------------------------------
 ; Level state block — bank 5 low RAM, LVL_STATE..LVL_STATE_END (320 B), right

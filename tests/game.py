@@ -185,10 +185,11 @@ class T(Proto):
         self.settle()
 
     def bg_tables(self):
-        """(ROOM_MAP, TILE_GLYPHS, TILE_ATTRS, ORN_GLYPHS) from memory."""
+        """(ROOM_MAP, TILE_GLYPHS, TILE_ATTRS, ORN_GLYPHS, the CUR_ROOM floor inks) from memory."""
         z = self.z
+        ink = room_model.floor_inks(z.read_memory(S["FLOOR_LIST"], 128), self.rb("CUR_ROOM"))
         return (z.read_memory(S["ROOM_MAP"], MAP_LEN), z.read_memory(S["TILE_GLYPHS"], S["TILE_IDS"] * 8),
-                z.read_memory(S["TILE_ATTRS"], S["TILE_IDS"]), z.read_memory(S["ORN_GLYPHS"], 64))
+                z.read_memory(S["TILE_ATTRS"], S["TILE_IDS"]), z.read_memory(S["ORN_GLYPHS"], 64), ink)
 
     def is_bg(self, frame, c, r):
         """Cell (c,r) shows exactly its tile-map background (glyph + attr; B3B-8:

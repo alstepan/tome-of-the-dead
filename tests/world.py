@@ -2592,13 +2592,14 @@ def run_gen_suites(p, check):
             slot = d - 1
             so = 7 * 16384 + (S["TSET_LO"] if slot < 4 else S["TSET_HI"]) - 0xC000 + (slot & 3) * S["TSET_STRIDE"]
             sl = SNA_RAM[so:so + S["TSET_STRIDE"]]
+            obj = S["T_LVL_OBJ"] - 32               # 3E-T6: item glyph ids' TILE_ATTRS 0 (fl_attr inks)
             check(f"W11 D{d}: ids 32..63 glyphs / attrs / TILE_FLAGS == the bank-7 slot {slot}",
                   (bytes(glyphs[256:]), bytes(attrs[32:]), bytes(flags[32:]))
-                  == (sl[:256], sl[256:288], sl[288:320]), "")
+                  == (sl[:256], sl[256:256 + obj] + bytes(32 - obj), sl[288:320]), "")
             floor_cls = {T[k] for k in ("T_PLAT", "T_WALLF", "T_END_L", "T_END_R", "T_HOLE_L",
                                         "T_HOLE_M", "T_HOLE_R", "T_GRATE", "T_AIR")}
             legal = {fl, wl, S["ATTR_AIR"], S["ATTR_LADDER"], S["ATTR_DOOR"], S["ATTR_GRATE"],
-                     S["ATTR_POTION"]}
+                     S["ATTR_POTION"], 0x42}       # (+ the legacy IT_POTION ink, item_ink)
             # B3B-9 decor: the level's own decor ids + the common small decor
             legal |= {attrs[i] for i in range(S["T_LVL_BASE"], S["T_LVL_OBJ"])}
             legal |= {attrs[T[k]] for k in ("T_CHAIN", "T_BONES_0", "T_BONES_1", "T_BONES_2", "T_BONES_3",
@@ -2628,7 +2629,8 @@ def run_gen_suites(p, check):
                 pit_air = [c for c in range(32) if m[S["FLOOR_ROW1"] * 32 + c] == T["T_AIR"]]
                 check(f"W11 D{d} r{r}: no AIR in row 17 (pits are storey-0 only)", not pit_air, pit_air[:3])
                 comp, disp = p.composed_frame(), p.frame()
-                tabs = p.bg_tables()
+                tabs = p.bg_tables()[:4] + (room_model.floor_inks(        # 3E-T6: room r's inks
+                    p.z.read_memory(S["FLOOR_LIST"], 128), r),)
                 badc, bada = [], []
                 for row in range(PLAY_ROWS):
                     for c in range(32):
@@ -2932,7 +2934,10 @@ def w16_level(p, check):
         """Everything a fresh level must satisfy (tag: where we are)."""
         blk = room_model.read_block(p)
         want = G.generate(d, lvl_seed(master, d) if seed is None else seed, master)
-        check(f"W16 {tag}: LVL_DEPTH {d}, block == levelgen.generate({d}, master + {d} * MUL)",
+        import items_model as IM                   # 3E-T6: + the item / trap generator
+        hero = IM.HERO_WARRIOR if p.rb("HERO_KIND") == S["K_KNIGHT"] else IM.HERO_MAGE
+        want = IM.apply_block(want, IM.gen_level_items(want, master, hero))
+        check(f"W16 {tag}: LVL_DEPTH {d}, block == items_model(levelgen.generate({d}, master + {d} * MUL))",
               p.rb("LVL_DEPTH") == d and blk == want, (p.rb("LVL_DEPTH"), hex(p.rw("LVL_SEED"))))
         st = blk[S["LVL_START"] - room_model.BASE]
         e = p.ent(0)

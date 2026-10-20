@@ -340,11 +340,14 @@ build_room:
 ; (draw_room ~334k T + the build, tests/world.py W12)
 ;------------------------------------------------------------------------------
 room_show:
+                push af
                 ld   h, ROOM_MAP >> 8
                 call build_room
                 call draw_room                 ; screen + attr shadow (leaves bank 7 paged)
+                pop  af
+                call fl_attr_room              ; 3E-T6: the floor items' inks over both
                 ld   a, SCREEN_BITMAP >> 8
-                jr   orn_row
+                jp   orn_row
 
 ;------------------------------------------------------------------------------
 ; room_shadow — do_exit after the scroll: the new room's animated-decor list
@@ -359,7 +362,188 @@ room_shadow:
                 ld   de, ANIM_N
                 ld   bc, ANIM_COPY_LEN
                 ldir
-                jp   shadow_room
+                call shadow_room
+                ld   a, (EXIT_DEST)            ; 3E-T6: + the new room's floor inks
+                jr   fl_attr_sh
+;------------------------------------------------------------------------------
+; 3E-T6 floor-item glyph + ink (game.md §8.11 Q1 + "3E simplification" 2: the
+; ink is a pure function of the TYPE). One byte per type in it_tab: the glyph
+; class (item_glyph) and the ink (item_ink), the per-cell attr painted by
+; fl_attr over the attr plane AFTER the cells were drawn from TILE_ATTRS.
+; level_load_tiles sets TILE_ATTRS of the item glyph ids to 0 (ink = paper:
+; blank), so a cell drawn from the map but not yet painted (the scroll's
+; entering strip, the instant between tile_rect and fl_attr) shows nothing
+; rather than a wrong ink.
+;------------------------------------------------------------------------------
+; it_byte — A = item type (< IT_COUNT): A = it_tab[type]. Keeps BC, DE. Clobbers HL.
+it_byte:        ld   hl, it_tab
+                add  a, l
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a
+                ld   a, (hl)
+                ret
+
+; item_glyph — A = item type (a live entry's FL_ITEM): A = its floor glyph,
+; 0 = none (IT_NONE, IT_KEY). Keeps BC, DE, HL.
+; Callers: build_room_map .pots (bank 3), ap_stamp (bank 7).  ~0.15k T
+item_glyph:     push hl
+                call it_byte
+                rrca
+                rrca
+                rrca
+                rrca
+                and  7
+                ld   hl, it_cls
+                call it_byte + 3               ; HL = it_cls + class
+                pop  hl
+                ret
+
+; item_ink — A = item type: A = its floor attr (ink on black; 0 = no glyph).
+; Keeps BC, DE. Clobbers HL.
+item_ink:       call it_byte
+                ld   h, a
+                and  7
+                bit  IT_BRIGHT_BIT, h
+                ret  z
+                or   $40                       ; BRIGHT
+                ret
+
+; it_tab: type -> class << 4 | BRIGHT << 3 | ink (paper 0). SINGLE SOURCE in
+; tools/items_model.py ITEM_INK + glyph(); tests/items_gen.py G0 checks this
+; table against it. Classes: it_cls index.
+IT_BRIGHT_BIT   EQU 3
+    MACRO ITB cls, attr
+                DB   ((cls) << 4) | (((attr) >> 3) & 8) | ((attr) & 7)
+    ENDM
+IC_NONE         EQU 0
+IC_FLASK        EQU 1
+IC_AMMO         EQU 2
+IC_FOOD         EQU 3
+IC_PAGES        EQU 4
+IC_WEAPON       EQU 5
+IC_WORN         EQU 6
+it_cls:         DB   0, T_FLASK, T_AMMO, T_FOOD, T_PAGES, T_WEAPON, T_WORN
+it_tab:         ITB  IC_NONE, 0                ; IT_NONE
+                ITB  IC_FLASK, $42             ; IT_POTION (legacy / PROTO)
+                ITB  IC_AMMO, $47              ; dagger
+                ITB  IC_AMMO, $46              ; arrow
+                ITB  IC_NONE, 0                ; key (no floor entry)
+                ITB  IC_FOOD, $06              ; carrot
+                ITB  IC_FOOD, $44              ; apple
+                ITB  IC_FOOD, $04              ; pear
+                ITB  IC_FOOD, $46              ; cheese
+                ITB  IC_FOOD, $42              ; meat
+                ITB  IC_FLASK, $42             ; Heal
+                ITB  IC_FLASK, $45             ; Mana
+                ITB  IC_FLASK, $44             ; Cure
+                ITB  IC_PAGES, $45             ; Teleport
+                ITB  IC_PAGES, $46             ; Fear
+                ITB  IC_PAGES, $44             ; Sleep
+                ITB  IC_PAGES, $47             ; Enchant
+                ITB  IC_PAGES, $43             ; book
+                ITB  IC_WEAPON, $06            ; bow
+                DUP  IT_WPN_W_HI - IT_WPN_W_LO + 1
+                ITB  IC_WEAPON, $07            ; Warrior blades
+                EDUP
+                DUP  IT_WPN_M_HI - IT_WPN_M_LO + 1
+                ITB  IC_WEAPON, $06            ; Mage staves
+                EDUP
+                DUP  IT_HELM_HI - IT_ARM_LO + 1
+                ITB  IC_WORN, $07              ; armour, helmets
+                EDUP
+                DUP  IT_CHARM_HI - IT_CHARM_LO + 1
+                ITB  IC_WORN, $06              ; charms
+                EDUP
+                ASSERT $ - it_tab == IT_COUNT && IT_KEY == 4 && IT_F_CARROT == 5 && IT_P_HEAL == 10
+                ASSERT IT_S_TELEPORT == 13 && IT_BOOK == 17 && IT_BOW == 18 && IT_WPN_W_LO == 19
+                ASSERT IT_WPN_M_LO == IT_WPN_W_HI + 1 && IT_ARM_LO == IT_WPN_M_HI + 1
+                ASSERT IT_HELM_LO == IT_ARM_HI + 1 && IT_CHARM_LO == IT_HELM_HI + 1
+
+; fl_attr_room — A = room: paint its floor inks over the screen attrs and
+; the attr shadow (room entry, after draw_room: bank 7 paged).
+; fl_attr_sh — A = room: the attr shadow only (bank 7 paged: room_shadow,
+; ap_stamp). fl_attr_scr — D / E = row / col offset: EXIT_DEST's inks over
+; the screen attrs where its cells show now (the scrolls, bank 1).
+; All: Clobbers A, BC, DE, HL; pages nothing.
+fl_attr_room:   push af
+                ld   c, SCREEN_ATTR >> 8
+                call fl_attr0
+                pop  af
+fl_attr_sh:     ld   c, SHADOW_ATTR >> 8
+fl_attr0:       ld   de, 0
+                jr   fl_attr
+fl_attr_scr:    ld   a, (EXIT_DEST)
+                ld   c, SCREEN_ATTR >> 8
+                ; fall through
+;------------------------------------------------------------------------------
+; fl_attr — room A's live FLOOR_LIST entries (both storeys) -> item_ink(type)
+; on an attr plane in screen layout: C = the plane's high base (SCREEN_ATTR >>
+; 8, or SHADOW_ATTR >> 8 with bank 7 paged), D / E = signed row / col offset
+; map -> plane; a cell landing off rows 0..PLAY_ROWS-1 / cols 0..31, or a type
+; without a glyph, is skipped. List order: the last entry of a cell wins, as
+; its glyph does (build_room_map, ap_stamp).
+; Pages nothing. Clobbers: A, BC, HL (DE kept).
+; ~32 x 33 T scan + ~0.25k T per entry of the room
+; SMC: .bh+1 = the plane base, per call.
+;------------------------------------------------------------------------------
+fl_attr:        ld   b, a
+                ld   a, c
+                ld   (.bh+1), a
+                ld   hl, FLOOR_LIST
+.l:             ld   a, (hl)
+                and  FL_ROOM_MASK              ; (FL_EMPTY -> 15: never a room)
+                cp   b
+                jr   nz, .n
+                ld   a, (hl)
+                rlca
+                sbc  a, a
+                and  STOREY_ROWS
+                add  a, STOREY_AIR - 1         ; the standing row 9s + 7
+                add  a, d
+                cp   PLAY_ROWS
+                jr   nc, .n
+                ld   c, a                      ; C = plane row
+                inc  l
+                ld   a, (hl)                   ; FL_COL
+                add  a, e
+                cp   ROOM_COLS
+                jr   nc, .n1
+                push hl
+                push de
+                ld   e, a                      ; E = plane col
+                inc  l
+                ld   a, (hl)                   ; FL_ITEM
+                call item_ink
+                or   a
+                jr   z, .x                     ; no glyph: nothing to paint
+                ld   d, a
+                ld   a, c
+                rrca
+                rrca
+                rrca
+                ld   l, a
+                and  3
+.bh:            add  a, 0                      ; SMC: the plane's high base
+                ld   h, a
+                ld   a, l
+                and  $E0
+                or   e
+                ld   l, a
+                ld   (hl), d
+.x:             pop  de
+                pop  hl
+.n1:            dec  l
+.n:             ld   a, l
+                add  a, FL_STRIDE
+                ld   l, a
+                jp   p, .l                     ; 32 entries: L $00..$7C
+                ret
+                ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE == $80 && FL_S1 == $80
+                ASSERT FL_COL == 1 && FL_ITEM == 2
+                ASSERT (SCREEN_ATTR & $FF) == 0 && (SHADOW_ATTR & $FF) == 0 && STOREY_ROWS == 9
+
 ; orn_row — the whole row 17 of ROOM_MAP, A = bitmap base high.
 orn_row:
                 ld   bc, FLOOR_ROW1 << 8       ; row 17, col 0
@@ -480,6 +664,8 @@ level_load_tiles:
                 call .patch
                 ld   a, (LVL_ATTR_WALL)
                 call .patch
+                xor  a                         ; 3E-T6: the item glyph ids blank
+                call .patch                    ; (fl_attr paints their inks)
                 pop  bc
                 pop  af
                 jp   restore_page
@@ -499,6 +685,7 @@ level_load_tiles:
 ; WALL_IDS, + rubble = ATTR_WALL, concept-screen §3.3 #12)
 theme_ids:      DB T_PLAT, T_WALLF, T_END_L, T_END_R, 0
                 DB T_BRICK, T_WALL_DITHER, T_WALL_PATCH, T_WALL_FADE, T_RUBBLE, 0
+                DB T_AMMO, T_PAGES, T_FLASK, T_FOOD, T_WEAPON, T_WORN, 0
 
 ;==============================================================================
 ; TEXT (B3B-13). Message strings are dictionary-token streams in the

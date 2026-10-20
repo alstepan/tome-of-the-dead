@@ -14,7 +14,10 @@ ARROWS_MAX      EQU 24
 ; floor_pickup — end_turn (game.md §8: pickup is automatic). The hero standing,
 ; not DYING: every FLOOR_LIST entry of CUR_ROOM on his storey whose col his
 ; body covers (x .. x + w - 1), in list order:
-;   IT_POTION: E_POT < MAX_POTIONS -> taken (pp_take; else it stays);
+;   IT_POTION / IT_POT_LO..HI (3E-T6: the generated potions, until T11's
+;     bag): E_POT < MAX_POTIONS -> taken (pp_take; else it stays);
+;   other item types (food, scrolls, books, gear, bow): ignored, left in
+;     place (T11 picks them up into the BAG);
 ;   IT_DAGGER / IT_ARROW, the Warrior only (the Mage has no ammunition):
 ;     what fits under the cap (DAGGERS 9 / ARROWS 24; arrows need no bow):
 ;     "YOU PICK UP n DAGGERS / ARROW(S)" when n > 0; an emptied entry ->
@@ -78,8 +81,12 @@ floor_pickup:
                 push de
                 push hl
                 cp   IT_POTION
-                jr   nz, .am
-                call pp_take
+                jr   z, .pt
+                cp   IT_POT_LO                 ; 3E-T6: generated potions (Heal / Mana /
+                jr   c, .am                    ; Cure) still count as E_POT until T11
+                cp   IT_POT_HI + 1
+                jr   nc, .nx                   ; other new types: left in place (T11)
+.pt:            call pp_take
                 jr   .nx
 .am:            ld   a, (HERO_KIND)
                 or   a
@@ -228,9 +235,11 @@ ap_take:
                 ld   c, a                      ; C = col, E = the FL_ROOM byte
                 ; fall through
 ; ap_stamp — C = col, E = the FL_ROOM byte (room | storey bit): the cell (col,
-; 9s + 7) of ROOM_MAP <- the last live FLOOR_LIST entry there (T_POTION /
-; T_DAGGERS / T_ARROWS), else T_AIR; redrawn next render + the attr shadow
-; (shadow_rect leaves bank 7 paged: our bank).  Clobbers: all but IX, IY.
+; 9s + 7) of ROOM_MAP <- the glyph of the last live FLOOR_LIST entry there
+; (item_glyph), else T_AIR; redrawn next render + the attr shadow
+; (shadow_rect leaves bank 7 paged: our bank), then the room's floor inks
+; over the shadow (fl_attr_sh: the cell left falls back to TILE_ATTRS of
+; its tile).  Clobbers: all but IX, IY.
 ap_stamp:
                 ld   d, T_AIR
                 ld   hl, FLOOR_LIST
@@ -249,14 +258,10 @@ ap_stamp:
                 ld   a, (hl)                   ; FL_ITEM
                 dec  l
                 dec  l
-                cp   IT_POTION
-                jr   nz, .a
-                ld   d, T_POTION
-                jr   .n
-.a:             sub  IT_DAGGER
-                cp   IT_ARROW - IT_DAGGER + 1
-                jr   nc, .n
-                ld   d, T_AMMO                 ; one glyph for both ammo kinds
+                call item_glyph                ; 3E-T6 (lowram; keeps BC, DE, HL)
+                or   a
+                jr   z, .n
+                ld   d, a
 .n:             ld   a, l
                 add  a, FL_STRIDE
                 ld   l, a
@@ -272,7 +277,9 @@ ap_stamp:
                 ld   (hl), d
                 ld   de, $0101
                 call queue_damage              ; (keeps BC, DE)
-                jp   shadow_rect
+                call shadow_rect               ; (bank 7 paged)
+                ld   a, (CUR_ROOM)             ; 3E-T6: the inks of what is left
+                jp   fl_attr_sh
                 ASSERT TX_CMB_ARROWS - TX_CMB_ARROW == TX_CMB_DAGGERS - TX_CMB_DAGGER
                 ; T7: the composed pickup line fits a log slot ("YOU PICK UP " + 2 digits +
                 ; the longest suffix; ARROWS_MAX < 100) — msg_end does not cut it

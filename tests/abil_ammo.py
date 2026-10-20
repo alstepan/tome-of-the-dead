@@ -586,7 +586,7 @@ def run(h, p, check):
     put(j, col, S["IT_ARROW"], 3, S["T_ARROWS"])
     ok, lines = step_on("P6")
     got = dict(ok=ok, a=p.rb("ARROWS"), pot=p.ent(0)["POT"], ep=entry(i), ea=entry(j)[0], c=cell(col),
-               sh=shadow_attr(IROW, col) == tile_attr(S["T_POTION"]), lines=lines)
+               sh=shadow_attr(IROW, col) == 0x42, lines=lines)    # 3E-T6: fl_attr_sh, item_ink(IT_POTION)
     want = dict(ok=True, a=3, pot=9, ep=[p.rb("CUR_ROOM") | S1, col, S["IT_POTION"], 1], ea=S["FL_EMPTY"],
                 c=S["T_POTION"], sh=True, lines=[pick + "3" + TXT["cmb_arrows"]])
     check("P6 full pack: potion stays (re-stamped T_POTION + attr shadow), 3 arrows taken", got == want, (got, want))

@@ -137,7 +137,7 @@ IT_CHARM_HI     EQU IT_C_GRAVE
 ;------------------------------------------------------------------------------
 ; Item record (game.md §8.9): TYPE / QTY / ISTATE, 3 B. Bag and worn slots
 ; store it as is (IR_*); FLOOR_LIST keeps its 4-B entry (FL_ITEM = TYPE,
-; FL_QTY = QTY) and the ISTATE lives in the parallel FL_IST[entry index].
+; FL_QTY = QTY); a floor item has no ISTATE (3E rev 6: m 0, pickup writes 0).
 ; Stacks merge only on equal TYPE and ISTATE; QTY 1..STACK_MAX (ammo / key
 ; counts live outside the bag). TYPE = IT_NONE marks a free slot (QTY and
 ; ISTATE then 0).
@@ -239,25 +239,23 @@ HS_WEAK_BELOW   EQU 10              ; FOOD < 10 -> WEAK
 ; ITEM_RAM — the 3E runtime item block. Bank 5 $5D00.., the BASIC area freed
 ; once boot has moved SP to $BF00 (garbage at power-on; not on tape; never
 ; touched before new_game). One page: every field is reached with `inc l`.
-; new_game (bank 7, boot7.asm) zeroes ALL of it; level changes keep it, except
-; FL_IST (per level: the T6 level-start generator writes all FLOOR_MAX bytes,
-; and every later FLOOR_LIST writer writes its entry's byte; stale until T6).
+; new_game (bank 7, boot7.asm) zeroes ALL of it; level changes keep it.
+; 3E simplification (game.md §8.11, 2026-10-20): no FL_IST (a floor item is
+; TYPE / QTY only, m 0), no ID_MAP / KNOWN (names fixed), no FL_ATTR (the
+; floor ink is f(type): it_tab, lowram.asm) -> 81 B (was 121 / 153).
 ;------------------------------------------------------------------------------
 ITEM_RAM        EQU $5D00
 BAG             EQU ITEM_RAM                    ; BAG_SLOTS x IR_STRIDE   (kept)
 WORN            EQU BAG + BAG_SLOTS * IR_STRIDE ; WORN_SLOTS x IR_STRIDE  (kept)
-FL_IST          EQU WORN + WORN_SLOTS * IR_STRIDE   ; FLOOR_MAX: ISTATE of FLOOR_LIST entry i (per level)
-ID_MAP          EQU FL_IST + FLOOR_MAX          ; ID_TYPES: appearance per light-ID type   (kept)
-KNOWN           EQU ID_MAP + ID_TYPES           ; bit k = light-ID type k known            (kept)
-FOOD            EQU KNOWN + 1                   ; 0..FOOD_MAX                              (kept)
+FOOD            EQU WORN + WORN_SLOTS * IR_STRIDE   ; 0..FOOD_MAX                          (kept)
 FOOD_TMR        EQU FOOD + 1                    ; turns since the last burn                (kept)
 HSTAGE          EQU FOOD_TMR + 1                ; HS_*                                     (kept)
 QPIN            EQU HSTAGE + 1                  ; QS_COUNT: pinned type per quick slot, IT_NONE = auto (kept;
                                                 ;   was HERO_ST + 29 since C3-0, never used)
 QS_CACHE        EQU QPIN + QS_COUNT             ; QS_COUNT: the type each quick slot shows, IT_NONE = grey (kept)
 ITEM_RAM_END    EQU QS_CACHE + QS_COUNT
-ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 121
-                ASSERT ITEM_RAM_LEN == 121
+ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 81
+                ASSERT ITEM_RAM_LEN == 81
                 ASSERT (ITEM_RAM & $FF) == 0 && ITEM_RAM_LEN <= 256      ; one page (inc l, djnz clear)
                 ASSERT ITEM_RAM >= $5CCB        ; above the system variables + channel area
                 ASSERT ITEM_RAM_END <= PF_RAM   ; below D3-6b PF_RAM ($5E00) / MK_RAM ($5F00)
