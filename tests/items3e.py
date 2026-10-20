@@ -4,7 +4,7 @@ Release build (DEBUG_KIT=0) for the emulator part; the layout part runs on any b
 
   L1  type enum: legacy ids 1..3 kept, class ranges contiguous in the documented
       order (counters, food, potions, scrolls, book, bow, gear W/A/H/C), IT_COUNT
-  L2  record / ISTATE bits (BUC, HIDDEN, enchant, m) partition the byte; IST_M_* values
+  L2  record / ISTATE bits (reserved, enchant, m) partition the byte; IST_M_* values
   L3  ITEM_RAM fields consecutive in the documented order and sizes, one page, outside
       LOG_TXT / PF_RAM / MK_RAM / the page band / GEN_SCRATCH / the tape image;
       TRAP_LIST / TRAP_N inside the ROOM_DESC spare below FLOOR_LIST; QPIN out of HERO_ST
@@ -46,13 +46,10 @@ def layout(check):
     ok &= s["IT_WPN_M_LO"] == s["IT_WPN_W_HI"] + 1 and s["IT_WPN_W_LO"] == s["IT_WPN_LO"]
     check("L1 gear ranges in W/A/H/C order, IT_COUNT", ok and s["IT_COUNT"] == nxt == 44)
     check("L1 slot ids", [s[k] for k in ("WS_WEAPON", "WS_ARMOUR", "WS_HELM", "WS_CHARM")] == [0, 1, 2, 3])
-    check("L1 light-ID range", s["IT_ID_LO"] == s["IT_POT_LO"] and s["IT_ID_HI"] == s["IT_SCR_HI"]
-          and s["ID_TYPES"] == 7 and s["KNOWN_POT_MASK"] == 0x07 and s["KNOWN_SCR_MASK"] == 0x78)
     # ---- L2 ------------------------------------------------------------------
     check("L2 record", (s["IR_TYPE"], s["IR_QTY"], s["IR_IST"], s["IR_STRIDE"], s["STACK_MAX"]) == (0, 1, 2, 3, 9))
-    m = [s["IST_BUC_MASK"], s["IST_HIDDEN"], s["IST_ENCH_MASK"], s["IST_M_MASK"]]
-    check("L2 ISTATE fields", m == [0x03, 0x04, 0x18, 0xE0] and sum(m) == 0xFF
-          and (s["BUC_NORMAL"], s["BUC_BLESSED"], s["BUC_CURSED"]) == (0, 1, 2))
+    m = [s["IST_RSVD_MASK"], s["IST_ENCH_MASK"], s["IST_M_MASK"]]
+    check("L2 ISTATE fields", m == [0x07, 0x18, 0xE0] and sum(m) == 0xFF)
     check("L2 m encodings", [s["IST_M_" + k] for k in ("P2", "P1", "M1", "M2", "M3")]
           == [((v & 7) << 5) for v in (2, 1, -1, -2, -3)])
     # ---- L3 ------------------------------------------------------------------

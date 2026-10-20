@@ -158,7 +158,7 @@ PLACEHOLDER PAGE - REAL TEXT COMES WITH
 THE 3C MENUS
 @end
 
-# === 3D (D3-2): combat, status, XP, books, wear, cursed messages ============
+# === 3D (D3-2): combat, status, XP, books, wear messages ============
 # --- info lines per rank (game.md §5; rank 1 = the info_* lines above; name field
 # max 15 chars + gap, so POWER STRIKE III is POWER STRK III) -------------------
 info_spark2     "SPARK II        MP2 RNG8    SHOCK 1D4+2"
@@ -244,22 +244,13 @@ cmb_daggers     " DAGGERS"
 cmb_dagger      " DAGGER"
 cmb_bow         "YOU PICK UP A BOW"
 
-# --- gear wear and curses (game.md §8.7, §8.10) -----------------------------------
+# --- gear wear (game.md §8.7) -----------------------------------
 cmb_notch       "YOUR WEAPON IS NOTCHED!"
 cmb_acid_arm    "ACID EATS YOUR ARMOUR!"
 cmb_acid_helm   "ACID EATS YOUR HELM!"
-cmb_holds_wpn   "YOUR BLESSED WEAPON HOLDS"
-cmb_holds_arm   "YOUR BLESSED ARMOUR HOLDS"
-cmb_holds_helm  "YOUR BLESSED HELM HOLDS"
 cmb_wpn_breaks  "YOUR WEAPON BREAKS!"
 cmb_arm_breaks  "YOUR ARMOUR FALLS APART!"
 cmb_helm_breaks "YOUR HELM FALLS APART!"
-cmb_cling       "IT CLINGS TO YOU! CURSED "
-cmb_cursed_no   "IT IS CURSED! YOU CANNOT"
-cmb_lifts       "THE CURSE LIFTS: BLESSED!"
-cmb_shat_wpn    "YOUR CURSED WEAPON SHATTERS!"
-cmb_shat_arm    "YOUR CURSED ARMOUR SHATTERS!"
-cmb_shat_helm   "YOUR CURSED HELM SHATTERS!"
 
 # --- status effects (game.md §6.4): hero whole lines, monster suffixes after THE + name
 st_frozen       "YOU ARE FROZEN SOLID!"

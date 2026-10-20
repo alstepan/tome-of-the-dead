@@ -117,6 +117,17 @@ UI1_LEN         EQU ui1_img_end - ui1_img
 ; so their sizes move nothing an overlay can reference. Labels = runtime
 ; $C000-window addresses (ovl_run: HL = label, C = BANK_OVL). Pass 1 of
 ; tools/build.sh (OVL_PASS 1) has no packed files yet: the streams are empty.
+; 3E-T4b: the RESIDENT item text (tools/itempack.py): it_words / it_wcx / it_name /
+; it_stems. Nothing reads them yet (T10 item_name does); the fx / page overlay streams
+; and it_stat are generated but not included (T8 / T13).
+                DISP $ + TEXT_DISP
+                INCLUDE "../build/text/items_tab.asm"
+it_text_end:
+                ENT
+IT_TEXT_LEN     EQU it_text_end - it_words
+                ASSERT IT_TEXT_LEN == ITW_BYTES + 2 * ITW_WCX_N + ITN_BYTES + ITS_LEN && IT_TEXT_LEN <= ITB_RESIDENT
+                ASSERT ITN_ROWS == IT_COUNT && it_stems_end - it_stems == ITS_LEN
+                ASSERT it_wcx - it_words == ITW_BYTES && it_stems - it_name == ITN_BYTES
 ovl_img:
                 DISP $ + TEXT_DISP
 ovl_blobs:

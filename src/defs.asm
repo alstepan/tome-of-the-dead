@@ -356,6 +356,7 @@ JA_FALL_BIT     EQU 7               ;   set: the jump ends in a pit fall (E_Y al
 GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
 MSG_BUF         EQU $BFA0           ; 32 B: impact message composition (show_impact_msg -> log_push)
 TIMING_MARK     EQU $BFC0           ; spare
+IT_BAD          EQU TIMING_MARK     ; DEBUG_KIT only: count of item_glyph / item_ink calls with a type >= IT_COUNT (expect 0)
 CLIMB_BLK_ID    EQU $BFC7           ; B14: slot of the last entity that blocked the hero's climb
 CLIMB_BLK_N     EQU $BFC8           ; B14: consecutive blocked climbs by CLIMB_BLK_ID (0 = none)
 CLIMB_SQZ_N     EQU 4               ; B18: the squeeze at the 2nd block when the blocker did not move,

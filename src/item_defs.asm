@@ -4,7 +4,7 @@
 ; level_defs.asm. Every fixed address is recorded in docs/memory-map.md
 ; "3E contracts (3E-T3)"; tests/items3e.py mirrors the ASSERTs from the .sym.
 ; Design refs: game.md §1.5 (traps), §7 (hunger), §8 (items, bag, worn slots,
-; quick slots), §8.5 (placement), §8.7 (BUC), §8.8 (light ID), §8.9 (record);
+; quick slots), §8.5 (placement), §8.7 (wear), §8.9 (record), §8.11 (3E simplification: no ID / BUC);
 ; plan.md "3E breakdown" + user rulings 2026-10-19/20 (no gold, scaled 8x8
 ; floor glyphs as icons, no other-class books, light ID kept).
 ;==============================================================================
@@ -94,8 +94,6 @@ IT_POT_LO       EQU IT_P_HEAL
 IT_POT_HI       EQU IT_P_CURE
 IT_SCR_LO       EQU IT_S_TELEPORT
 IT_SCR_HI       EQU IT_S_ENCHANT
-IT_ID_LO        EQU IT_POT_LO       ; light-ID types (§8.8): potions then scrolls,
-IT_ID_HI        EQU IT_SCR_HI       ;   k = type - IT_ID_LO indexes ID_MAP and the KNOWN bit
 IT_GEAR_LO      EQU IT_W_SHORT
 IT_GEAR_HI      EQU IT_C_GRAVE
 IT_WPN_LO       EQU IT_W_SHORT
@@ -126,7 +124,7 @@ IT_CHARM_HI     EQU IT_C_GRAVE
 ;------------------------------------------------------------------------------
 ; IT_IN lo, hi — class / range test. In: A = type. Out: CF = 1 iff
 ; lo <= type <= hi, and A = type - lo (the index inside the class: the gear
-; variant, the ID_MAP / KNOWN index for IT_ID_*, the food rank). Clobbers F.
+; variant, the food rank). Clobbers F.
 ; 4 B, 14 T (sub n + cp n; the unsigned wrap makes one compare do both ends).
 ;------------------------------------------------------------------------------
     MACRO IT_IN lo, hi
@@ -148,24 +146,13 @@ IR_IST          EQU 2
 IR_STRIDE       EQU 3
 STACK_MAX       EQU 9               ; game.md §8 "same-type stacks to 9"
 
-; ISTATE bits (§8.9; gear only — 0 for every other class):
-;   bits 0-1 BUC: 0 normal, 1 blessed, 2 cursed, 3 reserved
-;   bit 2    HIDDEN: the cursed value m is not revealed yet (set at generation
-;            for a cursed item, cleared on first equip or on blessing).
-;            DISPLAY-ONLY: logic ignores it
+; ISTATE bits (§8.9, 3E simplification: no BUC / HIDDEN; gear only, 0 elsewhere):
+;   bits 0-2 reserved, always 0 (were BUC / HIDDEN)
 ;   bits 3-4 weapon enchant +0..ENCH_MAX (Enchant scroll)
 ;   bits 5-7 m, signed 3-bit two's complement -4..+3 (used -3..+2): the
-;            BUC / wear modifier on the main stat (§8.7, §8.10). Extract:
+;            wear modifier on the main stat (§8.7). Extract:
 ;            5 x `sra a` (sign-extends, 40 T) or the IST_M_* compares below
-; Identification (§8.8) is per TYPE (KNOWN), never in ISTATE.
-IST_BUC_MASK    EQU %00000011
-BUC_NORMAL      EQU 0
-BUC_BLESSED     EQU 1
-BUC_CURSED      EQU 2
-IST_BLESSED_BIT EQU 0               ; BUC 1 / 2 are single bits: bit test, no mask
-IST_CURSED_BIT  EQU 1
-IST_HIDDEN      EQU %00000100
-IST_HIDDEN_BIT  EQU 2
+IST_RSVD_MASK   EQU %00000111
 IST_ENCH_MASK   EQU %00011000
 IST_ENCH_SHIFT  EQU 3
 IST_ENCH_ONE    EQU 1 << IST_ENCH_SHIFT
@@ -178,10 +165,8 @@ IST_M_P1        EQU (1 & 7) << IST_M_SHIFT   ; m = +1  $20
 IST_M_M1        EQU (-1 & 7) << IST_M_SHIFT  ; m = -1  $E0
 IST_M_M2        EQU (-2 & 7) << IST_M_SHIFT  ; m = -2  $C0
 IST_M_M3        EQU (-3 & 7) << IST_M_SHIFT  ; m = -3  $A0 (3F wear floor)
-                ASSERT ((IST_BUC_MASK & IST_HIDDEN) == 0) && (((IST_BUC_MASK | IST_HIDDEN) & IST_ENCH_MASK) == 0)
-                ASSERT ((IST_BUC_MASK | IST_HIDDEN | IST_ENCH_MASK) & IST_M_MASK) == 0
-                ASSERT (IST_BUC_MASK | IST_HIDDEN | IST_ENCH_MASK | IST_M_MASK) == $FF
-                ASSERT (BUC_BLESSED == (1 << IST_BLESSED_BIT)) && (BUC_CURSED == (1 << IST_CURSED_BIT))
+                ASSERT (IST_RSVD_MASK & IST_ENCH_MASK) == 0 && ((IST_RSVD_MASK | IST_ENCH_MASK) & IST_M_MASK) == 0
+                ASSERT (IST_RSVD_MASK | IST_ENCH_MASK | IST_M_MASK) == $FF
                 ASSERT (ENCH_MAX << IST_ENCH_SHIFT) == IST_ENCH_MASK
                 ASSERT IST_M_P1 == $20 && IST_M_P2 == $40 && IST_M_M1 == $E0 && IST_M_M2 == $C0
 
@@ -201,21 +186,6 @@ QS_FOOD         EQU 0
 QS_POTION       EQU 1
 QS_SCROLL       EQU 2
 QS_COUNT        EQU 3
-
-;------------------------------------------------------------------------------
-; Light identification (§8.8). ID_MAP[k], k = type - IT_ID_LO (0..2 potions,
-; 3..6 scrolls) = the appearance index (potions 0..ID_POT_APP-1: RUBY AZURE
-; EMERALD AMBER VIOLET MILKY; scrolls 0..ID_SCR_APP-1: ZORAK .. ABRAXA).
-; KNOWN bit k = type k is known (bits 0-2 potions, 3-6 scrolls, bit 7 0).
-; Per-run shuffle at START from f(MASTER_SEED, 255) (T6); kept across levels.
-;------------------------------------------------------------------------------
-ID_TYPES        EQU IT_ID_HI - IT_ID_LO + 1     ; 7
-ID_POT_APP      EQU 6
-ID_SCR_APP      EQU 8
-KNOWN_POT_MASK  EQU %00000111
-KNOWN_SCR_MASK  EQU %01111000
-                ASSERT (ID_TYPES == 7) && (KNOWN_POT_MASK == ((1 << (IT_POT_HI - IT_ID_LO + 1)) - 1))
-                ASSERT KNOWN_SCR_MASK == (((1 << ID_TYPES) - 1) & ~KNOWN_POT_MASK)
 
 ;------------------------------------------------------------------------------
 ; Hunger (game.md §7). FOOD 0..FOOD_MAX, start FOOD_START; -1 per

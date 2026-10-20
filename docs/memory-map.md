@@ -141,7 +141,7 @@ read in place: no `copy_virt3`, no `GEN_SRC` staging, ~30k T). **Dead after
 boot by contract:** the boot pool (every monster kind + the 2 select idles,
 `POOL_BOOT_NEED` ASSERTed ≤ bank 0 + bank 4) never reaches bank 6, the hero
 start's pool may overwrite the block — so it costs the pool nothing
-(`POOL_NEED` 44,096 of `POOL_CAP` 46,472 unchanged, slack 2,376 B kept for 3F),
+(`POOL_NEED` 44,096 of `POOL_CAP` 46,472 unchanged, slack 2,376 B kept for 3F; 3E-T4b: slack now 2,588, see its ledger),
 and **nothing may read it after `boot`** (`tests/game.py` #61: bank-6 code may
 run only below the select screen; no SMC / data writes in the block,
 `tests/zx0_pool.py` seeds its reference from the snapshot's bank 6).
@@ -2449,6 +2449,25 @@ Warrior), on top of `level_gen` (0.1–0.9M T) while the DEPTH card is shown;
 `fl_attr` ~1.4k T scan + ~0.75k T per entry of the room (4.5k T measured with
 4): a room transition + ≤ 19 calls ≈ **+≤ 0.1M T** on the ~2.6M T scroll;
 `ap_stamp` + one call per pickup; per tick 0 (`tests/budget.py` gate passes).
+
+**3E-T4b ledger** (item text into bank 1, dead bank-0 strings out, `feat/3e-t4b-include`):
+`tools/itempack.py` now runs in the default `tools/build.sh` (before pass 1;
+`--items` is the verbose report). `main.asm` INCLUDEs `build/text/items_tab.asm`
+(`it_words` 229 + `it_wcx` 12 + `it_name` 132 + `it_stems` 89 = **462 B**,
+ASSERTed against the generated sizes, `ITN_ROWS == IT_COUNT`, `<= ITB_RESIDENT`)
+in bank 1 right before `ovl_blobs`; nothing reads it until T10 `item_name`.
+Bank 1 free **718 -> 256**. The fx / page overlay stems and `it_stat` are
+generated (`items_fx_stems.asm`, `items_ovl_stems.asm`) but NOT included (T8 / T13).
+Bank 0 text: removed `cmb_holds_*` (3), `cmb_cling`, `cmb_cursed_no`, `cmb_lifts`,
+`cmb_shat_*` (3) = 9 strings, packed **2,650 -> 2,468 B** (pool start `$CA5A` ->
+`$C9A4`); `POOL_NEED` 44,096 of `POOL_CAP` **46,502 -> 46,684**, pool slack
+**2,406 -> 2,588** (+182). `cmb_notch` / `cmb_acid_*` / `cmb_*_breaks` have no
+user either (wear/break is not BUC) but are kept for T8/3F to decide; `found` /
+`quaff` still referenced (T11 retires them). `item_defs.asm`: BUC_*, `IST_HIDDEN`,
+`IT_ID_*`, `ID_*`, `KNOWN_*` EQUs gone; ISTATE bits 0-2 = `IST_RSVD_MASK`
+(always 0). DEBUG_KIT only: `IT_BAD` (= the spare `TIMING_MARK` `$BFC0`) counts
+`item_glyph` / `item_ink` calls with a type >= `IT_COUNT` (`it_byte_live`, +10 B
+low RAM in the kit build, 0 B release; kit `LOWRAM_SPARE` 109, release 119).
 
 **`E_POT` migration (today's potion count → `BAG`; do NOT migrate before
 T10/T11).** Every reader / writer of `E_POT` (`P_ENTITIES + E_POT`, hero slot 0):

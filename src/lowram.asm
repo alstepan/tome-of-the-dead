@@ -385,11 +385,24 @@ it_byte:        ld   hl, it_tab
                 ld   a, (hl)
                 ret
 
+; DEBUG_KIT only (0 B in the release build): item_glyph / item_ink get a LIVE FL type, so
+; a type >= IT_COUNT (a corrupt floor entry) bumps IT_BAD (expect 0) before the lookup.
+    IF DEBUG_KIT
+it_byte_live:   cp   IT_COUNT
+                jr   c, it_byte
+                ld   hl, IT_BAD
+                inc  (hl)
+                jr   it_byte
+IT_BYTE_LIVE    EQU it_byte_live
+    ELSE
+IT_BYTE_LIVE    EQU it_byte
+    ENDIF
+
 ; item_glyph — A = item type (a live entry's FL_ITEM): A = its floor glyph,
 ; 0 = none (IT_NONE, IT_KEY). Keeps BC, DE, HL.
 ; Callers: build_room_map .pots (bank 3), ap_stamp (bank 7).  ~0.15k T
 item_glyph:     push hl
-                call it_byte
+                call IT_BYTE_LIVE
                 rrca
                 rrca
                 rrca
@@ -402,7 +415,7 @@ item_glyph:     push hl
 
 ; item_ink — A = item type: A = its floor attr (ink on black; 0 = no glyph).
 ; Keeps BC, DE. Clobbers HL.
-item_ink:       call it_byte
+item_ink:       call IT_BYTE_LIVE
                 ld   h, a
                 and  7
                 bit  IT_BRIGHT_BIT, h

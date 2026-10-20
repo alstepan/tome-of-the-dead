@@ -2,7 +2,7 @@
 # tools/build.sh — THE build entry point (A6): sprite packer, then sjasmplus.
 #
 #   tools/build.sh [-o OUTDIR] [extra sjasmplus args, e.g. -DPROTO_START=1]
-#   tools/build.sh --items        3E-T4 item text only (tools/itempack.py; not in the build)
+#   tools/build.sh --items        3E-T4 item text only, verbose (tools/itempack.py)
 #
 # 1. tools/zx0_sources.py -> build/zx0/sprites_zx0.asm of THIS checkout (always
 #    regenerated, so a build never assembles stale packed art; the file is
@@ -21,8 +21,7 @@
 # Fails (exit 1) on any assembler error OR warning; prints the DISPLAY lines.
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-# 3E-T4 stand-alone target (NOT part of the default build; T4b includes the output in
-# bank 1): writes build/text/items_tab.asm, items_fx_stems.asm, items_ovl_stems.asm,
+# 3E-T4 stand-alone target (verbose itempack report; the default build also runs it): writes build/text/items_tab.asm, items_fx_stems.asm, items_ovl_stems.asm,
 # items_ids.inc.
 if [ "${1:-}" = "--items" ]; then
     shift
@@ -37,6 +36,10 @@ if [ "${1:-}" = "-o" ]; then
 fi
 python3 "$ROOT/tools/zx0_sources.py"
 python3 "$ROOT/tools/textpack.py"
+# 1b'. 3E-T4b: item text (src/items.txt) -> build/text/items_tab.asm + items_ids.inc; the
+# RESIDENT part is INCLUDEd in bank 1 before ovl_blobs (main.asm); the fx / page overlay
+# streams (items_fx_stems.asm, items_ovl_stems.asm) are generated but not included yet.
+python3 "$ROOT/tools/itempack.py" >/dev/null
 mkdir -p "$OUT/build/music_game"
 # SND-2: in-game songs (hps_* gate 30 + game_songs.asm) -> the AY slot (src/ay.asm, -i below)
 python3 "$ROOT/tools/abc2wzm.py" --game "$OUT/build/music_game" >/dev/null
