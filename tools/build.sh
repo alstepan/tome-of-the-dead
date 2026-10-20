@@ -22,7 +22,8 @@
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 # 3E-T4 stand-alone target (NOT part of the default build; T4b includes the output in
-# bank 1): writes build/text/items_tab.asm, items_ovl_stems.asm, items_ids.inc.
+# bank 1): writes build/text/items_tab.asm, items_fx_stems.asm, items_ovl_stems.asm,
+# items_ids.inc.
 if [ "${1:-}" = "--items" ]; then
     shift
     exec python3 "$ROOT/tools/itempack.py" "$@"

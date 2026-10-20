@@ -6,10 +6,14 @@ Input : src/items.txt (format documented in that file's header) and the
         bank-0 strings of src/strings.txt (E: references).
 Output (default build/text/, overridable with --out DIR; stdout = budgets):
   items_tab.asm       bank-1 resident block: it_words, it_wcx, it_name,
-                      it_stems(_end), it_attr, it_stat (+ ASSERTs)
-  items_ovl_stems.asm overlay-only stems (it_ovl_stems, ASSERT <= 310 B)
-  items_ids.inc       W_* word ids, S3_* / S3O_* stem offsets, ITW_* / ITN_* /
-                      ITS_* / ITO_* sizes
+                      it_stems(_end) (+ ASSERTs). The per-type ink (it_attr)
+                      is NOT emitted: src/lowram.asm it_tab carries it.
+  items_fx_stems.asm  overlay stems of the effect / quick-use lines (it_fx_stems,
+                      S_FX_*) followed by it_stat (2 B per type row); the pair
+                      ASSERTs <= 700 B raw.
+  items_ovl_stems.asm overlay page stems (it_ovl_stems, S3O_*, ASSERT <= 310 B).
+  items_ids.inc       W_* word ids, S3_* / S_FX_* / S3O_* stem offsets, ITW_* /
+                      ITN_* / ITS_* / ITF_* / ITO_* sizes
 
 Word table: raw ASCII, the last char with bit 7 set, no terminator. Word id
 is 1-based (0 = none in a name ref), id k = index k-1 in the table. it_wcx
@@ -22,7 +26,8 @@ substitutes W_WAR (Warrior/knight) or W_SPELL (Mage); the TOME word is shared.
 it_stat = 2 B per row: byte0 = DIE | (ATK & $0F) << 4; byte1 = AMT (food,
 potions) or (DEF & $0F) | (MP << 4) (gear).
 
-Stems: 0-terminated ASCII, offset = S3_<NAME> / S3O_<NAME>.
+Stems: 0-terminated ASCII, offset = S3_<NAME> (resident) / S_FX_<NAME> (fx)
+/ S3O_<NAME> (page).
 
 CHECKS (any failure = message on stderr and exit 1; nothing is written):
   - every word A-Z and <= 8 chars; 48 distinct words (game.md §8.11 item 2);
@@ -34,7 +39,8 @@ CHECKS (any failure = message on stderr and exit 1; nothing is written):
   - E: stems equal their src/strings.txt value; stem texts printable,
     upper case, no '"' and no byte 0;
   - byte budgets: words+refs <= 460, resident stems <= 480, resident total
-    (words + wcx + names + stems) <= 700, overlay stems <= 310.
+    (words + wcx + names + stems) <= 700, fx stems + it_stat <= 700 (raw),
+    page overlay stems <= 310.
 
 Usage:  python3 tools/itempack.py [--src FILE] [--out DIR]
         tools/build.sh --items      (stand-alone target; not part of the build)
@@ -63,7 +69,8 @@ HERO_WORD = {"warrior": "WAR", "knight": "WAR", "mage": "SPELL"}
 BUDGET_REFS = 460         # words + name refs
 BUDGET_STEMS = 480        # resident stems
 BUDGET_RESIDENT = 700     # words + wcx + names + resident stems
-BUDGET_OVL = 310          # overlay stems
+BUDGET_FX = 700           # fx overlay stems + it_stat (raw)
+BUDGET_OVL = 310          # page overlay stems
 
 
 class ItemsError(Exception):
@@ -119,7 +126,7 @@ class Row:
 class Stem:
     def __init__(self, name, group, ref, text, line_no):
         self.name = name
-        self.group = group        # "res" | "ovl"
+        self.group = group        # "res" | "fx" | "page"
         self.ref = ref            # None for N, else the strings.txt name
         self.text = text
         self.line_no = line_no
@@ -153,7 +160,7 @@ def parse_items(path, syms):
         m = re.fullmatch(r"\[(\w+)\]", line)
         if m:
             section = m.group(1)
-            if section not in ("book", "types", "stems"):
+            if section not in ("book", "types", "stems_resident", "stems_fx", "stems_page"):
                 raise ItemsError(f"{where}: unknown section [{section}]")
             continue
         if section == "book":
@@ -183,15 +190,14 @@ def parse_items(path, syms):
                 raise ItemsError(f"{where}: FLAG must be U or -")
             items.rows[tid] = Row(sym, tid, nm, _ink(ink_t, where), (die, atk, dfn, mp, amt),
                                   flag == "U", no)
-        elif section == "stems":
-            parts = [p.strip() for p in line.split("|", 3)]
-            if len(parts) != 4:
-                raise ItemsError(f"{where}: stem row needs NAME | GROUP | SRC | \"TEXT\"")
-            name, group, src, text_q = parts
+        elif section in ("stems_resident", "stems_fx", "stems_page"):
+            parts = [p.strip() for p in line.split("|", 2)]
+            if len(parts) != 3:
+                raise ItemsError(f"{where}: stem row needs NAME | SRC | \"TEXT\"")
+            name, src, text_q = parts
             if re.fullmatch(r"[a-z][a-z0-9_]*", name) is None:
                 raise ItemsError(f"{where}: stem NAME must be lower_case")
-            if group not in ("res", "ovl"):
-                raise ItemsError(f"{where}: GROUP must be res or ovl")
+            group = {"stems_resident": "res", "stems_fx": "fx", "stems_page": "page"}[section]
             mq = re.fullmatch(r'"([^"]*)"', text_q)
             if not mq:
                 raise ItemsError(f"{where}: TEXT must be double-quoted")
@@ -326,11 +332,17 @@ class Model:
     def stem_text(self, name):
         return self.stem[name].text
 
-    def res_stems(self):
-        return [st for st in self.items.stems if st.group == "res" and st.ref is None]
+    def _group(self, g):
+        return [st for st in self.items.stems if st.group == g and st.ref is None]
 
-    def ovl_stems(self):
-        return [st for st in self.items.stems if st.group == "ovl" and st.ref is None]
+    def res_stems(self):
+        return self._group("res")
+
+    def fx_stems(self):
+        return self._group("fx")
+
+    def page_stems(self):
+        return self._group("page")
 
 
 # ----------------------------------------------------------------------------
@@ -472,12 +484,24 @@ def check_stat_rows(model):
 # emission
 # ----------------------------------------------------------------------------
 
-def _db_lines(data, comment_for=None, per_line=16):
+def _db_lines(data, per_line=16):
     out = []
     for i in range(0, len(data), per_line):
         chunk = data[i:i + per_line]
         out.append("    DB " + ",".join(f"${b:02X}" for b in chunk))
     return out
+
+
+def sizes(model):
+    """Byte sizes of every emitted block (no file output)."""
+    words = model.words
+    res_blob, _ = stem_blob(model.res_stems())
+    fx_blob, _ = stem_blob(model.fx_stems())
+    page_blob, _ = stem_blob(model.page_stems())
+    return {"nwords": len(words), "words": len(pack_words(words)),
+            "wcx": 2 * len(pack_wcx(words)), "names": ROWS * 3,
+            "res_stems": len(res_blob), "fx_stems": len(fx_blob),
+            "stat": ROWS * 2, "page_stems": len(page_blob)}
 
 
 def emit(model, out_dir):
@@ -486,33 +510,22 @@ def emit(model, out_dir):
     wcx_offs = pack_wcx(words)
     wbytes = pack_words(words)
     res_blob, res_off = stem_blob(model.res_stems())
-    ovl_blob, ovl_off = stem_blob(model.ovl_stems())
-    names_bytes = bytearray()
+    fx_blob, fx_off = stem_blob(model.fx_stems())
+    page_blob, page_off = stem_blob(model.page_stems())
     names_comment = []
     for tid in range(ROWS):
         ids = model.name_ids.get(tid, (0, 0, 0))
         label = it.rows[tid].sym if tid in it.rows else "-"
-        names_bytes += bytes(ids)
         names_comment.append(f"    DB ${ids[0]:02X},${ids[1]:02X},${ids[2]:02X} ; {tid}: {label}")
-    attr = bytearray()
-    attr_comment = []
-    stat = bytearray()
     stat_comment = []
     for tid in range(ROWS):
         if tid in it.rows:
-            row = it.rows[tid]
-            ink_b = row.ink
-            label = row.sym
-        else:
-            ink_b, label = 0, "-"
-        attr.append(ink_b)
-        attr_comment.append(f"    DB ${ink_b:02X} ; {tid}: {label}")
-        if tid in it.rows:
             b0, b1 = pack_stat(model, tid)
+            label = it.rows[tid].sym
         else:
-            b0, b1 = 0, 0
-        stat += bytes([b0, b1])
+            b0, b1, label = 0, 0, "-"
         stat_comment.append(f"    DB ${b0:02X},${b1:02X} ; {tid}: {label}")
+
     def words_lines():
         out = []
         for k, w in enumerate(words, 1):
@@ -524,7 +537,7 @@ def emit(model, out_dir):
         wcx_lines.append(f"    DW ${off:04X} ; word {i * WCX_STEP + 1} (offset from it_words)")
 
     hdr = ("; GENERATED by tools/itempack.py from src/items.txt -- do not edit.\n"
-           "; 3E-T4 item text, bank-1 resident block (T4b places it; not in the default build).\n")
+           "; 3E-T4 item text (T4b places it; not in the default build).\n")
     tab = [hdr,
            "    INCLUDE \"items_ids.inc\"",
            "",
@@ -538,16 +551,9 @@ def emit(model, out_dir):
            "; item_name substitutes W_WAR (Warrior/knight) or W_SPELL (Mage) for it; TOME is shared.",
            "it_name:"] + names_comment + [
            "",
-           "; it_stems: resident log stems, 0-terminated ASCII (S3_* in items_ids.inc).",
+           "; it_stems: resident log stems (turn-path lines only), 0-terminated ASCII (S3_* in items_ids.inc).",
            "it_stems:"] + _db_lines(res_blob) + [
            "it_stems_end:",
-           "",
-           "; --- outside the 700-B resident budget (placement open, see the report) ---",
-           "; it_attr: floor / inventory ink per type row (§8.11 item 2; 0 = no glyph).",
-           "it_attr:"] + attr_comment + [
-           "; it_stat: 2 B per row: byte0 = DIE | (ATK&$0F)<<4; byte1 = AMT (food/potion) or DEF | MP<<4.",
-           "it_stat:"] + stat_comment + [
-           "it_tab_end:",
            "",
            "    ; --- budgets (game.md §8.11 (5)); a failure here is a packer bug or a data overrun ---",
            "    ASSERT (it_wcx - it_words) == ITW_BYTES",
@@ -557,20 +563,33 @@ def emit(model, out_dir):
            "    ASSERT it_stems_end - it_words <= ITB_RESIDENT",
            "    ASSERT it_stems_end - it_stems == ITS_LEN",
            ""]
+    fx = [hdr,
+          "    INCLUDE \"items_ids.inc\"",
+          "",
+          "; it_fx_stems: effect / quick-use log stems (overlay data, S_FX_* in items_ids.inc).",
+          "it_fx_stems:"] + _db_lines(fx_blob) + [
+          "it_fx_stems_end:",
+          "; it_stat: 2 B per row: byte0 = DIE | (ATK&$0F)<<4; byte1 = AMT (food/potion) or DEF | MP<<4.",
+          "it_stat:"] + stat_comment + [
+          "it_stat_end:",
+          "    ASSERT it_fx_stems_end - it_fx_stems == ITF_LEN",
+          "    ASSERT it_stat_end - it_stat == ITF_STAT",
+          "    ASSERT (it_fx_stems_end - it_fx_stems) + (it_stat_end - it_stat) <= ITB_FX",
+          ""]
     ovl = [hdr,
            "    INCLUDE \"items_ids.inc\"",
            "",
-           "; it_ovl_stems: overlay-only stems (page verbs and their effects), 0-terminated ASCII.",
-           "it_ovl_stems:"] + _db_lines(ovl_blob) + [
+           "; it_ovl_stems: overlay page stems (S3O_* in items_ids.inc), 0-terminated ASCII.",
+           "it_ovl_stems:"] + _db_lines(page_blob) + [
            "it_ovl_stems_end:",
            "    ASSERT it_ovl_stems_end - it_ovl_stems == ITO_LEN",
-           f"    ASSERT it_ovl_stems_end - it_ovl_stems <= ITB_OVL",
+           "    ASSERT it_ovl_stems_end - it_ovl_stems <= ITB_OVL",
            ""]
 
     # ids include file
     ids = [hdr.rstrip("\n"),
            "; word ids (1-based, table order), stem offsets, sizes",
-           "; include guard: items_tab.asm and items_ovl_stems.asm both INCLUDE this file",
+           "; include guard: items_tab.asm, items_fx_stems.asm and items_ovl_stems.asm INCLUDE this file",
            "    IFNDEF ITEMS_IDS_INC",
            "    DEFINE ITEMS_IDS_INC",
            f"ITW_COUNT        EQU {len(words)}",
@@ -583,39 +602,61 @@ def emit(model, out_dir):
            f"ITB_REFS         EQU {BUDGET_REFS}",
            f"ITB_STEMS        EQU {BUDGET_STEMS}",
            f"ITB_RESIDENT     EQU {BUDGET_RESIDENT}",
+           f"ITB_FX           EQU {BUDGET_FX}",
            f"ITB_OVL          EQU {BUDGET_OVL}",
            f"ITS_LEN          EQU {len(res_blob)}",
-           f"ITO_LEN          EQU {len(ovl_blob)}",
+           f"ITF_LEN          EQU {len(fx_blob)}",
+           f"ITF_STAT         EQU {ROWS * 2}",
+           f"ITO_LEN          EQU {len(page_blob)}",
            ]
     for k, w in enumerate(words, 1):
         ids.append(f"W_{w:<12}EQU {k}")
     for st in model.res_stems():
         ids.append(f"S3_{st.name.upper():<12}EQU {res_off[st.name]}   ; offset in it_stems")
-    for st in model.ovl_stems():
-        ids.append(f"S3O_{st.name.upper():<11}EQU {ovl_off[st.name]}   ; offset in it_ovl_stems")
+    for st in model.fx_stems():
+        ids.append(f"S_FX_{st.name.upper():<16}EQU {fx_off[st.name]}   ; offset in it_fx_stems")
+    for st in model.page_stems():
+        ids.append(f"S3O_{st.name.upper():<11}EQU {page_off[st.name]}   ; offset in it_ovl_stems")
     ids.append("    ENDIF")
     ids.append("")
 
     os.makedirs(out_dir, exist_ok=True)
     files = {
         "items_tab.asm": "\n".join(tab) + "\n",
+        "items_fx_stems.asm": "\n".join(fx) + "\n",
         "items_ovl_stems.asm": "\n".join(ovl) + "\n",
         "items_ids.inc": "\n".join(ids) + "\n",
     }
     for name, text in files.items():
         with open(os.path.join(out_dir, name), "w", encoding="utf-8") as f:
             f.write(text)
-    return {"nwords": len(words), "words": len(wbytes), "wcx": 2 * len(wcx_offs), "names": ROWS * 3,
-            "res_stems": len(res_blob), "ovl_stems": len(ovl_blob),
-            "attr": len(attr), "stat": len(stat)}
 
 
 # ----------------------------------------------------------------------------
 # driver
 # ----------------------------------------------------------------------------
 
+def budget_errors(b):
+    """Byte-budget failures for a sizes() dict (words+refs, resident, fx, page)."""
+    errs = []
+    refs = b["words"] + b["names"]
+    resident = b["words"] + b["wcx"] + b["names"] + b["res_stems"]
+    fx = b["fx_stems"] + b["stat"]
+    if refs > BUDGET_REFS:
+        errs.append(f"words+refs {refs} > {BUDGET_REFS}")
+    if b["res_stems"] > BUDGET_STEMS:
+        errs.append(f"resident stems {b['res_stems']} > {BUDGET_STEMS}")
+    if resident > BUDGET_RESIDENT:
+        errs.append(f"resident total {resident} > {BUDGET_RESIDENT}")
+    if fx > BUDGET_FX:
+        errs.append(f"fx stems + it_stat {fx} > {BUDGET_FX}")
+    if b["page_stems"] > BUDGET_OVL:
+        errs.append(f"page overlay stems {b['page_stems']} > {BUDGET_OVL}")
+    return errs
+
+
 def run(src, defs, strings_path, out_dir, quiet=False):
-    """-> (budgets dict, [errors]). Writes outputs only when there are no errors."""
+    """-> (budgets dict, [errors], model). Writes outputs only when there are no errors."""
     syms = parse_defs(defs)
     strings = parse_strings(strings_path)
     items = parse_items(src, syms)
@@ -627,18 +668,15 @@ def run(src, defs, strings_path, out_dir, quiet=False):
     errors += comp_errs
     if errors:
         return None, errors, model
-    b = emit(model, out_dir)
-    refs = b["words"] + b["names"]
-    resident = b["words"] + b["wcx"] + b["names"] + b["res_stems"]
-    if refs > BUDGET_REFS:
-        errors.append(f"words+refs {refs} > {BUDGET_REFS}")
-    if b["res_stems"] > BUDGET_STEMS:
-        errors.append(f"resident stems {b['res_stems']} > {BUDGET_STEMS}")
-    if resident > BUDGET_RESIDENT:
-        errors.append(f"resident total {resident} > {BUDGET_RESIDENT}")
-    if b["ovl_stems"] > BUDGET_OVL:
-        errors.append(f"overlay stems {b['ovl_stems']} > {BUDGET_OVL}")
-    b.update(refs=refs, resident=resident, worst_len=worst_len, worst_line=worst_line)
+    b = sizes(model)
+    errors += budget_errors(b)
+    b.update(refs=b["words"] + b["names"],
+             resident=b["words"] + b["wcx"] + b["names"] + b["res_stems"],
+             fx=b["fx_stems"] + b["stat"],
+             worst_len=worst_len, worst_line=worst_line)
+    if errors:
+        return b, errors, model
+    emit(model, out_dir)
     return b, errors, model
 
 
@@ -660,14 +698,13 @@ def main(argv=None):
         return 1
     print(f"itempack: words+refs {b['refs']} / {BUDGET_REFS} (words {b['words']} B, {b['nwords']} ids; "
           f"refs {b['names']} B, {ROWS} rows)")
-    print(f"itempack: resident stems {b['res_stems']} / {BUDGET_STEMS}")
+    print(f"itempack: resident stems {b['res_stems']} / {BUDGET_STEMS} (turn-path lines)")
     print(f"itempack: resident total WITHOUT it_wcx {b['resident'] - b['wcx']} / {BUDGET_RESIDENT}; "
           f"WITH it_wcx ({b['wcx']} B) {b['resident']} / {BUDGET_RESIDENT}")
-    print(f"itempack: overlay stems {b['ovl_stems']} / {BUDGET_OVL}")
-    print(f"itempack: outside resident budget: attr {b['attr']} + stat {b['stat']} = "
-          f"{b['attr'] + b['stat']} B")
+    print(f"itempack: fx stems {b['fx_stems']} + it_stat {b['stat']} = {b['fx']} / {BUDGET_FX} (raw, overlay)")
+    print(f"itempack: page overlay stems {b['page_stems']} / {BUDGET_OVL}")
     print(f"itempack: longest composed line {b['worst_len']} / {LOG_MAX}: {b['worst_line']}")
-    print(f"itempack: wrote {a.out}/items_tab.asm, items_ovl_stems.asm, items_ids.inc")
+    print(f"itempack: wrote {a.out}/items_tab.asm, items_fx_stems.asm, items_ovl_stems.asm, items_ids.inc")
     return 0
 
 

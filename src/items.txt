@@ -26,11 +26,16 @@
 #           byte1 = AMT for food/potion rows, else (DEF & $0F) | (MP << 4).
 #           Rows with AMT != 0 must have DEF = MP = 0 and vice versa (tool-checked).
 #
-# [stems]   NAME | GROUP | SRC | "TEXT"
-#           NAME   lower case identifier; EQU S3_<NAME> (res) or S3O_<NAME> (ovl).
-#           GROUP  res = bank-1 resident block (it_stems, offsets S3_*);
-#                  ovl = overlay-only block (it_ovl_stems, offsets S3O_*).
-#           SRC    N = new text, emitted in its group.
+# Stem sections (3E-T4c retag; the section is the group, a row is NAME | SRC | "TEXT"):
+#   [stems_resident]  bank-1 resident log stems (it_stems, EQU S3_<NAME>). Turn-path
+#                     lines ONLY: pickup, BAG FULL, trap trigger + TRAP FOUND.
+#   [stems_fx]        effect and quick-use results (overlay, it_fx_stems in
+#                     items_fx_stems.asm, EQU S_FX_<NAME>). it_stat is emitted in
+#                     the same file (the pair is budgeted at 700 B raw).
+#   [stems_page]      page stems (overlay, it_ovl_stems in items_ovl_stems.asm,
+#                     EQU S3O_<NAME>), budget 310 B.
+#           NAME   lower case identifier.
+#           SRC    N = new text, emitted in its section's block.
 #                  E:<name> = already in src/strings.txt (bank 0, 0 B here). The tool
 #                  checks TEXT == that string's value; it is used only for the
 #                  composed-length checks.
@@ -105,38 +110,51 @@ IT_C_SCARAB     | SCARAB AMULET     | $06  | 0 0 0 0 0  | U  | D5 unique: MP reg
 IT_C_GRAVE      | GRAVE RING        | $06  | 0 0 0 2 0  | U  | D6 unique: MP+2, DARK I (not packed)
 
 # --- message stems (§8.11 (3) table; lines that are NOT the item names) --------------
-[stems]
-# bank 0 (already in src/strings.txt; checked, not emitted)
-pick          | res | E:cmb_pick        | "YOU PICK UP "
-bk_read       | res | E:bk_read         | "YOU READ THE BOOK"
-st_asleep     | res | E:st_asleep       | "YOU FALL ASLEEP"
-spl_drain_heal | res | E:spl_drain_heal | "YOU FEEL HEALTHIER"
-# resident (bank 1): pickup-side, key, teleport/trap, hunger
-bag_full      | res | N | "BAG FULL"
-key_found     | res | N | "YOU FIND THE LAIR KEY"
-teleported    | res | N | "YOU ARE TELEPORTED!"
-trap_dart     | res | N | "A DART HITS YOU!"
-trap_gas      | res | N | "SLEEPING GAS!"
-trap_alarm    | res | N | "AN ALARM BELL RINGS!"
-trap_bell     | res | N | "A BELL RINGS. NOTHING COMES"
-trap_found    | res | N | "TRAP FOUND: "
-tf_dart       | res | N | "DART"
-tf_gas        | res | N | "GAS"
-tf_alarm      | res | N | "ALARM"
-hg_hungry     | res | N | "YOU ARE HUNGRY"
-hg_weak       | res | N | "YOU ARE WEAK WITH HUNGER"
-hg_fed        | res | N | "YOU FEEL WELL FED"
-# overlay-only (page verbs and their effects; items_ovl_stems.asm)
-drink         | ovl | N | "YOU DRINK THE "
-read          | ovl | N | "YOU READ THE "
-eat           | ovl | N | "YOU EAT THE "
-equip         | ovl | N | "YOU EQUIP "
-remove        | ovl | N | "YOU REMOVE "
-discard       | ovl | N | "YOU DISCARD "
-no_need       | ovl | N | "NO NEED"
-nothing       | ovl | N | "NOTHING HAPPENS"
-mana_surge    | ovl | N | "MANA SURGES!"
-cured         | ovl | N | "YOU ARE CURED"
-fear_flee     | ovl | N | "THEY FLEE IN TERROR!"
-sleep_fall    | ovl | N | "THEY FALL ASLEEP!"
-glows         | ovl | N | "YOUR WEAPON GLOWS!"
+# Retag (3E-T4c, architect 2026-10-20): the resident block keeps only what the turn
+# path prints. Everything a quick-use / effect result prints moved to [stems_fx].
+# [stems_page] is empty: the page verbs and effects it used to hold are fx now.
+# (The E: rows are bank-0 text: 0 B here, checked against src/strings.txt.)
+[stems_resident]
+# bank 0 (checked, not emitted)
+pick          | E:cmb_pick        | "YOU PICK UP "
+# turn path: BAG FULL, trap trigger + TRAP FOUND. No drop / unique line exists yet
+# (the spec has none; adding one is a designer item, not a retag).
+bag_full      | N | "BAG FULL"
+trap_dart     | N | "A DART HITS YOU!"
+trap_gas      | N | "SLEEPING GAS!"
+trap_alarm    | N | "AN ALARM BELL RINGS!"
+trap_found    | N | "TRAP FOUND: "
+tf_dart       | N | "DART"
+tf_gas        | N | "GAS"
+tf_alarm      | N | "ALARM"
+
+[stems_fx]
+# bank 0 (checked, not emitted)
+bk_read       | E:bk_read         | "YOU READ THE BOOK"
+st_asleep     | E:st_asleep       | "YOU FALL ASLEEP"
+spl_drain_heal | E:spl_drain_heal | "YOU FEEL HEALTHIER"
+# pickup / trap / teleport results that are not turn-path lines
+key_found     | N | "YOU FIND THE LAIR KEY"
+teleported    | N | "YOU ARE TELEPORTED!"
+trap_bell     | N | "A BELL RINGS. NOTHING COMES"
+# hunger (printed by the turn, but a status result, not a trigger)
+hg_hungry     | N | "YOU ARE HUNGRY"
+hg_weak       | N | "YOU ARE WEAK WITH HUNGER"
+hg_fed        | N | "YOU FEEL WELL FED"
+# quick-use verbs and effect results (was the overlay set)
+drink         | N | "YOU DRINK THE "
+read          | N | "YOU READ THE "
+eat           | N | "YOU EAT THE "
+equip         | N | "YOU EQUIP "
+remove        | N | "YOU REMOVE "
+discard       | N | "YOU DISCARD "
+no_need       | N | "NO NEED"
+nothing       | N | "NOTHING HAPPENS"
+mana_surge    | N | "MANA SURGES!"
+cured         | N | "YOU ARE CURED"
+fear_flee     | N | "THEY FLEE IN TERROR!"
+sleep_fall    | N | "THEY FALL ASLEEP!"
+glows         | N | "YOUR WEAPON GLOWS!"
+
+[stems_page]
+# (none in this retag)

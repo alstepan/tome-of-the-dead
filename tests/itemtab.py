@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Unit tests for tools/itempack.py (3E-T4, simplified per game.md §8.11 item 2):
-the item word table, name refs, the hero-tome marker, stems, stat / attr tables,
-the 32-char composed-line rule and the byte budgets.
+"""Unit tests for tools/itempack.py (3E-T4, simplified per game.md §8.11 item 2;
+3E-T4c retag): the item word table, name refs, the hero-tome marker, the three
+stem sets (resident / fx / page), it_stat, the 32-char composed-line rule and
+the byte budgets. The per-type ink is not emitted (src/lowram.asm carries it);
+the ink test checks items.txt against tools/items_model.py ITEM_INK.
 
 Run:  python3 tests/itemtab.py            (stdlib unittest; no build needed)
 
 The round-trip tests pack src/items.txt into a temporary directory, then parse
-the EMITTED items_tab.asm / items_ovl_stems.asm / items_ids.inc back into bytes
+the EMITTED items_tab.asm / items_fx_stems.asm / items_ovl_stems.asm / items_ids.inc back into bytes
 and decode them with the algorithm the Z80 will use (word lookup through
 it_wcx, 0-terminated stems, 3 word ids per name, $FF = hero tome word ->
 W_WAR / W_SPELL by hero kind). Expected strings come from items.txt (through
@@ -32,6 +34,8 @@ LOG_MAX = 32
 HERO_KINDS = ("warrior", "mage")
 HERO_WORD = {"warrior": "WAR", "mage": "SPELL"}   # knight maps to WAR too (tool table)
 ROWS = 44
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+import items_model as M  # noqa: E402  (ITEM_INK: the lowram ink source)
 
 
 def _num(tok):
@@ -75,15 +79,15 @@ def parse_ids(path):
 class Decoder:
     """Reads the packed tables the way the Z80 will (item_name, T10)."""
 
-    def __init__(self, tab, ids, ovl):
+    def __init__(self, tab, ids, fx_tab, ovl):
         self.ids = ids
         self.raw_words = bytes(tab["it_words"])
         self.wcx = [tab["it_wcx"][i] | (tab["it_wcx"][i + 1] << 8)
                     for i in range(0, len(tab["it_wcx"]), 2)]
         self.names = tab["it_name"]
         self.stems = bytes(tab["it_stems"])
-        self.attr = tab["it_attr"]
-        st = tab["it_stat"]
+        self.fx = bytes(fx_tab["it_fx_stems"])
+        st = fx_tab["it_stat"]
         self.stat = [(st[2 * i], st[2 * i + 1]) for i in range(len(st) // 2)]
         self.ovl = bytes(ovl)
 
@@ -136,9 +140,10 @@ class ItemTabTests(unittest.TestCase):
         cls.budgets, cls.errors, cls.model = ip.run(SRC, DEFS, STRINGS, cls.tmp)
         assert cls.errors == [], cls.errors
         cls.tab = parse_asm_sections(os.path.join(cls.tmp, "items_tab.asm"))
+        cls.fx_tab = parse_asm_sections(os.path.join(cls.tmp, "items_fx_stems.asm"))
         cls.ovl_tab = parse_asm_sections(os.path.join(cls.tmp, "items_ovl_stems.asm"))
         cls.ids = parse_ids(os.path.join(cls.tmp, "items_ids.inc"))
-        cls.dec = Decoder(cls.tab, cls.ids, cls.ovl_tab["it_ovl_stems"])
+        cls.dec = Decoder(cls.tab, cls.ids, cls.fx_tab, cls.ovl_tab["it_ovl_stems"])
 
     @classmethod
     def tearDownClass(cls):
@@ -147,6 +152,9 @@ class ItemTabTests(unittest.TestCase):
     # -- helpers ----------------------------------------------------------------
     def _res(self, name):
         return self.dec.zstr(self.dec.stems, self.ids["S3_" + name.upper()])
+
+    def _fx(self, name):
+        return self.dec.zstr(self.dec.fx, self.ids["S_FX_" + name.upper()])
 
     def _ovl(self, name):
         return self.dec.zstr(self.dec.ovl, self.ids["S3O_" + name.upper()])
@@ -263,20 +271,20 @@ class ItemTabTests(unittest.TestCase):
                 cls = self.model.klass[t]
                 name = self._expect(t, kind)
                 if cls == "food":
-                    self.assertEqual(self._ovl("eat") + name, "YOU EAT THE " + name)
+                    self.assertEqual(self._fx("eat") + name, "YOU EAT THE " + name)
                 if cls == "pot":
-                    self.assertEqual(self._ovl("drink") + name, "YOU DRINK THE " + name)
+                    self.assertEqual(self._fx("drink") + name, "YOU DRINK THE " + name)
                 if cls == "scr":
-                    self.assertEqual(self._ovl("read") + name, "YOU READ THE " + name)
+                    self.assertEqual(self._fx("read") + name, "YOU READ THE " + name)
                 if cls == "book":
-                    self.assertEqual(self._ovl("read") + name, "YOU READ THE " + name)
+                    self.assertEqual(self._fx("read") + name, "YOU READ THE " + name)
                 if cls == "gear":
                     for verb, expect in (("equip", "YOU EQUIP "), ("remove", "YOU REMOVE ")):
-                        line = self._ovl(verb) + name
+                        line = self._fx(verb) + name
                         self.assertEqual(line, expect + name)
                         self.assertLessEqual(len(line), LOG_MAX, line)
                 if name:
-                    line = self._ovl("discard") + name
+                    line = self._fx("discard") + name
                     self.assertEqual(line, "YOU DISCARD " + name)
                     self.assertLessEqual(len(line), LOG_MAX, line)
 
@@ -292,11 +300,11 @@ class ItemTabTests(unittest.TestCase):
 
     def test_known_example_lines(self):
         t_teleport = self.syms["IT_S_TELEPORT"]
-        self.assertEqual(self._ovl("read") + self._expect(t_teleport, "warrior"),
+        self.assertEqual(self._fx("read") + self._expect(t_teleport, "warrior"),
                          "YOU READ THE TELEPORT SCROLL")
-        self.assertEqual(self._ovl("drink") + self._expect(self.syms["IT_P_HEAL"], "mage"),
+        self.assertEqual(self._fx("drink") + self._expect(self.syms["IT_P_HEAL"], "mage"),
                          "YOU DRINK THE HEAL POTION")
-        self.assertEqual(self._ovl("read") + self._expect(self.syms["IT_BOOK"], "mage"),
+        self.assertEqual(self._fx("read") + self._expect(self.syms["IT_BOOK"], "mage"),
                          "YOU READ THE SPELL TOME")
 
     # -- stat / attr ------------------------------------------------------------------
@@ -314,12 +322,13 @@ class ItemTabTests(unittest.TestCase):
             self.assertEqual(die, row.die, row.sym)
             self.assertEqual(atk, row.atk, row.sym)
 
-    def test_attr_round_trip(self):
-        self.assertEqual(len(self.dec.attr), ROWS)
+    def test_ink_column_matches_lowram_source(self):
+        # No it_attr any more: the floor ink lives in src/lowram.asm it_tab, built from
+        # tools/items_model.py ITEM_INK. items.txt's INK column must agree with it.
         for t in range(ROWS):
             row = self.items.rows[t]
-            expect = row.ink
-            self.assertEqual(self.dec.attr[t], expect, row.sym)
+            if row.ink:
+                self.assertEqual(M.ITEM_INK.get(M.T[row.sym]), row.ink, row.sym)
 
     def test_fixed_floor_inks(self):
         # §8.11 item 2: floor / inventory ink per type (potions and scrolls)
@@ -327,7 +336,10 @@ class ItemTabTests(unittest.TestCase):
                   "IT_S_TELEPORT": 0x45, "IT_S_FEAR": 0x46, "IT_S_SLEEP": 0x44,
                   "IT_S_ENCHANT": 0x47, "IT_BOOK": 0x43}
         for sym, ink in expect.items():
-            self.assertEqual(self.dec.attr[self.syms[sym]], ink, sym)
+            self.assertEqual(self.items.rows[self.syms[sym]].ink, ink, sym)
+
+    def test_no_it_attr_emitted(self):
+        self.assertNotIn("it_attr", self.tab)
 
     def test_food_amounts(self):
         amounts = [self.items.rows[self.syms[s]].amt for s in
@@ -341,18 +353,76 @@ class ItemTabTests(unittest.TestCase):
         self.assertEqual(b["names"], ROWS * 3)
         self.assertEqual(b["refs"], 361)
         self.assertLessEqual(b["refs"], 460)
+        # resident: turn-path stems only (3E-T4c retag; ~80 B target, 89 B as built)
+        self.assertEqual(b["res_stems"], 89)
         self.assertLessEqual(b["res_stems"], 480)
+        self.assertEqual(b["resident"], 462)
         self.assertLessEqual(b["resident"], 700)
         self.assertLessEqual(b["resident"] - b["wcx"], 700)
-        self.assertLessEqual(b["ovl_stems"], 310)
+        # fx overlay: effect / quick-use stems + it_stat (raw)
+        self.assertEqual(b["fx_stems"], 315)
+        self.assertEqual(b["stat"], ROWS * 2)
+        self.assertEqual(b["fx"], b["fx_stems"] + b["stat"])
+        self.assertLessEqual(b["fx"], 700)
+        # page overlay: empty after the retag (all page verbs / effects are fx)
+        self.assertEqual(b["page_stems"], 0)
+        self.assertLessEqual(b["page_stems"], 310)
         self.assertEqual(len(self.tab["it_stems"]), b["res_stems"])
-        self.assertEqual(len(self.ovl_tab["it_ovl_stems"]), b["ovl_stems"])
+        self.assertEqual(len(self.fx_tab["it_fx_stems"]), b["fx_stems"])
+        self.assertEqual(len(self.fx_tab["it_stat"]), b["stat"])
+        self.assertEqual(len(self.ovl_tab["it_ovl_stems"]), b["page_stems"])
+
+    def test_every_resident_and_fx_stem_round_trip(self):
+        for st in self.model.res_stems():
+            self.assertEqual(self._res(st.name), st.text, st.name)
+        for st in self.model.fx_stems():
+            self.assertEqual(self._fx(st.name), st.text, st.name)
+        # bank-0 (E:) stems are not emitted: their text must equal src/strings.txt
+        for st in self.items.stems:
+            if st.ref is not None:
+                self.assertEqual(self.strings[st.ref], st.text, st.name)
+
+    def test_stems_sit_in_their_section(self):
+        groups = {st.name: st.group for st in self.items.stems}
+        self.assertEqual(groups["pick"], "res")
+        self.assertEqual(groups["trap_found"], "res")
+        self.assertEqual(groups["bag_full"], "res")
+        self.assertEqual(groups["drink"], "fx")
+        self.assertEqual(groups["hg_hungry"], "fx")
+        self.assertEqual(groups["bk_read"], "fx")
+        self.assertEqual(self.model.page_stems(), [])
+
+    def test_verb_stem_name_combos_fit_32(self):
+        # every verb stem x every display name it can take, decoded from the tables
+        longest = 0
+        for kind in HERO_KINDS:
+            for t in self._bag_types():
+                cls = self.model.klass[t]
+                name = self.dec.name(t, kind)
+                lines = []
+                if cls == "gear":
+                    lines += [self._fx("equip") + name, self._fx("remove") + name]
+                if cls == "food":
+                    lines += [self._fx("eat") + name]
+                if cls == "pot":
+                    lines += [self._fx("drink") + name]
+                if cls in ("scr", "book"):
+                    lines += [self._fx("read") + name]
+                if name:
+                    # pick is a bank-0 E: stem (not emitted): its value from src/strings.txt
+                    lines += [self.strings["cmb_pick"] + name, self._fx("discard") + name]
+                for line in lines:
+                    longest = max(longest, len(line))
+                    self.assertLessEqual(len(line), LOG_MAX, line)
+        self.assertEqual(longest, 28)
+        for frag in ("tf_dart", "tf_gas", "tf_alarm"):
+            self.assertLessEqual(len(self._res("trap_found") + self._res(frag)), LOG_MAX)
 
     def test_deterministic_output(self):
         tmp2 = tempfile.mkdtemp(prefix="itemtab2_")
         try:
             ip.run(SRC, DEFS, STRINGS, tmp2)
-            for name in ("items_tab.asm", "items_ovl_stems.asm", "items_ids.inc"):
+            for name in ("items_tab.asm", "items_fx_stems.asm", "items_ovl_stems.asm", "items_ids.inc"):
                 with open(os.path.join(self.tmp, name), "rb") as a, open(os.path.join(tmp2, name), "rb") as b:
                     self.assertEqual(a.read(), b.read(), name)
         finally:
@@ -363,7 +433,8 @@ class ItemTabTests(unittest.TestCase):
             self.skipTest("sjasmplus not on PATH")
         wrap = os.path.join(self.tmp, "wrap.asm")
         with open(wrap, "w", encoding="utf-8") as f:
-            f.write('    ORG $6000\n    INCLUDE "items_tab.asm"\n    INCLUDE "items_ovl_stems.asm"\n')
+            f.write('    ORG $6000\n    INCLUDE "items_tab.asm"\n    INCLUDE "items_fx_stems.asm"\n'
+                    '    INCLUDE "items_ovl_stems.asm"\n')
         r = subprocess.run(["sjasmplus", "--nologo", "--raw=" + os.path.join(self.tmp, "o.bin"),
                             "-i", self.tmp, wrap], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
