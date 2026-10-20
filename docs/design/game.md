@@ -1881,6 +1881,100 @@ chose stand except where a line below says CHANGE. All 3E rolls are on `ITEM_RNG
   set, and items may lie in it. The key is granted on first entry (Q1).
 - **Stale text fixed with this note:** §5 book placement and §8.7 cursed roll say `ITEM_RNG`.
 
+**3E text rulings (2026-10-20; designer, closes the T4 name/message gaps; supersedes the
+wording in §5, §7, §8.7, §8.8, §1.5 where it differs).** Style = `src/strings.txt`: UPPER
+CASE, **no trailing full stop**, `!` and `:` allowed, an internal `.` only in the ALARM line;
+every composed line ≤ 32 (`LOG_MAX`).
+
+**(1) Names.** A name is ≤ 3 word tokens, each word ≤ 8 chars, 65 distinct words in one table.
+**No article** in composed lines (`YOU PICK UP BLESSED HELM`, not `A BLESSED HELM`: the A/AN
+code costs more than the 2 chars it would cost). Composer: `stem + [BLESSED␣|CURSED␣] + name`;
+the BUC prefix is spelled out (8 / 7 chars) and only gear (weapon, armour, helmet, charm) ever
+has one. **Name length caps: BUC-able gear ≤ 12 chars incl. spaces; every other type ≤ 18.**
+The longest stem is 12 chars (`YOU PICK UP `, `YOU DISCARD `), 12 + 8 + 12 = 32: no
+truncation rule is needed.
+
+| Type (IT_*) | Display name (len) | Type | Display name (len) |
+|---|---|---|---|
+| F_CARROT / APPLE / PEAR / CHEESE / MEAT | CARROT 6 · APPLE 5 · PEAR 4 · CHEESE 6 · MEAT 4 | W_SHORT / LONG / AXE | SHORT SWORD 11 · LONG SWORD 10 · WAR AXE 7 |
+| P_HEAL / MANA / CURE known | POTION OF HEAL 14 · POTION OF MANA 14 · POTION OF CURE 14 | W_CLEAVER (unique) | WARLORD CLEAVER 15 |
+| P_* unknown (§8.8) | `<colour> POTION`, longest EMERALD POTION 14 | W_OAK / IRON / RUNE / BONE | OAK STAFF 9 · IRON STAFF 10 · RUNE STAFF 10 · BONE STAFF 10 (unique) |
+| S_TELEPORT / FEAR / SLEEP / ENCHANT known | SCROLL OF TELEPORT 18 · … FEAR 14 · … SLEEP 15 · … ENCHANT 17 | A_ROBE / LEATHER / CHAIN / PLATE | ROBE 4 · LEATHER 7 · CHAIN MAIL 10 · PLATE MAIL 10 |
+| S_* unknown | `SCROLL <label>`, longest SCROLL MIRADEL 14 | A_SILK / GRAVE (unique) | SILK CLOAK 10 · GRAVE CLOAK 11 |
+| BOOK (by `HERO_KIND`) | **WAR TOME 8** (Warrior) · **SPELL TOME 10** (Mage); replaces SPELLBOOK / WAR MANUAL (SPELLBOOK is 9 chars) | H_HOOD / HELM | HOOD 4 · HELM 4 |
+| BOW | BOW 3 | H_KING / MIRROR (unique) | KING HELM 9 · MIRROR HELM 11 |
+| C_MIGHT / WARD / FIRE | MIGHT RING 10 · WARD RING 9 · FIRE RING 9 (was RING OF FIRE WARD) | C_MANA / PLENTY | MANA AMULET 11 · FOOD AMULET 11 (Plenty: burn ×½) |
+| C_SCARAB (unique) | SCARAB AMULET 13 | C_GRAVE (unique) | GRAVE RING 10 (was RING OF THE GRAVE) |
+
+Appearance words (§8.8, unchanged): colours RUBY AZURE EMERALD AMBER VIOLET MILKY; labels
+ZORAK VELMIS OSTRUN KAPPU MIRADEL THUNE YOLQ ABRAXA. Bag types: food 5 + potions 3 + scrolls 4
++ book 1 + bow 1 + gear 25 = **39 names**. Uniques never carry a BUC prefix.
+**Computed longest lines (all ≤ 32):** `YOU PICK UP BLESSED SHORT SWORD` = 12+8+11 = **31**
+(equal: `… BLESSED MANA AMULET`, `… FOOD AMULET`; CURSED variants 30) · `YOU PICK UP SCROLL OF TELEPORT`
+30 · `YOU PICK UP WARLORD CLEAVER` 27 · `YOU READ THE SCROLL OF TELEPORT` 13+18 = **31** ·
+`YOU DRINK THE EMERALD POTION` 28 · `YOU DISCARD BLESSED SHORT SWORD` 31 · `YOU EQUIP BLESSED
+MANA AMULET` 29 · `YOU REMOVE BLESSED SHORT SWORD` 30 · `IT WAS A SCROLL OF TELEPORT` 27.
+Overall maximum **31**. The legacy `found` / `quaff` strings (`YOU PICK UP A POTION`, `YOU
+DRINK A POTION`) are deleted by T4. Per-type name refs: 3 B/type (3 word ids, 0-padded, no
+terminator when full) = 39 × 3 = 117 B; unknown potion/scroll names are composed by code from
+the §8.8 map (colour/label word + POTION/SCROLL), 0 extra refs.
+
+**(2) Food odds and hunger.** Food entry type is **uniform over the 5 at every depth** (the
+`tools/items_model.py` rule `rnd(5)`, unchanged: 0 B of table, mean 23 FOOD per item, 3–4
+items ≈ 80 FOOD + drops ≈ 100 against ≈ 75 burned per level, §7). No depth weighting. Hunger
+numbers, complete: `FOOD_START` 80 · cap 100 (eating clamps) · −1 per 6 turns (jump −2 extra)
+· stage by FOOD: FED ≥ 50, OK 25–49, HUNGRY 10–24, WEAK 0–9 · food values CARROT 10, APPLE 15,
+PEAR 20, CHEESE 30, MEAT 40 · never fatal. **Stage-change lines** (only on a downward crossing
+into HUNGRY / WEAK, and on an upward crossing into FED; crossing into OK and WEAK→HUNGRY print
+nothing): `YOU ARE HUNGRY` · `YOU ARE WEAK WITH HUNGER` (also repeated every 50 turns while
+WEAK) · `YOU FEEL WELL FED`.
+
+**(3) Messages.** `E` = exists in `src/strings.txt` (0 B), `N` = new.
+
+| Event | Line (len) | |
+|---|---|---|
+| pickup | `YOU PICK UP ` + [BUC] + name (stem `cmb_pick`) | E |
+| bag full | `BAG FULL` 8 | N |
+| key found | `YOU FIND THE LAIR KEY` 21 | N |
+| drink / read / eat | `YOU DRINK THE ` 14 · `YOU READ THE ` 13 · `YOU EAT THE ` 12 + name | N |
+| book read | `YOU READ THE BOOK` then the §5 lines (`bk_learn`, `bk_rises`, `bk_grasp`, `bk_vigor`, `bk_power`, `bk_crumbles`) | E |
+| identify on use | `IT WAS A ` 9 + known name (unknown types only, after the effect line) | N |
+| Heal | `YOU FEEL HEALTHIER` (`spl_drain_heal`) | E |
+| Mana | `MANA SURGES!` 12 | N |
+| Cure | `YOU ARE CURED` 13 (also +4 HP) | N |
+| Fear scroll | `THEY FLEE IN TERROR!` 20 | N |
+| Sleep scroll | `THEY FALL ASLEEP!` 17 | N |
+| Fear/Sleep, empty room; Enchant at +3 or with no weapon | `NOTHING HAPPENS` 15 | N |
+| Teleport scroll / trap | `YOU ARE TELEPORTED!` 19 | N |
+| Enchant, weapon +1 | `YOUR WEAPON GLOWS!` 18 | N |
+| Enchant, worn cursed | `THE CURSE LIFTS: BLESSED!` (`cmb_lifts`) | E |
+| equip / remove / discard | `YOU EQUIP ` 10 · `YOU REMOVE ` 11 · `YOU DISCARD ` 12 + [BUC] + name (no `THE`) | N |
+| equip cursed reveal | `IT CLINGS TO YOU! CURSED ` + signed digit (`cmb_cling`) | E |
+| cursed lock | `IT IS CURSED! YOU CANNOT` (`cmb_cursed_no`) | E |
+| known-waste refusal (no turn, item kept) | `NO NEED` 7: known Heal at full HP, known Mana at full MP, EAT at FOOD 100. Cure and unknown types are never refused | N |
+| shatter / wear lines | §8.7 / §8.10 (`cmb_shat_*`, `cmb_notch` …) | E |
+| trap fires | `A DART HITS YOU!` 16 · `SLEEPING GAS!` 13 then `YOU FALL ASLEEP` (`st_asleep`, E) · `YOU ARE TELEPORTED!` · `AN ALARM BELL RINGS!` 20 · `A BELL RINGS. NOTHING COMES` 27 | N |
+| trap found (walk-on of a hidden one needs no find line; search or Mage sense) | `TRAP FOUND: ` 12 + `DART` / `GAS` / `ALARM` / `TELEPORT` (4+3+5 chars new; TELEPORT is the item word) | N |
+| search finds nothing | no line (0 B) | |
+
+Search and Mage sense share the one `TRAP FOUND:` line. Scrolls carry **no BUC** (BUC is gear
+only), so Enchant has no blessed/cursed scroll variants.
+
+**(4) DISCARD destroys the whole stack** (one verb, no quantity prompt; frees the slot and
+compacts the bag at once). Cheapest code; rationale as Q3. Worn items cannot be discarded.
+
+**(5) Byte count (raw, before the dictionary packer).** Word table 65 words = **320 B**
+(top-bit terminator) + type refs **117 B** = 437 B. **Bank 1 (resident) = 651 B**: 437 +
+pickup/hunger/trap/key/teleport/bag-full strings 214 B (`BAG FULL` 8, key 21, TELEPORTED 19,
+DART 16, GAS 13, ALARM 20, BELL 27, `TRAP FOUND: ` + 3 names 24, 3 hunger lines 55,
+terminators 11). **Overlay (page-verb results, bank 3/page overlay) = 195 B**: stems 81
+(DRINK / READ / EAT / IT WAS A / EQUIP / REMOVE / DISCARD) + effects 102 (NO NEED, NOTHING
+HAPPENS, MANA SURGES!, CURED, FEAR, SLEEP, GLOWS) + 12 terminators. **New 3E words+stems =
+846 B** (≤ 700 resident: OK 651; ≤ 310 overlay: OK 195). With the page-only text (~160 B,
+Q9) the total is ≈ 1,006 B ≤ the 1,100 B cap; if the 160 B page text must also sit inside the
+310 B overlay it is **45 B over** (355): trims in order are Cure → reuse `st_clear` (−14), or
+move the 7 verb stems (81 B) to bank 1 (resident has 49 B of slack, so only ~4 of them fit).
+
 **Hunger:** HUNGRY doubles the MP regen period (WEAK: none; HP regen FED only), 3E, §7.
 
 ---
