@@ -906,7 +906,7 @@ header shows the same. 0 new glyphs.
 | Rule | Decision |
 |---|---|
 | Source | Abilities come **only** from books **found in the dungeon** (nothing is bought or granted). Melee is always available. Scrolls and ammunition are likewise found only (§8.5) |
-| Placement (rev 5, designer decision 2026-10-03) | **1 class book per level D1–D7, plus a 2nd class book with 1 in 2 on D4–D7** (`GEN_RNG`; E ≈ 9 per run). **The D1 book lies in the start room.** D8 has none. The generator places a generic **class book** (`SPELLBOOK` / `WAR MANUAL`); *what it teaches is decided when it is read* (below), so generation never depends on hero state |
+| Placement (rev 5, designer decision 2026-10-03) | **1 class book per level D1–D7, plus a 2nd class book with 1 in 2 on D4–D7** (`ITEM_RNG`, §8.11 Q8; E ≈ 9 per run). **The D1 book lies in the start room.** D8 has none. The generator places a generic **class book** (`SPELLBOOK` / `WAR MANUAL`); *what it teaches is decided when it is read* (below), so generation never depends on hero state |
 | Reading | Page verb `READ`, 1 turn on return; the book is consumed. Content, first match (gameplay RNG): **1.** an unlearned ability whose unlock depth (§4) ≤ the current depth → learn the earliest-depth one (rank 1; fills its bar slot); **2.** else **rank up** a known ability below rank 3, chosen uniformly; **3.** else a tome (Warrior Vigor, Mage Power, §4). So the D1 book always teaches the starter (Spark / Power Strike), each later ability arrives at its unlock depth (or on the next book read, if carried), and every other book is a rank-up. "Chance of new vs rank-up" (user) = rule 1 is deterministic (the §10 threat answers depend on the schedule); the rank-up target is the random part |
 | Other class's book | **CUT (user 2026-10-20, memory):** never generated; only the hero's class book exists |
 | Expected yield (E) | Warrior: 2 unlocks, 4 rank-ups (both to rank 3 by ~D6), ~3 Vigor. Mage: 5 unlocks, ~4 rank-ups (of 10 possible), ~0 Power. Mage ranks are the scarcer choice by design: 5 spells × 3 ranks cannot all max |
@@ -1571,7 +1571,7 @@ normal or CURSED**. Start kit and boss uniques are always normal. Every state ca
 | normal | 0 | — | free |
 | **CURSED** (user) | −2, −1, +1 or +2 (roll below) | **CURSED is visible; the value is hidden until the item is first equipped** (user + designer decision 2026-10-03: a state is known, a number is learned by wearing it — no identification verb) | **impossible** (`IT IS CURSED! YOU CANNOT.` 25) until the item is **blessed** or **shattered** |
 
-**Cursed value roll (designer decision 2026-10-03; out of 8, `GEN_RNG` at item placement):**
+**Cursed value roll (designer decision 2026-10-03; out of 8, `ITEM_RNG` at item placement, §8.11):**
 
 | Depth | −2 | −1 | +1 | +2 | mean |
 |---|---|---|---|---|---|
@@ -1830,6 +1830,56 @@ col on its storey's standing row, else the nearest free col within ±3, else a n
 is lost; a unique searches the whole storey. Gameplay RNG. The generator leaves ≥ 1
 floor-list entry free (≤ 31 used) so a unique always fits; other drops are lost when the
 list is full.
+
+**3E generation rulings (2026-10-20; designer, from the review of `tools/items_model.py`, commit
+f387ff0).** The model is the byte-exact spec for the Z80 generator (T6); the defaults it
+chose stand except where a line below says CHANGE. All 3E rolls are on `ITEM_RNG`
+(§8.5/§5/§8.7/§1.5 mentions of `GEN_RNG` for books, cursed value and traps are superseded by Q8).
+- **Streams.** `ITEM_RNG(m, d)` = the generator algorithm seeded `LVL_SEED(m, d|$80)` with the
+  usual `^ (d'*$0101)` (0 → 1), `d' = d|$80`; derived from the MASTER seed, not the reseeded
+  level seed. Light-ID stream = same with `d' = 255`. Run order per level: potion types (+ D8
+  relocation) → food → scrolls → gear → books → ammo/bow → traps.
+- **Roll order inside an item:** type (or qty) first, then BUC `rnd(16)`, then (cursed only)
+  value `rnd(8)`, then placement (`room = pool[rnd(n)]`, `storey = rnd(2)`, up to 8 × `col =
+  2 + rnd(28)`, first legal wins; none legal → the item is dropped silently, rolls stay
+  consumed). The ≤ 31 cap is unreachable (max 17 new+base entries: 3+4+2+2+2+2+2 incl. bow
+  bundle), so the Z80 omits the cap check.
+- **Potions:** entry 0 = Heal (no roll); entries 1..n = uniform Heal/Mana/Cure `rnd(3)`.
+- **Food** 3 + `rnd(2)`, type uniform of the 5 (`rnd(5)`). **Scrolls** 1 + `rnd(2)`, type uniform of 4.
+- **Gear** 1 + `rnd(2)`; type uniform over the depth- and class-gated §8 table (start kit and
+  uniques excluded, other-class weapons excluded). **BUC:** one `rnd(16)` `v`: `v < B` →
+  BLESSED (m +1); `v < B + C` → CURSED + HIDDEN, then `w = rnd(8)` walked over the §8.7 row in
+  column order m = −2, −1, +1, +2 (cumulative thresholds); else normal. Enchant bits 0.
+- **Rooms:** food, scrolls, gear and every book except the D1 one use present, non-start rooms
+  (lair allowed: it is the key's reward). D8 exception (Q1): food, gear and potions avoid the
+  lair; scrolls/books (PAGES) and ammo are exempt as before. Ammo/bow: non-start, non-lair.
+  **D1 book: start room** at a placed col. **CHANGE (model):** the D1 book gets the bow's
+  deterministic scan fallback inside the start room, so it is never dropped (without it the
+  Warrior/Mage has no ability at all).
+- **2nd book:** `rnd(2) == 0` rolled only on D4–D7 (no roll D1–D3, D8).
+- **D8 lair potion:** RELOCATE (the model's choice). A dropped Heal would break "≥ 1 Heal"
+  and "2–3 potions"; the entry keeps its slot and type, moves to a non-start non-lair room
+  via `place`, scan fallback if that fails. Types of all entries are rolled first; D8's
+  base floor list therefore differs from `GEN_RNG`'s output only in that cell (decor goldens
+  for D8 lair potions are re-baselined).
+- **Shared cells (generation):** no. New entries never share a cell with any existing entry
+  (stricter than Q8's "non-ammo"; ammo sharing is a runtime §6.3 rule only). Sole exception:
+  the D2 arrow bundle in the bow's cell (bow entry first, bundle second). The base potion
+  entries may already share among themselves (3B), unchanged.
+- **Ammo (Warrior only; Mage consumes no rolls):** dagger qty `2 + rnd(2)`, then arrow qty
+  `5 + rnd(4)`, then (D2) the bow. The hero class is fixed before level generation.
+- **Light-ID shuffle:** partial Fisher-Yates, potions first (3 of 6 appearances), then
+  scrolls (4 of 8); step `i` swaps `pool[i]` with `pool[i + rnd(n − i)]`; the id stream is
+  used for nothing else.
+- **Traps:** per trap: type `pool[rnd(len)]` (once, before the tries, consumed even if the
+  trap is then dropped), then ≤ 8 × (room = uniform among present non-start non-lair rooms
+  without a trap, `storey = rnd(2)`, `t = 6 + rnd(20)`), first legal wins; no eligible room →
+  dropped. The D1 "start body ±1" rule is vacuous (start room excluded). Pit zone and
+  footprints are applied on both storeys (the model is slightly stricter than §1.5 on
+  storey 0; keep it). A trap never shares a floor-item col in its room/storey.
+- **Key room:** no interplay. The key has no entry; `LVL_KEYROOM` is whatever `level_gen`
+  set, and items may lie in it. The key is granted on first entry (Q1).
+- **Stale text fixed with this note:** §5 book placement and §8.7 cursed roll say `ITEM_RNG`.
 
 **Hunger:** HUNGRY doubles the MP regen period (WEAK: none; HP regen FED only), 3E, §7.
 
