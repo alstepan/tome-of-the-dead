@@ -1791,7 +1791,7 @@ comes from the item-type table; gear BUC tint `$45`/`$42` and unique shimmer ove
   HELM.` Rationale: same player value (clear junk, free a slot) at ~15 B instead of ~80 B.
 - **QUICK pin is cut** (state + verb + rule ~70 B); quick slots auto-fill only (§8).
 - **Bag 20, stacking:** stacks merge on equal `TYPE` + `ISTATE` up to 9 (potions, scrolls,
-  food, books); gear and the bow never stack. Pickup tops up an existing stack, else takes
+  food only); **books, the bow and gear NEVER stack** (user/engineering 2026-10-20; one slot each). Pickup tops up an existing stack, else takes
   the first free slot; bag order = pickup order, compacted when a slot empties. Floor
   non-ammo entries are always `QTY` 1. Full bag: the item stays, `BAG FULL.` once per
   arrival on the cell. Floor weapons are generated for the hero's class only (no junk).
@@ -1837,11 +1837,60 @@ the "four scrolls (unknown)" are gone) — exercises EQUIP, Enchant, READ.
 1/2 · 1/3 · 1/4), the §9.1 column unchanged: Rat Cheese 1/4 · Goblin Apple 1/4 · Orc Meat
 1/3 · Skeleton Archer Arrows ×3 1/2 (Warrior runs) · Necromancer Mana 1/3; no other kind
 drops. Tiers drop as their base kind. Boss uniques = **8 B** (item type per depth D1–D7 +
-the D4 Mage variant, §8.6), always dropped, normal BUC. Placement: the dead body's centre
+the D4 Mage variant, §8.6), always dropped, `m` 0 (BUC is gone, rev 6). Placement: the dead body's centre
 col on its storey's standing row, else the nearest free col within ±3, else a non-unique
 is lost; a unique searches the whole storey. Gameplay RNG. The generator leaves ≥ 1
 floor-list entry free (≤ 31 used) so a unique always fits; other drops are lost when the
 list is full.
+
+**3E pickup/drop rulings (2026-10-20).**
+
+1. **Log lines** (UPPERCASE, no article, no trailing stop, all ≤ 32):
+
+| Event | Line | Longest |
+|---|---|---|
+| Pick up potion / food / scroll / book / weapon / armour / charm / bow | `YOU PICK UP ` (bank-0 `cmb_pick`) + item name (§8.11 table; stack top-up prints the same) | `YOU PICK UP WARLORD CLEAVER` / `...TELEPORT SCROLL` 27 |
+| Pick up ammo | `YOU PICK UP 3 ARROWS` (count + plural; the existing counter format, the only plural) | `YOU PICK UP 9 DAGGERS` 21 |
+| Bag full | `BAG FULL` (8). The item **stays on the floor**; once per arrival on the cell | 8 |
+| Ammo over cap | `QUIVER FULL` (existing); takes what fits, remainder stays | 11 |
+| Ordinary monster drop | **no line**: the glyph simply appears on the body's cell (saves ~15 B; the ink says the type) | — |
+| Boss unique drops | `BOSS DROPS ` (new resident stem, 11 B text) + item name | `BOSS DROPS WARLORD CLEAVER` 26 |
+| Key found | `YOU FIND THE LAIR KEY` (existing, 21) | 21 |
+
+   The legacy `cmb_bow` (`YOU PICK UP A BOW`) and the 3B stand-in `found` (`...A POTION`) are
+   retired: bow and potions use `cmb_pick` + name, so no article remains anywhere.
+2. **Drop table (5 rows × 3 B = 15 B; a row = base kind, item type, chance code):**
+
+| Row | Kind (tiers as base) | Item type | Chance |
+|---|---|---|---|
+| 1 | Rat | `IT_F_CHEESE` | 1/4 |
+| 2 | Goblin | `IT_F_APPLE` | 1/4 |
+| 3 | Orc | `IT_F_MEAT` | 1/3 |
+| 4 | Skeleton Archer (Warrior runs only) | arrows ×3 (`IT_ARROW`, qty 3) | 1/2 |
+| 5 | Necromancer | `IT_P_MANA` | 1/3 |
+
+   The §9.6 tier numerator bump and the "tier of a no-drop base drops random food 1 in 4" stay
+   as written there. `F_RESPAWN` monsters and golden bosses use no row.
+   **Boss uniques (8 B, item type by depth D1..D7 + D4 Mage variant; D8 none):** D1 `IT_H_KING`
+   · D2 `IT_A_SILK` · D3 `IT_A_GRAVE` · D4 `IT_W_CLEAVER` (Warrior) / `IT_W_BONE` (Mage) · D5
+   `IT_C_SCARAB` · D6 `IT_C_GRAVE` · D7 `IT_H_MIRROR`. A unique is simply **a fixed type whose
+   table stats beat the generic tier, `m` 0** (no `+2`, no flag; the `U` mark in `items.txt` only
+   drives the shimmer). **Placement:** the body's centre col on its storey's standing row if the
+   cell has no floor entry, else the nearest cell within ±3 with none; arrows may instead merge
+   into an ammo stack in a cell (§6.3 shared-cell rule). Non-unique with no spot or a full list
+   (31 used) is lost silently; a unique searches the whole storey and always fits because the
+   generator leaves entry 32 free (FLOOR_N ≤ 31 for generation).
+3. **Quick use (icon bar, §3.5), per T10 `bag_pick` modes:** FOOD icon = the **lowest-value food
+   type** (Carrot → Apple → Pear → Cheese → Meat); POTION icon = lowest potion type id (Heal →
+   Mana → Cure); SCROLL icon = **largest stack**, ties lowest type (Teleport → Fear → Sleep →
+   Enchant). Success prints the verb stem (`YOU EAT THE CARROT`, `YOU DRINK THE HEAL POTION`, `YOU
+   READ THE TELEPORT SCROLL` 28) and costs **1 turn**. Empty class: `NO FOOD` / `NO POTION` / `NO
+   SCROLL`, **0 turns**, nothing consumed. `NO NEED` (Heal at full HP, Mana at full MP, EAT at
+   100) is also 0 turns and consumes nothing.
+4. **Pickup turn cost = 0 extra.** Pickup is automatic at the end of the turn in which the hero
+   *arrived* on the cell (§2.2 order: pickups → aura → hunger…); that move already paid its turn.
+   Standing still, or a drop landing next to the hero, never picks up; stepping off and back on
+   retries (and re-arms the once-per-arrival `BAG FULL`).
 
 **3E generation rulings (2026-10-20; designer, from the review of `tools/items_model.py`, commit
 f387ff0).** The model is the byte-exact spec for the Z80 generator (T6); the defaults it
@@ -2005,7 +2054,7 @@ unknown names, (3) `IT WAS A`, `cmb_cling`/`cmb_lifts`/`cmb_cursed_no`/shatter l
    0 and changes only by (a) the **Enchant scroll** and (b) §8.10 wear. Main-stat effect of `m`
    as before: weapon dmg +m, armour/helm DEF +m (Robe/Hood max MP +m), clamped at 0 / `max(1,…)`.
    Only gear carries `ISTATE`; stacks still merge on equal `TYPE`+`ISTATE` (potions, scrolls,
-   food, books always 0). **Enchant (one rule):** worn weapon `m` +1, max +3 (`YOUR WEAPON
+   food only, always 0; books never stack). **Enchant (one rule):** worn weapon `m` +1, max +3 (`YOUR WEAPON
    GLOWS!`); fists or already +3 → `NOTHING HAPPENS`, scroll consumed. Armour is never
    enchanted. Wear (§8.10): `m` −1 on the target, destroyed at −3 (slot empties, fists 1d2);
    Enchant is the repair. EQUIP/REMOVE/swap are always free (no lock, no refusal but `BAG FULL`).
