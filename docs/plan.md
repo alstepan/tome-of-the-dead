@@ -401,6 +401,7 @@ blesses all worn cursed; seeded shatter empties the slot (fists 1d2); book read 
 | T8 | `hero_recalc` + equip/reveal/shatter/bless (single writer of `KT_ATK`/`KT_EVA` after `hero_st_init`) | S | T3, Q7 (B20) |
 | T9 | hunger (FOOD tick, stages, jump −2, regen gate, `ST_HWEAK`) | S | T8 |
 | T10 / T11 / T12 | bank-1 helpers `bag_add`/`item_name`/`qs_pick`/`id_learn` (J) / `floor_pickup` → bag, drops, quick use, EAT/GOLD/pickup SFX hooks (S) / effects incl. teleport (S) | | T3, T4, T8–T9, Q6 |
+| (user 2026-10-20 on the page: FIRE selects items so it cannot also be 'back' — **T13 must give a selectable `[CLOSE]` button on row 0 (cursor reachable by the directions) + the CLOSE verb; BREAK and `I` always close**; placeholder LAYOUT approved, remove only the 'PAGE PLACEHOLDER' text) |
 | T13 / T14 / T15 | page skeleton+input (S) / page drawing (J) / READ books via `abil_learn` (J) | | T2, T10, Q5 |
 | T16 | traps runtime (diff check, search on Wait, Mage sense, reveal) | S | T6, T12, T0 |
 | T17 | exit gate: pick up → equip → eat → learn spell; cursed until Enchant; budgets | J | all |
