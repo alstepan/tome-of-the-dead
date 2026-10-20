@@ -2,6 +2,7 @@
 # tools/build.sh — THE build entry point (A6): sprite packer, then sjasmplus.
 #
 #   tools/build.sh [-o OUTDIR] [extra sjasmplus args, e.g. -DPROTO_START=1]
+#   tools/build.sh --items        3E-T4 item text only (tools/itempack.py; not in the build)
 #
 # 1. tools/zx0_sources.py -> build/zx0/sprites_zx0.asm of THIS checkout (always
 #    regenerated, so a build never assembles stale packed art; the file is
@@ -20,6 +21,12 @@
 # Fails (exit 1) on any assembler error OR warning; prints the DISPLAY lines.
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# 3E-T4 stand-alone target (NOT part of the default build; T4b includes the output in
+# bank 1): writes build/text/items_tab.asm, items_ovl_stems.asm, items_ids.inc.
+if [ "${1:-}" = "--items" ]; then
+    shift
+    exec python3 "$ROOT/tools/itempack.py" "$@"
+fi
 OUT=$ROOT
 if [ "${1:-}" = "-o" ]; then
     [ $# -ge 2 ] || { echo "build.sh: -o needs a directory" >&2; exit 2; }

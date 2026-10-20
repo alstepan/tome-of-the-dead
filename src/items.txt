@@ -1,0 +1,167 @@
+# src/items.txt — 3E item names, message stems and per-type numbers (3E-T4).
+# THE single source for tools/itempack.py (-> build/text/items_tab.asm,
+# items_ovl_stems.asm, items_ids.inc) and tests/itemtab.py.
+# Spec: docs/design/game.md §8.11 "3E text rulings (2026-10-20)", §8 gear/food
+# tables, §8.6 uniques, §8.8 light ID.
+#
+# Lines: '#' starts a comment, blank lines are ignored. A section starts at [name].
+#
+# [buc]     word-table seeds, one per line: BLESSED, CURSED (the BUC prefixes).
+#
+# [appear]  light-ID words, in appearance-index order (each run must be contiguous
+#           in the word table; the tool checks it):
+#             potion RUBY=$02 AZURE=$05 EMERALD=$04 AMBER=$06 VIOLET=$03 MILKY=$07
+#             scroll ZORAK VELMIS OSTRUN KAPPU MIRADEL THUNE YOLQ ABRAXA
+#           The =$xx on a potion colour is its appearance ink (app_attr, §8.8).
+#
+# [book]    the two words the hero-tome marker stands for, one per line: WAR, SPELL.
+#           IT_BOOK's name is "<HERO> TOME": <HERO> is packed as the id $FF (ITN_HERO).
+#           CONTRACT for item_name (T10): $FF -> W_WAR when HERO_KIND is the Warrior
+#           (knight/warrior), W_SPELL for the Mage; the TOME word is shared.
+#
+# [types]   one row per type id, each id once, ids 0..43 (IT_* in item_defs.asm; IT_COUNT 44):
+#             IT_NAME | NAME | INK | DIE ATK DEF MP AMT | FLAG | NOTE
+#           NAME    1..3 words separated by single spaces, or '-' (no name).
+#                   Potions/scrolls: the KNOWN name; unknown names are composed
+#                   from [appear] ("<colour> POTION", "SCROLL <label>").
+#           INK     $xx (floor / inventory ink, §8.11 Q1), APP (potion: the
+#                   appearance ink from [appear]; packed as $00 in it_attr),
+#                   or '-' (= $00).
+#           DIE     weapon die sides (0 = none).
+#           ATK     signed attack modifier, -8..7.
+#           DEF MP  gear only (DEF >= 0, MP >= 0).
+#           AMT     food: FOOD restored (§7); potion: HP (Heal, Cure) or MP (Mana).
+#           FLAG    U = unique (never carries a BUC prefix, §8.6), else '-'.
+#           NOTE    free text, not packed (effects the 2-byte stat cannot carry).
+#           Packing into it_stat (2 B per row): byte0 = DIE | ((ATK & $0F) << 4);
+#           byte1 = AMT for food/potion rows, else (DEF & $0F) | (MP << 4).
+#           Rows with AMT != 0 must have DEF = MP = 0 and vice versa (tool-checked).
+#
+# [stems]   NAME | GROUP | SRC | "TEXT"
+#           NAME   lower case identifier; EQU S3_<NAME> (res) or S3O_<NAME> (ovl).
+#           GROUP  res = bank-1 resident block (it_stems, offsets S3_*);
+#                  ovl = overlay-only block (it_ovl_stems, offsets S3O_*).
+#           SRC    N = new text, emitted in its group.
+#                  E:<name> = already in src/strings.txt (bank 0, 0 B here). The tool
+#                  checks TEXT == that string's value; it is used only for the
+#                  composed-length checks.
+#           TEXT   double-quoted, UPPER CASE, printable ASCII, no '"'. Spaces at
+#                  the ends are kept (stems are concatenated). Style: no full stop
+#                  except the ALARM line (src/strings.txt style).
+#
+# Composed lines (the checks in tools/itempack.py, LOG_MAX 32):
+#   pick / equip / remove / discard  + [BUC] + name   (BUC only on BUC-able gear)
+#   eat + food name · drink / read + potion or scroll name (known or unknown)
+#   it_was_a + known potion or scroll name · trap_found + dart / gas / alarm / TELEPORT
+#   bk_read (E) · read + book name
+
+# --- word-table seeds -----------------------------------------------------------
+[buc]
+BLESSED
+CURSED
+
+# --- light-ID appearance words (§8.8) ---------------------------------------------
+[book]
+WAR
+SPELL
+
+[appear]
+potion RUBY=$02 AZURE=$05 EMERALD=$04 AMBER=$06 VIOLET=$03 MILKY=$07
+scroll ZORAK VELMIS OSTRUN KAPPU MIRADEL THUNE YOLQ ABRAXA
+
+# --- type rows (§8 tables; §8.11 Q1 inks; §8.11 names) ----------------------------
+[types]
+# counters: never in the bag, no name (their floor ink only)
+IT_NONE         | -                 | -    | 0 0 0 0 0 | -  | empty slot
+IT_POTION       | -                 | -    | 0 0 0 0 0 | -  | legacy 3B stand-in (id 1 reserved after T11)
+IT_DAGGER       | -                 | $47  | 0 0 0 0 0 | -  | counter, AMMO glyph
+IT_ARROW        | -                 | $46  | 0 0 0 0 0 | -  | counter, AMMO glyph
+IT_KEY          | -                 | -    | 0 0 0 0 0 | -  | level key: found on entry, no glyph
+# food, ascending FOOD (§7 table)
+IT_F_CARROT     | CARROT            | $06  | 0 0 0 0 10 | -  | FOOD +10
+IT_F_APPLE      | APPLE             | $44  | 0 0 0 0 15 | -  | FOOD +15
+IT_F_PEAR       | PEAR              | $04  | 0 0 0 0 20 | -  | FOOD +20
+IT_F_CHEESE     | CHEESE            | $46  | 0 0 0 0 30 | -  | FOOD +30
+IT_F_MEAT       | MEAT              | $42  | 0 0 0 0 40 | -  | FOOD +40
+# potions (§8): Heal +10 HP, Mana +8 MP, Cure +4 HP (and clears)
+IT_P_HEAL       | POTION OF HEAL    | APP  | 0 0 0 0 10 | -  | HP
+IT_P_MANA       | POTION OF MANA    | APP  | 0 0 0 0 8  | -  | MP
+IT_P_CURE       | POTION OF CURE    | APP  | 0 0 0 0 4  | -  | HP, clears POISON/WEAK/CONFUSED/FEAR
+# scrolls (§8): no numbers; ink always $07 (§8.8)
+IT_S_TELEPORT   | SCROLL OF TELEPORT | $07 | 0 0 0 0 0 | -  | -
+IT_S_FEAR       | SCROLL OF FEAR    | $07  | 0 0 0 0 0 | -  | -
+IT_S_SLEEP      | SCROLL OF SLEEP   | $07  | 0 0 0 0 0 | -  | -
+IT_S_ENCHANT    | SCROLL OF ENCHANT | $07  | 0 0 0 0 0 | -  | -
+# book: WAR TOME (Warrior) or SPELL TOME (Mage) by hero class; <HERO> = the marker (see [book])
+IT_BOOK         | <HERO> TOME       | $43  | 0 0 0 0 0 | -  | class book (§5, §8.11 names)
+IT_BOW          | BOW               | $06  | 0 0 0 0 0 | -  | Warrior bag item, floor glyph WEAPON
+# gear, W slot (weapons: class-locked)
+IT_W_SHORT      | SHORT SWORD       | $07  | 6 0 0 0 0  | -  | 1d6 (Warrior start)
+IT_W_LONG       | LONG SWORD        | $07  | 8 1 0 0 0  | -  | 1d8 atk+1 (D2+)
+IT_W_AXE        | WAR AXE           | $07  | 10 -1 0 0 0 | -  | 1d10 atk-1 (D4+)
+IT_W_CLEAVER    | WARLORD CLEAVER   | $07  | 10 1 0 0 0 | U  | D4 boss unique: 1d10+1, atk+1 (the +1 dmg is not packed)
+IT_W_OAK        | OAK STAFF         | $06  | 4 0 0 0 0  | -  | 1d4 (Mage start)
+IT_W_IRON       | IRON STAFF        | $06  | 6 0 0 0 0  | -  | 1d6 (D2+)
+IT_W_RUNE       | RUNE STAFF        | $06  | 4 0 0 0 0  | -  | 1d4, spells +1 dmg (not packed)
+IT_W_BONE       | BONE STAFF        | $06  | 6 0 0 0 0  | U  | D4 boss unique: 1d6, spells +2 (not packed)
+# gear, A slot (armour)
+IT_A_ROBE       | ROBE              | $07  | 0 0 0 2 0  | -  | MP+2 (Mage start)
+IT_A_LEATHER    | LEATHER           | $07  | 0 0 1 0 0  | -  | DEF 1 (Warrior start)
+IT_A_CHAIN      | CHAIN MAIL        | $07  | 0 0 2 0 0  | -  | DEF 2 (D3+)
+IT_A_PLATE      | PLATE MAIL        | $07  | 0 0 3 0 0  | -  | DEF 3 (D6+), MP regen x1/2 (code)
+IT_A_SILK       | SILK CLOAK        | $07  | 0 0 1 0 0  | U  | D2 unique DEF 1, eva+2, poison-immune
+IT_A_GRAVE      | GRAVE CLOAK       | $07  | 0 0 2 0 0  | U  | D3 unique DEF 2, DRAIN R, DARK R
+# gear, H slot (helmet)
+IT_H_HOOD       | HOOD              | $07  | 0 0 0 1 0  | -  | MP+1
+IT_H_HELM       | HELM              | $07  | 0 0 1 0 0  | -  | DEF+1
+IT_H_KING       | KING HELM         | $07  | 0 0 1 0 0  | U  | D1 unique DEF 1, eva+1
+IT_H_MIRROR     | MIRROR HELM       | $07  | 0 0 2 0 0  | U  | D7 unique DEF 2, DARK X (not packed)
+# gear, C slot (charm: ring or amulet)
+IT_C_MIGHT      | MIGHT RING        | $06  | 0 1 0 0 0  | -  | atk+1
+IT_C_WARD       | WARD RING         | $06  | 0 0 1 0 0  | -  | DEF+1
+IT_C_FIRE       | FIRE RING         | $06  | 0 0 0 0 0  | -  | FIRE R (not packed)
+IT_C_MANA       | MANA AMULET       | $06  | 0 0 0 0 0  | -  | MP regen x2 (not packed)
+IT_C_PLENTY     | FOOD AMULET       | $06  | 0 0 0 0 0  | -  | FOOD burn x1/2 (not packed)
+IT_C_SCARAB     | SCARAB AMULET     | $06  | 0 0 0 0 0  | U  | D5 unique: MP regen x2, FOOD burn x1/2 (not packed)
+IT_C_GRAVE      | GRAVE RING        | $06  | 0 0 0 2 0  | U  | D6 unique: MP+2, DARK I (not packed)
+
+# --- message stems (§8.11 (3) table; lines that are NOT the item names) --------------
+[stems]
+# bank 0 (already in src/strings.txt; checked, not emitted)
+pick          | res | E:cmb_pick        | "YOU PICK UP "
+bk_read       | res | E:bk_read         | "YOU READ THE BOOK"
+st_asleep     | res | E:st_asleep       | "YOU FALL ASLEEP"
+spl_drain_heal | res | E:spl_drain_heal | "YOU FEEL HEALTHIER"
+cmb_lifts     | res | E:cmb_lifts       | "THE CURSE LIFTS: BLESSED!"
+cmb_cling     | res | E:cmb_cling       | "IT CLINGS TO YOU! CURSED "
+cmb_cursed_no | res | E:cmb_cursed_no   | "IT IS CURSED! YOU CANNOT"
+# resident (bank 1): pickup-side, key, teleport/trap, hunger
+bag_full      | res | N | "BAG FULL"
+key_found     | res | N | "YOU FIND THE LAIR KEY"
+teleported    | res | N | "YOU ARE TELEPORTED!"
+trap_dart     | res | N | "A DART HITS YOU!"
+trap_gas      | res | N | "SLEEPING GAS!"
+trap_alarm    | res | N | "AN ALARM BELL RINGS!"
+trap_bell     | res | N | "A BELL RINGS. NOTHING COMES"
+trap_found    | res | N | "TRAP FOUND: "
+tf_dart       | res | N | "DART"
+tf_gas        | res | N | "GAS"
+tf_alarm      | res | N | "ALARM"
+hg_hungry     | res | N | "YOU ARE HUNGRY"
+hg_weak       | res | N | "YOU ARE WEAK WITH HUNGER"
+hg_fed        | res | N | "YOU FEEL WELL FED"
+# overlay-only (page verbs and their effects; items_ovl_stems.asm)
+drink         | ovl | N | "YOU DRINK THE "
+read          | ovl | N | "YOU READ THE "
+eat           | ovl | N | "YOU EAT THE "
+it_was_a      | ovl | N | "IT WAS A "
+equip         | ovl | N | "YOU EQUIP "
+remove        | ovl | N | "YOU REMOVE "
+discard       | ovl | N | "YOU DISCARD "
+no_need       | ovl | N | "NO NEED"
+nothing       | ovl | N | "NOTHING HAPPENS"
+mana_surge    | ovl | N | "MANA SURGES!"
+cured         | ovl | N | "YOU ARE CURED"
+fear_flee     | ovl | N | "THEY FLEE IN TERROR!"
+sleep_fall    | ovl | N | "THEY FALL ASLEEP!"
+glows         | ovl | N | "YOUR WEAPON GLOWS!"
