@@ -254,7 +254,9 @@ title_glyph:
 
 ; menu_orn — row 6: the panel ornament pattern (orn_cells' rule), MENU_A_SUB.
 menu_orn:
-                ld   bc, 6 << 8
+                ld   b, 6
+menu_orn_b:                                    ; B = row (3E-T2: the bag page's borders)
+                ld   c, 0
 .c:             ld   a, c
                 or   a
                 jr   z, .g                     ; ORN_CAP_L
@@ -1050,11 +1052,13 @@ pause_copy:     ld   (pc_dir), a
 
 ;------------------------------------------------------------------------------
 ; page_ovl — 3E-T2: far1 from page_run (low RAM; screen 2 = the backup, shown):
-; the page state (PAGE_N, PAGE_OPEN, SND_HOLD), then unpack the bag page
-; overlay (bank-1 stream ovl_page_zx0) into the bank-5 band PAGE_ORG and run
-; it there with bank 1 paged (ovl_run hands the caller's bank, 1, on).
-; page_post — far1 from page_run after the copy-back: SND_HOLD / PAGE_OPEN
-; off; nothing pressed on the page reaches play: no FIRE tap, no shortcut or
+; the page state (PAGE_N, PAGE_OPEN), ROOM_MAP -> PAGE_MAP_SAVE, then unpack
+; the bag page overlay (bank-1 stream ovl_page_zx0) into GEN_SCRATCH
+; (PAGE_ORG) and run it there with bank 1 paged (ovl_run hands the caller's
+; bank, 1, on). The page is NOT a pause: music and effects play on (no
+; SND_HOLD; user 2026-10-20).
+; page_post — far1 from page_run after the copy-back: ROOM_MAP back,
+; PAGE_OPEN off; nothing pressed on the page reaches play: no FIRE tap, no shortcut or
 ; stick edge, a held direction waits for its release (EXIT_LOCK, as an ICON
 ; MODE exit), no DOWN window, no pending use; ICON MODE is kept.
 ; Clobbers: A, BC, DE, HL (IX kept).
@@ -1063,14 +1067,18 @@ page_ovl:       ld   hl, PAGE_N
                 inc  (hl)
                 ld   a, 1
                 ld   (PAGE_OPEN), a
-                ld   hl, SND_MODE              ; HOLD: the ISR zeroes the volumes,
-                set  SND_HOLD_BIT, (hl)        ; freezes music + effect in place
+                ld   hl, ROOM_MAP              ; the live room map: the window aliases it
+                ld   de, PAGE_MAP_SAVE
+                ld   bc, PLAY_CELLS
+                ldir
                 ld   hl, ovl_page_zx0
                 ld   c, BANK_UI1
                 ld   de, PAGE_ORG
                 jp   ovl_run
-page_post:      ld   hl, SND_MODE
-                res  SND_HOLD_BIT, (hl)
+page_post:      ld   hl, PAGE_MAP_SAVE
+                ld   de, ROOM_MAP
+                ld   bc, PLAY_CELLS
+                ldir
                 xor  a
                 ld   (PAGE_OPEN), a
                 ld   (INTENT), a

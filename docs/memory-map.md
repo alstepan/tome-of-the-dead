@@ -199,41 +199,54 @@ unchanged outside the window / stub / stack, DI), O2 a full 1,536-B blob
 (574 packed) with interrupts on from bank 0 (round trip, bank 0 back, nothing
 but ISR-owned bytes changed; ~103k T).
 
-**Page window (3E-T2, built; replaces the planned screen-2 window /
-`ovl_run7`)**: the bitmap of bank-5 char rows `PAGE_BAND_ROW`..23 (`PAGE_ORG`
-`$5000..PAGE_LIMIT` `$57FF`, **2,048 B raw**, the bottom third), while those
-rows' attrs are 0 (ink = paper: the code is invisible). Order (`page_run`,
-low RAM): `present_full` first — screen 2 := the composed bank-5 screen and is
-shown, and **that copy is the backup** —, then `ovl_run` (no bounce: bank 5 is
-always mapped) unpacks into the band and calls the overlay **with any bank
-paged** (the page: bank 1, so it calls the bank-1 menu helpers directly; it may
-page anything, far-call anything). **IX is kept** across the whole page
-(`page_run` pushes it: its callers run on the turn-intent path with IX = the
-hero); AF / BC / DE / HL are clobbered. The page overlay blacks the band attrs,
-draws the page in rows 0..`PAGE_BAND_ROW`−1 of the bank-5 screen and shows it
+**Page window (3E-T2, built; page-fullscreen rev 2026-10-20)**: the page
+overlay runs in **`GEN_SCRATCH`** (`PAGE_ORG` `$6000..PAGE_LIMIT` `$65FF`,
+**1,536 B raw**, ASSERTed), so the page itself may draw all 24 rows. While a
+room is live that window aliases `ROOM_MAP`: `page_ovl` copies the room map
+(`PLAY_CELLS` 576 B) to `PAGE_MAP_SAVE` = `GEN_SRC` `$6940` first and
+`page_post` copies it back after the close (~25k T both; ASSERT
+`PAGE_MAP_SAVE + PLAY_CELLS <= TX_DEC`: `mf_tx` decodes into `TX_DEC` on the
+page). Audit of what else lives in `$6000..$65FF` across the modal page
+(grep, 2026-10-20): `NEXT_MAP` — written only by `do_exit`'s room build and
+read by the scroll (the transition is over before any INPUT tick); its tail
+`LP_CMAP` `$6540..` — `lp_enter` scratch, rebuilt each room entry; `LG_*` —
+`level_gen` scratch (level start only); the ZX0 frame cache — the generator
+only (`GEN_TRAP` guards play; `ovl_run` clears `GEN_ZBLK`); `GEN_SRC` — the
+pause save (not nested), `pblit` (`panel_init`, level start), `copy_virt`
+staging (cold). None keeps state across the page. `tests/page.py` P1 checks
+`ROOM_MAP`, `LVL_STATE`, `LP_STATE`, `ANIM_N` / `ANIM_N2` unchanged after a
+close and `PAGE_MAP_SAVE` == the map while open. Order (`page_run`, low RAM):
+`present_full` — screen 2 := the composed bank-5 screen, shown, and **that
+copy is the backup** —, then `page_ovl` (bank 1: state, the map save,
+`ovl_run`), which calls the overlay **with bank 1 paged** (it calls the
+bank-1 menu helpers directly; it may page / far-call anything). **IX is
+kept** across the whole page (`page_run` pushes it: its callers run on the
+turn-intent path with IX = the hero); AF / BC / DE / HL are clobbered. The
+overlay draws the page over the whole bank-5 screen and shows it
 (`show_bank5`). Close: `set_screen` shows screen 2 at once (the close is
 instant), then a 6,912-B LDIR copies screen 2 back over the bank-5 screen —
 **byte-exact restore, no recompose** (room, bodies, panel, log, status marks
-/ icons, FX numbers, cursor, ICON MODE info line; `tests/page.py` P4 x20). Why
-not the screen-2 window: it would leave the page on the composed screen with
-no copy of it, forcing a recompose of every layer (render state, marks, FX,
-drips, log ring, panel) — the band costs a page layout limit (rows 0..15)
-instead. Rules: nothing may present / render / run mark, drip or decor ops
-while the band is live (the page loop is modal: `menu_frame` + `sample_input`
-only); the overlay ASSERTs `end <= PAGE_LIMIT`; it must not draw into rows
-≥ `PAGE_BAND_ROW`. Measured (`tests/page.py` P1, release build): open 221k T
-to the overlay entry (present_full + far1 + unpack 300 B) + 272k T draw =
-**493k T, 7 frames** to the first page frame; close: the copy-back 191k T,
-**215k T / 3 frames** to the next tick (the screen flips back in the first).
-Free page-time RAM besides the band (not used yet; verify before use):
-`GEN_SRC`..`TX_DEC` `$6940..$6D14` (981 B: no pause save, no generator in
-play; `tx_dec` / `mf_tx` use `TX_DEC` above it) and `NEXT_MAP` `$6300..$65FF`
-(768 B: only a room transition / the generator write it).
-**Silent band overlay (contract, not built):** the same window serves any
-cold in-play event (e.g. 3E item effects, `hero_recalc`) without showing it:
-`present_full`, `ovl_run` into the band, then copy screen 2's bottom third
-back (`$D000..$D7FF` → `$5000`, 2,048 B, ~55k T) — ~0.2M T ≈ 3 frames per use,
-no attr change needed (bank 5 is not displayed in play).
+/ icons, FX numbers, cursor, ICON MODE info line; `tests/page.py` P4 x20).
+**The page is not a pause** (user 2026-10-20): no `SND_HOLD`, the ISR and the
+player run on through the open (present_full / unpack / draw) and the close;
+P1 checks `SND_MODE` / `MUS_STATE` / `MUS_CUR` unchanged and `ay_vars`
+advancing while open. Rules: nothing may present / render / run mark, drip or
+decor ops while the page is up (the page loop is modal: `menu_frame` +
+`sample_input` only); nothing may read `ROOM_MAP` (the overlay is there);
+the overlay ASSERTs `end <= PAGE_LIMIT`. Measured (`tests/page.py` P1,
+release build, page 362 B raw / 346 packed): open 252k T to the overlay entry
+(present_full + map save + unpack) + 373k T draw (the full 6,912-B clear +
+attr bands + ornaments + text + 24 boxes) = **625k T, 9 frames** to the
+first page frame (the game screen stays on view meanwhile); close: the
+copy-back 198k T, **223k T / 3 frames** to the next tick (the screen flips
+back in the first). Free page-time RAM besides the window (verify before
+use): `GEN_SRC` + `PLAY_CELLS`.. `TX_DEC` `$6B80..$6D14` (405 B).
+**Silent in-play overlay (contract, not built):** the same window (map
+saved / restored the same way, ~25k T + the unpack) serves any cold in-play
+event that neither renders nor reads `ROOM_MAP` (3E item effects,
+`hero_recalc`, ...): no `present_full` needed (nothing on screen changes
+while it runs); ~1 frame per use. (The old bank-5 band window is retired:
+it limited the page to rows 0..15.)
 
 **Bag page (3E-T2 SPIKE: empty)**: `page_run` (low RAM, 43 B; test
 probes `page_run.closed` / `page_run.post`, no code), reached ONLY on the
@@ -242,17 +255,20 @@ an ENTER in the same tick overrides it with `IN_FIRE`: one action),
 `tpt_intent` runs `page_run` for it (CF = 0, no turn), and FIRE / ENTER on the
 BAG icon reach it through `use_icon` -> `use_slot` (L = 0, no turn, no line,
 ICON MODE stays). A held hero (`STS_HOLD`) has `INTENT` dropped by
-`turn_input`, so the page never opens while held (both entries alike); `page_ovl` / `page_post` (bank 1, 57 B): `PAGE_N` += 1,
-`PAGE_OPEN` = 1, `SND_HOLD` set (music + SFX frozen in place, mode bits kept)
-/ cleared, then the input latches: `INTENT` / `DN_T` / `DN_COMMIT` 0,
-`STICK_OLD` = `STICK`, `SC_OLD` = `PLAYER_SC`, `FIRE_ST` = `FS_USED`,
-`EXIT_LOCK` = the held directions (a held direction waits for its release),
-`resync_tick`. The overlay closes on a NEW press of FIRE, BREAK, ENTER or `I`
-(keys held at the open are ignored); S, slot keys and the stick do nothing.
-Placeholder layout (Q3 open): header row 0 (`BAG  0/20`), 5×4 grid of 16×16
-boxes (rows 2..12, cols 1..14), WORN row 13..14 (4 boxes), verb row 15;
-6×8 text from raw ASCII in the overlay (no text-block strings; `NO BAG YET`
-dropped from `strings.txt`, −7 B bank 0).
+`turn_input`, so the page never opens while held (both entries alike);
+`page_ovl` / `page_post` (bank 1, 80 B): `PAGE_N` += 1, `PAGE_OPEN` = 1, the
+room map saved / restored, then the input latches: `INTENT` / `DN_T` /
+`DN_COMMIT` 0, `STICK_OLD` = `STICK`, `SC_OLD` = `PLAYER_SC`, `FIRE_ST` =
+`FS_USED`, `EXIT_LOCK` = the held directions (a held direction waits for its
+release), `resync_tick`. The overlay closes on a NEW press of FIRE, BREAK,
+ENTER or `I` (keys held at the open are ignored); S, slot keys and the stick
+do nothing. Placeholder layout (Q3 open; golden `tests/golden/page_empty.hash`):
+rows 0-1 title `BAG` (menu font, col 2) + `ITEMS 0/20` (row 1, right), row 2
+the menu ornament (`menu_orn_b`, `MENU_A_SUB`), rows 4..14 the 5×4 grid of
+16×16 boxes (cols 9..22, centred), rows 16..17 `WORN` + 4 boxes (cols
+11..21), row 19 the description, row 20 the verbs (placeholder `USE EQUIP REMOVE DISCARD`, game.md §8.11), **row 22 the page's
+message row**, row 23 the ornament; 6×8 text from raw ASCII in the overlay
+(no text-block strings; `NO BAG YET` dropped from `strings.txt`, −7 B bank 0).
 
 ### 3E-T1 byte ledger (measured, `tools/build.sh` DISPLAY, both `DEBUG_KIT` builds)
 
@@ -277,34 +293,39 @@ runtime-only RAM (not tape-loadable; boot-block code could copy code there):
 `$5F8C..$5FFF` (116 B). Total ≈ 2.8K resident + the windows vs the ≈ 4.4K
 stored need: overlays (ZX0 ~1.6-2×) must carry the bulk of 3E's code.
 
-**T13 page rules (review of 3E-T2, binding):** (a) **entry** — only through
-`INTENT` (`IN_BAG` / the BAG icon) on the turn-intent path, never directly
-from `intent_tick` or in an ANIM tick; while the hero is held the page does
-not open (no read-only mode in 3E; if one is ever added, USE / EQUIP / READ /
-EAT / DROP must refuse while held). (b) **restore model: apply after close** —
-the copy-back restores the screen exactly as it was at the open, so it is
-valid only for a page that changes nothing on the play screen: the page is
-read-only while up; a verb only RECORDS its choice (item + verb, e.g. a
-page-result byte), the page closes, and the effect runs after the copy-back
-as the turn's action (`tpt_intent` returns CF = 1 after applying it: HP / MP /
-panel / icons / log / hero sprite / quick slots change through the normal
-paths and are presented as usual). No verb applies its effect while the page
-is up; no dirty-region recompose is planned. (c) **messages** — rows 16..23
-(panel, log, info line) are black and hold the code while the page is up:
-refusals and descriptions use the page's own message row inside rows 0..15
-(reserve one, e.g. row 14 or 15, in the Q3 layout), never `msg_push` for an
-immediate line (a pushed line would show only after the close).
+**T13 page rules (review of 3E-T2, binding; page-fullscreen rev):** (a)
+**entry** — only through `INTENT` (`IN_BAG` / the BAG icon) on the
+turn-intent path, never directly from `intent_tick` or in an ANIM tick; while
+the hero is held the page does not open (no read-only mode in 3E; if one is
+ever added, USE / EQUIP / READ / EAT / DROP must refuse while held). (b)
+**restore model: apply after close** — the copy-back restores the screen
+exactly as it was at the open, so it is valid only for a page that changes
+nothing on the play screen: the page is read-only while up; a verb only
+RECORDS its choice (item + verb, e.g. a page-result byte), the page closes,
+and the effect runs after the copy-back as the turn's action (`tpt_intent`
+returns CF = 1 after applying it: HP / MP / panel / icons / log / hero
+sprite / quick slots change through the normal paths and are presented as
+usual). No verb applies its effect while the page is up; no dirty-region
+recompose is planned. (c) **screen and messages** — the page owns all 24
+rows (panel, log and info line are hidden while it is up); refusals and
+prompts go to the page's own message row (**row 22** in the placeholder
+layout, rows 20..22 reserved for description / verbs / message), never
+`msg_push` for an immediate line (a pushed line would show only after the
+close). (d) **code size** — each page overlay ≤ **1,536 B raw**
+(`GEN_SCRATCH`, ASSERTed), chainable (one overlay may `ovl_run` the next at
+`PAGE_ORG` only as its tail); it must not read `ROOM_MAP`; music / SFX play
+on (no `SND_HOLD`).
 
 ### 3E-T2 ledger and the 3E memory plan (measured, `tools/build.sh` DISPLAY)
 
 | Area | After 3E-T1 | After 3E-T2 | Δ | What |
 |------|------|------|---|------|
-| bank 1 free (`UI1_LIMIT − ovl_blobs_end`) | 2,005 | **1,694** | −311 | +273 `ovl_page_zx0`, +57 `page_ovl` / `page_post`, −30 `ovl_test_zx0`, ±text |
-| bank 7 free (release / kit) | 226 / 176 | **213 / 163** | −13 | `use_slot`'s SA_BAG branch calls `page_run`; review: `tpt_intent`'s `IN_BAG` path (+10) |
-| low RAM spare (`LOWRAM_SPARE`) | 376 | **333** | −43 | `page_run` (incl. push / pop IX) |
+| bank 1 free (`UI1_LIMIT − ovl_blobs_end`) | 2,005 | **1,617** (after merging main 2026-10-20) | −388 | +346 `ovl_page_zx0` (fullscreen rev: was 273), +80 `page_ovl` / `page_post` (+ the map save), +1 `menu_orn_b`, −30 `ovl_test_zx0`, ±text |
+| bank 7 free (release / kit) | 226 / 176 | **194 / 144** (after merging main: incl. main's own bank-7 growth) | −13 by the page | `use_slot`'s SA_BAG branch calls `page_run`; review: `tpt_intent`'s `IN_BAG` path (+10) |
+| low RAM spare (`LOWRAM_SPARE`) | 376 | **324** (after merging main) | −43 by the page | `page_run` (incl. push / pop IX) |
 | bank 2 (to `FRT` + `kind_tab` pad) | 29 + 85 | 18 + 98 (after merging 3E-T0) | 0 | `bag_msg` gone, `I` sets `INTENT` = `IN_BAG` (same size) |
 | bank 0 text / pool slack | 2,680 / 2,376 | 2,673 / 2,383 | +7 | `NO BAG YET` dropped |
-| bank 3 free to `AY_RESERVE` | 205 | 205 | 0 | — |
+| bank 3 free to `AY_RESERVE` | 205 | 103 (DEC1) | 0 by the page | — |
 
 Menu art ZX0 (lever (b)), measured with `tools/bin/zx0`: the menu-only part
 (`menu_title` + lines + `menu_torch*`, 385 B) packs to 284 B (net ≈ +90 B
@@ -316,20 +337,20 @@ the estimated 0.5K; worth doing only if 3E ends < 100 B short; needs
 `tests/gfx_integrity.py`'s menu-art check pointed at the unpacked copy).
 
 **What 3E can count on** (kit build, the binding one): **stored** — bank 1
-**1,694 B** (packed overlay streams or far1 code), bank 7 **163 B**, low RAM
-**333 B**, bank 3 **103 B** (after DEC1), bank 2 **18 B**: ≈ **2.31K** stored. **Raw
-windows** — the page band **2,048 B** per overlay (page; or a silent in-play
-event overlay at ~3 frames a use) + 981 B (`GEN_SRC`..) + 768 B
-(`NEXT_MAP`..) page-time scratch; `GEN_SCRATCH` **1,536 B** at a level start
-/ menu (`ovl_run`). **Runtime RAM** (state only, not tape-loaded):
+**1,617 B** (packed overlay streams or far1 code), bank 7 **144 B** (194
+release), low RAM **324 B**, bank 3 **103 B** (after DEC1), bank 2 **18 B**:
+≈ **2.21K** stored (measured after merging main 2026-10-20). **Raw
+windows** — `GEN_SCRATCH` **1,536 B** per overlay: the page (map saved), a
+silent in-play event overlay (~1 frame a use), a level start / the menu
+(`ovl_run`); + 405 B page-time scratch (`$6B80..$6D14`). **Runtime RAM** (state only, not tape-loaded):
 `$5CC0..$5DFF` 320 B + `$5F8C..$5FFF` 116 B (fits T3's ≈ 130-B item block).
 **Still to win:** lever (c) `AY_RESERVE` +0.45K (bank 3, after T0), (e) the
 `level_gen` overlay +0.5K (bank 3), (g) font trim +0.2–0.3K, (b) +0.09K →
 ≈ +1.2K → ≈ 3.7K stored vs the ≈ 4.4K stored need (≈ 3.7K with (f) the
 scaled floor-glyph icons, ruled 2026-10-19). **Must be overlays:** the page
-(T13 input / T14 drawing / T15 READ + the verbs' effects, ≤ 2,048 B raw each,
+(T13 input / T14 drawing / T15 READ + the verbs' effects, ≤ 1,536 B raw each,
 chainable), the level-start item / trap / BUC / ID-shuffle generator (T6,
-`GEN_SCRATCH`), and — via the silent band overlay — the cold effects shared by
+`GEN_SCRATCH`), and — via the silent in-play overlay — the cold effects shared by
 quick slots and page verbs (quaff / read / eat / teleport / `hero_recalc` /
 reveal / shatter / bless). Resident only: the hot / per-turn hooks (hunger
 tick, `floor_pickup` → `bag_add`, quick-slot auto-fill, the trap step check)

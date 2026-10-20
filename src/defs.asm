@@ -104,15 +104,16 @@ MUS_ROOM        EQU MUS_LAMENT      ; the in-play room tune (SND-3: Q rotation r
 ; TILE_GLYPHS[ROOM_MAP] — and its 6 KB hold the bank-7 cold code (far7).
 SCREEN7_BITMAP  EQU $C000           ; bank 7: displayed bitmap (copy of $4000)
 SCREEN7_ATTR    EQU $D800           ; bank 7: displayed attrs  (copy of $5800)
-; 3E-T2 page window (docs/memory-map.md "Overlays"): while the bag page is up,
-; screen 2 holds the composed screen (the backup, present_full) and the bank-5
-; screen shows the page in char rows 0..PAGE_BAND_ROW-1; the char rows from
-; PAGE_BAND_ROW down are black (attr 0: ink = paper) and their bitmap holds the
-; page overlay's code (ovl_run, always mapped, any $C000 bank may be paged).
-PAGE_BAND_ROW   EQU 16              ; the bottom third
-PAGE_ORG        EQU SCREEN_BITMAP + PAGE_BAND_ROW * 256   ; $5000 (rows 16..23, 2,048 B)
-PAGE_LIMIT      EQU SCREEN_BITMAP + SCREEN_BITMAP_LEN     ; $5800
-                ASSERT (PAGE_BAND_ROW & 7) == 0
+; 3E-T2 page window (docs/memory-map.md "Overlays", page-fullscreen rev): while
+; the bag page is up, screen 2 holds the composed screen (the backup,
+; present_full), the bank-5 screen shows the page on all 24 rows, and the page
+; overlay runs in GEN_SCRATCH ($6000, 1,536 B): page_ovl saves the live room
+; map (ROOM_MAP, PLAY_CELLS B) to PAGE_MAP_SAVE first and page_post puts it back
+; (NEXT_MAP, the ZX0 frame cache and the LG_* / LP_CMAP scratch hold nothing
+; that lives across the modal page).
+PAGE_ORG        EQU GEN_SCRATCH
+PAGE_LIMIT      EQU GEN_SCRATCH + GEN_SCRATCH_LEN
+PAGE_MAP_SAVE   EQU GEN_SRC             ; GEN_SRC.. (no pause save / pblit / generator meanwhile)
 B7_CODE         EQU $E000           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), tape
                                     ;     block joined to the TSET_LO tilesets below it
 B7_LIMIT        EQU $F800           ; ... up to the attr shadow (ASSERTed)

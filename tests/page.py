@@ -3,18 +3,21 @@
 page_post, src/page_ovl.asm; docs/memory-map.md "Overlays", the page window).
 Release build (DEBUG_KIT=0), real play.
 
-  P1  I opens the page: PAGE_OPEN, SND_HOLD set (mode bits kept), bank 5 shown,
-      the band (rows PAGE_BAND_ROW..23) all attr 0, the band bitmap ==
-      build/ovl/page.bin (round trip of the bank-1 stream), screen 2 == the
-      screen before (the backup); open / close cost in T and frames
+  P1  I opens the page: PAGE_OPEN, NO SND_HOLD (the page is not a pause: SND_MODE,
+      MUS_STATE / MUS_CUR unchanged, the player state ay_vars keeps changing, AY_CALLS
+      advance), bank 5 shown, GEN_SCRATCH == build/ovl/page.bin (round trip of the
+      bank-1 stream), PAGE_MAP_SAVE == the room map, screen 2 == the screen before
+      (the backup), golden `page_empty` (all 24 rows); open / close cost
   P2  keys inside the page do not leak: slot key, S, ENTER held, Q / A / O / P,
       DOWN held -> no turn, SEL_SLOT / SND_MODE / ICON_MODE / hero unchanged, page up
   P3  closing with a direction held: the hero does not move (EXIT_LOCK) while it is
       held, nor on its release; a fresh tap afterwards works
   P4  20 open / close cycles (I / BAG icon via 9 + ENTER / FIRE tap / ICON MODE FIRE;
       closed by FIRE / BREAK / ENTER / I; sound modes 3 / 2 / 0): each time the
-      displayed AND composed screens == before, no turn, SND_HOLD / PAGE_OPEN clear,
-      mode kept, ICON MODE kept, displayed == composed
+      displayed AND composed screens == before, no turn, no SND_HOLD, PAGE_OPEN clear,
+      mode kept, ICON MODE kept, displayed == composed; after the 20 cycles ROOM_MAP,
+      LVL_STATE, LP_STATE, ANIM lists, P_ENTITIES, RNG_STATE, tile_flags, FLOOR_LIST,
+      MK_RAM, the drip state and ITEM_RAM are unchanged
   P5  review fixes: BAG selected + I and ENTER in the same tick -> one open only;
       closing with ENTER / I never re-opens nor uses the icon; no turn; a held hero
       (STS_HOLD): I opens nothing (INTENT dropped on the turn-intent path)
@@ -26,13 +29,14 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+_UPD = "--update-golden" in sys.argv
 sys.argv = [sys.argv[0], "999"]               # keep game.py's item filter inert
 import game  # noqa: E402
+game.UPDATE = _UPD
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, SCREEN_FRAME_LEN  # noqa: E402
 
 KIT = bool(S.get("KIT_DEBUG", 0))
 HOLD = 0x80
-BAND = S["PAGE_BAND_ROW"]
 CLOSERS = (("FIRE",), ("CAPS", "SPACE"), ("ENTER",), ("I",))
 
 
@@ -49,6 +53,26 @@ def run(p, check):
     before, comp0 = p.frame(), p.composed_frame()
     check("P1 settled: displayed == composed before", before == comp0)
     z = p.z
+    ncell = S["PLAY_CELLS"]
+    keep = {"map": bytes(z.read_memory(S["ROOM_MAP"], ncell))}
+
+    def state():
+        """Game state that must survive any number of page opens / closes."""
+        return {k: bytes(z.read_memory(S[a] if isinstance(a, str) else a, n)) for k, a, n in (
+            ("ROOM_MAP", "ROOM_MAP", ncell), ("LVL_STATE (GEN_RNG, seeds, FLOOR_LIST)", "LVL_STATE", 320),
+            ("LP_STATE (LP_RNG)", "LP_STATE", S["LP_END"] - S["LP_STATE"]), ("ANIM_N", "ANIM_N", 49),
+            ("ANIM_N2", "ANIM_N2", 49), ("P_ENTITIES", "P_ENTITIES", 512), ("RNG_STATE", "RNG_STATE", 2),
+            ("tile_flags", "tile_flags", 64), ("FLOOR_LIST", "FLOOR_LIST", 128),
+            ("MK_RAM", "MK_RAM", S["MK_RAM_END"] - S["MK_RAM"]), ("DRIP", "DRIP_ST", 11),
+            ("ITEM_RAM", "ITEM_RAM", S["ITEM_RAM_LEN"]))}
+    mus0 = (p.rb("SND_MODE"), p.rb("MUS_STATE"), p.rb("MUS_CUR"))
+
+    def ayv():
+        z.cmd("set-memory-zone 0")
+        try:
+            return bytes(z.read_memory(3 * 16384 + S["ay_vars"] - 0xC000, S["ay_vars_end"] - S["ay_vars"]))
+        finally:
+            z.cmd("set-memory-zone -1")
     z.cmd("set-breakpoint 5 PC=%d" % S["page_run"])
     z.cmd("set-breakpoint 6 PC=%d" % S["PAGE_ORG"])
     z.cmd("set-breakpoint 7 PC=%d" % S["page_run.closed"])
@@ -75,14 +99,21 @@ def run(p, check):
     f_open = (p.rb("SYS_FRAMES") - f0) & 255
     check("P1 I -> page_run -> overlay -> page loop", ok)
     raw = open(REPO / "build" / "ovl" / "page.bin", "rb").read()
-    band = bytes(z.read_memory(S["PAGE_ORG"], len(raw)))
-    check("P1 band bitmap == build/ovl/page.bin (%d B)" % len(raw), band == raw,
-          sum(a != b for a, b in zip(band, raw)))
-    mode = p.rb("SND_MODE")
-    attrs = bytes(z.read_memory(S["SCREEN_ATTR"] + 32 * BAND, 32 * (24 - BAND)))
-    check("P1 open: PAGE_OPEN 1, SND_HOLD set (mode 3 kept), bank 5 shown, band attrs 0",
-          (p.rb("PAGE_OPEN"), mode, shown5(), set(attrs)) == (1, 3 | HOLD, True, {0}),
-          (p.rb("PAGE_OPEN"), hex(mode), shown5(), sorted(set(attrs))[:4]))
+    win = bytes(z.read_memory(S["PAGE_ORG"], len(raw)))
+    check("P1 GEN_SCRATCH == build/ovl/page.bin (%d B, limit %d)" % (len(raw), S["GEN_SCRATCH_LEN"]),
+          win == raw, sum(a != b for a, b in zip(win, raw)))
+    check("P1 PAGE_MAP_SAVE holds the room map",
+          bytes(z.read_memory(S["PAGE_MAP_SAVE"], ncell)) == keep["map"])
+    a0, c0 = ayv(), p.rw("AY_CALLS")
+    p.tick(10)
+    a1, c1 = ayv(), p.rw("AY_CALLS")
+    mus1 = (p.rb("SND_MODE"), p.rb("MUS_STATE"), p.rb("MUS_CUR"))
+    check("P1 open: PAGE_OPEN 1, bank 5 shown, no SND_HOLD: SND_MODE / MUS_STATE / MUS_CUR "
+          "unchanged, the player keeps sequencing (ay_vars change, AY_CALLS +10 frames)",
+          (p.rb("PAGE_OPEN"), shown5(), mus1, a1 != a0, (c1 - c0) & 0xFFFF >= 10)
+          == (1, True, mus0, True, True),
+          (p.rb("PAGE_OPEN"), shown5(), mus0, mus1, a1 != a0, c1 - c0))
+    game.golden(p.h, "page_empty", p.frame())
     z.cmd("set-memory-zone 0")
     try:
         b7 = bytes(z.read_memory(7 * 16384, SCREEN_FRAME_LEN))
@@ -125,7 +156,7 @@ def run(p, check):
     e1 = hero()
     check("P2 keys on the page: page still up, no turn, slot / sound / hero / ICON MODE kept",
           (opened, p.rb("PAGE_OPEN"), tc(), p.rb("SEL_SLOT"), p.rb("SND_MODE"), e1["X"], e1["FLAGS"],
-           p.rb("ICON_MODE")) == (True, 1, t0, sel0, m0 | HOLD, e0["X"], e0["FLAGS"], 0),
+           p.rb("ICON_MODE")) == (True, 1, t0, sel0, m0, e0["X"], e0["FLAGS"], 0),
           (opened, p.rb("PAGE_OPEN"), tc() - t0, p.rb("SEL_SLOT"), hex(p.rb("SND_MODE")), e1["X"], e0["X"]))
 
     # ---- P3: close with a direction held ---------------------------------------
@@ -145,6 +176,7 @@ def run(p, check):
     p.settle(4)
 
     # ---- P4: 20 cycles ----------------------------------------------------------
+    st0 = state()
     bad = []
     for i in range(20):
         smode = (3, 2, 0)[i % 3]
@@ -182,15 +214,19 @@ def run(p, check):
         aft, comp1 = p.frame(), p.composed_frame()
         st = (up, snd_open, p.rb("PAGE_OPEN"), p.rb("SND_MODE"), tc(), p.rb("ICON_MODE"),
               p.rb("SEL_SLOT"), aft == before, comp1 == before, aft == comp1)
-        want = (True, smode | HOLD, 0, smode, t0, im0, sel0, True, True, True)
+        want = (True, smode, 0, smode, t0, im0, sel0, True, True, True)
         if st != want:
             bad.append((i, how, st))
         if icon:                                  # leave ICON MODE (UP)
             p.tap("Q")
             p.tick(2)
     check("P4 20 open / close cycles (I / ENTER / FIRE / ICON MODE; FIRE / BREAK / ENTER / I; "
-          "modes 3 / 2 / 0): screens identical, no turn, HOLD cleared, mode / ICON MODE / slot kept",
+          "modes 3 / 2 / 0): screens identical, no turn, no SND_HOLD, mode / ICON MODE / slot kept",
           bad == [], bad[:3])
+    st1 = state()
+    check("P4 after the 20 cycles: ROOM_MAP, LVL_STATE, LP_STATE, ANIM lists, P_ENTITIES, RNG_STATE, "
+          "tile_flags, FLOOR_LIST, MK_RAM, drip state, ITEM_RAM unchanged",
+          st1 == st0, [k for k in st0 if st1[k] != st0[k]])
 
     # ---- P5: same-tick ENTER + I, close keys never re-open; held hero ---------
     p.settle(3)

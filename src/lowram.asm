@@ -2218,7 +2218,9 @@ zx0_code_end:
 ; can never make the next zx0_frame skip its unpack.
 ; Window contract: GEN_SCRATCH .. +GEN_SCRATCH_LEN aliases ROOM_MAP + NEXT_MAP
 ; — only while neither map is live: boot, the menu, a level start before
-; level_show / build_room_map; never in play or during a room transition.
+; level_show / build_room_map; never during a room transition. In play only
+; with ROOM_MAP saved and put back around it and nothing rendering / reading
+; the map meanwhile: the modal bag page (page_ovl / page_post, PAGE_MAP_SAVE).
 ; In : HL = packed stream (in bank C's $C000 window, or bank 2 / 5 RAM),
 ;      C = the bank holding it, DE = load + entry address (ASSERTed in the
 ;      overlay's build: load .. load + raw <= GEN_SCRATCH + GEN_SCRATCH_LEN),
@@ -2252,10 +2254,11 @@ ovl_run:
 ; from tpt_intent (INTENT = IN_BAG: the I key) or use_slot (FIRE / ENTER on
 ; the BAG icon): both on the turn-intent path, INPUT phase only, never while
 ; the hero is held (turn_input drops INTENT then); no turn.
-; Play and sound freeze (SND_HOLD). Open: present_full makes screen 2 the
-; composed screen and shows it — that copy is the backup —, then page_ovl
-; (bank 1) runs the page overlay in the bank-5 band PAGE_ORG, which draws the
-; page on the bank-5 screen and shows it until FIRE / BREAK / ENTER / I.
+; Play freezes; music and effects play on (not a pause). Open: present_full
+; makes screen 2 the composed screen and shows it — that copy is the backup —,
+; then page_ovl (bank 1) runs the page overlay in GEN_SCRATCH (ROOM_MAP saved),
+; which draws the page on all 24 rows of the bank-5 screen and shows it until
+; FIRE / BREAK / ENTER / I.
 ; Close: screen 2 is shown again at once and copied back over the bank-5
 ; screen, so room, bodies, panel, log, marks, FX and the cursor come back
 ; byte for byte (no recompose); page_post (bank 1) resets the input latches.
@@ -2283,7 +2286,7 @@ page_run:
                 call restore_page
                 pop  ix
 .post:                                         ; test probe (no code): copied back
-                ld   hl, page_post             ; bank 1: SND_HOLD off, input latches,
+                ld   hl, page_post             ; bank 1: ROOM_MAP back, input latches,
                 jp   far1                      ; resync_tick
 
 ; frt_ptr — HL = FRT + A*16 ; frt_ptr_cur uses GEN_FID.  Clobbers: A, DE, HL

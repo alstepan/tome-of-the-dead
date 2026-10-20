@@ -629,8 +629,8 @@ POOL_BOOT_NEED  EQU POOL_MONSTERS + 2 * 576 + 2 * 576   ; + 2 idles, + straddle 
 ;==============================================================================
 ; OVERLAYS (3E-T1) — code assembled at its runtime load address, stored
 ; ZX0-packed (bank 1 `ovl_blobs`), unpacked + called by ovl_run (lowram.asm;
-; the GEN_SCRATCH window, or 3E-T2's page window — the bank-5 bitmap band
-; PAGE_ORG..PAGE_LIMIT while the bag page is up; docs/memory-map.md
+; the GEN_SCRATCH window: at boot / menu / level start, or — ROOM_MAP saved
+; to PAGE_MAP_SAVE — while the modal bag page is up; docs/memory-map.md
 ; "Overlays"). Two assembler passes (tools/build.sh): OVL_PASS 1 assembles each
 ; raw image here — bank 0 scratch above tap_loader, pool at runtime, never
 ; loaded — and SAVEBINs it to build/ovl/<name>.bin; build.sh packs each .bin
@@ -650,6 +650,8 @@ page_ovl_end:
                 ENT
 PAGE_OVL_LEN    EQU page_ovl_end - page_ovl_main
                 ASSERT page_ovl_end <= PAGE_LIMIT
+                ASSERT PAGE_MAP_SAVE + PLAY_CELLS <= TX_DEC     ; mf_tx decodes into TX_DEC on the page
+                ASSERT PAGE_MAP_SAVE >= GEN_SCRATCH + GEN_SCRATCH_LEN
                 SAVEBIN "build/ovl/page.bin", ovl_raw_page, PAGE_OVL_LEN
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000
