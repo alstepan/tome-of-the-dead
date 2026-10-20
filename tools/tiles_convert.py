@@ -13,7 +13,7 @@ cold-data DEFB tables:
   /private/tmp/.../scratchpad/tiles_b3b2/*.png   previews (--preview DIR)
 
 Contract (docs/memory-map.md "3B contracts", src/level_defs.asm):
-  tile ids 0..31 common, 32..63 per level (60..63 reserved: attackables, D8 lectern),
+  tile ids 0..31 common, 32..63 per level (60..63 = floor-item glyphs FLASK/FOOD/WEAPON/WORN; the D8 Sanctum lectern is swapped in by 3E-T6),
   slot = 32 glyphs (ids 32..63, id order) + 32 attrs; per-level decor <= 28 ids (32..59).
 
 Usage: python3 tools/tiles_convert.py [--check] [--preview DIR]
@@ -61,7 +61,7 @@ COMMON = [
     (7,  "T_HOLE_L",     ("live", "tiles_bg_ladder_l", A_LAD)),
     (8,  "T_HOLE_M",     ("live", "tiles_bg_ladder_m", A_LAD)),
     (9,  "T_HOLE_R",     ("live", "tiles_bg_ladder_r", A_LAD)),
-    (10, "T_POTION",     ("item", "item_potion", 0, 0x42)),             # stays until 3E (spare after)
+    (10, "T_TRAP",       ("grid", "items3e.tiles", "trap")),            # 3E revealed trap plate, $42 (§1.5)
     (11, "T_DOOR_JAMB_L", ("grid", "b10_door_grate.tiles", "door_jamb_l")),  # B10 open door (was cobweb)
     (12, "T_CHAIN",      ("grid", "decor.tiles", "chain")),             # chest TR
     (13, "T_BONES_0",    ("cell", "bones.tiles", "bones", 0)),          # DEC1 dead skeleton, skull end
@@ -70,8 +70,10 @@ COMMON = [
     (16, "T_BONES_2",    ("cell", "bones.tiles", "bones", 2)),
     # D3-7 T6 (game.md §6.3): ids 17 / 18 = the dropped-ammo floor glyphs (were the drips,
     # no longer placed). Concept ammo.tiles (draft 2026-10-13, canvas review pending).
-    (17, "T_DAGGERS",    ("grid", "ammo.tiles", "daggers")),            # $47, = DAGGERS icon ink
-    (18, "T_ARROWS",     ("grid", "ammo.tiles", "arrows")),             # $07 (game.md §6.3)
+    # 3E (game.md §8.11 Q1, user-approved items3e.tiles): 17 = AMMO (daggers + arrows, one bundle,
+    # $47 default; T_DAGGERS = T_ARROWS = 17), 18 = PAGES (scroll / book, $07).
+    (17, "T_AMMO",       ("grid", "items3e.tiles", "ammo")),            # $47
+    (18, "T_PAGES",      ("grid", "items3e.tiles", "pages")),           # $07
     (19, "T_END_L",      ("live", "tiles_bg_platform_end_l", A_FLOOR)), # = T_PIT_R (cap at p+3)
     (20, "T_END_R",      ("live", "tiles_bg_platform_end_r", A_FLOOR)), # = T_PIT_L (cap at p-1)
     (21, "T_DOOR_ARCH_L", ("grid", "door.tiles", "door_arch_l")),
@@ -93,7 +95,7 @@ FLOOR_IDS = {1, 3, 19, 20}              # platform, wall-in-floor-row, end caps 
 WALL_IDS = {2, 28, 29, 30}
 BONES_IDS = (13, 15, 16, 31)    # DEC1 dead skeleton, screen order; static (no TF_ANIM)
 DECOR_IDS = {12, 13, 15, 16, 31}   # air-band decor: never in a floor row
-LIVE_UNCHANGED = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 19, 20}   # byte-identical to init_tiles
+LIVE_UNCHANGED = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 19, 20}   # byte-identical to init_tiles
 LEGACY_ALIASED = {11, 12, 13, 14, 17, 18}   # chest/zap ids reused by decor / door jambs (B3B-13) / ammo (D3-7)
 
 # Per-level colour schemes (game.md §1.2): (ATTR_FLOOR, ATTR_WALL)
@@ -150,7 +152,13 @@ LEVEL_OBJECTS = [
     ["TORCH_TALL", "BANNER_TALL", "PATCH_B", "GLOW"],                     # D7 Fortress (-PILLAR)
     ["BRAZIER_BIG", "BOOKSHELF", "BANNER_TALL", "TORCH_SLIM", "COBWEB", "COBWEB_R", "GLOW"],  # D8
 ]
-LECTERN = ("decor_r4.grid", "lectern")      # D8 only, ids 60..63 (slot 28..31), 2x2 attackable
+LECTERN = ("decor_r4.grid", "lectern")      # D8 Sanctum only: 2x2 attackable, ids 60..63 swapped in by T6
+                                            # (tileset_lectern); the D8 slot itself carries the items
+# 3E floor-item class glyphs in slot 28..31 (ids 60..63) of EVERY depth (game.md §8.11 Q1)
+ITEM_SLOTS = [("T_FLASK", ("item", "item_potion", 0, 0x42)),    # the old T_POTION glyph bytes
+              ("T_FOOD", ("grid", "items3e.tiles", "food")),
+              ("T_WEAPON", ("grid", "items3e.tiles", "weapon")),
+              ("T_WORN", ("grid", "items3e.tiles", "worn"))]
 
 # Panel: bar icons (concept_r4.py MAGE_BAR / WARRIOR_BAR inks = approved screen) in id order
 BAR_ICONS = [("STAFF", "staff2416", 0x46), ("SPARK", "spark2416", 0x43),
@@ -390,13 +398,12 @@ def build_level(d):
                 grid.append(irow)
             fid.append(grid)
         ids[on] = fid
-    lect = None
-    if d == 8:
-        cl = cells_of(*LECTERN)
-        lect = [[28 + 2 * r + c for c in range(2)] for r in range(2)]
-        for r in range(2):
-            for c in range(2):
-                glyphs[28 + 2 * r + c], attrs[28 + 2 * r + c] = cl[r][c]
+    for k, (_, src) in enumerate(ITEM_SLOTS):
+        if src[0] == "item":
+            glyphs[28 + k], attrs[28 + k] = item_tile(src[1], src[2]), src[3]
+        else:
+            glyphs[28 + k], attrs[28 + k] = tile8(src[1], src[2])
+    lect = [[28 + 2 * r + c for c in range(2)] for r in range(2)] if d == 8 else None
     return glyphs, attrs, ids, lect, nxt
 
 
@@ -423,11 +430,7 @@ def level_flags(d, ids, lect, enum):
                     if v != v0:
                         fl[v] |= enum["TF_ANIM"]
                         fl[v0] |= enum["TF_ANIM"]
-    if lect:
-        for row in lect:
-            for v in row:
-                fl[v] = enum["TF_SOLID"] | enum["TF_ATTACK"]
-    return fl
+    return fl                   # 28..31 (ids 60..63) = floor items: flags 0 (the lectern: tileset_lectern)
 
 
 def validate_common(glyphs, attrs):
@@ -462,8 +465,9 @@ def validate_level(d, glyphs, attrs, nxt):
             fail(f"D{d} slot {i}: paper not black (decor must be air-band)")
         if attrs[i] & 0x80:
             fail(f"D{d} slot {i}: FLASH")
-    if d != 8 and any(any(g) for g in glyphs[28:]):
-        fail(f"D{d}: slots 28..31 (ids 60..63) must be empty")
+    for k in range(4):
+        if not any(glyphs[28 + k]):
+            fail(f"D{d}: slot {28 + k} (id {60 + k}) must hold a floor-item glyph")
     if nxt > 28:
         fail(f"D{d}: {nxt} ids")
 
@@ -486,8 +490,8 @@ def emit_common(g, a, names, notes):
          "; Size        : 256 + 32 = 288 B.   Clash: one ink+paper per tile by construction.",
          "; Aliases     : T_WALL_DARK = T_BRICK (2), T_PIT_R = T_END_L (19), T_PIT_L = T_END_R (20).",
          "; Retired ids : 11-14 / 17-18 were chest / zap: 11/14 = open-door jambs, 12/13 = decor",
-         ";               (cobweb/moss moved per-level), 17/18 = dropped-ammo stacks T_DAGGERS /",
-         ";               T_ARROWS (D3-7 T6, concept ammo.tiles).  Id 10 = potion.",
+         ";               (cobweb/moss moved per-level), 17 = T_AMMO (daggers + arrows), 18 = T_PAGES",
+         ";               (3E, items3e.tiles).  Id 10 = T_TRAP (the potion moved to id 60 FLASK).",
          "; ============================================================================",
          "tiles_common_glyphs:"]
     for i in range(32):
@@ -506,7 +510,8 @@ def emit_tilesets(sets):
          "; GENERATED by tools/tiles_convert.py",
          "; Slot (320 B) = +0 glyphs of ids 32..63 (32 x 8 B, id order) + +256 attrs (32 B)",
          ";               + +288 TILE_FLAGS (32 B, B3B-8: TF_SOLID wall-ink objects, TF_ANIM glyph swaps).",
-         "; Slot i = depth i+1.  Ids 60..63 (slot glyph 28..31) = attackable objects (D8 lectern).",
+         "; Slot i = depth i+1.  Ids 60..63 (slot glyph 28..31) = 3E floor-item glyphs FLASK FOOD WEAPON WORN",
+         ";   on every depth (the D8 lectern is NOT in the slot: swapped in by T6, game.md §8.11 Q1).",
          "; Total 8 x 320 = 2560 B.  Per-level decor <= 28 ids (32..59).  Object -> id: tileset_ids.inc",
          "; Attr rule: wall-ink objects (pillar, plaster patches) carry ATTR_WALL[depth]; paper black.",
          "; TSET_SPLIT (a macro of the includer, src/main.asm) moves slots 4..7 to TSET_HI.",
@@ -517,7 +522,7 @@ def emit_tilesets(sets):
             L.append("        TSET_SPLIT                ; slots 4..7 (D5..D8) -> TSET_HI")
         L.append(f"tileset_d{d}:                       ; D{d}: ATTR_FLOOR ${SCHEME[d-1][0]:02X} "
                  f"ATTR_WALL ${SCHEME[d-1][1]:02X}, {n} decor ids" +
-                 (" + lectern 60..63" if d == 8 else ""))
+                 "")
         for i in range(32):
             L.append("        DEFB " + ",".join(f"${b:02X}" for b in g[i]) + f"    ; id {32+i}")
         L += [f"        ; attrs D{d}"] + defb(bytes(a), 8)
@@ -679,8 +684,6 @@ def preview(dirpath, cg, ca, names, sets, all_ids, icons, e24, e16, lab, orn):
         ids, lect = all_ids[d - 1]
         W = 12 * cell
         objs = [(on, f, grid) for on, fr in ids.items() for f, grid in enumerate(fr)]
-        if lect:
-            objs.append(("LECTERN", 0, lect))
         # lay objects left-to-right with wrap
         x = y = 4
         rowh = 0
@@ -762,7 +765,7 @@ def main():
     print(f"common: 32 glyphs 256 B + 32 attrs = 288 B; tilesets: 8 x 320 = 2560 B (+ flags); "
           f"ORN 64 B; bar icons 12 x 54 = 648 B (+ empty24 54, empty16 36, labels 4 x 9)")
     print("decor ids per level:", ", ".join(f"D{d}={n}" for d, (_, _, n, _) in enumerate(sets, 1)),
-          "(cap 28; D8 + lectern 60..63)")
+          "(cap 28; ids 60..63 = floor-item glyphs on every depth)")
     if errors:
         print("VALIDATION FAILED:")
         for e in errors:

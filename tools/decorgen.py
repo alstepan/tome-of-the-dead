@@ -205,9 +205,11 @@ def counts(w, h, fl):
 
 def is_decor(t):
     """a tile id the 1-cell ring must not hold (placed decor): chain, the four BONES ids and
-    everything per-level / wall-set (>= 28). Not 17 / 18 (the ammo floor glyphs: items, like the
-    potion 10).  DEC1: 12 chain, 13 / 15 / 16 / 31 bones (31 = candles before)."""
-    return t >= 28 or t in (12, 13, 15, 16, 31)
+    everything per-level / wall-set (28..59). Not 17 / 18 (ammo / pages floor glyphs) and not
+    60..63 (3E floor-item class glyphs FLASK FOOD WEAPON WORN on every depth: items, like the
+    old potion 10; the D8 lectern is stamped outside decorgen).  DEC1: 12 chain, 13 / 15 / 16 /
+    31 bones (31 = candles before)."""
+    return 28 <= t < 60 or t in (12, 13, 15, 16, 31)
 
 
 def floorish(t):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ammo_preview.py — review fragment + PNGs for the D3-7 T6 dropped-ammo floor glyphs.
 
-Source: assets/gfx/concept/grid/ammo.tiles (ids 17 T_DAGGERS / 18 T_ARROWS, via tiles_convert).
+Source: assets/gfx/concept/grid/ammo.tiles (HISTORICAL: the old dagger/arrow stand-ins on ids 17/18; since 3E the merged AMMO glyph is id 17 from items3e.tiles and id 18 is PAGES).
 Writes:
   assets/gfx/tiles/ammo.svg.html  one canvas-style SVG artboard per glyph (x8) + composed
                                   strips (air row over the floor row) on a D1 and a D5 floor,

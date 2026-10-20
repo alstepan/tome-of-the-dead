@@ -8,8 +8,8 @@
 ; Size        : 256 + 32 = 288 B.   Clash: one ink+paper per tile by construction.
 ; Aliases     : T_WALL_DARK = T_BRICK (2), T_PIT_R = T_END_L (19), T_PIT_L = T_END_R (20).
 ; Retired ids : 11-14 / 17-18 were chest / zap: 11/14 = open-door jambs, 12/13 = decor
-;               (cobweb/moss moved per-level), 17/18 = dropped-ammo stacks T_DAGGERS /
-;               T_ARROWS (D3-7 T6, concept ammo.tiles).  Id 10 = potion.
+;               (cobweb/moss moved per-level), 17 = T_AMMO (daggers + arrows), 18 = T_PAGES
+;               (3E, items3e.tiles).  Id 10 = T_TRAP (the potion moved to id 60 FLASK).
 ; ============================================================================
 tiles_common_glyphs:
         DEFB $00,$00,$00,$00,$00,$00,$00,$00    ;  0 T_AIR
@@ -22,15 +22,15 @@ tiles_common_glyphs:
         DEFB $60,$7F,$60,$60,$60,$7F,$60,$60    ;  7 T_HOLE_L
         DEFB $00,$FF,$00,$00,$00,$FF,$00,$00    ;  8 T_HOLE_M
         DEFB $06,$FE,$06,$06,$06,$FE,$06,$06    ;  9 T_HOLE_R
-        DEFB $38,$10,$38,$5C,$BE,$FE,$FE,$7C    ; 10 T_POTION
+        DEFB $00,$00,$00,$00,$00,$00,$FF,$DB    ; 10 T_TRAP
         DEFB $A0,$A0,$A0,$A0,$A0,$A0,$A0,$A0    ; 11 T_DOOR_JAMB_L
         DEFB $18,$24,$24,$24,$18,$18,$18,$18    ; 12 T_CHAIN
         DEFB $00,$7C,$FE,$92,$92,$FE,$55,$7D    ; 13 T_BONES_0
         DEFB $05,$05,$05,$05,$05,$05,$05,$05    ; 14 T_DOOR_JAMB_R
         DEFB $00,$3B,$44,$44,$44,$22,$FF,$55    ; 15 T_BONES_1
         DEFB $00,$80,$40,$4E,$51,$2A,$FF,$55    ; 16 T_BONES_2
-        DEFB $00,$02,$04,$88,$50,$24,$5F,$84    ; 17 T_DAGGERS
-        DEFB $00,$A2,$7F,$A2,$00,$A4,$7E,$A4    ; 18 T_ARROWS
+        DEFB $C3,$C3,$24,$18,$3C,$A5,$42,$24    ; 17 T_AMMO
+        DEFB $7E,$A1,$61,$2D,$21,$2D,$7E,$BE    ; 18 T_PAGES
         DEFB $FF,$90,$90,$90,$FF,$81,$81,$81    ; 19 T_END_L
         DEFB $FF,$11,$11,$11,$FF,$01,$01,$01    ; 20 T_END_R
         DEFB $07,$18,$27,$4C,$50,$90,$A0,$A0    ; 21 T_DOOR_ARCH_L
@@ -55,15 +55,15 @@ tiles_common_attrs:
         DEFB $02    ;  7 T_HOLE_L
         DEFB $02    ;  8 T_HOLE_M
         DEFB $02    ;  9 T_HOLE_R
-        DEFB $42    ; 10 T_POTION
+        DEFB $42    ; 10 T_TRAP
         DEFB $06    ; 11 T_DOOR_JAMB_L
         DEFB $07    ; 12 T_CHAIN
         DEFB $47    ; 13 T_BONES_0
         DEFB $06    ; 14 T_DOOR_JAMB_R
         DEFB $47    ; 15 T_BONES_1
         DEFB $47    ; 16 T_BONES_2
-        DEFB $47    ; 17 T_DAGGERS
-        DEFB $07    ; 18 T_ARROWS
+        DEFB $47    ; 17 T_AMMO
+        DEFB $07    ; 18 T_PAGES
         DEFB $0F    ; 19 T_END_L
         DEFB $0F    ; 20 T_END_R
         DEFB $06    ; 21 T_DOOR_ARCH_L

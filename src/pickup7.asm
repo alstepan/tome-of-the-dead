@@ -47,9 +47,8 @@ floor_pickup:
 .pf:            ld   a, (hl)
                 cp   T_POTION
                 jr   z, .scan
-                sub  T_DAGGERS
-                cp   T_ARROWS - T_DAGGERS + 1
-                jr   nc, .pn
+                cp   T_AMMO                    ; daggers + arrows share the one glyph
+                jr   nz, .pn
                 ld   a, (HERO_KIND)            ; ammo: the Warrior's only (K_KNIGHT 0)
                 or   a
                 jr   z, .scan
@@ -102,7 +101,7 @@ floor_pickup:
                 ASSERT FL_ROOM == 0 && FL_COL == 1 && FL_ITEM == 2 && FL_QTY == 3 && FL_S1 == $80
                 ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE <= 256 && FL_STRIDE == 4
                 ASSERT ((FL_EMPTY & (FL_ROOM_MASK | FL_S1)) & FL_ROOM_MASK) >= GRID_CELLS
-                ASSERT IT_ARROW == IT_DAGGER + 1 && T_ARROWS == T_DAGGERS + 1 && K_KNIGHT == 0
+                ASSERT IT_ARROW == IT_DAGGER + 1 && T_ARROWS == T_DAGGERS && K_KNIGHT == 0
 
 ; pp_take — a potion entry: HL = its &FL_ITEM, E = the FL_ROOM byte, IX =
 ; hero. E_POT < MAX_POTIONS: E_POT += 1, the entry -> FL_EMPTY, its
@@ -257,8 +256,7 @@ ap_stamp:
 .a:             sub  IT_DAGGER
                 cp   IT_ARROW - IT_DAGGER + 1
                 jr   nc, .n
-                add  a, T_DAGGERS
-                ld   d, a
+                ld   d, T_AMMO                 ; one glyph for both ammo kinds
 .n:             ld   a, l
                 add  a, FL_STRIDE
                 ld   l, a
@@ -280,4 +278,4 @@ ap_stamp:
                 ; the longest suffix; ARROWS_MAX < 100) — msg_end does not cut it
                 ASSERT TXL_CMB_PICK + 2 + TXL_CMB_DAGGERS <= LOG_MAX && TXL_CMB_PICK + 2 + TXL_CMB_ARROWS <= LOG_MAX
                 ASSERT ARROWS_MAX < 100 && DAGGERS_MAX < 100
-                ASSERT T_ARROWS == T_DAGGERS + 1 && T_POTION < T_DAGGERS
+                ASSERT T_ARROWS == T_DAGGERS && T_DAGGERS == T_AMMO

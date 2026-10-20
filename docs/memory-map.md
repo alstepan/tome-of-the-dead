@@ -919,17 +919,17 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 | 2 | `T_BRICK` = `T_WALL_DARK` | plain air-band wall face; re-glyphed DARK (B3B-2) |
 | 3 | `T_WALLF` | wall in a floor row (blocks, lintels in row 8/17) |
 | 4–6 / 7–9 | `T_LAD_L/M/R` / `T_HOLE_L/M/R` | ladder / ladder cells in a floor row |
-| 10 | `T_POTION` | PROTO; kept while potions are a floor tile (3B stand-in) — then the one free common id |
+| 10 | `T_TRAP` | **3E (user-approved glyphs, `assets/gfx/concept/grid/items3e.tiles`): the revealed trap plate**, ink `$42` default (per-type ink = T6), `TILE_FLAGS` 0 (walkable, game.md §1.5). The potion moved to id 60 (`T_POTION` = `T_FLASK`). Nothing stamps traps yet (T6) |
 | 11, 14 | `T_DOOR_JAMB_L`, `T_DOOR_JAMB_R` | B10 (user option B): open-door jambs, `$A0` / `$05` × 8, ink `$06`, non-solid (the PROTO chest stand-in is gone, B3B-13) |
 | 12 | `T_CHAIN` | small decor; cobweb / moss move to the per-level sets |
 | 13, 15, 16, 31 | `T_BONES_0..3` | **DEC1 (user-approved 2026-10-20): the dead-skeleton floor pile**, screen order left to right = ids 13, 15, 16, 31 (`BONES_IDS` / `dg_bids`, not contiguous), ink `$47`, static (`TILE_FLAGS` 0, no `TF_ANIM`); were `T_SKULLS`, `T_TORCH_T/B` (small torch) and `T_CANDLES`, all removed. Glyphs: concept `bones.tiles` via `tools/tiles_convert.py` (`("cell", file, block, k)` source) |
-| 17, 18 | `T_DAGGERS` / `T_ARROWS` | **D3-7 (designer 2026-10-12, game.md §6.3): permanently the dropped-ammo floor glyphs** (ink `$47` / `$07`), TILE_FLAGS 0 (floor items, like `T_POTION`), not decor for the deriver's ring (`dg_bad` 0). **D3-7 T6:** the B3B-13b drips are no longer placed (`dg_drips` / `decorgen.drips` removed: the per-level sets have no free id; game.md §6.3 "if they are ever placed"); the `T_DRIP1/2` aliases are gone. Glyphs (`tools/tiles_convert.py`): concept `assets/gfx/concept/grid/ammo.tiles` (17 = pile of 3 daggers, 18 = 2 arrows; draft 2026-10-13, canvas review pending) |
+| 17, 18 | `T_AMMO` (= `T_DAGGERS` = `T_ARROWS`) / `T_PAGES` | **3E (game.md §8.11 Q1, user-approved `items3e.tiles`): 17 = the merged AMMO bundle** (daggers AND arrows, one glyph, default ink `$47`; the arrows' `$46` is T6's per-cell stamp, until then both show `$47`); **18 = PAGES** scroll glyph (ink `$07`; nothing stamps it yet). TILE_FLAGS 0 (floor items), not decor for the deriver's ring (`dg_bad` 0). `ap_stamp` / `build_room_map` store `T_AMMO` for both `IT_DAGGER` and `IT_ARROW`; `floor_pickup` tests `T_AMMO` / `T_POTION`. (D3-7 T6 history: the B3B-13b drips are no longer placed.) |
 | 19, 20 | `T_END_L` = `T_PIT_R`, `T_END_R` = `T_PIT_L` | floor edge right / left of a hole: the pit caps share them |
 | 21–25 | `T_DOOR_ARCH_L/R`, `T_DOOR_L/R`, `T_DOOR_LOCK` | concept §3.1 (5 door ids) |
 | 26, 27 | `T_GRATE`, `T_RUBBLE` | B12: `T_GRATE` = the **raised** gate (variant B, ink `$46` = `ATTR_GRATE`), `TF_LADDER \| TF_HOLE`, stamped over the lair's open level exit; `T_GRATE_SHUT` = `T_GRATE` until 3F gives the closed gate its own id (TODO 3F, level_defs.asm) |
 | 28–30 | `T_WALL_DITHER/PATCH/FADE` | wall set |
 | 32..59 | `T_LVL_BASE`.. | per-level decor (bank-7 tileset) |
-| 60..63 | `T_LVL_OBJ` | per-level **attackable** object slots (D8 lectern + Book 2×2); D1–D7 leave them unused |
+| 60..63 | `T_LVL_OBJ` | **3E floor-item class glyphs on EVERY depth (slot bytes 28..31 of all 8 tilesets, flags 0)**: 60 `T_FLASK` = `T_POTION` (the old potion glyph bytes, ink `$42`), 61 `T_FOOD` (`$42`), 62 `T_WEAPON` (`$07`), 63 `T_WORN` (`$07`). `dg_bad` 0 for 60..63 (items, not decor: `is_decor` = 28..59 + chain/bones). **D8:** the lectern + Book are NOT in the D8 slot any more (they were unstamped); the T6 Sanctum swap must supply them (source `LECTERN` in `tools/tiles_convert.py`, ids `TS8_LECTERN_*` still emitted in `tileset_ids.inc`) |
 
 Row-17 ornament: not tile ids (`ORN_GLYPHS`, 8 × 8 B, attr `LVL_ATTR_FLOOR`).
 B3B-8: a render detail of the map's row-17 `T_PLAT` / `T_WALLF` cells
@@ -956,7 +956,7 @@ holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
   GRATE `TF_LADDER|TF_HOLE` (B12: the raised gate = the open exit hole; was `TF_FLOOR`), BRICK `TF_SOLID`, WALLF `SOLID|FLOOR`, LAD `TF_LADDER`, HOLE
   `LADDER|HOLE`, arch `SOLID`, planks `SOLID|DOOR`, LOCK `SOLID|DOOR|LOCK`,
   the large torches / braziers (per-level ids) `TF_ANIM`, the wall set (DARK = BRICK, DITHER,
-  PATCH, FADE) `TF_SOLID`, RUBBLE 0, 32..59 0, 60..63 `SOLID|ATTACK`
+  PATCH, FADE) `TF_SOLID`, RUBBLE 0, 32..59 0, 60..63 0 (3E floor items; the D8 lectern flags come with T6's swap)
   (game.md §1.2 "Solidity of decor": solidity = the cell class; wall-set ids
   only replace wall cells, non-solid decor only non-solid cells). **B3B-8:**
   ids 32..63 are overwritten per level by `level_load_tiles` from the slot's

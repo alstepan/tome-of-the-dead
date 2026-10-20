@@ -1,0 +1,87 @@
+# WazHack/ZX 3E floor-item class glyphs + revealed trap plate (game.md §8.11 Q1, §1.5).
+# DRAFT 2026-10-20 for user review (preview: assets/gfx/tiles/items3e.svg.html,
+# tools/items_glyph_preview.py). Format = tools/tiles_convert.py / gfx_convert.py --mode tile:
+# 8x8, '#' ink, '.' paper, MSB-left, 1 ink on BLACK paper (standing row = air row, attr paper 0,
+# so no clash with any depth's ATTR_FLOOR: the floor is the next cell row down).
+# Art sits low: row 7 = the resting edge on the floor line. Non-solid, flags 0.
+# Class = glyph SHAPE; exact type = per-cell INK set when stamped (item-type table). The header
+# attr below is the DEFAULT (first type of the class); variants listed per block.
+# Not wired: ids/attrs go live in the staff 3E task after approval (tiles_common / tilesets).
+#
+# id 60 FLASK reuses the old T_POTION glyph (sprites/grid/item_potion.grid): no block here.
+
+# --- id 61 FOOD: tilted drumstick, meat top-left (paper shine), bone + knob down-right.
+#     ink: meat $42 (default), cheese $46, pear $04, apple $44, carrot $06.
+=== food ink:red paper:black bright
+..###...
+.#####..
+##.####.
+#.#####.
+######..
+.#####..
+....##.#
+.....##.
+
+# --- id 18 PAGES (was T_ARROWS): upright scroll = icons8 scroll8 motif with the top text line
+#     dropped (top roll + curl, 2 text lines, bottom roll + curl / page edge). Scrolls AND books.
+#     ink: scroll $07 (default), book $43.
+=== pages ink:white paper:black
+.######.
+#.#....#
+.##....#
+..#.##.#
+..#....#
+..#.##.#
+.######.
+#.#####.
+
+# --- id 62 WEAPON: leaning sword, blade up-right (= item_sword / icons16_r2 sword motif),
+#     crossguard (1,3)-(4,6), grip, pommel on the floor line.
+#     ink: blades $07 (default), staves/bow $06.
+=== weapon ink:white paper:black
+......##
+.....###
+....###.
+.#.###..
+..###...
+..##....
+.#..#...
+#.......
+
+# --- id 63 WORN: heater shield with a paper (negative) cross, tip on the floor line.
+#     ink: armour/helm $07 (default), charms $06; BUC tint $45/$42 and unique shimmer override.
+=== worn ink:white paper:black
+........
+#######.
+###.###.
+#.....#.
+###.###.
+.##.##..
+..#.#...
+...#....
+
+# --- id 17 AMMO (merged, was T_DAGGERS): two crossed shafts tied at the crossing, 2x2 heads
+#     up, V fletch/pommel ends down: crossed daggers or arrows. Replaces the dagger pile.
+#     ink: daggers $47 (default), arrows $46.
+=== ammo ink:white paper:black bright
+##....##
+##....##
+..#..#..
+...##...
+..####..
+#.#..#.#
+.#....#.
+..#..#..
+
+# --- id 10 T_TRAP (revealed only, §1.5): flush pressure plate, 2 rows: slab + 2 dart holes
+#     (the tell) in the lower row; reads as floor furniture, not an item.
+#     ink by type: DART $42 (default), GAS $44, TELEPORT $43, ALARM $46.
+=== trap ink:red paper:black bright
+........
+........
+........
+........
+........
+........
+########
+##.##.##

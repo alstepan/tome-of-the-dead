@@ -219,8 +219,8 @@ def screen_check(p, check, tag, depth):
         if not (t >= TC and cb in lvl) and not GL.drip_shown(fr, drip, c, r):
             bad.append((c, r, t))
     check(f"GI {tag}: playfield ({n} uncovered cells) == ROOM_MAP in source glyphs", n > 300 and bad == [], bad[:6])
-    pg = SRC_GLY[S["T_POTION"] * 8:S["T_POTION"] * 8 + 8]
-    check(f"GI {tag}: panel potion glyph (row 19) == source T_POTION",
+    pg = gly[S["T_POTION"] * 8:S["T_POTION"] * 8 + 8]       # id 60 = the level slot's FLASK glyph
+    check(f"GI {tag}: panel potion glyph (row 19) == source T_POTION (id 60)",
           any(cell_bytes(fr, c, 19) == pg for c in range(32)), "")
 
 

@@ -670,11 +670,10 @@ build_room_map:
                 ld   e, T_POTION
                 cp   IT_POTION
                 jr   z, .pi
-                sub  IT_DAGGER                 ; D3-7 T6: ammo stacks -> T_DAGGERS / T_ARROWS
+                sub  IT_DAGGER                 ; D3-7 T6: ammo stacks -> T_AMMO (both kinds)
                 cp   IT_ARROW - IT_DAGGER + 1
                 jr   nc, .pn
-                add  a, T_DAGGERS
-                ld   e, a
+                ld   e, T_AMMO
 .pi:            push hl
                 push bc
                 ld   a, (hl)

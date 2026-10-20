@@ -369,18 +369,27 @@ T_DOOR_JAMB_L   EQU 11              ; `#.#.....` x 8: the left arch's outer stro
 T_CHAIN         EQU 12              ; small decor (valid after B3B-13)
 T_BONES_0       EQU 13              ; DEC1: BONES tile 0 (skull end)
 T_DOOR_JAMB_R   EQU 14              ; `.....#.#` x 8
-; D3-7 (designer 2026-10-12, game.md §6.3): ids 17 / 18 are permanently the
-; dropped-ammo floor glyphs (one stack per cell, 8x8 item glyph).
-T_DAGGERS       EQU 17              ; ink $47
-T_ARROWS        EQU 18              ; ink $07
+; 3E (game.md §8.11 Q1, user-approved glyphs): common 10 = T_TRAP (revealed trap plate),
+; 17 = T_AMMO (daggers AND arrows share the one bundle glyph, ink $47; the per-type ink
+; is T6's per-cell stamp), 18 = T_PAGES (scroll / book). T_DAGGERS / T_ARROWS stay as
+; aliases of 17 so the type -> tile maps need no second id.
+T_TRAP          EQU 10              ; ink $42 (type ink = T6)
+T_AMMO          EQU 17              ; ink $47
+T_PAGES         EQU 18              ; ink $07
+T_DAGGERS       EQU T_AMMO
+T_ARROWS        EQU T_AMMO
 ; D3-7 T6: the B3B-13b drips (T_DRIP1/2) are no longer placed (the per-level
 ; sets have no free ids; "if they are ever placed": per-level decor).
-; T_POTION (10) stays while potions are a floor tile (3B stand-in); 10 is the
-; one id left for a future common glyph.
 T_COMMON_USED   EQU 32
 T_LVL_BASE      EQU TILE_COMMON     ; 32: first per-level id
-T_LVL_OBJ       EQU 60              ; 60..63: per-level ATTACKABLE object slots (D8 lectern
-T_LVL_OBJ_N     EQU 4               ;   + Book, 2x2); D1–D7 decor uses 32..59 only
+T_LVL_OBJ       EQU 60              ; 60..63: per-level floor-item class glyphs (3E, every depth:
+T_LVL_OBJ_N     EQU 4               ;   FLASK FOOD WEAPON WORN); decor uses 32..59 only. The D8
+                                    ;   lectern (+ Book, 2x2) lives in tileset_lectern (swapped in T6)
+T_FLASK         EQU 60              ; potion (the old T_POTION glyph bytes)
+T_POTION        EQU T_FLASK
+T_FOOD          EQU 61
+T_WEAPON        EQU 62
+T_WORN          EQU 63
                 ASSERT T_COUNT <= T_DOOR_ARCH_L        ; new ids start after the live PROTO ids
                 ASSERT T_COMMON_USED <= TILE_COMMON
                 ASSERT T_BONES_3 < TILE_COMMON
