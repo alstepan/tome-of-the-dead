@@ -287,7 +287,7 @@ sfx_step:
 .run:           ld   hl, (sfx_ptr)
                 ld   a, h
                 or   a
-                ret  z                          ; idle (effects live at $EDA0+: H != 0)
+                ret  z                          ; idle (effects live at AY_RESERVE+: H != 0)
                 jr   .frame
 .defer:         ld   a, b                       ; prio >= SFX_DEFER_PRIO: after the effect
                 cp   SFX_DEFER_PRIO             ; (one slot, SFX_NEXT); else dropped

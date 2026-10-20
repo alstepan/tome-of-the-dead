@@ -36,10 +36,11 @@ BANK_SHADOW     EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect'
 BANK_COLD7      EQU 7               ; D3-S2: bank-7 cold code B7_CODE..B7_LIMIT (via far7)
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
 BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
-AY_RESERVE      EQU $EDA0           ; A8 / D3-0 / MEM-SND: bank 3 $EDA0..$FFFF = 4704 B AY player/music/FX
+AY_RESERVE      EQU $EFA0           ; A8 / D3-0 / MEM-SND / 3E lever (c): bank 3 $EFA0..$FFFF = 4192 B AY player/music/FX
                                     ;     reserve (game.md §11.2, user 2026-10-06: 7 KB -> 4 KB at $F000,
                                     ;     was $E400; MEM-SND: -608 B after 406 B of bank-3 cold code went
-                                    ;     to bank 7, ~200 B bank-3 slack kept); cold code + sources end below
+                                    ;     to bank 7, ~200 B bank-3 slack kept; 3E lever (c): +512 B
+                                    ;     back to bank-3 cold code, 167 B SFX slack kept); cold code + sources end below
 AY_RESERVE_END  EQU $10000
 BANK_AY         EQU BANK_COLD3      ; the ISR pages it in around every AY_PLAY call
 AY_PLAY         EQU AY_RESERVE      ; A8 player slot entry, called once per frame by the ISR
