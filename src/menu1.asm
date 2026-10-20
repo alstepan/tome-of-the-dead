@@ -161,17 +161,13 @@ menu_static:
 .tdone:         ; subtitle (6x8), ornament, footer
                 ld   a, TX_FT_SUBTITLE
                 ld   b, 5
-                ld   e, 4 * 8
+                ld   e, 5 * 8                  ; 28 chars x 6 = 168 px: centred at x=44 ~ 40
                 call print6x
                 ld   a, MENU_A_SUB
                 ld   bc, 5 << 8
                 ld   de, (32 << 8) | 2         ; rows 5-6
                 call stamp_rect
                 call menu_orn
-                ld   a, TX_FT_CREDIT
-                ld   b, 23
-                ld   e, 0
-                call print6x
                 ld   a, MENU_A_LABEL
                 ld   bc, 22 << 8
                 ld   de, (32 << 8) | 2
@@ -399,7 +395,7 @@ menu_items:
                 ASSERT TX_M_REDEFINE == TX_M_START + 3 && TX_CLS_MAGE == TX_CLS_WARRIOR + 1
 
 ; menu_snd — item 5 "5 SOUND: <state>" on rows 21-22 (menu font; the old
-; TX_FT_PRESS footer is gone, the credit stays on row 23): the rows are cleared
+; TX_FT_PRESS footer is gone, the credit line is gone too): the rows are cleared
 ; first (the values differ in length), the digit takes MENU_A_DIGIT like the
 ; others. Clobbers: A, BC, DE, HL
 menu_snd:
