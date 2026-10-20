@@ -1003,3 +1003,4 @@ decor_room:
                 INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
                 INCLUDE "rank3.asm"            ; D3-7: abil_load (ABIL_DESC for the bank-7 ability code)
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing
+                INCLUDE "bag3.asm"             ; 3E-T10: bag_add / bag_find / bag_take / bag_pick (no caller until T11)

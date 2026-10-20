@@ -1,0 +1,169 @@
+;==============================================================================
+; bag3.asm — 3E-T10 bag helpers, bank 3 (INCLUDEd last by bank3.asm). Reached
+; by far3 from bank 7 or called directly by bank-3 code / overlays running with
+; bank 3 paged. BAG ($5D00, bank 5) is always mapped, so nothing here pages.
+; Nothing calls these before 3E-T11. IX / IY are never touched; no EXX.
+;
+; BAG invariant (kept by these helpers): records are packed from slot 0 (a
+; free slot, TYPE IT_NONE, is followed only by free slots), so the order is
+; pickup order and bag_add's first free slot is the end of the list.
+;==============================================================================
+
+;------------------------------------------------------------------------------
+; bag_add — add a stack of B items of type A with ISTATE C.
+; In : A = type, B = qty (1..STACK_MAX), C = ISTATE (gear; 0 for stackables).
+; Out: L = 0 added, L = 1 refused (bag full, or A is not a bag type: < IT_BAG_LO
+;      (counters, the legacy potion id 1) or >= IT_COUNT). BAG untouched on 1.
+; Food / potions / scrolls (IT_FOOD_LO..IT_SCR_HI) top up the first stack of the
+; type that stays <= STACK_MAX, else take the first free slot; gear, the book
+; and the bow never merge (E = 0 never equals a used slot's non-zero type).
+; Clobbers: A, DE, HL, F (B, C kept).   ~0.6k T worst (20 slots)
+;------------------------------------------------------------------------------
+bag_add:
+                ld   d, a
+                sub  IT_BAG_LO
+                cp   IT_COUNT - IT_BAG_LO
+                jr   nc, .full              ; counter / legacy / out of range
+                ld   a, d
+                IT_IN IT_FOOD_LO, IT_SCR_HI
+                ld   e, 0                      ; match type: none ...
+                jr   nc, .ns
+                ld   e, d                      ; ... or the type itself if it stacks
+.ns:            ld   hl, BAG
+.l:             ld   a, (hl)
+                or   a
+                jr   z, .new                   ; packed list: first free slot = the end
+                cp   e
+                jr   nz, .nx
+                inc  l
+                ld   a, (hl)
+                add  a, b
+                cp   STACK_MAX + 1
+                jr   c, .mg
+                dec  l                         ; this stack would overflow: keep looking
+.nx:            ld   a, l
+                add  a, IR_STRIDE
+                ld   l, a
+                cp   BAG_SLOTS * IR_STRIDE
+                jr   c, .l
+.full:         ld   l, 1
+                ret
+.mg:            ld   (hl), a
+                ld   l, 0
+                ret
+.new:           ld   (hl), d
+                inc  l
+                ld   (hl), b
+                inc  l
+                ld   (hl), c
+                ld   l, 0
+                ret
+
+;------------------------------------------------------------------------------
+; bag_find — first slot holding a type.
+; In : A = type (IT_NONE finds the first free slot).
+; Out: A = slot 0..BAG_SLOTS-1, or $FF if absent.
+; Clobbers: A, C, HL, F (B, DE kept).   ~0.5k T worst
+;------------------------------------------------------------------------------
+bag_find:
+                ld   hl, BAG
+                ld   c, BAG_SLOTS
+.l:             cp   (hl)
+                jr   z, .f
+                inc  l
+                inc  l
+                inc  l
+                dec  c
+                jr   nz, .l
+                ld   a, $FF
+                ret
+.f:             ld   a, BAG_SLOTS
+                sub  c
+                ret
+
+;------------------------------------------------------------------------------
+; bag_take — remove B items from a slot; an emptied slot is compacted away
+; (the later records shift down, the last record is cleared).
+; In : A = slot (valid, occupied), B = qty to take (taking >= QTY empties it).
+; Out: A = QTY left (0 = the slot is gone).
+; Clobbers: A, BC, DE, HL, F.   ~60 T; + ~21 T per record shifted when emptied
+;------------------------------------------------------------------------------
+bag_take:
+                ld   l, a
+                add  a, a
+                add  a, l
+                ld   l, a                      ; slot * IR_STRIDE (<= 57)
+                ld   h, HIGH BAG
+                inc  l
+                ld   a, (hl)
+                sub  b
+                jr   z, .free
+                jr   c, .free
+                ld   (hl), a
+                ret
+.free:          dec  l
+                ld   d, h
+                ld   e, l                      ; DE = this record
+                inc  l
+                inc  l
+                inc  l                         ; HL = the next record
+                ld   a, BAG_SLOTS * IR_STRIDE - IR_STRIDE
+                sub  e
+                ld   c, a
+                ld   b, 0
+                jr   z, .z                     ; last slot: nothing to shift
+                ldir
+.z:             xor  a                         ; DE = the last record now
+                ld   (de), a
+                inc  e
+                ld   (de), a
+                inc  e
+                ld   (de), a
+                ret
+
+;------------------------------------------------------------------------------
+; bag_pick — the quick-slot pick (game.md §8 "Quick slots auto-fill"; no pin).
+; In : B = first type of the class (IT_FOOD_LO / IT_POT_LO / IT_SCR_LO),
+;      D = 2 * class size + mode (mode 0: the lowest type present = food,
+;      potion; mode 1: the largest stack, ties to the lowest type = scroll).
+; Out: A = the type, IT_NONE if the class is absent from the bag. (bag_find
+;      gives its slot.) A type spread over two slots counts its first stack.
+; Clobbers: A, BC, DE, HL, F.   <= 12 bag_find (~0.5k T) ~ 6k T worst
+;------------------------------------------------------------------------------
+bag_pick:
+                ld   e, 0                      ; E = best QTY so far
+                xor  a
+                push af                        ; best type (high byte) = none
+.t:             ld   a, b
+                call bag_find
+                inc  a
+                jr   z, .nx                    ; absent
+                dec  a
+                ld   c, a
+                add  a, a
+                add  a, c
+                inc  a                         ; slot * IR_STRIDE + IR_QTY
+                ld   l, a
+                ld   h, HIGH BAG
+                ld   c, (hl)                   ; C = this stack's QTY
+                ld   a, e
+                cp   c
+                jr   nc, .nx                   ; not strictly larger
+                ld   e, c
+                pop  af
+                push bc                        ; best type = B
+                bit  0, d
+                jr   z, .done                  ; mode 0: the first present wins
+.nx:            inc  b
+                dec  d
+                dec  d
+                ld   a, d
+                cp   2
+                jr   nc, .t
+.done:          pop  bc
+                ld   a, b
+                ret
+                ASSERT (BAG & $FF) == 0 && BAG_SLOTS * IR_STRIDE <= 60
+                ASSERT IT_FOOD_LO == IT_BAG_LO && IT_SCR_HI + 1 == IT_BOOK
+bag3_end:
+BAG3_LEN        EQU bag3_end - bag_add

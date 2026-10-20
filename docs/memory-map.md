@@ -2469,6 +2469,32 @@ user either (wear/break is not BUC) but are kept for T8/3F to decide; `found` /
 `item_glyph` / `item_ink` calls with a type >= `IT_COUNT` (`it_byte_live`, +10 B
 low RAM in the kit build, 0 B release; kit `LOWRAM_SPARE` 109, release 119).
 
+**3E-T10 bag helpers + item name composer** (`feat/3e-t10-bag`; no caller until T11; `tests/bag.py`).
+IX / IY never touched, no EXX; `BAG` is bank 5 (always mapped), so nothing pages.
+- `item_name` (bank 1, `src/itemname1.asm`, **98 B**, inside the it_tab DISP block; far1 or a
+  direct call with bank 1 paged): **In** A = type, DE = dest (outside `$C000`: `MSG_BUF`
+  / page scratch), H = max chars 0..32, C = mode (bit 0 reserved, ignored). **Out** DE past
+  the last char, **no terminator**, CF = 1 iff cut at H (a cut right after a space keeps the
+  space). Clobbers A, BC, HL. Words from `it_name` (3 ids; the `$FF` book marker = `W_WAR +
+  HERO_KIND`), lookup via `it_wcx` + <= 7-word scan, one space between words. Worst name
+  (WARLORD CLEAVER) ~4.4k T (limit 6k). Types 0..4 give an empty name.
+- Bank 3 (`src/bag3.asm`, last INCLUDE of `bank3.asm`, **159 B**, via far3 or direct from
+  bank-3 code / overlays running with bank 3 paged). `BAG` stays packed from slot 0 (a free
+  slot is followed only by free ones; pickup order).
+  - `bag_add` A = type, B = qty, C = ISTATE -> **L = 0 added / 1 refused** (full, or type
+    < `IT_BAG_LO` incl. legacy potion 1, or >= `IT_COUNT`; BAG untouched). Food / potions /
+    scrolls (`IT_FOOD_LO..IT_SCR_HI`) top up the first same-type stack that stays <= 9, else
+    the first free slot; gear / book / bow never merge. Clobbers A, DE, HL (B, C kept). <= ~1.3k T.
+  - `bag_find` A = type -> A = slot or `$FF` (IT_NONE = first free slot). Clobbers A, C, HL.
+  - `bag_take` A = slot, B = qty -> A = QTY left; at 0 (or over-take) the slot is
+    compacted away (<= 19 records shift, ~1.2k T). Clobbers A, BC, DE, HL.
+  - `bag_pick` (the quick-slot pick; QUICK pin cut, so a lookup, not `qs_pick`): B = first
+    type of the class, D = 2 x class size + mode (0: lowest type present = food, potion;
+    1: largest stack, ties lowest type = scroll) -> A = type or `IT_NONE`; `bag_find` gives
+    the slot. Clobbers A, BC, DE, HL. <= ~3.7k T (scroll class absent).
+- Ledger: bank 1 free **256 -> 158** (-98), bank 3 free to `AY_RESERVE` **609 -> 450**
+  (-159), bank 7 / low RAM / bank 2 unchanged (kit 142, release 192; `LOWRAM_SPARE` 109 / 119).
+
 **`E_POT` migration (today's potion count → `BAG`; do NOT migrate before
 T10/T11).** Every reader / writer of `E_POT` (`P_ENTITIES + E_POT`, hero slot 0):
 

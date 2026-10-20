@@ -123,6 +123,7 @@ UI1_LEN         EQU ui1_img_end - ui1_img
                 DISP $ + TEXT_DISP
                 INCLUDE "../build/text/items_tab.asm"
 it_text_end:
+                INCLUDE "itemname1.asm"         ; 3E-T10: item_name (no caller until T11)
                 ENT
 IT_TEXT_LEN     EQU it_text_end - it_words
                 ASSERT IT_TEXT_LEN == ITW_BYTES + 2 * ITW_WCX_N + ITN_BYTES + ITS_LEN && IT_TEXT_LEN <= ITB_RESIDENT
