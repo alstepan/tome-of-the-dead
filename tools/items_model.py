@@ -1,50 +1,51 @@
 #!/usr/bin/env python3
-"""items_model.py - reference model for 3E item / trap generation (3E-T5).
+"""items_model.py - reference model for 3E item / trap generation (3E-T5, simplified 3E-T5b).
 
 This is the SPEC the Z80 generator (3E-T6) must match byte for byte. It runs
 AFTER levelgen.generate() (the GEN_RNG pass is untouched) and produces, per
-level: the new FLOOR_LIST (potion types rolled, new entries appended), the
-parallel FL_IST[32], and the trap list (TRAP_LIST 6 x 2 B + TRAP_N). It never
-touches GEN_RNG / decor streams (game.md 8.11 Q8): everything is on ITEM_RNG.
+level: the new FLOOR_LIST (potion types rolled, new entries appended) and the
+trap list (TRAP_LIST 6 x 2 B + TRAP_N). It never touches GEN_RNG / decor streams
+(game.md 8.11 Q8): everything is on ITEM_RNG. Rev 6 (game.md 8.11 "3E
+simplification"): no identification, no BUC / cursed, no FL_IST - a floor item
+is always m 0 (ISTATE bits only exist in the bag), names are fixed and known.
 
-Streams (game.md 8.8, 8.11 Q8)
-------------------------------
+Stream (game.md 8.11 Q8)
+------------------------
 Same algorithm as GEN_RNG (levelgen.Rng: 16-bit xorshift 7,9,8;
 rnd(n) = step then (x & $FF) mod n; rnd16 = step then x), own state:
     LVL_SEED(m, d')  = (m + d' * LVL_SEED_MUL) & $FFFF       (bank3 level_new)
     ITEM_RNG(m, d)   = Rng(LVL_SEED(m, d | $80), d | $80)     seed ^ (d'*$0101), 0 -> 1
-    LIGHT-ID stream  = Rng(LVL_SEED(m, 255), 255)             (8.8 "depth 255")
-Both derive from the MASTER seed, not from the (possibly reseeded) level seed.
+It derives from the MASTER seed, not from the (possibly reseeded) level seed.
 
-ITEM_RNG call order, per level (8.11 Q8: potion types -> food -> scrolls ->
-gear -> class books -> ammo / bow -> traps). `place(pool, ...)` = room =
-pool[rnd(len)], storey = rnd(2), then up to PLACE_TRIES x (col = 2 + rnd(28),
-first legal wins); no legal col -> the item is dropped (counted, not an error).
+ITEM_RNG call order, per level (potion types -> food -> scrolls -> gear ->
+class books -> ammo / bow -> traps). Per item: type (or qty) roll, THEN
+placement. `place(pool, ...)` = room = pool[rnd(len)], storey = rnd(2), then up
+to PLACE_TRIES x (col = 2 + rnd(28), first legal wins); no legal col -> the item
+is dropped (counted, not an error).
  1. potions: the levelgen entries in list order; entry 0 = Heal (no roll), the
     others type = POT_BY_ROLL[rnd(3)]. D8 only: an entry in the lair is
     re-placed (non-start non-lair pool, same slot) - see Q_D8_LAIR_POTION.
  2. food:    n = 3 + rnd(2); each: type = IT_F_CARROT + rnd(5), place(non-start).
  3. scrolls: n = 1 + rnd(2); each: type = IT_S_TELEPORT + rnd(4), place(non-start).
  4. gear:    n = 1 + rnd(2); each: type = pool[rnd(len)] (depth + class gated),
-    BUC roll rnd(16), if cursed the value roll rnd(8), then place(non-start).
+    then place(non-start).  Fixed stats, no state roll.
  5. books (IT_BOOK, D1-D7): n = 1 (+1 if depth >= 4 and rnd(2) == 0; the roll is
     skipped on D1-D3 and D8); the D1 book is in the start room at a
-    place()d col; the others place(non-start).  D8: none, no roll.
+    place()d col (scan fallback, never dropped); the others place(non-start).
+    D8: none, no roll.
  6. Warrior only, D1-D7: dagger stack qty 2 + rnd(2), arrow stack qty 5 + rnd(4),
     each place(non-start non-lair). Then D2 only: the bow (place(non-start
     non-lair) with a deterministic scan fallback: "regardless of RNG") plus
     an IT_ARROW qty-6 entry in the bow's cell. D8: no ammo.
  7. traps (1.5): count / pool by depth; per trap type = pool[rnd(len)], then up
     to TRAP_TRIES x (room = elig[rnd(len)], storey = rnd(2), t = 6 + rnd(20)),
-    first legal wins; none -> dropped. ISTATE and the trap list are defined below.
+    first legal wins; none -> dropped.
 The key has no floor entry (8.11 Q1); LVL_KEYROOM stays whatever level_gen set.
 
 Encodings
 ---------
-FLOOR_LIST entry (room | S1<<7, col, type, qty); FL_IST[i] for gear =
-BUC | HIDDEN<<2 | (m & 7) << 5 (blessed: m=+1; cursed: HIDDEN, m in
-{-2,-1,+1,+2}); 0 for every other class. Trap list entry: B0 = room | S1<<4
-(KNOWN / SPENT 0), B1 = col | type << 5.
+FLOOR_LIST entry (room | S1<<7, col, type, qty). Trap list entry: B0 = room |
+S1<<4 (KNOWN / SPENT 0), B1 = col | type << 5.
 """
 import argparse
 import sys
@@ -57,7 +58,7 @@ D = G.D
 MUL = D["LVL_SEED_MUL"] if "LVL_SEED_MUL" in D else 0x9E37     # level_defs.asm (parsed if EQU-literal)
 
 # --- type ids (item_defs.asm, parsed: never copied) -------------------------------
-T = {k: v for k, v in D.items() if k.startswith(("IT_", "IST_", "BUC_", "TT_", "TR_", "TRF_"))}
+T = {k: v for k, v in D.items() if k.startswith(("IT_", "TT_", "TR_", "TRF_"))}
 IT_BOOK, IT_BOW = T["IT_BOOK"], T["IT_BOW"]
 FLOOR_MAX = D["FLOOR_MAX"]
 OFF_TRAP = D["TRAP_LIST"] - G.BASE          # $B0 in the 320-B block
@@ -93,13 +94,6 @@ GEAR_TABLE = (
     (T["IT_C_MIGHT"], 2, None), (T["IT_C_WARD"], 2, None), (T["IT_C_FIRE"], 2, None),
     (T["IT_C_MANA"], 3, None), (T["IT_C_PLENTY"], 3, None),
 )
-# 8.7 odds per found gear item, out of 16, by tier D1-3 / D4-6 / D7-8
-BLESSED_16 = (2, 3, 4)
-CURSED_16 = (2, 3, 4)
-# 8.7 cursed value roll, out of 8: counts for m = -2, -1, +1, +2
-CURSE_M = (-2, -1, 1, 2)
-CURSE_8 = ((0, 5, 3, 0), (2, 3, 2, 1), (3, 2, 2, 1))
-BLESSED_M = 1
 # 1.5 traps: count per depth; pool = kinds allowed at that depth (uniform)
 TRAP_COUNT = {1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4}
 TRAP_FIRST = ((T["TT_DART"], 1), (T["TT_GAS"], 2), (T["TT_TELEPORT"], 3), (T["TT_ALARM"], 5))
@@ -110,7 +104,6 @@ QUESTIONS = [
     "Q_FOOD_TYPE: food type uniform over the 5 foods (rnd(5)); doc gives only the count 3-4.",
     "Q_SCROLL_COUNT_ROOMS: food/scroll/gear/2nd+ books use the potions' pool (present, non-start rooms, lair allowed); doc names rooms only for ammo/bow (non-start non-lair) and the D1 book (start).",
     "Q_GEAR_POOL: gear type uniform over the depth+class gated 8 table (start kit and uniques excluded); no weighting stated.",
-    "Q_BUC_ORDER: one rnd(16): r < blessed -> BLESSED, r < blessed+cursed -> CURSED, else normal; value roll rnd(8) only for cursed, over m = -2,-1,+1,+2 in the doc column order.",
     "Q_D8_LAIR_POTION: a GEN_RNG potion in the D8 lair would become a 60..63 FLASK item (forbidden there, 8.11 Q1): it is RE-PLACED on ITEM_RNG outside lair/start (changes the base floor list; decor sees a moved cell).",
     "Q_AMMO_CELL: new entries never share a cell with an existing entry, except the bow's arrow bundle (doc: bundle in the bow's cell; other ammo sharing unspecified).",
     "Q_AMMO_QTY: 'stack of 2-3 (1d2+1)' = 2 + rnd(2); '5-8 (1d4+4)' = 5 + rnd(4).",
@@ -118,13 +111,12 @@ QUESTIONS = [
     "Q_TRAP_ROOM_ROLL: trap type is rolled once per trap before the tries; each try rolls room (uniform over eligible rooms without a trap), storey, t; D1 'not within start body +-1' is vacuous (start room is excluded).",
     "Q_KEY_ROOM: LVL_KEYROOM selection is not in this model (no floor item; the key rule is runtime).",
     "Q_ITEM_SEED_XOR: ITEM_RNG applies the same ^(d'*$0101) as GEN_RNG with d' = depth|$80 (doc: 'the generator algorithm seeded with f(master, depth|$80)').",
-    "Q_LIGHT_ID_SHUFFLE: partial Fisher-Yates on the stream: potions first (3 of 6 appearances), then scrolls (4 of 8); step i swaps pool[i] with pool[i + rnd(n - i)].",
     "Q_D1_BOOK_COL (RULED): D1 book in the start room, place() then scan fallback; never dropped.",
 ]
 
 
 # =============================================================================
-# 1. ITEM_RNG and the light-ID stream
+# 1. ITEM_RNG
 # =============================================================================
 def level_seed(master, d):
     """bank3 level_new: MASTER_SEED + d * LVL_SEED_MUL (16-bit wrap); game.md 1 'Seed'."""
@@ -136,27 +128,6 @@ def item_rng(master, depth):
     seeded from f(master, depth | $80). Separate from every GEN_RNG / decor stream."""
     dd = depth | 0x80
     return G.Rng(level_seed(master, dd), dd)
-
-
-def id_rng(master):
-    """Light-ID stream (game.md 8.8): f(master seed, 255)."""
-    return G.Rng(level_seed(master, 255), 255)
-
-
-def light_id_map(master):
-    """Per-run ID_MAP[7] (game.md 8.8; k = type - IT_ID_LO: 0..2 potions, 3..6 scrolls).
-    Potions get 3 distinct of 6 appearances, scrolls 4 distinct of 8, by a partial
-    Fisher-Yates on the id stream (Q_LIGHT_ID_SHUFFLE): potions first, then scrolls."""
-    rng = id_rng(master)
-    out = []
-    for n_types, n_app in ((D["IT_POT_HI"] - D["IT_POT_LO"] + 1, D["ID_POT_APP"]),
-                           (D["IT_SCR_HI"] - D["IT_SCR_LO"] + 1, D["ID_SCR_APP"])):
-        pool = list(range(n_app))
-        for i in range(n_types):
-            j = i + rng.rnd(n_app - i)
-            pool[i], pool[j] = pool[j], pool[i]
-            out.append(pool[i])
-    return out
 
 
 # =============================================================================
@@ -180,25 +151,46 @@ def glyph(typ):
     raise ValueError(typ)
 
 
+# SINGLE SOURCE of floor ink per item type (approved legend: assets/gfx/concept/grid/
+# items3e.tiles headers, game.md 8.11 Q1 + "3E simplification" item 2). Keyed by type id.
+_INK_BY_NAME = {
+    "IT_DAGGER": 0x47, "IT_ARROW": 0x46,                                   # AMMO
+    "IT_F_CARROT": 0x06, "IT_F_APPLE": 0x44, "IT_F_PEAR": 0x04,           # FOOD
+    "IT_F_CHEESE": 0x46, "IT_F_MEAT": 0x42,
+    "IT_P_HEAL": 0x42, "IT_P_MANA": 0x45, "IT_P_CURE": 0x44,              # FLASK
+    "IT_S_TELEPORT": 0x45, "IT_S_FEAR": 0x46, "IT_S_SLEEP": 0x44,         # PAGES
+    "IT_S_ENCHANT": 0x47, "IT_BOOK": 0x43,
+    "IT_BOW": 0x06,                                                        # WEAPON: staves/bow $06
+    "IT_W_SHORT": 0x07, "IT_W_LONG": 0x07, "IT_W_AXE": 0x07, "IT_W_CLEAVER": 0x07,
+    "IT_W_OAK": 0x06, "IT_W_IRON": 0x06, "IT_W_RUNE": 0x06, "IT_W_BONE": 0x06,
+    "IT_A_ROBE": 0x07, "IT_A_LEATHER": 0x07, "IT_A_CHAIN": 0x07, "IT_A_PLATE": 0x07,   # WORN
+    "IT_A_SILK": 0x07, "IT_A_GRAVE": 0x07,
+    "IT_H_HOOD": 0x07, "IT_H_HELM": 0x07, "IT_H_KING": 0x07, "IT_H_MIRROR": 0x07,
+    "IT_C_MIGHT": 0x06, "IT_C_WARD": 0x06, "IT_C_FIRE": 0x06, "IT_C_MANA": 0x06,
+    "IT_C_PLENTY": 0x06, "IT_C_SCARAB": 0x06, "IT_C_GRAVE": 0x06,
+}
+ITEM_INK = {T[k]: v for k, v in _INK_BY_NAME.items()}
+
+
+def item_attr(typ):
+    """Floor attribute byte (ink on black) of an item type; no state tints."""
+    return ITEM_INK[typ]
+
+
 def is_gear(typ):
     return D["IT_GEAR_LO"] <= typ <= D["IT_GEAR_HI"]
 
 
 class Lvl:
-    """Result: floor = [[room|S1<<7, col, type, qty]], ist (len == len(floor)),
-    traps = [(B0, B1)], plus stats (dropped items / traps)."""
+    """Result: floor = [[room|S1<<7, col, type, qty]], traps = [(B0, B1)], plus
+    stats (dropped items / traps)."""
 
     def __init__(self, depth, hero):
         self.depth, self.hero = depth, hero
-        self.floor, self.ist, self.traps = [], [], []
+        self.floor, self.traps = [], []
         self.dropped_items = 0
         self.dropped_traps = 0
         self.dropped_by_type = {}
-
-    def fl_ist(self):
-        """FL_IST parallel array: exactly FLOOR_MAX bytes, unused = 0."""
-        return bytes(self.ist) + bytes(FLOOR_MAX - len(self.ist))
-
 
 def cell_legal(b, r, s, col):
     """Legal item cell on storey s of room r: 3B potion legality (footprints f..f+2,
@@ -253,13 +245,12 @@ def scan_place(b, lvl, pool):
     raise RuntimeError("no legal cell at all")
 
 
-def add(lvl, rsc, typ, qty, ist=0):
+def add(lvl, rsc, typ, qty):
     r, s, col = rsc
     lvl.floor.append([r | (D["FL_S1"] if s else 0), col, typ, qty])
-    lvl.ist.append(ist)
 
 
-def try_add(rng, b, lvl, pool, typ, qty, ist=0, scan=False):
+def try_add(rng, b, lvl, pool, typ, qty, scan=False):
     """Roll placement for an already-rolled item. scan=True (D1 book, designer
     ruling 2026-10-20): deterministic scan fallback inside `pool`, never dropped.
     The FLOOR_CAP check is an assert only (max 17 entries, 8.11 rulings)."""
@@ -271,47 +262,18 @@ def try_add(rng, b, lvl, pool, typ, qty, ist=0, scan=False):
         lvl.dropped_items += 1
         lvl.dropped_by_type[typ] = lvl.dropped_by_type.get(typ, 0) + 1
         return None
-    add(lvl, rsc, typ, qty, ist)
+    add(lvl, rsc, typ, qty)
     return rsc
 
 
 # =============================================================================
 # 3. item rules
 # =============================================================================
-def tier(depth):
-    """8.7 odds tiers: D1-3 -> 0, D4-6 -> 1, D7-8 -> 2."""
-    return 0 if depth <= 3 else (1 if depth <= 6 else 2)
-
-
 def gear_pool(depth, hero):
     """game.md 8 table 'Found' column: gear types available at `depth` for `hero`
     (weapons class-locked, 8.11 Q4 'no junk'); id order."""
     lock = "W" if hero == HERO_WARRIOR else "M"
     return [t for t, d0, c in GEAR_TABLE if depth >= d0 and c in (None, lock)]
-
-
-def roll_gear_state(rng, depth):
-    """game.md 8.7 / 8.9: BUC out of 16 (blessed, cursed odds by tier), cursed
-    value out of 8. Returns ISTATE: BLESSED = BUC 1, m +1; CURSED = BUC 2 |
-    HIDDEN | m; normal = 0."""
-    t = tier(depth)
-    v = rng.rnd(16)
-    if v < BLESSED_16[t]:
-        return T["BUC_BLESSED"] | ((BLESSED_M & 7) << T["IST_M_SHIFT"])
-    if v < BLESSED_16[t] + CURSED_16[t]:
-        w = rng.rnd(8)
-        for m, n in zip(CURSE_M, CURSE_8[t]):
-            if w < n:
-                break
-            w -= n
-        return T["BUC_CURSED"] | T["IST_HIDDEN"] | ((m & 7) << T["IST_M_SHIFT"])
-    return 0
-
-
-def ist_m(ist):
-    """Signed m of an ISTATE (3-bit two's complement in bits 5-7)."""
-    m = (ist >> T["IST_M_SHIFT"]) & 7
-    return m - 8 if m & 4 else m
 
 
 def gen_potions(rng, b, lvl, pres, start, lair):
@@ -341,7 +303,6 @@ def gen_level_items(b, master, hero):
     pres, start, lair = rooms_of(b)
     lvl = Lvl(depth, hero)
     lvl.floor = read_floor(b)
-    lvl.ist = [0] * len(lvl.floor)
     non_start = [r for r in pres if r != start]
     non_lair = [r for r in non_start if r != lair]
     # 8.11 Q1: on D8 no 60..63 item lies in the lair
@@ -356,12 +317,11 @@ def gen_level_items(b, master, hero):
     for _ in range(SCROLL_N_MIN + rng.rnd(SCROLL_N_SPAN)):
         typ = D["IT_SCR_LO"] + rng.rnd(D["IT_SCR_HI"] - D["IT_SCR_LO"] + 1)
         try_add(rng, b, lvl, non_start, typ, 1)
-    # 8.5 gear 1-2 depth-gated; 8.7 BUC + cursed value
+    # 8.5 gear 1-2 depth-gated, fixed stats
     gp = gear_pool(depth, hero)
     for _ in range(GEAR_N_MIN + rng.rnd(GEAR_N_SPAN)):
         typ = gp[rng.rnd(len(gp))]
-        ist = roll_gear_state(rng, depth)
-        try_add(rng, b, lvl, glyph_pool, typ, 1, ist)
+        try_add(rng, b, lvl, glyph_pool, typ, 1)
     # 8.5 / 5: class books
     if depth in BOOK_DEPTHS:
         n = 1 + (1 if depth in BOOK2_DEPTHS and rng.rnd(2) == 0 else 0)
@@ -450,7 +410,7 @@ def gen_traps(rng, b, lvl, pres, start, lair):
 
 def apply_block(b, lvl):
     """Write `lvl` into a copy of the 320-B block: FLOOR_LIST + FLOOR_N, TRAP_LIST + TRAP_N.
-    Every other byte is unchanged. Returns (block, fl_ist)."""
+    Every other byte is unchanged. Returns the block."""
     nb = bytearray(b)
     nb[G.H["FLOOR_N"]] = len(lvl.floor)
     for i in range(FLOOR_MAX):
@@ -460,7 +420,7 @@ def apply_block(b, lvl):
         o = OFF_TRAP + i * D["TRAP_STRIDE"]
         nb[o:o + 2] = bytes(lvl.traps[i]) if i < len(lvl.traps) else b"\0\0"
     nb[OFF_TRAPN] = len(lvl.traps)
-    return bytes(nb), lvl.fl_ist()
+    return bytes(nb)
 
 
 # =============================================================================
@@ -473,15 +433,11 @@ def check_items(b, lvl, hero=None):
     hero = hero or lvl.hero
     depth = lvl.depth
     pres, start, lair = rooms_of(b)
-    nb, ist = apply_block(b, lvl)
+    nb = apply_block(b, lvl)
     n = len(lvl.floor)
     base = read_floor(b)
     if n > FLOOR_CAP:
         v.append(f"floor entries {n} > {FLOOR_CAP}")
-    if len(ist) != FLOOR_MAX or any(ist[n:]):
-        v.append("FL_IST length / unused not 0")
-    if len(lvl.ist) != n:
-        v.append("ist/floor length")
     if len(lvl.traps) > TRAP_MAX:
         v.append("trap list overflow")
     # the non-item bytes of the block are untouched
@@ -516,31 +472,12 @@ def check_items(b, lvl, hero=None):
             v.append(f"entry {i}: glyph {g} in D8 lair")
         if i < len(base) and typ == T["IT_POTION"]:
             v.append("legacy potion left")
-        s_ist = lvl.ist[i]
-        if not is_gear(typ):
-            if s_ist:
-                v.append(f"entry {i}: non-gear ISTATE {s_ist:#x}")
-            if qty < 1:
-                v.append(f"entry {i}: qty 0")
-        else:
-            buc = s_ist & T["IST_BUC_MASK"]
-            m = ist_m(s_ist)
+        if qty < 1:
+            v.append(f"entry {i}: qty 0")
+        if is_gear(typ):
             if qty != 1:
                 v.append(f"entry {i}: gear qty {qty}")
-            if s_ist & T["IST_ENCH_MASK"]:
-                v.append(f"entry {i}: enchant bits set")
-            if buc == T["BUC_BLESSED"]:
-                if m != 1 or s_ist & T["IST_HIDDEN"]:
-                    v.append(f"entry {i}: blessed encoding {s_ist:#x}")
-            elif buc == T["BUC_CURSED"]:
-                if m not in CURSE_M or not s_ist & T["IST_HIDDEN"]:
-                    v.append(f"entry {i}: cursed encoding {s_ist:#x}")
-                if CURSE_8[tier(depth)][CURSE_M.index(m)] == 0 if m in CURSE_M else False:
-                    v.append(f"entry {i}: cursed m {m} impossible at D{depth}")
-            elif s_ist:
-                v.append(f"entry {i}: normal gear ISTATE {s_ist:#x}")
-            allowed = gear_pool(depth, hero)
-            if typ not in allowed:
+            if typ not in gear_pool(depth, hero):
                 v.append(f"entry {i}: gear {typ} not in D{depth} {hero} pool")
     # one item per cell, except the bow + its bundle; the GEN_RNG potions may already
     # share a cell among themselves (3B step 8 does not test it): only NEW entries are checked
@@ -669,14 +606,9 @@ def master_for(i):
 def sweep(args):
     """(masters, depths) -> (violations, stats) over masters x depths x both heroes."""
     masters, depths = args
-    bad, st = [], {"levels": 0, "gear": [[0, 0, 0] for _ in range(3)],
-                   "m": [[0] * 4 for _ in range(3)], "dropped_items": 0, "dropped_traps": 0, "by_type": {},
-                   "traps": 0, "entries_max": 0, "ids_bad": 0}
+    bad, st = [], {"levels": 0, "dropped_items": 0, "dropped_traps": 0, "by_type": {},
+                   "traps": 0, "entries_max": 0}
     for mst in masters:
-        mp = light_id_map(mst)
-        if sorted(mp[:3]) != sorted(set(mp[:3])) or len(set(mp[:3])) != 3 or len(set(mp[3:])) != 4 or \
-                max(mp[:3]) >= 6 or max(mp[3:]) >= 8:
-            st["ids_bad"] += 1
         for d in depths:
             try:
                 b = G.generate(d, level_seed(mst, d), mst)
@@ -694,49 +626,16 @@ def sweep(args):
                     st["by_type"][k_] = st["by_type"].get(k_, 0) + n_
                 st["traps"] += len(lvl.traps)
                 st["entries_max"] = max(st["entries_max"], len(lvl.floor))
-                for e, s_ist in zip(lvl.floor, lvl.ist):
-                    if is_gear(e[2]):
-                        buc = s_ist & 3
-                        st["gear"][tier(d)][0 if buc == 0 else buc] += 1
-                        if buc == 2:
-                            st["m"][tier(d)][CURSE_M.index(ist_m(s_ist))] += 1
     return bad, st
-
-
-def odds_sanity(st):
-    """Statistical check of the BUC / cursed-m odds against 8.7 (5-sigma bands)."""
-    out = []
-    for t in range(3):
-        n_n, n_b, n_c = st["gear"][t]
-        n = n_n + n_b + n_c
-        if n < 2000:
-            continue
-        for name, got, p in (("blessed", n_b, BLESSED_16[t] / 16), ("cursed", n_c, CURSED_16[t] / 16)):
-            sd = (p * (1 - p) / n) ** 0.5
-            if abs(got / n - p) > 5 * sd:
-                out.append(f"tier {t} {name}: {got / n:.4f} vs {p:.4f} (n={n})")
-        if n_c >= 1000:
-            for j, k in enumerate(CURSE_8[t]):
-                p = k / 8
-                f = st["m"][t][j] / n_c
-                sd = (max(p * (1 - p), 1e-9) / n_c) ** 0.5
-                if abs(f - p) > 5 * sd + 1e-9:
-                    out.append(f"tier {t} m={CURSE_M[j]:+d}: {f:.4f} vs {p:.4f} (n={n_c})")
-    return out
 
 
 def merge(a, b):
     a["levels"] += b["levels"]
-    for k in ("dropped_items", "dropped_traps", "traps", "ids_bad"):
+    for k in ("dropped_items", "dropped_traps", "traps"):
         a[k] += b[k]
     a["entries_max"] = max(a["entries_max"], b["entries_max"])
     for k_, n_ in b["by_type"].items():
         a["by_type"][k_] = a["by_type"].get(k_, 0) + n_
-    for t in range(3):
-        for j in range(3):
-            a["gear"][t][j] += b["gear"][t][j]
-        for j in range(4):
-            a["m"][t][j] += b["m"][t][j]
 
 
 def main(argv=None):
@@ -754,9 +653,9 @@ def main(argv=None):
         mst, d, hero = int(a.show[0], 0), int(a.show[1]), a.show[2]
         b = G.generate(d, level_seed(mst, d), mst)
         lvl = gen_level_items(b, mst, hero)
-        for e, s_ist in zip(lvl.floor, lvl.ist):
-            print(f"  r{e[0] & 15} s{e[0] >> 7} c{e[1]:2d} type {e[2]:2d} qty {e[3]} ist {s_ist:02X}")
-        print("  traps", [(f"{x:02X}", f"{y:02X}") for x, y in lvl.traps], "ID_MAP", light_id_map(mst))
+        for e in lvl.floor:
+            print(f"  r{e[0] & 15} s{e[0] >> 7} c{e[1]:2d} type {e[2]:2d} qty {e[3]} attr {item_attr(e[2]):02X}")
+        print("  traps", [(f"{x:02X}", f"{y:02X}") for x, y in lvl.traps])
         print("  violations:", check_items(b, lvl, hero))
         return 0
     import multiprocessing as mp
@@ -765,8 +664,7 @@ def main(argv=None):
     depths = list(range(1, a.depths + 1))
     jobs = a.jobs or (mp.cpu_count() or 1)
     chunks = [(range(i, a.seeds, jobs * 8), depths) for i in range(jobs * 8)]
-    st = {"levels": 0, "gear": [[0, 0, 0] for _ in range(3)], "m": [[0] * 4 for _ in range(3)],
-          "dropped_items": 0, "dropped_traps": 0, "traps": 0, "entries_max": 0, "ids_bad": 0, "by_type": {}}
+    st = {"levels": 0, "dropped_items": 0, "dropped_traps": 0, "traps": 0, "entries_max": 0, "by_type": {}}
     bad = []
     if jobs > 1:
         with mp.Pool(jobs) as pool:
@@ -778,22 +676,14 @@ def main(argv=None):
             b_, s_ = sweep(c)
             bad += b_
             merge(st, s_)
-    odds = odds_sanity(st)
     print(f"items_model: {a.seeds} master seeds x D1..D{a.depths} x 2 heroes = {st['levels']} levels "
           f"in {time.time() - t0:.0f}s")
-    print(f"  violations {len(bad)}  odds-sanity {len(odds)}  bad ID maps {st['ids_bad']}  "
-          f"max floor entries {st['entries_max']}")
+    print(f"  violations {len(bad)}  max floor entries {st['entries_max']}")
     print(f"  dropped items {st['dropped_items']}  dropped traps {st['dropped_traps']}  traps {st['traps']}")
     print("  dropped by type", dict(sorted(st["by_type"].items())))
-    for t in range(3):
-        n_n, n_b, n_c = st["gear"][t]
-        n = max(1, n_n + n_b + n_c)
-        print(f"  tier {t}: gear {n} blessed {n_b / n:.3f} cursed {n_c / n:.3f}  cursed m(-2,-1,+1,+2) {st['m'][t]}")
     for x in bad[:10]:
         print("  FAIL", x)
-    for x in odds:
-        print("  ODDS", x)
-    return 1 if (bad or odds or st["ids_bad"]) else 0
+    return 1 if bad else 0
 
 
 if __name__ == "__main__":

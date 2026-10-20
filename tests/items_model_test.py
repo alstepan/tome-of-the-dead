@@ -23,7 +23,6 @@ class ItemsModel(unittest.TestCase):
         g = G.Rng(M.level_seed(0x1234, 3 | 0x80), 3 | 0x80)
         self.assertEqual([r.rnd(200) for _ in range(20)], [g.rnd(200) for _ in range(20)])
         self.assertNotEqual(M.item_rng(0x1234, 3).x, G.Rng(M.level_seed(0x1234, 3), 3).x)
-        self.assertNotEqual(M.item_rng(5, 1).x, M.id_rng(5).x)
         self.assertTrue(M.item_rng(0, 1).x != 0)
 
     def test_determinism(self):
@@ -33,15 +32,6 @@ class ItemsModel(unittest.TestCase):
                 for h in (M.HERO_WARRIOR, M.HERO_MAGE):
                     a, c = M.gen_level_items(b, m, h), M.gen_level_items(b, m, h)
                     self.assertEqual(M.apply_block(b, a), M.apply_block(b, c))
-
-    def test_light_id_map(self):
-        for m in range(300):
-            mp = M.light_id_map(m)
-            self.assertEqual(len(mp), D["ID_TYPES"])
-            self.assertEqual(len(set(mp[:3])), 3)
-            self.assertEqual(len(set(mp[3:])), 4)
-            self.assertTrue(max(mp[:3]) < D["ID_POT_APP"] and max(mp[3:]) < D["ID_SCR_APP"])
-        self.assertGreater(len({tuple(M.light_id_map(m)) for m in range(300)}), 100)
 
     def test_independent_of_gen_streams(self):
         """Generating items must not change level / decor output (8.11 Q8)."""
@@ -53,7 +43,7 @@ class ItemsModel(unittest.TestCase):
                 lg = (G.LAST, G.LAIR_RESEEDS)
                 for h in (M.HERO_WARRIOR, M.HERO_MAGE):
                     lvl = M.gen_level_items(b, m, h)
-                    nb, _ = M.apply_block(b, lvl)
+                    nb = M.apply_block(b, lvl)
                     # only FLOOR_LIST/FLOOR_N/TRAP bytes may differ
                     diff = [i for i in range(len(b)) if b[i] != nb[i]]
                     ok = lambda i: (G.OFF_FLOOR <= i < G.OFF_FLOOR + 128 or i == G.H["FLOOR_N"]
@@ -66,7 +56,6 @@ class ItemsModel(unittest.TestCase):
     def test_invariants_small_sweep(self):
         bad, st = M.sweep((range(0, 2000, 3), range(1, 9)))
         self.assertEqual(bad, [])
-        self.assertEqual(st["ids_bad"], 0)
 
     def test_books_bow_traps(self):
         n_book2 = n_d47 = 0
@@ -87,19 +76,44 @@ class ItemsModel(unittest.TestCase):
                     n_book2 += books == 2
                 self.assertEqual(sum(e[2] == M.IT_BOW for e in w.floor), 1 if d == 2 else 0)
                 self.assertEqual(sum(e[2] == M.IT_BOW for e in mg.floor), 0)
-                self.assertEqual(len(w.fl_ist()), 32)
         self.assertTrue(0.4 < n_book2 / n_d47 < 0.6, n_book2 / n_d47)
 
-    def test_cursed_values(self):
-        seen = {}
-        for m in range(600):
+    def test_ink_table_matches_legend(self):
+        """Expected inks written out from items3e.tiles / game.md 8.11 (not derived from the model)."""
+        want = {"IT_DAGGER": 0x47, "IT_ARROW": 0x46, "IT_F_MEAT": 0x42, "IT_F_CHEESE": 0x46,
+                "IT_F_PEAR": 0x04, "IT_F_APPLE": 0x44, "IT_F_CARROT": 0x06,
+                "IT_P_HEAL": 0x42, "IT_P_MANA": 0x45, "IT_P_CURE": 0x44,
+                "IT_S_TELEPORT": 0x45, "IT_S_FEAR": 0x46, "IT_S_SLEEP": 0x44, "IT_S_ENCHANT": 0x47,
+                "IT_BOOK": 0x43, "IT_BOW": 0x06, "IT_W_SHORT": 0x07, "IT_W_AXE": 0x07,
+                "IT_W_OAK": 0x06, "IT_W_BONE": 0x06, "IT_A_CHAIN": 0x07, "IT_H_HELM": 0x07,
+                "IT_C_MIGHT": 0x06, "IT_C_PLENTY": 0x06}
+        for k, a in want.items():
+            self.assertEqual(M.item_attr(M.T[k]), a, k)
+        # every real type has an ink; floor entries are TYPE/QTY only
+        for m in range(100):
             for d in (1, 5, 8):
-                b = level(m, d)
-                for e, s in zip(*[(l := M.gen_level_items(b, m, M.HERO_MAGE)).floor, l.ist]):
-                    if s & 3 == 2:
-                        seen.setdefault(d, set()).add(M.ist_m(s))
-        self.assertEqual(seen[1], {-1, 1})
-        self.assertEqual(seen[5], {-2, -1, 1, 2})
+                lvl = M.gen_level_items(level(m, d), m, M.HERO_MAGE)
+                for e in lvl.floor:
+                    self.assertEqual(len(e), 4)
+                    M.item_attr(e[2])
+
+    def test_ink_table_vs_items_txt(self):
+        """Cross-check against src/items.txt [types] INK column. TODO: tighten once the T4b
+        regeneration merges (potions/scrolls there still say APP / $07 until then)."""
+        txt = Path(__file__).resolve().parent.parent / "src" / "items.txt"
+        rows, in_types = {}, False
+        for ln in txt.read_text().splitlines():
+            if ln.startswith("["):
+                in_types = ln.strip() == "[types]"
+            elif in_types and "|" in ln and not ln.startswith("#"):
+                c = [x.strip() for x in ln.split("|")]
+                if len(c) >= 3 and c[0] in M.T:
+                    rows[c[0]] = c[2]
+        if not rows or any(v.startswith("APP") for v in rows.values()):
+            self.skipTest("items.txt not yet regenerated for 3E simplification (APP inks); TODO re-enable after T4b")
+        for name, ink in rows.items():
+            if ink.startswith("$"):
+                self.assertEqual(M.ITEM_INK.get(M.T[name]), int(ink[1:], 16), name)
 
 
 if __name__ == "__main__":
