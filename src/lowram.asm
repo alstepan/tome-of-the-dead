@@ -308,7 +308,11 @@ level_descend:
                 ld   a, GS_PLAYING             ; (edge-triggered input) first
                 ld   (GAME_STATE), a
                 jp   resync_tick
-.win:           ld   a, GS_WIN
+.win:           xor  a                         ; SND-4: Game Win once (like Game Over in end_turn
+                ld   (MUS_REQ), a              ; .dead): loop off, then the final shot; no stinger
+                ld   a, MUS_WIN                ; and no stinger_wait here (level_enter not run);
+                ld   (MUS_SHOT), a             ; the ISR drops it with music off
+                ld   a, GS_WIN
                 ld   (GAME_STATE), a
                 ld   a, TX_WIN
                 jp   msg_push_end              ; never dropped; end_screen drains it

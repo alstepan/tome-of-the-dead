@@ -11,7 +11,7 @@ wait-loop iteration and each music frame is observed.
      stinger within 3 frames, the room tune restarts (MUS_CUR 7), SND_MODE back to 3
   M  modes 2 (SFX only) and 0 (off): no wait-loop iteration, no shot ever sounds, MUS_SHOT dropped,
      MUS_REQ 7, depth + 1
-  W  depth 8 (win): no stinger requested (MUS_SHOT 0, MUS_CUR != 4), GS_WIN
+  W  depth 8 (win): no stinger, no wait; exactly one Game Win (T, MUS_CUR 5) shot edge; music off: silent
 Run: ZRCP_PORT=<port> python3 tests/snd4a.py
 """
 import sys
@@ -190,12 +190,44 @@ def run(h, p, check):
               and rb("GAME_STATE") == S["GS_PLAYING"], (rb("LVL_DEPTH"), rb("MUS_SHOT")))
 
     # ---- W: win path -----------------------------------------------------------
+    MUS_WIN = S["MUS_WIN"]
+
+    def isr_run(n):
+        """n more ISR samples (MUS_STATE, MUS_CUR, MUS_SHOT) after the descent returned."""
+        out = []
+        p.z.cmd("set-breakpoint 5 PC=%d" % DONE)
+        for _ in range(n):
+            p.z.cmd("cpu-step")
+            p.z.cmd("run %d" % RUN_LIMIT)
+            out.append((rb("MUS_STATE"), rb("MUS_CUR"), rb("MUS_SHOT")))
+        p.z.cmd("set-breakpoint 5")
+        return out
+
+    def win_edges(tr, more):
+        e, prev = 0, False
+        for st, cur in [(t[2], t[3]) for t in tr if t[0] == DONE] + [(m[0], m[1]) for m in more]:
+            on = (st & 3) == MS_SHOT and cur == MUS_WIN
+            e += on and not prev
+            prev = on
+        return e
+
     scene(3, depth=8)
     tr = descend()
-    check("W1 D8 descent = win: GS_WIN, no stinger requested, no wait",
-          rb("GAME_STATE") == S["GS_WIN"] and rb("MUS_SHOT") == 0 and edges(tr) == 0
-          and not [t for t in tr if t[0] == MT] and rb("MUS_CUR") != MUS_LEVEL,
-          (rb("GAME_STATE"), rb("MUS_SHOT")))
+    check("W1 D8 descent = win: GS_WIN, no stinger R, no wait",
+          rb("GAME_STATE") == S["GS_WIN"] and not [t for t in tr if t[0] == MT]
+          and all(t[3] != MUS_LEVEL for t in tr) and rb("MUS_REQ") == 0, (rb("GAME_STATE"), rb("MUS_REQ")))
+    more = isr_run(150)
+    check("W2 exactly one Game Win (T) MS_SHOT edge over the descent + 150 ticks, MUS_SHOT consumed",
+          win_edges(tr, more) == 1 and rb("MUS_SHOT") == 0 and rb("MUS_REQ") == 0
+          and rb("GAME_STATE") == S["GS_WIN"], (win_edges(tr, more), rb("MUS_REQ")))
+    for mode in (2, 0):
+        scene(mode, depth=8)
+        tr = descend()
+        more = isr_run(20)
+        check(f"W{mode + 3} mode {mode} win: nothing sounds, MUS_SHOT dropped, GS_WIN",
+              win_edges(tr, more) == 0 and rb("MUS_SHOT") == 0 and rb("MUS_CUR") == 0
+              and (rb("MUS_STATE") & 3) == 0 and rb("GAME_STATE") == S["GS_WIN"],
+              (rb("MUS_CUR"), rb("MUS_STATE")))
 
 
 if __name__ == "__main__":

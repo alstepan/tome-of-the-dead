@@ -533,7 +533,7 @@ Chosen on the S1e tape: **harpsichord + reverb tail S1e, staccato gate 5/16 (the
 | **W** | Dangerous | **danger**: **implemented (SND-3)** — >= 4 awake hostiles in the hero's room or HP <= 25 % of max, hysteresis below | loop | SND-3 |
 | **E** | Boss Fight | entering a **boss room** | loop | SND-4 |
 | **R** | Level Complete | **once** when the player kills the boss; **implemented on descent (SND-4a)**, see below | one-shot | SND-4 (boss) / SND-4a (descent, done) |
-| **T** | Game Win | **once** when the game is finished successfully | one-shot | SND-4 |
+| **T** | Game Win | **once** when the game is finished successfully — **implemented**: `level_descend .win` (lowram.asm) writes `MUS_REQ` 0 + `MUS_SHOT` 5, no stinger wait; the end screen never touches the mailbox | one-shot | SND-4 (done) |
 | **Y** | Game Over | **once** when the player dies — **implemented (SND-3)**: `end_turn` death branch, `MUS_REQ` 0 + `MUS_SHOT` 6 | one-shot | SND-3 |
 
 **DANGER trigger (W), as built in SND-3 (manager decision 2026-10-19, replaces the game.md §3.7 threat
