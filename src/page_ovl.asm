@@ -208,6 +208,5 @@ pg_strs:        DB   1, 168, "ITEMS 0/20", 0
                 DB   PG_WORN_ROW, 48, "WORN", 0
                 DB   PG_DESC_ROW, 16, "(EMPTY SLOT)", 0
                 DB   PG_VERB_ROW, 16, "USE   EQUIP   REMOVE   DISCARD", 0
-                DB   PG_MSG_ROW, 16, "PAGE PLACEHOLDER", 0
                 DB   PG_MSG_ROW, 176, "FIRE: BACK", 0
                 DB   $FF
