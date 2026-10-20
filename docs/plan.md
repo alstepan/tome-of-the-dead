@@ -382,7 +382,8 @@ for 3F's wave code), **blessed/cursed gear** (§8.7: odds, sticky curse, Enchant
 never auto-fill), the **item record** (§8.9) and the Sleep scroll / extended Cure (§8).
 Tests: trap placement 1,000 seeds Python == Z80; trigger/search/jump-over; cursed unequip
 refused until Enchant; identify-on-use + elimination.
-**Rev 5 (user 2026-10-03) supersedes the cursed rule above:** cursed `m` ∈ {−2,−1,+1,+2}
+**USER 2026-10-20 (memory): blessed/cursed AND item identification are DROPPED** — see game.md §8.11 "3E simplification (2026-10-20)" (fixed gear stats, `ISTATE` = `m` only, `FL_IST`/`ID_MAP`/`KNOWN` deleted, fixed potion/scroll names, delete list per task); the BUC/ID/shatter/reveal items in the text and T4–T12/T17 rows below are void.
+**Rev 5 (user 2026-10-03) supersedes the cursed rule above (now itself void):** cursed `m` ∈ {−2,−1,+1,+2}
 rolled by depth (`ISTATE` bits 5–7, bit 2 HIDDEN until equipped), sticky until **Enchant
 blesses** it (`m = max(m,+1)`) or a **projectile hit shatters** it (1 in 4, uniform among worn
 cursed slots; DART counts); no regen penalty (§8.7). Book placement: generic class books,

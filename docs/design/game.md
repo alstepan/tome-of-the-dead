@@ -1477,6 +1477,7 @@ Weapons are class-locked; everything else is not.
   the room's monsters fall ASLEEP 8 turns, §6.4) · **Enchant** (if any worn item is cursed:
   **blesses every worn cursed item** instead (§8.7, `THE CURSE LIFTS. BLESSED!`); else
   weapon dmg +1, max +3).
+  **[rev 6, 2026-10-20: Enchant = worn weapon `m` +1, max +3; no blessing; §8.11 "3E simplification".]**
   Floor scrolls pick the type uniformly from the four.
 - The **key** opens the lair door and is consumed.
 
@@ -1486,9 +1487,8 @@ Weapons are class-locked; everything else is not.
 - ~~`QUICK` on the page pins a type until its stack runs out.~~ **Cut 2026-10-20 (§8.11
   Q3):** no pin; auto-fill only.
 - SCROLL: the largest stack, ties Teleport → Fear → Sleep → Enchant (§3.5). Quick scroll = read.
-- **Unknown types (§8.8) never auto-fill**: auto-fill considers only known types; if the bag
-  holds only unknown potions/scrolls the quick slot greys out. Unknown types are used from
-  the page (DRINK / READ), the deliberate path (§8.11; the rev QUICK pin is cut).
+- ~~Unknown types never auto-fill~~ **[rev 6: no unknown types exist; every potion/scroll
+  type is always known and eligible.]**
 
 **Page engine rules (3E-T2 spike, manager review 2026-10-20; rev 2026-10-20 user: full
 screen, sound keeps playing; layout §8.11 Q3).** The page opens only on the turn-intent path
@@ -1558,6 +1558,10 @@ Uniques on the floor shimmer with the same cycle (it counts toward the room's at
 cells). Panel and page use hardware FLASH.
 
 ### 8.7 Blessed and cursed gear (3E; user 2026-10-03: known states, no identification; rev 5 user 2026-10-03: hidden ± value, bless/shatter)
+
+> **CUT, rev 6 (user 2026-10-20, memory): blessed/cursed, the hidden value, bless and
+> shatter do not exist. Superseded by §8.11 "3E simplification (2026-10-20)". The text below
+> is history; do not implement.**
 
 Every **found gear item** (weapon, armour, helmet, charm) has a visible state: **BLESSED,
 normal or CURSED**. Start kit and boss uniques are always normal. Every state carries a
@@ -1634,6 +1638,9 @@ is deleted (−~10 B hot). Per projectile hit on the hero: one test of the worn-
 
 ### 8.8 Light identification (3E; user 2026-10-03)
 
+> **CUT, rev 6 (user 2026-10-20, memory): no appearances, shuffle, `KNOWN`, elimination or
+> `IT WAS` lines. Superseded by §8.11 "3E simplification (2026-10-20)". History only.**
+
 **Potions and scrolls have per-run shuffled appearances**; a **type** becomes known on its
 **first use** (drink/read; free, automatic). Gear is never unidentified (§8.7). Food, books,
 ammo, the key: always known.
@@ -1665,8 +1672,9 @@ ammo, the key: always known.
 ### 8.9 Item record (designer decision 2026-10-03; layout by the engineer)
 
 Floor-list entries, bag slots and worn slots all carry the same item fields:
-`TYPE` (item type id) · `QTY` (stack 1–9; ammo counts live outside the bag) · `ISTATE`:
-bits 0–1 BUC (0 normal, 1 blessed, 2 cursed, 3 reserved) · bit 2 **HIDDEN** (rev 5: the
+`TYPE` (item type id) · `QTY` (stack 1–9; ammo counts live outside the bag) · `ISTATE`.
+**[rev 6: `ISTATE` = bits 5–7 `m` only, §8.11 "3E simplification"; floor entries carry no
+`ISTATE`. The rest of this paragraph is history.]** Former layout: bits 0–1 BUC (0 normal, 1 blessed, 2 cursed, 3 reserved) · bit 2 **HIDDEN** (rev 5: the
 cursed value is not yet revealed; set at generation for cursed items, cleared on first
 equip or on blessing; **display-only**, logic ignores it, as rev 4 reserved it) · bits 3–4
 weapon enchant +0..3 · **bits 5–7 `m`, the signed BUC/wear modifier** (3-bit two's
@@ -1683,6 +1691,10 @@ time and use never wear gear.
 |---|---|---|---|
 | **NOTCH** — Skeleton Guard, Skeleton Knight (§9.6), **Death Knight** (§9.1) | worn **weapon** | the monster **parries the hero's melee hit** (incl. Power Strike, Whirlwind; not thrown/shot ammo, not fists) | 1 in 2 per parry |
 | **ACID** — **Black Widow** (§9.6; replaces its rev-4 sleep bite) | worn **armour**, else helmet, else nothing | its bite hits the hero (≥ 1 dmg) | 1 in 4 per hit |
+
+**[rev 6, 2026-10-20: blessed/cursed are gone: "blessed immune", "cursed wears like normal" and
+the shatter cross-references below are void; every wear event applies to the target; the
+destroy-at-−3 path stays and is the only slot-clearing code.]**
 
 **Effect.** `m −= 1` on the target item; stats recompute as on unequip. **Floor `m = −3`**: a
 wear event on an item already at −3 **destroys** it; the slot empties exactly as a curse
@@ -1816,10 +1828,10 @@ page-only text (labels, verbs, help) ≤ 160 B inside the page overlay stream. R
 goes to bank 1.
 
 **Q10 Start bag (confirms §4).** Warrior: Short Sword + Leather worn; bag Heal ×1, Apple ×1;
-DAGGERS 3, ARROWS 0. Mage: Oak Staff + Robe worn; bag Heal ×1, Mana ×1, Apple ×1. All
-normal BUC; Heal (+ Mana for the Mage) known. **`DEBUG_KIT` adds** (on top of §1.4): Cure
-×1, one scroll of each of the 4 types (unknown), Meat ×1, class book ×1, a **cursed Helm**
-(value hidden) — exercises ID, curse lock, Enchant bless and READ.
+DAGGERS 3, ARROWS 0. Mage: Oak Staff + Robe worn; bag Heal ×1, Mana ×1, Apple ×1. **[rev 6: no
+BUC/known flags.]** **`DEBUG_KIT` adds** (on top of §1.4): Cure ×1, Mana ×1 (Warrior), one
+scroll of each of the 4 types, Meat ×1, class book ×1, a **Helm** (plain; the cursed Helm and
+the "four scrolls (unknown)" are gone) — exercises EQUIP, Enchant, READ.
 
 **Q11 Drops (≤ 24 B data).** Drop table = **5 rows × 3 B** (kind, item type, chance code
 1/2 · 1/3 · 1/4), the §9.1 column unchanged: Rat Cheese 1/4 · Goblin Apple 1/4 · Orc Meat
@@ -1976,6 +1988,67 @@ Q9) the total is ≈ 1,006 B ≤ the 1,100 B cap; if the 160 B page text must al
 move the 7 verb stems (81 B) to bank 1 (resident has 49 B of slack, so only ~4 of them fit).
 
 **Hunger:** HUNGRY doubles the MP regen period (WEAK: none; HP regen FED only), 3E, §7.
+
+#### 3E simplification (2026-10-20; rev 6, user decision: memory forces it)
+
+**SUPERSEDES:** §8.7 (blessed/cursed, hidden value, bless, shatter), §8.8 (light-ID), the
+BUC/cursed/HIDDEN/reveal parts of §8.9, §8.10 (blessed immunity, cursed wear, shatter
+cross-refs), §8 (Enchant-blesses, "unknown never auto-fill"), §1.4/Q10 DEBUG_KIT (cursed Helm,
+unknown scrolls), and in this section: Q1 BUC tints and the "appearance ink" for potions, Q3
+`STICKY`/cursed refusals/BUC name prefix, Q9 "incl. §8.8 appearances", the generation rulings
+(BUC `rnd(16)`, value `rnd(8)`, light-ID shuffle stream), text rulings (1) BUC composer and
+unknown names, (3) `IT WAS A`, `cmb_cling`/`cmb_lifts`/`cmb_cursed_no`/shatter lines.
+
+1. **Item record.** `TYPE` / `QTY` / `ISTATE`, 3 B as built. **`ISTATE` = bits 5–7 `m` only**
+   (signed −3..+3, the existing `IST_M_*` macros; bits 0–4 are 0 and reserved). **Gear has
+   FIXED stats by type** (the §8 table; no per-item random modifier, no roll code). `m` starts
+   0 and changes only by (a) the **Enchant scroll** and (b) §8.10 wear. Main-stat effect of `m`
+   as before: weapon dmg +m, armour/helm DEF +m (Robe/Hood max MP +m), clamped at 0 / `max(1,…)`.
+   Only gear carries `ISTATE`; stacks still merge on equal `TYPE`+`ISTATE` (potions, scrolls,
+   food, books always 0). **Enchant (one rule):** worn weapon `m` +1, max +3 (`YOUR WEAPON
+   GLOWS!`); fists or already +3 → `NOTHING HAPPENS`, scroll consumed. Armour is never
+   enchanted. Wear (§8.10): `m` −1 on the target, destroyed at −3 (slot empties, fists 1d2);
+   Enchant is the repair. EQUIP/REMOVE/swap are always free (no lock, no refusal but `BAG FULL`).
+   Tiers: the §8 table unchanged (Short Sword start / Long D2+ / Axe D4+; Chain D3+, Plate
+   D6+; rings D2+, amulets D3+; Hood/Helm D1+; uniques §8.6).
+2. **Names are fixed and always known:** `HEAL POTION` · `MANA POTION` · `CURE POTION` ·
+   `TELEPORT SCROLL` · `FEAR SCROLL` · `SLEEP SCROLL` · `ENCHANT SCROLL` (type-first, 2 words,
+   no `OF`). No `UNKNOWN`, appearance words, `BLESSED`/`CURSED` prefixes. Floor glyph ink stays
+   per type: FLASK Heal `$42` · Mana `$45` · Cure `$44`; PAGES Teleport `$45` · Fear `$46` ·
+   Sleep `$44` · Enchant `$47` (book `$43`). The player learns type by ink + the pickup line.
+   Longest composed line `YOU READ THE TELEPORT SCROLL` 28. The known-waste `NO NEED` refusal now
+   applies always (Heal at full HP, Mana at full MP, EAT at 100; Cure and scrolls never).
+3. **Unchanged:** traps (§1.5, incl. the DART trap damage; it just no longer shatters
+   anything); monster drops (Q11) and boss uniques (§8.6: fixed-stat items, never relied on
+   BUC; `m` 0). **DEBUG_KIT** (on top of §1.4): Cure ×1, Mana ×1, one scroll of each of the 4
+   types, Meat ×1, class book ×1, plain Helm ×1. **`ITEM_RNG` (Q8) kept.** Rolls that
+   disappear: BUC `rnd(16)`, cursed value `rnd(8)`, and the whole depth-255 light-ID stream.
+   **New exact per-item order:** type (or qty) → placement (`room = pool[rnd(n)]`, `storey =
+   rnd(2)`, ≤ 8 × `col = 2 + rnd(28)`). Level order unchanged: potion types → food → scrolls →
+   gear → books → ammo/bow → traps. Gear/trap/later outputs shift versus the T5 model (re-baseline
+   `items_gen` goldens; `GEN_RNG`/world goldens untouched). **`FL_IST` is dropped:** a floor item
+   is always `m` 0 (DISCARD destroys, nothing is dropped, boss/drop items are plain), so the floor
+   entry is TYPE/QTY only and a pickup writes `ISTATE` 0. Floor ink is a pure function of TYPE
+   (`it_attr`); `FL_ATTR` (T6) may become a per-draw lookup at the engineer's choice.
+4. **DELETE / simplify (staff).** `items_model.py`: `light_id_map`/`id_rng`, `roll_gear_state`
+   (BUC odds, `CURSE_M`, `BLESSED_M`), HIDDEN, `BUC_*` parsing, blessed/cursed checks in
+   `check_items`; keep `ITEM_RNG`, placement, traps. T6 overlay: shuffle, BUC/value rolls,
+   `known_init`, `FL_IST` writes. `item_defs.asm`: `IST_BUC_*`, `BUC_*`, `IST_HIDDEN*`,
+   `IST_ENCH_*`/`ENCH_MAX` bits (use `m`), `IT_ID_*`, `ID_*`, `KNOWN_*`; `ITEM_RAM`: `ID_MAP` 7 +
+   `KNOWN` 1 + `FL_IST` 32 = **−40 B** (`ITEM_RAM_LEN` 121 → 81, re-ASSERT). `items.txt` /
+   `itempack.py`: appearance words (6+8), `BLESSED`/`CURSED`, `OF`, `APP` ink class, the `IT WAS A`
+   stem; potion/scroll names to 2 words; re-run budgets. T8: shatter, bless, reveal-on-equip,
+   curse lock; `hero_recalc` reads only `m`. T10 `item_name` mode bits BUC/appearance. T12:
+   identify-on-use, elimination, unknown-refusal exceptions. T13: `STICKY` note, cursed refusals.
+   Bank-0 `cmb_cling/lifts/cursed_no/shat_*` become dead (bank 0 is frozen, but deleting them
+   frees bytes for the 3F pool; staff to confirm). Tests: drop reveal/bless/shatter/curse-lock/
+   ID-elimination cases, `items_gen` BUC checks; add: Enchant +1..+3 cap and fists, wear to −3
+   destroy, always-known names.
+5. **Estimate of 3E bytes saved (qualitative):** state RAM −40 B; ID/BUC words + stems −~170 B
+   tape (−14 appearance words ≈ −110 B table, stems/messages ≈ −60 B); T6 overlay ≈ −200 B
+   (≈ 700 B raw left); T8/T10/T12 code (shatter ≈ 90, bless 30, reveal 20, ID + naming modes
+   ≈ 270) ≈ −400 B bank 3/1; plus T13 refusals. **Total ≈ 0.9–1.0 KB**, enough to close the 3E gap
+   without further feature cuts (QUICK pin stays cut).
 
 ---
 
