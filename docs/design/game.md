@@ -48,7 +48,7 @@
 | Edges | horizontal: open edge on storey `s ∈ {0,1}`; **1 in 3 carry a door** (§2.3). Vertical: up-exit `{c,0}` below + down-exit hole `{c,2}` above, same `c` |
 | Start | the DFS root, **on the top grid row (L1, 2026-10-05)**, 0 monsters. D2–D8: arrival shaft from above, rubble-capped |
 | Lair | **on the bottom grid row (L1, 2026-10-05; tiers in the L1 rules row)**, the farthest leaf (BFS) with a horizontal tree edge: boss + **level exit** = down-shaft `{c,2}` under a **GRATE** that opens when the boss dies |
-| Key room | the farthest other leaf (else the farthest non-start room): holds the **level key**. The lair edge is a **locked door** |
+| Key room | the farthest other leaf (else the farthest non-start room): holds the **level key** (rev 2026-10-20: found on first entry, no floor item, §8.11 Q1). The lair edge is a **locked door** |
 | D8 Sanctum | an extra leaf off the lair behind a **sealed door** (opens on the Archmage's death); holds the Book. D8 has no exit |
 | **Level shape (L1, user 2026-10-05)** | The level exit (lair) is **always on the bottom grid row** (ids 6–8), and **no room is above the entry room**: the hero always heads down into the dungeon |
 | L1 rules (designer decision 2026-10-05) | Grid id `r = 3·row + col`, row 0 = top. **(1) Start = top row:** `start = rnd(3)` (replaces `rnd(9)`), so nothing can be above it; the start room has no up-exit; its row-0 horizontal neighbours are allowed (they are beside it, not above). Arrival shaft D2+ unchanged (storey 0 of the start room, rubble-capped). **(2) Room count:** `n = 7 + rnd(3)`; **D8: `n = min(7 + rnd(3), 8)`** (the Sanctum cell is reserved, see (5)). **(3) DFS growth:** the random DFS from `start` runs `while stack and not done`, where `done` = `|visited| ≥ n` **and** two horizontally adjacent bottom-row cells (6–7 or 7–8) are visited. A full DFS reaches all 9 cells, so `done` is always reachable; the room count stays 7–9. **(4) Bottom-row horizontal edge:** after the tree, if no tree edge joins two bottom-row rooms, the loop edge becomes **mandatory** and is drawn with `rnd(len)` from the unlinked present bottom-row pairs (the `LOOP_EDGE_ODDS` roll is skipped); otherwise the loop step is unchanged. Still 0–1 extra edges. **(5) D8 Sanctum:** before the DFS, reserve `S = 6 + 2·rnd(2)` (bottom-row end cell); the DFS never enters `S`; `done` additionally needs cell 7 and the other bottom end visited. The lair is then always cell 7 (the only bottom room next to the free `S`); the Sanctum hangs off its free side behind the sealed door. **(6) Lair tiers (replace F6 gap (1) tiers):** (a) farthest (BFS) **bottom-row** non-start leaf with a horizontal edge; (b) farthest bottom-row room with a horizontal edge (a through-room lair is fine; the boss never follows); ties = lowest id; D8 also needs `sanctum_ok`. (3)+(4) guarantee tier (b) exists, so **lair reseeds must be 0**; the reseed path (seed+1, ≤ 16) stays as a safety net only. Levelcheck asserts over the seed sweep: start on row 0 (so no room above it), lair on row 2, room count 7–9, lair has a horizontal edge, D8 lair = 7 with `S` free, lair-reseed count = 0; the junior reports Restart counts (feature/potion) before vs after. **(7) Lair door:** the lair's horizontal edge toward its BFS parent if horizontal, else its lowest-id horizontal edge, is the lair door (key gating only matters from 3F; the grate gates the exit). **(8)** Key room, vertical links, edges, door odds, shaft cols: unchanged |
@@ -61,7 +61,7 @@
 | **L2 invariants (levelcheck, seed sweep D1–D8)** | **I1** Grid shape unchanged: start on row 0, lair on row 2, room count 7–9, lair reseeds 0, exit/lair marking (B12: lair grate = id 26 + hint; ordinary down-exit holes plain) untouched. **I2** L2 features only in non-start/lair/Sanctum rooms with 2 internal ladders after L2 (2026-10-07: L2 may add lad2 and clear a narrow pit in its room, nothing else); ≤ 1 L2 feature per room; ≤ 2 mid-blocks and ≤ 2 wide pits per level; none on D1; `w ∈ 2..3`, `W ∈ 4..6`. **I3** Earlier generator output (tree, ladders, edge blocks, items, traps) identical to pre-L2 except, in L2-feature rooms only, an added lad2 and a removed narrow pit; LP records are derived afterwards. **I4** Geometry: mid-block `b ≥ c1+6`, `b+w+3 ≤ c2`; wide pit `p ≥ c1+7`, `p+W+4 ≤ c2`; every storey-1 and storey-0 footprint obeys the extended `\|c−p\|` clearance; no item/trap in the L2 span +1. **I5** Reachability model: nodes (room, storey, x); edges = walk (blocks are walls, fall-range `x` illegal), climb, door/edge transit; **jump `x ↔ x±6` crosses only a narrow pit**; a jump toward a wide pit is a fall edge (`x_f`), never a crossing; jump landing on a narrow-pit `p` is a fall edge; fall edge (one-way, 1d4) allowed but **not required**. Assert: from every room entry point the hero reaches every exit, the key room and the lair by **walk + climb only**, and the walk + climb graph is **strongly connected** per room (hero can always go back). **I6** No walker spawns on a fall-range `x` or inside a block |
 | Shaft cols (designer decision 2026-10-03) | Exit shafts (up-exit, down-exit, arrival, level exit) use left col **`c ∈ 5..24`** (footprint cols 5..26), a subset of the internal-ladder range 3..26. Why: door cells occupy cols 0–1 / 30–31, and a hero arriving through a horizontal exit stands at x = 1 (cols 1..3) or x = 28 (cols 28..30); `c ≥ 5` / `c+2 ≤ 26` leaves ≥ 1 solid-floor col (4 / 27) so arrival never overlaps a hole. The ≥ 4-clear-cols (`\|c1−c2\| ≥ 7`) rule applies unchanged between shafts and internal ladders/pits on the same storey |
 | Generator gaps (designer decision 2026-10-03) | **(1) Lair tiers** (superseded by the L1 rules row, 2026-10-05: both tiers are restricted to the bottom row; the D8 Sanctum cell is reserved up front)**:** (a) farthest non-start leaf with a horizontal edge; else (b) farthest non-start room with a horizontal edge (it keeps its other exits; the boss never follows, so a through-room lair is fine; on D8 the Sanctum leaf needs a free horizontal neighbour cell, else tier fails); there is **no tier (c)**: if neither exists, the generator **reseeds** (seed+1, ≤ 16 tries). The lair edge must be horizontal so the lair has its door. Key room (§1.4: unused in 3B) follows the same fallback. **(2) Potions: minimum 2** per level (≥ 1 Heal); up to 32 seeded placement tries each for the first two, the 3rd is optional and dropped after 8 tries. **(3) Dead-end block:** only in rooms that are **not start, lair or Sanctum**, and only at an edge with no exit. **(4) Start:** hero begins in the DFS-root room on **storey 0** (top); D1 x = col 14, D2+ x = arrival-shaft `c+1`; if x falls on a pit/ladder/shaft footprint, move to the nearest solid-floor col with ≥ 1 clear col. **Designer clarification 2026-10-03:** the arrival shaft is a storey-0 feature (it descends from above into the start room's storey 0, rubble-capped overhead), so the hero arrives on **storey 0, standing on solid floor at x = `c+1`, not mid-climb** (option a). The footprint-move rule **does not apply to the arrival shaft itself**; it applies only to the *other* footprints (pit, internal ladder, up/down-exit), and since placement already keeps those ≥ 4 clear cols (`\|c1−c2\| ≥ 7`) from the arrival shaft, in practice the move rule can only trigger on D1 (x = 14). **(5) 3B level block** needs nothing beyond the descriptors, floor-item list and hero start; population is the fixed per-room stand-in table keyed by room id and depth, not stored |
-| Traps (3E) | placed **last**, after the floor items, so every earlier generator output stays byte-identical to B3B-7 (Python == Z80). Rules §1.5 |
+| Traps (3E) | placed **last**, after the floor items, so every earlier generator output stays byte-identical to B3B-7 (Python == Z80). Rules §1.5. **Rev 2026-10-20:** 3E items and traps run on the separate `ITEM_RNG` after the whole `GEN_RNG` pass (§8.11 Q8) |
 | Stored per level | room descriptors (exits, ladders, pits, blocks, door/grate bits), the floor-item list, the **trap list (≤ 6 × 2 B, §1.5)**, the **population budget + 9 room records (~100 B, §9.4.1–9.4.2, user 2026-10-06)**; the 16 entity slots hold only the current room. Population §9.4, items §8.5 |
 
 ### 1.2 Level themes: colours and decor tilesets (attr-only; floor rows never under sprites)
@@ -89,6 +89,9 @@
   a set exceeds it, cut the arched window and the pillar variants first. Common id 10
   (freed when potions stop being a map tile in 3E) becomes **`T_TRAP`** (revealed trap,
   designer decision 2026-10-03, §1.5). After 3E the common ids are completely full.
+  **Rev 2026-10-20 (§8.11 Q1):** floor items use common 17 (AMMO) / 18 (PAGES) and
+  per-level 60..63 (FLASK, FOOD, WEAPON, WORN) on D1–D7; D8 swaps 60..63 with the lectern
+  in the Sanctum only.
 - Walls are **black-background** with occasional dithered brick patches (concept-screen §3.3).
 - **Solidity of decor (designer decision 2026-10-03).** Solidity belongs to the map cell
   class, never to the glyph: a decor glyph must have the same solidity as the cell it
@@ -131,7 +134,7 @@
 | Key / locked door | no key exists (potions only), so the lair door is an **ordinary unlocked door** (designer decision 2026-10-03) | §1.1 |
 | D8 | D8 gets a lair exit like D1–D7; **descending from D8 = `GS_WIN`** | §1.3 |
 | Close door | keyboard key **`C`** (1 turn, §2.3 legality; not redefinable, not on joystick) until the 3C icon bar adds FIRE on the melee icon (designer decision 2026-10-03: the key) | §3.1 |
-| Start kit (3D, D3-7 debug; designer decision 2026-10-12) | Behind a debug build flag only, never in a release tape. **Mage:** all 5 spells rank 1, MP 40/40. **Warrior:** Power Strike + Whirlwind rank 1, bow in the bag, **ARROWS 20, DAGGERS 8**, MP 20/20. The near-cap ammo lets the D1 floor stacks trigger `QUIVER FULL.` | §4 start kit (3E) |
+| Start kit (3D, D3-7 debug; designer decision 2026-10-12) | Behind a debug build flag only, never in a release tape. **Mage:** all 5 spells rank 1, MP 40/40. **Warrior:** Power Strike + Whirlwind rank 1, bow in the bag, **ARROWS 20, DAGGERS 8**, MP 20/20. The near-cap ammo lets the D1 floor stacks trigger `QUIVER FULL.` 3E additions: §8.11 Q10 | §4 start kit (3E) |
 
 ### 1.5 Traps (3E; user 2026-10-03 scope, designer decision 2026-10-03 details)
 
@@ -173,7 +176,8 @@ Message on find: `YOU FIND A DART TRAP.` · `… A GAS TRAP.` · `… AN ALARM T
 `YOU FIND A TELEPORT TRAP.` (25). A known trap overrides any derived decor in its cell
 (decor is cosmetic and re-derived on room entry, never stored).
 
-**Counts and types per level (seeded from the level seed, `GEN_RNG`).**
+**Counts and types per level (seeded from the level seed; rev 2026-10-20: on `ITEM_RNG`,
+not `GEN_RNG`, §8.11 Q8).**
 
 | Depth | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 |
 |---|---|---|---|---|---|---|---|---|
@@ -904,7 +908,7 @@ header shows the same. 0 new glyphs.
 | Source | Abilities come **only** from books **found in the dungeon** (nothing is bought or granted). Melee is always available. Scrolls and ammunition are likewise found only (§8.5) |
 | Placement (rev 5, designer decision 2026-10-03) | **1 class book per level D1–D7, plus a 2nd class book with 1 in 2 on D4–D7** (`GEN_RNG`; E ≈ 9 per run). **The D1 book lies in the start room.** D8 has none. The generator places a generic **class book** (`SPELLBOOK` / `WAR MANUAL`); *what it teaches is decided when it is read* (below), so generation never depends on hero state |
 | Reading | Page verb `READ`, 1 turn on return; the book is consumed. Content, first match (gameplay RNG): **1.** an unlearned ability whose unlock depth (§4) ≤ the current depth → learn the earliest-depth one (rank 1; fills its bar slot); **2.** else **rank up** a known ability below rank 3, chosen uniformly; **3.** else a tome (Warrior Vigor, Mage Power, §4). So the D1 book always teaches the starter (Spark / Power Strike), each later ability arrives at its unlock depth (or on the next book read, if carried), and every other book is a rank-up. "Chance of new vs rank-up" (user) = rule 1 is deterministic (the §10 threat answers depend on the schedule); the rank-up target is the random part |
-| Other class's book | 50 % per level. `READ` → "YOU GRASP LITTLE OF IT": Warrior +1 max MP, Mage +2 max HP; the book crumbles. Unchanged |
+| Other class's book | **CUT (user 2026-10-20, memory):** never generated; only the hero's class book exists |
 | Expected yield (E) | Warrior: 2 unlocks, 4 rank-ups (both to rank 3 by ~D6), ~3 Vigor. Mage: 5 unlocks, ~4 rank-ups (of 10 possible), ~0 Power. Mage ranks are the scarcer choice by design: 5 spells × 3 ranks cannot all max |
 
 **Ability ranks (user 2026-10-03: repeat books level an ability; numbers designer decision
@@ -1424,7 +1428,7 @@ distinct stages, each name ≤ 6 chars:**
 |---|---|---|---|
 | **FED** | 50–100 | **HP +1 per 12 turns** (user: agreed) | `$44` |
 | **OK** (was Peckish) | 25–49 | no HP regen | `$46` |
-| **HUNGRY** | 10–24 | atk −1, MP regen halved | `$42` |
+| **HUNGRY** | 10–24 | atk −1, MP regen halved (= regen **period ×2**, 3E, confirmed 2026-10-20 §8.11) | `$42` |
 | **WEAK** | 0–9 | atk −2, eva −1, dmg −1 (min 1; physical hits only, §6.4.2 R1), no MP regen, no jump | `$42` + message every 50 turns (`YOU ARE WEAK WITH HUNGER.`) |
 
 The Mummy curse applies the same penalties as the WEAK **status** (§6.4), not cumulative with
@@ -1479,31 +1483,35 @@ Weapons are class-locked; everything else is not.
 **Quick slots auto-fill** (user):
 - FOOD: the smallest FOOD value first.
 - POTION: Heal, else Mana, else Cure.
-- `QUICK` on the page pins a type until its stack runs out.
+- ~~`QUICK` on the page pins a type until its stack runs out.~~ **Cut 2026-10-20 (§8.11
+  Q3):** no pin; auto-fill only.
 - SCROLL: the largest stack, ties Teleport → Fear → Sleep → Enchant (§3.5). Quick scroll = read.
 - **Unknown types (§8.8) never auto-fill**: auto-fill considers only known types; if the bag
-  holds only unknown potions/scrolls the quick slot greys out. `QUICK` on the page may pin
-  an unknown type (deliberate use); the info line then shows its appearance name.
+  holds only unknown potions/scrolls the quick slot greys out. Unknown types are used from
+  the page (DRINK / READ), the deliberate path (§8.11; the rev QUICK pin is cut).
 
-**Page engine rules (3E-T2 spike, manager review 2026-10-20; layout still Q3).** The page
-opens only on the turn-intent path (`I` or FIRE / ENTER on BAG; never while the hero is
-held; no turn). While it is up the panel and log (rows 16–23) are hidden, so the page has
-its own message row for refusals inside rows 0–15. Verbs are chosen on the page but take
-effect after it closes, as the turn's action (the screen is restored exactly as it was when
-the page opened). Engineering detail: `docs/memory-map.md` "Overlays" → T13 page rules.
+**Page engine rules (3E-T2 spike, manager review 2026-10-20; rev 2026-10-20 user: full
+screen, sound keeps playing; layout §8.11 Q3).** The page opens only on the turn-intent path
+(`I` or FIRE / ENTER on BAG; never while the hero is held; no turn). It covers **all 24
+rows** (the panel and log are hidden while it is up), so it has its own message row for
+refusals (row 22, §8.11). Verbs are chosen on the page but take effect after it closes, as
+the turn's action (the screen is restored exactly as it was when the page opened). **The page
+is not a pause: music and SFX keep playing** (no `SND_HOLD`). Engineering detail:
+`docs/memory-map.md` "Overlays" → T13 page rules.
 
 ### 8.5 Per-level placement (floor list ≤ 32 entries)
 
 Food 3–4 · potions 2–3 (≥ 1 Heal) · **scrolls 1–2** (rev 2: 1; E: 1–2 keeps the quick
 slot alive) · gear 1–2 (depth-gated) · class book 1 (D1–D7) + 1 more with 1 in 2 on D4–D7
-(rev 5, §5) · other-class book 0–1 ·
-key 1 · **ammunition (rev 3; Warrior runs only: a Mage run generates no ammo entries):**
+(rev 5, §5) · ~~other-class book 0–1~~ (cut, user 2026-10-20) ·
+key 1 (no floor entry: found on entering the key room, §8.11 Q1) · all 3E entries on
+`ITEM_RNG` (§8.11 Q8) · **ammunition (rev 3; Warrior runs only: a Mage run generates no ammo entries):**
 
 | Item | Per level | Notes |
 |---|---|---|
 | **Dagger stack** | **1 stack of 2–3** (`1d2+1`) on D1–D7; none on D8 | placed in a random non-start, non-lair room |
 | **Arrow stack** | **1 stack of 5–8** (`1d4+4`) on D1–D7; D8 none | same |
-| **Bow (user 2026-10-04; Warrior runs only)** | **Exactly 1 on D2**: a floor-list entry in a random non-start, non-lair room, **plus a 6-arrow bundle placed in the same cell** (extra to D2's normal 5–8 stack; the two merge on pickup per the one-stack-per-cell rule, capped 24). Generated regardless of RNG; never on other depths. If the bow is dropped it stays findable; if lost (pit fall) it is gone, and the run continues melee/daggers only | Pre-bow arrows (D1 stack) are picked up and kept; the bow icon stays greyed until the bow is in the bag |
+| **Bow (user 2026-10-04; Warrior runs only)** | **Exactly 1 on D2**: a floor-list entry in a random non-start, non-lair room, **plus a 6-arrow bundle placed in the same cell** (extra to D2's normal 5–8 stack; the two merge on pickup per the one-stack-per-cell rule, capped 24). Generated regardless of RNG; never on other depths. If the bow is discarded (§8.11: DISCARD destroys) or lost (pit fall) it is gone, and the run continues melee/daggers only | Pre-bow arrows (D1 stack) are picked up and kept; the bow icon stays greyed until the bow is in the bag |
 | Skeleton Archer drop | Arrows ×3, 1/2 | D4, D5, D7 (§9.1) |
 | Thrown-and-recovered | per §6.3 | not a placement; uses floor-list slots |
 
@@ -1699,6 +1707,131 @@ less).
 **Cost.** Code ~70 B bank 3 (shares the shatter clear path); the hooks are the existing parry
 branch and the generic on-hit effect (new effect code `ACID`, no new column). Strings ~110 B
 raw. Per event ~0.3k T; 0 on the fast path.
+
+### 8.11 3E rulings (2026-10-20; designer, user-delegated "decide using memory constraints")
+
+Context: user rulings 2026-10-19/20 (no gold; page icons = scaled 8×8 floor glyphs; ~0.4 s
+page close OK; drops + boss uniques in 3E; other-class books cut; light-ID kept; page full
+screen, sound not paused). 3E has ≈ 2.4 KB free vs ≈ 4.4 KB need, so every ruling picks the
+smallest consistent rule.
+
+**Q1 Floor-item glyphs: 6 class glyphs, per-type ink, 0 new common ids.** All 64 ids are
+taken except per-level slots **60..63 on D1–D7** (the D8 lectern holds them on D8). Common
+ids 17/18 are re-purposed. Class is read from the **glyph**, the type from the **ink**
+(per-cell attr set when the item is stamped, the same mechanism as known traps §1.5; ink
+comes from the item-type table; gear BUC tint `$45`/`$42` and unique shimmer override it).
+
+| Id | Glyph | Items | Ink (normal) |
+|---|---|---|---|
+| 17 | **AMMO** (merged: was `T_DAGGERS`) | daggers, arrows | daggers `$47`, arrows `$46` |
+| 18 | **PAGES** (was `T_ARROWS`) | scrolls, class books | scroll `$07`, book `$43` |
+| 60 | **FLASK** (the old `T_POTION` glyph moved, no new art) | potions | appearance ink (§8.8) |
+| 61 | **FOOD** | meat, cheese, pear, apple, carrot | `$42` `$46` `$04` `$44` `$06` |
+| 62 | **WEAPON** | swords, axe, staves, bow, unique weapons | blades `$07`, staves/bow `$06` |
+| 63 | **WORN** (shield shape) | armour, helmets, charms, unique wearables | armour/helm `$07`, charms `$06` |
+
+- **Storage:** the four 60..63 glyphs (+ attr, flags 0) are written into the **D1–D7 tileset
+  slots' 60..63 bytes** (already reserved as zeros: 0 B new). **D8:** the room build loads
+  60..63 from the D8 slot (lectern) when the room is the **Sanctum**, else from the D7
+  slot (items). So that the lair↔Sanctum scroll never shows a mis-glyphed item, **on D8 no
+  60..63 item lies in the lair or Sanctum**: the generator skips them and any drop there
+  whose glyph is 60..63 is lost (AMMO/PAGES are common and allowed).
+- **Key: no floor glyph and no floor entry.** The key is found automatically on the **first
+  entry into the key room** (`LF_KEY_TAKEN`, panel key icon; `YOU FIND THE LAIR KEY.` 22).
+- Id 10 = `T_TRAP` as §1.5. Page icons = these 6 glyphs scaled ×2 (16×16) in the item ink.
+- **Art the artist must deliver (8×8, standing-row items, low in the cell): FOOD, PAGES
+  (open book / scroll, reads in white and magenta), WEAPON (sword), WORN (shield), AMMO
+  (one bundle that reads as daggers or arrows; until delivered the id-17 dagger pile is
+  used for both), plus the `T_TRAP` plate if not yet drawn.** FLASK reuses the potion glyph.
+
+**Q3 Page layout and verbs (full screen, 32×24 cells).**
+
+| Rows | Content |
+|---|---|
+| 0 | `INVENTORY` · `BAG 12/20` · right: **`[CLOSE]`** (cols 26–31, selectable) |
+| 1 | Warrior: `DAGGERS 3  ARROWS 14`; both: `KEY` when held |
+| 2–13 | **bag grid 5 × 4**: slot (c, r) icon 2×2 at col `3 + 6c`, rows `2 + 3r`, `3 + 3r`; stack count digit (2–9; none for 1) at col `5 + 6c`, row `3 + 3r` |
+| 14 | worn labels `WEAPON ARMOUR HELM CHARM` |
+| 15–16 | **WORN row**: 4 icons 2×2 at cols 3, 9, 15, 21; empty slot = blank |
+| 18 | description 1: name with BUC prefix (§8.7), ×n for stacks |
+| 19 | description 2: stats generated from the type table (`1D8 ATK+1`, `DEF 2`, `HEAL 10 HP`, `UNKNOWN`) + note `WORN` / `STICKY` |
+| 21 | **verb strip**: up to 3 words, the chosen one in inverse attr |
+| 22 | **message row** (refusals, page stays open) |
+| 23 | help `FIRE SELECT  I CLOSE` |
+
+- **Cursor** = attr only: the slot's 3×2 cells get paper blue (`ink | $08`). ←→ within a
+  row, ↑↓ between rows; ↓ from bag row 3 → WORN (col `min(c, 3)`); ↑ from bag row 0 →
+  `[CLOSE]`. Opens on bag slot 0. FIRE on an item → verb strip (←→ choose, FIRE confirm,
+  ↑/↓ back). FIRE on `[CLOSE]` or key `I` closes (joystick-complete).
+- **Verbs and turn cost** (all close the page and apply after close, T13):
+
+| Item | Verbs | Turns |
+|---|---|---|
+| potion / food / scroll / book | DRINK / EAT / READ / READ · DISCARD | 1 · 0 |
+| gear in bag | EQUIP (swaps a non-cursed worn item into the bag) · DISCARD | 1 · 0 |
+| worn gear | REMOVE (needs a free bag slot) | 1 |
+| bow | DISCARD | 0 |
+
+  Refused on the page (row 22, no close): EQUIP / REMOVE against a worn cursed item
+  (`IT IS CURSED! YOU CANNOT.`), REMOVE with a full bag (`BAG FULL.`).
+- **DROP is cut; DISCARD replaces it**: the item is destroyed (no floor-list entry, no glyph
+  stamp, no "one entry per cell" merge). Worn items cannot be discarded. `YOU DISCARD THE
+  HELM.` Rationale: same player value (clear junk, free a slot) at ~15 B instead of ~80 B.
+- **QUICK pin is cut** (state + verb + rule ~70 B); quick slots auto-fill only (§8).
+- **Bag 20, stacking:** stacks merge on equal `TYPE` + `ISTATE` up to 9 (potions, scrolls,
+  food, books); gear and the bow never stack. Pickup tops up an existing stack, else takes
+  the first free slot; bag order = pickup order, compacted when a slot empties. Floor
+  non-ammo entries are always `QTY` 1. Full bag: the item stays, `BAG FULL.` once per
+  arrival on the cell. Floor weapons are generated for the hero's class only (no junk).
+
+**Q6 Teleport (scroll and trap share one routine).** Target = a random room ≠ current,
+≠ Sanctum, ≠ lair while its boss lives (gameplay RNG). Arrival: storey `rnd(2)`, col `x`
+`rnd(28)+1`, ≤ 16 tries until the 3-col body is on solid floor, clear of every footprint
+±1, every trap col and every monster body; fallback storey 1, nearest legal col to 14
+(storey 1 is never blocked). **No followers.** The current room is banked exactly as on a
+normal exit (room record, §9.4.2); the target room is built as a normal entry
+(`GS_TRANSITION`, survivors as persisted / §9.4.3 lazy spawn) with the arrival spot as the
+entry point, so the entry spawn-distance rule applies to it. No scroll: an instant room
+redraw after the attr flash. Arrival on an item picks it up as usual; arrival never fires a
+trap (§1.5).
+
+**Q8 Separate item stream: CONFIRMED.** `ITEM_RNG` = the generator algorithm seeded with
+`f(master seed, depth | $80)` (as light-ID's depth-255 derivation). The whole `GEN_RNG`
+pass is unchanged byte for byte, incl. the existing 3B potion step (its 2–3 entries stay;
+their types are rolled on `ITEM_RNG`, the first is Heal). After it, `ITEM_RNG` runs: potion
+types → food → scrolls → gear (+ BUC and cursed value) → class books → ammo / bow
+(Warrior) → traps. New entries avoid every footprint, L2 span (+1) and existing entry (one
+non-ammo item per cell). Effect: descriptors, LP, budgets, room records and population
+goldens stay; decor changes only where a new item cell meets a decor footprint (decor still
+skips item cells, its rnd count per try is unchanged). Reason: no world rebaseline and the
+3E generator can be tuned without touching levelgen parity.
+
+**Q9 Text: 0 B in banks 0/4/6; 3E text cap 1,100 B raw.** No per-item descriptions: the
+second description line is formatted from type-table numbers. Names are **≤ 3 word tokens**
+(1 B each, 0 = end) into one word table (`POTION OF HEAL`, `RUBY POTION`, `CHAIN MAIL`,
+`WARLORD'S CLEAVER`); no plurals (page `×3`, floor singles). Budget: word table + per-type
+refs ≤ 460 B (incl. §8.8 appearances) · log stems ≤ 480 B (pickup, eat, drink, read, ID,
+equip/remove/discard, key, teleport, bag full; incl. §1.5 traps and §8.7 curse lines) ·
+page-only text (labels, verbs, help) ≤ 160 B inside the page overlay stream. Resident text
+goes to bank 1.
+
+**Q10 Start bag (confirms §4).** Warrior: Short Sword + Leather worn; bag Heal ×1, Apple ×1;
+DAGGERS 3, ARROWS 0. Mage: Oak Staff + Robe worn; bag Heal ×1, Mana ×1, Apple ×1. All
+normal BUC; Heal (+ Mana for the Mage) known. **`DEBUG_KIT` adds** (on top of §1.4): Cure
+×1, one scroll of each of the 4 types (unknown), Meat ×1, class book ×1, a **cursed Helm**
+(value hidden) — exercises ID, curse lock, Enchant bless and READ.
+
+**Q11 Drops (≤ 24 B data).** Drop table = **5 rows × 3 B** (kind, item type, chance code
+1/2 · 1/3 · 1/4), the §9.1 column unchanged: Rat Cheese 1/4 · Goblin Apple 1/4 · Orc Meat
+1/3 · Skeleton Archer Arrows ×3 1/2 (Warrior runs) · Necromancer Mana 1/3; no other kind
+drops. Tiers drop as their base kind. Boss uniques = **8 B** (item type per depth D1–D7 +
+the D4 Mage variant, §8.6), always dropped, normal BUC. Placement: the dead body's centre
+col on its storey's standing row, else the nearest free col within ±3, else a non-unique
+is lost; a unique searches the whole storey. Gameplay RNG. The generator leaves ≥ 1
+floor-list entry free (≤ 31 used) so a unique always fits; other drops are lost when the
+list is full.
+
+**Hunger:** HUNGRY doubles the MP regen period (WEAK: none; HP regen FED only), 3E, §7.
 
 ---
 
