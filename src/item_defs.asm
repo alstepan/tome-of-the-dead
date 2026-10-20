@@ -1,0 +1,299 @@
+;==============================================================================
+; item_defs.asm — Stage 3E item contracts (3E-T3). EQUs + MACROs + ASSERTs
+; only: this file emits NO bytes. INCLUDEd by defs.asm right after
+; level_defs.asm. Every fixed address is recorded in docs/memory-map.md
+; "3E contracts (3E-T3)"; tests/items3e.py mirrors the ASSERTs from the .sym.
+; Design refs: game.md §1.5 (traps), §7 (hunger), §8 (items, bag, worn slots,
+; quick slots), §8.5 (placement), §8.7 (BUC), §8.8 (light ID), §8.9 (record);
+; plan.md "3E breakdown" + user rulings 2026-10-19/20 (no gold, scaled 8x8
+; floor glyphs as icons, no other-class books, light ID kept).
+;==============================================================================
+
+;------------------------------------------------------------------------------
+; Item TYPE ids, ORDERED BY CLASS: every class (and every gear slot) is one
+; contiguous range, so a class test is IT_IN lo, hi (below). The 3B/3D ids
+; 1..3 keep their values (FLOOR_LIST data, levelgen.py / levelgen.asm, the
+; floor glyph mapping T_DAGGERS + (type - IT_DAGGER) in pickup7 / bank3).
+;
+;   0          IT_NONE      empty bag / worn slot, no pin
+;   1          IT_POTION    LEGACY 3B stand-in: a floor potion that pickup adds
+;                           to E_POT (heals QUAFF_HEAL). Retired by T11 (floor
+;                           potions become IT_P_*); then id 1 is reserved.
+;   2..4       counters     never in the bag (game.md §8): DAGGERS / ARROWS
+;                           (hero_defs.asm) and the level key (LF_KEY_TAKEN)
+;   5..18      bag-only     food, potions, scrolls (light ID), book, bow
+;   19..43     gear         W / A / H / C slot ranges, in WORN slot order
+;------------------------------------------------------------------------------
+IT_NONE         EQU 0
+IT_POTION       EQU 1               ; legacy (see above); E_POT migration: memory-map "3E contracts"
+; counters (floor-only types: pickup adds to a counter, never a bag slot)
+IT_DAGGER       EQU 2               ; D3-7: FL_QTY = count, tile T_DAGGERS, cap DAGGERS_MAX
+IT_ARROW        EQU 3               ; D3-7: FL_QTY = count, tile T_ARROWS, cap ARROWS_MAX
+IT_KEY          EQU 4               ; level key: pickup sets LF_KEY_TAKEN (game.md §8)
+; food, ascending FOOD value (game.md §7 table), so the quick slot's
+; "smallest FOOD first" (§8) = the lowest food type present
+IT_F_CARROT     EQU 5               ; +10
+IT_F_APPLE      EQU 6               ; +15
+IT_F_PEAR       EQU 7               ; +20
+IT_F_CHEESE     EQU 8               ; +30
+IT_F_MEAT       EQU 9               ; +40
+; potions (§8; quick-slot priority Heal > Mana > Cure = id order)
+IT_P_HEAL       EQU 10
+IT_P_MANA       EQU 11
+IT_P_CURE       EQU 12
+; scrolls (§8; quick-slot tie order Teleport > Fear > Sleep > Enchant = id order)
+IT_S_TELEPORT   EQU 13
+IT_S_FEAR       EQU 14
+IT_S_SLEEP      EQU 15
+IT_S_ENCHANT    EQU 16
+; books / tools
+IT_BOOK         EQU 17              ; the hero's class book (SPELLBOOK / WAR MANUAL by HERO_KIND,
+                                    ; game.md §5; other-class books dropped 2026-10-20). A tome is
+                                    ; a READ outcome (§5 rule 3), not an item type
+IT_BOW          EQU 18              ; Warrior bag item (replaces HAS_BOW at T11)
+; gear, slot W (weapon; class-locked: Warrior ids, then Mage ids; uniques last)
+IT_W_SHORT      EQU 19              ; Short Sword 1d6 (Warrior start)
+IT_W_LONG       EQU 20              ; Long Sword 1d8 atk+1 (D2+)
+IT_W_AXE        EQU 21              ; War Axe 1d10 atk-1 (D4+)
+IT_W_CLEAVER    EQU 22              ; Warlord's Cleaver (D4 boss unique)
+IT_W_OAK        EQU 23              ; Oak Staff 1d4 (Mage start)
+IT_W_IRON       EQU 24              ; Iron Staff 1d6 (D2+)
+IT_W_RUNE       EQU 25              ; Rune Staff 1d4, spells +1 (D4+)
+IT_W_BONE       EQU 26              ; Bone Staff (D4 boss unique)
+; slot A (armour)
+IT_A_ROBE       EQU 27              ; MP+2 (Mage start)
+IT_A_LEATHER    EQU 28              ; DEF 1 (Warrior start)
+IT_A_CHAIN      EQU 29              ; DEF 2 (D3+)
+IT_A_PLATE      EQU 30              ; DEF 3 (D6+)
+IT_A_SILK       EQU 31              ; Silk Cloak (D2 unique)
+IT_A_GRAVE      EQU 32              ; Gravecloak (D3 unique)
+; slot H (helmet)
+IT_H_HOOD       EQU 33              ; MP+1
+IT_H_HELM       EQU 34              ; DEF+1
+IT_H_KING       EQU 35              ; Goblin King's Helm (D1 unique)
+IT_H_MIRROR     EQU 36              ; Mirror Helm (D7 unique)
+; slot C (charm: ring or amulet)
+IT_C_MIGHT      EQU 37              ; Ring of Might
+IT_C_WARD       EQU 38              ; Ring of Warding
+IT_C_FIRE       EQU 39              ; Ring of Fire Ward
+IT_C_MANA       EQU 40              ; Amulet of Mana
+IT_C_PLENTY     EQU 41              ; Amulet of Plenty
+IT_C_SCARAB     EQU 42              ; Scarab Amulet (D5 unique)
+IT_C_GRAVE      EQU 43              ; Ring of the Grave (D6 unique)
+IT_COUNT        EQU 44              ; type tables (T4) have IT_COUNT entries
+
+; class ranges (inclusive)
+IT_CNT_LO       EQU IT_DAGGER       ; counters
+IT_CNT_HI       EQU IT_KEY
+IT_AMMO_LO      EQU IT_DAGGER
+IT_AMMO_HI      EQU IT_ARROW
+IT_BAG_LO       EQU IT_F_CARROT     ; types that occupy a bag slot: IT_BAG_LO..IT_COUNT-1
+IT_FOOD_LO      EQU IT_F_CARROT
+IT_FOOD_HI      EQU IT_F_MEAT
+IT_POT_LO       EQU IT_P_HEAL
+IT_POT_HI       EQU IT_P_CURE
+IT_SCR_LO       EQU IT_S_TELEPORT
+IT_SCR_HI       EQU IT_S_ENCHANT
+IT_ID_LO        EQU IT_POT_LO       ; light-ID types (§8.8): potions then scrolls,
+IT_ID_HI        EQU IT_SCR_HI       ;   k = type - IT_ID_LO indexes ID_MAP and the KNOWN bit
+IT_GEAR_LO      EQU IT_W_SHORT
+IT_GEAR_HI      EQU IT_C_GRAVE
+IT_WPN_LO       EQU IT_W_SHORT
+IT_WPN_HI       EQU IT_W_BONE
+IT_WPN_W_LO     EQU IT_W_SHORT      ; Warrior weapons
+IT_WPN_W_HI     EQU IT_W_CLEAVER
+IT_WPN_M_LO     EQU IT_W_OAK        ; Mage weapons
+IT_WPN_M_HI     EQU IT_W_BONE
+IT_ARM_LO       EQU IT_A_ROBE
+IT_ARM_HI       EQU IT_A_GRAVE
+IT_HELM_LO      EQU IT_H_HOOD
+IT_HELM_HI      EQU IT_H_MIRROR
+IT_CHARM_LO     EQU IT_C_MIGHT
+IT_CHARM_HI     EQU IT_C_GRAVE
+
+                ASSERT IT_NONE == 0 && IT_POTION == 1 && IT_DAGGER == 2 && IT_ARROW == 3
+                ASSERT IT_ARROW == IT_DAGGER + 1 && IT_KEY == IT_ARROW + 1
+                ASSERT IT_FOOD_LO == IT_CNT_HI + 1 && IT_POT_LO == IT_FOOD_HI + 1
+                ASSERT IT_SCR_LO == IT_POT_HI + 1 && IT_BOOK == IT_SCR_HI + 1 && IT_BOW == IT_BOOK + 1
+                ASSERT IT_GEAR_LO == IT_BOW + 1 && IT_WPN_LO == IT_GEAR_LO
+                ASSERT IT_WPN_M_LO == IT_WPN_W_HI + 1 && IT_WPN_HI == IT_WPN_M_HI
+                ASSERT IT_ARM_LO == IT_WPN_HI + 1 && IT_HELM_LO == IT_ARM_HI + 1
+                ASSERT IT_CHARM_LO == IT_HELM_HI + 1 && IT_GEAR_HI == IT_CHARM_HI
+                ASSERT IT_COUNT == IT_GEAR_HI + 1 && IT_COUNT <= 64
+                ASSERT IT_FOOD_HI - IT_FOOD_LO + 1 == 5 && IT_POT_HI - IT_POT_LO + 1 == 3
+                ASSERT IT_SCR_HI - IT_SCR_LO + 1 == 4
+
+;------------------------------------------------------------------------------
+; IT_IN lo, hi — class / range test. In: A = type. Out: CF = 1 iff
+; lo <= type <= hi, and A = type - lo (the index inside the class: the gear
+; variant, the ID_MAP / KNOWN index for IT_ID_*, the food rank). Clobbers F.
+; 4 B, 14 T (sub n + cp n; the unsigned wrap makes one compare do both ends).
+;------------------------------------------------------------------------------
+    MACRO IT_IN lo, hi
+                sub  lo
+                cp   (hi) - (lo) + 1
+    ENDM
+
+;------------------------------------------------------------------------------
+; Item record (game.md §8.9): TYPE / QTY / ISTATE, 3 B. Bag and worn slots
+; store it as is (IR_*); FLOOR_LIST keeps its 4-B entry (FL_ITEM = TYPE,
+; FL_QTY = QTY) and the ISTATE lives in the parallel FL_IST[entry index].
+; Stacks merge only on equal TYPE and ISTATE; QTY 1..STACK_MAX (ammo / key
+; counts live outside the bag). TYPE = IT_NONE marks a free slot (QTY and
+; ISTATE then 0).
+;------------------------------------------------------------------------------
+IR_TYPE         EQU 0
+IR_QTY          EQU 1
+IR_IST          EQU 2
+IR_STRIDE       EQU 3
+STACK_MAX       EQU 9               ; game.md §8 "same-type stacks to 9"
+
+; ISTATE bits (§8.9; gear only — 0 for every other class):
+;   bits 0-1 BUC: 0 normal, 1 blessed, 2 cursed, 3 reserved
+;   bit 2    HIDDEN: the cursed value m is not revealed yet (set at generation
+;            for a cursed item, cleared on first equip or on blessing).
+;            DISPLAY-ONLY: logic ignores it
+;   bits 3-4 weapon enchant +0..ENCH_MAX (Enchant scroll)
+;   bits 5-7 m, signed 3-bit two's complement -4..+3 (used -3..+2): the
+;            BUC / wear modifier on the main stat (§8.7, §8.10). Extract:
+;            5 x `sra a` (sign-extends, 40 T) or the IST_M_* compares below
+; Identification (§8.8) is per TYPE (KNOWN), never in ISTATE.
+IST_BUC_MASK    EQU %00000011
+BUC_NORMAL      EQU 0
+BUC_BLESSED     EQU 1
+BUC_CURSED      EQU 2
+IST_BLESSED_BIT EQU 0               ; BUC 1 / 2 are single bits: bit test, no mask
+IST_CURSED_BIT  EQU 1
+IST_HIDDEN      EQU %00000100
+IST_HIDDEN_BIT  EQU 2
+IST_ENCH_MASK   EQU %00011000
+IST_ENCH_SHIFT  EQU 3
+IST_ENCH_ONE    EQU 1 << IST_ENCH_SHIFT
+ENCH_MAX        EQU 3
+IST_M_MASK      EQU %11100000
+IST_M_SHIFT     EQU 5
+IST_M_ONE       EQU 1 << IST_M_SHIFT ; add IST_M_ONE = m + 1 (caller clamps)
+IST_M_P2        EQU (2 & 7) << IST_M_SHIFT   ; m = +2  $40
+IST_M_P1        EQU (1 & 7) << IST_M_SHIFT   ; m = +1  $20
+IST_M_M1        EQU (-1 & 7) << IST_M_SHIFT  ; m = -1  $E0
+IST_M_M2        EQU (-2 & 7) << IST_M_SHIFT  ; m = -2  $C0
+IST_M_M3        EQU (-3 & 7) << IST_M_SHIFT  ; m = -3  $A0 (3F wear floor)
+                ASSERT ((IST_BUC_MASK & IST_HIDDEN) == 0) && (((IST_BUC_MASK | IST_HIDDEN) & IST_ENCH_MASK) == 0)
+                ASSERT ((IST_BUC_MASK | IST_HIDDEN | IST_ENCH_MASK) & IST_M_MASK) == 0
+                ASSERT (IST_BUC_MASK | IST_HIDDEN | IST_ENCH_MASK | IST_M_MASK) == $FF
+                ASSERT (BUC_BLESSED == (1 << IST_BLESSED_BIT)) && (BUC_CURSED == (1 << IST_CURSED_BIT))
+                ASSERT (ENCH_MAX << IST_ENCH_SHIFT) == IST_ENCH_MASK
+                ASSERT IST_M_P1 == $20 && IST_M_P2 == $40 && IST_M_M1 == $E0 && IST_M_M2 == $C0
+
+;------------------------------------------------------------------------------
+; Worn slots (game.md §8 "Worn slots: 4"), WORN + slot * IR_STRIDE, in the
+; gear type order (slot k <-> the k-th gear range). Empty = TYPE IT_NONE
+; (weapon: fists 1d2, §8.7 shattering).
+;------------------------------------------------------------------------------
+WS_WEAPON       EQU 0
+WS_ARMOUR       EQU 1
+WS_HELM         EQU 2
+WS_CHARM        EQU 3
+WORN_SLOTS      EQU 4
+BAG_SLOTS       EQU 20              ; game.md §8: 5 x 4 page grid
+; quick slots (§8 "Quick slots auto-fill"): QPIN / QS_CACHE index
+QS_FOOD         EQU 0
+QS_POTION       EQU 1
+QS_SCROLL       EQU 2
+QS_COUNT        EQU 3
+
+;------------------------------------------------------------------------------
+; Light identification (§8.8). ID_MAP[k], k = type - IT_ID_LO (0..2 potions,
+; 3..6 scrolls) = the appearance index (potions 0..ID_POT_APP-1: RUBY AZURE
+; EMERALD AMBER VIOLET MILKY; scrolls 0..ID_SCR_APP-1: ZORAK .. ABRAXA).
+; KNOWN bit k = type k is known (bits 0-2 potions, 3-6 scrolls, bit 7 0).
+; Per-run shuffle at START from f(MASTER_SEED, 255) (T6); kept across levels.
+;------------------------------------------------------------------------------
+ID_TYPES        EQU IT_ID_HI - IT_ID_LO + 1     ; 7
+ID_POT_APP      EQU 6
+ID_SCR_APP      EQU 8
+KNOWN_POT_MASK  EQU %00000111
+KNOWN_SCR_MASK  EQU %01111000
+                ASSERT (ID_TYPES == 7) && (KNOWN_POT_MASK == ((1 << (IT_POT_HI - IT_ID_LO + 1)) - 1))
+                ASSERT KNOWN_SCR_MASK == (((1 << ID_TYPES) - 1) & ~KNOWN_POT_MASK)
+
+;------------------------------------------------------------------------------
+; Hunger (game.md §7). FOOD 0..FOOD_MAX, start FOOD_START; -1 per
+; FOOD_PERIOD turns (FOOD_TMR counts them), a jump -FOOD_JUMP extra; never
+; fatal. HSTAGE = the stage derived from FOOD (HS_FED = 0, so a zeroed block
+; reads FED). Written by T9; new_game zeroes all three (T9 sets FOOD_START).
+;------------------------------------------------------------------------------
+FOOD_MAX        EQU 100
+FOOD_START      EQU 80
+FOOD_PERIOD     EQU 6
+FOOD_JUMP       EQU 2
+HS_FED          EQU 0               ; FOOD >= HS_OK_BELOW
+HS_OK           EQU 1
+HS_HUNGRY       EQU 2
+HS_WEAK         EQU 3
+HS_OK_BELOW     EQU 50              ; FOOD < 50 -> OK
+HS_HUNGRY_BELOW EQU 25              ; FOOD < 25 -> HUNGRY
+HS_WEAK_BELOW   EQU 10              ; FOOD < 10 -> WEAK
+
+;------------------------------------------------------------------------------
+; ITEM_RAM — the 3E runtime item block. Bank 5 $5D00.., the BASIC area freed
+; once boot has moved SP to $BF00 (garbage at power-on; not on tape; never
+; touched before new_game). One page: every field is reached with `inc l`.
+; new_game (bank 7, boot7.asm) zeroes ALL of it; level changes keep it, except
+; FL_IST (per level: the T6 level-start generator writes all FLOOR_MAX bytes,
+; and every later FLOOR_LIST writer writes its entry's byte; stale until T6).
+;------------------------------------------------------------------------------
+ITEM_RAM        EQU $5D00
+BAG             EQU ITEM_RAM                    ; BAG_SLOTS x IR_STRIDE   (kept)
+WORN            EQU BAG + BAG_SLOTS * IR_STRIDE ; WORN_SLOTS x IR_STRIDE  (kept)
+FL_IST          EQU WORN + WORN_SLOTS * IR_STRIDE   ; FLOOR_MAX: ISTATE of FLOOR_LIST entry i (per level)
+ID_MAP          EQU FL_IST + FLOOR_MAX          ; ID_TYPES: appearance per light-ID type   (kept)
+KNOWN           EQU ID_MAP + ID_TYPES           ; bit k = light-ID type k known            (kept)
+FOOD            EQU KNOWN + 1                   ; 0..FOOD_MAX                              (kept)
+FOOD_TMR        EQU FOOD + 1                    ; turns since the last burn                (kept)
+HSTAGE          EQU FOOD_TMR + 1                ; HS_*                                     (kept)
+QPIN            EQU HSTAGE + 1                  ; QS_COUNT: pinned type per quick slot, IT_NONE = auto (kept;
+                                                ;   was HERO_ST + 29 since C3-0, never used)
+QS_CACHE        EQU QPIN + QS_COUNT             ; QS_COUNT: the type each quick slot shows, IT_NONE = grey (kept)
+ITEM_RAM_END    EQU QS_CACHE + QS_COUNT
+ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 121
+                ASSERT ITEM_RAM_LEN == 121
+                ASSERT (ITEM_RAM & $FF) == 0 && ITEM_RAM_LEN <= 256      ; one page (inc l, djnz clear)
+                ASSERT ITEM_RAM >= $5CCB        ; above the system variables + channel area
+                ASSERT ITEM_RAM_END <= PF_RAM   ; below D3-6b PF_RAM ($5E00) / MK_RAM ($5F00)
+                ASSERT WORN == BAG + BAG_SLOTS * IR_STRIDE      ; bag + worn = one 24-record scan
+
+;------------------------------------------------------------------------------
+; Trap list (game.md §1.5): per level, in the LVL_STATE ROOM_DESC spare
+; ($6DF0..$6DFF), so level_gen's `attempt` (EDGE_TAB..LVL_STATE_END := 0) and
+; proto_level clear it on every level for free; written by T6 after
+; level_gen. TRAP_N entries used (0..TRAP_MAX); spent entries are skipped,
+; never compacted mid-level.
+;   byte TR_B0: bits 0-3 room id, bit 4 TRF_S1 (storey 1), bit 5 TRF_KNOWN,
+;               bit 6 TRF_SPENT, bit 7 spare (0)
+;   byte TR_B1: bits 0-4 col, bits 5-6 type TT_*, bit 7 spare (0)
+; NOTE: tools/levelgen.py's 320-B block model (tests/levelgen_z80.py,
+; room_model.py) must keep these bytes 0 until T6 / T7 model the traps.
+;------------------------------------------------------------------------------
+TRAP_LIST       EQU ROOM_DESC + GRID_CELLS * RD_STRIDE   ; $6DF0
+TRAP_MAX        EQU 6
+TRAP_STRIDE     EQU 2
+TRAP_N          EQU TRAP_LIST + TRAP_MAX * TRAP_STRIDE   ; $6DFC ($6DFD..$6DFF spare)
+TR_B0           EQU 0
+TR_B1           EQU 1
+TRF_ROOM_MASK   EQU %00001111
+TRF_S1          EQU %00010000
+TRF_KNOWN       EQU %00100000
+TRF_SPENT       EQU %01000000
+TRF_S1_BIT      EQU 4
+TRF_KNOWN_BIT   EQU 5
+TRF_SPENT_BIT   EQU 6
+TR_COL_MASK     EQU %00011111
+TR_TYPE_MASK    EQU %01100000
+TR_TYPE_SHIFT   EQU 5
+TT_DART         EQU 0               ; D1+, re-arms
+TT_GAS          EQU 1               ; D2+, one-shot
+TT_TELEPORT     EQU 2               ; D3+, one-shot
+TT_ALARM        EQU 3               ; D5+, one-shot
+                ASSERT TRAP_N < FLOOR_LIST      ; inside the ROOM_DESC spare, below FLOOR_LIST
+                ASSERT TRAP_LIST == $6DF0 && TRAP_N == $6DFC

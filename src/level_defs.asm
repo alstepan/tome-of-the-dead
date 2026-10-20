@@ -175,8 +175,8 @@ DOOR_PLANK_H    EQU 6
 ; FLOOR_LIST (game.md §8.5): <= 32 entries x 4 B, FLOOR_N used (header).
 ; Entry: FL_ROOM bits 0–3 room id, bit 7 = storey 1; FL_EMPTY ($FF) = taken /
 ; free slot (pickups mark, never compact mid-level). FL_COL = item cell col;
-; the row is the storey's standing row 9s+7. FL_ITEM = item id (3E owns the
-; enum; 3B stand-in: potions only, IT_POTION). FL_QTY = stack count.
+; the row is the storey's standing row 9s+7. FL_ITEM = item type (IT_*,
+; item_defs.asm; ISTATE in the parallel FL_IST). FL_QTY = stack count.
 ; INVARIANT (T7; floor_pickup's pre-filter relies on it): every live entry of
 ; the current room shows on its cell (FL_COL, row 9s+7) in ROOM_MAP — the
 ; glyph (T_POTION / T_DAGGERS / T_ARROWS) of the LAST live entry of that cell
@@ -195,10 +195,8 @@ FL_ROOM_MASK    EQU %00001111
 FL_S1           EQU %10000000
 FL_S1_BIT       EQU 7
 FL_EMPTY        EQU $FF
-IT_NONE         EQU 0
-IT_POTION       EQU 1               ; 3B stand-in (game.md §1.4); 3E replaces the enum
-IT_DAGGER       EQU 2               ; D3-7: dropped daggers, FL_QTY = count (tile T_DAGGERS)
-IT_ARROW        EQU 3               ; D3-7: dropped arrows, FL_QTY = count (tile T_ARROWS)
+; FL_ITEM ids (IT_*): item_defs.asm (3E-T3; 1..3 keep their 3B / 3D values).
+; The entry's ISTATE is FL_IST[i] (item_defs.asm, ITEM_RAM).
 
 ;------------------------------------------------------------------------------
 ; Level state block — bank 5 low RAM, LVL_STATE..LVL_STATE_END (320 B), right

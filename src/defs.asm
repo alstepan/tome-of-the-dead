@@ -770,6 +770,7 @@ SYM             EQU FF_SYM
                 INCLUDE "level_defs.asm"
                 INCLUDE "hero_defs.asm"         ; C3-0: Stage 3C contracts (HERO_ST, JOY_MIRROR, KEYTAB)
                 INCLUDE "combat_defs.asm"       ; D3-0: Stage 3D state homes + layouts (ST_*, FXREC, KX, ...)
+                INCLUDE "item_defs.asm"         ; 3E-T3: item types / record / ITEM_RAM / trap list
 ; B3B-13: message string ids TX_* / decoded lengths TXL_* (+ ASSERT <= LOG_MAX),
 ; generated from src/strings.txt by tools/textpack.py (tools/build.sh)
                 INCLUDE "../build/text/strings_ids.inc"

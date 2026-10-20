@@ -80,7 +80,8 @@ PIT_MAX = 24
 
 def load_defs(paths=None):
     syms = {}
-    for p in (paths or [ROOT / "src" / "defs.asm", ROOT / "src" / "level_defs.asm"]):
+    for p in (paths or [ROOT / "src" / "defs.asm", ROOT / "src" / "level_defs.asm",
+                        ROOT / "src" / "item_defs.asm"]):   # 3E-T3: IT_* moved there
         _load_one(Path(p), syms)
     return syms
 
@@ -104,7 +105,7 @@ D = load_defs()
 
 def sym(name):
     if name not in D:
-        raise SystemExit(f"levelgen: symbol {name} missing/unparsed in level_defs.asm")
+        raise SystemExit(f"levelgen: symbol {name} missing/unparsed in level_defs.asm / item_defs.asm")
     return D[name]
 
 
