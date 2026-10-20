@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Unit tests for tools/itempack.py (3E-T4): the item word table, name refs,
-the hero-tome marker, stems, stat / attr tables, the 32-char composed-line rule
-and the byte budgets.
+"""Unit tests for tools/itempack.py (3E-T4, simplified per game.md §8.11 item 2):
+the item word table, name refs, the hero-tome marker, stems, stat / attr tables,
+the 32-char composed-line rule and the byte budgets.
 
 Run:  python3 tests/itemtab.py            (stdlib unittest; no build needed)
 
@@ -83,7 +83,6 @@ class Decoder:
         self.names = tab["it_name"]
         self.stems = bytes(tab["it_stems"])
         self.attr = tab["it_attr"]
-        self.app = tab["app_attr"]
         st = tab["it_stat"]
         self.stat = [(st[2 * i], st[2 * i + 1]) for i in range(len(st) // 2)]
         self.ovl = bytes(ovl)
@@ -162,12 +161,9 @@ class ItemTabTests(unittest.TestCase):
     def _bag_types(self):
         return [t for t in sorted(self.items.rows) if self.model.klass.get(t)]
 
-    def _gear_buc(self, t):
-        return self.model.klass.get(t) == "gear" and not self.items.rows[t].unique
-
     # -- word table ---------------------------------------------------------------
     def test_word_table_round_trip(self):
-        self.assertEqual(len(self.model.words), 65)
+        self.assertEqual(len(self.model.words), ip.WORD_COUNT_SPEC)
         for k, w in enumerate(self.model.words, 1):
             self.assertEqual(self.dec.word(k), w, f"word id {k}")
 
@@ -176,26 +172,24 @@ class ItemTabTests(unittest.TestCase):
             self.assertRegex(w, r"^[A-Z]{1,8}$", w)
 
     def test_word_bytes_top_bit_terminator(self):
-        self.assertEqual(self.budgets["words"], 320)
-        self.assertEqual(sum(1 for b in self.tab["it_words"] if b & 0x80), 65)
+        self.assertEqual(self.budgets["words"], 229)
+        self.assertEqual(sum(1 for b in self.tab["it_words"] if b & 0x80), ip.WORD_COUNT_SPEC)
+
+    def test_retired_words_absent(self):
+        # §8.11 item 2: no appearance words, no BUC prefixes, no 'OF', no 'UNKNOWN'
+        retired = {"BLESSED", "CURSED", "OF", "UNKNOWN", "RUBY", "AZURE", "EMERALD", "AMBER",
+                   "VIOLET", "MILKY", "ZORAK", "VELMIS", "OSTRUN", "KAPPU", "MIRADEL", "THUNE",
+                   "YOLQ", "ABRAXA"}
+        self.assertEqual(retired & set(self.model.words), set())
 
     def test_wcx_is_every_eighth_word(self):
-        self.assertEqual(len(self.dec.wcx), 9)
+        self.assertEqual(len(self.dec.wcx), 6)
         starts = []
         pos = 0
         for w in self.model.words:
             starts.append(pos)
             pos += len(w)
-        self.assertEqual(self.dec.wcx, [starts[i] for i in range(0, 65, 8)])
-
-    def test_appearance_bases(self):
-        for k, (w, ink) in enumerate(self.items.colours):
-            self.assertEqual(self.dec.word(self.ids["W_APP_POT"] + k), w)
-            self.assertEqual(self.dec.app[k], ink)
-        for k, w in enumerate(self.items.labels):
-            self.assertEqual(self.dec.word(self.ids["W_APP_SCR"] + k), w)
-        self.assertEqual(len(self.items.colours), 6)
-        self.assertEqual(len(self.items.labels), 8)
+        self.assertEqual(self.dec.wcx, [starts[i] for i in range(0, ip.WORD_COUNT_SPEC, 8)])
 
     # -- names and the hero-tome marker -------------------------------------------
     def test_every_type_name_round_trip_both_hero_kinds(self):
@@ -224,11 +218,13 @@ class ItemTabTests(unittest.TestCase):
                 continue
             self.assertNotIn(ip.HERO_MARK, self.dec.names[3 * tid:3 * tid + 3], tid)
 
-    def test_unknown_names_compose_from_appearance_words(self):
-        for k, (colour, _) in enumerate(self.items.colours):
-            self.assertEqual(self.dec.word(self.ids["W_APP_POT"] + k) + " POTION", f"{colour} POTION")
-        for k, label in enumerate(self.items.labels):
-            self.assertEqual("SCROLL " + self.dec.word(self.ids["W_APP_SCR"] + k), f"SCROLL {label}")
+    def test_fixed_potion_and_scroll_names(self):
+        # §8.11 item 2: type-first, 2 words, always known
+        expect = {"IT_P_HEAL": "HEAL POTION", "IT_P_MANA": "MANA POTION", "IT_P_CURE": "CURE POTION",
+                  "IT_S_TELEPORT": "TELEPORT SCROLL", "IT_S_FEAR": "FEAR SCROLL",
+                  "IT_S_SLEEP": "SLEEP SCROLL", "IT_S_ENCHANT": "ENCHANT SCROLL"}
+        for sym, name in expect.items():
+            self.assertEqual(self.dec.name(self.syms[sym]), name, sym)
 
     def test_no_duplicate_display_names(self):
         names = []
@@ -239,7 +235,7 @@ class ItemTabTests(unittest.TestCase):
 
     def test_name_length_caps(self):
         for t in self.items.rows:
-            cap = 12 if self._gear_buc(t) else 18
+            cap = ip.NAME_CAP
             for kind in HERO_KINDS:
                 name = self._expect(t, kind)
                 if name:
@@ -256,12 +252,10 @@ class ItemTabTests(unittest.TestCase):
         self.assertEqual(stem, "YOU PICK UP ")
         for kind in HERO_KINDS:
             for t in self._bag_types():
-                prefixes = ["", "BLESSED ", "CURSED "] if self._gear_buc(t) else [""]
-                names = [self._expect(t, kind)] + self.model.unknown_names(t)
-                for pfx in prefixes:
-                    for n in names:
-                        line = stem + pfx + n
-                        self.assertLessEqual(len(line), LOG_MAX, line)
+                name = self._expect(t, kind)
+                line = stem + name
+                self.assertEqual(line, "YOU PICK UP " + name)
+                self.assertLessEqual(len(line), LOG_MAX, line)
 
     def test_verb_lines_round_trip(self):
         for kind in HERO_KINDS:
@@ -271,45 +265,37 @@ class ItemTabTests(unittest.TestCase):
                 if cls == "food":
                     self.assertEqual(self._ovl("eat") + name, "YOU EAT THE " + name)
                 if cls == "pot":
-                    for n in [name] + self.model.unknown_names(t):
-                        self.assertEqual(self._ovl("drink") + n, "YOU DRINK THE " + n)
-                    self.assertEqual(self._ovl("it_was_a") + name, "IT WAS A " + name)
+                    self.assertEqual(self._ovl("drink") + name, "YOU DRINK THE " + name)
                 if cls == "scr":
-                    for n in [name] + self.model.unknown_names(t):
-                        self.assertEqual(self._ovl("read") + n, "YOU READ THE " + n)
-                    self.assertEqual(self._ovl("it_was_a") + name, "IT WAS A " + name)
+                    self.assertEqual(self._ovl("read") + name, "YOU READ THE " + name)
                 if cls == "book":
                     self.assertEqual(self._ovl("read") + name, "YOU READ THE " + name)
                 if cls == "gear":
                     for verb, expect in (("equip", "YOU EQUIP "), ("remove", "YOU REMOVE ")):
-                        for pfx in (["", "BLESSED ", "CURSED "] if self._gear_buc(t) else [""]):
-                            line = self._ovl(verb) + pfx + name
-                            self.assertEqual(line, expect + pfx + name)
-                            self.assertLessEqual(len(line), LOG_MAX, line)
-                for pfx in (["", "BLESSED ", "CURSED "] if self._gear_buc(t) else [""]):
-                    for n in [name] + self.model.unknown_names(t):
-                        if not n:
-                            continue
-                        line = self._ovl("discard") + pfx + n
-                        self.assertEqual(line, "YOU DISCARD " + pfx + n)
+                        line = self._ovl(verb) + name
+                        self.assertEqual(line, expect + name)
                         self.assertLessEqual(len(line), LOG_MAX, line)
+                if name:
+                    line = self._ovl("discard") + name
+                    self.assertEqual(line, "YOU DISCARD " + name)
+                    self.assertLessEqual(len(line), LOG_MAX, line)
 
     def test_trap_lines_round_trip(self):
         for frag, expect in (("tf_dart", "DART"), ("tf_gas", "GAS"), ("tf_alarm", "ALARM")):
             self.assertEqual(self._res("trap_found") + self._res(frag), "TRAP FOUND: " + expect)
         self.assertEqual(self._res("trap_found") + "TELEPORT", "TRAP FOUND: TELEPORT")
 
-    def test_longest_composed_line_is_31(self):
+    def test_longest_composed_line_is_28(self):
         longest, _, errs = ip.check_composed(self.model)
         self.assertEqual(errs, [])
-        self.assertEqual(longest, 31)
+        self.assertEqual(longest, 28)
 
     def test_known_example_lines(self):
         t_teleport = self.syms["IT_S_TELEPORT"]
         self.assertEqual(self._ovl("read") + self._expect(t_teleport, "warrior"),
-                         "YOU READ THE SCROLL OF TELEPORT")
-        self.assertEqual(self._ovl("it_was_a") + self._expect(self.syms["IT_P_HEAL"], "mage"),
-                         "IT WAS A POTION OF HEAL")
+                         "YOU READ THE TELEPORT SCROLL")
+        self.assertEqual(self._ovl("drink") + self._expect(self.syms["IT_P_HEAL"], "mage"),
+                         "YOU DRINK THE HEAL POTION")
         self.assertEqual(self._ovl("read") + self._expect(self.syms["IT_BOOK"], "mage"),
                          "YOU READ THE SPELL TOME")
 
@@ -332,12 +318,16 @@ class ItemTabTests(unittest.TestCase):
         self.assertEqual(len(self.dec.attr), ROWS)
         for t in range(ROWS):
             row = self.items.rows[t]
-            expect = 0 if row.ink == "APP" else row.ink
+            expect = row.ink
             self.assertEqual(self.dec.attr[t], expect, row.sym)
 
-    def test_potion_rows_use_appearance_ink(self):
-        for t in (self.syms["IT_P_HEAL"], self.syms["IT_P_MANA"], self.syms["IT_P_CURE"]):
-            self.assertEqual(self.items.rows[t].ink, "APP")
+    def test_fixed_floor_inks(self):
+        # §8.11 item 2: floor / inventory ink per type (potions and scrolls)
+        expect = {"IT_P_HEAL": 0x42, "IT_P_MANA": 0x45, "IT_P_CURE": 0x44,
+                  "IT_S_TELEPORT": 0x45, "IT_S_FEAR": 0x46, "IT_S_SLEEP": 0x44,
+                  "IT_S_ENCHANT": 0x47, "IT_BOOK": 0x43}
+        for sym, ink in expect.items():
+            self.assertEqual(self.dec.attr[self.syms[sym]], ink, sym)
 
     def test_food_amounts(self):
         amounts = [self.items.rows[self.syms[s]].amt for s in
@@ -347,8 +337,9 @@ class ItemTabTests(unittest.TestCase):
     # -- budgets ----------------------------------------------------------------------
     def test_budgets(self):
         b = self.budgets
-        self.assertEqual(b["words"], 320)
+        self.assertEqual(b["words"], 229)
         self.assertEqual(b["names"], ROWS * 3)
+        self.assertEqual(b["refs"], 361)
         self.assertLessEqual(b["refs"], 460)
         self.assertLessEqual(b["res_stems"], 480)
         self.assertLessEqual(b["resident"], 700)
@@ -407,13 +398,13 @@ class ItemPackCliTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
     def test_word_longer_than_8_fails(self):
-        r, wrote = self._run_with(lambda t: t.replace("\nscroll ZORAK ", "\nscroll ZORAKXYZW ", 1))
+        r, wrote = self._run_with(lambda t: t.replace("| FEAR SCROLL", "| FEARXYZWQ SCROLL", 1))
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("is 9 chars (max 8)", r.stderr)
         self.assertFalse(wrote)
 
     def test_four_word_name_fails(self):
-        r, wrote = self._run_with(lambda t: t.replace("SCROLL OF FEAR ", "SCROLL OF FEAR NOW ", 1))
+        r, wrote = self._run_with(lambda t: t.replace("FEAR SCROLL ", "FEAR SCROLL HARD NOW ", 1))
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("words", r.stderr)
         self.assertFalse(wrote)
@@ -431,7 +422,7 @@ class ItemPackCliTests(unittest.TestCase):
         self.assertFalse(wrote)
 
     def test_wrong_word_count_fails(self):
-        r, wrote = self._run_with(lambda t: t.replace("BLESSED\nCURSED", "BLESSED\nCURSED\nNEWWORD", 1))
+        r, wrote = self._run_with(lambda t: t.replace("[book]\nWAR\nSPELL", "[book]\nWAR\nSPELL\nNEWWORD", 1))
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("word count", r.stderr)
         self.assertFalse(wrote)

@@ -1,18 +1,10 @@
 # src/items.txt — 3E item names, message stems and per-type numbers (3E-T4).
 # THE single source for tools/itempack.py (-> build/text/items_tab.asm,
 # items_ovl_stems.asm, items_ids.inc) and tests/itemtab.py.
-# Spec: docs/design/game.md §8.11 "3E text rulings (2026-10-20)", §8 gear/food
-# tables, §8.6 uniques, §8.8 light ID.
+# Spec: docs/design/game.md §8.11 "3E simplification (2026-10-20)" (item 2 names
+# and inks, item 4 delete list), §8 gear/food tables, §8.6 uniques.
 #
 # Lines: '#' starts a comment, blank lines are ignored. A section starts at [name].
-#
-# [buc]     word-table seeds, one per line: BLESSED, CURSED (the BUC prefixes).
-#
-# [appear]  light-ID words, in appearance-index order (each run must be contiguous
-#           in the word table; the tool checks it):
-#             potion RUBY=$02 AZURE=$05 EMERALD=$04 AMBER=$06 VIOLET=$03 MILKY=$07
-#             scroll ZORAK VELMIS OSTRUN KAPPU MIRADEL THUNE YOLQ ABRAXA
-#           The =$xx on a potion colour is its appearance ink (app_attr, §8.8).
 #
 # [book]    the two words the hero-tome marker stands for, one per line: WAR, SPELL.
 #           IT_BOOK's name is "<HERO> TOME": <HERO> is packed as the id $FF (ITN_HERO).
@@ -22,16 +14,13 @@
 # [types]   one row per type id, each id once, ids 0..43 (IT_* in item_defs.asm; IT_COUNT 44):
 #             IT_NAME | NAME | INK | DIE ATK DEF MP AMT | FLAG | NOTE
 #           NAME    1..3 words separated by single spaces, or '-' (no name).
-#                   Potions/scrolls: the KNOWN name; unknown names are composed
-#                   from [appear] ("<colour> POTION", "SCROLL <label>").
-#           INK     $xx (floor / inventory ink, §8.11 Q1), APP (potion: the
-#                   appearance ink from [appear]; packed as $00 in it_attr),
-#                   or '-' (= $00).
+#                   Potions/scrolls: the fixed name (always known, §8.11 item 2).
+#           INK     $xx (floor / inventory ink, §8.11 item 2), or '-' (= $00).
 #           DIE     weapon die sides (0 = none).
 #           ATK     signed attack modifier, -8..7.
 #           DEF MP  gear only (DEF >= 0, MP >= 0).
 #           AMT     food: FOOD restored (§7); potion: HP (Heal, Cure) or MP (Mana).
-#           FLAG    U = unique (never carries a BUC prefix, §8.6), else '-'.
+#           FLAG    U = unique (§8.6), else '-'.
 #           NOTE    free text, not packed (effects the 2-byte stat cannot carry).
 #           Packing into it_stat (2 B per row): byte0 = DIE | ((ATK & $0F) << 4);
 #           byte1 = AMT for food/potion rows, else (DEF & $0F) | (MP << 4).
@@ -50,26 +39,16 @@
 #                  except the ALARM line (src/strings.txt style).
 #
 # Composed lines (the checks in tools/itempack.py, LOG_MAX 32):
-#   pick / equip / remove / discard  + [BUC] + name   (BUC only on BUC-able gear)
-#   eat + food name · drink / read + potion or scroll name (known or unknown)
-#   it_was_a + known potion or scroll name · trap_found + dart / gas / alarm / TELEPORT
-#   bk_read (E) · read + book name
+#   pick / equip / remove / discard + name (no prefix)
+#   eat + food name · drink / read + potion or scroll name · read + book name
+#   trap_found + dart / gas / alarm / TELEPORT · bk_read (E)
 
 # --- word-table seeds -----------------------------------------------------------
-[buc]
-BLESSED
-CURSED
-
-# --- light-ID appearance words (§8.8) ---------------------------------------------
 [book]
 WAR
 SPELL
 
-[appear]
-potion RUBY=$02 AZURE=$05 EMERALD=$04 AMBER=$06 VIOLET=$03 MILKY=$07
-scroll ZORAK VELMIS OSTRUN KAPPU MIRADEL THUNE YOLQ ABRAXA
-
-# --- type rows (§8 tables; §8.11 Q1 inks; §8.11 names) ----------------------------
+# --- type rows (§8 tables; §8.11 item 2 names and inks) ---------------------------
 [types]
 # counters: never in the bag, no name (their floor ink only)
 IT_NONE         | -                 | -    | 0 0 0 0 0 | -  | empty slot
@@ -84,16 +63,16 @@ IT_F_PEAR       | PEAR              | $04  | 0 0 0 0 20 | -  | FOOD +20
 IT_F_CHEESE     | CHEESE            | $46  | 0 0 0 0 30 | -  | FOOD +30
 IT_F_MEAT       | MEAT              | $42  | 0 0 0 0 40 | -  | FOOD +40
 # potions (§8): Heal +10 HP, Mana +8 MP, Cure +4 HP (and clears)
-IT_P_HEAL       | POTION OF HEAL    | APP  | 0 0 0 0 10 | -  | HP
-IT_P_MANA       | POTION OF MANA    | APP  | 0 0 0 0 8  | -  | MP
-IT_P_CURE       | POTION OF CURE    | APP  | 0 0 0 0 4  | -  | HP, clears POISON/WEAK/CONFUSED/FEAR
-# scrolls (§8): no numbers; ink always $07 (§8.8)
-IT_S_TELEPORT   | SCROLL OF TELEPORT | $07 | 0 0 0 0 0 | -  | -
-IT_S_FEAR       | SCROLL OF FEAR    | $07  | 0 0 0 0 0 | -  | -
-IT_S_SLEEP      | SCROLL OF SLEEP   | $07  | 0 0 0 0 0 | -  | -
-IT_S_ENCHANT    | SCROLL OF ENCHANT | $07  | 0 0 0 0 0 | -  | -
+IT_P_HEAL       | HEAL POTION       | $42  | 0 0 0 0 10 | -  | HP
+IT_P_MANA       | MANA POTION       | $45  | 0 0 0 0 8  | -  | MP
+IT_P_CURE       | CURE POTION       | $44  | 0 0 0 0 4  | -  | HP, clears POISON/WEAK/CONFUSED/FEAR
+# scrolls (§8): no numbers; fixed names and inks (§8.11 item 2)
+IT_S_TELEPORT   | TELEPORT SCROLL   | $45  | 0 0 0 0 0 | -  | -
+IT_S_FEAR       | FEAR SCROLL       | $46  | 0 0 0 0 0 | -  | -
+IT_S_SLEEP      | SLEEP SCROLL      | $44  | 0 0 0 0 0 | -  | -
+IT_S_ENCHANT    | ENCHANT SCROLL    | $47  | 0 0 0 0 0 | -  | -
 # book: WAR TOME (Warrior) or SPELL TOME (Mage) by hero class; <HERO> = the marker (see [book])
-IT_BOOK         | <HERO> TOME       | $43  | 0 0 0 0 0 | -  | class book (§5, §8.11 names)
+IT_BOOK         | <HERO> TOME       | $43  | 0 0 0 0 0 | -  | class book (§5)
 IT_BOW          | BOW               | $06  | 0 0 0 0 0 | -  | Warrior bag item, floor glyph WEAPON
 # gear, W slot (weapons: class-locked)
 IT_W_SHORT      | SHORT SWORD       | $07  | 6 0 0 0 0  | -  | 1d6 (Warrior start)
@@ -132,9 +111,6 @@ pick          | res | E:cmb_pick        | "YOU PICK UP "
 bk_read       | res | E:bk_read         | "YOU READ THE BOOK"
 st_asleep     | res | E:st_asleep       | "YOU FALL ASLEEP"
 spl_drain_heal | res | E:spl_drain_heal | "YOU FEEL HEALTHIER"
-cmb_lifts     | res | E:cmb_lifts       | "THE CURSE LIFTS: BLESSED!"
-cmb_cling     | res | E:cmb_cling       | "IT CLINGS TO YOU! CURSED "
-cmb_cursed_no | res | E:cmb_cursed_no   | "IT IS CURSED! YOU CANNOT"
 # resident (bank 1): pickup-side, key, teleport/trap, hunger
 bag_full      | res | N | "BAG FULL"
 key_found     | res | N | "YOU FIND THE LAIR KEY"
@@ -154,7 +130,6 @@ hg_fed        | res | N | "YOU FEEL WELL FED"
 drink         | ovl | N | "YOU DRINK THE "
 read          | ovl | N | "YOU READ THE "
 eat           | ovl | N | "YOU EAT THE "
-it_was_a      | ovl | N | "IT WAS A "
 equip         | ovl | N | "YOU EQUIP "
 remove        | ovl | N | "YOU REMOVE "
 discard       | ovl | N | "YOU DISCARD "
