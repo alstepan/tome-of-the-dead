@@ -274,6 +274,14 @@ ISR_SAVE_ALT    EQU 0                           ;     (needed once BOTH the play
 DEBUG_KIT       EQU 1                           ;     start kit (game.md §1.4 "Start kit", never in a
     ENDIF                                       ;     release tape); suites + goldens run on -DDEBUG_KIT=0
 KIT_DEBUG       EQU DEBUG_KIT                   ; (.sym: tests/game_lib.py refuses a kit build)
+    IFNDEF PHASE_SHIFT                          ; phase-locked walk shifts (2026-10-21 default):
+PHASE_SHIFT     EQU 1                           ;     a walker's walk frame is only ever drawn
+    ENDIF                                       ;     at one px parity -> one stored shift
+                                                ;     (WK4 / WK0, frames.asm); anim_entity
+                                                ;     .walkph locks it. 0 = escape hatch (both
+                                                ;     shifts, pre-lock image); 2 = soak
+                                                ;     diagnostic (unlocked + PHASE_TRAP)
+                ASSERT PHASE_SHIFT >= 0 && PHASE_SHIFT <= 2
 
 ;------------------------------------------------------------------------------
 ; State block $BF00.. (above initial SP). $BF00-$BF0D shared with main.asm:
@@ -302,7 +310,9 @@ ALLOC_PTR       EQU $BF43           ; word: next free byte in the paged pool ban
 ALLOC_MARK_IDX  EQU $BF45           ; allocator mark after monsters+hero idles
 ALLOC_MARK_PTR  EQU $BF46           ; word
 CLIMB_BLK_XY    EQU $BF48           ; B18 word: CLIMB_BLK_ID's (x, y) at its last block (climb_blocked)
-; $BF4A..$BF4B: spare (D3-0: $BF48..$BF4B were ZAP_T / ZAP_ROW / ZAP_COL / ZAP_LEN, the PROTO zap)
+PHASE_TRAP      EQU $BF4A           ; PHASE_SHIFT 1 / 2 (default 1): count (since boot, wraps) of walk ticks whose
+                                    ; E_WPH parity disagreed with px parity (lock changed the frame; expect 0)
+; $BF4B: spare (D3-0: $BF48..$BF4B were ZAP_T / ZAP_ROW / ZAP_COL / ZAP_LEN, the PROTO zap)
 DMG_COUNT       EQU $BF4C           ; rects in DMG_LIST this render
 PEND_DMG_COUNT  EQU $BF4D
 EXIT_DEST       EQU $BF4E           ; destination room of the pending exit
@@ -616,6 +626,9 @@ FDESC_RESERVE   EQU FRT_MAX * FDESC_STRIDE  ; 800 B at FRT_MAX (game.md budgeted
 
 FF_MOTION       EQU %00000001       ; store both shifts (0 and 4)
 FF_SYM          EQU %00000010       ; symmetric: left = right (no mirror)
+FF_PH4          EQU %00000100       ; PHASE_SHIFT: STATIONARY frame drawn at px & 4 = 4 (a
+                                    ; parity-locked walk frame): its one shift = (anchor + 4) & 4
+                ASSERT FF_PH4 == 4                  ; gen_facing / POOLACC add the flag as the 4 px
 
 ; FRT variant: v = facing_left*2 + (shift4 ? 1 : 0); 3 B each (bank, lo, hi)
 FRT_NONE        EQU $FF             ; bank byte for "variant not generated"
@@ -745,6 +758,7 @@ FCTR = FCTR + 1
     ELSE
       IF FRM_OK
 FID_nm EQU FCTR
+FFL_nm EQU (flg)                               ; the FF_* flags (data.asm MOVECYC checks)
 FCTR = FCTR + 1
         ; bottom-anchored frames must fit the body rows and be whole cells
         ; (fpy = py + bh*8 - H stays inside the body, row fix-up every 8 lines)
@@ -757,9 +771,9 @@ POOLACC = POOLACC + nm_h * 2 * (2 * nm_cols + 1)
 POOLACC = POOLACC + 2 * nm_h * 2 * (2 * nm_cols + 1)
           ENDIF
         ELSE
-POOLACC = POOLACC + nm_h * 2 * (nm_cols + (((nm_ax & 7) != 0) & 1))
+POOLACC = POOLACC + nm_h * 2 * (nm_cols + ((((nm_ax + ((flg) & FF_PH4)) & 7) != 0) & 1))
           IF ((flg) & FF_SYM) == 0
-POOLACC = POOLACC + nm_h * 2 * (nm_cols + ((((nm_w - nm_ax - bwpx) & 7) != 0) & 1))
+POOLACC = POOLACC + nm_h * 2 * (nm_cols + ((((nm_w - nm_ax - bwpx + ((flg) & FF_PH4)) & 7) != 0) & 1))
           ENDIF
         ENDIF
       ELSE
@@ -771,6 +785,21 @@ FID_nm EQU -1
 MOT             EQU FF_MOTION
 STA             EQU 0
 SYM             EQU FF_SYM
+; PHASE_SHIFT walk-cycle flags (frames.asm): a walker's KS_MOVE frame at phase p
+; is drawn only at px & 4 = (p even ? 4 : 0) (anim_entity .walkph locks it), so
+; WK4 (WALK1/3) = one shift, the px & 4 = 4 one; WK0 (WALK2/4) = the aligned one.
+; A walk frame also drawn at rest / climb / attack at the other parity stays MOT.
+; Rule (docs/conventions.md "Walk cycles"): move cycles via MOVECYC2/4 only (1
+; tick per entry, even length; even slots MOT or WK4, odd slots MOT or WK0 —
+; ASSERTed there); every other use draws at px & 4 = 0 (cell-aligned), so a
+; WK4 frame must appear in no other seq / role / cycle (tests/frames_phase.py).
+    IF PHASE_SHIFT
+WK4             EQU FF_PH4
+WK0             EQU STA
+    ELSE
+WK4             EQU MOT
+WK0             EQU MOT
+    ENDIF
 
 ;------------------------------------------------------------------------------
 ; Stage 3B data contracts (B3B-1): EQUs + ASSERTs only, no bytes.

@@ -2165,7 +2165,14 @@ gen_facing:
                 ld   a, 4
                 jp   gen_variant
 .stat:
+    IF PHASE_SHIFT
+                ld   a, (GEN_FLAGS)            ; FF_PH4 (= 4): drawn at px & 4 = 4,
+                and  FF_PH4                    ; so the shift is (anchor + 4) & 4
+                ld   hl, GEN_OFF
+                add  a, (hl)
+    ELSE
                 ld   a, (GEN_OFF)
+    ENDIF
                 and  7                         ; anchor implies the one shift
                 jp   z, gen_variant            ; shift 0 -> variant base
                 ld   hl, GEN_VAR

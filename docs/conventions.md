@@ -119,6 +119,24 @@
   Skipping it draws the previous world's slots for a tick (bugs B7 / B7b;
   `tests/game.py` #52 / #54). See `docs/memory-map.md` "Double buffer".
 
+## Walk cycles (phase-locked shifts, `PHASE_SHIFT` default 1)
+
+- A walker's walk phase and its px both step once per 4-px tween tick, so each
+  walk-cycle slot is only ever drawn at one px parity; the pool stores that one
+  shift (`src/frames.asm` WK4 / WK0) and `anim_entity .walkph` locks the drawn
+  phase to the px parity (`PHASE_TRAP` counts disagreements; expect 0).
+- Rules for every move cycle (write them with `MOVECYC2` / `MOVECYC4`,
+  `src/data.asm`, which ASSERT them): **1 tick per entry, even length; even
+  slots are drawn at shift 4 (flag WK4 or MOT), odd slots at shift 0 (WK0 /
+  STA or MOT).**
+- **Any walk frame also used at rest / attack / hurt / death / climb / jump
+  must be MOT** (those are drawn cell-aligned, or at both parities for JUMP2):
+  e.g. Skeleton / Goblin WALK1 are their REST frames. A WK4 frame may appear in
+  no other sequence, cycle or role (`tests/frames_phase.py`, static, no
+  emulator). Climb and JUMP2 art must exist (the walk stand-ins are ASSERTed
+  out under `PHASE_SHIFT`). `-DPHASE_SHIFT=0` = both shifts (escape hatch);
+  `=2` = unlocked + trap (soak diagnostic).
+
 ## Style
 
 - Labels: `snake_case`; local labels `.likeThis` under a parent.

@@ -23,7 +23,7 @@ replays the same generator sessions (boot: alloc_reset, every monster kind,
 the two select idles, save + mark; each game: select restores the idles' FRT
 rows, alloc_restore, gen_kind(hero), gen_kind(hero + K_FX_BASE) — D3-4: the
 class FX kind with its overlapping fid range) over the bank / FRT bytes the snapshot
-starts with: allocator, variant choice (MOTION: shift 0 + 4; else the anchor's
+starts with: allocator, variant choice (MOTION: shift 0 + 4; else the anchor (+4 for FF_PH4)
 one shift; SYM: left = right entries), mirror (bit-reversed bytes, reversed
 column pairs), the 4-px shift with its spill column. Geometry (frame_tab cols,
 H, anchor offsets), kind_tab FID0/FCNT and the frame flags (fdesc_tab
@@ -312,7 +312,7 @@ class Ref:
         if flags & self.S["FF_MOTION"]:
             self.variant(fid, src, cols, h, var, 0)
             self.variant(fid, src, cols, h, var + 1, 4)
-        elif off & 7 == 0:
+        elif (off + (flags & self.S.get("FF_PH4", 0))) & 7 == 0:   # PHASE_SHIFT: px & 4 = 4
             self.variant(fid, src, cols, h, var, 0)
         else:
             self.variant(fid, src, cols, h, var + 1, 4)
@@ -409,6 +409,7 @@ def main():
     a = ap.parse_args()
     tmp = tempfile.mkdtemp(prefix="zx0pool_")
     kit = ["DEBUG_KIT=0"]          # D3-7: suites run on the release start kit
+    kit += os.environ.get("ZX0POOL_DEFS", "").split()   # e.g. "PHASE_SHIFT=1"
     variants = [("zx0", REPO, kit)]
     if a.baseline:                 # (an older checkout ignores the unknown define)
         variants.append(("baseline", os.path.abspath(a.baseline), kit))

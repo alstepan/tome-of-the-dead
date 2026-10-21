@@ -56,6 +56,9 @@ boot6_init:
                 ld   (DMG_OVERFLOW), a
                 ld   (CLIP_TRAP), a
                 ld   (GEN_TRAP), a             ; since boot (like GEN_OVERFLOW)
+    IF PHASE_SHIFT
+                ld   (PHASE_TRAP), a           ; since boot (walk phase lock trap)
+    ENDIF
                 ld   (TURN_PHASE), a
                 ld   (PEND_DMG_COUNT), a
                 ld   (CUR_ROOM), a

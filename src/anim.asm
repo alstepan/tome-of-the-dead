@@ -291,6 +291,37 @@ anim_entity:
                 jr   .cf
 .walkph:        ld   a, (ix+E_WPH)
                 inc  (ix+E_WPH)
+    IF PHASE_SHIFT
+                ; Phase lock (KS_MOVE only; C = KS_MOVE 2 / KS_CLIMB 4): the
+                ; drawn phase's bit 0 = NOT (px & 4), so WALK1/3 (even) sit at
+                ; px & 4 = 4 and WALK2/4 at 0 BY CONSTRUCTION (one stored shift,
+                ; FF_PH4 / STA). E_WPH and px both step once per tween tick, so
+                ; it is a no-op while the parities agree; a disagreement bumps
+                ; PHASE_TRAP (= a frame the unlocked engine would have drawn
+                ; at the ungenerated shift). HL = the cycle (kept). 26 B;
+                ; per walking body per tick 85-86 T while the parities agree,
+                ; +37 T on a disagreement (the trap); a climb tick 15 T.
+                ; Clobbers D, E.
+                bit  1, c
+                jr   z, .cf                    ; climb cycle: unlocked
+                ld   d, a
+                and  $FE
+                bit  2, (ix+E_PX)
+                jr   nz, .ph4                  ; px & 4 = 4: even phase
+                inc  a
+.ph4:           ld   e, a
+                xor  d
+                rrca                           ; CF = the parities disagreed
+                ld   a, e
+                jr   nc, .cf
+                push hl
+                ld   hl, PHASE_TRAP
+                inc  (hl)
+                pop  hl
+      IF PHASE_SHIFT == 2
+                ld   a, d                      ; diagnostic: the unlocked phase (a
+      ENDIF                                    ; violation then shows as BLIT_MISS)
+    ENDIF
 .cf:            call cycle_frame
                 ld   b, 1
                 ret

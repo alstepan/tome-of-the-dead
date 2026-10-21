@@ -5,6 +5,15 @@
 ; Kinds are contiguous so a kind's frames are [KT_FID0, KT_FID0 + KT_FCNT).
 ; Heroes are listed first; monsters after. tools/zx0_sources.py packs the
 ; frames named here, in this order (= gen_kind order).
+;
+; Shift flags: MOT = both shifts (0, 4); STA = the one shift its anchor implies
+; at px & 4 = 0; SYM = left = right. WALK CYCLES (PHASE_SHIFT, default 1; rule
+; in docs/conventions.md "Walk cycles"): a move cycle (data.asm MOVECYC2/4) has
+; 1 tick per entry and an even length; anim .walkph draws its even slots only
+; at px & 4 = 4 (WK4: one shift) and its odd slots only at px & 4 = 0 (WK0).
+; A walk frame ALSO used at rest / attack / climb / death / jump must be MOT
+; (Skeleton / Goblin WALK1 = their REST, rat_run1, slime_squash). The build
+; ASSERTs the cycle slots; tests/frames_phase.py checks the other uses.
 ;==============================================================================
 FCTR = 0
 POOLACC = 0
@@ -12,10 +21,10 @@ KFID_KNIGHT = FCTR
 POOLACC = 0
                 FRM knight_idle1,   K_KNIGHT, 24, STA
                 FRM knight_idle2,   K_KNIGHT, 24, STA
-                FRM knight_walk1,   K_KNIGHT, 24, MOT
-                FRM knight_walk2,   K_KNIGHT, 24, MOT
-                FRM knight_walk3,   K_KNIGHT, 24, MOT
-                FRM knight_walk4,   K_KNIGHT, 24, MOT
+                FRM knight_walk1,   K_KNIGHT, 24, WK4
+                FRM knight_walk2,   K_KNIGHT, 24, WK0
+                FRM knight_walk3,   K_KNIGHT, 24, WK4
+                FRM knight_walk4,   K_KNIGHT, 24, WK0
                 FRM knight_windup,  K_KNIGHT, 24, STA
                 FRM knight_slash,   K_KNIGHT, 24, STA
                 FRM knight_follow,  K_KNIGHT, 24, STA
@@ -39,10 +48,10 @@ KFID_WIZARD = FCTR
 POOLACC = 0
                 FRM wizard_idle,    K_WIZARD, 24, STA
                 FRM wizard_idle2,   K_WIZARD, 24, STA
-                FRM wizard_walk1,   K_WIZARD, 24, MOT
-                FRM wizard_walk2,   K_WIZARD, 24, MOT
-                FRM wizard_walk3,   K_WIZARD, 24, MOT
-                FRM wizard_walk4,   K_WIZARD, 24, MOT
+                FRM wizard_walk1,   K_WIZARD, 24, WK4
+                FRM wizard_walk2,   K_WIZARD, 24, WK0
+                FRM wizard_walk3,   K_WIZARD, 24, WK4
+                FRM wizard_walk4,   K_WIZARD, 24, WK0
                 FRM wizard_cast1,   K_WIZARD, 24, STA
                 FRM wizard_cast2,   K_WIZARD, 24, STA
                 FRM wizard_climb1,  K_WIZARD, 24, STA|SYM
@@ -61,9 +70,9 @@ KFID_MONSTERS = FCTR
 KFID_SKELETON = FCTR
 POOLACC = 0
                 FRM skeleton_walk1,     K_SKELETON, 24, MOT
-                FRM skeleton_walk2,     K_SKELETON, 24, MOT
-                FRM skeleton_walk3,     K_SKELETON, 24, MOT
-                FRM skeleton_walk4,     K_SKELETON, 24, MOT
+                FRM skeleton_walk2,     K_SKELETON, 24, WK0
+                FRM skeleton_walk3,     K_SKELETON, 24, WK4
+                FRM skeleton_walk4,     K_SKELETON, 24, WK0
                 FRM skeleton_raise,     K_SKELETON, 24, STA
                 FRM skeleton_cut,       K_SKELETON, 24, STA
                 FRM skeleton_collapsed, K_SKELETON, 24, STA
@@ -74,9 +83,9 @@ KFCNT_SKELETON = FCTR - KFID_SKELETON
 
 KFID_GOBLIN = FCTR
                 FRM goblin_walk1,   K_GOBLIN, 24, MOT
-                FRM goblin_walk2,   K_GOBLIN, 24, MOT
-                FRM goblin_walk3,   K_GOBLIN, 24, MOT
-                FRM goblin_walk4,   K_GOBLIN, 24, MOT
+                FRM goblin_walk2,   K_GOBLIN, 24, WK0
+                FRM goblin_walk3,   K_GOBLIN, 24, WK4
+                FRM goblin_walk4,   K_GOBLIN, 24, WK0
                 FRM goblin_clubup,  K_GOBLIN, 24, STA
                 FRM goblin_smash,   K_GOBLIN, 24, STA
                 FRM goblin_climb1,  K_GOBLIN, 24, STA|SYM
@@ -95,7 +104,7 @@ KFCNT_GHOST = FCTR - KFID_GHOST
 
 KFID_RAT = FCTR
                 FRM rat_run1,       K_RAT, 32, MOT
-                FRM rat_run2,       K_RAT, 32, MOT
+                FRM rat_run2,       K_RAT, 32, WK0
                 FRM rat_bite,       K_RAT, 32, STA
                 FRM rat_hurt,       K_RAT, 32, STA
                 FRM rat_dead,       K_RAT, 32, STA
@@ -113,7 +122,7 @@ KFCNT_BAT = FCTR - KFID_BAT
 KFID_SLIME = FCTR
                 FRM slime_wobble,   K_SLIME, 24, STA
                 FRM slime_squash,   K_SLIME, 24, MOT
-                FRM slime_stretch,  K_SLIME, 24, MOT
+                FRM slime_stretch,  K_SLIME, 24, WK0
                 FRM slime_lunge,    K_SLIME, 24, STA
                 FRM slime_hurt,     K_SLIME, 24, STA
                 FRM slime_dead,     K_SLIME, 24, STA

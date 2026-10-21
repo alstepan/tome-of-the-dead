@@ -71,6 +71,10 @@ POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW)   ; D3-TX: the text b
                 ROLE WZ_DEAD,   FID_wizard_dead,   WZ_REST
                 ROLE WZ_JUMP1,  FID_wizard_jump1,  WZ_REST
                 ROLE WZ_JUMP2,  FID_wizard_jump2,  FID_wizard_walk1
+                ; PHASE_SHIFT: JUMP2 is drawn mid-tween at both px parities, so it
+                ; must be a real MOT frame, never the (one-shift WK4) WALK1 stand-in
+                ASSERT !PHASE_SHIFT || ((FID_knight_jump2 >= 0) && (FFL_knight_jump2 & FF_MOTION))
+                ASSERT !PHASE_SHIFT || ((FID_wizard_jump2 >= 0) && (FFL_wizard_jump2 & FF_MOTION))
                 ROLE WZ_SRAISE, FID_wizard_staffraise, FID_wizard_cast1
                 ROLE WZ_SSWING, FID_wizard_staffswing, FID_wizard_cast2
 
@@ -103,15 +107,35 @@ POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW)   ; D3-TX: the text b
 
 ;------------------------------------------------------------------------------
 ; Cycle / sequence emitters.
-;   CYCLE_WALK4 a,b,c,d : 4-tick walk cycle, 1 tick per frame
+;   MOVECYC4 / MOVECYC2 names : the KS_MOVE walk cycle (frame NAMES, not fids),
+;                         1 tick per frame, even length. PHASE_SHIFT (anim
+;                         .walkph): an even slot is drawn only at px & 4 = 4,
+;                         an odd one only at 0 -> even slots MOT or WK4, odd
+;                         slots MOT or STA/WK0 (ASSERTed; docs/conventions.md
+;                         "Walk cycles"). Write every move cycle with these.
 ;   CLIMBCYC kind-prefix: CLIMB1/CLIMB2 alternating per tick, or the WALK
 ;                         cycle when the climb art is missing.
 ;   DEATHSEQ hurt, dead, real?, rest : HURT 3 -> DEAD 12, or the blink stand-in
 ;------------------------------------------------------------------------------
+    MACRO MOVECYC4 cy0, cy1, cy2, cy3
+        DB 4, FID_cy0, 1, FID_cy1, 1, FID_cy2, 1, FID_cy3, 1, SEQ_END
+        ASSERT (FID_cy0 >= 0) && (FID_cy1 >= 0) && (FID_cy2 >= 0) && (FID_cy3 >= 0)
+        ASSERT (FFL_cy0 & (FF_MOTION | FF_PH4)) && (FFL_cy2 & (FF_MOTION | FF_PH4))
+        ASSERT ((FFL_cy1 & FF_MOTION) || !(FFL_cy1 & FF_PH4)) && ((FFL_cy3 & FF_MOTION) || !(FFL_cy3 & FF_PH4))
+    ENDM
+    MACRO MOVECYC2 cy0, cy1
+        DB 2, FID_cy0, 1, FID_cy1, 1, SEQ_END
+        ASSERT (FID_cy0 >= 0) && (FID_cy1 >= 0)
+        ASSERT FFL_cy0 & (FF_MOTION | FF_PH4)
+        ASSERT (FFL_cy1 & FF_MOTION) || !(FFL_cy1 & FF_PH4)
+    ENDM
+    ; The walk-cycle stand-in draws WALK1/3 at px & 4 = 0: illegal for WK4
+    ; frames, so PHASE_SHIFT needs the climb art (CLIMBREST: the same).
     MACRO CLIMBCYC c1, c2, w1, w2, w3, w4
       IF ((c1) >= 0) && ((c2) >= 0)
         DB 2, c1, 1, c2, 1, SEQ_END
       ELSE
+        ASSERT !PHASE_SHIFT
         DB 4, w1, 1, w2, 1, w3, 1, w4, 1, SEQ_END
       ENDIF
     ENDM
@@ -119,6 +143,7 @@ POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW)   ; D3-TX: the text b
       IF (c1) >= 0
         DB c1, 0
       ELSE
+        ASSERT !PHASE_SHIFT
         DB w1, 0
       ENDIF
     ENDM
@@ -140,7 +165,7 @@ POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW)   ; D3-TX: the text b
 ;==============================================================================
 ; --- Knight ---
 kn_idle:        DB 32, KN_REST, 16, KN_IDLE2, 16, SEQ_END
-kn_move:        DB 4, FID_knight_walk1, 1, FID_knight_walk2, 1, FID_knight_walk3, 1, FID_knight_walk4, 1, SEQ_END
+kn_move:        MOVECYC4 knight_walk1, knight_walk2, knight_walk3, knight_walk4
 kn_climb:       CLIMBCYC FID_knight_climb1, FID_knight_climb2, FID_knight_walk1, FID_knight_walk2, FID_knight_walk3, FID_knight_walk4
 kn_climbrest:   CLIMBREST FID_knight_climb1, FID_knight_walk1
 kn_attack:      DB FID_knight_windup, 2, 0, FID_knight_slash, 2, SF_IMPACT, FID_knight_follow, 2, 0, SEQ_END
@@ -149,7 +174,7 @@ kn_block:       DB KN_BLOCK, 3, 0, SEQ_END
 kn_death:       DEATHSEQ KN_HURT, KN_DEAD, FID_knight_dead, KN_REST
 ; --- Wizard ---
 wz_idle:        DB 32, WZ_REST, 16, WZ_IDLE2, 16, SEQ_END
-wz_move:        DB 4, FID_wizard_walk1, 1, FID_wizard_walk2, 1, FID_wizard_walk3, 1, FID_wizard_walk4, 1, SEQ_END
+wz_move:        MOVECYC4 wizard_walk1, wizard_walk2, wizard_walk3, wizard_walk4
 wz_climb:       CLIMBCYC FID_wizard_climb1, FID_wizard_climb2, FID_wizard_walk1, FID_wizard_walk2, FID_wizard_walk3, FID_wizard_walk4
 wz_climbrest:   CLIMBREST FID_wizard_climb1, FID_wizard_walk1
                 ; C3-7: KS_ATTACK = the staff melee (gap 0, game.md §6.2: STAFF_RAISE
@@ -162,7 +187,7 @@ wz_hurt:        DB WZ_HURT, 3, 0, SEQ_END
 wz_death:       DEATHSEQ WZ_HURT, WZ_DEAD, FID_wizard_dead, WZ_REST
 ; --- Skeleton ---
 sk_idle:        DB 1, SK_REST, 1, SEQ_END
-sk_move:        DB 4, FID_skeleton_walk1, 1, FID_skeleton_walk2, 1, FID_skeleton_walk3, 1, FID_skeleton_walk4, 1, SEQ_END
+sk_move:        MOVECYC4 skeleton_walk1, skeleton_walk2, skeleton_walk3, skeleton_walk4
 sk_climb:       CLIMBCYC FID_skeleton_climb1, FID_skeleton_climb2, FID_skeleton_walk1, FID_skeleton_walk2, FID_skeleton_walk3, FID_skeleton_walk4
 sk_climbrest:   CLIMBREST FID_skeleton_climb1, FID_skeleton_walk1
 sk_attack:      DB FID_skeleton_raise, 3, 0, FID_skeleton_cut, 2, SF_IMPACT, SEQ_END
@@ -171,7 +196,7 @@ sk_hurt:        DB SK_HURT, 3, 0, SEQ_END
 sk_death:       DEATHSEQ SK_HURT, FID_skeleton_collapsed, FID_skeleton_collapsed, SK_REST
 ; --- Goblin ---
 gb_idle:        DB 1, GB_REST, 1, SEQ_END
-gb_move:        DB 4, FID_goblin_walk1, 1, FID_goblin_walk2, 1, FID_goblin_walk3, 1, FID_goblin_walk4, 1, SEQ_END
+gb_move:        MOVECYC4 goblin_walk1, goblin_walk2, goblin_walk3, goblin_walk4
 gb_climb:       CLIMBCYC FID_goblin_climb1, FID_goblin_climb2, FID_goblin_walk1, FID_goblin_walk2, FID_goblin_walk3, FID_goblin_walk4
 gb_climbrest:   CLIMBREST FID_goblin_climb1, FID_goblin_walk1
 gb_attack:      DB FID_goblin_clubup, 3, 0, FID_goblin_smash, 2, SF_IMPACT, SEQ_END
@@ -185,7 +210,7 @@ gh_hurt:        DB GH_HURT, 3, 0, SEQ_END
 gh_death:       DEATHSEQ GH_HURT, GH_DEAD, FID_ghost_dead, GH_REST
 ; --- Rat ---
 rt_idle:        DB 1, RT_REST, 1, SEQ_END
-rt_move:        DB 2, FID_rat_run1, 1, FID_rat_run2, 1, SEQ_END
+rt_move:        MOVECYC2 rat_run1, rat_run2
 rt_climbrest:   DB RT_REST, 0
 rt_attack:      DB FID_rat_run1, 1, 0, RT_BITE, 2, SF_IMPACT, SEQ_END
 rt_hurt:        DB RT_HURT, 3, 0, SEQ_END
@@ -198,7 +223,7 @@ bt_hurt:        DB BT_HURT, 3, 0, SEQ_END
 bt_death:       DEATHSEQ BT_HURT, BT_DEAD, FID_bat_dead, BT_REST
 ; --- Slime ---
 sl_idle:        DB 24, FID_slime_wobble, 8, FID_slime_squash, 4, FID_slime_wobble, 8, FID_slime_stretch, 4, SEQ_END
-sl_move:        DB 2, FID_slime_squash, 1, FID_slime_stretch, 1, SEQ_END
+sl_move:        MOVECYC2 slime_squash, slime_stretch
 sl_climbrest:   DB SL_REST, 0
 sl_attack:      DB FID_slime_squash, 2, 0, SL_LUNGE, 2, SF_IMPACT, SEQ_END
 sl_hurt:        DB SL_HURT, 3, 0, SEQ_END
@@ -219,6 +244,9 @@ kind_seqs:
                 DB 3
                 DW gh_idle, gh_idle, gh_idle, gh_climbrest, gh_attack, gh_hurt, gh_hurt, gh_death
                 DB 2
+                ; rat / slime: KS_CLIMB = the move cycle (never used: not KF_CLIMBER,
+                ; but a vertical M_MOVE would draw it at px & 4 = 0 with any phase):
+                ; its even-slot frames must keep both shifts (ASSERTs after the table)
                 DW rt_idle, rt_move, rt_move, rt_climbrest, rt_attack, rt_hurt, rt_hurt, rt_death
                 DB 1
                 DW bt_idle, bt_idle, bt_idle, bt_climbrest, bt_attack, bt_hurt, bt_hurt, bt_death
@@ -226,6 +254,7 @@ kind_seqs:
                 DW sl_idle, sl_move, sl_move, sl_climbrest, sl_attack, sl_hurt, sl_hurt, sl_death
                 DB 2
                 ASSERT $ - kind_seqs == K_COUNT * KS_STRIDE
+                ASSERT (FFL_rat_run1 & FF_MOTION) && (FFL_slime_squash & FF_MOTION)
 
 ; hero_jump — the §2.4 arc frames per hero kind (anim_entity .jump; only the
 ; hero jumps, try_jump): 2 B/kind {JUMP1 (ticks 0 / 13, aligned), JUMP2
