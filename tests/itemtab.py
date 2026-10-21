@@ -355,14 +355,15 @@ class ItemTabTests(unittest.TestCase):
         self.assertLessEqual(b["refs"], 460)
         # resident: turn-path stems only (3E-T4c retag; ~80 B target, 89 B as built;
         # 3E-T11: + "BOSS DROPS " 11 + its terminator = 101; review: + "NO NEED" moved
-        # from the fx set, 7 + 1 = 109)
-        self.assertEqual(b["res_stems"], 109)
+        # from the fx set, 7 + 1 = 109; 3E-T9: + the 3 hunger lines from the fx set,
+        # 15 + 25 + 18 = 58 -> 167)
+        self.assertEqual(b["res_stems"], 167)
         self.assertLessEqual(b["res_stems"], 480)
-        self.assertEqual(b["resident"], 482)          # 3E-T11: + BOSS DROPS (12) + NO NEED (8)
+        self.assertEqual(b["resident"], 540)          # 3E-T11: + BOSS DROPS (12) + NO NEED (8); T9: + 58
         self.assertLessEqual(b["resident"], 700)
         self.assertLessEqual(b["resident"] - b["wcx"], 700)
         # fx overlay: effect / quick-use stems + it_stat (raw)
-        self.assertEqual(b["fx_stems"], 307)        # T11 review: NO NEED (8) moved to resident
+        self.assertEqual(b["fx_stems"], 249)        # T11 review: NO NEED (8) moved to resident; T9: hg_* (58)
         self.assertEqual(b["stat"], ROWS * 2)
         self.assertEqual(b["fx"], b["fx_stems"] + b["stat"])
         self.assertLessEqual(b["fx"], 700)
@@ -390,7 +391,7 @@ class ItemTabTests(unittest.TestCase):
         self.assertEqual(groups["trap_found"], "res")
         self.assertEqual(groups["bag_full"], "res")
         self.assertEqual(groups["drink"], "fx")
-        self.assertEqual(groups["hg_hungry"], "fx")
+        self.assertEqual(groups["hg_hungry"], "res")   # 3E-T9: the turn prints it (hunger6)
         self.assertEqual(groups["bk_read"], "fx")
         self.assertEqual(self.model.page_stems(), [])
 

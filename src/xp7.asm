@@ -23,7 +23,9 @@ XPF_EVA         EQU 2               ; an eva step
 ; "... hunger -> regen -> ..."), a plain call (bank 7), skipped when the hero
 ; is DYING (end_turn tests it first).
 ; MP regen: MP_RG counts turns; at the class period MP += 1 + MAXMP div 16 (to MAXMP) and
-; MP_RG = 0. While WEAK (ST_FLAGS slot 0) the counter is frozen (§7 "halted").
+; MP_RG = 0. While WEAK (ST_FLAGS slot 0) the counter is frozen (§7 "halted");
+; 3E-T9: the test is MP_HOLD, written by hunger_turn (R6) right before: WEAK
+; (status or hunger) -> frozen; HUNGRY -> frozen on odd TURN_COUNTER (period x2).
 ; Level-up (XP_UP set by deal_hit's award): while LVL < LVL_MAX and XP >=
 ; xpn_tab[LVL - 1]: LVL + 1, max/current HP and MP + the class gains, the L4 /
 ; L8 atk and L6 eva steps (the hero's kind_tab KT_ATK / KT_EVA columns: 0 T on
@@ -35,9 +37,9 @@ XPF_EVA         EQU 2               ; an eva step
 ; stats ~0.3k T per level; the lines ~4.5k + ~1.1k per step line.
 ;------------------------------------------------------------------------------
 xp_turn:
-                ld   a, (ST_FLAGS)
-                and  STS_WEAK
-                jr   nz, .lv                   ; WEAK: no regen, counter held
+                ld   a, (MP_HOLD)              ; 3E-T9 (hunger_turn, just before): WEAK
+                or   a                         ; (status or hunger) or a HUNGRY odd turn:
+                jr   nz, .lv                   ; no regen, counter held (-1 B vs ST_FLAGS)
                 ld   a, (HERO_KIND)
                 or   a
                 ld   b, MP_REG_W

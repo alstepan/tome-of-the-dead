@@ -183,21 +183,26 @@ st_sig:
 ; panel_more — panel_step's tail (HOT_COPY) after HP / LOG / ICONS / DEPTH:
 ; HL = PANEL_DIRTY, C = 0 in the tick's 1st frame. The info line (~25k T, a
 ; whole row of 6x8 text) draws only in a 1st frame, like a log line; MP
-; (D3-9b) first; FOOD / AMMO have nothing to draw until 3E (cleared).
+; (D3-9b) first; 3E-T9 FOOD (bar + stage word, ~7k T incl. far6: 1st frame
+; only, like INFO); AMMO has nothing to draw yet (cleared).
 ;------------------------------------------------------------------------------
 panel_more:
                 bit  PD_MP_BIT, (hl)           ; D3-9b: a small item (HP's size), any frame
                 jp   nz, item_mp               ; (xp2.asm, after kind_tab)
-                bit  PD_INFO_BIT, (hl)
-                jr   z, .clr
                 inc  c
                 dec  c
-                jr   nz, .clr                  ; 2nd frame: the info line waits
+                jr   nz, .clr                  ; 2nd frame: FOOD / the info line wait
+                bit  PD_FOOD_BIT, (hl)
+                ld   hl, item_food             ; 3E-T9: R6 (hunger6.asm)
+                jp   nz, far6
+                ld   hl, PANEL_DIRTY
+                bit  PD_INFO_BIT, (hl)
+                jr   z, .clr
                 res  PD_INFO_BIT, (hl)
                 ld   hl, item_info             ; bank 1 (info1.asm)
                 jp   far1
 .clr:           ld   a, (hl)
-                and  PD_LOG | PD_INFO          ; waiting log / info items stay
+                and  PD_LOG | PD_INFO | PD_FOOD ; waiting log / info / food items stay
                 ld   (hl), a
                 ret
 

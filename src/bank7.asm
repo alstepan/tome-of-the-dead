@@ -210,6 +210,8 @@ end_turn:
                 ld   a, (GAME_STATE)           ; not after a win (level_descend .win: GS_WIN
                 cp   GS_PLAYING                ; returns here): the end screen owns the music
                 call z, mus_pick               ; SND-3: Dangerous cue (mus7.asm), mailbox only
+                ld   hl, hunger_turn           ; 3E-T9: FOOD burn / jump cost / stage /
+                call far6                      ; FED regen / MP_HOLD (R6 hunger6.asm)
                 jp   xp_turn                   ; D3-9b: MP regen + level-up (xp7.asm)
                                                ; (B3B-13: the PROTO chest win is gone; a run
                                                ; wins by descending from D8, level_descend)

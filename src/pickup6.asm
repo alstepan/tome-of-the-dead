@@ -83,9 +83,12 @@ pot_take1:
 ; kit_add — far6 from new_game (bank 7), after ITEM_RAM is cleared and the hero
 ; slot is set: the start kit (game.md §8.11 Q10 / §4): WORN weapon + armour,
 ; the bag list by HERO_KIND (+ the DEBUG_KIT extras, rev 6 list, + the bow for
-; the Warrior). Ends with E_POT synced (bag_add).  Clobbers: A, BC, DE, HL.
+; the Warrior). Ends with E_POT synced (bag_add). 3E-T9: FOOD := FOOD_START.
+; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 kit_add:
+                ld   a, FOOD_START             ; 3E-T9: new_game zeroed ITEM_RAM (FED, timers 0)
+                ld   (FOOD), a
                 ld   a, (HERO_KIND)
                 ld   hl, kit_w
                 or   a

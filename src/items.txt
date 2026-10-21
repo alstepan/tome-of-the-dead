@@ -129,6 +129,11 @@ trap_found    | N | "TRAP FOUND: "
 tf_dart       | N | "DART"
 tf_gas        | N | "GAS"
 tf_alarm      | N | "ALARM"
+# hunger stage-change lines (3E-T9: the turn prints them: hunger6.asm hg_stage
+# via far1 it_line, type 0; game.md §8.11 (2))
+hg_hungry     | N | "YOU ARE HUNGRY"
+hg_weak       | N | "YOU ARE WEAK WITH HUNGER"
+hg_fed        | N | "YOU FEEL WELL FED"
 
 [stems_fx]
 # bank 0 (checked, not emitted)
@@ -139,10 +144,6 @@ spl_drain_heal | E:spl_drain_heal | "YOU FEEL HEALTHIER"
 key_found     | N | "YOU FIND THE LAIR KEY"
 teleported    | N | "YOU ARE TELEPORTED!"
 trap_bell     | N | "A BELL RINGS. NOTHING COMES"
-# hunger (printed by the turn, but a status result, not a trigger)
-hg_hungry     | N | "YOU ARE HUNGRY"
-hg_weak       | N | "YOU ARE WEAK WITH HUNGER"
-hg_fed        | N | "YOU FEEL WELL FED"
 # quick-use verbs and effect results (was the overlay set)
 drink         | N | "YOU DRINK THE "
 read          | N | "YOU READ THE "

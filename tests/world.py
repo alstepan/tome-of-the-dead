@@ -3431,6 +3431,7 @@ def w21_exits(p, check):
                     p.z.cmd("set-register PC=%d" % pc0)
                     p.settle(2)
                     hp0 = p.ent(0)["HP"]
+                    p.wb("HP_RG", 0)                   # 3E-T9: no FED HP regen in <= 8 turns
                     modes = set()
                     for _ in range(8):
                         if p.rb("CUR_ROOM") != r:
@@ -3787,6 +3788,7 @@ def main():
             def go(key, dest, tag, want_xy):
                 pn0 = split_frame(p.frame())[1]
                 t0 = p.rw("TURN_COUNTER")
+                p.wb("FOOD_TMR", 0)                    # 3E-T9: no FOOD burn (bar redraw) this turn
                 p.turn(key)
                 p.until(lambda: p.rb("CUR_ROOM") == dest and p.idle()
                         and p.rb("GAME_STATE") == GS_PLAYING, 600)
@@ -4065,6 +4067,7 @@ def main():
                 free_jump()
                 p.place(0, pit + 6 if left else pit - 6, y0, flags=HERO_R | (EF_LEFT if left else 0))
                 p.set_ent(0, HP=20)
+                p.wb("HP_RG", 0)                       # 3E-T9: no FED HP regen this turn
                 t0 = p.rw("TURN_COUNTER")
                 samples = []
                 ok = p.turn("K", "H" if left else "L",

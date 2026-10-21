@@ -54,7 +54,8 @@ def layout(check):
           == [((v & 7) << 5) for v in (2, 1, -1, -2, -3)])
     # ---- L3 ------------------------------------------------------------------
     fields = [("BAG", 60), ("WORN", 12), ("FOOD", 1),          # 3E rev 6: no FL_IST / ID_MAP / KNOWN
-              ("FOOD_TMR", 1), ("HSTAGE", 1), ("QPIN", 3), ("QS_CACHE", 3)]
+              ("FOOD_TMR", 1), ("HSTAGE", 1), ("HP_RG", 1), ("HW_TMR", 1),   # 3E-T9: the QPIN bytes
+              ("MP_HOLD", 1), ("QS_CACHE", 3)]
     a, ok = s["ITEM_RAM"], True
     for name, n in fields:
         ok &= s[name] == a
@@ -77,7 +78,7 @@ def layout(check):
     tl, tn = s["TRAP_LIST"], s["TRAP_N"]
     check("L3 trap list", tl == s["ROOM_DESC"] + 9 * 16 and tn == tl + 12 and tn < s["FLOOR_LIST"]
           and s["TRAP_MAX"] == 6 and s["TRAP_STRIDE"] == 2)
-    check("L3 QPIN left HERO_ST", not (s["HERO_ST"] <= s["QPIN"] < s["HERO_ST_END"]))
+    check("L3 hunger state (the old QPIN) outside HERO_ST", not (s["HERO_ST"] <= s["HP_RG"] < s["HERO_ST_END"]))
 
 
 def emu(p, check):
@@ -109,6 +110,7 @@ def emu(p, check):
     bag, worn = 0, S["WORN"] - lo
     want[bag:bag + 6] = bytes([S["IT_P_HEAL"], 1, 0, S["IT_F_APPLE"], 1, 0])
     want[worn:worn + 6] = bytes([S["IT_W_SHORT"], 1, 0, S["IT_A_LEATHER"], 1, 0])
+    want[S["FOOD"] - lo] = S["FOOD_START"]             # 3E-T9: kit_add
     check("R1 new_game zeroes ITEM_RAM + the start kit (T11)", mem(lo, n) == bytes(want), mem(lo, n).hex())
     bad = canaries()
     check("R1 the rest of the reserve untouched", not bad, bad[:16])
@@ -120,6 +122,14 @@ def emu(p, check):
     for _ in range(10):
         p.turn("WAIT")
     check("R2 turns played", (p.rw("TURN_COUNTER") - t0) & 0xFFFF >= 10)
+    # 3E-T9: every turn's hunger_turn owns FOOD .. MP_HOLD: the rest must stay the
+    # pattern through play; the whole block (hunger included) through the descent
+    h0, h1 = S["FOOD"] - lo, S["MP_HOLD"] + 1 - lo
+
+    def nohunger(b):
+        return b[:h0] + b[h1:]
+    check("R2 ITEM_RAM outside the hunger bytes kept by play", nohunger(mem(lo, n)) == nohunger(pat))
+    pat = mem(lo, n)
     d0 = p.rb("LVL_DEPTH")
     wt = S["wait_tick"]
     while p.pc() != wt:
@@ -143,7 +153,7 @@ def emu(p, check):
     p.tick(10)
     for _ in range(10):
         p.turn("WAIT")
-    check("R2 ITEM_RAM still kept after play", mem(lo, n) == got)
+    check("R2 ITEM_RAM still kept after play (hunger bytes aside)", nohunger(mem(lo, n)) == nohunger(got))
     bad = canaries()
     check("R2 the rest of the reserve untouched", not bad, bad[:16])
 

@@ -1375,7 +1375,8 @@ hero_fall:
 ; CF = 1: x = x_f, M_JUMP, JUMP_ARC = n (2 |x_f - x| airborne ticks) | D7 |
 ; FALL; a fall also runs hero_fall (y += 9, 1d4, landing conflicts) with the
 ; mode kept M_JUMP (anim plays the arc, then M_FALL). CF = 0: no turn.
-; Not modelled yet: 2 FOOD, Weak, frozen.
+; 3E-T9: the 2 FOOD are hunger_turn's (it sees JUMP_TURN == TURN_COUNTER at
+; the turn's end); WEAK (status or hunger) is refused before this (h_jump).
 ; Clobbers: all; IX = hero on return; TMP6 (dx), TMP7 (x_f).  Cold (once a turn).
 ;------------------------------------------------------------------------------
 try_jump:

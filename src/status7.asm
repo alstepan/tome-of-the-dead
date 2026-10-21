@@ -337,14 +337,14 @@ h_stumble:
 
 ;------------------------------------------------------------------------------
 ; h_jump — tpt_intent's jump, A = the E / W bits (try_jump's input), IX =
-; hero. WEAK: no jump (game.md §7 / §6.4: illegal, no turn, no line —
+; hero. WEAK (status or 3E-T9 hunger): no jump (game.md §7 / §6.4: illegal, no turn, no line —
 ; there is no string yet). CONFUSED and the roll: the other side (facing it
 ; first), illegal -> h_stumble.  Out: CF = 1 turn used.
 ;------------------------------------------------------------------------------
 h_jump:
                 ld   e, a
                 ld   a, (ST_FLAGS)
-                and  STS_WEAK
+                and  STS_WEAK | STS_HWEAK      ; 3E-T9: hunger WEAK too (§7 "no jump")
                 ret  nz                        ; (and: CF = 0)
                 call conf_roll
                 ld   a, e

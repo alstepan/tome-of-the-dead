@@ -27,7 +27,7 @@
 ; 0 = both status cells blank, as drawn here), then string E (TX_*, TX_NONE = none; B3B-13: was a
 ; pointer in DE) pushed to the log and everything
 ; queued drawn at once (panel_flush). The caller presents (present_full).
-; Placeholders until 3C/3E: FOOD bar full + "FED", no ammo, no
+; Placeholders until 3C/3E: (3E-T9: FOOD is item_food's now) no ammo, no
 ; info line, empty gear outlines; quick slots outlined except the potion slot
 ; (T_POTION glyph + count, the PROTO "POT n").  Clobbers: all but IX, IY.
 ; MEM-SND: the bank-2-only half (state reset, attr stamps, potion-slot scan)
@@ -50,17 +50,8 @@ panel_init:
                 ld   hl, label_drumstick
                 ld   bc, (STAT_ROW << 8) | FOOD_LBL_COL
                 call glyph8
-                                               ; (D3-9b: the MP bar is item_mp's, PD_MP set)
-                ld   bc, (STAT_ROW << 8) | FOOD_BAR_COL ; FOOD placeholder: full bar
-                call cell_bm
-                ld   a, 1
-                ld   d, a
-                call bars_draw
-                ld   hl, str_fed
-                ld   b, STAT_ROW
-                ld   e, HUNGER_COL * 8
-                call print6
-                ASSERT ((HUNGER_COL * 8) & 7) == 0 && HUNGER_COL * 8 + 6 * 3 <= 256  ; print6 x rule ("FED")
+                                               ; (D3-9b: the MP bar is item_mp's, PD_MP set;
+                                               ; 3E-T9: the FOOD bar + word item_food's, PD_FOOD)
                 ; rows 22-23: worn-gear outlines (the log attrs: panel_init7)
                 ld   c, GEAR_COL
 .gear:          push bc
@@ -319,6 +310,5 @@ bar_knight:     DB ICON_SWORD, ICON_POWER, ICON_WHIRL, ICON_DAGGERS, ICON_BOW
 bar_wizard:     DB ICON_STAFF, ICON_SPARK, ICON_FIREBOLT, ICON_FROST, ICON_DRAIN
                 DB ICON_LIGHTNING, SLOT_EMPTY, SLOT_POTION, SLOT_EMPTY, ICON_BAG
                 ASSERT bar_wizard - bar_knight == ICON_SLOTS && ICON_COUNT < SLOT_POTION
-str_fed:        DB "FED", 0
 
                 ASSERT ICON_LEN == 54 && ICON8_LEN == 9   ; pblit: 9 B per cell, <= 6 cells

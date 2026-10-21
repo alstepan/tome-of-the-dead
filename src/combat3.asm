@@ -42,7 +42,8 @@ kx_melee:
 ;      Power Strike +2, dagger +1). eva counts 0 against a target with a HOLD
 ;      effect (FROZEN / ASLEEP / STUNNED, §6.4). atk / eva: kind_tab (the
 ;      hero's columns carry the §4.1 level steps: xp_turn, D3-9b). D3-8: a WEAK hero attacks at -2 and
-;      his eva counts -1 (signed; §6.4 / §7).
+;      his eva counts -1 (signed; §6.4 / §7). 3E-T9: WEAK = status or hunger (STS_HWEAK, not
+;      stacked); a HUNGRY hero (HSTAGE) attacks at -1 (§7).
 ; Out: A = 1 hit (NZ) / 0 miss (Z). IX kept.
 ; RNG: exactly one d20 (the first draw of an attack, prototype §6.2 order).
 ; Clobbers: A, BC, DE, HL.   ~0.45k T (+0.1k for a non-held target's eva)
@@ -50,12 +51,17 @@ kx_melee:
 hit_roll:
                 ld   e, a                      ; E = target slot
                 ld   d, b                      ; D = modifier
-                ld   a, (ST_FLAGS)             ; D3-8: a WEAK hero (§6.4 / §7) attacks at -2
-                and  STS_WEAK                  ; (slot 0's WEAK first: 32 T when clear)
+                bit  EF_PLAYER_BIT, (ix+E_FLAGS) ; T9: the hero's hunger / WEAK penalties
                 jr   z, .nw
-                bit  EF_PLAYER_BIT, (ix+E_FLAGS)
-                jr   z, .nw
+                ld   a, (ST_FLAGS)             ; D3-8: a WEAK hero (§6.4 / §7) attacks at -2;
+                and  STS_WEAK | STS_HWEAK      ; 3E-T9: status or hunger WEAK, not stacked
+                jr   z, .nwk
                 dec  d
+                dec  d
+                jr   .nw
+.nwk:           ld   a, (HSTAGE)               ; 3E-T9: HUNGRY attacks at -1 (§7)
+                cp   HS_HUNGRY
+                jr   nz, .nw
                 dec  d
 .nw:            ld   c, 20
                 call rng_mod                   ; 0..19 (keeps C, DE)
@@ -75,7 +81,7 @@ hit_roll:
                 and  STS_HOLD
                 jr   nz, .cmp
                 ld   a, (hl)                   ; D3-8: WEAK (the hero only): eva - 1
-                and  STS_WEAK
+                and  STS_WEAK | STS_HWEAK      ; 3E-T9: or hunger WEAK (slot 0 only)
                 jr   z, .e0
                 dec  b
 .e0:            push ix
@@ -146,7 +152,7 @@ deal_hit:
                 ld   (dh_dmg), a
                 ld   b, 0                      ; B = a WEAK hero's extra DEF (D3-8f, game.md
                 ld   a, (ST_FLAGS)             ; §6.4.2 R1: -1 on the DEF path only; slot 0's
-                and  STS_WEAK                  ; WEAK first: ~30 T when clear). B survives
+                and  STS_WEAK | STS_HWEAK      ; WEAK first: ~30 T when clear; T9: + hunger). B survives
                 jr   z, .wk                    ; ent_ix to .rec (dh_dmg holds the roll)
                 bit  EF_PLAYER_BIT, (ix+E_FLAGS)
                 jr   z, .wk

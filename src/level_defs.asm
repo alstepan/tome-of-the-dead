@@ -588,7 +588,10 @@ ICON_SLOTS      EQU 10              ; slot i at cols 3i..3i+2, rows 18–19
 ICON_W          EQU 3
 ATTR_P_HP       EQU $42
 ATTR_P_MP       EQU $45
-ATTR_P_FED      EQU $44             ; FOOD bar + "FED" (stand-in stage until 3E)
+ATTR_P_FED      EQU $44             ; FOOD bar + stage word per HSTAGE (game.md §7; 3E-T9 item_food,
+ATTR_P_OK       EQU $46             ;   hunger6.asm hg_attr): FED / OK / HUNGRY / WEAK
+ATTR_P_HUNGRY   EQU $42
+ATTR_P_WEAK     EQU $42
 ATTR_LOG_OLD    EQU $07             ; row 22
 ATTR_LOG_NEW    EQU $47             ; row 23
 ATTR_P_GREY     EQU $07             ; greyed slot (concept-screen §5 icon states)
@@ -596,13 +599,14 @@ ATTR_P_SEL      EQU $08             ; OR: selected slot = PAPER blue
                 ASSERT LOG_ROW + 1 == 23 && (LOG_ROW & $18) == (23 & $18)   ; rows 22/23 share a bitmap third
 PD_HP_BIT       EQU 0
 PD_MP_BIT       EQU 1               ; D3-9b: item_mp (icons.asm); also polled (MP vs MP_SH)
+PD_FOOD_BIT     EQU 2               ; 3E-T9: item_food (hunger6.asm, R6; 1st frame only)
 PD_LOG_BIT      EQU 4
 PD_ICONS_BIT    EQU 5
 PD_INFO_BIT     EQU 6
 PD_DEPTH_BIT    EQU 7
                 ASSERT PD_HP == 1 << PD_HP_BIT && PD_LOG == 1 << PD_LOG_BIT
                 ASSERT PD_ICONS == 1 << PD_ICONS_BIT && PD_DEPTH == 1 << PD_DEPTH_BIT
-                ASSERT PD_INFO == 1 << PD_INFO_BIT && PD_MP == 1 << PD_MP_BIT
+                ASSERT PD_INFO == 1 << PD_INFO_BIT && PD_MP == 1 << PD_MP_BIT && PD_FOOD == 1 << PD_FOOD_BIT
 ; C3-3 info line fields (game.md §3.4: name chars 0-15, numbers 16-27, notes 28-41)
 INFO_NUM_COL    EQU 12              ; char 16 = 96 px
 INFO_NOTE_COL   EQU 21              ; char 28 = 168 px

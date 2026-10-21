@@ -208,7 +208,8 @@ QS_COUNT        EQU 3
 ; Hunger (game.md §7). FOOD 0..FOOD_MAX, start FOOD_START; -1 per
 ; FOOD_PERIOD turns (FOOD_TMR counts them), a jump -FOOD_JUMP extra; never
 ; fatal. HSTAGE = the stage derived from FOOD (HS_FED = 0, so a zeroed block
-; reads FED). Written by T9; new_game zeroes all three (T9 sets FOOD_START).
+; reads FED). Written by T9 (src/hunger6.asm, R6); new_game zeroes all three,
+; kit_add then sets FOOD_START.
 ;------------------------------------------------------------------------------
 FOOD_MAX        EQU 100
 FOOD_START      EQU 80
@@ -221,6 +222,11 @@ HS_WEAK         EQU 3
 HS_OK_BELOW     EQU 50              ; FOOD < 50 -> OK
 HS_HUNGRY_BELOW EQU 25              ; FOOD < 25 -> HUNGRY
 HS_WEAK_BELOW   EQU 10              ; FOOD < 10 -> WEAK
+HP_REG_FED      EQU 12              ; FED: HP +1 per 12 turns (§7)
+HW_REPEAT       EQU 50              ; WEAK: the line again every 50 turns (§8.11 (2))
+; Hunger-WEAK = ST_FLAGS slot 0 bit STS_HWEAK_BIT (combat_defs.asm), kept equal to
+; HSTAGE == HS_WEAK by hunger_turn: every WEAK test masks STS_WEAK | STS_HWEAK
+; (same effects, never stacked; no timer, no icon, Cure leaves it).
 
 ;------------------------------------------------------------------------------
 ; ITEM_RAM — the 3E runtime item block. Bank 5 $5D00.., the BASIC area freed
@@ -237,9 +243,12 @@ WORN            EQU BAG + BAG_SLOTS * IR_STRIDE ; WORN_SLOTS x IR_STRIDE  (kept)
 FOOD            EQU WORN + WORN_SLOTS * IR_STRIDE   ; 0..FOOD_MAX                          (kept)
 FOOD_TMR        EQU FOOD + 1                    ; turns since the last burn                (kept)
 HSTAGE          EQU FOOD_TMR + 1                ; HS_*                                     (kept)
-QPIN            EQU HSTAGE + 1                  ; QS_COUNT: pinned type per quick slot, IT_NONE = auto (kept;
-                                                ;   was HERO_ST + 29 since C3-0, never used)
-QS_CACHE        EQU QPIN + QS_COUNT             ; QS_COUNT: the type each quick slot shows, IT_NONE = grey (kept)
+; 3E-T9: the 3 QPIN bytes (QUICK pin cut, game.md §8.11 Q3; never used) = hunger state
+HP_RG           EQU HSTAGE + 1                  ; FED HP regen turn counter 0..HP_REG_FED-1     (kept)
+HW_TMR          EQU HP_RG + 1                   ; turns since the last WEAK line 0..HW_REPEAT-1  (kept)
+MP_HOLD         EQU HW_TMR + 1                  ; != 0: xp_turn skips MP regen this turn (hunger_turn
+                                                ;   writes it every turn, just before xp_turn)
+QS_CACHE        EQU MP_HOLD + 1                 ; QS_COUNT: the type each quick slot shows, IT_NONE = grey (kept)
 ITEM_RAM_END    EQU QS_CACHE + QS_COUNT
 ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 81
                 ASSERT ITEM_RAM_LEN == 81

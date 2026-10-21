@@ -184,7 +184,8 @@ LAST (`r6_blobs`), run by `ovl_run` with C = `BANK_R6`.
 | `$E500` `r6_code` | 602 / 584 | `pickup6.asm` (was bank-3 `pickup3.asm`): `pot_sync`, `pu_add`, `pot_take1`, `kit_add` (+ kit lists; the `DEBUG_KIT` extras are the 18-B difference), `mon_drop`, `drop_put` + `dp_*` (5 B, written in play), `drop_tab`, `uniq_tab`; then `bag6.asm` (was `bag3.asm`, `BAG6_LEN` 187): `bag_add`, `bag_find`, `bag_take`, **3E-T13 `bag_discard` (+20)**, `bag_pick` |
 | `$E75A` `ovl_page_zx0` | **1,182** (3E-T13; was 328) | the bag page stream (`BANK_OVL_PAGE`; was bank 1) |
 | `$EBF8` `ovl_items_zx0` | 881 | the T6 item / trap generator stream (`BANK_OVL_ITEMS`; was bank 1) |
-| `$EF69` `r6_end` .. `$FFFF` | **4,247 free** (release 4,265; before 3E-T13: 5,121 / 5,139) | `R6_FREE` (build DISPLAY) |
+| (code, after `bag6`) | 310 code+data | **3E-T9** `hunger6.asm`: `hunger_turn`, `food_sub` / `food_dirty`, `hunger_add`, `hg_stage` / `hg_line`, `item_food`, `hg_attr` (4 B) — see "3E-T9" |
+| `$EF69` `r6_end` .. `$FFFF` | **3,937 free** (kit; after 3E-T9 hunger + T13 page; release ≈ 3,955; before T13: 5,121 / 5,139) | `R6_FREE` (build DISPLAY) |
 
 Callers: bank 7 `floor_pickup` → far6 `pu_add`, `ic_quaff` → far6
 `bag_find` / `pot_take1`, `new_game` → far6 `kit_add` (each +12 T vs far3,
@@ -1307,7 +1308,8 @@ the input tick. `HUD4_EXT`/`HUD4_PW` (rows 20..23, one page, ASSERTed),
   (greyed `$07` at 0; stand-in for the PROTO "POT n"); depth `Dn` at (30, 18)
   (`LVL_DEPTH`, PROTO 0 → `D1`); row 20 blank (info line: 3C); row 21 heart /
   HP bar (cols 1–4) + 2-digit number (5–6) `$42`, drop / MP bar empty (3C)
-  `$45`, drumstick / FOOD bar full + `FED` `$44` (3E), no ammo; rows 22–23 log
+  `$45`, drumstick / FOOD bar + stage word (3E-T9: `item_food`, R6, fill FOOD / 100, word +
+  attr by `HSTAGE`: FED `$44` / OK `$46` / HUNGRY `$42` / WEAK `$42`), no ammo; rows 22–23 log
   (cols 0–23, `$07` / `$47`) + 4 empty gear outlines (cols 24–31, `$01`).
 - `print6` (B3B-11b "quad" printer, `src/panel_hot.asm`; HL string, B row,
   E pixel x **multiple of 8**): 4 chars = 3 bytes per pixel line composed in
@@ -2225,8 +2227,10 @@ are derived from them, never stored. `ST_X` stays unused (spare).
   (D3-8f, R2):** chance roll → (1) immunity mask (+ boss SLEEP / FEAR) →
   `IS UNAFFECTED`, stop → (2) R halves → (3) boss halves → 0: silent →
   self-Frost 1 → (4) held body / HOLD_GUARD: silent;
-  "no MP regen": D3-9b `xp_turn` freezes `MP_RG` while slot 0 is WEAK; the hunger WEAK (3E) must
-  share these tests (not cumulative) and gate the regen too.
+  "no MP regen": D3-9b `xp_turn` freezes `MP_RG` while slot 0 is WEAK. **3E-T9:** the hunger
+  WEAK is `ST_FLAGS` slot 0 bit 7 `STS_HWEAK` (no timer / icon / tint; Cure keeps it), synced to
+  `HSTAGE == HS_WEAK` by `hunger_turn`; every WEAK test masks `STS_WEAK | STS_HWEAK` (not
+  cumulative): `hit_roll` ×2, `deal_hit`, `h_jump`; `xp_turn` reads `MP_HOLD` instead ("3E-T9").
 - **Step:** `st_step` (bank 7, `src/status7.asm`; IX = entity, A = slot → L =
   1 held): POISON −1 (new value ≡ 0 mod 3 incl. 0: −1 HP, never below 1, a
   sleeper wakes), WEAK / MIND −1, HOLD −1 + skip (FROZEN / STUNNED ending → HOLD_GUARD),
@@ -2490,7 +2494,9 @@ moved SP; one page; not on tape, garbage before `new_game`):
 | `$5D48` | `FOOD` | 1 | game (0 after `new_game`; T9 sets `FOOD_START` 80) |
 | `$5D49` | `FOOD_TMR` | 1 | game (turns since the last burn, period `FOOD_PERIOD` 6) |
 | `$5D4A` | `HSTAGE` | 1 | game (`HS_FED` 0 / `OK` / `HUNGRY` / `WEAK`; thresholds 50 / 25 / 10) |
-| `$5D4B` | `QPIN` | 3 | game (pinned type per quick slot `QS_FOOD` / `QS_POTION` / `QS_SCROLL`; moved from `HERO_ST` +29, never used there) |
+| `$5D4B` | `HP_RG` | 1 | game (3E-T9, was `QPIN` byte 0 — the QUICK pin is cut, §8.11 Q3: FED HP regen turn counter 0..11) |
+| `$5D4C` | `HW_TMR` | 1 | game (3E-T9: turns since the last WEAK hunger line, 0..49; `$FF` on entering WEAK) |
+| `$5D4D` | `MP_HOLD` | 1 | per turn (3E-T9: written by `hunger_turn` right before `xp_turn`, which skips MP regen when != 0) |
 | `$5D4E` | `QS_CACHE` | 3 | game (the type each quick slot shows; `IT_NONE` = grey) |
 
 Cleared by **`new_game`** only (bank 7, `boot7.asm`: 9-B `inc l` loop, ~2.1k T (81 B),
@@ -2686,6 +2692,39 @@ descent carry is gone). So the readers did not change: `icon_poll` / `icon_state
 `MAX_POTIONS` has no engine user (a test name only); `IT_POTION` (1) stays: the
 PROTO rooms and the 3B levelgen step still write it (levelgen parity; the items
 overlay retypes generated ones), and `pu_add` takes it as a Heal potion.
+
+**3E-T9 hunger** (`feat/3e-t9-hunger`; `tests/hunger.py`; game.md §7, §8.11 (2)).
+- **R6 `src/hunger6.asm`** (far6 only; r6.asm rules). `hunger_turn` (end_turn, bank 7: `ld hl,
+  hunger_turn / call far6` right before `jp xp_turn`, not when DYING): (1) jump this turn
+  (`JUMP_TURN == TURN_COUNTER`: try_jump stored counter + 1, end_turn incremented since; 0 B
+  outside R6) -> FOOD −2; (2) `FOOD_TMR` +1, at `FOOD_PERIOD` 6 (12 with `IT_C_PLENTY` /
+  `IT_C_SCARAB` in `WORN` charm) -> 0, FOOD −1; floor 0, never fatal; (3) `hg_stage`; (4) FED:
+  `HP_RG` +1, at 12 HP +1 (to MAXHP); WEAK: `HW_TMR` +1, at 50 the WEAK line again; (5)
+  `MP_HOLD` = WEAK (status or hunger) ? != 0 : HUNGRY ? `TURN_COUNTER` bit 0 : 0.
+  `hg_stage`: `HSTAGE` from FOOD (50 / 25 / 10), `STS_HWEAK` := WEAK, on a change `PD_FOOD`
+  + at most one line through far1 `it_line` (A = 0, E = `S3_HG_*`): down into HUNGRY / WEAK,
+  up into FED; into OK and WEAK -> HUNGRY none. `hunger_add` (**T12 EAT API**: A = amount,
+  far6; FOOD capped at 100, then `hg_stage`; the `NO NEED` refusal at 100 is the caller's).
+  `item_food` (panel FOOD item): bar (FOOD / 100, cols 15–18), bank-0 `hg_*` word padded to 6
+  (cols 19–23), the stage attr over cols 15–23, `pmark_rect`. `kit_add` sets `FOOD_START` 80.
+- **Lines:** `hg_hungry` / `hg_weak` / `hg_fed` moved from `[stems_fx]` to `[stems_resident]`
+  in `src/items.txt` (bank-1 `it_stems`, +58 B; the bank-0 `hg_*` are the 1-word panel stage
+  names, there is no bank-0 line text to reuse).
+- **Penalties (all read where they apply; nothing for T8's `hero_recalc`):** `hit_roll`
+  (bank 3) hero attacker: WEAK (either) atk −2, else HUNGRY atk −1; target eva −1 and
+  `deal_hit` dmg −1 with `STS_WEAK | STS_HWEAK`; `h_jump` (bank 7) refuses the jump; `xp_turn`
+  regen gate = `MP_HOLD` (HUNGRY: `MP_RG` advances on even turns only = period ×2; WEAK:
+  frozen); FED HP regen in `hunger_turn`. Not hunger: Amulet of Mana / Scarab MP regen ×2 stays
+  TODO(T8).
+- **Panel:** `panel_more` (bank 2) draws `PD_FOOD` in a tick's 1st frame only (before INFO;
+  `far6 item_food`); `panel_init7` queues `PD_FOOD` per level (the bank-3 full-bar + "FED"
+  placeholder and `str_fed` are gone).
+- **Ledger** (DISPLAY, kit / release; before = main `ab2bb89`): R6 code 582 → 892 / 564 → 874
+  (free 5,121 → 4,811 / 4,829); bank 7 22 → 17 / 72 → 67 (end_turn +6, xp_turn −1; `h_jump`
+  mask 0 B); bank 3 603 → 619 (placeholder −~20, `hit_roll` HUNGRY +~9); bank 2 `kind_tab` pad
+  68 → 57 (`panel_more`); bank 1 1,300 → 1,242 (the 3 lines); low RAM unchanged (93 / 103).
+- **Time** (`tests/hunger.py` T1, incl. far6): `hunger_turn` ~0.87k T plain, ~0.96k with a burn,
+  ~3.6k with a stage line; `item_food` ~8.5k (1st frame only).
 
 ### Phase-locked walk shifts (2026-10-21, `PHASE_SHIFT` default 1)
 

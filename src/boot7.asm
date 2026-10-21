@@ -46,7 +46,7 @@ panel_init7:
                                                ; first floor_pickup of a level has no span
                 ld   (LVL_SH), a               ; level digit: never drawn
                 ld   (ICON_SIG), a             ; (no real signature is $FF)
-                ld   a, PD_HP | PD_MP | PD_ICONS | PD_DEPTH | PD_INFO
+                ld   a, PD_HP | PD_MP | PD_ICONS | PD_DEPTH | PD_INFO | PD_FOOD   ; 3E-T9: FOOD bar + word
                 ld   (PANEL_DIRTY), a
                 ; C3-3: the icon bar is drawn by item_icons (icon_state vs
                 ; ICON_SH): every slot "never drawn" -> slot_redraw each
