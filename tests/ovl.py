@@ -127,10 +127,12 @@ def run(p, check):
     raw, res_off = test_overlay()
     n = len(raw)
     packed1 = zx0_pack(raw)
-    tail = S["ovl_blobs_end"]
-    check("O1 packed self-test overlay fits the free bank-1 tail", tail + len(packed1) <= 0x10000)
-    bank_write(p, S["BANK_UI1"], tail, list(packed1))
-    code = stub_code(S["BANK_COLD3"], tail, S["BANK_UI1"], 0x4321, True)
+    # R6 (2026-10-21): O1 streams from the free R6 tail (bank 6, C = BANK_R6),
+    # like the page / items overlays now; O2 from the free bank-1 tail
+    tail = S["r6_end"]
+    check("O1 packed self-test overlay fits the free R6 tail", tail + len(packed1) <= 0x10000)
+    bank_write(p, S["BANK_R6"], tail, list(packed1))
+    code = stub_code(S["BANK_COLD3"], tail, S["BANK_R6"], 0x4321, True)
     before = ram128(p)
     pc0 = p.pc()
     ok = p.run_stub(code, org=STUB)
@@ -150,7 +152,7 @@ def run(p, check):
           "screen bit kept", (r[8] & 7, r[8] & 0x18) == (S["BANK_COLD3"], sh0 & 0x18), (hex(r[8]), hex(sh0)))
     check("O1 GEN_ZBLK cleared (stale key $FFFF poked before)", p.rw("GEN_ZBLK") == 0, p.rw("GEN_ZBLK"))
     win = (lin(S["GEN_SCRATCH"]), lin(S["GEN_SCRATCH"]) + n)
-    blob = (lin(tail, S["BANK_UI1"]), lin(tail, S["BANK_UI1"]) + len(packed1))
+    blob = (lin(tail, S["BANK_R6"]), lin(tail, S["BANK_R6"]) + len(packed1))
     bad = diffs(before, after, [win, stack, stub_r, zblk, blob])
     check("O1 nothing else in the 128K RAM changed (window, stub, GEN_ZBLK, stack aside; DI)",
           bad == [], [hex(x) for x in bad[:12]])
@@ -170,7 +172,7 @@ def run(p, check):
             big.extend(rnd.randrange(256) for _ in range(rnd.randrange(1, 12)))
     big = bytes(big[:L])
     packed = zx0_pack(big)
-    tail = S["ovl_blobs_end"]
+    tail = S["bank1_end"]
     check("O2 packed blob fits the free bank-1 tail", tail + len(packed) <= 0x10000,
           (hex(tail), len(packed)))
     bank_write(p, S["BANK_UI1"], tail, list(packed))
@@ -199,6 +201,31 @@ def run(p, check):
     p.z.cmd("set-register PC=%d" % pc0)
 
 
+def alloc_r6(p, check):
+    """R1 (R6, 2026-10-21): the pool allocator stops at R6_ADDR in bank 6 (the
+    permanent R6 region above it) and still fills banks 0 / 4 up to $10000."""
+    p.load()
+    p.wait_state(GS_SELECT)
+    idx, ptr, al = S["ALLOC_IDX"], S["ALLOC_PTR"], S["alloc"]
+
+    def case(i, at, n):
+        code = ([0x3E, i, 0x32] + w(idx) + [0x21] + w(at) + [0x22] + w(ptr) +
+                [0x01] + w(n) + [0xCD] + w(al) + [0xF5, 0x22] + w(RES) + [0xE1, 0x22] + w(RES + 2))
+        ok = p.run_stub(code, org=STUB)
+        r = p.z.read_memory(RES, 4)
+        return ok, r[0] | r[1] << 8, r[3], r[2] & 1, p.rb("ALLOC_IDX"), p.rw("ALLOC_PTR")
+    r6 = S["R6_ADDR"]
+    check("R1 bank 6: an allocation ending exactly at R6_ADDR fits (bank 6, ptr -> R6_ADDR)",
+          case(2, r6 - 100, 100) == (True, r6 - 100, S["BANK_R6"], 0, 2, r6), case(2, r6 - 100, 100))
+    got = case(2, r6 - 100, 101)
+    check("R1 bank 6: one byte into R6 = pool full (CF, ALLOC_IDX 3)", got[0] and got[3:5] == (1, 3), got)
+    check("R1 bank 4: an allocation ending exactly at $10000 fits, next bank opens",
+          case(1, 0xFF00, 0x100) == (True, 0xFF00, S["BANK_POOL1"], 0, 2, 0xC000), case(1, 0xFF00, 0x100))
+    got = case(0, 0xFF00, 0x101)
+    check("R1 bank 0: past $10000 -> the next bank (4) from $C000",
+          got == (True, 0xC000, S["BANK_POOL1"], 0, 1, 0xC101), got)
+
+
 def main():
     fails = []
     with Harness() as h:
@@ -212,6 +239,7 @@ def main():
                     print(f"[detail] {tag}: {str(detail)[:600]}", flush=True)
 
         run(p, check)
+        alloc_r6(p, check)
         print(f"ovl: {len(fails)} failed" + (f": {fails[:10]}" if fails else ""), flush=True)
         return 1 if fails or h.failures else 0
 

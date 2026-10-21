@@ -1053,7 +1053,7 @@ pause_copy:     ld   (pc_dir), a
 ;------------------------------------------------------------------------------
 ; page_ovl — 3E-T2: far1 from page_run (low RAM; screen 2 = the backup, shown):
 ; the page state (PAGE_N, PAGE_OPEN), ROOM_MAP -> PAGE_MAP_SAVE, then unpack
-; the bag page overlay (bank-1 stream ovl_page_zx0) into GEN_SCRATCH
+; the bag page overlay (R6 stream ovl_page_zx0) into GEN_SCRATCH
 ; (PAGE_ORG) and run it there with bank 1 paged (ovl_run hands the caller's
 ; bank, 1, on). The page is NOT a pause: music and effects play on (no
 ; SND_HOLD; user 2026-10-20).
@@ -1071,8 +1071,8 @@ page_ovl:       ld   hl, PAGE_N
                 ld   de, PAGE_MAP_SAVE
                 ld   bc, PLAY_CELLS
                 ldir
-                ld   hl, ovl_page_zx0
-                ld   c, BANK_UI1
+                ld   hl, ovl_page_zx0          ; R6 stream (BANK_OVL_PAGE = BANK_R6)
+                ld   c, BANK_OVL_PAGE
                 ld   de, PAGE_ORG
                 jp   ovl_run
 page_post:      ld   hl, PAGE_MAP_SAVE

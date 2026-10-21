@@ -2,7 +2,7 @@
 ; pickup7.asm — D3-7, bank 7 (bank7.asm rules: no data, no SMC): the
 ; end-of-turn floor pickup, list-driven (T6): dropped daggers / arrows
 ; (IT_DAGGER / IT_ARROW stacks, game.md §6.3) and, since 3E-T11, every bag
-; item (pu_add, bank-3 pickup3.asm). Shared cells (§6.3): every
+; item (pu_add, R6 pickup6.asm). Shared cells (§6.3): every
 ; entry under the hero is taken by its own rule, and the cell is re-stamped
 ; with the last live entry left there (ap_stamp).
 ;==============================================================================
@@ -21,7 +21,7 @@ ARROWS_MAX      EQU 24
 ;     FL_EMPTY, a remainder stays (FL_QTY -= n) and prints "QUIVER FULL"
 ;     (also when n = 0) (ap_take);
 ;   every other type (3E-T11: potions incl. the legacy IT_POTION = Heal,
-;     food, scrolls, book, bow, gear): pu_add (bank 3) -> BAG; taken ->
+;     food, scrolls, book, bow, gear): pu_add (R6) -> BAG; taken ->
 ;     "YOU PICK UP <name>", the cell re-stamped; bag full -> it stays,
 ;     "BAG FULL" once per arrival.
 ; Arrival (BAG FULL only; game.md §8.11 rulings 4): an item's col that was
@@ -32,7 +32,7 @@ ARROWS_MAX      EQU 24
 ; Clobbers: all but IY (IX = hero on return).
 ; ~0.5k T a turn with no item glyph under the body (T7 pre-filter), else ~3k T
 ; (the 32-entry scan) + ~3-6k T per ammo entry, ~6k T + ap_stamp (~4-9k T) per
-; bag pickup (far3 pu_add: bag_add + pot_sync + name + log)
+; bag pickup (far6 pu_add: bag_add + pot_sync + name + log)
 ;------------------------------------------------------------------------------
 floor_pickup:
                 ld   ix, P_ENTITIES
@@ -111,8 +111,8 @@ floor_pickup:
                 call z, ap_take                ; A = 0 daggers / 1 arrows
                 jr   .nx
 .bag:           ld   a, (hl)
-                ld   hl, pu_add                ; bank 3: bag_add + the line; L = 1 taken
-                call far3                      ; / 0 refused (bag full)
+                ld   hl, pu_add                ; R6: bag_add + the line; L = 1 taken
+                call far6                      ; / 0 refused (bag full)
                 dec  l
                 pop  hl
                 pop  de
@@ -263,7 +263,7 @@ ap_take:
 ; (item_glyph), else T_AIR; redrawn next render + the attr shadow
 ; (shadow_rect leaves bank 7 paged: our bank), then the room's floor inks
 ; over the shadow (fl_attr_sh: the cell left falls back to TILE_ATTRS of
-; its tile). ap_stamp_a: the col in A (3E-T11: far7 from drop_put, bank 3:
+; its tile). ap_stamp_a: the col in A (3E-T11: far7 from drop_put, R6:
 ; far7 passes A and DE in, not BC).  Clobbers: all but IX, IY.
 ap_stamp_a:
                 ld   c, a

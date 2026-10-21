@@ -36,7 +36,7 @@ BAG, SLOTS, STRIDE = S["BAG"], S["BAG_SLOTS"], S["IR_STRIDE"]
 IT = {k[3:]: v for k, v in S.items() if k.startswith("IT_") and isinstance(v, int)}
 IT_COUNT, BAG_LO = S["IT_COUNT"], S["IT_BAG_LO"]
 GUARD_IX, GUARD_IY = 0x1357, 0x2468
-BANK1, BANK3 = S["BANK_UI1"], S["BANK_COLD3"]
+BANK1, BANK3 = S["BANK_UI1"], S["BANK_R6"]   # R6: the bag helpers moved to bank 6 (bag6.asm)
 DEST = S["MSG_BUF"]
 FILL = 0x21
 
@@ -242,7 +242,7 @@ def main():
         ts_add = p.ts
         print("  T incl. stub (~0.3k): bag_add full-scan %d, bag_take shift-19 %d, bag_pick scrolls absent %d" %
               (ts_add, ts_shift, ts_pick))
-        print("  bytes: item_name %d (bank 1), bag helpers %d (bank 3)" % (S["ITEM_NAME_LEN"], S["BAG3_LEN"]))
+        print("  bytes: item_name %d (bank 1), bag helpers %d (R6)" % (S["ITEM_NAME_LEN"], S["BAG6_LEN"]))
         return 1 if h.failures else 0
 
 

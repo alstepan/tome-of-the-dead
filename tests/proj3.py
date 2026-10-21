@@ -150,7 +150,7 @@ class Rng:
                 return v
 
 
-# ---- 3E-T11 mon_drop (pickup3.asm): the drop chance on the gameplay RNG ----------
+# ---- 3E-T11 mon_drop (pickup6.asm, R6): the drop chance on the gameplay RNG ----------
 # drop_tab first match by kind (the defs.asm stand-in aliases: K_ORC / K_NECRO =
 # Goblin, K_ARCHER = Skeleton): Rat 1/4, Goblin 1/4, Skeleton (archer) arrows
 # 1/2 in a Warrior run only (no roll for the Mage). EF_RESPAWN and the hero:

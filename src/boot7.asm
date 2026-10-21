@@ -163,8 +163,8 @@ new_game:
                 ld   hl, init_ent_common       ; bank 3 (shared with spawn_one /
                 call far3                      ; level_populate; IX passes in)
                 call hero_st_init              ; C3-2 (intent7.asm, this bank)
-                ld   hl, kit_add               ; 3E-T11: worn + bag start kit (bank 3;
-                call far3                      ; E_POT = its potions via pot_sync)
+                ld   hl, kit_add               ; 3E-T11: worn + bag start kit (R6;
+                call far6                      ; E_POT = its potions via pot_sync)
                 ld   a, (proto_start)
                 or   a
                 jr   nz, .proto

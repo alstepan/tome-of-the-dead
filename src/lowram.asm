@@ -15,7 +15,7 @@
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; start — .tap entry (RANDOMIZE USR start): pull the seven headerless blocks
+; start — .tap entry (RANDOMIZE USR start): pull the eight headerless blocks
 ; off tape with the ROM loader, in `tape_tab` order (3E-T1: one table-driven
 ; loop, was one 15-20 B stanza per block): bank 1 = sources + vdata + UI code;
 ; bank 3 = source tail + bank-3 cold code; A8: bank 3 AY slot at AY_RESERVE;
@@ -23,7 +23,8 @@
 ; nothing there is live yet: screen 2 is not shown, the 128 editor's bank-7
 ; workspace is abandoned with BASIC; D3-TX: the text block at the bottom of
 ; bank 0 — check_paging's probe byte there is overwritten; 3E-T1: the boot
-; block at the top of bank 6 (boot6.asm). Then boot. The .sna enters at boot.
+; block in bank 6 (boot6.asm, below R6); R6: the R6 region at the top of
+; bank 6 (r6.asm, permanent). Then boot. The .sna enters at boot.
 ; Runs under the ROM IM1 ISR (LD-BYTES ends with EI; IY = $5C3A here): boot
 ; installs IM 2. A tape error rewinds and retries the same block.
 ;------------------------------------------------------------------------------
@@ -1889,7 +1890,16 @@ alloc_restore:
                 ret
 
 ; alloc — reserve BC bytes. Out: A = bank, HL = addr, CF = 1 if the pool is full.
+; R6: in bank 6 (index 2, the last) the pool ends at R6_ADDR (the permanent
+; R6 region above it): an allocation that would pass it overflows the pool.
 ; Clobbers: A, DE, HL
+;------------------------------------------------------------------------------
+alloc_next:                                    ; this bank is full: next bank, retry
+                pop  hl
+                ld   hl, ALLOC_IDX
+                inc  (hl)
+                ld   hl, BANK_WINDOW
+                ld   (ALLOC_PTR), hl
 alloc:
                 ld   a, (ALLOC_IDX)
                 cp   3
@@ -1897,18 +1907,15 @@ alloc:
                 ret  c                         ; out of banks
                 ld   hl, (ALLOC_PTR)
                 push hl
-                add  hl, bc                    ; end = ptr + size
-                jr   nc, .fits                 ; <= $FFFF
-                ld   a, h
-                or   l
-                jr   z, .fits                  ; exactly $10000 also fits
-                pop  hl
-                ld   hl, ALLOC_IDX              ; next bank, retry
-                inc  (hl)
-                ld   hl, BANK_WINDOW
-                ld   (ALLOC_PTR), hl
-                jr   alloc
-.fits:
+                dec  hl
+                add  hl, bc                    ; HL = end - 1; CF <=> end > $10000
+                jr   c, alloc_next
+                cp   2                         ; (A = idx) bank 6: the pool ends at R6_ADDR
+                jr   nz, .ok
+                ld   a, h                      ; end - 1 < R6_ADDR <=> H < HIGH R6_ADDR
+                cp   HIGH R6_ADDR              ; (LOW R6_ADDR = 0, ASSERTed in defs.asm)
+                jr   nc, alloc_next            ; into R6: next bank = 3 = the pool is full
+.ok:            inc  hl                        ; HL = end ($10000 -> 0: handled below)
                 ld   (ALLOC_PTR), hl
                 ld   a, (ALLOC_IDX)
                 ld   e, a

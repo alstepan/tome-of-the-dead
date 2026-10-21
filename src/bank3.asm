@@ -493,7 +493,8 @@ level_populate:
                 ld   (ix+E_ROOM), a
                 ld   a, (HERO_KIND)
                 ld   (ix+E_KIND), a
-                call pot_sync                  ; 3E-T11: E_POT = the bag's potions (was a carry)
+                ld   hl, pot_sync              ; 3E-T11: E_POT = the bag's potions (was a carry);
+                call far6                      ; R6 (keeps DE, IX; HL / BC clobbered, popped next)
                 pop  bc
                 ld   a, c
                 or   EF_ACTIVE | EF_PLAYER
@@ -1002,5 +1003,5 @@ decor_room:
                 INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
                 INCLUDE "rank3.asm"            ; D3-7: abil_load (ABIL_DESC for the bank-7 ability code)
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing
-                INCLUDE "pickup3.asm"          ; 3E-T11: pu_bag, pot_quaff, kit_add, mon_drop / drop_put
-                INCLUDE "bag3.asm"             ; 3E-T10: bag_add / bag_find / bag_take / bag_pick
+                ; R6 (2026-10-21): pickup3.asm / bag3.asm moved to the R6 region (r6.asm:
+                ; pickup6.asm, bag6.asm), reached through far6

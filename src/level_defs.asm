@@ -182,7 +182,7 @@ DOOR_PLANK_H    EQU 6
 ; glyph (item_glyph, lowram.asm; 3E-T6) of the LAST live entry of that cell
 ; in list order, with its item_ink(type) (fl_attr) in the screen / attr shadow. Kept by build_room_map (stamps every entry), ap_stamp
 ; (re-stamps a cell after any pickup), decor landing on T_AIR only, and the
-; 3E-T11 drops (drop_put, pickup3.asm: a T_AIR cell only, then ap_stamp_a).
+; 3E-T11 drops (drop_put, R6 pickup6.asm: a T_AIR cell only, then ap_stamp_a).
 ; Any new writer of an entry (§6.3 ammo landing) or of row 9s+7 must keep it. Checked: tests/gfx_integrity.py floor_check (D1..D8, entry + play).
 ;------------------------------------------------------------------------------
 FLOOR_MAX       EQU 32

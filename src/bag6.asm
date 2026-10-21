@@ -1,8 +1,9 @@
 ;==============================================================================
-; bag3.asm — 3E-T10 bag helpers, bank 3 (INCLUDEd last by bank3.asm). Reached
-; by far3 from bank 7 or called directly by bank-3 code / overlays running with
-; bank 3 paged. BAG ($5D00, bank 5) is always mapped, so nothing here pages.
-; Callers since 3E-T11: pickup3.asm (pu_bag, pot_quaff, kit_add). IX / IY are never touched; no EXX.
+; bag6.asm — 3E-T10 bag helpers (R6: was bank-3 bag3.asm), the R6 region
+; (r6.asm, bank 6). Reached by far6 from any bank (results in BC / DE / HL
+; only: far6 clobbers A, F — bag_find's C = 0 when absent) or called directly
+; by R6 code. BAG ($5D00, bank 5) is always mapped, so nothing here pages.
+; Callers since 3E-T11: pickup6.asm (pu_add, pot_take1, kit_add, pot_sync). IX / IY are never touched; no EXX.
 ;
 ; BAG invariant (kept by these helpers): records are packed from slot 0 (a
 ; free slot, TYPE IT_NONE, is followed only by free slots), so the order is
@@ -170,5 +171,5 @@ bag_pick:
                 ret
                 ASSERT (BAG & $FF) == 0 && BAG_SLOTS * IR_STRIDE <= 60
                 ASSERT IT_FOOD_LO == IT_BAG_LO && IT_SCR_HI + 1 == IT_BOOK
-bag3_end:
-BAG3_LEN        EQU bag3_end - bag_add
+bag6_end:
+BAG6_LEN        EQU bag6_end - bag_add

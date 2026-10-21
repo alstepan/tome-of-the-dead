@@ -1,9 +1,12 @@
 ;==============================================================================
-; pickup3.asm — 3E-T11, bank 3 (INCLUDEd by bank3.asm before bag3.asm): the
-; bag side of the floor pickup, the potion quick slot, the start kit, and the
-; monster drops (game.md §8.11 "3E pickup/drop rulings", Q10, Q11).
-; Entered by far3 from bank 7 (pu_bag, pot_quaff, kit_add) or called by
-; bank-3 code (mon_drop from deal_hit). BAG / FLOOR_LIST / ROOM_MAP are bank 5.
+; pickup6.asm — 3E-T11 (R6: was bank-3 pickup3.asm), the R6 region (r6.asm,
+; bank 6; INCLUDEd before bag6.asm): the bag side of the floor pickup, the
+; potion quick slot, the start kit, and the monster drops (game.md §8.11 "3E
+; pickup/drop rulings", Q10, Q11). Entered by far6 only: from bank 7 (pu_add,
+; pot_take1, kit_add), bank 3 (mon_drop from deal_hit: R6 is paged OVER bank 3
+; meanwhile — nothing here touches bank-3 code or data; hla is inlined) and
+; bank 3 (pot_sync from level_populate). bag6.asm is called directly (same
+; bank). BAG / FLOOR_LIST / ROOM_MAP are bank 5.
 ;
 ; E_POT (hero slot 0) is no longer a counter of its own: it is the number of
 ; potions in BAG (Heal + Mana + Cure), written ONLY by pot_sync, which every
@@ -36,7 +39,7 @@ pot_sync:
                 ASSERT (BAG & $FF) + BAG_SLOTS * IR_STRIDE <= 256 && IR_QTY == 1 && IR_STRIDE == 3
 
 ;------------------------------------------------------------------------------
-; pu_add — far3 from floor_pickup (bank 7) for a non-ammo entry under the
+; pu_add — far6 from floor_pickup (bank 7) for a non-ammo entry under the
 ; hero. In: A = its FL_ITEM (the legacy IT_POTION of the PROTO rooms / the 3B
 ; levelgen step = a Heal potion). bag_add qty 1, ISTATE 0 (a floor item is
 ; always plain, rev 6): added -> IT_BOW sets HAS_BOW (the bow icon / ic_bow
@@ -66,9 +69,9 @@ pu_add:
                 ret
 
 ;------------------------------------------------------------------------------
-; pot_take1 — far3 from ic_quaff (bank 7): A = a potion type present in the
+; pot_take1 — far6 from ic_quaff (bank 7): A = a potion type present in the
 ; bag: one taken from its first stack (bag_take -> pot_sync). (ic_quaff finds
-; the type with far3 bag_find: C out = 0 when absent.)
+; the type with far6 bag_find: C out = 0 when absent.)
 ; Clobbers: A, BC, DE, HL.   ~2k T
 ;------------------------------------------------------------------------------
 pot_take1:
@@ -77,7 +80,7 @@ pot_take1:
                 jp   bag_take
 
 ;------------------------------------------------------------------------------
-; kit_add — far3 from new_game (bank 7), after ITEM_RAM is cleared and the hero
+; kit_add — far6 from new_game (bank 7), after ITEM_RAM is cleared and the hero
 ; slot is set: the start kit (game.md §8.11 Q10 / §4): WORN weapon + armour,
 ; the bag list by HERO_KIND (+ the DEBUG_KIT extras, rev 6 list, + the bow for
 ; the Warrior). Ends with E_POT synced (bag_add).  Clobbers: A, BC, DE, HL.
@@ -123,7 +126,7 @@ kit_m:          DB   IT_W_OAK, IT_A_ROBE, IT_P_HEAL, IT_P_MANA, IT_F_APPLE
                 ASSERT WS_WEAPON == 0 && WS_ARMOUR == 1 && ((WORN + 2 * IR_STRIDE) >> 8) == (WORN >> 8)
 
 ;------------------------------------------------------------------------------
-; mon_drop — deal_hit's kill path (bank 3), IX = the dead monster (EF_DYING
+; mon_drop — far6 from deal_hit's kill path (bank 3), IX = the dead monster (EF_DYING
 ; set, still in place). game.md §8.11 Q11 + pickup/drop rulings 2:
 ;  - EF_RESPAWN: nothing.
 ;  - the lair boss: the first kill of kind LP_BOSS in LVL_LAIR on this level
@@ -159,8 +162,12 @@ mon_drop:
                 add  a, a
                 add  a, a                      ; Mage: 4 -> +3 below = 7
                 add  a, 3
-.u:             ld   hl, uniq_tab
-                call hla
+.u:             ld   hl, uniq_tab              ; uniq_tab[A]: hla is bank 3 (not paged)
+                add  a, l
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a
                 ld   a, (hl)
                 push af                        ; [type]
                 ld   bc, (1 << 8) | DROP_WHOLE

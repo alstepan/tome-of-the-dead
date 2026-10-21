@@ -45,7 +45,7 @@ POOL_HERO_MAX = POOL_KNIGHT + POOL_FXW
 POOL_HERO_MAX = POOL_WIZARD + POOL_FXM
     ENDIF
 POOL_NEED       EQU POOL_MONSTERS + POOL_HERO_MAX + 2 * 576 + 3 * 576
-POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW)   ; D3-TX: the text block sits under bank 0's pool
+POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN   ; D3-TX: the text block under bank 0's pool; R6: bank 6 ends at R6_ADDR
                 ASSERT POOL_NEED <= POOL_CAP
                 ASSERT FID_COUNT <= FRT_MAX
                 DISPLAY "GAME class FX pool: warrior ", /D, POOL_FXW, " (", /D, KFCNT_FXW, " frames), mage ", /D, POOL_FXM, " (", /D, KFCNT_FXM, " frames); knight ", /D, POOL_KNIGHT, ", wizard ", /D, POOL_WIZARD

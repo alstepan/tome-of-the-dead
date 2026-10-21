@@ -1861,19 +1861,22 @@ def isr_tests(h, p):
     # C3 review: bank-1 code (ui1_code..ui1_end: the scrolls, the info line,
     # entered by far1) is the one other bank allowed to run at $C000+.
     # D3-S2: and the bank-7 cold code (b7_code..b7_end, entered by far7).
-    # 3E-T1: and, during boot only, the boot block (BOOT6_ADDR..$FFFF, bank 6,
-    # entered by farb from boot): breakpoint 7 is re-armed without bank 6 at
-    # the menu (the pool overwrites the block at the hero start)
+    # 3E-T1: and, during boot only, the boot block (BOOT6_ADDR..R6_ADDR, bank
+    # 6, entered by farb from boot; the pool overwrites it at the hero start).
+    # R6 (2026-10-21): bank-6 code may run in the R6 region (R6_ADDR..r6_code_end,
+    # far6 targets) at any time BY DESIGN; only the boot window adds the boot
+    # block below it. Breakpoints 12 / 13 bound bank-6 PCs; 12 is re-armed at
+    # the menu without the boot block.
     p.z.cmd("set-breakpoint 7 PC>=C000H and RAM<>3 and RAM<>1 and RAM<>7 and RAM<>6")
     p.z.cmd("set-breakpoint 8 RAM=1 and PC>=C000H and PC<%XH" % S["ui1_code"])
     p.z.cmd("set-breakpoint 9 RAM=1 and PC>=%XH" % S["ui1_end"])
     p.z.cmd("set-breakpoint 10 RAM=7 and PC>=C000H and PC<%XH" % S["b7_code"])
     p.z.cmd("set-breakpoint 11 RAM=7 and PC>=%XH" % S["b7_end"])
     p.z.cmd("set-breakpoint 12 RAM=6 and PC>=C000H and PC<%XH" % S["BOOT6_ADDR"])
+    p.z.cmd("set-breakpoint 13 RAM=6 and PC>=%XH" % S["r6_code_end"])
     p.extra_probes = set()
     p.wait_state(GS_SELECT)
-    p.z.cmd("set-breakpoint 7 PC>=C000H and RAM<>3 and RAM<>1 and RAM<>7")
-    p.z.cmd("set-breakpoint 12")
+    p.z.cmd("set-breakpoint 12 RAM=6 and PC>=C000H and PC<%XH" % S["R6_ADDR"])
     p.wb("INPUT_REPEAT", 0)
     p.wb("ANIM_FREEZE", 1)
     p.wb("INPUT_SRC", 1)
@@ -1950,7 +1953,7 @@ def isr_tests(h, p):
         break
     p.release()
     p.wb("INPUT_REPEAT", 0)
-    for n in (5, 6, 7, 8, 9, 10, 11):
+    for n in (5, 6, 7, 8, 9, 10, 11, 12, 13):
         p.z.cmd("set-breakpoint %d" % n)
     print(f"[info] 61 transition: {ticks} ticks, ISR stops ay={n_ay} done={n_done},"
           f" interrupted $C000 banks {sorted(banks)}, screen bit sequence {scr}", flush=True)
@@ -2034,7 +2037,7 @@ def tape_rest(h, p):
     to = S["BANK_TEXT"] * 16384 + S["TEXT_ADDR"] - 0xC000   # D3-TX: the text block, bank 0
     h.expect("50 bank 0 text block (D3-TX tape block) == .sna", ram[to:to + S["TEXT_LEN"]] ==
              SNA_RAM[to:to + S["TEXT_LEN"]], True)
-    # 3E-T1: the boot block (bank 6 tail, last tape block). Boot-only: the
+    # 3E-T1: the boot block (bank 6, below R6). Boot-only: the
     # hero start's pool overwrites it, but the boot pool ends in bank 4
     # (ALLOC_IDX < 2 here, ASSERTed in main.asm as POOL_BOOT_NEED), so at the
     # menu it is still byte-equal to the .sna — checked, not masked
@@ -2042,6 +2045,12 @@ def tape_rest(h, p):
     h.expect("50 boot block untouched by the boot pool (ALLOC_IDX < 2)", p.rb("ALLOC_IDX") < 2, True)
     h.expect("50 bank 6 boot block (3E-T1 tape block) == .sna", ram[bo:bo + S["BOOT6_LEN"]] ==
              SNA_RAM[bo:bo + S["BOOT6_LEN"]], True)
+    # R6 (2026-10-21): the R6 region (bank 6 top, the last tape block, R6_USED B).
+    # Its only runtime writes are drop_put's dp_* scratch (a kill with a drop):
+    # none before the menu, so it is compared whole here
+    ro = S["BANK_R6"] * 16384 + S["R6_ADDR"] - 0xC000
+    h.expect("50 bank 6 R6 region (R6 tape block) == .sna", ram[ro:ro + S["R6_USED"]] ==
+             SNA_RAM[ro:ro + S["R6_USED"]], True)
     h.expect("50 tape: IM 2 installed by boot", " IM2 " in p.z.cmd("get-registers"), True)
     # CODE block starts in bank 5 low RAM (boot, generator) and runs into bank 2
     lo5 = S["lowram_code"] - 0x4000

@@ -276,7 +276,8 @@ class Ref:
             if self.idx >= 3:
                 return None
             end = self.ptr + n
-            if end <= 0x10000:
+            lim = self.S["R6_ADDR"] if self.idx == 2 else 0x10000   # R6: bank 6's pool ends at R6_ADDR
+            if end <= lim:
                 a, bank = self.ptr, (0, 4, 6)[self.idx]
                 if end == 0x10000:
                     self.ptr, self.idx = 0xC000, self.idx + 1

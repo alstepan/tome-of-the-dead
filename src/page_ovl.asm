@@ -1,8 +1,8 @@
 ;==============================================================================
 ; page_ovl.asm — 3E-T2 bag page overlay (SPIKE: an EMPTY page, placeholder
 ; text only; game.md §8 / §3.1, Q3 layout still open). Assembled at PAGE_ORG
-; = GEN_SCRATCH (main.asm "OVERLAYS"), stored ZX0-packed in bank 1
-; (ovl_page_zx0), run by ovl_run from page_ovl (bank 1) with BANK_UI1 paged,
+; = GEN_SCRATCH (main.asm "OVERLAYS"), stored ZX0-packed in the R6
+; region (ovl_page_zx0, BANK_OVL_PAGE), run by ovl_run from page_ovl (bank 1) with BANK_UI1 paged,
 ; so it calls the bank-1 menu helpers (mcell, mf_char, menu_orn_b) and the
 ; bank-2 / low-RAM ones (print6, stamp_rect, menu_frame, sample_input,
 ; show_bank5) directly.

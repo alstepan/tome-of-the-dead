@@ -386,17 +386,17 @@ debug_kit:
 
 ; ic_quaff — ic_potion's drink (out of line: keeps the jr chains in range).
 ; 3E-T11: the first potion type, Heal -> Mana -> Cure (game.md §8.11 rulings
-; 3), that is in the BAG (far3 bag_find) AND whose effect is not refused
+; 3), that is in the BAG (far6 bag_find) AND whose effect is not refused
 ; (pot_eff). None -> "NO NEED" (bank-1 stem), no turn, nothing consumed.
-; Used: pot_take1 (bank 3: the stack - 1, E_POT synced), the heal flash,
+; Used: pot_take1 (R6: the stack - 1, E_POT synced), the heal flash,
 ; SFX_QUAFF, "YOU DRINK A POTION" (the "DRINK THE <name>" stem is the fx
 ; overlay's, T12). L = 1 turn used / IC_REFUSED.  ~3-8k T
 ic_quaff:
                 ld   c, IT_POT_LO
 .t:             ld   a, c
                 push bc
-                ld   hl, bag_find              ; bank 3: C out = 0 if absent
-                call far3
+                ld   hl, bag_find              ; R6: C out = 0 if absent
+                call far6
                 ld   a, c
                 pop  bc
                 or   a
@@ -415,8 +415,8 @@ ic_quaff:
                 ld   l, IC_REFUSED             ; a line, no turn
                 ret
 .take:          ld   a, c
-                ld   hl, pot_take1
-                call far3
+                ld   hl, pot_take1             ; R6
+                call far6
                 ld   (ix+E_FLT), FLASH_TICKS
                 ld   (ix+E_FLA), ATTR_HEAL
                 ld   a, SFX_QUAFF              ; SND-5b

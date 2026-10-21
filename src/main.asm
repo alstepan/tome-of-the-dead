@@ -59,9 +59,10 @@ OVL_PASS        EQU 2                   ; tools/build.sh: -DOVL_PASS=1 first (3E
                 TAPE_BLK mode, BANK_TSET, TSET_LO, B7_TAPE_LEN            ; B3B-8 tilesets 0-3 + D3-S2 bank-7 code
                 TAPE_BLK mode, BANK_TSET, TSET_HI, TSET_HALF_LEN          ; tilesets 4-7
                 TAPE_BLK mode, BANK_TEXT, TEXT_ADDR, TEXT_LEN             ; D3-TX text block (bank 0 bottom)
-                TAPE_BLK mode, BANK_BOOT6, BOOT6_ADDR, BOOT6_LEN          ; 3E-T1 boot block (bank 6 top)
+                TAPE_BLK mode, BANK_BOOT6, BOOT6_ADDR, BOOT6_LEN          ; 3E-T1 boot block (bank 6, below R6)
+                TAPE_BLK mode, BANK_R6, R6_ADDR, R6_USED                  ; R6 region (bank 6 top, permanent)
     ENDM
-TAPE_HEADLESS_N EQU 7                   ; = the TAPE_BLK lines above (tape_tab ASSERTs its size)
+TAPE_HEADLESS_N EQU 8                   ; = the TAPE_BLK lines above (tape_tab ASSERTs its size)
 
 ;==============================================================================
 ; SPRITE SOURCES — banks 1 and 3, assembled contiguously at virtual $8000..$FFFF
@@ -113,10 +114,6 @@ ui1_img_end:
 UI1_LEN         EQU ui1_img_end - ui1_img
                 ASSERT ui1_img_end <= BANK_WINDOW              ; all in bank 1 (virtual < $C000)
                 ASSERT ui1_code == ui1_img + TEXT_DISP && ui1_end <= UI1_LIMIT
-; 3E-T1: the packed OVERLAY streams (ovl_run; "OVERLAYS" below), last in bank 1
-; so their sizes move nothing an overlay can reference. Labels = runtime
-; $C000-window addresses (ovl_run: HL = label, C = BANK_OVL). Pass 1 of
-; tools/build.sh (OVL_PASS 1) has no packed files yet: the streams are empty.
 ; 3E-T4b: the RESIDENT item text (tools/itempack.py): it_words / it_wcx / it_name /
 ; it_stems. Nothing reads them yet (T10 item_name does); the fx / page overlay streams
 ; and it_stat are generated but not included (T8 / T13).
@@ -124,28 +121,18 @@ UI1_LEN         EQU ui1_img_end - ui1_img
                 INCLUDE "../build/text/items_tab.asm"
 it_text_end:
                 INCLUDE "itemname1.asm"         ; 3E-T10: item_name (no caller until T11)
-                ENT
 IT_TEXT_LEN     EQU it_text_end - it_words
                 ASSERT IT_TEXT_LEN == ITW_BYTES + 2 * ITW_WCX_N + ITN_BYTES + ITS_LEN && IT_TEXT_LEN <= ITB_RESIDENT
                 ASSERT ITN_ROWS == IT_COUNT && it_stems_end - it_stems == ITS_LEN
                 ASSERT it_wcx - it_words == ITW_BYTES && it_stems - it_name == ITN_BYTES
-ovl_img:
-                DISP $ + TEXT_DISP
-ovl_blobs:
-ovl_page_zx0:                                         ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG)
-    IF OVL_PASS == 2
-                INCBIN "page.zx0"
-    ENDIF
-ovl_items_zx0:                                        ; 3E-T6 item / trap generator (items_ovl.asm, ITEMS_ORG)
-    IF OVL_PASS == 2
-                INCBIN "items.zx0"
-    ENDIF
-ovl_blobs_end:
+; R6 (2026-10-21): the packed overlay streams moved to the R6 region (bank 6
+; top, "R6 REGION" below); bank1_end = the end of the bank-1 block (runtime
+; $C000-window address; tests/ovl.py uses the free tail above it).
+bank1_end:
                 ENT
-ovl_img_end:
-OVL_BLOBS_LEN   EQU ovl_img_end - ovl_img
-                ASSERT ovl_img_end <= BANK_WINDOW && ovl_blobs_end <= UI1_LIMIT
-VIRT_TOTAL      EQU ovl_img_end - sprite_src
+bank1_img_end:
+                ASSERT bank1_img_end <= BANK_WINDOW && bank1_end <= UI1_LIMIT
+VIRT_TOTAL      EQU bank1_img_end - sprite_src
     IF VIRT_TOTAL > $4000
 SRC_LEN_LO      EQU $4000
     ELSE
@@ -154,7 +141,7 @@ SRC_LEN_LO      EQU VIRT_TOTAL
 SRC_LEN_HI      EQU VIRT_TOTAL - SRC_LEN_LO
                 ASSERT VIRT_TOTAL <= $8000
                 DISPLAY "GAME sprite sources: ", /D, SRC_TOTAL, " B + vdata ", /D, VDATA_LEN, " B (bank1 ", /D, SRC_LEN_LO, ", free ", /D, $4000 - SRC_LEN_LO, "; bank3 ", /D, SRC_LEN_HI, ")"
-                DISPLAY "GAME bank-1 UI code: ", /H, ui1_code, "..", /H, ui1_end, " (", /D, UI1_LEN, " B), overlay streams ", /D, OVL_BLOBS_LEN, " B, bank 1 free: ", /D, UI1_LIMIT - ovl_blobs_end
+                DISPLAY "GAME bank-1 UI code: ", /H, ui1_code, "..", /H, ui1_end, " (", /D, UI1_LEN, " B), bank 1 free: ", /D, UI1_LIMIT - bank1_end
                 DISPLAY "GAME ZX0 sources: ", /D, ZX0_FRAMES, " frames in ", /D, ZX0_BLOCKS, " blocks, ", /D, ZX0_PACKED_RAW, " -> ", /D, ZX0_PACKED_TOTAL, " B packed; total ", /D, SRC_TOTAL, " vs raw ", /D, ZX0_RAW_SRC_TOTAL, ": freed ", /D, ZX0_RAW_SRC_TOTAL - SRC_TOTAL, " B"
 
 
@@ -621,30 +608,64 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
                 DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, dt_attr_tab - kind_tab_pad, " B kind_tab ALIGN pad); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
 
 ;==============================================================================
-; BOOT BLOCK (3E-T1, memory levers a + d) — boot-only code + data at the TOP
-; of pool bank 6 (boot6.asm): own headerless tape block (the last in `start`'s
-; tape_tab), run by boot through farb before the pool is generated; the hero
-; start's pool overwrites it later (dead after boot by contract).
+; BOOT BLOCK (3E-T1, memory levers a + d) — boot-only code + data in pool
+; bank 6 just BELOW the R6 region (boot6.asm; R6: was the top of bank 6): own
+; headerless tape block, run by boot through farb before the pool is
+; generated; the hero start's pool overwrites it later (dead after boot by
+; contract).
 ;==============================================================================
                 MMU  3, BANK_BOOT6
-                ORG  $10000 - (boot6_end - boot6_code)
+                ORG  R6_ADDR - (boot6_end - boot6_code)
 boot6_code:
                 INCLUDE "boot6.asm"
 boot6_end:
 BOOT6_ADDR      EQU boot6_code
 BOOT6_LEN       EQU boot6_end - boot6_code
-                ASSERT boot6_end == $10000
+                ASSERT boot6_end == R6_ADDR
                 ; the boot pool (every monster kind + the 2 select idles, from
                 ; POOL_START) must end below bank 6: boot6_tiles runs before it,
                 ; but tests/game.py #50 checks the block after boot, at the menu
 POOL_BOOT_NEED  EQU POOL_MONSTERS + 2 * 576 + 2 * 576   ; + 2 idles, + straddle waste
                 ASSERT POOL_BOOT_NEED <= ($10000 - POOL_START) + $4000
-                DISPLAY "GAME boot block (bank 6 tail): ", /H, boot6_code, "..$FFFF (", /D, BOOT6_LEN, " B: code ", /D, keytab_defaults - boot6_code, " + data ", /D, boot6_end - keytab_defaults, "), dead after boot"
+                DISPLAY "GAME boot block (bank 6, below R6): ", /H, boot6_code, "..", /H, boot6_end - 1, " (", /D, BOOT6_LEN, " B: code ", /D, keytab_defaults - boot6_code, " + data ", /D, boot6_end - keytab_defaults, "), dead after boot"
+
+;==============================================================================
+; R6 REGION (2026-10-21) — PERMANENT code + data at the top of bank 6,
+; R6_ADDR..$FFFF (R6_LEN, defs.asm), carved out of the pool (POOL_CAP -
+; R6_LEN; alloc stops below R6_ADDR in bank 6). Own headerless tape block
+; (the last; R6_USED bytes). Resident code first (r6.asm, entered through
+; far6), then the packed overlay streams LAST (r6_blobs; ovl_run C = BANK_R6),
+; so their sizes move nothing an overlay can reference (2-pass overlay build).
+; Later tasks put their code / overlay streams / sprite sources here: R6_LEN
+; is the cap (the ASSERT below; the DISPLAY prints the free bytes).
+;==============================================================================
+                ORG  R6_ADDR
+r6_code:
+                INCLUDE "r6.asm"
+r6_code_end:
+r6_blobs:
+ovl_page_zx0:                                         ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG)
+    IF OVL_PASS == 2
+                INCBIN "page.zx0"
+    ENDIF
+ovl_items_zx0:                                        ; 3E-T6 item / trap generator (items_ovl.asm, ITEMS_ORG)
+    IF OVL_PASS == 2
+                INCBIN "items.zx0"
+    ENDIF
+r6_blobs_end:
+r6_end:
+R6_USED         EQU r6_end - R6_ADDR
+R6_FREE         EQU $10000 - r6_end
+    IF r6_end > $10000
+                DISPLAY "R6 OVERFLOW: ", /D, r6_end - $10000, " B over R6_LEN ", /D, R6_LEN
+    ENDIF
+                ASSERT r6_end <= $10000 && R6_USED > 0
+                DISPLAY "GAME R6 region (bank 6): ", /H, R6_ADDR, "..", /H, r6_end - 1, " (", /D, R6_USED, " of ", /D, R6_LEN, " B: code ", /D, r6_code_end - r6_code, " + overlay streams ", /D, r6_blobs_end - r6_blobs, "), R6 free: ", /D, R6_FREE
                 MMU  3, 0
 
 ;==============================================================================
 ; OVERLAYS (3E-T1) — code assembled at its runtime load address, stored
-; ZX0-packed (bank 1 `ovl_blobs`), unpacked + called by ovl_run (lowram.asm;
+; ZX0-packed (R6 `r6_blobs`, bank 6), unpacked + called by ovl_run (lowram.asm;
 ; the GEN_SCRATCH window: at boot / menu / level start, or — ROOM_MAP saved
 ; to PAGE_MAP_SAVE — while the modal bag page is up; docs/memory-map.md
 ; "Overlays"). Two assembler passes (tools/build.sh): OVL_PASS 1 assembles each
@@ -677,7 +698,7 @@ items_ovl_main:
 ITEMS_OVL_LEN   EQU ig_image_end - items_ovl_main
                 ASSERT ig_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
                 SAVEBIN "build/ovl/items.bin", ovl_raw_items, ITEMS_OVL_LEN
-                DISPLAY "GAME items overlay (3E-T6): ", /D, ITEMS_OVL_LEN, " B raw (+ ", /D, ig_end - ig_image_end, " B scratch) at ", /H, ITEMS_ORG, ", packed ", /D, ovl_blobs_end - ovl_items_zx0, " B in bank ", /D, BANK_OVL_ITEMS
+                DISPLAY "GAME items overlay (3E-T6): ", /D, ITEMS_OVL_LEN, " B raw (+ ", /D, ig_end - ig_image_end, " B scratch) at ", /H, ITEMS_ORG, ", packed ", /D, r6_blobs_end - ovl_items_zx0, " B in bank ", /D, BANK_OVL_ITEMS
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000
 

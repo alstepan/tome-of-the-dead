@@ -31,7 +31,17 @@ BANK_SRC_HI     EQU 3               ; sprite SOURCES, virtual $C000-$FFFF (conte
 BANK_POOL0      EQU 0               ; pre-shift pool (uncontended), boot-generated
 BANK_POOL1      EQU 4
 BANK_POOL2      EQU 6
-BANK_BOOT6      EQU BANK_POOL2      ; 3E-T1: the boot block BOOT6_ADDR..$FFFF (boot6.asm), dead after boot
+BANK_BOOT6      EQU BANK_POOL2      ; 3E-T1: the boot block BOOT6_ADDR..R6_ADDR-1 (boot6.asm), dead after boot
+; R6 (2026-10-21, user-approved carve of the pool slack): a PERMANENT code +
+; data region at the top of bank 6, R6_ADDR..$FFFF, own tape block (main.asm
+; "R6 REGION", src/r6.asm). The pool's bank-6 part ends at R6_ADDR (alloc;
+; POOL_CAP - R6_LEN). Code there is ORGed at its $C000+ address and entered
+; through far6 (gfx.asm); packed overlay streams there run through ovl_run
+; with C = BANK_R6. R6_LEN is THE cap (ASSERTed, free bytes DISPLAYed).
+BANK_R6         EQU BANK_POOL2
+R6_LEN          EQU 6912            ; $1B00: keeps >= 2.4 KB pool slack (user)
+R6_ADDR         EQU $10000 - R6_LEN ; $E500
+                ASSERT (R6_ADDR & $FF) == 0     ; alloc's bank-6 limit test reads only the high byte
 BANK_SHADOW     EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect's attrs)
 BANK_COLD7      EQU 7               ; D3-S2: bank-7 cold code B7_CODE..B7_LIMIT (via far7)
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
@@ -118,9 +128,10 @@ PAGE_MAP_SAVE   EQU GEN_SRC             ; GEN_SRC.. (no pause save / pblit / gen
 ; 3E-T6: the level-start item / trap generator overlay (items_ovl.asm) runs
 ; in the same window at a level start (after level_populate: the LG_* /
 ; LP_CMAP scratch is dead), its packed stream in bank BANK_OVL_ITEMS (main.asm
-; ovl_blobs; any bank ovl_run can page: move the INCBIN + this EQU together).
+; R6 `r6_blobs`; any bank ovl_run can page: move the INCBIN + this EQU together).
 ITEMS_ORG       EQU GEN_SCRATCH
-BANK_OVL_ITEMS  EQU BANK_UI1
+BANK_OVL_ITEMS  EQU BANK_R6         ; R6: was BANK_UI1 (bank-1 relief)
+BANK_OVL_PAGE   EQU BANK_R6         ; R6: the page stream (page_ovl, menu1.asm)
 B7_CODE         EQU $E000           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), tape
                                     ;     block joined to the TSET_LO tilesets below it
 B7_LIMIT        EQU $F800           ; ... up to the attr shadow (ASSERTed)

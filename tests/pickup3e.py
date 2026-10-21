@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """3E-T11: pickup into the BAG, the potion quick slot from the bag, the start
 kit, monster drops and the boss unique (src/pickup7.asm floor_pickup /
-pp_take, src/pickup3.asm pu_add / pot_pick / pot_take1 / kit_add / mon_drop /
+pp_take, src/pickup6.asm (R6) pu_add / pot_pick / pot_take1 / kit_add / mon_drop /
 drop_put, src/intent7.asm ic_quaff, src/itemname1.asm it_line). Played in
 PROTO room A on a release build (DEBUG_KIT=0). Spec: game.md §8.11 "3E
 pickup/drop rulings (2026-10-20)", Q10, Q11, §8 potions.
@@ -417,7 +417,7 @@ def run(p, check):
     tm["pickup (floor_pickup, 1 bag item)"] = p.tstates
     picked = bag() == [(IT["W_LONG"], 1, 0)]
     scene(bagrecs=[])
-    assert p.code([0x3E, IT["W_LONG"], 0x21] + w16(S["pu_add"]) + [0xCD] + w16(S["far3"])), "pu_add stub"
+    assert p.code([0x3E, IT["W_LONG"], 0x21] + w16(S["pu_add"]) + [0xCD] + w16(S["far6"])), "pu_add stub"
     tm["pu_add alone"] = p.tstates
     i, = free_entries(1)
     put(i, HX + 1, IT["W_LONG"])

@@ -48,6 +48,17 @@
   or 3) never pages `$C000` itself — it calls helpers that re-page it
   (`blit_keep`). See `docs/memory-map.md` "Cold code placement" / "3C
   contracts".
+- **R6 region (2026-10-21).** Permanent code + data + packed overlay streams
+  at the top of bank 6, `R6_ADDR..$FFFF` (`R6_LEN` is the cap, ASSERTed;
+  `src/r6.asm`, main.asm "R6 REGION"; bank 6 below it is sprite pool). Code
+  is entered only through **`far6`** (`ld c, BANK_R6` / `jr farb`, +12 T vs
+  far3; nests from any bank). Same rules as bank 7: far6 loses A and F
+  (results in BC / DE / HL / IX or memory); while it runs bank 6 is at
+  `$C000`, so it never calls bank-3 / bank-1 / bank-7 code or reads their
+  data directly (far3 / far1 / far7 only; e.g. `hla` is bank 3 — inline
+  it); no SMC; it never pages `$C000` itself. Overlay streams there run
+  through `ovl_run` with C = `BANK_R6`. New 3E / 3F code, overlay streams and
+  sprite sources go here (memory-map "R6 region").
 - **Bank-7 cold code (D3-S2).** Per-turn / per-event logic that needs no
   other `$C000` bank lives in bank 7 `$E000..$F7FF` (`src/bank7.asm`, the
   space of the dropped bitmap shadow), entered only through **`far7`**
