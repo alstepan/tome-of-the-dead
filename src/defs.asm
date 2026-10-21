@@ -125,6 +125,10 @@ SCREEN7_ATTR    EQU $D800           ; bank 7: displayed attrs  (copy of $5800)
 PAGE_ORG        EQU GEN_SCRATCH
 PAGE_LIMIT      EQU GEN_SCRATCH + GEN_SCRATCH_LEN
 PAGE_MAP_SAVE   EQU GEN_SRC             ; GEN_SRC.. (no pause save / pblit / generator meanwhile)
+; 3E-T13 page-time scratch after the map save (free while the page is up; below TX_DEC):
+PAGE_G60        EQU PAGE_MAP_SAVE + PLAY_CELLS  ; 32 B: glyphs 60..63 of the depth's bank-7 tileset slot
+PAGE_BUF        EQU PAGE_G60 + 32               ; LOG_MAX + 2 B: a composed text line (print6)
+PAGE_SCR_END    EQU PAGE_BUF + LOG_MAX + 2
 ; 3E-T6: the level-start item / trap generator overlay (items_ovl.asm) runs
 ; in the same window at a level start (after level_populate: the LG_* /
 ; LP_CMAP scratch is dead), its packed stream in bank BANK_OVL_ITEMS (main.asm

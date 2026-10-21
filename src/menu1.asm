@@ -1079,6 +1079,13 @@ page_post:      ld   hl, PAGE_MAP_SAVE
                 ld   de, ROOM_MAP
                 ld   bc, PLAY_CELLS
                 ldir
+                ld   a, (PAGE_VERB)            ; 3E-T13: DISCARD applies here (0 turns);
+                cp   VB_DISCARD                ; the other verbs are T8 / T12's (tpt_intent)
+                jr   nz, .nd
+                ld   a, (PAGE_SLOT)
+                ld   hl, bag_discard           ; R6: the whole stack, HAS_BOW for the bow
+                call far6
+.nd:
                 xor  a
                 ld   (PAGE_OPEN), a
                 ld   (INTENT), a

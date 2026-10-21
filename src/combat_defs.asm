@@ -274,7 +274,10 @@ ST_HERO_END     EQU TURN_PEND_END + 3
 ; boot: page_ovl / page_post write PAGE_OPEN, PAGE_N only counts — tests diff it)
 PAGE_OPEN       EQU ST_HERO_END     ; 1 while the bag page is up (page_ovl / page_post, test-observable)
 PAGE_N          EQU ST_HERO_END + 1 ; bag page opens, mod 256 (test-observable)
-PAGE_END        EQU ST_HERO_END + 2
+PAGE_VERB       EQU ST_HERO_END + 2 ; 3E-T13: the verb chosen on the page (VB_*, item_defs.asm; VB_NONE
+                                    ; = closed without one), written by the overlay at every open
+PAGE_SLOT       EQU ST_HERO_END + 3 ; 3E-T13: its slot: 0..19 bag, 20..23 worn (BAG + 3 * slot; test-observable)
+PAGE_END        EQU ST_HERO_END + 4
 HELD_WAIT       EQU 3
 LT_SERVED       EQU 1
 LT_HOLD_BIT     EQU 1

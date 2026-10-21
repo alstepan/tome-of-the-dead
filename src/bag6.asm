@@ -128,6 +128,29 @@ bag_take:
                 ret
 
 ;------------------------------------------------------------------------------
+; bag_discard — 3E-T13 the page's DISCARD (game.md §8.11 Q3): the whole stack
+; in bag slot A is destroyed (no floor entry, no line yet: the "YOU DISCARD "
+; stem is the T8 fx overlay's); the bow also clears HAS_BOW. far6 from
+; page_post (bank 1) after the page closed; 0 turns.
+; In : A = slot 0..BAG_SLOTS-1 (occupied). Out: A = 0.
+; Clobbers: A, BC, DE, HL, F.   ~2k T (bag_take + pot_sync)
+;------------------------------------------------------------------------------
+bag_discard:
+                ld   c, a
+                add  a, a
+                add  a, c
+                ld   l, a
+                ld   h, HIGH BAG
+                ld   a, (hl)
+                cp   IT_BOW
+                jr   nz, .nb
+                xor  a
+                ld   (HAS_BOW), a
+.nb:            ld   a, c
+                ld   b, STACK_MAX              ; >= any QTY: the slot empties
+                jr   bag_take
+
+;------------------------------------------------------------------------------
 ; bag_pick — the quick-slot pick (game.md §8 "Quick slots auto-fill"; no pin).
 ; In : B = first type of the class (IT_FOOD_LO / IT_POT_LO / IT_SCR_LO),
 ;      D = 2 * class size + mode (mode 0: the lowest type present = food,

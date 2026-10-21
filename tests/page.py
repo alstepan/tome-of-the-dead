@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""3E-T2 bag page spike (src/lowram.asm page_run, src/menu1.asm page_ovl /
+"""3E-T2 bag page window + 3E-T13 / T14 the real page (src/lowram.asm page_run, src/menu1.asm page_ovl /
 page_post, src/page_ovl.asm; docs/memory-map.md "Overlays", the page window).
 Release build (DEBUG_KIT=0), real play.
 
@@ -7,20 +7,26 @@ Release build (DEBUG_KIT=0), real play.
       MUS_STATE / MUS_CUR unchanged, the player state ay_vars keeps changing, AY_CALLS
       advance), bank 5 shown, GEN_SCRATCH == build/ovl/page.bin (round trip of the
       bank-1 stream), PAGE_MAP_SAVE == the room map, screen 2 == the screen before
-      (the backup), golden `page_empty` (all 24 rows); open / close cost
+      (the backup), golden `page_start` (the Warrior start bag); open / close cost
   P2  keys inside the page do not leak: slot key, S, ENTER held, Q / A / O / P,
       DOWN held -> no turn, SEL_SLOT / SND_MODE / ICON_MODE / hero unchanged, page up
   P3  closing with a direction held: the hero does not move (EXIT_LOCK) while it is
       held, nor on its release; a fresh tap afterwards works
   P4  20 open / close cycles (I / BAG icon via 9 + ENTER / FIRE tap / ICON MODE FIRE;
-      closed by FIRE / BREAK / ENTER / I; sound modes 3 / 2 / 0): each time the
+      closed by [CLOSE] + FIRE / BREAK / [CLOSE] + ENTER / I; sound modes 3 / 2 / 0): each time the
       displayed AND composed screens == before, no turn, no SND_HOLD, PAGE_OPEN clear,
       mode kept, ICON MODE kept, displayed == composed; after the 20 cycles ROOM_MAP,
       LVL_STATE, LP_STATE, ANIM lists, P_ENTITIES, RNG_STATE, tile_flags, FLOOR_LIST,
       MK_RAM, the drip state and ITEM_RAM are unchanged
   P5  review fixes: BAG selected + I and ENTER in the same tick -> one open only;
-      closing with ENTER / I never re-opens nor uses the icon; no turn; a held hero
+      closing with BREAK / I / ENTER+I never re-opens nor uses the icon; no turn; a held hero
       (STS_HOLD): I opens nothing (INTENT dropped on the turn-intent path)
+  P6  a mixed bag + worn set: 2x glyphs, floor inks, QTY digits, empty frames, ITEMS n,
+      cursor on slot 0, golden `page_bag`
+  P7  cursor wrap rules; P8 the verb-enable matrix (+ the USE word)
+  P9  verbs: EQUIP / REMOVE return PAGE_VERB / PAGE_SLOT and change nothing; [CLOSE],
+      strip navigation, BREAK, CLOSE verb -> VB_NONE; DISCARD (stack, bow: HAS_BOW 0,
+      E_POT, ITEMS n - 1, 0 turns); REMOVE with a full bag -> BAG FULL, page stays
 Run: ZRCP_PORT=<port> python3 tests/page.py
 """
 import os
@@ -33,11 +39,13 @@ _UPD = "--update-golden" in sys.argv
 sys.argv = [sys.argv[0], "999"]               # keep game.py's item filter inert
 import game  # noqa: E402
 game.UPDATE = _UPD
+import game_lib  # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, SCREEN_FRAME_LEN  # noqa: E402
 
 KIT = bool(S.get("KIT_DEBUG", 0))
 HOLD = 0x80
-CLOSERS = (("FIRE",), ("CAPS", "SPACE"), ("ENTER",), ("I",))
+# 3E-T13: FIRE / ENTER select; they close only on [CLOSE] (UP from bag row 0 first)
+CLOSERS = (("Q", "FIRE"), ("CAPS", "SPACE"), ("Q", "ENTER"), ("I",))
 
 
 def run(p, check):
@@ -99,8 +107,11 @@ def run(p, check):
     f_open = (p.rb("SYS_FRAMES") - f0) & 255
     check("P1 I -> page_run -> overlay -> page loop", ok)
     raw = open(REPO / "build" / "ovl" / "page.bin", "rb").read()
-    win = bytes(z.read_memory(S["PAGE_ORG"], len(raw)))
-    check("P1 GEN_SCRATCH == build/ovl/page.bin (%d B, limit %d)" % (len(raw), S["GEN_SCRATCH_LEN"]),
+    win = bytearray(z.read_memory(S["PAGE_ORG"], len(raw)))
+    v0, v1 = S["pg_rc"] - S["PAGE_ORG"], S["pg_wid"] - S["PAGE_ORG"]   # the page's variables (written)
+    win[v0:v1] = raw[v0:v1]
+    win = bytes(win)
+    check("P1 GEN_SCRATCH == build/ovl/page.bin but its variables (%d B, limit %d)" % (len(raw), S["GEN_SCRATCH_LEN"]),
           win == raw, sum(a != b for a, b in zip(win, raw)))
     check("P1 PAGE_MAP_SAVE holds the room map",
           bytes(z.read_memory(S["PAGE_MAP_SAVE"], ncell)) == keep["map"])
@@ -113,7 +124,7 @@ def run(p, check):
           (p.rb("PAGE_OPEN"), shown5(), mus1, a1 != a0, (c1 - c0) & 0xFFFF >= 10)
           == (1, True, mus0, True, True),
           (p.rb("PAGE_OPEN"), shown5(), mus0, mus1, a1 != a0, c1 - c0))
-    game.golden(p.h, "page_empty", p.frame())
+    game.golden(p.h, "page_start", p.frame())
     z.cmd("set-memory-zone 0")
     try:
         b7 = bytes(z.read_memory(7 * 16384, SCREEN_FRAME_LEN))
@@ -122,7 +133,7 @@ def run(p, check):
     check("P1 screen 2 holds the screen before the page (the backup)", b7 == bytes(before),
           sum(a != b for a, b in zip(b7, before)))
     p.tick(3)
-    p.hold("FIRE")
+    p.hold("I")
     z.cmd("reset-tstates-partial")
     ok = step_to({S["page_run.closed"]})
     p.release()
@@ -133,7 +144,7 @@ def run(p, check):
     ok = ok and step_to({S["wait_tick"]})
     t_close = int(z.cmd("get-tstates-partial"))
     f_close = (p.rb("SYS_FRAMES") - f1) & 255
-    check("P1 FIRE closes", ok and p.rb("PAGE_OPEN") == 0 and not shown5())
+    check("P1 I closes", ok and p.rb("PAGE_OPEN") == 0 and not shown5())
     print(f"[info] P1 open: {t_unpack} T to the overlay entry (present_full + unpack), "
           f"{t_open} T to the first page frame ({f_open} frames); close: copy-back {t_copy} T, "
           f"{t_close} T to the next tick probe ({f_close} frames)", flush=True)
@@ -160,7 +171,7 @@ def run(p, check):
           (opened, p.rb("PAGE_OPEN"), tc() - t0, p.rb("SEL_SLOT"), hex(p.rb("SND_MODE")), e1["X"], e0["X"]))
 
     # ---- P3: close with a direction held ---------------------------------------
-    p.hold("P", "FIRE")                          # facing right: P would walk
+    p.hold("P", "I")                             # facing right: P would walk
     p.tick(2)
     p.hold("P")
     closed = p.rb("PAGE_OPEN") == 0
@@ -207,7 +218,11 @@ def run(p, check):
         up = p.until(lambda: p.rb("PAGE_OPEN") == 1, 6)
         snd_open = p.rb("SND_MODE")
         p.tick(3)
-        p.hold(*CLOSERS[i % 4])
+        cl = CLOSERS[i % 4]
+        if cl[0] == "Q":                          # [CLOSE]: UP from bag row 0, then FIRE / ENTER
+            p.tap("Q")
+            cl = cl[1:]
+        p.hold(*cl)
         p.tick(2)
         p.release()
         p.tick(4)
@@ -234,7 +249,7 @@ def run(p, check):
         p.tap("9")
         p.tick(2)
     res = []
-    for opener, closer in ((("I", "ENTER"), ("ENTER",)), (("I",), ("I",)), (("ENTER",), ("ENTER", "I"))):
+    for opener, closer in ((("I", "ENTER"), ("CAPS", "SPACE")), (("I",), ("I",)), (("ENTER",), ("ENTER", "I"))):
         n0, t0 = p.rb("PAGE_N"), tc()
         p.hold(*opener)
         p.tick(2)
@@ -246,7 +261,7 @@ def run(p, check):
         p.release()
         p.tick(8)
         res.append((up, (p.rb("PAGE_N") - n0) & 255, p.rb("PAGE_OPEN"), tc() - t0))
-    check("P5 I+ENTER / I / ENTER open once; ENTER / I / ENTER+I close without a re-open or a use",
+    check("P5 I+ENTER / I / ENTER open once; BREAK / I / ENTER+I close without a re-open or a use",
           res == [(1, 1, 0, 0)] * 3, res)
     st = S["ST_FLAGS"]
     f0 = p.rb(st)
@@ -257,6 +272,256 @@ def run(p, check):
     held = (p.rb("PAGE_N") - n0) & 255, p.rb("PAGE_OPEN"), p.rb("INTENT")
     p.wb(st, f0)
     check("P5 held hero: I opens nothing, INTENT dropped", held == (0, 0, 0), held)
+    p.settle(3)
+    bag_page(p, check)
+
+
+# ---- 3E-T13 / T14: the real page (P6..P9) -------------------------------------
+VB = {k: S["VB_" + k] for k in ("NONE", "DRINK", "EAT", "READ", "EQUIP", "REMOVE", "DISCARD")}
+V_COLS = (2, 7, 12, 18, 25)                   # verb strip cols (page_ovl.asm pg_vtab)
+A_VON, A_VOFF = 0x45, 0x01
+CLOSE_SLOT = 24
+WIDTHS = (1, 5, 5, 5, 5, 4)                   # cursor row widths ([CLOSE], 4 bag rows, worn)
+
+
+def slot_rect(s):
+    """(col, row) of slot s's icon (page_ovl.asm pg_rect); [CLOSE] = (26, 0)."""
+    if s == CLOSE_SLOT:
+        return 26, 0
+    if s >= 20:
+        return 11 + 3 * (s - 20), 16
+    return 9 + 3 * (s % 5), 4 + 3 * (s // 5)
+
+
+def rect_cells(s):
+    c, r = slot_rect(s)
+    if s == CLOSE_SLOT:
+        return [(c + i, 0) for i in range(6)]
+    return [(c + i, r + j) for i in range(3) for j in range(2)]
+
+
+def bag_page(p, check):
+    z = p.z
+    tc = lambda: p.rw("TURN_COUNTER")          # noqa: E731
+    I = lambda n: S["IT_" + n]                 # noqa: E731,E741
+    it_tab = bytes(z.read_memory(S["it_tab"], S["IT_COUNT"]))
+    it_cls = bytes(z.read_memory(S["it_cls"], 7))
+    attr_at, cell_bytes = game_lib.attr_at, game_lib.cell_bytes
+
+    def ink(t):
+        b = it_tab[t]
+        return (b & 7) | (0x40 if b & 8 else 0)
+
+    def scaled(t):
+        """The type's floor glyph (the room's TILE_GLYPHS: not the Sanctum) 2x: {(dc, dr): 8 B}."""
+        g = bytes(z.read_memory(S["TILE_GLYPHS"] + it_cls[it_tab[t] >> 4] * 8, 8))
+
+        def dbl(b):
+            v = 0
+            for k in range(8):
+                v = (v << 2) | (3 if b & (0x80 >> k) else 0)
+            return v
+        out = {}
+        for half in (0, 1):
+            lines = [dbl(g[half * 4 + i // 2]) for i in range(8)]
+            out[(0, half)] = bytes(v >> 8 for v in lines)
+            out[(1, half)] = bytes(v & 255 for v in lines)
+        return out
+
+    def is_open():
+        return p.rb("PAGE_OPEN") == 1 and p.pc() == S["select_tick"]
+
+    def open_page():
+        p.tap("I")
+        return p.until(is_open, 12)
+
+    def wait_closed():
+        return p.until(lambda: p.rb("PAGE_OPEN") == 0, 12)
+
+    def highlighted(fr):
+        """(slots whose whole cursor rect has paper blue, cells with any paper outside the ornaments)."""
+        hi = {s for s in range(25) if all(attr_at(fr, c, r) & 0x38 == 0x08 for c, r in rect_cells(s))}
+        n = sum(1 for i in range(768) if fr[6144 + i] & 0x38 and i // 32 not in (2, 23))
+        return hi, n
+
+    def verbs(fr):
+        return tuple({A_VON: 1, A_VOFF: 0}.get(attr_at(fr, c, 20) & 0xC7, "?") for c in V_COLS)
+
+    def rc():
+        return p.rb("pg_rc"), p.rb(S["pg_rc"] + 1)
+
+    def row22(fr):
+        return b"".join(cell_bytes(fr, c, 22) for c in range(32))
+
+    def nav(slot):
+        """Cursor to `slot` by key taps (vertical first, then horizontal)."""
+        row, col = (0, 0) if slot == CLOSE_SLOT else (5, slot - 20) if slot >= 20 else (1 + slot // 5, slot % 5)
+        for _ in range(8):
+            r = rc()[0]
+            if r == row:
+                break
+            p.tap("A" if (row - r) % 6 <= 3 else "Q")
+        for _ in range(6):
+            if min(rc()[1], WIDTHS[row] - 1) == col:
+                break
+            p.tap("P")
+        return rc()[0] == row and min(rc()[1], WIDTHS[row] - 1) == col
+
+    bag = [("P_HEAL", 2), ("P_MANA", 1), ("F_APPLE", 3), ("S_FEAR", 1), ("BOOK", 1), ("W_LONG", 1),
+           ("A_CHAIN", 1), ("BOW", 1), ("C_MIGHT", 1), ("H_HELM", 1), ("F_MEAT", 9)]
+    worn = [("W_SHORT", 1), ("A_LEATHER", 1), None, ("C_FIRE", 1)]
+
+    def put_bag(items):
+        flat = [b for n, q in items for b in (I(n), q, 0)]
+        p.wmem("BAG", flat + [0] * (60 - len(flat)))
+    put_bag(bag)
+    p.wmem("WORN", [b for w in worn for b in ((I(w[0]), 1, 0) if w else (0, 0, 0))])
+    p.wb("DAGGERS", 3)
+    p.wb("ARROWS", 14)
+    p.wb("HAS_BOW", 1)
+    p.settle(2)
+
+    # ---- P6: cells, inks, counts, golden ---------------------------------------
+    ok = open_page()
+    fr = p.frame()
+    bad = []
+    for s in range(24):
+        rec = (bag + [None] * 9)[s] if s < 20 else worn[s - 20]
+        c, r = slot_rect(s)
+        if rec is None:
+            if cell_bytes(fr, c, r)[0] != 0xFF or attr_at(fr, c, r) & 0xC7 != 0x47:
+                bad.append((s, "frame"))
+            continue
+        t, q = I(rec[0]), rec[1]
+        for (dc, dr), want in scaled(t).items():
+            if cell_bytes(fr, c + dc, r + dr) != want:
+                bad.append((s, "glyph", dc, dr))
+            if attr_at(fr, c + dc, r + dr) & 0xC7 != ink(t):
+                bad.append((s, "ink", hex(attr_at(fr, c + dc, r + dr))))
+        if any(cell_bytes(fr, c + 2, r + 1)) != (q >= 2):
+            bad.append((s, "qty", q))
+    check("P6 page: 11 bag icons (2x floor glyph, floor ink, QTY digit >= 2), 9 empty frames, worn W/A/C + empty H",
+          ok and bad == [], (ok, bad[:6]))
+    got = (p.rb("pg_n"), highlighted(fr), verbs(fr), p.rb("pg_use"))
+    check("P6 ITEMS 11/20 (pg_n), cursor on slot 0 only, potion verbs DRINK / DISCARD / CLOSE",
+          got == (11, ({0}, 6), (1, 0, 0, 1, 1), VB["DRINK"]), got)
+    game.golden(p.h, "page_bag", fr)
+
+    # ---- P7: cursor moves + wrap rules -----------------------------------------
+    path = (("P", 1), ("O", 0), ("O", 4), ("A", 9), ("A", 14), ("A", 19), ("A", 23), ("P", 20), ("O", 23),
+            ("A", CLOSE_SLOT), ("P", CLOSE_SLOT), ("A", 0), ("Q", CLOSE_SLOT), ("Q", 20), ("Q", 15), ("O", 19))
+    bad = []
+    for k, want in path:
+        p.tap(k)
+        hi = highlighted(p.frame())
+        if hi != ({want}, len(rect_cells(want))):
+            bad.append((k, want, hi))
+    check("P7 cursor: L / R wrap in a row (5 bag, 4 worn, 1 [CLOSE]), U / D wrap over [CLOSE] / 4 bag rows / worn, "
+          "remembered col (worn min(col, 3))", bad == [], bad[:4])
+
+    # ---- P8: the verb-enable matrix ---------------------------------------------
+    want = {0: (1, 0, 0, 1, 1), 2: (1, 0, 0, 1, 1), 3: (1, 0, 0, 1, 1), 4: (1, 0, 0, 1, 1), 5: (0, 1, 0, 1, 1),
+            6: (0, 1, 0, 1, 1), 7: (0, 0, 0, 1, 1), 8: (0, 1, 0, 1, 1), 9: (0, 1, 0, 1, 1), 11: (0, 0, 0, 0, 1),
+            20: (0, 0, 1, 0, 1), 22: (0, 0, 0, 0, 1), 23: (0, 0, 1, 0, 1), CLOSE_SLOT: (0, 0, 0, 0, 1)}
+    use = {0: VB["DRINK"], 2: VB["EAT"], 3: VB["READ"], 4: VB["READ"], 5: 0, 7: 0, 20: 0}
+    bad = []
+    for s, w in want.items():
+        okn = nav(s)
+        got = verbs(p.frame())
+        if not okn or got != w or (s in use and p.rb("pg_use") != use[s]):
+            bad.append((s, okn, got, p.rb("pg_use")))
+    check("P8 verbs: potion / food / scroll / book USE (DRINK / EAT / READ) + DISCARD; gear EQUIP + DISCARD; "
+          "bow DISCARD; worn REMOVE; empty / [CLOSE]: CLOSE only", bad == [], bad[:4])
+
+    # ---- P9: verb selection and the return protocol ----------------------------
+    st0 = (bytes(z.read_memory(S["BAG"], 72)), p.rb("HAS_BOW"), tc())
+    res = {}
+    nav(5)                                         # Long Sword: EQUIP first
+    p.tap("FIRE")
+    sel = attr_at(p.frame(), 7, 20) & 0x38 == 0x08 and p.rb("pg_mode") == 1
+    p.tap("FIRE")
+    res["equip"] = (sel, wait_closed(), p.rb("PAGE_VERB"), p.rb("PAGE_SLOT"),
+                    (bytes(z.read_memory(S["BAG"], 72)), p.rb("HAS_BOW"), tc()) == st0)
+    p.settle(2)
+    open_page()
+    nav(CLOSE_SLOT)
+    p.tap("FIRE")
+    res["[close]"] = (wait_closed(), p.rb("PAGE_VERB"))
+    p.settle(2)
+    open_page()                                    # Heal x2: DRINK; L wraps to CLOSE, R back, R -> DISCARD
+    p.tap("FIRE")
+    seq = [p.rb("pg_vsel")]
+    for k in ("O", "P", "P"):
+        p.tap(k)
+        seq.append(p.rb("pg_vsel"))
+    p.tap("Q")                                     # back to the grid
+    back = (p.rb("pg_mode"), highlighted(p.frame()))
+    p.tap("FIRE")
+    p.tap("CAPS", "SPACE")                         # BREAK in the strip
+    res["strip"] = (seq, back, wait_closed(), p.rb("PAGE_VERB"))
+    p.settle(2)
+    open_page()                                    # food: USE, L -> CLOSE in the strip, FIRE
+    nav(2)
+    p.tap("FIRE")
+    p.tap("O")
+    p.tap("FIRE")
+    res["close verb"] = (wait_closed(), p.rb("PAGE_VERB"), tc() == st0[2])
+    check("P9 EQUIP: strip on EQUIP, FIRE closes, PAGE_VERB / PAGE_SLOT = EQUIP / 5, nothing applied, no turn; "
+          "[CLOSE] FIRE -> VB_NONE; strip L / R skip disabled verbs and wrap, U back, BREAK closes; CLOSE verb",
+          res == {"equip": (True, True, VB["EQUIP"], 5, True), "[close]": (True, 0),
+                  "strip": ([0, 4, 0, 3], (0, ({0}, 6)), True, 0), "close verb": (True, 0, True)}, res)
+
+    # DISCARD: the Heal stack (E_POT follows), then the bow (HAS_BOW 0); 0 turns
+    p.settle(2)
+    open_page()
+    p.tap("FIRE")
+    p.tap("P")
+    p.tap("FIRE")
+    d1 = (wait_closed(), p.rb("PAGE_VERB"), p.rb("PAGE_SLOT"))
+    p.settle(2)
+    want_bag = [b for n, q in bag[1:] for b in (I(n), q, 0)]
+    d1 += (list(z.read_memory(S["BAG"], 60)) == want_bag + [0] * (60 - len(want_bag)), p.ent(0)["POT"])
+    open_page()
+    n1 = p.rb("pg_n")
+    nav(6)                                         # the bow moved up one slot
+    p.tap("FIRE")
+    p.tap("FIRE")
+    d2 = (wait_closed(), p.rb("PAGE_VERB"), p.rb("PAGE_SLOT"), p.rb("HAS_BOW"),
+          I("BOW") not in list(z.read_memory(S["BAG"], 60))[0::3])
+    p.settle(2)
+    open_page()
+    n2 = p.rb("pg_n")
+    p.tap("I")
+    wait_closed()
+    check("P9 DISCARD: the whole Heal x2 stack (bag compacted, E_POT 1), then the bow (its only verb, HAS_BOW 0); "
+          "ITEMS 11 -> 10 -> 9; 0 turns",
+          (d1, d2, n1, n2, tc()) == ((True, VB["DISCARD"], 0, True, 1), (True, VB["DISCARD"], 6, 0, True), 10, 9,
+                                     st0[2]), (d1, d2, n1, n2, tc() - st0[2]))
+
+    # REMOVE: refused with a full bag (BAG FULL on row 22, page stays), the next key restores the help
+    p.settle(2)
+    put_bag([("F_APPLE", 1)] * 20)
+    open_page()
+    help0 = row22(p.frame())
+    nav(20)
+    p.tap("FIRE")
+    p.tap("FIRE")
+    r1 = (p.rb("PAGE_OPEN"), p.rb("pg_msgf"), row22(p.frame()) != help0, p.rb("PAGE_VERB"))
+    p.tap("Q")                                     # any press: the help again (and back to the grid)
+    r2 = (p.rb("pg_msgf"), row22(p.frame()) == help0)
+    p.tap("CAPS", "SPACE")
+    wait_closed()
+    p.settle(2)
+    put_bag(bag[1:7])
+    open_page()
+    nav(20)
+    p.tap("FIRE")
+    p.tap("FIRE")
+    r3 = (wait_closed(), p.rb("PAGE_VERB"), p.rb("PAGE_SLOT"), z.read_memory(S["WORN"], 1)[0] == I("W_SHORT"),
+          tc() == st0[2])
+    check("P9 REMOVE: full bag -> BAG FULL on row 22, page up, no verb; next key -> help; with room -> "
+          "PAGE_VERB REMOVE, slot 20, nothing applied, no turn",
+          (r1, r2, r3) == ((1, 1, True, 0), (0, True), (True, VB["REMOVE"], 20, True, True)), (r1, r2, r3))
 
 
 def main():

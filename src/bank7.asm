@@ -345,6 +345,10 @@ tpt_intent:
                 scf
                 ret
 .bag:           call page_run                  ; (lowram.asm; restores bank 7)
+                ; 3E-T13 return: PAGE_VERB / PAGE_SLOT (VB_*, item_defs.asm). page_post
+                ; already applied VB_DISCARD (0 turns). STUB for T8 / T12: DRINK / EAT /
+                ; READ / EQUIP / REMOVE will run the effect overlay here and return
+                ; CF = 1 (1 turn); today they are ignored (no turn).
                 or   a                         ; CF = 0: no turn, ICON MODE stays
                 ret
                 ASSERT IN_BAG == 2 && IN_FIRE == 1

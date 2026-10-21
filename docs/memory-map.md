@@ -181,10 +181,10 @@ LAST (`r6_blobs`), run by `ovl_run` with C = `BANK_R6`.
 
 | Address (kit build) | Size (kit / release) | What |
 |------|------|------|
-| `$E500` `r6_code` | 582 / 564 | `pickup6.asm` (was bank-3 `pickup3.asm`): `pot_sync`, `pu_add`, `pot_take1`, `kit_add` (+ kit lists; the `DEBUG_KIT` extras are the 18-B difference), `mon_drop`, `drop_put` + `dp_*` (5 B, written in play), `drop_tab`, `uniq_tab`; then `bag6.asm` (was `bag3.asm`, `BAG6_LEN` 167): `bag_add`, `bag_find`, `bag_take`, `bag_pick` |
-| `$E746` `ovl_page_zx0` | 328 | the bag page stream (`BANK_OVL_PAGE`; was bank 1) |
-| `$E88E` `ovl_items_zx0` | 881 | the T6 item / trap generator stream (`BANK_OVL_ITEMS`; was bank 1) |
-| `$EBFF` `r6_end` .. `$FFFF` | **5,121 free** (release 5,139) | `R6_FREE` (build DISPLAY) |
+| `$E500` `r6_code` | 602 / 584 | `pickup6.asm` (was bank-3 `pickup3.asm`): `pot_sync`, `pu_add`, `pot_take1`, `kit_add` (+ kit lists; the `DEBUG_KIT` extras are the 18-B difference), `mon_drop`, `drop_put` + `dp_*` (5 B, written in play), `drop_tab`, `uniq_tab`; then `bag6.asm` (was `bag3.asm`, `BAG6_LEN` 187): `bag_add`, `bag_find`, `bag_take`, **3E-T13 `bag_discard` (+20)**, `bag_pick` |
+| `$E75A` `ovl_page_zx0` | **1,182** (3E-T13; was 328) | the bag page stream (`BANK_OVL_PAGE`; was bank 1) |
+| `$EBF8` `ovl_items_zx0` | 881 | the T6 item / trap generator stream (`BANK_OVL_ITEMS`; was bank 1) |
+| `$EF69` `r6_end` .. `$FFFF` | **4,247 free** (release 4,265; before 3E-T13: 5,121 / 5,139) | `R6_FREE` (build DISPLAY) |
 
 Callers: bank 7 `floor_pickup` → far6 `pu_add`, `ic_quaff` → far6
 `bag_find` / `pot_take1`, `new_game` → far6 `kit_add` (each +12 T vs far3,
@@ -229,8 +229,10 @@ resident code** (R6, 2026-10-21; was bank 1 after the UI code)
 (`r6_blobs..r6_blobs_end`, labels = runtime `$C000`-window addresses, bank
 `BANK_R6` = `BANK_OVL_PAGE` / `BANK_OVL_ITEMS`; last in R6, so their sizes move nothing an overlay can
 reference) and writes the raw images again: **build.sh fails if any differs
-from pass 1**. Today: **`page`** (3E-T2, `src/page_ovl.asm` at `PAGE_ORG`,
-300 B raw → 273 B `ovl_page_zx0`; `tests/page.py` P1 round-trips it) and
+from pass 1**. Today: **`page`** (3E-T2, `src/page_ovl.asm` at `PAGE_ORG`;
+**3E-T13: the real page, 1,357 B raw → 1,182 B `ovl_page_zx0`** (179 B left
+in the window); `tests/page.py` P1 round-trips it, its variables
+`pg_rc..pg_wid` excepted) and
 **`items`** (3E-T6, `src/items_ovl.asm` at `ITEMS_ORG`, 1,027 B raw → 881 B
 `ovl_items_zx0`, bank `BANK_OVL_ITEMS`; run by `level_new`, see "3E contracts"). The
 3E-T1 `ovl_test` (30 B) is dropped: `tests/ovl.py` O1 assembles the same
@@ -296,8 +298,15 @@ release build, page 362 B raw / 346 packed): open 252k T to the overlay entry
 attr bands + ornaments + text + 24 boxes) = **625k T, 9 frames** to the
 first page frame (the game screen stays on view meanwhile); close: the
 copy-back 198k T, **223k T / 3 frames** to the next tick (the screen flips
-back in the first). Free page-time RAM besides the window (verify before
-use): `GEN_SRC` + `PLAY_CELLS`.. `TX_DEC` `$6B80..$6D14` (405 B).
+back in the first). **3E-T13 (the real page, release, Warrior start bag):
+360k T to the overlay entry (unpack of 1,357 B) + 478k T draw (+ 15 2x
+icons, `item_name`, counters) = 838k T, 12 frames to the first page frame;
+close unchanged (223k T, 3 frames).** Free page-time RAM besides the window (verify before
+use): `GEN_SRC` + `PLAY_CELLS`.. `TX_DEC` `$6B80..$6D14` (405 B); 3E-T13
+uses `$6B80..$6BC1` (`PAGE_G60` 32 B: glyphs 60..63 copied from the
+depth's bank-7 tileset slot — the room's `TILE_GLYPHS` hold the lectern in
+the D8 Sanctum —; `PAGE_BUF` 34 B: a composed text line; `defs.asm`,
+ASSERT `PAGE_SCR_END <= TX_DEC`), so `$6BC2..$6D14` (339 B) stay free.
 **Silent in-play overlay (contract, not built):** the same window (map
 saved / restored the same way, ~25k T + the unpack) serves any cold in-play
 event that neither renders nor reads `ROOM_MAP` (3E item effects,
@@ -319,13 +328,57 @@ room map saved / restored, then the input latches: `INTENT` / `DN_T` /
 `FS_USED`, `EXIT_LOCK` = the held directions (a held direction waits for its
 release), `resync_tick`. The overlay closes on a NEW press of FIRE, BREAK,
 ENTER or `I` (keys held at the open are ignored); S, slot keys and the stick
-do nothing. Placeholder layout (Q3 open; golden `tests/golden/page_empty.hash`):
+do nothing. Placeholder layout (Q3 open; golden `page_empty`, renamed `page_start` by 3E-T13):
 rows 0-1 title `BAG` (menu font, col 2) + `ITEMS 0/20` (row 1, right), row 2
 the menu ornament (`menu_orn_b`, `MENU_A_SUB`), rows 4..14 the 5×4 grid of
 16×16 boxes (cols 9..22, centred), rows 16..17 `WORN` + 4 boxes (cols
 11..21), row 19 the description, row 20 the verbs (placeholder `USE EQUIP REMOVE DISCARD`, game.md §8.11), **row 22 the page's
 message row**, row 23 the ornament; 6×8 text from raw ASCII in the overlay
 (no text-block strings; `NO BAG YET` dropped from `strings.txt`, −7 B bank 0).
+
+**Bag page (3E-T13 / T14, built: the real page, read-only + navigation + verb
+choice).** Supersedes the placeholder close keys above: **BREAK / I close
+(any mode); FIRE / ENTER select** (an item → the verb strip; on `[CLOSE]` →
+close); S, slot keys do nothing. Layout = the approved placeholder, rows
+(goldens `page_start` = Warrior start bag, `page_bag` = the P6 mix):
+
+| Rows | Content |
+|------|---------|
+| 0–1 | `BAG` (menu font, cols 2–4); row 0 `ITEMS n/20` (x 48) + **`[CLOSE]`** (cols 26–31, selectable, bright cyan); row 1 `DAGGERS d  ARROWS a` (Warrior only, x 48) + `KEY` (col 26, when `LF_KEY_TAKEN`) |
+| 2 / 23 | ornament (`menu_orn_b`) |
+| 4–14 | bag 5×4: slot s icon 2×2 at row `4 + 3(s / 5)`, col `9 + 3(s % 5)` = the floor glyph (`item_glyph`) scaled 2× in the floor ink (`item_ink`); QTY digit (≥ 2) at row +1, col +2; empty = a 16×16 frame (`$47`) |
+| 15 | `W A H C` over the worn icons |
+| 16–17 | `WORN` (x 48) + 4 icons at col `11 + 3k` (k = `WS_*`), empty = frame |
+| 19 | description: `item_name` (+ ` Xn` for stacks), `EMPTY`, blank on `[CLOSE]` (stat line: T8, `it_stat` not resident) |
+| 20 | verbs `USE`-word (col 2: `DRINK` / `EAT` / `READ` / `USE`), `EQUIP` (7), `REMOVE` (12), `DISCARD` (18), `CLOSE` (25): enabled `$45`, disabled `$01` |
+| 22 | message row: help `FIRE: SELECT   I: CLOSE`; refusal `BAG FULL` (bank-1 `it_stems` + `S3_BAG_FULL`, 0 B new text) until the next press |
+
+Cursor = attr only (`xor $08`: paper blue; every page attr has paper 0) over
+the slot's 3×2 cells (icon + count column), `[CLOSE]`'s 6 cells, the chosen
+verb's cells. Cursor rows 0 `[CLOSE]`, 1–4 bag rows, 5 worn; U / D step the
+row and wrap (worn ↔ `[CLOSE]`), L / R wrap inside the row (widths 1 / 5 / 5 /
+5 / 5 / 4); the column is remembered across rows (worn shows min(col, 3));
+opens on slot 0. Verb strip: FIRE on an item → the first enabled verb; L / R
+skip disabled verbs and wrap; U / D back to the grid; FIRE confirms. Enables:
+potion DRINK, food EAT, scroll / book READ (+ DISCARD); gear in the bag EQUIP
++ DISCARD; bow DISCARD; worn REMOVE (refused on the page with 20 used slots:
+`BAG FULL`); empty / `[CLOSE]`: CLOSE only. **Return protocol:** the overlay
+writes `PAGE_VERB` (`$BC56`, `VB_*` `item_defs.asm`: `VB_NONE` 0 at every
+open, `VB_DRINK` 1, `VB_EAT` 2, `VB_READ` 3, `VB_EQUIP` 4, `VB_REMOVE` 5,
+`VB_DISCARD` 6) and `PAGE_SLOT` (`$BC57`: 0..19 bag, `PG_SLOT_WORN` 20 +
+`WS_*`; record = `BAG + 3 * slot`) and changes no other state.
+**`page_post`** (bank 1, +16 B) applies `VB_DISCARD` after the copy-back:
+far6 `bag_discard` (R6, 20 B: the whole stack via `bag_take` (B =
+`STACK_MAX`) → compacted + `pot_sync`; the bow clears `HAS_BOW`; no log line
+yet — the `YOU DISCARD ` stem is in the T8 fx stems; 0 turns). **Stub for
+T8 / T12:** DRINK / EAT / READ / EQUIP / REMOVE are left in `PAGE_VERB` /
+`PAGE_SLOT` and ignored today (no turn); T8 / T12 read them in
+`tpt_intent`'s `.bag` (and `use_slot`'s `SA_BAG`) path after `page_run`,
+run the effect overlay and return CF = 1. Bytes: bank 7 0, low RAM 0, bank 1
++16, R6 code +20, R6 stream +854. Tests: `tests/page.py` P6 (cells / glyphs /
+inks / QTY / frames, `pg_n`, verbs, golden `page_bag`), P7 (wrap rules), P8
+(the enable matrix + USE word), P9 (EQUIP / REMOVE return values, `[CLOSE]`,
+strip navigation, BREAK, CLOSE verb, DISCARD stack + bow, BAG FULL refusal).
 
 ### 3E-T1 byte ledger (measured, `tools/build.sh` DISPLAY, both `DEBUG_KIT` builds)
 
@@ -689,7 +742,7 @@ outweighing the +8 T per redrawn background cell of the 64-id glyph address.)
 | `$BB00..$BC00` | `ISR_VEC_TABLE` | A8 IM 2 vector table, 257 B, every byte `ISR_VEC_BYTE` `$BC` (`I` = `$BB`); filled by `isr_install` at boot (3E-T1: `boot6_init`, the boot block) (runtime only, not on tape) |
 | `$BC01..$BC0B` / `$BC0C..$BC0F` | `DRIP_*` / `MK_*` | **D3-8b: the decorative drip** (11 B, `level_defs.asm`; layout under "3D contracts" → "Decorative drip (D3-8b)"); **D3-8d: the status-mark state** `MK_N` / `MK_RR` / `MK_OPS` / `MK_LEFT` (4 B, `combat_defs.asm`; "Status marks (D3-8d)"); no spare left (was 4 B; 15 B before D3-8b) |
 | `$BC10` / `$BC11..$BC40` | `ANIM_N2` / `ANIM_LIST2` | B3B-10 (B3B-9 review): the decor list of a NEXT_MAP build (do_exit), same format as `ANIM_N` / `ANIM_LIST`; `room_shadow` copies the 49 B over them after the scroll. (Was the B3B-1 `OCC_MASK`, 72 B: dropped — `decor_tick` tests a due cell against the drawn footprints directly, see "As built in B3B-10") |
-| `$BC41..$BC49` / `$BC4A..$BC50` / `$BC51..$BC5E` | `HERO3D` / `TURN_PEND` / — | **D3-0: `HERO3D`** (9 B: `MP_RG`, `HERO_RES` 3 B, `HERO_IMM`, `MP_SH`, `STAT_SH`, D3-6a `HERO_DEF`, `XP_UP`; "3D contracts (D3-0)"), **D3-7: the `TURN_PEND` block** (7 B: `TURN_PEND`, `ACT_ABL`, `ACT_AT`, `MON_AT`, `FX_DROP`, T7 `LOG_TURN` / `LOG_PDIR`), **3E-T2: `PAGE_OPEN` `$BC54` (1 while the bag page is up) / `PAGE_N` `$BC55` (opens, mod 256)** (`combat_defs.asm`, test-observable, not zeroed per level), then spare (12 B; D3-8: 14 B; T6: 16 B; D3-0: 21 B; was 30 B spare, B3B-10: the `ANIM_RR` round-robin index dropped, unused — the per-entry `AL_PHASE` counters + per-tick caps need none) |
+| `$BC41..$BC49` / `$BC4A..$BC50` / `$BC51..$BC5E` | `HERO3D` / `TURN_PEND` / — | **D3-0: `HERO3D`** (9 B: `MP_RG`, `HERO_RES` 3 B, `HERO_IMM`, `MP_SH`, `STAT_SH`, D3-6a `HERO_DEF`, `XP_UP`; "3D contracts (D3-0)"), **D3-7: the `TURN_PEND` block** (7 B: `TURN_PEND`, `ACT_ABL`, `ACT_AT`, `MON_AT`, `FX_DROP`, T7 `LOG_TURN` / `LOG_PDIR`), **3E-T2: `PAGE_OPEN` `$BC54` (1 while the bag page is up) / `PAGE_N` `$BC55` (opens, mod 256)**, **3E-T13: `PAGE_VERB` `$BC56` / `PAGE_SLOT` `$BC57`** (the page's return: "Bag page (3E-T13)") (`combat_defs.asm`, test-observable, not zeroed per level), then spare (7 B, `$BC58..$BC5E`; 3E-T2: 12 B; D3-8: 14 B; T6: 16 B; D3-0: 21 B; was 30 B spare, B3B-10: the `ANIM_RR` round-robin index dropped, unused — the per-entry `AL_PHASE` counters + per-tick caps need none) |
 | `$BC5F` / `$BC60..$BC8F` | `ANIM_N` / `ANIM_LIST` | B3B-1 (D6; B3B-10: `ANIM_N` moved `$BC58` → `$BC5F` so count + list are one 49-B block): animated decor cells of the room in `ROOM_MAP`, 12 × 4 B (`AL_COL`, `AL_ROW`, `AL_TYPE`, `AL_PHASE`); filled by the decor deriver (B3B-9) or copied from `ANIM_LIST2`; stepped by `decor_tick` (B3B-10) |
 | `$BC90..$BCBB` | `HERO_ST` | C3-0: the 3C hero / input state block (44 B, runtime RAM, `src/hero_defs.asm`; layout in "3C contracts"); full since C3-2 (`CUR_REP` .. `PAUSE_REQ`) |
 | `$BCBC..$BCF3` | `ISR_ADDR` | A8 ISR, 56 B (`ISR_LEN`; 68 with `ISR_SAVE_ALT`, 42 with `ISR_ROM_CHAIN`; ASSERT end ≤ `ISR_ADDR_END` `$BD00`), copied from `isr_image` at boot; `$BCF4..$BCFF` spare |
@@ -1633,7 +1686,7 @@ and below `HOT_COPY`):
 | `$B4FE` / `$B4FF` | `FX_BUSY` / `FXQ_N` | **D3-5:** bit i = FX track i live or still drawn (0 = FX idle: `turn_done` waits for it) / queued descriptors 0..2 |
 | `$B500..$B51F` | `FXT2` | **D3-5:** FX track 2 (32 B). No FONT6 hole is free any more |
 | `$BC4A..$BC50` | `TURN_PEND` block (D3-7) | `TURN_PEND` +0 (bit 0 `TP_ACT` ability logic pending, bit 1 `TP_MON` monster phase pending, bit 2 `TP_FIRE` this is the fire tick), `ACT_ABL` +1 (`ABL_*` pending), `ACT_AT` +2 (`TURN_TICK` of the release, fire tick f = `ACT_FIRE_TICK` 2), `MON_AT` +3 (≠ 0: monster phase deferred, its earliest `TURN_TICK` f + 1; it runs once the hero's FX is idle, designer 2026-10-12), `FX_DROP` +4 (T1: descriptors `fx_start` dropped, mod 256; tests assert 0), **T7:** `LOG_TURN` +5 (log drain: bit 0 `LT_SERVED` = `item_log` drew a line since the turn started, bit 1 `LT_HOLD` = `end_turn` holds the next turn), `LOG_PDIR` +6 (T7 review: the input a hold swallowed — `PLAYER_DIR` bits 0-3, bit 7 = `DK_WAIT` — replayed when the key was released during the hold; "Log drain (T7)" under "Projectiles"). Zeroed by `level_reset_new` (`HERO3D..TURN_PEND_END`). Contract under "Projectiles" |
-| `$BC41..$BC49` | `HERO3D` | `MP_RG` +0 (MP regen counter), `HERO_RES` +1 (3 B, RES format), `HERO_IMM` +4 (`IMMF_*`; ASSERT = `HERO_RES + KX_IMM`: deal_hit reads hero and kx row alike), `MP_SH` +5 (panel MP as drawn), `STAT_SH` +6 (status icons as drawn), **D3-6a:** `HERO_DEF` +7 (hero DEF: Warrior 1 Leather / Mage 0, set by `hero_st_init`; gear in 3E), `XP_UP` +8 (1 = `deal_hit` added XP; **D3-9b:** `xp_turn` (end_turn) checks the level-up and clears it), `MP_RG` counts turns to the next +1 MP (frozen while WEAK), `MP_SH` is polled by `icon_poll` (PD_MP → `item_mp`); `$BC4A..$BC50` = `TURN_PEND` (row above); **D3-8:** `HST_DONE` `$BC51` (1 = the hero's status step already ran for the turn being entered), `HELD_T` `$BC52` (held-hero INPUT-tick counter); **D3-8e2: `COMBAT_NOT_BEFORE` `$BC53`** (the §6.5.1 panel gate, "Cast-time output gate" under "Projectiles"); **3E-T2: `PAGE_OPEN` `$BC54`, `PAGE_N` `$BC55`** (the bag page, not zeroed per level); `$BC56..$BC5E` free. `level_reset_new` zeroes `HERO3D..ST_HERO_END` |
+| `$BC41..$BC49` | `HERO3D` | `MP_RG` +0 (MP regen counter), `HERO_RES` +1 (3 B, RES format), `HERO_IMM` +4 (`IMMF_*`; ASSERT = `HERO_RES + KX_IMM`: deal_hit reads hero and kx row alike), `MP_SH` +5 (panel MP as drawn), `STAT_SH` +6 (status icons as drawn), **D3-6a:** `HERO_DEF` +7 (hero DEF: Warrior 1 Leather / Mage 0, set by `hero_st_init`; gear in 3E), `XP_UP` +8 (1 = `deal_hit` added XP; **D3-9b:** `xp_turn` (end_turn) checks the level-up and clears it), `MP_RG` counts turns to the next +1 MP (frozen while WEAK), `MP_SH` is polled by `icon_poll` (PD_MP → `item_mp`); `$BC4A..$BC50` = `TURN_PEND` (row above); **D3-8:** `HST_DONE` `$BC51` (1 = the hero's status step already ran for the turn being entered), `HELD_T` `$BC52` (held-hero INPUT-tick counter); **D3-8e2: `COMBAT_NOT_BEFORE` `$BC53`** (the §6.5.1 panel gate, "Cast-time output gate" under "Projectiles"); **3E-T2: `PAGE_OPEN` `$BC54`, `PAGE_N` `$BC55`** (the bag page, not zeroed per level); **3E-T13: `PAGE_VERB` `$BC56`, `PAGE_SLOT` `$BC57`**; `$BC58..$BC5E` free. `level_reset_new` zeroes `HERO3D..ST_HERO_END` |
 
 `ST_*` arrays: byte = array + slot (`P_MAX_ENT` 16); `ST_FLAGS` / `ST_T1` /
 `ST_T2` share page `$B3` (ASSERT). **HERO_CARRY:** slot 0 carries over a

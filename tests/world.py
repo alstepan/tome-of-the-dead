@@ -1540,16 +1540,16 @@ def w22_23(p, check, which):
     if not refusal("4", "no_daggers"):
         bad.append("no_daggers")
     check("W23 refusals (bow, food, scroll, daggers at 0): their line, no turn", bad == [], bad)
-    # ENTER uses the icon; I = the bag (3E-T2: the page opens; FIRE closes it; tests/page.py)
+    # ENTER uses the icon; I = the bag (3E-T2: the page opens; BREAK or I closes it, 3E-T13: FIRE selects; tests/page.py)
     tap("9")
     t0 = tc()
     n0 = p.rb("PAGE_N")
     tap("ENTER")
     a = p.rb("PAGE_OPEN")
-    tap("SPACE")
+    tap("CAPS", "SPACE")
     tap("I")
     b = p.rb("PAGE_OPEN")
-    tap("SPACE")
+    tap("CAPS", "SPACE")
     check("W23 ENTER uses the selected icon (Bag: the page opens); I = the page; no turn",
           (a, b, (p.rb("PAGE_N") - n0) & 255, p.rb("PAGE_OPEN"), tc() - t0) == (1, 1, 2, 0, 0),
           (a, b, p.rb("PAGE_N") - n0, tc() - t0))

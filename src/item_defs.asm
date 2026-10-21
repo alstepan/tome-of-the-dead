@@ -181,6 +181,23 @@ WS_HELM         EQU 2
 WS_CHARM        EQU 3
 WORN_SLOTS      EQU 4
 BAG_SLOTS       EQU 20              ; game.md §8: 5 x 4 page grid
+
+;------------------------------------------------------------------------------
+; Page verbs (3E-T13, game.md §8.11 Q3): the bag page RECORDS a verb in
+; PAGE_VERB and its slot in PAGE_SLOT (0..BAG_SLOTS-1 bag, BAG_SLOTS + WS_* worn:
+; the record is BAG + IR_STRIDE * slot), closes, and the effect runs after the
+; copy-back. page_post applies VB_DISCARD itself (bag_discard, 0 turns); the
+; others are the T8 / T12 effect overlay's (tpt_intent, 1 turn). VB_DRINK..
+; VB_READ are also the page's USE-word index (page_ovl.asm pg_uw).
+;------------------------------------------------------------------------------
+VB_NONE         EQU 0               ; closed without a verb ([CLOSE], CLOSE, BREAK, I)
+VB_DRINK        EQU 1               ; potion
+VB_EAT          EQU 2               ; food
+VB_READ         EQU 3               ; scroll, book
+VB_EQUIP        EQU 4               ; gear in the bag
+VB_REMOVE       EQU 5               ; worn gear (refused on the page with a full bag)
+VB_DISCARD      EQU 6               ; any bag item: the whole stack (never worn)
+PG_SLOT_WORN    EQU BAG_SLOTS       ; PAGE_SLOT of worn slot 0 (+ WS_*)
 ; quick slots (§8 "Quick slots auto-fill"): QPIN / QS_CACHE index
 QS_FOOD         EQU 0
 QS_POTION       EQU 1
