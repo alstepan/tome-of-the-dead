@@ -1,0 +1,15 @@
+%abc-2.1
+X:1
+T:Tome of the Dead - Boss Fight
+C:ZX Spectrum 128K AY-3-8912 Chiptune
+M:4/4
+L:1/8
+Q:1/4=106
+K:Fm
+%%score (V1 V2) V3
+V:V1 clef=treble name="Channel A (Alto)"
+f c f _a4 g =e g c _a4 f _a4 c' _b4 g c =e f _a4 c' _d5 c' _a4 f g _a4 f g =e f2 f2 |]
+V:V2 clef=treble name="Channel B (Soprano)"
+c' _a4 c' f' =e' c' =e' g f' c' f' _a5 G5 =e' =e' g _a5 f' _a5 _b5 _a5 f' c' =e' f' c' =e' c' c'2 c'2 |]
+V:V3 clef=bass name="Channel C (Basso)"
+F, F F, F C G, C =E, F, F F, F C =E, C =E, _D F, _D _B, F, _A, C =E, F, C C =E, F,2 F,2 |]

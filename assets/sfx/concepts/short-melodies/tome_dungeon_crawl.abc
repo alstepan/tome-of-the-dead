@@ -1,0 +1,15 @@
+%abc-2.1
+X:1
+T:Tome of the Dead - Dungeon Crawl
+C:ZX Spectrum 128K AY-3-8912 Chiptune
+M:4/4
+L:1/8
+Q:1/4=72
+K:Fm
+%%score (V1 V2) V3
+V:V1 clef=treble name="Channel A (Alto)"
+c2 f2 _a4 g f2 f2 _a4 _d5 c'2 _b42 _b42 _d5 _b4 g2 =e2 f2 _a4 f c'2 _a42 |]
+V:V2 clef=treble name="Channel B (Soprano)"
+_a42 c'2 f'2 c'2 _d52 f'2 f' _d5 f'2 g2 _b42 c'2 g2 _a42 c' _a4 f'2 c'2 |]
+V:V3 clef=bass name="Channel C (Basso)"
+F,2 C2 _A,2 C2 _D2 _A,2 _B,2 F,2 G,2 _B,2 C2 =E,2 F,2 C2 F,2 C2 |]

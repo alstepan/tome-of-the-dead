@@ -1,0 +1,13 @@
+X: 3
+T: Lit by a Failing Torch (3-Voice Legato)
+M: 4/4
+L: 1/8
+Q:1/4=68
+K:F
+V:1 name="AY Lead"
+(D2 AF/2E/2) (F2 G2) | (FE DF) (AG/2A/2 B2) | (AG EG) (F/2G/2A E/2F/2D) | (DB/2A/2 G/2F/2E) (F/2G/2A D2) |]
+V:2 name="AY Harmony"
+(A,4 F,2 E,2) | (D,4 F,2 G,2) | (E,4 D,2 F,2) | (G,2 E,2 C,2 A,,2) |]
+V:3 name="AY Bass"
+D,,8 | A,,,8 | B,,,8 | (A,,,4 D,,4) |]
+

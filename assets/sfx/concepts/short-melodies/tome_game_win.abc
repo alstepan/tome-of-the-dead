@@ -1,0 +1,15 @@
+%abc-2.1
+X:1
+T:Tome of the Dead - Game Win
+C:ZX Spectrum 128K AY-3-8912 Chiptune
+M:4/4
+L:1/8
+Q:1/4=84
+K:Fm
+%%score (V1 V2) V3
+V:V1 clef=treble name="Channel A (Alto)"
+c f _a42 f _a4 c'2 _d52 _b42 c'2 f2 |]
+V:V2 clef=treble name="Channel B (Soprano)"
+f _a4 c'2 _a4 c' f'2 f'2 g2 =e2 f2 |]
+V:V3 clef=bass name="Channel C (Basso)"
+F,2 C2 F2 _A,2 _B,2 _D2 C2 F,2 |]

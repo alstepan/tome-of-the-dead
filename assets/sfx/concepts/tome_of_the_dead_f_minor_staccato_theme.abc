@@ -1,0 +1,39 @@
+%abc-2.1
+X:1
+T:Tome of the Dead - IIb. Catacomb Lament (Staccato Theme) (F minor)
+C:ZX Spectrum 128K AY-3-8912 Chiptune
+M:4/4
+L:1/8
+Q:1/4=96
+K:Fm
+%%score (V1 V2) V3
+V:V1 clef=treble name="V1"
+.f2 ._a .c' .f'2 .c' ._a | .f ._a .c'2 .g ._b .g2 | ._a .c' .f ._a .f2 ._a .c' | ._d'2 ._b ._d' .c'2 .g .c' | 
+._e .g .c'2 ._e' .c' .g2 | .c'2 ._a .c' .g2 .e2 | ._a .c' .f2 ._a .c' .c2 | .g ._b .g2 .e2 .g2 | 
+_a2 c' _a c'2 _a2 | f2 _b f e2 c'2 | c'2 _e' c' f2 _a f | _a f _a2 g2 c'2 | 
+_a2 f2 g2 _e2 | _a2 f _b g2 _b g | c'2 _e' c' _e2 _b g | _a f _a2 g2 c'2 | 
+.c2 ._a .c' ._B2 ._e ._b | ._A2 .f ._a .f2 ._d .f | .f2 ._b .f ._a2 .f ._a | ._B2 .g ._b .c'2 .e2 | 
+_a f c'2 c' _a _e'2 | f _b f2 _a f _a2 | _B g _B2 e2 c'2 | g e g2 e c' g2 | 
+._a .f .c'2 ._a .f ._a2 | .c2 .f ._a ._e2 ._a .c' | .f2 ._b .f ._a2 .f ._a | ._B .g ._B2 .e2 .c'2 | 
+f _b f2 _a f _a2 | _B g _B2 e2 c'2 | g e g2 c' e e2 | _a f c' f _a4 | 
+
+V:V2 clef=treble name="V2"
+c'2 f' _a _a2 f _a | _a c' f'2 _b g _b2 | c' _a _a2 _a2 f _a | f'2 _d' f' e'2 c' e' | 
+.c'2 ._e' .g' .c''2 .g' ._e' | ._a .c' ._e'2 ._b2 .c'2 | .f2 ._a .c' .f'2 ._a .f | ._b2 ._d' ._b .g2 .c'2 | 
+c' _a f'2 _a2 f _a | _d' _b f'2 g2 e'2 | _e' c' _a2 _a f _a2 | _d'2 f' _d' e2 g2 | 
+c' _a _d' _b _b g c' _a | f _a _d'2 _b g g2 | _e' c' _a2 g _e g2 | _d'2 f' _d' e2 g2 | 
+_e' c' _e'2 g _b g2 | c' _a c'2 _a f _a2 | _d' _b _d'2 c' _a c'2 | f d f2 e2 g2 | 
+c'2 _a f _e'2 c' _a | _d'2 _b f f'2 _d' _a | f2 d f e2 g2 | e'2 c' g c'2 g e | 
+.c'2 ._a' .f' .c'2 ._a .f | ._a .f ._a2 .c' ._e' .c'2 | ._d' ._b .f'2 ._a .f' ._d'2 | .f2 .d .f .e2 .g2 | 
+_d'2 _b f c'2 _a f | f2 d f e2 g2 | e'2 c' g e' g' c'2 | f' c' _a c' f'4 | 
+
+V:V3 clef=bass name="V3"
+F, C _A,2 F2 C _A, | F, _A, C2 G, _B, _E2 | _A, C F2 F,2 _A, C | _B,2 _D _B, C2 G, C | 
+C2 G, _E C2 G C | _A, C _E2 _B,2 C2 | F,2 _A, C F2 C _A, | _B,2 _D _B, C2 G, C | 
+.F2 ._A .c .F2 .C2 | ._B,2 ._D ._B, .C2 .G, .C | ._A,2 .C ._E ._D2 .F ._D | ._B,2 ._D ._B, .C2 .G, .C | 
+F C _B, F _E _B, _A, _E | _D _A, _B, F _E2 _B, _E | _A,2 C _E C2 _E _B, | _B, _D _B,2 C2 G, C | 
+_A2 _E C _E2 _B, G, | F2 C _A, _D2 _A, F, | _B,2 F _D F2 C _A, | G,2 _B, G, C2 G, C | 
+F C _A,2 _A _E C2 | _B, F _D2 _D _A, F2 | G, _B, G,2 C2 G, C | C G, C2 C, G, C,2 | 
+.F, .C .F2 .F, ._A, .C2 | .F,2 ._A, .C ._A,2 .C ._E | ._B,2 .F ._D ._D2 ._A, .F, | .G, ._B, .G,2 .C2 .G, .C | 
+_B, F _D2 F C _A,2 | G, _B, G,2 C2 G, C | C G, C2 C E G2 | F, C _A, F, F,4 | 
+

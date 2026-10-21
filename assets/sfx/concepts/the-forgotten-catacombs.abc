@@ -1,0 +1,16 @@
+X: 7
+T: The Forgotten Catacombs (3-Voice AY Original)
+M: 4/4
+L: 1/8
+Q:1/4=95
+K:F
+V:1 name="AY Ch 1"
+(D2 F2 A2 G2) | (F2 E2 D2 C2) | (D2 F2 A2 d2) | (c2 A2 G4) |
+(F2 A2 c2 B2) | (A2 G2 F2 E2) | (D/2E/2F/2G/2 A/2F/2D/2F/2 E/2F/2G/2A/2 E2) | D8 |]
+V:2 name="AY Ch 2"
+(A,4 D,4) | (D,4 A,,4) | (A,4 F,4) | (E,4 C,4) |
+(D,4 F,4) | (F,4 C,4) | (A,,2 D,2 C,2 C,2) | A,,8 |]
+V:3 name="AY Ch 3"
+(D,,2 D,,2 G,,2 G,,2) | (D,,2 D,,2 A,,2 A,,2) | (D,,2 D,,2 F,,2 F,,2) | (C,,2 C,,2 C,,2 C,,2) |
+(B,,,2 B,,,2 B,,,2 B,,,2) | (F,,2 F,,2 F,,2 F,,2) | (G,,2 F,,2 A,,2 A,,2) | D,,8 |]
+
