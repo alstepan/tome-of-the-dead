@@ -163,6 +163,11 @@ class Proto:
         a = S[name_or_addr] if isinstance(name_or_addr, str) else name_or_addr
         self.h.write_byte(a, v)
 
+    def wmem(self, name_or_addr, data):
+        a = S[name_or_addr] if isinstance(name_or_addr, str) else name_or_addr
+        for i, v in enumerate(data):
+            self.h.write_byte(a + i, v)
+
     def ent(self, slot):
         b = self.z.read_memory(S["P_ENTITIES"] + slot * STRIDE, STRIDE)
         return {k: b[o] for k, o in E.items()}

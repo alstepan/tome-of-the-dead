@@ -1483,18 +1483,23 @@ def main():
             tc = p.rw("TURN_COUNTER")
             p.turn("G")
             e = p.ent(0)
-            h.expect("32 quaff hp 10 -> 18", e["HP"], 18)
+            h.expect("32 quaff hp 10 -> 20 (3E-T11: Heal +10)", e["HP"], 20)
             h.expect("32 potions 1 -> 0", e["POT"], 0)
             h.expect("32 TURN_COUNTER += 1", p.rw("TURN_COUNTER") - tc, 1)
             h.expect("32 G with 0 potions: no turn", p.no_turn("G"), True)
+            # 3E-T11: potions live in the BAG (E_POT = its potion count, pot_sync):
+            # poke one Heal into the bag (+ the count the poke bypasses)
+            p.wmem(S["BAG"], [S["IT_P_HEAL"], 1, 0])
             p.set_ent(0, HP=20, POT=1)
             p.turn("G")
             h.expect("32 heal capped at max", p.ent(0)["HP"], 24)
-            p.set_ent(0, POT=9)
+            # 33: a full BAG (20 gear records; was E_POT 9) refuses the potion
+            p.wmem(S["BAG"], [S["IT_W_LONG"], 1, 0] * S["BAG_SLOTS"])
+            pot33 = p.ent(0)["POT"]
             p.place(0, 24, Y0)
             for _ in range(3):
                 p.turn("L")
-            h.expect("33 full pack stays 9", p.ent(0)["POT"], 9)
+            h.expect("33 full bag: the potion count stays", p.ent(0)["POT"], pot33)
             p.place(0, 20, Y0)
             p.settle()
             h.expect("33 potion stays on the floor", attr_at(p.frame(), 28, item_row(0)), 0x42)

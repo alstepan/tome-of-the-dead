@@ -2,7 +2,7 @@
 ; bag3.asm — 3E-T10 bag helpers, bank 3 (INCLUDEd last by bank3.asm). Reached
 ; by far3 from bank 7 or called directly by bank-3 code / overlays running with
 ; bank 3 paged. BAG ($5D00, bank 5) is always mapped, so nothing here pages.
-; Nothing calls these before 3E-T11. IX / IY are never touched; no EXX.
+; Callers since 3E-T11: pickup3.asm (pu_bag, pot_quaff, kit_add). IX / IY are never touched; no EXX.
 ;
 ; BAG invariant (kept by these helpers): records are packed from slot 0 (a
 ; free slot, TYPE IT_NONE, is followed only by free slots), so the order is
@@ -17,7 +17,8 @@
 ; Food / potions / scrolls (IT_FOOD_LO..IT_SCR_HI) top up the first stack of the
 ; type that stays <= STACK_MAX, else take the first free slot; gear, the book
 ; and the bow never merge (E = 0 never equals a used slot's non-zero type).
-; Clobbers: A, DE, HL, F (B, C kept).   ~0.6k T worst (20 slots)
+; 3E-T11: an add runs pot_sync (E_POT = the bag's potion count, +~1.2k T).
+; Clobbers: A, DE, HL, F (B, C kept).   ~0.6k T worst (20 slots) + pot_sync
 ;------------------------------------------------------------------------------
 bag_add:
                 ld   d, a
@@ -49,13 +50,13 @@ bag_add:
 .full:         ld   l, 1
                 ret
 .mg:            ld   (hl), a
-                ld   l, 0
-                ret
+                jr   .ok
 .new:           ld   (hl), d
                 inc  l
                 ld   (hl), b
                 inc  l
                 ld   (hl), c
+.ok:            call pot_sync                  ; 3E-T11: E_POT = the bag's potions
                 ld   l, 0
                 ret
 
@@ -86,6 +87,7 @@ bag_find:
 ; (the later records shift down, the last record is cleared).
 ; In : A = slot (valid, occupied), B = qty to take (taking >= QTY empties it).
 ; Out: A = QTY left (0 = the slot is gone).
+; 3E-T11: ends with pot_sync (E_POT, +~1.2k T).
 ; Clobbers: A, BC, DE, HL, F.   ~60 T; + ~21 T per record shifted when emptied
 ;------------------------------------------------------------------------------
 bag_take:
@@ -100,7 +102,7 @@ bag_take:
                 jr   z, .free
                 jr   c, .free
                 ld   (hl), a
-                ret
+                jr   .sy
 .free:          dec  l
                 ld   d, h
                 ld   e, l                      ; DE = this record
@@ -119,6 +121,9 @@ bag_take:
                 ld   (de), a
                 inc  e
                 ld   (de), a
+.sy:            push af                        ; 3E-T11: E_POT = the bag's potions
+                call pot_sync
+                pop  af
                 ret
 
 ;------------------------------------------------------------------------------

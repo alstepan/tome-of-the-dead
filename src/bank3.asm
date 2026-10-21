@@ -466,7 +466,7 @@ level_new:
 ; budget (lp_budget: game.md §9.4.1, replaces the B3B-12 stand-in table) and
 ; the start room's entry (lp_enter: quota 0, so no monster; record VISITED,
 ; ROOM_VISITS = 1). Monsters spawn when the hero enters their room (do_exit
-; -> lp_transition). Hero (slot 0): kind / HP / MAXHP / potions / facing
+; -> lp_transition). Hero (slot 0): kind / HP / MAXHP / facing (E_POT: pot_sync)
 ; carried over, room = LVL_START, x = level_start_x, standing on storey 0
 ; (game.md §1.1 gaps (4)), CUR_ROOM = LVL_START. Clobbers: all but IY.
 ;------------------------------------------------------------------------------
@@ -480,7 +480,6 @@ level_populate:
                 ld   l, (ix+E_HP)
                 ld   h, (ix+E_MAXHP)
                 push hl
-                ld   b, (ix+E_POT)
                 ld   a, (ix+E_FLAGS)
                 and  HERO_CARRY                ; flags that survive a descend
                 ld   c, a
@@ -494,8 +493,8 @@ level_populate:
                 ld   (ix+E_ROOM), a
                 ld   a, (HERO_KIND)
                 ld   (ix+E_KIND), a
+                call pot_sync                  ; 3E-T11: E_POT = the bag's potions (was a carry)
                 pop  bc
-                ld   (ix+E_POT), b
                 ld   a, c
                 or   EF_ACTIVE | EF_PLAYER
                 ld   (ix+E_FLAGS), a
@@ -1003,4 +1002,5 @@ decor_room:
                 INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
                 INCLUDE "rank3.asm"            ; D3-7: abil_load (ABIL_DESC for the bank-7 ability code)
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing
-                INCLUDE "bag3.asm"             ; 3E-T10: bag_add / bag_find / bag_take / bag_pick (no caller until T11)
+                INCLUDE "pickup3.asm"          ; 3E-T11: pu_bag, pot_quaff, kit_add, mon_drop / drop_put
+                INCLUDE "bag3.asm"             ; 3E-T10: bag_add / bag_find / bag_take / bag_pick

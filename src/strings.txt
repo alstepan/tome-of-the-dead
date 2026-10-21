@@ -30,7 +30,6 @@
 # --- whole log lines ----------------------------------------------------------
 welcome         "YOU ENTER THE DUNGEON"
 descend         "YOU DESCEND DEEPER"
-found           "YOU PICK UP A POTION"
 quaff           "YOU DRINK A POTION"
 locked          "THE DOOR IS LOCKED"
 fall            "YOU FALL INTO A PIT"
@@ -242,7 +241,6 @@ cmb_arrows      " ARROWS"
 cmb_arrow       " ARROW"
 cmb_daggers     " DAGGERS"
 cmb_dagger      " DAGGER"
-cmb_bow         "YOU PICK UP A BOW"
 
 # --- gear wear (game.md §8.7) -----------------------------------
 cmb_notch       "YOUR WEAPON IS NOTCHED!"

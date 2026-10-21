@@ -178,7 +178,8 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
-CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix")
+CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
+             "pmix")
 CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -312,6 +313,14 @@ SCENARIOS = {
         (1, 22, stand_y(1, 2), HOSTILE),
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "mkmix"),
+    # 3E-T11: "mix" with a bag item on every col of the hero's walk (a pickup at
+    # each arrival: bag_add + the name line + ap_stamp) and a 1-HP skeleton (the
+    # first slash kills it: mon_drop's roll / placement)
+    "pmix": ("knight + 4 monsters, bag items under every step, a kill", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "pmix"),
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
         (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
@@ -554,6 +563,24 @@ def mkmix_setup(p):
     p.settle()
 
 
+PMIX_STEP = int(os.environ.get("BUDGET_PMIX_STEP", "2"))   # 1: 13 adjacent items, 126.65k (T11 report)
+
+
+def pmix_setup(p):
+    """"pmix": FLOOR_LIST entries (room A, storey 1) on every PMIX_STEP-th col of 6..11 and 15..21,
+    one bag type each, their glyphs in ROOM_MAP row 16; the skeleton at 1 HP."""
+    types = [S[n] for n in ("IT_F_APPLE", "IT_P_HEAL", "IT_S_FEAR", "IT_W_LONG", "IT_A_CHAIN", "IT_C_MIGHT",
+                            "IT_F_MEAT")]
+    cols = list(range(15, 22, PMIX_STEP)) + list(range(6, 12, PMIX_STEP))
+    free = [i for i in range(S["FLOOR_MAX"]) if p.rb(S["FLOOR_LIST"] + i * S["FL_STRIDE"]) == S["FL_EMPTY"]]
+    for k, (i, c) in enumerate(zip(free, cols)):
+        t = types[k % len(types)]
+        p.z.cmd("write-memory %d %d %d %d %d" % (S["FLOOR_LIST"] + i * S["FL_STRIDE"], S["FL_S1"], c, t, 1))
+        g = p.rb(S["it_cls"] + (p.rb(S["it_tab"] + t) >> 4))
+        p.wb(S["ROOM_MAP"] + 16 * 32 + c, g)
+    p.set_ent(5, HP=1)
+
+
 def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     p = game.T(h)
@@ -586,6 +613,8 @@ def run_scenario(h, scen):
         acast_setup(p, placements)
     if len(scen) > 5 and scen[5] == "mkmix":
         mkmix_setup(p)
+    if len(scen) > 5 and scen[5] == "pmix":
+        pmix_setup(p)
     for f in EXTRA_SETUP:
         f(p)
     mode = scen[4] if len(scen) > 4 else None
@@ -667,7 +696,7 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix").split(","):
+        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")

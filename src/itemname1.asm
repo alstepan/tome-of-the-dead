@@ -21,6 +21,47 @@
 ; The book's first word id ITN_HERO ($FF) is the class word: W_WAR + HERO_KIND
 ; (K_KNIGHT 0 -> WAR, K_WIZARD 1 -> SPELL; asserted).
 ;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; it_line — 3E-T11, far1 from bank 3 (pu_bag, mon_drop): one composed log line
+; "<stem><name>" in MSG_BUF, pushed to the log (game.md §8.11 pickup/drop
+; rulings 1). In: A = type (IT_NONE: no name), E = S3_* offset of a bank-1
+; it_stems stem, or IL_PICK = the bank-0 "YOU PICK UP " (cmb_pick, tx_dec).
+; The name gets IT_CAT_MAX chars (LOG_MAX - the longest stem 12 = 20 >= every
+; name: no cut in practice).  Clobbers: A, BC, DE, HL.   ~1.5k + name + log
+;------------------------------------------------------------------------------
+IL_PICK         EQU $FF
+IT_CAT_MAX      EQU LOG_MAX - 12
+it_line:
+                push af                        ; [type]
+                ld   a, e
+                inc  a
+                jr   nz, .s3
+                ld   a, TX_CMB_PICK
+                call tx_dec                    ; HL = TX_DEC (low RAM; re-pages bank 1)
+                jr   .cp
+.s3:            dec  a
+                ld   hl, it_stems
+                add  a, l
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a
+.cp:            ld   de, MSG_BUF
+.c:             ld   a, (hl)
+                or   a
+                jr   z, .nm
+                ld   (de), a
+                inc  hl
+                inc  de
+                jr   .c
+.nm:            pop  af
+                ld   h, IT_CAT_MAX
+                call item_name                 ; DE past the name
+                xor  a
+                ld   (de), a
+                ld   hl, MSG_BUF
+                jp   log_push                  ; (bank 2; the ring is bank 5)
+                ASSERT IL_PICK != S3_BAG_FULL && IL_PICK != S3_BOSS_DROPS
 item_name:
                 inc  h
                 ld   b, h                      ; B = room + 1

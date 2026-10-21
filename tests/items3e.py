@@ -103,7 +103,13 @@ def emu(p, check):
 
     # ---- R1 ------------------------------------------------------------------
     p.menu_start(K_KNIGHT)
-    check("R1 new_game zeroes ITEM_RAM", mem(lo, n) == bytes(n), mem(lo, n).hex())
+    # 3E-T11: new_game zeroes ITEM_RAM, then kit_add writes the Warrior start kit
+    # (game.md §8.11 Q10: WORN Short Sword + Leather, BAG Heal x1 + Apple x1)
+    want = bytearray(n)
+    bag, worn = 0, S["WORN"] - lo
+    want[bag:bag + 6] = bytes([S["IT_P_HEAL"], 1, 0, S["IT_F_APPLE"], 1, 0])
+    want[worn:worn + 6] = bytes([S["IT_W_SHORT"], 1, 0, S["IT_A_LEATHER"], 1, 0])
+    check("R1 new_game zeroes ITEM_RAM + the start kit (T11)", mem(lo, n) == bytes(want), mem(lo, n).hex())
     bad = canaries()
     check("R1 the rest of the reserve untouched", not bad, bad[:16])
     # ---- R2 ------------------------------------------------------------------

@@ -622,7 +622,7 @@ def bar_bytes(fill):
 def w15(p, check):
     # B3B-13: messages are token streams pushed by id (msg_push); the expected
     # text comes from src/strings.txt
-    TXT = {"str_" + n: t for n, t in STRINGS if n in ("found", "locked", "fall", "died", "quaff")}
+    TXT = {"str_" + n: t for n, t in STRINGS if n in ("descend", "locked", "fall", "died", "quaff")}
     MSG = {k: S["TX_" + k[4:].upper()] for k in TXT}
     WELCOME = dict(STRINGS)["welcome"]
     STUB = S["LOWRAM_END_3B"]
@@ -721,7 +721,7 @@ def w15(p, check):
           log_row(p.composed_frame(), 22) == text6(WELCOME), "")
 
     # --- 3 messages: 2-row scroll ----------------------------------------
-    push("str_found", "str_locked", "str_fall")
+    push("str_descend", "str_locked", "str_fall")
     check("W15 3 pushes queued (LOG_QN 3, PD_LOG)", (p.rb("LOG_QN"), p.rb("PANEL_DIRTY") & S["PD_LOG"])
           == (3, S["PD_LOG"]), p.rb("LOG_QN"))
     n = 0
@@ -754,7 +754,7 @@ def w15(p, check):
     check("W15 displayed == composed", p.frame() == p.composed_frame(), "")
 
     # --- GS_DEAD / GS_WIN lines are never dropped (log_push_end) -------------
-    push("str_found", "str_locked", "str_fall", "str_quaff")
+    push("str_descend", "str_locked", "str_fall", "str_quaff")
     stub([0x3E, MSG["str_died"], 0xCD] + w(S["msg_push_end"]), "msg_push_end")
     check("W15 ring full: log_push_end replaces the newest pending (LOG_QN 4, LQ_DROP 1)",
           (p.rb("LOG_QN"), p.rb(S["LOG_Q"] + S["LQ_DROP"])) == (4, 1), "")
@@ -765,7 +765,7 @@ def w15(p, check):
     p.wb(S["LOG_Q"] + S["LQ_DROP"], 0)
 
     # --- ring overflow -----------------------------------------------------
-    push("str_found", "str_locked", "str_fall", "str_quaff", "str_died")
+    push("str_descend", "str_locked", "str_fall", "str_quaff", "str_died")
     check("W15 ring full: 5th push (log_push) dropped (LOG_QN 4, LQ_DROP 1)",
           (p.rb("LOG_QN"), p.rb(S["LOG_Q"] + S["LQ_DROP"])) == (4, 1), "")
     p.until(drained, 12)
@@ -1413,6 +1413,7 @@ def w22_23(p, check, which):
 
         pot_a = S["P_ENTITIES"] + S["E_POT"]
         p.wb(pot_a, 3)                                # potions to drink (a tap would)
+        p.wmem(S["BAG"], [S["IT_P_HEAL"], 3, 0])      # 3E-T11: ... from the BAG
         p.wb(hp_a, 5)
         p.wb("SEL_SLOT", 6)
         p.settle(2)
@@ -3151,7 +3152,7 @@ def w16_level(p, check):
         check(f"W16 {tag}: lair screens == map on row 17 + the glow cell (gate $46, glow, ornament)",
               not bad and p.rb(S["TILE_ATTRS"] + S["T_GRATE"]) == S["ATTR_GRATE"], bad[:4])
         # a marker line, then out and back in: no second hint
-        ingame([0x3E, S["TX_FOUND"], 0xCD] + w16(S["msg_push"]), "marker " + tag)
+        ingame([0x3E, S["TX_DESCEND"], 0xCD] + w16(S["msg_push"]), "marker " + tag)
         p.until(lambda: p.rb("LOG_QN") == 0, 200)
         p.settle(4)
         for _ in range(24):
@@ -3161,7 +3162,7 @@ def w16_level(p, check):
         p.until(lambda: p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
         walk_in()
         check(f"W16 {tag}: second entry to the lair: no second hint (row 23 = the marker)",
-              p.rb("CUR_ROOM") == lair and log_row(p.frame(), 23) == text6(dict(STRINGS)["found"]),
+              p.rb("CUR_ROOM") == lair and log_row(p.frame(), 23) == text6(dict(STRINGS)["descend"]),
               p.rb("CUR_ROOM"))
         # the exit col with the grate CLOSED: J is no exit (C3-8a: DOWN with no
         # ladder / exit below is a plain wait, 1 turn; it used to be no turn)

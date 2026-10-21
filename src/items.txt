@@ -117,9 +117,11 @@ IT_C_GRAVE      | GRAVE RING        | $06  | 0 0 0 2 0  | U  | D6 unique: MP+2, 
 [stems_resident]
 # bank 0 (checked, not emitted)
 pick          | E:cmb_pick        | "YOU PICK UP "
-# turn path: BAG FULL, trap trigger + TRAP FOUND. No drop / unique line exists yet
-# (the spec has none; adding one is a designer item, not a retag).
+# turn path: BAG FULL, the boss unique drop, NO NEED (the quick potion; T11, game.md §8.11),
+# trap trigger + TRAP FOUND.
 bag_full      | N | "BAG FULL"
+boss_drops    | N | "BOSS DROPS "
+no_need       | N | "NO NEED"
 trap_dart     | N | "A DART HITS YOU!"
 trap_gas      | N | "SLEEPING GAS!"
 trap_alarm    | N | "AN ALARM BELL RINGS!"
@@ -148,7 +150,6 @@ eat           | N | "YOU EAT THE "
 equip         | N | "YOU EQUIP "
 remove        | N | "YOU REMOVE "
 discard       | N | "YOU DISCARD "
-no_need       | N | "NO NEED"
 nothing       | N | "NOTHING HAPPENS"
 mana_surge    | N | "MANA SURGES!"
 cured         | N | "YOU ARE CURED"

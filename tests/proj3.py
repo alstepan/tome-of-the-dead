@@ -150,6 +150,24 @@ class Rng:
                 return v
 
 
+# ---- 3E-T11 mon_drop (pickup3.asm): the drop chance on the gameplay RNG ----------
+# drop_tab first match by kind (the defs.asm stand-in aliases: K_ORC / K_NECRO =
+# Goblin, K_ARCHER = Skeleton): Rat 1/4, Goblin 1/4, Skeleton (archer) arrows
+# 1/2 in a Warrior run only (no roll for the Mage). EF_RESPAWN and the hero:
+# no roll. (The lair boss's unique is not rolled; the models run outside lairs.)
+EF_RESPAWN = 0x80
+DROP_N = {K_RAT: 4, K_GOBLIN: 4}
+
+
+def drop_roll(rng, T, hero):
+    if T.flags & (EF_PLAYER | EF_RESPAWN):
+        return None
+    n = DROP_N.get(T.kind)
+    if n is None and T.kind == K_SKELETON and (hero is None or hero.kind == K_KNIGHT):
+        n = 2
+    return None if n is None else rng.mod(n) == 0
+
+
 # ---- the model -----------------------------------------------------------------
 class Body:
     def __init__(self, slot, kind, x, y, hp, maxhp=None, flags=EF_ACTIVE | EF_HOSTILE):
@@ -207,6 +225,7 @@ class World:
             T.flags |= EF_DYING
             T.react = 3
             T.stf = T.st1 = 0
+            drop_roll(rng, T, self.bodies.get(0))          # 3E-T11 mon_drop
         else:
             T.react = T.react if T.react == 3 else 1
             if T.stf & 3 == FROZEN and t == FIRE:          # thaw

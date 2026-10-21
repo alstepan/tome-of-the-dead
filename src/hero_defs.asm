@@ -23,7 +23,11 @@ ICON_SH         EQU HERO_ST + 16    ; 10 B: panel icon state last drawn, one per
 DAGGERS         EQU HERO_ST + 26    ; Warrior throwing daggers
 ARROWS          EQU HERO_ST + 27
 HAS_BOW         EQU HERO_ST + 28    ; 0 / 1
-; HERO_ST + 29..31: spare (3E-T3: QPIN moved to ITEM_RAM, item_defs.asm)
+; 3E-T11 (HERO_ST + 29..31, the old QPIN bytes): floor_pickup's arrival state
+PU_POS          EQU HERO_ST + 29    ; word: the hero's x, FL_ROOM byte at the last pickup
+                                    ; check (byte 1 $FF = none: panel_init7, per level)
+PU_ARR          EQU HERO_ST + 31    ; the previous x (PU_NONE $80: other room / storey):
+                                    ; BAG FULL only for a col outside its body span
 ; reserved for 3D (allocated now so the block does not move):
 LVL             EQU HERO_ST + 32    ; hero level
 XP              EQU HERO_ST + 33    ; word
@@ -42,7 +46,7 @@ HERO_ST_END     EQU $BCBC
                 ASSERT HERO_ST_END == ISR_ADDR && HERO_ST_USED <= HERO_ST_END
                 ASSERT KEYTAB + KEYTAB_N * KEYTAB_STRIDE == ICON_SH
                 ASSERT ICON_SH + ICON_SLOTS == DAGGERS
-                ASSERT HAS_BOW + 4 == LVL       ; 3 spare bytes (the old QPIN) between
+                ASSERT HAS_BOW + 4 == LVL && PU_ARR + 1 == LVL   ; the old QPIN bytes = PU_*
                 ASSERT (HERO_ST >> 8) == ((HERO_ST_END - 1) >> 8)   ; one page: inc l walks it
 
 ;------------------------------------------------------------------------------

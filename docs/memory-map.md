@@ -711,7 +711,7 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 | `$BF11` | `TICK_COUNTER` | word, 25 Hz ticks |
 | `$BF13` | `CUR_ROOM` | room id = 3×3 grid cell 0..8 (B3B-8; PROTO rooms A 0, B 1, D 3, C 4 — was 0..3 = A..D) |
 | `$BF14` | `HERO_KIND` | 0 Knight, 1 Wizard (2 = retired Rogue: hole in the `K_*` ids) |
-| `$BF15` | `POTIONS_TAKEN` | bitmask of taken potions by `FLOOR_LIST` entry index 0..7 (B3B-8; the PROTO potion ids 0..3 = entries 0..3) |
+| `$BF15` | `POTIONS_TAKEN` | bitmask of taken `FLOOR_LIST` entries 0..7 (B3B-8; the PROTO potion ids 0..3 = entries 0..3). 3E-T11: set for every bag pickup (`pp_take`), any type — a test observable "entry i taken", never "potion i"; no engine reader |
 | `$BF16` | `INPUT_REPEAT` | 1 (default) held keys repeat; poke 0 = edge-triggered |
 | `$BF17` | `ANIM_FREEZE` | poke 1: resting sprites hold IDLE frame 0 (goldens) |
 | `$BF18` | `PORT_7FFD_SHADOW` | last `$7FFD` value. The ROM's own shadow `BANKM` (`$5B5C`) is deliberately left stale: PROTO never returns to 128 BASIC and never calls 128-ROM paging routines |
@@ -902,7 +902,7 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 | `$6D45` / `$6D46` | `LVL_ATTR_FLOOR` / `LVL_ATTR_WALL` | game.md §1.2 |
 | `$6D47`..`$6D4A` | `LVL_START`, `LVL_LAIR`, `LVL_KEYROOM`, `LVL_SANCTUM` | room ids (`ROOM_NONE` `$FF`) |
 | `$6D4B` | `LVL_NROOMS` | 7..9 |
-| `$6D4C` | `LVL_FLAGS` | `LF_GRATE_OPEN 1`, `LF_KEY_TAKEN 2`, `LF_SEAL_OPEN 4`, `LF_GATE_HINT 8` (B12: the lair's gate hint was logged this level; `lair_hint`, reset by `level_gen` rewriting the byte) |
+| `$6D4C` | `LVL_FLAGS` | `LF_GRATE_OPEN 1`, `LF_KEY_TAKEN 2`, `LF_SEAL_OPEN 4`, `LF_GATE_HINT 8` (B12: the lair's gate hint was logged this level; `lair_hint`, reset by `level_gen` rewriting the byte), `LF_UNIQUE 16` (3E-T11: the boss unique dropped this level, `mon_drop`) |
 | `$6D4D` | `FLOOR_N` | floor-list entries used |
 | `$6D4E` | `MASTER_SEED` | word, per game |
 
@@ -1021,6 +1021,7 @@ holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
   without an exit (B3B-12 wires the level exit). Potions (D3-7 T6: `floor_pickup`, list-driven):
   every `FLOOR_LIST` entry (room | `FL_S1`, col under the body), marks a taken one `FL_EMPTY`,
   sets `POTIONS_TAKEN` bit = entry index (potions) and re-stamps the cell (`ap_stamp`).
+  3E-T11: every non-ammo entry goes to the BAG (`pu_add`, bank 3); see "3E-T11".
 - `build_room_map` v2 (bank 3, far3 through lowram `build_room`, A = room,
   page in D): base → exits + doors → pit → block → segments (row 8 holes +
   `T_END` caps, row 17 holes, ARR + `T_RUBBLE` ×3 in row 0, EXIT under
@@ -1400,7 +1401,8 @@ up to `ISR_ADDR`; not on tape — the owner task initialises it; one page):
 | `$BCAA` | `DAGGERS` | 1 | |
 | `$BCAB` | `ARROWS` | 1 | |
 | `$BCAC` | `HAS_BOW` | 1 | 0 / 1 |
-| `$BCAD` | spare | 3 | was `QPIN` (never used; 3E-T3 moved it to `ITEM_RAM`, "3E contracts") |
+| `$BCAD` | `PU_POS` | 2 | 3E-T11 (was the unused `QPIN`): the hero's x, `FL_ROOM` byte at the last `floor_pickup`; x `$FF` = none (`panel_init7`, per level) |
+| `$BCAF` | `PU_ARR` | 1 | 3E-T11: != 0 = arrived on a new cell, `BAG FULL` not yet printed there (`pu_add` clears it) |
 | `$BCB0` | `LVL` | 1 | reserved 3D |
 | `$BCB1` | `XP` | 2 | reserved 3D |
 | `$BCB3` | `ARANK` | 2 | reserved 3D |
@@ -2433,7 +2435,8 @@ live entry. `floor_pickup` takes `IT_P_*` potions like the legacy `IT_POTION`
 widen its glyph pre-filter** (today `T_POTION` / `T_AMMO` only). `POTIONS_TAKEN`
 (bit = entry index 0..7, set by `pp_take` only) has no reader in the engine
 (only `tests/abil_ammo.py` P9): entries 0..7 may now hold food / gear, so
-nothing may read a bit as "potion i".
+nothing may read a bit as "potion i". (3E-T11: done — the pre-filter takes every
+item glyph; see "3E-T11".)
 
 **3E-T6 byte / time ledger** (tools/build.sh DISPLAY; before = main with lever
 (c) + T4 + T5b): bank 1 free **1,635 → 718** (−917: `ovl_items_zx0` 881 + the
@@ -2495,24 +2498,82 @@ IX / IY never touched, no EXX; `BAG` is bank 5 (always mapped), so nothing pages
 - Ledger: bank 1 free **256 -> 158** (-98), bank 3 free to `AY_RESERVE` **609 -> 450**
   (-159), bank 7 / low RAM / bank 2 unchanged (kit 142, release 192; `LOWRAM_SPARE` 109 / 119).
 
-**`E_POT` migration (today's potion count → `BAG`; do NOT migrate before
-T10/T11).** Every reader / writer of `E_POT` (`P_ENTITIES + E_POT`, hero slot 0):
+**3E-T11 pickup into the bag, potions from the bag, start kit, drops** (`feat/3e-t11-pickup`;
+`tests/pickup3e.py`; spec game.md §8.11 "3E pickup/drop rulings", Q10, Q11).
+- **Pickup** (`floor_pickup`, bank 7): pre-filter widened to every item glyph (60..63
+  FLASK / FOOD / WEAPON / WORN, `T_PAGES`, `T_AMMO` for the Warrior). Ammo as before
+  (`ap_take`). Any other type: `pu_add` (bank 3, far3, A = FL_ITEM): legacy `IT_POTION`
+  -> `IT_P_HEAL`; `bag_add` qty 1 ISTATE 0; added -> `IT_BOW` sets `HAS_BOW`, the line
+  `YOU PICK UP <name>` (`it_line`), L = 1 -> `pp_take` (bank 7: `FL_EMPTY`,
+  `POTIONS_TAKEN` bit, `SFX_PICKUP`, `ap_stamp`); refused (bag full, L = 0) -> the entry
+  stays; `floor_pickup` prints `BAG FULL` only when the entry's col was NOT under the
+  previous body span: `floor_pickup` keeps `PU_POS` (HERO_ST +29: x, FL_ROOM byte) and
+  copies the previous x into `PU_ARR` (+31; `PU_NONE` $80 after a room / storey change;
+  `panel_init7` sets `PU_POS + 1` = $FF per level) — walking across one item prints it once.
+  Standing on a cell keeps retrying the pickup every turn silently, and a drop landing
+  under the hero is taken at the end of the turn (manager ruling, game.md §8.11 rule 4).
+- **Log line composer** `it_line` (bank 1, `itemname1.asm`, far1): A = type (0: no name),
+  E = `S3_*` stem offset in `it_stems` or `IL_PICK` ($FF) = bank-0 `cmb_pick` (tx_dec) ->
+  stem + `item_name` (`IT_CAT_MAX` 20) into `MSG_BUF`, `log_push`. Stems: `bag_full`,
+  `boss_drops` (new, `src/items.txt` [stems_resident]). Bank-0 `found` / `cmb_bow`
+  deleted (no reader).
+- **Quick potion** (`ic_quaff`, bank 7): Heal -> Mana -> Cure, the first type present
+  (far3 `bag_find`, C out 0 = absent) whose effect is not refused (`pot_eff`, CF):
+  Heal `QUAFF_HEAL` 10 / Mana `POT_MANA` 8 (`cap_add`: HL = value, max at HL+1; refused
+  when full) / Cure (`ST_FLAGS` slot 0: POISON, WEAK, MIND cleared, `ST_T1` low nibble and
+  `ST_T2` 0, HOLD kept, + `POT_CURE_HP` 4; refused with none of the three); then
+  `pot_take1` (far3), flash, `SFX_QUAFF`, `TX_QUAFF` (the "DRINK THE <name>" stem is the fx
+  overlay's, T12). All refused -> `NO NEED` (`no_need` moved to [stems_resident], 8 B),
+  `IC_REFUSED`, no turn.
+- **Drops** (`mon_drop`, bank 3, from `deal_hit`'s kill path, IX = the body): EF_RESPAWN ->
+  none. **Boss (STAND-IN until 3F gives bosses a kind / `IMMF_BOSS`):** the first kill of
+  kind `LP_BOSS` in `LVL_LAIR` this level (`LF_UNIQUE` clear) -> `uniq_tab[depth-1]` (D4
+  Mage: index 7 `IT_W_BONE`; D8 none), whole-storey search, `BOSS DROPS <name>`, no RNG
+  (pushed at once, i.e. BEFORE the attacker's "YOU KILL THE <x>" impact line: deferring it
+  needs a pending byte + an end-of-turn hook, ~16 B bank 7 — not done, manager to decide);
+  an escort of the boss's kind killed first takes it. Else `drop_tab` (5 x 3 B: kind, type,
+  1 in N; the `K_ORC` / `K_NECRO` = Goblin and `K_ARCHER` = Skeleton aliases: Orc / Necro
+  rows are shadowed by the Goblin's, Skeletons drop the archer's 3 arrows (Warrior only)
+  until 3F), one `rng_mod(N)` on the gameplay RNG (`tests/proj3.py` `drop_roll` models
+  it), no line. `drop_put`: centre col `x + w/2` on row 9s+7, else nearest col within
+  +-3 (left first) whose `ROOM_MAP` cell is `T_AIR` (= no live entry, the FLOOR_LIST
+  invariant; also no wall / decor); entry = the first `FL_EMPTY` among 0..30 (ordinary)
+  / 0..31 (unique: entry 31 is the last to fill, so it stays free for it); writes the
+  entry, far7 `ap_stamp_a` (A = col, E = FL_ROOM byte). Arrows never merge on the floor.
+  Not done (3F, with the lectern swap it guards): the D8 lair/Sanctum 60..63-glyph loss.
+- **Ledger** (tools/build.sh DISPLAY, before = main f25c650 -> T11 review round): bank 3
+  free **450 -> 47 release / 29 DEBUG_KIT** (`pickup3.asm` ~395 + 18 kit data, `bag3` +8,
+  `combat3` +3, `level_populate` −3; the review round moved BAG FULL to bank 7 and dropped
+  `pot_pick`); bank 7 **192 -> 72 release, 142 -> 22 kit** (−120: the quick potion with its
+  skip rule, `pot_eff` + `cap_add` inline, the BAG FULL span test, the pickup / arrival
+  code); bank 1 **158 -> 91** (`it_line` 47, stems `boss_drops` 12 + `no_need` 8); bank 0
+  text 2,468 -> 2,448 (pool slack +20); low RAM / bank 2 unchanged (119 / 18). RAM:
+  `PU_POS` / `PU_ARR` (the 3 spare HERO_ST bytes), `LF_UNIQUE` (LVL_FLAGS bit 4).
+- **Time** (`tests/pickup3e.py` T, incl. a ~0.3k stub): `floor_pickup` with nothing ~1.7k;
+  one bag pickup **~22.3k T** (`pu_add` 10.5k: bag_add + pot_sync + name + log; `ap_stamp`
+  8.1k; scan + far ~3.7k); a kill with a drop 12.7k (3.4k without); the boss kill + unique
+  19.2k. `tests/budget.py` "pmix" (the mix + a bag item on every 2nd col of the walk + a
+  kill): ordinary work max 124.3k (cap 126k; mix 123.6k); with an item on EVERY col (13
+  adjacent items, `BUDGET_PMIX_STEP=1`) 126.65k: the panel's 1st-frame loop drawing log +
+  icons + info in the same tick.
 
-| Site | Role | Switches in |
-|---|---|---|
-| `boot7.asm` `new_game` (`ld (ix+E_POT), 1`) | start kit: 1 potion | T11: start kit → `bag_add` (Heal ×1 + gear in `WORN`); `KNOWN` bit Heal (+ Mana for the Mage) |
-| `bank3.asm` `level_populate` (carry `E_POT` over `level_reset`) | descent carry | T11: delete the carry (the bag is outside the entity table) |
-| `pickup7.asm` `floor_pickup` / `pp_take` (`IT_POTION` → `E_POT` + 1, `MAX_POTIONS`, `POTIONS_TAKEN`) | pickup | T11: `IT_BAG_LO..` → `bag_add` (T10) with ISTATE 0, `BAG FULL.`; ammo / key stay counters |
-| `intent7.asm` `ic_potion` / `ic_quaff` (the old `try_quaff`) | quick-slot drink | T11: `QS_CACHE[QS_POTION]` → the potion effect (T12), decrement the bag stack |
-| `icons.asm` `icon_poll` (`E_POT` vs `PANEL_POT_SH`), `icons3.asm` `icon_state` `.pot` / `item_icons` (`pot_slot` redraw), `panel.asm` `slot_redraw` (count digit) | icon / count | T11: read the quick-slot stack count (`qs_pick`, T10) instead of `E_POT`; `PANEL_POT_SH` keeps its role |
-| `boot7.asm` `panel_init7` (`PANEL_POT_SH` = $FF; `pot_slot` scan) | panel reset | unchanged (shadow semantics kept) |
-| `info1.asm` `item_info` (potion count on the info line) | info line | T11 (with `item_name`, T10) |
-| `intent7.asm` `debug_kit` (DEBUG_KIT: `HAS_BOW`, `ARROWS`, `DAGGERS`; no `E_POT`) | kit | T11: `HAS_BOW` → `IT_BOW` in the bag; then `HAS_BOW` (`HERO_ST` +28) retires with every reader |
+**`E_POT` migration — DONE in 3E-T11 (as built; supersedes the plan table that
+was here).** `E_POT` (`P_ENTITIES + E_POT`, entity byte 8 of the hero) is no
+longer a counter: it is the **number of potions in `BAG`** (Heal + Mana + Cure
+QTY), written ONLY by `pot_sync` (bank 3, `pickup3.asm`), which every BAG writer
+runs: `bag_add` (on success) and `bag_take` tails, and `level_populate` (the old
+descent carry is gone). So the readers did not change: `icon_poll` / `icon_state`
+`.pot` / `item_icons` (`PANEL_POT_SH`), `slot_redraw` (count digit, capped 9),
+`item_info` ("X n"), `ic_potion` (0 -> NO POTION). Writers:
 
-Order: T10 lands the bank-1 helpers (`bag_add`, `item_name`, `qs_pick`,
-`id_learn`) reading `BAG` with no caller; T11 switches the writers first
-(`new_game` start kit, `pp_take`, `level_populate` carry) and the readers
-(`ic_potion`/`ic_quaff`, icon_poll / icon_state / item_icons / slot_redraw,
-`item_info`) in one change, then deletes `E_POT` (entity byte 8 freed),
-`MAX_POTIONS`, `POTIONS_TAKEN` and `IT_POTION`. Goldens showing the potion
-count move then, not before.
+| Site | As built (3E-T11) |
+|---|---|
+| `boot7.asm` `new_game` | `ld (ix+E_POT), 1` deleted; `kit_add` (far3) writes the start kit: WORN weapon + armour, BAG Heal (+ Mana for the Mage) + Apple (game.md §8.11 Q10), DEBUG_KIT extras (rev 6: Cure, Mana (Warrior), the 4 scrolls, Meat, book, Helm, + the bow for the Warrior); E_POT via `bag_add` |
+| `bank3.asm` `level_populate` | carry deleted -> `call pot_sync` |
+| `pickup7.asm` `floor_pickup` / `pp_take` | every non-ammo entry -> `pu_add` (far3: legacy `IT_POTION` = Heal, `bag_add` qty 1 ISTATE 0, the line); `pp_take` (bank 7) then empties the entry, sets the `POTIONS_TAKEN` bit, SFX, `ap_stamp` |
+| `intent7.asm` `ic_quaff` | `pot_pick` (far3, `bag_pick` mode 0: Heal -> Mana -> Cure) + the effect inline in bank 7 (`cap_add`) + `pot_take1` (far3: `bag_find` + `bag_take` 1) |
+| `HAS_BOW` | kept (readers unchanged): set by `pu_add` when the bow is taken and by `debug_kit`; the bow is also a bag item. Retiring `HAS_BOW` needs the DISCARD path (T13) to clear it — or every reader switched to `bag_find IT_BOW` |
+
+`MAX_POTIONS` has no engine user (a test name only); `IT_POTION` (1) stays: the
+PROTO rooms and the 3B levelgen step still write it (levelgen parity; the items
+overlay retypes generated ones), and `pu_add` takes it as a Heal potion.

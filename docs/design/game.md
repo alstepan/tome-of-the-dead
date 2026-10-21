@@ -1884,13 +1884,17 @@ list is full.
    type** (Carrot → Apple → Pear → Cheese → Meat); POTION icon = lowest potion type id (Heal →
    Mana → Cure); SCROLL icon = **largest stack**, ties lowest type (Teleport → Fear → Sleep →
    Enchant). Success prints the verb stem (`YOU EAT THE CARROT`, `YOU DRINK THE HEAL POTION`, `YOU
-   READ THE TELEPORT SCROLL` 28) and costs **1 turn**. Empty class: `NO FOOD` / `NO POTION` / `NO
+   READ THE TELEPORT SCROLL` 28) and costs **1 turn**. **POTION (manager ruling 2026-10-20, T11 review):** a type whose
+   effect would be refused (Heal at full HP, Mana at full MP, Cure with no POISON / WEAK / FEAR /
+   CONFUSED) is skipped for the next in order Heal → Mana → Cure; all refused → `NO NEED`. Empty class: `NO FOOD` / `NO POTION` / `NO
    SCROLL`, **0 turns**, nothing consumed. `NO NEED` (Heal at full HP, Mana at full MP, EAT at
    100) is also 0 turns and consumes nothing.
-4. **Pickup turn cost = 0 extra.** Pickup is automatic at the end of the turn in which the hero
-   *arrived* on the cell (§2.2 order: pickups → aura → hunger…); that move already paid its turn.
-   Standing still, or a drop landing next to the hero, never picks up; stepping off and back on
-   retries (and re-arms the once-per-arrival `BAG FULL`).
+4. **Pickup turn cost = 0 extra.** Pickup is automatic at the end of the turn (§2.2 order:
+   pickups → aura → hunger…); the turn was already paid. **An item under the hero is picked up
+   at the end of the turn** — also when he stood still, and a drop landing under his body
+   (manager ruling 2026-10-20, T11 review: the D3-7 ammo retry stands). `BAG FULL` prints once
+   per arrival: only when the item's column was not under the hero's body on the previous turn
+   (walking across one item prints it once; stepping fully off and back on prints it again).
 
 **3E generation rulings (2026-10-20; designer, from the review of `tools/items_model.py`, commit
 f387ff0).** The model is the byte-exact spec for the Z80 generator (T6); the defaults it

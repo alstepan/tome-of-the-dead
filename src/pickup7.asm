@@ -1,12 +1,13 @@
 ;==============================================================================
 ; pickup7.asm — D3-7, bank 7 (bank7.asm rules: no data, no SMC): the
-; end-of-turn floor pickup, list-driven (T6): potions (prototype §6.6; was
-; potion_pickup, which looked at the map tile) and dropped daggers / arrows
-; (IT_DAGGER / IT_ARROW stacks, game.md §6.3). Shared cells (§6.3): every
+; end-of-turn floor pickup, list-driven (T6): dropped daggers / arrows
+; (IT_DAGGER / IT_ARROW stacks, game.md §6.3) and, since 3E-T11, every bag
+; item (pu_add, bank-3 pickup3.asm). Shared cells (§6.3): every
 ; entry under the hero is taken by its own rule, and the cell is re-stamped
 ; with the last live entry left there (ap_stamp).
 ;==============================================================================
 
+PU_NONE         EQU $80                        ; "no previous span": col - $80 >= w for cols 0..31
 DAGGERS_MAX     EQU 9                          ; game.md §6.3 stack limits
 ARROWS_MAX      EQU 24
 
@@ -14,19 +15,24 @@ ARROWS_MAX      EQU 24
 ; floor_pickup — end_turn (game.md §8: pickup is automatic). The hero standing,
 ; not DYING: every FLOOR_LIST entry of CUR_ROOM on his storey whose col his
 ; body covers (x .. x + w - 1), in list order:
-;   IT_POTION / IT_POT_LO..HI (3E-T6: the generated potions, until T11's
-;     bag): E_POT < MAX_POTIONS -> taken (pp_take; else it stays);
-;   other item types (food, scrolls, books, gear, bow): ignored, left in
-;     place (T11 picks them up into the BAG);
 ;   IT_DAGGER / IT_ARROW, the Warrior only (the Mage has no ammunition):
 ;     what fits under the cap (DAGGERS 9 / ARROWS 24; arrows need no bow):
 ;     "YOU PICK UP n DAGGERS / ARROW(S)" when n > 0; an emptied entry ->
 ;     FL_EMPTY, a remainder stays (FL_QTY -= n) and prints "QUIVER FULL"
-;     (also when n = 0) (ap_take).
-; Each taken / matched entry re-stamps its cell (ap_stamp).
+;     (also when n = 0) (ap_take);
+;   every other type (3E-T11: potions incl. the legacy IT_POTION = Heal,
+;     food, scrolls, book, bow, gear): pu_add (bank 3) -> BAG; taken ->
+;     "YOU PICK UP <name>", the cell re-stamped; bag full -> it stays,
+;     "BAG FULL" once per arrival.
+; Arrival (BAG FULL only; game.md §8.11 rulings 4): an item's col that was
+; NOT under the previous body span (PU_ARR = the previous x .. + w - 1; PU_NONE
+; after a room / storey change, PU_POS byte 1 = $FF per level) prints "BAG
+; FULL"; walking across one item prints it once. Standing on the cell keeps
+; retrying the pickup every turn (the D3-7 ammo behaviour), silently.
 ; Clobbers: all but IY (IX = hero on return).
-; ~0.4k T a turn with no item tile under the body (T7 pre-filter), else ~3k T
-; (the 32-entry scan) + ~3-6k T per entry taken
+; ~0.5k T a turn with no item glyph under the body (T7 pre-filter), else ~3k T
+; (the 32-entry scan) + ~3-6k T per ammo entry, ~6k T + ap_stamp (~4-9k T) per
+; bag pickup (far3 pu_add: bag_add + pot_sync + name + log)
 ;------------------------------------------------------------------------------
 floor_pickup:
                 ld   ix, P_ENTITIES
@@ -43,12 +49,27 @@ floor_pickup:
                 ; cell after a pickup, decor only lands on T_AIR — so no item tile
                 ; under the body on the item row (9s + 7) = nothing to pick up.
                 ld   e, a                      ; E = s
+                rrca
+                ld   hl, CUR_ROOM
+                or   (hl)
+                ld   b, a                      ; BC = FL_ROOM byte, x
+                ld   hl, (PU_POS)              ; L = the previous x, H = its FL_ROOM byte
+                ld   (PU_POS), bc
+                ld   a, h
+                cp   b
+                ld   a, l
+                jr   z, .same
+                ld   a, PU_NONE                ; another room / storey: no previous span
+.same:          ld   (PU_ARR), a               ; the previous x (BAG FULL test, .full)
+                ld   a, e
                 call storey_row                ; A = 9s + 7 (keeps BC; B scratch)
                 ld   b, a
                 call cell_addr                 ; HL = (row, x) (A, HL)
                 ld   b, d                      ; the body's cols (x + w <= 32: one row)
 .pf:            ld   a, (hl)
-                cp   T_POTION
+                cp   T_LVL_OBJ                 ; 60..63: FLASK FOOD WEAPON WORN
+                jr   nc, .scan
+                cp   T_PAGES                   ; scroll / book
                 jr   z, .scan
                 cp   T_AMMO                    ; daggers + arrows share the one glyph
                 jr   nz, .pn
@@ -80,21 +101,36 @@ floor_pickup:
                 push bc
                 push de
                 push hl
-                cp   IT_POTION
-                jr   z, .pt
-                cp   IT_POT_LO                 ; 3E-T6: generated potions (Heal / Mana /
-                jr   c, .am                    ; Cure) still count as E_POT until T11
-                cp   IT_POT_HI + 1
-                jr   nc, .nx                   ; other new types: left in place (T11)
-.pt:            call pp_take
-                jr   .nx
-.am:            ld   a, (HERO_KIND)
-                or   a
-                jr   nz, .nx                   ; the Mage (K_KNIGHT == 0: the Warrior)
-                ld   a, (hl)
                 sub  IT_DAGGER
                 cp   IT_ARROW - IT_DAGGER + 1
-                call c, ap_take                ; A = 0 daggers / 1 arrows
+                jr   nc, .bag                  ; not ammo (IT_POTION 1 wraps: bag too)
+                ld   b, a
+                ld   a, (HERO_KIND)
+                or   a                         ; the Mage (K_KNIGHT == 0: the Warrior)
+                ld   a, b
+                call z, ap_take                ; A = 0 daggers / 1 arrows
+                jr   .nx
+.bag:           ld   a, (hl)
+                ld   hl, pu_add                ; bank 3: bag_add + the line; L = 1 taken
+                call far3                      ; / 0 refused (bag full)
+                dec  l
+                pop  hl
+                pop  de
+                push de
+                push hl                        ; HL = &FL_ITEM, D = w, E = the FL_ROOM byte
+                jr   nz, .full
+                call pp_take
+                jr   .nx
+.full:          dec  l
+                ld   a, (hl)                   ; its col
+                ld   hl, PU_ARR
+                sub  (hl)
+                cp   d
+                jr   c, .nx                    ; under the previous body span: not an arrival
+                xor  a                         ; IT_NONE: the stem alone
+                ld   e, S3_BAG_FULL
+                ld   hl, it_line               ; bank 1: "BAG FULL"
+                call far1
 .nx:            pop  hl
                 pop  de
                 pop  bc
@@ -110,16 +146,11 @@ floor_pickup:
                 ASSERT ((FL_EMPTY & (FL_ROOM_MASK | FL_S1)) & FL_ROOM_MASK) >= GRID_CELLS
                 ASSERT IT_ARROW == IT_DAGGER + 1 && T_ARROWS == T_DAGGERS && K_KNIGHT == 0
 
-; pp_take — a potion entry: HL = its &FL_ITEM, E = the FL_ROOM byte, IX =
-; hero. E_POT < MAX_POTIONS: E_POT += 1, the entry -> FL_EMPTY, its
-; POTIONS_TAKEN bit (entry index 0..7: the PROTO potion ids 0..3 are entries
-; 0..3, new_game), "YOU PICK UP A POTION", the cell re-stamped.
-; Clobbers: all but IX, IY.
+; pp_take — a bag item taken (pu_add): HL = its &FL_ITEM, E = the FL_ROOM
+; byte. The entry -> FL_EMPTY, its POTIONS_TAKEN bit (entry index 0..7: "entry
+; i taken", any type since 3E-T11; the PROTO potions are entries 0..3),
+; SFX_PICKUP, the cell re-stamped.  Clobbers: all but IX, IY.
 pp_take:
-                ld   a, (ix+E_POT)
-                cp   MAX_POTIONS
-                ret  nc                        ; full pack: it stays on the floor
-                inc  (ix+E_POT)
                 dec  l
                 ld   c, (hl)                   ; C = col
                 dec  l
@@ -128,7 +159,7 @@ pp_take:
                 rrca
                 rrca                           ; the entry index (FLOOR_LIST page-aligned)
                 cp   8
-                jr   nc, .nb                   ; > 8 entries: no POTIONS_TAKEN bit
+                jr   nc, .nb                   ; >= 8: no POTIONS_TAKEN bit
                 push de
                 call bitmask                   ; (A, D)
                 pop  de
@@ -137,12 +168,6 @@ pp_take:
                 ld   (hl), a
 .nb:            ld   a, SFX_PICKUP             ; SND-5b (keeps BC / DE / HL)
                 call sfx_req
-                push bc
-                push de
-                ld   a, TX_FOUND
-                call msg_push                  ; queued (panel_tick; lowram, re-pages bank 7)
-                pop  de
-                pop  bc
                 jp   ap_stamp
 
 ; ap_take — one ammo stack: A = 0 daggers / 1 arrows, HL = its &FL_ITEM, E =
@@ -231,15 +256,17 @@ ap_take:
                 ld   a, TX_QUIVER_FULL
                 call msg_push                  ; (A, BC, DE, HL)
                 pop  de
-.st:            pop  af
-                ld   c, a                      ; C = col, E = the FL_ROOM byte
+.st:            pop  af                        ; A = col, E = the FL_ROOM byte
                 ; fall through
 ; ap_stamp — C = col, E = the FL_ROOM byte (room | storey bit): the cell (col,
 ; 9s + 7) of ROOM_MAP <- the glyph of the last live FLOOR_LIST entry there
 ; (item_glyph), else T_AIR; redrawn next render + the attr shadow
 ; (shadow_rect leaves bank 7 paged: our bank), then the room's floor inks
 ; over the shadow (fl_attr_sh: the cell left falls back to TILE_ATTRS of
-; its tile).  Clobbers: all but IX, IY.
+; its tile). ap_stamp_a: the col in A (3E-T11: far7 from drop_put, bank 3:
+; far7 passes A and DE in, not BC).  Clobbers: all but IX, IY.
+ap_stamp_a:
+                ld   c, a
 ap_stamp:
                 ld   d, T_AIR
                 ld   hl, FLOOR_LIST

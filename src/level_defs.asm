@@ -181,9 +181,9 @@ DOOR_PLANK_H    EQU 6
 ; the current room shows on its cell (FL_COL, row 9s+7) in ROOM_MAP — the
 ; glyph (item_glyph, lowram.asm; 3E-T6) of the LAST live entry of that cell
 ; in list order, with its item_ink(type) (fl_attr) in the screen / attr shadow. Kept by build_room_map (stamps every entry), ap_stamp
-; (re-stamps a cell after any pickup), and decor landing on T_AIR only. Any
-; new writer of an entry (3E drops, §6.3 ammo landing) or of row 9s+7 must
-; keep it. Checked: tests/gfx_integrity.py floor_check (D1..D8, entry + play).
+; (re-stamps a cell after any pickup), decor landing on T_AIR only, and the
+; 3E-T11 drops (drop_put, pickup3.asm: a T_AIR cell only, then ap_stamp_a).
+; Any new writer of an entry (§6.3 ammo landing) or of row 9s+7 must keep it. Checked: tests/gfx_integrity.py floor_check (D1..D8, entry + play).
 ;------------------------------------------------------------------------------
 FLOOR_MAX       EQU 32
 FL_STRIDE       EQU 4
@@ -310,6 +310,8 @@ LF_SEAL_OPEN    EQU %00000100       ; (3F)
 LF_GATE_HINT    EQU %00001000       ; B12: "A GATE GLEAMS" already logged this level (do_exit;
                                     ; level_gen rewrites LVL_FLAGS, so it resets per level)
 LF_GATE_HINT_BIT EQU 3
+LF_UNIQUE       EQU %00010000       ; 3E-T11: the boss unique dropped this level (mon_drop)
+LF_UNIQUE_BIT   EQU 4
 
 ; B3B-12 level seed (game.md §1 "Seed"): LVL_SEED = MASTER_SEED + depth * LVL_SEED_MUL
 ; (16-bit). Additive with an ODD constant, NOT an XOR with depth * $0101: level_gen

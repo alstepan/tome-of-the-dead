@@ -113,7 +113,8 @@ hit_roll:
 ;     max(1, roll x mult x resist - DEF - 1) on his physical hits only —
 ;     spells, Drain, his own bounced / reflected bolt carry DH_NODEF).
 ;  4. HP -= dmg, saturating at 0; L = the HP lost.
-;  5. HP 0: EF_DYING + RC_DEATH; status slot cleared; a monster awards the
+;  5. HP 0: EF_DYING + RC_DEATH; status slot cleared; a monster drops its
+;     item (mon_drop, 3E-T11: gameplay RNG for a kind with a drop row) and awards the
 ;     hero KXP (EF_RESPAWN: KXP / 2, min 1) into XP (sat. XP_MAX), XP_UP = 1.
 ;     Else RC_HURT; ASLEEP wakes (any HP loss); FIRE thaws FROZEN; then the
 ;     effect (if any): chance roll (rng_mod N, 0 = success), then the
@@ -280,6 +281,7 @@ deal_hit:
                 ld   a, (ix+E_FLAGS)
                 and  EF_PLAYER
                 jr   nz, .heal                 ; the hero's death awards nothing
+                call mon_drop                  ; 3E-T11: drop / boss unique (pickup3.asm; keeps IX)
                 ld   a, (ix+E_KIND)            ; KXP = kx_tab[kind * 6 + KX_XP]
                 ld   l, a
                 add  a, a

@@ -353,14 +353,16 @@ class ItemTabTests(unittest.TestCase):
         self.assertEqual(b["names"], ROWS * 3)
         self.assertEqual(b["refs"], 361)
         self.assertLessEqual(b["refs"], 460)
-        # resident: turn-path stems only (3E-T4c retag; ~80 B target, 89 B as built)
-        self.assertEqual(b["res_stems"], 89)
+        # resident: turn-path stems only (3E-T4c retag; ~80 B target, 89 B as built;
+        # 3E-T11: + "BOSS DROPS " 11 + its terminator = 101; review: + "NO NEED" moved
+        # from the fx set, 7 + 1 = 109)
+        self.assertEqual(b["res_stems"], 109)
         self.assertLessEqual(b["res_stems"], 480)
-        self.assertEqual(b["resident"], 462)
+        self.assertEqual(b["resident"], 482)          # 3E-T11: + BOSS DROPS (12) + NO NEED (8)
         self.assertLessEqual(b["resident"], 700)
         self.assertLessEqual(b["resident"] - b["wcx"], 700)
         # fx overlay: effect / quick-use stems + it_stat (raw)
-        self.assertEqual(b["fx_stems"], 315)
+        self.assertEqual(b["fx_stems"], 307)        # T11 review: NO NEED (8) moved to resident
         self.assertEqual(b["stat"], ROWS * 2)
         self.assertEqual(b["fx"], b["fx_stems"] + b["stat"])
         self.assertLessEqual(b["fx"], 700)

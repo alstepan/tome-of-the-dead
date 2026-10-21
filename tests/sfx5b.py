@@ -236,15 +236,16 @@ def part_b(h, check):
     col = HX + 3
     scene()
     put(free_entry(), col, S["IT_POTION"], 0, S["T_POTION"])
+    p.wmem(S["BAG"], [0] * 60)                    # 3E-T11: an empty bag (E_POT = its potions)
     p.set_ent(0, POT=0)
     p.turn("L")
     check("B5 potion: [STEP, PICKUP], pack 1", log(p) == [ID["STEP"], ID["PICKUP"]] and p.ent(0)["POT"] == 1,
           (log(p), p.ent(0)["POT"]))
     scene()
     put(free_entry(), col, S["IT_POTION"], 0, S["T_POTION"])
-    p.set_ent(0, POT=S["MAX_POTIONS"])
+    p.wmem(S["BAG"], [S["IT_W_LONG"], 1, 0] * S["BAG_SLOTS"])   # 3E-T11: a full bag (was E_POT 9)
     p.turn("L")
-    check("B5 full pack: the potion stays, no PICKUP", log(p) == [ID["STEP"]], log(p))
+    check("B5 full bag: the potion stays, no PICKUP", log(p) == [ID["STEP"]], log(p))
     scene()
     put(free_entry(), col, S["IT_DAGGER"], 3, S["T_DAGGERS"])
     p.wb("DAGGERS", 3)
@@ -257,6 +258,7 @@ def part_b(h, check):
     check("B5 full quiver: nothing taken, no PICKUP", log(p) == [ID["STEP"]] and p.rb("ARROWS") == 24, (log(p), p.rb("ARROWS")))
     # B6
     scene()
+    p.wmem(S["BAG"], [S["IT_P_HEAL"], 2, 0])        # 3E-T11: 2 Heal in the bag (E_POT = the bag's)
     p.set_ent(0, HP=50, POT=2)
     p.turn("G")
     check("B6 quaff: [QUAFF], potion spent", log(p) == [ID["QUAFF"]] and p.ent(0)["POT"] == 1, (log(p), p.ent(0)["POT"]))

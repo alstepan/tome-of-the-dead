@@ -413,7 +413,7 @@ E_Y             EQU 4               ; body-top row
 E_HP            EQU 5
 E_MAXHP         EQU 6
 E_AIDIR         EQU 7               ; climb direction (+1 down / $FF up)
-E_POT           EQU 8               ; player: potions carried (0..9)
+E_POT           EQU 8               ; player: potions in BAG (3E-T11: written only by pot_sync)
 E_PX            EQU 9               ; body px (tweened)
 E_PY            EQU 10              ; body py (tweened)
 E_MODE          EQU 11              ; M_*
@@ -674,8 +674,8 @@ ATTR_MISS       EQU $46             ; T7: dodge flash (bright yellow: no kind us
 ATTR_HUD        EQU $47             ; bright white on black (screen clear; panel text, depth)
 
 ; room geometry: STOREY_COUNT / STOREY_ROWS / PLAY_ROWS ... (level_defs.asm, B3B-3)
-MAX_POTIONS     EQU 9
-QUAFF_HEAL      EQU 8
+MAX_POTIONS     EQU 9               ; (3E-T11: no engine user; the bag caps potions)
+QUAFF_HEAL      EQU 10              ; game.md §8: Heal +10 HP (3E-T11; was 8)
 FOLLOW_GAP      EQU 4
 FOLLOW_MAX      EQU 2
 ROOM_CAP        EQU 4               ; monsters per room (on-screen cap)

@@ -50,9 +50,11 @@ consumed, no floor drop), §2.3 (no throws / shots mid-ladder), §6 "Logic"
       the FX passes) -> the ATTR_MISS flash on exactly that tick
   H   a 1-tick Right / WAIT tap during a log hold (LT_HOLD, 3 lines): held
       that tick, replayed from LOG_PDIR once the queue is empty
-  P6  full pack + arrows over a potion: the potion stays, re-stamped + attr
+  P6  full bag + arrows over a potion: the potion stays, re-stamped + attr,
+      BAG FULL (3E-T11; was E_POT 9)
   P7  ap_take sets PD_AMMO   P8 a storey-0 stack (row 7)
   P9  POTIONS_TAKEN bit for entry index < 8 only (5 / 9), cell + attr shadow
+      (3E-T11: the pickup line is "YOU PICK UP HEAL POTION", the bag item)
   P10 the floor_pickup pre-filter: no glyph under the body -> no scan
 Run: ZRCP_PORT=<port> python3 tests/abil_ammo.py
 """
@@ -85,6 +87,7 @@ NONE = 0xFF
 FL, FLS = S["FLOOR_LIST"], S["FL_STRIDE"]
 STRINGS = textpack.read_strings()
 TXT = dict(STRINGS)
+HEAL_NAME = "HEAL POTION"      # 3E-T11: the legacy IT_POTION is picked up as a Heal potion
 NM = {K_RAT: "RAT", K_GOBLIN: "GOBLIN", K_SKELETON: "SKELETON"}
 IMG = textpack.parse_emitted(os.path.join(HERE.parent, "build", "text", "strings.asm"))
 PD_AMMO = S["PD_AMMO"]
@@ -556,7 +559,7 @@ def run(h, p, check):
                lines=lines)
     check("P4 no bow, ARROWS 20 + 6 over a potion: the potion and 4 arrows taken, QUIVER FULL, the arrows drawn",
           got == dict(ok=True, a=24, ep=S["FL_EMPTY"], e=2, c=S["T_ARROWS"], pot=pot0 + 1,
-                      lines=[TXT["found"], pick + "4" + TXT["cmb_arrows"], TXT["quiver_full"]]), got)
+                      lines=[pick + HEAL_NAME, pick + "4" + TXT["cmb_arrows"], TXT["quiver_full"]]), got)
     p.wb("ARROWS", 0)
     ok, lines = step_on("P4b", ("WAIT",))
     got = dict(ok=ok, a=p.rb("ARROWS"), e=entry(j)[0], c=cell(col), lines=lines)
@@ -577,19 +580,22 @@ def run(h, p, check):
     def tile_attr(t):
         return p.rb(S["TILE_ATTRS"] + t)
 
-    # P6 full pack (E_POT 9) + 3 arrows over a potion: the potion stays (and is drawn
-    # again, the last live entry), the arrows taken, PD_AMMO set, the attr shadow follows
+    # P6 full bag + 3 arrows over a potion: the potion stays (and is drawn again, the
+    # last live entry) with "BAG FULL" (3E-T11: the bag replaces the E_POT cap of 9;
+    # the hero arrives on the cell), the arrows taken, PD_AMMO set, the attr shadow follows
     scene([], arrows=0, bow=1)
     i, j = free_entries(2)
-    p.set_ent(0, POT=9)
+    p.wmem(S["BAG"], [S["IT_W_LONG"], 1, 0] * S["BAG_SLOTS"])
+    pot9 = p.ent(0)["POT"]
     put(i, col, S["IT_POTION"], 1)
     put(j, col, S["IT_ARROW"], 3, S["T_ARROWS"])
     ok, lines = step_on("P6")
     got = dict(ok=ok, a=p.rb("ARROWS"), pot=p.ent(0)["POT"], ep=entry(i), ea=entry(j)[0], c=cell(col),
                sh=shadow_attr(IROW, col) == 0x42, lines=lines)    # 3E-T6: fl_attr_sh, item_ink(IT_POTION)
-    want = dict(ok=True, a=3, pot=9, ep=[p.rb("CUR_ROOM") | S1, col, S["IT_POTION"], 1], ea=S["FL_EMPTY"],
-                c=S["T_POTION"], sh=True, lines=[pick + "3" + TXT["cmb_arrows"]])
-    check("P6 full pack: potion stays (re-stamped T_POTION + attr shadow), 3 arrows taken", got == want, (got, want))
+    want = dict(ok=True, a=3, pot=pot9, ep=[p.rb("CUR_ROOM") | S1, col, S["IT_POTION"], 1], ea=S["FL_EMPTY"],
+                c=S["T_POTION"], sh=True, lines=["BAG FULL", pick + "3" + TXT["cmb_arrows"]])
+    check("P6 full bag: potion stays (re-stamped T_POTION + attr shadow), BAG FULL, 3 arrows taken",
+          got == want, (got, want))
 
     # P7 ap_take sets PD_AMMO when it took something: read at the tick end_turn ran
     # (the panel clears the bit on the next tick: no ammo item is drawn yet)
@@ -639,7 +645,8 @@ def run(h, p, check):
         got = dict(ok=ok, bits=p.rb("POTIONS_TAKEN") ^ pt0, e=entry(idx)[0], c=cell(col),
                    sh=shadow_attr(IROW, col) == tile_attr(S["T_AIR"]), lines=lines)
         check(f"P9 potion in entry {idx}: POTIONS_TAKEN bit {'set' if idx < 8 else 'none'}, cell + attr T_AIR",
-              got == dict(ok=True, bits=want_bit, e=S["FL_EMPTY"], c=S["T_AIR"], sh=True, lines=[TXT["found"]]), got)
+              got == dict(ok=True, bits=want_bit, e=S["FL_EMPTY"], c=S["T_AIR"], sh=True, lines=[pick + HEAL_NAME]),
+              got)
 
     # P10 the pre-filter keeps the invariant: a stack whose cell does NOT show it (poked,
     # never happens in play) is not scanned — documents what the filter relies on

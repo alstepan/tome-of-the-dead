@@ -42,6 +42,8 @@ panel_init7:
                 ld   (PANEL_HP_SH), a          ; $FF: never drawn -> PD_HP / PD_ICONS
                 ld   (PANEL_HP_SH + 1), a
                 ld   (PANEL_POT_SH), a
+                ld   (PU_POS + 1), a           ; 3E-T11: FL_ROOM byte $FF = no cell: the
+                                               ; first floor_pickup of a level has no span
                 ld   (LVL_SH), a               ; level digit: never drawn
                 ld   (ICON_SIG), a             ; (no real signature is $FF)
                 ld   a, PD_HP | PD_MP | PD_ICONS | PD_DEPTH | PD_INFO
@@ -111,7 +113,8 @@ panel_init7:
 ;==============================================================================
 ; NEW GAME (prototype §6.5: fixed gameplay RNG seed; all rooms, monsters,
 ; potions re-initialised). HERO_KIND already set. MEM-SND: bank 7 (far7 from
-; start_game; was bank 3 since A7). Hero slot 0: kind, flags, 1 potion, HP.
+; start_game; was bank 3 since A7). Hero slot 0: kind, flags, HP; the start
+; kit (kit_add, 3E-T11: WORN + BAG; E_POT follows the bag).
 ; B3B-12: proto_start = 1 (test path, docs/memory-map.md "Level entry"): the
 ; PROTO rooms A-D as before (far3 new_game_proto, bank 3: proto_level +
 ; spawn_tab, ends with vis_reset). Else (default): MASTER_SEED = SYS_FRAMES
@@ -152,7 +155,6 @@ new_game:
                 ld   (ix+E_ROOM), ROOM_A
                 ld   (ix+E_FLAGS), EF_ACTIVE | EF_PLAYER
                 ld   (ix+E_X), HERO_START_COL
-                ld   (ix+E_POT), 1
                 KFIELD KT_BH
                 ld   b, a
                 ld   a, HERO_START_S * STOREY_ROWS + STOREY_AIR
@@ -161,6 +163,8 @@ new_game:
                 ld   hl, init_ent_common       ; bank 3 (shared with spawn_one /
                 call far3                      ; level_populate; IX passes in)
                 call hero_st_init              ; C3-2 (intent7.asm, this bank)
+                ld   hl, kit_add               ; 3E-T11: worn + bag start kit (bank 3;
+                call far3                      ; E_POT = its potions via pot_sync)
                 ld   a, (proto_start)
                 or   a
                 jr   nz, .proto
