@@ -1,0 +1,15 @@
+%abc-2.1
+X:1
+T:Tome of the Dead - Dangerous
+C:ZX Spectrum 128K AY-3-8912 Chiptune
+M:4/4
+L:1/8
+Q:1/4=68
+K:Fm
+%%score (V1 V2) V3
+V:V1 clef=treble name="Channel A (Alto)"
+f2 _g42 f2 =e2 f2 _a42 g2 =e2 |]
+V:V2 clef=treble name="Channel B (Soprano)"
+c'2 _d52 c'2 _b42 c'2 c'2 =e2 g2 |]
+V:V3 clef=bass name="Channel C (Basso)"
+F, F, F, F, F, F, F, F, _D,2 _B,2 C,2 C,2 |]
