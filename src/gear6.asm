@@ -363,13 +363,8 @@ it_fmt:
                 IT_IN IT_FOOD_LO, IT_POT_HI
                 jr   nc, .g
                 ld   a, b                      ; food / potion: the amount
-                add  a, a
-                add  a, (it_stat + 1) & $FF
-                ld   l, a
-                adc  a, (it_stat + 1) >> 8
-                sub  l
-                ld   h, a
-                ld   c, (hl)                   ; C = amount
+                call it_amt                    ; (fx6.asm)
+                ld   c, a                      ; C = amount
                 ld   hl, fs_food
                 ld   a, b
                 cp   IT_POT_LO

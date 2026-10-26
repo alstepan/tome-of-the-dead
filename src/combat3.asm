@@ -561,6 +561,97 @@ dh_stp:
                 ret
 
 ;------------------------------------------------------------------------------
+; room_status — 3E-T12, far3 from R6 fx_read: the Fear / Sleep scroll on every
+; living monster of CUR_ROOM (game.md §8: FEAR SCR_FEAR_T 6 turns / ASLEEP
+; SCR_SLEEP_T 8, §6.4). A typeless effect: no resistance halving; skipped: a
+; kind immune to it (KX_IMM) and a boss (IMMF_BOSS: never ASLEEP / FEAR, as
+; deal_hit); Sleep also skips a held body (no HOLD on a held body, §6.4.2 R2
+; (4)). FEAR overwrites the MIND group (CONFUSED -> FEAR), timer := 6; ASLEEP
+; timer := 8 and the typeless-ASLEEP flash (dh_status V3) when no reaction is
+; pending. No per-monster line: fx_read prints one for the room.
+; In : A = 0 Fear / 1 Sleep.  Out: L = bodies affected.
+; Clobbers: A, BC, DE, HL (IX kept).   ~0.25k T per slot, ~4k T (15 slots)
+;------------------------------------------------------------------------------
+room_status:
+                push ix
+                ld   d, a                      ; D = 0 Fear / 1 Sleep
+                ld   e, IMMF_FEAR | (1 << IMMF_BOSS_BIT)
+                or   a
+                jr   z, .m
+                ld   e, IMMF_SLEEP | (1 << IMMF_BOSS_BIT)
+.m:             ld   bc, $0100                 ; B = slot 1.., C = count
+                ld   ix, P_ENTITIES + P_ENT_STRIDE
+.l:             ld   a, (ix+E_FLAGS)
+                and  EF_ACTIVE | EF_DYING
+                dec  a                         ; 0 only for active and not dying
+                jr   nz, .n
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   nz, .n
+                ld   a, (ix+E_KIND)            ; kx_tab + kind * 6 + KX_IMM (one page)
+                ld   l, a
+                add  a, a
+                add  a, l
+                add  a, a
+                add  a, (kx_tab & $FF) + KX_IMM
+                ld   l, a
+                ld   h, kx_tab >> 8
+                ld   a, (hl)
+                and  e
+                jr   nz, .n                    ; immune, or a boss
+                ld   a, b
+                add  a, ST_FLAGS & $FF
+                ld   l, a
+                ld   h, ST_FLAGS >> 8
+                ld   a, (hl)
+                dec  d
+                inc  d
+                jr   nz, .sl
+                and  ~STS_MIND & $FF           ; FEAR: the MIND group overwritten
+                or   MIND_FEAR
+                ld   (hl), a
+                ld   a, l
+                add  a, (ST_T1 - ST_FLAGS) & $FF
+                ld   l, a
+                ld   a, (hl)
+                and  $F0                       ; (the HOLD timer kept)
+                or   SCR_FEAR_T                ; MIND timer: the low nibble
+                ld   (hl), a
+                jr   .c
+.sl:            bit  0, a                      ; (STS_HOLD = bits 0-1)
+                jr   nz, .n
+                bit  1, a
+                jr   nz, .n                    ; held already: no HOLD on a held body
+                or   HOLD_ASLEEP
+                ld   (hl), a
+                ld   a, l
+                add  a, (ST_T1 - ST_FLAGS) & $FF
+                ld   l, a
+                ld   a, (hl)
+                and  $0F                       ; (the MIND timer kept)
+                or   SCR_SLEEP_T << 4          ; HOLD timer: the high nibble
+                ld   (hl), a
+                ld   a, (ix+E_REACT)           ; the typeless ASLEEP cue (dh_status V3)
+                or   a
+                jr   nz, .c
+                ld   (ix+E_FLT), SLEEP_FLASH
+                ld   (ix+E_FLA), SLEEP_FLASH_ATTR
+.c:             inc  c
+.n:             push de
+                ld   de, P_ENT_STRIDE
+                add  ix, de
+                pop  de
+                inc  b
+                ld   a, b
+                cp   P_MAX_ENT
+                jr   c, .l
+                ld   l, c
+                pop  ix
+                ret
+                ASSERT STS_HOLD == 3 && EF_ACTIVE == 1 && IMMF_BOSS_BIT == 7
+                ASSERT SCR_FEAR_T <= STS_MAX_TURNS && SCR_SLEEP_T <= STS_MAX_TURNS && (ST_FLAGS & $FF) + P_MAX_ENT <= 256
+
+;------------------------------------------------------------------------------
 ; efx_tab — per effect id 1..7 (row = (id - 1) * EF_STRIDE): immunity bit
 ; (0 = none: FROZEN follows COLD, WEAK is hero-only), STATUS mask + value,
 ; timer field (EFT_*), the hero's line, the monster suffix (0 = none).

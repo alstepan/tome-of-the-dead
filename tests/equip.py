@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
 """3E-T8 gear: hero_recalc (src/gear6.asm, R6), the effects overlay
-(src/fx_ovl.asm via ovl_fx / ovl_fx_saved, src/lowram.asm), the page-verb
+(3E-T12: R6 src/fx6.asm fx_main, far6; was the fx overlay), the page-verb
 consumer (page_post, src/menu1.asm), enchant_weapon, the page stat line
 (it_fmt). Release build (DEBUG_KIT=0), PROTO room A, every monster parked.
 game.md §8 gear table, §8.6 uniques, §8.11 "3E simplification".
 
   N   kit start == the B20 numbers: Warrior atk 3 / eva 2 / 1d6+0 / DEF 1 / MP 6/6,
       period 8; Mage atk 1 / eva 1 / 1d4+0 / DEF 0 / MP 12/12 (10 + Robe 2), period 6
-  E   ovl_fx EQUIP / REMOVE (direct): the swap (old weapon takes the bag slot), an
+  E   fx_main EQUIP / REMOVE (direct): the swap (old weapon takes the bag slot), an
       empty slot (bag compacted), REMOVE -> the bag end, full bag refused (nothing,
       no turn), lines "YOU EQUIP <name>" / "YOU REMOVE <name>", FXR_TURN; stats
       follow (Long Sword atk +1 1d8, Chain DEF 2, Helm DEF +1, fists 1d2)
-  F   the ovl_fx round trip leaves ROOM_MAP / LVL_STATE / LP_STATE / P_ENTITIES /
+  F   fx_main leaves ROOM_MAP / LVL_STATE / LP_STATE / P_ENTITIES /
       RNG / FLOOR_LIST / MK_RAM / ANIM lists unchanged; cost
   U   uniques + charms: King Helm eva +1, Silk Cloak eva +2 + IMMF_POISON, Grave
       Cloak DRAIN R + DARK R, + Mirror Helm DARK X (per-field max, not OR), +
       Grave Ring (I < X: stays X) MP +2, Fire Ring FIRE R, Might atk +1, Ward DEF
       +1, Cleaver 1d10 +1 atk +1
   P   page_post consumes injected PAGE_VERB / PAGE_SLOT once: EQUIP -> L 1 (turn),
-      applied, PAGE_VERB 0, the map restored from the page's save; DRINK -> L 0,
-      nothing; DISCARD -> "YOU DISCARD <name>", 0 turns
+      applied, PAGE_VERB 0, the map restored from the page's save; DRINK Heal at
+      full HP -> L 0, NO NEED, nothing consumed (T12); DISCARD -> "YOU DISCARD
+      <name>", 0 turns
   X   enchant_weapon: m +1 .. +3 (KT_BONUS 1..3), the 4th and fists -> L 0
   L   level steps exactly once with gear: XP 922 -> L8: atk base +2 (+1 Might),
       eva +1; an equip afterwards keeps them (no double count)
@@ -111,7 +112,9 @@ def run(h, p, check):
         return p.rb(RES)
 
     def fx(op, arg):
-        stub([0x3E, op, 0x06, arg, 0xCD] + w16(S["ovl_fx"]))
+        p.wb("FX_OP", op)
+        p.wb("FX_ARG", arg)
+        stub([0x21] + w16(S["fx_main"]) + [0xCD] + w16(S["far6"]))
         return p.rb("FX_OP")
 
     def stats(kind=None):
@@ -229,23 +232,27 @@ def run(h, p, check):
     check("E6 REMOVE with a full bag: refused (FX_OP 0), nothing changes",
           (r6, bag() == b0, worn() == w0) == (0, True, True), (r6,))
     s2 = state()
-    check("F1 ovl_fx round trips leave ROOM_MAP / LVL_STATE / LP_STATE / P_ENTITIES / RNG / FLOOR_LIST / MK_RAM / "
+    check("F1 fx_main calls leave ROOM_MAP / LVL_STATE / LP_STATE / P_ENTITIES / RNG / FLOOR_LIST / MK_RAM / "
           "ANIM lists unchanged (no turn by itself)",
           s2 == s0 and p.rw("TURN_COUNTER") == t0, [k for k in s0 if s0[k] != s2[k]])
     # cost: the full fx path (map save + unpack + equip + line + recalc + map back), interrupts off
     put(["W_LONG"])
     z.cmd("set-breakpoint 5")
-    ok = p.code([0x3E, S["FX_EQUIP"], 0x06, 0, 0xCD] + w16(S["ovl_fx"]))
+    p.wb("FX_OP", S["FX_EQUIP"])
+    p.wb("FX_ARG", 0)
+    ok = p.code([0x21] + w16(S["fx_main"]) + [0xCD] + w16(S["far6"]))
     t_fx = p.tstates
     put(["P_HEAL"])
-    ok2 = p.code([0x3E, S["FX_DRINK"], 0x06, 0, 0xCD] + w16(S["ovl_fx"]))
+    p.wb("FX_OP", S["FX_DRINK"])
+    p.wb("FX_ARG", 5)                              # an empty slot: nothing
+    ok2 = p.code([0x21] + w16(S["fx_main"]) + [0xCD] + w16(S["far6"]))
     t_nop = p.tstates
     ok3 = p.code([0x21] + w16(S["hero_recalc"]) + [0xCD] + w16(S["far6"]))
     t_rc = p.tstates
-    print(f"[info] ovl_fx EQUIP {t_fx} T, a no-op op {t_nop} T (map save + unpack + map back), "
+    print(f"[info] fx_main EQUIP {t_fx} T, an empty-slot op {t_nop} T, "
           f"hero_recalc {t_rc} T (incl. far6)", flush=True)
-    check("F2 ovl_fx EQUIP <= 75k T (one ~1-frame hitch), hero_recalc <= 6k T", ok and ok2 and ok3
-          and t_fx <= 75000 and t_rc <= 6000, (t_fx, t_nop, t_rc))
+    check("F2 fx_main EQUIP <= 20k T (resident: no overlay), hero_recalc <= 6k T", ok and ok2 and ok3
+          and t_fx <= 20000 and t_rc <= 6000, (t_fx, t_nop, t_rc))
     scene(K_KNIGHT)
 
     # ======================= U: uniques, charms ==================================
@@ -353,8 +360,9 @@ def run(h, p, check):
     q3 = post(S["VB_DISCARD"], 1) + (len(bag()),)
     check("P1 page_post EQUIP: L 1, PAGE_VERB 0, PAGE_VLAST EQUIP, map back, the line, applied",
           q1 == (1, 0, S["VB_EQUIP"], True, ["YOU EQUIP LONG SWORD"], I("W_LONG"), I("W_SHORT")), q1)
-    check("P2 page_post DRINK (T12): L 0, consumed, nothing done; DISCARD: L 0, YOU DISCARD SHORT SWORD, bag 1",
-          (q2, q3) == ((0, 0, S["VB_DRINK"], True, [], (I("P_HEAL"), 1, 0)),
+    check("P2 page_post DRINK Heal at full HP: L 0, consumed verb, NO NEED, potion kept; DISCARD: L 0, "
+          "YOU DISCARD SHORT SWORD, bag 1",
+          (q2, q3) == ((0, 0, S["VB_DRINK"], True, ["NO NEED"], (I("P_HEAL"), 1, 0)),
                        (0, 0, S["VB_DISCARD"], True, ["YOU DISCARD SHORT SWORD"], 1)), (q2, q3))
 
     # ======================= S: stat line text ====================================

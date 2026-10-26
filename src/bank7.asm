@@ -235,6 +235,8 @@ end_turn:
 do_exit:
                 cp   EX_LEVEL                  ; A = EXIT_KIND (end_turn)
                 jp   z, level_descend          ; B3B-12: the level exit (lowram)
+                cp   EX_TELE
+                jp   z, .tele                  ; 3E-T12: the Teleport scroll
                 call follow_select             ; L-RELIEF: this bank (PROTO: far3 follow_admit)
                 call hide_sprites              ; every sprite hidden, hero too
                 call show_bank5                ; A7: the scroll runs on the $4000 screen
@@ -253,7 +255,7 @@ do_exit:
 .h:             call far1
                 call room_shadow               ; attr shadow of the new room (the scroll
                                                ; drew the screen and its row-17 ornament)
-                ld   a, (EXIT_DEST)
+.in:            ld   a, (EXIT_DEST)
                 ld   (CUR_ROOM), a
                 call lair_hint                 ; B12 (lowram: 3 B here, kind_tab pad)
                 ld   ix, P_ENTITIES
@@ -294,6 +296,23 @@ do_exit:
                 ld   a, GS_PLAYING
                 ld   (GAME_STATE), a
                 jp   resync_tick
+; 3E-T12 (game.md §8.11 Q6): no followers, no scroll. tele_pick (R6) picks the
+; room + spot and leaves EXIT_KIND = EX_UP / EX_DOWN + EXIT_COL, so
+; lp_transition banks / spawns for that arrival box and .in places the hero
+; there like a vertical arrival. The new room is composed in bank 5 (room_show:
+; map, screen, attr shadow, inks, ornament) while bank 7 still shows the old
+; one, then shown at once (show_bank5; present_full copies it back to 7).
+.tele:          call hide_sprites
+                ld   hl, tele_pick
+                call far6
+                ld   a, GS_TRANSITION
+                ld   (GAME_STATE), a
+                ld   hl, lp_transition         ; bank the old room, spawn the new one
+                call far3
+                ld   a, (EXIT_DEST)
+                call room_show                 ; (lowram; leaves bank 7 paged)
+                call show_bank5
+                jp   .in
 
 ;==============================================================================
 ; PLAYER TURN — try_player_turn: resolve the sampled keys (PLAYER_DIR/DISC).

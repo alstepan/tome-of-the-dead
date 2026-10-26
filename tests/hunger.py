@@ -269,7 +269,7 @@ def run(h, p, check):
     check("W1 deal_hit dmg 3: 3 / 2 hunger WEAK / 2 both (not stacked) / 2 status WEAK", res == [3, 2, 2, 2], res)
     p.wb(STF, HWEAK | WEAK)
     p.wb(S["ST_T2"], 5)
-    stub([0x3E, S["IT_P_CURE"], 0x21] + w16(S["pot_eff"]) + [0xCD] + w16(S["far7"]))
+    stub([0x3E, S["IT_P_CURE"], 0x21] + w16(S["pot_eff"]) + [0xCD] + w16(S["far6"]))
     check("W2 Cure clears status WEAK only (STS_HWEAK kept)", p.rb(STF) == HWEAK, hex(p.rb(STF)))
 
     # ======================= P: panel ==============================================

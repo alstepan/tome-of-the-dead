@@ -130,7 +130,8 @@ hunger_add:
 ; else WEAK); ST_FLAGS slot 0 STS_HWEAK := (stage == WEAK). On a change:
 ; PD_FOOD and at most ONE line (§8.11 (2)): downward into HUNGRY "YOU ARE
 ; HUNGRY", into WEAK "YOU ARE WEAK WITH HUNGER" (HW_TMR := -1), upward into
-; FED "YOU FEEL WELL FED"; into OK and WEAK -> HUNGRY nothing.
+; FED "YOU FEEL WELL FED" (3E-T12: + HP_RG := 0, the regen count restarts);
+; into OK and WEAK -> HUNGRY nothing.
 ; Clobbers: A, BC, DE, HL.   ~0.2k T (+ ~3k with a line)
 ;------------------------------------------------------------------------------
 hg_stage:
@@ -160,7 +161,10 @@ hg_stage:
                 ld   a, c
                 ld   e, S3_HG_FED
                 or   a
-                jr   z, hg_line                ; into FED: always upward
+                jr   nz, .nf                   ; into FED: always upward; 3E-T12: the FED
+                ld   (HP_RG), a                ; regen count restarts (A = 0: +1 HP 12 turns on)
+                jr   hg_line
+.nf:
                 cp   b
                 ret  c                         ; upward into OK / HUNGRY: no line
                 ld   e, S3_HG_HUNGRY

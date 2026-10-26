@@ -281,6 +281,7 @@ def part_b(h, check):
     scene()
     tab = S["slot_act_tab"]
     fs = [i for i in range(10) if p.rb(tab + i) == S["SA_FOOD"]]
+    p.wmem(S["BAG"], [0] * 60)                     # 3E-T12: the kit Apple would be eaten
     p.select_slot(fs[0])
     clear_log(p)
     nt = p.no_turn("FIRE")
