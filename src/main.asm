@@ -652,6 +652,10 @@ ovl_items_zx0:                                        ; 3E-T6 item / trap genera
     IF OVL_PASS == 2
                 INCBIN "items.zx0"
     ENDIF
+ovl_fx_zx0:                                           ; 3E-T8 effects overlay (fx_ovl.asm, FX_ORG; ovl_fx)
+    IF OVL_PASS == 2
+                INCBIN "fx.zx0"
+    ENDIF
 r6_blobs_end:
 r6_end:
 R6_USED         EQU r6_end - R6_ADDR
@@ -698,7 +702,16 @@ items_ovl_main:
 ITEMS_OVL_LEN   EQU ig_image_end - items_ovl_main
                 ASSERT ig_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
                 SAVEBIN "build/ovl/items.bin", ovl_raw_items, ITEMS_OVL_LEN
-                DISPLAY "GAME items overlay (3E-T6): ", /D, ITEMS_OVL_LEN, " B raw (+ ", /D, ig_end - ig_image_end, " B scratch) at ", /H, ITEMS_ORG, ", packed ", /D, r6_blobs_end - ovl_items_zx0, " B in bank ", /D, BANK_OVL_ITEMS
+                DISPLAY "GAME items overlay (3E-T6): ", /D, ITEMS_OVL_LEN, " B raw (+ ", /D, ig_end - ig_image_end, " B scratch) at ", /H, ITEMS_ORG, ", packed ", /D, ovl_fx_zx0 - ovl_items_zx0, " B in bank ", /D, BANK_OVL_ITEMS
+ovl_raw_fx:
+                DISP FX_ORG
+fx_ovl_main:
+                INCLUDE "fx_ovl.asm"
+                ENT
+FX_OVL_LEN      EQU fx_end - fx_ovl_main
+                ASSERT fx_end <= GEN_SCRATCH + GEN_SCRATCH_LEN && fx_ovl_main == fx_main
+                SAVEBIN "build/ovl/fx.bin", ovl_raw_fx, FX_OVL_LEN
+                DISPLAY "GAME fx overlay (3E-T8): ", /D, FX_OVL_LEN, " B raw at ", /H, FX_ORG, ", packed ", /D, r6_blobs_end - ovl_fx_zx0, " B in bank ", /D, BANK_OVL_FX, "; page overlay ", /D, PAGE_OVL_LEN, " B raw (", /D, PAGE_LIMIT - page_ovl_end, " left)"
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000
 

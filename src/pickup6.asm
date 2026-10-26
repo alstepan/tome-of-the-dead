@@ -84,6 +84,8 @@ pot_take1:
 ; slot is set: the start kit (game.md §8.11 Q10 / §4): WORN weapon + armour,
 ; the bag list by HERO_KIND (+ the DEBUG_KIT extras, rev 6 list, + the bow for
 ; the Warrior). Ends with E_POT synced (bag_add). 3E-T9: FOOD := FOOD_START.
+; 3E-T8: then hero_recalc (atk / eva / die / DEF / RES / MAXMP / MP_PER) and
+; MP := MAXMP.
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 kit_add:
@@ -108,12 +110,16 @@ kit_add:
 .l:             ld   a, (hl)
                 inc  hl
                 or   a
-                ret  z
+                jr   z, .rc
                 push hl
                 ld   bc, 1 << 8
                 call bag_add
                 pop  hl
                 jr   .l
+.rc:            call hero_recalc               ; 3E-T8: the worn kit's stats (gear6.asm)
+                ld   a, (MAXMP)                ; start full (the Robe's +2 included)
+                ld   (MP), a
+                ret
 kit_w:          DB   IT_W_SHORT, IT_A_LEATHER, IT_P_HEAL, IT_F_APPLE
     IF DEBUG_KIT
                 DB   IT_P_CURE, IT_P_MANA, IT_S_TELEPORT, IT_S_FEAR, IT_S_SLEEP, IT_S_ENCHANT

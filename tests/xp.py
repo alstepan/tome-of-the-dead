@@ -284,8 +284,10 @@ def run(h, p, check):
     # new snd_* strings retokenised the dictionary, ~+128 T per line; no xp code
     # changed). The level-up only runs in a tick's 1st frame (~84k T bound, C2),
     # so this is a drift guard, not a budget edge.
-    check("C1 xp_turn L1 -> L9 at once with its 3 lines + regen <= 13.5k T (1st frame only: <= ~84k T)",
-          tt["L1->L9 + 3 lines"] <= 13500, tt)
+    # 3E-T8: + hero_recalc (far6, ~4k T: the level steps are recomputed from LVL + gear)
+    # on a level with a step; still 1st frame only: <= ~71k + 18k = ~89k T < the 126k cap
+    check("C1 xp_turn L1 -> L9 at once with its 3 lines + regen + hero_recalc <= 18k T (1st frame only: <= ~89k T)",
+          tt["L1->L9 + 3 lines"] <= 18000, tt)
     check("C2 2nd frame: the level-up waits (XP_UP 1, LVL 1), regen only, <= 1k T",
           ok2 and pend == (1, 1) and t9 <= 1000, (ok2, pend, t9))
     # a deferred level-up lands on a later INPUT tick (turn_input -> xp_level)

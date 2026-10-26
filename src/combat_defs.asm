@@ -223,7 +223,7 @@ HERO_RES        EQU HERO3D + 1      ; 3 B: the hero's resistances (RES_* format 
 HERO_IMM        EQU HERO3D + 4      ; status immunity mask (IMMF_*; OR of gear, 3E)
 MP_SH           EQU HERO3D + 5      ; panel: MP as last drawn (PD_MP item, like PANEL_HP_SH)
 STAT_SH         EQU HERO3D + 6      ; panel: status icons as last drawn (row 21, cols 30-31)
-HERO_DEF        EQU HERO3D + 7      ; D3-6a: the hero's DEF (armour; Warrior Leather 1, Mage 0: hero_st_init; gear 3E)
+HERO_DEF        EQU HERO3D + 7      ; D3-6a: the hero's DEF (sum over worn gear; hero_recalc owns it, 3E-T8)
 XP_UP           EQU HERO3D + 8      ; D3-6a: 1 = deal_hit added XP; xp_turn (end_turn, xp7.asm) checks the level-up and clears it
 HERO3D_END      EQU HERO3D + 9
                 ASSERT HERO3D >= ANIM_LIST2 + ANIM_MAX * AL_STRIDE && HERO3D_END <= ANIM_N
@@ -255,7 +255,7 @@ LOG_PDIR        EQU TURN_PEND + 6   ; T7 review: the input a log hold swallowed 
                                     ; bit 7 = DK_WAIT): a tap released during the hold is replayed
 TURN_PEND_END   EQU TURN_PEND + 7
 ; D3-8 hero status step state (right after TURN_PEND, same spare; zeroed by
-; level_reset_new with HERO3D..ST_HERO_END):
+; level_reset_new with HERO3D..GEAR_MP, 3E-T8):
 HST_DONE        EQU TURN_PEND_END   ; 1 = the hero's status step already ran for the turn being
                                     ; entered (turn_input runs it before the action, once:
                                     ; an illegal try costs no turn and must not step twice);
@@ -280,6 +280,15 @@ PAGE_VERB       EQU ST_HERO_END + 2 ; 3E-T13: the verb chosen on the page (VB_*,
                                     ; = closed without one), written by the overlay at every open
 PAGE_SLOT       EQU ST_HERO_END + 3 ; 3E-T13: its slot: 0..19 bag, 20..23 worn (BAG + 3 * slot; test-observable)
 PAGE_END        EQU ST_HERO_END + 4
+; 3E-T8 (same spare, after PAGE_*; level_reset_new zeroes HERO3D..GEAR_MP incl. PAGE_*):
+GEAR_MP         EQU PAGE_END        ; the gear MP hero_recalc has added into MAXMP (0 at new_game;
+                                    ; recalc: MAXMP += new - GEAR_MP, so level-ups / tomes stay)
+MP_PER          EQU PAGE_END + 1    ; MP regen period (turns) for xp_turn: class 8 / 6, x 1/2 with
+                                    ; the Mana / Scarab amulet, x 2 with Plate (hero_recalc)
+FX_OP           EQU PAGE_END + 2    ; ovl_fx: in = the op (FX_*), out = the FXR_* result flags
+FX_ARG          EQU PAGE_END + 3    ; ovl_fx: the op's argument (a slot: BAG + 3 * arg)
+PAGE_VLAST      EQU PAGE_END + 4    ; the verb page_post last consumed (VB_*; test-observable only)
+HERO_T8_END     EQU PAGE_END + 5
 HELD_WAIT       EQU 3
 LT_SERVED       EQU 1
 LT_HOLD_BIT     EQU 1
@@ -291,8 +300,8 @@ TP_ACT          EQU 1 << TP_ACT_BIT
 TP_MON          EQU 1 << TP_MON_BIT
 TP_FIRE         EQU 1 << TP_FIRE_BIT
 ACT_FIRE_TICK   EQU 2               ; release tick f of every ability (game.md §6.1 "Release ticks")
-                ASSERT TURN_PEND == $BC4A && PAGE_END <= ANIM_N
-                ASSERT (HERO3D >> 8) == ((PAGE_END - 1) >> 8)
+                ASSERT TURN_PEND == $BC4A && HERO_T8_END <= ANIM_N
+                ASSERT (HERO3D >> 8) == ((HERO_T8_END - 1) >> 8) && FX_ARG == FX_OP + 1
 
 ;------------------------------------------------------------------------------
 ; Damage types (game.md §6.0) and the 3-B resistance record (KX_RES /

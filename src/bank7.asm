@@ -338,7 +338,7 @@ tpt_intent:
                 bit  1, c                      ; IN_BAG (I): the bag page, no turn (CF = 0)
                 jr   nz, .bag
                 call use_icon                  ; intent7.asm (D3-7 T0: bank 7): L = 1 turn used
-                ld   a, l
+.res:           ld   a, l
                 rrca                           ; CF = L bit 0
                 ret  nc                        ; refused: ICON MODE stays (§3.1)
                 ld   a, (ICON_MODE)
@@ -347,12 +347,9 @@ tpt_intent:
                 scf
                 ret
 .bag:           call page_run                  ; (lowram.asm; restores bank 7)
-                ; 3E-T13 return: PAGE_VERB / PAGE_SLOT (VB_*, item_defs.asm). page_post
-                ; already applied VB_DISCARD (0 turns). STUB for T8 / T12: DRINK / EAT /
-                ; READ / EQUIP / REMOVE will run the effect overlay here and return
-                ; CF = 1 (1 turn); today they are ignored (no turn).
-                or   a                         ; CF = 0: no turn, ICON MODE stays
-                ret
+                jr   .res                      ; 3E-T8: page_post consumed the verb (PAGE_VERB
+                                               ; 0 again): L = 1 EQUIP / REMOVE spent the turn
+                                               ; (fx overlay), 0 none / DISCARD / T12 verbs
                 ASSERT IN_BAG == 2 && IN_FIRE == 1
 .move:          ld   a, (PLAYER_DIR)
                 ld   c, a

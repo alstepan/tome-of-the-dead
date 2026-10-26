@@ -163,8 +163,8 @@ use_slot:
                 jr   z, .rf
                 cp   SA_BAG
                 jr   nz, ic_none               ; SA_EMPTY
-                call page_run                  ; 3E-T2: the bag page (lowram.asm), no turn,
-                jr   ic_none                   ; no line: L = 0 (ICON MODE stays)
+                jp   page_run                  ; 3E-T2: the bag page (lowram.asm); 3E-T8:
+                                               ; L = page_post's (1: a verb spent the turn)
 .rf:            ld   a, e
                 jr   ic_no
 ; ic_no_mana — SND-5: the NO MANA refusal (abil_spell / abil_melee); plays FIZZ (= NO).
@@ -316,16 +316,9 @@ hero_st_init:
                 ld   (ARANK + 1), a
                 ld   (XP), a                   ; C3-3 shows LV / XP (reserved for 3D)
                 ld   (XP + 1), a
-                ld   hl, kind_tab + KT_ATK     ; D3-9b: the level steps (xp_turn) off
-                ld   (hl), KN_ATK
-                inc  l
-                ld   (hl), WZ_ATK
-                ld   l, (KT_EVA + K_KNIGHT) & $FF
-                ld   (hl), KN_EVA
-                inc  l
-                ld   (hl), WZ_EVA
-                ASSERT K_KNIGHT == 0 && K_WIZARD == 1 && (kind_tab & $FF) == 0
-                ASSERT ((kind_tab + KT_ATK) >> 8) == ((kind_tab + KT_EVA) >> 8)
+                ; 3E-T8: the hero's kind_tab atk / eva / die / bonus columns, HERO_DEF,
+                ; HERO_RES / IMM and the gear MP are hero_recalc's (R6; kit_add runs it
+                ; right after this, with LVL 1: the level steps off)
                 inc  a
                 ld   (LVL), a                  ; level 1
                 dec  a
@@ -335,22 +328,19 @@ hero_st_init:
                 ld   b, MAGE_MP
                 jr   nz, .d                    ; Mage: no daggers, DEF 0 (HERO3D zeroed)
                 ld   b, WARRIOR_MP
-                ld   a, WARRIOR_DEF
-                ld   (HERO_DEF), a             ; D3-6a: Leather (game.md §4, §11.4)
                 ld   a, WARRIOR_DAGGERS
 .d:             ld   (DAGGERS), a
-                ld   a, b                      ; D3-7 T3: base MP (game.md §4)
-                ld   (MP), a
-                ld   (MAXMP), a
+                ld   a, b                      ; D3-7 T3: base MP (game.md §4; 3E-T8: the
+                ld   (MP), a                   ; Robe's +2 is gear: hero_recalc adds it,
+                ld   (MAXMP), a                ; kit_add fills MP)
     IF DEBUG_KIT
                 jr   debug_kit
     ELSE
                 ret
     ENDIF
 WARRIOR_MP      EQU 6
-MAGE_MP         EQU 12
+MAGE_MP         EQU 10                         ; 3E-T8: base (game.md §4: 10 + Robe 2 = 12)
 WARRIOR_DAGGERS EQU 3                          ; (EQUs: no bytes in bank 7)
-WARRIOR_DEF     EQU 1                          ; Leather; gear replaces it in 3E
 
     IF DEBUG_KIT
 ;------------------------------------------------------------------------------
@@ -375,7 +365,7 @@ debug_kit:
                 ld   (DAGGERS), a
                 jr   .s
 .m:             ld   hl, %0101010101           ; Mage: k0..4 rank 1
-                ld   b, 40
+                ld   b, 40 - 2                 ; 3E-T8: + the Robe's MP 2 (hero_recalc) = 40
 .s:             ld   (ARANK), hl
                 ld   a, b
                 ld   (MP), a

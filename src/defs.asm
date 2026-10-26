@@ -136,6 +136,12 @@ PAGE_SCR_END    EQU PAGE_BUF + LOG_MAX + 2
 ITEMS_ORG       EQU GEN_SCRATCH
 BANK_OVL_ITEMS  EQU BANK_R6         ; R6: was BANK_UI1 (bank-1 relief)
 BANK_OVL_PAGE   EQU BANK_R6         ; R6: the page stream (page_ovl, menu1.asm)
+; 3E-T8: the silent in-play effects overlay (src/fx_ovl.asm, ovl_fx in lowram.asm):
+; same window, the room map saved to FX_MAP_SAVE (= PAGE_MAP_SAVE: page_post
+; runs it with the page's save still there) and put back after it.
+FX_ORG          EQU GEN_SCRATCH
+FX_MAP_SAVE     EQU PAGE_MAP_SAVE
+BANK_OVL_FX     EQU BANK_R6
 B7_CODE         EQU $E000           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), tape
                                     ;     block joined to the TSET_LO tilesets below it
 B7_LIMIT        EQU $F800           ; ... up to the attr shadow (ASSERTed)
