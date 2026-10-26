@@ -740,7 +740,7 @@ About **30 SFX ≈ 0.8 KB E**.
 | LAND | 2 | 3 | 9 | `anim_entity` jump end / fall end, the hero (2) |
 | DOOR | 4 | 10 | 25 | `door_open` (low RAM; hero or monster) |
 | **Total (SND-5)** | | | **510** (table 54 + data 456) | |
-| STEP | **0** | 2 | 5 | hero: `try_horizontal` (7); every monster: `try_step` → `mv_sfx` (`logic.asm`, bank 2) |
+| STEP | **0** | 1 (was 2; `v9 n27`, was `v14 n14` + `v7 n22`: user 2026-10-26, too harsh; soft, below the un-ducked music's 13, the one effect exempt from the peak >= 14 rule) | 3 (was 5) | hero: `try_horizontal` (7); every monster: `try_step` → `mv_sfx` (`logic.asm`, bank 2) |
 | PICKUP | 3 | 6 | 9 | `floor_pickup`: `pp_take` (potion), `ap_take` (ammo, when n > 0) (7) |
 | QUAFF | 3 | 10 | 21 | `ic_quaff` (7) |
 | EAT | 3 | 6 | 13 | **not hooked** (3E): id `SFX_EAT` ready (GOLD removed in 3E-T0: no gold in the game) |

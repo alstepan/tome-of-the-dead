@@ -57,9 +57,9 @@ def part_a(h, check):
           and S["SFX_IDX_BOSS_ROAR"] == S["SFX_COUNT"] and S["SFX_IDX_BOSS_DEATH"] == S["SFX_COUNT"] + 1
           and S["SFX_IDX_SPARE3F"] == S["SFX_COUNT"] + 2 and S["SFX_COUNT"] + 3 <= 32,
           (S["SFX_NO"], S["SFX_FIZZ"]))
-    low = [n for n in ("STEP", "PICKUP", "QUAFF", "EAT")
+    low = [n for n in ("PICKUP", "QUAFF", "EAT")
            if max(f[1] for f in sfx2asm.decode(EFF[n]["data"])) < 14]
-    check("A4 new effects peak 14-15", not low and all(
+    check("A4 new effects peak 14-15 (STEP excepted: soft v9, user 2026-10-26)", not low and all(
         max(f[1] for f in sfx2asm.decode(EFF[n]["data"])) <= 15 for n in EFF), low)
     # A1
     a_bad, m_bad, fr = fx.play("STEP")

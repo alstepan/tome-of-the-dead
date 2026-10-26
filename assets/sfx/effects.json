@@ -36,7 +36,7 @@
                                          "v11 tC5", "v10 tA4", "v9 tF4", "v8 tD4", "v6 tB3", "v4 tG3", "v2 tE3"]},
     {"name": "DOOR", "prio": 4, "frames": ["v14 tC3 n28", "v15 tC#3", "v13 tD3 n26", "v12 tC#3", "v11 tC3 n24", "v10 tB2",
                                          "v8 tC3 n28", "v6 tB2", "v4 tA#2", "v2 tA2"]},
-    {"name": "STEP", "prio": 0, "frames": ["v14 n14", "v7 n22"]},
+    {"name": "STEP", "prio": 0, "frames": ["v9 n27"]},
     {"name": "PICKUP", "prio": 3, "frames": ["v15 tC6", "v12 t", "v15 tG6", "v13 t", "v10 t", "v5 t"]},
     {"name": "QUAFF", "prio": 3, "frames": ["v14 tA3", "v12 tC4", "v14 tB3", "v12 tD4", "v14 tC4", "v11 tE4", "v9 tD4",
                                           "v7 tF4", "v4 tE4", "v2 tG4"]},
