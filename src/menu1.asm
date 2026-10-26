@@ -15,7 +15,7 @@
 
 MENU_ITEM_ROW0  EQU 8               ; item i at rows 8 + 3i (2 rows, menu font); 4 at 18
 MENU_CTL_ROW    EQU 16              ; KEYS / KEMPSTON / SINCLAIR 1 / 2 (6x8)
-MENU_SND_ROW    EQU 22              ; item 5 (menu font, rows 21-22)
+MENU_SND_ROW    EQU 22              ; item 5 (menu font, rows 22-23)
 MENU_KEYS_ROW   EQU 20              ; UP Q  DOWN A ... (6x8)
 MENU_PREV_ROW   EQU 9               ; hero previews (body top)
 MENU_A_DIGIT    EQU $45

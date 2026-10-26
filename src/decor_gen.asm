@@ -14,8 +14,8 @@
 ;   D1 (concept-screen 3.3 "Decor placement (D1)"): (1) dg_patches: >= 1 back-wall
 ;   patch (+ a 2nd at 50 %), (2) dg_cobwebs: corner cobwebs, (3) 12 menu attempts x 4 rnd
 ;   calls (o, col, storey, r0; the row comes from the object class: mount row 1, ceiling
-;   row 0, floor row 7 at the bottom, patch / brick 1 + r0); (4) the drips: removed in D3-7 T6
-;   (ids 17 / 18 are the ammo floor glyphs). An attempt
+;   row 0, floor row 7 at the bottom, patch / brick 1 + r0); (4) removed: the drips (D3-7 T6, ids 17 / 18
+;   are the ammo floor glyphs) and the DEC1 bones pass (DEC2). An attempt
 ;   places one object iff the budgets (<= 2 large animated, 4 glyph + 8 attr cells, 6
 ;   patch / brick cells), the footprint (T_AIR; T_BRICK for the pillar), the class
 ;   support (T_PLAT / T_WALLF above a ceiling object / below a floor object) and the ring
@@ -32,9 +32,6 @@ DG_MAX_ATTR     EQU 8
 DG_MAX_WALL     EQU 6
 DG_PTRIES       EQU 8
 DG_MAX_COB      EQU 2
-DG_BTRIES       EQU 6               ; DEC1 bones: tries of 2 rnd calls each
-DG_BCOLS        EQU 4               ; bones footprint width
-DG_BRND         EQU 31 - DG_BCOLS   ; rnd(27): c = 1..27, c + 3 <= 30
 DC_CEIL         EQU 1               ; object classes (record wh byte bits 5..7)
 DC_FLOOR        EQU 2
 DC_PATCH        EQU 3
@@ -69,88 +66,7 @@ DC_COMP         EQU 5
                 call dg_try
                 pop  bc
                 djnz .t
-                ; fall through: (4) the DEC1 bones pass, last
-; dg_bones — (4) DEC1 dead skeleton (concept-screen 3.3): only depths with a non-zero dg_bodds
-; entry; ONE gate rnd(n) placed on 0, then up to DG_BTRIES tries of exactly 2 calls (storey,
-; col = 1 + rnd(27)), the first legal one wins. Legal = 4 T_AIR cells on the standing row,
-; T_PLAT / T_WALLF under each, ring free (dg_ring). Not in the menu; no state, no budgets.
-dg_bones:
-                ld   a, (LVL_DEPTH)
-                dec  a
-                ld   e, a
-                ld   d, 0
-                ld   hl, dg_bodds
-                add  hl, de
-                ld   a, (hl)
-                or   a
-                ret  z                         ; D1 / D2 / D6: no skeleton pool, no rnd call
-                call dg_rnd
-                or   a
-                ret  nz                        ; the gate: placed on 0
-                ld   b, DG_BTRIES
-.bt:            push bc
-                ld   a, 2
-                call dg_rnd
-                ld   e, a
-                add  a, a
-                add  a, a
-                add  a, a
-                add  a, e                      ; 9 * storey
-                add  a, STOREY_ROWS - 2        ; standing row 7
-                ld   (dg_row), a
-                ld   a, DG_BRND                ; c = 1 + rnd(27): footprint stays in cols 1..30
-                call dg_rnd
-                inc  a
-                ld   (dg_col), a
-                call dg_bfit
-                pop  bc
-                jr   z, dg_bput
-                djnz .bt
-                ret
-dg_bput:        ld   a, (dg_row)               ; HL = the map cell of the footprint's left end
-                ld   b, a
-                ld   a, (dg_col)
-                ld   c, a
-                call map_cell
-                ld   de, dg_bids
-                ld   b, DG_BCOLS
-.w:             ld   a, (de)
-                ld   (hl), a
-                inc  hl
-                inc  de
-                djnz .w
-                ret
-
-; dg_bfit — dg_row / dg_col: Z if the bones fit there. Footprint all T_AIR (== 0, so the four
-; bytes OR to 0), T_PLAT / T_WALLF directly below each, then the ring (no ladder, no decor).
-dg_bfit:
-                ld   a, (dg_row)
-                ld   b, a
-                ld   a, (dg_col)
-                ld   c, a
-                call map_cell
-                ld   a, (hl)
-                inc  hl
-                or   (hl)
-                inc  hl
-                or   (hl)
-                inc  hl
-                or   (hl)
-                ret  nz
-                ld   de, ROOM_COLS - 3
-                add  hl, de                    ; the row below, left end
-                ld   b, DG_BCOLS
-.s:             ld   a, (hl)
-                and  $FD                       ; T_WALLF (3) -> T_PLAT (1)
-                cp   T_PLAT
-                ret  nz
-                inc  hl
-                djnz .s
-                ld   a, 1
-                ld   (dg_h), a
-                ld   a, DG_BCOLS
-                ld   (dg_w), a
-                jp   dg_ring                   ; Z ok
+                ret                            ; (DEC2: the DEC1 bones pass that followed is gone)
 
 ; dg_rec — A = record index -> HL = &dg_recs[A] (3 B records). Clobbers A, C, DE.
 dg_rec:
@@ -275,12 +191,9 @@ dg_obj:
                 ld   a, (dg_w)
                 ld   d, a
                 bit  2, e
-                jr   z, .g2
-                ld   b, d
-.g2:            bit  3, e
                 jr   z, .g3
-                ld   b, 1
-.g3:            bit  4, e
+                ld   b, d
+.g3:            bit  4, e                      ; (DEC2: flag bit 3, glyph last col = cauldron, gone)
                 jr   z, .g4
                 ld   c, d
 .g4:            ld   (dg_da), bc               ; dg_da = C, dg_dg = B
@@ -687,15 +600,9 @@ dg_cell:
                 ld   a, d
                 or   a
                 jr   nz, .r1
-                bit  2, l                      ; row 0: glyph swap (all cells / last col)
-                jr   nz, .gl
-                bit  3, l
+                bit  2, l                      ; row 0: glyph swap (all cells)
                 jr   z, .at
-                ld   a, (dg_w)
-                dec  a
-                cp   e
-                jr   nz, .at
-.gl:            ld   hl, dg_alt
+                ld   hl, dg_alt
                 ld   a, (hl)                   ; type = alternate tile id (>= 16)
                 inc  (hl)
                 jr   .em
@@ -765,16 +672,16 @@ dg_rnd:
 ; L-RELIEF: dg_bad is not in this block: --asm-bad -> src/dg_bad3.asm, INCLUDEd
 ; by combat_data3.asm at $C0C0 (right after kx_tab: 64-aligned, no ALIGN pad).
 ; GENERATED by tools/decorgen.py --asm (edit the tool, re-run, paste)
-; record (3 B): base id | w + h*4 + class*32 | flags (bit0 moss, 1 tiled, 2 glyph row 0, 3 glyph last
-;                 col, 4 attr row 1, 5 attr all, 6 attr type 2, 7 large animated)
+; record (3 B): base id | w + h*4 + class*32 | flags (bit0 moss, 1 tiled, 2 glyph row 0, 3 unused (DEC2),
+;                 4 attr row 1, 5 / 6 unused (DEC1), 7 large animated)
 ; class 0 mount, 1 ceiling, 2 floor, 3 patch, 4 brick, 5 composite patch
 dg_start:       ; first per-level record of depth 1..8, then the end
-                DEFB 4, 8, 16, 20, 24, 27, 34, 37, 41
+                DEFB 4, 8, 15, 19, 22, 25, 32, 35, 39
 dg_pk:          ; PATCH_A/B records at the head of each level's records (0 = composite)
                 DEFB 0, 2, 1, 1, 1, 2, 1, 0
 dg_cob:         ; COBWEB left / right corner id per depth (0 = none)
                 DEFB  56,  58
-                DEFB  55,  57
+                DEFB  52,  54
                 DEFB  57,  58
                 DEFB   0,   0
                 DEFB   0,   0
@@ -795,43 +702,38 @@ dg_recs:
                 DEFB  32, 106, $00      ;  8 D2 PATCH_A
                 DEFB  36, 107, $00      ;  9 D2 PATCH_B
                 DEFB  42,  13, $94      ; 10 D2 TORCH_SLIM
-                DEFB  46,  70, $88      ; 11 D2 CAULDRON
-                DEFB  49,  73, $84      ; 12 D2 BRAZIER
-                DEFB  52,  10, $02      ; 13 D2 WINDOW_BAR
-                DEFB  53,   9, $00      ; 14 D2 BANNER
-                DEFB  56,  37, $01      ; 15 D2 MOSS
-                DEFB  52, 106, $00      ; 16 D3 PATCH_A
-                DEFB  32,  82, $94      ; 17 D3 BRAZIER_BIG
-                DEFB  42,  22, $00      ; 18 D3 BANNER_TALL
-                DEFB  56,  10, $02      ; 19 D3 BOOKSHELF
-                DEFB  55, 106, $00      ; 20 D4 PATCH_A
-                DEFB  32,  18, $94      ; 21 D4 TORCH_TALL
-                DEFB  42,  22, $00      ; 22 D4 BANNER_TALL
-                DEFB  52,  70, $88      ; 23 D4 CAULDRON
-                DEFB  54, 106, $00      ; 24 D5 PATCH_A
-                DEFB  32,  82, $94      ; 25 D5 BRAZIER_BIG
-                DEFB  42,  19, $00      ; 26 D5 WINDOW_ARCH
-                DEFB  41, 106, $00      ; 27 D6 PATCH_A
-                DEFB  45, 107, $00      ; 28 D6 PATCH_B
-                DEFB  32,  13, $94      ; 29 D6 TORCH_SLIM
-                DEFB  38,  10, $02      ; 30 D6 BOOKSHELF
-                DEFB  39,   9, $00      ; 31 D6 BANNER
-                DEFB  51,  10, $02      ; 32 D6 WINDOW_BAR
-                DEFB  53,  37, $01      ; 33 D6 MOSS
-                DEFB  52, 107, $00      ; 34 D7 PATCH_B
-                DEFB  32,  18, $94      ; 35 D7 TORCH_TALL
-                DEFB  42,  22, $00      ; 36 D7 BANNER_TALL
-                DEFB  32,  82, $94      ; 37 D8 BRAZIER_BIG
-                DEFB  42,  10, $02      ; 38 D8 BOOKSHELF
-                DEFB  43,  22, $00      ; 39 D8 BANNER_TALL
-                DEFB  53,  13, $94      ; 40 D8 TORCH_SLIM
+                DEFB  46,  73, $84      ; 11 D2 BRAZIER
+                DEFB  49,  10, $02      ; 12 D2 WINDOW_BAR
+                DEFB  50,   9, $00      ; 13 D2 BANNER
+                DEFB  53,  37, $01      ; 14 D2 MOSS
+                DEFB  52, 106, $00      ; 15 D3 PATCH_A
+                DEFB  32,  82, $94      ; 16 D3 BRAZIER_BIG
+                DEFB  42,  22, $00      ; 17 D3 BANNER_TALL
+                DEFB  56,  10, $02      ; 18 D3 BOOKSHELF
+                DEFB  52, 106, $00      ; 19 D4 PATCH_A
+                DEFB  32,  18, $94      ; 20 D4 TORCH_TALL
+                DEFB  42,  22, $00      ; 21 D4 BANNER_TALL
+                DEFB  54, 106, $00      ; 22 D5 PATCH_A
+                DEFB  32,  82, $94      ; 23 D5 BRAZIER_BIG
+                DEFB  42,  19, $00      ; 24 D5 WINDOW_ARCH
+                DEFB  41, 106, $00      ; 25 D6 PATCH_A
+                DEFB  45, 107, $00      ; 26 D6 PATCH_B
+                DEFB  32,  13, $94      ; 27 D6 TORCH_SLIM
+                DEFB  38,  10, $02      ; 28 D6 BOOKSHELF
+                DEFB  39,   9, $00      ; 29 D6 BANNER
+                DEFB  51,  10, $02      ; 30 D6 WINDOW_BAR
+                DEFB  53,  37, $01      ; 31 D6 MOSS
+                DEFB  52, 107, $00      ; 32 D7 PATCH_B
+                DEFB  32,  18, $94      ; 33 D7 TORCH_TALL
+                DEFB  42,  22, $00      ; 34 D7 BANNER_TALL
+                DEFB  32,  82, $94      ; 35 D8 BRAZIER_BIG
+                DEFB  42,  10, $02      ; 36 D8 BOOKSHELF
+                DEFB  43,  22, $00      ; 37 D8 BANNER_TALL
+                DEFB  53,  13, $94      ; 38 D8 TORCH_SLIM
 DG_NCOM         EQU 4
-DG_NREC         EQU 41
-
+DG_NREC         EQU 39
 
 ; state (bank 3 is RAM). dg_da before dg_dg (one `ld (dg_da), bc`).
-dg_bodds:       DEFB 0, 0, 2, 3, 2, 0, 3, 2     ; DEC1: gate rnd(n) by depth 1..8 (0 = no bones; D3 D4 D5 D7 D8)
-dg_bids:        DEFB T_BONES_0, T_BONES_1, T_BONES_2, T_BONES_3   ; screen order, not contiguous
 dg_cmin:        DEFB 1, 1, 1, 2, 0, 2     ; col minimum by class (mount ceiling floor patch brick composite)
 dg_rng:         DW   0
 dg_cls:         DB   0
@@ -863,7 +765,7 @@ dg_alt:         DB   0
 dg_ph:          DB   0
 dg_da:          DB   0
 dg_dg:          DB   0
-                ASSERT T_AIR == 0 && T_BRICK == 2 && F_MOSS == 1 && F_TILED == 2 && T_BONES_0 == 13 && T_BONES_1 == 15 && T_BONES_2 == 16 && T_BONES_3 == 31
+                ASSERT T_AIR == 0 && T_BRICK == 2 && F_MOSS == 1 && F_TILED == 2
                 ASSERT T_HOLE_R == T_LAD_L + 5 && ANIM_MAX == 12 && AL_STRIDE == 4
                 ASSERT (ANIM_N >> 8) == ((ANIM_LIST + ANIM_MAX * AL_STRIDE) >> 8) && PLAY_ROWS < 32
                 ASSERT (ANIM_N2 >> 8) == ((ANIM_LIST2 + ANIM_MAX * AL_STRIDE) >> 8) && ANIM_LIST2 == ANIM_N2 + 1

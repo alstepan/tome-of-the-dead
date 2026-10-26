@@ -364,12 +364,12 @@ T_RUBBLE        EQU 27              ; block foot, arrival-shaft cap, ash of the 
 T_WALL_DITHER   EQU 28              ; wall set (concept-screen §3.3)
 T_WALL_PATCH    EQU 29
 T_WALL_FADE     EQU 30
-T_BONES_3       EQU 31              ; DEC1: dead skeleton tile 3 (BONES ids 13/15/16/31, static)
+T_FREE31        EQU 31              ; DEC2: free (was bones tile 3)
 ; B10 (user option B, designer 2026-10-03): open-door jambs on ids 11 / 14,
 ; non-solid, ink $06; cobweb / moss move to the per-level sets.
 T_DOOR_JAMB_L   EQU 11              ; `#.#.....` x 8: the left arch's outer strokes, continued
 T_CHAIN         EQU 12              ; small decor (valid after B3B-13)
-T_BONES_0       EQU 13              ; DEC1: BONES tile 0 (skull end)
+T_FREE13        EQU 13              ; DEC2: free (was bones tile 0)
 T_DOOR_JAMB_R   EQU 14              ; `.....#.#` x 8
 ; 3E (game.md §8.11 Q1, user-approved glyphs): common 10 = T_TRAP (revealed trap plate),
 ; 17 = T_AMMO (daggers AND arrows share the one bundle glyph, ink $47; the per-type ink
@@ -394,7 +394,7 @@ T_WEAPON        EQU 62
 T_WORN          EQU 63
                 ASSERT T_COUNT <= T_DOOR_ARCH_L        ; new ids start after the live PROTO ids
                 ASSERT T_COMMON_USED <= TILE_COMMON
-                ASSERT T_BONES_3 < TILE_COMMON
+                ASSERT T_FREE31 < TILE_COMMON
                 ASSERT T_LVL_OBJ + T_LVL_OBJ_N == TILE_IDS
 
 ; TILE_FLAGS[64] (D2) bit meanings. The table itself is B3B-5 data:

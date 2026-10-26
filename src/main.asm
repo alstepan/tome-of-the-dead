@@ -508,7 +508,7 @@ DT_ATTR_LEN     EQU  DT_KINDS * 8
 ; until the first level_load_tiles (B3B-8) overwrites 32..63 from the slot.
 ; Solidity belongs to the cell class (game.md §1.2 "Solidity of decor",
 ; designer 2026-10-03): the wall set (DARK = T_BRICK, DITHER, PATCH, FADE) is
-; SOLID and only ever replaces wall cells; rubble / bones / moss / cobweb /
+; SOLID and only ever replaces wall cells; rubble / moss / cobweb /
 ; chain / floor items are not. Per-level wall variants (pillar,
 ; plaster patches in 32..59) carry TF_SOLID in their tileset slot's flags.
 ;------------------------------------------------------------------------------
@@ -520,8 +520,8 @@ tile_flags:
                 DB TF_LADDER, TF_LADDER, TF_LADDER     ;  4-6 T_LAD_L/M/R
                 DB TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE ; 7-9 T_HOLE_*
                 DB 0                                   ; 10 T_TRAP (revealed plate: walkable, game.md §1.5)
-                DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12-13 chain, bones 0
-                DB 0, 0                                ; 15-16 T_BONES_1/2 (DEC1: static)
+                DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12 chain, 13 free
+                DB 0, 0                                ; 15-16 free (DEC2)
                 DB 0, 0                                ; 17-18 T_AMMO / T_PAGES (floor items)
                 DB TF_FLOOR, TF_FLOOR                  ; 19-20 T_END_L/R = pit caps
                 DB TF_SOLID, TF_SOLID                  ; 21-22 T_DOOR_ARCH_L/R
@@ -531,7 +531,7 @@ tile_flags:
                 DB 0                                   ; 27 T_RUBBLE (decor at a block's foot)
                 DB 0, 0, 0                             ; 28-30 T_WALL_DITHER / PATCH / FADE:
                                                        ; non-solid back-wall patches (D1 decor rule)
-                DB 0                                   ; 31 T_BONES_3
+                DB 0                                   ; 31 free (DEC2)
                 DS T_LVL_OBJ - TILE_COMMON, 0          ; 32-59 per-level decor
                 DS T_LVL_OBJ_N, 0                      ; 60-63 FLASK FOOD WEAPON WORN (floor items)
                 ASSERT $ - tile_flags == TILE_IDS
