@@ -314,8 +314,8 @@ def lead_ids(d):
 DECOR_MOUNT = {"TORCH_TALL", "TORCH_SLIM", "WINDOW_ARCH", "WINDOW_BAR", "BANNER", "BANNER_TALL",
                "BOOKSHELF"}
 DECOR_CEIL = {"CHAIN", "MOSS"}
-DECOR_FLOOR = {"BONES", "CAULDRON", "BRAZIER", "BRAZIER_BIG"}
-BONES_DEPTHS = {3: 2, 4: 3, 5: 2, 7: 3, 8: 2}      # DEC1 (concept-screen 3.3): depth -> gate 1 in n
+DECOR_FLOOR = {"BRAZIER", "BRAZIER_BIG"}          # DEC2: BONES (DEC1) and CAULDRON dropped
+FREED_IDS = (13, 15, 16, 31)                       # DEC2: the old bones ids, never placed now
 DECOR_PATCH = {"PATCH_A", "PATCH_B", "WALL_DITHER", "WALL_PATCH", "WALL_FADE"}
 DECOR_BRICK = {"PILLAR"}
 DECOR_COB = {"COBWEB", "COBWEB_R"}
@@ -336,7 +336,6 @@ def decor_objs(d):
             if mm and int(mm.group(1)) == d and int(mm.group(3) or 1) == 1:
                 objs.setdefault(mm.group(2), {})[(int(mm.group(4)), int(mm.group(5)))] = int(mm.group(6))
         objs["CHAIN"] = {(0, 0): T["T_CHAIN"], (1, 0): T["T_CHAIN"]}
-        objs["BONES"] = {(0, k): T[f"T_BONES_{k}"] for k in range(4)}      # DEC1: ids 13 / 15 / 16 / 31
         for nm, k in (("WALL_DITHER", "T_WALL_DITHER"), ("WALL_PATCH", "T_WALL_PATCH"),
                       ("WALL_FADE", "T_WALL_FADE")):
             objs[nm] = {(0, 0): T[k]}
@@ -401,8 +400,6 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
                 errs.append(("pillar not solid", c, row))
         elif flags[m[j]] & SOLID:
             errs.append(("solid decor on an air cell", c, row))
-        if nm == "BONES" and d not in BONES_DEPTHS:
-            errs.append(("bones on a depth without a Skeleton-family pool (only D3 D4 D5 D7 D8)", c, row))
         if nm in DECOR_FLOOR:
             pass                                    # floor class: exempt from the 2-rows-above rule
         elif row % 9 > 5:
@@ -414,7 +411,7 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
                     errs.append(("decor adjacent to a ladder", c, row))
     # components (8-connected): one whole object each, by class
     cells = {j for j in ch if m[j] not in drip and m[j] in names}
-    seen, ncob, npatch_cells, npatch, nbones = set(), 0, 0, 0, 0
+    seen, ncob, npatch_cells, npatch = set(), 0, 0, 0
     for j0 in sorted(cells):
         if j0 in seen:
             continue
@@ -448,10 +445,6 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
                     or (above is not None and not floorish(above)):
                 errs.append((f"{nm}: ceiling row 0, hung from T_PLAT / T_WALLF (chain also screen top)", c0, r0))
         elif nm in DECOR_FLOOR:
-            if nm == "BONES":
-                nbones += 1
-                if len(comp) != 4 or r0 != r1 or r1 % 9 != 7:
-                    errs.append(("bones: one 4 x 1 pile on the standing row", c0, r0))
             if bot != 7 or not cols_ok(1, 30) or \
                     not all(floorish(base[(r1 + 1) * 32 + x % 32]) for x in comp if x // 32 == r1):
                 errs.append((f"{nm}: floor object must end on row 7 over T_PLAT / T_WALLF", c0, r0))
@@ -473,9 +466,6 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
                 errs.append(("cobweb outside a corner (row 0, brick column in rows 0..2, ceiling above)", c0, r0))
     if ncob > 2:
         errs.append(("more than 2 cobwebs", ncob))
-    if nbones > 1:
-        errs.append(("more than 1 bones pile in a room", nbones))
-    sizes["bones"] = sizes.get("bones", 0) + nbones
     if npatch_cells > 6:
         errs.append(("more than 6 patch / pillar cells", npatch_cells))
     if need_patch and not npatch:
@@ -2603,7 +2593,7 @@ def run_gen_suites(p, check):
                      S["ATTR_POTION"], 0x42}       # (+ the legacy IT_POTION ink, item_ink)
             # B3B-9 decor: the level's own decor ids + the common small decor
             legal |= {attrs[i] for i in range(S["T_LVL_BASE"], S["T_LVL_OBJ"])}
-            legal |= {attrs[T[k]] for k in ("T_CHAIN", "T_BONES_0", "T_BONES_1", "T_BONES_2", "T_BONES_3",
+            legal |= {attrs[T[k]] for k in ("T_CHAIN",
                                     "T_DAGGERS", "T_ARROWS")}   # D3-7 T6: ammo floor stacks
             for r in present_rooms(blk):
                 ok, tb, m = build_only(p, r)
@@ -2809,27 +2799,21 @@ def run_gen_suites(p, check):
         print(f"[info] W13 sweep: {sw}", flush=True)
         check(f"W13 wall-heavy sweep: {sw['rooms']} rooms (block / pit / door), checker clean",
               not sbad and sw["rooms"] > 1000 and sw["wall"] == 0, sbad[:3])
-        # ---- DEC1 bones rate by depth (Python deriver; the Z80 == Python is proven above): the
-        # per-room chance is at most the gate (1/2 D3 D5 D8, 1/3 D4 D7), never on D1 D2 D6, and
-        # not far below it (6 two-call tries nearly always find a legal pile on a roomy floor)
+        # ---- DEC2: the DEC1 bones ids (13 / 15 / 16 / 31) are never placed (Python deriver; the
+        # Z80 == Python is proven above) -- same 480-room sample the bones-rate check used
         rng = __import__("random").Random(0xDEC1)
-        tot, got = {d: 0 for d in range(1, 9)}, {d: 0 for d in range(1, 9)}
+        nrm, nbad = 0, 0
         for i in range(480):
             d, seed, master = 1 + i % 8, rng.randrange(65536), rng.randrange(65536)
             blk = G.generate(d, seed, master)
             for r in present_rooms(blk):
                 mm = room_model.render_room(blk, r)
-                tot[d] += 1
-                got[d] += T["T_BONES_0"] in mm
-        rate = {d: got[d] / tot[d] for d in tot}
-        print(f"[info] W13 bones rate by depth: " + ", ".join(f"D{d} {got[d]}/{tot[d]}" for d in tot), flush=True)
-        okr = all(got[d] == 0 for d in (1, 2, 6)) and all(
-            tot[d] and rate[d] <= 1 / n + 4 * (0.25 / tot[d]) ** 0.5 and rate[d] >= 0.5 / n
-            for d, n in BONES_DEPTHS.items())
-        check("W13 bones rate: none on D1 D2 D6; D3 D5 D8 <= 1/2, D4 D7 <= 1/3 (and >= half the gate)", okr, rate)
+                nrm += 1
+                nbad += any(t in mm for t in FREED_IDS)
+        check(f"W13 DEC2: freed common ids 13 / 15 / 16 / 31 never appear in {nrm} rooms", nbad == 0, nbad)
         # ---- synthetic maps: structural cells scattered inside the decor rows
         # (rows 9s..9s+5 and their ring) -> Python checker on 600 maps, the Z80
-        # deriver == Python on 24 of them (decor_room called directly: TMP1 =
+        # deriver == Python on 86 of them (i % 7) (decor_room called directly: TMP1 =
         # ROOM_MAP page, IX = descriptor, dg_dst = ANIM_N)
         struct = [T[k] for k in ("T_LAD_L", "T_LAD_M", "T_LAD_R", "T_HOLE_L", "T_HOLE_R",
                                  "T_DOOR_ARCH_L", "T_DOOR_R", "T_DOOR_JAMB_L", "T_PIT_L",
@@ -2851,7 +2835,7 @@ def run_gen_suites(p, check):
             e = decor_rules(m, base, fl, al, d, {"wall": 0, "air": 0, "anim": 0, "large": 0}, need_patch=False)
             if e:
                 ybad.append((d, seed, r, e[:2]))
-            if i % 25 == 0 or (d in BONES_DEPTHS and i % 5 == 0):
+            if i % 7 == 0:
                 okg, _, _, _ = gen_level(p, d, seed, master)
                 nz += 1
                 p.z.cmd("write-memory %d %s" % (S["ROOM_MAP"], " ".join(str(b) for b in base)))

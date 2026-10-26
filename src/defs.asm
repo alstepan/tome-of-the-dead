@@ -689,8 +689,8 @@ T_HOLE_M        EQU 8
 T_HOLE_R        EQU 9
 ; (B3B-13: the PROTO chest stand-in T_CHEST_* (per-level ids 32..35) and the
 ; zap tile ids T_ZAP1/2 (now T_DRIP1/2) are gone; D3-0: the zap itself too.)
-T_BONES_1       EQU 15              ; DEC1: BONES tiles 1 / 2 (were the small torch)
-T_BONES_2       EQU 16
+T_FREE15        EQU 15              ; DEC2: free common ids 13 / 15 / 16 / 31 (were the DEC1 bones; blank glyph, flags 0)
+T_FREE16        EQU 16
 T_END_L         EQU 19              ; PLATFORM_END_L: floor cell right of a hole
 T_END_R         EQU 20              ; PLATFORM_END_R: floor cell left of a hole
 T_COUNT         EQU 21

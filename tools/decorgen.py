@@ -9,11 +9,11 @@ decorate(m, depth, seed, live=True) -> (m', anim)
 
 D1 REWORK (user + designer 2026-10-05; concept-screen 3.3 "Decor placement (D1)"):
 classes decide the row, not rng; order: (1) patch pass, (2) cobweb pass, (3) 12-try
-menu loop, (4) DEC1 bones pass (D3-7 T6: the drips removed).  Class rules (storey row r = map row - 9s; row 7 = standing row):
+menu loop (D3-7 T6: the drips removed; DEC2: the bones pass and the cauldron removed).  Class rules (storey row r = map row - 9s; row 7 = standing row):
   Mount    torches / windows / banners / bookshelf: top row = storey row 1, T_AIR, cols 1..30
   Ceiling  chain, moss: storey row 0, T_AIR, cols 1..30; the cell above is T_PLAT/T_WALLF
            (chain also at map row 0; moss only map row 9)
-  Floor    cauldron, brazier(s): bottom row = row 7, T_AIR, cols 1..30,
+  Floor    brazier(s): bottom row = row 7, T_AIR, cols 1..30,
            every cell below the bottom row is T_PLAT / T_WALLF
   Patch    T_WALL_DITHER/PATCH/FADE, PATCH_A/B: NON-solid back wall, T_AIR, cols 2..29,
            rows 1..5 (r0 random)
@@ -75,21 +75,14 @@ C_MOUNT, C_CEIL, C_FLOOR, C_PATCH, C_BRICK, C_COMP = 0, 1, 2, 3, 4, 5
 CMIN = {C_MOUNT: 1, C_CEIL: 1, C_FLOOR: 1, C_PATCH: 2, C_BRICK: 0, C_COMP: 2}
 CLASS_OF = {"TORCH_TALL": C_MOUNT, "TORCH_SLIM": C_MOUNT, "WINDOW_ARCH": C_MOUNT,
             "WINDOW_BAR": C_MOUNT, "BANNER": C_MOUNT, "BANNER_TALL": C_MOUNT, "BOOKSHELF": C_MOUNT,
-            "CHAIN": C_CEIL, "MOSS": C_CEIL, "CAULDRON": C_FLOOR, "BRAZIER": C_FLOOR, "BRAZIER_BIG": C_FLOOR,
+            "CHAIN": C_CEIL, "MOSS": C_CEIL, "BRAZIER": C_FLOOR, "BRAZIER_BIG": C_FLOOR,
             "WALL_DITHER": C_PATCH, "WALL_PATCH": C_PATCH, "WALL_FADE": C_PATCH,
             "PATCH_A": C_PATCH, "PATCH_B": C_PATCH, "PILLAR": C_BRICK}
 PATCH_TRIES = 8
 MAX_COB = 2
 # flags byte of an object record (bit 0 = moss: a ceiling object that needs a floor above)
 # (bits 5 / 6 were attr-all / attr type 2: candles + small torch, gone with DEC1; never set now)
-F_MOSS, F_TILED, F_GROW0, F_GLAST, F_AROW1, F_LARGE = 1, 2, 4, 8, 16, 128
-
-# DEC1 BONES: the dead skeleton, a 4 x 1 floor pile on the standing row (own pass, last; not in
-# the menu).  Screen order left to right = the common ids below (NOT contiguous: no base + c).
-BONES_IDS = (D["T_BONES_0"], D["T_BONES_1"], D["T_BONES_2"], D["T_BONES_3"])
-BONES_W = len(BONES_IDS)
-BONES_TRIES = 6
-BONES_ODDS = {3: 2, 4: 3, 5: 2, 7: 3, 8: 2}      # depth -> n of the gate rnd(n); 0 places it
+F_MOSS, F_TILED, F_GROW0, F_AROW1, F_LARGE = 1, 2, 4, 16, 128   # bit 3 (glyph last col) was the cauldron: DEC2, gone
 
 # common objects (all depths): name, base, w, h, flags
 COMMON = [
@@ -106,8 +99,7 @@ COMP = ("PATCH3", 0, 2, 2, 0, C_COMP)
 COMP_AREA = 3
 TILED_OBJ = ("BOOKSHELF", "WINDOW_BAR")
 ANIM_FLAGS = {"TORCH_TALL": F_GROW0 | F_AROW1 | F_LARGE, "BRAZIER_BIG": F_GROW0 | F_AROW1 | F_LARGE,
-              "TORCH_SLIM": F_GROW0 | F_AROW1 | F_LARGE, "BRAZIER": F_GROW0 | F_LARGE,
-              "CAULDRON": F_GLAST | F_LARGE}
+              "TORCH_SLIM": F_GROW0 | F_AROW1 | F_LARGE, "BRAZIER": F_GROW0 | F_LARGE}
 
 
 def level_objects():
@@ -152,10 +144,8 @@ def level_objects():
             assert [fr[2][k] for k in diff] == [base + w * h + k for k in range(len(diff))], (d, name)
             want = w if fl & F_GROW0 else 1
             assert len(diff) == want, (d, name, diff)
-            if fl & F_GLAST:
-                assert diff == [(0, w - 1)], (d, name)
         else:
-            assert not fl & (F_GROW0 | F_GLAST), (d, name)
+            assert not fl & F_GROW0, (d, name)
         if fl & F_AROW1:
             assert h >= 2
         out[d].append((name, base, w, h, fl, CLASS_OF[name]))
@@ -198,18 +188,18 @@ class Rng:
 def counts(w, h, fl):
     """(glyph cells, attr cells) an object adds to the room budgets."""
     area = w * h
-    g = w if fl & F_GROW0 else (1 if fl & F_GLAST else 0)
+    g = w if fl & F_GROW0 else 0
     a = w if fl & F_AROW1 else 0
     return g, a
 
 
 def is_decor(t):
-    """a tile id the 1-cell ring must not hold (placed decor): chain, the four BONES ids and
+    """a tile id the 1-cell ring must not hold (placed decor): chain and
     everything per-level / wall-set (28..59). Not 17 / 18 (ammo / pages floor glyphs) and not
     60..63 (3E floor-item class glyphs FLASK FOOD WEAPON WORN on every depth: items, like the
-    old potion 10; the D8 lectern is stamped outside decorgen).  DEC1: 12 chain, 13 / 15 / 16 /
-    31 bones (31 = candles before)."""
-    return 28 <= t < 60 or t in (12, 13, 15, 16, 31)
+    old potion 10; the D8 lectern is stamped outside decorgen).  DEC2: 12 chain only (13 / 15 / 16 / 31
+    were the DEC1 bones, now free; 31 sits inside the 28..59 range, so it is carved out)."""
+    return (28 <= t < 60 and t != 31) or t == 12
 
 
 def floorish(t):
@@ -289,7 +279,7 @@ class Room:
                 if not fl & F_TILED:
                     i += 1
                 typ = 0
-                if dy == 0 and (fl & F_GROW0 or (fl & F_GLAST and dx == w - 1)):
+                if dy == 0 and fl & F_GROW0:
                     typ, alt = alt, alt + 1
                 elif dy == 1 and fl & F_AROW1:
                     typ = 1
@@ -348,25 +338,6 @@ def cobwebs(room, rng, depth):
                 return
 
 
-def bones(room, rng, depth):
-    """(4) the dead skeleton, depths in BONES_ODDS only.  Exactly one gate call rnd(n), placed on
-    0; then up to BONES_TRIES tries of exactly 2 calls (s = rnd(2), c = 1 + rnd(27)), the first
-    legal one wins.  Legal: the 4 cells (9s + 7, c..c+3) are T_AIR, each cell below is T_PLAT /
-    T_WALLF, the 1-cell ring holds no ladder and no decor.  No state, no mirroring."""
-    n = BONES_ODDS.get(depth)
-    if not n or rng.rnd(n):
-        return
-    m = room.m
-    for _ in range(BONES_TRIES):
-        s = rng.rnd(2)
-        c = 1 + rng.rnd(27)
-        row = 9 * s + 7
-        if fits(m, row, c, BONES_W, 1, C_FLOOR, 0):
-            for k, t in enumerate(BONES_IDS):
-                m[row * COLS + c + k] = t
-            return
-
-
 def decorate(m, depth, seed, live=True):
     rng = Rng(seed)
     room = Room(m, live)
@@ -376,14 +347,13 @@ def decorate(m, depth, seed, live=True):
     for _ in range(TRIES):
         o = mn[rng.rnd(len(mn))]
         room.try_place(rng, o, None)
-    bones(room, rng, depth)
     return room.m, room.anim
 
 
 def emit_asm():
     out = ["; GENERATED by tools/decorgen.py --asm (edit the tool, re-run, paste)",
-           "; record (3 B): base id | w + h*4 + class*32 | flags (bit0 moss, 1 tiled, 2 glyph row 0, 3 glyph last",
-           ";                 col, 4 attr row 1, 5 attr all, 6 attr type 2, 7 large animated)",
+           "; record (3 B): base id | w + h*4 + class*32 | flags (bit0 moss, 1 tiled, 2 glyph row 0, 3 unused (DEC2),",
+           ";                 4 attr row 1, 5 / 6 unused (DEC1), 7 large animated)",
            "; class 0 mount, 1 ceiling, 2 floor, 3 patch, 4 brick, 5 composite patch",
            "dg_start:       ; first per-level record of depth 1..8, then the end"]
     out.append("                DEFB " + ", ".join(str(LEVEL_FIRST[d]) for d in range(1, 10)))

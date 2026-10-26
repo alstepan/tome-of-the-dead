@@ -148,7 +148,7 @@ Glyph swap ~0.55k T/cell/step, attr cycle ~0.12k T/cell/step (budget §6).
 | 12 | Rubble | 1×1 | `ATTR_WALL` | — | 1 |
 | 13 | Bookshelf | 2×2 (1 glyph tiled) | `$06` | — | 1 |
 | 14–15 | **Wall set (artist round 3): DARK · DITHER · PATCH · FADE** on a black background, see below | 1×1 each | `ATTR_WALL[depth]` on black (`$07` reads light, `$01` reads dark) | — | **4** (they replace the rev-2 patches ×3 + WALL2) |
-| 16 | Cauldron (bubbling) | 2×1 | `$44` | glyph swap 2 | 3 |
+| 16 | ~~Cauldron (bubbling)~~ **SUPERSEDED by DEC2 (removed 2026-10-26)** | 2×1 | `$44` | glyph swap 2 | 3 |
 | 17 | **Lectern + Book** (D8 Sanctum, attackable, game.md §1.3) | 2×2 | lectern `$06`, book `$43` | flash on hit | 4 |
 | — | Door (§3.1) / grate over the exit hole / pit caps | 2×8 / 3×1 / 1+1 | `$06` / `$07` / floor | — | 5 / 1 / 2 |
 
@@ -339,6 +339,8 @@ Storey rows `0..7` (map row = `9s + r`); row 7 = **standing row**, row 8 = floor
   loop) if the ≤ 6 patch-cell budget allows. The menu may add more 1×1 patch cells.
 - **(2) Cobweb pass** (levels with `COBWEB`): scan corner candidates left-to-right,
   top-to-bottom; each takes one `rnd(2)`, placed on 0; **≤ 2 cobwebs per room**.
+
+> **SUPERSEDED by DEC2 (removed 2026-10-26): BONES and the cauldron are gone; ids 13/15/16/31 are free. Kept as history.**
 
 **Dead skeleton, BONES (DEC1; designer decision 2026-10-19; for tools/decorgen.py + src/decor_gen.asm, Python == Z80).**
 Replaces CANDLES (31), TORCH_SMALL (15/16) and SKULLS (13). TORCH_SLIM (D2/6/8) stays.
