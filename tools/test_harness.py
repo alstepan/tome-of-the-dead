@@ -27,7 +27,8 @@ ZESARUX = "/Applications/zesarux.app/Contents/MacOS/zesarux"
 # ZRCP_PORT: run suites from parallel worktrees without killing each other's
 # emulator (launch() pkills whatever holds its port).
 DEFAULT_PORT = int(os.environ.get("ZRCP_PORT", "10000"))
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LAUNCH_ATTEMPTS = 3
+REPO =os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Full screen frame = bitmap (6144) + attributes (768). The golden unit.
 SCREEN_ADDR = 0x4000
@@ -48,17 +49,30 @@ class Harness:
         """extra_args: appended ZEsarUX flags. Only for suites whose results
         do not depend on wall-clock pacing (e.g. the tick-exact PROTO driver
         uses --emulatorspeed / --vo null); settle-based suites keep defaults."""
-        # Kill a stray emulator holding our port so runs are repeatable.
-        subprocess.run(["pkill", "-f", f"remoteprotocol-port {self.port}"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(0.5)
-        self.proc = subprocess.Popen(
-            [ZESARUX, "--machine", "128k",
-             "--enable-remoteprotocol", "--remoteprotocol-port", str(self.port),
-             "--nosplash", "--noconfigfile", *extra_args],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        self.z = Zrcp(port=self.port)   # retries the connect until the port is up
-        return self
+        # B9: a launch that never opens the ZRCP port (Zrcp gives up after ~10 s)
+        # is killed and retried instead of hanging/failing the whole suite.
+        for attempt in range(1, LAUNCH_ATTEMPTS + 1):
+            t0 = time.monotonic()
+            # Kill a stray emulator holding our port so runs are repeatable.
+            subprocess.run(["pkill", "-f", f"remoteprotocol-port {self.port}"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(0.5)
+            self.proc = subprocess.Popen(
+                [ZESARUX, "--machine", "128k",
+                 "--enable-remoteprotocol", "--remoteprotocol-port", str(self.port),
+                 "--nosplash", "--noconfigfile", *extra_args],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                self.z = Zrcp(port=self.port)   # retries the connect until the port is up
+            except ConnectionError as e:
+                print(f"[harness] launch attempt {attempt} failed after "
+                      f"{time.monotonic() - t0:.1f}s: {e}", file=sys.stderr, flush=True)
+                self.close()
+                if attempt == LAUNCH_ATTEMPTS:
+                    raise
+                continue
+            print(f"[harness] launch {time.monotonic() - t0:.1f}s (attempt {attempt})", flush=True)
+            return self
 
     def load(self, sna_path, settle=0.6):
         """smartload an .sna; it auto-runs from $8000. Settle so boot completes."""
@@ -66,6 +80,7 @@ class Harness:
         time.sleep(settle)
 
     def close(self):
+        t0 = time.monotonic()
         try:
             if self.z:
                 self.z.close()
@@ -78,6 +93,7 @@ class Harness:
                 except subprocess.TimeoutExpired:
                     self.proc.kill()
                 self.proc = None
+            print(f"[harness] close {time.monotonic() - t0:.1f}s", flush=True)
 
     def __enter__(self):
         return self
