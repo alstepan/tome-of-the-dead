@@ -773,7 +773,7 @@ def main():
              must=lambda res, w: res["stop"] == PFS["ABSORB"] and w.bodies[1].hp == 50 and w.bodies[2].hp == 50)
         # D3-7 T4 (game.md §6): Drain Life reflected onto its caster is a normal
         # DRAIN hit with no heal (a Ghost poked to reflect DRAIN in kx_tab)
-        kxa = 3 * 16384 + S["kx_tab"] - 0xC000 + K_GHOST * 6
+        kxa = 3 * 16384 + S["kx_tab"] - 0xC000 + K_GHOST * 8
         p.z.cmd("set-memory-zone 0")
         kx_old = list(p.z.read_memory(kxa, 3))
         drx = list(kx_old)

@@ -125,9 +125,16 @@ IT_TEXT_LEN     EQU it_text_end - it_words
                 ASSERT IT_TEXT_LEN == ITW_BYTES + 2 * ITW_WCX_N + ITN_BYTES + ITS_LEN && IT_TEXT_LEN <= ITB_RESIDENT
                 ASSERT ITN_ROWS == IT_COUNT && it_stems_end - it_stems == ITS_LEN
                 ASSERT it_wcx - it_words == ITW_BYTES && it_stems - it_name == ITN_BYTES
-; R6 (2026-10-21): the packed overlay streams moved to the R6 region (bank 6
-; top, "R6 REGION" below); bank1_end = the end of the bank-1 block (runtime
-; $C000-window address; tests/ovl.py uses the free tail above it).
+; MEM-1: the T6 items stream is back in bank 1 (was R6; BANK_OVL_ITEMS = BANK_UI1).
+; Runtime $C000-window address, run by bank-3 level_new via ovl_run (C = bank 1).
+; The page stream stays in R6 ("R6 REGION" below).
+ovl_items_zx0:                                        ; 3E-T6 item / trap generator (items_ovl.asm, ITEMS_ORG)
+    IF OVL_PASS == 2
+                INCBIN "items.zx0"
+    ENDIF
+ovl_items_end:
+; bank1_end = the end of the bank-1 block (runtime $C000-window address;
+; tests/ovl.py uses the free tail above it).
 bank1_end:
                 ENT
 bank1_img_end:
@@ -648,10 +655,6 @@ ovl_page_zx0:                                         ; 3E-T2 bag page (page_ovl
     IF OVL_PASS == 2
                 INCBIN "page.zx0"
     ENDIF
-ovl_items_zx0:                                        ; 3E-T6 item / trap generator (items_ovl.asm, ITEMS_ORG)
-    IF OVL_PASS == 2
-                INCBIN "items.zx0"
-    ENDIF
 r6_blobs_end:
 r6_end:
 R6_USED         EQU r6_end - R6_ADDR
@@ -698,7 +701,7 @@ items_ovl_main:
 ITEMS_OVL_LEN   EQU ig_image_end - items_ovl_main
                 ASSERT ig_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
                 SAVEBIN "build/ovl/items.bin", ovl_raw_items, ITEMS_OVL_LEN
-                DISPLAY "GAME items overlay (3E-T6): ", /D, ITEMS_OVL_LEN, " B raw (+ ", /D, ig_end - ig_image_end, " B scratch) at ", /H, ITEMS_ORG, ", packed ", /D, r6_blobs_end - ovl_items_zx0, " B in bank ", /D, BANK_OVL_ITEMS
+                DISPLAY "GAME items overlay (3E-T6): ", /D, ITEMS_OVL_LEN, " B raw (+ ", /D, ig_end - ig_image_end, " B scratch) at ", /H, ITEMS_ORG, ", packed ", /D, ovl_items_end - ovl_items_zx0, " B in bank ", /D, BANK_OVL_ITEMS
                 DISPLAY "GAME page overlay: ", /D, PAGE_OVL_LEN, " B raw (", /D, PAGE_LIMIT - page_ovl_end, " left)"
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000

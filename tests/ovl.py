@@ -163,13 +163,13 @@ def run(p, check):
     big = bytearray([0xC9])                       # ret
     L = S["GEN_SCRATCH_LEN"]
     while len(big) < L:
-        if rnd.random() < 0.5 and len(big) > 16:  # a back-reference
+        if rnd.random() < 0.93 and len(big) > 16:  # a back-reference (MEM-1: mostly repeats, must pack < the 241-B bank-1 tail)
             o = rnd.randrange(1, min(len(big), 600))
-            k = rnd.randrange(2, 24)
+            k = rnd.randrange(2, 60)
             for _ in range(k):
                 big.append(big[-o])
         else:
-            big.extend(rnd.randrange(256) for _ in range(rnd.randrange(1, 12)))
+            big.extend(rnd.randrange(256) for _ in range(rnd.randrange(1, 4)))
     big = bytes(big[:L])
     packed = zx0_pack(big)
     tail = S["bank1_end"]

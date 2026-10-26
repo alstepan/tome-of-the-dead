@@ -57,7 +57,7 @@ def kx_row(res, imm, xp):
             b[2] |= 1 << i
         else:
             b[i // 4] |= RESP[r] << (2 * (i % 4))
-    return b + [imm, xp, 0]   # DEF = 0 in 3D (§11.4)
+    return b + [imm, xp, 0, 0, 0]   # DEF = 0 in 3D (§11.4); KX_SPARE 2 B (MEM-1)
 
 
 XP_NEXT = [40, 100, 200, 340, 500, 700, 920, 1150]          # levels 2..9
@@ -121,9 +121,9 @@ def main():
     chk("kx_tab base", [sym["kx_tab"]], [BASE])
     kx = at("kx_tab")
     for k in range(32):
-        want = kx_row(*KINDS[k][1:]) if k in KINDS else [0] * 6
-        chk(f"kx[{k}]", m[kx + 6 * k:kx + 6 * k + 6], want)
-    chk("kx_tab length (dg_bad follows, L-RELIEF)", [sym["dg_bad"] - sym["kx_tab"]], [192])
+        want = kx_row(*KINDS[k][1:]) if k in KINDS else [0] * 8
+        chk(f"kx[{k}]", m[kx + 8 * k:kx + 8 * k + 8], want)
+    chk("kx_tab length (dg_bad follows, L-RELIEF)", [sym["dg_bad"] - sym["kx_tab"]], [256])
 
     # D3-9b: XP_NEXT is ONE table, bank-2 xpn_tab (read from the .sna: 27-B
     # header, then RAM $4000..$FFFF with bank 2 at $8000); the bank-3 copy, the
@@ -165,7 +165,7 @@ def main():
         for f in fails:
             print("  ", f)
         return 1
-    print(f"combat_tables: PASS ({n} table groups; kx 192 B, rank 126 B, ammo 12 B, ab_def 90 B)")
+    print(f"combat_tables: PASS ({n} table groups; kx 256 B, rank 126 B, ammo 12 B, ab_def 90 B)")
     return 0
 
 
