@@ -159,6 +159,8 @@ def run(p, check):
     p.z.cmd("set-register PC=%d" % pc0)
 
     # ---- O2: a full-window blob, interrupts on ------------------------------
+    # (mostly repeats so it packs into the 241 B bank-1 tail; the literal-heavy
+    # case is covered by the real items.zx0 in items_gen)
     rnd = random.Random(0x3E71)
     big = bytearray([0xC9])                       # ret
     L = S["GEN_SCRATCH_LEN"]
