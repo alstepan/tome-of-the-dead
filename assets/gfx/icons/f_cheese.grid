@@ -1,0 +1,21 @@
+# WazHack/ZX 16x16 item icon (IC1, game.md 8.11 Q5). Packed by tools/icons16.py.
+# name: f_cheese
+# note: cheese wedge rising to the right, paper holes
+# legend: '#' ink (item-type ink from it_tab / ITEM_INK), '.' paper; 1 bit, no mask
+#
+................
+................
+................
+............##..
+..........#####.
+........#######.
+......#########.
+....###########.
+..#############.
+.##############.
+.##.###########.
+.#..####.######.
+.##.#######.###.
+.##############.
+................
+................
