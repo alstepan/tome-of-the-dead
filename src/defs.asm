@@ -132,9 +132,9 @@ PAGE_SCR_END    EQU PAGE_BUF + LOG_MAX + 2
 ; 3E-T6: the level-start item / trap generator overlay (items_ovl.asm) runs
 ; in the same window at a level start (after level_populate: the LG_* /
 ; LP_CMAP scratch is dead), its packed stream in bank BANK_OVL_ITEMS (main.asm
-; R6 `r6_blobs`; any bank ovl_run can page: move the INCBIN + this EQU together).
+; bank 1 tail, MEM-1; any bank ovl_run can page: move the INCBIN + this EQU together).
 ITEMS_ORG       EQU GEN_SCRATCH
-BANK_OVL_ITEMS  EQU BANK_R6         ; R6: was BANK_UI1 (bank-1 relief)
+BANK_OVL_ITEMS  EQU BANK_UI1       ; MEM-1: back in bank 1 (main.asm, after the it_text block)
 BANK_OVL_PAGE   EQU BANK_R6         ; R6: the page stream (page_ovl, menu1.asm)
 ; (3E-T8's fx overlay is gone since 3E-T12: ZX0 packed its code only 3 %, so the
 ; effects are R6-resident code, src/fx6.asm, entered by far6.)

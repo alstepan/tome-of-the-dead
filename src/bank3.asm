@@ -26,7 +26,7 @@
 ;------------------------------------------------------------------------------
 ; kx_tab — D3-0 (R2): the per-kind extension table (combat_defs.asm "KX"),
 ; K_MAX rows x KX_STRIDE B, first in bank 3 so it sits in one page (`ld h`,
-; L = kind * 6). Reserved here, zero = no resistance / immunity, 0 XP, DEF 0;
+; L = kind * 8). Reserved here, zero = no resistance / immunity, 0 XP, DEF 0;
 ; D3-1: combat_data3.asm defines kx_tab here (+ the other combat tables).
 ;------------------------------------------------------------------------------
                 INCLUDE "combat_data3.asm"    ; D3-1: kx_tab rows + XP / level-up / ability tables

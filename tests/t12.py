@@ -271,7 +271,7 @@ def run(h, p, check):
           (1, ["YOU READ THE ENCHANT SCROLL", "NOTHING HAPPENS"], []), (r, lines))
 
     # monsters for Fear / Sleep: four slots into the room (one DYING), one elsewhere
-    kxt = read_bank(p, 3, S["kx_tab"], 6 * 32)
+    kxt = read_bank(p, 3, S["kx_tab"], 8 * 32)
     room = p.rb("CUR_ROOM")
     mons = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & EF_ACTIVE][:5]
     assert len(mons) == 5, mons
@@ -284,7 +284,7 @@ def run(h, p, check):
         p.wmem(ST1, [0] * 16)
 
     def imm(sl):
-        return kxt[p.ent(sl)["KIND"] * 6 + S["KX_IMM"]]
+        return kxt[p.ent(sl)["KIND"] * 8 + S["KX_IMM"]]
 
     place_mons()
     p.wb(STF + mons[0], S["MIND_CONFUSED"])

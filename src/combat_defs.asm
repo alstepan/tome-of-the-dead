@@ -338,16 +338,17 @@ IMMF_POISON     EQU %00010000
 ;------------------------------------------------------------------------------
 ; KX — per-kind extension table (R2), bank 3 (`kx_tab`, bank3.asm; read by
 ; the bank-3 combat code, never by bank 2). Row = kx_tab + kind * KX_STRIDE,
-; K_MAX rows, one page (ASSERTed at the table: `ld h` + kind * 6 in L).
+; K_MAX rows, one page (ASSERTed at the table: `ld h` + kind * 8 in L).
 ; Data: D3-1 (zeros until then = N everywhere, no immunity, 0 XP, DEF 0).
 ;------------------------------------------------------------------------------
-KX_STRIDE       EQU 6
+KX_STRIDE       EQU 8
 KX_RES          EQU 0               ; 3 B, RES_* format
 KX_IMM          EQU 3               ; IMMF_* mask
 KX_XP           EQU 4               ; KXP: XP awarded on death (game.md §4.1)
 KX_DEF          EQU 5               ; monster DEF (0 in 3D, game.md §11.4)
-KX_LEN          EQU K_MAX * KX_STRIDE   ; 192 B
-                ASSERT KX_RES + RES_LEN == KX_IMM && KX_LEN <= 256
+KX_SPARE        EQU 6               ; 2 B reserved (3F: on-hit status / parry), zero until then
+KX_LEN          EQU K_MAX * KX_STRIDE   ; 256 B (MEM-1: was 6 x 32 = 192)
+                ASSERT KX_RES + RES_LEN == KX_IMM && KX_LEN <= 256 && KX_STRIDE == 8 && KX_SPARE + 2 == KX_STRIDE
 
 ;------------------------------------------------------------------------------
 ; deal_hit (combat3.asm, D3-6a) argument C: damage type | flags | effect id.

@@ -20,6 +20,7 @@ RSP_W           EQU 4               ; local to the KXROW macro (not a stored val
                 DB   (((phys) >> 2) & 1) | ((((fire) >> 2) & 1) << 1) | ((((cold) >> 2) & 1) << 2) | ((((shock) >> 2) & 1) << 3) | ((((drain) >> 2) & 1) << 4) | ((((dark) >> 2) & 1) << 5)
                 DB   imm, xp
                 DB   0              ; KX_DEF: monster DEF is 0 in 3D (game.md §11.4)
+                DB   0, 0           ; KX_SPARE: 3F on-hit status / parry
     ENDM
     MACRO KXNONE                    ; unused kind id: N everywhere, no immunity, 0 XP
                 DS   KX_STRIDE, 0
@@ -43,7 +44,7 @@ kx_tab:
                 ASSERT kx_tab == BANK_WINDOW && $ - kx_tab == KX_LEN
 
 ; L-RELIEF: decor_gen.asm's dg_bad (64 B, 64-aligned lookup) sits here, at
-; $C000 + KX_LEN = $C0C0: aligned by construction, so no ALIGN pad whatever the
+; $C000 + KX_LEN = $C100: aligned by construction, so no ALIGN pad whatever the
 ; bank-3 code size (it was an ALIGN 64 inside decor_gen.asm: 0..63 B of pad that
 ; moved with every byte of code before it). Bank 3 data, read by bank-3 code only.
                 INCLUDE "dg_bad3.asm"           ; GENERATED: tools/decorgen.py --asm-bad

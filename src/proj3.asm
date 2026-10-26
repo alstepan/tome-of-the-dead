@@ -548,10 +548,9 @@ pf_rsp:
                 ld   a, (ix+E_FLAGS)
                 and  EF_PLAYER
                 jr   nz, rsp_hl
-                ld   a, (ix+E_KIND)            ; kx_tab + kind * 6 (one page)
-                ld   l, a
+                ld   a, (ix+E_KIND)            ; kx_tab + kind * 8 (one page)
+                add  a, a                      ; x 8 (KX_STRIDE; kind < K_MAX = 32)
                 add  a, a
-                add  a, l
                 add  a, a
                 add  a, kx_tab & $FF
                 ld   l, a
