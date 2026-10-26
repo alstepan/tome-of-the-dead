@@ -603,6 +603,8 @@ materialise:
                 call get_box
                 call box_free
                 jr   c, .next
+                call corpse_hit                ; B19c: a corpse still in the box holds it
+                jr   c, .next
                 res  EF_PENDING_BIT, (ix+E_FLAGS)
                 call build_live                ; it now collides for later checks
                 call snap_pxpy
@@ -629,6 +631,49 @@ materialise:
                 ld   a, c
                 cp   P_MAX_ENT
                 jr   c, .lp
+                ret
+
+;------------------------------------------------------------------------------
+; corpse_hit — B19c: CF = 1 if a DYING body of CUR_ROOM (not PENDING)
+; overlaps box C,B,D,E. prototype §3.7 materialises a pending body
+; when its box is "free of all non-pending entities"; box_free skips DYING
+; ones (the movement rule, §6.1), so a follower hidden under the first one
+; through the door (both PENDING on the same entry box, B19b) popped up on its
+; corpse the turn it was killed — the user's "dagger kill comes back" (same
+; kind, death animation, then alive and attacking). It now waits until the
+; death sequence has freed the slot, then walks in from the edge.
+; Walks LIVE_LIST (CUR_ROOM, not PENDING; DYING re-checked live, as box_free;
+; a slot freed mid-turn reads flags 0 = no corpse). Only called for a pending
+; body whose box is otherwise free (materialise; 0 T in the common turn).
+; Preserves BC, DE, IX.  Clobbers: A, HL.   ~50 T + ~173 T per live entry (≈2.8k T at LIVE_N 16; runs once per materialise attempt whose box is otherwise free)
+;------------------------------------------------------------------------------
+corpse_hit:
+                push ix
+                ld   a, (LIVE_N)
+                ld   hl, LIVE_LIST
+.l:             or   a                         ; CF = 0
+                jr   z, .out
+                push af
+                push hl
+                inc  hl
+                ld   a, (hl)
+                ld   ixl, a
+                inc  hl
+                ld   a, (hl)
+                ld   ixh, a
+                bit  EF_DYING_BIT, (ix+E_FLAGS) ; (BIT / INC HL keep CF = 0)
+                call nz, box_vs_ix             ; CF = 1: overlaps (A, HL)
+                pop  hl
+                jr   c, .hit
+                ld   a, l
+                add  a, LL_STRIDE              ; (LIVE_LIST: one page, ASSERTed)
+                ld   l, a
+                pop  af
+                dec  a
+                jr   .l
+.hit:           pop  af
+                scf                            ; CF = 1: a corpse in the box
+.out:           pop  ix
                 ret
 
 ;==============================================================================
