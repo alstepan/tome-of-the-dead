@@ -22,14 +22,16 @@ XPF_EVA         EQU 2               ; an eva step
 ; xp_turn — end_turn's regen + level-up step (game.md §2.2 end of turn:
 ; "... hunger -> regen -> ..."), a plain call (bank 7), skipped when the hero
 ; is DYING (end_turn tests it first).
-; MP regen: MP_RG counts turns; at the class period MP += 1 + MAXMP div 16 (to MAXMP) and
+; MP regen: MP_RG counts turns; at MP_PER (3E-T8 hero_recalc: the class period,
+; x 1/2 Mana / Scarab amulet, x 2 Plate) MP += 1 + MAXMP div 16 (to MAXMP) and
 ; MP_RG = 0. While WEAK (ST_FLAGS slot 0) the counter is frozen (§7 "halted");
 ; 3E-T9: the test is MP_HOLD, written by hunger_turn (R6) right before: WEAK
 ; (status or hunger) -> frozen; HUNGRY -> frozen on odd TURN_COUNTER (period x2).
 ; Level-up (XP_UP set by deal_hit's award): while LVL < LVL_MAX and XP >=
-; xpn_tab[LVL - 1]: LVL + 1, max/current HP and MP + the class gains, the L4 /
-; L8 atk and L6 eva steps (the hero's kind_tab KT_ATK / KT_EVA columns: 0 T on
-; every to-hit roll; hero_st_init restores them). Several levels at once loop;
+; xpn_tab[LVL - 1]: LVL + 1, max/current HP and MP + the class gains; then
+; hero_recalc (R6, 3E-T8) rewrites the hero's kind_tab KT_ATK / KT_EVA columns
+; = base + the L4 / L8 atk and L6 eva steps (from LVL: never counted twice) +
+; gear (0 T on every to-hit roll). Several levels at once loop;
 ; the log gets ONE "YOU REACH LEVEL n!" (the final n) + one line per step kind
 ; gained, then LT_HOLD (end_turn's drain: the next turn waits for the lines).
 ; PD_INFO when the Bag's line (LV / XP) is selected; PD_MP + PD_INFO on a level.
@@ -40,12 +42,9 @@ xp_turn:
                 ld   a, (MP_HOLD)              ; 3E-T9 (hunger_turn, just before): WEAK
                 or   a                         ; (status or hunger) or a HUNGRY odd turn:
                 jr   nz, .lv                   ; no regen, counter held (-1 B vs ST_FLAGS)
-                ld   a, (HERO_KIND)
-                or   a
-                ld   b, MP_REG_W
-                jr   z, .w
-                ld   b, MP_REG_M
-.w:             ld   hl, MP_RG
+                ld   a, (MP_PER)               ; 3E-T8: hero_recalc's period (class 8 / 6,
+                ld   b, a                      ; Mana / Scarab x 1/2, Plate x 2; -6 B)
+                ld   hl, MP_RG
                 inc  (hl)
                 ld   a, (hl)
                 cp   b
@@ -69,7 +68,7 @@ xp_turn:
 .lv:            ; fall through
 ;------------------------------------------------------------------------------
 ; xp_level — the level-up check + its lines (XP_UP != 0), only while the tick
-; is in its 1st frame (<= ~71k T elapsed + <= ~13k T here: never past the
+; is in its 1st frame (<= ~71k T elapsed + <= ~17k T here incl. 3E-T8 hero_recalc: never past the
 ; cap); else XP_UP stays set and the next INPUT tick's turn_input (or the next
 ; end_turn) retries. Clobbers: A, BC, DE, HL.  ~0.1k T when it defers.
 ;------------------------------------------------------------------------------
@@ -135,32 +134,30 @@ xp_level:
                 add  a, e
                 ld   (hl), a
                 ASSERT MAXMP == MP + 1 && (MP >> 8) == (MAXMP >> 8)
-                ld   a, (HERO_KIND)            ; the hero's kind_tab columns
-                ld   d, a
-                ld   a, b
-                ld   e, KT_ATK & $FF
-                ld   l, 1 << XPF_ATK
+                ld   a, b                      ; the step lines (3E-T8: hero_recalc applies
+                ld   l, 1 << XPF_ATK           ; the steps from LVL: no kind_tab write here)
                 cp   LVL_ATK1
                 jr   z, .st
                 cp   LVL_ATK2
                 jr   z, .st
-                ld   e, KT_EVA & $FF
                 ld   l, 1 << XPF_EVA
                 cp   LVL_EVA1
                 jr   nz, .nx
 .st:            ld   a, l
                 or   c
                 ld   c, a
-                ld   a, e
-                add  a, d                      ; kind_tab page offset + kind (no carry)
-                ld   l, a
-                ld   h, (kind_tab + KT_ATK) >> 8
-                inc  (hl)
-                ASSERT (kind_tab & $FF) == 0 && ((kind_tab + KT_ATK) >> 8) == ((kind_tab + KT_EVA + K_MAX - 1) >> 8)
 .nx:            ld   a, b
                 jr   .chk
 .msg:           bit  XPF_LVL, c
                 ret  z
+                ld   a, c
+                and  (1 << XPF_ATK) | (1 << XPF_EVA)
+                jr   z, .nr                    ; no step: nothing recalc derives changed
+                push bc
+                ld   hl, hero_recalc           ; R6: atk / eva = base + steps(LVL) + gear
+                call far6
+                pop  bc
+.nr:
                 ld   a, SFX_LEVELUP            ; SND-5 (F only)
                 call sfx_req
                 ld   hl, PANEL_DIRTY

@@ -58,7 +58,7 @@ PG_WORN_ROW     EQU 16              ; 4 worn icons (rows 16..17), cols 11..21
 PG_WORN_COL     EQU 11
 PG_DESC_ROW     EQU 19
 PG_DESC_X       EQU 16
-PG_NAME_MAX     EQU 26              ; + " X9" <= 29 chars from x 16
+PG_NAME_MAX     EQU 26              ; + " X9" <= 29 chars from x 16; 3E-T8: real names <= 15, + it_fmt <= 14 (stacks: food / potions <= 11 + 3 + 8) <= 30 < PAGE_BUF
 PG_VERB_ROW     EQU 20
 PG_MSG_ROW      EQU 22              ; refusals / help (panel + log are hidden)
 PG_ORN_BOT      EQU 23
@@ -466,6 +466,7 @@ pg_info:        ld   b, PG_DESC_ROW
                 inc  b                         ; scroll / book: READ
 .eat:           inc  b
 .nm:            push bc
+                push de                        ; D = the slot
                 push hl
                 ld   a, e
                 ld   de, PAGE_BUF
@@ -482,7 +483,10 @@ pg_info:        ld   b, PG_DESC_ROW
                 call pg_cat
                 pop  af
                 call pg_num
-.one:           ld   bc, (PG_DESC_ROW << 8) | PG_DESC_X
+.one:           pop  af                        ; A = the slot
+                ld   hl, it_fmt                ; 3E-T8: the stat line (R6, gear6.asm)
+                call far6                      ; DE past it
+                ld   bc, (PG_DESC_ROW << 8) | PG_DESC_X
                 call pg_out
                 pop  bc
 .set:           ld   a, c

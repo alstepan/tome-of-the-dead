@@ -1062,6 +1062,11 @@ pause_copy:     ld   (pc_dir), a
 ; PAGE_OPEN off; nothing pressed on the page reaches play: no FIRE tap, no shortcut or
 ; stick edge, a held direction waits for its release (EXIT_LOCK, as an ICON
 ; MODE exit), no DOWN window, no pending use; ICON MODE is kept.
+; 3E-T8: page_post CONSUMES the verb (PAGE_VERB := VB_NONE first): EQUIP /
+; REMOVE run the fx overlay (ovl_fx_saved: the page's map save is reused,
+; the map goes back after it; 1 turn); DISCARD prints "YOU DISCARD <name>"
+; and runs bag_discard (0 turns); DRINK / EAT / READ are T12's (ignored).
+; Out (page_post): L = 1 the verb spent the turn, else 0.
 ; Clobbers: A, BC, DE, HL (IX kept).
 ;------------------------------------------------------------------------------
 page_ovl:       ld   hl, PAGE_N
@@ -1076,17 +1081,45 @@ page_ovl:       ld   hl, PAGE_N
                 ld   c, BANK_OVL_PAGE
                 ld   de, PAGE_ORG
                 jp   ovl_run
-page_post:      ld   hl, PAGE_MAP_SAVE
+page_post:      ld   hl, (PAGE_VERB)           ; L = verb, H = slot (PAGE_SLOT follows)
+                xor  a
+                ld   (PAGE_VERB), a            ; 3E-T8: consumed here, once (both entries:
+                                               ; tpt_intent IN_BAG, use_slot SA_BAG): a stale
+                                               ; verb never replays
+                ld   a, l
+                ld   (PAGE_VLAST), a           ; (test-observable)
+                sub  VB_EQUIP
+                cp   VB_REMOVE - VB_EQUIP + 1
+                jr   nc, .nfx
+                ld   (FX_OP), hl               ; 3E-T8: EQUIP / REMOVE = their fx ops; the
+                call ovl_fx_saved              ; page's map save is the fx one: it runs, then
+                ld   a, (FX_OP)                ; the map goes back (lowram)
+                jr   .lat
+.nfx:           push hl
+                ld   hl, PAGE_MAP_SAVE
                 ld   de, ROOM_MAP
                 ld   bc, PLAY_CELLS
                 ldir
-                ld   a, (PAGE_VERB)            ; 3E-T13: DISCARD applies here (0 turns);
-                cp   VB_DISCARD                ; the other verbs are T8 / T12's (tpt_intent)
+                pop  hl
+                ld   a, l                      ; 3E-T13: DISCARD applies here (0 turns);
+                cp   VB_DISCARD                ; DRINK / EAT / READ: T12 (ignored, 0 turns)
                 jr   nz, .nd
-                ld   a, (PAGE_SLOT)
+                ld   a, h                      ; A = the slot
+                push af
+                add  a, a
+                add  a, h
+                ld   l, a
+                ld   h, HIGH BAG               ; the record (BAG page-aligned)
+                ld   a, (hl)                   ; 3E-T8: "YOU DISCARD <name>"
+                ld   e, S_FX_DISCARD
+                ld   hl, fx_line               ; R6
+                call far6
+                pop  af
                 ld   hl, bag_discard           ; R6: the whole stack, HAS_BOW for the bow
                 call far6
-.nd:
+.nd:            xor  a                         ; no turn
+.lat:           and  FXR_TURN
+                push af                        ; L out: 1 = the verb spent the turn
                 xor  a
                 ld   (PAGE_OPEN), a
                 ld   (INTENT), a
@@ -1100,7 +1133,11 @@ page_post:      ld   hl, PAGE_MAP_SAVE
                 ld   (FIRE_ST), a
                 ld   a, (PLAYER_SC)            ; no shortcut edge either
                 ld   (SC_OLD), a
-                jp   resync_tick               ; the page time is not a tick overrun
+                call resync_tick               ; the page time is not a tick overrun
+                pop  af
+                ld   l, a                      ; L = 1 turn spent (far1 passes HL out)
+                ret
+                ASSERT FXR_TURN == 1 && PAGE_SLOT == PAGE_VERB + 1
 
 ;------------------------------------------------------------------------------
 ; end_card — far1 from end_screen (first tick of GS_DEAD / GS_WIN): A = the

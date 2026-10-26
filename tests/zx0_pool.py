@@ -441,7 +441,8 @@ def main():
         ref = reference(S, init)
         for pt, d in out.items():
             for b in POOL_BANKS:
-                s_ = diff_bytes(d["pool"][b], ref[pt]["pool"][b], 0xC000)
+                lim = (S["R6_ADDR"] - 0xC000) if b == 6 else 0x4000   # R6 is live variable space (gd_*/hr_*)
+                s_ = diff_bytes(d["pool"][b][:lim], ref[pt]["pool"][b][:lim], 0xC000)
                 print(f"[{'PASS' if s_ == 'identical' else 'FAIL'}] {name} vs reference {pt:7s} pool bank {b}: {s_}")
                 if s_ != "identical":
                     fails.append(f"{name}/{pt}/bank{b}")

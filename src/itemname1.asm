@@ -55,6 +55,9 @@ it_line:
                 inc  de
                 jr   .c
 .nm:            pop  af
+; it_line_nm — 3E-T8 (far1 from R6 fx_line): A = type, DE = past a stem already
+; in MSG_BUF: + the name, terminated, log_push.  Clobbers: A, BC, DE, HL
+it_line_nm:
                 ld   h, IT_CAT_MAX
                 call item_name                 ; DE past the name
                 xor  a

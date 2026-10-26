@@ -125,7 +125,8 @@ level_reset_new:
                 ld   (ST_T2), a
                 ld   (ST_X), a
                 ld   hl, HERO3D
-                ld   b, ST_HERO_END - HERO3D   ; D3-7: + the TURN_PEND block; D3-8: + HST_DONE / HELD_T; D3-8e2: + COMBAT_NOT_BEFORE
+                ld   b, MP_PER - HERO3D        ; D3-7: + the TURN_PEND block; D3-8: + HST_DONE / HELD_T; D3-8e2: + COMBAT_NOT_BEFORE;
+                                               ; 3E-T8: + PAGE_* + GEAR_MP (hero_recalc's delta base)
 .z:             ld   (hl), a
                 inc  l
                 djnz .z

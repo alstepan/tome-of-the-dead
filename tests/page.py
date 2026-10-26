@@ -24,7 +24,9 @@ Release build (DEBUG_KIT=0), real play.
   P6  a mixed bag + worn set: 2x glyphs, floor inks, QTY digits, empty frames, ITEMS n,
       cursor on slot 0, golden `page_bag`
   P7  cursor wrap rules; P8 the verb-enable matrix (+ the USE word)
-  P9  verbs: EQUIP / REMOVE return PAGE_VERB / PAGE_SLOT and change nothing; [CLOSE],
+  P9  verbs: EQUIP / REMOVE return PAGE_VERB / PAGE_SLOT, consumed by page_post
+      (PAGE_VERB 0 after the close, PAGE_VLAST = the verb) and applied (3E-T8: the
+      swap / the bag add, 1 turn each; tests/equip.py has the details); [CLOSE],
       strip navigation, BREAK, CLOSE verb -> VB_NONE; DISCARD (stack, bow: HAS_BOW 0,
       E_POT, ITEMS n - 1, 0 turns); REMOVE with a full bag -> BAG FULL, page stays
 Run: ZRCP_PORT=<port> python3 tests/page.py
@@ -39,6 +41,7 @@ _UPD = "--update-golden" in sys.argv
 sys.argv = [sys.argv[0], "999"]               # keep game.py's item filter inert
 import game  # noqa: E402
 game.UPDATE = _UPD
+game.PNG_DIR = os.environ.get("PAGE_PNG") or None   # PAGE_PNG=dir: dump the goldens' screens
 import game_lib  # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, SCREEN_FRAME_LEN  # noqa: E402
 
@@ -440,9 +443,13 @@ def bag_page(p, check):
     p.tap("FIRE")
     sel = attr_at(p.frame(), 7, 20) & 0x38 == 0x08 and p.rb("pg_mode") == 1
     p.tap("FIRE")
-    res["equip"] = (sel, wait_closed(), p.rb("PAGE_VERB"), p.rb("PAGE_SLOT"),
-                    (bytes(z.read_memory(S["BAG"], 72)), p.rb("HAS_BOW"), tc()) == st0)
-    p.settle(2)
+    res["equip"] = (sel, wait_closed(), p.rb("PAGE_VERB"), p.rb("PAGE_VLAST"), p.rb("PAGE_SLOT"),
+                    z.read_memory(S["BAG"] + 15, 1)[0] == I("W_SHORT"), z.read_memory(S["WORN"], 1)[0] == I("W_LONG"),
+                    p.rb("HAS_BOW") == st0[1])
+    p.settle(4)
+    res["equip"] += (tc() == st0[2] + 1,)
+    bag[5] = ("W_SHORT", 1)                        # 3E-T8: the swap (the old weapon took the slot)
+    st0 = (st0[0], st0[1], tc())
     open_page()
     nav(CLOSE_SLOT)
     p.tap("FIRE")
@@ -466,9 +473,10 @@ def bag_page(p, check):
     p.tap("O")
     p.tap("FIRE")
     res["close verb"] = (wait_closed(), p.rb("PAGE_VERB"), tc() == st0[2])
-    check("P9 EQUIP: strip on EQUIP, FIRE closes, PAGE_VERB / PAGE_SLOT = EQUIP / 5, nothing applied, no turn; "
+    check("P9 EQUIP: strip on EQUIP, FIRE closes, PAGE_VLAST / PAGE_SLOT = EQUIP / 5, PAGE_VERB consumed, applied "
+          "(swap), 1 turn; "
           "[CLOSE] FIRE -> VB_NONE; strip L / R skip disabled verbs and wrap, U back, BREAK closes; CLOSE verb",
-          res == {"equip": (True, True, VB["EQUIP"], 5, True), "[close]": (True, 0),
+          res == {"equip": (True, True, 0, VB["EQUIP"], 5, True, True, True, True), "[close]": (True, 0),
                   "strip": ([0, 4, 0, 3], (0, ({0}, 6)), True, 0), "close verb": (True, 0, True)}, res)
 
     # DISCARD: the Heal stack (E_POT follows), then the bow (HAS_BOW 0); 0 turns
@@ -477,7 +485,7 @@ def bag_page(p, check):
     p.tap("FIRE")
     p.tap("P")
     p.tap("FIRE")
-    d1 = (wait_closed(), p.rb("PAGE_VERB"), p.rb("PAGE_SLOT"))
+    d1 = (wait_closed(), p.rb("PAGE_VLAST"), p.rb("PAGE_SLOT"))
     p.settle(2)
     want_bag = [b for n, q in bag[1:] for b in (I(n), q, 0)]
     d1 += (list(z.read_memory(S["BAG"], 60)) == want_bag + [0] * (60 - len(want_bag)), p.ent(0)["POT"])
@@ -486,7 +494,7 @@ def bag_page(p, check):
     nav(6)                                         # the bow moved up one slot
     p.tap("FIRE")
     p.tap("FIRE")
-    d2 = (wait_closed(), p.rb("PAGE_VERB"), p.rb("PAGE_SLOT"), p.rb("HAS_BOW"),
+    d2 = (wait_closed(), p.rb("PAGE_VLAST"), p.rb("PAGE_SLOT"), p.rb("HAS_BOW"),
           I("BOW") not in list(z.read_memory(S["BAG"], 60))[0::3])
     p.settle(2)
     open_page()
@@ -517,11 +525,13 @@ def bag_page(p, check):
     nav(20)
     p.tap("FIRE")
     p.tap("FIRE")
-    r3 = (wait_closed(), p.rb("PAGE_VERB"), p.rb("PAGE_SLOT"), z.read_memory(S["WORN"], 1)[0] == I("W_SHORT"),
-          tc() == st0[2])
+    r3 = (wait_closed(), p.rb("PAGE_VLAST"), p.rb("PAGE_SLOT"), z.read_memory(S["WORN"], 1)[0] == 0,
+          z.read_memory(S["BAG"] + 18, 1)[0] == I("W_LONG"))
+    p.settle(4)
+    r3 += (tc() == st0[2] + 1,)
     check("P9 REMOVE: full bag -> BAG FULL on row 22, page up, no verb; next key -> help; with room -> "
-          "PAGE_VERB REMOVE, slot 20, nothing applied, no turn",
-          (r1, r2, r3) == ((1, 1, True, 0), (0, True), (True, VB["REMOVE"], 20, True, True)), (r1, r2, r3))
+          "PAGE_VLAST REMOVE, slot 20, applied (W_LONG -> bag slot 6, weapon slot empty), 1 turn",
+          (r1, r2, r3) == ((1, 1, True, 0), (0, True), (True, VB["REMOVE"], 20, True, True, True)), (r1, r2, r3))
 
 
 def main():

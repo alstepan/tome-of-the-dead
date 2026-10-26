@@ -198,6 +198,22 @@ VB_EQUIP        EQU 4               ; gear in the bag
 VB_REMOVE       EQU 5               ; worn gear (refused on the page with a full bag)
 VB_DISCARD      EQU 6               ; any bag item: the whole stack (never worn)
 PG_SLOT_WORN    EQU BAG_SLOTS       ; PAGE_SLOT of worn slot 0 (+ WS_*)
+;------------------------------------------------------------------------------
+; 3E-T8 effects overlay ops (ovl_fx, lowram.asm; src/fx_ovl.asm fx_tab): FX_OP
+; = op, FX_ARG = its argument. The page verbs ARE their ops (page_post stores
+; PAGE_VERB / PAGE_SLOT as FX_OP / FX_ARG). Result flags (FX_OP out).
+;------------------------------------------------------------------------------
+FX_DRINK        EQU VB_DRINK        ; T12 (reserved: no-op today)
+FX_EAT          EQU VB_EAT          ; T12 (reserved)
+FX_READ         EQU VB_READ         ; T12 (reserved)
+FX_EQUIP        EQU VB_EQUIP        ; arg = bag slot 0..19: worn <- it, the old worn item -> that slot
+FX_REMOVE       EQU VB_REMOVE       ; arg = PG_SLOT_WORN + WS_*: -> the bag (refused when full)
+FX_DISCARD      EQU VB_DISCARD      ; (reserved: page_post runs DISCARD itself)
+FX_TELEPORT     EQU 7               ; T12 (reserved: the scroll / trap teleport)
+FX_COUNT        EQU 8               ; fx_tab rows: ops 1..FX_COUNT-1
+FXR_TURN_BIT    EQU 0               ; the op spent the hero's turn
+FXR_TELE_BIT    EQU 2               ; T12: a teleport was requested (the caller runs it)
+FXR_TURN        EQU 1 << FXR_TURN_BIT
 ; quick slots (§8 "Quick slots auto-fill"): QPIN / QS_CACHE index
 QS_FOOD         EQU 0
 QS_POTION       EQU 1
