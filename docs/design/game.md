@@ -146,11 +146,11 @@ pathing change, no off-screen events).
 
 | Type | Depths | Effect on the hero | After triggering | Message (≤ 32) |
 |---|---|---|---|---|
-| **DART** | D1+ | 1d4+1 PHYS (DEF applies) + **POISON 6** (§6.4); impact = `arrow_hit` sprite at the hero | **re-arms** (stays, now known) | `A DART HITS YOU!` |
+| **DART** | D1+ | 1d4+1 PHYS (DEF applies) + **POISON 12** (§6.4; was 6, POIS1 §6.4.3); impact = `arrow_hit` sprite at the hero | **re-arms** (stays, now known) | `A DART HITS YOU!` |
 | **GAS** | D2+ | **ASLEEP 4** (§6.4); hero flashes `$44` one step (no new art) | **one-shot** (removed) | `SLEEPING GAS! YOU FALL ASLEEP.` (30) |
 | **TELEPORT** | D3+ | as the Teleport scroll (§8): random free spot, random room, never the lair while its boss lives; attr flash as the Archmage's | one-shot | `YOU ARE TELEPORTED!` |
 | **ALARM** | D5+ | while the boss lives: one **wave** = the §9.5 idle-wave spawn (1 + (rnd & 1) of the level's kinds at the room's doors/exits, awake, `F_RESPAWN`, slot + §9.3 cap rules), runs even with `IDLE_WAVE` off; border flashes red 2 ticks. Boss dead: nothing comes | one-shot | `AN ALARM BELL RINGS!` / `A BELL RINGS. NOTHING COMES.` (28) |
-| **STUN** (thunder rune; STUN1, §1.5.1) | D4+ | **STUNNED 2** (§6.4), no damage; hero flashes `$07` | one-shot | `THUNDERCLAP!` (12) then `YOU ARE STUNNED!` (existing) |
+| **STUN** (falling stone; STUN1, §1.5.1) | D4+ | 1d3 PHYS (DEF applies) + **STUNNED 2–3** (rolled, §6.4); hero flashes `$07` | one-shot | `A STONE FALLS ON YOU!` (21) then `YOU ARE STUNNED!` (existing) |
 
 ALARM's wave code lands in 3F; in 3E the trap is generated and prints the "nothing comes"
 line (the generator must not change between 3E and 3F).
@@ -227,18 +227,21 @@ generator outputs before the trap step unchanged vs B3B-7.
 
 #### 1.5.1 STUN trap (STUN1; user 2026-10-26 scope, designer decision 2026-10-26 details)
 
-A **thunder rune**: a sealed glyph in the plate bursts with a deafening crack. The hero reels
-and loses his next 2 actions. There is no blow, so there is **no damage** and no death path.
+A **falling stone**: the plate releases a stone from the ceiling. It strikes the hero's head
+for minor damage and stuns him for 2–3 turns. (Rev 2026-10-26, user rulings: (a) the trap does
+damage, (b) the duration is a 2–3 roll, (c) there is no helm reduction. This replaces the
+first draft's no-damage thunder rune.)
 
 | Rule | Value |
 |---|---|
 | Status | the **existing STUNNED** HOLD kind (`HOLD_STUNNED` = 3, §6.4). No new status bit, tint, icon, mark, pose or line: tint `$07`, panel icon, V1 pose and V2 mark, `YOU ARE STUNNED!` / `YOU CAN MOVE AGAIN.` already exist for the Ogre SLAM / Orc Bouncer / Skeleton Knight hero stuns |
-| Duration | **`TRAP_STUN_T` = 2**, fixed, no roll (no gameplay-RNG draw, so tests stay seed-free). The hero loses exactly his next 2 action phases (§6.4 step order). His eva is 0 from the trigger: the monster phase of the trigger turn and the 2 held turns = **3 monster phases at eva 0** |
-| vs GAS | GAS ASLEEP 4 ends on **any HP loss**. STUNNED does **not** end on damage, only on its timer. Out of combat STUN is the milder trap (2 turns, not 4). Next to monsters it is the harsher one: every adjacent monster gets ~3 near-sure swings, where under GAS the first swing wakes him. That is why it is D4+ |
+| Damage | **1d3 PHYS, DEF applies** (`max(1, roll − DEF)`): 1–3 HP, and with DEF 2+ almost always 1. No resistance, no helm rule. Not lethal by design, but it can kill a hero at 1–3 HP. The death goes through `deal_hit`'s standard DYING sequence and death credit, exactly as a DART death |
+| Duration | **`2 + rnd(2)` = 2 or 3** (50/50). It is rolled at fire time on the **gameplay RNG**: one draw after the damage die. `ITEM_RNG` and the trap generator are untouched. The hero loses exactly his next 2–3 action phases (§6.4 step order). His eva is 0 from the trigger: the trigger turn's monster phase plus the held turns = **3–4 monster phases at eva 0** |
+| vs GAS | GAS ASLEEP 4 ends on **any HP loss**. STUNNED does **not** end on damage, only on its timer. Out of combat STUN is the milder trap (2–3 turns, not 4, plus 1–3 HP). Next to monsters it is the harsher one: every adjacent monster gets ~3–4 near-sure swings, where under GAS the first swing wakes him. That is why it is D4+ |
 | While stunned | as any HOLD (§2.2): the loop runs his turns automatically (1 per 4 ticks, a Wait **without** search). Every turn input is ignored: move, melee, cast, quick slots, bag page. Only Pause works. There is no look command to keep |
-| Application | written straight into the hero's HOLD, like GAS (`tr_eff .gas`): kind STUNNED, HOLD timer 2, MIND timer kept. **HOLD_GUARD is ignored on application.** The hero has just moved, so B2 (already held) cannot apply. The trap is one-shot, so it cannot chain. **HOLD_GUARD is set normally when the stun ends** (§6.4 step 3). So an Ogre SLAM or Orc Bouncer hit cannot extend the trap stun: he always gets one action first. No immunity check: no gear grants `IMMF_STUN`. If a STUN-immune item is ever added, add the mask test (~6 B) |
-| Feedback | step 0: `SFX_TRAP` (reused); the hero flashes the type ink `$07` (`TRAP_FLASH_T`, the generic `tr_eff` path), then the STUNNED tint `$07` holds; the plate flashes `$47`; log `THUNDERCLAP!` (12, new) then `YOU ARE STUNNED!` (`st_stunned`, existing). Step 1: the plate is erased (one-shot), as GAS |
-| Plate ink | **`$07`** (white, not bright, on black). It is the STUNNED colour everywhere (tint, icon), so the plate tells you what it does. It is distinct from DART `$42`, GAS `$44`, TELEPORT `$43`, ALARM `$46` and from the `$47` flash/blink (the BRIGHT step is visible: the find blink goes `$47` / off / `$47` / off / `$07`). It is already in the legality set (STUNNED tint). `$45` was rejected (FROZEN tint, and the Mage's own attr: an invisible hero flash). `$41` was rejected (ASLEEP tint, near-black on black) |
+| Application | through **`deal_hit`**, like DART's poison: `trap_hit` parametrised, effect `EFX_STUNNED`, amount = the roll. So the standard hold rules apply. **B2:** cannot happen, because the hero has just moved. **HOLD_GUARD:** if it is still set (he just came out of a stun or freeze and this move is his guarded action), the stun is **silently refused** and the damage still lands. That matches the Ogre SLAM rule. HOLD_GUARD is set again when the trap stun ends (§6.4 step 3), so an Ogre SLAM or Orc Bouncer hit cannot extend it: he always gets one action first. The immunity mask is checked by `deal_hit` (no gear grants `IMMF_STUN` today) |
+| Feedback | step 0: `SFX_TRAP` (reused); the hero flashes the type ink `$07` (`TRAP_FLASH_T`, the generic `tr_eff` path), then the STUNNED tint `$07` holds; the plate flashes `$47`; log `A STONE FALLS ON YOU!` (21, new), then `deal_hit`'s own `YOU ARE STUNNED!` (`st_stunned`, existing). The hurt reaction plays on arrival (`E_REACTAT`, the DART timing). There is no impact sprite (the `arrow_hit` frame is DART-only). Step 1: the plate is erased (one-shot), as GAS |
+| Plate ink | **`$07`** (white, not bright, on black: grey stone). It is the STUNNED colour everywhere (tint, icon), so the plate tells you what it does. It is distinct from DART `$42`, GAS `$44`, TELEPORT `$43`, ALARM `$46` and from the `$47` flash/blink (the BRIGHT step is visible: the find blink goes `$47` / off / `$47` / off / `$07`). It is already in the legality set (STUNNED tint). `$45` was rejected (FROZEN tint, and the Mage's own attr: an invisible hero flash). `$41` was rejected (ASLEEP tint, near-black on black) |
 | Find | search and Mage sense are unchanged; line `TRAP FOUND: STUN` (`STUN` 4 B, new name) |
 | Hunger faint (§7.1) | the faint already defers while the hero is held. **STUN1 adds: it also defers while `HOLD_GUARD` is set.** So a faint never lands on the turn a stun or freeze ends, and he gets one free action between two holds. This costs ~4 B in FAINT1's defer checks (FAINT1 is not built yet, so it is in its estimate). |
 | ALARM (3F) | no interplay: ≤ 1 trap per room, so a room never holds both. A stunned hero at a wave's arrival is the ordinary held case. Danger music: HOLD already adds +2 to the horizon (§3.7) |
@@ -256,22 +259,34 @@ unchanged. Rebaseline the `tests/items_gen.py` 1,000-seed gate and the levelchec
 within the depth pool" check for D4–D8 only.
 
 **Implementation (staff; contracted).**
-- `item_defs.asm`: `TT_STUN` 4, `TR_TYPE_MASK` `%11100000` (bits 5–7), `TRAP_STUN_T` 2,
-  `TRAP_INK_STUN` `$07`, `TRAP_INKS` gets a 5th byte. Fix the three `ASSERT TT_* ==` lines.
-  `tr_type` / bank 3's type extraction must take 3 bits.
-- R6 `trap6.asm` `tr_eff`: a 5th dispatch arm. Factor GAS's HOLD write into `hero_hold`
-  (A = kind, B = turns). FAINT1's planned `hero_sleep` becomes this same routine, so GAS,
-  FAINT and STUN share it. Then the `THUNDERCLAP!` stem (`S3_TRAP_STUN`, bank 1 `it_line`)
-  and `TX_ST_STUNNED`. `TEV_FIRE + TT_STUN` = 5 collides with `TEV_FIND` 5, so **renumber
-  `TEV_FIND` to 6**.
-- Bytes: R6 ~25 B (of ~2.1 KB free), bank 3 ~2 B (`tr_ink3` +1), bank 1 ~20 B (stem 12 +
-  name 4 + terminators/refs), overlay ~12 B raw (`ig_tord` 5 + lookup ~6; ZX0 ~+10).
-  **≈ 60 B total.** Time: same as GAS (~9k + ~7k T over two ticks, budget.py `tgas` class).
-- Tests (`tests/t16.py`): add a type-4 case to every type loop. Fire: HOLD = STUNNED, timer 2,
-  both lines, plate erased, hero `E_FLT` attr `$07`, HP unchanged. A monster hit while stunned
-  **does not clear** HOLD (the GAS contrast). After 2 auto-turns he can act and HOLD_GUARD is
-  set. Find line `TRAP FOUND: STUN`, plate ink `$07`. Generator: D1–D3 trap lists identical to
-  the pre-STUN1 baseline, D4+ types in the 5-pool, placement bytes identical.
+- `item_defs.asm`: `TT_STUN` 4, `TR_TYPE_MASK` `%11100000` (bits 5–7), `TRAP_STONE_DIE` 3,
+  `TRAP_STUN_T` 2 (+ `rnd(2)`), `TRAP_INK_STUN` `$07`, `TRAP_INKS` gets a 5th byte. Fix the
+  three `ASSERT TT_* ==` lines. `tr_type` / bank 3's type extraction must take 3 bits.
+- Bank 3 `trap_hit`: add a second entry, `trap_stone`. It rolls 1d3, then `2 + rng_mod 2`, and
+  shares the WEAK +1 compensation and the `deal_hit` call with C = `DTY_PHYS | EFX_STUNNED`
+  and E = the roll. DART keeps its entry: 1d4+1, POISON `TRAP_DART_PSN`. Draw order: damage,
+  then duration. Tests pin both.
+- R6 `trap6.asm` `tr_eff`: a 5th dispatch arm. It prints the stem `A STONE FALLS ON YOU!`
+  (`S3_TRAP_STONE`, bank 1 `it_line`), calls far3 `trap_stone`, then joins DART's `E_REACTAT`
+  arrival code and returns before the `arrow_hit` FX. `TEV_FIRE + TT_STUN` = 5 collides with
+  `TEV_FIND` 5, so **renumber `TEV_FIND` to 6**.
+- Bytes: R6 ~16 B (of ~2.1 KB free), bank 3 ~18 B (`trap_stone` entry ~16 + `tr_ink3` +1),
+  bank 1 ~28 B (stem 21 + name `STUN` 4 + terminators/refs), overlay ~12 B raw (`ig_tord` 5
+  + lookup ~6; ZX0 ~+10). **≈ 75 B total.** Time: about DART's (~15k + ~5k T over two ticks,
+  budget.py `tdart` class, with no FX start).
+- Tests (`tests/t16.py`): add a type-4 case to every type loop.
+  - **Fire:** HOLD = STUNNED; both lines; plate erased; hero `E_FLT` attr `$07`.
+  - **Damage:** with `SEED_FIXED`, HP loss = `max(1, d − DEF)` for d ∈ 1..3, checked at DEF 0
+    (1, 2 and 3 all seen) and at DEF 3 (always 1).
+  - **Roll distribution:** ≥ 200 fires over varied gameplay seeds. Every timer ∈ {2, 3}, each
+    value ≥ 35 % of fires. The `ITEM_RNG` state is unchanged by a fire.
+  - **A monster hit while stunned does not clear HOLD** (the GAS contrast). After 2 or 3
+    auto-turns he can act and HOLD_GUARD is set.
+  - **Guard:** HOLD_GUARD poked set → the damage lands, no stun, no line.
+  - **Death:** HP 1, DEF 0 → DYING and the standard death sequence/credit (as DART).
+  - **Find:** line `TRAP FOUND: STUN`, plate ink `$07`.
+  - **Generator:** D1–D3 trap lists identical to the pre-STUN1 baseline, D4+ types in the
+    5-pool, placement bytes identical.
 
 ---
 
@@ -1215,7 +1230,9 @@ Seven effects in **four groups**. Effects in one group are exclusive; groups com
   reserved. Invariant: a group bit/kind is set ⇔ its timer nibble ≠ 0. `STATUS = 0` is the
   fast path (skip the whole step).
 - `STMR1`: high nibble HOLD turns, low nibble MIND turns. `STMR2`: high nibble POISON turns,
-  low nibble WEAK turns. **Max 15 turns** per effect.
+  low nibble WEAK turns. **Max 15 turns** per effect. **POIS1 (2026-10-26): POISON moves to
+  the full byte 3 (`ST_X`, the spare per-slot array, so the cap is 30 turns, §6.4.3). The
+  `STMR2` high nibble becomes spare. `STS_POISON` ⇔ `ST_X ≠ 0`.**
 - Per kind: an **immunity mask** (1 B: bits SLEEP, STUN, CONFUSE, FEAR, POISON), §9.1. The
   hero's mask = OR of worn gear (Silk Cloak: POISON).
 - **Where (budget):** the 32-B entity record has **no free byte** (+0..+31 all assigned; +8
@@ -1224,7 +1241,7 @@ Seven effects in **four groups**. Effects in one group are exclusive; groups com
   fled-once bit). Engineer's choice; the record format stays.
 
 **Status step** (start of the entity's own action phase, §2.2), in order:
-1. POISON: decrement; if the new value is a multiple of 3, lose **1 HP** (ignores DEF and
+1. POISON: decrement; if the new value is a multiple of **4** (POIS1; was 3), lose **1 HP** (ignores DEF and
    resistances; **never below 1 HP**: no source poisons monsters, so poison never kills).
 2. WEAK, MIND: decrement; at 0 clear (end message, hero only).
 3. HOLD: if set → decrement, **skip the action** (cooldowns do not tick); at 0 clear. If
@@ -1240,10 +1257,10 @@ monster hit on the hero), with no "applied this turn" flag. A banked monster (ot
 |---|---|---|---|
 | **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 / 3 / 4 by rank (COLD hit); self after a bounce or reflection **1** (§6.4.1) |
 | **ASLEEP** | skip action; eva 0 | timer, or **any HP loss** (incl. poison, aura) wakes it | Sleep scroll 8 (room), GAS trap 4 (hero), hunger faint 5 (hero, §7.1) |
-| **STUNNED** | skip action; eva 0; cannot parry | timer (**not** HP loss). **HOLD_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero), STUN trap 2 (hero, §1.5.1) |
+| **STUNNED** | skip action; eva 0; cannot parry | timer (**not** HP loss). **HOLD_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero), STUN trap 2–3 rolled (hero, §1.5.1) |
 | **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action fails because of the direction the turn is spent (`YOU STUMBLE.`); a non-direction refusal costs no turn and faces back (§2.3, §6.4.2 R4). Whirlwind, climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
 | **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) → illegal, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; ranged, spells, items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll 6 (room); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
-| **POISON** | −1 HP every 3rd turn (step 1) | timer; Cure | **adds per application, cap 15** (§6.4.1): Spider bite **6** (was 9), Spider Queen **9** (was 12), DART trap 6 |
+| **POISON** | −1 HP every **4th** turn (step 1); **cannot eat** (§7.2) | timer; Cure | **adds per application, cap 30** (POIS1, §6.4.3): Spider bite **12**, Giant Rat 12, Spider Queen **18**, Black Widow **24**, DART trap 12 |
 | **WEAK** | the hunger-WEAK penalties (§7: atk −2, eva −1, dmg −1 min 1 on **physical hits only**, §6.4.2 R1, no MP regen, no jump); **not cumulative** with hunger WEAK (the same penalties apply once) | timer; Cure | **Mummy curse** (below) 12 |
 
 **Mummy curse (defines §10's "curse").** A Mummy (and the Golden Pharaoh) hit drains 5 FOOD
@@ -1251,7 +1268,7 @@ as before and, **1 in 3**, curses: WEAK 12. `THE MUMMY CURSES YOU!` WEAK is a he
 effect (no source targets monsters).
 
 **Stacking / refresh.** Same effect again → timer = **max(current, new)**, never added
-(**exceptions, §6.4.1:** POISON adds, cap 15; no HOLD lands on a body already held). A
+(**exceptions, §6.4.1:** POISON adds, cap 30 (POIS1 §6.4.3; was 15); no HOLD lands on a body already held). A
 different effect in the same group **overwrites** kind and timer (a Frost Shard on a sleeper:
 the COLD damage wakes it, then FROZEN applies). Groups are independent.
 
@@ -1316,7 +1333,7 @@ bank 2 ~150 B; apply/clear/messages/tint in bank 3 via `far3`, ~300 B). Strings 
 | B2 | **No HOLD lands on a held body:** FROZEN/STUNNED/ASLEEP on a body whose HOLD is set → no effect (damage still applies). A sleeper is woken by the hit first, so Frost on a sleeper still freezes | Refresh (max) and overwrite (Stun → Frost) were the other ways to extend a lock |
 | B3 | **Self-freeze = 1 turn** at every rank: a Frost Shard striking its own caster (bounce, Ghost/Archmage reflection) freezes for 1, whatever the rank | Rank-ups added bounces *and* length, so rank 3 punished its own caster with 4 eva-0 turns; the Archmage reflects Frost (§9.1), which at rank 3 was a near-certain death. The risk stays, the spike goes |
 | B4 | **Spark CONFUSED 3 → 4** (all ranks; rank 3 chance 1 in 2 unchanged; bosses 4 → 2) | A confused monster loses only 1 in 2 actions, so 3 turns ≈ 1.5 lost actions on a 1-in-4 proc ≈ 0.4 per cast: invisible. 4 ≈ 2 lost actions; the boss value goes from 1 (≈ 0.5, unnoticeable) to 2 |
-| B5 | **POISON adds** per application, cap 15 (still −1 HP every 3rd turn, never below 1 HP). Spider **6** per bite (was 9), Spider Queen **9** (was 12), DART 6 | With max() a long Spider fight cost the same 3 HP as one bite: more bites must hurt more. 1 bite = 2 HP (was 3), 2 bites = 4, 3+ = 5 (cap). Safe because poison cannot kill |
+| B5 | **POISON adds** per application, cap 15 (still −1 HP every 3rd turn, never below 1 HP). Spider **6** per bite (was 9), Spider Queen **9** (was 12), DART 6. **Amounts, cap and tick rate superseded by POIS1, §6.4.3 (adding stays)** | With max() a long Spider fight cost the same 3 HP as one bite: more bites must hurt more. 1 bite = 2 HP (was 3), 2 bites = 4, 3+ = 5 (cap). Safe because poison cannot kill |
 
 **Reviewed, unchanged.**
 - Power Strike stun 1 / 1 / 2 (bosses — / — / 1; PHYS-R kinds — / — / 1; Ogre: none). It is a bonus on a ×2 hit.
@@ -1390,6 +1407,73 @@ reveal it and break §1.5 trap finding, and over a known trap it repeats the `T_
 | R2 | Boss + short ASLEEP/FEAR (halving runs before the immunity check, so nothing prints) | Fixed check order in `dh_status`: **(1) immunity mask + boss ASLEEP/FEAR immunity → ` IS UNAFFECTED.`** (stop); (2) typed-hit resistance I/X → none, R → halve; (3) boss halve; (4) B2 held-body / HOLD_GUARD. A result of 0 in steps 2–3 and any step-4 block are **silent** | Immunity is a fact the player should learn; a halved-to-0 stun on a boss is a partial resist already shown by the damage number, and printing it after every Power Strike is log spam |
 | R3 | Status of monsters leaving the room | **Accept the deviation:** banked monsters lose all status (§9.4.2 residue); no pause storage. **Admitted followers keep** their full 4-B status record (kind bits, timers, HOLD_GUARD), copied with the slot; timers do not tick during the transition. **HOLD or FEAR bodies are not follow candidates** (prototype §3.7 step 1); CONFUSED ones may follow | Pause would cost ≤ 4 × 9 rooms × 3 B ≈ 108 B of the 235 B bank-3 free for no visible gain (re-entry already re-places and keeps hp). A frozen monster walking through the door, or a fleeing one chasing, reads as a bug |
 | R4 | Confused hero + Whirlwind with no target | Whirlwind **never rolls** confusion (it strikes both sides; reversal is meaningless). No target → the plain §6.2 refusal: no turn, no MP. General reversed-path rule (§2.3): **direction failure → `YOU STUMBLE.`, turn spent, stays reversed**; **non-direction refusal (NO MANA, NOT LEARNED, AFRAID, no ammo/bow) → no turn, faces back** (user, confirmed) | A stumble must be caused by the confusion; Whirlwind's miss never is |
+
+### 6.4.3 Poison review: longer poison, no eating (POIS1; user 2026-10-26 scope, designer decision 2026-10-26 details)
+
+The user asked for poison to last longer, and a poisoned hero **cannot eat** (§7.2). POISON
+stays hero-only (no source poisons monsters). It still **adds** per application and still
+**never takes HP below 1**.
+
+| Rule | Was (B5) | Now |
+|---|---|---|
+| Durations (turns per application) | Spider 6 · Giant Rat 6 · Spider Queen 9 · Black Widow 12 · DART 6 | **×2: Spider 12 · Giant Rat 12 · Spider Queen 18 · Black Widow 24 · DART 12** |
+| Cap | 15 (one nibble) | **30**. The timer moves to the full byte `ST_X` (§6.4 data shape) |
+| Tick | −1 HP when the new value ≡ 0 mod 3 | **−1 HP when the new value ≡ 0 mod 4** (`and 3`, cheaper than the mod-3 loop) |
+| HP per application (fresh, = ⌈n / rate⌉) | 2 · 2 · 3 · 4; cap 5 | **3 · 3 · 5 · 6; cap 8** |
+
+**Why ×2 length but only ~×1.5 damage:** the length is what matters now. It is the window in
+which the hero cannot eat, and the window in which a Cure is worth carrying. Doubling the HP
+too would have been 4 · 4 · 6 · 8 / cap 10. Poison can't kill, so that cannot end a run on its
+own, but it would leave the D2 Mage (19 HP) at about half HP after one Spider Queen fight.
+
+**Lethality check (poison cannot kill; it softens the hero for the next fight).**
+- D2 Spider (7 hp, ~2 bites a fight → 24 turns): **6 HP** over 24 turns (was 4 over 12).
+  FED regen gives back +2 (1 per 12 turns), so net −4. That is 14 % of the Warrior's 28 HP
+  and 21 % of the Mage's 19 HP.
+- Spider Queen (3–4 bites → cap 30): **8 HP** over 30 turns, net −6 after regen (was 5 / −4).
+  That is 21 % of the Warrior's HP and 32 % of the Mage's. It is the D2 boss, Cure is its §10
+  answer, and Firebolt is the Mage's.
+- D5 Black Widow (one bite 24 → 6 HP; two → cap 8): net −4 / −6 after regen. That is 15 % of the
+  Warrior's 40 HP and 21 % of the Mage's 28 HP.
+- Worst case at any depth: a capped hero loses **8 HP over 30 turns**, never below 1 HP.
+- The danger estimate (§3.7) uses `EHP = HP − (POISON turns >> 2)`. That is now exactly the
+  remaining poison HP (turns / 4), so the formula is unchanged. It reads `ST_X`.
+
+**Cure supply (re-checked).** A level holds 2–3 potions: entry 0 is Heal, and entries 1..n are
+uniform Heal/Mana/Cure. That gives **0.5 Cure per level**, and **~44 % of levels have at least
+one**, plus monster drops (Q11). Cure is **not** the only way out. **Time always cures:** the
+timer is capped at 30, so the no-eat window is at most 30 turns after the last bite. It can only
+be extended by being bitten again (fighting poisoners) or by walking onto a known DART again
+(self-inflicted). §7.2 shows that this cannot become an unavoidable starvation spiral.
+Unchanged: the Cure frequency and the potion roll. Changing either would move every later
+`ITEM_RNG` output.
+
+**Implementation (staff).**
+- **Status step** (`status7.asm` step 1): read/write `ST_X + slot` (page `$B4`, the same low
+  byte as STATUS − `ST_FLAGS & $FF`) instead of the `STMR2` high nibble, and use the `and 3`
+  test. About −2 B net (the mod-3 loop goes).
+- **Apply** (`deal_hit` poison branch, combat3): add to the byte, cap `PSN_CAP` 30. It is
+  already a special case, and it leaves the nibble write path. About +12 B in bank 3.
+- **Cure** (`fx6.asm`): also zero `ST_X` slot 0 (+3 B). The **danger EHP** reads `ST_X`
+  (±0). `level_reset` / `new_game` already zero `ST_X`.
+- **Constants:** amounts ×2. Relax `TRAP_DART_PSN <= 15` and every amount `ASSERT` to `<=
+  PSN_CAP`. Check any kind-table field that packs a poison amount into 4 bits: 18 and 24 do
+  not fit. Store the amount / 2, or widen it (engineer's choice; the values are all even).
+- **Bytes:** ≈ **+15 B** (bank 3 +12, R6 +3, bank 7 ±0).
+- **Tests:** these rebaseline every test that pokes or reads poison in `STMR2`.
+  - Fresh 12 → exactly 3 HP lost over 12 turns, then `THE POISON WEARS OFF`.
+  - 12 + 12 + 12 → timer 30 (cap).
+  - HP 1 never drops.
+  - A sleeper wakes on a tick.
+  - Cure zeroes it.
+  - A level change keeps it (slot 0 carry).
+
+**BAL1 knobs:** the four amounts, `PSN_CAP` 30 (24–30), and the tick rate (4; 3 brings back
+the old HP per turn). If poison feels like a nuisance rather than a threat, drop the rate to 3
+before raising the amounts. If the no-eat lock bites too hard, lower `PSN_CAP` first. If Cure
+feels absent where poison is common, the cheapest fix is a guaranteed Cure as potion entry 1
+on **D2** (the first Spider depth). That is an `ITEM_RNG` change (it rebaselines items_gen
+from D2), so it is not taken now.
 
 ### 6.5 Hit feedback: damage numbers and target readout (D3-11; user 2026-10-13 numbers; designer decision 2026-10-13 rest)
 
@@ -1603,6 +1687,22 @@ eat to FOOD ≥ 10 then back to 9 → `HW_TMR` restarts at 0.
 
 Per level (E): ~450 turns ≈ 75 FOOD burned. Supply: 3–4 floor items + drops ≈ 100.
 
+#### 7.2 Poisoned: cannot eat (POIS1; user 2026-10-26 ruling, designer decision 2026-10-26 details)
+
+While POISON is set (`STS_POISON`), the hero **cannot eat** until it ends (timer or Cure).
+
+| Rule | Value |
+|---|---|
+| Paths | **every EAT**: the bag-page EAT verb, the icon-bar FOOD quick slot (§3.5), and any `bag_pick` FOOD mode. Potions, scrolls, equip, discard and all other verbs are unaffected |
+| Refusal | log `TOO SICK TO EAT` (15, new). It costs **0 turns**, consumes nothing and keeps the food in the bag. On the page the refusal is shown where `NO NEED` is (row 22) and the page stays open. Order: the POISON check runs **before** `NO NEED` (FOOD 100), so a poisoned hero at FOOD 100 sees `TOO SICK TO EAT`. The FOOD quick slot does not fall through to another class |
+| Ends | `THE POISON WEARS OFF` (timer, ≤ 30 turns after the last application, §6.4.3), or a Cure potion (`YOU ARE CURED`). He can eat on the next action. The quick POTION pick already reaches Cure when Heal and Mana would be refused (§8.11 (3)) |
+| Hunger keeps running | FOOD burns as usual (−1 / 6 turns), the stages apply as usual, and FED regen still runs. One capped poison window costs **≤ 5 FOOD** |
+| FAINT1 (§7.1) | unchanged and independent. A faint can land inside a poison window. A poison tick that costs HP wakes him (any HP loss). At 1 HP a tick costs nothing, so he sleeps the full 5 |
+| No spiral (proof) | (1) Poison is timed and capped at 30, so the lock lasts at most 30 turns after the last bite. (2) A 30-turn lock costs ≤ 5 FOOD and, with `FAINT_GAP` 30, **at most 1 faint**. (3) Neither poison nor hunger can kill: poison stops at 1 HP and hunger is never fatal. Only monsters kill, as always. (4) The lock only extends while he keeps being poisoned, i.e. while he fights poisoners or re-walks a known DART. Both are things he can stop doing |
+| Feedback | the POISON panel icon (`$44`) is already on screen and explains the refusal. There is no extra icon |
+| Bytes | the check `ld a,(ST_FLAGS) : bit STS_POISON_BIT,a : jr nz,.sick` sits before `NO NEED`'s FOOD-100 test, in the shared EAT legality path if there is one (~8 B). If the page and the quick slot test separately, ~16 B. The string is 15 + 1 B (with the other EAT refusals, `NO NEED`'s bank/overlay). **≈ 25–32 B** |
+| Tests | Poisoned + FOOD 50: page EAT → line, turn counter unchanged, bag unchanged, FOOD unchanged. The FOOD quick slot gives the same. FOOD 100 + poisoned → `TOO SICK TO EAT` (not `NO NEED`). The quick POTION slot still drinks. Cure, then EAT → eats. Timer runs out → eats |
+
 ---
 
 ## 8. Items and inventory
@@ -1764,7 +1864,7 @@ cursed items in the bag are not affected (bless what you wear).
   Strike doubles it). The hero may equip a replacement from the bag at once.
 - **Message:** `YOUR CURSED ARMOUR SHATTERS!` (28), slot words WEAPON / ARMOUR / HELM /
   CHARM (4 fixed strings, no item-name table).
-- A known re-arming DART trap is therefore a deliberate (costly: ~3.5 HP + POISON 6 per hit,
+- A known re-arming DART trap is therefore a deliberate (costly: ~3.5 HP + POISON 12 per hit (POIS1: the poison ≈ 3 HP over 12 turns, and no eating while it runs),
   ~4 hits expected) way to break a curse on D1–D3, where no monster shoots except the Goblin
   Slinger tier. Intended.
 
@@ -2259,8 +2359,9 @@ nothing): `YOU ARE HUNGRY` · `YOU ARE WEAK WITH HUNGER` · `YOU FEEL WELL FED`.
 | equip cursed reveal | `IT CLINGS TO YOU! CURSED ` + signed digit (`cmb_cling`) | E |
 | cursed lock | `IT IS CURSED! YOU CANNOT` (`cmb_cursed_no`) | E |
 | known-waste refusal (no turn, item kept) | `NO NEED` 7: known Heal at full HP, known Mana at full MP, EAT at FOOD 100. Cure and unknown types are never refused | N |
+| poisoned EAT refusal (no turn, item kept; POIS1 §7.2; checked before `NO NEED`) | `TOO SICK TO EAT` 15 | N |
 | shatter / wear lines | §8.7 / §8.10 (`cmb_shat_*`, `cmb_notch` …) | E |
-| trap fires | `A DART HITS YOU!` 16 · `SLEEPING GAS!` 13 then `YOU FALL ASLEEP` (`st_asleep`, E) · `YOU ARE TELEPORTED!` · `AN ALARM BELL RINGS!` 20 · `A BELL RINGS. NOTHING COMES` 27 · `THUNDERCLAP!` 12 then `YOU ARE STUNNED!` (`st_stunned`, E; STUN1 §1.5.1) | N |
+| trap fires | `A DART HITS YOU!` 16 · `SLEEPING GAS!` 13 then `YOU FALL ASLEEP` (`st_asleep`, E) · `YOU ARE TELEPORTED!` · `AN ALARM BELL RINGS!` 20 · `A BELL RINGS. NOTHING COMES` 27 · `A STONE FALLS ON YOU!` 21 then `YOU ARE STUNNED!` (`st_stunned`, E; STUN1 §1.5.1) | N |
 | trap found (walk-on of a hidden one needs no find line; search or Mage sense) | `TRAP FOUND: ` 12 + `DART` / `GAS` / `ALARM` / `TELEPORT` / `STUN` (4+3+5+4 chars new; TELEPORT is the item word) | N |
 | search finds nothing | no line (0 B) | |
 
@@ -2359,7 +2460,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Bat | 24×16 | 3 | 1 | 4 | 0 | 1d2 | 2 | flyer | erratic | — | D1–D3 |
 | Slime | 24×16 | 6 | 0 | 0 | 1 | 1d3 | 2 | walker, acts every 2 | chase | — | D1 |
 | Goblin | 24×32 | 6 | 1 | 1 | 0 | 1d4 | 3 | walker, climber, opener | chase | Apple 1/4 | D1, D2 |
-| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker | hit **poisons**: POISON +6 per bite, cap 15 (= −1 HP / 3 turns; §6.4.1) | — | D2, D4, D5 |
+| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker | hit **poisons**: POISON +12 per bite, cap 30 (= −1 HP / 4 turns; POIS1 §6.4.3) | — | D2, D4, D5 |
 | Skeleton | 24×48 | 10 | 2 | 2 | 1 | 1d6 | 5 | walker, climber, opener | chase | — | D3, D5, D8 |
 | **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | walker, opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
 | Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch 1 in 4 → CONFUSED 4 (§6.4) | — | D3, D6–D8 |
@@ -2886,11 +2987,11 @@ Short names ≤ 12 chars (messages, §6.4).
 
 | Base (ink) | Tier 2 | Tier 3 | Stats hp/atk/eva/DEF/dmg | Ink | Ability (mechanic reused) |
 |---|---|---|---|---|---|
-| Rat (`$06`) | **Giant Rat** | | 5/1/1/0/1d3 | `$02` | bite 1 in 4 → POISON 6 (Spider poison) |
+| Rat (`$06`) | **Giant Rat** | | 5/1/1/0/1d3 | `$02` | bite 1 in 4 → POISON 12 (Spider poison; POIS1 §6.4.3) |
 | | | **Rabbit Rat** | 8/2/3/0/1d4 | `$47` | **breeds**: hit and survives → 1 in 4 spawns one base **Rat** in the nearest legal cell (summon code, slot + §9.3 cap; `F_RESPAWN`); once per Rabbit Rat (`ENT_STAT` spare bit) |
 | Bat (`$43`) | **Screech Bat** | | 5/2/4/0/1d3 | `$05` | bite 1 in 4 → CONFUSED 2 |
 | Goblin (`$44`) | **Goblin Slinger** | | 8/2/1/0/1d4; rock 1d3 PHYS r6 | `$06` | ranged AI as the Archer (cooldown 2); rock = `dagger_spin` frames at `$06`, not recoverable; weight 3 + 1 |
-| Spider | **Black Widow** | | 10/4/3/0/1d4 | `$02` | POISON 12; bite 1 in 4 → **ACID** (armour `m −1`, §8.10; rev 5 replaces ASLEEP 2) |
+| Spider | **Black Widow** | | 10/4/3/0/1d4 | `$02` | POISON 24 (POIS1 §6.4.3); bite 1 in 4 → **ACID** (armour `m −1`, §8.10; rev 5 replaces ASLEEP 2) |
 | Skeleton (`$47`) | **Skeleton Guard** | | 14/3/2/2/1d6 | `$05` | **parries 1 in 4** PHYS hits (Death Knight parry; 0 dmg, `PARRIED`, no BLOCK frame: the hit flash is skipped); a parried melee hit **notches** the weapon 1 in 2 (§8.10) |
 | | | **Skeleton Knight** | 18/4/2/3/1d8 | `$44` | parries 1 in 3 (notch 1 in 2, §8.10); hit 1 in 4 → STUNNED 1 |
 | Ghost (`$45`) | **Poltergeist** | | 11/3/3/0/1d4 DRAIN | `$03` | touch 1 in 3 → FEAR 3 (replaces the Ghost's confusion) |
