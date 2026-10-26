@@ -111,6 +111,7 @@ def emu(p, check):
     want[bag:bag + 6] = bytes([S["IT_P_HEAL"], 1, 0, S["IT_F_APPLE"], 1, 0])
     want[worn:worn + 6] = bytes([S["IT_W_SHORT"], 1, 0, S["IT_A_LEATHER"], 1, 0])
     want[S["FOOD"] - lo] = S["FOOD_START"]             # 3E-T9: kit_add
+    want[S["QS_CACHE"] + S["QS_FOOD"] - lo] = 1          # 3E-T12: pot_sync counts the food stacks (Apple)
     check("R1 new_game zeroes ITEM_RAM + the start kit (T11)", mem(lo, n) == bytes(want), mem(lo, n).hex())
     bad = canaries()
     check("R1 the rest of the reserve untouched", not bad, bad[:16])
@@ -144,7 +145,11 @@ def emu(p, check):
             break
     check("R2 descended", p.rb("LVL_DEPTH") == d0 + 1, (d0, p.rb("LVL_DEPTH")))
     got = mem(lo, n)
-    check("R2 ITEM_RAM kept across the level change", got == pat)
+    q0 = S["QS_CACHE"] - lo                         # 3E-T12: QS_CACHE is pot_sync's (level_populate)
+
+    def noqs(b):
+        return b[:q0] + b[q0 + S["QS_COUNT"]:]
+    check("R2 ITEM_RAM kept across the level change (but the derived QS_CACHE)", noqs(got) == noqs(pat))
     tl = S["TRAP_LIST"]
     tr = mem(tl, 13)
     tn = tr[12]

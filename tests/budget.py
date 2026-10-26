@@ -179,7 +179,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix")
+             "pmix", "umix")
 CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -321,6 +321,15 @@ SCENARIOS = {
         (1, 22, stand_y(1, 2), HOSTILE),
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "pmix"),
+    # 3E-T12: "mix" with the quick uses as the hero's actions (R6 fx_quick): two potions
+    # (HP 5), three eats (the 3rd NO NEED at 100), three reads (Fear, Sleep, Fear over the
+    # 4 monsters: room_status), then melee / waits
+    "umix": ("knight + 4 monsters, quick potion / food / scroll uses", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)],
+        [("G", 2), ("@5", 3), ("@7", 3), ("FIRE", 2), ("WAIT", 2)], K_KNIGHT, None, "umix"),
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
         (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
@@ -581,6 +590,16 @@ def pmix_setup(p):
     p.set_ent(5, HP=1)
 
 
+def umix_setup(p):
+    """"umix": HP 5 / 200, FOOD 40, bag Heal x2, Meat x2, Fear x2, Sleep x1, Apple."""
+    p.set_ent(0, HP=5, MAXHP=200)
+    p.wb("FOOD", 40)
+    recs = [("IT_P_HEAL", 2), ("IT_F_MEAT", 2), ("IT_S_FEAR", 2), ("IT_S_SLEEP", 1), ("IT_F_APPLE", 1)]
+    flat = [v for n, q in recs for v in (S[n], q, 0)]
+    p.z.cmd("write-memory %d %s" % (S["BAG"], " ".join(str(b) for b in flat + [0] * (60 - len(flat)))))
+    p.wb(S["P_ENTITIES"] + S["E_POT"], 2)
+
+
 def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     p = game.T(h)
@@ -615,6 +634,8 @@ def run_scenario(h, scen):
         mkmix_setup(p)
     if len(scen) > 5 and scen[5] == "pmix":
         pmix_setup(p)
+    if len(scen) > 5 and scen[5] == "umix":
+        umix_setup(p)
     for f in EXTRA_SETUP:
         f(p)
     mode = scen[4] if len(scen) > 4 else None
@@ -636,6 +657,10 @@ def run_scenario(h, scen):
             st.turn(key)
             swing += S["FID_wizard_staffswing"] in p.trace_fids(0)
     st.close()
+    if len(scen) > 5 and scen[5] == "umix":         # the uses really happened (bag / FOOD / statuses)
+        bag = list(p.z.read_memory(S["BAG"], 15))
+        print(f"[info] umix after: bag {bag}, FOOD {p.rb('FOOD')}, HP {p.ent(0)['HP']}, "
+              f"ST_FLAGS {list(p.z.read_memory(S['ST_FLAGS'], 6))}", flush=True)
     totals = [t for t, _ in st.ticks]
     worst = max(st.ticks, key=lambda x: x[0])
     work = [t - i for t, i in zip(totals, st.isr_in)]
@@ -696,7 +721,7 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix").split(","):
+        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")

@@ -3,7 +3,7 @@
 ; (r6.asm, bank 6). Reached by far6 from any bank (results in BC / DE / HL
 ; only: far6 clobbers A, F — bag_find's C = 0 when absent) or called directly
 ; by R6 code. BAG ($5D00, bank 5) is always mapped, so nothing here pages.
-; Callers since 3E-T11: pickup6.asm (pu_add, pot_take1, kit_add, pot_sync). IX / IY are never touched; no EXX.
+; Callers since 3E-T11: pickup6.asm (pu_add, kit_add, pot_sync), fx6.asm (the effects). IX / IY are never touched; no EXX.
 ;
 ; BAG invariant (kept by these helpers): records are packed from slot 0 (a
 ; free slot, TYPE IT_NONE, is followed only by free slots), so the order is

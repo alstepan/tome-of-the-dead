@@ -199,21 +199,21 @@ VB_REMOVE       EQU 5               ; worn gear (refused on the page with a full
 VB_DISCARD      EQU 6               ; any bag item: the whole stack (never worn)
 PG_SLOT_WORN    EQU BAG_SLOTS       ; PAGE_SLOT of worn slot 0 (+ WS_*)
 ;------------------------------------------------------------------------------
-; 3E-T8 effects overlay ops (ovl_fx, lowram.asm; src/fx_ovl.asm fx_tab): FX_OP
-; = op, FX_ARG = its argument. The page verbs ARE their ops (page_post stores
-; PAGE_VERB / PAGE_SLOT as FX_OP / FX_ARG). Result flags (FX_OP out).
 ;------------------------------------------------------------------------------
-FX_DRINK        EQU VB_DRINK        ; T12 (reserved: no-op today)
-FX_EAT          EQU VB_EAT          ; T12 (reserved)
-FX_READ         EQU VB_READ         ; T12 (reserved)
+; Effect ops (3E-T8 / T12: fx_main, R6 src/fx6.asm, far6): FX_OP = op, FX_ARG
+; = its argument. The page verbs ARE their ops (page_post stores PAGE_VERB /
+; PAGE_SLOT as FX_OP / FX_ARG). Out: L = FXR_* (also written back to FX_OP).
+; DRINK / EAT / READ all run fx_use, which acts by the item's class.
+;------------------------------------------------------------------------------
+FX_DRINK        EQU VB_DRINK        ; arg = bag slot 0..19 (fx_use)
+FX_EAT          EQU VB_EAT          ; arg = bag slot (fx_use)
+FX_READ         EQU VB_READ         ; arg = bag slot (fx_use; Teleport: EXIT_KIND = EX_TELE)
 FX_EQUIP        EQU VB_EQUIP        ; arg = bag slot 0..19: worn <- it, the old worn item -> that slot
 FX_REMOVE       EQU VB_REMOVE       ; arg = PG_SLOT_WORN + WS_*: -> the bag (refused when full)
-FX_DISCARD      EQU VB_DISCARD      ; (reserved: page_post runs DISCARD itself)
-FX_TELEPORT     EQU 7               ; T12 (reserved: the scroll / trap teleport)
-FX_COUNT        EQU 8               ; fx_tab rows: ops 1..FX_COUNT-1
 FXR_TURN_BIT    EQU 0               ; the op spent the hero's turn
-FXR_TELE_BIT    EQU 2               ; T12: a teleport was requested (the caller runs it)
 FXR_TURN        EQU 1 << FXR_TURN_BIT
+FXR_REFUSED     EQU $80             ; refused with a line (NO NEED / NO FOOD ...): no turn
+                                    ; (= IC_REFUSED, intent7.asm; bit 0 clear)
 ; quick slots (§8 "Quick slots auto-fill"): QPIN / QS_CACHE index
 QS_FOOD         EQU 0
 QS_POTION       EQU 1
@@ -264,7 +264,8 @@ HP_RG           EQU HSTAGE + 1                  ; FED HP regen turn counter 0..H
 HW_TMR          EQU HP_RG + 1                   ; turns since the last WEAK line 0..HW_REPEAT-1  (kept)
 MP_HOLD         EQU HW_TMR + 1                  ; != 0: xp_turn skips MP regen this turn (hunger_turn
                                                 ;   writes it every turn, just before xp_turn)
-QS_CACHE        EQU MP_HOLD + 1                 ; QS_COUNT: the type each quick slot shows, IT_NONE = grey (kept)
+QS_CACHE        EQU MP_HOLD + 1                 ; QS_COUNT: 3E-T12 food / scroll stacks in BAG (pot_sync; 0 = the
+                                                ;   icon greys); the QS_POTION byte is unused (E_POT)        (kept)
 ITEM_RAM_END    EQU QS_CACHE + QS_COUNT
 ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 81
                 ASSERT ITEM_RAM_LEN == 81

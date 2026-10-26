@@ -9,8 +9,8 @@
 
 ;------------------------------------------------------------------------------
 ; icon_state — A = slot -> A = IS_HIDDEN / IS_GREY / IS_NORMAL (concept-screen
-; §5: melee and the Bag never grey; ammo / item at 0 greys; food and scrolls
-; are greyed until 3E; an unlearned ability is an empty outline).
+; §5: melee and the Bag never grey; ammo / item at 0 greys; 3E-T12: food /
+; scrolls grey with none in the bag (QS_CACHE); an unlearned ability is an empty outline).
 ; Clobbers: A, C, HL (B, DE kept)      ~80 T
 ;------------------------------------------------------------------------------
 icon_state:
@@ -30,10 +30,14 @@ icon_state:
                 jr   z, .bow
                 cp   SA_POTION
                 jr   z, .pot
-                cp   SA_FOOD
-                jr   z, .grey
+                ld   hl, QS_CACHE + QS_FOOD    ; 3E-T12: food / scroll stacks in the bag
+                cp   SA_FOOD                   ; (R6 pot_sync keeps them): 0 greys
+                jr   z, .qs
+                ld   l, (QS_CACHE + QS_SCROLL) & $FF
                 cp   SA_SCROLL
-                jr   z, .grey
+                jr   nz, .norm
+.qs:            ld   a, (hl)
+                jr   .cnt
 .norm:          ld   a, IS_NORMAL              ; melee, Bag
                 ret
 .dag:           ld   a, (DAGGERS)

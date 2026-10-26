@@ -425,6 +425,10 @@ class Proto:
             keys.remove("G")
             self.select_slot(self.POTION_SLOT[self.rb("HERO_KIND")], step)
             fire = True
+        for k in [k for k in keys if k.startswith("@")]:   # 3E-T12: "@n" = icon slot n, FIRE
+            keys.remove(k)
+            self.select_slot(int(k[1:]), step)
+            fire = True
         if "FIRE" in keys or "SPACE" in keys:
             fire = True
         e = self.ent(0)

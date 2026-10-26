@@ -612,7 +612,7 @@ def bar_bytes(fill):
 def w15(p, check):
     # B3B-13: messages are token streams pushed by id (msg_push); the expected
     # text comes from src/strings.txt
-    TXT = {"str_" + n: t for n, t in STRINGS if n in ("descend", "locked", "fall", "died", "quaff")}
+    TXT = {"str_" + n: t for n, t in STRINGS if n in ("descend", "locked", "fall", "died", "welcome")}
     MSG = {k: S["TX_" + k[4:].upper()] for k in TXT}
     WELCOME = dict(STRINGS)["welcome"]
     STUB = S["LOWRAM_END_3B"]
@@ -690,7 +690,7 @@ def w15(p, check):
           (p.rb("TURN_PHASE"), p.ent(0)["HP"]))
     check("W15 quaff: panel untouched in the input tick (composed rows 18-23)",
           panel(p.composed_frame()) == before, "")
-    want_log = text6(TXT["str_quaff"])
+    want_log = text6("YOU FEEL HEALTHIER")          # 3E-T12: "YOU DRINK THE HEAL POTION", then this
     seen = {}
     for k in range(1, 7):
         p.tick()
@@ -707,8 +707,8 @@ def w15(p, check):
           all(seen.get(k, 99) <= 3 for k in ("log", "hp", "pot")), seen)
     check("W15 quaff: the log line displayed one tick after it is composed",
           seen.get("shown", 99) == seen.get("log", 0) + 1, seen)
-    check(f"W15 quaff: scroll: row 22 = the previous newest line ({WELCOME})",
-          log_row(p.composed_frame(), 22) == text6(WELCOME), "")
+    check("W15 quaff: scroll: row 22 = the drink line (3E-T12: two lines a drink)",
+          log_row(p.composed_frame(), 22) == text6("YOU DRINK THE HEAL POTION"), "")
 
     # --- 3 messages: 2-row scroll ----------------------------------------
     push("str_descend", "str_locked", "str_fall")
@@ -744,7 +744,7 @@ def w15(p, check):
     check("W15 displayed == composed", p.frame() == p.composed_frame(), "")
 
     # --- GS_DEAD / GS_WIN lines are never dropped (log_push_end) -------------
-    push("str_descend", "str_locked", "str_fall", "str_quaff")
+    push("str_descend", "str_locked", "str_fall", "str_welcome")
     stub([0x3E, MSG["str_died"], 0xCD] + w(S["msg_push_end"]), "msg_push_end")
     check("W15 ring full: log_push_end replaces the newest pending (LOG_QN 4, LQ_DROP 1)",
           (p.rb("LOG_QN"), p.rb(S["LOG_Q"] + S["LQ_DROP"])) == (4, 1), "")
@@ -755,13 +755,13 @@ def w15(p, check):
     p.wb(S["LOG_Q"] + S["LQ_DROP"], 0)
 
     # --- ring overflow -----------------------------------------------------
-    push("str_descend", "str_locked", "str_fall", "str_quaff", "str_died")
+    push("str_descend", "str_locked", "str_fall", "str_welcome", "str_died")
     check("W15 ring full: 5th push (log_push) dropped (LOG_QN 4, LQ_DROP 1)",
           (p.rb("LOG_QN"), p.rb(S["LOG_Q"] + S["LQ_DROP"])) == (4, 1), "")
     p.until(drained, 12)
     p.tick()
-    check("W15 overflow drained: newest shown = the 4th push (YOU DRINK A POTION)",
-          log_row(p.frame(), 23) == text6(TXT["str_quaff"]), "")
+    check("W15 overflow drained: newest shown = the 4th push (YOU ENTER THE DUNGEON)",
+          log_row(p.frame(), 23) == text6(TXT["str_welcome"]), "")
 
     # --- costs: whole log item (scroll + 32 chars), print6 per char ----------
     long32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
@@ -1521,7 +1521,8 @@ def w22_23(p, check, which):
     p.wb("LOG_QN", 0)
     tap("SPACE")
     check("W23 again with no potion: NO POTION, no turn", shows("no_potion") and tc() == t0, tc() - t0)
-    # greyed / missing refusals
+    # greyed / missing refusals (3E-T12: the quick FOOD eats the kit Apple: empty the bag first)
+    p.wmem(S["BAG"], [0] * 60)
     bad = []
     for key, name in (("5", "no_bow"), ("6", "no_food"), ("8", "no_scroll")):
         if not refusal(key, name):
@@ -1579,13 +1580,13 @@ def w15_icons(p, check):
     sel = all(x & 0x38 == 0x08 for x in a[0])
     others_black = all(x & 0x38 == 0 for i in range(1, 10) for x in a[i])
     hidden = cells(fr, 1) == cells(fr, 2) == cells(fr, 9)
-    grey = all(x == S["ATTR_P_GREY"] for i in (4, 5, 7) for x in a[i])
-    normal = all(x != S["ATTR_P_GREY"] for i in (3, 8) for x in a[i])
+    grey = all(x == S["ATTR_P_GREY"] for i in (4, 7) for x in a[i])          # 3E-T12: food (5) has the Apple
+    normal = all(x != S["ATTR_P_GREY"] for i in (3, 5, 8) for x in a[i])
     pot = (a[6][3], a[6][5], log_row(fr, 19, 20, 1) == text6("1", 0, 1))
     check("W15i Warrior start: slot 1 selected (PAPER blue), others black paper",
           sel and others_black, a[0])
     check("W15i unlearned Power / Whirl = the empty outline (== spare slot 10)", hidden, "")
-    check("W15i greyed: bow (not found), quick food, quick scroll ($07); daggers (3) and Bag normal",
+    check("W15i greyed: bow (not found), quick scroll ($07); daggers (3), quick food (the kit Apple) and Bag normal",
           grey and normal, (a[4], a[5], a[7], a[3], a[8]))
     check("W15i quick potion: glyph ATTR_POTION, count '1' (ATTR_HUD)",
           pot == (S["ATTR_POTION"], S["ATTR_HUD"], True), pot)

@@ -2504,45 +2504,6 @@ page_run:
                 ld   hl, page_post             ; bank 1: ROOM_MAP back, input latches,
                 jp   far1                      ; resync_tick; L = 1 a verb spent the turn
 
-;------------------------------------------------------------------------------
-; ovl_fx — 3E-T8 the silent in-play effects overlay (src/fx_ovl.asm; memory-map
-; "Overlays"): ROOM_MAP -> FX_MAP_SAVE, the fx stream unpacked into FX_ORG and
-; run with the caller's bank paged, then the map put back. Nothing on screen
-; changes while it runs (it never renders; log lines are only queued).
-; ovl_fx_saved — the same with FX_OP / FX_ARG already set and the map already
-; in FX_MAP_SAVE (page_post: the page's save, PAGE_MAP_SAVE == FX_MAP_SAVE).
-; CONTRACT: GS_PLAYING only, never during a room transition / scroll (NEXT_MAP,
-; the scroll) or the pause (GEN_SRC is the pause save), nothing renders /
-; presents / reads ROOM_MAP until it returns.
-; In : A = op (FX_*, item_defs.asm), B = its argument; IX passes in (kept).
-; Out: FX_OP = the FXR_* flags (memory: the map copy-back clobbers BC/DE/HL).
-; Clobbers: A, BC, DE, HL (IX kept).
-; Cost: 2 x FX_OVL_LEN LDIR (ovl_fx_saved: PLAY_CELLS) + the unpack (~67 T / raw byte) + the op;
-; tests/equip.py measures it.
-;------------------------------------------------------------------------------
-ovl_fx:
-                ld   c, a
-                ld   (FX_OP), bc               ; FX_OP = op, FX_ARG = arg
-                ld   hl, ROOM_MAP              ; the live map: the window aliases it
-                ld   de, FX_MAP_SAVE
-                ld   bc, FX_OVL_LEN            ; only the overlay's own bytes are clobbered
-                push bc                        ; (ASSERTed below); the copy-back length
-                ldir
-                jr   ovl_fx_go
-ovl_fx_saved:                                  ; page_post: the page overlay clobbered more
-                ld   bc, PLAY_CELLS            ; -> put the whole saved map back
-                push bc
-ovl_fx_go:
-                ld   hl, ovl_fx_zx0            ; R6 stream
-                ld   c, BANK_OVL_FX
-                ld   de, FX_ORG
-                call ovl_run                   ; (the caller's bank back)
-                pop  bc
-                ld   hl, FX_MAP_SAVE
-                ld   de, ROOM_MAP
-                ldir
-                ret
-                ASSERT FX_OVL_LEN <= PLAY_CELLS && FX_ORG == ROOM_MAP   ; window = ROOM_MAP.., fx_end-bounded
 
 ; frt_ptr — HL = FRT + A*16 ; frt_ptr_cur uses GEN_FID.  Clobbers: A, DE, HL
 ;------------------------------------------------------------------------------

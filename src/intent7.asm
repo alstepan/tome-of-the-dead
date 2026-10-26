@@ -153,8 +153,9 @@ use_slot:
                 jr   z, ic_daggers
                 cp   SA_BOW
                 jr   z, ic_bow
+                ld   e, TX_NO_POTION
                 cp   SA_POTION
-                jr   z, ic_potion
+                jr   z, .rf
                 ld   e, TX_NO_FOOD             ; 3E: food
                 cp   SA_FOOD
                 jr   z, .rf
@@ -165,8 +166,9 @@ use_slot:
                 jr   nz, ic_none               ; SA_EMPTY
                 jp   page_run                  ; 3E-T2: the bag page (lowram.asm); 3E-T8:
                                                ; L = page_post's (1: a verb spent the turn)
-.rf:            ld   a, e
-                jr   ic_no
+.rf:            ld   a, e                      ; 3E-T12: the quick slots are R6 fx_quick
+                ld   hl, fx_quick              ; (fx6.asm; A = the class's NO line): L = 1
+                jp   far6                      ; used / IC_REFUSED (NO x, NO NEED: a line)
 ; ic_no_mana — SND-5: the NO MANA refusal (abil_spell / abil_melee); plays FIZZ (= NO).
 ic_no_mana:     ld   a, TX_NO_MANA
 ; ic_no — SND-5b: a 'nothing to use' refusal (no potion / food / scroll / bag /
@@ -182,8 +184,8 @@ ic_refuse:      call msg_push
 ic_none:        ld   l, 0
                 ret
                 ASSERT SA_EMPTY == 0 && SA_ABIL == SA_COUNT - 1 && SA_BAG < SA_ABIL
-IC_REFUSED      EQU $80                        ; ic_refuse's L: refused with a line
-                                               ; (bit 0 = 0: tpt_intent's rrca test)
+IC_REFUSED      EQU FXR_REFUSED                ; ic_refuse's L: refused with a line
+                                               ; (bit 0 = 0: tpt_intent's rrca test; = R6 fx_quick's)
 IC_NOTGT        EQU $82                        ; NO TARGET, line not yet pushed: use_icon
                                                ; pushes it, or stumbles if reversed
                 ASSERT (IC_NOTGT & 1) == 0 && IC_NOTGT != IC_REFUSED
@@ -217,16 +219,6 @@ ic_melee:
                 ret  c
 .nt:            ld   l, IC_NOTGT               ; use_icon: the line, or a stumble
                 ret
-
-; potion (quick slot): E_POT (= the bag's potions, pot_sync) 0 -> NO POTION;
-; else pot_quaff (bank 3): the lowest potion type's effect, 1 turn; Heal at
-; full HP / Mana at full MP: refused, no turn, no message.
-ic_potion:
-                ld   a, (ix+E_POT)
-                or   a
-                ld   a, TX_NO_POTION
-                jr   z, ic_no
-                jp   ic_quaff
 
 ic_daggers:
                 ld   a, (DAGGERS)
@@ -373,98 +365,3 @@ debug_kit:
                 ld   hl, rank_sync             ; bank 3
                 jp   far3
     ENDIF
-
-; ic_quaff — ic_potion's drink (out of line: keeps the jr chains in range).
-; 3E-T11: the first potion type, Heal -> Mana -> Cure (game.md §8.11 rulings
-; 3), that is in the BAG (far6 bag_find) AND whose effect is not refused
-; (pot_eff). None -> "NO NEED" (bank-1 stem), no turn, nothing consumed.
-; Used: pot_take1 (R6: the stack - 1, E_POT synced), the heal flash,
-; SFX_QUAFF, "YOU DRINK A POTION" (the "DRINK THE <name>" stem is the fx
-; overlay's, T12). L = 1 turn used / IC_REFUSED.  ~3-8k T
-ic_quaff:
-                ld   c, IT_POT_LO
-.t:             ld   a, c
-                push bc
-                ld   hl, bag_find              ; R6: C out = 0 if absent
-                call far6
-                ld   a, c
-                pop  bc
-                or   a
-                jr   z, .nx
-                ld   a, c
-                call pot_eff                   ; CF = refused (nothing done)
-                jr   nc, .take
-.nx:            inc  c
-                ld   a, c
-                cp   IT_POT_HI + 1
-                jr   c, .t
-                xor  a                         ; IT_NONE: the stem alone
-                ld   e, S3_NO_NEED
-                ld   hl, it_line               ; bank 1
-                call far1
-                ld   l, IC_REFUSED             ; a line, no turn
-                ret
-.take:          ld   a, c
-                ld   hl, pot_take1             ; R6
-                call far6
-                ld   (ix+E_FLT), FLASH_TICKS
-                ld   (ix+E_FLA), ATTR_HEAL
-                ld   a, SFX_QUAFF              ; SND-5b
-                call sfx_req
-                ld   a, TX_QUAFF
-                call msg_push                  ; queued (panel_tick)
-                ld   l, 1
-                ret
-
-; pot_eff — A = potion type: its effect (game.md §8), CF = 1 refused, nothing
-; done: Heal HP + QUAFF_HEAL / Mana MP + POT_MANA (capped; refused when full);
-; Cure clears POISON / WEAK / MIND (timers 0, HOLD kept) + POT_CURE_HP
-; (capped; refused with none of the three).  Clobbers: A, DE, HL
-pot_eff:
-                cp   IT_P_MANA
-                ld   hl, MP                    ; (MAXMP = MP + 1)
-                ld   e, POT_MANA
-                jr   z, cap_add
-                ld   hl, P_ENTITIES + E_HP     ; (E_MAXHP = E_HP + 1)
-                ld   e, QUAFF_HEAL
-                jr   c, cap_add                ; Heal
-                ld   hl, ST_FLAGS              ; Cure: the hero = status slot 0
-                ld   a, (hl)
-                and  STS_MIND | STS_POISON | STS_WEAK
-                scf
-                ret  z                         ; nothing to cure
-                xor  (hl)                      ; = flags & ~mask
-                ld   (hl), a
-                ld   l, ST_T1 & $FF
-                ld   a, (hl)
-                and  $F0                       ; MIND timer 0, HOLD kept
-                ld   (hl), a
-                ld   l, ST_T2 & $FF
-                ld   (hl), 0                   ; POISON / WEAK timers
-                ld   e, POT_CURE_HP
-                ld   hl, P_ENTITIES + E_HP
-                call cap_add                   ; (full HP: the cure alone)
-                or   a
-                ret
-POT_MANA        EQU 8                          ; game.md §8: Mana +8 MP
-POT_CURE_HP     EQU 4                          ; game.md §8: Cure +4 HP
-                ASSERT MAXMP == MP + 1 && E_MAXHP == E_HP + 1 && IT_P_CURE == IT_P_MANA + 1 && IT_P_HEAL + 1 == IT_P_MANA
-                ASSERT (ST_FLAGS >> 8) == (ST_T1 >> 8) && (ST_T1 >> 8) == (ST_T2 >> 8)
-
-; cap_add — HL = a value, (HL + 1) its max, E = amount: value = min(value +
-; E, max); CF = 1 (nothing done) if it was already >= max.  Clobbers: A, D
-cap_add:
-                inc  hl
-                ld   d, (hl)
-                dec  hl
-                ld   a, (hl)
-                cp   d
-                ccf
-                ret  c
-                add  a, e
-                cp   d
-                jr   c, .s
-                ld   a, d
-.s:             ld   (hl), a
-                or   a
-                ret

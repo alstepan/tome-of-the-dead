@@ -285,8 +285,8 @@ GEAR_MP         EQU PAGE_END        ; the gear MP hero_recalc has added into MAX
                                     ; recalc: MAXMP += new - GEAR_MP, so level-ups / tomes stay)
 MP_PER          EQU PAGE_END + 1    ; MP regen period (turns) for xp_turn: class 8 / 6, x 1/2 with
                                     ; the Mana / Scarab amulet, x 2 with Plate (hero_recalc)
-FX_OP           EQU PAGE_END + 2    ; ovl_fx: in = the op (FX_*), out = the FXR_* result flags
-FX_ARG          EQU PAGE_END + 3    ; ovl_fx: the op's argument (a slot: BAG + 3 * arg)
+FX_OP           EQU PAGE_END + 2    ; fx_main (R6): in = the op (FX_*), out = the FXR_* result flags
+FX_ARG          EQU PAGE_END + 3    ; fx_main: the op's argument (a slot: BAG + 3 * arg)
 PAGE_VLAST      EQU PAGE_END + 4    ; the verb page_post last consumed (VB_*; test-observable only)
 HERO_T8_END     EQU PAGE_END + 5
 HELD_WAIT       EQU 3

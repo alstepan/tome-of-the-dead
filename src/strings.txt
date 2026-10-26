@@ -30,7 +30,6 @@
 # --- whole log lines ----------------------------------------------------------
 welcome         "YOU ENTER THE DUNGEON"
 descend         "YOU DESCEND DEEPER"
-quaff           "YOU DRINK A POTION"
 locked          "THE DOOR IS LOCKED"
 fall            "YOU FALL INTO A PIT"
 died            "YOU DIED - PRESS ENTER"

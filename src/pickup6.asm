@@ -15,28 +15,59 @@
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; pot_sync — E_POT := the sum of the potion stacks' QTY in BAG.
-; Clobbers: A, HL, F (BC, DE kept).   ~1.2k T (20 slots)
+; pot_sync — E_POT := the sum of the potion stacks' QTY in BAG; 3E-T12: also
+; QS_CACHE + QS_FOOD / QS_SCROLL := the number of food / scroll stacks (the
+; icon bar's FOOD / SCROLL grey test, icons3.asm icon_state), PD_ICONS when
+; one of those changed (the potion count reaches the panel by icon_poll).
+; Clobbers: A, HL, F (BC, DE kept).   ~1.6k T (20 slots)
 ;------------------------------------------------------------------------------
 pot_sync:
                 push bc
+                push de
                 ld   hl, BAG
-                ld   bc, BAG_SLOTS << 8        ; B = slots, C = sum
+                ld   bc, BAG_SLOTS << 8        ; B = slots, C = potions
+                ld   de, 0                     ; D = food stacks, E = scroll stacks
 .l:             ld   a, (hl)
-                IT_IN IT_POT_LO, IT_POT_HI
-                inc  l
-                ld   a, (hl)                   ; QTY (ld / inc l keep IT_IN's CF)
-                inc  l
-                inc  l
-                jr   nc, .n
+                inc  l                         ; -> QTY
+                sub  IT_FOOD_LO
+                cp   IT_FOOD_HI - IT_FOOD_LO + 1
+                jr   nc, .nf
+                inc  d
+.nf:            sub  IT_POT_LO - IT_FOOD_LO    ; (a food wraps past both tests)
+                cp   IT_POT_HI - IT_POT_LO + 1
+                jr   nc, .np
+                ld   a, (hl)
                 add  a, c
                 ld   c, a
-.n:             djnz .l
+                jr   .nx
+.np:            sub  IT_SCR_LO - IT_POT_LO
+                cp   IT_SCR_HI - IT_SCR_LO + 1
+                jr   nc, .nx
+                inc  e
+.nx:            inc  l
+                inc  l
+                djnz .l
                 ld   a, c
                 ld   (P_ENTITIES + E_POT), a
+                ld   hl, QS_CACHE + QS_FOOD
+                ld   a, d
+                call .qs
+                ld   l, (QS_CACHE + QS_SCROLL) & $FF
+                ld   a, e
+                call .qs
+                pop  de
                 pop  bc
                 ret
+.qs:            cp   (hl)
+                ret  z
+                ld   (hl), a
+                ld   a, (PANEL_DIRTY)
+                or   PD_ICONS
+                ld   (PANEL_DIRTY), a
+                ret
                 ASSERT (BAG & $FF) + BAG_SLOTS * IR_STRIDE <= 256 && IR_QTY == 1 && IR_STRIDE == 3
+                ASSERT IT_POT_LO == IT_FOOD_HI + 1 && IT_SCR_LO == IT_POT_HI + 1
+                ASSERT ((QS_CACHE + QS_FOOD) >> 8) == ((QS_CACHE + QS_SCROLL) >> 8)
 
 ;------------------------------------------------------------------------------
 ; pu_add — far6 from floor_pickup (bank 7) for a non-ammo entry under the
@@ -67,17 +98,6 @@ pu_add:
                 call far1
                 ld   l, 1
                 ret
-
-;------------------------------------------------------------------------------
-; pot_take1 — far6 from ic_quaff (bank 7): A = a potion type present in the
-; bag: one taken from its first stack (bag_take -> pot_sync). (ic_quaff finds
-; the type with far6 bag_find: C out = 0 when absent.)
-; Clobbers: A, BC, DE, HL.   ~2k T
-;------------------------------------------------------------------------------
-pot_take1:
-                call bag_find                  ; A = slot (present: just picked)
-                ld   b, 1
-                jp   bag_take
 
 ;------------------------------------------------------------------------------
 ; kit_add — far6 from new_game (bank 7), after ITEM_RAM is cleared and the hero
