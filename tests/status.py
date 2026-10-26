@@ -206,7 +206,6 @@ def run(h, p, check):
         for abl, r in (learn or {}).items():
             k = abl if hero == K_WIZARD else abl - S["ABL_POWER"]
             av |= r << (2 * k)
-            p.wmem(S["RANK_ROWS"] + 6 * k, list(b3[ab + (abl * 3 + r - 1) * 6: ab + (abl * 3 + r) * 6]))
         p.wmem(S["ARANK"], w16(av))
         p.tick(3)
         capture(True)

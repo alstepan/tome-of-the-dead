@@ -17,9 +17,10 @@ PROTO room A, every monster parked unless placed:
       (MIND overwritten), a DYING one / another room untouched, "THEY FLEE IN
       TERROR!"; Sleep: ASLEEP 8 + the sleep flash, a FROZEN one skipped, "THEY
       FALL ASLEEP!"; empty room -> "NOTHING HAPPENS"; kinds immune by kx_tab skipped
-  B   book READ (fx_main): Warrior D1 learns Power Strike, D1 again -> rank 2,
-      D3 -> Whirlwind, all rank 3 -> Tome of Vigor (HP / MAXHP +3, MP / MAXMP +1);
-      Mage D2 with Spark -> Firebolt; the book consumed every time
+  B   book READ (fx_main), RANK1 rule (game.md §5 rev 6, fx_book): starter (slot 0, 0 RNG) ->
+      pity (BOOK_DRY 2) -> one uniform pick (RNG byte * n >> 8) -> Tome (Vigor / Power); depth
+      gate, no keystone; B1-B8 scripted, B9 seeded random sweep and B10 whole-run sequences
+      compared with tests/book_model.py (ARANK + BOOK_DRY, RNG state, line, tome stats)
 Generated levels (seed_fixed):
   T   Teleport fuzz (quick SCROLL, real turns): every read = 1 turn, the scroll
       consumed, "YOU READ THE TELEPORT SCROLL" + "YOU ARE TELEPORTED!", a new room
@@ -41,6 +42,8 @@ sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, stand_y, RUN_LIMIT  # noqa: E402
 from proj3 import T, w16  # noqa: E402
 from abil_melee import stream_text  # noqa: E402
+import book_model as BM  # noqa: E402
+import random  # noqa: E402
 
 KIT = bool(S.get("KIT_DEBUG", 0))
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_DYING, EF_PENDING = 1, 2, 4, 16, 64
@@ -353,40 +356,128 @@ def run(h, p, check):
     # ======================= B: books =============================================
     scene(K_KNIGHT)
 
-    def book(depth):
+    NAMES = {K_KNIGHT: ["POWER STRIKE", "WHIRLWIND"],
+             K_WIZARD: ["SPARK", "FIREBOLT", "FROST SHARD", "DRAIN LIFE", "LIGHTNING"]}
+
+    def book(depth, ranks=None, dry=0, seed=None):
+        """One READ of a class book at LVL_DEPTH `depth`; ranks (per class slot) / dry / seed poked
+        first when given (RANK1: BOOK_DRY = ARANK bits 10-11)."""
         put(["BOOK", "F_APPLE"])
         d0 = p.rb("LVL_DEPTH")
         p.wb("LVL_DEPTH", depth)
+        if ranks is not None:
+            p.wmem(S["ARANK"], w16(sum(r << (2 * k) for k, r in enumerate(ranks)) | dry << 10))
+        if seed is not None:
+            p.wmem(S["RNG_STATE"], w16(seed))
         lines.clear()
+        e0 = p.ent(0)
+        mp0 = p.rb("MP")
         r = fx(S["FX_READ"], 0)
         p.wb("LVL_DEPTH", d0)
-        return r, list(lines), p.rw("ARANK"), [x[0] for x in bag()]
-    b1 = book(1)
-    b2 = book(1)
-    b3 = book(3)
-    check("B1 Warrior D1: learns Power Strike; D1 again: Power Strike rank 2; D3: Whirlwind; book consumed",
-          (b1, b2, b3) == ((1, ["YOU READ THE WAR TOME", "YOU LEARN POWER STRIKE!"], 1, [I("F_APPLE")]),
-                           (1, ["YOU READ THE WAR TOME", "POWER STRIKE RISES TO RANK 2"], 2, [I("F_APPLE")]),
-                           (1, ["YOU READ THE WAR TOME", "YOU LEARN WHIRLWIND!"], 6, [I("F_APPLE")])), (b1, b2, b3))
-    rk = []
-    for _ in range(3):
-        rk.append(book(3)[2])
-    check("B2 rank-ups until both are rank 3 (random target, each +1)", rk[-1] == 0b1111 and
-          all(bin(a).count("1") <= bin(b).count("1") for a, b in zip([6] + rk, rk)), rk)
-    e0 = p.ent(0)
-    hp0, mhp0, mp0, mmp0 = e0["HP"], e0["MAXHP"], p.rb("MP"), p.rb("MAXMP")
-    b4 = book(3)
-    e1 = p.ent(0)
-    check("B3 all rank 3: Tome of Vigor HP / MAXHP +3, MP / MAXMP +1, 'YOU FEEL MORE VIGOROUS'",
-          (b4[1], e1["HP"] - hp0, e1["MAXHP"] - mhp0, p.rb("MP") - mp0, p.rb("MAXMP") - mmp0) ==
-          (["YOU READ THE WAR TOME", "YOU FEEL MORE VIGOROUS"], 3, 3, 1, 1), (b4, e1, hp0, mhp0))
+        e1 = p.ent(0)
+        return dict(r=r, lines=list(lines), arank=p.rw("ARANK"), rng=p.rw("RNG_STATE"),
+                    bag=[x[0] for x in bag()], dhp=e1["HP"] - e0["HP"], dmhp=e1["MAXHP"] - e0["MAXHP"],
+                    dmp=p.rb("MP") - mp0)
+
+    def unpack(av, n):
+        return [(av >> (2 * k)) & 3 for k in range(n)], (av >> 10) & 3
+
+    def book_check(kind, depth, ranks, dry, seed):
+        """One seeded read compared with tests/book_model.py: the new ARANK (ranks + BOOK_DRY), the RNG
+        (0 or exactly 1 rng_next), the line, the tome's stats, the book consumed."""
+        got = book(depth, ranks, dry, seed)
+        exp = BM.book_read(kind, depth, ranks, dry, seed)
+        n = len(ranks)
+        e_ranks, e_dry = (exp["ranks"], exp["dry"]) if exp["act"] != "tome" else (ranks, dry)
+        g_ranks, g_dry = unpack(got["arank"], n)
+        nm = NAMES[kind]
+        if exp["act"] == "learn":
+            ln = "YOU LEARN " + nm[exp["k"]] + "!"
+        elif exp["act"] == "rank":
+            ln = nm[exp["k"]] + " RISES TO RANK " + str(e_ranks[exp["k"]])
+        else:
+            ln = "YOU FEEL MORE VIGOROUS" if kind == K_KNIGHT else "YOU FEEL MORE POWERFUL"
+        stats = (3, 3, 1) if kind == K_KNIGHT else (1, 1, 3)       # tome: dHP, dMAXHP, dMP
+        want_stats = stats if exp["act"] == "tome" else (0, 0, 0)
+        ok = (got["r"] == 1 and (g_ranks, g_dry) == (e_ranks, e_dry) and got["rng"] == exp["rng"]
+              and got["lines"][1:] == [ln] and got["bag"] == [I("F_APPLE")]
+              and (got["dhp"], got["dmhp"], got["dmp"]) == want_stats)
+        return ok, (kind, depth, ranks, dry, seed, got, exp)
+
+    # B1..B8: scripted rules (the doc's step order)
+    scene(K_KNIGHT)
+    p.wb("MAXMP", 40)
+    b1 = book(8, [0, 0], 0, 0x1234)
+    check("B1 starter: no ability known -> slot 0 (Power Strike) at any depth, 0 RNG calls, book consumed",
+          (b1["lines"], b1["arank"], b1["rng"], b1["bag"]) ==
+          (["YOU READ THE WAR TOME", "YOU LEARN POWER STRIKE!"], 1, 0x1234, [I("F_APPLE")]), b1)
+    b2 = book(1, None, 0, 0x2222)
+    check("B2 Warrior D1, Power Strike known, Whirlwind locked: the one candidate = a rank-up (1 RNG call)",
+          (b2["lines"][1], b2["arank"] & 0x3FF, b2["rng"] != 0x2222) == ("POWER STRIKE RISES TO RANK 2", 2, True), b2)
+    b3 = book(3, [3, 0], 0, 0x3333)
+    check("B3 Warrior D3, PS III: Whirlwind (unlock D3) is the only candidate -> learned",
+          (b3["lines"][1], b3["arank"] & 0x3FF) == ("YOU LEARN WHIRLWIND!", 3 | 1 << 2), b3)
+    b4 = book(3, [3, 3], 0, 0x4444)
+    check("B4 Warrior all rank 3: Tome of Vigor HP / MAXHP +3, MP / MAXMP +1, 'YOU FEEL MORE VIGOROUS', 0 RNG",
+          (b4["lines"][1], b4["dhp"], b4["dmhp"], b4["dmp"], b4["rng"]) ==
+          ("YOU FEEL MORE VIGOROUS", 3, 3, 1, 0x4444), b4)
     scene(K_WIZARD)
-    m1 = book(1)
-    m2 = book(2)
-    m3 = book(0)
-    check("B4 Mage: D1 Spark, D2 Firebolt; PROTO depth 0 with Spark + Firebolt known: a rank-up",
-          (m1[1][1], m1[2], m2[1][1], m2[2], m3[1][1].endswith("RISES TO RANK 2")) ==
-          ("YOU LEARN SPARK!", 1, "YOU LEARN FIREBOLT!", 5, True), (m1, m2, m3))
+    m1 = book(0, [0] * 5, 0, 0x5555)
+    m2 = book(1, [1, 0, 0, 0, 0], 0, 0x6666)
+    check("B5 Mage: the first book = Spark (any depth, 0 RNG); D1 with only Spark known: Spark II (never Firebolt)",
+          (m1["lines"][1], m1["rng"], m2["lines"][1]) == ("YOU LEARN SPARK!", 0x5555, "SPARK RISES TO RANK 2"), (m1, m2))
+    m3 = book(8, [3, 0, 0, 0, 0], 2, 0x7777)
+    check("B6 pity: BOOK_DRY 2 + an eligible unlocked ability -> the earliest-depth one (Firebolt), 0 RNG, BOOK_DRY reset",
+          (m3["lines"][1], m3["rng"], m3["arank"] >> 10) == ("YOU LEARN FIREBOLT!", 0x7777, 0), m3)
+    m4 = book(8, [2, 3, 3, 3, 3], 0, 0x8888)
+    check("B7 Mage Spark II + the rest rank 3: Spark III (the only candidate)",
+          m4["lines"][1] == "SPARK RISES TO RANK 3", m4)
+    m5 = book(8, [3] * 5, 0, 0x9999)
+    check("B7 Mage all rank 3: Tome of Power (MAXMP / MP +3, HP / MAXHP +1), 0 RNG",
+          (m5["lines"][1], m5["dmp"], m5["dhp"], m5["dmhp"], m5["rng"]) == ("YOU FEEL MORE POWERFUL", 3, 1, 1, 0x9999), m5)
+    seen = set()
+    for sd in range(1, 400, 7):
+        seen.add(book(8, [3, 0, 0, 0, 0], 0, sd)["lines"][1])
+    check("B8 no keystone: Mage Spark III at D8, BOOK_DRY 0: the pick is uniform over the 4 unlearned spells",
+          len(seen) == 4 and "YOU LEARN FIREBOLT!" in seen, seen)
+
+    # B9: a seeded random sweep == the model (every branch: depth gate, pity, uniform pick, tome, dry bookkeeping)
+    rnd = random.Random(12)
+    for kind in (K_KNIGHT, K_WIZARD):
+        scene(kind)
+        p.wb("MAXMP", 60)
+        n = 2 if kind == K_KNIGHT else 5
+        bad, tomes, cases = [], 0, 70
+        for _ in range(cases):
+            ranks = [rnd.choice((0, 0, 1, 2, 3)) for _ in range(n)]
+            if not any(ranks):
+                ranks[rnd.randrange(n)] = rnd.randrange(1, 4)
+            ok, det = book_check(kind, rnd.randrange(0, 9), ranks, rnd.randrange(3), rnd.randrange(1, 65536))
+            tomes += det[6]["act"] == "tome"
+            if not ok:
+                bad.append(det)
+        check(f"B9 {'Warrior' if kind == K_KNIGHT else 'Mage'} {cases} seeded random reads == book_model "
+              f"(ARANK + BOOK_DRY, RNG, line, tome stats; {tomes} tomes)", not bad, bad[:1])
+
+    # B10: a whole run of books D1..D7 (a 2nd on D4..D7), seeded: ARANK after each read == the model
+    for kind, seed0 in ((K_KNIGHT, 0xACE1), (K_WIZARD, 0xBEEF), (K_WIZARD, 0x1357)):
+        scene(kind)
+        p.wb("MAXMP", 60)
+        n = 2 if kind == K_KNIGHT else 5
+        ranks, dry, st = [0] * n, 0, seed0
+        p.wmem(S["ARANK"], [0, 0])
+        p.wmem(S["RNG_STATE"], w16(st))
+        bad = []
+        for depth in [1, 2, 3, 4, 4, 5, 5, 6, 7, 7]:
+            exp = BM.book_read(kind, depth, ranks, dry, st)
+            got = book(depth)
+            if exp["act"] != "tome":
+                ranks, dry = exp["ranks"], exp["dry"]
+            st = exp["rng"]
+            if (unpack(got["arank"], n), got["rng"]) != ((ranks, dry), st):
+                bad.append((depth, got, exp))
+        check(f"B10 {'Warrior' if kind == K_KNIGHT else 'Mage'} seed {seed0:#06x}: 10 sequential reads == book_model",
+              not bad, bad[:1])
 
     # ======================= T: teleport fuzz (generated levels) ==================
     p.proto_start = 0

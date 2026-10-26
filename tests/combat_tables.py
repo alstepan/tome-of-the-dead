@@ -66,14 +66,16 @@ STEPS = {4: (1, 0), 6: (0, 1), 8: (1, 0)}                    # level -> (atk, ev
 
 # rank table, §5: (MP, range, die, bonus, bounces, effect) per rank 1..3, cumulative
 # effect: status = chance<<4 | turns; Firebolt = burst die (|$80 spare); Whirlwind = to-hit
+# RANK1 (game.md §5 rev 6): MP per rank 2/4/6, 3/5/8 x3, 5/8/12, 3/5/7, 4/7/10 and the damage columns.
+# Power Strike: die = multiplier code (0/1/2 = x2 / x2.5 / x3), bounces = extra to-hit (+2 base in ab_def).
 RANKS = {
-    "Spark":     [(2, 6, 4, 1, 0, 0x44), (2, 8, 4, 2, 0, 0x44), (2, 8, 4, 3, 0, 0x24)],
-    "Firebolt":  [(3, 12, 8, 2, 0, 4), (3, 12, 8, 3, 0, 6), (3, 12, 8, 4, 0, 0x86)],
-    "Frost":     [(3, 12, 6, 0, 1, 2), (3, 12, 6, 0, 2, 3), (3, 12, 6, 2, 2, 4)],
-    "Drain":     [(3, 5, 6, 1, 0, 0), (3, 8, 6, 2, 0, 0), (2, 8, 6, 3, 0, 0)],
-    "Lightning": [(5, 28, 8, 3, 2, 0), (5, 28, 8, 4, 2, 0), (4, 28, 8, 4, 3, 0)],
-    "Power":     [(3, 0, 0, 0, 0, 1), (2, 0, 0, 0, 0, 1), (2, 0, 0, 0, 0, 2)],
-    "Whirl":     [(4, 0, 0, 1, 0, 0), (4, 0, 0, 2, 0, 0), (3, 0, 0, 2, 0, 2)],
+    "Spark":     [(2, 6, 4, 1, 0, 0x44), (4, 8, 8, 2, 0, 0x44), (6, 8, 8, 4, 0, 0x24)],
+    "Firebolt":  [(3, 12, 8, 2, 0, 4), (5, 12, 8, 5, 0, 6), (8, 12, 10, 7, 0, 0x86)],
+    "Frost":     [(3, 12, 6, 0, 1, 2), (5, 12, 6, 1, 2, 3), (8, 12, 6, 3, 2, 4)],
+    "Drain":     [(3, 5, 6, 1, 0, 0), (5, 8, 6, 3, 0, 0), (8, 8, 8, 5, 0, 0)],
+    "Lightning": [(5, 28, 8, 3, 2, 0), (8, 28, 8, 6, 2, 0), (12, 28, 8, 8, 3, 0)],
+    "Power":     [(3, 0, 0, 0, 0, 1), (5, 0, 1, 0, 1, 1), (7, 0, 2, 0, 2, 2)],
+    "Whirl":     [(4, 0, 0, 1, 0, 0), (7, 0, 0, 3, 0, 0), (10, 0, 0, 4, 0, 2)],
 }
 AMMO = [(0, 6, 4, 2, 0, 0), (0, 14, 6, 1, 0, 0)]             # dagger r6 1d4+2, bow r14 1d6+1
 
@@ -159,7 +161,23 @@ def main():
             if n is not None and not f0 <= sym[f"FID_{n}"] < f0 + fn:
                 fails.append(f"def {i} fid {n} outside K_{cls} [{f0}, {f0 + fn})")
 
-    n = 32 + 8 + 2 + 8 + 21 + 2 + 9
+    # RANK1: every ranked info line shows its rank's MP cost and range (name field 16 | numbers 12 | notes 14)
+    info = {}
+    for ln in open(os.path.join(REPO, "src/strings.txt")):
+        m = re.match(r'^(info_\w+)\s+"(.*)"\s*$', ln)
+        if m:
+            info[m.group(1)] = m.group(2)
+    stems = {"Spark": "spark", "Firebolt": "firebolt", "Frost": "frost", "Drain": "drain",
+             "Lightning": "lightning", "Power": "power", "Whirl": "whirl"}
+    for name, rows in RANKS.items():
+        for r, row in enumerate(rows):
+            line = info[f"info_{stems[name]}" + ("" if r == 0 else str(r + 1))]
+            mm = re.match(r"^(.{16})MP(\d+) RNG(\d+)", line)
+            chk(f"info line {name} rank {r + 1} fits 42", [len(line) <= 42], [True])
+            chk(f"info line {name} rank {r + 1} MP / RNG", [mm and int(mm.group(2)), mm and int(mm.group(3))],
+                [row[0], row[1] if row[1] else 1])
+
+    n = 32 + 8 + 2 + 8 + 21 + 2 + 9 + 42
     if fails:
         print("combat_tables: FAIL")
         for f in fails:

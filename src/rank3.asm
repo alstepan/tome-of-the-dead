@@ -7,10 +7,14 @@
 ; abil_load — far3 from intent7 ic_disp, A = ABL_* (a ranked ability must be
 ; learned: ARANK rank 1..3; a rank of 0 reads the rank-1 row). ABIL_DESC =
 ; its ab_def row (ABD_STRIDE B), ABIL_RK = its rank row (RK_STRIDE B: ab_rank
-; at the hero's rank, ab_ammo for the dagger / bow). The class's ability index
-; k for ARANK: Mage k = ABL_*, Warrior k = ABL_* - ABL_POWER.
+; at the highest rank <= the hero's that the hero can pay now, MP >= RK_MP;
+; rank 1 is the floor (auto-downcast, game.md §5): so a caller's MP < RK_MP
+; test is the rank-1 NO MANA threshold; ab_ammo for the dagger / bow). A
+; spell's row is also copied to CAST_ROW (the stable copy the cast reads).
+; The class's ability index k for ARANK: Mage k = ABL_*, Warrior k = ABL_* -
+; ABL_POWER.
 ; Out: L = ABD_FLAGS (ABF_*), B = ABL_* (far3 passes BC / HL out).
-; Clobbers: A, C, DE, HL      ~0.6k T (2 LDIRs)
+; Clobbers: A, C, DE, HL      ~0.7k T (2 LDIRs)
 ;------------------------------------------------------------------------------
 abil_load:
                 ld   b, a                      ; B = ABL
@@ -38,13 +42,14 @@ abil_load:
                 jr   nz, .r
                 inc  a                         ; unlearned: the rank-1 row
 .r:             dec  a
-                ld   c, a
+                ld   c, a                      ; C = rank - 1
                 ld   a, b
                 add  a, a
                 add  a, b                      ; 3 * ABL
                 add  a, c                      ; row = 3 * ABL + rank - 1
                 jr   .row
 .ammo:          add  a, ABL_RANKED * RANK_MAX  ; ab_ammo follows ab_rank (ASSERTed)
+                ld   c, 0                      ; (no ranks: cost 0, no downcast)
 .row:           ld   l, a
                 add  a, a
                 add  a, l
@@ -55,9 +60,29 @@ abil_load:
                 ld   de, ab_rank
                 add  hl, de
                 pop  de
+.dc:            ld   a, (MP)                   ; auto-downcast: rank - 1 rows down while
+                cp   (hl)                      ; the cost exceeds MP (rank 1 stays)
+                jr   nc, .go
+                ld   a, c
+                or   a
+                jr   z, .go
+                dec  c
+                ld   a, l
+                sub  RK_STRIDE
+                ld   l, a
+                jr   nc, .dc
+                dec  h
+                jr   .dc
+.go:            ld   c, RK_STRIDE
+                call .cp
+                ld   a, b
+                cp   ABL_POWER
+                jr   nc, .fl                   ; a spell: ABIL_RK -> CAST_ROW
+                ld   hl, ABIL_RK
+                ld   de, CAST_ROW
                 ld   c, RK_STRIDE
                 call .cp
-                ld   a, (ABIL_DESC + ABD_FLAGS)
+.fl:            ld   a, (ABIL_DESC + ABD_FLAGS)
                 ld   l, a
                 ret
 .cp:            ld   a, (hl)                   ; C bytes HL -> DE (B kept)
@@ -69,66 +94,7 @@ abil_load:
                 ret
                 ASSERT ab_ammo == ab_rank + ABL_RANKED * RANK_MAX * RK_STRIDE
                 ASSERT ABL_RANKED == ABL_DAGGER && ABL_BOW == ABL_DAGGER + 1 && ABL_WHIRL == ABL_POWER + 1
-                ASSERT RANK_MAX == 3 && RK_STRIDE == 6 && ABD_STRIDE == 10
-
-;------------------------------------------------------------------------------
-; rank_sync — far3 (D3-9b reuses it after a learn / rank-up): RANK_ROWS row k <-
-; the ab_rank row of the hero's current rank, for every k whose ARANK rank is
-; != 0 (rank 0 rows are left alone). Class base: Mage ability k, Warrior
-; ABL_POWER + k (k = 0..4 is safe for both: a Warrior's bits 4..9 are 0).
-; HL walks the ab_rank class rows (RANK_MAX * RK_STRIDE = 18 B per k), BC the
-; RANK_ROWS destination (LDIR leaves it advanced); the end test is the low
-; byte of the last row + RR_STRIDE, as RANK_ROWS never crosses a page.
-; Clobbers: A, BC, DE, HL      ~1.2k T
-;------------------------------------------------------------------------------
-rank_sync:
-                ld   hl, ab_rank
-                ld   a, (HERO_KIND)
-                or   a                         ; K_KNIGHT == 0: Warrior
-                jr   nz, .m
-                ld   de, ABL_POWER * RANK_MAX * RK_STRIDE
-                add  hl, de
-.m:             ld   de, (ARANK)               ; DE shifts right 2 bits per k
-                ld   bc, RANK_ROWS
-.l:             ld   a, e
-                and  3
-                jr   z, .skip
-                push hl
-                push de
-                dec  a
-                ld   e, a
-                add  a, a
-                add  a, e
-                add  a, a                      ; 6 * (rank - 1)
-                ld   e, a
-                ld   d, 0
-                add  hl, de
-                ld   d, b
-                ld   e, c
-                ld   bc, RK_STRIDE
-                ldir
-                ld   b, d                      ; BC = the next row
-                ld   c, e
-                pop  de
-                pop  hl
-                jr   .adv
-.skip:          ld   a, c
-                add  a, RK_STRIDE              ; RANK_ROWS $E0..$FE: no carry
-                ld   c, a
-.adv:           srl  d
-                rr   e
-                srl  d
-                rr   e
-                push de
-                ld   de, RANK_MAX * RK_STRIDE
-                add  hl, de
-                pop  de
-                ld   a, c
-                cp   (RANK_ROWS + RANK_N * RK_STRIDE) & $FF
-                jr   nz, .l
-                ret
-                ASSERT (RANK_ROWS >> 8) == ((RANK_ROWS + RANK_N * RK_STRIDE - 1) >> 8)
-                ASSERT RR_STRIDE == RK_STRIDE && RANK_N == 5
+                ASSERT RANK_MAX == 3 && RK_STRIDE == 6 && ABD_STRIDE == 10 && RR_STRIDE == RK_STRIDE && ABL_SPARK == 0
 
 ;------------------------------------------------------------------------------
 ; proj_rel — far3 from the bank-7 releases (spell_fire; ammo_fire may share
@@ -188,10 +154,12 @@ melee_hit:
                 ld   a, (ABIL_RK + RK_EFFECT)
                 ld   e, a                      ; E = RK_EFFECT
                 bit  ABF_DMGX2_B3, c
-                jr   nz, .h
-                add  a, b                      ; Whirlwind: + the rank's to-hit
+                jr   z, .ww
+                ld   a, (ABIL_RK + RK_BOUNCES) ; Power Strike: the rank's to-hit +0 / 1 / 2
+                jr   .th
+.ww:            ld   e, 0                      ; Whirlwind: + RK_EFFECT to-hit, no effect
+.th:            add  a, b
                 ld   b, a
-                ld   e, 0                      ; (no effect)
 .h:             pop  af
                 push af
                 push de
@@ -219,10 +187,27 @@ melee_hit:
                 bit  ABF_DMGX2_B3, c
                 ld   c, a
                 jr   z, .d
-                sla  b                         ; Power Strike: x 2
-                jr   nc, .s
+                ld   h, 0                      ; Power Strike: 2d + RK_DIE (0 / 1 / 2) x d / 2
+                ld   l, b                      ; = x2 / x2.5 / x3, saturating at $FF
+                add  hl, hl
+                ld   a, (ABIL_RK + RK_DIE)
+                or   a
+                jr   z, .sat
+                cp   2
+                ld   a, b
+                jr   z, .x3
+                srl  a                         ; x2.5: + d div 2
+.x3:            add  a, l
+                ld   l, a
+                jr   nc, .sat
+                inc  h
+.sat:           ld   a, h
+                or   a
+                ld   b, l
+                jr   z, .s
                 ld   b, $FF
-.s:             or   EFX_STUNNED << DH_EFX_SHIFT
+.s:             ld   a, (ABIL_DESC + ABD_DTY)
+                or   EFX_STUNNED << DH_EFX_SHIFT
                 ld   c, a
 .d:             pop  af                        ; A = slot
                 call deal_hit                  ; L = HP lost (all but IX)

@@ -340,7 +340,7 @@ WARRIOR_DAGGERS EQU 3                          ; (EQUs: no bytes in bank 7)
 ; only; 3E: delete this block, the jump in hero_st_init and DEBUG_KIT; D3-7
 ; T5: moved from bank-3 rank3.asm for bank-3 room).
 ; Mage: 5 spells rank 1, MP 40/40. Warrior: bow, 20 arrows, 8 daggers, Power
-; Strike + Whirlwind rank 1, MP 20/20. Then rank_sync.
+; Strike + Whirlwind rank 1, MP 20/20.
 ; Clobbers: A, BC, DE, HL
 ;------------------------------------------------------------------------------
 debug_kit:
@@ -362,6 +362,5 @@ debug_kit:
                 ld   a, b
                 ld   (MP), a
                 ld   (MAXMP), a
-                ld   hl, rank_sync             ; bank 3
-                jp   far3
+                ret
     ENDIF

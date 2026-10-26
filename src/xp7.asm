@@ -191,14 +191,14 @@ xp_level:
                 ASSERT TXL_XP_REACH + 2 <= LOG_MAX
 
 ;------------------------------------------------------------------------------
-; abil_learn — the read-time book entry (game.md §5 rules 1 / 2; the READ verb
-; and the choice of k are 3E's). A = class ability index k (Mage 0..4 =
+; abil_learn — the read-time book entry's apply step (game.md §5; the READ verb
+; and the choice of k are fx_book's, R6). A = class ability index k (Mage 0..4 =
 ; ABL_*, Warrior 0..1 = ABL_* - ABL_POWER). Rank 0 -> 1: "YOU LEARN <NAME>!";
-; rank 1..2 -> +1: "<NAME> RISES TO RANK n"; rank 3: nothing (L = 0; rule 3,
-; the tome, is 3E's). ARANK += 1 << 2k, rank_sync (bank 3: the RANK_ROWS
-; row), PD_ICONS | PD_INFO (the slot's outline / info line).
+; rank 1..2 -> +1: "<NAME> RISES TO RANK n"; rank 3: nothing (L = 0).
+; ARANK += 1 << 2k (BOOK_DRY bits 10-11 untouched), PD_ICONS | PD_INFO (the
+; slot's outline / info line).
 ; far7-callable (no IX use). Out: L = the new rank (0 = already at rank 3).
-; Clobbers: A, BC, DE, HL.   ~5k T (rank_sync + one log line)
+; Clobbers: A, BC, DE, HL.   ~1k T (one log line)
 ;------------------------------------------------------------------------------
 abil_learn:
                 ld   b, a                      ; B = k
@@ -219,14 +219,10 @@ abil_learn:
 .a:             ld   de, (ARANK)
                 add  hl, de
                 ld   (ARANK), hl
-                push bc
-                ld   hl, rank_sync             ; bank 3 (nests)
-                call far3
                 ld   hl, PANEL_DIRTY
                 ld   a, (hl)
                 or   PD_ICONS | PD_INFO
                 ld   (hl), a
-                pop  bc
                 ld   a, (HERO_KIND)            ; name = TX_AB_SPARK + ABL_*
                 or   a
                 ld   a, c

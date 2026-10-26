@@ -11,7 +11,7 @@ SPELL_FLASH     EQU 5                          ; the cast's ticks (wz_cast: CAST
 ; abil_spell — intent7 ic_disp (ABF_SPELL), IX = hero, B = ABL_SPARK ..
 ; ABL_LIGHTNING (= the Mage's ability index k), ABIL_DESC loaded (abil_load).
 ; Refused (L = IC_REFUSED with its line, 0 silent; no turn, a message): unlearned -> NOT LEARNED; MP < the
-; RANK_ROWS row's RR_MP -> NO MANA; mid-ladder (game.md §2.3) -> NO TARGET;
+; CAST_ROW's RR_MP (the highest rank affordable, abil_load; rank 1 floor) -> NO MANA; mid-ladder (game.md §2.3) -> NO TARGET;
 ; act_begin's lead col 0 / 31 -> L = 0, no message.
 ; Accepted (input tick): act_begin (TURN_PEND, ACT_ABL = B, ACT_AT, MON_AT),
 ; MP -= cost, PD_MP, the abl_seq sequence (wz_cast), the hero flashes the
@@ -23,7 +23,7 @@ abil_spell:
                 call abil_rank                 ; bank 2: Z = unlearned (A, C, HL)
                 ld   a, TX_NOT_LEARNED
                 jp   z, ic_refuse
-                call spell_row                 ; HL = the rank row (RR_MP first)
+                ld   hl, CAST_ROW              ; the rank row of the cast (RR_MP first)
                 ld   a, (MP)
                 cp   (hl)
                 jp   c, ic_no_mana             ; SND-5: + the fizz effect
@@ -34,7 +34,7 @@ abil_spell:
                 dec  l
                 inc  l
                 ret  z                         ; no turn, no message
-                call spell_row
+                ld   hl, CAST_ROW
                 ld   a, (MP)
                 sub  (hl)                      ; (MP >= cost: checked above)
                 ld   (MP), a
@@ -48,22 +48,9 @@ abil_spell:
                 ret
                 ASSERT RR_MP == 0 && ABL_SPARK == 0
 
-; spell_row — B = ABL_SPARK..ABL_LIGHTNING -> HL = RANK_ROWS + B * RR_STRIDE
-; (the hero's current-rank row, rank_sync).  Clobbers: A, HL
-spell_row:
-                ld   a, b
-                add  a, a
-                add  a, b
-                add  a, a                      ; 6 * B (<= 24)
-                add  a, RANK_ROWS & $FF        ; RANK_ROWS never crosses a page
-                ld   l, a
-                ld   h, RANK_ROWS >> 8
-                ret
-                ASSERT RR_STRIDE == 6 && (RANK_ROWS >> 8) == ((RANK_ROWS + RANK_N * RR_STRIDE - 1) >> 8)
-
 ;------------------------------------------------------------------------------
 ; spell_fire — the spell's release (act_fire, fire tick f): proj_fire (bank 3,
-; via proj_rel: A = B, HL = its RANK_ROWS row, E = FXD_DELAY 0: the projectile
+; via proj_rel: A = B, DE = CAST_ROW, E = FXD_DELAY 0: the projectile
 ; appears now; fx_start's drop counts in FX_DROP). Drain Life: when it took
 ; HP from a body other than the caster (pf_lost > 0; a self-hit heals nothing,
 ; game.md §6 "Logic"), the hero flashes ATTR_HEAL from the release until
@@ -73,8 +60,7 @@ spell_row:
 ; proj_pre: <= ~45k T for 16 strikes, contended)
 ;------------------------------------------------------------------------------
 spell_fire:
-                call spell_row
-                ex   de, hl                    ; far3 takes HL as its target: the row in DE
+                ld   de, CAST_ROW              ; far3 takes HL as its target: the row in DE
                 ld   a, b
                 ld   hl, proj_rel
                 call far3                      ; L = pf_stop; IX = hero

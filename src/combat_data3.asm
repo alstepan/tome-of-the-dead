@@ -74,9 +74,9 @@ RANK_MAX        EQU 3
 ; Ranks are cumulative (§5): each row is the full effective value at that rank.
 RK_MP           EQU 0               ; MP cost
 RK_RANGE        EQU 1               ; range in cells (melee abilities: 0 = reach)
-RK_DIE          EQU 2               ; damage die sides (0 = the weapon die; see ABF_DMGX2)
+RK_DIE          EQU 2               ; damage die sides (0 = the weapon die; Power Strike: multiplier code, see its rows)
 RK_BONUS        EQU 3               ; flat damage bonus (Whirlwind: added to weapon die)
-RK_BOUNCES      EQU 4               ; wall reversals allowed
+RK_BOUNCES      EQU 4               ; wall reversals allowed (Power Strike: extra to-hit)
 RK_EFFECT       EQU 5               ; per-ability, see below
 RK_STRIDE       EQU 6
 ; RK_EFFECT meaning (ability's ABF_* flags say which):
@@ -94,34 +94,36 @@ RKE_SPARE       EQU $80
     ENDM
 
 ab_rank:
-; Spark: 2 MP (B20) r6 1d4+1 SHOCK, 1 in 4 CONFUSED 4 (D3-8c) | r2 1d4+2 range 8 | r3 1d4+3, CONFUSED 1 in 2 (4)
+; RANK1 (game.md §5 rev 6): rank 2 / 3 cost 1.6-3x rank 1 for more damage per cast.
+; Spark: 2 MP r6 1d4+1, 1 in 4 CONFUSED 4 (D3-8c) | 4 MP r8 1d8+2 | 6 MP r8 1d8+4, CONFUSED 1 in 2
                 RANK 2, 6, 4, 1, 0, (4 << 4) | 4
-                RANK 2, 8, 4, 2, 0, (4 << 4) | 4
-                RANK 2, 8, 4, 3, 0, (2 << 4) | 4
-; Firebolt: 3 MP r12 1d8+2, burst 1d4 | 1d8+3, burst 1d6 | 1d8+4, burst spares caster
+                RANK 4, 8, 8, 2, 0, (4 << 4) | 4
+                RANK 6, 8, 8, 4, 0, (2 << 4) | 4
+; Firebolt: 3 MP r12 1d8+2, burst 1d4 | 5 MP 1d8+5, burst 1d6 | 8 MP 1d10+7, burst spares caster
                 RANK 3, 12, 8, 2, 0, 4
-                RANK 3, 12, 8, 3, 0, 6
-                RANK 3, 12, 8, 4, 0, 6 | RKE_SPARE
-; Frost Shard: 3 MP r12 1d6, 1 bounce, freeze 2 | freeze 3, 2 bounces | 1d6+2, freeze 4
+                RANK 5, 12, 8, 5, 0, 6
+                RANK 8, 12, 10, 7, 0, 6 | RKE_SPARE
+; Frost Shard: 3 MP r12 1d6, 1 bounce, freeze 2 | 5 MP 1d6+1, 2 bounces, freeze 3 | 8 MP 1d6+3, freeze 4
                 RANK 3, 12, 6, 0, 1, 2
-                RANK 3, 12, 6, 0, 2, 3
-                RANK 3, 12, 6, 2, 2, 4
-; Drain Life: 3 MP r5 1d6+1 | 1d6+2, range 8 | 2 MP, 1d6+3
+                RANK 5, 12, 6, 1, 2, 3
+                RANK 8, 12, 6, 3, 2, 4
+; Drain Life: 3 MP r5 1d6+1 | 5 MP r8 1d6+3 | 8 MP r8 1d8+5
                 RANK 3, 5, 6, 1, 0, 0
-                RANK 3, 8, 6, 2, 0, 0
-                RANK 2, 8, 6, 3, 0, 0
-; Lightning: 5 MP r28 1d8+3, 2 bounces | 1d8+4 | 4 MP, 3 bounces
+                RANK 5, 8, 6, 3, 0, 0
+                RANK 8, 8, 8, 5, 0, 0
+; Lightning: 5 MP r28 1d8+3, 2 bounces | 8 MP 1d8+6 | 12 MP 1d8+8, 3 bounces
                 RANK 5, 28, 8, 3, 2, 0
-                RANK 5, 28, 8, 4, 2, 0
-                RANK 4, 28, 8, 4, 3, 0
-; Power Strike: 3 MP, x2 (die 0 = weapon), stun 1 | 2 MP | stun 2
+                RANK 8, 28, 8, 6, 2, 0
+                RANK 12, 28, 8, 8, 3, 0
+; Power Strike (RK_DIE = the multiplier code 0 / 1 / 2 = x2 / x2.5 / x3, RK_BOUNCES = the to-hit
+; added to ab_def's +2; RK_EFFECT = stun turns): 3 MP x2 +2 stun 1 | 5 MP x2.5 +3 stun 1 | 7 MP x3 +4 stun 2
                 RANK 3, 0, 0, 0, 0, 1
-                RANK 2, 0, 0, 0, 0, 1
-                RANK 2, 0, 0, 0, 0, 2
-; Whirlwind: 4 MP, dmg +1 | dmg +2 | 3 MP, to-hit +2
+                RANK 5, 0, 1, 0, 1, 1
+                RANK 7, 0, 2, 0, 2, 2
+; Whirlwind: 4 MP, dmg +1 | 7 MP, dmg +3 | 10 MP, dmg +4, to-hit +2
                 RANK 4, 0, 0, 1, 0, 0
-                RANK 4, 0, 0, 2, 0, 0
-                RANK 3, 0, 0, 2, 0, 2
+                RANK 7, 0, 0, 3, 0, 0
+                RANK 10, 0, 0, 4, 0, 2
 RK_LEN          EQU $ - ab_rank
                 ASSERT RK_LEN == ABL_RANKED * RANK_MAX * RK_STRIDE      ; 126 B
 

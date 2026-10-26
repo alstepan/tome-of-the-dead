@@ -17,7 +17,7 @@ item_mp + the poll (xp2.asm / icons.asm); the rank info line item_info (D3-9a).
   M   MP regen: Warrior +1 on the 8th turn, Mage on the 6th (B20), +1 + MAXMP div 16; never above MAXMP;
       none while WEAK (MP_RG frozen); the panel's MP_SH follows MP
   R   abil_learn per ability (Mage k 0..4, Warrior k 0..1): ranks 1, 2, 3 ->
-      RANK_ROWS row k == the ab_rank row of that rank; a 4th call returns 0;
+      abil_load's ABIL_RK == the ab_rank row of that rank; a 4th call returns 0;
       "YOU LEARN SPARK!", "SPARK RISES TO RANK 2"; the info line id of the
       selected rank-3 ability is its info_<name>3 line (D3-9a)
 Run: ZRCP_PORT=<port> python3 tests/xp.py
@@ -242,7 +242,8 @@ def run(h, p, check):
                 lines.clear()
                 got = far7("abil_learn", k)
                 rank = (p.rw("ARANK") >> (2 * k)) & 3
-                row = list(p.z.read_memory(S["RANK_ROWS"] + 6 * k, 6))
+                stub([0x3E, abl, 0x21] + w16(S["abil_load"]) + [0xCD] + w16(S["far3"]))   # (MP 20 covers every rank)
+                row = list(p.z.read_memory(S["ABIL_RK"], 6))
                 want = list(b3[ab + (abl * 3 + r - 1) * 6: ab + (abl * 3 + r) * 6])
                 nm = TXT[["ab_spark", "ab_firebolt", "ab_frost", "ab_drain", "ab_lightning", "ab_power",
                           "ab_whirl"][abl]]
@@ -251,7 +252,7 @@ def run(h, p, check):
                     bad.append((k, r, got, rank, row, want, lines, wl))
             if far7("abil_learn", k) != 0 or (p.rw("ARANK") >> (2 * k)) & 3 != 3:
                 bad.append((k, "4th call"))
-        check(f"R1 {'Mage' if hero == K_WIZARD else 'Warrior'} abil_learn ranks 1..3: RANK_ROWS == ab_rank"
+        check(f"R1 {'Mage' if hero == K_WIZARD else 'Warrior'} abil_learn ranks 1..3: abil_load's ABIL_RK == ab_rank"
               " row, lines, 4th call 0", not bad, bad)
         # D3-9a: the selected rank-3 ability's info line is its info_<name>3
         p.select_slot(1)
