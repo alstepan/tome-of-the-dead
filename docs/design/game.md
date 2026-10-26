@@ -154,6 +154,24 @@ pathing change, no off-screen events).
 ALARM's wave code lands in 3F; in 3E the trap is generated and prints the "nothing comes"
 line (the generator must not change between 3E and 3F).
 
+**As built (3E-T16, accepted deviations + user 2026-10-26 flashes; no new graphics).**
+- DART impact: the `arrow_hit` sprite plays for the **Warrior only** — it is not in the Mage's
+  class FX pool, so a Mage hit by a DART shows his hurt reaction alone (accepted, review
+  2026-10-26; no art added).
+- Timing: the trigger / find is decided on the move's input tick; the effect, its lines and
+  the flashes run on the following ticks, then the monster phase (the cast mechanism). On a
+  trigger the plate flashes bright white `$47` for 2 ticks (then DART shows its ink, a
+  one-shot is erased) and the hero flashes the type ink (DART `$42`, GAS `$44` one step,
+  TELEPORT `$43`, ALARM `$46`). On a find (search / sense) the plate blinks bright / off
+  twice, 2 ticks each, then shows its ink, with the `TRAP FOUND:` line.
+- Teleport (scroll and trap): the hero flashes `$43` (bright magenta = the TELEPORT ink; not
+  a hero kind attr, the hit `$42` or the gold `$46`/`$47`) for 3 ticks before the room
+  change (the turn is held 3 ticks) and again for 3 ticks on arrival, with the `DRAIN` SFX.
+- Mage sense also runs after a held Wait and on the room-entry turn; on entry (the
+  transition tick) a sensed trap is drawn at once in its ink, without the blink.
+- No floor item ever shares a trap col: drops (§8.11 rulings 2) skip trap cols, hidden or
+  known.
+
 **Trigger.** A trap fires when a hero move **first brings its col under the body** (walk,
 bump-free step, jump landing, fall landing, ladder step-off onto the storey). Standing on it,
 turning, or waiting does not re-fire; walking off and back on does (DART). A **jump clears

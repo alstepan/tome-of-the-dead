@@ -526,7 +526,7 @@ HUD4_PW         EQU $BFD6           ; 4 B, rows 20..23: cols changed since prese
 LOG_QN          EQU $BFDA           ; pending log messages in LOG_Q
 LOG_Q           EQU $BFE0           ; 8 B: pending log messages (layout: B3B-11)
 LOG_Q_LEN       EQU 8
-STATE_3B_END    EQU $C000           ; $BFF5..$BFFF spare ($BFF4 3E-T0 SFX_XP; $BFF3 SND-5 SFX_NEXT; $BFF1/$BFF2 SND-3 DNG_*; C3-0: JOY_MIRROR $BFEA, hero_defs.asm; C3-2b: EXIT_LOCK $BFD1, FIRE_LOCK $BFDF; SND-2: sound mailbox SND_MODE $BFEB..SFX_REQ $BFF0, defs.asm)
+STATE_3B_END    EQU $C000           ; $BFFB..$BFFF spare (3E-T16: TRP_PRE $BFF5, TRP_WAIT $BFF7, TRP_EV/STEP/ENT $BFF8..$BFFA, item_defs.asm; $BFF4 3E-T0 SFX_XP; $BFF3 SND-5 SFX_NEXT; $BFF1/$BFF2 SND-3 DNG_*; C3-0: JOY_MIRROR $BFEA, hero_defs.asm; C3-2b: EXIT_LOCK $BFD1, FIRE_LOCK $BFDF; SND-2: sound mailbox SND_MODE $BFEB..SFX_REQ $BFF0, defs.asm)
                 ASSERT SND_MODE == JOY_MIRROR + 1 && SFX_REQ == SND_MODE + 5 && SFX_REQ < STATE_3B_END
                 ASSERT DNG_DWELL == SFX_REQ + 1 && DNG_CALM == DNG_DWELL + 1 && SFX_NEXT == DNG_CALM + 1 && SFX_NEXT < STATE_3B_END
                 ASSERT MUS_REQ == SND_MODE + 1 && MUS_SHOT == MUS_REQ + 1 && MUS_STATE == MUS_SHOT + 1 && MUS_CUR == MUS_STATE + 1

@@ -652,6 +652,35 @@ room_status:
                 ASSERT SCR_FEAR_T <= STS_MAX_TURNS && SCR_SLEEP_T <= STS_MAX_TURNS && (ST_FLAGS & $FF) + P_MAX_ENT <= 256
 
 ;------------------------------------------------------------------------------
+; trap_hit — 3E-T16, far3 from R6 trap_turn: the DART trap's hit on the hero
+; (game.md §1.5): 1d4+1 PHYS (DEF applies) + POISON TRAP_DART_PSN through
+; deal_hit (immunity, poison add / cap, wake, death, "YOU ARE POISONED").
+; deal_hit wants an attacker: the hero himself, whose WEAK would add 1 to his
+; own DEF (R1: WEAK is for hero-DEALT hits only, "not to traps") -> the roll
+; gets +1 then, so max(1, roll + 1 - (DEF + 1)) = max(1, roll - DEF).
+; RNG: the d4 (gameplay RNG). Out: L = HP lost.  Clobbers: all but IX.  ~1.5k T + lines
+;------------------------------------------------------------------------------
+trap_hit:
+                push ix
+                ld   ix, P_ENTITIES
+                ld   c, TRAP_DART_DIE
+                call rng_mod                   ; 0..3 (keeps C, DE)
+                add  a, 2                      ; 1d4 + 1
+                ld   b, a
+                ld   a, (ST_FLAGS)
+                and  STS_WEAK | STS_HWEAK
+                jr   z, .nw
+                inc  b
+.nw:            ld   c, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT)
+                ld   e, TRAP_DART_PSN          ; chance 0 = always
+                xor  a                         ; the hero = slot 0
+                call deal_hit
+                pop  ix
+                ret
+                ASSERT TRAP_DART_PSN <= 15 && DTY_PHYS == 0
+tr_ink3:        TRAP_INKS                      ; build_room_map's known-plate attr (item_defs.asm)
+
+;------------------------------------------------------------------------------
 ; efx_tab — per effect id 1..7 (row = (id - 1) * EF_STRIDE): immunity bit
 ; (0 = none: FROZEN follows COLD, WEAK is hero-only), STATUS mask + value,
 ; timer field (EFT_*), the hero's line, the monster suffix (0 = none).

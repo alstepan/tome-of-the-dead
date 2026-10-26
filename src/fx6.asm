@@ -333,8 +333,7 @@ fx_read:
                 jr   nz, .no
                 ld   e, S_FX_GLOWS
                 jr   .ln
-.tp:            ld   a, EX_TELE
-                ld   (EXIT_KIND), a
+.tp:            call tele_arm                  ; 3E-T16: EX_TELE + the flash + the hold
                 jp   fx_turn
                 ASSERT IT_S_FEAR == IT_S_TELEPORT + 1 && IT_S_SLEEP == IT_S_FEAR + 1 && IT_S_ENCHANT == IT_S_SLEEP + 1
 
@@ -611,6 +610,7 @@ tele_pick:
                 jr   z, .k
                 ld   a, EX_UP                  ; storey 1 (FLOOR_ROW1)
 .k:             ld   (EXIT_KIND), a
+                call tele_flash                ; 3E-T16: the arrival flash
                 xor  a
                 ld   e, S_FX_TELEPORTED
                 jp   fx_line

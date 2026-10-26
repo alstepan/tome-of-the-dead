@@ -265,6 +265,12 @@ ap_take:
 ; over the shadow (fl_attr_sh: the cell left falls back to TILE_ATTRS of
 ; its tile). ap_stamp_a: the col in A (3E-T11: far7 from drop_put, R6:
 ; far7 passes A and DE in, not BC).  Clobbers: all but IX, IY.
+; ap_put_a — 3E-T16 (far7 from R6 trap6.asm): the same with the glyph given
+; (D = T_TRAP: a trap plate; the caller set TILE_ATTRS[T_TRAP] first), no
+; FLOOR_LIST scan (no floor item lies on a trap col: the generator, drop_put).
+; ap_stamp itself keeps a known trap's plate when the cell has no item left.
+ap_put_a:       ld   c, a
+                jr   ap_put
 ap_stamp_a:
                 ld   c, a
 ap_stamp:
@@ -293,7 +299,15 @@ ap_stamp:
                 add  a, FL_STRIDE
                 ld   l, a
                 djnz .l
-                ld   a, e
+                ld   a, d                      ; 3E-T16: no item left there: a known
+                or   a                         ; trap's plate stays (R6 trap_glyph;
+                jr   nz, ap_put                ; never generated: the item rules)
+                push bc
+                ld   a, c
+                ld   hl, trap_glyph
+                call far6                      ; (A, DE in; DE out)
+                pop  bc
+ap_put:         ld   a, e
                 rlca
                 and  1                         ; s
                 call storey_row                ; A = 9s + 7 (keeps BC)

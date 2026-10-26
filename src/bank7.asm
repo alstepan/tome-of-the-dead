@@ -118,6 +118,9 @@ turn_input:
                 ld   (LOG_PDIR), a             ; (a replayed tap is spent)
                 ld   (TURN_TICK), a            ; D3-7: the input tick is TURN_TICK 0
                                                ; (set_reaction_at / pf_tick add it)
+                ld   hl, (P_ENTITIES + E_X)    ; 3E-T16: the body before the action (every
+                ld   (TRP_PRE), hl             ; try; trap_turn's "first brings it under")
+                ASSERT E_Y == E_X + 1
                 ld   hl, HST_DONE              ; D3-8: the hero's status step, at the
                 or   (hl)                      ; start of his phase (game.md §6.4), once
                 jr   nz, .act                  ; per turn: an illegal try (no turn) does
@@ -149,7 +152,9 @@ turn_input:
                 jr   nz, .spent                ; before the monster phase); an ability
                 ld   hl, ST_FLAGS              ; turn resolves at its release: act_pend
                 res  STS_GUARD_BIT, (hl)       ; clears it then. (.hw: no action, kept)
-.spent:         xor  a
+.spent:         call trap_chk                  ; 3E-T16: trigger / search / Mage sense (also
+                                               ; the held Wait: sense only, TRP_WAIT 0)
+                xor  a
                 ld   (HST_DONE), a             ; the next turn steps again
                 ld   a, (CLIMB_BLK)            ; B14: any turn but a blocked-climb
                 or   a                         ; wait ends the run of blocks
@@ -166,6 +171,58 @@ turn_input:
                 ld   a, TP_ANIM
                 ld   (TURN_PHASE), a
                 ret
+
+;------------------------------------------------------------------------------
+; trap_chk — 3E-T16 (game.md §1.5): turn_input .spent (every accepted turn,
+; the held Wait too) and end_turn .ex (the room-entry sense). TRP_WAIT (TRW_*)
+; is read and cleared; on an exit / teleport turn (EXIT_KIND set) nothing;
+; else the first unspent trap of CUR_ROOM (the generator puts <= 1 in a room)
+; -> far6 trap_turn (A = TRW_*, DE = the entry): the DECISION only (trigger /
+; Mage sense / search); an event arms the trap sequence (TURN_PEND, ACT_ABL =
+; ABL_TRAP: act_pend runs trap_step on the next ticks, then the monsters).
+; Clobbers: all but IX, IY.   no trap in the room: ~0.15-0.4k T (TRAP_N
+; entries x ~50 T, bank 7 contended); one >= 7 cols off the body: + ~0.1k;
+; nearer: + trap_turn (far6, ~0.9k without an event)
+;------------------------------------------------------------------------------
+trap_chk:
+                ld   hl, TRP_WAIT
+                ld   d, (hl)                   ; D = TRW_*
+                ld   (hl), 0
+                ld   a, (EXIT_KIND)
+                or   a
+                ret  nz
+                ld   a, (TRAP_N)
+                or   a
+                ret  z
+                ld   b, a
+                ld   a, (CUR_ROOM)
+                ld   c, a
+                ld   hl, TRAP_LIST
+.l:             ld   a, (hl)                   ; TR_B0
+                xor  c
+                and  TRF_ROOM_MASK | TRF_SPENT
+                jr   z, .hit
+                inc  l
+                inc  l
+                djnz .l
+                ret
+.hit:           inc  l                         ; pre-filter (no far6): the trap col t
+                ld   a, (hl)                   ; outside x-6 .. x+8 can neither fire
+                dec  l                         ; (x .. x+2), be sensed (x-2 .. x+4)
+                and  TR_COL_MASK               ; nor be searched (x-6 .. x+8)
+                ld   c, a
+                ld   a, (P_ENTITIES + E_X)
+                ld   b, a
+                ld   a, c
+                sub  b
+                add  a, TRAP_SEARCH_R
+                cp   2 * TRAP_SEARCH_R + TRAP_HERO_W
+                ret  nc
+                ld   a, d
+                ex   de, hl                    ; DE = the entry
+                ld   hl, trap_turn             ; R6 trap6.asm
+                jp   far6
+                ASSERT TR_B0 == 0 && TRAP_STRIDE == 2 && (TRAP_LIST & $FF) + TRAP_MAX * TRAP_STRIDE <= 256
 
 ;------------------------------------------------------------------------------
 ; end_turn — ANIM finished (play_loop: turn_done CF -> far7): transition (if
@@ -193,7 +250,7 @@ end_turn:
 .ls:
                 ld   a, (EXIT_KIND)
                 or   a
-                call nz, do_exit
+                call nz, .ex
                 ld   hl, (TURN_COUNTER)
                 inc  hl
                 ld   (TURN_COUNTER), hl
@@ -215,6 +272,10 @@ end_turn:
                 jp   xp_turn                   ; D3-9b: MP regen + level-up (xp7.asm)
                                                ; (B3B-13: the PROTO chest win is gone; a run
                                                ; wins by descending from D8, level_descend)
+.ex:            call do_exit                   ; 3E-T16: + the room-entry Mage sense
+                ld   a, TRW_ENTRY              ; (immediate mode, no trigger test:
+                ld   (TRP_WAIT), a             ; this is the transition tick)
+                jp   trap_chk
 .dead:          xor  a                         ; SND-3: Game Over once (GS_DEAD never reaches
                 ld   (MUS_REQ), a              ; end_turn again; end_screen only redraws): final
                 ld   a, MUS_OVER               ; cue = loop off, then the shot
@@ -410,16 +471,16 @@ tpt_intent:
                 ld   d, 1
                 call try_climb
                 ret  c
-                scf                            ; DOWN with no climb: wait (§2.3)
-                ret
+                jr   .srch                     ; DOWN with no climb: wait (§2.3)
 .wt:            ld   a, (PLAYER_DISC)
                 and  DK_WAIT                   ; '.'
-                scf
-                ret  nz
+                jr   nz, .srch
                 ld   a, (CLIMB_BLK)            ; climb blocked by an entity: wait
                 or   a
                 ret  z                         ; CF = 0: nothing legal
-                scf
+.srch:          ld   a, 1                      ; 3E-T16: every Wait searches (game.md
+                ld   (TRP_WAIT), a             ; §2.3 / §1.5; the held Wait does not:
+                scf                            ; turn_input .hw senses but skips the search)
                 ret
 .side:          ld   a, d                      ; D = dx: against the facing?
                 bit  EF_LEFT_BIT, (ix+E_FLAGS)

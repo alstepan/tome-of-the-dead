@@ -308,3 +308,50 @@ TT_TELEPORT     EQU 2               ; D3+, one-shot
 TT_ALARM        EQU 3               ; D5+, one-shot
                 ASSERT TRAP_N < FLOOR_LIST      ; inside the ROOM_DESC spare, below FLOOR_LIST
                 ASSERT TRAP_LIST == $6DF0 && TRAP_N == $6DFC
+; 3E-T16 traps runtime state (state block spare $BFF5..$BFF7, test-observable,
+; never zeroed: both are written before they are read on every accepted turn)
+TRP_PRE         EQU $BFF5           ; 2 B: the hero's E_X, E_Y before this turn's action
+                                    ;   (turn_input .act, bank 7): the trigger's "first under"
+TRP_WAIT        EQU $BFF7           ; TRW_* bits: a Wait (tpt_intent .srch) / the room-entry
+                                    ;   sense (end_turn .ex); trap_chk passes and clears it
+TRP_EV          EQU $BFF8           ; the armed trap sequence (trap6.asm): TEV_FIRE + TT_* / TEV_FIND
+TRP_STEP        EQU $BFF9           ;   its step counter (trap_step)
+TRP_ENT         EQU $BFFA           ;   its TRAP_LIST entry (low byte)
+                ASSERT TRP_ENT < STATE_3B_END && TRP_PRE > SFX_XP
+TRW_WAIT_BIT    EQU 0
+TRW_ENTRY_BIT   EQU 1
+TRW_ENTRY       EQU 1 << TRW_ENTRY_BIT
+TEV_FIRE        EQU 1               ; + TT_*: 1..4
+TEV_FIND        EQU 5
+ABL_TRAP        EQU $80             ; ACT_ABL of a trap sequence (act_pend -> far6 trap_step)
+TRAP_ACT_TICK   EQU 1               ; the first step: the tick after the input tick
+TRAP_STEP_T     EQU 2               ; ticks between steps (each flash phase)
+FIND_BLINKS     EQU 2               ; the found plate blinks bright / off twice, then its ink
+PLATE_FLASH_ATTR EQU $47            ; the plate's bright flash (trigger) / blink (find)
+TRAP_FLASH_T    EQU FLASH_TICKS     ; the hero's type-ink flash on a trigger (GAS: one step)
+TELE_FLASH_ATTR EQU $43             ; teleport (scroll / trap): bright magenta, the TELEPORT ink;
+                                    ;   not a hero kind attr ($47 / $45), the hit $42, gold $46
+TELE_FLASH_T    EQU 5               ; ticks, before the room change and again on arrival (the
+                                    ;   displayed screen trails E_FLT by ~2 ticks: 3 shown)
+TELE_HOLD_T     EQU 5               ; the scroll's turn is held >= this (MON_AT)
+TELE_STEP_T     EQU 4               ; the trap's: step 1 at tick 1 + 4, the monster step after
+; trap rules (game.md §1.5)
+TRAP_HERO_W     EQU 3               ; both heroes' KT_BW: the body cols x .. x+2
+TRAP_SEARCH_R   EQU 6               ; Wait searches hidden traps within 6 cols of the body, 1 in 2
+TRAP_SENSE_R    EQU 2               ; the Mage senses them within 2 cols (100 %)
+TRAP_GAS_T      EQU 4               ; GAS: ASLEEP 4
+TRAP_DART_PSN   EQU 6               ; DART: 1d4+1 PHYS + POISON 6
+TRAP_DART_DIE   EQU 4
+; the known plate's attr by type (§1.5: ink on black). <= 1 trap per room
+; (generator), so the room's known trap sets TILE_ATTRS[T_TRAP] itself:
+; build_room_map's stamp (bank 3 tr_ink3) and trap6's reveal (R6 tr_ink6),
+; both tables built from these. (A scroll between two rooms with known traps
+; of different types shows the old plate in the new ink until it leaves.)
+TRAP_INK_DART   EQU $42
+TRAP_INK_GAS    EQU $44             ; (also the GAS hero flash, §1.5: $44 one step)
+TRAP_INK_TELE   EQU $43
+TRAP_INK_ALARM  EQU $46
+    MACRO TRAP_INKS
+                DB   TRAP_INK_DART, TRAP_INK_GAS, TRAP_INK_TELE, TRAP_INK_ALARM
+                ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3
+    ENDM
