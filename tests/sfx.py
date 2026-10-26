@@ -307,6 +307,8 @@ def run(h):
     for name, e in EFF.items():
         frs = sfx2asm.decode(e["data"])
         pk = max(v for _, v, _, _ in frs)
+        if name == "STEP":                       # soft by design (user 2026-10-26): v9, below the un-ducked music
+            continue
         jpk = next(j for j, x in enumerate(frs) if x[1] == pk)
         s.wb(SFX_REQ, e["id"])
         for j in range(len(frs)):
@@ -322,7 +324,7 @@ def run(h):
             if c[9:11] != w[9:11]:
                 rel.append(name)
                 break
-    check("SFX6 loudness: every effect peaks >= 14, above the (ducked) music voices at that frame",
+    check("SFX6 loudness: every effect but STEP (soft, v9) peaks >= 14, above the (ducked) music voices at that frame",
           not loud, loud[:3])
     check("SFX6 duck 3 seen for prio < 6, released (R9/R10 == oracle) right after every effect",
           seen3 and not rel, (seen3, rel[:3]))
