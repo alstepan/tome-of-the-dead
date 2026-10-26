@@ -150,6 +150,7 @@ pathing change, no off-screen events).
 | **GAS** | D2+ | **ASLEEP 4** (§6.4); hero flashes `$44` one step (no new art) | **one-shot** (removed) | `SLEEPING GAS! YOU FALL ASLEEP.` (30) |
 | **TELEPORT** | D3+ | as the Teleport scroll (§8): random free spot, random room, never the lair while its boss lives; attr flash as the Archmage's | one-shot | `YOU ARE TELEPORTED!` |
 | **ALARM** | D5+ | while the boss lives: one **wave** = the §9.5 idle-wave spawn (1 + (rnd & 1) of the level's kinds at the room's doors/exits, awake, `F_RESPAWN`, slot + §9.3 cap rules), runs even with `IDLE_WAVE` off; border flashes red 2 ticks. Boss dead: nothing comes | one-shot | `AN ALARM BELL RINGS!` / `A BELL RINGS. NOTHING COMES.` (28) |
+| **STUN** (thunder rune; STUN1, §1.5.1) | D4+ | **STUNNED 2** (§6.4), no damage; hero flashes `$07` | one-shot | `THUNDERCLAP!` (12) then `YOU ARE STUNNED!` (existing) |
 
 ALARM's wave code lands in 3F; in 3E the trap is generated and prints the "nothing comes"
 line (the generator must not change between 3E and 3F).
@@ -179,8 +180,8 @@ it** when the trap col is within the cleared cols `x+3 … x+5` (§2.4): jumping
 past a known DART. Teleport/fear arrivals never land with a trap col under the body.
 
 **Finding (hidden → known).** All traps are generated hidden. A known trap draws `T_TRAP`
-(common id 10) in its cell; the room builder sets its attr from a 4-entry type table (DART
-`$42`, GAS `$44`, TELEPORT `$43`, ALARM `$46`; ink on black, joins the legality set). A trap
+(common id 10) in its cell; the room builder sets its attr from a 5-entry type table (DART
+`$42`, GAS `$44`, TELEPORT `$43`, ALARM `$46`, STUN `$07`; ink on black, joins the legality set). A trap
 becomes known when:
 1. it **triggers** (DART stays known; one-shot traps are removed and the cell redraws as its
    normal id);
@@ -200,7 +201,10 @@ not `GEN_RNG`, §8.11 Q8).**
 | Depth | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 |
 |---|---|---|---|---|---|---|---|---|
 | Traps | 1 | 2 | 2 | 3 | 3 | 3 | 4 | 4 |
-| Type pool (uniform) | DART | DART, GAS | DART, GAS, TELEPORT | same | + ALARM | all 4 | all 4 | all 4 |
+| Type pool (uniform) | DART | DART, GAS | DART, GAS, TELEPORT | + STUN | + ALARM | all 5 | all 5 | all 5 |
+
+(STUN1 rev 2026-10-26: pool order DART, GAS, TELEPORT, STUN, ALARM; pool length 1, 2, 3, 4,
+5, 5, 5, 5. D4 was "same as D3", D5+ "all 4".)
 
 **Placement (generator, after floor items; each trap ≤ 8 seeded tries, else dropped).**
 - Room: not start, not lair, not Sanctum; **≤ 1 trap per room**.
@@ -211,14 +215,63 @@ not `GEN_RNG`, §8.11 Q8).**
   to a dead-end block or its rubble col. On storey 1, `t ∉ [p−1, p+3]` (pit landing zone).
   D1: not within the hero start body ±1.
 - Not on a floor-item cell.
-- Storage: **trap list ≤ 6 entries × 2 B**: room (4 bits), storey (1), col (5), type (2),
-  known (1), spent (1), 2 bits spare. Spent entries are skipped (never compacted mid-level).
+- Storage: **trap list ≤ 6 entries × 2 B**: room (4 bits), storey (1), col (5), type (**3**,
+  STUN1: widened into the old `TR_B1` bit 7 spare), known (1), spent (1), 1 bit spare
+  (`TR_B0` bit 7). Spent entries are skipped (never compacted mid-level).
 
 **Levelcheck invariants (B3B-6 checker extension).** Per seed and depth: trap count = table
 (minus dropped tries, reported); ≤ 1 per room; none in start/lair/Sanctum; every `t` passes
 the col rules above against the final room descriptors; types within the depth pool; all
 generated hidden; no trap under a pit landing zone; Python == Z80 trap list byte-exact;
 generator outputs before the trap step unchanged vs B3B-7.
+
+#### 1.5.1 STUN trap (STUN1; user 2026-10-26 scope, designer decision 2026-10-26 details)
+
+A **thunder rune**: a sealed glyph in the plate bursts with a deafening crack. The hero reels
+and loses his next 2 actions. There is no blow, so there is **no damage** and no death path.
+
+| Rule | Value |
+|---|---|
+| Status | the **existing STUNNED** HOLD kind (`HOLD_STUNNED` = 3, §6.4). No new status bit, tint, icon, mark, pose or line: tint `$07`, panel icon, V1 pose and V2 mark, `YOU ARE STUNNED!` / `YOU CAN MOVE AGAIN.` already exist for the Ogre SLAM / Orc Bouncer / Skeleton Knight hero stuns |
+| Duration | **`TRAP_STUN_T` = 2**, fixed, no roll (no gameplay-RNG draw, so tests stay seed-free). The hero loses exactly his next 2 action phases (§6.4 step order). His eva is 0 from the trigger: the monster phase of the trigger turn and the 2 held turns = **3 monster phases at eva 0** |
+| vs GAS | GAS ASLEEP 4 ends on **any HP loss**. STUNNED does **not** end on damage, only on its timer. Out of combat STUN is the milder trap (2 turns, not 4). Next to monsters it is the harsher one: every adjacent monster gets ~3 near-sure swings, where under GAS the first swing wakes him. That is why it is D4+ |
+| While stunned | as any HOLD (§2.2): the loop runs his turns automatically (1 per 4 ticks, a Wait **without** search). Every turn input is ignored: move, melee, cast, quick slots, bag page. Only Pause works. There is no look command to keep |
+| Application | written straight into the hero's HOLD, like GAS (`tr_eff .gas`): kind STUNNED, HOLD timer 2, MIND timer kept. **HOLD_GUARD is ignored on application.** The hero has just moved, so B2 (already held) cannot apply. The trap is one-shot, so it cannot chain. **HOLD_GUARD is set normally when the stun ends** (§6.4 step 3). So an Ogre SLAM or Orc Bouncer hit cannot extend the trap stun: he always gets one action first. No immunity check: no gear grants `IMMF_STUN`. If a STUN-immune item is ever added, add the mask test (~6 B) |
+| Feedback | step 0: `SFX_TRAP` (reused); the hero flashes the type ink `$07` (`TRAP_FLASH_T`, the generic `tr_eff` path), then the STUNNED tint `$07` holds; the plate flashes `$47`; log `THUNDERCLAP!` (12, new) then `YOU ARE STUNNED!` (`st_stunned`, existing). Step 1: the plate is erased (one-shot), as GAS |
+| Plate ink | **`$07`** (white, not bright, on black). It is the STUNNED colour everywhere (tint, icon), so the plate tells you what it does. It is distinct from DART `$42`, GAS `$44`, TELEPORT `$43`, ALARM `$46` and from the `$47` flash/blink (the BRIGHT step is visible: the find blink goes `$47` / off / `$47` / off / `$07`). It is already in the legality set (STUNNED tint). `$45` was rejected (FROZEN tint, and the Mage's own attr: an invisible hero flash). `$41` was rejected (ASLEEP tint, near-black on black) |
+| Find | search and Mage sense are unchanged; line `TRAP FOUND: STUN` (`STUN` 4 B, new name) |
+| Hunger faint (§7.1) | the faint already defers while the hero is held. **STUN1 adds: it also defers while `HOLD_GUARD` is set.** So a faint never lands on the turn a stun or freeze ends, and he gets one free action between two holds. This costs ~4 B in FAINT1's defer checks (FAINT1 is not built yet, so it is in its estimate). |
+| ALARM (3F) | no interplay: ≤ 1 trap per room, so a room never holds both. A stunned hero at a wave's arrival is the ordinary held case. Danger music: HOLD already adds +2 to the horizon (§3.7) |
+| Monsters | never stunned by traps (only the hero triggers traps, §1.5) |
+
+**Generation (T6 overlay + `tools/items_model.py`).** `TT_STUN` = **4** (`TT_DART..TT_ALARM`
+keep 0..3, so the existing tests and asserts stay valid). The type is still drawn once per
+trap as `pool[rnd(len)]`. The overlay keeps its prefix-length model through a 5-B order table
+`ig_tord` = DART, GAS, TELEPORT, STUN, ALARM (type = `ig_tord[rnd(len)]`). `ig_tplen` becomes
+1, 2, 3, 4, 5, 5, 5, 5. In the Python mirror, insert `(TT_STUN, 4)` into `TRAP_FIRST` between
+TELEPORT and ALARM. **RNG impact:** `rnd(n)` is one draw then `% n`, so the draw count does
+not change. Placement (room/storey/col) and every later `ITEM_RNG` output stay byte-identical.
+Only the **type field at D4+** changes (D4 `%3` → `%4`, D5+ `%4` → `%5`). D1–D3 are
+unchanged. Rebaseline the `tests/items_gen.py` 1,000-seed gate and the levelcheck "types
+within the depth pool" check for D4–D8 only.
+
+**Implementation (staff; contracted).**
+- `item_defs.asm`: `TT_STUN` 4, `TR_TYPE_MASK` `%11100000` (bits 5–7), `TRAP_STUN_T` 2,
+  `TRAP_INK_STUN` `$07`, `TRAP_INKS` gets a 5th byte. Fix the three `ASSERT TT_* ==` lines.
+  `tr_type` / bank 3's type extraction must take 3 bits.
+- R6 `trap6.asm` `tr_eff`: a 5th dispatch arm. Factor GAS's HOLD write into `hero_hold`
+  (A = kind, B = turns). FAINT1's planned `hero_sleep` becomes this same routine, so GAS,
+  FAINT and STUN share it. Then the `THUNDERCLAP!` stem (`S3_TRAP_STUN`, bank 1 `it_line`)
+  and `TX_ST_STUNNED`. `TEV_FIRE + TT_STUN` = 5 collides with `TEV_FIND` 5, so **renumber
+  `TEV_FIND` to 6**.
+- Bytes: R6 ~25 B (of ~2.1 KB free), bank 3 ~2 B (`tr_ink3` +1), bank 1 ~20 B (stem 12 +
+  name 4 + terminators/refs), overlay ~12 B raw (`ig_tord` 5 + lookup ~6; ZX0 ~+10).
+  **≈ 60 B total.** Time: same as GAS (~9k + ~7k T over two ticks, budget.py `tgas` class).
+- Tests (`tests/t16.py`): add a type-4 case to every type loop. Fire: HOLD = STUNNED, timer 2,
+  both lines, plate erased, hero `E_FLT` attr `$07`, HP unchanged. A monster hit while stunned
+  **does not clear** HOLD (the GAS contrast). After 2 auto-turns he can act and HOLD_GUARD is
+  set. Find line `TRAP FOUND: STUN`, plate ink `$07`. Generator: D1–D3 trap lists identical to
+  the pre-STUN1 baseline, D4+ types in the 5-pool, placement bytes identical.
 
 ---
 
@@ -1187,7 +1240,7 @@ monster hit on the hero), with no "applied this turn" flag. A banked monster (ot
 |---|---|---|---|
 | **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 / 3 / 4 by rank (COLD hit); self after a bounce or reflection **1** (§6.4.1) |
 | **ASLEEP** | skip action; eva 0 | timer, or **any HP loss** (incl. poison, aura) wakes it | Sleep scroll 8 (room), GAS trap 4 (hero), hunger faint 5 (hero, §7.1) |
-| **STUNNED** | skip action; eva 0; cannot parry | timer. **HOLD_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero) |
+| **STUNNED** | skip action; eva 0; cannot parry | timer (**not** HP loss). **HOLD_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero), STUN trap 2 (hero, §1.5.1) |
 | **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action fails because of the direction the turn is spent (`YOU STUMBLE.`); a non-direction refusal costs no turn and faces back (§2.3, §6.4.2 R4). Whirlwind, climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
 | **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) → illegal, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; ranged, spells, items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll 6 (room); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
 | **POISON** | −1 HP every 3rd turn (step 1) | timer; Cure | **adds per application, cap 15** (§6.4.1): Spider bite **6** (was 9), Spider Queen **9** (was 12), DART trap 6 |
@@ -1507,7 +1560,7 @@ counts; the Mummy WEAK **status** never causes a faint.
 | Faint | hero HOLD := ASLEEP, timer **`FAINT_T` = 5** (between GAS 4 and Sleep scroll 8). Fixed, no roll |
 | Grace (cooldown) | after a faint `HW_TMR := HW_REPEAT − FAINT_GAP` = 50 − **30** = 20, so the next faint comes **30 turns after the previous one started** (25 awake turns). Faints cannot chain: at most 1 per 30 turns, ≈ 17 % of starving turns asleep |
 | Wake | as any ASLEEP (§6.4, `st_step`): timer, or **any HP loss** wakes him (one hit, a poison tick, an aura). `YOU WAKE UP.` (existing). Eva 0 while asleep, so the first monster swing almost surely lands and wakes him |
-| Deferred, not skipped | if at the rollover the hero is **mid-ladder** (`on_ladder`), **already held** (any HOLD kind: GAS this turn, frozen, stunned; also §6.4.1 B2), has a **pending trap reaction** (`E_REACTAT ≠ 0`, DART in flight) or a **pending exit** (`EXIT_KIND ≠ 0`: room exit, teleport trap/scroll), the faint waits: `HW_TMR` is held at 49 and the check repeats at the next end of turn. A jump, fall or walk in progress is fine: the faint holds his **next** action (§6.4 step order), the current move finishes on screen |
+| Deferred, not skipped | if at the rollover the hero is **mid-ladder** (`on_ladder`), **already held** (any HOLD kind: GAS this turn, frozen, stunned; also §6.4.1 B2), has a **pending trap reaction** (`E_REACTAT ≠ 0`, DART in flight), has **`HOLD_GUARD` set** (a stun/freeze just ended; STUN1 §1.5.1) or a **pending exit** (`EXIT_KIND ≠ 0`: room exit, teleport trap/scroll), the faint waits: `HW_TMR` is held at 49 and the check repeats at the next end of turn. A jump, fall or walk in progress is fine: the faint holds his **next** action (§6.4 step order), the current move finishes on screen |
 | Bag page / page verbs | no special case: hunger ticks only in `end_turn`, which runs after a page verb is applied on return to play; the page cannot open while held (input ignored, §2.2). Eating on the page that turn lifts FOOD out of WEAK before the check (`hg_stage` runs first) → no faint |
 | Feedback | log `YOU FAINT FROM HUNGER` (21, FONT6, new); the GAS one-step hero flash (`E_FLT` = `TRAP_FLASH_T`, attr `$44`, existing) then the ASLEEP tint `$41` and the ASLEEP panel icon (existing); SFX = the GAS trap's SFX (reuse). The food bar/word is unchanged (still WEAK `$42`) |
 | Danger music | none extra: HOLD already adds +2 to the horizon (§3.7) |
@@ -2207,8 +2260,8 @@ nothing): `YOU ARE HUNGRY` · `YOU ARE WEAK WITH HUNGER` · `YOU FEEL WELL FED`.
 | cursed lock | `IT IS CURSED! YOU CANNOT` (`cmb_cursed_no`) | E |
 | known-waste refusal (no turn, item kept) | `NO NEED` 7: known Heal at full HP, known Mana at full MP, EAT at FOOD 100. Cure and unknown types are never refused | N |
 | shatter / wear lines | §8.7 / §8.10 (`cmb_shat_*`, `cmb_notch` …) | E |
-| trap fires | `A DART HITS YOU!` 16 · `SLEEPING GAS!` 13 then `YOU FALL ASLEEP` (`st_asleep`, E) · `YOU ARE TELEPORTED!` · `AN ALARM BELL RINGS!` 20 · `A BELL RINGS. NOTHING COMES` 27 | N |
-| trap found (walk-on of a hidden one needs no find line; search or Mage sense) | `TRAP FOUND: ` 12 + `DART` / `GAS` / `ALARM` / `TELEPORT` (4+3+5 chars new; TELEPORT is the item word) | N |
+| trap fires | `A DART HITS YOU!` 16 · `SLEEPING GAS!` 13 then `YOU FALL ASLEEP` (`st_asleep`, E) · `YOU ARE TELEPORTED!` · `AN ALARM BELL RINGS!` 20 · `A BELL RINGS. NOTHING COMES` 27 · `THUNDERCLAP!` 12 then `YOU ARE STUNNED!` (`st_stunned`, E; STUN1 §1.5.1) | N |
+| trap found (walk-on of a hidden one needs no find line; search or Mage sense) | `TRAP FOUND: ` 12 + `DART` / `GAS` / `ALARM` / `TELEPORT` / `STUN` (4+3+5+4 chars new; TELEPORT is the item word) | N |
 | search finds nothing | no line (0 B) | |
 
 Search and Mage sense share the one `TRAP FOUND:` line. Scrolls carry **no BUC** (BUC is gear
