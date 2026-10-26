@@ -1186,7 +1186,7 @@ monster hit on the hero), with no "applied this turn" flag. A banked monster (ot
 | Effect | Does | Ends | Durations / sources |
 |---|---|---|---|
 | **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 / 3 / 4 by rank (COLD hit); self after a bounce or reflection **1** (§6.4.1) |
-| **ASLEEP** | skip action; eva 0 | timer, or **any HP loss** (incl. poison, aura) wakes it | Sleep scroll 8 (room), GAS trap 4 (hero) |
+| **ASLEEP** | skip action; eva 0 | timer, or **any HP loss** (incl. poison, aura) wakes it | Sleep scroll 8 (room), GAS trap 4 (hero), hunger faint 5 (hero, §7.1) |
 | **STUNNED** | skip action; eva 0; cannot parry | timer. **HOLD_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero) |
 | **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action fails because of the direction the turn is spent (`YOU STUMBLE.`); a non-direction refusal costs no turn and faces back (§2.3, §6.4.2 R4). Whirlwind, climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
 | **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) → illegal, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; ranged, spells, items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll 6 (room); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
@@ -1488,11 +1488,57 @@ distinct stages, each name ≤ 6 chars:**
 | **FED** | 50–100 | **HP +1 per 12 turns** (user: agreed) | `$44` |
 | **OK** (was Peckish) | 25–49 | no HP regen | `$46` |
 | **HUNGRY** | 10–24 | atk −1, MP regen halved (= regen **period ×2**, 3E, confirmed 2026-10-20 §8.11) | `$42` |
-| **WEAK** | 0–9 | atk −2, eva −1, dmg −1 (min 1; physical hits only, §6.4.2 R1), no MP regen, no jump | `$42` + message every 50 turns (`YOU ARE WEAK WITH HUNGER.`) |
+| **WEAK** | 0–9 | atk −2, eva −1, dmg −1 (min 1; physical hits only, §6.4.2 R1), no MP regen, no jump | `$42`; line on entry (`YOU ARE WEAK WITH HUNGER.`); **faints** after 50 WEAK turns, then every 30 (§7.1) |
 
 The Mummy curse applies the same penalties as the WEAK **status** (§6.4), not cumulative with
 this stage. The panel hunger word stays FOOD-derived; the curse shows as a status icon.
 Worn cursed gear does **not** affect regen (rev 5, §8.7).
+
+#### 7.1 Fainting from hunger (FAINT1; user 2026-10-26 scope, designer decision 2026-10-26 details)
+
+Hunger never kills; the escalating penalty for staying WEAK is **fainting**: the hero falls
+**ASLEEP** (§6.4) for a few turns. Only the hunger **stage** WEAK (FOOD 0–9, `STS_HWEAK`)
+counts; the Mummy WEAK **status** never causes a faint.
+
+| Rule | Value |
+|---|---|
+| Clock | the existing `HW_TMR` (turns in WEAK, mod `HW_REPEAT` 50). Entering WEAK sets it to −1 (unchanged), so **every entry into WEAK restarts the grace**; leaving WEAK (eating to FOOD ≥ 10) stops it |
+| First faint | at the first `HW_TMR` rollover, **50 turns after WEAK begins** (FOOD ≈ 1 at the normal burn, ≈ 5 with Plenty/Scarab). The faint **replaces** the repeat line `YOU ARE WEAK WITH HUNGER` on that rollover |
+| Faint | hero HOLD := ASLEEP, timer **`FAINT_T` = 5** (between GAS 4 and Sleep scroll 8). Fixed, no roll |
+| Grace (cooldown) | after a faint `HW_TMR := HW_REPEAT − FAINT_GAP` = 50 − **30** = 20, so the next faint comes **30 turns after the previous one started** (25 awake turns). Faints cannot chain: at most 1 per 30 turns, ≈ 17 % of starving turns asleep |
+| Wake | as any ASLEEP (§6.4, `st_step`): timer, or **any HP loss** wakes him (one hit, a poison tick, an aura). `YOU WAKE UP.` (existing). Eva 0 while asleep, so the first monster swing almost surely lands and wakes him |
+| Deferred, not skipped | if at the rollover the hero is **mid-ladder** (`on_ladder`), **already held** (any HOLD kind: GAS this turn, frozen, stunned; also §6.4.1 B2), has a **pending trap reaction** (`E_REACTAT ≠ 0`, DART in flight) or a **pending exit** (`EXIT_KIND ≠ 0`: room exit, teleport trap/scroll), the faint waits: `HW_TMR` is held at 49 and the check repeats at the next end of turn. A jump, fall or walk in progress is fine: the faint holds his **next** action (§6.4 step order), the current move finishes on screen |
+| Bag page / page verbs | no special case: hunger ticks only in `end_turn`, which runs after a page verb is applied on return to play; the page cannot open while held (input ignored, §2.2). Eating on the page that turn lifts FOOD out of WEAK before the check (`hg_stage` runs first) → no faint |
+| Feedback | log `YOU FAINT FROM HUNGER` (21, FONT6, new); the GAS one-step hero flash (`E_FLT` = `TRAP_FLASH_T`, attr `$44`, existing) then the ASLEEP tint `$41` and the ASLEEP panel icon (existing); SFX = the GAS trap's SFX (reuse). The food bar/word is unchanged (still WEAK `$42`) |
+| Danger music | none extra: HOLD already adds +2 to the horizon (§3.7) |
+
+**Numbers (normal burn, −1 FOOD / 6 turns):** WEAK warning line at FOOD 9 → first faint 50
+turns later → faints at +80, +110, +140 … while unfed. Any food ends it (Carrot: FOOD 0 → 10 =
+HUNGRY; it falls back into WEAK after 6 turns, which restarts the 50-turn grace: a Carrot buys
+≈ 56 faint-free turns). **Expected cost:** a level holds 3–4 floor food items plus drops
+(≈ one find per 110–150 exploring turns, §8.11 (2)), so a hero who turns WEAK with an empty bag
+typically finds food within 60–75 WEAK turns: **0–1 faints**; a bad case (no food left on the
+level, 150 WEAK turns to the next level's first item) is **4 faints**. Per faint: 5 lost turns
+out of combat; in combat ≈ one sure hit per adjacent monster (the first wakes him) plus the
+approach/shots of ranged monsters. A real penalty, never a lock: he always wakes on the first
+damage, and 25 awake turns separate faints.
+
+**BAL1 knobs (playtest):** `FAINT_T` 5 (4–6), `FAINT_GAP` 30 (25–40), first faint = `HW_REPEAT`
+50. If starvation feels toothless, drop `FAINT_GAP` first; if it feels like a death spiral, raise
+it before touching `FAINT_T`.
+
+**Implementation (staff; R6 `hunger6.asm`, target ≤ 60 B code + 22 B string).** No new state:
+`HW_TMR` is the counter. In `hunger_turn` step 4, the WEAK rollover branch becomes: defer checks
+(HOLD bits of `ST_FLAGS`, `E_REACTAT`, `EXIT_KIND`; `on_ladder` on the hero — if `logic.asm` is
+not callable from R6, `end_turn` (bank 7) evaluates it before `far6` and passes a flag) → on
+defer `HW_TMR := HW_REPEAT − 1`, ret; else factor `trap6.asm`'s `.gas` HOLD write + flash into a
+shared R6 `hero_sleep` (B = turns; GAS keeps its own two lines), call it with `FAINT_T`, the SFX,
+`HW_TMR := HW_REPEAT − FAINT_GAP`, then `hg_line` with the new `S3_HG_FAINT`. Estimate: defer
+checks ~22 B, sleep call + gap write ~10 B, SFX + line ~8 B, `hero_sleep` factoring +4 B net
+≈ **44 B code + 22 B string**; ~0.1k T on the rollover turn only. Tests (`SEED_FIXED` not needed,
+no roll): poke FOOD 5 / WEAK / `HW_TMR` 49 → after one Wait: ASLEEP 5, the line, `HW_TMR` 20;
+same on a ladder → not asleep, `HW_TMR` 49; then step off → faints; a monster hit → wakes;
+eat to FOOD ≥ 10 then back to 9 → `HW_TMR` restarts at 0.
 
 | Food | FOOD | Source |
 |---|---|---|
@@ -2133,8 +2179,9 @@ numbers, complete: `FOOD_START` 80 · cap 100 (eating clamps) · −1 per 6 turn
 · stage by FOOD: FED ≥ 50, OK 25–49, HUNGRY 10–24, WEAK 0–9 · food values CARROT 10, APPLE 15,
 PEAR 20, CHEESE 30, MEAT 40 · never fatal. **Stage-change lines** (only on a downward crossing
 into HUNGRY / WEAK, and on an upward crossing into FED; crossing into OK and WEAK→HUNGRY print
-nothing): `YOU ARE HUNGRY` · `YOU ARE WEAK WITH HUNGER` (also repeated every 50 turns while
-WEAK) · `YOU FEEL WELL FED`.
+nothing): `YOU ARE HUNGRY` · `YOU ARE WEAK WITH HUNGER` · `YOU FEEL WELL FED`. **FAINT1
+(2026-10-26, §7.1) supersedes the 50-turn repeat line:** the WEAK rollover is now the faint
+(`YOU FAINT FROM HUNGER`).
 
 **(3) Messages.** `E` = exists in `src/strings.txt` (0 B), `N` = new.
 
