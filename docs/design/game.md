@@ -925,9 +925,10 @@ header shows the same. 0 new glyphs.
 |---|---|
 | Source | Abilities come **only** from books **found in the dungeon** (nothing is bought or granted). Melee is always available. Scrolls and ammunition are likewise found only (§8.5) |
 | Placement (rev 5, designer decision 2026-10-03) | **1 class book per level D1–D7, plus a 2nd class book with 1 in 2 on D4–D7** (`ITEM_RNG`, §8.11 Q8; E ≈ 9 per run). **The D1 book lies in the start room.** D8 has none. The generator places a generic **class book** (`SPELLBOOK` / `WAR MANUAL`); *what it teaches is decided when it is read* (below), so generation never depends on hero state |
-| Reading | Page verb `READ`, 1 turn on return; the book is consumed. Content, first match (gameplay RNG): **1.** an unlearned ability whose unlock depth (§4) ≤ the current depth → learn the earliest-depth one (rank 1; fills its bar slot); **2.** else **rank up** a known ability below rank 3, chosen uniformly; **3.** else a tome (Warrior Vigor, Mage Power, §4). So the D1 book always teaches the starter (Spark / Power Strike), each later ability arrives at its unlock depth (or on the next book read, if carried), and every other book is a rank-up. "Chance of new vs rank-up" (user) = rule 1 is deterministic (the §10 threat answers depend on the schedule); the rank-up target is the random part |
+| Reading (rev 6, user 2026-10-26: uniform pick; pity/keystone designer decision 2026-10-26) | Page verb `READ`, 1 turn on return; the book is consumed. What it teaches is decided now, **first matching step wins**: **1. Starter** — no ability known yet → learn the class's slot-0 ability (Spark / Power Strike), deterministic, 0 RNG. This is the *first book read*, normally the D1 start-room book. **2. Keystone** (Mage only) — depth ≥ 5 and Firebolt unlearned → learn Firebolt, 0 RNG (Firebolt is the only spell that hurts Ghosts and the Archmage, §9.1 resistances). **3. Pity** — `BOOK_DRY` = 2 (`PITY_N`) and an eligible unlearned ability exists → learn the **earliest-depth** eligible unlearned one, 0 RNG. **4. Uniform pick** — build the candidate list: every class ability that is either *unlearned with unlock depth (§4) ≤ current depth* (outcome: learn, rank 1, fills its bar slot) or *known below rank 3* (outcome: rank +1). Each ability contributes at most one candidate (≤ 5). Pick one uniformly with **one gameplay-RNG call** at read time. **5. Tome** — the list is empty → Warrior Vigor / Mage Power (§4), 0 RNG. **`BOOK_DRY`** (0–2): any learn (steps 1–4) sets it to 0; a rank-up while an eligible unlearned ability existed adds 1; any other read sets 0. Consequence: abilities can arrive late or (Frost, Drain, Lightning) never; a run may end Spark III with no Lightning |
 | Other class's book | **CUT (user 2026-10-20, memory):** never generated; only the hero's class book exists |
-| Expected yield (E) | Warrior: 2 unlocks, 4 rank-ups (both to rank 3 by ~D6), ~3 Vigor. Mage: 5 unlocks, ~4 rank-ups (of 10 possible), ~0 Power. Mage ranks are the scarcer choice by design: 5 spells × 3 ranks cannot all max |
+| Expected yield (E, rev 6; hand Markov estimate over 9 books, verify by sim in BAL1) | **Warrior:** step 4 at D2 has one candidate (PS → II); at D3 Whirlwind ½ / PS III ½; Whirlwind is the only candidate on the next read, so it is **always learned by the first D4 book**. End state is fixed: PS III + Whirlwind III after the 5th book (~D5), then Vigor × (books − 5) = 1–5, E 3. Pity never fires. **Mage:** Firebolt by D2 ½, by D3 ⅔, by D4 ~⅞, by D5 1 (keystone). End: **all 5 spells ~61 %, one missing ~36 % (Lightning in ~¾ of those, else Drain/Frost), two missing ~3 %**; ~3.6 unlocks + ~4.4 rank-ups, Spark III in ~½ of runs; **0 Power** (14 outcomes > 10 books max) |
+| Why `PITY_N` = 2 | P(end missing ≥ 1 Mage spell), same estimate: no pity ~63 % (Firebolt alone ~10 %) · N 3 ~50 % · **N 2 ~39 %** · N 1 ~12 % (≈ the old fixed schedule, kills the variety the user asked for). N 2 keeps missing-a-spell a real ~⅓-of-runs build outcome while the worst case is 1 unlock per 3 eligible reads; the keystone removes the only unwinnable gap (no Firebolt at D8) |
 
 **Ability ranks (user 2026-10-03: repeat books level an ability; numbers designer decision
 2026-10-03). Max rank 3; rank 1 = the §6.1/§6.2 row. Ranks are cumulative.**
@@ -955,6 +956,15 @@ bounces, effect duration/chance) = **126 B**; the engineer may keep it in bank 3
 hero's ≤ 5 current rows (30 B) into bank 2 on learn/rank-up, so casting reads one row as now
 (0 extra T per cast). Read-time book code ~90 B bank 3; strings ~60 B raw (two message
 stems + roman suffixes; ability names exist).
+
+**`abil_learn` (rev 6, engineer contract).** State: `ARANK` + `BOOK_DRY` 2 bits, packed in
+`ARANK`'s 6 spare bits (0 new bytes; engineer may choose otherwise). Inputs: class, current
+depth, the class's unlock-depth row (slots ordered by unlock depth, so "earliest" = lowest
+slot). One pass over slots 0–4 yields candidate count `n` ≤ 5 (a ≤ 5-byte slot list or a
+bitmask) and "eligible unlearned exists". Steps 1–3 and 5 make **0 RNG calls**; step 4 makes
+**exactly 1**: index = `(RNG8 × n) >> 8` (bias ≤ 1/256 for n ≤ 5; no rejection loop, so the
+call count is fixed and seeded tests replay). Warrior slots 2–4 are empty (never candidates).
+Same messages as before (`YOU LEARN …` / `… RISES TO RANK n` / tome).
 
 ---
 
