@@ -265,12 +265,6 @@ ap_take:
 ; over the shadow (fl_attr_sh: the cell left falls back to TILE_ATTRS of
 ; its tile). ap_stamp_a: the col in A (3E-T11: far7 from drop_put, R6:
 ; far7 passes A and DE in, not BC).  Clobbers: all but IX, IY.
-; ap_put_a — 3E-T16 (far7 from R6 trap6.asm): the same with the glyph given
-; (D = T_TRAP: a trap plate; the caller set TILE_ATTRS[T_TRAP] first), no
-; FLOOR_LIST scan (no floor item lies on a trap col: the generator, drop_put).
-; ap_stamp itself keeps a known trap's plate when the cell has no item left.
-ap_put_a:       ld   c, a
-                jr   ap_put
 ap_stamp_a:
                 ld   c, a
 ap_stamp:
@@ -321,6 +315,13 @@ ap_put:         ld   a, e
                 call shadow_rect               ; (bank 7 paged)
                 ld   a, (CUR_ROOM)             ; 3E-T6: the inks of what is left
                 jp   fl_attr_sh
+; B22: placed after ap_stamp, not in front of it: ap_take falls through into ap_stamp_a
+; ap_put_a — 3E-T16 (far7 from R6 trap6.asm): the same with the glyph given
+; (D = T_TRAP: a trap plate; the caller set TILE_ATTRS[T_TRAP] first), no
+; FLOOR_LIST scan (no floor item lies on a trap col: the generator, drop_put).
+; ap_stamp itself keeps a known trap's plate when the cell has no item left.
+ap_put_a:       ld   c, a
+                jr   ap_put
                 ASSERT TX_CMB_ARROWS - TX_CMB_ARROW == TX_CMB_DAGGERS - TX_CMB_DAGGER
                 ; T7: the composed pickup line fits a log slot ("YOU PICK UP " + 2 digits +
                 ; the longest suffix; ARROWS_MAX < 100) — msg_end does not cut it
