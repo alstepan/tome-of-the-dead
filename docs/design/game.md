@@ -1722,7 +1722,8 @@ raw. Per event ~0.3k T; 0 on the fast path.
 
 ### 8.11 3E rulings (2026-10-20; designer, user-delegated "decide using memory constraints")
 
-Context: user rulings 2026-10-19/20 (no gold; page icons = scaled 8×8 floor glyphs; ~0.4 s
+Context: user rulings 2026-10-19/20 (no gold; page icons = scaled 8×8 floor glyphs [reopened
+2026-10-26: true 16×16, Q5]; ~0.4 s
 page close OK; drops + boss uniques in 3E; other-class books cut; light-ID kept; page full
 screen, sound not paused). 3E has ≈ 2.4 KB free vs ≈ 4.4 KB need, so every ruling picks the
 smallest consistent rule.
@@ -1750,11 +1751,93 @@ comes from the item-type table; gear BUC tint `$45`/`$42` and unique shimmer ove
   whose glyph is 60..63 is lost (AMMO/PAGES are common and allowed).
 - **Key: no floor glyph and no floor entry.** The key is found automatically on the **first
   entry into the key room** (`LF_KEY_TAKEN`, panel key icon; `YOU FIND THE LAIR KEY.` 22).
-- Id 10 = `T_TRAP` as §1.5. Page icons = these 6 glyphs scaled ×2 (16×16) in the item ink.
+- Id 10 = `T_TRAP` as §1.5. ~~Page icons = these 6 glyphs scaled ×2 (16×16) in the item
+  ink.~~ **Superseded 2026-10-26 by Q5 below (true 16×16 icons); the floor keeps these 6 glyphs.**
 - **Art the artist must deliver (8×8, standing-row items, low in the cell): FOOD, PAGES
   (open book / scroll, reads in white and magenta), WEAPON (sword), WORN (shield), AMMO
   (one bundle that reads as daggers or arrows; until delivered the id-17 dagger pile is
   used for both), plus the `T_TRAP` plate if not yet drawn.** FLASK reuses the potion glyph.
+
+**Q5 Item icons: true 16×16 (REOPENED; user rulings 2026-10-26, details designer; plan IC1).**
+Supersedes the 2026-10-19 "scaled 8×8 floor glyphs" ruling for the page and panel.
+
+- **Format.** 16×16, **1-bit, no mask**, 32 B raw per icon: rows 0..15 top-down, each row
+  left byte then right byte, bit 7 = leftmost pixel. Set bit = ink, clear = paper. Drawn as a
+  **copy** (not OR) into its 2×2 cells, which are always byte-aligned (no shift).
+- **Colour.** **One ink per icon** = the item type's ink from `it_tab` (the same ink as its
+  floor glyph, incl. BRIGHT); paper = the screen's paper (black; page cursor = paper blue,
+  §8.11 Q3). No item ink may be blue (1): it would vanish under the cursor (none is today).
+  No unique shimmer off the floor. Per-cell colour inside an icon is a later fallback only,
+  not in IC1.
+- **Index = `type − IT_BAG_LO`** (no lookup table; address `ICON_BASE + idx × 32`):
+
+| Idx | Types (`IT_*`, item_defs.asm) | n |
+|---|---|---|
+| 0–4 | F_CARROT, F_APPLE, F_PEAR, F_CHEESE, F_MEAT | 5 |
+| 5–7 | P_HEAL, P_MANA, P_CURE | 3 |
+| 8–11 | S_TELEPORT, S_FEAR, S_SLEEP, S_ENCHANT | 4 |
+| 12–13 | BOOK (one icon for both tomes), BOW | 2 |
+| 14–21 | W_SHORT, W_LONG, W_AXE, W_CLEAVER · W_OAK, W_IRON, W_RUNE, W_BONE | 8 |
+| 22–27 | A_ROBE, A_LEATHER, A_CHAIN, A_PLATE, A_SILK, A_GRAVE | 6 |
+| 28–31 | H_HOOD, H_HELM, H_KING, H_MIRROR | 4 |
+| 32–38 | C_MIGHT, C_WARD, C_FIRE, C_MANA, C_PLENTY, C_SCARAB, C_GRAVE | 7 |
+| 39–42 | **slot placeholders** (empty worn slot): WEAPON, ARMOUR, HELMET, CHARM — index `39 + worn slot` | 4 |
+
+  **43 icons = 1,376 B raw.** No boots/hat (not in the model). **No bow placeholder:** the bow
+  has no worn slot (§6.3: a bag item, never worn); the icon-bar Bow slot keeps its 24×16
+  ability art. **Key and ammo get no 16×16 icon:** they are counters, not bag/worn items, and
+  have no 16×16 draw site (page row 1 is one text row; the panel key and row-21 ammo have
+  their own art). See question 1 below for adding them (+96 B).
+- **Placeholder ink `$05`** (dim cyan; distinct from every item ink in practice, and visible on
+  the blue cursor paper). Art: a **dotted outline** of the slot's class silhouette (sword,
+  body armour, helm, ring) — the same "empty" language as §8.7/§8.10's cleared slot.
+- **Storage.** Raw (the page overlay has no room to unpack ZX0), one copy, readable by both the
+  page draw and the panel draw. Region is the architect's call: **R6** (2,739 B free after T8,
+  before T12/T16/3F) or **bank 3** (619 B + DEC2's ~90–120 B ≈ 0.7 KB: does not fit 1,376 B
+  unless the architect frees ~0.7 KB more there or splits the set). The T14 `pg_icon`
+  bit-doubling code is deleted.
+- **Draw sites** (all into the bank-5 screen, attr = paper | `it_tab` ink):
+
+| Site | Where | Content |
+|---|---|---|
+| Bag grid | page rows 2–13, 2×2 at col `3 + 6c`, rows `2 + 3r` (Q3 table) | item icon; count digit unchanged |
+| Worn row | page rows 15–16, cols 3, 9, 15, 21 | worn item icon, else placeholder |
+| Description | page cols 0–1, rows 18–19 | selected item / worn item icon; blank on `[CLOSE]` or an empty bag slot; placeholder on an empty worn slot |
+| Panel worn cells | rows 22–23, cols 24/26/28/30 (weapon, armour, helmet, charm) | as the worn row; redrawn on equip/remove/destroy (T8 path) |
+| Quick slots | icon-bar FOOD/POTION/SCROLL slots, rows 18–19, cols `3i`, `3i+1` | the current auto-fill pick (§8.11 rulings 3) + stack count digit at col `3i+2` row 19 (the existing quick-potion layout); empty class → its representative icon (APPLE / HEAL / TELEPORT) greyed by the existing `IS_GREY` rule; redrawn through the existing `slot_redraw` when the pick or count changes |
+
+- **Floor reuse: NO** (user question answered from the numbers). The floor set is 6 class
+  glyphs × 8 B = **48 B** in tile ids 17/18/60–63 (ids already reserved: 0 B new). Deriving
+  8×8 floor glyphs from the 16×16 set needs a 2:1 downscale routine (~40 B, and a 2×2→1 pixel
+  reduction is unreadable at 8×8) **and** a tile id per drawn type (39 types vs 4 free ids:
+  the 64-id tileset is full). It would save at most 48 B for ~40 B of code and ids that do
+  not exist. The floor keeps the 6 class glyphs; class by shape, type by ink (Q1).
+- **Cost (E).** Data 1,376 B raw. Code: one 2×2 copy blitter shared by page and panel
+  (~30 B, ~1.0k T per icon; the full page = 20 + 4 + 1 icons ≈ 26k T, cheaper than the T14
+  doubling); quick-slot pick-icon hook ~25 B bank 3; minus the doubling code.
+- **Art brief (graphics-artist, Design canvas, user reviews; import via `tools/svg_sprites.py`
+  to 32 B raw per icon, index order above).**
+  - **Silhouette first:** each icon must read as a filled black-and-ink shape at 1× on a TV;
+    1-px margin (live area 14×14) so neighbours and the cursor block stay apart; strokes ≥ 2
+    px on the main shape; no large dither areas (chain mail's mesh is the only texture).
+  - **One ink, no paper detail:** colour cannot carry meaning inside an icon; the type ink
+    comes from `it_tab` (the artist does not pick it, but checks it reads on black and on
+    blue paper).
+  - **Class-consistent shapes, varied within the class:** swords share one 45° blade (bottom
+    left → top right) differing by length/hilt (Short: short blade, plain cross; Long: longer,
+    wider guard; Cleaver: broad chopping blade, heavy hilt); the Axe shares the 45° haft with
+    an axe head. Staves share a 45° pole differing by head (Oak knot, Iron banded cap, Rune
+    glyph-crystal, Bone skull). Armour = torso silhouette (Robe flared hem, Leather vest
+    with laces, Chain mesh, Plate segmented with pauldrons, Silk Cloak hooded drape, Grave
+    Cloak tattered hem). Helmets = head-on helmet (Hood soft peak, Helm nasal guard, King
+    crown band, Mirror flat visor with a shine notch). Rings = one band shape with a
+    differing stone (Might fist, Ward shield, Fire flame, Grave skull); amulets = chain +
+    pendant (Mana drop, Plenty wheat sheaf, Scarab beetle). Potions = flasks of three
+    distinct shapes (Heal round, Mana tall, Cure square) so the type also reads by shape;
+    scrolls = one rolled scroll with a differing sigil (Teleport swirl, Fear eye, Sleep Z,
+    Enchant star). Food: five distinct silhouettes (carrot, apple, pear, cheese wedge, meat
+    on the bone). Book: closed tome with a clasp. Bow: drawn bow with string, 45°.
+  - Placeholders: dotted outlines (2 px dot / 2 px gap) of the sword, torso, helm and ring.
 
 **Q3 Page layout and verbs (full screen, 32×24 cells).**
 
@@ -1764,8 +1847,8 @@ comes from the item-type table; gear BUC tint `$45`/`$42` and unique shimmer ove
 | 1 | Warrior: `DAGGERS 3  ARROWS 14`; both: `KEY` when held |
 | 2–13 | **bag grid 5 × 4**: slot (c, r) icon 2×2 at col `3 + 6c`, rows `2 + 3r`, `3 + 3r`; stack count digit (2–9; none for 1) at col `5 + 6c`, row `3 + 3r` |
 | 14 | worn labels `WEAPON ARMOUR HELM CHARM` |
-| 15–16 | **WORN row**: 4 icons 2×2 at cols 3, 9, 15, 21; empty slot = blank |
-| 18 | description 1: name with BUC prefix (§8.7), ×n for stacks |
+| 15–16 | **WORN row**: 4 icons 2×2 at cols 3, 9, 15, 21; empty slot = its slot placeholder (Q5) |
+| 18 | description 1: name with BUC prefix (§8.7), ×n for stacks; **from 2026-10-26 (Q5):** the selected item's 16×16 icon at cols 0–1 rows 18–19, both text lines start at col 2 (≤ 40 chars) |
 | 19 | description 2: stats generated from the type table (`1D8 ATK+1`, `DEF 2`, `HEAL 10 HP`, `UNKNOWN`) + note `WORN` / `STICKY` |
 | 21 | **verb strip**: up to 3 words, the chosen one in inverse attr |
 | 22 | **message row** (refusals, page stays open) |
