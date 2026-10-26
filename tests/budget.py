@@ -66,6 +66,7 @@ class Stepper:
         self.isr_in = []                      # per tick: T spent in [isr, isr.done)
         self.cast_ix, self.casting = set(), False  # D3-7: indices of "cast" class ticks
         self.fire_t = []                      # D3-7 T4: the fire ticks' totals
+        self.trans_t = []                     # 3E-T16: room-change (transition) ticks, not gated
         # B3B-11b log latency: FIFO ring -> drawn = LQ_RD advances, pushed = drawn + LOG_QN
         self.rd, self.drawn, self.pushed = p.rb(S["LOG_Q"] + S["LQ_RD"]), 0, p.rb("LOG_QN")
         self.push_tick, self.lat = [0] * self.pushed, []
@@ -95,6 +96,7 @@ class Stepper:
     def tick(self):
         """Advance one tick; record its work (tick_work -> wait_tick)."""
         self._to("tick_work")
+        room0 = self.p.rb("CUR_ROOM")
         self.z.cmd("reset-tstates-partial")
         split, last, prev, saved, isr_t = {}, "tick_work", 0, None, 0
         while True:
@@ -113,6 +115,11 @@ class Stepper:
                 last = n
             if n == "wait_tick":
                 break
+        if self.p.rb("CUR_ROOM") != room0:    # 3E-T16 "ttele": the teleport's frozen room build /
+            self.trans_t.append(prev)         # draw / present (a transition, as a room exit):
+            print(f"[info] transition tick {prev} T (room {room0} -> {self.p.rb('CUR_ROOM')}),"
+                  f" not gated", flush=True)
+            return                            # reported, not a play tick
         self.ticks.append((prev, split))
         self.isr_in.append(isr_t)
         for f in TICK_HOOKS:
@@ -179,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix")
+             "pmix", "umix", "tdart", "tgas", "ttele", "talarm", "tsearch", "tsense")
 CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -330,6 +337,26 @@ SCENARIOS = {
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)],
         [("G", 2), ("@5", 3), ("@7", 3), ("FIRE", 2), ("WAIT", 2)], K_KNIGHT, None, "umix"),
+    # 3E-T16 (review 2026-10-26): "pmix" with a hidden trap of each type at col 16 of
+    # room A's storey 1 (the 2nd walk step fires it: the trap sequence's ticks),
+    # a Wait search (col 20, 8 waits: found w.p. 255/256) and the Mage's sense on a
+    # walk tick (col 17, the first step); gated <= CAP like pmix
+    **{k: ("knight + 4 monsters + pmix items, a hidden %s trap on the walk" % n, [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, k)
+       for k, n in (("tdart", "DART"), ("tgas", "GAS"), ("ttele", "TELEPORT"), ("talarm", "ALARM"))},
+    "tsearch": ("knight + 4 monsters + pmix items, a Wait search finds a trap", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], [("FIRE", 3), ("WAIT", 8)], K_KNIGHT, None, "tsearch"),
+    "tsense": ("mage + 4 monsters + pmix items, the Mage senses a trap on a walk tick", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_WIZARD, None, "tsense"),
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
         (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
@@ -590,6 +617,27 @@ def pmix_setup(p):
     p.set_ent(5, HP=1)
 
 
+# 3E-T16: scenario -> (type, col) of the hidden trap (room A storey 1) poked over pmix
+TRAPS = {"tdart": (0, 16), "tgas": (1, 16), "ttele": (2, 16), "talarm": (3, 16), "tsearch": (0, 20),
+         "tsense": (1, 17)}
+
+
+def trap_setup(p, key):
+    typ, col = TRAPS[key]
+    pmix_setup(p)
+    room = p.rb("CUR_ROOM")
+    p.z.cmd("write-memory %d %s" % (S["TRAP_LIST"], " ".join(
+        str(v) for v in [room | S["TRF_S1"], col | (typ << 5)] + [0] * 10 + [1])))
+
+
+def trap_report(p, key):
+    b0, b1 = p.z.read_memory(S["TRAP_LIST"], 2)
+    ev = ("fired" if b0 & S["TRF_SPENT"] or (key == "tdart" and b0 & S["TRF_KNOWN"]) else
+          "found" if b0 & S["TRF_KNOWN"] else "nothing")
+    print(f"[info] {key}: trap {ev} (TR_B0 {b0:#04x}), HP {p.ent(0)['HP']}, room {p.rb('CUR_ROOM')}", flush=True)
+    return ev
+
+
 def umix_setup(p):
     """"umix": HP 5 / 200, FOOD 40, bag Heal x2, Meat x2, Fear x2, Sleep x1, Apple."""
     p.set_ent(0, HP=5, MAXHP=200)
@@ -636,6 +684,8 @@ def run_scenario(h, scen):
         pmix_setup(p)
     if len(scen) > 5 and scen[5] == "umix":
         umix_setup(p)
+    if len(scen) > 5 and scen[5] in TRAPS:
+        trap_setup(p, scen[5])
     for f in EXTRA_SETUP:
         f(p)
     mode = scen[4] if len(scen) > 4 else None
@@ -657,6 +707,7 @@ def run_scenario(h, scen):
             st.turn(key)
             swing += S["FID_wizard_staffswing"] in p.trace_fids(0)
     st.close()
+    st.trap_ev = trap_report(p, scen[5]) if len(scen) > 5 and scen[5] in TRAPS else None
     if len(scen) > 5 and scen[5] == "umix":         # the uses really happened (bag / FOOD / statuses)
         bag = list(p.z.read_memory(S["BAG"], 15))
         print(f"[info] umix after: bag {bag}, FOOD {p.rb('FOOD')}, HP {p.ent(0)['HP']}, "
@@ -721,11 +772,15 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix").split(","):
+        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,"
+                                  "tdart,tgas,ttele,talarm,tsearch,tsense").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")
                 continue
+            want_ev = {"tsearch": "found", "tsense": "found"}.get(key, "fired")
+            if key in TRAPS and st.trap_ev != want_ev:
+                fails.append(key + " (no trap event: %s)" % st.trap_ev)
             if any(t > CAST_CAP for t in st.casts_t):
                 fails.append(key + " (cast)")
             elif key in CAST_KEYS and not st.casts_t:

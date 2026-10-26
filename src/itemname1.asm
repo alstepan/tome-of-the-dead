@@ -47,14 +47,8 @@ it_line:
                 sub  l
                 ld   h, a
 .cp:            ld   de, MSG_BUF
-.c:             ld   a, (hl)
-                or   a
-                jr   z, .nm
-                ld   (de), a
-                inc  hl
-                inc  de
-                jr   .c
-.nm:            pop  af
+                call il_cpy
+                pop  af
 ; it_line_nm — 3E-T8 (far1 from R6 fx_line): A = type, DE = past a stem already
 ; in MSG_BUF: + the name, terminated, log_push.  Clobbers: A, BC, DE, HL
 it_line_nm:
@@ -78,6 +72,9 @@ item_name:
                 add  hl, de
                 pop  de                        ; HL = this type's 3 word ids
                 ld   c, 3                      ; words left (3 = first word)
+; in_row — 3E-T16 entry (tf_line): HL = a word-id row (0-ended, <= 3), B =
+; room + 1, C = 3; as item_name from here.
+in_row:
 .word:          ld   a, (hl)
                 inc  hl
                 or   a
@@ -141,3 +138,52 @@ item_name:
                 ASSERT ITN_HERO == $FF
 item_name_end:
 ITEM_NAME_LEN   EQU item_name_end - item_name
+
+; il_cpy — copy the 0-terminated HL to DE (no 0).  Clobbers: A, HL, DE
+il_cpy:         ld   a, (hl)
+                or   a
+                ret  z
+                ld   (de), a
+                inc  hl
+                inc  de
+                jr   il_cpy
+
+;------------------------------------------------------------------------------
+; tf_line — 3E-T16, far1 from R6 trap_turn: "TRAP FOUND: <type>" (game.md
+; §8.11 (3): search / Mage sense; DART / GAS / ALARM are resident stems, the
+; TELEPORT word is the item word W_TELEPORT) -> log_push.
+; In : A = TT_*.  Clobbers: A, BC, DE, HL.   ~1.5-2.5k T + log_push
+;------------------------------------------------------------------------------
+tf_line:
+                ld   hl, tf_tab
+                add  a, l
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a
+                ld   c, (hl)                   ; the name stem / 0 = TELEPORT
+                ld   hl, it_stems + S3_TRAP_FOUND
+                ld   de, MSG_BUF
+                call il_cpy
+                ld   a, c
+                or   a
+                jr   z, .tp
+                ld   hl, it_stems
+                add  a, l
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a
+                call il_cpy
+                jr   .end
+.tp:            ld   hl, tf_row
+                ld   bc, ((IT_CAT_MAX + 1) << 8) | 3
+                call in_row
+.end:           xor  a
+                ld   (de), a
+                ld   hl, MSG_BUF
+                jp   log_push
+tf_tab:         DB   S3_TF_DART, S3_TF_GAS, 0, S3_TF_ALARM
+tf_row:         DB   W_TELEPORT, 0
+                ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3
+                ASSERT S3_TF_DART != 0 && S3_TF_GAS != 0 && S3_TF_ALARM != 0

@@ -245,7 +245,8 @@ mon_drop:
 ;      col (x + w/2) on its storey's standing row 9s+7, else the nearest col
 ;      within +-C (left first) — a cell is free when ROOM_MAP shows T_AIR
 ;      there (no item glyph = no live entry, the FLOOR_LIST invariant; also
-;      no wall / decor). List: the first FL_EMPTY entry, among 0..30 for an
+;      no wall / decor) and no unspent trap has that col (3E-T16:
+;      trap_at). List: the first FL_EMPTY entry, among 0..30 for an
 ;      ordinary drop, 0..31 for a unique (entries fill from 0 and the
 ;      generator uses <= 17, so entry 31 is the last to fill: it stays the
 ;      unique's; a pickup freeing a lower entry after all 32 were used is
@@ -314,6 +315,12 @@ drop_put:
                 ld   a, (hl)
                 or   a
                 ret  nz                        ; not T_AIR
+                push de                        ; 3E-T16: nor a trap col (hidden or
+                ld   a, (dp_rb)                ; known, unspent: R6 trap_at)
+                ld   e, a
+                call trap_at
+                pop  de
+                ret  z
                 pop  af                        ; found: leave .s
                 ld   a, (dp_slot)
                 ld   l, a

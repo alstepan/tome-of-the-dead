@@ -695,6 +695,53 @@ build_room_map:
                 add  a, FL_STRIDE
                 ld   l, a
                 djnz .pt
+                ; 3E-T16 known unspent traps (game.md §1.5): T_TRAP in their
+                ; standing-row cell, before the deriver (decor needs T_AIR: a
+                ; known trap overrides decor), and its type attr into
+                ; TILE_ATTRS[T_TRAP] (<= 1 trap a room; the draw that follows
+                ; reads it). All TRAP_MAX entries: unused ones are 0 (never known).
+                ld   hl, TRAP_LIST
+.tr:            ld   a, (TMP0)
+                xor  (hl)
+                and  TRF_ROOM_MASK | TRF_KNOWN | TRF_SPENT
+                cp   TRF_KNOWN                 ; this room, known, not spent
+                jr   nz, .tn
+                push hl
+                ld   a, (hl)
+                and  TRF_S1
+                rrca
+                rrca
+                rrca
+                rrca                           ; s
+                call storey_row                ; (bank 2) A = 9s+7
+                ld   b, a
+                inc  l
+                ld   a, (hl)
+                and  TR_COL_MASK
+                ld   c, a
+                xor  (hl)                      ; the type << 5
+                rlca
+                rlca
+                rlca
+                add  a, tr_ink3 & $FF
+                ld   e, a
+                adc  a, tr_ink3 >> 8
+                sub  e
+                ld   d, a
+                call map_cell
+                ld   a, (hl)
+                or   a
+                jr   nz, .tk                   ; an item there: it shows (never generated)
+                ld   (hl), T_TRAP
+                ld   a, (de)
+                ld   (TILE_ATTRS + T_TRAP), a
+.tk:            pop  hl
+.tn:            inc  l
+                inc  l
+                ld   a, l
+                cp   (TRAP_LIST + TRAP_MAX * TRAP_STRIDE) & $FF
+                jr   nz, .tr
+                ASSERT TRF_S1 == 1 << 4 && (TRAP_LIST >> 8) == ((TRAP_LIST + TRAP_MAX * TRAP_STRIDE) >> 8)
                 ; decor
                 ld   a, (ix+RD_SEED)
                 or   (ix+RD_SEED + 1)

@@ -146,9 +146,15 @@ act_pend:
                 ld   a, (hl)
                 xor  TP_ACT | TP_FIRE          ; TP_ACT was set, TP_FIRE clear
                 ld   (hl), a
+                ld   a, (ACT_ABL)              ; 3E-T16: ABL_TRAP (bit 7): a trap
+                rla                            ; sequence step (R6 trap6.asm), no
+                jr   c, .trp                   ; probe: an ordinary tick for budget.py
                 call probe_act_fire            ; bank-2 test probe (budget "cast")
                 ld   a, (ACT_ABL)
                 jr   act_fire
+.trp:           ld   hl, trap_step
+                jp   far6
+                ASSERT ABL_TRAP == $80 && ABL_COUNT < $80
 .mon:           bit  TP_MON_BIT, (hl)
                 ret  z
                 ld   a, (FX_BUSY)              ; the hero's FX first (designer
@@ -182,6 +188,9 @@ act_pend:
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
                 ret  nz                        ; the hero died of his own cast
+                ld   a, (EXIT_KIND)            ; 3E-T16: a teleport turn (scroll / trap,
+                or   a                         ; tele_arm's hold): no monster phase
+                ret  nz
                 ld   hl, resolve_monsters      ; bank 3 (cache_player: the hero's
                 jp   far3                      ; position / HP as the cast left them)
 
