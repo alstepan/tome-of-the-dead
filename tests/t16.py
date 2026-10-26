@@ -482,6 +482,20 @@ def overlap(p, check, scene, trap, put_hero, heal, ent, cell, act, stub, tick, l
     k5 = cell(HX + 4)
     check("O3 build_room_map: an item on a known trap cell keeps its glyph; without it the plate is stamped",
           (k4, k5) == (g, T_TRAP), (k4, k5, g))
+    # O5 B22: ap_take (a bank-7 fall-through into ap_stamp_a) on a known trap cell: a full
+    # pickup leaves the plate; a partial one (QUIVER FULL) keeps the pile's class glyph
+    def take(qty, daggers):
+        p.wb(S["DAGGERS"], daggers)
+        p.wmem(S["FLOOR_LIST"] + 4 * fe, [rb, HX + 4, S["IT_DAGGER"], qty])
+        stub([0x3A] + w16(S["PORT_7FFD_SHADOW"]) + [0xF5, 0x3E, 7, 0xCD] + w16(S["page_bank"])
+             + [0x3E, 0, 0x21] + w16(S["FLOOR_LIST"] + 4 * fe + 2) + [0x1E, rb, 0xCD] + w16(S["ap_take"])
+             + [0xF1, 0xCD] + w16(S["restore_page"]))
+        return cell(HX + 4), p.rb(S["FLOOR_LIST"] + 4 * fe + (3 if qty == 3 else 0)), p.rb(S["DAGGERS"])
+    k6 = take(2, 0)
+    k7 = take(3, S["DAGGERS_MAX"] - 1)
+    p.wmem(S["FLOOR_LIST"] + 4 * fe, [0xFF] * 4)
+    check("O5 ap_take on a known trap cell: all taken -> plate; partial -> T_DAGGERS, FL_QTY left",
+          (k6, k7) == ((T_TRAP, 0xFF, 2), (S["T_DAGGERS"], 2, S["DAGGERS_MAX"])), (k6, k7))
     # S Silk Cloak: poison-immune against the DART
     scene(K_KNIGHT)
     p.wmem(S["WORN"], [S["IT_W_SHORT"], 1, 0, S["IT_A_SILK"], 1, 0, 0, 0, 0, 0, 0, 0])
