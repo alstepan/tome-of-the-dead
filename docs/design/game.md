@@ -832,10 +832,10 @@ Mana / Scarab halve it.
 
 | Ability | MP (rank 1) | Change |
 |---|---|---|
-| **Spark** | **2** (all ranks) | was 1: at 1 MP it out-damaged Firebolt per MP (3.5 vs 2.2) and made MP endless |
-| Firebolt · Frost Shard · Drain Life | 3 · 3 · 3 (Drain r3: 2) | unchanged |
-| Lightning | 5 (r3: 4) | unchanged |
-| Power Strike · Whirlwind | 3 (r2: 2) · 4 (r3: 3) | unchanged |
+| **Spark** | **2** (rank 1; rev 6 ranks 4 / 6, §5) | was 1: at 1 MP it out-damaged Firebolt per MP (3.5 vs 2.2) and made MP endless |
+| Firebolt · Frost Shard · Drain Life | 3 · 3 · 3 (rev 6 ranks 5 / 8 each, §5) | rank 1 unchanged |
+| Lightning | 5 (rev 6 ranks 8 / 12) | rank 1 unchanged |
+| Power Strike · Whirlwind | 3 (5 / 7) · 4 (7 / 10) | rank 1 unchanged; rev 6 auto-downcast, §5 |
 
 | Hero / level | `MAXMP` | Fight budget | Turns to refill from 0 |
 |---|---|---|---|
@@ -925,28 +925,59 @@ header shows the same. 0 new glyphs.
 |---|---|
 | Source | Abilities come **only** from books **found in the dungeon** (nothing is bought or granted). Melee is always available. Scrolls and ammunition are likewise found only (§8.5) |
 | Placement (rev 5, designer decision 2026-10-03) | **1 class book per level D1–D7, plus a 2nd class book with 1 in 2 on D4–D7** (`ITEM_RNG`, §8.11 Q8; E ≈ 9 per run). **The D1 book lies in the start room.** D8 has none. The generator places a generic **class book** (`SPELLBOOK` / `WAR MANUAL`); *what it teaches is decided when it is read* (below), so generation never depends on hero state |
-| Reading (rev 6, user 2026-10-26: uniform pick; pity/keystone designer decision 2026-10-26) | Page verb `READ`, 1 turn on return; the book is consumed. What it teaches is decided now, **first matching step wins**: **1. Starter** — no ability known yet → learn the class's slot-0 ability (Spark / Power Strike), deterministic, 0 RNG. This is the *first book read*, normally the D1 start-room book. **2. Keystone** (Mage only) — depth ≥ 5 and Firebolt unlearned → learn Firebolt, 0 RNG (Firebolt is the only spell that hurts Ghosts and the Archmage, §9.1 resistances). **3. Pity** — `BOOK_DRY` = 2 (`PITY_N`) and an eligible unlearned ability exists → learn the **earliest-depth** eligible unlearned one, 0 RNG. **4. Uniform pick** — build the candidate list: every class ability that is either *unlearned with unlock depth (§4) ≤ current depth* (outcome: learn, rank 1, fills its bar slot) or *known below rank 3* (outcome: rank +1). Each ability contributes at most one candidate (≤ 5). Pick one uniformly with **one gameplay-RNG call** at read time. **5. Tome** — the list is empty → Warrior Vigor / Mage Power (§4), 0 RNG. **`BOOK_DRY`** (0–2): any learn (steps 1–4) sets it to 0; a rank-up while an eligible unlearned ability existed adds 1; any other read sets 0. Consequence: abilities can arrive late or (Frost, Drain, Lightning) never; a run may end Spark III with no Lightning |
+| Reading (rev 6, user 2026-10-26: uniform pick; pity designer decision 2026-10-26, user-approved; keystone rule vetoed by the user 2026-10-26) | Page verb `READ`, 1 turn on return; the book is consumed. What it teaches is decided now, **first matching step wins**: **1. Starter** — no ability known yet → learn the class's slot-0 ability (Spark / Power Strike), deterministic, 0 RNG. This is the *first book read*, normally the D1 start-room book. **2. Pity** — `BOOK_DRY` = 2 (`PITY_N`) and an eligible unlearned ability exists → learn the **earliest-depth** eligible unlearned one, 0 RNG. **3. Uniform pick** — build the candidate list: every class ability that is either *unlearned with unlock depth (§4) ≤ current depth* (outcome: learn, rank 1, fills its bar slot) or *known below rank 3* (outcome: rank +1). Each ability contributes at most one candidate (≤ 5). Pick one uniformly with **one gameplay-RNG call** at read time. **4. Tome** — the list is empty → Warrior Vigor / Mage Power (§4), 0 RNG. **`BOOK_DRY`** (0–2): any learn (steps 1–3) sets it to 0; a rank-up while an eligible unlearned ability existed adds 1; any other read sets 0. Consequence: abilities can arrive late or never (Firebolt included, ~2 %, §10 BAL1 item); a run may end Spark III with no Lightning |
 | Other class's book | **CUT (user 2026-10-20, memory):** never generated; only the hero's class book exists |
-| Expected yield (E, rev 6; hand Markov estimate over 9 books, verify by sim in BAL1) | **Warrior:** step 4 at D2 has one candidate (PS → II); at D3 Whirlwind ½ / PS III ½; Whirlwind is the only candidate on the next read, so it is **always learned by the first D4 book**. End state is fixed: PS III + Whirlwind III after the 5th book (~D5), then Vigor × (books − 5) = 1–5, E 3. Pity never fires. **Mage:** Firebolt by D2 ½, by D3 ⅔, by D4 ~⅞, by D5 1 (keystone). End: **all 5 spells ~61 %, one missing ~36 % (Lightning in ~¾ of those, else Drain/Frost), two missing ~3 %**; ~3.6 unlocks + ~4.4 rank-ups, Spark III in ~½ of runs; **0 Power** (14 outcomes > 10 books max) |
-| Why `PITY_N` = 2 | P(end missing ≥ 1 Mage spell), same estimate: no pity ~63 % (Firebolt alone ~10 %) · N 3 ~50 % · **N 2 ~39 %** · N 1 ~12 % (≈ the old fixed schedule, kills the variety the user asked for). N 2 keeps missing-a-spell a real ~⅓-of-runs build outcome while the worst case is 1 unlock per 3 eligible reads; the keystone removes the only unwinnable gap (no Firebolt at D8) |
+| Expected yield (E, rev 6; hand Markov estimate over 9 books, verify by sim in BAL1) | **Warrior:** step 3 at D2 has one candidate (PS → II); at D3 Whirlwind ½ / PS III ½; Whirlwind is the only candidate on the next read, so it is **always learned by the first D4 book**. End state is fixed: PS III + Whirlwind III after the 5th book (~D5), then Vigor × (books − 5) = 1–5, E 3. Pity never fires. **Mage:** Firebolt by D2 ½, by D3 ⅔, by D4 ~⅞, by D5 ~93 %, by run end ~98 %. End: **all 5 spells ~61 %, one missing ~36 % (Lightning in ~¾ of those, else Drain/Frost), two missing ~3 %**; ~3.6 unlocks + ~4.4 rank-ups, Spark III in ~½ of runs; **0 Power** (14 outcomes > 10 books max) |
+| Why `PITY_N` = 2 | P(end missing ≥ 1 Mage spell), same estimate: no pity ~63 % (Firebolt alone ~10 %) · N 3 ~50 % · **N 2 ~39 %** · N 1 ~12 % (≈ the old fixed schedule, kills the variety the user asked for). N 2 keeps missing-a-spell a real ~⅓-of-runs build outcome while the worst case is 1 unlock per 3 eligible reads. Pity forces the earliest-depth spell, so Firebolt is the first forced one; it is missed only when random Frost/Drain/Lightning unlocks keep resetting `BOOK_DRY` (~2 %, §10 BAL1 item) |
 
 **Ability ranks (user 2026-10-03: repeat books level an ability; numbers designer decision
 2026-10-03). Max rank 3; rank 1 = the §6.1/§6.2 row. Ranks are cumulative.**
 
-| Ability | Rank 2 | Rank 3 |
-|---|---|---|
-| Spark (**2 MP**, B20; r6, 1d4+1) | 1d4+2, range 8 | 1d4+3, CONFUSED chance 1 in 2 |
-| Firebolt (3 MP, r12, 1d8+2, burst 1d4) | 1d8+3, burst 1d6 | 1d8+4, the burst **spares the caster** |
-| Frost Shard (3 MP, r12, 1d6, 1 bounce, freeze 2) | freeze 3, 2 bounces | 1d6+2, freeze 4 (bosses halved, §6.4) |
-| Drain Life (3 MP, r5, 1d6+1) | 1d6+2, range 8 | **2 MP**, 1d6+3 |
-| Lightning (5 MP, r28, 1d8+3, 2 bounces) | 1d8+4 | **4 MP**, 3 bounces (loop guard 4 still binds) |
-| Power Strike (3 MP, +2 hit, ×2, stun 1) | **2 MP** | stun 2 (bosses 1) |
-| Whirlwind (4 MP, dmg +1) | dmg +2 | **3 MP**, to-hit +2 |
+**Rev 6 (user 2026-10-26: each rank costs much more MP; numbers designer decision
+2026-10-26).** Costs: rank 2 ≈ ×1.6–1.75, rank 3 ≈ ×2.3–3 of rank 1. Damage rises with the
+cost so a higher rank is **more damage per cast (tempo/burst) at a lower damage per MP**
+(rank 2 ~0.85–1.0×, rank 3 ~0.7–0.8× of rank-1 efficiency). The old MP-*reduction* rank
+effects (Drain III 2 MP, Lightning III 4 MP, Power Strike II 2 MP, Whirlwind III 3 MP) are
+removed.
+
+| Ability | Rank 1 (§6.1/§6.2) | Rank 2 | Rank 3 |
+|---|---|---|---|
+| Spark | **2 MP**, r6, 1d4+1, confuse 1 in 4 | **4 MP**, r8, **1d8+2** | **6 MP**, r8, **1d8+4**, confuse 1 in 2 |
+| Firebolt | **3 MP**, r12, 1d8+2, burst 1d4 | **5 MP**, **1d8+5**, burst 1d6 | **8 MP**, **1d10+7**, burst 1d6, burst **spares the caster** |
+| Frost Shard | **3 MP**, r12, 1d6, 1 bounce, freeze 2 | **5 MP**, **1d6+1**, 2 bounces, freeze 3 | **8 MP**, **1d6+3**, 2 bounces, freeze 4 (bosses halved, §6.4) |
+| Drain Life | **3 MP**, r5, 1d6+1 | **5 MP**, r8, **1d6+3** | **8 MP**, r8, **1d8+5** |
+| Lightning | **5 MP**, r28, 1d8+3, 2 bounces | **8 MP**, **1d8+6** | **12 MP**, **1d8+8**, 3 bounces (loop guard 4 still binds) |
+| Power Strike | **3 MP**, +2 hit, ×2, stun 1 | **5 MP**, +3 hit, **×2½** (2d + d div 2), stun 1 | **7 MP**, +4 hit, **×3**, stun 2 (bosses 1) |
+| Whirlwind | **4 MP**, to-hit each, dmg +1 | **7 MP**, dmg **+3** | **10 MP**, dmg **+4**, to-hit +2 |
+
+**Auto-downcast (rule).** A cast fires at the **highest known rank the hero can afford now**;
+the MP spent and the effect are that rank's row. So a rank-up never locks an ability out and
+never makes it worse than before: the floor is always rank 1. The **grey-out** (§3.5) and the
+`NO MANA` refusal keep the **rank-1 cost** as their threshold (unchanged code path, the
+threshold is read from row 1). The rank-3 decision is *when* to spend the burst: a full pool
+opens with the big cast, a drained one keeps casting at rank 1–2. **Info line:** name +
+learned rank + that rank's cost (`FIREBOLT III  8MP …`, static per rank row); a downcast is
+silent apart from the smaller damage number (0 new strings).
+
+**Pool check (MP at expected level, §4.1; casts of the top rank from full, then downcasts).**
+
+| Ability, rank | Likely first reached | Pool there | Top-rank casts / fight |
+|---|---|---|---|
+| Spark III (6) | D3–D4 | M 16–18 | 2–3 (+ rank-1 tail) |
+| Firebolt III (8) | D4–D5 | M 18–20 | 2 |
+| Frost / Drain III (8) | D6–D7 | M 22–24 | 2–3 |
+| Lightning II (8) / III (12) | D5–D6 / D7 (~¼ of runs) | M 20–22 / 24–26 | 2 / 2 |
+| Power Strike II (5) / III (7) | D2 (always) / D3–D4 | W 7 / 8–9 | 1 / 1 (+ 0–1 rank-1) |
+| Whirlwind II (7) / III (10) | D4–D5 / D5–D6 | W 9–10 / 11–13 (+Vigor) | 1 / 1 |
+
+Never unaffordable: every top rank ≤ the pool at the depth it is first likely reached, and
+downcast covers the rest. Warrior power attacks become **one big hit per fight** (was 2–4
+cheap ones); the sword stays his main damage (§4.0).
 
 Daggers and the bow have no ranks (ammo is their limit).
 
 **Display.** Icons are unchanged (no pip: the 24×16 art fills its 3×2 cells, a digit would
-clash). The **info line name field** carries the rank as a roman suffix: `FIREBOLT II  3MP
+clash). The **info line name field** carries the rank as a roman suffix: `FIREBOLT II  5MP
 RANGE 12  FIRE BURST`, `POWER STRIKE III` (16 = the name field max). Messages: `YOU LEARN
 FIREBOLT!` · `FIREBOLT RISES TO RANK 2` (24; longest `POWER STRIKE RISES TO RANK 3` 28; no full stop, strings style).
 
@@ -961,7 +992,7 @@ stems + roman suffixes; ability names exist).
 `ARANK`'s 6 spare bits (0 new bytes; engineer may choose otherwise). Inputs: class, current
 depth, the class's unlock-depth row (slots ordered by unlock depth, so "earliest" = lowest
 slot). One pass over slots 0–4 yields candidate count `n` ≤ 5 (a ≤ 5-byte slot list or a
-bitmask) and "eligible unlearned exists". Steps 1–3 and 5 make **0 RNG calls**; step 4 makes
+bitmask) and "eligible unlearned exists". Steps 1, 2 and 4 make **0 RNG calls**; step 3 makes
 **exactly 1**: index = `(RNG8 × n) >> 8` (bias ≤ 1/256 for n ≤ 5; no rejection loop, so the
 call count is fixed and seeded tests replay). Warrior slots 2–4 are empty (never candidates).
 Same messages as before (`YOU LEARN …` / `… RISES TO RANK n` / tome).
@@ -2824,14 +2855,49 @@ ranks and gear keep pace.
 
 | Depth | Expected `LVL` | Hero at entry W HP/MP · M HP/MP (rev 5) | Threat | Key answer |
 |---|---|---|---|---|
-| D1 | 1 | 24/6 · 16/12 | soft | the D1 book in the start room |
-| D2 | 2 | 28/7 · 19/14 | poison | Cure; Firebolt (Spider W) |
-| D3 | 3 | 32/8 · 22/16 | first undead: Frost/Drain are useless | Firebolt (Vampire W); Whirlwind |
-| D4 | 4 | 36/9 · 25/18 | archers, Ogre 43 hp; Black Widow acid | Drain Life on living Orcs/Ogre; close doors; bow |
-| D5 | 5 | 40/10 · 28/20 | Mummy PHYS R, curse (WEAK 12, §6.4); first ALARM traps | Lightning; fire on Mummies; Cure; Scarab next |
+| D1 | 1 | 24/6 · 16/12 | soft | the D1 book in the start room (starter, deterministic) |
+| D2 | 2 | 28/7 · 19/14 | poison | Cure; Firebolt (Spider W; Mage has it ½) |
+| D3 | 3 | 32/8 · 22/16 | first undead: Frost/Drain are useless | Firebolt (Vampire W; ⅔); Whirlwind (½) or PS III |
+| D4 | 4 | 36/9 · 25/18 | archers, Ogre 43 hp; Black Widow acid | Spark (Ogre SHOCK W, always known); Drain on living; close doors; bow |
+| D5 | 5 | 40/10 · 28/20 | Mummy PHYS R, curse (WEAK 12, §6.4); first ALARM traps | Firebolt (Mage ~93 % by D5); Cure; Scarab next |
 | D6 | 6 | 47/12 · 31/22 | casters, ghost reflecting Lightning | Ring of the Grave; Firebolt on ghosts |
-| D7 | 7 | 54/14 · 34/24 | Death Knight (parry + notch, fire reflect) | Lightning (W); Power Strike through parries; blessed weapon |
-| D8 | 8 | 61/16 · 37/26 | Archmage + summons + bouncing bolt; reflects Frost/Lightning | Mirror Helm; Firebolt; potions saved |
+| D7 | 7 | 54/14 · 34/24 | Death Knight (parry + notch, fire reflect) | Spark / Lightning (W); Power Strike through parries; blessed weapon |
+| D8 | 8 | 61/16 · 37/26 | Archmage + summons + bouncing bolt; reflects Frost/Lightning | Mirror Helm; Firebolt (Mage ~98 %); potions saved |
+
+**Answers under random books (rev 6, §5).** Bosses never regenerate and never follow (§8.6),
+so a missing answer costs time and food (retreat, rest, return), never the run.
+
+| Threat (res., §9.1) | Mage answers | Mage without them | Warrior |
+|---|---|---|---|
+| Spider Queen D2 (FIRE W) | Firebolt | ½ of runs (and then Spark is II): Spark kite, ~14 MP for its 22 hp = the whole L2 pool; Mana potion or a second visit | PS II + sword; Cure |
+| Vampire Lord D3 (FIRE W; COLD/DRAIN I) | Firebolt; Spark N | ⅓: Spark-kite at range (its bite heals it), 2 lair visits; Frost/Drain useless | Whirlwind ½ / PS III ½: both fine |
+| Ogre Warlord D4 (PHYS R, SHOCK W) | **Spark**, Lightning | always has Spark; ranked Spark is the best answer | PS (×2–×3 beats PHYS R), bow, doors |
+| Mummies / Pharaoh D5 (FIRE W, PHYS R, COLD/DRAIN I) | Firebolt; Spark/Lightning N | ~7 %: Spark/Lightning at N, slower; Pharaoh over 2 visits | PS, Scarab next |
+| Ghosts D6–D8 (SHOCK X, PHYS R, COLD/DRAIN I) | **Firebolt only** | **~2 % (no Firebolt at run end): staff only, 1d4 PHYS R ≈ 1 per hit; avoid them (flyers, blocked by closed doors). BAL1 item** | sword (R), PS |
+| Living Orcs D4–D7 (FIRE R) | Drain (sustain), Spark, Lightning | no Drain (~10 %): potions + rest | sword, Whirlwind on packs |
+| Death Knight D7 (FIRE X, SHOCK W) | Spark, Lightning | no Lightning (~27 %): Spark III 1d8+4 ×2 = 17 per 6 MP is enough | PS through parries |
+| Archmage D8 (COLD/SHOCK X, DRAIN I) + summons | Firebolt + staff; Lightning on summons | no Lightning: Firebolt burst on summons. **No Firebolt (~2 %): Bone Staff 1d6 (~38 swings for ~47 hp) + Mirror Helm reflecting Death Bolts (½ to it), hit-and-run over many visits (it never regenerates, §8.6); near-unwinnable. BAL1 item** | steel, Mirror Helm |
+
+Warrior check: his end state is unchanged (PS III + Whirlwind III, ~3 Vigor); only the D3
+order varies (Whirlwind or PS III). Low variance is accepted: his variety is gear, bow and
+daggers. Rank-ups never hurt him (auto-downcast, §5).
+
+**BAL1 items from rev 6 (user 2026-10-26; resolve with a tools/ simulation + playtest):**
+- **No-Firebolt Mage (~2 % of runs; the keystone rule was vetoed).** Ghosts and the Archmage
+  have no spell answer. Options, in order of preference: (a) give them a non-Firebolt
+  answer, e.g. Ghost DRAIN I → R or SHOCK X → R, Archmage SHOCK X → R so Lightning works at
+  ½; (b) a Firebolt-strong drop on the way (Bone Staff "spells +2" → also FIRE-type staff
+  bonk, or a fire wand/scroll); (c) accept it as a rare hard run.
+- **Re-verify the §5 book-outcome and rank-MP numbers** (hand estimates) by simulation.
+- **Monsters must scale with depth, and stronger monsters should cast or throw.** Existing
+  coverage: depth scaling hp + (d − 1), atk + (d − 1) div 3 (§9.1); tier odds rise with depth
+  and hero level (§9.6). Ranged/casting today: Skeleton Archer / Sniper (arrows), Goblin
+  Slinger (rock), Necromancer (Dark Bolt), Bone Caller (summons), Archmage (Death Bolt +
+  summons). **Gap:** the melee tier-2/3 rows (Orc Berserker/Bouncer, Skeleton Guard/Knight,
+  Black Widow, Poltergeist, Rabbit Rat) have no ranged or spell attack, and no monster
+  throws daggers. BAL1 to decide e.g. Orc Bouncer / Skeleton Knight throw a dagger (Slinger
+  ranged AI, `dagger_spin` frames, 1d4 r6), Poltergeist a short DARK bolt, and whether depth
+  scaling should also add dmg (+ (d − 1) div 4).
 
 **Rev 5 changes (E; flagged for the 5-seed playtest):**
 - HP lands within ±2 of rev 4 at D8. **Mage MP runs ~+4 above rev 4 from D4 to D7** (the +2
