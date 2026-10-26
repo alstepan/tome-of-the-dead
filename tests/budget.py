@@ -486,7 +486,7 @@ class CastStepper(FxStepper):
                                                   S["ACT_FIRE_TICK"], S["ACT_FIRE_TICK"] + 1))
         # D3-7 T4: spell_fire is real now; a range-0 Lightning row keeps this
         # scenario the engine-only measurement ("lcast" is the real cast)
-        p.z.cmd("write-memory %d %s" % (S["RANK_ROWS"] + 6 * S["ABL_LIGHTNING"], " ".join(["0"] * 6)))
+        p.z.cmd("write-memory %d %s" % (S["CAST_ROW"], " ".join(["0"] * 6)))
         super().turn(*keys, **kw)
 
     def close(self):
@@ -496,16 +496,13 @@ class CastStepper(FxStepper):
 
 def lcast_setup(p, placements, k=None, r=3, x=14):
     """"lcast": the hero at x facing left (HP 200), the monsters 60 HP,
-    spell k (default Lightning) learned at rank r (ARANK + its RANK_ROWS row,
-    as rank_sync), MP 40, its slot selected (no turn)."""
+    spell k (default Lightning) learned at rank r (ARANK; abil_load picks the row), MP 40, its slot selected (no turn)."""
     import combat_tables as CT
     sym, b3 = CT.load()
     k = S["ABL_LIGHTNING"] if k is None else k
-    row = sym["ab_rank"] - CT.BASE + (k * 3 + r - 1) * 6
     p.set_ent(0, X=x, PX=x * 8, FLAGS=EF_ACTIVE | 2 | EF_LEFT, HP=200, MAXHP=200)
     for slot, *_ in placements:
         p.set_ent(slot, HP=60, MAXHP=60)
-    p.z.cmd("write-memory %d %s" % (S["RANK_ROWS"] + 6 * k, " ".join(str(b) for b in b3[row:row + 6])))
     p.z.cmd("write-memory %d %d %d" % (S["ARANK"], (r << (2 * k)) & 255, (r << (2 * k)) >> 8))
     p.wb("MP", 40)
     p.wb("MAXMP", 40)
@@ -559,17 +556,15 @@ def fzcast_setup(p, placements, key):
 
 def wcast_setup(p, placements):
     """"wcast": the hero at x 12 facing right (HP 200), the monsters 60 HP,
-    Whirlwind learned at rank 3 (ARANK + its RANK_ROWS row, as rank_sync),
+    Whirlwind learned at rank 3 (ARANK; abil_load picks the row),
     MP 40, the Whirlwind slot selected (no turn)."""
     import combat_tables as CT
     sym, b3 = CT.load()
     a, r = S["ABL_WHIRL"], 3
     k = a - S["ABL_POWER"]
-    row = sym["ab_rank"] - CT.BASE + (a * 3 + r - 1) * 6
     p.set_ent(0, HP=200, MAXHP=200)
     for slot, *_ in placements:
         p.set_ent(slot, HP=60, MAXHP=60)
-    p.z.cmd("write-memory %d %s" % (S["RANK_ROWS"] + 6 * k, " ".join(str(b) for b in b3[row:row + 6])))
     p.z.cmd("write-memory %d %d %d" % (S["ARANK"], (r << (2 * k)) & 255, (r << (2 * k)) >> 8))
     p.wb("MP", 40)
     p.wb("MAXMP", 40)

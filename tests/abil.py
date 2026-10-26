@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""D3-7 T3: rank_sync + the DEBUG start kit (src/rank3.asm, hero_st_init).
+"""D3-7 T3: abil_load's rank row + the DEBUG start kit (src/rank3.asm, hero_st_init).
 
   K1  start state per class after START: the base MP (Warrior 6 / Mage 12,
       game.md §4) and no abilities on a release build; on a DEBUG_KIT=1 build
       (needs GAME_ALLOW_DEBUG_KIT=1) the designer's kit: Mage 5 spells rank 1,
       MP 40/40; Warrior bow, ARROWS 20, DAGGERS 8, Power Strike + Whirlwind
-      rank 1, MP 20/20; and RANK_ROWS == the ab_rank rank-1 rows
-  K2  rank_sync (run in bank 3 over a booted game): for each class and rank
-      pattern, RANK_ROWS row k == ab_rank[(cls_base + k) * 3 + rank - 1] when
-      the rank is 1..3, and a rank 0 row is left untouched (sentinel)
+      rank 1, MP 20/20
+  K2  RANK1 abil_load (run in bank 3 over a booted game): for each class, rank
+      pattern and MP, ABIL_RK == ab_rank[(cls_base + k) * 3 + q - 1] with q the
+      highest rank <= the hero's with cost <= MP (rank 1 is the floor;
+      auto-downcast), and a spell's row is also CAST_ROW
 D3-7 T4: the Mage spells as a split ability turn (abil_spell / spell_fire,
 src/abil_spell7.asm) and the staff bonk (melee_bonk), played through the real
 controls (number key + FIRE) in PROTO room A, release build (DEBUG_KIT=0):
@@ -54,7 +55,7 @@ GOLDEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden")
 UPDATE = "--update-golden" in sys.argv
 PNG_DIR = sys.argv[sys.argv.index("--png") + 1] if "--png" in sys.argv else None
 
-RK, RR = 6, S["RANK_ROWS"]
+RK = 6
 SENT = 0xEE
 KIT = bool(S.get("KIT_DEBUG", 0))
 
@@ -75,9 +76,6 @@ def main():
                 if detail != "":
                     print(f"[detail] {tag}: {str(detail)[:600]}", flush=True)
 
-        def rows():
-            return list(p.z.read_memory(RR, 5 * RK))
-
         for kind, name in ((K_KNIGHT, "Warrior"), (K_WIZARD, "Mage")):
             p.boot(kind)
             mp, mx = p.rb("MP"), p.rb("MAXMP")
@@ -91,36 +89,41 @@ def main():
                     nk = 5
                 got = dict(mp=mp, mx=mx, arank=arank, bow=p.rb("HAS_BOW"),
                            arrows=p.rb("ARROWS"), daggers=p.rb("DAGGERS"))
-                exp_rows = []
-                for k in range(nk):
-                    exp_rows += ab_rank((base[kind] + k) * 3)
                 check(f"K1 {name} debug kit == {want}", got == want, got)
-                check(f"K1 {name} kit RANK_ROWS == rank-1 rows", rows()[:nk * RK] == exp_rows, rows())
             else:
                 want = dict(mp=6 if kind == K_KNIGHT else 12, arank=0)
                 want["mx"] = want["mp"]
                 got = dict(mp=mp, mx=mx, arank=arank)
                 check(f"K1 {name} release start: base MP {want['mp']}, no abilities", got == want, got)
 
-            # K2: rank_sync over poked ARANK patterns
+            # K2 (RANK1): abil_load over poked ARANK patterns and MP: ABIL_RK == the ab_rank row of the
+            # highest rank <= the hero's whose cost is <= MP (rank 1 is the floor; an unlearned ability
+            # reads rank 1), and a spell's row is also CAST_ROW
             nk = 2 if kind == K_KNIGHT else 5
             rng = random.Random(7 + kind)
             pats = [[0] * nk, [1] * nk, [2] * nk, [3] * nk, [3, 2, 1, 0, 3][:nk], [0, 3, 0, 2, 1][:nk]]
-            pats += [[rng.randrange(4) for _ in range(nk)] for _ in range(24)]
-            bad = []
+            pats += [[rng.randrange(4) for _ in range(nk)] for _ in range(10)]
+            bad, n = [], 0
             for pat in pats:
                 av = sum(r << (2 * k) for k, r in enumerate(pat))
-                p.z.cmd("write-memory %d %s" % (RR, " ".join([str(SENT)] * (5 * RK))))
                 p.wmem(S["ARANK"], w16(av))
-                assert p.code(p.bank3([0xCD] + w16(S["rank_sync"])))
-                want = []
-                for k in range(5):
-                    r = pat[k] if k < nk else 0
-                    want += ab_rank((base[kind] + k) * 3 + r - 1) if r else [SENT] * RK
-                got = rows()
-                if got != want:
-                    bad.append((pat, got, want))
-            check(f"K2 {name} rank_sync == ab_rank rows ({len(pats)} patterns)", not bad, bad[:1])
+                for mp in (0, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 40):
+                    p.wb("MP", mp)
+                    for k in range(nk):
+                        abl = base[kind] + k
+                        r = max(pat[k], 1)
+                        while r > 1 and ab_rank(abl * 3 + r - 1)[0] > mp:
+                            r -= 1
+                        want = ab_rank(abl * 3 + r - 1)
+                        p.z.cmd("write-memory %d %s" % (S["CAST_ROW"], " ".join([str(SENT)] * RK)))
+                        assert p.code(p.bank3([0x3E, abl, 0xCD] + w16(S["abil_load"])))
+                        got = list(p.z.read_memory(S["ABIL_RK"], RK))
+                        crow = list(p.z.read_memory(S["CAST_ROW"], RK))
+                        n += 1
+                        if got != want or crow != (want if abl < S["ABL_POWER"] else [SENT] * RK):
+                            bad.append((pat, mp, k, got, crow, want))
+            check(f"K2 {name} abil_load == the highest affordable ab_rank row, CAST_ROW for spells ({n} cases)",
+                  not bad, bad[:1])
 
         if not KIT:
             spells(h, p, check)
@@ -181,7 +184,7 @@ def spells(h, p, check):
         """Fresh Mage game in PROTO room A: every monster parked, the hero at
         HX facing right, `mons` = [(slot, x, hp)] on his floor (facing him),
         a Goblin (slot 3) behind him if `behind`; MP / MAXMP = mp; learn =
-        {k: rank} -> ARANK + RANK_ROWS (the ab_rank rows, as rank_sync)."""
+        {k: rank} -> ARANK (abil_load picks the ab_rank row)."""
         nonlocal kt
         p.boot(K_WIZARD)
         if kt is None:
@@ -202,7 +205,6 @@ def spells(h, p, check):
         av = 0
         for k, r in (learn or {}).items():
             av |= r << (2 * k)
-            p.wmem(S["RANK_ROWS"] + 6 * k, list(b3[ab + (k * 3 + r - 1) * 6: ab + (k * 3 + r) * 6]))
         p.wmem(S["ARANK"], w16(av))
         p.wb("FX_DROP", 0)
         p.tick(3)
@@ -234,8 +236,12 @@ def spells(h, p, check):
                     ent=e, rat=[mem[sl * STRIDE + E_REACTAT] for sl in range(16)],
                     tracks=[list(p.z.read_memory(S[f"FXT{i}"], 32)) for i in range(3)])
 
-    def cast(tag, k, rank, mons, hero_hp=60, gold=None):
-        scene(mons, hero_hp, learn={k: rank})
+    def cast(tag, k, rank, mons, hero_hp=60, gold=None, mp=40):
+        """rank = the learned rank; with a low `mp` the cast downcasts (RANK1): the
+        rank cast = the highest one whose cost <= mp (rank 1 floor)."""
+        scene(mons, hero_hp, learn={k: rank}, mp=mp)
+        while rank > 1 and b3[ab + (k * 3 + rank - 1) * 6] > mp:
+            rank -= 1
         cost = b3[ab + (k * 3 + rank - 1) * 6]
         mp0 = p.rb("MP")
         p.select_slot(k + 1)
@@ -344,6 +350,11 @@ def spells(h, p, check):
     cast("Drain r1 on a Rat heals the hero", DRAINL, 1, [(1, sx + 2, 40)], hero_hp=5)
     cast("Lightning r3 through Rat, Slime, Skeleton", LIGHTNING, 3,
          [(1, sx + 2, 60), (2, sx + 6, 60), (5, sx + 10, 60)], hero_hp=120)
+
+    # RANK1 auto-downcast: learned rank 3, MP only covers rank 2 / rank 1
+    cast("Lightning III with MP 9 casts rank II (8 MP)", LIGHTNING, 3,
+         [(1, sx + 2, 60), (2, sx + 6, 60), (5, sx + 10, 60)], hero_hp=120, mp=9)
+    cast("Firebolt III with MP 4 casts rank I (3 MP)", FIREBOLT, 3, [(1, sx + 3, 40), (2, sx + 4, 40)], mp=4)
 
     # --- S6: no MP ---
     scene([(1, sx + 3, 40)], learn={SPARK: 1}, mp=0)

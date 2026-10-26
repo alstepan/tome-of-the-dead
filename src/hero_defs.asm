@@ -31,7 +31,9 @@ PU_ARR          EQU HERO_ST + 31    ; the previous x (PU_NONE $80: other room / 
 ; reserved for 3D (allocated now so the block does not move):
 LVL             EQU HERO_ST + 32    ; hero level
 XP              EQU HERO_ST + 33    ; word
-ARANK           EQU HERO_ST + 35    ; word
+ARANK           EQU HERO_ST + 35    ; word: bits 0-9 ranks (2 bits x 5), bits 10-11 BOOK_DRY (RANK1)
+BOOK_DRY_MASK   EQU $0C             ; in ARANK + 1: 0 / 4 / 8 = BOOK_DRY 0 / 1 / 2 (game.md §5 pity)
+PITY_N          EQU 2               ; reads skipped while an unlock was eligible, before the forced learn
 MP              EQU HERO_ST + 37
 MAXMP           EQU HERO_ST + 38
 ; C3-2 turn-intent machine (intent_tick / try_player_turn, io.asm / logic.asm):

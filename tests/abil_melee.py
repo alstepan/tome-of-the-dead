@@ -8,7 +8,7 @@ sides, +1 dmg), §5 ranks (tests/combat_tables.py transcription), §2.3 (no
 power attack mid-ladder), §6.4 (stun: R halves, survivors only).
 
   R1  NOT LEARNED: the Power Strike slot forced (SEL_SLOT) with ARANK 0
-  R2  NO MANA: MP = cost - 1 (Power r1 3 MP, Whirlwind r3 3 MP)
+  R2  NO MANA: MP = rank-1 cost - 1 (Power 2 of 3 MP, Whirlwind r3 with 3 of 4 MP: the threshold stays at rank 1)
   R3  mid-ladder (room A's {5,1} shaft) -> NO TARGET
   R4  no target: Power Strike with a Goblin only BEHIND the hero; Whirlwind
       with the nearest body 2 cols away (reach 1)
@@ -132,7 +132,7 @@ def run(h, p, check):
         """Fresh Warrior game in PROTO room A: every monster parked, the hero
         at `hero` facing right (HP 200), mons = [(kind, x, y | None, hp,
         left)] (y None: standing on the hero's floor), learn = {abl: rank}
-        -> ARANK + RANK_ROWS (as rank_sync)."""
+        -> ARANK (abil_load picks the row)."""
         nonlocal kdie, kbon
         p.boot(K_KNIGHT)
         if not kt:
@@ -162,7 +162,6 @@ def run(h, p, check):
         for abl, r in (learn or {}).items():
             k = abl - POWER
             av |= r << (2 * k)
-            p.wmem(S["RANK_ROWS"] + 6 * k, list(b3[ab + (abl * 3 + r - 1) * 6: ab + (abl * 3 + r) * 6]))
         p.wmem(S["ARANK"], w16(av))
         p.wb("FX_DROP", 0)
         p.tick(3)
@@ -208,17 +207,18 @@ def run(h, p, check):
 
     def blows(w, rng, abl, rank, tgts):
         """melee_hit per target in slot order: [(slot, hit, lost)]."""
-        mp, _, _, bonus, _, eff = CT.RANKS[NAME[abl]][rank - 1]
+        mp, _, die, bonus, bounces, eff = CT.RANKS[NAME[abl]][rank - 1]
         dty, _, _, _, fl, hit = CT.DEFS[abl]
         x2 = fl & CT.DMGX2
         out = []
         for sl in sorted(tgts):
-            if not w.hit_roll(rng, 0, sl, hit + (0 if x2 else eff)):
+            # RANK1: Power Strike's to-hit = ab_def + RK_BOUNCES (+0 / 1 / 2), Whirlwind's + RK_EFFECT
+            if not w.hit_roll(rng, 0, sl, hit + (bounces if x2 else eff)):
                 out.append((sl, False, 0))
                 continue
             d = rng.mod(kdie) + 1 + kbon + bonus
-            if x2:
-                d = min(255, 2 * d)
+            if x2:                                  # RANK1: 2d + RK_DIE x d div 2 (x2 / x2.5 / x3)
+                d = min(255, 2 * d + (die * d) // 2)
             lost = w.deal(rng, 0, sl, d, dty, 0)
             b = w.bodies[sl]
             if x2 and lost and b.hp:                # deal_hit's STUNNED (chance 0: always)
@@ -258,6 +258,8 @@ def run(h, p, check):
         """One power attack through the controls; tgts = the slots it must
         strike (independent of melee_scan), want(res, w) picks the seed."""
         kinds = scene(mons, learn={abl: rank}, mp=mp)
+        while rank > 1 and CT.RANKS[NAME[abl]][rank - 1][0] > mp:       # RANK1 auto-downcast
+            rank -= 1
         cost = CT.RANKS[NAME[abl]][rank - 1][0]
         p.select_slot(SLOT[abl])
         t0 = p.rw("TURN_COUNTER")
@@ -351,8 +353,8 @@ def run(h, p, check):
     refuse("R1 Power Strike not learned", POWER, TXT["not_learned"], force=True)
     scene([(K_GOBLIN, gx, None, 30, True)], learn={POWER: 1}, mp=2)
     refuse("R2 Power Strike r1 with 2 MP", POWER, TXT["no_mana"])
-    scene([(K_GOBLIN, gx, None, 30, True)], learn={WHIRL: 3}, mp=2)
-    refuse("R2 Whirlwind r3 with 2 MP", WHIRL, TXT["no_mana"])
+    scene([(K_GOBLIN, gx, None, 30, True)], learn={WHIRL: 3}, mp=3)
+    refuse("R2 Whirlwind r3 with 3 MP (rank 1 costs 4)", WHIRL, TXT["no_mana"])
     scene([], learn={POWER: 1, WHIRL: 1}, mp=20, hero=(5, HY))
     p.turn("K")                                   # one row up the {5,1} shaft: mid-ladder
     rat = slots[K_RAT]
@@ -382,8 +384,15 @@ def run(h, p, check):
            [(K_RAT, gx, None, 60, True), (K_BAT, gx, HY, 60, True), (K_GOBLIN, HX - 3, None, 60, False),
             (K_SKELETON, HX + 8, None, 60, True)], [ratsl, bat, gob], all_hit)
     strike("W2 Whirlwind r2 (+2 dmg) on a Goblin", WHIRL, 2, [(K_GOBLIN, gx, None, 60, True)], [gob], all_hit)
-    strike("W3 Whirlwind r3 (3 MP, to-hit +2) both sides", WHIRL, 3,
+    strike("W3 Whirlwind r3 (10 MP, dmg +4, to-hit +2) both sides", WHIRL, 3,
            [(K_GOBLIN, gx, None, 60, True), (K_RAT, HX - 4, None, 60, False)], [gob, ratsl], all_hit)
+    # RANK1 auto-downcast: learned rank 3, the pool covers only rank 2 / rank 1 (NO MANA stays at rank 1's cost)
+    strike("D1 Power Strike r3 with MP 5 casts rank 2 (5 MP, x2.5)", POWER, 3,
+           [(K_GOBLIN, gx, None, 60, True)], [gob], all_hit, mp=5)
+    strike("D2 Power Strike r3 with MP 3 casts rank 1 (3 MP)", POWER, 3,
+           [(K_GOBLIN, gx, None, 60, True)], [gob], all_hit, mp=3)
+    strike("D3 Whirlwind r3 with MP 8 casts rank 2 (7 MP, dmg +3)", WHIRL, 3,
+           [(K_GOBLIN, gx, None, 60, True)], [gob], all_hit, mp=8)
 
     # ---- K: T7 power_fire skips a target that is DYING / HP 0 by the strike -------------
     # (none can be today: poked between the accept and the fire tick) — no d20 for it,

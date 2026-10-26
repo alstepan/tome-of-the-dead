@@ -69,8 +69,8 @@ act_begin:
                 ld   a, b                      ; only (proj_rel): the fire tick of a
                 cp   ABL_DAGGER                ; Lightning through 4 bodies is the
                 jr   nc, .rk                   ; heaviest of the game. Ammo: the ab_ammo
-                call spell_row                 ; row (ammo_fire's); spells: the RANK_ROWS
-                ex   de, hl                    ; row (spell_fire's)
+                ld   de, CAST_ROW              ; row (ammo_fire's); spells: CAST_ROW
+                                               ; (spell_fire's)
 .rk:            call probe_act_prep            ; bank-2 test probe (abil / abil_ammo)
                 ld   a, b
                 ld   hl, proj_pre

@@ -198,11 +198,13 @@ FX_NONE         EQU $FF
 FX_SLOT0        EQU P_MAX_ENT       ; ANIM_SLOT = 16 + track while render erases / draws it (flicker.py)
 
 ;------------------------------------------------------------------------------
-; RANK_ROWS — the hero's current-rank rows (game.md §5 "Data / cost"): one
-; row per ability index k (ARANK bits 2k..2k+1), copied from the bank-3 rank
-; table on learn / rank-up (D3-9b), read by the cast path. RR_STRIDE B/row.
+; CAST_ROW (RANK1; was RANK_ROWS, 5 rows kept by rank_sync) — the rank row of
+; the spell being cast: abil_load (bank 3) copies the ab_rank row of the
+; highest rank the hero can afford now (auto-downcast, game.md §5; rank 1 is
+; the floor) there at every spell use; abil_spell (cost check + payment), the
+; accept's proj_pre and the release's proj_rel read it. One row, RR_STRIDE B.
 ;------------------------------------------------------------------------------
-RANK_ROWS       EQU $B4E0           ; $B4E0..$B4FD
+CAST_ROW        EQU $B4E0           ; $B4E0..$B4E5 ($B4E6..$B4FD free: FONT6 plane hole)
 RANK_N          EQU 5               ; abilities per class (Mage 5 spells; Warrior uses 2)
 RR_STRIDE       EQU 6
 RR_MP           EQU 0               ; MP cost
@@ -211,7 +213,7 @@ RR_DIE          EQU 2               ; damage die N (1dN)
 RR_BONUS        EQU 3               ; + damage
 RR_BOUNCE       EQU 4               ; wall bounces
 RR_EFFECT       EQU 5               ; effect duration / chance
-                FONT6_HOLE RANK_ROWS, RANK_N * RR_STRIDE
+                FONT6_HOLE CAST_ROW, RR_STRIDE
 
 ;------------------------------------------------------------------------------
 ; HERO3D — hero 3D state in the spare after ANIM_LIST2 ($BC41..$BC5E, 30 B;

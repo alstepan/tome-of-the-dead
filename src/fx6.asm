@@ -338,61 +338,124 @@ fx_read:
                 ASSERT IT_S_FEAR == IT_S_TELEPORT + 1 && IT_S_SLEEP == IT_S_FEAR + 1 && IT_S_ENCHANT == IT_S_SLEEP + 1
 
 ;------------------------------------------------------------------------------
-; fx_book — the class book (game.md §5 "Reading", first match; gameplay RNG):
-;  1. the first unlearned ability k (abilities unlock in k order) whose unlock
-;     depth <= LVL_DEPTH -> abil_learn k (rank 1: "YOU LEARN <NAME>!")
-;     (unlock: Warrior k0 D1, k1 D3 = 2k + 1; Mage k0..4 D1..D5 = k + 1, §4);
-;  2. else a known ability below rank 3, uniform (rng_mod) -> abil_learn k
-;     ("<NAME> RISES TO RANK n");
-;  3. else the tome: Warrior Vigor HP +3 MP +1, Mage Power MP +3 HP +1 (max and
-;     current raised, §4; not a heal: no flash) + its line.
-; abil_learn is bank 7 (far7: rank_sync, PD_ICONS | PD_INFO, the line).
+; fx_book — the class book (game.md §5 "Reading" rev 6, first match wins):
+;  1. starter: no ability known yet -> slot 0 (Spark / Power Strike), 0 RNG;
+;  2. pity: BOOK_DRY == PITY_N and an eligible unlearned ability exists ->
+;     the earliest-depth one (the first candidate), 0 RNG;
+;  3. uniform pick over the candidates (<= 5, in slot = unlock-depth order):
+;     every ability that is unlearned with unlock depth <= LVL_DEPTH (learn;
+;     fx_cand byte = k | $80) or known below rank 3 (rank-up; byte = k). ONE
+;     call: index = (rng_byte * n) >> 8 (rng_next, no rejection loop);
+;  4. else the tome: Warrior Vigor HP +3 MP +1, Mage Power MP +3 HP +1 (max
+;     and current raised, §4; not a heal: no flash) + its line, 0 RNG.
+; BOOK_DRY (ARANK + 1 bits 2-3, ARANK bits 10-11): a learn resets it, a
+; rank-up while an eligible unlearned ability existed adds 1, a tome leaves it
+; (no eligible ability is left then: it is 0). Unlock depth: Warrior k0 D1, k1
+; D3 (2k + 1); Mage k0..4 D1..D5 (k + 1, §4): "slots 0..L-1 are unlocked" with
+; L = min(depth, 5) / min((depth + 1) div 2, 2).
+; abil_learn is bank 7 (far7: ARANK += 1 << 2k, PD_ICONS | PD_INFO, the line).
 ;------------------------------------------------------------------------------
 fx_book:
-                ld   a, (HERO_KIND)
-                or   a
-                ld   c, ABL_WHIRL - ABL_POWER + 1  ; Warrior: 2 abilities
-                jr   z, .w
-                ld   c, ABL_LIGHTNING - ABL_SPARK + 1   ; Mage: 5
-.w:             ld   b, 0                      ; k
-                ld   de, fx_cand               ; rule-2 candidates
-.f:             ld   a, b
-                push bc
-                call abil_rank                 ; A = rank, Z = unlearned (A, C, HL)
-                pop  bc
-                jr   z, .un
-                cp   RANK_MAX
-                jr   nc, .nx
-                ld   a, b
-                ld   (de), a                   ; known, below rank 3
-                inc  de
-.nx:            inc  b
-                ld   a, b
-                cp   c
-                jr   c, .f
-                jr   .r2
-.un:            ld   a, (HERO_KIND)            ; rule 1: its unlock depth
-                or   a
-                ld   a, b
-                jr   nz, .ud
-                add  a, a                      ; Warrior: 2k
-.ud:            ld   hl, LVL_DEPTH             ; A = unlock - 1 (2k / k)
-                cp   (hl)                      ; unlock - 1 < depth <=> unlock <= depth
-                jr   nc, .r2
-                ld   a, b
-                jr   .learn
-.r2:            ld   a, e                      ; rule 2: the candidates so far (the
-                sub  fx_cand & $FF             ; unlearned k ended the scan: only lower,
-                jr   z, .tome                  ; known ones can rank up)
-                ld   c, a
-                call rng_mod                   ; A = 0..n-1 (A, B, HL)
-                add  a, fx_cand & $FF
-                ld   l, a
-                ld   h, fx_cand >> 8
-                ld   a, (hl)
+                ld   hl, (ARANK)
+                ld   a, h
+                and  3                         ; (bits 10-15: BOOK_DRY, masked out)
+                or   l
+                jr   nz, .scan
+                                               ; starter: Z = A = 0: slot 0, 0 RNG
 .learn:         ld   hl, abil_learn            ; bank 7 (A = k)
                 call far7
-                jr   .turn
+                ld   l, FXR_TURN
+                ret
+.scan:          ld   a, (HERO_KIND)
+                or   a
+                ld   a, (LVL_DEPTH)
+                ld   c, 5
+                jr   nz, .lim                  ; Mage: min(depth, 5)
+                inc  a
+                srl  a                         ; Warrior: (depth + 1) div 2, min 2
+                ld   c, 2
+.lim:           cp   c
+                jr   c, .l0
+                ld   a, c
+.l0:            ld   c, a                      ; C = L: slot k is unlocked iff k < C
+                ld   de, (ARANK)               ; shifted right 2 bits per k
+                ld   b, 0                      ; k
+                ld   hl, fx_cand
+.s:             ld   a, e
+                and  3
+                jr   z, .un
+                cp   RANK_MAX
+                jr   z, .nx                    ; rank 3: no candidate
+                ld   a, b                      ; known below rank 3: a rank-up
+.ad:            ld   (hl), a
+                inc  l
+.nx:            srl  d
+                rr   e
+                srl  d
+                rr   e
+                inc  b
+                ld   a, b
+                cp   RANK_N
+                jr   nz, .s
+                ld   a, l                      ; n = candidates
+                sub  fx_cand & $FF
+                jr   z, .tome
+                ld   c, a
+                ld   b, a
+                ld   d, $FF                    ; D = index of the first unlearned ($FF none)
+.f:             dec  l                         ; walking down: the last write is the first
+                bit  7, (hl)
+                jr   z, .fn
+                ld   a, b
+                dec  a
+                ld   d, a
+.fn:            djnz .f
+                ld   a, (ARANK + 1)
+                and  BOOK_DRY_MASK
+                cp   PITY_N << 2
+                jr   nz, .rnd
+                ld   a, d
+                inc  a
+                jr   z, .rnd                   ; (pity with nothing eligible: unreachable)
+                ld   b, d
+                jr   .got
+.rnd:           call rng_next                  ; A = the byte (A, HL)
+                ld   e, a
+                ld   b, 0
+                xor  a
+.m:             add  a, e                      ; B = (byte * n) >> 8 (n <= 5: 8-bit adds)
+                jr   nc, .mn
+                inc  b
+.mn:            dec  c
+                jr   nz, .m
+.got:           ld   hl, fx_cand
+                ld   a, b
+                add  a, l
+                ld   l, a
+                ld   c, (hl)                   ; C = k | $80 if unlearned
+                ld   hl, ARANK + 1
+                ld   a, (hl)
+                ld   b, a
+                and  ~BOOK_DRY_MASK & $FF
+                ld   e, a                      ; E = BOOK_DRY 0
+                bit  7, c
+                jr   nz, .st                   ; a learn resets it
+                inc  d
+                jr   z, .st                    ; rank-up with nothing eligible: 0
+                ld   a, b
+                and  BOOK_DRY_MASK
+                add  a, 1 << 2                 ; rank-up while one was eligible: +1
+                or   e
+                ld   e, a
+.st:            ld   (hl), e
+                ld   a, c
+                and  $7F
+                jp   .learn
+.un:            ld   a, b                      ; unlearned: a candidate iff unlocked
+                cp   c
+                jr   nc, .nx
+                or   $80
+                jr   .ad
 .tome:          ld   a, (HERO_KIND)
                 or   a
                 ld   de, (TOME_BIG << 8) | TOME_SMALL      ; Vigor: D = HP, E = MP
@@ -424,7 +487,8 @@ fx_book:
 TOME_BIG        EQU 3               ; game.md §4: Tome of Vigor +3 HP +1 MP, Power +3 MP +1 HP
 TOME_SMALL      EQU 1
                 ASSERT E_MAXHP == E_HP + 1 && MAXMP == MP + 1 && ((P_ENTITIES + E_HP) & $FF) != $FF && (MP & $FF) != $FF
-                ASSERT (fx_cand >> 8) == ((fx_cand + 4) >> 8) && ABL_SPARK == 0 && K_KNIGHT == 0
+                ASSERT (fx_cand >> 8) == ((fx_cand + RANK_N) >> 8) && ABL_SPARK == 0 && K_KNIGHT == 0 && RANK_N == 5
+                ASSERT BOOK_DRY_MASK == $0C && PITY_N == 2
 
 ;------------------------------------------------------------------------------
 ; pot_eff — A = potion type: its effect (game.md §8), CF = 1 refused, nothing

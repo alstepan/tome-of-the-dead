@@ -21,7 +21,7 @@
 ;   MP_PER = 8 / 6 (class), / 2 with the Mana / Scarab amulet, x 2 with Plate
 ; Charms carry no m (only the weapon is enchanted; wear hits weapon / armour /
 ; helm). Rune / Bone staff spell damage (+1 / +2) is NOT applied (no reader
-; yet: the spell rows are rank_sync's, bank 3).
+; yet: the spell row is abil_load's CAST_ROW, bank 3).
 ;==============================================================================
 
 FIST_DIE        EQU 2                   ; game.md §8.7: an empty weapon slot = fists 1d2

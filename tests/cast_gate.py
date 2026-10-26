@@ -201,8 +201,7 @@ def main():
             p.set_ent(1, KIND=kind, HP=hp, MAXHP=max(hp, 60), REACT=0)
             p.wb(S["ST_FLAGS"] + 1, stf)
             p.wb(S["ST_T1"] + 1, 0x30 if stf else 0)
-            if effect is not None:
-                p.wb(S["RANK_ROWS"] + 6 * k + 5, effect)
+            assert effect in (None, 2)             # (Frost r1's own row: freeze 2, always; abil_load owns the row)
             p.settle()
             return p.rb(S["SLOTREC"] + 16 + S["R_ATTR"]), kt[kind]
 
