@@ -76,7 +76,7 @@ PFB_STOP        EQU 2
 ;      current (build_live: try_player_turn builds it at the hero's turn start);
 ;      A = ability ABL_* with a projectile (Spark .. Lightning, ABL_DAGGER,
 ;      ABL_BOW: its ab_def row gives type, frames, speed, flags, to-hit);
-;      HL = its 6-B rank row (RK_* layout: CAST_ROW (an ab_rank row), an ab_rank row or
+;      HL = its 6-B rank row (RK_* layout: CAST_ROW, an ab_rank row or
 ;      an ab_ammo row; RK_MP is not read); E = FXD_DELAY (ticks before the
 ;      projectile appears: the cast frames, D3-7).
 ; Out: L = pf_stop (PFS_*); pf_col = impact col; pf_tgt = first body that
