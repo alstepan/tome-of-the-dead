@@ -2,7 +2,7 @@
 """SND-1: the sound settings UI (game.md §3.6 checks 1-7; src/menu1.asm snd_cycle,
 sfx2.asm snd_scan / snd_hot). Release build (DEBUG_KIT=0), real menu / pause / play.
 
-  1  boot SND_MODE = 3; menu item 5 drawn "5 SOUND: ALL ON" (rows 21-22)
+  1  boot SND_MODE = 3; menu item 5 drawn "5 SOUND: ALL ON" (rows 22-23)
   2  in play S x3 -> 2, 0, 3; TURN_COUNTER / NEED_RELEASE / FIRE_ST / INTENT / TURN_HOLD / DN_T
      unchanged; the log shows each string
   3  S held 50 ticks -> one change only
@@ -62,9 +62,9 @@ def run(p, check):
 
     def menu_item(fr, m):
         t = "5 " + TXT[NAMES[m]]
-        ok = world.menu_text_ok(p, fr, 21, 4, t)
-        # nothing drawn right of the text up to col 20 (the longest state) on rows 21-22
-        blank = all(not any(world.cell_bytes(fr, c, r)) for r in (21, 22) for c in range(4 + len(t), 21))
+        ok = world.menu_text_ok(p, fr, 22, 4, t)
+        # nothing drawn right of the text up to col 20 (the longest state) on rows 22-23
+        blank = all(not any(world.cell_bytes(fr, c, r)) for r in (22, 23) for c in range(4 + len(t), 21))
         return ok and blank
 
     def log_line():
@@ -80,7 +80,7 @@ def run(p, check):
     p.release()
     p.tick(4)
     check("1 boot: SND_MODE = 3 (ALL ON)", p.rb("SND_MODE") == 3, p.rb("SND_MODE"))
-    check("1 menu: '5 SOUND: ALL ON' on rows 21-22", menu_item(p.frame(), 3), "")
+    check("1 menu: '5 SOUND: ALL ON' on rows 22-23", menu_item(p.frame(), 3), "")
     seq, drawn = [], []
     for _ in range(3):
         p.tap("5", n=2)
