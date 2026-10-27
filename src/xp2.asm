@@ -20,6 +20,10 @@ xpn_tab:        DW   40, 100, 200, 340, 500, 700, 920, 1150
 ;------------------------------------------------------------------------------
 item_mp:
                 res  PD_MP_BIT, (hl)
+                ld   a, $80                    ; IC1: MP / MAXMP moved -> the quick potion
+                ld   (QS_RECHK), a             ; pick may (icon_poll: a 1st-frame pass; set
+                                               ; here, once per draw: the poll would re-set
+                                               ; it every step until MP is drawn, starving it)
                 ld   a, (MAXMP)
                 ld   d, a                      ; (MAXMP 0 draws an empty bar)
                 ld   a, (MP)

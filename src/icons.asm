@@ -21,6 +21,10 @@ slot_act_tab:
                 DB SA_MELEE, SA_ABIL + 0, SA_ABIL + 1, SA_ABIL + 2, SA_ABIL + 3
                 DB SA_ABIL + 4, SA_FOOD, SA_POTION, SA_SCROLL, SA_BAG
                 ASSERT K_KNIGHT == 0 && K_WIZARD == 1
+                ; IC1 (pot_sync's forced redraw): quick slot = QS_SLOT0 + HERO_KIND + QS_*
+                ASSERT {b slot_act_tab + QS_SLOT0 + QS_FOOD} == SA_FOOD && {b slot_act_tab + QS_SLOT0 + QS_SCROLL} == SA_SCROLL
+                ASSERT {b slot_act_tab + ICON_SLOTS + QS_SLOT0 + 1 + QS_FOOD} == SA_FOOD
+                ASSERT {b slot_act_tab + ICON_SLOTS + QS_SLOT0 + 1 + QS_SCROLL} == SA_SCROLL
 
 ;------------------------------------------------------------------------------
 ; slot_act — A = slot 0..9 -> A = its SA_* for HERO_KIND (D3-7 T0: bank 2,
@@ -59,14 +63,18 @@ abil_rank:
                 ret
 
 ; item_icons_far — panel_step (HOT_COPY): the icon item, bank 3.
-item_icons_far: ld   hl, item_icons
+; IC1: A = C = 0 in the tick's 1st frame (panel_step / panel_flush), else != 0.
+item_icons_far: ld   a, c
+                ld   hl, item_icons
                 jp   far3
 
 
 ;------------------------------------------------------------------------------
 ; icon_poll — panel_step's poll (HOT_COPY): sets PD_ICONS in (HL) when the
 ; potion count, the level or the icon signature (icon_sig) differs from what
-; is drawn. Only these inputs change a slot's state in 3C; 3D's learning /
+; is drawn, or (IC1, C = 0: a tick's 1st frame) QS_RECHK bit 7 asks for a pass
+; (a quick slot pending, or HP / MP moved: the potion pick; set by item_hp,
+; item_mp, pot_sync, item_icons). Only these inputs change a slot's state in 3C; 3D's learning /
 ; rank-up / MP greying must set PD_ICONS itself (or extend icon_sig).
 ; D3-9b: also MP vs MP_SH (sets PD_MP: casts, regen, potions all redraw the
 ; MP item without their own dirty bit).
@@ -92,7 +100,13 @@ icon_poll:
                 ld   hl, LVL_SH
                 cp   (hl)
                 jr   nz, .dirty
-                call icon_sig
+                ld   a, (QS_RECHK)             ; IC1: bit 7 = an item_icons pass wanted,
+                add  a, a                      ; only in a tick's 1st frame (C = 0): a
+                jr   nc, .qd                   ; quick slot (big item) / the potion pick
+                inc  c
+                dec  c
+                jr   z, .dirty
+.qd:            call icon_sig
                 ld   hl, ICON_SIG
                 cp   (hl)
                 ex   de, hl

@@ -11,7 +11,10 @@
 ; icon_state — A = slot -> A = IS_HIDDEN / IS_GREY / IS_NORMAL (concept-screen
 ; §5: melee and the Bag never grey; ammo / item at 0 greys; 3E-T12: food /
 ; scrolls grey with none in the bag (QS_CACHE); an unlearned ability is an empty outline).
-; Clobbers: A, C, HL (B, DE kept)      ~80 T
+; IC1: the quick POTION slot's IS_NORMAL carries the pick (0..2 = Heal / Mana /
+; Cure) in bits IS_PICK_SH..+1, so a pick change redraws it (slot_redraw ->
+; qs_draw); FOOD / SCROLL pick / count changes are forced by pot_sync.
+; Clobbers: A, C, HL (B, DE kept)      ~80 T (potion ~0.3k)
 ;------------------------------------------------------------------------------
 icon_state:
                 call slot_act
@@ -51,8 +54,45 @@ icon_state:
                 ld   a, (ARROWS)
                 jr   .cnt
 .pot:           ld   a, (P_ENTITIES + E_POT)
-                jr   .cnt
-                ASSERT IS_HIDDEN == 0
+                or   a
+                jr   z, .grey                  ; none: the HEAL representative, greyed
+                call pot_need                  ; IC1: the pick = the first potion whose
+                jr   nz, .pk                   ; effect applies (fx_quick's order), else
+                ld   a, (QS_CACHE + QS_POTION) ; the first present (quick-use: NO NEED)
+                or   a
+                jr   nz, .pk
+                inc  a                         ; (E_POT without pot_sync: Heal)
+.pk:            ld   l, a
+                ld   a, IS_NORMAL - (1 << IS_PICK_SH)
+.pb:            add  a, 1 << IS_PICK_SH
+                srl  l
+                jr   nc, .pb                   ; IS_NORMAL | potion index << IS_PICK_SH
+                ret
+                ASSERT IS_HIDDEN == 0 && IS_PICK_SH == 2 && ((IS_SEL | IS_MODE) & (3 << IS_PICK_SH)) == 0
+
+;------------------------------------------------------------------------------
+; pot_need — IC1: A = the potion types present (QS_CACHE + QS_POTION, pot_sync)
+; whose effect quick-use would NOT refuse now, bit k = IT_P_HEAL + k (fx6
+; pot_eff's tests: Heal HP < MAXHP, Mana MP < MAXMP, Cure a MIND / POISON /
+; WEAK status); Z = none. icon_state's potion pick.
+; Clobbers: A, C, HL, F (B, DE kept).   ~0.14k T
+;------------------------------------------------------------------------------
+pot_need:       ld   a, (ST_FLAGS)             ; the hero = status slot 0
+                and  STS_MIND | STS_POISON | STS_WEAK
+                add  a, $FF                    ; CF = something to cure
+                rl   c
+                ld   hl, (MP)                  ; L = MP, H = MAXMP
+                ld   a, l
+                cp   h                         ; CF = MP < MAXMP
+                rl   c
+                ld   hl, (P_ENTITIES + E_HP)   ; L = HP, H = MAXHP
+                ld   a, l
+                cp   h                         ; CF = HP < MAXHP
+                rl   c                         ; C bits 0..2 = Heal / Mana / Cure
+                ld   a, (QS_CACHE + QS_POTION)
+                and  c
+                ret
+                ASSERT MAXMP == MP + 1 && E_MAXHP == E_HP + 1 && IT_P_MANA == IT_P_HEAL + 1 && IT_P_CURE == IT_P_HEAL + 2
 
 ; slot_want — B = slot -> A = icon_state | IS_SEL (| IS_MODE in ICON MODE)
 ; if B = SEL_SLOT.  Clobbers: A, C, HL (B, DE kept)
@@ -78,13 +118,18 @@ slot_want:
 ; item_icons — far3 via item_icons_far (PD_ICONS). Potion count changed: the potion slot is
 ; redrawn (its count digit). Level changed: the digit at (31, 19). Then the
 ; slots: a selection-only change is painted here (attrs, ~0.3k T each, all of
-; them); the first other change is ONE slot_redraw (panel.asm, ~2-4k T) and
-; PD_ICONS stays set for the next item. Any change sets PD_INFO.
+; them); the first other change is ONE slot_redraw (panel.asm, ~2-4k T; IC1: a
+; quick slot ~15k, only in a tick's 1st frame, else skipped and kept pending)
+; and PD_ICONS stays set for the next item. A selection change or
+; a redraw of the selected slot sets PD_INFO (IC1: not another slot's redraw).
 ; Clobbers: all but IX, IY.
 ;------------------------------------------------------------------------------
 item_icons:
+                ld   (ii_frame), a             ; IC1: 0 = the tick's 1st frame (item_icons_far)
                 ld   hl, PANEL_DIRTY
                 res  PD_ICONS_BIT, (hl)
+                xor  a                         ; IC1: this pass answers QS_RECHK (a quick
+                ld   (QS_RECHK), a             ; slot left undrawn below sets it again)
                 call st_sig                    ; D3-8: the hero's status icons changed:
                 ld   hl, STAT_SH               ; redraw both cells (bank 1, ~1k T)
                 cp   (hl)
@@ -101,8 +146,8 @@ item_icons:
                 cp   (hl)
                 jr   z, .np
                 ld   (hl), a
-                ld   a, (pot_slot)             ; count changed: redraw that slot
-                add  a, ICON_SH & $FF
+                ld   a, (HERO_KIND)            ; count changed: redraw the potion slot
+                add  a, (ICON_SH & $FF) + QS_SLOT0 + QS_POTION     ; (IC1: was pot_slot)
                 ld   l, a
                 ld   h, ICON_SH >> 8
                 ld   (hl), IS_NONE
@@ -136,10 +181,29 @@ item_icons:
                 cp   ICON_SLOTS
                 jr   c, .l
                 ret
-.slow:          ld   a, b                      ; A = slot, E = state
-                call slot_redraw
+.slow:          ld   a, (HERO_KIND)            ; IC1: a quick slot (qs_draw, ~15k T with
+                ld   c, a                      ; the far6 and the clear) is a big item:
+                ld   a, b                      ; like INFO / FOOD only in a tick's 1st
+                sub  QS_SLOT0                  ; frame (panel_tick's D5 rule: a 2nd-frame
+                sub  c                         ; tick draws small items only); else it
+                cp   QS_COUNT                  ; stays undrawn (ICON_SH back) and pending
+                jr   nc, .now
+                ld   a, (ii_frame)
+                or   a
+                jr   z, .now                   ; the tick's 1st frame
+                ld   (hl), d                   ; not drawn: pending (QS_RECHK bit 7 ->
+                ld   hl, QS_RECHK              ; icon_poll sets PD_ICONS in a 1st frame;
+                set  7, (hl)                   ; no item_icons pass per 2nd-frame tick)
+                jr   .next
+.now:           ld   a, (SEL_SLOT)             ; IC1: the info line is the SELECTED
+                cp   b                         ; slot's: another slot's redraw (a quick
+                push af                        ; slot's pick / count) leaves it (pmix:
+                ld   a, b                      ; no 25k T line + its row present per pickup)
+                call slot_redraw               ; A = slot, E = state
                 ld   hl, PANEL_DIRTY
                 set  PD_ICONS_BIT, (hl)        ; maybe more: the next item
+                pop  af
+                ret  nz
 .info:          ld   hl, PANEL_DIRTY
                 set  PD_INFO_BIT, (hl)
                 ret
@@ -240,5 +304,6 @@ lvl_draw:
                 jp   pmark_rect
 LVL_COL         EQU 31
 
-pot_slot:       DB   0                         ; the quick-potion slot (panel_init)
+ii_frame:       DB   0                         ; IC1: item_icons' A in (0 = a 1st frame)
+
 

@@ -97,6 +97,7 @@ IS_NORMAL       EQU 2
 IS_SEL          EQU $80             ; the selected slot (PAPER blue)
 IS_MODE         EQU $40             ; + ICON MODE: the selected slot inverse (ink <-> paper)
 IS_NONE         EQU $FF             ; ICON_SH: never drawn -> full redraw
+IS_PICK_SH      EQU 2               ; IC1: quick POTION pick (0..2) in bits 2-3 of IS_NORMAL
 
 JM_KEYS         EQU 0               ; KEYTAB only (boot zeroes JOY_MODE)
 JM_KEMPSTON     EQU 1               ; + IN ($1F) (JOY_MIRROR while INPUT_SRC != 0).

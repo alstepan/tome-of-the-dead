@@ -22,7 +22,7 @@ source (read from the .sna the suite loads, never from the running machine):
        the hero start (D3-4: which includes the hero's class FX kind, checked
        generated — one variant per facing for each fid of its range — once), and the displayed playfield == ROOM_MAP drawn from the
        SOURCE glyphs (every cell not under a sprite; row 17 may hold an
-       ornament glyph) + the panel's potion glyph == the source T_POTION.
+       ornament glyph) + (IC1) the panel's quick potion icon == a source 16x16 potion icon.
 Run with ZRCP_PORT=<port>.  `--depths N` (default 8).
 """
 import sys
@@ -224,9 +224,12 @@ def screen_check(p, check, tag, depth):
         if not (t >= TC and cb in lvl) and not GL.drip_shown(fr, drip, c, r):
             bad.append((c, r, t))
     check(f"GI {tag}: playfield ({n} uncovered cells) == ROOM_MAP in source glyphs", n > 300 and bad == [], bad[:6])
-    pg = gly[S["T_POTION"] * 8:S["T_POTION"] * 8 + 8]       # id 60 = the level slot's FLASK glyph
-    check(f"GI {tag}: panel potion glyph (row 19) == source T_POTION (id 60)",
-          any(cell_bytes(fr, c, 19) == pg for c in range(32)), "")
+    # IC1: the quick POTION slot shows a 16x16 potion icon (Heal / Mana / Cure, the pick) ==
+    # its source (assets/gfx/icons/icons16.asm), not the 8x8 T_POTION glyph any more
+    col = 18 + 3 * p.rb("HERO_KIND")
+    pots = [GL.icon16_cells(S[n] - S["IT_BAG_LO"]) for n in ("IT_P_HEAL", "IT_P_MANA", "IT_P_CURE")]
+    check(f"GI {tag}: panel quick potion icon (cols {col}-{col + 1}, rows 18-19) == a source 16x16 potion icon",
+          any(all(cell_bytes(fr, col + dc, 18 + dr) == b for (dc, dr), b in ic.items()) for ic in pots), "")
 
 
 def floor_check(p, check, tag, room=None, m=None):

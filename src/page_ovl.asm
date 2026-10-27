@@ -5,8 +5,9 @@
 ; (ovl_page_zx0, BANK_OVL_PAGE), run by ovl_run from page_ovl (bank 1) with
 ; BANK_UI1 paged, so it calls the bank-1 helpers (mcell, mattr, mf_char,
 ; menu_orn_b, row_clear, item_name, it_stems) and the bank-2 / low-RAM ones
-; (print6, stamp_rect, page_bank, restore_page, item_glyph, item_ink,
-; menu_frame, sample_input, show_bank5) directly.
+; (print6, stamp_rect, menu_frame, sample_input, show_bank5) directly; IC1:
+; the 16x16 icons through far6 icon_slot (R6 icons6.asm, the icon table's
+; bank).
 ; Contract (docs/memory-map.md "Overlays", the page window + "Bag page"): the
 ; caller (page_run) has made screen 2 the composed screen and shows it, and
 ; page_ovl has saved ROOM_MAP; this code draws the page over all 24 rows of
@@ -29,7 +30,8 @@
 ;        at row 5+3r, col 11+3c           |  directions  grid: the cursor (wrap rules
 ;  15    W A H C over the worn icons      |               below); strip: L / R the
 ;  16-17 WORN + 4 icons, cols 11+3k       |               next enabled verb (wraps),
-;  19    description: item_name (+ " Xn") |               U / D back to the grid
+;  18-19 icon (cols 0-1, IC1); row 19:  |               U / D back to the grid
+;        item_name (+ " Xn") + stat line  |
 ;  20    verbs USE-word EQUIP REMOVE      |
 ;        DISCARD CLOSE (enabled bright    | Cursor rows: 0 [CLOSE], 1-4 bag rows,
 ;        cyan, disabled dim blue)         | 5 worn. U / D step the row and wrap
@@ -57,6 +59,7 @@ PG_WLAB_ROW     EQU 15
 PG_WORN_ROW     EQU 16              ; 4 worn icons (rows 16..17), cols 11..21
 PG_WORN_COL     EQU 11
 PG_DESC_ROW     EQU 19
+PG_DICON_ROW    EQU PG_DESC_ROW - 1     ; IC1: the description icon, cols 0-1, rows 18-19
 PG_DESC_X       EQU 16
 PG_NAME_MAX     EQU 26              ; + " X9" <= 29 chars from x 16; 3E-T8: real names <= 15, + it_fmt <= 14 (stacks: food / potions <= 11 + 3 + 8) <= 30 < PAGE_BUF
 PG_VERB_ROW     EQU 20
@@ -77,40 +80,11 @@ PG_K_FIRE       EQU (1 << JOY_F_BIT) | (1 << SC_ENTER_BIT)
                 ASSERT PG_V_EQUIP + VB_EQUIP - 1 == VB_EQUIP && PG_V_DISCARD + VB_EQUIP - 1 == VB_DISCARD
                 ASSERT PG_V_REMOVE + VB_EQUIP - 1 == VB_REMOVE && VB_NONE == 0
                 ASSERT VB_EAT == VB_DRINK + 1 && VB_READ == VB_EAT + 1
-                ASSERT T_WORN == T_FLASK + 3 && T_FLASK >= TILE_COMMON && T_AMMO < TILE_COMMON && T_PAGES < TILE_COMMON
                 ASSERT (BAG & $FF) == 0 && WORN == BAG + PG_SLOT_WORN * IR_STRIDE && IR_QTY == 1
 
 page_main:
                 xor  a
                 ld   (PAGE_VERB), a            ; VB_NONE unless a verb is confirmed
-                ; glyphs 60..63 from the depth's bank-7 tileset slot: the room's
-                ; TILE_GLYPHS copy holds the lectern there in the D8 Sanctum
-                ld   a, (LVL_DEPTH)
-                sub  1
-                adc  a, 0                      ; depth 0 (PROTO) -> slot 0
-                cp   7
-                jr   c, .s7
-                ld   a, 6                      ; D8: the D7 slot (the room build's rule)
-.s7:            ld   hl, TSET_LO + TSET_GLYPHS + (T_FLASK - TILE_COMMON) * 8
-                cp   TSET_PER_HALF
-                jr   c, .lo
-                sub  TSET_PER_HALF
-                ld   hl, TSET_HI + TSET_GLYPHS + (T_FLASK - TILE_COMMON) * 8
-.lo:            ld   de, TSET_STRIDE
-                inc  a
-.sl:            dec  a
-                jr   z, .cp
-                add  hl, de
-                jr   .sl
-.cp:            ld   a, (PORT_7FFD_SHADOW)
-                push af
-                ld   a, BANK_TSET
-                call page_bank
-                ld   de, PAGE_G60
-                ld   bc, 32
-                ldir
-                pop  af
-                call restore_page              ; bank 1 again (the helpers)
                 ld   hl, SCREEN_BITMAP         ; bitmap 0 (~0.13M T contended)
                 ld   bc, SCREEN_BITMAP_LEN
                 xor  a
@@ -424,11 +398,17 @@ pg_move:        ld   a, c
                 call pg_hl                     ; on
                 ; fall through
 ;------------------------------------------------------------------------------
-; pg_info — the cursor slot's description (row 19), verb enables + USE word
-; (pg_en / pg_use) and the verb strip (row 20).  Clobbers: A, BC, DE, HL
+; pg_info — the cursor slot's description (row 19; IC1: its icon at cols 0-1,
+; rows 18-19: the item, an empty worn slot's placeholder, blank for [CLOSE] /
+; an empty bag slot), verb enables + USE word (pg_en / pg_use) and the verb
+; strip (row 20).  Clobbers: A, BC, DE, HL
 ;------------------------------------------------------------------------------
 pg_info:        ld   b, PG_DESC_ROW
                 call row_clear
+                call pg_cur                    ; A = slot (PG_SL_CLOSE: icon_slot clears)
+                ld   de, (PG_DICON_ROW << 8) | 0
+                ld   hl, icon_slot             ; R6 (icons6.asm)
+                call far6
                 call pg_cur                    ; A = slot, HL = its record
                 ld   bc, 1 << PG_V_CLOSE       ; B = USE word 0 ("USE"), C = enables
                 cp   PG_SL_CLOSE
@@ -624,36 +604,31 @@ pg_rect:        ld   de, (3 << 8) | 2
                 ret
 
 ;------------------------------------------------------------------------------
-; pg_cell — draw slot A (0..23): empty = a 16x16 frame; else the item's floor
-; glyph scaled 2x in its floor ink (item_glyph / item_ink) + the QTY digit
-; (stacks >= 2) right of it.  Clobbers: A, BC, DE, HL
+; pg_cell — draw slot A (0..23): an empty bag slot = a 16x16 frame; else (IC1)
+; its 16x16 icon in its ink — an empty worn slot its placeholder — (R6
+; icon_slot) + the QTY digit (stacks >= 2) right of it.  Clobbers: A, BC, DE, HL
 ;------------------------------------------------------------------------------
 pg_cell:        push af
                 call pg_rect                   ; B, C
                 pop  af
+                push bc
+                push af
+                ld   d, b
+                ld   e, c
+                ld   hl, icon_slot             ; R6 (icons6.asm); L = 0: cleared
+                call far6
+                pop  af
+                pop  bc
+                inc  l
+                dec  l
+                jr   z, pg_box                 ; an empty bag slot
                 ld   h, a
                 add  a, a
                 add  a, h
+                inc  a                         ; + IR_QTY
                 ld   l, a
-                ld   h, HIGH BAG               ; HL = the record
-                ld   a, (hl)
-                or   a
-                jr   z, pg_box
-                push hl
-                push bc
-                push af
-                call item_ink                  ; A = attr (keeps BC, DE)
-                ld   de, (2 << 8) | 2
-                call stamp_rect
-                pop  af
-                call pg_glyph                  ; HL = the 8x8 glyph
-                pop  bc
-                push bc
-                call pg_icon
-                pop  bc
-                pop  hl
-                inc  l
-                ld   a, (hl)                   ; QTY
+                ld   h, HIGH BAG
+                ld   a, (hl)                   ; QTY (an empty worn slot: 0)
                 cp   2
                 ret  c
                 add  a, '0'
@@ -713,65 +688,6 @@ pg_box:         push de
                 inc  d
                 dec  h
                 jr   nz, .s
-                ret
-
-;------------------------------------------------------------------------------
-; pg_glyph — A = item type: HL = its floor glyph's 8 bytes (common ids from
-; TILE_GLYPHS, 60..63 from the PAGE_G60 copy).  Clobbers: A, DE, F
-;------------------------------------------------------------------------------
-pg_glyph:       call item_glyph                ; A = tile id (keeps BC, DE, HL)
-                ld   l, a
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                ld   de, TILE_GLYPHS
-                cp   TILE_COMMON
-                jr   c, .c
-                ld   de, PAGE_G60 - T_FLASK * 8
-.c:             add  hl, de
-                ret
-
-;------------------------------------------------------------------------------
-; pg_icon — the 8x8 glyph at HL scaled 2x over the 2 x 2 cells at row B, col C
-; (each bit -> 2 px, each line -> 2 lines; written, not ORed).
-; Clobbers: A, BC, DE, HL.   ~8k T
-;------------------------------------------------------------------------------
-pg_icon:        push bc
-                call .half
-                pop  bc
-                inc  b
-.half:          call mcell                     ; DE = line 0 of (B, C)
-                ld   c, 4                      ; glyph lines per cell
-.r:             ld   a, (hl)
-                inc  hl
-                push hl
-                push bc
-                ld   c, a
-                ld   b, 8
-.x:             rl   c                         ; next bit (7 first) -> CF
-                sbc  a, a                      ; 0 / $FF
-                add  hl, hl
-                add  hl, hl
-                and  3
-                or   l
-                ld   l, a                      ; HL = the doubled line
-                djnz .x
-                ld   a, h
-                ld   (de), a
-                inc  e
-                ld   a, l
-                ld   (de), a
-                inc  d
-                ld   (de), a
-                dec  e
-                ld   a, h
-                ld   (de), a
-                inc  d
-                pop  bc
-                pop  hl
-                dec  c
-                jr   nz, .r
                 ret
 
 ;------------------------------------------------------------------------------

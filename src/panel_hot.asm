@@ -356,6 +356,8 @@ panel_step:
 ;------------------------------------------------------------------------------
 item_hp:
                 res  PD_HP_BIT, (hl)
+                ld   a, $80                    ; IC1: HP / MAXHP moved -> the quick potion
+                ld   (QS_RECHK), a             ; pick may (icon_poll: a 1st-frame pass)
                 ld   hl, (P_ENTITIES + E_HP)
                 ld   (PANEL_HP_SH), hl         ; HP and MAXHP as drawn
                 ld   d, h

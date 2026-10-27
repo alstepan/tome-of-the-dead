@@ -18,9 +18,9 @@
 ; panel_init7 — far7 from panel_init (bank 3): the bank-2-only half of the
 ; static panel: panel state reset (the *_SH "as drawn" bytes: $FF = never
 ; drawn; STAT_SH 0 = both status cells blank), every attr rect of rows 20-22
-; (info fields, depth / level cells, HP / MP / FOOD bars, log row 22), then
-; the quick-potion slot scan. Out: L = that slot (panel_init stores it in the
-; bank-3 pot_slot). Clobbers: A, BC, DE, HL.
+; (info fields, depth / level cells, HP / MP / FOOD bars, log row 22).
+; (IC1: the quick-potion slot scan is gone: QS_SLOT0 + QS_POTION + HERO_KIND.)
+; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 panel_init7:
                 ld   hl, HUD4_EXT              ; HUD4_EXT, HUD4_PW: rows blank, nothing pending
@@ -99,16 +99,7 @@ panel_init7:
                 ld   a, ATTR_LOG_OLD
                 ld   bc, LOG_ROW << 8
                 ld   de, (LOG_COLS << 8) | 1
-                call stamp_rect
-                ld   b, 0                      ; the quick-potion slot
-.ps:            ld   a, b
-                call slot_act
-                cp   SA_POTION
-                jr   z, .psf
-                inc  b
-                jr   .ps
-.psf:           ld   l, b
-                ret
+                jp   stamp_rect
 
 ;==============================================================================
 ; NEW GAME (prototype §6.5: fixed gameplay RNG seed; all rooms, monsters,
