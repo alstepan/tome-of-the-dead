@@ -48,6 +48,10 @@ def load():
         if b not in banks:
             banks[b] = d[off:off + 16384]
             off += 16384
+    # self-check: virt SRC6 window = bank 6 at the real address (needs a built tree)
+    assert S["SRC6_VDELTA"] == 0x8000
+    a = S["SRC6_ADDR"]
+    assert virt(banks, a - S["SRC6_VDELTA"], 16) == banks[6][a - 0xC000:a - 0xC000 + 16]
     return S, banks
 
 
@@ -58,7 +62,11 @@ def mem(banks, addr, n):
 
 
 def virt(banks, v, n):
-    """Virtual sprite-source / vdata address: $8000.. bank 1, $C000.. bank 3."""
+    """Virtual sprite-source / vdata address: $4000..$7FFF bank 6 (SRC6, real =
+    virt + SRC6_VDELTA = virt + $8000), $8000.. bank 1, $C000.. bank 3."""
+    assert v >= 0x4000, hex(v)
+    if v < 0x8000:
+        return banks[6][v - 0x4000:v - 0x4000 + n]
     return banks[1][v - 0x8000:v - 0x8000 + n] if v < 0xC000 else banks[3][v - 0xC000:v - 0xC000 + n]
 
 

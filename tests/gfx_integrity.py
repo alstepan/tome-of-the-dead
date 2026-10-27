@@ -46,9 +46,17 @@ def sna_bank(b, addr, n):
 
 
 def sna_virt(v, n):
-    """Virtual sprite-source / vdata address (copy_virt): $8000.. = bank 1,
-    $C000.. = bank 3."""
+    """Virtual sprite-source / vdata address (copy_virt): $4000..$7FFF = bank 6
+    (SRC6 blocks, real = virt + SRC6_VDELTA), $8000.. = bank 1, $C000.. = bank 3."""
+    assert v >= 0x4000, hex(v)
+    if v < 0x8000:
+        return sna_bank(6, v + S["SRC6_VDELTA"], n)
     return sna_bank(1, v + 0x4000, n) if v < 0xC000 else sna_bank(3, v, n)
+
+
+# self-check: the SRC6 window maps to bank 6 at the real address, not bank 1
+assert sna_virt(S["SRC6_ADDR"] - S["SRC6_VDELTA"], 16) == sna_bank(6, S["SRC6_ADDR"], 16)
+assert S["SRC6_VDELTA"] == 0x8000
 
 
 def sna_boot(addr, n):
