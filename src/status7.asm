@@ -16,7 +16,7 @@
 
 ;------------------------------------------------------------------------------
 ; st_step — the status step (game.md §6.4), IX = entity, A = its slot:
-;  1. POISON: timer - 1; a new value that is a multiple of 3 (0 included)
+;  1. POISON: timer (ST_X, POIS1) - 1; a new value that is a multiple of 4 (0 included)
 ;     costs 1 HP, never below 1 (poison never kills), and wakes a sleeper
 ;     (any HP loss); at 0 POISON clears ("THE POISON WEARS OFF", hero).
 ;  2. WEAK, then MIND: timer - 1, at 0 clear (the hero's end line).
@@ -34,6 +34,7 @@
 ;------------------------------------------------------------------------------
 ST_D_T1         EQU (ST_T1 - ST_FLAGS) & $FF   ; L offsets inside page $B3
 ST_D_T2         EQU (ST_T2 - ST_FLAGS) & $FF
+ST_D_X          EQU (ST_X - ST_FLAGS) & $FF    ; + slot: ST_X is in page ST_X >> 8
 st_step:
                 add  a, ST_FLAGS & $FF
                 ld   l, a
@@ -42,22 +43,19 @@ st_step:
                 bit  STS_POISON_BIT, (hl)
                 jr   z, .weak
                 ld   a, l
-                add  a, ST_D_T2
+                add  a, ST_D_X
                 ld   e, a
-                ld   d, h                      ; DE = STMR2 (POISON: high nibble)
+                ld   d, ST_X >> 8              ; DE = ST_X + slot (POIS1: the POISON turns, a byte)
                 ld   a, (de)
-                sub  $10
+                dec  a
                 ld   (de), a
-                and  $F0
                 jr   nz, .pm
                 res  STS_POISON_BIT, (hl)
                 ld   bc, TX_ST_POISON_OFF << 8 ; (no monster line)
                 call .msg
-                jr   .hp                       ; 0 is a multiple of 3
-.pm:            sub  $30                       ; (n << 4) mod (3 << 4) == 0 ?
-                jr   z, .hp
-                jr   nc, .pm
-                jr   .weak
+                jr   .hp                       ; 0 is a multiple of 4
+.pm:            and  3                         ; every 4th turn costs 1 HP
+                jr   nz, .weak
 .hp:            ld   a, (ix+E_HP)
                 cp   2
                 jr   c, .weak                  ; HP 1: never below (§6.4)
@@ -157,6 +155,7 @@ st_step:
                 pop  hl
                 ret
                 ASSERT (ST_FLAGS >> 8) == (ST_T2 >> 8) && (ST_FLAGS & $FF) + ST_SLOTS <= 256
+                ASSERT (ST_X & $FF) + ST_SLOTS <= 256   ; one page per array: L = slot
 
 ;------------------------------------------------------------------------------
 ; st_msg — IX = entity: the hero gets line B (TX_*), a monster "THE " + name +

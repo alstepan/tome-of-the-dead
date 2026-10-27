@@ -241,7 +241,9 @@ HS_OK_BELOW     EQU 50              ; FOOD < 50 -> OK
 HS_HUNGRY_BELOW EQU 25              ; FOOD < 25 -> HUNGRY
 HS_WEAK_BELOW   EQU 10              ; FOOD < 10 -> WEAK
 HP_REG_FED      EQU 12              ; FED: HP +1 per 12 turns (§7)
-HW_REPEAT       EQU 50              ; WEAK: the line again every 50 turns (§8.11 (2))
+HW_REPEAT       EQU 50              ; WEAK: the faint check every 50 turns (§7.1; was the repeat line)
+FAINT_T         EQU 5               ; FAINT1 (§7.1): the hunger faint = ASLEEP 5 (BAL1 knob 4..6)
+FAINT_GAP       EQU 30              ; faints come 30 turns apart (HW_TMR := HW_REPEAT - FAINT_GAP; BAL1 25..40)
 ; Hunger-WEAK = ST_FLAGS slot 0 bit STS_HWEAK_BIT (combat_defs.asm), kept equal to
 ; HSTAGE == HS_WEAK by hunger_turn: every WEAK test masks STS_WEAK | STS_HWEAK
 ; (same effects, never stacked; no timer, no icon, Cure leaves it).
@@ -284,7 +286,7 @@ ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 81
 ; never compacted mid-level.
 ;   byte TR_B0: bits 0-3 room id, bit 4 TRF_S1 (storey 1), bit 5 TRF_KNOWN,
 ;               bit 6 TRF_SPENT, bit 7 spare (0)
-;   byte TR_B1: bits 0-4 col, bits 5-6 type TT_*, bit 7 spare (0)
+;   byte TR_B1: bits 0-4 col, bits 5-7 type TT_* (STUN1: 3 bits)
 ; NOTE: tools/levelgen.py's 320-B block model (tests/levelgen_z80.py,
 ; room_model.py) must keep these bytes 0 until T6 / T7 model the traps.
 ;------------------------------------------------------------------------------
@@ -302,12 +304,13 @@ TRF_S1_BIT      EQU 4
 TRF_KNOWN_BIT   EQU 5
 TRF_SPENT_BIT   EQU 6
 TR_COL_MASK     EQU %00011111
-TR_TYPE_MASK    EQU %01100000
+TR_TYPE_MASK    EQU %11100000
 TR_TYPE_SHIFT   EQU 5
 TT_DART         EQU 0               ; D1+, re-arms
 TT_GAS          EQU 1               ; D2+, one-shot
 TT_TELEPORT     EQU 2               ; D3+, one-shot
 TT_ALARM        EQU 3               ; D5+, one-shot
+TT_STUN         EQU 4               ; D4+, one-shot (STUN1: the falling stone; pool order DART GAS TELEPORT STUN ALARM)
                 ASSERT TRAP_N < FLOOR_LIST      ; inside the ROOM_DESC spare, below FLOOR_LIST
                 ASSERT TRAP_LIST == $6DF0 && TRAP_N == $6DFC
 ; 3E-T16 traps runtime state (state block spare $BFF5..$BFF7, test-observable,
@@ -323,8 +326,8 @@ TRP_ENT         EQU $BFFA           ;   its TRAP_LIST entry (low byte)
 TRW_WAIT_BIT    EQU 0
 TRW_ENTRY_BIT   EQU 1
 TRW_ENTRY       EQU 1 << TRW_ENTRY_BIT
-TEV_FIRE        EQU 1               ; + TT_*: 1..4
-TEV_FIND        EQU 5
+TEV_FIRE        EQU 1               ; + TT_*: 1..5
+TEV_FIND        EQU 6
 ABL_TRAP        EQU $80             ; ACT_ABL of a trap sequence (act_pend -> far6 trap_step)
 TRAP_ACT_TICK   EQU 1               ; the first step: the tick after the input tick
 TRAP_STEP_T     EQU 2               ; ticks between steps (each flash phase)
@@ -342,8 +345,10 @@ TRAP_HERO_W     EQU 3               ; both heroes' KT_BW: the body cols x .. x+2
 TRAP_SEARCH_R   EQU 6               ; Wait searches hidden traps within 6 cols of the body, 1 in 2
 TRAP_SENSE_R    EQU 2               ; the Mage senses them within 2 cols (100 %)
 TRAP_GAS_T      EQU 4               ; GAS: ASLEEP 4
-TRAP_DART_PSN   EQU 6               ; DART: 1d4+1 PHYS + POISON 6
+TRAP_DART_PSN   EQU 12              ; DART: 1d4+1 PHYS + POISON 12 (POIS1: was 6; deal_hit's E param is /2, PSN_CAP)
 TRAP_DART_DIE   EQU 4
+TRAP_STONE_DIE  EQU 3               ; STUN1: the falling stone 1d3 PHYS (DEF applies) ...
+TRAP_STUN_T     EQU 2               ; ... + STUNNED 2 + rnd(2) (gameplay RNG: the damage die, then the duration)
 ; the known plate's attr by type (§1.5: ink on black). <= 1 trap per room
 ; (generator), so the room's known trap sets TILE_ATTRS[T_TRAP] itself:
 ; build_room_map's stamp (bank 3 tr_ink3) and trap6's reveal (R6 tr_ink6),
@@ -353,7 +358,8 @@ TRAP_INK_DART   EQU $42
 TRAP_INK_GAS    EQU $44             ; (also the GAS hero flash, §1.5: $44 one step)
 TRAP_INK_TELE   EQU $43
 TRAP_INK_ALARM  EQU $46
+TRAP_INK_STUN   EQU $07             ; grey stone = the STUNNED tint (also the hero flash)
     MACRO TRAP_INKS
-                DB   TRAP_INK_DART, TRAP_INK_GAS, TRAP_INK_TELE, TRAP_INK_ALARM
-                ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3
+                DB   TRAP_INK_DART, TRAP_INK_GAS, TRAP_INK_TELE, TRAP_INK_ALARM, TRAP_INK_STUN
+                ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3 && TT_STUN == 4
     ENDM

@@ -149,14 +149,17 @@ tr_rearm:       ld   hl, TURN_PEND
 ; or the plate's attr (TILE_ATTRS[T_TRAP] + ap_put_a): no new graphics.
 ;  TEV_FIRE + type (game.md §1.5 table, §6 V3):
 ;   step 0  SFX_TRAP; the hero flashes the type ink (DART $42, GAS $44 one step,
-;           TELEPORT $43, ALARM $46; TRAP_FLASH_T ticks); the plate shows bright
+;           TELEPORT $43, ALARM $46, STUN $07; TRAP_FLASH_T ticks); the plate shows bright
 ;           (PLATE_FLASH_ATTR); the effect —
-;           DART: "A DART HITS YOU!", far3 trap_hit (1d4+1 PHYS, DEF, POISON 6,
+;           DART: "A DART HITS YOU!", far3 trap_hit (1d4+1 PHYS, DEF, POISON 12,
 ;             its lines); the hurt plays on arrival (E_REACTAT = walk 2, jump
 ;             JA_N + 1) with the arrow_hit impact on the trap col (Warrior only:
 ;             arrow_hit is not in the Mage's class FX pool, game.md §1.5);
-;           GAS: ASLEEP TRAP_GAS_T (HOLD overwritten: a moving hero holds
-;             nothing), "SLEEPING GAS!" + "YOU FALL ASLEEP";
+;           STUN (STUN1): "A STONE FALLS ON YOU!", far3 trap_stone (1d3 PHYS, DEF,
+;             STUNNED 2 + rnd(2) through deal_hit: HOLD_GUARD refuses the stun,
+;             "YOU ARE STUNNED!"); the DART's hurt timing, no impact sprite;
+;           GAS: hero_hold ASLEEP TRAP_GAS_T (HOLD overwritten: a moving hero
+;             holds nothing), "SLEEPING GAS!" + "YOU FALL ASLEEP";
 ;           TELEPORT: tele_arm (EX_TELE, the $43 flash, SFX_DRAIN); act_pend's
 ;             monster step sees EXIT_KIND and skips the monsters; end_turn's
 ;             do_exit -> tele_pick ("YOU ARE TELEPORTED!", the arrival flash);
@@ -167,7 +170,7 @@ tr_rearm:       ld   hl, TURN_PEND
 ;  TEV_FIND: step 0 "TRAP FOUND: <type>"; the plate blinks bright / off
 ;           (TILE_ATTRS 0 = ink on black paper: unseen) FIND_BLINKS times,
 ;           TRAP_STEP_T ticks each, then shows in its ink.
-; Clobbers: all but IY (IX kept).   DART step 0 ~16k T, GAS ~9k, ALARM ~7k,
+; Clobbers: all but IY (IX kept).   DART step 0 ~16k T, STUN ~13k, GAS ~9k, ALARM ~7k,
 ;   TELEPORT ~4.5k, a plate step ~4k, the find's line step ~8k
 ;------------------------------------------------------------------------------
 trap_step:
@@ -259,30 +262,29 @@ tr_eff:
                 dec  a
                 jp   z, tele_arm
                 dec  a
-                jr   nz, .dart
+                jr   nz, .dart                 ; DART (A = -3) / STUN (A = 1)
                 ld   e, S_FX_TRAP_BELL         ; ALARM: TODO 3F the wave (§1.5, §9.5)
                 jp   fx_line                   ; (A = 0: the stem alone)
-.gas:           ld   hl, ST_FLAGS              ; the hero = status slot 0
-                ld   a, (hl)
-                and  ~STS_HOLD & $FF
-                or   HOLD_ASLEEP
-                ld   (hl), a
-                ld   l, ST_T1 & $FF
-                ld   a, (hl)
-                and  $0F                       ; (the MIND timer kept)
-                or   TRAP_GAS_T << 4           ; HOLD timer: the high nibble
-                ld   (hl), a
-                ld   e, S3_TRAP_GAS            ; (A = 0 from the dec: the stem alone)
-                xor  a
+.gas:           ld   a, HOLD_ASLEEP
+                ld   b, TRAP_GAS_T
+                call hero_hold
+                ld   e, S3_TRAP_GAS
+                xor  a                         ; the stem alone
                 ld   hl, it_line
                 call far1
                 ld   a, TX_ST_ASLEEP           ; "YOU FALL ASLEEP" (bank 0)
                 jp   msg_push
-.dart:          xor  a                         ; the stem alone
+.dart:          dec  a                         ; Z = STUN
+                ld   hl, trap_hit              ; bank 3 (combat3.asm)
                 ld   e, S3_TRAP_DART
+                jr   nz, .st
+                ld   hl, trap_stone            ; STUN1: 1d3 + STUNNED 2-3 through deal_hit
+                ld   e, S3_TRAP_STONE
+.st:            push hl
+                xor  a                         ; the stem alone
                 ld   hl, it_line
                 call far1
-                ld   hl, trap_hit              ; bank 3 (combat3.asm)
+                pop  hl
                 call far3
                 ld   a, (P_ENTITIES + E_MODE)
                 cp   M_JUMP
@@ -294,7 +296,10 @@ tr_eff:
 .d:             ld   (P_ENTITIES + E_REACTAT), a
                 sub  TRAP_ACT_TICK + 1         ; fx_start from act_pend at tick k: the
                 ld   c, a                      ; impact on k + delay + 1 -> delay =
-                ld   a, (HERO_KIND)            ; arrival - TRAP_ACT_TICK - 1
+                ld   a, (TRP_EV)               ; arrival - TRAP_ACT_TICK - 1
+                cp   TEV_FIRE + TT_STUN
+                ret  z                         ; STUN: no impact sprite (arrow_hit is DART-only)
+                ld   a, (HERO_KIND)
                 or   a
                 ret  nz                        ; the Mage: no arrow_hit frame
                 call tr_ent
@@ -318,8 +323,41 @@ tr_eff:
                 call fx_start                  ; bank 2 (all but IY)
                 pop  ix
                 ret
-                ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3
-                ASSERT (ST_FLAGS >> 8) == (ST_T1 >> 8) && TRAP_GAS_T <= STS_MAX_TURNS
+                ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3 && TT_STUN == 4
+                ASSERT E_FLA == E_FLT + 1 && ((P_ENTITIES + E_FLT) & $FF) != $FF
+
+;------------------------------------------------------------------------------
+; hero_hold — the hero falls under a HOLD with a timer, the GAS one-step flash:
+; HOLD kind := A (HOLD_*), HOLD timer := B turns (<= STS_MAX_TURNS, the MIND
+; timer kept), E_FLT := TRAP_FLASH_T ticks of TRAP_INK_GAS. Shared by the GAS
+; trap (tr_eff) and the hunger faint (hunger6.asm hg_faint); a STUN goes
+; through deal_hit (HOLD_GUARD, the line). Callers pick the lines / SFX.
+; In: A = HOLD_*, B = turns.  Clobbers: A, B, C, HL.   ~0.25k T
+;------------------------------------------------------------------------------
+hero_hold:
+                ld   hl, ST_FLAGS              ; the hero = status slot 0
+                ld   c, a
+                ld   a, (hl)
+                and  ~STS_HOLD & $FF
+                or   c
+                ld   (hl), a
+                ld   l, ST_T1 & $FF
+                ld   a, b
+                rlca
+                rlca
+                rlca
+                rlca                           ; HOLD timer: the high nibble
+                ld   b, a
+                ld   a, (hl)
+                and  $0F                       ; (the MIND timer kept)
+                or   b
+                ld   (hl), a
+                ld   hl, P_ENTITIES + E_FLT
+                ld   (hl), TRAP_FLASH_T
+                inc  l
+                ld   (hl), TRAP_INK_GAS
+                ret
+                ASSERT (ST_FLAGS >> 8) == (ST_T1 >> 8) && TRAP_GAS_T <= STS_MAX_TURNS && FAINT_T <= STS_MAX_TURNS
                 ASSERT E_FLA == E_FLT + 1 && ((P_ENTITIES + E_FLT) & $FF) != $FF
 
 ;------------------------------------------------------------------------------
@@ -388,9 +426,9 @@ tr_type:        inc  l
                 rlca
                 rlca
                 rlca
-                and  3                         ; bits 5-6 -> 0-1
+                and  7                         ; bits 5-7 -> 0-4 (STUN1: 3 bits)
                 ret
-                ASSERT TR_TYPE_SHIFT == 5 && TR_B1 == 1 && (TRAP_LIST >> 8) == ((TRAP_LIST + 11) >> 8)
+                ASSERT TR_TYPE_SHIFT == 5 && TR_TYPE_MASK == $E0 && TR_B1 == 1 && (TRAP_LIST >> 8) == ((TRAP_LIST + 11) >> 8)
 
 ;------------------------------------------------------------------------------
 ; trap_at — E = an FL_ROOM-style byte (room | FL_S1), C = col: Z = an unspent

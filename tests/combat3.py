@@ -42,7 +42,7 @@ NODEF = S["DH_NODEF"]
 HEAL = S["DH_HEAL"]
 EFS = S["DH_EFX_SHIFT"]
 FROZEN, ASLEEP, STUNNED, FEAR, CONFUSED, POISON, WEAK = range(1, 8)
-STF, ST1, ST2 = S["ST_FLAGS"], S["ST_T1"], S["ST_T2"]
+STF, ST1, ST2, STX = S["ST_FLAGS"], S["ST_T1"], S["ST_T2"], S["ST_X"]
 
 
 def w16(v):
@@ -117,10 +117,11 @@ class T(Proto):
     def st(self, slot, f=0, t1=0, t2=0):
         self.wb(STF + slot, f)
         self.wb(ST1 + slot, t1)
-        self.wb(ST2 + slot, t2)
+        self.wb(ST2 + slot, t2 & 255)
+        self.wb(STX + slot, t2 >> 8)               # POIS1: the third field = ST_T2 | ST_X << 8
 
     def gst(self, slot):
-        return self.rb(STF + slot), self.rb(ST1 + slot), self.rb(ST2 + slot)
+        return self.rb(STF + slot), self.rb(ST1 + slot), self.rb(ST2 + slot) | self.rb(STX + slot) << 8
 
 
 def main():
@@ -258,10 +259,10 @@ def main():
         r.append(("FEAR overwrites MIND", eff(FEAR, 2), (1 << 2, 0x02, 0)))
         r.append(("FROZEN independent (HOLD)", eff(FROZEN, 2), ((1 << 2) | FROZEN, 0x22, 0)))
         r.append(("STUNNED refused on a held body (D3-8c)", eff(STUNNED, 1), ((1 << 2) | FROZEN, 0x22, 0)))
-        r.append(("POISON 9", eff(POISON, 9), ((1 << 2) | FROZEN | 0x10, 0x22, 0x90)))
-        r.append(("WEAK 12", eff(WEAK, 12), ((1 << 2) | FROZEN | 0x30, 0x22, 0x9C)))
-        r.append(("POISON adds 4 to 9 -> 13", eff(POISON, 4), ((1 << 2) | FROZEN | 0x30, 0x22, 0xDC)))
-        r.append(("POISON caps at 15", eff(POISON, 4), ((1 << 2) | FROZEN | 0x30, 0x22, 0xFC)))
+        r.append(("POISON 9 (half: 18 turns, ST_X)", eff(POISON, 9), ((1 << 2) | FROZEN | 0x10, 0x22, 18 << 8)))
+        r.append(("WEAK 12", eff(WEAK, 12), ((1 << 2) | FROZEN | 0x30, 0x22, (18 << 8) | 12)))
+        r.append(("POISON adds 4 (8 turns) to 18 -> 26", eff(POISON, 4), ((1 << 2) | FROZEN | 0x30, 0x22, (26 << 8) | 12)))
+        r.append(("POISON caps at 30", eff(POISON, 4), ((1 << 2) | FROZEN | 0x30, 0x22, (30 << 8) | 12)))
         r.append(("STUNNED overwrites nothing: HOLD clear -> lands", eff(STUNNED, 1, st=(0, 0, 0)), (STUNNED, 0x10, 0)))
         r.append(("R halves 3 -> 1", eff(CONFUSED, 3, res=res_bytes(PHYS, R), st=(0, 0, 0)), (2 << 2, 0x01, 0)))
         r.append(("R halves 1 -> none", eff(CONFUSED, 1, res=res_bytes(PHYS, R), st=(0, 0, 0)), (0, 0, 0)))
