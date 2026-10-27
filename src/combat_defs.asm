@@ -290,7 +290,11 @@ MP_PER          EQU PAGE_END + 1    ; MP regen period (turns) for xp_turn: class
 FX_OP           EQU PAGE_END + 2    ; fx_main (R6): in = the op (FX_*), out = the FXR_* result flags
 FX_ARG          EQU PAGE_END + 3    ; fx_main: the op's argument (a slot: BAG + 3 * arg)
 PAGE_VLAST      EQU PAGE_END + 4    ; the verb page_post last consumed (VB_*; test-observable only)
-HERO_T8_END     EQU PAGE_END + 5
+QS_RECHK        EQU PAGE_END + 5    ; IC1: bit 7 = the icon bar needs an item_icons pass in a tick's 1st
+                                    ; frame (icon_poll): a quick slot left undrawn (2nd frame) / forced by
+                                    ; pot_sync, or HP / MP changed (the potion pick); bits 0-6 0. No init:
+                                    ; a stale bit costs one pass
+HERO_T8_END     EQU PAGE_END + 6
 HELD_WAIT       EQU 3
 LT_SERVED       EQU 1
 LT_HOLD_BIT     EQU 1

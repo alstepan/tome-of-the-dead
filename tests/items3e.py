@@ -111,7 +111,8 @@ def emu(p, check):
     want[bag:bag + 6] = bytes([S["IT_P_HEAL"], 1, 0, S["IT_F_APPLE"], 1, 0])
     want[worn:worn + 6] = bytes([S["IT_W_SHORT"], 1, 0, S["IT_A_LEATHER"], 1, 0])
     want[S["FOOD"] - lo] = S["FOOD_START"]             # 3E-T9: kit_add
-    want[S["QS_CACHE"] + S["QS_FOOD"] - lo] = 1          # 3E-T12: pot_sync counts the food stacks (Apple)
+    want[S["QS_CACHE"] + S["QS_FOOD"] - lo] = 1          # 3E-T12 / IC1: pot_sync's food QTY (Apple x1)
+    want[S["QS_CACHE"] + S["QS_POTION"] - lo] = 1        # IC1: potion types present (bit 0 = Heal)
     check("R1 new_game zeroes ITEM_RAM + the start kit (T11)", mem(lo, n) == bytes(want), mem(lo, n).hex())
     bad = canaries()
     check("R1 the rest of the reserve untouched", not bad, bad[:16])

@@ -37,9 +37,7 @@
 panel_init:
                 push de
                 ld   hl, panel_init7           ; MEM-SND: the state reset, every attr
-                call far7                      ; stamp, the potion-slot scan (boot7.asm;
-                ld   a, l                      ; +~0.3k T once per level), L = the slot
-                ld   (pot_slot), a             ; (bank-3 data: written here)
+                call far7                      ; stamp (boot7.asm; +~0.3k T once per level)
                 ; row 21: labels (glyph8 / pblit: bank-3 SMC + vdata via GEN_SRC)
                 ld   hl, label_heart
                 ld   bc, (STAT_ROW << 8) | HP_LBL_COL
@@ -52,19 +50,10 @@ panel_init:
                 call glyph8
                                                ; (D3-9b: the MP bar is item_mp's, PD_MP set;
                                                ; 3E-T9: the FOOD bar + word item_food's, PD_FOOD)
-                ; rows 22-23: worn-gear outlines (the log attrs: panel_init7)
-                ld   c, GEAR_COL
-.gear:          push bc
-                ld   hl, icon_empty16
-                ld   b, LOG_ROW
-                ld   de, (2 << 8) | 2
-                call pblit
-                pop  bc
-                inc  c
-                inc  c
-                ld   a, c
-                cp   ROOM_COLS
-                jr   c, .gear
+                ; rows 22-23: the worn cells (IC1: worn item icons / slot placeholders,
+                ; R6 icons6.asm; the log attrs: panel_init7)
+                ld   hl, worn_draw
+                call far6
                 pop  hl                        ; L = the first message (TX_*)
                 ld   a, l
                 cp   TX_NONE
@@ -171,10 +160,11 @@ cell_bm:
 ;------------------------------------------------------------------------------
 ; slot_redraw — far3 from item_icons: A = slot, E = its state (IS_* | IS_SEL).
 ; Draws the slot's 3 x 2 cells from scratch: an outline (IS_HIDDEN or no icon
-; art: the 3E quick food / scroll), the quick potion (T_POTION glyph + count,
-; ATTR_POTION / ATTR_HUD) or the bar icon (pblit, its own attrs); IS_GREY
-; -> all 6 attrs ATTR_P_GREY; IS_SEL -> PAPER blue (sel_paint, which marks).
-; Clobbers: all but IX, IY.   ~3k T (pblit through GEN_SRC)
+; art), a quick FOOD / POTION / SCROLL slot (IC1: R6 qs_draw — the pick's
+; 16x16 icon in its ink + the count of that type) or the bar icon (pblit, its
+; own attrs); IS_GREY -> all 6 attrs ATTR_P_GREY; IS_SEL -> PAPER blue
+; (sel_paint, which marks).
+; Clobbers: all but IX, IY.   ~3k T (pblit through GEN_SRC); quick ~6-11k T
 ;------------------------------------------------------------------------------
 slot_redraw:
                 ld   b, a
@@ -198,10 +188,10 @@ slot_redraw:
                 and  3
                 ld   a, (hl)                   ; A = icon id / SLOT_*
                 jr   z, .out                   ; IS_HIDDEN
-                cp   SLOT_POTION
-                jr   z, .pot
                 cp   SLOT_EMPTY
                 jr   z, .out
+                cp   SLOT_QFOOD
+                jr   nc, .quick
                 ld   hl, icon_tab              ; icon_tab + id * ICON_LEN (cold)
                 ld   de, ICON_LEN
                 or   a
@@ -217,54 +207,26 @@ slot_redraw:
                 call pblit
                 pop  bc
                 jr   .attrs
-.pot:           ld   b, ICON_ROW               ; blank 3 x 2, then the glyph + count
+.quick:         sub  SLOT_QFOOD                ; A = QS_* (IC1)
+                ld   d, a                      ; D = class, E = state
+                push de
+                ld   b, ICON_ROW               ; blank 3 x 2: bitmap, attrs 0
                 call .clr
                 ld   b, ICON_ROW + 1
                 call .clr
-                push bc
-                call cell_bm                   ; (19, col)
-                ex   de, hl
-                ld   hl, TILE_GLYPHS + T_POTION * 8
-                ld   b, 8
-.pg:            ld   a, (hl)
-                ld   (de), a
-                inc  hl
-                inc  d
-                djnz .pg
-                ld   a, (P_ENTITIES + E_POT)
-                cp   10
-                jr   c, .d
-                ld   a, 9
-.d:             add  a, '0'
-                ld   hl, P_NUMBUF
-                ld   (hl), a
-                inc  l
-                ld   (hl), 0
-                dec  l
-                pop  bc
-                push bc
-                ld   a, c
-                add  a, 2
-                add  a, a
-                add  a, a
-                add  a, a
-                ld   e, a                      ; x of (col + 2): a cell (print6 x rule)
-                ld   b, ICON_ROW + 1
-                call print6
-                pop  bc
-                push bc
                 ld   b, ICON_ROW
                 ld   de, (ICON_W << 8) | 2
                 xor  a
-                call stamp_rect
-                pop  bc
                 push bc
-                ld   b, ICON_ROW + 1
-                call attr_addr
-                ld   (hl), ATTR_POTION
-                inc  l
-                inc  l
-                ld   (hl), ATTR_HUD
+                call stamp_rect                ; (C kept)
+                pop  bc
+                pop  hl                        ; H = class, L = state
+                push bc
+                ld   a, h
+                ld   e, l
+                ld   d, c                      ; D = col
+                ld   hl, qs_draw               ; R6 (icons6.asm): icon + count
+                call far6
                 pop  bc
 .attrs:         pop  af                        ; A = slot (B of the push)
                 pop  de                        ; E = state
@@ -302,13 +264,17 @@ slot_redraw:
 
 ; item_info / dec16 / info_tab: bank 1 since the C3 review (info1.asm).
 
-; icon bars by class (game.md §3.5): icon ids (panel_icons.asm) / outline / potion slot
+; icon bars by class (game.md §3.5): icon ids (panel_icons.asm) / outline /
+; IC1 quick slots (SLOT_QFOOD + QS_*: R6 qs_draw)
 SLOT_EMPTY      EQU $FE
-SLOT_POTION     EQU $FD
+SLOT_QFOOD      EQU $FB
+SLOT_QPOT       EQU SLOT_QFOOD + QS_POTION
+SLOT_QSCR       EQU SLOT_QFOOD + QS_SCROLL
 bar_knight:     DB ICON_SWORD, ICON_POWER, ICON_WHIRL, ICON_DAGGERS, ICON_BOW
-                DB SLOT_EMPTY, SLOT_POTION, SLOT_EMPTY, ICON_BAG, SLOT_EMPTY
+                DB SLOT_QFOOD, SLOT_QPOT, SLOT_QSCR, ICON_BAG, SLOT_EMPTY
 bar_wizard:     DB ICON_STAFF, ICON_SPARK, ICON_FIREBOLT, ICON_FROST, ICON_DRAIN
-                DB ICON_LIGHTNING, SLOT_EMPTY, SLOT_POTION, SLOT_EMPTY, ICON_BAG
-                ASSERT bar_wizard - bar_knight == ICON_SLOTS && ICON_COUNT < SLOT_POTION
+                DB ICON_LIGHTNING, SLOT_QFOOD, SLOT_QPOT, SLOT_QSCR, ICON_BAG
+                ASSERT bar_wizard - bar_knight == ICON_SLOTS && ICON_COUNT < SLOT_QFOOD && SLOT_QSCR < SLOT_EMPTY
+                ASSERT {b bar_knight + QS_SLOT0 + QS_POTION} == SLOT_QPOT && {b bar_wizard + QS_SLOT0 + 1 + QS_POTION} == SLOT_QPOT
 
                 ASSERT ICON_LEN == 54 && ICON8_LEN == 9   ; pblit: 9 B per cell, <= 6 cells

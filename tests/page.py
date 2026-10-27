@@ -21,7 +21,8 @@ Release build (DEBUG_KIT=0), real play.
   P5  review fixes: BAG selected + I and ENTER in the same tick -> one open only;
       closing with BREAK / I / ENTER+I never re-opens nor uses the icon; no turn; a held hero
       (STS_HOLD): I opens nothing (INTENT dropped on the turn-intent path)
-  P6  a mixed bag + worn set: 2x glyphs, floor inks, QTY digits, empty frames, ITEMS n,
+  P6  a mixed bag + worn set: IC1 16x16 icons, floor inks, QTY digits, empty frames, the
+      empty worn slot's placeholder, the description icon, ITEMS n,
       cursor on slot 0, golden `page_bag`
   P7  cursor wrap rules; P8 the verb-enable matrix (+ the USE word)
   P9  verbs: EQUIP / REMOVE return PAGE_VERB / PAGE_SLOT, consumed by page_post
@@ -315,21 +316,9 @@ def bag_page(p, check):
         b = it_tab[t]
         return (b & 7) | (0x40 if b & 8 else 0)
 
-    def scaled(t):
-        """The type's floor glyph (the room's TILE_GLYPHS: not the Sanctum) 2x: {(dc, dr): 8 B}."""
-        g = bytes(z.read_memory(S["TILE_GLYPHS"] + it_cls[it_tab[t] >> 4] * 8, 8))
-
-        def dbl(b):
-            v = 0
-            for k in range(8):
-                v = (v << 2) | (3 if b & (0x80 >> k) else 0)
-            return v
-        out = {}
-        for half in (0, 1):
-            lines = [dbl(g[half * 4 + i // 2]) for i in range(8)]
-            out[(0, half)] = bytes(v >> 8 for v in lines)
-            out[(1, half)] = bytes(v & 255 for v in lines)
-        return out
+    def icon(idx):
+        """IC1: the 16x16 icon idx (type - IT_BAG_LO; 39 + worn slot = placeholder) cells."""
+        return game_lib.icon16_cells(idx)
 
     def is_open():
         return p.rb("PAGE_OPEN") == 1 and p.pc() == S["select_tick"]
@@ -391,20 +380,27 @@ def bag_page(p, check):
     for s in range(24):
         rec = (bag + [None] * 9)[s] if s < 20 else worn[s - 20]
         c, r = slot_rect(s)
-        if rec is None:
+        if rec is None and s < 20:
             if cell_bytes(fr, c, r)[0] != 0xFF or attr_at(fr, c, r) & 0xC7 != 0x47:
                 bad.append((s, "frame"))
             continue
-        t, q = I(rec[0]), rec[1]
-        for (dc, dr), want in scaled(t).items():
+        if rec is None:                           # IC1: an empty worn slot = its placeholder
+            idx, a, q = 39 + s - 20, S["ICONS16_INK_PH"], 0
+        else:
+            idx, a, q = I(rec[0]) - S["IT_BAG_LO"], ink(I(rec[0])), rec[1]
+        for (dc, dr), want in icon(idx).items():
             if cell_bytes(fr, c + dc, r + dr) != want:
-                bad.append((s, "glyph", dc, dr))
-            if attr_at(fr, c + dc, r + dr) & 0xC7 != ink(t):
+                bad.append((s, "icon", dc, dr))
+            if attr_at(fr, c + dc, r + dr) & 0xC7 != a:
                 bad.append((s, "ink", hex(attr_at(fr, c + dc, r + dr))))
         if any(cell_bytes(fr, c + 2, r + 1)) != (q >= 2):
             bad.append((s, "qty", q))
-    check("P6 page: 11 bag icons (2x floor glyph, floor ink, QTY digit >= 2), 9 empty frames, worn W/A/C + empty H",
-          ok and bad == [], (ok, bad[:6]))
+    # IC1: the description icon (cols 0-1, rows 18-19) = the cursor slot 0's (Heal)
+    for (dc, dr), want in icon(I("P_HEAL") - S["IT_BAG_LO"]).items():
+        if cell_bytes(fr, dc, 18 + dr) != want or attr_at(fr, dc, 18 + dr) != ink(I("P_HEAL")):
+            bad.append(("desc", dc, dr))
+    check("P6 page: 11 bag icons (IC1 16x16 icon, floor ink, QTY digit >= 2), 9 empty frames, worn W/A/C"
+          " + the H placeholder ($05), description icon", ok and bad == [], (ok, bad[:6]))
     got = (p.rb("pg_n"), highlighted(fr), verbs(fr), p.rb("pg_use"))
     check("P6 ITEMS 11/20 (pg_n), cursor on slot 0 only, potion verbs DRINK / DISCARD / CLOSE",
           got == (11, ({0}, 6), (1, 0, 0, 1, 1), VB["DRINK"]), got)

@@ -15,27 +15,46 @@
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; pot_sync — E_POT := the sum of the potion stacks' QTY in BAG; 3E-T12: also
-; QS_CACHE + QS_FOOD / QS_SCROLL := the number of food / scroll stacks (the
-; icon bar's FOOD / SCROLL grey test, icons3.asm icon_state), PD_ICONS when
-; one of those changed (the potion count reaches the panel by icon_poll).
-; Clobbers: A, HL, F (BC, DE kept).   ~1.6k T (20 slots)
+; pot_sync — E_POT := the sum of the potion stacks' QTY in BAG; 3E-T12 / IC1:
+; QS_CACHE + QS_FOOD / QS_SCROLL := the food / scroll QTY in BAG (0 = the
+; icon greys, icons3.asm icon_state; IC1: QTY, not stacks — every BAG write
+; that touches the class changes it, so a change = the quick slot's pick or
+; count may differ: that slot is forced to redraw, ICON_SH := IS_NONE +
+; QS_RECHK bit 7 -> icon_poll's PD_ICONS in a tick's 1st frame); QS_CACHE + QS_POTION := the potion types present (bit k =
+; IT_P_HEAL + k: pot_need / icon_state's pick; the potion slot redraws on
+; E_POT, item_icons). The quick slots are icon-bar slots 5..7 (Warrior) /
+; 6..8 (Mage) = QS_SLOT0 + HERO_KIND + QS_*.
+; Clobbers: A, HL, F (BC, DE kept).   ~1.7k T (20 slots)
 ;------------------------------------------------------------------------------
 pot_sync:
                 push bc
                 push de
+                xor  a
+                ld   (QS_CACHE + QS_POTION), a
                 ld   hl, BAG
                 ld   bc, BAG_SLOTS << 8        ; B = slots, C = potions
-                ld   de, 0                     ; D = food stacks, E = scroll stacks
+                ld   de, 0                     ; D = food QTY, E = scroll QTY
 .l:             ld   a, (hl)
                 inc  l                         ; -> QTY
                 sub  IT_FOOD_LO
                 cp   IT_FOOD_HI - IT_FOOD_LO + 1
                 jr   nc, .nf
-                inc  d
+                ld   a, (hl)
+                add  a, d
+                ld   d, a
+                jr   .nx
 .nf:            sub  IT_POT_LO - IT_FOOD_LO    ; (a food wraps past both tests)
                 cp   IT_POT_HI - IT_POT_LO + 1
                 jr   nc, .np
+                push hl                        ; potion k = A: present bit 1 << k
+                ld   hl, QS_CACHE + QS_POTION
+                inc  a
+                cp   3
+                jr   c, .pb
+                inc  a                         ; 1, 2, 4
+.pb:            or   (hl)
+                ld   (hl), a
+                pop  hl
                 ld   a, (hl)
                 add  a, c
                 ld   c, a
@@ -43,7 +62,9 @@ pot_sync:
 .np:            sub  IT_SCR_LO - IT_POT_LO
                 cp   IT_SCR_HI - IT_SCR_LO + 1
                 jr   nc, .nx
-                inc  e
+                ld   a, (hl)
+                add  a, e
+                ld   e, a
 .nx:            inc  l
                 inc  l
                 djnz .l
@@ -51,9 +72,11 @@ pot_sync:
                 ld   (P_ENTITIES + E_POT), a
                 ld   hl, QS_CACHE + QS_FOOD
                 ld   a, d
+                ld   c, QS_SLOT0 + QS_FOOD
                 call .qs
                 ld   l, (QS_CACHE + QS_SCROLL) & $FF
                 ld   a, e
+                ld   c, QS_SLOT0 + QS_SCROLL
                 call .qs
                 pop  de
                 pop  bc
@@ -61,13 +84,22 @@ pot_sync:
 .qs:            cp   (hl)
                 ret  z
                 ld   (hl), a
-                ld   a, (PANEL_DIRTY)
-                or   PD_ICONS
-                ld   (PANEL_DIRTY), a
+                push hl
+                ld   a, (HERO_KIND)
+                add  a, c
+                add  a, ICON_SH & $FF
+                ld   l, a
+                ld   h, ICON_SH >> 8
+                ld   (hl), IS_NONE             ; that slot redraws (pick / count) in a
+                ld   hl, QS_RECHK              ; tick's 1st frame (icon_poll: bit 7)
+                set  7, (hl)
+                pop  hl
                 ret
                 ASSERT (BAG & $FF) + BAG_SLOTS * IR_STRIDE <= 256 && IR_QTY == 1 && IR_STRIDE == 3
-                ASSERT IT_POT_LO == IT_FOOD_HI + 1 && IT_SCR_LO == IT_POT_HI + 1
+                ASSERT IT_POT_LO == IT_FOOD_HI + 1 && IT_SCR_LO == IT_POT_HI + 1 && IT_POT_HI == IT_POT_LO + 2
                 ASSERT ((QS_CACHE + QS_FOOD) >> 8) == ((QS_CACHE + QS_SCROLL) >> 8)
+                ASSERT (ICON_SH >> 8) == ((ICON_SH + ICON_SLOTS - 1) >> 8) && K_KNIGHT == 0 && K_WIZARD == 1
+                ASSERT QS_SLOT0 + QS_SCROLL + K_WIZARD < ICON_SLOTS
 
 ;------------------------------------------------------------------------------
 ; pu_add — far6 from floor_pickup (bank 7) for a non-ammo entry under the

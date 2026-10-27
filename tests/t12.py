@@ -239,7 +239,8 @@ def run(h, p, check):
     check("D2 DRINK Mana: + 'MANA SURGES!'; Cure (POISON): + 'YOU ARE CURED'", (r1, r2, lines) ==
           (1, 1, ["YOU DRINK THE MANA POTION", "MANA SURGES!", "YOU DRINK THE CURE POTION", "YOU ARE CURED"]),
           (r1, r2, lines))
-    # D3 the quick FOOD / SCROLL icons grey with none in the bag (QS_CACHE via pot_sync)
+    # D3 the quick FOOD / SCROLL icons grey with none in the bag (QS_CACHE via pot_sync;
+    # IC1: the class QTY sums, not the stack counts)
     put(["F_APPLE", "S_FEAR", ("S_SLEEP", 2)])
     qa = tuple(z.read_memory(S["QS_CACHE"], 3))
     put(["P_HEAL"])
@@ -250,8 +251,8 @@ def run(h, p, check):
     put(["F_APPLE", "S_FEAR"])
     p.tick(4)
     sh2 = (p.rb(S["ICON_SH"] + FOOD_SLOT[k]) & 3, p.rb(S["ICON_SH"] + SCR_SLOT[k]) & 3)
-    check("D3 QS_CACHE food / scroll stacks (1, -, 2) -> (0, -, 0); drawn icons grey, then normal again",
-          (qa[0], qa[2], qb[0], qb[2], sh, sh2) == (1, 2, 0, 0, (S["IS_GREY"],) * 2, (S["IS_NORMAL"],) * 2),
+    check("D3 QS_CACHE food / scroll QTY (1, -, 3) -> (0, -, 0); drawn icons grey, then normal again",
+          (qa[0], qa[2], qb[0], qb[2], sh, sh2) == (1, 3, 0, 0, (S["IS_GREY"],) * 2, (S["IS_NORMAL"],) * 2),
           (qa, qb, sh, sh2))
 
     # ======================= R: scrolls ===========================================

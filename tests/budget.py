@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "tdart", "tgas", "ttele", "talarm", "tsearch", "tsense")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tsearch", "tsense")
 CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -337,6 +337,14 @@ SCENARIOS = {
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)],
         [("G", 2), ("@5", 3), ("@7", 3), ("FIRE", 2), ("WAIT", 2)], K_KNIGHT, None, "umix"),
+    # IC1: "pmix" with Heal + Mana in the bag, MP 0 and full HP: the quick POTION slot shows
+    # Mana until a monster hit makes Heal useful (the pick flips: the slot redraws, a
+    # 1st-frame item) + the pickups' quick-slot count redraws (food / potion / scroll)
+    "qmix": ("knight + 4 monsters, pmix items, the quick-slot pick / count redraws", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "qmix"),
     # 3E-T16 (review 2026-10-26): "pmix" with a hidden trap of each type at col 16 of
     # room A's storey 1 (the 2nd walk step fires it: the trap sequence's ticks),
     # a Wait search (col 20, 8 waits: found w.p. 255/256) and the Mage's sense on a
@@ -643,6 +651,21 @@ def umix_setup(p):
     p.wb(S["P_ENTITIES"] + S["E_POT"], 2)
 
 
+def qmix_setup(p):
+    """"qmix" (IC1): pmix + bag Heal x1, Mana x2, Fear x1, Carrot x1 (QS_CACHE / E_POT as pot_sync
+    leaves them), MP 0, full HP; the 3 quick slots marked undrawn."""
+    pmix_setup(p)
+    recs = [("IT_P_HEAL", 1), ("IT_P_MANA", 2), ("IT_S_FEAR", 1), ("IT_F_CARROT", 1)]
+    flat = [v for n, q in recs for v in (S[n], q, 0)]
+    p.z.cmd("write-memory %d %s" % (S["BAG"], " ".join(str(b) for b in flat + [0] * (60 - len(flat)))))
+    p.wmem(S["QS_CACHE"], [1, 3, 1])                  # food QTY, potions present (Heal | Mana), scroll QTY
+    p.wb(S["P_ENTITIES"] + S["E_POT"], 3)
+    p.wb("MP", 0)
+    e = p.ent(0)
+    p.set_ent(0, HP=e["MAXHP"])
+    p.wmem(S["ICON_SH"] + S["QS_SLOT0"], [0xFF] * 3)
+
+
 def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     p = game.T(h)
@@ -679,6 +702,8 @@ def run_scenario(h, scen):
         pmix_setup(p)
     if len(scen) > 5 and scen[5] == "umix":
         umix_setup(p)
+    if len(scen) > 5 and scen[5] == "qmix":
+        qmix_setup(p)
     if len(scen) > 5 and scen[5] in TRAPS:
         trap_setup(p, scen[5])
     for f in EXTRA_SETUP:
@@ -707,6 +732,11 @@ def run_scenario(h, scen):
         bag = list(p.z.read_memory(S["BAG"], 15))
         print(f"[info] umix after: bag {bag}, FOOD {p.rb('FOOD')}, HP {p.ent(0)['HP']}, "
               f"ST_FLAGS {list(p.z.read_memory(S['ST_FLAGS'], 6))}", flush=True)
+    if len(scen) > 5 and scen[5] == "qmix":         # IC1: the potion pick as drawn (state bits 2-3)
+        sh = list(p.z.read_memory(S["ICON_SH"] + S["QS_SLOT0"], 3))
+        print(f"[info] qmix after: quick ICON_SH {[hex(v) for v in sh]} (potion pick {(sh[1] >> 2) & 3}),"
+              f" HP {p.ent(0)['HP']}/{p.ent(0)['MAXHP']}, MP {p.rb('MP')}, bag {list(p.z.read_memory(S['BAG'], 15))}",
+              flush=True)
     totals = [t for t, _ in st.ticks]
     worst = max(st.ticks, key=lambda x: x[0])
     work = [t - i for t, i in zip(totals, st.isr_in)]
@@ -767,7 +797,7 @@ def main():
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,"
+        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
                                   "tdart,tgas,ttele,talarm,tsearch,tsense").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):

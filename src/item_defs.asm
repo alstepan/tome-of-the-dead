@@ -219,6 +219,8 @@ QS_FOOD         EQU 0
 QS_POTION       EQU 1
 QS_SCROLL       EQU 2
 QS_COUNT        EQU 3
+QS_SLOT0        EQU 5               ; IC1: icon-bar slot of the Warrior's FOOD (+ HERO_KIND for the
+                                    ; Mage; + QS_* for POTION / SCROLL): slot_act_tab, ASSERTed in icons.asm
 
 ;------------------------------------------------------------------------------
 ; Hunger (game.md §7). FOOD 0..FOOD_MAX, start FOOD_START; -1 per
@@ -264,8 +266,8 @@ HP_RG           EQU HSTAGE + 1                  ; FED HP regen turn counter 0..H
 HW_TMR          EQU HP_RG + 1                   ; turns since the last WEAK line 0..HW_REPEAT-1  (kept)
 MP_HOLD         EQU HW_TMR + 1                  ; != 0: xp_turn skips MP regen this turn (hunger_turn
                                                 ;   writes it every turn, just before xp_turn)
-QS_CACHE        EQU MP_HOLD + 1                 ; QS_COUNT: 3E-T12 food / scroll stacks in BAG (pot_sync; 0 = the
-                                                ;   icon greys); the QS_POTION byte is unused (E_POT)        (kept)
+QS_CACHE        EQU MP_HOLD + 1                 ; QS_COUNT (pot_sync, IC1): food / scroll QTY in BAG (0 = the icon
+                                                ;   greys), QS_POTION = the potion types present (bit k = IT_P_HEAL + k) (kept)
 ITEM_RAM_END    EQU QS_CACHE + QS_COUNT
 ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 81
                 ASSERT ITEM_RAM_LEN == 81
