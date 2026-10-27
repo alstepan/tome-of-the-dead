@@ -130,6 +130,7 @@ def run(p, check):
         p.wmem(S["ST_FLAGS"], [0] * 16)
         p.wmem(S["ST_T1"], [0] * 16)
         p.wmem(S["ST_T2"], [0] * 16)
+        p.wmem(S["ST_X"], [0] * 16)
         if bagrecs is not None:
             flat = [v for r in bagrecs for v in r]
             p.wmem(BAG, flat + [0] * (60 - len(flat)))
@@ -269,7 +270,8 @@ def run(p, check):
     g2["mp"] = p.rb("MP")
     p.wb(st, S["STS_POISON"] | S["STS_WEAK"] | S["MIND_FEAR"])
     p.wb(S["ST_T1"], 0x05)                         # FEAR 5
-    p.wb(S["ST_T2"], 0x55)                         # POISON 5, WEAK 5 (no poison tick at 4)
+    p.wb(S["ST_T2"], 0x05)                         # WEAK 5
+    p.wb(S["ST_X"], 6)                             # POISON 6 (POIS1: a full byte; the step before the quaff makes it 5: no tick, a tick is at a multiple of 4)
     g3 = quaff()
     g3["st"] = (p.rb(st), p.rb(S["ST_T1"]), p.rb(S["ST_T2"]))
     got = [g1, g2, g3]

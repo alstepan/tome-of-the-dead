@@ -6,7 +6,7 @@ combat3.asm deal_hit (.ps: halved param, add, PSN_CAP), fx6.asm fx_eat / pot_eff
 
   F   hunger faint: the exact effect (ASLEEP 5, the GAS flash $44, 'YOU FAINT FROM HUNGER',
       HW_TMR 20); the timing over real turns (50 WEAK turns after the entry, then every 30);
-      deferred (HW_TMR held at 49, no line) while mid-ladder / held / HOLD_GUARD / E_REACT /
+      deferred (HW_TMR held at 49, no line) while mid-ladder / held / HOLD_GUARD /
       EXIT_KIND and then faints once clear; any HP loss wakes him; the Mummy WEAK status never
       faints; eating out of WEAK and back restarts the grace; costs
   P   poison: amounts 12 / 18 / 24 (kind-table param = half), DART 12, add per hit, cap 30 in
@@ -106,6 +106,9 @@ def run(h, p, check):
     def far6(label, a=0):
         stub([0x3E, a, 0x21] + w16(S[label]) + [0xCD] + w16(S["far6"]))
 
+    def far7(label):
+        stub([0x21] + w16(S[label]) + [0xCD] + w16(S["far7"]))
+
     def far3(label):
         stub([0x21] + w16(S[label]) + [0xCD] + w16(S["far3"]))
 
@@ -202,17 +205,27 @@ def run(h, p, check):
     defer("frozen", lambda: (p.wb(STF, HWEAK | FROZEN), p.wb(ST1, 0x30)), lambda: p.wmem(STF, [HWEAK]))
     defer("stunned", lambda: (p.wb(STF, HWEAK | HOLD), p.wb(ST1, 0x30)), lambda: p.wmem(STF, [HWEAK]))
     defer("guard", lambda: p.wb(STF, HWEAK | GUARD), lambda: p.wmem(STF, [HWEAK]))
-    defer("reaction", lambda: reactat(1), lambda: reactat(0))
-    defer("exit", lambda: p.wb(S["EXIT_KIND"], S["EX_TELE"]), lambda: p.wb(S["EXIT_KIND"], 0))
     want_a, want_b = (False, 49, []), (ASLEEP, 20, [L_FAINT])
     bad = {k: v for k, v in res.items() if v[0] != want_a or v[1] != want_b}
-    check("F3 deferred, not skipped: mid-ladder / frozen / stunned / HOLD_GUARD / E_REACT / EXIT_KIND -> no faint, "
+    check("F3 deferred, not skipped: mid-ladder / frozen / stunned / HOLD_GUARD -> no faint, "
           "HW_TMR 49, no line; once clear the next turn faints", not bad, bad)
+    # F3c the REAL exit path: end_turn runs do_exit (clears EXIT_KIND) BEFORE hunger_turn, so the
+    # arrival turn must not faint (.ex stands the clock still); the next turn faints
+    weak()
+    p.wb(S["EXIT_KIND"], S["EX_TELE"])
+    far7("end_turn")
+    a = (p.rb(STF) & HOLD == ASLEEP, p.rb(HW), L_FAINT in lines, p.rb(S["EXIT_KIND"]))
+    lines.clear()
+    far6("hunger_turn")
+    b = (p.rb(STF) & HOLD, p.rb(HW), list(lines))
+    check("F3c exit turn through end_turn (teleport): no faint, HW_TMR 49; the next turn faints",
+          (a, b) == ((False, 49, False, 0), (ASLEEP, 20, [L_FAINT])), (a, b))
+    scene()
     # a stale E_REACTAT (the last reaction's tick, never cleared) with no pending E_REACT must not defer
     weak()
     p.wb(S["P_ENTITIES"] + S["E_REACTAT"], 5)
     far6("hunger_turn")
-    check("F3b a stale E_REACTAT with E_REACT 0 does not defer the faint (budget tfaint found it)",
+    check("F3b a stale E_REACTAT does not defer the faint (budget tfaint found it)",
           (p.rb(STF) & HOLD, p.rb(HW)) == (ASLEEP, 20), (hex(p.rb(STF)), p.rb(HW)))
     # the Mummy WEAK status never faints (the hunger stage is not WEAK)
     clear()

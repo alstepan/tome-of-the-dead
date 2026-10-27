@@ -55,7 +55,7 @@ from proj3 import T, w16  # noqa: E402
 KIT = bool(S.get("KIT_DEBUG", 0))
 STRIDE = S["P_ENT_STRIDE"]
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT = 1, 2, 4, 8
-STF, ST1, ST2 = S["ST_FLAGS"], S["ST_T1"], S["ST_T2"]
+STF, ST1, ST2, STX = S["ST_FLAGS"], S["ST_T1"], S["ST_T2"], S["ST_X"]
 FROZEN, ASLEEP, STUNNED = 1, 2, 3
 FEAR, CONF = 1 << 2, 2 << 2
 POISON, WEAK = 0x10, 0x20
@@ -155,7 +155,7 @@ def run(h, p, check):
             place(sl, x, HY + 6 - kt[kind]["bh"] if y is None else y,
                   EF_ACTIVE | EF_HOSTILE | (EF_LEFT if left else 0), 60)
             out.append(sl)
-        for a in (STF, ST1, ST2):
+        for a in (STF, ST1, ST2, STX):
             p.wmem(a, [0] * 16)
         p.tick(3)
         return out

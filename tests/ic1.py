@@ -114,7 +114,7 @@ def run(p, check):
     def scene(hero):
         p.boot(hero)
         park()
-        for a in ("ST_FLAGS", "ST_T1", "ST_T2"):
+        for a in ("ST_FLAGS", "ST_T1", "ST_T2", "ST_X"):
             p.wmem(S[a], [0] * 16)
         p.settle(3)
 

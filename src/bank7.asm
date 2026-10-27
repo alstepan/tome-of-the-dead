@@ -277,6 +277,9 @@ end_turn:
                                                ; (B3B-13: the PROTO chest win is gone; a run
                                                ; wins by descending from D8, level_descend)
 .ex:            call do_exit                   ; 3E-T16: + the room-entry Mage sense
+                ld   hl, HW_TMR                ; FAINT1: a faint defers across an exit / teleport
+                dec  (hl)                      ; (hunger_turn's +1 restores it: the clock stands
+                                               ; still on the arrival turn; EXIT_KIND is gone)
                 ld   a, TRW_ENTRY              ; (immediate mode, no trigger test:
                 ld   (TRP_WAIT), a             ; this is the transition tick)
                 jp   trap_chk
