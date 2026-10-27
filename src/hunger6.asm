@@ -95,18 +95,17 @@ hunger_turn:
 ; on any HP loss), "YOU FAINT FROM HUNGER" (replaces the old repeat line), the
 ; GAS trap's SFX, HW_TMR := HW_REPEAT - FAINT_GAP (the next one FAINT_GAP turns
 ; after this started). DEFERRED (HW_TMR := HW_REPEAT - 1, checked again next
-; turn) while the hero is mid-ladder (on_ladder), held (any HOLD), HOLD_GUARD
-; (a stun / freeze just ended), has a pending reaction (E_REACT: a DART's hurt in flight) or exit
-; (EXIT_KIND). A jump / fall / walk in progress does not defer.
+; turn) while the hero is mid-ladder (on_ladder), held (any HOLD) or HOLD_GUARD
+; (a stun / freeze just ended). A jump / fall / walk in progress does not defer.
+; A pending exit / teleport defers in end_turn (.ex: HW_TMR - 1 before this
+; turn's + 1, so the clock stands still on the arrival turn; do_exit clears
+; EXIT_KIND before hunger_turn runs). No E_REACT test: turn_done waits for
+; E_REACT == 0, so a reaction is never pending here.
 ; Clobbers: A, BC, DE, HL (IX kept).   deferred ~0.2k T, faint ~3k T (+ line)
 ;------------------------------------------------------------------------------
 hg_faint:
                 ld   a, (ST_FLAGS)
                 and  STS_HOLD | STS_GUARD
-                ld   hl, P_ENTITIES + E_REACT  ; a pending reaction (a DART in flight): E_REACT, not E_REACTAT
-                or   (hl)                      ; (that one keeps its last tick once the reaction has played)
-                ld   hl, EXIT_KIND
-                or   (hl)
                 jr   nz, .defer
                 push ix
                 ld   ix, P_ENTITIES

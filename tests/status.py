@@ -379,12 +379,14 @@ def run(h, p, check):
     scene(K_KNIGHT, [], hp=10)
     setst(0, POISON)
     p.wb(STX, 12)
+    p.wb("FOOD", 40)                         # the OK stage: no FED regen to muddy the HP count
+    p.wb("HSTAGE", 1)
     hps = []
     for _ in range(12):
         wait_turn()
         hps.append(p.ent(0)["HP"])
     check("P1: POISON 12 at HP 10: -1 HP at timer 8 / 4 / 0 (every 4th turn), cleared",
-          hps == [10, 10, 10, 9, 9, 9, 9, 8, 8, 8, 8, 8] and st(0) == (0, 0, 0) and p.rb(STX) == 0, (hps, st(0)))   # (the 3rd tick, turn 12, meets the FED +1 HP regen: 7 + 1)
+          hps == [10, 10, 10, 9, 9, 9, 9, 8, 8, 8, 8, 7] and st(0) == (0, 0, 0) and p.rb(STX) == 0, (hps, st(0)))
     check("P1: 'THE POISON WEARS OFF' once", lines.count(TXT["st_poison_off"]) == 1, lines)
     scene(K_KNIGHT, [], hp=2)
     setst(0, POISON)
