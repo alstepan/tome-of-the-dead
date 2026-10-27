@@ -24,7 +24,7 @@
 ;     hunger is never fatal;
 ;  3. hg_stage (HSTAGE, its line, STS_HWEAK);
 ;  4. FED: HP_RG + 1, at HP_REG_FED -> 0, HP + 1 (to MAXHP; the panel polls
-;     HP). WEAK: HW_TMR + 1, at HW_REPEAT -> 0, "YOU ARE WEAK WITH HUNGER";
+;     HP). WEAK: HW_TMR + 1, at HW_REPEAT the faint (hg_faint, §7.1);
 ;  5. MP_HOLD for xp_turn: WEAK (status or hunger) -> != 0 (MP regen
 ;     halted); HUNGRY -> TURN_COUNTER bit 0 (MP_RG advances every 2nd turn:
 ;     the regen period doubles, §8.11); else 0.
@@ -71,13 +71,11 @@ hunger_turn:
                 jr   .hold
 .nfed:          cp   HS_WEAK
                 jr   nz, .hold
-                ld   hl, HW_TMR                ; WEAK: the line again every HW_REPEAT turns
+                ld   hl, HW_TMR                ; WEAK: the faint check every HW_REPEAT turns
                 inc  (hl)
                 ld   a, (hl)
                 cp   HW_REPEAT
-                jr   c, .hold
-                ld   (hl), 0
-                call hg_weak_line
+                call nc, hg_faint
 .hold:          ld   a, (ST_FLAGS)             ; 5. MP_HOLD (STS_HWEAK just synced)
                 and  STS_WEAK | STS_HWEAK
                 jr   nz, .mh
@@ -90,6 +88,44 @@ hunger_turn:
 .mh:            ld   (MP_HOLD), a
                 ret
                 ASSERT HS_FED == 0 && IT_C_SCARAB == IT_C_PLENTY + 1 && E_MAXHP == E_HP + 1
+
+;------------------------------------------------------------------------------
+; hg_faint — FAINT1 (game.md §7.1): HW_TMR reached HW_REPEAT in the WEAK stage.
+; The hero falls ASLEEP FAINT_T turns (hero_hold, trap6.asm: the GAS flash; wakes
+; on any HP loss), "YOU FAINT FROM HUNGER" (replaces the old repeat line), the
+; GAS trap's SFX, HW_TMR := HW_REPEAT - FAINT_GAP (the next one FAINT_GAP turns
+; after this started). DEFERRED (HW_TMR := HW_REPEAT - 1, checked again next
+; turn) while the hero is mid-ladder (on_ladder), held (any HOLD), HOLD_GUARD
+; (a stun / freeze just ended), has a pending reaction (E_REACT: a DART's hurt in flight) or exit
+; (EXIT_KIND). A jump / fall / walk in progress does not defer.
+; Clobbers: A, BC, DE, HL (IX kept).   deferred ~0.2k T, faint ~3k T (+ line)
+;------------------------------------------------------------------------------
+hg_faint:
+                ld   a, (ST_FLAGS)
+                and  STS_HOLD | STS_GUARD
+                ld   hl, P_ENTITIES + E_REACT  ; a pending reaction (a DART in flight): E_REACT, not E_REACTAT
+                or   (hl)                      ; (that one keeps its last tick once the reaction has played)
+                ld   hl, EXIT_KIND
+                or   (hl)
+                jr   nz, .defer
+                push ix
+                ld   ix, P_ENTITIES
+                call on_ladder                 ; Z = mid-ladder (bank 2; A, HL); pop keeps F
+                pop  ix
+                jr   z, .defer
+                ld   a, HOLD_ASLEEP
+                ld   b, FAINT_T
+                call hero_hold
+                ld   a, SFX_TRAP
+                call sfx_req                   ; (keeps all)
+                ld   a, HW_REPEAT - FAINT_GAP
+                ld   (HW_TMR), a
+                ld   e, S3_HG_FAINT
+                jr   hg_line
+.defer:         ld   a, HW_REPEAT - 1
+                ld   (HW_TMR), a
+                ret
+                ASSERT FAINT_GAP < HW_REPEAT
 
 ;------------------------------------------------------------------------------
 ; food_sub — FOOD -= B, floored at 0; PD_FOOD when it moved.

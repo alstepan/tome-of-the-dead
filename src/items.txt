@@ -134,6 +134,11 @@ tf_alarm      | N | "ALARM"
 hg_hungry     | N | "YOU ARE HUNGRY"
 hg_weak       | N | "YOU ARE WEAK WITH HUNGER"
 hg_fed        | N | "YOU FEEL WELL FED"
+# FAINT1 (game.md §7.1), STUN1 (§1.5.1), POIS1 (§7.2): appended last, no offset moves
+hg_faint      | N | "YOU FAINT FROM HUNGER"
+trap_stone    | N | "A STONE FALLS ON YOU!"
+tf_stun       | N | "STUN"
+too_sick      | N | "TOO SICK TO EAT"
 
 [stems_fx]
 # bank 0 (checked, not emitted)

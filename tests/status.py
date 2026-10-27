@@ -69,7 +69,7 @@ from abil_melee import stream_text  # noqa: E402
 KIT = bool(S.get("KIT_DEBUG", 0))
 STRIDE = S["P_ENT_STRIDE"]
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING = 1, 2, 4, 8, 16
-STF, ST1, ST2 = S["ST_FLAGS"], S["ST_T1"], S["ST_T2"]
+STF, ST1, ST2, STX = S["ST_FLAGS"], S["ST_T1"], S["ST_T2"], S["ST_X"]   # POIS1: POISON turns = ST_X (a byte)
 FROZEN, ASLEEP, STUNNED = 1, 2, 3
 FEAR, CONF = 1 << 2, 2 << 2
 POISON, WEAK, GUARD = 0x10, 0x20, 0x40
@@ -198,7 +198,7 @@ def run(h, p, check):
             sl = slots[kind]
             place(sl, x, HY + 6 - kt[kind]["bh"], EF_ACTIVE | EF_HOSTILE | (EF_LEFT if left else 0), mhp)
             out.append(sl)
-        for a in (STF, ST1, ST2):
+        for a in (STF, ST1, ST2, STX):
             p.wmem(a, [0] * 16)
         p.wb("MP", mp)
         p.wb("MAXMP", mp)
@@ -285,12 +285,13 @@ def run(h, p, check):
     check("W1: Spark on a sleeper: HOLD cleared, 'THE GOBLIN WAKES UP'",
           s[0] & 3 == 0 and s[1] >> 4 == 0 and "THE GOBLIN" + TXT["st_m_wake"] in lines, (s, lines))
     g, = scene(K_KNIGHT, [(K_GOBLIN, HX + 8, 30, True)])
-    setst(g, ASLEEP | POISON, 0x80, 0x40)
+    setst(g, ASLEEP | POISON, 0x80, 0)
+    p.wb(STX + g, 5)
     hp0 = p.ent(g)["HP"]
     wait_turn()
     s = st(g)
-    check("W2: poison (4 -> 3) costs 1 HP and wakes the sleeper; it acts (walks) the same turn",
-          p.ent(g)["HP"] == hp0 - 1 and s[0] == POISON and s[2] == 0x30 and p.ent(g)["X"] == HX + 7
+    check("W2: poison (5 -> 4, POIS1: every 4th turn) costs 1 HP and wakes the sleeper; it acts (walks) the same turn",
+          p.ent(g)["HP"] == hp0 - 1 and s[0] == POISON and p.rb(STX + g) == 4 and p.ent(g)["X"] == HX + 7
           and "THE GOBLIN" + TXT["st_m_wake"] in lines, (p.ent(g)["HP"], s, p.ent(g)["X"], lines))
 
     # ======================= G: HOLD_GUARD =========================================
@@ -369,28 +370,30 @@ def run(h, p, check):
     g, = scene(K_KNIGHT, [(K_GOBLIN, HX + 6, 60, True)])
     seq = []
     for _ in range(4):
-        deal(g, 0, 1, POIC, 6)
-        seq.append(st(0)[2] >> 4)
-    check("HG8: POISON 6 per bite adds: 6, 12, 15 (cap), 15", seq == [6, 12, 15, 15], seq)
+        deal(g, 0, 1, POIC, 6)               # POIS1: the param is half the turns (6 -> 12)
+        seq.append(p.rb(STX))
+    check("HG8: POISON 12 per bite adds: 12, 24, 30 (cap), 30 (ST_X)", seq == [12, 24, 30, 30], seq)
     check("HG8: ...with the flag set and no other effect", st(0)[0] == POISON, st(0))
 
     # ======================= P: poison =============================================
     scene(K_KNIGHT, [], hp=10)
-    setst(0, POISON, 0, 0x90)
+    setst(0, POISON)
+    p.wb(STX, 12)
     hps = []
-    for _ in range(9):
+    for _ in range(12):
         wait_turn()
         hps.append(p.ent(0)["HP"])
-    check("P1: POISON 9 at HP 10: -1 HP at timer 6 / 3 / 0, cleared", hps == [10, 10, 9, 9, 9, 8, 8, 8, 7]
-          and st(0) == (0, 0, 0), (hps, st(0)))
+    check("P1: POISON 12 at HP 10: -1 HP at timer 8 / 4 / 0 (every 4th turn), cleared",
+          hps == [10, 10, 10, 9, 9, 9, 9, 8, 8, 8, 8, 8] and st(0) == (0, 0, 0) and p.rb(STX) == 0, (hps, st(0)))   # (the 3rd tick, turn 12, meets the FED +1 HP regen: 7 + 1)
     check("P1: 'THE POISON WEARS OFF' once", lines.count(TXT["st_poison_off"]) == 1, lines)
     scene(K_KNIGHT, [], hp=2)
-    setst(0, POISON, 0, 0xF0)
+    setst(0, POISON)
+    p.wb(STX, 30)
     hps = []
-    for _ in range(15):
+    for _ in range(31):
         wait_turn()
         hps.append(p.ent(0)["HP"])
-    check("P2: POISON 15 at HP 2: down to 1, never below", min(hps) == 1 and hps[-1] == 1 and hps[0] == 2,
+    check("P2: POISON 30 at HP 2: down to 1, never below", min(hps) == 1 and hps[-1] == 1 and hps[0] == 2,
           hps)
 
     # ======================= C: CONFUSED ===========================================
@@ -449,14 +452,14 @@ def run(h, p, check):
     kx_poke(0x80)
     res = {}
     for name, turns, want in (("FROZEN", 2, (FROZEN, 0x10, 0)), ("STUNNED", 1, (0, 0, 0)),
-                              ("CONFUSED", 3, (CONF, 0x01, 0)), ("POISON", 9, (POISON, 0, 0x90)),
+                              ("CONFUSED", 3, (CONF, 0x01, 0)), ("POISON", 9, (POISON, 0, 0)),
                               ("ASLEEP", 8, (0, 0, 0))):
         setst(g, 0)
         lines.clear()
         deal(0, g, 1, EFX[name] << S["DH_EFX_SHIFT"], turns)
         res[name] = (st(g), want)
-    check("B1: boss: FROZEN 2 -> 1, STUNNED 1 -> none, CONFUSED 3 -> 1, POISON 9 full, ASLEEP immune",
-          all(a == b for a, b in res.values()), res)
+    check("B1: boss: FROZEN 2 -> 1, STUNNED 1 -> none, CONFUSED 3 -> 1, POISON 9 (= 18 turns) full, ASLEEP immune",
+          all(a == b for a, b in res.values()) and p.rb(STX + g) == 18, (res, p.rb(STX + g)))
     check("B1: ASLEEP on a boss: 'THE GOBLIN IS UNAFFECTED'", lines == ["THE GOBLIN" + TXT["cmb_unaffected"]],
           lines)
     kx_poke(0)
@@ -596,7 +599,8 @@ def run(h, p, check):
     p.wb("INPUT_REPEAT", 0)
     tc0 = p.rw("TURN_COUNTER")
     p.hold("L")
-    setst(0, ASLEEP | POISON, 0x50, 0x40)
+    setst(0, ASLEEP | POISON, 0x50, 0)
+    p.wb(STX, 5)
     xs = []
     for _ in range(12):
         tick()

@@ -96,7 +96,8 @@ GEAR_TABLE = (
 )
 # 1.5 traps: count per depth; pool = kinds allowed at that depth (uniform)
 TRAP_COUNT = {1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4}
-TRAP_FIRST = ((T["TT_DART"], 1), (T["TT_GAS"], 2), (T["TT_TELEPORT"], 3), (T["TT_ALARM"], 5))
+# STUN1 (game.md 1.5.1): pool order DART GAS TELEPORT STUN ALARM (the overlay's ig_tord prefix)
+TRAP_FIRST = ((T["TT_DART"], 1), (T["TT_GAS"], 2), (T["TT_TELEPORT"], 3), (T["TT_STUN"], 4), (T["TT_ALARM"], 5))
 
 # --- QUESTIONs (doc ambiguous; each choice above/below is a named constant) --------
 QUESTIONS = [
@@ -544,7 +545,7 @@ def check_items(b, lvl, hero=None):
     for b0, b1 in lvl.traps:
         r, s = b0 & T["TRF_ROOM_MASK"], 1 if b0 & T["TRF_S1"] else 0
         t, ty = b1 & T["TR_COL_MASK"], (b1 & T["TR_TYPE_MASK"]) >> T["TR_TYPE_SHIFT"]
-        if b0 & ~(T["TRF_ROOM_MASK"] | T["TRF_S1"]) or b1 & 0x80:
+        if b0 & ~(T["TRF_ROOM_MASK"] | T["TRF_S1"]):
             v.append("trap flag/spare bits set")
         if r not in pres or r in (start, lair):
             v.append(f"trap in room {r} (absent/start/lair)")

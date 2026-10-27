@@ -29,8 +29,9 @@
 ST_SLOTS        EQU P_MAX_ENT       ; 16
 ST_FLAGS        EQU $B310           ; STATUS (layout below); 0 = fast path
 ST_T1           EQU $B3E0           ; STMR1: hi nibble HOLD turns, lo nibble MIND turns
-ST_T2           EQU $B3F0           ; STMR2: hi nibble POISON turns, lo nibble WEAK turns
-ST_X            EQU $B400           ; spare per slot (§6.4 "byte 3", e.g. the Vampire's fled-once)
+ST_T2           EQU $B3F0           ; STMR2: lo nibble WEAK turns (hi nibble unused since POIS1)
+ST_X            EQU $B400           ; per slot: POISON turns (POIS1, a full byte, cap PSN_CAP); the rest spare
+                                    ;   (§6.4 "byte 3", e.g. the Vampire's fled-once)
                 FONT6_HOLE ST_FLAGS, ST_SLOTS
                 FONT6_HOLE ST_T1, ST_SLOTS
                 FONT6_HOLE ST_T2, ST_SLOTS
@@ -47,9 +48,20 @@ MIND_CONFUSED   EQU 2 << 2          ; (3 << 2 reserved)
 STS_POISON_BIT  EQU 4
 STS_WEAK_BIT    EQU 5
 STS_GUARD_BIT   EQU 6               ; HOLD_GUARD (game.md §6.4.1 B1)
+STS_GUARD       EQU 1 << STS_GUARD_BIT
 STS_HWEAK_BIT   EQU 7               ; 3E-T9: hunger WEAK (slot 0 only; HSTAGE == HS_WEAK, hunger6.asm)
 STS_HWEAK       EQU 1 << STS_HWEAK_BIT
 STS_MAX_TURNS   EQU 15              ; one nibble per timer
+; POIS1 (game.md §6.4.3): POISON turns per application (x2 of B5), summed per hit up to
+; PSN_CAP, in ST_X. deal_hit's turns nibble carries HALF the turns (a 4-bit field cannot hold
+; 18 / 24): the kind-table rows (3F) store PSN_x / 2 and deal_hit doubles it.
+PSN_CAP         EQU 30
+PSN_SPIDER      EQU 12
+PSN_RAT         EQU 12              ; Giant Rat (K_RAT)
+PSN_QUEEN       EQU 18              ; Spider Queen
+PSN_WIDOW       EQU 24              ; Black Widow
+                ASSERT PSN_CAP < 256 && PSN_QUEEN / 2 <= STS_MAX_TURNS && PSN_WIDOW / 2 <= STS_MAX_TURNS
+                ASSERT (PSN_SPIDER | PSN_RAT | PSN_QUEEN | PSN_WIDOW | PSN_CAP) % 2 == 0
 ; D3-8 sprite tints (game.md §6.4 "Indication"): HOLD kind 1..3, else CONFUSED.
 ; render (anim.asm) derives the tint from ST_FLAGS every tick (no tint state);
 ; a tint equal to the body's KT_ATTR uses its BRIGHT twin (attr XOR $40).

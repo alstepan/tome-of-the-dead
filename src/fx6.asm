@@ -50,9 +50,10 @@ fx_turn:        ld   l, FXR_TURN
                 ret
 fx_none:        ld   l, 0
                 ret
-; fx_noneed — "NO NEED" (bank-1 resident stem), no turn.
-fx_noneed:      xor  a                         ; IT_NONE: the stem alone
-                ld   e, S3_NO_NEED
+; fx_noneed — "NO NEED" (bank-1 resident stem), no turn. fx_refuse: E = the
+; stem (fx_eat's "TOO SICK TO EAT" joins here).
+fx_noneed:      ld   e, S3_NO_NEED
+fx_refuse:      xor  a                         ; IT_NONE: the stem alone
                 ld   hl, it_line
                 call far1
                 ld   l, FXR_REFUSED
@@ -274,11 +275,15 @@ fx_drunk:       ld   hl, P_ENTITIES + E_FLT    ; the heal flash (as the quick po
 
 
 ;------------------------------------------------------------------------------
-; fx_eat — B = a food type: FOOD 100 -> NO NEED; else "YOU EAT THE <name>",
+; fx_eat — B = a food type: poisoned -> TOO SICK TO EAT; FOOD 100 -> NO NEED; else "YOU EAT THE <name>",
 ; FOOD + its value (it_stat; hunger_add clamps at 100, a crossing into FED
 ; prints "YOU FEEL WELL FED" after it), SFX_EAT, one eaten.   ~6k T
 ;------------------------------------------------------------------------------
 fx_eat:
+                ld   a, (ST_FLAGS)             ; POIS1 (§7.2): poisoned, he cannot eat -
+                bit  STS_POISON_BIT, a         ; before NO NEED; 0 turns, nothing consumed
+                ld   e, S3_TOO_SICK
+                jp   nz, fx_refuse
                 ld   a, (FOOD)
                 cp   FOOD_MAX
                 jp   nc, fx_noneed
@@ -521,7 +526,9 @@ pot_eff:
                 and  $F0                       ; MIND timer 0, HOLD kept
                 ld   (hl), a
                 ld   l, ST_T2 & $FF
-                ld   (hl), 0                   ; POISON / WEAK timers
+                xor  a
+                ld   (hl), a                   ; WEAK timer
+                ld   (ST_X), a                 ; POIS1: the POISON timer
                 ld   e, POT_CURE_HP
                 ld   hl, P_ENTITIES + E_HP
                 call cap_add                   ; (full HP: the cure alone)

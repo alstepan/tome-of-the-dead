@@ -10,7 +10,7 @@ deal_hit (combat3), h_jump (status7), xp_turn (MP_HOLD).
   J   a jump turn costs FOOD_JUMP 2 extra; WEAK (hunger): no jump, no turn
   S   stages at the thresholds 50 / 25 / 10 with ONE line each: FED -> OK
       none, OK -> HUNGRY "YOU ARE HUNGRY", HUNGRY -> WEAK "YOU ARE WEAK WITH
-      HUNGER" (+ STS_HWEAK), again after 50 WEAK turns; hunger_add: WEAK ->
+      HUNGER" (+ STS_HWEAK), the 50th WEAK turn faints (FAINT1); hunger_add: WEAK ->
       HUNGRY none, -> FED "YOU FEEL WELL FED"; saturates at 100
   R   MP regen: Mage period 6 -> 12 while HUNGRY; none while (hunger) WEAK;
       FED HP +1 per 12 turns (to MAXHP), OK none
@@ -212,8 +212,10 @@ def run(h, p, check):
         p.turn("WAIT")
     a = hl()
     p.turn("WAIT")
-    check("S2 WEAK: the line again on the 50th WEAK turn, not before",
-          a == [] and hl() == [L_WEAK] and p.rb("HW_TMR") == 0, (a, hl(), p.rb("HW_TMR")))
+    check("S2 WEAK: no repeat line any more (FAINT1: the 50th WEAK turn faints instead, tests/status1.py): "
+          "ASLEEP, 'YOU FAINT FROM HUNGER', HW_TMR 20",
+          a == [] and lines.count("YOU FAINT FROM HUNGER") == 1 and L_WEAK not in hl()
+          and p.rb(STF) & 3 in (0, 2) and p.rb("HW_TMR") in (20, 21), (a, hl(), lines, p.rb("HW_TMR")))
     p.wb(FOOD, 5)
     lines.clear()
     far6("hunger_add", 6)

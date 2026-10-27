@@ -248,6 +248,9 @@ ig_main:
                 call hla
                 ld   a, (hl)
                 call rnd
+                ld   hl, ig_tord               ; STUN1: the pool is a prefix of DART GAS TELEPORT STUN ALARM
+                call hla
+                ld   a, (hl)
                 ld   (ig_t), a                 ; consumed even if the trap drops
                 ld   b, TRAP_TRIES
 .tt:            push bc
@@ -665,10 +668,12 @@ ig_gtab:        DB   2 | GT_W, IT_W_LONG
                 DB   3, IT_C_MANA
                 DB   3, IT_C_PLENTY
 IG_GEAR_N       EQU ($ - ig_gtab) / 2
-; §1.5 traps: count by depth; pool length (DART D1+, GAS D2+, TELEPORT D3+, ALARM D5+)
+; §1.5 traps: count by depth; pool length (DART D1+, GAS D2+, TELEPORT D3+, STUN D4+, ALARM D5+)
+; = a prefix of ig_tord (type = ig_tord[rnd(len)]; one draw, as before STUN1)
 ig_tcnt:        DB   1, 2, 2, 3, 3, 3, 4, 4
-ig_tplen:       DB   1, 2, 3, 3, 4, 4, 4, 4
-                ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3
+ig_tplen:       DB   1, 2, 3, 4, 5, 5, 5, 5
+ig_tord:        DB   TT_DART, TT_GAS, TT_TELEPORT, TT_STUN, TT_ALARM
+                ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3 && TT_STUN == 4
 ig_image_end:
 ; --- scratch (past the stored image; inside the window) ------------------------
 ig_d            EQU ig_image_end        ; depth

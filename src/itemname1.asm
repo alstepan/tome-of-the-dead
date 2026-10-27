@@ -183,7 +183,7 @@ tf_line:
                 ld   (de), a
                 ld   hl, MSG_BUF
                 jp   log_push
-tf_tab:         DB   S3_TF_DART, S3_TF_GAS, 0, S3_TF_ALARM
+tf_tab:         DB   S3_TF_DART, S3_TF_GAS, 0, S3_TF_ALARM, S3_TF_STUN
 tf_row:         DB   W_TELEPORT, 0
-                ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3
-                ASSERT S3_TF_DART != 0 && S3_TF_GAS != 0 && S3_TF_ALARM != 0
+                ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3 && TT_STUN == 4
+                ASSERT S3_TF_STUN != 0 && S3_TF_DART != 0 && S3_TF_GAS != 0 && S3_TF_ALARM != 0

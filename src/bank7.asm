@@ -144,16 +144,20 @@ turn_input:
                 xor  a                         ; without search (try_player_turn's
                 ld   (ACT_SLOT), a             ; turn-start state for the monster phase)
                 ld   (CLIMB_BLK), a
+                call trap_chk                  ; 3E-T16: the held Wait: sense only (TRP_WAIT 0)
                 jr   .spent
 .act:           call try_player_turn
                 ret  nc                        ; illegal: no turn consumed
+                call trap_chk                  ; 3E-T16: trigger / search / Mage sense. BEFORE the
+                                               ; guard clear (STUN1): a trap armed here keeps
+                                               ; HOLD_GUARD to its step (a stone cannot stun on
+                                               ; his guarded action, §1.5.1); act_pend clears it
                 ld   a, (MON_AT)               ; D3-8f: he acted -> his HOLD_GUARD clears
                 or   a                         ; (game.md §6.4 step 4: after the action,
                 jr   nz, .spent                ; before the monster phase); an ability
                 ld   hl, ST_FLAGS              ; turn resolves at its release: act_pend
                 res  STS_GUARD_BIT, (hl)       ; clears it then. (.hw: no action, kept)
-.spent:         call trap_chk                  ; 3E-T16: trigger / search / Mage sense (also
-                                               ; the held Wait: sense only, TRP_WAIT 0)
+.spent:
                 xor  a
                 ld   (HST_DONE), a             ; the next turn steps again
                 ld   a, (CLIMB_BLK)            ; B14: any turn but a blocked-climb

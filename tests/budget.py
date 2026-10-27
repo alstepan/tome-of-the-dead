@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tsearch", "tsense")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense")
 CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -354,7 +354,8 @@ SCENARIOS = {
         (1, 22, stand_y(1, 2), HOSTILE),
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, k)
-       for k, n in (("tdart", "DART"), ("tgas", "GAS"), ("ttele", "TELEPORT"), ("talarm", "ALARM"))},
+       for k, n in (("tdart", "DART"), ("tgas", "GAS"), ("ttele", "TELEPORT"), ("talarm", "ALARM"),
+                    ("tstun", "STUN"), ("tfaint", "hunger-faint (WEAK, HW_TMR 49: the first turn faints)"))},
     "tsearch": ("knight + 4 monsters + pmix items, a Wait search finds a trap", [
         (5, 15, stand_y(1, 6), HOSTILE),
         (1, 22, stand_y(1, 2), HOSTILE),
@@ -621,19 +622,31 @@ def pmix_setup(p):
 
 
 # 3E-T16: scenario -> (type, col) of the hidden trap (room A storey 1) poked over pmix
-TRAPS = {"tdart": (0, 16), "tgas": (1, 16), "ttele": (2, 16), "talarm": (3, 16), "tsearch": (0, 20),
-         "tsense": (1, 17)}
+TRAPS = {"tdart": (0, 16), "tgas": (1, 16), "ttele": (2, 16), "talarm": (3, 16), "tstun": (4, 16),
+         "tfaint": (None, 0), "tsearch": (0, 20), "tsense": (1, 17)}
 
 
 def trap_setup(p, key):
     typ, col = TRAPS[key]
     pmix_setup(p)
+    if typ is None:                               # STATUS1 "tfaint": a WEAK hero whose first turn is the 50th
+        p.wb("FOOD", 5)
+        p.wb("HSTAGE", S["HS_WEAK"])
+        p.wb("HW_TMR", S["HW_REPEAT"] - 1)
+        p.wb("ST_FLAGS", S["STS_HWEAK"])
+        return
     room = p.rb("CUR_ROOM")
     p.z.cmd("write-memory %d %s" % (S["TRAP_LIST"], " ".join(
         str(v) for v in [room | S["TRF_S1"], col | (typ << 5)] + [0] * 10 + [1])))
 
 
 def trap_report(p, key):
+    if key == "tfaint":                           # HW_TMR left 49: the faint was deferred / never ran
+        ev = "fired" if p.rb("HW_TMR") != S["HW_REPEAT"] - 1 else "nothing"
+        print(f"[info] tfaint: {ev} (HW_TMR {p.rb('HW_TMR')}, FOOD {p.rb('FOOD')}, HSTAGE {p.rb('HSTAGE')}, "
+              f"ST_FLAGS {p.rb('ST_FLAGS'):#04x}, EXIT_KIND {p.rb('EXIT_KIND')}, hero Y {p.ent(0)['Y']}, "
+              f"turns {p.rw('TURN_COUNTER')}), HP {p.ent(0)['HP']}", flush=True)
+        return ev
     b0, b1 = p.z.read_memory(S["TRAP_LIST"], 2)
     ev = ("fired" if b0 & S["TRF_SPENT"] or (key == "tdart" and b0 & S["TRF_KNOWN"]) else
           "found" if b0 & S["TRF_KNOWN"] else "nothing")
@@ -798,7 +811,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tsearch,tsense").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")

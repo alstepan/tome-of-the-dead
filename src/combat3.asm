@@ -130,7 +130,7 @@ hit_roll:
 ;     Frost Shard on its own caster freezes 1; (4) no HOLD on a held body,
 ;     FROZEN / STUNNED refused while HOLD_GUARD (set when either ends, a FIRE
 ;     thaw too) — both silent; same effect -> timer max(cur, new) (POISON:
-;     cur + new, cap 15), another effect of the group -> overwritten; groups
+;     cur + new, cap PSN_CAP in ST_X: POIS1), another effect of the group -> overwritten; groups
 ;     independent.
 ;  6. DH_HEAL (Drain Life, the Vampire's bite; NOT the Ghost's touch, game.md
 ;     §9.1): the attacker heals the HP lost (to its max; the hero also gets
@@ -470,7 +470,27 @@ dh_status:
                 and  (hl)
                 or   c
                 ld   (hl), a                   ; kind / bit set (group overwritten)
-                ld   a, (dh_tmr)
+                ld   a, (dh_efx)
+                cp   EFX_POISON
+                jr   nz, .nps
+                ; POIS1: the POISON timer is the byte ST_X + slot; the param nibble is HALF the
+                ; turns (PSN_*), added per hit up to PSN_CAP (E = 0: POISON was already on)
+                ld   a, l
+                add  a, (ST_X - ST_FLAGS) & $FF
+                ld   l, a
+                ld   h, ST_X >> 8
+                ld   a, d
+                add  a, a
+                inc  e
+                dec  e
+                jr   nz, .ps                   ; fresh: the new turns
+                add  a, (hl)
+                cp   PSN_CAP + 1
+                jr   c, .ps
+                ld   a, PSN_CAP
+.ps:            ld   (hl), a
+                jr   .nfl
+.nps:           ld   a, (dh_tmr)
                 ld   b, a
                 ld   a, l                      ; the timer byte: T1 or T2 (one page)
                 add  a, (ST_T1 - ST_FLAGS) & $FF
@@ -489,18 +509,7 @@ dh_status:
                 inc  e
                 dec  e
                 jr   nz, .set                  ; another effect: overwrite
-                ld   c, a
-                ld   a, (dh_efx)
-                cp   EFX_POISON
-                ld   a, c
-                jr   nz, .mx
-                add  a, d                      ; D3-8c: POISON adds per hit, cap 15
-                cp   16
-                jr   c, .pc
-                ld   a, 15
-.pc:            ld   d, a
-                jr   .set
-.mx:            cp   d
+                cp   d
                 jr   c, .set
                 ld   d, a                      ; same effect: max(cur, new)
 .set:           ld   a, (hl)
@@ -649,38 +658,56 @@ room_status:
                 ASSERT SCR_FEAR_T <= STS_MAX_TURNS && SCR_SLEEP_T <= STS_MAX_TURNS && (ST_FLAGS & $FF) + P_MAX_ENT <= 256
 
 ;------------------------------------------------------------------------------
-; trap_hit — 3E-T16, far3 from R6 trap_turn: the DART trap's hit on the hero
-; (game.md §1.5): 1d4+1 PHYS (DEF applies) + POISON TRAP_DART_PSN through
-; deal_hit (immunity, poison add / cap, wake, death, "YOU ARE POISONED").
+; trap_hit / trap_stone — 3E-T16 / STUN1, far3 from R6 tr_eff: a trap's hit on
+; the hero through deal_hit (immunity, poison add / cap, HOLD rules, wake,
+; death, the status line). game.md §1.5:
+;  trap_hit    DART: 1d4+1 PHYS (DEF applies) + POISON TRAP_DART_PSN (the param
+;              nibble is half the turns, POIS1)
+;  trap_stone  STUN (§1.5.1): 1d3 PHYS (DEF applies) + STUNNED 2 + rnd(2) turns;
+;              refused silently under HOLD_GUARD (deal_hit), the damage lands
 ; deal_hit wants an attacker: the hero himself, whose WEAK would add 1 to his
 ; own DEF (R1: WEAK is for hero-DEALT hits only, "not to traps") -> the roll
 ; gets +1 then, so max(1, roll + 1 - (DEF + 1)) = max(1, roll - DEF).
-; RNG: the d4 (gameplay RNG). Out: L = HP lost.  Clobbers: all but IX.  ~1.5k T + lines
+; RNG (gameplay): the damage die; trap_stone then the duration die.
+; Out: L = HP lost.  Clobbers: all but IX.  ~1.5k T + lines
 ;------------------------------------------------------------------------------
+trap_stone:
+                ld   c, TRAP_STONE_DIE
+                call rng_mod                   ; 0..2 (keeps C, DE)
+                inc  a                         ; 1d3
+                ld   d, a
+                ld   c, 2
+                call rng_mod                   ; 0..1
+                add  a, TRAP_STUN_T
+                ld   e, a                      ; E = the turns (chance 0 = always)
+                ld   b, d
+                ld   c, DTY_PHYS | (EFX_STUNNED << DH_EFX_SHIFT)
+                jr   th_go
 trap_hit:
-                push ix
-                ld   ix, P_ENTITIES
                 ld   c, TRAP_DART_DIE
                 call rng_mod                   ; 0..3 (keeps C, DE)
                 add  a, 2                      ; 1d4 + 1
                 ld   b, a
+                ld   e, TRAP_DART_PSN / 2      ; chance 0 = always
+                ld   c, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT)
+th_go:          push ix
+                ld   ix, P_ENTITIES
                 ld   a, (ST_FLAGS)
                 and  STS_WEAK | STS_HWEAK
                 jr   z, .nw
                 inc  b
-.nw:            ld   c, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT)
-                ld   e, TRAP_DART_PSN          ; chance 0 = always
-                xor  a                         ; the hero = slot 0
+.nw:            xor  a                         ; the hero = slot 0
                 call deal_hit
                 pop  ix
                 ret
-                ASSERT TRAP_DART_PSN <= 15 && DTY_PHYS == 0
+                ASSERT TRAP_DART_PSN <= PSN_CAP && TRAP_DART_PSN % 2 == 0 && TRAP_DART_PSN / 2 <= STS_MAX_TURNS && DTY_PHYS == 0
+                ASSERT TRAP_STUN_T + 1 <= STS_MAX_TURNS
 tr_ink3:        TRAP_INKS                      ; build_room_map's known-plate attr (item_defs.asm)
 
 ;------------------------------------------------------------------------------
 ; efx_tab — per effect id 1..7 (row = (id - 1) * EF_STRIDE): immunity bit
 ; (0 = none: FROZEN follows COLD, WEAK is hero-only), STATUS mask + value,
-; timer field (EFT_*), the hero's line, the monster suffix (0 = none).
+; timer field (EFT_*; POISON: none, its timer is ST_X), the hero's line, the monster suffix (0 = none).
 ;------------------------------------------------------------------------------
 EFR_IMM         EQU 0
 EFR_MASK        EQU 1
@@ -703,7 +730,7 @@ efx_tab:
                 DB   IMMF_STUN,    STS_HOLD,   HOLD_STUNNED,  EFT_T1HI, TX_ST_STUNNED,   MSG_M_STUNNED
                 DB   IMMF_FEAR,    STS_MIND,   MIND_FEAR,     EFT_T1LO, TX_ST_TERRIFIED, MSG_M_FLEES
                 DB   IMMF_CONFUSE, STS_MIND,   MIND_CONFUSED, EFT_T1LO, TX_ST_CONFUSED,  MSG_M_CONFUSED
-                DB   IMMF_POISON,  STS_POISON, STS_POISON,    EFT_T2HI, TX_ST_POISONED,  0
+                DB   IMMF_POISON,  STS_POISON, STS_POISON,    0,        TX_ST_POISONED,  0   ; (timer: ST_X, dh_status .ps)
                 DB   0,            STS_WEAK,   STS_WEAK,      EFT_T2LO, TX_ST_CURSE,     0
                 ASSERT $ - efx_tab == EFX_WEAK * EF_STRIDE
                 ASSERT EFR_IMM == 0 && EFR_MASK == 1 && EFR_VAL == 2 && EFR_TMR == 3 && EFR_HTX == 4 && EFR_MMSG == 5

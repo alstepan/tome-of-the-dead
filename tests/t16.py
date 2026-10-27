@@ -66,12 +66,12 @@ STUB = S["LOWRAM_END_3B"]
 STF, ST1, ST2 = S["ST_FLAGS"], S["ST_T1"], S["ST_T2"]
 TL, TN = S["TRAP_LIST"], S["TRAP_N"]
 KNOWN, SPENT, S1 = S["TRF_KNOWN"], S["TRF_SPENT"], S["TRF_S1"]
-DART, GAS, TELE, ALARM = range(4)
-INK = (0x42, 0x44, 0x43, 0x46)
-NAME = ("DART", "GAS", "TELEPORT", "ALARM")
+DART, GAS, TELE, ALARM, STUN = range(5)
+INK = (0x42, 0x44, 0x43, 0x46, 0x07)
+NAME = ("DART", "GAS", "TELEPORT", "ALARM", "STUN")
 T_TRAP = S["T_TRAP"]
 FIRE_LINE = {DART: "A DART HITS YOU!", GAS: "SLEEPING GAS!", ALARM: "A BELL RINGS. NOTHING COMES",
-             TELE: "YOU ARE TELEPORTED!"}
+             TELE: "YOU ARE TELEPORTED!", STUN: "A STONE FALLS ON YOU!"}
 
 
 def main():
@@ -193,11 +193,11 @@ def run(h, p, check):
     e = p.ent(0)
     lost = hp0 - e["HP"]
     want_lost = {max(1, r - dfn) for r in range(2, 6)}
-    a1 = (ok, d, e["X"], ln[:2], lost in want_lost, p.rb(STF) & S["STS_POISON"], p.rb(ST2) >> 4, ent()[0] & (KNOWN | SPENT),
+    a1 = (ok, d, e["X"], ln[:2], lost in want_lost, p.rb(STF) & S["STS_POISON"], p.rb(S["ST_X"]), ent()[0] & (KNOWN | SPENT),
           cell(t), p.rb("FX_DROP"))
     check("A1 hidden DART one col ahead: the step fires it — 'A DART HITS YOU!' + 'YOU ARE POISONED!', "
-          "1d4+1-DEF HP, POISON 6, known (not spent), T_TRAP in the map, 1 turn",
-          a1 == (True, 1, HX + 1, ["A DART HITS YOU!", "YOU ARE POISONED!"], True, S["STS_POISON"], 6, KNOWN, T_TRAP, 0),
+          "1d4+1-DEF HP, POISON 12 (ST_X), known (not spent), T_TRAP in the map, 1 turn",
+          a1 == (True, 1, HX + 1, ["A DART HITS YOU!", "YOU ARE POISONED!"], True, S["STS_POISON"], 12, KNOWN, T_TRAP, 0),
           (a1, lost, want_lost, ln))
     v1 = (any(a == 0x47 for a, *_ in rec), any(f and fa == 0x42 for _, f, fa, _ in rec),
           any(ha == 0x42 for *_, ha in rec), p.rb(S["TILE_ATTRS"] + T_TRAP), p.ent(0)["FLT"])
@@ -300,6 +300,9 @@ def run(h, p, check):
           "after arrival; nothing tinted at the end",
           d12 == 1 and "YOU ARE TELEPORTED!" in ln_12 and tele_ok(tl, r0) and tl[-1][3] != 0x43, (d12, ln_12, tl))
 
+    # ======================= S: STUN, the falling stone (STUN1, game.md §1.5.1) ===
+    stun(p, check, scene, trap, put_hero, heal, ent, cell, act, stub, tick, lines, hero_attr)
+
     # ======================= B: search ============================================
     blink = []
 
@@ -337,7 +340,7 @@ def run(h, p, check):
     # ======================= C: Mage sense ========================================
     scene(K_WIZARD)
     res = []
-    for k, typ in enumerate((TELE, GAS, ALARM, DART)):
+    for k, typ in enumerate((TELE, GAS, ALARM, DART, STUN)):
         x0 = 8 + 3 * k
         col = x0 + 5
         put_hero(x0)
@@ -350,9 +353,9 @@ def run(h, p, check):
         put_hero(2)
         sa = shown_attr(col)
         res.append((NAME[typ], k1, l1, k2, l2, cell(col), sa))
-    want = [(NAME[ty], False, [], True, ["TRAP FOUND: " + NAME[ty]], T_TRAP, INK[ty]) for ty in (TELE, GAS, ALARM, DART)]
+    want = [(NAME[ty], False, [], True, ["TRAP FOUND: " + NAME[ty]], T_TRAP, INK[ty]) for ty in (TELE, GAS, ALARM, DART, STUN)]
     check("C1 Mage sense (no RNG, any turn): a trap 2 cols off the body found, 4 off not; "
-          "'TRAP FOUND: TELEPORT / GAS / ALARM / DART', drawn with the type inks $43 / $44 / $46 / $42", res == want,
+          "'TRAP FOUND: TELEPORT / GAS / ALARM / DART / STUN', drawn with the type inks $43 / $44 / $46 / $42 / $07", res == want,
           res)
     put_hero(HX)
     trap(HX - 2, GAS)
@@ -401,7 +404,7 @@ def run(h, p, check):
             why = []
             if r not in pres or r in (start, lair, san):
                 why.append("room")
-            if b0 & (KNOWN | SPENT | 0x80) or b1 & 0x80:
+            if b0 & (KNOWN | SPENT | 0x80):
                 why.append("state")
             if not M.trap_col_ok_indep(b, r, s, c, floor):
                 why.append("col")
@@ -423,6 +426,118 @@ def run(h, p, check):
     # ======================= T: costs =============================================
     costs(p, check, scene, trap, put_hero, heal)
     return d_res
+
+
+
+def stun(p, check, scene, trap, put_hero, heal, ent, cell, act, stub, tick, lines, hero_attr):
+    """S: trap_stone (bank 3) and the STUN sequence. 1d3 PHYS (DEF applies, min 1) through deal_hit
+    + STUNNED 2 + rnd(2): damage then duration on the gameplay RNG, GEN_RNG (ITEM_RNG) untouched;
+    damage never ends the stun; HOLD_GUARD refuses it (the damage lands); death as a DART's."""
+    from collections import Counter
+    from proj3 import Rng
+    z = p.z
+    scene(K_KNIGHT)
+    heal()
+    p.wb("HERO_DEF", 0)
+    trap(HX + 3, STUN)
+    hp0 = p.ent(0)["HP"]
+    t_start = p.rw("TURN_COUNTER")
+    rec = []
+    ok, d, ln = act("L", per_tick=lambda fr, hero: rec.append((hero["FLT"], hero["FLA"], p.rb(S["TILE_ATTRS"] + T_TRAP),
+                                                                cell(HX + 3))))
+    e = p.ent(0)
+    lost = hp0 - e["HP"]
+    s1 = (ok, d, e["X"], ln[:2], 1 <= lost <= 3, p.rb(STF) & S["STS_HOLD"], ent()[0] & SPENT, cell(HX + 3) != T_TRAP,
+          any(f > 0 and a == 0x07 for f, a, *_ in rec), any(c == T_TRAP and a == 0x47 for *_, a, c in rec),
+          p.rb(S["ST_X"]))
+    check("S1 STUN trigger: 'A STONE FALLS ON YOU!' then 'YOU ARE STUNNED!', 1-3 HP, HOLD = STUNNED, spent + erased, "
+          "the hero flashes $07, the plate $47, no poison",
+          s1 == (True, 1, HX + 1, ["A STONE FALLS ON YOU!", "YOU ARE STUNNED!"], True, S["HOLD_STUNNED"], SPENT, True,
+                 True, True, 0), (s1, ln, rec))
+    # the stun runs its own timer: 2 or 3 auto-turns, then HOLD_GUARD (an Ogre SLAM cannot extend it)
+    p.until(lambda: p.rb(STF) & S["STS_HOLD"] == 0, 200)
+    p.until(p.idle, 40)
+    turns = p.rw("TURN_COUNTER") - t_start
+    check("S2 the stun lasts 2-3 held turns (fire turn + 2 or 3), then HOLD_GUARD is set and the move-again line shown",
+          (turns in (3, 4), bool(p.rb(STF) & (1 << S["STS_GUARD_BIT"])), "YOU CAN MOVE AGAIN" in lines),
+          (turns, p.rb(STF), lines))
+    # a hit does not end it (GAS contrast: ASLEEP wakes on any HP loss)
+    code = [0x21] + w16(S["trap_hit"]) + [0xCD] + w16(S["far3"])
+    heal()
+    p.wb("HERO_DEF", 0)
+    p.wb(STF, S["HOLD_STUNNED"])
+    p.wb(ST1, 0x30)
+    hp1 = p.ent(0)["HP"]
+    stub(code)
+    a = (p.ent(0)["HP"] < hp1, p.rb(STF) & S["STS_HOLD"], p.rb(ST1) >> 4)
+    heal()
+    p.wb(STF, S["HOLD_ASLEEP"])
+    p.wb(ST1, 0x30)
+    stub(code)
+    b = (p.ent(0)["HP"] < hp1, p.rb(STF) & S["STS_HOLD"])
+    check("S3 damage while STUNNED: HP lost, still STUNNED, timer kept (a sleeper wakes on the same hit)",
+          (a, b) == ((True, S["HOLD_STUNNED"], 3), (True, 0)), (a, b))
+    # trap_stone direct: the draw order and the distribution, 240 fires over varied seeds
+    code = [0x21] + w16(S["trap_stone"]) + [0xCD] + w16(S["far3"])
+    dur, d0, d3, bad = Counter(), Counter(), Counter(), []
+    gen0 = p.rw("GEN_RNG")
+    for i in range(240):
+        heal()
+        p.set_ent(0, HP=250, MAXHP=250)
+        defn = (0, 3, 1)[i % 3]
+        p.wb("HERO_DEF", defn)
+        weak = i % 12 == 2                       # hero WEAK (hunger): max(1, roll - DEF), not roll - DEF - 1
+        if weak:
+            p.wb(STF, S["STS_HWEAK"])
+        seed = ((0x2F1B + i * 0x1D3B) & 0xFFFF) or 1
+        p.wmem(S["RNG_STATE"], w16(seed))
+        stub(code)
+        rng = Rng(seed)
+        wd = 1 + rng.mod(3)
+        wt = 2 + rng.mod(2)
+        lost = 250 - p.ent(0)["HP"]
+        got = (lost, p.rb(STF) & S["STS_HOLD"], p.rb(ST1) >> 4, p.rw("RNG_STATE"))
+        want = (max(1, wd - defn), S["HOLD_STUNNED"], wt, rng.st)
+        if got != want:
+            bad.append((i, seed, defn, got, want))
+        dur[got[2]] += 1
+        (d0 if defn == 0 else d3 if defn == 3 else Counter())[wd if defn == 0 else lost] += 1
+    check("S4 trap_stone x240: HP lost = max(1, d - DEF) with d = 1 + rnd(3) then the duration 2 + rnd(2) (RNG "
+          "model exact, WEAK hero too), HOLD = STUNNED", not bad, bad[:3])
+    check("S5 fires: damage at DEF 0 shows 1, 2 and 3; at DEF 3 always 1; duration in {2, 3}, each >= 35 %",
+          set(d0) == {1, 2, 3} and set(d3) == {1} and set(dur) == {2, 3} and min(dur.values()) >= 0.35 * 240,
+          (d0, d3, dur))
+    check("S6 a fire leaves ITEM_RNG (GEN_RNG) untouched", p.rw("GEN_RNG") == gen0, (gen0, p.rw("GEN_RNG")))
+    # HOLD_GUARD set (he just came out of a stun / freeze): the stun is refused silently, the damage lands
+    scene(K_KNIGHT)
+    heal()
+    p.wb("HERO_DEF", 0)
+    p.wb(STF, 1 << S["STS_GUARD_BIT"])
+    trap(HX + 3, STUN)
+    hp2 = p.ent(0)["HP"]
+    ok, d, ln = act("L")
+    g = (ok, d, p.ent(0)["HP"] < hp2, p.rb(STF) & S["STS_HOLD"], "YOU ARE STUNNED!" in ln, ln[:1], ent()[0] & SPENT)
+    check("S7 HOLD_GUARD set: the damage lands, no stun, no 'YOU ARE STUNNED!', the trap is spent",
+          g == (True, 1, True, 0, False, ["A STONE FALLS ON YOU!"], SPENT), (g, ln))
+    # a Mage takes it too (no arrow_hit frame either way)
+    scene(K_WIZARD)
+    heal()
+    p.wb("HERO_DEF", 0)
+    trap(HX + 3, STUN)
+    ok, d, ln = act("L")
+    m = (ok, d, ln[:2], p.rb(STF) & S["STS_HOLD"])
+    check("S8 the Mage: the same lines and HOLD = STUNNED, no impact FX", m == (True, 1, ["A STONE FALLS ON YOU!", "YOU ARE STUNNED!"],
+                                                                            S["HOLD_STUNNED"]), (m, ln))
+    # death: 1 HP, DEF 0 -> the standard DYING sequence (as a DART death)
+    scene(K_KNIGHT)
+    heal()
+    p.set_ent(0, HP=1, MAXHP=250)
+    p.wb("HERO_DEF", 0)
+    trap(HX + 3, STUN)
+    ok, d, ln = act("L")
+    e = p.ent(0)
+    dth = (e["HP"], bool(e["FLAGS"] & EF_DYING), p.rb("GAME_STATE"), p.rb(STF) & S["STS_HOLD"])
+    check("S9 death at 1 HP, DEF 0: DYING, GS_DEAD, no stun left", dth == (0, True, S["GS_DEAD"], 0), (dth, ln))
 
 
 def tele_ok(tl, room):
@@ -610,6 +725,7 @@ def fuzz(p, check, lines, act, tick, heal, ent, cell):
         for sl in range(1, 16):
             p.set_ent(sl, ROOM=NOWHERE)
         for step in range(60):
+            p.until(p.idle, 60)                # a STUN / GAS hold keeps auto-turning: let the turn in flight end
             heal()
             p.wb("JUMP_TURN", 0xFF)
             p.wb(S["JUMP_TURN"] + 1, 0xFF)
@@ -628,13 +744,13 @@ def fuzz(p, check, lines, act, tick, heal, ent, cell):
             mine = [i for i, (b0, b1) in enumerate(cur[:p.rb("TRAP_N")]) if b0 & 15 == room and not b0 & SPENT]
             if not mine or not -3 <= (cur[mine[0]][1] & 31) - e["X"] <= 5:
                 c = rnd.choice(ok_cols)
-                typ = rnd.choice((DART, DART, GAS, ALARM, TELE))
+                typ = rnd.choice((DART, DART, GAS, ALARM, TELE, STUN))
                 p.wmem(S["TRAP_LIST"], [room | (S1 if s else 0), c | (typ << 5)] + [0] * 10 + [1])
                 cur = [tuple(z.read_memory(S["TRAP_LIST"] + 2 * i, 2)) for i in range(6)]
                 mine = [0]
             i0 = mine[0]
             b0, b1 = cur[i0]
-            t, typ, ts = b1 & 31, (b1 >> 5) & 3, (b0 >> 4) & 1
+            t, typ, ts = b1 & 31, (b1 >> 5) & 7, (b0 >> 4) & 1
             act_k = rnd.choice((("L",), ("H",), ("L",), ("H",), ("WAIT",), ("K", "L"), ("K", "H")))
             px, py = e["X"], e["Y"]
             ok, d, ln = act(*act_k)
@@ -681,7 +797,7 @@ def fuzz(p, check, lines, act, tick, heal, ent, cell):
                     known = b0x & KNOWN and not b0x & SPENT
                     on_body = sx == (1 if ex2["Y"] >= 9 else 0) and ex2["X"] <= c <= ex2["X"] + 2
                     if known and (cell(c, sx) != T_TRAP or (not on_body and
-                                                             attr_at(fr, c, 9 * sx + 7) != INK[(b1x >> 5) & 3])):
+                                                             attr_at(fr, c, 9 * sx + 7) != INK[(b1x >> 5) & 7])):
                         draw_bad.append((seed, step, c, sx, cell(c, sx), attr_at(fr, c, 9 * sx + 7)))
                     if not known and cell(c, sx) == T_TRAP:
                         draw_bad.append(("hidden drawn", seed, step, c, sx))
@@ -736,6 +852,8 @@ def costs(p, check, scene, trap, put_hero, heal):
     call("ALARM")
     trap(HX + 2, TELE)
     call("TELEPORT (EX_TELE only)")
+    trap(HX + 2, STUN)
+    call("STUN")
     scene(K_WIZARD)
     trap(HX + 4, DART)
     call("find (Mage sense)")
