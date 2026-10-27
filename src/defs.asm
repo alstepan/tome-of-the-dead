@@ -31,7 +31,7 @@ BANK_SRC_HI     EQU 3               ; sprite SOURCES, virtual $C000-$FFFF (conte
 BANK_POOL0      EQU 0               ; pre-shift pool (uncontended), boot-generated
 BANK_POOL1      EQU 4
 BANK_POOL2      EQU 6
-BANK_BOOT6      EQU BANK_POOL2      ; 3E-T1: the boot block BOOT6_ADDR..R6_ADDR-1 (boot6.asm), dead after boot
+BANK_BOOT6      EQU BANK_POOL2      ; 3E-T1: the boot block BOOT6_ADDR..SRC6_ADDR-1 (boot6.asm), dead after boot
 ; R6 (2026-10-21, user-approved carve of the pool slack): a PERMANENT code +
 ; data region at the top of bank 6, R6_ADDR..$FFFF, own tape block (main.asm
 ; "R6 REGION", src/r6.asm). The pool's bank-6 part ends at R6_ADDR (alloc;
@@ -41,8 +41,29 @@ BANK_BOOT6      EQU BANK_POOL2      ; 3E-T1: the boot block BOOT6_ADDR..R6_ADDR-
 BANK_R6         EQU BANK_POOL2
 R6_LEN          EQU 6912            ; $1B00: keeps >= 2.4 KB pool slack (user)
 R6_ADDR         EQU $10000 - R6_LEN ; $E500
-                ASSERT (R6_ADDR & $FF) == 0     ; alloc's bank-6 limit test reads only the high byte
-BANK_SHADOW     EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect's attrs)
+                ASSERT (R6_ADDR & $FF) == 0
+; SRC6 (3F memory plan; SRC6 spike 2026-10-27): a PERMANENT bank-6 SPRITE-SOURCE
+; region just BELOW R6, SRC6_ADDR..R6_ADDR-1 (SRC6_LEN = SRC6_PAGES x 256: the
+; size parameter), carved out of the pool 1:1 (POOL_CAP - SRC6_LEN). ZX0 blocks
+; only (build/zx0/src6_zx0.asm, tools/zx0_sources.py), read by zx0_frame. Their
+; FD_BLK is VIRTUAL like banks 1 / 3, in the free $4000..$7FFF range: SRC6 real
+; address - SRC6_VDELTA (banks 1 / 3 use $8000..$FFFF), so the GEN_ZBLK cache
+; key stays unique and no FD_FLAGS bit is spent. Its tape bytes ride on the
+; boot block's tape block (BOOT6_TAPE_LEN, main.asm).
+    IFNDEF SRC6_PAGES
+SRC6_PAGES      EQU 1               ; spike default: one page (the Spider stand-in)
+    ENDIF
+    IFNDEF SRC6_STANDIN
+SRC6_STANDIN    EQU 1               ; bit mask of the zx0_sources.py stand-in groups assembled into SRC6
+    ENDIF
+BANK_SRC6       EQU BANK_POOL2
+SRC6_LEN        EQU SRC6_PAGES * 256
+SRC6_ADDR       EQU R6_ADDR - SRC6_LEN
+SRC6_VDELTA     EQU $8000           ; FD_BLK = real - $8000: virt $4000..$7FFF = bank 6
+POOL6_END       EQU SRC6_ADDR       ; the pool's bank-6 part ends here (alloc)
+                ASSERT SRC6_PAGES >= 1 && SRC6_ADDR >= BANK_WINDOW + $1000
+                ASSERT (POOL6_END & $FF) == 0   ; alloc's bank-6 limit test reads only the high byte
+BANK_SHADOW    EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect's attrs)
 BANK_COLD7      EQU 7               ; D3-S2: bank-7 cold code B7_CODE..B7_LIMIT (via far7)
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
 BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
@@ -632,7 +653,8 @@ FT_STRIDE       EQU 4
 ; Frame descriptor (A6; bank 5 low RAM, fdesc_tab at the end of the cold block,
 ; read only by gen_frame) — 5 B/fid:
 ;   FD_BLK   word: VIRTUAL address of the frame's packed block
-;                  (banks 1/3; also the GEN_ZBLK cache key)
+;                  ($8000.. bank 1 / $C000.. bank 3 / SRC6: $4000..$7FFF =
+;                  bank 6 at +SRC6_VDELTA; also the GEN_ZBLK cache key)
 ;   FD_FRM   word: the frame's address inside GEN_SCRATCH once its
 ;                  block is unpacked (GEN_SCRATCH + in-block offset)
 ;   FD_FLAGS byte: FF_*

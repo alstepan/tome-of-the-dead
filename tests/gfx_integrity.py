@@ -53,8 +53,8 @@ def sna_virt(v, n):
 
 def sna_boot(addr, n):
     """3E-T1: the boot-only data sits in the boot block (bank 6 tail,
-    BOOT6_ADDR..R6_ADDR) — read from the .sna, the pool overwrites it later."""
-    assert S["BOOT6_ADDR"] <= addr and addr + n <= S["R6_ADDR"], hex(addr)
+    BOOT6_ADDR..SRC6_ADDR) — read from the .sna, the pool overwrites it later."""
+    assert S["BOOT6_ADDR"] <= addr and addr + n <= S["SRC6_ADDR"], hex(addr)
     return sna_bank(S["BANK_BOOT6"], addr, n)
 
 

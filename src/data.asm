@@ -45,11 +45,15 @@ POOL_HERO_MAX = POOL_KNIGHT + POOL_FXW
 POOL_HERO_MAX = POOL_WIZARD + POOL_FXM
     ENDIF
 POOL_NEED       EQU POOL_MONSTERS + POOL_HERO_MAX + 2 * 576 + 3 * 576
-POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN   ; D3-TX: the text block under bank 0's pool; R6: bank 6 ends at R6_ADDR
+POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN - SRC6_LEN   ; D3-TX: the text block under bank 0's pool; R6 + SRC6: bank 6 ends at POOL6_END
+                ASSERT POOL6_END - BANK_WINDOW == $4000 - R6_LEN - SRC6_LEN          ; POOL_CAP's bank-6 term = alloc's limit
+    IF POOL_NEED > POOL_CAP
+                DISPLAY "POOL FULL: need ", /D, POOL_NEED, " > POOL_CAP ", /D, POOL_CAP, " (SRC6_LEN ", /D, SRC6_LEN, ")"
+    ENDIF
                 ASSERT POOL_NEED <= POOL_CAP
                 ASSERT FID_COUNT <= FRT_MAX
                 DISPLAY "GAME class FX pool: warrior ", /D, POOL_FXW, " (", /D, KFCNT_FXW, " frames), mage ", /D, POOL_FXM, " (", /D, KFCNT_FXM, " frames); knight ", /D, POOL_KNIGHT, ", wizard ", /D, POOL_WIZARD
-                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (monsters ", /D, POOL_MONSTERS, ", hero max ", /D, POOL_HERO_MAX, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0)"
+                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (monsters ", /D, POOL_MONSTERS, ", hero max ", /D, POOL_HERO_MAX, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0); slack ", /D, POOL_CAP - POOL_NEED, " after SRC6 ", /D, SRC6_LEN, " B"
 
 ;==============================================================================
 ; ROLE TABLES (per-kind state -> frame). Stand-ins per prototype §7/§10:

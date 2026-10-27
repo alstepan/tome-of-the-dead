@@ -204,8 +204,9 @@ def run(p, check):
 
 
 def alloc_r6(p, check):
-    """R1 (R6, 2026-10-21): the pool allocator stops at R6_ADDR in bank 6 (the
-    permanent R6 region above it) and still fills banks 0 / 4 up to $10000."""
+    """R1 (R6, 2026-10-21; SRC6 spike): the pool allocator stops at POOL6_END
+    (= SRC6_ADDR) in bank 6 (the permanent SRC6 + R6 regions above it) and
+    still fills banks 0 / 4 up to $10000."""
     p.load()
     p.wait_state(GS_SELECT)
     idx, ptr, al = S["ALLOC_IDX"], S["ALLOC_PTR"], S["alloc"]
@@ -216,11 +217,11 @@ def alloc_r6(p, check):
         ok = p.run_stub(code, org=STUB)
         r = p.z.read_memory(RES, 4)
         return ok, r[0] | r[1] << 8, r[3], r[2] & 1, p.rb("ALLOC_IDX"), p.rw("ALLOC_PTR")
-    r6 = S["R6_ADDR"]
-    check("R1 bank 6: an allocation ending exactly at R6_ADDR fits (bank 6, ptr -> R6_ADDR)",
+    r6 = S["POOL6_END"]
+    check("R1 bank 6: an allocation ending exactly at POOL6_END fits (bank 6, ptr -> POOL6_END)",
           case(2, r6 - 100, 100) == (True, r6 - 100, S["BANK_R6"], 0, 2, r6), case(2, r6 - 100, 100))
     got = case(2, r6 - 100, 101)
-    check("R1 bank 6: one byte into R6 = pool full (CF, ALLOC_IDX 3)", got[0] and got[3:5] == (1, 3), got)
+    check("R1 bank 6: one byte into SRC6 = pool full (CF, ALLOC_IDX 3)", got[0] and got[3:5] == (1, 3), got)
     check("R1 bank 4: an allocation ending exactly at $10000 fits, next bank opens",
           case(1, 0xFF00, 0x100) == (True, 0xFF00, S["BANK_POOL1"], 0, 2, 0xC000), case(1, 0xFF00, 0x100))
     got = case(0, 0xFF00, 0x101)
