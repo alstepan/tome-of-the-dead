@@ -27,7 +27,7 @@
 | 3    | PROTO: sprite sources tail (virtual $C000-; empty since A5) + **cold code** (select, transition scrolls, follower selection; new game → bank 7 since MEM-SND); **`$EFA0-$FFFF` AY player slot** (A8; **3E lever (c): 4,192 B** from `$EFA0` (+512 B to bank-3 cold code); MEM-SND: 4,704 B from `$EDA0`, was 4 KB at `$F000` since D3-0 (user 2026-10-06), 7 KB from `$E400` before; called by the IM 2 ISR) | PROTO |
 | 4    | PROTO: pre-shift sprite pool      | PROTO    |
 | 5    | normal screen (also $4000 fixed); low RAM `$6000-$7FFF` buffers + **cold code** (boot, generator) + frame descriptors (A6) | system   |
-| 6    | PROTO: pre-shift sprite pool `$C000..R6_ADDR` (**R6: ends at `R6_ADDR` `$E500`**); **3E-T1: until the hero start, `BOOT6_ADDR..R6_ADDR` = the boot block** (boot-only code + data, own tape block, dead after boot — "Boot block"; R6: moved down from the top); **R6 (2026-10-21): `R6_ADDR..$FFFF` = the permanent R6 region** (6,912 B: resident code via `far6` + packed overlay streams, own tape block — "R6 region") | PROTO    |
+| 6    | PROTO: pre-shift sprite pool `$C000..POOL6_END` (**SRC6 spike: ends at `POOL6_END` = `SRC6_ADDR` `$E400`**; R6: was `R6_ADDR` `$E500`); **3E-T1: until the hero start, `BOOT6_ADDR..SRC6_ADDR` = the boot block** (boot-only code + data, own tape block, dead after boot — "Boot block"; R6 / SRC6: moved down from the top); **SRC6 spike (2026-10-27): `SRC6_ADDR..R6_ADDR` = the permanent bank-6 sprite-source region** (`SRC6_LEN` = `SRC6_PAGES` × 256, default 256 B; ZX0 blocks read by `zx0_frame`; on the boot block's tape block — "SRC6 region"); **R6 (2026-10-21): `R6_ADDR..$FFFF` = the permanent R6 region** (6,912 B: resident code via `far6` + packed overlay streams, own tape block — "R6 region") | PROTO    |
 | 7    | **displayed screen during play** (screen 2, `$C000-$DAFF`, A7 double buffer) + **8 level tilesets** `$DB00-$DFFF` / `$FAA0-$FF9F` (B3B-8: 8 × 320 B, loaded from tape) + **D3-S2: bank-7 cold code** `$E000-$F7FF` (`far7`; was the bitmap shadow) + the attr shadow `$F800-$FA3F` | system / PROTO |
 
 (Bank assignments are those of `src/main.asm` — see the PROTO section below.)
@@ -114,7 +114,7 @@ block runs on through the bank-7 cold code**, `B7_TAPE_LEN` = 1,280 + `B7_LEN`;
 `#50` checks it after a real tape load), (D3-TX) bank 0 from
 `TEXT_ADDR` (`TEXT_LEN`: the text block; `check_paging`'s bank-0 probe byte,
 written before it, is overwritten), (3E-T1) bank 6 from `BOOT6_ADDR`
-(`BOOT6_LEN`: the boot block), (R6, last = the 8th) bank 6 from `R6_ADDR`
+(`BOOT6_LEN`: the boot block; **SRC6 spike: `BOOT6_TAPE_LEN` = the boot block + `SRC6_USED`, the block runs on through the SRC6 sources** — no 9th block, `tape_tab` unchanged), (R6, last = the 8th) bank 6 from `R6_ADDR`
 (`R6_USED`: the R6 region's used bytes, not the whole `R6_LEN`). Nothing in bank 7 is live
 while `start` runs: screen 2 is not displayed (`$7FFD` bit 3 = 0 from BASIC),
 the attr shadow / screen 2 are written only after `boot`, and the 128 editor's
@@ -130,9 +130,9 @@ load, and IM 2 installed.
 
 `src/boot6.asm`, assembled by `main.asm` in pool bank 6 **just below the R6
 region** (R6, 2026-10-21; was the top of bank 6, `$F86B..$FFFF`):
-`BOOT6_ADDR..R6_ADDR-1` = `$DD6B..$E4FF`, `BOOT6_LEN` **1,941 B** (phase lock: +3 B PHASE_TRAP clear; 1,938 before) (code 252 + data
+**SRC6 spike: `BOOT6_ADDR..SRC6_ADDR-1` = `$DC66..$E3FF` (default `SRC6_PAGES` 1; ASSERT `boot6_end == SRC6_ADDR`), `BOOT6_LEN` 1,946 B**; before: `BOOT6_ADDR..R6_ADDR-1` = `$DD6B..$E4FF`, `BOOT6_LEN` **1,941 B** (phase lock: +3 B PHASE_TRAP clear; 1,938 before) (code 252 + data
 1,689; ASSERT `boot6_end == R6_ADDR`; `BANK_BOOT6` = `BANK_POOL2`). Own
-headerless tape block, the last in `start`'s `tape_tab`; in the `.sna`
+headerless tape block (SRC6 spike: it runs on through the SRC6 sources, `BOOT6_TAPE_LEN`), the 7th in `start`'s `tape_tab`; in the `.sna`
 preloaded. `boot` runs it through `farb` (C = `BANK_BOOT6`) twice, both before
 `alloc_reset`: `boot6_init` (under DI: the IM 2 install — vector table, ISR
 image → `ISR_ADDR`, I, IM 2 — and the power-on state + `KEYTAB`, the screen
@@ -206,7 +206,7 @@ boss + unique 19.1k; `budget.py` gate unchanged (pmix 127,791).
 **Rule for later tasks** (3E T8 / T9 / T12 / T13–16, 3F): new cold code,
 overlay streams and 3F sprite sources go to R6 — code into `r6.asm`
 (before `r6_code_end`), streams after `r6_blobs` (INCBIN + their `BANK_OVL_*`
-= `BANK_R6`); sources need a third `zx0_frame` source bank (3F memory plan).
+= `BANK_R6`); **sprite sources go to the SRC6 region just below R6** (SRC6 spike: `zx0_frame`'s third source bank, "SRC6 region").
 `R6_LEN` is the cap: `ASSERT r6_end <= $10000` (an overflow DISPLAYs the
 excess first); growing `R6_LEN` costs the pool 1:1 (`POOL_NEED <= POOL_CAP`
 ASSERT) and must keep `LOW R6_ADDR` = 0.
@@ -222,6 +222,54 @@ ASSERT) and must keep `LOW R6_ADDR` = 0.
 | bank-6 boot block | `$F86B..$FFFF` | `$DD6B..$E4FF` | moved below R6 (boot pool ends in bank 4: unchanged) |
 | tape | 7 headerless blocks | 8 | net data +8 B (1,791 in R6 − 1,209 bank 1 − 574 bank 3); one more pilot + gap ≈ +2–3 s on real tape |
 | cold paths (`zx0_pool.py`) | boot → select 4.54M T | 4,540,964 T | ≈ 0; hero start ('1') 5,388,886 T |
+
+### SRC6 region (SRC6 spike 2026-10-27; 3F memory plan, `feat/src6-spike`)
+
+The **permanent bank-6 sprite-source region**: `SRC6_ADDR..R6_ADDR-1`, just
+**below** R6 (R6 is unchanged: `$E500..$FFFF`, its free tail stays at the top,
+480 kit / 498 release), the boot block just below it. `SRC6_LEN` =
+`SRC6_PAGES` × 256 (`defs.asm`, `-DSRC6_PAGES=n`; default **1 = 256 B at
+`$E400`**), carved out of `POOL_CAP` 1:1 (`POOL_CAP` = 3 × 16 KB − text −
+`R6_LEN` − `SRC6_LEN`); the pool's bank-6 part ends at **`POOL6_END`** =
+`SRC6_ADDR` (`alloc` tests `HIGH POOL6_END`, `LOW` = 0 ASSERTed). Main.asm
+"SRC6 REGION", generated `build/zx0/src6_zx0.asm` (`tools/zx0_sources.py`):
+* the blocks of the FRM kinds in `SRC6_KINDS` (tool constant, empty until 3F;
+  env `SRC6_KINDS=K_A,K_B` overrides for a test build): same DP partition and
+  per-frame EQUs as banks 1 / 3, but `nm EQU zblk_N - SRC6_VDELTA`;
+* the 3F pool-spike **stand-ins** (`tools/pool_spike.py` `STAND_IN`, one block
+  per group, `s6s_<i>`, bit i of `SRC6_STANDIN`; default 1 = Spider 185 B);
+  nothing references them (no FRM line). Order / packed B: 0 SPIDER 185,
+  1 ORC 338, 2 NECRO 470, 3 MUMMY 560, 4 OGRE 464, 5 DK 770, 6 ARCHER_SHOOT
+  193, 7 DEAD_H 98, 8 NBOLT 101 = 3,179.
+
+**`zx0_frame` virtual map** (`FD_BLK`, the `GEN_ZBLK` key): `$4000..$7FFF` =
+SRC6 (bank 6 at + `SRC6_VDELTA` `$8000`), `$8000..$BFFF` = bank 1 at
++`$4000`, `$C000..` = bank 3. No `FD_FLAGS` bit is spent and the cache key
+stays unique by construction (+8 B low RAM: `bit 6,a` / `jr nz` / `set 6,h`
+/ `ld a, BANK_SRC6`; +20 T per bank-1 unpack, +30 T per SRC6 unpack; the
+same stream decodes in the same T from bank 6 — the src6 E2E variant's
+timings equal the default build's ±40 T). Read-only at runtime; on tape it is
+the tail of the boot block's tape block (`BOOT6_TAPE_LEN`; `SRC6_FREE` above
+the blocks is not on tape). Tests: `tests/zx0_pool.py` (bank-6 compare to
+`POOL6_END`, SRC6 == snapshot at every point, **S6** decode of each stand-in
+via `zx0_frame`, variant **src6** = the whole pool run with the Wizard's 4
+blocks in SRC6), `tests/game.py` #50 (SRC6 == `.sna` after a real tape load),
+`tests/ovl.py` R1 (`alloc` stops at `POOL6_END`).
+
+| Build | `SRC6_LEN` | used | `POOL_CAP` | need (static) | slack |
+|---|---|---|---|---|---|
+| before (main `2401565`) | — | — | 39,785 | 37,312 | 2,473 |
+| **default** (1 page, Spider) | 256 | 185 | 39,529 | 37,312 | **2,217** |
+| 9 pages (max today; DK+NECRO+OGRE+ORC+SPIDER) | 2,304 | 2,227 | 37,481 | 37,312 | 169 |
+| 13 pages (full lean 3,179) | 3,328 | 3,179 | 36,457 | 37,312 | **−855: ASSERT fails** |
+
+**Today `POOL_NEED` is static** (every monster kind is in the pool at once,
+boot-generated): the full lean 3F source set does NOT fit until 3F's
+per-level pool lands (need = the worst level, `docs/design/pool_spike.md`:
+D7 Warrior 35,168 → with 13 pages slack **1,289** B). Decode cost (S6,
+measured, DI): ~200 T per packed byte — Spider 185 → 416 B 40.8k T, the DK
+stand-in 770 → 1,440 B **159.7k T** (worst block; once per block per generator
+session).
 
 ### Overlays (3E-T1) — `ovl_run`, the GEN_SCRATCH window; screen-2 window contract
 
@@ -537,7 +585,7 @@ poked stale `GEN_ZBLK` + garbage scratch at the select screen → pool still
 identical; verified to FAIL with the `alloc_restore` clear removed).
 `GEN_SRC` stays as the `vdata` staging buffer (`pblit`; 3E-T1: `panel_boot` is gone). Decompressor =
 `src/dzx0_standard.asm` (vendored, pinned commit, unmodified, 68 B);
-`zx0_frame` + `dzx0` = 107 B (A5: 121; `zx0_code..zx0_code_end`, ASSERT ≤
+`zx0_frame` + `dzx0` = 115 B (SRC6 spike +8: the SRC6 virtual range; A5: 121; `zx0_code..zx0_code_end`, ASSERT ≤
 `ZX0_BUDGET` 128).
 
 ### Double buffer (A7, budget.md §3 option A)
@@ -805,7 +853,7 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+10 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
 | `$6E80..$6EBF` | `ORN_GLYPHS` | 64 | B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). `LOWRAM_END_3B` = `LOWRAM_FREE_END` = `$6EC0` |
 | `$6EC0..$6F31` | `LP_STATE` | 114 | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
-| `$6F32..$71A5` | free | 628 | of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
+| `$6F32..$71A5` | free | 628 | of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
 | `$71A6..$7FFF` | `lowram_code` (`start` first) | 3,674 | **cold block**, ends exactly at `$8000` (`src/lowram.asm`): **3E-T2: code 3,169 B + 101 descriptors 505 B**; 3E-T1: code 3,126 B (was 3,889 at `$70CF`); before: code 3,238 B + 101 frame descriptors 505 B (D3-S2 +89 incl. the bitmap-shadow paths' removal: + `clear_screen` / `print_char` / `print_str`, − `room_show` / `room_shadow`'s shadow ornament; L2 engine +28: `pit_range` / `pit_w`; D3-4 +8: `start_game` → `gen_kind(HERO_KIND + K_FX_BASE)`; J1 +145: `try_jump` D 6 / 7 + `jump_pit` + `pit_w`; earlier: D3-TX `tx_dec` + `.txt`, B12 +21, B14 +175, C3-2 +1, C3-1 +33, C3-0 +3, B3B-13 +37) |
 | inside the cold block | A5 `zx0_code..zx0_code_end` | 107 | `zx0_frame` 39 + `dzx0_standard` 68 (ASSERT ≤ `ZX0_BUDGET` 128) |
 | `$6000..$65FF` (alias) | A5 `GEN_SCRATCH` | 1,536 | ZX0 unpack target **aliasing `ROOM_MAP`+`NEXT_MAP`** (ends exactly at `TILE_GLYPHS`, ASSERTed): the generator runs only at boot, hero start and (3F) level start, before the room map is built — never mid-room. Guard: `GEN_TRAP` (state block) counts `gen_frame` calls while `GAME_STATE` is PLAYING/TRANSITION; tests assert 0 |

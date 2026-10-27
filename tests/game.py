@@ -1861,8 +1861,10 @@ def isr_tests(h, p):
     # C3 review: bank-1 code (ui1_code..ui1_end: the scrolls, the info line,
     # entered by far1) is the one other bank allowed to run at $C000+.
     # D3-S2: and the bank-7 cold code (b7_code..b7_end, entered by far7).
-    # 3E-T1: and, during boot only, the boot block (BOOT6_ADDR..R6_ADDR, bank
+    # 3E-T1: and, during boot only, the boot block (BOOT6_ADDR..SRC6_ADDR, bank
     # 6, entered by farb from boot; the pool overwrites it at the hero start).
+    # (SRC6 spike: the SRC6 sources SRC6_ADDR..R6_ADDR between it and R6 are
+    # data; the boot window below bounds bank-6 PCs only from below.)
     # R6 (2026-10-21): bank-6 code may run in the R6 region (R6_ADDR..r6_code_end,
     # far6 targets) at any time BY DESIGN; only the boot window adds the boot
     # block below it. Breakpoints 12 / 13 bound bank-6 PCs; 12 is re-armed at
@@ -2045,6 +2047,13 @@ def tape_rest(h, p):
     h.expect("50 boot block untouched by the boot pool (ALLOC_IDX < 2)", p.rb("ALLOC_IDX") < 2, True)
     h.expect("50 bank 6 boot block (3E-T1 tape block) == .sna", ram[bo:bo + S["BOOT6_LEN"]] ==
              SNA_RAM[bo:bo + S["BOOT6_LEN"]], True)
+    # SRC6 spike: the bank-6 sprite sources ride on the boot block's tape block
+    # (BOOT6_TAPE_LEN = boot block + SRC6_USED); read-only, compared whole
+    so = S["BANK_SRC6"] * 16384 + S["SRC6_ADDR"] - 0xC000
+    h.expect("50 boot tape block runs on through SRC6", S["BOOT6_TAPE_LEN"] ==
+             S["BOOT6_LEN"] + S["SRC6_USED"] and S["BOOT6_ADDR"] + S["BOOT6_LEN"] == S["SRC6_ADDR"], True)
+    h.expect("50 bank 6 SRC6 sources (boot tape block tail) == .sna", ram[so:so + S["SRC6_USED"]] ==
+             SNA_RAM[so:so + S["SRC6_USED"]], True)
     # R6 (2026-10-21): the R6 region (bank 6 top, the last tape block, R6_USED B).
     # Its only runtime writes are drop_put's dp_* scratch (a kill with a drop):
     # none before the menu, so it is compared whole here

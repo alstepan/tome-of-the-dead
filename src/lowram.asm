@@ -1891,8 +1891,9 @@ alloc_restore:
                 ret
 
 ; alloc — reserve BC bytes. Out: A = bank, HL = addr, CF = 1 if the pool is full.
-; R6: in bank 6 (index 2, the last) the pool ends at R6_ADDR (the permanent
-; R6 region above it): an allocation that would pass it overflows the pool.
+; R6 / SRC6: in bank 6 (index 2, the last) the pool ends at POOL6_END (=
+; SRC6_ADDR: the permanent SRC6 + R6 regions above it): an allocation that
+; would pass it overflows the pool.
 ; Clobbers: A, DE, HL
 ;------------------------------------------------------------------------------
 alloc_next:                                    ; this bank is full: next bank, retry
@@ -1911,11 +1912,11 @@ alloc:
                 dec  hl
                 add  hl, bc                    ; HL = end - 1; CF <=> end > $10000
                 jr   c, alloc_next
-                cp   2                         ; (A = idx) bank 6: the pool ends at R6_ADDR
+                cp   2                         ; (A = idx) bank 6: the pool ends at POOL6_END
                 jr   nz, .ok
-                ld   a, h                      ; end - 1 < R6_ADDR <=> H < HIGH R6_ADDR
-                cp   HIGH R6_ADDR              ; (LOW R6_ADDR = 0, ASSERTed in defs.asm)
-                jr   nc, alloc_next            ; into R6: next bank = 3 = the pool is full
+                ld   a, h                      ; end - 1 < POOL6_END <=> H < HIGH POOL6_END
+                cp   HIGH POOL6_END            ; (LOW POOL6_END = 0, ASSERTed in defs.asm)
+                jr   nc, alloc_next            ; into SRC6 / R6: next bank = 3 = the pool is full
 .ok:            inc  hl                        ; HL = end ($10000 -> 0: handled below)
                 ld   (ALLOC_PTR), hl
                 ld   a, (ALLOC_IDX)
@@ -2389,12 +2390,16 @@ mul8:
 ; GEN_SCRATCH unless it is already there (GEN_ZBLK = one-block cache: blocks
 ; hold 1-4 consecutive fids of one kind, so gen_kind unpacks each block
 ; exactly once). The tool guarantees no packed block straddles virtual $C000,
-; so the whole stream is in one bank's $C000 window.
+; so the whole stream is in one bank's $C000 window. Virtual map: $4000..$7FFF
+; = SRC6 (bank 6 at +SRC6_VDELTA; SRC6 spike), $8000..$BFFF = bank 1 at +$4000,
+; $C000.. = bank 3 as-is.
 ; Out: HL = the frame's raw bytes (cols*H*2, in GEN_SCRATCH). $C000 = the
 ; source bank if a block was unpacked (else unchanged). Clobbers: A, BC, DE, HL.
 ; Cost: cache hit ~110 T (A5: ~0.4k T incl. the banked 4-B descriptor
-; copy_virt, now gone); unpack (once per block) ~1.6 B packed -> raw at
-; roughly LDIR speed + Elias bits, e.g. ~25-45k T for a 1.1-1.4 KB block.
+; copy_virt, now gone); unpack (once per block) ~200 T per PACKED byte
+; (measured, tests/zx0_pool.py S6: 185 -> 416 B 40.8k T, 451 -> 1,440 B
+; 105.7k, the 770 -> 1,440 B DK stand-in 159.7k); the SRC6 path costs +10 T
+; over bank 1 (the same stream decodes from bank 6 in the same T, zx0_pool src6).
 ;------------------------------------------------------------------------------
 zx0_code:
 zx0_frame:
@@ -2411,8 +2416,12 @@ zx0_frame:
                 jr   nc, .pg                   ; virt $C000.. = bank 3 as-is
                 ld   a, h
                 add  a, (BANK_WINDOW - SRC_VIRT_BASE) >> 8
-                ld   h, a                      ; virt $8000.. = bank 1 at +$4000
-                ld   a, BANK_SRC_LO
+                bit  6, a                      ; $80..$BF -> $C0..$FF (bit 6 set): bank 1;
+                ld   h, a                      ; SRC6 $40..$7F -> $80..$BF (bit 6 clear)
+                ld   a, BANK_SRC_LO            ; (ld keeps ZF)
+                jr   nz, .pg                   ; virt $8000.. = bank 1 at +$4000
+                set  6, h                      ; virt $4000.. = SRC6: bank 6 at +$8000
+                ld   a, BANK_SRC6              ; (SRC6 spike: +8 B, +20 T per bank-1 unpack)
 .pg:            push hl
                 call page_bank
                 pop  hl

@@ -31,7 +31,14 @@ FD_FLAGS) are read from the image; the pixel data never is. Also asserts
 GEN_OVERFLOW = 0 and GEN_TRAP = 0 at every point, and reports cold-path
 T-states (boot -> first select_tick, select key -> first tick_work).
 
-Usage: python3 tests/zx0_pool.py [--baseline SRC_DIR]
+SRC6 spike: bank 6 is compared up to POOL6_END (= SRC6_ADDR); the SRC6 region
+SRC6_ADDR..R6_ADDR must equal the snapshot at every point (never written).
+S6: every SRC6 stand-in block is unpacked by zx0_frame from bank 6 bit-exact,
+timed against a bank-1 block of similar raw size. Variant "src6" (skip with
+--no-src6): the whole run again with the WIZARD's blocks in SRC6
+(SRC6_KINDS=K_WIZARD, -DSRC6_PAGES=9): boot idle + wizard games read bank 6.
+
+Usage: python3 tests/zx0_pool.py [--baseline SRC_DIR] [--no-src6]
   --baseline: also build SRC_DIR (e.g. a `git archive` of an older commit)
   and compare its pools to the same reference (and time it).
 Exit 1 on any mismatch / trap.
@@ -57,7 +64,7 @@ KEY = {"1": (3, 0), "2": (3, 1), "ENTER": (6, 0)}   # (KBD_MATRIX row, bit)
 GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 
 
-def build(src_root, defines, out):
+def build(src_root, defines, out, env=None):
     os.makedirs(os.path.join(out, "build"), exist_ok=True)
     flags = [f"-D{d}" for d in defines]
     if os.path.exists(os.path.join(src_root, "tools/build.sh")):
@@ -71,7 +78,8 @@ def build(src_root, defines, out):
                            check=True)
         cmd = ["sjasmplus", os.path.join(src_root, "src/main.asm"), "--fullpath",
                "--sym=build/wazhack.sym", "-i", os.path.join(src_root, "src")] + flags
-    r = subprocess.run(cmd, cwd=out, capture_output=True, text=True)
+    r = subprocess.run(cmd, cwd=out, capture_output=True, text=True,
+                       env=dict(os.environ, **(env or {})))
     if r.returncode or "warning" in r.stdout.lower().replace("warnings: 0", ""):
         sys.exit(f"build failed ({defines}):\n{r.stdout}\n{r.stderr}")
     disp = [ln for ln in r.stdout.splitlines() if ln.startswith(">")]
@@ -239,6 +247,74 @@ def scenario_run(r):
     return out, tm
 
 
+def pool6_end(S):
+    """SRC6 spike: bank 6's pool ends at POOL6_END (= SRC6_ADDR, below SRC6 +
+    R6); older checkouts (--baseline): at R6_ADDR."""
+    return S.get("POOL6_END", S["R6_ADDR"])
+
+
+def decode_call(r, virt):
+    """SRC6 S6: zx0_frame(DE = virt, BC = GEN_SCRATCH) from a DI stub with the
+    one-block cache cleared -> (T of the call incl. CALL/RET, scratch bytes, HL,
+    GEN_ZBLK, $7FFD shadow after)."""
+    S, z = r.S, r.z
+    stub, res = S["LOWRAM_END_3B"], S["LOWRAM_END_3B"] + 64
+    w = lambda v: [v & 0xFF, v >> 8]
+    code = ([0xF3, 0x21, 0, 0, 0x22] + w(S["GEN_ZBLK"]) + [0x11] + w(virt) +
+            [0x01] + w(S["GEN_SCRATCH"]) + [0xCD] + w(S["zx0_frame"]) +
+            [0x22] + w(res) + [0xFB, 0x00, 0x18, 0xFE])
+    end = stub + len(code) - 3
+    z.cmd("write-memory %d %s" % (stub, " ".join(map(str, code))))
+    for n in range(1, 33):
+        z.cmd("set-breakpoint %d" % n)
+    z.cmd("set-breakpoint 1 PC=%d" % end)
+    z.cmd("set-register PC=%d" % stub)
+    z.cmd("reset-tstates-partial")
+    z.cmd("run %d" % RUN_LIMIT)
+    t = int(z.cmd("get-tstates-partial"))
+    if r.pc() != end:
+        raise RuntimeError(f"zx0_frame stub did not return (virt {virt:#06x})")
+    t -= 4 + 10 + 16 + 10 + 10 + 16 + 4            # the stub's own DI / loads / EI
+    hl = z.read_memory(res, 2)
+    zb = z.read_memory(S["GEN_ZBLK"], 2)
+    return (t, z.read_memory(S["GEN_SCRATCH"], S["GEN_SCRATCH_LEN"]),
+            hl[0] | hl[1] << 8, zb[0] | zb[1] << 8, r.rb("PORT_7FFD_SHADOW"))
+
+
+def src6_decode(r, fails, name):
+    """S6 (SRC6 spike): every SRC6 stand-in block present in this build is
+    unpacked by zx0_frame from bank 6 (virtual FD_BLK = real - SRC6_VDELTA)
+    bit-exact to its raw stand-in bytes; GEN_ZBLK = the virtual key, bank 6
+    paged after. Its cost is compared with a bank-1 block of similar raw size."""
+    import zx0_sources as zs
+    S = r.S
+    r.load()
+    r.run_to("select_tick")                       # generator idle, GEN_SCRATCH free
+    with tempfile.TemporaryDirectory() as tmp:
+        st = zs.standin_blocks(tmp)
+    seen = 0
+    for i, g, seg, raw, z_ in st:
+        if f"s6s_{i}" not in S:
+            continue
+        seen += 1
+        virt = S[f"s6s_{i}_virt"]
+        t, scr, hl, zb, shadow = decode_call(r, virt)
+        ok = (scr[:len(raw)] == raw and hl == S["GEN_SCRATCH"] and zb == virt
+              and shadow & 7 == S["BANK_SRC6"] and virt < 0x8000)
+        b1 = min((k for k in S if re.fullmatch(r"zblk_\d+_raw", k)
+                  and 0x8000 <= S[k[:-4]] < 0xC000),          # a bank-1 block
+                 key=lambda k: abs(S[k] - len(raw)))[:-4]
+        t1, scr1, _, _, sh1 = decode_call(r, S[b1])
+        print(f"[{'PASS' if ok else 'FAIL'}] {name} S6 SRC6 stand-in {i} {g}: virt {virt:#06x} "
+              f"(bank 6 {S[f's6s_{i}']:#06x}) {len(z_)} -> {len(raw)} B, zx0_frame {t:,} T "
+              f"(bank-1 {b1} {S[b1 + '_packed']} -> {S[b1 + '_raw']} B: {t1:,} T, bank {sh1 & 7})")
+        if not ok:
+            fails.append(f"{name}/S6/{g}")
+    if not seen:
+        print(f"[FAIL] {name} S6: no SRC6 stand-in block in this build")
+        fails.append(f"{name}/S6/none")
+
+
 def ft_layout(S):
     """(stride, cols offset, H offset) of frame_tab: A6 = 4 B, pre-A6 = 8 B."""
     return S.get("FT_STRIDE", 8), S.get("FT_COLS", 2), S.get("FT_H", 3)
@@ -276,7 +352,7 @@ class Ref:
             if self.idx >= 3:
                 return None
             end = self.ptr + n
-            lim = self.S["R6_ADDR"] if self.idx == 2 else 0x10000   # R6: bank 6's pool ends at R6_ADDR
+            lim = pool6_end(self.S) if self.idx == 2 else 0x10000   # bank 6's pool ends below SRC6 / R6
             if end <= lim:
                 a, bank = self.ptr, (0, 4, 6)[self.idx]
                 if end == 0x10000:
@@ -407,19 +483,32 @@ def reference(S, init):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", help="source root of another checkout to compare too")
+    ap.add_argument("--no-src6", action="store_true",
+                    help="skip the SRC6 E2E variant (wizard sources in bank 6)")
     a = ap.parse_args()
     tmp = tempfile.mkdtemp(prefix="zx0pool_")
     kit = ["DEBUG_KIT=0"]          # D3-7: suites run on the release start kit
     kit += os.environ.get("ZX0POOL_DEFS", "").split()   # e.g. "PHASE_SHIFT=1"
-    variants = [("zx0", REPO, kit)]
+    variants = [("zx0", REPO, kit, None)]
+    if not a.no_src6:
+        # SRC6 spike E2E: the WIZARD's real blocks moved to the bank-6 SRC6
+        # region (2,055 B packed: 9 pages with the Spider stand-in; pool slack
+        # 169) — the boot select idle and every wizard game read their
+        # sources from bank 6 while the pool is written to banks 4 / 6
+        variants.append(("src6", REPO, kit + ["SRC6_PAGES=9"], {"SRC6_KINDS": "K_WIZARD"}))
     if a.baseline:                 # (an older checkout ignores the unknown define)
-        variants.append(("baseline", os.path.abspath(a.baseline), kit))
+        variants.append(("baseline", os.path.abspath(a.baseline), kit, None))
     res, fails = {}, []
-    for name, root, defs in variants:
-        sna, S, disp = build(root, defs, os.path.join(tmp, name))
+    for name, root, defs, env in variants:
+        try:
+            sna, S, disp = build(root, defs, os.path.join(tmp, name), env)
+        finally:
+            if env:                # the variant rewrote build/zx0/*: put the default back
+                subprocess.run([sys.executable, os.path.join(REPO, "tools/zx0_sources.py")],
+                               check=True, stdout=subprocess.DEVNULL)
         print(f"[{name}] built {sna}")
         for d in disp:
-            if "sprite sources" in d or "ZX0" in d or "low-RAM" in d:
+            if "sprite sources" in d or "ZX0" in d or "low-RAM" in d or "SRC6" in d:
                 print(f"[{name}]   {d}")
         h = Harness()
         h.launch(EMU_ARGS)
@@ -428,6 +517,8 @@ def main():
             r = Run(h, sna, S)
             out, tm = scenario_run(r)
             res[name] = (out, tm, S, r.init)
+            if "SRC6_ADDR" in S and name != "baseline":
+                src6_decode(r, fails, name)
         finally:
             h.close()
         for pt, d in out.items():
@@ -441,11 +532,19 @@ def main():
         ref = reference(S, init)
         for pt, d in out.items():
             for b in POOL_BANKS:
-                lim = (S["R6_ADDR"] - 0xC000) if b == 6 else 0x4000   # R6 is live variable space (gd_*/hr_*)
+                # bank 6: the pool part only (R6 is live variable space: gd_* / hr_*)
+                lim = (pool6_end(S) - 0xC000) if b == 6 else 0x4000
                 s_ = diff_bytes(d["pool"][b][:lim], ref[pt]["pool"][b][:lim], 0xC000)
                 print(f"[{'PASS' if s_ == 'identical' else 'FAIL'}] {name} vs reference {pt:7s} pool bank {b}: {s_}")
                 if s_ != "identical":
                     fails.append(f"{name}/{pt}/bank{b}")
+            if "SRC6_ADDR" in S:       # SRC6 spike: the source region is never written
+                a0, a1 = S["SRC6_ADDR"] - 0xC000, S["R6_ADDR"] - 0xC000
+                s_ = diff_bytes(d["pool"][6][a0:a1], init["pool"][6][a0:a1], S["SRC6_ADDR"])
+                print(f"[{'PASS' if s_ == 'identical' else 'FAIL'}] {name} {pt:7s} SRC6 region "
+                      f"{S['SRC6_ADDR']:#06x}..{S['R6_ADDR'] - 1:#06x} == snapshot: {s_}")
+                if s_ != "identical":
+                    fails.append(f"{name}/{pt}/SRC6")
             for k in ("FRT", "SEL_FRT_SAVE", "alloc", "GEN_OVERFLOW"):
                 ok = d[k] == ref[pt][k] if k != "FRT" else bytes(d[k]) == ref[pt][k]
                 print(f"[{'PASS' if ok else 'FAIL'}] {name} vs reference {pt:7s} {k}: "
