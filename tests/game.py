@@ -1876,6 +1876,9 @@ def isr_tests(h, p):
     p.z.cmd("set-breakpoint 11 RAM=7 and PC>=%XH" % S["b7_end"])
     p.z.cmd("set-breakpoint 12 RAM=6 and PC>=C000H and PC<%XH" % S["BOOT6_ADDR"])
     p.z.cmd("set-breakpoint 13 RAM=6 and PC>=%XH" % S["r6_code_end"])
+    # 3F SRC6 is data only: executing inside it (also during boot, when 12 stops
+    # at BOOT6_ADDR) is a bug
+    p.z.cmd("set-breakpoint 14 RAM=6 and PC>=%XH and PC<%XH" % (S["SRC6_ADDR"], S["R6_ADDR"]))
     p.extra_probes = set()
     p.wait_state(GS_SELECT)
     p.z.cmd("set-breakpoint 12 RAM=6 and PC>=C000H and PC<%XH" % S["R6_ADDR"])

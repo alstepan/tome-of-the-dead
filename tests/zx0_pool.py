@@ -292,6 +292,17 @@ def src6_decode(r, fails, name):
     r.run_to("select_tick")                       # generator idle, GEN_SCRATCH free
     with tempfile.TemporaryDirectory() as tmp:
         st = zs.standin_blocks(tmp)
+    if name == "src6":
+        # race guard: the variant shares the checkout's build/zx0 with tools/build.sh;
+        # if that was overwritten with default sources the wizard idle block is in
+        # bank 1/3 ($8000+) and this variant would silently test nothing
+        fd = S["fdesc_tab"] + S["FID_wizard_idle"] * S["FDESC_STRIDE"]
+        blk = r.z.read_memory(fd, 2)
+        blk = blk[0] | blk[1] << 8
+        ok = blk < 0x8000
+        print(f"[{'PASS' if ok else 'FAIL'}] {name} wizard idle FD_BLK {blk:#06x} is in bank 6 (< $8000)")
+        if not ok:
+            fails.append(f"{name}/wizard-idle-not-in-bank6")
     seen = 0
     for i, g, seg, raw, z_ in st:
         if f"s6s_{i}" not in S:
