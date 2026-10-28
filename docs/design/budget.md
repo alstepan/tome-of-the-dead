@@ -169,6 +169,29 @@ Worst: ordinary work **121,380** (mage, 4.6k under 126k), cast work **119,055**
 (wcast4, 8.9k under 128k), real **130,754** (wcast4 ordinary; **11,062 T** under the
 2-frame deadline). 0 ticks over any gate; `OVERRUN_COUNT` 0.
 
+**3F-B1 ERASE-AIR (2026-10-28):** `erase_rect` writes a T_AIR cell (id 0) as 8 zero lines with no
+glyph read (~64 T/cell; other ids +7 T). Ordinary work, base (main `a84526e`) -> new: mix/mage
+122,842/122,843 -> 121,246 (-1.6k), wcast4 ordinary 120,079 -> 116,431 (-3.6k), pmix 125,430 -> 124,518
+(-0.9k), wcast4 cast 121,123 -> 117,019, lightning 119,752 -> 117,929. Worst pmix-class tick gains only 0.9k (few
+air cells in its rect set); no scenario got worse by more than +1.1k (asleep lightning 109,136 -> 110,278,
+tick-placement noise, see the B2 note, not the 7 T/cell).
+
+**3F-B2 PRESENT-RUN (2026-10-28):** measured the B0 worst-tick masks first: sprite footprints give
+runs of 3-5 cells (pmix: rows 11-16, 3 full bytes + 38 cells in 11 partial bytes). An LDI line
+chain costs 16 T/byte + ~36 T per line + ~90 T setup per run vs 22 T/byte column copy, so a
+run-length LDI path (architect's idea) prices at only ~0.2-0.8k on pmix (break-even ~5 cells)
+and was dropped. Instead `present`'s loop was tightened (copied cell 262 -> 242 T, clear bit 31
+-> 24 T, byte header -14 T, screen highs patched once per third, all-zero `HUD4_PW` skipped),
++15 B bank 2. Present in the worst tick / worst work tick, base (B1 `b62fa1b`) -> new: pmix
+20,636 / 124,518 -> 19,109 / **122,922 (-1.6k)**; mage 19,774 / 121,246 -> 18,304 / 119,651
+(-1.6k); mix 121,246 -> 119,650; wcast4 cast 117,019 -> 115,423, ordinary 116,431 -> 115,974;
+lcastf 118,714 -> 117,346 (-1.4k); umix 99,517 -> 99,289 (its worst tick is HUD full bytes).
+Measurement noise: the per-tick noise floor is about +-3k T (work moves between ticks because
+the game diverges between builds; tick totals swing up to +-20k for the same index), so
+single-scenario deltas under ~1.5k mean nothing; only the consistent drop across nearly all
+scenarios is real (a 2-line `.full8` unroll saved 154 T in present and 0 T in the pmix tick; not kept). Below the
+plan's 2k target: the rest of present is the 22 T/byte copy itself.
+
 **SND-5 (sound effects in the ISR, 2026-10-19, M; review round + 27 effects + duck on every effect +
 the `SFX_NEXT` deferral):** the melee / spell / throw / bounce / burst / status / movement / door / level-up
 effects fire in the budget scenarios. ISR in window max 5,926 T (PRE_MAX up to 6,328); worst ordinary

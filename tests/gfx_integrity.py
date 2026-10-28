@@ -443,6 +443,8 @@ def seq_sweep(p, check):
         p.wb("INPUT_SRC", 1)
         p.menu_start(GL.K_WIZARD if hero == "2" else GL.K_KNIGHT)
         seq_check(p, check, f"SQ hero {hero} D1", list(p.z.read_memory(S["LP_KINDS"], 5)))
+        check(f"GI B1: hero {hero} D1 TILE_GLYPHS[0..7] == 0 (erase_rect T_AIR path)",
+              list(p.z.read_memory(S["TILE_GLYPHS"], 8)) == [0] * 8)
         for d in range(2, 9):
             pc0 = p.pc()
             ok, _ = p.code([0x3E, d - 1, 0x32] + w16(S["LVL_DEPTH"])
@@ -452,6 +454,8 @@ def seq_sweep(p, check):
             p.settle(4)
             check(f"GI SQ hero {hero} D{d}: level_descend stub ran", ok and p.rb("LVL_DEPTH") == d, p.rb("LVL_DEPTH"))
             seq_check(p, check, f"SQ hero {hero} D{d}", list(p.z.read_memory(S["LP_KINDS"], 5)))
+            check(f"GI B1: hero {hero} D{d} TILE_GLYPHS[0..7] == 0",
+                  list(p.z.read_memory(S["TILE_GLYPHS"], 8)) == [0] * 8)
     p.proto_start = 1
     p.load()
     p.wait_state(S["GS_SELECT"])

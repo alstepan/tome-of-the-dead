@@ -231,6 +231,7 @@ shadow_rect:
 ; FLOOR1 (review-measured): ids 0..31 cost 8 T less than before (D hoisted),
 ; ids 32..59 +46 T (the marker test + their own copy tail), a marker cell
 ; ~+96 T over a plain tile cell (the glyph cache).
+; 3F-B1: id 0 (T_AIR) takes .air: ~64 T/cell less, every other id +7 T.
 ; SMC: .cols/.rows+1 per call; .mh/.bh/.ah/.dah+1 per call / third.
 ;==============================================================================
 erase_rect:
@@ -290,6 +291,8 @@ erase_rect:
                 jr   c, .hi                    ; ids 32..63 (FLOOR1: the markers among them)
 .g:                                            ; DE = TILE_GLYPHS + id*8 (ids 0..31: 8 T less
 .bh:            ld   h, 0                      ; SMC: screen bitmap high (than before FLOOR1)
+                jr   z, .air                   ; 3F-B1: Z still from the 3rd ADD A,A (LD / JR C keep
+                                               ; flags): id 0 = T_AIR (id 32 left via .hi on CF)
                 DUP  7
                 ld   a, (de)
                 ld   (hl), a
@@ -312,17 +315,18 @@ erase_rect:
                 add  a, 32                     ; next char row: same third ...
                 ld   c, a
                 jr   nc, .row
-                ld   hl, .bh+1                 ; ... or the next one (rare)
-                ld   a, (hl)
-                add  a, 8
+                jp   .third                    ; ... or the next one (rare; out of line so
+                                               ; the JR C / JR Z below stay in range)
+; .air — 3F-B1: T_AIR (id 0, glyph all zero: ASSERTed in boot6, tests/eraseair.py):
+; 8 zero lines, no glyph read (the contended $66xx fetch). H = bitmap high
+; already (.bh). ~64 T less than the copy per air cell; other ids pay 7 T (JR Z).
+.air:           xor  a
+                DUP  7
                 ld   (hl), a
-                ld   hl, .mh+1
-                inc  (hl)
-                ld   hl, .ah+1
-                inc  (hl)
-                ld   hl, .dah+1
-                inc  (hl)
-                jr   .row
+                inc  h
+                EDUP
+                ld   (hl), a
+                jr   .dah
 ; .item — FLOOR1: A = a marker id T_ITEM0 + k (k = the item band row), L =
 ; the cell's low byte: its 8 lines from the glyph cache (FI_CELL, the storey's
 ; page, by L -> FI_GLY, bank 2) and the slot's ink (FI_INK) in place of the
@@ -367,6 +371,17 @@ erase_rect:
                 ld   (hl), a
                 ld   d, TILE_GLYPHS >> 8
                 jp   .nx
+.third:         ld   hl, .bh+1
+                ld   a, (hl)
+                add  a, 8
+                ld   (hl), a
+                ld   hl, .mh+1
+                inc  (hl)
+                ld   hl, .ah+1
+                inc  (hl)
+                ld   hl, .dah+1
+                inc  (hl)
+                jp   .row
                 ASSERT (FI_CELL & $FF) == 0 && (FI_GLY & $FF) == 0 && (FI_INK & $FF) == 0
                 ASSERT T_ITEM0 + 4 == TILE_IDS && FI_SLOTS == 8 && (T_ITEM0 & 1) == 0 && (T_ITEM0 & 31) == 28 && (TILE_GLYPHS & $1FF) == 0
                 ASSERT (TILE_GLYPHS & $1FF) == 0 && TILE_IDS <= 64 && (ROOM_MAP & $FF) == 0
@@ -601,18 +616,38 @@ pmark_dmg:
 ; it stays ahead of the beam (a cell would only tear if the beam scanned it
 ; mid-copy). Leaves bank 7 paged at $C000.
 ; Clobbers: A, BC, DE, HL.
-; Cost: ~50 T if nothing is marked; else ~65 T per clean row + ~200 T per
-; dirty row + ~75 T per non-zero mask byte + 251 T per copied cell (contended:
-; 2 accesses per byte, budget §4) + 31 T per clear bit before a byte's last;
-; a full mask byte (8 cells: HUD text) ~1.5k T by LDI lines (.full8, A7b).
-; SMC: .sbh/.dbh/.sah/.dah+1 (src/dst bitmap/attr high; .full8 reads them
-; too) and .rb+1 (the row's low-byte base) patched per dirty row.
+; Cost (uncontended; contended: 2 accesses per copied byte, budget §4): ~50 T
+; if nothing is marked; else ~110 T entry (+~220 T if a HUD4_PW row is set),
+; ~63 T per clean row, ~60 T per dirty row (+~190 T when its screen third
+; differs from the last dirty row's), ~50 T per zero mask byte, ~130 T per
+; non-zero one, 24 T per clear bit before a byte's last set bit, 242 T per
+; copied cell (-5 T for the first of a run of set bits; the last copied cell of a
+; mask byte pays a 26 T tail, was 15 T, which offsets that -5 T); a full mask byte (8
+; cells side by side) ~1.5k T by LDI lines (.full8, A7b).
+; 3F-B2 (measured on the B0 worst ticks; LDI-run variants priced and dropped:
+; at the 3-5-cell runs of sprite footprints the per-line chain overhead eats
+; the 6 T/byte LDI gain): the bit loop exits a run straight on the shift's
+; flags (24 T per clear bit, was 31; 24 T between set bits, was 44), the cell
+; low byte is the mask address * 8 (no per-row base), the screen highs are
+; re-patched only when the screen third changes, and an all-zero HUD4_PW is
+; skipped in one OR pass.
+; SMC: .sbh/.dbh/.sah/.dah+1 (src/dst bitmap/attr high of the current third;
+; .full8 reads them too) and .thd+1 (that third * 32; $FF = none yet).
 ;------------------------------------------------------------------------------
 present:
                 ld   a, (PRES_ANY)
                 or   a
                 ret  z
                 ld   hl, HUD4_PW               ; B3B-11 text rows 20..23: mark cols 0..PW-1
+                ld   a, (hl)
+                inc  l
+                or   (hl)
+                inc  l
+                or   (hl)
+                inc  l
+                or   (hl)
+                jr   z, .nohud                 ; (the usual case: 40 T, the loop is ~220 T)
+                ld   l, HUD4_PW & $FF
                 ld   b, TEXT_ROW
 .hud:           ld   a, (hl)
                 or   a
@@ -629,7 +664,7 @@ present:
                 ld   a, b
                 cp   TEXT_ROW + TEXT_ROWS
                 jr   c, .hud
-                xor  a
+.nohud:         xor  a
                 ld   (PRES_ANY), a             ; (after the marks: they set it)
                 ld   a, BANK_SCREEN7
                 call page_bank
@@ -644,6 +679,7 @@ present:
                 ld   h, PRES_MASK >> 8
                 ld   a, $FF
                 ld   (PRES_RMIN), a
+                ld   (.thd+1), a               ; no third patched yet
 .rowt:          ld   a, (hl)                   ; any bit in this row's 4 bytes?
                 inc  l
                 or   (hl)
@@ -660,28 +696,31 @@ present:
                 dec  l                         ; L = the row's mask byte 0
                 ld   a, l
                 sub  PRES_MASK & $FF
+                ld   c, a                      ; C = row * 4
                 rrca
                 rrca                           ; A = row 0..23
 .probe_row:                                    ; flicker probe (no code): A = row
-                ld   b, a
-                and  $18
-                or   SCREEN_BITMAP >> 8
-                ld   (.sbh+1), a
-                add  a, (SCREEN7_BITMAP - SCREEN_BITMAP) >> 8
-                ld   (.dbh+1), a
-                ld   a, b
-                rrca
-                rrca
-                rrca
+                ld   a, c
+                and  $E0                       ; third * 32 (row * 4 = third * 32 + (row & 7) * 4)
+.thd:           cp   $FF                       ; SMC: the third the highs below are patched for
+                jr   z, .byte
+                ld   (.thd+1), a
+                rlca
+                rlca
+                rlca                           ; A = third 0..2
                 ld   c, a
-                and  3
                 or   SCREEN_ATTR >> 8
                 ld   (.sah+1), a
                 add  a, (SCREEN7_ATTR - SCREEN_ATTR) >> 8
                 ld   (.dah+1), a
                 ld   a, c
-                and  $E0
-                ld   (.rb+1), a                ; (row & 7) << 5
+                add  a, a
+                add  a, a
+                add  a, a                      ; third * 8
+                or   SCREEN_BITMAP >> 8
+                ld   (.sbh+1), a
+                add  a, (SCREEN7_BITMAP - SCREEN_BITMAP) >> 8
+                ld   (.dbh+1), a
 .byte:          ld   a, (hl)
                 or   a
                 jr   z, .nextb
@@ -689,23 +728,17 @@ present:
                 push hl
                 ld   c, a                      ; C = bits left, bit 7 = this col
                 ld   a, l
-                and  3                         ; mask byte index in the row
                 add  a, a
                 add  a, a
-                add  a, a
-.rb:            or   0                         ; SMC: row low base
-                ld   b, a                      ; B = low byte of the cell
-                ld   a, c
-                inc  a
-                jr   nz, .bits
-                ld   a, b
-                cp   $F8                       ; (cols 24-31 of a third's last char
-                jr   nz, .full8                ; row: LDI would carry into H)
+                add  a, a                      ; (L - PRES_MASK lo) * 8 mod 256 = (row & 7) << 5 | byte * 8
+                ld   b, a                      ; B = low byte of the byte's col-0 cell
+                inc  c
+                jr   z, .full                  ; C was $FF
+                dec  c
 .bits:          dec  b                         ; (.bit pre-increments)
 .bit:           inc  b
                 sla  c
-                jr   c, .copy
-                jr   .bit                      ; clear bit, set bits remain: 31 T
+                jr   nc, .bit                  ; clear col (a set one follows): 24 T
 .copy:          ld   l, b
                 ld   e, b
 .sbh:           ld   h, 0                      ; SMC: bank-5 bitmap high
@@ -722,9 +755,10 @@ present:
 .dah:           ld   d, 0                      ; SMC: screen-2 attr high
                 ld   a, (hl)
                 ld   (de), a
-                inc  c
-                dec  c
-                jr   nz, .bit                  ; more set bits in this byte
+                inc  b
+                sla  c
+                jr   c, .copy                  ; the next col is set too: 24 T
+                jr   nz, .bit                  ; clear, set bits remain (Z: C == 0, byte done)
                 pop  hl
 .nextb:         inc  l
                 ld   a, l
@@ -734,9 +768,13 @@ present:
                 or   l                         ; A = 0 here: L = 0 <=> past row 23
                 jp   nz, .rowt
                 ret
+.full:          dec  c                         ; C = $FF again
+                ld   a, b
+                cp   $F8                       ; (cols 24-31 of a third's last char
+                jr   z, .bits                  ; row: LDI would carry into H)
                 ; A7b: a full mask byte = 8 cells side by side (HUD text runs),
                 ; copied line by line with LDI (16 T/byte, no per-cell setup):
-                ; ~1.5k T vs ~2.1k per byte. Low byte <= $F0 here, so the 8
+                ; ~1.5k T vs ~1.9k per byte. Low byte <= $F0 here, so the 8
                 ; LDIs of a line never carry into H / D.
 .full8:         ld   a, (.sbh+1)
                 ld   h, a
@@ -762,6 +800,9 @@ present:
                 ldir                           ; the 8 attrs
                 pop  hl
                 jr   .nextb
+                ASSERT (PRES_MASK & $1F) == 0  ; cell low byte = mask low byte * 8
+                ASSERT TEXT_ROWS == 4 && (HUD4_PW >> 8) == ((HUD4_PW + 3) >> 8)
+                ASSERT (((SCREEN_ATTR >> 8) & 3) == 0) && (((SCREEN_BITMAP >> 8) & $18) == 0)
                 ASSERT SCREEN7_ATTR - SCREEN7_BITMAP == SCREEN_ATTR - SCREEN_BITMAP
 
 ;==============================================================================
