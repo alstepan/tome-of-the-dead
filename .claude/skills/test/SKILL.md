@@ -65,6 +65,7 @@ python3 tests/drip.py           # D3-8b decorative drip: sources == model, never
 python3 tests/ic1.py            # IC1 16x16 item icons: page grid / worn row / description, panel worn cells, quick-slot pick + own count (potion Heal->Mana->Cure skipping no-ops), the ISR over bank-6 (R6) code, icon costs (DEBUG_KIT=0)
 python3 tests/page.py           # 3E-T2 bag page (full screen): I / BAG icon open, music plays on (no SND_HOLD), GEN_SCRATCH overlay round trip + ROOM_MAP save, golden page_empty, keys don't leak, held-direction close, 20 open/close cycles byte-identical screens + game state unchanged; reports open / close cost
 python3 tests/marks.py          # D3-8d status cues: overhead marks per status (hero + monsters, frame A/B), clear / death / room exit / covered / drip, V1 pose hold, V3 sleep flash, budget "mkmix" (<= 2 ops / tick) + "lcastf"
+python3 tests/exit3e.py         # 3E-T17 exit gate: seeded Warrior run pickup -> equip (page verb, hero_recalc) -> eat (FED / NO NEED) -> drink -> read Enchant -> learn from a book (abil_learn) -> trap fire + search; then runs budget.py pmix/umix/tdart/tsearch and gates worst work tick <= CAP and real <= 2 frames (BUDGET_SKIP=1 skips; DEBUG_KIT=0)
 FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scenarios a/b/c); MEASUREMENT, not a pass/fail gate; A/B the order with -DRENDER_FIRST=0
 ```
 
