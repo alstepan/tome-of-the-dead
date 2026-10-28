@@ -373,7 +373,7 @@ BLIT_MISS       EQU $BF40           ; count: stationary frame asked at a missing
 GEN_OVERFLOW    EQU $BF41           ; 1 if the pre-shift pool ran out (build bug)
 ALLOC_IDX       EQU $BF42           ; pool bank index 0..2
 ALLOC_PTR       EQU $BF43           ; word: next free byte in the paged pool bank
-ALLOC_MARK_IDX  EQU $BF45           ; allocator mark after monsters+hero idles
+ALLOC_MARK_IDX  EQU $BF45           ; 3F-T1: the LEVEL mark (start_game, after idles + hero + FX; level_enter rewinds)
 ALLOC_MARK_PTR  EQU $BF46           ; word
 CLIMB_BLK_XY    EQU $BF48           ; B18 word: CLIMB_BLK_ID's (x, y) at its last block (climb_blocked)
 PHASE_TRAP      EQU $BF4A           ; PHASE_SHIFT 1 / 2 (default 1): count (since boot, wraps) of walk ticks whose
@@ -463,6 +463,8 @@ JUMP_TURN       EQU $BFC4           ; B3B-5 word: TURN_COUNTER value on which a 
 ; Game states (GAME_STATE). 2/3/4 shared with constants.asm.
 GS_SELECT       EQU $05
 GS_TRANSITION   EQU $06
+GS_LEVEL        EQU $07             ; 3F-T1: level_enter before the room map exists (card,
+                                    ;   level_new, the level pool): gen_frame allowed (GEN_TRAP off)
 
 ; TURN_PHASE
 TP_INPUT        EQU 0

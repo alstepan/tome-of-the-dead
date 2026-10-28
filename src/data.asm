@@ -44,16 +44,28 @@ POOL_HERO_MAX = POOL_KNIGHT + POOL_FXW
     IF POOL_WIZARD + POOL_FXM > POOL_HERO_MAX
 POOL_HERO_MAX = POOL_WIZARD + POOL_FXM
     ENDIF
-POOL_NEED       EQU POOL_MONSTERS + POOL_HERO_MAX + 2 * 576 + 3 * 576
+                ; 3F-T1 (per-level pool): the pool holds the 2 idles, the hero
+                ; + its FX and ONE level's monster kinds (level_enter), so the
+                ; need is the worst depth: POOL_LVL_MAX = max over D1..D8 of
+                ; the level's generation kinds, computed at the end of main.asm
+                ; ("LEVEL POOL NEED") from the assembled lp_dtab / pool_gmap /
+                ; kind_tab / frame_tab / fdesc_tab bytes — exact per frame,
+                ; the same dedup as pool_list. POOL_NEED (= POOL_FIXED +
+                ; POOL_HERO_MAX + POOL_LVL_MAX), its checks and the DISPLAY are
+                ; defined there (DEFL, final pass only: use nothing above it).
+POOL_FIXED      EQU 2 * 576 + 3 * 576                    ; select idles + straddle waste
+                ; the PROTO rooms (test fixture, proto_start = 1): every original
+                ; monster kind (start_game .gk, K_SKELETON .. K_PROTO_END - 1)
+K_PROTO_END     EQU K_SLIME + 1
+                ASSERT KFID_SKELETON == KFID_MONSTERS && KFID_SLIME + KFCNT_SLIME == KFID_MONSTERS + KFCNT_MONSTERS
+POOL_NEED_PROTO EQU POOL_FIXED + POOL_HERO_MAX + POOL_MONSTERS
+                ; level_enter clears the FRT rows [KFID_MONSTERS, + KFCNT_MONSTERS):
+                ; every monster frame must lie there (heroes before, FX kinds after)
+                ASSERT KFID_MONSTERS + KFCNT_MONSTERS == KFID_FXM
 POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN - SRC6_LEN   ; D3-TX: the text block under bank 0's pool; R6 + SRC6: bank 6 ends at POOL6_END
                 ASSERT POOL6_END - BANK_WINDOW == $4000 - R6_LEN - SRC6_LEN          ; POOL_CAP's bank-6 term = alloc's limit
-    IF POOL_NEED > POOL_CAP
-                DISPLAY "POOL FULL: need ", /D, POOL_NEED, " > POOL_CAP ", /D, POOL_CAP, " (SRC6_LEN ", /D, SRC6_LEN, ")"
-    ENDIF
-                ASSERT POOL_NEED <= POOL_CAP
                 ASSERT FID_COUNT <= FRT_MAX
                 DISPLAY "GAME class FX pool: warrior ", /D, POOL_FXW, " (", /D, KFCNT_FXW, " frames), mage ", /D, POOL_FXM, " (", /D, KFCNT_FXM, " frames); knight ", /D, POOL_KNIGHT, ", wizard ", /D, POOL_WIZARD
-                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (monsters ", /D, POOL_MONSTERS, ", hero max ", /D, POOL_HERO_MAX, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0); slack ", /D, POOL_CAP - POOL_NEED, " after SRC6 ", /D, SRC6_LEN, " B"
 
 ;==============================================================================
 ; ROLE TABLES (per-kind state -> frame). Stand-ins per prototype §7/§10:

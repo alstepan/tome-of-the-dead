@@ -436,10 +436,9 @@ SPAWN_COUNT     EQU ($ - spawn_tab) / 5
 ; D8 seeds 55352..55354 exhaust once; at most 2 calls: the longest run of
 ; failing seeds is 18 < 32, tools/levelgen_runs.py), then level_populate
 ; (hero + the LP budget, game.md §9.4.1). LG_* scratch = GEN_SCRATCH: called
-; only before the first room is built (level_enter). No gen_kind here: every
-; kind of lp_dtab (stand-in aliases included) is in the boot pool (3F's
-; per-level pool from LP_KINDS + LP_BOSS goes between level_gen and the
-; build, after alloc_restore). 3E-T6: then the items overlay (items_ovl.asm,
+; only before the first room is built (level_enter). No gen_kind here: the
+; 3F-T1 level pool (LP_KINDS + LP_BOSS, low-RAM level_enter) is generated
+; after this returns, before the build. 3E-T6: then the items overlay (items_ovl.asm,
 ; ovl_run: unpacks from BANK_OVL_ITEMS, back in this bank).
 ; Clobbers: all but IY.   level_gen ~0.1-0.6M T per call (W16 reports)
 ;------------------------------------------------------------------------------
