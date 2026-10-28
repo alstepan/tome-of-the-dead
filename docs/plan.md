@@ -448,10 +448,10 @@ Open rulings (designer/user): Q1 floor-item rendering/ids; Q2 gold (not in game.
 
 ### 3F — Monsters, bosses & win (needs game.md §9–10)
 **PRIORITY 2026-10-28 (user): 3F is the top priority; BAL1 (+ additions) runs AFTER 3F; everything else (T17 gate, D-AI1d, SND-5 remainder, test triage, budget.py fix) later.** T16 verified: runtime merged to main as `785d4ad` (squash); branch `feat/3e-t16-traps` @ `3153fe8` differs only in 3 comments, worktree clean — no leftovers (branch/worktree safe to delete).
-Per-level pool generation (≤ 4 kinds + boss); new monsters (zombie, mummy, orc,
-skeleton-archer, necromancer, giant spider) + ranged AI; level bosses; Necromancer
+Per-level pool generation (≤ 4 kinds + boss); new monsters (Vampire, Mummy, Orc,
+Skeleton Archer, Necromancer, Spider) + ranged AI; level bosses; Necromancer
 Archmage + Book of Absolute Death Magic → win. **Exit:** full run start → win.
-3F also implements game.md §9.5 (respawn trickle while the boss lives; idle wave behind `IDLE_WAVE`, default off).
+3F also implements game.md §9.5 (respawn trickle while the boss lives; idle wave DROPPED from 3F scope (D1 R5, 0 B)).
 3F also implements **monster tiers** (game.md §9.6, user 2026-10-03): 12 tier rows (30/32
 kinds), spawn roll from `T2_BASE`/`T3_BASE` + `Δ` (rev 5: `LVL − d`, game.md §9.6), tier abilities (on-hit
 status, parry, rage, breed, summon, sniper/slinger), drop/XP scaling, and the ALARM trap wave.
@@ -459,6 +459,9 @@ status, parry, rage, breed, summon, sniper/slinger), drop/XP scaling, and the AL
 melee (Skeleton Guard/Knight, Death Knight, 1 in 2) and ACID on Black Widow bites (1 in 4,
 armour else helmet), `m −1`, floor −3 then destroyed, blessed immune. Tests: seeded notch/acid
 lowers `m`; destruction at −3 empties the slot (frees a cursed slot); blessed unchanged.
+
+**3F task chain (architect 2026-10-28, manager-adopted):** T1 per-level sprite pool (staff Opus, DISPATCHED `feat/3f-t1-pool`) ∥ D1 designer rulings (DONE: game.md §9.7 R1–R6) → T2 MEM-3F placement (kind_seq via base-kind column, bank-2 seq cache, kx_melee into KX_SPARE, R6 growth) ∥ A1 artist (lean frames: Spider 3, Orc 3, Necro 3, Mummy 3, Ogre WALK1/2+SLAM, DK 4, DEAD_H, NBOLT 3; NO Archer SHOOT) → T3 kind rows → {T4 Python refs, T6 combat abilities/wear} → {T5 tier spawn, T7 ranged AI, T10 Sanctum gen} → {T8 bosses, T12 respawn trickle} → T9 mid-room spawns/Vampire → T11 Archmage+Book+win → T13 real art in → T14 full-run test. Shortfall ≈ 1.7 KB (0.6 KB bank 2).
+**3F decisions:** golden boss = per-entity flag + `LEK_GOLD` (LE_KIND bit 5), kind rows stay 30; lectern = common ids 15/16/17/18 SOLID|ATTACK, `T_GRATE_SHUT` = 13 (no D8 swap of 60..63); only Goblin/Skeleton climb (Orc, Archer, Sniper, DK do not); HURT on new kinds = `$42` flash; **Archer SHOOT reuses Skeleton cut (Necro cast on D7 if needed) — user 2026-10-28**, D5 becomes the pool limit; boss music in 3F (first to slip to 3G). **Cut order if still short:** ALARM wave → Vampire close-distance → Rabbit breed → Archmage teleport → kind_tab page packing → arrays to R6; **last resort (user keeps it unless numbers force it): DK BLOCK → flash.**
 
 ### 3G — Sound & polish (later)
 AY music + FX on the A8 slot; balance pass; hardware hardening.
