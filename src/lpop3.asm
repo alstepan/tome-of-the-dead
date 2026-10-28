@@ -34,7 +34,7 @@ LPV_K           EQU TMP7                ; unit kind / bank slot
 
 ;------------------------------------------------------------------------------
 ; Per-depth budget rows (game.md §9.4 table): 4 kinds in table order, boss,
-; count incl. boss. Stand-in aliases for kinds that have no row yet: defs.asm.
+; count incl. boss (3F-T3: real kind ids, defs.asm; golden bosses are a per-entity flag, T8).
 ;------------------------------------------------------------------------------
 lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1, 11
                 DB   K_GOBLIN, K_SPIDER, K_BAT, K_RAT,         K_BOSS_D2, 12
@@ -49,9 +49,15 @@ LP_DROW         EQU 6
 ; §9.4.1 "N >= |R|" always holds (min N = 11 - 2 = 9 >= 7 = the most rooms R
 ; can have), so lp_budget has no "N farthest rooms" branch (levelgen.py keeps it).
                 ASSERT 11 - 2 >= GRID_CELLS - 2
-; §9.3 weights by kind row (defs.asm WT_*), K_COUNT entries
+; §9.3 weights by kind row (defs.asm WT_*), K_COUNT entries (3F-T3: 18 base + 12 tier rows)
+; (the hero rows 0 / 1 and the id-2 hole stay 0: a record entry of kind 0 may exist in tests)
 lp_wt:          DB   WT_K_KNIGHT, WT_K_WIZARD, 0, WT_K_SKELETON, WT_K_GOBLIN
                 DB   WT_K_GHOST, WT_K_RAT, WT_K_BAT, WT_K_SLIME
+                DB   WT_K_SPIDER, WT_K_VAMPIRE, WT_K_ORC, WT_K_ARCHER, WT_K_MUMMY
+                DB   WT_K_NECRO, WT_K_OGRE, WT_K_DKNIGHT, WT_K_ARCHMAGE
+                DB   WT_K_GIANT_RAT, WT_K_RABBIT_RAT, WT_K_SCREECH, WT_K_SLINGER
+                DB   WT_K_BLACK_WIDOW, WT_K_SKEL_GUARD, WT_K_SKEL_KNIGHT, WT_K_POLTERGEIST
+                DB   WT_K_ORC_BERSERK, WT_K_ORC_BOUNCER, WT_K_SNIPER, WT_K_BONE_CALLER
                 ASSERT $ - lp_wt == K_COUNT
                 ASSERT LEK_RESPAWN == EF_RESPAWN && K_COUNT - 1 <= LEK_KIND_MASK
                 ASSERT LVL_LAIR == LVL_START + 1 && LVL_SANCTUM == LVL_START + 3

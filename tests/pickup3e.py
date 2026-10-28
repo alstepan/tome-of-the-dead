@@ -25,7 +25,7 @@ pickup/drop rulings (2026-10-20)", Q10, Q11, §8 potions.
   D1  a Rat killed by deal_hit, seed with rng_mod(4) == 0: FL entry {room|s,
       centre col, CHEESE, 1}, the cell shows T_FOOD, no log line; RNG == model
   D2  the same with a losing seed: no entry; RNG == model (one roll)
-  D3  Skeleton (the K_ARCHER stand-in), Warrior: 3 arrows (1/2); Mage: no roll
+  D3  Skeleton Archer (K_ARCHER), Warrior: 3 arrows (1/2); Mage: no roll
   D4  body centre col taken by an entry: the drop goes to the nearest free col
   D5  FLOOR_LIST with 31 used: an ordinary drop is lost
   U1  the D1 lair boss (kind LP_BOSS in LVL_LAIR, LF_UNIQUE clear): KING HELM
@@ -41,7 +41,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
-from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_RAT, K_GOBLIN, K_SKELETON, stand_y  # noqa: E402
+from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_RAT, K_GOBLIN, K_SKELETON, K_ARCHER, stand_y  # noqa: E402
 from proj3 import T, w16, Rng  # noqa: E402
 import textpack  # noqa: E402
 import world  # noqa: E402
@@ -326,7 +326,12 @@ def run(p, check):
                 return sd
 
     def monster(kind, x, cls=K_KNIGHT, hp=5):
-        sl = next(s for s in range(1, 16) if p.ent(s)["KIND"] == kind)
+        # the PROTO monster of that kind, else (3F-T3: K_ARCHER is no PROTO kind) a Skeleton's slot
+        # re-kinded: the Archer row's stand-in body is the Skeleton's
+        sl = next((s for s in range(1, 16) if p.ent(s)["KIND"] == kind), None)
+        if sl is None:
+            sl = next(s for s in range(1, 16) if p.ent(s)["KIND"] == K_SKELETON)
+            p.set_ent(sl, KIND=kind)
         y = HY + kt[cls]["bh"] - kt[kind]["bh"]
         place(sl, x, y, EF_ACTIVE | EF_HOSTILE | EF_LEFT, hp)
         return sl
@@ -351,7 +356,7 @@ def run(p, check):
 
     for cls, kind, n, item, qty, nm in ((K_KNIGHT, K_RAT, 4, IT["F_CHEESE"], 1, "Rat cheese"),
                                        (K_KNIGHT, K_GOBLIN, 4, IT["F_APPLE"], 1, "Goblin apple"),
-                                       (K_KNIGHT, K_SKELETON, 2, IT["ARROW"], 3, "Skeleton (archer) arrows")):
+                                       (K_KNIGHT, K_ARCHER, 2, IT["ARROW"], 3, "Skeleton Archer arrows")):
         got, st, cx = drop_case("D1", kind, cls, n, True, item, qty)
         room = p.rb("CUR_ROOM") | S1
         k = got["new"][0][0] if got["new"] else None
@@ -361,8 +366,8 @@ def run(p, check):
             check(f"D1 {nm}: the cell shows the glyph", cell(cx) == glyph(item), cell(cx))
         got, st, cx = drop_case("D2", kind, cls, n, False, item, qty)
         check(f"D2 {nm}: the losing seed drops nothing, one roll", got == dict(rng=st, new=[], lines=[]), (got, st))
-    got, st, _ = drop_case("D3", K_SKELETON, K_WIZARD, 0, True, None, 0)
-    check("D3 Mage run: a Skeleton (archer) rolls nothing, drops nothing", got == dict(rng=st, new=[], lines=[]),
+    got, st, _ = drop_case("D3", K_ARCHER, K_WIZARD, 0, True, None, 0)
+    check("D3 Mage run: a Skeleton Archer rolls nothing, drops nothing", got == dict(rng=st, new=[], lines=[]),
           (got, st))
 
     def block_centre():

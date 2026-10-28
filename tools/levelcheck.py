@@ -509,6 +509,9 @@ def merge(a, b):
         else: a[k] += v
 
 
+LP_WAIT_MAX = 0.15
+
+
 def report(st, tot, fails):
     print(f"{tot - len(fails)}/{tot} pass")
     for f in fails[:10]: print("FAIL", f)
@@ -524,7 +527,10 @@ def report(st, tot, fails):
     # 8,000-level run (~30k edges) 0.0027, so +-0.02 is > 7 sd in both.
     bad = st["h_edges"] >= 5000 and abs(ratio - DOOR_P) > DOOR_TOL
     if bad: print(f"FAIL door fraction {ratio:.3f} outside 1/3 +- {DOOR_TOL}")
-    return bool(fails) or bad
+    # 3F-D3-3 (game.md §9.4.3): waits (units with no legal cell) target <= 15 %
+    wbad = u >= 1000 and st["lp_left"] / u > LP_WAIT_MAX
+    if wbad: print(f"FAIL LP waits {100 * st['lp_left'] / u:.1f}% above {100 * LP_WAIT_MAX:.0f}%")
+    return bool(fails) or bad or wbad
 
 
 def _scan(args):

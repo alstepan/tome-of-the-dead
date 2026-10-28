@@ -198,5 +198,5 @@ msg_end:
                 ld   (de), a
                 ld   hl, MSG_BUF
                 jp   log_push                  ; (any bank: the ring is bank 5)
-                ASSERT TXL_CMB_ARR_HIT + TXL_NM_SKELETON < 32 && TXL_CMB_DAG_HIT + TXL_NM_SKELETON < 32
-                ASSERT TXL_CMB_DAG_MISS + 1 + TXL_THE + TXL_NM_SKELETON <= LOG_MAX && TXL_CMB_ARR_MISS <= TXL_CMB_DAG_MISS
+                ASSERT TXL_CMB_ARR_HIT + NM_LONG < 32 && TXL_CMB_DAG_HIT + NM_LONG < 32
+                ASSERT TXL_CMB_DAG_MISS + 1 + TXL_THE + NM_LONG <= LOG_MAX && TXL_CMB_ARR_MISS <= TXL_CMB_DAG_MISS

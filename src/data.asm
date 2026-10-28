@@ -265,11 +265,12 @@ PIT_B           EQU 20              ; room B storey-0 pit, left hole col
 ; ids, bank-1 text block; msg_push / show_impact_msg, lowram.asm.)
 
 ; per-kind stats (prototype §6.3) — emitted into the page-aligned kind_tab,
-; one K_MAX (32) B array per KROW (ids 9..31 = 0 until Stage 3F kinds land)
-;                  KN  WZ  RG  SK  GB  GH  RT  BT  SL
-KROW_W          EQU 9                   ; kinds per KROW (its parameter count)
-    MACRO KROW v0, v1, v2, v3, v4, v5, v6, v7, v8
-                DB v0, v1, v2, v3, v4, v5, v6, v7, v8
+; one K_MAX (32) B array per KROW (3F-T3: ids 0..29 = the 18 base + 12 tier rows;
+; 30 / 31 = the class FX kinds, which have no kind_tab column)
+KROW_W          EQU 30                  ; kinds per KROW (its parameter count)
+    MACRO KROW v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29
+                DB v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14
+                DB v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29
                 DS K_MAX - KROW_W, 0
     ENDM
 ; (3F-T2: KROWFX — the FX kinds' KT_FID0 / KT_FCNT columns — is gone with them:

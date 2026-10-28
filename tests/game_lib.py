@@ -123,6 +123,7 @@ FLASH_ATTRS = ({0x42, 0x44, 0x46}         # ATTR_HIT, ATTR_HEAL, ATTR_MISS (T7 d
                | ST_TINTS                 # + the BRIGHT twin of a tint equal to a kind attr (st_tint),
                | {t ^ 0x40 for t in ST_TINTS if t in KIND_ATTR.values()})   # only those can occur
 K_KNIGHT, K_WIZARD, _K_RETIRED, K_SKELETON, K_GOBLIN, K_GHOST, K_RAT, K_BAT, K_SLIME = range(9)
+K_ARCHER = 12                           # 3F-T3: defs.asm K_ARCHER (the Skeleton Archer row; was the Skeleton stand-in alias)
 _KNAMES = ("KNIGHT", "WIZARD", None, "SKELETON", "GOBLIN", "GHOST", "RAT", "BAT", "SLIME")
 
 
@@ -290,7 +291,9 @@ class Proto:
                   f" $C000 bank {c000}", flush=True)
         else:
             raise RuntimeError("snapshot reload failed %d times" % attempts)
-        self.wb("proto_start", self.proto_start)     # B3B-12 (after the RAM check)
+        # B3B-12 (after the RAM check); 3F-T3: bit 1 = the PROTO pool also holds the Slime
+        # (the 6-kind fixture every PROTO suite was written against; PS_SLIME_BIT, lowram.asm)
+        self.wb("proto_start", 3 if self.proto_start else 0)
         self.load_breakpoints()
 
     def load_breakpoints(self):

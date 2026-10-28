@@ -592,26 +592,44 @@ K_GHOST         EQU 5
 K_RAT           EQU 6
 K_BAT           EQU 7
 K_SLIME         EQU 8
-K_COUNT         EQU 9
-; LP (game.md §9.4) stand-in aliases: the per-depth kind / boss rows that do not
-; exist yet map onto today's kinds of a similar body (3F adds the real rows and
-; replaces these EQUs; the LP tables in bank3.asm and tools/levelgen.py use the
-; names, so only this block changes).
-K_SPIDER        EQU K_RAT           ; small walker
-K_VAMPIRE       EQU K_SKELETON      ; tall walker
-K_ORC           EQU K_GOBLIN
-K_ARCHER        EQU K_SKELETON
-K_MUMMY         EQU K_SKELETON
-K_NECRO         EQU K_GOBLIN
-K_BOSS_D1       EQU K_GOBLIN        ; Golden Goblin King
+; 3F-T3: the real 3F rows (game.md §9.1 roster, §9.6 tiers): 18 base ids (2 heroes,
+; the id-2 hole, 15 monsters / bosses) + 12 tier rows = 30; a golden boss is a per-entity
+; flag on its base row (§9.7 R1), never a row. tools/levelgen.py KROWS carries the SAME ids
+; (levelgen.py asserts them against this file). The frames / sequences of the new kinds are
+; STAND-INS until 3F-T13 (real art): see pool6.asm pool_gmap / gu_tab, seq_img.asm ksm_tab.
+K_SPIDER        EQU 9
+K_VAMPIRE       EQU 10
+K_ORC           EQU 11
+K_ARCHER        EQU 12              ; Skeleton Archer
+K_MUMMY         EQU 13
+K_NECRO         EQU 14              ; Necromancer
+K_OGRE          EQU 15              ; unique boss D4
+K_DKNIGHT       EQU 16              ; unique boss D7
+K_ARCHMAGE      EQU 17              ; unique boss D8
+; tier rows, §9.6 table order (tier 2 / tier 3 of their base kind)
+K_GIANT_RAT     EQU 18
+K_RABBIT_RAT    EQU 19
+K_SCREECH       EQU 20              ; Screech Bat
+K_SLINGER       EQU 21              ; Goblin Slinger
+K_BLACK_WIDOW   EQU 22
+K_SKEL_GUARD    EQU 23
+K_SKEL_KNIGHT   EQU 24
+K_POLTERGEIST   EQU 25
+K_ORC_BERSERK   EQU 26
+K_ORC_BOUNCER   EQU 27
+K_SNIPER        EQU 28              ; Skeleton Sniper
+K_BONE_CALLER   EQU 29
+K_COUNT         EQU 30
+K_BOSS_D1       EQU K_GOBLIN        ; Golden Goblin King (golden = flag, T8)
 K_BOSS_D2       EQU K_SPIDER        ; Golden Spider Queen
 K_BOSS_D3       EQU K_VAMPIRE       ; Golden Vampire Lord
-K_BOSS_D4       EQU K_SKELETON      ; Ogre Warlord
+K_BOSS_D4       EQU K_OGRE          ; Ogre Warlord
 K_BOSS_D5       EQU K_MUMMY         ; Golden Pharaoh
 K_BOSS_D6       EQU K_NECRO         ; Golden High Necromancer
-K_BOSS_D7       EQU K_SKELETON      ; Death Knight
-K_BOSS_D8       EQU K_SKELETON      ; Archmage
-; §9.3 encounter weights (game.md §9.1 W column): lp_wt (bank 3) per kind row
+K_BOSS_D7       EQU K_DKNIGHT       ; Death Knight
+K_BOSS_D8       EQU K_ARCHMAGE      ; Archmage
+; §9.3 encounter weights (game.md §9.1 W column): lp_wt (bank 3) per kind row; a tier
+; keeps its base kind's weight except the Slinger (3 + 1, §9.6)
 WT_K_KNIGHT     EQU 0
 WT_K_WIZARD     EQU 0
 WT_K_SKELETON   EQU 5
@@ -620,10 +638,31 @@ WT_K_GHOST      EQU 3
 WT_K_RAT        EQU 2
 WT_K_BAT        EQU 2
 WT_K_SLIME      EQU 2
-K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 18 needed)
+WT_K_SPIDER     EQU 2
+WT_K_VAMPIRE    EQU 5
+WT_K_ORC        EQU 5
+WT_K_ARCHER     EQU 6
+WT_K_MUMMY      EQU 5
+WT_K_NECRO      EQU 6
+WT_K_OGRE       EQU 6
+WT_K_DKNIGHT    EQU 5
+WT_K_ARCHMAGE   EQU 6
+WT_K_GIANT_RAT  EQU WT_K_RAT
+WT_K_RABBIT_RAT EQU WT_K_RAT
+WT_K_SCREECH    EQU WT_K_BAT
+WT_K_SLINGER    EQU WT_K_GOBLIN + 1
+WT_K_BLACK_WIDOW EQU WT_K_SPIDER
+WT_K_SKEL_GUARD EQU WT_K_SKELETON
+WT_K_SKEL_KNIGHT EQU WT_K_SKELETON
+WT_K_POLTERGEIST EQU WT_K_GHOST
+WT_K_ORC_BERSERK EQU WT_K_ORC
+WT_K_ORC_BOUNCER EQU WT_K_ORC
+WT_K_SNIPER     EQU WT_K_ARCHER
+WT_K_BONE_CALLER EQU WT_K_NECRO
+K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 30 used, ids 30 / 31 = the class FX kinds)
 ; D3-4: the class FX kinds (render-only projectile / impact frames, game.md §6;
 ; never an entity's kind): the LAST two kind ids, so 3F's monster rows grow
-; up from K_COUNT without moving them (3F has 30 ids left: 0..29). Generated
+; up from K_COUNT without moving them (3F-T3: the monster rows now fill 0..29). Generated
 ; with the hero only (start_game: R6 pool_hero -> unit HERO_KIND + K_FX_BASE), so the
 ; pool holds the current class's FX only. Their fid ranges OVERLAP in
 ; frames.asm (spark_fizz1/2: Spark impact and Whirlwind impact): K_FXM =
@@ -631,7 +670,7 @@ K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 18 
 K_FXW           EQU K_MAX - 2       ; Warrior FX (= K_FX_BASE + K_KNIGHT)
 K_FXM           EQU K_MAX - 1       ; Mage FX    (= K_FX_BASE + K_WIZARD)
 K_FX_BASE       EQU K_FXW - K_KNIGHT
-                ASSERT K_FXM == K_FX_BASE + K_WIZARD && K_FXW > K_COUNT
+                ASSERT K_FXM == K_FX_BASE + K_WIZARD && K_FXW >= K_COUNT
 ; body height in cells per kind (single source: kind_tab KT_BH row and the FRM
 ; frame-height ASSERT both use these; named BH_<kind> so FRM can paste `kind`)
 BH_K_KNIGHT     EQU 6
@@ -642,7 +681,19 @@ BH_K_GHOST      EQU 4
 BH_K_RAT        EQU 2
 BH_K_BAT        EQU 2
 BH_K_SLIME      EQU 2
-BH_K_FXW        EQU 2               ; D3-4: FX frames are <= 16 px tall (FRM ASSERT only)
+; 3F-T3 STAND-IN bodies: the new kinds' rows carry the body of the frames they borrow
+; (a Skeleton-unit / Rat-unit / ... stand-in, pool6.asm pool_gmap), so KT_BH and the
+; sprite agree; T13 sets the real body (Spider 32x16, Ogre 32x48 (BW 4), ... game.md §9.1).
+BH_K_SPIDER     EQU BH_K_RAT
+BH_K_VAMPIRE    EQU BH_K_SKELETON
+BH_K_ORC        EQU BH_K_SKELETON
+BH_K_ARCHER     EQU BH_K_SKELETON
+BH_K_MUMMY      EQU BH_K_SKELETON
+BH_K_NECRO      EQU BH_K_SKELETON
+BH_K_OGRE       EQU BH_K_SKELETON
+BH_K_DKNIGHT    EQU BH_K_SKELETON
+BH_K_ARCHMAGE   EQU BH_K_SKELETON
+BH_K_FXW       EQU 2               ; D3-4: FX frames are <= 16 px tall (FRM ASSERT only)
 BH_K_FXM        EQU 2
 
 ; offsets of the parallel arrays inside kind_tab: 2 pages, 32 B per array
@@ -906,6 +957,9 @@ WK0             EQU MOT
 ; B3B-13: message string ids TX_* / decoded lengths TXL_* (+ ASSERT <= LOG_MAX),
 ; generated from src/strings.txt by tools/textpack.py (tools/build.sh)
                 INCLUDE "../build/text/strings_ids.inc"
+; 3F-T3: the longest kind name (the composed log lines are sized with it; every name is
+; ASSERTed <= NM_LONG in lowram.asm)
+NM_LONG         EQU TXL_NM_GIANT_RAT
 
 ; MUL_STOREY r — A = A * STOREY_ROWS (A = storey 0..2), r = the old A.  Clobbers: r.
 ; ld r,a + 8a + a: 5 ops, 20 T (the PROTO 7a was 8a - a at the same cost).

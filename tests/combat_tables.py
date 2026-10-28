@@ -49,7 +49,38 @@ KINDS = {
 }
 
 
-def kx_row(res, imm, xp):
+# 3F-T3 rows (game.md §9.1 resistances / immunity set / KXP / DEF, §9.6 tiers; ids = defs.asm K_*)
+BOSS = 0x80
+UNDEAD = SLEEP | POISON
+SK_RES = {"COLD": "I", "DRAIN": "I", "DARK": "I"}
+KINDS.update({
+    9: ("Spider", {"FIRE": "W"}, 0, 4),
+    10: ("Vampire", {"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),
+    11: ("Orc", {"FIRE": "R"}, 0, 9),
+    12: ("Skeleton Archer", SK_RES, UNDEAD, 7),
+    13: ("Mummy", {"PHYS": "R", "FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 12),
+    14: ("Necromancer", {"COLD": "R", "DRAIN": "I", "DARK": "I"}, 0, 10),
+    15: ("Ogre Warlord", {"PHYS": "R", "COLD": "R", "SHOCK": "W"}, BOSS, 60),
+    16: ("Death Knight", {"FIRE": "X", "COLD": "I", "SHOCK": "W", "DRAIN": "I", "DARK": "I"}, BOSS, 90),
+    17: ("Archmage", {"COLD": "X", "SHOCK": "X", "DRAIN": "I", "DARK": "R"}, BOSS, 0),
+    18: ("Giant Rat", {}, 0, 3),
+    19: ("Rabbit Rat", {}, 0, 4),
+    20: ("Screech Bat", {"SHOCK": "W"}, 0, 3),
+    21: ("Goblin Slinger", {}, 0, 4),
+    22: ("Black Widow", {"FIRE": "W"}, 0, 6),
+    23: ("Skeleton Guard", SK_RES, UNDEAD, 9),
+    24: ("Skeleton Knight", SK_RES, UNDEAD, 12),
+    25: ("Poltergeist", {"PHYS": "R", "COLD": "I", "SHOCK": "X", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),
+    26: ("Orc Berserker", {"FIRE": "R"}, FEAR, 13),          # FEAR-immune extra (§9.6)
+    27: ("Orc Bouncer", {"FIRE": "R"}, 0, 18),
+    28: ("Skeleton Sniper", SK_RES, UNDEAD, 10),
+    29: ("Bone Caller", {"COLD": "R", "DRAIN": "I", "DARK": "I"}, 0, 15),
+})
+# monster DEF (KX_DEF): the §9.1 / §9.6 DEF column (D3-1: Skeleton and Slime 1 too; the other 3D rows 0)
+DEF3F = {3: 1, 8: 1, 11: 1, 13: 2, 15: 2, 16: 3, 17: 1, 23: 2, 24: 3, 26: 1, 27: 2}
+
+
+def kx_row(res, imm, xp, d=0):
     b = [0, 0, 0]
     for t, r in res.items():
         i = TYPES.index(t)
@@ -57,15 +88,38 @@ def kx_row(res, imm, xp):
             b[2] |= 1 << i
         else:
             b[i // 4] |= RESP[r] << (2 * (i % 4))
-    return b + [imm, xp, 0, 0, 0]   # DEF = 0 in 3D (§11.4); KX_MELEE 2 B (3F-T2: below)
+    return b + [imm, xp, d, 0, 0]   # KX_MELEE 2 B (3F-T2: below)
 
 
 # 3F-T2: KX_MELEE (was combat3.asm kx_melee) = the kind's melee hit: dty |
 # efx << 4, chance << 4 | turns (game.md §9.1: PHYS everywhere, the Ghost's 1d4
 # DRAIN touch, 1 in 4 -> CONFUSED 4). EFX ids: defs (EFX_CONFUSED).
+# 3F-T3 on-hit rows (POISON turns are HALF the turns, PSN_*; chance = 1 in N, 0 = always):
+#   id -> (dty, efx, chance, turns)
+MELEE3F = {
+    9: ("PHYS", "POISON", 0, 6),                  # Spider bite POISON 12
+    10: ("DRAIN|HEAL", None, 0, 0),               # Vampire: the drain bite heals it
+    13: ("PHYS", "WEAK", 3, 12),                  # Mummy curse 1 in 3 -> WEAK 12
+    18: ("PHYS", "POISON", 4, 6),                 # Giant Rat 1 in 4 -> POISON 12
+    20: ("PHYS", "CONFUSED", 4, 2),               # Screech Bat 1 in 4 -> CONFUSED 2
+    22: ("PHYS", "POISON", 0, 12),                # Black Widow POISON 24
+    24: ("PHYS", "STUNNED", 4, 1),                # Skeleton Knight 1 in 4 -> STUNNED 1
+    25: ("DRAIN", "FEAR", 3, 3),                  # Poltergeist touch 1 in 3 -> FEAR 3
+    27: ("PHYS", "STUNNED", 3, 1),                # Orc Bouncer 1 in 3 -> STUNNED 1
+}
+
+
 def kx_melee(k, sym):
     if k == 5:
         return [TYPES.index("DRAIN") | sym["EFX_CONFUSED"] << sym["DH_EFX_SHIFT"], 4 << 4 | 4]
+    if k in MELEE3F:
+        dty, efx, ch, tn = MELEE3F[k]
+        v = TYPES.index("DRAIN") if dty.startswith("DRAIN") else 0
+        if dty.endswith("HEAL"):
+            v |= 0x80
+        if efx:
+            v |= sym["EFX_" + efx] << sym["DH_EFX_SHIFT"]
+        return [v, ch << 4 | tn]
     return [TYPES.index("PHYS"), 0]
 
 
@@ -132,7 +186,7 @@ def main():
     chk("kx_tab base", [sym["kx_tab"]], [BASE])
     kx = at("kx_tab")
     for k in range(32):
-        want = kx_row(*KINDS[k][1:])[:6] + kx_melee(k, sym) if k in KINDS else [0] * 8
+        want = kx_row(*KINDS[k][1:], DEF3F.get(k, 0))[:6] + kx_melee(k, sym) if k in KINDS else [0] * 8
         chk(f"kx[{k}]", m[kx + 8 * k:kx + 8 * k + 8], want)
     chk("kx_tab length (dg_bad follows, L-RELIEF)", [sym["dg_bad"] - sym["kx_tab"]], [256])
 
@@ -146,6 +200,49 @@ def main():
     chk("xp_next", [sna[x + 2 * i] | sna[x + 2 * i + 1] << 8 for i in range(8)], XP_NEXT)
     for gone in ("xp_next", "lvlup_tab", "lvl_step_tab"):
         chk(f"{gone} removed (single source)", [gone in sym], [False])
+
+    # 3F-T3: the new kind_tab rows (bank 2, from the .sna) and the per-kind weight / drop
+    # tables, transcribed from game.md §9.1 / §9.3 / §9.6 (hp atk eva before depth scaling;
+    # die = dmg die sides, bonus; period; weight). BW / BH / ink are the STAND-IN frames' until
+    # T13 (checked only for consistency with the stand-in unit, not against the doc).
+    kt = sym["kind_tab"]
+
+    def kcol(off, k):
+        return sna[27 + kt + off - 0x4000 + k]
+
+    # id: (hp, atk, eva, die, bonus, period, weight)
+    K3 = {9: (7, 3, 3, 4, 0, 1, 2), 10: (14, 2, 1, 6, 0, 2, 5), 11: (14, 3, 1, 8, 0, 1, 5),
+          12: (8, 2, 2, 4, 0, 1, 6), 13: (18, 3, 0, 8, 0, 2, 5), 14: (12, 2, 2, 4, 0, 1, 6),
+          15: (40, 5, 1, 10, 2, 1, 6), 16: (50, 6, 3, 10, 3, 1, 5), 17: (40, 4, 3, 6, 0, 1, 6),
+          18: (5, 1, 1, 3, 0, 1, 2), 19: (8, 2, 3, 4, 0, 1, 2), 20: (5, 2, 4, 3, 0, 1, 2),
+          21: (8, 2, 1, 4, 0, 1, 4), 22: (10, 4, 3, 4, 0, 1, 2), 23: (14, 3, 2, 6, 0, 1, 5),
+          24: (18, 4, 2, 8, 0, 1, 5), 25: (11, 3, 3, 4, 0, 1, 3), 26: (18, 4, 0, 8, 2, 1, 5),
+          27: (24, 5, 1, 10, 0, 1, 5), 28: (10, 3, 2, 4, 0, 1, 6), 29: (14, 3, 2, 4, 0, 1, 6)}
+    lw = sym["lp_wt"]
+    for k, (hp, atk, eva, die, bon, per, wt) in K3.items():
+        chk(f"kind_tab[{k}] hp/atk/eva/die/bonus/period",
+            [kcol(sym["KT_HP"], k), kcol(sym["KT_ATK"], k), kcol(sym["KT_EVA"], k), kcol(sym["KT_DIE"], k),
+             kcol(sym["KT_BONUS"], k), kcol(sym["KT_PERIOD"], k)], [hp, atk, eva, die, bon, per])
+        chk(f"lp_wt[{k}]", [m[lw + k - BASE]], [wt])
+    # tiers keep their base's body / flags / BH (§9.6), differ only in the ink from it
+    for tier, base in ((18, 6), (19, 6), (20, 7), (21, 4), (22, 9), (23, 3), (24, 3), (25, 5),
+                       (26, 11), (27, 11), (28, 12), (29, 14)):
+        for col in ("KT_BW", "KT_BH", "KT_FLAGS"):
+            chk(f"kind_tab {col}[{tier}] == base {base}", [kcol(sym[col], tier)], [kcol(sym[col], base)])
+        chk(f"tier {tier} ink != base {base} ink", [kcol(sym["KT_ATTR"], tier) != kcol(sym["KT_ATTR"], base)], [True])
+    # climbers: only Goblin / Skeleton (+ tiers) and the heroes (§9.7 R3)
+    CLIMB = {0, 1, 2, 3, 4, 21, 23, 24}
+    for k in range(30):
+        chk(f"KF_CLIMBER[{k}]", [kcol(sym["KT_FLAGS"], k) & sym["KF_CLIMBER"] != 0], [k in CLIMB])
+    # drop_tab: (kind, item, N, k) = "k in N" (§8.11 + §9.6: the base numerator + 1 per tier above 1)
+    dt = at("drop_tab")
+    DROPS = [(6, "IT_F_CHEESE", 4, 1), (4, "IT_F_APPLE", 4, 1), (11, "IT_F_MEAT", 3, 1), (12, "IT_ARROW", 2, 1),
+             (14, "IT_P_MANA", 3, 1), (18, "IT_F_CHEESE", 4, 2), (19, "IT_F_CHEESE", 4, 3),
+             (21, "IT_F_APPLE", 4, 2), (26, "IT_F_MEAT", 3, 2), (27, "IT_F_MEAT", 3, 3),
+             (28, "IT_ARROW", 2, 2), (29, "IT_P_MANA", 3, 2)]
+    chk("DROP_ROWS", [sym["DROP_ROWS"]], [len(DROPS)])
+    for i, (kd, it, n, kk) in enumerate(DROPS):
+        chk(f"drop_tab[{i}]", m[dt + 4 * i:dt + 4 * i + 4], [kd, sym[it], n, kk])
 
     rk = at("ab_rank")
     for a, (name, rows) in enumerate(RANKS.items()):
@@ -186,7 +283,7 @@ def main():
             chk(f"info line {name} rank {r + 1} MP / RNG", [mm and int(mm.group(2)), mm and int(mm.group(3))],
                 [row[0], row[1] if row[1] else 1])
 
-    n = 32 + 8 + 2 + 8 + 21 + 2 + 9 + 42
+    n = 32 + 8 + 2 + 8 + 21 + 2 + 9 + 42 + 40 + 48 + 30 + 13   # 3F-T3: kind_tab / lp_wt / climbers / drop_tab
     if fails:
         print("combat_tables: FAIL")
         for f in fails:
