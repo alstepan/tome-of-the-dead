@@ -813,7 +813,7 @@ PLK0 = {b lp_dtab + pld * LP_DROW + 0}
 PLK1 = {b lp_dtab + pld * LP_DROW + 1}
 PLK2 = {b lp_dtab + pld * LP_DROW + 2}
 PLK3 = {b lp_dtab + pld * LP_DROW + 3}
-PLK4 = {b lp_dtab + pld * LP_DROW + 4}
+PLK4 = {b lp_dtab + pld * LP_DROW + 4} & LEK_KIND_MASK   ; (3F-T5: the golden bit is not part of the kind)
                 MMU  3, BANK_R6
 PLM = 0
 PLX = 0
@@ -995,7 +995,7 @@ SQK0 = {b lp_dtab + sqd * LP_DROW + 0}
 SQK1 = {b lp_dtab + sqd * LP_DROW + 1}
 SQK2 = {b lp_dtab + sqd * LP_DROW + 2}
 SQK3 = {b lp_dtab + sqd * LP_DROW + 3}
-SQK4 = {b lp_dtab + sqd * LP_DROW + 4}
+SQK4 = {b lp_dtab + sqd * LP_DROW + 4} & LEK_KIND_MASK
                 MMU  3, 0
                 SQ_RESET
                 SQ_KIND SQK0

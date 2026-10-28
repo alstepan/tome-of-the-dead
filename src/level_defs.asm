@@ -239,11 +239,11 @@ ORN_MID_N       EQU 4               ; (glyph indices ORN_* = panel_orn.asm, bank
 ;   record r = LP_REC + r * LR_STRIDE:
 ;     +0 LR_HDR   bit 7 LR_VISITED (0 = FRESH), bits 0-2 = count 0..4
 ;                 (FRESH: the quota, no entries; VISITED: entries used)
-;     +1 4 x {LE_KIND, LE_HP}: kind row (bits 0-4) | LEK_RESPAWN | LEK_BRED, exact hp
+;     +1 4 x {LE_KIND, LE_HP}: kind row (bits 0-4) | LEK_GOLD | LEK_RESPAWN | LEK_BRED, exact hp
 ;------------------------------------------------------------------------------
 LP_STATE        EQU ORN_GLYPHS + ORN_COUNT * 8   ; $6EC0
 LP_KINDS        EQU LP_STATE + 0    ; 4 B: the depth's kinds (game.md §9.4 table order)  (test-observable)
-LP_BOSS         EQU LP_STATE + 4    ; boss kind row
+LP_BOSS         EQU LP_STATE + 4    ; boss kind row | LEK_GOLD on the golden depths (3F-T5)
 LP_TOTAL        EQU LP_STATE + 5    ; the table count incl. boss (tests / levelcheck)
 LP_LVL          EQU LP_STATE + 6    ; hero LVL at level entry (§9.6 tier input, 3F)
 LP_RESPAWNS     EQU LP_STATE + 7    ; trickle spawns this level (§9.5, RESPAWN_MAX; 3F)
@@ -275,6 +275,8 @@ LR_VISITED      EQU %10000000
 LR_VISITED_BIT  EQU 7
 LR_CNT_MASK     EQU %00000111
 LEK_KIND_MASK   EQU %00011111
+LEK_GOLD        EQU %00100000       ; golden boss (3F-T5, §9.7 R1): base row + this bit; hp 2 x scaled + 6, weight + 1
+LEK_GOLD_BIT    EQU 5
 LEK_RESPAWN     EQU %10000000       ; F_RESPAWN (§9.5): no drops, half XP (3F); = EF_RESPAWN (ASSERTed)
 LEK_BRED        EQU %01000000       ; Rabbit Rat "bred" (§9.6, 3F; record only today)
 LP_LEN          EQU 33 + GRID_CELLS * LR_STRIDE  ; 114 B

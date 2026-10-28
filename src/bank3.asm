@@ -235,9 +235,9 @@ follow_admit:
                 or   a
                 jr   z, .tall
                 ld   a, (ix+E_KIND)
-                ld   hl, lp_wt
-                call hla
-                ld   a, (TMP4)
+                or   (ix+E_GOLD)               ; 3F-T5: a golden follower weighs +1
+                call kind_wt
+                ld   hl, TMP4
                 add  a, (hl)
                 cp   LP_SIGMA_CAP + 1
                 jr   nc, .pick
@@ -305,22 +305,32 @@ dest_counts:
                 add  a, b
                 ld   (TMP3), a
 .r:             inc  hl
-                ld   a, (hl)                   ; LE_KIND
+                ld   a, (hl)                   ; LE_KIND (| LEK_GOLD)
                 inc  hl
-                and  LEK_KIND_MASK
                 call .wt
                 djnz .r
                 ret
-.w:             call .wt
+.w:             or   (ix+E_GOLD)               ; A = E_KIND here
+                call .wt
                 jr   .n
-; .wt: A = kind -> TMP4 += lp_wt[kind]. Keeps BC, HL.
+; .wt: A = kind byte (row | LEK_GOLD) -> TMP4 += its weight. Keeps BC, HL.
 .wt:            push hl
-                ld   hl, lp_wt
-                call hla
-                ld   a, (TMP4)
+                call kind_wt
+                ld   hl, TMP4
                 add  a, (hl)
                 ld   (TMP4), a
                 pop  hl
+                ret
+; kind_wt: A = kind byte (row | LEK_*) -> A = lp_wt[row] + 1 if LEK_GOLD (3F-T5, levelgen k3_weight). Clobbers HL.
+kind_wt:        push af
+                and  LEK_KIND_MASK
+                ld   hl, lp_wt
+                call hla
+                ld   a, (hl)
+                pop  hl                        ; H = the kind byte
+                bit  LEK_GOLD_BIT, h
+                ret  z
+                inc  a
                 ret
 
 ;------------------------------------------------------------------------------

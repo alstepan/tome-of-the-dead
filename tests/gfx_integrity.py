@@ -206,7 +206,7 @@ def pool_check(p, check, tag, snap0, snapd=None):
     kt = lambda col, k: gu[2 * k + (col == "KT_FCNT")]                # (was kind_tab KT_FID0 / KT_FCNT)
     gm = bank_read(p, S["BANK_R6"], S["pool_gmap"], 3 * S["PGMAP_N"])
     kinds = []
-    for k in p.z.read_memory(S["LP_KINDS"], 5):
+    for k in lp_kinds(p):
         us = [k]
         for r in range(S["PGMAP_N"]):
             if gm[3 * r] == k:
@@ -397,6 +397,11 @@ def scroll_ink(p, stats):
 SEQ_BIN = Path(__file__).resolve().parent.parent / "build" / "ovl" / "seq.bin"
 
 
+def lp_kinds(p):
+    """LP_KINDS[0..3] + LP_BOSS as kind rows (3F-T5: LP_BOSS carries LEK_GOLD on the golden depths)."""
+    return [k & S["LEK_KIND_MASK"] for k in p.z.read_memory(S["LP_KINDS"], 5)]
+
+
 def seq_check(p, check, tag, kinds):
     """3F-T2 review: the hero and every kind in `kinds` has a sequence cache
     row (seq_rows page | kind_tab KT_SEQ) and the row's 8 sequences (from the
@@ -442,7 +447,7 @@ def seq_sweep(p, check):
         p.wb("ANIM_FREEZE", 1)
         p.wb("INPUT_SRC", 1)
         p.menu_start(GL.K_WIZARD if hero == "2" else GL.K_KNIGHT)
-        seq_check(p, check, f"SQ hero {hero} D1", list(p.z.read_memory(S["LP_KINDS"], 5)))
+        seq_check(p, check, f"SQ hero {hero} D1", lp_kinds(p))
         check(f"GI B1: hero {hero} D1 TILE_GLYPHS[0..7] == 0 (erase_rect T_AIR path)",
               list(p.z.read_memory(S["TILE_GLYPHS"], 8)) == [0] * 8)
         for d in range(2, 9):
@@ -453,7 +458,7 @@ def seq_sweep(p, check):
             p.release()
             p.settle(4)
             check(f"GI SQ hero {hero} D{d}: level_descend stub ran", ok and p.rb("LVL_DEPTH") == d, p.rb("LVL_DEPTH"))
-            seq_check(p, check, f"SQ hero {hero} D{d}", list(p.z.read_memory(S["LP_KINDS"], 5)))
+            seq_check(p, check, f"SQ hero {hero} D{d}", lp_kinds(p))
             check(f"GI B1: hero {hero} D{d} TILE_GLYPHS[0..7] == 0",
                   list(p.z.read_memory(S["TILE_GLYPHS"], 8)) == [0] * 8)
     p.proto_start = 1

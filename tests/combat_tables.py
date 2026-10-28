@@ -11,6 +11,7 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE = 0xC000
+R6BLK = b""
 
 
 def load():
@@ -27,6 +28,10 @@ def load():
         i += 2 + n
     b3 = blocks[5]
     assert b3[0] == 0xFF, "bank-3 block flag"
+    global R6BLK
+    R6BLK = blocks[11]                 # TAPE_BLOCKS order (main.asm): the R6 region, at R6_ADDR (3F-T5: drop_tab lives there)
+    assert R6BLK[0] == 0xFF, "R6 block flag"
+    R6BLK = R6BLK[1:-1]
     return sym, b3[1:-1]
 
 
@@ -235,14 +240,14 @@ def main():
     for k in range(30):
         chk(f"KF_CLIMBER[{k}]", [kcol(sym["KT_FLAGS"], k) & sym["KF_CLIMBER"] != 0], [k in CLIMB])
     # drop_tab: (kind, item, N, k) = "k in N" (§8.11 + §9.6: the base numerator + 1 per tier above 1)
-    dt = at("drop_tab")
+    dt = sym["drop_tab"] - sym["R6_ADDR"]       # 3F-T5: drop_tab moved to R6 (tier6.asm)
     DROPS = [(6, "IT_F_CHEESE", 4, 1), (4, "IT_F_APPLE", 4, 1), (11, "IT_F_MEAT", 3, 1), (12, "IT_ARROW", 2, 1),
              (14, "IT_P_MANA", 3, 1), (18, "IT_F_CHEESE", 4, 2), (19, "IT_F_CHEESE", 4, 3),
              (21, "IT_F_APPLE", 4, 2), (26, "IT_F_MEAT", 3, 2), (27, "IT_F_MEAT", 3, 3),
              (28, "IT_ARROW", 2, 2), (29, "IT_P_MANA", 3, 2)]
     chk("DROP_ROWS", [sym["DROP_ROWS"]], [len(DROPS)])
     for i, (kd, it, n, kk) in enumerate(DROPS):
-        chk(f"drop_tab[{i}]", m[dt + 4 * i:dt + 4 * i + 4], [kd, sym[it], n, kk])
+        chk(f"drop_tab[{i}]", R6BLK[dt + 4 * i:dt + 4 * i + 4], [kd, sym[it], n, kk])
 
     rk = at("ab_rank")
     for a, (name, rows) in enumerate(RANKS.items()):

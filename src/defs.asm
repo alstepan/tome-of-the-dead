@@ -515,7 +515,8 @@ E_FLA           EQU 19              ; flash attr
 E_MSG           EQU 20              ; message code shown at IMPACT
 E_TGT           EQU 21              ; IMPACT target slot
 E_HIT           EQU 22              ; IMPACT: 1 = hit (flash)
-; +23 spare (D3-0: was E_ZAP, the PROTO wizard zap)
+E_GOLD          EQU 23              ; 3F-T5: LEK_GOLD ($20) on a golden boss, else 0 (set by lp_spawn, banked back by lp_bank;
+                                    ; D3-0: was E_ZAP, the PROTO wizard zap). Other readers: the T8 glow / atk / DEF flag
 E_DVIS          EQU 24              ; drawn: bit0 visible, bit3 = facing left (EF_LEFT)
 E_DFID          EQU 25              ; drawn frame id
 E_DFPX          EQU 26              ; drawn frame px
