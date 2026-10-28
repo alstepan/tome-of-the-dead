@@ -66,6 +66,65 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# ---- 3F kind / tier table (game.md §9.1 roster, §9.6 tiers, §9.7 R1) ------------
+# THE ONE PLACE the 3F kind-row ids live. The ids are PROVISIONAL (3F-T3 defines the
+# real kind_tab rows: 18 kinds + 12 tiers = 30, golden bosses are a flag, not rows);
+# T3 only edits this table. Everything 3F in this module and in respawn_model.py
+# (tier roll, escort, golden flag, respawn) reads it; the pre-3F LP code keeps the
+# stand-in K_* ids from defs.asm and is untouched.
+#   key           : name used by LP_TAB / the tests
+#   (id, base hp (§9.1 / §9.6 stats column, before depth scaling), body cols,
+#    flyer, §9.3 weight, base key or None, tier 1/2/3)
+KROWS = {
+    "K_RAT":        (6,   3, 4, False, 2, None,        1),    # §9.1
+    "K_BAT":        (7,   3, 3, True,  2, None,        1),
+    "K_SLIME":      (8,   6, 3, False, 2, None,        1),
+    "K_GOBLIN":     (4,   6, 3, False, 3, None,        1),
+    "K_SPIDER":     (9,   7, 4, False, 2, None,        1),
+    "K_SKELETON":   (3,  10, 3, False, 5, None,        1),
+    "K_VAMPIRE":    (10, 14, 3, False, 5, None,        1),
+    "K_GHOST":      (5,   8, 3, True,  3, None,        1),
+    "K_ORC":        (11, 14, 3, False, 5, None,        1),
+    "K_ARCHER":     (12,  8, 3, False, 6, None,        1),
+    "K_MUMMY":      (13, 18, 3, False, 5, None,        1),
+    "K_NECRO":      (14, 12, 3, False, 6, None,        1),
+    "K_OGRE":       (15, 40, 4, False, 6, None,        1),    # unique boss D4
+    "K_DKNIGHT":    (16, 50, 3, False, 5, None,        1),    # unique boss D7
+    "K_ARCHMAGE":   (17, 40, 3, False, 6, None,        1),    # unique boss D8
+    # §9.6 tier rows, table order (hp from the stats column; a tier keeps its
+    # base's body, flyer flag and weight, except the Slinger's +1)
+    "K_GIANT_RAT":  (18,  5, 4, False, 2, "K_RAT",     2),
+    "K_RABBIT_RAT": (19,  8, 4, False, 2, "K_RAT",     3),
+    "K_SCREECH":    (20,  5, 3, True,  2, "K_BAT",     2),
+    "K_SLINGER":    (21,  8, 3, False, 4, "K_GOBLIN",  2),    # weight 3 + 1
+    "K_BLACK_WIDOW": (22, 10, 4, False, 2, "K_SPIDER", 2),
+    "K_SKEL_GUARD": (23, 14, 3, False, 5, "K_SKELETON", 2),
+    "K_SKEL_KNIGHT": (24, 18, 3, False, 5, "K_SKELETON", 3),
+    "K_POLTERGEIST": (25, 11, 3, True,  3, "K_GHOST",  2),
+    "K_ORC_BERSERK": (26, 18, 3, False, 5, "K_ORC",    2),
+    "K_ORC_BOUNCER": (27, 24, 3, False, 5, "K_ORC",    3),
+    "K_SNIPER":     (28, 10, 3, False, 6, "K_ARCHER",  2),
+    "K_BONE_CALLER": (29, 14, 3, False, 6, "K_NECRO",  2),
+}
+# boss per depth (§8.6): (row key, golden). Golden = base row + LEK_GOLD (§9.7 R1)
+BOSS3 = {1: ("K_GOBLIN", True), 2: ("K_SPIDER", True), 3: ("K_VAMPIRE", True),
+         4: ("K_OGRE", False), 5: ("K_MUMMY", True), 6: ("K_NECRO", True),
+         7: ("K_DKNIGHT", False), 8: ("K_ARCHMAGE", False)}
+LEK_GOLD = 0x20                   # LE_KIND bit 5 (§9.7 R1; bits 0-4 row, 6 bred, 7 respawn)
+LEK_BRED = 0x40
+LEK_RESPAWN = 0x80
+LEK_ROW_MASK = 0x1F
+# §9.6 tier roll constants
+T2_BASE = (None, 24, 48, 64, 72, 80, 88, 96, 96)             # index = depth
+T3_BASE = (None, 0, 0, 0, 16, 24, 32, 40, 48)
+TIER3_MIN_DEPTH, TIER_SHIFT2, TIER_SHIFT3, TIER_DELTA_MAX, T2_CAP, T3_CAP = 4, 16, 8, 2, 160, 80
+# derived (do not edit): id -> key, base key -> (tier2 key, tier3 key)
+K3_BY_ID = {v[0]: k for k, v in KROWS.items()}
+TIERS = {}
+for _k, _v in KROWS.items():
+    if _v[5]:
+        TIERS.setdefault(_v[5], [None, None])[_v[6] - 2] = _k
+
 # ---- tunables (designer decision 2026-10-03) ---------------------------------
 SHAFT_MIN = 5            # exit shafts (up/down/arrival/level-exit) left col 5..24
 SHAFT_MAX = 24
@@ -116,7 +175,7 @@ EG_LINK EG_DOOR FLOOR_MAX FL_STRIDE FL_ROOM FL_COL FL_ITEM FL_QTY FL_S1 FL_EMPTY
 IT_POTION LVL_STATE LVL_DEPTH LVL_SEED GEN_RNG LVL_ATTR_FLOOR LVL_ATTR_WALL LVL_START
 LVL_LAIR LVL_KEYROOM LVL_SANCTUM LVL_NROOMS LVL_FLAGS FLOOR_N MASTER_SEED EDGE_TAB
 ROOM_DESC FLOOR_LIST LVL_STATE_END ROOM_NONE LF_GRATE_OPEN FEAT_W FEAT_GAP LAD_COL_MIN
-LAD_COL_MAX FEAT_TRIES EDGES_H GRID_CELLS""".split()
+LAD_COL_MAX FEAT_TRIES EDGES_H GRID_CELLS EG_SEAL RDF_SANCTUM""".split()
 for _n in NEEDED:
     sym(_n)
 
@@ -154,6 +213,11 @@ class Rng:
         self.calls += 1
         return self.step()
 
+    def byte(self):
+        """one step, low byte: the 0..255 tier / chance roll (no modulo)"""
+        self.calls += 1
+        return self.step() & 0xFF
+
 
 LAIR_RESEEDS = 0            # L1: times no lair candidate existed (must stay 0)
 LAST = (0, 0, 0)            # (restarts, rnd calls, reseeds) of the last generate()
@@ -176,7 +240,7 @@ L2_MAX = 2                                                     # per feature per
 class Room:
     def __init__(self):
         self.present = False
-        self.start = self.lair = self.dead = False
+        self.start = self.lair = self.dead = self.sanct = False
         self.exits = 0
         self.up = self.dn = self.arr = self.exitcol = 0
         self.lad1 = self.lad2 = self.pit = self.block = 0
@@ -457,7 +521,35 @@ def attempt(rng, depth, l2=True):
     return rooms, edges, floor, start, lair, len(visited)
 
 
-def generate(depth, seed, master=0, l2=True):
+SANCT_SALT = 0x5A17     # 3F: the Sanctum leaf's own stream (GEN_RNG and every earlier output untouched)
+
+
+def sanctum_pass(rooms, edges, seed, lair):
+    """3F D8 (game.md §1.1 L1 (5), 'D8 Sanctum'): the reserved bottom-row end
+    cell S (the one of 6/8 the DFS never entered) becomes a leaf room hanging
+    off the lair's free side behind a SEALED edge (EG_LINK|EG_DOOR|EG_SEAL; it
+    opens on the Archmage's death, LF_SEAL_OPEN). Own Rng stream: edge storey,
+    one ladder column, room seed. Returns S. Items/traps/L2 never see it."""
+    sc = [c for c in (6, 8) if not rooms[c].present]
+    assert len(sc) == 1 and lair == 7, "D8 Sanctum rule (L1 (5)) broken"
+    S = sc[0]
+    rng = Rng(seed ^ SANCT_SALT, 8)
+    s = rng.rnd(2)
+    rm = rooms[S]
+    rm.present = rm.dead = rm.sanct = True
+    if S == 6:
+        rooms[6].exits |= D["RDX_R"] | (D["RDX_RS1"] if s else 0)
+        rooms[7].exits |= D["RDX_L"] | (D["RDX_LS1"] if s else 0)
+    else:
+        rooms[7].exits |= D["RDX_R"] | (D["RDX_RS1"] if s else 0)
+        rooms[8].exits |= D["RDX_L"] | (D["RDX_LS1"] if s else 0)
+    edges[hedge(min(7, S))] = D["EG_LINK"] | D["EG_DOOR"] | D["EG_SEAL"]
+    rm.lad1 = pick_feature(rng, rm, D["LAD_COL_MIN"], D["LAD_COL_MAX"], (0, 1), True)
+    rm.seed = rng.rnd16()
+    return S
+
+
+def generate(depth, seed, master=0, l2=True, f3=False):
     global LAST
     restarts = reseeds = calls = 0
     for k in range(RESEED_MAX):
@@ -478,6 +570,10 @@ def generate(depth, seed, master=0, l2=True):
     else:
         raise RuntimeError("levelgen: no lair after 16 reseeds")
     seed = (seed + k) & 0xFFFF
+    sanct = None
+    if f3 and depth == 8:
+        sanct = sanctum_pass(rooms, edges, seed, lair)
+        n += 1
     rng.calls += calls
     LAST = (restarts, rng.calls, reseeds)
     b = bytearray(BLOCK_LEN)
@@ -488,9 +584,9 @@ def generate(depth, seed, master=0, l2=True):
     b[H["LVL_START"]] = start
     b[H["LVL_LAIR"]] = lair
     b[H["LVL_KEYROOM"]] = D["ROOM_NONE"]
-    b[H["LVL_SANCTUM"]] = D["ROOM_NONE"]
+    b[H["LVL_SANCTUM"]] = D["ROOM_NONE"] if sanct is None else sanct
     b[H["LVL_NROOMS"]] = n
-    b[H["LVL_FLAGS"]] = D["LF_GRATE_OPEN"]
+    b[H["LVL_FLAGS"]] = 0 if f3 else D["LF_GRATE_OPEN"]      # 3F: the grate opens on the boss's death
     b[H["FLOOR_N"]] = len(floor)
     b[H["MASTER_SEED"]:H["MASTER_SEED"] + 2] = (master & 0xFFFF).to_bytes(2, "little")
     for i, e in enumerate(edges):
@@ -500,7 +596,8 @@ def generate(depth, seed, master=0, l2=True):
         if not rm.present:
             continue
         fl = D["RDF_PRESENT"] | (D["RDF_START"] if rm.start else 0) | \
-            (D["RDF_LAIR"] if rm.lair else 0) | (D["RDF_DEADEND"] if rm.dead else 0)
+            (D["RDF_LAIR"] if rm.lair else 0) | (D["RDF_DEADEND"] if rm.dead else 0) | \
+            (D["RDF_SANCTUM"] if rm.sanct else 0)
         b[o + D["RD_FLAGS"]] = fl
         b[o + D["RD_EXITS"]] = rm.exits
         b[o + D["RD_UPCOL"]] = rm.up
@@ -609,6 +706,67 @@ def lp_wt(k):
     raise KeyError(k)
 
 
+# ---- 3F: tier roll, golden flag, kind lookups (table at the top of the module) ----
+
+def tier_odds(depth, lvl):
+    """§9.6 spawn roll odds out of 256 -> (T2, T3). LVL_EXP(d) = d, Δ = clamp(LVL - d, -2, 2)."""
+    dl = max(-TIER_DELTA_MAX, min(TIER_DELTA_MAX, lvl - depth))
+    t2 = max(0, min(T2_CAP, T2_BASE[depth] + TIER_SHIFT2 * dl))
+    t3 = max(0, min(T3_CAP, T3_BASE[depth] + TIER_SHIFT3 * dl)) if depth >= TIER3_MIN_DEPTH else 0
+    return t2, t3
+
+
+def tier_pick(base, r, depth, lvl):
+    """Pure part of the roll: r in 0..255 -> row key. r < T3 -> tier 3 (tier 2 if the
+    kind has none); r < T3 + T2 -> tier 2; else base. Untiered kinds stay base."""
+    t = TIERS.get(base)
+    if not t:
+        return base
+    t2, t3 = tier_odds(depth, lvl)
+    if r < t3:
+        return t[1] or t[0]
+    if r < t3 + t2:
+        return t[0]
+    return base
+
+
+def tier_roll(rng, base, depth, lvl):
+    """One rng step (low byte) iff the kind has tiers; none otherwise (bosses, escorts,
+    summons and breeding never call this)."""
+    if base not in TIERS:
+        return base
+    return tier_pick(base, rng.byte(), depth, lvl)
+
+
+def k3_row(key):
+    return KROWS[key][0]
+
+
+def k3_weight(kb):
+    """§9.3 weight of a record kind byte (row | LEK_*): golden +1."""
+    w = KROWS[K3_BY_ID[kb & LEK_ROW_MASK]][4]
+    return w + (1 if kb & LEK_GOLD else 0)
+
+
+def k3_info(kb):
+    """(body cols, hp, flyer) of a record kind byte; hp = §9.1 depth-scaled by the
+    caller via k3_hp."""
+    v = KROWS[K3_BY_ID[kb & LEK_ROW_MASK]]
+    return v[2], v[1], v[3]
+
+
+def k3_hp(kb, depth):
+    """Spawn hp: row hp + (depth - 1) (§9.1); golden = 2 x scaled + 6 (§9.7 R1)."""
+    hp = KROWS[K3_BY_ID[kb & LEK_ROW_MASK]][1] + depth - 1
+    return 2 * hp + 6 if kb & LEK_GOLD else hp
+
+
+def k3_boss(depth):
+    """LP_BOSS record kind byte: row | LEK_GOLD on the golden depths."""
+    key, gold = BOSS3[depth]
+    return KROWS[key][0] | (LEK_GOLD if gold else 0)
+
+
 def lp_off(name):
     return D[name] - D["LP_STATE"]
 
@@ -635,7 +793,7 @@ def lp_bfs(b):
     return dist
 
 
-def lp_budget(b, lvl=0):
+def lp_budget(b, lvl=0, f3=False):
     depth = b[H["LVL_DEPTH"]]
     start, lair, sanct = b[H["LVL_START"]], b[H["LVL_LAIR"]], b[H["LVL_SANCTUM"]]
     kinds, boss, total = LP_TAB[depth]
@@ -670,8 +828,8 @@ def lp_budget(b, lvl=0):
     quota[lair] = 2
     lp = bytearray(D["LP_LEN"])
     for i, k in enumerate(kinds):
-        lp[lp_off("LP_KINDS") + i] = D[k]
-    lp[lp_off("LP_BOSS")] = D[boss]
+        lp[lp_off("LP_KINDS") + i] = KROWS[k][0] if f3 else D[k]
+    lp[lp_off("LP_BOSS")] = k3_boss(depth) if f3 else D[boss]
     lp[lp_off("LP_TOTAL")] = total
     lp[lp_off("LP_LVL")] = lvl
     lp[lp_off("LP_DISCARD")] = discard
@@ -741,7 +899,7 @@ def lp_seed(b, lp, r):
 LP_CALLS = 0                # rnd calls of the last lp_enter (tests: cost)
 
 
-def lp_enter(b, lp, r, hs, hx, hw):
+def lp_enter(b, lp, r, hs, hx, hw, f3=False):
     lp = bytearray(lp)
     rng = Rng(0, 0)
     rng.x = lp_seed(b, lp, r)
@@ -750,19 +908,32 @@ def lp_enter(b, lp, r, hs, hx, hw):
     hdr = lp[ro]
     kinds = [lp[lp_off("LP_KINDS") + i] for i in range(4)]
     sig = [0]
+    depth, lvl = b[H["LVL_DEPTH"]], lp[lp_off("LP_LVL")]
+    wt = k3_weight if f3 else lp_wt
+    info = k3_info if f3 else lp_kinfo
+    ROWM = LEK_ROW_MASK if f3 else D["LEK_KIND_MASK"]
 
-    minw = min(lp_wt(k) for k in kinds)
+    def hp0(k):
+        return k3_hp(k, depth) if f3 else lp_kinfo(k)[1]
+
+    minw = min(wt(k) for k in kinds)
     sigi = max(D["LP_SIGMA_INIT"], lp[lp_off("LP_RMAX")] * minw)
 
-    def fit(cap, left=0):
+    def fit(cap, left=0, tier=False):
         """reservation fit (§9.4.3, designer 2026-10-06): accept a kind only if
-        sum + w + left * minW <= cap; rolled first, then the others in list order."""
+        sum + w + left * minW <= cap; rolled first, then the others in list order.
+        3F (tier=True, FRESH rooms only): the rolled kind gets the §9.6 tier roll
+        (spawn stream, LP_LVL); a rejected tier falls back to its own base, then
+        the other LP_KINDS at base tier (the escort is never rolled)."""
         i = rng.rnd(4)
-        order = [i] + [j for j in range(4) if j != i]
-        for j in order:
-            k = kinds[j]
-            if sig[0] + lp_wt(k) + left * minw <= cap:
-                sig[0] += lp_wt(k)
+        order = [kinds[i]] + [kinds[j] for j in range(4) if j != i]
+        if f3 and tier:
+            key = tier_roll(rng, K3_BY_ID[kinds[i]], depth, lvl)
+            if KROWS[key][0] != kinds[i]:
+                order.insert(0, KROWS[key][0])
+        for k in order:
+            if sig[0] + wt(k) + left * minw <= cap:
+                sig[0] += wt(k)
                 return k
         lp[lp_off("LP_DISCARD")] += 1
         return None
@@ -771,23 +942,23 @@ def lp_enter(b, lp, r, hs, hx, hw):
         units = []
         if r == b[H["LVL_LAIR"]]:
             k = lp[lp_off("LP_BOSS")]
-            units.append((k, lp_kinfo(k)[1]))
-            sig[0] = lp_wt(k)
+            units.append((k, hp0(k)))
+            sig[0] = wt(k)
             boss = True
-            k = fit(D["LP_SIGMA_CAP"])
+            k = fit(D["LP_SIGMA_CAP"])                  # escort: base tier, never rolled
             if k is not None:
-                units.append((k, lp_kinfo(k)[1]))
+                units.append((k, hp0(k)))
         else:
             n = hdr & D["LR_CNT_MASK"]
             for u in range(n):
-                k = fit(sigi, n - 1 - u)
+                k = fit(sigi, n - 1 - u, True)
                 if k is not None:
-                    units.append((k, lp_kinfo(k)[1]))
+                    units.append((k, hp0(k)))
     else:
         units = [(lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i]) for i in range(hdr & D["LR_CNT_MASK"])]
     placed, out, left = [], [], []
     for i, (kb, hp) in enumerate(units):
-        w, _, fly = lp_kinfo(kb & D["LEK_KIND_MASK"])
+        w, _, fly = info(kb & ROWM)
         best = None
         for t in range(D["LP_TRIES"]):
             v = rng.rnd16()                             # one step per candidate
