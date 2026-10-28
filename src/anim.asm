@@ -18,29 +18,55 @@
     ENDM
 
 ;==============================================================================
-; anim_tick — Clobbers: all but IY.
+; anim_tick — Clobbers: all but IY.  (B6: ASSERT P_MAX_ENT = 16, L = slot*16 wraps.)
 ;==============================================================================
+                ASSERT P_MAX_ENT == 16
+                ASSERT P_ENT_STRIDE == 32
 anim_tick:
                 xor  a
                 ld   (RLIST_N), a
-.lp:            ld   (ANIM_SLOT), a
-                rlca
-                rlca
-                rlca
-                rlca
+                ld   ix, P_ENTITIES
+                ld   de, P_ENT_STRIDE           ; B6: IX walks by 32, L (record) by 16
                 ld   l, a
                 ld   h, SLOTREC >> 8
-                ld   (hl), 0                   ; R_VIS default: hidden
-                ld   a, (ANIM_SLOT)
-                call ent_ix
+.lp:            ld   (hl), 0                   ; R_VIS default: hidden
                 ld   a, (ix+E_FLAGS)
+                or   a
+                jr   nz, .full
+                bit  0, (ix+E_DVIS)
+                jr   nz, .full                 ; empty but still drawn: erase via list
+                add  ix, de                    ; empty slot: nothing more to do
+                ld   a, l
+                add  a, 16
+                ld   l, a
+                jr   nc, .lp                   ; carry = slot 16 reached
+.done:          ld   a, (MSG_Q)
+                or   a
+                ret  z
+                dec  a
+                call ent_ix
+                call show_impact_msg           ; B3B-13: lowram (IX = attacker)
+                xor  a
+                ld   (MSG_Q), a
+                ret
+
+.full:          ld   c, a                      ; C = E_FLAGS (A is the slot below)
+                ld   a, l                      ; ANIM_SLOT only stored when a callee
+                rrca                           ; may read it (non-empty / drawn)
+                rrca
+                rrca
+                rrca
+                ld   (ANIM_SLOT), a
+                ld   a, c
                 and  EF_ACTIVE | EF_PENDING
                 cp   EF_ACTIVE
                 jr   nz, .next
                 ld   a, (CUR_ROOM)
                 cp   (ix+E_ROOM)
                 jr   nz, .next
+                push de                        ; (anim_entity clobbers DE; IX is kept)
                 call anim_entity               ; A = fid, B = visible
+                pop  de
                 ld   c, a
                 ld   a, (ANIM_SLOT)
                 rlca
@@ -69,17 +95,16 @@ anim_tick:
                 ld   (hl), a
 .skip:          ld   a, (ANIM_SLOT)
                 inc  a
-                cp   P_MAX_ENT
-                jr   c, .lp
-                ld   a, (MSG_Q)
-                or   a
-                ret  z
-                dec  a
-                call ent_ix
-                call show_impact_msg           ; B3B-13: lowram (IX = attacker)
-                xor  a
-                ld   (MSG_Q), a
-                ret
+                and  P_MAX_ENT - 1             ; wraps to 0 after the last slot
+                add  ix, de                    ; (keeps Z)
+                jp   z, .done
+                rlca
+                rlca
+                rlca
+                rlca
+                ld   l, a
+                ld   h, SLOTREC >> 8
+                jp   .lp
 
 ;------------------------------------------------------------------------------
 ; rl_first / rl_next — iterate RLIST (slots visible or still drawn this tick,
