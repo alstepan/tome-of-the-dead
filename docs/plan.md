@@ -476,6 +476,8 @@ lowers `m`; destruction at −3 empties the slot (frees a cursed slot); blessed 
 - **UB4 — quick POTION slot changes on pickup:** EXPECTED per spec (game.md §8 auto-fill: POTION = Heal, else Mana, else Cure; no pin since §8.11 Q3), so picking up a Heal swaps the slot. User to decide: keep, or pin/stick the slot until its stack runs out (costs bytes; ruling needed).
 - **UB5 — Warrior panel: redundant cell in the status bar:** remove it and put the eat/drink/read/inventory/level slots at the same coordinates as the Mage's. Panel layout (R6/bank 1 panel_init), goldens rebaselined. staff (Sonnet).
 
+- **GEAR3 — Enchant scroll hits any worn item (user 2026-10-28, post-3F post-BAL1):** the Enchant scroll enchants a RANDOM equipped item (robes, helms, rings, amulets, chainmail, cloaks, … not only the weapon: today `enchant_weapon` only). Uses the gear `m` field (ISTATE bits 5–7); needs a per-slot meaning of `m` (armour +DEF, helm/robe/cloak +DEF or resist, ring/amulet/charm = effect strength — numeric, ties to GEAR2) and `hero_recalc` reading it. Open: empty-slot handling (nothing worn = fizzle line), cap per item (`m` max, wear −3 rules §8.10 interplay with ACID/NOTCH), message with the item name (~text), Enchant quick-scroll stays one turn. Do together with GEAR2.
+
 ### 3G — Sound & polish (later)
 AY music + FX on the A8 slot; balance pass; hardware hardening.
 
