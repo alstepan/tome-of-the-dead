@@ -157,11 +157,9 @@ start_game:
                 ld   a, c
                 ld   (HERO_KIND), a
                 call gen_idles                 ; 3F-T1: the pool from the bottom
-                ld   a, (HERO_KIND)
-                call gen_kind
-                ld   a, (HERO_KIND)            ; D3-4: + the class FX kind
-                add  a, K_FX_BASE              ; (K_FXW / K_FXM: only this class's
-                call gen_kind                  ; projectiles / impacts in the pool)
+                ld   hl, pool_hero             ; 3F-T2 R6: PL_LIST = the hero + its class FX
+                call far6                      ; kind (D3-4: only this class's projectiles /
+                call gen_list                  ; impacts), seq slot 0, other FX rows NONE
                 call alloc_mark                ; 3F-T1: the LEVEL mark (level_enter rewinds here)
                 ld   hl, new_game              ; bank 7 (MEM-SND; was bank 3, A7 review):
                 call far7                      ; hero slot, PROTO level / master seed
@@ -171,14 +169,10 @@ start_game:
                 jr   z, .gen
                 ; PROTO rooms (test fixture): every original monster kind, as
                 ; the boot pool held before 3F-T1 (POOL_NEED_PROTO, data.asm)
-                push de                        ; (gen_kind clobbers DE)
-                ld   a, K_SKELETON
-.gk:            push af
-                call gen_kind
-                pop  af
-                inc  a
-                cp   K_PROTO_END
-                jr   c, .gk
+                push de                        ; (far6 / gen_list clobber DE)
+                ld   hl, pool_proto            ; 3F-T2 R6: K_SKELETON .. K_PROTO_END - 1
+                call far6                      ; + their seq blocks
+                call gen_list
                 pop  de
                 xor  a                       ; depth 0: the PROTO rooms' theme
                 call level_show                ; (the D1 set)
@@ -223,7 +217,8 @@ seed_value:     DW   SEED_VALUE
 ;            on B = 1), the stand-in population, hero on the start (GAME_STATE
 ;            = GS_LEVEL meanwhile, 3F-T1: no room map is live)
 ;   pool     3F-T1: the level's monster kinds above the hero (alloc_restore,
-;            FRT monster rows NONE, R6 pool_list, gen_kind each), then
+;            R6 pool_list: FRT monster rows NONE, the units + seq blocks;
+;            gen_list), then
 ;            GS_TRANSITION (a gen_frame from here on counts in GEN_TRAP)
 ;   show     level_show: tiles, first room into ROOM_MAP (so ANIM_LIST is the
 ;            new room's), panel, vis_reset (entity table rewritten), present
@@ -254,30 +249,18 @@ level_enter:
                 ld   hl, level_new             ; bank 3: generate + populate
                 call far3
                 ; 3F-T1 level pool: rewind to the level mark (above the hero),
-                ; every monster frame's FRT row := NONE (a kind not generated
-                ; here blits nothing — BLIT_MISS — never stale pool bytes),
-                ; then each generation kind of PL_LIST (R6 pool_list: LP_KINDS
-                ; + LP_BOSS through pool_gmap, deduplicated, $FF-terminated).
-                ; Before stinger_wait, so the generation overlaps the stinger.
+                ; then R6 pool_list (3F-T2: every monster frame's FRT row :=
+                ; NONE — a kind not generated here blits nothing, BLIT_MISS,
+                ; never stale pool bytes —, the FX rows outside the class FX
+                ; := NONE, PL_LIST = the units of LP_KINDS + LP_BOSS through
+                ; pool_gmap + the hero extras, the level's seq blocks) and
+                ; gen_list. Before stinger_wait, so the generation overlaps
+                ; the stinger.
                 call alloc_restore
-                ld   hl, FRT + KFID_MONSTERS * FRT_STRIDE
-                ld   de, FRT + KFID_MONSTERS * FRT_STRIDE + 1
-                ld   bc, KFCNT_MONSTERS * FRT_STRIDE - 1
-                ld   (hl), FRT_NONE
-                ldir                           ; ~16k T
                 ld   hl, pool_list
                 call far6
-                ld   hl, PL_LIST
-.pk:            ld   a, (hl)
-                inc  a
-                jr   z, .pe                    ; $FF: end
-                dec  a
-                push hl
-                call gen_kind
-                pop  hl
-                inc  hl
-                jr   .pk
-.pe:            ld   a, GS_TRANSITION          ; from here a gen_frame is a bug again
+                call gen_list
+                ld   a, GS_TRANSITION          ; from here a gen_frame is a bug again
                 ld   (GAME_STATE), a           ; (GEN_TRAP): level_show builds ROOM_MAP
                 ld   hl, stinger_wait         ; SND-4a: hold while the stinger plays (bank 1;
                 call far1                      ; a no-op unless MUS_CUR = MUS_LEVEL shot)
@@ -2059,29 +2042,182 @@ copy_virt:
                 ret
 
 ;------------------------------------------------------------------------------
-; gen_kind — generate every frame of kind A; a kind with 0 frames (the Rogue
-; hole, unused ids) returns at once (djnz with B = 0 would run 256 frames).
-; Clobbers: all but IX
+; gen_list — generate every frame of every unit in PL_LIST (pairs DB fid0,
+; fcnt >= 1; $FF end; written by R6 pool_hero / pool_proto / pool_list, 3F-T2:
+; was gen_kind on kind_tab KT_FID0 / KT_FCNT). Clobbers: all but IX
 ;------------------------------------------------------------------------------
-gen_kind:
-                ld   h, (kind_tab + KT_FID0) >> 8   ; KT_FID0/KT_FCNT: same page
-                add  a, KT_FID0 & $FF
-                ld   l, a
-                ld   a, (hl)                   ; first fid
-                ld   c, a
-                ld   a, l
-                add  a, KT_FCNT - KT_FID0
-                ld   l, a
-                ld   b, (hl)                   ; count
-                inc  b
-                dec  b
-                ret  z                         ; 0-frame kind: nothing to generate
-.f:             push bc
+gen_list:
+                ld   hl, PL_LIST
+.u:             ld   a, (hl)
+                inc  a
+                ret  z                         ; $FF: end
+                dec  a
+                ld   c, a                      ; C = fid
+                inc  hl
+                ld   b, (hl)                   ; B = count (pl_unit skips 0-frame units)
+                inc  hl
+.f:             push hl
+                push bc
                 ld   a, c
                 call gen_frame
                 pop  bc
+                pop  hl
                 inc  c
                 djnz .f
+                jr   .u
+
+;------------------------------------------------------------------------------
+; 3F-T2 SEQUENCE CACHE loader (docs/memory-map.md "Sequence cache (3F-T2)"):
+; called from R6 pool6.asm (pool_hero / pool_proto / pool_list) after the
+; masters are unpacked to SQ_IMG; reads only low RAM (the image, the SQ_*
+; scratch) and writes bank 2 (seq_rows, seq_bytes, kind_tab KT_SEQ), so it is
+; callable with any $C000 bank. Generator-session code, like gen_list.
+;------------------------------------------------------------------------------
+; sq_reset — no slot cached, seq_bytes empty, then the hero's block -> slot 0.
+; Clobbers: A, BC, DE, HL.
+sq_reset:
+                ld   hl, seq_bytes
+                ld   (SQ_TOP), hl
+                ld   hl, SQ_PTR
+                ld   b, 2 * SQ_SLOTS
+.z:             ld   (hl), 0
+                inc  hl
+                djnz .z
+                ld   a, (HERO_KIND)
+                ; fall through
+;------------------------------------------------------------------------------
+; sq_load — A = kind: its master block (ksm_tab; none = no-op) -> the first
+; free cache slot, unless a slot holds it already: row = 8 pointers (SQ_TOP +
+; offset) + KS_IMPACT, the sequence bytes copied to SQ_TOP. No free slot:
+; SEQ_TRAP++ (the build ASSERTs <= SQ_SLOTS - 1 monster blocks per level and the
+; byte need, main.asm "SEQ CACHE NEED").   Clobbers: A, BC, DE, HL.   ~2k T
+;------------------------------------------------------------------------------
+sq_load:
+                call ksm_ptr                   ; DE = the block (0: none)
+                ld   a, d
+                or   e
+                jr   z, .trap                  ; (build-ASSERTed never: every level kind has one)
+                ld   hl, SQ_PTR
+                ld   b, SQ_SLOTS
+.s:             ld   a, (hl)
+                inc  hl
+                or   (hl)
+                jr   z, .free                  ; 0: free (the used slots come first)
+                dec  hl
+                ld   a, (hl)
+                inc  hl
+                cp   e
+                jr   nz, .nx
+                ld   a, (hl)
+                cp   d
+                ret  z                         ; cached already
+.nx:            inc  hl
+                djnz .s
+.trap:          ld   hl, SEQ_TRAP              ; full (build-checked: never) / no block: the kind
+                inc  (hl)                      ; would blit the hero's row (debug trap, saturating)
+                ret  nz
+                dec  (hl)
+                ret
+.free:          ld   (hl), d                   ; slot := the block
+                dec  hl
+                ld   (hl), e
+                ld   a, SQ_SLOTS               ; slot index = SQ_SLOTS - B
+                sub  b
+                ld   c, a                      ; row = seq_rows + 17 * slot
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, c
+                add  a, seq_rows & $FF         ; (one page, ASSERTed at seq_rows)
+                ld   l, a
+                ld   h, seq_rows >> 8
+                push de                        ; row: 8 x (SQ_TOP + offset)
+                ex   de, hl                    ; DE = row, HL = block
+                inc  hl                        ; KSM_IMP
+                ld   c, (hl)                   ; C = impact
+                inc  hl                        ; KSM_OFF
+                ld   b, 8                      ; (C = impact kept)
+.r:             ld   a, (hl)
+                inc  hl
+                push hl
+                ld   hl, (SQ_TOP)
+                add  a, l
+                ld   l, a
+                jr   nc, .nc
+                inc  h
+.nc:            ex   de, hl
+                ld   (hl), e
+                inc  hl
+                ld   (hl), d
+                inc  hl
+                ex   de, hl
+                pop  hl
+                djnz .r
+                ld   a, c
+                ld   (de), a                   ; KS_IMPACT
+                pop  hl                        ; the block
+                ld   c, (hl)                   ; KSM_LEN
+                ld   b, 0
+                ld   de, KSM_SEQ
+                add  hl, de
+                ld   de, (SQ_TOP)
+                ldir
+                ld   (SQ_TOP), de
+                ret
+                ASSERT KSM_LEN == 0 && KSM_IMP == 1 && KSM_OFF == 2 && KSM_SEQ == 10 && KS_IMPACT == 16 && KS_STRIDE == 17
+
+; ksm_ptr — A = kind -> DE = its master block in SQ_IMG (ksm_tab; 0 = none).
+; Clobbers: A, HL.
+ksm_ptr:
+                add  a, a
+                ld   l, a
+                ld   h, 0
+                ld   de, ksm_tab
+                add  hl, de
+                ld   e, (hl)
+                inc  hl
+                ld   d, (hl)
+                ret
+
+;------------------------------------------------------------------------------
+; sq_fill — kind_tab KT_SEQ := the low byte of each kind's cached row (no row
+; for the kind's block: slot 0's, the hero — no entity of such a kind exists).
+; Clobbers: A, BC, DE, HL.   ~10k T
+;------------------------------------------------------------------------------
+sq_fill:
+                xor  a
+.k:             push af
+                call ksm_ptr                   ; DE = block
+                ld   hl, SQ_PTR
+                ld   bc, (SQ_SLOTS << 8) | (seq_rows & $FF)   ; B = slots, C = row low
+                ld   a, d
+                or   e
+                jr   z, .set                   ; no block: slot 0's row
+.s:             ld   a, (hl)
+                inc  hl
+                cp   e
+                jr   nz, .n
+                ld   a, (hl)
+                cp   d
+                jr   z, .set
+.n:             inc  hl
+                ld   a, c
+                add  a, KS_STRIDE
+                ld   c, a
+                djnz .s
+                ld   c, seq_rows & $FF         ; (not cached: slot 0)
+.set:           pop  af
+                ld   l, a
+                add  a, KT_SEQ & $FF
+                ld   e, a
+                ld   d, (kind_tab + KT_SEQ) >> 8
+                ld   a, c
+                ld   (de), a
+                ld   a, l
+                inc  a
+                cp   K_MAX
+                jr   c, .k
                 ret
 
 ;------------------------------------------------------------------------------

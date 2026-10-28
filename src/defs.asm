@@ -39,8 +39,12 @@ BANK_BOOT6      EQU BANK_POOL2      ; 3E-T1: the boot block BOOT6_ADDR..SRC6_ADD
 ; through far6 (gfx.asm); packed overlay streams there run through ovl_run
 ; with C = BANK_R6. R6_LEN is THE cap (ASSERTed, free bytes DISPLAYed).
 BANK_R6         EQU BANK_POOL2
-R6_LEN          EQU 6912            ; $1B00: keeps >= 2.4 KB pool slack (user)
-R6_ADDR         EQU $10000 - R6_LEN ; $E500
+; 3F-T2 (MEM-3F): + R6_GROW pages from the 3F-T1 pool slack (27 -> 27 + R6_GROW
+; pages): the kind sequence masters, the generation-unit table, the seq cache
+; loader, and >= 1.5 KB free for 3F code.
+R6_GROW         EQU 8
+R6_LEN          EQU (27 + R6_GROW) * 256   ; was $1B00 (27 pages, 2026-10-21)
+R6_ADDR         EQU $10000 - R6_LEN ; $DD00
                 ASSERT (R6_ADDR & $FF) == 0
 ; SRC6 (3F memory plan; SRC6 spike 2026-10-27): a PERMANENT bank-6 SPRITE-SOURCE
 ; region just BELOW R6, SRC6_ADDR..R6_ADDR-1 (SRC6_LEN = SRC6_PAGES x 256: the
@@ -274,8 +278,9 @@ P_ENTITIES      EQU $B000           ; 16 slots x 32 B = 512 B ($B000..$B1FF)
 P_ENT_STRIDE    EQU 32
 P_MAX_ENT       EQU 16
 FRT_STRIDE      EQU 16
-FRT_MAX         EQU 160             ; A6 (game.md §11.2): 101 used (D3-4)
-FRT             EQU P_ENTITIES - FRT_MAX * FRT_STRIDE   ; $A600..$AFFF: frame runtime
+FRT_MAX         EQU 128             ; 3F-T2: 160 -> 128 (+512 B bank 2): 101 used + the
+                                    ; 23 lean 3F frames (plan 3F A1) = 124; A6: was 160
+FRT             EQU P_ENTITIES - FRT_MAX * FRT_STRIDE   ; $A800..$AFFF (3F-T2; was $A600): frame runtime
                                     ; table, 16 B/fid (4 variants x bank,lo,hi + 4 pad);
                                     ; directly below ENTITIES, the image ends below it
 BANK2_FREE      EQU $B200           ; A6: vacated old FRT ($B200..$B7FF, 1,536 B):
@@ -429,6 +434,8 @@ JA_D7_BIT       EQU 6               ;   set: D = 7 arc shape (N = 14), else D = 
 JA_FALL_BIT     EQU 7               ;   set: the jump ends in a pit fall (E_Y already = storey 1)
 ; $BF9A..$BF9F: B3B-11 freed them (were the A7 HUD_EXT / HUD_PW); now MENU_SPIN, PAUSED, END_SHOWN,
 ; MENU_IN_SIG, PEND_N (below)
+SEQ_TRAP        EQU $BFFB           ; count (saturating): sq_load got a kind with no master block (ksm_tab 0) or no free cache slot
+                                    ;   (the kind would blit the hero's sequences; build-ASSERTed never; debug trap, expect 0)
 GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
 MSG_BUF         EQU $BFA0           ; 32 B: impact message composition (show_impact_msg -> log_push)
 TIMING_MARK     EQU $BFC0           ; spare
@@ -617,7 +624,7 @@ K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 18 
 ; D3-4: the class FX kinds (render-only projectile / impact frames, game.md §6;
 ; never an entity's kind): the LAST two kind ids, so 3F's monster rows grow
 ; up from K_COUNT without moving them (3F has 30 ids left: 0..29). Generated
-; with the hero only (start_game: gen_kind(HERO_KIND + K_FX_BASE)), so the
+; with the hero only (start_game: R6 pool_hero -> unit HERO_KIND + K_FX_BASE), so the
 ; pool holds the current class's FX only. Their fid ranges OVERLAP in
 ; frames.asm (spark_fizz1/2: Spark impact and Whirlwind impact): K_FXM =
 ; [mage-only | shared], K_FXW = [shared | warrior-only].
@@ -652,11 +659,12 @@ KT_REACH        EQU $0E0
 KT_PERIOD       EQU $100            ;                            (page 1)
 KT_FLAGS        EQU $120
 KT_ATTR         EQU $140
-KT_FID0         EQU $160            ; first frame id of the kind
-KT_FCNT         EQU $180            ; frame count of the kind
-KT_MOD9         EQU $1A0            ; 24 B: n mod STOREY_ROWS (9)  (n = y+h or a row, 0..23)
-KT_DIV9         EQU $1B8            ; 24 B: n div STOREY_ROWS      (same page as KT_MOD9: feet_mod)
-KT_END          EQU $1D0            ; D3-8d: mark.asm code follows from here (was 48 B spare)
+KT_SEQ          EQU $160            ; 3F-T2: RUNTIME, the low byte of the kind's SEQ_ROWS row
+                                    ; (lowram.asm (sq_load / sq_fill) writes it per level; tiers share their base's)
+                                    ; (was KT_FID0 / KT_FCNT: generator-only, now R6 gu_tab)
+KT_MOD9         EQU $180            ; 24 B: n mod STOREY_ROWS (9)  (n = y+h or a row, 0..23)
+KT_DIV9         EQU $1A0            ; 24 B: n div STOREY_ROWS      (same page as KT_MOD9: feet_mod)
+KT_END          EQU $1B8            ; D3-8d: mark.asm code follows from here (3F-T2: was $1D0)
 KT_SIZE         EQU $200
 
 ; KT_FLAGS bits
@@ -723,6 +731,22 @@ KS_BLOCK        EQU 12              ; seq
 KS_DEATH        EQU 14              ; seq
 KS_IMPACT       EQU 16              ; DB ticks before IMPACT in KS_ATTACK
 KS_STRIDE       EQU 17
+; 3F-T2 per-level sequence cache (docs/memory-map.md "Sequence cache (3F-T2)").
+; The masters (every kind's sequences) are a ZX0 stream in R6 (pool6.asm);
+; R6 copies the hero's block into slot 0 at a game start and the level's
+; monster blocks into slots 1.. at each level entry, then writes kind_tab
+; KT_SEQ (the row's low byte) for every kind. Rows: SEQ_ROWS (bank 2, one
+; page), KS_STRIDE each; the sequence bytes they point to: SEQ_BYTES.
+SQ_SLOTS        EQU 7               ; hero + <= 6 monster blocks (PROTO: all 6 original kinds)
+SQ_ROWS_LEN     EQU SQ_SLOTS * KS_STRIDE
+SEQB_LEN        EQU 256             ; SEQ_BYTES: >= hero + the level's blocks (ASSERTed per depth)
+; master block (the unpacked image at SQ_IMG): KSM_LEN (sequence bytes n),
+; KSM_IMP (= KS_IMPACT), KSM_OFF + 8 offsets (KS_IDLE..KS_DEATH order) from
+; KSM_SEQ, then the n sequence bytes (position-independent: no pointer inside)
+KSM_LEN         EQU 0
+KSM_IMP         EQU 1
+KSM_OFF         EQU 2
+KSM_SEQ         EQU 10
 
 ;------------------------------------------------------------------------------
 ; Tiles (8x8 background, cell-aligned). attr = TILE_ATTRS[id] always.

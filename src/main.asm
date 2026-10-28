@@ -11,7 +11,7 @@
 ;   -> build/wazhack.sna (128K snapshot; entry = boot, all banks preloaded)
 ;
 ; Memory (docs/memory-map.md "PROTO"): HOT code+tables $8000..(< FRT, bank
-; 2); frame runtime table FRT $A600..$AFFF; runtime entity/render tables
+; 2); frame runtime table FRT $A800..$AFFF; runtime entity/render tables
 ; $B000..$BAFF; stack $BB00..$BEFF; state block $BF00..$BFFF; room maps, tiles
 ; + generator buffers $6000..$6D3F and the COLD block lowram_code..$7FFF (bank
 ; 5: boot, generator, game start, frame descriptors);
@@ -495,7 +495,17 @@ enter_select:
 ; pages, K_MAX (32) B per array; no array crosses a page (KFIELD, feet_mod).
 ;==============================================================================
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
-                DS   (-($ + TILE_IDS + DT_ATTR_LEN)) & $FF, 0    ; B3B-5: tile_flags ends on the page
+                DS   (-($ + TILE_IDS + DT_ATTR_LEN + SQ_ROWS_LEN)) & $FF, 0    ; B3B-5: tile_flags ends on the page
+;------------------------------------------------------------------------------
+; SEQ_ROWS — 3F-T2 the per-level sequence cache's rows (RUNTIME: zeros in the
+; image, written by R6 pool6.asm / lowram.asm at a game start / level entry): SQ_SLOTS rows
+; of KS_STRIDE (the old kind_seqs row: 8 sequence pointers + KS_IMPACT), slot 0
+; = the hero, 1.. = the level's monster kinds. One page (kind_tab KT_SEQ holds
+; the row's low byte: kind_seq_ptr = 2 table reads, no multiply).
+;------------------------------------------------------------------------------
+seq_rows:
+                DS   SQ_ROWS_LEN, 0
+                ASSERT (seq_rows >> 8) == (($ - 1) >> 8)
 ;------------------------------------------------------------------------------
 ; dt_attr_tab — B3B-10 decor_tick attr cycles, 8 steps per kind (concept-screen
 ; §3.3): kind 1 flame (DT_HOT -> DT_RED -> DT_DIM: tall / slim torch bodies, braziers).
@@ -567,10 +577,11 @@ kind_tab:
                 ; open by bump in try_horizontal, not through KF_OPENER
                 KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0  ; KT_FLAGS
                 KROW $47,$45,$44,$47,$44,$45,$06,$43,$44          ; KT_ATTR
-                ; D3-4: + the class FX kinds K_FXW / K_FXM (ids 30 / 31, overlapping ranges)
-                KROWFX KFID_KNIGHT, KFID_WIZARD, 0, KFID_SKELETON, KFID_GOBLIN, KFID_GHOST, KFID_RAT, KFID_BAT, KFID_SLIME, KFID_FXW, KFID_FXM     ; KT_FID0
-                KROWFX KFCNT_KNIGHT, KFCNT_WIZARD, 0, KFCNT_SKELETON, KFCNT_GOBLIN, KFCNT_GHOST, KFCNT_RAT, KFCNT_BAT, KFCNT_SLIME, KFCNT_FXW, KFCNT_FXM ; KT_FCNT
-                ASSERT K_FXW == K_MAX - 2 && K_FXM == K_MAX - 1    ; KROWFX: the last two columns
+                ; 3F-T2: KT_SEQ (runtime: lowram.asm (sq_load / sq_fill) writes the kind's SEQ_ROWS row
+                ; low byte per level; 0 until the first game start). The old
+                ; KT_FID0 / KT_FCNT columns are the R6 generation-unit table gu_tab.
+                ASSERT $ - kind_tab == KT_SEQ
+                DS   K_MAX, 0                  ; KT_SEQ
                 ASSERT $ - kind_tab == KT_MOD9
                 ; walker height (B3B-5 lead_cell, logic.asm): a non-flyer body
                 ; never reaches a door's arch / lintel rows. Reads the bytes
@@ -579,10 +590,10 @@ kind_tab:
                 ASSERT ({b kind_tab + KT_FLAGS + n} & KF_FLYER) || ({b kind_tab + KT_BH + n} <= STOREY_AIR - DOOR_PLANK_DY)
                 EDUP
                 ASSERT (KT_MOD9 >> 8) == ((KT_DIV9 + 23) >> 8)    ; feet_mod: one H for both
-                ASSERT (KT_FID0 >> 8) == (KT_FCNT >> 8)            ; gen_kind: one H for both
                 DUP 24, n
                 DB   n % STOREY_ROWS           ; KT_MOD9
                 EDUP
+                DS   KT_DIV9 - KT_MOD9 - 24, 0 ; 8 B spare (3F-T2)
                 ASSERT $ - kind_tab == KT_DIV9
                 DUP 24, n
                 DB   n / STOREY_ROWS           ; KT_DIV9
@@ -601,18 +612,22 @@ kind_tab:
                 INCLUDE "bars2.asm"             ; MEM-SND bars_draw / num2 (from panel2.asm: pad headroom)
 
 code_end:
+; 3F-T2: the sequence cache's bytes (RUNTIME only, not on tape: R6 pool6.asm / lowram.asm
+; copies the hero's and the level's sequence blocks here; seq_rows point in)
+seq_bytes       EQU code_end
+seq_bytes_end   EQU seq_bytes + SEQB_LEN
 IMAGE_LEN       EQU code_end - image_start
 TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + bank 2
                 ASSERT start == lowram_code    ; USR target = first byte of the block
                 ASSERT FDESC_COUNT == FID_COUNT    ; fdesc_tab and frame_tab: same frames
                 ASSERT image_start == $8000
-                ASSERT code_end <= FRT         ; the image ends below the frame runtime table
+                ASSERT seq_bytes_end <= FRT    ; the image (+ the seq cache bytes) ends below the frame runtime table
                 ASSERT FRT + FRT_MAX * FRT_STRIDE <= P_ENTITIES
                 ASSERT P_ENTITIES + P_MAX_ENT * P_ENT_STRIDE <= BANK2_FREE
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
                 ASSERT LOWRAM_END <= LOWRAM_FREE_END
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), free to FRT: ", /D, FRT - code_end, " (+", /D, dt_attr_tab - kind_tab_pad, " B kind_tab ALIGN pad); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), seq cache bytes ", /D, SEQB_LEN, ", free to FRT: ", /D, FRT - seq_bytes_end, " (+", /D, seq_rows - kind_tab_pad, " B kind_tab ALIGN pad; bank 2 free ", /D, FRT - seq_bytes_end + seq_rows - kind_tab_pad, "); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
 
 ;==============================================================================
 ; BOOT BLOCK (3E-T1, memory levers a + d) — boot-only code + data in pool
@@ -680,6 +695,11 @@ ovl_page_zx0:                                         ; 3E-T2 bag page (page_ovl
     IF OVL_PASS == 2
                 INCBIN "page.zx0"
     ENDIF
+sqm_zx0:                                              ; 3F-T2 sequence masters (seq_img.asm, SQ_IMG)
+    IF OVL_PASS == 2
+                INCBIN "seq.zx0"
+    ENDIF
+sqm_zx0_end:
 r6_blobs_end:
 r6_end:
 R6_USED         EQU r6_end - R6_ADDR
@@ -696,8 +716,9 @@ R6_FREE         EQU $10000 - r6_end
 ; ASSEMBLED bytes (sjasmplus {b}: every table below is emitted earlier in the
 ; pass), so it cannot drift from what level_enter generates:
 ;   lp_dtab (bank 3: LP_KINDS + LP_BOSS per depth) -> pool_gmap (R6, the
-;   generation-kind map, pool_map's rule) -> the set of generation kinds
-;   (dedup per kind, as pool_list) -> kind_tab KT_FID0 / KT_FCNT -> per fid
+;   generation map, pool_map's rule) + pool_xmap (3F-T2 hero extras, both
+;   heroes counted) -> the set of generation units (dedup per unit, as
+;   pool_list) -> R6 gu_tab fid0 / fcnt (3F-T2; was kind_tab) -> per fid
 ;   frame_tab cols / H / offsets + fdesc_tab FD_FLAGS -> the exact bytes
 ;   gen_frame allocates (variant choice as gen_facing; the per-bank straddle
 ;   waste is POOL_FIXED's 3 x 576).
@@ -723,23 +744,50 @@ PLN = PLN + PLF_H * 2 * (PLF_C + ((((PLF_L + (PLF_F & FF_PH4)) & 7) != 0) & 1))
         ENDIF
       ENDIF
     ENDM
-    MACRO PL_KIND k                            ; PLM |= kind k's generation kinds (pool_map)
+    MACRO PL_UNIT u                            ; PLM / PLX |= unit u (units < 64)
+      IF (u) < 32
+PLM = PLM | (1 << (u))
+      ELSE
+PLX = PLX | (1 << ((u) - 32))
+      ENDIF
+    ENDM
+    MACRO PL_KIND k                            ; kind k's generation units (pool_map)
                 ASSERT (k) < K_MAX
 PLK_HIT = 0
       IF PGMAP_N
         DUP PGMAP_N, plr
           IF (PLK_HIT == 0) && ({b pool_gmap + 3 * plr} == (k))
 PLK_HIT = 1
-PLM = PLM | (1 << {b pool_gmap + 3 * plr + 1})
+                PL_UNIT {b pool_gmap + 3 * plr + 1}
             IF {b pool_gmap + 3 * plr + 2} != PG_NONE
-PLM = PLM | (1 << {b pool_gmap + 3 * plr + 2})
+                PL_UNIT {b pool_gmap + 3 * plr + 2}
             ENDIF
           ENDIF
         EDUP
       ENDIF
       IF PLK_HIT == 0
-PLM = PLM | (1 << (k))
+                PL_UNIT k
       ENDIF
+      IF PXMAP_N                               ; 3F-T2 hero extras: counted for EITHER
+        DUP PXMAP_N, plx                       ; hero (conservative: <= 128 B a level)
+          IF {b pool_xmap + 3 * plx} == (k)
+                PL_UNIT {b pool_xmap + 3 * plx + 2}
+          ENDIF
+        EDUP
+      ENDIF
+    ENDM
+    MACRO PL_UNITS_ADD m, ubase                ; PLN += the frames of every unit in mask m
+                DUP  32, plk
+      IF ((m) >> plk) & 1
+PLK_F0 = {b gu_tab + GU_STRIDE * ((ubase) + plk)}
+PLK_FN = {b gu_tab + GU_STRIDE * ((ubase) + plk) + 1}
+        IF PLK_FN
+                DUP  PLK_FN, plf
+                PL_FRAME_ADD PLK_F0 + plf
+                EDUP
+        ENDIF
+      ENDIF
+                EDUP
     ENDM
 PL_MAX = 0
 PL_WORST = 0
@@ -752,25 +800,19 @@ PLK3 = {b lp_dtab + pld * LP_DROW + 3}
 PLK4 = {b lp_dtab + pld * LP_DROW + 4}
                 MMU  3, BANK_R6
 PLM = 0
+PLX = 0
                 PL_KIND PLK0
                 PL_KIND PLK1
                 PL_KIND PLK2
                 PL_KIND PLK3
                 PL_KIND PLK4
 PLN = 0
-                DUP  K_MAX, plk
-      IF PLM & (1 << plk)
-PLK_F0 = {b kind_tab + KT_FID0 + plk}
-PLK_FN = {b kind_tab + KT_FCNT + plk}
-        IF PLK_FN
-                DUP  PLK_FN, plf
-                PL_FRAME_ADD PLK_F0 + plf
-                EDUP
-        ENDIF
+                PL_UNITS_ADD PLM, 0
+      IF PLX
+                PL_UNITS_ADD PLX, 32
       ENDIF
-                EDUP
       IFDEF POOL_LVL_VERBOSE
-                DISPLAY "GAME level pool D", /D, pld + 1, ": kinds mask ", /H, PLM, ", ", /D, PLN, " B; need ", /D, PLN + POOL_FIXED + POOL_HERO_MAX, " (Warrior hero) of ", /D, POOL_CAP
+                DISPLAY "GAME level pool D", /D, pld + 1, ": units mask ", /H, PLM, " / ", /H, PLX, ", ", /D, PLN, " B; need ", /D, PLN + POOL_FIXED + POOL_HERO_MAX, " (Warrior hero) of ", /D, POOL_CAP
       ENDIF
       IF PLN > PL_MAX
 PL_MAX = PLN
@@ -783,15 +825,21 @@ PL_WORST = pld + 1
 POOL_LVL_MAX = PL_MAX
 POOL_LVL_WORST = PL_WORST
 POOL_NEED = POOL_FIXED + POOL_HERO_MAX + POOL_LVL_MAX
-                ASSERT LP_DROW == 6 && K_MAX <= 32
+                ASSERT LP_DROW == 6 && K_MAX <= 32 && GU_N <= 64
     IF POOL_NEED > POOL_CAP
                 DISPLAY "POOL FULL: need ", /D, POOL_NEED, " (worst D", /D, POOL_LVL_WORST, ") > POOL_CAP ", /D, POOL_CAP, " (SRC6_LEN ", /D, SRC6_LEN, ")"
     ENDIF
                 ASSERT POOL_NEED <= POOL_CAP
+    ; 3F-T2: -DPOOL_PROTO_CHECK=0 = a TEST build that never enters the PROTO
+    ; rooms (tests/zx0_pool.py's src6 variant: 9 SRC6 pages; the PROTO need is
+    ; then over POOL_CAP and a PROTO start would overflow the pool)
+    IFNDEF POOL_PROTO_CHECK
+POOL_PROTO_CHECK EQU 1
+    ENDIF
     IF POOL_NEED_PROTO > POOL_CAP
                 DISPLAY "PROTO POOL FULL: the PROTO rooms need ", /D, POOL_NEED_PROTO, " > POOL_CAP ", /D, POOL_CAP
     ENDIF
-                ASSERT POOL_NEED_PROTO <= POOL_CAP
+                ASSERT POOL_NEED_PROTO <= POOL_CAP || !POOL_PROTO_CHECK
                 DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (worst level D", /D, POOL_LVL_WORST, " ", /D, POOL_LVL_MAX, ", hero max ", /D, POOL_HERO_MAX, ", fixed ", /D, POOL_FIXED, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0); slack ", /D, POOL_CAP - POOL_NEED, " after SRC6 ", /D, SRC6_LEN, " B; PROTO rooms ", /D, POOL_NEED_PROTO, " (slack ", /D, POOL_CAP - POOL_NEED_PROTO, ")"
 
 ;==============================================================================
@@ -831,8 +879,124 @@ ITEMS_OVL_LEN   EQU ig_image_end - items_ovl_main
                 SAVEBIN "build/ovl/items.bin", ovl_raw_items, ITEMS_OVL_LEN
                 DISPLAY "GAME items overlay (3E-T6): ", /D, ITEMS_OVL_LEN, " B raw (+ ", /D, ig_end - ig_image_end, " B scratch) at ", /H, ITEMS_ORG, ", packed ", /D, ovl_items_end - ovl_items_zx0, " B in bank ", /D, BANK_OVL_ITEMS
                 DISPLAY "GAME page overlay: ", /D, PAGE_OVL_LEN, " B raw (", /D, PAGE_LIMIT - page_ovl_end, " left)"
+;------------------------------------------------------------------------------
+; 3F-T2 sequence masters (seq_img.asm): raw image DISPed at SQ_IMG, packed into
+; R6 sqm_zx0 (pool6.asm unpacks it per pool_* call). Ends below TX_DEC (the
+; GEN_SRC / GEN_MIR window it borrows; pool6.asm header).
+;------------------------------------------------------------------------------
+ovl_raw_seq:
+                DISP SQ_IMG
+seq_img_main:
+                INCLUDE "seq_img.asm"
+seq_img_end:
+                ENT
+SEQ_IMG_LEN     EQU seq_img_end - seq_img_main
+                ASSERT SQ_IMG + SEQ_IMG_LEN <= TX_DEC
+                SAVEBIN "build/ovl/seq.bin", ovl_raw_seq, SEQ_IMG_LEN
+                DISPLAY "GAME sequence masters (3F-T2): ", /D, SEQ_IMG_LEN, " B raw at ", /H, SQ_IMG, " (", /D, TX_DEC - SQ_IMG - SEQ_IMG_LEN, " left), packed ", /D, sqm_zx0_end - sqm_zx0, " B in R6"
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000
+
+;==============================================================================
+; SEQ CACHE NEED (3F-T2) — per depth (lp_dtab, as LEVEL POOL NEED) and for the
+; PROTO rooms (K_SKELETON .. K_PROTO_END - 1): the distinct master blocks of
+; the level's kinds (ksm_tab, dedup by block as sq_load) must fit the cache:
+; <= SQ_SLOTS - 1 monster blocks, and the largest hero block + their bytes <=
+; SEQB_LEN. Read from the raw image just assembled above ({b} at its bank-0
+; scratch address: SQB_PHYS), final pass only (DEFL, as POOL_NEED).
+;==============================================================================
+    MACRO SQ_KIND k                            ; SQN / SQB += kind k's block, once
+SQ_P = {ovl_raw_seq + ksm_tab - SQ_IMG + 2 * (k)}
+                ASSERT SQ_P != 0                ; every kind of every depth / PROTO has a master block
+      IF SQ_P
+SQ_DUP = 0
+        IF SQ_P == SQ_P0
+SQ_DUP = 1
+        ENDIF
+        IF SQ_P == SQ_P1
+SQ_DUP = 1
+        ENDIF
+        IF SQ_P == SQ_P2
+SQ_DUP = 1
+        ENDIF
+        IF SQ_P == SQ_P3
+SQ_DUP = 1
+        ENDIF
+        IF SQ_P == SQ_P4
+SQ_DUP = 1
+        ENDIF
+        IF SQ_P == SQ_P5
+SQ_DUP = 1
+        ENDIF
+        IF SQ_DUP == 0
+          IF SQN == 0
+SQ_P0 = SQ_P
+          ELSEIF SQN == 1
+SQ_P1 = SQ_P
+          ELSEIF SQN == 2
+SQ_P2 = SQ_P
+          ELSEIF SQN == 3
+SQ_P3 = SQ_P
+          ELSEIF SQN == 4
+SQ_P4 = SQ_P
+          ELSE
+SQ_P5 = SQ_P
+          ENDIF
+SQN = SQN + 1
+SQB = SQB + {b ovl_raw_seq + SQ_P - SQ_IMG + KSM_LEN}
+        ENDIF
+      ENDIF
+    ENDM
+    MACRO SQ_RESET
+SQN = 0
+SQB = 0
+SQ_P0 = -1
+SQ_P1 = -1
+SQ_P2 = -1
+SQ_P3 = -1
+SQ_P4 = -1
+SQ_P5 = -1
+    ENDM
+SQ_HERO = {b ovl_raw_seq + ksm_kn - SQ_IMG + KSM_LEN}
+    IF {b ovl_raw_seq + ksm_wz - SQ_IMG + KSM_LEN} > SQ_HERO
+SQ_HERO = {b ovl_raw_seq + ksm_wz - SQ_IMG + KSM_LEN}
+    ENDIF
+SQ_MAX = 0
+SQ_NMAX = 0
+                DUP  LEVELS, sqd
+                MMU  3, BANK_COLD3
+SQK0 = {b lp_dtab + sqd * LP_DROW + 0}
+SQK1 = {b lp_dtab + sqd * LP_DROW + 1}
+SQK2 = {b lp_dtab + sqd * LP_DROW + 2}
+SQK3 = {b lp_dtab + sqd * LP_DROW + 3}
+SQK4 = {b lp_dtab + sqd * LP_DROW + 4}
+                MMU  3, 0
+                SQ_RESET
+                SQ_KIND SQK0
+                SQ_KIND SQK1
+                SQ_KIND SQK2
+                SQ_KIND SQK3
+                SQ_KIND SQK4
+      IF SQB > SQ_MAX
+SQ_MAX = SQB
+      ENDIF
+      IF SQN > SQ_NMAX
+SQ_NMAX = SQN
+      ENDIF
+                EDUP
+                SQ_RESET                       ; the PROTO rooms (pool_proto)
+                DUP  K_PROTO_END - K_SKELETON, sqk
+                SQ_KIND K_SKELETON + sqk
+                EDUP
+      IF SQB > SQ_MAX
+SQ_MAX = SQB
+      ENDIF
+      IF SQN > SQ_NMAX
+SQ_NMAX = SQN
+      ENDIF
+SEQB_NEED = SQ_HERO + SQ_MAX
+                ASSERT SQ_NMAX <= SQ_SLOTS - 1 && SEQB_NEED <= SEQB_LEN
+                DISPLAY "GAME sequence cache: ", /D, SQ_SLOTS, " rows (", /D, SQ_ROWS_LEN, " B) + bytes need ", /D, SEQB_NEED, " of SEQB_LEN ", /D, SEQB_LEN, " (hero ", /D, SQ_HERO, " + monsters ", /D, SQ_MAX, ", <= ", /D, SQ_NMAX, " blocks a level)"
 
 ;------------------------------------------------------------------------------
 ; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"

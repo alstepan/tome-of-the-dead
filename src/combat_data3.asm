@@ -14,15 +14,17 @@
 ;------------------------------------------------------------------------------
 RSP_W           EQU 4               ; local to the KXROW macro (not a stored value)
 
-    MACRO KXROW phys, fire, cold, shock, drain, dark, imm, xp
+    ; dty / efx / chance / turns: the kind's melee hit (KX_MELEE; 3F-T2: was
+    ; combat3.asm kx_melee, game.md §9.1 dmg column + on-hit effects)
+    MACRO KXROW phys, fire, cold, shock, drain, dark, imm, xp, dty, efx, chance, turns
                 DB   ((phys) & 3) | (((fire) & 3) << 2) | (((cold) & 3) << 4) | (((shock) & 3) << 6)
                 DB   ((drain) & 3) | (((dark) & 3) << 2)
                 DB   (((phys) >> 2) & 1) | ((((fire) >> 2) & 1) << 1) | ((((cold) >> 2) & 1) << 2) | ((((shock) >> 2) & 1) << 3) | ((((drain) >> 2) & 1) << 4) | ((((dark) >> 2) & 1) << 5)
                 DB   imm, xp
                 DB   0              ; KX_DEF: monster DEF is 0 in 3D (game.md §11.4)
-                DB   0, 0           ; KX_SPARE: 3F on-hit status / parry
+                DB   (dty) | ((efx) << DH_EFX_SHIFT), ((chance) << 4) | (turns)   ; KX_MELEE
     ENDM
-    MACRO KXNONE                    ; unused kind id: N everywhere, no immunity, 0 XP
+    MACRO KXNONE                    ; unused kind id: N everywhere, no immunity, 0 XP, PHYS melee
                 DS   KX_STRIDE, 0
     ENDM
 
@@ -31,15 +33,15 @@ IMM_UNDEAD      EQU IMMF_SLEEP | IMMF_POISON
 ; kinds not listed stay zero: heroes (0 XP; their resistances come from gear),
 ; the retired id 2, and every kind id >= K_COUNT (no 3D kind yet; 3F adds rows).
 kx_tab:
-                KXROW 0,0,0,0,0,0, 0, 0                                  ; K_KNIGHT (hero)
-                KXROW 0,0,0,0,0,0, 0, 0                                  ; K_WIZARD (hero)
+                KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0                                  ; K_KNIGHT (hero)
+                KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0                                  ; K_WIZARD (hero)
                 KXNONE                                                    ; id 2 retired
-                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 6              ; K_SKELETON
-                KXROW 0,0,0,0,0,0, 0, 3                                  ; K_GOBLIN
-                KXROW RSP_R,0,RSP_I,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 6      ; K_GHOST
-                KXROW 0,0,0,0,0,0, 0, 2                                  ; K_RAT
-                KXROW 0,0,0,RSP_W,0,0, 0, 2                              ; K_BAT
-                KXROW RSP_R,RSP_W,0,0,0,0, IMMF_SLEEP | IMMF_CONFUSE | IMMF_FEAR, 3 ; K_SLIME
+                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_PHYS, EFX_NONE, 0, 0              ; K_SKELETON
+                KXROW 0,0,0,0,0,0, 0, 3, DTY_PHYS, EFX_NONE, 0, 0                                  ; K_GOBLIN
+                KXROW RSP_R,0,RSP_I,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 4, 4  ; K_GHOST: the 1d4 DRAIN touch, 1 in 4 -> CONFUSED 4 (no heal: §9.1)
+                KXROW 0,0,0,0,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0                                  ; K_RAT
+                KXROW 0,0,0,RSP_W,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0                              ; K_BAT
+                KXROW RSP_R,RSP_W,0,0,0,0, IMMF_SLEEP | IMMF_CONFUSE | IMMF_FEAR, 3, DTY_PHYS, EFX_NONE, 0, 0 ; K_SLIME
                 DS   KX_LEN - K_COUNT * KX_STRIDE, 0                      ; ids 9..31 (3F)
                 ASSERT kx_tab == BANK_WINDOW && $ - kx_tab == KX_LEN
 

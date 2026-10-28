@@ -122,6 +122,15 @@ FLASH_ATTRS = ({0x42, 0x44, 0x46}         # ATTR_HIT, ATTR_HEAL, ATTR_MISS (T7 d
                | ST_TINTS                 # + the BRIGHT twin of a tint equal to a kind attr (st_tint),
                | {t ^ 0x40 for t in ST_TINTS if t in KIND_ATTR.values()})   # only those can occur
 K_KNIGHT, K_WIZARD, _K_RETIRED, K_SKELETON, K_GOBLIN, K_GHOST, K_RAT, K_BAT, K_SLIME = range(9)
+_KNAMES = ("KNIGHT", "WIZARD", None, "SKELETON", "GOBLIN", "GHOST", "RAT", "BAT", "SLIME")
+
+
+def kind_frames(k):
+    """(first fid, frame count) of kind k's own generation unit (3F-T2: R6
+    gu_tab, built from these KFID_* / KFCNT_* EQUs; was kind_tab KT_FID0 /
+    KT_FCNT). k = K_* (heroes, original monsters) or K_FXW / K_FXM."""
+    n = {S["K_FXW"]: "FXW", S["K_FXM"]: "FXM"}.get(k) or _KNAMES[k]
+    return S["KFID_" + n], S["KFCNT_" + n]
 
 
 class Proto:

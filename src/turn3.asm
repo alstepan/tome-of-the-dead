@@ -9,7 +9,7 @@
 ; page nothing, so they run fine under bank 3. The one exception reachable
 ; from here — try_step -> mon_door -> door_open -> door_paint -> shadow_rect
 ; (pages bank 7) — re-pages the caller's bank (door_paint, lowram.asm).
-; Data read: kind_tab / kind_seqs / P_ENTITIES / LIVE_LIST / TMP* (bank 2),
+; Data read: kind_tab / seq_rows / P_ENTITIES / LIVE_LIST / TMP* (bank 2),
 ; ROOM_MAP / ROOM_DESC / FLOOR_LIST (bank 5): none at $C000.
 ;
 ; Entries (far3 from bank 2; far3 clobbers AF, so nothing returns in A/F):
@@ -27,7 +27,7 @@
 ; do_attack — IX = attacker, A = target slot: one melee blow (D3-6a: on the
 ; shared core, combat3.asm). hit_roll (F1, the d20 first), then damage 1dN +
 ; bonus (kind_tab, prototype §6.2 / F2) dealt by deal_hit with the attacker's
-; kx_melee row (type + on-hit effect: PHYS; the Ghost's DRAIN touch, CONFUSED
+; kx_tab KX_MELEE pair (type + on-hit effect: PHYS; the Ghost's DRAIN touch, CONFUSED
 ; 4 at 1 in 4). Sets the attacker's ATTACK sequence + IMPACT info (E_HIT = 1
 ; iff HP was lost: an immune target does not flash; E_MSG hit / miss / kill)
 ; and the target's reaction (deal_hit: HURT / DEATH; a missed Knight: BLOCK).
@@ -43,14 +43,15 @@ do_attack:
                 call hit_roll
                 ld   (TMP0), a                 ; 1 hit / 0 miss (message)
                 jr   z, .miss
-                ld   a, (ix+E_KIND)            ; C / E = the kind's melee row
+                ld   a, (ix+E_KIND)            ; C / E = the kind's melee pair
+                add  a, a                      ; (kx_tab KX_MELEE, 3F-T2: was the
+                add  a, a                      ; kx_melee table)
                 add  a, a
-                ld   e, a
-                ld   d, 0
-                ld   hl, kx_melee
-                add  hl, de
+                add  a, (kx_tab & $FF) + KX_MELEE
+                ld   l, a
+                ld   h, kx_tab >> 8
                 ld   c, (hl)
-                inc  hl
+                inc  l
                 ld   e, (hl)
                 push bc
                 KFIELD KT_DIE                  ; damage: 1dN + bonus
@@ -128,17 +129,14 @@ set_reaction_at:
                 jr   nz, .tick                 ; projectile hit); +24 T otherwise
                 ld   hl, (ATK_PTR)
                 ld   a, (hl)                   ; attacker kind (E_KIND = 0)
-                ld   e, a
-                add  a, a
-                add  a, a
-                add  a, a
-                add  a, a
-                add  a, e                      ; kind * 17 (was a 17-step add loop:
-                ld   e, a                      ; ~0.4k T, ~0.6k contended, a hit)
-                ld   d, 0
-                ld   hl, kind_seqs + KS_IMPACT
-                add  hl, de
-                ASSERT KS_STRIDE == 17 && (K_COUNT - 1) * KS_STRIDE < 256 && E_KIND == 0
+                add  a, KT_SEQ & $FF           ; 3F-T2: its seq_rows row (kind_tab KT_SEQ,
+                ld   l, a                      ; the per-level cache) + KS_IMPACT: no
+                ld   h, (kind_tab + KT_SEQ) >> 8   ; multiply (was kind * 17)
+                ld   a, (hl)
+                add  a, KS_IMPACT              ; a row never crosses the page (seq_rows)
+                ld   l, a
+                ld   h, seq_rows >> 8
+                ASSERT E_KIND == 0
                 ld   a, (TURN_TICK)
                 add  a, (hl)
                 ld   b, a                      ; impact tick (TURN_TICK units)

@@ -13,28 +13,7 @@
 ; eva -1, deal_hit dmg -1 min 1); the status step itself is status7.asm.
 ;==============================================================================
 
-;------------------------------------------------------------------------------
-; kx_melee — a kind's melee hit as deal_hit arguments: {C, E} per kind id,
-; stride 2 (game.md §9.1 dmg column + on-hit effects). Monster DEF is 0 in 3D;
-; 3F adds the Spider's POISON 9, the Mummy's curse (WEAK 12, 1 in 3), ...
-;------------------------------------------------------------------------------
-KM_STRIDE       EQU 2
-    MACRO KMROW dty, efx, chance, turns
-                DB   (dty) | ((efx) << DH_EFX_SHIFT), ((chance) << 4) | (turns)
-    ENDM
-kx_melee:
-                KMROW DTY_PHYS, EFX_NONE, 0, 0       ; K_KNIGHT (sword)
-                KMROW DTY_PHYS, EFX_NONE, 0, 0       ; K_WIZARD (staff)
-                KMROW DTY_PHYS, EFX_NONE, 0, 0       ; id 2 retired
-                KMROW DTY_PHYS, EFX_NONE, 0, 0       ; K_SKELETON
-                KMROW DTY_PHYS, EFX_NONE, 0, 0       ; K_GOBLIN
-                KMROW DTY_DRAIN, EFX_CONFUSED, 4, 4  ; K_GHOST: 1d4 DRAIN, touch 1 in 4 -> CONFUSED 4 (no heal: §9.1)
-                KMROW DTY_PHYS, EFX_NONE, 0, 0       ; K_RAT
-                KMROW DTY_PHYS, EFX_NONE, 0, 0       ; K_BAT
-                KMROW DTY_PHYS, EFX_NONE, 0, 0       ; K_SLIME
-                ASSERT $ - kx_melee == K_COUNT * KM_STRIDE
-                ASSERT K_KNIGHT == 0 && K_WIZARD == 1 && K_SKELETON == 3 && K_GOBLIN == 4
-                ASSERT K_GHOST == 5 && K_RAT == 6 && K_BAT == 7 && K_SLIME == 8
+; (3F-T2: kx_melee — a kind's melee hit {C, E} — is kx_tab's KX_MELEE pair now.)
 
 ;------------------------------------------------------------------------------
 ; hit_roll — F1: hit iff d20 + atk + B >= 10 + eva (nat 20/1 off, game.md §7).

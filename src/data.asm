@@ -176,101 +176,13 @@ POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN - SRC6_LEN  
     ENDM
 
 ;==============================================================================
-; SEQUENCES (prototype §7). cycles: DB total_ticks, (fid,ticks)*, $FF.
-;                           seqs  : (fid,ticks,flags)*, $FF.
+; SEQUENCES (prototype §7): 3F-T2 — the per-kind sequences and the kind_seqs
+; rows are MASTERS in R6 now (src/seq_img.asm, a ZX0 stream unpacked by
+; pool6.asm / lowram.asm); bank 2 holds the per-level cache SEQ_ROWS / SEQ_BYTES (main.asm),
+; read through kind_tab KT_SEQ (kind_seq_ptr). The macros above are used there.
+; WZ_WIND: the wizard's staff wind-up ticks = its KS_IMPACT (seq_img.asm).
 ;==============================================================================
-; --- Knight ---
-kn_idle:        DB 32, KN_REST, 16, KN_IDLE2, 16, SEQ_END
-kn_move:        MOVECYC4 knight_walk1, knight_walk2, knight_walk3, knight_walk4
-kn_climb:       CLIMBCYC FID_knight_climb1, FID_knight_climb2, FID_knight_walk1, FID_knight_walk2, FID_knight_walk3, FID_knight_walk4
-kn_climbrest:   CLIMBREST FID_knight_climb1, FID_knight_walk1
-kn_attack:      DB FID_knight_windup, 2, 0, FID_knight_slash, 2, SF_IMPACT, FID_knight_follow, 2, 0, SEQ_END
-kn_hurt:        DB KN_HURT, 3, 0, SEQ_END
-kn_block:       DB KN_BLOCK, 3, 0, SEQ_END
-kn_death:       DEATHSEQ KN_HURT, KN_DEAD, FID_knight_dead, KN_REST
-; --- Wizard ---
-wz_idle:        DB 32, WZ_REST, 16, WZ_IDLE2, 16, SEQ_END
-wz_move:        MOVECYC4 wizard_walk1, wizard_walk2, wizard_walk3, wizard_walk4
-wz_climb:       CLIMBCYC FID_wizard_climb1, FID_wizard_climb2, FID_wizard_walk1, FID_wizard_walk2, FID_wizard_walk3, FID_wizard_walk4
-wz_climbrest:   CLIMBREST FID_wizard_climb1, FID_wizard_walk1
-                ; C3-7: KS_ATTACK = the staff melee (gap 0, game.md §6.2: STAFF_RAISE
-                ; wind-up -> STAFF_SWING strike, IMPACT on the swing). D3-0: the
-                ; PROTO ranged zap (CAST1 -> CAST2 at gap > 0) is gone: a Mage
-                ; with no spell has no ranged attack (game.md §5 / §11.4).
-WZ_WIND         EQU 2                          ; wind-up ticks = the wizard's KS_IMPACT
-wz_attack:      DB WZ_SRAISE, WZ_WIND, 0, WZ_SSWING, 3, SF_IMPACT, SEQ_END
-wz_hurt:        DB WZ_HURT, 3, 0, SEQ_END
-wz_death:       DEATHSEQ WZ_HURT, WZ_DEAD, FID_wizard_dead, WZ_REST
-; --- Skeleton ---
-sk_idle:        DB 1, SK_REST, 1, SEQ_END
-sk_move:        MOVECYC4 skeleton_walk1, skeleton_walk2, skeleton_walk3, skeleton_walk4
-sk_climb:       CLIMBCYC FID_skeleton_climb1, FID_skeleton_climb2, FID_skeleton_walk1, FID_skeleton_walk2, FID_skeleton_walk3, FID_skeleton_walk4
-sk_climbrest:   CLIMBREST FID_skeleton_climb1, FID_skeleton_walk1
-sk_attack:      DB FID_skeleton_raise, 3, 0, FID_skeleton_cut, 2, SF_IMPACT, SEQ_END
-sk_hurt:        DB SK_HURT, 3, 0, SEQ_END
-                ; Skeleton death uses its sheet COLLAPSED frame (always exists)
-sk_death:       DEATHSEQ SK_HURT, FID_skeleton_collapsed, FID_skeleton_collapsed, SK_REST
-; --- Goblin ---
-gb_idle:        DB 1, GB_REST, 1, SEQ_END
-gb_move:        MOVECYC4 goblin_walk1, goblin_walk2, goblin_walk3, goblin_walk4
-gb_climb:       CLIMBCYC FID_goblin_climb1, FID_goblin_climb2, FID_goblin_walk1, FID_goblin_walk2, FID_goblin_walk3, FID_goblin_walk4
-gb_climbrest:   CLIMBREST FID_goblin_climb1, FID_goblin_walk1
-gb_attack:      DB FID_goblin_clubup, 3, 0, FID_goblin_smash, 2, SF_IMPACT, SEQ_END
-gb_hurt:        DB GB_HURT, 3, 0, SEQ_END
-gb_death:       DEATHSEQ GB_HURT, GB_DEAD, FID_goblin_dead, GB_REST
-; --- Ghost (flyer: FLY uses the idle loop) ---
-gh_idle:        DB 12, FID_ghost_float1, 6, FID_ghost_float2, 6, SEQ_END
-gh_climbrest:   DB GH_REST, 0
-gh_attack:      DB FID_ghost_float2, 2, 0, GH_LUNGE, 2, SF_IMPACT, SEQ_END
-gh_hurt:        DB GH_HURT, 3, 0, SEQ_END
-gh_death:       DEATHSEQ GH_HURT, GH_DEAD, FID_ghost_dead, GH_REST
-; --- Rat ---
-rt_idle:        DB 1, RT_REST, 1, SEQ_END
-rt_move:        MOVECYC2 rat_run1, rat_run2
-rt_climbrest:   DB RT_REST, 0
-rt_attack:      DB FID_rat_run1, 1, 0, RT_BITE, 2, SF_IMPACT, SEQ_END
-rt_hurt:        DB RT_HURT, 3, 0, SEQ_END
-rt_death:       DEATHSEQ RT_HURT, RT_DEAD, FID_rat_dead, RT_REST
-; --- Bat (flyer) ---
-bt_idle:        DB 12, FID_bat_flapup, 3, FID_bat_glide, 3, FID_bat_flapdown, 3, FID_bat_glide, 3, SEQ_END
-bt_climbrest:   DB BT_REST, 0
-bt_attack:      DB FID_bat_flapup, 2, 0, BT_DIVE, 2, SF_IMPACT, SEQ_END
-bt_hurt:        DB BT_HURT, 3, 0, SEQ_END
-bt_death:       DEATHSEQ BT_HURT, BT_DEAD, FID_bat_dead, BT_REST
-; --- Slime ---
-sl_idle:        DB 24, FID_slime_wobble, 8, FID_slime_squash, 4, FID_slime_wobble, 8, FID_slime_stretch, 4, SEQ_END
-sl_move:        MOVECYC2 slime_squash, slime_stretch
-sl_climbrest:   DB SL_REST, 0
-sl_attack:      DB FID_slime_squash, 2, 0, SL_LUNGE, 2, SF_IMPACT, SEQ_END
-sl_hurt:        DB SL_HURT, 3, 0, SEQ_END
-sl_death:       DEATHSEQ SL_HURT, SL_DEAD, FID_slime_dead, SL_REST
-
-;------------------------------------------------------------------------------
-; kind_seqs: KS_STRIDE (18) B per kind — see KS_* in defs.asm.
-;------------------------------------------------------------------------------
-kind_seqs:
-                DW kn_idle, kn_move, kn_climb, kn_climbrest, kn_attack, kn_hurt, kn_block, kn_death
-                DB 2
-                DW wz_idle, wz_move, wz_climb, wz_climbrest, wz_attack, wz_hurt, wz_hurt, wz_death
-                DB WZ_WIND
-                DS KS_STRIDE, 0                ; K_ROGUE retired (hole keeps K_* ids stable)
-                DW sk_idle, sk_move, sk_climb, sk_climbrest, sk_attack, sk_hurt, sk_hurt, sk_death
-                DB 3
-                DW gb_idle, gb_move, gb_climb, gb_climbrest, gb_attack, gb_hurt, gb_hurt, gb_death
-                DB 3
-                DW gh_idle, gh_idle, gh_idle, gh_climbrest, gh_attack, gh_hurt, gh_hurt, gh_death
-                DB 2
-                ; rat / slime: KS_CLIMB = the move cycle (never used: not KF_CLIMBER,
-                ; but a vertical M_MOVE would draw it at px & 4 = 0 with any phase):
-                ; its even-slot frames must keep both shifts (ASSERTs after the table)
-                DW rt_idle, rt_move, rt_move, rt_climbrest, rt_attack, rt_hurt, rt_hurt, rt_death
-                DB 1
-                DW bt_idle, bt_idle, bt_idle, bt_climbrest, bt_attack, bt_hurt, bt_hurt, bt_death
-                DB 2
-                DW sl_idle, sl_move, sl_move, sl_climbrest, sl_attack, sl_hurt, sl_hurt, sl_death
-                DB 2
-                ASSERT $ - kind_seqs == K_COUNT * KS_STRIDE
-                ASSERT (FFL_rat_run1 & FF_MOTION) && (FFL_slime_squash & FF_MOTION)
+WZ_WIND         EQU 2
 
 ; hero_jump — the §2.4 arc frames per hero kind (anim_entity .jump; only the
 ; hero jumps, try_jump): 2 B/kind {JUMP1 (ticks 0 / 13, aligned), JUMP2
@@ -316,8 +228,7 @@ abl_seq:
                 ASSERT $ - abl_seq == ABL_COUNT * ABS_STRIDE
                 ASSERT ABL_SPARK == 0 && ABL_LIGHTNING == 4 && ABL_POWER == 5 && ABL_WHIRL == 6 && ABL_DAGGER == 7 && ABL_BOW == 8
 
-; resting frame per kind (select screen, HOLD fallback)
-kind_rest:      DB KN_REST, WZ_REST, 0, SK_REST, GB_REST, GH_REST, RT_REST, BT_REST, SL_REST
+; (3F-T2: kind_rest — the per-kind resting frame — is gone: nothing read it.)
 
 ; (B3B-13: the kind names are strings TX_NM_* in src/strings.txt, bank-1 text block)
 
@@ -361,10 +272,5 @@ KROW_W          EQU 9                   ; kinds per KROW (its parameter count)
                 DB v0, v1, v2, v3, v4, v5, v6, v7, v8
                 DS K_MAX - KROW_W, 0
     ENDM
-; KROWFX v0..v8, fxw, fxm — KROW plus the two class FX kinds' columns (the
-; last two ids, defs.asm K_FXW / K_FXM; D3-4: only KT_FID0 / KT_FCNT use it)
-    MACRO KROWFX v0, v1, v2, v3, v4, v5, v6, v7, v8, fxw, fxm
-                DB v0, v1, v2, v3, v4, v5, v6, v7, v8
-                DS K_FXW - KROW_W, 0
-                DB fxw, fxm
-    ENDM
+; (3F-T2: KROWFX — the FX kinds' KT_FID0 / KT_FCNT columns — is gone with them:
+; the generation units are R6 gu_tab, pool6.asm.)

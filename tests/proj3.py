@@ -895,7 +895,7 @@ def main():
             p9_bad.append(("shift", got))
         p.wb("TURN_TICK", 0)
         # set_reaction_at: impact tick + TURN_TICK
-        imp = p.rb(S["kind_seqs"] + S["KS_IMPACT"] + K_KNIGHT * S["KS_STRIDE"])
+        imp = p.rb((S["seq_rows"] & 0xFF00 | p.rb(S["kind_tab"] + S["KT_SEQ"] + K_KNIGHT)) + S["KS_IMPACT"])  # 3F-T2 seq cache row
         for tt in (0, 3):
             p.setup(two(K_RAT, SPARK), 1)
             p.wb("TURN_TICK", tt)

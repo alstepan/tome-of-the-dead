@@ -22,15 +22,16 @@ the pool banks 0/4/6 (whole 16 KB each), the whole FRT (FRT_MAX x 16 B),
 SEL_FRT_SAVE and the allocator state (ALLOC_IDX/PTR, mark). The reference
 replays the same generator sessions (3F-T1 — boot: alloc_reset, the two
 select idles, save; each game: select restores the idles' FRT rows,
-alloc_reset + the idles again, gen_kind(hero), gen_kind(hero + K_FX_BASE) —
+alloc_reset + the idles again, (3F-T2 pool_hero: monster FRT rows + the FX
+rows outside the class FX NONE) gen(hero), gen(hero + K_FX_BASE) —
 D3-4: the class FX kind with its overlapping fid range —, alloc_mark; each
-level: alloc_restore, FRT monster rows NONE, the level's generation kinds
+level: alloc_restore, FRT monster rows + non-class FX rows NONE, the level's generation units
 from the LP_KINDS / LP_BOSS bytes read at that point and the snapshot's
 pool_gmap) over the bank / FRT bytes the snapshot
 starts with: allocator, variant choice (MOTION: shift 0 + 4; else the anchor (+4 for FF_PH4)
 one shift; SYM: left = right entries), mirror (bit-reversed bytes, reversed
 column pairs), the 4-px shift with its spill column. Geometry (frame_tab cols,
-H, anchor offsets), kind_tab FID0/FCNT and the frame flags (fdesc_tab
+H, anchor offsets), R6 gu_tab fid0 / fcnt (3F-T2) and the frame flags (fdesc_tab
 FD_FLAGS) are read from the image; the pixel data never is. Also asserts
 GEN_OVERFLOW = 0 and GEN_TRAP = 0 at every point, and reports cold-path
 T-states (boot -> first select_tick, select key -> first tick_work).
@@ -480,11 +481,36 @@ class Ref:
         self.frt[o:o + 3] = bytes((bank, addr & 0xFF, addr >> 8))
         self.pool[bank][addr - 0xC000:addr - 0xC000 + len(out)] = out
 
+    def unit(self, u):
+        """(fid0, fcnt) of generation unit u (3F-T2: R6 gu_tab, read from the
+        snapshot's bank 6; was kind_tab KT_FID0 / KT_FCNT)."""
+        if "gu_tab" not in self.S:                  # --baseline: a pre-3F-T2 checkout
+            return self.kt[self.S["KT_FID0"] + u], self.kt[self.S["KT_FCNT"] + u]
+        o = self.S["gu_tab"] - 0xC000 + 2 * u
+        return self.pool[6][o], self.pool[6][o + 1]
+
     def kind(self, k):
-        S = self.S
-        f0, n = self.kt[S["KT_FID0"] + k], self.kt[S["KT_FCNT"] + k]
+        f0, n = self.unit(k)
         for f in range(f0, f0 + n):
             self.frame(f)
+
+    def frt_none(self, f0, n):
+        st = self.S["FRT_STRIDE"]
+        self.frt[f0 * st:(f0 + n) * st] = bytes([self.S["FRT_NONE"]]) * (n * st)
+
+    def begin(self, hero):
+        """R6 pl_begin (3F-T2), every pool_hero / pool_list session: monster
+        FRT rows NONE, then the FX rows outside the hero's class FX unit."""
+        S = self.S
+        self.frt_none(S["KFID_MONSTERS"], S["KFCNT_MONSTERS"])
+        if "gu_tab" not in S:                          # --baseline: pre-3F-T2 keeps the other FX rows
+            return
+        fx0, fxn = S["KFID_FXM"], S["KFID_FXW"] + S["KFCNT_FXW"]
+        h0, hn = self.unit(hero + S["K_FX_BASE"])
+        if h0 > fx0:
+            self.frt_none(fx0, h0 - fx0)
+        if fxn > h0 + hn:
+            self.frt_none(h0 + hn, fxn - h0 - hn)
 
     def idles(self):
         S = self.S
@@ -506,6 +532,8 @@ class Ref:
         for i, f in enumerate(self.idles()):          # sel_run: sel_frt_copy restore
             self.frt[f * st:(f + 1) * st] = self.save[i * st:(i + 1) * st]
         self.gen_idles()                               # start_game (3F-T1): from the bottom
+        self.hero = hero
+        self.begin(hero)                               # 3F-T2 pool_hero
         self.kind(hero)
         if "K_FX_BASE" in self.S:                      # D3-4: + the class FX kind
             self.kind(hero + self.S["K_FX_BASE"])
@@ -517,6 +545,9 @@ class Ref:
         S = self.S
         o = S["pool_gmap"] - 0xC000
         gm = self.pool[6][o:o + 3 * S["PGMAP_N"]]      # R6 never changes in play here
+        nx = S.get("PXMAP_N", 0) if "pool_xmap" in S else 0     # --baseline: pre-3F-T2 has none
+        o = S.get("pool_xmap", 0xC000) - 0xC000        # 3F-T2 hero extras: kind, hero, unit
+        xm = self.pool[6][o:o + 3 * nx]
         out = []
         for k in lp:
             us = [k]
@@ -524,14 +555,15 @@ class Ref:
                 if gm[3 * r] == k:
                     us = [u for u in gm[3 * r + 1:3 * r + 3] if u != 0xFF]
                     break
-            out += [u for u in us if u not in out]
+            us += [xm[3 * r + 2] for r in range(nx)
+                   if xm[3 * r] == k and xm[3 * r + 1] == self.hero]
+            out += [u for u in us if u not in out and self.unit(u)[1]]
         return out
 
     def level(self, lp):
         S, st = self.S, self.S["FRT_STRIDE"]
         self.idx, self.ptr = self.mark                 # alloc_restore
-        a, n = S["KFID_MONSTERS"] * st, S["KFCNT_MONSTERS"] * st
-        self.frt[a:a + n] = bytes([S["FRT_NONE"]]) * n
+        self.begin(self.hero)                          # 3F-T2 pool_list's pl_begin
         for k in self.gen_list(lp):
             self.kind(k)
 
@@ -597,7 +629,9 @@ def main():
         # region (2,055 B packed: 9 pages with the Spider stand-in; pool slack
         # 169) — the boot select idle and every wizard game read their
         # sources from bank 6 while the pool is written to banks 4 / 6
-        variants.append(("src6", REPO, kit + ["SRC6_PAGES=9"], {"SRC6_KINDS": "K_WIZARD"}))
+        # 3F-T2: R6 grew 8 pages, so 9 SRC6 pages leave POOL_CAP below the
+        # PROTO rooms' need: this variant never enters PROTO (POOL_PROTO_CHECK=0)
+        variants.append(("src6", REPO, kit + ["SRC6_PAGES=9", "POOL_PROTO_CHECK=0"], {"SRC6_KINDS": "K_WIZARD"}))
     if a.baseline:                 # (an older checkout ignores the unknown define)
         variants.append(("baseline", os.path.abspath(a.baseline), kit, None))
     res, fails = {}, []

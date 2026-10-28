@@ -372,7 +372,7 @@ def spells(h, p, check):
 
     # --- S7: the staff bonk ---
     scene([(3, HX + 3, 200)], hero_hp=200, behind=False)
-    imp = p.rb(S["kind_seqs"] + S["KS_IMPACT"] + K_WIZARD * S["KS_STRIDE"])
+    imp = p.rb((S["seq_rows"] & 0xFF00 | p.rb(S["kind_tab"] + S["KT_SEQ"] + K_WIZARD)) + S["KS_IMPACT"])  # 3F-T2 seq cache row
     bonk, raises, hit_turn = S["FID_staff_bonk"], 0, None
     for _ in range(8):
         t0 = p.rw("TURN_COUNTER")

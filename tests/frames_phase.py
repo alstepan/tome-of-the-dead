@@ -5,7 +5,7 @@ No emulator: reads build/wazhack.sym + .sna (any DEBUG_KIT) and src/*.asm.
     MOT or FF_PH4 (WK4), odd slots MOT or not FF_PH4 (WK0 / STA);
   * a WK4 frame (FF_PH4, drawn only at px & 4 = 4) is used nowhere else: not in
     any other cycle / sequence / climb-rest of any kind, hero_jump, abl_seq,
-    wz_bonk, kind_rest, and not named in src/ outside the frame list and the
+    wz_bonk, and not named in src/ outside the frame list and the
     MOVECYC lines; a KS_CLIMB that IS the move cycle (rat / slime) needs MOT
     even slots (drawn cell-aligned at any phase);
   * hero_jump JUMP2 (drawn mid-tween at both parities) is MOT.
@@ -26,7 +26,14 @@ sna = open(os.path.join(REPO, "build/wazhack.sna"), "rb").read()
 RAM = sna[27:27 + 49152]                       # $4000..$FFFF as saved
 
 
+# 3F-T2: the kind sequences are R6 masters (src/seq_img.asm), a ZX0 stream in
+# the .sna; its raw image (DISPed at SQ_IMG) is build/ovl/seq.bin
+IMG = open(os.path.join(REPO, "build/ovl/seq.bin"), "rb").read()
+
+
 def b(a):
+    if S["SQ_IMG"] <= a < S["SQ_IMG"] + len(IMG):
+        return IMG[a - S["SQ_IMG"]]
     assert 0x4000 <= a < 0xC000, hex(a)        # bank 5 / bank 2 only (no paged reads)
     return RAM[a - 0x4000]
 
@@ -63,12 +70,13 @@ def seq(p):
 uses = []                                       # (fid, where) outside the move cycles
 movecyc = {}
 for k in range(S["K_COUNT"]):
-    base = S["kind_seqs"] + k * S["KS_STRIDE"]
-    if w(base) == 0:
+    blk = w(S["ksm_tab"] + 2 * k)               # the kind's master block (seq_img.asm)
+    if blk == 0:
         continue                                # the retired Rogue hole
     flyer = b(S["kind_tab"] + S["KT_FLAGS"] + k) & S["KF_FLYER"]
-    ptr = {n: w(base + S[n]) for n in ("KS_IDLE", "KS_MOVE", "KS_CLIMB", "KS_CLIMBREST",
-                                       "KS_ATTACK", "KS_HURT", "KS_BLOCK", "KS_DEATH")}
+    ptr = {n: blk + S["KSM_SEQ"] + b(blk + S["KSM_OFF"] + S[n] // 2)
+           for n in ("KS_IDLE", "KS_MOVE", "KS_CLIMB", "KS_CLIMBREST",
+                     "KS_ATTACK", "KS_HURT", "KS_BLOCK", "KS_DEATH")}
     if not flyer:
         tot, ents = cycle(ptr["KS_MOVE"])
         movecyc[k] = ents
@@ -92,7 +100,6 @@ for k in range(S["K_COUNT"]):
     uses.append((b(ptr["KS_CLIMBREST"]), f"kind {k} KS_CLIMBREST"))
     for n in ("KS_ATTACK", "KS_HURT", "KS_BLOCK", "KS_DEATH"):
         uses += [(f, f"kind {k} {n}") for f in seq(ptr[n])]
-    uses.append((b(S["kind_rest"] + k), f"kind {k} kind_rest"))
 for h in range(2):
     j1, j2 = b(S["hero_jump"] + 2 * h), b(S["hero_jump"] + 2 * h + 1)
     uses.append((j1, f"hero {h} JUMP1"))

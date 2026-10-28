@@ -13,7 +13,7 @@ Reads build/wazhack.sna + .sym (build first) and the approved D3-3 grids
   F4  the packed block (FD_BLK, banks 1/3) unpacks (tools/bin/dzx0) to the
       grid's pixels at FD_FRM: native rows [mask, data] per column, mask 1 =
       '.', data 1 = '#'
-  F5  kind_tab KT_FID0 / KT_FCNT of K_FXW / K_FXM (the last two ids) and the
+  F5  R6 gu_tab fid0 / fcnt of K_FXW / K_FXM (the last two ids) and the
       overlap (K_FXW starts at spark_fizz1 = the last 2 of K_FXM)
   F6  status icons (bank-1 vdata): 7 x 8 B glyphs + 7 attrs == status_icons.grid
 Run: python3 tests/frames_d3.py
@@ -152,10 +152,10 @@ def main():
         chk(f"F4 {nm} pixels", block(blk)[frm:frm + len(raw)] == raw, True)
     chk("F1 frame count (4 Knight + 23 FX)", n, 27)
 
-    kt = mem(B, S["kind_tab"], 512)
+    gu = B[6][S["gu_tab"] - 0xC000:S["gu_tab"] - 0xC000 + 2 * 32]   # 3F-T2: R6 gu_tab (was kind_tab KT_FID0 / KT_FCNT)
     for k in ("FXW", "FXM"):
         kid = S[f"K_{k}"]
-        chk(f"F5 kind_tab K_{k} FID0/FCNT", (kt[S["KT_FID0"] + kid], kt[S["KT_FCNT"] + kid]),
+        chk(f"F5 gu_tab K_{k} fid0 / fcnt", (gu[2 * kid], gu[2 * kid + 1]),
             (S[f"KFID_{k}"], S[f"KFCNT_{k}"]))
     chk("F5 ids", (S["K_FXW"], S["K_FXM"], S["K_FX_BASE"] + S["K_KNIGHT"], S["K_FX_BASE"] + S["K_WIZARD"]),
         (30, 31, 30, 31))
