@@ -3412,3 +3412,9 @@ fi_full); low RAM 85 / 95 → 77 / 77 (`fi_cells` / `fi_cell` + `tile_rect` in, 
 `item_glyph` / `it_cls` / `it_tab` / `item_ink` out); bank 1 168 → 91 (scroll strips, the
 2 `fi_full` calls); bank 2 13 + 46 pad → 13 + 36 pad (`erase_rect .item` / `.dec`, `fi_row`, −
 `tile_rect`); RAM: the cache tables above + 256 B of stack.
+
+### 3F-B6 loop-walk (`feat/3f-b6-loopwalk`)
+
+`anim_tick` (bank 2) and `resolve_monsters` (bank 3) walk IX by 32 / the SLOTREC pointer by 16 and skip empty slots early (no `ent_ix`, no `ANIM_SLOT` store for an empty, undrawn slot). Bank 2: +36 B (`kind_tab` pad 87 -> 51 B, free-to-FRT 549 unchanged; bank 2 free 636 -> 600). Bank 3: -1 B (10 -> 11 free; 6 merged with B4).
+
+**Placement rule (T7/T8):** put new bank-2 code AFTER `kind_tab` (next to `mark.asm` / `xp2.asm`) so every byte comes out of the 549 free-to-FRT. The 51 B pad before `kind_tab` is only for code that must sit in that page; growth past it moves `kind_tab` a page (-256 B at once). `MON_SLOT` is no longer stored (nothing read it; `ANIM_SLOT` no longer ends at 15). Saved on the worst ticks: pmix resolve -1.8k, anim_tick -1.3k; wcast4 / lcastf anim_tick -1.2k.

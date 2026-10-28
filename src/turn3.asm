@@ -690,37 +690,40 @@ corpse_hit:
 ;==============================================================================
 resolve_monsters:
                 call cache_player
-                ld   a, 1
-.lp:            ld   (MON_SLOT), a
-                call ent_ix
-                ld   a, (ix+E_FLAGS)
+                ld   ix, P_ENTITIES + P_ENT_STRIDE ; B6: IX walks by 32, slot in C; MON_SLOT is
+                ld   de, P_ENT_STRIDE                 ; (MON_SLOT is no longer stored: nothing read it)
+                ld   bc, ((P_MAX_ENT - 1) << 8) | 1    ; B = slots left, C = slot
+.lp:            ld   a, (ix+E_FLAGS)
                 and  EF_ACTIVE | EF_PENDING | EF_DYING
                 cp   EF_ACTIVE
-                jr   nz, .next
+                jr   nz, .step
                 ld   a, (CUR_ROOM)
                 cp   (ix+E_ROOM)
-                jr   nz, .next
+                jr   nz, .step
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
-                jr   nz, .next                 ; player already dying: stand down
-                ld   a, (MON_SLOT)             ; D3-8: the status step at the start of its
-                add  a, ST_FLAGS & $FF         ; phase (game.md §2.2 / §6.4); STATUS 0 =
-                ld   l, a                      ; the fast path (~50 T)
-                ld   h, ST_FLAGS >> 8
+                jr   nz, .step                 ; player already dying: stand down
+                push bc                        ; the callees clobber BC / DE (keep IX): the
+                push de                        ; walk state lives on the stack across them
+                ld   a, c
+                add  a, ST_FLAGS & $FF         ; D3-8: the status step at the start of its
+                ld   l, a                      ; phase (game.md §2.2 / §6.4); STATUS 0 =
+                ld   h, ST_FLAGS >> 8          ; the fast path (~50 T)
                 ld   a, (hl)
                 or   a
                 jr   z, .ai
-                ld   a, (MON_SLOT)
+                ld   a, c
                 ld   hl, mon_status            ; bank 7 (status7.asm): L = 1 the action is
                 call far7                      ; spent (held / confused step / fear)
                 ld   a, l
                 or   a
                 jr   nz, .next
 .ai:            call ai_monster
-.next:          ld   a, (MON_SLOT)
-                inc  a
-                cp   P_MAX_ENT
-                jr   c, .lp
+.next:          pop  de
+                pop  bc
+.step:          inc  c
+                add  ix, de
+                djnz .lp
                 jp   materialise
 
 ; (POTIONS: potion_pickup moved to bank-7 pickup7.asm, D3-7 T5; T6: floor_pickup.)

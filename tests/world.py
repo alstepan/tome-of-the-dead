@@ -4293,7 +4293,10 @@ def main():
             for _ in range(12):
                 p.tick()
                 if p.pc() == probe:
-                    seen[p.rb("MON_SLOT")] = p.rb("PORT_7FFD_SHADOW") & 7
+                    # (>> 5 = P_ENT_STRIDE 32, ASSERTed in anim.asm)
+                    # B6: MON_SLOT is gone; IX (kept by the callees) = the monster at the probe
+                    ixr = int(re.search(r"IX=([0-9a-fA-F]{4})", p.z.cmd("get-registers")).group(1), 16)
+                    seen[(ixr - S["P_ENTITIES"]) >> 5] = p.rb("PORT_7FFD_SHADOW") & 7  # >> 5 = P_ENT_STRIDE 32 (ASSERTed in anim.asm)
                     if 4 in seen:
                         break
             p.release()
