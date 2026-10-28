@@ -85,43 +85,77 @@ def orn_index(col):
 
 
 def item_tile(item):
-    """build_room_map / ap_stamp item_glyph: type -> floor glyph id, None = not drawn."""
-    try:
-        return IM.glyph(item) if item else None
-    except ValueError:
-        return None
+    """FLOOR1: build_room_map draws every live entry (any type but IT_NONE) as
+    the markers T_ITEM0 + k on its 2x2 cells (k = 2s upper row, 2s + 1 lower);
+    the id of the upper row on storey 0 (None = not drawn)."""
+    return T["T_ITEM0"] if item else None
 
 
 def item_ink(item):
     """lowram item_ink: the floor attr of a type (items_model.ITEM_INK; the legacy
-    IT_POTION $42), None = no glyph (fl_attr paints nothing)."""
+    IT_POTION $42)."""
     if item == S["IT_POTION"]:
         return 0x42
-    return IM.ITEM_INK.get(item)
+    return IM.ITEM_INK.get(item, 0)
 
 
-def floor_inks(fl, room):
-    """3E-T6: {(col, row): attr} of room's live FLOOR_LIST entries (fl = the
-    128-B list; the last entry of a cell with a glyph wins): the per-cell ink
-    fl_attr paints over the TILE_ATTRS of the item glyph."""
-    out = {}
+def item_icon(item):
+    """FLOOR1 fi_new: the icons16 index of a floor type (type - IT_BAG_LO; the
+    legacy IT_POTION = Heal, daggers / arrows = the 2 floor-ammo icons)."""
+    if item >= S["IT_BAG_LO"]:
+        return item - S["IT_BAG_LO"]
+    return {S["IT_POTION"]: S["IT_P_HEAL"] - S["IT_BAG_LO"], S["IT_DAGGER"]: S["ICONS16_AMMO_DAGGER"],
+            S["IT_ARROW"]: S["ICONS16_AMMO_ARROW"]}.get(item, S["ICONS16_PH"])
+
+
+def icon_cell(item, h, r):
+    """The 8 bitmap bytes of half h (0 left / 1 right col), row r (0 top / 1
+    bottom) of the type's 16x16 icon (icons16: 4 quarters of 8 lines)."""
+    from game_lib import icon16_bytes
+    ic = icon16_bytes(item_icon(item))
+    return bytes(ic[16 * r + 8 * h:16 * r + 8 * h + 8])        # FLOOR1: quarters of 8 lines
+
+
+def floor_cells(fl, room, slots=None):
+    """FLOOR1: {(col, row): (glyph 8 B, attr)} the screen shows over room's
+    marker cells (fl = the 128-B FLOOR_LIST): each col of a storey shows its TOP
+    entry (the last live one in list order). INVARIANT (2026-10-28): a room holds
+    <= FI_SLOTS (8) distinct item types, so every top has a glyph slot (the model
+    asserts it: a 9th type is a test bug, drop_put refuses it). Cells c..c+1,
+    rows 9s+6..9s+7."""
+    slots = S["FI_SLOTS"] if slots is None else slots
+    tops, types = {}, set()
     for i in range(S["FLOOR_MAX"]):
         rb, col, it = fl[4 * i], fl[4 * i + 1], fl[4 * i + 2]
-        if rb != S["FL_EMPTY"] and rb & S["FL_ROOM_MASK"] == room and item_ink(it):
-            out[(col, SR * (1 if rb & S["FL_S1"] else 0) + SA - 1)] = item_ink(it)
+        if rb == S["FL_EMPTY"] or rb & S["FL_ROOM_MASK"] != room:
+            continue
+        tops[(rb, col)] = it
+        types.add(it)
+    assert len(types) <= slots, "room %d holds %d distinct item types (> %d)" % (room, len(types), slots)
+    out = {}
+    for (rb, col), it in tops.items():
+        top = SR * (1 if rb & S["FL_S1"] else 0) + SA - 2
+        for h in (0, 1):
+            for r in (0, 1):
+                out[(col + h, top + r)] = (icon_cell(it, h, r), item_ink(it))
     return out
+
+
+floor_inks = floor_cells             # (pre-FLOOR1 name: the per-cell inks)
 
 
 def expected_cell(rmap, glyphs, attrs, orn, ink, c, r, logical_col=None):
     """(glyph, attr) the screen shows for map cell (c, r): its tile, except the
-    row-17 ornament over PLAT / WALLF cells (glyph by logical col); a floor-item
-    cell takes its ink from `ink` (floor_inks; 3E-T6)."""
+    row-17 ornament over PLAT / WALLF cells (glyph by logical col) and FLOOR1
+    a floor-item cell (`ink` = floor_cells: its icon quarter + ink)."""
+    if ink and (c, r) in ink:
+        return ink[(c, r)]
     t = rmap[r * 32 + c]
     g = glyphs[t * 8:t * 8 + 8]
     if r == F1 and t in (T["T_PLAT"], T["T_WALLF"]):
         k = orn_index(c if logical_col is None else logical_col)
         g = orn[k * 8:k * 8 + 8]
-    return bytes(g), (ink or {}).get((c, r), attrs[t])
+    return bytes(g), attrs[t]
 
 
 def render_room(blk, r, decor=True, anim=None):
@@ -211,10 +245,12 @@ def render_room(blk, r, decor=True, anim=None):
     for i in range(S["FLOOR_MAX"]):
         o = OFF_FLOOR + i * S["FL_STRIDE"]
         room, col, item = blk[o], blk[o + 1], blk[o + 2]
-        tile = item_tile(item)                 # 3E-T6: the class glyph (item_glyph)
-        if room & S["FL_ROOM_MASK"] == r and tile is not None:
+        tile = item_tile(item)                 # FLOOR1: T_ITEM over the 2x2 footprint
+        if room != S["FL_EMPTY"] and room & S["FL_ROOM_MASK"] == r and tile is not None:
             s = 1 if room & S["FL_S1"] else 0
-            m[SR * s + SA - 1][col] = tile
+            for k in (0, 1):
+                m[SR * s + SA - 2][col + k] = tile + 2 * s
+                m[SR * s + SA - 1][col + k] = tile + 2 * s + 1
     seed = d[S["RD_SEED"]] | d[S["RD_SEED"] + 1] << 8
     flat = [t for row in m for t in row]
     if seed == 0:

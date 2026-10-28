@@ -44,6 +44,7 @@ import game  # noqa: E402
 game.UPDATE = _UPD
 game.PNG_DIR = os.environ.get("PAGE_PNG") or None   # PAGE_PNG=dir: dump the goldens' screens
 import game_lib  # noqa: E402
+import room_model  # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, SCREEN_FRAME_LEN  # noqa: E402
 
 KIT = bool(S.get("KIT_DEBUG", 0))
@@ -308,13 +309,10 @@ def bag_page(p, check):
     z = p.z
     tc = lambda: p.rw("TURN_COUNTER")          # noqa: E731
     I = lambda n: S["IT_" + n]                 # noqa: E731,E741
-    it_tab = bytes(z.read_memory(S["it_tab"], S["IT_COUNT"]))
-    it_cls = bytes(z.read_memory(S["it_cls"], 7))
     attr_at, cell_bytes = game_lib.attr_at, game_lib.cell_bytes
 
-    def ink(t):
-        b = it_tab[t]
-        return (b & 7) | (0x40 if b & 8 else 0)
+    def ink(t):                                # FLOOR1: it_tab lives in R6: the model's ink
+        return room_model.item_ink(t)
 
     def icon(idx):
         """IC1: the 16x16 icon idx (type - IT_BAG_LO; 39 + worn slot = placeholder) cells."""

@@ -170,8 +170,10 @@ line (the generator must not change between 3E and 3F).
   change (the turn is held 3 ticks) and again for 3 ticks on arrival, with the `DRAIN` SFX.
 - Mage sense also runs after a held Wait and on the room-entry turn; on entry (the
   transition tick) a sensed trap is drawn at once in its ink, without the blink.
-- No floor item ever shares a trap col: drops (§8.11 rulings 2) skip trap cols, hidden or
-  known.
+- No floor item ever covers a trap col: **FLOOR1 (2026-10-26):** an item covers cols c..c+1,
+  so a trap col t is never c or c+1 — the generator (trap after items: t ∉ {c, c+1} of every
+  item of the storey) and drops (§8.11 rulings 2: no footprint over a trap col, hidden or
+  known).
 
 **Trigger.** A trap fires when a hero move **first brings its col under the body** (walk,
 bump-free step, jump landing, fall landing, ladder step-off onto the storey). Standing on it,
@@ -1986,7 +1988,45 @@ page close OK; drops + boss uniques in 3E; other-class books cut; light-ID kept;
 screen, sound not paused). 3E has ≈ 2.4 KB free vs ≈ 4.4 KB need, so every ruling picks the
 smallest consistent rule.
 
-**Q1 Floor-item glyphs: 6 class glyphs, per-type ink, 0 new common ids.** All 64 ids are
+**FLOOR1 — floor items are their 16×16 icons (user-approved 2026-10-26; supersedes Q1's class
+glyphs and Q5's "floor reuse: NO").** Every floor item is drawn as its type's page icon (Q5) on
+a **2×2-cell footprint**, in its type's ink (`it_tab`), so each type is recognisable on the floor.
+
+- **Footprint:** cols **c..c+1** (`FL_COL` = c), rows **9s+6..9s+7** (the standing row and the
+  row above it). **c ∈ 2..28** (c+1 ≤ 29: never a door col 0–1 / 30–31); both cols legal
+  (no ladder / shaft / hole footprint f..f+2, no pit p−1..p+3, no edge block or its rubble, no
+  L2 span +1).
+- **Spacing:** no other item within **c−1..c+1** (footprints may touch, never overlap);
+  **exact-col stacks** are allowed (the bow + its bundle, ammo, drops onto a pile). A stack
+  shows its last live entry in list order.
+- **Traps:** t ≠ c, c+1 (§1.5).
+- **Generation (Q8):** ≤ **6 entries per room** (both storeys; the bow's bundle may make a
+  7th; designer target was ≈ 4, but 4 loses an item on ~13 % of levels, 6 on 0.9 %), placement
+  tries per item **16** (was 8; the 2-col footprint needs them). The GEN_RNG potions are
+  re-checked against these rules on ITEM_RNG and an illegal one re-placed (non-start pool,
+  scan fallback). **The D8 lair exclusion is gone** (no 60..63 class glyph exists any more).
+- **Pickup:** the body takes an item when it covers **c or c+1**; BAG FULL on arrival as before
+  (an arrival = the footprint was not under the previous body span).
+- **Drops** (rulings 2): (1) an existing item whose col is within d−1..d+1 of the body's centre
+  col d (an exact-col stack); (2) else the nearest free footprint c in d−3..d+3 (left first; a
+  unique: the whole storey): its 4 cells empty air, floor (TF_FLOOR) under both cols, no unspent
+  trap on c / c+1.
+- **INVARIANT (manager 2026-10-28): a room never holds more than 8 distinct item types**
+  (both storeys, tops and piles; the glyph cache has 8 slots, so every item always has its icon).
+  An ordinary drop of a type that would be the room's 9th is **refused** (monster loot is simply
+  not dropped; a thrown / hero-dropped item of a type the room already holds is never a 9th). A
+  **boss unique** with the room at 8 types **destroys** the lowest-value ordinary item first: the
+  first food / ammo / potion in list order, and every entry of its type (its pile shows the next
+  item), so the unique always fits. (The generator places ≤ 7 entries, so an 8th type is always
+  a monster drop = food / ammo / mana: a victim always exists.)
+- **Potions share one shape** (user 2026-10-27): Heal, Mana and Cure all use the Heal flask
+  icon, told apart by their inks (Heal `$42` red, Mana `$45` cyan, Cure `$44` green) — on the
+  floor, the page and the quick slot. The Mana / Cure grids stay in the assets, unused.
+- Thrown-and-recovered ammo (§6.3) is not built yet; when it is, it lands by the drop rules.
+
+**Q1 Floor-item glyphs: 6 class glyphs, per-type ink, 0 new common ids.** *(Superseded by FLOOR1
+above: the class glyph ids 17 / 18 / 60..63 are no longer placed; 60..63 are now the item
+markers; kept for the history.)* All 64 ids are
 taken except per-level slots **60..63 on D1–D7** (the D8 lectern holds them on D8). Common
 ids 17/18 are re-purposed. Class is read from the **glyph**, the type from the **ink**
 (per-cell attr set when the item is stamped, the same mechanism as known traps §1.5; ink
@@ -2064,7 +2104,7 @@ Supersedes the 2026-10-19 "scaled 8×8 floor glyphs" ruling for the page and pan
 | Panel worn cells | rows 22–23, cols 24/26/28/30 (weapon, armour, helmet, charm) | as the worn row; redrawn on equip/remove/destroy (T8 path) |
 | Quick slots | icon-bar FOOD/POTION/SCROLL slots, rows 18–19, cols `3i`, `3i+1` | the current auto-fill pick (§8.11 rulings 3) + stack count digit at col `3i+2` row 19 (the existing quick-potion layout); empty class → its representative icon (APPLE / HEAL / TELEPORT) greyed by the existing `IS_GREY` rule; redrawn through the existing `slot_redraw` when the pick or count changes |
 
-- **Floor reuse: NO** (user question answered from the numbers). The floor set is 6 class
+- **Floor reuse: NO** *(reversed 2026-10-26 by FLOOR1: the floor draws these icons)* (user question answered from the numbers). The floor set is 6 class
   glyphs × 8 B = **48 B** in tile ids 17/18/60–63 (ids already reserved: 0 B new). Deriving
   8×8 floor glyphs from the 16×16 set needs a 2:1 downscale routine (~40 B, and a 2×2→1 pixel
   reduction is unreadable at 8×8) **and** a tile id per drawn type (39 types vs 4 free ids:
@@ -2178,9 +2218,9 @@ the "four scrolls (unknown)" are gone) — exercises EQUIP, Enchant, READ.
 1/2 · 1/3 · 1/4), the §9.1 column unchanged: Rat Cheese 1/4 · Goblin Apple 1/4 · Orc Meat
 1/3 · Skeleton Archer Arrows ×3 1/2 (Warrior runs) · Necromancer Mana 1/3; no other kind
 drops. Tiers drop as their base kind. Boss uniques = **8 B** (item type per depth D1–D7 +
-the D4 Mage variant, §8.6), always dropped, `m` 0 (BUC is gone, rev 6). Placement: the dead body's centre
-col on its storey's standing row, else the nearest free col within ±3, else a non-unique
-is lost; a unique searches the whole storey. Gameplay RNG. The generator leaves ≥ 1
+the D4 Mage variant, §8.6), always dropped, `m` 0 (BUC is gone, rev 6). Placement (FLOOR1: the
+2-col footprint rules above): onto an item within ±1 of the dead body's centre col, else the
+nearest free footprint within ±3, else a non-unique is lost; a unique searches the whole storey. Gameplay RNG. The generator leaves ≥ 1
 floor-list entry free (≤ 31 used) so a unique always fits; other drops are lost when the
 list is full.
 
@@ -2216,11 +2256,12 @@ list is full.
    · D2 `IT_A_SILK` · D3 `IT_A_GRAVE` · D4 `IT_W_CLEAVER` (Warrior) / `IT_W_BONE` (Mage) · D5
    `IT_C_SCARAB` · D6 `IT_C_GRAVE` · D7 `IT_H_MIRROR`. A unique is simply **a fixed type whose
    table stats beat the generic tier, `m` 0** (no `+2`, no flag; the `U` mark in `items.txt` only
-   drives the shimmer). **Placement:** the body's centre col on its storey's standing row if the
-   cell has no floor entry, else the nearest cell within ±3 with none; arrows may instead merge
-   into an ammo stack in a cell (§6.3 shared-cell rule). Non-unique with no spot or a full list
-   (31 used) is lost silently; a unique searches the whole storey and always fits because the
-   generator leaves entry 32 free (FLOOR_N ≤ 31 for generation).
+   drives the shimmer). **Placement (FLOOR1, see the FLOOR1 rules above):** an
+   existing item within d−1..d+1 of the body's centre col d (an exact-col stack); else the nearest
+   free 2-col footprint within ±3. A drop of a 9th distinct type of the room (the 8-type
+   invariant), with no spot or a full list (31 used) is lost silently; a unique first displaces an
+   ordinary item when the room is at 8 types, then searches the whole storey and always fits
+   because the generator leaves entry 32 free (FLOOR_N ≤ 31 for generation).
 3. **Quick use (icon bar, §3.5), per T10 `bag_pick` modes:** FOOD icon = the **lowest-value food
    type** (Carrot → Apple → Pear → Cheese → Meat); POTION icon = lowest potion type id (Heal →
    Mana → Cure); SCROLL icon = **largest stack**, ties lowest type (Teleport → Fear → Sleep →

@@ -37,7 +37,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.argv = [sys.argv[0], "999"]               # keep game.py's item filter inert
 import game  # noqa: E402
-import game_lib  # noqa: E402
+import game_lib
+import room_model  # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, RUN_LIMIT  # noqa: E402
 
 KIT = bool(S.get("KIT_DEBUG", 0))
@@ -65,9 +66,8 @@ def run(p, check):
     z = p.z
     WT = S["wait_tick"]
     attr_at, cell_bytes = game_lib.attr_at, game_lib.cell_bytes
-    def ink(t):
-        b = p.rb(S["it_tab"] + t)
-        return (b & 7) | (0x40 if b & 8 else 0)
+    def ink(t):                                # FLOOR1: it_tab lives in R6: the model's ink
+        return room_model.item_ink(t)
 
     def stub(body, measure=False):
         assert p.pc() == WT, hex(p.pc())

@@ -195,6 +195,34 @@ TILE_ATTRS      EQU $6900           ; 64 B : attr per tile id (one page: ld h, T
 GEN_SRC         EQU $6940           ; 512 B: staging for vdata reads (pblit, copy_virt; 3E-T1: boot no longer)
 GEN_MIR         EQU $6B40           ; 512 B: mirrored copy (left-facing)
 LOWRAM_END      EQU $6D40
+; FLOOR1 floor-item glyph cache (docs/memory-map.md "FLOOR1"). One room (<= FI_SLOTS
+; distinct types). The bytes erase_rect reads per drawn item line are UNCONTENDED
+; bank 2: FI_GLY (the icons, $BD00: the bottom of the old 768-B stack; the
+; stack keeps 512 B, W20 asserts its depth <= 256 B, measured 66 B). The rest
+; (FI_TSLOT .. FI_INK, $699F..$6CFF) is low RAM in the play-free GEN_SRC /
+; GEN_MIR window (pblit stages <= 54 B below it; TX_DEC above): the pause save /
+; the page's map save / the generator overwrite it,
+; so each of them is followed by fi_full (bank 3). Built by fi_full from
+; FLOOR_LIST, kept by fi_add (R6: one col, a pickup / a drop), read by
+; erase_rect (bank 2, the T_ITEM0..3 marker cells) and fi_cells (lowram: room
+; draw, scroll strips).
+FI_SLOTS        EQU 8               ; distinct item types drawn per room
+FI_NONE         EQU $FF             ; FI_TSLOT: type not cached; FI_TYPE: slot free
+FI_PAD          EQU $699F           ; 1 B: FI_NONE always (FI_TSLOT[FI_NONE]: the "no type" read / write)
+FI_TSLOT        EQU $69A0           ; 64 B: item type -> its slot, FI_NONE
+FI_TYPE         EQU FI_TSLOT + 64   ; 8 B: slot -> its type, FI_NONE (contiguous: fi_full fills both)
+FI_USE          EQU FI_TYPE + FI_SLOTS  ; 8 B: != 0 = a live entry of the room has the slot's type
+FI_CELL         EQU $6A00           ; 2 pages: storey s's at FI_CELL + 256 s, indexed by the map /
+                                    ;   screen low byte L of a marker cell ((row & 7) << 5 | col:
+                                    ;   s0 rows 6 / 7 = $C0.. / $E0.., s1 rows 15 / 16 = $E0.. / $00..)
+                                    ;   = its FI_GLY low byte (slot * 32 + 8 * quarter); valid where
+                                    ;   the map holds T_ITEM0 + k; the rest of the 2 pages unused
+FI_END          EQU FI_CELL + 512
+FI_GLY          EQU $BD00           ; 256 B bank 2: slot s's 16x16 icon at FI_GLY + 32 s (icons16 layout:
+                                    ;   4 quarters UL, UR, LL, LR of 8 contiguous lines)
+FI_INK          EQU $6C00           ; 256 B: the ink of the slot of FI_GLY byte b at FI_INK + b (32 x
+                                    ;   per slot: one read with the glyph pointer's low byte); GEN_MIR,
+                                    ;   below TX_DEC (play-free)
 ; D3-TX: tx_dec's decode buffer (a whole string, 0-terminated, readable with any
 ; bank paged: bank-1 UI code can no longer read the text in place). The top of
 ; GEN_MIR: transient (filled and consumed inside one menu call), above the
@@ -301,7 +329,7 @@ ISR_VEC_LEN     EQU 257             ;     works whatever byte the floating bus s
 ISR_ADDR        EQU $BCBC           ; the ISR (copied here at boot from isr_image, lowram.asm)
 ISR_VEC_BYTE    EQU ISR_ADDR & $FF
 ISR_ADDR_END    EQU $BD00           ; ISR bytes end below this (ASSERTed)
-STACK_BOTTOM    EQU $BD00           ; stack grows down from $BF00 to here (768 B)
+STACK_BOTTOM    EQU $BE00           ; stack grows down from $BF00 to here (512 B; FLOOR1: $BD00.. = FI_GLY)
     IFNDEF ISR_ROM_CHAIN                        ; A8: 1 = the ISR ends with jp ROM_ISR (ROM
 ISR_ROM_CHAIN   EQU 0                           ;     FRAMES + keyboard scan, needs IY = $5C3A,
     ENDIF                                       ;     ~+0.92k T/frame (measured 1.54k vs 0.62k)); 0 = FRAMES only (default)

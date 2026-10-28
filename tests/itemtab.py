@@ -356,10 +356,12 @@ class ItemTabTests(unittest.TestCase):
         # resident: turn-path stems only (3E-T4c retag; ~80 B target, 89 B as built;
         # 3E-T11: + "BOSS DROPS " 11 + its terminator = 101; review: + "NO NEED" moved
         # from the fx set, 7 + 1 = 109; 3E-T9: + the 3 hunger lines from the fx set,
-        # 15 + 25 + 18 = 58 -> 167)
-        self.assertEqual(b["res_stems"], 167)
+        # 15 + 25 + 18 = 58 -> 167; later resident stems (3E-T16 traps / STATUS1 lines) +65 ->
+        # 232 — stale here since then; FLOOR1 review re-baselined it to the itempack report
+        # "resident stems 232 / 480")
+        self.assertEqual(b["res_stems"], 232)
         self.assertLessEqual(b["res_stems"], 480)
-        self.assertEqual(b["resident"], 540)          # 3E-T11: + BOSS DROPS (12) + NO NEED (8); T9: + 58
+        self.assertEqual(b["resident"], 605)          # 3E-T11: + BOSS DROPS (12) + NO NEED (8); T9: + 58; + 65 (see above)
         self.assertLessEqual(b["resident"], 700)
         self.assertLessEqual(b["resident"] - b["wcx"], 700)
         # fx overlay: effect / quick-use stems + it_stat (raw)

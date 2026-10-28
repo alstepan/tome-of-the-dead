@@ -118,30 +118,28 @@ def tables(p, check, tag, depth):
     bad = diff_ranges(g[:TC * 8], SRC_GLY, TG)
     check(f"GI {tag}: TILE_GLYPHS ids 0..31 == tiles_common_glyphs", bad == [],
           (bad[:6], sorted({(int(r[:6], 16) - TG) // 8 for r in bad})))
-    lists, t = [], S["theme_ids"]          # floor ids, 0, wall ids, 0, item ids, 0 (level_load_tiles .patch)
-    for _ in range(3):
+    lists, t = [], S["theme_ids"]          # floor ids, 0, wall ids, 0 (level_load_tiles .patch; FLOOR1:
+    for _ in range(2):                     # no item-glyph list: the markers 60..63 keep the slot attrs)
         ids = []
         while (v := p.rb(t)) != 0:
             ids.append(v)
             t += 1
         t += 1
         lists.append(ids)
-    theme = set(lists[0]) | set(lists[1]) | set(lists[2])
+    theme = set(lists[0]) | set(lists[1])
     ab = [i for i in range(TC) if (depth == 0 or i not in theme) and a[i] != SRC_ATT[i]]
     check(f"GI {tag}: TILE_ATTRS ids 0..31 == tiles_common_attrs (theme / item ids aside)", ab == [], ab)
     if depth:
         th = ([i for i in lists[0] if a[i] != p.rb("LVL_ATTR_FLOOR")]
-              + [i for i in lists[1] if a[i] != p.rb("LVL_ATTR_WALL")]
-              + [i for i in lists[2] if a[i] != 0])
-        check(f"GI {tag}: theme ids carry LVL_ATTR_FLOOR / WALL, item glyph ids 0 (3E-T6)", th == [], (lists, th))
+              + [i for i in lists[1] if a[i] != p.rb("LVL_ATTR_WALL")])
+        check(f"GI {tag}: theme ids carry LVL_ATTR_FLOOR / WALL", th == [], (lists, th))
         slot = depth - 1
         base = (S["TSET_LO"] if slot < 4 else S["TSET_HI"]) + (slot & 3) * S["TSET_STRIDE"]
         src = sna_bank(7, base, S["TSET_STRIDE"])
         n = (TILE_IDS - TC)
         tf = bytes(p.z.read_memory(S["tile_flags"] + TC, n))
         bad = (diff_ranges(g[TC * 8:], src[:n * 8], TG + TC * 8)
-               + diff_ranges(a[TC:], bytes(0 if TC + i in lists[2] else v      # item ids: 0 (3E-T6)
-                                           for i, v in enumerate(src[n * 8:n * 9])), TA + TC)
+               + diff_ranges(a[TC:], src[n * 8:n * 9], TA + TC)
                + diff_ranges(tf, src[n * 9:n * 10], S["tile_flags"] + TC))
         check(f"GI {tag}: ids 32..63 glyphs / attrs / tile_flags == bank-7 slot {slot}", bad == [], bad[:6])
     o = bytes(p.z.read_memory(S["ORN_GLYPHS"], len(SRC_ORN)))
@@ -219,19 +217,27 @@ def screen_check(p, check, tag, depth):
         if e["DVIS"] & 1:
             covered |= {(c, r) for c in range(e["DCOL"], e["DCOL"] + e["DCOLS"])
                         for r in range(e["DROW"], e["DROW"] + e["DROWS"])}
-    bad, n = [], 0
+    items = room_model.floor_cells(p.z.read_memory(S["FLOOR_LIST"], 128), p.rb("CUR_ROOM"))
+    bad, n, ni = [], 0, 0
     for i, t in enumerate(m):
         c, r = i % 32, i // 32
         if (c, r) in covered:
             continue
         n += 1
         cb = cell_bytes(fr, c, r)
+        if t >= S["T_ITEM0"]:                      # FLOOR1: a marker shows its icon quarter + ink
+            ni += 1
+            g, a = items.get((c, r), (None, None))
+            if cb != g or GL.attr_at(fr, c, r) != a:
+                bad.append((c, r, t, "item"))
+            continue
         if cb == gly[t * 8:t * 8 + 8] or (r == 17 and cb in orn):
             continue
         # decor glyph swap (decor_tick): a level id may show its partner frame
         if not (t >= TC and cb in lvl) and not GL.drip_shown(fr, drip, c, r):
             bad.append((c, r, t))
-    check(f"GI {tag}: playfield ({n} uncovered cells) == ROOM_MAP in source glyphs", n > 300 and bad == [], bad[:6])
+    check(f"GI {tag}: playfield ({n} uncovered cells, {ni} item cells) == ROOM_MAP in source glyphs, "
+          f"items as their 16x16 icons", n > 300 and bad == [], bad[:6])
     # IC1: the quick POTION slot shows a 16x16 potion icon (Heal / Mana / Cure, the pick) ==
     # its source (assets/gfx/icons/icons16.asm), not the 8x8 T_POTION glyph any more
     col = 18 + 3 * p.rb("HERO_KIND")
@@ -241,35 +247,29 @@ def screen_check(p, check, tag, depth):
 
 
 def floor_check(p, check, tag, room=None, m=None):
-    """T7 review: the FLOOR_LIST invariant floor_pickup's pre-filter relies on
-    (level_defs.asm FLOOR_LIST): every live entry of the room shows on its cell
-    (row 9s+7) — the glyph of the LAST live entry of that cell in list order.
-    Default: CUR_ROOM in the live ROOM_MAP (+ 3E-T6: each cell's item_ink(type) in the
-    attr shadow); else room `room` built into `m`."""
-    live = m is None
+    """FLOOR1: the 2x2 marker invariant floor_pickup's pre-filter, erase_rect and
+    drop_put rely on (level_defs.asm T_ITEM0): every live FLOOR_LIST entry of the
+    room has T_ITEM0 + 2s on cols c..c+1 of row 9s+6 and T_ITEM0 + 2s + 1 on row
+    9s+7, and no other cell of the map holds a marker. Default: CUR_ROOM in the
+    live ROOM_MAP; else room `room` built into `m`."""
     fl = p.z.read_memory(S["FLOOR_LIST"], S["FLOOR_MAX"] * S["FL_STRIDE"])
     if m is None:
         m = bytes(p.z.read_memory(S["ROOM_MAP"], 32 * S["PLAY_ROWS"]))
         room = p.rb("CUR_ROOM")
-    want, ink = {}, {}
+    want = {}
     for i in range(S["FLOOR_MAX"]):
-        r, col, item = fl[i * 4], fl[i * 4 + 1], fl[i * 4 + 2]
+        r, col = fl[i * 4], fl[i * 4 + 1]
         if r == S["FL_EMPTY"] or (r & S["FL_ROOM_MASK"]) != room:
             continue
-        try:
-            t = IM.glyph(item)                  # 3E-T6: the class glyph (items_model)
-        except ValueError:
-            continue
         sto = 1 if r & S["FL_S1"] else 0
-        want[(col, 9 * sto + 7)] = t
-        ink[(col, 9 * sto + 7)] = room_model.item_ink(item)
+        for k in (0, 1):
+            for h in (0, 1):
+                want[(col + h, 9 * sto + 6 + k)] = S["T_ITEM0"] + 2 * sto + k
     bad = [(c, r, m[r * 32 + c], t) for (c, r), t in want.items() if m[r * 32 + c] != t]
-    check(f"GI {tag}: FLOOR_LIST live entries ({len(want)} cells) all show their glyph in ROOM_MAP", bad == [], bad)
-    if live:                                    # 3E-T6: their ink in the attr shadow (bank 7)
-        sh = bank_read(p, 7, S["SHADOW_ATTR"], 32 * S["PLAY_ROWS"])
-        bad = [(c, r, sh[r * 32 + c], a) for (c, r), a in ink.items() if sh[r * 32 + c] != a]
-        check(f"GI {tag}: FLOOR_LIST cells carry their type's ink in the attr shadow", bad == [], bad)
-    return len(want)
+    stray = [(i % 32, i // 32, t) for i, t in enumerate(m) if t >= S["T_ITEM0"] and (i % 32, i // 32) not in want]
+    check(f"GI {tag}: FLOOR_LIST live entries ({len(want) // 4}) all show their 2x2 markers in ROOM_MAP, "
+          f"no stray marker", bad == [] and stray == [], (bad[:4], stray[:4]))
+    return len(want) // 4
 
 
 SCROLL_PCS = (S["hscroll_room.step"], S["vscroll_room.step"])
@@ -323,9 +323,11 @@ def forced_exit(p, stats):
 
 
 def scroll_ink(p, stats):
+    """FLOOR1: at a scroll step, every entering-room item cell already scrolled in
+    shows its icon quarter + ink (room_model.floor_cells of EXIT_DEST, shifted)."""
     k, kind, dest = p.rb("TMP5"), p.rb("TMP4"), p.rb("EXIT_DEST")
     fl = p.z.read_memory(S["FLOOR_LIST"], 128)
-    att = p.z.read_memory(S["SCREEN_ATTR"], 32 * S["PLAY_ROWS"])
+    fr = bytes(p.z.read_memory(S["SCREEN_BITMAP"], 6144)) + bytes(p.z.read_memory(S["SCREEN_ATTR"], 768))
     dc = dr = 0
     if kind == S["EX_RIGHT"]:
         dc = 32 - 2 * k
@@ -336,26 +338,19 @@ def scroll_ink(p, stats):
     else:
         dr = k - S["PLAY_ROWS"]
     stats["steps"] += 1
-    for i in range(32):
-        r = fl[4 * i]
-        if r == S["FL_EMPTY"] or r & 15 != dest:
-            continue
-        row, col = (16 if r & 0x80 else 7) + dr, fl[4 * i + 1] + dc
+    for (c, r), (g, a) in room_model.floor_cells(fl, dest).items():
+        row, col = r + dr, c + dc
         if 0 <= row < S["PLAY_ROWS"] and 0 <= col < 32:
             stats["cells"] += 1
-            last = [j for j in range(32) if fl[4 * j] == r and fl[4 * j + 1] == fl[4 * i + 1]][-1]
-            want = room_model.item_ink(fl[4 * last + 2])
-            if want is None:
-                continue
-            if att[row * 32 + col] != want:
-                stats["bad"].append((kind, k, dest, i, row, col, att[row * 32 + col], want))
+            if cell_bytes(fr, col, row) != g or GL.attr_at(fr, col, row) != a:
+                stats["bad"].append((kind, k, dest, c, r, row, col))
 
 
 def floor_build_check(p, check, tag):
     """Every room of the level, seeded with a dagger stack (storey 0, col 16), an
-    arrow stack under a potion (storey 1, col 20: the potion is the last entry)
-    and a potion under arrows (storey 1, col 24): build_room_map (into NEXT_MAP)
-    stamps the last live entry of each cell. The seeds are removed after."""
+    arrow stack under a potion (storey 1, col 20) and a potion under arrows
+    (storey 1, col 24): build_room_map (into NEXT_MAP) stamps FLOOR1's 2x2
+    markers of every seeded footprint. The seeds are removed after."""
     free = [i for i in range(S["FLOOR_MAX"]) if p.rb(S["FLOOR_LIST"] + 4 * i) == S["FL_EMPTY"]][:5]
     if len(free) < 5:
         check(f"GI {tag}: FLOOR_LIST has 5 free entries for the build check", False, free)
@@ -371,13 +366,16 @@ def floor_build_check(p, check, tag):
                        + [0xCD] + w16(S["far3"]), game=True)      # descend stub)
         p.z.cmd("set-register PC=%d" % pc0)
         m = bytes(p.z.read_memory(S["NEXT_MAP"], 32 * S["PLAY_ROWS"]))
-        got = (m[7 * 32 + 16], m[16 * 32 + 20], m[16 * 32 + 24])
-        if not ok or got != (S["T_DAGGERS"], S["T_POTION"], S["T_ARROWS"]):
-            bad.append((room, ok, got))
+        t0 = S["T_ITEM0"]
+        want = {(16 + h, 6 + k): t0 + k for h in (0, 1) for k in (0, 1)}
+        want.update({(c + h, 15 + k): t0 + 2 + k for c in (20, 24) for h in (0, 1) for k in (0, 1)})
+        got = [(c, r, m[r * 32 + c]) for (c, r), t in want.items() if m[r * 32 + c] != t]
+        if not ok or got:
+            bad.append((room, ok, got[:3]))
         n += 1
         for i in free:
             p.wb(S["FLOOR_LIST"] + 4 * i, S["FL_EMPTY"])
-    check(f"GI {tag}: build_room_map stamps every seeded entry, the last of a shared cell ({n} rooms)",
+    check(f"GI {tag}: build_room_map stamps every seeded entry's 2x2 markers ({n} rooms)",
           n >= 1 and bad == [], bad)
 
 
@@ -451,7 +449,7 @@ def main():
             if p.rb("GAME_STATE") != S["GS_PLAYING"]:
                 print(f"[info] D{d}: GAME_STATE {p.rb('GAME_STATE')} — stop", flush=True)
                 break
-        check(f"GI R3: scroll steps show the entering room's floor inks ({ink['exits']} exits, {ink['steps']} steps, "
+        check(f"GI R3: scroll steps show the entering room's floor items ({ink['exits']} exits, {ink['steps']} steps, "
               f"{ink['cells']} item cells)", ink["steps"] > 0 and ink["cells"] > 0 and not ink["bad"], ink["bad"][:6])
         print(f"[info] run anomalies: {T.anomalies}", flush=True)
     print(f"gfx_integrity: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)

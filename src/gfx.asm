@@ -175,88 +175,6 @@ stamp_rect:
                 jr   nz, .row
                 ret
 
-;==============================================================================
-; tile_rect — draw the background tiles (glyph AND attr) of a cell rect from
-; the tile map (prototype §4.3) on the bank-5 screen. Used for room draws and
-; transition columns; per-tick sprite erase uses erase_rect below (D3-S2: the
-; bank-7 bitmap shadow it could also target is gone).
-; In : C = col, B = row, D = cols, E = rows (inside 0..31 x 0..PLAY_ROWS-1).
-; Clobbers: A, BC, DE, HL.   ~290 T/cell (listing: 8 glyph rows unrolled).
-;------------------------------------------------------------------------------
-; Screen bitmap, attrs and the page-aligned map share the low byte
-; ((row&7)<<5 | col) — so per row we patch three high bytes (SMC) and walk C.
-; SMC: .mh+1 (map high), .ah+1 (attr high), .sh+1 (bitmap high) patched per row.
-;==============================================================================
-tile_rect:
-                ld   a, e
-                ld   (.rows+1), a             ; SMC: rows remaining
-                ld   a, d
-                ld   (.cols+1), a             ; SMC: cols per row
-.row:
-                ld   a, b                     ; B = row
-                rrca
-                rrca
-                rrca
-                ld   e, a                     ; E = row rotated
-                and  3
-                ld   d, a                     ; D = row >> 3
-.mhi:           add  a, ROOM_MAP >> 8         ; SMC: map page (ROOM_MAP / NEXT_MAP)
-                ld   (.mh+1), a
-                ld   a, d
-                or   SCREEN_ATTR >> 8
-                ld   (.ah+1), a
-                ld   a, b
-                and  $18
-                or   SCREEN_BITMAP >> 8
-                ld   (.sh+1), a
-                ld   a, e
-                and  $E0
-                or   c
-                push bc                        ; keep row/col for the next row
-                ld   c, a                      ; C = low byte of this row's first cell
-.cols:          ld   b, 0                      ; SMC: cols
-.cell:
-                ld   l, c
-.mh:            ld   h, 0                      ; SMC: map high
-                ld   a, (hl)                   ; tile id
-                ld   d, a
-                ld   l, a
-                ld   h, TILE_ATTRS >> 8
-                ld   a, (hl)                   ; tile attr
-                ld   l, c
-.ah:            ld   h, 0                      ; SMC: attr high
-                ld   (hl), a
-                ld   a, d
-                add  a, a
-                add  a, a
-                add  a, a                      ; CF = id bit 5 (ids < TILE_IDS = 64)
-                ld   e, a
-                ld   d, TILE_GLYPHS >> 9
-                rl   d                         ; DE = TILE_GLYPHS + id*8 (512-aligned base; +8 T vs 32 ids)
-.sh:            ld   h, 0                      ; SMC: bitmap high (L = C still)
-                DUP  7
-                ld   a, (de)
-                ld   (hl), a
-                inc  e
-                inc  h
-                EDUP
-                ld   a, (de)
-                ld   (hl), a
-                inc  c
-                djnz .cell
-                pop  bc
-                inc  b                         ; next row
-.rows:          ld   a, 0                      ; SMC: rows remaining
-                dec  a
-                ld   (.rows+1), a
-                jr   nz, .row
-                ret
-
-; select which map tile_rect reads (A = high byte of ROOM_MAP or NEXT_MAP)
-set_tile_map:
-                ld   (tile_rect.mhi+1), a
-                ret
-
 ;------------------------------------------------------------------------------
 ; shadow_rect — redraw rect C,B,D,E of the bank-7 ATTR shadow ($F800, screen-
 ; attr layout) from ROOM_MAP: TILE_ATTRS[id] (room entry, door planks, potion
@@ -301,13 +219,18 @@ shadow_rect:
 ; decor glyph swaps, door planks / jambs, potions, the B12 gate / glow, L2
 ; pits / blocks and the per-level ids 32..63 all live in it), attr = the
 ; bank-7 attr shadow ($F800: keeps the decor attr-cycle colours exactly), row
-; 17 = the floor ornament (orn_cells, only when the rect reaches it). ROOM_MAP,
+; 17 = the floor ornament (orn_cells, only when the rect reaches it);
+; FLOOR1: a floor-item marker cell (id >= T_ITEM0) from the glyph cache
+; instead (.item: icon quarter + slot ink, bank 2). ROOM_MAP,
 ; the screen bitmap / attrs and the attr shadow share the low byte
 ; ((row & 7) << 5 | col): per cell only high bytes change, L walks the row.
 ; In : C = col, B = row, D = cols, E = rows (rows 0..17).
 ; Out: bank 7 paged.  Clobbers: A, BC, DE, HL (IX kept)
 ; ~280 T + ~268 T/cell (+37 vs the old bitmap-shadow copy) + 74 T/row
-; (+~110 T per third crossed; + orn_cells ~0.3k per row-17 ornament cell).
+; (+~110 T per third crossed; + orn_cells ~0.3k per row-17 ornament cell)
+; FLOOR1 (review-measured): ids 0..31 cost 8 T less than before (D hoisted),
+; ids 32..59 +46 T (the marker test + their own copy tail), a marker cell
+; ~+96 T over a plain tile cell (the glyph cache).
 ; SMC: .cols/.rows+1 per call; .mh/.bh/.ah/.dah+1 per call / third.
 ;==============================================================================
 erase_rect:
@@ -354,7 +277,8 @@ erase_rect:
                 and  $E0
                 or   c
                 ld   c, a                      ; C = low byte of the row's first cell
-.row:           ld   l, c
+                ld   d, TILE_GLYPHS >> 8       ; FLOOR1: D stays the first glyph page (ids
+.row:           ld   l, c                      ; 0..31); .dec / .item put it back
 .cols:          ld   b, 0                      ; SMC: cols
 .cell:
 .mh:            ld   h, 0                      ; SMC: ROOM_MAP page of this third
@@ -363,10 +287,9 @@ erase_rect:
                 add  a, a
                 add  a, a                      ; CF = id bit 5
                 ld   e, a
-                ld   a, TILE_GLYPHS >> 9
-                rla
-                ld   d, a                      ; DE = TILE_GLYPHS + id*8
-.bh:            ld   h, 0                      ; SMC: screen bitmap high
+                jr   c, .hi                    ; ids 32..63 (FLOOR1: the markers among them)
+.g:                                            ; DE = TILE_GLYPHS + id*8 (ids 0..31: 8 T less
+.bh:            ld   h, 0                      ; SMC: screen bitmap high (than before FLOOR1)
                 DUP  7
                 ld   a, (de)
                 ld   (hl), a
@@ -379,7 +302,7 @@ erase_rect:
                 ld   a, (hl)
 .ah:            ld   h, 0                      ; SMC: screen attr high
                 ld   (hl), a
-                inc  l
+.nx:            inc  l
                 djnz .cell
 .rows:          ld   a, 0                      ; SMC: rows left
                 dec  a
@@ -400,8 +323,75 @@ erase_rect:
                 ld   hl, .dah+1
                 inc  (hl)
                 jr   .row
+; .item — FLOOR1: A = a marker id T_ITEM0 + k (k = the item band row), L =
+; the cell's low byte: its 8 lines from the glyph cache (FI_CELL, the storey's
+; page, by L -> FI_GLY, bank 2) and the slot's ink (FI_INK) in place of the
+; tile + shadow attr. Drawn once, in this pass.  ~0.29k T (a tile ~0.23k)
+.dec:           inc  d                         ; ids 32..59: the second glyph page
+                ld   a, (.bh+1)
+                ld   h, a
+                DUP  7
+                ld   a, (de)
+                ld   (hl), a
+                inc  e
+                inc  h
+                EDUP
+                ld   a, (de)
+                ld   (hl), a
+                dec  d                         ; (back to the first page)
+                jr   .dah
+.hi:            cp   (T_ITEM0 << 3) & $FF
+                jr   c, .dec                   ; ids 60..63 fall through: a floor-item marker
+.item:          ld   a, (hl)                   ; the id again (HL = its map cell)
+                srl  a                         ; k 0 / 1 -> storey 0, 2 / 3 -> 1
+                add  a, (FI_CELL >> 8) - (T_ITEM0 >> 1)
+                ld   d, a
+                ld   e, l
+                ld   a, (de)                   ; the FI_GLY low byte (slot * 32 + 8 * quarter)
+                ld   e, a
+                ld   d, FI_INK >> 8
+                ld   a, (.ah+1)
+                ld   h, a                      ; the screen attr high
+                ld   a, (de)
+                ld   (hl), a                   ; the slot's ink first (FI_INK by that byte)
+                ld   d, FI_GLY >> 8            ; DE = the quarter's line 0
+                ld   a, (.bh+1)
+                ld   h, a                      ; the screen bitmap high
+                DUP  7                         ; (unrolled like the tile copy above;
+                ld   a, (de)                   ; a quarter's 8 lines are contiguous)
+                ld   (hl), a
+                inc  e
+                inc  h
+                EDUP
+                ld   a, (de)
+                ld   (hl), a
+                ld   d, TILE_GLYPHS >> 8
+                jp   .nx
+                ASSERT (FI_CELL & $FF) == 0 && (FI_GLY & $FF) == 0 && (FI_INK & $FF) == 0
+                ASSERT T_ITEM0 + 4 == TILE_IDS && FI_SLOTS == 8 && (T_ITEM0 & 1) == 0 && (T_ITEM0 & 31) == 28 && (TILE_GLYPHS & $1FF) == 0
                 ASSERT (TILE_GLYPHS & $1FF) == 0 && TILE_IDS <= 64 && (ROOM_MAP & $FF) == 0
                 ASSERT (SCREEN_ATTR & $3FF) == 0 && (SHADOW_ATTR & $3FF) == 0 && FLOOR_ROW1 + 1 == PLAY_ROWS
+
+;------------------------------------------------------------------------------
+; fi_row — FLOOR1: an item cell's copy (erase_rect .item, lowram fi_cell),
+; bank 2 (uncontended fetches): HL = the
+; cell's bitmap line 0, DE = its quarter's first glyph byte (8 contiguous),
+; BC = its attr, A = the ink: 8 lines + the attr. Out: E += 8, H += 8.
+; Clobbers: A, H.   ~0.25k T
+;------------------------------------------------------------------------------
+fi_row:         push af
+.ln:            DUP  4
+                ld   a, (de)
+                ld   (hl), a
+                inc  e
+                inc  h
+                EDUP
+                ld   a, h
+                and  7
+                jr   nz, .ln                   ; 8 lines (H starts on a multiple of 8)
+                pop  af
+                ld   (bc), a
+                ret
 
 ;==============================================================================
 ; PRESENT — A7 double buffer, option A (docs/design/budget.md §3). During play

@@ -511,7 +511,7 @@ DT_ATTR_LEN     EQU  DT_KINDS * 8
 ; tile_flags — TILE_FLAGS[64] (D2, level_defs.asm TF_*), static, by tile id;
 ; the 64 B right below kind_tab (low byte $C0: cell_blocked adds the id with
 ; no carry, H constant). Placed in the ALIGN pad, so it costs no bank-2 bytes
-; beyond its 64. Per-level ids 32..59 = 0 (decor), 60..63 = FLASK / FOOD / WEAPON / WORN item glyphs (D8: the Sanctum lectern is swapped in by T6)
+; beyond its 64. Per-level ids 32..59 = 0 (decor), 60..63 = the FLOOR1 item markers T_ITEM0..+3 (flags 0)
 ; until the first level_load_tiles (B3B-8) overwrites 32..63 from the slot.
 ; Solidity belongs to the cell class (game.md §1.2 "Solidity of decor",
 ; designer 2026-10-03): the wall set (DARK = T_BRICK, DITHER, PATCH, FADE) is
@@ -527,9 +527,9 @@ tile_flags:
                 DB TF_LADDER, TF_LADDER, TF_LADDER     ;  4-6 T_LAD_L/M/R
                 DB TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE ; 7-9 T_HOLE_*
                 DB 0                                   ; 10 T_TRAP (revealed plate: walkable, game.md §1.5)
-                DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12 chain, 13 free
+                DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12 chain, 13 free (DEC2)
                 DB 0, 0                                ; 15-16 free (DEC2)
-                DB 0, 0                                ; 17-18 T_AMMO / T_PAGES (floor items)
+                DB 0, 0                                ; 17-18 free (FLOOR1; were T_AMMO / T_PAGES)
                 DB TF_FLOOR, TF_FLOOR                  ; 19-20 T_END_L/R = pit caps
                 DB TF_SOLID, TF_SOLID                  ; 21-22 T_DOOR_ARCH_L/R
                 DB TF_SOLID | TF_DOOR, TF_SOLID | TF_DOOR   ; 23-24 T_DOOR_L/R (closed planks)
@@ -540,7 +540,7 @@ tile_flags:
                                                        ; non-solid back-wall patches (D1 decor rule)
                 DB 0                                   ; 31 free (DEC2)
                 DS T_LVL_OBJ - TILE_COMMON, 0          ; 32-59 per-level decor
-                DS T_LVL_OBJ_N, 0                      ; 60-63 FLASK FOOD WEAPON WORN (floor items)
+                DS T_LVL_OBJ_N, 0                      ; 60-63 FLOOR1 item markers T_ITEM0..+3 (the slot loads 0)
                 ASSERT $ - tile_flags == TILE_IDS
                 ASSERT (tile_flags & $FF) + TILE_IDS == $100     ; one page, ends on it
                 ALIGN 256

@@ -315,6 +315,9 @@ do_exit:
                 ld   h, NEXT_MAP >> 8
                 ld   a, (EXIT_DEST)
                 call build_room                ; B3B-8: far3 -> bank-3 build_room_map v2
+                ld   a, (EXIT_DEST)            ; FLOOR1: the glyph cache follows the
+                ld   hl, fi_full               ; scroll (its strips draw EXIT_DEST's
+                call far3                      ; items; every sprite is erased already)
                 ld   a, (EXIT_KIND)            ; scroll arg: the exit direction
                 ld   hl, hscroll_room          ; both scrolls live in bank 1 (scroll1.asm)
                 cp   EX_UP

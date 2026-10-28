@@ -23,8 +23,9 @@ placement. `place(pool, ...)` = room = pool[rnd(len)], storey = rnd(2), then up
 to PLACE_TRIES x (col = 2 + rnd(28), first legal wins); no legal col -> the item
 is dropped (counted, not an error).
  1. potions: the levelgen entries in list order; entry 0 = Heal (no roll), the
-    others type = POT_BY_ROLL[rnd(3)]. D8 only: an entry in the lair is
-    re-placed (non-start non-lair pool, same slot) - see Q_D8_LAIR_POTION.
+    others type = POT_BY_ROLL[rnd(3)]. Then (FLOOR1) each entry in list order is
+    re-checked against the item rules below (its own cell freed first); an
+    illegal one is re-placed (non-start pool, scan fallback, same slot).
  2. food:    n = 3 + rnd(2); each: type = IT_F_CARROT + rnd(5), place(non-start).
  3. scrolls: n = 1 + rnd(2); each: type = IT_S_TELEPORT + rnd(4), place(non-start).
  4. gear:    n = 1 + rnd(2); each: type = pool[rnd(len)] (depth + class gated),
@@ -67,10 +68,14 @@ TRAP_MAX = D["TRAP_MAX"]
 HERO_WARRIOR, HERO_MAGE = "warrior", "mage"
 
 # --- tunables / rulings (every one a named constant) -------------------------------
-PLACE_TRIES = D["FEAT_TRIES"]               # 8: col tries per new item (potions use 32/8 in GEN_RNG)
+PLACE_TRIES = 2 * D["FEAT_TRIES"]           # FLOOR1: 16 col tries per new item (was 8; potions use 32/8 in GEN_RNG)
 TRAP_TRIES = 8                              # 1.5 "each trap <= 8 seeded tries"
 FLOOR_CAP = 31                              # 8.11 Q11: >= 1 entry stays free for a boss unique
 COL_LO, COL_SPAN = 2, 28                    # item col = 2 + rnd(28)  (same as the 3B potions)
+# FLOOR1 (game.md 8.11 Q1 rev 2026-10-26): an item covers cols c..c+1 (rows 9s+6..9s+7):
+# c <= COL_LAST, both cols legal, no other item within c-1..c+1, <= ROOM_CAP per room
+COL_LAST = D["ITEM_COL_LAST"]
+ROOM_CAP = D["ITEM_ROOM_CAP"]
 TRAP_COL_LO, TRAP_COL_SPAN = 6, 20          # 1.5 t in 6..25
 ARROW_BUNDLE = 6                            # 8.5 bow: 6-arrow bundle in the bow's cell
 ARROWS_MAX = 24                             # 8.5 "capped 24" (checker only)
@@ -105,7 +110,7 @@ QUESTIONS = [
     "Q_FOOD_TYPE: food type uniform over the 5 foods (rnd(5)); doc gives only the count 3-4.",
     "Q_SCROLL_COUNT_ROOMS: food/scroll/gear/2nd+ books use the potions' pool (present, non-start rooms, lair allowed); doc names rooms only for ammo/bow (non-start non-lair) and the D1 book (start).",
     "Q_GEAR_POOL: gear type uniform over the depth+class gated 8 table (start kit and uniques excluded); no weighting stated.",
-    "Q_D8_LAIR_POTION: a GEN_RNG potion in the D8 lair would become a 60..63 FLASK item (forbidden there, 8.11 Q1): it is RE-PLACED on ITEM_RNG outside lair/start (changes the base floor list; decor sees a moved cell).",
+    "Q_POTION_RECHECK (FLOOR1): the GEN_RNG potions do not know the 2-col footprint / spacing / room cap: an illegal one is RE-PLACED on ITEM_RNG in the non-start pool (was Q_D8_LAIR_POTION, D8 lair only; the D8 lair exclusion is gone).",
     "Q_AMMO_CELL: new entries never share a cell with an existing entry, except the bow's arrow bundle (doc: bundle in the bow's cell; other ammo sharing unspecified).",
     "Q_AMMO_QTY: 'stack of 2-3 (1d2+1)' = 2 + rnd(2); '5-8 (1d4+4)' = 5 + rnd(4).",
     "Q_DROPPED_ITEMS: when PLACE_TRIES fail, a new item is dropped silently (only the bow has a scan fallback); stats report it.",
@@ -194,13 +199,13 @@ class Lvl:
         self.dropped_by_type = {}
 
 def cell_legal(b, r, s, col):
-    """Legal item cell on storey s of room r: 3B potion legality (footprints f..f+2,
-    storey-0 pit p-1..p+3, edge block, cols 2..29) plus the L2 spans (wide pit,
-    mid-block, each +1 col), via levelgen.item_col_ok and levelgen.lp_hits
-    (game.md 8.11 Q8 'avoid every footprint, L2 span (+1)')."""
-    if not COL_LO <= col <= COL_LO + COL_SPAN - 1:
+    """FLOOR1: legal item footprint c..c+1 on storey s of room r: c in 2..COL_LAST,
+    neither col on a footprint f..f+2, the storey-0 pit p-1..p+3, the edge block
+    or an L2 span (wide pit, mid-block, each +1 col): levelgen.lp_hits over
+    cols c..c+1 (game.md 8.11 Q8 'avoid every footprint, L2 span (+1)')."""
+    if not COL_LO <= col <= COL_LAST:
         return False
-    return not G.lp_hits(b, r, s, col, col)
+    return not G.lp_hits(b, r, s, col, col + 1)
 
 
 def read_floor(b):
@@ -222,26 +227,43 @@ def occupied(lvl):
             for e in lvl.floor if e[0] != D["FL_EMPTY"]}
 
 
+def item_free(lvl, r, s, col):
+    """FLOOR1 (overlay ig_occ + ig_cap): no live entry of (r, s) at a col in
+    col-1..col+1, and the room (both storeys) holds < ROOM_CAP entries."""
+    n = 0
+    for e in lvl.floor:
+        if e[0] == D["FL_EMPTY"] or e[0] & D["FL_ROOM_MASK"] != r:
+            continue
+        n += 1
+        if (1 if e[0] & D["FL_S1"] else 0) == s and abs(e[1] - col) <= 1:
+            return False
+    return n < ROOM_CAP
+
+
+def item_ok(b, lvl, r, s, col):
+    """overlay ig_ok: the footprint legal and free."""
+    return col <= COL_LAST and item_free(lvl, r, s, col) and cell_legal(b, r, s, col)
+
+
 def place(rng, b, lvl, pool, cell_ok_extra=None):
     """One placement (see module doc): room, storey, then col tries. Returns
-    (r, s, col) or None. A cell already holding an entry is illegal (Q_AMMO_CELL)."""
-    occ = occupied(lvl)
+    (r, s, col) or None (FLOOR1: item_ok - spacing, room cap, footprint)."""
     r = pool[rng.rnd(len(pool))]
     s = rng.rnd(2)
     for _ in range(PLACE_TRIES):
         col = COL_LO + rng.rnd(COL_SPAN)
-        if (r, s, col) not in occ and cell_legal(b, r, s, col):
+        if item_ok(b, lvl, r, s, col):
             return r, s, col
     return None
 
 
 def scan_place(b, lvl, pool):
-    """Deterministic fallback (bow only): first legal free cell, pool order, storey 0..1, col 2..29."""
-    occ = occupied(lvl)
+    """Deterministic fallback (bow, D1 book, a re-placed potion): first legal free
+    footprint, pool order, storey 0..1, col 2..29 (29 never legal)."""
     for r in pool:
         for s in (0, 1):
             for col in range(COL_LO, COL_LO + COL_SPAN):
-                if (r, s, col) not in occ and cell_legal(b, r, s, col):
+                if item_ok(b, lvl, r, s, col):
                     return r, s, col
     raise RuntimeError("no legal cell at all")
 
@@ -279,21 +301,23 @@ def gear_pool(depth, hero):
 
 def gen_potions(rng, b, lvl, pres, start, lair):
     """game.md 8.5 / 8.11 Q8 step 1: potion TYPES for the levelgen entries (first
-    = Heal, no roll). D8: an entry in the lair is re-placed outside the lair
-    (Q_D8_LAIR_POTION; FLASK glyph 60 is forbidden in the lair on D8, 8.11 Q1)."""
+    = Heal, no roll). FLOOR1: then every entry, in list order, is re-checked
+    against item_ok (its own cell freed first) and an illegal one re-placed in
+    the non-start pool, scan fallback (Q_POTION_RECHECK)."""
     pool = [r for r in pres if r != start]
-    nl = [r for r in pool if r != lair]
     for i, e in enumerate(lvl.floor):
         e[2] = POT_BY_ROLL[0] if i == 0 else POT_BY_ROLL[rng.rnd(len(POT_BY_ROLL))]
-    if lvl.depth == 8:
-        for i, e in enumerate(lvl.floor):
-            if e[0] & D["FL_ROOM_MASK"] == lair:
-                e[0] = D["FL_EMPTY"]                 # frees its cell for place()
-                rsc = place(rng, b, lvl, nl)
-                if rsc is None:
-                    rsc = scan_place(b, lvl, nl)     # keep the count (>= 2 potions, 8.5)
-                r, s, col = rsc
-                e[0], e[1] = r | (D["FL_S1"] if s else 0), col
+    for i, e in enumerate(lvl.floor):
+        rb, col = e[0], e[1]
+        e[0] = D["FL_EMPTY"]                         # not its own neighbour
+        r, s = rb & D["FL_ROOM_MASK"], 1 if rb & D["FL_S1"] else 0
+        if not item_ok(b, lvl, r, s, col):
+            rsc = place(rng, b, lvl, pool)
+            if rsc is None:
+                rsc = scan_place(b, lvl, pool)       # keep the count (>= 2 potions, 8.5)
+            r, s, col = rsc
+            rb = r | (D["FL_S1"] if s else 0)
+        e[0], e[1] = rb, col
 
 
 def gen_level_items(b, master, hero):
@@ -306,8 +330,7 @@ def gen_level_items(b, master, hero):
     lvl.floor = read_floor(b)
     non_start = [r for r in pres if r != start]
     non_lair = [r for r in non_start if r != lair]
-    # 8.11 Q1: on D8 no 60..63 item lies in the lair
-    glyph_pool = non_lair if depth == 8 else non_start
+    glyph_pool = non_start                   # FLOOR1: the D8 lair exclusion is gone
 
     gen_potions(rng, b, lvl, pres, start, lair)
     # 8.5 food 3-4
@@ -356,7 +379,7 @@ def trap_col_ok(b, r, s, t, floor):
     rules are the caller's): t in 6..25; for every footprint c..c+2 on that
     storey (ladders, shafts, holes, arrival, pit) t not in [c-1, c+3]; wide pit /
     mid-block / edge block (+1 col, adjacent included); storey 1: pit landing
-    zone [p-1, p+3] (wide: p+W); not on a floor-item cell."""
+    zone [p-1, p+3] (wide: p+W); not inside a floor item's footprint c..c+1."""
     if not TRAP_COL_LO <= t < TRAP_COL_LO + TRAP_COL_SPAN:
         return False
     names = ("RD_UPCOL", "RD_ARRCOL", "RD_LAD1", "RD_LAD2", "RD_PITCOL") if s == 0 else \
@@ -379,8 +402,8 @@ def trap_col_ok(b, r, s, t, floor):
             return False
     for e in floor:
         if e[0] != D["FL_EMPTY"] and e[0] & D["FL_ROOM_MASK"] == r and \
-                bool(e[0] & D["FL_S1"]) == bool(s) and e[1] == t:
-            return False
+                bool(e[0] & D["FL_S1"]) == bool(s) and e[1] in (t - 1, t):
+            return False                        # FLOOR1: t != c, c + 1 of any item
     return True
 
 
@@ -459,7 +482,8 @@ def check_items(b, lvl, hero=None):
         if r not in pres:
             v.append(f"entry {i}: room {r} absent")
             continue
-        if not cell_legal(b, r, s, col) or not G.item_col_ok(G_room(b, r), s, col):
+        if not cell_legal(b, r, s, col) or not G.item_col_ok(G_room(b, r), s, col) \
+                or not G.item_col_ok(G_room(b, r), s, col + 1):
             v.append(f"entry {i}: illegal cell r{r} s{s} c{col}")
         cells.setdefault((r, s, col), []).append((i, typ))
         try:
@@ -469,8 +493,6 @@ def check_items(b, lvl, hero=None):
             continue
         if typ == T["IT_POTION"] or typ in (T["IT_KEY"],):
             v.append(f"entry {i}: type {typ} not allowed")
-        if depth == 8 and r == lair and g >= 60:
-            v.append(f"entry {i}: glyph {g} in D8 lair")
         if i < len(base) and typ == T["IT_POTION"]:
             v.append("legacy potion left")
         if qty < 1:
@@ -480,12 +502,20 @@ def check_items(b, lvl, hero=None):
                 v.append(f"entry {i}: gear qty {qty}")
             if typ not in gear_pool(depth, hero):
                 v.append(f"entry {i}: gear {typ} not in D{depth} {hero} pool")
-    # one item per cell, except the bow + its bundle; the GEN_RNG potions may already
-    # share a cell among themselves (3B step 8 does not test it): only NEW entries are checked
+    # FLOOR1: one item per footprint, except the bow + its bundle (exact col), no two
+    # items within c-1..c+1 of each other (the potions too: re-checked), the room cap
     for k, es in cells.items():
-        if len(es) > 1 and any(i >= len(base) for i, _ in es) and \
-                sorted(t for _, t in es) != sorted([IT_BOW, T["IT_ARROW"]]):
+        if len(es) > 1 and sorted(t for _, t in es) != sorted([IT_BOW, T["IT_ARROW"]]):
             v.append(f"cell {k} holds {[t for _, t in es]}")
+    for (r, s, c) in cells:
+        if (r, s, c + 1) in cells:
+            v.append(f"items r{r} s{s} at cols {c} and {c + 1}")
+    per_room = {}
+    for rb, col, typ, qty in lvl.floor:
+        per_room[rb & D["FL_ROOM_MASK"]] = per_room.get(rb & D["FL_ROOM_MASK"], 0) + 1
+    for r, n in per_room.items():
+        if n > ROOM_CAP + 1:                   # (+ the bow's bundle)
+            v.append(f"room {r}: {n} entries > cap {ROOM_CAP}")
     # counts
     pots = [e for e in lvl.floor if D["IT_POT_LO"] <= e[2] <= D["IT_POT_HI"]]
     if not POTION_COUNT_MIN <= len(pots) <= POTION_COUNT_MIN + 1 or len(pots) != len(base):
@@ -592,7 +622,7 @@ def trap_col_ok_indep(b, r, s, t, floor):
         spans.append((30 - w, 31) if bl & 128 else (0, w + 1))
     if any(lo <= t <= hi for lo, hi in spans):
         return False
-    return not any(e[0] != D["FL_EMPTY"] and e[0] & 15 == r and (e[0] >> 7) == s and e[1] == t
+    return not any(e[0] != D["FL_EMPTY"] and e[0] & 15 == r and (e[0] >> 7) == s and t in (e[1], e[1] + 1)
                    for e in floor)
 
 

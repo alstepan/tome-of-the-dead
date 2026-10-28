@@ -229,30 +229,31 @@ def part_b(h, check):
                 return i
         raise AssertionError
 
-    def put(i, col, item, qty, tile):
+    def put(i, col, item, qty, tile=None):     # FLOOR1: the storey-1 2x2 markers
         p.wmem(S["FLOOR_LIST"] + i * FLS, [p.rb("CUR_ROOM") | S["FL_S1"], col, item, qty])
-        p.wb(S["ROOM_MAP"] + IROW * 32 + col, tile)
+        p.wmem(S["ROOM_MAP"] + (IROW - 1) * 32 + col, [S["T_ITEM0"] + 2] * 2)
+        p.wmem(S["ROOM_MAP"] + IROW * 32 + col, [S["T_ITEM0"] + 3] * 2)
 
     col = HX + 3
     scene()
-    put(free_entry(), col, S["IT_POTION"], 0, S["T_POTION"])
+    put(free_entry(), col, S["IT_POTION"], 0)
     p.wmem(S["BAG"], [0] * 60)                    # 3E-T11: an empty bag (E_POT = its potions)
     p.set_ent(0, POT=0)
     p.turn("L")
     check("B5 potion: [STEP, PICKUP], pack 1", log(p) == [ID["STEP"], ID["PICKUP"]] and p.ent(0)["POT"] == 1,
           (log(p), p.ent(0)["POT"]))
     scene()
-    put(free_entry(), col, S["IT_POTION"], 0, S["T_POTION"])
+    put(free_entry(), col, S["IT_POTION"], 0)
     p.wmem(S["BAG"], [S["IT_W_LONG"], 1, 0] * S["BAG_SLOTS"])   # 3E-T11: a full bag (was E_POT 9)
     p.turn("L")
     check("B5 full bag: the potion stays, no PICKUP", log(p) == [ID["STEP"]], log(p))
     scene()
-    put(free_entry(), col, S["IT_DAGGER"], 3, S["T_DAGGERS"])
+    put(free_entry(), col, S["IT_DAGGER"], 3)
     p.wb("DAGGERS", 3)
     p.turn("L")
     check("B5 dagger stack: [STEP, PICKUP]", log(p) == [ID["STEP"], ID["PICKUP"]] and p.rb("DAGGERS") == 6, (log(p), p.rb("DAGGERS")))
     scene()
-    put(free_entry(), col, S["IT_ARROW"], 5, S["T_ARROWS"])
+    put(free_entry(), col, S["IT_ARROW"], 5)
     p.wb("ARROWS", 24)
     p.turn("L")
     check("B5 full quiver: nothing taken, no PICKUP", log(p) == [ID["STEP"]] and p.rb("ARROWS") == 24, (log(p), p.rb("ARROWS")))

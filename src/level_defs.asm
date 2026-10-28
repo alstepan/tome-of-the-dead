@@ -371,27 +371,23 @@ T_DOOR_JAMB_L   EQU 11              ; `#.#.....` x 8: the left arch's outer stro
 T_CHAIN         EQU 12              ; small decor (valid after B3B-13)
 T_FREE13        EQU 13              ; DEC2: free (was bones tile 0)
 T_DOOR_JAMB_R   EQU 14              ; `.....#.#` x 8
-; 3E (game.md §8.11 Q1, user-approved glyphs): common 10 = T_TRAP (revealed trap plate),
-; 17 = T_AMMO (daggers AND arrows share the one bundle glyph, ink $47; the per-type ink
-; is T6's per-cell stamp), 18 = T_PAGES (scroll / book). T_DAGGERS / T_ARROWS stay as
-; aliases of 17 so the type -> tile maps need no second id.
+; 3E (game.md §8.11 Q1, user-approved glyphs): common 10 = T_TRAP (revealed trap plate).
+; FLOOR1 (2026-10-26): the class glyphs 17 (AMMO) / 18 (PAGES) / 60..63 are no longer
+; placed (floor items = T_ITEM + the 16x16 icon); 17 / 18 keep their glyph bytes, unused.
 T_TRAP          EQU 10              ; ink $42 (type ink = T6)
-T_AMMO          EQU 17              ; ink $47
-T_PAGES         EQU 18              ; ink $07
-T_DAGGERS       EQU T_AMMO
-T_ARROWS        EQU T_AMMO
+T_FREE17        EQU 17              ; FLOOR1: free (was T_AMMO)
+T_FREE18        EQU 18              ; FLOOR1: free (was T_PAGES)
 ; D3-7 T6: the B3B-13b drips (T_DRIP1/2) are no longer placed (the per-level
 ; sets have no free ids; "if they are ever placed": per-level decor).
 T_COMMON_USED   EQU 32
 T_LVL_BASE      EQU TILE_COMMON     ; 32: first per-level id
-T_LVL_OBJ       EQU 60              ; 60..63: per-level floor-item class glyphs (3E, every depth:
-T_LVL_OBJ_N     EQU 4               ;   FLASK FOOD WEAPON WORN); decor uses 32..59 only. The D8
-                                    ;   lectern (+ Book, 2x2) lives in tileset_lectern (swapped in T6)
-T_FLASK         EQU 60              ; potion (the old T_POTION glyph bytes)
-T_POTION        EQU T_FLASK
-T_FOOD          EQU 61
-T_WEAPON        EQU 62
-T_WORN          EQU 63
+T_LVL_OBJ       EQU 60              ; 60..63: per-level slots 28..31 (the slot bytes still hold the
+T_LVL_OBJ_N     EQU 4               ;   3E class glyphs, unreferenced); decor uses 32..59 only
+; FLOOR1: the floor-item MARKERS, one id per item band row k (the 2x2 cells of a
+; live FLOOR_LIST entry: cols c..c+1; k = 2s on row 9s+6, 2s+1 on row 9s+7).
+; The only ids >= T_ITEM0, so erase_rect tests a cell with one compare; it draws
+; them from the glyph cache (FI_CELL / FI_GLY / FI_INK), never their tile glyph.
+T_ITEM0         EQU T_LVL_OBJ
                 ASSERT T_COUNT <= T_DOOR_ARCH_L        ; new ids start after the live PROTO ids
                 ASSERT T_COMMON_USED <= TILE_COMMON
                 ASSERT T_FREE31 < TILE_COMMON

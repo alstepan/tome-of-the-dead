@@ -19,6 +19,7 @@
 ; wider steps halve the transition (measured: 8 px/step = 1.55 s, see docs).
 HSTEP           EQU 2
 hscroll_room:
+                call fi_mp_next                ; FLOOR1: the strips' items from NEXT_MAP
                 ld   (TMP4), a
                 xor  a
                 ld   (TMP5), a                 ; k = 0 .. 32/HSTEP-1
@@ -109,13 +110,17 @@ hscroll_room:
                 ld   a, ROOM_COLS - HSTEP
                 sub  e
                 ld   e, a
-.lg:            push bc                        ; 3E-T6: the next room's floor inks
-                push de                        ; where its cells show now (col offset
-                ld   a, c                      ; = screen col - room col)
-                sub  e
-                ld   e, a
-                ld   d, 0
-                call fl_attr_scr               ; (lowram)
+.lg:            push bc                        ; FLOOR1: the next room's floor items
+                push de                        ; in the strip (fi_cells: its room cols,
+                ld   a, c                      ; on screen at + screen col - room col;
+                sub  e                         ; the glyph cache is EXIT_DEST's: do_exit)
+                ld   (fi_cell.dc+1), a         ; SMC (lowram)
+                ld   c, e                      ; (fi_cells reads NEXT_MAP: room coords)
+                ld   b, 0
+                ld   de, (HSTEP << 8) | PLAY_ROWS
+                call fi_cells                  ; (lowram; pages nothing)
+                xor  a
+                ld   (fi_cell.dc+1), a
                 pop  de
                 pop  bc
                 ld   b, FLOOR_ROW1
@@ -127,7 +132,7 @@ hscroll_room:
                 ld   a, (hl)
                 cp   ROOM_COLS / HSTEP
                 jp   c, .step
-                ret
+                jp   fi_mp_room
                 ASSERT HSTEP == 2
 
 ; scanline walker for rows 0..PLAY_ROWS-1: IX = base, returns NC while valid.
@@ -224,6 +229,7 @@ shift_attr_right:
 ; or EX_UP (content moves down, new rows enter at the top). PLAY_ROWS (18) char-row steps.
 ;------------------------------------------------------------------------------
 vscroll_room:
+                call fi_mp_next
                 ld   (TMP4), a
                 xor  a
                 ld   (TMP5), a
@@ -288,19 +294,23 @@ vscroll_room:
                 ld   de, (ROOM_COLS << 8) | 1
                 call tile_rect
                 pop  bc                        ; B = the entering screen row
-                push bc                        ; 3E-T6: the next room's floor inks
-                ld   a, (TMP4)                 ; where its rows show now (row offset
-                cp   EX_DOWN                   ; = B - the entering room row: k down,
-                ld   a, (TMP5)                 ; 17 - k up)
+                push bc                        ; FLOOR1: the next room's floor items
+                ld   a, (TMP4)                 ; in the row (its room row: k down,
+                cp   EX_DOWN                   ; 17 - k up; on screen at row B)
+                ld   a, (TMP5)
                 jr   z, .vd
                 cpl
                 add  a, PLAY_ROWS              ; 17 - k
 .vd:            ld   c, a
                 ld   a, b
                 sub  c
-                ld   d, a
-                ld   e, 0
-                call fl_attr_scr               ; (lowram)
+                ld   (fi_cell.dr+1), a           ; SMC (lowram): screen row - room row
+                ld   b, c
+                ld   c, 0
+                ld   de, (ROOM_COLS << 8) | 1
+                call fi_cells                  ; (lowram; pages nothing)
+                xor  a
+                ld   (fi_cell.dr+1), a
                 pop  bc
                 ld   a, (TMP4)                 ; B3B-8: is it the next room's row 17
                 cp   EX_DOWN                   ; (down: k = 17 at the bottom; up:
@@ -319,6 +329,17 @@ vscroll_room:
                 ld   a, (hl)
                 cp   PLAY_ROWS
                 jp   c, .step
+                ; fall through
+; fi_mp_room / fi_mp_next — FLOOR1: fi_cells' map page (SMC) back to ROOM_MAP /
+; to NEXT_MAP (the entering room in its own coords, read by the strips).
+; Keep all but F (fi_mp_next keeps A: the scroll arg).
+fi_mp_room:     ld   a, ROOM_MAP >> 8
+                ld   (fi_cells.mp+1), a
+                ret
+fi_mp_next:     push af
+                ld   a, NEXT_MAP >> 8
+                ld   (fi_cells.mp+1), a
+                pop  af
                 ret
 
 next_map_row:   ; HL = NEXT_MAP + A*32

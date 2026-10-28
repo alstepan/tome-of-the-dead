@@ -87,6 +87,7 @@ NONE = 0xFF
 FL, FLS = S["FLOOR_LIST"], S["FL_STRIDE"]
 STRINGS = textpack.read_strings()
 TXT = dict(STRINGS)
+MK = S["T_ITEM0"] + 3            # FLOOR1: the lower marker of a storey-1 item (row 16 = IROW)
 HEAL_NAME = "HEAL POTION"      # 3E-T11: the legacy IT_POTION is picked up as a Heal potion
 NM = {K_RAT: "RAT", K_GOBLIN: "GOBLIN", K_SKELETON: "SKELETON"}
 IMG = textpack.parse_emitted(os.path.join(HERE.parent, "build", "text", "strings.asm"))
@@ -504,8 +505,9 @@ def run(h, p, check):
 
     def put(i, col, item, qty, tile=None):
         p.wmem(FL + i * FLS, [p.rb("CUR_ROOM") | S1, col, item, qty])
-        if tile is not None:
-            p.wb(S["ROOM_MAP"] + IROW * 32 + col, tile)
+        if tile is not None:                      # FLOOR1: the 2x2 markers (rows 15 / 16)
+            p.wmem(S["ROOM_MAP"] + (IROW - 1) * 32 + col, [tile - 1] * 2)
+            p.wmem(S["ROOM_MAP"] + IROW * 32 + col, [tile] * 2)
 
     def entry(i):
         return list(p.z.read_memory(FL + i * FLS, 4))
@@ -526,7 +528,7 @@ def run(h, p, check):
     pick = TXT["cmb_pick"]
     scene([], daggers=3)
     i, = free_entries(1)
-    put(i, col, S["IT_DAGGER"], 3, S["T_DAGGERS"])
+    put(i, col, S["IT_DAGGER"], 3, MK)
     ok, lines = step_on("P1")
     got = dict(ok=ok, d=p.rb("DAGGERS"), e=entry(i)[0], c=cell(col), lines=lines)
     check("P1 3 daggers picked up: DAGGERS 6, entry FL_EMPTY, cell T_AIR, the line",
@@ -534,32 +536,32 @@ def run(h, p, check):
 
     scene([], daggers=8)
     i, = free_entries(1)
-    put(i, col, S["IT_DAGGER"], 3, S["T_DAGGERS"])
+    put(i, col, S["IT_DAGGER"], 3, MK)
     ok, lines = step_on("P2")
     got = dict(ok=ok, d=p.rb("DAGGERS"), e=entry(i), c=cell(col), lines=lines)
-    want = dict(ok=True, d=9, e=[p.rb("CUR_ROOM") | S1, col, S["IT_DAGGER"], 2], c=S["T_DAGGERS"],
+    want = dict(ok=True, d=9, e=[p.rb("CUR_ROOM") | S1, col, S["IT_DAGGER"], 2], c=MK,
                 lines=[pick + "1" + TXT["cmb_dagger"], TXT["quiver_full"]])
     check("P2 DAGGERS 8 + 3: 1 taken (cap 9), 2 stay, QUIVER FULL", got == want, (got, want))
 
     scene([], arrows=24, bow=1)
     i, = free_entries(1)
-    put(i, col, S["IT_ARROW"], 5, S["T_ARROWS"])
+    put(i, col, S["IT_ARROW"], 5, MK)
     ok, lines = step_on("P3")
     got = dict(ok=ok, a=p.rb("ARROWS"), e=entry(i)[3], c=cell(col), lines=lines)
     check("P3 ARROWS 24 + 5: nothing taken, QUIVER FULL",
-          got == dict(ok=True, a=24, e=5, c=S["T_ARROWS"], lines=[TXT["quiver_full"]]), got)
+          got == dict(ok=True, a=24, e=5, c=MK, lines=[TXT["quiver_full"]]), got)
 
     scene([], arrows=20, bow=0)
     i, j = free_entries(2)
     pot0 = p.ent(0)["POT"]
     put(i, col, S["IT_POTION"], 1)
-    put(j, col, S["IT_ARROW"], 6, S["T_ARROWS"])  # the last entry of the cell is drawn
+    put(j, col, S["IT_ARROW"], 6, MK)  # the last entry of the cell is drawn
     ok, lines = step_on("P4")
     got = dict(ok=ok, a=p.rb("ARROWS"), ep=entry(i)[0], e=entry(j)[3], c=cell(col), pot=p.ent(0)["POT"],
                lines=lines)
     check("P4 no bow, ARROWS 20 + 6 over a potion: the potion and 4 arrows taken, QUIVER FULL, the arrows drawn",
-          got == dict(ok=True, a=24, ep=S["FL_EMPTY"], e=2, c=S["T_ARROWS"], pot=pot0 + 1,
-                      lines=[pick + HEAL_NAME, pick + "4" + TXT["cmb_arrows"], TXT["quiver_full"]]), got)
+          got == dict(ok=True, a=24, ep=S["FL_EMPTY"], e=2, c=MK, pot=pot0 + 1,
+                      lines=[pick + "4" + TXT["cmb_arrows"], TXT["quiver_full"], pick + HEAL_NAME]), got)
     p.wb("ARROWS", 0)
     ok, lines = step_on("P4b", ("WAIT",))
     got = dict(ok=ok, a=p.rb("ARROWS"), e=entry(j)[0], c=cell(col), lines=lines)
@@ -568,10 +570,10 @@ def run(h, p, check):
 
     scene([], daggers=0, cls=K_WIZARD)
     i, = free_entries(1)
-    put(i, col, S["IT_DAGGER"], 3, S["T_DAGGERS"])
+    put(i, col, S["IT_DAGGER"], 3, MK)
     ok, lines = step_on("P5")
     got = dict(ok=ok, d=p.rb("DAGGERS"), e=entry(i)[3], c=cell(col))
-    check("P5 the Mage takes no daggers", got == dict(ok=True, d=0, e=3, c=S["T_DAGGERS"]), got)
+    check("P5 the Mage takes no daggers", got == dict(ok=True, d=0, e=3, c=MK), got)
 
     # ---- P6..P9: T7 review gaps ---------------------------------------------------------
     def shadow_attr(row, c):
@@ -588,12 +590,12 @@ def run(h, p, check):
     p.wmem(S["BAG"], [S["IT_W_LONG"], 1, 0] * S["BAG_SLOTS"])
     pot9 = p.ent(0)["POT"]
     put(i, col, S["IT_POTION"], 1)
-    put(j, col, S["IT_ARROW"], 3, S["T_ARROWS"])
+    put(j, col, S["IT_ARROW"], 3, MK)
     ok, lines = step_on("P6")
     got = dict(ok=ok, a=p.rb("ARROWS"), pot=p.ent(0)["POT"], ep=entry(i), ea=entry(j)[0], c=cell(col),
-               sh=shadow_attr(IROW, col) == 0x42, lines=lines)    # 3E-T6: fl_attr_sh, item_ink(IT_POTION)
+               sh=shadow_attr(IROW, col) == tile_attr(MK), lines=lines)    # FLOOR1: the marker's (erase inks it)
     want = dict(ok=True, a=3, pot=pot9, ep=[p.rb("CUR_ROOM") | S1, col, S["IT_POTION"], 1], ea=S["FL_EMPTY"],
-                c=S["T_POTION"], sh=True, lines=["BAG FULL", pick + "3" + TXT["cmb_arrows"]])
+                c=MK, sh=True, lines=[pick + "3" + TXT["cmb_arrows"], "BAG FULL"])
     check("P6 full bag: potion stays (re-stamped T_POTION + attr shadow), BAG FULL, 3 arrows taken",
           got == want, (got, want))
 
@@ -601,7 +603,7 @@ def run(h, p, check):
     # (the panel clears the bit on the next tick: no ammo item is drawn yet)
     scene([], daggers=3)
     i, = free_entries(1)
-    put(i, col, S["IT_DAGGER"], 2, S["T_DAGGERS"])
+    put(i, col, S["IT_DAGGER"], 2, MK)
     p.wb("PANEL_DIRTY", 0)
     t0 = p.rw("TURN_COUNTER")
     p.hold("L")
@@ -624,7 +626,8 @@ def run(h, p, check):
         i, = free_entries(1)
         c0 = HX + 1
         p.wmem(FL + i * FLS, [p.rb("CUR_ROOM"), c0, S["IT_DAGGER"], 2])
-        p.wb(S["ROOM_MAP"] + 7 * 32 + c0, S["T_DAGGERS"])
+        p.wmem(S["ROOM_MAP"] + 6 * 32 + c0, [S["T_ITEM0"]] * 2)          # FLOOR1: storey-0 markers
+        p.wmem(S["ROOM_MAP"] + 7 * 32 + c0, [S["T_ITEM0"] + 1] * 2)
         ok, lines = step_on("P8", ("WAIT",))
         got = dict(ok=ok, d=p.rb("DAGGERS"), e=entry(i)[0], c=p.rb(S["ROOM_MAP"] + 7 * 32 + c0),
                    sh=shadow_attr(7, c0) == tile_attr(S["T_AIR"]), lines=lines)
@@ -639,7 +642,7 @@ def run(h, p, check):
             check(f"P9 entry {idx} free", False, entry(idx))
             continue
         pt0 = p.rb("POTIONS_TAKEN")
-        put(idx, col, S["IT_POTION"], 1, S["T_POTION"])
+        put(idx, col, S["IT_POTION"], 1, MK)
         ok, lines = step_on("P9")
         want_bit = (1 << idx) if idx < 8 else 0
         got = dict(ok=ok, bits=p.rb("POTIONS_TAKEN") ^ pt0, e=entry(idx)[0], c=cell(col),
@@ -666,9 +669,12 @@ def run(h, p, check):
     p.wmem(FL + c * FLS, [room | S1, 24, S["IT_ARROW"], 1])    # shared: arrows first, the potion last
     p.wmem(FL + d * FLS, [room | S1, 24, S["IT_POTION"], 1])
     ok, tb, m = world.build_only(p, room)
-    got = dict(ok=ok, d=m[16 * 32 + 20], a=m[7 * 32 + 6], s=m[16 * 32 + 24])
-    check("B1 build_room_map: daggers / arrows glyphs on row 9s+7, a shared cell shows the last entry",
-          got == dict(ok=True, d=S["T_DAGGERS"], a=S["T_ARROWS"], s=S["T_POTION"]), got)
+    got = dict(ok=ok, d=m[16 * 32 + 20: 16 * 32 + 22], a=m[6 * 32 + 6: 6 * 32 + 8] + m[7 * 32 + 6: 7 * 32 + 8],
+               s=m[15 * 32 + 24: 15 * 32 + 26] + m[16 * 32 + 24: 16 * 32 + 26])
+    t0 = S["T_ITEM0"]
+    check("B1 build_room_map (FLOOR1): every entry's 2x2 markers, a shared col too",
+          got == dict(ok=True, d=bytes([t0 + 3] * 2), a=bytes([t0, t0, t0 + 1, t0 + 1]),
+                      s=bytes([t0 + 2, t0 + 2, t0 + 3, t0 + 3])), got)
 
 
 if __name__ == "__main__":

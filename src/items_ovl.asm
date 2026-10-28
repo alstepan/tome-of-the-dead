@@ -13,7 +13,7 @@
 ;
 ; ig_main   In : the level_gen block (LVL_STATE..), MASTER_SEED, HERO_KIND.
 ;           The level on ITEM_RNG = LVL_SEED(master, depth|$80): potion types
-;           (+ D8 lair relocation), food, scrolls, gear, books, Warrior ammo /
+;           (+ FLOOR1 the potion re-check), food, scrolls, gear, books, Warrior ammo /
 ;           the D2 bow + bundle, traps (per item: type / qty, then placement);
 ;           writes FLOOR_N + all 32 FLOOR_LIST entries (unused = FL_EMPTY x 4)
 ;           and TRAP_LIST / TRAP_N. A floor item is TYPE / QTY only (no ISTATE;
@@ -23,9 +23,8 @@
 ;           Out: -. Clobbers: A, BC, DE, HL (IX kept).
 ; Cost: measured by tests/items_gen.py (worst case reported there).
 ;==============================================================================
-PLACE_TRIES     EQU FEAT_TRIES          ; col tries per item (model PLACE_TRIES)
+PLACE_TRIES     EQU 2 * FEAT_TRIES      ; col tries per item (model PLACE_TRIES; FLOOR1: 8 -> 16, the 2-col footprint)
 TRAP_TRIES      EQU 8
-ITEM_COL_LO     EQU 2                   ; col = 2 + rnd(28)
 ITEM_COL_SPAN   EQU 28
 TRAP_COL_LO     EQU 6                   ; t = 6 + rnd(20)
 TRAP_COL_SPAN   EQU 20
@@ -111,13 +110,6 @@ ig_main:
                 ld   a, l
                 sub  (ig_gp + 1) & $FF
                 ld   (ig_gp), a
-                ; food / gear pool: D8 avoids the lair (§8.11 Q1: no 60..63 glyph there)
-                ld   hl, ig_ns
-                ld   a, e
-                cp   LEVELS
-                jr   nz, .gp
-                ld   hl, ig_nl
-.gp:            ld   (ig_gpool), hl
                 ; unused entries -> FL_EMPTY
                 ld   a, (FLOOR_N)
                 ld   (ig_n), a
@@ -145,34 +137,33 @@ ig_main:
                 add  a, IT_POT_LO
                 ld   (hl), a
                 jr   .pt
-.pd:            ; D8: a potion in the lair is re-placed (NL, scan fallback; same slot)
-                ld   a, (ig_d)
-                cp   LEVELS
-                jr   nz, .grp
+.pd:            ; FLOOR1: every GEN_RNG potion re-checked against the item rules
+                ; (ig_ok: footprint c..c+1, c <= 28, no item within c-1..c+1, the
+                ; room cap); an illegal one is re-placed in NS (scan fallback; same slot)
                 ld   a, (ig_n)
                 ld   b, a
                 ld   hl, FLOOR_LIST
-.d8:            ld   a, (hl)
-                and  FL_ROOM_MASK
-                ld   c, a
-                ld   a, (LVL_LAIR)
-                cp   c
-                jr   nz, .d8n
-                ld   (hl), FL_EMPTY            ; frees its cell for the placement
+.pv:            ld   d, (hl)
+                inc  l
+                ld   e, (hl)
+                dec  l
+                ld   (hl), FL_EMPTY            ; (not its own neighbour)
                 push hl
                 push bc
-                ld   hl, ig_nl
+                call ig_ok                     ; (keeps DE)
+                jr   nc, .pk
+                ld   hl, ig_ns
                 call ig_place_s
-                pop  bc
+.pk:            pop  bc
                 pop  hl
                 ld   (hl), d
                 inc  l
                 ld   (hl), e
                 dec  l
-.d8n:           ld   a, l
+                ld   a, l
                 add  a, FL_STRIDE
                 ld   l, a
-                djnz .d8
+                djnz .pv
                 ; 2.-4. food, scrolls, gear: n = lo + rnd(2) items of a type roll each
 .grp:           ld   ix, ig_grps
                 ld   b, IG_GRP_N
@@ -407,7 +398,7 @@ ig_app:         ld   hl, ig_n
 ; rnd(2), then up to PLACE_TRIES x col = 2 + rnd(28), first free legal cell.
 ; Out: NC + D = room | storey << 7, E = col; CF = none (dropped).
 ; ig_place_s — the same, then the deterministic scan over the pool (bow,
-; D1 book, D8 lair potion: never dropped).  Clobbers A, BC, DE, HL, IX.
+; D1 book, a re-placed potion: never dropped).  Clobbers A, BC, DE, HL, IX.
 ig_place_s:     call ig_place
                 ret  nc
                 ld   hl, (ig_pool)
@@ -441,7 +432,7 @@ ig_place:       ld   (ig_pool), hl
                 ret                            ; CF from ig_ok
 
 ; ig_scan — HL = pool: first free legal cell, pool order, storey 0 then 1,
-; col 2..29. Out as ig_place (CF only if the pool has none: unreachable).
+; col 2..29 (ig_ok refuses 29). Out as ig_place (CF only if the pool has none: unreachable).
 ig_scan:        ld   b, (hl)
 .r:             inc  hl
                 push bc
@@ -466,11 +457,21 @@ ig_scan:        ld   b, (hl)
                 pop  bc
                 ret                            ; NC
 
-; ig_ok — D = room | storey << 7, E = col: CF = taken (an entry in the cell)
-; or illegal (levelgen.lp_hits: bank-3 `hits` = storey footprints f..f+2,
-; storey-0 pit p-1..p+3, the storey's edge block; + the L2 spans on storey
-; 0: wide pit p-1..p+W, mid-block b-1..b+w). Keeps DE. Clobbers A, BC, HL, IX.
-ig_ok:          call ig_occ
+; ig_ok — D = room | storey << 7, E = col c: CF = illegal (FLOOR1 rules, model
+; cell_legal + item_free): c > ITEM_COL_LAST; another entry of the storey
+; within c-1..c+1 (ig_occ); the room (both storeys) already holds
+; ITEM_ROOM_CAP entries (ig_cap); the footprint c..c+1 on levelgen.lp_hits
+; (bank-3 `hits` = storey footprints f..f+2, storey-0 pit p-1..p+3, the
+; storey's edge block) or, storey 0, on an L2 span (wide pit p-1..p+W,
+; mid-block b-1..b+w). Keeps DE. Clobbers A, BC, HL, IX.
+ig_ok:          ld   a, e
+                cp   ITEM_COL_LAST + 1
+                ccf
+                ret  c
+                ld   c, 3
+                call ig_occ
+                ret  c
+                call ig_cap
                 ret  c
                 call ig_desc                   ; IX = the room's descriptor
                 ld   a, d
@@ -478,22 +479,34 @@ ig_ok:          call ig_occ
                 and  1
                 ld   c, a                      ; storey
                 push de
-                ld   d, e                      ; lo = hi = col
+                ld   d, e                      ; lo = c, hi = c + 1
+                inc  e
                 call hits                      ; (keeps BC)
                 pop  de
                 ret  c
                 ld   a, c
                 or   a
                 ret  nz                        ; storey 1: done (NC)
-                ld   b, (ix+L2_PITW)
+                inc  e                         ; c..c+1 meets s-1..s+w <=> c+1 in s-1..s+w+1
+                call .l2
+                dec  e                         ; (keeps CF)
+                ret
+.l2:            ld   b, (ix+L2_PITW)
                 inc  b
                 dec  b
-                jr   z, ig_mid                 ; narrow pit (or none): hits covered it
+                jr   z, .mid                   ; narrow pit (or none): hits covered it
                 ld   a, (ix+RD_PITCOL)
                 or   a
-                call nz, ig_span
+                jr   z, .mid
+                inc  b
+                call ig_span
                 ret  c
-                ; fall through
+.mid:           ld   b, (ix+L2_MIDW)
+                ld   a, (ix+L2_MIDB)
+                or   a
+                ret  z
+                inc  b
+                jr   ig_span
 ; ig_mid — storey 0: CF = E in the mid-block span b-1 .. b+w (IX = descriptor).
 ; Clobbers A, B.
 ig_mid:         ld   b, (ix+L2_MIDW)
@@ -519,8 +532,9 @@ ig_desc:        ld   a, d
                 pop  ix
                 ret
 
-; ig_occ — D = room | storey << 7, E = col: CF = a live entry 0..ig_n-1 is
-; there. Keeps DE. Clobbers A, B, HL.
+; ig_occ — D = room | storey << 7, E = col, C = window (3: an item col in
+; E-1..E+1, a new item; 2: in E-1..E, a trap col t inside a footprint): CF =
+; a live entry 0..ig_n-1 of that storey there. Keeps DE, C. Clobbers A, B, HL.
 ig_occ:         ld   a, (ig_n)
                 or   a
                 ret  z
@@ -532,13 +546,36 @@ ig_occ:         ld   a, (ig_n)
                 inc  l
                 ld   a, (hl)
                 dec  l
-                cp   e
-                scf
-                ret  z
+                inc  a
+                sub  e                         ; col - E + 1
+                cp   c
+                ret  c
 .on:            ld   a, l
                 add  a, FL_STRIDE
                 ld   l, a
                 djnz .o
+                or   a
+                ret
+
+; ig_cap — D = room | storey << 7: CF = entries 0..ig_n-1 of the room (both
+; storeys) number ITEM_ROOM_CAP already. Keeps DE. Clobbers A, BC, HL.
+ig_cap:         ld   a, (ig_n)
+                or   a
+                ret  z
+                ld   b, a
+                ld   c, ITEM_ROOM_CAP
+                ld   hl, FLOOR_LIST
+.l:             ld   a, (hl)
+                xor  d
+                and  FL_ROOM_MASK              ; (FL_EMPTY: 15 ^ room != 0)
+                jr   nz, .n
+                dec  c
+                scf
+                ret  z
+.n:             ld   a, l
+                add  a, FL_STRIDE
+                ld   l, a
+                djnz .l
                 or   a
                 ret
 
@@ -578,7 +615,7 @@ ig_elig:        ld   hl, ig_nl
 ; trap_col_ok): a storey footprint c (s0: up, arrival, ladders, pit; s1:
 ; down, exit, ladders) with c-1 <= t <= c+3; the pit zone p-1..p+(W or 3)
 ; on both storeys; s0 the mid-block b-1..b+w; the storey's edge block (right:
-; t >= 30-w, left: t <= w+1); a floor entry on the cell.
+; t >= 30-w, left: t <= w+1); a floor item's footprint (c or c+1) on it.
 ; Clobbers A, BC, HL, IX.
 ig_trap_ok:     call ig_desc
                 inc  hl
@@ -636,7 +673,8 @@ ig_trap_ok:     call ig_desc
                 ld   a, e
                 cp   b
                 ret  c                         ; t < w + 2
-.fl:            jp   ig_occ
+.fl:            ld   c, 2                      ; FLOOR1: t != c, c + 1 of any item
+                jp   ig_occ
                 ASSERT RD_UPCOL == 2 && RD_DNCOL == 3 && RD_ARRCOL == 4 && RD_EXITCOL == 5
                 ASSERT RD_LAD1 == 6 && RD_LAD2 == 7 && RD_PITCOL == 8 && RDB_S1 == $40
                 ASSERT PIT_W_NARROW == 3
@@ -645,11 +683,11 @@ ig_trap_ok:     call ig_desc
 ; ig_grp descriptors (game.md §8.5): n_lo (+ rnd(2)), type_lo, k (0 = the gear
 ; pool), DW the pool-pointer variable
 ig_grps:        DB   3, IT_FOOD_LO, IT_FOOD_HI - IT_FOOD_LO + 1
-                DW   ig_gpool                  ; food 3-4 (D8: not in the lair)
+                DW   ig_nsp                    ; food 3-4 (FLOOR1: the D8 lair allowed)
                 DB   1, IT_SCR_LO, IT_SCR_HI - IT_SCR_LO + 1
                 DW   ig_nsp                    ; scrolls 1-2 (lair allowed)
                 DB   1, 0, 0
-                DW   ig_gpool                  ; gear 1-2 (D8: not in the lair)
+                DW   ig_nsp                    ; gear 1-2
                 ASSERT $ - ig_grps == IG_GRP_N * IG_GRP_LEN
 ig_nsp:         DW   ig_ns
 ig_st:          DB   1, 0                      ; [start] (+1 written per level)
@@ -682,8 +720,7 @@ ig_t            EQU ig_n + 1            ; type / trap type of the item being pla
 ig_q            EQU ig_t + 1            ; qty
 ig_r            EQU ig_q + 1            ; placement room | storey << 7
 ig_pool         EQU ig_r + 1            ; word: the pool of the last ig_place
-ig_gpool        EQU ig_pool + 2         ; word: the food / gear pool
-ig_ns           EQU ig_gpool + 2        ; 1 + 9: present non-start rooms
+ig_ns           EQU ig_pool + 2         ; 1 + 9: present non-start rooms
 ig_nl           EQU ig_ns + 10          ; 1 + 9: ... minus the lair
 ig_el           EQU ig_nl + 10          ; 1 + 9: trap-eligible rooms
 ig_gp           EQU ig_el + 10          ; 1 + IG_GEAR_N: gear pool

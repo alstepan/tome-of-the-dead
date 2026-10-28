@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix")
 CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -328,6 +328,22 @@ SCENARIOS = {
         (1, 22, stand_y(1, 2), HOSTILE),
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "pmix"),
+    # FLOOR1: "mix" with 4 floor items (16x16 icons) under the fight, storey 1 cols 9 / 13 /
+    # 17 / 21 (not picked up: no walk onto them is required; restores under every body)
+    "imix": ("knight + 4 monsters, 4 floor items under the fight", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "imix"),
+    # FLOOR1 (manager decision 2026-10-28): the kill-drop at 8 item types: "mix" with room A at 8
+    # distinct types (the first food / ammo / potion type has 2 entries, one piled on another
+    # item) and the 1-HP skeleton as the lair boss: its first-slash kill runs uq_fit (fi_gc, the
+    # displacement of every entry of the victim type, each col re-stamped) + drop_put + ap_stamp
+    "dmix": ("knight + 4 monsters, a boss kill-drop in a room at 8 item types", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "dmix"),
     # 3E-T12: "mix" with the quick uses as the hero's actions (R6 fx_quick): two potions
     # (HP 5), three eats (the 3rd NO NEED at 100), three reads (Fear, Sleep, Fear over the
     # 4 monsters: room_status), then melee / waits
@@ -603,22 +619,65 @@ def mkmix_setup(p):
     p.settle()
 
 
-PMIX_STEP = int(os.environ.get("BUDGET_PMIX_STEP", "2"))   # 1: 13 adjacent items, 126.65k (T11 report)
+PMIX_STEP = int(os.environ.get("BUDGET_PMIX_STEP", "2"))   # >= 2 (FLOOR1: 2-col footprints)
 
 
 def pmix_setup(p):
     """"pmix": FLOOR_LIST entries (room A, storey 1) on every PMIX_STEP-th col of 6..11 and 15..21,
-    one bag type each, their glyphs in ROOM_MAP row 16; the skeleton at 1 HP."""
+    one bag type each, FLOOR1: T_ITEM on their 2x2 cells (PMIX_STEP >= 2: footprints c..c+1
+    touch, never overlap) + the glyph cache / icons (fi_refresh); the skeleton at 1 HP."""
     types = [S[n] for n in ("IT_F_APPLE", "IT_P_HEAL", "IT_S_FEAR", "IT_W_LONG", "IT_A_CHAIN", "IT_C_MIGHT",
                             "IT_F_MEAT")]
     cols = list(range(15, 22, PMIX_STEP)) + list(range(6, 12, PMIX_STEP))
     free = [i for i in range(S["FLOOR_MAX"]) if p.rb(S["FLOOR_LIST"] + i * S["FL_STRIDE"]) == S["FL_EMPTY"]]
     for k, (i, c) in enumerate(zip(free, cols)):
         t = types[k % len(types)]
-        p.z.cmd("write-memory %d %d %d %d %d" % (S["FLOOR_LIST"] + i * S["FL_STRIDE"], S["FL_S1"], c, t, 1))
-        g = p.rb(S["it_cls"] + (p.rb(S["it_tab"] + t) >> 4))
-        p.wb(S["ROOM_MAP"] + 16 * 32 + c, g)
+        p.put_item(i, S["FL_S1"], c, t)           # FLOOR1: T_ITEM 2x2 (rows 15..16, cols c..c+1)
+    p.fi_refresh()                                # the glyph cache + the icons on screen
     p.set_ent(5, HP=1)
+
+
+def imix_setup(p):
+    """"imix" (FLOOR1): 4 floor items (Apple, Heal, Long Sword, Chain) in room A storey 1
+    at cols 9 / 13 / 17 / 21, cache + icons drawn (fi_refresh)."""
+    types = [S[n] for n in ("IT_F_APPLE", "IT_P_HEAL", "IT_W_LONG", "IT_A_CHAIN")]
+    free = [i for i in range(S["FLOOR_MAX"]) if p.rb(S["FLOOR_LIST"] + i * S["FL_STRIDE"]) == S["FL_EMPTY"]]
+    for i, c, t in zip(free, (9, 13, 17, 21), types):
+        p.put_item(i, S["FL_S1"], c, t)
+    p.fi_refresh()
+
+
+def dmix_setup(p):
+    """"dmix" (FLOOR1): room A at exactly 8 distinct item types (the PROTO items + these), the victim
+    type = the first food / ammo / potion in list order (the PROTO potion), the 1-HP
+    skeleton the lair boss (LF_UNIQUE clear, depth 1: King's Helm), cache + icons drawn."""
+    room = p.rb("CUR_ROOM")
+    fl = lambda: list(p.z.read_memory(S["FLOOR_LIST"], 128))                   # noqa: E731
+    have = {fl()[4 * i + 2] for i in range(S["FLOOR_MAX"])
+            if fl()[4 * i] != S["FL_EMPTY"] and fl()[4 * i] & S["FL_ROOM_MASK"] == room}
+    free = [i for i in range(S["FLOOR_MAX"]) if p.rb(S["FLOOR_LIST"] + i * S["FL_STRIDE"]) == S["FL_EMPTY"]]
+    names = ["IT_A_CHAIN", "IT_W_LONG", "IT_C_MIGHT", "IT_S_FEAR", "IT_BOOK", "IT_H_HOOD", "IT_S_SLEEP"]
+    spots = [(S["FL_S1"], 6, "IT_A_CHAIN"), (S["FL_S1"], 6, "IT_F_APPLE"), (S["FL_S1"], 9, "IT_F_APPLE")]   # (clear of the hero's walk)
+    spots += [(room, c, n) for c, n in zip((6, 12, 18, 24), names[1:])]
+    spots = spots[:int(os.environ.get("BUDGET_DMIX_SPOTS", "99"))]       # (info: fewer = no displacement)
+    types = {S[n] for _, _, n in spots}
+    k = 0
+    while len(have | types) < int(os.environ.get("BUDGET_DMIX_TYPES", "8")):                  # (the PROTO room already holds some)
+        spots.append((room, 28 - 3 * k, names[k + 4 if k + 4 < len(names) else 0]))
+        types.add(S[spots[-1][2]])
+        k += 1
+    for i, (rb, c, n) in zip(free, spots):
+        p.put_item(i, rb | (room if rb == S["FL_S1"] else 0), c, S[n])
+    p.fi_refresh()
+    p.wb("LVL_LAIR", room)
+    p.wb("LP_BOSS", p.ent(5)["KIND"])
+    p.wb("LVL_DEPTH", 1)
+    p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~S["LF_UNIQUE"] & 0xFF)
+    p.set_ent(5, HP=1)
+    p.wmem(S["RNG_STATE"], [DMIX_SEED & 255, DMIX_SEED >> 8])   # a seed whose first slash hits (the kill is the point)
+
+
+DMIX_SEED = int(os.environ.get("BUDGET_DMIX_SEED", "8"))
 
 
 # 3E-T16: scenario -> (type, col) of the hidden trap (room A storey 1) poked over pmix
@@ -713,6 +772,10 @@ def run_scenario(h, scen):
         mkmix_setup(p)
     if len(scen) > 5 and scen[5] == "pmix":
         pmix_setup(p)
+    if len(scen) > 5 and scen[5] == "imix":
+        imix_setup(p)
+    if len(scen) > 5 and scen[5] == "dmix":
+        dmix_setup(p)
     if len(scen) > 5 and scen[5] == "umix":
         umix_setup(p)
     if len(scen) > 5 and scen[5] == "qmix":
@@ -745,6 +808,14 @@ def run_scenario(h, scen):
         bag = list(p.z.read_memory(S["BAG"], 15))
         print(f"[info] umix after: bag {bag}, FOOD {p.rb('FOOD')}, HP {p.ent(0)['HP']}, "
               f"ST_FLAGS {list(p.z.read_memory(S['ST_FLAGS'], 6))}", flush=True)
+    if len(scen) > 5 and scen[5] == "dmix":         # the boss kill-drop really ran uq_fit's displacement
+        fl = list(p.z.read_memory(S["FLOOR_LIST"], 128))
+        room = [(fl[4 * i + 1], fl[4 * i + 2]) for i in range(S["FLOOR_MAX"])
+                if fl[4 * i] != S["FL_EMPTY"] and fl[4 * i] & S["FL_ROOM_MASK"] == p.rb("CUR_ROOM")]
+        assert p.rb("LVL_FLAGS") & S["LF_UNIQUE"] and S["IT_POTION"] not in [t for _, t in room], \
+            f"dmix: the boss kill-drop did not displace (BUDGET_DMIX_SEED?): {room}"
+        print(f"[info] dmix after: {len(room)} entries, {len({t for _, t in room})} types, the potion type "
+              f"displaced (the walk may have picked the KING HELM up)", flush=True)
     if len(scen) > 5 and scen[5] == "qmix":         # IC1: the potion pick as drawn (state bits 2-3)
         sh = list(p.z.read_memory(S["ICON_SH"] + S["QS_SLOT0"], 3))
         print(f"[info] qmix after: quick ICON_SH {[hex(v) for v in sh]} (potion pick {(sh[1] >> 2) & 3}),"
@@ -811,7 +882,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")
