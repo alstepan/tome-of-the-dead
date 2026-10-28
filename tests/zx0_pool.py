@@ -7,9 +7,10 @@ frame .asm files, before packing). B3B-12 retired the raw-sources A/B build
 
 Builds src/main.asm into a private temp dir (tools/build.sh -o DIR), boots it
 in ZEsarUX and dumps, at five points:
-  boot     first select_tick (boot pool: monsters + the two select idles)
-  knight   first tick_work after '1' (a generated D1: level_enter runs no
-           generator — the pool must be exactly boot + the knight)
+  boot     first select_tick (3F-T1: boot pool = the two select idles only)
+  knight   first tick_work after '1': idles + knight + its FX (the LEVEL
+           mark), then D1's monster kinds (level_enter: LP_KINDS + LP_BOSS
+           through pool_gmap, dedup, FRT monster rows NONE first)
   k->w     knight game, GAME_STATE poked to DEAD, ENTER -> select -> '2':
            the wizard is regenerated AFTER rooms were built, i.e. GEN_SCRATCH
            (= ROOM_MAP/NEXT_MAP) was overwritten — block-cache invalidation
@@ -19,10 +20,13 @@ in ZEsarUX and dumps, at five points:
            alloc_restore must drop the cache
 the pool banks 0/4/6 (whole 16 KB each), the whole FRT (FRT_MAX x 16 B),
 SEL_FRT_SAVE and the allocator state (ALLOC_IDX/PTR, mark). The reference
-replays the same generator sessions (boot: alloc_reset, every monster kind,
-the two select idles, save + mark; each game: select restores the idles' FRT
-rows, alloc_restore, gen_kind(hero), gen_kind(hero + K_FX_BASE) — D3-4: the
-class FX kind with its overlapping fid range) over the bank / FRT bytes the snapshot
+replays the same generator sessions (3F-T1 — boot: alloc_reset, the two
+select idles, save; each game: select restores the idles' FRT rows,
+alloc_reset + the idles again, gen_kind(hero), gen_kind(hero + K_FX_BASE) —
+D3-4: the class FX kind with its overlapping fid range —, alloc_mark; each
+level: alloc_restore, FRT monster rows NONE, the level's generation kinds
+from the LP_KINDS / LP_BOSS bytes read at that point and the snapshot's
+pool_gmap) over the bank / FRT bytes the snapshot
 starts with: allocator, variant choice (MOTION: shift 0 + 4; else the anchor (+4 for FF_PH4)
 one shift; SYM: left = right entries), mirror (bit-reversed bytes, reversed
 column pairs), the 4-px shift with its spill column. Geometry (frame_tab cols,
@@ -30,6 +34,12 @@ H, anchor offsets), kind_tab FID0/FCNT and the frame flags (fdesc_tab
 FD_FLAGS) are read from the image; the pixel data never is. Also asserts
 GEN_OVERFLOW = 0 and GEN_TRAP = 0 at every point, and reports cold-path
 T-states (boot -> first select_tick, select key -> first tick_work).
+
+3F-T1 "levels" (skip with --no-levels): a knight game descends D2..D8 through
+the real level_descend (DI stub, like tests/gfx_integrity.py); at every depth
+the pool / FRT / allocator == the reference, GEN_OVERFLOW / GEN_TRAP 0, the
+pool top <= the build's POOL_NEED - the straddle allowance bound, and the
+level_enter cost (stub T) is reported against the 2 s (7.1M T) budget.
 
 SRC6 spike: bank 6 is compared up to POOL6_END (= SRC6_ADDR); the SRC6 region
 SRC6_ADDR..R6_ADDR must equal the snapshot at every point (never written).
@@ -159,6 +169,8 @@ class Run:
             if "fdesc_tab" in S else None,
             "GEN_OVERFLOW": self.rb("GEN_OVERFLOW"),
             "GEN_TRAP": self.rb("GEN_TRAP") if "GEN_TRAP" in S else 0,
+            "LP": self.z.read_memory(S["LP_KINDS"], 5),   # LP_KINDS[0..3] + LP_BOSS
+            "depth": self.rb("LVL_DEPTH"),
         }
 
     def poke_stale_cache(self):
@@ -185,6 +197,30 @@ class Run:
             self.z.cmd("write-memory %d %s" % (S["GEN_SCRATCH"] + o,
                                                 " ".join(map(str, junk[o:o + 128]))))
         return blk
+
+    def descend(self, depth):
+        """3F-T1: from a play tick, LVL_DEPTH = depth - 1 + the real
+        level_descend from a DI stub (no ISR: stinger_wait returns at once,
+        as in tests/gfx_integrity.py) -> T of the stub; PC put back."""
+        S, z = self.S, self.z
+        stub = S["LOWRAM_END_3B"]
+        w = lambda v: [v & 0xFF, v >> 8]
+        code = ([0xF3, 0x3E, depth - 1, 0x32] + w(S["LVL_DEPTH"]) + [0xCD] + w(S["level_descend"])
+                + [0xFB, 0x00, 0x18, 0xFE])
+        end = stub + len(code) - 3
+        pc0 = self.pc()
+        z.cmd("write-memory %d %s" % (stub, " ".join(map(str, code))))
+        for n in range(1, 33):
+            z.cmd("set-breakpoint %d" % n)
+        z.cmd("set-breakpoint 1 PC=%d" % end)
+        z.cmd("set-register PC=%d" % stub)
+        z.cmd("reset-tstates-partial")
+        z.cmd("run %d" % (4 * RUN_LIMIT))
+        t = int(z.cmd("get-tstates-partial"))
+        if self.pc() != end:
+            raise RuntimeError(f"level_descend stub to D{depth} did not return")
+        z.cmd("set-register PC=%d" % pc0)
+        return t
 
     def select_hero(self, key):
         """C3-8a: through the C3-6 menu. '2' toggles HERO (menu_hero persists
@@ -244,6 +280,21 @@ def scenario_run(r):
     tm["stale select '2'->tick"] = r.select_hero("2")
     out["stale"] = r.dump()
     out["stale"]["blk"] = blk
+    return out, tm
+
+
+def levels_run(r, depths):
+    """3F-T1: knight game, D1 then D2..depths via level_descend -> ({'D<n>': dump}, {T})."""
+    out, tm = {}, {}
+    r.load()
+    r.run_to("select_tick")
+    r.select_hero("1")
+    r.wb("SND_MODE", 2)                # SFX only: no stinger to wait for (a DI stub
+    out["D1"] = r.dump()               # would hang in stinger_wait's menu_frame)
+    for d in range(2, depths + 1):
+        r.run_to("tick_work")
+        tm[f"level_enter D{d}"] = r.descend(d)
+        out[f"D{d}"] = r.dump()
     return out, tm
 
 
@@ -355,7 +406,9 @@ class Ref:
         self.ft, (self.fs, self.oc, self.oh) = init["FT"], init["FTL"]
         st = init["static"]
         self.kt, self.fdesc = st["kt"], st["fdesc"]
-        self.idx, self.ptr, self.mark, self.save = 0, S["POOL_START"], (0, S["POOL_START"]), bytearray(32)
+        a = init["alloc"]                              # 3F-T1: boot sets no mark any more
+        self.idx, self.ptr, self.save = 0, S["POOL_START"], bytearray(32)
+        self.mark = (a[3], a[4] | a[5] << 8)
         self.overflow = 0
 
     def alloc(self, n):
@@ -437,24 +490,50 @@ class Ref:
         S = self.S
         return [S["FID_knight_idle1"], S["FID_wizard_idle"]]
 
-    def boot(self):
-        S, st = self.S, self.S["FRT_STRIDE"]
-        self.idx, self.ptr = 0, S["POOL_START"]   # D3-TX: the text block is under bank 0's pool
-        for k in range(S["K_SKELETON"], S["K_COUNT"]):
-            self.kind(k)
+    def gen_idles(self):
+        S = self.S
+        self.idx, self.ptr, self.overflow = 0, S["POOL_START"], 0   # alloc_reset (D3-TX: above the text)
         for f in self.idles():
             self.frame(f)
-        self.save = bytearray(b"".join(self.frt[f * st:(f + 1) * st] for f in self.idles()))
-        self.mark = (self.idx, self.ptr)
 
-    def game(self, hero):
+    def boot(self):
+        st = self.S["FRT_STRIDE"]
+        self.gen_idles()                               # 3F-T1: the idles only
+        self.save = bytearray(b"".join(self.frt[f * st:(f + 1) * st] for f in self.idles()))
+
+    def game(self, hero, lp):
         st = self.S["FRT_STRIDE"]
         for i, f in enumerate(self.idles()):          # sel_run: sel_frt_copy restore
             self.frt[f * st:(f + 1) * st] = self.save[i * st:(i + 1) * st]
-        self.idx, self.ptr = self.mark                 # alloc_restore
+        self.gen_idles()                               # start_game (3F-T1): from the bottom
         self.kind(hero)
         if "K_FX_BASE" in self.S:                      # D3-4: + the class FX kind
             self.kind(hero + self.S["K_FX_BASE"])
+        self.mark = (self.idx, self.ptr)               # alloc_mark: the LEVEL mark
+        self.level(lp)
+
+    def gen_list(self, lp):
+        """pool_list (R6): LP_KINDS + LP_BOSS through pool_gmap, dedup, in order."""
+        S = self.S
+        o = S["pool_gmap"] - 0xC000
+        gm = self.pool[6][o:o + 3 * S["PGMAP_N"]]      # R6 never changes in play here
+        out = []
+        for k in lp:
+            us = [k]
+            for r in range(S["PGMAP_N"]):
+                if gm[3 * r] == k:
+                    us = [u for u in gm[3 * r + 1:3 * r + 3] if u != 0xFF]
+                    break
+            out += [u for u in us if u not in out]
+        return out
+
+    def level(self, lp):
+        S, st = self.S, self.S["FRT_STRIDE"]
+        self.idx, self.ptr = self.mark                 # alloc_restore
+        a, n = S["KFID_MONSTERS"] * st, S["KFCNT_MONSTERS"] * st
+        self.frt[a:a + n] = bytes([S["FRT_NONE"]]) * n
+        for k in self.gen_list(lp):
+            self.kind(k)
 
     def dump(self):
         a = bytes((self.idx, self.ptr & 0xFF, self.ptr >> 8,
@@ -463,8 +542,8 @@ class Ref:
                 "SEL_FRT_SAVE": bytes(self.save), "alloc": a, "GEN_OVERFLOW": self.overflow}
 
 
-def reference(S, init):
-    """{point: reference dump} for scenario()'s five points."""
+def reference(S, init, out_run, lv=None):
+    """{point: reference dump} for scenario()'s five points (+ levels_run's)."""
     sys.path.insert(0, REPO_TOOLS)
     import zx0_pack as zp
     import zx0_sources as zs
@@ -475,19 +554,29 @@ def reference(S, init):
     raw = [frames[n] for n in names]
     K, W = S["K_KNIGHT"], S["K_WIZARD"]
     out = {}
+    lp = lambda pt: bytes(out_run[pt]["LP"])
     r = Ref(S, init, raw)
     r.boot()
     out["boot"] = r.dump()
-    r.game(K)
+    r.game(K, lp("knight"))
     out["knight"] = r.dump()
-    r.game(W)
+    r.game(W, lp("k->w"))
     out["k->w"] = r.dump()
     r = Ref(S, init, raw)
     r.boot()
-    r.game(W)
+    r.game(W, lp("wizard"))
     out["wizard"] = r.dump()
-    r.game(W)
+    r.game(W, lp("stale"))
     out["stale"] = r.dump()
+    if lv:
+        r = Ref(S, init, raw)
+        r.boot()
+        r.game(K, bytes(lv["D1"]["LP"]))
+        out["D1"] = r.dump()
+        for d in range(2, 9):
+            if f"D{d}" in lv:
+                r.level(bytes(lv[f"D{d}"]["LP"]))
+                out[f"D{d}"] = r.dump()
     return out
 
 
@@ -496,6 +585,8 @@ def main():
     ap.add_argument("--baseline", help="source root of another checkout to compare too")
     ap.add_argument("--no-src6", action="store_true",
                     help="skip the SRC6 E2E variant (wizard sources in bank 6)")
+    ap.add_argument("--no-levels", action="store_true",
+                    help="skip the 3F-T1 D1..D8 level-pool walk")
     a = ap.parse_args()
     tmp = tempfile.mkdtemp(prefix="zx0pool_")
     kit = ["DEBUG_KIT=0"]          # D3-7: suites run on the release start kit
@@ -527,20 +618,51 @@ def main():
             h.z.sock.settimeout(60)
             r = Run(h, sna, S)
             out, tm = scenario_run(r)
-            res[name] = (out, tm, S, r.init)
+            lv = None
+            if name == "zx0" and not a.no_levels:
+                lv, tl = levels_run(r, 8)
+                tm.update(tl)
+                for d in range(1, 9):
+                    ok = lv[f"D{d}"]["depth"] == d
+                    print(f"[{'PASS' if ok else 'FAIL'}] {name} levels: LVL_DEPTH == {d}")
+                    if not ok:
+                        fails.append(f"{name}/levels/D{d}-depth")
+                worst = max(v for k, v in tl.items())
+                ok = worst <= 2 * 3546900
+                print(f"[{'PASS' if ok else 'FAIL'}] {name} levels: worst level_enter {worst:,} T "
+                      f"({worst / 3546900:.2f} s) <= 2 s")
+                if not ok:
+                    fails.append(f"{name}/levels/time")
+            res[name] = (out, tm, S, r.init, lv)
             if "SRC6_ADDR" in S and name != "baseline":
                 src6_decode(r, fails, name)
         finally:
             h.close()
-        for pt, d in out.items():
+        for pt, d in list(out.items()) + list((lv or {}).items()):
             for k in ("GEN_OVERFLOW", "GEN_TRAP"):
                 if d[k]:
                     fails.append(f"{name}/{pt} {k}={d[k]}")
         print(f"[{name}] timings: " + ", ".join(f"{k} {v:,} T" for k, v in tm.items()))
 
     for name in res:
-        out, tm, S, init = res[name]
-        ref = reference(S, init)
+        out, tm, S, init, lv = res[name]
+        ref = reference(S, init, out, lv)
+        if lv:
+            out = dict(out, **lv)
+            # the pool top at every depth vs the build's bound: POOL_NEED minus
+            # the 3 x 576 straddle allowance is the exact byte need (bank 0
+            # starts at POOL_START; a skipped bank tail counts as used)
+            for pt in lv:
+                a = lv[pt]["alloc"]
+                idx, ptr = a[0], a[1] | a[2] << 8
+                used = [(ptr - S["POOL_START"]),
+                        (0x10000 - S["POOL_START"]) + (ptr - 0xC000),
+                        (0x10000 - S["POOL_START"]) + 0x4000 + (ptr - 0xC000)][min(idx, 2)]
+                ok = used <= S["POOL_NEED"] and idx <= 2
+                print(f"[{'PASS' if ok else 'FAIL'}] {name} {pt} pool top: bank idx {idx}, "
+                      f"{used:,} B used of POOL_NEED {S['POOL_NEED']:,} (POOL_CAP {S['POOL_CAP']:,})")
+                if not ok:
+                    fails.append(f"{name}/{pt}/pool-top")
         for pt, d in out.items():
             for b in POOL_BANKS:
                 # bank 6: the pool part only (R6 is live variable space: gd_* / hr_*)

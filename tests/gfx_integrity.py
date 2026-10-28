@@ -18,9 +18,14 @@ source (read from the .sna the suite loads, never from the running machine):
        left / right through the rooms: room changes + LP spawns):
        the GI0 tables again (TILE_ATTRS minus the theme_ids, which follow the
        depth), ids 32..63 glyphs / attrs / tile_flags == the bank-7 slot,
-       the sprite pool (bank 0 POOL_START.., banks 4 / 6) + FRT == as built at
-       the hero start (D3-4: which includes the hero's class FX kind, checked
-       generated — one variant per facing for each fid of its range — once), and the displayed playfield == ROOM_MAP drawn from the
+       the sprite pool (bank 0 POOL_START.., banks 4 / 6) + FRT (3F-T1, the
+       per-level pool): the part below the LEVEL mark (idles + hero + its class
+       FX) and the non-monster FRT rows == as built at the hero start (D3-4:
+       the FX kind checked generated — one variant per facing for each fid of
+       its range — once); at each depth every frame of the level's generation
+       kinds (LP_KINDS + LP_BOSS through pool_gmap) has a variant per facing,
+       every other monster frame's FRT row is NONE, and after play the whole
+       pool + FRT == as built at that depth's entry; and the displayed playfield == ROOM_MAP drawn from the
        SOURCE glyphs (every cell not under a sprite; row 17 may hold an
        ornament glyph) + (IC1) the panel's quick potion icon == a source 16x16 potion icon.
 Run with ZRCP_PORT=<port>.  `--depths N` (default 8).
@@ -171,13 +176,56 @@ def pool_snap(p):
     return snap
 
 
-def pool_check(p, check, tag, snap0):
+def pool_check(p, check, tag, snap0, snapd=None):
+    """3F-T1: snap0 = at the hero start (D1 entry), snapd = at this depth's
+    entry (None: this IS the entry — check the level part, return the snap)."""
     now = pool_snap(p)
-    for k in snap0:
-        lo = S["FRT"] if k == "FRT" else dict((b, l) for b, l, _ in POOL)[k]
-        bad = diff_ranges(now[k], snap0[k], lo)
-        check(f"GI {tag}: sprite pool {'FRT' if k == 'FRT' else f'bank {k}'} == as built at hero start",
+    st, f0, fn = S["FRT_STRIDE"], S["KFID_MONSTERS"], S["KFCNT_MONSTERS"]
+    if snapd is not None:                      # after play: nothing regenerated
+        for k in snapd:
+            lo = S["FRT"] if k == "FRT" else dict((b, l) for b, l, _ in POOL)[k]
+            bad = diff_ranges(now[k], snapd[k], lo)
+            check(f"GI {tag}: sprite pool {'FRT' if k == 'FRT' else f'bank {k}'} == as built at the depth's entry",
+                  bad == [], bad[:6])
+        return snapd
+    # below the level mark (ALLOC_MARK, start_game): idles + hero + class FX
+    mi = p.rb("ALLOC_MARK_IDX")
+    mp = p.z.read_memory(S["ALLOC_MARK_PTR"], 2)
+    mp = mp[0] | mp[1] << 8
+    for b, lo, hi in POOL:
+        i = (0, 4, 6).index(b)
+        end = hi if i < mi else (mp if i == mi else lo)
+        bad = diff_ranges(now[b][:end - lo], snap0[b][:end - lo], lo)
+        check(f"GI {tag}: pool bank {b} below the level mark ({mi}, {mp:#06x}) == as built at hero start",
               bad == [], bad[:6])
+    keep = list(range(0, f0 * st)) + list(range((f0 + fn) * st, len(now["FRT"])))
+    bad = [hex(S["FRT"] + i) for i in keep if now["FRT"][i] != snap0["FRT"][i]]
+    check(f"GI {tag}: FRT rows outside the monster fids == as built at hero start", bad == [], bad[:6])
+    # the level's generation kinds (pool_list's rule) generated, the rest NONE
+    kt = lambda col, k: p.z.read_memory(S["kind_tab"] + S[col] + k, 1)[0]
+    gm = bank_read(p, S["BANK_R6"], S["pool_gmap"], 3 * S["PGMAP_N"])
+    kinds = []
+    for k in p.z.read_memory(S["LP_KINDS"], 5):
+        us = [k]
+        for r in range(S["PGMAP_N"]):
+            if gm[3 * r] == k:
+                us = [u for u in gm[3 * r + 1:3 * r + 3] if u != 0xFF]
+                break
+        kinds += [u for u in us if u not in kinds]
+    fids = {f for k in kinds for f in range(kt("KT_FID0", k), kt("KT_FID0", k) + kt("KT_FCNT", k))}
+    bad = []
+    for f in range(f0, f0 + fn):
+        row = now["FRT"][f * st:(f + 1) * st]
+        if f in fids:
+            for side in (0, 2):
+                vs = [v for v in (side, side + 1) if row[3 * v] != S["FRT_NONE"]]
+                if not vs or any(row[3 * v] not in (0, 4, 6) for v in vs):   # MOT: 2 shifts
+                    bad.append((f, side))
+        elif any(row[3 * v] != S["FRT_NONE"] for v in range(4)):
+            bad.append((f, "not NONE"))
+    check(f"GI {tag}: level kinds {kinds} generated ({len(fids)} frames), other monster frames NONE",
+          bad == [] and p.rb("GEN_OVERFLOW") == 0 and p.rb("GEN_TRAP") == 0, bad[:6])
+    return now
 
 
 def fx_check(p, check):
@@ -423,7 +471,7 @@ def main():
             tables(p, check, tag, d)
             screen_check(p, check, tag, d)
             floor_check(p, check, tag)
-            pool_check(p, check, tag, snap0)
+            snapd = pool_check(p, check, tag, snap0)
             if forced_exit(p, ink):                # 3E-T6 R3 (+ the new room's shadow inks)
                 ink["exits"] += 1
                 p.settle(3)
@@ -444,7 +492,7 @@ def main():
             tables(p, check, tag, d)
             screen_check(p, check, tag, d)
             floor_check(p, check, tag)
-            pool_check(p, check, tag, snap0)
+            pool_check(p, check, tag, snap0, snapd)
             floor_build_check(p, check, tag)
             if p.rb("GAME_STATE") != S["GS_PLAYING"]:
                 print(f"[info] D{d}: GAME_STATE {p.rb('GAME_STATE')} — stop", flush=True)

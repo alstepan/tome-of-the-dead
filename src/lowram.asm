@@ -81,24 +81,25 @@ boot:
                 ld   hl, boot6_tiles           ; the common set, ornament, the panel hot
                 ld   c, BANK_BOOT6             ; code and the FONT6 planes (B3B-8 /
                 call farb                      ; B3B-11; were bank 7 init_tiles / panel_boot)
+                ; 3F-T1: the boot pool is the two select idles only; the hero
+                ; (start_game) and each level's monster kinds (level_enter)
+                ; are generated above them later
+                call gen_idles
+                or   a                         ; CF = 0: save
+                call sel_frt_copy
+                jp   enter_select              ; bank-2 trampoline -> bank 3
+
+; gen_idles — a new pool (alloc_reset) holding the two heroes' IDLE frames
+; for the select screen. Boot and every start_game (the alloc mark is the
+; LEVEL mark since 3F-T1, so a new game rebuilds from the bottom: the idles
+; regenerate to the same bytes at the same place, ~0.2M T).
+; Clobbers: all but IX
+gen_idles:
                 call alloc_reset
-                ; monsters: every kind's frames, both facings (§5.2)
-                ld   a, K_SKELETON
-.gk:            push af
-                call gen_kind
-                pop  af
-                inc  a
-                cp   K_COUNT
-                jr   c, .gk
-                ; the two heroes' IDLE frames for the select screen
                 ld   a, FID_knight_idle1
                 call gen_frame
                 ld   a, FID_wizard_idle
-                call gen_frame
-                or   a                         ; CF = 0: save
-                call sel_frt_copy
-                call alloc_mark                ; hero sets regenerate from here
-                jp   enter_select              ; bank-2 trampoline -> bank 3
+                jp   gen_frame
 
 ; tape_tab — start's blocks: bank, address, length (main.asm TAPE_BLOCKS, the
 ; one list the SAVETAPs expand too)
@@ -155,19 +156,31 @@ sel_tab:        DB   FID_knight_idle1, FID_wizard_idle
 start_game:
                 ld   a, c
                 ld   (HERO_KIND), a
-                call alloc_restore
+                call gen_idles                 ; 3F-T1: the pool from the bottom
                 ld   a, (HERO_KIND)
                 call gen_kind
                 ld   a, (HERO_KIND)            ; D3-4: + the class FX kind
                 add  a, K_FX_BASE              ; (K_FXW / K_FXM: only this class's
                 call gen_kind                  ; projectiles / impacts in the pool)
+                call alloc_mark                ; 3F-T1: the LEVEL mark (level_enter rewinds here)
                 ld   hl, new_game              ; bank 7 (MEM-SND; was bank 3, A7 review):
                 call far7                      ; hero slot, PROTO level / master seed
                 ld   de, TX_WELCOME            ; the first log line (panel_init)
                 ld   a, (proto_start)
                 or   a
                 jr   z, .gen
-                xor  a                         ; depth 0: the PROTO rooms' theme
+                ; PROTO rooms (test fixture): every original monster kind, as
+                ; the boot pool held before 3F-T1 (POOL_NEED_PROTO, data.asm)
+                push de                        ; (gen_kind clobbers DE)
+                ld   a, K_SKELETON
+.gk:            push af
+                call gen_kind
+                pop  af
+                inc  a
+                cp   K_PROTO_END
+                jr   c, .gk
+                pop  de
+                xor  a                       ; depth 0: the PROTO rooms' theme
                 call level_show                ; (the D1 set)
                 jr   .go
 .gen:           inc  a                         ; A = 1: D1
@@ -208,11 +221,14 @@ seed_value:     DW   SEED_VALUE
 ;            in bank 5 (game.md §11)
 ;   level    far3 level_new: LVL_SEED from MASTER_SEED, level_gen (retried
 ;            on B = 1), the stand-in population, hero on the start (GAME_STATE
-;            = TRANSITION meanwhile: a gen_frame here would count in GEN_TRAP)
+;            = GS_LEVEL meanwhile, 3F-T1: no room map is live)
+;   pool     3F-T1: the level's monster kinds above the hero (alloc_restore,
+;            FRT monster rows NONE, R6 pool_list, gen_kind each), then
+;            GS_TRANSITION (a gen_frame from here on counts in GEN_TRAP)
 ;   show     level_show: tiles, first room into ROOM_MAP (so ANIM_LIST is the
 ;            new room's), panel, vis_reset (entity table rewritten), present
 ; The caller sets GAME_STATE and resyncs the tick. Leaves bank 7 paged.
-; Clobbers: all but IY.   Cold: ~1.3-2.0M T (tests/world.py W16 reports)
+; Clobbers: all but IY.   Cold: ~3.4-4.5M T (worst D8 1.27 s)
 ;------------------------------------------------------------------------------
 level_enter:
                 push af
@@ -225,8 +241,8 @@ level_enter:
                 pop  af
                 push de
                 push af
-                ld   a, GS_TRANSITION
-                ld   (GAME_STATE), a
+                ld   a, GS_LEVEL               ; 3F-T1: no room map yet, the generator
+                ld   (GAME_STATE), a           ; may run (GS_TRANSITION after the pool)
                 ld   a, ATTR_HUD
                 call clear_screen
                 pop  af
@@ -237,7 +253,33 @@ level_enter:
                 pop  af
                 ld   hl, level_new             ; bank 3: generate + populate
                 call far3
-                ld   hl, stinger_wait          ; SND-4a: hold while the stinger plays (bank 1;
+                ; 3F-T1 level pool: rewind to the level mark (above the hero),
+                ; every monster frame's FRT row := NONE (a kind not generated
+                ; here blits nothing — BLIT_MISS — never stale pool bytes),
+                ; then each generation kind of PL_LIST (R6 pool_list: LP_KINDS
+                ; + LP_BOSS through pool_gmap, deduplicated, $FF-terminated).
+                ; Before stinger_wait, so the generation overlaps the stinger.
+                call alloc_restore
+                ld   hl, FRT + KFID_MONSTERS * FRT_STRIDE
+                ld   de, FRT + KFID_MONSTERS * FRT_STRIDE + 1
+                ld   bc, KFCNT_MONSTERS * FRT_STRIDE - 1
+                ld   (hl), FRT_NONE
+                ldir                           ; ~16k T
+                ld   hl, pool_list
+                call far6
+                ld   hl, PL_LIST
+.pk:            ld   a, (hl)
+                inc  a
+                jr   z, .pe                    ; $FF: end
+                dec  a
+                push hl
+                call gen_kind
+                pop  hl
+                inc  hl
+                jr   .pk
+.pe:            ld   a, GS_TRANSITION          ; from here a gen_frame is a bug again
+                ld   (GAME_STATE), a           ; (GEN_TRAP): level_show builds ROOM_MAP
+                ld   hl, stinger_wait         ; SND-4a: hold while the stinger plays (bank 1;
                 call far1                      ; a no-op unless MUS_CUR = MUS_LEVEL shot)
                 pop  de
                 ld   a, (LVL_DEPTH)

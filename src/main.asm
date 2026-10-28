@@ -630,10 +630,10 @@ boot6_end:
 BOOT6_ADDR      EQU boot6_code
 BOOT6_LEN       EQU boot6_end - boot6_code
                 ASSERT boot6_end == SRC6_ADDR
-                ; the boot pool (every monster kind + the 2 select idles, from
-                ; POOL_START) must end below bank 6: boot6_tiles runs before it,
-                ; but tests/game.py #50 checks the block after boot, at the menu
-POOL_BOOT_NEED  EQU POOL_MONSTERS + 2 * 576 + 2 * 576   ; + 2 idles, + straddle waste
+                ; the boot pool (3F-T1: the 2 select idles only, from POOL_START)
+                ; must end below bank 6: boot6_tiles runs before it, but
+                ; tests/game.py #50 checks the block after boot, at the menu
+POOL_BOOT_NEED  EQU 2 * 576 + 576                        ; 2 idles + straddle waste
                 ASSERT POOL_BOOT_NEED <= ($10000 - POOL_START) + $4000
                 DISPLAY "GAME boot block (bank 6, below SRC6): ", /H, boot6_code, "..", /H, boot6_end - 1, " (", /D, BOOT6_LEN, " B: code ", /D, keytab_defaults - boot6_code, " + data ", /D, boot6_end - keytab_defaults, "), dead after boot"
 
@@ -659,7 +659,7 @@ BOOT6_TAPE_LEN  EQU src6_end - BOOT6_ADDR
                 DISPLAY "SRC6 OVERFLOW: ", /D, src6_end - R6_ADDR, " B over SRC6_LEN ", /D, SRC6_LEN
     ENDIF
                 ASSERT src6_end <= R6_ADDR && SRC6_USED > 0
-                DISPLAY "GAME SRC6 sources (bank 6): ", /H, SRC6_ADDR, "..", /H, R6_ADDR - 1, " (", /D, SRC6_USED, " of ", /D, SRC6_LEN, " B: ", /D, SRC6_BLOCKS, " blocks, ", /D, SRC6_RAW, " raw), SRC6 free: ", /D, SRC6_FREE, "; pool slack ", /D, POOL_CAP - POOL_NEED
+                DISPLAY "GAME SRC6 sources (bank 6): ", /H, SRC6_ADDR, "..", /H, R6_ADDR - 1, " (", /D, SRC6_USED, " of ", /D, SRC6_LEN, " B: ", /D, SRC6_BLOCKS, " blocks, ", /D, SRC6_RAW, " raw), SRC6 free: ", /D, SRC6_FREE, " (pool slack: the GAME frames line)"
 
 ;==============================================================================
 ; R6 REGION (2026-10-21) — PERMANENT code + data at the top of bank 6,
@@ -690,6 +690,109 @@ R6_FREE         EQU $10000 - r6_end
                 ASSERT r6_end <= $10000 && R6_USED > 0
                 DISPLAY "GAME R6 region (bank 6): ", /H, R6_ADDR, "..", /H, r6_end - 1, " (", /D, R6_USED, " of ", /D, R6_LEN, " B: code ", /D, r6_code_end - r6_code, " + overlay streams ", /D, r6_blobs_end - r6_blobs, "), R6 free: ", /D, R6_FREE
                 MMU  3, 0
+
+;==============================================================================
+; LEVEL POOL NEED (3F-T1) — the worst depth's monster pool, computed from the
+; ASSEMBLED bytes (sjasmplus {b}: every table below is emitted earlier in the
+; pass), so it cannot drift from what level_enter generates:
+;   lp_dtab (bank 3: LP_KINDS + LP_BOSS per depth) -> pool_gmap (R6, the
+;   generation-kind map, pool_map's rule) -> the set of generation kinds
+;   (dedup per kind, as pool_list) -> kind_tab KT_FID0 / KT_FCNT -> per fid
+;   frame_tab cols / H / offsets + fdesc_tab FD_FLAGS -> the exact bytes
+;   gen_frame allocates (variant choice as gen_facing; the per-bank straddle
+;   waste is POOL_FIXED's 3 x 576).
+; POOL_NEED (data.asm) = POOL_FIXED + POOL_HERO_MAX + POOL_LVL_MAX.
+; -DPOOL_LVL_VERBOSE=1 DISPLAYs every depth.
+;==============================================================================
+    MACRO PL_FRAME_ADD fid                     ; PLN += gen_frame's pool bytes for fid
+PLF_C = {b frame_tab + (fid) * FT_STRIDE + FT_COLS}
+PLF_H = {b frame_tab + (fid) * FT_STRIDE + FT_H}
+PLF_R = {b frame_tab + (fid) * FT_STRIDE + FT_OFFR}
+PLF_L = {b frame_tab + (fid) * FT_STRIDE + FT_OFFL}
+PLF_F = {b fdesc_tab + (fid) * FDESC_STRIDE + FD_FLAGS}
+      IF PLF_F & FF_MOTION                     ; both shifts per facing
+        IF PLF_F & FF_SYM
+PLN = PLN + PLF_H * 2 * (2 * PLF_C + 1)
+        ELSE
+PLN = PLN + 2 * PLF_H * 2 * (2 * PLF_C + 1)
+        ENDIF
+      ELSE                                     ; one shift per facing (+1 col if shifted)
+PLN = PLN + PLF_H * 2 * (PLF_C + ((((PLF_R + (PLF_F & FF_PH4)) & 7) != 0) & 1))
+        IF (PLF_F & FF_SYM) == 0
+PLN = PLN + PLF_H * 2 * (PLF_C + ((((PLF_L + (PLF_F & FF_PH4)) & 7) != 0) & 1))
+        ENDIF
+      ENDIF
+    ENDM
+    MACRO PL_KIND k                            ; PLM |= kind k's generation kinds (pool_map)
+                ASSERT (k) < K_MAX
+PLK_HIT = 0
+      IF PGMAP_N
+        DUP PGMAP_N, plr
+          IF (PLK_HIT == 0) && ({b pool_gmap + 3 * plr} == (k))
+PLK_HIT = 1
+PLM = PLM | (1 << {b pool_gmap + 3 * plr + 1})
+            IF {b pool_gmap + 3 * plr + 2} != PG_NONE
+PLM = PLM | (1 << {b pool_gmap + 3 * plr + 2})
+            ENDIF
+          ENDIF
+        EDUP
+      ENDIF
+      IF PLK_HIT == 0
+PLM = PLM | (1 << (k))
+      ENDIF
+    ENDM
+PL_MAX = 0
+PL_WORST = 0
+                DUP  LEVELS, pld
+                MMU  3, BANK_COLD3
+PLK0 = {b lp_dtab + pld * LP_DROW + 0}
+PLK1 = {b lp_dtab + pld * LP_DROW + 1}
+PLK2 = {b lp_dtab + pld * LP_DROW + 2}
+PLK3 = {b lp_dtab + pld * LP_DROW + 3}
+PLK4 = {b lp_dtab + pld * LP_DROW + 4}
+                MMU  3, BANK_R6
+PLM = 0
+                PL_KIND PLK0
+                PL_KIND PLK1
+                PL_KIND PLK2
+                PL_KIND PLK3
+                PL_KIND PLK4
+PLN = 0
+                DUP  K_MAX, plk
+      IF PLM & (1 << plk)
+PLK_F0 = {b kind_tab + KT_FID0 + plk}
+PLK_FN = {b kind_tab + KT_FCNT + plk}
+        IF PLK_FN
+                DUP  PLK_FN, plf
+                PL_FRAME_ADD PLK_F0 + plf
+                EDUP
+        ENDIF
+      ENDIF
+                EDUP
+      IFDEF POOL_LVL_VERBOSE
+                DISPLAY "GAME level pool D", /D, pld + 1, ": kinds mask ", /H, PLM, ", ", /D, PLN, " B; need ", /D, PLN + POOL_FIXED + POOL_HERO_MAX, " (Warrior hero) of ", /D, POOL_CAP
+      ENDIF
+      IF PLN > PL_MAX
+PL_MAX = PLN
+PL_WORST = pld + 1
+      ENDIF
+                EDUP
+                MMU  3, 0
+; DEFL, not EQU: {b} reads 0 before the last pass, so an EQU would change
+; value in pass 3 (a warning); nothing may use these above this point
+POOL_LVL_MAX = PL_MAX
+POOL_LVL_WORST = PL_WORST
+POOL_NEED = POOL_FIXED + POOL_HERO_MAX + POOL_LVL_MAX
+                ASSERT LP_DROW == 6 && K_MAX <= 32
+    IF POOL_NEED > POOL_CAP
+                DISPLAY "POOL FULL: need ", /D, POOL_NEED, " (worst D", /D, POOL_LVL_WORST, ") > POOL_CAP ", /D, POOL_CAP, " (SRC6_LEN ", /D, SRC6_LEN, ")"
+    ENDIF
+                ASSERT POOL_NEED <= POOL_CAP
+    IF POOL_NEED_PROTO > POOL_CAP
+                DISPLAY "PROTO POOL FULL: the PROTO rooms need ", /D, POOL_NEED_PROTO, " > POOL_CAP ", /D, POOL_CAP
+    ENDIF
+                ASSERT POOL_NEED_PROTO <= POOL_CAP
+                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (worst level D", /D, POOL_LVL_WORST, " ", /D, POOL_LVL_MAX, ", hero max ", /D, POOL_HERO_MAX, ", fixed ", /D, POOL_FIXED, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0); slack ", /D, POOL_CAP - POOL_NEED, " after SRC6 ", /D, SRC6_LEN, " B; PROTO rooms ", /D, POOL_NEED_PROTO, " (slack ", /D, POOL_CAP - POOL_NEED_PROTO, ")"
 
 ;==============================================================================
 ; OVERLAYS (3E-T1) — code assembled at its runtime load address, stored
