@@ -258,6 +258,8 @@ ISR_LEN         EQU isr_end - isr
                 INCLUDE "panel_hot.asm"                       ; -> HOT_COPY
                 INCLUDE "../assets/gfx/fonts/font6x8.asm"     ; -> FONT6 planes
                 ASSERT tiles_common_attrs == tiles_common_glyphs + TILE_COMMON * 8
+                ; 3F-B1: erase_rect's air path writes 8 zero lines without reading the glyph
+                ASSERT T_AIR == 0 && ({b tiles_common_glyphs}|{b tiles_common_glyphs+1}|{b tiles_common_glyphs+2}|{b tiles_common_glyphs+3}|{b tiles_common_glyphs+4}|{b tiles_common_glyphs+5}|{b tiles_common_glyphs+6}|{b tiles_common_glyphs+7}) == 0
                 ASSERT TILES_COMMON_LEN == TILE_COMMON * 9
                 ASSERT orn_glyphs == tiles_common_glyphs + TILES_COMMON_LEN
                 ASSERT orn_glyphs_end - orn_glyphs == ORN_COUNT * 8
