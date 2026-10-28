@@ -386,14 +386,16 @@ def check(b, stats=None):
     return v
 
 
-def lp_check(b, stats=None):
+def lp_check(b, stats=None, f3=False, lvl=1):
     """LP (game.md §9.4.7 levelcheck): the budget split's quotas, then every
     room's first entry from each of its horizontal exits (the spawn rules hold:
     sum weight <= 8 / lair <= 12, count <= quota, body gap >= 8 to the arrival)."""
     v = []
     depth = b[G.H["LVL_DEPTH"]]
     st, lair = b[G.H["LVL_START"]], b[G.H["LVL_LAIR"]]
-    lp = G.lp_budget(b, 1)
+    lp = G.lp_budget(b, lvl, f3)
+    wt = G.k3_weight if f3 else G.lp_wt
+    kid = (lambda k: G.KROWS[k][0]) if f3 else (lambda k: D[k])      # noqa: E731
     o = lambda n: D[n] - D["LP_STATE"]                       # noqa: E731
     q = [lp[o("LP_REC") + r * D["LR_STRIDE"]] for r in range(9)]
     rmax = D["ROOM_MAX_LO"] if depth <= 2 else D["ROOM_MAX_HI"]
@@ -417,17 +419,17 @@ def lp_check(b, stats=None):
         arr += [(0, rd(b, r, "RD_UPCOL"))] if ex & D["RDX_U"] else []
         arr += [(1, rd(b, r, "RD_DNCOL"))] if ex & D["RDX_D"] else []
         for hs, hx in arr:
-            lp2, out = G.lp_enter(b, lp, r, hs, hx, 3)
-            ws = sum(G.lp_wt(kb & 31) for kb, *_ in out)
-            ws += sum(G.lp_wt(e & 31) for e in lp2[o("LP_REC") + 9 * r + 1:o("LP_REC") + 9 * r + 9:2] if e)
-            minw = min(G.lp_wt(D[k]) for k in G.LP_TAB[depth][0])
+            lp2, out = G.lp_enter(b, lp, r, hs, hx, 3, f3)
+            ws = sum(wt(kb if f3 else kb & 31) for kb, *_ in out)
+            ws += sum(wt(e if f3 else e & 31) for e in lp2[o("LP_REC") + 9 * r + 1:o("LP_REC") + 9 * r + 9:2] if e)
+            minw = min(wt(kid(k)) for k in G.LP_TAB[depth][0])
             cap = D["LP_SIGMA_CAP"] if r == lair else max(D["LP_SIGMA_INIT"], rmax * minw)
             if lp2[o("LP_DISCARD")]:
                 v.append(f"LP: room {r} lost {lp2[o('LP_DISCARD')]} unit(s) to the sum cap")
             if ws > cap or len(out) > max(q[r], 1 if r == lair else 0) + (1 if r == lair else 0):
                 v.append(f"LP: room {r} spawn sum {ws} / {len(out)} units")
             for kb, hp, s, x, _ in out:
-                w = G.lp_kinfo(kb & 31)[0]
+                w = (G.k3_info if f3 else G.lp_kinfo)(kb & 31)[0]
                 if s == hs and not (x >= hx + 3 + 5 or x + w + 5 <= hx):
                     v.append(f"LP: room {r} spawn x{x} s{s} within 5 of the arrival x{hx}")
                 # I6 (L2): nobody spawns inside / against a mid-block, on a wide pit's fall
@@ -444,6 +446,54 @@ def lp_check(b, stats=None):
                 stats["lp_left"] += lp2[o("LP_REC") + 9 * r] & 7
                 stats["lp_lost"] += lp2[o("LP_DISCARD")]
                 stats["lp_entries"] += 1
+    return v
+
+
+def check3(b, lvl=1, stats=None):
+    """3F block (generate(..., f3=True)): the ordinary invariants, the closed grate,
+    the D8 Sanctum leaf behind its sealed edge, then the 3F-mode LP checks
+    (tier roll with LP_LVL = lvl, golden boss, escort at base tier)."""
+    depth = b[G.H["LVL_DEPTH"]]
+    lair = b[G.H["LVL_LAIR"]]
+    if b[G.H["LVL_FLAGS"]] & D["LF_GRATE_OPEN"]:
+        return ["3F: grate open at level start"]
+    plain = bytearray(b)                    # strip the Sanctum -> must equal the plain generator
+    if depth == 8:
+        sc0 = b[G.H["LVL_SANCTUM"]]
+        if sc0 in (6, 8):
+            o = OFF_DESC + sc0 * D["RD_STRIDE"]
+            plain[o:o + D["RD_STRIDE"]] = bytes(D["RD_STRIDE"])
+            plain[OFF_DESC + 7 * D["RD_STRIDE"] + D["RD_EXITS"]] &= ~(D["RDX_R"] | D["RDX_RS1"]) if sc0 == 8 \
+                else ~(D["RDX_L"] | D["RDX_LS1"])
+            plain[OFF_EDGE + hedge(min(7, sc0))] = 0
+            plain[G.H["LVL_SANCTUM"]] = D["ROOM_NONE"]
+            plain[G.H["LVL_NROOMS"]] -= 1
+    plain[G.H["LVL_FLAGS"]] = D["LF_GRATE_OPEN"]
+    seed_used = int.from_bytes(b[G.H["LVL_SEED"]:G.H["LVL_SEED"] + 2], "little")
+    master = int.from_bytes(b[G.H["MASTER_SEED"]:G.H["MASTER_SEED"] + 2], "little")
+    if bytes(plain) != G.generate(depth, seed_used, master):
+        return ["3F: block minus the Sanctum != the plain generator's block"]
+    v = check(bytes(plain), stats)
+    sc = b[G.H["LVL_SANCTUM"]]
+    if depth != 8:
+        if sc != D["ROOM_NONE"]:
+            v.append("3F: Sanctum on a depth that has none")
+    else:
+        if sc not in (6, 8) or lair != 7:
+            return v + [f"3F: Sanctum {sc} lair {lair}"]
+        fl = rd(b, sc, "RD_FLAGS")
+        if not fl & D["RDF_PRESENT"] or not fl & D["RDF_SANCTUM"] or not fl & D["RDF_DEADEND"]:
+            v.append(f"3F: Sanctum room flags {fl:#04x}")
+        if bin(rd(b, sc, "RD_EXITS") & (D["RDX_L"] | D["RDX_R"] | D["RDX_U"] | D["RDX_D"])).count("1") != 1:
+            v.append("3F: Sanctum is not a one-exit leaf")
+        e = b[OFF_EDGE + hedge(min(7, sc))]
+        if e != D["EG_LINK"] | D["EG_DOOR"] | D["EG_SEAL"]:
+            v.append(f"3F: Sanctum edge {e:#04x} is not a sealed link")
+        if any(r != sc and rd(b, r, "RD_FLAGS") & D["RDF_SANCTUM"] for r in range(9)):
+            v.append("3F: two Sanctum rooms")
+        if G.lp_budget(b, lvl, True)[D["LP_REC"] - D["LP_STATE"] + sc * D["LR_STRIDE"]]:
+            v.append("3F: Sanctum has a population quota")
+    v += lp_check(b, stats, True, lvl)
     return v
 
 
@@ -530,7 +580,32 @@ def run(nseeds=1000, dmax=8):
             tot += 1
             if viol:
                 fails.append((depth, seed, viol[:3]))
-    return 1 if report(st, tot, fails) else 0
+    rc = 1 if report(st, tot, fails) else 0
+    return rc | run3(nseeds, dmax)
+
+
+def run3(nseeds=1000, dmax=8):
+    """3F pass: same seeds with f3=True. Blocks must equal the plain ones except in the D8
+    Sanctum (room, lair exit bit, edge), the closed grate and the header counts."""
+    fails = []
+    tot = 0
+    st = new_stats()
+    for depth in range(1, dmax + 1):
+        for i in range(nseeds):
+            seed = (i * 0x9E37 + depth * 0x3D) & 0xFFFF or 1
+            lr0 = G.LAIR_RESEEDS
+            b = G.generate(depth, seed, f3=True)
+            assert b == G.generate(depth, seed, f3=True), "non-deterministic"
+            assert G.LAIR_RESEEDS == lr0, f"L1: lair reseed d{depth} seed {seed:#06x}"
+            viol = check3(b, 1 + (i % 8), st)
+            tot += 1
+            if viol:
+                fails.append((depth, seed, viol[:3]))
+    print(f"3F pass (f3=True, LP_LVL cycling 1..8): {tot - len(fails)}/{tot} pass, "
+          f"LP discards/lost {st['lp_lost']}")
+    for f in fails[:10]:
+        print("FAIL", f)
+    return 1 if fails else 0
 
 
 if __name__ == "__main__":
