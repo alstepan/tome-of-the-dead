@@ -91,7 +91,9 @@
   designer decision 2026-10-03, §1.5). After 3E the common ids are completely full.
   **Rev 2026-10-20 (§8.11 Q1):** floor items use common 17 (AMMO) / 18 (PAGES) and
   per-level 60..63 (FLASK, FOOD, WEAPON, WORN) on D1–D7; D8 swaps 60..63 with the lectern
-  in the Sanctum only.
+  in the Sanctum only. **Superseded by FLOOR1 + 3F-D1 (§9.7 R2):** 60..63 are item markers on
+  every depth incl. D8; the lectern is common ids **15/16 (top L/R), 17/18 (bottom L/R)**,
+  `T_GRATE_SHUT` is common **13**; no D8 swap.
 - Walls are **black-background** with occasional dithered brick patches (concept-screen §3.3).
 - **Solidity of decor (designer decision 2026-10-03).** Solidity belongs to the map cell
   class, never to the glyph: a decor glyph must have the same solidity as the cell it
@@ -1794,7 +1796,8 @@ not a replacement for the sword. The stack caps (9 / 24) make hoarding a loss.
 | D7 | **Death Knight** | **unique** | **Mirror Helm**: helmet DEF 2, **DARK X** (reflects Dark/Death Bolts) |
 | D8 | **Necromancer Archmage** | unique | none; its death unseals the Sanctum |
 
-**Golden bosses** are a level kind with the `BOSS` flag.
+**Golden bosses** are their base kind's row plus a per-entity **golden flag** (implies `BOSS`);
+no kind row of their own (3F-D1, §9.7 R1).
 - **Stats:** hp = 2×hp + 6, atk +2, dmg +1, DEF +1, resistances of the kind.
 - **0 new frames, 0 pool.**
 - **Gold glow:** the stamp attr cycles **`$06 → $46 → $47 → $46`**, 2 ticks per step
@@ -2505,12 +2508,12 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Skeleton | 24×48 | 10 | 2 | 2 | 1 | 1d6 | 5 | walker, climber, opener | chase | — | D3, D5, D8 |
 | **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | walker, opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
 | Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch 1 in 4 → CONFUSED 4 (§6.4) | — | D3, D6–D8 |
-| Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, climber, opener | chase | Meat 1/3 | D4, D6, D7 |
-| Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, climber, opener | ranged | Arrows ×3 1/2 (W) | D4, D5, D7 |
+| Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, opener (3F-D1: not a climber) | chase | Meat 1/3 | D4, D6, D7 |
+| Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, opener (3F-D1: not a climber) | ranged | Arrows ×3 1/2 (W) | D4, D5, D7 |
 | Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5 |
 | Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener | ranged, cooldown 2; Dark Bolt hit 1 in 3 → FEAR 3 (§6.4) | Mana 1/3 | D6–D8 |
 | **Ogre Warlord** (unique) | **32×48** | 40 | 5 | 1 | 2 | 1d10+2 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg, a hit STUNS 1 (§6.4) | unique | D4 |
-| **Death Knight** (unique) | 24×48 | 50 | 6 | 3 | 3 | 1d10+3 | 5 | walker, climber, lair only | chase; **parries** 1 in 3 PHYS hits (BLOCK frame, 0 dmg); a parried melee hit **notches** the weapon 1 in 2 (§8.10) | unique | D7 |
+| **Death Knight** (unique) | 24×48 | 50 | 6 | 3 | 3 | 1d10+3 | 5 | walker, lair only (3F-D1: not a climber) | chase; **parries** 1 in 3 PHYS hits (BLOCK frame, 0 dmg); a parried melee hit **notches** the weapon 1 in 2 (§8.10) | unique | D7 |
 
 **Death Knight silhouette (round 4/5):** an evil twin of the Warrior with a clearly distinct
 outline: a **two-handed greatsword** (blade carried upright above the shoulder when walking,
@@ -2994,7 +2997,7 @@ untouched). Draw up to 8 candidate cells in the chosen room; first legal one win
   action on the spawn turn. The room map is not touched; spawning occurs outside the
   hero's room, so there is no render cost and no redraw beyond the normal room entry.
 
-**Idle wave (U, gated by `IDLE_WAVE`, default off; D for details).** Enable only if
+**Idle wave (U, gated by `IDLE_WAVE`, default off; D for details; 3F-D1: not built in 3F, §9.7 R5).** Enable only if
 playtesting shows camping (waiting in a cleared room to regen, or farming) is a problem.
 - Counter `idle_turns` counts hero turns spent in the same room with **no floor item
   picked up** (a pickup, room change, or learning a book resets it; plain waiting does
@@ -3087,6 +3090,73 @@ generic on-hit status apply ~80 B (shared with Spider/Ghost/Mummy/Ogre/Necro, §
 by row ~20 B, rage ~25 B, Sniper/Slinger flags ~30 B, breed + Bone Caller via the summon
 routine ~100 B (bank 3), tier roll ~70 B (bank 3) → **~0.33 KB**. Names ~130 B raw strings.
 Render: **0 per tick** (ink from `KT_ATTR`); turn logic +≤ 0.2k T per hit for the rolls.
+
+### 9.7 3F-D1 memory rulings (designer decision 2026-10-28; architect: 3F ≈ 1.7 KB over, 0.6 KB in bank 2)
+
+**R1 Golden bosses = flag, not rows.** Kind rows stay 18 + 12 tiers = **30**. A golden boss is
+its base row + one per-entity golden bit (engineer picks the byte; it implies `BOSS`) and
+**`LEK_GOLD` = `LE_KIND` bit 5** in the room record (bits 0–4 row, 6 bred, 7 respawn). Derived
+at spawn, not stored per row: hp = 2 × (scaled hp) + 6; atk +2, dmg +1, DEF +1 (applied once at
+spawn if the entity carries atk/DEF copies, else one flag test in the hit path, ≤ 25 B, ≤ 20 T);
+glow + weight +1 from the bit. Per-depth tables replace the rows: name (5 × ≤ 12 chars, ≈ 60 B
+raw, by depth), XP (§4.1 boss list, 8 B by depth), unique drop (§8.6, already by depth). The
+golden Vampire Lord's bat form keeps the bit (it glows). Cost ≈ 70 B code + 68 B data, vs 5
+rows that do not exist (35 > 32).
+
+**R2 Lectern and closed grate onto freed common ids.** Lectern 2×2 = **15 TL, 16 TR, 17 BL,
+18 BR** (contiguous: `id − 15 < 4` is the attackable test), `TF_SOLID|TF_ATTACK`, placed only in
+the Sanctum. **`T_GRATE_SHUT` = 13** (`TF_SOLID`). **31 stays free** (spare). Cost 0 B (glyph
+bytes overwrite the blank common slots; static flags/attrs); it **deletes** the planned D8 60..63
+swap (≈ 40–60 B saved) and D8 keeps item markers like D1–D7. Tileset 8 loses the lectern (4
+per-level ids freed). Art: the artist supplies the lectern (4 cells, from tileset 8) and a closed
+grate glyph (8 B). Book hit flash `$43` rewrites the 4 attrs (§1.3 unchanged).
+
+**R3 Climbers.** Only kinds with climb frames climb: **Goblin, Skeleton** (+ their tiers) and the
+heroes. **Orc, Skeleton Archer (+ Sniper), Death Knight are walkers, not climbers** (§9.1). 0 B,
+avoids +1,152 B pool on D4/D7 (a shared Skeleton climb pair would have to be resident there, and
+D7 is the worst level). Gameplay: like Ogre/Mummy/Vampire/Necro, a hero on the other storey is
+safe from them; the Archer still shoots along its storey, the DK lair fight is unchanged (bosses
+never follow). **Orc = 3 frames** (WALK1 = MOT rest, WALK2, ATTACK), HURT = flash, DEAD = the
+shared humanoid DEAD (as Mummy; pool spike assumption confirmed).
+
+**R4 HURT on frame-less kinds** (Spider, Orc, Necro, Mummy, Vampire, Archer, Ogre, DK, Archmage,
+golden bosses): the body keeps its current frame and its footprint takes the existing **`$42` hit
+flash** for the existing duration (priority §6.4: flash > tints > glow). No new code path.
+
+**R5 Cut order if memory still runs out** (cheapest player loss per byte first; E = estimate):
+1. Idle wave + `idle_turns`: **stays unbuilt** (0 B, saves ≈ 60 B vs building it). `IDLE_WAVE`
+   is dropped from 3F scope.
+2. ALARM wave → the 3E behaviour on every depth ("bell rings", border flash, nothing comes):
+   **−≈ 130 B** (door-cell spawn + awake set-up). §10 loses ~1 wave/level on D5+.
+3. Vampire close-distance rule (§9.2 rule 2, incl. the walk-path ≥ 12 test): **−≈ 110 B**.
+   Flee-as-bat stays.
+4. Rabbit Rat breed → bite 1 in 3 → POISON 12 via the generic on-hit (0 code): **−≈ 50 B** +
+   the bred bit.
+5. Archmage teleport (rule 3): **−≈ 80 B**; it becomes a turret (summon, bolt, melee).
+6. Data packing (no player loss; bank 2): on-hit = 1 B (effect 3 bits, chance 2 bits ∈ {1, ½,
+   ⅓, ¼}, duration index 3 bits → 8-entry table), parry folded into 2 bits of another per-kind
+   byte, tier-up = a 12-entry base→tier list scanned at spawn: **3rd page 8 → 5 B/kind, −≈ 96 B
+   bank 2**. Turn-only arrays (immunity, on-hit, parry, tier-up, KXP, drop) may live in R6 behind
+   `far6` (≤ 0.3k T per hit, 0 render).
+7. **Last resort, USER keeps it unless numbers force it:** Death Knight BLOCK → parry as the
+   Skeleton Guard (no frame, `PARRIED` text, hit flash skipped). Saves ≤ ≈ 0.5 KB pool now that
+   D5 is the max (D7 only drops to D5's level) + ≈ 190 B source.
+Not on the list (rules, user-owned): the respawn trickle, tiers, wear, bosses' core attacks.
+1–6 total ≈ 0.5 KB, mostly R6/bank 3 code; they close the bank-2 0.6 KB only together with the
+R6 move in 6.
+
+**DECIDED (user 2026-10-28): Archer SHOOT has no dedicated art.** The shot plays an existing
+cut/cast frame (no new source): **D5** the resident Skeleton cut, **D7** the resident Necro cast
+(or the Skeleton cut if it is cheaper in pool), **D4** has neither resident, so it loads the
+Skeleton cut frame alone (D4 has ~8 KB slack and is not the max, so 0 effective cost). The
+designer prefers the Skeleton cut everywhere (bony silhouette) where the pool allows. Saves **768 B pool + ≈ 193 B source**;
+D7 cut/cast savings cap at 1,280 B total, **D5 becomes the pool-limiting level**. §11.1 Archer
+row: 3 ids (Skeleton walk shared), no SHOOT.
+
+**R6 Plan reconciliation.** Plan 3F's "zombie" = **Vampire**, "giant spider" = **Spider** (§9.1;
+Giant Rat is a Rat tier). Boss music (cue E entry + cue R on boss death, sound.md) is wired **in
+3F** with the bosses (≈ 30 B, tune data already in the AY slot); if bank space blocks it, it is
+the first item deferred to 3G.
 
 ---
 
@@ -3187,7 +3257,7 @@ Verify with ≥ 5 seeds × 2 heroes before Stage 3 exit.
 
 | Owner | Frames | Ids | Source raw | Pool |
 |---|---|---|---|---|
-| Monsters drawn **M**: **Vampire**, Mummy, Orc, Necromancer, Spider 5 each; Archer 4 (HURT/DEAD = Skeleton) | WALK×2, ATTACK, HURT, DEAD | 29 | ~8,000 **M** | 4.2–4.6 KB per kind, Spider 2.75 **M** |
+| Monsters drawn **M** (superseded by the lean set 2026-10-20 + §9.7: Archer has no SHOOT frame, Orc 3 frames, no climb frames for Orc/Archer/DK): **Vampire**, Mummy, Orc, Necromancer, Spider 5 each; Archer 4 (HURT/DEAD = Skeleton) | WALK×2, ATTACK, HURT, DEAD | 29 | ~8,000 **M** | 4.2–4.6 KB per kind, Spider 2.75 **M** |
 | Mage drawn **M** | STAFF_SWING **40×48** | 1 | 480 | 960 |
 | Warrior **M** (round 3) | JUMP1, JUMP2 24×48, POWER_STRIKE 40×48 (ax 4), WHIRL 40×48 (ax 8), THROW 32×48, BOW 32×48 | 6 | 2,304 | **5,568** |
 | Mage **M** | JUMP1, JUMP2 | 2 | 576 | 1,920 |
