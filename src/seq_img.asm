@@ -18,8 +18,15 @@
 ;==============================================================================
 ksm_tab:
                 DW   ksm_kn, ksm_wz, 0, ksm_sk, ksm_gb, ksm_gh, ksm_rt, ksm_bt, ksm_sl
-                DS   2 * (K_MAX - K_COUNT), 0  ; ids 9..31: 3F rows (tiers -> their base block)
-                ASSERT $ - ksm_tab == 2 * K_MAX && K_COUNT == 9
+                ; 3F-T3 STAND-IN blocks (T13 gives each base kind its own block): the new base kinds
+                ; borrow the block of the frames they borrow (pool6.asm pool_gmap), a tier row names
+                ; its BASE kind's block (0 B here, and the cache dedups by block: one slot).
+                ;    SP      VP      OR      AR      MU      NE      OG      DK      AM
+                DW   ksm_rt, ksm_sk, ksm_sk, ksm_sk, ksm_sk, ksm_sk, ksm_sk, ksm_sk, ksm_sk
+                ;    GR      RR      SB      SL      BW      SG      SK      PG      OB      OU      SN      BC
+                DW   ksm_rt, ksm_rt, ksm_bt, ksm_gb, ksm_rt, ksm_sk, ksm_sk, ksm_gh, ksm_sk, ksm_sk, ksm_sk, ksm_sk
+                DS   2 * (K_MAX - K_COUNT), 0  ; ids 30 / 31: the class FX kinds (no sequences)
+                ASSERT $ - ksm_tab == 2 * K_MAX && K_COUNT == 30
 
     ; KSMH nm: the block header; offsets are from nm_s (the first byte)
     MACRO KSMH len, imp, q0, q1, q2, q3, q4, q5, q6, q7, base

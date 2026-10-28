@@ -60,6 +60,30 @@ nm_ghost        "GHOST"
 nm_rat          "RAT"
 nm_bat          "BAT"
 nm_slime        "SLIME"
+# 3F-T3: the new base kinds (ids 9..17) and the 12 tier rows (18..29), in kind id order.
+# Kept <= 9 chars: "YOUR DAGGER MISSES THE " + name must fit the 32-char log line (ASSERTed in
+# lowram.asm); the final names are the designer's D3-6 table (game.md §9.8).
+nm_spider       "SPIDER"
+nm_vampire      "VAMPIRE"
+nm_orc          "ORC"
+nm_archer       "ARCHER"
+nm_mummy        "MUMMY"
+nm_necro        "NECROMAGE"
+nm_ogre         "OGRE LORD"
+nm_dknight      "DEATHLORD"
+nm_archmage     "ARCHMAGE"
+nm_giant_rat    "GIANT RAT"
+nm_rabbit_rat   "BROOD RAT"
+nm_screech      "SCREECHER"
+nm_slinger      "SLINGER"
+nm_widow        "WIDOW"
+nm_sk_guard     "BONEGUARD"
+nm_sk_knight    "REVENANT"
+nm_poltergeist  "WRAITH"
+nm_berserker    "BERSERKER"
+nm_bouncer      "ORC BRUTE"
+nm_sniper       "SNIPER"
+nm_bone_caller  "SUMMONER"
 
 # === 3C (C3-4) ================================================================
 # --- info line, one per icon slot (game.md §3.5; Warrior 1-9, Mage 1-10) --------

@@ -189,6 +189,10 @@ start_game:
 
 ; B3B-12 run configuration (on tape, in this cold block; tests poke them right
 ; after the snapshot load / tape boot, docs/memory-map.md "Level entry"):
+PS_SLIME_BIT    EQU 1                   ; 3F-T3: proto_start bit 1 = the PROTO pool also holds the
+                                        ; Slime (6 kinds, 37,312 B: over POOL_CAP once the 3F names
+                                        ; are in the text; tests/game_lib.py pokes 3, the default
+                                        ; PROTO_START=1 is the build-asserted 5-kind pool)
 ;   proto_start  1 = new games start in the PROTO rooms A-D (tests/game.py's
 ;                walkthrough, budget, flicker); 0 (default) = a generated D1
 ;   seed_fixed   1 = MASTER_SEED = seed_value (game.md §1 SEED_FIXED, F3);
@@ -202,7 +206,8 @@ SEED_FIXED      EQU 0                   ; -DSEED_FIXED=1 [-DSEED_VALUE=n]
     IFNDEF SEED_VALUE
 SEED_VALUE      EQU $1234
     ENDIF
-proto_start:    DB   PROTO_START
+proto_start:    DB   PROTO_START * 3             ; 3F-T3: -DPROTO_START=1 emits 3 (rooms + Slime pooled: spawn_tab places the Slime)
+                ASSERT PROTO_START == 0 || PROTO_START == 1
 seed_fixed:     DB   SEED_FIXED
 seed_value:     DW   SEED_VALUE
 
@@ -869,9 +874,9 @@ imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EM
                 ASSERT imp_post - imp_pre == MSG_M_THAW && $ - imp_post == MSG_M_THAW
                 ASSERT MSG_M_UNAFF == 7 && MSG_M_FROZEN == 8 && MSG_M_ASLEEP == 9 && MSG_M_STUNNED == 10
                 ASSERT MSG_M_FLEES == 11 && MSG_M_CONFUSED == 12 && MSG_M_WAKE == 13 && MSG_M_THAW == 14
-                ASSERT TXL_THE + TXL_NM_SKELETON + TXL_CMB_UNAFFECTED < 32   ; the longest D3-6a line
+                ASSERT TXL_THE + NM_LONG + TXL_CMB_UNAFFECTED < 32   ; the longest D3-6a line
                 ASSERT MSG_P_HIT == 1 && MSG_P_MISS == 2 && MSG_P_KILL == 3 && MSG_M_HIT == 4 && MSG_M_MISS == 5
-                ASSERT MSG_SQUEEZE == 6 && TXL_YOU_SQUEEZE + TXL_NM_SKELETON < 32
+                ASSERT MSG_SQUEEZE == 6 && TXL_YOU_SQUEEZE + NM_LONG < 32
                 ; K_ROGUE (kind 2) is retired: TX_NM_ROGUE is an empty string and no entity may carry
                 ; that kind, else the impact line would lose its name (B3B-13b)
                 ASSERT TX_NM_ROGUE == TX_NM_KNIGHT + 2 && TXL_NM_ROGUE == 0 && K_WIZARD == 1 && K_SKELETON == 3
@@ -879,15 +884,32 @@ imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EM
                 ASSERT TX_NM_WIZARD == TX_NM_KNIGHT + K_WIZARD && TX_NM_SKELETON == TX_NM_KNIGHT + K_SKELETON
                 ASSERT TX_NM_GOBLIN == TX_NM_KNIGHT + K_GOBLIN && TX_NM_GHOST == TX_NM_KNIGHT + K_GHOST
                 ASSERT TX_NM_RAT == TX_NM_KNIGHT + K_RAT && TX_NM_BAT == TX_NM_KNIGHT + K_BAT
-                ASSERT TX_NM_SLIME == TX_NM_KNIGHT + K_SLIME && K_KNIGHT == 0 && K_COUNT == 9
+                ASSERT TX_NM_SLIME == TX_NM_KNIGHT + K_SLIME && K_KNIGHT == 0 && K_COUNT == 30
+                ; 3F-T3: the new kinds' names (ids 9..29, in kind id order)
+                ASSERT TX_NM_SPIDER == TX_NM_KNIGHT + K_SPIDER && TX_NM_VAMPIRE == TX_NM_KNIGHT + K_VAMPIRE
+                ASSERT TX_NM_ORC == TX_NM_KNIGHT + K_ORC && TX_NM_ARCHER == TX_NM_KNIGHT + K_ARCHER
+                ASSERT TX_NM_MUMMY == TX_NM_KNIGHT + K_MUMMY && TX_NM_NECRO == TX_NM_KNIGHT + K_NECRO
+                ASSERT TX_NM_OGRE == TX_NM_KNIGHT + K_OGRE && TX_NM_DKNIGHT == TX_NM_KNIGHT + K_DKNIGHT
+                ASSERT TX_NM_ARCHMAGE == TX_NM_KNIGHT + K_ARCHMAGE && TX_NM_GIANT_RAT == TX_NM_KNIGHT + K_GIANT_RAT
+                ASSERT TX_NM_RABBIT_RAT == TX_NM_KNIGHT + K_RABBIT_RAT && TX_NM_SCREECH == TX_NM_KNIGHT + K_SCREECH
+                ASSERT TX_NM_SLINGER == TX_NM_KNIGHT + K_SLINGER && TX_NM_WIDOW == TX_NM_KNIGHT + K_BLACK_WIDOW
+                ASSERT TX_NM_SK_GUARD == TX_NM_KNIGHT + K_SKEL_GUARD && TX_NM_SK_KNIGHT == TX_NM_KNIGHT + K_SKEL_KNIGHT
+                ASSERT TX_NM_POLTERGEIST == TX_NM_KNIGHT + K_POLTERGEIST && TX_NM_BERSERKER == TX_NM_KNIGHT + K_ORC_BERSERK
+                ASSERT TX_NM_BOUNCER == TX_NM_KNIGHT + K_ORC_BOUNCER && TX_NM_SNIPER == TX_NM_KNIGHT + K_SNIPER
+                ASSERT TX_NM_BONE_CALLER == TX_NM_KNIGHT + K_BONE_CALLER
+                ASSERT TXL_NM_SPIDER <= NM_LONG && TXL_NM_VAMPIRE <= NM_LONG && TXL_NM_ORC <= NM_LONG && TXL_NM_ARCHER <= NM_LONG
+                ASSERT TXL_NM_MUMMY <= NM_LONG && TXL_NM_NECRO <= NM_LONG && TXL_NM_OGRE <= NM_LONG && TXL_NM_DKNIGHT <= NM_LONG
+                ASSERT TXL_NM_ARCHMAGE <= NM_LONG && TXL_NM_GIANT_RAT <= NM_LONG && TXL_NM_SCREECH <= NM_LONG && TXL_NM_SLINGER <= NM_LONG
+                ASSERT TXL_NM_WIDOW <= NM_LONG && TXL_NM_SK_GUARD <= NM_LONG && TXL_NM_SK_KNIGHT <= NM_LONG && TXL_NM_POLTERGEIST <= NM_LONG
+                ASSERT TXL_NM_BERSERKER <= NM_LONG && TXL_NM_BOUNCER <= NM_LONG && TXL_NM_SNIPER <= NM_LONG && TXL_NM_BONE_CALLER <= NM_LONG
                 ; the longest composition + its 0 fits MSG_BUF (32 B); a
                 ; stream is never longer than its text, so chars bound bytes
-                ASSERT TXL_NM_SKELETON >= TXL_NM_KNIGHT && TXL_NM_SKELETON >= TXL_NM_WIZARD
-                ASSERT TXL_NM_SKELETON >= TXL_NM_GOBLIN && TXL_NM_SKELETON >= TXL_NM_GHOST
-                ASSERT TXL_NM_SKELETON >= TXL_NM_RAT && TXL_NM_SKELETON >= TXL_NM_BAT && TXL_NM_SKELETON >= TXL_NM_SLIME
-                ASSERT TXL_YOU_HIT + TXL_NM_SKELETON + TXL_EMPTY < 32 && TXL_YOU_MISS + TXL_NM_SKELETON < 32
-                ASSERT TXL_YOU_KILL + TXL_NM_SKELETON < 32 && TXL_THE + TXL_NM_SKELETON + TXL_HITS_YOU < 32
-                ASSERT TXL_THE + TXL_NM_SKELETON + TXL_MISSES < 32 && MSG_BUF + 32 <= TIMING_MARK
+                ASSERT NM_LONG >= TXL_NM_KNIGHT && NM_LONG >= TXL_NM_WIZARD
+                ASSERT NM_LONG >= TXL_NM_GOBLIN && NM_LONG >= TXL_NM_GHOST
+                ASSERT NM_LONG >= TXL_NM_RAT && NM_LONG >= TXL_NM_BAT && NM_LONG >= TXL_NM_SLIME
+                ASSERT TXL_YOU_HIT + NM_LONG + TXL_EMPTY < 32 && TXL_YOU_MISS + NM_LONG < 32
+                ASSERT TXL_YOU_KILL + NM_LONG < 32 && TXL_THE + NM_LONG + TXL_HITS_YOU < 32
+                ASSERT TXL_THE + NM_LONG + TXL_MISSES < 32 && MSG_BUF + 32 <= TIMING_MARK
 
 ;==============================================================================
 ; B3B-5 DOORS, FALLS, JUMP (game.md §2.3-2.5, §9.1). They run only on the turn

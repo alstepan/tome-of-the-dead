@@ -45,7 +45,7 @@ KT = S["kind_tab"]
 EF_ACTIVE, EF_HOSTILE, EF_LEFT, EF_PENDING, EF_DYING = 1, 4, S["EF_LEFT"], S["EF_PENDING"], S["EF_DYING"]
 GS_PLAYING = S["GS_PLAYING"]
 STRIDE = S["P_ENT_STRIDE"]
-LP_T_GUARD = 42000                 # lp_enter worst (DI, incl. far3): §9.4.3 ceiling 40k + 5% for the lp_mark clip guard (manager 2026-10-06; measured 40.4k)
+LP_T_GUARD = 46000                 # lp_enter worst (DI, incl. far3): game.md §9.8 D3-2: worst <= 46k, mean <= 22k (a room entry on a frozen screen, not a tick)
 
 
 def w16(v):
@@ -241,8 +241,8 @@ def part_a(h, p, check, nrand):
     # game.md §9.4.3 (revised 2026-10-06): accepted mean <= 20k, worst <= 40k T.
     # Mean limit 21k since L2 (manager 2026-10-07): mid-blocks / wide pits add obstacles
     # (measured 20,119 T); the worst limit is unchanged.
-    check(f"A2 lp_enter worst {worst[0]} T <= {LP_T_GUARD}, mean {sum(tss) // len(tss)} <= 21000",
-          worst[0] <= LP_T_GUARD and sum(tss) // len(tss) <= 21000, worst)
+    check(f"A2 lp_enter worst {worst[0]} T <= {LP_T_GUARD}, mean {sum(tss) // len(tss)} <= 22000",
+          worst[0] <= LP_T_GUARD and sum(tss) // len(tss) <= 22000, worst)
     return worst
 
 

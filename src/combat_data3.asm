@@ -16,12 +16,12 @@ RSP_W           EQU 4               ; local to the KXROW macro (not a stored val
 
     ; dty / efx / chance / turns: the kind's melee hit (KX_MELEE; 3F-T2: was
     ; combat3.asm kx_melee, game.md §9.1 dmg column + on-hit effects)
-    MACRO KXROW phys, fire, cold, shock, drain, dark, imm, xp, dty, efx, chance, turns
+    MACRO KXROW phys, fire, cold, shock, drain, dark, imm, xp, dty, efx, chance, turns, def
                 DB   ((phys) & 3) | (((fire) & 3) << 2) | (((cold) & 3) << 4) | (((shock) & 3) << 6)
                 DB   ((drain) & 3) | (((dark) & 3) << 2)
                 DB   (((phys) >> 2) & 1) | ((((fire) >> 2) & 1) << 1) | ((((cold) >> 2) & 1) << 2) | ((((shock) >> 2) & 1) << 3) | ((((drain) >> 2) & 1) << 4) | ((((dark) >> 2) & 1) << 5)
                 DB   imm, xp
-                DB   0              ; KX_DEF: monster DEF is 0 in 3D (game.md §11.4)
+                DB   def            ; KX_DEF (3F-T3: §9.1 DEF for the new rows; the 3D rows stay 0, game.md §11.4)
                 DB   (dty) | ((efx) << DH_EFX_SHIFT), ((chance) << 4) | (turns)   ; KX_MELEE
     ENDM
     MACRO KXNONE                    ; unused kind id: N everywhere, no immunity, 0 XP, PHYS melee
@@ -33,16 +33,45 @@ IMM_UNDEAD      EQU IMMF_SLEEP | IMMF_POISON
 ; kinds not listed stay zero: heroes (0 XP; their resistances come from gear),
 ; the retired id 2, and every kind id >= K_COUNT (no 3D kind yet; 3F adds rows).
 kx_tab:
-                KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0                                  ; K_KNIGHT (hero)
-                KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0                                  ; K_WIZARD (hero)
+                KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_KNIGHT (hero)
+                KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_WIZARD (hero)
                 KXNONE                                                    ; id 2 retired
-                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_PHYS, EFX_NONE, 0, 0              ; K_SKELETON
-                KXROW 0,0,0,0,0,0, 0, 3, DTY_PHYS, EFX_NONE, 0, 0                                  ; K_GOBLIN
-                KXROW RSP_R,0,RSP_I,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 4, 4  ; K_GHOST: the 1d4 DRAIN touch, 1 in 4 -> CONFUSED 4 (no heal: §9.1)
-                KXROW 0,0,0,0,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0                                  ; K_RAT
-                KXROW 0,0,0,RSP_W,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0                              ; K_BAT
-                KXROW RSP_R,RSP_W,0,0,0,0, IMMF_SLEEP | IMMF_CONFUSE | IMMF_FEAR, 3, DTY_PHYS, EFX_NONE, 0, 0 ; K_SLIME
-                DS   KX_LEN - K_COUNT * KX_STRIDE, 0                      ; ids 9..31 (3F)
+                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_PHYS, EFX_NONE, 0, 0, 1              ; K_SKELETON (DEF 1, §9.1 / D3-1)
+                KXROW 0,0,0,0,0,0, 0, 3, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_GOBLIN
+                KXROW RSP_R,0,RSP_I,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 4, 4, 0  ; K_GHOST: the 1d4 DRAIN touch, 1 in 4 -> CONFUSED 4 (no heal: §9.1)
+                KXROW 0,0,0,0,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_RAT
+                KXROW 0,0,0,RSP_W,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0, 0                              ; K_BAT
+                KXROW RSP_R,RSP_W,0,0,0,0, IMMF_SLEEP | IMMF_CONFUSE | IMMF_FEAR, 3, DTY_PHYS, EFX_NONE, 0, 0, 1 ; K_SLIME (DEF 1, D3-1)
+                ; --- 3F-T3: the new base rows (game.md §9.1: resistances, immunity set, KXP, DEF, the
+                ; melee hit's type / on-hit status). The on-hit status lives in KX_MELEE (deal_hit
+                ; reads it today); POISON's turns nibble is HALF the turns (PSN_*). Behaviour that
+                ; is NOT a plain on-hit status (Mummy FOOD drain, Ogre SLAM, parry, ACID, breed,
+                ; summon, ranged, rage) is T6-T9 code keyed on the kind id.
+                KXROW 0,RSP_W,0,0,0,0, 0, 4, DTY_PHYS, EFX_POISON, 0, PSN_SPIDER / 2, 0               ; K_SPIDER: bite POISON 12
+                KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_DRAIN | DH_HEAL, EFX_NONE, 0, 0, 0 ; K_VAMPIRE: drain bite heals it
+                KXROW 0,RSP_R,0,0,0,0, 0, 9, DTY_PHYS, EFX_NONE, 0, 0, 1                               ; K_ORC
+                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 7, DTY_PHYS, EFX_NONE, 0, 0, 0              ; K_ARCHER (arrow: T7)
+                KXROW RSP_R,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 12, DTY_PHYS, EFX_WEAK, 3, 12, 2    ; K_MUMMY: curse 1 in 3 -> WEAK 12 (FOOD drain: T6)
+                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, 0, 10, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_NECRO (Dark Bolt: T7)
+                KXROW RSP_R,0,RSP_R,RSP_W,0,0, 1 << IMMF_BOSS_BIT, 60, DTY_PHYS, EFX_NONE, 0, 0, 2     ; K_OGRE: SLAM = T8
+                KXROW 0,RSP_X,RSP_I,RSP_W,RSP_I,RSP_I, 1 << IMMF_BOSS_BIT, 90, DTY_PHYS, EFX_NONE, 0, 0, 3 ; K_DKNIGHT: parry 1 in 3, notch 1 in 2 = T6
+                KXROW 0,0,RSP_X,RSP_X,RSP_I,RSP_R, 1 << IMMF_BOSS_BIT, 0, DTY_PHYS, EFX_NONE, 0, 0, 1  ; K_ARCHMAGE: awards 0 XP (§4.1)
+                ; --- the 12 tier rows (§9.6): the base kind's resistances / immunity (+ the noted extras),
+                ; own KXP (§4.1 table), DEF and on-hit status
+                KXROW 0,0,0,0,0,0, 0, 3, DTY_PHYS, EFX_POISON, 4, PSN_RAT / 2, 0                       ; K_GIANT_RAT: bite 1 in 4 -> POISON 12
+                KXROW 0,0,0,0,0,0, 0, 4, DTY_PHYS, EFX_NONE, 0, 0, 0                                   ; K_RABBIT_RAT (breeds: T6)
+                KXROW 0,0,0,RSP_W,0,0, 0, 3, DTY_PHYS, EFX_CONFUSED, 4, 2, 0                           ; K_SCREECH: bite 1 in 4 -> CONFUSED 2
+                KXROW 0,0,0,0,0,0, 0, 4, DTY_PHYS, EFX_NONE, 0, 0, 0                                   ; K_SLINGER (rock: T7)
+                KXROW 0,RSP_W,0,0,0,0, 0, 6, DTY_PHYS, EFX_POISON, 0, PSN_WIDOW / 2, 0                 ; K_BLACK_WIDOW: POISON 24 (ACID: T6)
+                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_PHYS, EFX_NONE, 0, 0, 2              ; K_SKEL_GUARD: parry 1 in 4 = T6
+                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 12, DTY_PHYS, EFX_STUNNED, 4, 1, 3          ; K_SKEL_KNIGHT: 1 in 4 -> STUNNED 1; parry 1 in 3 = T6
+                KXROW RSP_R,0,RSP_I,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_DRAIN, EFX_FEAR, 3, 3, 0     ; K_POLTERGEIST: touch 1 in 3 -> FEAR 3
+                KXROW 0,RSP_R,0,0,0,0, IMMF_FEAR, 13, DTY_PHYS, EFX_NONE, 0, 0, 1                      ; K_ORC_BERSERK: FEAR-immune; rage = T6
+                KXROW 0,RSP_R,0,0,0,0, 0, 18, DTY_PHYS, EFX_STUNNED, 3, 1, 2                           ; K_ORC_BOUNCER: 1 in 3 -> STUNNED 1
+                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 10, DTY_PHYS, EFX_NONE, 0, 0, 0             ; K_SNIPER (stand-and-shoot: T7)
+                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, 0, 15, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_BONE_CALLER (summon: T6)
+                ASSERT ($ - kx_tab) == K_COUNT * KX_STRIDE && K_COUNT == 30
+                DS   KX_LEN - K_COUNT * KX_STRIDE, 0                      ; ids 30 / 31: the class FX kinds
                 ASSERT kx_tab == BANK_WINDOW && $ - kx_tab == KX_LEN
 
 ; L-RELIEF: decor_gen.asm's dg_bad (64 B, 64-aligned lookup) sits here, at

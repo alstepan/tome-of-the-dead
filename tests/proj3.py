@@ -64,7 +64,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from game_lib import Harness, Proto, S, EMU_ARGS, K_KNIGHT, K_GHOST, K_RAT, K_BAT, K_SLIME, K_SKELETON, K_GOBLIN  # noqa: E402
+from game_lib import Harness, Proto, S, EMU_ARGS, K_KNIGHT, K_GHOST, K_RAT, K_BAT, K_SLIME, K_SKELETON, K_GOBLIN, K_ARCHER  # noqa: E402
 import combat_tables as CT  # noqa: E402
 
 import os  # noqa: E402
@@ -151,9 +151,8 @@ class Rng:
 
 
 # ---- 3E-T11 mon_drop (pickup6.asm, R6): the drop chance on the gameplay RNG ----------
-# drop_tab first match by kind (the defs.asm stand-in aliases: K_ORC / K_NECRO =
-# Goblin, K_ARCHER = Skeleton): Rat 1/4, Goblin 1/4, Skeleton (archer) arrows
-# 1/2 in a Warrior run only (no roll for the Mage). EF_RESPAWN and the hero:
+# drop_tab first match by kind (3F-T3: the real rows; the kinds the models place):
+# Rat 1/4, Goblin 1/4, Skeleton Archer arrows 1/2 in a Warrior run only (no roll for the Mage). EF_RESPAWN and the hero:
 # no roll. (The lair boss's unique is not rolled; the models run outside lairs.)
 EF_RESPAWN = 0x80
 DROP_N = {K_RAT: 4, K_GOBLIN: 4}
@@ -163,7 +162,7 @@ def drop_roll(rng, T, hero):
     if T.flags & (EF_PLAYER | EF_RESPAWN):
         return None
     n = DROP_N.get(T.kind)
-    if n is None and T.kind == K_SKELETON and (hero is None or hero.kind == K_KNIGHT):
+    if n is None and T.kind == K_ARCHER and (hero is None or hero.kind == K_KNIGHT):
         n = 2
     return None if n is None else rng.mod(n) == 0
 
@@ -217,7 +216,7 @@ class World:
         if weak:
             dmg = min(255, dmg * 2)
         if t == PHYS and not c & NODEF:
-            dmg = max(1, dmg - (self.hero_def if T.flags & EF_PLAYER else 0))
+            dmg = max(1, dmg - (self.hero_def if T.flags & EF_PLAYER else CT.DEF3F.get(T.kind, 0)))   # D3-1: monster KX_DEF
         dmg = max(1, dmg)
         lost = min(dmg, T.hp)
         T.hp -= lost
@@ -460,7 +459,7 @@ class T(Proto):
 
     def kinds(self):
         kt = {}
-        for k in range(9):
+        for k in range(S["K_COUNT"]):          # 3F-T3: the 18 base + 12 tier rows
             g = lambda f: self.rb(S["kind_tab"] + S[f] + k)  # noqa: E731
             kt[k] = dict(bw=g("KT_BW"), bh=g("KT_BH"), atk=g("KT_ATK"), eva=g("KT_EVA"),
                          fly=bool(g("KT_FLAGS") & S["KF_FLYER"]))

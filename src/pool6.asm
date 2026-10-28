@@ -25,8 +25,8 @@
 ; GENERATION MAP (pool_gmap, 3F-T1 contract): records DB kind, u1, u2 (u2 =
 ; PG_NONE: none), first match wins; a mapped kind generates u1 (+ u2) INSTEAD
 ; of its own unit (tier rows -> their base unit, Vampire / Archmage -> Necro,
-; Archer -> Skeleton walk + its SHOOT unit). Empty today (every 3F kind is an
-; alias id, defs.asm K_SPIDER = K_RAT, ...).
+; Archer -> Skeleton walk + its SHOOT unit). 3F-T3: the nine new base kinds map to
+; their STAND-IN units (T13 replaces the records).
 ; HERO EXTRAS (pool_xmap, 3F-T2): records DB kind, hero kind, unit: on a level
 ; listing the kind, a game of that hero also generates the unit (game.md 3F:
 ; the Mage's arrow frames on Archer levels, dagger_spin on D1 / D2). Empty
@@ -95,7 +95,12 @@ pool_proto:
                 jr   c, .w
                 ld   de, PL_PROTO
                 ld   b, K_PROTO_END - K_SKELETON
+                ld   a, (proto_start)          ; 3F-T3: bit PS_SLIME_BIT = also the Slime (the last
+                bit  PS_SLIME_BIT, a           ; kind of the list); the default fixture pools the
+                jr   nz, pl_kinds              ; other five (POOL_NEED_PROTO); tests poke 3
+                dec  b
                 jr   pl_kinds
+                ASSERT K_PROTO_END - 1 == K_SLIME
 
 pool_list:
                 call pl_begin
@@ -291,18 +296,48 @@ gu_tab:
                 GU   KFID_RAT, KFCNT_RAT
                 GU   KFID_BAT, KFCNT_BAT
                 GU   KFID_SLIME, KFCNT_SLIME
-                DS   GU_STRIDE * (K_FXW - K_COUNT), 0  ; ids 9..29 (3F rows: base units via pool_gmap)
+                ; 3F-T3: ids 9..17 (the new base kinds) have no unit of their own yet: their STAND-IN
+                ; frames come from pool_gmap (below); T13 puts the real units here. The 12 tier rows
+                ; (18..29) name their BASE kind's unit (same frames, 0 new ids, 0 pool; Black Widow =
+                ; the Spider's, i.e. the Rat stand-in for now), so a tier needs no map entry.
+                DS   GU_STRIDE * (K_GIANT_RAT - K_SPIDER), 0   ; ids 9..17
+                GU   KFID_RAT, KFCNT_RAT                       ; K_GIANT_RAT
+                GU   KFID_RAT, KFCNT_RAT                       ; K_RABBIT_RAT
+                GU   KFID_BAT, KFCNT_BAT                       ; K_SCREECH
+                GU   KFID_GOBLIN, KFCNT_GOBLIN                 ; K_SLINGER
+                GU   KFID_RAT, KFCNT_RAT                       ; K_BLACK_WIDOW (the Spider's stand-in)
+                GU   KFID_SKELETON, KFCNT_SKELETON             ; K_SKEL_GUARD
+                GU   KFID_SKELETON, KFCNT_SKELETON             ; K_SKEL_KNIGHT
+                GU   KFID_GHOST, KFCNT_GHOST                   ; K_POLTERGEIST
+                GU   KFID_SKELETON, KFCNT_SKELETON             ; K_ORC_BERSERK (the Orc's stand-in)
+                GU   KFID_SKELETON, KFCNT_SKELETON             ; K_ORC_BOUNCER
+                GU   KFID_SKELETON, KFCNT_SKELETON             ; K_SNIPER (the Archer's)
+                GU   KFID_SKELETON, KFCNT_SKELETON             ; K_BONE_CALLER (the Necro's)
+                ASSERT K_BONE_CALLER == K_FXW - 1
                 GU   KFID_FXW, KFCNT_FXW
                 GU   KFID_FXM, KFCNT_FXM
 gu_tab_x:                                      ; units >= K_MAX (extras): none yet
 gu_tab_end:
 GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
-                ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 9
+                ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 30
                 ASSERT K_FXW == K_MAX - 2 && K_FXM == K_MAX - 1
 
 ; pool_gmap — the generation map (see the header). Kinds < $80.
 pool_gmap:
-                DB   PG_NONE                   ; (empty: every 3F kind is an alias today)
+                ; 3F-T3 STAND-INS (T13 replaces each record by the kind's own unit(s)): a new base
+                ; kind generates the frames of the nearest existing body (unit dedup by fid0 at run
+                ; time, by this map at build time: one Skeleton set serves the Vampire, Orc, Archer,
+                ; Mummy, Necro, Ogre, Death Knight, Archmage)
+                DB   K_SPIDER,   K_RAT,      PG_NONE
+                DB   K_VAMPIRE,  K_SKELETON, PG_NONE
+                DB   K_ORC,      K_SKELETON, PG_NONE
+                DB   K_ARCHER,   K_SKELETON, PG_NONE
+                DB   K_MUMMY,    K_SKELETON, PG_NONE
+                DB   K_NECRO,    K_SKELETON, PG_NONE
+                DB   K_OGRE,     K_SKELETON, PG_NONE
+                DB   K_DKNIGHT,  K_SKELETON, PG_NONE
+                DB   K_ARCHMAGE, K_SKELETON, PG_NONE
+                DB   PG_NONE
 pool_gmap_end:
 PGMAP_N         EQU (pool_gmap_end - pool_gmap - 1) / 3
                 ASSERT pool_gmap_end - pool_gmap == 3 * PGMAP_N + 1

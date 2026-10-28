@@ -70,12 +70,12 @@ mon_drop:
                 inc  hl
                 inc  hl
                 inc  hl
+                inc  hl
                 djnz .r
                 ret
 .hit:           inc  hl
                 ld   d, (hl)                   ; D = type
                 inc  hl
-                ld   c, (hl)                   ; C = 1 in N
                 ld   e, 1                      ; E = qty
                 ld   a, d
                 cp   IT_ARROW
@@ -84,11 +84,15 @@ mon_drop:
                 or   a
                 ret  nz                        ; arrows: Warrior runs only
                 ld   e, DROP_ARROWS
-.q:             push de
-                call rng_mod                   ; A = 0..N-1 (A, B, HL)
-                pop  de
-                or   a
-                ret  nz
+.q:             ld   c, (hl)                   ; C = N
+                inc  hl                        ; 3F-T3: HL -> the numerator (a tier's "k in N", §9.6)
+                push hl
+                push de
+                call rng_mod                   ; A = 0..N-1
+                pop de
+                pop hl
+                cp   (hl)                      ; roll < numerator <=> drop (1 in N rows: numerator 1,
+                ret  nc                        ; the same RNG draw / outcome as before)
                 ld   a, d
                 ld   d, e                      ; D = qty
                 ld   e, DROP_NEAR
@@ -188,18 +192,27 @@ uq_chk:         ld   hl, FI_USE
                 ASSERT (FI_USE >> 8) == (FI_TSLOT >> 8) && FI_SLOTS < 256 - (FI_USE & $FF)
                 ASSERT IT_KEY == 4 && IT_P_CURE == 12 && IT_POTION == 1 && IT_F_CARROT == IT_KEY + 1 && IT_P_HEAL == IT_F_MEAT + 1
                 ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE == $80 && FL_COL == 1 && FL_ITEM == 2
-; drop_tab (§8.11 rulings 2, 5 rows x 3 B: kind, type, 1 in N). The kinds are
-; the defs.asm stand-in aliases until 3F (K_ORC / K_NECRO = K_GOBLIN: their
-; rows are shadowed by the Goblin's; K_ARCHER = K_SKELETON: Skeletons drop
-; the archer's arrows meanwhile). First match wins.
-drop_tab:       DB   K_RAT,    IT_F_CHEESE, 4
-                DB   K_GOBLIN, IT_F_APPLE,  4
-                DB   K_ORC,    IT_F_MEAT,   3
-                DB   K_ARCHER, IT_ARROW,    2
-                DB   K_NECRO,  IT_P_MANA,   3
-DROP_ROWS       EQU ($ - drop_tab) / 3
+; drop_tab (§8.11 rulings 2 + §9.6 rewards; 3F-T3: 12 rows x 4 B: kind, type, N, k = "k in
+; N"): the base drops (k = 1) and the tier rows (the base numerator + 1 per tier above 1:
+; Cheese 1/4 -> 2/4 -> 3/4, Arrows 1/2 -> 2/2). First match wins. NOT here (T5 / T6): the
+; tier rows of a base with no drop (Screech Bat, Black Widow, Skeleton Guard / Knight,
+; Poltergeist), which drop a random food (Carrot / Apple / Pear) 1 in 4.
+DROP_STRIDE     EQU 4
+drop_tab:       DB   K_RAT,         IT_F_CHEESE, 4, 1
+                DB   K_GOBLIN,      IT_F_APPLE,  4, 1
+                DB   K_ORC,         IT_F_MEAT,   3, 1
+                DB   K_ARCHER,      IT_ARROW,    2, 1
+                DB   K_NECRO,       IT_P_MANA,   3, 1
+                DB   K_GIANT_RAT,   IT_F_CHEESE, 4, 2
+                DB   K_RABBIT_RAT,  IT_F_CHEESE, 4, 3
+                DB   K_SLINGER,     IT_F_APPLE,  4, 2
+                DB   K_ORC_BERSERK, IT_F_MEAT,   3, 2
+                DB   K_ORC_BOUNCER, IT_F_MEAT,   3, 3
+                DB   K_SNIPER,      IT_ARROW,    2, 2
+                DB   K_BONE_CALLER, IT_P_MANA,   3, 2
+DROP_ROWS       EQU ($ - drop_tab) / DROP_STRIDE
 ; uniq_tab (§8.6 / §8.11: 8 B): D1..D7 by depth - 1, then the D4 Mage variant
 uniq_tab:       DB   IT_H_KING, IT_A_SILK, IT_A_GRAVE, IT_W_CLEAVER
                 DB   IT_C_SCARAB, IT_C_GRAVE, IT_H_MIRROR, IT_W_BONE
 UNIQ_DEPTHS     EQU 7
-                ASSERT DROP_ROWS == 5 && $ - uniq_tab == 8 && K_KNIGHT == 0 && K_WIZARD == 1
+                ASSERT DROP_ROWS == 12 && $ - uniq_tab == 8 && K_KNIGHT == 0 && K_WIZARD == 1
