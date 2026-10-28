@@ -2893,7 +2893,7 @@ def lp_model(p, blk):
     import levelgen as G
     st = blk[S["LVL_START"] - room_model.BASE]
     kw = p.rb(S["kind_tab"] + S["KT_BW"] + p.ent(0)["KIND"])
-    lp, out = G.lp_enter(blk, G.lp_budget(blk, p.rb("LVL")), st, 0, p.ent(0)["X"], kw)
+    lp, out = G.lp_enter(blk, G.lp_budget(blk, p.rb("LVL"), f3=True), st, 0, p.ent(0)["X"], kw, f3=True)
     lp = bytearray(lp)
     lp[S["ROOM_VISITS"] - S["LP_STATE"] + st] += 1
     got = bytearray(p.z.read_memory(S["LP_STATE"], S["LP_LEN"]))

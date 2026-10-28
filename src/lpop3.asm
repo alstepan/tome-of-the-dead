@@ -34,14 +34,15 @@ LPV_K           EQU TMP7                ; unit kind / bank slot
 
 ;------------------------------------------------------------------------------
 ; Per-depth budget rows (game.md §9.4 table): 4 kinds in table order, boss,
-; count incl. boss (3F-T3: real kind ids, defs.asm; golden bosses are a per-entity flag, T8).
+; count incl. boss (3F-T3: real kind ids, defs.asm). 3F-T5: the golden depths (D1-D3, D5, D6, §9.7
+; R1) carry LEK_GOLD in the boss byte (levelgen.py k3_boss); the entity bit is E_GOLD.
 ;------------------------------------------------------------------------------
-lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1, 11
-                DB   K_GOBLIN, K_SPIDER, K_BAT, K_RAT,         K_BOSS_D2, 12
-                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT,    K_BOSS_D3, 12
+lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1 | LEK_GOLD, 11
+                DB   K_GOBLIN, K_SPIDER, K_BAT, K_RAT,         K_BOSS_D2 | LEK_GOLD, 12
+                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT,    K_BOSS_D3 | LEK_GOLD, 12
                 DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER,         K_BOSS_D4, 13
-                DB   K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER,  K_BOSS_D5, 13
-                DB   K_VAMPIRE, K_GHOST, K_NECRO, K_ORC,       K_BOSS_D6, 14
+                DB   K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER,  K_BOSS_D5 | LEK_GOLD, 13
+                DB   K_VAMPIRE, K_GHOST, K_NECRO, K_ORC,       K_BOSS_D6 | LEK_GOLD, 14
                 DB   K_ORC, K_ARCHER, K_GHOST, K_NECRO,        K_BOSS_D7, 14
                 DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE,  K_BOSS_D8, 11
 LP_DROW         EQU 6
@@ -51,13 +52,16 @@ LP_DROW         EQU 6
                 ASSERT 11 - 2 >= GRID_CELLS - 2
 ; §9.3 weights by kind row (defs.asm WT_*), K_COUNT entries (3F-T3: 18 base + 12 tier rows)
 ; (the hero rows 0 / 1 and the id-2 hole stay 0: a record entry of kind 0 may exist in tests)
-lp_wt:          DB   WT_K_KNIGHT, WT_K_WIZARD, 0, WT_K_SKELETON, WT_K_GOBLIN
+    MACRO LP_WT_ROWS                           ; shared with R6 lp_wt6 (tier6.asm: R6 cannot read bank 3)
+                DB   WT_K_KNIGHT, WT_K_WIZARD, 0, WT_K_SKELETON, WT_K_GOBLIN
                 DB   WT_K_GHOST, WT_K_RAT, WT_K_BAT, WT_K_SLIME
                 DB   WT_K_SPIDER, WT_K_VAMPIRE, WT_K_ORC, WT_K_ARCHER, WT_K_MUMMY
                 DB   WT_K_NECRO, WT_K_OGRE, WT_K_DKNIGHT, WT_K_ARCHMAGE
                 DB   WT_K_GIANT_RAT, WT_K_RABBIT_RAT, WT_K_SCREECH, WT_K_SLINGER
                 DB   WT_K_BLACK_WIDOW, WT_K_SKEL_GUARD, WT_K_SKEL_KNIGHT, WT_K_POLTERGEIST
                 DB   WT_K_ORC_BERSERK, WT_K_ORC_BOUNCER, WT_K_SNIPER, WT_K_BONE_CALLER
+    ENDM
+lp_wt:          LP_WT_ROWS
                 ASSERT $ - lp_wt == K_COUNT
                 ASSERT LEK_RESPAWN == EF_RESPAWN && K_COUNT - 1 <= LEK_KIND_MASK
                 ASSERT LVL_LAIR == LVL_START + 1 && LVL_SANCTUM == LVL_START + 3
@@ -279,6 +283,7 @@ lp_bank:        ld   (LPV_ROOM), a
                 jr   nz, .free                 ; dead: never returns
                 and  EF_RESPAWN
                 or   (ix+E_KIND)
+                or   (ix+E_GOLD)               ; 3F-T5: LEK_GOLD or 0
                 ld   b, a
                 ld   c, (ix+E_HP)
                 ld   a, (LPV_ROOM)
@@ -361,8 +366,9 @@ lp_transition:
 ; lp_enter — A = room, LP_HX / LP_HS / LP_HW = the hero's arrival box:
 ; §9.4.3 spawn. Seeds the spawn stream (GEN_RNG algorithm, own state: GEN_RNG
 ; is saved and put back) from LVL_SEED, the room and ROOM_VISITS[room]; a
-; FRESH record gets its units (lair: boss + escort, cap 12; else quota x
-; lp_fit, cap SIGMA_INIT = max(8, ROOM_MAX x minW) with the reservation) written into its own entry area; then every unit is placed
+; FRESH record gets its units (3F-T5: R6 lp_gen, tier6.asm, ONE far6: lair = boss +
+; escort, cap 12; else quota x fit with the §9.6 tier roll, cap SIGMA_INIT = max(8, ROOM_MAX x minW)
+; with the reservation; entries {kind byte | LEK_GOLD, depth-scaled hp}) written into its own entry area; then every unit is placed
 ; (lp_place) into a free slot (lp_spawn) or kept, in order, in the record,
 ; which becomes VISITED. ROOM_VISITS is NOT incremented (callers do it).
 ; Clobbers: all but IY.   <= ~15k T worst (4 units x 8 tries)
@@ -401,78 +407,11 @@ lp_enter:
                 call lp_rec
                 ld   (LP_RECP), hl
                 ld   a, (hl)
-                inc  hl                        ; -> entry 0
                 bit  LR_VISITED_BIT, a
-                jp   nz, .vis
-                and  LR_CNT_MASK
-                ld   b, a                      ; FRESH: the quota
-                ld   a, (LVL_LAIR)
-                cp   c
-                jr   nz, .fresh
-                ld   a, 1
-                ld   (LPV_BOSS), a
-                ld   a, (LP_BOSS)
-                push hl
-                ld   hl, lp_wt
-                call hla
-                ld   a, (hl)
-                ld   (LP_SIG), a
-                pop  hl
-                ld   a, (LP_BOSS)
-                call .unit
-                xor  a
-                ld   (LP_RES), a
-                ld   b, 1
-                ld   a, LP_SIGMA_CAP
-                call lp_fit                    ; escort (base tier, never rolled)
-                jr   c, .place
-                call .unit
-                inc  b
-                jr   .place
-.fresh:         push hl                        ; minW = the lightest LP_KINDS weight,
-                ld   de, LP_KINDS              ; E (then the cap) = SIGMA_INIT =
-                ld   c, $FF                    ; max(LP_SIGMA_INIT, LP_RMAX x minW)
-.mw:            ld   a, (de)
-                ld   hl, lp_wt
-                call hla
-                ld   a, (hl)
-                cp   c
-                jr   nc, .mn
-                ld   c, a
-.mn:            inc  e
-                ld   a, e
-                cp   (LP_KINDS + 4) & $FF
-                jr   nz, .mw
-                ld   a, (LP_RMAX)
-                ld   d, a
-                xor  a
-.mu:            add  a, c
-                dec  d
-                jr   nz, .mu
-                cp   LP_SIGMA_INIT
-                jr   nc, .sg
-                ld   a, LP_SIGMA_INIT
-.sg:            ld   (LPV_N), a                ; (scratch until .place)
-                pop  hl
-                ld   d, 0                      ; units written
-                inc  b
-                jr   .fn
-.fl:            push bc                        ; LP_RES = (units left after this) x minW
-                xor  a
-                dec  b
-                jr   z, .rz
-.rm:            add  a, c
-                djnz .rm
-.rz:            ld   (LP_RES), a
-                pop  bc
-                ld   a, (LPV_N)
-                call lp_fit                    ; (3F: + the §9.6 tier roll here)
-                jr   c, .fn
-                call .unit
-                inc  d
-.fn:            djnz .fl
-                ld   b, d
-                jr   .place
+                jr   nz, .vis
+                ld   hl, lp_gen                ; 3F-T5: FRESH -> R6 lp_gen (tier6.asm): the lair's boss (+ golden flag)
+                call far6                      ; + escort, else quota x fit with the §9.6 tier roll; entries
+                jr   .place                    ; {kind byte, depth-scaled hp}; B = their number
 .vis:           and  LR_CNT_MASK
                 ld   b, a
 .place:         ld   a, b
@@ -527,78 +466,6 @@ lp_enter:
 .full:          pop  hl
                 ld   (GEN_RNG), hl
                 ret
-; .unit: A = kind -> entry (HL) = {kind, its full hp}, HL += 2. Keeps BC, DE.
-.unit:          ld   (hl), a
-                inc  hl
-                push hl
-                KTA  KT_HP
-                pop  hl
-                ld   (hl), a
-                inc  hl
-                ret
-
-;------------------------------------------------------------------------------
-; lp_fit — A = sum cap, LP_RES = reservation: roll i = rnd(4), the kind
-; LP_KINDS[i] if LP_SIG + its weight + LP_RES <= cap (reservation fit, §9.4.3
-; designer decision 2026-10-06), else the other LP_KINDS in list order (i
-; skipped), else none (never with a FRESH room's reservation):
-; CF, LP_DISCARD += 1. NC: A = kind, LP_SIG += its weight.
-; Keeps BC, DE, HL.
-;------------------------------------------------------------------------------
-lp_fit:         push hl
-                push de
-                push bc
-                ld   c, a                      ; cap
-                ld   a, 4
-                call rnd
-                ld   e, a                      ; i
-                ld   b, a
-                call .try
-                jr   nc, .ok
-                ld   b, 0
-.j:             ld   a, b
-                cp   e
-                jr   z, .jn
-                call .try
-                jr   nc, .ok
-.jn:            inc  b
-                ld   a, b
-                cp   4
-                jr   c, .j
-                ld   hl, LP_DISCARD
-                inc  (hl)
-                scf
-                jr   .x
-.ok:            ld   b, a
-                ld   a, (LP_SIG)
-                add  a, d
-                ld   (LP_SIG), a
-                ld   a, b                      ; (add: no carry, sum <= 12)
-                or   a
-.x:             pop  bc
-                pop  de
-                pop  hl
-                ret
-; .try: B = index, C = cap -> D = weight, A = kind; CF = cap < LP_SIG + weight + LP_RES
-.try:           ld   a, b
-                ld   hl, LP_KINDS
-                call hla
-                ld   a, (hl)
-                push af
-                ld   hl, lp_wt
-                call hla
-                ld   d, (hl)
-                ld   a, (LP_SIG)
-                add  a, d
-                ld   hl, LP_RES                ; + the reservation for the units
-                add  a, (hl)                   ;   still to roll (§9.4.3)
-                ld   l, a
-                ld   a, c
-                sub  l
-                pop  hl
-                ld   a, h                      ; (ld keeps the flags)
-                ret
-
 ;------------------------------------------------------------------------------
 ; lp_place — LP_W / LP_M = the unit, LPV_BOSS: LP_TRIES candidates from the
 ; spawn stream, one step each: s = bit 0 of its high byte, x = LP_XMIN + (low
@@ -982,9 +849,26 @@ lp_spawn:       ld   ix, P_ENTITIES + P_ENT_STRIDE
                 push hl
                 call spawn_one                 ; A kind, D room, E col, C storey, B flags
                 pop  hl
+                push hl
+                ld   c, (hl)                   ; C = the record's kind byte (| LEK_GOLD)
+                ld   a, c
+                and  LEK_KIND_MASK
+                KTA  KT_HP
+                ld   hl, LVL_DEPTH
+                add  a, (hl)
+                dec  a                         ; 3F-T5: max hp = row hp + (depth - 1) (§9.1; was the unscaled
+                bit  LEK_GOLD_BIT, c           ; KT_HP spawn_one set: the stand-in bug), golden 2 x + 6 (§9.7 R1)
+                jr   z, .mh                    ; (= R6 kind_hp, the record side)
+                add  a, a
+                add  a, 6
+.mh:            ld   (ix+E_MAXHP), a
+                ld   a, c
+                and  LEK_GOLD
+                ld   (ix+E_GOLD), a            ; the golden bit travels with the entity (lp_bank writes it back)
+                pop  hl
                 inc  hl
                 ld   a, (hl)
-                ld   (ix+E_HP), a              ; exact hp (FRESH: = the kind's)
+                ld   (ix+E_HP), a              ; exact hp (FRESH: = the max)
                 or   a                         ; NC
                 ret
 ; .st0: HL = status array, A = slot: (HL + A) = 0. Keeps A.

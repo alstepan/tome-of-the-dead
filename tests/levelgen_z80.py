@@ -10,7 +10,7 @@ Run with ZRCP_PORT=<port>.
 
 `--f3` (3F-T10): builds the -DF3_GEN=1 variant into a temp dir (WZ_BUILD_DIR, game_lib) and
 compares against generate(..., f3=True): the D8 Sanctum leaf, the sealed edge, LVL_FLAGS = 0,
-NROOMS + 1, GEN_RNG untouched; the LP budget is still compared with the default (non-f3) lp_budget.
+NROOMS + 1, GEN_RNG untouched; the LP budget is compared with lp_budget(f3=True) in both modes (3F-T5: golden LP_BOSS).
 Half of the `--random N` cases are forced to D8."""
 import os
 import random
@@ -89,7 +89,7 @@ def case(h, p, depth, seed, master=0, tag="", ei=False):
     want = G.generate(depth, seed, master, f3=F3)
     wx = G.start_x(want)
     ok, ts, blk, rc, sx, lp = p.run(depth, seed, master, ei)
-    wlp = G.lp_budget(want, p.rb("LVL"))
+    wlp = G.lp_budget(want, p.rb("LVL"), f3=True)      # 3F-T5: the golden bosses (LP_BOSS | LEK_GOLD)
     good = ok and rc == 0 and blk == want and sx == wx and lp == wlp
     if not good:
         d = next((i for i in range(len(want)) if blk[i] != want[i]), None)

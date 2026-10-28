@@ -410,6 +410,27 @@ def run(p, check):
     check("U1 the next Goblin in the lair: the ordinary row (apple, one roll)",
           p.rw("RNG_STATE") == r.st and [e[2] for e in new] == [IT["F_APPLE"]], (new, p.rw("RNG_STATE"), r.st))
 
+    # U2 (3F-T5 review): on a golden depth the boss is the GOLDEN body; a same-kind plain escort killed first
+    # takes the ordinary row, not the unique
+    def lair_gold():
+        lair()
+        p.wb("LP_BOSS", K_GOBLIN | S["LEK_GOLD"])
+    scene()
+    lair_gold()
+    sl = monster(K_GOBLIN, 24)
+    before = [entry(k) for k in range(S["FLOOR_MAX"])]
+    kill(sl)
+    new = [entry(k) for k in range(S["FLOOR_MAX"]) if entry(k) != before[k]]
+    check("U2 golden lair: a plain same-kind Goblin killed first: no unique, LF_UNIQUE stays clear",
+          not p.rb("LVL_FLAGS") & S["LF_UNIQUE"] and IT["H_KING"] not in [e[2] for e in new], (new, p.rb("LVL_FLAGS")))
+    sl = monster(K_GOBLIN, 24)
+    p.wb(S["P_ENTITIES"] + sl * S["P_ENT_STRIDE"] + S["E_GOLD"], S["LEK_GOLD"])
+    before = [entry(k) for k in range(S["FLOOR_MAX"])]
+    kill(sl)
+    new = [entry(k) for k in range(S["FLOOR_MAX"]) if entry(k) != before[k]]
+    check("U2 golden lair: the golden Goblin killed: KING HELM, LF_UNIQUE set",
+          p.rb("LVL_FLAGS") & S["LF_UNIQUE"] and IT["H_KING"] in [e[2] for e in new], (new, p.rb("LVL_FLAGS")))
+
     # ---- T: cost (info + loose caps) ------------------------------------------------
     tm = {}
     for tag, win in (("kill + drop", True), ("kill, no drop", False)):

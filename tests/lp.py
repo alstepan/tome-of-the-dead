@@ -24,7 +24,13 @@ Part B (game, real do_exit on a generated D1, seed_fixed):
   B3  followers: a candidate next to the hero is admitted (PENDING into the
       destination), with the destination full (cap) it is banked into the
       room left instead (prototype §3.7 + §9.4.3 step 3)
-Run with ZRCP_PORT=<port>.  `--random N` (A1/A2 random pairs, default 40).
+  A7  3F-T5 sweep: >= 1,000 (depth, seed, hero, LVL) levels, every room entered
+      once: the tools/levelgen.py f3 reference (tier roll, escort, golden flag,
+      depth-scaled hp) == the Z80 record by record (+ E_MAXHP / E_GOLD of the
+      slots), all 8 depths and both heroes; counts the tier rows and golden
+      bosses seen (a sweep that never rolls a tier proves nothing)
+Run with ZRCP_PORT=<port>.  `--random N` (A1/A2 random pairs, default 40);
+`--sweep N` (A7 levels, default 1000; 0 skips it).
 """
 import random
 import sys
@@ -50,6 +56,11 @@ LP_T_GUARD = 46000                 # lp_enter worst (DI, incl. far3): game.md §
 
 def w16(v):
     return [v & 255, v >> 8]
+
+
+def gold_of(p, slot):
+    """E_GOLD of an entity slot (tests/game_lib.py's E table does not carry it)."""
+    return p.rb(S["P_ENTITIES"] + slot * STRIDE + S["E_GOLD"])
 
 
 def mask(b):
@@ -166,8 +177,35 @@ def props(p, blk, r, slots, hs, hx, hw, tf):
     return bad
 
 
+def sync_bodies(p):
+    """KROWS carries the game.md body widths; the Z80 kind_tab carries the STAND-IN frames' until T13
+    (tools/levelgen.py KNOWN_STANDIN_DIFFS: the Ogre, 4 vs 3). Placement is a function of the Z80 body, so the
+    reference runs on kind_tab's KT_BW (hp / weight / flyer stay the doc's: any drift there fails)."""
+    diff = []
+    for key, v in list(G.KROWS.items()):
+        bw = p.kb(v[0], "KT_BW")
+        if bw != v[2]:
+            G.KROWS[key] = v[:2] + (bw,) + v[3:]
+            diff.append(f"{key} {v[2]}->{bw}")
+    if diff and not getattr(sync_bodies, "told", False):
+        sync_bodies.told = True
+        print(f"[lp] reference body widths taken from kind_tab (stand-in frames): {', '.join(diff)}", flush=True)
+
+
+def scaled_ok(p, sl, out, depth):
+    """3F-T5: every placed slot's E_MAXHP == the depth-scaled max (golden 2 x + 6) and E_GOLD == the
+    record's LEK_GOLD (levelgen.k3_hp), one slot per placed unit, in order."""
+    if len(sl) != len(out):
+        return False
+    for (slot, *_), (kb, *_) in zip(sl, out):
+        if p.ent(slot)["MAXHP"] != G.k3_hp(kb, depth) or gold_of(p, slot) != (kb & G.LEK_GOLD):
+            return False
+    return True
+
+
 def part_a(h, p, check, nrand):
     p.load()
+    sync_bodies(p)
     tf = p.z.read_memory(S["tile_flags"], 64)
     for n, (w, hp, fly) in G.KINFO.items():
         k = S[n]
@@ -202,11 +240,11 @@ def part_a(h, p, check, nrand):
         ok2, tb = p.far3("lp_budget")
         blk = p.block()
         want_b = G.generate(d, seed)
-        wl = G.lp_budget(want_b, lvl)
+        wl = G.lp_budget(want_b, lvl, f3=True)
         got = p.lp()
         good = ok1 and ok2 and blk == want_b and mask(got) == mask(wl)
         nb += good
-        check(f"A1 d{d} seed {seed:#06x}: lp_budget == levelgen.lp_budget", good,
+        check(f"A1 d{d} seed {seed:#06x}: lp_budget == levelgen.lp_budget (f3)", good,
               (ok1, ok2, blk == want_b, got.hex(), wl.hex()))
         # A2/A3: every present room, random arrival, in id order
         lp_ = got
@@ -219,11 +257,11 @@ def part_a(h, p, check, nrand):
             p.clear_slots()
             p.wmem(S["LP_HX"], [hx, hs, hw])
             ok, ts = p.far3("lp_enter", a=r)
-            wl2, out = G.lp_enter(blk, lp_, r, hs, hx, hw)
+            wl2, out = G.lp_enter(blk, lp_, r, hs, hx, hw, f3=True)
             got2 = p.lp()
             sl = p.slots()
             ws = want_slots(p, blk, r, out)
-            good = ok and sl == ws and mask(got2) == mask(wl2)
+            good = ok and sl == ws and mask(got2) == mask(wl2) and scaled_ok(p, sl, out, d)
             ne += good
             check(f"A2 d{d} seed {seed:#06x} room {r} (arrival s{hs} x{hx}): lp_enter == levelgen.lp_enter",
                   good, (ok, sl, ws, got2.hex(), wl2.hex()))
@@ -246,15 +284,96 @@ def part_a(h, p, check, nrand):
     return worst
 
 
-def bank_model(lp, r, slots):
-    """§9.4.2: append every alive slot of room r (exact hp, EF_RESPAWN) in slot order."""
+def fast_slots(p):
+    """p.slots() + E_MAXHP / E_GOLD from ONE memory read: [(slot, kind, room, x, y, flags, hp, maxhp, gold)]."""
+    b = p.z.read_memory(S["P_ENTITIES"] + STRIDE, 15 * STRIDE)
+    out = []
+    for s_ in range(15):
+        o = s_ * STRIDE
+        if b[o + 2] & EF_ACTIVE:
+            out.append((s_ + 1, b[o], b[o + 1], b[o + 3], b[o + 4], b[o + 2], b[o + 5], b[o + 6], b[o + S["E_GOLD"]]))
+    return out
+
+
+def part_a7(h, p, check, nlev):
+    """A7 (3F-T5): the tier / escort / golden / scaled-hp reference vs the Z80, record by record."""
+    p.load()
+    sync_bodies(p)
+    rng = random.Random(0x5EED5)
+    heroes = (S["K_KNIGHT"], S["K_WIZARD"])
+    nrooms = nunits = ntier = ngold = nbad = 0
+    tiers_by_depth = {d: 0 for d in range(1, 9)}
+    tss = []
+    worst = (0, "")
+    bad = []
+    for i in range(nlev):
+        d = 1 + i % 8
+        hero = heroes[(i // 8) & 1]
+        seed = rng.randrange(1, 65536)
+        lvl = max(1, d + rng.randint(-3, 4)) if i % 5 else rng.randint(1, 12)
+        p.wb("HERO_KIND", hero)
+        p.wb("LVL", lvl)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        ok1, _ = p.far3("level_gen", a=d)
+        ok2, _ = p.far3("lp_budget")
+        blk = p.block()
+        lp_ = p.lp()
+        wb_ = G.lp_budget(blk, lvl, f3=True)
+        if not (ok1 and ok2 and mask(lp_) == mask(wb_)):
+            bad.append((d, seed, "budget"))
+            continue
+        st = blk[S["LVL_START"] - G.BASE]
+        hw = p.kb(hero, "KT_BW")
+        for r in range(9):
+            if not room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"] or r == st:
+                continue
+            hs = rng.randint(0, 1)
+            hx = rng.choice((1, 28, rng.randint(5, 24)))
+            p.wmem(S["P_ENTITIES"] + STRIDE, [0] * (15 * STRIDE))        # slots 1..15 free
+            p.wmem(S["LP_HX"], [hx, hs, hw])
+            ok, ts = p.far3("lp_enter", a=r)
+            wl, out = G.lp_enter(blk, lp_, r, hs, hx, hw, f3=True)
+            got = p.lp()
+            sl = fast_slots(p)
+            ws = want_slots(p, blk, r, out)
+            good = (ok and [x[:7] for x in sl] == ws and mask(got) == mask(wl)
+                    and [(x[7], x[8]) for x in sl] == [(G.k3_hp(kb, d), kb & G.LEK_GOLD) for kb, *_ in out])
+            nrooms += 1
+            nunits += len(sl)
+            for kb, *_ in out:
+                ntier += (kb & G.LEK_ROW_MASK) >= 18
+                ngold += bool(kb & G.LEK_GOLD)
+                tiers_by_depth[d] += (kb & G.LEK_ROW_MASK) >= 18
+            tss.append(ts)
+            if ts > worst[0]:
+                worst = (ts, f"d{d} {seed:#06x} r{r} n{len(sl)}")
+            if not good:
+                nbad += 1
+                if len(bad) < 6:
+                    bad.append((d, seed, lvl, hero, r, sl, ws, got.hex(), wl.hex()))
+            lp_ = got
+    tss.sort()
+    print(f"[lp] A7 {nlev} levels / {nrooms} rooms / {nunits} spawned units: {ntier} tier rows, {ngold} golden "
+          f"bosses; tiers by depth {tiers_by_depth}; lp_enter (DI, incl. far3 + far6 hooks) mean {sum(tss) // len(tss)} T, "
+          f"median {tss[len(tss) // 2]}, 90% {tss[len(tss) * 9 // 10]}, worst {worst[0]} T ({worst[1]})", flush=True)
+    check(f"A7 {nlev} levels x both heroes x all depths: {nrooms} room entries == levelgen f3 reference "
+          f"(records, slots, E_MAXHP, E_GOLD)", nbad == 0 and not bad, bad[:3])
+    check("A7 the sweep rolled tiers at every depth and golden bosses (a sweep without them proves nothing)",
+          all(v > 0 for v in tiers_by_depth.values()) and ngold > 0, (tiers_by_depth, ngold))
+    check(f"A7 lp_enter worst {worst[0]} T <= {LP_T_GUARD}, mean {sum(tss) // len(tss)} <= 22000",
+          worst[0] <= LP_T_GUARD and sum(tss) // len(tss) <= 22000, worst)
+
+
+def bank_model(lp, r, slots, gold=None):
+    """§9.4.2: append every alive slot of room r (exact hp, EF_RESPAWN, 3F-T5: LEK_GOLD) in slot order."""
+    gold = gold or {}
     lp = bytearray(lp)
     ro = S["LP_REC"] - LPB + r * S["LR_STRIDE"]
     n = lp[ro] & 7
-    for (_, k, rr, _, _, fl, hp) in slots:
+    for (sl_, k, rr, _, _, fl, hp) in slots:
         if rr != r or fl & EF_DYING:
             continue
-        lp[ro + 1 + 2 * n] = k | (fl & S["EF_RESPAWN"])
+        lp[ro + 1 + 2 * n] = k | (fl & S["EF_RESPAWN"]) | gold.get(sl_, 0)
         lp[ro + 2 + 2 * n] = hp
         n += 1
     lp[ro] = S["LR_VISITED"] | n
@@ -288,6 +407,7 @@ def part_a6(h, p, check):
 def part_a4(h, p, check):
     """A4 + A5 on a few levels."""
     p.load()
+    sync_bodies(p)
     for d, seed in ((1, 0x1234), (3, 0xBEEF), (7, 0x0042), (4, 0x7777)):
         p.wb("LVL", 1)
         p.wmem(S["LVL_SEED"], w16(seed))
@@ -324,23 +444,25 @@ def part_a4(h, p, check):
             if len(sl) > 1:
                 p.set_ent(sl[1][0], FLAGS=sl[1][5] | EF_DYING)       # dying: never returns
             sl = p.slots()
+            gold = {x[0]: gold_of(p, x[0]) for x in sl}
             lp0 = p.lp()
             ok, tb = p.far3("lp_bank", a=r, e=0)
             lp1 = p.lp()
-            check(f"A4 d{d} room {r}: lp_bank -> record == model (exact hp, dead dropped), slots freed",
-                  ok and mask(lp1) == mask(bank_model(lp0, r, sl)) and p.slots() == [],
-                  (lp1.hex(), bank_model(lp0, r, sl).hex(), p.slots()))
+            check(f"A4 d{d} room {r}: lp_bank -> record == model (exact hp, golden bit, dead dropped), slots freed",
+                  ok and mask(lp1) == mask(bank_model(lp0, r, sl, gold)) and p.slots() == [],
+                  (lp1.hex(), bank_model(lp0, r, sl, gold).hex(), p.slots()))
             p.wb(S["ROOM_VISITS"] + r, p.rb(S["ROOM_VISITS"] + r) + 1)
             lp1 = p.lp()
             p.wmem(S["LP_HX"], [1, 0, 3])
             p.far3("lp_enter", a=r)
-            wl, out = G.lp_enter(blk, lp1, r, 0, 1, 3)
+            wl, out = G.lp_enter(blk, lp1, r, 0, 1, 3, f3=True)
             got = p.slots()
             alive = [(x[1], x[6]) for x in sl if not x[5] & EF_DYING] + [
                 (e[0] & 31, e[1]) for e in G_entries(lp0, r)]
             check(f"A4 d{d} room {r}: re-entry == levelgen.lp_enter of the banked record; "
                   f"kinds + hp kept {alive}",
                   got == want_slots(p, blk, r, out) and mask(p.lp()) == mask(wl)
+                  and scaled_ok(p, got, out, d)
                   and sorted([(x[1], x[6]) for x in got] + [
                       (e[0] & 31, e[1]) for e in G_entries(p.lp(), r)]) == sorted(alive),
                   (got, out))
@@ -415,7 +537,7 @@ def part_b(h, p, check):
     kw = p.kb(S["K_KNIGHT"], "KT_BW")
     kh = p.kb(S["K_KNIGHT"], "KT_BH")
     lp0 = p.lp()
-    exp0 = _visit(G.lp_enter(blk, G.lp_budget(blk, p.rb("LVL")), st, 0, p.ent(0)["X"], kw)[0], st)
+    exp0 = _visit(G.lp_enter(blk, G.lp_budget(blk, p.rb("LVL"), f3=True), st, 0, p.ent(0)["X"], kw, f3=True)[0], st)
     check("B0 new game: LP block == levelgen.lp_budget + the start room's entry (VISITED, visits 1)",
           mask(lp0) == mask(exp0), (lp0.hex(), exp0.hex()))
     check("B0 new game: no monster slot (start room quota 0)", p.slots() == [], p.slots())
@@ -468,7 +590,7 @@ def part_b(h, p, check):
     # B1: A -> B (first entry of B)
     lp_a = p.lp()
     ok = walk_out(a, "R", s_)
-    wl, out = G.lp_enter(blk, _bank_all(lp_a, a), b, s_, 1, kw)
+    wl, out = G.lp_enter(blk, _bank_all(lp_a, a), b, s_, 1, kw, f3=True)
     sl = p.slots()
     check(f"B1 walked {a} -> {b} through the real do_exit", ok, p.rb("CUR_ROOM"))
     check(f"B1 room {b}: slots == levelgen.lp_enter (FRESH, arrival s{s_} x1)",
@@ -493,7 +615,7 @@ def part_b(h, p, check):
     invariant("B2 out")
     lp_b = p.lp()
     ok = walk_out(a, "R", s_)
-    wl, out = G.lp_enter(blk, _bank_all(lp_b, a), b, s_, 1, kw)
+    wl, out = G.lp_enter(blk, _bank_all(lp_b, a), b, s_, 1, kw, f3=True)
     got = p.slots()
     check(f"B2 re-entered {b}: slots == levelgen.lp_enter of the record; kinds + hp {keep}",
           ok and got == want_slots(p, blk, b, out)
@@ -547,6 +669,34 @@ def part_b(h, p, check):
           p.rb("CUR_ROOM") == a and (k, 4) in [(e[0] & 31, e[1]) for e in entb]
           and not [x for x in p.slots() if x[1] == k and x[6] == 4], (entb, p.slots()))
     invariant("B3 rejected")
+    # B3c (3F-T5 review): the golden +1 counts in the 9.3 cap (12) for residents (record / spawned slots) and followers
+    G_, GOLD = S["K_GOBLIN"], S["LEK_GOLD"]
+    for tag, res, fgold, admit in (("golden resident 4+3+3, plain follower 3 = 13", [G_ | GOLD, G_, G_], 0, False),
+                                   ("plain residents 3+3+3, golden follower 4 = 13", [G_, G_, G_], GOLD, False),
+                                   ("golden resident 4+3, plain follower 3 = 10", [G_ | GOLD, G_], 0, True),
+                                   ("plain residents 3+3+3, plain follower 3 = 12", [G_, G_, G_], 0, True)):
+        for x in p.slots():
+            p.set_ent(x[0], FLAGS=0)
+        p.wmem(S["LP_REC"] + 9 * a, [0x80 | len(res)] + [v for kk in res for v in (kk, 6)] + [0] * (8 - 2 * len(res)))
+        p.wmem(S["LP_REC"] + 9 * b, [0x80] + [0] * 8)
+        put_hero(b, 2, s_, True)
+        p.set_ent(5, KIND=k, ROOM=b, FLAGS=EF_ACTIVE | EF_HOSTILE | EF_LEFT, X=2 + kw + 1,
+                  Y=stand_y(s_, gh), PX=(2 + kw + 1) * 8, PY=stand_y(s_, gh) * 8, MODE=0, DVIS=0,
+                  HP=4, MAXHP=6)
+        p.wb(S["P_ENTITIES"] + 5 * STRIDE + S["E_GOLD"], fgold)
+        ingame([0xCD] + w16(S["vis_reset"]), "vis")
+        for _ in range(4):
+            if p.rb("CUR_ROOM") == a:
+                break
+            p.turn("H")
+        p.until(lambda: p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+        got = [x for x in p.slots() if x[1] == k and x[6] == 4]
+        entb = [(e[0] & 31, e[1]) for e in G_entries(p.lp(), b)]
+        ok = p.rb("CUR_ROOM") == a and ((len(got) == 1 and (k, 4) not in entb) if admit
+                                        else (not got and (k, 4) in entb))
+        check(f"B3c cap with the golden +1: {tag}: follower {'admitted' if admit else 'rejected, banked back'}",
+              ok, (p.slots(), entb))
+        invariant("B3c")
 
 
 def _visit(lp, r):
@@ -567,6 +717,9 @@ def main():
     nrand = 40
     if "--random" in sys.argv:
         nrand = int(sys.argv[sys.argv.index("--random") + 1])
+    nsweep = 1000
+    if "--sweep" in sys.argv:
+        nsweep = int(sys.argv[sys.argv.index("--sweep") + 1])
     fails = []
     with Harness() as h:
         h.launch(EMU_ARGS)
@@ -581,6 +734,8 @@ def main():
             part_a(h, p, check, nrand)
             part_a4(h, p, check)
             part_a6(h, p, check)
+            if nsweep:
+                part_a7(h, p, check, nsweep)
         part_b(h, p, check)
         print(f"lp: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
         return 1 if fails or h.failures else 0

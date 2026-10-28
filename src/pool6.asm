@@ -111,6 +111,7 @@ pool_list:
 ; PL_LIST, its seq block -> the cache; then KT_SEQ.
 pl_kinds:
 .k:             ld   a, (de)
+                and  LEK_KIND_MASK             ; 3F-T5: LP_BOSS may carry LEK_GOLD
                 push de
                 push bc
                 push af

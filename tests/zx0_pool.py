@@ -170,7 +170,7 @@ class Run:
             if "fdesc_tab" in S else None,
             "GEN_OVERFLOW": self.rb("GEN_OVERFLOW"),
             "GEN_TRAP": self.rb("GEN_TRAP") if "GEN_TRAP" in S else 0,
-            "LP": self.z.read_memory(S["LP_KINDS"], 5),   # LP_KINDS[0..3] + LP_BOSS
+            "LP": [k & S["LEK_KIND_MASK"] for k in self.z.read_memory(S["LP_KINDS"], 5)],   # LP_KINDS[0..3] + LP_BOSS (3F-T5: minus LEK_GOLD)
             "depth": self.rb("LVL_DEPTH"),
         }
 
