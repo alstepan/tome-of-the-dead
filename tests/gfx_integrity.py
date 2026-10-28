@@ -202,7 +202,8 @@ def pool_check(p, check, tag, snap0, snapd=None):
     bad = [hex(S["FRT"] + i) for i in keep if now["FRT"][i] != snap0["FRT"][i]]
     check(f"GI {tag}: FRT rows outside the monster fids == as built at hero start", bad == [], bad[:6])
     # the level's generation kinds (pool_list's rule) generated, the rest NONE
-    kt = lambda col, k: p.z.read_memory(S["kind_tab"] + S[col] + k, 1)[0]
+    gu = bank_read(p, S["BANK_R6"], S["gu_tab"], 2 * S["GU_N"])     # 3F-T2: the generation units
+    kt = lambda col, k: gu[2 * k + (col == "KT_FCNT")]                # (was kind_tab KT_FID0 / KT_FCNT)
     gm = bank_read(p, S["BANK_R6"], S["pool_gmap"], 3 * S["PGMAP_N"])
     kinds = []
     for k in p.z.read_memory(S["LP_KINDS"], 5):
@@ -230,12 +231,11 @@ def pool_check(p, check, tag, snap0, snapd=None):
 
 def fx_check(p, check):
     """D3-4: the hero's class FX kind (K_FX_BASE + HERO_KIND) is resident at the
-    hero start: every fid of its KT_FID0/KT_FCNT range has a right (v0/v1) and a
+    hero start: every fid of its gu_tab unit range has a right (v0/v1) and a
     left (v2/v3) variant in a pool bank whose bytes lie inside the pool."""
     hk = p.rb("HERO_KIND")
     k = S["K_FX_BASE"] + hk
-    f0 = p.z.read_memory(S["kind_tab"] + S["KT_FID0"] + k, 1)[0]
-    fc = p.z.read_memory(S["kind_tab"] + S["KT_FCNT"] + k, 1)[0]
+    f0, fc = bank_read(p, S["BANK_R6"], S["gu_tab"] + 2 * k, 2)     # 3F-T2: R6 gu_tab
     want = ("KFID_FXW", "KFCNT_FXW") if hk == S["K_KNIGHT"] else ("KFID_FXM", "KFCNT_FXM")
     check(f"GI FX: kind {k} range == {want[0]}", (f0, fc) == (S[want[0]], S[want[1]]), (f0, fc))
     frt = bytes(p.z.read_memory(S["FRT"] + f0 * S["FRT_STRIDE"], fc * S["FRT_STRIDE"]))
@@ -394,6 +394,74 @@ def scroll_ink(p, stats):
                 stats["bad"].append((kind, k, dest, c, r, row, col))
 
 
+SEQ_BIN = Path(__file__).resolve().parent.parent / "build" / "ovl" / "seq.bin"
+
+
+def seq_check(p, check, tag, kinds):
+    """3F-T2 review: the hero and every kind in `kinds` has a sequence cache
+    row (seq_rows page | kind_tab KT_SEQ) and the row's 8 sequences (from the
+    row pointer to the block's end) + KS_IMPACT equal the master block in
+    build/ovl/seq.bin (the raw SQ_IMG); a non-hero kind must not fall back to
+    slot 0 (the hero's row)."""
+    img = SEQ_BIN.read_bytes()
+    ib = lambda a: img[a - S["SQ_IMG"]]
+    iw = lambda a: ib(a) | ib(a + 1) << 8
+    kt = p.z.read_memory(S["kind_tab"] + S["KT_SEQ"], 32)
+    pg, slot0 = S["seq_rows"] & 0xFF00, S["seq_rows"] & 0xFF
+    hero = p.rb("HERO_KIND")
+    bad = []
+    for k in sorted({hero, *kinds}):
+        blk = iw(S["ksm_tab"] + 2 * k)
+        if blk == 0 or (k != hero and kt[k] == slot0):
+            bad.append((k, "no row"))
+            continue
+        rb = p.z.read_memory(pg | kt[k], 17)
+        n = ib(blk)
+        for i in range(8):
+            mo = blk + 10 + ib(blk + 2 + i)
+            ln = blk + 10 + n - mo
+            got = bytes(p.z.read_memory(rb[2 * i] | rb[2 * i + 1] << 8, ln))
+            if got != img[mo - S["SQ_IMG"]:mo - S["SQ_IMG"] + ln]:
+                bad.append((k, "seq", i))
+                break
+        else:
+            if rb[16] != ib(blk + 1):
+                bad.append((k, "impact"))
+    check(f"GI {tag}: sequence cache rows of hero {hero} + kinds {sorted(kinds)} == the masters", bad == [], bad)
+
+
+def seq_sweep(p, check):
+    """seq_check for both heroes on D1..D8 (level_descend stub) and the PROTO start."""
+    p.proto_start = 0
+    for hero in ("1", "2"):
+        p.load()
+        p.wait_state(S["GS_SELECT"])
+        p.wb("seed_fixed", 1)
+        p.wmem(S["seed_value"], w16(0x1234))
+        p.wb("INPUT_REPEAT", 0)
+        p.wb("ANIM_FREEZE", 1)
+        p.wb("INPUT_SRC", 1)
+        p.menu_start(GL.K_WIZARD if hero == "2" else GL.K_KNIGHT)
+        seq_check(p, check, f"SQ hero {hero} D1", list(p.z.read_memory(S["LP_KINDS"], 5)))
+        for d in range(2, 9):
+            pc0 = p.pc()
+            ok, _ = p.code([0x3E, d - 1, 0x32] + w16(S["LVL_DEPTH"])
+                           + [0xCD] + w16(S["level_descend"]), game=True)
+            p.z.cmd("set-register PC=%d" % pc0)
+            p.release()
+            p.settle(4)
+            check(f"GI SQ hero {hero} D{d}: level_descend stub ran", ok and p.rb("LVL_DEPTH") == d, p.rb("LVL_DEPTH"))
+            seq_check(p, check, f"SQ hero {hero} D{d}", list(p.z.read_memory(S["LP_KINDS"], 5)))
+    p.proto_start = 1
+    p.load()
+    p.wait_state(S["GS_SELECT"])
+    p.wb("INPUT_REPEAT", 0)
+    p.wb("INPUT_SRC", 1)
+    p.menu_start(GL.K_KNIGHT)
+    seq_check(p, check, "SQ PROTO", list(range(S["K_SKELETON"], S["K_PROTO_END"])))
+    p.proto_start = 0
+
+
 def floor_build_check(p, check, tag):
     """Every room of the level, seeded with a dagger stack (storey 0, col 16), an
     arrow stack under a potion (storey 1, col 20) and a potion under arrows
@@ -499,6 +567,9 @@ def main():
                 break
         check(f"GI R3: scroll steps show the entering room's floor items ({ink['exits']} exits, {ink['steps']} steps, "
               f"{ink['cells']} item cells)", ink["steps"] > 0 and ink["cells"] > 0 and not ink["bad"], ink["bad"][:6])
+        check("GI R4: SEQ_TRAP 0 (every sq_load kind had a block and a slot)", p.rb("SEQ_TRAP") == 0, p.rb("SEQ_TRAP"))
+        seq_sweep(p, check)
+        check("GI R4: SEQ_TRAP 0 after the sequence sweep", p.rb("SEQ_TRAP") == 0, p.rb("SEQ_TRAP"))
         print(f"[info] run anomalies: {T.anomalies}", flush=True)
     print(f"gfx_integrity: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
     return 1 if fails else 0

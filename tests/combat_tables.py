@@ -57,7 +57,16 @@ def kx_row(res, imm, xp):
             b[2] |= 1 << i
         else:
             b[i // 4] |= RESP[r] << (2 * (i % 4))
-    return b + [imm, xp, 0, 0, 0]   # DEF = 0 in 3D (§11.4); KX_SPARE 2 B (MEM-1)
+    return b + [imm, xp, 0, 0, 0]   # DEF = 0 in 3D (§11.4); KX_MELEE 2 B (3F-T2: below)
+
+
+# 3F-T2: KX_MELEE (was combat3.asm kx_melee) = the kind's melee hit: dty |
+# efx << 4, chance << 4 | turns (game.md §9.1: PHYS everywhere, the Ghost's 1d4
+# DRAIN touch, 1 in 4 -> CONFUSED 4). EFX ids: defs (EFX_CONFUSED).
+def kx_melee(k, sym):
+    if k == 5:
+        return [TYPES.index("DRAIN") | sym["EFX_CONFUSED"] << sym["DH_EFX_SHIFT"], 4 << 4 | 4]
+    return [TYPES.index("PHYS"), 0]
 
 
 XP_NEXT = [40, 100, 200, 340, 500, 700, 920, 1150]          # levels 2..9
@@ -123,7 +132,7 @@ def main():
     chk("kx_tab base", [sym["kx_tab"]], [BASE])
     kx = at("kx_tab")
     for k in range(32):
-        want = kx_row(*KINDS[k][1:]) if k in KINDS else [0] * 8
+        want = kx_row(*KINDS[k][1:])[:6] + kx_melee(k, sym) if k in KINDS else [0] * 8
         chk(f"kx[{k}]", m[kx + 8 * k:kx + 8 * k + 8], want)
     chk("kx_tab length (dg_bad follows, L-RELIEF)", [sym["dg_bad"] - sym["kx_tab"]], [256])
 

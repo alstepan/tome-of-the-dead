@@ -364,9 +364,11 @@ KX_RES          EQU 0               ; 3 B, RES_* format
 KX_IMM          EQU 3               ; IMMF_* mask
 KX_XP           EQU 4               ; KXP: XP awarded on death (game.md §4.1)
 KX_DEF          EQU 5               ; monster DEF (0 in 3D, game.md §11.4)
-KX_SPARE        EQU 6               ; 2 B reserved (3F: on-hit status / parry), zero until then
+KX_MELEE        EQU 6               ; 2 B: the kind's melee hit as deal_hit's {C, E} (3F-T2: was
+                                    ; combat3.asm's kx_melee table, folded into the old KX_SPARE):
+                                    ; +0 dty | efx << DH_EFX_SHIFT, +1 chance << 4 | turns
 KX_LEN          EQU K_MAX * KX_STRIDE   ; 256 B (MEM-1: was 6 x 32 = 192)
-                ASSERT KX_RES + RES_LEN == KX_IMM && KX_LEN <= 256 && KX_STRIDE == 8 && KX_SPARE + 2 == KX_STRIDE
+                ASSERT KX_RES + RES_LEN == KX_IMM && KX_LEN <= 256 && KX_STRIDE == 8 && KX_MELEE + 2 == KX_STRIDE
 
 ;------------------------------------------------------------------------------
 ; deal_hit (combat3.asm, D3-6a) argument C: damage type | flags | effect id.

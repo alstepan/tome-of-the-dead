@@ -149,6 +149,12 @@ def run(p, check):
         p.wmem(FL + i * FLS, [p.rb("CUR_ROOM") | S1, col, item, qty])
         p.wmem(S["ROOM_MAP"] + (IROW - 1) * 32 + col, [S["T_ITEM0"] + 2] * 2)
         p.wmem(S["ROOM_MAP"] + IROW * 32 + col, [S["T_ITEM0"] + 3] * 2)
+        # the marker cells' FI_CELL quarters as fi_put writes them (slot 0: UL 0,
+        # UR 8 / LL 16, LR 24; storey 1's page): dp_pile reads the left-quarter
+        # bit there (3F-T2: no longer relying on what the low RAM held before)
+        pg = S["FI_CELL"] + 256
+        p.wmem(pg + ((((IROW - 1) & 7) << 5) | col), [0, 8])
+        p.wmem(pg + (((IROW & 7) << 5) | col), [16, 24])
 
     def entry(i):
         return list(p.z.read_memory(FL + i * FLS, 4))

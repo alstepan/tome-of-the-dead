@@ -22,7 +22,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import game_lib  # noqa: E402
-from game_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at,  # noqa: E402
+from game_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at, kind_frames,  # noqa: E402
                        cell_bytes, TILE_ATTRS, FLASH_ATTRS, KIND_ATTR, split_frame, frame_png,
                        stand_y, is_standing, storey_of, item_row, STOREY_ROWS, STOREY_COUNT,
                        PLAY_ROWS, FLOOR_ROWS, MAP_LEN,
@@ -302,8 +302,7 @@ class T(Proto):
         """(FRT rows, pre-shifted bytes of every generated variant) of the
         current hero's frames: the per-game hero sprite set."""
         k = self.rb("HERO_KIND")
-        f0 = self.rb(S["kind_tab"] + S["KT_FID0"] + k)
-        n = self.rb(S["kind_tab"] + S["KT_FCNT"] + k)
+        f0, n = kind_frames(k)
         frt = self.z.read_memory(S["FRT"] + f0 * 16, n * 16)
         fs = S["FT_STRIDE"]
         ft = self.z.read_memory(S["frame_tab"] + f0 * fs, n * fs)
@@ -378,6 +377,7 @@ def main():
             h.expect("1 GEN_OVERFLOW 0 after boot + hero gen", p.rb("GEN_OVERFLOW"), 0)
             # A5: gen_frame never runs while GEN_SCRATCH (= room maps) is live
             h.expect("1 GEN_TRAP 0 after boot + hero gen", p.rb("GEN_TRAP"), 0)
+            h.expect("1 SEQ_TRAP 0 after boot + hero gen", p.rb("SEQ_TRAP"), 0)
             h.expect("39 start attrs legal", attr_violations(p.frame(), legal_attrs(p)), [])
             h.expect("8 floor band A at rest", floor_band_ok(p.frame(), holes(0)), [])
 
@@ -996,8 +996,7 @@ def main():
             p.end_to_menu()
             p.settle()
             p.menu_start(K_WIZARD, settle=None)  # '2' toggles HERO, '1' starts (C3-6 menu)
-            wz0 = p.rb(S["kind_tab"] + S["KT_FID0"] + K_WIZARD)
-            wzn = p.rb(S["kind_tab"] + S["KT_FCNT"] + K_WIZARD)
+            wz0, wzn = kind_frames(K_WIZARD)
             stale, badfid, badbg = [], [], []
             for t in (1, 2):
                 p.tick()                        # first ticks of the new game
@@ -1815,6 +1814,7 @@ def main():
             h.expect("40 CLIP_TRAP 0 over the walkthrough", res1["clip"], 0)
             h.expect("40 GEN_TRAP 0 over the walkthrough (rooms built + scrolled)",
                      res1["gentrap"], 0)
+            h.expect("40 SEQ_TRAP 0 over the walkthrough", res1["seqtrap"], 0)
             h.expect("36 WIN (GS_WIN end screen): ENTER -> GS_SELECT", res1["select"], True)
             if want(38):
                 res2 = walkthrough(h, p, check14=False)
@@ -2175,7 +2175,7 @@ def walkthrough(h, p, check14=False):
     res = dict(gs=p.rb("GAME_STATE"), end=(p.rb("CUR_ROOM"), e0["X"], storey_of(e0["Y"], body(p, K_KNIGHT)[1])),
                turns=p.rw("TURN_COUNTER"),
                overrun=p.rw("OVERRUN_COUNT"), miss=p.rb("BLIT_MISS"), hp=p.ent(0)["HP"],
-               dmgov=p.rb("DMG_OVERFLOW"), clip=p.rb("CLIP_TRAP"), gentrap=p.rb("GEN_TRAP"))
+               dmgov=p.rb("DMG_OVERFLOW"), clip=p.rb("CLIP_TRAP"), gentrap=p.rb("GEN_TRAP"), seqtrap=p.rb("SEQ_TRAP"))
     res["state"] = (p.rw("RNG_STATE"), p.rw("TURN_COUNTER"), p.rb("POTIONS_TAKEN"),
                     tuple((e["ROOM"], e["X"], e["Y"], e["HP"], e["FLAGS"] & 0x7F)
                           for e in (p.ent(s) for s in range(9))))

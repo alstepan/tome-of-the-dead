@@ -1,60 +1,162 @@
 ;==============================================================================
-; pool6.asm — 3F-T1 the per-level sprite pool's kind list (R6; r6.asm rules:
-; far6 only, results in memory, no SMC). docs/memory-map.md "Level pool".
+; pool6.asm — the sprite pool's per-session generation lists + the sequence
+; cache (R6; r6.asm rules: far6 only, results in memory, no SMC).
+; docs/memory-map.md "Level pool (3F-T1)" / "Sequence cache (3F-T2)".
 ;
-; level_enter (lowram.asm) rewinds the pool to the LEVEL mark (above the
-; select idles + the hero + its class FX, start_game's alloc_mark), sets every
-; monster frame's FRT row to NONE, far6 pool_list, then gen_kind's each entry
-; of PL_LIST. A generation kind is a kind_tab row whose [KT_FID0, +KT_FCNT)
-; range is generated (only the generator reads those two columns).
+; Three far6 entries, each writing PL_LIST (pairs DB fid0, fcnt; $FF end) for
+; lowram gen_list and loading the matching kind sequence blocks into the bank-2
+; cache (seq_rows / seq_bytes, kind_tab KT_SEQ):
+;   pool_hero   start_game, after gen_idles: the hero + its class FX kind; seq
+;               slot 0 = the hero; every FX FRT row except the hero's class
+;               FX := NONE (3F-T2: the other class's rows never go stale)
+;   pool_proto  start_game, PROTO rooms: the original monster kinds
+;               K_SKELETON .. K_PROTO_END - 1, seq slots 1..6
+;   pool_list   level_enter, after alloc_restore: monster FRT rows := NONE,
+;               the FX rows outside the hero's class FX := NONE (stale extras
+;               of the previous level), LP_KINDS[0..3] + LP_BOSS through
+;               pool_gmap + the hero-dependent extras (pool_xmap); seq slots 1..
 ;
-; GENERATION-KIND MAP (pool_gmap; the contract T2 builds on): records
-;   DB kind, g1, g2         g2 = PG_NONE: no second unit
-; A kind with a record generates g1 (+ g2) INSTEAD of its own range; a kind
-; without one generates its own range. Shared / tier rows map to their base
-; frames' unit (Vampire / Archmage -> the Necro unit, a Giant Rat tier -> Rat),
-; a row needing two units lists both (Archer -> the Skeleton-walk unit + its
-; SHOOT unit; Necro -> its body + the bolt unit). Units must not overlap
-; (dedup is per kind: an overlapping fid would be generated twice). Records
-; are read in order, the first match wins. Today every 3F kind is a stand-in
-; ALIAS of an original kind id (defs.asm K_SPIDER = K_RAT, ...), so the map
-; is empty. The build-time need (main.asm "LEVEL POOL NEED") reads these
-; bytes too, so the map and POOL_NEED cannot drift.
+; GENERATION UNITS (gu_tab, 3F-T2; was kind_tab KT_FID0 / KT_FCNT): DB fid0,
+; fcnt per unit. Units 0..K_MAX-1 = the kinds' own ranges (0 frames: none);
+; units >= K_MAX = extra ranges with no kind (3F: e.g. a SHOOT frame, the
+; Necro bolt, the Mage's arrows) — none yet. Monster / extra units must not
+; overlap (dedup is per unit, by fid0: an overlap would be generated twice).
+;
+; GENERATION MAP (pool_gmap, 3F-T1 contract): records DB kind, u1, u2 (u2 =
+; PG_NONE: none), first match wins; a mapped kind generates u1 (+ u2) INSTEAD
+; of its own unit (tier rows -> their base unit, Vampire / Archmage -> Necro,
+; Archer -> Skeleton walk + its SHOOT unit). Empty today (every 3F kind is an
+; alias id, defs.asm K_SPIDER = K_RAT, ...).
+; HERO EXTRAS (pool_xmap, 3F-T2): records DB kind, hero kind, unit: on a level
+; listing the kind, a game of that hero also generates the unit (game.md 3F:
+; the Mage's arrow frames on Archer levels, dagger_spin on D1 / D2). Empty
+; today. An extra unit must lie outside that hero's class FX unit (it is
+; NONE'd at the next level entry by fxr_none).
+; The build-time need (main.asm "LEVEL POOL NEED") reads gu_tab / pool_gmap /
+; pool_xmap too, so the tables and POOL_NEED cannot drift.
+;
+; SEQUENCE CACHE (3F-T2): the masters are src/seq_img.asm, a ZX0 stream
+; (sqm_zx0, main.asm r6_blobs) unpacked to SQ_IMG per call (~60k T); ksm_tab
+; there names each kind's block (tiers: their base's). sq_reset puts the
+; hero's block in slot 0 (same bytes, same place every time: the hero's live
+; E_SEQ stays valid), sq_load adds a kind's block (deduplicated by block),
+; sq_fill writes KT_SEQ of every kind (no block cached: slot 0's row — no
+; entity of such a kind exists in play). The scratch (PL_LIST, SQ_PTR,
+; SQ_TOP, SQ_IMG) is the play-free GEN_SRC / GEN_MIR window: fi_full rebuilds
+; the floor-item cache there at the following room build (as after any
+; generator run), pblit stages its <= 54 B at GEN_SRC only after it.
 ;==============================================================================
 PG_NONE         EQU $FF
-PL_LIST         EQU GEN_SRC            ; pblit's staging bytes (< 54, below the FI glyph cache):
-PL_CAP          EQU 12                 ; free in level_enter between level_new and panel_init
+PL_LIST         EQU GEN_SRC            ; pairs fid0, fcnt; $FF end
+PL_CAP          EQU 2 * 12 + 1         ; level: <= 5 kinds x 2 units + 2 extras; hero: 2
+SQ_PTR          EQU PL_LIST + PL_CAP   ; SQ_SLOTS words: each slot's master block (0 = free)
+SQ_TOP          EQU SQ_PTR + 2 * SQ_SLOTS  ; word: the next free seq_bytes byte
+PL_PROTO        EQU SQ_TOP + 2         ; pool_proto's kind list (6 B)
+SQ_IMG          EQU GEN_SRC + 64       ; the unpacked masters (seq_img.asm is DISPed here)
 LP_GEN_N        EQU 5                  ; LP_KINDS[0..3] + LP_BOSS (not the LP scratch: lp.py
                                        ; B0G reads LP_HX.. after a new game)
-                ASSERT LP_BOSS == LP_KINDS + 4 && PL_LIST + PL_CAP <= GEN_SRC + 54 && FI_PAD >= GEN_SRC + 54
-                ASSERT 2 * LP_GEN_N + 1 <= PL_CAP   ; <= 2 units per kind + the $FF end
+GU_STRIDE       EQU 2
+FX_FID0         EQU KFID_FXM           ; the class FX fids [FX_FID0, FX_END): both FX units
+FX_END          EQU KFID_FXW + KFCNT_FXW
+                ASSERT LP_BOSS == LP_KINDS + 4 && PL_PROTO + K_PROTO_END - K_SKELETON <= SQ_IMG
+                ASSERT FX_FID0 + KFCNT_FXM <= FX_END && KFID_FXW >= FX_FID0
 
 ;------------------------------------------------------------------------------
-; pool_list — far6 from level_enter: PL_LIST := the generation kinds of
-; LP_KINDS[0..3] + LP_BOSS (pool_map), each once, in first-seen order, $FF
-; terminated (<= 10 + 1 B).   Clobbers: A, BC, DE, HL.   ~2k T
+; pool_hero — far6 from start_game (HERO_KIND set, after gen_idles):
+; PL_LIST := [hero unit, class FX unit]; seq slot 0 := the hero; KT_SEQ.
+; pool_list — far6 from level_enter (after alloc_restore): PL_LIST := the
+; units of LP_KINDS[0..3] + LP_BOSS (pool_map) + their hero extras
+; (pool_xmap), each once, first-seen order; seq slots 1.. := their blocks.
+; pool_proto — far6 from start_game (PROTO rooms, after pool_hero's session):
+; the same for the original kinds K_SKELETON .. K_PROTO_END - 1.
+; All three first (pl_begin): the masters unpacked, monster FRT rows := NONE
+; (a kind not generated now blits nothing — BLIT_MISS — never stale pool
+; bytes; 3F-T1's level_enter LDIR), the FX rows outside the hero's class FX
+; := NONE (fxr_none), PL_LIST empty, seq slot 0 := the hero (sq_reset).
+; Clobbers: A, BC, DE, HL.   ~0.1M T (unpack ~60k, FRT rows ~15k)
 ;------------------------------------------------------------------------------
+pool_hero:
+                call pl_begin
+                ld   a, (HERO_KIND)
+                call pl_unit
+                ld   a, (HERO_KIND)
+                add  a, K_FX_BASE
+                call pl_unit
+                jp   sq_fill
+
+pool_proto:
+                call pl_begin
+                ld   hl, PL_PROTO              ; the kind list K_SKELETON ..
+                ld   a, K_SKELETON
+.w:             ld   (hl), a
+                inc  hl
+                inc  a
+                cp   K_PROTO_END
+                jr   c, .w
+                ld   de, PL_PROTO
+                ld   b, K_PROTO_END - K_SKELETON
+                jr   pl_kinds
+
 pool_list:
-                ld   hl, PL_LIST
-                ld   (hl), PG_NONE             ; empty list
+                call pl_begin
                 ld   de, LP_KINDS
                 ld   b, LP_GEN_N
+                ; fall through
+; pl_kinds — DE = kind list, B = count: each kind's units + hero extras ->
+; PL_LIST, its seq block -> the cache; then KT_SEQ.
+pl_kinds:
 .k:             ld   a, (de)
                 push de
                 push bc
-                call pool_map                  ; B = g1, C = g2
+                push af
+                call pool_map                  ; B = u1, C = u2
                 ld   a, b
-                call pl_add
+                call pl_unit
                 ld   a, c
-                call pl_add
+                call pl_unit
+                pop  af
+                push af
+                ld   e, a                      ; hero extras: DB kind, hero, unit
+                ld   hl, pool_xmap
+.x:             ld   a, (hl)
+                cp   PG_NONE
+                jr   z, .xe
+                inc  hl
+                cp   e
+                ld   a, (hl)                   ; A = hero kind (flags: the kind test)
+                inc  hl
+                ld   b, (hl)                   ; B = unit
+                inc  hl
+                jr   nz, .x
+                push hl
+                ld   hl, HERO_KIND
+                cp   (hl)
+                ld   a, b
+                call z, pl_unit                ; (keeps DE)
+                pop  hl
+                jr   .x
+.xe:            pop  af
+                call sq_load
                 pop  bc
                 pop  de
                 inc  de
                 djnz .k
-                ret
+                jp   sq_fill
 
-; pool_map — A = kind -> B = g1, C = g2 (PG_NONE) per pool_gmap (no record:
-; B = the kind itself).   Clobbers: F, HL.
+pl_begin:
+                ld   hl, sqm_zx0               ; the sequence masters -> SQ_IMG
+                ld   de, SQ_IMG
+                call dzx0_standard
+                ld   a, KFID_MONSTERS
+                ld   b, KFCNT_MONSTERS
+                call frt_none
+                call fxr_none
+                ld   a, PG_NONE                ; PL_LIST := empty
+                ld   (PL_LIST), a
+                jp   sq_reset                  ; seq slot 0 := the hero (low RAM)
+
+; pool_map — A = kind -> B = u1, C = u2 (PG_NONE) per pool_gmap (no record:
+; B = the kind's own unit).   Clobbers: F, HL.
 pool_map:
                 ld   b, a
                 ld   c, PG_NONE
@@ -72,27 +174,143 @@ pool_map:
                 ld   c, (hl)
                 ret
 
-; pl_add — A = generation kind (PG_NONE: none): append it to PL_LIST unless
-; already listed. Keeps BC, DE.   Clobbers: A, F, HL.
-pl_add:
-                inc  a
+; pl_unit — A = unit (PG_NONE: none): append its pair to PL_LIST unless it has
+; no frames or is listed already (same fid0). Keeps BC, DE.  Clobbers: A, F, HL
+pl_unit:
+                cp   PG_NONE
                 ret  z
-                dec  a
-                ld   hl, PL_LIST
-.c:             cp   (hl)
-                ret  z                         ; listed already
-                bit  7, (hl)                   ; the $FF end?
+                push de
+                add  a, a                      ; units < 128
+                ld   l, a
+                ld   h, 0
+                ld   de, gu_tab
+                add  hl, de
+                ld   d, (hl)                   ; D = fid0
                 inc  hl
-                jr   z, .c
-                dec  hl
-                ld   (hl), a                   ; over the old end
+                ld   a, (hl)                   ; frames
+                or   a
+                jr   z, .r                     ; 0-frame unit (the Rogue hole, 3F rows)
+                ld   e, a
+                ld   hl, PL_LIST
+.c:             ld   a, (hl)
+                cp   PG_NONE
+                jr   z, .add
+                cp   d
+                jr   z, .r                     ; listed already
+                inc  hl
+                inc  hl
+                jr   .c
+.add:           ld   (hl), d
+                inc  hl
+                ld   (hl), e
                 inc  hl
                 ld   (hl), PG_NONE
+.r:             pop  de
                 ret
 
-; pool_gmap — the generation-kind map (see the header). Kinds < $80.
+;------------------------------------------------------------------------------
+; frt_none — A = first fid, B = count (>= 1): those FRT rows := FRT_NONE (all
+; 16 B, as the 3F-T1 level clear).   Clobbers: A, BC, DE, HL.   ~21 T / byte
+;------------------------------------------------------------------------------
+frt_none:
+                ld   l, a
+                ld   h, 0
+                add  hl, hl
+                add  hl, hl
+                add  hl, hl
+                add  hl, hl
+                ld   de, FRT
+                add  hl, de                    ; HL = the first row
+                ex   de, hl
+                ld   l, b
+                ld   h, 0
+                add  hl, hl
+                add  hl, hl
+                add  hl, hl
+                add  hl, hl
+                dec  hl
+                ld   b, h
+                ld   c, l                      ; BC = count x 16 - 1 (>= 15)
+                ex   de, hl
+                ld   (hl), FRT_NONE
+                ld   d, h
+                ld   e, l
+                inc  de
+                ldir
+                ret
+                ASSERT FRT_STRIDE == 16
+
+; fxr_none — the FX FRT rows outside the hero's class FX unit := NONE: the other
+; class's exclusive rows and any hero extra of the previous level (3F-T2: the
+; T1 note — a bolt / arrow drawn from another class's stale row). The class
+; FX rows themselves are generated by start_game / kept for the game.
+; Clobbers: A, BC, DE, HL.
+fxr_none:
+                ld   a, (HERO_KIND)
+                add  a, K_FX_BASE
+                add  a, a
+                ld   l, a
+                ld   h, 0
+                ld   de, gu_tab
+                add  hl, de
+                ld   a, (hl)                   ; A = fid0 of the class FX
+                inc  hl
+                add  a, (hl)                   ; A = its end
+                push af
+                dec  hl
+                ld   a, (hl)
+                sub  FX_FID0                   ; rows [FX_FID0, fid0)
+                ld   b, a
+                ld   a, FX_FID0
+                call nz, frt_none
+                pop  af                        ; rows [end, FX_END)
+                ld   b, a
+                ld   a, FX_END
+                sub  b
+                ret  z
+                ld   c, b                      ; A = count, C = first
+                ld   b, a
+                ld   a, c
+                jp   frt_none
+
+;------------------------------------------------------------------------------
+; gu_tab — the generation units: DB fid0, fcnt (see the header). Units < K_MAX
+; are the kinds (the old kind_tab KT_FID0 / KT_FCNT columns; D3-4: the class FX
+; kinds K_FXW / K_FXM, ids 30 / 31, overlapping ranges).
+;------------------------------------------------------------------------------
+    MACRO GU f0, fn
+                DB   f0, fn
+    ENDM
+gu_tab:
+                GU   KFID_KNIGHT, KFCNT_KNIGHT
+                GU   KFID_WIZARD, KFCNT_WIZARD
+                GU   0, 0                      ; id 2 retired
+                GU   KFID_SKELETON, KFCNT_SKELETON
+                GU   KFID_GOBLIN, KFCNT_GOBLIN
+                GU   KFID_GHOST, KFCNT_GHOST
+                GU   KFID_RAT, KFCNT_RAT
+                GU   KFID_BAT, KFCNT_BAT
+                GU   KFID_SLIME, KFCNT_SLIME
+                DS   GU_STRIDE * (K_FXW - K_COUNT), 0  ; ids 9..29 (3F rows: base units via pool_gmap)
+                GU   KFID_FXW, KFCNT_FXW
+                GU   KFID_FXM, KFCNT_FXM
+gu_tab_x:                                      ; units >= K_MAX (extras): none yet
+gu_tab_end:
+GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
+                ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 9
+                ASSERT K_FXW == K_MAX - 2 && K_FXM == K_MAX - 1
+
+; pool_gmap — the generation map (see the header). Kinds < $80.
 pool_gmap:
                 DB   PG_NONE                   ; (empty: every 3F kind is an alias today)
 pool_gmap_end:
 PGMAP_N         EQU (pool_gmap_end - pool_gmap - 1) / 3
                 ASSERT pool_gmap_end - pool_gmap == 3 * PGMAP_N + 1
+
+; pool_xmap — the hero extras (see the header): DB kind, hero kind, unit.
+pool_xmap:
+                DB   PG_NONE                   ; (empty: no Archer / thrower kind yet)
+pool_xmap_end:
+PXMAP_N         EQU (pool_xmap_end - pool_xmap - 1) / 3
+                ASSERT pool_xmap_end - pool_xmap == 3 * PXMAP_N + 1
+                ASSERT 2 * (2 * LP_GEN_N + 2) + 1 <= PL_CAP && 2 * 2 * (K_PROTO_END - K_SKELETON) + 1 <= PL_CAP

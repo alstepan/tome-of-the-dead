@@ -500,18 +500,18 @@ face_a:         or   a
 ;------------------------------------------------------------------------------
 ; (D3-S2: find_target moved to bank7.asm; D3-7: intent7.asm, also bank 7, calls it.)
 
-; kind_seq_ptr — HL = kind_seqs + kind(IX)*KS_STRIDE.  Clobbers: A, B, DE, HL
+; kind_seq_ptr — HL = the kind(IX)'s sequence row (KS_* offsets): seq_rows +
+; slot * KS_STRIDE, its low byte read from kind_tab KT_SEQ (3F-T2: the
+; per-level cache, R6 pool6.asm / lowram.asm; a tier row shares its base kind's row).
+; Clobbers: A, HL (BC, DE kept: was A, B, DE, HL).   61 T for every kind (was
+; 65 + 24 T per kind id: 257 T for the Slime, ~0.76k T for a 3F id 29)
 kind_seq_ptr:
-                ld   e, (ix+E_KIND)
-                ld   d, 0
-                ld   hl, kind_seqs
-                ld   a, e
-                or   a
-                ret  z
-                ld   b, a
-                ld   e, KS_STRIDE
-.m:             add  hl, de
-                djnz .m
+                ld   a, (ix+E_KIND)
+                add  a, KT_SEQ & $FF
+                ld   l, a
+                ld   h, (kind_tab + KT_SEQ) >> 8
+                ld   l, (hl)
+                ld   h, seq_rows >> 8
                 ret
 
 ; start_seq — IX mode SEQ at sequence HL.  Clobbers: A

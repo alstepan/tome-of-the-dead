@@ -193,9 +193,7 @@ anim_entity:
                 ld   c, KS_DEATH
 .rs:            or   $80                       ; running
                 ld   (ix+E_REACT), a
-                push bc
-                call kind_seq_ptr
-                pop  bc
+                call kind_seq_ptr              ; (keeps BC, 3F-T2)
                 ld   b, 0
                 add  hl, bc
                 ld   a, (hl)
@@ -275,9 +273,7 @@ anim_entity:
                 jr   nz, .mv
                 ld   (ix+E_MODE), M_REST
 .mv:            ; frame: flyers use the idle loop phase; others the walk phase
-                push bc
-                call kind_seq_ptr
-                pop  bc
+                call kind_seq_ptr              ; (keeps BC, 3F-T2)
                 ld   b, 0
                 add  hl, bc
                 ld   a, (hl)
