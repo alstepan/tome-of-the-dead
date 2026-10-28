@@ -6,14 +6,35 @@ seed, runs a probe stub (far3 -> level_gen, far3 -> level_start_x) and compares
 the 320-byte block with levelgen.generate() and the start col with start_x().
 Reports T-states of the worst cases (interrupts are off in the stub, so the
 count is the generator alone). `--random N` sets the random-seed count (200).
-Run with ZRCP_PORT=<port>."""
+Run with ZRCP_PORT=<port>.
+
+`--f3` (3F-T10): builds the -DF3_GEN=1 variant into a temp dir (WZ_BUILD_DIR, game_lib) and
+compares against generate(..., f3=True): the D8 Sanctum leaf, the sealed edge, LVL_FLAGS = 0,
+NROOMS + 1, GEN_RNG untouched; the LP budget is still compared with the default (non-f3) lp_budget.
+Half of the `--random N` cases are forced to D8."""
+import os
 import random
+import subprocess
+import tempfile
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+F3 = "--f3" in sys.argv
+if F3 and "WZ_BUILD_DIR" not in os.environ:
+    # re-run against a -DF3_GEN=1 build, BEFORE game_lib is imported (it reads WZ_BUILD_DIR
+    # and the .sym at import, so the checkout's build/ need not exist or be DEBUG_KIT=0)
+    _root = Path(__file__).resolve().parent.parent
+    _out = tempfile.mkdtemp(prefix="f3gen_")
+    os.makedirs(os.path.join(_out, "build"), exist_ok=True)
+    _r = subprocess.run([str(_root / "tools/build.sh"), "-o", _out, "-DDEBUG_KIT=0", "-DF3_GEN=1"],
+                        cwd=_out, capture_output=True, text=True)
+    if _r.returncode or "warning" in _r.stdout.lower().replace("warnings: 0", ""):
+        sys.exit("f3 build failed:\n" + _r.stdout[-2000:] + _r.stderr[-500:])
+    sys.exit(subprocess.call([sys.executable, __file__] + sys.argv[1:],
+                             env=dict(os.environ, WZ_BUILD_DIR=os.path.join(_out, "build"))))
 import levelgen as G                                    # noqa: E402
 from game_lib import Harness, Proto, S, EMU_ARGS        # noqa: E402
 
@@ -65,13 +86,15 @@ class T(Proto):
 
 
 def case(h, p, depth, seed, master=0, tag="", ei=False):
-    want = G.generate(depth, seed, master)
+    want = G.generate(depth, seed, master, f3=F3)
     wx = G.start_x(want)
     ok, ts, blk, rc, sx, lp = p.run(depth, seed, master, ei)
     wlp = G.lp_budget(want, p.rb("LVL"))
     good = ok and rc == 0 and blk == want and sx == wx and lp == wlp
     if not good:
         d = next((i for i in range(len(want)) if blk[i] != want[i]), None)
+        if d is not None and os.environ.get("LG_DUMP"):
+            print("   got ", blk.hex(), "\n   want", want.hex())
         print(f"  FAIL d{depth} seed {seed:#06x} {tag}: ran={ok} rc={rc} first diff @{d}"
               f" got {blk[d] if d is not None else '-'} want {want[d] if d is not None else '-'}"
               f" startx {sx}/{wx} lp_budget {'ok' if lp == wlp else lp.hex() + ' want ' + wlp.hex()}",
@@ -177,8 +200,8 @@ def main():
             print(f"all retry/reseed cases: {len(cases)} run, {nfail - f0} fail, {time.monotonic() - t0:.0f}s", flush=True)
         rng = random.Random(0x3B7)
         t0 = time.monotonic()
-        for _ in range(nrand):
-            go(rng.randint(1, 8), rng.randrange(65536), rng.randrange(65536), "rand")
+        for i in range(nrand):
+            go(8 if F3 and i % 2 == 0 else rng.randint(1, 8), rng.randrange(65536), rng.randrange(65536), "rand")
         print(f"random {nrand}: {time.monotonic() - t0:.1f}s; total {npass} pass {nfail} fail;"
               f" worst T {worst}", flush=True)
         return 1 if nfail or h.failures else 0

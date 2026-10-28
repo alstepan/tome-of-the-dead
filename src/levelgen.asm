@@ -63,6 +63,9 @@ LG_SVP          EQU GEN_SCRATCH + 102   ; the narrow pit col removed while tryin
 ; L2 descriptor fields L2_PITW / L2_MIDB / L2_MIDW: level_defs.asm
 L2_MAX          EQU 2                   ; per feature per level
 RESEED_MAX      EQU 16
+    IFNDEF F3_GEN
+F3_GEN          EQU 0                   ; 3F switch (-DF3_GEN=1) == tools/levelgen.py generate(..., f3=True):
+    ENDIF                               ; LVL_FLAGS = 0 (grate shut, all depths) and the D8 Sanctum leaf. 0 = 3B
 DOOR_ODDS       EQU 3
 PIT_COL_MIN     EQU 5
 PIT_COL_MAX     EQU 24
@@ -1277,11 +1280,16 @@ level_gen:      ld   (LVL_DEPTH), a
                 ld   a, ROOM_NONE
                 ld   (LVL_KEYROOM), a
                 ld   (LVL_SANCTUM), a
+    IF F3_GEN
+                ld   hl, sanctum_leaf   ; 3F (R6, sanct6.asm): writes LVL_FLAGS = 0, the D8 Sanctum, B = 0
+                jp   far6               ; (bank 3 is full; restore_page keeps BC, callers test B)
+    ELSE
                 ld   a, LF_GRATE_OPEN
                 ld   (LVL_FLAGS), a
                 xor  a
                 ld   b, a
                 ret
+    ENDIF
 
 ;==============================================================================
 ; level_start_x: D1 x = 14, D2+ x = arrival col + 1 (arrival shaft exempt); if
