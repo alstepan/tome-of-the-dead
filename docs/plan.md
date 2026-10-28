@@ -465,6 +465,10 @@ lowers `m`; destruction at −3 empties the slot (frees a cursed slot); blessed 
 
 **Icon-sharing fallback (user 2026-10-28; UNDESIRABLE, only if 3F runs short of R6):** share 16×16 shapes by class, differing by ink (32 B per merged icon, 43 × 32 = 1,376 B in R6). Ranked: staffs → 1 (~64 B), body armour 6 → 2 (~128 B), swords/weapons 8 → 3 (~160 B), helmets 4 → 2 (~64 B), food 5 → 3 (~64 B), and LAST of all merge every ring/amulet charm (7 → 1, ~192 B). Total ≈ 0.4–0.8 KB. Use after the free cuts (3F cut order above) and font trim M1(c).
 
+**POST-3F, POST-BAL1 (user 2026-10-28, order: 3F → BAL1 → these):**
+- **GEAR1 — class gear gates:** metal/warrior gear (helm, chainmail, plate…) blocks Mage spells; mage cloth/robes block Warrior power attacks (Power Strike/Whirlwind). Flag per item type (or spare `ISTATE` bits 0–4), gate at the cast / power-attack entry, visible cue on page/icon bar, refusal line (~30 B text). Open: all-or-nothing vs mana penalty, which pieces count (rings/amulets/helms), scrolls/books, balance vs 3F ranged monsters (BAL1 first), enough opposite-class drops. Est. ~30–60 B code + text.
+- **GEAR2 — random numeric stats:** NUMBERS ONLY (user): per-instance damage/defence offset (e.g. same bone staff 1d8+2 vs 2d7+1; also rings, amulets, helms, robes) — no named effects/prefixes. Needs per-instance bytes on floor entries (today TYPE/QTY only) and in the bag (spare ISTATE bits or a stat byte), stacking by TYPE+ISTATE splits, page stat line shows the numbers, ITEM_RNG draws change → items_model.py/items_gen.py rebaselined. Memory ~0.5–1 KB est.; measure after 3F. Lever (user): **reduce the number of generated items** to pay for it. Open: visible before equip or found by use (no ID system), ring/amulet strength variance.
+
 ### 3G — Sound & polish (later)
 AY music + FX on the A8 slot; balance pass; hardware hardening.
 
