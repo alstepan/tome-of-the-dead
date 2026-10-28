@@ -2718,6 +2718,11 @@ Placed after traps, so every earlier generator output stays byte-identical (Pyth
 The start room gets 0. The lair gets boss + 1 escort (§9.4.4). The quota is stored as the
 room record's count (FRESH). No kinds are chosen at generation.
 
+**D8 (3F-D2, designer 2026-10-28, confirms T4):** `LP_TOTAL` = 11 (10 + Archmage; summons
+never count), `N` = 11 − 1 − 1 = **9**, the Sanctum's quota is **0** and it is never in `R`.
+`LVL_NROOMS` counts every present room **including the Sanctum** (D8: 8–9); it is a room with a
+record like any other, always empty of monsters.
+
 #### 9.4.2 Room record (option b: exact survivors)
 
 Per room: state `FRESH | VISITED`, a count 0–4, and up to **4 entries** = {kind row (tier
@@ -2765,7 +2770,11 @@ are visited.
   lightest kind weighs 3), `minW` = the lightest weight in `LP_KINDS`, `left` = units still to
   roll after this one. A kind is accepted only if `Σ + w + left × minW ≤ SIGMA_INIT[d]`. The
   rolled kind (with its tier roll) is tried first; if rejected, the other `LP_KINDS` in list
-  order at base tier; the lightest kind always passes. A unit is therefore **never lost**
+  order at base tier; the lightest kind always passes. **Exact fallback order (3F-D2, designer
+  2026-10-28, matches T4):** (1) the rolled kind at its rolled tier; (2) the **same kind at base
+  tier** (only differs in weight for the Goblin Slinger, 4 → 3; for every other tier it fails
+  again and costs one compare); (3) the other `LP_KINDS` indices **0, 1, 2, 3 ascending, skipping
+  the rolled index**, base tier. First accepted wins. No RNG is drawn in (2)–(3). A unit is therefore **never lost**
   (`LP_DISCARD` stays 0, and levelcheck asserts it); the cost is a mild bias to light kinds in
   rooms that rolled heavy. Order-independent, no extra RNG steps. Lair: unchanged (cap 12,
   boss + escort).
@@ -2792,7 +2801,12 @@ retried on the next entry. Nothing is lost, and arrival-conflict PENDING never a
 residents.
 
 Created monsters have full hp (FRESH) and the generator's initial state, and they face the
-hero. A teleport into a room (trap or scroll) is an entry with no followers; its arrival
+hero. **Full hp = depth-scaled (3F-D2, designer 2026-10-28; §9.1, §9.7 R1):** `hp = row hp +
+(d − 1)` for base and tier rows alike; a golden boss `hp = 2 × (row hp + d − 1) + 6`. Every
+path that writes or creates hp uses this value: FRESH spawn, lair boss + escort, trickle entry
+(§9.5), summons, breed. A stored record hp is never re-scaled on re-entry (it is already
+scaled). The 3B/LP stand-in path that stores unscaled row hp is a **bug**, fixed in T5. atk
+scaling (`+ (d − 1) div 3`) is applied at creation from the row, never stored in the record. A teleport into a room (trap or scroll) is an entry with no followers; its arrival
 point is the teleport cell.
 
 **Cost (revised 2026-10-06 after LP measurement: mean 20k, worst 38.6k T).** **Accepted: mean
@@ -2812,6 +2826,10 @@ visit is acceptable. Target: waits ≤ 8% of first-entry units.
 - Archmage summons are discarded on leave (their cooldown resets).
 - The boss never follows. Its death sets the boss-dead flag: the grate opens and the trickle
   stops (§9.5).
+- **D8 sealed edge (3F-D2, confirms T4 and memory-map `EDGE_TAB`):** the lair↔Sanctum edge is
+  `EG_LINK | EG_DOOR | EG_SEAL` (a sealed door is a door: door cells, planks, door collision;
+  `EG_SEAL` only overrides opening, like `EG_LOCK`). Never `EG_LOCK`, never `EG_OPEN` at
+  generation.
 
 #### 9.4.5 Hard ceilings
 
@@ -2831,6 +2849,17 @@ per level from `LP_KINDS` + `LP_BOSS`.
 
 **Fix:** the Bone Caller summons a base **Skeleton if Skeleton ∈ `LP_KINDS`, else a base
 Ghost**. D6 and D7 have no Skeleton set (§11.3).
+
+**Hero-dependent projectile extras (3F-D2, designer 2026-10-28; T1 open issue).** Monster
+projectiles reuse the Warrior's class-FX frames, which a Mage run does not load (`K_FXW`).
+So on a **Mage** run only, the level pool adds:
+- **Archer levels (Skeleton Archer ∈ `LP_KINDS`: D4, D5, D7):** `arrow_fly1/2` (16×8,
+  stationary) = **≤ 128 B pool** (2 frames × 32 B source × 2 facings), 0 new source, 0 new fid.
+- **Goblin levels (D1, D2; the Goblin Slinger's rock):** `dagger_spin1/2` (8×8) = **≤ 64 B**.
+- **Not** `arrow_hit`: a Mage hit by an arrow shows his hurt reaction only (as the DART, §1.5).
+The two sets never share a level, so the extra is **≤ 128 B**, on D4/D5/D7; D5 is the
+pool-limiting level (§9.7), so the engineer re-checks `POOL_NEED` for Mage D5. Warrior runs
+add nothing (already resident).
 
 #### 9.4.7 Test hooks (`SEED_FIXED`)
 
@@ -2965,7 +2994,8 @@ is the current room) and is banked on leave like anyone.
 3. The target room is not the hero's current room and not the room the hero just left (the
    previous room, for the turn after a transition and until the hero enters a third
    room; `prev_room` is updated on every room change).
-4. The room is not the boss lair (a lair holds boss + ≤ 1 escort, Σ ≤ 12, never topped up).
+4. The room is not the boss lair (a lair holds boss + ≤ 1 escort, Σ ≤ 12, never topped up),
+   and not the D8 Sanctum (3F-D2).
 
 **Room choice (U + D).** Eligible rooms = all rooms passing 2–4. Pick one by weighted
 random using the weight above (rooms with un-picked items preferred; every eligible room
@@ -2974,6 +3004,32 @@ has weight ≥ 1, so the fallback is automatic). No eligible room = skip.
 **Kind (U + D).** Uniform over the level's own ≤ 4 kinds (§9.4), never the boss, an escort
 unique, a summon or any `unique` kind. If the picked kind would break the cap, try the
 next kind in the level's list once (cheapest-first not needed), else skip.
+
+**Exact check and RNG draw order (3F-D2, designer 2026-10-28; confirms T4; Python == Z80).**
+All draws are on `RNG_STATE`. Steps 1–4 draw nothing, so a check with no eligible room leaves
+the RNG untouched.
+1. `turn mod RESPAWN_PERIOD = 0`, else stop.
+2. Boss alive (boss-dead flag clear) and `LP_RESPAWNS < RESPAWN_MAX`, else stop.
+3. Build the eligible set: rooms `r` in **ascending id**, `r` present, VISITED, record entries
+   < 4, `r ≠ CUR_ROOM`, `r ≠ prev_room`, `r ≠ LVL_LAIR`, `r ≠ LVL_SANCTUM`, and
+   **`Σ(record weights) + minW ≤ 12`** where `minW` = the lightest **base** weight in
+   `LP_KINDS` (record weights include tier and golden +1). Weight `w_r = min(7, 1 + 2 × items_r)`.
+4. Set empty → stop.
+5. **Draw 1, chance byte:** `rnd8 ≥ RESPAWN_CHANCE` → stop.
+6. **Draw 2, room:** `rnd(Σ w_r)` (the shared range helper used by the §9.4.1 weighted split),
+   walk the set in id order subtracting `w_r`.
+7. **Draw 3, kind:** `k = rnd & 3` (as §9.4.3). **Draw 4, tier:** the §9.6 roll for
+   `LP_KINDS[k]` with the **current** `LVL` (one byte, drawn **only if the kind has tiers**,
+   exactly as §9.6 and the FRESH spawn: Slime, Vampire, Mummy draw nothing; one shared tier
+   routine for both paths).
+8. Cap check of the tiered kind: `Σ + w ≤ 12` (count is already < 4). Pass → step 10.
+9. **One retry:** `k = (k + 1) & 3`, **draw 5, tier** for it (same "only if tiered" rule),
+   cap-check. Fail → stop (the
+   draws are spent; `LP_RESPAWNS` unchanged).
+10. Append {row, hp = depth-scaled full hp (§9.4.3), `F_RESPAWN`}; `LP_RESPAWNS += 1`.
+No placement draws: placement is §9.4.3 on the next entry. Eligibility (step 3) uses the
+lightest base weight only; the picked tiered kind is cap-checked in 8/9. A room passing 3 can
+therefore still refuse both tries (e.g. Σ 9, both picks weigh 5): accepted, a skip.
 
 **Flags (U).** Respawned monsters get `F_RESPAWN`: **no drops** (the death-drop roll is
 skipped) and XP / `RESPAWN_XP_DIV`. They are otherwise normal and may follow (prototype §3.7,
@@ -3062,7 +3118,8 @@ breeding are never rolled).** For each monster of a kind that has tiers:
   whole depth of progress (rev 4's `PL` unit was half); the shifts stay 16/8 and are a
   playtest knob (§10).
 - Odds out of 256, `T2 = clamp(T2_BASE[d] + 16·Δ, 0, 160)`, `T3 = clamp(T3_BASE[d] + 8·Δ, 0,
-  80)` if `d ≥ TIER3_MIN_DEPTH` else 0. Roll `r` (gameplay RNG for respawns; the **room spawn
+  80)` if `d ≥ TIER3_MIN_DEPTH` else 0. Roll `r` (one 8-bit step; untiered kinds draw no `r`,
+  3F-D2) (gameplay RNG for respawns; the **room spawn
   stream** for the initial population, rolled at first entry with `LP_LVL`, §9.4.3, designer
   decision 2026-10-06): `r < T3` → tier 3 (if the kind has one, else tier 2); `r < T3 +
   T2` → tier 2; else base.
