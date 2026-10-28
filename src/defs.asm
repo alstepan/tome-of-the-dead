@@ -459,7 +459,7 @@ FIRE_LOCK       EQU $BFDF           ; C3-2b review: 1 = FIRE masked after BREAK 
 MENU_SPIN       EQU $BF9A           ; C3-6: word, frames x busy-wait passes in the menu (seed entropy)
 PAUSED          EQU $BF9C           ; C3-6: 1 while the pause overlay is up (test-observable)
 END_SHOWN       EQU $BF9D
-PEND_N          EQU $BF9F           ; B19: PENDING bodies of CUR_ROOM at the last build_live (pend_hit)
+PEND_N          EQU $BF9F           ; B19: PENDING bodies of CUR_ROOM at the last build_live (pend_hit); an upper bound. RULE (3F-B4): whatever sets PENDING in CUR_ROOM before the monster phase (ALARM wave, summon, respawn) must call build_live
 MENU_IN_SIG     EQU $BF9E           ; C3-6 review: last input fold seen by menu_frame           ; C3-6: 1 = the death / win card is drawn
 LVL_SH          EQU $BFCA           ; C3-3: hero level digit last drawn ($FF = never)
 LOCK_SHOWN      EQU $BFC6           ; B3B-5: 1 = the locked-door message was printed for the key

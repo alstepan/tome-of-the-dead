@@ -586,30 +586,38 @@ clamp_band:
 ; Clobbers: all but IY.
 ;==============================================================================
 materialise:
+                ld   a, (PEND_N)               ; 3F-B4: nothing PENDING in CUR_ROOM -> done
+                or   a                         ; (was a 15-slot walk, ~2.2k T). PEND_N is as of
+                ret  z                         ; the last build_live; every route that sets
+                                               ; PENDING (squeeze, arrival_conflicts) rebuilds,
+                                               ; and the turn starts with build_live: an UPPER bound
+                                               ; (kills only leave it too high: harmless). RULE: anything
+                                               ; that sets PENDING in CUR_ROOM or moves a PENDING body
+                                               ; into it before the monster phase must call build_live
                 ld   ix, P_ENTITIES + P_ENT_STRIDE
                 ld   c, 1
-.lp:            push bc
-                ld   a, c
-                ld   (ACT_SLOT), a
-                ld   a, (ix+E_FLAGS)
+.lp:            ld   a, (ix+E_FLAGS)
                 and  EF_ACTIVE | EF_PENDING
                 cp   EF_ACTIVE | EF_PENDING
                 jr   nz, .next
                 ld   a, (CUR_ROOM)
                 cp   (ix+E_ROOM)
                 jr   nz, .next
+                push bc                        ; (only a pending body pays the save + slot)
+                ld   a, c
+                ld   (ACT_SLOT), a
                 call get_box
                 call box_free
-                jr   c, .next
+                jr   c, .nextp
                 call corpse_hit                ; B19c: a corpse still in the box holds it
-                jr   c, .next
+                jr   c, .nextp
                 res  EF_PENDING_BIT, (ix+E_FLAGS)
                 call build_live                ; it now collides for later checks
                 call snap_pxpy
                 ld   (ix+E_MODE), M_REST
                 ld   (ix+E_DFID), $FF
                 bit  EF_WALKIN_BIT, (ix+E_FLAGS)
-                jr   z, .next
+                jr   z, .nextp
                 res  EF_WALKIN_BIT, (ix+E_FLAGS)
                 ld   a, (ix+E_X)
                 cp   1
@@ -622,9 +630,9 @@ materialise:
                 add  a, a                      ; right edge: from x+1
 .edge:          ld   (ix+E_PX), a
                 ld   (ix+E_MODE), M_MOVE
+.nextp:         pop  bc
 .next:          ld   de, P_ENT_STRIDE
                 add  ix, de
-                pop  bc
                 inc  c
                 ld   a, c
                 cp   P_MAX_ENT
