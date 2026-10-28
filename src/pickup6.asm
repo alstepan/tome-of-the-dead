@@ -187,114 +187,42 @@ kit_m:          DB   IT_W_OAK, IT_A_ROBE, IT_P_HEAL, IT_P_MANA, IT_F_APPLE
                 ASSERT WS_WEAPON == 0 && WS_ARMOUR == 1 && ((WORN + 2 * IR_STRIDE) >> 8) == (WORN >> 8)
 
 ;------------------------------------------------------------------------------
-; mon_drop — far6 from deal_hit's kill path (bank 3), IX = the dead monster (EF_DYING
-; set, still in place). game.md §8.11 Q11 + pickup/drop rulings 2:
-;  - EF_RESPAWN: nothing.
-;  - the lair boss: the first kill of kind LP_BOSS in LVL_LAIR on this level
-;    (LF_UNIQUE; STAND-IN until 3F gives bosses their own kind / IMMF_BOSS:
-;    an escort of the boss's kind killed first takes the drop) -> the depth's
-;    unique (uniq_tab; D4 Mage: Bone Staff; D8 none), placed anywhere on the
-;    storey, "BOSS DROPS " + name.
-;  - else the first drop_tab row of its kind: 1 in N on the gameplay RNG
-;    (rng_mod; rolled only for a kind with a row); arrows (qty 3) only in a
-;    Warrior run (no roll for the Mage). No line (the glyph appears).
-; Clobbers: all but IX.   no row ~0.2k T; a drop ~12k T (placement + ap_stamp)
-;------------------------------------------------------------------------------
-mon_drop:
-                bit  EF_RESPAWN_BIT, (ix+E_FLAGS)
-                ret  nz
-                ld   a, (LVL_LAIR)
-                cp   (ix+E_ROOM)
-                jr   nz, .row
-                ld   a, (LP_BOSS)
-                cp   (ix+E_KIND)
-                jr   nz, .row
-                ld   hl, LVL_FLAGS
-                bit  LF_UNIQUE_BIT, (hl)
-                jr   nz, .row                  ; (the boss's kind as an ordinary monster)
-                set  LF_UNIQUE_BIT, (hl)
-                ld   a, (LVL_DEPTH)
-                dec  a
-                cp   UNIQ_DEPTHS
-                ret  nc                        ; D8: none
-                cp   3
-                jr   nz, .u
-                ld   a, (HERO_KIND)
-                add  a, a
-                add  a, a                      ; Mage: 4 -> +3 below = 7
-                add  a, 3
-.u:             ld   hl, uniq_tab              ; uniq_tab[A]: hla is bank 3 (not paged)
-                add  a, l
-                ld   l, a
-                adc  a, h
-                sub  l
-                ld   h, a
-                ld   a, (hl)
-                push af                        ; [type]
-                ld   bc, (1 << 8) | DROP_WHOLE
-                call drop_put                  ; CF = lost (never: entry 32 is kept free)
-                pop  bc                        ; B = type
-                ret  c
-                ld   a, b
-                ld   e, S3_BOSS_DROPS          ; "BOSS DROPS " + name (bank 1)
-                ld   hl, it_line
-                jp   far1
-.row:           ld   hl, drop_tab
-                ld   b, DROP_ROWS
-.r:             ld   a, (ix+E_KIND)
-                cp   (hl)
-                jr   z, .hit
-                inc  hl
-                inc  hl
-                inc  hl
-                djnz .r
-                ret
-.hit:           inc  hl
-                ld   d, (hl)                   ; D = type
-                inc  hl
-                ld   c, (hl)                   ; C = 1 in N
-                ld   e, 1                      ; E = qty
-                ld   a, d
-                cp   IT_ARROW
-                jr   nz, .q
-                ld   a, (HERO_KIND)
-                or   a
-                ret  nz                        ; arrows: Warrior runs only
-                ld   e, DROP_ARROWS
-.q:             push de
-                call rng_mod                   ; A = 0..N-1 (A, B, HL)
-                pop  de
-                or   a
-                ret  nz
-                ld   a, d
-                ld   b, e
-                ld   c, DROP_NEAR
-                ; fall through
-;------------------------------------------------------------------------------
-; drop_put — a new FLOOR_LIST entry under the dead body IX.
-; In : A = type, B = qty, C = search half-width (DROP_NEAR 3; DROP_WHOLE: the
-;      whole storey, a unique). Placement (§8.11 rulings 2): the body's centre
-;      col (x + w/2) on its storey's standing row 9s+7, else the nearest col
-;      within +-C (left first) — a cell is free when ROOM_MAP shows T_AIR
-;      there (no item glyph = no live entry, the FLOOR_LIST invariant; also
-;      no wall / decor) and no unspent trap has that col (3E-T16:
-;      trap_at). List: the first FL_EMPTY entry, among 0..30 for an
-;      ordinary drop, 0..31 for a unique (entries fill from 0 and the
-;      generator uses <= 17, so entry 31 is the last to fill: it stays the
-;      unique's; a pickup freeing a lower entry after all 32 were used is
-;      the one case this differs from "<= 31 used"). NOT here (3F, with the
-;      D8 lectern swap it guards): §8.11 Q1's "a 60..63-glyph drop in the D8
-;      lair / Sanctum is lost".
-;      Arrows never merge into a stack (one entry per drop; pickup merges).
-; Out: CF = 1 lost (silently); else the entry written and the cell stamped
-;      (far7 ap_stamp_a: map + attr shadow + floor inks).
+; drop_put — far6 from bank-3 mon_drop (FLOOR1: was in this file): a new
+; FLOOR_LIST entry under the dead body IX.
+; In : A = type, D = qty, E = search half-width (DROP_NEAR 3; DROP_WHOLE: the
+;      whole storey, a unique). INVARIANT (FLOOR1 manager decision 2026-10-28):
+;      a room never holds more than FI_SLOTS (8) distinct item types, tops and
+;      piles alike. A type that would be a 9th is REFUSED here (L = 0, silently:
+;      monster loot is not dropped; a future thrown-ammo / hero drop of a type
+;      the room already has is never a 9th, so it follows the rules below). A
+;      boss unique is made to fit by its caller (drop3.asm uq_fit displaces an
+;      ordinary item first). Placement (§8.11 rulings 2), on the body's storey,
+;      centre col d = x + w/2:
+;      1. an existing item whose col is within d-1 .. d+1 (an exact-col stack);
+;      2. else the nearest free footprint c..c+1 with c in d-C .. d+C (left
+;         first), c in 2..28: its 4 cells T_AIR (no wall / decor / ladder,
+;         no other item within c-1..c+1: their marker cells), a floor under
+;         both cols (TF_FLOOR: no hole / pit) and no unspent trap on c or
+;         c+1 (3E-T16 trap_at, hidden or known).
+;      List: the first FL_EMPTY entry, among 0..30 for an ordinary drop,
+;      0..31 for a unique (entries fill from 0 and the generator uses <= 17,
+;      so entry 31 is the last to fill: it stays the unique's; a pickup
+;      freeing a lower entry after all 32 were used is the one case this
+;      differs from "<= 31 used"). Arrows never merge into a stack (one entry
+;      per drop; pickup merges).
+; Out: L = 0 lost (silently); else L = 1, the entry written and the cell
+;      stamped (far7 ap_stamp_a: map + attr shadow + the glyph cache).
 ; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
-drop_put:
-                ld   l, a
-                ld   h, b
+drop_put:       call .go
+                sbc  a, a
+                inc  a
+                ld   l, a                      ; (far6 loses F: the result in L)
+                ret
+.go:            ld   l, a
+                ld   h, d
                 ld   (dp_tq), hl               ; type, qty
-                ld   a, c
+                ld   a, e
                 ld   (dp_w), a
                 ; --- the first free entry: 0..30, or 0..31 for a unique ---
                 ld   hl, FLOOR_LIST
@@ -313,7 +241,7 @@ drop_put:
                 ret                            ; list full: lost
 .fe:            ld   a, l
                 ld   (dp_slot), a
-.sp:            ; --- the cell ---
+                ; --- the cell ---
                 call get_box                   ; C = x, D = w (A, B, E, HL)
                 srl  d
                 ld   a, c
@@ -327,7 +255,13 @@ drop_put:
                 ld   a, e
                 call storey_row                ; A = 9s + 7
                 ld   b, a
-                ld   e, 0                      ; E = distance
+                ld   a, (dp_tq)
+                call dp_cap                    ; CF = a 9th type: the room's invariant (<= 8 distinct
+                ret  c                         ; types) refuses it, lost (else its slot is taken now)
+                ld   e, 1                      ; 1. a pile within +-1
+                call dp_pile
+                jr   nc, .put
+                ld   e, 0                      ; 2. E = distance
 .s:             ld   a, d
                 sub  e
                 call .try
@@ -339,22 +273,16 @@ drop_put:
                 cp   e
                 jr   nc, .s
                 scf
-                ret                            ; no free cell: lost
-.try:           cp   ROOM_COLS
-                ret  nc                        ; off the room (also a negative col)
+                ret                            ; no free footprint: lost
+.try:           cp   ITEM_COL_LO
+                ret  c                         ; (also a negative col)
+                cp   ITEM_COL_LAST + 1
+                ret  nc
                 ld   c, a
-                call cell_addr                 ; HL = ROOM_MAP (B, C) (A)
-                ld   a, (hl)
-                or   a
-                ret  nz                        ; not T_AIR
-                push de                        ; 3E-T16: nor a trap col (hidden or
-                ld   a, (dp_rb)                ; known, unspent: R6 trap_at)
-                ld   e, a
-                call trap_at
-                pop  de
-                ret  z
+                call dp_free
+                ret  c
                 pop  af                        ; found: leave .s
-                ld   a, (dp_slot)
+.put:           ld   a, (dp_slot)              ; C = the col
                 ld   l, a
                 ld   h, FLOOR_LIST >> 8
                 ld   a, (dp_rb)
@@ -374,28 +302,115 @@ drop_put:
                 call far7
                 or   a                         ; CF = 0: placed
                 ret
-                ASSERT T_AIR == 0 && (FLOOR_LIST & $FF) == 0 && FL_EMPTY == $FF
+                ASSERT T_AIR == 0 && (FLOOR_LIST & $FF) == 0 && FL_EMPTY == $FF && TF_FLOOR == $80
                 ASSERT FL_ROOM == 0 && FL_COL == 1 && FL_ITEM == 2 && FL_QTY == 3 && FL_S1 == $80
-DROP_NEAR       EQU 3
-DROP_WHOLE      EQU ROOM_COLS - 1
-DROP_ARROWS     EQU 3
+
+; dp_cap — A = type: CF = it gets no glyph slot even after a re-mark = a 9th
+; distinct type of the room (the invariant's test). The first fi_slot may fail
+; on stale slots (types gone from the room keep theirs during a visit): then
+; fi_gc frees them and fi_slot runs again (~3k T, only with 8 slots used).
+; Otherwise the type's slot is taken now (ap_stamp's fi_add finds it).
+; Keeps BC, DE.  Clobbers A, HL.
+dp_cap:         push bc
+                push de
+                ld   b, a
+                push bc
+                call fi_slot
+                pop  bc
+                jr   nc, .x
+                push bc
+                ld   a, (CUR_ROOM)
+                call fi_gc
+                pop  bc
+                call fi_slot
+.x:             pop  de
+                pop  bc
+                ret
+
+; dp_pile — B = 9s + 7, D = centre col, E = max distance: NC + C = the col of
+; the nearest item of the storey within it (FLOOR1: a marker cell in ROOM_MAP
+; whose FI_CELL byte is a LEFT quarter, so every item col has one), d - k
+; before d + k; CF = none.
+; Keeps B, D, E.  Clobbers: A, C, HL.
+dp_pile:        ld   c, 0                      ; C = k
+.k:             ld   a, d
+                sub  c
+                call .t
+                ret  nc
+                ld   a, d
+                add  a, c
+                call .t
+                ret  nc
+                inc  c
+                ld   a, e
+                cp   c
+                jr   nc, .k
+                ret                            ; CF: none within E
+.t:             cp   ROOM_COLS                 ; A = col (a negative one wraps)
+                ccf
+                ret  c
+                push bc
+                ld   c, a
+                call cell_addr                 ; HL = ROOM_MAP (B, C) (keeps BC, DE)
+                ld   a, (hl)
+                cp   T_ITEM0
+                jr   c, .no
+                ld   a, (dp_rb)
+                rlca
+                and  1
+                add  a, FI_CELL >> 8
+                ld   h, a                      ; the storey's FI_CELL page, the map's L
+                bit  3, (hl)                   ; quarter 1 / 3: a right one
+                jr   nz, .no
+                ld   a, c
+                pop  bc
+                ld   c, a                      ; C = its col
+                or   a                         ; NC
+                ret
+.no:            pop  bc
+                scf
+                ret
+                ASSERT (FI_CELL & $FF) == 0 && FL_S1 == $80 && ROOM_COLS == 32
+
+; dp_free — B = 9s + 7, C = col c: CF = c..c+1 is not a free item footprint
+; (dp_cell on both cols). Keeps BC, DE.  Clobbers: A, HL.
+dp_free:        call dp_cell
+                ret  c
+                inc  c
+                call dp_cell
+                dec  c
+                ret
+; dp_cell — B = 9s + 7, C = col: CF unless (9s+6, C) and (9s+7, C) are T_AIR,
+; (9s+8, C) is a floor (TF_FLOOR) and no unspent trap has col C.
+dp_cell:        dec  b
+                call cell_addr                 ; (keeps BC, DE)
+                inc  b
+                ld   a, (hl)
+                or   a
+                scf
+                ret  nz
+                call cell_addr
+                ld   a, (hl)
+                or   a
+                scf
+                ret  nz                        ; (a marker: another item's footprint)
+                inc  b
+                call cell_blocked              ; A = the floor cell's TILE_FLAGS
+                dec  b
+                rlca                           ; CF = TF_FLOOR
+                ccf
+                ret  c
+                push de
+                ld   a, (dp_rb)
+                ld   e, a
+                call trap_at                   ; Z = an unspent trap (keeps BC, DE)
+                pop  de
+                scf
+                ret  z
+                or   a
+                ret
 dp_tq:          DW   0                         ; type, qty
 dp_w:           DB   0
 dp_slot:        DB   0
 dp_rb:          DB   0
 
-; drop_tab (§8.11 rulings 2, 5 rows x 3 B: kind, type, 1 in N). The kinds are
-; the defs.asm stand-in aliases until 3F (K_ORC / K_NECRO = K_GOBLIN: their
-; rows are shadowed by the Goblin's; K_ARCHER = K_SKELETON: Skeletons drop
-; the archer's arrows meanwhile). First match wins.
-drop_tab:       DB   K_RAT,    IT_F_CHEESE, 4
-                DB   K_GOBLIN, IT_F_APPLE,  4
-                DB   K_ORC,    IT_F_MEAT,   3
-                DB   K_ARCHER, IT_ARROW,    2
-                DB   K_NECRO,  IT_P_MANA,   3
-DROP_ROWS       EQU ($ - drop_tab) / 3
-; uniq_tab (§8.6 / §8.11: 8 B): D1..D7 by depth - 1, then the D4 Mage variant
-uniq_tab:       DB   IT_H_KING, IT_A_SILK, IT_A_GRAVE, IT_W_CLEAVER
-                DB   IT_C_SCARAB, IT_C_GRAVE, IT_H_MIRROR, IT_W_BONE
-UNIQ_DEPTHS     EQU 7
-                ASSERT DROP_ROWS == 5 && $ - uniq_tab == 8 && K_KNIGHT == 0 && K_WIZARD == 1

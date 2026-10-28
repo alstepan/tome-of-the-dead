@@ -21,5 +21,6 @@
                 INCLUDE "gear6.asm"            ; 3E-T8: hero_recalc, enchant_weapon, fx_line, it_fmt (+ fx stems, it_stat)
                 INCLUDE "fx6.asm"              ; 3E-T12 (+ the T8 equip / remove): fx_main, fx_quick, the effects, tele_pick, pot_eff
                 INCLUDE "trap6.asm"            ; 3E-T16: trap_turn / trap_fire (trigger, search, Mage sense, effects)
+                INCLUDE "fi6.asm"              ; FLOOR1: fi_add / fi_slot / fi_put (the floor-item glyph cache)
                 INCLUDE "icons6.asm"           ; IC1: icon_slot / worn_draw / qs_draw (the 16x16 icon blitter)
-                INCLUDE "../assets/gfx/icons/icons16.asm"   ; IC1: the 43 icons, 1,376 B raw (tools/icons16.py)
+                INCLUDE "../assets/gfx/icons/icons16.asm"   ; IC1 + FLOOR1: 45 logical icons in 1,376 B raw (potions share one shape; tools/icons16.py)

@@ -2,9 +2,8 @@
 """3E-T7: the Z80 item / trap generator overlay (src/items_ovl.asm, 3E-T6) vs
 tools/items_model.py (rev 6, game.md §8.11 "3E simplification"), byte-exact.
 
-  G0  the low-RAM floor-item table it_tab (lowram.asm; item_glyph / item_ink, read
-      from the .sna) == items_model.glyph() / ITEM_INK for every type with a floor
-      glyph; IT_NONE / IT_KEY carry no glyph.
+  G0  the item ink table it_tab (R6 icons6.asm item_ink, read from the
+      .sna's bank 6) == items_model.ITEM_INK for every type (IT_NONE / IT_KEY: 0).
   G1  batch parity: for master seeds 0..N-1 (default 1,000) x D1..D8 x both heroes,
       the Python levelgen block (levelgen.generate == the Z80 level_gen, proven by
       tests/levelgen_z80.py) is poked into LVL_STATE with HERO_KIND and the overlay
@@ -96,23 +95,20 @@ def expected(b, master, hero):
 
 
 def table_check(h):
-    """G0: it_tab / it_cls (low RAM, bank 5 in the .sna) vs the model."""
+    """G0: it_tab (FLOOR1: R6, bank 6 in the .sna) inks vs the model (the class
+    glyphs are gone; the ink drives the floor / page icon attr)."""
     def ram(a, n):
-        o = 5 * 16384 + (a - 0x4000)
+        o = 6 * 16384 + (a - 0xC000)
         return SNA_RAM[o:o + n]
-    tab, cls = ram(S["it_tab"], S["IT_COUNT"]), ram(S["it_cls"], 7)
+    tab = ram(S["it_tab"], S["IT_COUNT"])
     bad = []
     for t in range(S["IT_COUNT"]):
         v = tab[t]
-        g = cls[(v >> 4) & 7]
-        ink = (v & 7) | (0x40 if v & 8 else 0) if g else 0
-        try:
-            wg, wi = M.glyph(t), M.ITEM_INK.get(t, 0x42 if t == S["IT_POTION"] else None)
-        except ValueError:
-            wg, wi = 0, 0
-        if (g, ink) != (wg, wi):
-            bad.append((t, g, hex(ink), wg, wi))
-    h.expect("G0 it_tab glyph / ink == items_model (all types)", len(bad), 0)
+        ink = (v & 7) | (0x40 if v & 8 else 0)
+        wi = M.ITEM_INK.get(t, 0x42 if t == S["IT_POTION"] else 0)
+        if ink != wi:
+            bad.append((t, hex(ink), hex(wi)))
+    h.expect("G0 it_tab ink == items_model ITEM_INK (all types)", len(bad), 0)
     if bad:
         print("  G0 detail:", bad[:6], flush=True)
 

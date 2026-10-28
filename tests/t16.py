@@ -26,7 +26,7 @@ trap_chk takes the room's first unspent entry, the generator puts <= 1 there):
      (the plate blinks $47 / off twice, then its ink), teleport scroll + trap
      (hero $43 >= 2 ticks before the room change and >= 2 after), nothing left
      tinted after
-  O  item / trap overlap: drop_put skips a hidden trap col; ap_stamp keeps a
+  O  item / trap overlap (FLOOR1: no footprint covers a trap col): drop_put skips a hidden trap col; ap_stamp keeps a
      known plate; build_room_map never hides an item under T_TRAP; the Silk
      Cloak's poison immunity against the DART
 Generated levels (seed_fixed):
@@ -565,52 +565,51 @@ def overlap(p, check, scene, trap, put_hero, heal, ent, cell, act, stub, tick, l
     ent0 = [i for i in range(32) if p.rb(S["FLOOR_LIST"] + 4 * i) == 0xFF][0]
     stub([0x3A] + w16(S["PORT_7FFD_SHADOW"]) + [0xF5, 0x3E, S["BANK_R6"], 0xCD] + w16(S["page_bank"])
          + [0xDD, 0x21] + w16(S["P_ENTITIES"] + 32 * sl)
-         + [0x3E, S["IT_F_APPLE"], 0x01, S["DROP_NEAR"], 1, 0xCD] + w16(S["drop_put"])
+         + [0x3E, S["IT_F_APPLE"], 0x11, S["DROP_NEAR"], 1, 0xCD] + w16(S["drop_put"])
          + [0xF1, 0xCD] + w16(S["restore_page"]))
     fe = list(z.read_memory(S["FLOOR_LIST"] + 4 * ent0, 4))
-    check("O1 drop_put: the body's centre col holds a hidden trap -> the drop lands on the nearest other col",
-          (fe[0], fe[2], fe[1] != c, abs(fe[1] - c) == 1) == (rb, S["IT_F_APPLE"], True, True), (fe, c, kind, w))
+    check("O1 drop_put (FLOOR1): the body's centre col holds a hidden trap -> the nearest footprint c..c+1 "
+          "free of it (c + 1: c - 1 / c would cover the trap)",
+          (fe[0], fe[2], fe[1]) == (rb, S["IT_F_APPLE"], c + 1), (fe, c, kind, w))
+    p.wmem(S["FLOOR_LIST"] + 4 * ent0, [0xFF] * 4)
     p.set_ent(sl, ROOM=NOWHERE)
-    # O2 ap_stamp keeps a known plate (no item left there)
+    # O2 FLOOR1: ap_put_a draws / erases a plate's ONE cell (ap_stamp is the items' 2x2 now)
     put_hero(HX)
     trap(HX + 4, GAS)                          # Warrior: not sensed; make it known by a find poke + draw
     p.wb(S["TRAP_LIST"], room | S1 | KNOWN)
+    n0 = cell(HX + 5)
     stub([0x3E, 0x47, 0x32] + w16(S["TILE_ATTRS"] + T_TRAP)
          + [0x3E, HX + 4, 0x11] + w16((T_TRAP << 8) | rb) + [0x21] + w16(S["ap_put_a"]) + [0xCD] + w16(S["far7"]))
     k1 = cell(HX + 4)
-    stub([0x3E, HX + 4, 0x11] + w16(rb) + [0x21] + w16(S["ap_stamp_a"]) + [0xCD] + w16(S["far7"]))
+    stub([0x3E, HX + 4, 0x11] + w16(rb) + [0x21] + w16(S["ap_put_a"]) + [0xCD] + w16(S["far7"]))   # D = T_AIR
     k2 = cell(HX + 4)
-    p.wb(S["TRAP_LIST"], room | S1)            # hidden now: the stamp clears it
-    stub([0x3E, HX + 4, 0x11] + w16(rb) + [0x21] + w16(S["ap_stamp_a"]) + [0xCD] + w16(S["far7"]))
-    k3 = cell(HX + 4)
-    check("O2 ap_stamp on a known trap cell with no item: the plate stays; a hidden trap's cell: T_AIR",
-          (k1, k2, k3) == (T_TRAP, T_TRAP, 0), (k1, k2, k3))
-    # O3 build_room_map: an item on a known trap cell shows (never generated: poked)
+    check("O2 ap_put_a: the plate drawn / erased in its one cell, its neighbour untouched",
+          (k1, k2, cell(HX + 5)) == (T_TRAP, 0, n0), (k1, k2, cell(HX + 5), n0))
+    # O3 build_room_map: an item right of a known trap (footprint t+1..t+2) and the plate both show
     p.wb(S["TRAP_LIST"], room | S1 | KNOWN)
     fe = [i for i in range(32) if p.rb(S["FLOOR_LIST"] + 4 * i) == 0xFF][0]
-    p.wmem(S["FLOOR_LIST"] + 4 * fe, [rb, HX + 4, S["IT_F_APPLE"], 1])
+    p.wmem(S["FLOOR_LIST"] + 4 * fe, [rb, HX + 5, S["IT_F_APPLE"], 1])
     stub([0x3E, room, 0x26, S["ROOM_MAP"] >> 8, 0xCD] + w16(S["build_room"]))
-    g = p.rb(S["it_cls"] + (p.rb(S["it_tab"] + S["IT_F_APPLE"]) >> 4))
-    k4 = cell(HX + 4)
-    p.wmem(S["FLOOR_LIST"] + 4 * fe, [0xFF] * 4)
-    stub([0x3E, room, 0x26, S["ROOM_MAP"] >> 8, 0xCD] + w16(S["build_room"]))
-    k5 = cell(HX + 4)
-    check("O3 build_room_map: an item on a known trap cell keeps its glyph; without it the plate is stamped",
-          (k4, k5) == (g, T_TRAP), (k4, k5, g))
-    # O5 B22: ap_take (a bank-7 fall-through into ap_stamp_a) on a known trap cell: a full
-    # pickup leaves the plate; a partial one (QUIVER FULL) keeps the pile's class glyph
+    k4 = (cell(HX + 4), cell(HX + 5), cell(HX + 6))
+    m3 = S["T_ITEM0"] + 3                      # storey 1, the lower marker row (9s + 7)
+    check("O3 build_room_map: the plate at t, the item's markers at t+1..t+2",
+          k4 == (T_TRAP, m3, m3), k4)
+    # O5 B22: ap_take (a bank-7 fall-through into ap_stamp_a) on a dagger pile next to a known
+    # plate: all taken -> the markers go, the plate stays; partial (QUIVER FULL) -> the markers stay
     def take(qty, daggers):
         p.wb(S["DAGGERS"], daggers)
-        p.wmem(S["FLOOR_LIST"] + 4 * fe, [rb, HX + 4, S["IT_DAGGER"], qty])
+        p.wmem(S["FLOOR_LIST"] + 4 * fe, [rb, HX + 5, S["IT_DAGGER"], qty])
+        stub([0x3E, room, 0x26, S["ROOM_MAP"] >> 8, 0xCD] + w16(S["build_room"]))
         stub([0x3A] + w16(S["PORT_7FFD_SHADOW"]) + [0xF5, 0x3E, 7, 0xCD] + w16(S["page_bank"])
              + [0x3E, 0, 0x21] + w16(S["FLOOR_LIST"] + 4 * fe + 2) + [0x1E, rb, 0xCD] + w16(S["ap_take"])
              + [0xF1, 0xCD] + w16(S["restore_page"]))
-        return cell(HX + 4), p.rb(S["FLOOR_LIST"] + 4 * fe + (3 if qty == 3 else 0)), p.rb(S["DAGGERS"])
+        return (cell(HX + 4), cell(HX + 5), cell(HX + 6)), p.rb(S["FLOOR_LIST"] + 4 * fe + (3 if qty == 3 else 0)), \
+            p.rb(S["DAGGERS"])
     k6 = take(2, 0)
     k7 = take(3, S["DAGGERS_MAX"] - 1)
     p.wmem(S["FLOOR_LIST"] + 4 * fe, [0xFF] * 4)
-    check("O5 ap_take on a known trap cell: all taken -> plate; partial -> T_DAGGERS, FL_QTY left",
-          (k6, k7) == ((T_TRAP, 0xFF, 2), (S["T_DAGGERS"], 2, S["DAGGERS_MAX"])), (k6, k7))
+    check("O5 ap_take next to a known plate: all taken -> T_AIR, the plate kept; partial -> the markers, FL_QTY left",
+          (k6, k7) == (((T_TRAP, 0, 0), 0xFF, 2), ((T_TRAP, m3, m3), 2, S["DAGGERS_MAX"])), (k6, k7))
     # S Silk Cloak: poison-immune against the DART
     scene(K_KNIGHT)
     p.wmem(S["WORN"], [S["IT_W_SHORT"], 1, 0, S["IT_A_SILK"], 1, 0, 0, 0, 0, 0, 0, 0])
@@ -678,6 +677,10 @@ def persistence(p, check, lines, act, tick, heal, ent, cell, shown_attr):
     hx = p.ent(0)["X"]
     col = hx + 2 + 2 + 1 if side == "L" else hx - 3       # 3 off the arrival body, 2 off after one step in
     p.wmem(S["TRAP_LIST"], [n | (S1 if s else 0), col | (GAS << 5)] + [0] * 10 + [1])
+    for i in range(S["FLOOR_MAX"]):            # FLOOR1: no item footprint (c..c+1) may cover the
+        fe = p.z.read_memory(S["FLOOR_LIST"] + 4 * i, 2)   # poked trap col (the generator's rule)
+        if fe[0] == (n | (S["FL_S1"] if s else 0)) and fe[1] in (col - 1, col):
+            p.wmem(S["FLOOR_LIST"] + 4 * i, [0xFF] * 4)
     heal()
     for sl in range(1, 16):
         if p.ent(sl)["ROOM"] == n:

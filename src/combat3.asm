@@ -286,8 +286,7 @@ deal_hit:
                 ld   a, (ix+E_FLAGS)
                 and  EF_PLAYER
                 jr   nz, .heal                 ; the hero's death awards nothing
-                ld   hl, mon_drop              ; 3E-T11: drop / boss unique (R6 pickup6.asm;
-                call far6                      ; keeps IX; pages R6 over bank 3, back after)
+                call mon_drop                  ; 3E-T11: drop / boss unique (drop3.asm; keeps IX)
                 ld   a, (ix+E_KIND)            ; KXP = kx_tab[kind * 8 + KX_XP]
                 add  a, a                      ; x 8 (KX_STRIDE; kind < K_MAX = 32)
                 add  a, a

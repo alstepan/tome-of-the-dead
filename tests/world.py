@@ -119,7 +119,7 @@ D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
   W20 stack low-water: $BD00..$BEFF pattern-filled before boot, then boot,
       a generated D1 start and 80 seeded random turns (walk / climb / jump /
       wait, fights, exits); the lowest byte touched must leave >= 512 B of
-      the 768-B stack unused (reports the measured max depth).
+      the 512-B stack (FLOOR1: $BD00.. is FI_GLY) unused (reports the measured max depth).
   B11 (user bug: the hero fell a storey where the floor is drawn, walking
   into the left room):
   W21 generated D1s (seed_fixed, 2 masters): every storey-0 horizontal exit,
@@ -372,12 +372,12 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
     errs = []
     ch = [j for j in range(576) if m[j] != base[j]]
     names, shape = decor_objs(d)
-    drip = {T["T_DAGGERS"], T["T_ARROWS"]}                         # D3-7 T6: the drips are gone
+    drip = {T["T_FREE17"], T["T_FREE18"]} | set(range(T["T_ITEM0"], T["T_ITEM0"] + 4))   # ids no deriver places
     floorish = lambda t: t in (T["T_PLAT"], T["T_WALLF"])          # noqa: E731
     for j in ch:                                                    # per cell: base class vs solidity
         c, row = j % 32, j // 32
         if m[j] in drip:
-            errs.append(("the deriver placed an ammo floor glyph (17 / 18: no drips since D3-7 T6)", c, row))
+            errs.append(("the deriver placed a free (17 / 18) or floor-item marker id", c, row))
             continue
         nm = names.get(m[j])
         if nm is None:
@@ -1122,7 +1122,7 @@ def w20(p, check):
     depth = top - low
     print(f"[info] W20 measured: max stack depth {depth} B (lowest byte touched {low:#06x}) over boot,"
           f" a generated D1 start and {turns} turns (rooms visited end {p.rb('CUR_ROOM')})", flush=True)
-    check("W20 stack: max depth <= 256 B of the 768-B stack (STACK_BOTTOM never reached)",
+    check("W20 stack: max depth <= 256 B of the 512-B stack (STACK_BOTTOM never reached)",
           0 < depth <= 256, depth)
 
 
@@ -2584,18 +2584,18 @@ def run_gen_suites(p, check):
             slot = d - 1
             so = 7 * 16384 + (S["TSET_LO"] if slot < 4 else S["TSET_HI"]) - 0xC000 + (slot & 3) * S["TSET_STRIDE"]
             sl = SNA_RAM[so:so + S["TSET_STRIDE"]]
-            obj = S["T_LVL_OBJ"] - 32               # 3E-T6: item glyph ids' TILE_ATTRS 0 (fl_attr inks)
+
             check(f"W11 D{d}: ids 32..63 glyphs / attrs / TILE_FLAGS == the bank-7 slot {slot}",
                   (bytes(glyphs[256:]), bytes(attrs[32:]), bytes(flags[32:]))
-                  == (sl[:256], sl[256:256 + obj] + bytes(32 - obj), sl[288:320]), "")
+                  == (sl[:256], sl[256:288], sl[288:320]), "")
             floor_cls = {T[k] for k in ("T_PLAT", "T_WALLF", "T_END_L", "T_END_R", "T_HOLE_L",
                                         "T_HOLE_M", "T_HOLE_R", "T_GRATE", "T_AIR")}
             legal = {fl, wl, S["ATTR_AIR"], S["ATTR_LADDER"], S["ATTR_DOOR"], S["ATTR_GRATE"],
                      S["ATTR_POTION"], 0x42}       # (+ the legacy IT_POTION ink, item_ink)
             # B3B-9 decor: the level's own decor ids + the common small decor
             legal |= {attrs[i] for i in range(S["T_LVL_BASE"], S["T_LVL_OBJ"])}
-            legal |= {attrs[T[k]] for k in ("T_CHAIN",
-                                    "T_DAGGERS", "T_ARROWS")}   # D3-7 T6: ammo floor stacks
+            legal |= {attrs[T["T_CHAIN"]]}
+            legal |= set(room_model.IM.ITEM_INK.values())   # FLOOR1: the floor items' inks
             for r in present_rooms(blk):
                 ok, tb, m = build_only(p, r)
                 note("build_room_map", tb, f"D{d} r{r}")
@@ -2685,6 +2685,12 @@ def run_gen_suites(p, check):
             if not ok or blk != want_blk:
                 check(f"W12M d{d} seed {seed:#06x}: Z80 block == levelgen.py", False, ok)
                 continue
+            # FLOOR1: the rooms are built after the item generator (items_ovl == items_model,
+            # tests/items_gen.py): its floor list (2-col footprints; the raw GEN_RNG potions
+            # may overlap a ladder by their second col until it re-checks them)
+            IM = room_model.IM
+            want_blk = IM.apply_block(want_blk, IM.gen_level_items(want_blk, master, IM.HERO_WARRIOR))
+            p.wmem(S["LVL_STATE"], list(want_blk))
             for r in present_rooms(want_blk):
                 ok, tb, m = build_only(p, r)
                 note("build_room_map", tb, f"D{d} seed {seed:#06x} r{r}")
@@ -2818,7 +2824,7 @@ def run_gen_suites(p, check):
         # ROOM_MAP page, IX = descriptor, dg_dst = ANIM_N)
         struct = [T[k] for k in ("T_LAD_L", "T_LAD_M", "T_LAD_R", "T_HOLE_L", "T_HOLE_R",
                                  "T_DOOR_ARCH_L", "T_DOOR_R", "T_DOOR_JAMB_L", "T_PIT_L",
-                                 "T_PIT_R", "T_RUBBLE", "T_POTION", "T_DOOR_LOCK", "T_WALLF")]
+                                 "T_PIT_R", "T_RUBBLE", "T_ITEM0", "T_DOOR_LOCK", "T_WALLF")]
         rng = __import__("random").Random(0x5E7)
         ybad, zbad, nsyn, nz = [], [], 0, 0
         for i in range(600):

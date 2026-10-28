@@ -559,7 +559,8 @@ _ICONS16 = []
 
 
 def icons16_table():
-    """IC1: the 43 x 32-B icons parsed from their source assets/gfx/icons/icons16.asm
+    """IC1 + FLOOR1: the 43 physical x 32-B icons (45 logical: + 2 floor ammo, - Mana / Cure
+    sharing Heal's shape) parsed from their source assets/gfx/icons/icons16.asm
     (independent of the build; tests compare the drawn cells against it)."""
     if _ICONS16:
         return _ICONS16[0]
@@ -574,15 +575,28 @@ def icons16_table():
             data += bytes(int(v.strip().lstrip("$"), 16) for v in line.split(None, 1)[1].split(";")[0].split(","))
         elif on and line.strip().startswith("ASSERT"):
             break
-    assert len(data) == 43 * 32, len(data)
+    assert len(data) == 43 * 32, len(data)        # FLOOR1: the 3 potions share one shape
     _ICONS16.append(bytes(data))
     return _ICONS16[0]
 
 
+def icon16_phys(idx):
+    """FLOOR1 icons6 ic_addr: logical icon index -> its slot in the table (Mana / Cure ->
+    Heal's shape, the rest above them - 2)."""
+    lo, n = S["ICONS16_SHARE_LO"], S["ICONS16_SHARE_N"]
+    return idx if idx < lo else lo - 1 if idx < lo + n else idx - n
+
+
+def icon16_bytes(idx):
+    """The 32 B of logical icon idx."""
+    k = icon16_phys(idx)
+    return icons16_table()[k * 32:k * 32 + 32]
+
+
 def icon16_cells(idx):
     """IC1: icon idx (type - IT_BAG_LO; 39 + worn slot = placeholder) as {(dc, dr): 8 B} cells."""
-    d = icons16_table()[idx * 32:idx * 32 + 32]
-    return {(dc, dr): bytes(d[(dr * 8 + i) * 2 + dc] for i in range(8)) for dc in (0, 1) for dr in (0, 1)}
+    d = icon16_bytes(idx)                                       # FLOOR1: 4 quarters of 8 lines
+    return {(dc, dr): bytes(d[dr * 16 + dc * 8:dr * 16 + dc * 8 + 8]) for dc in (0, 1) for dr in (0, 1)}
 
 
 # --- B3B-3 geometry (game.md §2.1), read from the .sym: never hard-coded ---

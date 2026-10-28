@@ -142,12 +142,13 @@ def run(p, check):
         assert len(out) >= n, "floor list full"
         return out[:n]
 
-    def glyph(t):
-        return p.rb(S["it_cls"] + (p.rb(S["it_tab"] + t) >> 4))
+    def glyph(t):                                # FLOOR1: every type shows the marker (row 16)
+        return S["T_ITEM0"] + 3
 
     def put(i, col, item, qty=1):
         p.wmem(FL + i * FLS, [p.rb("CUR_ROOM") | S1, col, item, qty])
-        p.wb(S["ROOM_MAP"] + IROW * 32 + col, glyph(item))
+        p.wmem(S["ROOM_MAP"] + (IROW - 1) * 32 + col, [S["T_ITEM0"] + 2] * 2)
+        p.wmem(S["ROOM_MAP"] + IROW * 32 + col, [S["T_ITEM0"] + 3] * 2)
 
     def entry(i):
         return list(p.z.read_memory(FL + i * FLS, 4))
@@ -225,16 +226,16 @@ def run(p, check):
     i, = free_entries(1)
     put(i, col, IT["F_CHEESE"])
     walk = []
-    for _ in range(4):                              # x HX+1, +2, +3 (all cover col), HX+4 (off)
-        walk += step()[1]
+    for _ in range(5):                              # x HX+1 .. +4 (all cover col..col+1: FLOOR1
+        walk += step()[1]                           # 2-col footprint), HX+5 (off)
     back = []
-    for _ in range(4):                              # back left until the body covers col again
+    for _ in range(4):                              # back left until the body covers col + 1 again
         back += step(("H",))[1]
-        if p.ent(0)["X"] + kt[K_KNIGHT]["bw"] - 1 >= col:
+        if p.ent(0)["X"] + kt[K_KNIGHT]["bw"] - 1 >= col + 1:
             break
     got = dict(walk=walk, back=back, x=p.ent(0)["X"], e=entry(i)[0])
-    check("P2w walk across: one BAG FULL for 3 steps over the item, one more on the way back",
-          got == dict(walk=["BAG FULL"], back=["BAG FULL"], x=HX + 3, e=p.rb("CUR_ROOM") | S1), got)
+    check("P2w walk across: one BAG FULL for 4 steps over the item (2-col footprint), one more on the way back",
+          got == dict(walk=["BAG FULL"], back=["BAG FULL"], x=HX + 4, e=p.rb("CUR_ROOM") | S1), got)
 
     # ---- P3 stacking -------------------------------------------------------------------
     scene(bagrecs=[(IT["P_HEAL"], 8, 0)])
@@ -364,8 +365,8 @@ def run(p, check):
         put(i, cx, IT["F_PEAR"])
     got, st, cx = drop_case("D4", K_RAT, K_KNIGHT, 4, True, IT["F_CHEESE"], 1, pre=block_centre)
     news = [e for _, e in got["new"] if e[2] == IT["F_CHEESE"]]
-    check("D4 centre taken: the cheese lands on the nearest free col (left first)",
-          news == [[p.rb("CUR_ROOM") | S1, cx - 1, IT["F_CHEESE"], 1]], got)
+    check("D4 FLOOR1: an item at the centre col -> the cheese stacks on it (an item within +-1 snaps)",
+          news == [[p.rb("CUR_ROOM") | S1, cx, IT["F_CHEESE"], 1]], got)
 
     def fill31():
         fr = [k for k in range(S["FLOOR_MAX"]) if p.rb(FL + k * FLS) == S["FL_EMPTY"]]

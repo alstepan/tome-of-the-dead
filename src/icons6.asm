@@ -1,7 +1,7 @@
 ;==============================================================================
 ; icons6.asm — IC1 the 16x16 item icons (game.md §8.11 Q5), the R6 region
 ; (r6.asm rules: far6 only from other banks, results in BC / DE / HL, no SMC).
-; The icon table icons16 (assets/gfx/icons/icons16.asm, 1,376 B raw, generated
+; The icon table icons16 (assets/gfx/icons/icons16.asm, 43 x 32 = 1,376 B raw: 45 logical icons, the 3 potions share one shape; generated
 ; by tools/icons16.py) follows this code in R6: one copy, read only here, so
 ; every draw site reaches it through these routines (the ISR never reads it).
 ;   icon_slot  far6 from the page overlay (bag grid, worn row, description)
@@ -67,16 +67,9 @@ ic_blit:        push af                        ; [attr]
                 or   SCREEN_BITMAP >> 8
                 ld   b, a
                 ld   c, l                      ; BC = bitmap line 0 of the cell
-                ld   l, d
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl                    ; index * ICONS16_BYTES
+                ld   a, d
+                call ic_addr                   ; HL = the icon's 32 B (keeps BC, DE)
                 ld   a, e
-                ld   de, icons16
-                add  hl, de                    ; HL = the icon's 32 B
                 ld   d, b
                 ld   e, c                      ; DE = the screen
                 ld   c, a                      ; C = mask
@@ -104,25 +97,149 @@ ic_blit:        push af                        ; [attr]
                 ret
 .none:          ld   l, a                      ; L = 0: cleared
                 ret
-; .cell — 8 lines of 2 bytes (HL) & C -> (DE); D advances 8.  Clobbers: A, B
-.cell:          ld   b, 8
-.ln:            ld   a, (hl)
-                and  c
-                ld   (de), a
-                inc  hl
+; .cell — 2 quarters (16 B at HL, FLOOR1 layout: 8 lines each) & C -> the
+; cells at DE / DE + 1; D advances 8, E kept.  Clobbers: A, B
+.cell:          call .q
+                ld   a, d
+                sub  8
+                ld   d, a
                 inc  e
+                call .q
+                dec  e
+                ret
+.q:             ld   b, 4                      ; 2 lines a pass
+.ln:            DUP  2
                 ld   a, (hl)
                 and  c
                 ld   (de), a
                 inc  hl
-                dec  e
                 inc  d
+                EDUP
                 djnz .ln
                 ret
                 ASSERT ICONS16_BYTES == 32 && ICONS16_COUNT * ICONS16_BYTES < $10000
-                ASSERT ICONS16_PH == IT_COUNT - IT_BAG_LO && ICONS16_COUNT == ICONS16_PH + WORN_SLOTS
+                ASSERT ICONS16_PH == IT_COUNT - IT_BAG_LO && ICONS16_AMMO_DAGGER == ICONS16_PH + WORN_SLOTS
+                ASSERT ICONS16_AMMO_ARROW == ICONS16_AMMO_DAGGER + 1 && ICONS16_COUNT == ICONS16_AMMO_ARROW + 1
                 ASSERT PG_SLOT_WORN == BAG_SLOTS && WORN == BAG + BAG_SLOTS * IR_STRIDE && (BAG & $FF) == 0
                 ASSERT (BAG_SLOTS + WORN_SLOTS) * IR_STRIDE <= 256 && ATTR_STRIDE == 32
+
+;------------------------------------------------------------------------------
+; 3E-T6 floor-item ink (game.md §8.11 Q1 + "3E simplification" 2: the ink is a
+; pure function of the TYPE): it_tab, one byte per type (FLOOR1: moved here
+; from low RAM; every caller is R6). FLOOR1: the floor
+; item is its 16x16 icon (fi_cells) in this ink; the icon sites (icons6.asm)
+; use it too.
+;------------------------------------------------------------------------------
+; it_byte — A = item type (< IT_COUNT): A = it_tab[type]. Keeps BC, DE. Clobbers HL.
+it_byte:        ld   hl, it_tab
+                add  a, l
+                ld   l, a
+                adc  a, h
+                sub  l
+                ld   h, a
+                ld   a, (hl)
+                ret
+
+; DEBUG_KIT only (0 B in the release build): item_glyph / item_ink get a LIVE FL type, so
+; a type >= IT_COUNT (a corrupt floor entry) bumps IT_BAD (expect 0) before the lookup.
+    IF DEBUG_KIT
+it_byte_live:   cp   IT_COUNT
+                jr   c, it_byte
+                ld   hl, IT_BAD
+                inc  (hl)
+                jr   it_byte
+IT_BYTE_LIVE    EQU it_byte_live
+    ELSE
+IT_BYTE_LIVE    EQU it_byte
+    ENDIF
+
+; item_ink — A = item type: A = its floor attr (ink on black; 0 = no glyph).
+; Keeps BC, DE. Clobbers HL.
+item_ink:       call IT_BYTE_LIVE
+                ld   h, a
+                and  7
+                bit  IT_BRIGHT_BIT, h
+                ret  z
+                or   $40                       ; BRIGHT
+                ret
+
+; it_tab: type -> class << 4 | BRIGHT << 3 | ink (paper 0). SINGLE SOURCE in
+; tools/items_model.py ITEM_INK + glyph(); tests/items_gen.py G0 checks this
+; table against it. (FLOOR1: the class nibble is documentation only — the old
+; floor class glyph; nothing reads it.)
+IT_BRIGHT_BIT   EQU 3
+    MACRO ITB cls, attr
+                DB   ((cls) << 4) | (((attr) >> 3) & 8) | ((attr) & 7)
+    ENDM
+IC_NONE         EQU 0
+IC_FLASK        EQU 1
+IC_AMMO         EQU 2
+IC_FOOD         EQU 3
+IC_PAGES        EQU 4
+IC_WEAPON       EQU 5
+IC_WORN         EQU 6
+it_tab:         ITB  IC_NONE, 0                ; IT_NONE
+                ITB  IC_FLASK, $42             ; IT_POTION (legacy / PROTO)
+                ITB  IC_AMMO, $47              ; dagger
+                ITB  IC_AMMO, $46              ; arrow
+                ITB  IC_NONE, 0                ; key (no floor entry)
+                ITB  IC_FOOD, $06              ; carrot
+                ITB  IC_FOOD, $44              ; apple
+                ITB  IC_FOOD, $04              ; pear
+                ITB  IC_FOOD, $46              ; cheese
+                ITB  IC_FOOD, $42              ; meat
+                ITB  IC_FLASK, $42             ; Heal
+                ITB  IC_FLASK, $45             ; Mana
+                ITB  IC_FLASK, $44             ; Cure
+                ITB  IC_PAGES, $45             ; Teleport
+                ITB  IC_PAGES, $46             ; Fear
+                ITB  IC_PAGES, $44             ; Sleep
+                ITB  IC_PAGES, $47             ; Enchant
+                ITB  IC_PAGES, $43             ; book
+                ITB  IC_WEAPON, $06            ; bow
+                DUP  IT_WPN_W_HI - IT_WPN_W_LO + 1
+                ITB  IC_WEAPON, $07            ; Warrior blades
+                EDUP
+                DUP  IT_WPN_M_HI - IT_WPN_M_LO + 1
+                ITB  IC_WEAPON, $06            ; Mage staves
+                EDUP
+                DUP  IT_HELM_HI - IT_ARM_LO + 1
+                ITB  IC_WORN, $07              ; armour, helmets
+                EDUP
+                DUP  IT_CHARM_HI - IT_CHARM_LO + 1
+                ITB  IC_WORN, $06              ; charms
+                EDUP
+                ASSERT $ - it_tab == IT_COUNT && IT_KEY == 4 && IT_F_CARROT == 5 && IT_P_HEAL == 10
+                ASSERT IT_S_TELEPORT == 13 && IT_BOOK == 17 && IT_BOW == 18 && IT_WPN_W_LO == 19
+                ASSERT IT_WPN_M_LO == IT_WPN_W_HI + 1 && IT_ARM_LO == IT_WPN_M_HI + 1
+                ASSERT IT_HELM_LO == IT_ARM_HI + 1 && IT_CHARM_LO == IT_HELM_HI + 1
+
+;------------------------------------------------------------------------------
+; ic_addr — A = a LOGICAL icon index (type - IT_BAG_LO, ICONS16_PH + worn slot,
+; the floor ammo): HL = its 32 B in icons16. FLOOR1 (user 2026-10-27): the 3
+; potions share Heal's shape (their inks differ): logical 6 / 7 -> physical 5,
+; >= 8 -> - 2.  Keeps BC, DE.  Clobbers A, F.   ~0.2k T
+;------------------------------------------------------------------------------
+ic_addr:        cp   ICONS16_SHARE_LO
+                jr   c, .p
+                sub  ICONS16_SHARE_N
+                cp   ICONS16_SHARE_LO
+                jr   nc, .p
+                ld   a, ICONS16_SHARE_LO - 1   ; Mana / Cure -> Heal's shape
+.p:             ld   l, a
+                ld   h, 0
+                add  hl, hl
+                add  hl, hl
+                add  hl, hl
+                add  hl, hl
+                add  hl, hl                    ; * ICONS16_BYTES
+                push de
+                ld   de, icons16
+                add  hl, de
+                pop  de
+                ret
+                ASSERT ICONS16_SHARE_LO == IT_P_MANA - IT_BAG_LO && ICONS16_SHARE_LO - 1 == IT_P_HEAL - IT_BAG_LO
+                ASSERT ICONS16_SHARE_N == 2 && IT_P_CURE == IT_P_MANA + 1
 
 ;------------------------------------------------------------------------------
 ; worn_draw — the panel's 4 worn cells (rows LOG_ROW..+1, cols GEAR_COL + 2k,

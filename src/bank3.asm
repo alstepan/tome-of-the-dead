@@ -563,9 +563,9 @@ glow_ids:       DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_G
 ;            runs to the hole). ARR: + RUBBLE over the shaft in row 0 (no exit
 ;            up, game.md §1.1). EXIT: the level exit; closed (LF_GRATE_OPEN = 0,
 ;            3F) T_GRATE_SHUT over it before the deriver
-;   items    FLOOR_LIST entries of this room -> their class glyph (item_glyph,
-;            3E-T6: FLASK / FOOD / WEAPON / WORN / PAGES / AMMO), row 9s+7; the
-;            ink is painted after the draw (fl_attr: item_ink(type))
+;   items    FLOOR1: every live FLOOR_LIST entry of this room -> T_ITEM0 + k on its
+;            2x2 cells (c..c+1, rows 9s+6..9s+7); the icon is drawn after the
+;            map draw (fi_cells, from the R6 fi_full glyph cache)
 ;   decor    RD_SEED != 0: decor_room (B3B-9); seed 0 (PROTO): proto_decor.
 ;            The animated cells go to ANIM_N/ANIM_LIST (ROOM_MAP) or
 ;            ANIM_N2/ANIM_LIST2 (NEXT_MAP: do_exit's room_shadow copies it
@@ -661,7 +661,7 @@ build_room_map:
                 ld   d, T_GRATE_SHUT           ; TODO 3F: own closed id (level_defs.asm)
                 ld   b, FLOOR_ROW1
                 call .three
-.pots:          ; potions (3B stand-in: floor tiles, game.md §1.4)
+.pots:          ; FLOOR1 floor items: the T_ITEM0 + k markers over each live entry's 2x2 cells
                 ld   hl, FLOOR_LIST
                 ld   b, FLOOR_MAX
 .pt:            ld   a, (hl)                   ; FL_ROOM ($FF & $0F = 15: never a room)
@@ -670,25 +670,31 @@ build_room_map:
                 ld   a, (TMP0)
                 cp   c
                 jr   nz, .pn
-                inc  l
-                inc  l
-                ld   a, (hl)                   ; FL_ITEM
-                dec  l
-                ld   c, (hl)                   ; FL_COL
-                dec  l
-                call item_glyph                ; 3E-T6: the class glyph (lowram; keeps BC, HL)
-                or   a
-                jr   z, .pn                    ; (none: IT_NONE / IT_KEY)
-                ld   e, a
                 push hl
                 push bc
+                inc  l
+                ld   c, (hl)                   ; FL_COL
+                dec  l
                 ld   a, (hl)
                 rlca                           ; FL_S1 -> bit 0
                 and  1
+                ld   e, a                      ; E = s
                 call storey_row                ; (bank 2) A = 9s+7, keeps BC, DE
-                ld   b, a
+                dec  a
+                ld   b, a                      ; B = 9s+6, the item's top row
                 call map_cell
-                ld   (hl), e                   ; (list order: the last live entry of a cell shows)
+                ld   a, e
+                add  a, a
+                add  a, T_ITEM0                ; band row 2s: the upper marker
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                inc  a                         ; 2s + 1: the lower one
+                ld   de, ROOM_COLS - 1
+                add  hl, de
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
                 pop  bc
                 pop  hl
 .pn:            ld   a, l
@@ -1051,5 +1057,7 @@ decor_room:
                 INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
                 INCLUDE "rank3.asm"            ; D3-7: abil_load (ABIL_DESC for the bank-7 ability code)
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing
+                INCLUDE "fi3.asm"              ; FLOOR1: fi_full (cold; per entry far6 fi_add)
+                INCLUDE "drop3.asm"            ; FLOOR1: mon_drop + drop_tab / uniq_tab (from R6)
                 ; R6 (2026-10-21): pickup3.asm / bag3.asm moved to the R6 region (r6.asm:
                 ; pickup6.asm, bag6.asm), reached through far6

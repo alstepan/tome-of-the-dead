@@ -165,9 +165,9 @@ def run(p, check):
     big = bytearray([0xC9])                       # ret
     L = S["GEN_SCRATCH_LEN"]
     while len(big) < L:
-        if rnd.random() < 0.93 and len(big) > 16:  # a back-reference (MEM-1: mostly repeats, must pack < the 241-B bank-1 tail)
-            o = rnd.randrange(1, min(len(big), 600))
-            k = rnd.randrange(2, 60)
+        if rnd.random() < 0.985 and len(big) > 16:  # a back-reference (FLOOR1: 0.97, must pack < the 91-B bank-1 tail)
+            o = rnd.randrange(1, min(len(big), 200))
+            k = rnd.randrange(16, 120)
             for _ in range(k):
                 big.append(big[-o])
         else:

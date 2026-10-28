@@ -258,6 +258,30 @@ class T(Proto):
                 self.turn("WAIT")
         return False
 
+    def put_item(self, idx, rb, col, typ, qty=1):
+        """FLOOR1: FLOOR_LIST entry idx = (rb, col, typ, qty) and the T_ITEM0 + k markers over its
+        2x2 cells in ROOM_MAP (rb = room | FL_S1); call fi_refresh after."""
+        self.z.cmd("write-memory %d %d %d %d %d" % (S["FLOOR_LIST"] + idx * S["FL_STRIDE"], rb, col, typ, qty))
+        s1 = 1 if rb & S["FL_S1"] else 0
+        top = S["STOREY_ROWS"] * s1 + S["STOREY_AIR"] - 2
+        for k, r in enumerate((top, top + 1)):
+            self.wmem(S["ROOM_MAP"] + r * 32 + col, [S["T_ITEM0"] + 2 * s1 + k] * 2)
+
+    def fi_refresh(self, draw=True):
+        """FLOOR1: at the wait_tick probe, far3 fi_full(CUR_ROOM) (the glyph cache
+        from FLOOR_LIST) and, draw=True, fi_cells over the whole room + present_full
+        (the items on both screens); play resumes at the probe."""
+        pc0 = self.pc()
+        w = lambda n: list(S[n].to_bytes(2, "little"))   # noqa: E731
+        code = [0xF3, 0x3A] + w("PORT_7FFD_SHADOW") + [0xF5, 0x3A] + w("CUR_ROOM") + \
+               [0x21] + w("fi_full") + [0xCD] + w("far3")
+        if draw:
+            code += [0x01, 0, 0, 0x11, S["PLAY_ROWS"], 32, 0xCD] + w("fi_cells") + [0xCD] + w("present_full")
+        code += [0xF1, 0xCD] + w("restore_page") + [0xFB]
+        ok = self.run_stub(code, org=S["LOWRAM_END_3B"])
+        self.z.cmd("set-register PC=%d" % pc0)
+        return ok
+
     def run_stub(self, code, org=0x6000):
         """Execute raw Z80 `code` at `org` (ROOM_MAP, scratch until the next
         load) up to its final `jr $` (appended here). Unit-tests a routine
@@ -1641,10 +1665,10 @@ def main():
             p.isolate()
             p.place(0, 10, Y1)
             cell = S["ROOM_MAP"] + item_row(1) * 32 + 11   # storey 1 potion row, under the hero
-            p.wb(cell, S["T_POTION"])
+            p.wb(cell, S["T_ITEM0"] + 3)                # FLOOR1: an item marker (s1 lower), no entry
             p.turn("WAIT")
             h.expect("48 unlisted potion tile: not taken", p.ent(0)["POT"], 1)
-            h.expect("48 unlisted potion tile stays in the map", p.rb(cell), S["T_POTION"])
+            h.expect("48 unlisted potion tile stays in the map", p.rb(cell), S["T_ITEM0"] + 3)
             h.expect("48 POTIONS_TAKEN unchanged", p.rb("POTIONS_TAKEN"), 0)
 
         # ---------------- 49 (review 🟢) stamp_rect clamps at col 31 + CLIP_TRAP

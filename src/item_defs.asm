@@ -13,7 +13,7 @@
 ; Item TYPE ids, ORDERED BY CLASS: every class (and every gear slot) is one
 ; contiguous range, so a class test is IT_IN lo, hi (below). The 3B/3D ids
 ; 1..3 keep their values (FLOOR_LIST data, levelgen.py / levelgen.asm, the
-; floor glyph mapping T_DAGGERS + (type - IT_DAGGER) in pickup7 / bank3).
+; FLOOR1: on the floor every type is its 16x16 icon over the T_ITEM0 markers).
 ;
 ;   0          IT_NONE      empty bag / worn slot, no pin
 ;   1          IT_POTION    LEGACY 3B stand-in: a floor potion that pickup adds
@@ -25,10 +25,16 @@
 ;   19..43     gear         W / A / H / C slot ranges, in WORN slot order
 ;------------------------------------------------------------------------------
 IT_NONE         EQU 0
+; FLOOR1 (game.md §8.11 Q1 rev 2026-10-26): a floor item covers cols c..c+1 of
+; rows 9s+6..9s+7 (FL_COL = c); c in ITEM_COL_LO..ITEM_COL_LAST (c+1 <= 29:
+; never the door cols 0-1 / 30-31). Generator (items_ovl.asm) and drop_put.
+ITEM_COL_LO     EQU 2
+ITEM_COL_LAST   EQU 28
+ITEM_ROOM_CAP   EQU 6               ; FLOOR1: generated entries per room (both storeys), max (4: ~13 % of the levels lose an item)
 IT_POTION       EQU 1               ; legacy (see above); E_POT migration: memory-map "3E contracts"
 ; counters (floor-only types: pickup adds to a counter, never a bag slot)
-IT_DAGGER       EQU 2               ; D3-7: FL_QTY = count, tile T_DAGGERS, cap DAGGERS_MAX
-IT_ARROW        EQU 3               ; D3-7: FL_QTY = count, tile T_ARROWS, cap ARROWS_MAX
+IT_DAGGER       EQU 2               ; D3-7: FL_QTY = count, cap DAGGERS_MAX (FLOOR1 icon 43)
+IT_ARROW        EQU 3               ; D3-7: FL_QTY = count, cap ARROWS_MAX (FLOOR1 icon 44)
 IT_KEY          EQU 4               ; level key: pickup sets LF_KEY_TAKEN (game.md §8)
 ; food, ascending FOOD value (game.md §7 table), so the quick slot's
 ; "smallest FOOD first" (§8) = the lowest food type present

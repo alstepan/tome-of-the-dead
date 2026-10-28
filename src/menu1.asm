@@ -964,6 +964,9 @@ pause_run:
                 ret
 .resume:        ld   a, 1                      ; restore: GEN_SRC -> screen
                 call pause_copy
+                ld   a, (CUR_ROOM)             ; FLOOR1: the save overwrote the floor-item
+                ld   hl, fi_full               ; glyph cache (GEN_SRC tail): rebuilt
+                call far3
                 ld   bc, PAUSE_ROW << 8
                 ld   de, (32 << 8) | 3
                 call pmark_rect
@@ -1093,6 +1096,9 @@ page_post:      ld   hl, (PAGE_VERB)           ; L = verb, H = slot (PAGE_SLOT f
                 ld   de, ROOM_MAP              ; effect runs with the live map (3E-T12:
                 ld   bc, PLAY_CELLS            ; R6 code, no overlay window)
                 ldir
+                ld   a, (CUR_ROOM)             ; FLOOR1: the map save overwrote the
+                ld   hl, fi_full               ; floor-item glyph cache: rebuilt
+                call far3
                 pop  hl
                 ld   a, l
                 cp   VB_DISCARD

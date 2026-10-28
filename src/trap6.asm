@@ -5,7 +5,7 @@
 ; ASLEEP), §6 V3 (flashes). The generator (items_ovl.asm, T6) fills
 ; TRAP_LIST; the known plate is drawn by build_room_map (bank 3: T_TRAP in the
 ; map, its type attr into TILE_ATTRS[T_TRAP]), mid-room by tr_plate / tr_show
-; (the attr) + ap_put_a / ap_stamp_a (bank 7).
+; (the attr) + ap_put_a (bank 7).
 ;
 ; Two halves (review 2026-10-26: a trap event on the input tick overran the
 ; 126k cap, pmix + DART 141k T):
@@ -166,7 +166,7 @@ tr_rearm:       ld   hl, TURN_PEND
 ;           ALARM: 3E stub "A BELL RINGS. NOTHING COMES" (3F: the wave while
 ;             the boss lives + the red border, "AN ALARM BELL RINGS!");
 ;   step 1  (TRAP_STEP_T ticks on; TELEPORT: TELE_STEP_T) the plate: DART in its ink, a one-shot
-;           erased (ap_stamp_a: T_AIR; decor returns on the next entry).
+;           erased (ap_put_a: T_AIR; decor returns on the next entry).
 ;  TEV_FIND: step 0 "TRAP FOUND: <type>"; the plate blinks bright / off
 ;           (TILE_ATTRS 0 = ink on black paper: unseen) FIND_BLINKS times,
 ;           TRAP_STEP_T ticks each, then shows in its ink.
@@ -219,15 +219,15 @@ tr_final:       bit  TRF_SPENT_BIT, (hl)
                 jr   z, tr_show
                 ; fall through
 ; tr_erase / tr_show / tr_plate — HL = an entry in CUR_ROOM: its plate
-; erased (ap_stamp_a: T_AIR — no floor item may share a trap col, drop_put /
-; the generator) / drawn in its type attr / drawn with TILE_ATTRS[T_TRAP] := A;
-; redrawn next render + the attr shadow (far7).
+; erased (T_AIR — no floor item footprint covers a trap col, drop_put / the
+; generator) / drawn in its type attr / drawn with TILE_ATTRS[T_TRAP] := A;
+; redrawn next render + the attr shadow (far7 ap_put_a: the one cell).
 ; Keep HL.  Clobbers: A, BC, DE.   ~4k T
-tr_erase:       ld   bc, ap_stamp_a
+tr_erase:       ld   b, T_AIR
                 jr   tr_draw
 tr_show:        call tr_ink                    ; A = its type attr
 tr_plate:       ld   (TILE_ATTRS + T_TRAP), a  ; (<= 1 trap a room: item_defs.asm)
-                ld   bc, ap_put_a
+                ld   b, T_TRAP
 tr_draw:        push hl
                 ld   a, (hl)
                 ld   e, a
@@ -237,9 +237,8 @@ tr_draw:        push hl
                 or   FL_S1
 .s:             ld   e, a                      ; E = the FL_ROOM-style byte
                 call tr_col                    ; A = col
-                ld   d, T_TRAP
-                ld   h, b
-                ld   l, c
+                ld   d, b                      ; D = the tile
+                ld   hl, ap_put_a
                 call far7                      ; (A, DE in)
                 pop  hl
                 ret
@@ -433,19 +432,9 @@ tr_type:        inc  l
 ;------------------------------------------------------------------------------
 ; trap_at — E = an FL_ROOM-style byte (room | FL_S1), C = col: Z = an unspent
 ; TRAP_LIST entry there (HL = it), NZ = none. Callers: drop_put (pickup6: a
-; drop never lands on a trap col, hidden or known), trap_glyph.
+; drop's footprint never covers a trap col, hidden or known).
 ; Keeps BC, DE. Clobbers: A, HL.   ~40 T + TRAP_N x ~60 T
-; trap_glyph — far6 from bank-7 ap_stamp (a cell with no item left): A =
-; col, E = the FL_ROOM byte: D = T_TRAP if a known unspent trap is there
-; (its plate stays), else D unchanged (far6: DE out).  Clobbers: all but IX.
 ;------------------------------------------------------------------------------
-trap_glyph:     ld   c, a
-                call trap_at
-                ret  nz
-                bit  TRF_KNOWN_BIT, (hl)
-                ret  z
-                ld   d, T_TRAP
-                ret
 trap_at:        push bc
                 push de
                 ld   a, e
