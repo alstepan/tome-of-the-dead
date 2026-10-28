@@ -2596,6 +2596,39 @@ Designer decision 2026-10-04: a climb blocked twice in a row by the same entity 
 hero and blocker (no exclusions, no free attack, costs the hero's turn); see prototype
 §6.4 "Squeeze past". This removes the residual: no ladder can stay blocked.
 
+**Ladder queue: monsters following the hero to another storey (AI-L1, designer decision
+2026-10-28; "strongest first" pending user confirmation).** Applies to climbers in the
+prototype §6.4 walker rule 3 (`.seek`) only; the hero-protecting rules above run first and win.
+Two monster-monster jams exist today:
+- **J1 (own box counts as head-on):** the climb-start check (`turn3.asm .at`, `box_free` over
+  the whole shaft rect) includes the climber's **own** end box, so a second climber that has
+  stepped partly into that box (x = col ± 1/2) makes the one at `col` wait, while it is itself
+  blocked by that body: both wait forever. **Fix:** the head-on check covers only the
+  mid-ladder rows and the **far-end** box (direction from `ai_dir`). A body in the near box
+  never stops a climb start.
+- **J2 (approach from both sides):** two climbers reach for `col` from opposite sides and
+  block each other one cell short. **Rule: strongest first.** Power = the kind's base hp
+  (`kind_tab KT_HP`, static; not current hp, which would reorder the queue mid-fight; not W,
+  which lives in bank 3). Equal power → the lower slot id wins (no extra code: slot order).
+  When a seeker's step toward `col` is blocked by a monster that wins, and the seeker's box
+  overlaps the near-end box (`|x − col| < 3`), it steps 1 cell **away** from `col` (no turn
+  cost beyond its own; blocked → wait). Not overlapping → it **waits** facing the shaft (no
+  pacing: pacing re-collides and costs bytes). Rule 1 (attack in reach) still comes first. A
+  winner blocked by a loser just waits; the loser clears on its turn (one turn's delay).
+- The shaft itself stays the existing queue: one climber per segment (mid-ladder + far box),
+  the next starts when it is clear. No monster-monster swap on the ladder (D-AI1c's swap
+  stays unbuilt; if built, it uses the same power compare instead of slot id alone).
+- Why strongest first: the hero meets the biggest threat fresh and alone at the hole, can
+  see it climbing and choose to fight or leave; weakest first wears him down with fodder so
+  the strong one arrives when he is weakest (a hidden spike). It also reads as "the leader
+  climbs, the pack waits". Today only Goblin (6) and Skeleton (10) climb, so it is mostly
+  Skeleton before Goblin.
+- **Cost:** J1 ≈ 6–10 B (direction-dependent rect origin/height), J2 ≈ 35–45 B with the
+  power compare (blocker id, 2 × `KFIELD KT_HP`, overlap test, reverse step), ≈ 15–20 B
+  without it. Runs only on a blocked seek step (< 0.5k T), nothing per tick. **If memory is
+  short:** J1 + the symmetric back-off (the loser = whichever moves first, i.e. slot order)
+  is the cheapest correct rule; the power compare is an add-on. J1 alone is the must-have.
+
 **Ranged** (Archer, Necromancer), first match:
 1. In melee reach → melee.
 2. Hero in line (vertical overlap, not mid-ladder), `gap ≤ range`, the first body in line
