@@ -23,5 +23,8 @@
                 INCLUDE "trap6.asm"            ; 3E-T16: trap_turn / trap_fire (trigger, search, Mage sense, effects)
                 INCLUDE "fi6.asm"              ; FLOOR1: fi_add / fi_slot / fi_put (the floor-item glyph cache)
                 INCLUDE "pool6.asm"            ; 3F-T1: pool_list / pool_map / pool_gmap (the level pool's kinds)
+    IF F3_GEN
+                INCLUDE "sanct6.asm"           ; 3F-T10: sanctum_leaf (D8 Sanctum generation, only with the 3F switch)
+    ENDIF
                 INCLUDE "icons6.asm"           ; IC1: icon_slot / worn_draw / qs_draw (the 16x16 icon blitter)
                 INCLUDE "../assets/gfx/icons/icons16.asm"   ; IC1 + FLOOR1: 45 logical icons in 1,376 B raw (potions share one shape; tools/icons16.py)

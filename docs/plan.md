@@ -507,3 +507,5 @@ AY music + FX on the A8 slot; balance pass; hardware hardening.
 | Attribute clash on new art | Canvas convention + importer validation + round-trip |
 | Junior/staff contract drift at integration | Contracts carry args/clobbers/addresses; shared layout files staff-only; reviewer on combined diff |
 | Scope creep | Next phases only after the concept review |
+
+**3F-T10 notes (2026-10-28):** `-DF3_GEN=1` (default 0, byte-identical to main) = Z80 Sanctum + `LVL_FLAGS` 0 (`src/sanct6.asm`, R6; bank 3 −2 B, R6 −142 B). Not default until the world/lp suites are f3-aware (they fail only as oracle mismatches, grate shut: W16/W25 descents, W11/W26/A1 blocks) and T8 opens the grate. OPEN (owner T6/T11): items/traps can land in the Sanctum (`items_ovl.asm` excludes only START/LAIR), contradicting the `sanctum_pass` docstring and `items_model.py:412`.

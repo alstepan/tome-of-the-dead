@@ -20,8 +20,9 @@ REPO = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(REPO, "tools"))
 from test_harness import Harness  # noqa: E402,F401
 
-BUILD_SNA = os.path.join(REPO, "build", "wazhack.sna")
-SYM = os.path.join(REPO, "build", "wazhack.sym")
+BUILD_DIR = os.environ.get("WZ_BUILD_DIR", os.path.join(REPO, "build"))   # a variant build (levelgen_z80 --f3)
+BUILD_SNA = os.path.join(BUILD_DIR, "wazhack.sna")
+SYM = os.path.join(BUILD_DIR, "wazhack.sym")
 
 # Every ZRCP command must answer within this (a `run` is <= 1 emulated s of
 # boot pool generation; everything else is instant). A stuck command raises
