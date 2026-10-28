@@ -2524,6 +2524,10 @@ ids:** WALK1, WALK2, CLEAVE, BLOCK, DEAD (the rev-2 WIND-UP is dropped; HURT = f
 Opener = it can open closed doors (1 turn). Locked/sealed doors stop all monsters. The
 Ogre and Death Knight scale by depth like the rest.
 
+**3F-D3 (2026-10-28): this table is authoritative for the original kinds too.** The prototype
+values still in `kind_tab` (Skeleton/Slime DEF 0, Goblin 1d3, Ghost hp 7, Slime hp 5) are
+replaced by the values above (§9.8 D3-1); the §11.4 "monster DEF 0" rule was 3D-only.
+
 **Door rules for monsters (designer decision 2026-10-03).**
 - A closed door's plank cells block movement like a wall for every body.
 - An **opener** whose chosen step would enter a closed, unlocked door's cells opens it
@@ -2842,12 +2846,15 @@ scaled). The 3B/LP stand-in path that stores unscaled row hp is a **bug**, fixed
 scaling (`+ (d − 1) div 3`) is applied at creation from the row, never stored in the record. A teleport into a room (trap or scroll) is an entry with no followers; its arrival
 point is the teleport cell.
 
-**Cost (revised 2026-10-06 after LP measurement: mean 20k, worst 38.6k T).** **Accepted: mean
-≤ 20k, worst ≤ 40k T once per transition.** 40k T is 0.57 of a 50 Hz frame, on a frozen screen
+**Cost (revised 2026-10-06 after LP measurement: mean 20k, worst 38.6k T; 3F-D3 2026-10-28:
+real 3F weights measured worst 44.4k).** **Accepted: mean ≤ 20k (≤ 22k with 3F weights),
+worst ≤ 46k T once per transition (3F-D3; was 40k).** 46k T is 0.66 of a 50 Hz frame, on a frozen screen
 already paying ~45k room build + 100–130k decor, so it is under 25% of the transition. No
 tick budget is used and the pool is not touched. Do not add tries to chase fewer waits. A
 wait is cheap (the unit is retried on the next entry) and a few missing monsters on first
-visit is acceptable. Target: waits ≤ 8% of first-entry units.
+visit is acceptable. Target: waits ≤ 15% of first-entry units (3F-D3 2026-10-28; the old 8%
+was never met: 11.8% pre-3F, 12.1% with 3F weights). Not a task; revisit only if the
+levelcheck figure exceeds 15% or a playtest shows visibly empty first rooms.
 
 #### 9.4.4 Lair and bosses
 
@@ -3116,7 +3123,7 @@ and awards half XP; same seed and inputs reproduce the same spawns.
 A tier is a **colour variant of a base kind**: the same frames (0 new frame ids, 0 pool), its
 own ink, stats and one small ability, and **its own `kind_tab` row**. Rows: 32 − 18 used = 14
 free (15 if the Rogue hole, id 2, is reclaimed); **12 tiers** below → 30 used, 2 spare.
-Short names ≤ 12 chars (messages, §6.4).
+Short names ≤ 9 chars (3F-D3: `YOUR DAGGER MISSES THE ` + 9 = 32; final list §9.8 D3-6).
 
 | Base (ink) | Tier 2 | Tier 3 | Stats hp/atk/eva/DEF/dmg | Ink | Ability (mechanic reused) |
 |---|---|---|---|---|---|
@@ -3130,7 +3137,7 @@ Short names ≤ 12 chars (messages, §6.4).
 | Ghost (`$45`) | **Poltergeist** | | 11/3/3/0/1d4 DRAIN | `$03` | touch 1 in 3 → FEAR 3 (replaces the Ghost's confusion) |
 | Orc | **Orc Berserker** | | 18/4/0/1/1d8+2 | `$02` | FEAR-immune; **rage**: hp ≤ ½ max → atk +2 |
 | | | **Orc Bouncer** | 24/5/1/2/1d10 | `$03` | hit 1 in 3 → STUNNED 1 (a "bouncer" throws you out cold) |
-| Skeleton Archer | **Skeleton Sniper** | | 10/3/2/0/1d4; arrow 1d8 r14 | `$04` | stands its ground (skips the "gap < 3 → step away" rule); Arrows ×3 drop 1/2 |
+| Skeleton Archer (`$03`, 3F-D3) | **Skeleton Sniper** | | 10/3/2/0/1d4; arrow 1d8 r14 | `$04` | stands its ground (skips the "gap < 3 → step away" rule); Arrows ×3 drop **2/2** (always; Rewards rule below, 3F-D3) |
 | Necromancer | **Bone Caller** | | 14/3/2/0/1d4; Dark Bolt as base | `$06` | **summons** one base Skeleton if Skeleton ∈ `LP_KINDS`, else a base Ghost (designer decision 2026-10-06, §9.4.6: D6/D7 pools have no Skeleton) (Archmage summon code: cooldown 8, ≤ 1 live summon, slot + cap; `F_RESPAWN`) |
 
 Untiered: Slime (D1 only), Vampire, Mummy (both already complex), uniques, the Archmage.
@@ -3247,6 +3254,58 @@ row: 3 ids (Skeleton walk shared), no SHOOT.
 Giant Rat is a Rat tier). Boss music (cue E entry + cue R on boss death, sound.md) is wired **in
 3F** with the bosses (≈ 30 B, tune data already in the AY slot); if bank space blocks it, it is
 the first item deferred to 3G.
+
+### 9.8 3F-D3 rulings (designer decision 2026-10-28; T3 kind-row review)
+
+**D3-1 Original rows take the §9.1 values now.** Skeleton DEF 1, Slime DEF 1 and hp 6, Goblin
+dmg 1d4, Ghost hp 8. Data-only follow-up to T3 (before T5, so the first Fuse playtest runs on
+spec numbers); seeded combat/levelcheck expectations are rebaselined in the same change.
+Render goldens should not move (no hp is drawn at spawn); any golden that does move is reviewed,
+not blindly accepted. Balance: D1 Goblin +0.5 avg dmg (the §10 sample duel already assumed
+1d4); Slime DEF 1 + PHYS R makes the Mage's staff ≈ 1 per hit, but the Slime is D1-only, acts
+every 2 and Spark ignores DEF, so the Mage walks away or Sparks it (2 MP). Skeleton DEF 1 from
+D3 is answered by PS / Firebolt / Spark. Tuning stays a BAL1 job, starting from the spec.
+
+**D3-2 `lp_enter` ceiling: worst ≤ 46k T, mean ≤ 22k** (§9.4.3). Room-entry work on a frozen
+screen, not a tick; no new algorithm. Do not add placement tries.
+
+**D3-3 Waits target ≤ 15%** (§9.4.3). Accept 12.1%; no task.
+
+**D3-4 Skeleton Archer ink = `$03` (magenta, not BRIGHT).** Rejected: `$47` (= Skeleton),
+`$05`/`$44` (Skeleton Guard/Knight, same frames on D5), `$04` (its Sniper), `$06` (= the D5
+air-band ink; reads as decor), `$02` (the `$42` hit flash barely shows on it), and the status /
+glow inks. Black paper, one ink per cell, so it is legal on every background. On D7 `$03` is
+shared with the Orc Bouncer and Poltergeist, which have different silhouettes. Constraint for
+the artist: the Mummy (D5) and Spider base inks must not be `$03`.
+
+**D3-5 Sniper drop = 2/2** (Rewards rule wins; §9.6 row text fixed).
+
+**D3-6 Names (≤ 9 chars; the user may rename later).**
+
+| Row | Name | | Row | Name |
+|---|---|---|---|---|
+| Giant Rat | `GIANT RAT` | | Spider | `SPIDER` |
+| Rabbit Rat | `BROOD RAT` | | Vampire | `VAMPIRE` |
+| Screech Bat | `SCREECHER` | | Mummy | `MUMMY` |
+| Goblin Slinger | `SLINGER` | | Orc | `ORC` |
+| Black Widow | `WIDOW` | | Skeleton Archer | `ARCHER` |
+| Skeleton Guard | `BONEGUARD` | | Necromancer | `NECROMAGE` |
+| Skeleton Knight | `REVENANT` | | Ogre Warlord | `OGRE LORD` |
+| Poltergeist | `WRAITH` | | Death Knight | `DEATHLORD` |
+| Orc Berserker | `BERSERKER` | | Archmage | `ARCHMAGE` |
+| Orc Bouncer | `ORC BRUTE` | | | |
+| Skeleton Sniper | `SNIPER` | | | |
+| Bone Caller | `SUMMONER` | | | |
+
+Design names in this doc stay as they are; only the in-game strings change. Golden boss names
+(§9.7 R1, per-depth table) keep their own ≤ 12 limit because they are only used in boss lines;
+if they reach the hit/miss line they must also fit 9.
+
+**D3-7 Parry chance: no data, derive from the kind id in the PHYS hit path.** Only 3 rows
+parry, so a compare chain on the row id (`SK_GUARD` → chance 64/256 = ¼; `SK_KNIGHT`, `DK` →
+85/256 ≈ ⅓; anything else → no parry) costs ≈ 14 B code, ≤ 60 T, 0 data, and needs no KX byte
+or table. Use spare KX bits only if a parry flag already exists there and the compare can be
+dropped. A 4th parrier (BAL1) would move it to a 2-bit field (§9.7 R5 #6).
 
 ---
 
@@ -3390,7 +3449,7 @@ of 1.7×, sources grow by ~2.3K. The levers, cheapest first:
 
 - **user 2026-10-06:** (a) AY reserve 4 KB (see §11.2). (b) PROTO wizard "zap" melee removed; Mage melee = STAFF_RAISE → STAFF_SWING (staff bonk). (c) A measurement spike on dropping the bank-7 clean-background copy runs during 3D; decision before 3E.
 - **Ammo glyphs (designer decision 2026-10-06):** no new tile ids (common ids full). 3D: thrown daggers and arrows are consumed (no floor drop). Recovery is deferred to 3E floor-item records (spent arrows / thrown daggers become floor items, drawn by the item glyph path).
-- **DEF (designer decision 2026-10-06):** 3D implements hero DEF (armour, e.g. Leather 1) in the damage formula. Monster DEF is 0 in 3D; the KX table adds it in 3E (no `kind_tab` change in 3D).
+- **DEF (designer decision 2026-10-06):** 3D implements hero DEF (armour, e.g. Leather 1) in the damage formula. Monster DEF is 0 in 3D; the KX table adds it in 3E (no `kind_tab` change in 3D). **Ended by 3F-D3 (§9.8 D3-1): every row carries its §9.1/§9.6 DEF.**
 - **dagger_spin:** 2 frames (as §11.1); the other two drawn grids stay unused source.
 - **Animation order:** monster animations start only after the hero's projectile lands (no overlap). Costs latency, protects the tick budget.
 - **3D tests:** poison, WEAK, FEAR, SLEEP, book reading and bow pickup have no source until 3E/3F; 3D tests them by poking state.
