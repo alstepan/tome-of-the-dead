@@ -47,7 +47,7 @@ SRC6_ADDR..R6_ADDR must equal the snapshot at every point (never written).
 S6: every SRC6 block (3F-T13: the real 3F-A1 art) is unpacked by zx0_frame from bank 6 bit-exact,
 timed against a bank-1 block of similar raw size. Variant "src6" (skip with
 --no-src6): the whole run again with the WIZARD's blocks in SRC6
-(SRC6_KINDS=+K_WIZARD, -DSRC6_PAGES=18; 3F-T13): boot idle + wizard games read bank 6.
+(SRC6_KINDS=+K_WIZARD, -DSRC6_PAGES=19, minus K_DKNIGHT; 3F-T13): boot idle + wizard games read bank 6.
 
 Usage: python3 tests/zx0_pool.py [--baseline SRC_DIR] [--no-src6]
   --baseline: also build SRC_DIR (e.g. a `git archive` of an older commit)
@@ -657,10 +657,11 @@ def main():
         # descends; its D1 sessions fit)
         sys.path.insert(0, REPO_TOOLS)
         import zx0_sources as zs
-        s6 = ",".join(sorted(zs.SRC6_KINDS | {"K_WIZARD"}))
-        # 3F-T13bc: default SRC6 3,231 B (13 pages) + the Wizard's 2,055 B -> 21 pages (SRC6 at
-        # $C800, the lowest the defs.asm ASSERT allows)
-        variants.append(("src6", REPO, kit + ["SRC6_PAGES=21", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
+        # 3F-T7: R6_GROW 8->10 leaves at most 19 SRC6 pages (SRC6 at $C800, the lowest the defs.asm
+        # ASSERT allows); the default set (3,231 B) + the Wizard's 2,055 B needs 21, so the variant
+        # keeps the Dark Knight's block (486 B) in banks 1 / 3 (S6 still checks every block in SRC6)
+        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT"}) | {"K_WIZARD"}))
+        variants.append(("src6", REPO, kit + ["SRC6_PAGES=19", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
                          {"SRC6_KINDS": s6}))
     if a.baseline:                 # (an older checkout ignores the unknown define)
         variants.append(("baseline", os.path.abspath(a.baseline), kit, None))
