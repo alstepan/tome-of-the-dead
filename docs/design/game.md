@@ -2519,7 +2519,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 outline: a **two-handed greatsword** (blade carried upright above the shoulder when walking,
 chopped down in CLEAVE) and a **horned, crowned helm**. Do not reuse Knight frames. **5 frame
 ids:** WALK1, WALK2, CLEAVE, BLOCK, DEAD (the rev-2 WIND-UP is dropped; HURT = flash).
-| **Necromancer Archmage** | 24×48 | 40 | 4 | 3 | 1 | 1d6; Death Bolt 1d8+3 DARK r28, 1 bounce | **6** | teleports, never walks | boss caster | — | D8 |
+| **Necromancer Archmage** | 24×48 | **60** (ARCHMAGE-SPEC; was 40) | 4 | 3 | 1 | staff 1d6; **7 spells, §9.9** | **6** | blinks once, never walks | boss caster, §9.9 | — | D8 |
 
 Opener = it can open closed doors (1 turn). Locked/sealed doors stop all monsters. The
 Ogre and Death Knight scale by depth like the rest.
@@ -2701,17 +2701,15 @@ The SHOOT pose = the existing cut/cast frame (§9.7, user 2026-10-28).
 Caller summon, Archmage summon/teleport run there first); Bone Caller needs its own summon
 counter (0..8, 4 bits) and a ≤ 1-live-summon test (summoned bodies carry `F_RESPAWN`; the
 owner link is T9's choice: 4-bit owner slot or a room scan); the descriptor table gets an
-Archmage row (r 28, N 2, auto-hit, 1d8+3 DARK, 1 bounce, no reflect gate).
+Archmage row (r 28, N 2, auto-hit, 1d8+3 DARK, 1 bounce, no reflect gate). **ARCHMAGE-SPEC
+(§9.9) changes that row to N 1, 0 bounces, and adds 6 more rows (7 in all).**
 
 **AI and resistances:** a monster never fires at a body that reflects its type (Archmage
 exempt, above).
 
-**Archmage** (never leaves the lair), first match:
-1. Summon cooldown 0, < 2 summoned Skeletons, a slot free, and the cap allows → **summon a
-   Skeleton** (cooldown 6).
-2. Hero in line → **Death Bolt** (cooldown 2).
-3. Hero adjacent → **teleport** to the other storey (cooldown 4; attr flash).
-4. Melee, else wait.
+**Archmage** (never leaves the lair): **superseded by §9.9 ARCHMAGE-SPEC (2026-10-29)**. The
+old list (summon cd 6 → Death Bolt cd 2 → teleport when adjacent cd 4 → melee) is replaced:
+7 spells on a telegraphed cycle, one phase blink at ½ hp, summons and the staff on off-turns.
 
 **Vampire** (D3, D6, D8; and the golden Vampire Lord). Humanoid form is the Vampire kind;
 **bat form reuses the Bat kind's frames and movement** (flyer, erratic, bat attack 1d2),
@@ -3370,6 +3368,7 @@ flash** for the existing duration (priority §6.4: flash > tints > glow). No new
 4. Rabbit Rat breed → bite 1 in 3 → POISON 12 via the generic on-hit (0 code): **−≈ 50 B** +
    the bred bit.
 5. Archmage teleport (rule 3): **−≈ 80 B**; it becomes a turret (summon, bolt, melee).
+   **Superseded by the §9.9 cut order (ARCHMAGE-SPEC).**
 6. Data packing (no player loss; bank 2): on-hit = 1 B (effect 3 bits, chance 2 bits ∈ {1, ½,
    ⅓, ¼}, duration index 3 bits → 8-entry table), parry folded into 2 bits of another per-kind
    byte, tier-up = a 12-entry base→tier list scanned at spawn: **3rd page 8 → 5 B/kind, −≈ 96 B
@@ -3448,6 +3447,177 @@ dropped. A 4th parrier (BAL1) would move it to a 2-bit field (§9.7 R5 #6).
 **ARCHER-DEPTHS H1 (user 2026-10-29): Archer removed from D7 to keep the D7 pool; D7 ranged
 pressure = 2 Necro entries** (`LP_KINDS` D7 = Orc, Necro, Ghost, Necro; §9.4). The Skeleton
 Archer and its Sniper tier spawn on **D4, D5** only; the Archer 2-frame walk is dropped.
+
+### 9.9 Archmage spell set (ARCHMAGE-SPEC; user 2026-10-29 scope, designer decision 2026-10-29 details)
+
+User (Fuse): *"it shares the Necromancer's sprite, feels too weak, casts too little; as the main
+boss it should cast EVERY effect in the game."* Ruling: the Archmage **acts every turn**. It
+casts a **damage spell every 2nd turn** and fills the turns between with a hex, a summon, its
+one blink, or its staff. Its 7 spells cover **all 5 magic damage types and all 7 statuses**, and
+the staff covers PHYS. Every spell is a **RANGED-SPEC monster shot** (§9.2): auto-hit, `roll ×
+res`, no DEF, the on-hit roll after the damage. Each is **one descriptor row**: a new spell
+costs data, not code.
+
+**A1 Stats.** hp **60** (was 40; D8 scaling → **67**), atk 4, eva 3, DEF 1, `BOSS`, resistances
+unchanged (§9.1: COLD X, SHOCK X, DRAIN I, DARK R). Why 60: the final boss now sits above the
+Death Knight (56 at D7), and the Mage's Firebolt budget still covers it (below).
+
+**A2 Spell rows** (`rd_tab` rows, RW_STRIDE 8, + an ink byte; rows 0–4 = bolts, 5–6 = hexes):
+
+| Row | Spell | Type | r | Damage (avg) | Rider on the hero (chance) | FX ink | Special |
+|---|---|---|---|---|---|---|---|
+| 0 | **Death Bolt** | DARK | 28 | 1d8+3 (7.5) | FEAR 3 (85/256) | `$43` magenta | the fallback row; Mirror Helm return (A6) |
+| 1 | **Frost** | COLD | 12 | 1d6+1 (4.5) | FROZEN 2 (128/256) | `$45` cyan | HOLD row (A4) |
+| 2 | **Lightning** | SHOCK | 12 | 1d8+1 (5.5) | CONFUSED 4 (128/256) | `$47` white | — |
+| 3 | **Drain** | DRAIN | 5 | 1d6+1 (4.5) | WEAK 8 (128/256) | `$44` green | heals the Archmage by the damage dealt (the Vampire's drain path; green `+n` on it) |
+| 4 | **Firebolt** | FIRE | 12 | 1d8+2 (6.5) | STUNNED 1 (85/256) | `$42` red | HOLD row (A4); FIRE thaws a frozen hero (the cycle never puts it after Frost) |
+| 5 | **Sleep** (hex) | typeless | 12 | 0 | ASLEEP 3 (always) | `$41` blue | HOLD row (A4) |
+| 6 | **Venom** (hex) | typeless | 12 | 0 | POISON +12 (always) | `$06` yellow | — |
+
+- **Riders** use the §6.4 rules unchanged: R2 check order, resist I/X → none, R → half, B2 (no
+  HOLD on a held body), HOLD_GUARD, max-refresh, POISON adds (cap 30). Riders go through the
+  generic on-hit apply (T6), fed from the row instead of the kind.
+- **Hex rows** (`RWF_HEX`) deal no damage, print no hit line, and apply the rider through the
+  immunity mask only (Silk Cloak → Venom `UNAFFECTED`). They are typeless, so no gear blocks
+  Sleep: Sleep is the one effect only Cure/time answers, and any damage wakes the hero.
+- **No bounces on any row** (the T7 row's 1 bounce goes). Monster shots still never bounce or
+  drop items. The only reversal is A6.
+- **Cap per turn:** the Archmage makes at most one attack per turn (one spell *or* one staff
+  hit), so its maximum is **11 HP per turn** (Death Bolt 1d8+3) and **17 per two turns**
+  (bolt + staff). Summons and the Book aura are separate sources (the aura is in the Sanctum,
+  not in the lair: it never stacks with this fight).
+
+**A3 Turn rule** (the Archmage's own `ai_monster` branch: one kind test at entry → far6 R6
+`arch_ai`; it skips the walker path, the melee-first rule and the ranged hook. It never walks:
+G1d spawn only, no G2). State: cast counter **C** (the 2-bit `E_RCD`, 1 at spawn/arrival), cycle
+pointer **P** (0..4, starts 0), hex cooldown **H** (0..4), summon cooldown **S** (T9's 4-bit
+field), **blinked** bit. HOLD (FROZEN/STUNNED) skips the whole turn and nothing ticks (§6.4).
+**In line / gap** = RANGED-SPEC geometry (same storey, both standing, wall scan + `box_free`);
+the hero mid-ladder or on the other storey is out of line.
+1. Decrement H and S (floor 0). Read C, then decrement it (the T7 rule: the old value decides).
+2. **Bolt turn** (C was 0) and the hero in line: cast **ORDER[P]** if `gap < r` and (it is not
+   a HOLD row, or the hero has no HOLD and no HOLD_GUARD); **otherwise cast Death Bolt** (r 28
+   always reaches across the room). P = (P + 1) mod 5, C = 1, done. `ORDER = Death Bolt, Frost,
+   Lightning, Drain, Firebolt` (Lightning follows Frost, so the cycle never thaws its own freeze).
+   C was 0 but out of line: C stays 0 (it bolts the moment there is a line) and go to 3.
+3. **Off-turn**, first match:
+   a. **Blink** (once per life): hp ≤ ½ max and not blinked → move to post **P′** = the same
+      x on the other storey. If that box is illegal (wall, pit, body, ladder box), try 1..8 cols
+      toward the room centre; if none is legal, the bit is spent and nothing moves. Costs the
+      turn, sets S = 0, `$47` attr flash on both footprints (the teleport flash),
+      `THE ARCHMAGE VANISHES!`.
+   b. **Summon** (T9's Bone Caller code): S = 0, < 2 live summons, a free slot and the cap
+      allow it → one Skeleton beside it (Bone Caller placement rule), S = 6.
+   c. **Hex:** H = 0, the hero in line, gap < 12 → **Sleep** if the hero has no HOLD and no
+      HOLD_GUARD, else **Venom**. H = 4.
+   d. **Staff:** the hero in reach → melee 1d6 PHYS (F1 roll, DEF applies; the cast/attack pose).
+   e. Wait facing the hero.
+- **Re-entry** (banked; AI state is not banked): P = 0, H = 0, C = 1, S as T9 resets it,
+  blinked = (hp ≤ ½ max). It is re-placed at its G1d post, not at P′.
+- Net cadence with the hero in line: a bolt on turns 2, 4, 6…, a hex about every 5th turn, the
+  staff or a summon in between. **Something visible happens every turn.**
+
+**A4 Hold lock (no chain-stun).** The HOLD rows (Frost, Firebolt's stun, Sleep) are never chosen
+while the hero is held or has HOLD_GUARD (Frost/Firebolt fall back to Death Bolt, Sleep to
+Venom). With B2 and HOLD_GUARD this caps the hero's lost turns at ≈ 1 in 4 during the worst
+streak. Sleep is broken by the next bolt (any HP loss wakes), so it costs ≈ 1 turn.
+
+**A5 Telegraph** (the player must see what comes next; turn-based, so the cue is *before* the
+turn, not during it).
+- **Body ink = the next bolt's ink.** After every bolt (and at spawn), the Archmage's stamp attr
+  becomes ORDER[P]'s FX ink. The footprint attrs are rewritten once through the existing tint
+  change path (≈ 2.2k T, on a render tick). Priority as §6.4: hit flash > HOLD tint > this ink.
+  Its cyan body says "Frost next: get out of 12 cols, climb, or eat it". The fallback rule is
+  honest: if the shown spell cannot fire, it is always the magenta Death Bolt.
+- **Cast pose** on every spell and hex (the Necro cast frame), with the bolt in the row's ink.
+  The impact is `nbolt_hit` in the same ink, then the usual `$42` hit flash and the status mark
+  (§6.4.1 V2) or panel icon.
+- **No border flash** per status: the mark, the tint and the panel icon already show it, and
+  the border means ALARM (§1.5). No per-spell log line: the existing hit line plus the status
+  line (`YOU ARE FROZEN SOLID!` …) name the effect. New text = **1 string** (A3a).
+
+**A6 Mirror Helm return** (user 2026-10-29 (c): the Archmage ignores the reflect gate). A Death
+Bolt on a DARK X hero deals him 0 and no FEAR. It reverses at his front cell (a second FX track
+from the hero back to the Archmage, queued in `RS_Q`, starting at the impact tick) and strikes
+the Archmage for the same roll × its DARK R = **½** (min 1); FEAR on it is boss-immune. No other row can be reflected (no hero gear has X except DARK). Ring of
+the Grave (DARK I): 0, `UNAFFECTED`, no return. Gravecloak (DARK R, DRAIN R): ½ damage, half
+durations on those riders. Fire Ward: Firebolt ½, stun duration 1 → 0.
+
+**A7 Visuals: zero new frames.** Pose: the Necro frames already resident on D8 (the Necro is a D8
+kind and its unit is generated for the Archmage too: cast + walk1 as the stand, `dead_humanoid`).
+FX: **`nbolt_fly1/2` + `nbolt_hit` re-inked per row** via the FX descriptor's attr byte (the
+Slinger-rock precedent, T7). These are resident on D8 for **both** heroes. The hero's own spell
+frames (Firebolt, Frost…) are in the Mage pool only, so they are not used: same look on both runs,
+0 pool, 0 fids (FRT 132/132 stays full). **Optional polish, not in T11:** on a Mage run, use the
+resident hero fly/impact fids for rows 1–4 (a per-row Mage fid byte + 1 test, ≈ 12 B).
+- **The Necro-sprite complaint:** with A5 the Archmage's body is never the Necro's ink; it is
+  always a spell colour that changes every 2 turns. That is the free answer. A truly distinct
+  silhouette needs art (A9 USER).
+
+**A8 Balance at D8** (hero at entry W 61 HP / 16 MP, M 37 / 26; §10). Average bolt over a full
+cycle 5.7 (4.2 with the Mirror Helm), so ≈ 2.9 HP per turn in line (2.1 with the helm), plus
+the staff in reach.
+- **Approach:** at gap ≥ 12 only Death Bolt reaches, and the Mirror Helm (the mandatory D7 boss's
+  drop) turns it into ½ damage to the Archmage. The other storey and a mid-room block are out of
+  line, so no casts come from there (summons still do). Without the helm, 6 turns of approach at
+  gap ≥ 12 cost 3 Death Bolts ≈ 22 HP.
+- **Warrior:** Power Strike ×5 (16 MP) ≈ 55 + 3 swings ≈ 70 ≥ 67 hp, so ≈ 8 melee turns.
+  Damage taken: 4 bolts + staff ≈ 30, plus one blink phase (re-approach ≈ 4–6 turns, ≈ 12–17) and
+  summons: **≈ 45 of 61** without the helm, **≈ 33** with it. Winnable without any ranged item.
+  Cure answers FEAR/WEAK/CONFUSED; Heal potions are the buffer.
+- **Mage:** Firebolt ≈ 9–10 per cast (Bone Staff +2, ranks) → ≈ 7–8 casts = 21–24 MP of 26
+  (a Mana potion is the margin). Over those ≈ 8 turns he takes ≈ 4 bolts + 1 hex ≈ 23 of 37. His
+  Frost/Lightning reflect (X), as before. The no-Firebolt Mage (~2 %) stays the §10 BAL1 item.
+- **BAL1 knobs, in order:** hp 60 (50–70), C cadence (N 1; N 2 = every 3rd turn), the rider
+  chances, hex cooldown 4, blink threshold ½.
+
+**A9 Cost** (estimate; T11, mostly R6, input tick only).
+
+| Item | R6 | bank 3 |
+|---|---|---|
+| 6 new rows × 8 B + 7 ink bytes (the T7 Archmage row is reused, edited) | ≈ 55 | — |
+| `arch_ai`: counters, ORDER/P, range + hold-lock fallback, off-turn chain | ≈ 110 | entry test ≈ 6 |
+| Row-fed rider + `RWF_HEX` path in `rg_shoot` | ≈ 35 | — |
+| FX ink override from the row | ≈ 6 | — |
+| Telegraph ink (stamp attr + tint request) | ≈ 20 | — |
+| Blink (P′ search, flash, line) | ≈ 50 | — |
+| Mirror Helm return (2nd track + ½ hit on the caster) | ≈ 45 | — |
+| Drain heal (reuse the Vampire's) / summon (reuse T9) | ≈ 10 / ≈ 15 | — |
+| String `THE ARCHMAGE VANISHES!` | 22 (text bank) | — |
+| **Total** | **≈ 345 B** (≈ 200 B more than the old 4-rule Archmage) | **≈ 6 B** |
+
+Bank 2 0 B (`rk_tab` already maps the Archmage to its first row). Pool 0 B. RAM: P (3 bits), H
+(3 bits) and the blinked bit go in the Archmage slot's `ST_X` (monsters are never poisoned, §6.4.3)
+or any spare per-slot bits (engineer's choice); C and S live in `E_RCD` as T7/T9 reserved. Ticks:
+selection ≤ 0.6k T, a shot ≈ 8.7k T (T7 measured), the return track adds one FX track (the ≤ 3
+shared tracks, queued if busy). One footprint attr rewrite (≈ 2.2k T) per bolt on a render tick.
+
+**A10 Cut order if memory runs out** (cheapest loss per byte first):
+1. Mirror Helm return FX: keep the ½ hit on the Archmage, but drop the 2nd track (an impact flash
+   on it instead): **−≈ 25 B**.
+2. Telegraph body ink: the bolt ink still shows the type, but there is no warning before it: **−≈ 20 B**.
+3. Blink: it becomes a turret with summons: **−≈ 50 B** (+ the string).
+4. Hexes (rows 5–6 + `RWF_HEX`): ASLEEP and POISON leave its set: **−≈ 40 B**.
+5. Archmage summons (T9's code stays for the Bone Caller): **−≈ 15 B**.
+Never cut: rows 0–4 with the cycle, i.e. 5 types × 5 riders every 2nd turn. That is the request.
+**Rejected:** casting a damage spell every turn (≈ 5.7 HP per turn would kill the Mage in about 6
+turns, before his ≈ 8 Firebolts finish it); teleporting the hero (it would undo every Warrior
+approach; the scroll/trap keep that effect); the hero's spell frames on a Warrior run (≈ 1.7 KB
+pool vs ≈ 1.1 KB D8 slack after T8).
+
+**T11 data slots T7 left:** the `rd_tab` Archmage row (edit: N 2 → 1, bounces 1 → 0), the caster
+pre-rule slot `.pre` in `ai_ranged` (unused by the Archmage, which takes its own branch; it stays
+for the Bone Caller), `E_RCD` bits 2–5 (summon counter), the `rk_tab` Archmage entry, and the
+reflect-gate exemption flag on the Archmage row.
+
+**USER decisions:** (U1) **cadence**: a damage spell every 2nd turn with an action every turn
+(recommended), or a damage spell every turn (out of balance for the Mage, A8); (U2) **hp 60**
+(recommended) vs keeping 40; (U3) **look**: telegraph inks only (0 B, recommended now) or **one new
+24×48 Archmage stand frame** (+576 B D8 pool of the ≈ 1.1 KB left after T8, +16 B bank 2 for an
+FRT_MAX bump, ≈ 150 B packed source; the cast pose stays the Necro's); the old §11.1 IDLE + CAST
+pair (1,536 B pool) no longer fits; (U4) the Warrior wins without ranged items (A8: yes, by design;
+confirm that the Mirror Helm as the expected answer is fine); (U5) teleporting the hero is
+excluded (it would undo the Warrior's approach).
 
 ---
 
