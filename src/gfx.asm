@@ -1017,55 +1017,9 @@ blit_chain_al_end:
 blit_al_jp:     jp   blit_chain_al             ; SMC: entry for this width
                 ASSERT (blit_chain_al_end - blit_chain_al) == BLIT_BLOCK * BLIT_MAXW
 
-;==============================================================================
-; frame_footprint — exact cell footprint of frame A at (fpx E, fpy D).
-; Out: C = col, B = row, D = cols, E = rows.  Clobbers: A, HL
-;   cols = (fpx&7 + W + 7) >> 3 ; rows = (fpy&7 + H + 7) >> 3   (§4.2 exact)
-;==============================================================================
-frame_footprint:
-                ld   l, a
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl                    ; fid*FT_STRIDE
-                push de
-                ld   de, frame_tab + FT_COLS
-                add  hl, de
-                pop  de
-                ld   a, e
-                and  4
-                ld   a, (hl)                   ; cols
-                jr   z, .c0
-                inc  a                         ; shifted -> +1 spill col
-.c0:            ld   c, a                      ; C = cols (temp)
-                inc  hl
-                ld   a, d
-                and  7
-                add  a, (hl)                   ; + H
-                add  a, 7
-                rrca
-                rrca
-                rrca
-                and  $1F
-                ld   l, a                      ; L = rows
-                ld   a, d
-                rrca
-                rrca
-                rrca
-                and  $1F
-                ld   b, a                      ; B = row
-                ld   d, c                      ; D = cols
-                ld   a, e
-                rrca
-                rrca
-                rrca
-                and  $1F
-                ld   c, a                      ; C = col
-                ld   e, l                      ; E = rows
-                ret
-
 ; ft_ptr — HL = frame_tab + A*FT_STRIDE (4).  Clobbers: A, DE, HL
-                ASSERT FT_STRIDE == 4          ; blit_sprite / frame_footprint / ft_ptr: 2 x add hl,hl
-                ASSERT FT_H == FT_COLS + 1     ; blit_sprite / frame_footprint: inc hl
+                ASSERT FT_STRIDE == 4          ; blit_sprite / ft_ptr: 2 x add hl,hl
+                ASSERT FT_H == FT_COLS + 1     ; blit_sprite: inc hl
                 ASSERT FT_OFFR == FT_H + 1 && FT_OFFL == FT_OFFR + 1 ; render .vis: inc hl chain
 ft_ptr:
                 ld   l, a

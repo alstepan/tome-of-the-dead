@@ -3766,3 +3766,12 @@ starts at `code_end` and moved with the bank-2 growth), never behaviour. Not don
 | bank 3 free to `AY_RESERVE` | 85 | **48** | −37 (`.sk`: the inline `.fstep` + `ld hl, lq_block` / `jp far6` 19; the mid-ladder turn-round 18) |
 | R6 free (release / kit) | 317 / 247 | **232 / 162** | −85 `lq6.asm` |
 | bank 2 / bank 7 / low RAM / bank 1 | — | unchanged | 0 |
+
+### MEM-W1b ledger (dead strings + `frame_footprint`; tools/build.sh DISPLAY, release and kit identical for these rows)
+
+| Region | Before (main `c3ae149`) | After | Δ |
+|---|---|---|---|
+| bank 0 text (packed) | 207 strings, 2,652 B | **193 strings, 2,520 B** | −132 (14 unreferenced ids: bang, bk_grasp, bk_crumbles, bk_destroyed, cmb_range, end_killed, m_title, none_left, paused, rk_ii, rk_iii, xp_lv, xp_xp, xp_level; the LOG-FIX / T11 groups kept) |
+| pool start / pool slack (every level, 1:1) | `$CA5C` / 1,476 (PROTO 1,316) | `$C9D8` / **1,608** (PROTO 1,448) | +132 (`POOL_NEED` unchanged, per-level `LEVEL_NEED` unchanged) |
+| bank 2 `frame_footprint` (no caller, no test) | 49 B | deleted | −49 |
+| bank 2 free (free to FRT + `kind_tab` ALIGN pad) | 208 + 35 = 243 | 208 + **84** = **292** | +49: all in the pad (the image still ends `$A510`; free to FRT unchanged) |
