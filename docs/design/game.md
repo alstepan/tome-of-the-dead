@@ -47,7 +47,7 @@
 | Tree | random DFS spanning tree over the 3×3 cells from a random start, 7–9 rooms, + 0–1 extra edge (a loop). Leaves = **dead-end rooms** |
 | Edges | horizontal: open edge on storey `s ∈ {0,1}`; **1 in 3 carry a door** (§2.3). Vertical: up-exit `{c,0}` below + down-exit hole `{c,2}` above, same `c` |
 | Start | the DFS root, **on the top grid row (L1, 2026-10-05)**, 0 monsters. D2–D8: arrival shaft from above, rubble-capped |
-| Lair | **on the bottom grid row (L1, 2026-10-05; tiers in the L1 rules row)**, the farthest leaf (BFS) with a horizontal tree edge: boss + **level exit** = down-shaft `{c,2}` under a **GRATE** that opens when the boss dies |
+| Lair | **on the bottom grid row (L1, 2026-10-05; tiers in the L1 rules row)**, the farthest leaf (BFS) with a horizontal tree edge: boss + **level exit** = down-shaft `{c,2}` under a **GRATE** that opens when the boss dies. **The grate is SHUT (`T_GRATE_SHUT`, solid) while the boss lives; this is the rule (BOSS-GUARD 2026-10-29; the §1.4 "always open" row was the 3B stand-in only).** The boss is posted on the grate and guards it (§9.2 "Boss guard") |
 | Key room | the farthest other leaf (else the farthest non-start room): holds the **level key** (rev 2026-10-20: found on first entry, no floor item, §8.11 Q1). The lair edge is a **locked door** |
 | D8 Sanctum | an extra leaf off the lair behind a **sealed door** (opens on the Archmage's death); holds the Book. D8 has no exit |
 | **Level shape (L1, user 2026-10-05)** | The level exit (lair) is **always on the bottom grid row** (ids 6–8), and **no room is above the entry room**: the hero always heads down into the dungeon |
@@ -132,7 +132,7 @@
 |---|---|---|
 | Floor items | **potions only** | §8.5 |
 | Population | a **fixed per-room table** using today's (prototype) kinds | §9.4 **lazy population** (user 2026-10-06; plan task LP): budget + per-room records, spawned on room entry (§9.4.1–9.4.3) |
-| Lair | the **grate is always open** (boss death not required), but drawn as the distinct raised-portcullis frame (id 26, ink `$46`, concept-screen §3.3 B3B-8 #4) with a first-entry hint `A GATE GLEAMS. THE WAY DOWN.` (designer decision 2026-10-04, B12); ordinary down-exit holes stay plain | §1.1, §8.6 |
+| Lair | **SUPERSEDED in 3F (BOSS-GUARD 2026-10-29): shut until the boss dies, §1.1 / §9.2 "Boss guard".** 3B stand-in was: the **grate is always open** (boss death not required), but drawn as the distinct raised-portcullis frame (id 26, ink `$46`, concept-screen §3.3 B3B-8 #4) with a first-entry hint `A GATE GLEAMS. THE WAY DOWN.` (designer decision 2026-10-04, B12); ordinary down-exit holes stay plain | §1.1, §8.6 |
 | Key / locked door | no key exists (potions only), so the lair door is an **ordinary unlocked door** (designer decision 2026-10-03) | §1.1 |
 | D8 | D8 gets a lair exit like D1–D7; **descending from D8 = `GS_WIN`** | §1.3 |
 | Close door | keyboard key **`C`** (1 turn, §2.3 legality; not redefinable, not on joystick) until the 3C icon bar adds FIRE on the melee icon (designer decision 2026-10-03: the key) | §3.1 |
@@ -2666,6 +2666,67 @@ Bosses never follow, so the Lord's bat form stays in its lair.
 **Ogre:** a SLAM turn plays RAISE → SLAM.
 **Death Knight:** a parry plays BLOCK and prints `PARRIED`.
 
+**Boss guard (BOSS-GUARD; user 2026-10-29: the boss is always generated near the level exit and
+tries to protect it; rules designer decision 2026-10-29).** Applies to every lair boss of D1–D7
+(golden bosses, Ogre, Death Knight). D8's Archmage: spawn rule G1d only (it never walks).
+- **Grate:** shut (`T_GRATE_SHUT` 13, solid floor) while the boss lives; its death sets
+  `LF_GRATE_OPEN`, swaps the 3 cells to `T_GRATE` 26 and logs `A GATE GLEAMS. THE WAY DOWN.`
+  (the existing B12 string moves from "first entry" to "the gate opens"). First lair entry
+  while the boss lives logs `THE GATE IS BARRED.` (concept-screen §3.3 #4; +20 B text; cut
+  first if text bytes are short). DOWN at `x == c` on the shut grate: illegal, no turn (F4).
+  The boss is mandatory: no descent past a living boss (uniques and the BAL1 curve depend on it).
+- **G1 Post.** `P = (storey 1, x = c)`, `c` = `RD_EXITCOL` of the lair: the boss stands **on the
+  grate** (3-col body `c..c+2`, 4-col body `c..c+3`; `c ∈ 5..24` keeps both inside cols 5..27).
+  The level-exit shaft is exempt from the §9.4.3 "shaft footprint ±1" exclusion (nobody arrives
+  through it); every other legality test holds. Facing at spawn: toward the hero.
+  - **G1a Arrival gap:** if the hero arrives on storey 1 and the body gap to his arrival box is
+    < 5 cols, the boss spawns shifted away from the hero, 1 col at a time, until the gap is 5
+    (worst case 5 cols, e.g. `c` = 24 with the hero at x 28). It then walks to `P` by G2.
+  - **G1b Escort:** storey 1, shoulder to shoulder on the **lair-door side** of the boss (door
+    side from the lair edge in `EDGE_TAB`): `x = bx − 1 − we` (door left) or `x = bx + wb + 1`
+    (door right), `we`/`wb` = body widths in cols. Illegal by §9.4.3 (ladder box, arrival box,
+    arrival gap, wall) → the other side → the normal 8-try placement (spawn stream, as today).
+    Flyer escorts use the same `x` inside their storey-1 band.
+  - **G1c Re-entry:** a banked boss (exact hp) and escort are re-placed by G1/G1a/G1b, never by
+    the random rule. Pure function of (`c`, widths, door side, hero arrival): Python
+    (`tools/levelgen.py` `lp_enter`) == Z80; no new RNG draws.
+  - **G1d D8:** the Archmage spawns on the storey of the sealed lair↔Sanctum edge at `x = 5`
+    (Sanctum left) or `x = 24` (right), with G1a. The Sanctum door is its "exit". No leash: it
+    never walks; its teleport rule is unchanged. D8 has no level exit.
+- **G2 Guard AI** (the boss slot only; inserted in `ai_monster` **after** the attack rules
+  (melee in reach; ranged rule 2 shoot / Archmage rules) and **before** any movement rule):
+  - **Engaged** iff the hero is **standing on storey 1** (not mid-ladder) **and** (`|hero_x − c|
+    ≤ R`, **R = 8**, or the boss is **PROVOKED**). Engaged → its normal rules (chase, SLAM,
+    parry, Necro step-away), anywhere on storey 1.
+  - **Not engaged** → go home: `x ≠ c` → one step toward `c` (the walker step, blocked → wait);
+    `x == c` → wait, facing the hero. Never climbs (the golden Goblin King loses climbing in
+    its lair), never follows (§8.6). A ranged boss (golden High Necromancer) still shoots from
+    the post by rule 2 (its r8 ≤ R, so in practice when the hero is inside the leash).
+  - **PROVOKED** (1 bit per slot, engineer's choice, e.g. a spare `E_GOLD` bit): set when the
+    hero's damage (melee, ammo, spell, burst) reaches the boss; cleared at spawn (so leaving
+    the lair resets it; banking drops AI state anyway). Why: without it a bow (r14), Firebolt
+    (r12) or Lightning (r28) kills a boss parked at its post from outside R for free.
+  - **Statuses:** ASLEEP/FEAR immune (unchanged); FROZEN/STUNNED skip the action as for anyone;
+    CONFUSED wanders as usual and the next clear turn resumes G2. Vampire Lord: flee (rule 1)
+    as before; the close-distance rule (rule 2) is **off** for a guarding boss; a Lord left on
+    storey 0 after its bat flight uses its ordinary chase there (rare; it cannot climb back).
+  - **Hero on the grate:** he is inside R, so the boss attacks him. If the boss dies while the
+    hero stands on the grate, the grate opens under him (walkable, no fall); DOWN descends.
+  - The escort has **no leash**: it is an ordinary monster (may chase, may follow on exit).
+- **Cost (estimate):** guard decision + home step in R6 behind far6 ≈ 45 B, hook in
+  `ai_monster` (bank 3) ≈ 8 B, PROVOKED set in the monster damage path ≈ 10 B, lair placement
+  (G1–G1d) in R6 ≈ 55 B → **≈ 120 B (R6 ≈ 100, bank 3 ≈ 18)** + 20 B text. Ticks: input tick
+  only; non-boss slots pay one flag test (≈ 20 T); the boss ≈ 0.3k T (far6 + compare) + the
+  existing step. No per-frame cost; golden glow's stationary path (§8.6) becomes the common
+  lair case (already budgeted).
+- **Tests:** placement sweep Python == Z80 (boss `x == c` or the G1a shift with gap exactly 5;
+  escort side/fallback; never overlapping ladder/arrival boxes); hero on storey 0 for 20 turns →
+  boss stays/returns to `c`; storey 1 at `|dx|` 9 → holds, 8 → engages; a ranged hit from 12
+  → chases past R, hero climbs → returns home, comes down → chases (still provoked), leave and
+  re-enter → unprovoked at `P` with exact hp; boss killed on the grate → tiles 13→26,
+  `LF_GRATE_OPEN`, DOWN at `c` descends, before that DOWN is refused with no turn; D8 Archmage
+  at the seal side; `tests/ai_equiv.py` A/B with no boss in the room = 0 mismatches.
+
 **Idea (not scheduled; designer note 2026-10-13): monsters drink potions.** Shape if built:
 only **Goblin, Orc, Necromancer** (hands, opener-humanoids); at spawn 1 in 4 carries **one
 Heal potion** (1 bit in the spare `ENT_STAT` byte 3, beside the Vampire's fled bit). First-match
@@ -2859,13 +2920,14 @@ levelcheck figure exceeds 15% or a playtest shows visibly empty first rooms.
 #### 9.4.4 Lair and bosses
 
 - **Created on the first lair entry:** the boss (`LP_BOSS`) plus 1 escort (`LP_KINDS[rnd & 3]`,
-  base tier, never tier-rolled), within Σ ≤ 12. The boss takes the legal cell farthest from
-  the hero.
+  base tier, never tier-rolled), within Σ ≤ 12. ~~The boss takes the legal cell farthest from
+  the hero.~~ **Placement = the guard post (§9.2 "Boss guard", BOSS-GUARD 2026-10-29)**, on
+  every lair entry (first and banked); it draws no spawn-stream step.
 - **Banked like any room:** the boss's **exact hp persists** and it does not regenerate. The
   escort is banked too.
 - Archmage summons are discarded on leave (their cooldown resets).
-- The boss never follows. Its death sets the boss-dead flag: the grate opens and the trickle
-  stops (§9.5).
+- The boss never follows. It guards the exit (§9.2 "Boss guard"). Its death sets the
+  boss-dead flag: the grate opens and the trickle stops (§9.5).
 - **D8 sealed edge (3F-D2, confirms T4 and memory-map `EDGE_TAB`):** the lair↔Sanctum edge is
   `EG_LINK | EG_DOOR | EG_SEAL` (a sealed door is a door: door cells, planks, door collision;
   `EG_SEAL` only overrides opening, like `EG_LOCK`). Never `EG_LOCK`, never `EG_OPEN` at
