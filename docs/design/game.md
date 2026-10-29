@@ -2511,7 +2511,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, opener (3F-D1: not a climber) | chase | Meat 1/3 | D4, D6, D7 |
 | Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, opener (3F-D1: not a climber) | ranged | Arrows ×3 1/2 (W) | D4, D5, D7 |
 | Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5 |
-| Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener | ranged, cooldown 2; Dark Bolt hit 1 in 3 → FEAR 3 (§6.4) | Mana 1/3 | D6–D8 |
+| Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener, climber (user 2026-10-29) | ranged, cooldown 2 (§9.2 RANGED-SPEC); Dark Bolt hit 1 in 3 → FEAR 3 (§6.4) | Mana 1/3 | D6–D8 |
 | **Ogre Warlord** (unique) | **32×48** | 40 | 5 | 1 | 2 | 1d10+2 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg, a hit STUNS 1 (§6.4) | unique | D4 |
 | **Death Knight** (unique) | 24×48 | 50 | 6 | 3 | 3 | 1d10+3 | 5 | walker, lair only (3F-D1: not a climber) | chase; **parries** 1 in 3 PHYS hits (BLOCK frame, 0 dmg); a parried melee hit **notches** the weapon 1 in 2 (§8.10) | unique | D7 |
 
@@ -2633,14 +2633,76 @@ Two monster-monster jams exist today:
   short:** J1 + the symmetric back-off (the loser = whichever moves first, i.e. slot order)
   is the cheapest correct rule; the power compare is an add-on. J1 alone is the must-have.
 
-**Ranged** (Archer, Necromancer), first match:
-1. In melee reach → melee.
-2. Hero in line (vertical overlap, not mid-ladder), `gap ≤ range`, the first body in line
-   is the hero, cooldown 0 → **shoot** (cooldown: Archer 1, Necro 2).
-3. `gap < 3` → step away.
-4. Otherwise, walker rules.
+**Ranged (RANGED-SPEC, designer decision 2026-10-29; T7; supersedes the 4-line rule).**
+Shooters (one descriptor row each, R6; the Archmage's row is T11):
 
-**AI and resistances:** a monster never fires at a body that reflects its type.
+| Kind | Range r | Cool N | Hit rule | Damage | On hit | Step-away | Climbs | FX |
+|---|---|---|---|---|---|---|---|---|
+| Skeleton Archer | 10 | 1 | F1 roll | 1d6 PHYS, `max(1, roll×res − DEF)` | — | yes | no | arrow_fly `$07` |
+| Skeleton Sniper | 14 | 1 | F1 roll | 1d8 PHYS, as above | — | **no** | no | arrow_fly `$07` |
+| Goblin Slinger | 6 | 2 | F1 roll | 1d3 PHYS, as above | — | yes | yes | dagger_spin `$06` |
+| Necromancer | 8 | 2 | auto-hit (spell) | 1d6+1 DARK, `roll×res`, no DEF | FEAR 3, 85/256 | yes | yes (user 2026-10-29) | NBOLT |
+| Bone Caller | 8 | 2 | auto-hit | as Necromancer | as Necromancer | yes | yes | NBOLT |
+
+Poltergeist is not a shooter (melee touch). atk / dmg include depth scaling and golden +2 / +1.
+- **Geometry.** `gap` = empty cols between the boxes (melee reach = gap 0–1). **In range iff
+  `gap < r`** (the bolt's cell 1 is the shooter's front neighbour; it strikes on entering the
+  hero's near col = cell `gap+1`). **In line iff** shooter standing, hero standing (not
+  mid-ladder) and the same storey (`storey_ref`); every standing body of a storey overlaps,
+  so no row test is needed. **Flight row** `fr = shooter top + 2` (tall: `9s+4`, Slinger:
+  `9s+6`), always inside the standing hero's rows `9s+2..9s+7`.
+- **Clear line iff** (a) no `TF_SOLID` cell in `ROOM_MAP` row `fr` over the gap cols (air
+  decor, torches and back-wall patches are non-solid by §1.2, so in practice only a mid-room
+  block stops it) and (b) no body (any kind or state, mid-ladder included, pending excluded)
+  in the rect gap cols × the shooter's rows: `box_free` with `ACT_SLOT` = the shooter. **No
+  friendly fire:** a blocked line is never fired.
+- **Cooldown.** Per-entity counter (2 bits). Set to **1 at spawn/arrival** (no shot on the
+  first monster phase after room entry); set to **N on a shot**; decremented by 1 (floor 0) at
+  the entry of the ranged hook (below), i.e. on every acting turn in which it did not melee.
+  A shot needs counter 0 after the decrement. Net cadence for a stationary target: N = 1 →
+  every 2nd turn, N = 2 → every 3rd.
+- **Reflect gate:** a shooter never fires at a hero whose response to its type is X (Mirror
+  Helm vs DARK); it behaves as if the line were blocked. **The Archmage is exempt** (T11; the
+  §9.1 "reflected Death Bolt deals ½" intent needs it to fire).
+
+**Per-turn order in `ai_monster`** (walker path; the yield rule, the act-every-2 gate and the
+status step stay ahead, unchanged): 1 yield (`cork_check`) → 2 period gate → 3 melee
+(`attack_if_reach.box`, `ret c`) → **4 ranged hook** (only `KF_RANGED` kinds; one flag test
+for the rest) → 5 boss guard (§9.2 G2) → 6 walker rules (`.fstep` / `.other` / `.seek`).
+The hook is entered after `ret c`, must not need the B5 box in BC/DE (it re-derives what it
+needs), must preserve `TMP4` and the standing flag in H (or recompute), and returns CF = 1
+when it consumed the turn. Hook, first match, cheapest reject first:
+1. Decrement the counter. Shooter not standing, or hero not in line → CF = 0 (walker rules:
+   climbers `.seek` the ladder toward the hero; Archer/Sniper patrol their storey).
+2. Compute `gap`. `gap ≥ r` → CF = 0 (walker rules: it closes in).
+3. Line not clear (wall scan, then `box_free`; or reflect gate) → CF = 0.
+4. Counter 0 → **SHOOT**: face the hero (free), resolve now (below), counter = N, CF = 1.
+5. `gap ≤ 2` and step-away kind → one walker step away from the hero (faces the step);
+   blocked → wait facing the hero. CF = 1. (`gap ≤ 2` here means gap 2: gap 0–1 meleed.)
+6. Otherwise **HOLD**: wait facing the hero, CF = 1 (in range, clear, reloading: it does not
+   walk into melee; the hero must close the gap). Sniper holds at gap 2 too.
+FEAR / CONFUSED / held monsters never reach the hook (status code), so they never shoot.
+
+**Resolution (input tick, logic first, §6.5.1).** RNG order inside the shooter's slot turn:
+PHYS: to-hit `d20 + atk ≥ 10 + hero eva`, then damage. DARK: damage, then the on-hit roll
+(`r < 85`, via the T6 generic on-hit apply; skipped when the damage is 0 / I). Hero I → 0,
+`UNAFFECTED`. Lines reuse the monster melee hit/miss strings (no new text). Death credit,
+DYING, HP bar, log and damage number follow §6.5.1 (`COMBAT_NOT_BEFORE` = impact tick; game
+over not before it). **Monster shots never bounce, never reflect, never drop an item** (hit
+or miss). FX: the track starts at the shooter's release entry in `anim_tick` (far6), release
+tick 2 + (slot & 1) (parity stagger), from the shooter's front col at `fr` to the hero's
+near col; a hit plays the impact frame + `$42` flash there, a miss ends at the same col with
+no impact and no flash. ≤ 3 tracks shared with hero bolts; a 4th waits (logic unaffected).
+The SHOOT pose = the existing cut/cast frame (§9.7, user 2026-10-28).
+
+**Data T9/T11 need from T7:** the hook leaves a **caster pre-rule slot** before step 4 (Bone
+Caller summon, Archmage summon/teleport run there first); Bone Caller needs its own summon
+counter (0..8, 4 bits) and a ≤ 1-live-summon test (summoned bodies carry `F_RESPAWN`; the
+owner link is T9's choice: 4-bit owner slot or a room scan); the descriptor table gets an
+Archmage row (r 28, N 2, auto-hit, 1d8+3 DARK, 1 bounce, no reflect gate).
+
+**AI and resistances:** a monster never fires at a body that reflects its type (Archmage
+exempt, above).
 
 **Archmage** (never leaves the lair), first match:
 1. Summon cooldown 0, < 2 summoned Skeletons, a slot free, and the cap allows → **summon a
@@ -2660,6 +2722,13 @@ BAT!`. Bat form heals nothing; the drain bite exists only in humanoid form. Firs
 2. **Close distance:** humanoid, hero on the **other storey** or across a pit (no walk path
    shorter than 12 cols), gap ≤ 10 cols → bat and flies at the hero. It reverts to
    humanoid when within 2 cols of the hero on the same storey (costs its turn).
+   **Cheap definition (RANGED-SPEC 2026-10-29; replaces the walk-path test):** `gap ≤ 10`
+   (box gap in cols, as for shots) **and** either the hero is on the other storey (standing
+   or mid-ladder), or the same storey with a **cut between** them: a scan of the gap cols
+   finds a hole in the floor row `9s+8` (narrow or wide pit: a walker cannot jump) or a
+   `TF_SOLID` cell in the standing row `9s+7` (mid-room block). Same scan routine as the
+   ranged wall scan, other row. No path search. Revert: gap ≤ 2, same storey, and the
+   humanoid box at its x is legal and standing (over a pit it stays a bat until it is not).
 3. Otherwise humanoid chase and bite.
 Flying over a pit is fine (flyer rules); on a ladder it cannot attack, as for any body.
 Bosses never follow, so the Lord's bat form stays in its lair.
