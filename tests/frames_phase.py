@@ -8,7 +8,9 @@ No emulator: reads build/wazhack.sym + .sna (any DEBUG_KIT) and src/*.asm.
     wz_bonk, and not named in src/ outside the frame list and the
     MOVECYC lines; a KS_CLIMB that IS the move cycle (rat / slime) needs MOT
     even slots (drawn cell-aligned at any phase);
-  * hero_jump JUMP2 (drawn mid-tween at both parities) is MOT.
+  * hero_jump JUMP2 (drawn mid-tween at both parities) is MOT;
+  * every frame of a flyer's KS_MOVE cycle (drawn at the idle phase while it
+    tweens, any parity) is MOT (3F-D7LEV: the Ghost's gh_fly).
 With -DPHASE_SHIFT=0 (no FF_PH4 frames) the checks pass trivially.
 Usage: python3 tests/frames_phase.py      exit 1 on any violation.
 """
@@ -88,6 +90,11 @@ for k in range(S["K_COUNT"]):
                 fails.append(f"kind {k} move slot {i} {names[f]}: even slot, not MOT / WK4")
             if i % 2 == 1 and fl & PH4 and not fl & MOT:
                 fails.append(f"kind {k} move slot {i} {names[f]}: odd slot flagged WK4")
+    else:
+        # 3F-D7LEV: a flyer's KS_MOVE is drawn at the idle phase, any px parity: all MOT
+        for f, _ in cycle(ptr["KS_MOVE"])[1]:
+            if not flags(f) & MOT:
+                fails.append(f"kind {k} flyer KS_MOVE frame {names[f]}: not MOT (drawn at both parities)")
     for n in ("KS_IDLE", "KS_CLIMB"):
         if n == "KS_CLIMB" and not flyer and ptr[n] == ptr["KS_MOVE"]:
             for i, (f, _) in enumerate(movecyc[k]):   # climb by coincidence: aligned, any phase
