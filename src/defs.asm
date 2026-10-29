@@ -153,8 +153,9 @@ PAGE_LIMIT      EQU GEN_SCRATCH + GEN_SCRATCH_LEN
 PAGE_MAP_SAVE   EQU GEN_SRC             ; GEN_SRC.. (no pause save / pblit / generator meanwhile)
 ; 3E-T13 page-time scratch after the map save (free while the page is up; below TX_DEC):
 ; (IC1: the 32-B PAGE_G60 glyph copy is gone: the page draws the R6 16x16 icons)
-PAGE_BUF        EQU PAGE_MAP_SAVE + PLAY_CELLS  ; LOG_MAX + 2 B: a composed text line (print6)
-PAGE_SCR_END    EQU PAGE_BUF + LOG_MAX + 2
+PAGE_BUF        EQU PAGE_MAP_SAVE + PLAY_CELLS  ; PAGE_BUF_LEN B: a composed text line (print6)
+PAGE_BUF_LEN    EQU 40                          ; WEAR-UI: 39 chars + 0 (the row-19 line from x 16 is 40 chars wide; the longest gear line, the Cleaver at m -3, is 37)
+PAGE_SCR_END    EQU PAGE_BUF + PAGE_BUF_LEN
 ; 3E-T6: the level-start item / trap generator overlay (items_ovl.asm) runs
 ; in the same window at a level start (after level_populate: the LG_* /
 ; LP_CMAP scratch is dead), its packed stream in bank BANK_OVL_ITEMS (main.asm

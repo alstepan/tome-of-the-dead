@@ -375,7 +375,7 @@ def run(h, p, check):
     p.wb(S["BAG"] + 2, 0x40)                         # Cleaver m +2
     p.wb(S["BAG"] + 20, 0xE0)                        # Robe m -1
     got = [fmt(s) for s in range(7)]
-    want = [" 1D10+3 ATK+1", " DEF+1 EVA+2", " FOOD+30", " MP+8", "", " 1D10 ATK-1", " MP+1"]
+    want = [" +2 1D10+3 ATK+1", " DEF+1 EVA+2", " FOOD+30", " MP+8", "", " 1D10 ATK-1", " -1 MP+1"]   # WEAR-UI: " +m" before the numbers
     check("S1 it_fmt: Cleaver +2, Silk, Cheese, Mana, Fear (none), Axe, Robe -1", got == want, (got, want))
 
 

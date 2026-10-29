@@ -278,6 +278,7 @@ def run(p, check):
     p.wb(st, f0)
     check("P5 held hero: I opens nothing, INTENT dropped", held == (0, 0, 0), held)
     p.settle(3)
+    wear_ui(p, check)
     bag_page(p, check)
 
 
@@ -303,6 +304,90 @@ def rect_cells(s):
     if s == CLOSE_SLOT:
         return [(c + i, 0) for i in range(6)]
     return [(c + i, r + j) for i in range(3) for j in range(2)]
+
+
+def wear_ui(p, check):
+    """WEAR-UI: the description line shows a gear item's modifier m (" -2" / " +1", m != 0) and, at m = -3,
+    " WORN OUT" in place of " -3" (the next wear event destroys it); m = 0 shows nothing extra (the fresh-item goldens are
+    unchanged); the longest line (any gear type, m -3 / +3) fits PAGE_BUF (PAGE_BUF_LEN - 1 chars)."""
+    z = p.z
+    tc = lambda: p.rw("TURN_COUNTER")          # noqa: E731
+    I = lambda n: S["IT_" + n]                 # noqa: E731,E741
+    bag0 = bytes(z.read_memory(S["BAG"], 60))
+    worn0 = bytes(z.read_memory(S["WORN"], 12))
+
+    def txt():
+        b = bytes(z.read_memory(S["PAGE_BUF"], S["PAGE_BUF_LEN"]))
+        return b.split(b"\0")[0].decode("latin1")
+
+    def is_open():
+        return p.rb("PAGE_OPEN") == 1 and p.pc() == S["select_tick"]
+
+    def shown(slot_bytes, where="bag"):
+        """Page text for a record in bag slot 0 (cursor there) after a cursor bounce (re-runs pg_info)."""
+        p.wmem("BAG", slot_bytes + [0] * (60 - len(slot_bytes)))
+        p.tap("P")
+        p.tap("O")
+        return txt()
+    ist = lambda m: (m & 7) << 5               # noqa: E731
+    p.wmem("BAG", [0] * 60)
+    p.wmem("WORN", [0] * 12)
+    p.tap("I")
+    ok = p.until(is_open, 12)
+    got = {m: [shown([I(t), 1, ist(m)]) for t in ("W_LONG", "A_CHAIN", "H_HELM")] for m in (0, -1, -2, -3, 1)}
+    want = {0: ["LONG SWORD 1D8 ATK+1", "CHAIN MAIL DEF+2", "HELM DEF+1"],
+            -1: ["LONG SWORD -1 1D8-1 ATK+1", "CHAIN MAIL -1 DEF+1", "HELM -1"],
+            -2: ["LONG SWORD -2 1D8-2 ATK+1", "CHAIN MAIL -2", "HELM -2 DEF-1"],
+            -3: ["LONG SWORD WORN OUT 1D8-3 ATK+1", "CHAIN MAIL WORN OUT DEF-1", "HELM WORN OUT DEF-2"],
+            1: ["LONG SWORD +1 1D8+1 ATK+1", "CHAIN MAIL +1 DEF+3", "HELM +1 DEF+2"]}
+    check("WU1 page text m = 0 / -1 / -2 / -3 / +1: name + signed m (WORN OUT instead of -3) + the numbers",
+          ok and got == want, (ok, {m: (got[m], want[m]) for m in got if got[m] != want[m]}))
+    # the worn slots (cursor Q Q = worn weapon) show the same text; the bag item likewise
+    mx, who = 0, None
+    for t in range(S["IT_GEAR_LO"], S["IT_GEAR_HI"] + 1):
+        for m in (-3, 3):
+            tx = shown([t, 1, ist(m)])
+            if len(tx) > mx:
+                mx, who = len(tx), (t, m, tx)
+    check("WU2 every gear type at m = -3 / +3: the line fits PAGE_BUF (<= PAGE_BUF_LEN - 1 chars)",
+          mx <= S["PAGE_BUF_LEN"] - 1, (mx, who))
+    # a fresh bag potion / food stack: unchanged (no m text, whatever bits 5-7 hold)
+    pot = shown([I("P_HEAL"), 2, 0xE0])
+    check("WU3 a potion stack with ISTATE $E0 (bits 5-7 set) has no m text", pot.startswith("HEAL POTION X2") and "-" not in pot, pot)
+    # destruction at -3: the slot empties and the page reflects it (the row 19 text = an always-empty slot's)
+    p.tap("I")
+    p.until(lambda: p.rb("PAGE_OPEN") == 0, 12)
+    # the wear event itself (wear_slot: m -3 + notch empties the slot, WEAR_PEND bit pair 2) is tier6.py W1;
+    # here its aftermath: the empty slot, the pending redraw applied by a real turn
+    p.wmem("WORN", [0] * 12)
+    p.wb("WEAR_PEND", 2)
+    t0 = tc()
+    for k in ("P", "O", "Q", "A"):             # a real turn: end_turn -> hunger_turn -> wear_apply
+        p.tap(k)
+        p.tick(8)
+        if tc() != t0:
+            break
+    slot = list(z.read_memory(S["WORN"], 3))
+    p.tap("I")
+    p.until(is_open, 12)
+    p.tap("Q")
+    p.tap("Q")
+    p.tick(2)
+    at20 = (p.rb("pg_rc"), p.rb(S["pg_rc"] + 1))
+    from game_lib import cell_bytes
+    row19 = lambda: [cell_bytes(p.frame(), c, 19) for c in range(2, 8)]   # noqa: E731
+    r20 = row19()
+    p.tap("P")
+    p.tap("P")
+    p.tap("P")
+    r23 = row19()
+    check("WU4 aftermath of a destruction (slot empty, redraw applied by a turn): the page shows EMPTY there like any empty slot; the wear event itself is tier6 W1",
+          slot == [0, 0, 0] and at20 == (5, 0) and r20 == r23 and p.rb("WEAR_PEND") == 0, (slot, at20, r20 == r23, p.rb("WEAR_PEND")))
+    p.tap("I")
+    p.until(lambda: p.rb("PAGE_OPEN") == 0, 12)
+    p.wmem("BAG", list(bag0))
+    p.wmem("WORN", list(worn0))
+    p.settle(2)
 
 
 def bag_page(p, check):

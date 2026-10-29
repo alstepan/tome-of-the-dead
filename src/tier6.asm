@@ -324,8 +324,7 @@ T3_BASE:        DB   0, 0, 0, 0, 16, 24, 32, 40, 48
                 ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 3) >> 8)
 
 ; §9.3 weights by kind row: the same list as bank-3 lp_wt (LP_WT_ROWS, lpop3.asm); R6 cannot read bank 3
-lp_wt6:         LP_WT_ROWS
-                ASSERT $ - lp_wt6 == K_COUNT && ((lp_wt6 + K_COUNT) >> 8) == (lp_wt6 >> 8)
+; lp_wt6: moved to the end of r6.asm (WEAR-UI: its one-page rule needs a pad that moves with R6's growth)
 
 ;------------------------------------------------------------------------------
 ; kind_hp — A = kind byte (row | LEK_*) -> A = row hp + (depth - 1); golden:

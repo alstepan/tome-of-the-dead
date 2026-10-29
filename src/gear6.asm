@@ -346,7 +346,8 @@ fx_line:
 ; die and dmg bonus), " ATK+n", " DEF+n", " MP+n", " EVA+n" (non-zero ones,
 ; signed); nothing for scrolls / books / the bow / an empty slot.
 ; In : A = slot 0..23 (record BAG + 3 * A), DE = dest. Out: DE past the text
-; (no terminator; <= 14 chars).  Clobbers: A, BC, HL, F.
+; (no terminator; <= 27 chars: a gear item with m != 0 first gets " -n" /
+; " +n", or " WORN OUT" in place at m = -3).  Clobbers: A, BC, HL, F.
 ;------------------------------------------------------------------------------
 it_fmt:
                 ld   c, a
@@ -377,7 +378,25 @@ it_fmt:
 .g:             ld   a, b
                 IT_IN IT_GEAR_LO, IT_GEAR_HI
                 ret  nc
-                ld   a, b
+                ld   a, c
+                and  IST_M_MASK
+                jr   z, .m0                    ; m = 0: nothing extra
+                cp   IST_M_M3
+                jr   nz, .sg
+                ld   hl, fs_worn               ; m = -3: " WORN OUT" in place of " -3" (the next
+                call fcat                      ; wear event destroys it; 3 chars shorter: the
+                jr   .m0                       ; Cleaver's line is 37 chars, the row 40 wide)
+.sg:            push bc
+                ld   a, ' '
+                ld   (de), a
+                inc  de
+                ld   a, c
+                ld   b, IST_M_SHIFT            ; (djnz loop: 6 B vs 5 x sra = 10 B)
+.ms:            sra  a
+                djnz .ms                       ; A = m signed -4..+3
+                call fsgn                      ; " -2" / " +1" (wear-down shows)
+                pop  bc
+.m0:            ld   a, b
                 push de
                 call gear_dec
                 pop  de

@@ -846,9 +846,10 @@ back in the first). **3E-T13 (the real page, release, Warrior start bag):
 icons, `item_name`, counters) = 838k T, 12 frames to the first page frame;
 close unchanged (223k T, 3 frames).** Free page-time RAM besides the window (verify before
 use): `GEN_SRC` + `PLAY_CELLS`.. `TX_DEC` `$6B80..$6D14` (405 B); 3E-T13
-uses `$6B80..$6BA1` (**IC1: `PAGE_G60` deleted** — the page draws the R6
-16×16 icons, no glyph copy; `PAGE_BUF` 34 B: a composed text line; `defs.asm`,
-ASSERT `PAGE_SCR_END <= TX_DEC`), so `$6BA2..$6D14` (371 B) stay free.
+uses `$6B80..$6BA7` (**IC1: `PAGE_G60` deleted** — the page draws the R6
+16×16 icons, no glyph copy; `PAGE_BUF` 40 B (`PAGE_BUF_LEN`, WEAR-UI: was 34; the longest gear line
+"WARLORD CLEAVER WORN OUT 1D10-2 ATK+1" is 37 chars): a composed text line; `defs.asm`,
+ASSERT `PAGE_SCR_END <= TX_DEC`), so `$6BA8..$6D14` (365 B) stay free.
 **[RETIRED 3E-T12: `ovl_fx` / `ovl_fx_saved` / `fx_ovl.asm` / `FX_ORG` / `FX_MAP_SAVE` / `BANK_OVL_FX` are deleted; the ops are R6-resident `fx6.asm` (far6), page_post restores the map then far6 `fx_main`. History below.]** **Silent in-play overlay (3E-T8, built: `ovl_fx`):** the same window serves
 cold in-play events that neither render nor read `ROOM_MAP` / `NEXT_MAP` /
 `LP_CMAP`; no `present_full` (nothing on screen changes while it runs; log
@@ -911,7 +912,7 @@ close); S, slot keys do nothing. Layout = the approved placeholder, rows
 | 15 | `W A H C` over the worn icons |
 | 16–17 | `WORN` (x 48) + 4 icons at col `11 + 3k` (k = `WS_*`), empty = **IC1: the slot placeholder** (ink `$05`) |
 | 18–19, cols 0–1 | **IC1: the description icon** (`PG_DICON_ROW`): the cursor item's icon, an empty worn slot's placeholder, blank on `[CLOSE]` / an empty bag slot |
-| 19 | description: `item_name` (+ ` Xn` for stacks) + **3E-T8 the stat line** (far6 `it_fmt`, A = slot: ` FOOD+n` / ` HP+n` / ` MP+n`, gear ` 1Dn[+b] ATK±n DEF±n MP±n EVA±n`), `EMPTY`, blank on `[CLOSE]`; page overlay **IC1: 1,243 B raw (293 left)**, was 1,365 / 171 |
+| 19 | description: `item_name` (+ ` Xn` for stacks) + **3E-T8 the stat line** (far6 `it_fmt`, A = slot: ` FOOD+n` / ` HP+n` / ` MP+n`, gear ` ±m` (m != 0; ` WORN OUT` replaces it at m = -3, WEAR-UI) then ` 1Dn[+b] ATK±n DEF±n MP±n EVA±n`), `EMPTY`, blank on `[CLOSE]`; page overlay **IC1: 1,243 B raw (293 left)**, was 1,365 / 171 |
 | 20 | verbs `USE`-word (col 2: `DRINK` / `EAT` / `READ` / `USE`), `EQUIP` (7), `REMOVE` (12), `DISCARD` (18), `CLOSE` (25): enabled `$45`, disabled `$01` |
 | 22 | message row: help `FIRE: SELECT   I: CLOSE`; refusal `BAG FULL` (bank-1 `it_stems` + `S3_BAG_FULL`, 0 B new text) until the next press |
 

@@ -61,7 +61,7 @@ PG_WORN_COL     EQU 11
 PG_DESC_ROW     EQU 19
 PG_DICON_ROW    EQU PG_DESC_ROW - 1     ; IC1: the description icon, cols 0-1, rows 18-19
 PG_DESC_X       EQU 16
-PG_NAME_MAX     EQU 26              ; + " X9" <= 29 chars from x 16; 3E-T8: real names <= 15, + it_fmt <= 14 (stacks: food / potions <= 11 + 3 + 8) <= 30 < PAGE_BUF
+PG_NAME_MAX     EQU 26              ; + " X9" <= 29 chars from x 16; 3E-T8: real names <= 15, + it_fmt <= 14 (stacks: food / potions <= 11 + 3 + 8) <= 30; WEAR-UI gear lines <= 37 (test WU2) < PAGE_BUF_LEN 40
 PG_VERB_ROW     EQU 20
 PG_MSG_ROW      EQU 22              ; refusals / help (panel + log are hidden)
 PG_ORN_BOT      EQU 23
