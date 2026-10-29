@@ -82,12 +82,13 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # (Orc / Ogre RAISE, Vampire BITE (+ Necro walk3, no cast), Necro walk3, Mummy walk3/4, the
 # shared climb pair for Orc / Necro / Archer levels, the symmetric small corpse (-128 B a Rat /
 # Spider level), dk_block out, the DK B3 walk3 +768 on D7) and ARCHER-DEPTHS H1 (no Archer on D7: the 2nd Necro, no Mage
-# arrows there). Update with a reason only.
+# arrows there). MEM-W1: skeleton_collapsed 24x48 -> 24x16 (-384 a Skeleton level) and
+# knight_windup 40x48 -> 32x48 (-192, Warrior); pixels unchanged. Update with a reason only.
 LEVEL_NEED = {
-    (0, 1): 27392, (0, 2): 26848, (0, 3): 32224, (0, 4): 31776,
-    (0, 5): 29792, (0, 6): 28960, (0, 7): 31456, (0, 8): 31840,
-    (1, 1): 23264, (1, 2): 22720, (1, 3): 28032, (1, 4): 27712,
-    (1, 5): 25728, (1, 6): 24768, (1, 7): 27264, (1, 8): 27648,
+    (0, 1): 27200, (0, 2): 26656, (0, 3): 31648, (0, 4): 31584,
+    (0, 5): 29216, (0, 6): 28768, (0, 7): 31264, (0, 8): 31264,
+    (1, 1): 23264, (1, 2): 22720, (1, 3): 27648, (1, 4): 27712,
+    (1, 5): 25344, (1, 6): 24768, (1, 7): 27264, (1, 8): 27264,
 }
 
 

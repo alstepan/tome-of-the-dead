@@ -187,6 +187,15 @@ ANCHOR_Y = {"dead_humanoid": -32}
 # out of the 32-px box).
 REPAD = {"knight_block": 2, "knight_hurt": -3}
 
+# MEM-W1 pixel-data trims (docs/design/mem_reclaim.md s3 #1/#4): blank rows /
+# columns the canvas artboard carries but the engine never needs. (top rows,
+# right cols) in px, both multiples of 8 (whole cells). Applied AFTER the
+# anchor is measured on the full artboard; the rows leave the TOP of a
+# bottom-anchored frame (pixels stay put: ay -= top, cf ANCHOR_Y) and the
+# columns leave the RIGHT edge (ax unchanged). Asserted blank. The grid and
+# asm hold the trimmed frame; roundtrip pads them back before comparing.
+TRIM = {"skeleton_collapsed": (32, 0), "knight_windup": (0, 8)}
+
 # Frames the engine may draw mid-tween (both pre-shifts, prototype.md §5.1);
 # everything else is STATIONARY. SYMMETRIC = back views: the engine skips the
 # left-facing mirror. Emitted as <char>_flags in index.asm.
@@ -242,6 +251,7 @@ class Frame:
     solid: np.ndarray | None = None
     anchor: tuple[int, int] = (0, 0)
     pad_top: int = 0
+    trim: tuple[int, int] = (0, 0)   # (top rows, right cols) cropped by TRIM
     extra: dict = field(default_factory=dict)
 
     @property
@@ -668,6 +678,15 @@ def prepare(frames: list[Frame]) -> None:
             fr.extra.update(ref=ref.name, iou=iou, iou0=iou0)
             check_anchor(fr)
     for fr in frames:
+        if fr.name in TRIM:
+            tt, tr = TRIM[fr.name]
+            assert tt % 8 == 0 and tr % 8 == 0, fr.name
+            if fr.bitmap[:tt].any() or (tr and fr.bitmap[:, fr.w - tr:].any()):
+                raise SystemExit(f"{fr.name}: TRIM {TRIM[fr.name]} would cut ink off the frame")
+            fr.bitmap = fr.bitmap[tt:, :fr.w - tr]
+            fr.trim = (tt, tr)
+            fr.anchor = (fr.anchor[0], fr.anchor[1] - tt)
+            fr.extra["ax_l"] -= tr
         if fr.kind == "item" and fr.h % 8:
             # pad to whole cells at the TOP: the item keeps sitting on the floor
             fr.pad_top = 8 - fr.h % 8
@@ -758,6 +777,10 @@ def import_sheet(sheet: str, out_dir: str, gen_date: str | None,
                  f"artboard: {fr.character} / {fr.caption} ({fr.bitmap.shape[1]}x"
                  f"{fr.h - fr.pad_top}), ink {fr.ink_hex}",
                  f"grid: {os.path.relpath(gpath, REPO)} (via tools/svg_sprites.py)"]
+        if fr.trim != (0, 0):
+            notes.append(f"trimmed {fr.trim[0]} blank rows off the top, {fr.trim[1]} px off the "
+                         f"right (MEM-W1; pixels unchanged, ay {fr.anchor[1]}); artboard was "
+                         f"{fr.w + fr.trim[1]}x{fr.h + fr.trim[0]}")
         if fr.pad_top:
             notes.append(f"padded {fr.pad_top} transparent rows on top to whole cells")
         if fr.kind == "sprite":
@@ -1154,6 +1177,8 @@ def cmd_roundtrip(args) -> int:
             gbm, meta = read_grid(g)
             if fr.pad_top:
                 gbm = gbm[fr.pad_top:]
+            if fr.trim != (0, 0):
+                gbm = np.pad(gbm, ((fr.trim[0], 0), (0, fr.trim[1])))
             if "repad" in fr.extra:
                 gbm = np.roll(gbm, -fr.extra["repad"], axis=1)
             if bitmap_to_path(gbm) != fr.d or meta.get("ink") != fr.ink_hex:

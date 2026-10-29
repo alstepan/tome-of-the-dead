@@ -4,75 +4,44 @@
 ; Source        : assets/gfx/sprites/grid/skeleton_collapsed.grid
 ;                 canvas https://claude.ai/artifact/U71G9dWUWzZBVxmJUrevD3
 ;                 vendored as assets/gfx/source/wazhack_sprites.dc.html
-;                 artboard: SKELETON / COLLAPSED (24x48), ink #FFFFFF
+;                 artboard: SKELETON / COLLAPSED (24x16), ink #FFFFFF
 ;                 grid: assets/gfx/sprites/grid/skeleton_collapsed.grid (via tools/svg_sprites.py)
+;                 trimmed 32 blank rows off the top, 0 px off the right (MEM-W1; pixels unchanged, ay -32); artboard was 24x48
 ;                 anchor reference: skeleton_walk1 (head-band IoU 0.00); ax_L=0
 ;                 class: STATIONARY
-; Dimensions    : 24x48 px = 3 data cols x 48 rows, no pad col (engine pre-shift spills into col 3)
+; Dimensions    : 24x16 px = 3 data cols x 16 rows, no pad col (engine pre-shift spills into col 3)
 ; Layout/row    : c0_mask,c0_data, c1_mask,c1_data, c2_mask,c2_data  (MSB=left)
 ; Mask polarity : bit 1 = transparent (keep background)
 ; Mask shape    : filled silhouette (+ outline if any) — enclosed paper is opaque
 ; Composite     : screen = (screen AND mask) OR data
-; Bytes         : 48*6 + 1 descriptor = 289
+; Bytes         : 16*6 + 1 descriptor = 97
 ; Colour        : ink=white paper=black bright=1  -> ATTR_SPRITE=$47
 ; Band paper    : black (descriptor PAPER must match — verified)
 ; Intended use  : engine boot-gen of 8 pre-shifts; masked blit at pixel X
-; Anchor        : ax=0 ay=0  draw_x = body_x - ax, draw_y = body_y - ay (right-facing; body_x/y = reference frame origin)
+; Anchor        : ax=0 ay=-32  draw_x = body_x - ax, draw_y = body_y - ay (right-facing; body_x/y = reference frame origin)
 ; ============================================================================
 skeleton_collapsed:
         DEFB $FF,$00,$FF,$00,$FF,$00    ; row  0
         DEFB $FF,$00,$FF,$00,$FF,$00    ; row  1
         DEFB $FF,$00,$FF,$00,$FF,$00    ; row  2
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row  3
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row  4
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row  5
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row  6
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row  7
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row  8
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row  9
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 10
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 11
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 12
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 13
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 14
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 15
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 16
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 17
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 18
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 19
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 20
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 21
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 22
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 23
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 24
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 25
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 26
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 27
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 28
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 29
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 30
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 31
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 32
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 33
-        DEFB $FF,$00,$FF,$00,$FF,$00    ; row 34
-        DEFB $FE,$00,$3F,$00,$FF,$00    ; row 35
-        DEFB $F8,$00,$0F,$80,$FF,$00    ; row 36
-        DEFB $F0,$03,$04,$E0,$07,$00    ; row 37
-        DEFB $F0,$04,$00,$91,$03,$F0    ; row 38
-        DEFB $F0,$03,$00,$F3,$01,$F8    ; row 39
-        DEFB $C0,$04,$00,$8B,$01,$FC    ; row 40
-        DEFB $C0,$13,$00,$F3,$01,$90    ; row 41
-        DEFB $C0,$18,$00,$07,$07,$90    ; row 42
-        DEFB $00,$07,$00,$97,$00,$F0    ; row 43
-        DEFB $00,$79,$00,$E7,$00,$86    ; row 44
-        DEFB $00,$00,$00,$38,$00,$7E    ; row 45
-        DEFB $00,$FF,$00,$D7,$00,$E0    ; row 46
-        DEFB $00,$FF,$00,$C6,$0F,$00    ; row 47
+        DEFB $FE,$00,$3F,$00,$FF,$00    ; row  3
+        DEFB $F8,$00,$0F,$80,$FF,$00    ; row  4
+        DEFB $F0,$03,$04,$E0,$07,$00    ; row  5
+        DEFB $F0,$04,$00,$91,$03,$F0    ; row  6
+        DEFB $F0,$03,$00,$F3,$01,$F8    ; row  7
+        DEFB $C0,$04,$00,$8B,$01,$FC    ; row  8
+        DEFB $C0,$13,$00,$F3,$01,$90    ; row  9
+        DEFB $C0,$18,$00,$07,$07,$90    ; row 10
+        DEFB $00,$07,$00,$97,$00,$F0    ; row 11
+        DEFB $00,$79,$00,$E7,$00,$86    ; row 12
+        DEFB $00,$00,$00,$38,$00,$7E    ; row 13
+        DEFB $00,$FF,$00,$D7,$00,$E0    ; row 14
+        DEFB $00,$FF,$00,$C6,$0F,$00    ; row 15
 skeleton_collapsed_attr:
         DEFB $47                                  ; ATTR_SPRITE
 skeleton_collapsed_len  EQU $ - skeleton_collapsed
 skeleton_collapsed_w    EQU 24                ; px
-skeleton_collapsed_h    EQU 48                ; px (rows)
+skeleton_collapsed_h    EQU 16                ; px (rows)
 skeleton_collapsed_cols EQU 3                 ; byte columns (x2 bytes each)
 skeleton_collapsed_ax   EQU 0                 ; x-anchor, px left of body origin
-skeleton_collapsed_ay   EQU 0                 ; y-anchor, px above body origin
+skeleton_collapsed_ay   EQU -32                 ; y-anchor, px above body origin
