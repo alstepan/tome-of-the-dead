@@ -144,7 +144,12 @@
   STA or MOT).**
 - **Any walk frame also used at rest / attack / hurt / death / climb / jump
   must be MOT** (those are drawn cell-aligned, or at both parities for JUMP2):
-  e.g. Skeleton / Goblin WALK1 are their REST frames. A WK4 frame may appear in
+  e.g. Skeleton / Goblin WALK1 are their REST frames — **unless it sits in an
+  ODD slot** (drawn cell-aligned too): the 3F 2-frame walkers (3F-T13) write
+  `MOVECYC2 walk2, walk1`, WALK1 = rest pose = `WK0` (one shift; MOT under
+  `PHASE_SHIFT` 0), WALK2 = `WK4` — −576 B pool per 24×48 kind vs MOT + WK0.
+  A non-climber whose move cycle has a WK4 even slot uses its idle cycle as
+  KS_CLIMB (never the move cycle). A WK4 frame may appear in
   no other sequence, cycle or role (`tests/frames_phase.py`, static, no
   emulator). Climb and JUMP2 art must exist (the walk stand-ins are ASSERTed
   out under `PHASE_SHIFT`). `-DPHASE_SHIFT=0` = both shifts (escape hatch);

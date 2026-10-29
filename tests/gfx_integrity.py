@@ -207,11 +207,9 @@ def pool_check(p, check, tag, snap0, snapd=None):
     gm = bank_read(p, S["BANK_R6"], S["pool_gmap"], 3 * S["PGMAP_N"])
     kinds = []
     for k in lp_kinds(p):
-        us = [k]
-        for r in range(S["PGMAP_N"]):
-            if gm[3 * r] == k:
-                us = [u for u in gm[3 * r + 1:3 * r + 3] if u != 0xFF]
-                break
+        # 3F-T13: every pool_gmap record of the kind applies (no record: its own unit)
+        us = [u for r in range(S["PGMAP_N"]) if gm[3 * r] == k
+              for u in gm[3 * r + 1:3 * r + 3] if u != 0xFF] or [k]
         kinds += [u for u in us if u not in kinds]
     fids = {f for k in kinds for f in range(kt("KT_FID0", k), kt("KT_FID0", k) + kt("KT_FCNT", k))}
     bad = []
@@ -533,6 +531,9 @@ def main():
         p.release()
         p.settle(3)
         snap0 = pool_snap(p)
+        lim6 = S["alloc.lim6"] + 1
+        check("GI lim6: a normal start leaves alloc's bank-6 limit at HIGH POOL6_END, GEN_TRAP 0",
+              p.rb(lim6) == (S["SRC6_ADDR"] >> 8) and p.rb("GEN_TRAP") == 0, (p.rb(lim6), p.rb("GEN_TRAP")))
         fx_check(p, check)
         ink = {"steps": 0, "cells": 0, "bad": [], "exits": 0}
         for d in range(1, depths + 1):
@@ -579,6 +580,29 @@ def main():
         check("GI R4: SEQ_TRAP 0 (every sq_load kind had a block and a slot)", p.rb("SEQ_TRAP") == 0, p.rb("SEQ_TRAP"))
         seq_sweep(p, check)
         check("GI R4: SEQ_TRAP 0 after the sequence sweep", p.rb("SEQ_TRAP") == 0, p.rb("SEQ_TRAP"))
+        # 3F-T13 R6 guard: a PROTO start moves alloc's limit over SRC6; a level_enter after it
+        # (pool_list) must bump GEN_TRAP and put the limit back (a PROTO session needs a reload)
+        p.proto_start = 1
+        p.load()
+        p.wait_state(S["GS_SELECT"])
+        p.wb("INPUT_REPEAT", 0)
+        p.wb("ANIM_FREEZE", 1)
+        p.wb("INPUT_SRC", 1)
+        p.hold("1")
+        p.wait_state(S["GS_PLAYING"])
+        p.release()
+        p.settle(3)
+        check("GI lim6: the PROTO start moved the limit to HIGH R6_ADDR, GEN_TRAP 0",
+              p.rb(lim6) == (S["R6_ADDR"] >> 8) and p.rb("GEN_TRAP") == 0, (p.rb(lim6), p.rb("GEN_TRAP")))
+        # level_enter's pool step (alloc_restore + far6 pool_list); the rest of level_enter would
+        # gen_list from the overwritten SRC6 sources (garbage by design: reload after PROTO)
+        pc0 = p.pc()
+        ok, _ = p.code([0xCD] + w16(S["alloc_restore"]) + [0x21] + w16(S["pool_list"])
+                       + [0xCD] + w16(S["far6"]), game=True)
+        p.z.cmd("set-register PC=%d" % pc0)
+        check("GI lim6: PROTO then level_enter's pool step (pool_list) ran, tripped GEN_TRAP once and reset the limit",
+              ok and p.rb("GEN_TRAP") == 1 and p.rb(lim6) == (S["SRC6_ADDR"] >> 8),
+              (ok, p.rb("GEN_TRAP"), p.rb(lim6)))
         print(f"[info] run anomalies: {T.anomalies}", flush=True)
     print(f"gfx_integrity: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
     return 1 if fails else 0

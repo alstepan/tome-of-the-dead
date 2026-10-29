@@ -55,17 +55,18 @@ R6_ADDR         EQU $10000 - R6_LEN ; $DD00
 ; key stays unique and no FD_FLAGS bit is spent. Its tape bytes ride on the
 ; boot block's tape block (BOOT6_TAPE_LEN, main.asm).
     IFNDEF SRC6_PAGES
-SRC6_PAGES      EQU 1               ; spike default: one page (the Spider stand-in)
+SRC6_PAGES      EQU 10              ; 3F-T13: the 3F-A1 sources (8 blocks, 2,393 B packed; was 1 = the spike's Spider stand-in)
     ENDIF
     IFNDEF SRC6_STANDIN
-SRC6_STANDIN    EQU 1               ; bit mask of the zx0_sources.py stand-in groups assembled into SRC6
+SRC6_STANDIN    EQU 0               ; bit mask of the zx0_sources.py stand-in groups assembled into SRC6 (3F-T13: none, the real art replaced them)
     ENDIF
 BANK_SRC6       EQU BANK_POOL2
 SRC6_LEN        EQU SRC6_PAGES * 256
 SRC6_ADDR       EQU R6_ADDR - SRC6_LEN
 SRC6_VDELTA     EQU $8000           ; FD_BLK = real - $8000: virt $4000..$7FFF = bank 6
 POOL6_END       EQU SRC6_ADDR       ; the pool's bank-6 part ends here (alloc)
-                ASSERT SRC6_PAGES >= 1 && SRC6_ADDR >= BANK_WINDOW + $1000
+                ASSERT SRC6_PAGES >= 1 && SRC6_ADDR >= BANK_WINDOW + $0800   ; 3F-T13: was + $1000; the boot block below
+                                                ; SRC6 is ASSERTed to fit bank 6 in main.asm (boot6_code)
                 ASSERT (POOL6_END & $FF) == 0   ; alloc's bank-6 limit test reads only the high byte
 BANK_SHADOW    EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect's attrs)
 BANK_COLD7      EQU 7               ; D3-S2: bank-7 cold code B7_CODE..B7_LIMIT (via far7)
@@ -596,8 +597,8 @@ K_SLIME         EQU 8
 ; 3F-T3: the real 3F rows (game.md §9.1 roster, §9.6 tiers): 18 base ids (2 heroes,
 ; the id-2 hole, 15 monsters / bosses) + 12 tier rows = 30; a golden boss is a per-entity
 ; flag on its base row (§9.7 R1), never a row. tools/levelgen.py KROWS carries the SAME ids
-; (levelgen.py asserts them against this file). The frames / sequences of the new kinds are
-; STAND-INS until 3F-T13 (real art): see pool6.asm pool_gmap / gu_tab, seq_img.asm ksm_tab.
+; (levelgen.py asserts them against this file). 3F-T13: the new kinds draw the real 3F-A1
+; frames (frames.asm; units / sharing: pool6.asm gu_tab / pool_gmap, seq_img.asm ksm_tab).
 K_SPIDER        EQU 9
 K_VAMPIRE       EQU 10
 K_ORC           EQU 11
@@ -682,18 +683,19 @@ BH_K_GHOST      EQU 4
 BH_K_RAT        EQU 2
 BH_K_BAT        EQU 2
 BH_K_SLIME      EQU 2
-; 3F-T3 STAND-IN bodies: the new kinds' rows carry the body of the frames they borrow
-; (a Skeleton-unit / Rat-unit / ... stand-in, pool6.asm pool_gmap), so KT_BH and the
-; sprite agree; T13 sets the real body (Spider 32x16, Ogre 32x48 (BW 4), ... game.md §9.1).
-BH_K_SPIDER     EQU BH_K_RAT
-BH_K_VAMPIRE    EQU BH_K_SKELETON
-BH_K_ORC        EQU BH_K_SKELETON
-BH_K_ARCHER     EQU BH_K_SKELETON
-BH_K_MUMMY      EQU BH_K_SKELETON
-BH_K_NECRO      EQU BH_K_SKELETON
-BH_K_OGRE       EQU BH_K_SKELETON
-BH_K_DKNIGHT    EQU BH_K_SKELETON
-BH_K_ARCHMAGE   EQU BH_K_SKELETON
+; 3F-T13: the real 3F bodies (game.md §9.1): Spider 32x16, Ogre 32x48 (KT_BW 4), the rest 24x48;
+; the tiers / shared rows use their base's (main.asm KROW KT_BH)
+BH_K_SPIDER     EQU 2
+BH_K_VAMPIRE    EQU 6
+BH_K_ORC        EQU 6
+BH_K_ARCHER     EQU 6
+BH_K_MUMMY      EQU 6
+BH_K_NECRO      EQU 6
+BH_K_OGRE       EQU 6
+BH_K_DKNIGHT    EQU 6
+BH_K_ARCHMAGE   EQU 6
+BH_G_DEADH      EQU 2               ; 3F-T13 frame groups with no kind (frames.asm FRM ASSERT only):
+BH_G_NBOLT      EQU 2               ; the shared humanoid DEAD (40x16), the Necro bolt (<= 16 px)
 BH_K_FXW       EQU 2               ; D3-4: FX frames are <= 16 px tall (FRM ASSERT only)
 BH_K_FXM        EQU 2
 

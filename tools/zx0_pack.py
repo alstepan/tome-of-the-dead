@@ -53,12 +53,25 @@ def parse_defb(code: str, where: str) -> bytes:
     return bytes(int(t[1:], 16) for t in items)
 
 
+def index_names(d=None):
+    """Frame/tile file names INCLUDEd by assets/gfx/sprites/index.asm, in include order,
+    with the nested `index_3f.asm` (tools/gen_3f_art.py owns it) expanded in place."""
+    d = d or os.path.join(REPO, "assets/gfx/sprites")
+    out = []
+    for n in re.findall(r'INCLUDE\s+"(\w+)\.asm"', open(os.path.join(d, "index.asm")).read()):
+        if n == "index_3f":
+            out += re.findall(r'INCLUDE\s+"(\w+)\.asm"', open(os.path.join(d, n + ".asm")).read())
+        else:
+            out.append(n)
+    return out
+
+
 def game_frames():
     """[(name, bytes)] in index.asm include order. Each frame file: `name:`,
     then only DEFB $xx rows (blank / comment lines and `name_<sub>:` labels
     allowed) up to `name_attr:`. Any other line in that span fails."""
     d = os.path.join(REPO, "assets/gfx/sprites")
-    names = re.findall(r'INCLUDE\s+"(\w+)\.asm"', open(os.path.join(d, "index.asm")).read())
+    names = index_names(d)
     out = []
     for n in names:
         path = os.path.join(d, n + ".asm")

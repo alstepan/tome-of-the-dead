@@ -1923,7 +1923,9 @@ alloc_restore:
 ; alloc — reserve BC bytes. Out: A = bank, HL = addr, CF = 1 if the pool is full.
 ; R6 / SRC6: in bank 6 (index 2, the last) the pool ends at POOL6_END (=
 ; SRC6_ADDR: the permanent SRC6 + R6 regions above it): an allocation that
-; would pass it overflows the pool.
+; would pass it overflows the pool. 3F-T13: a PROTO-fixture game (pool_proto)
+; moves the limit to R6_ADDR — the PROTO rooms hold no 3F kind and have no
+; stairs, so nothing reads SRC6 in that session (docs/memory-map.md "SRC6").
 ; Clobbers: A, DE, HL
 ;------------------------------------------------------------------------------
 alloc_next:                                    ; this bank is full: next bank, retry
@@ -1945,7 +1947,10 @@ alloc:
                 cp   2                         ; (A = idx) bank 6: the pool ends at POOL6_END
                 jr   nz, .ok
                 ld   a, h                      ; end - 1 < POOL6_END <=> H < HIGH POOL6_END
-                cp   HIGH POOL6_END            ; (LOW POOL6_END = 0, ASSERTed in defs.asm)
+.lim6:          cp   HIGH POOL6_END            ; (LOW POOL6_END = 0, ASSERTed in defs.asm)
+                ; SMC: .lim6 + 1 = the bank-6 limit page, written by R6 pool6.asm only:
+                ; pool_hero (every game start) HIGH POOL6_END, pool_proto (the PROTO
+                ; fixture) HIGH R6_ADDR — PROTO pools over the SRC6 sources (3F-T13)
                 jr   nc, alloc_next            ; into SRC6 / R6: next bank = 3 = the pool is full
 .ok:            inc  hl                        ; HL = end ($10000 -> 0: handled below)
                 ld   (ALLOC_PTR), hl
