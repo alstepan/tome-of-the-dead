@@ -326,7 +326,8 @@ hero_st_init:
                 ld   (MP), a                   ; Robe's +2 is gear: hero_recalc adds it,
                 ld   (MAXMP), a                ; kit_add fills MP)
     IF DEBUG_KIT
-                jr   debug_kit
+                ld   hl, debug_kit             ; R6 (r6.asm): only writes RAM; the
+                jp   far6                      ; kit build's bank 7 was 9 B over B7_LIMIT
     ELSE
                 ret
     ENDIF
@@ -334,33 +335,4 @@ WARRIOR_MP      EQU 6
 MAGE_MP         EQU 10                         ; 3E-T8: base (game.md §4: 10 + Robe 2 = 12)
 WARRIOR_DAGGERS EQU 3                          ; (EQUs: no bytes in bank 7)
 
-    IF DEBUG_KIT
-;------------------------------------------------------------------------------
-; debug_kit — the tail of hero_st_init (game.md §1.4 start kit, debug builds
-; only; 3E: delete this block, the jump in hero_st_init and DEBUG_KIT; D3-7
-; T5: moved from bank-3 rank3.asm for bank-3 room).
-; Mage: 5 spells rank 1, MP 40/40. Warrior: bow, 20 arrows, 8 daggers, Power
-; Strike + Whirlwind rank 1, MP 20/20.
-; Clobbers: A, BC, DE, HL
-;------------------------------------------------------------------------------
-debug_kit:
-                ld   a, (HERO_KIND)
-                or   a
-                ld   hl, %0101                 ; Warrior: k0, k1 rank 1
-                ld   b, 20
-                jr   nz, .m
-                ld   a, 1
-                ld   (HAS_BOW), a
-                ld   a, 20
-                ld   (ARROWS), a
-                ld   a, 8
-                ld   (DAGGERS), a
-                jr   .s
-.m:             ld   hl, %0101010101           ; Mage: k0..4 rank 1
-                ld   b, 40 - 2                 ; 3E-T8: + the Robe's MP 2 (hero_recalc) = 40
-.s:             ld   (ARANK), hl
-                ld   a, b
-                ld   (MP), a
-                ld   (MAXMP), a
-                ret
-    ENDIF
+; (debug_kit: R6 fx6-side block in r6.asm — kit builds only, bank-7 relief)
