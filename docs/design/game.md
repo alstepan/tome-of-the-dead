@@ -2659,8 +2659,10 @@ Poltergeist is not a shooter (melee touch). atk / dmg include depth scaling and 
 - **Cooldown.** Per-entity counter (2 bits). Set to **1 at spawn/arrival** (no shot on the
   first monster phase after room entry); set to **N on a shot**; decremented by 1 (floor 0) at
   the entry of the ranged hook (below), i.e. on every acting turn in which it did not melee.
-  A shot needs counter 0 after the decrement. Net cadence for a stationary target: N = 1 →
-  every 2nd turn, N = 2 → every 3rd.
+  A shot needs the counter to be 0 AT HOOK ENTRY (the check uses the old value, then the counter
+  decrements; T7 review 2026-10-29: "0 after the decrement" would fire every turn at N = 1).
+  Net cadence for a stationary target: N = 1 → every 2nd turn, N = 2 → every 3rd; counter 1 at
+  spawn/arrival/banked return. DYING bodies do NOT block the gap (`box_free` skips them).
 - **Reflect gate:** a shooter never fires at a hero whose response to its type is X (Mirror
   Helm vs DARK); it behaves as if the line were blocked. **The Archmage is exempt** (T11; the
   §9.1 "reflected Death Bolt deals ½" intent needs it to fire).
