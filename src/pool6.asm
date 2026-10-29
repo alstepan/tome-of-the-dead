@@ -18,20 +18,23 @@
 ;
 ; GENERATION UNITS (gu_tab, 3F-T2; was kind_tab KT_FID0 / KT_FCNT): DB fid0,
 ; fcnt per unit. Units 0..K_MAX-1 = the kinds' own ranges (0 frames: none);
-; units >= K_MAX = extra ranges with no kind (3F: e.g. a SHOOT frame, the
-; Necro bolt, the Mage's arrows) — none yet. Monster / extra units must not
-; overlap (dedup is per unit, by fid0: an overlap would be generated twice).
+; units >= K_MAX = extra ranges with no kind (3F-T13: the Skeleton halves, the
+; shared DEADs, the Necro bolt, the Mage's arrows / daggers). Units that can
+; meet on one level must not overlap (dedup is per unit, by fid0: an overlap
+; would be generated twice); a frame set shared by kinds is ONE unit id.
 ;
-; GENERATION MAP (pool_gmap, 3F-T1 contract): records DB kind, u1, u2 (u2 =
-; PG_NONE: none), first match wins; a mapped kind generates u1 (+ u2) INSTEAD
-; of its own unit (tier rows -> their base unit, Vampire / Archmage -> Necro,
-; Archer -> Skeleton walk + its SHOOT unit). 3F-T3: the nine new base kinds map to
-; their STAND-IN units (T13 replaces the records).
+; GENERATION MAP (pool_gmap; 3F-T13: EVERY matching record applies, was the
+; first): records DB kind, u1, u2 (u2 = PG_NONE: none); a kind with records
+; generates their units INSTEAD of its own unit (Skeleton = U_SKARCH +
+; U_SKREST, Archer = U_SKARCH + U_DEADH, Vampire / Archmage = the Necro's,
+; Necro = its own + U_DEADH + U_NBOLT: two records). Tier rows are never in
+; LP_KINDS / LP_BOSS (spawns take the base's frames, game.md §9.6), so they
+; need no record; their gu_tab row names the base's own unit (documentation).
 ; HERO EXTRAS (pool_xmap, 3F-T2): records DB kind, hero kind, unit: on a level
 ; listing the kind, a game of that hero also generates the unit (game.md 3F:
-; the Mage's arrow frames on Archer levels, dagger_spin on D1 / D2). Empty
-; today. An extra unit must lie outside that hero's class FX unit (it is
-; NONE'd at the next level entry by fxr_none).
+; the Mage's arrow_fly1/2 on Archer levels D4 / D5 / D7, dagger_spin1/2 on the
+; Goblin's D1 / D2 for the Slinger's rock). An extra unit must lie outside that
+; hero's class FX unit (it is NONE'd at the next level entry by fxr_none).
 ; The build-time need (main.asm "LEVEL POOL NEED") reads gu_tab / pool_gmap /
 ; pool_xmap too, so the tables and POOL_NEED cannot drift.
 ;
@@ -48,7 +51,8 @@
 ;==============================================================================
 PG_NONE         EQU $FF
 PL_LIST         EQU GEN_SRC            ; pairs fid0, fcnt; $FF end
-PL_CAP          EQU 2 * 12 + 1         ; level: <= 5 kinds x 2 units + 2 extras; hero: 2
+PL_CAP          EQU 2 * 17 + 1         ; level: <= 5 kinds x 3 units + 2 extras (3F-T13; build-ASSERTed
+                                       ; per depth in main.asm LEVEL POOL NEED); hero: 2
 SQ_PTR          EQU PL_LIST + PL_CAP   ; SQ_SLOTS words: each slot's master block (0 = free)
 SQ_TOP          EQU SQ_PTR + 2 * SQ_SLOTS  ; word: the next free seq_bytes byte
 PL_PROTO        EQU SQ_TOP + 2         ; pool_proto's kind list (6 B)
@@ -65,7 +69,7 @@ FX_END          EQU KFID_FXW + KFCNT_FXW
 ; pool_hero — far6 from start_game (HERO_KIND set, after gen_idles):
 ; PL_LIST := [hero unit, class FX unit]; seq slot 0 := the hero; KT_SEQ.
 ; pool_list — far6 from level_enter (after alloc_restore): PL_LIST := the
-; units of LP_KINDS[0..3] + LP_BOSS (pool_map) + their hero extras
+; units of LP_KINDS[0..3] + LP_BOSS (pool_gmap) + their hero extras
 ; (pool_xmap), each once, first-seen order; seq slots 1.. := their blocks.
 ; pool_proto — far6 from start_game (PROTO rooms, after pool_hero's session):
 ; the same for the original kinds K_SKELETON .. K_PROTO_END - 1.
@@ -76,6 +80,8 @@ FX_END          EQU KFID_FXW + KFCNT_FXW
 ; Clobbers: A, BC, DE, HL.   ~0.1M T (unpack ~60k, FRT rows ~15k)
 ;------------------------------------------------------------------------------
 pool_hero:
+                ld   a, HIGH POOL6_END         ; 3F-T13: alloc's bank-6 limit = below SRC6 (the
+                ld   (alloc.lim6 + 1), a       ; PROTO fixture may have moved it; SMC target, lowram.asm)
                 call pl_begin
                 ld   a, (HERO_KIND)
                 call pl_unit
@@ -85,6 +91,12 @@ pool_hero:
                 jp   sq_fill
 
 pool_proto:
+                ; 3F-T13: the PROTO fixture (6 original kinds, POOL_NEED_PROTO) pools over the
+                ; SRC6 sources: no 3F kind, no stairs in rooms A-D, so this session never reads
+                ; them; the next game start (pool_hero) moves the limit back. A test must not
+                ; descend from PROTO without a reload (SRC6 is then overwritten).
+                ld   a, HIGH R6_ADDR
+                ld   (alloc.lim6 + 1), a       ; SMC target (lowram.asm alloc)
                 call pl_begin
                 ld   hl, PL_PROTO              ; the kind list K_SKELETON ..
                 ld   a, K_SKELETON
@@ -103,27 +115,48 @@ pool_proto:
                 ASSERT K_PROTO_END - 1 == K_SLIME
 
 pool_list:
-                call pl_begin
+                ; 3F-T13 guard: a level pool must never run with the PROTO limit (it would
+                ; pool over SRC6 and the next descend read overwritten sources): trap + reset.
+                ld   hl, alloc.lim6 + 1
+                ld   a, HIGH POOL6_END
+                cp   (hl)
+                jr   z, .lim
+                ld   (hl), a                   ; reset the SMC limit
+                ld   hl, GEN_TRAP
+                inc  (hl)
+                jr   nz, .lim
+                dec  (hl)                      ; saturate
+.lim:           call pl_begin
                 ld   de, LP_KINDS
                 ld   b, LP_GEN_N
                 ; fall through
-; pl_kinds — DE = kind list, B = count: each kind's units + hero extras ->
-; PL_LIST, its seq block -> the cache; then KT_SEQ.
+; pl_kinds — DE = kind list, B = count: each kind's units (every pool_gmap
+; record of the kind, else its own unit) + its hero extras -> PL_LIST, its seq
+; block -> the cache; then KT_SEQ.
 pl_kinds:
 .k:             ld   a, (de)
                 and  LEK_KIND_MASK             ; 3F-T5: LP_BOSS may carry LEK_GOLD
                 push de
                 push bc
-                push af
-                call pool_map                  ; B = u1, C = u2
-                ld   a, b
-                call pl_unit
-                ld   a, c
-                call pl_unit
-                pop  af
-                push af
-                ld   e, a                      ; hero extras: DB kind, hero, unit
-                ld   hl, pool_xmap
+                ld   e, a                      ; E = kind
+                ld   d, a                      ; D = the fallback unit (own; PG_NONE once a record hit)
+                ld   hl, pool_gmap
+.g:             ld   a, (hl)
+                cp   PG_NONE
+                jr   z, .ge
+                inc  hl
+                cp   e
+                jr   nz, .gn
+                ld   d, PG_NONE
+                call pl_unit_hl                ; u1
+                call pl_unit_hl                ; u2
+                jr   .g
+.gn:            inc  hl
+                inc  hl
+                jr   .g
+.ge:            ld   a, d
+                call pl_unit                   ; no record: the kind's own unit (PG_NONE: none; keeps DE)
+                ld   hl, pool_xmap             ; hero extras: DB kind, hero, unit
 .x:             ld   a, (hl)
                 cp   PG_NONE
                 jr   z, .xe
@@ -131,23 +164,32 @@ pl_kinds:
                 cp   e
                 ld   a, (hl)                   ; A = hero kind (flags: the kind test)
                 inc  hl
-                ld   b, (hl)                   ; B = unit
-                inc  hl
-                jr   nz, .x
+                jr   nz, .xn
                 push hl
                 ld   hl, HERO_KIND
                 cp   (hl)
-                ld   a, b
-                call z, pl_unit                ; (keeps DE)
                 pop  hl
+                jr   nz, .xn
+                call pl_unit_hl
                 jr   .x
-.xe:            pop  af
+.xn:            inc  hl
+                jr   .x
+.xe:            ld   a, e
                 call sq_load
                 pop  bc
                 pop  de
                 inc  de
                 djnz .k
                 jp   sq_fill
+
+; pl_unit_hl — pl_unit of the unit byte at (HL); HL += 1. Keeps BC, DE.
+pl_unit_hl:
+                ld   a, (hl)
+                inc  hl
+                push hl
+                call pl_unit
+                pop  hl
+                ret
 
 pl_begin:
                 ld   hl, sqm_zx0               ; the sequence masters -> SQ_IMG
@@ -160,25 +202,6 @@ pl_begin:
                 ld   a, PG_NONE                ; PL_LIST := empty
                 ld   (PL_LIST), a
                 jp   sq_reset                  ; seq slot 0 := the hero (low RAM)
-
-; pool_map — A = kind -> B = u1, C = u2 (PG_NONE) per pool_gmap (no record:
-; B = the kind's own unit).   Clobbers: F, HL.
-pool_map:
-                ld   b, a
-                ld   c, PG_NONE
-                ld   hl, pool_gmap
-.s:             bit  7, (hl)                   ; PG_NONE: end of the map
-                ret  nz
-                cp   (hl)
-                inc  hl
-                jr   z, .hit
-                inc  hl
-                inc  hl
-                jr   .s
-.hit:           ld   b, (hl)
-                inc  hl
-                ld   c, (hl)
-                ret
 
 ; pl_unit — A = unit (PG_NONE: none): append its pair to PL_LIST unless it has
 ; no frames or is listed already (same fid0). Keeps BC, DE.  Clobbers: A, F, HL
@@ -291,53 +314,80 @@ gu_tab:
                 GU   KFID_KNIGHT, KFCNT_KNIGHT
                 GU   KFID_WIZARD, KFCNT_WIZARD
                 GU   0, 0                      ; id 2 retired
-                GU   KFID_SKELETON, KFCNT_SKELETON
+                GU   KFID_SKELETON, KFCNT_SKELETON             ; (generated as U_SKARCH + U_SKREST)
                 GU   KFID_GOBLIN, KFCNT_GOBLIN
                 GU   KFID_GHOST, KFCNT_GHOST
-                GU   KFID_RAT, KFCNT_RAT
+                GU   KFID_RAT, KFID_RATDEAD - KFID_RAT         ; the Rat's body (+ U_DEADR: pool_gmap)
                 GU   KFID_BAT, KFCNT_BAT
                 GU   KFID_SLIME, KFCNT_SLIME
-                ; 3F-T3: ids 9..17 (the new base kinds) have no unit of their own yet: their STAND-IN
-                ; frames come from pool_gmap (below); T13 puts the real units here. The 12 tier rows
-                ; (18..29) name their BASE kind's unit (same frames, 0 new ids, 0 pool; Black Widow =
-                ; the Spider's, i.e. the Rat stand-in for now), so a tier needs no map entry.
-                DS   GU_STRIDE * (K_GIANT_RAT - K_SPIDER), 0   ; ids 9..17
-                GU   KFID_RAT, KFCNT_RAT                       ; K_GIANT_RAT
-                GU   KFID_RAT, KFCNT_RAT                       ; K_RABBIT_RAT
+                ; 3F-T13: the real 3F-A1 units of the new base kinds (ids 9..17); a kind drawing
+                ; another's frames names that unit (informational: its pool_gmap records decide)
+                GU   KFID_SPIDER, KFCNT_SPIDER                 ; K_SPIDER (+ U_DEADR)
+                GU   KFID_NECRO, KFCNT_NECRO                   ; K_VAMPIRE (the Necro's frames)
+                GU   KFID_ORC, KFCNT_ORC                       ; K_ORC
+                GU   KFID_SKELETON, KFCNT_SKARCH               ; K_ARCHER (= U_SKARCH: walk1..4 + cut)
+                GU   KFID_MUMMY, KFCNT_MUMMY                   ; K_MUMMY
+                GU   KFID_NECRO, KFCNT_NECRO                   ; K_NECRO (+ U_DEADH, U_NBOLT)
+                GU   KFID_OGRE, KFCNT_OGRE                     ; K_OGRE
+                GU   KFID_DKNIGHT, KFCNT_DKNIGHT               ; K_DKNIGHT
+                GU   KFID_NECRO, KFCNT_NECRO                   ; K_ARCHMAGE (the Necro's frames)
+                ; the 12 tier rows (18..29) name their BASE kind's unit (same frames, 0 pool; never
+                ; in LP_KINDS / LP_BOSS, so never generated as a unit of their own)
+                GU   KFID_RAT, KFID_RATDEAD - KFID_RAT         ; K_GIANT_RAT
+                GU   KFID_RAT, KFID_RATDEAD - KFID_RAT         ; K_RABBIT_RAT
                 GU   KFID_BAT, KFCNT_BAT                       ; K_SCREECH
                 GU   KFID_GOBLIN, KFCNT_GOBLIN                 ; K_SLINGER
-                GU   KFID_RAT, KFCNT_RAT                       ; K_BLACK_WIDOW (the Spider's stand-in)
+                GU   KFID_SPIDER, KFCNT_SPIDER                 ; K_BLACK_WIDOW
                 GU   KFID_SKELETON, KFCNT_SKELETON             ; K_SKEL_GUARD
                 GU   KFID_SKELETON, KFCNT_SKELETON             ; K_SKEL_KNIGHT
                 GU   KFID_GHOST, KFCNT_GHOST                   ; K_POLTERGEIST
-                GU   KFID_SKELETON, KFCNT_SKELETON             ; K_ORC_BERSERK (the Orc's stand-in)
-                GU   KFID_SKELETON, KFCNT_SKELETON             ; K_ORC_BOUNCER
-                GU   KFID_SKELETON, KFCNT_SKELETON             ; K_SNIPER (the Archer's)
-                GU   KFID_SKELETON, KFCNT_SKELETON             ; K_BONE_CALLER (the Necro's)
+                GU   KFID_ORC, KFCNT_ORC                       ; K_ORC_BERSERK
+                GU   KFID_ORC, KFCNT_ORC                       ; K_ORC_BOUNCER
+                GU   KFID_SKELETON, KFCNT_SKARCH               ; K_SNIPER
+                GU   KFID_NECRO, KFCNT_NECRO                   ; K_BONE_CALLER
                 ASSERT K_BONE_CALLER == K_FXW - 1
                 GU   KFID_FXW, KFCNT_FXW
                 GU   KFID_FXM, KFCNT_FXM
-gu_tab_x:                                      ; units >= K_MAX (extras): none yet
+gu_tab_x:                                      ; units >= K_MAX (extras, 3F-T13)
+U_SKARCH        EQU K_MAX + 0
+                GU   KFID_SKELETON, KFCNT_SKARCH               ; Skeleton walk1..4 + cut (= the Archer)
+U_SKREST        EQU K_MAX + 1
+                GU   KFID_SKREST, KFCNT_SKREST                 ; Skeleton raise .. hurt
+U_DEADR         EQU K_MAX + 2
+                GU   KFID_RATDEAD, 1                           ; rat_dead (Rat, Spider)
+U_DEADH         EQU K_MAX + 3
+                GU   KFID_DEADH, 1                             ; dead_humanoid (every 3F humanoid + Ogre)
+U_NBOLT         EQU K_MAX + 4
+                GU   KFID_NBOLT, KFCNT_NBOLT                   ; nbolt_fly1/2 + hit (Necro, Archmage)
+U_ARROWM        EQU K_MAX + 5
+                GU   FID_arrow_fly1, 2                         ; Mage extra on Archer levels (D4 / D5 / D7)
+U_DAGM          EQU K_MAX + 6
+                GU   FID_dagger_spin1, 2                       ; Mage extra on Goblin levels (Slinger rock)
 gu_tab_end:
 GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
                 ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 30
                 ASSERT K_FXW == K_MAX - 2 && K_FXM == K_MAX - 1
+                ASSERT KFID_SKREST == KFID_SKELETON + KFCNT_SKARCH && FID_skeleton_cut == KFID_SKREST - 1
+                ASSERT KFID_RATDEAD == KFID_RAT + KFCNT_RAT - 1 && FID_rat_dead == KFID_RATDEAD
+                ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_dagger_spin2 == FID_dagger_spin1 + 1
+                ; the Mage's extras lie outside his class FX unit (fxr_none NONEs them per level)
+                ASSERT FID_arrow_fly1 >= KFID_FXM + KFCNT_FXM && FID_dagger_spin1 >= KFID_FXM + KFCNT_FXM
 
-; pool_gmap — the generation map (see the header). Kinds < $80.
+; pool_gmap — the generation map (see the header): every record of a kind applies. Kinds < $80.
 pool_gmap:
-                ; 3F-T3 STAND-INS (T13 replaces each record by the kind's own unit(s)): a new base
-                ; kind generates the frames of the nearest existing body (unit dedup by fid0 at run
-                ; time, by this map at build time: one Skeleton set serves the Vampire, Orc, Archer,
-                ; Mummy, Necro, Ogre, Death Knight, Archmage)
-                DB   K_SPIDER,   K_RAT,      PG_NONE
-                DB   K_VAMPIRE,  K_SKELETON, PG_NONE
-                DB   K_ORC,      K_SKELETON, PG_NONE
-                DB   K_ARCHER,   K_SKELETON, PG_NONE
-                DB   K_MUMMY,    K_SKELETON, PG_NONE
-                DB   K_NECRO,    K_SKELETON, PG_NONE
-                DB   K_OGRE,     K_SKELETON, PG_NONE
-                DB   K_DKNIGHT,  K_SKELETON, PG_NONE
-                DB   K_ARCHMAGE, K_SKELETON, PG_NONE
+                DB   K_SKELETON, U_SKARCH,   U_SKREST
+                DB   K_RAT,      K_RAT,      U_DEADR
+                DB   K_SPIDER,   K_SPIDER,   U_DEADR
+                DB   K_VAMPIRE,  K_NECRO,    U_DEADH
+                DB   K_ORC,      K_ORC,      U_DEADH
+                DB   K_ARCHER,   U_SKARCH,   U_DEADH  ; SHOOT = the Skeleton cut (game.md §9.7 DECIDED)
+                DB   K_MUMMY,    K_MUMMY,    U_DEADH
+                DB   K_NECRO,    K_NECRO,    U_DEADH
+                DB   K_NECRO,    U_NBOLT,    PG_NONE
+                DB   K_OGRE,     K_OGRE,     U_DEADH
+                DB   K_DKNIGHT,  K_DKNIGHT,  U_DEADH
+                DB   K_ARCHMAGE, K_NECRO,    U_DEADH
+                DB   K_ARCHMAGE, U_NBOLT,    PG_NONE
                 DB   PG_NONE
 pool_gmap_end:
 PGMAP_N         EQU (pool_gmap_end - pool_gmap - 1) / 3
@@ -345,8 +395,10 @@ PGMAP_N         EQU (pool_gmap_end - pool_gmap - 1) / 3
 
 ; pool_xmap — the hero extras (see the header): DB kind, hero kind, unit.
 pool_xmap:
-                DB   PG_NONE                   ; (empty: no Archer / thrower kind yet)
+                DB   K_ARCHER, K_WIZARD, U_ARROWM
+                DB   K_GOBLIN, K_WIZARD, U_DAGM
+                DB   PG_NONE
 pool_xmap_end:
 PXMAP_N         EQU (pool_xmap_end - pool_xmap - 1) / 3
                 ASSERT pool_xmap_end - pool_xmap == 3 * PXMAP_N + 1
-                ASSERT 2 * (2 * LP_GEN_N + 2) + 1 <= PL_CAP && 2 * 2 * (K_PROTO_END - K_SKELETON) + 1 <= PL_CAP
+                ASSERT 2 * (3 * LP_GEN_N + 2) + 1 <= PL_CAP && 2 * 2 * (K_PROTO_END - K_SKELETON) + 1 <= PL_CAP

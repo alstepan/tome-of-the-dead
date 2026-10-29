@@ -693,11 +693,11 @@ LP_TAB = {1: (("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 11),
 # it against the build): kind -> (body width, hp, flyer)
 KINFO = {"K_SKELETON": (3, 10, False), "K_GOBLIN": (3, 6, False), "K_GHOST": (3, 8, True),
          "K_RAT": (4, 3, False), "K_BAT": (3, 3, True), "K_SLIME": (3, 6, False),
-         # 3F-T3: the new rows (main.asm KT_BW / KT_HP / KF_FLYER; BW is the STAND-IN body's
-         # until T13, hp the game.md §9.1 / §9.6 value before depth scaling)
+         # 3F-T3: the new rows (main.asm KT_BW / KT_HP / KF_FLYER; 3F-T13: BW = the real 3F-A1
+         # body, hp the game.md §9.1 / §9.6 value before depth scaling)
          "K_SPIDER": (4, 7, False), "K_VAMPIRE": (3, 14, False), "K_ORC": (3, 14, False),
          "K_ARCHER": (3, 8, False), "K_MUMMY": (3, 18, False), "K_NECRO": (3, 12, False),
-         "K_OGRE": (3, 40, False), "K_DKNIGHT": (3, 50, False), "K_ARCHMAGE": (3, 40, False),
+         "K_OGRE": (4, 40, False), "K_DKNIGHT": (3, 50, False), "K_ARCHMAGE": (3, 40, False),
          "K_GIANT_RAT": (4, 5, False), "K_RABBIT_RAT": (4, 8, False), "K_SCREECH": (3, 5, True),
          "K_SLINGER": (3, 8, False), "K_BLACK_WIDOW": (4, 10, False), "K_SKEL_GUARD": (3, 14, False),
          "K_SKEL_KNIGHT": (3, 18, False), "K_POLTERGEIST": (3, 11, True), "K_ORC_BERSERK": (3, 18, False),
@@ -720,9 +720,9 @@ def lp_wt(k):
 
 # 3F-T3: KROWS (game.md) vs the Z80 rows (KINFO = kind_tab BW / HP / flyer, defs.asm WT_*).
 # Intentional differences, NOT game changes (designer ruling pending): the prototype rows keep
-# (D3-1: Slime / Ghost hp now match §9.1) the Ogre's body is the Skeleton stand-in's
-# 3 cols until T13 (§9.1: 32x48 = 4). key -> field names that may differ.
-KNOWN_STANDIN_DIFFS = {"K_OGRE": {"body"}}
+# (D3-1: Slime / Ghost hp now match §9.1; 3F-T13: the Ogre's body is the real 32x48 = 4 cols,
+# so no difference is left). key -> field names that may differ.
+KNOWN_STANDIN_DIFFS = {}
 for _k, _v in KROWS.items():
     _bw, _hp, _fl = KINFO[_k]
     _got = {"hp": _hp == _v[1], "body": _bw == _v[2], "flyer": _fl == _v[3], "weight": D["WT_" + _k] == _v[4]}

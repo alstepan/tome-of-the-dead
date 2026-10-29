@@ -44,10 +44,10 @@ level_enter cost (stub T) is reported against the 2 s (7.1M T) budget.
 
 SRC6 spike: bank 6 is compared up to POOL6_END (= SRC6_ADDR); the SRC6 region
 SRC6_ADDR..R6_ADDR must equal the snapshot at every point (never written).
-S6: every SRC6 stand-in block is unpacked by zx0_frame from bank 6 bit-exact,
+S6: every SRC6 block (3F-T13: the real 3F-A1 art) is unpacked by zx0_frame from bank 6 bit-exact,
 timed against a bank-1 block of similar raw size. Variant "src6" (skip with
 --no-src6): the whole run again with the WIZARD's blocks in SRC6
-(SRC6_KINDS=K_WIZARD, -DSRC6_PAGES=9): boot idle + wizard games read bank 6.
+(SRC6_KINDS=+K_WIZARD, -DSRC6_PAGES=18; 3F-T13): boot idle + wizard games read bank 6.
 
 Usage: python3 tests/zx0_pool.py [--baseline SRC_DIR] [--no-src6]
   --baseline: also build SRC_DIR (e.g. a `git archive` of an older commit)
@@ -334,16 +334,19 @@ def decode_call(r, virt):
 
 
 def src6_decode(r, fails, name):
-    """S6 (SRC6 spike): every SRC6 stand-in block present in this build is
-    unpacked by zx0_frame from bank 6 (virtual FD_BLK = real - SRC6_VDELTA)
-    bit-exact to its raw stand-in bytes; GEN_ZBLK = the virtual key, bank 6
-    paged after. Its cost is compared with a bank-1 block of similar raw size."""
+    """S6 (SRC6 spike; 3F-T13: the real 3F-A1 blocks, the stand-ins are retired):
+    every SRC6 block of this build (zblk_N at a bank-6 address in SRC6_ADDR..
+    R6_ADDR) is unpacked by zx0_frame from bank 6 (virtual FD_BLK = real -
+    SRC6_VDELTA) bit-exact to the raw bytes of its frames (zblk_N_first ..
+    + zblk_N_n in FRM order); GEN_ZBLK = the virtual key, bank 6 paged after.
+    Its cost is compared with a bank-1 block of similar raw size."""
+    import zx0_pack as zp
     import zx0_sources as zs
     S = r.S
     r.load()
     r.run_to("select_tick")                       # generator idle, GEN_SCRATCH free
-    with tempfile.TemporaryDirectory() as tmp:
-        st = zs.standin_blocks(tmp)
+    frames = dict(zp.game_frames())
+    names = [n for n in zs.frm_order() if n in frames]
     if name == "src6":
         # race guard: the variant shares the checkout's build/zx0 with tools/build.sh;
         # if that was overwritten with default sources the wizard idle block is in
@@ -356,25 +359,28 @@ def src6_decode(r, fails, name):
         if not ok:
             fails.append(f"{name}/wizard-idle-not-in-bank6")
     seen = 0
-    for i, g, seg, raw, z_ in st:
-        if f"s6s_{i}" not in S:
+    for b in range(S["ZX0_BLOCKS"]):
+        lab = f"zblk_{b}"
+        if not (S["SRC6_ADDR"] <= S[lab] < S["R6_ADDR"]):
             continue
         seen += 1
-        virt = S[f"s6s_{i}_virt"]
+        f0, n = S[lab + "_first"], S[lab + "_n"]
+        raw = b"".join(frames[nm] for nm in names[f0:f0 + n])
+        virt = S[lab] - S["SRC6_VDELTA"]
         t, scr, hl, zb, shadow = decode_call(r, virt)
-        ok = (scr[:len(raw)] == raw and hl == S["GEN_SCRATCH"] and zb == virt
-              and shadow & 7 == S["BANK_SRC6"] and virt < 0x8000)
+        ok = (len(raw) == S[lab + "_raw"] and scr[:len(raw)] == raw and hl == S["GEN_SCRATCH"]
+              and zb == virt and shadow & 7 == S["BANK_SRC6"] and virt < 0x8000)
         b1 = min((k for k in S if re.fullmatch(r"zblk_\d+_raw", k)
                   and 0x8000 <= S[k[:-4]] < 0xC000),          # a bank-1 block
                  key=lambda k: abs(S[k] - len(raw)))[:-4]
         t1, scr1, _, _, sh1 = decode_call(r, S[b1])
-        print(f"[{'PASS' if ok else 'FAIL'}] {name} S6 SRC6 stand-in {i} {g}: virt {virt:#06x} "
-              f"(bank 6 {S[f's6s_{i}']:#06x}) {len(z_)} -> {len(raw)} B, zx0_frame {t:,} T "
+        print(f"[{'PASS' if ok else 'FAIL'}] {name} S6 SRC6 block {b} [{', '.join(names[f0:f0 + n])}]: "
+              f"virt {virt:#06x} (bank 6 {S[lab]:#06x}) {S[lab + '_packed']} -> {len(raw)} B, zx0_frame {t:,} T "
               f"(bank-1 {b1} {S[b1 + '_packed']} -> {S[b1 + '_raw']} B: {t1:,} T, bank {sh1 & 7})")
         if not ok:
-            fails.append(f"{name}/S6/{g}")
+            fails.append(f"{name}/S6/{lab}")
     if not seen:
-        print(f"[FAIL] {name} S6: no SRC6 stand-in block in this build")
+        print(f"[FAIL] {name} S6: no SRC6 block in this build")
         fails.append(f"{name}/S6/none")
 
 
@@ -550,11 +556,9 @@ class Ref:
         xm = self.pool[6][o:o + 3 * nx]
         out = []
         for k in lp:
-            us = [k]
-            for r in range(S["PGMAP_N"]):
-                if gm[3 * r] == k:
-                    us = [u for u in gm[3 * r + 1:3 * r + 3] if u != 0xFF]
-                    break
+            # 3F-T13: every pool_gmap record of the kind applies (no record: its own unit)
+            us = [u for r in range(S["PGMAP_N"]) if gm[3 * r] == k
+                  for u in gm[3 * r + 1:3 * r + 3] if u != 0xFF] or [k]
             us += [xm[3 * r + 2] for r in range(nx)
                    if xm[3 * r] == k and xm[3 * r + 1] == self.hero]
             out += [u for u in us if u not in out and self.unit(u)[1]]
@@ -631,7 +635,15 @@ def main():
         # sources from bank 6 while the pool is written to banks 4 / 6
         # 3F-T2: R6 grew 8 pages, so 9 SRC6 pages leave POOL_CAP below the
         # PROTO rooms' need: this variant never enters PROTO (POOL_PROTO_CHECK=0)
-        variants.append(("src6", REPO, kit + ["SRC6_PAGES=9", "POOL_PROTO_CHECK=0"], {"SRC6_KINDS": "K_WIZARD"}))
+        # 3F-T13: the 3F-A1 blocks live in SRC6 by default (10 pages); the variant adds the
+        # Wizard's 4 blocks (2,055 B) -> 18 pages: POOL_CAP is then below the D7 Warrior need
+        # too, so the variant also skips the level-need ASSERT (POOL_LVL_CHECK=0: it never
+        # descends; its D1 sessions fit)
+        sys.path.insert(0, REPO_TOOLS)
+        import zx0_sources as zs
+        s6 = ",".join(sorted(zs.SRC6_KINDS | {"K_WIZARD"}))
+        variants.append(("src6", REPO, kit + ["SRC6_PAGES=18", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
+                         {"SRC6_KINDS": s6}))
     if a.baseline:                 # (an older checkout ignores the unknown define)
         variants.append(("baseline", os.path.abspath(a.baseline), kit, None))
     res, fails = {}, []

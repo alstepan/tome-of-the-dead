@@ -129,6 +129,7 @@
         INCLUDE "tiles_fx.asm"
         INCLUDE "tiles_bg.asm"
         INCLUDE "status_icons.asm"
+        INCLUDE "index_3f.asm"
 
 FRAME_F_MOTION    EQU 1
 FRAME_F_SYMMETRIC EQU 2

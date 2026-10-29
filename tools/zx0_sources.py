@@ -66,8 +66,10 @@ DZX0 = os.path.join(REPO, "tools/bin/dzx0")
 OUT = os.path.join(REPO, "build/zx0/sprites_zx0.asm")
 OUT6 = os.path.join(REPO, "build/zx0/src6_zx0.asm")
 # FRM kinds whose packed sources live in the bank-6 SRC6 region (3F art goes
-# here); empty until 3F. SRC6_KINDS in the environment overrides (test builds).
-SRC6_KINDS = set()
+# here; 3F-T13: the 3F-A1 lean set + the two shared groups G_DEADH / G_NBOLT).
+# SRC6_KINDS in the environment overrides (test builds; it REPLACES the set).
+SRC6_KINDS = {"K_SPIDER", "K_ORC", "K_NECRO", "K_MUMMY", "K_OGRE", "K_DKNIGHT",
+              "G_DEADH", "G_NBOLT"}
 if os.environ.get("SRC6_KINDS") is not None:
     SRC6_KINDS = {k.strip() for k in os.environ["SRC6_KINDS"].split(",") if k.strip()}
 SCRATCH_LEN = 1536          # GEN_SCRATCH_LEN (src/defs.asm); ASSERTed in the output too
@@ -217,8 +219,7 @@ def main():
         fail("tools/bin/zx0 missing — run tools/setup_zx0.sh once (needs network "
              "for the pinned clone; the build itself never does)")
 
-    index_names = re.findall(r'INCLUDE\s+"(\w+)\.asm"',
-                             open(os.path.join(SPR, "index.asm")).read())
+    index_names = zp.index_names(SPR)
     frames = dict(zp.game_frames())                      # name -> raw pixel bytes
     order = [n for n in frm_order() if n in frames]      # generator frames, fid order
     packed_set = set(order)

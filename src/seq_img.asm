@@ -18,13 +18,13 @@
 ;==============================================================================
 ksm_tab:
                 DW   ksm_kn, ksm_wz, 0, ksm_sk, ksm_gb, ksm_gh, ksm_rt, ksm_bt, ksm_sl
-                ; 3F-T3 STAND-IN blocks (T13 gives each base kind its own block): the new base kinds
-                ; borrow the block of the frames they borrow (pool6.asm pool_gmap), a tier row names
-                ; its BASE kind's block (0 B here, and the cache dedups by block: one slot).
+                ; 3F-T13: the real 3F-A1 blocks; kinds drawing another's frames share its block
+                ; (Vampire / Archmage = the Necro's), a tier row names its BASE kind's block (0 B
+                ; here, and the cache dedups by block: one slot)
                 ;    SP      VP      OR      AR      MU      NE      OG      DK      AM
-                DW   ksm_rt, ksm_sk, ksm_sk, ksm_sk, ksm_sk, ksm_sk, ksm_sk, ksm_sk, ksm_sk
+                DW   ksm_sp, ksm_ne, ksm_or, ksm_ar, ksm_mu, ksm_ne, ksm_og, ksm_dk, ksm_ne
                 ;    GR      RR      SB      SL      BW      SG      SK      PG      OB      OU      SN      BC
-                DW   ksm_rt, ksm_rt, ksm_bt, ksm_gb, ksm_rt, ksm_sk, ksm_sk, ksm_gh, ksm_sk, ksm_sk, ksm_sk, ksm_sk
+                DW   ksm_rt, ksm_rt, ksm_bt, ksm_gb, ksm_sp, ksm_sk, ksm_sk, ksm_gh, ksm_or, ksm_or, ksm_ar, ksm_ne
                 DS   2 * (K_MAX - K_COUNT), 0  ; ids 30 / 31: the class FX kinds (no sequences)
                 ASSERT $ - ksm_tab == 2 * K_MAX && K_COUNT == 30
 
@@ -128,3 +128,60 @@ sl_hurt:        DB SL_HURT, 3, 0, SEQ_END
 sl_death:       DEATHSEQ SL_HURT, SL_DEAD, FID_slime_dead, SL_REST
 ksm_sl_e:
                 ASSERT (FFL_rat_run1 & FF_MOTION) && (FFL_slime_squash & FF_MOTION)
+; --- 3F-T13: the 3F-A1 kinds (game.md §9.1 / §9.7 R3-R4) ---
+; Walkers, NOT climbers (only the Goblin / Skeleton climb, R3): KS_CLIMB = the
+; idle cycle (cell-aligned at any phase; never the move cycle, whose even slot is
+; a WK4 frame). 2-frame walk: MOVECYC2 walk2, walk1 — WALK1 (the rest pose) in
+; the odd, cell-aligned slot (frames.asm). HURT = the rest frame held: the body
+; takes the $42 hit flash (R4, no frame). DEAD = the shared rat_dead (Spider) /
+; dead_humanoid (every humanoid + the Ogre). Attack timing = the Skeleton's
+; (wind-up 3, strike 2 + IMPACT) / the Rat's for the Spider (1, 2). KS_CLIMBREST
+; points at the HURT seq: anim .crest reads only its first byte (= the rest fid),
+; so the 2-B "DB fid, 0" entry is shared (-2 B per block; never used: no climber).
+    MACRO KSM3F z3n, z3p, z3c, z3d
+ksm_z3n:        KSMH ksm_z3n_e - ksm_z3n_s, 3, z3n_idle, z3n_move, z3n_idle, z3n_hurt, z3n_attack, z3n_hurt, z3n_hurt, z3n_death, ksm_z3n_s
+ksm_z3n_s:
+z3n_idle:       DB 1, FID_z3p_walk1, 1, SEQ_END
+z3n_move:       MOVECYC2 z3p_walk2, z3p_walk1
+z3n_attack:     DB FID_z3p_walk1, 3, 0, FID_z3c, 2, SF_IMPACT, SEQ_END
+z3n_hurt:       DB FID_z3p_walk1, 3, 0, SEQ_END
+z3n_death:      DEATHSEQ FID_z3p_walk1, FID_z3d, FID_z3d, FID_z3p_walk1
+ksm_z3n_e:
+    ENDM
+; --- Spider (32x16; Black Widow) ---
+ksm_sp:         KSMH ksm_sp_e - ksm_sp_s, 1, sp_idle, sp_move, sp_idle, sp_hurt, sp_attack, sp_hurt, sp_hurt, sp_death, ksm_sp_s
+ksm_sp_s:
+sp_idle:        DB 1, FID_spider_walk1, 1, SEQ_END
+sp_move:        MOVECYC2 spider_walk2, spider_walk1
+sp_attack:      DB FID_spider_walk1, 1, 0, FID_spider_bite, 2, SF_IMPACT, SEQ_END
+sp_hurt:        DB FID_spider_walk1, 3, 0, SEQ_END
+sp_death:       DEATHSEQ FID_spider_walk1, FID_rat_dead, FID_rat_dead, FID_spider_walk1
+ksm_sp_e:
+; --- Orc (Berserker, Bouncer) / Necromancer (Vampire, Archmage, Bone Caller) / Mummy / Ogre ---
+                KSM3F or, orc, orc_attack, dead_humanoid
+                KSM3F ne, necro, necro_cast, dead_humanoid
+                KSM3F mu, mummy, mummy_attack, dead_humanoid
+                KSM3F og, ogre, ogre_slam, dead_humanoid
+; --- Death Knight (+ BLOCK: the parry frame, §9.1) ---
+ksm_dk:         KSMH ksm_dk_e - ksm_dk_s, 3, dk_idle, dk_move, dk_idle, dk_hurt, dk_attack, dk_hurt, dk_blk, dk_death, ksm_dk_s
+ksm_dk_s:
+dk_idle:        DB 1, FID_dk_walk1, 1, SEQ_END
+dk_move:        MOVECYC2 dk_walk2, dk_walk1
+dk_attack:      DB FID_dk_walk1, 3, 0, FID_dk_cleave, 2, SF_IMPACT, SEQ_END
+dk_hurt:        DB FID_dk_walk1, 3, 0, SEQ_END
+dk_blk:         DB FID_dk_block, 3, 0, SEQ_END
+dk_death:       DEATHSEQ FID_dk_walk1, FID_dead_humanoid, FID_dead_humanoid, FID_dk_walk1
+ksm_dk_e:
+; --- Skeleton Archer (Sniper): the Skeleton's walk + cut = U_SKARCH; SHOOT / melee = the cut
+; (game.md §9.7 DECIDED: no SHOOT art); not a climber; DEAD = dead_humanoid ---
+ksm_ar:         KSMH ksm_ar_e - ksm_ar_s, 3, ar_idle, ar_move, ar_idle, ar_hurt, ar_attack, ar_hurt, ar_hurt, ar_death, ksm_ar_s
+ksm_ar_s:
+ar_idle:        DB 1, SK_REST, 1, SEQ_END
+ar_move:        MOVECYC4 skeleton_walk1, skeleton_walk2, skeleton_walk3, skeleton_walk4
+ar_attack:      DB SK_REST, 3, 0, FID_skeleton_cut, 2, SF_IMPACT, SEQ_END
+ar_hurt:        DB SK_REST, 3, 0, SEQ_END
+ar_death:       DEATHSEQ SK_REST, FID_dead_humanoid, FID_dead_humanoid, SK_REST
+ksm_ar_e:
+                ; the 2-frame walkers' rest frame (odd slot, drawn cell-aligned) must not be WK4
+                ASSERT !(FFL_spider_walk1 & FF_PH4) && !(FFL_orc_walk1 & FF_PH4) && !(FFL_necro_walk1 & FF_PH4)
+                ASSERT !(FFL_mummy_walk1 & FF_PH4) && !(FFL_ogre_walk1 & FF_PH4) && !(FFL_dk_walk1 & FF_PH4)

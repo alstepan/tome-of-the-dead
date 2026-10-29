@@ -57,7 +57,8 @@ POOL_FIXED      EQU 2 * 576 + 3 * 576                    ; select idles + stradd
                 ; the PROTO rooms (test fixture, proto_start = 1): every original
                 ; monster kind (start_game .gk, K_SKELETON .. K_PROTO_END - 1)
 K_PROTO_END     EQU K_SLIME + 1
-                ASSERT KFID_SKELETON == KFID_MONSTERS && KFID_SLIME + KFCNT_SLIME == KFID_MONSTERS + KFCNT_MONSTERS
+                ASSERT KFID_SKELETON == KFID_MONSTERS && KFID_SLIME + KFCNT_SLIME == KFID_F3
+                ASSERT KFID_NBOLT + KFCNT_NBOLT == KFID_MONSTERS + KFCNT_MONSTERS   ; 3F-T13: the 3F frames end the range
 POOL_NEED_PROTO EQU POOL_FIXED + POOL_HERO_MAX + POOL_MONSTERS
                 ; level_enter clears the FRT rows [KFID_MONSTERS, + KFCNT_MONSTERS):
                 ; every monster frame must lie there (heroes before, FX kinds after)

@@ -58,6 +58,10 @@ INK_MAP = {
     "#D70000": (2, False),   # dim red: LADDER_L/M/R (ATTR_LADDER $02)
     "#D7D7D7": (7, False),   # dim white: lair grate T_GRATE ($07), B10 2026-10-03
     "#0000FF": (1, True),    # bright blue: ASLEEP status icon/tint $41 (game.md §6.4, D3-3)
+    # 3F-A1 (tools/gen_3f_art.py) base inks for new kinds (game.md §9.6 ink rules)
+    "#00D7D7": (5, False),   # dim cyan: Spider $05
+    "#00D700": (4, False),   # dim green: Orc $04
+    "#D700D7": (3, False),   # dim magenta: Necromancer $03
 }
 INK_HEX = {v: k for k, v in INK_MAP.items()}
 GRID_STROKE = "#2a2a44"
@@ -71,11 +75,14 @@ CHAR_PREFIX = {
     "SPARK": "spark", "FIREBOLT": "firebolt", "FROST": "frost", "DRAIN": "drain",
     "LIGHTNING": "lightning", "POWER STRIKE": "power", "DAGGER": "dagger",
     "ARROW": "arrow", "STAFF": "staff",
+    # Stage 3F lean monster set (3F-A1, tools/gen_3f_art.py; game.md §9.1, §9.7)
+    "SPIDER": "spider", "ORC": "orc", "NECROMANCER": "necro", "MUMMY": "mummy",
+    "OGRE": "ogre", "DEATH KNIGHT": "dk", "DEAD": "dead", "NECRO BOLT": "nbolt",
 }
 # FX "characters": cell-aligned, placed by the FX track (px, py), not by a body
 # box, so every FX frame's ax is declared 0 (ANCHOR_X below) and body_w = 8.
 FX_PREFIXES = ("spark", "firebolt", "frost", "drain", "lightning", "power", "dagger",
-               "arrow", "staff")
+               "arrow", "staff", "nbolt")
 
 # Characters present on the vendored canvas / draft sheets but dropped from the
 # build (out of scope; G1 budget docs/design/budget.md §2). The sheets stay
@@ -105,7 +112,7 @@ DRAFT_GEN = {"assets/gfx/source/c37_frames.svg.html": "tools/gen_c37_frames.py",
 # as one ink on black; the in-game attribute (which may have a non-black
 # paper, e.g. the blue floor band) is declared here per tile, never guessed.
 TILE_SECTIONS = {"FX TILES": "tiles_fx", "BG TILES": "tiles_bg",
-                 "STATUS ICONS": "status_icons"}
+                 "STATUS ICONS": "status_icons", "3F TILES": "tiles_3f"}
 TILE_ATTR = {
     "zap1": 0x45, "zap2": 0x45,            # bright cyan on black (§10.2 #33-34)
     "platform": 0x0F,                      # ATTR_FLOOR: white ink on BLUE paper
@@ -117,11 +124,16 @@ TILE_ATTR = {
     # status icons (game.md §6.4 panel glyphs, row 21 cols 30-31; black paper)
     "frozen": 0x45, "asleep": 0x41, "stunned": 0x07, "confused": 0x43,
     "fear": 0x42, "poison": 0x44, "weak": 0x42,
+    # 3F common ids (game.md §9.7 R2; 3F-A1): lectern 2x2 = ids 15..18, closed gate = 13
+    "lectern_tl": 0x43, "lectern_tr": 0x43, "lectern_bl": 0x06, "lectern_br": 0x06,
+    "grate_shut": 0x07,
 }
 
 # Body box width per kind (docs/design/prototype.md §2) for the §5.3 anchor rule.
 BODY_W = {"knight": 24, "wizard": 24, "rogue": 24, "skeleton": 24, "goblin": 24,
           "ghost": 24, "rat": 32, "bat": 24, "slime": 24,
+          "spider": 32, "orc": 24, "necro": 24, "mummy": 24, "ogre": 32, "dk": 24,
+          "dead": 24,              # shared humanoid DEAD (3F, game.md §9.7 R3)
           **{p: 8 for p in FX_PREFIXES}}
 
 # Explicit horizontal anchors (prototype.md §5.3/§10.2), overriding the head-band
@@ -141,6 +153,7 @@ ANCHOR_X = {
     "rat_bite": 0, "rat_hurt": 0, "rat_dead": 0,
     "bat_dive": 0, "bat_hurt": 0, "bat_dead": 0,
     "slime_lunge": 0, "slime_hurt": 0, "slime_dead": 0,
+    "spider_bite": 0, "dead_humanoid": 8,    # 3F-A1: as rat_bite / knight_dead
     # Stage 3D FX (D3-3): engine-placed, see FX_PREFIXES
     **{f"{p}_{c}": 0 for p, cs in (
         ("spark", ("fly1", "fly2", "fizz1", "fizz2")),
@@ -148,8 +161,13 @@ ANCHOR_X = {
         ("frost", ("fly", "crack")), ("drain", ("fly1", "fly2", "hit")),
         ("lightning", ("fly1", "fly2", "flash")), ("power", ("burst",)),
         ("dagger", ("spin1", "spin2")), ("arrow", ("fly1", "fly2", "hit")),
-        ("staff", ("bonk",))) for c in cs},
+        ("staff", ("bonk",)), ("nbolt", ("fly1", "fly2", "hit"))) for c in cs},
 }
+
+# Explicit vertical anchors for frames whose character has no taller reference
+# frame on the sheet: the shared humanoid DEAD (3F-A1) lies under a 48-px body
+# box like knight_dead (ay = 16 - 48).
+ANCHOR_Y = {"dead_humanoid": -32}
 
 # Re-pads of canvas frames whose measured ax is not a multiple of 4 (§10.3):
 # the art is shifted inside the SAME frame box by dx px (only blank columns
@@ -172,6 +190,8 @@ MOTION_FRAMES = {
     "ghost_float1", "ghost_float2", "rat_run1", "rat_run2",
     "bat_flapup", "bat_glide", "bat_flapdown",
     "slime_wobble", "slime_squash", "slime_stretch",
+    # 3F-A1: MOVECYC2 walkers (WALK 1 = MOT rest frame, WALK 2 = WK0)
+    *(f"{c}_walk{n}" for c in ("spider", "orc", "necro", "mummy", "ogre", "dk") for n in (1, 2)),
 }
 SYMMETRIC_FRAMES = {f"{c}_climb{n}" for c in ("knight", "wizard", "rogue", "skeleton", "goblin")
                     for n in (1, 2)}
@@ -631,6 +651,8 @@ def prepare(frames: list[Frame]) -> None:
             if fr.name in ANCHOR_X:
                 ax, iou = ANCHOR_X[fr.name], float("nan")
                 fr.extra["declared"] = True
+            if fr.name in ANCHOR_Y:
+                ay = ANCHOR_Y[fr.name]
             fr.anchor = (ax, ay)
             fr.extra.update(ref=ref.name, iou=iou, iou0=iou0)
             check_anchor(fr)
@@ -846,6 +868,8 @@ TILE_USE = {
     "tiles_bg": "PROTO room tiles via draw_cell (prototype.md §3.3/§4.1)",
     "status_icons": "panel glyphs (NOT tile ids): row 21 cols 30-31, priority "
                     "HOLD > MIND > POISON > WEAK (game.md §6.4)",
+    "tiles_3f": "common tile glyphs for tiles_convert (game.md §9.7 R2): id 13 T_GRATE_SHUT "
+                "(grate_shut), ids 15/16/17/18 lectern TL/TR/BL/BR",
 }
 
 
@@ -915,6 +939,9 @@ def write_index(frames: list[Frame], out_dir: str, rel_sheet: str, gen_date,
     L.append('        INCLUDE "tiles_ladder.asm"')
     for ts in tile_sets:
         L.append(f'        INCLUDE "{ts}.asm"')
+    # 3F-A1 lean frames: tools/gen_3f_art.py owns index_3f.asm, so a canvas re-import
+    # (which rewrites this file) can never drop them (3F-T13 review)
+    L.append('        INCLUDE "index_3f.asm"')
     L.append("")
     L.append("FRAME_F_MOTION    EQU %d" % FLAG_MOTION)
     L.append("FRAME_F_SYMMETRIC EQU %d" % FLAG_SYMMETRIC)

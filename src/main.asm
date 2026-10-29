@@ -567,9 +567,9 @@ kind_tab:
                 ; 18..29 (the tiers: Giant Rat, Rabbit Rat, Screech Bat, Slinger, Black Widow, Skel
                 ; Guard, Skel Knight, Poltergeist, Orc Berserker, Orc Bouncer, Sniper, Bone Caller).
                 ; The new rows follow game.md §9.1 / §9.6 (hp / atk / eva are the table values before
-                ; depth scaling; die/bonus = the dmg column); their BODY (BW/BH) and the ink are the
-                ; STAND-IN frames' until T13 (defs.asm BH_K_*). Legacy ids 0..8 are unchanged.
-                KROW   3,  3,  3,  3,  3,  3,  4,  3,  3,   4,  3,  3,  3,  3,  3,  3,  3,  3,   4,  4,  3,  3,  4,  3,  3,  3,  3,  3,  3,  3          ; KT_BW (cells)
+                ; depth scaling; die/bonus = the dmg column); 3F-T13: their BODY (BW/BH, defs.asm
+                ; BH_K_*) and base inks are the real 3F-A1 art's. Legacy ids 0..8 are unchanged.
+                KROW   3,  3,  3,  3,  3,  3,  4,  3,  3,   4,  3,  3,  3,  3,  3,  4,  3,  3,   4,  4,  3,  3,  4,  3,  3,  3,  3,  3,  3,  3          ; KT_BW (cells; 3F-T13: Spider / Black Widow 32x16, Ogre 32x48)
                 KROW BH_K_KNIGHT, BH_K_WIZARD, 0, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME, BH_K_SPIDER, BH_K_VAMPIRE, BH_K_ORC, BH_K_ARCHER, BH_K_MUMMY, BH_K_NECRO, BH_K_OGRE, BH_K_DKNIGHT, BH_K_ARCHMAGE, BH_K_RAT, BH_K_RAT, BH_K_BAT, BH_K_GOBLIN, BH_K_SPIDER, BH_K_SKELETON, BH_K_SKELETON, BH_K_GHOST, BH_K_ORC, BH_K_ORC, BH_K_ARCHER, BH_K_NECRO ; KT_BH
                 KROW  24, 16, 18, 10,  6,  8,  3,  3,  6,   7, 14, 14,  8, 18, 12, 40, 50, 40,   5,  8,  5,  8, 10, 14, 18, 11, 18, 24, 10, 14          ; KT_HP
                 KROW KN_ATK, WZ_ATK, 5, 2, 1, 2, 0, 1, 0,   3, 2, 3, 2, 3, 2, 5, 6, 4,   1, 2, 2, 2, 4, 3, 4, 3, 4, 5, 3, 3          ; KT_ATK (hero columns: + level steps at runtime, D3-9b)
@@ -582,7 +582,7 @@ kind_tab:
                 ; open by bump in try_horizontal, not through KF_OPENER. 3F-T3: climbers are only
                 ; the Goblin, Skeleton (+ tiers) and the heroes (§9.7 R3); Mummy / Ogre / DK do not open doors
                 KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0,   0, KF_OPENER|KF_TALL, KF_OPENER|KF_TALL, KF_OPENER|KF_TALL, KF_TALL, KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL,   0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, 0, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_OPENER|KF_TALL, KF_OPENER|KF_TALL, KF_OPENER|KF_TALL, KF_OPENER|KF_TALL  ; KT_FLAGS
-                KROW $47,$45,$44,$47,$44,$45,$06,$43,$44,   $05,$03,$04,$03,$06,$43,$02,$03,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (new inks provisional: §9.6 tier inks, bases differ from their tiers)
+                KROW $47,$45,$44,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
                 ; 3F-T2: KT_SEQ (runtime: lowram.asm (sq_load / sq_fill) writes the kind's SEQ_ROWS row
                 ; low byte per level; 0 until the first game start). The old
                 ; KT_FID0 / KT_FCNT columns are the R6 generation-unit table gu_tab.
@@ -650,7 +650,7 @@ boot6_code:
 boot6_end:
 BOOT6_ADDR      EQU boot6_code
 BOOT6_LEN       EQU boot6_end - boot6_code
-                ASSERT boot6_end == SRC6_ADDR
+                ASSERT boot6_end == SRC6_ADDR && boot6_code >= BANK_WINDOW   ; (3F-T13: a test build's 18 SRC6 pages still fit)
                 ; the boot pool (3F-T1: the 2 select idles only, from POOL_START)
                 ; must end below bank 6: boot6_tiles runs before it, but
                 ; tests/game.py #50 checks the block after boot, at the menu
@@ -757,12 +757,12 @@ PLM = PLM | (1 << (u))
 PLX = PLX | (1 << ((u) - 32))
       ENDIF
     ENDM
-    MACRO PL_KIND k                            ; kind k's generation units (pool_map)
+    MACRO PL_KIND k                            ; kind k's generation units (pool6.asm pl_kinds)
                 ASSERT (k) < K_MAX
 PLK_HIT = 0
       IF PGMAP_N
-        DUP PGMAP_N, plr
-          IF (PLK_HIT == 0) && ({b pool_gmap + 3 * plr} == (k))
+        DUP PGMAP_N, plr                       ; 3F-T13: every record of the kind applies
+          IF {b pool_gmap + 3 * plr} == (k)
 PLK_HIT = 1
                 PL_UNIT {b pool_gmap + 3 * plr + 1}
             IF {b pool_gmap + 3 * plr + 2} != PG_NONE
@@ -827,6 +827,11 @@ PLN = 0
       IF PLX
                 PL_UNITS_ADD PLX, 32
       ENDIF
+PLU = 0                                        ; 3F-T13: the level's units fit PL_LIST
+                DUP  32, plb
+PLU = PLU + ((PLM >> plb) & 1) + ((PLX >> plb) & 1)
+                EDUP
+                ASSERT 2 * PLU + 1 <= PL_CAP
       IFDEF POOL_LVL_VERBOSE
                 DISPLAY "GAME level pool D", /D, pld + 1, " hero ", /D, plh, ": units mask ", /H, PLM, " / ", /H, PLX, ", ", /D, PLN, " B; need ", /D, PLN + POOL_FIXED + PL_HERO_B, " of ", /D, POOL_CAP
       ENDIF
@@ -846,7 +851,12 @@ POOL_LVL_WORST = PL_WORST
     IF POOL_NEED > POOL_CAP
                 DISPLAY "POOL FULL: need ", /D, POOL_NEED, " (worst D", /D, POOL_LVL_WORST, ") > POOL_CAP ", /D, POOL_CAP, " (SRC6_LEN ", /D, SRC6_LEN, ")"
     ENDIF
-                ASSERT POOL_NEED <= POOL_CAP
+    ; 3F-T13: -DPOOL_LVL_CHECK=0 = a TEST build that never descends (tests/zx0_pool.py's src6
+    ; variant: 18 SRC6 pages; the D7 need is then over POOL_CAP, its D1 sessions fit)
+    IFNDEF POOL_LVL_CHECK
+POOL_LVL_CHECK  EQU 1
+    ENDIF
+                ASSERT POOL_NEED <= POOL_CAP || !POOL_LVL_CHECK
     ; 3F-T2: -DPOOL_PROTO_CHECK=0 = a TEST build that never enters the PROTO
     ; rooms (tests/zx0_pool.py's src6 variant: 9 SRC6 pages; the PROTO need is
     ; then over POOL_CAP and a PROTO start would overflow the pool)
@@ -854,19 +864,21 @@ POOL_LVL_WORST = PL_WORST
 POOL_PROTO_CHECK EQU 1
     ENDIF
     ; 3F-T3: the PROTO fixture's default pool omits the Slime (proto_start bit PS_SLIME_BIT, pool_proto);
-    ; the 6-kind fixture the tests poke (proto_start = 3) is DISPLAYed, not asserted: its conservative
-    ; bound is over POOL_CAP, the real pool top is not (tests/game.py #50 runs it).
+    ; tests poke proto_start = 3 (all six kinds). 3F-T13: a PROTO game pools over the SRC6 sources too
+    ; (pool_proto moves alloc's bank-6 limit to R6_ADDR: rooms A-D hold no 3F kind and no stairs), so
+    ; its cap is POOL_CAP + SRC6_LEN and the 6-kind fixture's conservative bound is asserted again.
+POOL_CAP_PROTO  EQU POOL_CAP + SRC6_LEN
 PLN = 0
                 DUP  KFCNT_SLIME, pls
                 PL_FRAME_ADD KFID_SLIME + pls
                 EDUP
 POOL_SLIME_B = PLN
 POOL_NEED_PROTO5 = POOL_NEED_PROTO - POOL_SLIME_B
-    IF POOL_NEED_PROTO5 > POOL_CAP
-                DISPLAY "PROTO POOL FULL: the PROTO rooms (5 kinds) need ", /D, POOL_NEED_PROTO5, " > POOL_CAP ", /D, POOL_CAP
+    IF POOL_NEED_PROTO > POOL_CAP_PROTO
+                DISPLAY "PROTO POOL FULL: the PROTO rooms (6 kinds) need ", /D, POOL_NEED_PROTO, " > POOL_CAP + SRC6_LEN ", /D, POOL_CAP_PROTO
     ENDIF
-                ASSERT POOL_NEED_PROTO5 <= POOL_CAP || !POOL_PROTO_CHECK
-                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (worst level D", /D, POOL_LVL_WORST, " ", /D, POOL_LVL_MAX, ", hero max ", /D, POOL_HERO_MAX, ", fixed ", /D, POOL_FIXED, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0); slack ", /D, POOL_CAP - POOL_NEED, " after SRC6 ", /D, SRC6_LEN, " B; PROTO rooms (5 kinds) ", /D, POOL_NEED_PROTO5, " (slack ", /D, POOL_CAP - POOL_NEED_PROTO5, "), with the Slime ", /D, POOL_NEED_PROTO, " (conservative bound, not asserted: over POOL_CAP by ", /D, POOL_NEED_PROTO - POOL_CAP, " when > 0)"
+                ASSERT POOL_NEED_PROTO <= POOL_CAP_PROTO || !POOL_PROTO_CHECK
+                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (worst level D", /D, POOL_LVL_WORST, " ", /D, POOL_LVL_MAX, ", hero max ", /D, POOL_HERO_MAX, ", fixed ", /D, POOL_FIXED, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0); slack ", /D, POOL_CAP - POOL_NEED, " after SRC6 ", /D, SRC6_LEN, " B; PROTO rooms (6 kinds, over SRC6) ", /D, POOL_NEED_PROTO, " of ", /D, POOL_CAP_PROTO, " (slack ", /D, POOL_CAP_PROTO - POOL_NEED_PROTO, "; 5 kinds ", /D, POOL_NEED_PROTO5, ")"
 
 ;==============================================================================
 ; OVERLAYS (3E-T1) — code assembled at its runtime load address, stored

@@ -2115,8 +2115,12 @@ def w17(p, check):
     # buffer below lowram_code no longer holds it all, so the strings are
     # decoded in id batches that fit (stub area 0x3C B; the plain loop reads
     # and writes the buffer in place: same bytes, same cost per char).
-    BUF, GET = STUB + 0x40, STUB + 0x3C
-    room = S["lowram_code"] - BUF
+    # 3F-T13: the low-RAM cold block grew down (+23 frame descriptors): the stub
+    # area below lowram_code is ~63 B now, so the buffer moved to the play-free
+    # GEN_SRC window (PAGE_MAP_SAVE / SQ_IMG: generator / page time only; +64
+    # clears pblit's <= 54-B staging at GEN_SRC); no room is built meanwhile
+    BUF, room = S["PAGE_MAP_SAVE"] + 0x40, 0x200
+    GET = BUF - 4                                   # the 4-B plain getter, below the buffer
     plain_get = [0x0A, 0x03, 0xB7, 0xC9]          # ld a,(bc) / inc bc / or a / ret
     p.z.cmd("write-memory %d %s" % (GET, " ".join(map(str, plain_get))))
 
@@ -2130,7 +2134,8 @@ def w17(p, check):
                    [("L", "in"), 0xCD] + w(getter) + [0x12, 0x13, 0xB7, ("jr", 0x20, "in"),
                     0xF1, 0x3C, 0xFE, last, ("jr", 0x38, "lp"),
                     0xF1, 0xCD] + w(S["restore_page"]))
-    assert len(decode_loop(GET, True, 0, 1)) + 4 <= GET - STUB, "W17: stub overlaps GET"
+    assert STUB + max(len(decode_loop(GET, pl, 0, 1)) for pl in (True, False)) + 4 <= S["lowram_code"], \
+        "W17: the stub overlaps the cold block"
     batches, i = [], 0
     while i < len(texts):
         j, n = i, 0
@@ -3372,7 +3377,9 @@ def w16_level(p, check):
         t = int(p.z.cmd("get-tstates-partial"))
         p.z.cmd("set-register PC=%d" % pc0)
         info["level_enter D2 T (DI)"] = t
-        check("W16 level_enter (D2, DI) ran, cold path < 3.6M T (~1 s)", ok and t < 3600000, t)   # 3F-T3: fixed seed (~1k T jitter, 3% headroom)
+        # 3F-T13: D2 now generates the Spider's real frames (+ U_DEADR; the T3 stand-in shared the
+        # Rat's unit) and unpacks the larger sequence masters: 3.68M T measured (was ~3.5M)
+        check("W16 level_enter (D2, DI) ran, cold path < 3.8M T (~1.07 s)", ok and t < 3800000, t)   # fixed seed (~1k T jitter, 3% headroom)
     finally:
         p.proto_start = 1
     print("[info] W16 measured: " + ", ".join(f"{k} {v:,}" for k, v in info.items()), flush=True)
