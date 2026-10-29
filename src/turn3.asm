@@ -303,6 +303,10 @@ ai_monster:
                 call z, attack_if_reach.box    ; walker: on_ladder Z = not standing -> no attack
                 pop  hl                        ; H = 0 iff standing (flags kept)
                 ret  c
+                call ai_rhook                  ; 3F-T7 ranged hook (game.md §9.2 step 4): bank-2 rk_tab
+                ret  c                         ; reject (~66 T), a shooter far6s R6 ai_ranged; CF = the turn
+                                               ; is used. HL / TMP4 kept (the B5 box in BC / DE is not:
+                                               ; nothing below reads it)
                 ld   a, (PL_STOREY)
                 ld   c, a                      ; C = player storey
                 ld   a, (TMP4)
@@ -392,6 +396,20 @@ ai_monster:
                 ld   d, a
                 ld   e, 0
                 jp   try_step_face
+
+; rs_hit / rs_deal — 3F-T7: far3 entries for R6 ai_ranged (ranged6.asm), which
+; cannot call bank 3. rs_hit: A = 0 (the hero), IX = the shooter -> L = 1 hit /
+; 0 miss (hit_roll, modifier 0). rs_deal: A = deal_hit C, D = damage, E = the
+; effect parameter, IX = the shooter -> L = HP the hero lost (deal_hit).
+; Clobbers: all but IX.
+rs_hit:         ld   b, 0
+                call hit_roll
+                ld   l, a
+                ret
+rs_deal:        ld   c, a
+                ld   b, d
+                xor  a                         ; target = the hero
+                jp   deal_hit
 
 ; nearest_ladder — nearest segment with storey B in the current room to IX.x
 ; (descriptor order RD_UPCOL..RD_LAD2; a tie keeps the first, as the PROTO

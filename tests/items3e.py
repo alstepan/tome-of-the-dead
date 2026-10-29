@@ -8,7 +8,7 @@ Release build (DEBUG_KIT=0) for the emulator part; the layout part runs on any b
   L3  ITEM_RAM fields consecutive in the documented order and sizes, one page, outside
       LOG_TXT / PF_RAM / MK_RAM / the page band / GEN_SCRATCH / the tape image;
       TRAP_LIST / TRAP_N inside the ROOM_DESC spare below FLOOR_LIST; QPIN out of HERO_ST
-  R1  canary $A5 over ITEM_RAM + the rest of $5CC0..$5DFF + $5F8C..$5FFF at the menu;
+  R1  canary $A5 over ITEM_RAM + the rest of $5CC0..$5DFF + RG_RAM_END..$5FFF at the menu;
       START: new_game zeroes exactly ITEM_RAM, every other canary byte survives
   R2  20 turns of play + a descent (level_descend, music off): ITEM_RAM (a written
       pattern) is kept byte-exact (3E rev 6: no per-level field in it); the 3E-T6
@@ -26,7 +26,7 @@ from proj3 import T, w16  # noqa: E402
 
 KIT = bool(S.get("KIT_DEBUG", 0))
 CANARY = 0xA5
-LOW_RES = [(0x5CC0, 0x5E00), (S["MK_RAM_END"], 0x6000)]   # runtime-only reserve (memory-map)
+LOW_RES = [(0x5CC0, 0x5E00), (S["RG_RAM_END"], 0x6000)]   # runtime-only reserve (memory-map; 3F-T7: RG_RAM after MK_RAM)
 
 
 def layout(check):
