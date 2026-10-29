@@ -12,8 +12,10 @@
 ; 1 tick per entry and an even length; anim .walkph draws its even slots only
 ; at px & 4 = 4 (WK4: one shift) and its odd slots only at px & 4 = 0 (WK0).
 ; A walk frame ALSO used at rest / attack / climb / death / jump must be MOT
-; (Skeleton / Goblin WALK1 = their REST, rat_run1, slime_squash). The build
-; ASSERTs the cycle slots; tests/frames_phase.py checks the other uses.
+; (rat_run1, slime_squash) unless it sits in an ODD slot (cell-aligned): the
+; Skeleton / Goblin cycle starts at walk2 (3F-D7LEV: walk2..4, walk1) so WALK1
+; = their REST is WK0. The build ASSERTs the cycle slots; tests/frames_phase.py
+; checks the other uses.
 ;==============================================================================
 FCTR = 0
 POOLACC = 0
@@ -71,10 +73,13 @@ KFID_SKELETON = FCTR
 POOLACC = 0
                 ; 3F-T13: walk1..4 + cut first = the Skeleton Archer's unit U_SKARCH (a PREFIX
                 ; of the Skeleton's frames: pool6.asm gu_tab; the Skeleton = U_SKARCH + U_SKREST)
-                FRM skeleton_walk1,     K_SKELETON, 24, MOT
-                FRM skeleton_walk2,     K_SKELETON, 24, WK0
-                FRM skeleton_walk3,     K_SKELETON, 24, WK4
-                FRM skeleton_walk4,     K_SKELETON, 24, WK0
+                ; 3F-D7LEV: MOVECYC4 walk2, walk3, walk4, walk1 (same cyclic order): WALK1 = the
+                ; rest pose in the odd (aligned) slot = one shift (-576 B pool on a Skeleton /
+                ; Archer level vs MOT); WALK2 / WALK4 are the WK4 strides. Goblin the same.
+                FRM skeleton_walk1,     K_SKELETON, 24, WK0
+                FRM skeleton_walk2,     K_SKELETON, 24, WK4
+                FRM skeleton_walk3,     K_SKELETON, 24, WK0
+                FRM skeleton_walk4,     K_SKELETON, 24, WK4
                 FRM skeleton_cut,       K_SKELETON, 24, STA
 KFID_SKREST = FCTR
                 FRM skeleton_raise,     K_SKELETON, 24, STA
@@ -87,10 +92,10 @@ KFCNT_SKARCH = KFID_SKREST - KFID_SKELETON
 KFCNT_SKREST = FCTR - KFID_SKREST
 
 KFID_GOBLIN = FCTR
-                FRM goblin_walk1,   K_GOBLIN, 24, MOT
-                FRM goblin_walk2,   K_GOBLIN, 24, WK0
-                FRM goblin_walk3,   K_GOBLIN, 24, WK4
-                FRM goblin_walk4,   K_GOBLIN, 24, WK0
+                FRM goblin_walk1,   K_GOBLIN, 24, WK0
+                FRM goblin_walk2,   K_GOBLIN, 24, WK4
+                FRM goblin_walk3,   K_GOBLIN, 24, WK0
+                FRM goblin_walk4,   K_GOBLIN, 24, WK4
                 FRM goblin_clubup,  K_GOBLIN, 24, STA
                 FRM goblin_smash,   K_GOBLIN, 24, STA
                 FRM goblin_climb1,  K_GOBLIN, 24, STA|SYM
@@ -100,7 +105,7 @@ KFID_GOBLIN = FCTR
 KFCNT_GOBLIN = FCTR - KFID_GOBLIN
 
 KFID_GHOST = FCTR
-                FRM ghost_float1,   K_GHOST, 24, MOT
+                FRM ghost_float1,   K_GHOST, 24, WK0     ; 3F-D7LEV: rest pose, never drawn in flight (seq_img gh_fly)
                 FRM ghost_float2,   K_GHOST, 24, MOT
                 FRM ghost_lunge,    K_GHOST, 24, STA
                 FRM ghost_hurt,     K_GHOST, 24, STA

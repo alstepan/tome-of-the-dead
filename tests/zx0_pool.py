@@ -75,6 +75,18 @@ KEY = {"1": (3, 0), "2": (3, 1), "ENTER": (6, 0)}   # (KBD_MATRIX row, bit)
 GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 
 
+# 3F-D7LEV: the per-level pool need (POOL_FIXED + hero + level monsters, B), (hero, depth);
+# hero 0 = Warrior, 1 = Mage. Was (3F-T13) D7 Warrior 34,080: Skeleton / Goblin walk
+# rotated (WALK1 one shift: -576 B a Skeleton / Archer / Goblin level, -384 B D1) and the
+# Ghost's FLOAT1 one shift (-512 B on D3 / D6 / D7 / D8). Update with a reason only.
+LEVEL_NEED = {
+    (0, 1): 27520, (0, 2): 26976, (0, 3): 31456, (0, 4): 29792,
+    (0, 5): 28000, (0, 6): 26080, (0, 7): 32992, (0, 8): 29728,
+    (1, 1): 23392, (1, 2): 22848, (1, 3): 27264, (1, 4): 25728,
+    (1, 5): 23936, (1, 6): 21888, (1, 7): 28928, (1, 8): 25536,
+}
+
+
 def build(src_root, defines, out, env=None):
     os.makedirs(os.path.join(out, "build"), exist_ok=True)
     flags = [f"-D{d}" for d in defines]
@@ -627,7 +639,7 @@ def main():
     tmp = tempfile.mkdtemp(prefix="zx0pool_")
     kit = ["DEBUG_KIT=0"]          # D3-7: suites run on the release start kit
     kit += os.environ.get("ZX0POOL_DEFS", "").split()   # e.g. "PHASE_SHIFT=1"
-    variants = [("zx0", REPO, kit, None)]
+    variants = [("zx0", REPO, kit + ["POOL_LVL_VERBOSE=1"], None)]   # (+ DISPLAYs only)
     if not a.no_src6:
         # SRC6 spike E2E: the WIZARD's real blocks moved to the bank-6 SRC6
         # region (2,055 B packed: 9 pages with the Spider stand-in; pool slack
@@ -655,6 +667,19 @@ def main():
                 subprocess.run([sys.executable, os.path.join(REPO, "tools/zx0_sources.py")],
                                check=True, stdout=subprocess.DEVNULL)
         print(f"[{name}] built {sna}")
+        if name == "zx0" and not os.environ.get("ZX0POOL_DEFS"):
+            # 3F-D7LEV: the build's per-level pool need (main.asm POOL_LVL_VERBOSE), both heroes
+            got = {}
+            for d in disp:
+                m = re.search(r"level pool D(\d) hero (\d): .*, (\d+) B; need (\d+)", d)
+                if m:
+                    got[(int(m.group(2)), int(m.group(1)))] = int(m.group(4))
+            for (hero, dep), want in sorted(LEVEL_NEED.items()):
+                ok = got.get((hero, dep)) == want
+                print(f"[{'PASS' if ok else 'FAIL'}] {name} level need D{dep} "
+                      f"{('Warrior', 'Mage')[hero]}: {got.get((hero, dep))} == {want}")
+                if not ok:
+                    fails.append(f"{name}/need/D{dep}h{hero}")
         for d in disp:
             if "sprite sources" in d or "ZX0" in d or "low-RAM" in d or "SRC6" in d:
                 print(f"[{name}]   {d}")

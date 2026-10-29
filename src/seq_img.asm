@@ -67,8 +67,8 @@ ksm_wz_e:
 ksm_sk:         KSMH ksm_sk_e - ksm_sk_s, 3, sk_idle, sk_move, sk_climb, sk_climbrest, sk_attack, sk_hurt, sk_hurt, sk_death, ksm_sk_s
 ksm_sk_s:
 sk_idle:        DB 1, SK_REST, 1, SEQ_END
-sk_move:        MOVECYC4 skeleton_walk1, skeleton_walk2, skeleton_walk3, skeleton_walk4
-sk_climb:       CLIMBCYC FID_skeleton_climb1, FID_skeleton_climb2, FID_skeleton_walk1, FID_skeleton_walk2, FID_skeleton_walk3, FID_skeleton_walk4
+sk_move:        MOVECYC4 skeleton_walk2, skeleton_walk3, skeleton_walk4, skeleton_walk1
+sk_climb:       CLIMBCYC FID_skeleton_climb1, FID_skeleton_climb2, FID_skeleton_walk2, FID_skeleton_walk3, FID_skeleton_walk4, FID_skeleton_walk1
 sk_climbrest:   CLIMBREST FID_skeleton_climb1, FID_skeleton_walk1
 sk_attack:      DB FID_skeleton_raise, 3, 0, FID_skeleton_cut, 2, SF_IMPACT, SEQ_END
 sk_hurt:        DB SK_HURT, 3, 0, SEQ_END
@@ -79,18 +79,25 @@ ksm_sk_e:
 ksm_gb:         KSMH ksm_gb_e - ksm_gb_s, 3, gb_idle, gb_move, gb_climb, gb_climbrest, gb_attack, gb_hurt, gb_hurt, gb_death, ksm_gb_s
 ksm_gb_s:
 gb_idle:        DB 1, GB_REST, 1, SEQ_END
-gb_move:        MOVECYC4 goblin_walk1, goblin_walk2, goblin_walk3, goblin_walk4
-gb_climb:       CLIMBCYC FID_goblin_climb1, FID_goblin_climb2, FID_goblin_walk1, FID_goblin_walk2, FID_goblin_walk3, FID_goblin_walk4
+gb_move:        MOVECYC4 goblin_walk2, goblin_walk3, goblin_walk4, goblin_walk1
+gb_climb:       CLIMBCYC FID_goblin_climb1, FID_goblin_climb2, FID_goblin_walk2, FID_goblin_walk3, FID_goblin_walk4, FID_goblin_walk1
 gb_climbrest:   CLIMBREST FID_goblin_climb1, FID_goblin_walk1
 gb_attack:      DB FID_goblin_clubup, 3, 0, FID_goblin_smash, 2, SF_IMPACT, SEQ_END
 gb_hurt:        DB GB_HURT, 3, 0, SEQ_END
 gb_death:       DEATHSEQ GB_HURT, GB_DEAD, FID_goblin_dead, GB_REST
 ksm_gb_e:
-; --- Ghost (flyer: FLY uses the idle loop) ---
-ksm_gh:         KSMH ksm_gh_e - ksm_gh_s, 2, gh_idle, gh_idle, gh_idle, gh_climbrest, gh_attack, gh_hurt, gh_hurt, gh_death, ksm_gh_s
+; --- Ghost (flyer) ---
+                ; 3F-D7LEV: FLY = gh_fly (anim .mv reads a flyer's KS_MOVE cycle at the
+                ; idle_phase, i.e. at any px parity): FLOAT2 held (MOT), so FLOAT1 (the rest
+                ; pose: idle at rest, cell-aligned) keeps ONE shift (STA, -512 B pool per
+                ; Ghost level). KS_CLIMBREST = gh_idle + 1: anim .crest reads one byte, and
+                ; gh_idle's first fid IS GH_REST (never used: not a climber; -2 B)
+ksm_gh:         KSMH ksm_gh_e - ksm_gh_s, 2, gh_idle, gh_fly, gh_idle, gh_idle + 1, gh_attack, gh_hurt, gh_hurt, gh_death, ksm_gh_s
 ksm_gh_s:
 gh_idle:        DB 12, FID_ghost_float1, 6, FID_ghost_float2, 6, SEQ_END
-gh_climbrest:   DB GH_REST, 0
+                ASSERT GH_REST == FID_ghost_float1 && !(FFL_ghost_float1 & FF_MOTION) == !!PHASE_SHIFT
+gh_fly:         DB 1, FID_ghost_float2, 1, SEQ_END
+                ASSERT FFL_ghost_float2 & FF_MOTION
 gh_attack:      DB FID_ghost_float2, 2, 0, GH_LUNGE, 2, SF_IMPACT, SEQ_END
 gh_hurt:        DB GH_HURT, 3, 0, SEQ_END
 gh_death:       DEATHSEQ GH_HURT, GH_DEAD, FID_ghost_dead, GH_REST
@@ -177,7 +184,7 @@ ksm_dk_e:
 ksm_ar:         KSMH ksm_ar_e - ksm_ar_s, 3, ar_idle, ar_move, ar_idle, ar_hurt, ar_attack, ar_hurt, ar_hurt, ar_death, ksm_ar_s
 ksm_ar_s:
 ar_idle:        DB 1, SK_REST, 1, SEQ_END
-ar_move:        MOVECYC4 skeleton_walk1, skeleton_walk2, skeleton_walk3, skeleton_walk4
+ar_move:        MOVECYC4 skeleton_walk2, skeleton_walk3, skeleton_walk4, skeleton_walk1
 ar_attack:      DB SK_REST, 3, 0, FID_skeleton_cut, 2, SF_IMPACT, SEQ_END
 ar_hurt:        DB SK_REST, 3, 0, SEQ_END
 ar_death:       DEATHSEQ SK_REST, FID_dead_humanoid, FID_dead_humanoid, SK_REST

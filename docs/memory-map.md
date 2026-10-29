@@ -433,7 +433,7 @@ in R6** and a **per-level cache in bank 2** (was: every kind's 17-B
 * **Build check** (main.asm "SEQ CACHE NEED", after OVERLAYS, final pass,
   from the raw image bytes): per depth (`lp_dtab`) and for PROTO, the
   distinct blocks ≤ `SQ_SLOTS` − 1 and the largest hero block + their bytes
-  ≤ `SEQB_LEN`. Today: **hero 49 + monsters 202 (PROTO) = 251 of 256**, ≤ 6
+  ≤ `SEQB_LEN`. Today: **hero 49 + monsters 204 (PROTO) = 253 of 256** (3F-D7LEV), ≤ 6
   blocks. 3F (T3) raises `SEQB_LEN` as it adds blocks (each byte = 1 B bank
   2; expect ~+40 B for the worst 3F level's larger blocks).
 * Tests: `tests/frames_phase.py` reads the masters from `build/ovl/seq.bin`;
@@ -641,6 +641,27 @@ The 3F-A1 lean frames replace the T3 stand-ins (frames, sequences, bodies, inks)
 | D8 Necro Skeleton Ghost Vampire + Archmage | 12,096 | 30,816 | 12,096 | 26,624 |
 
 `POOL_CAP` **34,980** (37,284 − 9 SRC6 pages), `POOL_NEED` 34,080 (D7 Warrior), **slack 900**.
+
+**3F-D7LEV (no art change):** the Skeleton / Goblin / Archer walk is `MOVECYC4 walk2, walk3,
+walk4, walk1` (same cyclic order): WALK1 (the rest pose) sits in an odd, cell-aligned slot →
+`WK0` (one shift; was MOT), WALK2 / WALK4 `WK4`, WALK3 `WK0`. The Ghost flies on its own
+KS_MOVE `gh_fly` (FLOAT2 held, MOT) so FLOAT1 (idle at rest only) is `WK0`. Need per level
+(Warrior / Mage), before → after:
+
+| Depth | Warrior | Mage |
+|---|---|---|
+| D1 | 27,904 → 27,520 (−384) | 23,776 → 23,392 |
+| D2 | 27,360 → 26,976 (−384) | 23,232 → 22,848 |
+| D3 | 32,544 → 31,456 (−1,088) | 28,352 → 27,264 |
+| D4 | 30,368 → 29,792 (−576) | 26,304 → 25,728 |
+| D5 | 28,576 → 28,000 (−576) | 24,512 → 23,936 |
+| D6 | 26,592 → 26,080 (−512) | 22,400 → 21,888 |
+| **D7** | **34,080 → 32,992 (−1,088)** | 30,016 → 28,928 |
+| D8 | 30,816 → 29,728 (−1,088) | 26,624 → 25,536 |
+
+`POOL_NEED` **32,992** (D7 Warrior), **slack 1,988**; PROTO fixture 37,312 → 35,840 (slack
+1,700). Asserted per level in `tests/zx0_pool.py` `LEVEL_NEED`. Sequence masters 711 → 713 B
+raw (`gh_fly` +4, Ghost KS_CLIMBREST = `gh_idle + 1` −2), seq cache need 251 → **253** of 256.
 
 | Region (kit build; release in brackets) | Before (main `b2c300a`) | After 3F-T13 | Δ |
 |---|---|---|---|

@@ -144,10 +144,15 @@
   STA or MOT).**
 - **Any walk frame also used at rest / attack / hurt / death / climb / jump
   must be MOT** (those are drawn cell-aligned, or at both parities for JUMP2):
-  e.g. Skeleton / Goblin WALK1 are their REST frames — **unless it sits in an
-  ODD slot** (drawn cell-aligned too): the 3F 2-frame walkers (3F-T13) write
-  `MOVECYC2 walk2, walk1`, WALK1 = rest pose = `WK0` (one shift; MOT under
-  `PHASE_SHIFT` 0), WALK2 = `WK4` — −576 B pool per 24×48 kind vs MOT + WK0.
+  e.g. rat_run1 / slime_squash — **unless it sits in an ODD slot** (drawn
+  cell-aligned too): put the rest pose LAST in the cycle. The 3F 2-frame
+  walkers (3F-T13) write `MOVECYC2 walk2, walk1`, the Skeleton / Goblin /
+  Archer (3F-D7LEV) `MOVECYC4 walk2, walk3, walk4, walk1` (same cyclic order):
+  WALK1 = rest pose = `WK0` (one shift; MOT under `PHASE_SHIFT` 0), the even
+  slots `WK4` — −576 B pool per 24×48 kind vs a MOT WALK1.
+- **Flyers** draw their KS_MOVE cycle at the idle phase (any px parity): every
+  frame in it must be MOT. The Ghost's KS_MOVE is `gh_fly` (FLOAT2 held), so
+  its rest pose FLOAT1 (idle at rest only) is `WK0` (3F-D7LEV, −512 B).
   A non-climber whose move cycle has a WK4 even slot uses its idle cycle as
   KS_CLIMB (never the move cycle). A WK4 frame may appear in
   no other sequence, cycle or role (`tests/frames_phase.py`, static, no
