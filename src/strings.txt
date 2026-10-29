@@ -104,7 +104,6 @@ info_potion     "POTION                      FIRE: DRINK"
 info_scroll     "QUICK SCROLL                FIRE: READ"
 info_bag        "BAG"
 # state note replacing the notes field at 0 ammo (game.md §6.3)
-none_left       "NONE LEFT"
 
 # --- refusals: illegal FIRE, no turn passes (game.md §3.1, §6.3) ----------------
 no_arrows       "NO ARROWS"
@@ -125,7 +124,6 @@ hg_hungry       "HUNGRY"
 hg_weak         "WEAK"
 
 # --- pause overlay (game.md §3.1) -----------------------------------------------
-paused          "PAUSED"
 resume          "RESUME"
 quit            "QUIT"
 quit_ask        "QUIT? Y/N"
@@ -136,7 +134,6 @@ snd_sfx         "SOUND: SFX ONLY"
 snd_all         "SOUND: ALL ON"
 
 # --- main menu (menu font; concept screen_menu.png, game.md §3.2) ---------------
-m_title         "TOME OF THE DEAD"
 m_start         "1 START"
 m_hero          "2 HERO: "
 m_controls      "3 CONTROLS"
@@ -159,7 +156,6 @@ ft_subtitle     "(C) 2026 A DUNGEON ROGUELIKE"
 
 # --- death / win screens and the DEPTH card (menu font; pieces take a number/name) -
 end_dead        "YOU DIED"
-end_killed      "KILLED BY "
 end_win         "YOU WIN!"
 end_press       "PRESS 1-4 OR ENTER"
 card_depth      "DEPTH "
@@ -206,17 +202,11 @@ ab_drain        "DRAIN LIFE"
 ab_lightning    "LIGHTNING"
 ab_power        "POWER STRIKE"
 ab_whirl        "WHIRLWIND"
-rk_ii           " II"
-rk_iii          " III"
-bang            "!"
 
 # --- books (game.md §5) ---------------------------------------------------------
 bk_read         "YOU READ THE BOOK"
 bk_learn        "YOU LEARN "
 bk_rises        " RISES TO RANK "
-bk_grasp        "YOU GRASP LITTLE OF IT"
-bk_crumbles     "THE BOOK CRUMBLES"
-bk_destroyed    "THE BOOK IS DESTROYED"
 # placeholder text - designer to confirm
 bk_vigor        "YOU FEEL MORE VIGOROUS"
 # placeholder text - designer to confirm
@@ -226,9 +216,6 @@ bk_power        "YOU FEEL MORE POWERFUL"
 xp_reach        "YOU REACH LEVEL "
 xp_atk          "YOU STRIKE TRUER"
 xp_eva          "YOU FEEL NIMBLE"
-xp_lv           "LV "
-xp_xp           "XP "
-xp_level        "LEVEL "
 
 # --- projectiles and spells (game.md §6): pre + kind name; max pre 20 so that
 # pre + a 12-char short name fits 32 ----------------------------------------------
@@ -258,7 +245,6 @@ spl_reflect     "YOUR SPELL IS REFLECTED"
 spl_reflect_m   "IT IS REFLECTED"
 cmb_parries     " PARRIES!"
 cmb_unaffected  " IS UNAFFECTED"
-cmb_range       "OUT OF RANGE"
 cmb_pick        "YOU PICK UP "
 cmb_arrows      " ARROWS"
 cmb_arrow       " ARROW"
