@@ -156,12 +156,14 @@ set_reaction_at:
                 ret
 
 ;==============================================================================
-; MONSTER AI (prototype §6.4). IX = monster (active, CUR_ROOM, not pending/dying).
-; Clobbers: all but IX.
+; MONSTER AI (prototype §6.4). IX = monster (active, CUR_ROOM, not pending/dying),
+; ACT_SLOT = its slot (3F-B5: the caller, resolve_monsters, stores it; was an
+; ix_slot here, ~0.1k T). No result.  Clobbers: all but IX.
+; 3F-B5 walker path: get_box once (cork_check keeps BC / DE), the feet row y+h
+; looked up once (was feet_mod x3 + get_box again in attack_if_reach), and a
+; known-standing step enters try_step past its on_ladder (~0.3k T a step).
 ;==============================================================================
 ai_monster:
-                call ix_slot
-                ld   (ACT_SLOT), a
                 ; --- yield rule (§6.4): hero mid-ladder and I block its climb.
                 ; Checked against the hero's whole remaining path (cork_check),
                 ; not just the next step, so a monster already parked on the
@@ -259,31 +261,53 @@ ai_monster:
                 and  KF_FLYER
                 jp   nz, ai_flyer
                 ; ================= WALKER =================
-                call attack_if_reach
+                ; BC / DE = the box still (get_box above; cork_check keeps BC,
+                ; DE, KFIELD clobbers A / HL only). n = y+h (= feet_mod's n):
+                ; storey_ref and is_standing from one KT_DIV9 / KT_MOD9 pair.
+                ASSERT KT_DIV9 == KT_MOD9 + $20 && ((kind_tab + KT_MOD9) & $3F) <= 8
+                ld   a, b
+                add  a, e
+                add  a, (kind_tab + KT_DIV9) & $FF
+                ld   l, a
+                ld   h, (kind_tab + KT_DIV9) >> 8
+                ld   a, (hl)                   ; n div 9 (0..2)
+                ASSERT STOREY_COUNT == 2       ; min(div, 1) as 0 -> 0, else 1:
+                cp   1                         ; CF iff 0
+                sbc  a, a                      ; $FF / 0
+                inc  a                         ; 0 / 1 (4 B, 15 T vs cp / jr / ld 6 B)
+                ld   (TMP4), a                 ; my storey (storey_ref; TMP4 is scratch
+                res  5, l                      ; nothing in the attack reads) -> KT_MOD9 row
+                ld   a, (hl)
+                xor  STOREY_AIR                ; Z / A = 0: standing (CF = 0)
+                push af
+                call z, attack_if_reach.box    ; walker: on_ladder Z = not standing -> no attack
+                pop  hl                        ; H = 0 iff standing (flags kept)
                 ret  c
-                call storey_ref
-                ld   b, a
                 ld   a, (PL_STOREY)
                 ld   c, a                      ; C = player storey
-                ld   a, b
-                ld   (TMP4), a                 ; my storey
-                cp   c
-                jr   nz, .other
-                call is_standing
-                jr   nz, .other
+                ld   a, (TMP4)
+                xor  c
+                or   h
+                jr   nz, .other                ; another storey, or not standing
                 ; same storey, standing: step toward the player
                 call dx_to_player              ; D = dx (0 if aligned)
                 ld   a, d
                 or   a
                 ret  z
-                ld   e, 0
-                jp   try_step_face
+.fstep:         ld   e, 0                      ; try_step_face for a STANDING walker:
+                ld   a, d                      ; enters try_step past its on_ladder test
+                ld   (TMP6), a                 ; (Z only mid-ladder; ~0.3k T). No result:
+                call try_step.vert             ; ai_monster's caller reads none (CF of
+                ret  nc                        ; face_tmp6 is not try_step_face's)
+                jp   face_tmp6
 .other:
+                ld   b, h                      ; B = 0 iff standing
                 KFIELD KT_FLAGS
                 and  KF_CLIMBER
                 jr   z, .patrol
-                call on_ladder
-                jr   nz, .seek
+                ld   a, b                      ; (on_ladder: walker -> NZ iff standing)
+                or   a
+                jr   z, .seek
                 ; mid-ladder: continue in ai_dir
                 ld   d, 0
                 ld   e, (ix+E_AIDIR)
@@ -315,10 +339,9 @@ ai_monster:
                 cp   (ix+E_X)
                 jr   z, .at
                 ld   d, 1
-                jr   nc, .tw
+                jr   nc, .fstep                ; (.seek: standing)
                 ld   d, $FF
-.tw:            ld   e, 0
-                jp   try_step_face
+                jr   .fstep
 .at:            ; at the shaft: climb only if the segment is clear (no head-on)
                 ld   c, a                      ; B = segment storey (its lower end)
                 ld   a, b                      ; shaft rect: rows 9(B-1) .. 9B+7
@@ -393,17 +416,20 @@ dx_to_player:
                 ret
 
 ; attack_if_reach — if the player is in reach (either side) face + attack.
-; CF = 1 if attacked.
+; IX = monster. CF = 1 if attacked.  Clobbers: all but IX.
+; .box (3F-B5, ai_monster / ai_flyer): BC / DE = IX's get_box, IX known not
+; mid-ladder (a flyer, or a standing walker): skips on_ladder + get_box (the
+; two pure tests only reorder: either fails -> no attack).
 attack_if_reach:
                 ; Monsters only ever target the hero, whose box/state is cached
                 ; for the turn (cache_player), so this is one direct test instead
                 ; of two target scans (~0.6k T vs ~2k T per monster).
-                ld   a, (PL_LADDER)
-                or   a
-                jr   nz, .no                   ; hero mid-ladder: no combat (§4.2)
                 call on_ladder
                 jr   z, .no                    ; I'm on a ladder: no combat
                 call get_box
+.box:           ld   a, (PL_LADDER)
+                or   a
+                jr   nz, .no                   ; hero mid-ladder: no combat (§4.2)
                 ld   a, (PL_Y)                 ; vertical overlap
                 ld   hl, PL_H
                 add  a, (hl)
@@ -456,8 +482,8 @@ attack_if_reach:
 ; ladder-end rule is gone); only try_step's anti-cork protects a climb.
 ; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
-ai_flyer:
-                call attack_if_reach
+ai_flyer:                                      ; BC / DE = the box (ai_monster's get_box)
+                call attack_if_reach.box       ; 3F-B5: a flyer is never mid-ladder
                 ret  c
                 call storey_ref
                 ld   (TMP4), a                 ; my storey s
@@ -706,6 +732,7 @@ resolve_monsters:
                 push bc                        ; the callees clobber BC / DE (keep IX): the
                 push de                        ; walk state lives on the stack across them
                 ld   a, c
+                ld   (ACT_SLOT), a             ; 3F-B5: ai_monster's ACT_SLOT (was its ix_slot)
                 add  a, ST_FLAGS & $FF         ; D3-8: the status step at the start of its
                 ld   l, a                      ; phase (game.md §2.2 / §6.4); STATUS 0 =
                 ld   h, ST_FLAGS >> 8          ; the fast path (~50 T)

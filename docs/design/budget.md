@@ -192,6 +192,22 @@ single-scenario deltas under ~1.5k mean nothing; only the consistent drop across
 scenarios is real (a 2-line `.full8` unroll saved 154 T in present and 0 T in the pmix tick; not kept). Below the
 plan's 2k target: the rest of present is the 22 T/byte copy itself.
 
+**3F-B5 AI-FEET (2026-10-29):** `ai_monster`'s walker path reuses the entry `get_box` (cork_check
+keeps BC / DE) and looks y+h up once in `KT_DIV9` / `KT_MOD9` (storey + standing), instead of
+`feet_mod` x3 + `get_box` again; `attack_if_reach.box` (also `ai_flyer`) skips its on_ladder +
+get_box; a known-standing step enters `try_step.vert` (skips try_step's on_ladder); `ACT_SLOT`
+from `resolve_monsters`' slot counter (no `ix_slot`). `resolve_monsters` phase over all ticks
+(`GAME_PROFILE=1`, `phase max/sum` line), base (main `6edd76e`) -> new, max / sum:
+pmix 19,765 / 203,326 -> **16,125 / 178,771 (-3.6k max, -12%)**; mage 22,680 / 104,644 ->
+18,552 / 86,630 (-4.1k); wcast4 25,271 / 70,202 -> 23,255 / 64,560 (-2.0k); lcastf 17,744 ->
+13,672 (-4.1k); umix 21,898 -> 21,444 (its worst resolve tick has status-held monsters; per
+tick -2.8..-4.3k on every plain monster turn, +13..66 T on the held ones). Worst tick pmix
+120,137 -> 117,060, others unchanged (their worst tick has no monster phase). Probe caveat:
+`resolve_monsters` now sits at `$E0C3`, an address bank-7 code also runs at, so 3 umix
+quick-use ticks show a spurious ~6.3k "resolve" (0 on base). Behaviour bit-identical:
+`tests/ai_equiv.py` (2,100 seeded turns, 6 runs PROTO / D1 / D4 / D7, both heroes): entity
+logic, RNG, status and the full 512-B entity table equal after every turn. Bank 3 +15 B.
+
 **SND-5 (sound effects in the ISR, 2026-10-19, M; review round + 27 effects + duck on every effect +
 the `SFX_NEXT` deferral):** the melee / spell / throw / bounce / burst / status / movement / door / level-up
 effects fire in the budget scenarios. ISR in window max 5,926 T (PRE_MAX up to 6,328); worst ordinary
