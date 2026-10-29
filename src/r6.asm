@@ -25,6 +25,7 @@
                 INCLUDE "abil6.asm"            ; 3F-T6: parry6 / mummy6 / acid6 / wear_slot / wear_apply
                 INCLUDE "tier6.asm"            ; 3F-T5: lp_gen (FRESH unit loop + tier roll) / kind_hp, drop_row + drop_tab (from bank 3)
                 INCLUDE "pool6.asm"            ; 3F-T1: pool_list / pool_map / pool_gmap (the level pool's kinds)
+                INCLUDE "ranged6.asm"          ; 3F-T7: ai_ranged (the shooter decision, the shot + its queued FX descriptor)
     IF F3_GEN
                 INCLUDE "sanct6.asm"           ; 3F-T10: sanctum_leaf (D8 Sanctum generation, only with the 3F switch)
     ENDIF

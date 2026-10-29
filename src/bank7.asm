@@ -1046,6 +1046,7 @@ follow_select:
 ; L-RELIEF: bank 7, far7 from bank-3 follow_admit (IX passes in).
 ; Clobbers: A, BC.
 place_follower:
+                ld   (ix+E_RCD), 0             ; 3F-T7: cooldown counter 1 on arrival (stored XOR 1)
                 ld   a, (EXIT_DEST)
                 ld   (ix+E_ROOM), a
                 set  EF_PENDING_BIT, (ix+E_FLAGS)

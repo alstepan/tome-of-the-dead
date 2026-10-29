@@ -113,6 +113,64 @@ MK_AX           EQU MK_WAIT + P_MAX_ENT                      ; $5F8B: mk_draw's 
 MK_RAM_END      EQU MK_AX + 1                                ; $5F8C
                 ASSERT (MK_MAP & $FF) == 0 && ((MK_RAM_END - 1) >> 8) == (MK_RAM >> 8)
                 ASSERT MK_RAM >= PF_RAM + PF_RAM_LEN && MK_RAM_END <= $6000
+
+;------------------------------------------------------------------------------
+; 3F-T7 ranged attacks (game.md §9.2 RANGED-SPEC; src/ranged6.asm, R6; bank-2
+; ranged2.asm ai_rhook + rk_tab). Runtime RAM RG_RAM right after MK_RAM (bank 5,
+; runtime only, garbage at boot: ai_ranged writes the scratch before reading it,
+; RS_N is reset whenever TP_SHOT is clear).
+;------------------------------------------------------------------------------
+RG_RAM          EQU MK_RAM_END      ; $5F8C
+RG_ROW          EQU RG_RAM          ; 8 B: the shooter's rd_tab row (RW_*), copied per hook call
+RG_OLD          EQU RG_ROW + 8      ; the cooldown counter at the hook's entry (before the decrement)
+RG_DIR          EQU RG_OLD + 1      ; +1 hero to the right / $FF left
+RG_FIRST        EQU RG_DIR + 1      ; the lowest gap col
+RG_GAP          EQU RG_FIRST + 1    ; empty cols between the boxes
+RG_F            EQU RG_GAP + 1      ; the shot: RGF_IMP (impact frame) / RGF_FLASH (HP lost)
+RS_P            EQU RG_F + 1        ; low byte of the next free RS_Q entry (valid while TP_SHOT)
+RS_Q            EQU RS_P + 1        ; RS_MAX x RS_STRIDE: {release tick R ($FF: started), the flash's
+                                    ; impact tick (0: none / done), the FX descriptor (FXD_LEN)}
+RS_STRIDE       EQU 2 + FXD_LEN
+RS_MAX          EQU 4               ; shooters in one monster phase (Σ12, weight >= 4: <= 3); a 5th: FX_DROP
+RS_SINK         EQU RS_Q + RS_MAX * RS_STRIDE   ; the overflow entry: written, never run
+RG_RAM_END      EQU RS_SINK + RS_STRIDE
+                ASSERT RG_RAM_END <= $6000 && (RG_RAM >> 8) == ((RG_RAM_END - 1) >> 8)
+RS_R            EQU 0               ; RS_Q entry fields
+RS_FL           EQU 1
+RS_D            EQU 2
+RS_STARTED      EQU $FF
+RGF_IMP_BIT     EQU 0
+RGF_FLASH_BIT   EQU 1
+RG_REL          EQU 2               ; release tick = the monster phase's tick + RG_REL + (slot & 1)
+; rd_tab row (R6 ranged6.asm), RW_STRIDE B per shooter; rk_tab[kind] (bank 2) = its row 1.., 0 = none
+RW_R            EQU 0               ; range r: in range iff gap < r
+RW_N            EQU 1               ; cooldown N: the counter := N on a shot (N = 1 every 2nd turn, 2 every 3rd)
+RW_F            EQU 2               ; RWF_*
+RW_DIE          EQU 3               ; damage 1dDIE + BON
+RW_BON          EQU 4
+RW_DHC          EQU 5               ; deal_hit C (DTY_* | DH_NODEF | EFX << DH_EFX_SHIFT)
+RW_DHE          EQU 6               ; deal_hit E (on-hit effect: chance 1 in N << 4 | turns)
+RW_FX           EQU 7               ; flight fid A; fid + 1 = B, fid + 2 = the impact frame (unless RWF_NOIMP)
+RW_STRIDE       EQU 8
+RWF_SPELL       EQU %00000001       ; auto-hit (no d20; Necro / Bone Caller / Archmage)
+RWF_AWAY        EQU %00000010       ; steps away from the hero at gap 2 (not the Sniper)
+RWF_NOIMP       EQU %00000100       ; no impact frame (dagger_spin rock)
+RWF_PRE         EQU %00001000       ; T9 / T11: the caster pre-rule slot runs first (summon / teleport)
+RWF_NOREFL      EQU %00010000       ; ignores the reflect gate (Archmage, T11)
+RWF_BNC1        EQU %01000000       ; bits 6-7: wall bounces (Archmage 1; T11, unread)
+RK_ARCHER       EQU 1               ; rd_tab rows
+RK_SNIPER       EQU 2
+RK_SLINGER      EQU 3
+RK_NECRO        EQU 4
+RK_BONE_CALLER  EQU 5
+RK_ARCHMAGE     EQU 6               ; T11: data only (rk_tab[K_ARCHMAGE] stays 0 until the Archmage AI)
+RK_ROWS         EQU 6
+; E_RCD (= E_POT, unused by monsters): bits 0-1 the cooldown counter stored XOR 1 (the
+; zeroed spawn slot (lp_spawn) / place_follower's 0 = counter 1: no shot on the first
+; monster phase after the room entry); bits 2-5 T9's Bone Caller summon counter (unused yet)
+E_RCD           EQU E_POT
+RCD_MASK        EQU %00000011
+RCD_SUMMON      EQU %00111100       ; T9
 MK_G_CONF       EQU 4               ; glyph g of CONFUSED / FEAR (HOLD: g = the HOLD kind)
 MK_G_FEAR       EQU 5
 MK_FRAME        EQU %00001000       ; R_MK bit 3: frame B (A shifted up 1 px)
@@ -328,7 +386,9 @@ TP_FIRE_BIT     EQU 2               ; this is the fire tick: panel item + decor_
 TP_ACT          EQU 1 << TP_ACT_BIT
 TP_MON          EQU 1 << TP_MON_BIT
 TP_FIRE         EQU 1 << TP_FIRE_BIT
-ACT_FIRE_TICK   EQU 2               ; release tick f of every ability (game.md §6.1 "Release ticks")
+TP_SHOT_BIT     EQU 3               ; 3F-T7: monster shots queued (RS_Q): act_pend far6s shot_tick each
+TP_SHOT         EQU 1 << TP_SHOT_BIT ; tick (FX start at the release, hero flash at the impact); holds the turn
+ACT_FIRE_TICK   EQU 2              ; release tick f of every ability (game.md §6.1 "Release ticks")
                 ASSERT TURN_PEND == $BC4A && HERO_T8_END <= ANIM_N
                 ASSERT (HERO3D >> 8) == ((HERO_T8_END - 1) >> 8) && FX_ARG == FX_OP + 1
 

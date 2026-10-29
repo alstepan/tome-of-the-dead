@@ -619,6 +619,7 @@ kind_tab:
                 INCLUDE "xp2.asm"               ; D3-9b XP_NEXT table + item_mp (MP bar)
                 INCLUDE "sfx2.asm"              ; SND-5 sfx_req / sfx_msg (any bank calls them)
                 INCLUDE "bars2.asm"             ; MEM-SND bars_draw / num2 (from panel2.asm: pad headroom)
+                INCLUDE "ranged2.asm"           ; 3F-T7 ai_rhook + rk_tab (the ranged hook's reject)
 
 code_end:
 ; 3F-T2: the sequence cache's bytes (RUNTIME only, not on tape: R6 pool6.asm / lowram.asm

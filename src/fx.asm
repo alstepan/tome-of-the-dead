@@ -39,6 +39,14 @@ fx_trk:         DW   FXT0, FXT1, FXT2           ; track i record (bit 1 << i of 
                 ASSERT (nm_ax & 7) == 0 && ((nm_w - nm_ax - 8) & 7) == 0 && (nm_h & 7) == 0  ; cell-aligned
                 DB   (attr) | ((nm_ay >> 3) << 7)
     ENDM
+; 3F-T13 / T7: the Necro bolt fids sit below KFID_FXM (monster range): fx_set reads
+; fx_meta - KFID_FXM + fid for them too, so their meta bytes go here, padded up to
+; fx_meta for any fids between them and KFID_FXM (T13bc's climb pair: never an FX)
+; (the art's ink #FF00FF = $43; fly ay 0, hit ay 8). Monster shots: ranged6.asm.
+                ASSERT FID_nbolt_hit == FID_nbolt_fly1 + 2 && FID_nbolt_hit < KFID_FXM
+                ASSERT nbolt_fly1_ay == 0 && nbolt_fly2_ay == 0 && nbolt_hit_ay == 8
+                DB   $43, $43, $43 | $80       ; nbolt_fly1, nbolt_fly2, nbolt_hit
+                DS   KFID_FXM - FID_nbolt_hit - 1, 0
 fx_meta:        FXMETA spark_fly1,      $43
                 FXMETA spark_fly2,      $43
                 FXMETA firebolt_fly1,   $46

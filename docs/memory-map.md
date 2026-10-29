@@ -13,7 +13,7 @@
 | `$5800-$5AFF`| Screen attributes (bank 5)                  | 768 bytes, the clash grid     |
 | `$5B00-$5BFF`| Printer buffer → **`LOG_TXT`** (B3B-11)     | log message ring, 4 × 64 B (runtime only, after boot) |
 | `$5C00-$5CBF`| System variables                            |                               |
-| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`** (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D50` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification; runtime only — "3E contracts") |
+| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`**; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`** (ranged scratch + shot queue, runtime only — "3F-T7") (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D50` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification; runtime only — "3E contracts") |
 | `$8000-$BFFF`| Program origin region                       | `ORG $8000` for now           |
 | `$C000-$FFFF`| Paged bank window                           | bank selected by $7FFD bits0-2|
 
@@ -167,7 +167,7 @@ per level), `status_icons` (`mk_room`, per room; `st_icons_draw`).
 ### R6 region (2026-10-21; user-approved carve of the pool slack)
 
 A **permanent** code + data region at the top of bank 6: `R6_ADDR..$FFFF` =
-**3F-T2: `$DD00..$FFFF`, `R6_LEN` 8,960 B (`(27 + R6_GROW) × 256`, `R6_GROW` 8 pages, defs.asm)** (was `$E500..$FFFF`, `R6_LEN` **6,912 B** (`defs.asm`; `$1B00`, so ≥ 2.4 KB pool
+**3F-T2: `$DD00..$FFFF`, `R6_LEN` 8,960 B (`(27 + R6_GROW) × 256`, `R6_GROW` 8 pages, defs.asm)** — **3F-T7: `R6_GROW` 10, `$DB00..$FFFF`, `R6_LEN` 9,472 B** (+2 pages from the D7 pool slack, manager 2026-10-29) (was `$E500..$FFFF`, `R6_LEN` **6,912 B** (`defs.asm`; `$1B00`, so ≥ 2.4 KB pool
 slack is kept; `LOW R6_ADDR` = 0 ASSERTed: `alloc`'s test reads only the
 high byte)). Carved out of `POOL_CAP` 1:1 (46,704 → **39,792**; need 37,312,
 slack **2,480**; 3F-T2: `POOL_CAP` 37,481, level need 32,288, PROTO 37,312): `alloc` ends bank 6 at `R6_ADDR` (`tests/ovl.py` R1,
@@ -1378,7 +1378,7 @@ $5F00..$5F8B (140 B), E: free once `boot` has moved SP off the BASIC stack) are 
 reserve (B3B-11: `$5B00` = `LOG_TXT`; **D3-6b: `$5E00-$5EFF` = `PF_RAM`**, the
 proj_fire scratch — never touched before `boot`; **3E-T3: `$5D00-$5D78` = `ITEM_RAM`**, zeroed by `new_game`;
 still free: `$5CCB-$5CFF` (53 B; `$5CC0-$5CCA` is the ROM channel area, avoided), `$5D79-$5DFF` (135 B),
-`$5F8C-$5FFF` (116 B) — `tests/items3e.py` R1/R2 canary them through a game start, play and a descent). A8: after `boot` nothing uses the system variables but
+`$5FF4-$5FFF` (12 B; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`**, the ranged-attack scratch + shot queue, "3F-T7") — `tests/items3e.py` R1/R2 canary them through a game start, play and a descent). A8: after `boot` nothing uses the system variables but
 `SYS_FRAMES` (`$5C78-$5C7A`; the IM 2 ISR does not run the ROM keyboard scan),
 so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 
@@ -3670,3 +3670,57 @@ fi_full); low RAM 85 / 95 → 77 / 77 (`fi_cells` / `fi_cell` + `tile_rect` in, 
 ### 3F-B5 AI-feet (`feat/3f-b5-aifeet`)
 
 `ai_monster` (bank 3, `turn3.asm`) no longer computes its slot: `resolve_monsters` stores `ACT_SLOT` from its slot counter before the status step (`mon_status` stores the same value), and `ai_monster`'s contract now reads "ACT_SLOT = its slot" (its only caller). Walker path: one `KT_DIV9` / `KT_MOD9` lookup of y+h from the entry `get_box` (ASSERT `KT_DIV9 == KT_MOD9 + $20`, the table base low 6 bits <= 8, `STOREY_COUNT == 2`); `attack_if_reach.box` = the box test with BC / DE given and the body known free (ai_monster walker when standing, `ai_flyer`); `.fstep` enters bank-2 `try_step.vert` (past its on_ladder) only for a standing walker. Shared helpers (`feet_mod`, `try_step`, `cork_check`) unchanged. TMP4 (my storey) is now written before the attack test (scratch; nothing in `do_attack` reads it). Bank 3: 265 -> 250 B free (+15). No new addresses.
+
+### 3F-T7 ranged attacks (`feat/3f-t7-ranged`)
+
+game.md §9.2 RANGED-SPEC (Archer, Sniper, Slinger, Necromancer, Bone Caller; the Archmage row is data
+for T11). Counter rule (manager-approved 2026-10-29): a shot needs the counter at 0 on the hook's entry,
+then it decrements (spawn / arrival 1, N = 1 every 2nd turn, N = 2 every 3rd). Tests `tests/ranged.py`
+(A: 2,400 seeded situations == `tools/ranged_model.py`), budget `rroom` / `nroom` / `rcast`.
+- **Hook**: `ai_monster` (bank 3) after the melee `ret c`: `call ai_rhook` / `ret c` (review: HL and
+  `TMP4` kept by the callee; nothing below reads the B5 box). `ai_rhook` (bank 2, `ranged2.asm`):
+  `rk_tab[kind]` via BC (30 B, one page, ASSERTed) = the `rd_tab` row, 0 = not a shooter (66 T); a
+  shooter saves HL and far6s R6 `ai_ranged` (A = row, E = standing): L = 1 the turn is used.
+- **R6** `ranged6.asm`: `rd_tab` (6 × `RW_STRIDE` 8: r, N, `RWF_*`, die, bonus, deal_hit C / E, flight
+  fid), `ai_ranged` (steps 1-6: counter, in line = same storey + hero not mid-ladder, gap, wall scan of
+  the flight row (`rg_scan`) + `box_free` over gap cols × my rows, the DARK reflect gate, [T9 / T11
+  pre-rule slot `.pre`], SHOOT / step-away / HOLD), `rg_shoot` (far3 `rs_hit` / `rs_deal`, the hero's
+  E_REACTAT := impact tick I, `COMBAT_NOT_BEFORE` = max(it, min(I, R + CNB_MAX)) on a hit, E_MSG hit /
+  miss at the attack's IMPACT, the attack sequence, the RS_Q entry with the whole FX descriptor),
+  `rg_ri`, `rg_scan` (T9's Vampire scan can reuse it), `shot_tick`.
+- **Release**: `act_pend` (bank 7) far6s `shot_tick` while `TP_SHOT` (`TURN_PEND` bit 3; holds the turn):
+  `fx_start` at release tick R = phase tick + `RG_REL` 2 + (slot & 1) (a busy set of 3 tracks queues in
+  FXQ, a 6th FX: `FX_DROP`) with one `sfx_req` (a DARK bolt `SFX_SPARK`, an arrow / rock `SFX_THROW`;
+  existing effects, ISR contract unchanged), the hero's `ATTR_HIT` flash at I = R + gap + 1 when HP was lost; a miss /
+  the Slinger's rock: no impact frame; the rock flies in `FXD_ATTR` `$06` (§9.6; `dagger_spin`'s own is `$47`). `place_follower` zeroes `E_RCD` (counter 1 on arrival).
+- **Bank 3**: the hook 4 B + `rs_hit` / `rs_deal` 13 B. **`fx_meta`**: 3 B for the Necro bolt fids below
+  `KFID_FXM` (fx_set indexes `fx_meta - KFID_FXM + fid`), then `DS KFID_FXM - FID_nbolt_hit - 1` zeros for
+  any fids between them and the FX range (T13bc's climb pair: +2 B then).
+- **RAM `RG_RAM` `$5F8C..$5FF3`** (bank 5 runtime reserve after `MK_RAM`; garbage at boot, `RS_P` reset
+  whenever `TP_SHOT` is clear): `RG_ROW` 8 (the row copy), `RG_OLD`, `RG_DIR`, `RG_FIRST`, `RG_GAP`,
+  `RG_F`, `RS_P` (low byte of the next free entry), `RS_Q` 4 × 18 {R ($FF started), flash tick (0 none),
+  FX descriptor 16} + the overflow sink 18. `E_RCD` = `E_POT` (unused by monsters): bits 0-1 the counter
+  stored XOR 1, bits 2-5 T9's Bone Caller summon counter (reserved).
+- **Not in T7**: `KF_CLIMBER` for Archer / Sniper (T13bc's kind rows: they `.seek` once the flag is set;
+  the Slinger and the Necro family per their rows), the Vampire bat trigger (T9), golden atk / dmg (T8).
+
+| Region (kit build `-DDEBUG_KIT=0`) | main `73e1479` | after 3F-T7 | Δ |
+|---|---|---|---|
+| R6 `R6_LEN` / free | 8,960 / 517 | **9,472 / 371** | +512 (`R6_GROW` 8 → 10), −658 `ranged6.asm` (review: +12 release SFX, +8 rock attr) |
+| pool `POOL_CAP` / need / slack (D7 Warrior) | 34,980 / 32,992 / 1,988 | **34,468 / 32,992 / 1,476** | −512 (both heroes, D1-D8 asserts green; PROTO 6 kinds slack 1,188) |
+| bank 2 free to FRT / pad | 293 / 215 | **240 / 212** | −53 `ranged2.asm` (`ai_rhook` 21 + `rk_tab` 30 + 2), −3 `fx_meta` |
+| bank 3 free | 106 | **89** | −17 |
+| bank 7 free | 53 | **36** | −17 (`act_pend` +13, `place_follower` +4) |
+| low RAM / bank 1 | 37 / 99 | unchanged | 0 |
+
+Ticks (`tests/budget.py`, worst work tick, cap 126,000): `pmix` 109,064 = main (the reject costs nothing
+visible), new `rroom` 85,984, `nroom` 112,774, `rcast` ordinary 83,695 / cast 96,635; every other scenario
+unchanged-to-main and gated. Hook cost over the reject (`tests/ranged.py` T, contended stub): out of line
+0.83k, out of range 0.98k, full line test + HOLD at gap 9 2.3k, step-away 4.0k, a shot 8.5-8.7k (hit_roll /
+deal_hit + its lines); `shot_tick` adds far7 + far6 (~0.5k) on each TP_SHOT tick, + fx_start at a release.
+`tests/ai_equiv.py` (shooters re-kinded, fixed master seeds) vs main: 2,100 turns, 0 mismatches.
+Review round: `sroom` (3 Slingers, 2 stacked, all shooting on one input tick, pmix items) 98,724; the ISR
+peak in the ranged scenarios (5,993 T) stays under the suite's existing peak (6,194). `ai_equiv`'s full-hash
+diffs vs main are only `E_SEQL` / `E_SEQH` (offsets 12 / 13: sequence pointers into the seq cache, which
+starts at `code_end` and moved with the bank-2 growth), never behaviour. Not done (review item 6b): reading
+`rd_tab` in place instead of the 8-B row copy (every RW_* access would need an index register; ~0.2k T).

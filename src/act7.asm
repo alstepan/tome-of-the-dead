@@ -135,7 +135,12 @@ LOG_WAIT_MAX    EQU 8                          ; ticks (320 ms): progress if the
                 ASSERT ROOM_CAP + LOG_MON_MAX <= LOG_SLOTS
 act_pend:
                 ld   hl, TURN_PEND
-                res  TP_FIRE_BIT, (hl)         ; the fire tick is over
+                bit  TP_SHOT_BIT, (hl)         ; 3F-T7: monster shots in flight (R6 shot_tick:
+                jr   z, .ns                    ; the FX start at the release, the hit flash at
+                ld   hl, shot_tick             ; the impact; clears TP_SHOT when done). Never
+                call far6                      ; with TP_ACT / TP_MON (set later, in .go)
+                ld   hl, TURN_PEND
+.ns:            res  TP_FIRE_BIT, (hl)         ; the fire tick is over
                 bit  TP_ACT_BIT, (hl)
                 jr   z, .mon
                 ld   a, (ACT_AT)

@@ -15,6 +15,10 @@ TURN_COUNTER, GAME_STATE, ST_FLAGS (16 B), and a full 512-B P_ENTITIES hash
 (reported separately: animation bytes may legitimately depend on frame
 timing). The hero is healed to MAXHP before every turn (same poke on both
 builds) so fights run long. Build both with -DDEBUG_KIT=0.
+3F-T7: before every turn the shooter kinds (Archer, Sniper, Necromancer, Bone
+Caller -> Orc; Slinger -> Goblin) are re-kinded on both builds, so the A/B
+against a pre-T7 base proves the ranged hook neutral for every other kind (the
+shooter path itself: tests/ranged.py A, the model A/B).
 """
 import hashlib
 import json
@@ -38,12 +42,23 @@ def record(out, nturns):
     from game_lib import Harness, S, EMU_ARGS, E, STRIDE
     from lp import T as Proto, w16
     GL.Proto.snd_mode = 2
+    REKIND = {S[k]: S[v] for k, v in (("K_ARCHER", "K_ORC"), ("K_SNIPER", "K_ORC"), ("K_NECRO", "K_ORC"),
+                                       ("K_BONE_CALLER", "K_ORC"), ("K_SLINGER", "K_GOBLIN"))}
     with Harness() as h, open(out, "w") as f:
         h.launch(EMU_ARGS)
-        p = Proto(h)
+        class P(Proto):                              # 3F-T7: a fixed master seed per run, so a
+            seed = None                              # generated start does not depend on the build's
+                                                     # boot timing (SYS_FRAMES at the hero choice)
+            def load(self, attempts=3):
+                super().load(attempts)
+                if self.seed is not None:
+                    self.wb("seed_fixed", 1)
+                    self.wmem(S["seed_value"], w16(self.seed))
+        p = P(h)
         for run, (hero, proto, seed, depth) in enumerate(RUNS):
             rnd = random.Random(seed)
             p.proto_start = proto
+            p.seed = 0x2000 + seed
             p.boot(hero=hero, freeze=0)
             if depth > 1:
                 p.wmem(S["MASTER_SEED"], w16(0x2000 + seed))
@@ -57,6 +72,11 @@ def record(out, nturns):
                 if p.rb("GAME_STATE") != 2:
                     break
                 p.wb(S["P_ENTITIES"] + E["HP"], p.rb(S["P_ENTITIES"] + E["MAXHP"]))
+                for s_ in range(1, 16):              # 3F-T7: shooters re-kinded (the base build has no
+                    ka = S["P_ENTITIES"] + s_ * STRIDE + E["KIND"]   # ranged hook): the A/B stays
+                    k_ = p.rb(ka)                    # behaviour-neutral for every other kind
+                    if k_ in REKIND:
+                        p.wb(ka, REKIND[k_])
                 k = rnd.choice(KEYS)
                 p.turn(k, max_ticks=200)
                 ents = bytes(p.z.read_memory(S["P_ENTITIES"], 16 * STRIDE))
@@ -66,6 +86,8 @@ def record(out, nturns):
                            tc=p.rw("TURN_COUNTER"), gs=p.rb("GAME_STATE"),
                            st=list(p.z.read_memory(S["ST_FLAGS"], 16)),
                            full=hashlib.sha1(ents).hexdigest()[:12])
+                if os.environ.get("AI_EQUIV_FULL"):  # 3F-T7 review: the full-hash diff offsets
+                    rec["ents"] = ents.hex()
                 f.write(json.dumps(rec) + "\n")
                 f.flush()
             print(f"[rec] run {run} hero {hero} proto {proto} depth {depth}: {t + 1} turns", flush=True)
@@ -94,11 +116,20 @@ def main():
     first = None
     full_diff = 0
     for a, b in zip(A, B):
-        ka = {k: v for k, v in a.items() if k != "full"}
-        kb = {k: v for k, v in b.items() if k != "full"}
+        ka = {k: v for k, v in a.items() if k not in ("full", "ents")}
+        kb = {k: v for k, v in b.items() if k not in ("full", "ents")}
         if ka != kb and first is None:
             first = (a, b)
         full_diff += a["full"] != b["full"]
+    offs = {}
+    for a, b in zip(A, B):
+        if a["full"] != b["full"] and "ents" in a and "ents" in b:
+            ea, eb = bytes.fromhex(a["ents"]), bytes.fromhex(b["ents"])
+            for i in range(len(ea)):
+                if ea[i] != eb[i]:
+                    offs[i % 32] = offs.get(i % 32, 0) + 1
+    if offs:
+        print("ai_equiv: full-hash diffs by entity field offset (count):", dict(sorted(offs.items())))
     moved = sum(1 for i in range(1, len(A)) if A[i]["logic"] != A[i - 1]["logic"])
     ok = first is None and len(A) == len(B)
     print(f"ai_equiv: {len(A)} / {len(B)} turns, {moved} turns with entity change; "
