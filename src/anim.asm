@@ -403,8 +403,9 @@ anim_entity:
                 ret
 .jump:          ; JUMP (game.md §2.4; J1 2026-10-06). Arc tick t = E_TMR, n =
                 ; JUMP_ARC airborne ticks, N = 12 (D 6) / 14 (D 7). t 0: JUMP1,
-                ; aligned; t 1..n: JUMP2 (MOTION frame: drawn at shift 4 too),
-                ; px += 4, py = 8y - 4 min(t, N-t, 4) (= the §2.4 dy lists for
+                ; aligned; t 1..n: px += 4 and the pose follows the NEW px parity
+                ; (JUMP-ALT, user 2026-10-29): px & 4 = 4 -> JUMP2 (WK4: its one
+                ; pool shift), 0 -> JUMP1 (STA, aligned): the two alternate, py = 8y - 4 min(t, N-t, 4) (= the §2.4 dy lists for
                 ; both D; a cut-short arc stops at n < N); t n+1: JUMP1, landed
                 ; (M_REST) or, JA_FALL (the hero already sits on storey 1:
                 ; base py - 72), py snapped to storey 0 and M_FALL drops it.
@@ -444,7 +445,10 @@ anim_entity:
                 ld   a, (ix+E_PX)
                 call tween
                 ld   (ix+E_PX), a
-                ld   e, 1                      ; JUMP2
+                and  4                         ; JUMP-ALT: E = (px & 4) >> 2: 1 = JUMP2 at
+                rrca                           ; shift 4 (WK4), 0 = JUMP1 aligned (STA): each
+                rrca                           ; pose only at its pool shift (+12 T, 3 B)
+                ld   e, a
                 jr   .jfid
 .jland:         ld   (ix+E_MODE), M_REST       ; landed, E = 0 (JUMP1)
                 bit  JA_FALL_BIT, l

@@ -72,8 +72,8 @@ sk_climb:       CLIMBCYC FID_skeleton_climb1, FID_skeleton_climb2, FID_skeleton_
 sk_climbrest:   CLIMBREST FID_skeleton_climb1, FID_skeleton_walk1
 sk_attack:      DB FID_skeleton_raise, 3, 0, FID_skeleton_cut, 2, SF_IMPACT, SEQ_END
 sk_hurt:        DB SK_HURT, 3, 0, SEQ_END
-                ; Skeleton death uses its sheet COLLAPSED frame (always exists)
-sk_death:       DEATHSEQ SK_HURT, FID_skeleton_collapsed, FID_skeleton_collapsed, SK_REST
+                ; CORPSE-ASHES: DEAD = the shared small_corpse (U_DEADR; was skeleton_collapsed)
+sk_death:       DEATHSEQ SK_HURT, FID_small_corpse, FID_small_corpse, SK_REST
 ksm_sk_e:
 ; --- Goblin ---
 ksm_gb:         KSMH ksm_gb_e - ksm_gb_s, 3, gb_idle, gb_move, gb_climb, gb_climbrest, gb_attack, gb_hurt, gb_hurt, gb_death, ksm_gb_s
@@ -84,7 +84,7 @@ gb_climb:       CLIMBCYC FID_goblin_climb1, FID_goblin_climb2, FID_goblin_walk2,
 gb_climbrest:   CLIMBREST FID_goblin_climb1, FID_goblin_walk1
 gb_attack:      DB FID_goblin_clubup, 3, 0, FID_goblin_smash, 2, SF_IMPACT, SEQ_END
 gb_hurt:        DB GB_HURT, 3, 0, SEQ_END
-gb_death:       DEATHSEQ GB_HURT, GB_DEAD, FID_goblin_dead, GB_REST
+gb_death:       DEATHSEQ GB_HURT, FID_small_corpse, FID_small_corpse, GB_REST   ; CORPSE-ASHES
 ksm_gb_e:
 ; --- Ghost (flyer) ---
                 ; 3F-D7LEV: FLY = gh_fly (anim .mv reads a flyer's KS_MOVE cycle at the
@@ -146,7 +146,7 @@ ksm_sl_e:
 ; a block, ASSERTed). 2-frame walk: MOVECYC2 walk2, walk1 — WALK1 (the rest
 ; pose) in the odd, cell-aligned slot (frames.asm). HURT = the rest frame held:
 ; the body takes the $42 hit flash (R4, no frame). DEAD = the shared
-; small_corpse (Spider) / dead_humanoid (every humanoid + the Ogre). Attack
+; small_corpse (CORPSE-ASHES: every monster but Bat / Slime / Ghost). Attack
 ; timing = the Skeleton's (wind-up 3, strike 2 + IMPACT; 3F-T13bc: the Orc /
 ; Ogre wind-up is their RAISE frame, the Vampire strikes with vamp_bite) / the
 ; Rat's for the Spider (1, 2). A non-climber's KS_CLIMBREST points at its HURT
@@ -168,7 +168,7 @@ or_move:        MOVECYC2 orc_walk2, orc_walk1
 or_climb:       CLIMBCYC FID_climb_h1, FID_climb_h2, FID_orc_walk1, FID_orc_walk1, FID_orc_walk1, FID_orc_walk1
 or_attack:      DB FID_orc_raise, 3, 0, FID_orc_attack, 2, SF_IMPACT, SEQ_END
 or_hurt:        DB FID_orc_walk1, 3, 0, SEQ_END
-or_death:       DEATHSEQ FID_orc_walk1, FID_dead_humanoid, FID_dead_humanoid, FID_orc_walk1
+or_death:       DEATHSEQ FID_orc_walk1, FID_small_corpse, FID_small_corpse, FID_orc_walk1
 ksm_or_e:
 ; --- Necromancer (Archmage, Bone Caller): climber (not the Archmage: it never walks, no
 ; KF_CLIMBER); walk B3 = walk2, walk1, walk3, walk1 (ART3); CAST ---
@@ -179,7 +179,7 @@ ne_move:        MOVECYC4 necro_walk2, necro_walk1, necro_walk3, necro_walk1
 ne_climb:       CLIMBCYC FID_climb_h1, FID_climb_h2, FID_necro_walk1, FID_necro_walk1, FID_necro_walk1, FID_necro_walk1
 ne_attack:      DB FID_necro_walk1, 3, 0, FID_necro_cast, 2, SF_IMPACT, SEQ_END
 ne_hurt:        DB FID_necro_walk1, 3, 0, SEQ_END
-ne_death:       DEATHSEQ FID_necro_walk1, FID_dead_humanoid, FID_dead_humanoid, FID_necro_walk1
+ne_death:       DEATHSEQ FID_necro_walk1, FID_small_corpse, FID_small_corpse, FID_necro_walk1
 ksm_ne_e:
 ; --- Vampire: the Necro walk (B3, hood + staff in its own ink $05) + BITE (ART2 V1); not a climber ---
 ksm_vp:         KSMH ksm_vp_e - ksm_vp_s, 3, vp_idle, vp_move, vp_idle, vp_hurt, vp_attack, vp_hurt, vp_hurt, vp_death, ksm_vp_s
@@ -188,7 +188,7 @@ vp_idle:        DB 1, FID_necro_walk1, 1, SEQ_END
 vp_move:        MOVECYC4 necro_walk2, necro_walk1, necro_walk3, necro_walk1
 vp_attack:      DB FID_necro_walk1, 3, 0, FID_vamp_bite, 2, SF_IMPACT, SEQ_END
 vp_hurt:        DB FID_necro_walk1, 3, 0, SEQ_END
-vp_death:       DEATHSEQ FID_necro_walk1, FID_dead_humanoid, FID_dead_humanoid, FID_necro_walk1
+vp_death:       DEATHSEQ FID_necro_walk1, FID_small_corpse, FID_small_corpse, FID_necro_walk1
 ksm_vp_e:
 ; --- Mummy: walk B4 = walk2, walk4, walk3, walk1 (ART3) ---
 ksm_mu:         KSMH ksm_mu_e - ksm_mu_s, 3, mu_idle, mu_move, mu_climb, mu_climb + 1, mu_attack, mu_hurt, mu_hurt, mu_death, ksm_mu_s
@@ -198,7 +198,7 @@ mu_move:        MOVECYC4 mummy_walk2, mummy_walk4, mummy_walk3, mummy_walk1
 mu_climb:       CLIMBCYC FID_climb_h1, FID_climb_h2, FID_mummy_walk1, FID_mummy_walk1, FID_mummy_walk1, FID_mummy_walk1
 mu_attack:      DB FID_mummy_walk1, 3, 0, FID_mummy_attack, 2, SF_IMPACT, SEQ_END
 mu_hurt:        DB FID_mummy_walk1, 3, 0, SEQ_END
-mu_death:       DEATHSEQ FID_mummy_walk1, FID_dead_humanoid, FID_dead_humanoid, FID_mummy_walk1
+mu_death:       DEATHSEQ FID_mummy_walk1, FID_small_corpse, FID_small_corpse, FID_mummy_walk1
 ksm_mu_e:
 ; --- Ogre: RAISE -> SLAM (ART2 O2 / O1) ---
 ksm_og:         KSMH ksm_og_e - ksm_og_s, 3, og_idle, og_move, og_idle, og_hurt, og_attack, og_hurt, og_hurt, og_death, ksm_og_s
@@ -207,7 +207,7 @@ og_idle:        DB 1, FID_ogre_walk1, 1, SEQ_END
 og_move:        MOVECYC2 ogre_walk2, ogre_walk1
 og_attack:      DB FID_ogre_raise, 3, 0, FID_ogre_slam, 2, SF_IMPACT, SEQ_END
 og_hurt:        DB FID_ogre_walk1, 3, 0, SEQ_END
-og_death:       DEATHSEQ FID_ogre_walk1, FID_dead_humanoid, FID_dead_humanoid, FID_ogre_walk1
+og_death:       DEATHSEQ FID_ogre_walk1, FID_small_corpse, FID_small_corpse, FID_ogre_walk1
 ksm_og_e:
 ; --- Death Knight: 3F-T13bc the BLOCK frame is gone: a parry is RC_PARRY (anim: the rest
 ; pose + a 1-tick ATTR_PARRY flash, no sequence); KS_BLOCK = the HURT seq (never started) ---
@@ -217,11 +217,11 @@ dk_idle:        DB 1, FID_dk_walk1, 1, SEQ_END
 dk_move:        MOVECYC4 dk_walk2, dk_walk1, dk_walk3, dk_walk1   ; 3F-T13bc B3 walk (ART4)
 dk_attack:      DB FID_dk_walk1, 3, 0, FID_dk_cleave, 2, SF_IMPACT, SEQ_END
 dk_hurt:        DB FID_dk_walk1, 3, 0, SEQ_END
-dk_death:       DEATHSEQ FID_dk_walk1, FID_dead_humanoid, FID_dead_humanoid, FID_dk_walk1
+dk_death:       DEATHSEQ FID_dk_walk1, FID_small_corpse, FID_small_corpse, FID_dk_walk1
 ksm_dk_e:
 ; --- Skeleton Archer (Sniper): the Skeleton's walk + cut = U_SKARCH; SHOOT / melee = the cut
 ; (game.md §9.7 DECIDED: no SHOOT art); 3F-T13bc climber (the Skeleton's own climb pair, as sk_climb; user 2026-10-29);
-; DEAD = dead_humanoid ---
+; DEAD = small_corpse (CORPSE-ASHES) ---
 ksm_ar:         KSMH ksm_ar_e - ksm_ar_s, 3, ar_idle, ar_move, ar_climb, ar_climb + 1, ar_attack, ar_hurt, ar_hurt, ar_death, ksm_ar_s
 ksm_ar_s:
 ar_idle:        DB 1, SK_REST, 1, SEQ_END
@@ -229,7 +229,7 @@ ar_move:        MOVECYC4 skeleton_walk2, skeleton_walk3, skeleton_walk4, skeleto
 ar_climb:       CLIMBCYC FID_skeleton_climb1, FID_skeleton_climb2, SK_REST, SK_REST, SK_REST, SK_REST
 ar_attack:      DB SK_REST, 3, 0, FID_skeleton_cut, 2, SF_IMPACT, SEQ_END
 ar_hurt:        DB SK_REST, 3, 0, SEQ_END
-ar_death:       DEATHSEQ SK_REST, FID_dead_humanoid, FID_dead_humanoid, SK_REST
+ar_death:       DEATHSEQ SK_REST, FID_small_corpse, FID_small_corpse, SK_REST
 ksm_ar_e:
                 ; the 2-frame walkers' rest frame (odd slot, drawn cell-aligned) must not be WK4
                 ASSERT !(FFL_spider_walk1 & FF_PH4) && !(FFL_orc_walk1 & FF_PH4) && !(FFL_necro_walk1 & FF_PH4)

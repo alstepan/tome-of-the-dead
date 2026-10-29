@@ -35,9 +35,9 @@ POOLACC = 0
                 FRM knight_climb1,  K_KNIGHT, 24, STA|SYM
                 FRM knight_climb2,  K_KNIGHT, 24, STA|SYM
                 FRM knight_dead,    K_KNIGHT, 24, STA
-                ; C3-7: jump (game.md §2.4). JUMP2 is drawn mid-tween (x += 4 px/tick)
+                ; C3-7: jump (game.md §2.4). JUMP-ALT: airborne, JUMP1 at px & 4 = 0 / JUMP2 at 4 (anim .jump)
                 FRM knight_jump1,   K_KNIGHT, 24, STA
-                FRM knight_jump2,   K_KNIGHT, 24, MOT
+                FRM knight_jump2,   K_KNIGHT, 24, WK4     ; JUMP-ALT: px & 4 = 4 only (was MOT: -576 B pool)
                 ; D3-4: Warrior abilities (game.md §6.2 / §6.3; art D3-3)
                 FRM knight_throw,   K_KNIGHT, 24, STA
                 FRM knight_bow,     K_KNIGHT, 24, STA
@@ -62,7 +62,7 @@ POOLACC = 0
                 FRM wizard_dead,    K_WIZARD, 24, STA
                 ; C3-7: jump + staff melee (game.md §2.4 / §6.2)
                 FRM wizard_jump1,   K_WIZARD, 24, STA
-                FRM wizard_jump2,   K_WIZARD, 24, MOT
+                FRM wizard_jump2,   K_WIZARD, 24, WK4     ; JUMP-ALT: px & 4 = 4 only (was MOT: -576 B pool)
                 FRM wizard_staffraise, K_WIZARD, 24, STA
                 FRM wizard_staffswing, K_WIZARD, 24, STA
 KFCNT_WIZARD = FCTR - KFID_WIZARD
@@ -89,7 +89,7 @@ KFID_SKCLIMB = FCTR
                 FRM skeleton_climb2,    K_SKELETON, 24, STA|SYM
 KFID_SKREST = FCTR
                 FRM skeleton_raise,     K_SKELETON, 24, STA
-                FRM skeleton_collapsed, K_SKELETON, 24, STA
+                ; CORPSE-ASHES: skeleton_collapsed retired (DEAD = small_corpse, U_DEADR)
                 FRM skeleton_hurt,      K_SKELETON, 24, STA
 KFCNT_SKELETON = FCTR - KFID_SKELETON
 KFCNT_SKARCH = KFID_SKCLIMB - KFID_SKELETON
@@ -106,7 +106,7 @@ KFID_GOBLIN = FCTR
                 FRM goblin_climb1,  K_GOBLIN, 24, STA|SYM
                 FRM goblin_climb2,  K_GOBLIN, 24, STA|SYM
                 FRM goblin_hurt,    K_GOBLIN, 24, STA
-                FRM goblin_dead,    K_GOBLIN, 24, STA
+                ; CORPSE-ASHES: goblin_dead retired (DEAD = small_corpse, U_DEADR)
 KFCNT_GOBLIN = FCTR - KFID_GOBLIN
 
 KFID_GHOST = FCTR
@@ -122,9 +122,11 @@ KFID_RAT = FCTR
                 FRM rat_run2,       K_RAT, 32, WK0
                 FRM rat_bite,       K_RAT, 32, STA
                 FRM rat_hurt,       K_RAT, 32, STA
-KFID_RATDEAD = FCTR                     ; 3F-T13: unit U_DEADR (the Rat's and the Spider's DEAD);
-                ; 3F-T13bc: the NEUTRAL small-animal corpse (ART2 C2) replaces rat_dead for the
-                ; Rat / Spider / Giant Rat / Brood Rat (+ tiers); symmetric: one pool facing
+KFID_RATDEAD = FCTR                     ; 3F-T13: unit U_DEADR; 3F-T13bc: the NEUTRAL corpse (ART2 C2)
+                ; CORPSE-ASHES (user 2026-10-29): THE shared monster corpse ("ashes") of every
+                ; kind but the Bat / Slime / Ghost (own DEAD) and the heroes (knight_dead /
+                ; wizard_dead); symmetric: one pool facing. Body 32 (the Rat's): on a 24-px
+                ; body it spans px .. px + 31 in both facings (bottom-anchored, FRM)
                 FRM small_corpse,   K_RAT, 32, STA|SYM
 KFCNT_RAT = FCTR - KFID_RAT
 
@@ -204,8 +206,7 @@ KFID_DKNIGHT = FCTR
                 ; 3F-T13bc: dk_block retired (a parry = the rest pose + the RC_PARRY flash, anim)
 KFCNT_DKNIGHT = FCTR - KFID_DKNIGHT
                 ; shared units with no kind of their own (G_* = zx0 block groups; defs.asm BH_G_*)
-KFID_DEADH = FCTR                       ; the shared humanoid DEAD (body 24; the Ogre draws it too)
-                FRM dead_humanoid,  G_DEADH, 24, STA
+                ; CORPSE-ASHES: dead_humanoid (G_DEADH) retired: the humanoids draw small_corpse
 KFID_NBOLT = FCTR                       ; the Necro / Archmage bolt (FX-style: cell-aligned, body 8)
                 FRM nbolt_fly1,     G_NBOLT, 8, STA
                 FRM nbolt_fly2,     G_NBOLT, 8, STA
