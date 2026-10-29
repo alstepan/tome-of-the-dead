@@ -598,6 +598,12 @@ kind_tab:
                 DUP K_COUNT, n
                 ASSERT ({b kind_tab + KT_FLAGS + n} & KF_FLYER) || ({b kind_tab + KT_BH + n} <= STOREY_AIR - DOOR_PLANK_DY)
                 EDUP
+                ; AI-L1 J1 proof (turn3.asm .at): every climber is FEAT_W wide, so the
+                ; climb-start check over the whole shaft rect never sees a body in the
+                ; climber's own end box that does not already overlap the climber
+                DUP K_COUNT, n
+                ASSERT !({b kind_tab + KT_FLAGS + n} & KF_CLIMBER) || ({b kind_tab + KT_BW + n} == FEAT_W)
+                EDUP
                 ASSERT (KT_MOD9 >> 8) == ((KT_DIV9 + 23) >> 8)    ; feet_mod: one H for both
                 DUP 24, n
                 DB   n % STOREY_ROWS           ; KT_MOD9

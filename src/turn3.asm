@@ -335,7 +335,20 @@ ai_monster:
                 ; mid-ladder: continue in ai_dir
                 ld   d, 0
                 ld   e, (ix+E_AIDIR)
-                jp   try_step
+                call try_step
+                ret  c
+                ; AI-L1 review: blocked, and ai_dir leads AWAY from the hero's storey
+                ; (it changed storey mid-climb): turn round (the turn is spent), else
+                ; it hangs over a waiter at the foot for ever. Away <=> bit 7 of
+                ; ai_dir (up) == PL_STOREY (segment {c,1}: 0 above, 1 below)
+                ld   a, (PL_STOREY)
+                rrca
+                xor  (ix+E_AIDIR)
+                ret  m                         ; it leads toward the hero: keep waiting
+                ld   a, (ix+E_AIDIR)
+                neg
+                ld   (ix+E_AIDIR), a
+                ret
 .seek:          ; C = player storey, TMP4 = my storey
                 ld   a, (TMP4)
                 ld   b, a
@@ -362,11 +375,24 @@ ai_monster:
                 ret  z
                 cp   (ix+E_X)
                 jr   z, .at
+                ld   e, a                      ; E = col (lq_block)
                 ld   d, 1
-                jr   nc, .fstep                ; (.seek: standing)
+                jr   nc, .sk                   ; (.seek: standing)
                 ld   d, $FF
-                jr   .fstep
-.at:            ; at the shaft: climb only if the segment is clear (no head-on)
+.sk:            push de                        ; AI-L1: .fstep inline, but a failed step
+                ld   e, 0                      ; goes on to the ladder queue (R6 lq6.asm,
+                ld   a, d                      ; game.md §9.2 'Ladder queue': strongest
+                ld   (TMP6), a                 ; first; the loser near the shaft backs
+                call try_step.vert             ; off 1 cell). +19 B here; the far6 runs
+                pop  de                        ; only on a blocked seek step
+                jp   c, face_tmp6
+                ld   hl, lq_block
+                jp   far6
+.at:            ; at the shaft: climb only if the segment is clear (no head-on).
+                ; AI-L1 J1 (game.md §9.2): the rect also covers my own end box, which
+                ; is harmless because every climber is FEAT_W wide (main.asm kind_tab
+                ; ASSERT): a body overlapping the near-end box on my storey overlaps
+                ; me (same feet row) or sits above my head in my first climb step.
                 ld   c, a                      ; B = segment storey (its lower end)
                 ld   a, b                      ; shaft rect: rows 9(B-1) .. 9B+7
                 dec  a                         ; (upper standing top .. lower air bottom)
