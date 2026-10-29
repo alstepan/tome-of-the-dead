@@ -25,12 +25,12 @@ tiles_common_glyphs:
         DEFB $00,$00,$00,$00,$00,$00,$FF,$DB    ; 10 T_TRAP
         DEFB $A0,$A0,$A0,$A0,$A0,$A0,$A0,$A0    ; 11 T_DOOR_JAMB_L
         DEFB $18,$24,$24,$24,$18,$18,$18,$18    ; 12 T_CHAIN
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; 13 T_FREE13
+        DEFB $FF,$92,$92,$92,$FF,$92,$92,$92    ; 13 T_GRATE_SHUT
         DEFB $05,$05,$05,$05,$05,$05,$05,$05    ; 14 T_DOOR_JAMB_R
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; 15 T_FREE15
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; 16 T_FREE16
-        DEFB $C3,$C3,$24,$18,$3C,$A5,$42,$24    ; 17 T_AMMO
-        DEFB $7E,$A1,$61,$2D,$21,$2D,$7E,$BE    ; 18 T_PAGES
+        DEFB $00,$02,$3D,$42,$5A,$42,$5A,$7E    ; 15 T_LECT_TL
+        DEFB $00,$40,$BC,$42,$DA,$42,$5A,$7E    ; 16 T_LECT_TR
+        DEFB $FF,$7F,$0F,$03,$03,$03,$07,$1F    ; 17 T_LECT_BL
+        DEFB $FF,$FE,$F0,$C0,$C0,$C0,$E0,$F8    ; 18 T_LECT_BR
         DEFB $FF,$90,$90,$90,$FF,$81,$81,$81    ; 19 T_END_L
         DEFB $FF,$11,$11,$11,$FF,$01,$01,$01    ; 20 T_END_R
         DEFB $07,$18,$27,$4C,$50,$90,$A0,$A0    ; 21 T_DOOR_ARCH_L
@@ -58,12 +58,12 @@ tiles_common_attrs:
         DEFB $42    ; 10 T_TRAP
         DEFB $06    ; 11 T_DOOR_JAMB_L
         DEFB $07    ; 12 T_CHAIN
-        DEFB $00    ; 13 T_FREE13
+        DEFB $07    ; 13 T_GRATE_SHUT
         DEFB $06    ; 14 T_DOOR_JAMB_R
-        DEFB $00    ; 15 T_FREE15
-        DEFB $00    ; 16 T_FREE16
-        DEFB $47    ; 17 T_AMMO
-        DEFB $07    ; 18 T_PAGES
+        DEFB $43    ; 15 T_LECT_TL
+        DEFB $43    ; 16 T_LECT_TR
+        DEFB $06    ; 17 T_LECT_BL
+        DEFB $06    ; 18 T_LECT_BR
         DEFB $0F    ; 19 T_END_L
         DEFB $0F    ; 20 T_END_R
         DEFB $06    ; 21 T_DOOR_ARCH_L

@@ -200,3 +200,95 @@ fi_slot:        ld   a, b
                 ASSERT FI_PAD == FI_TSLOT - 1 && (FI_PAD >> 8) == (FI_TSLOT >> 8) && FI_NONE == $FF
                 ASSERT (FI_GLY & $FF) == 0 && FI_SLOTS * ICONS16_BYTES == 256
 
+;------------------------------------------------------------------------------
+; uq_fit — (R6 since the 3F-T8 review: far6 from mon_drop; was bank 3) FLOOR1 invariant (a room holds <= FI_SLOTS = 8 distinct item types):
+; before a boss unique is placed, if CUR_ROOM already holds 8 types the lowest-
+; value ordinary item is DESTROYED so the unique always fits: the first live
+; entry of the room (both storeys, list order) whose type is a potion / ammo /
+; food (types IT_POTION..IT_P_CURE, not IT_KEY), then every entry of that type
+; (the type must leave the room), each col re-stamped (ap_stamp: the pile's next
+; item, else air). Always found: the generator places <= 7 entries (<= 7 types),
+; so an 8th type is a monster drop, and monster drops are food / ammo / mana.
+; (uq_tab types are unique ids: never already on the floor.) None found
+; (poked list): nothing happens and drop_put refuses the unique (L = 0).
+; Clobbers: all but IX.   fits ~0.2k T (all 8 slots marked: + ~3k T gc); a displacement ~+9k T per destroyed entry (ap_stamp)
+;------------------------------------------------------------------------------
+uq_fit:         call uq_chk
+                ret  z                         ; a slot is unmarked: <= 7 types, it fits (~0.2k T)
+                ld   a, (CUR_ROOM)
+                call fi_gc                     ; FI_USE := the types the room holds (~3k T)
+                call uq_chk
+                ret  z                         ; (only stale slots were in use)
+                ld   a, (CUR_ROOM)
+                ld   c, a
+                ld   hl, FLOOR_LIST
+.v:             ld   a, (hl)
+                and  FL_ROOM_MASK
+                cp   c
+                jr   nz, .nv
+                inc  l
+                inc  l
+                ld   a, (hl)                   ; FL_ITEM
+                dec  l
+                dec  l
+                ld   b, a
+                cp   IT_KEY
+                jr   z, .nv
+                dec  a
+                cp   IT_P_CURE
+                jr   c, .d                     ; type 1 .. 12: the victim's type = B
+.nv:            ld   a, l
+                add  a, FL_STRIDE
+                ld   l, a
+                jp   p, .v
+                ret
+.d:             ld   hl, FLOOR_LIST            ; destroy every entry of the room with type B
+.dl:            ld   a, (hl)
+                and  FL_ROOM_MASK
+                cp   c
+                jr   nz, .dn
+                inc  l
+                inc  l
+                ld   a, (hl)
+                dec  l
+                dec  l
+                cp   b
+                jr   nz, .dn
+                ld   a, (hl)
+                and  FL_ROOM_MASK | FL_S1
+                ld   e, a                      ; E = room | storey
+                inc  l
+                ld   a, (hl)                   ; A = col
+                dec  l
+                ld   (hl), FL_EMPTY
+                push bc
+                push hl
+                ld   hl, ap_stamp_a            ; bank 7: map + shadow + fi_add of the col's next
+                call far7
+                pop  hl
+                pop  bc
+.dn:            ld   a, l
+                add  a, FL_STRIDE
+                ld   l, a
+                jp   p, .dl
+                ld   a, FI_TSLOT & $FF         ; the victim type's slot is free again: drop_put's dp_cap
+                add  a, b                      ; finds it at once (no second fi_gc, ~3k T)
+                ld   l, a
+                ld   h, FI_TSLOT >> 8
+                ld   a, (hl)
+                add  a, FI_USE & $FF
+                ld   l, a
+                ld   (hl), 0
+                ret
+; uq_chk — Z = some FI_USE slot is 0 (free: the room holds < 8 types, as every live type is marked).
+uq_chk:         ld   hl, FI_USE
+                ld   b, FI_SLOTS
+.c:             ld   a, (hl)
+                inc  l
+                or   a
+                ret  z
+                djnz .c
+                ret                            ; NZ: all 8 marked
+                ASSERT (FI_USE >> 8) == (FI_TSLOT >> 8) && FI_SLOTS < 256 - (FI_USE & $FF)
+                ASSERT IT_KEY == 4 && IT_P_CURE == 12 && IT_POTION == 1 && IT_F_CARROT == IT_KEY + 1 && IT_P_HEAL == IT_F_MEAT + 1
+                ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE == $80 && FL_COL == 1 && FL_ITEM == 2

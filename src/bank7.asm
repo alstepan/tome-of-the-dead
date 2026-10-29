@@ -564,17 +564,19 @@ try_climb:
                 ld   a, RDX_D                  ; {x,2}: the down-exit ...
                 call .vexit
                 jr   z, .dn
-                ld   a, (LVL_FLAGS)            ; ... else the level exit (B3B-12):
-                and  LF_GRATE_OPEN             ; only through an open grate (3B: always
-                jr   z, .no                    ; open, game.md §1.4; 3F: the boss's death)
-                call cur_room_desc             ; and only at x == RD_EXITCOL
-                ld   a, l
-                add  a, RD_EXITCOL             ; (descriptor: one page)
+                call cur_room_desc             ; ... else the level exit (B3B-12), only at
+                ld   a, l                      ; x == RD_EXITCOL (descriptor: one page)
+                add  a, RD_EXITCOL
                 ld   l, a
                 ld   a, (hl)
                 cp   c
                 jr   nz, .no
-                ld   a, EX_LEVEL
+                ld   a, (LVL_FLAGS)            ; and only through an open grate (3F-T8:
+                and  LF_GRATE_OPEN             ; the boss's death). Shut: game.md §9.2 F4,
+                jr   nz, .lvl                  ; illegal, NO turn: drop the caller's frame
+                pop  hl                        ; (turn_input .nu's `jr .srch` wait); A = 0,
+                ret                            ; CF = 0 (and) = "nothing legal"
+.lvl:           ld   a, EX_LEVEL
                 jr   .dk
 .dn:            add  a, GRID_W                 ; dest r + 3
                 ld   (EXIT_DEST), a
@@ -976,11 +978,16 @@ follow_select:
                 ld   a, (ix+E_FLAGS)
                 and  EF_ACTIVE | EF_PENDING | EF_DYING
                 cp   EF_ACTIVE
-                jr   nz, .cn
+                jp   nz, .cn
                 ld   a, (CUR_ROOM)
                 cp   (ix+E_ROOM)
-                jr   nz, .cn
-                ld   a, (TMP7)                 ; D3-8f (game.md §6.4.2 R3): a HOLD or
+                jp   nz, .cn
+                ld   a, (ix+E_KIND)            ; 3F-T8 (game.md §8.6 / §9.2): the lair boss
+                or   (ix+E_GOLD)               ; NEVER follows (it was a plain candidate: the
+                ld   hl, LP_BOSS               ; D4 Ogre left its lair, user playtest). Only the
+                cp   (hl)                      ; boss matches kind | E_GOLD = LP_BOSS (the Ogre /
+                jr   z, .cn                    ; Death Knight spawn nowhere else; PROTO: LP_BOSS 0
+                ld   a, (TMP7)                 ; = the Knight's id). D3-8f (game.md §6.4.2 R3): a HOLD or                 ; D3-8f (game.md §6.4.2 R3): a HOLD or
                 add  a, ST_FLAGS & $FF         ; FEAR body is not a candidate (CONFUSED
                 ld   l, a                      ; may follow)
                 ld   h, ST_FLAGS >> 8
@@ -1041,52 +1048,6 @@ follow_select:
                 ret  nz                        ; the destination's residents spawned
                 ld   hl, follow_admit          ; PROTO: admit now (bank 3; far3 nests,
                 jp   far3                      ; bank 7 comes back)
-
-; place_follower — IX = admitted follower: room <- dest, PENDING, entry spot.
-; L-RELIEF: bank 7, far7 from bank-3 follow_admit (IX passes in).
-; Clobbers: A, BC.
-place_follower:
-                ld   (ix+E_RCD), 0             ; 3F-T7: cooldown counter 1 on arrival (stored XOR 1)
-                ld   a, (EXIT_DEST)
-                ld   (ix+E_ROOM), a
-                set  EF_PENDING_BIT, (ix+E_FLAGS)
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                jr   nc, .vert
-                ; horizontal: x = 1 (arrive at left edge) or 31-w; face in
-                cp   EX_RIGHT
-                jr   nz, .fromleft
-                ld   (ix+E_X), 1
-                res  EF_LEFT_BIT, (ix+E_FLAGS)
-                jr   .hy
-.fromleft:      KFIELD KT_BW
-                ld   b, a
-                ld   a, ROOM_COLS - 1
-                sub  b
-                ld   (ix+E_X), a
-                set  EF_LEFT_BIT, (ix+E_FLAGS)
-.hy:            set  EF_WALKIN_BIT, (ix+E_FLAGS)
-                KFIELD KT_FLAGS
-                and  KF_FLYER
-                ret  nz                        ; flyers keep their band offset (same s)
-                ld   a, (EXIT_STOREY)
-                jr   .stand
-.vert:          ld   a, (EXIT_COL)
-                ld   (ix+E_X), a
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                ld   a, STOREY_COUNT - 1       ; going up: arrive on the bottom storey
-                jr   z, .stand
-                xor  a                         ; going down: storey 0
-.stand:         MUL_STOREY b
-                add  a, STOREY_AIR             ; 9s+8
-                ld   b, a
-                KFIELD KT_BH
-                ld   c, a
-                ld   a, b
-                sub  c
-                ld   (ix+E_Y), a
-                ret
 
 ;==============================================================================
 ; arrival_conflicts — after a transition: any non-pending monster in CUR_ROOM

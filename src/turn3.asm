@@ -65,6 +65,7 @@ do_attack:
                 jp   p, .pos
 .one:           ld   a, 1
 .pos:           pop  bc
+                call atk_mod                   ; 3F-T8: golden + 1; the Ogre's SLAM x 1.5 + STUN
                 ld   b, a
                 ld   a, (TMP2)
                 call deal_hit                  ; L = HP lost; IX = attacker; H = 1: parried (3F-T6)
@@ -130,6 +131,7 @@ do_attack:
                 ld   h, (hl)
                 ld   l, a
                 jp   start_seq
+
 
 ;------------------------------------------------------------------------------
 ; set_reaction_at — IX = target, C = RC_*, attacker = (ATK_PTR). Priority:
@@ -527,9 +529,8 @@ attack_if_reach:
                 ld   e, $FF
 .gap:           ld   (TMP3), a                 ; gap
                 ld   b, a
-                KFIELD KT_REACH
-                cp   b
-                jr   c, .no                    ; gap > reach
+                call reach_ok                  ; CF: gap > reach (3F-T8: the Ogre's SLAM reach 2)
+                jr   c, .no
                 ld   a, e
                 ld   (TMP6), a
                 call face_tmp6

@@ -256,9 +256,55 @@ follow_admit:
                 inc  (hl)
                 ld   hl, FOLLOW_N
                 inc  (hl)
-                ld   hl, place_follower        ; L-RELIEF: bank 7 (IX passes in; A, F lost:
-                call far7                      ; .pick reloads them)
+                call place_follower            ; (3F-T8 review: bank 3 again; .pick reloads A)
                 jp   .pick                     ; (+3 B of far call: out of jr range)
+
+; place_follower — IX = admitted follower: room <- dest, PENDING, entry spot.
+; (3F-T8 review: back in bank 3 from bank 7 — bank-7 relief; a plain call from follow_admit.)
+; Clobbers: A, BC.
+place_follower:
+                ld   (ix+E_RCD), 0             ; 3F-T7: cooldown counter 1 on arrival (stored XOR 1)
+                ld   a, (EXIT_DEST)
+                ld   (ix+E_ROOM), a
+                set  EF_PENDING_BIT, (ix+E_FLAGS)
+                ld   a, (EXIT_KIND)
+                cp   EX_UP
+                jr   nc, .vert
+                ; horizontal: x = 1 (arrive at left edge) or 31-w; face in
+                cp   EX_RIGHT
+                jr   nz, .fromleft
+                ld   (ix+E_X), 1
+                res  EF_LEFT_BIT, (ix+E_FLAGS)
+                jr   .hy
+.fromleft:      KFIELD KT_BW
+                ld   b, a
+                ld   a, ROOM_COLS - 1
+                sub  b
+                ld   (ix+E_X), a
+                set  EF_LEFT_BIT, (ix+E_FLAGS)
+.hy:            set  EF_WALKIN_BIT, (ix+E_FLAGS)
+                KFIELD KT_FLAGS
+                and  KF_FLYER
+                ret  nz                        ; flyers keep their band offset (same s)
+                ld   a, (EXIT_STOREY)
+                jr   .stand
+.vert:          ld   a, (EXIT_COL)
+                ld   (ix+E_X), a
+                ld   a, (EXIT_KIND)
+                cp   EX_UP
+                ld   a, STOREY_COUNT - 1       ; going up: arrive on the bottom storey
+                jr   z, .stand
+                xor  a                         ; going down: storey 0
+.stand:         MUL_STOREY b
+                add  a, STOREY_AIR             ; 9s+8
+                ld   b, a
+                KFIELD KT_BH
+                ld   c, a
+                ld   a, b
+                sub  c
+                ld   (ix+E_Y), a
+                ret
+
 
 ; dest_counts — TMP3 = active monsters (incl. pending) in EXIT_DEST, TMP4 =
 ; tall (PROTO) / sum weight (LP: + the residents still in the destination's
@@ -571,8 +617,8 @@ glow_ids:       DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_G
 ;            rows 9s-1..9s+7 clipped; row 8 = HOLE + T_END_R / T_END_L caps on
 ;            the platform either side; row 17 = HOLE, no caps (the ornament
 ;            runs to the hole). ARR: + RUBBLE over the shaft in row 0 (no exit
-;            up, game.md §1.1). EXIT: the level exit; closed (LF_GRATE_OPEN = 0,
-;            3F) T_GRATE_SHUT over it before the deriver
+;            up, game.md §1.1). EXIT: the level exit (row 17 = HOLE here; its
+;            gate is stamped after the deriver, below)
 ;   items    FLOOR1: every live FLOOR_LIST entry of this room -> T_ITEM0 + k on its
 ;            2x2 cells (c..c+1, rows 9s+6..9s+7); the icon is drawn after the
 ;            map draw (fi_cells, from the R6 fi_full glyph cache)
@@ -580,9 +626,9 @@ glow_ids:       DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_G
 ;            The animated cells go to ANIM_N/ANIM_LIST (ROOM_MAP) or
 ;            ANIM_N2/ANIM_LIST2 (NEXT_MAP: do_exit's room_shadow copies it
 ;            after the scroll); the list is emptied first (PROTO: stays 0)
-;   gate     B12, after the deriver, open grate only (always in 3B): T_GRATE
-;            (raised, LADDER|HOLE) over the 3 exit cells + glow_ids[depth] on
-;            row 16 above the middle one if T_AIR
+;   gate     B12 / 3F-T8, after the deriver: shut (LF_GRATE_OPEN = 0, the boss
+;            lives) T_GRATE_SHUT x 3; open: T_GRATE (raised, LADDER|HOLE) over the
+;            3 exit cells + glow_ids[depth] on row 16 above the middle one if T_AIR
 ; Clobbers: A, BC, DE, HL (IX, IY kept).   45.4k T worst (measured, DI, contended: W11 / W12M)
 ;==============================================================================
 build_room_map:
@@ -663,13 +709,6 @@ build_room_map:
 .sgd:           ld   a, (ix+RD_ARRCOL)         ; arrival shaft: rubble-capped (row 0)
                 ld   d, T_RUBBLE
                 ld   b, 0
-                call .three
-                ld   a, (LVL_FLAGS)            ; level exit, CLOSED grate (3F; 3B never):
-                and  LF_GRATE_OPEN             ; drawn before the deriver as before. The
-                jr   nz, .pots                 ; open gate is stamped after it (.gate)
-                ld   a, (ix+RD_EXITCOL)
-                ld   d, T_GRATE_SHUT           ; TODO 3F: own closed id (level_defs.asm)
-                ld   b, FLOOR_ROW1
                 call .three
 .pots:          ; FLOOR1 floor items: the T_ITEM0 + k markers over each live entry's 2x2 cells
                 ld   hl, FLOOR_LIST
@@ -769,12 +808,15 @@ build_room_map:
                 ; above the middle cell if that is still T_AIR. After the deriver, so its
                 ; ring rule still saw HOLE_* there: the decor stays byte-identical to
                 ; before (and nothing is ever placed beside / above the exit).
-.gate:          ld   a, (LVL_FLAGS)            ; (PROTO rooms come here too: no exit)
-                and  LF_GRATE_OPEN
-                jr   z, .x
-                ld   a, (ix+RD_EXITCOL)        ; 0 = not the lair (.three: none)
-                ld   d, T_GRATE
-                ld   b, FLOOR_ROW1
+.gate:          ld   a, (ix+RD_EXITCOL)        ; 0 = not the lair (.three: none; PROTO
+                ld   b, FLOOR_ROW1             ; rooms come here too: no exit)
+                ld   d, T_GRATE_SHUT           ; 3F-T8 (BOSS-GUARD): the SHUT gate while the
+                ld   hl, LVL_FLAGS             ; boss lives, also after the deriver, so the
+                bit  LF_GRATE_OPEN_BIT, (hl)   ; decor never depends on the grate state
+                jr   nz, .open                 ; (grate_open re-stamps the same 3 cells + glow)
+                call .three
+                jr   .x
+.open:          ld   d, T_GRATE
                 call .three                    ; HL = the right cell (col c+2)
                 jr   z, .x                     ; (Z from .three's or a: no exit)
                 ld   de, -(ROOM_COLS + 1)      ; -> row 16, col c+1

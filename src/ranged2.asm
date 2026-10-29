@@ -38,7 +38,7 @@ ai_rhook:
                 ld   b, rk_tab >> 8
                 ld   a, (bc)
                 or   a
-                ret  z                         ; CF = 0: not a shooter (HL untouched)
+                jr   z, ai_ghook               ; CF = 0: not a shooter (HL untouched)
                 push hl
                 ld   e, h                      ; E = standing flag (far6 passes DE in)
                 ld   hl, ai_ranged             ; R6: A = its rd_tab row
@@ -46,5 +46,31 @@ ai_rhook:
                 ld   a, l
                 pop  hl
                 rra                            ; CF = L bit 0
+                ret  c                         ; (a shooting / holding boss is done)
+;------------------------------------------------------------------------------
+; ai_ghook — 3F-T8 boss guard hook (game.md §9.2 G2: after the attack rules,
+; before any movement rule): only the lair boss (CUR_ROOM = LVL_LAIR and
+; E_KIND | E_GOLD = LP_BOSS) far6s R6 ai_guard (boss6.asm). Same In / Out as
+; ai_rhook (CF = 1 the turn is used; TMP4 and HL kept).
+; Cost: outside the lair +46 T a monster; the boss + far6 ai_guard.
+;------------------------------------------------------------------------------
+ai_ghook:       ld   a, (LVL_LAIR)
+                ld   b, a
+                ld   a, (CUR_ROOM)
+                xor  b
+                ret  nz                        ; CF = 0 (xor)
+                ld   a, (ix+E_KIND)
+                or   (ix+E_GOLD)
+                ld   b, a
+                ld   a, (LP_BOSS)
+                xor  b
+                ret  nz
+                push hl
+                ld   e, h                      ; E = standing flag
+                ld   hl, ai_guard              ; R6: L = 1 used
+                call far6
+                ld   a, l
+                pop  hl
+                rra
                 ret
 

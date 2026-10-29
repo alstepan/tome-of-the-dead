@@ -134,6 +134,9 @@ RS_STRIDE       EQU 2 + FXD_LEN
 RS_MAX          EQU 4               ; shooters in one monster phase (Σ12, weight >= 4: <= 3); a 5th: FX_DROP
 RS_SINK         EQU RS_Q + RS_MAX * RS_STRIDE   ; the overflow entry: written, never run
 RG_RAM_END      EQU RS_SINK + RS_STRIDE
+BOSS_TRAP       EQU RG_RAM_END      ; 3F-T8: count (wraps; garbage at boot, tests read the delta): a lair
+                                    ; entry found no live boss while LF_UNIQUE is clear (boss6.asm boss_chk)
+                ASSERT BOSS_TRAP < $6000
                 ASSERT RG_RAM_END <= $6000 && (RG_RAM >> 8) == ((RG_RAM_END - 1) >> 8)
 RS_R            EQU 0               ; RS_Q entry fields
 RS_FL           EQU 1
@@ -171,6 +174,15 @@ RK_ROWS         EQU 6
 E_RCD           EQU E_POT
 RCD_MASK        EQU %00000011
 RCD_SUMMON      EQU %00111100       ; T9
+; 3F-T8: the Ogre (never a shooter) keeps its SLAM counter in the same bits 0-1 (game.md §9.1:
+; every 3rd turn SLAM, reach 2, x 1.5 dmg, a hit STUNS 1): turns since the last SLAM, 0 at spawn
+; (lp_spawn zeroes the slot); og_adv: 3 -> 1, 0 -> 1, 1 -> 2, 2 stays; at 2 (OG_READY) its reach
+; is 2 and a blow sets 3 (OG_SLAM: this attack is the SLAM, atk_mod reads it). bank-2 boss2.asm.
+OG_READY        EQU 2
+OG_SLAM         EQU 3
+OG_REACH        EQU 2               ; the SLAM's reach (kind_tab KT_REACH 1 otherwise)
+OG_STUN         EQU 1               ; STUNNED turns, always (chance nibble 0)
+GOLD_ATK        EQU 2               ; §9.7 R1: a golden boss's to-hit bonus (atk_of); dmg + 1, DEF + 1
 MK_G_CONF       EQU 4               ; glyph g of CONFUSED / FEAR (HOLD: g = the HOLD kind)
 MK_G_FEAR       EQU 5
 MK_FRAME        EQU %00001000       ; R_MK bit 3: frame B (A shifted up 1 px)

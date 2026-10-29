@@ -49,6 +49,7 @@ OUT_P = os.path.join(REPO, "assets/gfx/panel")
 # Pit caps are NOT here: T_PIT_L/T_PIT_R alias T_END_R/T_END_L (level_defs.asm), designer
 # 2026-10-03: the end shape faces the hole (cap at p-1 = RIGHT-end shape = id 20, cap at
 # p+3 = LEFT-end shape = id 19) which is exactly the current alias; no swap needed.
+T3F = "../../sprites/grid/tiles_3f.grid"   # 3F-T8: the approved 3F common tiles (GRID-relative)
 A_AIR, A_FLOOR, A_WALL, A_LAD = 0x00, 0x0F, 0x01, 0x02     # defs.asm ATTR_* defaults (depth 1)
 COMMON = [
     (0,  "T_AIR",        ("zero",)),
@@ -64,16 +65,17 @@ COMMON = [
     (10, "T_TRAP",       ("grid", "items3e.tiles", "trap")),            # 3E revealed trap plate, $42 (§1.5)
     (11, "T_DOOR_JAMB_L", ("grid", "b10_door_grate.tiles", "door_jamb_l")),  # B10 open door (was cobweb)
     (12, "T_CHAIN",      ("grid", "decor.tiles", "chain")),             # chest TR
-    (13, "T_FREE13",     ("hold",)),                                  # DEC2: was T_BONES_0 (dropped 2026-10-26)
+    (13, "T_GRATE_SHUT", ("grid", T3F, "grate_shut")),                  # 3F-T8 closed lair gate, $07 (§9.7 R2)
     (14, "T_DOOR_JAMB_R", ("grid", "b10_door_grate.tiles", "door_jamb_r")),  # B10 open door (was moss)
-    (15, "T_FREE15",     ("hold",)),                                  # DEC2: was T_BONES_1 (dropped 2026-10-26)
-    (16, "T_FREE16",     ("hold",)),                                  # DEC2: was T_BONES_2 (dropped 2026-10-26)
+    (15, "T_LECT_TL",    ("grid", T3F, "lectern_tl")),                  # 3F-T8 Sanctum lectern 2x2 (§9.7 R2)
+    (16, "T_LECT_TR",    ("grid", T3F, "lectern_tr")),
     # D3-7 T6 (game.md §6.3): ids 17 / 18 = the dropped-ammo floor glyphs (were the drips,
     # no longer placed). Concept ammo.tiles (draft 2026-10-13, canvas review pending).
     # 3E (game.md §8.11 Q1, user-approved items3e.tiles): 17 = AMMO (daggers + arrows, one bundle,
     # $47 default; T_DAGGERS = T_ARROWS = 17), 18 = PAGES (scroll / book, $07).
-    (17, "T_AMMO",       ("grid", "items3e.tiles", "ammo")),            # $47
-    (18, "T_PAGES",      ("grid", "items3e.tiles", "pages")),           # $07
+    # FLOOR1: 17 / 18 no longer placed; 3F-T8: the lectern's bottom row
+    (17, "T_LECT_BL",    ("grid", T3F, "lectern_bl")),
+    (18, "T_LECT_BR",    ("grid", T3F, "lectern_br")),
     (19, "T_END_L",      ("live", "tiles_bg_platform_end_l", A_FLOOR)), # = T_PIT_R (cap at p+3)
     (20, "T_END_R",      ("live", "tiles_bg_platform_end_r", A_FLOOR)), # = T_PIT_L (cap at p-1)
     (21, "T_DOOR_ARCH_L", ("grid", "door.tiles", "door_arch_l")),
@@ -95,7 +97,7 @@ FLOOR_IDS = {1, 3, 19, 20}              # platform, wall-in-floor-row, end caps 
 WALL_IDS = {2, 28, 29, 30}
 DECOR_IDS = {12}   # air-band decor: never in a floor row
 LIVE_UNCHANGED = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 19, 20}   # byte-identical to init_tiles
-LEGACY_ALIASED = {11, 12, 13, 14, 17, 18}   # chest/zap ids reused by decor / door jambs (B3B-13) / ammo (D3-7)
+LEGACY_ALIASED = {11, 12, 14}   # chest/zap ids reused by decor / door jambs (B3B-13) / ammo (D3-7)
 
 # Per-level colour schemes (game.md §1.2): (ATTR_FLOOR, ATTR_WALL)
 SCHEME = [(0x0F, 0x01), (0x27, 0x04), (0x17, 0x02), (0x28, 0x05),

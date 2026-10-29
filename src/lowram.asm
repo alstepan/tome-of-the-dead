@@ -309,8 +309,8 @@ lair_hint:
                 ret  nz
                 set  LF_GATE_HINT_BIT, (hl)
                 push af
-                ld   a, TX_GATE_GLEAMS
-                call msg_push
+                ld   a, TX_GATE_BARRED         ; 3F-T8: the boss lives on every first entry
+                call msg_push                  ; (grate_open logs "A GATE GLEAMS" now)
                 pop  af
                 ret
                 ASSERT LF_GATE_HINT == 1 << LF_GATE_HINT_BIT
@@ -976,6 +976,10 @@ door_paint:
                 jr   nz, .r
                 pop  bc
                 ld   de, (DOOR_COLS << 8) | DOOR_PLANK_H
+; rect_repaint — 3F-T8 entry (R6 grate_open): ROOM_MAP cells of rect C,B,D,E
+; changed -> the bank-7 attr shadow + a queued restore (PEND_DMG); the caller's
+; $C000 bank back. Clobbers: all but IX.
+rect_repaint:
                 ld   a, (PORT_7FFD_SHADOW)     ; B3B-R2: the caller's $C000 bank back
                 push af                        ; after shadow_rect (bank 7): a monster
                 push bc                        ; opening a door runs under the bank-3

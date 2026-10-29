@@ -116,7 +116,7 @@ def check(b, stats=None):
     if b[H["LVL_NROOMS"]] != n: v.append("NROOMS mismatch")
     if b[H["LVL_KEYROOM"]] != D["ROOM_NONE"] or b[H["LVL_SANCTUM"]] != D["ROOM_NONE"]:
         v.append("key/sanctum must be ROOM_NONE in 3B")
-    if b[H["LVL_FLAGS"]] != D["LF_GRATE_OPEN"]: v.append("LVL_FLAGS")
+    if b[H["LVL_FLAGS"]] != 0: v.append("LVL_FLAGS (3F-T8: the grate is shut at generation)")
     if (b[H["LVL_ATTR_FLOOR"]], b[H["LVL_ATTR_WALL"]]) != ATTRS_REF.get(depth): v.append("attrs")
     for i in range(H["MASTER_SEED"] + 2, D["LVL_HDR_LEN"]):
         if b[i]: v.append("header spare")
@@ -468,7 +468,6 @@ def check3(b, lvl=1, stats=None):
             plain[OFF_EDGE + hedge(min(7, sc0))] = 0
             plain[G.H["LVL_SANCTUM"]] = D["ROOM_NONE"]
             plain[G.H["LVL_NROOMS"]] -= 1
-    plain[G.H["LVL_FLAGS"]] = D["LF_GRATE_OPEN"]
     seed_used = int.from_bytes(b[G.H["LVL_SEED"]:G.H["LVL_SEED"] + 2], "little")
     master = int.from_bytes(b[G.H["MASTER_SEED"]:G.H["MASTER_SEED"] + 2], "little")
     if bytes(plain) != G.generate(depth, seed_used, master):

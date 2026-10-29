@@ -1330,7 +1330,7 @@ outweighing the +8 T per redrawn background cell of the 64-id glyph address.)
 +3 X (body-left col), +4 Y (body-top row), +5 HP, +6 MAXHP, +7 AIDIR (±1 climb
 dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 +15 REACT, +16 REACTAT, +17 WPH, +18 FLT, +19 FLA, +20 MSG, +21 TGT, +22 HIT,
-+23 GOLD (3F-T5: `E_GOLD` = `LEK_GOLD` $20 on a golden boss, else 0; D3-0: was ZAP), +24 DVIS (bit0 drawn, bit3 facing), +25 DFID, +26 DFPX, +27 DFPY,
++23 GOLD (3F-T5: `E_GOLD` = `LEK_GOLD` $20 on a golden boss, else 0; D3-0: was ZAP; 3F-T8: read by the glow, hit_roll atk + 2, atk_mod dmg + 1, deal_hit DEF + 1 / IMMF_BOSS, room_status; MUST stay $20 / 0: lp_bank ORs it into the kind byte), +24 DVIS (bit0 drawn, bit3 facing), +25 DFID, +26 DFPX, +27 DFPY,
 +28..31 drawn footprint col,row,cols,rows`. Hero HP/potions = `$B005`/`$B008`.
 
 ### Bank 5 low RAM (`$6000-$7FFF`, free after `CLEAR 24575`)
@@ -1424,6 +1424,7 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 | `$BFFB` | `SEQ_TRAP` | 3F-T2 review: count (saturating, cleared by `boot`): `sq_load` got a kind with no master block (`ksm_tab` 0) or no free cache slot, i.e. the kind would blit the hero's sequence row (build-ASSERTed never; debug trap, expect 0; `tests/game.py` / `tests/gfx_integrity.py`) |
 | `$BFA0` | `MSG_BUF` | 32 B: `show_impact_msg` / `impact_line` (B14: also the squeeze line) composes the impact line here (B3B-13: a token stream, pre + name + post, ≤ 31 B + 0 ASSERTed), then `log_push` copies it (B3B-11; tests use it as a stub result byte) |
 | `$BFC0` | `TIMING_MARK` | spare |
+| `$BF4B` | `GLOW_CNT` | **3F-T8**: golden-glow tick count (main.asm `.panel`: +1 on every tick that may draw a panel item, never a turn's input / TP_FIRE tick); `glow_kat` attr = `glow_tab[(GLOW_CNT >> 1) & 3]` |
 | `$BFC2` | `AY_CALLS` | A8 word: `AY_PLAY` calls (`ay_play` counts every call, whatever the mailbox; = frames since boot's `EI`; `tests/game.py` #61). Test-observable |
 | `$BFC4` | `JUMP_TURN` | B3B-5 word: the `TURN_COUNTER` value on which a jump is refused (= the turn after a jump; game.md §2.4 "not two turns in a row"); `$FFFF` = none (`new_game`) |
 | `$BFC6` | `LOCK_SHOWN` | B3B-5: 1 = the locked-door message was printed for the key still held (once per press); `read_turn_input` clears it when no key is held |
@@ -1589,7 +1590,7 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 | `$6D45` / `$6D46` | `LVL_ATTR_FLOOR` / `LVL_ATTR_WALL` | game.md §1.2 |
 | `$6D47`..`$6D4A` | `LVL_START`, `LVL_LAIR`, `LVL_KEYROOM`, `LVL_SANCTUM` | room ids (`ROOM_NONE` `$FF`) |
 | `$6D4B` | `LVL_NROOMS` | 7..9 |
-| `$6D4C` | `LVL_FLAGS` | `LF_GRATE_OPEN 1`, `LF_KEY_TAKEN 2`, `LF_SEAL_OPEN 4`, `LF_GATE_HINT 8` (B12: the lair's gate hint was logged this level; `lair_hint`, reset by `level_gen` rewriting the byte), `LF_UNIQUE 16` (3E-T11: the boss unique dropped this level, `mon_drop`) |
+| `$6D4C` | `LVL_FLAGS` | `LF_GRATE_OPEN 1`, `LF_KEY_TAKEN 2`, `LF_SEAL_OPEN 4`, `LF_GATE_HINT 8` (B12: the lair's gate hint was logged this level; `lair_hint`, reset by `level_gen` rewriting the byte), `LF_UNIQUE 16` (3E-T11: the boss unique dropped this level, `mon_drop`), **`LF_PROVOKED 32`** (3F-T8: the hero's damage reached the lair boss, deal_hit `.mon`; cleared by `lp_post` when the boss is placed). **3F-T8: `level_gen` writes 0 (the grate SHUT); `grate_open` sets `LF_GRATE_OPEN`; `LF_GATE_HINT` now remembers the first-entry line `THE GATE IS BARRED`** |
 | `$6D4D` | `FLOOR_N` | floor-list entries used |
 | `$6D4E` | `MASTER_SEED` | word, per game |
 
@@ -1611,11 +1612,12 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 | 10 | `T_TRAP` | **3E (user-approved glyphs, `assets/gfx/concept/grid/items3e.tiles`): the revealed trap plate**, ink `$42` default, `TILE_FLAGS` 0 (walkable, game.md §1.5). The potion moved to id 60 (`T_POTION` = `T_FLASK`). T6 generates the trap list; **3E-T16: a known unspent trap is stamped by `build_room_map` (before the decor deriver) and `TILE_ATTRS[T_TRAP]` is set to its type attr there and on a mid-room reveal (≤ 1 trap a room; see "3E-T16")** |
 | 11, 14 | `T_DOOR_JAMB_L`, `T_DOOR_JAMB_R` | B10 (user option B): open-door jambs, `$A0` / `$05` × 8, ink `$06`, non-solid (the PROTO chest stand-in is gone, B3B-13) |
 | 12 | `T_CHAIN` | small decor; cobweb / moss move to the per-level sets |
-| 13, 15, 16, 31 | `T_FREE13` / `T_FREE15` / `T_FREE16` / `T_FREE31` | **FREE (DEC2, user 2026-10-26)**: the DEC1 dead-skeleton bones pile was dropped to free bank 3 for the 16x16 item icons; the ids are blank glyph, attr 0, `TILE_FLAGS` 0, in no record, `dg_bad` 0, not `is_decor`. Not renumbered. (History: were `T_SKULLS`, small torch, `T_CANDLES` before DEC1.) `bones.tiles` / `dec1_bones.svg.html` stay in assets, unreferenced |
-| 17, 18 | `T_FREE17` / `T_FREE18` | **FLOOR1: free** (were 3E's `T_AMMO` / `T_PAGES` class glyphs; their `tiles_common` glyph bytes stay, unreferenced; `TILE_ATTRS` = the source attrs, no longer blanked: `theme_ids` has 2 lists) |
+| 13 | `T_GRATE_SHUT` | **3F-T8 (§9.7 R2, BOSS-GUARD)**: the CLOSED lair gate (tiles_3f `grate_shut`, ink `$07`), `TF_SOLID \| TF_FLOOR`; `build_room_map` stamps it over the 3 exit cells AFTER the deriver while `LF_GRATE_OPEN` is clear; R6 `grate_open` swaps them to `T_GRATE` (+ glow) when the boss dies |
+| 15–18 | `T_LECT_TL/TR/BL/BR` | **3F-T8 (§9.7 R2)**: the D8 Sanctum lectern 2×2 (tiles_3f, `$43` top / `$06` bottom), `TF_SOLID \| TF_ATTACK` (`id − 15 < 4` = attackable); glyphs + flags only, placed by T11 |
+| 31 | `T_FREE31` | FREE (DEC2) |
 | 19, 20 | `T_END_L` = `T_PIT_R`, `T_END_R` = `T_PIT_L` | floor edge right / left of a hole: the pit caps share them |
 | 21–25 | `T_DOOR_ARCH_L/R`, `T_DOOR_L/R`, `T_DOOR_LOCK` | concept §3.1 (5 door ids) |
-| 26, 27 | `T_GRATE`, `T_RUBBLE` | B12: `T_GRATE` = the **raised** gate (variant B, ink `$46` = `ATTR_GRATE`), `TF_LADDER \| TF_HOLE`, stamped over the lair's open level exit; `T_GRATE_SHUT` = `T_GRATE` until 3F gives the closed gate its own id (TODO 3F, level_defs.asm) |
+| 26, 27 | `T_GRATE`, `T_RUBBLE` | B12: `T_GRATE` = the **raised** gate (variant B, ink `$46` = `ATTR_GRATE`), `TF_LADDER \| TF_HOLE`, stamped over the lair's open level exit; 3F-T8: `T_GRATE_SHUT` = 13 (own id, above) |
 | 28–30 | `T_WALL_DITHER/PATCH/FADE` | wall set |
 | 32..59 | `T_LVL_BASE`.. | per-level decor (bank-7 tileset) |
 | 60..63 | `T_ITEM0`..+3 (= `T_LVL_OBJ`) | **FLOOR1 floor-item MARKERS** (the only ids ≥ 60, so `erase_rect` tests a cell with one compare inside its ids-32..63 path): a live `FLOOR_LIST` entry's 2×2 cells hold `T_ITEM0 + 2s` on row 9s+6 and `+ 2s + 1` on row 9s+7 (cols c..c+1), written by `build_room_map` and `ap_stamp`; drawn from the glyph cache ("FLOOR1" below), never from their tile glyph (the slot bytes 28..31 still hold the old 3E class glyphs: `tile_rect` draws them for an instant before `fi_cells` overdraws, cold paths only). `TILE_FLAGS` 0 (slot bytes), `dg_bad` 0, not `is_decor`. The D8 lectern swap (3F) needs another home than 60..63 now |
@@ -3790,3 +3792,97 @@ starts at `code_end` and moved with the bank-2 growth), never behaviour. Not don
   the Archer adds `U_SKCLIMB`); D5 unchanged 29,792 / 25,728 (Archer shares the Skeleton's pair,
   Mummy adds the shared pair); all others unchanged. Cap 33,700. Worst level D4 32,352 (slack 1,348).
 * Bytes: R6 free 162 -> 152, bank 1 free 111 -> 105 (repacked ZX0 block), bank 2 / bank 3 / low RAM 0.
+
+### 3F-T8 bosses (`feat/3f-t8-bosses`; game.md §9.2 'Boss guard', §1.1 / §9.4.4 grate, §9.7 R1 / R2, §9.1 Ogre; `tests/boss.py`)
+
+- **Grate** (BOSS-GUARD a): `level_gen` (both `F3_GEN` paths) and `levelgen.py generate` write `LVL_FLAGS` 0: the lair's
+  level exit is SHUT (`T_GRATE_SHUT` 13, `TF_SOLID | TF_FLOOR`, tiles_3f `grate_shut` `$07`). `build_room_map` stamps
+  the shut / open gate AFTER the deriver in both states (the decor never depends on the grate; `room_model.py` too).
+  `try_climb` DOWN at `x == RD_EXITCOL` on the shut grate: illegal, NO turn (F4: `pop hl` drops `tpt_intent`'s
+  wait; the illegal try still runs the hero's status step once, `HST_DONE`, as any illegal try). The boss's death
+  (`mon_drop`'s boss branch, before the unique is placed) far6s R6 `grate_open`: `LF_GRATE_OPEN`, 3 cells -> `T_GRATE`
+  (+ the depth's glow above the middle cell if air: `glow6`, a copy of bank-3 `glow_ids`), `rect_repaint` (new
+  low-RAM entry = `door_paint`'s tail: attr shadow, restore_page, queue_damage), `A GATE GLEAMS, THE WAY DOWN`. A hero
+  standing on the grate stays (LADDER | HOLE, no fall), DOWN at c descends. `lair_hint` (first lair entry) logs
+  `THE GATE IS BARRED` (new string `gate_barred`, +19 B packed text). Teleport keeps excluding the lair while
+  `LF_UNIQUE` is clear (unchanged).
+- **Post** (G1 / G1a / G1b): R6 `boss6.asm` `lp_post`, far6 from `lp_enter`'s unit loop for every unit of the lair
+  (FRESH and banked, no spawn-stream step); == `tools/levelgen.py lp_post` (`tests/lp.py` A2 / A7 byte-exact). The
+  boss: storey 1, x = c, or (hero arriving on storey 1 with gap < 5) shifted 1 col at a time away from him to the
+  first x with gap >= 5 and no `LP_CMAP` mark outside the exit's own c-1..c+3 (none in range -> lp_place); the escort
+  (any other lair unit) shoulder to shoulder: door side (engineer's choice: the lair's left edge if any, else right;
+  differs from L1 (7)'s BFS parent only for a through-room lair) then the other, range / gap 5 / no mark, else
+  lp_place. `lp_place` lost its "boss farthest from the hero" branch (-55 B bank 3); `LP_BEST` / `LP_BX` are
+  `lp_post`'s `LP_EXLO` / `LP_EXHI` scratch. The D8 Archmage (G1d) is posted like the others until T11 (F3_GEN off).
+- **Guard AI** (G2): bank-2 `ai_ghook` (ranged2.asm, behind `ai_rhook`: a non-shooter jumps there, a shooter whose
+  `ai_ranged` returned L = 0 falls in): only `CUR_ROOM == LVL_LAIR` and `E_KIND | E_GOLD == LP_BOSS` far6s R6
+  `ai_guard` (+46 T a monster outside the lair). Archmage / mid-ladder / off storey 1: ordinary rules; ENGAGED iff
+  the hero stands on storey 1 and (|PL_X - c| <= 8 or `LF_PROVOKED`); else a walker step toward c (`try_step_face`),
+  at c: face the hero. **PROVOKED = `LVL_FLAGS` bit 5 `LF_PROVOKED`** (one boss a level; the HERO3D / entity spares
+  were not needed): set in `deal_hit .mon` for a target matching `LP_BOSS`, cleared by `lp_post` when the boss is
+  placed. The Vampire Lord's bat rules are T9 (nothing to switch off yet).
+- **Never follows (user playtest bug, D4 Ogre)**: root cause: `follow_select` (bank 7) had no boss rule — the Ogre
+  was an ordinary follower candidate at the lair door. Fixed: a slot in `LVL_LAIR` matching `LP_BOSS` is never a
+  candidate (+19 B bank 7). The vanish after the teleport: not a data loss (tests/boss.py F2 + a follower+teleport
+  probe: the follower lands in the old room's record with its hp); a followed boss sat as an ordinary entry in a
+  non-lair record, where `lp_place`'s 8 random tries often find no cell for the 4-col Ogre on re-entry (kept in the
+  record, invisible). Since the fix the boss is always in its lair, where `lp_post` places it. **Safety:
+  `boss_chk`** (R6, far6 from `lp_transition` after `lp_enter`): while `LF_UNIQUE` is clear and the lair record is
+  VISITED (or being entered), the boss must be a live slot of the lair or a lair record entry, else
+  **`BOSS_TRAP`** (`$5FF4` = `RG_RAM_END`, bank 5, wraps, garbage at boot: tests read the delta) += 1; the grate
+  opens only on the boss's death.
+- **Golden** (§9.7 R1; E_GOLD = $20): `hit_roll` atk + `GOLD_ATK` 2 (inline), `atk_mod` dmg + 1 (bank 3, after the
+  roll in `do_attack`; R6 `rg_shoot` + 1 for a golden shooter), `deal_hit .mon` DEF + 1 (the WEAK extra B), IMMF_BOSS
+  for a golden target (`E_GOLD` rlca x 2 OR the KX_IMM byte: deal_hit and `room_status`). Not done: the per-depth
+  boss name / XP tables (R1 data; open).
+- **Glow** (§8.6): render `.kat` -> `glow_kat` (bank 2): attr `glow_tab[(GLOW_CNT >> 1) & 3]` = `$06 $46 $47 $46`;
+  `GLOW_CNT` (`$BF4B`) += 1 at main.asm `.panel` (never a turn's input tick / TP_FIRE / before COMBAT_NOT_BEFORE).
+  A golden DIRTY_ATTR slot adds NO damage rect (`.sa`); `draw_slot` -> `stamp_slot` -> `stamp2` writes the attrs of
+  both screens (bank 5 + `SCREEN7_ATTR`, bank 7 paged, caller's bank restored): ~1.4k T for a 3x6 body. A damage
+  rect over it still forces the ordinary full redraw (overlap repair).
+- **Ogre SLAM** (§9.1): `E_RCD` bits 0-1 (the Ogre is no shooter) = turns since the last SLAM: `og_adv` (bank 2) 3 ->
+  1, 0 -> 1, 1 -> 2, 2 stays; advanced once a turn by `ai_guard` (no blow) or `reach_ok` (a blow). At 2 the reach
+  is 2 (`reach_ok`, replaces attack_if_reach's KFIELD KT_REACH) and the blow sets 3 = the SLAM: `atk_mod` x 1.5 and
+  deal_hit C / E = PHYS + STUNNED 1 (always; HOLD_GUARD / boss halving rules as any STUN). The RAISE -> SLAM pose is
+  the Ogre's only attack sequence (T13bc). `place_follower` zeroes E_RCD (unchanged).
+- **Tiles** (§9.7 R2): common 13 = `T_GRATE_SHUT`, 15..18 = `T_LECT_TL/TR/BL/BR` (tiles_3f, `TF_SOLID | TF_ATTACK`,
+  placed by T11); `tools/tiles_convert.py` reads `assets/gfx/sprites/grid/tiles_3f.grid`; boot block bytes only.
+
+| Region (`-DDEBUG_KIT=0` unless noted) | main `602407c` | after 3F-T8 | Δ |
+|---|---|---|---|
+| R6 `R6_LEN` / free (release / kit) | 9,472 / 232 / 162 | **10,240 / 486 / 416** | +768 (`R6_GROW` 10 -> 13), −514 `boss6.asm` (lp_post, ai_guard, grate_open + glow6, boss_chk), +6 rg_shoot |
+| pool `POOL_CAP` / need / slack (worst D3) | 33,700 / 32,224 / 1,476 | **32,918 / 32,224 / 694** | −768 R6, −14 text; PROTO slack 534; per-level asserts both heroes green |
+| bank 2 free to FRT / `kind_tab` pad | 208 / 35 | **29 / 17** | −179 `boss2.asm` + `ai_ghook`; −18 before `kind_tab` (`.kat` / `.sa` hooks, `GLOW_CNT` inc) |
+| bank 3 free | 48 | **23** | −25 (lp_place −55, build_room_map −12; hooks, golden, atk_mod, PROVOKED, boss_chk call) |
+| bank 7 free (release / kit) | 36 / 31 | **12 / 7** | −24 (`follow_select` boss rule, `try_climb` F4) |
+| low RAM / bank 1 / AY | 17 / 111 / 169 | unchanged | 0 (`rect_repaint` is a label) |
+| text (bank 0) | 2,652 | 2,666 | +14 `gate_barred` |
+- **Boss vanish on lair re-entry (UB6 / the D2 Spider Queen report)**: root cause on main = `lp_enter` re-placed a
+  BANKED boss through `lp_place`'s 8 random tries (the "farthest" boss rule only ran for a FRESH lair) and kept it
+  in the record, unspawned and invisible, when none was legal: main's `levelgen.py` model (== the Z80, lp.py A7)
+  misses the boss on 5-10 % of lair re-entries (D4 10.5 %, D2 9.2 %, D1 4.7 %). `lp_post` places it at its post on
+  every entry: `tests/boss.py` R0 (10,500 model re-entries, 0 misses) and R1 (Z80, D1-D6: leave, 2 rooms away, back
+  x 4, exact hp, BOSS_TRAP 0).
+- **Ticks** (`tests/budget.py`, worst ordinary work tick, cap 126,000): `lglow` 102,445, `omix` 108,906, `pmix`
+  109,487 (main 109,064: +423 = `ai_ghook` ~46 T a monster + the `.kat` / `.sa` golden tests ~30 T a drawn slot),
+  every scenario gated green; `lqmix` 146,841 (report-only, main 148k). lp_enter (A7, 300 levels) mean 19,283 /
+  worst 42,439 T (<= 22k / 46k). `tests/ai_equiv.py` vs main: 2,100 turns, 0 logic / RNG / status mismatches.
+  `FL=abc tests/flicker.py`: 0 flicker / tear events.
+- **T8 review (2026-10-29), rebased on main `54fe574`:** `boss_chk` requires a LIVE boss slot while the hero
+  ENTERS the lair (a boss left in the record there = UB7: `tests/boss.py` T1 forces it, no free slot, BOSS_TRAP + 1);
+  `lp_post` also shifts the post at c when a body placed earlier in the record covers it (`lp_spawn` marks bodies
+  `LPC_BODY` 2, never exempt; lp_legal ORs every bit: unchanged elsewhere; boss.py P1). KNOWN (not fixed): an item
+  dropped on the shut grate (TF_FLOOR) floats above the open shaft after the grate opens. Memory relief: `atk_mod`
+  bank 3 -> bank 2 (boss2.asm), `og_adv` / `glow_kat` + `glow_tab` -> `boss2a.asm` before `kind_tab` (the pad),
+  `uq_fit` + `uq_chk` bank 3 -> R6 `fi6.asm` (far6 from mon_drop), `place_follower` bank 7 -> bank 3 (plain call
+  from follow_admit), `follow_select`'s boss rule without the LVL_LAIR test (only the boss matches kind | E_GOLD =
+  LP_BOSS). BOSS_HERE (review item 3) not done: ~17 T a monster in ai_ghook only (the render hooks already test
+  E_GOLD, 6 T dearer than a global byte), and a stale / missing entry state would silently skip the guard.
+
+| Region (`-DDEBUG_KIT=0`; main `54fe574` -> rebased T8) | main | T8 rebased | Δ |
+|---|---|---|---|
+| bank 3 free | 48 | **60** | +12 |
+| bank 7 free (release / kit) | 36 / 31 | **136 / 131** | +100 (place_follower 116 B out) |
+| bank 2 free to FRT / pad | 208 / 84 | **40 / 21** | −168 / −63 |
+| R6 free (release) | 179 | **313** (kit 224) | +768 R6_GROW 10 -> 13, −634 T8 code |
+| pool slack (worst D4) | 1,672 | **890** | −768 R6, −14 text |

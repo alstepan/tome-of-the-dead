@@ -130,7 +130,7 @@ def main():
             pc0 = p.pc()
             code = [0xF3, 0x3A] + w16(S["PORT_7FFD_SHADOW"]) + [0xF5]
             if unique:                             # mon_drop's boss path: uq_fit, then DROP_WHOLE
-                code += [0x21] + w16(S["uq_fit"]) + [0xCD] + w16(S["far3"])
+                code += [0x21] + w16(S["uq_fit"]) + [0xCD] + w16(S["far6"])   # 3F-T8 review: R6
             code += [0x3E, S["BANK_R6"], 0xCD] + w16(S["page_bank"]) + [0xDD, 0x21] + w16(S["P_ENTITIES"] + 32)
             code += [0x3E, typ, 0x11, S["DROP_WHOLE"] if unique else S["DROP_NEAR"], 1, 0xCD] + w16(S["drop_put"])
             code += [0xF1, 0xCD] + w16(S["restore_page"]) + [0xFB]

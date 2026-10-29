@@ -58,6 +58,7 @@ debug_kit:
                 ret
     ENDIF
                 INCLUDE "lq6.asm"              ; AI-L1: lq_block (the ladder queue: strongest first)
+                INCLUDE "boss6.asm"            ; 3F-T8: lp_post / ai_guard / grate_open (the lair boss)
     IF F3_GEN
                 INCLUDE "sanct6.asm"           ; 3F-T10: sanctum_leaf (D8 Sanctum generation, only with the 3F switch)
     ENDIF

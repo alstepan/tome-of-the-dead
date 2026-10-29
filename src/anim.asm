@@ -789,7 +789,10 @@ render:
                 jr   z, .kat
                 call st_tint                   ; (keeps B, HL)
                 jr   .tsh
-.kat:           KFIELD_KEEPHL KT_ATTR
+.kat:           ld   a, (ix+E_GOLD)            ; 3F-T8: a golden body glows (boss2.asm)
+                or   a
+                jp   nz, glow_kat
+                KFIELD_KEEPHL KT_ATTR
 .tsh:           ld   (hl), a                   ; R_TINT = shown now
 .ro:            res  2, l                      ; back to R_ATTR
 .fl:            ld   (hl), a                   ; R_ATTR
@@ -825,6 +828,9 @@ render:
                 ld   (hl), 0                   ; R_LOG
                 dec  c
                 jp   nz, .s                    ; NONE: nothing to erase or add
+                ld   a, (ix+E_GOLD)            ; 3F-T8: a golden body's attr-only repaint
+                or   a                         ; (draw_slot -> stamp_slot: both screens),
+                jp   nz, .s                    ; no damage rect
                 RFIELD R_COL                   ; ATTR: re-stamped in place
                 jp   .addn
 .edge:          ld   d, a                      ; D = fpx + W - 256 (right edge: the overhang)
@@ -1125,7 +1131,7 @@ draw_slot:
                 ld   a, (hl)
                 inc  l
                 ld   (hl), a                   ; R_DATTR = the attr stamped now
-                jp   stamp_rect
+                jp   stamp_slot                ; 3F-T8 (boss2.asm): stamp_rect, or both screens
 
 ; trace_log — append (ANIM_SLOT, BL_FID) to the 32-B ANIM_TRACE ring.
 trace_log:
