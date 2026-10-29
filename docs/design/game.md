@@ -708,7 +708,7 @@ judgement about the next few turns, not about the room's contents.
 - **`KX_XP`.** It is an absolute reward, so it ignores hero growth and the D1 and D7
   numbers mean different things. It also bakes in the tier ×1.5/×2 reward bonus.
 - **HP fraction alone.** It fires in an empty room after a trap, and it never fires for
-  a full-HP D7 hero facing 2 Berserkers and a Sniper.
+  a full-HP D7 hero facing 2 Berserkers and a Bone Caller.
 - **"Any awake hostile in the room"** (sound.md §3 B rev 1). It would be on in most
   rooms, so W would turn into the explore tune.
 
@@ -1774,11 +1774,11 @@ key 1 (no floor entry: found on entering the key room, §8.11 Q1) · all 3E entr
 | **Dagger stack** | **1 stack of 2–3** (`1d2+1`) on D1–D7; none on D8 | placed in a random non-start, non-lair room |
 | **Arrow stack** | **1 stack of 5–8** (`1d4+4`) on D1–D7; D8 none | same |
 | **Bow (user 2026-10-04; Warrior runs only)** | **Exactly 1 on D2**: a floor-list entry in a random non-start, non-lair room, **plus a 6-arrow bundle placed in the same cell** (extra to D2's normal 5–8 stack; the two merge on pickup per the one-stack-per-cell rule, capped 24). Generated regardless of RNG; never on other depths. If the bow is discarded (§8.11: DISCARD destroys) or lost (pit fall) it is gone, and the run continues melee/daggers only | Pre-bow arrows (D1 stack) are picked up and kept; the bow icon stays greyed until the bow is in the bag |
-| Skeleton Archer drop | Arrows ×3, 1/2 | D4, D5, D7 (§9.1) |
+| Skeleton Archer drop | Arrows ×3, 1/2 | D4, D5 (§9.1; D7 dropped by H1, §9.8) |
 | Thrown-and-recovered | per §6.3 | not a placement; uses floor-list slots |
 
 Supply estimate (E, whole run): daggers ≈ 3 + 7 × 2.5 ≈ 20 found + recoveries (×4 throws
-each ≈ 80 throws if all are used); arrows ≈ 6 (D2 bundle) + 7 × 6.5 ≈ 52 found (start 0; D1 is dagger-only play, which the D1 balance row already assumes) + ~9 from Archers.
+each ≈ 80 throws if all are used); arrows ≈ 6 (D2 bundle) + 7 × 6.5 ≈ 52 found (start 0; D1 is dagger-only play, which the D1 balance row already assumes) + ~6 from Archers (D4/D5 only since H1; was ~9).
 With ~14 monsters per level and ~65 % to-hit, a level's ~6 arrows kill about one monster, so
 ranged play is a **tool for the dangerous kinds** (archers, casters, the Ogre's approach),
 not a replacement for the sword. The stack caps (9 / 24) make hoarding a loss.
@@ -2509,7 +2509,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | walker, opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
 | Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch 1 in 4 → CONFUSED 4 (§6.4) | — | D3, D6–D8 |
 | Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, opener (3F-D1: not a climber) | chase | Meat 1/3 | D4, D6, D7 |
-| Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, opener (3F-D1: not a climber) | ranged | Arrows ×3 1/2 (W) | D4, D5, D7 |
+| Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, opener (3F-D1: not a climber) | ranged | Arrows ×3 1/2 (W) | D4, D5 (ARCHER-DEPTHS H1, user 2026-10-29: not D7, §9.8) |
 | Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5 |
 | Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener, climber (user 2026-10-29) | ranged, cooldown 2 (§9.2 RANGED-SPEC); Dark Bolt hit 1 in 3 → FEAR 3 (§6.4) | Mana 1/3 | D6–D8 |
 | **Ogre Warlord** (unique) | **32×48** | 40 | 5 | 1 | 2 | 1d10+2 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg, a hit STUNS 1 (§6.4) | unique | D4 |
@@ -2850,8 +2850,15 @@ arrival, and it makes descending a valid escape.
 | D4 | Orc, Rat, Spider, Skeleton Archer | 13 | **Ogre Warlord** |
 | D5 | Mummy, Skeleton, Skeleton Archer, Spider | 13 | Golden Pharaoh |
 | D6 | Vampire, Ghost, Necromancer, Orc | 14 | Golden High Necromancer |
-| D7 | Orc, Skeleton Archer, Ghost, Necromancer | 14 | **Death Knight** |
+| D7 | Orc, Necromancer, Ghost, Necromancer (two Necro entries, ARCHER-DEPTHS H1) | 14 | **Death Knight** |
 | D8 | Necromancer, Skeleton, Ghost, Vampire | 10 + Archmage (+ ≤ 2 summons) | Archmage |
+
+**D7 pool (ARCHER-DEPTHS H1, user 2026-10-29).** `LP_KINDS` D7 = {Orc, Necromancer, Ghost,
+Necromancer}; `LP_KINDS[rnd & 3]` stays a 2-bit pick, so the Necromancer is drawn 2 in 4
+(Orc 1/4, Ghost 1/4). The Necromancer weighs **6 = the Archer's 6**, so Σ, `SIGMA_INIT[7]` and
+`minW` (Ghost 3) are unchanged; the §9.4.3 fallback scan simply meets the Necro twice (index 1
+then 3; harmless). The pool loads the Necro once (kinds are de-duplicated when the pool is
+built; engineer confirms the builder skips a repeated kind).
 
 **Lazy population (principle: user 2026-10-06; details: designer decision 2026-10-06; plan
 task LP).** A level stores no monster list. It stores a **budget** (count, kinds, per-room
@@ -3024,11 +3031,11 @@ Ghost**. D6 and D7 have no Skeleton set (§11.3).
 **Hero-dependent projectile extras (3F-D2, designer 2026-10-28; T1 open issue).** Monster
 projectiles reuse the Warrior's class-FX frames, which a Mage run does not load (`K_FXW`).
 So on a **Mage** run only, the level pool adds:
-- **Archer levels (Skeleton Archer ∈ `LP_KINDS`: D4, D5, D7):** `arrow_fly1/2` (16×8,
+- **Archer levels (Skeleton Archer ∈ `LP_KINDS`: D4, D5; D7 dropped by ARCHER-DEPTHS H1):** `arrow_fly1/2` (16×8,
   stationary) = **≤ 128 B pool** (2 frames × 32 B source × 2 facings), 0 new source, 0 new fid.
 - **Goblin levels (D1, D2; the Goblin Slinger's rock):** `dagger_spin1/2` (8×8) = **≤ 64 B**.
 - **Not** `arrow_hit`: a Mage hit by an arrow shows his hurt reaction only (as the DART, §1.5).
-The two sets never share a level, so the extra is **≤ 128 B**, on D4/D5/D7; D5 is the
+The two sets never share a level, so the extra is **≤ 128 B**, on D4/D5 only; D5 is the
 pool-limiting level (§9.7), so the engineer re-checks `POOL_NEED` for Mage D5. Warrior runs
 add nothing (already resident).
 
@@ -3342,7 +3349,7 @@ grate glyph (8 B). Book hit flash `$43` rewrites the 4 attrs (§1.3 unchanged).
 **R3 Climbers.** Only kinds with climb frames climb: **Goblin, Skeleton** (+ their tiers) and the
 heroes. **Orc, Skeleton Archer (+ Sniper), Death Knight are walkers, not climbers** (§9.1). 0 B,
 avoids +1,152 B pool on D4/D7 (a shared Skeleton climb pair would have to be resident there, and
-D7 is the worst level). Gameplay: like Ogre/Mummy/Vampire/Necro, a hero on the other storey is
+D7 is the worst level; since H1, §9.8, D7 has no Archer, so this now concerns D4 only). Gameplay: like Ogre/Mummy/Vampire/Necro, a hero on the other storey is
 safe from them; the Archer still shoots along its storey, the DK lair fight is unchanged (bosses
 never follow). **Orc = 3 frames** (WALK1 = MOT rest, WALK2, ATTACK), HURT = flash, DEAD = the
 shared humanoid DEAD (as Mummy; pool spike assumption confirmed).
@@ -3374,12 +3381,10 @@ Not on the list (rules, user-owned): the respawn trickle, tiers, wear, bosses' c
 R6 move in 6.
 
 **DECIDED (user 2026-10-28): Archer SHOOT has no dedicated art.** The shot plays an existing
-cut/cast frame (no new source): **D5** the resident Skeleton cut, **D7** the resident Necro cast
-(or the Skeleton cut if it is cheaper in pool), **D4** has neither resident, so it loads the
-Skeleton cut frame alone (D4 has ~8 KB slack and is not the max, so 0 effective cost). The
-designer prefers the Skeleton cut everywhere (bony silhouette) where the pool allows. Saves **768 B pool + ≈ 193 B source**;
-D7 cut/cast savings cap at 1,280 B total, **D5 becomes the pool-limiting level**. §11.1 Archer
-row: 3 ids (Skeleton walk shared), no SHOOT.
+cut/cast frame (no new source): **D5** the resident Skeleton cut, **D4** has no resident, so it
+loads the Skeleton cut frame alone (D4 has ~8 KB slack and is not the max, so 0 effective cost).
+(D7 has no Archer since ARCHER-DEPTHS H1, §9.8.) Saves **768 B pool + ≈ 193 B source**;
+**D5 becomes the pool-limiting level**. §11.1 Archer row: 3 ids (Skeleton walk shared), no SHOOT.
 
 **R6 Plan reconciliation.** Plan 3F's "zombie" = **Vampire**, "giant spider" = **Spider** (§9.1;
 Giant Rat is a Rat tier). Boss music (cue E entry + cue R on boss death, sound.md) is wired **in
@@ -3405,8 +3410,8 @@ screen, not a tick; no new algorithm. Do not add placement tries.
 **D3-4 Skeleton Archer ink = `$03` (magenta, not BRIGHT).** Rejected: `$47` (= Skeleton),
 `$05`/`$44` (Skeleton Guard/Knight, same frames on D5), `$04` (its Sniper), `$06` (= the D5
 air-band ink; reads as decor), `$02` (the `$42` hit flash barely shows on it), and the status /
-glow inks. Black paper, one ink per cell, so it is legal on every background. On D7 `$03` is
-shared with the Orc Bouncer and Poltergeist, which have different silhouettes. Constraint for
+glow inks. Black paper, one ink per cell, so it is legal on every background. (The former D7
+`$03` share with the Orc Bouncer and Poltergeist is moot: no Archer on D7, H1.) Constraint for
 the artist: the Mummy (D5) and Spider base inks must not be `$03`.
 
 **D3-5 Sniper drop = 2/2** (Rewards rule wins; §9.6 row text fixed).
@@ -3438,6 +3443,10 @@ parry, so a compare chain on the row id (`SK_GUARD` → chance 64/256 = ¼; `SK_
 or table. Use spare KX bits only if a parry flag already exists there and the compare can be
 dropped. A 4th parrier (BAL1) would move it to a 2-bit field (§9.7 R5 #6).
 
+**ARCHER-DEPTHS H1 (user 2026-10-29): Archer removed from D7 to keep the D7 pool; D7 ranged
+pressure = 2 Necro entries** (`LP_KINDS` D7 = Orc, Necro, Ghost, Necro; §9.4). The Skeleton
+Archer and its Sniper tier spawn on **D4, D5** only; the Archer 2-frame walk is dropped.
+
 ---
 
 ## 10. Balance sketch
@@ -3453,7 +3462,7 @@ ranks and gear keep pace.
 | D4 | 4 | 36/9 · 25/18 | archers, Ogre 43 hp; Black Widow acid | Spark (Ogre SHOCK W, always known); Drain on living; close doors; bow |
 | D5 | 5 | 40/10 · 28/20 | Mummy PHYS R, curse (WEAK 12, §6.4); first ALARM traps | Firebolt (Mage ~93 % by D5); Cure; Scarab next |
 | D6 | 6 | 47/12 · 31/22 | casters, ghost reflecting Lightning | Ring of the Grave; Firebolt on ghosts |
-| D7 | 7 | 54/14 · 34/24 | Death Knight (parry + notch, fire reflect) | Spark / Lightning (W); Power Strike through parries; blessed weapon |
+| D7 | 7 | 54/14 · 34/24 | Death Knight (parry + notch, fire reflect); Necros 2 in 4 rolls (Dark Bolt + FEAR; no Archers, H1) | Spark / Lightning (W); Power Strike through parries; blessed weapon |
 | D8 | 8 | 61/16 · 37/26 | Archmage + summons + bouncing bolt; reflects Frost/Lightning | Mirror Helm; Firebolt (Mage ~98 %); potions saved |
 
 **Answers under random books (rev 6, §5).** Bosses never regenerate and never follow (§8.6),
@@ -3597,7 +3606,7 @@ of 1.7×, sources grow by ~2.3K. The levers, cheapest first:
 | D4 | Orc 4.6 + Rat 2.0 + Spider 2.75 + Archer 4.4 + Skel HURT/DEAD 0.9 + **Ogre 6.5** | 21.2 |
 | D5 | Mummy 4.6 + Skeleton 8.4 + Archer 4.4 + Spider 2.75 | 20.2 |
 | D6 | Vampire 4.6 + **Bat 2.0** + Ghost 2.9 + Necro 4.48 + Orc 4.6 | 18.6 |
-| D7 | Orc 4.6 + Archer 4.4 + Skel HURT/DEAD 0.9 + Ghost 2.9 + Necro 4.48 + **Death Knight 5.18** | 22.5 |
+| D7 | Orc 4.6 + Ghost 2.9 + Necro 4.48 (loaded once; 2 `LP_KINDS` entries, H1) + **Death Knight 5.18** (no Archer / Skel HURT/DEAD since H1, −5.3) | 17.2 |
 | D8 | Necro 4.48 + Skeleton 8.4 + Ghost 2.9 + Vampire 4.6 + **Bat 2.0** + Archmage 1.54 | **23.9** |
 
 Level-start regeneration (≤ 24 KB, D8) takes ≈ 1.9 s (E; block unpacking is not slower than per-frame), behind a `DEPTH n` card.
