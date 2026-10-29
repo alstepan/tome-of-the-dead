@@ -3724,3 +3724,44 @@ peak in the ranged scenarios (5,993 T) stays under the suite's existing peak (6,
 diffs vs main are only `E_SEQL` / `E_SEQH` (offsets 12 / 13: sequence pointers into the seq cache, which
 starts at `code_end` and moved with the bank-2 growth), never behaviour. Not done (review item 6b): reading
 `rd_tab` in place instead of the 8-B row copy (every RW_* access would need an index register; ~0.2k T).
+
+### AI-L1 ladder queue (`feat/ai-l1-ladder`; game.md §9.2 'Ladder queue'; `tests/ladder_jam.py`)
+
+- **R6 `lq6.asm` `lq_block`** (far6 entry, 85 B): from `turn3.asm ai_monster .sk` when a climber's
+  standing step toward its shaft col failed (`.fstep` inlined there: D = dx, E = col pass in DE). Re-runs
+  `box_free` over the failed step's box; no body → plain wait (no facing change: A/B-neutral without
+  contention). A body: face the shaft; (review) a body on MY side in the near-end box but not at col
+  (dx × (its x − col) in −2..−1) → I back off 1 cell whatever the power / my distance (the 3-climber chain:
+  col c, Orc c−2 / Necro c+1 / Orc c+4 deadlocked, the Necro boxed in between two winners); else the blocker
+  wins when its static `kind_tab KT_HP` is higher, or equal and its slot is lower (slot order =
+  `P_ENTITIES` address order: `sbc hl, bc` vs IX); a winner blocking me with `|x − col| < FEAT_W` →
+  `try_step` 1 cell away (facing kept), else wait. The hero is not special (KT_HP 24 / 16, it wins; it
+  never blocks a seek step off its own climb path).
+- **Mid-ladder turn-round (review, `turn3.asm .other`, bank 3 +18 B):** a mid-ladder climber whose step
+  fails and whose `E_AIDIR` leads away from `PL_STOREY` (bit 7 of ai_dir == PL_STOREY on the {c,1}
+  segment) negates `E_AIDIR` (the turn is spent): the hero changed storey mid-climb, a waiter at the foot
+  no longer hangs it there for ever. No 'mid-ladder blocker always wins' rule.
+- **J1** (climb start over the own end box) is not a bug while every `KF_CLIMBER` kind is `FEAT_W` wide:
+  ASSERT in `main.asm` after `kind_tab` (a body in the near-end box overlaps the climber or sits in its
+  first climb step). `.at` unchanged.
+- No new RAM. Contracts kept: ACT_SLOT set by the caller (box_free skips me), nothing between `try_step`
+  and `.vert`, `.ny2` untouched.
+- **Known minor behaviours (not fixed, each > 6 B):** an opener backing off into a closed plank opens the
+  door (`try_step` → `mon_door`; the step is spent); a STRONGER blocker that never moves (a non-climber, a
+  Slime on its off turn) makes a weaker seeker in the near-end box step back and forth every 2 turns; a
+  flyer (over a pit or anywhere) in the way counts as a blocker (power compare as any body); a shooter
+  that arrives and stays on the far-end box (it shoots instead of walking) holds the next climber at the
+  foot (pre-existing: the shaft queue). `tests/ladder_jam.py` Q6 caps x reversals at 4 a climber.
+- **Cost:** `lq_block` 1,493 T (winner waits) / 3,624 T (loser backs off, a step included) per blocked
+  seek step. `tests/budget.py` `lqmix` (REPORTED, not gated: 3 Skeletons jammed at room A's {23,1} top,
+  the Knight walking storey 1 through the pmix items): worst tick 152,959 T, resolve_monsters 22.6k; the
+  control `BUDGET_LQ_X=9,14,19` (the same 3 walking, no jam in the worst tick) is **148,088 T on main**
+  (148,163 here): the over-cap tick is the render / present of 3 moving 24×48 walkers + the hero's pickup
+  tick, pre-existing; AI-L1 adds ≈ +4.9k T (≈ +6.2k in resolve_monsters) on top. Main's `lqmix` (the jam
+  never moves) is 84,582 T.
+
+| Region (`-DDEBUG_KIT=0`) | main `fca0814` | after AI-L1 | Δ |
+|---|---|---|---|
+| bank 3 free to `AY_RESERVE` | 85 | **48** | −37 (`.sk`: the inline `.fstep` + `ld hl, lq_block` / `jp far6` 19; the mid-ladder turn-round 18) |
+| R6 free (release / kit) | 317 / 247 | **232 / 162** | −85 `lq6.asm` |
+| bank 2 / bank 7 / low RAM / bank 1 | — | unchanged | 0 |

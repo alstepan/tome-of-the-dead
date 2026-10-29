@@ -57,6 +57,7 @@ debug_kit:
                 ld   (MAXMP), a
                 ret
     ENDIF
+                INCLUDE "lq6.asm"              ; AI-L1: lq_block (the ladder queue: strongest first)
     IF F3_GEN
                 INCLUDE "sanct6.asm"           ; 3F-T10: sanctum_leaf (D8 Sanctum generation, only with the 3F switch)
     ENDIF

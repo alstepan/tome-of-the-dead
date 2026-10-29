@@ -19,6 +19,8 @@ builds) so fights run long. Build both with -DDEBUG_KIT=0.
 Caller -> Orc; Slinger -> Goblin) are re-kinded on both builds, so the A/B
 against a pre-T7 base proves the ranged hook neutral for every other kind (the
 shooter path itself: tests/ranged.py A, the model A/B).
+AI-L1: AI_EQUIV_LADDER=1 swaps in climber-heavy generated depths (2, 3, 5, 6, 7);
+a mismatch there must be two climbers contending for one shaft (the ladder queue).
 """
 import hashlib
 import json
@@ -32,6 +34,8 @@ HERE = Path(__file__).resolve().parent
 RUNS = [  # (hero, proto, seed, depth): PROTO rooms A-D (ladders, B14 / B8 / squeeze
     # cases), generated D1, and D4 / D7 for the 3F walkers / climbers / flyers
     (0, 1, 11, 1), (1, 1, 12, 1), (0, 0, 13, 1), (1, 0, 14, 4), (0, 0, 15, 7), (1, 0, 16, 7)]
+if os.environ.get("AI_EQUIV_LADDER"):    # AI-L1: climber-heavy depths only (Goblin D2, Skeleton D3 / D5,
+    RUNS = [(0, 0, 21, 2), (1, 0, 22, 3), (0, 0, 23, 5), (1, 0, 24, 6), (0, 0, 25, 7)]   # Orc / Necro D6-D7)
 KEYS = ["L", "L", "L", "H", "H", "H", "K", "J", "K", "J", "WAIT", "SPACE", "SPACE"]
 LOGIC = ("KIND", "ROOM", "FLAGS", "X", "Y", "HP", "AIDIR")
 

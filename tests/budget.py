@@ -414,6 +414,14 @@ SCENARIOS = {
         (1, 5, stand_y(1, 4), RIGHT),
         (2, 19, stand_y(1, 4), HOSTILE),
         (5, 19, stand_y(1, 4), HOSTILE)], KEYS, K_KNIGHT, None, "sroom"),
+    # AI-L1 review: 3 climbers jammed at the {23,1} ladder top (storey 0; the hero walks storey 1 below
+    # through the pmix items): Skeleton c-2 / Goblin c+1 / Skeleton c+4 = the 3-climber chain (strong,
+    # weak, strong), so lq_block (far6, box_free, a back-off try_step) runs for each of them on the
+    # same monster phase. Kinds by lqmix_setup (slot 1 the Rat -> a 2nd Skeleton).
+    "lqmix": ("knight + pmix items below, 3 climbers jammed at a ladder top (lq_block x3)", [
+        (5, 21, stand_y(0, 6), RIGHT),
+        (3, 24, stand_y(0, 4), HOSTILE),
+        (1, 27, stand_y(0, 6), HOSTILE)], KEYS, K_KNIGHT, None, "lqmix"),
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
         (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
@@ -740,6 +748,19 @@ def ranged_setup(p, placements, key):
     p.settle()
 
 
+def lqmix_setup(p):
+    """"lqmix" (AI-L1): pmix items + slot 1 re-kinded to a Skeleton (60 HP each, so nothing dies)."""
+    pmix_setup(p)
+    p.set_ent(1, KIND=S["K_SKELETON"])
+    for sl in (1, 3, 5):
+        p.set_ent(sl, HP=60, MAXHP=60)
+    p.set_ent(0, HP=250, MAXHP=250)
+    if os.environ.get("BUDGET_LQ_X"):             # control run: other storey-0 cols (e.g. no jam)
+        for sl, x in zip((5, 3, 1), map(int, os.environ["BUDGET_LQ_X"].split(","))):
+            p.set_ent(sl, X=x, PX=8 * x)
+    p.settle()
+
+
 def imix_setup(p):
     """"imix" (FLOOR1): 4 floor items (Apple, Heal, Long Sword, Chain) in room A storey 1
     at cols 9 / 13 / 17 / 21, cache + icons drawn (fi_refresh)."""
@@ -883,6 +904,8 @@ def run_scenario(h, scen):
         RANGED_FIDS.clear()
     if len(scen) > 5 and scen[5] == "imix":
         imix_setup(p)
+    if len(scen) > 5 and scen[5] == "lqmix":
+        lqmix_setup(p)
     if len(scen) > 5 and scen[5] == "dmix":
         dmix_setup(p)
     if len(scen) > 5 and scen[5] == "umix":
@@ -931,6 +954,9 @@ def run_scenario(h, scen):
             f"dmix: the boss kill-drop did not displace (BUDGET_DMIX_SEED?): {room}"
         print(f"[info] dmix after: {len(room)} entries, {len({t for _, t in room})} types, the potion type "
               f"displaced (the walk may have picked the KING HELM up)", flush=True)
+    if len(scen) > 5 and scen[5] == "lqmix":        # AI-L1: where the climbers ended
+        print(f"[info] lqmix after: climbers (x, y) {[(p.ent(sl)['X'], p.ent(sl)['Y']) for sl in (5, 3, 1)]},"
+              f" hero ({p.ent(0)['X']}, {p.ent(0)['Y']})", flush=True)
     if len(scen) > 5 and scen[5] == "qmix":         # IC1: the potion pick as drawn (state bits 2-3)
         sh = list(p.z.read_memory(S["ICON_SH"] + S["QS_SLOT0"], 3))
         print(f"[info] qmix after: quick ICON_SH {[hex(v) for v in sh]} (potion pick {(sh[1] >> 2) & 3}),"
@@ -1007,7 +1033,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rcast,sroom").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rcast,sroom,lqmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")
