@@ -91,6 +91,9 @@ wear_slot:
                 ld   (hl), a
                 or   a                         ; NC
                 ret
+    IF ($ & $FF) > 250
+                ALIGN 256                      ; the 6-B table must not straddle a page (H loaded once; moves with R6 growth)
+    ENDIF
 wear_bit:       DB   1, 4, 16, 2, 8, 32        ; wear w / a / h, then break w / a / h
                 ASSERT (wear_bit & $FF) + 6 <= 256 && WS_WEAPON == 0
 
@@ -138,5 +141,8 @@ wear_apply:
                 cp   3
                 jr   c, .l
                 ret
+    IF ($ & $FF) > 253
+                ALIGN 256                      ; as wear_bit
+    ENDIF
 wear_ty:        DB   IT_WPN_LO, IT_ARM_LO, IT_HELM_LO
                 ASSERT (wear_ty & $FF) + 3 <= 256      ; `add a, l` above has no carry
