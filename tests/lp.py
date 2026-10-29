@@ -162,7 +162,10 @@ def props(p, blk, r, slots, hs, hx, hw, tf):
         if x < 2 or x + w - 1 > 29:
             bad.append((k, x, "door cols"))
         for bit, s1, lo, hi in ((S["RDX_L"], S["RDX_LS1"], 1, 4), (S["RDX_R"], S["RDX_RS1"], 27, 30)):
-            if ex & bit and bool(ex & s1) == (s_ == 1) and x <= hi and x + w - 1 >= lo:
+            if ex & bit and bool(ex & s1) == (s_ == 1) and x <= hi and x + w - 1 >= lo \
+                    and not (s_ == 1 and x == room_model.field(blk, r, "RD_EXITCOL")):
+                # 3F-T8 (game.md §9.2 G1): the boss's post ON the grate (c in 5..24, a 4-col body
+                # reaches col 27) is exempt; a shifted post / the escort obey the rule
                 bad.append((k, x, s_, "arrival box", lo))
         if s_ == hs and not (x >= hx + hw + 5 or x + w + 5 <= hx):
             bad.append((k, x, s_, "within 5 cols of the arrival (8 on tries 1-4)", hx))

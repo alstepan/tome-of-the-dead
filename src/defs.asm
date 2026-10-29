@@ -42,7 +42,7 @@ BANK_R6         EQU BANK_POOL2
 ; 3F-T2 (MEM-3F): + R6_GROW pages from the 3F-T1 pool slack (27 -> 27 + R6_GROW
 ; pages): the kind sequence masters, the generation-unit table, the seq cache
 ; loader, and >= 1.5 KB free for 3F code.
-R6_GROW         EQU 10                  ; 3F-T7: +2 pages (manager 2026-10-29: the H1 D7 pool slack)
+R6_GROW         EQU 13                  ; 3F-T8: +3 pages (bosses: grate / guard / post / glow / SLAM); 3F-T7: 8 -> 10
 R6_LEN          EQU (27 + R6_GROW) * 256   ; was $1B00 (27 pages, 2026-10-21)
 R6_ADDR         EQU $10000 - R6_LEN ; $DD00
                 ASSERT (R6_ADDR & $FF) == 0
@@ -390,7 +390,7 @@ ALLOC_MARK_PTR  EQU $BF46           ; word
 CLIMB_BLK_XY    EQU $BF48           ; B18 word: CLIMB_BLK_ID's (x, y) at its last block (climb_blocked)
 PHASE_TRAP      EQU $BF4A           ; PHASE_SHIFT 1 / 2 (default 1): count (since boot, wraps) of walk ticks whose
                                     ; E_WPH parity disagreed with px parity (lock changed the frame; expect 0)
-; $BF4B: spare (D3-0: $BF48..$BF4B were ZAP_T / ZAP_ROW / ZAP_COL / ZAP_LEN, the PROTO zap)
+GLOW_CNT        EQU $BF4B           ; 3F-T8: golden-glow tick count (main.asm .panel ticks; boss2.asm glow_kat); D3-0: was ZAP_LEN
 DMG_COUNT       EQU $BF4C           ; rects in DMG_LIST this render
 PEND_DMG_COUNT  EQU $BF4D
 EXIT_DEST       EQU $BF4E           ; destination room of the pending exit
@@ -829,8 +829,7 @@ T_HOLE_M        EQU 8
 T_HOLE_R        EQU 9
 ; (B3B-13: the PROTO chest stand-in T_CHEST_* (per-level ids 32..35) and the
 ; zap tile ids T_ZAP1/2 (now T_DRIP1/2) are gone; D3-0: the zap itself too.)
-T_FREE15        EQU 15              ; DEC2: free common ids 13 / 15 / 16 / 31 (were the DEC1 bones; blank glyph, flags 0)
-T_FREE16        EQU 16
+; (DEC2's free common ids 13 / 15 / 16: 3F-T8 T_GRATE_SHUT / the lectern, level_defs.asm; 31 stays free)
 T_END_L         EQU 19              ; PLATFORM_END_L: floor cell right of a hole
 T_END_R         EQU 20              ; PLATFORM_END_R: floor cell left of a hole
 T_COUNT         EQU 21

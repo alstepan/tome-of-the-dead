@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -418,6 +418,24 @@ SCENARIOS = {
     # through the pmix items): Skeleton c-2 / Goblin c+1 / Skeleton c+4 = the 3-climber chain (strong,
     # weak, strong), so lq_block (far6, box_free, a back-off try_step) runs for each of them on the
     # same monster phase. Kinds by lqmix_setup (slot 1 the Rat -> a 2nd Skeleton).
+    # 3F-T8: room A made the lair (LVL_LAIR 0, LP_BOSS, its RD_EXITCOL = the post), pmix items under the
+    # hero's walk. "lglow": the goblin (slot 3, x 25) is the GOLDEN Goblin King standing on its post
+    # (RD_EXITCOL 25; the hero stays >= 9 cols away: G2 holds it there), so its glow steps through the
+    # attr-only repaint (boss2.asm stamp2) every 2 eligible ticks, some of them right before an input
+    # tick; + the skeleton / rat / bat as escort. "omix": the 1-slot skeleton re-kinded to the OGRE
+    # (Skeleton sequences: PROTO pools no Ogre frames — the 32-px RAISE / SLAM blit is 1 col
+    # narrower here), PROVOKED (always engaged), SLAM counter 2 at the start (a reach-2 SLAM + STUN on
+    # the first turn, then every 3rd), goblin + rat + bat, the Knight's slash (KEYS).
+    "lglow": ("knight + golden Goblin King stationary on its post + 3, pmix items", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "lglow"),
+    "omix": ("knight + Ogre SLAM (RAISE->SLAM, STUN) + goblin + rat + bat, pmix items", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "omix"),
     "lqmix": ("knight + pmix items below, 3 climbers jammed at a ladder top (lq_block x3)", [
         (5, 21, stand_y(0, 6), RIGHT),
         (3, 24, stand_y(0, 4), HOSTILE),
@@ -862,6 +880,25 @@ def qmix_setup(p):
     p.wmem(S["ICON_SH"] + S["QS_SLOT0"], [0xFF] * 3)
 
 
+def boss_setup(p, key):
+    """"lglow" / "omix" (3F-T8): room A (PROTO 0) becomes the lair (see the scenario comment)."""
+    pmix_setup(p)
+    p.wb("LVL_LAIR", 0)
+    p.wb(S["ROOM_DESC"] + S["RD_EXITCOL"], 25)       # the post (only ai_guard reads it here)
+    if key == "lglow":
+        p.wb("LP_BOSS", S["K_GOBLIN"] | S["LEK_GOLD"])
+        p.wb(S["P_ENTITIES"] + 3 * S["P_ENT_STRIDE"] + S["E_GOLD"], S["LEK_GOLD"])
+        p.set_ent(3, HP=60, MAXHP=60)
+        p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~S["LF_PROVOKED"] & 255)
+    else:
+        sk = p.rb(S["kind_tab"] + S["KT_SEQ"] + S["K_SKELETON"])
+        p.wb(S["kind_tab"] + S["KT_SEQ"] + S["K_OGRE"], sk)
+        p.wb("LP_BOSS", S["K_OGRE"])
+        p.set_ent(5, KIND=S["K_OGRE"], HP=60, MAXHP=60, POT=2)     # POT = E_RCD: SLAM counter 2
+        p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | S["LF_PROVOKED"])
+    p.set_ent(0, HP=250, MAXHP=250)
+
+
 def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     p = game.T(h)
@@ -906,6 +943,8 @@ def run_scenario(h, scen):
         imix_setup(p)
     if len(scen) > 5 and scen[5] == "lqmix":
         lqmix_setup(p)
+    if len(scen) > 5 and scen[5] in ("lglow", "omix"):
+        boss_setup(p, scen[5])
     if len(scen) > 5 and scen[5] == "dmix":
         dmix_setup(p)
     if len(scen) > 5 and scen[5] == "umix":
@@ -954,6 +993,9 @@ def run_scenario(h, scen):
             f"dmix: the boss kill-drop did not displace (BUDGET_DMIX_SEED?): {room}"
         print(f"[info] dmix after: {len(room)} entries, {len({t for _, t in room})} types, the potion type "
               f"displaced (the walk may have picked the KING HELM up)", flush=True)
+    if len(scen) > 5 and scen[5] in ("lglow", "omix"):
+        print(f"[info] {scen[5]} after: boss x {p.ent(3 if scen[5] == 'lglow' else 5)['X']}, hero HP "
+              f"{p.ent(0)['HP']}, GLOW_CNT {p.rb('GLOW_CNT')}, Ogre counter {p.ent(5)['POT'] & 3}", flush=True)
     if len(scen) > 5 and scen[5] == "lqmix":        # AI-L1: where the climbers ended
         print(f"[info] lqmix after: climbers (x, y) {[(p.ent(sl)['X'], p.ent(sl)['Y']) for sl in (5, 3, 1)]},"
               f" hero ({p.ent(0)['X']}, {p.ent(0)['Y']})", flush=True)
@@ -1033,7 +1075,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rcast,sroom,lqmix").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rcast,sroom,lglow,omix,lqmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")

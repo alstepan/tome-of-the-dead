@@ -661,8 +661,10 @@ def main():
         # 3F-T7: R6_GROW 8->10 leaves at most 19 SRC6 pages (SRC6 at $C800, the lowest the defs.asm
         # ASSERT allows); the default set (3,231 B) + the Wizard's 2,055 B needs 21, so the variant
         # keeps the Dark Knight's block (486 B) in banks 1 / 3 (S6 still checks every block in SRC6)
-        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT"}) | {"K_WIZARD"}))
-        variants.append(("src6", REPO, kit + ["SRC6_PAGES=19", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
+        # 3F-T8: R6_GROW 10->13 leaves at most 16 SRC6 pages: the Ogre's and the Mummy's blocks stay in
+        # banks 1 / 3 too (3,721 of 4,096 B)
+        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT", "K_OGRE", "K_MUMMY"}) | {"K_WIZARD"}))
+        variants.append(("src6", REPO, kit + ["SRC6_PAGES=16", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
                          {"SRC6_KINDS": s6}))
     if a.baseline:                 # (an older checkout ignores the unknown define)
         variants.append(("baseline", os.path.abspath(a.baseline), kit, None))

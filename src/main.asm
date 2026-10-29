@@ -341,7 +341,9 @@ probe_render_done:
                 ld   a, (TURN_PEND)            ; D3-7: nor in an ability's fire tick
                 and  TP_FIRE                   ; (act_fire + its proj_fire: the cast tick)
                 jr   nz, panel_done
-.panel:         call panel_tick
+.panel:         ld   hl, GLOW_CNT              ; 3F-T8: the golden glow steps only on
+                inc  (hl)                      ; ticks that may draw a panel item (boss2.asm)
+                call panel_tick
 panel_done:                                    ; test probe (no code): panel item done
                 ld   a, (TURN_PHASE)
                 or   a
@@ -489,6 +491,7 @@ enter_select:
                 INCLUDE "decor.asm"             ; B3B-10 animated decor (decor_tick)
                 INCLUDE "fx.asm"                ; D3-5 FX tracks (fx_start / fx_tick / fx_render)
                 INCLUDE "drip.asm"              ; D3-8b decorative drip (drip_tick, per tick)
+                INCLUDE "boss2a.asm"            ; 3F-T8 og_adv / glow_kat (in the kind_tab pad)
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
@@ -538,9 +541,11 @@ tile_flags:
                 DB TF_LADDER, TF_LADDER, TF_LADDER     ;  4-6 T_LAD_L/M/R
                 DB TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE, TF_LADDER | TF_HOLE ; 7-9 T_HOLE_*
                 DB 0                                   ; 10 T_TRAP (revealed plate: walkable, game.md §1.5)
-                DB 0, 0, 0, 0                          ; 11 / 14 door jambs (open door), 12 chain, 13 free (DEC2)
-                DB 0, 0                                ; 15-16 free (DEC2)
-                DB 0, 0                                ; 17-18 free (FLOOR1; were T_AMMO / T_PAGES)
+                DB 0, 0                                ; 11 door jamb (open door), 12 chain
+                DB TF_SOLID | TF_FLOOR                 ; 13 T_GRATE_SHUT (3F-T8: the closed lair gate)
+                DB 0                                   ; 14 door jamb
+                DB TF_SOLID | TF_ATTACK, TF_SOLID | TF_ATTACK   ; 15-18 the Sanctum lectern (3F-T8, §9.7 R2;
+                DB TF_SOLID | TF_ATTACK, TF_SOLID | TF_ATTACK   ; placed by T11)
                 DB TF_FLOOR, TF_FLOOR                  ; 19-20 T_END_L/R = pit caps
                 DB TF_SOLID, TF_SOLID                  ; 21-22 T_DOOR_ARCH_L/R
                 DB TF_SOLID | TF_DOOR, TF_SOLID | TF_DOOR   ; 23-24 T_DOOR_L/R (closed planks)
@@ -626,6 +631,7 @@ kind_tab:
                 INCLUDE "sfx2.asm"              ; SND-5 sfx_req / sfx_msg (any bank calls them)
                 INCLUDE "bars2.asm"             ; MEM-SND bars_draw / num2 (from panel2.asm: pad headroom)
                 INCLUDE "ranged2.asm"           ; 3F-T7 ai_rhook + rk_tab (the ranged hook's reject)
+                INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
 
 code_end:
 ; 3F-T2: the sequence cache's bytes (RUNTIME only, not on tape: R6 pool6.asm / lowram.asm

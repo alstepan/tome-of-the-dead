@@ -300,20 +300,26 @@ LP_XMAX         EQU 29
 LP_CMW          EQU 33              ; cols 0..32 (a flyer's margin reaches col 32)
 LP_CMAP         EQU NEXT_MAP + PLAY_CELLS        ; $6540..$6581
 LPC_BAD         EQU 1               ; a body may not cover the col
+LPC_BODY        EQU 2               ; 3F-T8 review: a body lp_spawn placed this entry (lp_legal ORs every bit;
+                                    ; lp_post exempts only LPC_BAD marks of the exit's own footprint)
                 ASSERT LP_CMAP + 2 * LP_CMW <= NEXT_MAP + MAP_BUF_LEN
 RESPAWN_MAX     EQU 6               ; §9.5 trickle cap per level (3F)
                 ASSERT LR_MAX * LE_STRIDE + 1 == LR_STRIDE && LP_REC == ROOM_VISITS + GRID_CELLS
 
 LOWRAM_END_3B   EQU LP_END          ; = LOWRAM_FREE_END (defs.asm); test stubs run here
 
-LF_GRATE_OPEN   EQU %00000001       ; lair grate open (3B: set at level start, game.md §1.4)
+LF_GRATE_OPEN   EQU %00000001       ; lair grate open (3F-T8: set by grate_open when the boss dies; 3B: at level start)
+LF_GRATE_OPEN_BIT EQU 0
 LF_KEY_TAKEN    EQU %00000010       ; (3E+)
 LF_SEAL_OPEN    EQU %00000100       ; (3F)
-LF_GATE_HINT    EQU %00001000       ; B12: "A GATE GLEAMS" already logged this level (do_exit;
-                                    ; level_gen rewrites LVL_FLAGS, so it resets per level)
+LF_GATE_HINT    EQU %00001000       ; B12 / 3F-T8: the first-lair-entry line ("THE GATE IS BARRED")
+                                    ; logged this level (do_exit; level_gen rewrites LVL_FLAGS)
 LF_GATE_HINT_BIT EQU 3
 LF_UNIQUE       EQU %00010000       ; 3E-T11: the boss unique dropped this level (mon_drop)
 LF_UNIQUE_BIT   EQU 4
+LF_PROVOKED     EQU %00100000       ; 3F-T8 (§9.2 G2 PROVOKED): the hero's damage reached the lair boss;
+LF_PROVOKED_BIT EQU 5               ; cleared when lp_post places the boss (every lair entry). ONE bit:
+                                    ; one boss a level (the per-entity choice of the spec, engineer's call)
 
 ; B3B-12 level seed (game.md §1 "Seed"): LVL_SEED = MASTER_SEED + depth * LVL_SEED_MUL
 ; (16-bit). Additive with an ODD constant, NOT an XOR with depth * $0101: level_gen
@@ -357,11 +363,10 @@ T_DOOR_R        EQU 24              ; closed plank, right col
 T_DOOR_LOCK     EQU 25              ; plank-R with lock plate (locked / sealed; sealed attr $02)
 T_GRATE         EQU 26              ; B12: the RAISED gate (variant B, ink $46) over the lair's
                                     ; open level-exit hole in row 17 (3 cells, 1 glyph; LADDER|HOLE)
-T_GRATE_SHUT    EQU T_GRATE         ; TODO 3F: the closed gate needs its own common id (full bars,
-                                    ; ink $07, TF_FLOOR; concept-screen B3B-8 #4) - until then the
-                                    ; closed branch draws the raised glyph (3B never closes it)
-                ASSERT T_GRATE_SHUT == T_GRATE  ; TODO 3F: give the closed gate its own TF_SOLID
-                                                ; common id, then drop this ASSERT
+T_GRATE_SHUT    EQU 13              ; 3F-T8 (§9.7 R2, BOSS-GUARD): the CLOSED gate over the lair's level
+                                    ; exit while the boss lives (tiles_3f grate_shut, ink $07), TF_SOLID |
+                                    ; TF_FLOOR; build_room_map stamps it after the deriver, grate_open
+                                    ; swaps the 3 cells to T_GRATE when the boss dies
 T_RUBBLE        EQU 27              ; block foot, arrival-shaft cap, ash of the Book
 T_WALL_DITHER   EQU 28              ; wall set (concept-screen §3.3)
 T_WALL_PATCH    EQU 29
@@ -371,14 +376,18 @@ T_FREE31        EQU 31              ; DEC2: free (was bones tile 3)
 ; non-solid, ink $06; cobweb / moss move to the per-level sets.
 T_DOOR_JAMB_L   EQU 11              ; `#.#.....` x 8: the left arch's outer strokes, continued
 T_CHAIN         EQU 12              ; small decor (valid after B3B-13)
-T_FREE13        EQU 13              ; DEC2: free (was bones tile 0)
+; 3F-T8 (§9.7 R2): 13 = T_GRATE_SHUT (above); 15..18 = the D8 Sanctum lectern 2x2
+; (TL TR / BL BR, TF_SOLID | TF_ATTACK: `id - T_LECT_TL < 4` is the attackable test;
+; placed by T11 only)
+T_LECT_TL       EQU 15
+T_LECT_TR       EQU 16
+T_LECT_BL       EQU 17
+T_LECT_BR       EQU 18
 T_DOOR_JAMB_R   EQU 14              ; `.....#.#` x 8
 ; 3E (game.md §8.11 Q1, user-approved glyphs): common 10 = T_TRAP (revealed trap plate).
 ; FLOOR1 (2026-10-26): the class glyphs 17 (AMMO) / 18 (PAGES) / 60..63 are no longer
 ; placed (floor items = T_ITEM + the 16x16 icon); 17 / 18 keep their glyph bytes, unused.
 T_TRAP          EQU 10              ; ink $42 (type ink = T6)
-T_FREE17        EQU 17              ; FLOOR1: free (was T_AMMO)
-T_FREE18        EQU 18              ; FLOOR1: free (was T_PAGES)
 ; D3-7 T6: the B3B-13b drips (T_DRIP1/2) are no longer placed (the per-level
 ; sets have no free ids; "if they are ever placed": per-level decor).
 T_COMMON_USED   EQU 32

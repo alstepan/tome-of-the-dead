@@ -48,7 +48,10 @@ hit_roll:
                 add  a, d
                 ld   d, a                      ; d20 + mod
                 KFIELD KT_ATK
-                add  a, d
+                bit  LEK_GOLD_BIT, (ix+E_GOLD) ; 3F-T8 (§9.7 R1): a golden boss attacks at
+                jr   z, .ng                    ; + GOLD_ATK
+                add  a, GOLD_ATK
+.ng:            add  a, d
                 sub  10
                 ld   d, a                      ; D = d20 + atk + mod - 10 (signed, |D| < 64)
                 ld   a, (ix+E_KIND)            ; 3F-T6 rage (game.md §9.6): an Orc Berserker at hp <= max / 2
@@ -164,7 +167,17 @@ deal_hit:
                 ld   a, (HERO_DEF)
                 ld   hl, HERO_RES
                 jr   .rec
-.mon:           ld   a, (ix+E_KIND)            ; row = kx_tab + kind * 8 (one page)
+.mon:           ld   a, (ix+E_GOLD)            ; 3F-T8 (§9.7 R1): a golden boss is DEF + 1 (B
+                or   a                         ; is added to the DEF at .rec) ...
+                jr   z, .ng
+                inc  b
+.ng:            or   (ix+E_KIND)               ; ... and any hit on the lair boss (kind |
+                ld   hl, LP_BOSS               ; E_GOLD = LP_BOSS: only the boss matches)
+                cp   (hl)                      ; PROVOKES it (§9.2 G2: LF_PROVOKED, one boss
+                jr   nz, .npv                  ; a level; lp_post clears it)
+                ld   hl, LVL_FLAGS
+                set  LF_PROVOKED_BIT, (hl)
+.npv:           ld   a, (ix+E_KIND)            ; row = kx_tab + kind * 8 (one page)
                 add  a, a                      ; x 8 (KX_STRIDE; kind < K_MAX = 32)
                 add  a, a
                 add  a, a
@@ -181,7 +194,12 @@ deal_hit:
                 add  a, KX_IMM
                 ld   e, a
                 ld   d, h
-                ld   a, (de)
+                ld   a, (ix+E_GOLD)            ; 3F-T8: a golden boss is a BOSS (§9.7 R1;
+                rlca                           ; the hero's E_GOLD is 0)
+                rlca                           ; LEK_GOLD (bit 5) -> IMMF_BOSS (bit 7)
+                ex   de, hl
+                or   (hl)
+                ex   de, hl
                 bit  IMMF_BOSS_BIT, a
                 jr   z, .nb
                 or   IMMF_SLEEP | IMMF_FEAR    ; D3-8: bosses never sleep or fear (§6.4)
@@ -629,7 +647,10 @@ room_status:
                 add  a, (kx_tab & $FF) + KX_IMM
                 ld   l, a
                 ld   h, kx_tab >> 8
-                ld   a, (hl)
+                ld   a, (ix+E_GOLD)            ; 3F-T8: a golden boss is a BOSS (§9.7 R1)
+                rlca
+                rlca                           ; LEK_GOLD -> IMMF_BOSS
+                or   (hl)
                 and  e
                 jr   nz, .n                    ; immune, or a boss
                 ld   a, b

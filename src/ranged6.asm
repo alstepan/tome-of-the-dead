@@ -213,7 +213,10 @@ rg_shoot:
                 inc  a
                 ld   hl, RG_ROW + RW_BON
                 add  a, (hl)
-                ld   d, a
+                bit  LEK_GOLD_BIT, (ix+E_GOLD) ; 3F-T8: a golden shooter's dmg + 1 (§9.7 R1)
+                jr   z, .ng
+                inc  a
+.ng:            ld   d, a
                 ld   a, (RG_ROW + RW_DHE)
                 ld   e, a
                 ld   a, (RG_ROW + RW_DHC)

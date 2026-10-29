@@ -589,7 +589,7 @@ def generate(depth, seed, master=0, l2=True, f3=False):
     b[H["LVL_KEYROOM"]] = D["ROOM_NONE"]
     b[H["LVL_SANCTUM"]] = D["ROOM_NONE"] if sanct is None else sanct
     b[H["LVL_NROOMS"]] = n
-    b[H["LVL_FLAGS"]] = 0 if f3 else D["LF_GRATE_OPEN"]      # 3F: the grate opens on the boss's death
+    b[H["LVL_FLAGS"]] = 0               # 3F-T8 (BOSS-GUARD): shut until the boss dies (grate_open); 3B: LF_GRATE_OPEN
     b[H["FLOOR_N"]] = len(floor)
     b[H["MASTER_SEED"]:H["MASTER_SEED"] + 2] = (master & 0xFFFF).to_bytes(2, "little")
     for i, e in enumerate(edges):
@@ -672,14 +672,15 @@ def start_x(b):
 #   FRESH room: count x fit(rnd(4), SIGMA_INIT = max(8, ROOM_MAX * minW),
 #   reserving left * minW for the units still to roll: the rolled kind, else the
 #   other LP_KINDS in list order; the lightest always fits, so nothing is lost);
-#   VISITED: its entries. Then
-#   per unit, in order: LP_TRIES candidates, one GEN_RNG step v each: s = bit 8
+#   VISITED: its entries. Then per unit, in order: a unit of the LAIR first
+#   takes its post (lp_post, 3F-T8 BOSS-GUARD: the boss on the grate, the
+#   escort beside it; no stream step), else
+#   LP_TRIES candidates, one GEN_RNG step v each: s = bit 8
 #   of v, x = LP_XMIN + (v & $FF) mod (29 - w)
 #   arrival gap >= LP_GAP (8) on tries 1-4, >= LP_GAP2 (5) on 5-8; a candidate
 #   failing ONLY the gap is re-tested at the same x on the other storey
-#   (the fresh lair's boss: all 8, the legal one farthest from the hero wins:
-#   |x - hx| + 32 if another storey, first on ties; everyone else: the first
-#   legal one). Unplaced units stay in the record (in order). Record -> VISITED.
+#   (the first legal one; 3F-T8: the old 'boss farthest from the hero' rule is
+#   gone). Unplaced units stay in the record (in order). Record -> VISITED.
 #   ROOM_VISITS is NOT incremented here (the caller does it after admission).
 LP_TAB = {1: (("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 11),
           2: (("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 12),
@@ -922,6 +923,67 @@ def lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap=8):
     return "ok"
 
 
+GUARD_GAP = 5               # boss6.asm: G1a / G1b body gap to the hero's arrival box
+
+
+def lp_cmap1(b, r, k, placed=()):
+    """Z80 lp_cmap's storey-1 LPC_BAD mark of col k: the footprints f-1..f+3 (lp_hits), the
+    arrival box of a storey-1 edge, the pit's landing p-1..p+W (+ `placed`: lp_spawn's LPC_BODY)."""
+    ex = _rd(b, r, "RD_EXITS")
+    if ex & D["RDX_L"] and ex & D["RDX_LS1"] and 1 <= k <= 4:
+        return True
+    if ex & D["RDX_R"] and ex & D["RDX_RS1"] and 27 <= k <= 30:
+        return True
+    if lp_hits(b, r, 1, k - 1, k + 1):
+        return True
+    p = _rd(b, r, "RD_PITCOL")
+    if p and p - 1 <= k <= p + (_rb(b, r, L2_PITW) or 3):
+        return True
+    return any(ps == 1 and lo <= k <= hi for ps, lo, hi in placed)
+
+
+def lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM):
+    """3F-T8 (game.md §9.2 'Boss guard' G1 / G1a / G1b; Z80 R6 boss6.asm lp_post): a unit of the
+    lair -> (1, x) or None (the ordinary 8-try placement). No spawn-stream step. The post: c (the
+    lair's RD_EXITCOL: on the grate); a hero arriving on storey 1 with a body gap < 5 to it shifts
+    it 1 col at a time away (right if hx < c) to the first x with gap >= 5 whose body cols carry
+    no cell-map mark outside the exit's own c-1..c+3; out of LP_XMIN..LP_XMAX+1-wb -> None. The
+    boss (kind | LEK_GOLD == LP_BOSS) stands there; any other unit tries shoulder to shoulder on
+    the door side (left if the lair has a left edge), then the other side: range, gap 5, no
+    mark, else None (also when the boss has no post)."""
+    boss = lp[lp_off("LP_BOSS")]
+    wb = info(boss & ROWM)[0]
+    c = _rd(b, r, "RD_EXITCOL")
+
+    def rng(x, ww):
+        return D["LP_XMIN"] <= x <= D["LP_XMAX"] + 1 - ww
+
+    def gap(x, ww):
+        return hs != 1 or x >= hx + hw + GUARD_GAP or x + ww + GUARD_GAP <= hx
+
+    def marks(x, ww, lo, hi):       # LPC_BAD outside lo..hi, or a body placed (LPC_BODY: never exempt)
+        return any((lp_cmap1(b, r, k) and not lo <= k <= hi)
+                   or any(ps == 1 and plo <= k <= phi for ps, plo, phi in placed) for k in range(x, x + ww))
+    bx = c
+    if not gap(c, wb) or marks(c, wb, c - 1, c + 3):
+        d = 1 if hx < c else -1
+        while True:
+            bx += d
+            if not rng(bx, wb):
+                return None
+            if gap(bx, wb) and not marks(bx, wb, c - 1, c + 3):
+                break
+    if kb & (ROWM | LEK_GOLD) == boss:
+        return (1, bx)
+    sides = [bx - 1 - w, bx + wb + 1]
+    if not _rd(b, r, "RD_EXITS") & D["RDX_L"]:
+        sides.reverse()
+    for x in sides:
+        if rng(x, w) and gap(x, w) and not marks(x, w, 1, 0):
+            return (1, x)
+    return None
+
+
 def lp_seed(b, lp, r):
     seed = int.from_bytes(b[H["LVL_SEED"]:H["LVL_SEED"] + 2], "little")
     v = lp[lp_off("ROOM_VISITS") + r]
@@ -970,14 +1032,12 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False):
                 return k
         lp[lp_off("LP_DISCARD")] += 1
         return None
-    boss = False
     if not hdr & D["LR_VISITED"]:
         units = []
         if r == b[H["LVL_LAIR"]]:
             k = lp[lp_off("LP_BOSS")]
             units.append((k, hp0(k)))
             sig[0] = wt(k)
-            boss = True
             k = fit(D["LP_SIGMA_CAP"])                  # escort: base tier, never rolled
             if k is not None:
                 units.append((k, hp0(k)))
@@ -992,8 +1052,9 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False):
     placed, out, left = [], [], []
     for i, (kb, hp) in enumerate(units):
         w, _, fly = info(kb & ROWM)
-        best = None
-        for t in range(D["LP_TRIES"]):
+        best = lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM) \
+            if r == b[H["LVL_LAIR"]] else None
+        for t in range(0 if best else D["LP_TRIES"]):
             v = rng.rnd16()                             # one step per candidate
             s = (v >> 8) & 1
             x = D["LP_XMIN"] + (v & 0xFF) % (D["LP_XMAX"] - w)
@@ -1004,12 +1065,8 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False):
                 res = lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap)
             if res != "ok":
                 continue
-            if not (boss and i == 0):
-                best = (s, x)
-                break
-            d = abs(x - hx) + (32 if s != hs else 0)
-            if best is None or d > best[2]:
-                best = (s, x, d)
+            best = (s, x)
+            break
         if best is None:
             left.append((kb, hp))
             continue

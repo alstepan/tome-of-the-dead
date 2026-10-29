@@ -344,6 +344,8 @@ lp_transition:
 .hx:            ld   (LP_HX), a
                 ld   a, (EXIT_DEST)
                 call lp_enter
+                ld   hl, boss_chk              ; 3F-T8: the lair boss still exists (debug trap)
+                call far6
                 call follow_admit
                 ld   a, (CUR_ROOM)
                 ld   e, 0
@@ -428,8 +430,17 @@ lp_enter:
                 ld   (LPV_K), a
                 KTA  KT_BW
                 ld   (LP_W), a
-                call lp_place                  ; CF = no legal cell, else C = s, E = x
-                call nc, lp_spawn              ; CF = no free slot
+                ld   a, (LVL_LAIR)             ; 3F-T8 (game.md §9.2 G1 / G1a / G1b): a unit
+                ld   hl, LPV_ROOM              ; of the lair takes its post (R6 boss6.asm, no
+                cp   (hl)                      ; stream step); an escort with no legal post
+                jr   nz, .pl                   ; falls back to lp_place
+                ld   hl, lp_post
+                call far6                      ; L = 1: C = 1, E = x
+                ld   a, l
+                cp   1                         ; Z, NC: posted
+                jr   z, .sp
+.pl:            call lp_place                  ; CF = no legal cell, else C = s, E = x
+.sp:            call nc, lp_spawn              ; CF = no free slot
                 jr   nc, .nu
                 ld   hl, (LPV_RDP)             ; not placed: stays in the record
                 ld   de, (LPV_WRP)
@@ -440,8 +451,6 @@ lp_enter:
                 inc  hl
                 inc  hl
                 ld   (LPV_RDP), hl
-                xor  a
-                ld   (LPV_BOSS), a             ; only unit 0 can be the boss
                 ld   hl, LPV_N
                 dec  (hl)
                 jr   nz, .u
@@ -475,8 +484,6 @@ lp_enter:
 ; E = x.  Clobbers: A, BC, DE, HL.   ~8 x 0.6k T worst
 ;------------------------------------------------------------------------------
 lp_place:       ld   b, LP_TRIES
-                xor  a
-                ld   (LP_BEST), a
 .t:             push bc
                 call lg_step                   ; ONE step per candidate (~0.35k T saved):
                 ld   a, h                      ; s = bit 0 of the high byte,
@@ -508,44 +515,12 @@ lp_place:       ld   b, LP_TRIES
                 ld   c, a
                 call lp_legal
                 jr   c, .n
-.lg:
-                ld   a, (LPV_BOSS)
-                or   a
-                jr   z, .first
-                ld   a, (LP_HX)
-                sub  e
-                jr   nc, .ab
-                neg
-.ab:            ld   d, a
-                ld   a, (LP_HS)
-                cp   c
-                ld   a, d
-                jr   z, .ss
-                add  a, 32
-.ss:            inc  a                         ; distance + 1 (>= 1)
-                ld   hl, LP_BEST
-                cp   (hl)
-                jr   z, .n
-                jr   c, .n                     ; not strictly farther
-                ld   (hl), a
-                ld   a, c
-                ld   (LP_BS), a
-                ld   a, e
-                ld   (LP_BX), a
+.lg:            pop  hl                        ; drop the saved BC: C = s stays
+                ret                            ; (NC from lp_legal)
 .n:             pop  bc
                 djnz .t
-                ld   a, (LP_BEST)
-                or   a
                 scf
-                ret  z
-                ld   a, (LP_BS)
-                ld   c, a
-                ld   a, (LP_BX)
-                ld   e, a
-                or   a
                 ret
-.first:         pop  hl                        ; drop the saved BC: C = s stays
-                ret                            ; (NC from the or)
 
 ;------------------------------------------------------------------------------
 ; lp_cmap — LPV_ROOM, LP_HX / LP_HS / LP_HW: build LP_CMAP (level_defs.asm),
@@ -829,7 +804,7 @@ lp_spawn:       ld   ix, P_ENTITIES + P_ENT_STRIDE
                 ld   a, (LP_W)
                 ld   b, a
                 ld   a, e
-                ld   e, LPC_BAD                ; the body: no later unit overlaps it
+                ld   e, LPC_BODY               ; the body: no later unit overlaps it (lp_post: never exempt)
                 call lp_mark
                 pop  de
                 ld   a, (LP_HX)

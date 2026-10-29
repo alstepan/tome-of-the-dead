@@ -315,7 +315,7 @@ DECOR_MOUNT = {"TORCH_TALL", "TORCH_SLIM", "WINDOW_ARCH", "WINDOW_BAR", "BANNER"
                "BOOKSHELF"}
 DECOR_CEIL = {"CHAIN", "MOSS"}
 DECOR_FLOOR = {"BRAZIER", "BRAZIER_BIG"}          # DEC2: BONES (DEC1) and CAULDRON dropped
-FREED_IDS = (13, 15, 16, 31)                       # DEC2: the old bones ids, never placed now
+FREED_IDS = (15, 16, 17, 18, 31)                   # DEC2 ids never placed by the generator (3F-T8: 13 = T_GRATE_SHUT in every lair; 15..18 the T11 lectern)
 DECOR_PATCH = {"PATCH_A", "PATCH_B", "WALL_DITHER", "WALL_PATCH", "WALL_FADE"}
 DECOR_BRICK = {"PILLAR"}
 DECOR_COB = {"COBWEB", "COBWEB_R"}
@@ -372,7 +372,7 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
     errs = []
     ch = [j for j in range(576) if m[j] != base[j]]
     names, shape = decor_objs(d)
-    drip = {T["T_FREE17"], T["T_FREE18"]} | set(range(T["T_ITEM0"], T["T_ITEM0"] + 4))   # ids no deriver places
+    drip = {T["T_LECT_BL"], T["T_LECT_BR"]} | set(range(T["T_ITEM0"], T["T_ITEM0"] + 4))   # ids no deriver places
     floorish = lambda t: t in (T["T_PLAT"], T["T_WALLF"])          # noqa: E731
     for j in ch:                                                    # per cell: base class vs solidity
         c, row = j % 32, j // 32
@@ -2023,6 +2023,7 @@ def w25(p, check):
             for s_ in range(1, 16):
                 p.set_ent(s_, FLAGS=0)            # nobody interferes (a fixed, hazard-free route)
             x = ex - 2 if ex - 2 >= 2 else ex + 2
+            p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | S["LF_GRATE_OPEN"])   # 3F-T8: as if the boss were dead
             p.z.cmd("write-memory %d %d" % (S["CUR_ROOM"], lair))
             p.set_ent(0, ROOM=lair, X=x, Y=y1, PX=x * 8, PY=y1 * 8,
                       FLAGS=EF_ACTIVE | EF_PLAYER | (EF_LEFT if x > ex else 0), MODE=0, DVIS=0)
@@ -2555,7 +2556,7 @@ def invariants(blk, r, m, d):
                                     or (t == T["T_END_L"] and c - 1 in holes8))
                 if not ok:
                     bad.append(("cap", c, row, t))
-            if row == F1 and t not in ladder_ids | {T["T_PLAT"], T["T_WALLF"], T["T_GRATE"]}:
+            if row == F1 and t not in ladder_ids | {T["T_PLAT"], T["T_WALLF"], T["T_GRATE"], T["T_GRATE_SHUT"]}:
                 bad.append(("row 17", c, row, t))
             if row == F1 and t in (T["T_PLAT"], T["T_WALLF"]) and on_lad:
                 bad.append(("ornament over a hole", c, row, t))
@@ -2598,8 +2599,8 @@ def run_gen_suites(p, check):
                   (bytes(glyphs[256:]), bytes(attrs[32:]), bytes(flags[32:]))
                   == (sl[:256], sl[256:288], sl[288:320]), "")
             floor_cls = {T[k] for k in ("T_PLAT", "T_WALLF", "T_END_L", "T_END_R", "T_HOLE_L",
-                                        "T_HOLE_M", "T_HOLE_R", "T_GRATE", "T_AIR")}
-            legal = {fl, wl, S["ATTR_AIR"], S["ATTR_LADDER"], S["ATTR_DOOR"], S["ATTR_GRATE"],
+                                        "T_HOLE_M", "T_HOLE_R", "T_GRATE", "T_GRATE_SHUT", "T_AIR")}
+            legal = {fl, wl, S["ATTR_AIR"], S["ATTR_LADDER"], S["ATTR_DOOR"], S["ATTR_GRATE"], attrs[T["T_GRATE_SHUT"]],
                      S["ATTR_POTION"], 0x42}       # (+ the legacy IT_POTION ink, item_ink)
             # B3B-9 decor: the level's own decor ids + the common small decor
             legal |= {attrs[i] for i in range(S["T_LVL_BASE"], S["T_LVL_OBJ"])}
@@ -2611,16 +2612,16 @@ def run_gen_suites(p, check):
                 want_m = room_model.render_room(blk, r)
                 bad = [(i % 32, i // 32, m[i], want_m[i]) for i in range(len(want_m)) if m[i] != want_m[i]]
                 check(f"W11 D{d} r{r}: map == the spec model", ok and not bad, bad[:4])
-                # B12: the raised gate only on the lair's 3 exit cells, its glow above the middle
+                # 3F-T8 (BOSS-GUARD): at level start the lair's 3 exit cells carry the SHUT gate
+                # (T_GRATE_SHUT), no raised gate / glow anywhere (B12's open gate: below)
                 lair = blk[S["LVL_LAIR"] - S["LVL_STATE"]]
-                gates = [i for i in range(576) if m[i] == T["T_GRATE"]]
-                glows = [i for i in range(576) if m[i] == room_model.glow_id(d)]
+                gates = [i for i in range(576) if m[i] == T["T_GRATE_SHUT"]]
+                glows = [i for i in range(576) if m[i] in (room_model.glow_id(d), T["T_GRATE"])]
                 xc = room_model.field(blk, r, "RD_EXITCOL")
                 F1 = S["FLOOR_ROW1"]
                 want_g = [F1 * 32 + xc + k for k in range(3)] if r == lair else []
-                check(f"W11 D{d} r{r}: gate (id {T['T_GRATE']}) {'+ glow on the level exit' if r == lair else 'nowhere: not the lair'}",
-                      bool(xc) == (r == lair) and gates == want_g
-                      and glows == ([(F1 - 1) * 32 + xc + 1] if r == lair else []), (xc, gates, glows))
+                check(f"W11 D{d} r{r}: shut gate (id {T['T_GRATE_SHUT']}) {'on the level exit, no glow' if r == lair else 'nowhere: not the lair'}",
+                      bool(xc) == (r == lair) and gates == want_g and not glows, (xc, gates, glows))
                 ok, ts = show_room(p, r)
                 note("room_show + present_full", ts, f"D{d} r{r}")
                 rows = [(c, row, m[row * 32 + c]) for row in (S["FLOOR_ROW0"], S["FLOOR_ROW1"])
@@ -2647,18 +2648,19 @@ def run_gen_suites(p, check):
                             bada.append((c, row, "floor attr", hex(a)))
                 check(f"W11 D{d} r{r}: both screens == map tiles (+ row-17 ornament)", not badc, badc[:4])
                 check(f"W11 D{d} r{r}: playfield attrs legal for D{d} (floor = ATTR_FLOOR)", not bada, bada[:4])
-            # the lair's level exit with the grate CLOSED (3B always opens it,
-            # game.md §1.4; the closed branch is the 3F boss rule): T_GRATE x 3
+            # the lair's level exit with the grate OPEN (3F-T8: the boss is dead; B12 art):
+            # T_GRATE x 3 + the glow above the middle cell, map == model
             lair = blk[S["LVL_LAIR"] - S["LVL_STATE"]]
             fo = S["LVL_FLAGS"] - S["LVL_STATE"]
-            p.wb(S["LVL_FLAGS"], blk[fo] & ~S["LF_GRATE_OPEN"] & 255)
+            p.wb(S["LVL_FLAGS"], blk[fo] | S["LF_GRATE_OPEN"])
             ok, _, m = build_only(p, lair)
-            closed = bytearray(blk)
-            closed[fo] &= ~S["LF_GRATE_OPEN"] & 255
-            want_m = room_model.render_room(bytes(closed), lair)
+            opened = bytearray(blk)
+            opened[fo] |= S["LF_GRATE_OPEN"]
+            want_m = room_model.render_room(bytes(opened), lair)
             xc = room_model.field(blk, lair, "RD_EXITCOL")
-            check(f"W11 D{d} lair r{lair}: grate closed -> T_GRATE over the exit hole, map == model",
-                  ok and m == bytes(want_m) and xc and m[S["FLOOR_ROW1"] * 32 + xc] == T["T_GRATE"],
+            F1 = S["FLOOR_ROW1"]
+            check(f"W11 D{d} lair r{lair}: grate open -> T_GRATE x 3 over the exit hole (+ the glow), map == model",
+                  ok and m == bytes(want_m) and xc and all(m[F1 * 32 + xc + k] == T["T_GRATE"] for k in range(3)),
                   (ok, xc))
             p.wb(S["LVL_FLAGS"], blk[fo])
     # ---------------- W12: re-entry byte-identical ------------------------
@@ -2826,7 +2828,7 @@ def run_gen_suites(p, check):
                 mm = room_model.render_room(blk, r)
                 nrm += 1
                 nbad += any(t in mm for t in FREED_IDS)
-        check(f"W13 DEC2: freed common ids 13 / 15 / 16 / 31 never appear in {nrm} rooms", nbad == 0, nbad)
+        check(f"W13 DEC2: common ids 15..18 / 31 (lectern / free) never appear in {nrm} rooms", nbad == 0, nbad)
         # ---- synthetic maps: structural cells scattered inside the decor rows
         # (rows 9s..9s+5 and their ring) -> Python checker on 600 maps, the Z80
         # deriver == Python on 86 of them (i % 7) (decor_room called directly: TMP1 =
@@ -3060,6 +3062,7 @@ def w16_level(p, check):
             p.set_ent(s_, KIND=k, ROOM=lair, FLAGS=EF_ACTIVE | EF_HOSTILE | EF_LEFT, X=gx,
                       Y=stand_y(1, gh), PX=gx * 8, PY=stand_y(1, gh) * 8, MODE=0, DVIS=0,
                       HP=p.rb(S["kind_tab"] + S["KT_HP"] + k))
+        p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | S["LF_GRATE_OPEN"])   # 3F-T8: the grate opens on the boss's death
         p.z.cmd("write-memory %d %d" % (S["CUR_ROOM"], lair))
         p.set_ent(0, ROOM=lair, X=x if walk else ex, Y=y1, PX=(x if walk else ex) * 8, PY=y1 * 8,
                   MODE=0, DVIS=0)
@@ -3086,7 +3089,7 @@ def w16_level(p, check):
         p.until(lambda: p.idle(), 100)
         return ran, cards, (p.rw("SYS_FRAMES") - f0) & 0xFFFF
 
-    HINT = dict(STRINGS)["gate_gleams"]
+    HINT = dict(STRINGS)["gate_barred"]          # 3F-T8: the first lair entry while the boss lives
 
     def lair_visit(tag):
         """B12: walk into the lair (real do_exit) from its door-side neighbour,
@@ -3138,18 +3141,17 @@ def w16_level(p, check):
         xc = room_model.field(blk, lair, "RD_EXITCOL")
         m = p.z.read_memory(S["ROOM_MAP"], 576)
         F1 = S["FLOOR_ROW1"]
-        check(f"W16 {tag}: lair (do_exit build) map == model: gate x3 on the exit, the glow above",
-              not map_structure(p, lair) and all(m[F1 * 32 + xc + k] == S["T_GRATE"] for k in range(3))
-              and m[(F1 - 1) * 32 + xc + 1] == room_model.glow_id(p.rb("LVL_DEPTH")),
+        check(f"W16 {tag}: lair (do_exit build) map == model: the SHUT gate x3 on the exit (3F-T8)",
+              not map_structure(p, lair) and all(m[F1 * 32 + xc + k] == S["T_GRATE_SHUT"] for k in range(3)),
               (map_structure(p, lair)[:3], list(m[F1 * 32 + xc:F1 * 32 + xc + 3]), m[(F1 - 1) * 32 + xc + 1]))
         # the gate / glow cells and row 17 on both screens (the whole-room check
         # would trip over the torches' attr cycle, decor_tick)
         tabs = p.bg_tables()
-        cells = [(c, F1) for c in range(32)] + [(xc + 1, F1 - 1)]
+        cells = [(c, F1) for c in range(32)]     # 3F-T8: the boss stands above the gate (no glow while shut)
         bad = [(scr, c, r_) for scr, f in (("displayed", p.frame()), ("composed", p.composed_frame()))
                for c, r_ in cells
                if (attr_at(f, c, r_), bytes(cell_bytes(f, c, r_))) != room_model.expected_cell(*tabs, c, r_)[::-1]]
-        check(f"W16 {tag}: lair screens == map on row 17 + the glow cell (gate $46, glow, ornament)",
+        check(f"W16 {tag}: lair screens == map on row 17 + the cell above the gate (shut gate, ornament)",
               not bad and p.rb(S["TILE_ATTRS"] + S["T_GRATE"]) == S["ATTR_GRATE"], bad[:4])
         # a marker line, then out and back in: no second hint
         ingame([0x3E, S["TX_DESCEND"], 0xCD] + w16(S["msg_push"]), "marker " + tag)
@@ -3164,15 +3166,17 @@ def w16_level(p, check):
         check(f"W16 {tag}: second entry to the lair: no second hint (row 23 = the marker)",
               p.rb("CUR_ROOM") == lair and log_row(p.frame(), 23) == text6(dict(STRINGS)["descend"]),
               p.rb("CUR_ROOM"))
-        # the exit col with the grate CLOSED: J is no exit (C3-8a: DOWN with no
-        # ladder / exit below is a plain wait, 1 turn; it used to be no turn)
+        # the exit col with the grate SHUT: J is no exit and costs no turn (3F-T8, game.md §9.2 F4)
         fo = p.rb("LVL_FLAGS")
         p.wb("LVL_FLAGS", fo & ~S["LF_GRATE_OPEN"] & 255)
+        for k in range(1, 16):
+            p.set_ent(k, FLAGS=0)                 # (the boss stands on the post)
         p.place(0, xc, y1, room=lair, flags=EF_ACTIVE | EF_PLAYER)
         d0 = p.rb("LVL_DEPTH")
-        nt = p.turn("J")
-        check(f"W16 {tag}: grate closed: J on the exit col {xc} = a wait, no EX_LEVEL",
+        nt = p.no_turn("J")
+        check(f"W16 {tag}: grate shut: J on the exit col {xc} = no turn (F4), no EX_LEVEL",
               nt and p.rb("EXIT_KIND") == 0 and p.rb("LVL_DEPTH") == d0, (nt, p.rb("EXIT_KIND")))
+        p.turn("WAIT")                            # (the illegal try ran the hero's status step: HST_DONE)
         p.wb("LVL_FLAGS", fo)
         return blk
 
