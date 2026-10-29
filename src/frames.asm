@@ -81,14 +81,19 @@ POOLACC = 0
                 FRM skeleton_walk3,     K_SKELETON, 24, WK0
                 FRM skeleton_walk4,     K_SKELETON, 24, WK4
                 FRM skeleton_cut,       K_SKELETON, 24, STA
+KFID_SKCLIMB = FCTR
+                ; fix/archer-climb: the climb pair is its own unit U_SKCLIMB (Skeleton = U_SKARCH +
+                ; U_SKCLIMB + U_SKREST) so the Archer / Sniper (the Skeleton body) generate and use
+                ; the Skeleton's own climb frames without the rest of the set
+                FRM skeleton_climb1,    K_SKELETON, 24, STA|SYM
+                FRM skeleton_climb2,    K_SKELETON, 24, STA|SYM
 KFID_SKREST = FCTR
                 FRM skeleton_raise,     K_SKELETON, 24, STA
                 FRM skeleton_collapsed, K_SKELETON, 24, STA
-                FRM skeleton_climb1,    K_SKELETON, 24, STA|SYM
-                FRM skeleton_climb2,    K_SKELETON, 24, STA|SYM
                 FRM skeleton_hurt,      K_SKELETON, 24, STA
 KFCNT_SKELETON = FCTR - KFID_SKELETON
-KFCNT_SKARCH = KFID_SKREST - KFID_SKELETON
+KFCNT_SKARCH = KFID_SKCLIMB - KFID_SKELETON
+KFCNT_SKCLIMB = KFID_SKREST - KFID_SKCLIMB
 KFCNT_SKREST = FCTR - KFID_SKREST
 
 KFID_GOBLIN = FCTR

@@ -26,7 +26,7 @@
 ; GENERATION MAP (pool_gmap; 3F-T13: EVERY matching record applies, was the
 ; first): records DB kind, u1, u2 (u2 = PG_NONE: none); a kind with records
 ; generates their units INSTEAD of its own unit (Skeleton = U_SKARCH +
-; U_SKREST, Archer = U_SKARCH + U_DEADH, Vampire / Archmage = the Necro's,
+; U_SKCLIMB + U_SKREST, Archer = U_SKARCH + U_SKCLIMB + U_DEADH, Vampire / Archmage = the Necro's,
 ; Necro = its own + U_DEADH + U_NBOLT: two records). Tier rows are never in
 ; LP_KINDS / LP_BOSS (spawns take the base's frames, game.md §9.6), so they
 ; need no record; their gu_tab row names the base's own unit (documentation).
@@ -314,7 +314,7 @@ gu_tab:
                 GU   KFID_KNIGHT, KFCNT_KNIGHT
                 GU   KFID_WIZARD, KFCNT_WIZARD
                 GU   0, 0                      ; id 2 retired
-                GU   KFID_SKELETON, KFCNT_SKELETON             ; (generated as U_SKARCH + U_SKREST)
+                GU   KFID_SKELETON, KFCNT_SKELETON             ; (generated as U_SKARCH + U_SKCLIMB + U_SKREST)
                 GU   KFID_GOBLIN, KFCNT_GOBLIN
                 GU   KFID_GHOST, KFCNT_GHOST
                 GU   KFID_RAT, KFID_RATDEAD - KFID_RAT         ; the Rat's body (+ U_DEADR: pool_gmap)
@@ -352,7 +352,7 @@ gu_tab_x:                                      ; units >= K_MAX (extras, 3F-T13)
 U_SKARCH        EQU K_MAX + 0
                 GU   KFID_SKELETON, KFCNT_SKARCH               ; Skeleton walk1..4 + cut (= the Archer)
 U_SKREST        EQU K_MAX + 1
-                GU   KFID_SKREST, KFCNT_SKREST                 ; Skeleton raise .. hurt
+                GU   KFID_SKREST, KFCNT_SKREST                 ; Skeleton raise, collapsed, hurt
 U_DEADR         EQU K_MAX + 2
                 GU   KFID_RATDEAD, 1                           ; small_corpse (Rat, Spider; 3F-T13bc: was rat_dead)
 U_DEADH         EQU K_MAX + 3
@@ -369,11 +369,13 @@ U_NCAST         EQU K_MAX + 8
                 GU   KFID_NCAST, 1                             ; 3F-T13bc: necro_cast (Necro, Archmage)
 U_VBITE         EQU K_MAX + 9
                 GU   KFID_VBITE, 1                             ; 3F-T13bc: vamp_bite (Vampire)
+U_SKCLIMB       EQU K_MAX + 10
+                GU   KFID_SKCLIMB, KFCNT_SKCLIMB               ; Skeleton climb1/2 (Skeleton, Archer, Sniper)
 gu_tab_end:
 GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
                 ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 30
                 ASSERT K_FXW == K_MAX - 2 && K_FXM == K_MAX - 1
-                ASSERT KFID_SKREST == KFID_SKELETON + KFCNT_SKARCH && FID_skeleton_cut == KFID_SKREST - 1
+                ASSERT KFID_SKCLIMB == KFID_SKELETON + KFCNT_SKARCH && KFID_SKREST == KFID_SKCLIMB + KFCNT_SKCLIMB && FID_skeleton_climb2 == KFID_SKREST - 1 && KFCNT_SKCLIMB == 2 && FID_skeleton_cut == KFID_SKCLIMB - 1
                 ASSERT KFID_RATDEAD == KFID_RAT + KFCNT_RAT - 1 && FID_small_corpse == KFID_RATDEAD
                 ASSERT KFID_NCAST == KFID_NECRO + KFCNT_NECRO && KFID_VBITE == KFID_NCAST + 1
                 ASSERT FID_climb_h2 == KFID_CLIMBH + 1
@@ -384,18 +386,20 @@ GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
 ; pool_gmap — the generation map (see the header): every record of a kind applies. Kinds < $80.
 pool_gmap:
                 DB   K_SKELETON, U_SKARCH,   U_SKREST
+                DB   K_SKELETON, U_SKCLIMB,  PG_NONE
                 DB   K_RAT,      K_RAT,      U_DEADR
                 DB   K_SPIDER,   K_SPIDER,   U_DEADR
                 ; 3F-T13bc: the Necro walk is shared (K_NECRO unit = walk1..3), the Vampire adds its
-                ; bite, the Necro / Archmage the cast; climbers (Orc, Necro, Archer families) add the
-                ; shared climb pair U_CLIMBH (once a level: dedup per unit)
+                ; bite, the Necro / Archmage the cast; climbers (Orc, Necro, Mummy) add the
+                ; shared climb pair U_CLIMBH (the Archer family uses the Skeleton's U_SKCLIMB) (once a level: dedup per unit)
                 DB   K_VAMPIRE,  K_NECRO,    U_VBITE
                 DB   K_VAMPIRE,  U_DEADH,    PG_NONE
                 DB   K_ORC,      K_ORC,      U_DEADH
                 DB   K_ORC,      U_CLIMBH,   PG_NONE
                 DB   K_ARCHER,   U_SKARCH,   U_DEADH  ; SHOOT = the Skeleton cut (game.md §9.7 DECIDED)
-                DB   K_ARCHER,   U_CLIMBH,   PG_NONE
+                DB   K_ARCHER,   U_SKCLIMB,  PG_NONE  ; the Skeleton's own climb pair (not U_CLIMBH)
                 DB   K_MUMMY,    K_MUMMY,    U_DEADH
+                DB   K_MUMMY,    U_CLIMBH,   PG_NONE
                 DB   K_NECRO,    K_NECRO,    U_DEADH
                 DB   K_NECRO,    U_NBOLT,    U_NCAST
                 DB   K_NECRO,    U_CLIMBH,   PG_NONE

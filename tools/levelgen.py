@@ -705,10 +705,10 @@ KINFO = {"K_SKELETON": (3, 10, False), "K_GOBLIN": (3, 6, False), "K_GHOST": (3,
 
 # 3F-T13bc: the climbing kinds (main.asm KT_FLAGS KF_CLIMBER; tests/lp.py A0 checks it against
 # the build). The LP model does not move monsters, so nothing here reads it yet (the AI / ladder
-# rules are the Z80's): Goblin / Skeleton (+ tiers) since 3B, + Orc / Archer / Necro (+ tiers).
+# rules are the Z80's): Goblin / Skeleton (+ tiers) since 3B, + Orc / Archer / Necro (+ tiers) + Mummy.
 CLIMBERS = {"K_SKELETON", "K_GOBLIN", "K_SLINGER", "K_SKEL_GUARD", "K_SKEL_KNIGHT",
             "K_ORC", "K_ORC_BERSERK", "K_ORC_BOUNCER", "K_ARCHER", "K_SNIPER",
-            "K_NECRO", "K_BONE_CALLER"}
+            "K_NECRO", "K_BONE_CALLER", "K_MUMMY"}
 
 
 def lp_kinfo(k):

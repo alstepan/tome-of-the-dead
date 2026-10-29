@@ -83,11 +83,11 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # shared climb pair for Orc / Necro / Archer levels, the symmetric small corpse (-128 B a Rat /
 # Spider level), dk_block out, the DK B3 walk3 +768 on D7) and ARCHER-DEPTHS H1 (no Archer on D7: the 2nd Necro, no Mage
 # arrows there). MEM-W1: skeleton_collapsed 24x48 -> 24x16 (-384 a Skeleton level) and
-# knight_windup 40x48 -> 32x48 (-192, Warrior); pixels unchanged. Update with a reason only.
+# knight_windup 40x48 -> 32x48 (-192, Warrior); pixels unchanged. fix/archer-climb: the Archer / Sniper climb on the SKELETON's own pair (unit U_SKCLIMB): D4 +576 (Orc keeps the shared pair), D5 unchanged (the Mummy needs the shared pair, the Archer shares the Skeleton's). Update with a reason only.
 LEVEL_NEED = {
-    (0, 1): 27200, (0, 2): 26656, (0, 3): 31648, (0, 4): 31584,
+    (0, 1): 27200, (0, 2): 26656, (0, 3): 31648, (0, 4): 32160,
     (0, 5): 29216, (0, 6): 28768, (0, 7): 31264, (0, 8): 31264,
-    (1, 1): 23264, (1, 2): 22720, (1, 3): 27648, (1, 4): 27712,
+    (1, 1): 23264, (1, 2): 22720, (1, 3): 27648, (1, 4): 28288,
     (1, 5): 25344, (1, 6): 24768, (1, 7): 27264, (1, 8): 27264,
 }
 
