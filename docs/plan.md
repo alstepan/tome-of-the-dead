@@ -539,3 +539,5 @@ AY music + FX on the A8 slot; balance pass; hardware hardening.
 **USER 2026-10-29 (later):** corpse merge GO (task CORPSE-ASHES + JUMP-ALT landing, branch `feat/corpse-ashes`, one staff run); **Orc = V4 Ironhide** (frames from `feat/3f-art7-orc` dd72622; lands with animation item 4, after the corpse merge frees ids); animation items 1–4 and the dedicated Vampire art re-opened for review on the canvas (artboards F3f ART6 options, F3g Vampire, F3h Orc) before final frames are cut.
 
 **VAMPIRE (user 2026-10-29): use the 40 px option** (own set, artist branch `feat/3f-art8-vampire` be11215; short sprites, cape, no staff). Frames land with the animation items after the corpse merge; budget per level to be re-measured with the 40 px set.
+
+**ANIMATION ITEMS 1–4 GO (user 2026-10-29, after re-viewing F3f: "looks good, only need adjustments to the new Vampire and the new Orc"):** engineering for items 1–3 (Spider hurt, Archer hurt, Necromancer 4-frame walk) proceeds after the corpse merge; Orc (V4) and Vampire (40 px) go through ART9 (final sets + review board) first.
