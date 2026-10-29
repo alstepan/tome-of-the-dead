@@ -495,17 +495,18 @@ enter_select:
 ; pages, K_MAX (32) B per array; no array crosses a page (KFIELD, feet_mod).
 ;==============================================================================
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
-                DS   (-($ + TILE_IDS + DT_ATTR_LEN + SQ_ROWS_LEN)) & $FF, 0    ; B3B-5: tile_flags ends on the page
+                DS   (-($ + TILE_IDS + DT_ATTR_LEN)) & $FF, 0    ; B3B-5: tile_flags ends on the page
 ;------------------------------------------------------------------------------
-; SEQ_ROWS — 3F-T2 the per-level sequence cache's rows (RUNTIME: zeros in the
-; image, written by R6 pool6.asm / lowram.asm at a game start / level entry): SQ_SLOTS rows
-; of KS_STRIDE (the old kind_seqs row: 8 sequence pointers + KS_IMPACT), slot 0
-; = the hero, 1.. = the level's monster kinds. One page (kind_tab KT_SEQ holds
-; the row's low byte: kind_seq_ptr = 2 table reads, no multiply).
+; SEQ_ROWS — 3F-T2 the per-level sequence cache's rows (RUNTIME, written by R6
+; pool6.asm / lowram.asm at a game start / level entry before any kind animates):
+; SQ_SLOTS rows of KS_STRIDE (the old kind_seqs row: 8 sequence pointers +
+; KS_IMPACT), slot 0 = the hero, 1.. = the level's monster kinds. One page
+; (kind_tab KT_SEQ holds the row's low byte: kind_seq_ptr = 2 table reads, no
+; multiply). 3F-T13bc: moved out of the image (was 119 zero bytes of the kind_tab
+; ALIGN pad) into FRT_GAP, the runtime RAM above the page-aligned FRT.
 ;------------------------------------------------------------------------------
-seq_rows:
-                DS   SQ_ROWS_LEN, 0
-                ASSERT (seq_rows >> 8) == (($ - 1) >> 8)
+seq_rows        EQU FRT + FRT_MAX * FRT_STRIDE
+                ASSERT (seq_rows >> 8) == ((seq_rows + SQ_ROWS_LEN - 1) >> 8) && SQ_ROWS_LEN <= FRT_GAP
 ;------------------------------------------------------------------------------
 ; dt_attr_tab — B3B-10 decor_tick attr cycles, 8 steps per kind (concept-screen
 ; §3.3): kind 1 flame (DT_HOT -> DT_RED -> DT_DIM: tall / slim torch bodies, braziers).
@@ -579,9 +580,11 @@ kind_tab:
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  1,   1,  1,  1,  1,  1,  1,  1,  1,  1,   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1          ; KT_REACH (D3-0: the Mage's PROTO reach-3 zap is gone, game.md §11.4)
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  2,   1,  2,  1,  1,  2,  1,  1,  1,  1,   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1          ; KT_PERIOD (Slime, Vampire, Mummy: acts every 2)
                 ; B3B-5: skeleton + goblin are openers (game.md §9.1); the heroes
-                ; open by bump in try_horizontal, not through KF_OPENER. 3F-T3: climbers are only
-                ; the Goblin, Skeleton (+ tiers) and the heroes (§9.7 R3); Mummy / Ogre / DK do not open doors
-                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0,   0, KF_OPENER|KF_TALL, KF_OPENER|KF_TALL, KF_OPENER|KF_TALL, KF_TALL, KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL,   0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, 0, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_OPENER|KF_TALL, KF_OPENER|KF_TALL, KF_OPENER|KF_TALL, KF_OPENER|KF_TALL  ; KT_FLAGS
+                ; open by bump in try_horizontal, not through KF_OPENER. 3F-T3: climbers were only
+                ; the Goblin, Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
+                ; + the Orc (Berserker, Bouncer), Necro (Bone Caller), Archer (Sniper) on the shared
+                ; climb pair; not Vampire / Archmage / DK / Ogre / Mummy; Mummy / Ogre / DK do not open doors
+                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0,   0, KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL,   0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, 0, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL  ; KT_FLAGS
                 KROW $47,$45,$44,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
                 ; 3F-T2: KT_SEQ (runtime: lowram.asm (sq_load / sq_fill) writes the kind's SEQ_ROWS row
                 ; low byte per level; 0 until the first game start). The old
@@ -633,7 +636,7 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
                 ASSERT LOWRAM_END <= LOWRAM_FREE_END
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), seq cache bytes ", /D, SEQB_LEN, ", free to FRT: ", /D, FRT - seq_bytes_end, " (+", /D, seq_rows - kind_tab_pad, " B kind_tab ALIGN pad; bank 2 free ", /D, FRT - seq_bytes_end + seq_rows - kind_tab_pad, "); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), seq cache bytes ", /D, SEQB_LEN, ", free to FRT: ", /D, FRT - seq_bytes_end, " (+", /D, dt_attr_tab - kind_tab_pad, " B kind_tab ALIGN pad; bank 2 free ", /D, FRT - seq_bytes_end + dt_attr_tab - kind_tab_pad, "; FRT_GAP ", /D, FRT_GAP, " B runtime at ", /H, seq_rows, ", seq_rows ", /D, SQ_ROWS_LEN, " B of it, ", /D, FRT_GAP - SQ_ROWS_LEN, " free); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
 
 ;==============================================================================
 ; BOOT BLOCK (3E-T1, memory levers a + d) — boot-only code + data in pool
@@ -1015,6 +1018,7 @@ SQK4 = {b lp_dtab + sqd * LP_DROW + 4} & LEK_KIND_MASK
                 SQ_KIND SQK2
                 SQ_KIND SQK3
                 SQ_KIND SQK4
+                DISPLAY "GAME sequence cache D", /D, sqd + 1, ": ", /D, SQN, " blocks, ", /D, SQB, " B + hero ", /D, SQ_HERO, " = ", /D, SQB + SQ_HERO, " of ", /D, SEQB_LEN   ; 3F-T13bc
       IF SQB > SQ_MAX
 SQ_MAX = SQB
       ENDIF

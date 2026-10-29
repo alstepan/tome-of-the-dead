@@ -78,6 +78,10 @@ CHAR_PREFIX = {
     # Stage 3F lean monster set (3F-A1, tools/gen_3f_art.py; game.md §9.1, §9.7)
     "SPIDER": "spider", "ORC": "orc", "NECROMANCER": "necro", "MUMMY": "mummy",
     "OGRE": "ogre", "DEATH KNIGHT": "dk", "DEAD": "dead", "NECRO BOLT": "nbolt",
+    # 3F ART2 finals (tools/gen_art2_final.py): Vampire own BITE, shared small-animal corpse
+    "VAMPIRE": "vamp", "SMALL ANIMAL": "small",
+    # 3F ART3 finals (tools/gen_art3_final.py): ONE shared humanoid climb pair
+    "CLIMB": "climb",
 }
 # FX "characters": cell-aligned, placed by the FX track (px, py), not by a body
 # box, so every FX frame's ax is declared 0 (ANCHOR_X below) and body_w = 8.
@@ -134,6 +138,8 @@ BODY_W = {"knight": 24, "wizard": 24, "rogue": 24, "skeleton": 24, "goblin": 24,
           "ghost": 24, "rat": 32, "bat": 24, "slime": 24,
           "spider": 32, "orc": 24, "necro": 24, "mummy": 24, "ogre": 32, "dk": 24,
           "dead": 24,              # shared humanoid DEAD (3F, game.md §9.7 R3)
+          "vamp": 24, "small": 32,  # ART2: Vampire = Necro body; corpse = Rat body
+          "climb": 24,              # ART3: shared humanoid climb (Orc/Necro/Vampire/Archer)
           **{p: 8 for p in FX_PREFIXES}}
 
 # Explicit horizontal anchors (prototype.md §5.3/§10.2), overriding the head-band
@@ -154,6 +160,10 @@ ANCHOR_X = {
     "bat_dive": 0, "bat_hurt": 0, "bat_dead": 0,
     "slime_lunge": 0, "slime_hurt": 0, "slime_dead": 0,
     "spider_bite": 0, "dead_humanoid": 8,    # 3F-A1: as rat_bite / knight_dead
+    # ART2 (gen_art2_final.py): bite lunges forward from the robe (body x 0..23);
+    # orc_raise = body at x 8..31, cleaver behind the head in x 0..10; corpse as rat_dead
+    "vamp_bite": 0, "orc_raise": 8, "small_corpse": 0,
+    "climb_h1": 0, "climb_h2": 0,            # ART3: back-view climb, as skeleton_climb
     # Stage 3D FX (D3-3): engine-placed, see FX_PREFIXES
     **{f"{p}_{c}": 0 for p, cs in (
         ("spark", ("fly1", "fly2", "fizz1", "fizz2")),
@@ -194,7 +204,8 @@ MOTION_FRAMES = {
     *(f"{c}_walk{n}" for c in ("spider", "orc", "necro", "mummy", "ogre", "dk") for n in (1, 2)),
 }
 SYMMETRIC_FRAMES = {f"{c}_climb{n}" for c in ("knight", "wizard", "rogue", "skeleton", "goblin")
-                    for n in (1, 2)}
+                    for n in (1, 2)} | {"small_corpse"} \
+    | {"climb_h1", "climb_h2"}   # ART2: mirror-symmetric heap; ART3: shared climb pair
 FLAG_MOTION, FLAG_SYMMETRIC = 1, 2
 
 # Ghost dithered tail (§5.4 exception): on these rows the mask is DATA-ONLY

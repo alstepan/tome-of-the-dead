@@ -4,7 +4,8 @@ Stub-driven on a booted Knight game (as tests/combat3.py).
 
   P1  parry rates over 3,000 seeded PHYS hits each: Skeleton Guard ~64/256, Skeleton Knight and
       Death Knight ~85/256; Skeleton / Goblin 0; a FIRE hit on a Guard never parries
-  P2  a parry: L = 0, H = 1, HP unchanged; the Death Knight gets RC_BLOCK, a Guard no reaction
+  P2  a parry: L = 0, H = 1, HP unchanged; the Death Knight gets RC_PARRY (3F-T13bc), a Guard no reaction;
+      P2b: RC_PARRY starts as the 1-tick ATTR_PARRY flash (anim_entity), no sequence
   P3  do_attack on a Guard: parried -> E_MSG MSG_P_PARRY, E_HIT 0, the line "THE BONEGUARD PARRIES!"
   W1  NOTCH: a melee parry 1 in 2 lowers the weapon m, WEAR_PEND = the line, hero_recalc NOT run
       yet (KT_BONUS unchanged); hunger_turn (end_turn) applies line + recalc + clears it;
@@ -162,8 +163,21 @@ def main():
             return None
         lh = until_parry(K["DKNIGHT"])
         e = p.ent(1)
-        check("P2 Death Knight parry: L 0, H 1, HP kept, RC_BLOCK",
-              lh == (0, 1) and e["HP"] == 100 and e["REACT"] == S["RC_BLOCK"], (lh, e["HP"], e["REACT"]))
+        check("P2 Death Knight parry: L 0, H 1, HP kept, RC_PARRY (3F-T13bc: no BLOCK frame)",
+              lh == (0, 1) and e["HP"] == 100 and e["REACT"] == S["RC_PARRY"], (lh, e["HP"], e["REACT"]))
+        # 3F-T13bc: the reaction starts (anim_entity .rest at E_REACTAT) as the 1-tick ATTR_PARRY flash,
+        # no sequence: E_REACT -> 0, E_FLT = PARRY_FLASH, E_FLA = ATTR_PARRY, the body stays at rest
+        p.set_ent(1, MODE=S["M_REST"], FLT=0, FLA=0)
+        p.wb(S["P_ENTITIES"] + STRIDE + S["E_REACTAT"], 0)
+        p.wb(S["TURN_PHASE"], 1)
+        p.wb(S["TURN_TICK"], 0)
+        p.wb(S["ANIM_SLOT"], 1)
+        assert p.code([0xDD, 0x21] + w16(S["P_ENTITIES"] + STRIDE) + [0xCD] + w16(S["anim_entity"]))
+        e = p.ent(1)
+        p.wb(S["TURN_PHASE"], 0)
+        check("P2b Death Knight parry reaction: flash ATTR_PARRY for PARRY_FLASH ticks, no sequence",
+              (e["REACT"], e["FLT"], e["FLA"], e["MODE"]) == (0, S["PARRY_FLASH"], S["ATTR_PARRY"], S["M_REST"]),
+              (e["REACT"], e["FLT"], e["FLA"], e["MODE"]))
         lh = until_parry(K["SKEL_GUARD"])
         e = p.ent(1)
         check("P2 Guard parry: L 0, H 1, HP kept, no BLOCK reaction",

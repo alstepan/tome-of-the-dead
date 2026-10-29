@@ -687,7 +687,7 @@ LP_TAB = {1: (("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 11),
           4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER"), "K_BOSS_D4", 13),
           5: (("K_MUMMY", "K_SKELETON", "K_ARCHER", "K_SPIDER"), "K_BOSS_D5", 13),
           6: (("K_VAMPIRE", "K_GHOST", "K_NECRO", "K_ORC"), "K_BOSS_D6", 14),
-          7: (("K_ORC", "K_ARCHER", "K_GHOST", "K_NECRO"), "K_BOSS_D7", 14),
+          7: (("K_ORC", "K_NECRO", "K_GHOST", "K_NECRO"), "K_BOSS_D7", 14),   # 3F-T13bc H1: no Archer on D7
           8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE"), "K_BOSS_D8", 11)}
 # kind_tab mirror (main.asm KROW KT_BW / KT_HP / KF_FLYER; tests/lp.py checks
 # it against the build): kind -> (body width, hp, flyer)
@@ -702,6 +702,13 @@ KINFO = {"K_SKELETON": (3, 10, False), "K_GOBLIN": (3, 6, False), "K_GHOST": (3,
          "K_SLINGER": (3, 8, False), "K_BLACK_WIDOW": (4, 10, False), "K_SKEL_GUARD": (3, 14, False),
          "K_SKEL_KNIGHT": (3, 18, False), "K_POLTERGEIST": (3, 11, True), "K_ORC_BERSERK": (3, 18, False),
          "K_ORC_BOUNCER": (3, 24, False), "K_SNIPER": (3, 10, False), "K_BONE_CALLER": (3, 14, False)}
+
+# 3F-T13bc: the climbing kinds (main.asm KT_FLAGS KF_CLIMBER; tests/lp.py A0 checks it against
+# the build). The LP model does not move monsters, so nothing here reads it yet (the AI / ladder
+# rules are the Z80's): Goblin / Skeleton (+ tiers) since 3B, + Orc / Archer / Necro (+ tiers).
+CLIMBERS = {"K_SKELETON", "K_GOBLIN", "K_SLINGER", "K_SKEL_GUARD", "K_SKEL_KNIGHT",
+            "K_ORC", "K_ORC_BERSERK", "K_ORC_BOUNCER", "K_ARCHER", "K_SNIPER",
+            "K_NECRO", "K_BONE_CALLER"}
 
 
 def lp_kinfo(k):

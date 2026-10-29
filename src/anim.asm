@@ -204,11 +204,11 @@ anim_entity:
                 ld   a, (TURN_TICK)
                 cp   (ix+E_REACTAT)
                 jr   c, .idle
-                ; start the pending reaction (HURT / BLOCK / DEATH; T7 DODGE:
-                ; no sequence, a flash: 18 B, +14 T to the other reactions)
+                ; start the pending reaction (HURT / BLOCK / DEATH; T7 DODGE /
+                ; 3F-T13bc PARRY (the Death Knight): no sequence, a flash)
                 ld   a, (ix+E_REACT)
                 cp   RC_DODGE
-                jr   z, .dodge
+                jr   nc, .dodge                ; RC_DODGE / RC_PARRY (the largest codes)
                 ld   c, KS_HURT
                 cp   RC_HURT
                 jr   z, .rs
@@ -227,9 +227,12 @@ anim_entity:
                 ld   l, a
                 call start_seq
                 jp   .seq
-.dodge:         ld   (ix+E_REACT), RC_NONE
-                ld   (ix+E_FLT), MISS_FLASH
-                ld   (ix+E_FLA), ATTR_MISS
+.dodge:         ld   (ix+E_REACT), RC_NONE     ; (no flag change: Z = RC_DODGE still)
+                ld   bc, ATTR_MISS << 8 | MISS_FLASH
+                jr   z, .dfl
+                ld   bc, ATTR_PARRY << 8 | PARRY_FLASH   ; 3F-T13bc: +6 B vs the dodge-only path
+.dfl:           ld   (ix+E_FLT), c
+                ld   (ix+E_FLA), b
 .idle:
                 call on_ladder
                 jr   nz, .cyc

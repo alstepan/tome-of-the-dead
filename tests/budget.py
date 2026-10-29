@@ -656,6 +656,14 @@ def tmix_setup(p):
     p.set_ent(5, KIND=S["K_SKEL_GUARD"], HP=60, MAXHP=60)
     p.set_ent(1, KIND=S["K_BLACK_WIDOW"], HP=60, MAXHP=60)
     p.set_ent(3, KIND=S["K_ORC_BERSERK"], HP=9, MAXHP=20)
+    # 3F-T13bc (manager-accepted 2026-10-29): PROTO has no Orc frames, so the fixture clears the
+    # Berserker's KF_CLIMBER. The Berserker climbs now (KF_CLIMBER), but rooms A-D pool no Orc frames: its block is
+    # not cached, so it animates with the HERO's sequence row (Knight climb / walk frames, 40 px) — a
+    # stand-in this scenario never meant to measure (it measures the tier hooks). Keep it walking as in
+    # 3F-T6 (main's figures); real climbers on their own frames: tests/climb3f.py + the D7 "cmix" note
+    # in docs/memory-map.md "ART2 / ART3 / ART4 wiring".
+    kf = S["kind_tab"] + S["KT_FLAGS"] + S["K_ORC_BERSERK"]
+    p.wb(kf, p.rb(kf) & ~S["KF_CLIMBER"])
     p.set_ent(0, HP=250, MAXHP=250)               # the run must outlast the Widow / Berserker bites
     # the deferred half of a wear event is forced onto the first end_turn (the random 1-in-N rolls would
     # rarely land in a 14-turn run): WEAR_PEND = the armour ACID line -> hunger_turn's wear_apply (line +

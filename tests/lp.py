@@ -212,6 +212,8 @@ def part_a(h, p, check, nrand):
         check(f"A0 levelgen.KINFO {n} == kind_tab (BW, HP, flyer)",
               (p.kb(k, "KT_BW"), p.kb(k, "KT_HP"), bool(p.kb(k, "KT_FLAGS") & S["KF_FLYER"])) == (w, hp, fly),
               (p.kb(k, "KT_BW"), p.kb(k, "KT_HP")))
+        check(f"A0 levelgen.CLIMBERS {n} == kind_tab KF_CLIMBER (3F-T13bc)",
+              bool(p.kb(k, "KT_FLAGS") & S["KF_CLIMBER"]) == (n in G.CLIMBERS), p.kb(k, "KT_FLAGS"))
     rng = random.Random(0x1F9)
     pairs = [(d, s) for d in range(1, 9) for s in (0x0001, 0x1234, 0xBEEF)]
     pairs += [(rng.randint(1, 8), rng.randrange(65536)) for _ in range(nrand)]

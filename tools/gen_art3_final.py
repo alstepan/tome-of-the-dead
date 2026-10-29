@@ -1,0 +1,282 @@
+#!/usr/bin/env python3
+"""gen_art3_final.py — 3F ART3 FINAL frames (user picks on art3_options.png, 2026-10-29).
+
+Deterministic pixel art (no AI raster); the pixels are the APPROVED concept
+builders of tools/gen_art3_options.py, bit-identical. This tool owns the NEW
+frames only and does NOT wire them (no index.asm / index_3f.asm /
+src/frames.asm / SRC6 / defs edits: T13c does that):
+
+  CLIMB         H1, H2  24x48  ax 0  (A1: ONE shared body-neutral humanoid climb
+                                     pair, back view, knee-length cloak, no weapon;
+                                     H2 = mirror(H1); STA|SYM like skeleton/goblin
+                                     CLIMB1/2: one facing stored, 288 B pool each.
+                                     Drawn in the climbing kind's ink: Orc $04,
+                                     Necromancer $03, Vampire $05, Archer $03)
+  NECROMANCER   WALK 3  24x48       (B3: new even slot, cycle W2 W1 W3 W1; W3 = WK4;
+                                     the Vampire shares the Necro walk group)
+  MUMMY         WALK 3  24x48       (B4: drags the back foot; even slot WK4)
+  MUMMY         WALK 4  24x48       (B4: lurch / passing; odd slot WK0)
+                                     cycle W2 W4 W3 W1 (1 tick per entry)
+
+The asm attr byte is the kind's base ink (climb: $04); the engine draws a
+monster frame in its kind's ink, so the shared climb bytes serve every climber.
+
+Outputs:
+  assets/gfx/sprites/grid/<name>.grid, assets/gfx/sprites/<name>.asm  (native)
+  assets/gfx/source/3f_art3_frames.svg.html  canvas fragment (review)
+  assets/gfx/sprites/draft3f_art3_sheet.png  review sheet (climb in 4 inks)
+Validation (exit 1 on failure): fragment re-parses to the same bitmaps; canvas +
+3f_frames + the new frames through the REAL importer (anchors, gfx_convert
+clash, data/mask round-trip); committed asm decoded again; H2 == mirror(H1).
+Sizes: ZX0 per block (zx0_sources.partition + dzx0 round-trip).
+Run AFTER tools/gen_3f_art.py. Usage: python3 tools/gen_art3_final.py [--check]
+"""
+
+from __future__ import annotations
+
+import argparse
+import html
+import os
+import sys
+import tempfile
+
+import numpy as np
+from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gen_3f_art as G  # noqa: E402
+import gen_art2_final as F2  # noqa: E402  (label / zx0_group / pool_bytes helpers)
+import gen_art3_options as C  # noqa: E402  (approved concept builders A1 / B3 / B4)
+import svg_sprites as S  # noqa: E402
+import zx0_sources as ZS  # noqa: E402
+
+REPO = S.REPO
+SPR, GRID_DIR = G.SPR, G.GRID_DIR
+FRAGMENT = os.path.join(REPO, "assets/gfx/source/3f_art3_frames.svg.html")
+SHEET_PNG = os.path.join(SPR, "draft3f_art3_sheet.png")
+GEN_DATE = "2026-10-29"
+
+INK_VAMP = "#00D7D7"      # $05
+INK_TIER = "#FFFFFF"      # $47 preview: a bright tier ink
+
+
+def climb_h1() -> np.ndarray:
+    return C.climb_neutral1()
+
+
+def climb_h2() -> np.ndarray:
+    return C.mirror(C.climb_neutral1())
+
+
+def necro_walk3() -> np.ndarray:
+    return C.with_legs("necro_walk1", C.NECRO_HEM3, 40)
+
+
+def mummy_walk3() -> np.ndarray:
+    return C.with_legs("mummy_walk1", C.MUMMY_LEGS3, 33)
+
+
+def mummy_walk4() -> np.ndarray:
+    return C.with_legs("mummy_walk1", C.MUMMY_LEGS4, 33)
+
+
+# heading, caption, builder, ink, slot flag, note
+NEW = [
+    ("CLIMB", "H1", climb_h1, G.INK_ORC, "SYM",
+     "A1 shared humanoid climb 1 (back view, knee-length cloak, no weapon); STA|SYM."),
+    ("CLIMB", "H2", climb_h2, G.INK_ORC, "SYM", "A1 shared humanoid climb 2 = mirror(H1); STA|SYM."),
+    ("NECROMANCER", "WALK 3", necro_walk3, G.INK_NECRO, "WK4",
+     "B3 even slot: cycle W2 W1 W3 W1 (W1 rest WK0, W2/W3 WK4); Vampire shares it."),
+    ("MUMMY", "WALK 3", mummy_walk3, G.INK_MUMMY, "WK4",
+     "B4 even slot: drags the back foot; cycle W2 W4 W3 W1."),
+    ("MUMMY", "WALK 4", mummy_walk4, G.INK_MUMMY, "WK0",
+     "B4 odd slot: lurch / passing pose."),
+]
+POOL = {"SYM": 288, "WK0": 576, "WK4": 768}   # 24x48 pool bytes (frames.asm FRM formula)
+NOTE_TEXT = {
+    "CLIMB": "ART3 A1: ONE shared humanoid climb pair for the new climbers (Orc $04, "
+             "Necromancer $03, Vampire $05, Skeleton Archer $03): the kind's ink colours it. "
+             "H2 = mirror(H1), stored once (SYM).",
+    "NECROMANCER": "ART3 B3: new WALK 3 (even slot, WK4). Cycle W2 W1 W3 W1. The Vampire draws "
+                   "the same frames in $05.",
+    "MUMMY": "ART3 B4: new WALK 3 (back foot dragged, WK4) + WALK 4 (lurch, WK0). "
+             "Cycle W2 W4 W3 W1.",
+}
+# concept estimates (art3_options/costs.txt): ZX0 delta in the kind block
+ESTIMATE = {"CLIMB": 272, "NECRO": 27, "MUMMY": 113}
+
+
+def asm_notes(b) -> list[str]:
+    h, w = b["bm"].shape
+    cls = "STATIONARY, SYMMETRIC (mirror pair: one pool facing)" if b["name"] in S.SYMMETRIC_FRAMES \
+        else f"walk slot {b['flag']} (phase-locked, conventions.md 'Walk cycles')"
+    return ["DRAFT (not yet on the canvas): assets/gfx/source/3f_art3_frames.svg.html",
+            "generated by tools/gen_art3_final.py (3F ART3 final)",
+            f"artboard: {b['hd']} / {b['cap']} ({w}x{h}), ink {b['ink']}",
+            f"grid: {b['rel_grid']}",
+            f"anchor: {b['anchor_note']}; ax_L={b['axl']}",
+            "class: " + cls,
+            "NOT in sprites/index.asm / index_3f.asm yet (T13c wires it: FRM row, SRC6 block)"]
+
+
+def gfx_native(b, out_asm) -> None:
+    colour, bright = S.INK_MAP[b["ink"]]
+    argv = ["--mode", "sprite", "--layout", "native", "--in", b["rel_grid"],
+            "--name", b["name"], "--out", out_asm,
+            "--ink", G.GC.COL_NAME[colour], "--paper", "black", "--band-paper", "black",
+            "--anchor-x", str(b["ax"]), "--anchor-y", str(b["ay"]), "--src-path",
+            "--date", GEN_DATE]
+    for n in asm_notes(b):
+        argv += ["--note", n]
+    if bright:
+        argv.append("--bright")
+    S._quiet(S.run_gfx, argv)
+
+
+def grid_text(b) -> str:
+    t = G.grid_text(b).split("\n", 1)[1]
+    return ("# WazHack/ZX gfx text grid — DRAFT generated by tools/gen_art3_final.py "
+            "(edit that); 3F ART3 final, not on the canvas yet.\n" + t)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--check", action="store_true", help="validate + sizes; write nothing")
+    args = ap.parse_args()
+    new = []
+    for hd, cap, fn, ink, flag, note in NEW:
+        bm = fn().astype(bool)
+        name = f"{S.CHAR_PREFIX[hd]}_{S.slug(cap)}"
+        assert bm.shape == (48, 24), (name, bm.shape)
+        new.append(dict(hd=hd, cap=cap, name=name, bm=bm, ink=ink, flag=flag, note=note,
+                        solid=S.make_mask(bm, S.OUTLINE, name)))
+    by_new = {b["name"]: b for b in new}
+    assert np.array_equal(by_new["climb_h2"]["bm"], by_new["climb_h1"]["bm"][:, ::-1])
+    order = ["CLIMB", "NECROMANCER", "MUMMY"]
+    out = ["<!-- WazHack/ZX 3F ART3 FINAL artboards (user picks 2026-10-29 on art3_options.png: "
+           "A1 shared climb, B3 Necro walk, B4 Mummy walk). Generated by tools/gen_art3_final.py. "
+           "All face right (the engine mirrors). -->",
+           "<h2>3F ART3</h2>"]
+    for hd in order:
+        out.append(G.heading(hd))
+        out.append(G.NOTE.format(html.escape(NOTE_TEXT[hd])))
+        out.append(G.ROW)
+        out += [G.artboard(b["bm"], b["ink"], b["cap"]) for b in new if b["hd"] == hd]
+        out.append("</div>")
+    frag = "\n".join(out) + "\n"
+    with tempfile.TemporaryDirectory() as tmp:
+        fpath = os.path.join(tmp, "frag.html")
+        with open(fpath, "w") as f:
+            f.write(frag)
+        fr, _ = S.parse_sheet(fpath)
+        assert len(fr) == len(new)
+        for f, b in zip(fr, new):
+            assert (f.character, f.caption) == (b["hd"], b["cap"]) and \
+                np.array_equal(f.bitmap, b["bm"]), b["name"]
+        # ---- the real importer: canvas + 3f_frames (sprites) + the NEW frames
+        sheet = os.path.join(tmp, "sheet.html")
+        with open(sheet, "w") as f:
+            f.write(open(S.SHEET).read() + "\n"
+                    + open(G.FRAGMENT).read().split("<h2>3F TILES</h2>")[0] + "\n"
+                    + "\n".join(G.heading(b["hd"]) + "\n" + G.ROW + "\n"
+                                + G.artboard(b["bm"], b["ink"], b["cap"]) + "\n</div>"
+                                for b in new))
+        frames = S.import_sheet(sheet, os.path.join(tmp, "out"), GEN_DATE)
+        by = {f.name: f for f in frames}
+        for b in new:
+            f = by[b["name"]]
+            assert np.array_equal(f.bitmap, b["bm"]) and np.array_equal(f.solid, b["solid"]), \
+                b["name"]
+            b["ax"], b["ay"] = f.anchor
+            b["axl"] = f.extra["ax_l"]
+            b["anchor_note"] = ("declared (svg_sprites ANCHOR_X)" if f.extra.get("declared")
+                                else f"reference {f.extra['ref']} head-band IoU "
+                                     f"{f.extra['iou']:.2f}")
+            assert (b["ax"], b["ay"]) == (0, 0), (b["name"], f.anchor)
+            b["raw"], rows, _ = G.raw_bytes(os.path.join(tmp, "out", b["name"] + ".asm"))
+            G.check_rows(b, rows)
+        print(f"importer: canvas + 3f_frames + {len(new)} ART3 frames, clash + round-trip OK")
+        raw = {f.name: G.raw_bytes(os.path.join(tmp, "out", f.name + ".asm"))[0]
+               for f in frames if f.kind == "sprite"}
+        zdir = os.path.join(tmp, "z")
+        os.makedirs(zdir)
+        for b in new:
+            print(f"{b['name']:12s} 24x48 raw {len(b['raw'])} ax {b['ax']} ay {b['ay']} "
+                  f"axL {b['axl']}  {b['flag']} pool {POOL[b['flag']]}")
+        z1 = F2.zx0_group([("climb_h1", raw["climb_h1"])], zdir, "c1")
+        z2 = F2.zx0_group([(n, raw[n]) for n in ("climb_h1", "climb_h2")], zdir, "c2")
+        print(f"group CLIMB own block: H1 {z1}, H1+H2 {z2} (est +{ESTIMATE['CLIMB']})")
+        # zx0_sources.partition caps a block at MAX_FRAMES (4): the 5-frame Mummy
+        # group splits, so the frame ORDER in the SRC6 list matters (walks first).
+        blocks = [("NECRO", ["necro_walk1", "necro_walk2", "necro_cast"],
+                   ["necro_walk1", "necro_walk2", "necro_walk3", "necro_cast"]),
+                  ("MUMMY", ["mummy_walk1", "mummy_walk2", "mummy_attack"],
+                   ["mummy_walk1", "mummy_walk2", "mummy_walk3", "mummy_walk4", "mummy_attack"]),
+                  ("MUMMY", ["mummy_walk1", "mummy_walk2", "mummy_attack"],
+                   ["mummy_walk1", "mummy_walk2", "mummy_attack", "mummy_walk3", "mummy_walk4"])]
+        for g, names, plus_names in blocks:
+            base = F2.zx0_group([(n, raw[n]) for n in names], zdir, g)
+            plus = F2.zx0_group([(n, raw[n]) for n in plus_names], zdir, g + "p")
+            parts = ZS.partition([(n, raw[n]) for n in plus_names], zdir)
+            print(f"group {g:5s} zx0 {base} -> {plus} (delta +{plus - base}, est "
+                  f"+{ESTIMATE[g]}) order {' '.join(n.split('_')[1] for n in plus_names)} "
+                  f"blocks {[k for _, k in parts]}")
+    if args.check:
+        return 0
+    with open(FRAGMENT, "w") as f:
+        f.write(frag)
+    cwd = os.getcwd()
+    os.chdir(REPO)
+    try:
+        for b in new:
+            gpath = os.path.join(GRID_DIR, b["name"] + ".grid")
+            b["rel_grid"] = os.path.relpath(gpath, REPO)
+            with open(gpath, "w") as f:
+                f.write(grid_text(b))
+            asm = os.path.join("assets/gfx/sprites", b["name"] + ".asm")
+            gfx_native(b, asm)
+            rb, rows, attr = G.raw_bytes(asm)
+            G.check_rows(b, rows)
+            assert rb == b["raw"], b["name"]
+            colour, bright = S.INK_MAP[b["ink"]]
+            assert attr == colour | (0x40 if bright else 0), (b["name"], attr)
+    finally:
+        os.chdir(cwd)
+    # ---- review sheet (x4, ink on black, mask-opaque paper black on slate)
+    rows_im = []
+    h1, h2 = by_new["climb_h1"], by_new["climb_h2"]
+    climb = [F2.label(G.render(h1["bm"], h1["solid"], h1["ink"]), "climb_h1 24x48", "SYM, Orc $04"),
+             F2.label(G.render(h2["bm"], h2["solid"], h2["ink"]), "climb_h2 24x48", "= mirror(H1)")]
+    for ink, lab in ((G.INK_NECRO, "Necro / Archer $03"), (INK_VAMP, "Vampire $05"),
+                     (INK_TIER, "tier ink $47")):
+        climb += [F2.label(G.render(b["bm"], b["solid"], ink), b["name"], lab) for b in (h1, h2)]
+    walks = {"NECROMANCER": [("necro_walk2", "W2 WK4"), ("necro_walk1", "W1 rest WK0"),
+                             ("necro_walk3", "W3 WK4 NEW")],
+             "MUMMY": [("mummy_walk2", "W2 WK4"), ("mummy_walk4", "W4 WK0 NEW"),
+                       ("mummy_walk3", "W3 WK4 NEW"), ("mummy_walk1", "W1 rest WK0")]}
+    sections = [("CLIMB  (A1 shared pair; the kind's ink colours it)", climb)]
+    for hd, seq in walks.items():
+        ims = []
+        kink = G.INK_NECRO if hd == "NECROMANCER" else G.INK_MUMMY
+        for n, lab in seq:
+            bm = by_new[n]["bm"] if n in by_new else C.load(n)
+            ims.append(F2.label(G.render(bm, S.make_mask(bm, S.OUTLINE), kink), n, lab))
+        if hd == "NECROMANCER":               # the Vampire draws the same walk frames
+            for n, lab in seq:
+                bm = by_new[n]["bm"] if n in by_new else C.load(n)
+                ims.append(F2.label(G.render(bm, S.make_mask(bm, S.OUTLINE), INK_VAMP),
+                                    n, "Vampire $05 " + lab.split()[0]))
+        cyc = "W2 W1 W3 W1" if hd == "NECROMANCER" else "W2 W4 W3 W1"
+        sections.append((f"{hd}  walk cycle {cyc} (1 tick per entry)", ims))
+    for title_s, ims in sections:
+        title = Image.new("RGB", (600, 16), (24, 24, 36))
+        ImageDraw.Draw(title).text((2, 2), title_s, fill=(255, 216, 74))
+        rows_im.append(G.vstack_im([title, G.hstrip(ims, gap=6)], gap=2))
+    G.vstack_im(rows_im).save(SHEET_PNG)
+    print(f"wrote {len(new)} grids + asm, {os.path.relpath(FRAGMENT, REPO)}, "
+          f"{os.path.relpath(SHEET_PNG, REPO)}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

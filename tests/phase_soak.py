@@ -19,10 +19,14 @@ with Harness() as h:
     h.launch(EMU_ARGS)
     p = Proto(h)
     # (hero, proto, seed, depth): depth > 1 = a generated start, then MASTER_SEED := seed and a
-    # level_descend stub to that depth (3F kinds: D4 Spider/Orc/Mummy.., D7 Ogre/DK/Necro..)
+    # level_descend stub to that depth (3F kinds: D4 Orc/Spider/Archer + Ogre, D5 Mummy/Skeleton/Archer,
+    # D7 Orc/Necro/Ghost + DK, D8 Necro/Skeleton/Vampire + Archmage)
     for run, (hero, proto, seed, depth) in enumerate(
             [(0, 1, 1, 1), (1, 1, 2, 1), (0, 0, 3, 1), (1, 0, 4, 1), (0, 0, 5, 1), (1, 0, 6, 1),
-             (0, 0, 7, 4), (1, 0, 8, 4), (0, 0, 9, 7), (1, 0, 10, 7)]):
+             (0, 0, 7, 4), (1, 0, 8, 4), (0, 0, 9, 7), (1, 0, 10, 7),
+             # 3F-T13bc: D5 (Mummy B4 walk, Archer + Skeleton climbers), D8 (Vampire B3 walk);
+             # the forced climbs of Orc / Necro / Archer on D4 / D5 / D7 are tests/climb3f.py
+             (0, 0, 11, 5), (1, 0, 12, 5), (0, 0, 13, 8)]):
         rnd = random.Random(seed)
         p.proto_start = proto
         p.boot(hero=hero, freeze=0)
