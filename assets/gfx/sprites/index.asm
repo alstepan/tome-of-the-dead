@@ -134,7 +134,7 @@
 FRAME_F_MOTION    EQU 1
 FRAME_F_SYMMETRIC EQU 2
 
-; ---- knight: 20 frames, 6996 bytes
+; ---- knight: 20 frames, 6900 bytes
 knight_frames:
         DEFW knight_idle1
         DEFW knight_idle2
@@ -163,7 +163,7 @@ knight_meta:
         DEFB 3,48,0,0        ; knight_walk2           24x48
         DEFB 3,48,0,0        ; knight_walk3           24x48
         DEFB 3,48,0,0        ; knight_walk4           24x48
-        DEFB 5,48,4,0        ; knight_windup          40x48
+        DEFB 4,48,4,0        ; knight_windup          32x48
         DEFB 5,48,4,0        ; knight_slash           40x48
         DEFB 5,48,4,0        ; knight_follow          40x48
         DEFB 4,48,4,0        ; knight_block           32x48
@@ -200,7 +200,7 @@ KNIGHT_POWERSTRIKE_IDX EQU 19
 knight_flags:
         DEFB 0,0,1,1,1,1,0,0,0,0,0,2,2,0,0,1,0,0,0,0
 knight_frame_count EQU 20
-knight_bytes       EQU knight_idle1_len + knight_idle2_len + knight_walk1_len + knight_walk2_len + knight_walk3_len + knight_walk4_len + knight_windup_len + knight_slash_len + knight_follow_len + knight_block_len + knight_hurt_len + knight_climb1_len + knight_climb2_len + knight_dead_len + knight_jump1_len + knight_jump2_len + knight_throw_len + knight_bow_len + knight_whirl_len + knight_powerstrike_len   ; = 6996
+knight_bytes       EQU knight_idle1_len + knight_idle2_len + knight_walk1_len + knight_walk2_len + knight_walk3_len + knight_walk4_len + knight_windup_len + knight_slash_len + knight_follow_len + knight_block_len + knight_hurt_len + knight_climb1_len + knight_climb2_len + knight_dead_len + knight_jump1_len + knight_jump2_len + knight_throw_len + knight_bow_len + knight_whirl_len + knight_powerstrike_len   ; = 6900
 
 ; ---- wizard: 16 frames, 4976 bytes
 wizard_frames:
@@ -258,7 +258,7 @@ wizard_flags:
 wizard_frame_count EQU 16
 wizard_bytes       EQU wizard_idle_len + wizard_walk1_len + wizard_walk2_len + wizard_walk3_len + wizard_walk4_len + wizard_cast1_len + wizard_cast2_len + wizard_idle2_len + wizard_climb1_len + wizard_climb2_len + wizard_hurt_len + wizard_dead_len + wizard_jump1_len + wizard_jump2_len + wizard_staffraise_len + wizard_staffswing_len   ; = 4976
 
-; ---- skeleton: 10 frames, 2986 bytes
+; ---- skeleton: 10 frames, 2794 bytes
 skeleton_frames:
         DEFW skeleton_walk1
         DEFW skeleton_walk2
@@ -277,7 +277,7 @@ skeleton_meta:
         DEFB 3,48,0,0        ; skeleton_walk4         24x48
         DEFB 3,48,0,0        ; skeleton_raise         24x48
         DEFB 4,48,0,0        ; skeleton_cut           32x48
-        DEFB 3,48,0,0        ; skeleton_collapsed     24x48
+        DEFB 3,16,0,-32        ; skeleton_collapsed     24x16
         DEFB 3,48,0,0        ; skeleton_climb1        24x48
         DEFB 3,48,0,0        ; skeleton_climb2        24x48
         DEFB 3,48,0,0        ; skeleton_hurt          24x48
@@ -294,7 +294,7 @@ SKELETON_HURT_IDX EQU 9
 skeleton_flags:
         DEFB 1,1,1,1,0,0,0,2,2,0
 skeleton_frame_count EQU 10
-skeleton_bytes       EQU skeleton_walk1_len + skeleton_walk2_len + skeleton_walk3_len + skeleton_walk4_len + skeleton_raise_len + skeleton_cut_len + skeleton_collapsed_len + skeleton_climb1_len + skeleton_climb2_len + skeleton_hurt_len   ; = 2986
+skeleton_bytes       EQU skeleton_walk1_len + skeleton_walk2_len + skeleton_walk3_len + skeleton_walk4_len + skeleton_raise_len + skeleton_cut_len + skeleton_collapsed_len + skeleton_climb1_len + skeleton_climb2_len + skeleton_hurt_len   ; = 2794
 
 ; ---- goblin: 10 frames, 1930 bytes
 goblin_frames:
@@ -600,4 +600,4 @@ staff_frame_count EQU 1
 staff_bytes       EQU staff_bonk_len   ; = 65
 
 sprites_frame_count EQU 107
-sprites_total_bytes EQU knight_bytes + wizard_bytes + skeleton_bytes + goblin_bytes + ghost_bytes + rat_bytes + bat_bytes + slime_bytes + item_bytes + spark_bytes + firebolt_bytes + frost_bytes + drain_bytes + lightning_bytes + power_bytes + dagger_bytes + arrow_bytes + staff_bytes   ; = 20747 (unshifted, masked, incl. descriptors)
+sprites_total_bytes EQU knight_bytes + wizard_bytes + skeleton_bytes + goblin_bytes + ghost_bytes + rat_bytes + bat_bytes + slime_bytes + item_bytes + spark_bytes + firebolt_bytes + frost_bytes + drain_bytes + lightning_bytes + power_bytes + dagger_bytes + arrow_bytes + staff_bytes   ; = 20459 (unshifted, masked, incl. descriptors)
