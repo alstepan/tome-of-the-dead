@@ -1,0 +1,13 @@
+# gen_art3_options.py — pool per frame (SYM climb 288, WK0 576, WK4 768); packed = ZX0 delta in the kind's SRC6 block
+climbn_1       SYM  pool  288  raw 288  packed +141  ; Orc ink
+climbn_2       SYM  pool  288  raw 288  packed +131  ; mirror
+orc_climb1     SYM  pool  288  raw 288  packed +157  ; cleaver on back
+orc_climb2     SYM  pool  288  raw 288  packed +142  ; mirror
+necro_climb1   SYM  pool  288  raw 288  packed +170  ; robe+staff
+necro_climb2   SYM  pool  288  raw 288  packed +157  ; mirror
+necro_walk3    WK4  pool  768  raw 288  packed +27  ; B3/B4 even
+necro_walk4    WK0  pool  576  raw 288  packed +13  ; B4 passing
+orc_walk3      WK4  pool  768  raw 288  packed +45  ; B3/B4 knee up
+orc_walk4      WK0  pool  576  raw 288  packed +40  ; B4 heel lift
+mummy_walk3    WK4  pool  768  raw 288  packed +61  ; B3/B4 drag
+mummy_walk4    WK0  pool  576  raw 288  packed +52  ; B4 lurch

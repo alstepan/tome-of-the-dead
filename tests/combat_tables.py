@@ -235,8 +235,9 @@ def main():
         for col in ("KT_BW", "KT_BH", "KT_FLAGS"):
             chk(f"kind_tab {col}[{tier}] == base {base}", [kcol(sym[col], tier)], [kcol(sym[col], base)])
         chk(f"tier {tier} ink != base {base} ink", [kcol(sym["KT_ATTR"], tier) != kcol(sym["KT_ATTR"], base)], [True])
-    # climbers: only Goblin / Skeleton (+ tiers) and the heroes (§9.7 R3)
-    CLIMB = {0, 1, 2, 3, 4, 21, 23, 24}
+    # climbers: Goblin / Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
+    # + Orc (Berserker 26, Bouncer 27), Archer (Sniper 28), Necro (Bone Caller 29)
+    CLIMB = {0, 1, 2, 3, 4, 21, 23, 24, 11, 12, 14, 26, 27, 28, 29}
     for k in range(30):
         chk(f"KF_CLIMBER[{k}]", [kcol(sym["KT_FLAGS"], k) & sym["KF_CLIMBER"] != 0], [k in CLIMB])
     # drop_tab: (kind, item, N, k) = "k in N" (§8.11 + §9.6: the base numerator + 1 per tier above 1)
@@ -244,10 +245,12 @@ def main():
     DROPS = [(6, "IT_F_CHEESE", 4, 1), (4, "IT_F_APPLE", 4, 1), (11, "IT_F_MEAT", 3, 1), (12, "IT_ARROW", 2, 1),
              (14, "IT_P_MANA", 3, 1), (18, "IT_F_CHEESE", 4, 2), (19, "IT_F_CHEESE", 4, 3),
              (21, "IT_F_APPLE", 4, 2), (26, "IT_F_MEAT", 3, 2), (27, "IT_F_MEAT", 3, 3),
-             (28, "IT_ARROW", 2, 2), (29, "IT_P_MANA", 3, 2)]
+             (28, "IT_ARROW", 2, 2), (29, "IT_P_MANA", 3, 2),
+             # 3F-T6: the tiers of a base with no drop: a random food (type 0 = Carrot / Apple / Pear) 1 in 4
+             (20, 0, 4, 1), (22, 0, 4, 1), (23, 0, 4, 1), (24, 0, 4, 1), (25, 0, 4, 1)]
     chk("DROP_ROWS", [sym["DROP_ROWS"]], [len(DROPS)])
     for i, (kd, it, n, kk) in enumerate(DROPS):
-        chk(f"drop_tab[{i}]", R6BLK[dt + 4 * i:dt + 4 * i + 4], [kd, sym[it], n, kk])
+        chk(f"drop_tab[{i}]", R6BLK[dt + 4 * i:dt + 4 * i + 4], [kd, sym[it] if isinstance(it, str) else it, n, kk])
 
     rk = at("ab_rank")
     for a, (name, rows) in enumerate(RANKS.items()):

@@ -203,7 +203,8 @@ def spider_bite() -> np.ndarray:
 
 # ===========================================================================
 # ORC (24x48; ink $04): hunched brute, jutting jaw + tusk, pointed ear, belt,
-# cleaver hanging from the front fist.
+# cleaver hanging from the front fist. ART2 (2026-10-29, user): the 1-px strip
+# hanging between the legs under the belt (rows 30-32, x 13) removed.
 # ===========================================================================
 
 ORC_TOP = """
@@ -237,9 +238,9 @@ ORC_TOP = """
 27|...####..#.#.#.#.#.####.
 28|...####..#########.####.
 29|....##...####.####.###..
-30|.........###.#.###..#...
-31|.........###.#.###.####.
-32|.........###.#.###.#####
+30|.........###...###..#...
+31|.........###...###.####.
+32|.........###...###.#####
 33|.........###...###.#####
 34|.........###...###.###.#
 """
@@ -279,35 +280,39 @@ def orc_walk(legs) -> np.ndarray:
     return stack(art(ORC_TOP, 24), art(legs, 24))
 
 
+ORC_ATTACK_HIGH = """
+00|................#..#.##########.
+01|.............#.......#.########.
+02|...........#.........##########.
+03|.....................#........#.
+04|.....................##########.
+05|......................###.......
+06|......................###.......
+07|......................####......
+08|.....................#####......
+09|....................#####.......
+10|...................#####........
+11|..................#####.........
+12|..................####..........
+13|..................###...........
+14|..................###...........
+15|..................###...........
+16|..................###...........
+17|..................###...........
+18|..................##............
+"""
+
+
 def orc_attack() -> np.ndarray:
-    """The chop landing: front arm swung out level, cleaver edge-down ahead,
-    two swing streaks above it."""
+    """ART2 O3 (user-approved 2026-10-29), same 32x48 box: the cleaver (carried
+    low at the hip in the walk) raised over the head and chopping down — blade
+    above the fist, a swing arc of ticks behind the skull."""
     b = np.hstack([orc_walk(ORC_LEGS1), blank(8, 48)])
-    b[15:37, 18:] = False
-    b[15:37] |= art("""
-15|........................##......
-16|..................#####...##....
-17|..................#########.#...
-18|..................###########...
-19|...................##########...
-20|....................######......
-21|.......................#####....
-22|.......................######...
-23|.......................#######..
-24|.......................#######..
-25|........................######..
-26|........................#####...
-27|........................###.....
-28|................................
-29|................................
-30|................................
-31|................................
-32|................................
-33|................................
-34|................................
-35|................................
-36|................................
-""", 32)
+    b[15:29, 18:] = False                                         # old front arm
+    b[29:38, 19:] = False                                         # cleaver at the hip
+    arm = np.zeros_like(b)
+    arm[0:19] = art(ORC_ATTACK_HIGH, 32)
+    put(b, arm, sep=True)
     return b
 
 
@@ -570,22 +575,22 @@ def ogre_walk(legs) -> np.ndarray:
 
 
 def ogre_slam() -> np.ndarray:
-    """SLAM (reach 2): the club smashed into the floor ahead, front arm thrown
-    straight down-forward, floor cracks and chips at the impact."""
+    """ART2 O1 (user-approved 2026-10-29), same 40x48 box: the club comes DOWN on
+    the victim's head — arm thrown up-forward, club head at head height, an arc
+    of swing ticks above the skull, chips off the impact. No floor strike."""
     sh = (48, 40)
     b = ogre_body(sh, OGRE_LEGS1, front_arm=False)
-    put(b, poly(sh, [(21, 14), (28, 26)], w=4), sep=True)        # arm thrown forward
-    put(b, ellipse(sh, 30.0, 28.5, 2.6, 2.6), sep=True)          # fist
-    put(b, poly(sh, [(31, 30), (34, 39)], w=2), sep=True)        # haft
-    put(b, ellipse(sh, 35.0, 42.5, 3.4, 4.2), sep=True)          # head on the floor
-    b[41, 35] = False
-    b[44, 34] = False
-    for x, y in ((39, 45), (38, 42), (31, 44), (39, 39), (30, 41), (37, 38)):
-        b[y, x] = True                                           # chips
-    b[47, 29:40] = True                                          # crack line on the floor
-    b[47, 31] = b[47, 35] = b[47, 38] = False
-    for x, y in ((27, 18), (28, 19), (29, 20), (30, 21), (31, 18), (32, 19), (33, 20)):
-        b[y, x] = True                                           # swing streaks
+    for x, y in ((14, 0), (17, 0), (20, 0), (23, 1), (26, 1), (29, 2), (31, 3),
+                 (33, 4), (12, 1), (24, 0), (28, 0), (32, 1)):
+        b[y, x] = True                                            # swing arc above the head
+    put(b, poly(sh, [(21, 14), (28, 10)], w=4), sep=True)         # arm thrown up-forward
+    put(b, ellipse(sh, 30.5, 11.0, 2.6, 2.6), sep=True)           # fist
+    put(b, poly(sh, [(32, 9), (34, 6)], w=2), sep=True)           # haft
+    put(b, ellipse(sh, 36.0, 5.5, 3.6, 4.6), sep=True)            # club head (coming down)
+    b[4, 36] = False                                              # knots
+    b[7, 35] = False
+    for x, y in ((39, 13), (38, 15), (36, 14)):
+        b[y, x] = True                                            # chips off the impact
     return b
 
 
@@ -837,13 +842,13 @@ NOTE_TEXT = {
     "SPIDER": "Body 32x16, ink $05 (proposal; Black Widow tier $02). WALK 1 = rest (MOT), "
               "WALK 2 (WK0), BITE 40x16 ax 0 (lunges onto the front legs, fangs out).",
     "ORC": "Body 24x48, ink $04 (proposal; tiers $02/$03). §9.7 R3: 3 frames. WALK 1 = rest, "
-           "WALK 2, ATTACK 32x48 (cleaver swung level at head height). Walker, no climb.",
+           "WALK 2, ATTACK 32x48 (ART2: cleaver raised overhead, chopping down). Walker, no climb.",
     "NECROMANCER": "Body 24x48, ink $03 (proposal; Bone Caller $06). Vampire and Archmage are "
                    "drawn with these frames in their own inks. CAST 32x48: arm out under a dark spark.",
     "MUMMY": "Body 24x48, ink $06. Bandage bands = paper lines. ATTACK 32x48: arms thrust "
              "out for the grab.",
-    "OGRE": "Ogre Warlord (unique), body 32x48, ink $44 (proposal). SLAM 40x48: club "
-            "smashed into the floor ahead (reach 2). RAISE / HURT dropped (lean set).",
+    "OGRE": "Ogre Warlord (unique), body 32x48, ink $44 (proposal). SLAM 40x48 (ART2): club "
+            "brought down at head height (reach 2). RAISE / HURT dropped (lean set).",
     "DEATH KNIGHT": "Unique, body 24x48, ink $47. Horned crowned helm, greatsword carried "
                     "upright. CLEAVE 40x48 (ax 4): the chop down to the floor. BLOCK 32x48 "
                     "(ax 4): blade crosswise, parry (kept: §9.7 R5 item 7 is last resort).",
@@ -1027,6 +1032,10 @@ def check_rows(b, rows):
                     raise SystemExit(f"{b['name']}: mask mismatch at ({x},{y})")
 
 
+ART23_FRAMES = ("orc_raise", "ogre_raise", "vamp_bite", "small_corpse", "necro_walk3",
+                "mummy_walk3", "mummy_walk4", "climb_h1", "climb_h2", "dk_walk3")
+
+
 def write_index_3f() -> None:
     """assets/gfx/sprites/index_3f.asm: the INCLUDEs of this tool's frames (sources only: the
     packer reads them; no <char>_frames / _meta tables, unread by the engine). index.asm
@@ -1037,6 +1046,10 @@ def write_index_3f() -> None:
          "; (tools/zx0_pack.py index_names) reads these includes; no tables."]
     for hd, cap, _fn, _ink in FRAMES:
         L.append(f'        INCLUDE "{S.CHAR_PREFIX[hd]}_{S.slug(cap)}.asm"')
+    L.append("; ART2 / ART3 final frames (tools/gen_art2_final.py / gen_art3_final.py own the .asm files;")
+    L.append("; wired by 3F-T13bc: src/frames.asm FRM rows)")
+    for n in ART23_FRAMES:
+        L.append(f'        INCLUDE "{n}.asm"')
     with open(os.path.join(SPR, "index_3f.asm"), "w") as f:
         f.write("\n".join(L) + "\n")
 

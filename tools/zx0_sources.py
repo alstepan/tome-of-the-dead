@@ -68,7 +68,7 @@ OUT6 = os.path.join(REPO, "build/zx0/src6_zx0.asm")
 # FRM kinds whose packed sources live in the bank-6 SRC6 region (3F art goes
 # here; 3F-T13: the 3F-A1 lean set + the two shared groups G_DEADH / G_NBOLT).
 # SRC6_KINDS in the environment overrides (test builds; it REPLACES the set).
-SRC6_KINDS = {"K_SPIDER", "K_ORC", "K_NECRO", "K_MUMMY", "K_OGRE", "K_DKNIGHT",
+SRC6_KINDS = {"K_SPIDER", "K_ORC", "K_NECRO", "K_MUMMY", "K_OGRE", "K_DKNIGHT", "G_CLIMBH",
               "G_DEADH", "G_NBOLT"}
 if os.environ.get("SRC6_KINDS") is not None:
     SRC6_KINDS = {k.strip() for k in os.environ["SRC6_KINDS"].split(",") if k.strip()}

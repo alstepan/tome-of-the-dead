@@ -162,7 +162,10 @@ set_reaction_at:
                 ret  z                         ; death sticks
                 ld   a, c
                 cp   RC_BLOCK
+                jr   z, .blk
+                cp   RC_PARRY                  ; 3F-T13bc: a parry flash never downgrades either
                 jr   nz, .set
+.blk:
                 ld   a, (ix+E_REACT)
                 cp   RC_DODGE                  ; T7: a pending missile dodge is no real
                 jr   z, .set                   ; reaction: a BLOCK replaces it

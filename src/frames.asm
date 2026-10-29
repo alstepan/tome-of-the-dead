@@ -117,8 +117,10 @@ KFID_RAT = FCTR
                 FRM rat_run2,       K_RAT, 32, WK0
                 FRM rat_bite,       K_RAT, 32, STA
                 FRM rat_hurt,       K_RAT, 32, STA
-KFID_RATDEAD = FCTR                     ; 3F-T13: unit U_DEADR (the Rat's and the Spider's DEAD)
-                FRM rat_dead,       K_RAT, 32, STA
+KFID_RATDEAD = FCTR                     ; 3F-T13: unit U_DEADR (the Rat's and the Spider's DEAD);
+                ; 3F-T13bc: the NEUTRAL small-animal corpse (ART2 C2) replaces rat_dead for the
+                ; Rat / Spider / Giant Rat / Brood Rat (+ tiers); symmetric: one pool facing
+                FRM small_corpse,   K_RAT, 32, STA|SYM
 KFCNT_RAT = FCTR - KFID_RAT
 
 KFID_BAT = FCTR
@@ -158,28 +160,43 @@ KFCNT_SPIDER = FCTR - KFID_SPIDER
 KFID_ORC = FCTR
                 FRM orc_walk1,      K_ORC, 24, WK0
                 FRM orc_walk2,      K_ORC, 24, WK4
+                FRM orc_raise,      K_ORC, 24, STA      ; 3F-T13bc ART2: the wind-up before ATTACK
                 FRM orc_attack,     K_ORC, 24, STA
 KFCNT_ORC = FCTR - KFID_ORC
+                ; 3F-T13bc: the Necro frames split into walk / cast / bite groups (units K_NECRO =
+                ; walk1..3, U_NCAST, U_VBITE: the Vampire draws walk + bite, the Necro / Archmage /
+                ; Bone Caller walk + cast). Walk B3 = MOVECYC4 walk2, walk1, walk3, walk1 (ART3):
+                ; walk3 is the second WK4 stride. Order walk1..3, cast (packs best: ART3 note)
 KFID_NECRO = FCTR
                 FRM necro_walk1,    K_NECRO, 24, WK0
                 FRM necro_walk2,    K_NECRO, 24, WK4
-                FRM necro_cast,     K_NECRO, 24, STA
+                FRM necro_walk3,    K_NECRO, 24, WK4
 KFCNT_NECRO = FCTR - KFID_NECRO
+KFID_NCAST = FCTR
+                FRM necro_cast,     K_NECRO, 24, STA
+KFID_VBITE = FCTR
+                FRM vamp_bite,      K_NECRO, 24, STA    ; ART2 V1: the Vampire's drain bite
+                ; 3F-T13bc ART3 B4: MOVECYC4 walk2, walk4, walk3, walk1 (walk3 drags the back foot,
+                ; walk4 lurches); frame order walk1..4, attack = the 4 + 1 block split (+140 B packed)
 KFID_MUMMY = FCTR
                 FRM mummy_walk1,    K_MUMMY, 24, WK0
                 FRM mummy_walk2,    K_MUMMY, 24, WK4
+                FRM mummy_walk3,    K_MUMMY, 24, WK4
+                FRM mummy_walk4,    K_MUMMY, 24, WK0
                 FRM mummy_attack,   K_MUMMY, 24, STA
 KFCNT_MUMMY = FCTR - KFID_MUMMY
 KFID_OGRE = FCTR
                 FRM ogre_walk1,     K_OGRE, 32, WK0
                 FRM ogre_walk2,     K_OGRE, 32, WK4
+                FRM ogre_raise,     K_OGRE, 32, STA     ; 3F-T13bc ART2 O2: the wind-up before SLAM
                 FRM ogre_slam,      K_OGRE, 32, STA
 KFCNT_OGRE = FCTR - KFID_OGRE
 KFID_DKNIGHT = FCTR
                 FRM dk_walk1,       K_DKNIGHT, 24, WK0
                 FRM dk_walk2,       K_DKNIGHT, 24, WK4
+                FRM dk_walk3,       K_DKNIGHT, 24, WK4  ; 3F-T13bc ART4: B3 walk W2 W1 W3 W1 (2nd WK4 stride)
                 FRM dk_cleave,      K_DKNIGHT, 24, STA
-                FRM dk_block,       K_DKNIGHT, 24, STA
+                ; 3F-T13bc: dk_block retired (a parry = the rest pose + the RC_PARRY flash, anim)
 KFCNT_DKNIGHT = FCTR - KFID_DKNIGHT
                 ; shared units with no kind of their own (G_* = zx0 block groups; defs.asm BH_G_*)
 KFID_DEADH = FCTR                       ; the shared humanoid DEAD (body 24; the Ogre draws it too)
@@ -189,6 +206,10 @@ KFID_NBOLT = FCTR                       ; the Necro / Archmage bolt (FX-style: c
                 FRM nbolt_fly2,     G_NBOLT, 8, STA
                 FRM nbolt_hit,      G_NBOLT, 8, STA
 KFCNT_NBOLT = FCTR - KFID_NBOLT
+KFID_CLIMBH = FCTR                      ; 3F-T13bc ART3 A1: the shared humanoid climb pair (Orc /
+                ; Necro / Archer families: unit U_CLIMBH, one per level; drawn in the kind's ink)
+                FRM climb_h1,       G_CLIMBH, 24, STA|SYM
+                FRM climb_h2,       G_CLIMBH, 24, STA|SYM
 POOL_F3 = POOLACC
 KFCNT_MONSTERS = FCTR - KFID_MONSTERS
 

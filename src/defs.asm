@@ -55,7 +55,7 @@ R6_ADDR         EQU $10000 - R6_LEN ; $DD00
 ; key stays unique and no FD_FLAGS bit is spent. Its tape bytes ride on the
 ; boot block's tape block (BOOT6_TAPE_LEN, main.asm).
     IFNDEF SRC6_PAGES
-SRC6_PAGES      EQU 10              ; 3F-T13: the 3F-A1 sources (8 blocks, 2,393 B packed; was 1 = the spike's Spider stand-in)
+SRC6_PAGES      EQU 13              ; 3F-T13bc: 10 -> 13 (+ the ART2 / ART3 frames, 12 blocks, 3,173 B, dk_block out); 3F-T13: the 3F-A1 sources (8 blocks, 2,393 B packed; was 1 = the spike's Spider stand-in)
     ENDIF
     IFNDEF SRC6_STANDIN
 SRC6_STANDIN    EQU 0               ; bit mask of the zx0_sources.py stand-in groups assembled into SRC6 (3F-T13: none, the real art replaced them)
@@ -279,11 +279,16 @@ P_ENTITIES      EQU $B000           ; 16 slots x 32 B = 512 B ($B000..$B1FF)
 P_ENT_STRIDE    EQU 32
 P_MAX_ENT       EQU 16
 FRT_STRIDE      EQU 16
-FRT_MAX         EQU 128             ; 3F-T2: 160 -> 128 (+512 B bank 2): 101 used + the
-                                    ; 23 lean 3F frames (plan 3F A1) = 124; A6: was 160
-FRT             EQU P_ENTITIES - FRT_MAX * FRT_STRIDE   ; $A800..$AFFF (3F-T2; was $A600): frame runtime
+FRT_MAX         EQU 132             ; 3F-T13bc: 128 -> 132 (FRT page-aligned: FRT_GAP; -20 B low-RAM reserve):
+                                    ; 132 used (ART2 / ART3 / ART4 frames +9, dk_block -1), 0 spare (the
+                                    ; next fid needs FRT_MAX 133+); 3F-T2: 160 -> 128; A6: was 160
+FRT             EQU (P_ENTITIES - FRT_MAX * FRT_STRIDE) & $FF00   ; page-aligned (blit_sprite's nibble swap):
+                                    ; 3F-T13bc $A700..$AF3F + FRT_GAP; 3F-T2 $A800..$AFFF; frame runtime
                                     ; table, 16 B/fid (4 variants x bank,lo,hi + 4 pad);
                                     ; directly below ENTITIES, the image ends below it
+FRT_GAP         EQU P_ENTITIES - (FRT + FRT_MAX * FRT_STRIDE)   ; 3F-T13bc: free bank-2 RAM
+                                    ; between the FRT and ENTITIES (192 B, $AF40..$AFFF): runtime
+                                    ; only, nothing allocated there yet (docs/memory-map.md)
 BANK2_FREE      EQU $B200           ; A6: vacated old FRT ($B200..$B7FF, 1,536 B):
 BANK2_FREE_END  EQU SLOTREC         ;     free bank-2 runtime RAM (docs/memory-map.md)
 SLOTREC         EQU $B800           ; A7b: per-slot render record, 16 B per slot ($B800..$B8FF,
@@ -556,6 +561,9 @@ RC_HURT         EQU 1
 RC_BLOCK        EQU 2
 RC_DEATH        EQU 3
 RC_DODGE        EQU 4               ; T7: a missile missed it: no sequence, the ATTR_MISS flash at E_REACTAT
+RC_PARRY        EQU 5               ; 3F-T13bc: the Death Knight parried: no sequence (the rest pose),
+                                    ; the ATTR_PARRY flash at E_REACTAT (anim .dodge; was RC_BLOCK + dk_block)
+                ASSERT RC_PARRY == RC_DODGE + 1 && RC_DEATH < RC_DODGE && RC_BLOCK < RC_DODGE
 
 ; R_DIRTY classes
 DIRTY_NONE      EQU 0
@@ -697,6 +705,7 @@ BH_K_OGRE       EQU 6
 BH_K_DKNIGHT    EQU 6
 BH_K_ARCHMAGE   EQU 6
 BH_G_DEADH      EQU 2               ; 3F-T13 frame groups with no kind (frames.asm FRM ASSERT only):
+BH_G_CLIMBH     EQU 6               ; 3F-T13bc: the shared humanoid climb pair (24x48)
 BH_G_NBOLT      EQU 2               ; the shared humanoid DEAD (40x16), the Necro bolt (<= 16 px)
 BH_K_FXW       EQU 2               ; D3-4: FX frames are <= 16 px tall (FRM ASSERT only)
 BH_K_FXM        EQU 2
@@ -795,7 +804,7 @@ KS_STRIDE       EQU 17
 ; page), KS_STRIDE each; the sequence bytes they point to: SEQ_BYTES.
 SQ_SLOTS        EQU 7               ; hero + <= 6 monster blocks (PROTO: all 6 original kinds)
 SQ_ROWS_LEN     EQU SQ_SLOTS * KS_STRIDE
-SEQB_LEN        EQU 256             ; SEQ_BYTES: >= hero + the level's blocks (ASSERTed per depth)
+SEQB_LEN        EQU 288             ; 3F-T13bc: 256 -> 288; SEQ_BYTES: >= hero + the level's blocks (ASSERTed per depth)
 ; master block (the unpacked image at SQ_IMG): KSM_LEN (sequence bytes n),
 ; KSM_IMP (= KS_IMPACT), KSM_OFF + 8 offsets (KS_IDLE..KS_DEATH order) from
 ; KSM_SEQ, then the n sequence bytes (position-independent: no pointer inside)
@@ -845,6 +854,8 @@ FOLLOW_MAX      EQU 2
 ROOM_CAP        EQU 4               ; monsters per room (on-screen cap)
 TALL_CAP        EQU 2
 FLASH_TICKS     EQU 2
+PARRY_FLASH     EQU 3               ; 3F-T13bc: the Death Knight parry flash (3 ticks of ATTR_PARRY, as MISS_FLASH: the hero overlaps the DK's columns; review 2026-10-29)
+ATTR_PARRY      EQU $46             ; bright yellow (= ATTR_MISS): visible on the DK's $47 body
 MISS_FLASH      EQU 3               ; T7: dodge flash ticks (the 1-cell/tick arrow crosses a 3-cell body)
 EXIT_NONE       EQU $FF
 TICK_FRAMES     EQU 2               ; 25 Hz

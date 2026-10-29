@@ -240,9 +240,9 @@ deal_hit:
                 ld   a, l
                 or   a
                 jr   z, .np
-                ld   a, (ix+E_KIND)            ; only the Death Knight has a BLOCK frame
-                cp   K_DKNIGHT
-                ld   c, RC_BLOCK
+                ld   a, (ix+E_KIND)            ; only the Death Knight shows a parry: 3F-T13bc the
+                cp   K_DKNIGHT                 ; RC_PARRY flash (the BLOCK frame is gone)
+                ld   c, RC_PARRY
                 call z, set_reaction_at
                 ld   ix, (ATK_PTR)
                 ld   hl, $0100                 ; L = 0 lost, H = 1: parried (do_attack / melee_hit read H)

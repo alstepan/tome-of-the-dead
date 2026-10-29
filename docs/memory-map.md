@@ -227,6 +227,9 @@ ASSERT) and must keep `LOW R6_ADDR` = 0.
 
 ### SRC6 region (SRC6 spike 2026-10-27; 3F memory plan, `feat/src6-spike`)
 
+**3F-T13bc:** `SRC6_PAGES` default **13** (`$D000..$DCFF`): 12 blocks (+ `G_CLIMBH`, the ART2 /
+ART3 / ART4 frames; `dk_block` out), 8,736 raw → **3,231 B packed, 97 free**; boot block
+`$C863..$CFFF` ("ART2 / ART3 / ART4 wiring (3F-T13bc)").
 **3F-T13 (as built, kit build):** `SRC6_PAGES` default **10** (`$D300..$DCFF`, 2,560 B), holding
 the real 3F-A1 art: `SRC6_KINDS` = `K_SPIDER K_ORC K_NECRO K_MUMMY K_OGRE K_DKNIGHT G_DEADH
 G_NBOLT` (`G_*` = frame groups with no kind: `defs.asm` `BH_G_*`), 8 blocks, 6,240 raw → **2,393 B
@@ -433,7 +436,7 @@ in R6** and a **per-level cache in bank 2** (was: every kind's 17-B
 * **Build check** (main.asm "SEQ CACHE NEED", after OVERLAYS, final pass,
   from the raw image bytes): per depth (`lp_dtab`) and for PROTO, the
   distinct blocks ≤ `SQ_SLOTS` − 1 and the largest hero block + their bytes
-  ≤ `SEQB_LEN`. Today: **hero 49 + monsters 204 (PROTO) = 253 of 256** (3F-D7LEV), ≤ 6
+  ≤ `SEQB_LEN`. Today: **hero 49 + monsters 204 (PROTO) = 253 of 288** (3F-T13bc: `SEQB_LEN` 256 → 288; the build DISPLAYs every depth: D1..D8 177..207, D4 the worst level 207; was 253 of 256 after 3F-D7LEV), ≤ 6
   blocks. 3F (T3) raises `SEQB_LEN` as it adds blocks (each byte = 1 B bank
   2; expect ~+40 B for the worst 3F level's larger blocks).
 * Tests: `tests/frames_phase.py` reads the masters from `build/ovl/seq.bin`;
@@ -495,7 +498,7 @@ Orc / Archer / Mummy / Necro / Ogre / Death Knight / Archmage → the Skeleton u
 (`ksm_tab`) and range (`gu_tab`). `KT_BW` / `KT_BH` are the stand-in body (`defs.asm` `BH_K_*`;
 Ogre 4 cols and the real heights are T13's), `KT_ATTR` inks are provisional (tiers per §9.6,
 bases differ from them). The seq cache holds one slot per **block**, so a D-level needs <= 3 slots
-(Rat / Skeleton / Bat ...): `SEQB_LEN` stays 256 (PROTO still the 251 B worst; T13 grows it).
+(Rat / Skeleton / Bat ...): `SEQB_LEN` stays 256 (PROTO still the 253 B worst after 3F-D7LEV; 3F-T13bc grew it to 288).
 
 **PROTO fixture (T2 input "shrink it")**: the 21 names add 192 B of text (see below), which took the
 PROTO 6-kind pool bound 23 B over `POOL_CAP`. `proto_start` is now a bit field: **bit 0 = PROTO rooms,
@@ -673,6 +676,88 @@ raw (`gh_fly` +4, Ghost KS_CLIMBREST = `gh_idle + 1` −2), seq cache need 251 �
 | bank 1 free | 91 | **99** | +8: the Skeleton reorder packs 8 B smaller |
 | low RAM spare | 43 | 43 | `fdesc_tab` +115 B came out of the `FRT_MAX` descriptor reserve (135 → 20); the cold block now starts at `$6F71`: the test-stub area `LOWRAM_END_3B` (`$6F32`) .. `lowram_code` is **63 B** (was 178; `tests/world.py` W17's decode buffer moved to `PAGE_MAP_SAVE` + 64) |
 | bank 3 / bank 7 / AY slot | 10 / 27 (72) / 169 | unchanged | 0 |
+
+### ART2 / ART3 / ART4 wiring (3F-T13bc, `feat/3f-t13bc`)
+
+The user-approved ART2 (`feat/3f-art2-final`), ART3 (`feat/3f-art3-final`) and ART4
+(`feat/3f-art4-dk`) frames, the new climbers and ARCHER-DEPTHS H1.
+* **Frames** (`src/frames.asm`, 124 → **132 fids**, `FRT_MAX` 128 → **132**, 0 spare):
+  `small_corpse` (STA|SYM, 32×16) replaces `rat_dead` in place (fid / unit `U_DEADR`
+  unchanged: Rat, Spider + tiers); `orc_raise` (Orc: walk1, walk2, raise, attack);
+  Necro split: `necro_walk1..3` (= the `K_NECRO` unit), `necro_cast` (`U_NCAST`), `vamp_bite`
+  (`U_VBITE`); Mummy walk1..4, attack (the 4 + 1 block order); `ogre_raise` (walk1, walk2,
+  raise, slam); `dk_walk3`, **`dk_block` removed**; `climb_h1` / `climb_h2` (group `G_CLIMBH`,
+  `BH_G_CLIMBH` 6, unit **`U_CLIMBH`**) after `nbolt_*` (the monster range ends there,
+  ASSERTed). Orc ATTACK / Ogre SLAM / Orc walk1/2 are redrawn in place by the art branch.
+* **Units / map** (R6 `pool6.asm`): new `U_CLIMBH` (K_MAX + 7), `U_NCAST` (+ 8), `U_VBITE`
+  (+ 9); `pool_gmap` 13 → 17 records (52 B): Vampire → Necro walk + `U_VBITE` + `U_DEADH`;
+  Orc / Archer / Necro → + `U_CLIMBH` (one shared group, generated once per level: dedup per
+  unit); Necro / Archmage → + `U_NCAST`. A duplicate `LP_KINDS` entry (D7: two Necros) is one
+  unit set (pl_unit dedups by fid0, the build macro ORs a mask, sq_load dedups by block).
+* **Sequences** (`seq_img.asm`, raw 713 → 781 B, 136 B left in the `SQ_IMG` window; packed
+  422 → 458 B): own blocks per kind (the `KSM3F` macro is gone): Orc RAISE 3 → ATTACK 2 +
+  IMPACT, Ogre RAISE 3 → SLAM 2 + IMPACT (same timing as before: `KS_IMPACT` 3), Vampire
+  `ksm_vp` (Necro walk B3 + `vamp_bite`; was `ksm_ne`), Necro / Vampire / DK `MOVECYC4 walk2,
+  walk1, walk3, walk1`, Mummy `MOVECYC4 walk2, walk4, walk3, walk1`; climbers (Orc, Necro,
+  Archer blocks, so their tiers too) `KS_CLIMB` = `CLIMBCYC climb_h1, climb_h2`,
+  `KS_CLIMBREST` = that cycle + 1 (one byte read = `climb_h1`, ASSERTed STA); DK `KS_BLOCK` =
+  its HURT seq (never started: see parry).
+* **Climbers** (`main.asm` KROW `KT_FLAGS`): `KF_CLIMBER` for Orc 11, Archer 12, Necro 14,
+  Berserker 26, Bouncer 27, Sniper 28, Bone Caller 29 (not Vampire / Archmage / DK / Ogre /
+  Mummy / Ghost). No AI change (turn3 `.seek` / bank-7 follow read only the flag);
+  `tools/levelgen.py` `CLIMBERS` (checked by `tests/lp.py` A0), `tests/combat_tables.py`.
+* **ARCHER-DEPTHS H1** (user): `lp_dtab` D7 = Orc, **Necro**, Ghost, Necro (+ DK): no Archer
+  on D7 (no Archer units, no Mage arrows there); `tools/levelgen.py` LP_TAB the same byte.
+  The Archer 2-frame walk / unit split (architect L1) is DROPPED: the Archer keeps the
+  Skeleton walk on D4 / D5 and climbs on the shared pair (D5: +576 B pool, slack is ample).
+* **Death Knight parry** (no BLOCK frame): `deal_hit` sets **`RC_PARRY`** (5) instead of
+  `RC_BLOCK`; `anim_entity .rest` starts it like `RC_DODGE` — no sequence (the rest pose),
+  `E_FLT` = `PARRY_FLASH` 1, `E_FLA` = `ATTR_PARRY` `$46` (+6 B bank 2); `set_reaction_at`
+  treats it as BLOCK for the never-downgrade rule (+4 B bank 3). The PARRIES line is unchanged.
+* **FRT / bank 2**: `FRT` must be page-aligned (`blit_sprite` nibble swap), so `FRT_MAX` 132
+  puts it at `$A700..$AF3F` (−256 B from the image's room); the 192 B above it to
+  `P_ENTITIES` are **`FRT_GAP`** (runtime) and now hold **`seq_rows`** (119 B, `$AF40..`,
+  one page, were zeros in the `kind_tab` ALIGN pad), 73 B free. `SEQB_LEN` 256 → 288.
+
+| Depth (lp_dtab + boss) | need Warrior before → after | need Mage before → after |
+|---|---|---|
+| D1 Rat Bat Slime Goblin | 27,520 → 27,392 | 23,392 → 23,264 |
+| D2 Goblin Spider Bat Rat | 26,976 → 26,848 | 22,848 → 22,720 |
+| **D3** Skeleton Vampire Ghost Bat | 31,456 → **32,224** (worst) | 27,264 → 28,032 |
+| D4 Orc Rat Spider Archer + Ogre | 29,792 → 31,776 | 25,728 → 27,712 |
+| D5 Mummy Skeleton Archer Spider | 28,000 → 29,792 | 23,936 → 25,728 |
+| D6 Vampire Ghost Necro Orc | 26,080 → 28,960 | 21,888 → 24,768 |
+| D7 Orc **Necro** Ghost Necro + DK | 32,992 → 31,456 | 28,928 → 27,264 |
+| D8 Necro Skeleton Ghost Vampire + Archmage | 29,728 → 31,840 | 25,536 → 27,648 |
+
+`POOL_CAP` 34,980 → **34,212** (SRC6 10 → 13 pages), `POOL_NEED` **32,224 (D3 Warrior),
+slack 1,988** (D7 2,756). PROTO fixture
+35,840 → 35,712 of 37,540. Asserted per level in `tests/zx0_pool.py` `LEVEL_NEED`.
+
+| Region (`-DDEBUG_KIT=0` build) | Before (main `b92ee7b`) | After 3F-T13bc | Δ |
+|---|---|---|---|
+| bank 2 free (to `FRT` + pad) | 293 + 215 = **508** | 261 + 40 = **301** (+ 73 in `FRT_GAP`) | −207: `FRT` page step −256 (192 back as `FRT_GAP`, 119 of it `seq_rows` moved out of the pad), `frame_tab` +32, `SEQB_LEN` +32, anim +6 |
+| SRC6 | 10 pages, 2,394 B used, 166 free | **13 pages, 3,231 used, 97 free** | 12 blocks (+ `G_CLIMBH`, the new frames; `dk_block` out) |
+| R6 free | 515 | **461** | −54: `pool_gmap` +12, `gu_tab` +6, `sqm_zx0` +36 |
+| bank 3 free to `AY_RESERVE` | 106 | **102** | −4 (`set_reaction_at` RC_PARRY) |
+| bank 1 free | 99 | **111** | +12 (`rat_dead` → the smaller `small_corpse` block) |
+| low RAM spare | 37 | **17** | −20: +8 descriptors (40 B) out of a reserve 20 → 0 |
+| bank 7 / AY slot | 53 / 169 | unchanged | 0 |
+
+Ticks (work, cap 126,000): the PROTO budget suite unchanged or lower except Lightning
+FROZEN-1 118,015 → 119,766 (worst gated); `pmix` 116,906 → 109,064; `tmix` 119,052 (the
+Berserker kept non-climbing there: in rooms A-D it animates on the HERO's uncached sequence
+row, Knight frames, so a climbing stand-in measured 128,300 — not a real cost). On a generated
+level (scratch scripts, same seed vs main): D4 Knight vs Ogre RAISE/SLAM + Orc RAISE/ATTACK +
+Rat + Spider worst 110,637 (= main; mean +5.5k: the raise frames), D7 Orc + Necro climbing to
+the hero + Ghost worst 109,688 (main 109,713). Tests: `tests/climb3f.py` (C1-C5: Orc / Archer
+on D4, Orc / Necro on D7, Archer + Skeleton on D5 climb on their climb art, Vampire / Mummy
+never leave their storey, traps 0), `tests/tier6.py` P2 / P2b (RC_PARRY + the flash),
+`tests/phase_soak.py` + D5 / D8 runs, `tests/world.py` W17 stubs moved to `GEN_SRC` + `$240`
+(17 B left below `lowram_code`), `tests/zx0_pool.py` src6 variant 21 pages.
+**Resolved (manager):** `ATTR_PARRY` was `$47` = the Death Knight's own `KT_ATTR`
+`$47` (invisible): now **`$46`** (bright yellow), 1 tick, on the DK's own cells (cells it shares
+with an overlapping hero take the last-drawn body's attr).
 
 ### Overlays (3E-T1) — `ovl_run`, the GEN_SCRATCH window; screen-2 window contract
 
@@ -1217,7 +1302,7 @@ outweighing the +8 T per redrawn background cell of the 64-id glyph address.)
 | Range | Symbol | Contents |
 |-------|--------|----------|
 | `$8000..$A4DB` (+ `seq_bytes` to `$A5DB`) | `image_start`…`code_end` | **3F-T2 (MEM-3F): `$8000..$A4DB`, 9,435 B; then `seq_bytes` 256 B (runtime only, not on tape: the sequence cache's bytes, "Sequence cache (3F-T2)"); free to `FRT` (`$A800`) 549 B + 126 B `kind_tab` ALIGN pad = **675 B** (was 13 + 36 = 49): `FRT_MAX` 160 → 128 +512, the kind sequences / `kind_seqs` / `kind_rest` out (−455) for the cache (`seq_rows` 119 B in the pad + `seq_bytes` 256) +80, `kind_tab` −24 (`KT_FID0` / `KT_FCNT` → R6 `gu_tab`, `KT_MOD9` / `KT_DIV9` moved up, `KT_END` `$1D0` → `$1B8`), `kind_seq_ptr` / anim callers −8. `kind_tab` stays `$A100`.** Before: HOT code + static tables (3E-T0: `$A5E3` -> `$A5EE`, 9,710 B; free to `FRT` 29 -> 18 B, the `kind_tab` ALIGN pad unchanged 85 B: `sfx_msg` +11 B after `kind_tab`; SND-4a: low-RAM cold block spare 131 → 118 B (−13 in `level_descend` / `level_enter`; `stinger_wait` in bank 1, 412 B free); **SND-5b: `$8000..$A5E3`, 9,699 B incl. the pad; 29 B to `FRT` + 85 B `kind_tab` ALIGN pad (was 136: `mv_sfx` 48 B + its `call` 3 B in `logic.asm`)** (`bars_draw` 96 + `num2` 35 moved from the end of `panel2.asm` to `src/bars2.asm` after `kind_tab`: 131 B more pad for new hooks BEFORE `kind_tab`, the total bank-2 free (165 B) unchanged; `kind_tab` stays `$A100`); SND-1: `$8000..$A560`, 9,568 B; 160 B to `FRT` + 5 B `kind_tab` ALIGN pad** (+8 before `kind_tab`: `sample_input` `call snd_scan`, `intent_tick` `bit SC_SOUND, e` / `call nz, snd_hot`; +17 after: `snd_scan` / `snd_hot` in `sfx2.asm`; 5 B of pad left: the next bank-2 byte before `kind_tab` beyond that moves it a page); SND-5: `$8000..$A54E`, 9,550 B; 178 B to `FRT` + 13 B `kind_tab` ALIGN pad — 14 more bank-2 bytes BEFORE `kind_tab` move it a page (+256): +24 before it (`fx.asm` `call fx_imp_sfx` + the bounce request, its two `jr` → `jp`; `anim.asm` the two LAND requests), +87 after (`src/sfx2.asm` `sfx_req` (+ the `SFX_NEXT` loser rule) / `sfx_msg` (12-entry table) / `sfx_abl` (9-entry table) / `fx_imp_sfx`); D3-9b: `$8000..$A4D4`, 9,428 B; 300 B to `FRT` + 41 B pad; `kind_tab` stays `$A100`** (+17 B before `kind_tab`: `icon_poll`'s MP poll 13, `panel_more`'s PD_MP test; +39 B after `mark.asm`: `src/xp2.asm` — `xpn_tab` (XP_NEXT, 16 B, **the single table**, read by bank-7 `xp_turn` and bank-1 `item_info`) + `item_mp` (MP bar + number); **the heroes' `KT_ATK` / `KT_EVA` columns (ids 0 / 1) are runtime state**: `xp_turn` adds the §4.1 L4 / L8 atk and L6 eva steps there (0 T per to-hit roll), `hero_st_init` writes back `KN_ATK` / `WZ_ATK` / `KN_EVA` / `WZ_EVA` (main.asm) on a new game). **D3-8d: `$8000..$A49C`, 9,372 B; 356 B to `FRT` + 165 B pad; `kind_tab` stays `$A100`** (+460 B: `src/mark.asm` after the kind arrays (`kind_tab + KT_END` = `$A2D0`: `mark_tick`, `mk_slot` (+ the review fixes: damage test past the op cap, the `MK_WAIT` retry gate), `mk_rec` / `mk_cb(de)` / `mk_bit`, 4 B scratch); +31 B before `kind_tab` (pad 196 → 165): `cell_occ`'s mark-map test 14, `idle_phase`'s HOLD test 12, the `decor_gate` call 3). **D3-8b: `$8000..$A2CF`, 8,912 B; 816 B to `FRT` + 196 B pad; `kind_tab` `$A000` → `$A100`** (+206 B over D3-8f: `src/drip.asm` 201 — `drip_tick` (TP_FIRE exit, cover test, gates, the fall step with its row-17 guard), `drip_erase`, `drip_draw`, the 3 glyphs 22 B — `cell_occ` (decor_tick's inline occupancy loop made a shared routine, +3 net), `decor_gate` +2. Pad history: the D3-8f build reported 146 B of pad before `kind_tab` (the D3-8 figure below, 167 B, was not re-measured after D3-8c..f); the code grew past it, so `kind_tab` moved a page). **D3-8: `$8000..$A1CF`, 8,656 B; 1,072 B to `FRT` + 167 B pad; `kind_tab` `$9F00` → `$A000`** (+~140 B: the render tint, `st_tint`, `st_sig`). **D3-S2: `$8000..$A0CF`, 8,400 B; headroom 1,328 B to `FRT` + 249 B pad = 1,577 B** (was 48 + 196): −1,280 B to bank 7 (`bank7.asm`: the player turn, `end_turn` / `do_exit` / `hide_sprites`, `pause_hook`'s body, intent_tick's ICON MODE branch), −96 B to low RAM (`clear_screen`, `print_char`, `print_str`), +~25 B stubs / `far7`, Part 1 (no bitmap shadow) +11 B; `kind_tab` `$A400` → `$9F00`) (8,912 B incl. the pad, C3-3; 8,656 B, C3-2; 8,144 B, C3-1; 7,888 B, B3B-13; B3B-R2 8,144 B; B3B-10 9,680 B; incl. the ALIGN pad + the 16-B `dt_attr_tab` and the 64-B `tile_flags` before `kind_tab`; `ASSERT code_end <= FRT`). **Headroom (D3-5, build DISPLAY): 48 B to `FRT` + 174 B pad** (D3-5 +899 B: `fx.asm`, `kind_tab` `$A000` → `$A400`; "3D contracts"). Before: **(D3-0): 1,072 B to `FRT` + 108 B pad** (D3-0 −256 B code: the zap (`draw_zap` / `zap_covered` / `draw_glyph` / `dt_zap` / the anim + hide paths, ~250 B) out, `kind_tab` `$A100` → `$A000`). Before: **(C3-2b; + main's B12 merge, see the build DISPLAY): 816 B to `FRT` + 166 B pad = 982 B** (C3-2b: the ICON MODE `intent_tick` / `tpt_intent` +~250 B, paid by moving the icon state / drawing — `slot_act_tab` … `icon_state`, `slot_want`, `item_icons`, `sel_paint`, `lvl_draw`, `pot_slot` — to bank 3 (`icons3.asm`, entered by `item_icons_far` → far3); C3-3 +362 B: `icons.asm` — `slot_act_tab` / `slot_act` / `abil_rank` moved from bank 3, `icon_state`, `icon_poll` + `icon_sig`, `item_icons`, `sel_paint`, `lvl_draw`, `panel_more`, `print6x`; old `item_icons` / `pot_col` out; `kind_tab` → `$A100`. C3-2 + B11/B14 merge: 1,297 B (B11 +11 B; C3-2 alone: 1,308 B) (C3-2 +391 B: `intent_tick` + `fire_used` / `bag_msg` / `pause_hook` ~190, `tpt_intent` ~110, the `legacy_input` gates in `input_tick` / `sample_input` / `read_turn_input` / `try_player_turn` ~40, `SC_ENTER` ~6; `kind_tab` moved `$9E00` → `$A000`. C3-1: 1,699 B (C3-1 +154 B: `input_tick`, `read_stick` / `stick_tab` + the Sinclair presets (20 B), `sample_input` on `STICK` + `PLAYER_SC`; `kind_tab` moved `$9D00` → `$9E00`. C3-0: 1,853 B (C3-0 +5 B: `farb` / `far1` / `far3`, `kind_tab` stays at `$9D00`; B3B-13: 1,840 + 24 = 1,864 B; B3B-13 −151 B net: the strings `str_found/quaff/died/win/welcome` + `kind_names` / names ~160, the PROTO chest win in `end_turn` ~35 out; `tk_get` 44 + `print6t` 21 in, `item_log` → `print6t`; `kind_tab` moved down to `$9D00`, read from the `.sym`. Before: B3B-12: 1,584 B to `FRT` + 129 B pad = 1,713 B; B3B-12 +32 B: `try_climb` `EX_LEVEL` (only at `RD_EXITCOL` with `LF_GRATE_OPEN`), the `do_exit` → `level_descend` dispatch, the PROTO win gated on `LVL_DEPTH` 0; B3B-R2: 1,745 B) for code/static tables (B3B-R2 −1,538 B net: `src/turn3.asm` (monster phase, attacks, potions, impact messages; 1,558 B) out to bank 3, + the far3 call sites (5 sites, +20 B); `kind_tab` moved to `$9E00`. (The raw A/B build that kept turn3 in bank 2 was retired in B3B-12, manager decision.) Before: B3B-10: 48 B to `FRT` + 159 B pad = 207 B (B3B-10 +355 B: `decor.asm` 352 (`decor_tick` with the step inlined, `dt_zap`) + the `play_loop` call, `dt_attr_tab` 16 in the pad; `kind_tab` moved one page up to `$A400`. Before: B3B-11b: 560 B to `FRT` + 18 B pad = 578 B (B3B-11b +74 B: `item_icons` + `pot_col` moved here from `HOT_COPY` ~65, `print6g` / `p6_inline` (the print6 getter interface) ~55, `item_log` one item, no chunk state −~45; B3B-11: 652 B; B3B-11 +82 B net: `panel2.asm` 435 (`item_log` 121, `log_scroll` 183, `bars_draw` 96, `num2` 35), `str_cat` / `show_impact_msg` composer, the `panel_tick` call; out: the A7 HUD (`hud_status` / `hud_room` / `msg_begin`, `clear_row` 155, `hud_track`, `print_char_hud`, `print_dec`, 3 strings) ~350; the rest of the panel's hot code sits in `HOT_COPY`. Before: B3B-8: 560 B to `FRT` + 174 B pad = 734 B; B3B-8 −69 B net: the PROTO `room_tab` + 4 room descriptors (~105 B, now bank-3 `proto_rooms`) and the old `room_desc` / `exit_h` / list loops out; `seg_storey` 13, `room_side` 36, `try_climb` `.vexit` 20, `potion_pickup` on `FLOOR_LIST`, the `hud_room` letter 7 in. Before: B3B-5 + review + B10: 560 + 105 = 665 B; B3B-5 used 402 B of the 1,067 (B10 hardening: flyer box row clamp 6): `tile_flags` 64, `cell_addr` / `cell_blocked` / `lead_cell` / `desc_byte` 57, `box_solid` (flyer steps, jump swept box) 34, `LOCK_SHOWN` clear 3, terrain + pit + door hooks in `try_horizontal` / `try_step` ~85, jump chord + key C in `try_player_turn` / `sample_input` ~30, `M_FALL` / `M_JUMP` anim 83 + `jump_dy` 12, room descriptors +16; the rest of B3B-5 is bank-5 low RAM. Before: A7b rebased on the B8 rev 816 B to `FRT` + 251 B pad = 1,067 B; A7 review: 993 B; A7b: code −78 B net — the one-pass record render (−138 B) and the blit rewrite (−46 B) pay for the erase row stepping (+26), `stamp_rect` / the 16-bit blit entry patch (+19) and the present `.full8` path (+61); A6: 677 B; A7: 111 B after present / pmark / HUD tracking / in-place rect dedupe / paging +566 B; the review moved 1,062 B of cold code out — `build_room_map` 254 B to bank-5 low RAM, `new_game` + `init_ent_common` + `spawn_tab` and follower selection + arrival conflicts 794 B to bank 3, net of the `far3` call sites — and added the B8 flyer ladder-end rule +159 B and the bank-2 `map_cell` +21 B; the 2026-10-02 cross-or-leave flyer rule + blocked-climb wait: +4 B net), plus the 1,536 B free runtime RAM `$B200..$B7FF` below. Code bytes `$8000..kind_tab_pad` 7,439 (B3B-R2; B3B-10 8,977; B3B-11b 8,622; B3B-11 8,548; B3B-8 8,466; A7 review 8,271; A7 9,153; A6 8,587). **IC1: `$8000..$A5F3`, free to `FRT` 13 B (−5: `item_mp` sets `QS_RECHK`) + 46 B `kind_tab` ALIGN pad (was 57: `icon_poll`'s pending-pass check +10, `item_icons_far` +1).** `kind_tab` page-aligned at `$A100` (D3-8b; `$A000` D3-8; D3-S2 `$9F00`; `$A400` D3-5; D3-0 `$A000`; `$A100` C3-3; C3-2 `$A000`; C3-1 `$9E00`; B3B-13 `$9D00`; B3B-R2 `$9E00`; B3B-10 `$A400`, before `$A200`; moves with the code: tests read it from the `.sym`), **2 pages** (`KT_SIZE` `$200`): **3F-T2: 12 parallel 32-B kind arrays** (`KT_BW` .. `KT_ATTR`, then **`KT_SEQ` `$160`** — runtime, the low byte of the kind's `seq_rows` row, written per level by R6 `sq_fill`; `KT_FID0` / `KT_FCNT` are gone to R6 `gu_tab`) + `KT_MOD9` `$180` (24 B, 8 spare) / `KT_DIV9` `$1A0`, **`KT_END` `$1B8`**. Before 3F-T2: 13 parallel **32-B** kind arrays (`K_MAX` 32; ids 0..8 used, 2 = Rogue hole; **D3-4: ids 30 / 31 = the class FX kinds `K_FXW` / `K_FXM`, only their `KT_FID0` / `KT_FCNT` columns are set** — 3F's monster rows have ids 9..29) + `KT_MOD9`/`KT_DIV9` tables (n mod/div `STOREY_ROWS`, n = 0..23; B3B-3, were MOD7/DIV7 at the same offsets), `KT_END` `$1D0` (the old "48 B spare in its page (resistances, 3F)": the resistances are bank-3 `kx_tab` since D3-0; **D3-8d: `src/mark.asm` is assembled from `kind_tab + KT_END` on**, i.e. right after the arrays, so `code_end` = the end of `mark.asm`). No array crosses a page: `KFIELD` folds the page into `H`. `frame_tab` **4 B/fid** (`FT_COLS`, `FT_H`, `FT_OFFR`, `FT_OFFL`: only what the renderer reads; D3-4: 101 fids = 404 B). `far1` / `far3` / `farb` / `restore_page` / `blit_keep` / `enter_select`: the far-call trampolines (53 B, C3-0). |
-| `$A800..$AFFF` (3F-T2; was `$A600`) | `FRT` | frame runtime table (A6: moved from `$B200`): 16 B/fid (4 variants × bank,lo,hi), **`FRT_MAX` 128** (3F-T2, was 160: 101 used + the 23 lean 3F frames of plan 3F A1 = 124, 4 spare; +512 B bank 2 and −160 B of the low-RAM descriptor growth reserve; D3-4: 101 used; 74 at C3-7); `FRT = P_ENTITIES − FRT_MAX × 16` |
+| **`$A700..$AF3F`** (3F-T13bc; `$A800..$AFFF` 3F-T2; was `$A600`) | `FRT` | **3F-T13bc: `FRT_MAX` 132 (all used), `FRT` = (`P_ENTITIES` − `FRT_MAX` × 16) & `$FF00` (page-aligned: `blit_sprite`'s nibble-swap fid × 16), the rest up to `P_ENTITIES` is **`FRT_GAP`** (`$AF40..$AFFF`, 192 B, runtime only): `seq_rows` (119 B, moved out of the image) + 73 B free.** Before: frame runtime table (A6: moved from `$B200`): 16 B/fid (4 variants × bank,lo,hi), **`FRT_MAX` 128** (3F-T2, was 160: 101 used + the 23 lean 3F frames of plan 3F A1 = 124, 4 spare; +512 B bank 2 and −160 B of the low-RAM descriptor growth reserve; D3-4: 101 used; 74 at C3-7); `FRT = P_ENTITIES − FRT_MAX × 16` |
 | `$B000..$B1FF` | `P_ENTITIES` | 16 slots × **32 B** (layout below); slot 0 = hero |
 | `$B200..$B7FF` | `BANK2_FREE` | the vacated A5 `FRT` (1,536 B, runtime RAM, not in the image/tape; `BANK2_FREE_END` = `SLOTREC`). **B3B-1 (D8): fully reserved; B3B-11 / B3B-11b use it** — **`FONT6` `$B200..$B5FF` = the PLANAR 6×8 font** (B3B-11b, for the quad printer): line *l* of char *c* (32..127) at `FONT6 + (l>>1)*256 + c + (l&1)*FONT6_WB` (`FONT6_WB` 96): 4 pages, even lines in window A (offsets 32..127), odd lines in window B (128..223); built at boot by `panel_boot` from the char-major `font6x8` (bank-1 `vdata`, via `GEN_SRC`), glyph bits 1..0 masked off. Free holes inside the planes: offsets 0..31 / 224..255 of each page (`$B200..$B21F`, `$B2E0..$B31F`, `$B3E0..$B41F`, `$B4E0..$B51F`, 32 + 3 × 64 B); (B3B-13..C3-7: `ZAP_GLYPHS` `$B200..$B20F`, gone with the zap in D3-0.) **D3-0: the holes hold the 3D runtime state** — see "3D contracts (D3-0)": `FXREC` `$B2E0..$B30F`, `ST_FLAGS` `$B310..$B31F`, `ST_T1` / `ST_T2` / `ST_X` `$B3E0..$B40F`, `FXQ` `$B410..$B41F`, `RANK_ROWS` `$B4E0..$B4FD`; free: `$B200..$B21F` (32 B), `$B4FE..$B51F` (34 B). **`HOT_COPY` `$B5E0..$B7FF`** (544 B, boot-copied hot code, risk R2): **`$B5E0..$B7D6` = the panel hot image (503 B, C3-3; was 515**: `print6` (quad printer, 4 SMC fetch sites + 8 SMC plane offsets) ~270, `log_push` / `log_push_end` / `log_drop`, `panel_tick` / `panel_step`, `item_hp`, `item_depth`; **IC1: `item_hp` +5 → 508 B, 36 B spare**, was 41), **36 B spare** (C3-3: `panel_step` polls through `icon_poll` and ends in `panel_more`, bank 2; ASSERT `HOT_COPY + PANEL_HOT_LEN <= HOT_COPY_END`; the build DISPLAY reports it). Labels in the `.sym` are the runtime addresses (`DISP`) |
 | `$B800..$B8FF` | `SLOTREC` | A7b: per-slot render record, 16 slots × **16 B** (one page; record = `SLOTREC + slot*16`, fields reached by `inc l`): `R_VIS +0`, `R_FID +1` (written by `anim_tick`), `R_FPX +2`, `R_FPY +3`, `R_COL +4`, `R_ROW +5`, `R_COLS +6`, `R_ROWS +7` (`R_FID..R_ROWS` = the entity's drawn block `E_DFID..E_DROWS` in the same order: `draw_slot` copies it with one LDIR; ASSERTed), `R_LEFT +8`, `R_ATTR +9`, `R_DATTR +10`, `R_DIRTY +11`, `R_LOG +12`, **D3-8e2: `R_TINT +13`** (= `R_ATTR | 4`: the body attr — kind or status tint — last shown with no reaction pending; `render` keeps showing it while `E_REACT` is pending, game.md §6.5.1), **D3-8d: `R_MK +14` / `R_MKLO +15`** (the slot's status mark as drawn: g / frame / row >> 3, the cell's low byte; "Status marks (D3-8d)"; no spare left) (was the 13 × 16-B `SLOTVARS` arrays `N_VIS`… `$B800..$B8CF`) |

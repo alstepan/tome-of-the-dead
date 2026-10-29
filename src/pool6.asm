@@ -323,11 +323,11 @@ gu_tab:
                 ; 3F-T13: the real 3F-A1 units of the new base kinds (ids 9..17); a kind drawing
                 ; another's frames names that unit (informational: its pool_gmap records decide)
                 GU   KFID_SPIDER, KFCNT_SPIDER                 ; K_SPIDER (+ U_DEADR)
-                GU   KFID_NECRO, KFCNT_NECRO                   ; K_VAMPIRE (the Necro's frames)
+                GU   KFID_NECRO, KFCNT_NECRO                   ; K_VAMPIRE (the Necro walk; + U_VBITE)
                 GU   KFID_ORC, KFCNT_ORC                       ; K_ORC
                 GU   KFID_SKELETON, KFCNT_SKARCH               ; K_ARCHER (= U_SKARCH: walk1..4 + cut)
                 GU   KFID_MUMMY, KFCNT_MUMMY                   ; K_MUMMY
-                GU   KFID_NECRO, KFCNT_NECRO                   ; K_NECRO (+ U_DEADH, U_NBOLT)
+                GU   KFID_NECRO, KFCNT_NECRO                   ; K_NECRO = walk1..3 (+ U_NCAST, U_DEADH, U_NBOLT, U_CLIMBH)
                 GU   KFID_OGRE, KFCNT_OGRE                     ; K_OGRE
                 GU   KFID_DKNIGHT, KFCNT_DKNIGHT               ; K_DKNIGHT
                 GU   KFID_NECRO, KFCNT_NECRO                   ; K_ARCHMAGE (the Necro's frames)
@@ -354,7 +354,7 @@ U_SKARCH        EQU K_MAX + 0
 U_SKREST        EQU K_MAX + 1
                 GU   KFID_SKREST, KFCNT_SKREST                 ; Skeleton raise .. hurt
 U_DEADR         EQU K_MAX + 2
-                GU   KFID_RATDEAD, 1                           ; rat_dead (Rat, Spider)
+                GU   KFID_RATDEAD, 1                           ; small_corpse (Rat, Spider; 3F-T13bc: was rat_dead)
 U_DEADH         EQU K_MAX + 3
                 GU   KFID_DEADH, 1                             ; dead_humanoid (every 3F humanoid + Ogre)
 U_NBOLT         EQU K_MAX + 4
@@ -363,12 +363,20 @@ U_ARROWM        EQU K_MAX + 5
                 GU   FID_arrow_fly1, 2                         ; Mage extra on Archer levels (D4 / D5 / D7)
 U_DAGM          EQU K_MAX + 6
                 GU   FID_dagger_spin1, 2                       ; Mage extra on Goblin levels (Slinger rock)
+U_CLIMBH        EQU K_MAX + 7
+                GU   KFID_CLIMBH, 2                            ; 3F-T13bc: the shared humanoid climb pair
+U_NCAST         EQU K_MAX + 8
+                GU   KFID_NCAST, 1                             ; 3F-T13bc: necro_cast (Necro, Archmage)
+U_VBITE         EQU K_MAX + 9
+                GU   KFID_VBITE, 1                             ; 3F-T13bc: vamp_bite (Vampire)
 gu_tab_end:
 GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
                 ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 30
                 ASSERT K_FXW == K_MAX - 2 && K_FXM == K_MAX - 1
                 ASSERT KFID_SKREST == KFID_SKELETON + KFCNT_SKARCH && FID_skeleton_cut == KFID_SKREST - 1
-                ASSERT KFID_RATDEAD == KFID_RAT + KFCNT_RAT - 1 && FID_rat_dead == KFID_RATDEAD
+                ASSERT KFID_RATDEAD == KFID_RAT + KFCNT_RAT - 1 && FID_small_corpse == KFID_RATDEAD
+                ASSERT KFID_NCAST == KFID_NECRO + KFCNT_NECRO && KFID_VBITE == KFID_NCAST + 1
+                ASSERT FID_climb_h2 == KFID_CLIMBH + 1
                 ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_dagger_spin2 == FID_dagger_spin1 + 1
                 ; the Mage's extras lie outside his class FX unit (fxr_none NONEs them per level)
                 ASSERT FID_arrow_fly1 >= KFID_FXM + KFCNT_FXM && FID_dagger_spin1 >= KFID_FXM + KFCNT_FXM
@@ -378,16 +386,23 @@ pool_gmap:
                 DB   K_SKELETON, U_SKARCH,   U_SKREST
                 DB   K_RAT,      K_RAT,      U_DEADR
                 DB   K_SPIDER,   K_SPIDER,   U_DEADR
-                DB   K_VAMPIRE,  K_NECRO,    U_DEADH
+                ; 3F-T13bc: the Necro walk is shared (K_NECRO unit = walk1..3), the Vampire adds its
+                ; bite, the Necro / Archmage the cast; climbers (Orc, Necro, Archer families) add the
+                ; shared climb pair U_CLIMBH (once a level: dedup per unit)
+                DB   K_VAMPIRE,  K_NECRO,    U_VBITE
+                DB   K_VAMPIRE,  U_DEADH,    PG_NONE
                 DB   K_ORC,      K_ORC,      U_DEADH
+                DB   K_ORC,      U_CLIMBH,   PG_NONE
                 DB   K_ARCHER,   U_SKARCH,   U_DEADH  ; SHOOT = the Skeleton cut (game.md §9.7 DECIDED)
+                DB   K_ARCHER,   U_CLIMBH,   PG_NONE
                 DB   K_MUMMY,    K_MUMMY,    U_DEADH
                 DB   K_NECRO,    K_NECRO,    U_DEADH
-                DB   K_NECRO,    U_NBOLT,    PG_NONE
+                DB   K_NECRO,    U_NBOLT,    U_NCAST
+                DB   K_NECRO,    U_CLIMBH,   PG_NONE
                 DB   K_OGRE,     K_OGRE,     U_DEADH
                 DB   K_DKNIGHT,  K_DKNIGHT,  U_DEADH
                 DB   K_ARCHMAGE, K_NECRO,    U_DEADH
-                DB   K_ARCHMAGE, U_NBOLT,    PG_NONE
+                DB   K_ARCHMAGE, U_NBOLT,    U_NCAST
                 DB   PG_NONE
 pool_gmap_end:
 PGMAP_N         EQU (pool_gmap_end - pool_gmap - 1) / 3

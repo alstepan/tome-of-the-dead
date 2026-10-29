@@ -24,3 +24,15 @@
         INCLUDE "nbolt_fly1.asm"
         INCLUDE "nbolt_fly2.asm"
         INCLUDE "nbolt_hit.asm"
+; ART2 / ART3 final frames (tools/gen_art2_final.py / gen_art3_final.py own the .asm files;
+; wired by 3F-T13bc: src/frames.asm FRM rows)
+        INCLUDE "orc_raise.asm"
+        INCLUDE "ogre_raise.asm"
+        INCLUDE "vamp_bite.asm"
+        INCLUDE "small_corpse.asm"
+        INCLUDE "necro_walk3.asm"
+        INCLUDE "mummy_walk3.asm"
+        INCLUDE "mummy_walk4.asm"
+        INCLUDE "climb_h1.asm"
+        INCLUDE "climb_h2.asm"
+        INCLUDE "dk_walk3.asm"

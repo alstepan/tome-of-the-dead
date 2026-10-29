@@ -1,0 +1,24 @@
+# gen_art2_options.py — pool = cell-aligned, both facings (SYM: one); packed = ZX0 delta in the kind's block
+vamp_bite32        32x48  STA  pool   768  raw 384  packed +156 (block delta)  ; own frame, lunge
+vamp_bite24        24x48  STA  pool   576  raw 288  packed +116 (block delta)  ; own frame, body box
+vamp_castdrain     40x48  MOCK  ; Necro cast + FX/attr cue
+vamp_batswoop      32x48  MOCK  ; Bat DIVE at head height
+ogre_slam_now      40x48  MOCK  ; current: floor
+ogre_slam_high     40x48  STA  pool   960 (was 960)  raw 480  packed 187 (was 196, delta -9)  ; redraw, same box
+ogre_raise32       32x48  STA  pool   768  raw 384  packed +143 (block delta)  ; new wind-up
+orc_attack_now     32x48  MOCK  ; current
+orc_attack_high    32x48  STA  pool   768 (was 768)  raw 384  packed 156 (was 143, delta +13)  ; redraw, same box
+rat_dead_now       32x16  MOCK  ; shown in Spider ink
+remains_bones      32x16  STA  pool   256 (was 256)  raw 128  packed 66 (was 74, delta -8)  ; replaces rat_dead
+remains_splat      32x16  SYM  pool   128 (was 256)  raw 128  packed 60 (was 74, delta -14)  ; replaces rat_dead
+spider_dead        32x16  STA  pool   256  raw 128  packed +100 (block delta)  ; Spider-own
+orc_walk1_48       24x48  MOCK  ; now
+orc_walk1_40       24x40  S40  per frame (STA, both facings) pool -96 (shift-4 copy -128), raw -48  ; short mock
+necro_walk1_48     24x48  MOCK  ; now
+necro_walk1_40     24x40  S40  per frame (STA, both facings) pool -96 (shift-4 copy -128), raw -48  ; short mock
+ogre_walk1_48      32x48  MOCK  ; now
+ogre_walk1_40      32x40  S40  per frame (STA, both facings) pool -128 (shift-4 copy -160), raw -64  ; short mock
+dk_walk1_48        24x48  MOCK  ; now
+dk_walk1_40        24x40  S40  per frame (STA, both facings) pool -96 (shift-4 copy -128), raw -48  ; short mock
+mummy_walk1_48     24x48  MOCK  ; now
+mummy_walk1_40     24x40  S40  per frame (STA, both facings) pool -96 (shift-4 copy -128), raw -48  ; short mock

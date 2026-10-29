@@ -78,12 +78,16 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # 3F-D7LEV: the per-level pool need (POOL_FIXED + hero + level monsters, B), (hero, depth);
 # hero 0 = Warrior, 1 = Mage. Was (3F-T13) D7 Warrior 34,080: Skeleton / Goblin walk
 # rotated (WALK1 one shift: -576 B a Skeleton / Archer / Goblin level, -384 B D1) and the
-# Ghost's FLOAT1 one shift (-512 B on D3 / D6 / D7 / D8). Update with a reason only.
+# Ghost's FLOAT1 one shift (-512 B on D3 / D6 / D7 / D8). 3F-T13bc: the ART2 / ART3 frames
+# (Orc / Ogre RAISE, Vampire BITE (+ Necro walk3, no cast), Necro walk3, Mummy walk3/4, the
+# shared climb pair for Orc / Necro / Archer levels, the symmetric small corpse (-128 B a Rat /
+# Spider level), dk_block out, the DK B3 walk3 +768 on D7) and ARCHER-DEPTHS H1 (no Archer on D7: the 2nd Necro, no Mage
+# arrows there). Update with a reason only.
 LEVEL_NEED = {
-    (0, 1): 27520, (0, 2): 26976, (0, 3): 31456, (0, 4): 29792,
-    (0, 5): 28000, (0, 6): 26080, (0, 7): 32992, (0, 8): 29728,
-    (1, 1): 23392, (1, 2): 22848, (1, 3): 27264, (1, 4): 25728,
-    (1, 5): 23936, (1, 6): 21888, (1, 7): 28928, (1, 8): 25536,
+    (0, 1): 27392, (0, 2): 26848, (0, 3): 32224, (0, 4): 31776,
+    (0, 5): 29792, (0, 6): 28960, (0, 7): 31456, (0, 8): 31840,
+    (1, 1): 23264, (1, 2): 22720, (1, 3): 28032, (1, 4): 27712,
+    (1, 5): 25728, (1, 6): 24768, (1, 7): 27264, (1, 8): 27648,
 }
 
 
@@ -654,7 +658,9 @@ def main():
         sys.path.insert(0, REPO_TOOLS)
         import zx0_sources as zs
         s6 = ",".join(sorted(zs.SRC6_KINDS | {"K_WIZARD"}))
-        variants.append(("src6", REPO, kit + ["SRC6_PAGES=18", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
+        # 3F-T13bc: default SRC6 3,231 B (13 pages) + the Wizard's 2,055 B -> 21 pages (SRC6 at
+        # $C800, the lowest the defs.asm ASSERT allows)
+        variants.append(("src6", REPO, kit + ["SRC6_PAGES=21", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
                          {"SRC6_KINDS": s6}))
     if a.baseline:                 # (an older checkout ignores the unknown define)
         variants.append(("baseline", os.path.abspath(a.baseline), kit, None))

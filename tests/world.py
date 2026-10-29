@@ -2076,7 +2076,10 @@ def w17(p, check):
     info_* / ft_* lines, which are up to 42 chars and never go to the log), $C000 handed back, T
     per item; (c) composed impact lines (show_impact_msg, all 5 kinds x the
     monster names) drawn == their text."""
-    STUB = S["LOWRAM_END_3B"]
+    # 3F-T13bc: the cold block grew down again (+8 frame descriptors): 17 B are left below
+    # lowram_code, so W17's stubs run in the play-free GEN_SRC window too, above the decode
+    # buffer (PAGE_MAP_SAVE + 0x40 + 0x200 .. TX_DEC; no room is built meanwhile)
+    STUB = S["PAGE_MAP_SAVE"] + 0x40 + 0x200
     w = w16
     texts = [t for _, t in STRINGS]
     n_chars = sum(len(t) for t in texts)
@@ -2134,8 +2137,9 @@ def w17(p, check):
                    [("L", "in"), 0xCD] + w(getter) + [0x12, 0x13, 0xB7, ("jr", 0x20, "in"),
                     0xF1, 0x3C, 0xFE, last, ("jr", 0x38, "lp"),
                     0xF1, 0xCD] + w(S["restore_page"]))
-    assert STUB + max(len(decode_loop(GET, pl, 0, 1)) for pl in (True, False)) + 4 <= S["lowram_code"], \
-        "W17: the stub overlaps the cold block"
+    assert STUB + max(len(decode_loop(GET, pl, 0, 1)) for pl in (True, False)) + 4 <= S["TX_DEC"], \
+        "W17: the stub overlaps TX_DEC"
+    assert BUF + room <= STUB, "W17: the decode buffer runs into the stub"
     batches, i = [], 0
     while i < len(texts):
         j, n = i, 0

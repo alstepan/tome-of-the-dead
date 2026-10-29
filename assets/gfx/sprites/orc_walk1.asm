@@ -51,10 +51,10 @@ orc_walk1:
         DEFB $C0,$1E,$00,$55,$00,$5E    ; row 27
         DEFB $C0,$1E,$00,$7F,$00,$DE    ; row 28
         DEFB $C0,$0C,$00,$7B,$00,$DC    ; row 29
-        DEFB $E1,$00,$00,$75,$00,$C8    ; row 30
-        DEFB $FF,$00,$00,$75,$00,$DE    ; row 31
-        DEFB $FF,$00,$00,$75,$00,$DF    ; row 32
-        DEFB $FF,$00,$00,$71,$00,$DF    ; row 33
+        DEFB $E1,$00,$00,$71,$00,$C8    ; row 30
+        DEFB $FF,$00,$04,$71,$00,$DE    ; row 31
+        DEFB $FF,$00,$04,$71,$00,$DF    ; row 32
+        DEFB $FF,$00,$04,$71,$00,$DF    ; row 33
         DEFB $FE,$00,$04,$71,$00,$DD    ; row 34
         DEFB $FE,$00,$04,$F1,$00,$EF    ; row 35
         DEFB $FE,$00,$04,$F1,$00,$EE    ; row 36

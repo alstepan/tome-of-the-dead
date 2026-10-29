@@ -150,6 +150,13 @@
   Archer (3F-D7LEV) `MOVECYC4 walk2, walk3, walk4, walk1` (same cyclic order):
   WALK1 = rest pose = `WK0` (one shift; MOT under `PHASE_SHIFT` 0), the even
   slots `WK4` — −576 B pool per 24×48 kind vs a MOT WALK1.
+  3F-T13bc: the B3 walks (Necro / Vampire / Death Knight) `MOVECYC4 walk2,
+  walk1, walk3, walk1` (walk2 / walk3 `WK4`, walk1 `WK0` in both odd slots), the
+  Mummy B4 `MOVECYC4 walk2, walk4, walk3, walk1` (walk2 / walk3 `WK4`, walk4 /
+  walk1 `WK0`). Climbers draw `KS_CLIMB` cell-aligned: the climb art is STA
+  (the shared humanoid pair `climb_h1` / `climb_h2` is STA|SYM, drawn in the
+  kind's ink); a `KS_CLIMBREST` that points one byte into a cycle (`xx_climb +
+  1`, `gh_idle + 1`) carries an ASSERT on the fid it lands on.
 - **Flyers** draw their KS_MOVE cycle at the idle phase (any px parity): every
   frame in it must be MOT. The Ghost's KS_MOVE is `gh_fly` (FLOAT2 held), so
   its rest pose FLOAT1 (idle at rest only) is `WK0` (3F-D7LEV, −512 B).

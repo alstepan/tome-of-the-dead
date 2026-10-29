@@ -43,7 +43,7 @@ lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1 | LEK_G
                 DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER,         K_BOSS_D4, 13
                 DB   K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER,  K_BOSS_D5 | LEK_GOLD, 13
                 DB   K_VAMPIRE, K_GHOST, K_NECRO, K_ORC,       K_BOSS_D6 | LEK_GOLD, 14
-                DB   K_ORC, K_ARCHER, K_GHOST, K_NECRO,        K_BOSS_D7, 14
+                DB   K_ORC, K_NECRO, K_GHOST, K_NECRO,         K_BOSS_D7, 14   ; 3F-T13bc ARCHER-DEPTHS H1: the 2nd Necro replaces the Archer (weight 6 = 6)
                 DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE,  K_BOSS_D8, 11
 LP_DROW         EQU 6
                 ASSERT $ - lp_dtab == LEVELS * LP_DROW

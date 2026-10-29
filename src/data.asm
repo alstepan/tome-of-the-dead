@@ -58,7 +58,7 @@ POOL_FIXED      EQU 2 * 576 + 3 * 576                    ; select idles + stradd
                 ; monster kind (start_game .gk, K_SKELETON .. K_PROTO_END - 1)
 K_PROTO_END     EQU K_SLIME + 1
                 ASSERT KFID_SKELETON == KFID_MONSTERS && KFID_SLIME + KFCNT_SLIME == KFID_F3
-                ASSERT KFID_NBOLT + KFCNT_NBOLT == KFID_MONSTERS + KFCNT_MONSTERS   ; 3F-T13: the 3F frames end the range
+                ASSERT KFID_CLIMBH + 2 == KFID_MONSTERS + KFCNT_MONSTERS   ; 3F-T13(bc): the 3F frames end the range
 POOL_NEED_PROTO EQU POOL_FIXED + POOL_HERO_MAX + POOL_MONSTERS
                 ; level_enter clears the FRT rows [KFID_MONSTERS, + KFCNT_MONSTERS):
                 ; every monster frame must lie there (heroes before, FX kinds after)
@@ -110,7 +110,7 @@ POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN - SRC6_LEN  
                 ROLE RT_REST,   FID_rat_run1,      FID_rat_run1
                 ROLE RT_BITE,   FID_rat_bite,      FID_rat_run1
                 ROLE RT_HURT,   FID_rat_hurt,      RT_REST
-                ROLE RT_DEAD,   FID_rat_dead,      RT_REST
+                ROLE RT_DEAD,   FID_small_corpse,  RT_REST   ; 3F-T13bc: the neutral corpse (ART2 C2)
 
                 ROLE BT_REST,   FID_bat_flapup,    FID_bat_flapup
                 ROLE BT_DIVE,   FID_bat_dive,      FID_bat_flapup
