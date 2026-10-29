@@ -142,7 +142,7 @@ proj_pre:
 ; RK_EFFECT (always; turns 1 / 1 / 2: deal_hit applies it to a survivor
 ; only, halves it on R, refuses it under HOLD_GUARD / IMMF_STUN).
 ; RNG (prototype §6.2 order): d20, 1dN, deal_hit's effect chance.
-; Out: L = HP lost, H = 1 hit / 0 miss (far3 passes HL out); IX = hero.
+; Out: L = HP lost, H = 1 hit / 0 miss / 2 parried (3F-T6) (far3 passes HL out); IX = hero.
 ; Clobbers: all but IX.   ~1.3k T + deal_hit (~0.7k + ~1.5k per message)
 ;------------------------------------------------------------------------------
 melee_hit:
@@ -180,6 +180,10 @@ melee_hit:
                 add  a, d
                 ld   hl, ABIL_RK + RK_BONUS
                 add  a, (hl)
+                jr   z, .one                   ; 3F-T6: max(1, ...) (the weapon's m < 0)
+                jp   p, .pos
+.one:           ld   a, 1
+.pos:
                 pop  bc                        ; C = ABF_*
                 pop  de                        ; E = the effect parameter
                 ld   b, a                      ; B = dmg
@@ -210,8 +214,8 @@ melee_hit:
                 or   EFX_STUNNED << DH_EFX_SHIFT
                 ld   c, a
 .d:             pop  af                        ; A = slot
-                call deal_hit                  ; L = HP lost (all but IX)
-                ld   h, 1
+                call deal_hit                  ; L = HP lost (all but IX); H = 1 parried (3F-T6)
+                inc  h                         ; H = 1 hit / 2 parried
                 ret
 .x:             pop  af
                 ret

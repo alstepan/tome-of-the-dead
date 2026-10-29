@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix")
 CAST_KEYS = ("cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -353,6 +353,16 @@ SCENARIOS = {
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)],
         [("G", 2), ("@5", 3), ("@7", 3), ("FIRE", 2), ("WAIT", 2)], K_KNIGHT, None, "umix"),
+    # 3F-T6: "pmix" with the 3F tier abilities live (tmix_setup): the 1-slot skeleton is a Skeleton Guard
+    # (60 hp: parry 1 in 4 + NOTCH 1 in 2 on a worn weapon), the rat a Black Widow (ACID 1 in 4 on the
+    # worn armour), the goblin an Orc Berserker at hp <= half (rage: hit_roll +2); the end_turn tick of a
+    # wear event pays the deferred line + hero_recalc + worn cell. The Widow / Berserker bodies have no
+    # PROTO frames (their pool kinds are not resident): their draw is skipped, the hooks are measured
+    "tmix": ("knight + Guard, Widow, Berserker, bat: parry + NOTCH, ACID, rage over pmix", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "tmix"),
     # IC1: "pmix" with Heal + Mana in the bag, MP 0 and full HP: the quick POTION slot shows
     # Mana until a monster hit makes Heal useful (the pick flips: the slot redraws, a
     # 1st-frame item) + the pickups' quick-slot count redraws (food / potion / scroll)
@@ -637,6 +647,24 @@ def pmix_setup(p):
     p.set_ent(5, HP=1)
 
 
+TMIX_SEED = int(os.environ.get("BUDGET_TMIX_SEED", "0"), 0)
+
+
+def tmix_setup(p):
+    """"tmix" (3F-T6): pmix + the tier abilities (see the scenario comment)."""
+    pmix_setup(p)
+    p.set_ent(5, KIND=S["K_SKEL_GUARD"], HP=60, MAXHP=60)
+    p.set_ent(1, KIND=S["K_BLACK_WIDOW"], HP=60, MAXHP=60)
+    p.set_ent(3, KIND=S["K_ORC_BERSERK"], HP=9, MAXHP=20)
+    p.set_ent(0, HP=250, MAXHP=250)               # the run must outlast the Widow / Berserker bites
+    # the deferred half of a wear event is forced onto the first end_turn (the random 1-in-N rolls would
+    # rarely land in a 14-turn run): WEAR_PEND = the armour ACID line -> hunger_turn's wear_apply (line +
+    # hero_recalc + worn cell) runs once, in the worst case alongside the pickups / kill of pmix
+    p.wb("WEAR_PEND", S["TX_CMB_ACID_ARM"])
+    if TMIX_SEED:
+        p.wmem(S["RNG_STATE"], [TMIX_SEED & 255, TMIX_SEED >> 8])
+
+
 def imix_setup(p):
     """"imix" (FLOOR1): 4 floor items (Apple, Heal, Long Sword, Chain) in room A storey 1
     at cols 9 / 13 / 17 / 21, cache + icons drawn (fi_refresh)."""
@@ -772,6 +800,8 @@ def run_scenario(h, scen):
         mkmix_setup(p)
     if len(scen) > 5 and scen[5] == "pmix":
         pmix_setup(p)
+    if len(scen) > 5 and scen[5] == "tmix":
+        tmix_setup(p)
     if len(scen) > 5 and scen[5] == "imix":
         imix_setup(p)
     if len(scen) > 5 and scen[5] == "dmix":
@@ -808,6 +838,9 @@ def run_scenario(h, scen):
         bag = list(p.z.read_memory(S["BAG"], 15))
         print(f"[info] umix after: bag {bag}, FOOD {p.rb('FOOD')}, HP {p.ent(0)['HP']}, "
               f"ST_FLAGS {list(p.z.read_memory(S['ST_FLAGS'], 6))}", flush=True)
+    if len(scen) > 5 and scen[5] == "tmix":         # the tier abilities really ran
+        print(f"[info] tmix after: WORN {list(p.z.read_memory(S['WORN'], 9))}, WEAR_PEND {p.rb('WEAR_PEND')},"
+              f" HP {p.ent(0)['HP']}/{p.ent(0)['MAXHP']}, Guard HP {p.ent(5)['HP']}", flush=True)
     if len(scen) > 5 and scen[5] == "dmix":         # the boss kill-drop really ran uq_fit's displacement
         fl = list(p.z.read_memory(S["FLOOR_LIST"], 128))
         room = [(fl[4 * i + 1], fl[4 * i + 2]) for i in range(S["FLOOR_MAX"])
@@ -892,7 +925,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")

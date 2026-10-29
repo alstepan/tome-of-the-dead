@@ -245,7 +245,7 @@ ABIL_IMPT_DELAY EQU (1 << 8) | 0               ; H = FXD_IMPT 1, L = FXD_DELAY 0
 ; this tick (the strike frame's SF_IMPACT tick): HP lost -> the target
 ; flashes ATTR_HIT and its HURT / DEATH (deal_hit) starts now (E_REACTAT =
 ; TURN_TICK: set_reaction_at added the Knight's KS_IMPACT to it); the line
-; "YOU HIT / MISS / KILL THE <kind>"; Power Strike: power_burst on it
+; "YOU HIT / MISS / KILL THE <kind>" (3F-T6: H = 2 parried: "THE <kind> PARRIES!", no flash); Power Strike: power_burst on it
 ; (front_cell; FIDA = IF1, IMPA = IF2: set on this tick and the next).
 ; Clobbers: all but IY (IX kept)
 ;------------------------------------------------------------------------------
@@ -260,8 +260,12 @@ melee_strike:
                 push hl
                 call ent_ix                    ; IX = target (A, E)
                 pop  hl
-                ld   b, MSG_P_MISS
+                ld   b, MSG_P_PARRY            ; 3F-T6: H = 2: parried (no flash: L = 0)
                 dec  h
+                dec  h
+                jr   z, .msg
+                ld   b, MSG_P_MISS
+                inc  h                         ; H was 0 (miss): $FE -> $FF, NZ; H was 1 (hit): $FF -> 0, Z
                 jr   nz, .msg
                 ld   b, MSG_P_HIT
                 ld   a, (ix+E_HP)

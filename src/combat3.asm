@@ -51,6 +51,18 @@ hit_roll:
                 add  a, d
                 sub  10
                 ld   d, a                      ; D = d20 + atk + mod - 10 (signed, |D| < 64)
+                ld   a, (ix+E_KIND)            ; 3F-T6 rage (game.md §9.6): an Orc Berserker at hp <= max / 2
+                cp   K_ORC_BERSERK             ; attacks at +RAGE_ATK. 33 T on the fast path
+                jr   nz, .nr
+                ld   a, (ix+E_HP)
+                add  a, a                      ; 2 hp - 1 < max  <=>  2 hp <= max (hp < 128)
+                dec  a
+                cp   (ix+E_MAXHP)
+                jr   nc, .nr
+                inc  d
+                inc  d
+                ASSERT RAGE_ATK == 2
+.nr:
                 ld   a, e
                 add  a, ST_FLAGS & $FF         ; status byte of the target (one page)
                 ld   l, a
@@ -85,7 +97,8 @@ hit_roll:
 ;      x 2 already applied),
 ;      C = DTY_* | DH_NODEF | EFX_* << DH_EFX_SHIFT | DH_HEAL, E = effect parameter
 ;      (high nibble: chance "1 in N", 0 = always; low nibble: turns).
-; Out: L = HP the target actually lost (0: immune, or already at 0 HP).
+; Out: L = HP the target actually lost (0: immune, or already at 0 HP). 3F-T6: H = 1 iff the
+;      hit was PARRIED (L = 0; parry6), else 0.
 ;      IX = attacker. ATK_PTR = attacker (set_reaction_at).
 ; Rules, in order:
 ;  1. target HP 0 (dying): nothing, L = 0.
@@ -199,7 +212,42 @@ deal_hit:
                 ld   c, MSG_M_UNAFF
                 call dh_msg
                 jp   .out
-.dmg:           ld   a, (dh_dmg)
+.dmg:           ld   a, (ix+E_KIND)            ; 3F-T6 parry (game.md §9.1 / §9.8 D3-7): kind-id compare, no data
+                cp   K_DKNIGHT                 ; byte. Guard 64/256, Knight + Death Knight 85/256. 59 T for every
+                ld   e, PARRY_KNIGHT           ; other target (the hero included)
+                jr   z, .pry
+                ASSERT K_SKEL_KNIGHT == K_SKEL_GUARD + 1
+                sub  K_SKEL_GUARD
+                cp   2
+                jr   nc, .np
+                or   a
+                jr   nz, .pry                  ; K_SKEL_KNIGHT = K_SKEL_GUARD + 1
+                ld   e, PARRY_GUARD
+.pry:           ld   a, (dh_flags)
+                and  DH_TYPE
+                jr   nz, .np                   ; PHYS hits only (DTY_PHYS == 0)
+                ld   a, (dh_slot)              ; game.md §6.4: a held body (STUNNED / FROZEN / ASLEEP) cannot
+                add  a, ST_FLAGS & $FF         ; parry
+                ld   l, a
+                ld   h, ST_FLAGS >> 8
+                ld   a, (hl)
+                and  STS_HOLD
+                jr   nz, .np
+                ld   a, (dh_rtick)             ; D != 0: a shot / thrown hit (no notch)
+                ld   d, a
+                ld   hl, parry6                ; R6: the roll + the NOTCH decision; L = 1 parried
+                call far6
+                ld   a, l
+                or   a
+                jr   z, .np
+                ld   a, (ix+E_KIND)            ; only the Death Knight has a BLOCK frame
+                cp   K_DKNIGHT
+                ld   c, RC_BLOCK
+                call z, set_reaction_at
+                ld   ix, (ATK_PTR)
+                ld   hl, $0100                 ; L = 0 lost, H = 1: parried (do_attack / melee_hit read H)
+                ret
+.np:            ld   a, (dh_dmg)
                 ld   b, a
                 ld   a, (dh_rsp)
                 or   a                         ; RSP_N
@@ -317,6 +365,7 @@ deal_hit:
 .out:           ld   ix, (ATK_PTR)
 .ox:            ld   a, (dh_lost)
                 ld   l, a
+                ld   h, 0                      ; 3F-T6: H = 1 only for a parry (above)
                 ret
 
 ;------------------------------------------------------------------------------

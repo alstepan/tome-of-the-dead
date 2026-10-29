@@ -11,8 +11,8 @@
 ;   atk  = KN_ATK / WZ_ATK + (LVL >= 4) + (LVL >= 8) + sum(gear ATK)
 ;   eva  = KN_EVA / WZ_EVA + (LVL >= 6) + sum(gear EVA, gx_tab)
 ;   die  = the worn weapon's die (fists FIST_DIE 1d2); bonus = its m (+1 the
-;          Cleaver), clamped >= 0 (deal_hit needs dmg >= 1: a negative bonus
-;          needs a max(1, ..) at the two melee rolls first — 3F wear)
+;          Cleaver), SIGNED since 3F-T6 (do_attack / melee_hit roll
+;          max(1, 1dN + bonus): a notched weapon at m < 0 hits for less, min 1)
 ;   DEF  = sum(gear DEF) + m of a worn armour / helm with DEF, clamped >= 0
 ;   max MP gear part = sum(gear MP) + m of a worn Robe / Hood (MP, no DEF),
 ;          >= 0; MAXMP += new - GEAR_MP (level-ups / tomes stay in MAXMP),
@@ -120,9 +120,8 @@ hero_recalc:
                 ld   a, l
                 add  a, KT_BONUS - KT_DIE
                 ld   l, a
-                ld   a, (hr_bon)
-                call clamp0
-                ld   (hl), a
+                ld   a, (hr_bon)               ; 3F-T6: SIGNED (a notched weapon, m < 0): the two melee rolls
+                ld   (hl), a                   ; take max(1, 1dN + bonus)
                 ld   a, (hr_def)
                 call clamp0
                 ld   (HERO_DEF), a

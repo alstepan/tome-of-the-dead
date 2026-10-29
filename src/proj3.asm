@@ -765,7 +765,11 @@ pf_strike:
                 ld   e, a
                 ld   a, (hl)
                 call deal_hit                  ; L = HP lost, IX = caster, dh_tix = target
-                ld   a, (dh_rtick)             ; B = the impact tick
+                dec  h                         ; 3F-T6: H = 1 parried -> pf_lost $FF (ammo_fire prints the
+                jr   nz, .npy                  ; PARRIES line; nothing else reads pf_lost of a PHYS shot)
+                ld   l, h
+                dec  l
+.npy:           ld   a, (dh_rtick)             ; B = the impact tick
                 ld   b, a
                 ld   a, (pf_tgt)
                 inc  a

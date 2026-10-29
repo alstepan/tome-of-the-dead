@@ -31,6 +31,9 @@
 ; Clobbers: A, BC, DE, HL.   ~0.5k T (+ far6 ~0.25k; + ~3k on a line turn)
 ;------------------------------------------------------------------------------
 hunger_turn:
+                ld   a, (WEAR_PEND)            ; 3F-T6: a wear event of this turn (abil6.asm): the line,
+                or   a                         ; hero_recalc, the worn cell — deferred from the input tick
+                call nz, wear_apply
                 ld   hl, (TURN_COUNTER)
                 ld   de, (JUMP_TURN)
                 or   a

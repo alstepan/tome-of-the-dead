@@ -580,6 +580,8 @@ MSG_M_FLEES     EQU 11              ; FEAR
 MSG_M_CONFUSED  EQU 12
 MSG_M_WAKE      EQU 13
 MSG_M_THAW      EQU 14
+MSG_P_PARRY     EQU 15              ; 3F-T6: the hero's blow was parried: "THE <target> PARRIES!" (the target's name,
+                                    ; like MSG_P_HIT..KILL; do_attack / melee_strike set it, show_impact_msg / impact_line)
 
 ;------------------------------------------------------------------------------
 ; Kinds (prototype §2/§6.3). Parallel byte tables, page-aligned (kind_tab).
