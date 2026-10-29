@@ -385,7 +385,12 @@ drop_row:       ld   hl, drop_tab
                 cp   (hl)                      ; roll < numerator <=> drop (1 in N rows: numerator 1,
                 ret  nc                        ; the same RNG draw / outcome as before)
                 ld   a, d
-                ld   d, e                      ; D = qty
+                or   a
+                jr   nz, .dp
+                ld   c, 3                      ; 3F-T6 type 0: a random Carrot / Apple / Pear (§9.6)
+                call rng_mod                   ; (keeps C, DE)
+                add  a, IT_F_CARROT
+.dp:            ld   d, e                      ; D = qty
                 ld   e, DROP_NEAR
                 jp   drop_put
 
@@ -393,7 +398,8 @@ drop_row:       ld   hl, drop_tab
 ; N"): the base drops (k = 1) and the tier rows (the base numerator + 1 per tier above 1:
 ; Cheese 1/4 -> 2/4 -> 3/4, Arrows 1/2 -> 2/2). First match wins. NOT here: the tier rows
 ; of a base with no drop (Screech Bat, Black Widow, Skeleton Guard / Knight, Poltergeist),
-; which drop a random food (Carrot / Apple / Pear) 1 in 4 (open, not in the T5 contract).
+; are the last 5 rows (3F-T6): type 0 = a random food (Carrot / Apple / Pear), 1 in 4.
+; 3F-T6: 17 rows.
 DROP_STRIDE     EQU 4
 drop_tab:       DB   K_RAT,         IT_F_CHEESE, 4, 1
                 DB   K_GOBLIN,      IT_F_APPLE,  4, 1
@@ -407,5 +413,10 @@ drop_tab:       DB   K_RAT,         IT_F_CHEESE, 4, 1
                 DB   K_ORC_BOUNCER, IT_F_MEAT,   3, 3
                 DB   K_SNIPER,      IT_ARROW,    2, 2
                 DB   K_BONE_CALLER, IT_P_MANA,   3, 2
+                DB   K_SCREECH,     0, 4, 1    ; 3F-T6: the tiers of a base with no drop: a random food (type 0) 1 in 4
+                DB   K_BLACK_WIDOW, 0, 4, 1
+                DB   K_SKEL_GUARD,  0, 4, 1
+                DB   K_SKEL_KNIGHT, 0, 4, 1
+                DB   K_POLTERGEIST, 0, 4, 1
 DROP_ROWS       EQU ($ - drop_tab) / DROP_STRIDE
-                ASSERT DROP_ROWS == 12
+                ASSERT DROP_ROWS == 17 && IT_F_APPLE == IT_F_CARROT + 1 && IT_F_PEAR == IT_F_CARROT + 2

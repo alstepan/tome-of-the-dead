@@ -130,6 +130,7 @@ level_reset_new:
 .z:             ld   (hl), a
                 inc  l
                 djnz .z
+                ld   (WEAR_PEND), a            ; 3F-T6: a stale wear line would print at the first end_turn
                 jr   level_reset
 
 ;------------------------------------------------------------------------------

@@ -111,7 +111,13 @@ ammo_fire:
                 ld   b, MSG_P_KILL
                 call impact_line               ; "YOU KILL THE <kind>" (A, BC, DE, HL)
                 jr   .out
-.hit:           ld   a, b
+.hit:           ld   a, (pf_lost)              ; 3F-T6: $FF = the hit was parried (deal_hit H = 1)
+                inc  a
+                jr   nz, .nph
+                ld   b, MSG_P_PARRY
+                call impact_line               ; "THE <kind> PARRIES!" (C = kind)
+                jr   .out
+.nph:           ld   a, b
                 cp   ABL_DAGGER
                 ld   a, TX_CMB_DAG_HIT
                 jr   z, .h

@@ -59,16 +59,33 @@ do_attack:
                 call rng_mod                   ; (keeps DE)
                 inc  a
                 ld   d, a
-                KFIELD KT_BONUS
+                KFIELD KT_BONUS                ; (signed: the hero's weapon m, gear6 hero_recalc)
                 add  a, d
-                pop  bc
+                jr   z, .one                   ; 3F-T6: max(1, 1dN + bonus) (a worn weapon at m < 0)
+                jp   p, .pos
+.one:           ld   a, 1
+.pos:           pop  bc
                 ld   b, a
                 ld   a, (TMP2)
-                call deal_hit                  ; L = HP lost; IX = attacker
+                call deal_hit                  ; L = HP lost; IX = attacker; H = 1: parried (3F-T6)
                 ld   a, l
                 or   a
-                jr   z, .res                   ; nothing lost (immune): no flash
-                ld   a, 1
+                jr   nz, .lost
+                dec  h
+                jr   nz, .res                  ; nothing lost (immune): no flash
+                ld   (ix+E_HIT), a             ; parried: no flash (A = 0), IX = the attacker (deal_hit's
+                                               ; contract); the line "THE <kind> PARRIES!" at IMPACT
+                ld   a, MSG_P_PARRY
+                jr   .setm
+.lost:          ld   a, (ix+E_KIND)            ; 3F-T6: an on-hit side effect of the Mummy (FOOD) / Black Widow
+                ld   hl, mummy6                ; (ACID, 1 in 4): R6, only on a hit that cost HP
+                cp   K_MUMMY
+                jr   z, .fx
+                ld   hl, acid6
+                cp   K_BLACK_WIDOW
+                jr   nz, .nfx
+.fx:            call far6
+.nfx:           ld   a, 1
                 jr   .res
 .miss:          ld   a, (TMP2)
                 call ent_ix                    ; IX = target

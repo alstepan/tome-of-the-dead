@@ -130,6 +130,11 @@ MK_BRIGHT       EQU $40             ; frame B of a glyph using all 8 rows (ASLEE
 ; down, 0 = none) after the R halving. No kind sets it before 3F (tests poke it).
 IMMF_BOSS_BIT   EQU 7               ; (deal_hit tests it with rla: must stay bit 7)
 EF_PLAYER_BIT   EQU 1
+; 3F-T6 (game.md §9.1 / §9.6 / §9.8 D3-7): parry chance /256 by kind id in deal_hit (no data byte)
+PARRY_GUARD     EQU 64              ; Skeleton Guard 1 in 4
+PARRY_KNIGHT    EQU 85              ; Skeleton Knight + Death Knight ~1 in 3
+FOOD_MUMMY      EQU 5               ; the Mummy's hit drains this much FOOD (game.md §9.1)
+RAGE_ATK        EQU 2               ; Orc Berserker at hp <= max / 2 (§9.6)
                 ASSERT EF_PLAYER == 1 << EF_PLAYER_BIT
 
 ;------------------------------------------------------------------------------
@@ -306,7 +311,13 @@ QS_RECHK        EQU PAGE_END + 5    ; IC1: bit 7 = the icon bar needs an item_ic
                                     ; frame (icon_poll): a quick slot left undrawn (2nd frame) / forced by
                                     ; pot_sync, or HP / MP changed (the potion pick); bits 0-6 0. No init:
                                     ; a stale bit costs one pass
-HERO_T8_END     EQU PAGE_END + 6
+WEAR_PEND       EQU PAGE_END + 6    ; 3F-T6 (game.md §8.10): bitfield of the wear events decided this turn
+                                    ; (abil6.asm wear_slot ORs it on the input tick: the item's m is already -1 /
+                                    ; the slot already empty): bit 2 s = notch / acid, bit 2 s + 1 = broke, slot s =
+                                    ; WS_WEAPON / ARMOUR / HELM. hunger_turn (end_turn, R6) wear_apply: hero_recalc
+                                    ; once, per slot its line (break preferred) + worn cell, then 0. Cleared by
+                                    ; level_reset_new (not in the HERO3D..MP_PER zeroing run)
+HERO_T8_END     EQU PAGE_END + 7
 HELD_WAIT       EQU 3
 LT_SERVED       EQU 1
 LT_HOLD_BIT     EQU 1
