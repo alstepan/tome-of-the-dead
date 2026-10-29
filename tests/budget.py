@@ -840,6 +840,16 @@ def run_scenario(h, scen):
     print(f"max tick       : {worst[0]} T  ({worst[0] / BUDGET * 100:.1f}% of {BUDGET})")
     print(f"mean tick      : {sum(totals) // len(totals)} T")
     print(f"worst split    : " + ", ".join(f"{k}={v}" for k, v in worst[1].items()))
+    if os.environ.get("GAME_PROFILE"):            # 3F-B5: per-phase max / sum over ALL ticks (A/B work)
+        ph = {}
+        for _, sp in st.ticks:
+            for k, v in sp.items():
+                m, s = ph.get(k, (0, 0))
+                ph[k] = (max(m, v), s + v)
+        print("phase max/sum  : " + ", ".join(f"{k}={m}/{s}" for k, (m, s) in ph.items()
+                                              if k in ("try_player_turn", "resolve_monsters", "materialise")))
+        if os.environ.get("GAME_PROFILE_TICKS"):  # per-tick resolve_monsters (A/B diffs)
+            print("resolve/tick   : " + " ".join(str(sp.get("resolve_monsters", 0)) for _, sp in st.ticks))
     print(f"ticks > budget : {len(over)}")
     print(f"ISR in window  : max {max(st.isr_in)} T, ticks with ISR {sum(1 for i in st.isr_in if i)};"
           f" PRE_MAX {pre_max} (402 + max ISR, floor {PRE_FLOOR})")
