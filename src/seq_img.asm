@@ -136,9 +136,10 @@ sl_death:       DEATHSEQ SL_HURT, SL_DEAD, FID_slime_dead, SL_REST
 ksm_sl_e:
                 ASSERT (FFL_rat_run1 & FF_MOTION) && (FFL_slime_squash & FF_MOTION)
 ; --- 3F-T13: the 3F-A1 kinds (game.md §9.1 / §9.7 R3-R4) ---
-; Non-climbers (Vampire, Mummy, Ogre, DK, Spider): KS_CLIMB = the idle cycle
+; Non-climbers (Vampire, Ogre, DK, Spider): KS_CLIMB = the idle cycle
 ; (cell-aligned at any phase; never the move cycle, whose even slot is a WK4
-; frame). 3F-T13bc climbers (Orc, Necro, Archer families; user 2026-10-29):
+; frame). 3F-T13bc climbers (Orc, Necro, Mummy families; the Mummy since 2026-10-29; the Archer / Sniper use the Skeleton's own
+; skeleton_climb1/2 in their ink, U_SKCLIMB; user 2026-10-29):
 ; KS_CLIMB = the SHARED humanoid climb pair climb_h1 / climb_h2 (ART3 A1, unit
 ; U_CLIMBH, STA|SYM, drawn in the kind's KT_ATTR ink), KS_CLIMBREST = that
 ; cycle + 1 (anim .crest reads one byte: the cycle's first fid = climb_h1; -2 B
@@ -190,10 +191,11 @@ vp_hurt:        DB FID_necro_walk1, 3, 0, SEQ_END
 vp_death:       DEATHSEQ FID_necro_walk1, FID_dead_humanoid, FID_dead_humanoid, FID_necro_walk1
 ksm_vp_e:
 ; --- Mummy: walk B4 = walk2, walk4, walk3, walk1 (ART3) ---
-ksm_mu:         KSMH ksm_mu_e - ksm_mu_s, 3, mu_idle, mu_move, mu_idle, mu_hurt, mu_attack, mu_hurt, mu_hurt, mu_death, ksm_mu_s
+ksm_mu:         KSMH ksm_mu_e - ksm_mu_s, 3, mu_idle, mu_move, mu_climb, mu_climb + 1, mu_attack, mu_hurt, mu_hurt, mu_death, ksm_mu_s
 ksm_mu_s:
 mu_idle:        DB 1, FID_mummy_walk1, 1, SEQ_END
 mu_move:        MOVECYC4 mummy_walk2, mummy_walk4, mummy_walk3, mummy_walk1
+mu_climb:       CLIMBCYC FID_climb_h1, FID_climb_h2, FID_mummy_walk1, FID_mummy_walk1, FID_mummy_walk1, FID_mummy_walk1
 mu_attack:      DB FID_mummy_walk1, 3, 0, FID_mummy_attack, 2, SF_IMPACT, SEQ_END
 mu_hurt:        DB FID_mummy_walk1, 3, 0, SEQ_END
 mu_death:       DEATHSEQ FID_mummy_walk1, FID_dead_humanoid, FID_dead_humanoid, FID_mummy_walk1
@@ -218,13 +220,13 @@ dk_hurt:        DB FID_dk_walk1, 3, 0, SEQ_END
 dk_death:       DEATHSEQ FID_dk_walk1, FID_dead_humanoid, FID_dead_humanoid, FID_dk_walk1
 ksm_dk_e:
 ; --- Skeleton Archer (Sniper): the Skeleton's walk + cut = U_SKARCH; SHOOT / melee = the cut
-; (game.md §9.7 DECIDED: no SHOOT art); 3F-T13bc climber (shared pair; user: 'try');
+; (game.md §9.7 DECIDED: no SHOOT art); 3F-T13bc climber (the Skeleton's own climb pair, as sk_climb; user 2026-10-29);
 ; DEAD = dead_humanoid ---
 ksm_ar:         KSMH ksm_ar_e - ksm_ar_s, 3, ar_idle, ar_move, ar_climb, ar_climb + 1, ar_attack, ar_hurt, ar_hurt, ar_death, ksm_ar_s
 ksm_ar_s:
 ar_idle:        DB 1, SK_REST, 1, SEQ_END
 ar_move:        MOVECYC4 skeleton_walk2, skeleton_walk3, skeleton_walk4, skeleton_walk1
-ar_climb:       CLIMBCYC FID_climb_h1, FID_climb_h2, SK_REST, SK_REST, SK_REST, SK_REST
+ar_climb:       CLIMBCYC FID_skeleton_climb1, FID_skeleton_climb2, SK_REST, SK_REST, SK_REST, SK_REST
 ar_attack:      DB SK_REST, 3, 0, FID_skeleton_cut, 2, SF_IMPACT, SEQ_END
 ar_hurt:        DB SK_REST, 3, 0, SEQ_END
 ar_death:       DEATHSEQ SK_REST, FID_dead_humanoid, FID_dead_humanoid, SK_REST
@@ -235,3 +237,5 @@ ksm_ar_e:
                 ; KS_CLIMBREST = the climb cycle + 1 (one byte read): that byte is climb_h1, which
                 ; must be the cell-aligned STA climb art (CLIMBCYC emitted the real pair)
                 ASSERT FID_climb_h1 >= 0 && FID_climb_h2 >= 0 && !(FFL_climb_h1 & (FF_PH4 | FF_MOTION))
+                ; the Archer / Sniper climb with the Skeleton's own pair (sk_climb's): cell-aligned STA|SYM
+                ASSERT !(FFL_skeleton_climb1 & (FF_PH4 | FF_MOTION)) && !(FFL_skeleton_climb2 & FF_MOTION)

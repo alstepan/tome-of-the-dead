@@ -3775,3 +3775,18 @@ starts at `code_end` and moved with the bank-2 growth), never behaviour. Not don
 | pool start / pool slack (every level, 1:1) | `$CA5C` / 1,476 (PROTO 1,316) | `$C9D8` / **1,608** (PROTO 1,448) | +132 (`POOL_NEED` unchanged, per-level `LEVEL_NEED` unchanged) |
 | bank 2 `frame_footprint` (no caller, no test) | 49 B | deleted | −49 |
 | bank 2 free (free to FRT + `kind_tab` ALIGN pad) | 208 + 35 = 243 | 208 + **84** = **292** | +49: all in the pad (the image still ends `$A510`; free to FRT unchanged) |
+
+### fix/archer-climb (user 2026-10-29): Archer / Sniper climb on the Skeleton's own pair; the Mummy climbs
+
+* Frames: the Skeleton's `skeleton_climb1/2` moved ahead of `raise / collapsed / hurt`
+  (`frames.asm`): Skeleton = `U_SKARCH` (walk1..4 + cut) + new **`U_SKCLIMB`** (K_MAX + 10, the
+  2 climb frames, STA|SYM, 576 B) + `U_SKREST` (raise, collapsed, hurt). FIDs of those five
+  frames renumber (all references are symbolic).
+* `pool_gmap` 17 -> 19 records (+6 B R6): Skeleton + `U_SKCLIMB`; Archer (Sniper) `U_SKCLIMB`
+  instead of `U_CLIMBH`; Mummy + `U_CLIMBH`. `ksm_ar` KS_CLIMB = `skeleton_climb1/2` (the
+  Archer / Sniper ink), `ksm_mu` gets a climb cycle (shared `climb_h1/h2`, ink $06).
+  `KF_CLIMBER` on K_MUMMY (13); `levelgen.CLIMBERS` + `K_MUMMY`.
+* Pool need (B, Warrior / Mage): D4 31,776 -> 32,352 / 27,712 -> 28,288 (Orc keeps `U_CLIMBH`,
+  the Archer adds `U_SKCLIMB`); D5 unchanged 29,792 / 25,728 (Archer shares the Skeleton's pair,
+  Mummy adds the shared pair); all others unchanged. Cap 33,700. Worst level D4 32,352 (slack 1,348).
+* Bytes: R6 free 162 -> 152, bank 1 free 111 -> 105 (repacked ZX0 block), bank 2 / bank 3 / low RAM 0.

@@ -236,8 +236,8 @@ def main():
             chk(f"kind_tab {col}[{tier}] == base {base}", [kcol(sym[col], tier)], [kcol(sym[col], base)])
         chk(f"tier {tier} ink != base {base} ink", [kcol(sym["KT_ATTR"], tier) != kcol(sym["KT_ATTR"], base)], [True])
     # climbers: Goblin / Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
-    # + Orc (Berserker 26, Bouncer 27), Archer (Sniper 28), Necro (Bone Caller 29)
-    CLIMB = {0, 1, 2, 3, 4, 21, 23, 24, 11, 12, 14, 26, 27, 28, 29}
+    # + Orc (Berserker 26, Bouncer 27), Archer (Sniper 28), Necro (Bone Caller 29), + Mummy 13 (fix/archer-climb; the Pharaoh boss guard is the AI's)
+    CLIMB = {0, 1, 2, 3, 4, 21, 23, 24, 11, 12, 13, 14, 26, 27, 28, 29}
     for k in range(30):
         chk(f"KF_CLIMBER[{k}]", [kcol(sym["KT_FLAGS"], k) & sym["KF_CLIMBER"] != 0], [k in CLIMB])
     # drop_tab: (kind, item, N, k) = "k in N" (§8.11 + §9.6: the base numerator + 1 per tier above 1)

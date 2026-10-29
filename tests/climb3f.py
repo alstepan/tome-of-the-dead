@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""3F-T13bc: the new climbers (user 2026-10-29: Orc / Necro / Archer families climb on the
-shared humanoid climb pair climb_h1 / climb_h2, ART3 A1). Seeded generated games, the real
+"""3F-T13bc: the new climbers (user 2026-10-29: Orc / Necro / Mummy climb on the
+shared humanoid climb pair climb_h1 / climb_h2, ART3 A1; Archer / Sniper on the Skeleton's own). Seeded generated games, the real
 level_descend (level_enter pools the level's units), the room's monsters cleared but one, which
 is re-kinded and put on the bottom storey (1) away from a ladder {c, 1}; the hero waits on the
 top storey (0). The AI (turn3.asm .seek, KF_CLIMBER only) must take it up the ladder.
@@ -12,9 +12,10 @@ top storey (0). The AI (turn3.asm .seek, KF_CLIMBER only) must take it up the la
       pair while it stands at a ladder end (the climb starts / ends at a standing row);
   C4  PHASE_TRAP, BLIT_MISS, GEN_TRAP, SEQ_TRAP stay 0 (the climb pair is pooled on that level,
       the cycle is drawn cell-aligned: STA|SYM, docs/conventions.md "Walk cycles");
-  C5  a NON-climber (Vampire on D8, Mummy on D5) put the same way never changes storey.
-Scenarios (hero, depth, kind): Orc + Archer on D4, Orc + Necro on D7, Archer + Skeleton on
-D5 (the Skeleton = control: its own climb pair). --png DIR saves a mid-climb screen per run.
+  C5  a NON-climber (Vampire on D8) put the same way never changes storey.
+Scenarios (hero, depth, kind): Orc + Archer + Sniper on D4, Orc + Necro on D7, Archer + Sniper + Skeleton + Mummy on
+D5 (Archer / Sniper / Skeleton: the SKELETON's climb pair skeleton_climb1/2, fix/archer-climb;
+Orc / Necro / Mummy: the shared humanoid pair). --png DIR saves a mid-climb screen per run.
 Build with -DDEBUG_KIT=0.  Usage: python3 tests/climb3f.py [--png DIR]"""
 import os
 import sys
@@ -36,6 +37,7 @@ OWN = {
     "ORC": {FID[n] for n in ("orc_walk1", "orc_walk2")},
     "NECRO": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3")},
     "ARCHER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
+    "SNIPER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
     "SKELETON": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
     "VAMPIRE": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3")},
     "MUMMY": {FID[n] for n in ("mummy_walk1", "mummy_walk2", "mummy_walk3", "mummy_walk4")},
@@ -43,7 +45,9 @@ OWN = {
 # (hero, depth, kind name, climber?, master seed)
 RUNS = [(0, 4, "ORC", True, 0x4101), (1, 4, "ARCHER", True, 0x4102), (0, 7, "NECRO", True, 0x7101),
         (1, 7, "ORC", True, 0x7102), (0, 5, "ARCHER", True, 0x5101), (1, 5, "SKELETON", True, 0x5102),
-        (0, 8, "VAMPIRE", False, 0x8101), (1, 5, "MUMMY", False, 0x5103)]
+        (0, 8, "VAMPIRE", False, 0x8101), (0, 5, "MUMMY", True, 0x5103), (1, 5, "MUMMY", True, 0x5104),
+        # fix/archer-climb: Archer / Sniper (the Skeleton body) climb on the SKELETON's own pair
+        (0, 4, "ARCHER", True, 0x4103), (0, 4, "SNIPER", True, 0x4104), (1, 5, "SNIPER", True, 0x5105)]
 fails = 0
 
 
@@ -134,7 +138,7 @@ with Harness() as h:
         top = storey_of(e["Y"], H6) == 0
         mid = {fid for y, py, fid in seen if (y + H6) % 9 != 8 and fid != 0xFF}
         rest = {fid for y, py, fid in seen if (y + H6) % 9 == 8 and fid != 0xFF}
-        want_climb = CLIMB_SK if kn == "SKELETON" else CLIMB_H
+        want_climb = CLIMB_SK if kn in ("SKELETON", "ARCHER", "SNIPER") else CLIMB_H
         traps = (p.rb("PHASE_TRAP"), p.rb("BLIT_MISS"), p.rb("GEN_TRAP"), p.rb("SEQ_TRAP"))
         if climber:
             check(f"C1 {tag}: climbed to the hero's storey in {turns} turns (ladder col {c}, from x {mx})",
