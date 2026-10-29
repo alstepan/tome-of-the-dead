@@ -88,10 +88,11 @@ POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN - SRC6_LEN  
                 ROLE WZ_DEAD,   FID_wizard_dead,   WZ_REST
                 ROLE WZ_JUMP1,  FID_wizard_jump1,  WZ_REST
                 ROLE WZ_JUMP2,  FID_wizard_jump2,  FID_wizard_walk1
-                ; PHASE_SHIFT: JUMP2 is drawn mid-tween at both px parities, so it
-                ; must be a real MOT frame, never the (one-shift WK4) WALK1 stand-in
-                ASSERT !PHASE_SHIFT || ((FID_knight_jump2 >= 0) && (FFL_knight_jump2 & FF_MOTION))
-                ASSERT !PHASE_SHIFT || ((FID_wizard_jump2 >= 0) && (FFL_wizard_jump2 & FF_MOTION))
+                ; PHASE_SHIFT: never the walk1 stand-in (a WK4 walk frame belongs to its cycle);
+                ; JUMP-ALT (user 2026-10-29): JUMP2 is WK4 (drawn only at px & 4 = 4; anim
+                ; .jump picks JUMP1 / JUMP2 from the new px bit 2): a real frame, not MOT.
+                ASSERT !PHASE_SHIFT || ((FID_knight_jump2 >= 0) && !(FFL_knight_jump2 & FF_MOTION))
+                ASSERT !PHASE_SHIFT || ((FID_wizard_jump2 >= 0) && !(FFL_wizard_jump2 & FF_MOTION))
                 ROLE WZ_SRAISE, FID_wizard_staffraise, FID_wizard_cast1
                 ROLE WZ_SSWING, FID_wizard_staffswing, FID_wizard_cast2
 
@@ -100,7 +101,6 @@ POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN - SRC6_LEN  
 
                 ROLE GB_REST,   FID_goblin_walk1,  FID_goblin_walk1
                 ROLE GB_HURT,   FID_goblin_hurt,   GB_REST
-                ROLE GB_DEAD,   FID_goblin_dead,   GB_REST
 
                 ROLE GH_REST,   FID_ghost_float1,  FID_ghost_float1
                 ROLE GH_LUNGE,  FID_ghost_lunge,   FID_ghost_float2
@@ -110,7 +110,8 @@ POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN - SRC6_LEN  
                 ROLE RT_REST,   FID_rat_run1,      FID_rat_run1
                 ROLE RT_BITE,   FID_rat_bite,      FID_rat_run1
                 ROLE RT_HURT,   FID_rat_hurt,      RT_REST
-                ROLE RT_DEAD,   FID_small_corpse,  RT_REST   ; 3F-T13bc: the neutral corpse (ART2 C2)
+                ROLE RT_DEAD,   FID_small_corpse,  RT_REST   ; 3F-T13bc: the neutral corpse (ART2 C2);
+                ; CORPSE-ASHES: every monster DEAD but Bat / Slime / Ghost (seq_img DEATHSEQ)
 
                 ROLE BT_REST,   FID_bat_flapup,    FID_bat_flapup
                 ROLE BT_DIVE,   FID_bat_dive,      FID_bat_flapup

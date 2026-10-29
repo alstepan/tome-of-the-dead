@@ -12,7 +12,8 @@ from game_lib import Harness, S, EMU_ARGS  # noqa: E402
 from lp import T as Proto, w16  # noqa: E402  (Proto + code(): a level_descend stub)
 
 GS_PLAYING = 2
-KEYS = ["L", "L", "L", "H", "H", "H", "K", "J", "WAIT", "SPACE"]
+KEYS = ["L", "L", "L", "H", "H", "H", "K", "J", "WAIT", "SPACE",
+        ("K", "L"), ("K", "L"), ("K", "H"), ("K", "H")]   # JUMP-ALT: running jumps (UP + side chord)
 fails = 0
 GL.Proto.snd_mode = 2                            # no stinger hold in descents
 with Harness() as h:
@@ -47,9 +48,9 @@ with Harness() as h:
             if p.rb("GAME_STATE") != GS_PLAYING:
                 break
             k = rnd.choice(KEYS)
-            if p.turn(k, max_ticks=200):
+            if p.turn(*(k if isinstance(k, tuple) else (k,)), max_ticks=200):
                 turns += 1
-                walks += k in "LH"
+                walks += k in ("L", "H")
         tr, bm = p.rb("PHASE_TRAP"), p.rb("BLIT_MISS")
         ok = tr == 0 and bm == 0
         fails += not ok

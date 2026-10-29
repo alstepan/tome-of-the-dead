@@ -110,8 +110,9 @@ for k in range(S["K_COUNT"]):
 for h in range(2):
     j1, j2 = b(S["hero_jump"] + 2 * h), b(S["hero_jump"] + 2 * h + 1)
     uses.append((j1, f"hero {h} JUMP1"))
-    if not flags(j2) & MOT:
-        fails.append(f"hero {h} JUMP2 {names[j2]}: not MOT (drawn at both parities)")
+    # JUMP-ALT: JUMP2 is WK4 (drawn at px & 4 = 4 only; anim .jump picks by px parity)
+    if flags(j2) & MOT or not flags(j2) & PH4:
+        fails.append(f"hero {h} JUMP2 {names[j2]}: not WK4 (JUMP-ALT: drawn at px & 4 = 4 only)")
 for a in range(S["ABL_COUNT"]):
     uses += [(f, f"abl_seq {a}") for f in seq(w(S["abl_seq"] + a * S["ABS_STRIDE"]))]
 uses += [(f, "wz_bonk") for f in seq(S["wz_bonk"])]
@@ -129,7 +130,8 @@ if pat:
         for ln, line in enumerate(open(os.path.join(REPO, "src", fn)), 1):
             code = line.split(";")[0]
             if pat.search(code) and "MOVECYC" not in code and "CLIMBCYC" not in code \
-                    and "CLIMBREST" not in code and "ROLE" not in code:
+                    and "CLIMBREST" not in code and "ROLE" not in code \
+                    and not code.strip().startswith("ASSERT"):
                 fails.append(f"src/{fn}:{ln}: WK4 frame named outside its move cycle: {code.strip()}")
 
 print(f"[info] PHASE_SHIFT={S.get('PHASE_SHIFT', 0)}; WK4 frames {sorted(names[f] for f in wk4)}; "

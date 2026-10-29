@@ -281,8 +281,9 @@ P_ENT_STRIDE    EQU 32
 P_MAX_ENT       EQU 16
 FRT_STRIDE      EQU 16
 FRT_MAX         EQU 132             ; 3F-T13bc: 128 -> 132 (FRT page-aligned: FRT_GAP; -20 B low-RAM reserve):
-                                    ; 132 used (ART2 / ART3 / ART4 frames +9, dk_block -1), 0 spare (the
-                                    ; next fid needs FRT_MAX 133+); 3F-T2: 160 -> 128; A6: was 160
+                                    ; 132 used (ART2 / ART3 / ART4 frames +9, dk_block -1); CORPSE-ASHES:
+                                    ; 129 used, 3 spare (skeleton_collapsed, goblin_dead, dead_humanoid
+                                    ; out; kept at 132 for the animation items); 3F-T2: 160 -> 128; A6: was 160
 FRT             EQU (P_ENTITIES - FRT_MAX * FRT_STRIDE) & $FF00   ; page-aligned (blit_sprite's nibble swap):
                                     ; 3F-T13bc $A700..$AF3F + FRT_GAP; 3F-T2 $A800..$AFFF; frame runtime
                                     ; table, 16 B/fid (4 variants x bank,lo,hi + 4 pad);
@@ -705,9 +706,11 @@ BH_K_NECRO      EQU 6
 BH_K_OGRE       EQU 6
 BH_K_DKNIGHT    EQU 6
 BH_K_ARCHMAGE   EQU 6
-BH_G_DEADH      EQU 2               ; 3F-T13 frame groups with no kind (frames.asm FRM ASSERT only):
+                                    ; 3F-T13 frame groups with no kind (frames.asm FRM ASSERT only;
+                                    ; CORPSE-ASHES: G_DEADH retired, every DEAD but Bat / Slime / Ghost
+                                    ; and the heroes is small_corpse):
 BH_G_CLIMBH     EQU 6               ; 3F-T13bc: the shared humanoid climb pair (24x48)
-BH_G_NBOLT      EQU 2               ; the shared humanoid DEAD (40x16), the Necro bolt (<= 16 px)
+BH_G_NBOLT      EQU 2               ; the Necro bolt (<= 16 px)
 BH_K_FXW       EQU 2               ; D3-4: FX frames are <= 16 px tall (FRM ASSERT only)
 BH_K_FXM        EQU 2
 

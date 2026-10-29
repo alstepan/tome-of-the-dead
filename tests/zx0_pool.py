@@ -84,11 +84,14 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # Spider level), dk_block out, the DK B3 walk3 +768 on D7) and ARCHER-DEPTHS H1 (no Archer on D7: the 2nd Necro, no Mage
 # arrows there). MEM-W1: skeleton_collapsed 24x48 -> 24x16 (-384 a Skeleton level) and
 # knight_windup 40x48 -> 32x48 (-192, Warrior); pixels unchanged. fix/archer-climb: the Archer / Sniper climb on the SKELETON's own pair (unit U_SKCLIMB): D4 +576 (Orc keeps the shared pair), D5 unchanged (the Mummy needs the shared pair, the Archer shares the Skeleton's). Update with a reason only.
+# CORPSE-ASHES: skeleton_collapsed / goblin_dead / dead_humanoid -> the shared small_corpse (U_DEADR):
+# W D1..D8 -320 -320 -384 -320 -512 -192 -192 -384 (Mage the same).
+# JUMP-ALT (user 2026-10-29): knight_jump2 / wizard_jump2 MOT -> WK4, the jump pose picked by px parity: every need -576.
 LEVEL_NEED = {
-    (0, 1): 27200, (0, 2): 26656, (0, 3): 31648, (0, 4): 32160,
-    (0, 5): 29216, (0, 6): 28768, (0, 7): 31264, (0, 8): 31264,
-    (1, 1): 23264, (1, 2): 22720, (1, 3): 27648, (1, 4): 28288,
-    (1, 5): 25344, (1, 6): 24768, (1, 7): 27264, (1, 8): 27264,
+    (0, 1): 26304, (0, 2): 25760, (0, 3): 30688, (0, 4): 31264,
+    (0, 5): 28128, (0, 6): 28000, (0, 7): 30496, (0, 8): 30304,
+    (1, 1): 22368, (1, 2): 21824, (1, 3): 26688, (1, 4): 27392,
+    (1, 5): 24256, (1, 6): 24000, (1, 7): 26496, (1, 8): 26304,
 }
 
 

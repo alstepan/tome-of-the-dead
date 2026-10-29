@@ -26,8 +26,9 @@
 ; GENERATION MAP (pool_gmap; 3F-T13: EVERY matching record applies, was the
 ; first): records DB kind, u1, u2 (u2 = PG_NONE: none); a kind with records
 ; generates their units INSTEAD of its own unit (Skeleton = U_SKARCH +
-; U_SKCLIMB + U_SKREST, Archer = U_SKARCH + U_SKCLIMB + U_DEADH, Vampire / Archmage = the Necro's,
-; Necro = its own + U_DEADH + U_NBOLT: two records). Tier rows are never in
+; U_SKCLIMB + U_SKREST + U_DEADR, Archer = U_SKARCH + U_SKCLIMB + U_DEADR, Vampire / Archmage = the Necro's,
+; Necro = its own + U_DEADR + U_NBOLT: two records; CORPSE-ASHES: U_DEADR = THE
+; monster corpse of every kind but the Bat / Slime / Ghost). Tier rows are never in
 ; LP_KINDS / LP_BOSS (spawns take the base's frames, game.md §9.6), so they
 ; need no record; their gu_tab row names the base's own unit (documentation).
 ; HERO EXTRAS (pool_xmap, 3F-T2): records DB kind, hero kind, unit: on a level
@@ -327,7 +328,7 @@ gu_tab:
                 GU   KFID_ORC, KFCNT_ORC                       ; K_ORC
                 GU   KFID_SKELETON, KFCNT_SKARCH               ; K_ARCHER (= U_SKARCH: walk1..4 + cut)
                 GU   KFID_MUMMY, KFCNT_MUMMY                   ; K_MUMMY
-                GU   KFID_NECRO, KFCNT_NECRO                   ; K_NECRO = walk1..3 (+ U_NCAST, U_DEADH, U_NBOLT, U_CLIMBH)
+                GU   KFID_NECRO, KFCNT_NECRO                   ; K_NECRO = walk1..3 (+ U_NCAST, U_DEADR, U_NBOLT, U_CLIMBH)
                 GU   KFID_OGRE, KFCNT_OGRE                     ; K_OGRE
                 GU   KFID_DKNIGHT, KFCNT_DKNIGHT               ; K_DKNIGHT
                 GU   KFID_NECRO, KFCNT_NECRO                   ; K_ARCHMAGE (the Necro's frames)
@@ -352,24 +353,23 @@ gu_tab_x:                                      ; units >= K_MAX (extras, 3F-T13)
 U_SKARCH        EQU K_MAX + 0
                 GU   KFID_SKELETON, KFCNT_SKARCH               ; Skeleton walk1..4 + cut (= the Archer)
 U_SKREST        EQU K_MAX + 1
-                GU   KFID_SKREST, KFCNT_SKREST                 ; Skeleton raise, collapsed, hurt
+                GU   KFID_SKREST, KFCNT_SKREST                 ; Skeleton raise, hurt (CORPSE-ASHES: collapsed out)
 U_DEADR         EQU K_MAX + 2
-                GU   KFID_RATDEAD, 1                           ; small_corpse (Rat, Spider; 3F-T13bc: was rat_dead)
-U_DEADH         EQU K_MAX + 3
-                GU   KFID_DEADH, 1                             ; dead_humanoid (every 3F humanoid + Ogre)
-U_NBOLT         EQU K_MAX + 4
+                GU   KFID_RATDEAD, 1                           ; small_corpse: CORPSE-ASHES, every monster but Bat / Slime / Ghost
+                ; CORPSE-ASHES: U_DEADH (dead_humanoid) retired; the later units renumbered
+U_NBOLT         EQU K_MAX + 3
                 GU   KFID_NBOLT, KFCNT_NBOLT                   ; nbolt_fly1/2 + hit (Necro, Archmage)
-U_ARROWM        EQU K_MAX + 5
+U_ARROWM        EQU K_MAX + 4
                 GU   FID_arrow_fly1, 2                         ; Mage extra on Archer levels (D4 / D5 / D7)
-U_DAGM          EQU K_MAX + 6
+U_DAGM          EQU K_MAX + 5
                 GU   FID_dagger_spin1, 2                       ; Mage extra on Goblin levels (Slinger rock)
-U_CLIMBH        EQU K_MAX + 7
+U_CLIMBH        EQU K_MAX + 6
                 GU   KFID_CLIMBH, 2                            ; 3F-T13bc: the shared humanoid climb pair
-U_NCAST         EQU K_MAX + 8
+U_NCAST         EQU K_MAX + 7
                 GU   KFID_NCAST, 1                             ; 3F-T13bc: necro_cast (Necro, Archmage)
-U_VBITE         EQU K_MAX + 9
+U_VBITE         EQU K_MAX + 8
                 GU   KFID_VBITE, 1                             ; 3F-T13bc: vamp_bite (Vampire)
-U_SKCLIMB       EQU K_MAX + 10
+U_SKCLIMB       EQU K_MAX + 9
                 GU   KFID_SKCLIMB, KFCNT_SKCLIMB               ; Skeleton climb1/2 (Skeleton, Archer, Sniper)
 gu_tab_end:
 GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
@@ -386,26 +386,27 @@ GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
 ; pool_gmap — the generation map (see the header): every record of a kind applies. Kinds < $80.
 pool_gmap:
                 DB   K_SKELETON, U_SKARCH,   U_SKREST
-                DB   K_SKELETON, U_SKCLIMB,  PG_NONE
+                DB   K_SKELETON, U_SKCLIMB,  U_DEADR
+                DB   K_GOBLIN,   K_GOBLIN,   U_DEADR   ; CORPSE-ASHES: the Goblin's DEAD is the shared corpse
                 DB   K_RAT,      K_RAT,      U_DEADR
                 DB   K_SPIDER,   K_SPIDER,   U_DEADR
                 ; 3F-T13bc: the Necro walk is shared (K_NECRO unit = walk1..3), the Vampire adds its
                 ; bite, the Necro / Archmage the cast; climbers (Orc, Necro, Mummy) add the
                 ; shared climb pair U_CLIMBH (the Archer family uses the Skeleton's U_SKCLIMB) (once a level: dedup per unit)
                 DB   K_VAMPIRE,  K_NECRO,    U_VBITE
-                DB   K_VAMPIRE,  U_DEADH,    PG_NONE
-                DB   K_ORC,      K_ORC,      U_DEADH
+                DB   K_VAMPIRE,  U_DEADR,    PG_NONE
+                DB   K_ORC,      K_ORC,      U_DEADR
                 DB   K_ORC,      U_CLIMBH,   PG_NONE
-                DB   K_ARCHER,   U_SKARCH,   U_DEADH  ; SHOOT = the Skeleton cut (game.md §9.7 DECIDED)
+                DB   K_ARCHER,   U_SKARCH,   U_DEADR  ; SHOOT = the Skeleton cut (game.md §9.7 DECIDED)
                 DB   K_ARCHER,   U_SKCLIMB,  PG_NONE  ; the Skeleton's own climb pair (not U_CLIMBH)
-                DB   K_MUMMY,    K_MUMMY,    U_DEADH
+                DB   K_MUMMY,    K_MUMMY,    U_DEADR
                 DB   K_MUMMY,    U_CLIMBH,   PG_NONE
-                DB   K_NECRO,    K_NECRO,    U_DEADH
+                DB   K_NECRO,    K_NECRO,    U_DEADR
                 DB   K_NECRO,    U_NBOLT,    U_NCAST
                 DB   K_NECRO,    U_CLIMBH,   PG_NONE
-                DB   K_OGRE,     K_OGRE,     U_DEADH
-                DB   K_DKNIGHT,  K_DKNIGHT,  U_DEADH
-                DB   K_ARCHMAGE, K_NECRO,    U_DEADH
+                DB   K_OGRE,     K_OGRE,     U_DEADR
+                DB   K_DKNIGHT,  K_DKNIGHT,  U_DEADR
+                DB   K_ARCHMAGE, K_NECRO,    U_DEADR
                 DB   K_ARCHMAGE, U_NBOLT,    U_NCAST
                 DB   PG_NONE
 pool_gmap_end:
