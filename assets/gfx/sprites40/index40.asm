@@ -58,3 +58,23 @@
 ; --- the shared humanoid climb pair (Orc / Necro / Mummy families; STA|SYM, kind ink)
         INCLUDE "climb_h1.asm"
         INCLUDE "climb_h2.asm"
+; --- Orc V4 Ironhide: 6 frames (ART11; orc_walk3 / orc_hurt are new ids)
+        INCLUDE "orc_walk1.asm"
+        INCLUDE "orc_walk2.asm"
+        INCLUDE "orc_walk3.asm"
+        INCLUDE "orc_raise.asm"
+        INCLUDE "orc_attack.asm"
+        INCLUDE "orc_hurt.asm"
+; --- Mummy V2 tomb guard: walk1..4 + attack (ART12 pick; HURT = the rest pose; import_anim40 mummy)
+        INCLUDE "mummy_walk1.asm"
+        INCLUDE "mummy_walk2.asm"
+        INCLUDE "mummy_walk3.asm"
+        INCLUDE "mummy_walk4.asm"
+        INCLUDE "mummy_attack.asm"
+; --- Necromancer V2 bone caster: walk1..4 + cast (ART12 pick; Archmage / Bone Caller share it;
+;     import_anim40 necro)
+        INCLUDE "necro_walk1.asm"
+        INCLUDE "necro_walk2.asm"
+        INCLUDE "necro_walk3.asm"
+        INCLUDE "necro_walk4.asm"
+        INCLUDE "necro_cast.asm"

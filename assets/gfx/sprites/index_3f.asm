@@ -27,6 +27,10 @@
 ; ART2 / ART3 final frames (tools/gen_art2_final.py / gen_art3_final.py own the .asm files;
 ; wired by 3F-T13bc: src/frames.asm FRM rows)
         INCLUDE "orc_raise.asm"
+; ANIM-IMPORT2: new 40-px-only frames (no 48-px file; tools/zx0_pack.py sprite_asm resolves
+; them in assets/gfx/sprites40/, listed in its index40.asm)
+        INCLUDE "orc_walk3.asm"
+        INCLUDE "orc_hurt.asm"
         INCLUDE "ogre_raise.asm"
         INCLUDE "vamp_bite.asm"
         INCLUDE "small_corpse.asm"

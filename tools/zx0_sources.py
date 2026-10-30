@@ -176,7 +176,7 @@ def raw_source_total(index_names):
             n += (1 if kw == "DEFB" else 2) * len(items)
         return n
     return count(os.path.join(SPR, "index.asm")) + sum(
-        count(os.path.join(SPR, nm + ".asm")) for nm in index_names)
+        count(zp.sprite_asm(nm)) for nm in index_names)          # ANIM-IMPORT2: the 40-px override
 
 
 def standin_blocks(tmp):

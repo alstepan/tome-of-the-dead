@@ -146,7 +146,7 @@ ksm_sl_e:
 ; a block, ASSERTed). 2-frame walk: MOVECYC2 walk2, walk1 — WALK1 (the rest
 ; pose) in the odd, cell-aligned slot (frames.asm). HURT = the rest frame held
 ; + the $42 hit flash (R4) — ANIM-IMPORT: real poses for the Spider (bite), Archer
-; (skeleton_hurt); the Orc / Vampire real hurt poses are pending (feat/anim-import wip). DEAD = the shared
+; (skeleton_hurt), Orc (orc_hurt, ANIM-IMPORT2); the Vampire's lands with its own set. DEAD = the shared
 ; small_corpse (CORPSE-ASHES: every monster but Bat / Slime / Ghost). Attack
 ; timing = the Skeleton's (wind-up 3, strike 2 + IMPACT; 3F-T13bc: the Orc /
 ; Ogre wind-up is their RAISE frame, the Vampire strikes with vamp_bite) / the
@@ -165,15 +165,15 @@ sp_attack:      DB FID_spider_walk1, 1, 0, FID_spider_bite, 2, SF_IMPACT, SEQ_EN
 sp_hurt:        DB FID_spider_bite, 3, 0, SEQ_END        ; ANIM-IMPORT item 1: HURT = the bite pose (0 B)
 sp_death:       DEATHSEQ FID_spider_bite, FID_small_corpse, FID_small_corpse, FID_spider_walk1
 ksm_sp_e:
-; --- Orc (Berserker, Bouncer): climber; RAISE -> ATTACK ---
+; --- Orc (Berserker, Bouncer): climber; RAISE -> ATTACK; V4 Ironhide B3 walk + HURT (ANIM-IMPORT2) ---
 ksm_or:         KSMH ksm_or_e - ksm_or_s, 3, or_idle, or_move, or_climb, or_climb + 1, or_attack, or_hurt, or_hurt, or_death, ksm_or_s
 ksm_or_s:
 or_idle:        DB 1, FID_orc_walk1, 1, SEQ_END
-or_move:        MOVECYC2 orc_walk2, orc_walk1
+or_move:        MOVECYC4 orc_walk2, orc_walk1, orc_walk3, orc_walk1   ; ANIM-IMPORT2: B3 (Orc V4)
 or_climb:       CLIMBCYC FID_climb_h1, FID_climb_h2, FID_orc_walk1, FID_orc_walk1, FID_orc_walk1, FID_orc_walk1
 or_attack:      DB FID_orc_raise, 3, 0, FID_orc_attack, 2, SF_IMPACT, SEQ_END
-or_hurt:        DB FID_orc_walk1, 3, 0, SEQ_END
-or_death:       DEATHSEQ FID_orc_walk1, FID_small_corpse, FID_small_corpse, FID_orc_walk1
+or_hurt:        DB FID_orc_hurt, 3, 0, SEQ_END           ; ANIM-IMPORT2: its own HURT pose (Orc V4)
+or_death:       DEATHSEQ FID_orc_hurt, FID_small_corpse, FID_small_corpse, FID_orc_walk1
 ksm_or_e:
 ; --- Necromancer (Archmage, Bone Caller): climber (not the Archmage: it never walks, no
 ; KF_CLIMBER); walk B4 = walk2, walk4, walk3, walk1 (ART3; ANIM-IMPORT, was B3); CAST ---
