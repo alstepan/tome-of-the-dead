@@ -26,10 +26,10 @@ def load():
         n = tap[i] | tap[i + 1] << 8
         blocks.append(tap[i + 2:i + 2 + n])
         i += 2 + n
-    b3 = blocks[5]
+    b3 = blocks[7]                      # +2 since b918cc5: loading-screen header + SCREEN$ blocks precede the code header
     assert b3[0] == 0xFF, "bank-3 block flag"
     global R6BLK
-    R6BLK = blocks[11]                 # TAPE_BLOCKS order (main.asm): the R6 region, at R6_ADDR (3F-T5: drop_tab lives there)
+    R6BLK = blocks[13]                 # TAPE_BLOCKS order (main.asm): the R6 region, at R6_ADDR (3F-T5: drop_tab lives there)
     assert R6BLK[0] == 0xFF, "R6 block flag"
     R6BLK = R6BLK[1:-1]
     return sym, b3[1:-1]
