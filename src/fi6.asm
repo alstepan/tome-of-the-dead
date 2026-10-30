@@ -4,7 +4,7 @@
 ; uncontended: the per-pickup / per-drop update runs here).
 ; The cache (defs.asm FI_*, docs/memory-map.md "FLOOR1") holds, for ONE room
 ; (CUR_ROOM; EXIT_DEST during a scroll), up to FI_SLOTS distinct item types:
-; per slot its 16x16 icon (copied from icons16, this region) and ink
+; per slot its 16x16 icon (unpacked from icpk by ic_unp, this region) and ink
 ; (item_ink), and per storey / col the slot of the item cell drawn there
 ; (FI_CELL). erase_rect (bank 2) draws from it on every restore of a marker
 ; cell; fi_cells (lowram) on the room draw and the scroll strips.
@@ -166,9 +166,11 @@ fi_slot:        ld   a, b
                 ld   h, FI_INK >> 8
                 ld   a, e
                 push bc
-                ld   b, ICONS16_BYTES
-.ik:            ld   (hl), a
+                ld   b, ICONS16_BYTES / 4      ; MEM-RECLAIM w2c: x4 unrolled (+3 B, -0.3k T
+.ik:            DUP  4                         ; on the drop's kill tick: pays for ic_unp)
+                ld   (hl), a
                 inc  l
+                EDUP
                 djnz .ik
                 pop  bc
                 ld   a, b                      ; the icon: type - IT_BAG_LO; below it
@@ -178,16 +180,16 @@ fi_slot:        ld   a, b
                 cp   ICONS16_AMMO_DAGGER
                 jr   nc, .ix
                 ld   a, IT_P_HEAL - IT_BAG_LO
-.ix:            call ic_addr                   ; HL = its 32 B (icons6.asm)
+.ix:            ld   h, a
                 ld   a, c
                 rrca
                 rrca
                 rrca                           ; slot * 32
                 ld   e, a
                 ld   d, FI_GLY >> 8
-                push bc                        ; (icons16 is laid out as 4 quarters of 8
-                ld   bc, ICONS16_BYTES         ; contiguous lines: erase_rect steps E by 1)
-                ldir
+                ld   a, h
+                push bc                        ; (4 quarters of 8 contiguous lines:
+                call ic_unp                    ; erase_rect steps E by 1; icons6.asm)
                 pop  bc
                 ld   a, c                      ; A = slot, NC (rrca left CF = slot bit 2: clear it)
                 or   a

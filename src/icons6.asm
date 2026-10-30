@@ -1,7 +1,7 @@
 ;==============================================================================
 ; icons6.asm — IC1 the 16x16 item icons (game.md §8.11 Q5), the R6 region
 ; (r6.asm rules: far6 only from other banks, results in BC / DE / HL, no SMC).
-; The icon table icons16 (assets/gfx/icons/icons16.asm, 43 x 32 = 1,376 B raw: 45 logical icons, the 3 potions share one shape; generated
+; The icon table (assets/gfx/icons/icons16.asm: 45 logical icons, the 3 potions share one shape, PACKED (MEM-RECLAIM w2c) into icpk 995 B for 1,376 raw; generated
 ; by tools/icons16.py) follows this code in R6: one copy, read only here, so
 ; every draw site reaches it through these routines (the ISR never reads it).
 ;   icon_slot  far6 from the page overlay (bag grid, worn row, description)
@@ -17,7 +17,7 @@
 ; = none), D = char row, E = col of the 2 x 2 cells. An item -> its icon; an
 ; empty worn slot -> its placeholder (ICONS16_PH + worn slot); an empty bag
 ; slot / none -> the 4 cells' bitmap cleared, attrs untouched.
-; Out: L = 0 cleared, else drawn.  Clobbers: A, BC, DE, HL.  ~1.3k T
+; Out: L = 0 cleared, else drawn.  Clobbers: A, BC, DE, HL.  ~3.1k T (MIRROR ~4.5k; ic1)
 ; ic_slot — the same with B = row, C = col (R6 callers).
 ;------------------------------------------------------------------------------
 icon_slot:      ld   b, d
@@ -39,9 +39,9 @@ ic_slot:        ld   e, a                      ; E = slot
                 ; fall through
 ;------------------------------------------------------------------------------
 ; ic_draw — A = icon index 0..ICONS16_COUNT-1, B = row, C = col: the icon
-; copied into the 2 x 2 cells, their attrs = its ink on black. Out: L != 0.
+; unpacked into the 2 x 2 cells (ic_scr), their attrs = its ink on black. Out: L != 0.
 ; ic_clr  — B = row, C = col: the 2 x 2 cells' bitmap cleared. Out: L = 0.
-; Clobbers: A, BC, DE, HL.   ~1.2k T (16 lines x 2 B x ~33 T + the 4 attrs)
+; Clobbers: A, BC, DE, HL.   draw ~2.9k T (a MIRROR icon ~4.3k), clear ~1.2k T
 ;------------------------------------------------------------------------------
 ic_draw:        ld   d, a                      ; D = index
                 sub  ICONS16_PH
@@ -50,12 +50,13 @@ ic_draw:        ld   d, a                      ; D = index
                 ld   a, d
                 add  a, IT_BAG_LO
                 call item_ink                  ; A = attr (keeps BC, DE)
-.ph:            ld   e, $FF                    ; copy mask: the icon as is
+.ph:            ld   e, $FF                    ; E != 0: draw
                 jr   ic_blit
-ic_clr:         xor  a                         ; attr 0 = none written; mask 0 = clear
-                ld   d, a
+ic_clr:         xor  a                         ; attr 0 = none written; E = 0: clear
                 ld   e, a
-; ic_blit — A = attr (0: attrs untouched), D = index, E = byte mask, B / C cell
+; ic_blit — A = attr (0: attrs untouched), D = index, E = $FF draw / 0 clear,
+; B / C cell. MEM-RECLAIM w2c: a draw unpacks the icon straight onto the
+; screen (ic_scr: no buffer, no copy pass); every caller passes E = $FF or 0.
 ic_blit:        push af                        ; [attr]
                 call attr_addr                 ; HL = attr (B, C)   (BC, DE kept)
                 push hl                        ; [attr address]
@@ -65,24 +66,28 @@ ic_blit:        push af                        ; [attr]
                 rlca
                 rlca
                 or   SCREEN_BITMAP >> 8
-                ld   b, a
-                ld   c, l                      ; BC = bitmap line 0 of the cell
+                ld   b, a                      ; B = bitmap line 0's high byte (C = L)
                 ld   a, d
-                call ic_addr                   ; HL = the icon's 32 B (keeps BC, DE)
-                ld   a, e
+                inc  e
+                dec  e
                 ld   d, b
-                ld   e, c                      ; DE = the screen
-                ld   c, a                      ; C = mask
-                call .cell                     ; upper cells: rows 0..7
-                ld   a, e
-                add  a, 32                     ; the next char row ...
-                ld   e, a
-                jr   c, .th                    ; ... crossed a third: D is right already
-                ld   a, d
-                sub  8
-                ld   d, a
-.th:            call .cell                     ; lower cells: rows 8..15
-                pop  hl                        ; attr address
+                ld   e, l                      ; DE = bitmap line 0 of the cell
+                jr   z, .clr
+                call ic_scr
+                jr   .at
+.clr:           ld   b, 2                      ; 2 char rows ...
+.c2:            ld   c, 8                      ; ... of 8 lines x 2 cells
+                xor  a                         ; (ic_sstep clobbers A)
+.c1:            ld   (de), a
+                inc  e
+                ld   (de), a
+                dec  e
+                inc  d
+                dec  c
+                jr   nz, .c1
+                call ic_sstep
+                djnz .c2
+.at:            pop  hl                        ; attr address
                 pop  af                        ; attr
                 or   a
                 jr   z, .none
@@ -96,26 +101,6 @@ ic_blit:        push af                        ; [attr]
                 ld   (hl), a
                 ret
 .none:          ld   l, a                      ; L = 0: cleared
-                ret
-; .cell — 2 quarters (16 B at HL, FLOOR1 layout: 8 lines each) & C -> the
-; cells at DE / DE + 1; D advances 8, E kept.  Clobbers: A, B
-.cell:          call .q
-                ld   a, d
-                sub  8
-                ld   d, a
-                inc  e
-                call .q
-                dec  e
-                ret
-.q:             ld   b, 4                      ; 2 lines a pass
-.ln:            DUP  2
-                ld   a, (hl)
-                and  c
-                ld   (de), a
-                inc  hl
-                inc  d
-                EDUP
-                djnz .ln
                 ret
                 ASSERT ICONS16_BYTES == 32 && ICONS16_COUNT * ICONS16_BYTES < $10000
                 ASSERT ICONS16_PH == IT_COUNT - IT_BAG_LO && ICONS16_AMMO_DAGGER == ICONS16_PH + WORN_SLOTS
@@ -215,38 +200,189 @@ it_tab:         ITB  IC_NONE, 0                ; IT_NONE
                 ASSERT IT_HELM_LO == IT_ARM_HI + 1 && IT_CHARM_LO == IT_HELM_HI + 1
 
 ;------------------------------------------------------------------------------
-; ic_addr — A = a LOGICAL icon index (type - IT_BAG_LO, ICONS16_PH + worn slot,
-; the floor ammo): HL = its 32 B in icons16. FLOOR1 (user 2026-10-27): the 3
-; potions share Heal's shape (their inks differ): logical 6 / 7 -> physical 5,
-; >= 8 -> - 2.  Keeps BC, DE.  Clobbers A, F.   ~0.2k T
+; MEM-RECLAIM w2c: the icons are PACKED (icpk, 995 B for the 1,376 raw; format
+; in icons16.asm, Python model tools/icons16.py pk_decode) and unpacked byte-
+; exact by ic_scr (onto the screen: ic_blit) or ic_unp (FI_GLY: fi6). A column
+; = 2 octs (8 lines each: a mask byte, 1 = repeat the previous byte, bit 7
+; first, + the literals); a MIRROR icon's right column is its left one
+; bit-reversed (rev8, 66 T a line: a 256-B table would cost more R6 than the
+; mirror saves).
+;
+; ic_find — A = a LOGICAL icon index (type - IT_BAG_LO, ICONS16_PH + worn
+; slot, the floor ammo): HL = its stream, C = MIRROR << 7 | delta. FLOOR1
+; (user 2026-10-27): the 3 potions share Heal's shape (their inks differ):
+; logical 6 / 7 -> physical 5, >= 8 -> - 2.  Keeps DE.  Clobbers: A, C.  ~0.25k T
 ;------------------------------------------------------------------------------
-ic_addr:        cp   ICONS16_SHARE_LO
+ic_find:        cp   ICONS16_SHARE_LO
                 jr   c, .p
                 sub  ICONS16_SHARE_N
                 cp   ICONS16_SHARE_LO
                 jr   nc, .p
                 ld   a, ICONS16_SHARE_LO - 1   ; Mana / Cure -> Heal's shape
-.p:             ld   l, a
-                ld   h, 0
+.p:             push de
+                ld   e, a
+                ld   d, 0                      ; DE = p
+                ld   hl, icpk_idx
+                add  hl, de
+                ld   c, (hl)
+                ld   l, e
+                ld   h, d
                 add  hl, hl
                 add  hl, hl
+                add  hl, de
                 add  hl, hl
-                add  hl, hl
-                add  hl, hl                    ; * ICONS16_BYTES
-                push de
-                ld   de, icons16
+                add  hl, de
+                add  hl, hl                    ; HL = 22 p (ICONS16_PK_K)
+                ld   a, c
+                and  $7F
+                ld   e, a                      ; (D = 0)
+                add  hl, de
+                ld   de, icpk_base
                 add  hl, de
                 pop  de
                 ret
                 ASSERT ICONS16_SHARE_LO == IT_P_MANA - IT_BAG_LO && ICONS16_SHARE_LO - 1 == IT_P_HEAL - IT_BAG_LO
-                ASSERT ICONS16_SHARE_N == 2 && IT_P_CURE == IT_P_MANA + 1
+                ASSERT ICONS16_SHARE_N == 2 && IT_P_CURE == IT_P_MANA + 1 && ICONS16_PK_K == 22
+
+;------------------------------------------------------------------------------
+; ic_scr — A = a logical icon index, DE = the bitmap address of line 0 of the
+; UL cell (byte-aligned 2 x 2 cells, any char row): the icon drawn (COPIED).
+; Clobbers: A, BC, DE, HL.   ~2.6k T (32 lines x ~47 T + lookup); MIRROR ~4k T (16 rev8 lines ~125 T)
+;------------------------------------------------------------------------------
+ic_scr:         call ic_find
+                push de                        ; [UL]
+                push bc                        ; [C = MIRROR flag]
+                call .col0                     ; UL, LL
+                pop  bc
+                pop  de
+                inc  e                         ; UR
+                rl   c
+                jr   c, .mcol
+.col0:          xor  a                         ; A = the column's "previous" byte
+                call .oct
+                ld   b, a
+                call ic_sstep
+                ld   a, b
+; .oct — 8 lines down: a mask byte at HL (bit 7 first; 1 = repeat A) + its
+; literals -> (DE), D advanced 8.  A = previous in / out.  Clobbers: C, F
+; (51 T a literal line, 43 a repeat)
+.oct:           ld   c, (hl)
+                inc  hl
+                scf                            ; sentinel: C = 0 after the 8th shift,
+                rl   c                         ; so no counter
+.ol:            jr   c, .or
+                ld   a, (hl)                   ; a literal
+                inc  hl
+.or:            ld   (de), a
+                inc  d
+                sla  c
+                jr   nz, .ol
+                ret
+; .mcol — the right column = the left one (DE - 1) bit-reversed, line by line.
+.mcol:          call .m8
+                call ic_sstep
+.m8:            ld   c, 8
+.mb:            dec  e
+                ld   a, (de)
+                inc  e
+                call rev8
+                ld   (de), a
+                inc  d
+                dec  c
+                jr   nz, .mb
+                ret
+; ic_sstep — D / E from below an 8-line cell (D advanced 8) to line 0 of the
+; cell under it (the char row below; E + 32 crossing a third: D is right).
+; Clobbers: A, F
+ic_sstep:       ld   a, e
+                add  a, 32
+                ld   e, a
+                ret  c
+                ld   a, d
+                sub  8
+                ld   d, a
+                ret
+
+; rev8 — A = A bit-reversed (J. Metcalf's 17-B swap network).  Clobbers: B, F.  66 T
+rev8:           ld   b, a
+                rlca
+                rlca
+                xor  b
+                and  $AA
+                xor  b
+                ld   b, a
+                rlca
+                rlca
+                rlca
+                rrc  b
+                xor  b
+                and  $66
+                xor  b
+                ret
+
+;------------------------------------------------------------------------------
+; ic_unp — A = a logical icon index, DE = a 32-ALIGNED destination (FI_GLY +
+; 32 slot): the icon's 32 B in the FLOOR1 layout (UL, UR, LL, LR quarters of 8
+; contiguous lines) — fi6's per-room glyph cache.
+; Clobbers: A, BC, DE, HL.   ~1.6k T (unrolled, ~35 T a line); MIRROR ~3k T
+;------------------------------------------------------------------------------
+ic_unp:         call ic_find
+                push bc                        ; [C = MIRROR flag]
+                call .col0                     ; UL -> +0..7, LL -> +16..23
+                pop  bc
+                ld   a, e
+                sub  16
+                ld   e, a                      ; +24 -> +8 (UR) (aligned: no borrow)
+                rl   c
+                jr   c, .mir
+.col0:          xor  a                         ; A = the column's "previous" byte
+                call .oct
+                ld   b, a
+                ld   a, e
+                add  a, 8
+                ld   e, a                      ; the column's lower quarter
+                ld   a, b
+; .oct — as ic_scr's, stepping E (8 contiguous lines, no carry: aligned),
+; UNROLLED (+~50 B): fi_slot runs on the kill tick of a monster drop (budget
+; lcastf), 39 T a literal line / 31 a repeat vs the loop's 51 / 43.
+.oct:           ld   c, (hl)
+                inc  hl
+                DUP  8
+                sla  c
+                jr   c, $ + 4                  ; repeat: skip the literal fetch
+                ld   a, (hl)
+                inc  hl
+                ld   (de), a
+                inc  e
+                EDUP
+                ret
+; .mir — E = +8: UR = UL and LR = LL (8 B below), each line bit-reversed
+.mir:           ld   h, d
+                ld   l, e                      ; HL = +8 (UR)
+                call .m8
+                ld   a, l
+                add  a, 8
+                ld   l, a                      ; +24 (LR)
+.m8:            ld   a, l
+                sub  8
+                ld   e, a                      ; DE = HL - 8 (D = H: aligned)
+                ld   c, 8
+.mb:            ld   a, (de)
+                inc  e
+                call rev8
+                ld   (hl), a
+                inc  l
+                dec  c
+                jr   nz, .mb
+                ret
+                ASSERT (FI_GLY & 31) == 0 && ATTR_STRIDE == 32
 
 ;------------------------------------------------------------------------------
 ; worn_draw — the panel's 4 worn cells (rows LOG_ROW..+1, cols GEAR_COL + 2k,
 ; WS_* order: weapon, armour, helmet, charm): the worn item's icon, else its
 ; slot placeholder (game.md §8.11 Q5 "Panel worn cells"); marked for present.
 ; far6 from panel_init (bank 3, per level). (EQUIP / REMOVE: worn_cell.)
-; Clobbers: A, BC, DE, HL.   ~6k T
+; Clobbers: A, BC, DE, HL.   ~10-16k T (4 icons; 16.3k in ic1 with 3 MIRROR ones)
 ;------------------------------------------------------------------------------
 worn_draw:      ld   bc, (LOG_ROW << 8) | GEAR_COL
                 ld   a, PG_SLOT_WORN
@@ -268,7 +404,7 @@ worn_draw:      ld   bc, (LOG_ROW << 8) | GEAR_COL
 ;------------------------------------------------------------------------------
 ; worn_cell — A = a gear type: the panel cell of its worn slot redrawn (the
 ; slot's item now, else its placeholder), marked for present. fx_done (EQUIP /
-; REMOVE: A = the item equipped / removed).  Clobbers: A, BC, DE, HL.  ~2.6k T
+; REMOVE: A = the item equipped / removed).  Clobbers: A, BC, DE, HL.  ~3.5-5k T
 ;------------------------------------------------------------------------------
 worn_cell:      ld   bc, (LOG_ROW << 8) | GEAR_COL
                 ld   e, PG_SLOT_WORN
@@ -303,7 +439,7 @@ worn_cell:      ld   bc, (LOG_ROW << 8) | GEAR_COL
 ; empty class -> its representative APPLE / HEAL / TELEPORT (the caller greys
 ; it, IS_GREY). Then at (ICON_ROW + 1, D + 2) the count OF THAT TYPE (all its
 ; stacks, capped 9) in ATTR_HUD.
-; Clobbers: A, BC, DE, HL.   ~4-9k T (bag_pick ~0.5-6k, icon ~1.2k, digit ~1k)
+; Clobbers: A, BC, DE, HL.   ~5-11k T (bag_pick ~0.5-6k, icon ~2.9-4.3k, digit ~1k)
 ;------------------------------------------------------------------------------
 qs_draw:        cp   QS_DAG
                 jr   nc, qs_ammo               ; AMMO-COUNT: the Warrior's dagger / bow slots
@@ -394,7 +530,7 @@ qs_pd:          ld   a, d
 ; above it on row ICON_ROW (a 6x8 digit does not fit two to a cell: read
 ; top-down, "2" over "0" = 20).  The caller greys / selects the 6 attrs
 ; afterwards (a 0 count is a grey "0").
-; Clobbers: A, BC, DE, HL.   ~2-3k T (icon 1.2k + 1-2 digits ~0.5k each)
+; Clobbers: A, BC, DE, HL.   ~4-6k T (icon ~2.9-4.3k + 1-2 digits ~0.5k each)
 ;------------------------------------------------------------------------------
 qs_ammo:        ld   c, d                      ; C = col
                 ld   b, ICON_ROW

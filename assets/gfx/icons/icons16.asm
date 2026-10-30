@@ -8,7 +8,7 @@
 ; OR) into 2x2 byte-aligned cells.
 ; Index = type - IT_BAG_LO (0..38); 39 + worn slot = empty-slot placeholders
 ; (weapon, armour, helmet, charm); 43 / 44 = floor ammo (IT_DAGGER, IT_ARROW;
-; counters, never in the bag). Address = icons16 + index * 32.
+; counters, never in the bag). Raw: icons16 + index * 32 (reference only, below).
 ; Ink per icon = it_tab (src/lowram.asm; source tools/items_model.py ITEM_INK) with
 ; paper black (cursor: paper blue); placeholders ink $05; ammo = ITEM_INK. Ink per icon
 ; is listed below for reference only; the draw takes it from it_tab.
@@ -25,7 +25,13 @@ ICONS16_PH      EQU 39              ; first placeholder index (39 + worn slot)
 ICONS16_AMMO_DAGGER EQU 43          ; floor ammo IT_DAGGER
 ICONS16_AMMO_ARROW  EQU 44          ; floor ammo IT_ARROW
 ICONS16_INK_PH  EQU $05             ; placeholder ink (dim cyan)
+ICONS16_PK_K    EQU 22              ; MEM-RECLAIM w2c: icpk_idx delta base (B per icon)
+                ASSERT ICONS16_COUNT == 45 && ICONS16_AMMO_ARROW == ICONS16_COUNT - 1
+                ASSERT ICONS16_PHYS == ICONS16_COUNT - ICONS16_SHARE_N
 
+; The RAW table: the reference the tests compare the screen against (tests/game_lib.py
+; icons16_table) — NOT assembled (MEM-RECLAIM w2c): the build holds icpk below.
+    IF 0
 icons16:
 ;  0 f_carrot     IT_F_CARROT    ink $06
                 DEFB $00,$00,$00,$00,$00,$01,$03,$07,$00,$66,$2C,$38,$F6,$F0,$E0,$40
@@ -156,6 +162,138 @@ icons16:
 ; 44 ammo_arrow   IT_ARROW       ink $46
                 DEFB $00,$00,$00,$00,$00,$00,$00,$00,$00,$3E,$1E,$0E,$1A,$32,$60,$C0
                 DEFB $01,$03,$26,$2C,$38,$7C,$66,$00,$80,$00,$00,$00,$00,$00,$00,$00
-                ASSERT ICONS16_COUNT == 45 && ICONS16_AMMO_ARROW == ICONS16_COUNT - 1
                 ASSERT $ - icons16 == ICONS16_PHYS * ICONS16_BYTES
-                ASSERT ICONS16_PHYS == ICONS16_COUNT - ICONS16_SHARE_N
+    ENDIF
+
+; MEM-RECLAIM w2c: the PACKED icons (43 + 952 B, was 1376 raw), decoded byte-exact by
+; icons6.asm ic_unp. Per physical icon p: icpk_idx[p] = MIRROR << 7 | delta; its stream
+; at icpk_base + ICONS16_PK_K * p + delta: the left column (UL oct, LL oct), then, unless
+; MIRROR (right = left bit-reversed), the right column (UR oct, LR oct). An oct = a mask
+; byte (bit 7 = line 0; 1 = repeat the column's previous byte, from 0) + its literals.
+icpk_idx:
+                DEFB $01,$02,$00,$02,$00,$00,$02,$8C,$06,$8F,$09,$0D,$0F,$0B,$0A,$0D
+                DEFB $11,$12,$14,$15,$95,$8C,$07,$91,$08,$0C,$90,$0A,$8D,$03,$04,$8C
+                DEFB $07,$12,$9C,$16,$A2,$1C,$A0,$96,$8F,$08,$08
+icpk:
+icpk_base       EQU icpk + (-1)
+;  0 f_carrot    
+                DEFB $F8,$01,$03,$07,$80,$0F,$16,$1C,$38,$30,$40,$00,$80,$66,$2C,$38
+                DEFB $F6,$F0,$E0,$40,$3F,$80,$00
+;  1 f_apple     
+                DEFB $F0,$1F,$3F,$37,$2F,$69,$3F,$1F,$0F,$00,$83,$B8,$F0,$80,$7C,$FE
+                DEFB $E9,$FC,$78,$00
+;  2 f_pear      
+                DEFB $E6,$01,$03,$07,$08,$0F,$1D,$1B,$1F,$0F,$03,$00,$86,$40,$B8,$E0
+                DEFB $F0,$F8,$38,$FC,$FE,$FC,$F0,$00
+;  3 f_cheese    
+                DEFB $FC,$03,$0F,$01,$3F,$7F,$6F,$4F,$6F,$7F,$00,$E3,$0C,$3E,$FE,$E1
+                DEFB $7E,$EE,$FE,$00
+;  4 f_meat      
+                DEFB $91,$1F,$7F,$6F,$5F,$7F,$0F,$3F,$1F,$07,$00,$CF,$C0,$E0,$80,$C0
+                DEFB $80,$EC,$7C,$3C,$16,$00
+;  5 p_heal      
+                DEFB $A4,$03,$07,$03,$0F,$1F,$28,$37,$2F,$3F,$1F,$0F,$00,$A4,$C0,$E0
+                DEFB $C0,$F0,$F8,$78,$FC,$F8,$F0,$00
+;  8 s_teleport  
+                DEFB $80,$3F,$5F,$3F,$1F,$10,$1F,$17,$00,$15,$14,$17,$18,$3F,$5F,$3F
+                DEFB $00,$80,$FC,$FA,$FC,$F8,$78,$B8,$58,$C0,$D8,$38,$FC,$FA,$FC,$00
+;  9 s_fear       MIRROR
+                DEFB $84,$3F,$5F,$3F,$1F,$1C,$1B,$00,$13,$1B,$1C,$1F,$3F,$5F,$3F,$00
+; 10 s_sleep     
+                DEFB $81,$3F,$5F,$3F,$1F,$18,$1F,$80,$1E,$1D,$18,$3F,$5F,$3F,$00,$80
+                DEFB $FC,$FA,$FC,$F8,$18,$D8,$B8,$20,$78,$F8,$18,$FC,$FA,$FC,$00
+; 11 s_enchant    MIRROR
+                DEFB $80,$3F,$5F,$3F,$1F,$1B,$1D,$10,$40,$1E,$10,$1D,$3F,$5F,$3F,$00
+; 12 book        
+                DEFB $80,$3F,$7F,$5F,$5E,$5C,$58,$5C,$30,$5E,$5F,$7F,$60,$3F,$00,$B8
+                DEFB $F0,$70,$3E,$7A,$38,$FE,$F0,$10,$F0,$00
+; 13 bow         
+                DEFB $80,$20,$3F,$11,$08,$04,$02,$01,$7F,$00,$E0,$C0,$60,$30,$18,$08
+                DEFB $01,$8C,$44,$24,$14,$0E,$06,$00
+; 14 w_short     
+                DEFB $FE,$01,$10,$03,$1F,$0E,$1A,$70,$60,$00,$F0,$10,$70,$E0,$C0,$3F
+                DEFB $80,$00
+; 15 w_long      
+                DEFB $FE,$01,$10,$33,$1F,$0E,$1B,$71,$60,$00,$80,$02,$0E,$1C,$38,$70
+                DEFB $E0,$C0,$3F,$80,$00
+; 16 w_axe       
+                DEFB $82,$07,$0F,$1F,$3F,$7F,$67,$00,$01,$03,$06,$0C,$18,$30,$60,$00
+                DEFB $C1,$04,$8C,$98,$F0,$E0,$9F,$60,$00
+; 17 w_cleaver   
+                DEFB $F8,$01,$03,$37,$10,$3F,$1F,$0F,$1B,$71,$60,$00,$80,$18,$3C,$7E
+                DEFB $FC,$F8,$F0,$E0,$15,$C0,$80,$00,$80,$00
+; 18 w_oak       
+                DEFB $EA,$01,$03,$01,$80,$03,$06,$0C,$18,$30,$60,$00,$84,$40,$EC,$FE
+                DEFB $BE,$FE,$FC,$1F,$D0,$80,$00
+; 19 w_iron      
+                DEFB $FC,$01,$03,$00,$01,$03,$0F,$0E,$1A,$30,$60,$00,$80,$18,$3C,$7E
+                DEFB $FC,$78,$70,$E0,$1F,$C0,$40,$00
+; 20 w_rune      
+                DEFB $FD,$01,$00,$00,$01,$03,$0C,$18,$30,$60,$00,$80,$1C,$3E,$76,$EE
+                DEFB $DC,$B8,$F0,$1F,$C0,$80,$00
+; 21 w_bone      
+                DEFB $DD,$01,$00,$00,$01,$03,$06,$0C,$18,$70,$60,$00,$88,$FC,$FE,$32
+                DEFB $CE,$FC,$A8,$3F,$C0,$00
+; 22 a_robe       MIRROR
+                DEFB $89,$0E,$3E,$7E,$6E,$6F,$88,$07,$0F,$1F,$3F,$7F,$00
+; 23 a_leather    MIRROR
+                DEFB $80,$18,$1C,$1E,$3E,$3F,$3E,$3F,$00,$3E,$3F,$3E,$3F,$3E,$3C,$38
+                DEFB $00
+; 24 a_chain     
+                DEFB $80,$0E,$3E,$7F,$75,$7F,$6A,$6F,$02,$15,$1F,$1A,$1F,$15,$1F,$00
+                DEFB $80,$70,$7C,$FE,$5E,$FE,$A6,$F6,$02,$58,$F8,$A8,$F8,$58,$F8,$00
+; 25 a_plate      MIRROR
+                DEFB $91,$3B,$7B,$7F,$5F,$1F,$C0,$10,$1F,$10,$0F,$07,$00
+; 26 a_silk      
+                DEFB $80,$01,$03,$07,$0C,$08,$0C,$1E,$36,$1F,$3F,$7F,$00,$80,$80,$C0
+                DEFB $E0,$30,$10,$30,$78,$B4,$7C,$7E,$FE,$00
+; 27 a_grave     
+                DEFB $83,$30,$38,$1D,$1E,$3F,$48,$7F,$7B,$7F,$6E,$44,$00,$83,$0C,$1C
+                DEFB $B8,$78,$7C,$60,$7E,$76,$7E,$6E,$44,$00
+; 28 h_hood       MIRROR
+                DEFB $80,$01,$03,$07,$0F,$1F,$1C,$38,$40,$30,$38,$3C,$7C,$7F,$3F,$00
+; 29 h_helm      
+                DEFB $80,$07,$1F,$3B,$37,$7F,$40,$7F,$99,$79,$71,$30,$00,$88,$E0,$F8
+                DEFB $FC,$FE,$02,$FE,$99,$9E,$8E,$0C,$00
+; 30 h_king       MIRROR
+                DEFB $81,$41,$63,$77,$7F,$6E,$7F,$33,$79,$71,$30,$00
+; 31 h_mirror    
+                DEFB $80,$1F,$3F,$37,$2F,$3F,$20,$3F,$C9,$35,$3F,$1F,$00,$9C,$F8,$FC
+                DEFB $04,$FC,$C9,$5C,$FC,$F8,$00
+; 32 c_might     
+                DEFB $84,$0E,$1F,$1B,$1A,$08,$07,$00,$0F,$1C,$38,$30,$38,$1C,$0F,$00
+                DEFB $C4,$70,$F0,$B8,$08,$F0,$80,$38,$1C,$0C,$1C,$38,$F0,$00
+; 33 c_ward       MIRROR
+                DEFB $80,$1F,$1E,$10,$1E,$0E,$06,$03,$00,$0F,$1C,$38,$30,$38,$1C,$0F
+                DEFB $00
+; 34 c_fire      
+                DEFB $80,$01,$03,$07,$0F,$0E,$0C,$06,$00,$0F,$1C,$38,$30,$38,$1C,$0F
+                DEFB $00,$C0,$20,$60,$E0,$F0,$70,$E0,$00,$F0,$38,$1C,$0C,$1C,$38,$F0
+                DEFB $00
+; 35 c_mana      
+                DEFB $80,$0A,$10,$20,$10,$0A,$01,$03,$00,$07,$0F,$1D,$1B,$1F,$0F,$07
+                DEFB $00,$80,$50,$08,$04,$08,$50,$80,$C0,$18,$E0,$F0,$F8,$F0,$E0,$00
+; 36 c_plenty     MIRROR
+                DEFB $80,$0A,$10,$20,$10,$0A,$19,$3D,$80,$19,$07,$03,$05,$09,$11,$00
+; 37 c_scarab    
+                DEFB $80,$0A,$10,$20,$10,$0A,$01,$03,$00,$25,$17,$07,$2E,$4E,$2E,$46
+                DEFB $00,$80,$50,$08,$04,$08,$50,$80,$C0,$00,$A4,$E8,$E0,$F4,$F2,$F4
+                DEFB $E2,$00
+; 38 c_grave      MIRROR
+                DEFB $88,$07,$0F,$09,$0E,$07,$05,$00,$0F,$1C,$38,$30,$38,$1C,$0F,$00
+; 39 ph_weapon   
+                DEFB $FC,$21,$12,$00,$00,$04,$02,$08,$10,$00,$60,$00,$81,$04,$12,$20
+                DEFB $04,$08,$00,$11,$40,$80,$00,$80,$40,$00
+; 40 ph_armour    MIRROR
+                DEFB $8A,$0C,$23,$40,$00,$60,$54,$10,$00,$10,$06,$00
+; 41 ph_helmet    MIRROR
+                DEFB $85,$06,$10,$20,$00,$40,$00,$00,$0C,$40,$48,$08,$00,$60,$00
+; 42 ph_charm     MIRROR
+                DEFB $80,$01,$00,$0C,$00,$01,$0C,$20,$21,$40,$00,$40,$20,$0C,$00
+; 43 ammo_dagger 
+                DEFB $80,$01,$02,$01,$03,$02,$03,$3F,$3A,$23,$03,$01,$00,$C6,$80,$00
+                DEFB $80,$F8,$3B,$88,$80,$00
+; 44 ammo_arrow  
+                DEFB $FF,$00,$01,$03,$26,$2C,$38,$7C,$66,$00,$80,$3E,$1E,$0E,$1A,$32
+                DEFB $60,$C0,$3F,$80,$00
+                ASSERT $ - icpk_idx == 995 && icpk_idx + ICONS16_PHYS == icpk

@@ -69,5 +69,5 @@ debug_kit:
     ENDIF
 lp_wt6:         LP_WT_ROWS
                 ASSERT $ - lp_wt6 == K_COUNT && ((lp_wt6 + K_COUNT - 1) >> 8) == (lp_wt6 >> 8)
-                INCLUDE "../assets/gfx/icons/icons16.asm"   ; IC1 + FLOOR1: 45 logical icons in 1,376 B raw (potions share one shape; tools/icons16.py)
+                INCLUDE "../assets/gfx/icons/icons16.asm"   ; IC1 + FLOOR1: 45 logical icons packed in 995 B (1,376 raw; MEM-RECLAIM w2c; tools/icons16.py)
 fs_worn:        DB   " WORN OUT", 0           ; it_fmt (gear6.asm): m = -3 (after the icon data)

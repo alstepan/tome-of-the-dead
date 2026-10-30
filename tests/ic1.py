@@ -278,13 +278,19 @@ def run(p, check):
     di, ei = [0xF3], [0xFB]
     t_icon = stub(di + far6("icon_slot", [0x3E, 0, 0x11] + w16((4 << 8) | 9)) + ei, True)
     t_clr = stub(di + far6("icon_slot", [0x3E, 5, 0x11] + w16((4 << 8) | 9)) + ei, True)
+    # MEM-RECLAIM w2c: worn slot 21 = A_ROBE, a MIRROR icon (right half = left bit-reversed, rev8)
+    t_mir = stub(di + far6("icon_slot", [0x3E, S["PG_SLOT_WORN"] + 1, 0x11] + w16((4 << 8) | 9)) + ei, True)
     t_worn = stub(di + far6("worn_draw") + ei, True)
     t_q = [stub(di + far6("qs_draw", [0x3E, qs, 0x11] + w16((18 << 8) | S["IS_NORMAL"])) + ei, True)
            for qs in (0, 1, 2)]
-    print(f"[info] T icon_slot {t_icon} T, cleared {t_clr} T, worn_draw {t_worn} T, qs_draw food / potion / "
+    print(f"[info] T icon_slot {t_icon} T, mirrored {t_mir} T, cleared {t_clr} T, worn_draw {t_worn} T, qs_draw food / potion / "
           f"scroll {t_q} T (all incl. far6 + DI stub)", flush=True)
-    check("T costs: icon_slot <= 2.5k, worn_draw <= 9.5k, qs_draw <= 12k T",
-          t_icon <= 2500 and t_worn <= 9500 and max(t_q) <= 12000, (t_icon, t_worn, t_q))
+    # MEM-RECLAIM w2c (packed icons, unpacked onto the screen): a plain icon was ~2.45k raw, now
+    # ~3.1k (32 lines x ~47 T + lookup); a MIRROR one ~4.5k (16 lines rev8 at ~125 T each);
+    # worn_draw = 4 icons (3 MIRROR in this setup) ~16.4k; each limit ~+8 % over the measured
+    check("T costs: icon_slot <= 3.4k, MIRROR <= 4.9k, worn_draw <= 17.5k, qs_draw <= 12k T",
+          t_icon <= 3400 and t_mir <= 4900 and t_worn <= 17500 and max(t_q) <= 12000,
+          (t_icon, t_mir, t_worn, t_q))
     p.settle(4)
 
     # ======================= I1: the ISR over bank 6 ===============================
