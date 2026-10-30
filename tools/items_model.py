@@ -360,8 +360,8 @@ def gen_level_items(b, master, hero):
             rsc = place(rng, b, lvl, non_lair)
             if rsc is None:
                 rsc = scan_place(b, lvl, non_lair)
-            add(lvl, rsc, IT_BOW, 1)
-            add(lvl, rsc, T["IT_ARROW"], ARROW_BUNDLE)   # same cell (8.5)
+            add(lvl, rsc, T["IT_ARROW"], ARROW_BUNDLE)   # same cell (8.5); bundle first, the bow LAST:
+            add(lvl, rsc, IT_BOW, 1)                     # the cell shows its last entry (BOW-ICON)
     gen_traps(rng, b, lvl, pres, start, lair)
     return lvl
 

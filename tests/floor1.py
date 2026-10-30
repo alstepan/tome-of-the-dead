@@ -28,6 +28,9 @@ T_ITEM0..3 markers; bg_mismatch ignores the drawn sprites' footprints).
       (every entry of it, one on a pile: the pile's next item shows): the unique lands, 8 types,
       no mismatch, also after a pause and after a page rebuild
   F16 a unique with 7 types displaces nothing
+  F17 (BOW-ICON) the bow shows its own icon: alone, in the generator's pile (bundle entry first, the
+      bow LAST = the cell shows the last live entry) and not the arrow's; arrows alone = the arrow icon,
+      a dagger alone = the dagger icon (the three glyphs differ)
 Run: ZRCP_PORT=<port> python3 tests/floor1.py
 """
 import os
@@ -472,6 +475,33 @@ def main():
         p.fi_refresh()
         p.settle()
         check("F16 ... also after the rebuild", not p.bg_mismatch(), p.bg_mismatch()[:4])
+        # ---- F17 the bow's floor icon (bow + 6-arrow bundle in one cell) --------------
+        def glyph_of(t):
+            sl = p.rb(S["FI_TSLOT"] + S[t])
+            return bytes(p.z.read_memory(S["FI_GLY"] + 32 * sl, 32)) if sl < S["FI_SLOTS"] else None
+
+        def one(entries, col=14):
+            p.boot(K_KNIGHT)
+            p.isolate()
+            for i, (t, q) in zip(free(len(entries)), entries):
+                p.put_item(i, S1, col, S[t], q)
+            p.fi_refresh()
+            p.settle()
+            ul = p.rb(S["FI_CELL"] + 256 + 0xE0 + col)
+            return ul // 32, p.bg_mismatch()
+
+        sb, mb = one([("IT_BOW", 1)])
+        gb = glyph_of("IT_BOW")
+        sa, ma = one([("IT_ARROW", 6)])
+        ga = glyph_of("IT_ARROW")
+        sd, md = one([("IT_DAGGER", 2)])
+        gd = glyph_of("IT_DAGGER")
+        check("F17 bow / arrows / dagger alone: three distinct icons, screen == model",
+              gb and ga and gd and len({gb, ga, gd}) == 3 and not (mb or ma or md), (mb[:2], ma[:2], md[:2]))
+        sp, mp = one([("IT_ARROW", 6), ("IT_BOW", 1)])          # the generator's order
+        gp = glyph_of("IT_BOW")
+        check("F17 bundle + bow in one cell (bow last): the cell shows the bow's slot + glyph, == the model",
+              gp == gb and p.rb(S["FI_TYPE"] + sp) == S["IT_BOW"] and not mp, (sp, mp[:4]))
     print(f"floor1: {len(fails)} failed" + (f": {fails}" if fails else ""), flush=True)
     return 1 if fails or h.failures else 0
 
