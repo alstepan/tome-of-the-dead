@@ -330,7 +330,7 @@ ai_monster:
                 ld   b, h                      ; B = 0 iff standing
                 KFIELD KT_FLAGS
                 and  KF_CLIMBER
-                jr   z, .patrol
+                jp   z, .patrol
                 ld   a, b                      ; (on_ladder: walker -> NZ iff standing)
                 or   a
                 jr   z, .seek
@@ -381,7 +381,12 @@ ai_monster:
                 ld   d, 1
                 jr   nc, .sk                   ; (.seek: standing)
                 ld   d, $FF
-.sk:            push de                        ; AI-L1: .fstep inline, but a failed step
+.sk:            ld   a, (ix+E_AIDIR)           ; scratch/lq-hold: lq_block's back-off left LQ_HOLD
+                xor  LQ_HOLD                   ; ($80; a standing walker's E_AIDIR is free): hold
+                jr   nz, .sk1                  ; this turn (no re-approach: a period-1 loser no
+                ld   (ix+E_AIDIR), a           ; longer phase-locks a period-2 winner). 38 T
+                ret
+.sk1:           push de                        ; AI-L1: .fstep inline, but a failed step
                 ld   e, 0                      ; goes on to the ladder queue (R6 lq6.asm,
                 ld   a, d                      ; game.md §9.2 'Ladder queue': strongest
                 ld   (TMP6), a                 ; first; the loser near the shaft backs
@@ -395,12 +400,20 @@ ai_monster:
                 ; is harmless because every climber is FEAT_W wide (main.asm kind_tab
                 ; ASSERT): a body overlapping the near-end box on my storey overlaps
                 ; me (same feet row) or sits above my head in my first climb step.
+                ; fix/spider-climb: the 4-wide Spider (2 rows tall) is the one exception, so the
+                ; rect is the climber's KT_BW wide (FEAT_W for every other climber): the Spider
+                ; at col covers col .. col + 3 all the way up, and a body in its far-end box at
+                ; col + 3 must stop the start (+8 B vs ld d, FEAT_W; ~30 T, at the shaft only).
+                ; A body overlapping the near-end box overlaps the Spider on its storey; only
+                ; one above its 2-row head (a flyer) can wait the start (it moves on). lq6
+                ; LQ_W: its queue box is 4 wide.
                 ld   c, a                      ; B = segment storey (its lower end)
                 ld   a, b                      ; shaft rect: rows 9(B-1) .. 9B+7
                 dec  a                         ; (upper standing top .. lower air bottom)
                 MUL_STOREY b
                 ld   b, a
-                ld   d, FEAT_W
+                KFIELD KT_BW                   ; (A, HL; B / C kept)
+                ld   d, a
                 ld   e, 2 * STOREY_ROWS - 1
                 call box_free
                 ret  c                         ; someone on it -> wait

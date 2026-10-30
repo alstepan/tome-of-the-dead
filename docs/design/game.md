@@ -2505,13 +2505,13 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Bat | 24×16 | 3 | 1 | 4 | 0 | 1d2 | 2 | flyer | erratic | — | D1–D3 |
 | Slime | 24×16 | 6 | 0 | 0 | 1 | 1d3 | 2 | walker, acts every 2 | chase | — | D1 |
 | Goblin | 24×32 | 6 | 1 | 1 | 0 | 1d4 | 3 | walker, climber, opener | chase | Apple 1/4 | D1, D2 |
-| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker | hit **poisons**: POISON +12 per bite, cap 30 (= −1 HP / 4 turns; POIS1 §6.4.3) | — | D2, D4, D5 |
+| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker, climber (on its rest pose; user 2026-10-29) | hit **poisons**: POISON +12 per bite, cap 30 (= −1 HP / 4 turns; POIS1 §6.4.3) | — | D2, D4, D5 |
 | Skeleton | 24×48 | 10 | 2 | 2 | 1 | 1d6 | 5 | walker, climber, opener | chase | — | D3, D5, D8 |
 | **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | walker, opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
 | Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch 1 in 4 → CONFUSED 4 (§6.4) | — | D3, D6–D8 |
-| Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, opener (3F-D1: not a climber) | chase | Meat 1/3 | D4, D6, D7 |
-| Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, opener (3F-D1: not a climber) | ranged | Arrows ×3 1/2 (W) | D4, D5 (ARCHER-DEPTHS H1, user 2026-10-29: not D7, §9.8) |
-| Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5 |
+| Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, opener, climber (shared humanoid climb pair, 3F-T13bc) | chase | Meat 1/3 | D4, D6, D7 |
+| Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, opener, climber (the Skeleton's climb pair, user 2026-10-29) | ranged | Arrows ×3 1/2 (W) | D4, D5 (ARCHER-DEPTHS H1, user 2026-10-29: not D7, §9.8) |
+| Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, climber (shared humanoid climb pair, user 2026-10-29), acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5 |
 | Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener, climber (user 2026-10-29) | ranged, cooldown 2 (§9.2 RANGED-SPEC); Dark Bolt hit 1 in 3 → FEAR 3 (§6.4) | Mana 1/3 | D6–D8 |
 | **Ogre Warlord** (unique) | **32×48** | 40 | 5 | 1 | 2 | 1d10+2 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg, a hit STUNS 1 (§6.4) | unique | D4 |
 | **Death Knight** (unique) | 24×48 | 50 | 6 | 3 | 3 | 1d10+3 | 5 | walker, lair only (3F-D1: not a climber) | chase; **parries** 1 in 3 PHYS hits (BLOCK frame, 0 dmg); a parried melee hit **notches** the weapon 1 in 2 (§8.10) | unique | D7 |
@@ -3353,7 +3353,7 @@ avoids +1,152 B pool on D4/D7 (a shared Skeleton climb pair would have to be res
 D7 is the worst level; since H1, §9.8, D7 has no Archer, so this now concerns D4 only). Gameplay: like Ogre/Mummy/Vampire/Necro, a hero on the other storey is
 safe from them; the Archer still shoots along its storey, the DK lair fight is unchanged (bosses
 never follow). **Orc = 3 frames** (WALK1 = MOT rest, WALK2, ATTACK), HURT = flash, DEAD = the
-shared humanoid DEAD (as Mummy; pool spike assumption confirmed).
+shared humanoid DEAD (as Mummy; pool spike assumption confirmed). **Superseded (3F-T13bc + user 2026-10-29):** the Orc, Necromancer and Mummy families climb on the shared humanoid climb pair, the Archer / Sniper on the Skeleton's own pair, the Spider / Black Widow on their rest pose (no art); Vampire, Ogre, Death Knight and every boss stay walkers.
 
 **R4 HURT on frame-less kinds** (Spider, Orc, Necro, Mummy, Vampire, Archer, Ogre, DK, Archmage,
 golden bosses): the body keeps its current frame and its footprint takes the existing **`$42` hit

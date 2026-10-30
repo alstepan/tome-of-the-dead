@@ -16,6 +16,7 @@ bottom storey (1) at c + d; the hero waits on the top storey (0), >= 8 cols from
 3-climber chains: a seeker blocked by a body on its own side that is not yet at col backs off.
 J1 (the climb-start check over the own end box) cannot happen: every KF_CLIMBER kind is
 FEAT_W wide (turn3.asm .at ASSERT), so a body in the near-end box overlaps the climber itself.
+fix/spider-climb: the 4-wide Spider (+ Black Widow) is the exception (the cases with SPIDER; lq6 LQ_W = 4).
 Build with -DDEBUG_KIT=0.  Usage: ZRCP_PORT=n python3 tests/ladder_jam.py"""
 import sys
 import game_lib as GL
@@ -24,7 +25,8 @@ from lp import T as Proto, w16
 
 MAX_TURNS = 40                                  # + 20 a climber beyond 2
 TF_SOLID, TF_LADDER, TF_FLOOR, TF_HOLE = S["TF_SOLID"], S["TF_LADDER"], S["TF_FLOOR"], S["TF_HOLE"]
-HP = {k: None for k in ("ORC", "NECRO", "GOBLIN", "SKELETON", "ARCHER")}
+HP = {k: None for k in ("ORC", "NECRO", "GOBLIN", "SKELETON", "ARCHER", "SPIDER", "MUMMY")}
+BW = {k: 4 if k == "SPIDER" else 3 for k in HP}       # fix/spider-climb: the 4-wide Spider
 BH = {k: S["BH_K_" + k] for k in HP}
 # (tag, hero, depth, [(kind, dx from col)], seed, opposite sides?)
 CASES = [
@@ -48,6 +50,19 @@ CASES = [
     ("3: Goblin c-2 / Goblin c+1 / Goblin c+4 D1", 1, 1, [("GOBLIN", -2), ("GOBLIN", 1), ("GOBLIN", 4)], 0x1401, False),
     # review: the 1st climber mid-ladder heading DOWN (ai_dir +1) while the hero is above (it changed
     # storey mid-climb), the 2nd waiting at col below it: the mid-ladder one must turn round (Q5)
+    # fix/spider-climb: a 4-wide body (Spider, BH 2) in the 3-wide shaft's end box (J1 re-proof)
+    ("Spider L / Goblin R D2", 0, 2, [("SPIDER", -5), ("GOBLIN", 4)], 0x2601, True),
+    ("Goblin L / Spider R D2", 1, 2, [("GOBLIN", -4), ("SPIDER", 4)], 0x2602, True),
+    ("Spider L / Spider R D4", 0, 4, [("SPIDER", -5), ("SPIDER", 4)], 0x4601, True),
+    ("Spider L / Mummy R D5", 1, 5, [("SPIDER", -5), ("MUMMY", 4)], 0x5601, True),
+    ("Mummy L / Spider R D5", 0, 5, [("MUMMY", -4), ("SPIDER", 4)], 0x5602, True),
+    ("Spider col / Goblin col+4 D2", 0, 2, [("SPIDER", 0), ("GOBLIN", 4)], 0x2701, False),
+    ("Spider col+1 / Spider col+5 D4", 1, 4, [("SPIDER", 1), ("SPIDER", 5)], 0x4701, False),
+    ("Mummy col / Spider col+3 D5", 0, 5, [("MUMMY", 0), ("SPIDER", 3)], 0x5701, False),
+    ("3: Spider c-5 / Mummy c+1 / Spider c+5 D5", 1, 5, [("SPIDER", -5), ("MUMMY", 1), ("SPIDER", 5)], 0x5801, False),
+    ("mid: Spider descending above / Mummy waiting at col D5", 0, 5, [("SPIDER", 0), ("MUMMY", 0)], 0x5901, "mid"),
+    ("mid: Mummy descending above / Spider waiting at col D5", 1, 5, [("MUMMY", 0), ("SPIDER", 0)], 0x5902, "mid"),
+    ("mid: Spider descending above / Spider waiting at col D4", 0, 4, [("SPIDER", 0), ("SPIDER", 0)], 0x4901, "mid"),
     ("mid: Orc descending above / Necro waiting at col D7", 0, 7, [("ORC", 0), ("NECRO", 0)], 0x7403, "mid"),
     ("mid: Necro descending above / Orc waiting at col D7", 1, 7, [("NECRO", 0), ("ORC", 0)], 0x7303, "mid"),
 ]
@@ -125,7 +140,7 @@ with Harness() as h:
             if not lad or lad[-1] - lad[0] > 2:
                 continue                                # none, or two {c,1} shafts
             c = lad[0]
-            okp = all(standable(f, 1, c + d, BH[k]) for k, d in mons)
+            okp = all(standable(f, 1, c + d, BH[k], BW[k]) for k, d in mons)
             hd = 4 * len(mons) + 1                      # room for the arrivals queueing toward the hero
             hx = next((x for x in list(range(c - hd, 0, -1)) + list(range(c + hd, 28)) if standable(f, 0, x)), None)
             if not okp or hx is None:
@@ -141,7 +156,7 @@ with Harness() as h:
         for sl in range(1, S["P_MAX_ENT"]):
             p.set_ent(sl, FLAGS=0)
         for i, (kn, d) in enumerate(mons):
-            x, yk = c + d, stand_y(1, BH[kn]) - (BH[kn] if opp == "mid" and i == 0 else 0)
+            x, yk = c + d, stand_y(1, BH[kn]) - (max(BH[k] for k, _ in mons) if opp == "mid" and i == 0 else 0)
             p.set_ent(1 + i, KIND=S["K_" + kn], ROOM=room, FLAGS=1 | 4, HP=200, MAXHP=200, X=x, Y=yk,
                       PX=8 * x, PY=8 * yk, MODE=0, REACT=0, FLT=0, AIDIR=1)
             p.wb(S["ST_FLAGS"] + 1 + i, 0)
@@ -156,7 +171,7 @@ with Harness() as h:
             boxes = []
             for i, (kn, _) in enumerate(mons):
                 e = p.ent(1 + i)
-                boxes.append((e["X"], e["Y"], 3, BH[kn]))
+                boxes.append((e["X"], e["Y"], BW[kn], BH[kn]))
                 if e["X"] != xs[i][-1]:
                     xs[i].append(e["X"])
                 if storey_of(e["Y"], BH[kn]) == 0 and (e["Y"] + BH[kn]) % 9 == 8 and i not in first:

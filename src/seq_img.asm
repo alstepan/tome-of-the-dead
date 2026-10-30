@@ -136,7 +136,7 @@ sl_death:       DEATHSEQ SL_HURT, SL_DEAD, FID_slime_dead, SL_REST
 ksm_sl_e:
                 ASSERT (FFL_rat_run1 & FF_MOTION) && (FFL_slime_squash & FF_MOTION)
 ; --- 3F-T13: the 3F-A1 kinds (game.md §9.1 / §9.7 R3-R4) ---
-; Non-climbers (Vampire, Ogre, DK, Spider): KS_CLIMB = the idle cycle
+; Non-climbers (Vampire, Ogre, DK): KS_CLIMB = the idle cycle
 ; (cell-aligned at any phase; never the move cycle, whose even slot is a WK4
 ; frame). 3F-T13bc climbers (Orc, Necro, Mummy families; the Mummy since 2026-10-29; the Archer / Sniper use the Skeleton's own
 ; skeleton_climb1/2 in their ink, U_SKCLIMB; user 2026-10-29):
@@ -151,11 +151,15 @@ ksm_sl_e:
 ; timing = the Skeleton's (wind-up 3, strike 2 + IMPACT; 3F-T13bc: the Orc /
 ; Ogre wind-up is their RAISE frame, the Vampire strikes with vamp_bite) / the
 ; Rat's for the Spider (1, 2). A non-climber's KS_CLIMBREST points at its HURT
-; seq (first byte = the rest fid; never used); the Spider's is sp_idle + 1 = spider_walk1.
-; --- Spider (32x16; Black Widow) ---
-ksm_sp:         KSMH ksm_sp_e - ksm_sp_s, 1, sp_idle, sp_move, sp_idle, sp_idle + 1, sp_attack, sp_hurt, sp_hurt, sp_death, ksm_sp_s
+; seq (first byte = the rest fid; never used).
+; --- Spider (32x16; Black Widow): climber (fix/spider-climb): KS_CLIMB = sp_idle (its rest
+; pose, no climb art; cell-aligned), KS_CLIMBREST = sp_rest = sp_idle + 1 (anim .crest reads
+; that one byte: FID_spider_walk1, ASSERTed below; HURT is the bite pose since ANIM-IMPORT) ---
+ksm_sp:         KSMH ksm_sp_e - ksm_sp_s, 1, sp_idle, sp_move, sp_idle, sp_rest, sp_attack, sp_hurt, sp_hurt, sp_death, ksm_sp_s
 ksm_sp_s:
-sp_idle:        DB 1, FID_spider_walk1, 1, SEQ_END
+sp_idle:        DB 1
+sp_rest:        DB FID_spider_walk1, 1, SEQ_END          ; KS_CLIMBREST (review: the climb rest fid)
+                ASSERT sp_rest == sp_idle + 1 && FID_spider_walk1 >= 0 && !(FFL_spider_walk1 & FF_PH4)
 sp_move:        MOVECYC2 spider_walk2, spider_walk1
 sp_attack:      DB FID_spider_walk1, 1, 0, FID_spider_bite, 2, SF_IMPACT, SEQ_END
 sp_hurt:        DB FID_spider_bite, 3, 0, SEQ_END        ; ANIM-IMPORT item 1: HURT = the bite pose (0 B)

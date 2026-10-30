@@ -30,7 +30,8 @@ STRIDE = S["P_ENT_STRIDE"]
 FID = {k[4:]: v for k, v in S.items() if k.startswith("FID_") and isinstance(v, int)}
 PNG = sys.argv[sys.argv.index("--png") + 1] if "--png" in sys.argv else None
 TF_SOLID, TF_LADDER, TF_FLOOR, TF_HOLE = (S["TF_SOLID"], S["TF_LADDER"], S["TF_FLOOR"], S["TF_HOLE"])
-H6 = 6                                           # every scenario body is 24x48 (BW 3, BH 6)
+H6 = 6                                           # the hero and every scenario body but the Spider: 24x48 (BW 3, BH 6)
+CLIMB_SP = {FID["spider_walk1"]}                 # fix/spider-climb: the Spider (32x16, BW 4 BH 2) climbs on its rest pose
 CLIMB_H = {FID["climb_h1"], FID["climb_h2"]}
 CLIMB_SK = {FID["skeleton_climb1"], FID["skeleton_climb2"]}
 OWN = {
@@ -38,6 +39,7 @@ OWN = {
     "NECRO": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3", "necro_walk4")},
     "ARCHER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
     "SNIPER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
+    "SPIDER": {FID[n] for n in ("spider_walk1", "spider_walk2")},
     "SKELETON": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
     "VAMPIRE": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3", "necro_walk4")},
     "MUMMY": {FID[n] for n in ("mummy_walk1", "mummy_walk2", "mummy_walk3", "mummy_walk4")},
@@ -47,7 +49,8 @@ RUNS = [(0, 4, "ORC", True, 0x4101), (1, 4, "ARCHER", True, 0x4102), (0, 7, "NEC
         (1, 7, "ORC", True, 0x7102), (0, 5, "ARCHER", True, 0x5101), (1, 5, "SKELETON", True, 0x5102),
         (0, 8, "VAMPIRE", False, 0x8101), (0, 5, "MUMMY", True, 0x5103), (1, 5, "MUMMY", True, 0x5104),
         # fix/archer-climb: Archer / Sniper (the Skeleton body) climb on the SKELETON's own pair
-        (0, 4, "ARCHER", True, 0x4103), (0, 4, "SNIPER", True, 0x4104), (1, 5, "SNIPER", True, 0x5105)]
+        (0, 2, "SPIDER", True, 0x2101), (1, 2, "SPIDER", True, 0x2102), (0, 4, "SPIDER", True, 0x4105),
+        (1, 5, "SPIDER", True, 0x5106), (0, 4, "ARCHER", True, 0x4103), (0, 4, "SNIPER", True, 0x4104), (1, 5, "SNIPER", True, 0x5105)]
 fails = 0
 
 
@@ -63,12 +66,12 @@ def room_cells(p):
     return lambda c, r: tf[m[r * 32 + c] & 63] if 0 <= c < 32 and 0 <= r < S["PLAY_ROWS"] else TF_SOLID
 
 
-def standable(f, s, x):
+def standable(f, s, x, w=3, h=H6):
     """A 3-col body standing on storey s at col x: floor under it, nothing solid / ladder in it."""
-    y = stand_y(s, H6)
-    if not all(f(c, y + H6) & TF_FLOOR and not f(c, y + H6) & TF_HOLE for c in range(x, x + 3)):
+    y = stand_y(s, h)
+    if not all(f(c, y + h) & TF_FLOOR and not f(c, y + h) & TF_HOLE for c in range(x, x + w)):
         return False
-    return all(not f(c, r) & (TF_SOLID | TF_LADDER) for c in range(x, x + 3) for r in range(y, y + H6))
+    return all(not f(c, r) & (TF_SOLID | TF_LADDER) for c in range(x, x + w) for r in range(y, y + h))
 
 
 with Harness() as h:
@@ -78,6 +81,7 @@ with Harness() as h:
     for hero, depth, kn, climber, seed in RUNS:
         tag = f"{kn} D{depth} hero {hero}"
         kind = S["K_" + kn]
+        W, H = (4, 2) if kn == "SPIDER" else (3, H6)
         done = False
         for attempt in range(6):                     # find a start room with a usable ladder {c, 1}
             p.proto_start = 0
@@ -95,7 +99,7 @@ with Harness() as h:
             if not lad:
                 continue
             c = lad[0]
-            mx = next((x for x in list(range(c + 6, 28)) + list(range(c - 8, 0, -1)) if standable(f, 1, x)), None)
+            mx = next((x for x in list(range(c + 6, 27)) + list(range(c - 8, 0, -1)) if standable(f, 1, x, W, H)), None)
             hx = next((x for x in list(range(c - 8, 0, -1)) + list(range(c + 8, 28)) if standable(f, 0, x)), None)
             if mx is None or hx is None:
                 continue
@@ -107,7 +111,7 @@ with Harness() as h:
         room = p.rb("CUR_ROOM")
         for sl in range(1, S["P_MAX_ENT"]):          # one walker: the others out of the room
             p.set_ent(sl, FLAGS=0)
-        my, hy = stand_y(1, H6), stand_y(0, H6)
+        my, hy = stand_y(1, H), stand_y(0, H6)
         p.set_ent(1, KIND=kind, ROOM=room, FLAGS=1 | 4, HP=200, MAXHP=200, X=mx, Y=my, PX=8 * mx, PY=8 * my,
                   MODE=0, REACT=0, FLT=0)
         p.wb(S["ST_FLAGS"] + 1, 0)
@@ -121,8 +125,8 @@ with Harness() as h:
             e = p.ent(1)
             fid = p.rb(S["SLOTREC"] + S["SLOTREC_STRIDE"] + S["R_FID"])   # slot 1's desired frame
             seen.append((e["Y"], e["PY"], fid))
-            if PNG and climber and (e["Y"] + H6) % 9 in (3, 4) and not per_tick.shot:
-                if fid in CLIMB_H | CLIMB_SK:
+            if PNG and climber and (e["Y"] + H) % 9 in (3, 4) and not per_tick.shot:
+                if fid in CLIMB_H | CLIMB_SK | CLIMB_SP:
                     os.makedirs(PNG, exist_ok=True)
                     frame_png(p.frame(), os.path.join(PNG, f"climb_{kn.lower()}_d{depth}.png"), 3)
                     per_tick.shot = 1
@@ -132,13 +136,13 @@ with Harness() as h:
             p.turn("WAIT", per_tick=per_tick, max_ticks=200)
             turns += 1
             e = p.ent(1)
-            if storey_of(e["Y"], H6) == 0 and (e["Y"] + H6) % 9 == 8:
+            if storey_of(e["Y"], H) == 0 and (e["Y"] + H) % 9 == 8:
                 break
         e = p.ent(1)
-        top = storey_of(e["Y"], H6) == 0
-        mid = {fid for y, py, fid in seen if (y + H6) % 9 != 8 and fid != 0xFF}
-        rest = {fid for y, py, fid in seen if (y + H6) % 9 == 8 and fid != 0xFF}
-        want_climb = CLIMB_SK if kn in ("SKELETON", "ARCHER", "SNIPER") else CLIMB_H
+        top = storey_of(e["Y"], H) == 0
+        mid = {fid for y, py, fid in seen if (y + H) % 9 != 8 and fid != 0xFF}
+        rest = {fid for y, py, fid in seen if (y + H) % 9 == 8 and fid != 0xFF}
+        want_climb = CLIMB_SP if kn == "SPIDER" else CLIMB_SK if kn in ("SKELETON", "ARCHER", "SNIPER") else CLIMB_H
         traps = (p.rb("PHASE_TRAP"), p.rb("BLIT_MISS"), p.rb("GEN_TRAP"), p.rb("SEQ_TRAP"))
         if climber:
             check(f"C1 {tag}: climbed to the hero's storey in {turns} turns (ladder col {c}, from x {mx})",

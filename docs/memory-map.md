@@ -3631,7 +3631,7 @@ pre-filter = a marker under the body on row 9s+7; `drop_put`'s free test = 4
 
 All low-RAM parts sit in the play-free GEN_SRC / GEN_MIR window (pblit's ≤ 54 B at
 `$6940` below; `TX_DEC` `$6D15` above, ASSERTed): the pause save, the page's map save and
-the generator overwrite them, so each is followed by **`fi_full`** (bank 3, far3: room_show
+the generator overwrite them, so each is followed by **`fi_full`** (bank 3, bank 2 since LAND-PENDING; far3: room_show
 (level entry, start_game, teleport), `do_exit` for `EXIT_DEST` before the scroll, pause
 resume, `page_post`). Per pickup / drop: bank-7 `ap_stamp` writes the 2×2 markers + attr
 shadow + `queue_damage` 2×2 and far6 **`fi_add`** (R6) with the col's last live type
@@ -4034,3 +4034,29 @@ monsters hitting on one tick lost a line (`MSG_Q` is one slot). Fixed; tests `te
 | bank 3 free to `AY_RESERVE` | 37 | **19** | −18 (`pf_burst` self line + gates) |
 | bank 2 free | 271 | **149** | −122 (`msg2.asm` 119 B, `do_impact` 23) |
 | R6 / low RAM / bank 1 / text bank 0 | — | unchanged | 0 |
+
+### fix/spider-climb (user 2026-10-29): the Spider (+ Black Widow) climbs
+
+* `KF_CLIMBER` on K_SPIDER (9) / K_BLACK_WIDOW (22); `ksm_sp` KS_CLIMB = `sp_idle` (its rest pose
+  `spider_walk1`, cell-aligned: no art, no fid, 0 B pool or sequence cache), KS_CLIMBREST = `sp_rest`
+  = `sp_idle + 1` (the one fid byte anim `.crest` reads; ASSERTed == `FID_spider_walk1`, not WK4).
+  J1 ASSERT (main.asm) excepts the 4-wide Spider rows. `lq6.asm` `.w` (+27 B R6): the ladder queue's
+  near-end box width = the wider of the two bodies (4 with a Spider).
+* Hold (from `scratch/lq-hold`): `lq_block`'s back-off leaves `E_AIDIR = LQ_HOLD` ($80) on the standing
+  walker, `ai_monster .sk` holds that one seek turn (no re-approach), so a period-1 loser no longer
+  phase-locks a period-2 winner (the Spider / Mummy opposite-side D5 jams; `tests/ladder_jam.py` gates
+  them now, no XFAIL). +12 B bank 3 (`.sk` 11, `jr` -> `jp .patrol` 1), +4 B R6.
+* `.at` climb start (bank 3): the shaft rect is the climber's `KT_BW` wide (was `FEAT_W`): the Spider
+  covers col .. col + 3 all the way up, so a body in its far-end box at col + 3 must stop the start.
+  Same width for every other climber (kind_tab ASSERT). +8 B bank 3.
+* Bank-3 relief: `fi3.asm` (`fi_full`, 52 B, cold, far3 callers unchanged: it touches only low RAM and
+  far6) moved to bank 2 after `msg2.asm`.
+
+Release (rebased on main + STAFF-BONUS + LOG-FIX + AMMO-COUNT, 2026-10-30):
+
+| Region | before | after | Δ |
+|---|---|---|---|
+| bank 3 free to `AY_RESERVE` | 13 | **45** | −20 (hold 12, `.at` 8) + 52 (`fi_full` out) |
+| bank 2 free (after the image + kind_tab pad) | 98 + 34 = 132 | **46 + 34 = 80** | −52 (`fi_full` in) |
+| R6 free (release / kit) | 261 / 191 | **230 / 160** | −31 (`lq6` `.w` 27, hold 4) |
+| pool / sequence cache / bank 1 / bank 7 | — | unchanged | 0 |

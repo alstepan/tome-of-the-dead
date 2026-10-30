@@ -1109,7 +1109,7 @@ decor_room:
                 INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
                 INCLUDE "rank3.asm"            ; D3-7: abil_load (ABIL_DESC for the bank-7 ability code)
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing
-                INCLUDE "fi3.asm"              ; FLOOR1: fi_full (cold; per entry far6 fi_add)
+                ; fi3.asm (FLOOR1 fi_full) lives in bank 2 since LAND-PENDING (bank-3 relief)
                 INCLUDE "drop3.asm"            ; FLOOR1: mon_drop + drop_tab / uniq_tab (from R6)
                 ; R6 (2026-10-21): pickup3.asm / bag3.asm moved to the R6 region (r6.asm:
                 ; pickup6.asm, bag6.asm), reached through far6

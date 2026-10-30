@@ -589,7 +589,7 @@ kind_tab:
                 ; the Goblin, Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
                 ; + the Orc (Berserker, Bouncer), Necro (Bone Caller), Archer (Sniper) on the shared
                 ; climb pair; not Vampire / Archmage / DK / Ogre / Mummy; Mummy / Ogre / DK do not open doors
-                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0, 0, KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, 0, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL  ; KT_FLAGS
+                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0, KF_CLIMBER, KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL  ; KT_FLAGS
                 KROW $47,$45,$44,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
                 ; 3F-T2: KT_SEQ (runtime: lowram.asm (sq_load / sq_fill) writes the kind's SEQ_ROWS row
                 ; low byte per level; 0 until the first game start). The old
@@ -607,7 +607,7 @@ kind_tab:
                 ; climb-start check over the whole shaft rect never sees a body in the
                 ; climber's own end box that does not already overlap the climber
                 DUP K_COUNT, n
-                ASSERT !({b kind_tab + KT_FLAGS + n} & KF_CLIMBER) || ({b kind_tab + KT_BW + n} == FEAT_W)
+                ASSERT !({b kind_tab + KT_FLAGS + n} & KF_CLIMBER) || ({b kind_tab + KT_BW + n} == FEAT_W) || (n == K_SPIDER) || (n == K_BLACK_WIDOW)   ; the 4-wide Spider (+ tier): fix/spider-climb
                 EDUP
                 ASSERT (KT_MOD9 >> 8) == ((KT_DIV9 + 23) >> 8)    ; feet_mod: one H for both
                 DUP 24, n
@@ -635,6 +635,7 @@ kind_tab:
                 INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
                 INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy (were low RAM / gfx.asm)
                 INCLUDE "msg2.asm"              ; LOG-FIX: msg_cat / msg_end (from bank 7), log_room, hit_line
+                INCLUDE "fi3.asm"               ; FLOOR1 fi_full (cold; far3 callers unchanged): from bank 3 (LAND-PENDING relief)
 ftz_zx0:                                       ; MEM-FT frame_tab, FT_LEN B/fid contiguous, ZX0 (boot6_ft;
     IF OVL_PASS == 2                            ; bank 2: always mapped, on the CODE tape block; LAST in the
                 INCBIN "ft.zx0"                 ; image so its pass-1/2 size moves only code_end)
