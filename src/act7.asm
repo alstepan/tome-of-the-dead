@@ -53,6 +53,8 @@ act_lead_ok:
 ;      lines / HP must not show before the bolt -> COMBAT_NOT_BEFORE = the
 ;      first impact tick (pf_ftick; at most ACT_FIRE_TICK + CNB_MAX), 0 when
 ;      nothing was struck (a miss sets no gate).
+; LOG-FIX: a spell (B < ABL_DAGGER) also logs "YOU CAST <SPELL>" first (msg_push, TX_SPL_C_SPARK + B;
+;      dropped when LOG_QN >= CAST_LINE_MAX so the hit / kill line keeps its slot).
 ; act_begin_ok: the same without the lead-col guard (always L = 1): the power
 ;      attacks, which fire no projectile (act_fire skips the guard for them).
 ; Clobbers: A, HL (B, C, DE, IX kept)
@@ -69,8 +71,15 @@ act_begin:
                 ld   a, b                      ; only (proj_rel): the fire tick of a
                 cp   ABL_DAGGER                ; Lightning through 4 bodies is the
                 jr   nc, .rk                   ; heaviest of the game. Ammo: the ab_ammo
-                ld   de, CAST_ROW              ; row (ammo_fire's); spells: CAST_ROW
-                                               ; (spell_fire's)
+                ld   a, (LOG_QN)               ; row (ammo_fire's); spells: CAST_ROW
+                cp   CAST_LINE_MAX             ; (spell_fire's). LOG-FIX: a spell first logs
+                jr   nc, .cr                   ; "YOU CAST <SPELL>" ahead of proj_pre's status
+                push bc                        ; lines; with >= CAST_LINE_MAX pending it is
+                ld   a, b                      ; dropped instead: the ring keeps its room
+                add  a, TX_SPL_C_SPARK         ; for the hit / kill line (msg_push: ~1k T)
+                call msg_push                  ; (AF, BC, DE, HL)
+                pop  bc
+.cr:            ld   de, CAST_ROW
 .rk:            call probe_act_prep            ; bank-2 test probe (abil / abil_ammo)
                 ld   a, b
                 ld   hl, proj_pre
@@ -131,6 +140,7 @@ act_seq:
 ; line needs >= 1 such proc with 4 monsters all hitting) — dropped and counted
 ; in LQ_DROP, never a corrupt ring.
 LOG_MON_MAX     EQU 0
+CAST_LINE_MAX   EQU LOG_SLOTS - 1              ; LOG-FIX: pending lines at which the cast line is dropped
 LOG_WAIT_MAX    EQU 8                          ; ticks (320 ms): progress if the log cannot drain
                 ASSERT ROOM_CAP + LOG_MON_MAX <= LOG_SLOTS
 act_pend:

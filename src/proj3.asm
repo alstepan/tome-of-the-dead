@@ -865,6 +865,16 @@ pf_burst:
                 ld   c, DTY_FIRE | DH_NODEF
                 ld   a, (pf_cur)
                 call deal_hit
+                ld   a, l                      ; LOG-FIX P2a: the caster in the burst, hurt (L = HP lost:
+                or   a                         ; an immune hero got UNAFFECTED only)
+                jr   z, .nb
+                ld   a, (pf_cur)
+                or   a
+                jr   nz, .nb
+                call log_room                  ; (the result line is never the one dropped)
+                ld   a, TX_SPL_BURN_SELF
+                call msg_push                  ; "THE BURST SCORCHES YOU" (AF, BC, DE, HL)
+.nb:
                 ld   a, (pf_itick)
                 ld   b, a
                 ld   a, (pf_cur)

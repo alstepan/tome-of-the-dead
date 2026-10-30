@@ -550,9 +550,23 @@ do_impact:
                 ld   (ix+E_FLT), FLASH_TICKS
                 ld   (ix+E_FLA), ATTR_HIT
                 pop  ix
-.nohit:         call ix_slot                   ; queue the HUD line: printed once
+.nohit:         ld   a, (MSG_Q)                ; LOG-FIX P2b: a second impact in the same tick
+                or   a                         ; used to overwrite the first one's line (two
+                jr   z, .q                     ; Goblins flanking the hero: one line): show the
+                ld   a, (LOG_QN)               ; queued one now (~1.4k T), queue this one - only
+                cp   1                         ; with the ring EMPTY (the panel drains one line a
+                jr   nc, .q                    ; first-frame tick: a looser test overflowed a
+                ld   a, (MSG_Q)                ; 4-monster faint turn); else last-wins as before
+                push ix
+                push de                        ; (anim_entity's DE / HL survive; the ring has room:
+                dec  a                         ; ROOM_CAP lines)
+                call ent_ix                    ; (A, E)
+                call show_impact_msg           ; (A, BC, DE, HL; IX kept)
+                pop  de
+                pop  ix
+.q:             call ix_slot                   ; queue the HUD line: printed once
                 inc  a                         ; at the end of anim_tick (the last
-                ld   (MSG_Q), a                ; impact of a tick wins)
+                ld   (MSG_Q), a                ; impact of a tick is the one queued)
                 ret
 
 ;------------------------------------------------------------------------------

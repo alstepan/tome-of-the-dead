@@ -102,7 +102,8 @@ ammo_fire:
                 inc  a
                 jr   z, .none                  ; $FF: nothing struck
                 dec  a
-                push bc
+                call log_room                  ; LOG-FIX Fix A: the result line below replaces the
+                push bc                        ; newest pending one rather than being dropped
                 call ent_kind                  ; C = kind, A = HP
                 pop  de
                 ld   b, d                      ; B = ABL_*
@@ -117,21 +118,16 @@ ammo_fire:
                 ld   b, MSG_P_PARRY
                 call impact_line               ; "THE <kind> PARRIES!" (C = kind)
                 jr   .out
-.nph:           ld   a, b
-                cp   ABL_DAGGER
-                ld   a, TX_CMB_DAG_HIT
-                jr   z, .h
-                ld   a, TX_CMB_ARR_HIT
-.h:             ld   de, MSG_BUF
-                push bc
-                call msg_cat                   ; "YOUR DAGGER HITS THE "
-                pop  bc
-                call msg_kind                  ; + the kind name
-                call msg_end
+.nph:           ld   a, b                      ; LOG-FIX: spells share the tail: the hit line =
+                add  a, TX_SPL_SPARK           ; TX_SPL_SPARK + ABL (ASSERTed below), as a token
+                ld   b, a                      ; stream (msg2.asm hit_line, ~1.4k T)
+                call hit_line                  ; "YOUR DAGGER HITS THE <kind>" / "FIREBOLT BURNS ..."
                 jr   .out
 .none:          dec  c
                 jr   z, .out                   ; the named miss line said it
                 ld   a, b
+                cp   ABL_DAGGER
+                jr   c, .out                   ; a spell: act_begin logged "YOU CAST <SPELL>" already
                 call miss_pre
                 call msg_end                   ; "YOUR DAGGER / ARROW MISSES"
 .out:           ld   l, 1
@@ -146,6 +142,16 @@ ent_kind:
                 pop  ix
                 ret
 
+                ASSERT TX_SPL_FIRE == TX_SPL_SPARK + ABL_FIREBOLT && TX_SPL_FROST == TX_SPL_SPARK + ABL_FROST
+                ASSERT TX_SPL_DRAIN == TX_SPL_SPARK + ABL_DRAIN && TX_SPL_LIGHT == TX_SPL_SPARK + ABL_LIGHTNING
+                ASSERT TX_CMB_POWER == TX_SPL_SPARK + ABL_POWER && TX_CMB_WHIRL == TX_SPL_SPARK + ABL_WHIRL
+                ASSERT TX_CMB_DAG_HIT == TX_SPL_SPARK + ABL_DAGGER && TX_CMB_ARR_HIT == TX_SPL_SPARK + ABL_BOW
+                ; the cast lines (act_begin): TX_SPL_C_SPARK + ABL_*; POWER / WHIRL slots are fillers
+                ASSERT TX_SPL_C_FIRE == TX_SPL_C_SPARK + ABL_FIREBOLT && TX_SPL_C_FROST == TX_SPL_C_SPARK + ABL_FROST
+                ASSERT TX_SPL_C_DRAIN == TX_SPL_C_SPARK + ABL_DRAIN && TX_SPL_C_LIGHT == TX_SPL_C_SPARK + ABL_LIGHTNING
+                ASSERT TX_CMB_THROW == TX_SPL_C_SPARK + ABL_DAGGER && TX_CMB_SHOOT == TX_SPL_C_SPARK + ABL_BOW
+                ASSERT TX_SPL_C_SPARK == TX_CMB_ARR_HIT + 1
+
 ; miss_pre — A = ABL_DAGGER / ABL_BOW -> MSG_BUF = "YOUR DAGGER / ARROW
 ; MISSES", DE = its end.  Clobbers: A, DE, HL (BC kept)
 miss_pre:
@@ -159,50 +165,11 @@ miss_pre:
                 pop  bc
                 ret
 
-;------------------------------------------------------------------------------
-; Composed log lines in MSG_BUF (bank 7 cannot page the text block: it runs in
-; $C000, so the pieces come decoded through low-RAM tx_dec; plain ASCII is a
-; valid log stream, tk_get passes chars < $80 through). Cold: once per event.
-; msg_cat — append the text of string A (TX_*) at DE.  Out: DE advanced.
-;           Clobbers: A, BC, HL   (~0.4k T + ~70 T per char)
-; msg_kind — append kind C's name (TX_NM_KNIGHT + C).  Same.
-; msg_dec — append A = 0..99 in decimal (no leading 0).  Clobbers: A, BC
-; msg_end — 0-terminate at DE and log_push MSG_BUF.  Clobbers: A, B, DE, HL
-;------------------------------------------------------------------------------
-msg_kind:
-                ld   a, c
-                add  a, TX_NM_KNIGHT
-msg_cat:
-                push de
-                call tx_dec                    ; HL = TX_DEC (A, BC, DE, HL)
-                pop  de
-.c:             ld   a, (hl)
-                or   a
-                ret  z
-                ld   (de), a
-                inc  hl
-                inc  de
-                jr   .c
-msg_dec:
-                ld   b, '0' - 1
-.t:             inc  b
-                sub  10
-                jr   nc, .t
-                add  a, '0' + 10
-                ld   c, a                      ; C = the units digit
-                ld   a, b
-                cp   '0'
-                jr   z, .u                     ; < 10: one digit
-                ld   (de), a
-                inc  de
-.u:             ld   a, c
-                ld   (de), a
-                inc  de
-                ret
-msg_end:
-                xor  a
-                ld   (de), a
-                ld   hl, MSG_BUF
-                jp   log_push                  ; (any bank: the ring is bank 5)
+; Composed log lines in MSG_BUF: msg_cat / msg_kind / msg_dec / msg_end live in bank 2
+; (src/msg2.asm, LOG-FIX: always mapped, 45 B off bank 7), shared with pickup7 / xp7.
                 ASSERT TXL_CMB_ARR_HIT + NM_LONG < 32 && TXL_CMB_DAG_HIT + NM_LONG < 32
+                ASSERT TXL_SPL_SPARK + NM_LONG < 32 && TXL_SPL_FIRE + NM_LONG < 32 && TXL_SPL_FROST + NM_LONG < 32
+                ASSERT TXL_SPL_DRAIN + NM_LONG < 32 && TXL_SPL_LIGHT + NM_LONG < 32
+                ASSERT TXL_SPL_C_FROST <= LOG_MAX && TXL_SPL_C_DRAIN <= LOG_MAX && TXL_SPL_C_FIRE <= LOG_MAX
+                ASSERT TXL_SPL_C_LIGHT <= LOG_MAX && TXL_SPL_C_SPARK <= LOG_MAX && TXL_CMB_SHOOT <= LOG_MAX
                 ASSERT TXL_CMB_DAG_MISS + 1 + TXL_THE + NM_LONG <= LOG_MAX && TXL_CMB_ARR_MISS <= TXL_CMB_DAG_MISS
