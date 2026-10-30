@@ -677,6 +677,8 @@ redefine:
                 call rd_ent                    ; HL = mk_order entry
                 ld   a, (hl)
                 call tx_copy
+                ld   a, TX_KEY_BRK             ; hint: how to cancel
+                call tx_copy
                 xor  a
                 ld   (de), a
                 call rd_show
@@ -764,13 +766,15 @@ redefine:
                 pop  bc
                 djnz .bt
                 jp   .ask
-; rd_ent — HL = mk_order entry rd_i.  Clobbers: A, DE, HL
+; rd_ent — HL = mk_order entry rd_i.  Clobbers: A, BC, HL.  DE (the mk_buf
+; cursor after "PRESS KEY FOR ") must survive: UB8 — it used DE, so the name was
+; written through DE = 2*i (ROM) and the old menu_keys text showed through.
 rd_ent:         ld   a, (rd_i)
                 add  a, a
-                ld   e, a
-                ld   d, 0
+                ld   c, a
+                ld   b, 0
                 ld   hl, mk_order
-                add  hl, de
+                add  hl, bc
                 ret
 
 ; rd_show — mk_buf (plain) on the keys row, after a clear.
