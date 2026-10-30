@@ -150,10 +150,11 @@
   Archer (3F-D7LEV) `MOVECYC4 walk2, walk3, walk4, walk1` (same cyclic order):
   WALK1 = rest pose = `WK0` (one shift; MOT under `PHASE_SHIFT` 0), the even
   slots `WK4` — −576 B pool per 24×48 kind vs a MOT WALK1.
-  3F-T13bc: the B3 walks (Necro / Vampire / Death Knight) `MOVECYC4 walk2,
+  3F-T13bc: the B3 walks (Death Knight) `MOVECYC4 walk2,
   walk1, walk3, walk1` (walk2 / walk3 `WK4`, walk1 `WK0` in both odd slots), the
   Mummy B4 `MOVECYC4 walk2, walk4, walk3, walk1` (walk2 / walk3 `WK4`, walk4 /
-  walk1 `WK0`). Climbers draw `KS_CLIMB` cell-aligned: the climb art is STA
+  walk1 `WK0`); ANIM-IMPORT: the Necro (+ the Vampire until its own set) B4 like
+  the Mummy. Climbers draw `KS_CLIMB` cell-aligned: the climb art is STA
   (the shared humanoid pair `climb_h1` / `climb_h2` is STA|SYM, drawn in the
   kind's ink); a `KS_CLIMBREST` that points one byte into a cycle (`xx_climb +
   1`, `gh_idle + 1`) carries an ASSERT on the fid it lands on.
@@ -166,6 +167,17 @@
   emulator). Climb and JUMP2 art must exist (the walk stand-ins are ASSERTed
   out under `PHASE_SHIFT`). `-DPHASE_SHIFT=0` = both shifts (escape hatch);
   `=2` = unlocked + trap (soak diagnostic).
+
+## FRT rows (MEM-FT)
+
+- Each FRT row is 16 B: bytes 0..11 = the pre-shift variant pointers,
+  **bytes 12..15 (`FT_IN_ROW`) = that fid's `frame_tab` entry** (`FT_COLS`, `FT_H`,
+  `FT_OFFR`, `FT_OFFL`), written once at boot by `boot6_ft` and never again.
+  Writers clear / fill **only bytes 0..11** (`frt_none`, `gen_frame`, `pl_begin`):
+  a full-row write (16-B LDIR / fill of `FRT_NONE`) destroys the frame geometry of
+  that fid for the rest of the power-on (the blitter / `render` read it every draw).
+  Whole-row copies of rows that came from the FRT itself (`sel_frt_copy`) are fine.
+  `tests/game.py` #50 checks the FRT after a real tape boot == the `.sna`.
 
 ## Style
 

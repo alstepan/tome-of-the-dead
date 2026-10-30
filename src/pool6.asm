@@ -323,9 +323,9 @@ gu_tab:
                 GU   KFID_SPIDER, KFCNT_SPIDER                 ; K_SPIDER (+ U_DEADR)
                 GU   KFID_NECRO, KFCNT_NECRO                   ; K_VAMPIRE (the Necro walk; + U_VBITE)
                 GU   KFID_ORC, KFCNT_ORC                       ; K_ORC
-                GU   KFID_SKELETON, KFCNT_SKARCH               ; K_ARCHER (= U_SKARCH: walk1..4 + cut)
+                GU   KFID_SKELETON, KFCNT_SKARCH               ; K_ARCHER (= U_SKARCH: walk1..4 + cut + hurt)
                 GU   KFID_MUMMY, KFCNT_MUMMY                   ; K_MUMMY
-                GU   KFID_NECRO, KFCNT_NECRO                   ; K_NECRO = walk1..3 (+ U_NCAST, U_DEADR, U_NBOLT, U_CLIMBH)
+                GU   KFID_NECRO, KFCNT_NECRO                   ; K_NECRO = walk1..4 (+ U_NCAST, U_DEADR, U_NBOLT, U_CLIMBH)
                 GU   KFID_OGRE, KFCNT_OGRE                     ; K_OGRE
                 GU   KFID_DKNIGHT, KFCNT_DKNIGHT               ; K_DKNIGHT
                 GU   KFID_NECRO, KFCNT_NECRO                   ; K_ARCHMAGE (the Necro's frames)
@@ -348,9 +348,9 @@ gu_tab:
                 GU   KFID_FXM, KFCNT_FXM
 gu_tab_x:                                      ; units >= K_MAX (extras, 3F-T13)
 U_SKARCH        EQU K_MAX + 0
-                GU   KFID_SKELETON, KFCNT_SKARCH               ; Skeleton walk1..4 + cut (= the Archer)
+                GU   KFID_SKELETON, KFCNT_SKARCH               ; Skeleton walk1..4 + cut + hurt (= the Archer; ANIM-IMPORT: + hurt)
 U_SKREST        EQU K_MAX + 1
-                GU   KFID_SKREST, KFCNT_SKREST                 ; Skeleton raise, hurt (CORPSE-ASHES: collapsed out)
+                GU   KFID_SKREST, KFCNT_SKREST                 ; Skeleton raise (CORPSE-ASHES: collapsed out; ANIM-IMPORT: hurt -> U_SKARCH)
 U_DEADR         EQU K_MAX + 2
                 GU   KFID_RATDEAD, 1                           ; small_corpse: CORPSE-ASHES, every monster but Bat / Slime / Ghost
                 ; CORPSE-ASHES: U_DEADH (dead_humanoid) retired; the later units renumbered
@@ -372,7 +372,7 @@ gu_tab_end:
 GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
                 ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 30
                 ASSERT K_FXW == K_MAX - 2 && K_FXM == K_MAX - 1
-                ASSERT KFID_SKCLIMB == KFID_SKELETON + KFCNT_SKARCH && KFID_SKREST == KFID_SKCLIMB + KFCNT_SKCLIMB && FID_skeleton_climb2 == KFID_SKREST - 1 && KFCNT_SKCLIMB == 2 && FID_skeleton_cut == KFID_SKCLIMB - 1
+                ASSERT KFID_SKCLIMB == KFID_SKELETON + KFCNT_SKARCH && KFID_SKREST == KFID_SKCLIMB + KFCNT_SKCLIMB && FID_skeleton_climb2 == KFID_SKREST - 1 && KFCNT_SKCLIMB == 2 && FID_skeleton_hurt == KFID_SKCLIMB - 1 && FID_skeleton_cut == KFID_SKCLIMB - 2 && KFCNT_SKREST == 1
                 ASSERT KFID_RATDEAD == KFID_RAT + KFCNT_RAT - 1 && FID_small_corpse == KFID_RATDEAD
                 ASSERT KFID_NCAST == KFID_NECRO + KFCNT_NECRO && KFID_VBITE == KFID_NCAST + 1
                 ASSERT FID_climb_h2 == KFID_CLIMBH + 1
@@ -387,7 +387,7 @@ pool_gmap:
                 DB   K_GOBLIN,   K_GOBLIN,   U_DEADR   ; CORPSE-ASHES: the Goblin's DEAD is the shared corpse
                 DB   K_RAT,      K_RAT,      U_DEADR
                 DB   K_SPIDER,   K_SPIDER,   U_DEADR
-                ; 3F-T13bc: the Necro walk is shared (K_NECRO unit = walk1..3), the Vampire adds its
+                ; 3F-T13bc: the Necro walk is shared (K_NECRO unit = walk1..4), the Vampire adds its
                 ; bite, the Necro / Archmage the cast; climbers (Orc, Necro, Mummy) add the
                 ; shared climb pair U_CLIMBH (the Archer family uses the Skeleton's U_SKCLIMB) (once a level: dedup per unit)
                 DB   K_VAMPIRE,  K_NECRO,    U_VBITE

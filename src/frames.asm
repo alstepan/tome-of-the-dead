@@ -82,6 +82,9 @@ POOLACC = 0
                 FRM skeleton_walk3,     K_SKELETON, 24, WK0
                 FRM skeleton_walk4,     K_SKELETON, 24, WK4
                 FRM skeleton_cut,       K_SKELETON, 24, STA
+                ; ANIM-IMPORT item 2: skeleton_hurt joins the prefix (U_SKARCH) = the Archer /
+                ; Sniper HURT pose too (D4 +576 B pool; 0 where a Skeleton is on the level)
+                FRM skeleton_hurt,      K_SKELETON, 24, STA
 KFID_SKCLIMB = FCTR
                 ; fix/archer-climb: the climb pair is its own unit U_SKCLIMB (Skeleton = U_SKARCH +
                 ; U_SKCLIMB + U_SKREST) so the Archer / Sniper (the Skeleton body) generate and use
@@ -91,7 +94,6 @@ KFID_SKCLIMB = FCTR
 KFID_SKREST = FCTR
                 FRM skeleton_raise,     K_SKELETON, 24, STA
                 ; CORPSE-ASHES: skeleton_collapsed retired (DEAD = small_corpse, U_DEADR)
-                FRM skeleton_hurt,      K_SKELETON, 24, STA
 KFCNT_SKELETON = FCTR - KFID_SKELETON
 KFCNT_SKARCH = KFID_SKCLIMB - KFID_SKELETON
 KFCNT_SKCLIMB = KFID_SKREST - KFID_SKCLIMB
@@ -172,13 +174,16 @@ KFID_ORC = FCTR
                 FRM orc_attack,     K_ORC, 24, STA
 KFCNT_ORC = FCTR - KFID_ORC
                 ; 3F-T13bc: the Necro frames split into walk / cast / bite groups (units K_NECRO =
-                ; walk1..3, U_NCAST, U_VBITE: the Vampire draws walk + bite, the Necro / Archmage /
-                ; Bone Caller walk + cast). Walk B3 = MOVECYC4 walk2, walk1, walk3, walk1 (ART3):
-                ; walk3 is the second WK4 stride. Order walk1..3, cast (packs best: ART3 note)
+                ; walk1..4, U_NCAST, U_VBITE: the Vampire draws walk + bite, the Necro / Archmage /
+                ; Bone Caller walk + cast). Walk B4 since ANIM-IMPORT (below). Order walk1..4,
+                ; cast (packs best: ART3 note)
 KFID_NECRO = FCTR
                 FRM necro_walk1,    K_NECRO, 24, WK0
                 FRM necro_walk2,    K_NECRO, 24, WK4
                 FRM necro_walk3,    K_NECRO, 24, WK4
+                ; ANIM-IMPORT item 3: walk B4 = MOVECYC4 walk2, walk4, walk3, walk1 (ART3, as the
+                ; Mummy): walk4 = the passing pose in an odd slot (WK0)
+                FRM necro_walk4,    K_NECRO, 24, WK0
 KFCNT_NECRO = FCTR - KFID_NECRO
 KFID_NCAST = FCTR
                 FRM necro_cast,     K_NECRO, 24, STA
