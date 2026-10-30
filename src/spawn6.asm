@@ -9,8 +9,8 @@
 ;   sp_bcall   ai_ranged's caster pre-rule slot (ranged6.asm, RWF_PRE): the Bone
 ;              Caller -> one base Skeleton if Skeleton is in LP_KINDS, else a Ghost
 ;              (§9.4.6), cooldown BC_CD, <= BC_LIVE live summons (§9.6);
-;   ph_summon  far6 from ai_guard (boss7.asm): the Golden Pharaoh raises 1 + (rnd & 1)
-;              Skeletons / Mummies (plan.md PHARAOH ABILITY, user option 2), <= PH_LIVE;
+;   ph_summon  far6 from ai_guard (boss7.asm): the Golden Pharaoh raises ONE
+;              Skeleton / Mummy at a time (plan.md PHARAOH ABILITY, user option 2), PH_LIVE 1;
 ;   the ALARM trap (trap7.asm tr_eff) -> a wave of 1 + (rnd & 1) LP_KINDS bodies at a
 ;              door of the room (§1.5 / §9.5 idle-wave placement).
 ; end_turn (bank 7) far6s sp_run, which places and creates them: the spawn work
@@ -183,9 +183,10 @@ sp_bcall:       ld   hl, LP_KINDS
 
 ;------------------------------------------------------------------------------
 ; ph_summon — far6 from ai_guard (bank 7): IX = the lair boss, a Mummy = the
-; Golden Pharaoh (D5). sp_summon (cooldown PH_CD, <= PH_LIVE live minions) with
-; a base Skeleton; on a summon one RNG byte: bit 0 = a 2nd body, bit 1 = Mummies
-; instead (both weigh 5: the cap test with the Skeleton holds for either).
+; Golden Pharaoh (D5). sp_summon (cooldown PH_CD, <= PH_LIVE = 1 live minion: user
+; 2026-10-30, one at a time; Pharaoh 6 + minion 5 = 11 of 12 never fits a 2nd) with
+; a base Skeleton; on a summon one RNG byte: bit 1 = a Mummy instead (both weigh 5:
+; the cap test with the Skeleton holds for either).
 ; Out: L = 1 the turn is used.  Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 ph_summon:      ld   d, K_SKELETON | SQF_SUMM | SQF_RESP
@@ -195,15 +196,11 @@ ph_summon:      ld   d, K_SKELETON | SQF_SUMM | SQF_RESP
                 ld   l, 0
                 ret  nc
                 call rng_next                  ; (bank 2) A = the byte
-                rra
-                jr   nc, .one
-                ld   hl, SPQ_N
-                inc  (hl)
-.one:           rra
-                jr   nc, .u
+                ld   l, 1
+                bit  1, a
+                ret  z
                 ld   a, K_MUMMY | SQF_SUMM | SQF_RESP
                 ld   (SPQ_K), a
-.u:             ld   l, 1
                 ret
                 ASSERT WT_K_MUMMY == WT_K_SKELETON
 
@@ -435,13 +432,16 @@ sp_place:       ld   a, (P_ENTITIES + E_X)
 sp_try:         ld   (ix+E_X), a
                 cp   LP_XMIN
                 ret  c
+                cp   LP_XMAX + 1               ; x itself too: a negative x ($FF) + width wraps below the
+                ccf                            ; end-col test (4 B); CF = x > LP_XMAX
+                ret  c
                 call get_box                   ; (bank 2) C x, B y, D w, E h
                 ld   a, c
                 add  a, d
                 dec  a
                 cp   LP_XMAX + 1
                 ccf
-                ret  c                         ; runs past the last col, or x negative
+                ret  c                         ; runs past the last col
                 call box_free                  ; (bank 2; keeps BC, DE) a body there
                 ret  c
                 KFIELD KT_FLAGS

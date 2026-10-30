@@ -4265,7 +4265,7 @@ free slot and the cap -> a base Skeleton if `K_SKELETON` in `LP_KINDS` else a Gh
 KS_ATTACK pose with `E_MSG` = **`MSG_M_SUMMON` 16** "THE <kind> SUMMONS!" at its IMPACT (new string
 `cmb_summons`; the Bone Caller's name is "SUMMONER"), the turn used); **`ph_summon`** (far6 from bank-7
 `ai_guard` for the lair boss when it is a Mummy = the Golden Pharaoh, before the leash logic: the same with
-`PH_LIVE` 2 / `PH_CD` 8, then one RNG byte: bit 0 a 2nd body, bit 1 Mummies instead of Skeletons; L = 1 the
+`PH_LIVE` 1 (one minion at a time, user 2026-10-30; Pharaoh 6 + minion 5 = 11 of 12 never fits a 2nd, so the old 2nd-body branch was dead and is gone) / `PH_CD` 8, then one RNG byte: bit 1 a Mummy instead of a Skeleton; L = 1 the
 turn is used); the **ALARM** trap (`trap7.asm tr_eff`: a generated level (`LVL_DEPTH` != 0) with
 `LF_UNIQUE` clear -> `SPQ_WAVE`, `SPQ_NONE`, 1 + (rnd & 1), `out (PORT_BORDER)` `BORDER_ALARM` 2 for
 `TRAP_STEP_T` ticks (step 1 writes 0), "AN ALARM BELL RINGS!" (`S3_TRAP_ALARM`); else the 3E bell line).
@@ -4296,8 +4296,11 @@ keeps bits 2-7 (`RCD_KEEP`; a summon that follows stays summon-made and is dropp
 Costs (`tests/spawn.py` T, far6 incl., interrupts on): `sp_run` a summon 10.4k T, an offspring 10.5k, a
 2-body wave 14.2k (gates 12k / 12k / 16k); producers: S > 0 ~80 T, a decision ~1.8k (`sp_scan`), `breed6`
 ~0.3k + far6 per Rabbit hit. `tests/budget.py` new **`bsum`** (nroom with the Bone Caller alone: the summon
-turn + its end_turn spawn) 103,682 T worst work tick; every scenario green, worst gated ordinary 121,246
-(`lcastf` family unchanged), `lqmix` (report only) 128,110.
+turn + its end_turn spawn) 103,682 T worst work tick; every scenario green; new **`walarm`** (an ALARM
+wave on a room already holding 2 monsters: 2 queued Goblins, `sp_run` ~14.2k at the first end_turn, then the
+materialise ticks) worst work tick **122,529** T (125,170 incl. the ISR; cap 126,000); worst gated ordinary
+otherwise 121,246 (main 121,018: +228 T; the Lightning / `lcastf` family +155..+407 T and the pickup scenarios ~+52 T come from
+the `deal_hit` Rabbit hook, ~46 T per surviving hit; nothing is unchanged), `lqmix` (report only) 128,110.
 
 | Region (`-DDEBUG_KIT=0`) | main `2390dec` | after 3F-T9 | Δ |
 |---|---|---|---|

@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -408,6 +408,14 @@ SCENARIOS = {
     # summons (the cast pose), end_turn's sp_run makes the Ghost (spawn6.asm) on that turn's last tick
     "bsum": ("knight + Bone Caller in line, pmix items, a Ghost summoned at end_turn", [
         (7, 4, stand_y(1, 6), RIGHT)], KEYS, K_KNIGHT, None, "bsum"),
+    # 3F-T9 review: "walarm" = an ALARM wave on a generated level, room already holding 2 monsters (Rat + Bat,
+    # sigma 4): the queue is poked as tr_eff leaves it (SPQ_WAVE at the doors, 2 bodies) and the LP_KINDS the
+    # PROTO rooms lack are 4 Goblins (4 + 3 + 3 = 10 <= 12: both always fit, so the 2-body worst case is
+    # deterministic). The first turn's end_turn runs sp_run (2 bodies, door spot, build_live); the later turns
+    # materialise them (the trap's own cost is the "talarm" scenario).
+    "walarm": ("knight + Rat, Bat; ALARM wave of 2 Goblins queued, sp_run at end_turn, then materialise", [
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "walarm"),
     "rcast": ("mage Lightning r3 through 2 Archers in line, the deferred phase shoots back", [
         (5, 6, stand_y(1, 6), RIGHT),
         (7, 22, stand_y(1, 6), HOSTILE)], [("FIRE", 3)], K_WIZARD, None, "rcast"),
@@ -903,6 +911,9 @@ def boss_setup(p, key):
     p.set_ent(0, HP=250, MAXHP=250)
 
 
+WALARM_PRE = []                                   # "walarm": the slots live before the wave
+
+
 def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     p = game.T(h)
@@ -957,6 +968,10 @@ def run_scenario(h, scen):
         qmix_setup(p)
     if len(scen) > 5 and scen[5] in TRAPS:
         trap_setup(p, scen[5])
+    if len(scen) > 5 and scen[5] == "walarm":
+        WALARM_PRE[:] = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1]
+        p.wmem(S["LP_KINDS"], [S["K_GOBLIN"]] * 4)
+        p.wmem(S["SPQ_K"], [S["SPQ_WAVE"], S["SPQ_NONE"], 2])
     for f in EXTRA_SETUP:
         f(p)
     mode = scen[4] if len(scen) > 4 else None
@@ -993,6 +1008,10 @@ def run_scenario(h, scen):
         sm = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and p.ent(sl)["POT"] & 0x40]
         print(f"[info] bsum after: summon-made slots {sm}", flush=True)
         assert sm, "bsum: no summon was made"
+    if len(scen) > 5 and scen[5] == "walarm":       # the wave really was made (2 new bodies, SPQ empty)
+        wv = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and sl not in WALARM_PRE]
+        print(f"[info] walarm after: wave slots {wv}, SPQ_K {p.rb('SPQ_K')}", flush=True)
+        assert len(wv) == 2 and p.rb("SPQ_K") == 0, "walarm: the 2-body wave was not made"
     if len(scen) > 5 and scen[5] == "dmix":         # the boss kill-drop really ran uq_fit's displacement
         fl = list(p.z.read_memory(S["FLOOR_LIST"], 128))
         room = [(fl[4 * i + 1], fl[4 * i + 2]) for i in range(S["FLOOR_MAX"])
@@ -1083,7 +1102,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,bsum,rcast,sroom,lglow,omix,lqmix").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,bsum,walarm,rcast,sroom,lglow,omix,lqmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")
