@@ -4088,14 +4088,21 @@ Ogre, Death Knight (48), Goblin (32), Ghost, Bat, Slime, Rat, Spider and the her
   `U_SKCLIMB` climb1/2, `U_SKREST` raise; the Archer / Sniper draw them in their inks) and the shared
   humanoid climb pair `climb_h1` / `climb_h2` (`U_CLIMBH`: Orc / Necro / Mummy families). No id / flag /
   sequence change. Pool both heroes D1..D8: 0, 0, −864, −864, −960, −96, −96, −960.
+- **(3) Orc V4 Ironhide + Mummy V2 + Necromancer V2:** Orc 6 frames (ART11; **new ids `orc_walk3`
+  (WK4) and `orc_hurt` (STA)** inside `K_ORC`, later fids renumber, symbolic everywhere): walk B3
+  `MOVECYC4 walk2, walk1, walk3, walk1`, HURT = `orc_hurt` (also the DEATHSEQ's first pose). Mummy
+  (`tools/import_anim40.py mummy`: walk1..4 + attack, same B4 flags, HURT = the rest pose) and Necromancer
+  (`... necro`: walk1..4 + cast; Archmage / Bone Caller share it in their inks) art-only. New 40-px-only
+  names are INCLUDEd in `sprites/index_3f.asm` (the packer's frame list) and resolved in `sprites40/`.
+  Pool both heroes D1..D8: 0, 0, −448, +640, −576, +64, +64, −576. **SRC6 exactly full** (3,328 of 3,328).
 
-| Region (release `-DDEBUG_KIT=0`; main `df086fc` → step) | main | (1) heroes | (2) Skeleton + climb |
-|---|---|---|---|
-| pool need worst level / slack (`POOL_CAP` 33,050) | D4 W 31,840 / 1,210 | D4 W 29,728 / **3,322** | D4/D7 W 28,864 / **4,186** |
-| PROTO slack | 2,330 | 4,442 | 5,306 |
-| bank 1 free (sprite sources) | 150 | 673 (packed 12,015 → 11,492) | 810 |
-| bank 2 free | 271 | 267 (`ftz_zx0` 124 → 131; `.jump` −3) | 267 |
-| R6 free | 327 | 328 | 326 (packed streams) |
-| SRC6 free (13 pages) | 160 | 160 | 181 (climb pair block) |
-| `FID_COUNT` / `FRT_MAX` | 130 / 144 | 130 / 144 | 130 / 144 |
+| Region (release `-DDEBUG_KIT=0`; main `df086fc` → step) | main | (1) heroes | (2) Skeleton + climb | (3) Orc + Mummy + Necro |
+|---|---|---|---|---|
+| pool need worst level / slack (`POOL_CAP` 33,050) | D4 W 31,840 / 1,210 | D4 W 29,728 / **3,322** | D4/D7 W 28,864 / **4,186** | D4 W 29,504 / **3,546** |
+| PROTO slack | 2,330 | 4,442 | 5,306 | 5,306 |
+| bank 1 free (sprite sources) | 150 | 673 (packed 12,015 → 11,492) | 810 | 810 |
+| bank 2 free | 271 | 267 (`ftz_zx0` 124 → 131; `.jump` −3) | 267 | 267 |
+| R6 free | 327 | 328 | 326 (packed streams) | 332 |
+| SRC6 free (13 pages) | 160 | 160 | 181 (climb pair block) | **0** |
+| `FID_COUNT` / `FRT_MAX` | 130 / 144 | 130 / 144 | 130 / 144 | 132 / 144 |
 

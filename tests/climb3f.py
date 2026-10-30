@@ -35,7 +35,7 @@ CLIMB_SP = {FID["spider_walk1"]}                 # fix/spider-climb: the Spider 
 CLIMB_H = {FID["climb_h1"], FID["climb_h2"]}
 CLIMB_SK = {FID["skeleton_climb1"], FID["skeleton_climb2"]}
 OWN = {
-    "ORC": {FID[n] for n in ("orc_walk1", "orc_walk2")},
+    "ORC": {FID[n] for n in ("orc_walk1", "orc_walk2", "orc_walk3")},   # ANIM-IMPORT2: B3 walk
     "NECRO": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3", "necro_walk4")},
     "ARCHER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
     "SNIPER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
