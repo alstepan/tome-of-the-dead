@@ -3995,3 +3995,40 @@ No new state and no new address: `proj_prep` (bank 3, `proj3.asm`) reads the wor
 reaches deal_hit as part of the pre-resist damage. Direct hit only (not the Firebolt burst).
 `hero_recalc` untouched. Bank 3 free to `AY_RESERVE` 60 -> **37** (-23 B; release, rebased on main
 2026-10-30); bank 2 271 / R6 327 unchanged. Test: `tests/staff.py`.
+
+## LOG-FIX (fix/log-lines): the Mage's cast / hit lines, flanking melee lines
+
+The LOG-AUDIT found the spell lines were never written (strings existed, unreferenced) and that two
+monsters hitting on one tick lost a line (`MSG_Q` is one slot). Fixed; tests `tests/log_audit.py`
+(L1..L10, L12, L14, S, C; reads the ring by its write index, one sample a tick).
+
+- **`src/strings.txt` (0 B):** reordered so the hit lines are `TX_SPL_SPARK + ABL_*` over 0..8 and the cast lines
+  `TX_SPL_C_SPARK + ABL_*` (fillers for Power / Whirlwind); ASSERTed in `abil_ammo7.asm`, with
+  `TXL_* + NM_LONG < 32` for every hit line. Text block unchanged (2,652 B). Only the spell half of the cast
+  table is used (dagger / bow keep their single result line).
+- **`spell_fire` ends in `ammo_fire.t`**: one result line per cast, as a token stream (`hit_line`, ~1.4k T, no
+  tx_dec decode; the fire tick +2.2k T vs main, was +7.9k with msg_cat / msg_kind). `THE BOLT HITS YOU` when
+  the caster was struck AND hurt (`pf_tgt` = 0, `pf_lost` != 0; `pf_tgt` is the FIRST body only: a bolt that
+  hits a monster and then bounces onto the caster prints no self line - deferred).
+- **Fix A, `log_room`** (bank 2): a RESULT line (hit / kill / parry / self-hit / burst-self) with the ring full
+  replaces the newest pending line (counted in LQ_DROP) instead of being dropped. A Lightning through 3-4
+  ASLEEP bodies (cast line + 3 WAKES UP lines) keeps its hit line (test S).
+- **`act_begin`** pushes `YOU CAST <SPELL>` before `proj_pre`; dropped when `LOG_QN >= 3` (`CAST_LINE_MAX`).
+- **`pf_burst`** (bank 3): `THE BURST SCORCHES YOU` when the burst hurt the caster (deal_hit's L != 0).
+- **`do_impact`** (`anim.asm`): a second impact in a tick shows the queued one first (~1.4k T) only with the log
+  ring empty (`LOG_QN` = 0), else last-wins as before. A looser test (`LOG_QN` < 3 / < 2) overflowed the
+  `tfaint` stress scenario (hero asleep, 4 monsters, no panel drain for 15 ticks); even `LOG_QN` = 0 leaves one
+  dropped monster line there (main 0; see the report).
+- **`src/msg2.asm`** (bank 2, after `ranged2.asm`): `msg_kind` / `msg_cat` / `msg_dec` / `msg_end` moved from
+  bank 7 (callers there unchanged) + `log_room` + `hit_line`.
+- Deferred: kill / hit lines for pierced bodies (P3), POWER STRIKE / WHIRLWIND wording, bounce / reflect lines,
+  the hunger-line retry, dead-text reclaim.
+
+(Release, rebased on main + STAFF-BONUS, 2026-10-30.)
+
+| Region | before | after | Δ |
+|---|---|---|---|
+| bank 7 free (kit / release) | 131 / 136 | **144 / 149** | +13 (the msg_* helpers out, hit_line in) |
+| bank 3 free to `AY_RESERVE` | 37 | **19** | −18 (`pf_burst` self line + gates) |
+| bank 2 free | 271 | **149** | −122 (`msg2.asm` 119 B, `do_impact` 23) |
+| R6 / low RAM / bank 1 / text bank 0 | — | unchanged | 0 |

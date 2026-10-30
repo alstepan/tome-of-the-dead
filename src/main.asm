@@ -634,6 +634,7 @@ kind_tab:
                 INCLUDE "ranged2.asm"           ; 3F-T7 ai_rhook + rk_tab (the ranged hook's reject)
                 INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
                 INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy (were low RAM / gfx.asm)
+                INCLUDE "msg2.asm"              ; LOG-FIX: msg_cat / msg_end (from bank 7), log_room, hit_line
 ftz_zx0:                                       ; MEM-FT frame_tab, FT_LEN B/fid contiguous, ZX0 (boot6_ft;
     IF OVL_PASS == 2                            ; bank 2: always mapped, on the CODE tape block; LAST in the
                 INCBIN "ft.zx0"                 ; image so its pass-1/2 size moves only code_end)

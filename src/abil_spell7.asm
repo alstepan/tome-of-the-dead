@@ -56,6 +56,7 @@ abil_spell:
 ; game.md §6 "Logic"), the hero flashes ATTR_HEAL from the release until
 ; FLASH_TICKS after the impact.
 ; In: IX = hero, B = ABL_SPARK..ABL_LIGHTNING (= ACT_ABL). Out: L = 1 fired.
+; LOG-FIX: ends in ammo_fire.t (hit line TX_SPL_SPARK + ABL, "YOU KILL THE").
 ; Clobbers: all but IY.   ~0.4k T + proj_go (the walk left after the accept's
 ; proj_pre: <= ~45k T for 16 strikes, contended)
 ;------------------------------------------------------------------------------
@@ -80,5 +81,17 @@ spell_fire:
                 sub  b
                 add  a, FLASH_TICKS
                 ld   (ix+E_FLT), a
-.out:           ld   l, 1
-                ret
+.out:           ld   a, (pf_tgt)               ; LOG-FIX P2a: the bolt struck the caster (slot 0,
+                or   a                         ; a bounce / reflection) and hurt him (pf_lost: an
+                jr   nz, .nsf                  ; immune hero got deal_hit's UNAFFECTED line only):
+                ld   a, (pf_lost)              ; "THE BOLT HITS YOU" (the burst's own line: pf_burst,
+                or   a                         ; bank 3). pf_tgt is the FIRST body struck: a bolt
+                jr   z, .nsf                   ; that hit a monster and then bounced onto the
+                call log_room                  ; caster prints no self line (deferred)
+                ld   a, TX_SPL_HIT_SELF
+                call msg_push
+.nsf:
+                ld   a, (ACT_ABL)              ; LOG-FIX: the one result line (hit / kill) through
+                ld   b, a                      ; ammo_fire's tail: B = ABL, C = 0 (no named miss);
+                ld   c, 0                      ; it ends with L = 1
+                jp   ammo_fire.t
