@@ -203,6 +203,15 @@ st_sig:
 panel_more:
                 bit  PD_MP_BIT, (hl)           ; D3-9b: a small item (HP's size), any frame
                 jp   nz, item_mp               ; (xp2.asm, after kind_tab)
+                bit  PD_AMMO_BIT, (hl)         ; AMMO-COUNT: a throw / shot / pickup moved a count:
+                jr   z, .na                    ; redraw the dagger + bow slots (the count cell);
+                res  PD_AMMO_BIT, (hl)         ; PD_ICONS drains them next (item_icons: one slot
+                set  PD_ICONS_BIT, (hl)        ; per pass)
+                ld   a, IS_NONE
+                ld   (ICON_SH + SLOT_AMMO0), a
+                ld   (ICON_SH + SLOT_AMMO0 + 1), a
+                ret
+.na:
                 inc  c
                 dec  c
                 jr   nz, .clr                  ; 2nd frame: FOOD / the info line wait

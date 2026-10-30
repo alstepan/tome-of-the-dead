@@ -305,7 +305,9 @@ worn_cell:      ld   bc, (LOG_ROW << 8) | GEAR_COL
 ; stacks, capped 9) in ATTR_HUD.
 ; Clobbers: A, BC, DE, HL.   ~4-9k T (bag_pick ~0.5-6k, icon ~1.2k, digit ~1k)
 ;------------------------------------------------------------------------------
-qs_draw:        push de                        ; [D = col]
+qs_draw:        cp   QS_DAG
+                jr   nc, qs_ammo               ; AMMO-COUNT: the Warrior's dagger / bow slots
+                push de                        ; [D = col]
                 ld   b, IT_FOOD_LO
                 ld   d, 2 * (IT_FOOD_HI - IT_FOOD_LO + 1) + 0   ; mode 0: the lowest type
                 ld   l, IT_F_APPLE
@@ -355,21 +357,26 @@ qs_draw:        push de                        ; [D = col]
                 cp   10
                 jr   c, .d
                 ld   a, 9
-.d:             add  a, '0'
+.d:             ld   d, a                      ; D = the digit
+                pop  bc                        ; B = col
+                ld   a, b
+                add  a, 2                      ; the count column
+                ld   c, a
+                ld   b, ICON_ROW + 1
+; qs_pd — D = digit 0..9, B = row, C = col: its 6x8 glyph in the cell (print6 x rule:
+; x = a cell), ATTR_HUD.  Keeps BC.  Clobbers: A, DE, HL
+qs_pd:          ld   a, d
+                add  a, '0'
                 ld   hl, P_NUMBUF
                 ld   (hl), a
                 inc  l
                 ld   (hl), 0
                 dec  l
-                pop  bc                        ; B = col
-                ld   a, b
-                add  a, 2                      ; the count column
-                ld   c, a
+                ld   a, c
                 add  a, a
                 add  a, a
                 add  a, a
-                ld   e, a                      ; pixel x: a cell (print6 x rule)
-                ld   b, ICON_ROW + 1
+                ld   e, a                      ; pixel x: a cell
                 push bc
                 call print6
                 pop  bc
@@ -377,5 +384,54 @@ qs_draw:        push de                        ; [D = col]
                 ld   (hl), ATTR_HUD
                 ret
                 ASSERT (BAG & $FF) == 0 && BAG_SLOTS * IR_STRIDE <= 256 && IR_QTY == 1 && IR_STRIDE == 3
+
+;------------------------------------------------------------------------------
+; qs_ammo — AMMO-COUNT, qs_draw's branch for A = QS_DAG / QS_BOW (same contract:
+; D = the slot's col, the 3 x 2 cells cleared, attrs 0): the dagger (ICONS16
+; ammo dagger) or the bow (IT_BOW's icon) as a 16x16 icon in its it_tab ink, and
+; the count of DAGGERS / ARROWS (0..99) in the slot's third column as the
+; quick slots do: the units digit on row ICON_ROW + 1, a non-zero tens digit
+; above it on row ICON_ROW (a 6x8 digit does not fit two to a cell: read
+; top-down, "2" over "0" = 20).  The caller greys / selects the 6 attrs
+; afterwards (a 0 count is a grey "0").
+; Clobbers: A, BC, DE, HL.   ~2-3k T (icon 1.2k + 1-2 digits ~0.5k each)
+;------------------------------------------------------------------------------
+qs_ammo:        ld   c, d                      ; C = col
+                ld   b, ICON_ROW
+                ld   hl, (DAGGERS)             ; L = DAGGERS, H = ARROWS
+                sub  QS_DAG                    ; Z = dagger
+                ld   a, IT_DAGGER
+                ld   d, ICONS16_AMMO_DAGGER
+                jr   z, .go
+                ld   l, h                      ; the bow shows the arrow count
+                ld   a, IT_BOW
+                ld   d, IT_BOW - IT_BAG_LO
+.go:            push hl                        ; [L = count]
+                call item_ink                  ; A = the type's ink (BC, DE kept)
+                ld   e, $FF
+                push bc
+                call ic_blit                   ; D = icon, A = attr, E = mask $FF
+                pop  bc
+                pop  hl
+                ld   a, l
+                ld   e, 0                      ; E = tens
+.dv:            sub  10
+                jr   c, .dd
+                inc  e
+                jr   .dv
+.dd:            add  a, 10
+                inc  c
+                inc  c                         ; the count column
+                push af                        ; [units]
+                ld   a, e
+                or   a
+                jr   z, .nt
+                ld   d, a
+                call qs_pd                     ; tens: row ICON_ROW
+.nt:            pop  af
+                ld   d, a
+                inc  b                         ; units: row ICON_ROW + 1
+                jr   qs_pd
+                ASSERT ARROWS == DAGGERS + 1 && ARROWS_MAX < 100 && DAGGERS_MAX < 100 && IT_BOW > IT_BAG_LO
                 ASSERT IT_P_CURE == IT_P_HEAL + 2 && IT_F_APPLE >= IT_FOOD_LO && IT_F_APPLE <= IT_FOOD_HI
                 ASSERT IT_S_TELEPORT == IT_SCR_LO && QS_FOOD == 0 && QS_POTION == 1 && QS_SCROLL == 2

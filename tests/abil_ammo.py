@@ -56,6 +56,14 @@ consumed, no floor drop), §2.3 (no throws / shots mid-ladder), §6 "Logic"
   P9  POTIONS_TAKEN bit for entry index < 8 only (5 / 9), cell + attr shadow
       (3E-T11: the pickup line is "YOU PICK UP HEAL POTION", the bag item)
   P10 the floor_pickup pre-filter: no glyph under the body -> no scan
+  AC  AMMO-COUNT (src/icons6.asm qs_ammo, icons.asm panel_more PD_AMMO -> ICON_SH, panel.asm
+      bar_knight SLOT_QDAG / SLOT_QBOW): the Warrior's dagger / bow slots are quick-style
+      (16x16 icon + the count in the slot's third column: units row 19, a non-zero tens above)
+      AC1 8 daggers / 20 arrows: icons + digits "8" / "2" over "0", ATTR_HUD, the icon inks
+      AC2 a dagger thrown / an arrow shot through the controls: 7 / 19 (the real PD_AMMO)
+      AC3 pickups: 8 + 3 -> 9 (partial, cap), arrows 20 + 6 -> 24 (cap): the digits follow
+      AC4 0 ammo: both slots grey (all 6 attrs $07), a "0" in the count cell; no tens
+      AC5 the Mage: slots 3 / 4 (Frost / Drain) unchanged by the ammo counters / PD_AMMO
 Run: ZRCP_PORT=<port> python3 tests/abil_ammo.py
 """
 import copy
@@ -70,6 +78,7 @@ from game_lib import (Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_RAT, K_GOBLIN,
                       stand_y)
 from proj3 import T, w16, World, Body, Rng  # noqa: E402
 import proj3  # noqa: E402
+import game_lib  # noqa: E402
 import combat_tables as CT  # noqa: E402
 import textpack  # noqa: E402
 import world  # noqa: E402
@@ -675,6 +684,105 @@ def run(h, p, check):
     check("B1 build_room_map (FLOOR1): every entry's 2x2 markers, a shared col too",
           got == dict(ok=True, d=bytes([t0 + 3] * 2), a=bytes([t0, t0, t0 + 1, t0 + 1]),
                       s=bytes([t0 + 2, t0 + 2, t0 + 3, t0 + 3])), got)
+
+    # ---- AC: AMMO-COUNT, the panel's count cells ------------------------------------------
+    FONT6 = open(HERE.parent / "assets" / "gfx" / "fonts" / "font6x8.bin", "rb").read()
+
+    def dig(ch):                                  # print6's cell: the glyph rows & $FC
+        return bytes(b & 0xFC for b in FONT6[(ord(ch) - 32) * 8:(ord(ch) - 31) * 8])
+
+    BLANK = bytes(8)
+    HUD, GREY = S["ATTR_HUD"], S["ATTR_P_GREY"]
+    cb, at = game_lib.cell_bytes, game_lib.attr_at
+
+    def ammo_set(d, a, bow=1):
+        """Poke the counters and raise PD_AMMO as every runtime writer does."""
+        p.wb("DAGGERS", d)
+        p.wb("ARROWS", a)
+        p.wb("HAS_BOW", bow)
+        p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_AMMO"])
+        p.tick(8)
+
+    def panel_slot(fr, slot):
+        """(icon cells, tens cell, units cell, attrs of the 6 cells) of icon-bar slot `slot`."""
+        c = 3 * slot
+        ic = {(dc, dr): cb(fr, c + dc, 18 + dr) for dc in (0, 1) for dr in (0, 1)}
+        return ic, cb(fr, c + 2, 18), cb(fr, c + 2, 19), [at(fr, c + dc, 18 + dr) for dr in (0, 1) for dc in (0, 1, 2)]
+
+    def ammo_ok(tag, d, a, bow=1):
+        fr = p.composed_frame()
+        bad = []
+        for slot, n, idx, ink in ((3, d, S["ICONS16_AMMO_DAGGER"], 0x47), (4, a, S["IT_BOW"] - S["IT_BAG_LO"], 0x06)):
+            ic, tens, units, attrs = panel_slot(fr, slot)
+            grey = n == 0 or (slot == 4 and not bow)
+            if ic != game_lib.icon16_cells(idx):
+                bad.append((slot, "icon"))
+            if tens != (dig(str(n // 10)) if n >= 10 else BLANK) or units != dig(str(n % 10)):
+                bad.append((slot, "digits", tens.hex(), units.hex()))
+            want = [GREY] * 6 if grey else [ink, ink, HUD if n >= 10 else 0, ink, ink, HUD]
+            if attrs != want:
+                bad.append((slot, "attrs", [hex(x) for x in attrs]))
+        check(tag, not bad, bad)
+
+    scene([], daggers=3, arrows=0, bow=1)
+    ammo_set(8, 20)
+    ammo_ok("AC1 8 daggers / 20 arrows: icons, digits (8 | 2 over 0), inks", 8, 20)
+
+    scene([], daggers=8, arrows=20, bow=1)
+    ammo_set(8, 20)
+    p.select_slot(SLOT[DAGGER])
+    ok = p.turn("FIRE")
+    p.tick(10)
+    check("AC2 dagger thrown: DAGGERS 7, the digit 7", ok and p.rb("DAGGERS") == 7, (ok, p.rb("DAGGERS")))
+    p.select_slot(0)
+    p.tick(6)
+    ammo_ok("AC2 panel after the throw", 7, 20)
+    p.select_slot(SLOT[BOW])
+    ok = p.turn("FIRE")
+    p.tick(10)
+    check("AC2 arrow shot: ARROWS 19", ok and p.rb("ARROWS") == 19, (ok, p.rb("ARROWS")))
+    p.select_slot(0)
+    p.tick(6)
+    ammo_ok("AC2 panel after the shot (19: tens 1, units 9)", 7, 19)
+
+    scene([], daggers=8, arrows=20, bow=1)
+    ammo_set(8, 20)
+    i, = free_entries(1)
+    put(i, col, S["IT_DAGGER"], 3, MK)
+    step_on("AC3")
+    p.tick(10)
+    check("AC3 DAGGERS 8 + 3 -> 9", p.rb("DAGGERS") == 9, p.rb("DAGGERS"))
+    ammo_ok("AC3 panel after the partial pickup", 9, 20)
+    i, = free_entries(1)
+    put(i, col + 1, S["IT_ARROW"], 6, MK)
+    step_on("AC3b")
+    p.tick(10)
+    check("AC3 ARROWS 20 + 6 -> 24", p.rb("ARROWS") == 24, p.rb("ARROWS"))
+    ammo_ok("AC3 panel after the quiver-cap pickup (24)", 9, 24)
+
+    scene([], daggers=1, arrows=1, bow=1)
+    ammo_set(1, 1)
+    p.wb("DAGGERS", 0)
+    p.wb("ARROWS", 0)
+    p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_AMMO"])
+    p.tick(10)
+    ammo_ok("AC4 0 ammo: both slots grey, a 0", 0, 0)
+    ammo_set(0, 25)
+    ammo_ok("AC4b no daggers, 25 arrows: slot 3 grey, bow normal (25)", 0, 25)
+    ammo_set(5, 7, bow=0)
+    ammo_ok("AC4c no bow: the bow slot grey (arrows counted: 7)", 5, 7, bow=0)
+
+    scene([], daggers=0, cls=K_WIZARD)
+    p.tick(6)
+    fr0 = p.composed_frame()
+    p.wb("DAGGERS", 5)
+    p.wb("ARROWS", 12)
+    p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_AMMO"])
+    p.tick(10)
+    fr1 = p.composed_frame()
+    same = all(cb(fr0, c, r) == cb(fr1, c, r) and at(fr0, c, r) == at(fr1, c, r)
+               for c in range(9, 15) for r in (18, 19))
+    check("AC5 the Mage: slots 3 / 4 unchanged by the ammo counters + PD_AMMO", same)
 
 
 if __name__ == "__main__":

@@ -204,6 +204,9 @@ item_icons:
                 set  PD_ICONS_BIT, (hl)        ; maybe more: the next item
                 pop  af
                 ret  nz
+                ld   a, (SEL_SLOT)             ; AMMO-COUNT: a redraw of a bar icon below the quick
+                cp   QS_SLOT0                  ; slots (an ammo count, a grey / un-grey) leaves the
+                ret  c                         ; info line as it is (its text does not change: saves ~25k T)
 .info:          ld   hl, PANEL_DIRTY
                 set  PD_INFO_BIT, (hl)
                 ret
