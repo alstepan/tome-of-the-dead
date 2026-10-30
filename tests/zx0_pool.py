@@ -97,11 +97,13 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # both heroes D1..D8 0 0 -128 0 0 +2112 0 +2112 (POOL_CAP 33,050 -> 32,538: SRC6 13 -> 15 pages).
 # ANIM-X12 X1 + X2 (Orc / Vampire 4th walk pose, +1 fid each = +480 B pool on every level that has the
 # kind): both heroes D1..D8 0 0 +480 +480 0 +960 +480 +480; SRC6 15 -> 16 pages (POOL_CAP 32,538 -> 32,269).
+# SPIDER-CLIMB (spider_climb1/2 STA|SYM 32x16 in the K_SPIDER unit, 128 B pool each): both heroes D2 D4 D5
+# +256 (the Spider levels); POOL_CAP unchanged (SRC6 +163 B, 57 free of 16 pages).
 LEVEL_NEED = {
-    (0, 1): 24192, (0, 2): 23648, (0, 3): 28192, (0, 4): 29984,
-    (0, 5): 24480, (0, 6): 29504, (0, 7): 29408, (0, 8): 29824,
-    (1, 1): 21056, (1, 2): 20512, (1, 3): 24992, (1, 4): 26912,
-    (1, 5): 21408, (1, 6): 26304, (1, 7): 26208, (1, 8): 26624,
+    (0, 1): 24192, (0, 2): 23904, (0, 3): 28192, (0, 4): 30240,
+    (0, 5): 24736, (0, 6): 29504, (0, 7): 29408, (0, 8): 29824,
+    (1, 1): 21056, (1, 2): 20768, (1, 3): 24992, (1, 4): 27168,
+    (1, 5): 21664, (1, 6): 26304, (1, 7): 26208, (1, 8): 26624,
 }
 
 

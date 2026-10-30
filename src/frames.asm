@@ -167,6 +167,10 @@ KFID_SPIDER = FCTR
                 FRM spider_walk1,   K_SPIDER, 32, WK0
                 FRM spider_walk2,   K_SPIDER, 32, WK4
                 FRM spider_bite,    K_SPIDER, 32, STA
+                ; SPIDER-CLIMB (user 2026-10-30): the dedicated dorsal-view climb pair (ART15; 32 wide,
+                ; art in x 0..23 over the ladder's 3 cells), cell-aligned STA|SYM = 128 B pool each
+                FRM spider_climb1,  K_SPIDER, 32, STA|SYM
+                FRM spider_climb2,  K_SPIDER, 32, STA|SYM
 KFCNT_SPIDER = FCTR - KFID_SPIDER
 KFID_ORC = FCTR
                 ; ANIM-IMPORT2 (3): Orc V4 Ironhide at 40 px (ART11; all six frames redrawn):

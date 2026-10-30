@@ -37,6 +37,8 @@
         INCLUDE "climb_h2.asm"
         INCLUDE "dk_walk3.asm"
         INCLUDE "necro_walk4.asm"
+        INCLUDE "spider_climb1.asm"
+        INCLUDE "spider_climb2.asm"
 ; ANIM-IMPORT2: new 40-px-only frames (no 48-px file; tools/zx0_pack.py sprite_asm resolves
 ; them in assets/gfx/sprites40/, listed in its index40.asm)
         INCLUDE "orc_walk3.asm"

@@ -2603,7 +2603,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Bat | 24×16 | 3 | 1 | 4 | 0 | 1d2 | 2 | flyer | erratic | — | D1–D3 |
 | Slime | 24×16 | 6 | 0 | 0 | 1 | 1d3 | 2 | walker, acts every 2 | chase | — | D1 |
 | Goblin | 24×32 | 6 | 1 | 1 | 0 | 1d4 | 3 | walker, climber, opener | chase | Apple 1/4 | D1, D2 |
-| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker, climber (on its rest pose; user 2026-10-29) | hit **poisons**: POISON +12 per bite, cap 30 (= −1 HP / 4 turns; POIS1 §6.4.3) | — | D2, D4, D5 |
+| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker, climber (own dorsal climb pair spider_climb1/2, STA|SYM; user 2026-10-30, was its rest pose) | hit **poisons**: POISON +12 per bite, cap 30 (= −1 HP / 4 turns; POIS1 §6.4.3) | — | D2, D4, D5 |
 | Skeleton | 24×48 | 10 | 2 | 2 | 1 | 1d6 | 5 | walker, climber, opener | chase | — | D3, D5, D8 |
 | **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | walker, opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
 | Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch 1 in 4 → CONFUSED 4 (§6.4) | — | D3, D6–D8 |
