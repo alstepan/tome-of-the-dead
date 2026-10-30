@@ -12,11 +12,12 @@ sp_run makes the bodies (src/spawn6.asm). Seeded generated games (the real level
      (10 more turns: none); the summon dead -> the next S = 0 turn summons again; lp_bank drops it
   C  the cap: Bone Caller + 3 Skeletons (4 monsters) -> no summon, S stays 0, the queue empty
   P  Golden Pharaoh (D5 lair): with its escort (Σ >= 9 + 5 > 12) no summon; escort gone -> 1
-     minion (Skeleton / Mummy, summon-made) beside it, S = 8; the 2nd never fits the cap; leaving
+     minion (Skeleton / Mummy, summon-made) beside it, S = 8; PH_LIVE 1: one at a time; leaving
      the lair discards it (record = the boss)
   A  ALARM (D5, boss alive): "AN ALARM BELL RINGS!", 1-2 bodies of LP_KINDS PENDING at a door
      (F_RESPAWN, not summon-made), walked in after the next turns; boss dead (LF_UNIQUE): the bell
      line and nothing
+  N  sp_try with a parent at x = 2: a negative candidate x ($FF + width wraps) is refused, a legal col is not
   X  sp_run on an exit turn (EXIT_KIND) / a dying hero: the queue is emptied, nothing made
   T  costs: sp_run (far6 incl.) for a summon / an offspring / a 2-body wave
 Build with -DDEBUG_KIT=0. ZRCP_PORT=<port> python3 tests/spawn.py
@@ -29,7 +30,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import Harness, S, EMU_ARGS, stand_y, RUN_LIMIT  # noqa: E402
-from lp import T, w16  # noqa: E402
+from lp import T, w16, RES  # noqa: E402
 from boss import Lair, boss_slot, rec_entries  # noqa: E402
 from abil_melee import stream_text  # noqa: E402
 
@@ -196,6 +197,7 @@ def main():
         bone_caller(p, lines)
         pharaoh(p, lines)
         alarm(p, lines)
+        bounds(p, lines)
         exits(p, lines)
     print(f"spawn: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
     return 1 if fails else 0
@@ -393,7 +395,7 @@ def pharaoh(p, lines):
         before = room_slots(p)
         p.turn("WAIT")
         n += len(new_slots(p, before))
-    check("P4 a 2nd minion never fits the §9.3 cap (6 + 5 + 5 > 12): 12 turns, none", n == 0, n)
+    check("P4 one minion at a time (PH_LIVE 1; 6 + 5 + 5 > 12 anyway): 12 turns, none", n == 0, n)
     ok = L.leave()
     ents, _ = rec_entries(p, L.lair)
     check("P5 leaving the lair discards the minion: the record holds the boss only",
@@ -447,6 +449,37 @@ def alarm(p, lines):
         mat = [s2 for s2 in ns if p.ent(s2)["FLAGS"] & EF_ACTIVE and not p.ent(s2)["FLAGS"] & EF_PENDING]
         check("A5 the wave materialised within 6 turns (walked / popped in)", mat == [s2 for s2 in ns
               if p.ent(s2)["FLAGS"] & EF_ACTIVE], [(s2, p.ent(s2)) for s2 in ns])
+
+
+# ---------------------------------------------------------------------------- N
+@keep_pc
+def try_x(p, sl, x):
+    """sp_try (bank 6, called direct) for slot sl at candidate x -> CF (the carry of the call)."""
+    sh = S["PORT_7FFD_SHADOW"]
+    body = ([0x3A] + w16(sh) + [0xF5, 0x3E, S["BANK_R6"], 0xCD] + w16(S["page_bank"])
+            + [0x3E, 0xFF, 0x32] + w16(S["ACT_SLOT"])
+            + [0xDD, 0x21] + w16(S["P_ENTITIES"] + sl * STRIDE) + [0x3E, x, 0xCD] + w16(S["sp_try"])
+            + [0x9F, 0x32] + w16(RES) + [0xF1, 0xCD] + w16(S["restore_page"]))      # sbc a,a = 0 / $FF
+    ok, _ = p.code(body, game=True)
+    return ok, p.rb(RES) != 0
+
+
+def bounds(p, lines):
+    L, r = level(p, lines, 5, 0x7A01, need=10)
+    check("N setup: D5", L is not None, r)
+    if not L:
+        return
+    s_, c0 = r
+    clear_room(p)
+    hero_at(p, c0 + 8, s_)
+    mon(p, 1, K["SKELETON"], 2, s_, hp=60)                    # the parent at x = 2
+    mon(p, 2, K["GHOST"], 2, s_, hp=60)                       # a flyer body: no terrain test after the bounds
+    for sl, tag in ((1, "walker"), (2, "flyer")):
+        for x in (0xFF, 0xFE, 0xFD):
+            ok, cf = try_x(p, sl, x)
+            check(f"N1 sp_try {tag} x = ${x:02X} (negative): refused", ok and cf, (ok, cf))
+    ok, cf = try_x(p, 1, c0 + 4)
+    check("N2 sp_try walker on a legal free col: accepted", ok and not cf, (ok, cf))
 
 
 # ---------------------------------------------------------------------------- X / T

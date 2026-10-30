@@ -171,7 +171,7 @@ SP_R            EQU 4               ; summon / breed placement: tries d = 0 .. S
 BC_CD           EQU 8               ; Bone Caller summon cooldown (game.md §9.6: cooldown 8, <= 1 live summon)
 BC_LIVE         EQU 1
 PH_CD           EQU 8               ; PHARAOH ABILITY (user 2026-10-30, option 2; cadence ASSUMED = the Bone
-PH_LIVE         EQU 2               ; Caller's, designer to confirm): <= 2 live minions, 1 + (rnd & 1) a cast
+PH_LIVE         EQU 1               ; Caller's, designer to confirm): ONE live minion at a time (user 2026-10-30)
 BREED_N         EQU 4               ; Rabbit Rat: hit and survives -> 1 in BREED_N breeds (once per Rabbit Rat)
 RS_R            EQU 0               ; RS_Q entry fields
 RS_FL           EQU 1
