@@ -221,11 +221,13 @@ ig_main:
                 call ig_t1
                 ld   hl, ig_nl
                 call ig_place_s
-                call ig_app                    ; (keeps DE)
-                ld   a, IT_ARROW
-                ld   (ig_t), a
-                ld   a, ARROW_BUNDLE
+                ld   a, IT_ARROW               ; the bundle first, the bow LAST: the cell shows its
+                ld   (ig_t), a                 ; last live entry (fi_full / ap_stamp), the bow's icon
+                ld   a, ARROW_BUNDLE           ; must win over the arrows' (BOW-ICON)
                 ld   (ig_q), a
+                call ig_app                    ; (keeps DE)
+                ld   a, IT_BOW
+                call ig_t1
                 call ig_app
                 ; 7. traps (§1.5): type rnd(pool), then <= 8 tries (room of the
                 ;    eligible NL rooms without a trap, storey, t = 6 + rnd(20))

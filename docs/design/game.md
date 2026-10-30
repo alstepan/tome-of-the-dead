@@ -2314,7 +2314,7 @@ chose stand except where a line below says CHANGE. All 3E rolls are on `ITEM_RNG
   for D8 lair potions are re-baselined).
 - **Shared cells (generation):** no. New entries never share a cell with any existing entry
   (stricter than Q8's "non-ammo"; ammo sharing is a runtime §6.3 rule only). Sole exception:
-  the D2 arrow bundle in the bow's cell (bow entry first, bundle second). The base potion
+  the D2 arrow bundle in the bow's cell (bundle entry first, bow second: the cell shows its last entry, the bow's icon). The base potion
   entries may already share among themselves (3B), unchanged.
 - **Ammo (Warrior only; Mage consumes no rolls):** dagger qty `2 + rnd(2)`, then arrow qty
   `5 + rnd(4)`, then (D2) the bow. The hero class is fixed before level generation.
