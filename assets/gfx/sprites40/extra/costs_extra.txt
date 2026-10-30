@@ -1,0 +1,37 @@
+# ART11 extra-frame proposals (coordinator 2026-10-30). Pool = src/defs.asm FRM formula at
+# 40 rows, both facings: 24-wide WK0 / STA 480, WK4 640, STA|SYM 240, MOT 1120, 32-wide STA 640.
+# Charged on every level that generates the unit. Spare frame ids after ANIM-IMPORT2:
+# ~14 of 144 - 6 (Orc + Vampire) = ~8 (J-a needs no new id: JUMP2 exists, flag MOT).
+# Slack = worst-level slack AFTER ART11 + J-a + Orc/Vampire import (sprites40/costs.txt,
+# cap 32,538 at 15 SRC6 pages): Warrior D1 8154 D2 8698 D3 4634 D4 2842 D5 7866 D6 3802
+# D7 3418 D8 3002; Mage D3 7834 D4 5914 D6 7002 D7 6618 D8 6202 (+192 each with the idle fix).
+
+RANKED PROPOSALS
+ id  what                                   fids  pool / level         levels        SRC6 packed (est.)  gain
+ X1  Orc walk W2 W1 W3 W4 (W4 WK0 new;       +1    +480                 D4 D6 D7      ~+90  (Orc block 657)   both feet planted, equal 8-px strides
+     W2/W3 far foot re-placed) DRAWN                                                                      (today one passing pose for two legs: limp 10/6)
+ X2  Vampire walk W2 W1 W3 W4 (W4 WK0 new)   +1    +480                 D3 D6 D8      ~+90                  far foot no longer slides 2 px
+     DRAWN
+ X3  Humanoid climb 4 poses (c1 mid c2 mid', +2    +480 (2 x 240 SYM)   D4-D8         ~+180 (pair 251)      hand-over-hand instead of a
+     STA|SYM; Orc / Necro / Mummy)                                                                        2-pose flip on every 4-px rise
+ X4  Orc swing in-between RAISE -> ATTACK    +1    +640 (32w STA)       D4 D6 D7      ~+110                 flail passes overhead instead of
+     (attack seq raise 3, swing 1, attack 2)                                                              a 1-tick jump back -> front
+ X5  Skeleton/Archer cut in-between          +1    +640 (32w STA)       D3 D4 D5 D8   ~+100                 sword arc instead of raise->cut pop
+ X6  Mummy walk leg redraw (legs swap,       0     0                    D5            ~0                    REQUIRED by the planted-foot rule:
+     planted feet)                                                                                        the 48-px walk skates 1-3 px/tick
+ X7  Necro cast in-between                   +1    +640 (32w STA)       D6 D7 D8      ~+90                  arm rises over 2 ticks
+ X8  Orc / Vampire hurt recoil 2nd frame     +1 ea +480                 D4 D6 D7 / D3 D6 D8                 recoil + recover
+ --  Ogre 4-pose walk (still 48 px, 32w)      +2    +1728 (WK0 768 + WK4 960)  D4 (worst level)        NOT recommended at 48 px
+ --  Death Knight: 3-pose B3 walk at 48 px    +1    +576 / +768          D7            NOT recommended at 48 px
+
+RECOMMENDED PACKAGE: X1 + X2 + X3 + X4 + X6 = 5 frame ids (of ~8 spare)
+ Warrior need delta / slack after:  D3 +480 -> 4154 | D4 +1600 -> 1242 | D5 +480 -> 7386 |
+                                    D6 +2080 -> 1722 | D7 +1600 -> 1818 | D8 +960 -> 2042
+ Mage: worst D4 5914 - 1600 = 4314.
+ SRC6: ART11 shrinks the packed monster blocks by ~277 B (SKARCH -97, SKCLIMB -23, SKREST -23,
+ ORC -63, CLIMBH -21, MUMMY -25, NECRO -16, NCAST -9); the package adds ~460 B packed -> net
+ ~+190 B: may need +1 SRC6 page (-256 B pool on EVERY level: Warrior D4 slack ~986). Engineer to
+ measure with the real zx0 partition.
+ Second wave if slack allows: X5 (D4 +640 -> ~600) — or swap X4 for X5.
+
+DRAWN: X1, X2 (assets/gfx/sprites40/extra/: grids, old/new GIF + film, art11_extra.svg.html).

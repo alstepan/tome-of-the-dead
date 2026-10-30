@@ -40,8 +40,10 @@
 ; ANIM-IMPORT2: new 40-px-only frames (no 48-px file; tools/zx0_pack.py sprite_asm resolves
 ; them in assets/gfx/sprites40/, listed in its index40.asm)
         INCLUDE "orc_walk3.asm"
+        INCLUDE "orc_walk4.asm"
         INCLUDE "orc_hurt.asm"
         INCLUDE "vamp_walk1.asm"
         INCLUDE "vamp_walk2.asm"
         INCLUDE "vamp_walk3.asm"
+        INCLUDE "vamp_walk4.asm"
         INCLUDE "vamp_hurt.asm"

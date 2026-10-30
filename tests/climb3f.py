@@ -35,13 +35,13 @@ CLIMB_SP = {FID["spider_walk1"]}                 # fix/spider-climb: the Spider 
 CLIMB_H = {FID["climb_h1"], FID["climb_h2"]}
 CLIMB_SK = {FID["skeleton_climb1"], FID["skeleton_climb2"]}
 OWN = {
-    "ORC": {FID[n] for n in ("orc_walk1", "orc_walk2", "orc_walk3")},   # ANIM-IMPORT2: B3 walk
+    "ORC": {FID[n] for n in ("orc_walk1", "orc_walk2", "orc_walk3", "orc_walk4")},   # ANIM-IMPORT2: B3 walk
     "NECRO": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3", "necro_walk4")},
     "ARCHER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
     "SNIPER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
     "SPIDER": {FID[n] for n in ("spider_walk1", "spider_walk2")},
     "SKELETON": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
-    "VAMPIRE": {FID[n] for n in ("vamp_walk1", "vamp_walk2", "vamp_walk3")},   # ANIM-IMPORT2: own set
+    "VAMPIRE": {FID[n] for n in ("vamp_walk1", "vamp_walk2", "vamp_walk3", "vamp_walk4")},   # ANIM-IMPORT2: own set
     "MUMMY": {FID[n] for n in ("mummy_walk1", "mummy_walk2", "mummy_walk3", "mummy_walk4")},
 }
 # (hero, depth, kind name, climber?, master seed)

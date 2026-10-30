@@ -15,7 +15,11 @@ to assets/gfx/sprites40/<name>.asm; the build takes it once <name> is listed in
 assets/gfx/sprites40/index40.asm (tools/zx0_pack.py sprite_asm). Frames are 40 rows,
 bottom-anchored on the 48-row body (FRM: fpy = py + BH * 8 - H): 8 px lower, no pad.
 
-Usage: python3 tools/import_anim40.py mage|mummy|necro|vamp
+ANIM-X12 (X1 / X2, user 2026-10-30): `orcx` / `vampx` import the 4-pose walk W2 W1 W3 W4 from
+assets/gfx/sprites40/extra/grid (tools/gen_art11_extra.py): W2 / W3 replace the existing frames
+(far foot re-placed), W4 is the new WK0 frame <name>_walk4; W1 (= walk1, the rest pose) is unchanged.
+
+Usage: python3 tools/import_anim40.py mage|mummy|necro|vamp|orcx|vampx
 """
 import os
 import subprocess
@@ -24,6 +28,7 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ART12 = "assets/gfx/sprites40/art12/grid"
 ART9 = "assets/gfx/concept/art9_final/grid"
+EXTRA = "assets/gfx/sprites40/extra/grid"
 GRID = os.path.join(REPO, "assets/gfx/sprites40/grid")
 SPR40 = os.path.join(REPO, "assets/gfx/sprites40")
 
@@ -42,9 +47,16 @@ SETS = {
         "vamp_walk1": ("vamp_walk1", 0, "WK0 rest"), "vamp_walk2": ("vamp_walk2", 0, "WK4"),
         "vamp_walk3": ("vamp_walk3", 0, "WK4"), "vamp_bite": ("vamp_bite", 0, "STA"),
         "vamp_hurt": ("vamp_hurt", 0, "STA")}),
+    "orcx": ("green", False, EXTRA, {
+        "orc_walk2": ("orc_x1_w2", 0, "WK4"), "orc_walk3": ("orc_x1_w3", 0, "WK4"),
+        "orc_walk4": ("orc_x1_w4", 0, "WK0")}),
+    "vampx": ("cyan", False, EXTRA, {
+        "vamp_walk2": ("vamp_x2_w2", 0, "WK4"), "vamp_walk3": ("vamp_x2_w3", 0, "WK4"),
+        "vamp_walk4": ("vamp_x2_w4", 0, "WK0")}),
 }
 PICK = {"mage": "ART12 pick: Mage HURT V3 stagger", "mummy": "ART12 pick: Mummy V2 tomb guard",
-        "necro": "ART12 pick: Necromancer V2 bone caster", "vamp": "ART9 final: the Vampire's own 40-px set"}
+        "necro": "ART12 pick: Necromancer V2 bone caster", "vamp": "ART9 final: the Vampire's own 40-px set",
+        "orcx": "ANIM-X12 X1: Orc 4-pose walk W2 W1 W3 W4", "vampx": "ANIM-X12 X2: Vampire 4-pose walk W2 W1 W3 W4"}
 
 
 def main():

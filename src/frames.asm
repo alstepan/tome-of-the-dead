@@ -170,11 +170,13 @@ KFID_SPIDER = FCTR
 KFCNT_SPIDER = FCTR - KFID_SPIDER
 KFID_ORC = FCTR
                 ; ANIM-IMPORT2 (3): Orc V4 Ironhide at 40 px (ART11; all six frames redrawn):
-                ; walk B3 = MOVECYC4 walk2, walk1, walk3, walk1 (walk3 = the 2nd WK4 stride),
+                ; ANIM-X12 (X1): walk = MOVECYC4 walk2, walk1, walk3, walk4 (walk1 = rest, WK0; walk4 = the
+                ; far-leg passing pose, WK0 in the odd slot: both planted feet step 4 px a tick),
                 ; HURT = its own pose (also opens the DEATHSEQ)
                 FRM orc_walk1,      K_ORC, 24, WK0
                 FRM orc_walk2,      K_ORC, 24, WK4
                 FRM orc_walk3,      K_ORC, 24, WK4
+                FRM orc_walk4,      K_ORC, 24, WK0
                 FRM orc_raise,      K_ORC, 24, STA      ; the wind-up before ATTACK (ax 8)
                 FRM orc_attack,     K_ORC, 24, STA
                 FRM orc_hurt,       K_ORC, 24, STA
@@ -195,12 +197,14 @@ KFCNT_NECRO = FCTR - KFID_NECRO
 KFID_NCAST = FCTR
                 FRM necro_cast,     K_NECRO, 24, STA
                 ; ANIM-IMPORT2 (4) (ART9 APPROVED): the Vampire's OWN 40-px set (cape, no staff; was
-                ; the Necro walk + the ART2 vamp_bite, U_VBITE retired): walk B3 = MOVECYC4 walk2,
-                ; walk1, walk3, walk1 (walk1 = rest = WK0 in the odd slots), BITE, HURT
+                ; the Necro walk + the ART2 vamp_bite, U_VBITE retired): walk = MOVECYC4 walk2,
+                ; walk1, walk3, walk4 (ANIM-X12 X2: walk1 = rest, walk4 = the far-leg passing pose,
+                ; WK0 in the odd slots), BITE, HURT
 KFID_VAMPIRE = FCTR
                 FRM vamp_walk1,     K_VAMPIRE, 24, WK0
                 FRM vamp_walk2,     K_VAMPIRE, 24, WK4
                 FRM vamp_walk3,     K_VAMPIRE, 24, WK4
+                FRM vamp_walk4,     K_VAMPIRE, 24, WK0
                 FRM vamp_bite,      K_VAMPIRE, 24, STA  ; ART9: the re-headed drain bite (32x40, was ART2 32x48)
                 FRM vamp_hurt,      K_VAMPIRE, 24, STA
 KFCNT_VAMPIRE = FCTR - KFID_VAMPIRE

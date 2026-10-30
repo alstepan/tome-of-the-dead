@@ -58,10 +58,12 @@
 ; --- the shared humanoid climb pair (Orc / Necro / Mummy families; STA|SYM, kind ink)
         INCLUDE "climb_h1.asm"
         INCLUDE "climb_h2.asm"
-; --- Orc V4 Ironhide: 6 frames (ART11; orc_walk3 / orc_hurt are new ids)
+; --- Orc V4 Ironhide: 7 frames (ART11; orc_walk3 / orc_hurt are new ids; ANIM-X12 X1: walk2 / walk3
+;     redrawn + orc_walk4 = the 4th walk pose; import_anim40 orcx)
         INCLUDE "orc_walk1.asm"
         INCLUDE "orc_walk2.asm"
         INCLUDE "orc_walk3.asm"
+        INCLUDE "orc_walk4.asm"
         INCLUDE "orc_raise.asm"
         INCLUDE "orc_attack.asm"
         INCLUDE "orc_hurt.asm"
@@ -79,9 +81,10 @@
         INCLUDE "necro_walk4.asm"
         INCLUDE "necro_cast.asm"
 ; --- Vampire: its own 40-px set (ART9 APPROVED; vamp_bite replaced in place, walk1..3 / hurt new;
-;     import_anim40 vamp)
+;     import_anim40 vamp; ANIM-X12 X2: walk2 / walk3 redrawn + vamp_walk4, import_anim40 vampx)
         INCLUDE "vamp_walk1.asm"
         INCLUDE "vamp_walk2.asm"
         INCLUDE "vamp_walk3.asm"
+        INCLUDE "vamp_walk4.asm"
         INCLUDE "vamp_bite.asm"
         INCLUDE "vamp_hurt.asm"
