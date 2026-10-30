@@ -685,7 +685,7 @@ dg_cob:         ; COBWEB left / right corner id per depth (0 = none)
                 DEFB  57,  58
                 DEFB   0,   0
                 DEFB   0,   0
-                DEFB  52,  54
+                DEFB  50,  52
                 DEFB   0,   0
                 DEFB  57,  58
 dg_crec:        ; the composite patch record (D1 / D8)
@@ -716,13 +716,13 @@ dg_recs:
                 DEFB  54, 106, $00      ; 22 D5 PATCH_A
                 DEFB  32,  82, $94      ; 23 D5 BRAZIER_BIG
                 DEFB  42,  19, $00      ; 24 D5 WINDOW_ARCH
-                DEFB  41, 106, $00      ; 25 D6 PATCH_A
-                DEFB  45, 107, $00      ; 26 D6 PATCH_B
+                DEFB  39, 106, $00      ; 25 D6 PATCH_A
+                DEFB  43, 107, $00      ; 26 D6 PATCH_B
                 DEFB  32,  13, $94      ; 27 D6 TORCH_SLIM
-                DEFB  38,  10, $02      ; 28 D6 BOOKSHELF
-                DEFB  39,   9, $00      ; 29 D6 BANNER
-                DEFB  51,  10, $02      ; 30 D6 WINDOW_BAR
-                DEFB  53,  37, $01      ; 31 D6 MOSS
+                DEFB  36,  10, $02      ; 28 D6 BOOKSHELF
+                DEFB  37,   9, $00      ; 29 D6 BANNER
+                DEFB  49,  10, $02      ; 30 D6 WINDOW_BAR
+                DEFB  51,  37, $01      ; 31 D6 MOSS
                 DEFB  52, 107, $00      ; 32 D7 PATCH_B
                 DEFB  32,  18, $94      ; 33 D7 TORCH_TALL
                 DEFB  42,  22, $00      ; 34 D7 BANNER_TALL
