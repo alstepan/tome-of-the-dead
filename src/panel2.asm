@@ -89,14 +89,15 @@ print6t:
 ; = stream pointer. Out: A = next char 32..127, 0 = end (never called again
 ; after it: a stream always ends in the main mode). Keeps DE; clobbers H(L).
 ; Stream bytes: 0 end, 32..127 literal, t >= 128 token -> dictionary entry
-; t - 128 (tx_dict word; 2+ literal chars, the last with bit 7 set, no
+; t - 128 (tx_dict byte = its offset in the tx_entries page; 2+ literal
+; chars, the last with bit 7 set, no
 ; nesting). Two modes switched by the opcode at .sw: main (TK_MAIN `ld h, n`,
 ; falls through to the stream) and entry (TK_ENTRY `jr .ent`; BC walks the
 ; entry, the stream pointer parked in .back+1).
 ; SMC: .sw (opcode), .back+1 (parked stream pointer). NEVER call from the ISR (the SMC
 ; mode switch is not re-entrant: an interrupt mid-entry would corrupt the walk).
 ; Cost per char (+17 T call, vs 17 T for the inline fetch): literal 35 T,
-; entry char 40 T, an entry's last char 81 T, token 135 T + its first char.
+; entry char 40 T, an entry's last char 81 T, token 125 T + its first char.
 ;------------------------------------------------------------------------------
 TK_MAIN         EQU $26                        ; ld h, n: operand = the jr offset, harmless
 TK_ENTRY        EQU $18                        ; jr e
@@ -107,15 +108,13 @@ tk_get:
                 or   a
                 ret  p                         ; 0 = end, 32..127 = literal
                 ld   (.back + 1), bc           ; park the stream
-                add  a, a                      ; (t - 128) * 2: bit 7 drops out
-                add  a, tx_dict & $FF
+                add  a, (tx_dict - $80) & $FF  ; w2d: tx_dict is a byte per token
                 ld   l, a
-                adc  a, tx_dict >> 8
+                adc  a, (tx_dict - $80) >> 8
                 sub  l
-                ld   h, a                      ; HL = tx_dict + (t - 128) * 2
-                ld   c, (hl)
-                inc  hl
-                ld   b, (hl)                   ; BC = the entry
+                ld   h, a                      ; HL = tx_dict + t - 128
+                ld   c, (hl)                   ; the entry's offset in its page
+                ld   b, tx_entries >> 8        ; BC = the entry (all in one page)
                 ld   a, TK_ENTRY
                 ld   (.sw), a
 .ent:           ld   a, (bc)

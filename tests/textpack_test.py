@@ -52,7 +52,7 @@ class Style(unittest.TestCase):
         parse('info_ok "' + "NAME".ljust(16) + "MP1 RNG6".ljust(12) + "NOTE" + '"\n')
 
     def test_id_count(self):
-        # D3-0: ids are bytes indexed 16-bit by tx_ptr: 256 strings, not 128
+        # ids are bytes; 256 strings = tx_tab's one page (w2d: a word per 2 ids)
         many = lambda n: "".join(f's{i} "X"\n' for i in range(n))
         self.assertEqual(len(parse(many(200))[0]), 200)
         parse(many(tp.MAX_STRINGS))

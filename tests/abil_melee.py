@@ -72,22 +72,7 @@ IMG = textpack.parse_emitted(os.path.join(HERE.parent, "build", "text", "strings
 
 def stream_text(raw):
     """A log ring entry (token stream) -> text (tk_get's expansion)."""
-    t0 = 2 * len(STRINGS)
-    out = []
-    for a in raw:
-        if a == 0:
-            break
-        if a < 0x80:
-            out.append(chr(a))
-            continue
-        q = int.from_bytes(IMG[t0 + 2 * (a - 0x80):t0 + 2 * (a - 0x80) + 2], "little")
-        while True:
-            c = IMG[q]
-            q += 1
-            out.append(chr(c & 0x7F))
-            if c & 0x80:
-                break
-    return "".join(out)
+    return textpack.expand(IMG, raw)   # w2d: the layout lives in textpack
 
 
 def main():

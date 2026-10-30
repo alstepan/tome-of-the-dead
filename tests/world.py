@@ -2217,6 +2217,42 @@ def w17(p, check):
     p.wb(ent(0, "E_MSG"), 0)
     p.wb(ent(1, "E_MSG"), 0)
     check("W17 composed impact lines (5 kinds x 6 monsters) drawn == text", bad == [], bad[:4])
+    # (c') MEM-RECLAIM w2d review: EVERY impact_line combo (msg 1..15 x every named kind):
+    # text == drawn, and the cost split. impact_line (compose: sfx_msg + 3 tx_ptr + copy +
+    # log_push) runs in the tick's work; item_log draws the line later on a 1st-frame
+    # panel slot, whose own ceiling is W15's 25k. Gates: compose <= IMP_CAP (main 2162bc8
+    # worst 3,500 T; w2d 3,774 T; + ~0.6k for one HOT_SKIP_MAX skip), compose + item <=
+    # 25k + IMP_CAP (main's worst 29,082 T, w2d 29,149 T; budget.py gates the real ticks).
+    IMP_CAP = 4500
+    k0 = [n for n, _ in STRINGS].index("nm_knight")
+    PRE = [None, "you_hit", "you_miss", "you_kill", "the", "the", "you_squeeze"] + ["the"] * 9
+    POST = [None, "empty", "empty", "empty", "hits_you", "misses", "empty", "cmb_unaffected",
+            "st_m_frozen", "st_m_asleep", "st_m_stunned", "st_m_flees", "st_m_confused",
+            "st_m_wake", "st_m_thaw", "cmb_parries"]
+    assert len(PRE) == len(POST) == S["MSG_P_PARRY"] + 1
+    bad2, t_cmp, t_all, n_all = [], (0, ""), (0, ""), 0
+    for m in range(1, S["MSG_P_PARRY"] + 1):
+        for k in range(S["K_FXW"]):
+            nm = STRINGS[k0 + k][1]
+            if not nm:
+                continue                                # a cut kind (nm_rogue "")
+            exp = T_[PRE[m]] + nm + T_[POST[m]]
+            t1 = stub([0x06, m, 0x0E, k, 0xCD] + w(S["impact_line"]), f"impact_line {k} {m}", measure=True)
+            p.wb("LOG_QN", 0)
+            t2 = stub([0x06, m, 0x0E, k, 0xCD] + w(S["impact_line"]) + [0x21] + w(S["PANEL_DIRTY"]) +
+                      [0xCD] + w(S["item_log"]), f"impact_line+item {k} {m}", measure=True)
+            n_all += 1
+            t_cmp = max(t_cmp, (t1, exp))
+            t_all = max(t_all, (t2, exp))
+            if log_row(p.composed_frame(), 23) != text6(exp):
+                bad2.append((m, k, exp))
+    check(f"W17 all {n_all} impact_line combos (msg 1..15 x every kind) drawn == text", bad2 == [] and n_all >= 400,
+          (n_all, bad2[:4]))
+    check(f"W17 impact_line compose <= {IMP_CAP} T", t_cmp[0] <= IMP_CAP, t_cmp)
+    check(f"W17 impact_line + log item <= {25000 + IMP_CAP} T (W15 item ceiling + compose)",
+          t_all[0] <= 25000 + IMP_CAP, t_all)
+    print(f"[info] W17 impact_line: worst compose {t_cmp[0]} T ({t_cmp[1]!r}), worst compose + item"
+          f" {t_all[0]} T ({t_all[1]!r}) over {n_all} combos", flush=True)
     print(f"[info] W17 measured (contended, ZEsarUX): tk_get decode loop {t_tk} T vs plain getter {t_pl} T"
           f" over {n_chars} chars -> decode +{per:.1f} T/char (vs a called plain fetch);"
           f" worst msg_push + log item {worst[0]} T ({worst[1]}); worst impact compose + item {t_imp} T",
