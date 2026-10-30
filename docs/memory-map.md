@@ -3963,3 +3963,26 @@ starts at `code_end` and moved with the bank-2 growth), never behaviour. Not don
 | boot block (dead after boot) | 1,949 B | 1,983 B | +34 (`boot6_ft`) |
 | pool need / slack | 31,264 / 1,786 | unchanged | 0 |
 
+
+
+## ANIM-IMPORT (2026-10-30, branch `feat/anim-import`; plan.md "ANIMATION ITEMS 1–4 GO" / "ART9 APPROVED")
+
+- **Item 1, Spider HURT = its BITE pose** (0 B): `ksm_sp` HURT + the DEATHSEQ's hurt entry = `spider_bite`;
+  KS_CLIMBREST → `sp_idle + 1` (= `spider_walk1`, never used: not a climber).
+- **Item 2, Archer / Sniper HURT = `skeleton_hurt`**: the frame moved into the Skeleton's prefix
+  unit `U_SKARCH` (walk1..4, cut, **hurt**; `U_SKCLIMB` climb1/2; `U_SKREST` = raise only, ASSERTed),
+  so no new unit / R6 byte: +576 B pool on D4 (no Skeleton there), 0 on D5 (the Skeleton's own).
+  `ksm_ar` HURT / DEATHSEQ = `SK_HURT`. Skeleton FIDs renumber (symbolic everywhere).
+- **Item 3, Necromancer B4 walk**: `necro_walk4` (ART3 B4 passing, `assets/gfx/concept/art3_options`,
+  WK0, fid in the `K_NECRO` unit) and `MOVECYC4 walk2, walk4, walk3, walk1` (Necro, Archmage, Bone
+  Caller; the Vampire shares it until its own set): +576 B on every Necro-unit level (D3 / D6 / D7 / D8).
+- `FID_COUNT` 129 → **130** of `FRT_MAX` 144 (14 spare); low RAM spare 13 (descriptor reserve 70);
+  SRC6 free 173 → **160** (Necro block +13); bank 1 free 160 → **150** (Skeleton block repack);
+  R6 free 323 → **327** (sqm_zx0 −4); bank 2 / bank 3 / bank 7 unchanged.
+
+| Pool need (release) | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 |
+|---|---|---|---|---|---|---|---|---|
+| Warrior before → after | 26,304 | 25,760 | 30,688 → 31,264 | 31,264 → **31,840** | 28,128 | 28,000 → 28,576 | 30,496 → 31,072 | 30,304 → 30,880 |
+| Mage before → after | 22,368 | 21,824 | 26,688 → 27,264 | 27,392 → 27,968 | 24,256 | 24,000 → 24,576 | 26,496 → 27,072 | 26,304 → 26,880 |
+
+`POOL_CAP` 33,050: worst level D4 Warrior slack 1,786 → **1,210**; PROTO slack 2,330 (unchanged).

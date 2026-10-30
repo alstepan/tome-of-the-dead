@@ -35,11 +35,11 @@ CLIMB_H = {FID["climb_h1"], FID["climb_h2"]}
 CLIMB_SK = {FID["skeleton_climb1"], FID["skeleton_climb2"]}
 OWN = {
     "ORC": {FID[n] for n in ("orc_walk1", "orc_walk2")},
-    "NECRO": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3")},
+    "NECRO": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3", "necro_walk4")},
     "ARCHER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
     "SNIPER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
     "SKELETON": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
-    "VAMPIRE": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3")},
+    "VAMPIRE": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3", "necro_walk4")},
     "MUMMY": {FID[n] for n in ("mummy_walk1", "mummy_walk2", "mummy_walk3", "mummy_walk4")},
 }
 # (hero, depth, kind name, climber?, master seed)

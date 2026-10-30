@@ -3357,6 +3357,11 @@ shared humanoid DEAD (as Mummy; pool spike assumption confirmed).
 **R4 HURT on frame-less kinds** (Spider, Orc, Necro, Mummy, Vampire, Archer, Ogre, DK, Archmage,
 golden bosses): the body keeps its current frame and its footprint takes the existing **`$42` hit
 flash** for the existing duration (priority §6.4: flash > tints > glow). No new code path.
+**ANIM-IMPORT (user 2026-10-29 "ANIMATION ITEMS 1–4 GO" / "ART9 APPROVED"; the flash
+alone is not acceptable for these kinds):** real HURT poses (the flash still plays on top):
+Spider = its BITE pose (0 B), Skeleton Archer (+ Sniper) = `skeleton_hurt` (in the Archer's
+unit). The HURT pose also opens the kind's DEATH sequence (as the original kinds). Walks:
+Necromancer (+ Bone Caller / Archmage) B4 `W2, W4, W3, W1` (ART3 `necro_walk4`).
 
 **R5 Cut order if memory still runs out** (cheapest player loss per byte first; E = estimate):
 1. Idle wave + `idle_turns`: **stays unbuilt** (0 B, saves ≈ 60 B vs building it). `IDLE_WAVE`

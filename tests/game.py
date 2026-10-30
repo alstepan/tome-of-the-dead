@@ -2088,6 +2088,15 @@ def tape_rest(h, p):
     ro = S["BANK_R6"] * 16384 + S["R6_ADDR"] - 0xC000
     h.expect("50 bank 6 R6 region (R6 tape block) == .sna", ram[ro:ro + S["R6_USED"]] ==
              SNA_RAM[ro:ro + S["R6_USED"]], True)
+    # MEM-FT review: the FRT row image (frame_tab in row bytes 12..15) is .sna-only; on tape
+    # boot6_ft rebuilds it from ftz_zx0. At the menu every row == the .sna except bytes 0..11
+    # of the two select idles' rows (gen_idles wrote their variant pointers; tails compared)
+    fo, nf = 2 * 16384 + S["FRT"] - 0x8000, S["FID_COUNT"]
+    ft, fs = bytearray(ram[fo:fo + 16 * nf]), bytearray(SNA_RAM[fo:fo + 16 * nf])
+    for fid in (S["FID_knight_idle1"], S["FID_wizard_idle"]):
+        ft[16 * fid:16 * fid + 12] = fs[16 * fid:16 * fid + 12] = bytes(12)
+    h.expect("50 FRT[0..FID_COUNT*16) after tape boot == .sna (bar the idles' variant bytes)",
+             [i for i in range(len(ft)) if ft[i] != fs[i]][:8], [])
     h.expect("50 tape: IM 2 installed by boot", " IM2 " in p.z.cmd("get-registers"), True)
     # CODE block starts in bank 5 low RAM (boot, generator) and runs into bank 2
     lo5 = S["lowram_code"] - 0x4000

@@ -31,6 +31,7 @@
         INCLUDE "vamp_bite.asm"
         INCLUDE "small_corpse.asm"
         INCLUDE "necro_walk3.asm"
+        INCLUDE "necro_walk4.asm"
         INCLUDE "mummy_walk3.asm"
         INCLUDE "mummy_walk4.asm"
         INCLUDE "climb_h1.asm"
