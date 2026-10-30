@@ -146,8 +146,9 @@ LEVEL_OBJECTS = [
     ["BRAZIER_BIG", "BANNER_TALL", "PATCH_A", "BOOKSHELF", "COBWEB", "COBWEB_R", "GLOW"],  # D3
     ["TORCH_TALL", "BANNER_TALL", "PATCH_A", "GLOW"],         # D4 Warrens (-WINDOW_BAR)
     ["BRAZIER_BIG", "WINDOW_ARCH", "PATCH_A", "GLOW"],                    # D5 Sandstone (-PILLAR)
-    ["TORCH_SLIM", "PILLAR", "BOOKSHELF", "BANNER", "PATCH_A", "PATCH_B", "WINDOW_BAR",
-     "COBWEB", "MOSS", "COBWEB_R", "GLOW"],                               # D6
+    ["TORCH_SLIM", "BOOKSHELF", "BANNER", "PATCH_A", "PATCH_B", "WINDOW_BAR",
+     "COBWEB", "MOSS", "COBWEB_R", "GLOW"],                               # D6 (-PILLAR: MEM-RECLAIM w2a,
+                                                                          # never placed since 2026-10-12)
     ["TORCH_TALL", "BANNER_TALL", "PATCH_B", "GLOW"],                     # D7 Fortress (-PILLAR)
     ["BRAZIER_BIG", "BOOKSHELF", "BANNER_TALL", "TORCH_SLIM", "COBWEB", "COBWEB_R", "GLOW"],  # D8
 ]
