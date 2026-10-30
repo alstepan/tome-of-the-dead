@@ -288,3 +288,5 @@ st_m_confused   " IS CONFUSED"
 st_m_flees      " FLEES!"
 st_m_thaw       " THAWS OUT"
 gate_barred     "THE GATE IS BARRED"
+# 3F-T9 (spawn6.asm sp_summon, impact_line MSG_M_SUMMON): the Bone Caller / Golden Pharaoh summon
+cmb_summons     " SUMMONS!"

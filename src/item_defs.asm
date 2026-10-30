@@ -337,6 +337,7 @@ TEV_FIND        EQU 6
 ABL_TRAP        EQU $80             ; ACT_ABL of a trap sequence (act_pend -> far6 trap_step)
 TRAP_ACT_TICK   EQU 1               ; the first step: the tick after the input tick
 TRAP_STEP_T     EQU 2               ; ticks between steps (each flash phase)
+BORDER_ALARM    EQU 2               ; 3F-T9: the ALARM wave's red border (game.md §1.5: 2 ticks = TRAP_STEP_T)
 FIND_BLINKS     EQU 2               ; the found plate blinks bright / off twice, then its ink
 PLATE_FLASH_ATTR EQU $47            ; the plate's bright flash (trigger) / blink (find)
 TRAP_FLASH_T    EQU FLASH_TICKS     ; the hero's type-ink flash on a trigger (GAS: one step)

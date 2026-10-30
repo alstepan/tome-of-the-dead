@@ -138,6 +138,41 @@ BOSS_TRAP       EQU RG_RAM_END      ; 3F-T8: count (wraps; garbage at boot, test
                                     ; entry found no live boss while LF_UNIQUE is clear (boss6.asm boss_chk)
                 ASSERT BOSS_TRAP < $6000
                 ASSERT RG_RAM_END <= $6000 && (RG_RAM >> 8) == ((RG_RAM_END - 1) >> 8)
+;------------------------------------------------------------------------------
+; 3F-T9 mid-room spawns (game.md §9.6 Rabbit Rat breed / Bone Caller summon, §1.5 ALARM
+; wave, plan.md PHARAOH ABILITY; src/spawn6.asm, R6). The SPAWN QUEUE (1 entry): a
+; producer (deal_hit's breed6, ai_ranged's caster slot, ai_guard's Pharaoh, the ALARM
+; trap) only DECIDES and fills it; end_turn (bank 7) far6s sp_run, which places and
+; creates the bodies (the tick budget: never the cast / input tick). Runtime RAM after
+; BOSS_TRAP (bank 5, garbage at boot: new_game zeroes SPQ_K; end_turn always empties it).
+;------------------------------------------------------------------------------
+SPQ_RAM          EQU BOSS_TRAP + 1   ; $5FF5
+SPQ_K            EQU SPQ_RAM          ; queued kind byte: bits 0-4 the kind (0 = an ALARM wave: LP_KINDS[rnd & 3]
+                                    ; per body), SQF_* flags; 0 = empty
+SPQ_P            EQU SPQ_RAM + 1      ; the parent slot (summoner / breeder: placement anchor); SPQ_NONE = the doors
+SPQ_N            EQU SPQ_RAM + 2      ; bodies (1..2)
+SP_KB           EQU SPQ_RAM + 3     ; sp_run scratch: the body's kind byte
+SP_Y            EQU SPQ_RAM + 4     ; the body's y
+SP_S            EQU SPQ_RAM + 5     ; the body's storey
+SP_N            EQU SPQ_RAM + 6     ; sp_scan: live monsters of CUR_ROOM (incl. PENDING)
+SP_SIG          EQU SPQ_RAM + 7     ; sp_scan: their Σ weight (§9.3)
+SP_NS           EQU SPQ_RAM + 8     ; sp_scan: how many are summon-made (= SP_SIG + 1: one word store)
+SP_AX           EQU SPQ_RAM + 9     ; sp_run: the parent's x / x + w (the placement anchor)
+SP_AR           EQU SPQ_RAM + 10
+SPQ_RAM_END     EQU SPQ_RAM + 11    ; = $6000: the runtime reserve after RG_RAM is full
+                ASSERT SPQ_RAM_END <= $6000
+SPQ_NONE         EQU $FF
+SQF_ONCE        EQU %00100000       ; sp_run sets the parent's RCD_ONCE when the body is made (the Rabbit Rat)
+SQF_SUMM        EQU %01000000       ; summon-made: RCD_SUMMONED (discarded on leave, §9.4.2)
+SQF_RESP        EQU %10000000       ; F_RESPAWN (= EF_RESPAWN: no drops, half XP)
+SPQ_WAVE         EQU SQF_RESP        ; an ALARM wave (kind 0: rolled per body)
+                ASSERT SQF_RESP == EF_RESPAWN && ((SQF_ONCE | SQF_SUMM | SQF_RESP) & LEK_KIND_MASK) == 0
+SP_R            EQU 4               ; summon / breed placement: tries d = 0 .. SP_R - 1 on each side of the parent
+BC_CD           EQU 8               ; Bone Caller summon cooldown (game.md §9.6: cooldown 8, <= 1 live summon)
+BC_LIVE         EQU 1
+PH_CD           EQU 8               ; PHARAOH ABILITY (user 2026-10-30, option 2; cadence ASSUMED = the Bone
+PH_LIVE         EQU 2               ; Caller's, designer to confirm): <= 2 live minions, 1 + (rnd & 1) a cast
+BREED_N         EQU 4               ; Rabbit Rat: hit and survives -> 1 in BREED_N breeds (once per Rabbit Rat)
 RS_R            EQU 0               ; RS_Q entry fields
 RS_FL           EQU 1
 RS_D            EQU 2
@@ -170,10 +205,19 @@ RK_ARCHMAGE     EQU 6               ; T11: data only (rk_tab[K_ARCHMAGE] stays 0
 RK_ROWS         EQU 6
 ; E_RCD (= E_POT, unused by monsters): bits 0-1 the cooldown counter stored XOR 1 (the
 ; zeroed spawn slot (lp_spawn) / place_follower's 0 = counter 1: no shot on the first
-; monster phase after the room entry); bits 2-5 T9's Bone Caller summon counter (unused yet)
+; monster phase after the room entry); bits 2-5 T9's summon counter S (Bone Caller / Pharaoh;
+; turns to the next summon, 0 = ready); bit 6 summon-made (sp_run; lp_bank discards it); bit 7
+; the once bit (a Rabbit Rat has bred; banked as LEK_BRED, lp_spawn restores it).
+; place_follower keeps bits 2-7 (RCD_KEEP).
 E_RCD           EQU E_POT
 RCD_MASK        EQU %00000011
 RCD_SUMMON      EQU %00111100       ; T9
+RCD_S1          EQU %00000100       ; one S step
+RCD_SUMMONED    EQU %01000000
+RCD_SUMMONED_BIT EQU 6
+RCD_ONCE        EQU %10000000
+RCD_ONCE_BIT    EQU 7
+RCD_KEEP        EQU RCD_SUMMON | RCD_SUMMONED | RCD_ONCE
 ; 3F-T8: the Ogre (never a shooter) keeps its SLAM counter in the same bits 0-1 (game.md §9.1:
 ; every 3rd turn SLAM, reach 2, x 1.5 dmg, a hit STUNS 1): turns since the last SLAM, 0 at spawn
 ; (lp_spawn zeroes the slot); og_adv: 3 -> 1, 0 -> 1, 1 -> 2, 2 stays; at 2 (OG_READY) its reach

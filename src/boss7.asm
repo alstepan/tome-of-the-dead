@@ -137,9 +137,18 @@ ai_guard:
                 ld   a, (ix+E_KIND)
                 cp   K_ARCHMAGE
                 jr   z, .ord
-                cp   K_OGRE
+                cp   K_MUMMY                   ; 3F-T9: the Golden Pharaoh (D5's boss) summons
+                jr   nz, .og                   ; (R6 spawn6.asm ph_summon: L = 1 the turn is used)
+                push de
+                ld   hl, ph_summon
+                call far6
+                pop  de
+                dec  l
+                jr   z, .used
+                jr   .ng
+.og:            cp   K_OGRE
                 call z, og_adv                 ; (bank 2; keeps DE)
-                ld   a, e
+.ng:            ld   a, e
                 or   a
                 jr   nz, .ord                  ; mid-ladder
                 ld   a, (TMP4)

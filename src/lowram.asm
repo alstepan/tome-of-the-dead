@@ -821,10 +821,13 @@ impact_line:
 ; D3-6a: + MSG_M_UNAFF .. MSG_M_THAW (deal_hit, combat3.asm): "THE " + name + status suffix
 imp_pre:        DB   TX_YOU_HIT, TX_YOU_MISS, TX_YOU_KILL, TX_THE, TX_THE, TX_YOU_SQUEEZE
                 DB   TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE   ; (+ MSG_P_PARRY)
+                DB   TX_THE                                                               ; 3F-T9 MSG_M_SUMMON
 imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EMPTY
                 DB   TX_CMB_UNAFFECTED, TX_ST_M_FROZEN, TX_ST_M_ASLEEP, TX_ST_M_STUNNED
                 DB   TX_ST_M_FLEES, TX_ST_M_CONFUSED, TX_ST_M_WAKE, TX_ST_M_THAW, TX_CMB_PARRIES
-                ASSERT imp_post - imp_pre == MSG_P_PARRY && $ - imp_post == MSG_P_PARRY && MSG_P_PARRY == MSG_M_THAW + 1
+                DB   TX_CMB_SUMMONS
+                ASSERT imp_post - imp_pre == MSG_M_SUMMON && $ - imp_post == MSG_M_SUMMON && MSG_P_PARRY == MSG_M_THAW + 1
+                ASSERT MSG_M_SUMMON == MSG_P_PARRY + 1 && TXL_THE + NM_LONG + TXL_CMB_SUMMONS < 32
                 ASSERT TXL_THE + NM_LONG + TXL_CMB_PARRIES < 32
                 ASSERT MSG_M_UNAFF == 7 && MSG_M_FROZEN == 8 && MSG_M_ASLEEP == 9 && MSG_M_STUNNED == 10
                 ASSERT MSG_M_FLEES == 11 && MSG_M_CONFUSED == 12 && MSG_M_WAKE == 13 && MSG_M_THAW == 14

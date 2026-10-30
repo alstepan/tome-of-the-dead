@@ -592,6 +592,7 @@ MSG_M_WAKE      EQU 13
 MSG_M_THAW      EQU 14
 MSG_P_PARRY     EQU 15              ; 3F-T6: the hero's blow was parried: "THE <target> PARRIES!" (the target's name,
                                     ; like MSG_P_HIT..KILL; do_attack / melee_strike set it, show_impact_msg / impact_line)
+MSG_M_SUMMON    EQU 16              ; 3F-T9: "THE <kind> SUMMONS!" (spawn6.asm sp_summon: the caster's IMPACT line)
 
 ;------------------------------------------------------------------------------
 ; Kinds (prototype §2/§6.3). Parallel byte tables, page-aligned (kind_tab).

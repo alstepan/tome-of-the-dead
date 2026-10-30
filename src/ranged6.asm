@@ -146,8 +146,12 @@ ai_ranged:
                 cp   RSP_X << 2
                 jp   z, rg_no                  ; X: never fired at (as if blocked)
                 ASSERT DTY_DARK == 5 && RES_B1 == 1
-.pre:           ; T9 / T11 caster pre-rule slot (RWF_PRE: Bone Caller summon, Archmage
-                ; summon / teleport) goes here, before the shot. No behaviour in T7.
+.pre:           ; T9 caster pre-rule slot (RWF_PRE: the Bone Caller's summon, spawn6.asm;
+                ; T11's Archmage takes its own branch), before the shot: CF = summoned
+                ld   a, (RG_ROW + RW_F)
+                and  RWF_PRE
+                call nz, sp_bcall
+                jr   c, rg_used
                 ; 4. SHOOT if the counter was 0
                 ld   a, (RG_OLD)
                 or   a
@@ -170,6 +174,24 @@ ai_ranged:
                 call face_a
 rg_used:        ld   l, 1
                 ret
+
+;------------------------------------------------------------------------------
+; rg_pose — IX = the monster, B = E_MSG: the line at its attack's IMPACT (do_impact),
+; E_TGT / E_HIT 0 (no flash), the attack sequence (the cut / cast pose). Shared by
+; rg_shoot and the 3F-T9 summon (spawn6.asm sp_summon).  Clobbers: A, DE, HL.
+;------------------------------------------------------------------------------
+rg_pose:        ld   (ix+E_MSG), b
+                xor  a
+                ld   (ix+E_TGT), a
+                ld   (ix+E_HIT), a
+                call kind_seq_ptr              ; (bank 2)
+                ld   de, KS_ATTACK
+                add  hl, de
+                ld   a, (hl)
+                inc  hl
+                ld   h, (hl)
+                ld   l, a
+                jp   start_seq
 
 ;------------------------------------------------------------------------------
 ; rg_shoot — step 4: face the hero, counter := N, resolve now (RNG order §9.2:
@@ -239,18 +261,7 @@ rg_shoot:
                 jr   c, .g2
                 ld   (hl), a
 .g2:            ld   b, MSG_M_HIT
-.msg:           ld   (ix+E_MSG), b             ; at the attack's IMPACT (do_impact); E_HIT 0:
-                xor  a                         ; the flash waits for the bolt (shot_tick)
-                ld   (ix+E_TGT), a
-                ld   (ix+E_HIT), a
-                call kind_seq_ptr              ; the attack sequence (the cut / cast pose)
-                ld   de, KS_ATTACK
-                add  hl, de
-                ld   a, (hl)
-                inc  hl
-                ld   h, (hl)
-                ld   l, a
-                call start_seq
+.msg:           call rg_pose                   ; E_MSG at the attack's IMPACT; E_HIT 0: the flash waits for the bolt (shot_tick)
                 ; --- the RS_Q entry (TP_SHOT: act_pend runs shot_tick every tick) ---
                 ld   hl, TURN_PEND
                 bit  TP_SHOT_BIT, (hl)

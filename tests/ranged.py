@@ -121,6 +121,11 @@ def main():
         p.hook(3)
         t_base, tmax = p.tstates, {}
         rnd = random.Random(0x7A7)
+        LPK = list(p.z.read_memory(S["LP_KINDS"], 4))         # 3F-T9: the Bone Caller's summon kind
+        WT = {k_: S[n_] for k_, n_ in ((K_RAT, "WT_K_RAT"), (K_BAT, "WT_K_BAT"), (K_SKELETON, "WT_K_SKELETON"),
+              (S["K_GHOST"], "WT_K_GHOST"), (S["K_ARCHER"], "WT_K_ARCHER"), (S["K_SNIPER"], "WT_K_SNIPER"),
+              (S["K_SLINGER"], "WT_K_SLINGER"), (S["K_NECRO"], "WT_K_NECRO"),
+              (S["K_BONE_CALLER"], "WT_K_BONE_CALLER"))}
         bad_a, n_a, stats = [], 0, dict(shot=0, step=0, hold=0, no=0, hit=0, fear=0)
         while n_a < N_A:
             kind = rnd.choice(SHOOTERS)
@@ -207,9 +212,15 @@ def main():
             p.wb("FX_DROP", 0)
             p.wb("HSTAGE", 0)
             p.wmem(S["RNG_STATE"], w16(seed))
+            p.wb("SPQ_K", 0)                                 # 3F-T9: the spawn queue free (end_turn empties it)
+            # 3F-T9 Bone Caller summon (spawn6.asm sp_summon): S = 0, < BC_LIVE summons (none here: the
+            # bodies carry no RCD_SUMMONED), a free slot (<= 5 used), the cap: < ROOM_CAP live, Σ + w <= 12
+            live = [e_["KIND"] for s_, e_ in ents.items() if s_ and not e_["FLAGS"] & EF_DYING]
+            sw = WT[K_SKELETON] if K_SKELETON in LPK else WT[S["K_GHOST"]]
+            summon_ok = len(live) < S["ROOM_CAP"] and sum(WT[k_] for k_ in live) + sw <= S["LP_SIGMA_CAP"]
             sit = dict(kind=kind, row=row, slot=slot, x=sx, y=sy, w=w, h=hgt, left=left, standing=standing,
                        storey=1, counter=counter, atk=kt[kind]["atk"], turn_tick=tt, map=mp,
-                       bodies=bodies,
+                       bodies=bodies, s=hi >> 2, summon_ok=summon_ok,
                        hero=dict(x=hx, y=hy_, w=hw, h=hh, storey=hst, ladder=hlad, hp=ents[0]["HP"],
                                  eva=kt[K_KNIGHT]["eva"], held=stf & 3 != 0, res=res, def_=hdef, imm=imm,
                                  stf=stf, st1=st1, react=0))
@@ -225,8 +236,15 @@ def main():
                        left=bool(e(slot, "FLAGS") & EF_LEFT), x=e(slot, "X"),
                        moved=e(slot, "MODE") == S["M_MOVE"], rng=p.rw("RNG_STATE"),
                        tp=bool(p.rb("TURN_PEND") & S["TP_SHOT"]), drop=p.rb("FX_DROP"))
-            exp = dict(cf=want["used"], counter=want["counter"], hi=hi, left=want["left"], x=want["x"],
-                       moved=want["moved"], rng=rng.st, tp=want["shot"] is not None, drop=0)
+            exp = dict(cf=want["used"], counter=want["counter"], hi=want.get("s", hi >> 2) << 2, left=want["left"],
+                       x=want["x"], moved=want["moved"], rng=rng.st, tp=want["shot"] is not None, drop=0)
+            got["sq"] = p.rb("SPQ_K")
+            exp["sq"] = 0
+            if want.get("summon"):
+                stats["summon"] = stats.get("summon", 0) + 1
+                got["msg"] = e(slot, "MSG")
+                exp["msg"] = S["MSG_M_SUMMON"]
+                exp["sq"] = (K_SKELETON if K_SKELETON in LPK else S["K_GHOST"]) | 0xC0
             sh = want["shot"]
             if sh:
                 hs = sh["hero"]

@@ -251,6 +251,10 @@ end_turn:
                 ASSERT LT_SERVED == 1
 .lh:            ld   (hl), LT_HOLD
 .ls:
+                ld   a, (SPQ_K)                ; 3F-T9: the queued spawn (summon / breed / ALARM
+                or   a                         ; wave) is made now, never in the cast / input
+                ld   hl, sp_run                ; tick (R6 spawn6.asm; it empties the queue and
+                call nz, far6                  ; skips it on an exit / a dying hero)
                 ld   a, (EXIT_KIND)
                 or   a
                 call nz, .ex

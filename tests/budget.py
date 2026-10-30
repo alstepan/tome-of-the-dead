@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -404,6 +404,10 @@ SCENARIOS = {
     "nroom": ("knight + Necromancer + Bone Caller in line, pmix items, DARK bolts", [
         (5, 20, stand_y(1, 6), HOSTILE),
         (7, 4, stand_y(1, 6), RIGHT)], KEYS, K_KNIGHT, None, "nroom"),
+    # 3F-T9: "bsum" = "nroom" with the Bone Caller alone (S = 0, room for a summon): its first in-line turn
+    # summons (the cast pose), end_turn's sp_run makes the Ghost (spawn6.asm) on that turn's last tick
+    "bsum": ("knight + Bone Caller in line, pmix items, a Ghost summoned at end_turn", [
+        (7, 4, stand_y(1, 6), RIGHT)], KEYS, K_KNIGHT, None, "bsum"),
     "rcast": ("mage Lightning r3 through 2 Archers in line, the deferred phase shoots back", [
         (5, 6, stand_y(1, 6), RIGHT),
         (7, 22, stand_y(1, 6), HOSTILE)], [("FIRE", 3)], K_WIZARD, None, "rcast"),
@@ -744,7 +748,7 @@ def ranged_setup(p, placements, key):
     """"rroom" / "nroom" / "rcast" (3F-T7): the 2 slots re-kinded to shooters, drawn with the Skeleton's
     sequences (KT_SEQ poke: Archer / Necro frames are not in the PROTO pool), counter 0 (E_RCD = 1), 60 HP."""
     kinds = {"rroom": ("K_ARCHER", "K_ARCHER"), "nroom": ("K_NECRO", "K_BONE_CALLER"),
-             "rcast": ("K_ARCHER", "K_ARCHER"), "sroom": ("K_SLINGER",) * 3}[key]
+             "rcast": ("K_ARCHER", "K_ARCHER"), "sroom": ("K_SLINGER",) * 3, "bsum": ("K_BONE_CALLER",)}[key]
     if key == "rcast":
         lcast_setup(p, placements)
     else:
@@ -758,7 +762,7 @@ def ranged_setup(p, placements, key):
     if key == "rcast":                            # the Mage's PROTO pool: no arrows
         RANGED_FIDS.update({S["FID_arrow_fly1"]: S["FID_firebolt_fly1"], S["FID_arrow_fly2"]: S["FID_firebolt_fly2"],
                             S["FID_arrow_hit"]: S["FID_firebolt_burst1"]})
-    if key == "nroom":                            # no Necro bolt in the PROTO pool
+    if key in ("nroom", "bsum"):                  # no Necro bolt in the PROTO pool
         RANGED_FIDS.update({S["FID_nbolt_fly1"]: S["FID_arrow_fly1"], S["FID_nbolt_fly2"]: S["FID_arrow_fly2"],
                             S["FID_nbolt_hit"]: S["FID_arrow_hit"]})
     if ranged_fids not in TICK_HOOKS:
@@ -935,7 +939,7 @@ def run_scenario(h, scen):
         pmix_setup(p)
     if len(scen) > 5 and scen[5] == "tmix":
         tmix_setup(p)
-    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom"):
+    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum"):
         ranged_setup(p, placements, scen[5])
     else:
         RANGED_FIDS.clear()
@@ -982,9 +986,13 @@ def run_scenario(h, scen):
     if len(scen) > 5 and scen[5] == "tmix":         # the tier abilities really ran
         print(f"[info] tmix after: WORN {list(p.z.read_memory(S['WORN'], 9))}, WEAR_PEND {p.rb('WEAR_PEND')},"
               f" HP {p.ent(0)['HP']}/{p.ent(0)['MAXHP']}, Guard HP {p.ent(5)['HP']}", flush=True)
-    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom"):
+    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum"):
         print(f"[info] {scen[5]} after: hero HP {p.ent(0)['HP']}, shooters HP "
               f"{[p.ent(sl)['HP'] for sl, *_ in placements]}, BLIT_MISS {p.rb('BLIT_MISS')}", flush=True)
+    if len(scen) > 5 and scen[5] == "bsum":         # 3F-T9: the summon really happened
+        sm = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and p.ent(sl)["POT"] & 0x40]
+        print(f"[info] bsum after: summon-made slots {sm}", flush=True)
+        assert sm, "bsum: no summon was made"
     if len(scen) > 5 and scen[5] == "dmix":         # the boss kill-drop really ran uq_fit's displacement
         fl = list(p.z.read_memory(S["FLOOR_LIST"], 128))
         room = [(fl[4 * i + 1], fl[4 * i + 2]) for i in range(S["FLOOR_MAX"])
@@ -1075,7 +1083,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rcast,sroom,lglow,omix,lqmix").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,bsum,rcast,sroom,lglow,omix,lqmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")
