@@ -336,7 +336,7 @@ ap_stamp:
                 ld   hl, fi_add                ; R6: the glyph cache's col
                 jp   far6
 ; B22: placed after ap_stamp, not in front of it: ap_take falls through into ap_stamp_a
-; ap_put_a — 3E-T16 (far7 from R6 trap6.asm): A = a trap col t, D = its tile
+; ap_put_a — 3E-T16 (called by trap7.asm tr_draw): A = a trap col t, D = its tile
 ; (T_TRAP: the caller set TILE_ATTRS[T_TRAP] first; T_AIR: a spent plate
 ; erased), E = the FL_ROOM-style byte: the ONE cell (t, 9s+7) — no item lies
 ; on a trap col (the generator, drop_put) — redrawn next render + the attr

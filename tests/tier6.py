@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_SKELETON, K_GOBLIN  # noqa: E402
+B7_LABELS = {"hunger_turn", "hunger_add", "trap_step", "trap_turn"}   # MEM-RECLAIM w2b: bank-7 cold code (far7), not R6
 from proj3 import T as PT, w16  # noqa: E402
 import textpack  # noqa: E402
 
@@ -98,8 +99,8 @@ class T(PT):
         inner = [0xDD, 0x21] + w16(S["P_ENTITIES"] + att * STRIDE) + [0x3E, tgt, 0xCD] + w16(S["do_attack"])
         assert self.code(self.bank3(inner))
 
-    def far6(self, label):
-        assert self.code([0x21] + w16(S[label]) + [0xCD] + w16(S["far6"]))
+    def far6(self, label):                     # MEM-RECLAIM w2b: hunger_turn is bank 7 (far7)
+        assert self.code([0x21] + w16(S[label]) + [0xCD] + w16(S["far7" if label in B7_LABELS else "far6"]))
 
     def hunger(self):
         self.far6("hunger_turn")

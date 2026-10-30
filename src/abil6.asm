@@ -34,8 +34,17 @@ parry6:
 .y:             ld   l, 1
                 ret
 
-mummy6:         ld   b, FOOD_MUMMY
-                jp   food_sub                  ; FOOD floors at 0 (hunger6.asm)
+mummy6:         ld   hl, FOOD                  ; MEM-RECLAIM w2b: hunger7.asm food_sub inlined
+                ld   a, (hl)                   ; (that one is bank 7 now): FOOD - FOOD_MUMMY,
+                or   a                         ; floored at 0, PD_FOOD when it moved
+                ret  z
+                sub  FOOD_MUMMY
+                jr   nc, .s
+                xor  a
+.s:             ld   (hl), a
+                ld   hl, PANEL_DIRTY
+                set  PD_FOOD_BIT, (hl)
+                ret
 
 acid6:          call rng_next
                 and  3

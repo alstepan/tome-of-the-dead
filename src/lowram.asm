@@ -925,7 +925,7 @@ door_paint:
                 jr   nz, .r
                 pop  bc
                 ld   de, (DOOR_COLS << 8) | DOOR_PLANK_H
-; rect_repaint — 3F-T8 entry (R6 grate_open): ROOM_MAP cells of rect C,B,D,E
+; rect_repaint — 3F-T8 entry (bank-7 grate_open): ROOM_MAP cells of rect C,B,D,E
 ; changed -> the bank-7 attr shadow + a queued restore (PEND_DMG); the caller's
 ; $C000 bank back. Clobbers: all but IX.
 rect_repaint:

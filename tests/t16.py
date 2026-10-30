@@ -831,7 +831,7 @@ def costs(p, check, scene, trap, put_hero, heal):
         while p.rb("TURN_PEND") & S["TP_ACT"] and k < 8:     # the armed sequence, step by step
             p.wb("TURN_PEND", p.rb("TURN_PEND") & ~S["TP_ACT"] & 0xFF)
             p.wb("TURN_TICK", p.rb("ACT_AT"))
-            p.code([0x21] + w16(S["trap_step"]) + [0xCD] + w16(S["far6"]))
+            p.code([0x21] + w16(S["trap_step"]) + [0xCD] + w16(S["far7"]))   # MEM-RECLAIM w2b: bank 7
             out[f"{tag} step {k}"] = p.tstates
             k += 1
         p.wmem(S["TURN_PEND"], [0, 0, 0, 0])

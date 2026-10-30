@@ -57,7 +57,7 @@ OVL_PASS        EQU 2                   ; tools/build.sh: -DOVL_PASS=1 first (3E
                 TAPE_BLK mode, BANK_COLD3, BANK_WINDOW, BANK3_LEN         ; source tail + bank-3 cold code
                 TAPE_BLK mode, BANK_COLD3, AY_RESERVE, AY_LEN             ; A8 AY slot (BANK_AY = 3)
                 TAPE_BLK mode, BANK_TSET, B7_CODE, B7_LEN                 ; D3-S2 bank-7 cold code
-                TAPE_BLK mode, BANK_TSET, TSET_BASE, TSET_LEN             ; level tilesets (MEM-RECLAIM w2a: dedup, one block)
+                TAPE_BLK mode, BANK_TSET, TSET_BASE, B7D_LEN              ; level tilesets (w2a: dedup) + data7 (w2b), one block
                 TAPE_BLK mode, BANK_TEXT, TEXT_ADDR, TEXT_LEN             ; D3-TX text block (bank 0 bottom)
                 TAPE_BLK mode, BANK_BOOT6, BOOT6_ADDR, BOOT6_TAPE_LEN     ; 3E-T1 boot block + SRC6 sources (bank 6, below R6)
                 TAPE_BLK mode, BANK_R6, R6_ADDR, R6_USED                  ; R6 region (bank 6 top, permanent)
@@ -194,10 +194,14 @@ AY_LEN          EQU ay_code_end - AY_RESERVE
                 ORG  TSET_BASE
                 INCLUDE "../assets/gfx/tiles/tilesets.asm"
 TSET_LEN        EQU tilesets_end - tilesets
+data7:                                         ; MEM-RECLAIM w2b: the bank-7 code's read-only tables
+                INCLUDE "data7.asm"
+data7_end:
+B7D_LEN         EQU data7_end - TSET_BASE      ; tilesets + data7: one tape block
                 ASSERT tilesets == TSET_BASE && tset_slots == TSET_BASE
                 ASSERT tileset_d2 - tileset_d1 == TSET_STRIDE && tset_fsets - tset_slots == LEVELS * TSET_STRIDE
                 ASSERT tset_pool - tset_fsets == TSET_NFSET * (TILE_IDS - TILE_COMMON) && TSET_NPOOL <= 256
-                ASSERT tilesets_end <= $10000
+                ASSERT data7_end <= $10000
 
 ;==============================================================================
 ; BANK-7 COLD CODE (D3-S2; MEM-RECLAIM w2a: from $DB00, the old tileset slots
@@ -211,7 +215,7 @@ b7_end:
 B7_LEN          EQU b7_end - b7_code
                 ASSERT B7_CODE == SCREEN7_ATTR + SCREEN_ATTR_LEN && b7_end <= B7_LIMIT && B7_LIMIT == SHADOW_ATTR
                 DISPLAY "GAME bank-7 cold code: ", /H, b7_code, "..", /H, b7_end - 1, " (", /D, B7_LEN, " B), free to the attr shadow: ", /D, B7_LIMIT - b7_end
-                DISPLAY "GAME bank-7 tilesets (MEM-RECLAIM w2a, dedup): ", /H, tilesets, "..", /H, tilesets_end - 1, " (", /D, TSET_LEN, " B, ", /D, TSET_NPOOL, " glyphs), free to $10000: ", /D, $10000 - tilesets_end
+                DISPLAY "GAME bank-7 tilesets (MEM-RECLAIM w2a, dedup): ", /H, tilesets, "..", /H, tilesets_end - 1, " (", /D, TSET_LEN, " B, ", /D, TSET_NPOOL, " glyphs), + data7 ", /D, data7_end - data7, " B, free to $10000: ", /D, $10000 - data7_end
 
 ;==============================================================================
 ; TEXT (B3B-13; D3-TX: bank 1 -> bank 0) — the text block (tools/textpack.py

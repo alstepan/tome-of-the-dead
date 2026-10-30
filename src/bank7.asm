@@ -224,8 +224,7 @@ trap_chk:
                 ret  nc
                 ld   a, d
                 ex   de, hl                    ; DE = the entry
-                ld   hl, trap_turn             ; R6 trap6.asm
-                jp   far6
+                jp   trap_turn                 ; trap7.asm (MEM-RECLAIM w2b: was far6 R6)
                 ASSERT TR_B0 == 0 && TRAP_STRIDE == 2 && (TRAP_LIST & $FF) + TRAP_MAX * TRAP_STRIDE <= 256
 
 ;------------------------------------------------------------------------------
@@ -271,8 +270,8 @@ end_turn:
                 ld   a, (GAME_STATE)           ; not after a win (level_descend .win: GS_WIN
                 cp   GS_PLAYING                ; returns here): the end screen owns the music
                 call z, mus_pick               ; SND-3: Dangerous cue (mus7.asm), mailbox only
-                ld   hl, hunger_turn           ; 3E-T9: FOOD burn / jump cost / stage /
-                call far6                      ; FED regen / MP_HOLD (R6 hunger6.asm)
+                call hunger_turn               ; 3E-T9: FOOD burn / jump cost / stage /
+                                               ; FED regen / MP_HOLD (hunger7.asm; w2b: was far6)
                 jp   xp_turn                   ; D3-9b: MP regen + level-up (xp7.asm)
                                                ; (B3B-13: the PROTO chest win is gone; a run
                                                ; wins by descending from D8, level_descend)
@@ -1163,5 +1162,8 @@ intent_icon7:
                 INCLUDE "mark7.asm"            ; D3-8d: status marks: room reset + glyph copy, hide
                 INCLUDE "xp7.asm"              ; D3-9b: MP regen, level-up, learn / rank-up
                 INCLUDE "mus7.asm"             ; SND-3: Dangerous (W) cue, mus_pick
+                INCLUDE "hunger7.asm"          ; MEM-RECLAIM w2b: hunger_turn / hunger_add (from R6 hunger6.asm)
+                INCLUDE "trap7.asm"            ; MEM-RECLAIM w2b: trap_turn / trap_step / effects (from R6 trap6.asm)
+                INCLUDE "boss7.asm"            ; MEM-RECLAIM w2b: grate_open / boss_chk (from R6 boss6.asm)
                 INCLUDE "tiles7.asm"           ; MEM-RECLAIM w2a: level_tiles7 (deduplicated tileset gather)
                 INCLUDE "boot7.asm"            ; MEM-SND: panel_init7, new_game (from bank 3; 3E-T1: the boot parts -> boot6.asm)

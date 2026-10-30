@@ -1827,7 +1827,7 @@ def main():
                 p.z.cmd("set-memory-zone 0")
                 try:
                     o = 7 * 16384 + S["TSET_BASE"] - 0xC000     # MEM-RECLAIM w2a: one dedup block
-                    n = S["TSET_LEN"]
+                    n = S["B7D_LEN"]
                     h.expect("38 end: bank-7 tilesets == .sna",
                              bytes(p.z.read_memory(o, n)) == SNA_RAM[o:o + n], True)
                 finally:
@@ -2060,7 +2060,7 @@ def tape_rest(h, p):
     h.expect("50 bank 3 AY slot (A8 tape block, bar ay_vars) == .sna", ba == sa, True)
     o = 7 * 16384 + S["TSET_BASE"] - 0xC000      # B3B-8 / MEM-RECLAIM w2a: the tileset tape block
     h.expect("50 bank 7 tilesets (tape block) == .sna",
-             ram[o:o + S["TSET_LEN"]] == SNA_RAM[o:o + S["TSET_LEN"]], True)
+             ram[o:o + S["B7D_LEN"]] == SNA_RAM[o:o + S["B7D_LEN"]], True)
     o = 7 * 16384 + S["B7_CODE"] - 0xC000       # D3-S2: the bank-7 cold code (own tape block)
     h.expect("50 bank 7 cold code (D3-S2 tape block) == .sna",
              ram[o:o + S["B7_LEN"]] == SNA_RAM[o:o + S["B7_LEN"]], True)

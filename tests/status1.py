@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_GOBLIN, stand_y, RUN_LIMIT  # noqa: E402
+B7_LABELS = {"hunger_turn", "hunger_add", "trap_step", "trap_turn"}   # MEM-RECLAIM w2b: bank-7 cold code (far7), not R6
 from proj3 import T, w16  # noqa: E402
 from abil_melee import stream_text  # noqa: E402
 
@@ -103,8 +104,8 @@ def run(h, p, check):
         run_to_probe()
         assert p.pc() == WT, "stub did not return"
 
-    def far6(label, a=0):
-        stub([0x3E, a, 0x21] + w16(S[label]) + [0xCD] + w16(S["far6"]))
+    def far6(label, a=0):                      # MEM-RECLAIM w2b: the hunger logic is bank 7 (far7)
+        stub([0x3E, a, 0x21] + w16(S[label]) + [0xCD] + w16(S["far7" if label in B7_LABELS else "far6"]))
 
     def far7(label):
         stub([0x21] + w16(S[label]) + [0xCD] + w16(S["far7"]))
@@ -448,12 +449,12 @@ def run(h, p, check):
 
     def cost(label, setter):
         setter()
-        ok = p.code([0x3E, 0, 0x21] + w16(S[label]) + [0xCD] + w16(S["far6"]))
+        ok = p.code([0x3E, 0, 0x21] + w16(S[label]) + [0xCD] + w16(S["far7" if label in B7_LABELS else "far6"]))
         return ok, p.tstates
     tt = {"hunger_turn WEAK, no faint": cost("hunger_turn", lambda: weak(hw=10)),
           "hunger_turn deferred": cost("hunger_turn", lambda: (weak(), p.set_ent(0, Y=HY - 1))),
           "hunger_turn faint": cost("hunger_turn", lambda: weak())}
-    print(f"[info] costs incl. far6 (T): {tt}", flush=True)
+    print(f"[info] costs incl. far6 / far7 (T): {tt}", flush=True)
     check("T1 hunger_turn: WEAK plain <= 1.2k T, deferred <= 2k, the faint turn <= 8k (line + sleep)",
           all(v[0] for v in tt.values()) and tt["hunger_turn WEAK, no faint"][1] <= 1200
           and tt["hunger_turn deferred"][1] <= 2000 and tt["hunger_turn faint"][1] <= 8000, tt)

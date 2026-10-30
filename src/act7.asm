@@ -162,13 +162,12 @@ act_pend:
                 xor  TP_ACT | TP_FIRE          ; TP_ACT was set, TP_FIRE clear
                 ld   (hl), a
                 ld   a, (ACT_ABL)              ; 3E-T16: ABL_TRAP (bit 7): a trap
-                rla                            ; sequence step (R6 trap6.asm), no
+                rla                            ; sequence step (trap7.asm), no
                 jr   c, .trp                   ; probe: an ordinary tick for budget.py
                 call probe_act_fire            ; bank-2 test probe (budget "cast")
                 ld   a, (ACT_ABL)
                 jr   act_fire
-.trp:           ld   hl, trap_step
-                jp   far6
+.trp:           jp   trap_step                 ; trap7.asm (MEM-RECLAIM w2b: was far6 R6)
                 ASSERT ABL_TRAP == $80 && ABL_COUNT < $80
 .mon:           bit  TP_MON_BIT, (hl)
                 ret  z

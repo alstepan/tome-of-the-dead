@@ -41,8 +41,8 @@ mon_drop:
                 bit  LF_UNIQUE_BIT, (hl)
                 jr   nz, .row                  ; (the boss's kind as an ordinary monster)
                 set  LF_UNIQUE_BIT, (hl)
-                ld   hl, grate_open            ; 3F-T8 (R6 boss6.asm): the gate opens (before the
-                call far6                      ; unique is placed: never on the open gate)
+                ld   hl, grate_open            ; 3F-T8 (bank-7 boss7.asm, w2b): the gate opens (before the
+                call far7                      ; unique is placed: never on the open gate)
                 ld   a, (LVL_DEPTH)
                 dec  a
                 cp   UNIQ_DEPTHS
