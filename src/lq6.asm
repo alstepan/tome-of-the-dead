@@ -27,6 +27,7 @@
 ; Clobbers: all but IX (far6 loses A, F anyway).
 ; Cost: ~0.35k T + a step-away try_step (~0.4k T), only on a blocked seek step.
 ;==============================================================================
+LQ_HOLD         EQU $80
 lq_block:
                 push de
                 call get_box                   ; C = x, B = y, D = w, E = h
@@ -53,9 +54,14 @@ lq_block:
                 bit  7, d                      ; (col c: Orc c-2, Necro c+1, Orc c+4 stuck for
                 jr   z, .sgn                   ; ever: the Necro, between two winners, had
                 neg                            ; nowhere to go). dx * (its x - col) in -2..-1
-.sgn:           add  a, FEAT_W - 1             ; <=> on my side, 0 < |its x - col| < FEAT_W.
-                cp   FEAT_W - 1                ; Farther out it never backs off (no pacing
-                jr   c, .back                  ; behind a mere waiter); at col: power rule
+.sgn:           push af                        ; W = the wider of the two bodies (3; 4 with a Spider:
+                call .w                        ; it needs col .. col + 3 free). On my side,
+                dec  a                         ; 0 < |its x - col| < W <=> rel + W - 1 < W - 1
+                ld   l, a                      ; (unsigned). Farther out it never backs off (no
+                pop  af                        ; pacing behind a mere waiter); at col: power rule
+                add  a, l
+                cp   l
+                jr   c, .back
 .pow:           KFIELD KT_HP                   ; A = my power, H = the KT_HP page
                 push af
                 ld   a, (bc)                   ; its kind
@@ -69,14 +75,29 @@ lq_block:
                 pop  hl                        ; address order (P_ENTITIES + 32 x slot)
                 sbc  hl, bc                    ; (CF = 0 from cp: equal) CF iff I am lower
                 ret  c                         ; I win
-.away:          ld   a, (ix+E_X)               ; |x - col| < 3: my box overlaps the
-                sub  e                         ; near-end box (FEAT_W wide)
+.away:          call .w                        ; |x - col| < W: my box overlaps the near-end box
+                ld   l, a                      ; (W as above)
+                ld   a, (ix+E_X)
+                sub  e
                 jr   nc, .abs
                 neg
-.abs:           cp   FEAT_W
+.abs:           cp   l
                 ret  nc                        ; clear of it: wait
-.back:          ld   a, d
+.back:          ld   (ix+E_AIDIR), LQ_HOLD     ; scratch/lq-hold: hold the next seek turn (turn3 .sk)
+                ld   a, d
                 neg
                 ld   d, a
                 ld   e, 0
                 jp   try_step                  ; 1 cell away (facing kept); blocked -> wait
+; .w — A = max(my KT_BW, the blocker's KT_BW) (fix/spider-climb: FEAT_W except around the 4-wide
+; Spider / Black Widow). In: IX = me, BC = the blocker's entity (E_KIND = +0). Clobbers: HL, A.
+.w:             KFIELD KT_BW
+                push af
+                ld   a, (bc)
+                add  a, KT_BW & $FF
+                ld   l, a
+                pop  af
+                cp   (hl)
+                ret  nc
+                ld   a, (hl)
+                ret

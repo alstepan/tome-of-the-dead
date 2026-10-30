@@ -1,6 +1,8 @@
 ;==============================================================================
 ; fi3.asm — FLOOR1: fi_full, the cold from-scratch build of the floor-item
-; glyph cache (bank 3, far3 only; the per-entry work is R6 fi_add, fi6.asm).
+; glyph cache (far3 only; the per-entry work is R6 fi_add, fi6.asm). Lives in
+; bank 2 since LAND-PENDING (bank-3 relief, 52 B); touches only low RAM + far6,
+; so the callers' far3 (bank 3 paged, restored by far6) is unchanged.
 ;==============================================================================
 ;------------------------------------------------------------------------------
 ; fi_full — A = room (0..8): the cache emptied, then every live FLOOR_LIST
@@ -11,7 +13,7 @@
 ; gets a slot: a pickup revealing the type under a pile needs no rebuild.
 ; far3 from room_show (level entry, start_game, teleport), do_exit (EXIT_DEST
 ; before the scroll), pause close (menu1), page_post (menu1): the bytes may be
-; garbage (pause save / page map save / generator). Cold: bank 3.
+; garbage (pause save / page map save / generator). Cold (bank 2).
 ; Clobbers: A, BC, DE, HL.   ~4k T + ~1.5k T per live entry of the room + ~0.9k T per type
 ;------------------------------------------------------------------------------
 fi_full:        push af
