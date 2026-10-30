@@ -19,7 +19,7 @@
 ; off tape with the ROM loader, in `tape_tab` order (3E-T1: one table-driven
 ; loop, was one 15-20 B stanza per block): bank 1 = sources + vdata + UI code;
 ; bank 3 = source tail + bank-3 cold code; A8: bank 3 AY slot at AY_RESERVE;
-; B3B-8: bank 7 tilesets at TSET_LO (+ D3-S2 the bank-7 cold code) / TSET_HI —
+; B3B-8: bank 7 tilesets at TSET_BASE (MEM-RECLAIM w2a) + D3-S2 the bank-7 cold code —
 ; nothing there is live yet: screen 2 is not shown, the 128 editor's bank-7
 ; workspace is abandoned with BASIC; D3-TX: the text block at the bottom of
 ; bank 0 — check_paging's probe byte there is overwritten; 3E-T1: the boot
@@ -649,66 +649,15 @@ orn_cells:
 
 ;------------------------------------------------------------------------------
 ; level_load_tiles — the level theme (game.md §1.2): A = depth 1..8, or 0 =
-; the PROTO rooms A-D (D1's set, then the stand-in chest at T_CHEST_TL..BR =
-; ids 32..35, B10; B3B-13 retires it). Copies the depth's bank-7 slot (TSET_*:
-; 32 glyphs, 32 attrs, 32 TILE_FLAGS of ids 32..63) to TILE_LEVEL_GLYPHS /
-; TILE_LEVEL_ATTRS / tile_flags + 32, then sets the common floor / wall ids'
-; attrs to LVL_ATTR_FLOOR / LVL_ATTR_WALL (level_gen / new_game write them).
-; Before the room is built and drawn. Puts the caller's $C000 bank back.
-; Clobbers: A, BC, DE, HL.   11.7k T worst (measured, DI: tests/world.py W11)
+; the PROTO rooms A-D (D1's set). MEM-RECLAIM w2a: a far7 stub, the body is
+; bank-7 level_tiles7 (tiles7.asm: the deduplicated tileset gather + the
+; theme_ids patch below). Before the room is built and drawn; the caller's
+; $C000 bank is back on return (far7).
+; Clobbers: A, BC, DE, HL.   17.9k T worst (far7 + gather, contended; tests/world.py W11; was 11.7k)
 ;------------------------------------------------------------------------------
 level_load_tiles:
-                ld   b, a
-                ld   a, (PORT_7FFD_SHADOW)
-                push af                        ; caller's page (restore_page)
-                push bc                        ; B = depth
-                ld   a, BANK_TSET
-                call page_bank
-                pop  bc
-                push bc
-                ld   a, b
-                or   a
-                jr   z, .s                     ; PROTO: slot 0 (D1)
-                dec  a                         ; slot = depth - 1
-.s:             ld   hl, TSET_LO
-                cp   TSET_PER_HALF
-                jr   c, .lo
-                ld   hl, TSET_HI
-                sub  TSET_PER_HALF
-.lo:            ld   d, a                      ; DE = (slot & 3) * 320 = *256 + *64
-                rrca
-                rrca
-                ld   e, a
-                add  hl, de
-                ld   de, TILE_LEVEL_GLYPHS
-                ld   bc, TSET_ATTRS
-                ldir
-                ld   de, TILE_LEVEL_ATTRS
-                ld   c, TILE_IDS - TILE_COMMON
-                ldir
-                ld   de, tile_flags + TILE_COMMON
-                ld   c, TILE_IDS - TILE_COMMON
-                ldir
-                ld   hl, theme_ids             ; common ids that follow the depth
-                ld   a, (LVL_ATTR_FLOOR)
-                call .patch
-                ld   a, (LVL_ATTR_WALL)
-                call .patch
-                pop  bc
-                pop  af
-                jp   restore_page
-.patch:         ; A = attr -> TILE_ATTRS[id] for the ids at HL up to a 0 (T_AIR)
-                ld   e, (hl)
-                inc  hl
-                inc  e
-                dec  e
-                ret  z
-                ld   d, TILE_ATTRS >> 8
-                ld   (de), a
-                jr   .patch
-                ASSERT (TILE_ATTRS & $FF) == 0 && T_AIR == 0
-                ASSERT ((tile_flags + TILE_IDS - 1) >> 8) == (tile_flags >> 8)
-                ASSERT TSET_PER_HALF == 4      ; (slot & 3) * 64 by two rrca
+                ld   hl, level_tiles7          ; farb hands A (the depth) to the target
+                jp   far7
 ; the common ids whose attr is the depth's (tools/tiles_convert.py FLOOR_IDS /
 ; WALL_IDS, + rubble = ATTR_WALL, concept-screen §3.3 #12)
 theme_ids:      DB T_PLAT, T_WALLF, T_END_L, T_END_R, 0

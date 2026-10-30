@@ -56,8 +56,8 @@ OVL_PASS        EQU 2                   ; tools/build.sh: -DOVL_PASS=1 first (3E
                 TAPE_BLK mode, BANK_SRC_LO, BANK_WINDOW, SRC_LEN_LO       ; sources, vdata, UI code, overlays
                 TAPE_BLK mode, BANK_COLD3, BANK_WINDOW, BANK3_LEN         ; source tail + bank-3 cold code
                 TAPE_BLK mode, BANK_COLD3, AY_RESERVE, AY_LEN             ; A8 AY slot (BANK_AY = 3)
-                TAPE_BLK mode, BANK_TSET, TSET_LO, B7_TAPE_LEN            ; B3B-8 tilesets 0-3 + D3-S2 bank-7 code
-                TAPE_BLK mode, BANK_TSET, TSET_HI, TSET_HALF_LEN          ; tilesets 4-7
+                TAPE_BLK mode, BANK_TSET, B7_CODE, B7_LEN                 ; D3-S2 bank-7 cold code
+                TAPE_BLK mode, BANK_TSET, TSET_BASE, TSET_LEN             ; level tilesets (MEM-RECLAIM w2a: dedup, one block)
                 TAPE_BLK mode, BANK_TEXT, TEXT_ADDR, TEXT_LEN             ; D3-TX text block (bank 0 bottom)
                 TAPE_BLK mode, BANK_BOOT6, BOOT6_ADDR, BOOT6_TAPE_LEN     ; 3E-T1 boot block + SRC6 sources (bank 6, below R6)
                 TAPE_BLK mode, BANK_R6, R6_ADDR, R6_USED                  ; R6 region (bank 6 top, permanent)
@@ -185,38 +185,33 @@ AY_LEN          EQU ay_code_end - AY_RESERVE
                 DISPLAY "GAME AY slot (bank 3): ", /H, AY_RESERVE, "..", /H, ay_code_end - 1, " (", /D, AY_LEN, " B of ", /D, AY_RESERVE_END - AY_RESERVE, "), free: ", /D, AY_RESERVE_END - ay_code_end, "; ISR ", /D, ISR_LEN, " B at ", /H, ISR_ADDR
 
 ;==============================================================================
-; LEVEL TILESETS (B3B-8) — the 8 per-level tile sets (tools/tiles_convert.py,
-; slot format TSET_* in level_defs.asm) in the bank-7 spare: slots 0-3 above
-; screen 2 (TSET_LO), 4-7 above the shadow attrs (TSET_HI; TSET_SPLIT, a
-; macro the generated file invokes between D4 and D5). Two headerless tape
-; blocks (`start` .t7lo / .t7hi); level_load_tiles copies one slot per level.
+; LEVEL TILESETS (B3B-8; MEM-RECLAIM w2a: deduplicated, 2,560 -> TSET_LEN B) —
+; the 8 per-level tile sets (tools/tiles_convert.py, format TSET_* in
+; level_defs.asm) in bank 7 above the shadow attrs, one headerless tape block;
+; level_tiles7 gathers one record per level.
 ;==============================================================================
                 MMU  3, BANK_TSET
-    MACRO TSET_SPLIT
-tsets_lo_end:
-                ORG  TSET_HI
-    ENDM
-                ORG  TSET_LO
+                ORG  TSET_BASE
                 INCLUDE "../assets/gfx/tiles/tilesets.asm"
-                ASSERT tileset_d1 == TSET_LO && tileset_d5 == TSET_HI
-                ASSERT tileset_d2 - tileset_d1 == TSET_STRIDE && TILESET_SLOT_LEN == TSET_STRIDE
-                ASSERT tsets_lo_end == TSET_LO + TSET_HALF_LEN && tilesets_end == TSET_HI + TSET_HALF_LEN
-                ASSERT tsets_lo_end <= B7_CODE && tilesets_end <= $10000
+TSET_LEN        EQU tilesets_end - tilesets
+                ASSERT tilesets == TSET_BASE && tset_slots == TSET_BASE
+                ASSERT tileset_d2 - tileset_d1 == TSET_STRIDE && tset_fsets - tset_slots == LEVELS * TSET_STRIDE
+                ASSERT tset_pool - tset_fsets == TSET_NFSET * (TILE_IDS - TILE_COMMON) && TSET_NPOOL <= 256
+                ASSERT tilesets_end <= $10000
 
 ;==============================================================================
-; BANK-7 COLD CODE (D3-S2) — B7_CODE ($E000, right after tileset slot 3)
-; .. B7_LIMIT ($F800, the attr shadow): the 6 KB the dropped bitmap shadow
-; freed. Entered only through far7 (rules: src/bank7.asm). On tape it is ONE
-; block with the low tilesets (TSET_LO .. b7_end, start .t7lo).
+; BANK-7 COLD CODE (D3-S2; MEM-RECLAIM w2a: from $DB00, the old tileset slots
+; 0..3) — B7_CODE (right after the screen-2 attrs) .. B7_LIMIT ($F800, the attr
+; shadow). Entered only through far7 (rules: src/bank7.asm). One tape block.
 ;==============================================================================
                 ORG  B7_CODE
 b7_code:
                 INCLUDE "bank7.asm"
 b7_end:
 B7_LEN          EQU b7_end - b7_code
-B7_TAPE_LEN     EQU b7_end - TSET_LO           ; tilesets 0..3 + the code, one tape block
-                ASSERT tsets_lo_end == B7_CODE && b7_end <= B7_LIMIT && B7_LIMIT == SHADOW_ATTR
+                ASSERT B7_CODE == SCREEN7_ATTR + SCREEN_ATTR_LEN && b7_end <= B7_LIMIT && B7_LIMIT == SHADOW_ATTR
                 DISPLAY "GAME bank-7 cold code: ", /H, b7_code, "..", /H, b7_end - 1, " (", /D, B7_LEN, " B), free to the attr shadow: ", /D, B7_LIMIT - b7_end
+                DISPLAY "GAME bank-7 tilesets (MEM-RECLAIM w2a, dedup): ", /H, tilesets, "..", /H, tilesets_end - 1, " (", /D, TSET_LEN, " B, ", /D, TSET_NPOOL, " glyphs), free to $10000: ", /D, $10000 - tilesets_end
 
 ;==============================================================================
 ; TEXT (B3B-13; D3-TX: bank 1 -> bank 0) — the text block (tools/textpack.py

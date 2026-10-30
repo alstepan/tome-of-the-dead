@@ -53,6 +53,25 @@ def load_syms(path=SYM):
 S = load_syms()
 
 
+def tset_slot(rd, slot):
+    """MEM-RECLAIM w2a: bank-7 tileset record `slot` (= depth - 1) expanded to the
+    old 320-B slot image (32 glyphs of ids 32..63 + 32 attrs + 32 TILE_FLAGS), i.e.
+    what level_tiles7 leaves in TILE_LEVEL_GLYPHS / TILE_LEVEL_ATTRS / tile_flags + 32.
+    rd(addr, n) -> n bytes of bank 7 at $C000-window address addr."""
+    n = S["TILE_IDS"] - S["TILE_COMMON"]
+    rec = rd(S["tset_slots"] + slot * S["TSET_STRIDE"], S["TSET_STRIDE"])
+    gly = b"".join(bytes(rd(S["tset_pool"] + 8 * i, 8)) for i in rec[S["TSET_GIDX"]:S["TSET_GIDX"] + n])
+    att = bytes(rec[S["TSET_ATTRS"]:S["TSET_ATTRS"] + n])
+    fl = bytes(rd(S["tset_fsets"] + rec[S["TSET_FSET"]] * n, n))
+    return gly + att + fl
+
+
+def sna_bank7(addr, n):
+    """Bytes of bank 7 at $C000-window address addr in the loaded .sna."""
+    o = 7 * 16384 + addr - 0xC000
+    return SNA_RAM[o:o + n]
+
+
 def _private_snapshot():
     """Copy build/wazhack.sna once to a private temp file and load only that:
     a concurrent assemble rewrites build/wazhack.sna in place (SAVESNA path is

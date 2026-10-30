@@ -165,8 +165,8 @@ BANK_OVL_ITEMS  EQU BANK_UI1       ; MEM-1: back in bank 1 (main.asm, after the 
 BANK_OVL_PAGE   EQU BANK_R6         ; R6: the page stream (page_ovl, menu1.asm)
 ; (3E-T8's fx overlay is gone since 3E-T12: ZX0 packed its code only 3 %, so the
 ; effects are R6-resident code, src/fx6.asm, entered by far6.)
-B7_CODE         EQU $E000           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), tape
-                                    ;     block joined to the TSET_LO tilesets below it
+B7_CODE         EQU $DB00           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), right
+                                    ;     after screen 2 (MEM-RECLAIM w2a: was $E000, above tilesets 0..3)
 B7_LIMIT        EQU $F800           ; ... up to the attr shadow (ASSERTed)
 SHADOW_ATTR     EQU $F800           ; bank 7: room tile attrs in screen layout ($F800..$FA3F used)
 BANK_WINDOW     EQU $C000

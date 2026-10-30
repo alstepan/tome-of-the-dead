@@ -282,8 +282,8 @@ def depth_flags(p, d):
     if d not in _DFLAGS:
         from game_lib import SNA_RAM
         slot = d - 1
-        so = 7 * 16384 + (S["TSET_LO"] if slot < 4 else S["TSET_HI"]) - 0xC000 + (slot & 3) * S["TSET_STRIDE"]
-        _DFLAGS[d] = bytes(p.z.read_memory(S["tile_flags"], 32)) + SNA_RAM[so + 288:so + 320]
+        from game_lib import tset_slot, sna_bank7
+        _DFLAGS[d] = bytes(p.z.read_memory(S["tile_flags"], 32)) + tset_slot(sna_bank7, slot)[288:320]
     return _DFLAGS[d]
 
 
@@ -2592,8 +2592,8 @@ def run_gen_suites(p, check):
                   and all(attrs[T[k]] == wl for k in room_model.WALL_IDS),
                   [hex(attrs[T[k]]) for k in room_model.FLOOR_IDS + room_model.WALL_IDS])
             slot = d - 1
-            so = 7 * 16384 + (S["TSET_LO"] if slot < 4 else S["TSET_HI"]) - 0xC000 + (slot & 3) * S["TSET_STRIDE"]
-            sl = SNA_RAM[so:so + S["TSET_STRIDE"]]
+            from game_lib import tset_slot, sna_bank7
+            sl = tset_slot(sna_bank7, slot)                    # MEM-RECLAIM w2a: dedup record
 
             check(f"W11 D{d}: ids 32..63 glyphs / attrs / TILE_FLAGS == the bank-7 slot {slot}",
                   (bytes(glyphs[256:]), bytes(attrs[32:]), bytes(flags[32:]))
@@ -2956,10 +2956,10 @@ def w16_level(p, check):
               (p.rb("GAME_STATE"), p.rb("EXIT_KIND"), p.rb("GEN_TRAP"), p.rb("GEN_OVERFLOW")))
         fa, wa = room_model.THEME[d]
         lvl = S["TILE_GLYPHS"] + S["T_LVL_BASE"] * 8
-        slot = (S["TSET_LO"] if d <= 4 else S["TSET_HI"]) + ((d - 1) & 3) * S["TSET_STRIDE"]
+        from game_lib import tset_slot
         check(f"W16 {tag}: theme D{d} (floor / wall attrs, ids 32..63 == bank-7 slot {d - 1})",
               (p.rb("LVL_ATTR_FLOOR"), p.rb("LVL_ATTR_WALL")) == (fa, wa)
-              and bytes(p.z.read_memory(lvl, 256)) == bank7(p, slot, 256),
+              and bytes(p.z.read_memory(lvl, 256)) == tset_slot(lambda a_, n_: bank7(p, a_, n_), d - 1)[:256],
               (hex(p.rb("LVL_ATTR_FLOOR")), hex(p.rb("LVL_ATTR_WALL"))))
         got_lp, want_lp, out = lp_model(p, blk)
         got = [s_ for s_ in range(1, 16) if p.ent(s_)["FLAGS"]]

@@ -1,5 +1,5 @@
 ;==============================================================================
-; bank7.asm — D3-S2 bank-7 COLD code, B7_CODE ($E000) .. b7_end <= B7_LIMIT
+; bank7.asm — D3-S2 bank-7 COLD code, B7_CODE ($DB00, w2a; was $E000) .. b7_end <= B7_LIMIT
 ; ($F800, the attr shadow): the 6 KB freed by dropping the bitmap shadow.
 ; Per-turn / per-event logic moved out of bank 2 (docs/memory-map.md "Cold
 ; code placement"): the player turn (turn_input -> try_player_turn ->
@@ -1163,4 +1163,5 @@ intent_icon7:
                 INCLUDE "mark7.asm"            ; D3-8d: status marks: room reset + glyph copy, hide
                 INCLUDE "xp7.asm"              ; D3-9b: MP regen, level-up, learn / rank-up
                 INCLUDE "mus7.asm"             ; SND-3: Dangerous (W) cue, mus_pick
+                INCLUDE "tiles7.asm"           ; MEM-RECLAIM w2a: level_tiles7 (deduplicated tileset gather)
                 INCLUDE "boot7.asm"            ; MEM-SND: panel_init7, new_game (from bank 3; 3E-T1: the boot parts -> boot6.asm)
