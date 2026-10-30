@@ -10,7 +10,9 @@
 ;
 ; One 8x8 glyph above every visible HOLD / MIND body (hero and monsters; HOLD >
 ; MIND): the body's centre column ((px + 4) / 8 + (KT_BW - 1) / 2), the row
-; above its top row ((py / 8) - 1); hidden when that row lies above the
+; above its top row ((py / 8) - 1; ANIM-IMPORT2: above the DRAWN frame's top
+; row R_ROW when that lies lower, e.g. a 40-px frame on a 48-px body, so the
+; mark rests on the visible head); hidden when that row lies above the
 ; storey band (top row = 9s, a flyer at y = 9s) or when the cell is inside a
 ; drawn body / FX / another mark (then it waits). Glyph = the panel icon
 ; (status_icons 0..4, frame A), attr = the icon's (FROZEN $45, ASLEEP $41,
@@ -168,7 +170,7 @@ mk_slot:
                 ld   h, SLOTREC >> 8
                 ld   a, (hl)                   ; R_VIS (anim_tick: drawn next render)
                 or   a
-                jr   z, .want                  ; hidden: none
+                jp   z, .want                  ; hidden: none (jp: ANIM-IMPORT2 pushed it out of jr range)
                 ld   a, b
                 and  STS_HOLD                  ; HOLD > MIND; g = the HOLD kind 1..3
                 jr   nz, .g
@@ -188,6 +190,26 @@ mk_slot:
                 rrca
                 and  $1F
                 ld   e, a                      ; E = its top row
+                ; ANIM-IMPORT2: a frame shorter than the body (the 40-px sets on a 6-cell
+                ; body, bottom-anchored) starts lower: the mark sits right above the DRAWN
+                ; top row (this tick's R_ROW) instead, which lies inside the body box, so
+                ; never above the storey band (no KT_MOD9 test). +12 B, +~45 T a marked slot
+                ld   a, (mk_sl)
+                rrca
+                rrca
+                rrca
+                rrca                           ; slot * 16 (slot < 16)
+                or   R_ROW
+                ld   l, a
+                ld   h, SLOTREC >> 8
+                ld   a, (hl)                   ; the drawn frame's top row
+                cp   e
+                jr   z, .full                  ; frame top = body top (48 / 32 / 16-px art)
+                jr   c, .full                  ; (above it: never today; keep the body rule)
+                dec  a
+                ld   e, a                      ; E = the mark row: one above the visible head
+                jr   .mrow
+.full:          ld   a, e
                 add  a, (kind_tab + KT_MOD9) & $FF
                 ld   l, a
                 ld   h, (kind_tab + KT_MOD9) >> 8
@@ -195,6 +217,7 @@ mk_slot:
                 or   a
                 jr   z, .hide                  ; storey top row: the row above is not its band
                 dec  e                         ; E = the mark row (0..16)
+.mrow:
                 ld   a, (ANIM_FREEZE)
                 or   a
                 jr   nz, .fa                   ; goldens: frame A

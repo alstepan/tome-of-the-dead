@@ -4128,7 +4128,11 @@ Pool need per level after (4) (release; `tests/zx0_pool.py` `LEVEL_NEED`), `POOL
 
 **Overlays with 40-px bodies (checked on screen, `tests/climb3f.py --png` + a scratch scene):** attrs (kind ink,
 `$42` flash, golden glow, tints) follow the drawn footprint (5 rows): the blank top body row is never painted.
-The status mark (`mark.asm`: row = `py / 8 − 1`, the body box's top − 1) now floats one blank cell above a
-40-px head (an 8-px gap; unchanged for the 48-px Ogre / DK). Moving it down a row for 40-px frames is a
-`mark.asm` change (not done here).
+- **(5) Status marks above the visible head** (`mark.asm` `mk_slot`, bank 2): the mark row is the DRAWN
+  frame's top row − 1 (this tick's `SLOTREC` `R_ROW`) when that frame starts below the body top (the 40-px
+  sets); else the old rule (body top − 1, hidden at a storey top row via `KT_MOD9`): 48-px Ogre / DK,
+  32-px Goblin, 16-px kinds unchanged. No table. +25 B (incl. one `jr` → `jp`), ~+45 T a marked slot per
+  pass (≤ 1 op budget unchanged). `ranged2.asm` now INCLUDEs before `mark.asm` so `rk_tab` stays inside
+  one page. Bank 2 free 267 → **243**; bank 3 (60), bank 7 (136), R6 (327) unchanged. `tests/marks.py`
+  `want_cell` follows the same rule.
 

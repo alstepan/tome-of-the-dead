@@ -626,11 +626,12 @@ kind_tab:
 ; kind_tab beyond its ALIGN pad would move kind_tab a page; MEM-SND moved
 ; bars2.asm here to widen that pad for new hooks). No alignment needed.
 ;------------------------------------------------------------------------------
+                ; ANIM-IMPORT2: ranged2 first (rk_tab must not straddle a page; mark.asm grew)
+                INCLUDE "ranged2.asm"           ; 3F-T7 ai_rhook + rk_tab (the ranged hook's reject)
                 INCLUDE "mark.asm"              ; D3-8d status marks (mark_tick, per tick)
                 INCLUDE "xp2.asm"               ; D3-9b XP_NEXT table + item_mp (MP bar)
                 INCLUDE "sfx2.asm"              ; SND-5 sfx_req / sfx_msg (any bank calls them)
                 INCLUDE "bars2.asm"             ; MEM-SND bars_draw / num2 (from panel2.asm: pad headroom)
-                INCLUDE "ranged2.asm"           ; 3F-T7 ai_rhook + rk_tab (the ranged hook's reject)
                 INCLUDE "boss2a.asm"            ; 3F-T8 og_adv / glow_kat (AMMO-COUNT: after kind_tab, its pad was 6 B)
                 INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
                 INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy (were low RAM / gfx.asm)
