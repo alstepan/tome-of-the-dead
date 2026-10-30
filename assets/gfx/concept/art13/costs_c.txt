@@ -1,0 +1,28 @@
+# ART13c nun Archmage FINAL (option D, side cast) — costs (tools/gen_art13c_nun.py).
+# pool = src/defs.asm FRM formula, both facings stored (left = mirror), one shift
+# per flag: WK0 / STA shift 0, WK4 shift 4 (+1 col). No SYM, no frontal frame.
+# Today the Archmage shares the Necro frames: every byte below is extra, on D8 only.
+
+frame       flags  W  pool  src(raw)  new fid (FRM order, own unit U_ARCH)
+nun_walk1   WK0   24   480    241     KFID_ARCH + 0
+nun_walk2   WK4   24   640    241     KFID_ARCH + 1
+nun_cast    STA   24   480    241     KFID_ARCH + 2
+nun_hurt    STA   24   480    241     KFID_ARCH + 3
+
+TOTAL 4 fids  pool 2080 B  SRC6 zx0 ≈392 B   D8 Warrior slack 3194 -> +1114
+  without HURT (rest + flash, as today): 3 fids  pool 1600 B  SRC6 ≈256 B  slack -> +1594
+  idle-only (the Archmage never walks, A3: WALK2 drawn cell-aligned -> STA):  pool 1920 B  slack -> +1274
+  RAISE telegraph not drawn: +1 fid, +480 B (STA 24w).
+
+FRAME IDS: 4 of the 8 spare (FRT_MAX 144). Absolute numbers are assigned by FCTR at
+import: a new kind group KFID_ARCH (nun_walk1, nun_walk2, nun_cast, nun_hurt) inside the
+monster range after the Necro group (later fids shift by 4); appended at the end of
+the current list they would be FID_COUNT .. FID_COUNT + 3 (136..139 with 136 used).
+Sequences: ksm_ar-style own block: MOVECYC2 walk2, walk1; CAST = cast; HURT = hurt;
+idle = walk1 (rest). pool_gmap: Archmage -> U_ARCH + U_DEADH + U_NBOLT (no longer Necro).
+
+INK REGIONS (one ink; the telegraph recolours all of it): solid = coif brim rows 4-5,
+wimple / bib, face (brow, nose, cheek, jaw), hands, cross; 50 % hatch = veil + habit;
+paper = hood shadow row 6, the 3x3 socket rows 8-10, mouth, chin shadow; 1-px glow at
+face (16,9) (cast: 3-px cross). Round-tripped in #00D700, #00FF00, #00FFFF, #D700D7, #D7D700, #FF00FF, #FF3030, #FFFFFF.
+checks: head top [0], shuffle slip [0, 0], frontal frames 0.

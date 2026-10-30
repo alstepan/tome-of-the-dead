@@ -1,0 +1,44 @@
+# ART13 nun Archmage — costs (tools/gen_art13_nun.py). CONCEPT, not wired.
+# pool = src/defs.asm FRM formula, both facings (SYM = one facing): per facing
+# H x 2 x (cols + 1 if off the 8-px grid at its shift). src = H x cols x 2 + 1 raw.
+# Today the Archmage shares the Necro frames (0 B extra; Necro is on D8 anyway).
+# Any own Archmage set is ALL extra on D8 only. D8 Warrior slack 3,194 B, target <= ~1,597.
+
+frame               flags      W cols  pool   src
+nun_a_glide1        STA|SYM   24    3   240   241
+nun_a_glide2        STA|SYM   24    3   240   241
+nun_a_raise         STA|SYM   24    3   240   241
+nun_a_cast          STA       32    4   640   321
+nun_a_hurt          STA|SYM   24    3   240   241
+nun_b_walk1         WK0       24    3   480   241
+nun_b_walk2         WK4       24    3   640   241
+nun_b_walk3         WK4       24    3   640   241
+nun_b_walk4         WK0       24    3   480   241
+nun_b_cast          STA       32    4   640   321
+nun_b_hurt          STA       24    3   480   241
+
+A  (GLIDE1, GLIDE2, CAST, HURT)          4 fids  pool  1360  SRC6 zx0  477 B
+A+ (+ RAISE telegraph pose)              5 fids  pool  1600  SRC6 zx0  575 B
+B  (WALK1..4, CAST, HURT)                6 fids  pool  3360  SRC6 zx0  527 B
+
+D8 Warrior slack after: A +1834, A+ +1594, B -166
+Assumptions (engineer to confirm): A's frontal frames are SYM (one stored facing, drawn
+unmirrored both ways, as the climb pairs) and every Archmage frame is one shift (STA:
+the G1d post and the blink target are cell-aligned). Without SYM: A 1360 -> 2080;
+without one-shift (MOT): A -> 3120 (over budget) — then cut HURT (rest + flash, as today).
+FRT ids: 8 spare of 144 -> A 4 (4 left), A+ 5 (3 left), B 6 (2 left).
+SRC6: + 1 ZX0 block per option (unit U_ARCH, own pool_gmap record replacing the
+Archmage -> Necro record; Necro stays for the D8 Necromancers + U_NBOLT unchanged).
+B: the Archmage NEVER walks (A3: G1d post, blink only), so B's 4 walk frames would only
+ever play as an idle cycle: 2,240 B of pool for motion the rules never show.
+
+INK REGIONS (one ink, the telegraph recolours all of it; legible by DENSITY not hue):
+  solid ink  : coif band rows 4-5, wimple ring cols 5-6 / 17-18 rows 4-17, bib rows 16-19,
+               face cols 8-15 rows 7-15, hands, cross  -> brightest region in every ink
+  50% hatch  : veil rows 0-19 outside the wimple, habit rows 19-37 -> reads dark / 'black'
+  paper      : face ring (1 px), 3x3 eye sockets rows 8-10, nose, mouth -> hollow face
+  1-px ink   : the eye glows (9,9) / (14,9) inside the sockets; RAISE / CAST flare to a
+               3-px cross per eye
+  Checked packed + round-tripped in #00D700, #00FF00, #00FFFF, #D700D7, #D7D700, #FF00FF, #FF3030, #FFFFFF.
+
+checks: head top [0], B walk slip [0, 0, 0, 0]
