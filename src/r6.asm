@@ -63,10 +63,11 @@ debug_kit:
                 INCLUDE "sanct6.asm"           ; 3F-T10: sanctum_leaf (D8 Sanctum generation, only with the 3F switch)
     ENDIF
                 INCLUDE "icons6.asm"           ; IC1: icon_slot / worn_draw / qs_draw (the 16x16 icon blitter)
-                INCLUDE "../assets/gfx/icons/icons16.asm"   ; IC1 + FLOOR1: 45 logical icons in 1,376 B raw (potions share one shape; tools/icons16.py)
-fs_worn:        DB   " WORN OUT", 0           ; it_fmt (gear6.asm): m = -3 (after the code: keeps lp_wt6's page)
+                ; AMMO-COUNT: before the icon data (after it, qs_ammo's +66 B made the guard pad 26 B)
     IF (($ & $FF) + K_COUNT) > $100
                 ALIGN 256                      ; lp_wt6 (tier6.asm) must sit inside one page (H loaded once)
     ENDIF
 lp_wt6:         LP_WT_ROWS
                 ASSERT $ - lp_wt6 == K_COUNT && ((lp_wt6 + K_COUNT - 1) >> 8) == (lp_wt6 >> 8)
+                INCLUDE "../assets/gfx/icons/icons16.asm"   ; IC1 + FLOOR1: 45 logical icons in 1,376 B raw (potions share one shape; tools/icons16.py)
+fs_worn:        DB   " WORN OUT", 0           ; it_fmt (gear6.asm): m = -3 (after the icon data)

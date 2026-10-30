@@ -2189,6 +2189,8 @@ Level digit: `lvl_draw` at (31, 19), attr `$46`. `hero_st_init` sets `LVL` 1,
 `info_potion` "POTION … FIRE: DRINK", food / scroll "FIRE: EAT" / "FIRE: READ",
 `info_bag` "BAG" (the numbers are live).
 
+**AMMO-COUNT (user 2026-10-29; game.md §8.11 "Ammo slots").** The Warrior's dagger / bow slots (3 / 4) are quick-style: `bar_knight` holds `SLOT_QDAG` / `SLOT_QBOW` (`SLOT_QFOOD` moved `$FB` -> `$F9`, classes `QS_DAG` 3 / `QS_BOW` 4 after the quick ones; `QS_COUNT` stays 3, so the 1st-frame-only rule of `item_icons` `.slow` is unchanged: an ammo slot redraw is a small item like any bar icon: measured whole slot_redraw 10.2k T dagger, 12.2k T bow with two digits, vs 9.7k T for the old 24x16 art; any frame). `slot_redraw`'s `.quick` path -> R6 `qs_draw` -> `qs_ammo` (`icons6.asm`): 16x16 icon (`ic_blit`: `ICONS16_AMMO_DAGGER` / `IT_BOW - IT_BAG_LO`, ink `item_ink` of `IT_DAGGER` / `IT_BOW`) + the count of `DAGGERS` / `ARROWS` via `qs_pd` (units row 19, tens row 18 when non-zero). **Dirty path, no tick cost:** `PD_AMMO` (raised by `abil_ammo`, `ap_take`) used to be cleared by `panel_more`; it now sets `ICON_SH + SLOT_AMMO0 / +1` = `IS_NONE` and `PD_ICONS` (17 B in `panel_more`, only reached when something is dirty). The 24x16 `ICON_DAGGERS` / `ICON_BOW` art is dropped from `icon_tab` (`tools/tiles_convert.py` BAR_ICONS: 10 icons; bank-1 vdata -108 B). Budget (rebased on main + STAFF-BONUS + LOG-FIX, 2026-10-30): R6 -66 B (release 327 -> 261 free; kit 235 -> 191; `lp_wt6` moved before the icons16 data in `r6.asm`, else its page guard padded 26 B), bank 2 -17 B (`panel_more`; `boss2a.asm` moved after `kind_tab`: the 6-B ALIGN pad could not take it; bank 2 free 149 -> 132), bank 3 -6 B (`item_icons`: 19 -> 13), bank 1 +108 B (the 24x16 dagger / bow art dropped from `panel_icons.asm`: free 148 -> 256), bank 7 unchanged. Tests: `tests/abil_ammo.py` AC1-AC5.
+
 **ICON MODE (C3-2b; game.md §3.1 "ICON MODE", user 2026-10-05; replaces C3-2's
 "FIRE held + ←/→" cursor and FIRE+↓ bag).** `intent_tick`: ↓ + FIRE, either
 first and the other within `DN_DEFER` 3 ticks (`DN_T` / `FIRE_T`) →
@@ -3874,7 +3876,7 @@ starts at `code_end` and moved with the bank-2 growth), never behaviour. Not don
   `lp_post` also shifts the post at c when a body placed earlier in the record covers it (`lp_spawn` marks bodies
   `LPC_BODY` 2, never exempt; lp_legal ORs every bit: unchanged elsewhere; boss.py P1). KNOWN (not fixed): an item
   dropped on the shut grate (TF_FLOOR) floats above the open shaft after the grate opens. Memory relief: `atk_mod`
-  bank 3 -> bank 2 (boss2.asm), `og_adv` / `glow_kat` + `glow_tab` -> `boss2a.asm` before `kind_tab` (the pad),
+  bank 3 -> bank 2 (boss2.asm), `og_adv` / `glow_kat` + `glow_tab` -> `boss2a.asm` before `kind_tab` (the pad; AMMO-COUNT moved it after `kind_tab`),
   `uq_fit` + `uq_chk` bank 3 -> R6 `fi6.asm` (far6 from mon_drop), `place_follower` bank 7 -> bank 3 (plain call
   from follow_admit), `follow_select`'s boss rule without the LVL_LAIR test (only the boss matches kind | E_GOLD =
   LP_BOSS). BOSS_HERE (review item 3) not done: ~17 T a monster in ai_ghook only (the render hooks already test

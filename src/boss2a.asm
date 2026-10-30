@@ -1,6 +1,7 @@
 ;==============================================================================
-; boss2a.asm — 3F-T8 bank-2 helpers placed BEFORE kind_tab (they use the
-; kind_tab ALIGN pad; T8 review: bank-2 relief). The rest: boss2.asm.
+; boss2a.asm — 3F-T8 bank-2 helpers (were BEFORE kind_tab in its ALIGN pad;
+; AMMO-COUNT moved them after kind_tab: panel_more's +17 B overflowed the 6-B
+; pad and shifted kind_tab a page). The rest: boss2.asm.
 ;==============================================================================
 
 ;------------------------------------------------------------------------------

@@ -491,7 +491,6 @@ enter_select:
                 INCLUDE "decor.asm"             ; B3B-10 animated decor (decor_tick)
                 INCLUDE "fx.asm"                ; D3-5 FX tracks (fx_start / fx_tick / fx_render)
                 INCLUDE "drip.asm"              ; D3-8b decorative drip (drip_tick, per tick)
-                INCLUDE "boss2a.asm"            ; 3F-T8 og_adv / glow_kat (in the kind_tab pad)
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
@@ -632,6 +631,7 @@ kind_tab:
                 INCLUDE "sfx2.asm"              ; SND-5 sfx_req / sfx_msg (any bank calls them)
                 INCLUDE "bars2.asm"             ; MEM-SND bars_draw / num2 (from panel2.asm: pad headroom)
                 INCLUDE "ranged2.asm"           ; 3F-T7 ai_rhook + rk_tab (the ranged hook's reject)
+                INCLUDE "boss2a.asm"            ; 3F-T8 og_adv / glow_kat (AMMO-COUNT: after kind_tab, its pad was 6 B)
                 INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
                 INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy (were low RAM / gfx.asm)
                 INCLUDE "msg2.asm"              ; LOG-FIX: msg_cat / msg_end (from bank 7), log_room, hit_line

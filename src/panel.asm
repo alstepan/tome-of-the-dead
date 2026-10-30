@@ -267,14 +267,20 @@ slot_redraw:
 ; icon bars by class (game.md §3.5): icon ids (panel_icons.asm) / outline /
 ; IC1 quick slots (SLOT_QFOOD + QS_*: R6 qs_draw)
 SLOT_EMPTY      EQU $FE
-SLOT_QFOOD      EQU $FB
+SLOT_QFOOD      EQU $F9
 SLOT_QPOT       EQU SLOT_QFOOD + QS_POTION
 SLOT_QSCR       EQU SLOT_QFOOD + QS_SCROLL
-bar_knight:     DB ICON_SWORD, ICON_POWER, ICON_WHIRL, ICON_DAGGERS, ICON_BOW
+QS_DAG          EQU QS_COUNT                   ; AMMO-COUNT: the Warrior's dagger / bow slots are
+QS_BOW          EQU QS_COUNT + 1               ; quick-style (16x16 icon + count cell): R6 qs_ammo
+SLOT_AMMO0      EQU 3                          ; the Warrior's dagger slot (the bow follows): icons.asm panel_more
+SLOT_QDAG       EQU SLOT_QFOOD + QS_DAG
+SLOT_QBOW       EQU SLOT_QFOOD + QS_BOW
+bar_knight:     DB ICON_SWORD, ICON_POWER, ICON_WHIRL, SLOT_QDAG, SLOT_QBOW
                 DB SLOT_QFOOD, SLOT_QPOT, SLOT_QSCR, ICON_BAG, SLOT_EMPTY
 bar_wizard:     DB ICON_STAFF, ICON_SPARK, ICON_FIREBOLT, ICON_FROST, ICON_DRAIN
                 DB ICON_LIGHTNING, SLOT_QFOOD, SLOT_QPOT, SLOT_QSCR, ICON_BAG
-                ASSERT bar_wizard - bar_knight == ICON_SLOTS && ICON_COUNT < SLOT_QFOOD && SLOT_QSCR < SLOT_EMPTY
+                ASSERT bar_wizard - bar_knight == ICON_SLOTS && ICON_COUNT < SLOT_QFOOD && SLOT_QBOW < SLOT_EMPTY
+                ASSERT {b bar_knight + SLOT_AMMO0} == SLOT_QDAG && {b bar_knight + SLOT_AMMO0 + 1} == SLOT_QBOW
                 ASSERT {b bar_knight + QS_SLOT0 + QS_POTION} == SLOT_QPOT && {b bar_wizard + QS_SLOT0 + 1 + QS_POTION} == SLOT_QPOT
 
                 ASSERT ICON_LEN == 54 && ICON8_LEN == 9   ; pblit: 9 B per cell, <= 6 cells
