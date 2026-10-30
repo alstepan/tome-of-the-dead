@@ -45,3 +45,16 @@
         INCLUDE "wizard_jump2.asm"
         INCLUDE "wizard_staffraise.asm"
         INCLUDE "wizard_staffswing.asm"
+; --- Skeleton family: 9 frames (Skeleton Archer / Sniper share U_SKARCH + U_SKCLIMB)
+        INCLUDE "skeleton_walk1.asm"
+        INCLUDE "skeleton_walk2.asm"
+        INCLUDE "skeleton_walk3.asm"
+        INCLUDE "skeleton_walk4.asm"
+        INCLUDE "skeleton_cut.asm"
+        INCLUDE "skeleton_hurt.asm"
+        INCLUDE "skeleton_climb1.asm"
+        INCLUDE "skeleton_climb2.asm"
+        INCLUDE "skeleton_raise.asm"
+; --- the shared humanoid climb pair (Orc / Necro / Mummy families; STA|SYM, kind ink)
+        INCLUDE "climb_h1.asm"
+        INCLUDE "climb_h2.asm"
