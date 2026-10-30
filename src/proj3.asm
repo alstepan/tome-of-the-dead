@@ -121,7 +121,19 @@ proj_prep:
                 ASSERT RK_RANGE == 1 && RK_DIE == 2 && RK_BONUS == 3 && RK_BOUNCES == 4 && RK_EFFECT == 5
                 ; --- ab_def row: type, frames, speed, flags, to-hit ---
                 ld   a, (pf_abl)
-                ld   l, a
+                cp   ABL_LIGHTNING + 1         ; STAFF-BONUS: a damaging hero spell: the worn
+                jr   nc, .nsb                  ; Rune / Bone staff adds +1 / +2 to the spell's
+                ld   hl, WORN + WS_WEAPON * IR_STRIDE + IR_TYPE ; flat bonus (after the dice, before
+                ld   a, (hl)                   ; DEF / resist; deal_hit; min 1 there). Direct hit
+                sub  IT_W_RUNE                 ; only (not the Firebolt burst); no state.
+                cp   2                         ; RUNE -> 0, BONE -> 1, else >= 2 (wraps high)
+                jr   nc, .nsb2
+                inc  a
+                ld   hl, pf_bonus
+                add  a, (hl)
+                ld   (hl), a
+.nsb2:          ld   a, (pf_abl)
+.nsb:           ld   l, a
                 add  a, a
                 add  a, a
                 add  a, l
@@ -130,6 +142,7 @@ proj_prep:
                 ld   d, 0
                 ld   hl, ab_def
                 add  hl, de
+                ASSERT IT_W_BONE == IT_W_RUNE + 1 && WS_WEAPON == 0
                 inc  hl                        ; (ABD_DTY: pf_dhc_tab has it)
                 ld   de, pf_desc + FXD_FIDA
                 ld   bc, 4

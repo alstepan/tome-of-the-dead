@@ -20,8 +20,8 @@
 ;   HERO_RES B0 / B1 = per-field max of the gear's (gx_tab), HERO_IMM = OR
 ;   MP_PER = 8 / 6 (class), / 2 with the Mana / Scarab amulet, x 2 with Plate
 ; Charms carry no m (only the weapon is enchanted; wear hits weapon / armour /
-; helm). Rune / Bone staff spell damage (+1 / +2) is NOT applied (no reader
-; yet: the spell row is abil_load's CAST_ROW, bank 3).
+; helm). Rune / Bone staff spell damage (+1 / +2) is not a recalc stat: proj_prep
+; (bank 3) reads the worn weapon's TYPE at cast time.
 ;==============================================================================
 
 FIST_DIE        EQU 2                   ; game.md §8.7: an empty weapon slot = fists 1d2
