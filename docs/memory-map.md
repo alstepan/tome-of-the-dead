@@ -3986,3 +3986,12 @@ starts at `code_end` and moved with the bank-2 growth), never behaviour. Not don
 | Mage before → after | 22,368 | 21,824 | 26,688 → 27,264 | 27,392 → 27,968 | 24,256 | 24,000 → 24,576 | 26,496 → 27,072 | 26,304 → 26,880 |
 
 `POOL_CAP` 33,050: worst level D4 Warrior slack 1,786 → **1,210**; PROTO slack 2,330 (unchanged).
+
+## STAFF-BONUS (fix/staff-spell-bonus): Rune / Bone staff spell damage
+
+No new state and no new address: `proj_prep` (bank 3, `proj3.asm`) reads the worn weapon's TYPE
+(`WORN + WS_WEAPON * IR_STRIDE + IR_TYPE`, low RAM) for `pf_abl` Spark..Lightning and adds
+`type - IT_W_RUNE + 1` (Rune +1, Bone +2) to `pf_bonus` (the cast's copy of RK_BONUS), so it
+reaches deal_hit as part of the pre-resist damage. Direct hit only (not the Firebolt burst).
+`hero_recalc` untouched. Bank 3 free to `AY_RESERVE` 60 -> **37** (-23 B; release, rebased on main
+2026-10-30); bank 2 271 / R6 327 unchanged. Test: `tests/staff.py`.

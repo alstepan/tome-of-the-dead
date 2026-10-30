@@ -20,8 +20,8 @@ unknown potions, stats are fixed by type.
 | WARLORD CLEAVER | Warrior | 1d10+1, atk +1 (unique) | D4 boss (Ogre Warlord) |
 | OAK STAFF | Mage | 1d4 | start |
 | IRON STAFF | Mage | 1d6 | D2+ |
-| RUNE STAFF | Mage | 1d4, spells +1 dmg (*see note 2*) | D4+ |
-| BONE STAFF | Mage | 1d6, spells +2 dmg (unique; *see note 2*) | D4 boss (Ogre Warlord) |
+| RUNE STAFF | Mage | 1d4, spells +1 dmg  | D4+ |
+| BONE STAFF | Mage | 1d6, spells +2 dmg (unique) | D4 boss (Ogre Warlord) |
 
 No weapon worn = fists, 1d2.
 
@@ -173,8 +173,9 @@ Pending (TRAP2, after 3F): every trap stays and re-arms after triggering, as DAR
 1. **FIRE RING** has almost nothing to resist: no monster deals FIRE damage. It only halves
    the Mage's own Firebolt burst at point-blank range and a Firebolt reflected by the Death
    Knight (FIRE X). For a Warrior it does nothing. Needs a decision (BAL1).
-2. **RUNE STAFF / BONE STAFF spell bonus** (+1 / +2) is in the design but not in the code
-   (`items.txt` "not packed", no handler). As built, RUNE STAFF is a worse IRON STAFF.
+2. **RUNE STAFF / BONE STAFF spell bonus** (+1 / +2) is built: it adds to the direct hit of
+   Spark, Firebolt, Frost, Lightning and Drain (all ranks), after the dice and before resistance
+   (min 1). It does not apply to the Firebolt burst, melee, thrown daggers or arrows.
 3. **WEAK** names both the hunger stage and the Mummy curse status (same penalties, different
    cure: food vs CURE/timer).
 4. Dagger/arrow recovery after a throw (§6.3) is designed; game.md §8.11 FLOOR1 says it is
