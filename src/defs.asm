@@ -280,17 +280,17 @@ P_ENTITIES      EQU $B000           ; 16 slots x 32 B = 512 B ($B000..$B1FF)
 P_ENT_STRIDE    EQU 32
 P_MAX_ENT       EQU 16
 FRT_STRIDE      EQU 16
-FRT_MAX         EQU 132             ; 3F-T13bc: 128 -> 132 (FRT page-aligned: FRT_GAP; -20 B low-RAM reserve):
-                                    ; 132 used (ART2 / ART3 / ART4 frames +9, dk_block -1); CORPSE-ASHES:
-                                    ; 129 used, 3 spare (skeleton_collapsed, goblin_dead, dead_humanoid
-                                    ; out; kept at 132 for the animation items); 3F-T2: 160 -> 128; A6: was 160
+FRT_MAX         EQU 144             ; MEM-FT: 132 -> 144, the most the $A700 page holds (FRT_GAP 0; a
+                                    ; 145th fid steps FRT down a page, -256 B bank 2); 129 used, 15 spare.
+                                    ; Each fid also reserves FDESC_STRIDE (5) B of low RAM (main.asm fit).
+                                    ; 3F-T13bc: 128 -> 132; CORPSE-ASHES: 129 used; 3F-T2: 160 -> 128
 FRT             EQU (P_ENTITIES - FRT_MAX * FRT_STRIDE) & $FF00   ; page-aligned (blit_sprite's nibble swap):
-                                    ; 3F-T13bc $A700..$AF3F + FRT_GAP; 3F-T2 $A800..$AFFF; frame runtime
-                                    ; table, 16 B/fid (4 variants x bank,lo,hi + 4 pad);
-                                    ; directly below ENTITIES, the image ends below it
-FRT_GAP         EQU P_ENTITIES - (FRT + FRT_MAX * FRT_STRIDE)   ; 3F-T13bc: free bank-2 RAM
-                                    ; between the FRT and ENTITIES (192 B, $AF40..$AFFF): runtime
-                                    ; only, nothing allocated there yet (docs/memory-map.md)
+                                    ; MEM-FT $A700..$AFFF; frame runtime table, 16 B/fid: 4 variants
+                                    ; x bank,lo,hi (0..11) + the fid's frame_tab entry (FT_IN_ROW..15,
+                                    ; static: boot6_ft unpacks it, nothing rewrites it); directly below
+                                    ; ENTITIES; seq_rows sits directly below it (main.asm)
+FRT_GAP         EQU P_ENTITIES - (FRT + FRT_MAX * FRT_STRIDE)   ; free bank-2 RAM between the FRT and
+                                    ; ENTITIES (MEM-FT: 0; 3F-T13bc 192 held seq_rows, now below FRT)
 BANK2_FREE      EQU $B200           ; A6: vacated old FRT ($B200..$B7FF, 1,536 B):
 BANK2_FREE_END  EQU SLOTREC         ;     free bank-2 runtime RAM (docs/memory-map.md)
 SLOTREC         EQU $B800           ; A7b: per-slot render record, 16 B per slot ($B800..$B8FF,
@@ -746,15 +746,41 @@ KF_BAT          EQU %00010000       ; bat jitter / wander
 KF_OPENER       EQU %01000000       ; B3B-5: opens closed unlocked doors by bumping (game.md §9.1)
 
 ;------------------------------------------------------------------------------
-; Frame table (static, bank 2 image, frame_tab) — FT_STRIDE (4) B/fid.
+; Frame table (static, frame_tab) — MEM-FT: the 4-B entry lives in the fid's
+; FRT row (bytes FT_IN_ROW..FT_IN_ROW+3, the row's spare tail), so
+; frame_tab = FRT + FT_IN_ROW and FT_STRIDE = FRT_STRIDE (16). Not in the
+; bank-2 image: boot6_ft unpacks ftz_zx0 (124 B, end of the image) (contiguous 4 B/fid) and spreads
+; it into the rows at boot; frt_none / gen_frame write bytes 0..11 only.
+; A6: only what the per-tick renderer reads (blit, footprint, frame offsets);
+; the generator-only part is the bank-5 descriptor (FD_*).
 ;------------------------------------------------------------------------------
-; A6: only what the per-tick renderer reads (blit, footprint, frame offsets)
-; stays in bank 2; the generator-only part is the bank-5 descriptor (FD_*).
 FT_COLS         EQU 0               ; data byte-columns (W/8)
 FT_H            EQU 1               ; rows (px)
 FT_OFFR         EQU 2               ; signed: frame_px = body_px + off (right)
 FT_OFFL         EQU 3               ; signed: (left-facing)
-FT_STRIDE       EQU 4
+FT_LEN          EQU 4               ; bytes per entry (the packed stream: contiguous)
+FT_IN_ROW       EQU 4 * 3           ; after the 4 variants (bank, lo, hi)
+FT_STRIDE       EQU FRT_STRIDE
+frame_tab       EQU FRT + FT_IN_ROW
+                ASSERT FT_IN_ROW + FT_LEN == FRT_STRIDE
+
+; FT_HL_A — HL = frame_tab + A * FT_STRIDE + ofs (A = fid). FRT page-aligned:
+; fid*16 by nibble swap, 60 T / 16 B, keeps DE / BC (4 x add hl,hl: 76 T).
+; Clobbers: A, HL.
+    MACRO FT_HL_A ofs
+                rrca
+                rrca
+                rrca
+                rrca
+                ld   l, a
+                and  $0F
+                add  a, FRT >> 8
+                ld   h, a
+                ld   a, l
+                and  $F0
+                or   FT_IN_ROW + (ofs)
+                ld   l, a
+    ENDM
 
 ;------------------------------------------------------------------------------
 ; Frame descriptor (A6; bank 5 low RAM, fdesc_tab at the end of the cold block,
@@ -891,8 +917,9 @@ ATTR_GRATE      EQU $46             ; lair gate, raised (B12 variant B; tiles_co
 ; The list is INCLUDEd twice (A6):
 ;   FRM_EMIT = FRM_DESC  lowram.asm fdesc_tab (bank 5): the generator's 5-B
 ;                        descriptor FD_BLK, FD_FRM, FD_FLAGS (defs.asm FD_*)
-;   FRM_EMIT = FRM_HOT   data.asm frame_tab (bank 2): the renderer's 4-B entry
-;                        FT_COLS, FT_H, FT_OFFR, FT_OFFL; defines FID_<name> and
+;   FRM_EMIT = FRM_HOT   data.asm: the FRT row image (MEM-FT: 12 x FRT_NONE + the
+;                        renderer's 4-B frame_tab entry FT_COLS, FT_H, FT_OFFR,
+;                        FT_OFFL; assembled at FRT, not on tape); defines FID_<name> and
 ;                        accumulates POOLACC = bytes this frame costs in the
 ;                        pre-shift pool (both facings; MOTION = shifts 0+4,
 ;                        STATIONARY = the one shift its anchor implies; SYM =
@@ -928,6 +955,7 @@ FCTR = FCTR + 1
         ; bottom-anchored frames must fit the body rows and be whole cells
         ; (fpy = py + bh*8 - H stays inside the body, row fix-up every 8 lines)
         ASSERT (nm_h <= BH_kind * 8) && ((nm_h & 7) == 0)
+        DS   FT_IN_ROW, FRT_NONE                ; MEM-FT: the FRT row's variants (none yet)
         DB   nm_cols, nm_h, low(0 - nm_ax), low(0 - (nm_w - nm_ax - bwpx))
         IF (flg) & FF_MOTION
           IF (flg) & FF_SYM

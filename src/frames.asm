@@ -1,7 +1,8 @@
 ;==============================================================================
 ; frames.asm — THE frame list (fid order). INCLUDEd twice (see FRM, defs.asm):
 ; lowram.asm (FRM_EMIT = FRM_DESC -> fdesc_tab, bank 5) and data.asm
-; (FRM_EMIT = FRM_HOT -> frame_tab, bank 2; FID_*, KFID_*/KFCNT_*, POOL_*).
+; (FRM_EMIT = FRM_HOT -> the FRT row image incl. frame_tab, MEM-FT; FID_*,
+; KFID_*/KFCNT_*, POOL_*).
 ; Kinds are contiguous so a kind's frames are [KT_FID0, KT_FID0 + KT_FCNT).
 ; Heroes are listed first; monsters after. tools/zx0_sources.py packs the
 ; frames named here, in this order (= gen_kind order).

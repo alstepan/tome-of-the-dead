@@ -875,14 +875,11 @@ blit_sprite:
                 inc  l
                 ld   d, (hl)                   ; DE = pre-shifted frame
                 push de
-                call page_bank                 ; (A, BC)
-                ld   a, (BL_FID)
+                call page_bank                 ; (A, BC; keeps HL)
+                ld   a, l                      ; MEM-FT: frame_tab is the same FRT row's
+                and  $F0                       ; tail: HL = row + FT_IN_ROW (22 T; was
+                or   FT_IN_ROW + FT_COLS       ; fid*4 + frame_tab, 67 T)
                 ld   l, a
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl                    ; fid*FT_STRIDE (4; ASSERTed at ft_ptr)
-                ld   de, frame_tab + FT_COLS
-                add  hl, de
                 ld   c, (hl)                   ; C = data cols
                 inc  hl
                 ld   b, (hl)                   ; B = rows (H)
@@ -1017,15 +1014,5 @@ blit_chain_al_end:
 blit_al_jp:     jp   blit_chain_al             ; SMC: entry for this width
                 ASSERT (blit_chain_al_end - blit_chain_al) == BLIT_BLOCK * BLIT_MAXW
 
-; ft_ptr — HL = frame_tab + A*FT_STRIDE (4).  Clobbers: A, DE, HL
-                ASSERT FT_STRIDE == 4          ; blit_sprite / ft_ptr: 2 x add hl,hl
                 ASSERT FT_H == FT_COLS + 1     ; blit_sprite: inc hl
                 ASSERT FT_OFFR == FT_H + 1 && FT_OFFL == FT_OFFR + 1 ; render .vis: inc hl chain
-ft_ptr:
-                ld   l, a
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl
-                ld   de, frame_tab
-                add  hl, de
-                ret

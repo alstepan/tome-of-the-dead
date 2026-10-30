@@ -2262,7 +2262,7 @@ sq_fill:
 ; PLAYING/TRANSITION bumps GEN_TRAP (saturating; tests assert 0). The block
 ; cache (GEN_ZBLK) is valid for one generator session only: alloc_reset /
 ; alloc_restore drop it (every caller starts with one of them).
-; Static data: frame_tab (bank 2: cols, H, offsets) + fdesc_tab (bank 5:
+; Static data: frame_tab (MEM-FT: the FRT row tail, bank 2: cols, H, offsets) + fdesc_tab (bank 5:
 ; block, frame address, flags) — no banked descriptor read, no copy_virt.
 ; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
@@ -2288,7 +2288,7 @@ gen_frame:
                 djnz .clr
                 ; read the static entries
                 ld   a, (GEN_FID)
-                call ft_ptr                    ; HL = frame_tab + fid*4 (FT_COLS)
+                call ft_ptr                    ; HL = frame_tab + fid*16 (FT_COLS; frt2.asm)
                 ld   a, (hl)
                 ld   (GEN_COLS), a
                 inc  hl                        ; FT_H
@@ -2709,53 +2709,8 @@ page_run:
                 jp   far1                      ; resync_tick; L = 1 a verb spent the turn
 
 
-; frt_ptr — HL = FRT + A*16 ; frt_ptr_cur uses GEN_FID.  Clobbers: A, DE, HL
-;------------------------------------------------------------------------------
-; sel_frt_copy — CF = 0: save the two select idles' FRT rows (boot pool,
-; below the alloc mark) to SEL_FRT_SAVE; CF = 1: restore them. start_game's
-; gen_kind regenerates the chosen hero's frames ABOVE the mark and re-points
-; their FRT rows (incl. its select idle) there; the next hero's gen_kind then
-; overwrites that pool region, so without the restore the select screen drew
-; whatever the last game left there.  ~1.2k T.  Clobbers: A, BC, DE, HL, TMP0
-;------------------------------------------------------------------------------
-sel_frt_copy:
-                sbc  a, a                      ; A = $FF restore / 0 save
-                ld   (TMP0), a
-                ld   hl, sel_tab
-                ld   de, SEL_FRT_SAVE
-                ld   b, 2
-.l:             push bc
-                push hl
-                push de
-                ld   a, (hl)                   ; fid
-                call frt_ptr                   ; HL = FRT row (DE clobbered)
-                pop  de                        ; DE = save cursor
-                ld   a, (TMP0)
-                or   a
-                jr   z, .cp
-                ex   de, hl                    ; restore: save -> FRT
-.cp:            ld   bc, FRT_STRIDE
-                ldir                           ; keeps Z
-                jr   z, .nx
-                ex   de, hl                    ; DE = save cursor again
-.nx:            pop  hl
-                inc  hl                        ; sel_tab: 1 B per hero
-                pop  bc
-                djnz .l
-                ret
-
-frt_ptr_cur:
-                ld   a, (GEN_FID)
-frt_ptr:
-                ld   l, a
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                ld   de, FRT
-                add  hl, de
-                ret
+; (MEM-FT: sel_frt_copy / frt_ptr / frt_ptr_cur moved to bank 2, frt2.asm:
+; low RAM for the FRT_MAX descriptor reserve.)
 
 ;==============================================================================
 ; fdesc_tab — frame descriptors (A6), FDESC_STRIDE (5) B per fid, read only

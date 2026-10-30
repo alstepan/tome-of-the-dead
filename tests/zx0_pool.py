@@ -522,7 +522,9 @@ class Ref:
 
     def frt_none(self, f0, n):
         st = self.S["FRT_STRIDE"]
-        self.frt[f0 * st:(f0 + n) * st] = bytes([self.S["FRT_NONE"]]) * (n * st)
+        k = self.S.get("FT_IN_ROW", st)                # MEM-FT: the row tail is frame_tab (kept)
+        for f in range(f0, f0 + n):
+            self.frt[f * st:f * st + k] = bytes([self.S["FRT_NONE"]]) * k
 
     def begin(self, hero):
         """R6 pl_begin (3F-T2), every pool_hero / pool_list session: monster

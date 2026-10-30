@@ -357,12 +357,8 @@ fx_set:
                 ld   a, d
                 and  $7F
 .at:            ld   (ix+FX_ATTR), a
-                ld   l, e
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl
-                ld   bc, frame_tab + FT_COLS
-                add  hl, bc
+                ld   a, e
+                FT_HL_A FT_COLS                ; MEM-FT: frame_tab in the FRT row
                 ld   c, (hl)                   ; C = cols
                 inc  hl
                 ld   a, (hl)                   ; H px -> rows

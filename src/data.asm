@@ -24,14 +24,22 @@ dst EQU fb
 
 
 ;==============================================================================
-; FRAME TABLE (bank 2, FT_STRIDE = 4 B/fid: FT_COLS, FT_H, FT_OFFR, FT_OFFL —
-; what the per-tick renderer reads). The list itself is src/frames.asm; its
+; FRAME TABLE — MEM-FT: the list (src/frames.asm) is assembled HERE in source
+; order (it defines FID_* / KFID_* / POOL_* for everything after), but ORGed at
+; FRT: the FRT row image of every fid (12 x FRT_NONE + the 4-B frame_tab entry
+; FT_COLS, FT_H, FT_OFFR, FT_OFFL), runtime RAM above the image — not on tape,
+; only in the .sna. The build packs its frame_tab bytes (main.asm ovl_raw_ft ->
+; bank-2 ftz_zx0); boot6_ft rebuilds exactly these rows at boot. main.asm's LEVEL
+; POOL NEED reads the entries here ({b frame_tab + fid * FT_STRIDE}). Its
 ; generator half (source block / offset / flags) is fdesc_tab in lowram.asm.
 ;==============================================================================
-frame_tab:
+FT_RESUME = $
+                ORG  FRT
+frt_image:
 FRM_EMIT = FRM_HOT
                 INCLUDE "frames.asm"
-                ASSERT $ - frame_tab == FID_COUNT * FT_STRIDE
+                ASSERT $ - frt_image == FID_COUNT * FRT_STRIDE
+                ORG  FT_RESUME
 
                 ; Pool budget (prototype §5.2 / R-2): monsters + the largest
                 ; hero + the 2 select-screen idles + worst per-bank straddle
