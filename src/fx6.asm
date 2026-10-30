@@ -157,7 +157,7 @@ fx_remove:
                 ld   e, S_FX_REMOVE
                 ; fall through
 ; fx_done — A = type, E = the S_FX_* stem: the line, hero_recalc, the panel's
-; worn cell of that type's slot (IC1 worn_cell, ~2.6k T, marked for present), 1 turn.
+; worn cell of that type's slot (IC1 worn_cell, ~3.5-5k T, marked for present), 1 turn.
 fx_done:        push af
                 call fx_line                   ; "<stem><name>", queued
                 call hero_recalc
