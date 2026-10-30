@@ -37,7 +37,7 @@ ZX0_PACKED_TOTAL_FALLBACK = 8908
 
 def meta(name):
     out = {}
-    for line in open(os.path.join(SPR, name + ".asm")):
+    for line in open(zp.sprite_asm(name)):
         m = re.match(rf"^{name}_(w|h|cols|ax)\s+EQU\s+(-?\d+)", line)
         if m:
             out[m.group(1)] = int(m.group(2))

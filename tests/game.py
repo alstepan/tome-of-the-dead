@@ -675,14 +675,16 @@ def main():
                 r = runs([d for d in want_f if d in (j1, j2)])
                 h.expect(f"66 {tag}: jump ran, x {'-' if left else '+'}6",
                          (ok, p.ent(0)["X"]), (True, x0 - 6 if left else x0 + 6))
-                # JUMP-ALT: the pose alternates by px parity (JUMP2 = WK4 at px % 8 = 4 only)
-                h.expect(f"66 {tag}: jump ran, arc alternates JUMP1/JUMP2 x6 then JUMP1",
-                         [(f, n) for f, n in r], [(j1, 1)] + [(j2, 1), (j1, 1)] * 5 + [(j2, 1), (j1, 2)])
-                h.expect(f"66 {tag}: drawn JUMP2 x6 (odd ticks), landing JUMP1",
+                # ANIM-IMPORT2 J-a: JUMP1 crouch at take-off / landing, JUMP2 every airborne tick
+                h.expect(f"66 {tag}: arc frames JUMP1 -> JUMP2 x12 -> JUMP1",
+                         [(f, n if f == j2 else 1) for f, n in r], [(j1, 1), (j2, 12), (j1, 1)])
+                h.expect(f"66 {tag}: drawn JUMP2 x12, then the landing JUMP1",
                          ([n for f, n in runs([d for d, _, _ in smp if d in (j1, j2)]) if f == j2],
-                          p.ent(0)["DFID"], bool(p.ent(0)["FLAGS"] & EF_LEFT)), ([1] * 6, j1, left))
-                h.expect(f"66 {tag}: JUMP1 only at px % 8 = 0, JUMP2 only at px % 8 = 4",
-                         [(d, px) for d, px, _ in smp if (d == j1 and px % 8) or (d == j2 and px % 8 != 4)][:2], [])
+                          p.ent(0)["DFID"], bool(p.ent(0)["FLAGS"] & EF_LEFT)), ([12], j1, left))
+                h.expect(f"66 {tag}: JUMP2 drawn at shift 4 and 0 (MOT frame), JUMP1 only aligned",
+                         (any(d == j2 and px % 8 == 4 for d, px, _ in smp),
+                          any(d == j2 and px % 8 == 0 for d, px, _ in smp),
+                          [(d, px) for d, px, _ in smp if d == j1 and px % 8][:2]), (True, True, []))
                 # ax = ax_L = 0 (24-px frames): the frame box is the body box
                 # in both facings, so the drawn column == px // 8 every tick
                 h.expect(f"66 {tag}: frame box == body box (no jump of the body)",

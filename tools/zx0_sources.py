@@ -99,7 +99,7 @@ def frm_order():
 def meta(name):
     """nm_w/h/cols/ax/ay EQU values (verbatim expressions) from <name>.asm."""
     out = {}
-    for line in open(os.path.join(SPR, name + ".asm")):
+    for line in open(zp.sprite_asm(name)):
         m = re.match(rf"^{name}_(w|h|cols|ax|ay)\s+EQU\s+([^;]+)", line)
         if m:
             out[m.group(1)] = m.group(2).strip()

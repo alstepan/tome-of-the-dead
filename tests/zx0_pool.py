@@ -87,11 +87,13 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # CORPSE-ASHES: skeleton_collapsed / goblin_dead / dead_humanoid -> the shared small_corpse (U_DEADR):
 # W D1..D8 -320 -320 -384 -320 -512 -192 -192 -384 (Mage the same).
 # JUMP-ALT (user 2026-10-29): knight_jump2 / wizard_jump2 MOT -> WK4, the jump pose picked by px parity: every need -576.
+# ANIM-IMPORT2 (1) heroes at 40 px (J-a: jump2 MOT again, +480 at 40 rows) + the select idles at 40
+# rows (POOL_FIXED -192): Warrior -1,920 - 192 = -2,112, Mage -1,120 - 192 = -1,312 every level.
 LEVEL_NEED = {
-    (0, 1): 26304, (0, 2): 25760, (0, 3): 31264, (0, 4): 31840,
-    (0, 5): 28128, (0, 6): 28576, (0, 7): 31072, (0, 8): 30880,
-    (1, 1): 22368, (1, 2): 21824, (1, 3): 27264, (1, 4): 27968,
-    (1, 5): 24256, (1, 6): 24576, (1, 7): 27072, (1, 8): 26880,
+    (0, 1): 24192, (0, 2): 23648, (0, 3): 29152, (0, 4): 29728,
+    (0, 5): 26016, (0, 6): 26464, (0, 7): 28960, (0, 8): 28768,
+    (1, 1): 21056, (1, 2): 20512, (1, 3): 25952, (1, 4): 26656,
+    (1, 5): 22944, (1, 6): 23264, (1, 7): 25760, (1, 8): 25568,
 }
 
 

@@ -7,7 +7,10 @@ MSB=left, mask 1 = transparent. The trailing ATTR_SPRITE byte of the .asm
 budget's "source = W/8 x H x 2" excludes it.
 
 Sets:
-  game    assets/gfx/sprites/*.asm  (DEFB rows parsed back to bytes, in file order)
+  game    assets/gfx/sprites/*.asm  (DEFB rows parsed back to bytes, in file order);
+          ANIM-IMPORT2: a name listed in assets/gfx/sprites40/index40.asm is read
+          from assets/gfx/sprites40/<name>.asm instead (the 40-px set; the 48-px
+          files stay in assets/gfx/sprites/, tag archive/48px-sprites)
   concept assets/gfx/concept/grid/sprites/*.grid (packed via gfx_convert native layout)
 
 Outputs (build/zx0/<set>/): <frame>.bin (raw), <frame>.zx0, <kind>.kblock.{bin,zx0}
@@ -53,6 +56,25 @@ def parse_defb(code: str, where: str) -> bytes:
     return bytes(int(t[1:], 16) for t in items)
 
 
+SPR = os.path.join(REPO, "assets/gfx/sprites")
+SPR40 = os.path.join(REPO, "assets/gfx/sprites40")
+INDEX40 = os.path.join(SPR40, "index40.asm")
+
+
+def sprites40_names():
+    """Names the build takes from assets/gfx/sprites40/ (index40.asm INCLUDE order)."""
+    if not os.path.exists(INDEX40):
+        return []
+    return re.findall(r'^\s*INCLUDE\s+"(\w+)\.asm"', open(INDEX40).read(), re.M)
+
+
+def sprite_asm(name):
+    """Path of the .asm the build uses for frame `name` (the 40-px override first)."""
+    if name in sprites40_names():
+        return os.path.join(SPR40, name + ".asm")
+    return os.path.join(SPR, name + ".asm")
+
+
 def index_names(d=None):
     """Frame/tile file names INCLUDEd by assets/gfx/sprites/index.asm, in include order,
     with the nested `index_3f.asm` (tools/gen_3f_art.py owns it) expanded in place."""
@@ -74,7 +96,7 @@ def game_frames():
     names = index_names(d)
     out = []
     for n in names:
-        path = os.path.join(d, n + ".asm")
+        path = sprite_asm(n)
         buf, on, done = bytearray(), False, False
         for ln, line in enumerate(open(path), 1):
             code = line.split(";")[0].strip()

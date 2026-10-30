@@ -3461,6 +3461,13 @@ alone is not acceptable for these kinds):** real HURT poses (the flash still pla
 Spider = its BITE pose (0 B), Skeleton Archer (+ Sniper) = `skeleton_hurt` (in the Archer's
 unit). The HURT pose also opens the kind's DEATH sequence (as the original kinds). Walks:
 Necromancer (+ Bone Caller / Archmage) B4 `W2, W4, W3, W1` (ART3 `necro_walk4`).
+**ANIM-IMPORT2 (user 2026-10-30 "40 PX APPROVED" / "ART11 DECISIONS" / "ART12 PICKS"):** the
+Warrior, Mage, Skeleton family (+ Archer / Sniper), Orc (V4 Ironhide), Mummy (V2 tomb guard),
+Necromancer (V2 bone caster; Archmage / Bone Caller share it in their inks), Vampire (own set) and the
+shared humanoid climb pair are drawn **40 px tall** on the unchanged 48-px (6-cell) body: bottom-anchored,
+8 px blank at the body top; hit boxes, ladders, doors and the jump swept box are unchanged. Ogre and Death
+Knight stay 48 px, the Goblin 32; hero DEAD frames unchanged. Jump = **J-a**: JUMP1 crouch at take-off and
+landing, one JUMP2 leap pose on every airborne tick (§2.4 arc table unchanged). Mage HURT = the V3 stagger.
 
 **R5 Cut order if memory still runs out** (cheapest player loss per byte first; E = estimate):
 1. Idle wave + `idle_turns`: **stays unbuilt** (0 B, saves ≈ 60 B vs building it). `IDLE_WAVE`

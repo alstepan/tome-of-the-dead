@@ -61,7 +61,10 @@ POOL_HERO_MAX = POOL_WIZARD + POOL_FXM
                 ; the same dedup as pool_list. POOL_NEED (= POOL_FIXED +
                 ; POOL_HERO_MAX + POOL_LVL_MAX), its checks and the DISPLAY are
                 ; defined there (DEFL, final pass only: use nothing above it).
-POOL_FIXED      EQU 2 * 576 + 3 * 576                    ; select idles + straddle waste
+                ; ANIM-IMPORT2: the select idles are 40 rows (24 x 40 STA, both facings = 480 B
+                ; each, was 576); the straddle allowance stays 6 cols x 48 x 2 (Ogre / DK are 48)
+                ASSERT knight_idle1_cols == 3 && knight_idle1_ax == 0 && wizard_idle_cols == 3 && wizard_idle_ax == 0
+POOL_FIXED      EQU (knight_idle1_h + wizard_idle_h) * 2 * 3 * 2 + 3 * 576   ; select idles + straddle waste
                 ; the PROTO rooms (test fixture, proto_start = 1): every original
                 ; monster kind (start_game .gk, K_SKELETON .. K_PROTO_END - 1)
 K_PROTO_END     EQU K_SLIME + 1
@@ -96,11 +99,11 @@ POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN - SRC6_LEN  
                 ROLE WZ_DEAD,   FID_wizard_dead,   WZ_REST
                 ROLE WZ_JUMP1,  FID_wizard_jump1,  WZ_REST
                 ROLE WZ_JUMP2,  FID_wizard_jump2,  FID_wizard_walk1
-                ; PHASE_SHIFT: never the walk1 stand-in (a WK4 walk frame belongs to its cycle);
-                ; JUMP-ALT (user 2026-10-29): JUMP2 is WK4 (drawn only at px & 4 = 4; anim
-                ; .jump picks JUMP1 / JUMP2 from the new px bit 2): a real frame, not MOT.
-                ASSERT !PHASE_SHIFT || ((FID_knight_jump2 >= 0) && !(FFL_knight_jump2 & FF_MOTION))
-                ASSERT !PHASE_SHIFT || ((FID_wizard_jump2 >= 0) && !(FFL_wizard_jump2 & FF_MOTION))
+                ; PHASE_SHIFT: JUMP2 is drawn mid-tween at both px parities (ANIM-IMPORT2
+                ; J-a: every airborne tick), so it must be a real MOT frame, never the
+                ; (one-shift WK4) WALK1 stand-in
+                ASSERT !PHASE_SHIFT || ((FID_knight_jump2 >= 0) && (FFL_knight_jump2 & FF_MOTION))
+                ASSERT !PHASE_SHIFT || ((FID_wizard_jump2 >= 0) && (FFL_wizard_jump2 & FF_MOTION))
                 ROLE WZ_SRAISE, FID_wizard_staffraise, FID_wizard_cast1
                 ROLE WZ_SSWING, FID_wizard_staffswing, FID_wizard_cast2
 
