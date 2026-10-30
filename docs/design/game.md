@@ -3461,6 +3461,11 @@ alone is not acceptable for these kinds):** real HURT poses (the flash still pla
 Spider = its BITE pose (0 B), Skeleton Archer (+ Sniper) = `skeleton_hurt` (in the Archer's
 unit). The HURT pose also opens the kind's DEATH sequence (as the original kinds). Walks:
 Necromancer (+ Bone Caller / Archmage) B4 `W2, W4, W3, W1` (ART3 `necro_walk4`).
+**ANIM-X12 (user 2026-10-30, X1 / X2):** the Orc and the Vampire walk four distinct poses, W2 W1 W3 W4
+(`MOVECYC4`; W1 = the rest pose, W4 = the far-leg passing pose, WK0 in the odd slot), both planted feet
+step exactly 4 px per tick with equal strides (the old cycle showed W1 twice: a limp / sliding far foot).
++1 frame id each (`orc_walk4`, `vamp_walk4`; 138 of 144), +480 B pool on the Orc / Vampire levels.
+
 **ANIM-IMPORT2 (user 2026-10-30 "40 PX APPROVED" / "ART11 DECISIONS" / "ART12 PICKS"):** the
 Warrior, Mage, Skeleton family (+ Archer / Sniper), Orc (V4 Ironhide), Mummy (V2 tomb guard),
 Necromancer (V2 bone caster; Archmage / Bone Caller share it in their inks), Vampire (own set) and the

@@ -1,11 +1,11 @@
-# WazHack/ZX gfx text grid — ART11 40 px (tools/gen_art11_40px.py); regenerate, never hand-edit.
+# WazHack/ZX gfx text grid — ANIM-X12 X1: Orc 4-pose walk W2 W1 W3 W4 (user 2026-10-30); from assets/gfx/sprites40/extra/grid/orc_x1_w2.grid; imported by tools/import_anim40.py (ANIM-IMPORT2)
 # name: orc_walk2
 # size: 24x40
 # character: ORC
-# caption: WALK2 40
+# caption: W2 40 (proposal)
 # ink: #00D700
 # anchor: 0 0
-# note: ART11 Orc V4 40 px (ART10 re-draw, ART9 stride bob removed); drop [6, 10, 15, 20, 23, 38, 40, 42]
+# note: ART11 extra-frame proposal (tools/gen_art11_extra.py)
 # legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
 #
 ........................
@@ -40,11 +40,11 @@
 ..+##############+++++..
 ..++#####+++####+#+#++..
 ...+++####+####+#####++.
-...++#####+###+#######+.
-...+######+####+#####++.
-...+#####++++#+#######+.
-...+#####+..++++#####++.
-...+#####++...+#+#+#++..
-...++#####++..+##+#+#+..
-....+######+..+######+..
-....+######+..+######+..
+....++####+###+#######+.
+....+#####+####+#####++.
+....+#####+++#+#######+.
+....+######+++++#####++.
+....++#####++.+#+#+#++..
+.....+######+++##+#+#+..
+.....++######++######+..
+......+######++######+..

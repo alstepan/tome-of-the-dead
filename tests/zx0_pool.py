@@ -95,11 +95,13 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # (the Vampire still draws the Necro walk): both heroes D1..D8 0 0 -448 +640 -576 +64 +64 -576.
 # ANIM-IMPORT2 (4) the Vampire's own 40-px set (5 frames, unit K_VAMPIRE; was the Necro walk + U_VBITE):
 # both heroes D1..D8 0 0 -128 0 0 +2112 0 +2112 (POOL_CAP 33,050 -> 32,538: SRC6 13 -> 15 pages).
+# ANIM-X12 X1 + X2 (Orc / Vampire 4th walk pose, +1 fid each = +480 B pool on every level that has the
+# kind): both heroes D1..D8 0 0 +480 +480 0 +960 +480 +480; SRC6 15 -> 16 pages (POOL_CAP 32,538 -> 32,269).
 LEVEL_NEED = {
-    (0, 1): 24192, (0, 2): 23648, (0, 3): 27712, (0, 4): 29504,
-    (0, 5): 24480, (0, 6): 28544, (0, 7): 28928, (0, 8): 29344,
-    (1, 1): 21056, (1, 2): 20512, (1, 3): 24512, (1, 4): 26432,
-    (1, 5): 21408, (1, 6): 25344, (1, 7): 25728, (1, 8): 26144,
+    (0, 1): 24192, (0, 2): 23648, (0, 3): 28192, (0, 4): 29984,
+    (0, 5): 24480, (0, 6): 29504, (0, 7): 29408, (0, 8): 29824,
+    (1, 1): 21056, (1, 2): 20512, (1, 3): 24992, (1, 4): 26912,
+    (1, 5): 21408, (1, 6): 26304, (1, 7): 26208, (1, 8): 26624,
 }
 
 

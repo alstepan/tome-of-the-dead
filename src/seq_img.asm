@@ -169,7 +169,7 @@ ksm_sp_e:
 ksm_or:         KSMH ksm_or_e - ksm_or_s, 3, or_idle, or_move, or_climb, or_climb + 1, or_attack, or_hurt, or_hurt, or_death, ksm_or_s
 ksm_or_s:
 or_idle:        DB 1, FID_orc_walk1, 1, SEQ_END
-or_move:        MOVECYC4 orc_walk2, orc_walk1, orc_walk3, orc_walk1   ; ANIM-IMPORT2: B3 (Orc V4)
+or_move:        MOVECYC4 orc_walk2, orc_walk1, orc_walk3, orc_walk4   ; ANIM-X12 X1: 4 distinct poses (was walk1 twice)
 or_climb:       CLIMBCYC FID_climb_h1, FID_climb_h2, FID_orc_walk1, FID_orc_walk1, FID_orc_walk1, FID_orc_walk1
 or_attack:      DB FID_orc_raise, 3, 0, FID_orc_attack, 2, SF_IMPACT, SEQ_END
 or_hurt:        DB FID_orc_hurt, 3, 0, SEQ_END           ; ANIM-IMPORT2: its own HURT pose (Orc V4)
@@ -190,7 +190,7 @@ ksm_ne_e:
 ksm_vp:         KSMH ksm_vp_e - ksm_vp_s, 3, vp_idle, vp_move, vp_idle, vp_hurt, vp_attack, vp_hurt, vp_hurt, vp_death, ksm_vp_s
 ksm_vp_s:
 vp_idle:        DB 1, FID_vamp_walk1, 1, SEQ_END
-vp_move:        MOVECYC4 vamp_walk2, vamp_walk1, vamp_walk3, vamp_walk1   ; B3 (ART9)
+vp_move:        MOVECYC4 vamp_walk2, vamp_walk1, vamp_walk3, vamp_walk4   ; ANIM-X12 X2: 4 distinct poses
 vp_attack:      DB FID_vamp_walk1, 3, 0, FID_vamp_bite, 2, SF_IMPACT, SEQ_END
 vp_hurt:        DB FID_vamp_hurt, 3, 0, SEQ_END          ; its own HURT pose (ART9)
 vp_death:       DEATHSEQ FID_vamp_hurt, FID_small_corpse, FID_small_corpse, FID_vamp_walk1

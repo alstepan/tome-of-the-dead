@@ -74,7 +74,7 @@ def sprite_asm(name):
         return os.path.join(SPR40, name + ".asm")
     path = os.path.join(SPR, name + ".asm")
     if not os.path.exists(path) and os.path.exists(os.path.join(SPR40, name + ".asm")):
-        # orc_walk3 / orc_hurt / vamp_* exist only at 40 px: index40.asm is not an on/off switch
+        # orc_walk3/4 / orc_hurt / vamp_* (incl. vamp_walk4) exist only at 40 px: index40.asm is not an on/off switch
         raise SystemExit(f"zx0_pack: {name} has no 48-px source; it must stay listed in "
                          "assets/gfx/sprites40/index40.asm (the way back to the 48-px set is the "
                          "tag archive/48px-sprites: docs/conventions.md 'Sprite sources')")

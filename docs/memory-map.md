@@ -237,6 +237,20 @@ ASSERT) and must keep `LOW R6_ADDR` = 0.
 
 ### SRC6 region (SRC6 spike 2026-10-27; 3F memory plan, `feat/src6-spike`)
 
+**ANIM-X12 (2026-10-30, X1 Orc + X2 Vampire 4th walk pose):** `SRC6_PAGES` default **16**
+(`$C800..$D7FF`, 4,096 B): `orc_walk4` / `vamp_walk4` (new WK0 frames; walk2 / walk3 redrawn) grow the
+K_ORC / K_VAMPIRE blocks +75 B: 14 blocks, 9,888 raw -> **3,876 B packed, 220 free** (15 pages overflowed
+by 36 B; reordering FRM rows saves only ~18 B in all, so a page it is). `POOL_CAP` 32,538 -> **32,269**;
+R6 untouched (free 229 release). `FID_COUNT` 136 -> **138** of 144. Both walks `MOVECYC4 walk2, walk1,
+walk3, walk4` (even slots WK4, odd WK0). Pool need +480 B on every level with the kind: Orc D4 D6 D7,
+Vampire D3 D6 D8. Slack per level after (`POOL_CAP` 32,269), Warrior / Mage:
+D1 8,077 / 11,213, D2 8,621 / 11,757, D3 4,077 / 7,277, **D4 2,285 / 5,357**, D5 7,789 / 10,861,
+D6 2,765 / 5,965, D7 2,861 / 6,061, D8 2,445 / 5,645 (before, 15 pages: worst D4 3,034 / 6,106).
+**Pending (T11): the nun Archmage** (~393 B packed, 2,080 B pool on D8, 4 ids) will need roughly one more
+SRC6 page (-256 B pool every level): D8 Warrior slack then ~2,445 - 2,080 - 256 = **~109 B** (D8 becomes
+the worst level; Mage ~3,309). `tests/walk_feet.py`: the Vampire XFAIL is gone; `vp_move` measures its
+sloped boots over the bottom 3 rows (others: bottom row).
+
 **ANIM-IMPORT2 (2026-10-30):** `SRC6_PAGES` default **15** (`$C900..$D7FF`, 3,840 B): + `K_VAMPIRE` (the
 Vampire's own 40-px set, 2 blocks 675 B), 14 blocks, 9,408 raw → **3,801 B packed, 39 free**; boot block
 `$C141..$C8FF`. 13 → 15 pages = −512 B `POOL_CAP` (33,050 → 32,538); R6 is not touched. The `zx0_pool`
