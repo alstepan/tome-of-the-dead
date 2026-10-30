@@ -289,6 +289,11 @@ def run(p, check):
     # ---- C: cover (the hero teleported onto the falling drop) ------------------
     hero = p.ent(0)
     kw, kh = game.body(p, K_KNIGHT)
+    # ART11 (a428fa0): the 40 px Warrior draws kh - 1 rows, bottom-aligned in its body
+    # box (the top body row is blank), so the drop cell must be tested against the DRAWN
+    # box (DROWS), not the body box
+    dr = hero["DROWS"]
+    hd = kh - dr
     res = None
     for _ in range(600):
         p.tick()
@@ -297,7 +302,7 @@ def run(p, check):
             c, r = d["col"], d["row"]
             s_ = r // 9
             ytop = 9 * s_ + 8 - kh
-            if r >= ytop and c + kw <= 31:
+            if r >= ytop + hd and c + kw <= 31:
                 x = max(1, c - kw // 2)
                 p.set_ent(0, X=x, Y=ytop, PX=x * 8, PY=ytop * 8, MODE=0)
                 p.tick()
@@ -335,10 +340,10 @@ def run(p, check):
             ok_land = "armed"
             src_col, top = c, ytop
         elif ok_land == "armed" and d["st"] == S["DRS_IDLE"]:
-            ok_land = bool(rows) and max(r for _, r in rows) == top - 1
+            ok_land = bool(rows) and max(r for _, r in rows) == top + hd - 1
             break
-    check("C a drop falling onto the hero's column lands at his head row - 1, never inside him",
-          ok_land is True, (ok_land, rows[-4:], top))
+    check("C a drop falling onto the hero's column lands at his (drawn) head row - 1, never inside him",
+          ok_land is True, (ok_land, rows[-4:], top + hd))
     # ---- H: drip_hide ----------------------------------------------------------
     p.until(lambda: drip(p)["drawn"], 600)
     d = drip(p)

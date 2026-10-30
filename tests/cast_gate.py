@@ -27,8 +27,9 @@ anim state.
       the HURT and its flash are over
   T6  Lightning r3 at a Rat 22 cells away: pf_ftick > ACT_FIRE_TICK + CNB_MAX,
       the gate is capped there (§6.5.1 "Bound"), T1's panel checks hold (a spell
-      strike logs no line and no MP item is drawn yet: T4/T6 are "silent" casts,
-      so they prove no output at all; T6b is the log-producing variant)
+      strike now logs YOU CAST <SPELL> (LOG-FIX 9aa2ec8) and a kill logs YOU KILL
+      THE <kind>: T4/T6 check the panel output is held to the gate; T6b is the
+      bow variant)
   T6b a bow shot at a Rat 12 cells away (pf_ftick 13 > the cap) that hits: "YOUR
       ARROW HITS THE RAT" is held to the gate, then drains
 Run: ZRCP_PORT=<port> python3 tests/cast_gate.py
@@ -134,12 +135,14 @@ def main():
             if pushed:
                 # SND-5 (bisected 2026-10-20): the ISR's longer frames push the last line's
                 # draw (panel_tick's 1st-frame rule) one tick later, so ONE line may still be
-                # pending on the turn's last sample; it must drain within 4 more ticks (the
+                # pending on the turn's last sample (LOG-FIX 9aa2ec8: a spell cast now logs
+                # "YOU CAST <SPELL>" too, so the cast line + a monster-phase line may both be
+                # pending: <= 2); it must drain within 4 more ticks (the
                 # next turn waits on it: LT_HOLD), never be dropped (LQ_DROP 0).
                 last = [t for t in ticks if t["ph"] == 0]
                 p.tick(4)
-                check(f"{tag}: the cast's log lines drain after the gate (<= 1 pending at the turn end, none 4 ticks later)",
-                      any(t["served"] for t in ticks) and all(t["qn"] <= 1 for t in last)
+                check(f"{tag}: the cast's log lines drain after the gate (<= 2 pending at the turn end, none 4 ticks later)",
+                      any(t["served"] for t in ticks) and all(t["qn"] <= 2 for t in last)
                       and p.rb("LOG_QN") == 0 and p.rb(S["LOG_Q"] + S["LQ_DROP"]) == 0,
                       [(t["tt"], t["qn"], t["served"]) for t in ticks[:24]])
             kmon = next((i for i, t in enumerate(ticks) if t["pend"] == 0), None)
@@ -218,7 +221,7 @@ def main():
         attr0, kt = tint_scene(SPARK, 1, K_RAT, 1, S["HOLD_FROZEN"])
         hpsh0 = p.rb("PANEL_HP_SH")
         acc, ticks, tgt, ftick = run_turn(p, slot=1)
-        gate_checks("T4 Spark kill", acc, ticks, hpsh0, tgt, ftick, silent=True)
+        gate_checks("T4 Spark kill", acc, ticks, hpsh0, tgt, ftick)
         bad, npend = held_ok(acc, ticks, attr0)
         died = any(t["react"] & 0x80 for t in ticks) and acc["flags"] & EF_DYING
         check(f"T4 frozen Rat killed by a Spark: tint {attr0:#04x} kept while its DEATH is pending"
@@ -252,7 +255,7 @@ def main():
         acc, ticks, tgt, ftick = run_turn(p)
         check(f"T6 Lightning r3 at a Rat 22 cells away: pf_ftick {ftick} > {GATE_MAX}, gate capped",
               tgt == 1 and ftick > GATE_MAX and acc["cnb"] == GATE_MAX, (tgt, ftick, acc["cnb"]))
-        gate_checks("T6 long flight", acc, ticks, hpsh0, tgt, ftick, silent=True)
+        gate_checks("T6 long flight", acc, ticks, hpsh0, tgt, ftick)
 
         # ---- T6b: the same bound on a long bow flight whose hit logs a line ----
         # (a spell strike logs nothing; "YOUR ARROW HITS THE RAT" is the line the
