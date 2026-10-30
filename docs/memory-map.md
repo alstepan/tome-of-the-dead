@@ -4084,13 +4084,18 @@ Ogre, Death Knight (48), Goblin (32), Ghost, Bat, Slime, Rat, Spider and the her
   `POOL_FIXED` = `(knight_idle1_h + wizard_idle_h) × 12 + 3 × 576` = 2,688 (select idles 40 rows: −192).
   Hero pool B (+ class FX): Warrior 15,072 → 13,152, Mage 11,072 → 9,952.
 
-| Region (release `-DDEBUG_KIT=0`; main `df086fc` → step) | main | (1) heroes |
-|---|---|---|
-| pool need worst level / slack (`POOL_CAP` 33,050) | D4 W 31,840 / 1,210 | D4 W 29,728 / **3,322** |
-| PROTO slack | 2,330 | 4,442 |
-| bank 1 free (sprite sources) | 150 | 673 (packed 12,015 → 11,492) |
-| bank 2 free | 271 | 267 (`ftz_zx0` 124 → 131; `.jump` −3) |
-| R6 free | 327 | 328 |
-| SRC6 free (13 pages) | 160 | 160 |
-| `FID_COUNT` / `FRT_MAX` | 130 / 144 | 130 / 144 |
+- **(2) Skeleton family + climb pairs:** the 9 Skeleton frames (`U_SKARCH` walk1..4 / cut / hurt,
+  `U_SKCLIMB` climb1/2, `U_SKREST` raise; the Archer / Sniper draw them in their inks) and the shared
+  humanoid climb pair `climb_h1` / `climb_h2` (`U_CLIMBH`: Orc / Necro / Mummy families). No id / flag /
+  sequence change. Pool both heroes D1..D8: 0, 0, −864, −864, −960, −96, −96, −960.
+
+| Region (release `-DDEBUG_KIT=0`; main `df086fc` → step) | main | (1) heroes | (2) Skeleton + climb |
+|---|---|---|---|
+| pool need worst level / slack (`POOL_CAP` 33,050) | D4 W 31,840 / 1,210 | D4 W 29,728 / **3,322** | D4/D7 W 28,864 / **4,186** |
+| PROTO slack | 2,330 | 4,442 | 5,306 |
+| bank 1 free (sprite sources) | 150 | 673 (packed 12,015 → 11,492) | 810 |
+| bank 2 free | 271 | 267 (`ftz_zx0` 124 → 131; `.jump` −3) | 267 |
+| R6 free | 327 | 328 | 326 (packed streams) |
+| SRC6 free (13 pages) | 160 | 160 | 181 (climb pair block) |
+| `FID_COUNT` / `FRT_MAX` | 130 / 144 | 130 / 144 | 130 / 144 |
 

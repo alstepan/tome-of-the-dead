@@ -89,11 +89,13 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # JUMP-ALT (user 2026-10-29): knight_jump2 / wizard_jump2 MOT -> WK4, the jump pose picked by px parity: every need -576.
 # ANIM-IMPORT2 (1) heroes at 40 px (J-a: jump2 MOT again, +480 at 40 rows) + the select idles at 40
 # rows (POOL_FIXED -192): Warrior -1,920 - 192 = -2,112, Mage -1,120 - 192 = -1,312 every level.
+# ANIM-IMPORT2 (2) Skeleton family (U_SKARCH / U_SKCLIMB / U_SKREST) + the shared climb pair at 40 px:
+# both heroes D1..D8 0 0 -864 -864 -960 -96 -96 -960.
 LEVEL_NEED = {
-    (0, 1): 24192, (0, 2): 23648, (0, 3): 29152, (0, 4): 29728,
-    (0, 5): 26016, (0, 6): 26464, (0, 7): 28960, (0, 8): 28768,
-    (1, 1): 21056, (1, 2): 20512, (1, 3): 25952, (1, 4): 26656,
-    (1, 5): 22944, (1, 6): 23264, (1, 7): 25760, (1, 8): 25568,
+    (0, 1): 24192, (0, 2): 23648, (0, 3): 28288, (0, 4): 28864,
+    (0, 5): 25056, (0, 6): 26368, (0, 7): 28864, (0, 8): 27808,
+    (1, 1): 21056, (1, 2): 20512, (1, 3): 25088, (1, 4): 25792,
+    (1, 5): 21984, (1, 6): 23168, (1, 7): 25664, (1, 8): 24608,
 }
 
 
