@@ -90,7 +90,17 @@ and attr-shadow banks are uncontended (0/4/6) resp. contended (7: erase attrs,
 decor steps, the D3-S2 cold code).
 `PORT_7FFD_SHADOW` always has bit 4 = 1 (48K ROM: charset, LD-BYTES).
 
-Tape: BASIC `10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"`
+Tape (LOAD-WIRE): BASIC `10 CLEAR VAL "24575": BORDER/PAPER/INK 0: CLS: POKE 23739,111`,
+`15 LOAD "" SCREEN$`, `20 LOAD "" CODE`, `30 RANDOMIZE USR VAL "<start>"`; then the
+**loading picture** (`assets/gfx/loading/loading_s2.scr`, 6,912 B, "The Descent"; generator
+`tools/gen_loading_screen.py`) as a CODE block `$4000` + 6,912 B straight after the BASIC
+and before the game CODE. It exists ONLY on the tape: `src/main.asm` parks the image's own
+`$4000..$5AFF` bytes with SAVEBIN (`build/slot1_park.bin`), INCBINs the .scr there for that one
+SAVETAP and INCBINs the parked bytes back, so the .sna / game image are byte-identical (0 game
+bytes, banks and R6 free unchanged). The CLEAR must precede the picture (CLEAR CLSes). The ROM's
+game-CODE header message blanks rows 22-23 of the picture while that block loads (POKE 23739,111 only
+drops the text; a DF_SZ poke scrolls the screen instead). `tests/tape_layout.py` parses the .tap
+(block order, parity, .scr == block data). Game loader:
 (the 5 USR digits are emitted from the `start` label, today `29927` = `$74E7`).
 ONE CODE block `lowram_code..code_end` (`TAPE_CODE_LEN` 12,521 B: bank-5
 low-RAM cold block `$74E7..$7FFF` — code, then the frame descriptors

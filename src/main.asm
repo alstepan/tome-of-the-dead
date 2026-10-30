@@ -1077,7 +1077,7 @@ SEQB_NEED = SQ_HERO + SQ_MAX
                 DISPLAY "GAME sequence cache: ", /D, SQ_SLOTS, " rows (", /D, SQ_ROWS_LEN, " B) + bytes need ", /D, SEQB_NEED, " of SEQB_LEN ", /D, SEQB_LEN, " (hero ", /D, SQ_HERO, " + monsters ", /D, SQ_MAX, ", <= ", /D, SQ_NMAX, " blocks a level)"
 
 ;------------------------------------------------------------------------------
-; tap_loader — 10 CLEAR VAL "24575": LOAD "" CODE: RANDOMIZE USR VAL "<start>"
+; tap_loader — 10 CLEAR/BORDER 0../POKE: 15 LOAD "" SCREEN$: 20 LOAD "" CODE: 30 RANDOMIZE USR VAL "<start>"
 ; CLEAR 24575 frees $6000..$7FFF for the room maps / generator buffers and the
 ; low-RAM cold code. The USR address is emitted as 5 ASCII digits of `start`.
 ; Tokenised in a scratch ORG (page 0 at $E000; not part of the runtime image —
@@ -1085,12 +1085,20 @@ SEQB_NEED = SQ_HERO + SQ_MAX
 ; block at the bottom of bank 0, ASSERTed).
 ;------------------------------------------------------------------------------
 TAPE_CLEAR      EQU 24575
+LOAD_SCR_LEN    EQU 6912
                 ORG  $E000
 tap_loader:
                 DB   0, 10
                 DW   tap_l10_end - tap_l10_body
-tap_l10_body:   DB   $FD, $B0, '"', "24575", '"', $0D
+tap_l10_body:   DB   $FD, $B0, '"', "24575", '"', ':'                   ; CLEAR (also CLSes: must precede the picture)
+                DB   $E7, $B0, '"0"', ':', $DA, $B0, '"0"', ':', $D9, $B0, '"0"', ':', $FB, ':'  ; BORDER/PAPER/INK 0: CLS
+                DB   $F4, $B0, '"23739"', ',', $B0, '"111"', $0D       ; POKE 23739,111: drop the ROM's "Bytes:" header text
+                ; NB the game CODE header's CLS_LOWER still blanks rows 22-23 of the picture (DF_SZ tricks scroll it)
 tap_l10_end:
+                DB   0, 15
+                DW   tap_l15_end - tap_l15_body
+tap_l15_body:   DB   $EF, $22, $22, $AA, $0D                    ; LOAD "" SCREEN$ (loading picture, 6912 B at $4000)
+tap_l15_end:
                 DB   0, 20
                 DW   tap_l20_end - tap_l20_body
 tap_l20_body:   DB   $EF, $22, $22, $AF, $0D
@@ -1114,6 +1122,15 @@ tap_loader_len  EQU  $ - tap_loader
     IF OVL_PASS == 2                    ; pass 1 (overlay images only) writes no tape / snapshot
                 EMPTYTAP "build/wazhack.tap"
                 SAVETAP  "build/wazhack.tap", BASIC, "wazhack", tap_loader, tap_loader_len, 10
+                ; loading picture: slot 1 ($4000) holds game image bytes here, so park them in
+                ; a scratch file, INCBIN the .scr over them for SAVETAP, then restore (the .sna and
+                ; the CODE block below see the original bytes; 0 game bytes).
+                SAVEBIN  "build/slot1_park.bin", $4000, LOAD_SCR_LEN
+                ORG  $4000
+                INCBIN   "../assets/gfx/loading/loading_s2.scr"
+                SAVETAP  "build/wazhack.tap", CODE,  "wazhack", $4000, LOAD_SCR_LEN
+                ORG  $4000
+                INCBIN   "slot1_park.bin"                 ; found via build.sh -i OUTDIR/build
                 SAVETAP  "build/wazhack.tap", CODE,  "wazhack", lowram_code, TAPE_CODE_LEN
                 TAPE_BLOCKS 1                  ; the headerless blocks = start's tape_tab
                 MMU  3, 0

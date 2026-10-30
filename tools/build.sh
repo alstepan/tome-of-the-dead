@@ -60,7 +60,7 @@ rm -f build/wazhack.tap build/wazhack.sna build/wazhack.sym
 mkdir -p "$OVL"
 set +e
 sjasmplus "$ROOT/src/main.asm" --fullpath --sym="$OVL/pass1.sym" \
-    -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" -i "$OVL" \
+    -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" -i "$OUT/build" -i "$OVL" \
     -DOVL_PASS=1 "$@" >"$OVL/pass1.log" 2>&1
 RC=$?
 set -e
@@ -78,7 +78,7 @@ done
 set +e
 sjasmplus "$ROOT/src/main.asm" --fullpath \
     --lst=build/wazhack.lst --sld=build/wazhack.sld --sym=build/wazhack.sym \
-    -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" -i "$OVL" "$@" >"$LOG" 2>&1
+    -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" -i "$OUT/build" -i "$OVL" "$@" >"$LOG" 2>&1
 RC=$?
 set -e
 grep -E '^>|rror|arning' "$LOG" || true

@@ -47,7 +47,8 @@ generated D1); `-DSEED_FIXED=1 [-DSEED_VALUE=n]` fixed master seed (default:
 `-DDEBUG_KIT=0` (D3-7): no debug start kit — the build the test suites and
 goldens need (default 1 = the designer's debug kit, never in a release tape).
 - `src/main.asm` is the single entry the assembler walks (it `INCLUDE`s the rest).
-- Emits `build/wazhack.tap` (BASIC loader + one CODE block = bank-5 low-RAM
+- Emits `build/wazhack.tap` (BASIC loader + the loading-picture SCREEN$ block (6,912 B CODE @ $4000,
+  tape-only, see memory-map "Tape") + one CODE block = bank-5 low-RAM
   cold code + bank-2 image, then two headerless blocks: bank 1 sources, bank 3
   source tail + cold code) and `build/wazhack.sna` (128K, entry `boot`).
 - `--sym` is required: `tests/game*.py` and `tests/budget.py` read every address /
