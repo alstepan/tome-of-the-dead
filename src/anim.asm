@@ -690,12 +690,7 @@ render:
                 inc  l                         ; R_FID
                 ld   a, (hl)
                 push hl
-                ld   l, a
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl                    ; fid * FT_STRIDE
-                ld   de, frame_tab + FT_COLS
-                add  hl, de
+                FT_HL_A FT_COLS                ; MEM-FT: frame_tab in the FRT row (+6 T)
                 ld   c, (hl)                   ; C = data cols
                 inc  hl
                 ld   b, (hl)                   ; B = H (FT_H)

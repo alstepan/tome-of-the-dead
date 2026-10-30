@@ -239,8 +239,10 @@ pl_unit:
                 ret
 
 ;------------------------------------------------------------------------------
-; frt_none — A = first fid, B = count (>= 1): those FRT rows := FRT_NONE (all
-; 16 B, as the 3F-T1 level clear).   Clobbers: A, BC, DE, HL.   ~21 T / byte
+; frt_none — A = first fid, B = count (>= 1): those FRT rows' variants (bytes
+; 0..FT_IN_ROW-1) := FRT_NONE. MEM-FT: the row tail is the fid's static
+; frame_tab entry, so a row is no longer filled whole (was one 16-B LDIR run).
+; Clobbers: A, BC, HL.   ~390 T / row (was ~340: 16 B at 21 T)
 ;------------------------------------------------------------------------------
 frt_none:
                 ld   l, a
@@ -249,26 +251,21 @@ frt_none:
                 add  hl, hl
                 add  hl, hl
                 add  hl, hl
-                ld   de, FRT
-                add  hl, de                    ; HL = the first row
-                ex   de, hl
-                ld   l, b
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                dec  hl
-                ld   b, h
-                ld   c, l                      ; BC = count x 16 - 1 (>= 15)
-                ex   de, hl
-                ld   (hl), FRT_NONE
-                ld   d, h
-                ld   e, l
-                inc  de
-                ldir
+                ld   a, b                      ; A = rows
+                ld   bc, FRT
+                add  hl, bc                    ; HL = the first row
+.r:             ld   b, FT_IN_ROW
+.f:             ld   (hl), FRT_NONE
+                inc  hl
+                djnz .f
+                inc  hl                        ; skip the frame_tab tail
+                inc  hl
+                inc  hl
+                inc  hl
+                dec  a
+                jr   nz, .r
                 ret
-                ASSERT FRT_STRIDE == 16
+                ASSERT FRT_STRIDE == 16 && FT_IN_ROW + 4 == FRT_STRIDE
 
 ; fxr_none — the FX FRT rows outside the hero's class FX unit := NONE: the other
 ; class's exclusive rows and any hero extra of the previous level (3F-T2: the

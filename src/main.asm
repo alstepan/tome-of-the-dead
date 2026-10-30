@@ -506,10 +506,11 @@ kind_tab_pad:                                  ; ALIGN padding starts here (head
 ; KS_IMPACT), slot 0 = the hero, 1.. = the level's monster kinds. One page
 ; (kind_tab KT_SEQ holds the row's low byte: kind_seq_ptr = 2 table reads, no
 ; multiply). 3F-T13bc: moved out of the image (was 119 zero bytes of the kind_tab
-; ALIGN pad) into FRT_GAP, the runtime RAM above the page-aligned FRT.
+; ALIGN pad) into FRT_GAP; MEM-FT (FRT_MAX 144 fills the FRT page, FRT_GAP 0):
+; directly BELOW the page-aligned FRT, runtime RAM above seq_bytes (ASSERTed).
 ;------------------------------------------------------------------------------
-seq_rows        EQU FRT + FRT_MAX * FRT_STRIDE
-                ASSERT (seq_rows >> 8) == ((seq_rows + SQ_ROWS_LEN - 1) >> 8) && SQ_ROWS_LEN <= FRT_GAP
+seq_rows        EQU FRT - SQ_ROWS_LEN
+                ASSERT (seq_rows >> 8) == ((seq_rows + SQ_ROWS_LEN - 1) >> 8)
 ;------------------------------------------------------------------------------
 ; dt_attr_tab — B3B-10 decor_tick attr cycles, 8 steps per kind (concept-screen
 ; §3.3): kind 1 flame (DT_HOT -> DT_RED -> DT_DIM: tall / slim torch bodies, braziers).
@@ -632,6 +633,12 @@ kind_tab:
                 INCLUDE "bars2.asm"             ; MEM-SND bars_draw / num2 (from panel2.asm: pad headroom)
                 INCLUDE "ranged2.asm"           ; 3F-T7 ai_rhook + rk_tab (the ranged hook's reject)
                 INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
+                INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy (were low RAM / gfx.asm)
+ftz_zx0:                                       ; MEM-FT frame_tab, FT_LEN B/fid contiguous, ZX0 (boot6_ft;
+    IF OVL_PASS == 2                            ; bank 2: always mapped, on the CODE tape block; LAST in the
+                INCBIN "ft.zx0"                 ; image so its pass-1/2 size moves only code_end)
+    ENDIF
+ftz_zx0_end:
 
 code_end:
 ; 3F-T2: the sequence cache's bytes (RUNTIME only, not on tape: R6 pool6.asm / lowram.asm
@@ -643,13 +650,13 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
                 ASSERT start == lowram_code    ; USR target = first byte of the block
                 ASSERT FDESC_COUNT == FID_COUNT    ; fdesc_tab and frame_tab: same frames
                 ASSERT image_start == $8000
-                ASSERT seq_bytes_end <= FRT    ; the image (+ the seq cache bytes) ends below the frame runtime table
+                ASSERT seq_bytes_end <= seq_rows   ; the image (+ the seq cache bytes) ends below seq_rows, then the FRT
                 ASSERT FRT + FRT_MAX * FRT_STRIDE <= P_ENTITIES
                 ASSERT P_ENTITIES + P_MAX_ENT * P_ENT_STRIDE <= BANK2_FREE
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
                 ASSERT LOWRAM_END <= LOWRAM_FREE_END
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), seq cache bytes ", /D, SEQB_LEN, ", free to FRT: ", /D, FRT - seq_bytes_end, " (+", /D, dt_attr_tab - kind_tab_pad, " B kind_tab ALIGN pad; bank 2 free ", /D, FRT - seq_bytes_end + dt_attr_tab - kind_tab_pad, "; FRT_GAP ", /D, FRT_GAP, " B runtime at ", /H, seq_rows, ", seq_rows ", /D, SQ_ROWS_LEN, " B of it, ", /D, FRT_GAP - SQ_ROWS_LEN, " free); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), seq cache bytes ", /D, SEQB_LEN, ", free to seq_rows: ", /D, seq_rows - seq_bytes_end, " (+", /D, dt_attr_tab - kind_tab_pad, " B kind_tab ALIGN pad; bank 2 free ", /D, seq_rows - seq_bytes_end + dt_attr_tab - kind_tab_pad, "; seq_rows ", /H, seq_rows, " ", /D, SQ_ROWS_LEN, " B, FRT ", /H, FRT, " ", /D, FRT_MAX, " rows (", /D, FRT_MAX - FID_COUNT, " spare), FRT_GAP ", /D, FRT_GAP, "); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
 
 ;==============================================================================
 ; BOOT BLOCK (3E-T1, memory levers a + d) — boot-only code + data in pool
@@ -948,6 +955,19 @@ SEQ_IMG_LEN     EQU seq_img_end - seq_img_main
                 ASSERT SQ_IMG + SEQ_IMG_LEN <= TX_DEC
                 SAVEBIN "build/ovl/seq.bin", ovl_raw_seq, SEQ_IMG_LEN
                 DISPLAY "GAME sequence masters (3F-T2): ", /D, SEQ_IMG_LEN, " B raw at ", /H, SQ_IMG, " (", /D, TX_DEC - SQ_IMG - SEQ_IMG_LEN, " left), packed ", /D, sqm_zx0_end - sqm_zx0, " B in R6"
+;------------------------------------------------------------------------------
+; MEM-FT frame_tab stream: the entries read back ({b}, slot 2 = page 2) from the
+; FRT row image data.asm assembled at FRT, contiguous FT_LEN B per fid; packed
+; into R6 ftz_zx0, boot6_ft spreads it into the FRT rows. (124 B packed vs 516.)
+;------------------------------------------------------------------------------
+ovl_raw_ft:
+                DUP  FID_COUNT, ftf
+                DB   {b frame_tab + ftf * FT_STRIDE + 0}, {b frame_tab + ftf * FT_STRIDE + 1}
+                DB   {b frame_tab + ftf * FT_STRIDE + 2}, {b frame_tab + ftf * FT_STRIDE + 3}
+                EDUP
+                ASSERT $ - ovl_raw_ft == FID_COUNT * FT_LEN && FT_LEN == 4
+                SAVEBIN "build/ovl/ft.bin", ovl_raw_ft, FID_COUNT * FT_LEN
+                DISPLAY "GAME frame_tab stream (MEM-FT): ", /D, FID_COUNT * FT_LEN, " B raw -> packed ", /D, ftz_zx0_end - ftz_zx0, " B in bank 2 (boot6_ft -> the FRT rows)"
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000
 
