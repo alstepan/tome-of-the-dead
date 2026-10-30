@@ -1982,17 +1982,26 @@ the input tick. `HUD4_EXT`/`HUD4_PW` (rows 20..23, one page, ASSERTed),
   the build on a mismatch / a char outside 32..127 / > LOG_MAX.
 - **Stream format:** 0 end; 32..127 literal; t ≥ 128 token → dictionary
   entry t − 128 = 2+ literal chars, the last with bit 7 set (no nesting).
-  Dictionary built greedily from the real strings (saving n·(L−1) − (L+2)).
+  Dictionary built greedily from the real strings (saving n·(L−1) − (L+1);
+  w2d: capped at `DICT_MAX` 256 entry bytes).
   Streams concatenate (composition in `MSG_BUF`); numbers are literal digits.
 - **Block** (`text_img`; **D3-TX: bank 0 = `BANK_TEXT`** at `TEXT_ADDR`
   `$C000`, under the pool (`POOL_START` = its end), own tape block; was bank 1
   after `vdata`, DISPed — the D3-2 strings, 2,684 B, did not fit bank 1's
-  992 B; bank 0 is uncontended, so text reads got cheaper): `tx_tab` (DW per string id) · `tx_dict` (DW per token) · entries ·
-  streams. B3B-13: 24 strings, 4 tokens, 278 B raw text (0-terminated; +48 B
+  992 B; bank 0 is uncontended, so text reads got cheaper). **MEM-RECLAIM w2d
+  layout:** `tx_entries` at `$C000` (≤ 256 B, one page: `tk_get` loads B =
+  `$C0`) · 0-pad to `$C100` · `tx_tab` at `$C100` (page-aligned: `tx_ptr`
+  loads H; DW per `TX_STRIDE` = 2 ids, the stream of the even id; an odd id
+  skips its predecessor's 0-terminated stream — the streams stay in id order;
+  256 ids = exactly the page) · `tx_dict` (DB per token = the entry's offset in
+  the `tx_entries` page) · streams. 195 strings, 72 tokens: **2,282 B** (was
+  2,547 with DW per id + DW per token: bank-0 pool +265 B; low RAM 0, bank 2
+  +1 B `tk_get`). textpack fails the build if an odd log-width id would skip
+  more than `HOT_SKIP_MAX` 24 B (today 19). B3B-13: 24 strings, 4 tokens, 278 B raw text (0-terminated; +48 B
   of the pointers the code used) → **277 B** incl. tables (the corpus is tiny;
   the format pays off with the 3E/3F names).
 - **Z80:** `msg_push` / `msg_push_end` (A = TX_*; lowram: page `BANK_TEXT`,
-  `tx_ptr`, `log_push(_end)`, hand `$C000` back), `tx_ptr` (A → HL; **D3-0: 16-bit index**, `ld l,a / ld h,0 / add hl,hl`, 86 T: string ids 0..255, `TX_COUNT ≤ 256` (textpack `MAX_STRINGS` + the emitted ASSERT; was 128 via `add a,a`); `tx_ptr_hl` = the same entry for an HL id, the planned path past 256 — ids are bytes in every caller / DB table today),
+  `tx_ptr`, `log_push(_end)`, hand `$C000` back), `tx_ptr` (A → HL, keeps BC/DE; string ids 0..255, `TX_COUNT ≤ 256` (textpack `MAX_STRINGS` + the emitted ASSERT); **w2d:** `tx_tab` a word per 2 ids, 17 B as before: even id 58 T, odd ~67 T + 25 T per byte of the skipped stream (hot ≤ ~0.6k T; was 86 T flat); `tx_ptr_hl` (the HL-id entry, no caller) was removed: ids > 255 need a 16-bit `tx_ptr` again),
   `show_impact_msg` (lowram, pre + kind name `TX_NM_KNIGHT + kind` + post via
   `imp_pre` / `imp_post`); `print6t` (bank 2: HL = stream, pages `BANK_TEXT`
   around `print6g`); `tk_get` (bank 2, the getter; mode = SMC opcode at
@@ -2815,8 +2824,8 @@ model of the rules); P9 the split turn (`TURN_TICK` shift of `pf_itick` /
 `E_REACTAT` / `set_reaction_at`, the `act_begin` / `act_fire` lead-col guard,
 `FX_DROP`).
 
-**Text ids:** `tx_ptr` indexes 16-bit since D3-0 — ids 0..255 (`TX_COUNT`
-≤ 256), `tx_ptr_hl` takes an HL id for the later > 256 path (see "Text").
+**Text ids:** ids 0..255 (`TX_COUNT` ≤ 256); w2d: `tx_tab` is sparse (a word
+per 2 ids, one page) and `tx_ptr_hl` is gone — ids > 255 need a 16-bit `tx_ptr` (see "Text").
 
 **Class FX kinds (D3-4)** (`src/frames.asm`, `defs.asm`): the projectile /
 impact sprites (game.md §6.1–6.3) are two render-only kinds at the top of the
@@ -4211,3 +4220,25 @@ Pool need per level after (4) (release; `tests/zx0_pool.py` `LEVEL_NEED`), `POOL
 * The 4-wide ladder queue (`lq6.asm` `.w`) only reads `KT_BW`, never the frames; the 3-cell shaft box and
   the per-tick 4 px climb tween are unchanged. `tests/climb3f.py` C2 now wants {climb1, climb2} for the
   Spider (both seen), ladder_jam unchanged.
+
+## MEM-RECLAIM w2d (`feat/mem-reclaim-w2d`): sparse string pointers + 1-byte dictionary offsets
+
+Text block format change only ("Text (B3B-13)" above has the layout); every string decodes
+identically (W17, textpack round trip). Release build, vs main 2162bc8:
+
+| Region | before | after | delta |
+|---|---|---|---|
+| bank-0 text block (`TEXT_LEN`) | 2,547 | **2,282** | −265 (tx_tab 390 → 196, tx_dict 140 → 72, entries 247 → 255 + 1 pad, streams 1,770 → 1,758) |
+| pool slack (worst level, `POOL_START` $C9F3 → $C8EA) | 2,029 | **2,294** | +265 |
+| low RAM spare (`LOWRAM_SPARE`) | 94 | **94** | 0 (`tx_ptr` stays 17 B; `tx_ptr_hl` removed) |
+| bank 2 free | 51 | 52 | +1 (`tk_get`: 1-byte dict index, −10 T per token) |
+
+Net +266 B. Review: a word per 8 ids (−411 B) cost up to ~3k T per lookup and +14.1k T in the
+Whirlwind r3 tick (3 impact lines = 9 lookups); a word per 2 ids bounds the skip to one stream.
+W17(c') gates every impact_line combo (msg 1..15 x every named kind): compose ≤ `IMP_CAP`
+4,500 T (tick work; main 3,500, w2d 3,774), compose + log item ≤ 25k (W15's 1st-frame item ceiling) + `IMP_CAP` (main 29,082, w2d 29,149).
+budget.py vs main, all scenarios: Whirlwind r3 Skel+Rat+Bat −150, pmix family +176, boss kill-drop +228,
+Lightning (lcast / lcastf / lcasts) ±0, lqmix ±0, worst +228.
+`textpack.py` owns the layout (`layout` / `decode` / `expand`; `parse_emitted` returns the image
+with `dict_off` / `tab_off`); the log-reading tests (tier6, pickup3e, abil_ammo, abil_melee) use
+`textpack.expand`.

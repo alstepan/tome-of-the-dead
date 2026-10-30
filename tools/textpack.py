@@ -21,14 +21,24 @@ Stream format (user decision 2026-10-03, plan B3B-13):
   128..255   dictionary token t: entry t - 128
 Dictionary entry = 2+ literal chars (32..127), the LAST one with bit 7 set
 (no length byte, no terminator; no nesting: an entry never holds a token).
-Text block layout (all addresses absolute, runtime bank-1 $C000-based):
-  tx_tab    DW x TX_COUNT     string id -> its stream
-  tx_dict   DW x TX_TOKENS    token t -> entry (index (t - 128) * 2)
-  entries, then the 0-terminated streams.
+Text block layout (MEM-RECLAIM w2d; runtime bank-0 $C000-based, 256-aligned):
+  tx_entries  the entries, <= DICT_MAX (256) B: one page, so an entry's
+              address is (tx_entries >> 8, offset) - tk_get loads B as a constant;
+              0-padded to the next page (the greedy fills it: ~1 B)
+  tx_tab      (page-aligned: tx_ptr loads H as a constant) DW x
+              ceil(TX_COUNT / TX_STRIDE) (absolute) the stream of string id
+              k * TX_STRIDE; string id i is reached by skipping i % TX_STRIDE
+              0-terminated streams from it (tx_ptr). TX_STRIDE 2: an odd id
+              skips its predecessor's stream - HOT_SKIP_MAX caps that for the
+              log-width (hot: impact / combat / cast lines) ids; 256 ids =
+              128 words = exactly the $C100 page
+  tx_dict     DB x TX_TOKENS   token t -> its entry's offset from tx_entries
+  then the 0-terminated streams, in id order (the skip relies on it).
 The dictionary is built greedily from the real strings: repeatedly take the
-literal substring with the best saving n*(L-1) - (L+2) (n non-overlapping
-uses, L chars, +2 for its tx_dict word) until none saves a byte or 128 tokens
-are used. Deterministic (ties: longer, then lexicographically smaller).
+literal substring with the best saving n*(L-1) - (L+1) (n non-overlapping
+uses, L chars, +1 for its tx_dict byte) that still fits DICT_MAX, until none
+saves a byte or 128 tokens are used. Deterministic (ties: longer, then
+lexicographically smaller).
 
 Dynamic parts (kind names, numbers) are composed into MSG_BUF from whole
 streams (concatenating streams keeps a valid stream: tokens are 1 byte and
@@ -80,8 +90,11 @@ WIDE_PREFIXES = ("info_", "ft_")
 INFO_FIELDS = (16, 28)  # info line: numbers from char 16, notes from char 28
 LOG_MAX = 32            # src/level_defs.asm (ASSERTed in the output too)
 MAX_TOKENS = 128
-MAX_STRINGS = 256      # D3-0: tx_ptr indexes 16-bit (ld l,a / add hl,hl); ids stay bytes
+MAX_STRINGS = 256      # ids are bytes (A / DB tables); tx_tab fills one page at 256
 MAX_ENTRY = 16          # longest dictionary entry considered
+DICT_MAX = 256          # entry bytes: one page (tk_get: B = tx_entries >> 8)
+TX_STRIDE = 2           # tx_tab: one word per 2 ids (tx_ptr: res 0,l / rra = the skip flag)
+HOT_SKIP_MAX = 24       # w2d review: an odd log-width id skips <= 24 B (~0.6k T) in tx_ptr
 
 
 def fail(msg):
@@ -169,7 +182,7 @@ def read_source(path=SRC):
         fail(f"{path}: @long {cur[0]} has no @end")
     if len(out) > MAX_STRINGS:
         fail(f"more than {MAX_STRINGS} strings: ids are bytes (A / DB tables); "
-             "beyond that use tx_ptr_hl with 16-bit ids")
+             "beyond that tx_tab outgrows its page: tx_ptr needs a 16-bit index")
     if len(longs) > 64:
         fail("more than 64 long blocks")
     return out, longs
@@ -244,13 +257,13 @@ def build_dict(texts):
 
     for cnt in per:
         add(cnt, 1)
-    entries = []
+    entries, used = [], 0
     while len(entries) < MAX_TOKENS:
         best = None
         for c in multi:
             L = len(c)
-            g = total[c] * (L - 1) - (L + 2)
-            if g <= 0 or (best is not None and (g, L) < best[0][:2]):
+            g = total[c] * (L - 1) - (L + 1)
+            if g <= 0 or used + L > DICT_MAX or (best is not None and (g, L) < best[0][:2]):
                 continue
             key = (g, L, [-ord(ch) for ch in c])
             if best is None or key > best[0]:
@@ -261,6 +274,7 @@ def build_dict(texts):
         tok = len(entries)
         entries.append(c)
         L = len(c)
+        used += L
         for k, st in enumerate(streams):
             if c not in per[k]:
                 continue
@@ -288,51 +302,72 @@ def encode(texts):
     return ents, strs
 
 
+class TextImg(bytes):
+    """The block image (bytes) + where its tables sit (offsets from text_base)."""
+    dict_off = tab_off = 0
+
+
 def layout(ents, strs, base=0):
-    """-> (image bytes, tx_tab offsets, entry offsets) for a block at `base`."""
+    """-> (image, tx_tab offsets of every string, entry offsets) for a block at
+    `base` (offsets from the block start; the image keeps every TX_STRIDE-th)."""
     n_s, n_t = len(strs), len(ents)
-    off = 2 * n_s + 2 * n_t
-    e_off = []
+    e_off, off = [], 0
     for e in ents:
         e_off.append(off)
         off += len(e)
+    if off > DICT_MAX:
+        fail(f"dictionary {off} B > {DICT_MAX}")
+    pad = DICT_MAX - off
+    tab_off = DICT_MAX
+    dict_off = tab_off + 2 * ((n_s + TX_STRIDE - 1) // TX_STRIDE)
+    off = dict_off + n_t
     s_off = []
     for s in strs:
         s_off.append(off)
         off += len(s)
     img = bytearray()
-    for o in s_off:
-        img += (base + o).to_bytes(2, "little")
-    for o in e_off:
-        img += (base + o).to_bytes(2, "little")
     for e in ents:
         img += e
+    img += bytes(pad)
+    for o in s_off[::TX_STRIDE]:
+        img += (base + o).to_bytes(2, "little")
+    img += bytes(e_off)
     for s in strs:
         img += s
-    return bytes(img), s_off, e_off
+    img = TextImg(img)
+    img.dict_off, img.tab_off = dict_off, tab_off
+    return img, s_off, e_off
 
 
-def decode(img, n_strings, sid, base=0):
-    """The Z80 getter's algorithm (tk_get) on the block image -> chars."""
-    p = int.from_bytes(img[2 * sid:2 * sid + 2], "little") - base
-    t0 = 2 * n_strings
+def expand(img, raw):
+    """A token stream (bytes; stops at 0) -> text, as tk_get expands it."""
     out = []
-    for _ in range(4 * WIDE_MAX):
-        a = img[p]
-        p += 1
+    for a in raw:
         if a == 0:
-            return out
+            break
         if a < 0x80:
-            out.append(a)
+            out.append(chr(a))
             continue
-        q = int.from_bytes(img[t0 + 2 * (a - 0x80):t0 + 2 * (a - 0x80) + 2], "little") - base
+        q = img[img.dict_off + a - 0x80]
         while True:
             c = img[q]
             q += 1
-            out.append(c & 0x7F)
+            out.append(chr(c & 0x7F))
             if c & 0x80:
                 break
-    fail(f"string {sid}: no terminator")
+    return "".join(out)
+
+
+def decode(img, n_strings, sid, base=0):
+    """The Z80 getter's algorithm (tx_ptr + tk_get) on the block image -> chars."""
+    t = img.tab_off + 2 * (sid // TX_STRIDE)
+    p = int.from_bytes(img[t:t + 2], "little") - base
+    for _ in range(sid % TX_STRIDE):
+        p = img.index(0, p) + 1
+    end = img.index(0, p)
+    if end - p > 4 * WIDE_MAX:
+        fail(f"string {sid}: no terminator")
+    return [ord(c) for c in expand(img, img[p:end + 1])]
 
 
 def emit(names, texts, ents, strs):
@@ -352,6 +387,7 @@ def emit(names, texts, ents, strs):
         lim = "LOG_MAX" if limit_for(nm) == LOG_MAX else str(limit_for(nm))
         ids.append(f"                ASSERT TXL_{nm.upper()} <= {lim}")
     ids += [f"TX_COUNT         EQU {n_s}", f"TX_TOKENS        EQU {n_t}",
+            f"TX_STRIDE        EQU {TX_STRIDE}          ; tx_tab: a word per {TX_STRIDE} ids",
             f"TEXT_RAW         EQU {raw}          ; 0-terminated plain strings",
             f"TEXT_PACKED      EQU {len(img)}     ; the whole text block (tables included)",
             f"                ASSERT TX_COUNT <= {MAX_STRINGS} && TX_TOKENS <= {MAX_TOKENS}", ""]
@@ -363,21 +399,25 @@ def emit(names, texts, ents, strs):
         f"; {n_s} strings, {n_t} tokens: raw {raw} B -> {len(img)} B packed (tables included)",
         "; " + "=" * 76,
         "text_base:",
-        "tx_tab:",
+        "tx_entries:",
     ]
-    for i, o in enumerate(s_off):
-        asm.append(f"        DW text_base + {o}    ; {i} {names[i]}")
-    asm.append("tx_dict:")
-    for i, o in enumerate(e_off):
-        asm.append(f"        DW text_base + {o}    ; ${0x80 + i:02X} {entries_txt(ents[i])!r}")
-    asm.append("tx_entries:")
     for i, e in enumerate(ents):
         asm.append("        DB " + ",".join(f"${b:02X}" for b in e)
                    + f"    ; ${0x80 + i:02X} {entries_txt(e)!r}")
+    pad = img.tab_off - sum(map(len, ents))
+    if pad:
+        asm.append("        DB " + ",".join(["$00"] * pad) + "    ; pad: tx_tab page-aligned")
+    asm.append("tx_tab:")
+    for i, o in enumerate(s_off[::TX_STRIDE]):
+        asm.append(f"        DW text_base + {o}    ; {i * TX_STRIDE} {names[i * TX_STRIDE]}")
+    asm.append("tx_dict:")
+    for i, o in enumerate(e_off):
+        asm.append(f"        DB ${o:02X}    ; ${0x80 + i:02X} {entries_txt(ents[i])!r}")
     asm.append("tx_strings:")
     for i, s in enumerate(strs):
         asm.append("        DB " + ",".join(f"${b:02X}" for b in s) + f"    ; {names[i]}: {texts[i]!r}")
-    asm += ["text_end:", f"        ASSERT text_end - text_base == {len(img)}", ""]
+    asm += ["text_end:", f"        ASSERT text_end - text_base == {len(img)}",
+            f"        ASSERT tx_tab - tx_entries == {DICT_MAX} && tx_dict - text_base == {img.dict_off}", ""]
     return "\n".join(ids), "\n".join(asm), img, raw
 
 
@@ -387,8 +427,11 @@ def entries_txt(e):
 
 def parse_emitted(path):
     """Rebuild the block image (base 0) from the emitted DB / DW lines."""
-    img = bytearray()
+    img, offs = bytearray(), {}
     for line in open(path):
+        lab = line.split(";")[0].strip()
+        if lab in ("tx_dict:", "tx_tab:"):
+            offs[lab[:-1]] = len(img)
         code = line.split(";")[0].strip()
         if code.startswith("DW "):
             m = re.fullmatch(r"DW text_base \+ (\d+)", code)
@@ -401,7 +444,9 @@ def parse_emitted(path):
                 if not re.fullmatch(r"\$[0-9A-F]{2}", t):
                     fail(f"emitted DB token not understood: {t!r}")
                 img.append(int(t[1:], 16))
-    return bytes(img)
+    img = TextImg(img)
+    img.dict_off, img.tab_off = offs.get("tx_dict", 0), offs.get("tx_tab", 0)
+    return img
 
 
 def long_image(lines):
@@ -532,7 +577,7 @@ def main():
     write_if_changed(OUT_LONG, lt_asm)
     # round trip on the EMITTED files
     back = parse_emitted(OUT_ASM)
-    if back != img:
+    if back != img or (back.dict_off, back.tab_off) != (img.dict_off, img.tab_off):
         fail("emitted strings.asm does not re-parse to the packed image")
     for i, t in enumerate(texts):
         got = decode(back, len(texts), i)
@@ -542,6 +587,16 @@ def main():
             fail(f"{names[i]}: round trip mismatch: {bytes(got)!r} != {t!r}")
         if len(got) > limit_for(names[i]):
             fail(f"{names[i]}: {len(got)} chars > {limit_for(names[i])}")
+    # w2d review: the tx_ptr skip on hot (log-width) ids is bounded, so a new or
+    # reordered string cannot silently push a composed log line over the tick budget
+    hot_worst = 0
+    for i, nm in enumerate(names):
+        if limit_for(nm) == LOG_MAX and i % TX_STRIDE:
+            sk = sum(len(strs[j]) for j in range(i - i % TX_STRIDE, i))
+            hot_worst = max(hot_worst, sk)
+            if sk > HOT_SKIP_MAX:
+                fail(f"{nm}: tx_ptr skips {sk} B (> HOT_SKIP_MAX {HOT_SKIP_MAX}): move it, or "
+                     f"the long string before it, by one line in src/strings.txt")
     lb = parse_long_asm(open(OUT_LONG).read())
     if len(lb) != lt_len:
         fail("emitted longtext.asm size mismatch")
@@ -551,7 +606,7 @@ def main():
             fail(f"long block {nm}: emitted longtext.asm does not round-trip")
     print(f"textpack: {len(texts)} strings, {len(ents)} tokens, raw {raw} -> packed "
           f"{len(img)} B (streams {sum(map(len, strs))} + dict {sum(map(len, ents))} + "
-          f"tables {2 * (len(strs) + len(ents))}); round-trip ok; -> build/text/")
+          f"tables {len(img) - sum(map(len, strs)) - sum(map(len, ents))} incl. pad); round-trip ok; hot skip <= {hot_worst} B; -> build/text/")
     if blocks:
         print(f"textpack: {len(blocks)} long blocks, raw {sum(len(b[2]) for b in blocks)} -> "
               f"ZX0 {sum(len(b[3]) for b in blocks)} B (+ {4 * len(blocks)} B table); "

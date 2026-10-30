@@ -697,28 +697,30 @@ msg_go:
                 ; fall through
 ;------------------------------------------------------------------------------
 ; tx_ptr — HL = the stream of string A (TX_*, 0..255) in the text block
-; (BANK_TEXT must be paged).  Clobbers: A.   86 T
-; tx_ptr_hl — the same for a 16-bit id in HL (D3-0: the path for > 256 ids;
-; no caller yet: every id is still a byte in A / DB tables, textpack caps
-; TX_COUNT at 256).
-; D3-0: 16-bit index (was `add a, a`: ids < 128); +31 T, +5 B; once per
-; message / info line, never per tick.
+; (BANK_TEXT must be paged).  Clobbers: A, F (keeps BC, DE: imp's .cat).
+; MEM-RECLAIM w2d: tx_tab (page $C100) holds a word per TX_STRIDE = 2 ids
+; (bank 0 −194 B): an odd id skips its predecessor's 0-terminated stream
+; (the streams are in id order). textpack fails the build if an odd
+; log-width id would skip > HOT_SKIP_MAX (24) B. ids > 255 need a 16-bit
+; index (tx_tab is one full page at 256).
+; Cost: even id 58 T, odd ~67 T + 25 T per skipped byte (hot <= ~0.67k T);
+; main's flat DW table was 86 T.
 ;------------------------------------------------------------------------------
+                ASSERT TX_STRIDE == 2 && (tx_tab & $FF) == 0   ; res 0,l = the word; H constant
 tx_ptr:
                 ld   l, a
-                ld   h, 0
-tx_ptr_hl:
-                add  hl, hl
-                ld   a, l
-                add  a, tx_tab & $FF
-                ld   l, a
-                ld   a, h
-                adc  a, tx_tab >> 8
-                ld   h, a
+                res  0, l                      ; (id / 2) * 2
+                ld   h, tx_tab >> 8            ; HL = its tx_tab word
+                rra                            ; CF = odd id (no flag change below)
                 ld   a, (hl)
                 inc  hl
                 ld   h, (hl)
-                ld   l, a
+                ld   l, a                      ; HL = the stream of id & ~1
+                ret  nc
+                xor  a
+.s:             cp   (hl)                      ; skip the even id's stream
+                inc  hl
+                jr   nz, .s
                 ret
 
 ;------------------------------------------------------------------------------

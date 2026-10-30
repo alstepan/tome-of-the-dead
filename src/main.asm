@@ -233,6 +233,7 @@ text_img_end:
 TEXT_LEN        EQU text_img_end - text_img
 POOL_START      EQU text_img_end               ; alloc_reset: first pool byte in bank 0
                 ASSERT text_base == TEXT_ADDR && TEXT_LEN == TEXT_PACKED
+                ASSERT (tx_entries & $FF) == 0         ; w2d: tk_get's B = tx_entries >> 8
                 ASSERT text_img_end <= tap_loader      ; the BASIC loader scratch ($E000, page 0)
                 DISPLAY "GAME text (bank 0): ", /D, TX_COUNT, " strings, ", /D, TX_TOKENS, " tokens, raw ", /D, TEXT_RAW, " -> ", /D, TEXT_PACKED, " B packed at ", /H, text_base, "; pool from ", /H, POOL_START
 
