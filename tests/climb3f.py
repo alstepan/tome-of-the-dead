@@ -41,7 +41,7 @@ OWN = {
     "SNIPER": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
     "SPIDER": {FID[n] for n in ("spider_walk1", "spider_walk2")},
     "SKELETON": {FID[n] for n in ("skeleton_walk1", "skeleton_walk2", "skeleton_walk3", "skeleton_walk4")},
-    "VAMPIRE": {FID[n] for n in ("necro_walk1", "necro_walk2", "necro_walk3", "necro_walk4")},
+    "VAMPIRE": {FID[n] for n in ("vamp_walk1", "vamp_walk2", "vamp_walk3")},   # ANIM-IMPORT2: own set
     "MUMMY": {FID[n] for n in ("mummy_walk1", "mummy_walk2", "mummy_walk3", "mummy_walk4")},
 }
 # (hero, depth, kind name, climber?, master seed)

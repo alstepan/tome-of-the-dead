@@ -179,10 +179,10 @@ KFID_ORC = FCTR
                 FRM orc_attack,     K_ORC, 24, STA
                 FRM orc_hurt,       K_ORC, 24, STA
 KFCNT_ORC = FCTR - KFID_ORC
-                ; 3F-T13bc: the Necro frames split into walk / cast / bite groups (units K_NECRO =
-                ; walk1..4, U_NCAST, U_VBITE: the Vampire draws walk + bite, the Necro / Archmage /
-                ; Bone Caller walk + cast). Walk B4 since ANIM-IMPORT (below). Order walk1..4,
-                ; cast (packs best: ART3 note)
+                ; 3F-T13bc: the Necro frames split into walk / cast groups (units K_NECRO =
+                ; walk1..4, U_NCAST: the Necro / Archmage / Bone Caller walk + cast; ANIM-IMPORT2 (4):
+                ; the Vampire has its own set below). Walk B4 since ANIM-IMPORT (below). Order
+                ; walk1..4, cast (packs best: ART3 note)
 KFID_NECRO = FCTR
                 FRM necro_walk1,    K_NECRO, 24, WK0
                 FRM necro_walk2,    K_NECRO, 24, WK4
@@ -194,8 +194,16 @@ KFID_NECRO = FCTR
 KFCNT_NECRO = FCTR - KFID_NECRO
 KFID_NCAST = FCTR
                 FRM necro_cast,     K_NECRO, 24, STA
-KFID_VBITE = FCTR
-                FRM vamp_bite,      K_NECRO, 24, STA    ; ART2 V1: the Vampire's drain bite
+                ; ANIM-IMPORT2 (4) (ART9 APPROVED): the Vampire's OWN 40-px set (cape, no staff; was
+                ; the Necro walk + the ART2 vamp_bite, U_VBITE retired): walk B3 = MOVECYC4 walk2,
+                ; walk1, walk3, walk1 (walk1 = rest = WK0 in the odd slots), BITE, HURT
+KFID_VAMPIRE = FCTR
+                FRM vamp_walk1,     K_VAMPIRE, 24, WK0
+                FRM vamp_walk2,     K_VAMPIRE, 24, WK4
+                FRM vamp_walk3,     K_VAMPIRE, 24, WK4
+                FRM vamp_bite,      K_VAMPIRE, 24, STA  ; ART9: the re-headed drain bite (32x40, was ART2 32x48)
+                FRM vamp_hurt,      K_VAMPIRE, 24, STA
+KFCNT_VAMPIRE = FCTR - KFID_VAMPIRE
                 ; 3F-T13bc ART3 B4: MOVECYC4 walk2, walk4, walk3, walk1 (walk3 drags the back foot,
                 ; walk4 lurches); frame order walk1..4, attack = the 4 + 1 block split (+140 B packed).
                 ; ANIM-IMPORT2 (3): the ART12 V2 tomb guard at 40 px (same B4 flags; HURT = rest pose)

@@ -93,11 +93,13 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # both heroes D1..D8 0 0 -864 -864 -960 -96 -96 -960.
 # ANIM-IMPORT2 (3) Orc V4 at 40 px (6 frames: +orc_walk3 / orc_hurt), Mummy V2 + Necro V2 at 40 px
 # (the Vampire still draws the Necro walk): both heroes D1..D8 0 0 -448 +640 -576 +64 +64 -576.
+# ANIM-IMPORT2 (4) the Vampire's own 40-px set (5 frames, unit K_VAMPIRE; was the Necro walk + U_VBITE):
+# both heroes D1..D8 0 0 -128 0 0 +2112 0 +2112 (POOL_CAP 33,050 -> 32,538: SRC6 13 -> 15 pages).
 LEVEL_NEED = {
-    (0, 1): 24192, (0, 2): 23648, (0, 3): 27840, (0, 4): 29504,
-    (0, 5): 24480, (0, 6): 26432, (0, 7): 28928, (0, 8): 27232,
-    (1, 1): 21056, (1, 2): 20512, (1, 3): 24640, (1, 4): 26432,
-    (1, 5): 21408, (1, 6): 23232, (1, 7): 25728, (1, 8): 24032,
+    (0, 1): 24192, (0, 2): 23648, (0, 3): 27712, (0, 4): 29504,
+    (0, 5): 24480, (0, 6): 28544, (0, 7): 28928, (0, 8): 29344,
+    (1, 1): 21056, (1, 2): 20512, (1, 3): 24512, (1, 4): 26432,
+    (1, 5): 21408, (1, 6): 25344, (1, 7): 25728, (1, 8): 26144,
 }
 
 
@@ -674,7 +676,8 @@ def main():
         # keeps the Dark Knight's block (486 B) in banks 1 / 3 (S6 still checks every block in SRC6)
         # 3F-T8: R6_GROW 10->13 leaves at most 16 SRC6 pages: the Ogre's and the Mummy's blocks stay in
         # banks 1 / 3 too (3,721 of 4,096 B)
-        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT", "K_OGRE", "K_MUMMY"}) | {"K_WIZARD"}))
+        # ANIM-IMPORT2: + the Vampire's own blocks (675 B) stay in banks 1 / 3 as well
+        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT", "K_OGRE", "K_MUMMY", "K_VAMPIRE"}) | {"K_WIZARD"}))
         variants.append(("src6", REPO, kit + ["SRC6_PAGES=16", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
                          {"SRC6_KINDS": s6}))
     if a.baseline:                 # (an older checkout ignores the unknown define)

@@ -78,3 +78,10 @@
         INCLUDE "necro_walk3.asm"
         INCLUDE "necro_walk4.asm"
         INCLUDE "necro_cast.asm"
+; --- Vampire: its own 40-px set (ART9 APPROVED; vamp_bite replaced in place, walk1..3 / hurt new;
+;     import_anim40 vamp)
+        INCLUDE "vamp_walk1.asm"
+        INCLUDE "vamp_walk2.asm"
+        INCLUDE "vamp_walk3.asm"
+        INCLUDE "vamp_bite.asm"
+        INCLUDE "vamp_hurt.asm"
