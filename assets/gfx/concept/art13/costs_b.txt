@@ -1,0 +1,46 @@
+# ART13b nun Archmage, side-view options — costs (tools/gen_art13b_nun.py). CONCEPT.
+# pool = src/defs.asm FRM formula (= gen_art13_nun.pool): per stored facing H x 2 x
+# (cols + 1 if off the 8-px grid at its shift); side frames store BOTH facings (the
+# left one is the mirror, generated at level entry); SYM = one stored facing, drawn
+# unmirrored both ways (the climb pairs' flag) — only for the frontal REVEAL.
+# Assumptions (engineer to confirm): (1) SYM accepted on a monster frame; (2) one shift
+# per frame (STA): the Archmage never walks, its G1d post and blink target are
+# cell-aligned (D's walk keeps WK0 / WK4 in case it ever moves); (3) F: Archmage body
+# width BW 2 (16 px; the Spider already has its own BW); (4) today HURT = rest + flash,
+# so every HURT frame is optional (the '-' totals).
+# D8 Warrior slack 3194 B; target for the recommendation <= ~1597.
+
+opt frame              flags     W  ax frontal  pool   src
+ A  nun_a_glide1       STA|SYM   24   0  YES      240   241
+ A  nun_a_glide2       STA|SYM   24   0  YES      240   241
+ A  nun_a_raise        STA|SYM   24   0  YES      240   241
+ A  nun_a_cast         STA       32   0  -        640   321
+ A  nun_a_hurt         STA|SYM   24   0  YES      240   241
+ C  nun_c_glide1       STA       24   0  -        480   241
+ C  nun_c_glide2       STA       24   0  -        480   241
+ C  nun_c_reveal       STA|SYM   24   0  YES      240   241
+ C  nun_c_hurt         STA       24   0  -        480   241
+ D  nun_d_walk1        WK0       24   0  -        480   241
+ D  nun_d_walk2        WK4       24   0  -        640   241
+ D  nun_d_reveal       STA|SYM   24   0  YES      240   241
+ D  nun_d_hurt         STA       24   0  -        480   241
+ E  nun_e_glide1       STA       24   0  -        480   241
+ E  nun_e_glide2       STA       24   0  -        480   241
+ E  nun_e_cast         STA       32   0  -        640   321
+ E  nun_e_hurt         STA       24   0  -        480   241
+ F  nun_f_glide1       STA       16   0  -        320   161
+ F  nun_f_glide2       STA       16   0  -        320   161
+ F  nun_f_reveal       STA|SYM   24   4  YES      320   241
+ F  nun_f_hurt         STA       16   0  -        320   161
+
+opt  fids  pool total  slack left | without HURT (rest + flash): fids pool slack | SRC6 zx0 (no hurt)
+ A    4      1360     +1834   |  3   1120   +2074      | 477 (ART13)
+ C    4      1680     +1514   |  3   1200   +1994      | 425 (290)
+ D    4      1840     +1354   |  3   1360   +1834      | 393 (255)
+ E    4      2080     +1114   |  3   1600   +1594      | 446 (315)
+ F    4      1280     +1914   |  3    960   +2234      | 322 (229)
+
+FRT ids: 8 spare of 144. Frontal frames per option: A all (ref), C/D/F one (REVEAL),
+E none (CAST is side-view, only the head turns 3/4).
+checks: head top constant per option, D shuffle planted-shoe slip [0, 0], packed and
+round-tripped in #00D700, #00FF00, #00FFFF, #D700D7, #D7D700, #FF00FF, #FF3030, #FFFFFF.
