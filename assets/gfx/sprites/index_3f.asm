@@ -31,6 +31,10 @@
 ; them in assets/gfx/sprites40/, listed in its index40.asm)
         INCLUDE "orc_walk3.asm"
         INCLUDE "orc_hurt.asm"
+        INCLUDE "vamp_walk1.asm"
+        INCLUDE "vamp_walk2.asm"
+        INCLUDE "vamp_walk3.asm"
+        INCLUDE "vamp_hurt.asm"
         INCLUDE "ogre_raise.asm"
         INCLUDE "vamp_bite.asm"
         INCLUDE "small_corpse.asm"

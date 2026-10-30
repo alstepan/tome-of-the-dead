@@ -146,7 +146,7 @@ ksm_sl_e:
 ; a block, ASSERTed). 2-frame walk: MOVECYC2 walk2, walk1 — WALK1 (the rest
 ; pose) in the odd, cell-aligned slot (frames.asm). HURT = the rest frame held
 ; + the $42 hit flash (R4) — ANIM-IMPORT: real poses for the Spider (bite), Archer
-; (skeleton_hurt), Orc (orc_hurt, ANIM-IMPORT2); the Vampire's lands with its own set. DEAD = the shared
+; (skeleton_hurt), Orc (orc_hurt), Vampire (vamp_hurt; ANIM-IMPORT2). DEAD = the shared
 ; small_corpse (CORPSE-ASHES: every monster but Bat / Slime / Ghost). Attack
 ; timing = the Skeleton's (wind-up 3, strike 2 + IMPACT; 3F-T13bc: the Orc /
 ; Ogre wind-up is their RAISE frame, the Vampire strikes with vamp_bite) / the
@@ -186,14 +186,14 @@ ne_attack:      DB FID_necro_walk1, 3, 0, FID_necro_cast, 2, SF_IMPACT, SEQ_END
 ne_hurt:        DB FID_necro_walk1, 3, 0, SEQ_END
 ne_death:       DEATHSEQ FID_necro_walk1, FID_small_corpse, FID_small_corpse, FID_necro_walk1
 ksm_ne_e:
-; --- Vampire: the Necro walk (B3, hood + staff in its own ink $05) + BITE (ART2 V1); not a climber ---
+; --- Vampire: ANIM-IMPORT2 its own 40-px set (ART9: cape, no staff; walk B3, BITE, HURT); not a climber ---
 ksm_vp:         KSMH ksm_vp_e - ksm_vp_s, 3, vp_idle, vp_move, vp_idle, vp_hurt, vp_attack, vp_hurt, vp_hurt, vp_death, ksm_vp_s
 ksm_vp_s:
-vp_idle:        DB 1, FID_necro_walk1, 1, SEQ_END
-vp_move:        MOVECYC4 necro_walk2, necro_walk4, necro_walk3, necro_walk1   ; shares the Necro B4 until its own set
-vp_attack:      DB FID_necro_walk1, 3, 0, FID_vamp_bite, 2, SF_IMPACT, SEQ_END
-vp_hurt:        DB FID_necro_walk1, 3, 0, SEQ_END
-vp_death:       DEATHSEQ FID_necro_walk1, FID_small_corpse, FID_small_corpse, FID_necro_walk1
+vp_idle:        DB 1, FID_vamp_walk1, 1, SEQ_END
+vp_move:        MOVECYC4 vamp_walk2, vamp_walk1, vamp_walk3, vamp_walk1   ; B3 (ART9)
+vp_attack:      DB FID_vamp_walk1, 3, 0, FID_vamp_bite, 2, SF_IMPACT, SEQ_END
+vp_hurt:        DB FID_vamp_hurt, 3, 0, SEQ_END          ; its own HURT pose (ART9)
+vp_death:       DEATHSEQ FID_vamp_hurt, FID_small_corpse, FID_small_corpse, FID_vamp_walk1
 ksm_vp_e:
 ; --- Mummy: walk B4 = walk2, walk4, walk3, walk1 (ART3) ---
 ksm_mu:         KSMH ksm_mu_e - ksm_mu_s, 3, mu_idle, mu_move, mu_climb, mu_climb + 1, mu_attack, mu_hurt, mu_hurt, mu_death, ksm_mu_s
@@ -239,6 +239,7 @@ ksm_ar_e:
                 ; the 2-frame walkers' rest frame (odd slot, drawn cell-aligned) must not be WK4
                 ASSERT !(FFL_spider_walk1 & FF_PH4) && !(FFL_orc_walk1 & FF_PH4) && !(FFL_necro_walk1 & FF_PH4)
                 ASSERT !(FFL_mummy_walk1 & FF_PH4) && !(FFL_ogre_walk1 & FF_PH4) && !(FFL_dk_walk1 & FF_PH4)
+                ASSERT !(FFL_vamp_walk1 & FF_PH4)
                 ; KS_CLIMBREST = the climb cycle + 1 (one byte read): that byte is climb_h1, which
                 ; must be the cell-aligned STA climb art (CLIMBCYC emitted the real pair)
                 ASSERT FID_climb_h1 >= 0 && FID_climb_h2 >= 0 && !(FFL_climb_h1 & (FF_PH4 | FF_MOTION))

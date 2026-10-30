@@ -55,7 +55,7 @@ R6_ADDR         EQU $10000 - R6_LEN ; $DD00
 ; key stays unique and no FD_FLAGS bit is spent. Its tape bytes ride on the
 ; boot block's tape block (BOOT6_TAPE_LEN, main.asm).
     IFNDEF SRC6_PAGES
-SRC6_PAGES      EQU 13              ; 3F-T13bc: 10 -> 13 (+ the ART2 / ART3 frames, 12 blocks, 3,173 B, dk_block out); 3F-T13: the 3F-A1 sources (8 blocks, 2,393 B packed; was 1 = the spike's Spider stand-in)
+SRC6_PAGES      EQU 15              ; ANIM-IMPORT2: 13 -> 15 (the Vampire's own set, 2 blocks 675 B; 14 blocks 3,801 B, 39 free; -512 B POOL_CAP, R6 untouched); 3F-T13bc: 10 -> 13 (+ the ART2 / ART3 frames, 12 blocks, 3,173 B, dk_block out); 3F-T13: the 3F-A1 sources (8 blocks, 2,393 B packed; was 1 = the spike's Spider stand-in)
     ENDIF
     IFNDEF SRC6_STANDIN
 SRC6_STANDIN    EQU 0               ; bit mask of the zx0_sources.py stand-in groups assembled into SRC6 (3F-T13: none, the real art replaced them)

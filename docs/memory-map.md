@@ -227,6 +227,11 @@ ASSERT) and must keep `LOW R6_ADDR` = 0.
 
 ### SRC6 region (SRC6 spike 2026-10-27; 3F memory plan, `feat/src6-spike`)
 
+**ANIM-IMPORT2 (2026-10-30):** `SRC6_PAGES` default **15** (`$C900..$D7FF`, 3,840 B): + `K_VAMPIRE` (the
+Vampire's own 40-px set, 2 blocks 675 B), 14 blocks, 9,408 raw → **3,801 B packed, 39 free**; boot block
+`$C141..$C8FF`. 13 → 15 pages = −512 B `POOL_CAP` (33,050 → 32,538); R6 is not touched. The `zx0_pool`
+**src6** variant keeps `K_VAMPIRE` in banks 1 / 3 too (16 pages max).
+
 **3F-T13bc:** `SRC6_PAGES` default **13** (`$D000..$DCFF`): 12 blocks (+ `G_CLIMBH`, the ART2 /
 ART3 / ART4 frames; `dk_block` out), 8,736 raw → **3,231 B packed, 97 free**; boot block
 `$C863..$CFFF` ("ART2 / ART3 / ART4 wiring (3F-T13bc)").
@@ -4095,14 +4100,35 @@ Ogre, Death Knight (48), Goblin (32), Ghost, Bat, Slime, Rat, Spider and the her
   (`... necro`: walk1..4 + cast; Archmage / Bone Caller share it in their inks) art-only. New 40-px-only
   names are INCLUDEd in `sprites/index_3f.asm` (the packer's frame list) and resolved in `sprites40/`.
   Pool both heroes D1..D8: 0, 0, −448, +640, −576, +64, +64, −576. **SRC6 exactly full** (3,328 of 3,328).
+- **(4) Vampire own set:** `vamp_walk1` (WK0) / `vamp_walk2` / `vamp_walk3` (WK4) / `vamp_bite` (STA,
+  ART9 32×40, replaces the ART2 32×48 in place) / `vamp_hurt` (STA) = unit `K_VAMPIRE` (`KFID_VAMPIRE`,
+  5 fids after `necro_cast`); walk B3 `MOVECYC4 walk2, walk1, walk3, walk1`, HURT / DEATHSEQ pose
+  `vamp_hurt`; no longer draws the Necro walk. **`U_VBITE` retired** (`U_SKCLIMB` K_MAX + 9 → + 8),
+  `pool_gmap` 2 Vampire records → 1. Pool both heroes D1..D8: 0, 0, −128, 0, 0, +2,112, 0, +2,112.
+  `SRC6_PAGES` 13 → 15 (above). `tests/walk_feet.py` (new, static): every 40-px walk cycle keeps a foot
+  planted (the next slot's sole pixels + 4 px meet the current sole; the 48-px set failed it: bob / slide).
 
-| Region (release `-DDEBUG_KIT=0`; main `df086fc` → step) | main | (1) heroes | (2) Skeleton + climb | (3) Orc + Mummy + Necro |
-|---|---|---|---|---|
-| pool need worst level / slack (`POOL_CAP` 33,050) | D4 W 31,840 / 1,210 | D4 W 29,728 / **3,322** | D4/D7 W 28,864 / **4,186** | D4 W 29,504 / **3,546** |
-| PROTO slack | 2,330 | 4,442 | 5,306 | 5,306 |
-| bank 1 free (sprite sources) | 150 | 673 (packed 12,015 → 11,492) | 810 | 810 |
-| bank 2 free | 271 | 267 (`ftz_zx0` 124 → 131; `.jump` −3) | 267 | 267 |
-| R6 free | 327 | 328 | 326 (packed streams) | 332 |
-| SRC6 free (13 pages) | 160 | 160 | 181 (climb pair block) | **0** |
-| `FID_COUNT` / `FRT_MAX` | 130 / 144 | 130 / 144 | 130 / 144 | 132 / 144 |
+| Region (release `-DDEBUG_KIT=0`; main `df086fc` → step) | main | (1) heroes | (2) Skeleton + climb | (3) Orc + Mummy + Necro | (4) Vampire |
+|---|---|---|---|---|---|
+| `POOL_CAP` | 33,050 | 33,050 | 33,050 | 33,050 | **32,538** (SRC6 15 pages) |
+| pool need worst level / slack | D4 W 31,840 / 1,210 | D4 W 29,728 / **3,322** | D4/D7 W 28,864 / **4,186** | D4 W 29,504 / **3,546** | D4 W 29,504 / **3,034** |
+| PROTO slack | 2,330 | 4,442 | 5,306 | 5,306 | 5,306 |
+| bank 1 free (sprite sources) | 150 | 673 (packed 12,015 → 11,492) | 810 | 810 | 810 |
+| bank 2 free | 271 | 267 (`ftz_zx0` 124 → 131; `.jump` −3) | 267 | 267 | 267 |
+| R6 free (release / kit) | 327 / 235 | 328 | 326 (packed streams) | 332 | **327 / 230** |
+| SRC6 free | 160 | 160 | 181 (climb pair block) | **0** | 39 (15 pages) |
+| `FID_COUNT` / `FRT_MAX` | 130 / 144 | 130 / 144 | 130 / 144 | 132 / 144 | **136 / 144** |
+
+Pool need per level after (4) (release; `tests/zx0_pool.py` `LEVEL_NEED`), `POOL_CAP` 32,538:
+
+| depth | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 |
+|---|---|---|---|---|---|---|---|---|
+| Warrior need / slack | 24,192 / 8,346 | 23,648 / 8,890 | 27,712 / 4,826 | **29,504 / 3,034** | 24,480 / 8,058 | 28,544 / 3,994 | 28,928 / 3,610 | 29,344 / 3,194 |
+| Mage need / slack | 21,056 / 11,482 | 20,512 / 12,026 | 24,512 / 8,026 | **26,432 / 6,106** | 21,408 / 11,130 | 25,344 / 7,194 | 25,728 / 6,810 | 26,144 / 6,394 |
+
+**Overlays with 40-px bodies (checked on screen, `tests/climb3f.py --png` + a scratch scene):** attrs (kind ink,
+`$42` flash, golden glow, tints) follow the drawn footprint (5 rows): the blank top body row is never painted.
+The status mark (`mark.asm`: row = `py / 8 − 1`, the body box's top − 1) now floats one blank cell above a
+40-px head (an 8-px gap; unchanged for the 48-px Ogre / DK). Moving it down a row for 40-px frames is a
+`mark.asm` change (not done here).
 
