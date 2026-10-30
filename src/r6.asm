@@ -17,10 +17,10 @@
 ;==============================================================================
                 INCLUDE "pickup6.asm"          ; 3E-T11: pu_add, pot_take1, kit_add, mon_drop / drop_put (was bank 3)
                 INCLUDE "bag6.asm"             ; 3E-T10: bag_add / bag_find / bag_take / bag_pick, pot_sync user (was bank 3)
-                INCLUDE "hunger6.asm"          ; 3E-T9: hunger_turn / hunger_add / item_food
+                INCLUDE "hunger6.asm"          ; 3E-T9: item_food (w2b: the hunger logic is bank-7 hunger7.asm)
                 INCLUDE "gear6.asm"            ; 3E-T8: hero_recalc, enchant_weapon, fx_line, it_fmt (+ fx stems, it_stat)
                 INCLUDE "fx6.asm"              ; 3E-T12 (+ the T8 equip / remove): fx_main, fx_quick, the effects, tele_pick, pot_eff
-                INCLUDE "trap6.asm"            ; 3E-T16: trap_turn / trap_fire (trigger, search, Mage sense, effects)
+                INCLUDE "trap6.asm"            ; 3E-T16: tele_arm / tele_flash / trap_at (w2b: the runtime is bank-7 trap7.asm)
                 INCLUDE "fi6.asm"              ; FLOOR1: fi_add / fi_slot / fi_put (the floor-item glyph cache)
                 INCLUDE "abil6.asm"            ; 3F-T6: parry6 / mummy6 / acid6 / wear_slot / wear_apply
                 INCLUDE "tier6.asm"            ; 3F-T5: lp_gen (FRESH unit loop + tier roll) / kind_hp, drop_row + drop_tab (from bank 3)
@@ -58,7 +58,7 @@ debug_kit:
                 ret
     ENDIF
                 INCLUDE "lq6.asm"              ; AI-L1: lq_block (the ladder queue: strongest first)
-                INCLUDE "boss6.asm"            ; 3F-T8: lp_post / ai_guard / grate_open (the lair boss)
+                INCLUDE "boss6.asm"            ; 3F-T8: lp_post (the lair boss; w2b: ai_guard / grate_open / boss_chk -> boss7.asm)
     IF F3_GEN
                 INCLUDE "sanct6.asm"           ; 3F-T10: sanctum_leaf (D8 Sanctum generation, only with the 3F switch)
     ENDIF

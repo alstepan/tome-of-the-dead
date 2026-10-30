@@ -344,8 +344,8 @@ lp_transition:
 .hx:            ld   (LP_HX), a
                 ld   a, (EXIT_DEST)
                 call lp_enter
-                ld   hl, boss_chk              ; 3F-T8: the lair boss still exists (debug trap)
-                call far6
+                ld   hl, boss_chk              ; 3F-T8: the lair boss still exists (debug trap; bank 7, w2b)
+                call far7
                 call follow_admit
                 ld   a, (CUR_ROOM)
                 ld   e, 0

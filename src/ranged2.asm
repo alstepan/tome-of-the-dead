@@ -50,9 +50,9 @@ ai_rhook:
 ;------------------------------------------------------------------------------
 ; ai_ghook — 3F-T8 boss guard hook (game.md §9.2 G2: after the attack rules,
 ; before any movement rule): only the lair boss (CUR_ROOM = LVL_LAIR and
-; E_KIND | E_GOLD = LP_BOSS) far6s R6 ai_guard (boss6.asm). Same In / Out as
+; E_KIND | E_GOLD = LP_BOSS) far7s ai_guard (bank-7 boss7.asm). Same In / Out as
 ; ai_rhook (CF = 1 the turn is used; TMP4 and HL kept).
-; Cost: outside the lair +46 T a monster; the boss + far6 ai_guard.
+; Cost: outside the lair +46 T a monster; the boss + far7 ai_guard.
 ;------------------------------------------------------------------------------
 ai_ghook:       ld   a, (LVL_LAIR)
                 ld   b, a
@@ -67,8 +67,8 @@ ai_ghook:       ld   a, (LVL_LAIR)
                 ret  nz
                 push hl
                 ld   e, h                      ; E = standing flag
-                ld   hl, ai_guard              ; R6: L = 1 used
-                call far6
+                ld   hl, ai_guard              ; bank 7 boss7.asm (w2b; was R6): L = 1 used
+                call far7
                 ld   a, l
                 pop  hl
                 rra

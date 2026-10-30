@@ -86,7 +86,7 @@
   `level_enter`); a helper that leaves another bank paged (`blit_sprite`,
   `render`, the generator, `page_bank`) is wrapped in `ld c, BANK_COLD7` /
   `call farb`. Paging bank 7 in never changes the displayed screen (that is
-  `$7FFD` bit 3, kept by `page_bank`). No SMC and no data in bank 7 code:
+  `$7FFD` bit 3, kept by `page_bank`). No SMC and no data in bank 7 code (MEM-RECLAIM w2b: its read-only tables go to `src/data7.asm`, bank 7 after the tilesets):
   `tests/gfx_integrity.py` asserts `B7_CODE..B7_LIMIT` == the .sna. Test
   probes never go there (a PC breakpoint at `$DB00+` also fires in bank-3 /
   bank-1 code at the same address): keep a bank-2 stub as the probe

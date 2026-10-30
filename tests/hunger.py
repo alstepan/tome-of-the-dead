@@ -30,6 +30,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_GOBLIN, stand_y, RUN_LIMIT, attr_at  # noqa: E402
+B7_LABELS = {"hunger_turn", "hunger_add", "trap_step", "trap_turn"}   # MEM-RECLAIM w2b: bank-7 cold code (far7), not R6
 from proj3 import T, w16  # noqa: E402
 from abil_melee import stream_text  # noqa: E402
 
@@ -102,8 +103,8 @@ def run(h, p, check):
         run_to_probe()
         assert p.pc() == WT, "stub did not return"
 
-    def far6(label, a=0):
-        stub([0x3E, a, 0x21] + w16(S[label]) + [0xCD] + w16(S["far6"]))
+    def far6(label, a=0):                      # MEM-RECLAIM w2b: the hunger logic is bank 7 (far7)
+        stub([0x3E, a, 0x21] + w16(S[label]) + [0xCD] + w16(S["far7" if label in B7_LABELS else "far6"]))
 
     def deal(att, tgt, dmg):
         inner = ([0xDD, 0x21] + w16(S["P_ENTITIES"] + att * STRIDE) + [0x3E, tgt, 0x06, dmg, 0x0E, 0, 0x1E, 0,
@@ -333,14 +334,17 @@ def run(h, p, check):
 
     def cost(label, food=60, tmr=0, stage=FED, a=0):
         setfood(food, tmr, stage)
-        ok = p.code([0x3E, a, 0x21] + w16(S[label]) + [0xCD] + w16(S["far6"]))
+        ok = p.code([0x3E, a, 0x21] + w16(S[label]) + [0xCD] + w16(S["far7" if label in B7_LABELS else "far6"]))
         return ok, p.tstates
     tt = {"plain": cost("hunger_turn"), "burn": cost("hunger_turn", tmr=5),
           "burn + HUNGRY line": cost("hunger_turn", food=25, tmr=5, stage=OK),
           "item_food HUNGRY": cost("item_food", food=20, stage=HUNGRY)}
-    print(f"[info] costs incl. far6 (T): {tt}", flush=True)
-    check("T1 hunger_turn <= 1.2k T plain / burn, <= 5k with a line; item_food <= 9k (1st frame only)",
-          all(v[0] for v in tt.values()) and tt["plain"][1] <= 1200 and tt["burn"][1] <= 1200
+    print(f"[info] costs incl. far6 / far7 (T): {tt}", flush=True)
+    # MEM-RECLAIM w2b: hunger_turn is bank-7 code (contended, ~+0.25k measured) that end_turn calls
+    # directly; the stub's far7 (~0.25k) is test overhead the game no longer pays (it paid far6 before):
+    # the plain / burn cap incl. the far call is 1.5k (was 1.2k incl. far6; budget.py: every tick -88 T).
+    check("T1 hunger_turn <= 1.5k T plain / burn incl. the test's far7, <= 5k with a line; item_food <= 9k (1st frame only)",
+          all(v[0] for v in tt.values()) and tt["plain"][1] <= 1500 and tt["burn"][1] <= 1500
           and tt["burn + HUNGRY line"][1] <= 5000 and tt["item_food HUNGRY"][1] <= 9000, tt)
 
 

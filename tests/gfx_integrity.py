@@ -156,7 +156,7 @@ def tables(p, check, tag, depth):
     for (b, lo, hi, name) in (
             (1, S["vdata"] + 0x4000, S["vdata_end"] + 0x4000, "bank-1 vdata (panel / status icons; 3E-T1: the boot-only part is in the boot block)"),
             (1, S["menu_font"], S["menu_torch_end"], "bank-1 menu art (font, title, torch)"),
-            (7, S["tilesets"], S["tilesets_end"], "bank-7 tilesets (MEM-RECLAIM w2a: dedup block)"),
+            (7, S["tilesets"], S["data7_end"], "bank-7 tilesets (w2a: dedup) + data7 (w2b: bank-7 code tables)"),
             (7, S["B7_CODE"], S["B7_LIMIT"], "bank-7 cold code + unused tail (D3-S2: the "
              "freed bitmap shadow, w2a + the old tileset slots 0..3, is never written)"),
             (0, S["text_img"], S["text_img_end"], "bank-0 text block")):

@@ -292,7 +292,8 @@ fx_eat:
                 call fx_line
                 ld   a, (fx_type)
                 call it_amt                    ; A = its FOOD
-                call hunger_add
+                ld   hl, hunger_add            ; bank 7 hunger7.asm (MEM-RECLAIM w2b; A passes in)
+                call far7
                 ld   a, SFX_EAT
                 jp   fx_take
 
