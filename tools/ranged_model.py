@@ -36,6 +36,7 @@ PF_ROW_DY, RG_REL, CNB_MAX, PF_IMPT, FX_NONE = 2, 2, 8, 2, 0xFF
 STS_HOLD, STS_MIND, MIND_FEAR, IMMF_FEAR = 0x03, 0x0C, 0x04, 0x08
 MSG_M_HIT, MSG_M_MISS = 4, 5
 RC_DEATH = 3
+BC_CD, BC_LIVE = 8, 1                              # 3F-T9 Bone Caller summon (combat_defs.asm)
 
 
 class Rng:
@@ -150,6 +151,13 @@ def decide(sit, rng):
             return out
     if fl & RWF_SPELL and not fl & RWF_NOREFL and hero_rsp(H["res"], DTY_DARK) == RSP_X:
         return out
+    if fl & RWF_PRE:                                # 3F-T9 caster pre-rule (spawn6.asm sp_summon):
+        s = sit.get("s", 0)                         # S (E_RCD bits 2-5) > 0: S - 1 and on to the shot;
+        if s:                                       # S = 0 and the room takes a summon (sit["summon_ok"]:
+            out["s"] = s - 1                        # queue free, < BC_LIVE summons, a free slot, the cap)
+        elif sit.get("summon_ok"):                  # -> the turn is the summon: S := BC_CD, no shot
+            out.update(used=True, summon=True, s=BC_CD)
+            return out
     out["used"] = True
     if old == 0:                                    # SHOOT
         out["left"] = d < 0

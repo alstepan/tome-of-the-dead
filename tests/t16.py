@@ -72,6 +72,7 @@ NAME = ("DART", "GAS", "TELEPORT", "ALARM", "STUN")
 T_TRAP = S["T_TRAP"]
 FIRE_LINE = {DART: "A DART HITS YOU!", GAS: "SLEEPING GAS!", ALARM: "A BELL RINGS. NOTHING COMES",
              TELE: "YOU ARE TELEPORTED!", STUN: "A STONE FALLS ON YOU!"}
+WAVE_LINE = "AN ALARM BELL RINGS!"             # 3F-T9: a generated level while the boss lives (tests/spawn.py)
 
 
 def main():
@@ -763,7 +764,12 @@ def fuzz(p, check, lines, act, tick, heal, ent, cell):
             nb0, nb1 = z.read_memory(S["TRAP_LIST"] + 2 * i0, 2)
             e2 = p.ent(0)
             moved_room = p.rb("CUR_ROOM") != room
-            fired = (FIRE_LINE[typ] in ln) and not (typ == TELE and not nb0 & SPENT)
+            fired = (FIRE_LINE[typ] in ln or (typ == ALARM and WAVE_LINE in ln)) and not (typ == TELE and not nb0 & SPENT)
+            if typ == ALARM and WAVE_LINE in ln:       # 3F-T9: the wave (end_turn's sp_run) leaves the room
+                p.until(p.idle, 60)
+                for sl in range(1, 16):
+                    if p.ent(sl)["ROOM"] == room:
+                        p.set_ent(sl, ROOM=NOWHERE)
             found = any(x.startswith("TRAP FOUND: ") for x in ln)
             # the logic-time body: after the action (a teleport moved him on: the intended one)
             if moved_room and fired and typ == TELE:

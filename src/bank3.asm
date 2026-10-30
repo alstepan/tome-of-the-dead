@@ -263,7 +263,9 @@ follow_admit:
 ; (3F-T8 review: back in bank 3 from bank 7 — bank-7 relief; a plain call from follow_admit.)
 ; Clobbers: A, BC.
 place_follower:
-                ld   (ix+E_RCD), 0             ; 3F-T7: cooldown counter 1 on arrival (stored XOR 1)
+                ld   a, (ix+E_RCD)             ; 3F-T7: cooldown counter 1 on arrival (stored XOR 1);
+                and  RCD_KEEP                  ; 3F-T9: the summon counter / summon-made / once bits stay
+                ld   (ix+E_RCD), a
                 ld   a, (EXIT_DEST)
                 ld   (ix+E_ROOM), a
                 set  EF_PENDING_BIT, (ix+E_FLAGS)

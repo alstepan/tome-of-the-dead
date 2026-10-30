@@ -254,8 +254,8 @@ lp_append:      call lp_rec
 ; E = 0: every slot (E, not C: far3 passes DE, not BC — tests call it). §9.4.2: each active monster slot of the room is freed;
 ; the alive ones (not EF_DYING) are appended to the record with their exact
 ; hp and EF_RESPAWN (position, facing, AI state, statuses, PENDING dropped).
-; Dead ones are never written. (Summons: no summon exists yet — 3F flags them
-; and skips the append.) The record becomes VISITED.
+; Dead ones are never written; summon-made ones (3F-T9 RCD_SUMMONED) are
+; discarded (§9.4.2); RCD_ONCE is written as LEK_BRED. The record becomes VISITED.
 ; Clobbers: A, BC, DE, HL, IX.   ~2.4k T (15 slots) + ~0.2k T per banked one
 ;------------------------------------------------------------------------------
 lp_bank:        ld   (LPV_ROOM), a
@@ -281,10 +281,15 @@ lp_bank:        ld   (LPV_ROOM), a
 .b:             ld   a, (ix+E_FLAGS)
                 bit  EF_DYING_BIT, a
                 jr   nz, .free                 ; dead: never returns
+                bit  RCD_SUMMONED_BIT, (ix+E_RCD)
+                jr   nz, .free                 ; 3F-T9: summon-made: discarded (§9.4.2)
                 and  EF_RESPAWN
                 or   (ix+E_KIND)
                 or   (ix+E_GOLD)               ; 3F-T5: LEK_GOLD or 0
-                ld   b, a
+                bit  RCD_ONCE_BIT, (ix+E_RCD)
+                jr   z, .nb
+                set  LEK_BRED_BIT, a           ; 3F-T9: the once bit (a Rabbit Rat bred)
+.nb:            ld   b, a
                 ld   c, (ix+E_HP)
                 ld   a, (LPV_ROOM)
                 call lp_append
@@ -837,7 +842,10 @@ lp_spawn:       ld   ix, P_ENTITIES + P_ENT_STRIDE
                 add  a, a
                 add  a, 6
 .mh:            ld   (ix+E_MAXHP), a
-                ld   a, c
+                bit  LEK_BRED_BIT, c           ; 3F-T9: the once bit back (lp_bank wrote it)
+                jr   z, .nb
+                set  RCD_ONCE_BIT, (ix+E_RCD)
+.nb:            ld   a, c
                 and  LEK_GOLD
                 ld   (ix+E_GOLD), a            ; the golden bit travels with the entity (lp_bank writes it back)
                 pop  hl

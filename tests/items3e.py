@@ -26,7 +26,9 @@ from proj3 import T, w16  # noqa: E402
 
 KIT = bool(S.get("KIT_DEBUG", 0))
 CANARY = 0xA5
-LOW_RES = [(0x5CC0, 0x5E00), (S["RG_RAM_END"], 0x6000)]   # runtime-only reserve (memory-map; 3F-T7: RG_RAM after MK_RAM)
+# runtime-only reserve (memory-map; 3F-T7: RG_RAM after MK_RAM; 3F-T9: BOSS_TRAP + the spawn queue SPQ_RAM fill
+# RG_RAM_END..$5FFF, new_game zeroes SPQ_K)
+LOW_RES = [(0x5CC0, 0x5E00)] + ([(S["SPQ_RAM_END"], 0x6000)] if S["SPQ_RAM_END"] < 0x6000 else [])
 
 
 def layout(check):

@@ -185,7 +185,7 @@ trap_step:
                 jr   z, .fd
                 ; --- fire ---
                 dec  c
-                jr   z, tr_final               ; step 1
+                jr   z, .s1                    ; step 1
                 call tr_eff                    ; step 0
                 call tr_ent
                 ld   a, PLATE_FLASH_ATTR
@@ -199,6 +199,9 @@ trap_step:
 .pl:            call tr_plate
                 ld   b, TRAP_STEP_T
                 jr   tr_rearm
+.s1:            xor  a                         ; 3F-T9: the ALARM's red border off (black is
+                out  (PORT_BORDER), a          ; the only border colour in play: any type)
+                jr   tr_final
                 ; --- find ---
 .fd:            ld   a, c
                 or   a
@@ -265,7 +268,28 @@ tr_eff:
                 jp   far6
 .nt:            dec  a
                 jr   nz, .dart                 ; DART (A = -3) / STUN (A = 1)
-                ld   e, S_FX_TRAP_BELL         ; ALARM: TODO 3F the wave (§1.5, §9.5)
+                ld   a, (LVL_DEPTH)            ; ALARM (3F-T9, game.md §1.5): a generated level (the
+                or   a                         ; PROTO rooms have no LP_KINDS) while the boss lives
+                jr   z, .bell
+                ld   a, (LVL_FLAGS)            ; (its unique not dropped: as the teleport's lair rule)
+                and  LF_UNIQUE
+                jr   nz, .bell
+                ld   hl, SPQ_K                 ; a wave of 1 + (rnd & 1) at a door, made by end_turn's
+                ld   (hl), SPQ_WAVE            ; sp_run (the queue is empty: the trap fires in the
+                inc  l                         ; hero's phase, before any producer of this turn)
+                ld   (hl), SPQ_NONE            ; SPQ_P: the doors
+                call rng_next
+                and  1
+                inc  a
+                ld   (SPQ_N), a
+                ld   a, BORDER_ALARM           ; the red border, TRAP_STEP_T ticks (step 1 clears it)
+                out  (PORT_BORDER), a
+                ld   e, S3_TRAP_ALARM          ; "AN ALARM BELL RINGS!" (bank 1 resident stem)
+                xor  a
+                ld   hl, it_line
+                jp   far1
+.bell:          xor  a                         ; (A = 0: the stem alone)
+                ld   e, S_FX_TRAP_BELL         ; boss dead / PROTO: "A BELL RINGS. NOTHING COMES"
                 ld   hl, fx_line               ; R6 gear6.asm (A = 0: the stem alone; E kept by farb)
                 jp   far6
 .gas:           ld   a, HOLD_ASLEEP

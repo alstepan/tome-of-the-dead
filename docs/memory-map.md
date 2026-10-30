@@ -194,6 +194,7 @@ LAST (`r6_blobs`), run by `ovl_run` with C = `BANK_R6`.
 | `$E500` `r6_code` | 602 / 584 | `pickup6.asm` (was bank-3 `pickup3.asm`): `pot_sync`, `pu_add`, ~~`pot_take1`~~ (3E-T12: deleted, −9 B), `kit_add` (+ kit lists; the `DEBUG_KIT` extras are the 18-B difference), `mon_drop`, `drop_put` + `dp_*` (5 B, written in play), `drop_tab`, `uniq_tab`; then `bag6.asm` (was `bag3.asm`, `BAG6_LEN` 187): `bag_add`, `bag_find`, `bag_take`, **3E-T13 `bag_discard` (+20)**, `bag_pick` |
 | **MEM-RECLAIM w2c (2026-10-30)** | **R6 free +185 B (release 1,283 -> 1,468, kit 1,212 -> 1,397)** | icon packing: `icons16` 1,376 B raw -> `icpk_idx` + `icpk` 995 B (−381), unpacker code +196 (`icons6.asm` `ic_find` / `ic_scr` / `ic_unp` (unrolled oct, ~50 B: `fi_slot` runs on a drop's kill tick, budget lcastf) / `rev8`; `ic_blit`'s copy pass gone; `fi_slot`'s FI_INK fill x4 unrolled). Decoded byte-exact (tools/icons16.py proves the Python model; the screen tests compare against the raw table). Stack: none (decoded onto the screen / into `FI_GLY`). Costs (ic1, incl. far6): `icon_slot` 2.45k -> 3.1k T, a MIRROR icon 4.5k, `worn_draw` 9.4k -> 16.3k (3 MIRROR placeholders), `fi_slot` ~+0.7k T per new slot; budget lcastf 123,059 -> 123,743 T |
 | **MEM-RECLAIM w2b (2026-10-30)** | **R6 free 229 -> 1,283 B release (kit 158 -> 1,212; 1,292 / 1,221 before the Spider climb commit took 9 B)** | cold code moved **R6 -> bank 7** (`B7_CODE` space freed by w2a): `hunger7.asm` (`hunger_turn` (end_turn calls it directly, was far6; `wear_apply` stays R6, far6 from it on a wear turn), `hg_faint`, `food_sub` / `food_dirty`, `hunger_add` (far7 from R6 `fx6`), `hg_stage` / `hg_line`); `trap7.asm` (`trap_turn` (jp from `trap_chk`), `trap_step` (jp from `act_pend`), `tr_*`, `tr_eff` (far6 R6 `tele_arm` / `fx_line`), `hero_hold`; `tr_draw` calls `ap_put_a` directly); `boss7.asm` (`grate_open` far7 from bank-3 `mon_drop`, `boss_chk` far7 from `lp_transition`, `ai_guard` far7 from bank-2 `ai_ghook`). Their read-only tables (`tr_ink7`, `tr_fx`, `glow7`; 29 B) are `data7.asm` in bank 7 right after the tilesets (`data7..data7_end`, one tape block with them, `B7D_LEN`; bank-7 code keeps no data). Stay in R6: `item_food` + `hg_attr` (panel render: never from contended bank 7), `tele_arm` / `tele_flash` / `trap_at` (R6 `fx6` / `pickup6` call them), `lp_post`; `mummy6` inlines its `food_sub` (13 B). Tests call the moved entries through far7 (`B7_LABELS` in hunger / status1 / tier6, t16). |
+| (code, after `ranged6`) | **800** (3F-T9) | `spawn6.asm`: the spawn queue producers `breed6` / `sp_bcall` / `ph_summon` + `sp_summon` (the pose: ranged6 `rg_pose`, now shared with `rg_shoot`), `sp_scan` / `sp_wt` / `sp_fit` (§9.3 cap), `sp_run` (end_turn) + `sp_init` / `sp_y` / `sp_place` / `sp_try` / `sp_door` / `sp_fin`; no variables (bank-5 `SPQ_RAM`) — see "3F-T9" |
 | `$E75A` `ovl_page_zx0` | **1,182** (3E-T13; was 328) | the bag page stream (`BANK_OVL_PAGE`; was bank 1) |
 | ~~`ovl_items_zx0`~~ | 0 (was 881) | **MEM-1: back in bank 1** (`BANK_OVL_ITEMS` = `BANK_UI1`, after the `it_text` block; R6 holds only `ovl_page_zx0` now, 1,192 B of streams incl. the page stream; the R6 addresses below shift down 881 B) |
 | (code, after `bag6`) | 310 code+data (**STATUS1: +55** `hg_faint`) | **3E-T9** `hunger6.asm` — **MEM-RECLAIM w2b: `hunger_turn`, `food_sub` / `food_dirty`, `hunger_add`, `hg_stage` / `hg_line` moved to bank 7 (`hunger7.asm`); only `item_food`, `hg_attr` (4 B) stay here** — see "3E-T9" |
@@ -1411,7 +1412,7 @@ $5F00..$5F8B (140 B), E: free once `boot` has moved SP off the BASIC stack) are 
 reserve (B3B-11: `$5B00` = `LOG_TXT`; **D3-6b: `$5E00-$5EFF` = `PF_RAM`**, the
 proj_fire scratch — never touched before `boot`; **3E-T3: `$5D00-$5D78` = `ITEM_RAM`**, zeroed by `new_game`;
 still free: `$5CCB-$5CFF` (53 B; `$5CC0-$5CCA` is the ROM channel area, avoided), `$5D79-$5DFF` (135 B),
-`$5FF4-$5FFF` (12 B; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`**, the ranged-attack scratch + shot queue, "3F-T7") — `tests/items3e.py` R1/R2 canary them through a game start, play and a descent). A8: after `boot` nothing uses the system variables but
+`$5FF4-$5FFF` (12 B; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`**, the ranged-attack scratch + shot queue, "3F-T7"; **3F-T8: `$5FF4` = `BOSS_TRAP`; 3F-T9: `$5FF5-$5FFF` = `SPQ_RAM`, the spawn queue + `sp_run` scratch — the reserve after `RG_RAM` is full**, "3F-T9") — `tests/items3e.py` R1/R2 canary them through a game start, play and a descent). A8: after `boot` nothing uses the system variables but
 `SYS_FRAMES` (`$5C78-$5C7A`; the IM 2 ISR does not run the ROM keyboard scan),
 so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 
@@ -2319,7 +2320,7 @@ and below `HOT_COPY`):
 | `$B310..$B31F` | `ST_FLAGS` | STATUS per slot (game.md §6.4): bits 0-1 HOLD kind (`HOLD_FROZEN` 1 / `ASLEEP` 2 / `STUNNED` 3), 2-3 MIND kind (`MIND_FEAR` 1<<2, `MIND_CONFUSED` 2<<2), 4 POISON, 5 WEAK, 6 HOLD_GUARD (game.md §6.4.1 B1), 7 reserved; 0 = fast path |
 | `$B3E0..$B3EF` | `ST_T1` | STMR1: hi nibble HOLD turns, lo MIND turns |
 | `$B3F0..$B3FF` | `ST_T2` | STMR2: lo nibble WEAK turns (**POIS1: the hi nibble is unused**; POISON moved to `ST_X`) |
-| `$B400..$B40F` | `ST_X` | per slot byte (§6.4 "byte 3"): **POIS1: the POISON turns** (cap `PSN_CAP` 30; a full byte; read by `st_step`, added by `deal_hit`'s `.ps`, zeroed by Cure; slot 0 carries over a descend); the Vampire's fled-once bit can NOT share this byte (POISON uses all 8 bits; the Vampire cannot be poisoned, but the hero/others can): **3F's rule: the bit lives in the slot's `ST_T1` hi-nibble spare or a new byte, decided at 3F; if it ever shares `ST_X` the Vampire must be POISON-immune and mask `$7F`.** `.kill` does not zero `ST_X` (6 B, not <= 3); spawn / `lp_*` clear it |
+| `$B400..$B40F` | `ST_X` | per slot byte (§6.4 "byte 3"): **POIS1: the POISON turns** (cap `PSN_CAP` 30; a full byte; read by `st_step`, added by `deal_hit`'s `.ps`, zeroed by Cure; slot 0 carries over a descend); the Vampire's fled-once bit can NOT share this byte (POISON uses all 8 bits; the Vampire cannot be poisoned, but the hero/others can): **3F-T9: per-entity once bits live in `E_RCD` bit 7 (`RCD_ONCE`, banked as `LEK_BRED`; the Rabbit Rat's bred bit, the Vampire's fled bit when its bat form lands)**. `.kill` does not zero `ST_X` (6 B, not <= 3); spawn / `lp_*` clear it |
 | `$B410..$B41F` | `FXQ0` (= `FXQ`) | **D3-5:** FX queue entry 0 (FIFO head; a 16-B descriptor). D3-0's 2 × 8 B could not hold a 16-B descriptor |
 | `$B4E0..$B4E5` | `CAST_ROW` | **RANK1:** the rank row of the spell being cast, `RR_STRIDE` 6 B (`RR_MP`, `RR_RANGE`, `RR_DIE`, `RR_BONUS`, `RR_BOUNCE`, `RR_EFFECT`): `abil_load` (bank 3) copies the `ab_rank` row of the highest rank the hero can pay now (auto-downcast, rank 1 floor) at every spell use. Was `RANK_ROWS` (5 rows kept by `rank_sync`, both gone); `$B4E6..$B4FD` is free FONT6 plane hole again |
 | `$B4FE` / `$B4FF` | `FX_BUSY` / `FXQ_N` | **D3-5:** bit i = FX track i live or still drawn (0 = FX idle: `turn_done` waits for it) / queued descriptors 0..2 |
@@ -3760,7 +3761,7 @@ then it decrements (spawn / arrival 1, N = 1 every 2nd turn, N = 2 every 3rd). T
   whenever `TP_SHOT` is clear): `RG_ROW` 8 (the row copy), `RG_OLD`, `RG_DIR`, `RG_FIRST`, `RG_GAP`,
   `RG_F`, `RS_P` (low byte of the next free entry), `RS_Q` 4 × 18 {R ($FF started), flash tick (0 none),
   FX descriptor 16} + the overflow sink 18. `E_RCD` = `E_POT` (unused by monsters): bits 0-1 the counter
-  stored XOR 1, bits 2-5 T9's Bone Caller summon counter (reserved).
+  stored XOR 1, bits 2-5 T9's summon counter S, bit 6 summon-made, bit 7 the once bit (**3F-T9**, below).
 - **Not in T7**: `KF_CLIMBER` for Archer / Sniper (T13bc's kind rows: they `.seek` once the flag is set;
   the Slinger and the Necro family per their rows), the Vampire bat trigger (T9), golden atk / dmg (T8).
 
@@ -4242,3 +4243,72 @@ Lightning (lcast / lcastf / lcasts) ±0, lqmix ±0, worst +228.
 `textpack.py` owns the layout (`layout` / `decode` / `expand`; `parse_emitted` returns the image
 with `dict_off` / `tab_off`); the log-reading tests (tier6, pickup3e, abil_ammo, abil_melee) use
 `textpack.expand`.
+
+## 3F-T9 mid-room spawns (`feat/3f-t9-spawns`; game.md §9.6 Rabbit Rat / Bone Caller, §1.5 ALARM, §9.5 idle-wave placement, plan.md PHARAOH ABILITY; `tests/spawn.py`)
+
+**Decide / make split (3F TICK-BUDGET PLAN: "input tick only DECIDES, 1-entry SPAWN_Q at end_turn").**
+A producer fills the 1-entry **spawn queue** and nothing else; `end_turn` (bank 7, before the exit
+test) far6s R6 `sp_run`, which makes the bodies on the turn's last tick. Never in a cast / input tick
+(lcastf unchanged). A producer that finds the queue busy does nothing (S not reset: it retries).
+
+| Symbol | Addr | |
+|---|---|---|
+| `SPQ_K` | `$5FF5` | queued kind byte: bits 0-4 the kind (0 = an ALARM wave: `LP_KINDS[rnd & 3]` per body), `SQF_ONCE` bit 5 (set the parent's `RCD_ONCE` when made), `SQF_SUMM` bit 6 (= `RCD_SUMMONED`), `SQF_RESP` bit 7 (= `EF_RESPAWN`); 0 = empty. Garbage at boot: `new_game` (boot7) zeroes it; `sp_run` always empties it |
+| `SPQ_P` / `SPQ_N` | `$5FF6` / `$5FF7` | the parent slot (placement anchor; `SPQ_NONE` $FF = the doors) / bodies 1..2 |
+| `SP_KB` `SP_Y` `SP_S` `SP_N` `SP_SIG` `SP_NS` `SP_AX` `SP_AR` | `$5FF8..$5FFF` | `sp_scan` / `sp_run` scratch (`SP_NS` = `SP_SIG` + 1: one word store) |
+
+Producers: **`breed6`** (far6 from `deal_hit`'s survive path, bank 3, kind test inline: a Rabbit Rat hit
+and alive, not `RCD_ONCE`, queue free, `rng_mod 4` = 0 -> one base Rat, `SQF_ONCE|SUMM|RESP`);
+**`sp_bcall`** (`ai_ranged` `.pre`, `RWF_PRE` rows = the Bone Caller, reached in line / in range / clear /
+no reflect: S > 0 -> S - 1 and on to the shot; S = 0 and < `BC_LIVE` 1 summon-made bodies in the room and a
+free slot and the cap -> a base Skeleton if `K_SKELETON` in `LP_KINDS` else a Ghost, S := `BC_CD` 8, the
+KS_ATTACK pose with `E_MSG` = **`MSG_M_SUMMON` 16** "THE <kind> SUMMONS!" at its IMPACT (new string
+`cmb_summons`; the Bone Caller's name is "SUMMONER"), the turn used); **`ph_summon`** (far6 from bank-7
+`ai_guard` for the lair boss when it is a Mummy = the Golden Pharaoh, before the leash logic: the same with
+`PH_LIVE` 2 / `PH_CD` 8, then one RNG byte: bit 0 a 2nd body, bit 1 Mummies instead of Skeletons; L = 1 the
+turn is used); the **ALARM** trap (`trap7.asm tr_eff`: a generated level (`LVL_DEPTH` != 0) with
+`LF_UNIQUE` clear -> `SPQ_WAVE`, `SPQ_NONE`, 1 + (rnd & 1), `out (PORT_BORDER)` `BORDER_ALARM` 2 for
+`TRAP_STEP_T` ticks (step 1 writes 0), "AN ALARM BELL RINGS!" (`S3_TRAP_ALARM`); else the 3E bell line).
+
+`sp_run` per body: kind -> `sp_scan` (slots 1..15 of `CUR_ROOM`: `SP_N` live incl. PENDING, `SP_SIG`
+Σ `lp_wt6` (+1 golden), `SP_NS` summon-made, the first free slot (E_FLAGS 0)) -> `sp_fit` (`SP_N` <
+`ROOM_CAP` and Σ + w <= `LP_SIGMA_CAP`) -> the parent's storey / x / x + w (live, not PENDING / DYING,
+in the room) -> `sp_init` (bytes 0..23 + the slot's `ST_*` zeroed: **the drawn record `E_DVIS..` stays**,
+so a freed corpse still drawn in that slot is erased when render classifies the new body FULL) -> the spot:
+**beside the parent** (`sp_place`: d = 0..`SP_R`-1 = 3, the side toward the hero first; `sp_try`: body
+cols in `LP_XMIN..LP_XMAX`, `box_free` with `ACT_SLOT` = $FF (every live body, the hero included), a
+flyer `box_solid`-clear in its cruise row 9s+1, a walker on floor cells `TF_FLOOR` without `TF_HOLE` /
+`TF_LADDER` and standing-row cells without `TF_SOLID|TF_LADDER|TF_DOOR`), or **the door** (`sp_door`:
+left door x = 1, else right x = 31 - w, on its storey, `EF_PENDING | EF_WALKIN`: it walks in as a
+follower; no door: the up-exit col on storey 0, else the down-exit col on storey 1, `EF_PENDING`; every
+wave body takes the same spot, materialise lets them in one by one) -> `sp_fin` (flags ACTIVE | HOSTILE |
+`SQF_RESP` | the PENDING bits, facing the hero, `E_RCD` = `RCD_SUMMONED` or 0, hp = max = R6 `kind_hp`,
+snap px / py, M_REST; `SQF_ONCE`: the parent's `RCD_ONCE`) -> **`build_live`** (LIVE_LIST for the next
+body's `box_free`; PEND_N for the wave: the 3F-B4 rule). A body that fails (slot, cap, parent gone, no
+spot) ends the run. No spawn when `EXIT_KIND` != 0 or the hero is dying (the queue is still emptied).
+
+`E_RCD` (= `E_POT`): bits 0-1 the shot / SLAM counter (T7 / T8), bits 2-5 **S** (`RCD_SUMMON`), bit 6
+**`RCD_SUMMONED`** (summon-made: Bone Caller / Pharaoh summons, Rabbit offspring; the ALARM wave is not),
+bit 7 **`RCD_ONCE`**. Bank 3: `lp_bank` frees a summon-made body without banking it (§9.4.2) and writes
+`RCD_ONCE` as **`LEK_BRED`** (bit 6 of the record's kind byte); `lp_spawn` restores it; `place_follower`
+keeps bits 2-7 (`RCD_KEEP`; a summon that follows stays summon-made and is dropped when that room is left).
+
+Costs (`tests/spawn.py` T, far6 incl., interrupts on): `sp_run` a summon 10.4k T, an offspring 10.5k, a
+2-body wave 14.2k (gates 12k / 12k / 16k); producers: S > 0 ~80 T, a decision ~1.8k (`sp_scan`), `breed6`
+~0.3k + far6 per Rabbit hit. `tests/budget.py` new **`bsum`** (nroom with the Bone Caller alone: the summon
+turn + its end_turn spawn) 103,682 T worst work tick; every scenario green, worst gated ordinary 121,246
+(`lcastf` family unchanged), `lqmix` (report only) 128,110.
+
+| Region (`-DDEBUG_KIT=0`) | main `2390dec` | after 3F-T9 | Δ |
+|---|---|---|---|
+| R6 free | 1,468 | **655** | −813 (`spawn6.asm` 800; `ranged6.asm` +13: the `.pre` hook 10, `rg_pose` shared with `sp_summon` +3) |
+| bank 3 free | 45 | **8** | −37 (`lp_bank` 14, `lp_spawn` 8, `place_follower` 4, `deal_hit` breed hook 11) |
+| bank 7 free | 273 | **193** | −80 (end_turn 10, new_game 4, ALARM 44, border off 6, `ai_guard` Pharaoh 16) |
+| low RAM spare | 94 | **92** | −2 (`imp_pre` / `imp_post` + 1 each) |
+| bank 2 / bank 1 | 52 / 911 | unchanged | 0 |
+| text (bank 0, packed) / pool slack | 2,282 / 2,294 | 2,288 / **2,288** | +6 / −6 (`cmb_summons`) |
+| bank-5 runtime reserve | `$5FF5..$5FFF` free | `SPQ_RAM` | 11 B (`tests/items3e.py` canary range follows `SPQ_RAM_END`) |
+
+**Not in this change (open):** the Vampire bat form (game.md §9.2: flee / close-distance rules, the Bat
+frames + sequence block as level-pool extras on D6 / D8, the Vampire's resistances / weight / boss
+identity while a bat) and the drain bite's `+n` floater (needs the D3-11 number system, not built).

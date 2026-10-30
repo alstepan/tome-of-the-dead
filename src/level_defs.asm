@@ -278,7 +278,8 @@ LEK_KIND_MASK   EQU %00011111
 LEK_GOLD        EQU %00100000       ; golden boss (3F-T5, §9.7 R1): base row + this bit; hp 2 x scaled + 6, weight + 1
 LEK_GOLD_BIT    EQU 5
 LEK_RESPAWN     EQU %10000000       ; F_RESPAWN (§9.5): no drops, half XP (3F); = EF_RESPAWN (ASSERTed)
-LEK_BRED        EQU %01000000       ; Rabbit Rat "bred" (§9.6, 3F; record only today)
+LEK_BRED        EQU %01000000       ; the once bit (3F-T9): a Rabbit Rat has bred (§9.6); = the entity's RCD_ONCE
+LEK_BRED_BIT    EQU 6               ; (lp_bank writes it, lp_spawn restores it)
 LP_LEN          EQU 33 + GRID_CELLS * LR_STRIDE  ; 114 B
 LP_END          EQU LP_STATE + LP_LEN            ; $6F32
 ; budget constants (game.md §9.3 / §9.4.1)

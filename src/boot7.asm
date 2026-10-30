@@ -156,6 +156,8 @@ new_game:
                 call hero_st_init              ; C3-2 (intent7.asm, this bank)
                 ld   hl, kit_add               ; 3E-T11: worn + bag start kit (R6;
                 call far6                      ; E_POT = its potions via pot_sync)
+                xor  a                         ; 3F-T9: the spawn queue is garbage at boot
+                ld   (SPQ_K), a                ; (end_turn empties it after that)
                 ld   a, (proto_start)
                 or   a
                 jr   nz, .proto
