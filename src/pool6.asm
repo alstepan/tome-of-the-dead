@@ -22,6 +22,8 @@
 ; shared DEADs, the Necro bolt, the Mage's arrows / daggers). Units that can
 ; meet on one level must not overlap (dedup is per unit, by fid0: an overlap
 ; would be generated twice); a frame set shared by kinds is ONE unit id.
+; 3F-T9 exception: units with the SAME fid0 merge (pl_unit keeps the longer
+; count): K_VBAT (the Bat's first 2 frames) inside K_BAT on D3.
 ;
 ; GENERATION MAP (pool_gmap; 3F-T13: EVERY matching record applies, was the
 ; first): records DB kind, u1, u2 (u2 = PG_NONE: none); a kind with records
@@ -176,7 +178,12 @@ pl_kinds:
 .xn:            inc  hl
                 jr   .x
 .xe:            ld   a, e
+                cp   K_VAMPIRE                 ; 3F-T9: + its bat form's block (K_VBAT's KT_SEQ)
+                jr   nz, .xs
+                ld   a, K_VBAT
                 call sq_load
+                ld   a, K_VAMPIRE
+.xs:            call sq_load
                 pop  bc
                 pop  de
                 inc  de
@@ -219,17 +226,23 @@ pl_unit:
                 inc  hl
                 ld   a, (hl)                   ; frames
                 or   a
-                jr   z, .r                     ; 0-frame unit (the Rogue hole, 3F rows)
+                jr   z, .r                     ; 0-frame unit
                 ld   e, a
                 ld   hl, PL_LIST
 .c:             ld   a, (hl)
                 cp   PG_NONE
                 jr   z, .add
                 cp   d
-                jr   z, .r                     ; listed already
+                jr   z, .same                  ; listed already
                 inc  hl
                 inc  hl
                 jr   .c
+.same:          inc  hl                        ; 3F-T9: same fid0 = one range: keep the longer
+                ld   a, (hl)                   ; (K_VBAT's 2 Bat frames + the Bat's 6 on D3)
+                cp   e
+                jr   nc, .r
+                ld   (hl), e
+                jr   .r
 .add:           ld   (hl), d
                 inc  hl
                 ld   (hl), e
@@ -311,7 +324,7 @@ fxr_none:
 gu_tab:
                 GU   KFID_KNIGHT, KFCNT_KNIGHT
                 GU   KFID_WIZARD, KFCNT_WIZARD
-                GU   0, 0                      ; id 2 retired
+                GU   KFID_BAT, VB_FCNT         ; K_VBAT (3F-T9): the Bat's flapup / glide (via pool_gmap K_VAMPIRE)
                 GU   KFID_SKELETON, KFCNT_SKELETON             ; (generated as U_SKARCH + U_SKCLIMB + U_SKREST)
                 GU   KFID_GOBLIN, KFCNT_GOBLIN
                 GU   KFID_GHOST, KFCNT_GHOST
@@ -379,6 +392,7 @@ GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
                 ; the Mage's extras lie outside his class FX unit (fxr_none NONEs them per level)
                 ASSERT FID_arrow_fly1 >= KFID_FXM + KFCNT_FXM && FID_dagger_spin1 >= KFID_FXM + KFCNT_FXM
 
+VB_FCNT         EQU 2                          ; 3F-T9: K_VBAT's frames = the Bat's first two
 ; pool_gmap — the generation map (see the header): every record of a kind applies. Kinds < $80.
 pool_gmap:
                 DB   K_SKELETON, U_SKARCH,   U_SKREST
@@ -390,6 +404,8 @@ pool_gmap:
                 ; Bone Caller), the Necro / Archmage add the cast; climbers (Orc, Necro, Mummy) add the
                 ; shared climb pair U_CLIMBH (the Archer family uses the Skeleton's U_SKCLIMB) (once a level: dedup per unit)
                 DB   K_VAMPIRE,  K_VAMPIRE,  U_DEADR   ; ANIM-IMPORT2: own set (was Necro walk + U_VBITE)
+                DB   K_VAMPIRE,  K_VBAT,     PG_NONE   ; 3F-T9: its bat form (the Bat's first 2 frames; on a
+                                                       ; Bat level pl_unit merges them into the Bat's unit)
                 DB   K_ORC,      K_ORC,      U_DEADR
                 DB   K_ORC,      U_CLIMBH,   PG_NONE
                 DB   K_ARCHER,   U_SKARCH,   U_DEADR  ; SHOOT = the Skeleton cut (game.md §9.7 DECIDED)

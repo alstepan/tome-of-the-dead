@@ -257,6 +257,9 @@ end_turn:
                 call nz, far6                  ; skips it on an exit / a dying hero)
                 ld   a, (EXIT_KIND)
                 or   a
+                call z, vb_turn                ; 3F-T9: the Vampire's bat form (+ R6 vbat6.asm)
+                ld   a, (EXIT_KIND)
+                or   a
                 call nz, .ex
                 ld   hl, (TURN_COUNTER)
                 inc  hl
@@ -294,6 +297,69 @@ end_turn:
                 ld   (GAME_STATE), a
                 ld   a, TX_DIED
                 jp   msg_push_end              ; never dropped (B3B-11b); end_screen drains it
+
+;------------------------------------------------------------------------------
+; vb_turn — end_turn (3F-T9, game.md §9.2 Vampire bat form; no exit this turn):
+; picks the bodies that may change form now — a Vampire at the end of an odd
+; turn (its rest turn), a bat form (K_VBAT) at the end of an even one — of
+; CUR_ROOM, active, not PENDING / DYING, not held (HOLD: it cannot act), the
+; hero alive; prepares ACT_SLOT, PL_* (cache_player), VB_S (its storey) and
+; far6s R6 vb_one (vbat6.asm), which decides and makes the change.
+; Clobbers: all but IY.   ~0.15k T off a Vampire level; there ~1.8k T with no
+;   candidate (15 slots, contended), + ~0.9k T and vb_one a candidate
+;------------------------------------------------------------------------------
+vb_turn:        ld   a, (P_ENTITIES + E_FLAGS)
+                and  EF_DYING
+                ret  nz
+                ld   hl, LP_KINDS              ; a Vampire level only (LP_KINDS + LP_BOSS; a bat
+                ld   b, LP_GEN_N               ; form exists only there): ~0.15k T elsewhere
+.g:             ld   a, (hl)
+                and  LEK_KIND_MASK
+                cp   K_VAMPIRE
+                jr   z, .go
+                inc  hl
+                djnz .g
+                ret
+.go:
+                ld   a, (TURN_COUNTER)
+                rrca
+                ld   c, K_VBAT                 ; even: the bat forms
+                jr   nc, .k
+                ld   c, K_VAMPIRE              ; odd: the humanoids
+.k:             ld   ix, P_ENTITIES + P_ENT_STRIDE
+                ld   b, P_MAX_ENT - 1
+.l:             ld   a, c
+                cp   (ix+E_KIND)
+                jr   nz, .n
+                ld   a, (ix+E_FLAGS)
+                and  EF_ACTIVE | EF_PENDING | EF_DYING
+                dec  a
+                jr   nz, .n
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   nz, .n
+                ld   a, P_MAX_ENT
+                sub  b                         ; A = the slot (B = 15 .. 1)
+                ld   (ACT_SLOT), a
+                add  a, ST_FLAGS & $FF
+                ld   l, a
+                ld   h, ST_FLAGS >> 8
+                ld   a, (hl)
+                and  STS_HOLD
+                jr   nz, .n                    ; frozen / stunned
+                push bc
+                call cache_player              ; (bank 2; keeps IX)
+                call storey_ref                ; (bank 2)
+                ld   (VB_S), a
+                ld   hl, vb_one
+                call far6                      ; (IX passes back: vb_one keeps it)
+                pop  bc
+.n:             ld   de, P_ENT_STRIDE
+                add  ix, de
+                djnz .l
+                ret
+                ASSERT EF_ACTIVE == 1 && (ST_FLAGS & $FF) + P_MAX_ENT <= $100
+                ASSERT LP_BOSS == LP_KINDS + 4
 
 ;------------------------------------------------------------------------------
 ; do_exit — A = EXIT_KIND. EX_LEVEL: level_descend (B3B-12). Else follower

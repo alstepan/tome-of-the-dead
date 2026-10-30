@@ -17,7 +17,7 @@
 ; EQUs (KN_REST, ...) are data.asm's.
 ;==============================================================================
 ksm_tab:
-                DW   ksm_kn, ksm_wz, 0, ksm_sk, ksm_gb, ksm_gh, ksm_rt, ksm_bt, ksm_sl
+                DW   ksm_kn, ksm_wz, ksm_vb, ksm_sk, ksm_gb, ksm_gh, ksm_rt, ksm_bt, ksm_sl
                 ; 3F-T13: the real 3F-A1 blocks; kinds drawing another's frames share its block
                 ; (Vampire / Archmage = the Necro's), a tier row names its BASE kind's block (0 B
                 ; here, and the cache dedups by block: one slot)
@@ -124,6 +124,18 @@ bt_attack:      DB FID_bat_flapup, 2, 0, BT_DIVE, 2, SF_IMPACT, SEQ_END
 bt_hurt:        DB BT_HURT, 3, 0, SEQ_END
 bt_death:       DEATHSEQ BT_HURT, BT_DEAD, FID_bat_dead, BT_REST
 ksm_bt_e:
+; --- 3F-T9: the Vampire's bat form (K_VBAT, id 2): only the Bat's first VB_FCNT frames
+; (flapup / glide, MOT: a flyer draws them at any px parity), so a Vampire level without the
+; Bat pools 2 frames, not 6. No corpse: it fades out (DEATHSEQ q_x < 0, the rest frame blinks).
+ksm_vb:         KSMH ksm_vb_e - ksm_vb_s, 2, vb_idle, vb_idle, vb_idle, vb_idle + 1, vb_attack, vb_hurt, vb_hurt, vb_death, ksm_vb_s
+ksm_vb_s:
+vb_idle:        DB 6, FID_bat_flapup, 3, FID_bat_glide, 3, SEQ_END   ; KS_CLIMBREST = vb_idle + 1 = flapup
+vb_attack:      DB FID_bat_flapup, 2, 0, FID_bat_glide, 2, SF_IMPACT, SEQ_END
+vb_hurt:        DB FID_bat_glide, 3, 0, SEQ_END
+vb_death:       DEATHSEQ FID_bat_glide, FID_bat_glide, -1, FID_bat_glide
+ksm_vb_e:
+                ASSERT FID_bat_flapup == KFID_BAT && FID_bat_glide == KFID_BAT + 1 && VB_FCNT == 2
+                ASSERT (FFL_bat_flapup & FF_MOTION) && (FFL_bat_glide & FF_MOTION)
 ; --- Slime ---
 ksm_sl:         KSMH ksm_sl_e - ksm_sl_s, 2, sl_idle, sl_move, sl_move, sl_climbrest, sl_attack, sl_hurt, sl_hurt, sl_death, ksm_sl_s
 ksm_sl_s:

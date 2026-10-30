@@ -99,11 +99,13 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # kind): both heroes D1..D8 0 0 +480 +480 0 +960 +480 +480; SRC6 15 -> 16 pages (POOL_CAP 32,538 -> 32,269).
 # SPIDER-CLIMB (spider_climb1/2 STA|SYM 32x16 in the K_SPIDER unit, 128 B pool each): both heroes D2 D4 D5
 # +256 (the Spider levels); POOL_CAP unchanged (SRC6 +163 B, 57 free of 16 pages).
+# 3F-T9 VAMPIRE BAT FORM (K_VBAT = the Bat's flapup / glide, 2 MOT frames, 448 B each, via pool_gmap
+# K_VAMPIRE; on D3 merged into the Bat's unit by pl_unit): both heroes D6 D8 +896; D8 is the worst level now.
 LEVEL_NEED = {
     (0, 1): 24192, (0, 2): 23904, (0, 3): 28192, (0, 4): 30240,
-    (0, 5): 24736, (0, 6): 29504, (0, 7): 29408, (0, 8): 29824,
+    (0, 5): 24736, (0, 6): 30400, (0, 7): 29408, (0, 8): 30720,
     (1, 1): 21056, (1, 2): 20768, (1, 3): 24992, (1, 4): 27168,
-    (1, 5): 21664, (1, 6): 26304, (1, 7): 26208, (1, 8): 26624,
+    (1, 5): 21664, (1, 6): 27200, (1, 7): 26208, (1, 8): 27520,
 }
 
 
@@ -602,8 +604,15 @@ class Ref:
         S, st = self.S, self.S["FRT_STRIDE"]
         self.idx, self.ptr = self.mark                 # alloc_restore
         self.begin(self.hero)                          # 3F-T2 pool_list's pl_begin
+        # pl_unit (R6) keeps one range per fid0, the longer count (3F-T9: K_VBAT's 2 Bat frames
+        # merge into the Bat's unit on D3), in first-seen order
+        rng = {}
         for k in self.gen_list(lp):
-            self.kind(k)
+            f0, n = self.unit(k)
+            rng[f0] = max(rng.get(f0, 0), n)
+        for f0, n in rng.items():
+            for f in range(f0, f0 + n):
+                self.frame(f)
 
     def dump(self):
         a = bytes((self.idx, self.ptr & 0xFF, self.ptr >> 8,

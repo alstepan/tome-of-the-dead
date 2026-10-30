@@ -31,11 +31,11 @@ RSP_W           EQU 4               ; local to the KXROW macro (not a stored val
 IMM_UNDEAD      EQU IMMF_SLEEP | IMMF_POISON
 
 ; kinds not listed stay zero: heroes (0 XP; their resistances come from gear),
-; the retired id 2, and every kind id >= K_COUNT (no 3D kind yet; 3F adds rows).
+; every kind id >= K_COUNT (no 3D kind yet; 3F adds rows).
 kx_tab:
                 KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_KNIGHT (hero)
                 KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_WIZARD (hero)
-                KXNONE                                                    ; id 2 retired
+                KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_PHYS, EFX_NONE, 0, 0, 0              ; K_VBAT (3F-T9): the Vampire's row, a plain 1d2 bite (no drain / heal in bat form)
                 KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_PHYS, EFX_NONE, 0, 0, 1              ; K_SKELETON (DEF 1, §9.1 / D3-1)
                 KXROW 0,0,0,0,0,0, 0, 3, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_GOBLIN
                 KXROW RSP_R,0,RSP_I,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 4, 4, 0  ; K_GHOST: the 1d4 DRAIN touch, 1 in 4 -> CONFUSED 4 (no heal: §9.1)

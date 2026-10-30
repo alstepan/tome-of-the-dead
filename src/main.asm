@@ -575,13 +575,15 @@ kind_tab:
                 ; The new rows follow game.md §9.1 / §9.6 (hp / atk / eva are the table values before
                 ; depth scaling; die/bonus = the dmg column); 3F-T13: their BODY (BW/BH, defs.asm
                 ; BH_K_*) and base inks are the real 3F-A1 art's. Legacy ids 0..8 are unchanged.
+                ; 3F-T9: id 2 = K_VBAT, the Vampire's bat form: the Bat's body / flags / atk 1 eva 4 /
+                ; 1d2 bite, every turn; the Vampire's hp row 14 (a banked bat's max hp, lp_spawn) and ink.
                 KROW   3,  3,  3,  3,  3,  3,  4,  3,  3,   4,  3,  3,  3,  3,  3,  4,  3,  3,   4,  4,  3,  3,  4,  3,  3,  3,  3,  3,  3,  3          ; KT_BW (cells; 3F-T13: Spider / Black Widow 32x16, Ogre 32x48)
-                KROW BH_K_KNIGHT, BH_K_WIZARD, 0, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME, BH_K_SPIDER, BH_K_VAMPIRE, BH_K_ORC, BH_K_ARCHER, BH_K_MUMMY, BH_K_NECRO, BH_K_OGRE, BH_K_DKNIGHT, BH_K_ARCHMAGE, BH_K_RAT, BH_K_RAT, BH_K_BAT, BH_K_GOBLIN, BH_K_SPIDER, BH_K_SKELETON, BH_K_SKELETON, BH_K_GHOST, BH_K_ORC, BH_K_ORC, BH_K_ARCHER, BH_K_NECRO ; KT_BH
-                KROW  24, 16, 18, 10,  6,  8,  3,  3,  6,   7, 14, 14,  8, 18, 12, 40, 50, 40,   5,  8,  5,  8, 10, 14, 18, 11, 18, 24, 10, 14          ; KT_HP
-                KROW KN_ATK, WZ_ATK, 5, 2, 1, 2, 0, 1, 0,   3, 2, 3, 2, 3, 2, 5, 6, 4,   1, 2, 2, 2, 4, 3, 4, 3, 4, 5, 3, 3          ; KT_ATK (hero columns: + level steps at runtime, D3-9b)
-                KROW KN_EVA, WZ_EVA, 3, 2, 1, 3, 1, 4, 0,   3, 1, 1, 2, 0, 2, 1, 3, 3,   1, 3, 4, 1, 3, 2, 2, 3, 0, 1, 2, 2          ; KT_EVA (hero_st_init restores KN_* / WZ_*)
-                KROW   6,  4,  4,  4,  4,  4,  2,  2,  3,   4,  6,  8,  4,  8,  4, 10, 10,  6,   3,  4,  3,  4,  4,  6,  8,  4,  8, 10,  4,  4          ; KT_DIE
-                KROW   0,  0,  1,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,  0,  0,  2,  3,  0,   0,  0,  0,  0,  0,  0,  0,  0,  2,  0,  0,  0          ; KT_BONUS
+                KROW BH_K_KNIGHT, BH_K_WIZARD, BH_K_BAT, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME, BH_K_SPIDER, BH_K_VAMPIRE, BH_K_ORC, BH_K_ARCHER, BH_K_MUMMY, BH_K_NECRO, BH_K_OGRE, BH_K_DKNIGHT, BH_K_ARCHMAGE, BH_K_RAT, BH_K_RAT, BH_K_BAT, BH_K_GOBLIN, BH_K_SPIDER, BH_K_SKELETON, BH_K_SKELETON, BH_K_GHOST, BH_K_ORC, BH_K_ORC, BH_K_ARCHER, BH_K_NECRO ; KT_BH
+                KROW  24, 16, 14, 10,  6,  8,  3,  3,  6,   7, 14, 14,  8, 18, 12, 40, 50, 40,   5,  8,  5,  8, 10, 14, 18, 11, 18, 24, 10, 14          ; KT_HP
+                KROW KN_ATK, WZ_ATK, 1, 2, 1, 2, 0, 1, 0,   3, 2, 3, 2, 3, 2, 5, 6, 4,   1, 2, 2, 2, 4, 3, 4, 3, 4, 5, 3, 3          ; KT_ATK (hero columns: + level steps at runtime, D3-9b)
+                KROW KN_EVA, WZ_EVA, 4, 2, 1, 3, 1, 4, 0,   3, 1, 1, 2, 0, 2, 1, 3, 3,   1, 3, 4, 1, 3, 2, 2, 3, 0, 1, 2, 2          ; KT_EVA (hero_st_init restores KN_* / WZ_*)
+                KROW   6,  4,  2,  4,  4,  4,  2,  2,  3,   4,  6,  8,  4,  8,  4, 10, 10,  6,   3,  4,  3,  4,  4,  6,  8,  4,  8, 10,  4,  4          ; KT_DIE
+                KROW   0,  0,  0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,  0,  0,  2,  3,  0,   0,  0,  0,  0,  0,  0,  0,  0,  2,  0,  0,  0          ; KT_BONUS
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  1,   1,  1,  1,  1,  1,  1,  1,  1,  1,   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1          ; KT_REACH (D3-0: the Mage's PROTO reach-3 zap is gone, game.md §11.4)
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  2,   1,  2,  1,  1,  2,  1,  1,  1,  1,   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1          ; KT_PERIOD (Slime, Vampire, Mummy: acts every 2)
                 ; B3B-5: skeleton + goblin are openers (game.md §9.1); the heroes
@@ -589,8 +591,8 @@ kind_tab:
                 ; the Goblin, Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
                 ; + the Orc (Berserker, Bouncer), Necro (Bone Caller), Archer (Sniper) on the shared
                 ; climb pair; not Vampire / Archmage / DK / Ogre / Mummy; Mummy / Ogre / DK do not open doors
-                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0, KF_CLIMBER, KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL  ; KT_FLAGS
-                KROW $47,$45,$44,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
+                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_FLYER|KF_BAT, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0, KF_CLIMBER, KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL  ; KT_FLAGS
+                KROW $47,$45,$05,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
                 ; 3F-T2: KT_SEQ (runtime: lowram.asm (sq_load / sq_fill) writes the kind's SEQ_ROWS row
                 ; low byte per level; 0 until the first game start). The old
                 ; KT_FID0 / KT_FCNT columns are the R6 generation-unit table gu_tab.
@@ -848,6 +850,10 @@ PLX = 0
                 PL_KIND PLK2
                 PL_KIND PLK3
                 PL_KIND PLK4
+      IF (PLM >> K_BAT) & 1                    ; 3F-T9: the bat form's frames lie inside the Bat's
+PLM = PLM & ~(1 << K_VBAT)                     ; unit (same fid0: pl_unit merges them)
+      ENDIF
+                ASSERT {b gu_tab + GU_STRIDE * K_VBAT} == {b gu_tab + GU_STRIDE * K_BAT} && {b gu_tab + GU_STRIDE * K_VBAT + 1} <= {b gu_tab + GU_STRIDE * K_BAT + 1}
 PLN = 0
                 PL_UNITS_ADD PLM, 0
       IF PLX
@@ -1054,6 +1060,9 @@ SQK4 = {b lp_dtab + sqd * LP_DROW + 4} & LEK_KIND_MASK
                 SQ_KIND SQK2
                 SQ_KIND SQK3
                 SQ_KIND SQK4
+      IF (SQK0 == K_VAMPIRE) || (SQK1 == K_VAMPIRE) || (SQK2 == K_VAMPIRE) || (SQK3 == K_VAMPIRE) || (SQK4 == K_VAMPIRE)
+                SQ_KIND K_VBAT                  ; 3F-T9: pl_kinds loads the bat form's block with the Vampire's
+      ENDIF
                 DISPLAY "GAME sequence cache D", /D, sqd + 1, ": ", /D, SQN, " blocks, ", /D, SQB, " B + hero ", /D, SQ_HERO, " = ", /D, SQB + SQ_HERO, " of ", /D, SEQB_LEN   ; 3F-T13bc
       IF SQB > SQ_MAX
 SQ_MAX = SQB

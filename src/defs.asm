@@ -593,6 +593,8 @@ MSG_M_THAW      EQU 14
 MSG_P_PARRY     EQU 15              ; 3F-T6: the hero's blow was parried: "THE <target> PARRIES!" (the target's name,
                                     ; like MSG_P_HIT..KILL; do_attack / melee_strike set it, show_impact_msg / impact_line)
 MSG_M_SUMMON    EQU 16              ; 3F-T9: "THE <kind> SUMMONS!" (spawn6.asm sp_summon: the caster's IMPACT line)
+MSG_M_DRAIN     EQU 17              ; 3F-T9: "THE VAMPIRE DRAINS YOU" (impact_line remaps the Vampire's MSG_M_HIT:
+                                    ; its bite heals it, game.md §9.1; the +n floater needs D3-11)
 
 ;------------------------------------------------------------------------------
 ; Kinds (prototype §2/§6.3). Parallel byte tables, page-aligned (kind_tab).
@@ -601,6 +603,11 @@ K_KNIGHT        EQU 0
 K_WIZARD        EQU 1
                                 ; id 2 retired (Rogue removed, G1 budget 2): hole kept so
                                 ; K_* ids / HERO_KIND semantics stay stable
+K_VBAT          EQU 2           ; 3F-T9: the hole's row = the Vampire's BAT FORM (game.md §9.2;
+                                ; vbat6.asm): never in LP_KINDS / spawned, an entity gets it only
+                                ; by transforming (and a banked bat comes back as one). Bat body /
+                                ; flags / 1d2 bite, the Vampire's hp row, resistances, KXP, weight,
+                                ; name and ink; frames = the Bat's first VB_FCNT (pool6.asm gu_tab)
 K_SKELETON      EQU 3
 K_GOBLIN        EQU 4
 K_GHOST         EQU 5

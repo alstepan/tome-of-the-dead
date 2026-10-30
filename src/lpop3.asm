@@ -51,9 +51,9 @@ LP_DROW         EQU 6
 ; can have), so lp_budget has no "N farthest rooms" branch (levelgen.py keeps it).
                 ASSERT 11 - 2 >= GRID_CELLS - 2
 ; §9.3 weights by kind row (defs.asm WT_*), K_COUNT entries (3F-T3: 18 base + 12 tier rows)
-; (the hero rows 0 / 1 and the id-2 hole stay 0: a record entry of kind 0 may exist in tests)
+; (the hero rows 0 / 1 stay 0: a record entry of kind 0 may exist in tests; id 2 = K_VBAT, 3F-T9)
     MACRO LP_WT_ROWS                           ; shared with R6 lp_wt6 (tier6.asm: R6 cannot read bank 3)
-                DB   WT_K_KNIGHT, WT_K_WIZARD, 0, WT_K_SKELETON, WT_K_GOBLIN
+                DB   WT_K_KNIGHT, WT_K_WIZARD, WT_K_VAMPIRE, WT_K_SKELETON, WT_K_GOBLIN   ; 3F-T9: id 2 = K_VBAT keeps the Vampire's weight
                 DB   WT_K_GHOST, WT_K_RAT, WT_K_BAT, WT_K_SLIME
                 DB   WT_K_SPIDER, WT_K_VAMPIRE, WT_K_ORC, WT_K_ARCHER, WT_K_MUMMY
                 DB   WT_K_NECRO, WT_K_OGRE, WT_K_DKNIGHT, WT_K_ARCHMAGE
