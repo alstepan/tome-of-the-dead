@@ -653,7 +653,7 @@ orn_cells:
 ; bank-7 level_tiles7 (tiles7.asm: the deduplicated tileset gather + the
 ; theme_ids patch below). Before the room is built and drawn; the caller's
 ; $C000 bank is back on return (far7).
-; Clobbers: A, BC, DE, HL.   17.9k T worst (far7 + gather, contended; tests/world.py W11; was 11.7k)
+; Clobbers: A, BC, DE, HL.   17.9k T worst (far7 + gather, contended; measured by the w2 review via ZRCP; was 11.7k)
 ;------------------------------------------------------------------------------
 level_load_tiles:
                 ld   hl, level_tiles7          ; farb hands A (the depth) to the target
