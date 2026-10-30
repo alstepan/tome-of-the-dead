@@ -547,7 +547,121 @@ NUN_X0, NUN_Y0 = 23 * 8, 10 * 8          # 64 x 88 px block: cols 23-30, rows 10
 WIMPLE_CELLS = box(26, 11, 3, 3)          # coif / wimple / face: W+ cells, crisp at cell edges
 
 
-def nun_hd(s: Scr, X0: int, Y0: int):
+RED_FACE_CELLS = box(26, 12, 3, 1) | {(27, 13)}   # S2b: PAPER W+, INK R+
+
+# S2c crone face: the 3x3 W+ head block (24x24 px, local x 24..47, y 8..31) as a
+# designed LEFT half (12 cols, col 11 touches the axis), mirrored. Codes:
+#   '#' coif (solid white)   '.' black gap / outside   'k' aged skin (75% dither)
+#   'h' lit skin (forehead, cheekbone, nose ridge, chin)   'e' sunken socket
+#   'g' eye glint   's' shadow (hollows, wrinkles)   'm' mouth seam
+#   'l' lip (white in a, red in b)   't' stitch (black in a, white in b)
+CRONE_HALF = [
+    "....########",   # 0  coif crown
+    "..##########",   # 1
+    ".###########",   # 2
+    "############",   # 3
+    "############",   # 4
+    "#######.....",   # 5  top of the face opening
+    "######.kkhhh",   # 6  forehead
+    "#####.kkshhh",   # 7  wrinkle
+    "#####.kksssh",   # 8  brow ridge in shadow
+    "#####.keeeeh",   # 9  sunken socket
+    "#####.segeeh",   # 10 glint, crow's foot
+    "#####.kkeekh",   # 11
+    "####.khhhksh",   # 12 high cheekbone
+    "####.kkhkksh",   # 13
+    "#####.sskksh",   # 14 hollow cheek, thin nose
+    "#####.sskkeh",   # 15 nostril, nose tip
+    "#####.skkkkk",   # 16
+    "######.kkllt",   # 17 upper lip + stitch
+    "######.ksmmm",   # 18 mouth seam
+    ".#####.kkllt",   # 19 lower lip + stitch; bib tapers
+    "..####.skkkh",   # 20 long jaw
+    "...####.skkh",   # 21
+    "....####.kkh",   # 22 bony chin
+    "......###...",   # 23 under the chin
+]
+CRONE = [r + r[::-1] for r in CRONE_HALF]
+assert len(CRONE) == 24 and all(len(r) == 24 for r in CRONE)
+
+
+def narrow_coif(grid: list[str], d: int = 3) -> list[str]:
+    """S2d: keep coif ('#') only within d px (Chebyshev) of the face; the rest of the
+    head block becomes black -- the gap between the tight coif and the veil."""
+    face = {(j, i) for j, r in enumerate(grid) for i, ch in enumerate(r) if ch in "khegsmlt"}
+    out = []
+    for j, r in enumerate(grid):
+        row = []
+        for i, ch in enumerate(r):
+            near = any((j + dj, i + di) in face for dj in range(-d, d + 1) for di in range(-d, d + 1))
+            row.append(ch if ch != "#" or near else ".")
+        out.append("".join(row))
+    return out
+
+
+CRONE_NARROW = narrow_coif(CRONE)
+
+
+def crone_face(s: Scr, X0: int, Y0: int, red: bool, narrow: bool = False):
+    """Stamp the S2c head block. a: W+ on black. b: RED_FACE_CELLS become PAPER W+
+    / INK R+ so sockets, face edge, shadows, mouth and lips turn red there."""
+    if red:
+        for (c, r) in RED_FACE_CELLS:
+            s.paper[r, c] = WHITE + B
+    for j, row in enumerate(CRONE_NARROW if narrow else CRONE):
+        for i, ch in enumerate(row):
+            X, Y = X0 + 24 + i, Y0 + 8 + j
+            in_red = red and (X // 8, Y // 8) in RED_FACE_CELLS
+            if in_red:          # b: PAPER W+ / INK R+ -- pale smooth skin, red features
+                on = ch in "eml" or (ch in ".s" and (X + Y) % 2 == 0)
+                s.put(X, Y, RED + B) if on else s.clr(X, Y)
+            else:
+                white = ch in "#hgl" or (ch == "k" and not (X % 2 == 0 and Y % 2 == 1))
+                s.put(X, Y, WHITE + B) if white else s.clr(X, Y)
+
+
+
+def red_face(s: Scr, X0: int, Y0: int, cx: float, human: bool):
+    """S2b: eyes + lips in red. In RED_FACE_CELLS paper = bright white (skin / coif)
+    and ink = bright red, so those cells hold only W+ and R+ -- no black: sockets
+    become red, the face edge a red dotted line. All other cells are untouched."""
+    for (c, r) in RED_FACE_CELLS:
+        s.paper[r, c] = WHITE + B
+        s.clear_rect(c * 8, r * 8, 8, 8)
+    def red(x, y):
+        X, Y = X0 + x, Y0 + y
+        if (X // 8, Y // 8) in RED_FACE_CELLS:
+            s.put(X, Y, RED + B)
+    for ex in (int(cx - 3.5), int(cx + 3.5)):               # eye centres x 32 / 39
+        if human:   # almond eye 6 px: red lids, red 2-px iris, white of the eye = paper
+            for x in range(ex - 1, ex + 3):
+                red(x, 17)
+                red(x, 19)
+            for x in (ex - 2, ex, ex + 1, ex + 3):
+                red(x, 18)
+        else:       # skull: solid red hollow (the socket glows), white pupil-less
+            for y in range(15, 23):
+                for x in range(26, 46):
+                    if ((x + 0.5 - (ex + 0.5)) / 2.8) ** 2 + ((y + 0.5 - 18.5) / 2.4) ** 2 <= 1:
+                        red(x, y)
+    if human:
+        red(37, 21)                                         # nose shadow
+        red(37, 22)
+        red(35, 23)
+        lips = {25: (34, 35, 37, 38), 26: range(33, 40), 27: range(34, 39), 28: range(35, 38)}
+    else:
+        for y in (21, 22):                                  # nose slit
+            red(35, y)
+            red(36, y)
+        lips = {25: range(34, 38), 26: (33, 35, 36, 38), 27: range(34, 38)}
+    for y, xs in lips.items():
+        for x in xs:
+            red(x, y)
+    if human:
+        s.clr(X0 + 36, Y0 + 27)                             # highlight on the lower lip
+
+
+def nun_hd(s: Scr, X0: int, Y0: int, face: str = "skull"):
     """The Archmage nun drawn at screen resolution (not the 40 px sprite at 2x).
 
     Inks: the 3x3 wimple block (cols 26-28, rows 11-13) is W+; veil + habit are
@@ -556,10 +670,15 @@ def nun_hd(s: Scr, X0: int, Y0: int):
     Tone = ordered dither from a fold-phase lighting model (no 2nd ink per cell).
     The figure is centred on the wimple block (x 220), so it spills into col 31.
     """
+    global WIMPLE_CELLS, RED_FACE_CELLS
+    r0 = Y0 // 8
+    WIMPLE_CELLS = box(26, r0 + 1, 3, 3)
+    RED_FACE_CELLS = box(26, r0 + 2, 3, 1) | {(27, r0 + 3)}
+
     def col(x, y):
         if (x // 8, y // 8) in WIMPLE_CELLS:
             return WHITE + B
-        return GREEN + B if y // 8 <= 15 else GREEN
+        return GREEN + B if y // 8 <= r0 + 5 else GREEN
 
     WD = 72
     cx = 36.0
@@ -663,62 +782,81 @@ def nun_hd(s: Scr, X0: int, Y0: int):
         put(x, 78)
         put(x, 79)
 
-    # -- coif + wimple (W+): rounded hood opening, bib below, folds; crisp black gap
-    for y in range(8, 32):
+    if face.startswith("crone"):
+        crone_face(s, X0, Y0, red=(face == "crone_red"), narrow=(face == "crone_narrow"))
+        if face == "crone_narrow":   # veil's inner edge just outside the W+ block
+            for y in range(8, 34):
+                put(23, y)
+                put(48, y)
+            for x in range(24, 48):                        # chamfered corners
+                put(x, 7)
+    else:
+        # -- coif + wimple (W+): rounded hood opening, bib below, folds; crisp black gap
+        for y in range(8, 32):
+            for x in range(24, 48):
+                red = face != "skull"   # S2b: row-12 cells + mouth cell must be all coif
+                hood = ((x + 0.5 - cx) / (12.6 if red else 11.5)) ** 2 + ((y + 0.5 - 20) / 12.5) ** 2 <= 1
+                bib = y >= 20 and abs(x + 0.5 - cx) < 11.5 - max(0, y - 25) * (1.2 if red else 1.4)
+                if hood or bib:
+                    put(x, y)
         for x in range(24, 48):
-            hood = ((x + 0.5 - cx) / 11.5) ** 2 + ((y + 0.5 - 20) / 12.5) ** 2 <= 1
-            bib = y >= 20 and abs(x + 0.5 - cx) < 11.5 - max(0, y - 25) * 1.4
-            if hood or bib:
-                put(x, y)
-    for x in range(24, 48):
-        put(x, 12, False) if ((x + 0.5 - cx) / 11.5) ** 2 + ((12.5 - 20) / 12.5) ** 2 <= 1 else None
-    fcx, fcy, frx, fry = cx, 20.0, 7.0, 8.0
-    for y in range(10, 31):
-        for x in range(26, 47):
-            e = ((x + 0.5 - fcx) / frx) ** 2 + ((y + 0.5 - fcy) / fry) ** 2
-            if 1.0 < e <= 1.3 and y > 11:
-                put(x, y, False)                            # crisp face opening in the wimple
-            if e <= 1.0:
-                put(x, y, False)
-                gaunt = 0.5 if y < 21 else 0.18            # hollow cheeks / jaw in shadow
-                if 0.8 < e <= 1.0 and dith(x, y, 0.75) or dith(x, y, gaunt):
-                    put(x, y)
-    for (ex, ey) in (cx - 3.5, 18.5), (cx + 3.5, 18.5):   # hollow sockets, white rim, glow
-        for y in range(14, 24):
-            for x in range(28, 46):
-                q = ((x + 0.5 - ex) / 2.8) ** 2 + ((y + 0.5 - ey) / 2.3) ** 2
-                if q <= 1:
+            put(x, 12, False) if ((x + 0.5 - cx) / 11.5) ** 2 + ((12.5 - 20) / 12.5) ** 2 <= 1 else None
+        fcx, fcy, frx, fry = cx, 20.0, 7.0, 8.0
+        for y in range(10, 31):
+            for x in range(26, 47):
+                e = ((x + 0.5 - fcx) / frx) ** 2 + ((y + 0.5 - fcy) / fry) ** 2
+                if 1.0 < e <= 1.3 and y > 11 and face == "skull":
+                    put(x, y, False)                            # crisp face opening in the wimple
+                if e <= 1.0:
                     put(x, y, False)
-                elif q <= 1.9:
-                    put(x, y)
-        put(int(ex), int(ey))
-    for y in (22, 23):
-        put(35, y, False)
-        put(36, y, False)
-    for x in range(33, 39):
-        put(x, 26, False)
-    for t in range(16):                                     # wimple folds under the chin
-        a = np.pi * (0.2 + 0.6 * t / 15)
-        for r in (10.5, 13.5):
-            put(int(cx + r * np.cos(a)), int(20 + r * np.sin(a)), False)
+                    gaunt = 0.5 if y < 21 else 0.18            # hollow cheeks / jaw in shadow
+                    if face == "red_human":
+                        gaunt = 1.0                             # pale, smooth skin
+                    if 0.8 < e <= 1.0 and dith(x, y, 0.75) or dith(x, y, gaunt):
+                        put(x, y)
+        for (ex, ey) in ((cx - 3.5, 18.5), (cx + 3.5, 18.5)) if face == "skull" else ():
+            for y in range(14, 24):
+                for x in range(28, 46):
+                    q = ((x + 0.5 - ex) / 2.8) ** 2 + ((y + 0.5 - ey) / 2.3) ** 2
+                    if q <= 1:
+                        put(x, y, False)
+                    elif q <= 1.9:
+                        put(x, y)
+            put(int(ex), int(ey))
+        if face == "red_human":                                 # black brows (row 11, W+ cells)
+            for x in list(range(30, 35)) + list(range(38, 43)):
+                put(x, 14 if x in (30, 42) else 13, False)
+                put(x, 15 if x in (30, 42) else 14, False)
+        if face == "skull":
+            for y in (22, 23):
+                put(35, y, False)
+                put(36, y, False)
+            for x in range(33, 39):
+                put(x, 26, False)
+        for t in range(16):                                     # wimple folds under the chin
+            a = np.pi * (0.2 + 0.6 * t / 15)
+            for r in (10.5, 13.5):
+                put(int(cx + r * np.cos(a)), int(20 + r * np.sin(a)), False)
+    if face in ("red_skull", "red_human"):
+        red_face(s, X0, Y0, cx, human=(face == "red_human"))
 
-    # -- mist (row 20, green wisps) and floor reflection (row 21, blue)
-    for y in range(160, 168):
-        for x in range(176, 256):
+    # -- mist (last nun row, green wisps) and floor reflection (landing row, blue)
+    for y in range(Y0 + 80, Y0 + 88):
+        for x in range(160, 256):
             lx = x - X0
             inside = 0 <= lx < WD and m[y - Y0, lx]
             lvl = 0.10 + 0.14 * (np.sin(x / 7 + y * 0.9) + np.sin(x / 13 - y))
             if not inside and dith(x, y, lvl):
                 s.put(x, y, GREEN)
-    for y in range(170, 176):
+    for y in range(Y0 + 90, Y0 + 96):
         for x in range(X0, min(W, X0 + WD)):
-            src = 87 - (y - 170) * 2 - 6
-            if m[src, x - X0] and dith(x, y, 0.22 - 0.03 * (y - 170)):
+            src = 87 - (y - Y0 - 90) * 2 - 6
+            if m[src, x - X0] and dith(x, y, 0.22 - 0.03 * (y - Y0 - 90)):
                 s.put(x, y, BLUE)
 
 
 # ================================================================ S2 THE DESCENT
-def s2(hd: bool = True) -> Scr:
+def s2(hd: bool = True, face: str = "skull") -> Scr:
     """Cross-section staircase: heroes descend toward the Archmage in the dark."""
     s = Scr()
     ice = by_row([WHITE + B, CYAN + B, CYAN, BLUE + B, WHITE + B, CYAN + B, CYAN, BLUE + B], 0)
@@ -732,14 +870,15 @@ def s2(hd: bool = True) -> Scr:
     place_torch(s, tc, trow)
     lf = light(tc + 1, trow + 0.5, [(1.8, YEL), (2.6, RED + B), (3.1, RED)])
     mage_cells, war_cells = box(6, 8, 3, 5), box(14, 12, 3, 5)
-    nun_cells = box(22, 10, 10, 11)
+    nun_cells = box(20, 8, 12, 11)
     reserved = (mage_cells | war_cells | nun_cells | box(0, 0, 32, 4) | box(5, 4, 27, 4)
                 | box(tc, trow, 2, 4))
-    back = {(c, r) for c in range(0, 22) for r in range(4, 22) if r < 10 + c // 2} - reserved
+    back = {(c, r) for c in range(0, 22) for r in range(4, 20) if r < 10 + c // 2} - reserved
     bricks(s, sorted(back), lambda c, r: lf(c, r), seed=2)
 
-    # staircase: step k = cols 2k..2k+1, tread at row 10+k; mass below to row 21
-    nsteps = 11
+    # staircase: step k = cols 2k..2k+1, tread at row 10+k; mass below to row 19
+    # (rows 20-21 = captions, rows 22-23 blank: the ROM clears them for the next header)
+    nsteps, GND = 10, 160
     def step_ink(k):
         return [WHITE + B, WHITE, YEL, YEL, RED + B, RED, MAG, MAG, BLUE + B, BLUE, BLUE][k]
     for k in range(nsteps):
@@ -749,26 +888,26 @@ def s2(hd: bool = True) -> Scr:
             s.put(x, ty, ink)                       # tread edge
             if k < 6 or x % 2 == 0:
                 s.put(x, ty + 1, ink)
-        for y in range(ty, 176):                    # riser line at the step's left
+        for y in range(ty, GND):                    # riser line at the step's left
             if k > 0 and y < ty + 8:
                 s.put(x0, y, ink)
         # mass texture: bricks fading with depth (dither density by k)
         dens = max(0.0, 0.55 - 0.05 * k)
-        for y in range(ty + 2, 176):
+        for y in range(ty + 2, GND):
             for x in range(x0, x0 + 16):
                 yy = y - ty
                 mortar = (yy % 6 == 5) or ((x + (8 if (yy // 6) & 1 else 0)) % 16 == 0)
-                fade = (y - ty) / (176 - ty)
+                fade = (y - ty) / (GND - ty)
                 if mortar and dith(x, y, max(0.0, 1.0 - fade * 1.6) * (1 - k / nsteps) + dens * 0.0):
                     s.put(x, y, ink)
-    # landing at the bottom (cols 22-31, tread row 21)
-    for x in range(176, W):
-        s.put(x, 168, BLUE)
+    # landing at the bottom (cols 20-31, tread row 19)
+    for x in range(160, W):
+        s.put(x, 152, BLUE)
         if x % 2 == 0:
-            s.put(x, 169, BLUE)
-    for y in range(170, 176):
-        for x in range(176, W):
-            yy = y - 168
+            s.put(x, 153, BLUE)
+    for y in range(154, GND):
+        for x in range(160, W):
+            yy = y - 152
             if ((yy % 6 == 5) or ((x + (8 if (yy // 6) & 1 else 0)) % 16 == 0)) and dith(x, y, 0.35):
                 s.put(x, y, BLUE)
 
@@ -776,14 +915,15 @@ def s2(hd: bool = True) -> Scr:
     s.grid(MAGE, 6 * 8, 8 * 8, CYAN + B)
     s.grid(KNIGHT, 14 * 8, 12 * 8, WHITE + B)
     if hd:
-        nun_hd(s, 23 * 8, 10 * 8)
+        nun_hd(s, 23 * 8, 8 * 8, face)
     else:
-        s.grid(NUN, 23 * 8, 11 * 8, GREEN, scale=2, mirror=False)
+        s.grid(NUN, 23 * 8, 9 * 8, GREEN, scale=2, mirror=False)
     # small skull on step 9
     s.bits(SKULL_BM, 18 * 8, 17 * 8, WHITE)
     # text
-    s.text6(SUB, centre(len(SUB) * 6), 176, CYAN + B)
-    s.text6(CREDIT, centre(len(CREDIT) * 6), 184, WHITE)
+    s.text6(SUB, centre(len(SUB) * 6), 160, CYAN + B)
+    s.text6(CREDIT, centre(len(CREDIT) * 6), 168, WHITE)
+    assert not (s.px[176:] != NONE).any(), "rows 22-23 must stay blank"
     s.notes = [
         "Paper black; one ink per cell.",
         "Title: game title16 script 2x, TOME OF (rows 0-3, left) / THE DEAD (rows 4-7, right); ink per row W+ C+ C B+.",
@@ -791,10 +931,10 @@ def s2(hd: bool = True) -> Scr:
         "W+ W Y Y R+ R M M B+ B B down the stair (light fades into the dark); brick mortar is dithered",
         "away with depth inside each step's ink. Heroes stand on treads in cells left empty above the",
         "steps (Mage C+ step 3, Warrior W+ step 7). Torch reuses the game torch.",
-        "Archmage (native 64x88, cols 23-31 rows 10-20, nothing else in those cells): wimple/coif/face",
-        "= 3x3 W+ cells (cols 26-28 rows 11-13) cut on cell edges; veil + habit G+ rows 10-15, G rows",
-        "16-20; tone/folds by ordered dither; mist = G dither row 20; reflection = B dither on the",
-        "landing row 21.",
+        "Archmage (native 64x88, cols 23-31 rows 8-18, nothing else in those cells): wimple/coif/face",
+        "= 3x3 W+ cells (cols 26-28 rows 9-11) cut on cell edges; veil + habit G+ rows 8-13, G rows",
+        "14-18; tone/folds by ordered dither; mist = G dither row 18; reflection = B dither on the",
+        "landing row 19. Captions rows 20-21; rows 22-23 BLANK (ROM clears them for the next header).",
     ]
     return s
 
@@ -871,12 +1011,13 @@ def svg_paths(img) -> str:
     """Screen as crisp SVG: one path of 1-px runs per non-black colour."""
     out = []
     cols = {}
-    for y in range(H):
+    hh, ww = img.shape[:2]
+    for y in range(hh):
         x = 0
-        while x < W:
+        while x < ww:
             c = tuple(int(v) for v in img[y, x])
             x1 = x
-            while x1 < W and tuple(int(v) for v in img[y, x1]) == c:
+            while x1 < ww and tuple(int(v) for v in img[y, x1]) == c:
                 x1 += 1
             if c != (0, 0, 0):
                 cols.setdefault(c, []).append(f"M{x} {y}h{x1 - x}v1h-{x1 - x}z")
@@ -947,23 +1088,101 @@ def main() -> int:
         sheet[:, i * (W + 8):i * (W + 8) + W] = im
     Image.fromarray(sheet).resize((sheet.shape[1] * 2, H * 2), Image.NEAREST).save(
         os.path.join(OUT, "loading_options.png"))
-    # S2 picked by the user (2026-10-30): final = native HD Archmage; previous = 2x sprite
-    prev = s2(hd=False)
-    pb, pa = prev.resolve("S2-prev")
-    prev_img = render(pb, pa)
-    png(prev_img, os.path.join(OUT, "loading_s2_prev.png"))
     s2_final = next(it for it in items if it[0] == "S2")
+    pb, pa = s2(hd=False).resolve("S2-prev")              # superseded 2x-sprite nun (reference)
+    png(render(pb, pa), os.path.join(OUT, "loading_s2_prev.png"))
+    # S2b (user 2026-10-30): red eyes + red lips via PAPER W+ / INK R+ face cells
+    b_items = []
+    for tag, face, title in (("S2b_skull", "red_skull", "red eyes + lips, skull face"),
+                             ("S2b_human", "red_human", "red eyes + lips, pale human face")):
+        sb = s2(face=face)
+        sb.notes = s2_final[3] + [
+            "S2b: cells (26,10) (27,10) (28,10) (27,11) = PAPER W+ / INK R+ (attr $7A): skin and coif",
+            "are paper, eyes / lips / face edge are red ink; no black in those 4 cells (sockets turn red).",
+            "Every neighbour keeps W+ on black, so the face edge changes from red dots to black at the",
+            "cell edge. 4 cells only; the 2-colour check is unchanged."]
+        bm, attr = sb.resolve(tag)
+        scr = to_scr(bm, attr)
+        bm2, attr2 = decode_scr(scr)
+        assert (bm2 == bm).all() and (attr2 == attr).all()
+        base = os.path.join(OUT, f"loading_{tag.lower()}")
+        open(base + ".scr", "wb").write(scr)
+        img = render(bm2, attr2)
+        png(img, base + ".png")
+        png(img, base + "_grid.png", grid=True)
+        open(base + "_attr.txt", "w").write(attr_txt(tag, attr2, sb.notes))
+        b_items.append((tag.replace("_", " ").upper(), title, img, sb.notes[-4:], 3))
+        print(f"{tag}: ok -> {base}.scr")
+    # S2c (user 2026-10-30): elongated gaunt crone face; a = W+ on black, b = red trick
+    c_items = []
+    for tag, face, title, extra in (
+            ("S2c_a", "crone", "crone face, black sockets (W+ on black)",
+             ["S2c a: same attributes as S2 final; the 3x3 W+ head block is a designed 24x24",
+              "crone face (CRONE_HALF, mirrored): long oval, sunken sockets + glint, thin nose,",
+              "hollow cheeks, stitched mouth, long bony chin; the bib tapers under the chin."]),
+            ("S2c_b", "crone_red", "crone face, red sockets + lips",
+             ["S2c b: crone face + cells (26,10) (27,10) (28,10) (27,11) = PAPER W+ / INK R+ ($7A):",
+              "sockets, face edge, hollows, mouth seam and lips are red there; the eye glint is",
+              "paper white; rows 9/11 side cells stay W+ on black (edge turns black there)."])):
+        sc = s2(face=face)
+        sc.notes = s2_final[3] + extra
+        bm, attr = sc.resolve(tag)
+        scr = to_scr(bm, attr)
+        bm2, attr2 = decode_scr(scr)
+        assert (bm2 == bm).all() and (attr2 == attr).all()
+        base = os.path.join(OUT, f"loading_{tag.lower()}")
+        open(base + ".scr", "wb").write(scr)
+        img = render(bm2, attr2)
+        png(img, base + ".png")
+        png(img, base + "_grid.png", grid=True)
+        open(base + "_attr.txt", "w").write(attr_txt(tag, attr2, sc.notes))
+        c_items.append((tag.replace("_", " ").upper(), title, img, extra, 3))
+        print(f"{tag}: ok -> {base}.scr")
+    sd = s2(face="crone_narrow")
+    sd.notes = s2_final[3] + [
+        "S2d: crone face with a TIGHT coif (3 px round the face, narrow_coif()); the rest of the",
+        "3x3 W+ block is black, so a black gap separates coif and veil; the veil's inner edge is a",
+        "green line just outside the block (cols 25 / 29, row 8). No red variant: the gap would fall",
+        "inside the PAPER-white face cells, which cannot show black."]
+    bm, attr = sd.resolve("S2d")
+    scr = to_scr(bm, attr)
+    bm2, attr2 = decode_scr(scr)
+    assert (bm2 == bm).all() and (attr2 == attr).all()
+    base = os.path.join(OUT, "loading_s2d")
+    open(base + ".scr", "wb").write(scr)
+    img = render(bm2, attr2)
+    png(img, base + ".png")
+    png(img, base + "_grid.png", grid=True)
+    open(base + "_attr.txt", "w").write(attr_txt("S2d", attr2, sd.notes))
+    print(f"S2d: ok -> {base}.scr")
+    trio = ([("S2 FINAL", "round skull face", s2_final[2], s2_final[3][-4:], 3)] + c_items +
+            [("S2D", "crone face, tight coif (black sockets)", img, sd.notes[-4:], 3)])
     html = board(
-        [("S2 FINAL", "THE DESCENT (picked)", s2_final[2], s2_final[3], 3),
-         ("S2 PREVIOUS", "nun = 40 px sprite at 2x, for comparison", prev_img,
-          ["Superseded: the Archmage was the ART13 nun_a_cast grid upscaled 2x."], 2)],
-        "F3o ART14 — LOADING SCREEN S2 FINAL (SCREEN$ 6,912 B, 0 GAME BYTES)",
-        "User picked S2 (The Descent). The Archmage is now drawn at native screen resolution "
-        "(64x88 px): habit folds with dither shading, crisp coif/wimple, hollow eyes with a glow "
-        "pixel, praying hands, rosary + cross, wavy hem, mist and a floor reflection. Every cell is "
-        "black paper + one ink; the generator rejects any 3-colour cell. File: "
-        "assets/gfx/loading/loading_s2.scr (S1/S3 files kept). Not wired into the tape.",
-        grid_for={"S2 FINAL"})
+        trio,
+        "F3o ART14 — LOADING SCREEN: S2 FINAL / S2c a / S2c b / S2d TIGHT COIF (SCREEN$ 6,912 B)",
+        "S2c redraws the Archmage head as a long gaunt crone (designed pixel grid, not a circle). "
+        "a keeps S2 final's attributes (white on black, black sockets); b adds red sockets + lips "
+        "with the 4-cell PAPER white / INK red trick. Every cell is 2 colours (generator-checked). "
+        "S2d = S2c a with a tight coif and a black gap to the veil. Rows 22-23 are blank in all four "
+        "(the ROM clears them while the next header loads). "
+        "Files: assets/gfx/loading/loading_s2.scr, loading_s2c_a.scr, loading_s2c_b.scr, loading_s2d.scr.",
+        grid_for={"S2 FINAL", "S2C A", "S2C B", "S2D"})
+    hd = "font-family: 'Press Start 2P', monospace; font-size: 13px; color: #e8e6f0; margin: 24px 0 12px;"
+    tx = "font-size: 12px; color: #e8e6f0; margin: 6px 0;"
+    crops = [f'<div style="{hd}">HEAD CLOSE-UP 6× (cols 25-29, rows 8-12, attr grid)</div>',
+             '<div style="display: flex; gap: 16px; flex-wrap: wrap;">']
+    for name, _, img, _, _ in trio:
+        cr = img[64:104, 200:240]
+        gp = ('<path d="' + "".join(f"M{k} 0V40" for k in (8, 16, 24, 32)) +
+              "".join(f"M0 {k}H40" for k in (8, 16, 24, 32)) +
+              '" stroke="#FF00FF" stroke-opacity="0.45" stroke-width="0.12" fill="none"></path>')
+        crops.append('<div style="display: flex; flex-direction: column; gap: 6px;">'
+                     '<div style="padding: 8px; background: #000000; border: 2px solid #26263a;">'
+                     '<svg width="240" height="240" viewBox="0 0 40 40" shape-rendering="crispEdges" '
+                     'style="display: block;"><rect width="40" height="40" fill="#000000"></rect>'
+                     + svg_paths(cr) + gp + f'</svg></div><div style="{tx}">{name} · HEAD 40×40</div></div>')
+    crops.append("</div>")
+    html += "\n".join(crops) + "\n"
     open(os.path.join(OUT, "loading_options.svg.html"), "w").write(html)
     print(f"board: {len(html)} B")
     return 0
