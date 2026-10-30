@@ -1826,11 +1826,10 @@ def main():
                 from game_lib import SNA_RAM
                 p.z.cmd("set-memory-zone 0")
                 try:
-                    for nm in ("TSET_LO", "TSET_HI"):
-                        o = 7 * 16384 + S[nm] - 0xC000
-                        n = S["TSET_HALF_LEN"]
-                        h.expect(f"38 end: bank-7 tilesets {nm} == .sna",
-                                 bytes(p.z.read_memory(o, n)) == SNA_RAM[o:o + n], True)
+                    o = 7 * 16384 + S["TSET_BASE"] - 0xC000     # MEM-RECLAIM w2a: one dedup block
+                    n = S["TSET_LEN"]
+                    h.expect("38 end: bank-7 tilesets == .sna",
+                             bytes(p.z.read_memory(o, n)) == SNA_RAM[o:o + n], True)
                 finally:
                     p.z.cmd("set-memory-zone -1")
 
@@ -2059,12 +2058,11 @@ def tape_rest(h, p):
     ba, sa = bytearray(ram[ayo:ayo + S["AY_LEN"]]), bytearray(SNA_RAM[ayo:ayo + S["AY_LEN"]])
     ba[a0:a1] = sa[a0:a1] = bytes(a1 - a0)
     h.expect("50 bank 3 AY slot (A8 tape block, bar ay_vars) == .sna", ba == sa, True)
-    for nm in ("TSET_LO", "TSET_HI"):            # B3B-8: the bank-7 tileset blocks
-        o = 7 * 16384 + S[nm] - 0xC000
-        h.expect(f"50 bank 7 tilesets {nm} (B3B-8 tape block) == .sna",
-                 ram[o:o + S["TSET_HALF_LEN"]] == SNA_RAM[o:o + S["TSET_HALF_LEN"]], True)
-    o = 7 * 16384 + S["B7_CODE"] - 0xC000       # D3-S2: the bank-7 cold code (same block as TSET_LO)
-    h.expect("50 bank 7 cold code (D3-S2, TSET_LO tape block) == .sna",
+    o = 7 * 16384 + S["TSET_BASE"] - 0xC000      # B3B-8 / MEM-RECLAIM w2a: the tileset tape block
+    h.expect("50 bank 7 tilesets (tape block) == .sna",
+             ram[o:o + S["TSET_LEN"]] == SNA_RAM[o:o + S["TSET_LEN"]], True)
+    o = 7 * 16384 + S["B7_CODE"] - 0xC000       # D3-S2: the bank-7 cold code (own tape block)
+    h.expect("50 bank 7 cold code (D3-S2 tape block) == .sna",
              ram[o:o + S["B7_LEN"]] == SNA_RAM[o:o + S["B7_LEN"]], True)
     to = S["BANK_TEXT"] * 16384 + S["TEXT_ADDR"] - 0xC000   # D3-TX: the text block, bank 0
     h.expect("50 bank 0 text block (D3-TX tape block) == .sna", ram[to:to + S["TEXT_LEN"]] ==

@@ -139,8 +139,7 @@ def tables(p, check, tag, depth):
               + [i for i in lists[1] if a[i] != p.rb("LVL_ATTR_WALL")])
         check(f"GI {tag}: theme ids carry LVL_ATTR_FLOOR / WALL", th == [], (lists, th))
         slot = depth - 1
-        base = (S["TSET_LO"] if slot < 4 else S["TSET_HI"]) + (slot & 3) * S["TSET_STRIDE"]
-        src = sna_bank(7, base, S["TSET_STRIDE"])
+        src = GL.tset_slot(lambda a_, n_: sna_bank(7, a_, n_), slot)   # MEM-RECLAIM w2a: dedup records
         n = (TILE_IDS - TC)
         tf = bytes(p.z.read_memory(S["tile_flags"] + TC, n))
         bad = (diff_ranges(g[TC * 8:], src[:n * 8], TG + TC * 8)
@@ -157,10 +156,9 @@ def tables(p, check, tag, depth):
     for (b, lo, hi, name) in (
             (1, S["vdata"] + 0x4000, S["vdata_end"] + 0x4000, "bank-1 vdata (panel / status icons; 3E-T1: the boot-only part is in the boot block)"),
             (1, S["menu_font"], S["menu_torch_end"], "bank-1 menu art (font, title, torch)"),
-            (7, S["TSET_LO"], S["TSET_LO"] + 4 * S["TSET_STRIDE"], "bank-7 tilesets 0..3"),
-            (7, S["TSET_HI"], S["TSET_HI"] + 4 * S["TSET_STRIDE"], "bank-7 tilesets 4..7"),
+            (7, S["tilesets"], S["tilesets_end"], "bank-7 tilesets (MEM-RECLAIM w2a: dedup block)"),
             (7, S["B7_CODE"], S["B7_LIMIT"], "bank-7 cold code + unused tail (D3-S2: the "
-             "freed bitmap shadow $E000..$F7FF is never written)"),
+             "freed bitmap shadow, w2a + the old tileset slots 0..3, is never written)"),
             (0, S["text_img"], S["text_img_end"], "bank-0 text block")):
         got = bank_read(p, b, lo, hi - lo)
         bad = diff_ranges(got, sna_bank(b, lo, hi - lo), lo)
@@ -252,8 +250,7 @@ def screen_check(p, check, tag, depth):
     fr = p.frame()
     m = bytes(p.z.read_memory(S["ROOM_MAP"], 32 * S["PLAY_ROWS"]))
     slot = depth - 1
-    base = (S["TSET_LO"] if slot < 4 else S["TSET_HI"]) + (slot & 3) * S["TSET_STRIDE"]
-    gly = SRC_GLY + sna_bank(7, base, (TILE_IDS - TC) * 8)
+    gly = SRC_GLY + GL.tset_slot(lambda a_, n_: sna_bank(7, a_, n_), slot)[:(TILE_IDS - TC) * 8]
     lvl = {gly[i:i + 8] for i in range(TC * 8, TILE_IDS * 8, 8)}
     orn = {SRC_ORN[i:i + 8] for i in range(0, len(SRC_ORN), 8)}
     covered = set()

@@ -75,7 +75,7 @@
   region just below R6 (`SRC6_KINDS` in `tools/zx0_sources.py`; memory-map
   "SRC6 region").
 - **Bank-7 cold code (D3-S2).** Per-turn / per-event logic that needs no
-  other `$C000` bank lives in bank 7 `$E000..$F7FF` (`src/bank7.asm`, the
+  other `$C000` bank lives in bank 7 `$DB00..$F7FF` (MEM-RECLAIM w2a; `src/bank7.asm`, the
   space of the dropped bitmap shadow), entered only through **`far7`**
   (`ld c, BANK_COLD7` → `farb`; nests from bank 3 / bank 1 too). Rules:
   never per-tick render / present / ISR code (bank 7 is contended; a far
@@ -88,7 +88,7 @@
   `call farb`. Paging bank 7 in never changes the displayed screen (that is
   `$7FFD` bit 3, kept by `page_bank`). No SMC and no data in bank 7 code:
   `tests/gfx_integrity.py` asserts `B7_CODE..B7_LIMIT` == the .sna. Test
-  probes never go there (a PC breakpoint at `$E000+` also fires in bank-3 /
+  probes never go there (a PC breakpoint at `$DB00+` also fires in bank-3 /
   bank-1 code at the same address): keep a bank-2 stub as the probe
   (`read_turn_input`, `pause_hook`).
   **Exception (D3-8d, the status-mark ops):** `mk_op` / `mk_forget` /

@@ -425,33 +425,27 @@ TF_ANIM_BIT     EQU 6
 TF_FLOOR_BIT    EQU 7
 
 ;------------------------------------------------------------------------------
-; Bank-7 tileset slots (game.md §1.2/§11.2): 8 x 320 B, slot = depth - 1.
-;   slot layout: +0 glyphs of ids 32..63 (32 x 8 B, id order), +256 attrs (32 B),
-;   +288 TILE_FLAGS of ids 32..63 (32 B; B3B-8: per-level solidity / anim bits)
-;   -> LDIRs of 256 to TILE_LEVEL_GLYPHS, 32 to TILE_LEVEL_ATTRS, 32 to
-;   tile_flags + 32 (level_load_tiles, lowram.asm).
-;   slots 0–3 at TSET_LO ($DB00..$DFFF, above screen 2), 4–7 at TSET_HI
-;   ($FAA0..$FF9F, above the shadow attrs). Address = (slot < 4 ? TSET_LO :
-;   TSET_HI) + (slot & 3) * 320. Cold data; B3B-8: two headerless tape blocks
-;   loaded by `start` (bank 7 paged), and in the .sna.
+; Bank-7 tilesets (game.md §1.2/§11.2), MEM-RECLAIM w2a deduplicated format
+; (tools/tiles_convert.py -> assets/gfx/tiles/tilesets.asm), one block at
+; TSET_BASE (above the shadow attrs):
+;   tset_slots  8 records x TSET_STRIDE (65 B), record = depth - 1 (PROTO: 0):
+;               +TSET_GIDX 32 tset_pool indices of ids 32..63, +TSET_ATTRS 32
+;               attrs, +TSET_FSET the tset_fsets index of their TILE_FLAGS
+;   tset_fsets  TSET_NFSET x 32 B TILE_FLAGS sets of ids 32..63
+;   tset_pool   TSET_NPOOL x 8 B distinct glyphs
+; level_tiles7 (tiles7.asm, far7 from the low-RAM level_load_tiles) gathers
+; one record into TILE_LEVEL_GLYPHS / TILE_LEVEL_ATTRS / tile_flags + 32.
+; Cold data, one headerless tape block, never written at runtime.
 ;------------------------------------------------------------------------------
 BANK_TSET       EQU 7
-TSET_GLYPHS     EQU 0
-TSET_ATTRS      EQU 256
-TSET_FLAGS      EQU 288
-TSET_STRIDE     EQU 320
-TSET_PER_HALF   EQU 4
-TSET_HALF_LEN   EQU TSET_PER_HALF * TSET_STRIDE   ; 1,280 B per tape block
-TSET_LO         EQU $DB00           ; right above screen 2 ($C000..$DAFF)
-TSET_HI         EQU $FAA0           ; right above the shadow attrs (PROTO rows 0–20; 3B 0–17)
-                ASSERT TSET_ATTRS == (TILE_IDS - TILE_COMMON) * 8 && TSET_FLAGS == TSET_ATTRS + TILE_IDS - TILE_COMMON
-                ASSERT TSET_STRIDE == TSET_FLAGS + TILE_IDS - TILE_COMMON
-                ASSERT TSET_STRIDE == 5 * 64    ; level_load_tiles: (slot&3) * 320 = slot*256 + slot*64
-                ASSERT TSET_LO >= SCREEN7_ATTR + SCREEN_ATTR_LEN
-                ASSERT TSET_HI >= SHADOW_ATTR + PLAY_ROWS * ATTR_STRIDE   ; (+3 PROTO rows of slack)
-                ASSERT TSET_LO + TSET_PER_HALF * TSET_STRIDE <= B7_CODE
-                ASSERT TSET_HI + TSET_PER_HALF * TSET_STRIDE <= $10000
-                ASSERT 2 * TSET_PER_HALF == LEVELS
+TSET_GIDX       EQU 0
+TSET_ATTRS      EQU 32
+TSET_FSET       EQU 64
+TSET_STRIDE     EQU 65
+TSET_BASE       EQU $FAA0           ; right above the shadow attrs (PROTO rows 0–20; 3B 0–17)
+                ASSERT TSET_ATTRS == TILE_IDS - TILE_COMMON && TSET_FSET == 2 * TSET_ATTRS
+                ASSERT TSET_STRIDE == TSET_FSET + 1   ; level_tiles7: slot * 65 = slot * 64 + slot
+                ASSERT TSET_BASE >= SHADOW_ATTR + PLAY_ROWS * ATTR_STRIDE   ; (+3 PROTO rows of slack)
                 ASSERT BANK_TSET == BANK_SCREEN7 && BANK_TSET == BANK_SHADOW
 
 ;------------------------------------------------------------------------------
