@@ -92,13 +92,13 @@ decor steps, the D3-S2 cold code).
 
 Tape (LOAD-WIRE): BASIC `10 CLEAR VAL "24575": BORDER/PAPER/INK 0: CLS: POKE 23739,111`,
 `15 LOAD "" SCREEN$`, `20 LOAD "" CODE`, `30 RANDOMIZE USR VAL "<start>"`; then the
-**loading picture** (`assets/gfx/loading/loading_s2.scr`, 6,912 B, "The Descent"; generator
+**loading picture** (`assets/gfx/loading/loading_s2d.scr`, 6,912 B, "The Descent", variant S2d; generator
 `tools/gen_loading_screen.py`) as a CODE block `$4000` + 6,912 B straight after the BASIC
 and before the game CODE. It exists ONLY on the tape: `src/main.asm` parks the image's own
 `$4000..$5AFF` bytes with SAVEBIN (`build/slot1_park.bin`), INCBINs the .scr there for that one
 SAVETAP and INCBINs the parked bytes back, so the .sna / game image are byte-identical (0 game
 bytes, banks and R6 free unchanged). The CLEAR must precede the picture (CLEAR CLSes). The ROM's
-game-CODE header message blanks rows 22-23 of the picture while that block loads (POKE 23739,111 only
+game-CODE header message clears rows 22-23 while that block loads, so S2d keeps them blank (bitmap 0, attr 7) (POKE 23739,111 only
 drops the text; a DF_SZ poke scrolls the screen instead). `tests/tape_layout.py` parses the .tap
 (block order, parity, .scr == block data). Game loader:
 (the 5 USR digits are emitted from the `start` label, today `29927` = `$74E7`).

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tape layout gate (LOAD-WIRE): build/wazhack.tap parses as
   BASIC header + program (autostart 10, loader lines 10/15/20/30),
-  SCREEN$ header (CODE @ $4000, 6912 B) + data == assets/gfx/loading/loading_s2.scr,
+  SCREEN$ header (CODE @ $4000, 6912 B) + data == assets/gfx/loading/loading_s2d.scr,
   CODE header (lowram_code) + data, then only headerless (flag $FF) blocks.
 Every block's XOR parity is checked. No emulator needed.
 Usage: tests/tape_layout.py [TAP]   (default build/wazhack.tap)"""
@@ -63,8 +63,8 @@ expect("line 10 starts CLEAR VAL \"24575\" (before the picture)", lines[10].star
 
 ok, (typ, nm, ln, p1, p2) = hdr(blocks[2])
 expect("block 2 = CODE header $4000, 6912 B", ok and typ == 3 and p1 == 0x4000 and ln == 6912)
-scr = open(os.path.join(REPO, "assets/gfx/loading/loading_s2.scr"), "rb").read()
-expect("block 3 data == loading_s2.scr (6912 B)", blocks[3][0] == 0xFF and blocks[3][1:-1] == scr and len(scr) == 6912)
+scr = open(os.path.join(REPO, "assets/gfx/loading/loading_s2d.scr"), "rb").read()
+expect("block 3 data == loading_s2d.scr (6912 B)", blocks[3][0] == 0xFF and blocks[3][1:-1] == scr and len(scr) == 6912)
 ok, (typ, nm, ln, p1, p2) = hdr(blocks[4])
 expect("block 4 = game CODE header @ lowram_code", ok and typ == 3 and p1 == sym["lowram_code"] and ln == sym["TAPE_CODE_LEN"])
 expect("block 5 = game CODE data", blocks[5][0] == 0xFF and len(blocks[5]) - 2 == ln)
