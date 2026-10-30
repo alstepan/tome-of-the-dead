@@ -67,6 +67,14 @@ goldens need (default 1 = the designer's debug kit, never in a release tape).
   missing or have an illegal anchor fall back to stand-ins automatically
   (`src/frames.asm` FRM list, `src/data.asm` ROLE, `src/lowram.asm` TSRC
   tables) — no code change needed when art lands.
+- **40-px override (ANIM-IMPORT2):** every name INCLUDEd in
+  `assets/gfx/sprites40/index40.asm` is read from `assets/gfx/sprites40/<name>.asm`
+  instead (`tools/zx0_pack.py` `sprite_asm`), so editing or re-importing
+  (`tools/svg_sprites.py`, which writes `assets/gfx/sprites/`) a frame listed
+  there changes NOTHING in the build — edit the `sprites40/` copy. index40 is
+  not an on/off switch (six frames exist only at 40 px); the 48-px set comes
+  back only from the tag `archive/48px-sprites` (`docs/conventions.md`
+  "Sprite sources").
 
 ## Success criteria
 

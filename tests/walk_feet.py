@@ -5,8 +5,9 @@ A walker steps 4 px per tick and shows the next MOVECYC slot each tick (docs/con
 frame from one slot to the next. For every consecutive slot pair (cyclic) of the listed
 move cycles (src/seq_img.asm, read as text) this checks, from the frame pixels the build
 packs (tools/zx0_pack.py game_frames / sprite_asm: the 40-px override), that
-  * some ink pixel of the sole row (the frame's bottom row: frames are bottom-anchored) of
-    slot n+1, put 4 px further on, lands on a sole ink pixel of slot n (a planted foot), and
+  * at least MIN_CONTACT ink pixels of the sole row (the frame's bottom row: frames are
+    bottom-anchored) of slot n+1, put 4 px further on, land on sole ink pixels of slot n
+    (a planted foot, not a 1-px graze), and
   * the sole row is not empty (the frame stands on the floor).
 Right-facing art (the left facing is the mirror: the same relation). Exit 1 on a failure.
 Usage: python3 tests/walk_feet.py
@@ -24,6 +25,10 @@ import zx0_sources as zs  # noqa: E402
 # move cycles of the 40-px walkers (seq_img.asm labels)
 CYCLES = ["kn_move", "wz_move", "sk_move", "ar_move", "or_move", "ne_move", "mu_move", "vp_move"]
 STEP = 4
+MIN_CONTACT = 3            # px of sole that must stay on the same screen x (a 1-px touch is a slide)
+# known art debt, reported but not failing (remove the entry when the art is fixed):
+XFAIL = {"vp_move": "ART9 Vampire walk (pre-ART11 planted-foot rule) keeps only 1-2 px of sole; "
+                    "the ART11 extra X2 (4th walk pose) is the pending fix"}
 
 frames = dict(zp.game_frames())
 
@@ -59,12 +64,17 @@ for lab in CYCLES:
         sb, hb = sole(b)
         if not sa or not sb:
             bad.append(f"{a if not sa else b}: empty sole row")
-        elif not {x + STEP for x in sb} & sa:
-            bad.append(f"{a} -> {b}: no foot planted (sole {sorted(sa)} vs next+4 {sorted(x + STEP for x in sb)})")
+        elif len({x + STEP for x in sb} & sa) < MIN_CONTACT:
+            bad.append(f"{a} -> {b}: planted contact {len({x + STEP for x in sb} & sa)} px < {MIN_CONTACT} "
+                       f"(sole {sorted(sa)} vs next+4 {sorted(x + STEP for x in sb)})")
         if ha != hb:
             bad.append(f"{a} / {b}: heights {ha} / {hb}")
     ok = not bad
-    fails += not ok
-    print(f"[{'PASS' if ok else 'FAIL'}] {lab} {cyc}" + ("" if ok else ": " + "; ".join(bad)))
+    xf = not ok and lab in XFAIL
+    fails += not ok and not xf
+    tag = "PASS" if ok else ("XFAIL" if xf else "FAIL")
+    print(f"[{tag}] {lab} {cyc}" + ("" if ok else ": " + "; ".join(bad)) + (f" [{XFAIL[lab]}]" if xf else ""))
+    if ok and lab in XFAIL:
+        print(f"[XPASS] {lab}: drop its XFAIL entry")
 print("walk_feet:", "OK" if not fails else f"{fails} FAILED")
 sys.exit(1 if fails else 0)

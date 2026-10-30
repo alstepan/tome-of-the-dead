@@ -20,6 +20,19 @@
   `; SMC:` with what gets patched and where, and must not live in ROM-paged space.
 - Annotate hot routines with their T-state cost in the header.
 
+## Sprite sources (ANIM-IMPORT2)
+
+- Frame sources = `assets/gfx/sprites/<name>.asm` (the INCLUDE list of `index.asm` +
+  `index_3f.asm`), **except every name INCLUDEd in `assets/gfx/sprites40/index40.asm`, read from
+  `assets/gfx/sprites40/<name>.asm`** (`tools/zx0_pack.py` `sprite_asm()`: the packer, `pool_spike`,
+  `tests/combat.py`; any new tool reading frame files must use it). The 48-px files of those names
+  stay in `assets/gfx/sprites/` for reference only: a canvas re-import (`tools/svg_sprites.py`)
+  or a `gen_*` tool writing there does not change the build for a shadowed name.
+- `index40.asm` is **not** a toggle: `orc_walk3`, `orc_hurt`, `vamp_walk1..3`, `vamp_hurt` exist
+  only at 40 px (FRM rows, sequences), so dropping them from it fails the build with a pointer
+  here. The only way back to the 48-px set is the tag **`archive/48px-sprites`** (= main
+  `410c118`, before any 40-px import), or reverting the ANIM-IMPORT2 commits.
+
 ## Memory & data
 
 - No magic addresses. Define them as constants in an include and reference by name.
