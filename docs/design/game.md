@@ -505,6 +505,104 @@ WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|
   `concept_menu` / `screen_menu.png` (designer decision 2026-10-04). Death `KILLED BY …`
   killer tracking is 3D (designer decision).
 
+#### 3.2.1 HOW TO PLAY screen (INSTR1; user 2026-10-30 request, designer decision 2026-10-30)
+
+**Problem.** The game never tells the player the goal or the non-obvious combos (↓ + FIRE,
+FIRE + ↑, the BAG icon, Wait = search). One static screen fixes it.
+
+**Flow (decision): once per boot, before the first menu, from the boot block.**
+
+| Option | Resident bytes | Re-readable | Verdict |
+|---|---|---|---|
+| **A. Pre-menu, once per power-on, text in the bank-6 boot block** | **0** after boot (≈ 0.75 KB more tape, ≈ 4–5 s of loading) | no (reload the tape) | **chosen** |
+| B. After START, before D1, every game | ≈ 0.5 KB packed (tokenised or ZX0) + ≈ 40 B code, permanently | yes | rejected now: no free slot fits (R6 379 B, bank 3 ≈ 380 B, bank 7 ≈ 110 B); the only home is the pre-shift pool slack (2,480 B), which is reserved for 3F monsters |
+| C. After START, first game only | same as B | no | same cost as B for the same reach as A (a permadeath game is one boot = one session) |
+| D. Menu item `6 HOW TO PLAY` | same as B | yes | rejected now: same cost as B, and the menu has no free row (item 5 is on rows 21–22, the credit on row 23) |
+
+- Why A: the boot block (§ memory-map "Boot block") is already on tape, runs once and is **dead
+  after boot by contract** (the hero pool may overwrite it). Text and its draw loop placed there
+  cost no resident byte. This is the user's "load into video RAM before the menu" option without
+  a separate tape block: same one-shot behaviour, no new `tape_tab` record. Showing it every game
+  would annoy repeat players; showing it once per boot reaches every new player.
+- **Order in `boot`:** after `boot6_tiles` (the `FONT6` planes exist), call `boot6_help`: clear
+  the bank-5 screen (ULA shows bank 5 at boot), set the border black, draw the 24 rows below,
+  then let the rest of `boot` (the boot pool generation) run **while the player reads**, if it
+  does not touch the bank-5 screen (engineer verifies; else wait first, then generate). Then wait
+  for the key and enter the menu.
+- **Dismiss:** any key, accepted only after **all keys have been released once** (the `ENTER`
+  of `LOAD ""` may still be held). No timeout. The key is **swallowed**: the menu waits for a
+  full release before reading, so a `1` here never STARTs. Kempston is **not** read (the port
+  floats on a bare machine, and the menu never reads joysticks, §3.2); Sinclair FIRE is a key
+  (`0` / `5`), so it works. A joystick player needs the keyboard for `1 START` anyway, so this
+  adds no new keyboard step.
+- **Music:** silent (the title tune starts with the menu as today). Simplest; no AY change.
+- **Unblock for B/D later:** after 3F, if R6 has ≥ 600 B free or the pool slack is still
+  ≥ 1.5 KB, a tokenised copy can be added to the bank-0 text block and shown from the menu
+  (needs a menu relayout to fit item 6).
+
+**Rendering.** The custom **6×8 text font** (`FONT6`, resident), 32 chars per row = 192 px,
+**left margin 32 px** (centred). With that margin, chars 0 / 12 / 24 start at px 32 / 104 / 176
+= attr cols 4 / 13 / 22, so the 3 colour fields of the control rows fall exactly on attr cells
+(§3.4 colour rule). Paper black (0) everywhere, border black. Every row is upper case, ≤ 32
+chars, no scrolling, one screen.
+
+**Exact text** (`|` marks col 0 and col 32; field starts at chars 0 / 12 / 24 are padded with spaces):
+
+```
+row |0         1         2         3 |
+    |01234567890123456789012345678901|
+ 0  |TOME OF THE DEAD - HOW TO PLAY  |  $46
+ 1  |FIND THE KEY, KILL THE BOSS AND |  $47
+ 2  |GO DOWN. ON DEPTH 8 KILL THE    |  $47
+ 3  |ARCHMAGE, THEN DESTROY THE BOOK.|  $47
+ 4  |STICK       ACTION      KEY     |  $06
+ 5  |LEFT RIGHT  WALK, HIT           |  F
+ 6  |UP+L/R      JUMP                |  F
+ 7  |UP DOWN     CLIMB               |  F
+ 8  |DOWN        WAIT/SEARCH .       |  F
+ 9  |FIRE        USE ICON    ENTER   |  F
+10  |DOWN+FIRE   ICON BAR    1-0     |  F
+11  |BAR: L/R PICK, FIRE USE, UP BACK|  $07
+12  |SPELLS, ARROWS: AIM BY FACING.  |  $07
+13  |FIRE ON BAG INVENTORY   I       |  F
+14  |FIRE+UP     PAUSE/SOUND BREAK S |  F
+15  |WALK INTO DOORS AND ONTO ITEMS. |  $07
+16  |KEYS Q A O P SPACE ACT AS STICK |  $05
+17  |MENU 3 PICKS STICK, 4 REDEFINES |  $05
+18  |WATCH FOOD - THE STARVING FAINT.|  $44
+19  |GRATES ARE ONE WAY: LOOT FIRST. |  $44
+20  |BOSSES NEVER LEAVE THEIR LAIR.  |  $44
+21  |READ FEAR OR SLEEP WHEN SWARMED.|  $44
+22  |ENCHANT MENDS A WORN WEAPON.    |  $44
+23  |         PRESS ANY KEY          |  $46
+```
+
+`F` = the 3-field control row: chars 0–11 (STICK) `$45`, chars 12–23 (ACTION) `$47`,
+chars 24–31 (KEY, shortcut) `$46`. Row 4 is the field header in `$06`.
+
+**Why each line (source rules).** Goal: §1 Win, §1.1 key room / lair / grate, §1.3. Rows 5–14:
+§3.1 (Wait = search: §1.5 `TRP_WAIT`; ↓ waits only with no ladder below; jump ↖ ↗; icon use
+fires toward the facing; ICON MODE ← → / FIRE / ↑ back; BAG icon or `I`; Pause FIRE + ↑ or
+BREAK, SOUND in the pause box or `S`). Row 15: doors open by walking (§3.1), pickups are
+automatic (§8). Rows 16–17: §3.2. Tips: hunger is never fatal but WEAK faints (§7, §7.1); the
+level exit is one way (§1 "Going back up: no"); bosses never follow (§8.6); Fear / Sleep scrolls
+(§8); Enchant repairs a worn weapon (§8.11 rev 6). **Cursed gear is not mentioned: rev 6
+(§8.11 "3E simplification") removed it.**
+
+**Budget (E).** Text ≈ 650 chars + ≈ 40 B of row/field/attr records ≈ **0.7 KB**, plus a draw +
+wait loop ≈ 60–80 B, all in the boot block (`BOOT6_LEN` grows; `BOOT6_ADDR` moves down into
+bank-6 pool space that only the hero pool uses after boot; the boot pool still ends in bank 4,
+`POOL_BOOT_NEED` ASSERT). Raw text is fine: ZX0 would save ≈ 0.25 KB of tape (≈ 1.5 s) but adds
+an unpack step. Engineer's choice. Resident cost after boot: **0 B**.
+
+**Checks (`test`).**
+1. Real tape load → the help screen is shown before the menu; golden screen `help`.
+2. A key held from load → the screen stays until release + a new press.
+3. Pressing `1` on it → menu shown, not started (`GS` still menu, `TURN_COUNTER` untouched).
+4. Death → menu → START, and win → menu: the help screen is **not** shown again.
+5. `tests/game.py` #61 still passes (boot-block PCs only during boot); #50 bank-6 compare covers
+   the new bytes.
+
 ### 3.3 Panel at a glance (layout: concept-screen §5; approved round 5)
 
 Rows 18–19: **10 icons 24×16** (cols `3i … 3i+2`), cols 30–31 = depth + key icon. Row 20: the
