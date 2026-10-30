@@ -1034,6 +1034,8 @@ def check_rows(b, rows):
 
 ART23_FRAMES = ("orc_raise", "ogre_raise", "vamp_bite", "small_corpse", "necro_walk3",
                 "mummy_walk3", "mummy_walk4", "climb_h1", "climb_h2", "dk_walk3")
+# SPIDER-CLIMB (ART15, tools/gen_art15_spider_climb.py owns the .asm files; K_SPIDER unit)
+ART15_FRAMES = ("spider_climb1", "spider_climb2")
 # ANIM-IMPORT (necro_walk4, ART3) and ANIM-IMPORT2 (the 40-px-only names: no 48-px file, the .asm
 # lives in assets/gfx/sprites40/, resolved by tools/zx0_pack.py sprite_asm through index40.asm)
 ANIM_FRAMES = ("necro_walk4",)
@@ -1053,7 +1055,7 @@ def write_index_3f() -> None:
         L.append(f'        INCLUDE "{S.CHAR_PREFIX[hd]}_{S.slug(cap)}.asm"')
     L.append("; ART2 / ART3 final frames (tools/gen_art2_final.py / gen_art3_final.py own the .asm files;")
     L.append("; wired by 3F-T13bc: src/frames.asm FRM rows)")
-    for n in ART23_FRAMES + ANIM_FRAMES:
+    for n in ART23_FRAMES + ANIM_FRAMES + ART15_FRAMES:
         L.append(f'        INCLUDE "{n}.asm"')
     L.append("; ANIM-IMPORT2: new 40-px-only frames (no 48-px file; tools/zx0_pack.py sprite_asm resolves")
     L.append("; them in assets/gfx/sprites40/, listed in its index40.asm)")

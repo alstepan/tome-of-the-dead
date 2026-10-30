@@ -163,7 +163,7 @@ ANCHOR_X = {
     "rat_bite": 0, "rat_hurt": 0, "rat_dead": 0,
     "bat_dive": 0, "bat_hurt": 0, "bat_dead": 0,
     "slime_lunge": 0, "slime_hurt": 0, "slime_dead": 0,
-    "spider_bite": 0, "dead_humanoid": 8,    # 3F-A1: as rat_bite / knight_dead
+    "spider_bite": 0, "spider_climb1": 0, "spider_climb2": 0, "dead_humanoid": 8,    # 3F-A1: as rat_bite / knight_dead
     # ART2 (gen_art2_final.py): bite lunges forward from the robe (body x 0..23);
     # orc_raise = body at x 8..31, cleaver behind the head in x 0..10; corpse as rat_dead
     "vamp_bite": 0, "orc_raise": 8, "small_corpse": 0,
@@ -216,7 +216,7 @@ MOTION_FRAMES = {
     # 3F-A1: MOVECYC2 walkers (WALK 1 = MOT rest frame, WALK 2 = WK0)
     *(f"{c}_walk{n}" for c in ("spider", "orc", "necro", "mummy", "ogre", "dk") for n in (1, 2)),
 }
-SYMMETRIC_FRAMES = {f"{c}_climb{n}" for c in ("knight", "wizard", "rogue", "skeleton", "goblin")
+SYMMETRIC_FRAMES = {f"{c}_climb{n}" for c in ("knight", "wizard", "rogue", "skeleton", "goblin", "spider")
                     for n in (1, 2)} | {"small_corpse"} \
     | {"climb_h1", "climb_h2"}   # ART2: mirror-symmetric heap; ART3: shared climb pair
 FLAG_MOTION, FLAG_SYMMETRIC = 1, 2

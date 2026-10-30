@@ -14,7 +14,7 @@ top storey (0). The AI (turn3.asm .seek, KF_CLIMBER only) must take it up the la
       the cycle is drawn cell-aligned: STA|SYM, docs/conventions.md "Walk cycles");
   C5  a NON-climber (Vampire on D8) put the same way never changes storey.
 Scenarios (hero, depth, kind): Orc + Archer + Sniper on D4, Orc + Necro on D7, Archer + Sniper + Skeleton + Mummy on
-D5 (Archer / Sniper / Skeleton: the SKELETON's climb pair skeleton_climb1/2, fix/archer-climb;
+D5 (Archer / Sniper / Skeleton: the SKELETON's climb pair skeleton_climb1/2, fix/archer-climb; Spider: spider_climb1/2, SPIDER-CLIMB;
 Orc / Necro / Mummy: the shared humanoid pair). --png DIR saves a mid-climb screen per run.
 Build with -DDEBUG_KIT=0.  Usage: python3 tests/climb3f.py [--png DIR]"""
 import os
@@ -31,7 +31,7 @@ FID = {k[4:]: v for k, v in S.items() if k.startswith("FID_") and isinstance(v, 
 PNG = sys.argv[sys.argv.index("--png") + 1] if "--png" in sys.argv else None
 TF_SOLID, TF_LADDER, TF_FLOOR, TF_HOLE = (S["TF_SOLID"], S["TF_LADDER"], S["TF_FLOOR"], S["TF_HOLE"])
 H6 = 6                                           # the hero and every scenario body but the Spider: 24x48 (BW 3, BH 6)
-CLIMB_SP = {FID["spider_walk1"]}                 # fix/spider-climb: the Spider (32x16, BW 4 BH 2) climbs on its rest pose
+CLIMB_SP = {FID["spider_climb1"], FID["spider_climb2"]}   # SPIDER-CLIMB: the Spider (32x16, BW 4 BH 2) has its own dorsal climb pair
 CLIMB_H = {FID["climb_h1"], FID["climb_h2"]}
 CLIMB_SK = {FID["skeleton_climb1"], FID["skeleton_climb2"]}
 OWN = {

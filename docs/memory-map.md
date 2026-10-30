@@ -4072,6 +4072,7 @@ monsters hitting on one tick lost a line (`MSG_Q` is one slot). Fixed; tests `te
 * `KF_CLIMBER` on K_SPIDER (9) / K_BLACK_WIDOW (22); `ksm_sp` KS_CLIMB = `sp_idle` (its rest pose
   `spider_walk1`, cell-aligned: no art, no fid, 0 B pool or sequence cache), KS_CLIMBREST = `sp_rest`
   = `sp_idle + 1` (the one fid byte anim `.crest` reads; ASSERTed == `FID_spider_walk1`, not WK4).
+  **Superseded by SPIDER-CLIMB below (2026-10-30): its own climb pair.**
   J1 ASSERT (main.asm) excepts the 4-wide Spider rows. `lq6.asm` `.w` (+27 B R6): the ladder queue's
   near-end box width = the wider of the two bodies (4 with a Spider).
 * Hold (from `scratch/lq-hold`): `lq_block`'s back-off leaves `E_AIDIR = LQ_HOLD` ($80) on the standing
@@ -4176,3 +4177,21 @@ Pool need per level after (4) (release; `tests/zx0_pool.py` `LEVEL_NEED`), `POOL
   `archive/48px-sprites`. `tools/gen_3f_art.py` `write_index_3f` regenerates `sprites/index_3f.asm` with
   `necro_walk4` and the six names (`ANIM_FRAMES` / `ANIM40_FRAMES`).
 
+### SPIDER-CLIMB (user 2026-10-30, `feat/spider-climb-frames`): the Spider's own climb pair
+
+* `spider_climb1` / `spider_climb2` (ART15, `tools/gen_art15_spider_climb.py`; dorsal view, head up,
+  32x16, STA|SYM, art in x 0..23 over the ladder's 3 cells, cols 24..31 transparent; ink $05, Black
+  Widow $02 via KT_ATTR) are two more FRM rows of the **K_SPIDER unit** (`frames.asm`, after `spider_bite`;
+  `KFCNT_SPIDER` 3 -> 5): the Spider / Black Widow levels only (D2 D4 D5; the Widow shares the Spider's
+  `gu_tab` / `pool_gmap` records, no table change). `FID_COUNT` 138 -> **140** of 144 (4 spare).
+* `ksm_sp` (seq_img.asm): `sp_idle` = a 1-frame idle on `spider_walk1` (4 B, as before), `sp_climb:
+  CLIMBCYC FID_spider_climb1, FID_spider_climb2` as KS_CLIMB, KS_CLIMBREST = `sp_climb + 1` (anim `.crest`
+  reads that one byte = climb1; ASSERTed STA/SYM, climb2 == climb1 + 1). `sp_rest` is gone. +6 B raw
+  sequence master (+9 B packed in R6: release R6 free 229 -> **220**, page count untouched).
+* Pool: **+256 B on D2 / D4 / D5, both heroes** (2 x 128 B); `POOL_CAP` unchanged 32,269. Slack per level
+  after (Warrior / Mage; before): D2 8,365 / 11,501 (8,621 / 11,757), D4 **2,029 / 5,101** (2,285 / 5,357),
+  D5 7,533 / 10,605 (7,789 / 10,861); D1 D3 D6 D7 D8 unchanged. `tests/zx0_pool.py` LEVEL_NEED +256 there.
+* SRC6: K_SPIDER block +163 B packed: 15 blocks, 10,144 raw -> **4,039 of 4,096 B, 57 free** (was 220).
+* The 4-wide ladder queue (`lq6.asm` `.w`) only reads `KT_BW`, never the frames; the 3-cell shaft box and
+  the per-tick 4 px climb tween are unchanged. `tests/climb3f.py` C2 now wants {climb1, climb2} for the
+  Spider (both seen), ladder_jam unchanged.

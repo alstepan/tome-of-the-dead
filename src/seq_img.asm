@@ -152,14 +152,15 @@ ksm_sl_e:
 ; Ogre wind-up is their RAISE frame, the Vampire strikes with vamp_bite) / the
 ; Rat's for the Spider (1, 2). A non-climber's KS_CLIMBREST points at its HURT
 ; seq (first byte = the rest fid; never used).
-; --- Spider (32x16; Black Widow): climber (fix/spider-climb): KS_CLIMB = sp_idle (its rest
-; pose, no climb art; cell-aligned), KS_CLIMBREST = sp_rest = sp_idle + 1 (anim .crest reads
-; that one byte: FID_spider_walk1, ASSERTed below; HURT is the bite pose since ANIM-IMPORT) ---
-ksm_sp:         KSMH ksm_sp_e - ksm_sp_s, 1, sp_idle, sp_move, sp_idle, sp_rest, sp_attack, sp_hurt, sp_hurt, sp_death, ksm_sp_s
+; --- Spider (32x16; Black Widow): climber (fix/spider-climb); SPIDER-CLIMB (user 2026-10-30): its own
+; dorsal-view climb pair spider_climb1/2 (STA|SYM, cell-aligned; ART15): KS_CLIMB = sp_climb,
+; KS_CLIMBREST = sp_climb + 1 (anim .crest reads that one byte = spider_climb1, ASSERTed below;
+; the idle seq is its own 1-frame rest on spider_walk1; HURT is the bite pose since ANIM-IMPORT) ---
+ksm_sp:         KSMH ksm_sp_e - ksm_sp_s, 1, sp_idle, sp_move, sp_climb, sp_climb + 1, sp_attack, sp_hurt, sp_hurt, sp_death, ksm_sp_s
 ksm_sp_s:
-sp_idle:        DB 1
-sp_rest:        DB FID_spider_walk1, 1, SEQ_END          ; KS_CLIMBREST (review: the climb rest fid)
-                ASSERT sp_rest == sp_idle + 1 && FID_spider_walk1 >= 0 && !(FFL_spider_walk1 & FF_PH4)
+sp_idle:        DB 1, FID_spider_walk1, 1, SEQ_END
+sp_climb:       CLIMBCYC FID_spider_climb1, FID_spider_climb2, FID_spider_walk1, FID_spider_walk1, FID_spider_walk1, FID_spider_walk1
+                ASSERT FID_spider_climb1 >= 0 && FID_spider_climb2 == FID_spider_climb1 + 1 && !(FFL_spider_climb1 & (FF_PH4 | FF_MOTION)) && !(FFL_spider_climb2 & FF_MOTION)
 sp_move:        MOVECYC2 spider_walk2, spider_walk1
 sp_attack:      DB FID_spider_walk1, 1, 0, FID_spider_bite, 2, SF_IMPACT, SEQ_END
 sp_hurt:        DB FID_spider_bite, 3, 0, SEQ_END        ; ANIM-IMPORT item 1: HURT = the bite pose (0 B)
