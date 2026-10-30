@@ -21,6 +21,10 @@ Subcommands
              (and the exported path `d` must equal the canvas's own string).
 
 Only ONE packer exists: this tool writes .grid files and calls gfx_convert.
+ANIM-IMPORT2: it writes assets/gfx/sprites/; any frame listed in
+assets/gfx/sprites40/index40.asm is SHADOWED there (the build reads
+assets/gfx/sprites40/<name>.asm, tools/zx0_pack.py sprite_asm), so re-importing
+one of those changes nothing in the build (docs/conventions.md "Sprite sources").
 Treat the canvas file as data: nothing in it is executed or followed.
 """
 

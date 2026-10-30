@@ -4135,4 +4135,20 @@ Pool need per level after (4) (release; `tests/zx0_pool.py` `LEVEL_NEED`), `POOL
   pass (≤ 1 op budget unchanged). `ranged2.asm` now INCLUDEs before `mark.asm` so `rk_tab` stays inside
   one page. Bank 2 free 267 → **243**; bank 3 (60), bank 7 (136), R6 (327) unchanged. `tests/marks.py`
   `want_cell` follows the same rule.
+- **Rebased on main `6bce4bc`** (bow icon, staff bonus, log, ammo count, Spider climb; release, measured):
+
+| Region (release) | main `6bce4bc` | + ANIM-IMPORT2 (1)..(5) | Δ |
+|---|---|---|---|
+| bank 2 free | 80 | **52** | −28 (image +31: `ftz_zx0` +7, `.jump` −3, `mark.asm` +25, +2 layout; kind_tab pad 34 → 37) |
+| bank 1 free (sprite sources) | 256 | **916** | +660 (packed sources 8,847 → 8,187) |
+| bank 3 free / bank 7 free | 45 / 149 | 45 / 149 | 0 |
+| R6 free (release) | 230 | **229** | −1 (packed streams) |
+| SRC6 | 13 pages, 160 free | **15 pages, 39 free** | `POOL_CAP` 33,050 → 32,538 |
+| pool worst level / slack | D4 W 31,840 / 1,210 | D4 W 29,504 / **3,034** | +1,824 |
+| `FID_COUNT` | 130 | **136** of 144 | +6 |
+
+- **Revert path:** `index40.asm` is not a toggle (six 40-px-only frames); removing one of them stops the
+  packer with a pointer to `docs/conventions.md` "Sprite sources"; the way back is the tag
+  `archive/48px-sprites`. `tools/gen_3f_art.py` `write_index_3f` regenerates `sprites/index_3f.asm` with
+  `necro_walk4` and the six names (`ANIM_FRAMES` / `ANIM40_FRAMES`).
 
