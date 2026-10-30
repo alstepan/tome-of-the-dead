@@ -27,6 +27,7 @@ import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GRIDS = os.path.join(REPO, "assets/gfx/source/d3_grid")
+GRIDS40 = os.path.join(REPO, "assets/gfx/sprites40/grid")
 DZX0 = os.path.join(REPO, "tools/bin/dzx0")
 FXW_ONLY = {"power_burst", "dagger_spin1", "dagger_spin2", "arrow_fly1", "arrow_fly2", "arrow_hit"}
 SHARED = {"spark_fizz1", "spark_fizz2"}
@@ -126,7 +127,10 @@ def main():
     names.remove("status_icons")
     n = 0
     for nm in names:
-        meta, rows = read_grid(os.path.join(GRIDS, nm + ".grid"))
+        # ART11 (a428fa0): the shipped Warrior frames are the 40 px grids; the d3_grid
+        # drafts (48 px) are only the fallback for frames never re-drawn at 40 px
+        gp = os.path.join(GRIDS40, nm + ".grid")
+        meta, rows = read_grid(gp if os.path.exists(gp) else os.path.join(GRIDS, nm + ".grid"))
         w, h = map(int, meta["size"].split("x"))
         ax = int(meta["anchor"].split()[0])
         fid = S.get(f"FID_{nm}")

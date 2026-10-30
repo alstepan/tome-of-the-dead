@@ -218,9 +218,9 @@ def kills(p, kt, check):
                 p.tick(2)
                 settled = p.bg_mismatch()
                 kl = [l for l in lines if l.startswith(TXT["you_kill"])]
-                # a spell kill logs no line of its own (abil_spell7 has no impact
-                # line; abil_ammo7 / melee: YOU KILL, from the target's HP then)
-                want_kl = [] if how == "spark" else [TXT["you_kill"] + NAME[kind]]
+                # LOG-FIX (9aa2ec8): a spell kill logs "YOU KILL THE <kind>" like
+                # a thrown / shot / melee kill (the cast line "YOU CAST ..." is not a kill line)
+                want_kl = [TXT["you_kill"] + NAME[kind]]
                 check(f"{tag}: kill — HP 0 for good, never alive again, no DEATH with HP > 0, slot freed, "
                       f"no stale cell, settled screen == map + live bodies; kill line {want_kl}",
                       not seen["bad"] and not seen["death_hp"] and seen["death"] and e["FLAGS"] == 0
