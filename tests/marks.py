@@ -177,9 +177,13 @@ def run(h, p, check):
     def want_cell(slot):
         e = p.ent(slot)
         top = e["PY"] >> 3
+        col = ((e["PX"] + 4) >> 3) + (kt[e["KIND"]]["bw"] - 1) // 2
+        ftop = p.rb(S["SLOTREC"] + slot * 16 + S["R_ROW"])   # ANIM-IMPORT2: the drawn frame's top row
+        if ftop > top:                                   # a 40-px frame on a 48-px body: above the head
+            return (col, ftop - 1)
         if top % 9 == 0:
             return None
-        return (((e["PX"] + 4) >> 3) + (kt[e["KIND"]]["bw"] - 1) // 2, top - 1)
+        return (col, top - 1)
 
     def bg(c, r):
         tabs = p.bg_tables()
