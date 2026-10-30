@@ -36,9 +36,10 @@ POOLACC = 0
                 FRM knight_climb1,  K_KNIGHT, 24, STA|SYM
                 FRM knight_climb2,  K_KNIGHT, 24, STA|SYM
                 FRM knight_dead,    K_KNIGHT, 24, STA
-                ; C3-7: jump (game.md §2.4). JUMP-ALT: airborne, JUMP1 at px & 4 = 0 / JUMP2 at 4 (anim .jump)
+                ; C3-7: jump (game.md §2.4). ANIM-IMPORT2 J-a: JUMP1 = the crouch at take-off /
+                ; landing (aligned), JUMP2 = the leap every airborne tick (both parities: MOT)
                 FRM knight_jump1,   K_KNIGHT, 24, STA
-                FRM knight_jump2,   K_KNIGHT, 24, WK4     ; JUMP-ALT: px & 4 = 4 only (was MOT: -576 B pool)
+                FRM knight_jump2,   K_KNIGHT, 24, MOT
                 ; D3-4: Warrior abilities (game.md §6.2 / §6.3; art D3-3)
                 FRM knight_throw,   K_KNIGHT, 24, STA
                 FRM knight_bow,     K_KNIGHT, 24, STA
@@ -63,7 +64,7 @@ POOLACC = 0
                 FRM wizard_dead,    K_WIZARD, 24, STA
                 ; C3-7: jump + staff melee (game.md §2.4 / §6.2)
                 FRM wizard_jump1,   K_WIZARD, 24, STA
-                FRM wizard_jump2,   K_WIZARD, 24, WK4     ; JUMP-ALT: px & 4 = 4 only (was MOT: -576 B pool)
+                FRM wizard_jump2,   K_WIZARD, 24, MOT     ; ANIM-IMPORT2 J-a (was JUMP-ALT WK4)
                 FRM wizard_staffraise, K_WIZARD, 24, STA
                 FRM wizard_staffswing, K_WIZARD, 24, STA
 KFCNT_WIZARD = FCTR - KFID_WIZARD

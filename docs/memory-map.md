@@ -357,7 +357,7 @@ monster kinds** (was: every monster kind, boot-generated).
   are valid only in the last pass: `POOL_LVL_MAX`, `POOL_LVL_WORST`,
   `POOL_NEED` are **DEFL** (in the `.sym`), defined there and used nowhere
   above (the SRC6 DISPLAY no longer prints the slack). `POOL_NEED =
-  POOL_FIXED (2 × 576 idles + 3 × 576 straddle) + POOL_HERO_MAX +
+  POOL_FIXED (2 × 480 idles since ANIM-IMPORT2, was 2 × 576; + 3 × 576 straddle) + POOL_HERO_MAX +
   POOL_LVL_MAX`; ASSERTs `POOL_NEED ≤ POOL_CAP` and `POOL_NEED_PROTO ≤
   POOL_CAP` (`-DPOOL_LVL_VERBOSE=1` DISPLAYs every depth).
 * Tests: `tests/zx0_pool.py` (the reference replays boot / hero / level
@@ -3924,6 +3924,9 @@ starts at `code_end` and moved with the bank-2 growth), never behaviour. Not don
 
 ## JUMP-ALT (2026-10-29, branch `feat/corpse-ashes`, from `exp/jump-alt` eaeff4a; plan.md "JUMP-ALT KEPT")
 
+**SUPERSEDED by ANIM-IMPORT2 (J-a, user 2026-10-30):** JUMP2 is MOT again and drawn every airborne tick;
+the parity pick in `anim_entity .jump` is removed (−3 B / −12 T an airborne tick). See "ANIM-IMPORT2" below.
+
 - `knight_jump2` / `wizard_jump2` MOT → **WK4** (one pool shift, px & 4 = 4); `anim_entity .jump` picks the
   airborne pose from the NEW px parity (E = (px & 4) >> 2: JUMP2 shifted, JUMP1 aligned), so the two alternate
   every tick and each is drawn only at its pool shift (`PHASE_TRAP` stays 0; `tests/phase_soak.py` adds running
@@ -4060,3 +4063,34 @@ Release (rebased on main + STAFF-BONUS + LOG-FIX + AMMO-COUNT, 2026-10-30):
 | bank 2 free (after the image + kind_tab pad) | 98 + 34 = 132 | **46 + 34 = 80** | −52 (`fi_full` in) |
 | R6 free (release / kit) | 261 / 191 | **230 / 160** | −31 (`lq6` `.w` 27, hold 4) |
 | pool / sequence cache / bank 1 / bank 7 | — | unchanged | 0 |
+
+
+## ANIM-IMPORT2 (2026-10-30, branch `feat/anim-40px`; plan.md "40 PX APPROVED" / "ART11 DECISIONS" / "ART12 PICKS")
+
+The approved 40-px frames replace the 48-px ones for the heroes and the Skeleton / Orc / Mummy /
+Necromancer / Vampire families. **Body boxes are unchanged (6 cells, `BH_K_*`)**: frames are drawn
+bottom-anchored (FRM: `fpy = py + BH × 8 − H`), so a 40-row frame lands 8 px lower and the top body cell
+row is blank; the drawn footprint (`R_ROW` / `R_ROWS`, attrs, damage rects) follows the frame (5 rows).
+Ogre, Death Knight (48), Goblin (32), Ghost, Bat, Slime, Rat, Spider and the hero DEAD frames are unchanged.
+
+- **Sources:** `assets/gfx/sprites40/<name>.asm` (+ `grid/<name>.grid`) for every name listed in
+  `assets/gfx/sprites40/index40.asm`; `tools/zx0_pack.py` `sprite_asm()` resolves a frame there first
+  (used by `zx0_sources.py`, `pool_spike.py`, `tests/combat.py`), else `assets/gfx/sprites/` (the 48-px
+  originals stay in the tree; tag `archive/48px-sprites` = main `410c118`). ART11 asm as shipped by the
+  artist; the ART12 picks and the Vampire set through `tools/import_anim40.py`.
+- **(1) Heroes:** Warrior 19 + Mage 15 frames at 40 rows (Mage HURT = ART12 V3 stagger, 32 wide, ax 8);
+  **J-a jump**: JUMP1 = the crouch at take-off / landing, JUMP2 = the one leap pose every airborne tick
+  (MOT again, `data.asm` ASSERTs MOT; JUMP-ALT's parity pick removed: −3 B, −12 T an airborne tick).
+  `POOL_FIXED` = `(knight_idle1_h + wizard_idle_h) × 12 + 3 × 576` = 2,688 (select idles 40 rows: −192).
+  Hero pool B (+ class FX): Warrior 15,072 → 13,152, Mage 11,072 → 9,952.
+
+| Region (release `-DDEBUG_KIT=0`; main `df086fc` → step) | main | (1) heroes |
+|---|---|---|
+| pool need worst level / slack (`POOL_CAP` 33,050) | D4 W 31,840 / 1,210 | D4 W 29,728 / **3,322** |
+| PROTO slack | 2,330 | 4,442 |
+| bank 1 free (sprite sources) | 150 | 673 (packed 12,015 → 11,492) |
+| bank 2 free | 271 | 267 (`ftz_zx0` 124 → 131; `.jump` −3) |
+| R6 free | 327 | 328 |
+| SRC6 free (13 pages) | 160 | 160 |
+| `FID_COUNT` / `FRT_MAX` | 130 / 144 | 130 / 144 |
+

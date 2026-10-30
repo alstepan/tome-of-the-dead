@@ -110,9 +110,9 @@ for k in range(S["K_COUNT"]):
 for h in range(2):
     j1, j2 = b(S["hero_jump"] + 2 * h), b(S["hero_jump"] + 2 * h + 1)
     uses.append((j1, f"hero {h} JUMP1"))
-    # JUMP-ALT: JUMP2 is WK4 (drawn at px & 4 = 4 only; anim .jump picks by px parity)
-    if flags(j2) & MOT or not flags(j2) & PH4:
-        fails.append(f"hero {h} JUMP2 {names[j2]}: not WK4 (JUMP-ALT: drawn at px & 4 = 4 only)")
+    # ANIM-IMPORT2 J-a: JUMP2 = the one leap pose every airborne tick (both parities): MOT
+    if not flags(j2) & MOT:
+        fails.append(f"hero {h} JUMP2 {names[j2]}: not MOT (J-a: drawn at both parities)")
 for a in range(S["ABL_COUNT"]):
     uses += [(f, f"abl_seq {a}") for f in seq(w(S["abl_seq"] + a * S["ABS_STRIDE"]))]
 uses += [(f, "wz_bonk") for f in seq(S["wz_bonk"])]

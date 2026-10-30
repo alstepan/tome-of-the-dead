@@ -1,0 +1,141 @@
+# ART11 costs (tools/gen_art11_40px.py). Pool = src/defs.asm FRM formula, both facings:
+# per facing H x 2 x (cols + 1 if off the 8-px grid at its shift); MOT = both shifts;
+# SYM = one facing. src = raw source bytes (H x cols x 2 + 1). Same bytes on EVERY level
+# that generates the frame's unit (hero frames: every level).
+
+PER-FRAME TABLE
+  kind      frame                flags     W  cols ax  rows 48->40  pool48 pool40  save  src48 src40
+  knight    knight_idle1         STA       24   3   0     48 -> 40      576    480    96    289   241
+  knight    knight_walk1         WK4       24   3   0     48 -> 40      768    640   128    289   241
+  knight    knight_walk2         WK0       24   3   0     48 -> 40      576    480    96    289   241
+  knight    knight_walk3         WK4       24   3   0     48 -> 40      768    640   128    289   241
+  knight    knight_walk4         WK0       24   3   0     48 -> 40      576    480    96    289   241
+  knight    knight_windup        STA       32   4   4     48 -> 40      960    800   160    385   321
+  knight    knight_slash         STA       40   5   4     48 -> 40     1152    960   192    481   401
+  knight    knight_follow        STA       40   5   4     48 -> 40     1152    960   192    481   401
+  knight    knight_block         STA       32   4   4     48 -> 40      960    800   160    385   321
+  knight    knight_hurt          STA       32   4   0     48 -> 40      768    640   128    385   321
+  knight    knight_jump1         STA       24   3   0     48 -> 40      576    480    96    289   241
+  knight    knight_throw         STA       32   4   0     48 -> 40      768    640   128    385   321
+  knight    knight_bow           STA       32   4   0     48 -> 40      768    640   128    385   321
+  knight    knight_whirl         STA       40   5   8     48 -> 40      960    800   160    481   401
+  knight    knight_powerstrike   STA       40   5   4     48 -> 40     1152    960   192    481   401
+  knight    knight_jump2         MOT       24   3   0     48 -> 40      768   1120  -352    289   241
+  knight    knight_climb1        STA|SYM   24   3   0     48 -> 40      288    240    48    289   241
+  knight    knight_climb2        STA|SYM   24   3   0     48 -> 40      288    240    48    289   241
+  knight    knight_idle2         STA       24   3   0     48 -> 40      576    480    96    289   241
+  wizard    wizard_idle          STA       24   3   0     48 -> 40      576    480    96    289   241
+  wizard    wizard_idle2         STA       24   3   0     48 -> 40      576    480    96    289   241
+  wizard    wizard_walk1         WK4       24   3   0     48 -> 40      768    640   128    289   241
+  wizard    wizard_walk2         WK0       24   3   0     48 -> 40      576    480    96    289   241
+  wizard    wizard_walk3         WK4       24   3   0     48 -> 40      768    640   128    289   241
+  wizard    wizard_walk4         WK0       24   3   0     48 -> 40      576    480    96    289   241
+  wizard    wizard_cast1         STA       32   4   0     48 -> 40      768    640   128    385   321
+  wizard    wizard_cast2         STA       32   4   0     48 -> 40      768    640   128    385   321
+  wizard    wizard_hurt          STA       32   4   8     48 -> 40      768    640   128    385   321
+  wizard    wizard_jump1         STA       24   3   0     48 -> 40      576    480    96    289   241
+  wizard    wizard_staffraise    STA       24   3   0     48 -> 40      576    480    96    289   241
+  wizard    wizard_staffswing    STA       40   5   0     48 -> 40      960    800   160    481   401
+  wizard    wizard_jump2         MOT       24   3   0     48 -> 40      768   1120  -352    289   241
+  wizard    wizard_climb1        STA|SYM   24   3   0     48 -> 40      288    240    48    289   241
+  wizard    wizard_climb2        STA|SYM   24   3   0     48 -> 40      288    240    48    289   241
+  orc       orc_walk1            WK0       24   3   0     48 -> 40      576    480    96    289   241
+  orc       orc_walk2            WK4       24   3   0     48 -> 40      768    640   128    289   241
+  orc       orc_walk3            WK4       24   3   0     48 -> 40      768    640   128    289   241
+  orc       orc_raise            STA       32   4   8     48 -> 40      768    640   128    385   321
+  orc       orc_attack           STA       32   4   0     48 -> 40      768    640   128    385   321
+  orc       orc_hurt             STA       24   3   0     48 -> 40      576    480    96    289   241
+  skeleton  skeleton_walk1       WK0       24   3   0     48 -> 40      576    480    96    289   241
+  skeleton  skeleton_walk2       WK4       24   3   0     48 -> 40      768    640   128    289   241
+  skeleton  skeleton_walk3       WK0       24   3   0     48 -> 40      576    480    96    289   241
+  skeleton  skeleton_walk4       WK4       24   3   0     48 -> 40      768    640   128    289   241
+  skeleton  skeleton_cut         STA       32   4   0     48 -> 40      768    640   128    385   321
+  skeleton  skeleton_hurt        STA       24   3   0     48 -> 40      576    480    96    289   241
+  skeleton  skeleton_raise       STA       24   3   0     48 -> 40      576    480    96    289   241
+  skeleton  skeleton_climb1      STA|SYM   24   3   0     48 -> 40      288    240    48    289   241
+  skeleton  skeleton_climb2      STA|SYM   24   3   0     48 -> 40      288    240    48    289   241
+  mummy     mummy_walk1          WK0       24   3   0     48 -> 40      576    480    96    289   241
+  mummy     mummy_walk2          WK4       24   3   0     48 -> 40      768    640   128    289   241
+  mummy     mummy_walk3          WK4       24   3   0     48 -> 40      768    640   128    289   241
+  mummy     mummy_walk4          WK0       24   3   0     48 -> 40      576    480    96    289   241
+  mummy     mummy_attack         STA       32   4   0     48 -> 40      768    640   128    385   321
+  necro     necro_walk1          WK0       24   3   0     48 -> 40      576    480    96    289   241
+  necro     necro_walk2          WK4       24   3   0     48 -> 40      768    640   128    289   241
+  necro     necro_walk3          WK4       24   3   0     48 -> 40      768    640   128    289   241
+  necro     necro_walk4          WK0       24   3   0     48 -> 40      576    480    96    289   241
+  necro     necro_cast           STA       32   4   0     48 -> 40      768    640   128    385   321
+  climbh    climb_h1             STA|SYM   24   3   0     48 -> 40      288    240    48    289   241
+  climbh    climb_h2             STA|SYM   24   3   0     48 -> 40      288    240    48    289   241
+
+  (Warrior / Mage DEAD 40x16 unchanged: 320 B pool each, not listed. JUMP2: pool48 = today's WK4;
+   pool40 = J-a MOT. Warrior IDLE2 = IDLE1_40 with one torso row folded, see the grid note.)
+
+TOTALS per kind (pool48 = today's flags; J-a included in pool40)
+  knight    19 frames  pool  14400 ->  12480  save  1920  (vs 48+J-a  2496)  raw src -1120
+  wizard    15 frames  pool   9600 ->   8480  save  1120  (vs 48+J-a  1696)  raw src -800
+  orc        6 frames  pool   4224 ->   3520  save   704  (vs 48+J-a   704)  raw src -320
+  skeleton   9 frames  pool   5184 ->   4320  save   864  (vs 48+J-a   864)  raw src -448
+  mummy      5 frames  pool   3456 ->   2880  save   576  (vs 48+J-a   576)  raw src -256
+  necro      5 frames  pool   3456 ->   2880  save   576  (vs 48+J-a   576)  raw src -256
+  climbh     2 frames  pool    576 ->    480  save    96  (vs 48+J-a    96)  raw src -96
+
+ZX0 PACKED sources per unit (zx0_sources partition, 48 -> 40):
+  SKARCH     640 ->   543  (-97)
+  SKCLIMB    271 ->   248  (-23)
+  SKREST     159 ->   136  (-23)
+  ORC        720 ->   664  (-56)
+  CLIMBH     272 ->   251  (-21)
+  MUMMY      460 ->   435  (-25)
+  NECRO      220 ->   204  (-16)
+  NCAST      184 ->   175  (-9)
+  knight    3002 ->  2618  (-384)
+  wizard    2000 ->  1839  (-161)
+
+UNIT pool (48 -> save):  SKARCH 4032->3360 (-672), SKCLIMB 576->480 (-96), SKREST 576->480 (-96), ORC 4224->3520 (-704), CLIMBH 576->480 (-96), MUMMY 3456->2880 (-576), NECRO 2688->2240 (-448), NCAST 768->640 (-128)
+
+HERO pool every level, 48 today -> 40 with J-a: Warrior -1920, Mage -1120 (J-a alone costs +480 at 40)
+  + POOL_FIXED select idles at 40 rows: -192 if that constant is updated (engineer)
+
+PER-LEVEL NEED (level need = 2880 fixed + hero B + level PLN). base = wip 0390ff7 measured
+(Orc V4 at 48 + Vampire 40, 15 SRC6 pages, cap 32,538); new = base - hero save - monster save.
+monster save = the 40-px units on that depth (Skeleton family, Orc, Mummy, Necro, climb pair).
+  Warrior: hero B 15072 -> 13152
+   D   base     mon-save  new     slack@32538  slack@33050   (skel  orc  mummy necro climb)
+   D1   26304        0   24384       +8154       +8666        0     0     0     0     0
+   D2   25760        0   23840       +8698       +9210        0     0     0     0     0
+   D3   30688      864   27904       +4634       +5146      864     0     0     0     0
+   D4   33184     1568   29696       +2842       +3354      768   704     0     0    96
+   D5   28128     1536   24672       +7866       +8378      864     0   576     0    96
+   D6   32032     1376   28736       +3802       +4314        0   704     0   576    96
+   D7   32416     1376   29120       +3418       +3930        0   704     0   576    96
+   D8   32992     1536   29536       +3002       +3514      864     0     0   576    96
+   worst: D4 29696 -> slack 2842 @ 15 SRC6 pages (3034 with the idle fix)
+
+  Mage: hero B 11072 -> 9952
+   D   base     mon-save  new     slack@32538  slack@33050   (skel  orc  mummy necro climb)
+   D1   22368        0   21248      +11290      +11802        0     0     0     0     0
+   D2   21824        0   20704      +11834      +12346        0     0     0     0     0
+   D3   26688      864   24704       +7834       +8346      864     0     0     0     0
+   D4   29312     1568   26624       +5914       +6426      768   704     0     0    96
+   D5   24256     1536   21600      +10938      +11450      864     0   576     0    96
+   D6   28032     1376   25536       +7002       +7514        0   704     0   576    96
+   D7   28416     1376   25920       +6618       +7130        0   704     0   576    96
+   D8   28992     1536   26336       +6202       +6714      864     0     0   576    96
+   worst: D4 26624 -> slack 5914 @ 15 SRC6 pages (6106 with the idle fix)
+
+HEIGHTS of every monster frame set (48-px tree, before ART11; rows = frame H, visible = ink rows):
+  Skeleton / Archer / Sniper               H 48     visible 44..48
+  Goblin (+Slinger)                        H 32     visible 29..32
+  Ghost (+Poltergeist)                     H 32     visible 27..27
+  Rat                                      H 16     visible 13..15
+  Bat                                      H 16     visible 9..14
+  Slime                                    H 16     visible 9..16
+  Spider                                   H 16     visible 15..16
+  Orc (main, 48)                           H 48     visible 43..48
+  Mummy                                    H 48     visible 44..44
+  Necromancer / Archmage / Bone Caller     H 48     visible 47..47
+  Ogre                                     H 48     visible 45..48
+  Death Knight                             H 48     visible 48..48
+  humanoid climb pair                      H 48     visible 48..48
+  Vampire (ART9 own set)                   H 40     visible 36..39
+  ART11 40-px sets (visible ink rows): knight 33..39, wizard 36..40, orc 37..40, skeleton 36..40, mummy 36..36, necro 39..39, climbh 40..40

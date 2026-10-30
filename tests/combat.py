@@ -25,6 +25,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
+import zx0_pack as zp  # noqa: E402  (sprite_asm: the 40-px override)
 ONLY = [a for a in sys.argv[1:] if not a.startswith("-")]
 sys.argv = [sys.argv[0]] + ["999"]           # keep game.py's item filter inert
 import game  # noqa: E402
@@ -41,7 +43,7 @@ PLAY_ROWS = 18
 
 def art(name):
     """(w, h, ay, attr) of a frame from its sprite sheet .asm (the art, not the engine)."""
-    src = open(os.path.join(REPO, "assets/gfx/sprites", name + ".asm")).read()
+    src = open(zp.sprite_asm(name)).read()   # ANIM-IMPORT2: the 40-px override (sprites40/index40.asm)
     g = lambda k: int(re.search(rf"^{name}_{k}\s+EQU\s+(\d+)", src, re.M).group(1))  # noqa: E731
     attr = int(re.search(r"ATTR_SPRITE=\$([0-9A-F]{2})", src).group(1), 16)
     return g("w"), g("h"), g("ay"), attr
