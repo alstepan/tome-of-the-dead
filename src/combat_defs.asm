@@ -218,6 +218,17 @@ RCD_SUMMONED_BIT EQU 6
 RCD_ONCE        EQU %10000000
 RCD_ONCE_BIT    EQU 7
 RCD_KEEP        EQU RCD_SUMMON | RCD_SUMMONED | RCD_ONCE
+; 3F-T9 the Vampire's bat form (vbat6.asm; the Vampire never summons, so bits 2-5 are free
+; on it): RCD_ONCE = it has fled once; bit 2 RCD_VFLEE = this bat form is the FLEE one
+; (reverts when its FEAR ends), clear = the close-distance one (reverts near the hero).
+; place_follower keeps it; lp_bank drops it (a banked bat returns as a close-distance one).
+RCD_VFLEE       EQU %00000100
+RCD_VFLEE_BIT   EQU 2
+VB_FLEE_T       EQU 8               ; §9.2 rule 1: flee 8 turns (FEAR, MIND timer; <= STS_MAX_TURNS)
+VB_GAP          EQU 10              ; rule 2: close distance at a box gap <= 10 cols
+VB_NEAR         EQU 2               ; revert at a box gap <= 2 (same storey, no cut between)
+VB_S            EQU SP_S            ; vb_turn / vb_one scratch (end_turn, after sp_run: SPQ_RAM is free;
+                                    ; spawn6.asm sp_y writes SP_S itself)
 ; 3F-T8: the Ogre (never a shooter) keeps its SLAM counter in the same bits 0-1 (game.md §9.1:
 ; every 3rd turn SLAM, reach 2, x 1.5 dmg, a hit STUNS 1): turns since the last SLAM, 0 at spawn
 ; (lp_spawn zeroes the slot); og_adv: 3 -> 1, 0 -> 1, 1 -> 2, 2 stays; at 2 (OG_READY) its reach

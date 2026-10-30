@@ -61,6 +61,7 @@ SK_RES = {"COLD": "I", "DRAIN": "I", "DARK": "I"}
 KINDS.update({
     9: ("Spider", {"FIRE": "W"}, 0, 4),
     10: ("Vampire", {"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),
+    2: ("Vampire bat form", {"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),   # 3F-T9 K_VBAT: the Vampire's row, PHYS bite
     11: ("Orc", {"FIRE": "R"}, 0, 9),
     12: ("Skeleton Archer", SK_RES, UNDEAD, 7),
     13: ("Mummy", {"PHYS": "R", "FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 12),
@@ -222,7 +223,8 @@ def main():
           18: (5, 1, 1, 3, 0, 1, 2), 19: (8, 2, 3, 4, 0, 1, 2), 20: (5, 2, 4, 3, 0, 1, 2),
           21: (8, 2, 1, 4, 0, 1, 4), 22: (10, 4, 3, 4, 0, 1, 2), 23: (14, 3, 2, 6, 0, 1, 5),
           24: (18, 4, 2, 8, 0, 1, 5), 25: (11, 3, 3, 4, 0, 1, 3), 26: (18, 4, 0, 8, 2, 1, 5),
-          27: (24, 5, 1, 10, 0, 1, 5), 28: (10, 3, 2, 4, 0, 1, 6), 29: (14, 3, 2, 4, 0, 1, 6)}
+          27: (24, 5, 1, 10, 0, 1, 5), 28: (10, 3, 2, 4, 0, 1, 6), 29: (14, 3, 2, 4, 0, 1, 6),
+          2: (14, 1, 4, 2, 0, 1, 5)}           # 3F-T9 K_VBAT: Vampire hp / weight, the Bat's atk / eva, 1d2, every turn
     lw = sym["lp_wt"]
     for k, (hp, atk, eva, die, bon, per, wt) in K3.items():
         chk(f"kind_tab[{k}] hp/atk/eva/die/bonus/period",
@@ -237,7 +239,7 @@ def main():
         chk(f"tier {tier} ink != base {base} ink", [kcol(sym["KT_ATTR"], tier) != kcol(sym["KT_ATTR"], base)], [True])
     # climbers: Goblin / Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
     # + Orc (Berserker 26, Bouncer 27), Archer (Sniper 28), Necro (Bone Caller 29), + Mummy 13, Spider 9 + Black Widow 22 (fix/archer-climb; the Pharaoh boss guard is the AI's)
-    CLIMB = {0, 1, 2, 3, 4, 9, 21, 22, 23, 24, 11, 12, 13, 14, 26, 27, 28, 29}
+    CLIMB = {0, 1, 3, 4, 9, 21, 22, 23, 24, 11, 12, 13, 14, 26, 27, 28, 29}
     for k in range(30):
         chk(f"KF_CLIMBER[{k}]", [kcol(sym["KT_FLAGS"], k) & sym["KF_CLIMBER"] != 0], [k in CLIMB])
     # drop_tab: (kind, item, N, k) = "k in N" (§8.11 + §9.6: the base numerator + 1 per tier above 1)

@@ -2235,8 +2235,11 @@ def w17(p, check):
         for k in range(S["K_FXW"]):
             nm = STRINGS[k0 + k][1]
             if not nm:
-                continue                                # a cut kind (nm_rogue "")
-            exp = T_[PRE[m]] + nm + T_[POST[m]]
+                continue                                # a nameless kind (none since 3F-T9 nm_vbat)
+            post = POST[m]
+            if m == S["MSG_M_HIT"] and k == S["K_VAMPIRE"]:
+                post = "cmb_drains"                     # 3F-T9: impact_line remaps the Vampire's bite hit
+            exp = T_[PRE[m]] + nm + T_[post]
             t1 = stub([0x06, m, 0x0E, k, 0xCD] + w(S["impact_line"]), f"impact_line {k} {m}", measure=True)
             p.wb("LOG_QN", 0)
             t2 = stub([0x06, m, 0x0E, k, 0xCD] + w(S["impact_line"]) + [0x21] + w(S["PANEL_DIRTY"]) +

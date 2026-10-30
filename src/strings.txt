@@ -52,8 +52,8 @@ empty           ""
 # Rogue's hole) --------------------------------------------------------------------
 nm_knight       "KNIGHT"
 nm_wizard       "WIZARD"
-# kind 2: never printed (K_ROGUE is retired, no entity has it; ASSERTed in lowram.asm)
-nm_rogue        ""
+# kind 2 = K_VBAT (3F-T9): the Vampire's bat form keeps its name (the Rogue's retired hole)
+nm_vbat         "VAMPIRE"
 nm_skeleton     "SKELETON"
 nm_goblin       "GOBLIN"
 nm_ghost        "GHOST"
@@ -290,3 +290,7 @@ st_m_thaw       " THAWS OUT"
 gate_barred     "THE GATE IS BARRED"
 # 3F-T9 (spawn6.asm sp_summon, impact_line MSG_M_SUMMON): the Bone Caller / Golden Pharaoh summon
 cmb_summons     " SUMMONS!"
+# 3F-T9 the Vampire's bat form (vbat6.asm, game.md §9.2)
+vb_turns        "THE VAMPIRE TURNS INTO A BAT!"
+# 3F-T9 impact_line MSG_M_DRAIN: the Vampire's bite hit (it heals by the damage)
+cmb_drains      " DRAINS YOU"

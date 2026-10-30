@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "vbat")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -416,6 +416,8 @@ SCENARIOS = {
     "walarm": ("knight + Rat, Bat; ALARM wave of 2 Goblins queued, sp_run at end_turn, then materialise", [
         (1, 22, stand_y(1, 2), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "walarm"),
+    "vbat": ("knight + a low-hp Vampire, pmix items, the bat transform at end_turn", [
+        (7, 4, stand_y(1, 6), RIGHT)], KEYS, K_KNIGHT, None, "vbat"),
     "rcast": ("mage Lightning r3 through 2 Archers in line, the deferred phase shoots back", [
         (5, 6, stand_y(1, 6), RIGHT),
         (7, 22, stand_y(1, 6), HOSTILE)], [("FIRE", 3)], K_WIZARD, None, "rcast"),
@@ -756,7 +758,8 @@ def ranged_setup(p, placements, key):
     """"rroom" / "nroom" / "rcast" (3F-T7): the 2 slots re-kinded to shooters, drawn with the Skeleton's
     sequences (KT_SEQ poke: Archer / Necro frames are not in the PROTO pool), counter 0 (E_RCD = 1), 60 HP."""
     kinds = {"rroom": ("K_ARCHER", "K_ARCHER"), "nroom": ("K_NECRO", "K_BONE_CALLER"),
-             "rcast": ("K_ARCHER", "K_ARCHER"), "sroom": ("K_SLINGER",) * 3, "bsum": ("K_BONE_CALLER",)}[key]
+             "rcast": ("K_ARCHER", "K_ARCHER"), "sroom": ("K_SLINGER",) * 3, "bsum": ("K_BONE_CALLER",),
+             "vbat": ("K_VAMPIRE",)}[key]
     if key == "rcast":
         lcast_setup(p, placements)
     else:
@@ -770,6 +773,10 @@ def ranged_setup(p, placements, key):
     if key == "rcast":                            # the Mage's PROTO pool: no arrows
         RANGED_FIDS.update({S["FID_arrow_fly1"]: S["FID_firebolt_fly1"], S["FID_arrow_fly2"]: S["FID_firebolt_fly2"],
                             S["FID_arrow_hit"]: S["FID_firebolt_burst1"]})
+    if key == "vbat":                             # the bat form draws the PROTO Bat's sequences
+        p.wb(S["kind_tab"] + S["KT_SEQ"] + S["K_VBAT"], p.rb(S["kind_tab"] + S["KT_SEQ"] + S["K_BAT"]))
+        p.set_ent(placements[0][0], HP=4, MAXHP=14, POT=0)
+        p.wb(S["LP_KINDS"], S["K_VAMPIRE"])
     if key in ("nroom", "bsum"):                  # no Necro bolt in the PROTO pool
         RANGED_FIDS.update({S["FID_nbolt_fly1"]: S["FID_arrow_fly1"], S["FID_nbolt_fly2"]: S["FID_arrow_fly2"],
                             S["FID_nbolt_hit"]: S["FID_arrow_hit"]})
@@ -950,7 +957,7 @@ def run_scenario(h, scen):
         pmix_setup(p)
     if len(scen) > 5 and scen[5] == "tmix":
         tmix_setup(p)
-    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum"):
+    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat"):
         ranged_setup(p, placements, scen[5])
     else:
         RANGED_FIDS.clear()
@@ -1001,7 +1008,7 @@ def run_scenario(h, scen):
     if len(scen) > 5 and scen[5] == "tmix":         # the tier abilities really ran
         print(f"[info] tmix after: WORN {list(p.z.read_memory(S['WORN'], 9))}, WEAR_PEND {p.rb('WEAR_PEND')},"
               f" HP {p.ent(0)['HP']}/{p.ent(0)['MAXHP']}, Guard HP {p.ent(5)['HP']}", flush=True)
-    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum"):
+    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat"):
         print(f"[info] {scen[5]} after: hero HP {p.ent(0)['HP']}, shooters HP "
               f"{[p.ent(sl)['HP'] for sl, *_ in placements]}, BLIT_MISS {p.rb('BLIT_MISS')}", flush=True)
     if len(scen) > 5 and scen[5] == "bsum":         # 3F-T9: the summon really happened
@@ -1012,6 +1019,10 @@ def run_scenario(h, scen):
         wv = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and sl not in WALARM_PRE]
         print(f"[info] walarm after: wave slots {wv}, SPQ_K {p.rb('SPQ_K')}", flush=True)
         assert len(wv) == 2 and p.rb("SPQ_K") == 0, "walarm: the 2-body wave was not made"
+    if len(scen) > 5 and scen[5] == "vbat":         # 3F-T9: the transform really happened (RCD_ONCE)
+        e = p.ent(placements[0][0])
+        print(f"[info] vbat after: kind {e['KIND']}, E_RCD {e['POT']:#04x}, HP {e['HP']}", flush=True)
+        assert e["POT"] & 0x80, "vbat: the Vampire never turned into a bat"
     if len(scen) > 5 and scen[5] == "dmix":         # the boss kill-drop really ran uq_fit's displacement
         fl = list(p.z.read_memory(S["FLOOR_LIST"], 128))
         room = [(fl[4 * i + 1], fl[4 * i + 2]) for i in range(S["FLOOR_MAX"])
@@ -1102,7 +1113,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,bsum,walarm,rcast,sroom,lglow,omix,lqmix").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,bsum,walarm,vbat,rcast,sroom,lglow,omix,lqmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")

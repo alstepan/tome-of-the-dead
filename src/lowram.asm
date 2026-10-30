@@ -781,6 +781,14 @@ show_impact_msg:
 ; RAT" uses it from the input phase). Clobbers: A, BC, DE, HL (IX kept).
 impact_line:
                 call sfx_msg                   ; SND-5: melee hit / miss / kill / hurt (bank 2; BC kept)
+                ld   a, b                      ; 3F-T9: the Vampire's bite hit drains (heals it):
+                cp   MSG_M_HIT                 ; "THE VAMPIRE DRAINS YOU" (after sfx_msg: the HURT
+                jr   nz, .nd                   ; sound stays; its bat form K_VBAT bites plainly)
+                ld   a, c
+                cp   K_VAMPIRE
+                jr   nz, .nd
+                ld   b, MSG_M_DRAIN
+.nd:
                 ld   a, (PORT_7FFD_SHADOW)
                 push af                        ; caller's page
                 push bc
@@ -821,12 +829,13 @@ impact_line:
 ; D3-6a: + MSG_M_UNAFF .. MSG_M_THAW (deal_hit, combat3.asm): "THE " + name + status suffix
 imp_pre:        DB   TX_YOU_HIT, TX_YOU_MISS, TX_YOU_KILL, TX_THE, TX_THE, TX_YOU_SQUEEZE
                 DB   TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE   ; (+ MSG_P_PARRY)
-                DB   TX_THE                                                               ; 3F-T9 MSG_M_SUMMON
+                DB   TX_THE, TX_THE                                                       ; 3F-T9 MSG_M_SUMMON, MSG_M_DRAIN
 imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EMPTY
                 DB   TX_CMB_UNAFFECTED, TX_ST_M_FROZEN, TX_ST_M_ASLEEP, TX_ST_M_STUNNED
                 DB   TX_ST_M_FLEES, TX_ST_M_CONFUSED, TX_ST_M_WAKE, TX_ST_M_THAW, TX_CMB_PARRIES
-                DB   TX_CMB_SUMMONS
-                ASSERT imp_post - imp_pre == MSG_M_SUMMON && $ - imp_post == MSG_M_SUMMON && MSG_P_PARRY == MSG_M_THAW + 1
+                DB   TX_CMB_SUMMONS, TX_CMB_DRAINS
+                ASSERT imp_post - imp_pre == MSG_M_DRAIN && $ - imp_post == MSG_M_DRAIN && MSG_P_PARRY == MSG_M_THAW + 1
+                ASSERT MSG_M_DRAIN == MSG_M_SUMMON + 1 && TXL_THE + NM_LONG + TXL_CMB_DRAINS < 32
                 ASSERT MSG_M_SUMMON == MSG_P_PARRY + 1 && TXL_THE + NM_LONG + TXL_CMB_SUMMONS < 32
                 ASSERT TXL_THE + NM_LONG + TXL_CMB_PARRIES < 32
                 ASSERT MSG_M_UNAFF == 7 && MSG_M_FROZEN == 8 && MSG_M_ASLEEP == 9 && MSG_M_STUNNED == 10
@@ -834,9 +843,8 @@ imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EM
                 ASSERT TXL_THE + NM_LONG + TXL_CMB_UNAFFECTED < 32   ; the longest D3-6a line
                 ASSERT MSG_P_HIT == 1 && MSG_P_MISS == 2 && MSG_P_KILL == 3 && MSG_M_HIT == 4 && MSG_M_MISS == 5
                 ASSERT MSG_SQUEEZE == 6 && TXL_YOU_SQUEEZE + NM_LONG < 32
-                ; K_ROGUE (kind 2) is retired: TX_NM_ROGUE is an empty string and no entity may carry
-                ; that kind, else the impact line would lose its name (B3B-13b)
-                ASSERT TX_NM_ROGUE == TX_NM_KNIGHT + 2 && TXL_NM_ROGUE == 0 && K_WIZARD == 1 && K_SKELETON == 3
+                ; kind 2 (the retired Rogue's hole) = K_VBAT, the Vampire's bat form (3F-T9): its name
+                ASSERT TX_NM_VBAT == TX_NM_KNIGHT + K_VBAT && TXL_NM_VBAT <= NM_LONG && K_WIZARD == 1 && K_SKELETON == 3
                 ; kind names: TX_NM_KNIGHT + kind (src/strings.txt order)
                 ASSERT TX_NM_WIZARD == TX_NM_KNIGHT + K_WIZARD && TX_NM_SKELETON == TX_NM_KNIGHT + K_SKELETON
                 ASSERT TX_NM_GOBLIN == TX_NM_KNIGHT + K_GOBLIN && TX_NM_GHOST == TX_NM_KNIGHT + K_GHOST

@@ -195,6 +195,7 @@ LAST (`r6_blobs`), run by `ovl_run` with C = `BANK_R6`.
 | **MEM-RECLAIM w2c (2026-10-30)** | **R6 free +185 B (release 1,283 -> 1,468, kit 1,212 -> 1,397)** | icon packing: `icons16` 1,376 B raw -> `icpk_idx` + `icpk` 995 B (−381), unpacker code +196 (`icons6.asm` `ic_find` / `ic_scr` / `ic_unp` (unrolled oct, ~50 B: `fi_slot` runs on a drop's kill tick, budget lcastf) / `rev8`; `ic_blit`'s copy pass gone; `fi_slot`'s FI_INK fill x4 unrolled). Decoded byte-exact (tools/icons16.py proves the Python model; the screen tests compare against the raw table). Stack: none (decoded onto the screen / into `FI_GLY`). Costs (ic1, incl. far6): `icon_slot` 2.45k -> 3.1k T, a MIRROR icon 4.5k, `worn_draw` 9.4k -> 16.3k (3 MIRROR placeholders), `fi_slot` ~+0.7k T per new slot; budget lcastf 123,059 -> 123,743 T |
 | **MEM-RECLAIM w2b (2026-10-30)** | **R6 free 229 -> 1,283 B release (kit 158 -> 1,212; 1,292 / 1,221 before the Spider climb commit took 9 B)** | cold code moved **R6 -> bank 7** (`B7_CODE` space freed by w2a): `hunger7.asm` (`hunger_turn` (end_turn calls it directly, was far6; `wear_apply` stays R6, far6 from it on a wear turn), `hg_faint`, `food_sub` / `food_dirty`, `hunger_add` (far7 from R6 `fx6`), `hg_stage` / `hg_line`); `trap7.asm` (`trap_turn` (jp from `trap_chk`), `trap_step` (jp from `act_pend`), `tr_*`, `tr_eff` (far6 R6 `tele_arm` / `fx_line`), `hero_hold`; `tr_draw` calls `ap_put_a` directly); `boss7.asm` (`grate_open` far7 from bank-3 `mon_drop`, `boss_chk` far7 from `lp_transition`, `ai_guard` far7 from bank-2 `ai_ghook`). Their read-only tables (`tr_ink7`, `tr_fx`, `glow7`; 29 B) are `data7.asm` in bank 7 right after the tilesets (`data7..data7_end`, one tape block with them, `B7D_LEN`; bank-7 code keeps no data). Stay in R6: `item_food` + `hg_attr` (panel render: never from contended bank 7), `tele_arm` / `tele_flash` / `trap_at` (R6 `fx6` / `pickup6` call them), `lp_post`; `mummy6` inlines its `food_sub` (13 B). Tests call the moved entries through far7 (`B7_LABELS` in hunger / status1 / tier6, t16). |
 | (code, after `ranged6`) | **800** (3F-T9) | `spawn6.asm`: the spawn queue producers `breed6` / `sp_bcall` / `ph_summon` + `sp_summon` (the pose: ranged6 `rg_pose`, now shared with `rg_shoot`), `sp_scan` / `sp_wt` / `sp_fit` (§9.3 cap), `sp_run` (end_turn) + `sp_init` / `sp_y` / `sp_place` / `sp_try` / `sp_door` / `sp_fin`; no variables (bank-5 `SPQ_RAM`) — see "3F-T9" |
+| (code, after `spawn6`) | **~225** (3F-T9 bat) | `vbat6.asm`: `vb_one` (far6 from bank-7 `vb_turn`, end_turn) + `vb_bat` / `vb_fin` / `vb_st` / `vb_gap` / `vb_cut`; no variables — see "3F-T9 Vampire bat form" |
 | `$E75A` `ovl_page_zx0` | **1,182** (3E-T13; was 328) | the bag page stream (`BANK_OVL_PAGE`; was bank 1) |
 | ~~`ovl_items_zx0`~~ | 0 (was 881) | **MEM-1: back in bank 1** (`BANK_OVL_ITEMS` = `BANK_UI1`, after the `it_text` block; R6 holds only `ovl_page_zx0` now, 1,192 B of streams incl. the page stream; the R6 addresses below shift down 881 B) |
 | (code, after `bag6`) | 310 code+data (**STATUS1: +55** `hg_faint`) | **3E-T9** `hunger6.asm` — **MEM-RECLAIM w2b: `hunger_turn`, `food_sub` / `food_dirty`, `hunger_add`, `hg_stage` / `hg_line` moved to bank 7 (`hunger7.asm`); only `item_food`, `hg_attr` (4 B) stay here** — see "3E-T9" |
@@ -496,7 +497,7 @@ in R6** and a **per-level cache in bank 2** (was: every kind's 17-B
 ### Kind rows (3F-T3, `feat/3f-t3-rows`)
 
 **Ids** (`defs.asm`, the single source; `tools/levelgen.py` `KROWS` asserts the same ids when it
-loads): 0 Warrior, 1 Mage, 2 hole, 3 Skeleton, 4 Goblin, 5 Ghost, 6 Rat, 7 Bat, 8 Slime (unchanged),
+loads): 0 Warrior, 1 Mage, 2 hole (**3F-T9: `K_VBAT`, the Vampire's bat form**), 3 Skeleton, 4 Goblin, 5 Ghost, 6 Rat, 7 Bat, 8 Slime (unchanged),
 **9 Spider, 10 Vampire, 11 Orc, 12 Archer, 13 Mummy, 14 Necro, 15 Ogre, 16 Death Knight, 17 Archmage**,
 then the 12 tiers in the §9.6 table order **18 Giant Rat, 19 Rabbit Rat, 20 Screech Bat, 21 Slinger,
 22 Black Widow, 23 Skel Guard, 24 Skel Knight, 25 Poltergeist, 26 Orc Berserker, 27 Orc Bouncer,
@@ -2320,7 +2321,7 @@ and below `HOT_COPY`):
 | `$B310..$B31F` | `ST_FLAGS` | STATUS per slot (game.md §6.4): bits 0-1 HOLD kind (`HOLD_FROZEN` 1 / `ASLEEP` 2 / `STUNNED` 3), 2-3 MIND kind (`MIND_FEAR` 1<<2, `MIND_CONFUSED` 2<<2), 4 POISON, 5 WEAK, 6 HOLD_GUARD (game.md §6.4.1 B1), 7 reserved; 0 = fast path |
 | `$B3E0..$B3EF` | `ST_T1` | STMR1: hi nibble HOLD turns, lo MIND turns |
 | `$B3F0..$B3FF` | `ST_T2` | STMR2: lo nibble WEAK turns (**POIS1: the hi nibble is unused**; POISON moved to `ST_X`) |
-| `$B400..$B40F` | `ST_X` | per slot byte (§6.4 "byte 3"): **POIS1: the POISON turns** (cap `PSN_CAP` 30; a full byte; read by `st_step`, added by `deal_hit`'s `.ps`, zeroed by Cure; slot 0 carries over a descend); the Vampire's fled-once bit can NOT share this byte (POISON uses all 8 bits; the Vampire cannot be poisoned, but the hero/others can): **3F-T9: per-entity once bits live in `E_RCD` bit 7 (`RCD_ONCE`, banked as `LEK_BRED`; the Rabbit Rat's bred bit, the Vampire's fled bit when its bat form lands)**. `.kill` does not zero `ST_X` (6 B, not <= 3); spawn / `lp_*` clear it |
+| `$B400..$B40F` | `ST_X` | per slot byte (§6.4 "byte 3"): **POIS1: the POISON turns** (cap `PSN_CAP` 30; a full byte; read by `st_step`, added by `deal_hit`'s `.ps`, zeroed by Cure; slot 0 carries over a descend); the Vampire's fled-once bit can NOT share this byte (POISON uses all 8 bits; the Vampire cannot be poisoned, but the hero/others can): **3F-T9: per-entity once bits live in `E_RCD` bit 7 (`RCD_ONCE`, banked as `LEK_BRED`; the Rabbit Rat's bred bit, the Vampire's fled bit: "3F-T9 Vampire bat form")**. `.kill` does not zero `ST_X` (6 B, not <= 3); spawn / `lp_*` clear it |
 | `$B410..$B41F` | `FXQ0` (= `FXQ`) | **D3-5:** FX queue entry 0 (FIFO head; a 16-B descriptor). D3-0's 2 × 8 B could not hold a 16-B descriptor |
 | `$B4E0..$B4E5` | `CAST_ROW` | **RANK1:** the rank row of the spell being cast, `RR_STRIDE` 6 B (`RR_MP`, `RR_RANGE`, `RR_DIE`, `RR_BONUS`, `RR_BOUNCE`, `RR_EFFECT`): `abil_load` (bank 3) copies the `ab_rank` row of the highest rank the hero can pay now (auto-downcast, rank 1 floor) at every spell use. Was `RANK_ROWS` (5 rows kept by `rank_sync`, both gone); `$B4E6..$B4FD` is free FONT6 plane hole again |
 | `$B4FE` / `$B4FF` | `FX_BUSY` / `FXQ_N` | **D3-5:** bit i = FX track i live or still drawn (0 = FX idle: `turn_done` waits for it) / queued descriptors 0..2 |
@@ -4312,6 +4313,65 @@ the `deal_hit` Rabbit hook, ~46 T per surviving hit; nothing is unchanged), `lqm
 | text (bank 0, packed) / pool slack | 2,282 / 2,294 | 2,288 / **2,288** | +6 / −6 (`cmb_summons`) |
 | bank-5 runtime reserve | `$5FF5..$5FFF` free | `SPQ_RAM` | 11 B (`tests/items3e.py` canary range follows `SPQ_RAM_END`) |
 
-**Not in this change (open):** the Vampire bat form (game.md §9.2: flee / close-distance rules, the Bat
-frames + sequence block as level-pool extras on D6 / D8, the Vampire's resistances / weight / boss
-identity while a bat) and the drain bite's `+n` floater (needs the D3-11 number system, not built).
+**Not in this change (open):** the drain bite's `+n` floater (needs the D3-11 number system, not built).
+The Vampire bat form: next section.
+
+## 3F-T9 Vampire bat form (`feat/3f-t9-bat`; game.md §9.2 "Vampire", RANGED-SPEC cut rule; `tests/vbat.py`)
+
+**A kind row, not a flag.** `K_VBAT` = **2** (the retired Rogue's hole; `defs.asm`): every per-kind table
+gets a real row, so ai_flyer / try_step / render / the hit path need nothing new. Rows: `kind_tab` the
+Bat's body (3x2) / `KF_FLYER|KF_BAT` / atk 1 eva 4 / 1d2 / period 1, the Vampire's `KT_HP` 14 (a banked
+bat's max hp in `lp_spawn`) and ink $05; `kx_tab` the Vampire's resistances / `IMM_UNDEAD` / KXP 9, a
+plain PHYS bite (no drain, no heal); `lp_wt` / `lp_wt6` `WT_K_VAMPIRE`; name `nm_vbat` "VAMPIRE"; `gu_tab`
+= (`KFID_BAT`, `VB_FCNT` 2: flapup / glide, MOT); `ksm_tab` = `ksm_vb` (seq_img.asm: 2-frame flap, no
+corpse: it fades out). A transform rewrites `E_KIND` (+ `E_Y` on a revert); hp, statuses, `E_GOLD`,
+`E_RCD` stay. Never in `LP_KINDS` / spawned: only by transforming (a banked bat returns as one).
+
+| Symbol | Where | |
+|---|---|---|
+| `E_RCD` bit 7 `RCD_ONCE` | entity | the Vampire has fled once (banked as `LEK_BRED`) |
+| `E_RCD` bit 2 `RCD_VFLEE` | entity | this bat form is the flee one (reverts when its FEAR ends); clear = close-distance bat. `place_follower` keeps it, `lp_bank` drops it |
+| `VB_S` = `SP_S` | `$5FFA` | storey scratch (end_turn after `sp_run`: SPQ_RAM is free) |
+| `VB_FLEE_T` 8 / `VB_GAP` 10 / `VB_NEAR` 2 | combat_defs.asm | FEAR turns / close-distance gap / revert gap |
+| `MSG_M_DRAIN` 17 | defs.asm | the Vampire's bite-hit line (impact_line remap) |
+
+**Flow (end_turn only, never a cast / input tick).** Bank-7 `vb_turn` (bank7.asm, `call z` when no exit):
+off a Vampire level (`LP_KINDS` + `LP_BOSS` without `K_VAMPIRE`) returns (~0.15k T); else picks each
+body of CUR_ROOM that may change now — a Vampire at the end of an **odd** turn (its rest turn: "costs
+its whole turn"), a bat at the end of an **even** one (the humanoid then rests the next turn) — active,
+not PENDING / DYING / held (HOLD), sets `ACT_SLOT`, `cache_player`, `VB_S` and far6s R6 **`vb_one`**
+(`vbat6.asm`): humanoid, hero on its storey: (1) flee: not `RCD_ONCE`, 3 hp <= max + 2 (5 of 14) ->
+bat, `RCD_ONCE|RCD_VFLEE`, MIND := FEAR `VB_FLEE_T` (mon_status steps it away; cornered it bites);
+(2) close: 1 <= gap <= 10 and `vb_cut` (a floor-row 9s+8 col with neither `TF_FLOOR` nor `TF_LADDER`,
+or a `TF_SOLID` standing-row 9s+7 cell, via ranged6 `rg_scan`) -> bat. Bat: revert when (VFLEE: FEAR
+over) / (else: hero on its storey, gap <= 2, no cut between) and the humanoid box at its x is legal
+(spawn6 `sp_y` + `sp_try`, `box_free` skipping `ACT_SLOT`; else it stays a bat, y restored). Every
+transform (`vb_bat` / `vb_fin`): `M_REST`, `snap_pxpy`, golden: **`LP_BOSS` := kind | `LEK_GOLD`** (the
+Lord keeps its boss identity: guard hook, drop / grate, PROVOKED, never follows, `boss_chk`),
+`build_live` (LIVE_LIST caches w / h). Turning into a bat logs "THE VAMPIRE TURNS INTO A BAT!"
+(`vb_turns`, bank-0 text); the revert is silent.
+
+**Pool / sequences.** `pool_gmap` + (`K_VAMPIRE`, `K_VBAT`, -): D6 / D8 pool the Bat's first 2 frames
+(+896 B each, D8 the worst level now). On D3 (the Bat is resident) `pl_unit` **merges units with the same
+fid0** (keeps the longer count; the build's `PL_KIND` sum drops `K_VBAT` when `K_BAT` is listed; the
+`zx0_pool.py` model merges the same way). `pl_kinds` loads `K_VBAT`'s block with the Vampire's (D3 / D6 /
+D8: 5 cache blocks, main.asm SEQ CACHE NEED counts it).
+
+**Not built (open):** rule 2's **other-storey** case: a flyer cannot leave its storey band (ai_flyer /
+clamp_band, bank 3 has 8 B free), so a Vampire whose hero is on the other storey keeps walking
+(non-climber: patrols). Flee is the FEAR step (x only, away), not an erratic flight. Drain `+n`: not
+built (needs D3-11); instead **`MSG_M_DRAIN` 17**: low-RAM `impact_line` (after `sfx_msg`, so the HURT
+sound stays) remaps `MSG_M_HIT` of `K_VAMPIRE` to "THE VAMPIRE DRAINS YOU" (`cmb_drains`; `imp_pre` /
+`imp_post` + 1 each; the bat form `K_VBAT` keeps HITS YOU).
+
+Costs (`tests/vbat.py` T, far7 incl., interrupts on, D6): `vb_turn` no candidate 2.1k T, a Vampire that
+stays 5.9k, a flee transform 7.8k (gates 2.5k / 6k / 12k).
+
+| Region (`-DDEBUG_KIT=0`) | after 3F-T9 spawns | after bat form | Δ |
+|---|---|---|---|
+| R6 free | 655 | **357** | −298 (`vbat6.asm` ~225, `pl_unit` merge 8, `pl_kinds` 10, `pool_gmap` 3, `sqm_zx0` +23 packed) |
+| bank 7 free | 193 | **85** | −108 (`vb_turn` + the end_turn hook) |
+| low RAM spare | 92 | **78** | −14 (`impact_line` drain remap 12, `imp_pre` / `imp_post` 2) |
+| bank 3 / bank 2 | 8 / 52 | unchanged | 0 (rows edited in place: `kind_tab`, `kx_tab`, `lp_wt`) |
+| text (bank 0) | 2,288 | 2,311 | +23 (`nm_vbat`, `vb_turns`, `cmb_drains`; retokenised) |
+| pool slack (worst level) | 2,288 (D4) | **1,785 (D8)** | −503 (D8 +896 bat frames, text +23) |
