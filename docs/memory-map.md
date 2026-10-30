@@ -4369,7 +4369,7 @@ stays 5.9k, a flee transform 7.8k (gates 2.5k / 6k / 12k).
 
 | Region (`-DDEBUG_KIT=0`) | after 3F-T9 spawns | after bat form | Δ |
 |---|---|---|---|
-| R6 free | 655 | **357** | −298 (`vbat6.asm` ~225, `pl_unit` merge 8, `pl_kinds` 10, `pool_gmap` 3, `sqm_zx0` +23 packed) |
+| R6 free | 658 | **360** | −298 (`vbat6.asm` ~225, `pl_unit` merge 8, `pl_kinds` 10, `pool_gmap` 3, `sqm_zx0` +23 packed) |
 | bank 7 free | 193 | **85** | −108 (`vb_turn` + the end_turn hook) |
 | low RAM spare | 92 | **78** | −14 (`impact_line` drain remap 12, `imp_pre` / `imp_post` 2) |
 | bank 3 / bank 2 | 8 / 52 | unchanged | 0 (rows edited in place: `kind_tab`, `kx_tab`, `lp_wt`) |
