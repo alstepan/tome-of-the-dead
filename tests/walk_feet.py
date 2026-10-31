@@ -25,7 +25,7 @@ import zx0_pack as zp  # noqa: E402
 import zx0_sources as zs  # noqa: E402
 
 # move cycles of the 40-px walkers (seq_img.asm labels)
-CYCLES = ["kn_move", "wz_move", "sk_move", "ar_move", "or_move", "ne_move", "mu_move", "vp_move"]
+CYCLES = ["kn_move", "wz_move", "sk_move", "ar_move", "or_move", "ne_move", "mu_move", "vp_move", "og_move"]
 STEP = 4
 MIN_CONTACT = 3            # px of sole that must stay on the same screen x (a 1-px touch is a slide)
 # known art debt, reported but not failing (remove the entry when the art is fixed); ANIM-X12:
