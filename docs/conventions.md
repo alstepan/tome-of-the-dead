@@ -30,7 +30,7 @@
   or a `gen_*` tool writing there does not change the build for a shadowed name.
 - `index40.asm` is **not** a toggle: `orc_walk3`, `orc_walk4`, `orc_hurt`, `vamp_walk1..4`, `vamp_hurt`, `nun_*` (3F-T11) exist
   only at 40 px (FRM rows, sequences), so dropping them from it fails the build with a pointer
-  here. The only way back to the 48-px set is the tag **`archive/48px-sprites`** (= main
+  here. `mummy_*` is the ART16 Pharaoh option A (3F-PHARAOH, replaced the Mummy V2 art; `import_anim40.py pharaoh`). The only way back to the 48-px set is the tag **`archive/48px-sprites`** (= main
   `410c118`, before any 40-px import), or reverting the ANIM-IMPORT2 commits.
 
 ## Memory & data

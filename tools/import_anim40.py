@@ -23,7 +23,11 @@ assets/gfx/sprites40/extra/grid (tools/gen_art11_extra.py): W2 / W3 replace the 
 assets/gfx/concept/art13/grid (tools/gen_art13c_nun.py, ART13c option D): nun_walk1 WK0,
 nun_walk2 WK4, nun_cast / nun_hurt STA (ink green = KT_ATTR $04).
 
-Usage: python3 tools/import_anim40.py mage|mummy|necro|vamp|orcx|vampx|nun
+3F-PHARAOH (`pharaoh`, user 2026-10-31 GOLDEN PHARAOH option A NEMES KING): replaces the five Mummy
+frames in place (same names / slots / sizes / flags / ink; all Mummies, gold included) from
+assets/gfx/concept/art16/grid/pharaoh_*_a.grid (tools/gen_art16.py). Supersedes `mummy`.
+
+Usage: python3 tools/import_anim40.py mage|mummy|necro|vamp|orcx|vampx|nun|pharaoh
 """
 import os
 import subprocess
@@ -34,6 +38,7 @@ ART12 = "assets/gfx/sprites40/art12/grid"
 ART9 = "assets/gfx/concept/art9_final/grid"
 EXTRA = "assets/gfx/sprites40/extra/grid"
 ART13 = "assets/gfx/concept/art13/grid"
+ART16 = "assets/gfx/concept/art16/grid"
 GRID = os.path.join(REPO, "assets/gfx/sprites40/grid")
 SPR40 = os.path.join(REPO, "assets/gfx/sprites40")
 
@@ -61,10 +66,15 @@ SETS = {
     "nun": ("green", False, ART13, {
         "nun_walk1": ("nun_walk1", 0, "WK0 rest"), "nun_walk2": ("nun_walk2", 0, "WK4"),
         "nun_cast": ("nun_cast", 0, "STA"), "nun_hurt": ("nun_hurt", 0, "STA")}),
+    "pharaoh": ("yellow", False, ART16, {
+        "mummy_walk1": ("pharaoh_walk1_a", 0, "WK0 rest"), "mummy_walk2": ("pharaoh_walk2_a", 0, "WK4"),
+        "mummy_walk3": ("pharaoh_walk3_a", 0, "WK4"), "mummy_walk4": ("pharaoh_walk4_a", 0, "WK0"),
+        "mummy_attack": ("pharaoh_attack_a", 0, "STA")}),
 }
 PICK = {"mage": "ART12 pick: Mage HURT V3 stagger", "mummy": "ART12 pick: Mummy V2 tomb guard",
         "necro": "ART12 pick: Necromancer V2 bone caster", "vamp": "ART9 final: the Vampire's own 40-px set",
         "orcx": "ANIM-X12 X1: Orc 4-pose walk W2 W1 W3 W4", "vampx": "ANIM-X12 X2: Vampire 4-pose walk W2 W1 W3 W4",
+        "pharaoh": "ART16 pick: Golden Pharaoh option A Nemes King (all Mummies)",
         "nun": "ART13c final: the nun Archmage (option D, side cast; 3F-T11)"}
 
 
@@ -81,6 +91,7 @@ def main():
         lines[0] = (f"# WazHack/ZX gfx text grid — {PICK[key]} (user 2026-10-30); from "
                     f"{src}/{sname}.grid; imported by tools/import_anim40.py (ANIM-IMPORT2)")
         lines = [f"# name: {name}" if ln.startswith("# name:") else ln for ln in lines]
+        lines = [ln for ln in lines if not (ln.startswith("# note:") and "not imported" in ln)]
         g = os.path.join(GRID, name + ".grid")
         open(g, "w").write("\n".join(lines))
         cmd = [sys.executable, os.path.join(REPO, "tools/gfx_convert.py"),
