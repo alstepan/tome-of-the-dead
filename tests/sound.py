@@ -44,7 +44,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(REPO, "tools"))
-from game_lib import Harness, Proto, S, EMU_ARGS, GS_PLAYING, GS_SELECT  # noqa: E402
+from game_lib import Harness, Proto, S, EMU_ARGS, GS_PLAYING, GS_SELECT, GS_ANYKEY  # noqa: E402
 import wzm_ref  # noqa: E402
 
 ISR, DONE = S["isr"], S["isr.done"]
@@ -83,6 +83,7 @@ class Snd:
         self.h, self.z = h, h.z
         self.p = Proto(h)
         self._mem = None
+        self._ak = [0, False]                 # BOOT-ANYKEY answer: [frames waited, done]
 
     def load(self):
         self.p.load()
@@ -93,7 +94,28 @@ class Snd:
         z.cmd("set-breakpoint 22 PC=%d" % DONE)
         z.cmd("set-memory-zone 0")
         self._mem = None
+        self._ak = [0, False]
         return self
+
+    def answer_anykey(self):
+        """BOOT-ANYKEY: the boot waits for a key (GS_ANYKEY) with the title tune already
+        playing; tap ENTER across frames (released first, down 3 frames, released) so the
+        menu follows. Called after every stepped frame until the menu is reached."""
+        n, done = self._ak
+        if done:
+            return
+        gs = self.rb("GAME_STATE")
+        if n == 0 and gs != GS_ANYKEY:
+            return
+        n += 1
+        if n == 1:
+            self.wb("INPUT_SRC", 1)
+            self.p.release()
+        elif n == 4:
+            self.p.hold("ENTER")
+        elif n == 8:
+            self.p.release()
+        self._ak = [n, n >= 12 and gs != GS_ANYKEY]
 
     # --- stepping -----------------------------------------------------------
     def _to(self, pc):
@@ -112,6 +134,7 @@ class Snd:
             self._to(ISR)
             z.cmd("reset-tstates-partial")
         self._to(DONE)
+        self.answer_anykey()
         if timed:
             return int(z.cmd("get-tstates-partial")), int(z.cmd("get-tstates"))
 
@@ -180,6 +203,13 @@ class Snd:
     def menu_start(self, sid=7):
         """Fresh load, run to the START frame of song `sid` (menu Lament = 7)."""
         self.load()
+        # BOOT-ANYKEY: the title tune now starts at boot, under the loading picture. Run to
+        # the menu (answering the key wait), silence it and ask again, so the capture starts
+        # at a clean song start in a settled menu as it did before.
+        self.until(lambda: self.rb("GAME_STATE") == GS_SELECT)
+        self.wb(MUS_REQ, 0)
+        self.frames(3)
+        self.wb(MUS_REQ, sid)
         self.until(lambda: self.cur() == sid and self.state() & MS_MASK == MS_LOOP)
         return self
 
@@ -192,8 +222,9 @@ def diff_info(d):
 def snd1_2(h):
     s = Snd(h).load()
     s.frames(2)
-    check("SND1 boot mailbox [SND_MODE, MUS_REQ, SHOT, STATE, CUR, SFX] = [3,0,0,0,0,0]",
-          s.mbox() == (3, 0, 0, 0, 0, 0), s.mbox())
+    # BOOT-ANYKEY: the title tune starts at boot (it plays over the loading picture)
+    check("SND1 boot mailbox [SND_MODE, MUS_REQ, SHOT, STATE, CUR, SFX] = [3,7,0,1,7,0]",
+          s.mbox() == (3, 7, 0, 1, 7, 0), s.mbox())
     s.until(lambda: s.rb("GAME_STATE") == GS_SELECT)
     s.until(lambda: s.cur() == 7)             # (the start frame may already be behind us)
     check("SND1 menu: MUS_REQ = MUS_CUR = 7, MS_LOOP",

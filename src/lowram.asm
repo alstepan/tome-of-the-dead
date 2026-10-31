@@ -87,7 +87,9 @@ boot:
                 call gen_idles
                 or   a                         ; CF = 0: save
                 call sel_frt_copy
-                jp   enter_select              ; bank-2 trampoline -> bank 3
+                ld   hl, boot6_wait            ; the loading picture + title tune until a key
+                ld   c, BANK_BOOT6             ; (boot block: dead after this, no resident code)
+                jp   farb                      ; boot6_wait ends in jp enter_select (frames dropped)
 
 ; gen_idles — a new pool (alloc_reset) holding the two heroes' IDLE frames
 ; for the select screen. Boot and every start_game (the alloc mark is the

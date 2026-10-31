@@ -168,8 +168,22 @@ class Run:
         for _ in range(50):
             self.z.cmd("run %d" % RUN_LIMIT)
             if self.pc() in want:
+                if "select_tick" in labels and self.S.get("GS_ANYKEY") and \
+                        self.rb("GAME_STATE") == self.S["GS_ANYKEY"]:
+                    self.anykey(want)             # BOOT-ANYKEY: answer, run on to the menu
+                    continue
                 return int(self.z.cmd("get-tstates-partial"))
         raise RuntimeError(f"never reached {labels}")
+
+    def anykey(self, want):
+        """boot6_wait (GS_ANYKEY, probe = select_tick): released for 2 frames, ENTER for 2,
+        released for 2 (ENTER and '1' share a menu bit), each frame = one select_tick."""
+        self.wb("INPUT_SRC", 1)
+        for keys in ((), (), ("ENTER",), ("ENTER",), (), ()):
+            self.hold(*keys)
+            self.z.cmd("cpu-step")
+            self.z.cmd("run %d" % RUN_LIMIT)
+        self.hold()
 
     def wb(self, name, v):
         self.z.cmd("write-memory %d %d" % (self.S[name], v))

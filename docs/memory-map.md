@@ -138,6 +138,19 @@ load, and IM 2 installed.
 
 ### Boot block (3E-T1, memory levers (a) + (d))
 
+**BOOT-ANYKEY (user 2026-10-30):** after `boot` the loading picture (S2d SCREEN$ on the bank-5
+screen) STAYS up, the title tune playing (`boot6_init` sets `MUS_REQ` = `MUS_LAMENT` before the first
+EI; `menu_run` asks for the same id = no restart), until a key; `boot6_init` no longer clears the
+screen or sets the border. A third `farb` call from `boot` (after `gen_idles` + `sel_frt_copy`, so the
+pool generation runs while the picture shows) runs `boot6_wait`: `GAME_STATE` = **`GS_ANYKEY` 8**, a
+13-char "PRESS ANY KEY" with the ROM `print_str` on row 22 (rows 22-23 are blank in the art, attrs 7 =
+white on black: untouched), then `menu_frame` loops: wait for all keys released once, then any key
+(no timeout, Kempston not read, the key is swallowed because `menu_run` primes its edge detector from
+the matrix), `ld sp, WORKSTORE_TOP` + `jp enter_select` (no return; farb's frame is dropped).
+Cost: resident +5 B in `boot` (low RAM `jp farb` with `ld hl` / `ld c`, was `jp enter_select`),
+`GS_ANYKEY` is an EQU (0 B); the rest is boot-block code (free after boot). Tests: `tests/game_lib.py`
+`boot_key` (called by `wait_state(GS_SELECT)`), `tests/anykey.py`.
+
 `src/boot6.asm`, assembled by `main.asm` in pool bank 6 **just below the R6
 region** (R6, 2026-10-21; was the top of bank 6, `$F86B..$FFFF`):
 **3F-T2: `$D466..$DBFF` (R6 grew 8 pages: SRC6 `$DC00..$DCFF`, R6 `$DD00..`)**; SRC6 spike: `BOOT6_ADDR..SRC6_ADDR-1` = `$DC66..$E3FF` (default `SRC6_PAGES` 1; ASSERT `boot6_end == SRC6_ADDR`), `BOOT6_LEN` 1,946 B; before: `BOOT6_ADDR..R6_ADDR-1` = `$DD6B..$E4FF`, `BOOT6_LEN` **1,941 B** (phase lock: +3 B PHASE_TRAP clear; 1,938 before) (code 252 + data
@@ -1421,7 +1434,7 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 
 | Address | Symbol | Meaning |
 |---------|--------|---------|
-| `$BF00` | `GAME_STATE` | `GS_BOOT 1`, `GS_PLAYING 2`, `GS_WIN 3`, `GS_DEAD 4`, **`GS_SELECT 5`**, **`GS_TRANSITION 6`**, **`GS_LEVEL 7`** (3F-T1: `level_enter` before the room map exists — card, `level_new`, the level pool; `gen_frame` allowed; `GS_TRANSITION` from the end of the pool) |
+| `$BF00` | `GAME_STATE` | `GS_BOOT 1`, `GS_PLAYING 2`, `GS_WIN 3`, `GS_DEAD 4`, **`GS_SELECT 5`**, **`GS_TRANSITION 6`**, **`GS_ANYKEY 8`** (BOOT-ANYKEY: `boot6_wait`, the loading picture waits for a key), **`GS_LEVEL 7`** (3F-T1: `level_enter` before the room map exists — card, `level_new`, the level pool; `gen_frame` allowed; `GS_TRANSITION` from the end of the pool) |
 | `$BF01` | `RNG_STATE` | xorshift16 (7,9,8); reseeded `$A55A` every new game |
 | `$BF03` | `TURN_COUNTER` | word; +1 at the end of every turn's animation |
 | `$BF05` / `$BF06` | `INPUT_SRC` / `KBD_MATRIX` | P3 injection contract, unchanged |

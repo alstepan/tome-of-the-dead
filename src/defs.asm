@@ -480,6 +480,7 @@ GS_SELECT       EQU $05
 GS_TRANSITION   EQU $06
 GS_LEVEL        EQU $07             ; 3F-T1: level_enter before the room map exists (card,
                                     ;   level_new, the level pool): gen_frame allowed (GEN_TRAP off)
+GS_ANYKEY       EQU $08             ; boot6_wait: the loading picture waits for a key (set at boot, replaced by menu_run)
 
 ; TURN_PHASE
 TP_INPUT        EQU 0

@@ -26,7 +26,7 @@ from game_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at
                        cell_bytes, TILE_ATTRS, FLASH_ATTRS, KIND_ATTR, split_frame, frame_png,
                        stand_y, is_standing, storey_of, item_row, STOREY_ROWS, STOREY_COUNT,
                        PLAY_ROWS, FLOOR_ROWS, MAP_LEN,
-                       GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION,
+                       GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION, GS_ANYKEY,
                        EF_LEFT, EF_PENDING, EF_ACTIVE, EF_HOSTILE,
                        K_KNIGHT, K_WIZARD, K_SKELETON, K_GOBLIN, K_RAT,
                        K_BAT, K_SLIME, K_GHOST, ROOM_A, ROOM_C, ROOM_D)
@@ -1709,6 +1709,14 @@ def main():
             while time.monotonic() - t0 < 60:            # fast tape traps: ~1 s
                 time.sleep(0.25)
                 gs = p.rb("GAME_STATE")
+                if gs == GS_ANYKEY:                      # BOOT-ANYKEY: the loading picture waits
+                    p.wb("INPUT_SRC", 1)                 # for a key; inject one (the tape path has
+                    p.release()                          # the host keyboard otherwise)
+                    time.sleep(0.3)
+                    p.hold("ENTER")
+                    time.sleep(0.3)
+                    p.release()
+                    continue
                 if gs == GS_SELECT:
                     break
             print(f"[info] 50 tape: GAME_STATE {gs} after {time.monotonic() - t0:.1f}s", flush=True)
