@@ -4504,8 +4504,10 @@ T11 check (D8 +2,080 B): 29,017 + 2,080 = 31,097 crosses into bank 6 (bank-4 tai
 worst need 31,097 + 575 + 64 = 31,736 ≤ 32,761 (1,025 B spare even then).
 ## 3F-T12 respawn trickle (`feat/3f-t12-trickle`; game.md §9.5 + 3F-D2 draw order; `tests/trickle.py`, budget `trickle`)
 
-Records only (§9.5 lazy population): every `RESPAWN_PERIOD` (48) turns of the level, end_turn (bank 7,
-after sp_run / the exit / `TURN_COUNTER++`) far6s R6 **`trk_run`**: boss alive (`LF_GRATE_OPEN` clear),
+Records only (§9.5 lazy population): every `RESPAWN_PERIOD` (48) turns of the level end_turn (bank 7) sets
+`TRK_DUE`; the NEXT INPUT tick (bank-7 `turn_input`, first thing) clears it and far6s R6 **`trk_run`** ALONE
+(no turn starts in that tick, the input / a deferred level-up wait one tick; review: on the turn-ending tick
+115.8k + 14.1k broke the 126k cap): boss alive (`LF_GRATE_OPEN` clear),
 `LP_RESPAWNS` < 6, eligible = VISITED, < 4 entries, not `CUR_ROOM` / `TRK_PREV` / `LVL_LAIR` /
 `LVL_SANCTUM`, Σ + minW <= 12; w_r = min(7, 1 + 2 x live `FLOOR_LIST` entries); draws on `RNG_STATE`
 (chance < 96, room = byte mod Σw, k = byte & 3, `tier_row` with the CURRENT `LVL`, one retry k + 1);
@@ -4514,7 +4516,7 @@ Byte-exact vs `tools/respawn_model.py` (now also excludes the Sanctum, 3F-D2).
 
 | Address | Symbol | |
 |---|---|---|
-| `$6D56` | `TRK_PHASE` | turns since the last check 0..47 (EDGE_TAB spare; level_gen zeroes it = reset on level entry; end_turn increments it BEFORE do_exit, so a descent leaves a fresh LVL_STATE — world.py W16 block compare). A turn whose end_turn runs `sp_run` does not advance it (no check shares a tick with sp_run) (test-observable) |
+| `$6D56` | `TRK_PHASE` | bits 0-6 turns since the last check 0..47, bit 7 `TRK_DUE` (the check runs on the next INPUT tick) (EDGE_TAB spare; level_gen zeroes it = reset on level entry; end_turn increments it BEFORE do_exit, so a descent leaves a fresh LVL_STATE — world.py W16 block compare). A turn whose end_turn runs `sp_run` does not advance it (no check shares a tick with sp_run) (test-observable) |
 | `$6D57` | `TRK_PREV` | prev_room: written in do_exit `.in` (exit + teleport) = the room left; 0 at level entry is harmless (only CUR_ROOM is VISITED before the first exit) (test-observable) |
 | `LP_STATE+15..+23` | `TRK_W` | 9 B scratch in the `lp_enter` scratch range (dead between entries) |
 
@@ -4526,9 +4528,11 @@ the LVL in C (lp_gen passes `LP_LVL`, the trickle `LVL`).
 | Region (`-DDEBUG_KIT=0`) | main `8d14385` | after 3F-T12 | Δ |
 |---|---|---|---|
 | R6 free | 537 | **246** | −291 (`trickle6.asm` 285, tier6 `lp_minw` / C-entry net +6) |
-| bank 7 free | 92 | **61** | −31 (end_turn phase inc before the exit 4 + check / far6 15, sp_run phase hold +6, do_exit `TRK_PREV` 6) |
+| bank 7 free | 92 | **49** | −43 (end_turn count before the exit 4 + DUE test 12, sp_run count hold +6, do_exit `TRK_PREV` 6, turn_input DUE run 13) |
 | low RAM / bank 2 / bank 3 / bank 1 / pool | 41 / 28 / 5 / 441 / — | unchanged | 0 (state in the EDGE_TAB spare) |
 
-Costs: `trk_run` stopped at step 2 ~0.1k T; worst full check with a spawn (far6 incl.) 10,136 T (tests/trickle.py T);
-budget `trickle` (pmix + a check on every end_turn, 14 checks / 5 appends) worst work tick 113,996 T vs pmix 103,624;
-full budget.py PASS, worst gated walarm 122,177 / lcastf 121,246 (unchanged: no check shares sp_run's tick).
+Costs (far6 incl.): stopped at step 2 ~0.1k T; a full scan 10.0-10.5k T, 14.1k T with a spawn (heavy state: 8 VISITED
+records x 3 entries, the Skeleton-fails / Rat-retry path; tests/trickle.py T2), all on the idle INPUT tick.
+Budget `trickle` / `otrickle` (pmix / omix + a forced spawning check after every turn): worst ticks = the base
+scenarios' (the check tick is far below them): the check (idle INPUT) tick 87.2k T worst incl. its
+render / panel item, 8 / 9 checks all spawning; full budget.py PASS (worst gated walarm 122,177, lcastf 121,473).

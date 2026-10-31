@@ -3246,7 +3246,7 @@ permanently the turn the boss dies (the flag is not re-armed on revisit or reloa
 
 | Name | Value | Meaning |
 |---|---|---|
-| `RESPAWN_PERIOD` | 48 | check every 48 game turns (hero turn counter, `turn mod 48 = 0`) |
+| `RESPAWN_PERIOD` | 48 | check every 48 turns **of the level** (a per-level count reset on level entry; a turn whose end_turn makes a queued spawn does not count; manager ruling 2026-10-31, T12) |
 | `RESPAWN_CHANCE` | 96 (of 256) | ≈ 38 % per check, so about 1 spawn per ~128 turns, ~3–4 per 450-turn level |
 | `RESPAWN_XP_DIV` | 2 | XP awarded = `KXP` (§4.1) / 2, rounded down, min 1 |
 | `RESPAWN_ITEM_W` | 2 | room weight = 1 + 2 × (un-picked floor items in the room), capped at 7 |
@@ -3285,7 +3285,8 @@ next kind in the level's list once (cheapest-first not needed), else skip.
 **Exact check and RNG draw order (3F-D2, designer 2026-10-28; confirms T4; Python == Z80).**
 All draws are on `RNG_STATE`. Steps 1–4 draw nothing, so a check with no eligible room leaves
 the RNG untouched.
-1. `turn mod RESPAWN_PERIOD = 0`, else stop.
+1. The level's turn count (reset on level entry; turns that run a queued spawn are not counted) reaches
+   `RESPAWN_PERIOD`, else stop. The check itself runs on the next idle input tick (engine timing, T12).
 2. Boss alive (boss-dead flag clear) and `LP_RESPAWNS < RESPAWN_MAX`, else stop.
 3. Build the eligible set: rooms `r` in **ascending id**, `r` present, VISITED, record entries
    < 4, `r ≠ CUR_ROOM`, `r ≠ prev_room`, `r ≠ LVL_LAIR`, `r ≠ LVL_SANCTUM`, and
@@ -3318,8 +3319,9 @@ limits throttle later depths automatically; a faster trickle would stack on that
 and break the §10 threat curve.
 
 **Placement (D).** Cell-legal, deterministic from the gameplay RNG (`RNG_STATE`, the
-same stream as combat, so a seeded test replays; `GEN_RNG` is generation-only and
-untouched). Draw up to 8 candidate cells in the chosen room; first legal one wins, else skip:
+same stream as combat, so a seeded test replays). `GEN_RNG` is overwritten by the trickle (it carries
+the draws through the shared tier roll); nothing reads it between level generations: it is reseeded /
+saved by level_gen, ig_seed, lp_enter, lp_budget, l2_pass (manager ruling 2026-10-31, T12). Draw up to 8 candidate cells in the chosen room; first legal one wins, else skip:
 - Walkers: a floor-standing cell on a storey, not a ladder cell or pit cell, not a door
   cell, not in a ladder-end box (the 1-cell footprint at each ladder end), not occupied,
   and at least 6 columns from the hero if the room is visible.

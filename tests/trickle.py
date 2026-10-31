@@ -6,11 +6,16 @@ against tools/respawn_model.py trickle_check, on seeded generated levels (the re
      tiers), CUR_ROOM / TRK_PREV / LP_RESPAWNS / LVL / RNG_STATE / boss-dead, floor items taken at
      random: far6 trk_run == trickle_check(turn 48) on every record byte, LP_RESPAWNS and the
      final RNG_STATE (D1, D5, D8 incl. the Sanctum); LP_LVL / slots untouched
-  E  end_turn: TRK_PHASE counts the level's turns, a check only on the 48th (phase back to 0); a
-     spawn is a record append only (the slots unchanged); RESPAWN_MAX holds; boss dead: nothing
+  E  end_turn: TRK_PHASE counts the level's turns; the 48th only sets TRK_DUE (no check on the
+     turn-ending tick), the next INPUT tick runs the check ALONE (no turn starts in it; a held key's
+     turn starts on the tick after); a spawn is a record append only (the slots unchanged);
+     RESPAWN_MAX holds; boss dead: nothing; a turn whose end_turn runs sp_run holds the count
+  F  a real 48-turn play from arrival (no TRK_PHASE poke): no check through turn 47, the check runs
+     after the 48th
   P  prev_room: a real do_exit into the lair -> TRK_PREV = the room left; a teleport -> the lair
   R  the appended entry is placed by lp_enter on entry: F_RESPAWN body, the kind, the scaled hp
-  T  cost: worst far6 trk_run (a full check) over the M cases
+  T  cost: worst far6 trk_run over the M cases + a heavy state (8 VISITED records x 3 entries, a
+     spawn through the Skeleton-fails / Rat-retry path, 450 seeds; review measured 14.1k)
 Build with -DDEBUG_KIT=0. ZRCP_PORT=<port> python3 tests/trickle.py
 """
 import random
@@ -246,6 +251,92 @@ def end_turn_cases(p, L, rnd):
         p.clear_slots()
 
 
+def due_cases(p, L, rnd):
+    """E6-E9: the DUE flag / idle-tick execution, the sp_run hold (TRK_PHASE not poked in F)."""
+    d = L.depth
+    pr = present(L)
+    cur = p.rb("CUR_ROOM")
+    tgt = [r for r in pr if r not in (cur, L.lair, p.rb("LVL_SANCTUM"))][0]
+    recs = [None if r not in pr else {"visited": r == tgt or r == cur, "ents": []} for r in range(9)]
+    keys, _ = p._prep(("WAIT",))
+    # F: a real 48-turn play from the arrival (TRK_PHASE as level_gen left it)
+    write_state(p, d, recs, rnd)
+    p.wb("TRK_PREV", cur)
+    p.wb("LP_RESPAWNS", 0)
+    p.wmem(S["TRK_W"], [0xEE] * 9)
+    ph0 = p.rb("TRK_PHASE")
+    for _ in range(47):
+        heal(p)
+        p.turn("WAIT")
+    check("F1 47 turns from the arrival: count 47, no check (TRK_W untouched)",
+          ph0 == 0 and p.rb("TRK_PHASE") == 47 and list(p.z.read_memory(S["TRK_W"], 9)) == [0xEE] * 9,
+          (ph0, p.rb("TRK_PHASE"), list(p.z.read_memory(S["TRK_W"], 9))))
+    # E6-E8 on the 48th turn, tick by tick with the key held
+    heal(p)
+    t0, n0 = p.rw("TURN_COUNTER"), p.rb("LP_RESPAWNS")
+    rep0 = p.rb("INPUT_REPEAT")
+    p.wb("INPUT_REPEAT", 1)                                    # held keys repeat (the default game setting)
+    p.hold(*keys)
+    log = []
+    for _ in range(40):
+        p.tick()
+        log.append((p.rw("TURN_COUNTER") - t0, p.rb("TURN_PHASE"), p.rb("TRK_PHASE"),
+                    p.rb(S["TRK_W"] + tgt), p.rb("LP_RESPAWNS")))
+        if log[-1][0] >= 2:
+            break
+    p.release()
+    p.wb("INPUT_REPEAT", rep0)
+    p.tick(2)
+    e = next((i for i, x in enumerate(log) if x[0] == 1), None)
+    ok6 = e is not None and log[e][2] == S["TRK_DUE"] and log[e][3] == 0xEE and log[e][4] == n0
+    check("E6 the 48th turn's ending tick only sets TRK_DUE (no check: TRK_W / LP_RESPAWNS untouched)", ok6,
+          log[:e + 3] if e is not None else log)
+    ok7 = ok6 and e + 1 < len(log) and log[e + 1][:3] == (1, 0, 0) and log[e + 1][3] != 0xEE
+    check("E7 the next INPUT tick runs the check alone (TRK_DUE clear, w_r written, no turn started)", ok7,
+          log[e:e + 3] if e is not None else log)
+    ok8 = ok7 and any(x[0] == 2 or x[1] == 1 for x in log[e + 2:e + 4])
+    check("F2 / E8 the held key's next turn starts right after the check tick", ok8,
+          log[e:e + 5] if e is not None else log)
+    # E9: a turn whose end_turn runs sp_run does not advance the count
+    p.wb("TRK_PHASE", 10)
+    p.wmem(S["SPQ_K"], [S["K_RAT"] | 0xE0, 15, 1])           # an offspring of an empty slot: emptied, none made
+    heal(p)
+    p.turn("WAIT")
+    check("E9 a turn with sp_run holds the count (10 -> 10), the queue emptied",
+          p.rb("TRK_PHASE") == 10 and p.rb("SPQ_K") == 0, (p.rb("TRK_PHASE"), p.rb("SPQ_K")))
+    heal(p)
+    p.turn("WAIT")
+    check("E9b the next plain turn counts again (10 -> 11)", p.rb("TRK_PHASE") == 11, p.rb("TRK_PHASE"))
+
+
+def heavy_cost(p, L, rnd):
+    cur = p.rb("CUR_ROOM")
+    sk, rat, gob = S["K_SKELETON"], S["K_RAT"], S["K_GOBLIN"]
+    p.wmem(S["LP_KINDS"], [sk, rat, sk, rat])
+    p.wb("LVL_LAIR", S["ROOM_NONE"])
+    p.wb("LVL_SANCTUM", S["ROOM_NONE"])
+    p.wb("TRK_PREV", cur)
+    p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~S["LF_GRATE_OPEN"] & 255)
+    rec = []
+    for r in range(9):
+        rec += [0x80] + [0] * 8 if r == cur else [0x83, gob, 9, gob, 9, rat, 7, 0, 0]
+    res = []
+    for lvl in (3, 7, 12):
+        for _ in range(150):
+            p.wmem(S["LP_REC"], rec)
+            p.wb("LP_RESPAWNS", 0)
+            p.wb("LVL", lvl)
+            p.wmem(S["RNG_STATE"], [rnd.randrange(256), rnd.randrange(1, 256)])
+            ok, t = far6(p, "trk_run")
+            res.append((t, p.rb("LP_RESPAWNS")))
+    sc = max(t for t, n in res if not n)
+    sp = max(t for t, n in res if n)
+    print(f"[info] heavy state (8 x 3 entries, 450 seeds): worst far6 trk_run no spawn {sc} T, with a spawn {sp} T",
+          flush=True)
+    check("T2 heavy state: trk_run <= 15k T (on the idle INPUT tick, ~25-30k T: far under the 126k cap)",
+          sp <= 15000 and sc <= 15000, (sc, sp))
+
+
 def prev_cases(p, L):
     ok = L.enter()
     check("P1 a real do_exit into the lair: TRK_PREV = the room left", ok and p.rb("TRK_PREV") == L.nb,
@@ -276,7 +367,10 @@ def main():
             model_cases(p, L, rnd, 120 if d != 8 else 80, worst)
             if d == 5:
                 L = Lair(p, d, seed)
+                due_cases(p, L, rnd)
+                L = Lair(p, d, seed)
                 end_turn_cases(p, L, rnd)
+                heavy_cost(p, L, rnd)
                 L = Lair(p, d, seed)
                 prev_cases(p, L)
     print(f"[info] worst far6 trk_run with a spawn: {worst[0]} T ({worst[1]})", flush=True)

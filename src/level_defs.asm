@@ -310,8 +310,11 @@ RESPAWN_PERIOD  EQU 48              ; a check every 48 turns of the level (TRK_P
 RESPAWN_CHANCE  EQU 96              ; of 256: draw 1 < this -> a spawn try
 RESPAWN_ITEM_W  EQU 2               ; room weight = min(RESPAWN_ITEM_CAP, 1 + 2 x un-picked floor items)
 RESPAWN_ITEM_CAP EQU 7
-TRK_PHASE       EQU EDGE_TAB + 6    ; $6D56: turns since the last check, 0..47 (EDGE_TAB spare; level_gen's
+TRK_PHASE       EQU EDGE_TAB + 6    ; $6D56: bits 0-6 turns since the last check 0..47, bit 7 TRK_DUE (EDGE_TAB spare; level_gen's
                                     ; attempt zeroes EDGE_TAB..LVL_STATE_END: reset on level entry)   (test-observable)
+TRK_DUE         EQU %10000000       ; TRK_PHASE bit 7: end_turn counted the 48th turn, turn_input runs trk_run
+TRK_DUE_BIT     EQU 7
+TRK_CNT_MASK    EQU %01111111
 TRK_PREV        EQU EDGE_TAB + 7    ; $6D57: prev_room = the room the hero left last (do_exit .in; 0 at level
                                     ; entry is harmless: only CUR_ROOM is VISITED until the first exit) (test-observable)
 TRK_W           EQU LP_SIG          ; trk_run scratch, 9 B (LP_STATE + 15 .. + 23: lp_enter / lp_budget scratch,
