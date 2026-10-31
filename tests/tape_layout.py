@@ -72,5 +72,13 @@ expect("block 5 = game CODE data", blocks[5][0] == 0xFF and len(blocks[5]) - 2 =
 rest = blocks[6:]
 expect("%d headerless blocks follow (TAPE_HEADLESS_N)" % len(rest),
        len(rest) == sym["TAPE_HEADLESS_N"] and all(b[0] == 0xFF for b in rest))
+# INSTR-BUILD: the bank-0 block (6th headerless, TAPE_BLOCKS order) = the text block + the
+# HOW TO PLAY streams (page 1 at POOL_START, page 2, the overlay code), boot only
+txt = rest[5] if len(rest) > 5 else b""
+expect("headerless 6 = text + INSTR streams (%d B = %d + %d)" % (
+       len(txt) - 2, sym["TEXT_LEN"], sym["TEXT_TAPE_LEN"] - sym["TEXT_LEN"]),
+       len(txt) - 2 == sym["TEXT_TAPE_LEN"] and sym["instr_p1_zx0"] == sym["POOL_START"]
+       and sym["TEXT_ADDR"] + sym["TEXT_TAPE_LEN"] == sym["instr_zx0_end"]
+       and sym["instr_p1_zx0"] < sym["instr_p2_zx0"] < sym["instr_zx0"] < sym["instr_zx0_end"])
 print("tape_layout: %s (%d blocks, %d B)" % ("OK" if not fails else "%d FAILED" % fails, len(blocks), len(d)))
 sys.exit(1 if fails else 0)

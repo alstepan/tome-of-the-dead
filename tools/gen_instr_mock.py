@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """HOW TO PLAY (INSTR1) render mockups -> assets/gfx/instr/instr_p{1,2}.png (+ @3).
 
-Source spec: docs/design/instructions_screen.txt. Text = real FONT6 (assets/gfx/fonts/font6x8.bin,
+Source spec: docs/design/instructions_screen.txt + the PAGES table in tools/instr_pack.py
+(shared with the build, INSTR-BUILD). Text = real FONT6 (assets/gfx/fonts/font6x8.bin,
 6x8 at x=6k,y=8r); icons/tiles decoded from the real asm tables. Attribute-legal: every
 8x8 cell has one INK+PAPER (+BRIGHT); --check also verifies no ink pixel is invisible
 (ink==paper), <=2 colours per cell in the rendered image, and rows <= 42 chars.
@@ -10,6 +11,9 @@ Usage: tools/gen_instr_mock.py [--check]
 import os, re, sys
 import numpy as np
 from PIL import Image
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import instr_pack  # noqa: E402  (the shared page spec)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 G = os.path.join(ROOT, "assets", "gfx")
@@ -72,18 +76,6 @@ def tile(i):
 FONT = font6()
 
 
-def parse(page):
-    rows, on = [], False
-    for ln in open(os.path.join(ROOT, "docs/design/instructions_screen.txt")).read().split("\n"):
-        if ln.startswith("==="):
-            on = ln.startswith("=== PAGE %d ROWS" % page)
-            continue
-        if on:
-            rows.append(ln)
-    assert len(rows) == 24, (page, len(rows))
-    return rows
-
-
 class Scr:
     def __init__(s):
         s.bm = np.zeros((H, W), bool)
@@ -108,52 +100,40 @@ class Scr:
             s.at[r + i // (w // 8), c + i % (w // 8)] = a
 
 
-def page1():
+def page(n):
+    """Page n from the shared spec (tools/instr_pack.py PAGES: fills, icons; text rows)."""
     s = Scr()
-    rows = parse(1)
-    s.fill([0], 0, 31, 0x46)
-    s.fill([2, 3, 4, 5], 0, 31, 0x47)
-    s.fill([7], 0, 31, 0x06)
-    for r in (8, 9, 10, 11, 12, 13, 15):
-        s.fill([r], 0, 8, 0x45); s.fill([r], 9, 23, 0x47); s.fill([r], 24, 31, 0x46)
-    s.fill([14], 9, 31, 0x47)
-    s.fill([16], 3, 23, 0x47); s.fill([16], 24, 31, 0x46)
-    s.fill([17], 3, 31, 0x07)
-    s.fill([18], 3, 31, 0x47); s.fill([19], 3, 31, 0x07)
-    s.fill([21, 22], 0, 31, 0x05)
-    s.fill([23], 0, 31, 0x46)
+    rows = instr_pack.rows(n)
+    for r, c0, c1, a in instr_pack.PAGES[n]["fills"]:
+        s.fill([r], c0, c1, a)
     s.text(rows)
-    bm, at = bar24("icon_bag"); s.blit(bm, 16, 0, at)
-    bm, at = bar24("icon_sword"); s.blit(bm, 18, 0, at)
-    for (r, c, i) in ((4, 30, 15), (4, 31, 16), (5, 30, 17), (5, 31, 18)):
-        bm, a = tile(i); s.blit(bm, r, c, [a])
+    if n == 2:
+        for r in range(3, 11):  # left-column text must end before the right icon (cell 16 = x128)
+            for k, ch in enumerate(rows[r][:24]):
+                if ch != ' ' and (k + 1) * 6 > 128:
+                    s.warn.append("row %d: left text char %d overlaps right icon" % (r, k))
+    for ic in instr_pack.PAGES[n]["icons"]:
+        kind, arg, r, c = ic[:4]
+        if kind == "bar":
+            bm, at = bar24(arg)
+            s.blit(bm, r, c, at)
+        elif kind == "tile":
+            bm, a = tile(arg)
+            s.blit(bm, r, c, [a])
+        elif kind == "label":
+            d = bytes_after(PI, arg, 9)
+            s.blit(np.array([[v >> (7 - x) & 1 for x in range(8)] for v in d[:8]], bool), r, c, [d[8]])
+        else:
+            s.blit(icon16(arg), r, c, [ic[4]] * 4)
     return s
+
+
+def page1():
+    return page(1)
 
 
 def page2():
-    s = Scr()
-    rows = parse(2)
-    s.fill([0, 12, 23], 0, 31, 0x46)
-    s.fill([2], 0, 31, 0x06)
-    for r in (3, 5, 7, 9):
-        s.fill([r], 2, 31, 0x47)
-    for r in (4, 6, 8, 10):
-        s.fill([r], 2, 31, 0x07)
-    for r, a in ((13, 0x47), (15, 0x45), (17, 0x47), (19, 0x45), (21, 0x47)):
-        s.fill([r], 0, 31, a)
-    s.text(rows)
-    for r in range(3, 11):  # left-column text must end before the right icon (cell 16 = x128)
-        for k, ch in enumerate(rows[r][:24]):
-            if ch != ' ' and (k + 1) * 6 > 128:
-                s.warn.append("row %d: left text char %d overlaps right icon" % (r, k))
-    for (r, c, i, a) in ((3, 0, 'p_heal', 0x42), (3, 16, 'f_meat', 0x42), (5, 0, 's_teleport', 0x45),
-                         (5, 16, 'book', 0x43), (7, 0, 'ammo_dagger', 0x47), (7, 16, 'w_long', 0x07)):
-        s.blit(icon16(i), r, c, [a] * 4)
-    d = bytes_after(PI, "label_key", 9)
-    s.blit(np.array([[v >> (7 - x) & 1 for x in range(8)] for v in d[:8]], bool), 9, 1, [d[8]])
-    bm, a = tile(13)
-    s.blit(np.tile(bm, (2, 2)), 9, 16, [a] * 4)
-    return s
+    return page(2)
 
 
 def rgb(idx, br):
@@ -202,4 +182,5 @@ def main():
     sys.exit(0 if ok else 1)
 
 
-main()
+if __name__ == "__main__":
+    main()

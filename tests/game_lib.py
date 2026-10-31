@@ -123,7 +123,9 @@ E = dict(KIND=0, ROOM=1, FLAGS=2, X=3, Y=4, HP=5, MAXHP=6, AIDIR=7, POT=8,
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING, EF_WALKIN, EF_PENDING = 1, 2, 4, 8, 16, 32, 64
 
 GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION = 2, 3, 4, 5, 6
-GS_ANYKEY = 8                      # boot6_wait: the loading picture waits for a key
+GS_ANYKEY = 8                      # instr_main (boot6_wait): the loading picture waits for a key
+GS_HELP1, GS_HELP2 = 9, 10         # INSTR-BUILD: the HOW TO PLAY pages (boot only, before the menu)
+BOOT_WAITS = (GS_ANYKEY, GS_HELP1, GS_HELP2)   # every boot key wait: the harness taps ENTER at each
 
 # keys: (mirror row index, bit)
 KEYS = {
@@ -364,9 +366,10 @@ class Proto:
     snd_mode = None
 
     def boot_key(self):
-        """At the boot's 'PRESS ANY KEY' wait (boot6_wait, GS_ANYKEY): let it see every
-        key released, tap ENTER (down 2 frames; the menu swallows it) and release.
-        The one place the harness answers it (wait_state(GS_SELECT) -> boot())."""
+        """At a boot key wait (BOOT_WAITS: the picture's 'PRESS ANY KEY', then the two
+        HOW TO PLAY pages, instr_ovl.asm): let it see every key released, tap ENTER
+        (down 2 frames; the menu swallows the last one) and release. Called once per
+        wait (wait_state(GS_SELECT) -> boot()): 3 calls from boot to the menu."""
         self.wb("INPUT_SRC", 1)                  # injected matrix, not the host's keyboard
         self.release()
         self.tick(2)
@@ -378,7 +381,7 @@ class Proto:
     def wait_state(self, gs, max_ticks=600):
         def pred():
             g = self.rb("GAME_STATE")
-            if g == GS_ANYKEY and gs == GS_SELECT:
+            if g in BOOT_WAITS and gs == GS_SELECT:
                 self.boot_key()
                 g = self.rb("GAME_STATE")
             return g == gs

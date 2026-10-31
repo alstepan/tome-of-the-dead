@@ -44,7 +44,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(REPO, "tools"))
-from game_lib import Harness, Proto, S, EMU_ARGS, GS_PLAYING, GS_SELECT, GS_ANYKEY  # noqa: E402
+from game_lib import Harness, Proto, S, EMU_ARGS, GS_PLAYING, GS_SELECT, GS_ANYKEY, BOOT_WAITS  # noqa: E402
 import wzm_ref  # noqa: E402
 
 ISR, DONE = S["isr"], S["isr.done"]
@@ -105,7 +105,7 @@ class Snd:
         if done:
             return
         gs = self.rb("GAME_STATE")
-        if n == 0 and gs != GS_ANYKEY:
+        if n == 0 and gs not in BOOT_WAITS:
             return
         n += 1
         if n == 1:
@@ -115,7 +115,9 @@ class Snd:
             self.p.hold("ENTER")
         elif n == 8:
             self.p.release()
-        self._ak = [n, n >= 12 and gs != GS_ANYKEY]
+        if n >= 12 and gs in BOOT_WAITS:     # INSTR: the next wait (a HOW TO PLAY page)
+            n = 0
+        self._ak = [n, n >= 12]
 
     # --- stepping -----------------------------------------------------------
     def _to(self, pc):

@@ -81,15 +81,16 @@ boot:
                 ld   hl, boot6_tiles           ; the common set, ornament, the panel hot
                 ld   c, BANK_BOOT6             ; code and the FONT6 planes (B3B-8 /
                 call farb                      ; B3B-11; were bank 7 init_tiles / panel_boot)
+                ld   hl, boot6_wait            ; the loading picture + title tune until a key,
+                ld   c, BANK_BOOT6             ; then HOW TO PLAY (INSTR-BUILD): before the boot
+                call farb                      ; pool, which overwrites its bank-0 streams
                 ; 3F-T1: the boot pool is the two select idles only; the hero
                 ; (start_game) and each level's monster kinds (level_enter)
                 ; are generated above them later
                 call gen_idles
                 or   a                         ; CF = 0: save
                 call sel_frt_copy
-                ld   hl, boot6_wait            ; the loading picture + title tune until a key
-                ld   c, BANK_BOOT6             ; (boot block: dead after this, no resident code)
-                jp   farb                      ; boot6_wait ends in jp enter_select (frames dropped)
+                jp   enter_select
 
 ; gen_idles — a new pool (alloc_reset) holding the two heroes' IDLE frames
 ; for the select screen. Boot and every start_game (the alloc mark is the

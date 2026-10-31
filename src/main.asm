@@ -58,7 +58,7 @@ OVL_PASS        EQU 2                   ; tools/build.sh: -DOVL_PASS=1 first (3E
                 TAPE_BLK mode, BANK_COLD3, AY_RESERVE, AY_LEN             ; A8 AY slot (BANK_AY = 3)
                 TAPE_BLK mode, BANK_TSET, B7_CODE, B7_LEN                 ; D3-S2 bank-7 cold code
                 TAPE_BLK mode, BANK_TSET, TSET_BASE, B7D_LEN              ; level tilesets (w2a: dedup) + data7 (w2b), one block
-                TAPE_BLK mode, BANK_TEXT, TEXT_ADDR, TEXT_LEN             ; D3-TX text block (bank 0 bottom)
+                TAPE_BLK mode, BANK_TEXT, TEXT_ADDR, TEXT_TAPE_LEN        ; D3-TX text block (bank 0 bottom) + INSTR streams (boot only)
                 TAPE_BLK mode, BANK_BOOT6, BOOT6_ADDR, BOOT6_TAPE_LEN     ; 3E-T1 boot block + SRC6 sources (bank 6, below R6)
                 TAPE_BLK mode, BANK_R6, R6_ADDR, R6_USED                  ; R6 region (bank 6 top, permanent)
     ENDM
@@ -232,6 +232,27 @@ text_img:
 text_img_end:
 TEXT_LEN        EQU text_img_end - text_img
 POOL_START      EQU text_img_end               ; alloc_reset: first pool byte in bank 0
+; INSTR-BUILD: the HOW TO PLAY streams (page 1, page 2, then the overlay code:
+; the code stream is last so no address an overlay reads depends on a packed
+; size — instr_main reaches page 2 as "past page 1"). Boot only: on the text
+; tape block (TEXT_TAPE_LEN), read by boot6_wait -> ovl_run before gen_idles,
+; then the boot pool overwrites them (POOL_START is unchanged: 0 pool bytes).
+instr_p1_zx0:
+    IF OVL_PASS == 2
+                INCBIN "instr1.zx0"
+    ENDIF
+instr_p2_zx0:
+    IF OVL_PASS == 2
+                INCBIN "instr2.zx0"
+    ENDIF
+instr_zx0:
+    IF OVL_PASS == 2
+                INCBIN "instr.zx0"
+    ENDIF
+instr_zx0_end:
+INSTR_P1_ZX0    EQU instr_p1_zx0
+TEXT_TAPE_LEN   EQU instr_zx0_end - TEXT_ADDR
+                ASSERT instr_p1_zx0 == POOL_START && instr_zx0_end <= tap_loader
                 ASSERT text_base == TEXT_ADDR && TEXT_LEN == TEXT_PACKED
                 ASSERT (tx_entries & $FF) == 0         ; w2d: tk_get's B = tx_entries >> 8
                 ASSERT text_img_end <= tap_loader      ; the BASIC loader scratch ($E000, page 0)
@@ -1197,6 +1218,38 @@ ovl_raw_ft:
                 ASSERT $ - ovl_raw_ft == FID_COUNT * FT_LEN && FT_LEN == 4
                 SAVEBIN "build/ovl/ft.bin", ovl_raw_ft, FID_COUNT * FT_LEN
                 DISPLAY "GAME frame_tab stream (MEM-FT): ", /D, FID_COUNT * FT_LEN, " B raw -> packed ", /D, ftz_zx0_end - ftz_zx0, " B in bank 2 (boot6_ft -> the FRT rows)"
+;------------------------------------------------------------------------------
+; INSTR-BUILD: the HOW TO PLAY overlay (instr_ovl.asm at INSTR_ORG) + its two
+; page images (tools/instr_pack.py, DISPed at INSTR_DATA = right after the code);
+; streams in bank 0 after the text block ("TEXT" above), boot only.
+;------------------------------------------------------------------------------
+ovl_raw_instr:
+                DISP INSTR_ORG
+instr_ovl_main:
+                INCLUDE "instr_ovl.asm"
+instr_ovl_end:
+                ENT
+INSTR_OVL_LEN   EQU instr_ovl_end - instr_ovl_main
+INSTR_DATA      EQU instr_ovl_end
+                SAVEBIN "build/ovl/instr.bin", ovl_raw_instr, INSTR_OVL_LEN
+ovl_raw_instr1:
+                DISP INSTR_DATA
+instr_p1_img:
+                INCLUDE "../build/text/instr_p1.inc"
+instr_p1_end:
+                ENT
+ovl_raw_instr2:
+                DISP INSTR_DATA
+instr_p2_img:
+                INCLUDE "../build/text/instr_p2.inc"
+instr_p2_end:
+                ENT
+INSTR_P1_LEN    EQU instr_p1_end - instr_p1_img
+INSTR_P2_LEN    EQU instr_p2_end - instr_p2_img
+                ASSERT instr_p1_end <= GEN_SCRATCH + GEN_SCRATCH_LEN && instr_p2_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
+                SAVEBIN "build/ovl/instr1.bin", ovl_raw_instr1, INSTR_P1_LEN
+                SAVEBIN "build/ovl/instr2.bin", ovl_raw_instr2, INSTR_P2_LEN
+                DISPLAY "GAME HOW TO PLAY overlay (INSTR-BUILD, boot only): code ", /D, INSTR_OVL_LEN, " + page 1 ", /D, INSTR_P1_LEN, " / page 2 ", /D, INSTR_P2_LEN, " B raw at ", /H, INSTR_ORG, " (", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p1_end, " / ", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p2_end, " left); packed ", /D, instr_zx0_end - instr_p1_zx0, " B in bank 0 after the text (", /H, instr_p1_zx0, "..", /H, instr_zx0_end - 1, ")"
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000
 
