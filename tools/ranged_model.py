@@ -30,7 +30,7 @@ ROWS = {
     14: (8, 2, RWF_AWAY | RWF_SPELL, 6, 1, DARK_DHC, FEAR3, "nbolt_fly1"),     # Necromancer
     29: (8, 2, RWF_AWAY | RWF_SPELL | RWF_PRE, 6, 1, DARK_DHC, FEAR3, "nbolt_fly1"),  # Bone Caller
 }
-ARCHMAGE_ROW = (28, 2, RWF_SPELL | RWF_PRE | RWF_NOREFL | 0x40, 8, 3, DTY_DARK | NODEF, 0, "nbolt_fly1")
+ARCHMAGE_ROW = (28, 2, RWF_SPELL | RWF_NOREFL | 0x40, 8, 3, DTY_DARK | NODEF, 0, "nbolt_fly1")
 ROCK_ATTR = 0x06                                   # the Slinger's rock FX attr (§9.6)
 PF_ROW_DY, RG_REL, CNB_MAX, PF_IMPT, FX_NONE = 2, 2, 8, 2, 0xFF
 STS_HOLD, STS_MIND, MIND_FEAR, IMMF_FEAR = 0x03, 0x0C, 0x04, 0x08

@@ -264,9 +264,8 @@ walk3, walk4` (even slots WK4, odd WK0). Pool need +480 B on every level with th
 Vampire D3 D6 D8. Slack per level after (`POOL_CAP` 32,269), Warrior / Mage:
 D1 8,077 / 11,213, D2 8,621 / 11,757, D3 4,077 / 7,277, **D4 2,285 / 5,357**, D5 7,789 / 10,861,
 D6 2,765 / 5,965, D7 2,861 / 6,061, D8 2,445 / 5,645 (before, 15 pages: worst D4 3,034 / 6,106).
-**Pending (T11): the nun Archmage** (~393 B packed, 2,080 B pool on D8, 4 ids) will need roughly one more
-SRC6 page (-256 B pool every level): D8 Warrior slack then ~2,445 - 2,080 - 256 = **~109 B** (D8 becomes
-the worst level; Mage ~3,309). `tests/walk_feet.py`: the Vampire XFAIL is gone; `vp_move` measures its
+**Done (3F-T11): the nun Archmage** (392 B packed, 2,080 B pool on D8, 4 ids) went to the **bank-1**
+sources, not SRC6 (SRC6 cannot grow past 15 pages: the boot block below it; section "3F-T11"). `tests/walk_feet.py`: the Vampire XFAIL is gone; `vp_move` measures its
 sloped boots over the bottom 3 rows (others: bottom row).
 
 **ANIM-IMPORT2 (2026-10-30):** `SRC6_PAGES` default **15** (`$C900..$D7FF`, 3,840 B): + `K_VAMPIRE` (the
@@ -4536,3 +4535,36 @@ records x 3 entries, the Skeleton-fails / Rat-retry path; tests/trickle.py T2), 
 Budget `trickle` / `otrickle` (pmix / omix + a forced spawning check after every turn): worst ticks = the base
 scenarios' (the check tick is far below them): the check (idle INPUT) tick 87.2k T worst incl. its
 render / panel item, 8 / 9 checks all spawning; full budget.py PASS (worst gated walarm 122,177, lcastf 121,473).
+
+## 3F-T11 the nun Archmage (`feat/3f-t11-nun`; plan.md "NUN ARCHMAGE APPROVED", ART13c option D)
+
+The Archmage's OWN side-view frames (was the Necro's walk + `U_NCAST`): `nun_walk1` WK0 (rest), `nun_walk2`
+WK4, `nun_cast` STA, `nun_hurt` STA, 24x40 bottom-anchored on the 6-row body, ink `$04` (`KT_ATTR`), from
+`assets/gfx/concept/art13/grid` (`tools/gen_art13c_nun.py`) via `tools/import_anim40.py nun` ->
+`assets/gfx/sprites40/nun_*.asm` (listed in `index40.asm` + `index_3f.asm`). `frames.asm` group
+`KFID_ARCH` (FRM kind `K_ARCHMAGE`, after the Death Knight: the shared NBOLT / CLIMBH / FX fids shift +4);
+`gu_tab[K_ARCHMAGE]` = `KFID_ARCH, KFCNT_ARCH`; `pool_gmap` Archmage = its own unit + `U_DEADR` + `U_NBOLT`
+(no `U_NCAST`); seq block `ksm_am` (`MOVECYC2 walk2, walk1`; ATTACK = rest 3 + cast 2 + IMPACT; HURT =
+`nun_hurt`; DEATHSEQ nun_hurt -> `small_corpse`; not a climber). `rd_tab` Archmage row: `RWF_PRE` cleared
+(plan.md "T11 NOTE"; its own summon belongs to the Archmage AI, `rk_tab[K_ARCHMAGE]` still 0).
+
+**Placement: bank 1, not SRC6.** The boot block (2,043 B) is ORGed just below `SRC6_ADDR` and must start
+at >= `$C000`: SRC6 can grow to 15 pages at most (`$C800`; +256 B, 275 free) — short of the 392-B block;
+16 pages fail `boot6_code >= BANK_WINDOW`. Bank 1 had 441 B: the `K_ARCHMAGE` block (1 ZX0 block, 4 frames,
+960 raw -> 392 B) costs **0 pool**. Consequence for the **Pharaoh** (ART16 A own frames, +413 B packed):
+no home left without a new lever (bank 1 49 B, SRC6 +1 page = 275 B; e.g. move the boot block, or
+move ~140 B of SRC6 blocks out) -> per plan it SHARES the Mummy frames unless such a lever is approved.
+
+| Region (`-DDEBUG_KIT=0`) | main `d1d4d03` | after 3F-T11 | Δ |
+|---|---|---|---|
+| `FID_COUNT` / `FRT_MAX` | 140 / 144 | **144 / 144 (0 spare)** | +4 |
+| pool need / slack D8 Warrior (worst) | 29,081 / 3,680 | **31,241 / 1,520** | +2,160 (2,080 + the bank 0 -> 4 straddle 25 -> 105; D8 Warrior now reaches bank 6) |
+| pool need / slack D8 Mage | 26,073 / 6,688 | **28,153 / 4,608** | +2,080 |
+| pool D1..D7 (both heroes), `POOL_CAP` 32,761 | — | unchanged | 0 (D4 Warrior 28,601 next worst, slack 4,160) |
+| bank 1 free | 441 | **49** | −392 (the `K_ARCHMAGE` block) |
+| SRC6 free (14 pages) | 19 | 19 | 0 |
+| R6 free | 502 | **487** | −15 (`sqm_zx0` 485 -> 500 B; masters 831 -> 869 raw, 48 left) |
+| low RAM spare (after the descriptor reserve) | 41 (reserve 20) | **41** (reserve 0) | 0 (4 descriptors fill the reserve) |
+| seq cache D8 | 5 blocks 211 of 288 | **6 blocks 239 of 288** | +28 (`ksm_am`; worst need 253 unchanged) |
+| bank 2 / bank 3 / bank 7 | 28 / 5 / 49 | unchanged | 0 |
+

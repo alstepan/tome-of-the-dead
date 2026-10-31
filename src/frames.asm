@@ -155,7 +155,7 @@ POOL_MONSTERS = POOLACC                 ; the original six kinds (the PROTO fixt
 
 ; 3F-T13: the 3F-A1 lean frames (game.md §9.1 / §9.7 R3-R5). Packed sources in the
 ; bank-6 SRC6 region (tools/zx0_sources.py SRC6_KINDS). HURT = the $42 flash (no
-; frame); the Vampire / Archmage / Bone Caller draw the Necro frames, the Archer /
+; frame); the Vampire / Bone Caller draw the Necro frames (3F-T11: the Archmage its own), the Archer /
 ; Sniper the Skeleton's U_SKARCH (pool6.asm pool_gmap). WALK CYCLE of the 2-frame
 ; walkers (docs/conventions.md "Walk cycles"): MOVECYC2 walk2, walk1 — WALK1 (the
 ; rest pose) sits in the ODD slot, drawn cell-aligned like every rest / attack /
@@ -186,7 +186,7 @@ KFID_ORC = FCTR
                 FRM orc_hurt,       K_ORC, 24, STA
 KFCNT_ORC = FCTR - KFID_ORC
                 ; 3F-T13bc: the Necro frames split into walk / cast groups (units K_NECRO =
-                ; walk1..4, U_NCAST: the Necro / Archmage / Bone Caller walk + cast; ANIM-IMPORT2 (4):
+                ; walk1..4, U_NCAST: the Necro / Bone Caller walk + the Necro's cast; ANIM-IMPORT2 (4):
                 ; the Vampire has its own set below). Walk B4 since ANIM-IMPORT (below). Order
                 ; walk1..4, cast (packs best: ART3 note)
 KFID_NECRO = FCTR
@@ -195,7 +195,7 @@ KFID_NECRO = FCTR
                 FRM necro_walk3,    K_NECRO, 24, WK4
                 ; ANIM-IMPORT item 3: walk B4 = MOVECYC4 walk2, walk4, walk3, walk1 (ART3, as the
                 ; Mummy): walk4 = the passing pose in an odd slot (WK0). ANIM-IMPORT2 (3): the
-                ; ART12 V2 bone caster at 40 px (same flags / cycle; Archmage, Bone Caller share it)
+                ; ART12 V2 bone caster at 40 px (same flags / cycle; the Bone Caller shares it)
                 FRM necro_walk4,    K_NECRO, 24, WK0
 KFCNT_NECRO = FCTR - KFID_NECRO
 KFID_NCAST = FCTR
@@ -235,6 +235,16 @@ KFID_DKNIGHT = FCTR
                 FRM dk_cleave,      K_DKNIGHT, 24, STA
                 ; 3F-T13bc: dk_block retired (a parry = the rest pose + the RC_PARRY flash, anim)
 KFCNT_DKNIGHT = FCTR - KFID_DKNIGHT
+                ; 3F-T11 (NUN ARCHMAGE APPROVED, user 2026-10-30; ART13c option D): the Archmage's
+                ; OWN side-view set (was the Necro walk + cast): MOVECYC2 walk2, walk1 (walk1 = rest,
+                ; WK0 in the odd slot), CAST, HURT; no frontal frame. Sources in BANK 1 (not SRC6:
+                ; SRC6 can grow one page at most, the boot block sits below it; memory-map "3F-T11")
+KFID_ARCH = FCTR
+                FRM nun_walk1,      K_ARCHMAGE, 24, WK0
+                FRM nun_walk2,      K_ARCHMAGE, 24, WK4
+                FRM nun_cast,       K_ARCHMAGE, 24, STA
+                FRM nun_hurt,       K_ARCHMAGE, 24, STA
+KFCNT_ARCH = FCTR - KFID_ARCH
                 ; shared units with no kind of their own (G_* = zx0 block groups; defs.asm BH_G_*)
                 ; CORPSE-ASHES: dead_humanoid (G_DEADH) retired: the humanoids draw small_corpse
 KFID_NBOLT = FCTR                       ; the Necro / Archmage bolt (FX-style: cell-aligned, body 8)

@@ -53,7 +53,7 @@ PH_INK = "#D7D700"
 SRC6_FREE = 57                                      # B free in the 16 SRC6 pages (2390dec)
 POOL_CAP = 32269
 NEED = {"D4 Warrior": 30240, "D4 Mage": 27168, "D5 Warrior": 24736, "D5 Mage": 21664}
-FID_USED, FRT_MAX = 140, 144
+FID_USED, FRT_MAX = 144, 144
 
 
 # ===========================================================================

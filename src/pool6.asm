@@ -28,7 +28,7 @@
 ; GENERATION MAP (pool_gmap; 3F-T13: EVERY matching record applies, was the
 ; first): records DB kind, u1, u2 (u2 = PG_NONE: none); a kind with records
 ; generates their units INSTEAD of its own unit (Skeleton = U_SKARCH +
-; U_SKCLIMB + U_SKREST + U_DEADR, Archer = U_SKARCH + U_SKCLIMB + U_DEADR, Vampire / Archmage = the Necro's,
+; U_SKCLIMB + U_SKREST + U_DEADR, Archer = U_SKARCH + U_SKCLIMB + U_DEADR, Archmage = its own + U_DEADR + U_NBOLT (3F-T11),
 ; Necro = its own + U_DEADR + U_NBOLT: two records; CORPSE-ASHES: U_DEADR = THE
 ; monster corpse of every kind but the Bat / Slime / Ghost). Tier rows are never in
 ; LP_KINDS / LP_BOSS (spawns take the base's frames, game.md §9.6), so they
@@ -341,7 +341,7 @@ gu_tab:
                 GU   KFID_NECRO, KFCNT_NECRO                   ; K_NECRO = walk1..4 (+ U_NCAST, U_DEADR, U_NBOLT, U_CLIMBH)
                 GU   KFID_OGRE, KFCNT_OGRE                     ; K_OGRE
                 GU   KFID_DKNIGHT, KFCNT_DKNIGHT               ; K_DKNIGHT
-                GU   KFID_NECRO, KFCNT_NECRO                   ; K_ARCHMAGE (the Necro's frames)
+                GU   KFID_ARCH, KFCNT_ARCH                     ; K_ARCHMAGE (3F-T11: the nun's own walk1/2 + cast + hurt)
                 ; the 12 tier rows (18..29) name their BASE kind's unit (same frames, 0 pool; never
                 ; in LP_KINDS / LP_BOSS, so never generated as a unit of their own)
                 GU   KFID_RAT, KFID_RATDEAD - KFID_RAT         ; K_GIANT_RAT
@@ -368,7 +368,7 @@ U_DEADR         EQU K_MAX + 2
                 GU   KFID_RATDEAD, 1                           ; small_corpse: CORPSE-ASHES, every monster but Bat / Slime / Ghost
                 ; CORPSE-ASHES: U_DEADH (dead_humanoid) retired; the later units renumbered
 U_NBOLT         EQU K_MAX + 3
-                GU   KFID_NBOLT, KFCNT_NBOLT                   ; nbolt_fly1/2 + hit (Necro, Archmage)
+                GU   KFID_NBOLT, KFCNT_NBOLT                   ; nbolt_fly1/2 + hit (Necro, Bone Caller, Archmage)
 U_ARROWM        EQU K_MAX + 4
                 GU   FID_arrow_fly1, 2                         ; Mage extra on Archer levels (D4 / D5 / D7)
 U_DAGM          EQU K_MAX + 5
@@ -376,7 +376,7 @@ U_DAGM          EQU K_MAX + 5
 U_CLIMBH        EQU K_MAX + 6
                 GU   KFID_CLIMBH, 2                            ; 3F-T13bc: the shared humanoid climb pair
 U_NCAST         EQU K_MAX + 7
-                GU   KFID_NCAST, 1                             ; 3F-T13bc: necro_cast (Necro, Archmage)
+                GU   KFID_NCAST, 1                             ; 3F-T13bc: necro_cast (Necro, Bone Caller)
                 ; ANIM-IMPORT2: U_VBITE retired (vamp_bite is in the Vampire's own unit)
 U_SKCLIMB       EQU K_MAX + 8
                 GU   KFID_SKCLIMB, KFCNT_SKCLIMB               ; Skeleton climb1/2 (Skeleton, Archer, Sniper)
@@ -400,8 +400,8 @@ pool_gmap:
                 DB   K_GOBLIN,   K_GOBLIN,   U_DEADR   ; CORPSE-ASHES: the Goblin's DEAD is the shared corpse
                 DB   K_RAT,      K_RAT,      U_DEADR
                 DB   K_SPIDER,   K_SPIDER,   U_DEADR
-                ; 3F-T13bc: the Necro walk is shared (K_NECRO unit = walk1..4: Necro / Archmage /
-                ; Bone Caller), the Necro / Archmage add the cast; climbers (Orc, Necro, Mummy) add the
+                ; 3F-T13bc: the Necro walk is shared (K_NECRO unit = walk1..4: Necro / Bone Caller),
+                ; the Necro adds the cast (3F-T11: the Archmage has its own unit); climbers (Orc, Necro, Mummy) add the
                 ; shared climb pair U_CLIMBH (the Archer family uses the Skeleton's U_SKCLIMB) (once a level: dedup per unit)
                 DB   K_VAMPIRE,  K_VAMPIRE,  U_DEADR   ; ANIM-IMPORT2: own set (was Necro walk + U_VBITE)
                 DB   K_VAMPIRE,  K_VBAT,     PG_NONE   ; 3F-T9: its bat form (the Bat's first 2 frames; on a
@@ -417,8 +417,8 @@ pool_gmap:
                 DB   K_NECRO,    U_CLIMBH,   PG_NONE
                 DB   K_OGRE,     K_OGRE,     U_DEADR
                 DB   K_DKNIGHT,  K_DKNIGHT,  U_DEADR
-                DB   K_ARCHMAGE, K_NECRO,    U_DEADR
-                DB   K_ARCHMAGE, U_NBOLT,    U_NCAST
+                DB   K_ARCHMAGE, K_ARCHMAGE, U_DEADR   ; 3F-T11: the nun (walk1/2, cast, hurt)
+                DB   K_ARCHMAGE, U_NBOLT,    PG_NONE   ; its Death Bolt (rd_tab row RW_FX)
                 DB   PG_NONE
 pool_gmap_end:
 PGMAP_N         EQU (pool_gmap_end - pool_gmap - 1) / 3
