@@ -1,0 +1,28 @@
+# ART16 Ogre / Golden Pharaoh side-view options — costs (tools/gen_art16.py).
+# pool = src/defs.asm FRM formula (both facings, one shift per flag); packed = zx0 with
+# the zx0_sources.partition rule, today's frames from zx0_pack.game_frames (40-px override).
+# SRC6: 57 B free of 16 pages; each further page costs 256 B of POOL_CAP on EVERY level.
+# POOL_CAP 32269; slack today: D4 Warrior 2,029, D4 Mage 5,101, D5 Warrior 7,533, D5 Mage 10,605
+
+OGRE (drop-in: same 4 fids / sizes / flags / ax; pool 3456 B unchanged on D4)
+  today  packed 619 B
+  A CLUB BRUTE       packed 615 B  delta -4 B SRC6  (saves)
+  B WARLORD CLEAVER  packed 642 B  delta +23 B SRC6  (fits the free bytes)
+  C KNUCKLE DRAGGER  packed 639 B  delta +20 B SRC6  (fits the free bytes)
+
+GOLDEN PHARAOH: today = the K_MUMMY frames + the gold glow attr (boss7 ai_guard: K_MUMMY |
+LEK_GOLD). A side-view Pharaoh that differs from the Mummy NEEDS ITS OWN FRAMES:
+  5 fids (walk1..4 + attack, the Mummy's slots / flags / B4 cycle): pool +2880 B on D5 only
+    (D5 slack Warrior 7,533 -> 4,653, Mage 10,605 -> 7,725)
+  frame ids: 140 of FRT_MAX 144 used (4 spare, earmarked for the approved nun Archmage):
+    5 more need FRT_MAX raised (engine: FRT table + kind/frame-group hook for the gold Mummy).
+  lean alt (3 fids walk1/walk2 MOVECYC2 + attack, not drawn): pool +1760 B on D5.
+  today Mummy packed 366 B (unchanged: the Mummy keeps its frames)
+  A NEMES KING       packed 413 B = SRC6 +413 B  -> +2 page(s): POOL_CAP -512 every level (D4 Warrior slack 2,029 -> 1,517)
+  B RISEN LURCHER    packed 443 B = SRC6 +443 B  -> +2 page(s): POOL_CAP -512 every level (D4 Warrior slack 2,029 -> 1,517)
+  C CROWNED SORCERER packed 400 B = SRC6 +400 B  -> +2 page(s): POOL_CAP -512 every level (D4 Warrior slack 2,029 -> 1,517)
+
+ZERO-COST alternative: apply the chosen Pharaoh option to the K_MUMMY frames themselves
+(Mummy and Pharaoh share the new side-view art again, gold = attr only): pool 0, fids 0,
+SRC6 delta = option packed - today Mummy packed: A +47 B, B +77 B (+1 page), C +34 B (free 57 B, shared with the Ogre delta).
+  It changes the approved Mummy V2 look too (user call).

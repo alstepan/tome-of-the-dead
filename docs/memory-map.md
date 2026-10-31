@@ -4439,3 +4439,15 @@ corpse lies on the floor. The transform tick's `R_VIS` hide (fix/vamp-corruption
 | R6 free | 348 | **354** | +6 (`ksm_vb` death 22 → 7 B raw, `sqm_zx0` packed; main + w3: 543 → 537, packing) |
 | seq cache need | 253 | 253 | the K_VBAT block −15 B (not the worst level's) |
 | pool (every level) | — | 0 | D8 slack 1,785 on main, 2,297 with MEM-RECLAIM w3 (≥ 2,230 kept) |
+
+## ART16 Ogre option A, Club Brute (`feat/3f-ogre-a`; user-approved 2026-10-31; `tools/import_ogre_a.py`)
+
+Drop-in replacement of the four Ogre frames (`ogre_walk1` WK0, `ogre_walk2` WK4, `ogre_raise` / `ogre_slam` STA; same
+FIDs, sizes 32x48 / 40x48 for the slam, flags, ax 0, `og_*` sequences untouched). Source grids
+`assets/gfx/concept/art16/grid/ogre_<f>_a.grid` (`tools/gen_art16.py`) -> `assets/gfx/sprites/grid/ogre_<f>.grid` ->
+`gfx_convert --layout native` -> `assets/gfx/sprites/ogre_<f>.asm`. Only the Ogre; the Pharaoh options are not imported.
+
+| Region (`-DDEBUG_KIT=0`) | before | after | Δ |
+|---|---|---|---|
+| SRC6 free (K_OGRE block packed 619 → 615 B) | 15 | **19** | −4 B used (3,565 of 3,584) |
+| pool (every level) | — | 0 | same frame sizes/flags: D8 worst 14,880, slack 2,297 |
