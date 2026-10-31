@@ -123,6 +123,7 @@ E = dict(KIND=0, ROOM=1, FLAGS=2, X=3, Y=4, HP=5, MAXHP=6, AIDIR=7, POT=8,
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING, EF_WALKIN, EF_PENDING = 1, 2, 4, 8, 16, 32, 64
 
 GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION = 2, 3, 4, 5, 6
+GS_ANYKEY = 8                      # boot6_wait: the loading picture waits for a key
 
 # keys: (mirror row index, bit)
 KEYS = {
@@ -362,8 +363,26 @@ class Proto:
     # the setting, so it stays ALL ON until then). None = leave the boot default (snd4a / sound / snd1 / snd3).
     snd_mode = None
 
+    def boot_key(self):
+        """At the boot's 'PRESS ANY KEY' wait (boot6_wait, GS_ANYKEY): let it see every
+        key released, tap ENTER (down 2 frames; the menu swallows it) and release.
+        The one place the harness answers it (wait_state(GS_SELECT) -> boot())."""
+        self.wb("INPUT_SRC", 1)                  # injected matrix, not the host's keyboard
+        self.release()
+        self.tick(2)
+        self.hold("ENTER")
+        self.tick(2)
+        self.release()
+        self.tick(2)                             # the menu sees the release (ENTER and 1 share a bit)
+
     def wait_state(self, gs, max_ticks=600):
-        ok = self.until(lambda: self.rb("GAME_STATE") == gs, max_ticks)
+        def pred():
+            g = self.rb("GAME_STATE")
+            if g == GS_ANYKEY and gs == GS_SELECT:
+                self.boot_key()
+                g = self.rb("GAME_STATE")
+            return g == gs
+        ok = self.until(pred, max_ticks)
         if ok and gs in (GS_PLAYING, GS_SELECT) and self.snd_mode is not None:
             self.wb("SND_MODE", self.snd_mode if gs == GS_PLAYING else 3)
         return ok

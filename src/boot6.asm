@@ -44,9 +44,8 @@ boot6_init:
                 ld   a, ISR_VEC_TABLE >> 8
                 ld   i, a
                 im   2
-                xor  a
-                out  (PORT_BORDER), a
-                ld   (INPUT_SRC), a
+                xor  a                         ; (the border and the screen are the loading
+                ld   (INPUT_SRC), a            ; picture's: boot6_wait leaves them alone)
                 ld   (JOY_MODE), a             ; C3-1: JM_KEYS until the menu says
                 ld   (JOY_MIRROR), a           ; otherwise; nothing held
                 ld   (STICK), a
@@ -86,6 +85,9 @@ boot6_init:
                 ASSERT MUS_SHOT == MUS_REQ + 1 && MUS_CUR == MUS_STATE + 1
                 ld   a, SND_ALL                ; game.md §3.6: ALL ON per power-on
                 ld   (SND_MODE), a             ; (only boot writes it; new_game never)
+                ld   a, MUS_LAMENT             ; the title tune from the first EI: it plays over
+                ld   (MUS_REQ), a              ; the loading picture; menu_run asks for the same
+                                               ; id = no restart
                 ld   hl, RNG_SEED
                 ld   (RNG_STATE), hl
                 ld   a, 1
@@ -102,8 +104,6 @@ boot6_init:
                 ld   de, KEYTAB
                 ld   bc, KEYTAB_N * KEYTAB_STRIDE
                 ldir
-                ld   a, ATTR_HUD
-                call clear_screen
                 ld   hl, P_ENTITIES            ; nothing drawn / alive yet
                 ld   de, P_ENTITIES + 1
                 ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1
@@ -188,6 +188,45 @@ boot6_ft:
                 jr   nz, .r
                 ret
                 ASSERT FID_COUNT >= 1 && FID_COUNT <= 255
+
+;------------------------------------------------------------------------------
+; boot6_wait — farb from boot after the boot pool (gen_idles): the loading
+; picture (S2d SCREEN$, still on the bank-5 screen: boot clears nothing) stays up
+; with the title tune playing until a key (user 2026-10-30). "PRESS ANY KEY" on
+; rows 22-23 (blank in the art, attrs 7 = white on black). A key counts only
+; after every key was released once (the ENTER of LOAD "" may still be down);
+; no timeout; Kempston is not read (input_tick, GAME_STATE != GS_PLAYING). The key
+; is swallowed without code: menu_run primes its edge detector from the matrix, so
+; a key still down gives no edge. menu_frame = the frame sync + the select_tick
+; probe + the seed mixing. GS_ANYKEY is test-observable (tests/game_lib.py).
+; Does not return: ends in enter_select (the stack is back at its base).
+;------------------------------------------------------------------------------
+boot6_wait:
+                ld   a, GS_ANYKEY
+                ld   (GAME_STATE), a
+                ld   hl, bw_text
+                ld   bc, BW_ROW << 8 | BW_COL
+                call print_str
+.rel:           call bw_down                   ; all released once
+                jr   nz, .rel
+.prs:           call bw_down
+                jr   z, .prs
+                ld   sp, WORKSTORE_TOP         ; drop farb's frame (jp from boot, no return:
+                jp   enter_select              ; bank 2 trampoline -> bank 3; saves boot 3 B)
+bw_down:        call menu_frame                ; one frame; then Z = no key down:
+                ld   hl, KBD_MATRIX            ; AND the 8 rows (a down key = a low bit)
+                ld   b, KBD_MATRIX_LEN
+                ld   a, $FF
+.l:             and  (hl)
+                inc  l
+                djnz .l
+                or   $E0                       ; bits 5-7 (EAR) are not keys
+                inc  a                         ; Z = all ones = nothing down
+                ret
+bw_text:        DB   "PRESS ANY KEY", 0
+BW_ROW          EQU 22
+BW_COL          EQU (32 - 13) / 2
+                ASSERT (KBD_MATRIX >> 8) == ((KBD_MATRIX + KBD_MATRIX_LEN - 1) >> 8)
 
 ;==============================================================================
 ; boot-only data (read in place by the two routines above)
