@@ -760,8 +760,10 @@ def main():
         # 3F-T8: R6_GROW 10->13 leaves at most 16 SRC6 pages: the Ogre's and the Mummy's blocks stay in
         # banks 1 / 3 too (3,721 of 4,096 B)
         # ANIM-IMPORT2: + the Vampire's own blocks (675 B) stay in banks 1 / 3 as well
+        # MEM-RECLAIM w4: R6_GROW 13 -> 14 leaves at most 15 SRC6 pages (SRC6 at $C800); the set is
+        # 3,644 of 3,840 B
         s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT", "K_OGRE", "K_MUMMY", "K_VAMPIRE"}) | {"K_WIZARD"}))
-        variants.append(("src6", REPO, kit + ["SRC6_PAGES=16", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
+        variants.append(("src6", REPO, kit + ["SRC6_PAGES=15", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
                          {"SRC6_KINDS": s6}))
     if a.baseline:                 # (an older checkout ignores the unknown define)
         variants.append(("baseline", os.path.abspath(a.baseline), kit, None))

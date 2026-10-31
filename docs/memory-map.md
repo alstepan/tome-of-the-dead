@@ -4484,3 +4484,20 @@ every depth, Mage D1..D8 25 / 89 / 41 / 281 / 153 / 41 / 281 / 217 (allowance wa
 pushes a level past the end of bank 4 (linear 30,457 B with today's text block) wastes the
 bank-4 tail, up to one variant − 1 (≤ 575 B). Plan new art as `slack − 575` on levels that will
 cross (D8 + T11's 2,080 B does: 29,017 + 2,080 > 30,457).
+
+**R6_GROW 13 → 14** (separate commit, paid by MEM-PS2): R6 `$D700..$FFFF` (`R6_LEN` 10,496), SRC6
+`$C900..$D6FF` (14 pages, unchanged content, 19 free), boot block `$C105..$C8FF`, bank-6 pool
+`$C000..$C8FF` (2,304 B). `tests/zx0_pool.py` src6 variant: 15 SRC6 pages (the most `$C800` allows;
+its set 3,644 of 3,840 B).
+
+| Region (`-DDEBUG_KIT=0`) | main `c60488a` | after w4 | main + T12 (479c664) + w4 |
+|---|---|---|---|
+| R6 free | 537 | **793** | **502** (T12 −291) |
+| `POOL_CAP` | 33,017 | 32,761 | 32,761 |
+| pool slack D4 Warrior (need) | 2,777 (30,240) | **4,160** (28,601) | 4,160 |
+| pool slack D8 Warrior, worst (need) | 2,297 (30,720) | **3,680** (29,081) | 3,680 |
+| pool slack D8 Mage | 5,497 | 6,688 | 6,688 |
+| PROTO 6 kinds static / sim | 5,529 / — | 5,273 / 6,912 | — |
+
+T11 check (D8 +2,080 B): 29,017 + 2,080 = 31,097 crosses into bank 6 (bank-4 tail waste ≤ 575):
+worst need 31,097 + 575 + 64 = 31,736 ≤ 32,761 (1,025 B spare even then).

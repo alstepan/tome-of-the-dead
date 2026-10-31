@@ -42,7 +42,7 @@ BANK_R6         EQU BANK_POOL2
 ; 3F-T2 (MEM-3F): + R6_GROW pages from the 3F-T1 pool slack (27 -> 27 + R6_GROW
 ; pages): the kind sequence masters, the generation-unit table, the seq cache
 ; loader, and >= 1.5 KB free for 3F code.
-R6_GROW         EQU 13                  ; 3F-T8: +3 pages (bosses: grate / guard / post / glow / SLAM); 3F-T7: 8 -> 10
+R6_GROW         EQU 14                  ; MEM-RECLAIM w4: +1 page for T11 (paid by MEM-PS2's exact pool need); 3F-T8: +3 pages (bosses: grate / guard / post / glow / SLAM); 3F-T7: 8 -> 10
 R6_LEN          EQU (27 + R6_GROW) * 256   ; was $1B00 (27 pages, 2026-10-21)
 R6_ADDR         EQU $10000 - R6_LEN ; $DD00
                 ASSERT (R6_ADDR & $FF) == 0
