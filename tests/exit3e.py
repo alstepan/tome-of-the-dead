@@ -257,6 +257,28 @@ def run(h, p, check):
           (r, lines, p.rw("ARANK") & 3, bag()) ==
           (1, ["YOU READ THE WAR TOME", "YOU LEARN POWER STRIKE!"], 1, []), (r, lines, p.rw("ARANK"), bag()))
 
+    # UB2: every book read plays SFX_LEVELUP (learn, rank-up and tome); a scroll read does not.
+    # sfx_req's entry is patched to log each id (tests/sfx5b.py install_log; own log area, the stubs use STUB..+120).
+    LOGB = STUB + 120
+    base = S["sfx_req"]
+    p.wmem(STUB + 160, [0xE5, 0xF5, 0x2A] + w16(LOGB) + [0x77, 0x23, 0x22] + w16(LOGB) + [0xF1, 0xE1,
+           0xF5, 0xC5, 0x47, 0xC3] + w16(base + 3))
+    p.wmem(base, [0xC3] + w16(STUB + 160))
+
+    def sfx_read(arank, item):
+        setbag([item])
+        p.wmem(S["ARANK"], w16(arank))
+        p.wmem(LOGB, w16(LOGB + 2))
+        fx(S["FX_READ"], 0)
+        end = p.rb(LOGB) | p.rb(LOGB + 1) << 8
+        n = end - LOGB - 2                    # (read_memory with a length of 0 reads a default span)
+        return (list(z.read_memory(LOGB + 2, n)) if n else []), p.rw("ARANK") & 0x3FF
+
+    LU = S["SFX_LEVELUP"]
+    ids = [sfx_read(0, "BOOK"), sfx_read(1, "BOOK"), sfx_read(0x3FF, "BOOK"), sfx_read(0, "S_ENCHANT")]
+    check("UB2 SFX_LEVELUP once per book read: learn, rank-up, tome (ARANK unchanged); none for a scroll",
+          ids == [([LU], 1), ([LU], 2), ([LU], 0x3FF), ([], 0)], ids)
+
     # ---- T traps ------------------------------------------------------------------------
     def trap(c, typ=DART):
         p.wmem(TL, [room | TS1, c | (typ << 5)] + [0] * 10 + [1])

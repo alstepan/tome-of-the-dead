@@ -4647,6 +4647,7 @@ non-lock, game.md §9.9 A9b). Rulings recorded in game.md §9.9 A9b (hex at deci
 | Region (`-DDEBUG_KIT=0`) | after 3F-T11b | after the fixes | Δ |
 |---|---|---|---|
 | R6 free release / kit | 159 / 87 | **153 / 81** | −6 (rg_line range test 5, arch_ai row loads 10, −9 removed checks) |
+| R6 free release (UB2) | 153 | **148** | −5 (`fx_book` entry: `ld a, SFX_LEVELUP` / `call sfx_req`) |
 | bank 7 free | 49 | **53** | +4 (`ai_guard`'s dead `K_ARCHMAGE` test) |
 
 ## ART19-IMPORT (`feat/ghost-h`; user 2026-10-31: ART19 Ghost option H "Wisp Shroud")
