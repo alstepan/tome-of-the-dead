@@ -58,13 +58,21 @@ POOL_HERO_MAX = POOL_WIZARD + POOL_FXM
                 ; the level's generation kinds, computed at the end of main.asm
                 ; ("LEVEL POOL NEED") from the assembled lp_dtab / pool_gmap /
                 ; kind_tab / frame_tab / fdesc_tab bytes — exact per frame,
-                ; the same dedup as pool_list. POOL_NEED (= POOL_FIXED +
-                ; POOL_HERO_MAX + POOL_LVL_MAX), its checks and the DISPLAY are
+                ; the same dedup as pool_list. POOL_NEED (MEM-PS2: the simulated
+                ; pool top + POOL_SIM_MARGIN, worst hero x depth), its checks and the DISPLAY are
                 ; defined there (DEFL, final pass only: use nothing above it).
                 ; ANIM-IMPORT2: the select idles are 40 rows (24 x 40 STA, both facings = 480 B
                 ; each, was 576); the straddle allowance stays 6 cols x 48 x 2 (Ogre / DK are 48)
                 ASSERT knight_idle1_cols == 3 && knight_idle1_ax == 0 && wizard_idle_cols == 3 && wizard_idle_ax == 0
 POOL_FIXED      EQU (knight_idle1_h + wizard_idle_h) * 2 * 3 * 2 + 3 * 576   ; select idles + straddle waste
+                ; MEM-PS2: the LEVEL need no longer uses POOL_FIXED's 3 x 576 straddle guess:
+                ; main.asm "LEVEL POOL NEED" replays alloc variant by variant (the real
+                ; session order: idles, hero, class FX, mark, the level's units first-seen)
+                ; -> the exact pool top per hero x depth (skipped bank tails counted), plus
+                ; this documented safety margin; tests/zx0_pool.py checks simulated == the
+                ; real ALLOC_IDX / ALLOC_PTR at every depth, both heroes and PROTO. POOL_FIXED
+                ; stays the PROTO fixture's static (conservative) bound below.
+POOL_SIM_MARGIN EQU 64
                 ; the PROTO rooms (test fixture, proto_start = 1): every original
                 ; monster kind (start_game .gk, K_SKELETON .. K_PROTO_END - 1)
 K_PROTO_END     EQU K_SLIME + 1

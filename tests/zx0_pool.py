@@ -39,8 +39,12 @@ T-states (boot -> first select_tick, select key -> first tick_work).
 3F-T1 "levels" (skip with --no-levels): a knight game descends D2..D8 through
 the real level_descend (DI stub, like tests/gfx_integrity.py); at every depth
 the pool / FRT / allocator == the reference, GEN_OVERFLOW / GEN_TRAP 0, the
-pool top <= the build's POOL_NEED - the straddle allowance bound, and the
+pool top + POOL_SIM_MARGIN <= the build's POOL_NEED, and the
 level_enter cost (stub T) is reported against the 2 s (7.1M T) budget.
+MEM-PS2: the Mage walks D1..D8 too (vs the reference), and at every depth of both
+walks plus a PROTO start per hero x 5 / 6 kinds the real ALLOC_IDX / ALLOC_PTR must
+EQUAL the build's simulated pool top (main.asm PS_*, POOL_LVL_VERBOSE DISPLAY): an
+undercount would let POOL_NEED <= POOL_CAP pass a pool that overflows.
 
 SRC6 spike: bank 6 is compared up to POOL6_END (= SRC6_ADDR); the SRC6 region
 SRC6_ADDR..R6_ADDR must equal the snapshot at every point (never written).
@@ -101,11 +105,14 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # +256 (the Spider levels); POOL_CAP unchanged (SRC6 +163 B, 57 free of 16 pages).
 # 3F-T9 VAMPIRE BAT FORM (K_VBAT = the Bat's flapup / glide, 2 MOT frames, 448 B each, via pool_gmap
 # K_VAMPIRE; on D3 merged into the Bat's unit by pl_unit): both heroes D6 D8 +896; D8 is the worst level now.
+# MEM-PS2: the need is the SIMULATED pool top (main.asm PS_*: alloc replayed variant by variant, the real
+# skipped bank tails) + POOL_SIM_MARGIN 64, no longer + POOL_FIXED's 3 x 576 straddle guess: every need
+# -1,728 + 64 + the level's real straddle waste (Warrior 25 B everywhere; Mage D1..D8 25 89 41 281 153 41 281 217).
 LEVEL_NEED = {
-    (0, 1): 24192, (0, 2): 23904, (0, 3): 28192, (0, 4): 30240,
-    (0, 5): 24736, (0, 6): 30400, (0, 7): 29408, (0, 8): 30720,
-    (1, 1): 21056, (1, 2): 20768, (1, 3): 24992, (1, 4): 27168,
-    (1, 5): 21664, (1, 6): 27200, (1, 7): 26208, (1, 8): 27520,
+    (0, 1): 22553, (0, 2): 22265, (0, 3): 26553, (0, 4): 28601,
+    (0, 5): 23097, (0, 6): 28761, (0, 7): 27769, (0, 8): 29081,
+    (1, 1): 19417, (1, 2): 19193, (1, 3): 23369, (1, 4): 25785,
+    (1, 5): 20153, (1, 6): 25577, (1, 7): 24825, (1, 8): 26073,
 }
 
 
@@ -332,19 +339,59 @@ def scenario_run(r):
     return out, tm
 
 
-def levels_run(r, depths):
-    """3F-T1: knight game, D1 then D2..depths via level_descend -> ({'D<n>': dump}, {T})."""
+def levels_run(r, depths, key="1", pre=""):
+    """3F-T1: knight game ('1'; MEM-PS2: '2' = the Mage, points prefixed pre), D1 then
+    D2..depths via level_descend -> ({'<pre>D<n>': dump}, {T})."""
     out, tm = {}, {}
     r.load()
     r.run_to("select_tick")
-    r.select_hero("1")
+    r.select_hero(key)
     r.wb("SND_MODE", 2)                # SFX only: no stinger to wait for (a DI stub
-    out["D1"] = r.dump()               # would hang in stinger_wait's menu_frame)
+    out[f"{pre}D1"] = r.dump()         # would hang in stinger_wait's menu_frame)
     for d in range(2, depths + 1):
         r.run_to("tick_work")
-        tm[f"level_enter D{d}"] = r.descend(d)
-        out[f"D{d}"] = r.dump()
+        tm[f"{pre}level_enter D{d}"] = r.descend(d)
+        out[f"{pre}D{d}"] = r.dump()
     return out, tm
+
+
+def proto_run(r):
+    """MEM-PS2: a PROTO-fixture game per hero and kind count (proto_start 1 = 5 kinds,
+    3 = + the Slime) -> {(hero, kinds): ALLOC_IDX / PTR / GEN_OVERFLOW / GEN_TRAP} at the
+    first play tick (pool_proto's session done). Each starts from a fresh load (a PROTO
+    session pools over SRC6)."""
+    out = {}
+    for hero, key in ((0, "1"), (1, "2")):
+        for kinds, ps in ((5, 1), (6, 3)):
+            r.load()
+            r.wb("proto_start", ps)
+            r.run_to("select_tick")
+            r.select_hero(key)
+            a = r.z.read_memory(r.S["ALLOC_IDX"], 3)
+            out[(hero, kinds)] = {"alloc": a, "GEN_OVERFLOW": r.rb("GEN_OVERFLOW"),
+                                  "GEN_TRAP": r.rb("GEN_TRAP")}
+    return out
+
+
+def linear_top(S, idx, ptr):
+    """The pool top as main.asm PS_LINEAR: bank 0 from POOL_START, a skipped bank tail used."""
+    return [(ptr - S["POOL_START"]),
+            (0x10000 - S["POOL_START"]) + (ptr - 0xC000),
+            (0x10000 - S["POOL_START"]) + 0x4000 + (ptr - 0xC000)][min(idx, 2)]
+
+
+def sim_check(name, what, S, real, sim, fails):
+    """MEM-PS2: the build's simulated pool top (idx, ptr) must equal the real one; an
+    undercount (simulated < real) would let the ASSERT pass a pool that overflows."""
+    ri, rp = real[0], real[1] | real[2] << 8
+    si, sp = sim
+    ru, su = linear_top(S, ri, rp), linear_top(S, si, sp)
+    ok = (ri, rp) == (si, sp)
+    tag = "" if ok else (" UNDERCOUNT" if su < ru else " (over)")
+    print(f"[{'PASS' if ok else 'FAIL'}] {name} pool sim {what}: real idx {ri} ptr {rp:#06x} "
+          f"({ru:,} B) == simulated idx {si} ptr {sp:#06x} ({su:,} B){tag}")
+    if not ok:
+        fails.append(f"{name}/sim/{what}")
 
 
 def pool6_end(S):
@@ -670,6 +717,15 @@ def reference(S, init, out_run, lv=None):
             if f"D{d}" in lv:
                 r.level(bytes(lv[f"D{d}"]["LP"]))
                 out[f"D{d}"] = r.dump()
+        if "M-D1" in lv:                               # MEM-PS2: the Mage's walk
+            r = Ref(S, init, raw)
+            r.boot()
+            r.game(W, bytes(lv["M-D1"]["LP"]))
+            out["M-D1"] = r.dump()
+            for d in range(2, 9):
+                if f"M-D{d}" in lv:
+                    r.level(bytes(lv[f"M-D{d}"]["LP"]))
+                    out[f"M-D{d}"] = r.dump()
     return out
 
 
@@ -718,13 +774,19 @@ def main():
                 subprocess.run([sys.executable, os.path.join(REPO, "tools/zx0_sources.py")],
                                check=True, stdout=subprocess.DEVNULL)
         print(f"[{name}] built {sna}")
+        sims = {}
         if name == "zx0" and not os.environ.get("ZX0POOL_DEFS"):
             # 3F-D7LEV: the build's per-level pool need (main.asm POOL_LVL_VERBOSE), both heroes
             got = {}
             for d in disp:
-                m = re.search(r"level pool D(\d) hero (\d): .*, (\d+) B; need (\d+)", d)
+                m = re.search(r"level pool D(\d) hero (\d): .*, (\d+) B; need (\d+) of \d+ "
+                              r"\(sim top idx (\d+) ptr (\d+)", d)
                 if m:
                     got[(int(m.group(2)), int(m.group(1)))] = int(m.group(4))
+                    sims[(int(m.group(2)), int(m.group(1)))] = (int(m.group(5)), int(m.group(6)))
+                m = re.search(r"pool sim PROTO kinds (\d) hero (\d): top idx (\d+) ptr (\d+)", d)
+                if m:
+                    sims[(int(m.group(2)), "P" + m.group(1))] = (int(m.group(3)), int(m.group(4)))
             for (hero, dep), want in sorted(LEVEL_NEED.items()):
                 ok = got.get((hero, dep)) == want
                 print(f"[{'PASS' if ok else 'FAIL'}] {name} level need D{dep} "
@@ -743,12 +805,27 @@ def main():
             lv = None
             if name == "zx0" and not a.no_levels:
                 lv, tl = levels_run(r, 8)
+                lvm, tlm = levels_run(r, 8, "2", "M-")     # MEM-PS2: the Mage's walk too
+                for hero, pre in ((0, ""), (1, "M-")):
+                    for d in range(1, 9):
+                        dd = (lv if not hero else lvm)[f"{pre}D{d}"]
+                        ok = dd["depth"] == d
+                        print(f"[{'PASS' if ok else 'FAIL'}] {name} levels {pre}: LVL_DEPTH == {d}")
+                        if not ok:
+                            fails.append(f"{name}/levels/{pre}D{d}-depth")
+                        if not os.environ.get("ZX0POOL_DEFS"):
+                            sim_check(name, f"{('Warrior', 'Mage')[hero]} D{d}", S, dd["alloc"],
+                                      sims.get((hero, d), (-1, -1)), fails)
+                lv.update(lvm)
+                tl.update(tlm)
                 tm.update(tl)
-                for d in range(1, 9):
-                    ok = lv[f"D{d}"]["depth"] == d
-                    print(f"[{'PASS' if ok else 'FAIL'}] {name} levels: LVL_DEPTH == {d}")
-                    if not ok:
-                        fails.append(f"{name}/levels/D{d}-depth")
+                if not os.environ.get("ZX0POOL_DEFS"):
+                    for (hero, kinds), pd in sorted(proto_run(r).items()):
+                        what = f"{('Warrior', 'Mage')[hero]} PROTO {kinds} kinds"
+                        sim_check(name, what, S, pd["alloc"], sims.get((hero, f"P{kinds}"), (-1, -1)), fails)
+                        for k in ("GEN_OVERFLOW", "GEN_TRAP"):
+                            if pd[k]:
+                                fails.append(f"{name}/{what} {k}={pd[k]}")
                 worst = max(v for k, v in tl.items())
                 ok = worst <= 2 * 3546900
                 print(f"[{'PASS' if ok else 'FAIL'}] {name} levels: worst level_enter {worst:,} T "
@@ -771,16 +848,14 @@ def main():
         ref = reference(S, init, out, lv)
         if lv:
             out = dict(out, **lv)
-            # the pool top at every depth vs the build's bound: POOL_NEED minus
-            # the 3 x 576 straddle allowance is the exact byte need (bank 0
-            # starts at POOL_START; a skipped bank tail counts as used)
+            # the pool top at every depth vs the build's bound: MEM-PS2 POOL_NEED = the
+            # worst simulated top + POOL_SIM_MARGIN (bank 0 starts at POOL_START; a
+            # skipped bank tail counts as used); the exact match is sim_check above
             for pt in lv:
                 a = lv[pt]["alloc"]
                 idx, ptr = a[0], a[1] | a[2] << 8
-                used = [(ptr - S["POOL_START"]),
-                        (0x10000 - S["POOL_START"]) + (ptr - 0xC000),
-                        (0x10000 - S["POOL_START"]) + 0x4000 + (ptr - 0xC000)][min(idx, 2)]
-                ok = used <= S["POOL_NEED"] and idx <= 2
+                used = linear_top(S, idx, ptr)
+                ok = used + S["POOL_SIM_MARGIN"] <= S["POOL_NEED"] and idx <= 2
                 print(f"[{'PASS' if ok else 'FAIL'}] {name} {pt} pool top: bank idx {idx}, "
                       f"{used:,} B used of POOL_NEED {S['POOL_NEED']:,} (POOL_CAP {S['POOL_CAP']:,})")
                 if not ok:

@@ -402,10 +402,16 @@ monster kinds** (was: every monster kind, boot-generated).
   the exact bytes `gen_frame` allocates. Read with sjasmplus `{b}`, so they
   are valid only in the last pass: `POOL_LVL_MAX`, `POOL_LVL_WORST`,
   `POOL_NEED` are **DEFL** (in the `.sym`), defined there and used nowhere
-  above (the SRC6 DISPLAY no longer prints the slack). `POOL_NEED =
-  POOL_FIXED (2 × 480 idles since ANIM-IMPORT2, was 2 × 576; + 3 × 576 straddle) + POOL_HERO_MAX +
-  POOL_LVL_MAX`; ASSERTs `POOL_NEED ≤ POOL_CAP` and `POOL_NEED_PROTO ≤
-  POOL_CAP` (`-DPOOL_LVL_VERBOSE=1` DISPLAYs every depth).
+  above (the SRC6 DISPLAY no longer prints the slack). **MEM-PS2 (MEM-RECLAIM w4):
+  `POOL_NEED` = max over hero × depth of the SIMULATED pool top + `POOL_SIM_MARGIN` (64 B,
+  data.asm)**: the `PS_*` macros replay `alloc` variant by variant in the real session order
+  (idles, hero unit, class FX unit, mark, the level's units first-seen with `pl_unit`'s same-fid0
+  merge), so the bank-boundary waste is exact (was `POOL_FIXED`'s 3 × 576 guess, still the
+  PROTO fixture's static bound `POOL_NEED_PROTO`); the PROTO fixture is simulated too
+  (`POOL_SIM_PROTO`, ASSERTed with the margin). ASSERTs `POOL_NEED ≤ POOL_CAP` and
+  `POOL_NEED_PROTO ≤ POOL_CAP_PROTO` (`-DPOOL_LVL_VERBOSE=1` DISPLAYs every depth with the
+  simulated idx / ptr / straddle waste; `tests/zx0_pool.py` checks simulated == the real
+  `ALLOC_IDX` / `ALLOC_PTR` for D1..D8 × both heroes + PROTO 5 / 6 kinds × both heroes).
 * Tests: `tests/zx0_pool.py` (the reference replays boot / hero / level
   sessions bit-exact; "levels": a Knight game D1..D8 through the real
   `level_descend`, pool / FRT / allocator == reference at every depth, pool
@@ -4451,3 +4457,30 @@ FIDs, sizes 32x48 / 40x48 for the slam, flags, ax 0, `og_*` sequences untouched)
 |---|---|---|---|
 | SRC6 free (K_OGRE block packed 619 → 615 B) | 15 | **19** | −4 B used (3,565 of 3,584) |
 | pool (every level) | — | 0 | same frame sizes/flags: D8 worst 14,880, slack 2,297 |
+
+## MEM-RECLAIM wave 4 (`feat/mem-reclaim-w4`; room for T11 the nun Archmage)
+
+**MEM-PS2 — exact build-time pool simulation.** The level `POOL_NEED` no longer adds `POOL_FIXED`'s
+3 × 576 B straddle allowance: main.asm "LEVEL POOL NEED" (`PS_ALLOC` / `PS_FRAME` / `PS_UNIT` /
+`PS_KIND` / `PS_LINEAR`) replays `alloc` for every variant in the real order (gen_idles →
+pool_hero → alloc_mark → pool_list per depth; PROTO: pool_proto with the `R6_ADDR` limit) and
+takes the linear pool top (bank 0 from `POOL_START`, skipped bank tails counted) +
+`POOL_SIM_MARGIN` 64 B. Emits no bytes: the release `.tap` / `.sna` are **byte-identical** to main
+(`c60488a`). `tests/zx0_pool.py`: simulated (idx, ptr) == real `ALLOC_IDX` / `ALLOC_PTR` on all
+20 points (D1..D8 × Warrior / Mage, PROTO 5 / 6 kinds × both), any mismatch fails (UNDERCOUNT
+tagged); the Mage now also walks D1..D8 against the Python reference.
+
+Measured straddle waste (the 0 → 4 bank boundary; no level reaches bank 6 yet): Warrior 25 B on
+every depth, Mage D1..D8 25 / 89 / 41 / 281 / 153 / 41 / 281 / 217 (allowance was 1,728).
+
+| Pool (`POOL_CAP` 33,017) | need before (3 × 576) | need after (sim + 64) | slack after |
+|---|---|---|---|
+| D4 Warrior | 30,240 | 28,601 | 4,416 |
+| D8 Warrior (worst) | 30,720 | 29,081 | **3,936** (was 2,297) |
+| D8 Mage | 27,520 | 26,073 | 6,944 |
+| PROTO 6 kinds (cap 36,601) | 31,072 static | sim 29,369 + 64 | static bound still asserted |
+
+**Caveat (planning):** the slack is now exact, not a guaranteed headroom for NEW art: content that
+pushes a level past the end of bank 4 (linear 30,457 B with today's text block) wastes the
+bank-4 tail, up to one variant − 1 (≤ 575 B). Plan new art as `slack − 575` on levels that will
+cross (D8 + T11's 2,080 B does: 29,017 + 2,080 > 30,457).

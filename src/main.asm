@@ -758,9 +758,9 @@ R6_FREE         EQU $10000 - r6_end
 ;   level need is computed for the Warrior and the Mage separately, POOL_NEED = the larger) -> the set of generation units (dedup per unit, as
 ;   pool_list) -> R6 gu_tab fid0 / fcnt (3F-T2; was kind_tab) -> per fid
 ;   frame_tab cols / H / offsets + fdesc_tab FD_FLAGS -> the exact bytes
-;   gen_frame allocates (variant choice as gen_facing; the per-bank straddle
-;   waste is POOL_FIXED's 3 x 576).
-; POOL_NEED (data.asm) = POOL_FIXED + POOL_HERO_MAX + POOL_LVL_MAX.
+;   gen_frame allocates (variant choice as gen_facing); MEM-PS2: the per-bank
+;   straddle waste is SIMULATED exactly (PS_* below; was POOL_FIXED's 3 x 576).
+; POOL_NEED = max over hero x depth of the simulated pool top + POOL_SIM_MARGIN.
 ; -DPOOL_LVL_VERBOSE=1 DISPLAYs every depth.
 ;==============================================================================
     MACRO PL_FRAME_ADD fid                     ; PLN += gen_frame's pool bytes for fid
@@ -827,9 +827,162 @@ PLK_FN = {b gu_tab + GU_STRIDE * ((ubase) + plk) + 1}
       ENDIF
                 EDUP
     ENDM
+;------------------------------------------------------------------------------
+; MEM-PS2: the POOL SIMULATION — alloc / gen_frame / gen_facing / pl_unit /
+; gen_list replayed variant by variant at build time, in the real session order:
+;   gen_idles (alloc_reset: POOL_START; knight_idle1, wizard_idle), pool_hero
+;   (the hero unit, then its class FX unit), alloc_mark; per level alloc_restore
+;   + pool_list (LP_KINDS[0..3] + LP_BOSS = the lp_dtab row: each kind's pool_gmap
+;   records in order, else its own unit, then its pool_xmap extras; a unit whose
+;   fid0 is listed already is skipped, the listed range takes the longest count:
+;   pl_unit .same); PROTO: pool_proto after the mark (bank-6 limit R6_ADDR).
+; Every variant goes through PS_ALLOC = alloc (a variant that does not fit the
+; bank's rest skips to the next bank; bank 6 ends at the limit; ending exactly at
+; $10000 opens the next bank). The result PS_USED = the linear pool top (bank 0
+; from POOL_START, a skipped tail counts as used) = what tests/zx0_pool.py reads
+; back as ALLOC_IDX / ALLOC_PTR: replaces POOL_FIXED's 3 x 576 straddle guess.
+; Final pass only ({b}); no bytes emitted.
+;------------------------------------------------------------------------------
+    MACRO PS_ALLOC n                           ; alloc BC = n (PS_IDX / PS_PTR / PS_OVF)
+PSA_N = (n)
+PSA_D = 0
+                DUP  3
+      IF PSA_D == 0 && PS_IDX < 3
+        IF PS_IDX == 2
+PSA_L = PS_LIM6
+        ELSE
+PSA_L = $10000
+        ENDIF
+        IF PS_PTR + PSA_N <= PSA_L
+PS_PTR = PS_PTR + PSA_N
+PSA_D = 1
+          IF PS_PTR == $10000                  ; alloc .same: the next alloc opens the next bank
+PS_PTR = BANK_WINDOW
+PS_IDX = PS_IDX + 1
+          ENDIF
+        ELSE                                   ; alloc_next
+PS_IDX = PS_IDX + 1
+PS_PTR = BANK_WINDOW
+        ENDIF
+      ENDIF
+                EDUP
+      IF PSA_D == 0
+PS_OVF = 1                                     ; GEN_OVERFLOW
+      ENDIF
+    ENDM
+    MACRO PS_FRAME fid                         ; gen_frame: right facing, then left unless FF_SYM
+PSF_C = {b frame_tab + (fid) * FT_STRIDE + FT_COLS}
+PSF_H = {b frame_tab + (fid) * FT_STRIDE + FT_H}
+PSF_R = {b frame_tab + (fid) * FT_STRIDE + FT_OFFR}
+PSF_L = {b frame_tab + (fid) * FT_STRIDE + FT_OFFL}
+PSF_F = {b fdesc_tab + (fid) * FDESC_STRIDE + FD_FLAGS}
+      IF PHASE_SHIFT                           ; gen_facing .stat: (anchor + FF_PH4) & 7
+PSF_P = PSF_F & FF_PH4
+      ELSE
+PSF_P = 0
+      ENDIF
+      IF PSF_F & FF_MOTION                     ; shift 0 then shift 4 (+1 col)
+                PS_ALLOC 2 * PSF_H * PSF_C
+                PS_ALLOC 2 * PSF_H * (PSF_C + 1)
+        IF (PSF_F & FF_SYM) == 0
+                PS_ALLOC 2 * PSF_H * PSF_C
+                PS_ALLOC 2 * PSF_H * (PSF_C + 1)
+        ENDIF
+      ELSE
+                PS_ALLOC 2 * PSF_H * (PSF_C + ((((PSF_R + PSF_P) & 7) != 0) & 1))
+        IF (PSF_F & FF_SYM) == 0
+                PS_ALLOC 2 * PSF_H * (PSF_C + ((((PSF_L + PSF_P) & 7) != 0) & 1))
+        ENDIF
+      ENDIF
+    ENDM
+    MACRO PS_INMASK m, x, v                    ; PSV_IN = bit v of the 64-bit unit set m / x
+      IF (v) < 32
+PSV_IN = ((m) >> (v)) & 1
+      ELSE
+PSV_IN = ((x) >> ((v) - 32)) & 1
+      ENDIF
+    ENDM
+    MACRO PS_UNIT u                            ; pl_unit u, then gen_list's frames for it
+PSU_F0 = {b gu_tab + GU_STRIDE * (u)}
+PSU_N = {b gu_tab + GU_STRIDE * (u) + 1}
+PSU_GO = PSU_N != 0                            ; 0-frame unit: nothing
+      IF PSU_GO
+                DUP  GU_N, psv                 ; listed already (a done unit, same fid0)
+                PS_INMASK PSD_M, PSD_X, psv
+        IF PSV_IN
+          IF {b gu_tab + GU_STRIDE * psv} == PSU_F0
+PSU_GO = 0
+          ENDIF
+        ENDIF
+                EDUP
+      ENDIF
+      IF PSU_GO
+                DUP  GU_N, psv                 ; pl_unit .same: the range = the session's longest
+                PS_INMASK PSS_M, PSS_X, psv    ; unit with this fid0 (all later: this is the first)
+        IF PSV_IN
+          IF {b gu_tab + GU_STRIDE * psv} == PSU_F0 && {b gu_tab + GU_STRIDE * psv + 1} > PSU_N
+PSU_N = {b gu_tab + GU_STRIDE * psv + 1}
+          ENDIF
+        ENDIF
+                EDUP
+PSU_F = PSU_F0
+                DUP  PSU_N
+                PS_FRAME PSU_F
+PSU_F = PSU_F + 1
+                EDUP
+      ENDIF
+      IF (u) < 32
+PSD_M = PSD_M | (1 << (u))
+      ELSE
+PSD_X = PSD_X | (1 << ((u) - 32))
+      ENDIF
+    ENDM
+    MACRO PS_KIND k                            ; pl_kinds for kind k (PL_KIND's walk, in order)
+PSK_HIT = 0
+      IF PGMAP_N
+        DUP PGMAP_N, psr
+          IF {b pool_gmap + 3 * psr} == (k)
+PSK_HIT = 1
+PSK_U2 = {b pool_gmap + 3 * psr + 2}
+PSK_U = {b pool_gmap + 3 * psr + 1}
+                PS_UNIT PSK_U
+            IF PSK_U2 != PG_NONE
+PSK_U = PSK_U2
+                PS_UNIT PSK_U
+            ENDIF
+          ENDIF
+        EDUP
+      ENDIF
+      IF PSK_HIT == 0
+                PS_UNIT k
+      ENDIF
+      IF PXMAP_N
+        DUP PXMAP_N, psx
+          IF ({b pool_xmap + 3 * psx} == (k)) && ({b pool_xmap + 3 * psx + 1} == PL_HERO)
+PSK_U = {b pool_xmap + 3 * psx + 2}
+                PS_UNIT PSK_U
+          ENDIF
+        EDUP
+      ENDIF
+    ENDM
+    MACRO PS_LINEAR                            ; PS_USED = the linear pool top (+ $10000 on overflow)
+      IF PS_IDX == 0
+PS_USED = PS_PTR - POOL_START
+      ELSE
+        IF PS_IDX == 1
+PS_USED = ($10000 - POOL_START) + (PS_PTR - BANK_WINDOW)
+        ELSE
+PS_USED = ($10000 - POOL_START) + $4000 + (PS_PTR - BANK_WINDOW)
+        ENDIF
+      ENDIF
+      IF PS_OVF
+PS_USED = PS_USED + $10000
+      ENDIF
+    ENDM
 POOL_NEED = 0
 POOL_LVL_MAX = 0
 POOL_LVL_WORST = 0
+POOL_SIM_PROTO = 0                             ; the worst simulated PROTO top (both heroes, 6 kinds)
                 DUP  2, plh                    ; 3F-T3: per hero (K_KNIGHT = 0, K_WIZARD = 1)
 PL_HERO = plh
       IF plh == K_KNIGHT
@@ -839,6 +992,51 @@ PL_HERO_B = POOL_WIZARD + POOL_FXM
       ENDIF
 PL_MAX = 0
 PL_WORST = 0
+                MMU  3, BANK_R6
+                ; MEM-PS2 hero session: gen_idles + pool_hero + gen_list, then alloc_mark
+PS_IDX = 0
+PS_PTR = POOL_START
+PS_OVF = 0
+PS_LIM6 = POOL6_END
+                PS_FRAME FID_knight_idle1
+                PS_FRAME FID_wizard_idle
+PSS_M = (1 << plh) | (1 << (plh + K_FX_BASE))
+PSS_X = 0
+PSD_M = 0
+PSD_X = 0
+                PS_UNIT plh
+                PS_UNIT plh + K_FX_BASE
+                ASSERT {b gu_tab + GU_STRIDE * plh} != {b gu_tab + GU_STRIDE * (plh + K_FX_BASE)}
+                ASSERT PS_OVF == 0
+PSM_IDX = PS_IDX                               ; the LEVEL mark
+PSM_PTR = PS_PTR
+                ; MEM-PS2 PROTO fixture (pool_proto after the mark, bank-6 limit R6_ADDR; 6 kinds =
+                ; proto_start 3, the 5-kind default without the Slime is DISPLAYed too for the test)
+                DUP  2, psp
+PLM = 0
+PLX = 0
+                DUP  K_PROTO_END - K_SKELETON - 1 + psp, psk
+                PL_KIND K_SKELETON + psk
+                EDUP
+PSS_M = PLM
+PSS_X = PLX
+PSD_M = 0
+PSD_X = 0
+PS_IDX = PSM_IDX
+PS_PTR = PSM_PTR
+PS_LIM6 = R6_ADDR
+                DUP  K_PROTO_END - K_SKELETON - 1 + psp, psk
+                PS_KIND K_SKELETON + psk
+                EDUP
+                PS_LINEAR
+      IFDEF POOL_LVL_VERBOSE
+                DISPLAY "GAME pool sim PROTO kinds ", /D, K_PROTO_END - K_SKELETON - 1 + psp, " hero ", /D, plh, ": top idx ", /D, PS_IDX, " ptr ", /D, PS_PTR, " used ", /D, PS_USED, " of ", /D, POOL_CAP + SRC6_LEN
+      ENDIF
+      IF psp && PS_USED > POOL_SIM_PROTO
+POOL_SIM_PROTO = PS_USED
+      ENDIF
+                EDUP
+PS_LIM6 = POOL6_END
                 DUP  LEVELS, pld
                 MMU  3, BANK_COLD3
 PLK0 = {b lp_dtab + pld * LP_DROW + 0}
@@ -854,6 +1052,22 @@ PLX = 0
                 PL_KIND PLK2
                 PL_KIND PLK3
                 PL_KIND PLK4
+                ; MEM-PS2: the level session replayed (PSS = the full unit set, before the
+                ; VBAT strip below: PS_UNIT merges same-fid0 units itself)
+PSS_M = PLM
+PSS_X = PLX
+PSD_M = 0
+PSD_X = 0
+PS_IDX = PSM_IDX                               ; alloc_restore
+PS_PTR = PSM_PTR
+PS_OVF = 0
+                PS_KIND PLK0
+                PS_KIND PLK1
+                PS_KIND PLK2
+                PS_KIND PLK3
+                PS_KIND PLK4
+                PS_LINEAR
+PS_NEED = PS_USED + POOL_SIM_MARGIN
       IF (PLM >> K_BAT) & 1                    ; 3F-T9: the bat form's frames lie inside the Bat's
 PLM = PLM & ~(1 << K_VBAT)                     ; unit (same fid0: pl_unit merges them)
       ENDIF
@@ -869,16 +1083,17 @@ PLU = PLU + ((PLM >> plb) & 1) + ((PLX >> plb) & 1)
                 EDUP
                 ASSERT 2 * PLU + 1 <= PL_CAP
       IFDEF POOL_LVL_VERBOSE
-                DISPLAY "GAME level pool D", /D, pld + 1, " hero ", /D, plh, ": units mask ", /H, PLM, " / ", /H, PLX, ", ", /D, PLN, " B; need ", /D, PLN + POOL_FIXED + PL_HERO_B, " of ", /D, POOL_CAP
+                DISPLAY "GAME level pool D", /D, pld + 1, " hero ", /D, plh, ": units mask ", /H, PLM, " / ", /H, PLX, ", ", /D, PLN, " B; need ", /D, PS_NEED, " of ", /D, POOL_CAP, " (sim top idx ", /D, PS_IDX, " ptr ", /D, PS_PTR, " used ", /D, PS_USED, ", straddle waste ", /D, PS_USED - PLN - PL_HERO_B - 2 * (knight_idle1_h + wizard_idle_h) * 2 * 3, ")"
       ENDIF
-      IF PLN > PL_MAX
-PL_MAX = PLN
+      IF PS_NEED > PL_MAX
+PL_MAX = PS_NEED
 PL_WORST = pld + 1
+PL_LVLB = PLN
       ENDIF
                 EDUP
-      IF POOL_FIXED + PL_HERO_B + PL_MAX > POOL_NEED
-POOL_NEED = POOL_FIXED + PL_HERO_B + PL_MAX
-POOL_LVL_MAX = PL_MAX
+      IF PL_MAX > POOL_NEED
+POOL_NEED = PL_MAX
+POOL_LVL_MAX = PL_LVLB
 POOL_LVL_WORST = PL_WORST
       ENDIF
                 EDUP
@@ -914,7 +1129,8 @@ POOL_NEED_PROTO5 = POOL_NEED_PROTO - POOL_SLIME_B
                 DISPLAY "PROTO POOL FULL: the PROTO rooms (6 kinds) need ", /D, POOL_NEED_PROTO, " > POOL_CAP + SRC6_LEN ", /D, POOL_CAP_PROTO
     ENDIF
                 ASSERT POOL_NEED_PROTO <= POOL_CAP_PROTO || !POOL_PROTO_CHECK
-                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (worst level D", /D, POOL_LVL_WORST, " ", /D, POOL_LVL_MAX, ", hero max ", /D, POOL_HERO_MAX, ", fixed ", /D, POOL_FIXED, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0); slack ", /D, POOL_CAP - POOL_NEED, " after SRC6 ", /D, SRC6_LEN, " B; PROTO rooms (6 kinds, over SRC6) ", /D, POOL_NEED_PROTO, " of ", /D, POOL_CAP_PROTO, " (slack ", /D, POOL_CAP_PROTO - POOL_NEED_PROTO, "; 5 kinds ", /D, POOL_NEED_PROTO5, ")"
+                ASSERT POOL_SIM_PROTO + POOL_SIM_MARGIN <= POOL_CAP_PROTO || !POOL_PROTO_CHECK   ; MEM-PS2 (the static bound above is the looser)
+                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (MEM-PS2 simulated top + margin ", /D, POOL_SIM_MARGIN, "; worst level D", /D, POOL_LVL_WORST, " ", /D, POOL_LVL_MAX, ", hero max ", /D, POOL_HERO_MAX, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0); slack ", /D, POOL_CAP - POOL_NEED, " after SRC6 ", /D, SRC6_LEN, " B; PROTO rooms (6 kinds, over SRC6) ", /D, POOL_NEED_PROTO, " of ", /D, POOL_CAP_PROTO, " (slack ", /D, POOL_CAP_PROTO - POOL_NEED_PROTO, "; 5 kinds ", /D, POOL_NEED_PROTO5, ")"
 
 ;==============================================================================
 ; OVERLAYS (3E-T1) — code assembled at its runtime load address, stored
