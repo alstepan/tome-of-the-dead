@@ -4662,3 +4662,17 @@ A true drop-in: same names / fids / FRM rows / sizes (24x32, lunge 32x32) / flag
 | bank 1 free | 2 | **42** | +40 (sources 9,096 -> 9,056 B; ZX0 packed 12,661 -> 12,621 B) |
 | SRC6 free / pool slack D8 Warrior / FID_COUNT | 19 / 1,264 / 144 | unchanged | 0 |
 | other banks | — | unchanged | 0 |
+
+## GOLDEN-BOSS-XP (`fix/golden-boss-xp`; game.md §4.1 boss XP by depth)
+
+`grate_open` (bank 7, far7 from `mon_drop`, before bank 3's KXP add) does `XP += bxp_d[LVL_DEPTH - 1]`; `bxp_d` (8 B,
+`data7.asm`) = §4.1 golden XP - the base kind's KXP: 17 / 26 / 36 / 0 / 53 / 70 / 0 / 0 (D1 Goblin King 20, D2 Spider Queen 30,
+D3 Vampire Lord 45, D5 Pharaoh 65, D6 High Necro 80; D4 Ogre 60, D7 Death Knight 90, D8 Archmage 0 are right in `kx_tab`).
+Build ASSERTs delta + `KXP_*` (combat_defs.asm, used by the `kx_tab` rows) == §4.1. No saturation here: bank 3 clamps at
+`XP_MAX` after. Cost ~100 T once per boss. Escorts (E_GOLD 0) never reach `grate_open`: base KXP.
+
+| Region (`-DDEBUG_KIT=0`) | main `35d37a0` | after | Δ |
+|---|---|---|---|
+| bank 7 free | 53 | **35** | -18 (`grate_open` +18) |
+| data7 / tileset block free to `$10000` | 123 | **115** | -8 (`bxp_d`) |
+| bank 3 / R6 / other | -- | unchanged | 0 |

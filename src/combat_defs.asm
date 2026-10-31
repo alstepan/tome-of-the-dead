@@ -533,6 +533,12 @@ KX_STRIDE       EQU 8
 KX_RES          EQU 0               ; 3 B, RES_* format
 KX_IMM          EQU 3               ; IMMF_* mask
 KX_XP           EQU 4               ; KXP: XP awarded on death (game.md §4.1)
+; base-kind KXP of the golden-boss depths (kx_tab rows use these; data7 bxp_d = golden XP - these)
+KXP_GOBLIN      EQU 3
+KXP_SPIDER      EQU 4
+KXP_VAMPIRE     EQU 9
+KXP_MUMMY       EQU 12
+KXP_NECRO       EQU 10
 KX_DEF          EQU 5               ; monster DEF (0 in 3D, game.md §11.4)
 KX_MELEE        EQU 6               ; 2 B: the kind's melee hit as deal_hit's {C, E} (3F-T2: was
                                     ; combat3.asm's kx_melee table, folded into the old KX_SPARE):

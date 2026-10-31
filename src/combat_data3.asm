@@ -37,7 +37,7 @@ kx_tab:
                 KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_WIZARD (hero)
                 KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_PHYS, EFX_NONE, 0, 0, 0              ; K_VBAT (3F-T9): the Vampire's row, a plain 1d2 bite (no drain / heal in bat form)
                 KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_PHYS, EFX_NONE, 0, 0, 1              ; K_SKELETON (DEF 1, §9.1 / D3-1)
-                KXROW 0,0,0,0,0,0, 0, 3, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_GOBLIN
+                KXROW 0,0,0,0,0,0, 0, KXP_GOBLIN, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_GOBLIN
                 KXROW RSP_R,0,RSP_I,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 4, 4, 0  ; K_GHOST: the 1d4 DRAIN touch, 1 in 4 -> CONFUSED 4 (no heal: §9.1)
                 KXROW 0,0,0,0,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_RAT
                 KXROW 0,0,0,RSP_W,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0, 0                              ; K_BAT
@@ -47,12 +47,12 @@ kx_tab:
                 ; reads it today); POISON's turns nibble is HALF the turns (PSN_*). Behaviour that
                 ; is NOT a plain on-hit status (Mummy FOOD drain, Ogre SLAM, parry, ACID, breed,
                 ; summon, ranged, rage) is T6-T9 code keyed on the kind id.
-                KXROW 0,RSP_W,0,0,0,0, 0, 4, DTY_PHYS, EFX_POISON, 0, PSN_SPIDER / 2, 0               ; K_SPIDER: bite POISON 12
-                KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_DRAIN | DH_HEAL, EFX_NONE, 0, 0, 0 ; K_VAMPIRE: drain bite heals it
+                KXROW 0,RSP_W,0,0,0,0, 0, KXP_SPIDER, DTY_PHYS, EFX_POISON, 0, PSN_SPIDER / 2, 0               ; K_SPIDER: bite POISON 12
+                KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, KXP_VAMPIRE, DTY_DRAIN | DH_HEAL, EFX_NONE, 0, 0, 0 ; K_VAMPIRE: drain bite heals it
                 KXROW 0,RSP_R,0,0,0,0, 0, 9, DTY_PHYS, EFX_NONE, 0, 0, 1                               ; K_ORC
                 KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 7, DTY_PHYS, EFX_NONE, 0, 0, 0              ; K_ARCHER (arrow: T7)
-                KXROW RSP_R,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 12, DTY_PHYS, EFX_WEAK, 3, 12, 2    ; K_MUMMY: curse 1 in 3 -> WEAK 12 (FOOD drain: T6)
-                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, 0, 10, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_NECRO (Dark Bolt: T7)
+                KXROW RSP_R,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, KXP_MUMMY, DTY_PHYS, EFX_WEAK, 3, 12, 2    ; K_MUMMY: curse 1 in 3 -> WEAK 12 (FOOD drain: T6)
+                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, 0, KXP_NECRO, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_NECRO (Dark Bolt: T7)
                 KXROW RSP_R,0,RSP_R,RSP_W,0,0, 1 << IMMF_BOSS_BIT, 60, DTY_PHYS, EFX_NONE, 0, 0, 2     ; K_OGRE: SLAM = T8
                 KXROW 0,RSP_X,RSP_I,RSP_W,RSP_I,RSP_I, 1 << IMMF_BOSS_BIT, 90, DTY_PHYS, EFX_NONE, 0, 0, 3 ; K_DKNIGHT: parry 1 in 3, notch 1 in 2 = T6
                 KXROW 0,0,RSP_X,RSP_X,RSP_I,RSP_R, 1 << IMMF_BOSS_BIT, 0, DTY_PHYS, EFX_NONE, 0, 0, 1  ; K_ARCHMAGE: awards 0 XP (§4.1)
