@@ -19,6 +19,8 @@ TURN_COUNTER poked (the end_turn decision), plus real turns for the flee flight.
      flees (gap grows), reverts within 14 turns
   K  lp_bank: a bat form is banked as K_VBAT with its exact hp
   D  impact_line: the Vampire's bite hit reads "THE VAMPIRE DRAINS YOU", its bat form's "THE VAMPIRE HITS YOU"
+  S  the transform turn on the top storey (real turns): the log rows' attrs unchanged, no body drawn
+     outside the playfield (fix/vamp-corruption: the stale old-kind frame by the new KT_BH)
   T  costs: vb_turn (far7 incl.) with no candidate / a candidate staying / a transform
 Build with -DDEBUG_KIT=0. ZRCP_PORT=<port> python3 tests/vbat.py
 """
@@ -33,12 +35,13 @@ from lp import T, w16  # noqa: E402
 from boss import rec_entries  # noqa: E402
 from abil_melee import stream_text  # noqa: E402
 from spawn import (Lines, kt, heal, clear_room, mon, hero_at, level, far3, keep_pc, check,  # noqa: E402
-                   fails)
+                   fails, good_cols)
 
 KV, KB = S["K_VAMPIRE"], S["K_VBAT"]
 ONCE, VFLEE = 0x80, S["RCD_VFLEE"]
 MIND_FEAR, STS_MIND = S["MIND_FEAR"], S["STS_MIND"]
 GOLD = S["LEK_GOLD"]
+ATTRS = 0x5800                                 # the bank-5 attribute file (hardware)
 
 
 @keep_pc
@@ -120,6 +123,9 @@ def run(p, lines, r):
     check("F2 RCD_ONCE | RCD_VFLEE, FEAR 8 turns, LIVE_LIST box 3x2",
           e["POT"] & (ONCE | VFLEE) == ONCE | VFLEE and fear(p, 1) == (MIND_FEAR, S["VB_FLEE_T"])
           and ll_box(p, 1) == (3, 2), (e["POT"], fear(p, 1), ll_box(p, 1)))
+    check("F2b the slot is hidden for the next render (R_VIS 0: RENDER_FIRST would place the old kind's "
+          "frame by the new KT_BH)", p.rb(S["SLOTREC"] + 16 * 1 + S["R_VIS"]) == 0,
+          p.rb(S["SLOTREC"] + 16 * 1 + S["R_VIS"]))
     vb_turn(p, 4)
     check("F3 even turn, FEAR on: stays a bat", p.ent(1)["KIND"] == KB, p.ent(1))
     p.wb(S["ST_FLAGS"] + 1, 0)
@@ -249,6 +255,40 @@ def run(p, lines, r):
     check(f"R2 it flees (gap > 2 by turn {flew}) and reverts within 14 turns (turn {back})",
           flew is not None and back is not None and back - turned <= 14, (flew, back, p.ent(1)))
     p.z.cmd("set-breakpoint 5")
+    screen_safe(p)
+
+
+def screen_safe(p):
+    """S (fix/vamp-corruption, user playtest D3): the transform turn on the TOP storey through real
+    turns. Before the fix the next RENDER_FIRST render placed the Vampire's 48-px frame by the bat's
+    2-row KT_BH: fpy = 16 + 16 - 48 = -16 -> R_ROW 30 -> blit / erase into the attributes (log rows
+    22 / 23 at the body's cols) and the bank-5 RAM above them. The log rows' attrs must not change,
+    and no body may ever be drawn outside the playfield rows."""
+    ok = [c for c in range(2, 20) if all(good_cols(p, 0)[c:c + 3])]
+    run0 = next((c for c in ok if c + 6 in ok), None)
+    check("S0 a top-storey spot for the hero + a Vampire beside it", run0 is not None, ok)
+    if run0 is None:
+        return
+    setup(p, 0, run0, run0 + 3, hp=4)
+    log_attr = lambda: p.z.read_memory(ATTRS + 22 * 32, 64)
+    a0 = log_attr()
+    turned, bad_row, diffs = None, None, []
+    for t in range(1, 5):
+        heal(p)
+        if turned is None:
+            p.set_ent(1, HP=4)
+        p.turn("WAIT")
+        e = p.ent(1)
+        if e["DVIS"] & 1 and e["DROW"] + e["DROWS"] > 18:
+            bad_row = (t, e["DROW"], e["DROWS"])
+        a1 = log_attr()
+        diffs += [(t, 22 + i // 32, i % 32, a1[i]) for i in range(64) if a1[i] != a0[i]]
+        if e["KIND"] == KB:
+            turned = t
+            break
+    check(f"S1 top storey: the Vampire turns into a bat (turn {turned}), log-row attrs unchanged, drawn "
+          "rows inside the playfield", turned is not None and not diffs and bad_row is None,
+          (turned, diffs[:6], bad_row))
 
 
 if __name__ == "__main__":

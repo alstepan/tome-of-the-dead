@@ -195,7 +195,7 @@ LAST (`r6_blobs`), run by `ovl_run` with C = `BANK_R6`.
 | **MEM-RECLAIM w2c (2026-10-30)** | **R6 free +185 B (release 1,283 -> 1,468, kit 1,212 -> 1,397)** | icon packing: `icons16` 1,376 B raw -> `icpk_idx` + `icpk` 995 B (−381), unpacker code +196 (`icons6.asm` `ic_find` / `ic_scr` / `ic_unp` (unrolled oct, ~50 B: `fi_slot` runs on a drop's kill tick, budget lcastf) / `rev8`; `ic_blit`'s copy pass gone; `fi_slot`'s FI_INK fill x4 unrolled). Decoded byte-exact (tools/icons16.py proves the Python model; the screen tests compare against the raw table). Stack: none (decoded onto the screen / into `FI_GLY`). Costs (ic1, incl. far6): `icon_slot` 2.45k -> 3.1k T, a MIRROR icon 4.5k, `worn_draw` 9.4k -> 16.3k (3 MIRROR placeholders), `fi_slot` ~+0.7k T per new slot; budget lcastf 123,059 -> 123,743 T |
 | **MEM-RECLAIM w2b (2026-10-30)** | **R6 free 229 -> 1,283 B release (kit 158 -> 1,212; 1,292 / 1,221 before the Spider climb commit took 9 B)** | cold code moved **R6 -> bank 7** (`B7_CODE` space freed by w2a): `hunger7.asm` (`hunger_turn` (end_turn calls it directly, was far6; `wear_apply` stays R6, far6 from it on a wear turn), `hg_faint`, `food_sub` / `food_dirty`, `hunger_add` (far7 from R6 `fx6`), `hg_stage` / `hg_line`); `trap7.asm` (`trap_turn` (jp from `trap_chk`), `trap_step` (jp from `act_pend`), `tr_*`, `tr_eff` (far6 R6 `tele_arm` / `fx_line`), `hero_hold`; `tr_draw` calls `ap_put_a` directly); `boss7.asm` (`grate_open` far7 from bank-3 `mon_drop`, `boss_chk` far7 from `lp_transition`, `ai_guard` far7 from bank-2 `ai_ghook`). Their read-only tables (`tr_ink7`, `tr_fx`, `glow7`; 29 B) are `data7.asm` in bank 7 right after the tilesets (`data7..data7_end`, one tape block with them, `B7D_LEN`; bank-7 code keeps no data). Stay in R6: `item_food` + `hg_attr` (panel render: never from contended bank 7), `tele_arm` / `tele_flash` / `trap_at` (R6 `fx6` / `pickup6` call them), `lp_post`; `mummy6` inlines its `food_sub` (13 B). Tests call the moved entries through far7 (`B7_LABELS` in hunger / status1 / tier6, t16). |
 | (code, after `ranged6`) | **800** (3F-T9) | `spawn6.asm`: the spawn queue producers `breed6` / `sp_bcall` / `ph_summon` + `sp_summon` (the pose: ranged6 `rg_pose`, now shared with `rg_shoot`), `sp_scan` / `sp_wt` / `sp_fit` (§9.3 cap), `sp_run` (end_turn) + `sp_init` / `sp_y` / `sp_place` / `sp_try` / `sp_door` / `sp_fin`; no variables (bank-5 `SPQ_RAM`) — see "3F-T9" |
-| (code, after `spawn6`) | **~225** (3F-T9 bat) | `vbat6.asm`: `vb_one` (far6 from bank-7 `vb_turn`, end_turn) + `vb_bat` / `vb_fin` / `vb_st` / `vb_gap` / `vb_cut`; no variables — see "3F-T9 Vampire bat form" |
+| (code, after `spawn6`) | **~237** (3F-T9 bat) | `vbat6.asm`: `vb_one` (far6 from bank-7 `vb_turn`, end_turn) + `vb_bat` / `vb_fin` / `vb_st` / `vb_gap` / `vb_cut`; no variables — see "3F-T9 Vampire bat form" |
 | `$E75A` `ovl_page_zx0` | **1,182** (3E-T13; was 328) | the bag page stream (`BANK_OVL_PAGE`; was bank 1) |
 | ~~`ovl_items_zx0`~~ | 0 (was 881) | **MEM-1: back in bank 1** (`BANK_OVL_ITEMS` = `BANK_UI1`, after the `it_text` block; R6 holds only `ovl_page_zx0` now, 1,192 B of streams incl. the page stream; the R6 addresses below shift down 881 B) |
 | (code, after `bag6`) | 310 code+data (**STATUS1: +55** `hg_faint`) | **3E-T9** `hunger6.asm` — **MEM-RECLAIM w2b: `hunger_turn`, `food_sub` / `food_dirty`, `hunger_add`, `hg_stage` / `hg_line` moved to bank 7 (`hunger7.asm`); only `item_food`, `hg_attr` (4 B) stay here** — see "3E-T9" |
@@ -4348,7 +4348,11 @@ over) / (else: hero on its storey, gap <= 2, no cut between) and the humanoid bo
 (spawn6 `sp_y` + `sp_try`, `box_free` skipping `ACT_SLOT`; else it stays a bat, y restored). Every
 transform (`vb_bat` / `vb_fin`): `M_REST`, `snap_pxpy`, golden: **`LP_BOSS` := kind | `LEK_GOLD`** (the
 Lord keeps its boss identity: guard hook, drop / grate, PROVOKED, never follows, `boss_chk`),
-`build_live` (LIVE_LIST caches w / h). Turning into a bat logs "THE VAMPIRE TURNS INTO A BAT!"
+`build_live` (LIVE_LIST caches w / h), **the slot's `R_VIS` := 0** (fix/vamp-corruption: with
+`RENDER_FIRST` the next render runs before `anim_tick`, i.e. with this tick's `R_FID` = the OLD kind's
+frame placed by the NEW kind's `KT_BH` — a 48-px Vampire frame on the 2-row bat box at y 2 gave fpy −16,
+`R_ROW` 30: blit / `erase_rect` into the attributes and bank-5 `$5Bxx..$5Fxx`; hidden, that render only
+erases, one tick blank). Turning into a bat logs "THE VAMPIRE TURNS INTO A BAT!"
 (`vb_turns`, bank-0 text); the revert is silent.
 
 **Pool / sequences.** `pool_gmap` + (`K_VAMPIRE`, `K_VBAT`, -): D6 / D8 pool the Bat's first 2 frames
@@ -4369,7 +4373,7 @@ stays 5.9k, a flee transform 7.8k (gates 2.5k / 6k / 12k).
 
 | Region (`-DDEBUG_KIT=0`) | after 3F-T9 spawns | after bat form | Δ |
 |---|---|---|---|
-| R6 free | 658 | **360** | −298 (`vbat6.asm` ~225, `pl_unit` merge 8, `pl_kinds` 10, `pool_gmap` 3, `sqm_zx0` +23 packed) |
+| R6 free | 658 | **348** | −310 (`vbat6.asm` ~237 incl. the fix/vamp-corruption `R_VIS` hide 12, `pl_unit` merge 8, `pl_kinds` 10, `pool_gmap` 3, `sqm_zx0` +23 packed) |
 | bank 7 free | 193 | **85** | −108 (`vb_turn` + the end_turn hook) |
 | low RAM spare | 92 | **78** | −14 (`impact_line` drain remap 12, `imp_pre` / `imp_post` 2) |
 | bank 3 / bank 2 | 8 / 52 | unchanged | 0 (rows edited in place: `kind_tab`, `kx_tab`, `lp_wt`) |
