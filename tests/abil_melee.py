@@ -40,6 +40,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+BUILD_DIR = os.environ.get("WZ_BUILD_DIR", str(HERE.parent / "build"))
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import (Harness, S, EMU_ARGS, K_KNIGHT, K_RAT, K_SLIME, K_GOBLIN, K_SKELETON, K_BAT,  # noqa: E402
@@ -67,7 +68,7 @@ FX_ST, FX_FID, FXD_COL, FXD_ROW = 16, 18, 5, 6
 STRINGS = textpack.read_strings()
 TXT = dict(STRINGS)
 NM = {K_RAT: "RAT", K_SLIME: "SLIME", K_GOBLIN: "GOBLIN", K_SKELETON: "SKELETON", K_BAT: "BAT"}
-IMG = textpack.parse_emitted(os.path.join(HERE.parent, "build", "text", "strings.asm"))
+IMG = textpack.parse_emitted(os.path.join(BUILD_DIR, "text", "strings.asm"))
 
 
 def stream_text(raw):

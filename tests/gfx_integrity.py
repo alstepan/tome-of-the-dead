@@ -31,6 +31,7 @@ source (read from the .sna the suite loads, never from the running machine):
 Run with ZRCP_PORT=<port>.  `--depths N` (default 8).
 """
 import sys
+import os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -389,7 +390,7 @@ def scroll_ink(p, stats):
                 stats["bad"].append((kind, k, dest, c, r, row, col))
 
 
-SEQ_BIN = Path(__file__).resolve().parent.parent / "build" / "ovl" / "seq.bin"
+SEQ_BIN = Path(os.environ.get("WZ_BUILD_DIR", str(Path(__file__).resolve().parent.parent / "build"))) / "ovl" / "seq.bin"
 
 
 def lp_kinds(p):

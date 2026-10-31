@@ -39,6 +39,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+BUILD_DIR = os.environ.get("WZ_BUILD_DIR", str(HERE.parent / "build"))
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_RAT, K_GOBLIN, K_SKELETON, K_ARCHER, stand_y  # noqa: E402
@@ -58,7 +59,7 @@ BAG, WORN = S["BAG"], S["WORN"]
 STRINGS = textpack.read_strings()
 TXT = dict(STRINGS)
 PICK = TXT["cmb_pick"]
-IMG = textpack.parse_emitted(os.path.join(HERE.parent, "build", "text", "strings.asm"))
+IMG = textpack.parse_emitted(os.path.join(BUILD_DIR, "text", "strings.asm"))
 RES = S["WORKSTORE_TOP"] - 8
 IT = {k[3:]: v for k, v in S.items() if k.startswith("IT_") and isinstance(v, int)}
 NAME = {"F_CHEESE": "CHEESE", "P_MANA": "MANA POTION", "S_FEAR": "FEAR SCROLL", "BOOK": "WAR TOME",

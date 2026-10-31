@@ -53,7 +53,7 @@ Page 1: the goal and the controls. `[..]` = icon (not text); attr per row on the
 20                                               -
 21  Q A O P SPACE = UP DOWN LEFT RIGHT FIRE      $05
 22  MENU: 3 PICKS JOYSTICK, 4 REDEFINES KEYS     $05
-23       ANY KEY: NEXT PAGE   BREAK: PLAY        $46
+23       ANY KEY: NEXT PAGE   BREAK: SKIP        $46
 ```
 `F` = the 3 fields (§2). (Icon rows: the text starts at char 4; in the .txt the icon area is spaces.)
 
@@ -77,7 +77,7 @@ Page 2: things you find, and tips.
 17  * NO WAY BACK UP: LOOT EACH DEPTH FIRST       $47
 19  * SWARMED? READ SLEEP, FEAR OR TELEPORT       $45
 21  * STANDING NEAR THE TOME HURTS YOU            $47
-23            PRESS ANY KEY TO PLAY              $46
+23                 ANY KEY: START                  $46
 ```
 Rows 01, 11, 14, 16, 18, 20 and 22 are blank (tips are bulleted `* `, only the 5 most important kept). (Here `[X]` is drawn 3 chars wide to keep the text columns
 visible; the real 16×16 icon fills cells 0–1 / 16–17 and the text starts at char 4 / 24.)

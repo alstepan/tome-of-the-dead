@@ -10,17 +10,18 @@ import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BUILD_DIR = os.environ.get("WZ_BUILD_DIR", os.path.join(REPO, "build"))
 BASE = 0xC000
 R6BLK = b""
 
 
 def load():
     sym = {}
-    for ln in open(os.path.join(REPO, "build/wazhack.sym")):
+    for ln in open(os.path.join(BUILD_DIR, "wazhack.sym")):
         m = re.match(r"(\S+): EQU 0x([0-9A-Fa-f]+)", ln)
         if m:
             sym[m.group(1)] = int(m.group(2), 16)
-    tap = open(os.path.join(REPO, "build/wazhack.tap"), "rb").read()
+    tap = open(os.path.join(BUILD_DIR, "wazhack.tap"), "rb").read()
     blocks, i = [], 0
     while i < len(tap):
         n = tap[i] | tap[i + 1] << 8
@@ -200,7 +201,7 @@ def main():
     # header, then RAM $4000..$FFFF with bank 2 at $8000); the bank-3 copy, the
     # bank-1 xp_next and the bank-3 level-up tables are gone (xp7.asm immediates,
     # checked at runtime by tests/xp.py).
-    sna = open(os.path.join(REPO, "build/wazhack.sna"), "rb").read()
+    sna = open(os.path.join(BUILD_DIR, "wazhack.sna"), "rb").read()
     x = 27 + sym["xpn_tab"] - 0x4000
     chk("xpn_tab in bank 2", [0x8000 <= sym["xpn_tab"] < 0xC000], [True])
     chk("xp_next", [sna[x + 2 * i] | sna[x + 2 * i + 1] << 8 for i in range(8)], XP_NEXT)

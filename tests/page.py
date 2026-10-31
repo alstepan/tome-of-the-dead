@@ -37,6 +37,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+BUILD_DIR = os.environ.get("WZ_BUILD_DIR", str(HERE.parent / "build"))
 sys.path.insert(0, str(HERE))
 _UPD = "--update-golden" in sys.argv
 sys.argv = [sys.argv[0], "999"]               # keep game.py's item filter inert
@@ -111,7 +112,7 @@ def run(p, check):
     t_open = int(z.cmd("get-tstates-partial"))
     f_open = (p.rb("SYS_FRAMES") - f0) & 255
     check("P1 I -> page_run -> overlay -> page loop", ok)
-    raw = open(REPO / "build" / "ovl" / "page.bin", "rb").read()
+    raw = open(Path(BUILD_DIR) / "ovl" / "page.bin", "rb").read()
     win = bytearray(z.read_memory(S["PAGE_ORG"], len(raw)))
     v0, v1 = S["pg_rc"] - S["PAGE_ORG"], S["pg_wid"] - S["PAGE_ORG"]   # the page's variables (written)
     win[v0:v1] = raw[v0:v1]
