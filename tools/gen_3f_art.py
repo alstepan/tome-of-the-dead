@@ -1040,7 +1040,7 @@ ART15_FRAMES = ("spider_climb1", "spider_climb2")
 # lives in assets/gfx/sprites40/, resolved by tools/zx0_pack.py sprite_asm through index40.asm)
 ANIM_FRAMES = ("necro_walk4",)
 ANIM40_FRAMES = ("orc_walk3", "orc_walk4", "orc_hurt", "vamp_walk1", "vamp_walk2", "vamp_walk3", "vamp_walk4",
-                 "vamp_hurt")
+                 "vamp_hurt", "nun_walk1", "nun_walk2", "nun_cast", "nun_hurt")   # 3F-T11: the nun Archmage
 
 
 def write_index_3f() -> None:

@@ -19,7 +19,11 @@ ANIM-X12 (X1 / X2, user 2026-10-30): `orcx` / `vampx` import the 4-pose walk W2 
 assets/gfx/sprites40/extra/grid (tools/gen_art11_extra.py): W2 / W3 replace the existing frames
 (far foot re-placed), W4 is the new WK0 frame <name>_walk4; W1 (= walk1, the rest pose) is unchanged.
 
-Usage: python3 tools/import_anim40.py mage|mummy|necro|vamp|orcx|vampx
+3F-T11 (`nun`, user 2026-10-30 NUN ARCHMAGE APPROVED): the Archmage's own four frames from
+assets/gfx/concept/art13/grid (tools/gen_art13c_nun.py, ART13c option D): nun_walk1 WK0,
+nun_walk2 WK4, nun_cast / nun_hurt STA (ink green = KT_ATTR $04).
+
+Usage: python3 tools/import_anim40.py mage|mummy|necro|vamp|orcx|vampx|nun
 """
 import os
 import subprocess
@@ -29,6 +33,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ART12 = "assets/gfx/sprites40/art12/grid"
 ART9 = "assets/gfx/concept/art9_final/grid"
 EXTRA = "assets/gfx/sprites40/extra/grid"
+ART13 = "assets/gfx/concept/art13/grid"
 GRID = os.path.join(REPO, "assets/gfx/sprites40/grid")
 SPR40 = os.path.join(REPO, "assets/gfx/sprites40")
 
@@ -53,10 +58,14 @@ SETS = {
     "vampx": ("cyan", False, EXTRA, {
         "vamp_walk2": ("vamp_x2_w2", 0, "WK4"), "vamp_walk3": ("vamp_x2_w3", 0, "WK4"),
         "vamp_walk4": ("vamp_x2_w4", 0, "WK0")}),
+    "nun": ("green", False, ART13, {
+        "nun_walk1": ("nun_walk1", 0, "WK0 rest"), "nun_walk2": ("nun_walk2", 0, "WK4"),
+        "nun_cast": ("nun_cast", 0, "STA"), "nun_hurt": ("nun_hurt", 0, "STA")}),
 }
 PICK = {"mage": "ART12 pick: Mage HURT V3 stagger", "mummy": "ART12 pick: Mummy V2 tomb guard",
         "necro": "ART12 pick: Necromancer V2 bone caster", "vamp": "ART9 final: the Vampire's own 40-px set",
-        "orcx": "ANIM-X12 X1: Orc 4-pose walk W2 W1 W3 W4", "vampx": "ANIM-X12 X2: Vampire 4-pose walk W2 W1 W3 W4"}
+        "orcx": "ANIM-X12 X1: Orc 4-pose walk W2 W1 W3 W4", "vampx": "ANIM-X12 X2: Vampire 4-pose walk W2 W1 W3 W4",
+        "nun": "ART13c final: the nun Archmage (option D, side cast; 3F-T11)"}
 
 
 def main():

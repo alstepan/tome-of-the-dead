@@ -49,3 +49,7 @@
         INCLUDE "vamp_walk3.asm"
         INCLUDE "vamp_walk4.asm"
         INCLUDE "vamp_hurt.asm"
+        INCLUDE "nun_walk1.asm"
+        INCLUDE "nun_walk2.asm"
+        INCLUDE "nun_cast.asm"
+        INCLUDE "nun_hurt.asm"

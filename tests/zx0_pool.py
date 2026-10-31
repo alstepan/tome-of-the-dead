@@ -108,11 +108,14 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # MEM-PS2: the need is the SIMULATED pool top (main.asm PS_*: alloc replayed variant by variant, the real
 # skipped bank tails) + POOL_SIM_MARGIN 64, no longer + POOL_FIXED's 3 x 576 straddle guess: every need
 # -1,728 + 64 + the level's real straddle waste (Warrior 25 B everywhere; Mage D1..D8 25 89 41 281 153 41 281 217).
+# 3F-T11 the nun Archmage's own 4 frames (unit K_ARCHMAGE: walk1 WK0 480, walk2 WK4 640, cast / hurt STA
+# 480; was the Necro's walk + U_NCAST, which the D8 Necro still loads): both heroes D8 only, Warrior +2,160
+# (2,080 + the bank 0 -> 4 straddle 25 -> 105), Mage +2,080; sources in bank 1, POOL_CAP unchanged.
 LEVEL_NEED = {
     (0, 1): 22553, (0, 2): 22265, (0, 3): 26553, (0, 4): 28601,
-    (0, 5): 23097, (0, 6): 28761, (0, 7): 27769, (0, 8): 29081,
+    (0, 5): 23097, (0, 6): 28761, (0, 7): 27769, (0, 8): 31241,
     (1, 1): 19417, (1, 2): 19193, (1, 3): 23369, (1, 4): 25785,
-    (1, 5): 20153, (1, 6): 25577, (1, 7): 24825, (1, 8): 26073,
+    (1, 5): 20153, (1, 6): 25577, (1, 7): 24825, (1, 8): 28153,
 }
 
 

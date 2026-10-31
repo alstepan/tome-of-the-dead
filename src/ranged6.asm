@@ -32,7 +32,10 @@ rd_tab:         ;    r   N  flags                      die bon dhc        dhe   
                 DB   6,  2, RWF_AWAY | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; Slinger (rock)
                 DB   8,  2, RWF_AWAY | RWF_SPELL,        6, 1, DARK_DHC,  FEAR3_1IN3, FID_nbolt_fly1    ; Necromancer
                 DB   8,  2, RWF_AWAY | RWF_SPELL | RWF_PRE, 6, 1, DARK_DHC, FEAR3_1IN3, FID_nbolt_fly1   ; Bone Caller
-                DB  28,  2, RWF_SPELL | RWF_PRE | RWF_NOREFL | RWF_BNC1, 8, 3, DTY_DARK | DH_NODEF, 0, FID_nbolt_fly1 ; Archmage (T11)
+                ; 3F-T11: the Archmage row has NO RWF_PRE (plan.md "T11 NOTE": with it, the row would
+                ; run sp_bcall = the Bone Caller's summon rules); its own summon (<= 2 Skeletons,
+                ; cooldown 6, own sp_summon call) belongs to the Archmage AI (rk_tab[K_ARCHMAGE] is 0)
+                DB  28,  2, RWF_SPELL | RWF_NOREFL | RWF_BNC1, 8, 3, DTY_DARK | DH_NODEF, 0, FID_nbolt_fly1 ; Archmage
                 ASSERT $ - rd_tab == RK_ROWS * RW_STRIDE
                 ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_arrow_hit == FID_arrow_fly1 + 2
                 ASSERT FID_dagger_spin2 == FID_dagger_spin1 + 1

@@ -28,7 +28,7 @@
   `tests/combat.py`; any new tool reading frame files must use it). The 48-px files of those names
   stay in `assets/gfx/sprites/` for reference only: a canvas re-import (`tools/svg_sprites.py`)
   or a `gen_*` tool writing there does not change the build for a shadowed name.
-- `index40.asm` is **not** a toggle: `orc_walk3`, `orc_walk4`, `orc_hurt`, `vamp_walk1..4`, `vamp_hurt` exist
+- `index40.asm` is **not** a toggle: `orc_walk3`, `orc_walk4`, `orc_hurt`, `vamp_walk1..4`, `vamp_hurt`, `nun_*` (3F-T11) exist
   only at 40 px (FRM rows, sequences), so dropping them from it fails the build with a pointer
   here. The only way back to the 48-px set is the tag **`archive/48px-sprites`** (= main
   `410c118`, before any 40-px import), or reverting the ANIM-IMPORT2 commits.
@@ -73,7 +73,8 @@
   through `ovl_run` with C = `BANK_R6`. New 3E / 3F code and overlay streams
   go here (memory-map "R6 region"); 3F sprite sources go to the **SRC6**
   region just below R6 (`SRC6_KINDS` in `tools/zx0_sources.py`; memory-map
-  "SRC6 region").
+  "SRC6 region") while it has room (at most 15 pages: the boot block below it;
+  3F-T11's `K_ARCHMAGE` went to the bank-1 sources instead, memory-map "3F-T11").
 - **Bank-7 cold code (D3-S2).** Per-turn / per-event logic that needs no
   other `$C000` bank lives in bank 7 `$DB00..$F7FF` (MEM-RECLAIM w2a; `src/bank7.asm`, the
   space of the dropped bitmap shadow), entered only through **`far7`**

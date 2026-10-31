@@ -19,10 +19,10 @@
 ksm_tab:
                 DW   ksm_kn, ksm_wz, ksm_vb, ksm_sk, ksm_gb, ksm_gh, ksm_rt, ksm_bt, ksm_sl
                 ; 3F-T13: the real 3F-A1 blocks; kinds drawing another's frames share its block
-                ; (Vampire / Archmage = the Necro's), a tier row names its BASE kind's block (0 B
+                ; (none since 3F-T11: the Archmage has its own), a tier row names its BASE kind's block (0 B
                 ; here, and the cache dedups by block: one slot)
                 ;    SP      VP      OR      AR      MU      NE      OG      DK      AM
-                DW   ksm_sp, ksm_vp, ksm_or, ksm_ar, ksm_mu, ksm_ne, ksm_og, ksm_dk, ksm_ne
+                DW   ksm_sp, ksm_vp, ksm_or, ksm_ar, ksm_mu, ksm_ne, ksm_og, ksm_dk, ksm_am
                 ;    GR      RR      SB      SL      BW      SG      SK      PG      OB      OU      SN      BC
                 DW   ksm_rt, ksm_rt, ksm_bt, ksm_gb, ksm_sp, ksm_sk, ksm_sk, ksm_gh, ksm_or, ksm_or, ksm_ar, ksm_ne
                 DS   2 * (K_MAX - K_COUNT), 0  ; ids 30 / 31: the class FX kinds (no sequences)
@@ -190,8 +190,7 @@ or_attack:      DB FID_orc_raise, 3, 0, FID_orc_attack, 2, SF_IMPACT, SEQ_END
 or_hurt:        DB FID_orc_hurt, 3, 0, SEQ_END           ; ANIM-IMPORT2: its own HURT pose (Orc V4)
 or_death:       DEATHSEQ FID_orc_hurt, FID_small_corpse, FID_small_corpse, FID_orc_walk1
 ksm_or_e:
-; --- Necromancer (Archmage, Bone Caller): climber (not the Archmage: it never walks, no
-; KF_CLIMBER); walk B4 = walk2, walk4, walk3, walk1 (ART3; ANIM-IMPORT, was B3); CAST ---
+; --- Necromancer (Bone Caller): climber; walk B4 = walk2, walk4, walk3, walk1 (ART3; ANIM-IMPORT, was B3); CAST ---
 ksm_ne:         KSMH ksm_ne_e - ksm_ne_s, 3, ne_idle, ne_move, ne_climb, ne_climb + 1, ne_attack, ne_hurt, ne_hurt, ne_death, ksm_ne_s
 ksm_ne_s:
 ne_idle:        DB 1, FID_necro_walk1, 1, SEQ_END
@@ -201,6 +200,18 @@ ne_attack:      DB FID_necro_walk1, 3, 0, FID_necro_cast, 2, SF_IMPACT, SEQ_END
 ne_hurt:        DB FID_necro_walk1, 3, 0, SEQ_END
 ne_death:       DEATHSEQ FID_necro_walk1, FID_small_corpse, FID_small_corpse, FID_necro_walk1
 ksm_ne_e:
+; --- Archmage (3F-T11, the nun; ART13c option D): side view only; 2-pose shuffle MOVECYC2
+; walk2, walk1 (walk1 = rest, WK0, odd slot); ATTACK = rest 3 + the side CAST 2 + IMPACT (the
+; Necro's timing: rg_pose / sp_summon play it); HURT = its own pose; DEAD = small_corpse.
+; Not a climber (no KF_CLIMBER): KS_CLIMB = the idle, KS_CLIMBREST = the HURT seq (never used) ---
+ksm_am:         KSMH ksm_am_e - ksm_am_s, 3, am_idle, am_move, am_idle, am_hurt, am_attack, am_hurt, am_hurt, am_death, ksm_am_s
+ksm_am_s:
+am_idle:        DB 1, FID_nun_walk1, 1, SEQ_END
+am_move:        MOVECYC2 nun_walk2, nun_walk1
+am_attack:      DB FID_nun_walk1, 3, 0, FID_nun_cast, 2, SF_IMPACT, SEQ_END
+am_hurt:        DB FID_nun_hurt, 3, 0, SEQ_END
+am_death:       DEATHSEQ FID_nun_hurt, FID_small_corpse, FID_small_corpse, FID_nun_walk1
+ksm_am_e:
 ; --- Vampire: ANIM-IMPORT2 its own 40-px set (ART9: cape, no staff; walk B3, BITE, HURT); not a climber ---
 ksm_vp:         KSMH ksm_vp_e - ksm_vp_s, 3, vp_idle, vp_move, vp_idle, vp_hurt, vp_attack, vp_hurt, vp_hurt, vp_death, ksm_vp_s
 ksm_vp_s:
@@ -254,7 +265,7 @@ ksm_ar_e:
                 ; the 2-frame walkers' rest frame (odd slot, drawn cell-aligned) must not be WK4
                 ASSERT !(FFL_spider_walk1 & FF_PH4) && !(FFL_orc_walk1 & FF_PH4) && !(FFL_necro_walk1 & FF_PH4)
                 ASSERT !(FFL_mummy_walk1 & FF_PH4) && !(FFL_ogre_walk1 & FF_PH4) && !(FFL_dk_walk1 & FF_PH4)
-                ASSERT !(FFL_vamp_walk1 & FF_PH4)
+                ASSERT !(FFL_vamp_walk1 & FF_PH4) && !(FFL_nun_walk1 & FF_PH4)
                 ; KS_CLIMBREST = the climb cycle + 1 (one byte read): that byte is climb_h1, which
                 ; must be the cell-aligned STA climb art (CLIMBCYC emitted the real pair)
                 ASSERT FID_climb_h1 >= 0 && FID_climb_h2 >= 0 && !(FFL_climb_h1 & (FF_PH4 | FF_MOTION))

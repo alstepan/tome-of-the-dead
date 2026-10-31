@@ -88,3 +88,9 @@
         INCLUDE "vamp_walk4.asm"
         INCLUDE "vamp_bite.asm"
         INCLUDE "vamp_hurt.asm"
+; --- nun Archmage (3F-T11; ART13c option D, side cast, user 2026-10-30 NUN ARCHMAGE APPROVED):
+;     its own 4 frames (was the Necro's walk + cast); import_anim40 nun
+        INCLUDE "nun_walk1.asm"
+        INCLUDE "nun_walk2.asm"
+        INCLUDE "nun_cast.asm"
+        INCLUDE "nun_hurt.asm"
