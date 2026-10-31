@@ -31,14 +31,13 @@ TRAP_FX_DY      EQU 4               ; the DART impact row: hero top + 4 (the low
 
 ;------------------------------------------------------------------------------
 ; trap_turn — jp from trap_chk (bank 7). In: A = TRP_WAIT (bit 0 a Wait, bit 1 the
-; room-entry sense: immediate mode), DE = the room's unspent TRAP_LIST entry.
+; room-entry sense: immediate mode), DE = the room's TRAP_LIST entry.
 ; Nothing for a DYING hero or a trap on the other storey. Then, with t = the
 ; trap col and x = the hero's body-left col:
 ;  1. trigger: t in x .. x+2 now and NOT before the action (TRP_PRE: same
 ;     storey and t in its x .. x+2) — standing, turning or waiting on it never
 ;     re-fires; walking off and on does; a jump that clears it (t in the
-;     swept cols) never has it under the body. The bits now (DART known, a
-;     one-shot spent), the work in the sequence (TEV_FIRE + type);
+;     swept cols) never has it under the body. The bits now (known, TRAP2: every type stays), the work in the sequence (TEV_FIRE + type);
 ;  2. else a hidden trap is found (known now; TEV_FIND) by the Mage's sense
 ;     (t in x-2 .. x+4, 100 %) or, on a Wait, by the search (t in x-6 .. x+8,
 ;     1 in 2: rng_mod 2 = 0, gameplay RNG; the sense is tested first, so a
@@ -78,14 +77,8 @@ trap_turn:
                 sub  b
                 cp   HERO_W                    ; ... and under that body: no re-fire
                 ret  c
-.fire:          call tr_type
-                ld   b, a
-                or   a
-                jr   nz, .one
-                set  TRF_KNOWN_BIT, (hl)       ; DART: known, re-arms
-                jr   .arm
-.one:           set  TRF_SPENT_BIT, (hl)       ; GAS / TELEPORT / ALARM: one-shot
-.arm:           ld   a, b
+.fire:          set  TRF_KNOWN_BIT, (hl)       ; TRAP2: every type is known and stays (re-arms)
+                call tr_type
                 add  a, TEV_FIRE
                 jr   tr_arm
 .nu:            bit  TRF_KNOWN_BIT, (hl)
@@ -167,8 +160,7 @@ tr_rearm:       ld   hl, TURN_PEND
 ;             do_exit -> tele_pick ("YOU ARE TELEPORTED!", the arrival flash);
 ;           ALARM: 3E stub "A BELL RINGS. NOTHING COMES" (3F: the wave while
 ;             the boss lives + the red border, "AN ALARM BELL RINGS!");
-;   step 1  (TRAP_STEP_T ticks on; TELEPORT: TELE_STEP_T) the plate: DART in its ink, a one-shot
-;           erased (ap_put_a: T_AIR; decor returns on the next entry).
+;   step 1  (TRAP_STEP_T ticks on; TELEPORT: TELE_STEP_T) the plate in its ink (every type stays, TRAP2).
 ;  TEV_FIND: step 0 "TRAP FOUND: <type>"; the plate blinks bright / off
 ;           (TILE_ATTRS 0 = ink on black paper: unseen) FIND_BLINKS times,
 ;           TRAP_STEP_T ticks each, then shows in its ink.
@@ -201,7 +193,7 @@ trap_step:
                 jr   tr_rearm
 .s1:            xor  a                         ; 3F-T9: the ALARM's red border off (black is
                 out  (PORT_BORDER), a          ; the only border colour in play: any type)
-                jr   tr_final
+                jr   tr_show
                 ; --- find ---
 .fd:            ld   a, c
                 or   a
@@ -212,28 +204,21 @@ trap_step:
                 call tr_ent
 .b:             ld   a, c
                 cp   2 * FIND_BLINKS
-                jr   z, tr_final               ; done: its ink
+                jr   z, tr_show                ; done: its ink
                 rrca
                 ld   a, PLATE_FLASH_ATTR       ; even steps bright,
                 jr   nc, .pl
                 xor  a                         ; odd steps off
                 jr   .pl
 
-; tr_final — HL = the entry: DART / a found trap in its ink; a one-shot erased.
-tr_final:       bit  TRF_SPENT_BIT, (hl)
-                jr   z, tr_show
-                ; fall through
-; tr_erase / tr_show / tr_plate — HL = an entry in CUR_ROOM: its plate
-; erased (T_AIR — no floor item footprint covers a trap col, drop_put / the
-; generator) / drawn in its type attr / drawn with TILE_ATTRS[T_TRAP] := A;
-; redrawn next render + the attr shadow (ap_put_a, bank 7: the one cell).
+; tr_show / tr_plate — HL = an entry in CUR_ROOM: its plate drawn in its type
+; attr / drawn with TILE_ATTRS[T_TRAP] := A; redrawn next render + the attr
+; shadow (ap_put_a, bank 7: the one cell).  TRAP2: no trap is ever erased.
 ; Keep HL.  Clobbers: A, BC, DE.   ~4k T
-tr_erase:       ld   b, T_AIR
-                jr   tr_draw
 tr_show:        call tr_ink                    ; A = its type attr
 tr_plate:       ld   (TILE_ATTRS + T_TRAP), a  ; (<= 1 trap a room: item_defs.asm)
                 ld   b, T_TRAP
-tr_draw:        push hl
+                push hl
                 ld   a, (hl)
                 ld   e, a
                 and  TRF_ROOM_MASK
@@ -274,6 +259,7 @@ tr_eff:
                 ld   a, (LVL_FLAGS)            ; (its unique not dropped: as the teleport's lair rule)
                 and  LF_UNIQUE
                 jr   nz, .bell
+                inc  (hl)                      ; (HL = LP_RESPAWNS still)
                 ld   hl, SPQ_K                 ; a wave of 1 + (rnd & 1) at a door, made by end_turn's
                 ld   (hl), SPQ_WAVE            ; sp_run (the queue is empty: the trap fires in the
                 inc  l                         ; hero's phase, before any producer of this turn)

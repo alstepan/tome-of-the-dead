@@ -149,10 +149,10 @@ pathing change, no off-screen events).
 | Type | Depths | Effect on the hero | After triggering | Message (≤ 32) |
 |---|---|---|---|---|
 | **DART** | D1+ | 1d4+1 PHYS (DEF applies) + **POISON 12** (§6.4; was 6, POIS1 §6.4.3); impact = `arrow_hit` sprite at the hero | **re-arms** (stays, now known) | `A DART HITS YOU!` |
-| **GAS** | D2+ | **ASLEEP 4** (§6.4); hero flashes `$44` one step (no new art) | **one-shot** (removed) | `SLEEPING GAS! YOU FALL ASLEEP.` (30) |
-| **TELEPORT** | D3+ | as the Teleport scroll (§8): random free spot, random room, never the lair while its boss lives; attr flash as the Archmage's | one-shot | `YOU ARE TELEPORTED!` |
-| **ALARM** | D5+ | while the boss lives: one **wave** = the §9.5 idle-wave spawn (1 + (rnd & 1) of the level's kinds at the room's doors/exits, awake, `F_RESPAWN`, slot + §9.3 cap rules), runs even with `IDLE_WAVE` off; border flashes red 2 ticks. Boss dead: nothing comes | one-shot | `AN ALARM BELL RINGS!` / `A BELL RINGS. NOTHING COMES.` (28) |
-| **STUN** (falling stone; STUN1, §1.5.1) | D4+ | 1d3 PHYS (DEF applies) + **STUNNED 2–3** (rolled, §6.4); hero flashes `$07` | one-shot | `A STONE FALLS ON YOU!` (21) then `YOU ARE STUNNED!` (existing) |
+| **GAS** | D2+ | **ASLEEP 4** (§6.4); hero flashes `$44` one step (no new art) | re-arms (stays) | `SLEEPING GAS! YOU FALL ASLEEP.` (30) |
+| **TELEPORT** | D3+ | as the Teleport scroll (§8): random free spot, random room, never the lair while its boss lives; attr flash as the Archmage's | re-arms (stays; accepted by the user: a free escape tool) | `YOU ARE TELEPORTED!` |
+| **ALARM** | D5+ | while the boss lives: one **wave** = the §9.5 idle-wave spawn (1 + (rnd & 1) of the level's kinds at the room's doors/exits, awake, `F_RESPAWN`, slot + §9.3 cap rules), runs even with `IDLE_WAVE` off; border flashes red 2 ticks. Boss dead, or `LP_RESPAWNS` at `RESPAWN_MAX` (6): nothing comes (TRAP2: a wave counts toward the §9.5 respawn cap, so a re-arming plate cannot be farmed for XP) | re-arms (stays) | `AN ALARM BELL RINGS!` / `A BELL RINGS. NOTHING COMES.` (28) |
+| **STUN** (falling stone; STUN1, §1.5.1) | D4+ | 1d3 PHYS (DEF applies) + **STUNNED 2–3** (rolled, §6.4); hero flashes `$07` | re-arms (stays) | `A STONE FALLS ON YOU!` (21) then `YOU ARE STUNNED!` (existing) |
 
 ALARM's wave code lands in 3F; in 3E the trap is generated and prints the "nothing comes"
 line (the generator must not change between 3E and 3F).
@@ -163,8 +163,8 @@ line (the generator must not change between 3E and 3F).
   2026-10-26; no art added).
 - Timing: the trigger / find is decided on the move's input tick; the effect, its lines and
   the flashes run on the following ticks, then the monster phase (the cast mechanism). On a
-  trigger the plate flashes bright white `$47` for 2 ticks (then DART shows its ink, a
-  one-shot is erased) and the hero flashes the type ink (DART `$42`, GAS `$44` one step,
+  trigger the plate flashes bright white `$47` for 2 ticks (then every type shows its ink: TRAP2, no
+  trap is ever removed) and the hero flashes the type ink (DART `$42`, GAS `$44` one step,
   TELEPORT `$43`, ALARM `$46`). On a find (search / sense) the plate blinks bright / off
   twice, 2 ticks each, then shows its ink, with the `TRAP FOUND:` line.
 - Teleport (scroll and trap): the hero flashes `$43` (bright magenta = the TELEPORT ink; not
@@ -187,8 +187,8 @@ past a known DART. Teleport/fear arrivals never land with a trap col under the b
 (common id 10) in its cell; the room builder sets its attr from a 5-entry type table (DART
 `$42`, GAS `$44`, TELEPORT `$43`, ALARM `$46`, STUN `$07`; ink on black, joins the legality set). A trap
 becomes known when:
-1. it **triggers** (DART stays known; one-shot traps are removed and the cell redraws as its
-   normal id);
+1. it **triggers** (TRAP2, user 2026-10-28: **every** trap stays known and visible and re-arms; it fires again
+   only on a NEW crossing, and monsters ignore traps);
 2. **Search = Wait** (↓ with no ladder below, §2.3; no new key, joystick-complete): each
    hidden trap in the current room on the hero's storey within **6 cols** of the body is
    found with **1 in 2** (gameplay RNG);
@@ -220,8 +220,8 @@ not `GEN_RNG`, §8.11 Q8).**
   D1: not within the hero start body ±1.
 - Not on a floor-item cell.
 - Storage: **trap list ≤ 6 entries × 2 B**: room (4 bits), storey (1), col (5), type (**3**,
-  STUN1: widened into the old `TR_B1` bit 7 spare), known (1), spent (1), 1 bit spare
-  (`TR_B0` bit 7). Spent entries are skipped (never compacted mid-level).
+  STUN1: widened into the old `TR_B1` bit 7 spare), known (1), 2 bits spare
+  (`TR_B0` bits 6-7; the old `spent` bit is retired by TRAP2).
 
 **Levelcheck invariants (B3B-6 checker extension).** Per seed and depth: trap count = table
 (minus dropped tries, reported); ≤ 1 per room; none in start/lair/Sanctum; every `t` passes
@@ -244,7 +244,7 @@ first draft's no-damage thunder rune.)
 | vs GAS | GAS ASLEEP 4 ends on **any HP loss**. STUNNED does **not** end on damage, only on its timer. Out of combat STUN is the milder trap (2–3 turns, not 4, plus 1–3 HP). Next to monsters it is the harsher one: every adjacent monster gets ~3–4 near-sure swings, where under GAS the first swing wakes him. That is why it is D4+ |
 | While stunned | as any HOLD (§2.2): the loop runs his turns automatically (1 per 4 ticks, a Wait **without** search). Every turn input is ignored: move, melee, cast, quick slots, bag page. Only Pause works. There is no look command to keep |
 | Application | through **`deal_hit`**, like DART's poison: `trap_hit` parametrised, effect `EFX_STUNNED`, amount = the roll. So the standard hold rules apply. **B2:** cannot happen, because the hero has just moved. **HOLD_GUARD:** if it is still set (he just came out of a stun or freeze and this move is his guarded action), the stun is **silently refused** and the damage still lands. That matches the Ogre SLAM rule. HOLD_GUARD is set again when the trap stun ends (§6.4 step 3), so an Ogre SLAM or Orc Bouncer hit cannot extend it: he always gets one action first. The immunity mask is checked by `deal_hit` (no gear grants `IMMF_STUN` today) |
-| Feedback | step 0: `SFX_TRAP` (reused); the hero flashes the type ink `$07` (`TRAP_FLASH_T`, the generic `tr_eff` path), then the STUNNED tint `$07` holds; the plate flashes `$47`; log `A STONE FALLS ON YOU!` (21, new), then `deal_hit`'s own `YOU ARE STUNNED!` (`st_stunned`, existing). The hurt reaction plays on arrival (`E_REACTAT`, the DART timing). There is no impact sprite (the `arrow_hit` frame is DART-only). Step 1: the plate is erased (one-shot), as GAS |
+| Feedback | step 0: `SFX_TRAP` (reused); the hero flashes the type ink `$07` (`TRAP_FLASH_T`, the generic `tr_eff` path), then the STUNNED tint `$07` holds; the plate flashes `$47`; log `A STONE FALLS ON YOU!` (21, new), then `deal_hit`'s own `YOU ARE STUNNED!` (`st_stunned`, existing). The hurt reaction plays on arrival (`E_REACTAT`, the DART timing). There is no impact sprite (the `arrow_hit` frame is DART-only). Step 1: the plate shows its ink and stays (TRAP2), as GAS |
 | Plate ink | **`$07`** (white, not bright, on black: grey stone). It is the STUNNED colour everywhere (tint, icon), so the plate tells you what it does. It is distinct from DART `$42`, GAS `$44`, TELEPORT `$43`, ALARM `$46` and from the `$47` flash/blink (the BRIGHT step is visible: the find blink goes `$47` / off / `$47` / off / `$07`). It is already in the legality set (STUNNED tint). `$45` was rejected (FROZEN tint, and the Mage's own attr: an invisible hero flash). `$41` was rejected (ASLEEP tint, near-black on black) |
 | Find | search and Mage sense are unchanged; line `TRAP FOUND: STUN` (`STUN` 4 B, new name) |
 | Hunger faint (§7.1) | the faint already defers while the hero is held. **STUN1 adds: it also defers while `HOLD_GUARD` is set.** So a faint never lands on the turn a stun or freeze ends, and he gets one free action between two holds. This costs ~4 B in FAINT1's defer checks (FAINT1 is not built yet, so it is in its estimate). |
@@ -279,7 +279,7 @@ within the depth pool" check for D4–D8 only.
   + lookup ~6; ZX0 ~+10). **≈ 75 B total.** Time: about DART's (~15k + ~5k T over two ticks,
   budget.py `tdart` class, with no FX start).
 - Tests (`tests/t16.py`): add a type-4 case to every type loop.
-  - **Fire:** HOLD = STUNNED; both lines; plate erased; hero `E_FLT` attr `$07`.
+  - **Fire:** HOLD = STUNNED; both lines; plate stays; hero `E_FLT` attr `$07`.
   - **Damage:** with `SEED_FIXED`, HP loss = `max(1, d − DEF)` for d ∈ 1..3, checked at DEF 0
     (1, 2 and 3 all seen) and at DEF 3 (always 1).
   - **Roll distribution:** ≥ 200 fires over varied gameplay seeds. Every timer ∈ {2, 3}, each

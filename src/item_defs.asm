@@ -291,7 +291,7 @@ ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 81
 ; level_gen. TRAP_N entries used (0..TRAP_MAX); spent entries are skipped,
 ; never compacted mid-level.
 ;   byte TR_B0: bits 0-3 room id, bit 4 TRF_S1 (storey 1), bit 5 TRF_KNOWN,
-;               bit 6 TRF_SPENT, bit 7 spare (0)
+;               bits 6-7 spare (0); TRAP2: no trap is ever spent
 ;   byte TR_B1: bits 0-4 col, bits 5-7 type TT_* (STUN1: 3 bits)
 ; NOTE: tools/levelgen.py's 320-B block model (tests/levelgen_z80.py,
 ; room_model.py) must keep these bytes 0 until T6 / T7 model the traps.
@@ -305,10 +305,9 @@ TR_B1           EQU 1
 TRF_ROOM_MASK   EQU %00001111
 TRF_S1          EQU %00010000
 TRF_KNOWN       EQU %00100000
-TRF_SPENT       EQU %01000000
+TRF_SPENT       EQU 0               ; TRAP2: retired (mask terms in trap6 / fx6 / bank3 / bank7 are no-ops)
 TRF_S1_BIT      EQU 4
 TRF_KNOWN_BIT   EQU 5
-TRF_SPENT_BIT   EQU 6
 TR_COL_MASK     EQU %00011111
 TR_TYPE_MASK    EQU %11100000
 TR_TYPE_SHIFT   EQU 5
