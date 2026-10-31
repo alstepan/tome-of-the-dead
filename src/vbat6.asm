@@ -120,12 +120,28 @@ vb_one:         ld   a, (ix+E_KIND)
 ; vb_bat — IX = a humanoid Vampire: the bat form, same x and top row (the 3x2
 ; box lies inside the 3x6 one: no legality test), the line. vb_fin — both
 ; directions: M_REST, px / py snapped, the golden Lord's LP_BOSS := its kind |
-; LEK_GOLD, build_live.  Clobbers: A, BC, DE, HL.
+; LEK_GOLD, build_live, the slot hidden for the next render (R_VIS 0, below).
+; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 vb_bat:         ld   (ix+E_KIND), K_VBAT
                 ld   a, TX_VB_TURNS
                 call msg_push                  ; (low RAM; any bank)
-vb_fin:         ld   (ix+E_MODE), M_REST       ; no sequence of the other kind runs on (start_seq
+                ; fix/vamp-corruption: RENDER_FIRST renders the next tick BEFORE anim_tick,
+                ; i.e. with this tick's R_FID = a frame of the OLD kind placed by the NEW
+                ; kind's KT_BH (fpy = py + 8 bh - H): a 48-px Vampire frame on the 2-row
+                ; bat box at y 2 gave fpy = -16 -> R_ROW 30 -> blit / erase_rect into the
+                ; attributes and the bank-5 RAM above them ($5Bxx..$5Fxx). R_VIS 0: that
+                ; render only erases the drawn sprite; anim_tick then sets the new frame
+                ; (one tick blank).  12 B, ~60 T a transform
+vb_fin:         ld   a, (ACT_SLOT)
+                rrca
+                rrca
+                rrca
+                rrca                           ; slot * 16 (slot < 16)
+                ld   l, a
+                ld   h, SLOTREC >> 8
+                ld   (hl), 0                   ; R_VIS := hidden
+                ld   (ix+E_MODE), M_REST       ; no sequence of the other kind runs on (start_seq
                 call snap_pxpy                 ; zeroes E_TMR; .walkph re-locks E_WPH to px)
                 ld   a, (ix+E_GOLD)
                 or   a
@@ -134,6 +150,7 @@ vb_fin:         ld   (ix+E_MODE), M_REST       ; no sequence of the other kind r
                 ld   (LP_BOSS), a
 .b:             jp   build_live                ; (bank 2; keeps IX)
                 ASSERT M_REST == 0 && BH_K_BAT <= BH_K_VAMPIRE && BH_K_VAMPIRE == 6
+                ASSERT R_VIS == 0 && (SLOTREC & $FF) == 0 && SLOTREC_STRIDE == 16 && P_MAX_ENT == 16
                 ASSERT VB_FLEE_T <= STS_MAX_TURNS && (ST_FLAGS >> 8) == (ST_T1 >> 8)
 
 ; vb_st — HL = ST_FLAGS of ACT_SLOT.  Clobbers: A
