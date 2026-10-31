@@ -1671,7 +1671,7 @@ no bitmap shadow to carry it). Tests: `tests/room_model.py` `expected_cell`.
 256-B page, static): `TF_SOLID 1` (bodies + projectiles: walls, block, arch,
 closed planks, lectern), `TF_DOOR 2` (closed plank: bump opens), `TF_LOCK 4`
 (locked/sealed plank), `TF_LADDER 8` (LAD_*, HOLE_*), `TF_HOLE 16` (floor-row
-cell passable vertically), `TF_ATTACK 32` (lectern/Book), `TF_ANIM 64`
+cell passable vertically), `TF_ATTACK 32` (lectern/Tome), `TF_ANIM 64`
 (deriver adds the cell to `ANIM_LIST`), `TF_FLOOR 128` (floor support; pit
 holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
 

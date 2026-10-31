@@ -38,7 +38,7 @@
 | Going back up | **no**; the arrival shaft top is rubble | the previous level is discarded with its pool |
 | Save | **none; permadeath**. Death → death screen (`KILLED BY … ON D5, TURN n`) → main menu | user |
 | Seed | master seed = `FRAMES` when START is pressed; level seed = f(master, depth). Test flag `SEED_FIXED` forces the compile-time seed (F3) | a fixed seed would replay the same dungeon every game |
-| Win | D8: kill the **Necromancer Archmage** → the Sanctum seal opens → **destroy the Book of Absolute Death Magic** (§1.3) → `GS_WIN` | user |
+| Win | D8: kill the **Necromancer Archmage** → the Sanctum seal opens → **destroy the Tome of Absolute Death Magic** (§1.3) → `GS_WIN` | user |
 
 ### 1.1 Generation rules (F6, per level, deterministic from the level seed)
 
@@ -49,7 +49,7 @@
 | Start | the DFS root, **on the top grid row (L1, 2026-10-05)**, 0 monsters. D2–D8: arrival shaft from above, rubble-capped |
 | Lair | **on the bottom grid row (L1, 2026-10-05; tiers in the L1 rules row)**, the farthest leaf (BFS) with a horizontal tree edge: boss + **level exit** = down-shaft `{c,2}` under a **GRATE** that opens when the boss dies. **The grate is SHUT (`T_GRATE_SHUT`, solid) while the boss lives; this is the rule (BOSS-GUARD 2026-10-29; the §1.4 "always open" row was the 3B stand-in only).** The boss is posted on the grate and guards it (§9.2 "Boss guard") |
 | Key room | the farthest other leaf (else the farthest non-start room): holds the **level key** (rev 2026-10-20: found on first entry, no floor item, §8.11 Q1). The lair edge is a **locked door** |
-| D8 Sanctum | an extra leaf off the lair behind a **sealed door** (opens on the Archmage's death); holds the Book. D8 has no exit |
+| D8 Sanctum | an extra leaf off the lair behind a **sealed door** (opens on the Archmage's death); holds the Tome. D8 has no exit |
 | **Level shape (L1, user 2026-10-05)** | The level exit (lair) is **always on the bottom grid row** (ids 6–8), and **no room is above the entry room**: the hero always heads down into the dungeon |
 | L1 rules (designer decision 2026-10-05) | Grid id `r = 3·row + col`, row 0 = top. **(1) Start = top row:** `start = rnd(3)` (replaces `rnd(9)`), so nothing can be above it; the start room has no up-exit; its row-0 horizontal neighbours are allowed (they are beside it, not above). Arrival shaft D2+ unchanged (storey 0 of the start room, rubble-capped). **(2) Room count:** `n = 7 + rnd(3)`; **D8: `n = min(7 + rnd(3), 8)`** (the Sanctum cell is reserved, see (5)). **(3) DFS growth:** the random DFS from `start` runs `while stack and not done`, where `done` = `|visited| ≥ n` **and** two horizontally adjacent bottom-row cells (6–7 or 7–8) are visited. A full DFS reaches all 9 cells, so `done` is always reachable; the room count stays 7–9. **(4) Bottom-row horizontal edge:** after the tree, if no tree edge joins two bottom-row rooms, the loop edge becomes **mandatory** and is drawn with `rnd(len)` from the unlinked present bottom-row pairs (the `LOOP_EDGE_ODDS` roll is skipped); otherwise the loop step is unchanged. Still 0–1 extra edges. **(5) D8 Sanctum:** before the DFS, reserve `S = 6 + 2·rnd(2)` (bottom-row end cell); the DFS never enters `S`; `done` additionally needs cell 7 and the other bottom end visited. The lair is then always cell 7 (the only bottom room next to the free `S`); the Sanctum hangs off its free side behind the sealed door. **(6) Lair tiers (replace F6 gap (1) tiers):** (a) farthest (BFS) **bottom-row** non-start leaf with a horizontal edge; (b) farthest bottom-row room with a horizontal edge (a through-room lair is fine; the boss never follows); ties = lowest id; D8 also needs `sanctum_ok`. (3)+(4) guarantee tier (b) exists, so **lair reseeds must be 0**; the reseed path (seed+1, ≤ 16) stays as a safety net only. Levelcheck asserts over the seed sweep: start on row 0 (so no room above it), lair on row 2, room count 7–9, lair has a horizontal edge, D8 lair = 7 with `S` free, lair-reseed count = 0; the junior reports Restart counts (feature/potion) before vs after. **(7) Lair door:** the lair's horizontal edge toward its BFS parent if horizontal, else its lowest-id horizontal edge, is the lair door (key gating only matters from 3F; the grate gates the exit). **(8)** Key room, vertical links, edges, door odds, shaft cols: unchanged |
 | In-room | 1–2 internal ladders `{c,1}`, `c ∈ 3..26`, ≥ 4 cols from ladders/pits · optional **pit** (3 cols, storey-0 floor, ≥ 3 clear cols on each side) · optional **dead-end block** (2–3 wall cols at an exitless edge, rubble at its foot) · decor **re-derived from the room seed** (never stored; rules in concept-screen §3.3) |
@@ -114,16 +114,16 @@
   TILE_FLAGS solid bit. DARK (= `T_BRICK`), wall_worn/wall_brk and pillar stay SOLID on brick.
   Placement rules: concept-screen §3.3 "Decor placement (D1)".
 
-### 1.3 The Book of Absolute Death Magic
+### 1.3 The Tome of Absolute Death Magic
 
-- The Book lies on a **2×2 lectern tile object** in the Sanctum. It **cannot be picked up**.
-- **BOOK_HP = 5.** Every hit whose line reaches the Book removes 1: melee, power attack,
+- The Tome lies on a **2×2 lectern tile object** in the Sanctum. It **cannot be picked up**.
+- **TOME_HP = 5.** Every hit whose line reaches the Tome removes 1: melee, power attack,
   spell, arrow or dagger.
   - It **ignores resistances** and is never missed.
   - Each hit flashes the lectern `$43` and prints a message.
 - **Aura:** while the hero is within 6 cols on its storey, it deals 1 HP per turn (end of
   turn, ignores DEF).
-- At 0 it turns to ash (rubble glyph) → `THE BOOK IS DESTROYED` → `GS_WIN`.
+- At 0 it turns to ash (rubble glyph) → `THE TOME IS DESTROYED` → `GS_WIN`.
 - It is a tile with an `ATTACKABLE` flag, not an entity.
 
 ### 1.4 Stage 3B stand-ins (user, 2026-10-03; temporary, replaced in 3C+)
@@ -431,7 +431,7 @@ in a row" caps flight speed at 7 cols per 2 turns.
 | Pause (Resume / Sound / Quit, §3.6) | FIRE held + ↑ | — | BREAK |
 | Cycle sound ALL ON > SFX ONLY > OFF (§3.6; no turn) | via Pause → SOUND | — | `S` |
 | Page: move / verb / confirm / back | directions / ← → / FIRE / ↓ + FIRE | same | — |
-| Close door, hit the Book | FIRE on the melee icon / bump | — | — |
+| Close door, hit the Tome | FIRE on the melee icon / bump | — | — |
 | Pickups | automatic at the end of a turn | — | — |
 
 **Stage 3C decisions (user 2026-10-04 / designer decision 2026-10-04).**
@@ -554,7 +554,7 @@ row |0         1         2         3 |
  0  |TOME OF THE DEAD - HOW TO PLAY  |  $46
  1  |FIND THE KEY, KILL THE BOSS AND |  $47
  2  |GO DOWN. ON DEPTH 8 KILL THE    |  $47
- 3  |ARCHMAGE, THEN DESTROY THE BOOK.|  $47
+ 3  |ARCHMAGE, THEN DESTROY THE TOME.|  $47
  4  |STICK       ACTION      KEY     |  $06
  5  |LEFT RIGHT  WALK, HIT           |  F
  6  |UP+L/R      JUMP                |  F
@@ -644,7 +644,7 @@ chars: char index 0, 4, 8 … )**. Never recolour mid-cell. The log uses one col
 message that would exceed it must be reworded in the table below; there is no wrapping.
 Examples (all ≤ 32): `YOU HIT THE GOBLIN.` · `THE GOBLIN MISSES YOU.` ·
 `DEATH KNIGHT PARRIES!` · `YOU THROW A DAGGER.` · `YOU GRASP LITTLE OF IT.` ·
-`THE BOOK IS DESTROYED` (21) · `NO ARROWS.` · `QUIVER FULL.` · `THE VAMPIRE TURNS INTO A BAT!` (28) · `YOU PICK UP 3 ARROWS.` ·
+`THE TOME IS DESTROYED` (21) · `NO ARROWS.` · `QUIVER FULL.` · `THE VAMPIRE TURNS INTO A BAT!` (28) · `YOU PICK UP 3 ARROWS.` ·
 `FOOD: HUNGRY.` The death line moves to the menu font: `KILLED BY …` ≤ 32 chars, with the
 monster name abbreviated by a table if longer than the budget.
 
@@ -1226,7 +1226,7 @@ sprite. **≤ 3 tracks at once**; more are queued.
 - **Loop guard:** max 4 reversals per projectile. Range is finite in any case.
 - **Encoding (engineer):** per kind 6 × 2 bits {N, R, I, X} + a 6-bit W mask ≈ 3 B.
 - **The hero uses the same format**, OR-combined from worn gear (best response wins).
-- Falls and the Book's aura ignore resistances.
+- Falls and the Tome's aura ignore resistances.
 
 ### 6.1 Mage spells (dmg ignores DEF)
 
@@ -3443,7 +3443,7 @@ the Sanctum. **`T_GRATE_SHUT` = 13** (`TF_SOLID`). **31 stays free** (spare). Co
 bytes overwrite the blank common slots; static flags/attrs); it **deletes** the planned D8 60..63
 swap (≈ 40–60 B saved) and D8 keeps item markers like D1–D7. Tileset 8 loses the lectern (4
 per-level ids freed). Art: the artist supplies the lectern (4 cells, from tileset 8) and a closed
-grate glyph (8 B). Book hit flash `$43` rewrites the 4 attrs (§1.3 unchanged).
+grate glyph (8 B). Tome hit flash `$43` rewrites the 4 attrs (§1.3 unchanged).
 
 **R3 Climbers.** Only kinds with climb frames climb: **Goblin, Skeleton** (+ their tiers) and the
 heroes. **Orc, Skeleton Archer (+ Sniper), Death Knight are walkers, not climbers** (§9.1). 0 B,
@@ -3600,7 +3600,7 @@ Death Knight (56 at D7), and the Mage's Firebolt budget still covers it (below).
   drop items. The only reversal is A6.
 - **Cap per turn:** the Archmage makes at most one attack per turn (one spell *or* one staff
   hit), so its maximum is **11 HP per turn** (Death Bolt 1d8+3) and **17 per two turns**
-  (bolt + staff). Summons and the Book aura are separate sources (the aura is in the Sanctum,
+  (bolt + staff). Summons and the Tome aura are separate sources (the aura is in the Sanctum,
   not in the lair: it never stacks with this fight).
 
 **A3 Turn rule** (the Archmage's own `ai_monster` branch: one kind test at entry → far6 R6

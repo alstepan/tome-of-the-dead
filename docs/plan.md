@@ -116,7 +116,7 @@ Engine work in this stage = flicker fix + real-hardware measurement only.
 - **Items + inventory:** full-screen inventory page (pauses play); the **bottom
   panel shows the currently selected spell/attack**.
 - **Run:** **permadeath**, **no tape save**. **Win:** kill the final boss
-  **Necromancer Archmage**, find the **Book of Absolute Death Magic** and
+  **Necromancer Archmage**, find the **Tome of Absolute Death Magic** and
   destroy it.
 - **Ranged attacks** with distinct animations per spell/weapon — **magic is the
   focus**.
@@ -450,7 +450,7 @@ Open rulings (designer/user): Q1 floor-item rendering/ids; Q2 gold (not in game.
 **PRIORITY 2026-10-28 (user): 3F is the top priority; BAL1 (+ additions) runs AFTER 3F; everything else (T17 gate, D-AI1d, SND-5 remainder, test triage, budget.py fix) later.** T16 verified: runtime merged to main as `785d4ad` (squash); branch `feat/3e-t16-traps` @ `3153fe8` differs only in 3 comments, worktree clean — no leftovers (branch/worktree safe to delete).
 Per-level pool generation (≤ 4 kinds + boss); new monsters (Vampire, Mummy, Orc,
 Skeleton Archer, Necromancer, Spider) + ranged AI; level bosses; Necromancer
-Archmage + Book of Absolute Death Magic → win. **Exit:** full run start → win.
+Archmage + Tome of Absolute Death Magic → win. **Exit:** full run start → win.
 3F also implements game.md §9.5 (respawn trickle while the boss lives; idle wave DROPPED from 3F scope (D1 R5, 0 B)).
 3F also implements **monster tiers** (game.md §9.6, user 2026-10-03): 12 tier rows (30/32
 kinds), spawn roll from `T2_BASE`/`T3_BASE` + `Δ` (rev 5: `LVL − d`, game.md §9.6), tier abilities (on-hit
