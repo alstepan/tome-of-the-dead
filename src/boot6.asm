@@ -191,7 +191,7 @@ boot6_ft:
 
 ;------------------------------------------------------------------------------
 ; boot6_wait — farb from boot after the boot pool (gen_idles): the loading
-; picture (S2d SCREEN$, still on the bank-5 screen: boot clears nothing) stays up
+; picture (L3c SCREEN$, still on the bank-5 screen: boot clears nothing) stays up
 ; with the title tune playing until a key (user 2026-10-30). "PRESS ANY KEY" on
 ; rows 22-23 (blank in the art, attrs 7 = white on black). A key counts only
 ; after every key was released once (the ENTER of LOAD "" may still be down);
