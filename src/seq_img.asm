@@ -126,13 +126,15 @@ bt_death:       DEATHSEQ BT_HURT, BT_DEAD, FID_bat_dead, BT_REST
 ksm_bt_e:
 ; --- 3F-T9: the Vampire's bat form (K_VBAT, id 2): only the Bat's first VB_FCNT frames
 ; (flapup / glide, MOT: a flyer draws them at any px parity), so a Vampire level without the
-; Bat pools 2 frames, not 6. No corpse: it fades out (DEATHSEQ q_x < 0, the rest frame blinks).
+; Bat pools 2 frames, not 6. VBAT-ART (user playtest: the old fade-out stand-in BLINKED — the
+; "FLASH"): HURT = glide + the hit flash; DEAD = the Vampire's own small_corpse (U_DEADR, pooled
+; with the Vampire on every Vampire level: 0 pool), on the floor (anim .rs -> boss2a vb_fall).
 ksm_vb:         KSMH ksm_vb_e - ksm_vb_s, 2, vb_idle, vb_idle, vb_idle, vb_idle + 1, vb_attack, vb_hurt, vb_hurt, vb_death, ksm_vb_s
 ksm_vb_s:
 vb_idle:        DB 6, FID_bat_flapup, 3, FID_bat_glide, 3, SEQ_END   ; KS_CLIMBREST = vb_idle + 1 = flapup
 vb_attack:      DB FID_bat_flapup, 2, 0, FID_bat_glide, 2, SF_IMPACT, SEQ_END
 vb_hurt:        DB FID_bat_glide, 3, 0, SEQ_END
-vb_death:       DEATHSEQ FID_bat_glide, FID_bat_glide, -1, FID_bat_glide
+vb_death:       DEATHSEQ FID_bat_glide, FID_small_corpse, FID_small_corpse, FID_bat_glide   ; VBAT-ART: no blink; vb_fall drops it
 ksm_vb_e:
                 ASSERT FID_bat_flapup == KFID_BAT && FID_bat_glide == KFID_BAT + 1 && VB_FCNT == 2
                 ASSERT (FFL_bat_flapup & FF_MOTION) && (FFL_bat_glide & FF_MOTION)

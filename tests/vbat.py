@@ -22,6 +22,13 @@ TURN_COUNTER poked (the end_turn decision), plus real turns for the flee flight.
   S  the transform turn on the top storey (real turns): the log rows' attrs unchanged, no body drawn
      outside the playfield (fix/vamp-corruption: the stale old-kind frame by the new KT_BH)
   T  costs: vb_turn (far7 incl.) with no candidate / a candidate staying / a transform
+  V  VBAT-ART (user playtest: the bat form "FLASHED"; the fade-out death stand-in blinked): K_VBAT
+     draws in the Bat's ink; every tick of a flee + a close-distance cycle (real turns) has no
+     FLASH bit (attr bit 7) in either screen's attributes, the drawn bat-form cells (outside the
+     hero's) = the Bat's attr while no flash / tint is on, and the alive bat is never hidden but on
+     its transform tick; HURT = the glide frame + the ATTR_HIT flash; DEAD = the Vampire's
+     small_corpse lying on the floor (rect bottom = the standing row), never hidden (no blink)
+     until the slot frees. On D6, then D3 (the Bat resident) and D8.
 Build with -DDEBUG_KIT=0. ZRCP_PORT=<port> python3 tests/vbat.py
 """
 import sys
@@ -41,6 +48,7 @@ KV, KB = S["K_VAMPIRE"], S["K_VBAT"]
 ONCE, VFLEE = 0x80, S["RCD_VFLEE"]
 MIND_FEAR, STS_MIND = S["MIND_FEAR"], S["STS_MIND"]
 GOLD = S["LEK_GOLD"]
+ATTR_BAT = None                                # the Bat's KT_ATTR (read at run time)
 ATTRS = 0x5800                                 # the bank-5 attribute file (hardware)
 
 
@@ -95,12 +103,21 @@ def main():
         check("setup: D6 + a 20-col standable run", L is not None, r)
         if L:
             run(p, lines, r)
+        for d in (3, 8):
+            L, r = level(p, lines, d, 0x7601, need=12)
+            check(f"setup: D{d} + a 12-col standable run", L is not None, r)
+            if L:
+                visual(p, r, f"D{d}")
     print(f"vbat: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
     return 1 if fails else 0
 
 
 def run(p, lines, r):
+    global ATTR_BAT
     s_, c0 = r
+    ATTR_BAT = p.rb(S["kind_tab"] + S["KT_ATTR"] + S["K_BAT"])
+    check("V0 K_VBAT draws in the Bat's ink (KT_ATTR)", p.rb(S["kind_tab"] + S["KT_ATTR"] + KB) == ATTR_BAT,
+          (p.rb(S["kind_tab"] + S["KT_ATTR"] + KB), ATTR_BAT))
     vy = stand_y(s_, 6)
     # ------------------------------------------------------------------ P
     frt = lambda f: p.rb(S["FRT"] + 16 * f)
@@ -256,6 +273,108 @@ def run(p, lines, r):
           flew is not None and back is not None and back - turned <= 14, (flew, back, p.ent(1)))
     p.z.cmd("set-breakpoint 5")
     screen_safe(p)
+    visual(p, r, "D6", cycles=True)
+
+
+def attr_scan(p, bad, tag):
+    """V: one rendered tick: no FLASH bit in either screen's attributes; the drawn bat form's
+    cells (bank 5, outside the hero's drawn rect) = the Bat's attr while no flash / tint / reaction."""
+    cf = p.composed_frame()
+    for nm, fr in (("b5", cf), ("shown", p.frame())):
+        f = [(i // 32, i % 32, fr[6144 + i]) for i in range(768) if fr[6144 + i] & 0x80]
+        if f:
+            bad.append((tag, nm, "FLASH", f[:3]))
+    e = p.ent(1)
+    if not e["FLAGS"] & 1 or e["KIND"] != KB:
+        return
+    if not e["DVIS"] & 1:
+        bad.append((tag, "bat hidden"))
+        return
+    if e["FLT"] or e["REACT"] or p.rb(S["ST_FLAGS"] + 1) & S["STS_TINTED"]:
+        return
+    if e["DFID"] not in (S["FID_bat_flapup"], S["FID_bat_glide"]):
+        return                                 # the transform tick: the drawn state is still the old kind's
+    h = p.ent(0)
+    hero = {(r_, c) for r_ in range(h["DROW"], h["DROW"] + h["DROWS"])
+            for c in range(h["DCOL"], h["DCOL"] + h["DCOLS"])} if h["DVIS"] & 1 else set()
+    cells = [cf[6144 + r_ * 32 + c] for r_ in range(e["DROW"], e["DROW"] + e["DROWS"])
+             for c in range(e["DCOL"], e["DCOL"] + e["DCOLS"]) if (r_, c) not in hero]
+    if any(a != ATTR_BAT for a in cells):
+        bad.append((tag, "attr", e["DROW"], e["DCOL"], cells[:6]))
+
+
+def turns(p, n, bad, tag, keys=("WAIT",), hp=None):
+    """n real turns + 2 idle ticks each, attr_scan every rendered tick (the transform tick may hide
+    the slot once: R_VIS, fix/vamp-corruption) -> the kinds after each turn."""
+    ks = []
+    for t in range(n):
+        heal(p)
+        if hp is not None and p.ent(1)["KIND"] == KV:
+            p.set_ent(1, HP=hp)
+        k0 = p.ent(1)["KIND"]
+        sub = []
+        p.turn(*keys, per_tick=lambda fr, hero: attr_scan(p, sub, f"{tag} t{t}"))
+        for _ in range(2):
+            p.tick()
+            attr_scan(p, sub, f"{tag} t{t}i")
+        if p.ent(1)["KIND"] != k0:             # a transform this turn: one hidden tick allowed
+            hid = [b for b in sub if b[1:] == ("bat hidden",)]
+            sub = [b for b in sub if b[1:] != ("bat hidden",)] + hid[1:]
+        bad += sub
+        ks.append(p.ent(1)["KIND"])
+    return ks
+
+
+def visual(p, r, tag, cycles=False):
+    s_, c0 = r
+    bad = []
+    if cycles:                                 # D6: a flee + a close-distance cycle, real turns
+        setup(p, s_, c0 + 3, c0 + 6, hp=4)
+        ks = turns(p, 12, bad, tag + " flee", hp=4)
+        fr, old = 9 * s_ + 8, None
+        setup(p, s_, c0, c0 + 9)
+        old = cell(p, fr, c0 + 5, S["T_AIR"])
+        ks2 = turns(p, 6, bad, tag + " close")
+        cell(p, fr, c0 + 5, old)
+        check(f"V1 {tag} flee {ks} / close {ks2}: the bat form appears; no FLASH bit, the Bat's attr "
+              "on its cells, never hidden but the transform tick", KB in ks and KB in ks2 and not bad, bad[:4])
+    else:                                      # D3 / D8: a resting bat form, 3 turns
+        setup(p, s_, c0, c0 + 6, k=KB)
+        ks = turns(p, 3, bad, tag)
+        check(f"V1 {tag} a bat form, 3 turns: no FLASH bit, the Bat's attr on its cells", not bad, bad[:4])
+    # HURT / DEAD: a bat form beside the hero, eva 0 (the hit lands); hp 30 then hp 1
+    eva = S["kind_tab"] + S["KT_EVA"] + KB
+    eva0 = p.rb(eva)
+    p.wb(eva, 0)
+    for hp in (30, 1):
+        rec = []
+
+        def pt(fr, hero):
+            e = p.ent(1)
+            cf = p.composed_frame()
+            a = [cf[6144 + r_ * 32 + c] for r_ in range(e["DROW"], e["DROW"] + e["DROWS"])
+                 for c in range(e["DCOL"] + 1, e["DCOL"] + e["DCOLS"] - 1)]   # the inner cols (no hero spill)
+            rec.append((e["FLAGS"], e["DVIS"] & 1, e["DFID"], e["DROW"] + e["DROWS"] - 1, e["HP"], a))
+        for _ in range(4):
+            setup(p, s_, c0, c0 + 3, k=KB, hp=hp, maxhp=14)
+            rec.clear()
+            p.turn("L", per_tick=pt)
+            for _ in range(12):
+                p.tick()
+                pt(None, None)
+            if any(x[4] < hp for x in rec):
+                break
+        if hp == 30:
+            hurt = [x for x in rec if x[1] and x[2] == S["FID_bat_glide"] and x[5] and all(v == S["ATTR_HIT"] for v in x[5])]
+            check(f"V2 {tag} HURT: the glide frame + the ATTR_HIT flash", bool(hurt), rec[:6])
+        else:
+            dying = [x for x in rec if x[0] & 1 and x[0] & S["EF_DYING"]]
+            dead = [x for x in dying if x[2] == S["FID_small_corpse"]]
+            check(f"V3 {tag} DEAD: never hidden while dying (no blink), the Vampire's small_corpse on the "
+                  f"floor (rect bottom row {9 * s_ + 7})",
+                  dying and all(x[1] for x in dying) and dead and all(x[3] == 9 * s_ + 7 for x in dead)
+                  and not p.ent(1)["FLAGS"] & 1, (len(dying), dying[-3:], p.ent(1)["FLAGS"]))
+    p.wb(eva, eva0)
 
 
 def screen_safe(p):
