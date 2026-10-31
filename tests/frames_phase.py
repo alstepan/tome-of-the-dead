@@ -19,18 +19,19 @@ import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BUILD_DIR = os.environ.get("WZ_BUILD_DIR", os.path.join(REPO, "build"))
 S = {}
-for line in open(os.path.join(REPO, "build/wazhack.sym")):
+for line in open(os.path.join(BUILD_DIR, "wazhack.sym")):
     m = re.match(r"^([A-Za-z_][\w.]*):\s+EQU\s+0x([0-9A-Fa-f]+)", line)
     if m:
         S[m.group(1)] = int(m.group(2), 16)
-sna = open(os.path.join(REPO, "build/wazhack.sna"), "rb").read()
+sna = open(os.path.join(BUILD_DIR, "wazhack.sna"), "rb").read()
 RAM = sna[27:27 + 49152]                       # $4000..$FFFF as saved
 
 
 # 3F-T2: the kind sequences are R6 masters (src/seq_img.asm), a ZX0 stream in
 # the .sna; its raw image (DISPed at SQ_IMG) is build/ovl/seq.bin
-IMG = open(os.path.join(REPO, "build/ovl/seq.bin"), "rb").read()
+IMG = open(os.path.join(BUILD_DIR, "ovl/seq.bin"), "rb").read()
 
 
 def b(a):

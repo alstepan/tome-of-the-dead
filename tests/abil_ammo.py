@@ -72,6 +72,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+BUILD_DIR = os.environ.get("WZ_BUILD_DIR", str(HERE.parent / "build"))
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import (Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_RAT, K_GOBLIN, K_SKELETON,  # noqa: E402
@@ -99,7 +100,7 @@ TXT = dict(STRINGS)
 MK = S["T_ITEM0"] + 3            # FLOOR1: the lower marker of a storey-1 item (row 16 = IROW)
 HEAL_NAME = "HEAL POTION"      # 3E-T11: the legacy IT_POTION is picked up as a Heal potion
 NM = {K_RAT: "RAT", K_GOBLIN: "GOBLIN", K_SKELETON: "SKELETON"}
-IMG = textpack.parse_emitted(os.path.join(HERE.parent, "build", "text", "strings.asm"))
+IMG = textpack.parse_emitted(os.path.join(BUILD_DIR, "text", "strings.asm"))
 PD_AMMO = S["PD_AMMO"]
 
 

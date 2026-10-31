@@ -19,7 +19,7 @@
 ; static panel: panel state reset (the *_SH "as drawn" bytes: $FF = never
 ; drawn; STAT_SH 0 = both status cells blank), every attr rect of rows 20-22
 ; (info fields, depth / level cells, HP / MP / FOOD bars, log row 22).
-; (IC1: the quick-potion slot scan is gone: QS_SLOT0 + QS_POTION + HERO_KIND.)
+; (IC1: the quick-potion slot scan is gone: QS_SLOT0 + QS_POTION.)
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 panel_init7:

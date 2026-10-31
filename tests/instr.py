@@ -7,8 +7,9 @@ flow, pages per docs/design/instructions_screen.md / .txt).
   I3  page 2 (GS_HELP2) == page(2) byte for byte
   I4  page 2's key ('1') -> menu, swallowed (no START), menu answers a real press
   I5  BREAK on page 1 skips page 2 -> menu (GS_SELECT), never GS_HELP2
-  I6  bank-0 streams overwritten by the boot pool only after the help (POOL_START), the
-      text block intact; resident cost: none (checked by the build DISPLAYs, not here)
+  I6  static: the boot pool's start (POOL_START) equals the page-1 stream label, i.e. the
+      pool is laid over the streams; that it only runs after the help screens is not
+      checked here (resident cost: build DISPLAYs)
 The reference is a model, not a stored hash: a golden is the approved render itself.
    ZRCP_PORT=<port> python3 tests/instr.py
 """

@@ -80,7 +80,7 @@ IN_FIRE         EQU 1               ; INTENT: use the selected icon
 IN_BAG          EQU 2               ; INTENT: 3E-T2 the bag page (I; tpt_intent -> page_run, no turn)
 
 ; Slot actions (C3-2/C3-3; icons.asm slot_act_tab, one byte per class x slot)
-SA_EMPTY        EQU 0               ; no icon (the Warrior's slot 6, the gap): never selected
+SA_EMPTY        EQU 0               ; no icon (the Warrior's slot 5, 0-based: the gap): never selected
 SA_MELEE        EQU 1               ; sword / staff
 SA_DAGGERS      EQU 2
 SA_BOW          EQU 3

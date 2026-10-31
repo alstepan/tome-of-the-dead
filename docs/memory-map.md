@@ -210,7 +210,7 @@ LAST (`r6_blobs`), run by `ovl_run` with C = `BANK_R6`.
 | Address (kit build) | Size (kit / release) | What |
 |------|------|------|
 | `$E500` `r6_code` | 602 / 584 | `pickup6.asm` (was bank-3 `pickup3.asm`): `pot_sync`, `pu_add`, ~~`pot_take1`~~ (3E-T12: deleted, −9 B), `kit_add` (+ kit lists; the `DEBUG_KIT` extras are the 18-B difference), `mon_drop`, `drop_put` + `dp_*` (5 B, written in play), `drop_tab`, `uniq_tab`; then `bag6.asm` (was `bag3.asm`, `BAG6_LEN` 187): `bag_add`, `bag_find`, `bag_take`, **3E-T13 `bag_discard` (+20)**, `bag_pick` |
-| **UB5 (2026-10-31)** | **R6 free 153 -> 156, bank-3 cold free 0 -> 8, bank 1 / bank 2 unchanged** | Warrior panel: the blank 10th cell moves from slot 9 to slot 5; food / potion / scroll / bag at slots 6..9 on BOTH bars (`QS_SLOT0` 5 -> 6, no `+ HERO_KIND`): `bar_knight` / `slot_act_tab` reordered, `icons3.asm` (-8 B: the potion redraw and `.slow` lose their `HERO_KIND` terms), `pickup6.asm` `pot_sync .qs` (-3 B). Data tables unchanged in size. |
+| **UB5 (2026-10-31)** | **R6 free 148 -> 151, bank-3 cold free 0 -> 8, bank 1 / bank 2 unchanged** | Warrior panel: the blank 10th cell moves from slot 9 to slot 5; food / potion / scroll / bag at slots 6..9 on BOTH bars (`QS_SLOT0` 5 -> 6, no `+ HERO_KIND`): `bar_knight` / `slot_act_tab` reordered, `icons3.asm` (-8 B: the potion redraw and `.slow` lose their `HERO_KIND` terms), `pickup6.asm` `pot_sync .qs` (-3 B). Data tables unchanged in size. |
 | **MEM-RECLAIM w2c (2026-10-30)** | **R6 free +185 B (release 1,283 -> 1,468, kit 1,212 -> 1,397)** | icon packing: `icons16` 1,376 B raw -> `icpk_idx` + `icpk` 995 B (−381), unpacker code +196 (`icons6.asm` `ic_find` / `ic_scr` / `ic_unp` (unrolled oct, ~50 B: `fi_slot` runs on a drop's kill tick, budget lcastf) / `rev8`; `ic_blit`'s copy pass gone; `fi_slot`'s FI_INK fill x4 unrolled). Decoded byte-exact (tools/icons16.py proves the Python model; the screen tests compare against the raw table). Stack: none (decoded onto the screen / into `FI_GLY`). Costs (ic1, incl. far6): `icon_slot` 2.45k -> 3.1k T, a MIRROR icon 4.5k, `worn_draw` 9.4k -> 16.3k (3 MIRROR placeholders), `fi_slot` ~+0.7k T per new slot; budget lcastf 123,059 -> 123,743 T |
 | **MEM-RECLAIM w2b (2026-10-30)** | **R6 free 229 -> 1,283 B release (kit 158 -> 1,212; 1,292 / 1,221 before the Spider climb commit took 9 B)** | cold code moved **R6 -> bank 7** (`B7_CODE` space freed by w2a): `hunger7.asm` (`hunger_turn` (end_turn calls it directly, was far6; `wear_apply` stays R6, far6 from it on a wear turn), `hg_faint`, `food_sub` / `food_dirty`, `hunger_add` (far7 from R6 `fx6`), `hg_stage` / `hg_line`); `trap7.asm` (`trap_turn` (jp from `trap_chk`), `trap_step` (jp from `act_pend`), `tr_*`, `tr_eff` (far6 R6 `tele_arm` / `fx_line`), `hero_hold`; `tr_draw` calls `ap_put_a` directly); `boss7.asm` (`grate_open` far7 from bank-3 `mon_drop`, `boss_chk` far7 from `lp_transition`, `ai_guard` far7 from bank-2 `ai_ghook`). Their read-only tables (`tr_ink7`, `tr_fx`, `glow7`; 29 B) are `data7.asm` in bank 7 right after the tilesets (`data7..data7_end`, one tape block with them, `B7D_LEN`; bank-7 code keeps no data). Stay in R6: `item_food` + `hg_attr` (panel render: never from contended bank 7), `tele_arm` / `tele_flash` / `trap_at` (R6 `fx6` / `pickup6` call them), `lp_post`; `mummy6` inlines its `food_sub` (13 B). Tests call the moved entries through far7 (`B7_LABELS` in hunger / status1 / tier6, t16). |
 | (code, after `ranged6`) | **800** (3F-T9) | `spawn6.asm`: the spawn queue producers `breed6` / `sp_bcall` / `ph_summon` + `sp_summon` (the pose: ranged6 `rg_pose`, now shared with `rg_shoot`), `sp_scan` / `sp_wt` / `sp_fit` (§9.3 cap), `sp_run` (end_turn) + `sp_init` / `sp_y` / `sp_place` / `sp_try` / `sp_door` / `sp_fin`; no variables (bank-5 `SPQ_RAM`) — see "3F-T9" |
@@ -4697,9 +4697,9 @@ No timeout, Kempston not read, the title tune plays on.
   its own `in_vblk` for the vdata `icon_bag`, `icon_sword`, `label_key` (`copy_virt` -> `GEN_SRC`; not bank-3
   `pblit` / `glyph8`: their SMC would make bank 3 != the .sna at the menu, game.py #50), `TILE_GLYPHS`
   (lectern 15-18, grate 13). Attrs are written last (the page appears at once).
-- **Streams:** bank 0 `instr_p1_zx0` = `POOL_START` (`$C916`) .. `instr_zx0_end` (`$CE73`), 1,374 B: page 1,
+- **Streams:** bank 0 `instr_p1_zx0` = `POOL_START` (`$C916`) .. `instr_zx0_end` (`$CE6D`), 1,368 B: page 1,
   page 2, then the code (last, so no overlay address depends on a packed size). On the text tape block
-  (`TEXT_TAPE_LEN` = `TEXT_LEN` + 1,374; no new tape block, `tape_tab` unchanged). Dead after the help:
+  (`TEXT_TAPE_LEN` = `TEXT_LEN` + 1,368; no new tape block, `tape_tab` unchanged). Dead after the help:
   `gen_idles` (now after it) writes the boot pool from `POOL_START` over them; `POOL_START`, `POOL_CAP`
   unchanged (0 pool bytes).
 - **Spec = build:** `tools/instr_pack.py` holds the attr fills / icon placements (`PAGES`) and reads the rows
@@ -4714,7 +4714,7 @@ No timeout, Kempston not read, the title tune plays on.
 |---|---|---|---|
 | low RAM spare | 41 | **38** | −3 (`boot`: `call farb` + `jp enter_select`) |
 | boot block | 2,043 B (`$C005..`) | **1,992 B** (`$C038..`) | −51 (`boot6_wait` 11 B; key waits moved to the overlay) |
-| bank 0 text tape block | 2,326 | **3,700** | +1,374 (boot-only streams) |
-| tape total (.tap bytes, measured) | 80,704 | **82,025** | +1,321 B (+1,374 streams, −51 boot block, low-RAM +3) |
-| bank 1 / bank 3 / bank 7 / R6 / SRC6 / pool slack | 42 / 0 / 53 / 153 / 19 / 1,264 | unchanged | 0 |
+| bank 0 text tape block | 2,326 | **3,694** | +1,368 (boot-only streams) |
+| tape total (.tap bytes, measured) | 80,704 | **82,023** | +1,319 B (+1,368 streams, −51 boot block, low-RAM +3) |
+| bank 1 / bank 3 / bank 7 / R6 / SRC6 / pool slack | 42 / 0 / 51 / 151 / 19 / 1,264 | unchanged | 0 |
 

@@ -26,6 +26,7 @@ import sys
 import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BUILD_DIR = os.environ.get("WZ_BUILD_DIR", os.path.join(REPO, "build"))
 GRIDS = os.path.join(REPO, "assets/gfx/source/d3_grid")
 GRIDS40 = os.path.join(REPO, "assets/gfx/sprites40/grid")
 DZX0 = os.path.join(REPO, "tools/bin/dzx0")
@@ -36,11 +37,11 @@ COL = {"black": 0, "blue": 1, "red": 2, "magenta": 3, "green": 4, "cyan": 5, "ye
 
 def load():
     S = {}
-    for ln in open(os.path.join(REPO, "build/wazhack.sym")):
+    for ln in open(os.path.join(BUILD_DIR, "wazhack.sym")):
         m = re.match(r"^([A-Za-z_][\w.]*):\s+EQU\s+0x([0-9A-Fa-f]+)", ln)
         if m:
             S[m.group(1)] = int(m.group(2), 16)
-    d = open(os.path.join(REPO, "build/wazhack.sna"), "rb").read()
+    d = open(os.path.join(BUILD_DIR, "wazhack.sna"), "rb").read()
     assert len(d) == 131103, "want a 128K .sna"
     r48, p7 = d[27:27 + 49152], d[49181]
     banks = {5: r48[:16384], 2: r48[16384:32768], p7 & 7: r48[32768:]}

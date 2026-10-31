@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+BUILD_DIR = os.environ.get("WZ_BUILD_DIR", str(HERE.parent / "build"))
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_SKELETON, K_GOBLIN  # noqa: E402
@@ -36,7 +37,7 @@ EF_ACTIVE, EF_PLAYER, EF_HOSTILE = 1, 2, 4
 PHYS, FIRE = 0, 1
 STRINGS = textpack.read_strings()
 TXT = dict(STRINGS)
-IMG = textpack.parse_emitted(os.path.join(HERE.parent, "build", "text", "strings.asm"))
+IMG = textpack.parse_emitted(os.path.join(BUILD_DIR, "text", "strings.asm"))
 WORN, BAG = S["WORN"], S["BAG"]
 IT = {k[3:]: v for k, v in S.items() if k.startswith("IT_") and isinstance(v, int)}
 

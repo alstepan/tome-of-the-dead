@@ -18,7 +18,7 @@
 ; Clobbers: A, BC, DE, HL.   ~9k T (the shadow + the line; the XP delta ~100 T)
 ;------------------------------------------------------------------------------
 grate_open:
-                ld   a, (LVL_DEPTH)            ; golden-boss XP: only the golden body reaches here; bank 3 then adds the
+                ld   a, (LVL_DEPTH)            ; golden-boss XP: every boss body reaches here (D4 / D7 / D8 with delta 0); bank 3 then adds the
                 add  a, (bxp_d - 1) & $FF      ; base kind's KXP (and clamps at XP_MAX), so the delta makes §4.1's total
                 ld   l, a                      ; (0 on D4 / D7 / D8: kx_tab is already right). bxp_d: one page (ASSERT)
                 ld   h, (bxp_d - 1) >> 8
