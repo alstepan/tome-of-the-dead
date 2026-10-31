@@ -89,7 +89,7 @@ PARAMS = {
     "FED_REGEN": 12,                    # 7: +1 HP per 12 turns when FOOD >= 50
     "HEAL_AMT": 10, "MANA_AMT": 8, "CURE_HP": 4,  # 8 consumables
     "PITY_N": 2,                        # 5
-    "ARCHMAGE_HP": 60,                  # 9.9 A1 (the built kind_tab still holds the pre-ARCHMAGE-SPEC 40)
+    "ARCHMAGE_HP": 60,                  # 9.9 A1 (kind_tab now holds 60)
     "T2_BASE": [24, 48, 64, 72, 80, 88, 96, 96], "T3_BASE": [0, 0, 0, 16, 24, 32, 40, 48],  # 9.6
     "TIER_SHIFT2": 16, "TIER_SHIFT3": 8, "TIER_DELTA_MAX": 2, "T2_CAP": 160, "T3_CAP": 80, "TIER3_MIN_DEPTH": 4,
     "ROOM_MAX": [2, 2, 3, 3, 3, 3, 3, 3],  # 9.4.1
