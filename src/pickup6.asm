@@ -22,8 +22,8 @@
 ; count may differ: that slot is forced to redraw, ICON_SH := IS_NONE +
 ; QS_RECHK bit 7 -> icon_poll's PD_ICONS in a tick's 1st frame); QS_CACHE + QS_POTION := the potion types present (bit k =
 ; IT_P_HEAL + k: pot_need / icon_state's pick; the potion slot redraws on
-; E_POT, item_icons). The quick slots are icon-bar slots 5..7 (Warrior) /
-; 6..8 (Mage) = QS_SLOT0 + HERO_KIND + QS_*.
+; E_POT, item_icons). The quick slots are icon-bar slots 6..8 (both
+; heroes, UB5) = QS_SLOT0 + QS_*.
 ; Clobbers: A, HL, F (BC, DE kept).   ~1.7k T (20 slots)
 ;------------------------------------------------------------------------------
 pot_sync:
@@ -85,8 +85,7 @@ pot_sync:
                 ret  z
                 ld   (hl), a
                 push hl
-                ld   a, (HERO_KIND)
-                add  a, c
+                ld   a, c
                 add  a, ICON_SH & $FF
                 ld   l, a
                 ld   h, ICON_SH >> 8
@@ -98,8 +97,8 @@ pot_sync:
                 ASSERT (BAG & $FF) + BAG_SLOTS * IR_STRIDE <= 256 && IR_QTY == 1 && IR_STRIDE == 3
                 ASSERT IT_POT_LO == IT_FOOD_HI + 1 && IT_SCR_LO == IT_POT_HI + 1 && IT_POT_HI == IT_POT_LO + 2
                 ASSERT ((QS_CACHE + QS_FOOD) >> 8) == ((QS_CACHE + QS_SCROLL) >> 8)
-                ASSERT (ICON_SH >> 8) == ((ICON_SH + ICON_SLOTS - 1) >> 8) && K_KNIGHT == 0 && K_WIZARD == 1
-                ASSERT QS_SLOT0 + QS_SCROLL + K_WIZARD < ICON_SLOTS
+                ASSERT (ICON_SH >> 8) == ((ICON_SH + ICON_SLOTS - 1) >> 8)
+                ASSERT QS_SLOT0 + QS_SCROLL < ICON_SLOTS
 
 ;------------------------------------------------------------------------------
 ; pu_add — far6 from floor_pickup (bank 7) for a non-ammo entry under the

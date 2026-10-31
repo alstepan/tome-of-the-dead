@@ -454,7 +454,7 @@ in a row" caps flight speed at 7 cols per 2 turns.
 - ↙/↘ act as ←/→. Opposite keys cancel (F7). The cursor **skips unlearned slots** (empty
   outlines) but **does not skip greyed ones** (you may select a greyed icon to read its info
   line; FIRE on it is illegal, costs no turn, and prints the reason, e.g. `NO ARROWS`).
-- **Both bars have a BAG icon** (Warrior slot 9, Mage slot 10). Layouts: §3.5.
+- **Both bars have a BAG icon** (slot 10 on both bars). Layouts: §3.5.
 - **ICON MODE (user 2026-10-05, replaces "FIRE held + ← →"; details designer decision 2026-10-05).**
   Entered by ↓ + FIRE. Play is paused: no turn passes, monsters and timers do not act, no
   animation advance except the cursor highlight. The selected icon is drawn highlighted
@@ -683,13 +683,13 @@ Budget table: §11.2.
 | 3 | Whirlwind | Firebolt |
 | 4 | Daggers | Frost Shard |
 | 5 | Bow | Drain Life |
-| 6 | Quick food | Lightning |
-| 7 | Quick potion | Quick food |
-| 8 | Quick scroll | Quick potion |
-| 9 | **Bag** | Quick scroll |
-| 10 | (empty outline; spare) | **Bag** |
+| 6 | (blank gap; spare) | Lightning |
+| 7 | Quick food | Quick food |
+| 8 | Quick potion | Quick potion |
+| 9 | Quick scroll | Quick scroll |
+| 10 | **Bag** | **Bag** |
 
-- The Warrior has 9 icons (a spare 10th). The Mage has all 10.
+- The Warrior has 9 icons (slot 6 is a blank gap, UB5 2026-10-31). The Mage has all 10. Food / potion / scroll / bag sit at the SAME slots (7-10) on both bars.
 - **Quick scroll** (new slot, needed to hold the scroll icon the approved panel shows): FIRE
   reads the quick scroll (1 turn; same effect as `READ` on the page). Auto-fill: the stack
   with the most scrolls, ties → Teleport, Fear, Sleep, Enchant (known types only, §8.8). `QUICK` on the page pins a type.

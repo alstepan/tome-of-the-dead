@@ -225,8 +225,8 @@ QS_FOOD         EQU 0
 QS_POTION       EQU 1
 QS_SCROLL       EQU 2
 QS_COUNT        EQU 3
-QS_SLOT0        EQU 5               ; IC1: icon-bar slot of the Warrior's FOOD (+ HERO_KIND for the
-                                    ; Mage; + QS_* for POTION / SCROLL): slot_act_tab, ASSERTed in icons.asm
+QS_SLOT0        EQU 6               ; IC1 / UB5: icon-bar slot of FOOD, the SAME for both heroes (the Warrior's
+                                    ; slot 5 is the blank gap); + QS_* for POTION / SCROLL: slot_act_tab, ASSERTed in icons.asm
 
 ;------------------------------------------------------------------------------
 ; Hunger (game.md §7). FOOD 0..FOOD_MAX, start FOOD_START; -1 per

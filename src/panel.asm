@@ -276,11 +276,11 @@ SLOT_AMMO0      EQU 3                          ; the Warrior's dagger slot (the 
 SLOT_QDAG       EQU SLOT_QFOOD + QS_DAG
 SLOT_QBOW       EQU SLOT_QFOOD + QS_BOW
 bar_knight:     DB ICON_SWORD, ICON_POWER, ICON_WHIRL, SLOT_QDAG, SLOT_QBOW
-                DB SLOT_QFOOD, SLOT_QPOT, SLOT_QSCR, ICON_BAG, SLOT_EMPTY
+                DB SLOT_EMPTY, SLOT_QFOOD, SLOT_QPOT, SLOT_QSCR, ICON_BAG   ; UB5: food..bag at the Mage's slots 6..9
 bar_wizard:     DB ICON_STAFF, ICON_SPARK, ICON_FIREBOLT, ICON_FROST, ICON_DRAIN
                 DB ICON_LIGHTNING, SLOT_QFOOD, SLOT_QPOT, SLOT_QSCR, ICON_BAG
                 ASSERT bar_wizard - bar_knight == ICON_SLOTS && ICON_COUNT < SLOT_QFOOD && SLOT_QBOW < SLOT_EMPTY
                 ASSERT {b bar_knight + SLOT_AMMO0} == SLOT_QDAG && {b bar_knight + SLOT_AMMO0 + 1} == SLOT_QBOW
-                ASSERT {b bar_knight + QS_SLOT0 + QS_POTION} == SLOT_QPOT && {b bar_wizard + QS_SLOT0 + 1 + QS_POTION} == SLOT_QPOT
+                ASSERT {b bar_knight + QS_SLOT0 + QS_POTION} == SLOT_QPOT && {b bar_wizard + QS_SLOT0 + QS_POTION} == SLOT_QPOT
 
                 ASSERT ICON_LEN == 54 && ICON8_LEN == 9   ; pblit: 9 B per cell, <= 6 cells

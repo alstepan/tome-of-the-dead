@@ -176,7 +176,7 @@ class Proto:
     # that turns the hero around first (0 turns), "C" = close door = FIRE with
     # the melee icon selected, "G" = quaff = select the potion slot, FIRE.
     NEW_KEYS = {"L": "P", "H": "O", "K": "Q", "J": "A", "WAIT": "."}
-    POTION_SLOT = {0: 6, 1: 7}               # icon slot (0-based) per hero kind, game.md §3.5
+    POTION_SLOT = {0: 7, 1: 7}               # icon slot (0-based) per hero kind, game.md §3.5
     SLOT_KEY = "1234567890"                  # number key of slot i
 
     def __init__(self, h):

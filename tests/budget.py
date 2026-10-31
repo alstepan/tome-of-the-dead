@@ -352,7 +352,7 @@ SCENARIOS = {
         (1, 22, stand_y(1, 2), HOSTILE),
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)],
-        [("G", 2), ("@5", 3), ("@7", 3), ("FIRE", 2), ("WAIT", 2)], K_KNIGHT, None, "umix"),
+        [("G", 2), ("@6", 3), ("@8", 3), ("FIRE", 2), ("WAIT", 2)], K_KNIGHT, None, "umix"),
     # 3F-T6: "pmix" with the 3F tier abilities live (tmix_setup): the 1-slot skeleton is a Skeleton Guard
     # (60 hp: parry 1 in 4 + NOTCH 1 in 2 on a worn weapon), the rat a Black Widow (ACID 1 in 4 on the
     # worn armour), the goblin an Orc Berserker at hp <= half (rage: hit_roll +2); the end_turn tick of a

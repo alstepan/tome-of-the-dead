@@ -50,7 +50,7 @@ TL = S["TRAP_LIST"]
 KNOWN, SPENT, TS1 = S["TRF_KNOWN"], S["TRF_SPENT"], S["TRF_S1"]
 DART = 0
 T_TRAP = S["T_TRAP"]
-FOOD_SLOT = {0: 5, 1: 6}
+FOOD_SLOT = {0: 6, 1: 6}
 
 
 def main():

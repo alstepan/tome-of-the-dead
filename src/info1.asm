@@ -43,7 +43,7 @@ item_info:
                 add  hl, de
                 ld   a, (hl)
                 cp   TX_NONE
-                ret  z                         ; the Warrior's spare slot: blank
+                ret  z                         ; the Warrior's blank gap (slot 5): blank
                 ld   b, a                      ; B = the base line
                 ld   a, (SEL_SLOT)             ; D3-9a: a ranked ability at rank 2 / 3
                 call slot_act                  ; takes its info_<name>2 / 3 line (game.md §5:
@@ -188,7 +188,7 @@ dec16:
 
 ; info line string per class x slot (TX_NONE: blank)
 info_tab:       DB TX_INFO_SWORD, TX_INFO_POWER, TX_INFO_WHIRL, TX_INFO_DAGGERS, TX_INFO_BOW
-                DB TX_INFO_FOOD, TX_INFO_POTION, TX_INFO_SCROLL, TX_INFO_BAG, TX_NONE
+                DB TX_NONE, TX_INFO_FOOD, TX_INFO_POTION, TX_INFO_SCROLL, TX_INFO_BAG   ; UB5: slot 5 = the blank gap
                 DB TX_INFO_STAFF, TX_INFO_SPARK, TX_INFO_FIREBOLT, TX_INFO_FROST, TX_INFO_DRAIN
                 DB TX_INFO_LIGHTNING, TX_INFO_FOOD, TX_INFO_POTION, TX_INFO_SCROLL, TX_INFO_BAG
 
