@@ -253,18 +253,31 @@ end_turn:
 .ls:
                 ld   a, (SPQ_K)                ; 3F-T9: the queued spawn (summon / breed / ALARM
                 or   a                         ; wave) is made now, never in the cast / input
-                ld   hl, sp_run                ; tick (R6 spawn6.asm; it empties the queue and
-                call nz, far6                  ; skips it on an exit / a dying hero)
+                jr   z, .nq                    ; tick (R6 spawn6.asm; it empties the queue and
+                ld   hl, TRK_PHASE             ; skips it on an exit / a dying hero). 3F-T12: the
+                dec  (hl)                      ; trickle phase stands still on this turn, so a
+                ld   hl, sp_run                ; check never shares the tick with sp_run (walarm
+                call far6                      ; 122.5k + trk_run ~10k > the 126k cap)
+.nq:
                 ld   a, (EXIT_KIND)
                 or   a
                 call z, vb_turn                ; 3F-T9: the Vampire's bat form (+ R6 vbat6.asm)
+                ld   hl, TRK_PHASE             ; 3F-T12: the level's turn count, BEFORE the exit
+                inc  (hl)                      ; (a level change zeroes it: a fresh LVL_STATE)
                 ld   a, (EXIT_KIND)
                 or   a
                 call nz, .ex
                 ld   hl, (TURN_COUNTER)
                 inc  hl
                 ld   (TURN_COUNTER), hl
-                call floor_pickup              ; pickup7.asm (D3-7 T6: potions + ammo, list-driven;
+                ld   hl, TRK_PHASE             ; 3F-T12: the respawn trickle every RESPAWN_PERIOD
+                ld   a, (hl)                   ; turns of the level, after the exit (cur / prev
+                sub  RESPAWN_PERIOD            ; final): records only (R6 trickle6.asm)
+                jr   nz, .nt
+                ld   (hl), a
+                ld   hl, trk_run
+                call far6
+.nt:            call floor_pickup              ; pickup7.asm (D3-7 T6: potions + ammo, list-driven;
                                                ; HP / potions reach the panel by panel_tick's poll)
                 xor  a
                 ld   (TURN_PHASE), a
@@ -395,7 +408,9 @@ do_exit:
 .h:             call far1
                 call room_shadow               ; attr shadow of the new room (the scroll
                                                ; drew the screen and its row-17 ornament)
-.in:            ld   a, (EXIT_DEST)
+.in:            ld   a, (CUR_ROOM)             ; 3F-T12: prev_room (§9.5 limit 3), every room
+                ld   (TRK_PREV), a             ; change (exit + teleport)
+                ld   a, (EXIT_DEST)
                 ld   (CUR_ROOM), a
                 call lair_hint                 ; B12 (lowram: 3 B here, kind_tab pad)
                 ld   ix, P_ENTITIES

@@ -27,6 +27,7 @@
                 INCLUDE "pool6.asm"            ; 3F-T1: pool_list / pool_map / pool_gmap (the level pool's kinds)
                 INCLUDE "ranged6.asm"          ; 3F-T7: ai_ranged (the shooter decision, the shot + its queued FX descriptor)
                 INCLUDE "spawn6.asm"           ; 3F-T9: the spawn queue (breed6 / sp_bcall / ph_summon) + sp_run (end_turn)
+                INCLUDE "trickle6.asm"         ; 3F-T12: trk_run, the respawn trickle (far6 from end_turn every RESPAWN_PERIOD turns)
                 INCLUDE "vbat6.asm"            ; 3F-T9: the Vampire's bat form (vb_one: far6 from bank-7 vb_turn, end_turn)
     IF DEBUG_KIT
 ;------------------------------------------------------------------------------

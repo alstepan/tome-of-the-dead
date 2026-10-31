@@ -219,7 +219,7 @@ LVL_FLAGS       EQU LVL_STATE + 12  ; LF_* below
 FLOOR_N         EQU LVL_STATE + 13  ; FLOOR_LIST entries used (0..32)
 MASTER_SEED     EQU LVL_STATE + 14  ; word: per game (FRAMES at START / SEED_FIXED)
 LVL_HDR_LEN     EQU 16
-EDGE_TAB        EQU LVL_STATE + $10 ; 6 B ($6D50..$6D55); $6D56..$6D5F spare
+EDGE_TAB        EQU LVL_STATE + $10 ; 6 B ($6D50..$6D55); $6D56 TRK_PHASE, $6D57 TRK_PREV (3F-T12); $6D58..$6D5F spare
 ROOM_DESC       EQU LVL_STATE + $20 ; 9 x 16 = 144 B ($6D60..$6DEF); $6DF0..$6DFF spare
 FLOOR_LIST      EQU LVL_STATE + $C0 ; 32 x 4 = 128 B ($6E00..$6E7F, page-aligned)
 LVL_STATE_END   EQU LVL_STATE + $140
@@ -305,6 +305,18 @@ LPC_BODY        EQU 2               ; 3F-T8 review: a body lp_spawn placed this 
                                     ; lp_post exempts only LPC_BAD marks of the exit's own footprint)
                 ASSERT LP_CMAP + 2 * LP_CMW <= NEXT_MAP + MAP_BUF_LEN
 RESPAWN_MAX     EQU 6               ; §9.5 trickle cap per level (3F)
+; 3F-T12 respawn trickle (game.md §9.5, R6 trickle6.asm; tools/respawn_model.py)
+RESPAWN_PERIOD  EQU 48              ; a check every 48 turns of the level (TRK_PHASE)
+RESPAWN_CHANCE  EQU 96              ; of 256: draw 1 < this -> a spawn try
+RESPAWN_ITEM_W  EQU 2               ; room weight = min(RESPAWN_ITEM_CAP, 1 + 2 x un-picked floor items)
+RESPAWN_ITEM_CAP EQU 7
+TRK_PHASE       EQU EDGE_TAB + 6    ; $6D56: turns since the last check, 0..47 (EDGE_TAB spare; level_gen's
+                                    ; attempt zeroes EDGE_TAB..LVL_STATE_END: reset on level entry)   (test-observable)
+TRK_PREV        EQU EDGE_TAB + 7    ; $6D57: prev_room = the room the hero left last (do_exit .in; 0 at level
+                                    ; entry is harmless: only CUR_ROOM is VISITED until the first exit) (test-observable)
+TRK_W           EQU LP_SIG          ; trk_run scratch, 9 B (LP_STATE + 15 .. + 23: lp_enter / lp_budget scratch,
+                                    ; dead between entries): live floor entries, then w_r per room
+                ASSERT TRK_W + GRID_CELLS <= ROOM_VISITS && TRK_W >= LP_HW + 1 && TRK_PREV < ROOM_DESC
                 ASSERT LR_MAX * LE_STRIDE + 1 == LR_STRIDE && LP_REC == ROOM_VISITS + GRID_CELLS
 
 LOWRAM_END_3B   EQU LP_END          ; = LOWRAM_FREE_END (defs.asm); test stubs run here
