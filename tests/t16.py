@@ -220,7 +220,7 @@ def run(h, p, check):
     hp1 = p.ent(0)["HP"]
     _, d4, ln_4 = act("H")                     # turn-around + the step back on
     check("A4 walking back on (DART re-arms): fires again, 1 turn",
-          (d4, ln_4[:1], p.ent(0)["HP"] < hp1, ent()[0] & SPENT) == (1, ["A DART HITS YOU!"], True, 0), (d4, ln_4))
+          (d4, ln_4[:1], p.ent(0)["HP"] < hp1) == (1, ["A DART HITS YOU!"], True), (d4, ln_4))
     # jumps: over (t in the swept cols x+3..x+5) / onto
     heal()
     put_hero(t - 4)
@@ -250,25 +250,27 @@ def run(h, p, check):
     pa = []
     _, d8, ln_8 = act("L", per_tick=lambda fr, hero: (fl.append((hero["FLT"], hero["FLA"])),
                                                       pa.append((p.rb(S["TILE_ATTRS"] + T_TRAP), cell(HX + 3)))))
-    a8 = (d8, ln_8[:2], p.rb(STF) & 3, p.rb(ST1) >> 4 in (3, 4), ent()[0] & SPENT, cell(HX + 3) != T_TRAP,
+    a8 = (d8, ln_8[:2], p.rb(STF) & 3, p.rb(ST1) >> 4 in (3, 4), ent()[0] & KNOWN, cell(HX + 3) == T_TRAP,
           any(f > 0 and a == 0x44 for f, a in fl))
-    check("A8 GAS: 'SLEEPING GAS!' + 'YOU FALL ASLEEP', ASLEEP ~4, the $44 flash, spent, never drawn",
-          a8 == (1, ["SLEEPING GAS!", "YOU FALL ASLEEP"], S["HOLD_ASLEEP"], True, SPENT, True, True), (a8, ln_8, fl))
-    check("V2 GAS trigger: the plate shown $47 (T_TRAP) on a tick, erased at the end; hero $44, no flash left",
-          (any(a == 0x47 and c == T_TRAP for a, c in pa), cell(HX + 3) != T_TRAP, p.ent(0)["FLT"]) == (True, True, 0),
+    check("A8 GAS: 'SLEEPING GAS!' + 'YOU FALL ASLEEP', ASLEEP ~4, the $44 flash, known and stays drawn (TRAP2)",
+          a8 == (1, ["SLEEPING GAS!", "YOU FALL ASLEEP"], S["HOLD_ASLEEP"], True, KNOWN, True, True), (a8, ln_8, fl))
+    check("V2 GAS trigger: the plate shown $47 (T_TRAP) on a tick, still drawn at the end (TRAP2); hero $44, no flash left",
+          (any(a == 0x47 and c == T_TRAP for a, c in pa), cell(HX + 3) == T_TRAP, p.ent(0)["FLT"]) == (True, True, 0),
           (pa, fl))
     heal()
     tick(4)
     _, _, ln_8b = act("H")
     _, _, ln_8c = act("L")
-    check("A9 a spent GAS never fires again", "SLEEPING GAS!" not in ln_8b + ln_8c, (ln_8b, ln_8c))
+    check("A9 TRAP2: the GAS re-arms: walking off does not fire, a NEW crossing does",
+          ("SLEEPING GAS!" not in ln_8b, "SLEEPING GAS!" in ln_8c) == (True, True), (ln_8b, ln_8c))
     # ALARM
     put_hero(HX)
     heal()
+    tick(8)                                    # the re-fired GAS's asleep turns drain (TRAP2)
     trap(HX + 3, ALARM)
     _, d10, ln_10 = act("L")
-    check("A10 ALARM (3E stub): 'A BELL RINGS. NOTHING COMES', spent",
-          (d10, ln_10, ent()[0] & SPENT) == (1, ["A BELL RINGS. NOTHING COMES"], SPENT), (d10, ln_10))
+    check("A10 ALARM (3E stub): 'A BELL RINGS. NOTHING COMES', known and stays",
+          (d10, ln_10, ent()[0] & KNOWN) == (1, ["A BELL RINGS. NOTHING COMES"], KNOWN), (d10, ln_10))
     # TELEPORT
     put_hero(HX)
     heal()
@@ -281,9 +283,9 @@ def run(h, p, check):
         tl.append((p.rb("CUR_ROOM"), p.ent(0)["FLT"], p.ent(0)["FLA"], hero_attr(p.frame(), p.ent(0))))
     check("V3 TELEPORT trap: the hero shows $43 on >= 2 ticks before the room change and >= 2 after "
           "arrival; nothing tinted at the end", tele_ok(tl, room) and tl[-1][3] != 0x43 and p.ent(0)["FLT"] == 0, tl)
-    check("A11 TELEPORT: spent, 'YOU ARE TELEPORTED!', 1 turn, GS_PLAYING, EXIT_KIND 0 after",
-          (d11, "YOU ARE TELEPORTED!" in ln_11, ent()[0] & SPENT, p.rb("GAME_STATE"), p.rb("EXIT_KIND")) ==
-          (1, True, SPENT, 2, 0), (d11, ln_11))
+    check("A11 TELEPORT: known (re-arms), 'YOU ARE TELEPORTED!', 1 turn, GS_PLAYING, EXIT_KIND 0 after",
+          (d11, "YOU ARE TELEPORTED!" in ln_11, ent()[0] & KNOWN, p.rb("GAME_STATE"), p.rb("EXIT_KIND")) ==
+          (1, True, KNOWN, 2, 0), (d11, ln_11))
 
     # teleport scroll (quick slot 7, PROTO: the room set A..D)
     scene(K_KNIGHT)
@@ -448,12 +450,12 @@ def stun(p, check, scene, trap, put_hero, heal, ent, cell, act, stub, tick, line
                                                                 cell(HX + 3))))
     e = p.ent(0)
     lost = hp0 - e["HP"]
-    s1 = (ok, d, e["X"], ln[:2], 1 <= lost <= 3, p.rb(STF) & S["STS_HOLD"], ent()[0] & SPENT, cell(HX + 3) != T_TRAP,
+    s1 = (ok, d, e["X"], ln[:2], 1 <= lost <= 3, p.rb(STF) & S["STS_HOLD"], ent()[0] & KNOWN, cell(HX + 3) == T_TRAP,
           any(f > 0 and a == 0x07 for f, a, *_ in rec), any(c == T_TRAP and a == 0x47 for *_, a, c in rec),
           p.rb(S["ST_X"]))
-    check("S1 STUN trigger: 'A STONE FALLS ON YOU!' then 'YOU ARE STUNNED!', 1-3 HP, HOLD = STUNNED, spent + erased, "
+    check("S1 STUN trigger: 'A STONE FALLS ON YOU!' then 'YOU ARE STUNNED!', 1-3 HP, HOLD = STUNNED, known + stays, "
           "the hero flashes $07, the plate $47, no poison",
-          s1 == (True, 1, HX + 1, ["A STONE FALLS ON YOU!", "YOU ARE STUNNED!"], True, S["HOLD_STUNNED"], SPENT, True,
+          s1 == (True, 1, HX + 1, ["A STONE FALLS ON YOU!", "YOU ARE STUNNED!"], True, S["HOLD_STUNNED"], KNOWN, True,
                  True, True, 0), (s1, ln, rec))
     # the stun runs its own timer: 2 or 3 auto-turns, then HOLD_GUARD (an Ogre SLAM cannot extend it)
     p.until(lambda: p.rb(STF) & S["STS_HOLD"] == 0, 200)
@@ -517,9 +519,9 @@ def stun(p, check, scene, trap, put_hero, heal, ent, cell, act, stub, tick, line
     trap(HX + 3, STUN)
     hp2 = p.ent(0)["HP"]
     ok, d, ln = act("L")
-    g = (ok, d, p.ent(0)["HP"] < hp2, p.rb(STF) & S["STS_HOLD"], "YOU ARE STUNNED!" in ln, ln[:1], ent()[0] & SPENT)
-    check("S7 HOLD_GUARD set: the damage lands, no stun, no 'YOU ARE STUNNED!', the trap is spent",
-          g == (True, 1, True, 0, False, ["A STONE FALLS ON YOU!"], SPENT), (g, ln))
+    g = (ok, d, p.ent(0)["HP"] < hp2, p.rb(STF) & S["STS_HOLD"], "YOU ARE STUNNED!" in ln, ln[:1], ent()[0] & KNOWN)
+    check("S7 HOLD_GUARD set: the damage lands, no stun, no 'YOU ARE STUNNED!', the trap stays known",
+          g == (True, 1, True, 0, False, ["A STONE FALLS ON YOU!"], KNOWN), (g, ln))
     # a Mage takes it too (no arrow_hit frame either way)
     scene(K_WIZARD)
     heal()

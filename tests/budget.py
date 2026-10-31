@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -416,6 +416,12 @@ SCENARIOS = {
     "walarm": ("knight + Rat, Bat; ALARM wave of 2 Goblins queued, sp_run at end_turn, then materialise", [
         (1, 22, stand_y(1, 2), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "walarm"),
+    # TRAP2: "walarm2" = a SECOND firing of the same (re-armed, known) ALARM plate: the same wave work with
+    # LP_RESPAWNS = 1 (the first wave counted) -> tr_eff gates on / counts LP_RESPAWNS (< RESPAWN_MAX);
+    # the wave work (sp_run, 2 bodies) is identical, the cap is the contract (<= CAP).
+    "walarm2": ("knight + Rat, Bat; a second ALARM wave (LP_RESPAWNS 1), as walarm", [
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "walarm2"),
     # 3F-T12: "trickle" = "pmix" with a respawn-trickle check after EVERY turn (TRK_PHASE re-armed to 47):
     # end_turn only sets TRK_DUE, the check (R6 trk_run) runs on the next INPUT tick (turn_input, alone).
     # Worst case: LVL_DEPTH 5, 8 other VISITED rooms of 3 entries (sigma 8: the full eligibility scan),
@@ -960,8 +966,8 @@ def trap_report(p, key):
               f"turns {p.rw('TURN_COUNTER')}), HP {p.ent(0)['HP']}", flush=True)
         return ev
     b0, b1 = p.z.read_memory(S["TRAP_LIST"], 2)
-    ev = ("fired" if b0 & S["TRF_SPENT"] or (key == "tdart" and b0 & S["TRF_KNOWN"]) else
-          "found" if b0 & S["TRF_KNOWN"] else "nothing")
+    # TRAP2: every trap is known after a fire too (no SPENT bit): the scenario says which event was meant
+    ev = (("found" if key in ("tsearch", "tsense") else "fired") if b0 & S["TRF_KNOWN"] else "nothing")
     print(f"[info] {key}: trap {ev} (TR_B0 {b0:#04x}), HP {p.ent(0)['HP']}, room {p.rb('CUR_ROOM')}", flush=True)
     return ev
 
@@ -1069,10 +1075,12 @@ def run_scenario(h, scen):
         qmix_setup(p)
     if len(scen) > 5 and scen[5] in TRAPS:
         trap_setup(p, scen[5])
-    if len(scen) > 5 and scen[5] == "walarm":
+    if len(scen) > 5 and scen[5] in ("walarm", "walarm2"):
         WALARM_PRE[:] = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1]
         p.wmem(S["LP_KINDS"], [S["K_GOBLIN"]] * 4)
         p.wmem(S["SPQ_K"], [S["SPQ_WAVE"], S["SPQ_NONE"], 2])
+        if scen[5] == "walarm2":
+            p.wb("LP_RESPAWNS", 1)
     for f in EXTRA_SETUP:
         f(p)
     mode = scen[4] if len(scen) > 4 else None
@@ -1121,7 +1129,7 @@ def run_scenario(h, scen):
         TRK["on"] = False
         print(f"[info] {scen[5]} after: {TRK['checks']} checks, {TRK['spawns']} record appends, worst check tick {TRK['tick']} T", flush=True)
         assert TRK["checks"] >= 6 and TRK["spawns"] == TRK["checks"], "trickle: a check did not spawn"
-    if len(scen) > 5 and scen[5] == "walarm":       # the wave really was made (2 new bodies, SPQ empty)
+    if len(scen) > 5 and scen[5] in ("walarm", "walarm2"):       # the wave really was made (2 new bodies, SPQ empty)
         wv = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and sl not in WALARM_PRE]
         print(f"[info] walarm after: wave slots {wv}, SPQ_K {p.rb('SPQ_K')}", flush=True)
         assert len(wv) == 2 and p.rb("SPQ_K") == 0, "walarm: the 2-body wave was not made"
@@ -1219,7 +1227,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,vbat,trickle,otrickle,rcast,sroom,lglow,omix,lqmix").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,omix,lqmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")
