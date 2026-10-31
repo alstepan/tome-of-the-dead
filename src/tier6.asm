@@ -52,22 +52,7 @@ lp_gen:         ld   hl, (LP_RECP)
                 jr   z, .lair
                 ; ---- an ordinary room: minW, then the cap = max(LP_SIGMA_INIT, LP_RMAX x minW) ----
                 push bc
-                ld   b, 4
-                ld   hl, LP_KINDS
-                ld   c, $FF
-.mw:            ld   a, (hl)
-                inc  l                         ; (LP_KINDS: one page, ASSERTed)
-                add  a, lp_wt & $FF
-                push hl
-                ld   l, a
-                ld   h, lp_wt >> 8
-                ld   a, (hl)
-                pop  hl
-                cp   c
-                jr   nc, .mn
-                ld   c, a
-.mn:            djnz .mw
-                ld   a, c
+                call lp_minw                   ; A = C = minW (keeps DE)
                 ld   (LPG_MINW), a
                 ld   a, (LP_RMAX)
                 ld   b, a
@@ -154,8 +139,10 @@ gen_fit:       call gen_step
                 add  a, LP_KINDS & $FF
                 ld   l, a
                 ld   h, LP_KINDS >> 8
-                ld   a, (hl)                   ; the rolled base row
                 push bc
+                ld   a, (LP_LVL)
+                ld   c, a                      ; C = the level-entry LVL (§9.6)
+                ld   a, (hl)                   ; the rolled base row
                 call tier_row
                 pop  bc
                 or   a
@@ -178,6 +165,24 @@ gen_fit:       call gen_step
                 ld   hl, LP_DISCARD
                 inc  (hl)
                 scf
+                ret
+; lp_minw — A = C = the lightest §9.3 weight in LP_KINDS (lp_gen, the T12 trickle).
+; Keeps DE.  Clobbers: B, HL.
+lp_minw:        ld   hl, LP_KINDS
+                ld   bc, (4 << 8) | $FF
+.mw:            ld   a, (hl)
+                inc  l                         ; (LP_KINDS: one page, ASSERTed)
+                add  a, lp_wt & $FF
+                push hl
+                ld   l, a
+                ld   h, lp_wt >> 8
+                ld   a, (hl)
+                pop  hl
+                cp   c
+                jr   nc, .mn
+                ld   c, a
+.mn:            djnz .mw
+                ld   a, c
                 ret
 ; gen_tryi — A = LP_KINDS index; gen_tryk — A = kind row: accept iff LP_SIG + w + LP_RES <= cap.
 ; NC: A = the row, LP_SIG += w; CF: rejected. Clobbers: A, DE, HL.
@@ -207,8 +212,9 @@ gen_tryk:          ld   e, a
 ; gen_step — one xorshift 7,9,8 step of the spawn stream (GEN_RNG) -> HL: bank 2 (io.asm; MEM-RECLAIM w3, was a 21-B copy here).
 
 ;------------------------------------------------------------------------------
-; tier_row — A = a base row -> A = its tier row to try first, 0 = none (the kind has
-; no tiers: NO stream step; or the roll gave the base). The odds (out of 256):
+; tier_row — A = a base row, C = the hero LVL to use (lp_gen: LP_LVL, the level-entry
+; LVL; the T12 trickle: the current LVL) -> A = its tier row to try first, 0 = none
+; (the kind has no tiers: NO stream step; or the roll gave the base). The odds (out of 256):
 ;   T2 = max(0, T2_BASE[d] + 16 Δ)   T3 = d >= 4 ? max(0, T3_BASE[d] + 8 Δ) : 0
 ;   r = the low byte of one stream step: r < T3 -> tier 3 (tier 2 if the base
 ;   has none), r < T3 + T2 -> tier 2, else base. The caps (160 / 80) cannot be
@@ -231,9 +237,10 @@ tier_row:       ld   hl, tier_tab
                 ld   d, (hl)                   ; tier-3 row, 0 = none
                 push de
                 ld   a, (LVL_DEPTH)
-                ld   c, a
-                ld   a, (LP_LVL)
-                sub  c
+                ld   b, a
+                ld   a, c                      ; LVL
+                sub  b
+                ld   c, b                      ; C = depth
                 add  a, TIER_DELTA_MAX         ; x = clamp(LVL - d, -2, 2) + 2
                 jp   m, .x0
                 cp   2 * TIER_DELTA_MAX + 1

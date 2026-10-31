@@ -49,6 +49,7 @@ class Level:
         self.items = items or [0] * 9
         self.resp = 0               # LP_RESPAWNS
         self.boss_dead = False
+        self.sanctum = None         # LVL_SANCTUM (D8; 3F-D2: never eligible)
         self.cur = None             # the hero's room
         self.prev = None            # the room the hero just left (updated on EVERY room change)
 
@@ -66,13 +67,13 @@ def room_weight(items):
 
 
 def eligible(lv, extra_w=0):
-    """Rooms passing §9.5 hard limits 1, 3, 4 (and the entry count of 2). `extra_w` > 0
+    """Rooms passing §9.5 hard limits 1, 3, 4 (lair and D8 Sanctum) (and the entry count of 2). `extra_w` > 0
     additionally requires Σ + extra_w <= 12 (limit 2 for a known new body)."""
     out = []
     for r, rec in enumerate(lv.recs):
         if rec is None or not rec["visited"] or len(rec["ents"]) >= ROOM_CAP_N:
             continue
-        if r == lv.cur or r == lv.prev or r == lv.lair:
+        if r == lv.cur or r == lv.prev or r == lv.lair or r == lv.sanctum:
             continue
         if lv.sigma(r) + extra_w > ROOM_CAP_SIGMA:
             continue

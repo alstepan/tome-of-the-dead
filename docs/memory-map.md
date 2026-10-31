@@ -208,7 +208,8 @@ LAST (`r6_blobs`), run by `ovl_run` with C = `BANK_R6`.
 | **MEM-RECLAIM w2c (2026-10-30)** | **R6 free +185 B (release 1,283 -> 1,468, kit 1,212 -> 1,397)** | icon packing: `icons16` 1,376 B raw -> `icpk_idx` + `icpk` 995 B (−381), unpacker code +196 (`icons6.asm` `ic_find` / `ic_scr` / `ic_unp` (unrolled oct, ~50 B: `fi_slot` runs on a drop's kill tick, budget lcastf) / `rev8`; `ic_blit`'s copy pass gone; `fi_slot`'s FI_INK fill x4 unrolled). Decoded byte-exact (tools/icons16.py proves the Python model; the screen tests compare against the raw table). Stack: none (decoded onto the screen / into `FI_GLY`). Costs (ic1, incl. far6): `icon_slot` 2.45k -> 3.1k T, a MIRROR icon 4.5k, `worn_draw` 9.4k -> 16.3k (3 MIRROR placeholders), `fi_slot` ~+0.7k T per new slot; budget lcastf 123,059 -> 123,743 T |
 | **MEM-RECLAIM w2b (2026-10-30)** | **R6 free 229 -> 1,283 B release (kit 158 -> 1,212; 1,292 / 1,221 before the Spider climb commit took 9 B)** | cold code moved **R6 -> bank 7** (`B7_CODE` space freed by w2a): `hunger7.asm` (`hunger_turn` (end_turn calls it directly, was far6; `wear_apply` stays R6, far6 from it on a wear turn), `hg_faint`, `food_sub` / `food_dirty`, `hunger_add` (far7 from R6 `fx6`), `hg_stage` / `hg_line`); `trap7.asm` (`trap_turn` (jp from `trap_chk`), `trap_step` (jp from `act_pend`), `tr_*`, `tr_eff` (far6 R6 `tele_arm` / `fx_line`), `hero_hold`; `tr_draw` calls `ap_put_a` directly); `boss7.asm` (`grate_open` far7 from bank-3 `mon_drop`, `boss_chk` far7 from `lp_transition`, `ai_guard` far7 from bank-2 `ai_ghook`). Their read-only tables (`tr_ink7`, `tr_fx`, `glow7`; 29 B) are `data7.asm` in bank 7 right after the tilesets (`data7..data7_end`, one tape block with them, `B7D_LEN`; bank-7 code keeps no data). Stay in R6: `item_food` + `hg_attr` (panel render: never from contended bank 7), `tele_arm` / `tele_flash` / `trap_at` (R6 `fx6` / `pickup6` call them), `lp_post`; `mummy6` inlines its `food_sub` (13 B). Tests call the moved entries through far7 (`B7_LABELS` in hunger / status1 / tier6, t16). |
 | (code, after `ranged6`) | **800** (3F-T9) | `spawn6.asm`: the spawn queue producers `breed6` / `sp_bcall` / `ph_summon` + `sp_summon` (the pose: ranged6 `rg_pose`, now shared with `rg_shoot`), `sp_scan` / `sp_wt` / `sp_fit` (§9.3 cap), `sp_run` (end_turn) + `sp_init` / `sp_y` / `sp_place` / `sp_try` / `sp_door` / `sp_fin`; no variables (bank-5 `SPQ_RAM`) — see "3F-T9" |
-| (code, after `spawn6`) | **~237** (3F-T9 bat) | `vbat6.asm`: `vb_one` (far6 from bank-7 `vb_turn`, end_turn) + `vb_bat` / `vb_fin` / `vb_st` / `vb_gap` / `vb_cut`; no variables — see "3F-T9 Vampire bat form" |
+| (code, after `spawn6`) | **285** (3F-T12) | `trickle6.asm`: `trk_run` (far6 from end_turn every `RESPAWN_PERIOD` turns) + `trk_sig` / `trk_draw`; tier6 `lp_minw` (shared with `lp_gen`, net +5 there); no variables (scratch `TRK_W`) — see "3F-T12" |
+| (code, after `trickle6`) | **~237** (3F-T9 bat) | `vbat6.asm`: `vb_one` (far6 from bank-7 `vb_turn`, end_turn) + `vb_bat` / `vb_fin` / `vb_st` / `vb_gap` / `vb_cut`; no variables — see "3F-T9 Vampire bat form" |
 | `$E75A` `ovl_page_zx0` | **1,182** (3E-T13; was 328) | the bag page stream (`BANK_OVL_PAGE`; was bank 1) |
 | ~~`ovl_items_zx0`~~ | 0 (was 881) | **MEM-1: back in bank 1** (`BANK_OVL_ITEMS` = `BANK_UI1`, after the `it_text` block; R6 holds only `ovl_page_zx0` now, 1,192 B of streams incl. the page stream; the R6 addresses below shift down 881 B) |
 | (code, after `bag6`) | 310 code+data (**STATUS1: +55** `hg_faint`) | **3E-T9** `hunger6.asm` — **MEM-RECLAIM w2b: `hunger_turn`, `food_sub` / `food_dirty`, `hunger_add`, `hg_stage` / `hg_line` moved to bank 7 (`hunger7.asm`); only `item_food`, `hg_attr` (4 B) stay here** — see "3E-T9" |
@@ -1397,7 +1398,7 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6900` | `TILE_ATTRS` | 64 | attr by tile id (one page: `ld h, TILE_ATTRS>>8`) |
 | `$6940` | `GEN_SRC` | 512 | **3F-T2: the generator session's scratch (R6 `pool_hero` / `pool_proto` / `pool_list` → `gen_list` / the seq loader; dead before `panel_init`): `PL_LIST` `$6940` (≤ 25 B: pairs fid0, fcnt, `$FF` end), `SQ_PTR` `$6959` (7 words), `SQ_TOP` `$6967`, `PL_PROTO` `$6969` (6 B), `SQ_IMG` `$6980..$6B34` (the unpacked sequence masters, 437 B; ASSERTed below `TX_DEC`) — over `FI_PAD` / `FI_TSLOT` / `FI_CELL` (SQ_IMG ends at `$6B34`, below `FI_INK` `$6C00` and `GEN_MIR`; it does not run over `FI_INK`), rebuilt by `fi_full` at the following room build as after any generator run.** 3F-T1: `PL_LIST` (12 B at `$6940`, R6 `pool_list` → `level_enter`, dead before `panel_init`). B3B-11b: `pblit` (one icon, <= 54 B) stages `vdata` here (3E-T1: `panel_boot`'s font halves no more: boot6_tiles reads the boot block in place) — new game only, never during generation. C3-6: the pause overlay saves rows 7-9 here (`PAUSE_SAVE`, 864 B: it runs on into `GEN_MIR`) while paused |
 | `$6B40` | `GEN_MIR` | 512 | generator: mirrored frame (`LOWRAM_END` = `LOWRAM_FREE_END` `$6D40`). D3-TX: its top 43 B `$6D15..$6D3F` = `TX_DEC` (`tx_dec`'s transient decode buffer, menu text) |
-| `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+10 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
+| `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+ **3F-T12: `TRK_PHASE` `$6D56`, `TRK_PREV` `$6D57`** + 8 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
 | `$6E80..$6EBF` | `ORN_GLYPHS` | 64 | B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). `LOWRAM_END_3B` = `LOWRAM_FREE_END` = `$6EC0` |
 | `$6EC0..$6F31` | `LP_STATE` | 114 | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
 | `$6F32..$6FE3` (3F-T2, kit) | free | 178 | **3F-T2: 135 B kept for descriptor growth (`FRT_MAX` 128 − 101 frames), 43 spare kit** (review: +7 B `SEQ_TRAP` path in `sq_load`; 50 before); before: `$6F32..$71A5`, 628, of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3F-T1: 29 spare kit** (−48: the level-pool block in `level_enter`, `gen_idles`; the cold block now starts at `$7076`; "Level pool (3F-T1)"); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
@@ -2066,7 +2067,7 @@ none of this runs and every monster keeps its slot as before.
 | +8 | `LP_DISCARD` | units lost: split / sum cap / a full record (expect 0 from the split) |
 | +9 | `LP_RMAX` | `ROOM_MAX` 2 (D1–D2) / 3 (D3–D8) |
 | +10 | `LP_RNG` | word: the last entry's spawn-stream seed |
-| +12..+23 | `LP_HX` `LP_HS` `LP_HW` `LP_SIG` `LP_RECP` (w) `LP_W` `LP_GAPV` `LP_BEST` `LP_BS` `LP_BX` `LP_RES` | `lp_enter` / `lp_budget` scratch (tests mask it) |
+| +12..+23 | `LP_HX` `LP_HS` `LP_HW` `LP_SIG` `LP_RECP` (w) `LP_W` `LP_GAPV` `LP_BEST` `LP_BS` `LP_BX` `LP_RES` | `lp_enter` / `lp_budget` scratch (tests mask it); **3F-T12: +15..+23 = `TRK_W` (9 B), `trk_run`'s scratch (per-room floor counts, then w_r) — dead between entries** |
 | +24 | `ROOM_VISITS` | 9 B: entries per room this level (spawn-stream input) |
 | +33 | `LP_REC` | 9 records × `LR_STRIDE` 9: `LR_HDR` (bit 7 `LR_VISITED`, bits 0–2 count) + 4 × {`LE_KIND` = kind row bits 0–4 \| **`LEK_GOLD` bit 5 (3F-T5: golden boss)** \| `LEK_BRED` bit 6 \| `LEK_RESPAWN` bit 7 (= `EF_RESPAWN`), `LE_HP` exact hp, **depth-scaled since 3F-T5**}. FRESH: count = quota, no entries; VISITED: count = entries (unused entries 0) |
 
@@ -4501,3 +4502,33 @@ its set 3,644 of 3,840 B).
 
 T11 check (D8 +2,080 B): 29,017 + 2,080 = 31,097 crosses into bank 6 (bank-4 tail waste ≤ 575):
 worst need 31,097 + 575 + 64 = 31,736 ≤ 32,761 (1,025 B spare even then).
+## 3F-T12 respawn trickle (`feat/3f-t12-trickle`; game.md §9.5 + 3F-D2 draw order; `tests/trickle.py`, budget `trickle`)
+
+Records only (§9.5 lazy population): every `RESPAWN_PERIOD` (48) turns of the level, end_turn (bank 7,
+after sp_run / the exit / `TURN_COUNTER++`) far6s R6 **`trk_run`**: boss alive (`LF_GRATE_OPEN` clear),
+`LP_RESPAWNS` < 6, eligible = VISITED, < 4 entries, not `CUR_ROOM` / `TRK_PREV` / `LVL_LAIR` /
+`LVL_SANCTUM`, Σ + minW <= 12; w_r = min(7, 1 + 2 x live `FLOOR_LIST` entries); draws on `RNG_STATE`
+(chance < 96, room = byte mod Σw, k = byte & 3, `tier_row` with the CURRENT `LVL`, one retry k + 1);
+appends {row | `LEK_RESPAWN`, `kind_hp`} and `LP_RESPAWNS` += 1. Never a slot, never a cast / input tick.
+Byte-exact vs `tools/respawn_model.py` (now also excludes the Sanctum, 3F-D2).
+
+| Address | Symbol | |
+|---|---|---|
+| `$6D56` | `TRK_PHASE` | turns since the last check 0..47 (EDGE_TAB spare; level_gen zeroes it = reset on level entry; end_turn increments it BEFORE do_exit, so a descent leaves a fresh LVL_STATE — world.py W16 block compare). A turn whose end_turn runs `sp_run` does not advance it (no check shares a tick with sp_run) (test-observable) |
+| `$6D57` | `TRK_PREV` | prev_room: written in do_exit `.in` (exit + teleport) = the room left; 0 at level entry is harmless (only CUR_ROOM is VISITED before the first exit) (test-observable) |
+| `LP_STATE+15..+23` | `TRK_W` | 9 B scratch in the `lp_enter` scratch range (dead between entries) |
+
+`GEN_RNG` is used as the draw register (RNG_STATE copied in / back out around `trk_draw`, so the shared
+`tier_row` steps it) and is NOT restored: nothing consumes it between level generations (lp_enter
+saves / reseeds / restores it; level_gen, lp_budget and the items overlay reseed it). `tier_row` now takes
+the LVL in C (lp_gen passes `LP_LVL`, the trickle `LVL`).
+
+| Region (`-DDEBUG_KIT=0`) | main `8d14385` | after 3F-T12 | Δ |
+|---|---|---|---|
+| R6 free | 537 | **246** | −291 (`trickle6.asm` 285, tier6 `lp_minw` / C-entry net +6) |
+| bank 7 free | 92 | **61** | −31 (end_turn phase inc before the exit 4 + check / far6 15, sp_run phase hold +6, do_exit `TRK_PREV` 6) |
+| low RAM / bank 2 / bank 3 / bank 1 / pool | 41 / 28 / 5 / 441 / — | unchanged | 0 (state in the EDGE_TAB spare) |
+
+Costs: `trk_run` stopped at step 2 ~0.1k T; worst full check with a spawn (far6 incl.) 10,136 T (tests/trickle.py T);
+budget `trickle` (pmix + a check on every end_turn, 14 checks / 5 appends) worst work tick 113,996 T vs pmix 103,624;
+full budget.py PASS, worst gated walarm 122,177 / lcastf 121,246 (unchanged: no check shares sp_run's tick).

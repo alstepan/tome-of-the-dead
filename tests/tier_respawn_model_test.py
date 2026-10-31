@@ -169,6 +169,9 @@ for seed in range(1, 40):                                # exclusions
         check(hp == G.k3_hp(kb, 5) and not kb & G.LEK_GOLD, "full hp, not golden")
         key = G.K3_BY_ID[kb & 31]
         check(key in lv.kinds or G.KROWS[key][5] in lv.kinds, "kind (or its tier) from the level's list")
+lv = level(visited=(0, 1, 4), lair=7)                    # 3F-D2: the D8 Sanctum is never eligible
+lv.sanctum = 4
+check(all(g[0] != 4 for _, g in run(lv, 3, 20000, hero=(0, 1))) and lv.resp == 0, "Sanctum excluded")
 lv = level(visited=())
 lv.prev, lv.cur = 0, 1
 r0 = G.Rng(4, 5)
