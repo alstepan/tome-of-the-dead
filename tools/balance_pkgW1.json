@@ -1,0 +1,149 @@
+{
+ "_doc": "W1 Warrior power-ups, monsters keep PHYS R. TABLE: Power MP 3/5/7->2/3/5, Ogre SHOCK W->N (Mage-only nerf). CODE: Power Strike ignores PHYS R; Warrior MP 6->10, +1->+2 per level",
+ "ab_rank": {
+  "Spark": {
+   "2": {
+    "range": 9,
+    "die": 8,
+    "bonus": 2
+   },
+   "3": {
+    "range": 10,
+    "die": 8,
+    "bonus": 4
+   }
+  },
+  "Firebolt": {
+   "1": {
+    "range": 8,
+    "die": 6,
+    "bonus": 2
+   },
+   "2": {
+    "range": 8,
+    "die": 8,
+    "bonus": 4,
+    "effect": 4
+   },
+   "3": {
+    "range": 10,
+    "die": 10,
+    "bonus": 6
+   }
+  },
+  "Frost": {
+   "1": {
+    "range": 10,
+    "die": 6,
+    "bonus": 1
+   },
+   "2": {
+    "range": 10,
+    "die": 8,
+    "bonus": 2
+   },
+   "3": {
+    "mp": 7,
+    "range": 12,
+    "die": 8,
+    "bonus": 4
+   }
+  },
+  "Drain": {
+   "1": {
+    "range": 6,
+    "die": 6,
+    "bonus": 2
+   },
+   "2": {
+    "range": 8,
+    "die": 8,
+    "bonus": 3
+   },
+   "3": {
+    "mp": 7,
+    "range": 8,
+    "die": 8,
+    "bonus": 6
+   }
+  },
+  "Lightning": {
+   "1": {
+    "range": 16,
+    "die": 8,
+    "bonus": 4,
+    "bounces": 1
+   },
+   "2": {
+    "range": 16,
+    "die": 8,
+    "bonus": 7,
+    "bounces": 1
+   },
+   "3": {
+    "mp": 11,
+    "range": 20,
+    "die": 10,
+    "bonus": 9,
+    "bounces": 2
+   }
+  },
+  "Power": {
+   "1": {
+    "mp": 2
+   },
+   "2": {
+    "mp": 3
+   },
+   "3": {
+    "mp": 5
+   }
+  }
+ },
+ "kx": {
+  "SPIDER": {
+   "FIRE": "N"
+  },
+  "BLACK_WIDOW": {
+   "FIRE": "N"
+  },
+  "SKELETON": {
+   "COLD": "R"
+  },
+  "ARCHER": {
+   "COLD": "R"
+  },
+  "SNIPER": {
+   "COLD": "R"
+  },
+  "SKEL_GUARD": {
+   "COLD": "R"
+  },
+  "SKEL_KNIGHT": {
+   "COLD": "R"
+  },
+  "GHOST": {
+   "COLD": "R"
+  },
+  "POLTERGEIST": {
+   "COLD": "R"
+  },
+  "NECRO": {
+   "DRAIN": "N"
+  },
+  "BONE_CALLER": {
+   "DRAIN": "N"
+  },
+  "MUMMY": {
+   "PHYS": "N"
+  },
+  "OGRE": {
+   "SHOCK": "N"
+  }
+ },
+ "param": {
+  "PS_R": 1,
+  "W_MP0": 10,
+  "W_LVL_MP": 2
+ }
+}
