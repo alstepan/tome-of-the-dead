@@ -112,10 +112,10 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # 480; was the Necro's walk + U_NCAST, which the D8 Necro still loads): both heroes D8 only, Warrior +2,160
 # (2,080 + the bank 0 -> 4 straddle 25 -> 105), Mage +2,080; sources in bank 1, POOL_CAP unchanged.
 LEVEL_NEED = {
-    (0, 1): 22553, (0, 2): 22265, (0, 3): 26553, (0, 4): 28601,
-    (0, 5): 23097, (0, 6): 28761, (0, 7): 27769, (0, 8): 31241,
-    (1, 1): 19417, (1, 2): 19193, (1, 3): 23369, (1, 4): 25785,
-    (1, 5): 20153, (1, 6): 25577, (1, 7): 24825, (1, 8): 28153,
+    (0, 1): 22538, (0, 2): 22250, (0, 3): 26538, (0, 4): 28586,
+    (0, 5): 23082, (0, 6): 28746, (0, 7): 27754, (0, 8): 31226,
+    (1, 1): 19402, (1, 2): 19178, (1, 3): 23354, (1, 4): 25770,
+    (1, 5): 20138, (1, 6): 25562, (1, 7): 24810, (1, 8): 28138,   # 3F-T11b: -15 each (measured; text +15 B)
 }
 
 
@@ -765,8 +765,11 @@ def main():
         # ANIM-IMPORT2: + the Vampire's own blocks (675 B) stay in banks 1 / 3 as well
         # MEM-RECLAIM w4: R6_GROW 13 -> 14 leaves at most 15 SRC6 pages (SRC6 at $C800); the set is
         # 3,644 of 3,840 B
-        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT", "K_OGRE", "K_MUMMY", "K_VAMPIRE"}) | {"K_WIZARD"}))
-        variants.append(("src6", REPO, kit + ["SRC6_PAGES=15", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
+        # 3F-T11b: R6_GROW 14 -> 15 leaves at most 14 SRC6 pages (SRC6 at $C800, 3,584 B): the set is the
+        # Spider, Necro, Ogre, the climb pair + the Wizard (1,908 B packed); the Vampire, Orc and Death
+        # Knight (1,900 B) go to banks 1 / 3 (8 B less than the Wizard there: bank 1 has ~no slack)
+        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT", "K_ORC", "K_MUMMY", "K_VAMPIRE"}) | {"K_WIZARD"}))
+        variants.append(("src6", REPO, kit + ["SRC6_PAGES=14", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
                          {"SRC6_KINDS": s6}))
     if a.baseline:                 # (an older checkout ignores the unknown define)
         variants.append(("baseline", os.path.abspath(a.baseline), kit, None))

@@ -74,6 +74,8 @@ lp_post:
                 jr   nz, .esc
                 ld   hl, LVL_FLAGS             ; the boss
                 res  LF_PROVOKED_BIT, (hl)
+                ld   a, AM_INK0                ; 3F-T11b (§9.9 A5): the Archmage's body ink at spawn = ORDER[0]'s
+                ld   (kind_tab + KT_ATTR + K_ARCHMAGE), a   ; (P = 0; only a D8 body reads it)
                 ld   e, c
 .one:           ld   c, 1
                 ld   l, c

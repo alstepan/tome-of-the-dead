@@ -292,5 +292,7 @@ gate_barred     "THE GATE IS BARRED"
 cmb_summons     " SUMMONS!"
 # 3F-T9 the Vampire's bat form (vbat6.asm, game.md §9.2)
 vb_turns        "THE VAMPIRE TURNS INTO A BAT!"
+# 3F-T11b the Archmage's blink (arch6.asm am_blink, game.md §9.9 A3a)
+am_vanish       "THE ARCHMAGE VANISHES!"
 # 3F-T9 impact_line MSG_M_DRAIN: the Vampire's bite hit (it heals by the damage)
 cmb_drains      " DRAINS YOU"

@@ -73,7 +73,7 @@
   through `ovl_run` with C = `BANK_R6`. New 3E / 3F code and overlay streams
   go here (memory-map "R6 region"); 3F sprite sources go to the **SRC6**
   region just below R6 (`SRC6_KINDS` in `tools/zx0_sources.py`; memory-map
-  "SRC6 region") while it has room (at most 15 pages: the boot block below it;
+  "SRC6 region") while it has room (at most 14 pages since 3F-T11b R6_GROW 15: the boot block below it;
   3F-T11's `K_ARCHMAGE` went to the bank-1 sources instead, memory-map "3F-T11").
 - **Bank-7 cold code (D3-S2).** Per-turn / per-event logic that needs no
   other `$C000` bank lives in bank 7 `$DB00..$F7FF` (MEM-RECLAIM w2a; `src/bank7.asm`, the

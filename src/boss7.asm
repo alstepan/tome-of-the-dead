@@ -121,7 +121,6 @@ boss_chk:
 ; ai_guard — G2 (game.md §9.2), far7 (w2b: was far6) from ai_ghook: IX = the lair boss
 ; (ACT_SLOT = its slot), E = 0 iff standing, TMP4 = its storey, PL_* =
 ; cache_player. Runs after the melee / ranged rules found nothing to do.
-;  - the Archmage (D8): G1d only, the ordinary rules (L = 0);
 ;  - the Ogre: one SLAM-counter turn (og_adv; a turn with a blow advances it in
 ;    reach_ok instead);
 ;  - mid-ladder, or off storey 1 (a Vampire Lord left on storey 0 after its bat
@@ -134,9 +133,7 @@ boss_chk:
 ; Clobbers: all but IX.   ~0.25k T + a step (far7 ~0.25k on top; contended)
 ;------------------------------------------------------------------------------
 ai_guard:
-                ld   a, (ix+E_KIND)
-                cp   K_ARCHMAGE
-                jr   z, .ord
+                ld   a, (ix+E_KIND)            ; (3F-T11b: the Archmage never gets here: ai_mon -> arch_ai)
                 cp   K_MUMMY                   ; 3F-T9: the Golden Pharaoh (D5's boss) summons
                 jr   nz, .og                   ; (R6 spawn6.asm ph_summon: L = 1 the turn is used)
                 push de

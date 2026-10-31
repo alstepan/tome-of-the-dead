@@ -4,7 +4,7 @@
 ;==============================================================================
 
 ; rk_tab — kind -> its rd_tab row (RK_*, R6 ranged6.asm), 0 = no ranged attack.
-; The Archmage's row exists (T11) but its kind stays 0 until the Archmage AI.
+; The Archmage stays 0: its 7 spell rows are cast by its own AI (ai_mon -> arch_ai).
 rk_tab:
                 DS   K_ARCHER, 0
                 DB   RK_ARCHER                 ; 12
@@ -19,6 +19,18 @@ rk_tab:
                 ASSERT K_NECRO == K_ARCHER + 2 && K_BONE_CALLER == K_SNIPER + 1 && K_SNIPER > K_SLINGER && K_SLINGER > K_NECRO
                 ASSERT K_COUNT == K_BONE_CALLER + 1
 
+;------------------------------------------------------------------------------
+; ai_mon — 3F-T11b, resolve_monsters' (bank 3) per-monster AI call: the
+; Archmage (game.md §9.9 A3: its own branch, one kind test) far6s R6 arch_ai
+; (arch6.asm), every other kind runs ai_monster (bank 3, paged). Same In / Out
+; as ai_monster (IX = the monster, ACT_SLOT; no result; clobbers all but IX).
+; Cost: +31 T a monster (the test + JP).
+;------------------------------------------------------------------------------
+ai_mon:         ld   a, (ix+E_KIND)
+                cp   K_ARCHMAGE
+                jp   nz, ai_monster
+                ld   hl, arch_ai
+                jp   far6
 
 ;------------------------------------------------------------------------------
 ; ai_rhook — ai_monster (bank 3) right after its melee test (game.md §9.2

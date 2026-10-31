@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "vbat", "trickle", "otrickle")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -432,6 +432,22 @@ SCENARIOS = {
         (1, 22, stand_y(1, 2), HOSTILE),
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "otrickle"),
+    # 3F-T11b (game.md §9.9): the Archmage in line at gap 5 (slot 7, x 4; hero x 12) with a Mirror Helm hero
+    # (DARK X): S = 15 / C = 1 at the start (no summon: a Skeleton beside it would block the line), then a
+    # bolt every 2nd turn (Death Bolts: the ½ return hit + the 2nd FX track), hexes / staff between; pmix items
+    "aroom": ("knight (Mirror Helm) + the Archmage in line, pmix items: summon, bolts + returns, hexes", [
+        (7, 4, stand_y(1, 6), RIGHT)], KEYS, K_KNIGHT, None, "aroom"),
+    # 3F-T11b review: "asum" = the Archmage at S 0 / C 1 (no Mirror Helm): turn 1 summons (the decision on the
+    # input tick, end_turn's sp_run makes the Skeleton), then the Archmage + the live Skeleton (it walks in and
+    # fights; the Archmage bolts / hexes when the line is clear, the staff otherwise)
+    "asum": ("knight + the Archmage summoning, then Archmage + its Skeleton, pmix items", [
+        (7, 4, stand_y(1, 6), RIGHT)], KEYS, K_KNIGHT, None, "asum"),
+    # 3F-T11b review: "rfar" = 2 shooters held OUT of range for the whole run (Archer gap 11 >= r 10 at x 26,
+    # Necromancer gap 8 >= r 8 at x 1; the hero only waits): the cheap range reject in rg_line (before the
+    # line scans), compared against main
+    "rfar": ("knight waiting + Archer and Necromancer out of range, pmix items", [
+        (5, 26, stand_y(1, 6), HOSTILE),
+        (7, 1, stand_y(1, 6), RIGHT)], [("WAIT", 12)], K_KNIGHT, None, "rfar"),
     "vbat": ("knight + a low-hp Vampire, pmix items, the bat transform at end_turn", [
         (7, 4, stand_y(1, 6), RIGHT)], KEYS, K_KNIGHT, None, "vbat"),
     "rcast": ("mage Lightning r3 through 2 Archers in line, the deferred phase shoots back", [
@@ -822,7 +838,8 @@ def ranged_setup(p, placements, key):
     sequences (KT_SEQ poke: Archer / Necro frames are not in the PROTO pool), counter 0 (E_RCD = 1), 60 HP."""
     kinds = {"rroom": ("K_ARCHER", "K_ARCHER"), "nroom": ("K_NECRO", "K_BONE_CALLER"),
              "rcast": ("K_ARCHER", "K_ARCHER"), "sroom": ("K_SLINGER",) * 3, "bsum": ("K_BONE_CALLER",),
-             "vbat": ("K_VAMPIRE",)}[key]
+             "vbat": ("K_VAMPIRE",), "aroom": ("K_ARCHMAGE",), "asum": ("K_ARCHMAGE",),
+             "rfar": ("K_ARCHER", "K_NECRO")}[key]
     if key == "rcast":
         lcast_setup(p, placements)
     else:
@@ -840,7 +857,19 @@ def ranged_setup(p, placements, key):
         p.wb(S["kind_tab"] + S["KT_SEQ"] + S["K_VBAT"], p.rb(S["kind_tab"] + S["KT_SEQ"] + S["K_BAT"]))
         p.set_ent(placements[0][0], HP=4, MAXHP=14, POT=0)
         p.wb(S["LP_KINDS"], S["K_VAMPIRE"])
-    if key in ("nroom", "bsum"):                  # no Necro bolt in the PROTO pool
+    if key == "aroom":                            # 3F-T11b: the Mirror Helm (DARK X), POT 0: S 0 / C 1
+        p.set_ent(placements[0][0], HP=67, MAXHP=67, POT=0x3C)   # S 15: no summon (it would stand in the line;
+                                                                  # the summon decision + sp_run: "bsum")
+        p.wmem(S["HERO_RES"], [0, 3 << 2, 0])
+        p.wb(S["ST_X"] + placements[0][0], 0)
+    if key == "rfar":                             # bricks on the standing row 16 at cols 25 / 4: neither can
+        for c_ in (25, 4):                        # step in (the flight row 13 stays clear)
+            p.wb(S["ROOM_MAP"] + 16 * 32 + c_, S["T_BRICK"])
+    if key == "asum":                             # S 0 / C 1: the first turn summons
+        p.set_ent(placements[0][0], HP=67, MAXHP=67, POT=0)
+        p.wb(S["ST_X"] + placements[0][0], 0)
+        p.wb("SPQ_K", 0)
+    if key in ("nroom", "bsum", "aroom", "asum", "rfar"):   # no Necro bolt in the PROTO pool
         RANGED_FIDS.update({S["FID_nbolt_fly1"]: S["FID_arrow_fly1"], S["FID_nbolt_fly2"]: S["FID_arrow_fly2"],
                             S["FID_nbolt_hit"]: S["FID_arrow_hit"]})
     if ranged_fids not in TICK_HOOKS:
@@ -1022,7 +1051,7 @@ def run_scenario(h, scen):
         tmix_setup(p)
     if len(scen) > 5 and scen[5] in ("trickle", "otrickle"):
         trickle_setup(p, scen[5])
-    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat"):
+    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat", "aroom", "asum", "rfar"):
         ranged_setup(p, placements, scen[5])
     else:
         RANGED_FIDS.clear()
@@ -1073,9 +1102,17 @@ def run_scenario(h, scen):
     if len(scen) > 5 and scen[5] == "tmix":         # the tier abilities really ran
         print(f"[info] tmix after: WORN {list(p.z.read_memory(S['WORN'], 9))}, WEAR_PEND {p.rb('WEAR_PEND')},"
               f" HP {p.ent(0)['HP']}/{p.ent(0)['MAXHP']}, Guard HP {p.ent(5)['HP']}", flush=True)
-    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat"):
+    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat", "aroom", "asum", "rfar"):
         print(f"[info] {scen[5]} after: hero HP {p.ent(0)['HP']}, shooters HP "
               f"{[p.ent(sl)['HP'] for sl, *_ in placements]}, BLIT_MISS {p.rb('BLIT_MISS')}", flush=True)
+    if len(scen) > 5 and scen[5] == "aroom":        # 3F-T11b: the bolts + the Mirror Helm returns really happened
+        print(f"[info] aroom after: Archmage HP {p.ent(7)['HP']} / 67, state {p.rb(S['ST_X'] + 7):#04x}", flush=True)
+        assert p.ent(7)["HP"] < 67, "aroom: no Mirror Helm return"
+    if len(scen) > 5 and scen[5] == "asum":         # 3F-T11b: the Archmage's summon really happened
+        sm = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and p.ent(sl)["POT"] & 0x40]
+        print(f"[info] asum after: summon-made slots {sm}, Archmage HP {p.ent(7)['HP']}", flush=True)
+        assert sm or any(p.ent(sl)["KIND"] == S["K_SKELETON"] and p.ent(sl)["FLAGS"] & 0x10 for sl in range(1, 16)), \
+            "asum: no summon was made"
     if len(scen) > 5 and scen[5] == "bsum":         # 3F-T9: the summon really happened
         sm = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and p.ent(sl)["POT"] & 0x40]
         print(f"[info] bsum after: summon-made slots {sm}", flush=True)
@@ -1182,7 +1219,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,bsum,walarm,vbat,trickle,otrickle,rcast,sroom,lglow,omix,lqmix").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,vbat,trickle,otrickle,rcast,sroom,lglow,omix,lqmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")

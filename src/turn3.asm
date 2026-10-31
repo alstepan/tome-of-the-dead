@@ -447,9 +447,14 @@ rs_hit:         ld   b, 0
                 ld   l, a
                 ret
 rs_deal:        ld   c, a
-                ld   b, d
                 xor  a                         ; target = the hero
+rs_dl:          ld   b, d
                 jp   deal_hit
+; rs_self — 3F-T11b (arch6.asm am_cast, game.md §9.9 A6): the Mirror Helm return, D
+; = the roll, E = the Archmage's slot, IX = it: a DARK hit on itself (no rider).
+rs_self:        ld   c, DTY_DARK | DH_NODEF
+                ld   a, e
+                jr   rs_dl
 
 ; nearest_ladder — nearest segment with storey B in the current room to IX.x
 ; (descriptor order RD_UPCOL..RD_LAD2; a tie keeps the first, as the PROTO
@@ -822,7 +827,7 @@ resolve_monsters:
                 ld   a, l
                 or   a
                 jr   nz, .next
-.ai:            call ai_monster
+.ai:            call ai_mon                    ; 3F-T11b (bank 2): the Archmage -> R6 arch_ai, else ai_monster
 .next:          pop  de
                 pop  bc
 .step:          inc  c
