@@ -1,0 +1,100 @@
+# HOW TO PLAY screen (INSTR1) - render spec. Layout B, 2 pages. Source: docs/design/instructions_screen.md
+# Lines starting with '#' or '===' are NOT screen rows. Every page = exactly 24 screen rows
+# (row 00 .. row 23), each <= 42 chars, after the "=== PAGE n ROWS ===" marker.
+# Text: FONT6 6x8, char k starts at x = 6*k px (k = 0..41, x 0..251), row r at y = 8*r px.
+# Icons/tiles: 8x8 attribute CELLS, cell c at x = 8*c px (c = 0..31). Icon area chars are spaces.
+# Attr = Spectrum byte: BRIGHT bit 6, PAPER bits 5-3, INK bits 2-0. PAPER is 0 (black) everywhere
+# unless stated. $47 = INK 7 white, BRIGHT 1 | $07 = INK 7, BRIGHT 0 | $46 = INK 6 yellow, BRIGHT 1
+# $06 = INK 6, BRIGHT 0 | $45 = INK 5 cyan, BRIGHT 1 | $05 = INK 5, BRIGHT 0 | $42 = INK 2 red, BRIGHT 1
+# $43 = INK 3 magenta, BRIGHT 1 | $00 = blank. Border black. No FLASH.
+=== PAGE 1 ROWS ===
+      TOME OF THE DEAD - HOW TO PLAY   1/2
+
+FIND THE KEY, UNLOCK THE LAIR, KILL ITS
+BOSS: ITS GRATE IS THE WAY DOWN
+ON DEPTH 8 SLAY THE ARCHMAGE, THEN
+DESTROY THE TOME OF THE DEAD
+
+STICK       ACTION              KEY
+LEFT/RIGHT  WALK, HIT, OPEN DOOR
+UP/DOWN     CLIMB A LADDER
+UP+L/R      JUMP NARROW PITS
+DOWN        WAIT, SEARCH TRAPS  SYM+M
+FIRE TAP    USE SELECTED ICON   ENTER
+DOWN+FIRE   CHOOSE AN ICON      1-0
+            L/R MOVE, FIRE USE, UP EXIT
+FIRE+UP     PAUSE: SOUND, QUIT  BREAK
+    FIRE ON BAG: INVENTORY      I
+    EAT, DRINK, READ, EQUIP, DISCARD
+    FIRE ON SWORD/STAFF: HIT, OR CLOSE
+    THE OPEN DOOR YOU FACE
+
+Q A O P SPACE = UP DOWN LEFT RIGHT FIRE
+MENU: 3 PICKS JOYSTICK, 4 REDEFINES KEYS
+     ANY KEY: NEXT PAGE   BREAK: PLAY
+=== PAGE 1 ATTRS (row: cells -> attr) ===
+# 00: 0-31 $46
+# 01: 0-31 $00
+# 02,03: 0-31 $47
+# 04,05: 0-29 $47 | 30-31 = lectern tile cells (see icons)
+# 06: 0-31 $00
+# 07: 0-31 $06
+# 08-13,15: 0-8 $45 (STICK, chars 0-11) | 9-23 $47 (ACTION, chars 12-31) | 24-31 $46 (KEY, chars 32-41)
+# 14: 0-8 $00 | 9-31 $47
+# 16: 0-2 icon $06 | 3-23 $47 | 24-31 $46
+# 17: 0-2 icon $06 | 3-31 $07
+# 18: 0-2 icon $47 | 3-31 $47
+# 19: 0-2 icon $47 | 3-31 $07
+# 20: 0-31 $00
+# 21,22: 0-31 $05
+# 23: 0-31 $46
+=== PAGE 1 ICONS (token  rows  cells  size  attr  source) ===
+# [icon:bag]      rows 16-17  cells 0-2    24x16  $06       assets/gfx/panel/panel_icons.asm icon_bag (bar icon)
+# [icon:sword]    rows 18-19  cells 0-2    24x16  $47       assets/gfx/panel/panel_icons.asm icon_sword (bar icon)
+# [tile:lectern]  rows 4-5    cells 30-31  16x16  in-game   map tiles common ids 15/16 (top L/R), 17/18 (bottom L/R), D8 attrs
+=== PAGE 2 ROWS ===
+              ITEMS AND TIPS           2/2
+
+WALK OVER ITEMS TO TAKE THEM
+    POTION - DRINK IT   FOOD - EAT IT
+    HEAL, MANA, CURE    OR GROW WEAK
+    SCROLL - READ IT    BOOK - READ IT
+   SLEEP FEAR ENCHANT   NEW SPELL OR SKILL
+    DAGGERS, ARROWS     WEAPON, ARMOUR
+    WARRIOR AMMO        EQUIP IN THE BAG
+    KEY                 GRATE - WAY DOWN
+    OPENS THE LAIR      OPENS IF BOSS DIES
+
+TIPS
+* DOWN WAITS A TURN AND SEARCHES FOR TRAPS
+
+* HUNGER NEVER KILLS, BUT THE WEAK FAINT
+
+* NO WAY BACK UP: LOOT EACH DEPTH FIRST
+
+* SWARMED? READ SLEEP, FEAR OR TELEPORT
+
+* STANDING NEAR THE TOME HURTS YOU
+
+          PRESS ANY KEY TO PLAY
+=== PAGE 2 ATTRS (row: cells -> attr) ===
+# 00: 0-31 $46
+# 01: 0-31 $00
+# 02: 0-31 $06
+# 03,05,07,09: 0-1 icon | 2-15 $47 (left text, chars 4-21) | 16-17 icon | 18-31 $47 (right text, chars 24-41)
+# 04,06,08,10: 0-1 icon | 2-15 $07 | 16-17 icon | 18-31 $07
+# 11: 0-31 $00
+# 12: 0-31 $46
+# 13,15,17,19,21: 0-31 alternating $47 (13,17,21) / $45 (15,19), tips with '* ' bullet
+# 14,16,18,20: 0-31 $00 (blank)
+# 22: 0-31 $00
+# 23: 0-31 $46
+=== PAGE 2 ICONS (token  rows  cells  size  attr  source) ===
+# [icon:p_heal]       rows 3-4   cells 0-1    16x16  $42  icons16 #5 (Mana/Cure share this shape)
+# [icon:f_meat]       rows 3-4   cells 16-17  16x16  $42  icons16 #4
+# [icon:s_teleport]   rows 5-6   cells 0-1    16x16  $45  icons16 #8
+# [icon:book]         rows 5-6   cells 16-17  16x16  $43  icons16 #12 (skill book item, not the Book of Death Magic)
+# [icon:ammo_dagger]  rows 7-8   cells 0-1    16x16  $47  icons16 #43
+# [icon:w_long]       rows 7-8   cells 16-17  16x16  $07  icons16 #15
+# [icon:label_key]    row 9      cell 1       8x8    its labels8 attr  panel_icons.asm label_key (cells 0, row-10 0-1 blank, attr $00)
+# [tile:grate_shut]   rows 9-10  cells 16-17  4 x 8x8 $07 common tile id 13 (T_GRATE_SHUT) repeated 2x2
