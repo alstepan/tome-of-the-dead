@@ -4648,3 +4648,16 @@ non-lock, game.md §9.9 A9b). Rulings recorded in game.md §9.9 A9b (hex at deci
 |---|---|---|---|
 | R6 free release / kit | 159 / 87 | **153 / 81** | −6 (rg_line range test 5, arch_ai row loads 10, −9 removed checks) |
 | bank 7 free | 49 | **53** | +4 (`ai_guard`'s dead `K_ARCHMAGE` test) |
+
+## ART19-IMPORT (`feat/ghost-h`; user 2026-10-31: ART19 Ghost option H "Wisp Shroud")
+
+`tools/import_anim40.py ghost_h`: `assets/gfx/concept/art19/grid/ghost_{float1,float2,lunge,hurt,dead}_h.grid` ->
+`assets/gfx/sprites/{grid/,}ghost_*` (`gfx_convert --layout native`, ink cyan bright `$45`, clash + round-trip OK).
+A true drop-in: same names / fids / FRM rows / sizes (24x32, lunge 32x32) / flags / ax 0 / timing; no new frame ids
+(FID 144 / 144). The Poltergeist / golden Ghost keep their attr-only differences.
+
+| Region (`-DDEBUG_KIT=0`) | main `b3d1a17` | after | Δ |
+|---|---|---|---|
+| bank 1 free | 2 | **42** | +40 (sources 9,096 -> 9,056 B; ZX0 packed 12,661 -> 12,621 B) |
+| SRC6 free / pool slack D8 Warrior / FID_COUNT | 19 / 1,264 / 144 | unchanged | 0 |
+| other banks | — | unchanged | 0 |

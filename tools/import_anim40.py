@@ -27,7 +27,12 @@ nun_walk2 WK4, nun_cast / nun_hurt STA (ink green = KT_ATTR $04).
 frames in place (same names / slots / sizes / flags / ink; all Mummies, gold included) from
 assets/gfx/concept/art16/grid/pharaoh_*_a.grid (tools/gen_art16.py). Supersedes `mummy`.
 
-Usage: python3 tools/import_anim40.py mage|mummy|necro|vamp|orcx|vampx|nun|pharaoh
+ART19-IMPORT (`ghost_h`, user 2026-10-31 GHOST option H WISP SHROUD): replaces the five Ghost frames in
+place (assets/gfx/sprites/, 32-px set; same names / sizes 24x32 + lunge 32x32 / flags / ax 0 / ink cyan
+bright $45) from assets/gfx/concept/art19/grid/ghost_*_h.grid (tools/gen_art19b.py). The Poltergeist /
+golden variants keep their attr-only differences.
+
+Usage: python3 tools/import_anim40.py mage|mummy|necro|vamp|orcx|vampx|nun|pharaoh|ghost_h
 """
 import os
 import subprocess
@@ -78,7 +83,30 @@ PICK = {"mage": "ART12 pick: Mage HURT V3 stagger", "mummy": "ART12 pick: Mummy 
         "nun": "ART13c final: the nun Archmage (option D, side cast; 3F-T11)"}
 
 
+def ghost_h():
+    """ART19 Ghost option H -> assets/gfx/sprites/ghost_<f>.asm (the 32-px set, like import_ogre_a.py)."""
+    src, dst = "assets/gfx/concept/art19/grid", "assets/gfx/sprites"
+    for f in ("float1", "float2", "lunge", "hurt", "dead"):
+        s = f"{src}/ghost_{f}_h.grid"
+        lines = open(os.path.join(REPO, s)).read().split("\n")
+        assert lines[0].startswith("# WazHack/ZX gfx text grid"), s
+        lines[0] = ("# WazHack/ZX gfx text grid — ART19 Ghost option H (Wisp Shroud), user-approved "
+                    f"2026-10-31; from {s}; imported by tools/import_anim40.py ghost_h")
+        lines = [f"# name: ghost_{f}" if ln.startswith("# name:") else ln for ln in lines]
+        lines = [ln for ln in lines if not ln.startswith("# note:")]
+        g = f"{dst}/grid/ghost_{f}.grid"
+        open(os.path.join(REPO, g), "w").write("\n".join(lines))
+        subprocess.run([sys.executable, "tools/gfx_convert.py", "--mode", "sprite", "--layout", "native",
+                        "--in", g, "--name", f"ghost_{f}", "--out", f"{dst}/ghost_{f}.asm",
+                        "--ink", "cyan", "--bright", "--paper", "black", "--band-paper", "black",
+                        "--anchor-x", "0", "--anchor-y", "0", "--src-path", "--date", "2026-10-31",
+                        "--note", "ART19 Ghost option H Wisp Shroud (approved); tools/import_anim40.py ghost_h"],
+                       check=True, cwd=REPO)
+
+
 def main():
+    if len(sys.argv) == 2 and sys.argv[1] == "ghost_h":
+        return ghost_h()
     if len(sys.argv) != 2 or sys.argv[1] not in SETS:
         sys.exit(__doc__)
     key = sys.argv[1]
