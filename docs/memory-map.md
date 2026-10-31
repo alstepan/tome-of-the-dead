@@ -4568,3 +4568,18 @@ move ~140 B of SRC6 blocks out) -> per plan it SHARES the Mummy frames unless su
 | seq cache D8 | 5 blocks 211 of 288 | **6 blocks 239 of 288** | +28 (`ksm_am`; worst need 253 unchanged) |
 | bank 2 / bank 3 / bank 7 | 28 / 5 / 49 | unchanged | 0 |
 
+## 3F-PHARAOH (`feat/3f-pharaoh`; user 2026-10-31: ART16 Golden Pharaoh option A "Nemes King" replaces the Mummy frames)
+
+`tools/import_anim40.py pharaoh`: `assets/gfx/concept/art16/grid/pharaoh_{walk1..4,attack}_a.grid` ->
+`assets/gfx/sprites40/{grid/,}mummy_{walk1..4,attack}` (`gfx_convert --layout native`, clash + round-trip OK).
+A true drop-in: same names / fids / FRM rows (`WK0 WK4 WK4 WK0 STA`), 24x40 (attack 32x40), ax 0, ink yellow,
+seqs `mu_*` untouched (HURT = the rest pose; the Pharaoh has no hurt pose). ALL Mummies share it, gold = the
+`LEK_GOLD` attr only. This voids the ART16 "own frames" option (5 fids, +2 SRC6 pages, +2,880 B pool D5).
+
+| Region (`-DDEBUG_KIT=0`) | main `266f637` | after | Δ |
+|---|---|---|---|
+| bank 1 free | 49 | **2** | −47 (`K_MUMMY` packed 366 -> 413 B; sources 9,049 -> 9,096 B) |
+| SRC6 free / pool slack D8 Warrior / FID_COUNT | 19 / 1,520 / 144 | unchanged | 0 |
+| other banks | — | unchanged | 0 |
+
+Bank 1 is now essentially full (2 B): any further bank-1 growth needs a lever first.
