@@ -1,0 +1,14 @@
+# ART19 Ghost side-view options D-G (dementor-like) — costs (tools/gen_art19.py).
+# pool = src/defs.asm FRM formula (both facings, one shift per flag); packed = zx0 with
+# the zx0_sources.partition rule (<= 4 frames a block), today's frames from zx0_pack.game_frames.
+# SRC6: 19 B free of 14 pages; each further page costs 256 B of POOL_CAP on EVERY level.
+
+GHOST frames (src/frames.asm KFID_GHOST, also K_POLTERGEIST): float1 24x32 WK0, float2 24x32 MOT,
+  lunge 32x32 STA, hurt 24x32 STA, dead 24x32 STA (own DEAD); ax 0, body 24.
+  pool 2560 B per Ghost level (384 + 896 + 512 + 384 + 384) -- UNCHANGED by every option (drop-in)
+  frame ids 0 (144/144 stays), engine 0, sequences 0, pool 0: only the packed SRC6 bytes move.
+  today  packed 436 B  (float1+float2+lunge+hurt 326, dead 110)
+  D HOODED SHROUD   packed 394 B  delta -42 B SRC6  (saves)  [float1+float2+lunge+hurt 300, dead 94]
+  E HUNCHED REAPER  packed 373 B  delta -63 B SRC6  (saves)  [float1+float2+lunge+hurt 290, dead 83]
+  F GAUNT WRAITH    packed 404 B  delta -32 B SRC6  (saves)  [float1+float2+lunge+hurt 309, dead 95]
+  G BANNER WRAITH   packed 355 B  delta -81 B SRC6  (saves)  [float1+float2+lunge+hurt 264, dead 91]
