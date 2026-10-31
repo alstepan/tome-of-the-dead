@@ -80,24 +80,7 @@ LG_ROOMS_END    EQU (ROOM_DESC + GRID_CELLS * RD_STRIDE) & $FF
 ;------------------------------------------------------------------------------
 ; helpers (all preserve BC, DE unless noted)
 ;------------------------------------------------------------------------------
-lg_step:                                ; xorshift 7,9,8 -> HL, stored in GEN_RNG
-                ld   hl, (GEN_RNG)
-                ld   a, h
-                rra
-                ld   a, l
-                rra
-                xor  h
-                ld   h, a
-                ld   a, l
-                rra
-                ld   a, h
-                rra
-                xor  l
-                ld   l, a
-                xor  h
-                ld   h, a
-                ld   (GEN_RNG), hl
-                ret
+lg_step           EQU gen_step         ; MEM-RECLAIM w3: bank-2 gen_step (xorshift 7,9,8 -> HL, stored in GEN_RNG)
 rnd:                                    ; A = n -> A = (x & $FF) mod n. Clobbers A, HL, F
                 push bc                 ; n = 1 / 2 fast paths (most calls): exact, no loop
                 ld   c, a

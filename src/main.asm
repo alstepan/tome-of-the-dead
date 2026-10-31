@@ -584,7 +584,10 @@ kind_tab:
                 KROW KN_EVA, WZ_EVA, 4, 2, 1, 3, 1, 4, 0,   3, 1, 1, 2, 0, 2, 1, 3, 3,   1, 3, 4, 1, 3, 2, 2, 3, 0, 1, 2, 2          ; KT_EVA (hero_st_init restores KN_* / WZ_*)
                 KROW   6,  4,  2,  4,  4,  4,  2,  2,  3,   4,  6,  8,  4,  8,  4, 10, 10,  6,   3,  4,  3,  4,  4,  6,  8,  4,  8, 10,  4,  4          ; KT_DIE
                 KROW   0,  0,  0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,  0,  0,  2,  3,  0,   0,  0,  0,  0,  0,  0,  0,  0,  2,  0,  0,  0          ; KT_BONUS
-                KROW   1,  1,  1,  1,  1,  1,  1,  1,  1,   1,  1,  1,  1,  1,  1,  1,  1,  1,   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1          ; KT_REACH (D3-0: the Mage's PROTO reach-3 zap is gone, game.md §11.4)
+lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REACH column (all 1: reach_ok / the hero's reach are literals) holds the §9.3
+                LP_WT_ROWS                     ; weights, ONE copy read by bank 3 (kind_wt / levelgen) and R6 (lp_wt6 is gone): H = kind_tab page, L = $E0 + row
+                DS   K_MAX - K_COUNT, 0
+                ASSERT lp_wt == kind_tab + KT_REACH && K_COUNT <= K_MAX && (lp_wt & $FF) + K_COUNT <= $100
                 KROW   1,  1,  1,  1,  1,  1,  1,  1,  2,   1,  2,  1,  1,  2,  1,  1,  1,  1,   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1          ; KT_PERIOD (Slime, Vampire, Mummy: acts every 2)
                 ; B3B-5: skeleton + goblin are openers (game.md §9.1); the heroes
                 ; open by bump in try_horizontal, not through KF_OPENER. 3F-T3: climbers were only

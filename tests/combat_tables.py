@@ -225,12 +225,13 @@ def main():
           24: (18, 4, 2, 8, 0, 1, 5), 25: (11, 3, 3, 4, 0, 1, 3), 26: (18, 4, 0, 8, 2, 1, 5),
           27: (24, 5, 1, 10, 0, 1, 5), 28: (10, 3, 2, 4, 0, 1, 6), 29: (14, 3, 2, 4, 0, 1, 6),
           2: (14, 1, 4, 2, 0, 1, 5)}           # 3F-T9 K_VBAT: Vampire hp / weight, the Bat's atk / eva, 1d2, every turn
-    lw = sym["lp_wt"]
+    ASSERT_LW = sym["lp_wt"] == sym["kind_tab"] + sym["KT_REACH"]   # MEM-RECLAIM w3: lp_wt is the old KT_REACH slot, ONE copy (bank 2)
+    chk("lp_wt == kind_tab + KT_REACH", [ASSERT_LW], [True])
     for k, (hp, atk, eva, die, bon, per, wt) in K3.items():
         chk(f"kind_tab[{k}] hp/atk/eva/die/bonus/period",
             [kcol(sym["KT_HP"], k), kcol(sym["KT_ATK"], k), kcol(sym["KT_EVA"], k), kcol(sym["KT_DIE"], k),
              kcol(sym["KT_BONUS"], k), kcol(sym["KT_PERIOD"], k)], [hp, atk, eva, die, bon, per])
-        chk(f"lp_wt[{k}]", [m[lw + k - BASE]], [wt])
+        chk(f"lp_wt[{k}]", [kcol(sym["KT_REACH"], k)], [wt])
     # tiers keep their base's body / flags / BH (§9.6), differ only in the ink from it
     for tier, base in ((18, 6), (19, 6), (20, 7), (21, 4), (22, 9), (23, 3), (24, 3), (25, 5),
                        (26, 11), (27, 11), (28, 12), (29, 14)):

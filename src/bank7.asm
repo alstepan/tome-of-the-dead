@@ -856,7 +856,7 @@ find_target:
                 ld   (TMP2), a                 ; aw
                 ld   a, e
                 ld   (TMP3), a                 ; ah
-                KFIELD KT_REACH
+                ld   a, 1                      ; reach 1 for every kind (MEM-RECLAIM w3: the KT_REACH column is gone; the Ogre's SLAM reach is boss2 reach_ok)
                 ld   (TMP4), a
                 ld   a, $FF
                 ld   (TMP5), a                 ; best slot

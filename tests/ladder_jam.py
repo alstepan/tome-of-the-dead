@@ -9,7 +9,7 @@ bottom storey (1) at c + d; the hero waits on the top storey (0), >= 8 cols from
   Q2  opposite sides: the STRONGER (static KT_HP; tie = the lower slot) arrives first;
   Q3  every move is legal: no two live bodies overlap at any turn end;
   Q4  lq_block in the jam pose (stub call): the winner waits, the loser backs off 1 cell;
-  T   its cost (far6 included): wait <= 2k T, back-off <= 4.5k T;
+  T   its cost (far3 included): wait <= 2k T, back-off <= 4.5k T;
   Q5  (the 'mid' cases, Q1) a climber mid-ladder heading away from the hero's storey, blocked by a
       waiter at the foot, turns round (turn3.asm .other) instead of hanging there;
   Q6  no pacing: each climber's x direction reverses at most 4 times (back off, come back).
@@ -95,7 +95,7 @@ def overlap(a, b):
 
 
 def lq_cost(p, c):
-    """Q4 / T: lq_block itself (far6 from a stub, LIVE_LIST of the last turn: both slots live).
+    """Q4 / T: lq_block itself (far3 from a stub; bank 3 since MEM-RECLAIM w3, LIVE_LIST of the last turn: both slots live).
     The J2 jam pose on storey 1: Orc (slot 1, hp 14) at c-1, Necro (slot 2, hp 12) at c+2."""
     ent = lambda sl: S["P_ENTITIES"] + sl * S["P_ENT_STRIDE"]
     for sl, x in ((1, c - 1), (2, c + 2)):
@@ -105,11 +105,11 @@ def lq_cost(p, c):
     res = {}
     for name, sl, dx in (("winner waits", 1, 1), ("loser backs off", 2, 0xFF)):
         ok, ts = p.code([0x3E, sl, 0x32] + w16(S["ACT_SLOT"]) + [0xDD, 0x21] + w16(ent(sl)) +
-                        [0x11, c, dx, 0x21] + w16(S["lq_block"]) + [0xCD] + w16(S["far6"]), game=True)
+                        [0x11, c, dx, 0x21] + w16(S["lq_block"]) + [0xCD] + w16(S["far3"]), game=True)   # MEM-RECLAIM w3: lq_block is bank 3 (far3 from the stub)
         res[name] = (ok, ts - 62)                       # minus the stub (DI, EI, 5 loads: 62 T)
     p.z.cmd("set-register PC=%d" % pc0)
     x1, x2 = p.ent(1)["X"], p.ent(2)["X"]
-    print("  lq_block T (incl. far6): " + ", ".join(f"{k} {v[1]}" for k, v in res.items()), flush=True)
+    print("  lq_block T (incl. far3): " + ", ".join(f"{k} {v[1]}" for k, v in res.items()), flush=True)
     check("lq_block: the winner waits, the loser backs off 1 cell (Q4)", x1 == c - 1 and x2 == c + 3 and
           all(v[0] for v in res.values()), (x1, x2, res))
     # measured 1,420 / 3,548 (D7, 2 live monsters + hero): far6 ~0.2k, box_free ~0.4k, the back-off's

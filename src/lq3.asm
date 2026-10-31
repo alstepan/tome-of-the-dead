@@ -1,6 +1,7 @@
 ;==============================================================================
-; lq6.asm — AI-L1 ladder queue (game.md §9.2 'Ladder queue', user 2026-10-29:
-; STRONGEST FIRST), R6. One far6 entry, lq_block, from turn3.asm ai_monster
+; lq3.asm — AI-L1 ladder queue (game.md §9.2 'Ladder queue', user 2026-10-29:
+; STRONGEST FIRST), bank 3 (MEM-RECLAIM w3: was R6 lq6.asm, entered by far6; every
+; helper it calls is bank 2 / low RAM). One entry, lq_block, JP'd from turn3.asm ai_monster
 ; .seek when a climber's standing step toward its shaft col failed.
 ;
 ; J2 (two seekers reaching for col from opposite sides blocked each other one
@@ -24,7 +25,7 @@
 ;
 ; In: IX = the seeker (standing walker, ACT_SLOT = its slot: B5 contract),
 ;     D = dx toward col (+1 / -1), E = col.   No result.
-; Clobbers: all but IX (far6 loses A, F anyway).
+; Clobbers: all but IX.
 ; Cost: ~0.35k T + a step-away try_step (~0.4k T), only on a blocked seek step.
 ;==============================================================================
 LQ_HOLD         EQU $80
