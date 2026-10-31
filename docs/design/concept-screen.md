@@ -149,7 +149,7 @@ Glyph swap ~0.55k T/cell/step, attr cycle ~0.12k T/cell/step (budget §6).
 | 13 | Bookshelf | 2×2 (1 glyph tiled) | `$06` | — | 1 |
 | 14–15 | **Wall set (artist round 3): DARK · DITHER · PATCH · FADE** on a black background, see below | 1×1 each | `ATTR_WALL[depth]` on black (`$07` reads light, `$01` reads dark) | — | **4** (they replace the rev-2 patches ×3 + WALL2) |
 | 16 | ~~Cauldron (bubbling)~~ **SUPERSEDED by DEC2 (removed 2026-10-26)** | 2×1 | `$44` | glyph swap 2 | 3 |
-| 17 | **Lectern + Book** (D8 Sanctum, attackable, game.md §1.3) | 2×2 | lectern `$06`, book `$43` | flash on hit | 4 |
+| 17 | **Lectern + Tome** (D8 Sanctum, attackable, game.md §1.3) | 2×2 | lectern `$06`, book `$43` | flash on hit | 4 |
 | — | Door (§3.1) / grate over the exit hole / pit caps | 2×8 / 3×1 / 1+1 | `$06` / `$07` / floor | — | 5 / 1 / 2 |
 
 **Designer decision 2026-10-03:** per-level sets are capped at **28 ids (32..59)** for D1–D7

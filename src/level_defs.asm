@@ -368,7 +368,7 @@ T_GRATE_SHUT    EQU 13              ; 3F-T8 (§9.7 R2, BOSS-GUARD): the CLOSED g
                                     ; exit while the boss lives (tiles_3f grate_shut, ink $07), TF_SOLID |
                                     ; TF_FLOOR; build_room_map stamps it after the deriver, grate_open
                                     ; swaps the 3 cells to T_GRATE when the boss dies
-T_RUBBLE        EQU 27              ; block foot, arrival-shaft cap, ash of the Book
+T_RUBBLE        EQU 27              ; block foot, arrival-shaft cap, ash of the Tome
 T_WALL_DITHER   EQU 28              ; wall set (concept-screen §3.3)
 T_WALL_PATCH    EQU 29
 T_WALL_FADE     EQU 30
@@ -413,7 +413,7 @@ TF_DOOR         EQU %00000010       ; closed door plank: bump opens it (hero / o
 TF_LOCK         EQU %00000100       ; locked or sealed plank: never opened by a bump without key / seal
 TF_LADDER       EQU %00001000       ; climbable segment (LAD_*, HOLE_*)
 TF_HOLE         EQU %00010000       ; floor-row cell passable vertically (HOLE_*; open grate -> HOLE_*)
-TF_ATTACK       EQU %00100000       ; attackable tile object (lectern / Book, game.md §1.3)
+TF_ATTACK       EQU %00100000       ; attackable tile object (lectern / Tome, game.md §1.3)
 TF_ANIM         EQU %01000000       ; animated decor: the deriver puts the cell in ANIM_LIST
 TF_FLOOR        EQU %10000000       ; floor support (PLAT, WALLF, END/PIT caps, GRATE; not pit AIR)
 TF_SOLID_BIT    EQU 0

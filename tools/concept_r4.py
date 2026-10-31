@@ -338,7 +338,7 @@ def screen_d8(art):
     put_sprite(s, art, "necro_walk1", 27, 17, 0x43, mirror=True)
     put_sprite(s, art, "skeleton_walk2", 5, 17, C.A_SKEL)
     panel(s, art, "mage", "D8", 5, "LIGHTNING 5MP RANGE 28 BOUNCE 2",
-          ["THE BOOK WHISPERS: -1HP", "LIGHTNING HITS ARCHMAGE!"],
+          ["THE TOME WHISPERS: -1HP", "LIGHTNING HITS ARCHMAGE!"],
           hp=(21, 48), mp=(7, 20), food=0.3, stage="WEAK")
     return s
 
