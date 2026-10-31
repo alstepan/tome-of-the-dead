@@ -3714,6 +3714,21 @@ or any spare per-slot bits (engineer's choice); C and S live in `E_RCD` as T7/T9
 selection ≤ 0.6k T, a shot ≈ 8.7k T (T7 measured), the return track adds one FX track (the ≤ 3
 shared tracks, queued if busy). One footprint attr rewrite (≈ 2.2k T) per bolt on a render tick.
 
+**A9b As built (3F-T11b, manager rulings 2026-10-31; `src/arch6.asm`, memory-map "3F-T11b").** Accepted deviations:
+- **Hex status at decision time** (not after impact): Sleep / Venom are applied when the hex is cast (the
+  RANGED-SPEC "logic first" rule), so the ASLEEP tint / POISON mark and the line show while the bolt is still
+  flying (≤ 1 s) and later monsters of the same phase already see the status. Moving it to the impact tick
+  (shot_tick applying a stored row at I) costs ≈ 30 B R6, over the ≈ 20 B ruling. No sleep cue flash.
+- **Blink flash on the new footprint only** (`$47`, `TELE_FLASH_T`); the old footprint is simply erased by render.
+  If no box is legal the blink bit is spent and the off-turn goes on (b..e).
+- **"< 2 live summons" never binds:** the §9.3 room cap is the real limit (Archmage 6 + Skeleton 5 = 11 of
+  `LP_SIGMA_CAP` 12), so at most ONE summoned Skeleton lives at a time. No design change.
+- The Archmage skips `ai_monster` entirely, so it never yields to a climbing hero; a legal blink box
+  (`sp_try`) never overlaps a shaft's exit box in the tested rooms, and a hero mid-ladder can always climb
+  back down (no combat either way): not a lock (`tests/archmage.py` L).
+- No green `+n` on the Drain heal (needs D3-11). The Sanctum seal opening on its death is not wired
+  (`LF_SEAL_OPEN` has no writer yet; the death runs the boss flow: `LF_GRATE_OPEN`, `LF_UNIQUE`).
+
 **A10 Cut order if memory runs out** (cheapest loss per byte first):
 1. Mirror Helm return FX: keep the ½ hit on the Archmage, but drop the 2nd track (an impact flash
    on it instead): **−≈ 25 B**.

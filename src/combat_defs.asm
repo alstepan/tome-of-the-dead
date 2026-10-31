@@ -195,14 +195,46 @@ RWF_AWAY        EQU %00000010       ; steps away from the hero at gap 2 (not the
 RWF_NOIMP       EQU %00000100       ; no impact frame (dagger_spin rock)
 RWF_PRE         EQU %00001000       ; T9 / T11: the caster pre-rule slot runs first (summon / teleport)
 RWF_NOREFL      EQU %00010000       ; ignores the reflect gate (Archmage, T11)
-RWF_BNC1        EQU %01000000       ; bits 6-7: wall bounces (Archmage 1; T11, unread)
+RWF_HEX         EQU %00100000       ; 3F-T11b: no damage, no hit line; the rider through the immunity mask only (am_hex)
+RWF_HOLD_BIT    EQU 6
+RWF_HOLD        EQU 1 << RWF_HOLD_BIT   ; 3F-T11b: a HOLD row (A4 hold lock: never on a held / HOLD_GUARD hero)
 RK_ARCHER       EQU 1               ; rd_tab rows
 RK_SNIPER       EQU 2
 RK_SLINGER      EQU 3
 RK_NECRO        EQU 4
 RK_BONE_CALLER  EQU 5
-RK_ARCHMAGE     EQU 6               ; T11: data only (rk_tab[K_ARCHMAGE] stays 0 until the Archmage AI)
-RK_ROWS         EQU 6
+RK_ARCHMAGE     EQU 6               ; 3F-T11b: the Archmage's 7 spell rows RK_ARCHMAGE .. + 6 (arch_ai; no rk_tab entry)
+RK_ROWS         EQU 12
+;------------------------------------------------------------------------------
+; 3F-T11b the Archmage spell AI (game.md §9.9 ARCHMAGE-SPEC; R6 arch6.asm, entered by
+; bank-2 ai_mon). Spell index s = 0..6 -> rd_tab row RK_ARCHMAGE + s; s 0..4 = ORDER
+; (Death Bolt, Frost, Lightning, Drain, Firebolt) = the cycle pointer P, 5 / 6 the hexes.
+; State: C = E_RCD bits 0-1 (stored XOR 1, as T7), S = E_RCD bits 2-5 (T9), and the
+; byte ST_X + slot (monsters are never poisoned, §6.4.3; lp_spawn / sp_init zero it):
+; bits 0-2 P, bits 3-5 H (hex cooldown), bit 6 blinked, bit 7 initialised (0 = a fresh
+; spawn / re-entry: P = H = 0, blinked = hp <= max / 2, A3 "Re-entry").
+;------------------------------------------------------------------------------
+AMS_P           EQU %00000111
+AMS_H           EQU %00111000
+AMS_H1          EQU %00001000
+AMS_BLINK_BIT   EQU 6
+AMS_INIT_BIT    EQU 7
+AM_ORDER_N      EQU 5               ; bolt rows in the cycle
+AM_SLEEP        EQU 5               ; spell index of the Sleep hex (Venom = 6)
+AM_VENOM        EQU 6
+AM_HEX_R        EQU 12              ; A3c: gap < 12
+AM_HEX_CD       EQU 4               ; A3c: H = 4
+AM_SUM_CD       EQU 6               ; A3b: S = 6
+AM_LIVE         EQU 2               ; A3b: < 2 live summons
+AM_BLINK_N      EQU 8               ; A3a: P' + 1 .. 8 cols toward the room centre
+AM_BLINK_ATTR   EQU $47             ; A3a: the teleport flash attr ($47)
+AM_SLEEP_T      EQU 3               ; Sleep: ASLEEP 3 (A2 row 5)
+AM_PSN_T        EQU 12              ; Venom: POISON + 12 (A2 row 6)
+AM_INK0         EQU $43             ; ORDER[0]'s ink (Death Bolt): the body ink at spawn (lp_post)
+; scratch in the spawn RAM (dead in the monster phase: sp_run / vb_one set them before
+; every use at end_turn; sp_summon's sp_scan writes SP_N / SP_SIG / SP_NS only)
+AM_ROW          EQU SP_Y            ; am_cast: the spell index
+AM_DMG          EQU SP_KB           ; rg_shoot: the last damage roll (the Mirror Helm return reuses it)
 ; E_RCD (= E_POT, unused by monsters): bits 0-1 the cooldown counter stored XOR 1 (the
 ; zeroed spawn slot (lp_spawn) / place_follower's 0 = counter 1: no shot on the first
 ; monster phase after the room entry); bits 2-5 T9's summon counter S (Bone Caller / Pharaoh;

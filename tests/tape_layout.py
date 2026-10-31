@@ -11,9 +11,10 @@ import struct
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-tap_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(REPO, "build", "wazhack.tap")
+BUILD = os.environ.get("WZ_BUILD_DIR", os.path.join(REPO, "build"))   # a variant build (game_lib's WZ_BUILD_DIR)
+tap_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(BUILD, "wazhack.tap")
 sym = {}
-for line in open(os.path.join(REPO, "build", "wazhack.sym")):
+for line in open(os.path.join(BUILD, "wazhack.sym")):
     m = re.match(r"^([A-Za-z_][\w.]*):\s+EQU\s+0x([0-9A-Fa-f]+)", line)
     if m:
         sym[m.group(1)] = int(m.group(2), 16)

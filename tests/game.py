@@ -1691,7 +1691,8 @@ def main():
         # CODE -> start -> 2x LD-BYTES into banks 1/3 -> boot).
         if want(50):
             tap = os.path.join(tempfile.mkdtemp(prefix="game_tap_"), "wazhack.tap")
-            shutil.copyfile(os.path.join(os.path.dirname(HERE), "build", "wazhack.tap"), tap)
+            shutil.copyfile(os.path.join(os.environ.get("WZ_BUILD_DIR", os.path.join(os.path.dirname(HERE), "build")),
+                                         "wazhack.tap"), tap)      # (a variant build: WZ_BUILD_DIR, game_lib)
             p.wb("GAME_STATE", 0)                        # no stale GS_SELECT
             p.z.cmd("set-memory-zone 0")                 # scrub banks 1/3: sources
             for b in (1, 3):                             # must come off the tape

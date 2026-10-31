@@ -21,7 +21,8 @@
 ; rd_tab — one row per shooter (RW_* fields, combat_defs.asm), row k = rk_tab
 ; value k (1-based). game.md §9.2 table: atk = kind_tab KT_ATK (hit_roll);
 ; PHYS = max(1, roll x res - DEF) (deal_hit); DARK = roll x res, no DEF.
-; Every RWF_SPELL row is DARK (the reflect gate tests DARK only).
+; The reflect gate tests DARK only: every RWF_SPELL row it applies to (no RWF_NOREFL:
+; Necro / Bone Caller) is DARK; the Archmage's typed rows (3F-T11b) never pass it.
 ;------------------------------------------------------------------------------
 ROCK_ATTR       EQU $06                 ; the Slinger's rock (game.md §9.6: $06)
 FEAR3_1IN3      EQU (3 << 4) | 3        ; DARK on-hit: FEAR 3 turns, 1 in 3 (~85/256, §9.2)
@@ -32,15 +33,24 @@ rd_tab:         ;    r   N  flags                      die bon dhc        dhe   
                 DB   6,  2, RWF_AWAY | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; Slinger (rock)
                 DB   8,  2, RWF_AWAY | RWF_SPELL,        6, 1, DARK_DHC,  FEAR3_1IN3, FID_nbolt_fly1    ; Necromancer
                 DB   8,  2, RWF_AWAY | RWF_SPELL | RWF_PRE, 6, 1, DARK_DHC, FEAR3_1IN3, FID_nbolt_fly1   ; Bone Caller
-                ; 3F-T11: the Archmage row has NO RWF_PRE (plan.md "T11 NOTE": with it, the row would
-                ; run sp_bcall = the Bone Caller's summon rules); its own summon (<= 2 Skeletons,
-                ; cooldown 6, own sp_summon call) belongs to the Archmage AI (rk_tab[K_ARCHMAGE] is 0)
-                DB  28,  2, RWF_SPELL | RWF_NOREFL | RWF_BNC1, 8, 3, DTY_DARK | DH_NODEF, 0, FID_nbolt_fly1 ; Archmage
+                ; 3F-T11b the Archmage's 7 spells (game.md §9.9 A2; arch6.asm, no rk_tab entry): no
+                ; bounces, N 1 (C cadence: a bolt every 2nd turn), hexes N 0 (an off-turn hex keeps
+                ; C = 0). Riders through deal_hit's on-hit apply (85/256 = 1 in 3, 128/256 = 1 in 2).
+                ; Hex rows: RW_DIE = the immunity bit, RW_BON = the hero's line, RW_DHE = the turns
+                ; (Sleep: << 4, the ST_T1 HOLD nibble), RW_DHC = the EFX (am_hex tells them apart).
+                DB  28,  1, RWF_SPELL | RWF_NOREFL, 8, 3, DARK_DHC, FEAR3_1IN3, FID_nbolt_fly1                    ; 0 Death Bolt
+                DB  12,  1, RWF_SPELL | RWF_HOLD, 6, 1, DTY_COLD | DH_NODEF | (EFX_FROZEN << DH_EFX_SHIFT), $22, FID_nbolt_fly1  ; 1 Frost
+                DB  12,  1, RWF_SPELL, 8, 1, DTY_SHOCK | DH_NODEF | (EFX_CONFUSED << DH_EFX_SHIFT), $24, FID_nbolt_fly1      ; 2 Lightning
+                DB   5,  1, RWF_SPELL, 6, 1, DTY_DRAIN | DH_NODEF | DH_HEAL | (EFX_WEAK << DH_EFX_SHIFT), $28, FID_nbolt_fly1 ; 3 Drain
+                DB  12,  1, RWF_SPELL | RWF_HOLD, 8, 2, DTY_FIRE | DH_NODEF | (EFX_STUNNED << DH_EFX_SHIFT), $31, FID_nbolt_fly1 ; 4 Firebolt
+                DB  AM_HEX_R, 0, RWF_SPELL | RWF_HEX | RWF_HOLD, IMMF_SLEEP, TX_ST_ASLEEP, EFX_ASLEEP << DH_EFX_SHIFT, AM_SLEEP_T << 4, FID_nbolt_fly1 ; 5 Sleep
+                DB  AM_HEX_R, 0, RWF_SPELL | RWF_HEX, IMMF_POISON, TX_ST_POISONED, EFX_POISON << DH_EFX_SHIFT, AM_PSN_T, FID_nbolt_fly1     ; 6 Venom
                 ASSERT $ - rd_tab == RK_ROWS * RW_STRIDE
                 ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_arrow_hit == FID_arrow_fly1 + 2
                 ASSERT FID_dagger_spin2 == FID_dagger_spin1 + 1
                 ASSERT FID_nbolt_fly2 == FID_nbolt_fly1 + 1 && FID_nbolt_hit == FID_nbolt_fly1 + 2
                 ASSERT RK_ARCHER == 1 && RK_SNIPER == 2 && RK_SLINGER == 3 && RK_NECRO == 4 && RK_BONE_CALLER == 5 && RK_ARCHMAGE == 6
+                ASSERT RK_ARCHMAGE + AM_VENOM == RK_ROWS && AM_SLEEP_T << 4 < 256 && AM_SLEEP_T <= STS_MAX_TURNS && AM_PSN_T <= PSN_CAP
 
 ;------------------------------------------------------------------------------
 ; ai_ranged — the hook (game.md §9.2 "Per-turn order" step 4), first match:
@@ -62,84 +72,17 @@ rd_tab:         ;    r   N  flags                      die bon dhc        dhe   
 ;      E = 0 iff standing (ai_monster's H), TMP4 = its storey (ai_monster),
 ;      ACT_SLOT = its slot, cache_player's PL_* current. TMP4 is kept.
 ; Out: L = 1 the turn is used, 0 not.  Clobbers: all but IX.
-; Cost (far6 incl.): out of line ~0.6k T, out of range ~0.8k, a full line test
+; Cost (far6 incl.): out of line ~0.6k T, out of range ~0.8k (rg_line tests the
+; range before the scans), a full line test
 ; ~1.3k + 60 T a gap col, a shot ~2.5k + hit_roll / deal_hit (+ lines) ~1-3k.
 ;------------------------------------------------------------------------------
 rg_no:          ld   l, 0                      ; the walker rules run
                 ret
 ai_ranged:
-                ld   l, a
-                ld   h, 0
-                add  hl, hl
-                add  hl, hl
-                add  hl, hl
-                ld   bc, rd_tab - RW_STRIDE
-                add  hl, bc
-                push de
-                ld   de, RG_ROW
-                ld   bc, RW_STRIDE
-                ldir
-                pop  de
-                ; 1. the counter (E_RCD bits 0-1, stored XOR 1)
-                ld   a, (ix+E_RCD)
-                xor  1
-                ld   b, a
-                and  RCD_MASK
-                ld   (RG_OLD), a
-                jr   z, .c0
-                dec  b                         ; > 0: only the low bits change
-.c0:            ld   a, b
-                xor  1
-                ld   (ix+E_RCD), a
-                ld   a, e
-                ld   hl, PL_LADDER             ; the hero mid-ladder: not in line
-                or   (hl)
-                jr   nz, rg_no
-                ld   a, (PL_STOREY)
-                ld   hl, TMP4
-                cp   (hl)
-                jr   nz, rg_no                 ; another storey
-                ; 2. gap, side, first gap col (standing bodies of a storey always
-                ; overlap vertically: no row test, §9.2 "Geometry")
-                KFIELD KT_BW
-                add  a, (ix+E_X)
-                ld   c, a                      ; C = x + w
-                ld   a, (PL_X)
-                sub  c
-                ld   b, 1
-                jr   nc, .gd                   ; hero right: gap = px - (x + w), first = x + w
-                ld   a, (PL_X)
-                ld   hl, PL_W
-                add  a, (hl)
-                ld   c, a                      ; hero left: first = px + pw
-                ld   a, (ix+E_X)
-                sub  c                         ; gap = x - (px + pw)
-                jr   c, rg_no                  ; (overlap: never for two standing bodies)
-                ld   b, $FF
-.gd:            ld   hl, RG_DIR
-                ld   (hl), b
-                inc  l
-                ld   (hl), c                   ; RG_FIRST
-                inc  l
-                ld   (hl), a                   ; RG_GAP
-                ASSERT RG_FIRST == RG_DIR + 1 && RG_GAP == RG_FIRST + 1 && (RG_DIR >> 8) == (RG_GAP >> 8)
-                ld   hl, RG_ROW + RW_R
-                cp   (hl)
-                jr   nc, rg_no                 ; gap >= r: it closes in
-                ; 3. clear line (gap 0 / 1 meleed already; 0 only guards the loops)
-                or   a
-                jr   z, .refl
-                ld   d, a                      ; D = gap cols
-                ld   a, (ix+E_Y)
-                add  a, PF_ROW_DY
-                ld   b, a                      ; B = flight row (top + 2)
-                call rg_scan
-                jr   c, rg_no                  ; a solid cell (a mid-room block)
-                KFIELD KT_BH
-                ld   e, a
-                ld   b, (ix+E_Y)               ; gap cols x my rows
-                call box_free                  ; (ACT_SLOT = me)
-                jp   c, rg_no                  ; a body in the way: no friendly fire
+                call rg_row                    ; RG_ROW = row A (keeps DE)
+                call rg_cnt                    ; 1. the counter (keeps E)
+                call rg_line                   ; 2. in line and gap < r (CF = no: it closes in)
+                jr   c, rg_no
 .refl:          ld   a, (RG_ROW + RW_F)        ; reflect gate: a DARK (spell) row, not exempt,
                 xor  RWF_SPELL                 ; vs the hero's DARK response X (Mirror Helm)
                 and  RWF_SPELL | RWF_NOREFL
@@ -202,7 +145,9 @@ rg_pose:        ld   (ix+E_MSG), b
 ; reaction at I = R + gap + 1 (the FX starts at R with 0 delay and flies gap
 ; cells at 8 px a tick: fx_start's timeline), the panel gate (a hit: §6.5.1),
 ; E_MSG (the melee hit / miss line at the attack's IMPACT, behind the gate),
-; the attack sequence (the cut / cast pose), the RS_Q entry. L = 1.
+; the attack sequence (the cut / cast pose), the RS_Q entry. L = 1, DE = the
+; byte after the RS_Q entry written (3F-T11b am_cast re-inks it, the sink too).
+; 3F-T11b: an RWF_HEX row deals nothing (am_hex), AM_DMG = the damage roll.
 ;------------------------------------------------------------------------------
 rg_shoot:
                 ld   a, (RG_DIR)
@@ -232,7 +177,13 @@ rg_shoot:
                 jr   nz, .ni
                 ld   hl, RG_F
                 set  RGF_IMP_BIT, (hl)
-.ni:            ld   a, (RG_ROW + RW_DIE)      ; 1dN + bonus
+.ni:            ld   a, (RG_ROW + RW_F)        ; 3F-T11b: a hex (the Archmage's Sleep / Venom):
+                and  RWF_HEX                   ; no damage roll, the rider by the immunity mask
+                jr   z, .dm                    ; (am_hex, arch6.asm); L = 0: no flash, no
+                call am_hex                    ; reaction (the caller clears E_MSG: no hit line)
+                ld   l, 0
+                jr   .dl
+.dm:            ld   a, (RG_ROW + RW_DIE)      ; 1dN + bonus
                 ld   c, a
                 call rng_mod
                 inc  a
@@ -242,12 +193,13 @@ rg_shoot:
                 jr   z, .ng
                 inc  a
 .ng:            ld   d, a
+                ld   (AM_DMG), a               ; 3F-T11b: the Mirror Helm return's roll (am_cast)
                 ld   a, (RG_ROW + RW_DHE)
                 ld   e, a
                 ld   a, (RG_ROW + RW_DHC)
                 ld   hl, rs_deal
                 call far3                      ; L = HP lost (I: 0 + the UNAFFECTED line)
-                call rg_ri                     ; A = R, B = I
+.dl:            call rg_ri                     ; A = R, B = I
                 inc  l
                 dec  l
                 jr   z, .gate
@@ -266,7 +218,7 @@ rg_shoot:
 .g2:            ld   b, MSG_M_HIT
 .msg:           call rg_pose                   ; E_MSG at the attack's IMPACT; E_HIT 0: the flash waits for the bolt (shot_tick)
                 ; --- the RS_Q entry (TP_SHOT: act_pend runs shot_tick every tick) ---
-                ld   hl, TURN_PEND
+rg_q:           ld   hl, TURN_PEND             ; (3F-T11b am_cast: the Mirror Helm return track)
                 bit  TP_SHOT_BIT, (hl)
                 set  TP_SHOT_BIT, (hl)
                 ld   hl, RS_P
@@ -372,6 +324,105 @@ rg_ri:          push hl
                 pop  hl
                 ret
 
+
+;------------------------------------------------------------------------------
+; rg_rp — A = rd_tab row 1.. -> HL = the row.  Clobbers: A, BC.
+; rg_row — the same, copied to RG_ROW (RW_STRIDE B).  Keeps DE.  Clobbers: A, BC, HL.
+;------------------------------------------------------------------------------
+rg_row:         call rg_rp
+                push de
+                ld   de, RG_ROW
+                ld   bc, RW_STRIDE
+                ldir
+                pop  de
+                ret
+rg_rp:          ld   l, a
+                ld   h, 0
+                add  hl, hl
+                add  hl, hl
+                add  hl, hl
+                ld   bc, rd_tab - RW_STRIDE
+                add  hl, bc
+                ret
+                ASSERT RW_STRIDE == 8
+
+;------------------------------------------------------------------------------
+; rg_cnt — step 1's counter (E_RCD bits 0-1, stored XOR 1): RG_OLD = A = c, c =
+; max(0, c - 1); Z = c was 0.  Keeps C, DE, HL.  Clobbers: A, B.
+;------------------------------------------------------------------------------
+rg_cnt:         ld   a, (ix+E_RCD)
+                xor  1
+                ld   b, a
+                and  RCD_MASK
+                ld   (RG_OLD), a
+                jr   z, .c0
+                dec  b                         ; > 0: only the low bits change
+.c0:            ld   a, b
+                xor  1
+                ld   (ix+E_RCD), a
+                ld   a, (RG_OLD)
+                or   a
+                ret
+
+;------------------------------------------------------------------------------
+; rg_line — RANGED-SPEC "in line" (§9.2 Geometry): IX standing (E = 0) on the
+; hero's storey TMP4, the hero standing (not mid-ladder), no overlap; RG_DIR /
+; RG_FIRST / RG_GAP set; gap < RG_ROW's RW_R (the row must be loaded); the flight row over the gap free of TF_SOLID cells
+; (rg_scan) and no live body in gap cols x my rows (box_free, ACT_SLOT = me).
+; Out: CF = not in line; NC: A = gap.  Clobbers: A, BC, DE, HL.
+;------------------------------------------------------------------------------
+rg_line:        ld   a, e
+                ld   hl, PL_LADDER             ; the hero mid-ladder: not in line
+                or   (hl)
+                jr   nz, .no
+                ld   a, (PL_STOREY)
+                ld   hl, TMP4
+                cp   (hl)
+                jr   nz, .no                   ; another storey
+                ; gap, side, first gap col (standing bodies of a storey always
+                ; overlap vertically: no row test, §9.2 "Geometry")
+                KFIELD KT_BW
+                add  a, (ix+E_X)
+                ld   c, a                      ; C = x + w
+                ld   a, (PL_X)
+                sub  c
+                ld   b, 1
+                jr   nc, .gd                   ; hero right: gap = px - (x + w), first = x + w
+                ld   a, (PL_X)
+                ld   hl, PL_W
+                add  a, (hl)
+                ld   c, a                      ; hero left: first = px + pw
+                ld   a, (ix+E_X)
+                sub  c                         ; gap = x - (px + pw)
+                ret  c                         ; (overlap: never for two standing bodies)
+                ld   b, $FF
+.gd:            ld   hl, RG_DIR
+                ld   (hl), b
+                inc  l
+                ld   (hl), c                   ; RG_FIRST
+                inc  l
+                ld   (hl), a                   ; RG_GAP
+                ASSERT RG_FIRST == RG_DIR + 1 && RG_GAP == RG_FIRST + 1 && (RG_DIR >> 8) == (RG_GAP >> 8)
+                ld   hl, RG_ROW + RW_R         ; gap >= r: out of range, before the scans (cheap reject)
+                cp   (hl)
+                jr   nc, .no
+                or   a                         ; gap 0: in line (NC; 0 only guards the loops)
+                ret  z
+                ld   d, a                      ; D = gap cols
+                ld   a, (ix+E_Y)
+                add  a, PF_ROW_DY
+                ld   b, a                      ; B = flight row (top + 2)
+                call rg_scan
+                ret  c                         ; a solid cell (a mid-room block)
+                KFIELD KT_BH
+                ld   e, a
+                ld   b, (ix+E_Y)               ; gap cols x my rows
+                call box_free                  ; (ACT_SLOT = me)
+                ret  c                         ; a body in the way: no friendly fire
+                ld   a, (RG_GAP)
+                ret
+.no:            scf
+                ret
 
 ;------------------------------------------------------------------------------
 ; rg_scan — CF = 1 if ROOM_MAP row B, cols C .. C+D-1 (D >= 1, inside the row)

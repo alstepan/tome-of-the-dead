@@ -4583,3 +4583,68 @@ seqs `mu_*` untouched (HURT = the rest pose; the Pharaoh has no hurt pose). ALL 
 | other banks | — | unchanged | 0 |
 
 Bank 1 is now essentially full (2 B): any further bank-1 growth needs a lever first.
+
+
+## 3F-T11b the Archmage spell AI (`feat/3f-t11b-archmage-ai`; game.md §9.9 ARCHMAGE-SPEC A2-A6; `tests/archmage.py`, budget `aroom`)
+
+**Entry.** `resolve_monsters` (bank 3) calls bank-2 **`ai_mon`** (`ranged2.asm`, was `call ai_monster`): `K_ARCHMAGE`
+far6s R6 **`arch_ai`** (`src/arch6.asm`), every other kind `jp ai_monster` (+31 T a monster). The Archmage skips the
+yield / walker / melee-first / ranged hook / boss guard (bank-7 `ai_guard`'s Archmage test is now dead). HOLD skips it
+before (`mon_status`). `rk_tab[K_ARCHMAGE]` stays 0.
+
+**Data.** `rd_tab` rows `RK_ARCHMAGE` .. +6 (`RK_ROWS` 12) = spell index 0..6: Death Bolt, Frost, Lightning, Drain,
+Firebolt (the ORDER = P), Sleep, Venom (hexes, N 0, `RWF_HEX`; `RW_DIE` = the immunity bit, `RW_BON` = the line, `RW_DHE`
+= the turns). `RWF_HOLD` (bit 6, was the unread `RWF_BNC1`) = an A4 hold-lock row. `am_ink_tab` 7 B = the A2 inks.
+
+| State | Where | |
+|---|---|---|
+| C / S | `E_RCD` bits 0-1 (XOR 1) / 2-5 | T7 / T9 fields; S - 1 each turn through `sp_summon`'s S > 0 path |
+| P / H / blinked / init | `ST_X + slot` bits 0-2 / 3-5 / 6 / 7 | monsters are never poisoned (§6.4.3); `lp_spawn` / `sp_init` zero it -> init 0 = A3 re-entry (P = H = 0, blinked = hp <= max / 2) (test-observable) |
+| body ink | `kind_tab + KT_ATTR + K_ARCHMAGE` (bank 2, runtime-written) | A5 telegraph: ORDER[P]'s ink after every bolt; `lp_post` (boss branch) writes `AM_INK0` $43 at every lair entry; render re-stamps the footprint (DIRTY_ATTR) (test-observable) |
+| `AM_ROW` / `AM_DMG` | `SP_Y` / `SP_KB` (`$5FF9` / `$5FF8`) | monster-phase scratch in the spawn RAM (dead there: `sp_run` / `vb_one` set them before use); `rg_shoot` stores every damage roll in `AM_DMG` |
+
+**Flow** (`arch_ai`): 1. H - 1, S - 1, C (`rg_cnt`); 2. old C = 0 and in line (`rg_line`, shared with `ai_ranged` now:
+`rg_row` / `rg_rp` / `rg_cnt` / `rg_line` split out of it, the range test after the line test, same outcome) -> `am_pick`
+(gap >= r or a HOLD row on a held / guarded hero -> Death Bolt), P + 1 mod 5, `am_cast` (`rg_shoot` + FXD_ATTR := the ink;
+Death Bolt on DARK X: bank-3 **`rs_self`** (turn3.asm, +5 B: DARK on itself, R -> ½, min 1), its reaction at I2 = I + gap +
+1, the 2nd track = `rg_q` (rg_shoot's queue tail) with RG_DIR reversed, no hero flash, TURN_TICK + gap + 1 for R' = I,
+restored); 3. a. blink (`am_blink`: `sp_y` other storey + `sp_try` x, then 1..8 cols toward the centre; the $47 flash
+`TELE_FLASH_T` on the new footprint, `build_live`, S = 0, `THE ARCHMAGE VANISHES!`; no legal box: the bit is spent, b..e
+run); b. summon (S = 0: `sp_summon` base Skeleton, < 2 live, S := 6); c. hex (in line, gap < 12, H = 0: Sleep / Venom
+(`am_hex`: immunity mask only), H := 4, E_MSG 0); d. / e. face the hero, far3 `attack_if_reach` (the staff, 1d6 PHYS).
+
+**R6_GROW 14 -> 15** (separate commit, OPEN for approval: the code did not fit 487 / kit 415): R6 `$D600..$FFFF`
+(`R6_LEN` 10,752), SRC6 `$C800..$D5FF` (14 pages, unchanged content, 19 free; it can no longer grow: the boot block
+`$C005..$C7FF` sits at the bank floor), bank-6 pool `$C000..$C7FF` (2,048 B), `POOL_CAP` 32,761 -> **32,490**.
+`tests/zx0_pool.py` src6 variant: 14 pages (Spider, Necro, Ogre, climb pair + the Wizard; Vampire / Orc / DK to banks 1 / 3).
+
+| Region (`-DDEBUG_KIT=0`) | main `266f637` | after 3F-T11b | Δ |
+|---|---|---|---|
+| R6 free release / kit | 487 / 415 | **159 / 87** | +256 (R6_GROW 15) −584 (`arch6.asm` 492 incl. the inks, `rd_tab` +48, ranged6 split / hex branch / `AM_DMG` +39, `lp_post` +5) |
+| bank 3 free | 5 | **0** | −5 (`rs_self`) |
+| bank 2 free | 28 | **14** | −14 (`ai_mon`) |
+| text (bank 0) | 2,311 | 2,326 | +15 (`am_vanish`) |
+| pool need / slack D8 Warrior (worst) | 31,241 / 1,520 | **31,226 / 1,264** | −256 cap, need −15 (every level's need −15: text +15 B) |
+| bank 1 / bank 7 / low RAM | 49 / 49 / 41 | unchanged | 0 |
+
+Costs (`tests/archmage.py` A, stub incl. build_live / cache_player / far6, contended): worst bolt 17.6k T, hex 16.4k,
+summon decision 17.4k, blink 23.7k, staff / wait 17.5k (the stub alone ~4.6k). Budget **`aroom`** (Mirror Helm hero in line
+at gap 5, bolts + returns + hexes over the KEYS walk): worst work tick **92,287 T** (cap 126,000).
+**Not built / deviations:** the blink flashes the NEW footprint only (the old one is erased by render); the hex sets the
+status at decision time (no sleep cue flash, the tint shows at once, before the bolt lands); the Drain heal has no green
+`+n` (D3-11); the cap (Archmage 6 + Skeleton 5 = 11 of 12) admits only ONE live summon, so "< 2" never binds.
+
+**3F-T11b review fixes (fix-then-ship).** `rg_line` tests `gap < RG_ROW`'s `RW_R` before the scans again (the cheap
+out-of-range reject; `ai_ranged`'s post-check gone; `arch_ai` loads the Death Bolt row (r 28) before its first `rg_line`
+and the Sleep row (r 12) before the hex one). Dead `ai_guard` Archmage test removed (bank 7 +4). Budget: **`rfar`** (Archer
++ Necromancer held out of range, the hero waiting; GAME_PROFILE) `resolve_monsters` max 10,216 T vs main `eec2b1e` 9,860
+(+356: `ai_mon` +31 a monster, the `rg_row` / `rg_cnt` / `rg_line` calls), worst tick 44,492 vs 44,184; **`asum`** (S 0:
+the summon decision + end_turn `sp_run`, then Archmage + its live Skeleton) worst work tick 92,421. `tests/archmage.py` K:
+killed by its own Mirror Helm return (hp 0, DYING, DEATH at I2, both tracks queued and re-inked, D8 boss flow
+`LF_GRATE_OPEN` + `LF_UNIQUE`, no drop roll; a real turn plays the death out); L: ladder-top blink box (documented
+non-lock, game.md §9.9 A9b). Rulings recorded in game.md §9.9 A9b (hex at decision time kept: ≈ 30 B > 20 B).
+
+| Region (`-DDEBUG_KIT=0`) | after 3F-T11b | after the fixes | Δ |
+|---|---|---|---|
+| R6 free release / kit | 159 / 87 | **153 / 81** | −6 (rg_line range test 5, arch_ai row loads 10, −9 removed checks) |
+| bank 7 free | 49 | **53** | +4 (`ai_guard`'s dead `K_ARCHMAGE` test) |
