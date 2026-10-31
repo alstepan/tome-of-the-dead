@@ -15,9 +15,18 @@
 ; restore of rows 16-17 (rect_repaint, low RAM), "A GATE GLEAMS, THE WAY
 ; DOWN". Before the unique is placed (drop_put needs TF_FLOOR: never on the
 ; open gate). IX kept.
-; Clobbers: A, BC, DE, HL.   ~9k T (the shadow + the line)
+; Clobbers: A, BC, DE, HL.   ~9k T (the shadow + the line; the XP delta ~100 T)
 ;------------------------------------------------------------------------------
 grate_open:
+                ld   a, (LVL_DEPTH)            ; golden-boss XP: only the golden body reaches here; bank 3 then adds the
+                add  a, (bxp_d - 1) & $FF      ; base kind's KXP (and clamps at XP_MAX), so the delta makes §4.1's total
+                ld   l, a                      ; (0 on D4 / D7 / D8: kx_tab is already right). bxp_d: one page (ASSERT)
+                ld   h, (bxp_d - 1) >> 8
+                ld   e, (hl)
+                ld   d, 0
+                ld   hl, (XP)
+                add  hl, de                    ; <= 9,999 + 70: no 16-bit wrap
+                ld   (XP), hl
                 ld   hl, LVL_FLAGS
                 set  LF_GRATE_OPEN_BIT, (hl)
                 call cur_room_desc

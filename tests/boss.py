@@ -19,6 +19,7 @@ the hero walked into the lair through its door (real do_exit + lp_transition).
       and STUNNED; counter 3 -> 1 next turn; at counter 0 a gap-2 hero is not attacked
   K1  the boss killed on the grate (hero standing ON the open grate when it dies): tiles 13 -> 26,
       LF_GRATE_OPEN, "A GATE GLEAMS" logged, the hero did not fall; DOWN at c descends
+  X   golden-boss XP: the boss kill adds game.md 4.1's XP (D1 20 .. D7 90); an escort of its kind gives base KXP
   GL  golden glow: a stationary golden boss steps its attr in both screens (bank 7 == bank 5 on
       its footprint every tick, 3 distinct attrs seen over 16 ticks)
 Build with -DDEBUG_KIT=0. ZRCP_PORT=<port> python3 tests/boss.py
@@ -39,6 +40,8 @@ GS_PLAYING = S["GS_PLAYING"]
 F1 = S["FLOOR_ROW1"]
 TXT = dict(STRINGS)
 fails = []
+GXP = {1: 20, 2: 30, 3: 45, 4: 60, 5: 65, 6: 80, 7: 90}      # game.md 4.1 boss XP by depth
+KXP_BASE = {1: 3, 2: 4, 3: 9, 5: 12, 6: 10}
 
 
 def check(name, ok, got=None):
@@ -163,7 +166,7 @@ def main():
         trap_ub7(p)
         for depth, seed in ((1, 0x1B21), (2, 0x2B22), (3, 0x3B23), (4, 0x4B24), (5, 0x5B25), (6, 0x6B26)):
             reentry(p, depth, seed)
-        for depth, seed in ((1, 0x1B01), (4, 0x4B04), (7, 0x7B07)):
+        for depth, seed in ((1, 0x1B01), (2, 0x2B02), (3, 0x3B03), (4, 0x4B04), (5, 0x5B05), (6, 0x6B16), (7, 0x7B07)):
             run(p, depth, seed)
         glow(p)
     print(f"boss: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
@@ -232,7 +235,9 @@ def run(p, depth, seed):
         for _ in range(2):
             p.turn("WAIT")
         check(f"{tag} G1 hero at |dx| 8: engaged, the boss leaves the post toward him",
-              p.ent(bs)["X"] != c and (p.ent(bs)["X"] - c) * (near - c) > 0, p.ent(bs)["X"])
+              p.ent(bs)["KIND"] == S["K_NECRO"]         # a ranged caster engages by casting from its post
+              or (p.ent(bs)["X"] != c and (p.ent(bs)["X"] - c) * (near - c) > 0),
+              p.ent(bs)["X"])
     # ---------------- G2 PROVOKED ----------------------------------------
     boss_at(p, bs, c)
     p.set_ent(bs, HP=hp0)
@@ -316,9 +321,33 @@ def run(p, depth, seed):
     # ---------------- S1 Ogre SLAM ---------------------------------------
     if p.ent(bs)["KIND"] == S["K_OGRE"]:
         slam(p, L, bs, c, wb, tag)
-    # ---------------- K1 kill on the grate -------------------------------
-    p.set_ent(bs, HP=1)
+    # ---------------- X  golden-boss XP by depth (this review: bxp_d) ----
     bxx = c + 3 if c + 3 + wb - 1 <= 29 else c - wb
+    golden = bool(p.rb("LP_BOSS") & S["LEK_GOLD"])
+    if golden:                                  # an escort of the same kind (E_GOLD 0): base KXP, no gate
+        fl = p.ent(bs)["FLAGS"]
+        sv = bytes(p.z.read_memory(S["P_ENTITIES"] + bs * STRIDE, STRIDE))
+        es = next(k for k in range(1, 16) if k != bs and not p.ent(k)["FLAGS"] & EF_ACTIVE)
+        p.set_ent(bs, FLAGS=0)
+        p.wmem(S["P_ENTITIES"] + es * STRIDE, list(sv))
+        p.wb(S["P_ENTITIES"] + es * STRIDE + S["E_GOLD"], 0)
+        p.set_ent(es, HP=1, MAXHP=1, FLAGS=fl & ~EF_LEFT & 255 | (EF_LEFT if bxx > c else 0))
+        boss_at(p, es, bxx)
+        L.place_hero(c, 1, left=bxx < c)
+        p.set_ent(0, HP=99)
+        xp0 = p.rw("XP")
+        for _ in range(20):
+            if not p.ent(es)["FLAGS"] & EF_ACTIVE or p.ent(es)["FLAGS"] & EF_DYING:
+                break
+            p.turn("L" if bxx > c else "H")
+        p.settle(6)
+        check(f"{tag} X escort of the boss kind (E_GOLD 0): +base KXP {KXP_BASE[depth]}, grate stays shut",
+              p.rw("XP") - xp0 == KXP_BASE[depth] and not p.rb("LVL_FLAGS") & 1, (p.rw("XP") - xp0, p.rb("LVL_FLAGS")))
+        p.set_ent(es, FLAGS=0)
+        p.wmem(S["P_ENTITIES"] + bs * STRIDE, list(sv))
+    # ---------------- K1 kill on the grate -------------------------------
+    xp0 = p.rw("XP")
+    p.set_ent(bs, HP=1)
     boss_at(p, bs, bxx)
     L.place_hero(c, 1, left=bxx < c)
     if bxx > c:
@@ -343,6 +372,7 @@ def run(p, depth, seed):
         p.tick()
         grab(p.frame(), None)
     p.settle(4)
+    check(f"{tag} X boss kill: XP delta == game.md 4.1 ({GXP[depth]})", p.rw("XP") - xp0 == GXP[depth], p.rw("XP") - xp0)
     m = p.z.read_memory(S["ROOM_MAP"], 576)
     check(f"{tag} K1 the boss killed beside / the hero ON the grate: LF_GRATE_OPEN, tiles 13 -> 26",
           p.rb("LVL_FLAGS") & 1 and all(m[F1 * 32 + c + k] == S["T_GRATE"] for k in range(3)),
