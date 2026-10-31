@@ -37,7 +37,14 @@
 ; Clobbers: all but IY (far7: A, F lost; nothing is returned).
 ;------------------------------------------------------------------------------
 turn_input:
-                ld   a, (XP_UP)                ; D3-9b: a level-up a heavy end_turn tick
+                ld   hl, TRK_PHASE             ; 3F-T12: a due trickle check takes this INPUT
+                bit  TRK_DUE_BIT, (hl)         ; tick ALONE (idle: no turn starts, no log line, a
+                jr   z, .nd                    ; deferred level-up waits too); the input is read on
+                res  TRK_DUE_BIT, (hl)         ; the next tick (40 ms, once per 48 turns). A turn
+                                               ; never starts with it set: end_turn sees it clear
+                ld   hl, trk_run               ; (R6 trickle6.asm)
+                jp   far6
+.nd:            ld   a, (XP_UP)                ; D3-9b: a level-up a heavy end_turn tick
                 or   a                         ; deferred (xp_level: 1st frame only)
                 call nz, xp_level
                 ld   a, (ST_FLAGS)             ; D3-8 held hero (FROZEN / ASLEEP / STUNNED,
@@ -270,13 +277,12 @@ end_turn:
                 ld   hl, (TURN_COUNTER)
                 inc  hl
                 ld   (TURN_COUNTER), hl
-                ld   hl, TRK_PHASE             ; 3F-T12: the respawn trickle every RESPAWN_PERIOD
-                ld   a, (hl)                   ; turns of the level, after the exit (cur / prev
-                sub  RESPAWN_PERIOD            ; final): records only (R6 trickle6.asm)
-                jr   nz, .nt
-                ld   (hl), a
-                ld   hl, trk_run
-                call far6
+                ld   hl, TRK_PHASE             ; 3F-T12: every RESPAWN_PERIOD turns of the level
+                ld   a, (hl)                   ; the check is DUE (TRK_DUE = bit 7, count 0); it
+                and  TRK_CNT_MASK              ; runs on the next INPUT tick (turn_input), never
+                cp   RESPAWN_PERIOD            ; on this heavy turn-ending tick (review: up to
+                jr   nz, .nt                   ; 115.8k + 14.1k > the 126k cap)
+                ld   (hl), TRK_DUE
 .nt:            call floor_pickup              ; pickup7.asm (D3-7 T6: potions + ammo, list-driven;
                                                ; HP / potions reach the panel by panel_tick's poll)
                 xor  a

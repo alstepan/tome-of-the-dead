@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "vbat", "trickle")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "vbat", "trickle", "otrickle")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -416,15 +416,22 @@ SCENARIOS = {
     "walarm": ("knight + Rat, Bat; ALARM wave of 2 Goblins queued, sp_run at end_turn, then materialise", [
         (1, 22, stand_y(1, 2), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "walarm"),
-    # 3F-T12: "trickle" = "pmix" with a respawn-trickle check (R6 trk_run, far6 from end_turn) on EVERY turn's
-    # last tick (TRK_PHASE re-armed to 47 after each check): LVL_DEPTH 5, 8 other VISITED rooms of 3 entries
-    # (sigma 8: the full eligibility scan, 9 records x sp_wt), LP_KINDS Skeleton / Rat alternating (a Skeleton
-    # pick fails the cap and retries the Rat: 2 tier rolls); the records / LP_RESPAWNS reset after a check.
+    # 3F-T12: "trickle" = "pmix" with a respawn-trickle check after EVERY turn (TRK_PHASE re-armed to 47):
+    # end_turn only sets TRK_DUE, the check (R6 trk_run) runs on the next INPUT tick (turn_input, alone).
+    # Worst case: LVL_DEPTH 5, 8 other VISITED rooms of 3 entries (sigma 8: the full eligibility scan),
+    # LP_KINDS Skeleton / Rat alternating and RNG_STATE poked to TRK_SEED once DUE (chance passes, a Skeleton
+    # pick fails the cap, the Rat retry spawns: 2 tier rolls) -> a spawn on every check (asserted).
+    # "otrickle": the same over "omix" (the Ogre SLAM: the heaviest turn-ending tick, 115.8k).
     "trickle": ("knight + 4 monsters, pmix items, a trickle check at every end_turn", [
         (5, 15, stand_y(1, 6), HOSTILE),
         (1, 22, stand_y(1, 2), HOSTILE),
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "trickle"),
+    "otrickle": ("knight + Ogre SLAM + goblin + rat + bat, pmix items, a trickle check after every turn", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "otrickle"),
     "vbat": ("knight + a low-hp Vampire, pmix items, the bat transform at end_turn", [
         (7, 4, stand_y(1, 6), RIGHT)], KEYS, K_KNIGHT, None, "vbat"),
     "rcast": ("mage Lightning r3 through 2 Archers in line, the deferred phase shoots back", [
@@ -719,6 +726,7 @@ def pmix_setup(p):
 
 
 TRK = {"on": False, "checks": 0, "spawns": 0, "rec": []}
+TRK_SEED = 6                                      # RNG_STATE: draw 1 < 96, draw 3 even (a Skeleton first)
 
 
 def trickle_arm(p):
@@ -727,14 +735,18 @@ def trickle_arm(p):
     p.wmem(S["LP_REC"], TRK["rec"])
 
 
-def trickle_setup(p):
-    """"trickle" (3F-T12): pmix + the trickle state (see the scenario comment); trickle_hook re-arms it."""
-    pmix_setup(p)
+def trickle_setup(p, key="trickle"):
+    """"trickle" / "otrickle" (3F-T12): pmix / omix + the trickle state (see the scenario comment)."""
+    if key == "otrickle":
+        boss_setup(p, "omix")                     # room A = the lair (excluded anyway: CUR_ROOM)
+    else:
+        pmix_setup(p)
     sk, rat, gob = S["K_SKELETON"], S["K_RAT"], S["K_GOBLIN"]
     p.wb("LVL_DEPTH", 5)
     p.wmem(S["LP_KINDS"], [sk, rat, sk, rat])
     p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~S["LF_GRATE_OPEN"] & 255)
-    p.wb("LVL_LAIR", S["ROOM_NONE"])
+    if key == "trickle":
+        p.wb("LVL_LAIR", S["ROOM_NONE"])
     p.wb("LVL_SANCTUM", S["ROOM_NONE"])
     cur = p.rb("CUR_ROOM")
     p.wb("TRK_PREV", cur)
@@ -743,12 +755,16 @@ def trickle_setup(p):
         rec += [0x80] + [0] * 8 if r == cur else [0x83, gob, 9, gob, 9, rat, 7, 0, 0]
     TRK["rec"] = rec
     trickle_arm(p)
-    TRK.update(on=True, checks=0, spawns=0)
+    TRK.update(on=True, checks=0, spawns=0, tick=0)
 
 
 def trickle_hook(st):
-    if TRK["on"] and st.p.rb("TRK_PHASE") == 0:      # end_turn ran a check this tick
+    if TRK["on"] and st.p.rb("TRK_PHASE") == S["TRK_DUE"]:   # end_turn counted the 48th turn
+        assert st.p.rb("LP_RESPAWNS") == 0, "trickle ran on the turn-ending tick"
+        st.p.wmem(S["RNG_STATE"], [TRK_SEED, 0])
+    elif TRK["on"] and st.p.rb("TRK_PHASE") == 0:    # the next INPUT tick ran the check
         TRK["checks"] += 1
+        TRK["tick"] = max(TRK.get("tick", 0), st.ticks[-1][0])
         TRK["spawns"] += st.p.rb("LP_RESPAWNS")
         trickle_arm(st.p)
 
@@ -1004,8 +1020,8 @@ def run_scenario(h, scen):
         pmix_setup(p)
     if len(scen) > 5 and scen[5] == "tmix":
         tmix_setup(p)
-    if len(scen) > 5 and scen[5] == "trickle":
-        trickle_setup(p)
+    if len(scen) > 5 and scen[5] in ("trickle", "otrickle"):
+        trickle_setup(p, scen[5])
     if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat"):
         ranged_setup(p, placements, scen[5])
     else:
@@ -1064,10 +1080,10 @@ def run_scenario(h, scen):
         sm = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and p.ent(sl)["POT"] & 0x40]
         print(f"[info] bsum after: summon-made slots {sm}", flush=True)
         assert sm, "bsum: no summon was made"
-    if len(scen) > 5 and scen[5] == "trickle":      # 3F-T12: the checks really ran
+    if len(scen) > 5 and scen[5] in ("trickle", "otrickle"):   # 3F-T12: the checks really ran
         TRK["on"] = False
-        print(f"[info] trickle after: {TRK['checks']} checks, {TRK['spawns']} record appends", flush=True)
-        assert TRK["checks"] >= 10 and TRK["spawns"] >= 1, "trickle: the checks / spawns did not run"
+        print(f"[info] {scen[5]} after: {TRK['checks']} checks, {TRK['spawns']} record appends, worst check tick {TRK['tick']} T", flush=True)
+        assert TRK["checks"] >= 6 and TRK["spawns"] == TRK["checks"], "trickle: a check did not spawn"
     if len(scen) > 5 and scen[5] == "walarm":       # the wave really was made (2 new bodies, SPQ empty)
         wv = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and sl not in WALARM_PRE]
         print(f"[info] walarm after: wave slots {wv}, SPQ_K {p.rb('SPQ_K')}", flush=True)
@@ -1166,7 +1182,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,bsum,walarm,vbat,trickle,rcast,sroom,lglow,omix,lqmix").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,bsum,walarm,vbat,trickle,otrickle,rcast,sroom,lglow,omix,lqmix").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")
