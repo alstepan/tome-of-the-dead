@@ -92,13 +92,13 @@ decor steps, the D3-S2 cold code).
 
 Tape (LOAD-WIRE): BASIC `10 CLEAR VAL "24575": BORDER/PAPER/INK 0: CLS: POKE 23739,111`,
 `15 LOAD "" SCREEN$`, `20 LOAD "" CODE`, `30 RANDOMIZE USR VAL "<start>"`; then the
-**loading picture** (`assets/gfx/loading/loading_s2d.scr`, 6,912 B, "The Descent", variant S2d; generator
-`tools/gen_loading_screen.py`) as a CODE block `$4000` + 6,912 B straight after the BASIC
+**loading picture** (`assets/gfx/loading/loading_l3c.scr`, 6,912 B, crypt variant L3c, approved 2026-10-31, replaces S2d; generator
+`tools/gen_loading_concepts2.py`) as a CODE block `$4000` + 6,912 B straight after the BASIC
 and before the game CODE. It exists ONLY on the tape: `src/main.asm` parks the image's own
 `$4000..$5AFF` bytes with SAVEBIN (`build/slot1_park.bin`), INCBINs the .scr there for that one
 SAVETAP and INCBINs the parked bytes back, so the .sna / game image are byte-identical (0 game
 bytes, banks and R6 free unchanged). The CLEAR must precede the picture (CLEAR CLSes). The ROM's
-game-CODE header message clears rows 22-23 while that block loads, so S2d keeps them blank (bitmap 0, attr 7) (POKE 23739,111 only
+game-CODE header message clears rows 22-23 while that block loads, so L3c keeps them blank (bitmap 0, attr 7) (POKE 23739,111 only
 drops the text; a DF_SZ poke scrolls the screen instead). `tests/tape_layout.py` parses the .tap
 (block order, parity, .scr == block data). Game loader:
 (the 5 USR digits are emitted from the `start` label, today `29927` = `$74E7`).
@@ -138,7 +138,7 @@ load, and IM 2 installed.
 
 ### Boot block (3E-T1, memory levers (a) + (d))
 
-**BOOT-ANYKEY (user 2026-10-30):** after `boot` the loading picture (S2d SCREEN$ on the bank-5
+**BOOT-ANYKEY (user 2026-10-30):** after `boot` the loading picture (L3c SCREEN$ on the bank-5
 screen) STAYS up, the title tune playing (`boot6_init` sets `MUS_REQ` = `MUS_LAMENT` before the first
 EI; `menu_run` asks for the same id = no restart), until a key; `boot6_init` no longer clears the
 screen or sets the border. A third `farb` call from `boot` (after `gen_idles` + `sel_frt_copy`, so the

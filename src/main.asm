@@ -1356,7 +1356,7 @@ tap_loader_len  EQU  $ - tap_loader
                 ; the CODE block below see the original bytes; 0 game bytes).
                 SAVEBIN  "build/slot1_park.bin", $4000, LOAD_SCR_LEN
                 ORG  $4000
-                INCBIN   "../assets/gfx/loading/loading_s2d.scr"
+                INCBIN   "../assets/gfx/loading/loading_l3c.scr"
                 SAVETAP  "build/wazhack.tap", CODE,  "wazhack", $4000, LOAD_SCR_LEN
                 ORG  $4000
                 INCBIN   "slot1_park.bin"                 ; found via build.sh -i OUTDIR/build

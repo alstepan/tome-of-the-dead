@@ -2,7 +2,7 @@
 """BOOT-ANYKEY: after boot the loading picture stays up (music playing) until a
 key; the menu then appears and the key is swallowed (boot6_wait, boot6.asm).
 The .sna does not hold the loading screen (the tape's SCREEN$ block is not in
-it), so the test pokes assets/gfx/loading/loading_s2d.scr into $4000 first.
+it), so the test pokes assets/gfx/loading/loading_l3c.scr into $4000 first.
    ZRCP_PORT=<port> python3 tests/anykey.py
 """
 import os
@@ -13,7 +13,7 @@ import game_lib  # noqa: E402
 from game_lib import Harness, Proto, S, EMU_ARGS, GS_SELECT, GS_ANYKEY, GS_PLAYING  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCR = open(os.path.join(REPO, "assets/gfx/loading/loading_s2d.scr"), "rb").read()
+SCR = open(os.path.join(REPO, "assets/gfx/loading/loading_l3c.scr"), "rb").read()
 
 
 def poke(p, addr, data):
