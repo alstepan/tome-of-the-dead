@@ -387,14 +387,13 @@ ai_monster:
                 ld   (ix+E_AIDIR), a           ; longer phase-locks a period-2 winner). 38 T
                 ret
 .sk1:           push de                        ; AI-L1: .fstep inline, but a failed step
-                ld   e, 0                      ; goes on to the ladder queue (R6 lq6.asm,
+                ld   e, 0                      ; goes on to the ladder queue (bank 3 lq3.asm,
                 ld   a, d                      ; game.md §9.2 'Ladder queue': strongest
                 ld   (TMP6), a                 ; first; the loser near the shaft backs
-                call try_step.vert             ; off 1 cell). +19 B here; the far6 runs
+                call try_step.vert             ; off 1 cell). +19 B here; the queue runs
                 pop  de                        ; only on a blocked seek step
                 jp   c, face_tmp6
-                ld   hl, lq_block
-                jp   far6
+                jp   lq_block                  ; (bank 3 since MEM-RECLAIM w3: was `ld hl, lq_block` / far6, R6)
 .at:            ; at the shaft: climb only if the segment is clear (no head-on).
                 ; AI-L1 J1 (game.md §9.2): the rect also covers my own end box, which
                 ; is harmless because every climber is FEAT_W wide (main.asm kind_tab
@@ -405,7 +404,7 @@ ai_monster:
                 ; at col covers col .. col + 3 all the way up, and a body in its far-end box at
                 ; col + 3 must stop the start (+8 B vs ld d, FEAT_W; ~30 T, at the shaft only).
                 ; A body overlapping the near-end box overlaps the Spider on its storey; only
-                ; one above its 2-row head (a flyer) can wait the start (it moves on). lq6
+                ; one above its 2-row head (a flyer) can wait the start (it moves on). lq3
                 ; LQ_W: its queue box is 4 wide.
                 ld   c, a                      ; B = segment storey (its lower end)
                 ld   a, b                      ; shaft rect: rows 9(B-1) .. 9B+7

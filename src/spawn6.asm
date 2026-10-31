@@ -26,15 +26,15 @@
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; sp_wt — A = kind byte (row | LEK_GOLD) -> A = its §9.3 weight (lp_wt6 + 1 if
+; sp_wt — A = kind byte (row | LEK_GOLD) -> A = its §9.3 weight (lp_wt + 1 if
 ; golden). Keeps B, DE, HL.  Clobbers: C.
 ;------------------------------------------------------------------------------
 sp_wt:          ld   c, a
                 and  LEK_KIND_MASK
-                add  a, lp_wt6 & $FF           ; (lp_wt6: one page, r6.asm)
+                add  a, lp_wt & $FF           ; (lp_wt: one page, r6.asm)
                 push hl
                 ld   l, a
-                ld   h, lp_wt6 >> 8
+                ld   h, lp_wt >> 8
                 ld   a, (hl)
                 pop  hl
                 bit  LEK_GOLD_BIT, c

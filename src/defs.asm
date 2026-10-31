@@ -55,7 +55,7 @@ R6_ADDR         EQU $10000 - R6_LEN ; $DD00
 ; key stays unique and no FD_FLAGS bit is spent. Its tape bytes ride on the
 ; boot block's tape block (BOOT6_TAPE_LEN, main.asm).
     IFNDEF SRC6_PAGES
-SRC6_PAGES      EQU 16              ; ANIM-X12: 15 -> 16 (Orc + Vampire 4th walk pose, +75 B packed; 3,876 B, 220 free); ANIM-IMPORT2: 13 -> 15 (the Vampire's own set, 2 blocks 675 B; 14 blocks 3,801 B, 39 free; -512 B POOL_CAP, R6 untouched); 3F-T13bc: 10 -> 13 (+ the ART2 / ART3 frames, 12 blocks, 3,173 B, dk_block out); 3F-T13: the 3F-A1 sources (8 blocks, 2,393 B packed; was 1 = the spike's Spider stand-in)
+SRC6_PAGES      EQU 14              ; MEM-RECLAIM w3: 16 -> 14 (K_MUMMY + G_NBOLT, 470 B packed, back to bank 1 sources: 3,569 B used, 15 free; +512 B POOL_CAP); ANIM-X12: 15 -> 16 (Orc + Vampire 4th walk pose, +75 B packed; 3,876 B, 220 free); ANIM-IMPORT2: 13 -> 15 (the Vampire's own set, 2 blocks 675 B; 14 blocks 3,801 B, 39 free; -512 B POOL_CAP, R6 untouched); 3F-T13bc: 10 -> 13 (+ the ART2 / ART3 frames, 12 blocks, 3,173 B, dk_block out); 3F-T13: the 3F-A1 sources (8 blocks, 2,393 B packed; was 1 = the spike's Spider stand-in)
     ENDIF
     IFNDEF SRC6_STANDIN
 SRC6_STANDIN    EQU 0               ; bit mask of the zx0_sources.py stand-in groups assembled into SRC6 (3F-T13: none, the real art replaced them)
@@ -72,7 +72,7 @@ BANK_SHADOW    EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect's
 BANK_COLD7      EQU 7               ; D3-S2: bank-7 cold code B7_CODE..B7_LIMIT (via far7)
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
 BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
-AY_RESERVE      EQU $EFA0           ; A8 / D3-0 / MEM-SND / 3E lever (c): bank 3 $EFA0..$FFFF = 4192 B AY player/music/FX
+AY_RESERVE      EQU $EFD0           ; MEM-RECLAIM w3: $EFA0 -> $EFD0 (+48 B bank-3 cold code for lq_block; 121 B SFX slack kept); was: A8 / D3-0 / MEM-SND / 3E lever (c): bank 3 $EFA0..$FFFF = 4192 B AY player/music/FX
                                     ;     reserve (game.md §11.2, user 2026-10-06: 7 KB -> 4 KB at $F000,
                                     ;     was $E400; MEM-SND: -608 B after 406 B of bank-3 cold code went
                                     ;     to bank 7, ~200 B bank-3 slack kept; 3E lever (c): +512 B
@@ -681,6 +681,15 @@ WT_K_ORC_BERSERK EQU WT_K_ORC
 WT_K_ORC_BOUNCER EQU WT_K_ORC
 WT_K_SNIPER     EQU WT_K_ARCHER
 WT_K_BONE_CALLER EQU WT_K_NECRO
+    MACRO LP_WT_ROWS                           ; emitted once, in kind_tab's KT_REACH slot (main.asm)
+                DB   WT_K_KNIGHT, WT_K_WIZARD, WT_K_VAMPIRE, WT_K_SKELETON, WT_K_GOBLIN   ; 3F-T9: id 2 = K_VBAT keeps the Vampire's weight
+                DB   WT_K_GHOST, WT_K_RAT, WT_K_BAT, WT_K_SLIME
+                DB   WT_K_SPIDER, WT_K_VAMPIRE, WT_K_ORC, WT_K_ARCHER, WT_K_MUMMY
+                DB   WT_K_NECRO, WT_K_OGRE, WT_K_DKNIGHT, WT_K_ARCHMAGE
+                DB   WT_K_GIANT_RAT, WT_K_RABBIT_RAT, WT_K_SCREECH, WT_K_SLINGER
+                DB   WT_K_BLACK_WIDOW, WT_K_SKEL_GUARD, WT_K_SKEL_KNIGHT, WT_K_POLTERGEIST
+                DB   WT_K_ORC_BERSERK, WT_K_ORC_BOUNCER, WT_K_SNIPER, WT_K_BONE_CALLER
+    ENDM
 K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 30 used, ids 30 / 31 = the class FX kinds)
 ; D3-4: the class FX kinds (render-only projectile / impact frames, game.md §6;
 ; never an entity's kind): the LAST two kind ids, so 3F's monster rows grow
@@ -732,7 +741,7 @@ KT_ATK          EQU $060
 KT_EVA          EQU $080
 KT_DIE          EQU $0A0
 KT_BONUS        EQU $0C0
-KT_REACH        EQU $0E0
+KT_REACH        EQU $0E0            ; MEM-RECLAIM w3: now the lp_wt weights (the old all-1 reach column is gone)
 KT_PERIOD       EQU $100            ;                            (page 1)
 KT_FLAGS        EQU $120
 KT_ATTR         EQU $140

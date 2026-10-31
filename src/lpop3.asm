@@ -52,17 +52,8 @@ LP_DROW         EQU 6
                 ASSERT 11 - 2 >= GRID_CELLS - 2
 ; §9.3 weights by kind row (defs.asm WT_*), K_COUNT entries (3F-T3: 18 base + 12 tier rows)
 ; (the hero rows 0 / 1 stay 0: a record entry of kind 0 may exist in tests; id 2 = K_VBAT, 3F-T9)
-    MACRO LP_WT_ROWS                           ; shared with R6 lp_wt6 (tier6.asm: R6 cannot read bank 3)
-                DB   WT_K_KNIGHT, WT_K_WIZARD, WT_K_VAMPIRE, WT_K_SKELETON, WT_K_GOBLIN   ; 3F-T9: id 2 = K_VBAT keeps the Vampire's weight
-                DB   WT_K_GHOST, WT_K_RAT, WT_K_BAT, WT_K_SLIME
-                DB   WT_K_SPIDER, WT_K_VAMPIRE, WT_K_ORC, WT_K_ARCHER, WT_K_MUMMY
-                DB   WT_K_NECRO, WT_K_OGRE, WT_K_DKNIGHT, WT_K_ARCHMAGE
-                DB   WT_K_GIANT_RAT, WT_K_RABBIT_RAT, WT_K_SCREECH, WT_K_SLINGER
-                DB   WT_K_BLACK_WIDOW, WT_K_SKEL_GUARD, WT_K_SKEL_KNIGHT, WT_K_POLTERGEIST
-                DB   WT_K_ORC_BERSERK, WT_K_ORC_BOUNCER, WT_K_SNIPER, WT_K_BONE_CALLER
-    ENDM
-lp_wt:          LP_WT_ROWS
-                ASSERT $ - lp_wt == K_COUNT
+; (3F: MEM-RECLAIM w3: lp_wt is the kind_tab KT_REACH slot, bank 2 main.asm; the macro LP_WT_ROWS lives in defs.asm)
+; lp_wt: one copy in bank 2 (kind_tab + KT_REACH), read by bank 3 and R6
                 ASSERT LEK_RESPAWN == EF_RESPAWN && K_COUNT - 1 <= LEK_KIND_MASK
                 ASSERT LVL_LAIR == LVL_START + 1 && LVL_SANCTUM == LVL_START + 3
 ; low-RAM neighbours (D3-TX merge): TX_DEC (GEN_MIR top) < LVL_STATE < ORN_GLYPHS

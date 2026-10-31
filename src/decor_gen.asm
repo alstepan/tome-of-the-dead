@@ -640,21 +640,8 @@ dg_cell:
 dg_rnd:
                 push bc
                 ld   c, a
-                ld   hl, (dg_rng)              ; xorshift 7,9,8 (= levelgen lg_step)
-                ld   a, h
-                rra
-                ld   a, l
-                rra
-                xor  h
-                ld   h, a
-                ld   a, l
-                rra
-                ld   a, h
-                rra
-                xor  l
-                ld   l, a
-                xor  h
-                ld   h, a
+                ld   hl, (dg_rng)              ; xorshift 7,9,8 (= levelgen lg_step; MEM-RECLAIM w3: bank-2 xs_core)
+                call xs_core
                 ld   (dg_rng), hl
                 ld   a, c
                 cp   2

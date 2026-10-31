@@ -59,17 +59,13 @@ debug_kit:
                 ld   (MAXMP), a
                 ret
     ENDIF
-                INCLUDE "lq6.asm"              ; AI-L1: lq_block (the ladder queue: strongest first)
+                ; (MEM-RECLAIM w3: lq_block, the AI-L1 ladder queue, moved to bank 3: src/lq3.asm)
                 INCLUDE "boss6.asm"            ; 3F-T8: lp_post (the lair boss; w2b: ai_guard / grate_open / boss_chk -> boss7.asm)
     IF F3_GEN
                 INCLUDE "sanct6.asm"           ; 3F-T10: sanctum_leaf (D8 Sanctum generation, only with the 3F switch)
     ENDIF
                 INCLUDE "icons6.asm"           ; IC1: icon_slot / worn_draw / qs_draw (the 16x16 icon blitter)
                 ; AMMO-COUNT: before the icon data (after it, qs_ammo's +66 B made the guard pad 26 B)
-    IF (($ & $FF) + K_COUNT) > $100
-                ALIGN 256                      ; lp_wt6 (tier6.asm) must sit inside one page (H loaded once)
-    ENDIF
-lp_wt6:         LP_WT_ROWS
-                ASSERT $ - lp_wt6 == K_COUNT && ((lp_wt6 + K_COUNT - 1) >> 8) == (lp_wt6 >> 8)
+                ; (MEM-RECLAIM w3: lp_wt6 is gone: R6 reads the bank-2 lp_wt, kind_tab + KT_REACH)
                 INCLUDE "../assets/gfx/icons/icons16.asm"   ; IC1 + FLOOR1: 45 logical icons packed in 995 B (1,376 raw; MEM-RECLAIM w2c; tools/icons16.py)
 fs_worn:        DB   " WORN OUT", 0           ; it_fmt (gear6.asm): m = -3 (after the icon data)

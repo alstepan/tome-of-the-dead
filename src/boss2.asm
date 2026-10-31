@@ -39,16 +39,13 @@ atk_mod:
 ; attacker, B = the gap -> CF = out of reach. The Ogre: reach OG_REACH at
 ; counter OG_READY (and a blow there is the SLAM: counter := OG_SLAM), else
 ; reach 1 (a blow advances the counter: og_adv). Keeps DE (E = the side).
-; Clobbers: A, C, HL.   ~70 T (not the Ogre)
+; Clobbers: A.   ~40 T (not the Ogre)
 ;------------------------------------------------------------------------------
 reach_ok:
                 ld   a, (ix+E_KIND)
                 cp   K_OGRE
-                jr   z, .og
-                add  a, (kind_tab + KT_REACH) & $FF
-                ld   l, a
-                ld   h, (kind_tab + KT_REACH) >> 8
-                ld   a, (hl)
+                ld   a, 1                      ; MEM-RECLAIM w3: every kind's reach is 1 (the KT_REACH column is gone; lp_wt took its slot)
+                jr   z, .og                    ; (LD keeps the flags)
                 cp   b                         ; CF = reach < gap
                 ret
 .og:            ld   a, (ix+E_RCD)

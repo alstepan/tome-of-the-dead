@@ -1107,6 +1107,7 @@ decor_room:
 ; (cold tile data: B3B-11b moved it to main.asm vdata, read via copy_virt3)
                 INCLUDE "panel.asm"            ; B3B-11 panel engine (cold part + the HOT_COPY image)
                 INCLUDE "turn3.asm"            ; B3B-R2 turn logic: monster phase, attacks, potions
+                INCLUDE "lq3.asm"              ; AI-L1: lq_block (the ladder queue: strongest first; R6 until MEM-RECLAIM w3)
                 INCLUDE "combat3.asm"          ; D3-6a: hit_roll, deal_hit (shared damage core)
                 INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
                 INCLUDE "rank3.asm"            ; D3-7: abil_load (ABIL_DESC for the bank-7 ability code)

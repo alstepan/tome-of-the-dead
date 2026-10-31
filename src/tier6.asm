@@ -57,10 +57,10 @@ lp_gen:         ld   hl, (LP_RECP)
                 ld   c, $FF
 .mw:            ld   a, (hl)
                 inc  l                         ; (LP_KINDS: one page, ASSERTed)
-                add  a, lp_wt6 & $FF
+                add  a, lp_wt & $FF
                 push hl
                 ld   l, a
-                ld   h, lp_wt6 >> 8
+                ld   h, lp_wt >> 8
                 ld   a, (hl)
                 pop  hl
                 cp   c
@@ -109,9 +109,9 @@ lp_gen:         ld   hl, (LP_RECP)
                 ld   a, (LP_BOSS)
                 ld   c, a                      ; kind byte (| LEK_GOLD)
                 and  LEK_KIND_MASK
-                add  a, lp_wt6 & $FF
+                add  a, lp_wt & $FF
                 ld   l, a
-                ld   h, lp_wt6 >> 8
+                ld   h, lp_wt >> 8
                 ld   a, (hl)
                 bit  LEK_GOLD_BIT, c           ; golden: weight + 1 (levelgen.py k3_weight)
                 jr   z, .bw
@@ -186,9 +186,9 @@ gen_tryi:          add  a, LP_KINDS & $FF
                 ld   h, LP_KINDS >> 8
                 ld   a, (hl)
 gen_tryk:          ld   e, a
-                add  a, lp_wt6 & $FF
+                add  a, lp_wt & $FF
                 ld   l, a
-                ld   h, lp_wt6 >> 8
+                ld   h, lp_wt >> 8
                 ld   d, (hl)                   ; D = w
                 ld   a, (LP_SIG)
                 add  a, d
@@ -204,24 +204,7 @@ gen_tryk:          ld   e, a
                 ld   a, e
                 ret
 
-; step — one xorshift 7,9,8 step of the spawn stream (GEN_RNG) -> HL (= bank-3 lg_step, which R6 cannot call).
-gen_step:      ld   hl, (GEN_RNG)
-                ld   a, h
-                rra
-                ld   a, l
-                rra
-                xor  h
-                ld   h, a
-                ld   a, l
-                rra
-                ld   a, h
-                rra
-                xor  l
-                ld   l, a
-                xor  h
-                ld   h, a
-                ld   (GEN_RNG), hl
-                ret
+; gen_step — one xorshift 7,9,8 step of the spawn stream (GEN_RNG) -> HL: bank 2 (io.asm; MEM-RECLAIM w3, was a 21-B copy here).
 
 ;------------------------------------------------------------------------------
 ; tier_row — A = a base row -> A = its tier row to try first, 0 = none (the kind has
@@ -315,16 +298,20 @@ tier_tab:       DB   K_RAT,      K_GIANT_RAT,     K_RABBIT_RAT
                 DB   K_NECRO,    K_BONE_CALLER,   0
                 ASSERT ($ - tier_tab) == 3 * TIER_N
 ; §9.6 odds bases, indexed by depth (1..8; entry 0 unused)
-                ALIGN 16                       ; each 9-byte table inside one page (H loaded per table)
+    IF (($ & $FF) + 9) > $100
+                ALIGN 256                      ; each 9-byte table inside one page (H loaded per table); MEM-RECLAIM w3: pad only when it would straddle (was ALIGN 16: 25 B)
+    ENDIF
 T2_BASE:        DB   0, 24, 48, 64, 72, 80, 88, 96, 96
-                ALIGN 16
+    IF (($ & $FF) + 9) > $100
+                ALIGN 256
+    ENDIF
 T3_BASE:        DB   0, 0, 0, 0, 16, 24, 32, 40, 48
+                ASSERT (T2_BASE >> 8) == ((T2_BASE + 8) >> 8) && (T3_BASE >> 8) == ((T3_BASE + 8) >> 8)
                 ASSERT LEVELS == 8
                 ASSERT 96 + TIER_SHIFT2 * TIER_DELTA_MAX <= T2_CAP && 48 + TIER_SHIFT3 * TIER_DELTA_MAX <= T3_CAP
                 ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 3) >> 8)
 
-; §9.3 weights by kind row: the same list as bank-3 lp_wt (LP_WT_ROWS, lpop3.asm); R6 cannot read bank 3
-; lp_wt6: moved to the end of r6.asm (WEAR-UI: its one-page rule needs a pad that moves with R6's growth)
+; §9.3 weights by kind row: lp_wt (bank 2, kind_tab + KT_REACH; main.asm), one copy for bank 3 and R6
 
 ;------------------------------------------------------------------------------
 ; kind_hp — A = kind byte (row | LEK_*) -> A = row hp + (depth - 1); golden:

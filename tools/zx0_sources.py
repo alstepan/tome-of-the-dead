@@ -68,8 +68,8 @@ OUT6 = os.path.join(REPO, "build/zx0/src6_zx0.asm")
 # FRM kinds whose packed sources live in the bank-6 SRC6 region (3F art goes
 # here; 3F-T13: the 3F-A1 lean set + the shared groups; CORPSE-ASHES: G_DEADH retired).
 # SRC6_KINDS in the environment overrides (test builds; it REPLACES the set).
-SRC6_KINDS = {"K_SPIDER", "K_ORC", "K_NECRO", "K_VAMPIRE", "K_MUMMY", "K_OGRE", "K_DKNIGHT",
-              "G_CLIMBH", "G_NBOLT"}     # ANIM-IMPORT2: + K_VAMPIRE (its own set; was in K_NECRO)
+SRC6_KINDS = {"K_SPIDER", "K_ORC", "K_NECRO", "K_VAMPIRE", "K_OGRE", "K_DKNIGHT",
+              "G_CLIMBH"}     # ANIM-IMPORT2: + K_VAMPIRE (its own set; was in K_NECRO); MEM-RECLAIM w3: K_MUMMY + G_NBOLT (470 B) back to bank 1 (SRC6 16 -> 14 pages)
 if os.environ.get("SRC6_KINDS") is not None:
     SRC6_KINDS = {k.strip() for k in os.environ["SRC6_KINDS"].split(",") if k.strip()}
 SCRATCH_LEN = 1536          # GEN_SCRATCH_LEN (src/defs.asm); ASSERTed in the output too

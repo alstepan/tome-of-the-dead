@@ -537,6 +537,34 @@ rng_next:
                 ld   a, l
                 ret
 
+;------------------------------------------------------------------------------
+; xs_core / gen_step — MEM-RECLAIM w3: the xorshift (7,9,8) core ONCE for the generation streams
+; (bank 3 levelgen lg_step = gen_step, decor_gen dg_rnd, R6 tier6 gen_step: three inline copies of 14 B
+; before; rng_next stays inline: it is the per-tick hot path).
+; xs_core: HL = state -> HL = next state.  Clobbers: A.   ~70 T incl. call/ret (+17 vs inline)
+; gen_step: HL = next GEN_RNG (stored).    Clobbers: A, HL.   ~100 T
+;------------------------------------------------------------------------------
+xs_core:
+                ld   a, h
+                rra
+                ld   a, l
+                rra
+                xor  h
+                ld   h, a
+                ld   a, l
+                rra
+                ld   a, h
+                rra
+                xor  l
+                ld   l, a
+                xor  h
+                ld   h, a
+                ret
+gen_step:       ld   hl, (GEN_RNG)
+                call xs_core
+                ld   (GEN_RNG), hl
+                ret
+
 ;==============================================================================
 ; rng_mod — uniform 0..C-1 by mask-and-reject (no divide, no modulo bias).
 ; In : C = n (1..128).  Out: A = 0..n-1.  Clobbers: A, B, HL
