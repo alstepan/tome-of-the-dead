@@ -20,7 +20,7 @@ with their SOURCE (assets/gfx/icons/icons16.asm), inks with it_tab.
       -> Cure; Heal split 9 + 2 -> "9" (capped); none -> the Heal icon greyed, "0"
   Q2  quick FOOD (lowest type: Carrot x2 over Meat) / SCROLL (largest stack: Fear x2
       over Teleport) icon + own count; none -> Apple / Teleport greyed
-  Q3  the Mage's quick slots (one col right): Mana pick
+  Q3  the Mage's quick slots (the same cols since UB5): Mana pick
   I1  ISR over bank 6 (R6 follow-up (b)): icon blits in a loop with interrupts on;
       every ISR stop records the $C000 bank; bank 6 is interrupted, the ISR pages
       bank 3 for AY_PLAY and hands back exactly the shadow (port + MMU) each time;
@@ -50,7 +50,7 @@ PH = S["ICONS16_PH"]
 INK_PH = S["ICONS16_INK_PH"]
 GREY, HUD = S["ATTR_P_GREY"], S["ATTR_HUD"]
 FONT6 = open(os.path.join(HERE.parent, "assets", "gfx", "fonts", "font6x8.bin"), "rb").read()
-QCOL = {K_KNIGHT: {"F": 15, "P": 18, "S": 21}, K_WIZARD: {"F": 18, "P": 21, "S": 24}}
+QCOL = {K_KNIGHT: {"F": 18, "P": 21, "S": 24}, K_WIZARD: {"F": 18, "P": 21, "S": 24}}   # UB5: the same cols
 I = lambda n: S["IT_" + n]                     # noqa: E731,E741
 
 

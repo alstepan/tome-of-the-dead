@@ -146,8 +146,7 @@ item_icons:
                 cp   (hl)
                 jr   z, .np
                 ld   (hl), a
-                ld   a, (HERO_KIND)            ; count changed: redraw the potion slot
-                add  a, (ICON_SH & $FF) + QS_SLOT0 + QS_POTION     ; (IC1: was pot_slot)
+                ld   a, (ICON_SH & $FF) + QS_SLOT0 + QS_POTION     ; count changed: redraw the potion slot (UB5: one slot for both heroes)
                 ld   l, a
                 ld   h, ICON_SH >> 8
                 ld   (hl), IS_NONE
@@ -181,11 +180,11 @@ item_icons:
                 cp   ICON_SLOTS
                 jr   c, .l
                 ret
-.slow:          ld   a, (HERO_KIND)            ; IC1: a quick slot (qs_draw, ~15k T with
-                ld   c, a                      ; the far6 and the clear) is a big item:
-                ld   a, b                      ; like INFO / FOOD only in a tick's 1st
-                sub  QS_SLOT0                  ; frame (panel_tick's D5 rule: a 2nd-frame
-                sub  c                         ; tick draws small items only); else it
+.slow:          ld   a, b                      ; IC1: a quick slot (qs_draw, ~15k T with
+                sub  QS_SLOT0                  ; the far6 and the clear) is a big item:
+                                               ; like INFO / FOOD only in a tick's 1st
+                                               ; frame (panel_tick's D5 rule: a 2nd-frame
+                                               ; tick draws small items only); else it
                 cp   QS_COUNT                  ; stays undrawn (ICON_SH back) and pending
                 jr   nc, .now
                 ld   a, (ii_frame)

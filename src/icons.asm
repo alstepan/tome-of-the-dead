@@ -14,17 +14,17 @@
 ;==============================================================================
 
 slot_act_tab:
-                ; Warrior: Sword, Power Strike, Whirlwind, Daggers, Bow, food, potion, scroll, Bag, -
+                ; Warrior: Sword, Power Strike, Whirlwind, Daggers, Bow, -, food, potion, scroll, Bag
                 DB SA_MELEE, SA_ABIL + 0, SA_ABIL + 1, SA_DAGGERS, SA_BOW
-                DB SA_FOOD, SA_POTION, SA_SCROLL, SA_BAG, SA_EMPTY
+                DB SA_EMPTY, SA_FOOD, SA_POTION, SA_SCROLL, SA_BAG
                 ; Mage: Staff, Spark, Firebolt, Frost Shard, Drain Life, Lightning, food, potion, scroll, Bag
                 DB SA_MELEE, SA_ABIL + 0, SA_ABIL + 1, SA_ABIL + 2, SA_ABIL + 3
                 DB SA_ABIL + 4, SA_FOOD, SA_POTION, SA_SCROLL, SA_BAG
                 ASSERT K_KNIGHT == 0 && K_WIZARD == 1
-                ; IC1 (pot_sync's forced redraw): quick slot = QS_SLOT0 + HERO_KIND + QS_*
+                ; IC1 / UB5 (pot_sync's forced redraw): quick slot = QS_SLOT0 + QS_* (both heroes)
                 ASSERT {b slot_act_tab + QS_SLOT0 + QS_FOOD} == SA_FOOD && {b slot_act_tab + QS_SLOT0 + QS_SCROLL} == SA_SCROLL
-                ASSERT {b slot_act_tab + ICON_SLOTS + QS_SLOT0 + 1 + QS_FOOD} == SA_FOOD
-                ASSERT {b slot_act_tab + ICON_SLOTS + QS_SLOT0 + 1 + QS_SCROLL} == SA_SCROLL
+                ASSERT {b slot_act_tab + ICON_SLOTS + QS_SLOT0 + QS_FOOD} == SA_FOOD
+                ASSERT {b slot_act_tab + ICON_SLOTS + QS_SLOT0 + QS_SCROLL} == SA_SCROLL
 
 ;------------------------------------------------------------------------------
 ; slot_act — A = slot 0..9 -> A = its SA_* for HERO_KIND (D3-7 T0: bank 2,

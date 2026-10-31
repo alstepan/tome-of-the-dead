@@ -200,15 +200,15 @@ def run(p, check):
         p.settle(2)
         how = i % 4
         icon = how == 3
-        if icon:                                  # ICON MODE: A + SPACE, cursor to BAG (9)
+        if icon:                                  # ICON MODE: A + SPACE, cursor to BAG (key 0, UB5: slot 10 on both bars)
             p.hold("A", "SPACE")
             p.tick(2)
             p.release()
             p.tick(2)
-            p.tap("9")
+            p.tap("0")
             p.tick(2)
         elif how in (1, 2):
-            p.tap("9")
+            p.tap("0")
             p.tick(2)
         before, comp0 = p.frame(), p.composed_frame()
         t0, sel0, im0 = tc(), p.rb("SEL_SLOT"), p.rb("ICON_MODE")
@@ -250,8 +250,8 @@ def run(p, check):
 
     # ---- P5: same-tick ENTER + I, close keys never re-open; held hero ---------
     p.settle(3)
-    if p.rb("SEL_SLOT") != 8:
-        p.tap("9")
+    if p.rb("SEL_SLOT") != 9:
+        p.tap("0")
         p.tick(2)
     res = []
     for opener, closer in ((("I", "ENTER"), ("CAPS", "SPACE")), (("I",), ("I",)), (("ENTER",), ("ENTER", "I"))):

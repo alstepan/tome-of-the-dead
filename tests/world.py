@@ -677,7 +677,7 @@ def w15(p, check):
     panel = lambda f: split_frame(f)[1]
     # C3-8a: quaff = the potion slot selected (key 7: selects only), then a FIRE tap;
     # the turn starts in the tick that sees FIRE released (the "input tick").
-    p.select_slot(6)
+    p.select_slot(7)                              # UB5: the quick potion is slot 7 on both bars
     p.settle(4)                                   # the cursor / info line repaint is done
     before = panel(p.composed_frame())
     tc0 = p.rw("TURN_COUNTER")
@@ -699,7 +699,7 @@ def w15(p, check):
             seen["log"] = k
         if "hp" not in seen and hp_ok(comp):
             seen["hp"] = k
-        if "pot" not in seen and log_row(comp, 19, 20, 1) == text6("0", 0, 1):
+        if "pot" not in seen and log_row(comp, 19, 23, 1) == text6("0", 0, 1):
             seen["pot"] = k
         if "shown" not in seen and log_row(fr, 23) == want_log:
             seen["shown"] = k
@@ -1239,7 +1239,7 @@ def w22_23(p, check, which):
         check("W22 ICON MODE freezes play (hero flash timer held, no turn)",
               p.rb(S["P_ENTITIES"] + S["E_FLT"]) == 10 and tc() == t0, p.rb(S["P_ENTITIES"] + S["E_FLT"]))
         p.wb(S["P_ENTITIES"] + S["E_FLT"], 0)
-        # cursor: R at once, +10 ticks, then every 4 (1-2 unlearned skipped, 9 empty)
+        # cursor: R at once, +10 ticks, then every 4 (1-2 unlearned skipped, 5 = the blank gap, UB5)
         hold("P")
         seq = []
         for _ in range(30):
@@ -1248,13 +1248,13 @@ def w22_23(p, check, which):
         hold()
         p.tick(2)
         moves = [(i, v) for i, v in enumerate(seq) if i == 0 or v != seq[i - 1]]
-        want = [(0, 3), (10, 4), (14, 5), (18, 6), (22, 7), (26, 8)]
+        want = [(0, 3), (10, 4), (14, 6), (18, 7), (22, 8), (26, 9)]
         check("W22 ICON MODE R: cursor 0 -> 3 at once (1-2 unlearned skipped), +10 ticks, then every 4",
               moves == want and p.rb("ICON_MODE") == 1, moves)
         tap("P")
-        check("W22 cursor wraps 8 -> 0 (slot 9 empty skipped)", p.rb("SEL_SLOT") == 0, p.rb("SEL_SLOT"))
+        check("W22 cursor wraps 9 -> 0", p.rb("SEL_SLOT") == 0, p.rb("SEL_SLOT"))
         tap("O")
-        check("W22 cursor wraps 0 -> 8 leftwards", p.rb("SEL_SLOT") == 8, p.rb("SEL_SLOT"))
+        check("W22 cursor wraps 0 -> 9 leftwards", p.rb("SEL_SLOT") == 9, p.rb("SEL_SLOT"))
         tap("5")
         check("W22 ICON MODE: key 5 jumps the cursor to slot 4", p.rb("SEL_SLOT") == 4, p.rb("SEL_SLOT"))
         p.wb("LOG_QN", 0)
@@ -1289,7 +1289,7 @@ def w22_23(p, check, which):
         hold()
         p.tick(2)
         check("W22 FIRE held 4 ticks, then DOWN: no ICON MODE, no use", (m2, tc() - t0) == (0, 0), m2)
-        # use from the mode: potion (slot 7) drinks -> turn, back to play
+        # use from the mode: potion (slot 8, key 8) drinks -> turn, back to play
         hp_a = S["P_ENTITIES"] + S["E_HP"]
         p.wb(hp_a, 5)
         hold("A")
@@ -1298,7 +1298,7 @@ def w22_23(p, check, which):
         p.tick()
         hold()
         p.tick()
-        tap("7")
+        tap("8")
         tap("SPACE")
         p.until(lambda: p.idle(), 40)
         check("W22 ICON MODE: FIRE on the potion drinks it (1 turn) and returns to play",
@@ -1386,9 +1386,9 @@ def w22_23(p, check, which):
         tap("2")
         b = p.rb("SEL_SLOT")
         nl = shows("not_learned")
-        tap("0")
+        tap("6")
         c = p.rb("SEL_SLOT")
-        check("W22 shortcuts: 5 selects slot 4 (greyed bow), 2 = NOT LEARNED (stays), 0 = empty (stays)",
+        check("W22 shortcuts: 5 selects slot 4 (greyed bow), 2 = NOT LEARNED (stays), 6 = the blank gap (stays)",
               (a, b, nl, c) == (4, 4, True, 4), (a, b, nl, c))
         # --- review fixes (C3-2b) ---
         hp_a = S["P_ENTITIES"] + S["E_HP"]
@@ -1405,7 +1405,7 @@ def w22_23(p, check, which):
         p.wb(pot_a, 3)                                # potions to drink (a tap would)
         p.wmem(S["BAG"], [S["IT_P_HEAL"], 3, 0])      # 3E-T11: ... from the BAG
         p.wb(hp_a, 5)
-        p.wb("SEL_SLOT", 6)
+        p.wb("SEL_SLOT", 7)
         p.settle(2)
         t0, pr = tc(), p.rb("PAUSE_REQ")
         hold("CAPS", "SPACE")
@@ -1505,18 +1505,18 @@ def w22_23(p, check, which):
     p.until(lambda: p.idle(), 40)
     check("W23 FIRE on the sword facing the open door: closes it (1 turn; replaces key C)",
           (tc() - t0, p.rb(e_ab) & OPEN) == (1, 0), (tc() - t0, p.rb(e_ab)))
-    # quick potion (Warrior slot 7 = key 7)
+    # quick potion (slot 8 = key 8 on both bars, UB5)
     fresh(x=12)
     hpa = S["P_ENTITIES"] + S["E_HP"]
     p.wb(hpa, 5)
-    tap("7")
+    tap("8")
     sel = p.rb("SEL_SLOT")
     t0 = tc()
     tap("SPACE")
     p.until(lambda: p.idle(), 40)
     e = hero()
-    check("W23 key 7 + FIRE: quick potion drunk (1 turn, HP up, potion used)",
-          (sel, tc() - t0, e["HP"] > 5, e["POT"]) == (6, 1, True, 0), (sel, tc() - t0, e["HP"], e["POT"]))
+    check("W23 key 8 + FIRE: quick potion drunk (1 turn, HP up, potion used)",
+          (sel, tc() - t0, e["HP"] > 5, e["POT"]) == (7, 1, True, 0), (sel, tc() - t0, e["HP"], e["POT"]))
     t0 = tc()
     p.wb("LOG_QN", 0)
     tap("SPACE")
@@ -1524,7 +1524,7 @@ def w22_23(p, check, which):
     # greyed / missing refusals (3E-T12: the quick FOOD eats the kit Apple: empty the bag first)
     p.wmem(S["BAG"], [0] * 60)
     bad = []
-    for key, name in (("5", "no_bow"), ("6", "no_food"), ("8", "no_scroll")):
+    for key, name in (("5", "no_bow"), ("7", "no_food"), ("9", "no_scroll")):
         if not refusal(key, name):
             bad.append(name)
     p.wb("DAGGERS", 0)
@@ -1532,7 +1532,7 @@ def w22_23(p, check, which):
         bad.append("no_daggers")
     check("W23 refusals (bow, food, scroll, daggers at 0): their line, no turn", bad == [], bad)
     # ENTER uses the icon; I = the bag (3E-T2: the page opens; BREAK or I closes it, 3E-T13: FIRE selects; tests/page.py)
-    tap("9")
+    tap("0")                                      # UB5: the Bag is slot 10 (key 0) on both bars
     t0 = tc()
     n0 = p.rb("PAGE_N")
     tap("ENTER")
@@ -1579,15 +1579,15 @@ def w15_icons(p, check):
     a = {i: attrs(fr, i) for i in range(10)}
     sel = all(x & 0x38 == 0x08 for x in a[0])
     others_black = all(x & 0x38 == 0 for i in range(1, 10) for x in a[i])
-    hidden = cells(fr, 1) == cells(fr, 2) == cells(fr, 9)
-    grey = all(x == S["ATTR_P_GREY"] for i in (4, 7) for x in a[i])          # 3E-T12: food (5) has the Apple
-    normal = all(x != S["ATTR_P_GREY"] for i in (3, 5, 8) for x in a[i])
-    pot = (a[6][3], a[6][5], log_row(fr, 19, 20, 1) == text6("1", 0, 1))
+    hidden = cells(fr, 1) == cells(fr, 2) == cells(fr, 5)
+    grey = all(x == S["ATTR_P_GREY"] for i in (4, 8) for x in a[i])          # 3E-T12: food (6) has the Apple
+    normal = all(x != S["ATTR_P_GREY"] for i in (3, 6, 9) for x in a[i])
+    pot = (a[7][3], a[7][5], log_row(fr, 19, 23, 1) == text6("1", 0, 1))
     check("W15i Warrior start: slot 1 selected (PAPER blue), others black paper",
           sel and others_black, a[0])
-    check("W15i unlearned Power / Whirl = the empty outline (== spare slot 10)", hidden, "")
+    check("W15i unlearned Power / Whirl = the empty outline (== the blank gap, slot 6)", hidden, "")
     check("W15i greyed: bow (not found), quick scroll ($07); daggers (3), quick food (the kit Apple) and Bag normal",
-          grey and normal, (a[4], a[5], a[7], a[3], a[8]))
+          grey and normal, (a[4], a[6], a[8], a[3], a[9]))
     check("W15i quick potion: glyph ATTR_POTION, count '1' (ATTR_HUD)",
           pot == (S["ATTR_POTION"], S["ATTR_HUD"], True), pot)
     check("W15i level digit '1' at (31, 19), attr $46",
@@ -1605,11 +1605,11 @@ def w15_icons(p, check):
     p.wb("DAGGERS", 0)
     fr = settle_panel()
     check("W15i daggers at 0: selected + greyed = $0F", all(x == 0x0F for x in attrs(fr, 3)), attrs(fr, 3))
-    p.wb("SEL_SLOT", 6)
+    p.wb("SEL_SLOT", 7)
     fr = settle_panel()
     check("W15i potion line: 'POTION  X1  FIRE: DRINK' (count in the numbers field)",
           info(fr) == text6(line((0, "POTION"), (16, "X1"), (28, "FIRE: DRINK")), 0, 32), "")
-    p.wb("SEL_SLOT", 8)
+    p.wb("SEL_SLOT", 9)
     fr = settle_panel()
     check("W15i Bag line: 'BAG  LV 1  XP 0/40' (game.md §4.1)",
           info(fr) == text6(line((0, "BAG"), (16, "LV 1"), (28, "XP 0/40")), 0, 32), "")
@@ -1618,7 +1618,7 @@ def w15_icons(p, check):
     p.wb("LVL", 4)
     p.wb("SEL_SLOT", 3)
     settle_panel()
-    p.wb("SEL_SLOT", 8)
+    p.wb("SEL_SLOT", 9)
     fr = settle_panel()
     check("W15i Bag line follows LVL / XP; level digit follows LVL",
           info(fr) == text6(line((0, "BAG"), (16, "LV 4"), (28, "XP 295/340")), 0, 32)
@@ -2000,7 +2000,7 @@ def w25(p, check):
             check(f"W25 {src}: ICON MODE (DOWN+FIRE), R x4 to the potion (slots {seq}), FIRE drinks it: "
                   "HP up, one potion used, back in play, 1 turn",
                   (mode, seq, e4["HP"] > 5, e4["POT"], p.rb("ICON_MODE"), tc() - t0)
-                  == (1, [3, 4, 5, 6], True, pot0 - 1, 0, 1), (mode, seq, e4["HP"], e4["POT"], tc() - t0))
+                  == (1, [3, 4, 6, 7], True, pot0 - 1, 0, 1), (mode, seq, e4["HP"], e4["POT"], tc() - t0))
             # pause + resume
             t0 = tc()
             hold(src, "F")

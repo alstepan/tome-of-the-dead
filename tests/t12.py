@@ -53,9 +53,9 @@ NOWHERE = 7
 STUB = S["LOWRAM_END_3B"]
 RES = STUB + 200
 I = lambda n: S["IT_" + n]                     # noqa: E731,E741
-FOOD_SLOT = {0: 5, 1: 6}
-POT_SLOT = {0: 6, 1: 7}
-SCR_SLOT = {0: 7, 1: 8}
+FOOD_SLOT = {0: 6, 1: 6}
+POT_SLOT = {0: 7, 1: 7}
+SCR_SLOT = {0: 8, 1: 8}
 STF, ST1 = S["ST_FLAGS"], S["ST_T1"]
 LP_CMW = 33
 
