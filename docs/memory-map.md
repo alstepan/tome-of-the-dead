@@ -4334,10 +4334,10 @@ The Vampire bat form: next section.
 **A kind row, not a flag.** `K_VBAT` = **2** (the retired Rogue's hole; `defs.asm`): every per-kind table
 gets a real row, so ai_flyer / try_step / render / the hit path need nothing new. Rows: `kind_tab` the
 Bat's body (3x2) / `KF_FLYER|KF_BAT` / atk 1 eva 4 / 1d2 / period 1, the Vampire's `KT_HP` 14 (a banked
-bat's max hp in `lp_spawn`) and ink $05; `kx_tab` the Vampire's resistances / `IMM_UNDEAD` / KXP 9, a
+bat's max hp in `lp_spawn`) and **the Bat's ink $43** (VBAT-ART; was the Vampire's $05); `kx_tab` the Vampire's resistances / `IMM_UNDEAD` / KXP 9, a
 plain PHYS bite (no drain, no heal); `lp_wt` / `lp_wt6` `WT_K_VAMPIRE`; name `nm_vbat` "VAMPIRE"; `gu_tab`
-= (`KFID_BAT`, `VB_FCNT` 2: flapup / glide, MOT); `ksm_tab` = `ksm_vb` (seq_img.asm: 2-frame flap, no
-corpse: it fades out). A transform rewrites `E_KIND` (+ `E_Y` on a revert); hp, statuses, `E_GOLD`,
+= (`KFID_BAT`, `VB_FCNT` 2: flapup / glide, MOT); `ksm_tab` = `ksm_vb` (seq_img.asm: 2-frame flap; VBAT-ART: HURT = glide + the hit flash, DEAD =
+the Vampire's `small_corpse` on the floor — see "VBAT-ART" below). A transform rewrites `E_KIND` (+ `E_Y` on a revert); hp, statuses, `E_GOLD`,
 `E_RCD` stay. Never in `LP_KINDS` / spawned: only by transforming (a banked bat returns as one).
 
 | Symbol | Where | |
@@ -4420,3 +4420,20 @@ Measured candidates **not** taken (text DP re-parse -1 B; the 15..26-B small dup
 song-instrument sharing -100 B AY slot: tool + player format change). `POOL_FIXED`'s 3 x 576 straddle allowance is
 conservative (D6 Knight: need 32,288 vs measured pool top 30,825): an exact per-level bank-crossing simulation at build time
 could return ~1 KB of *accounted* slack (the assert, not real memory); not built.
+**VBAT-ART (`fix/vbat-art`, user playtest 2026-10-31: the bat form "FLASHED").** Root cause: no attr has
+bit 7 anywhere (scanned every tick of flee / close cycles on D3 / D6 / D8, both screens); the blinking was
+`vb_death`'s fade-out stand-in (`DEATHSEQ` q_x < 0: the rest frame drawn / `SF_HIDE` every 2 ticks, 3x —
+the only kind using it), plus the cyan Vampire ink on Bat frames. Fix: `KT_ATTR[K_VBAT]` = the Bat's `$43`
+(st_tint's CONFUSED twin rule as the Bat's); `vb_death` = `DEATHSEQ glide, small_corpse` (HURT 3 ticks =
+glide + `ATTR_HIT`, DEAD 12 = the Vampire's own `small_corpse`, `U_DEADR`, already pooled with the Vampire on
+every Vampire level: **0 pool**; `bat_hurt` / `bat_dead` would cost +448 B each on D6 / D8 and D8 must keep
+2,080 + 150 B for T11); **`vb_fall`** (anim.asm, called at a DEATH start in anim `.rs`, ~45 T other kinds):
+a dying `K_VBAT` drops its 2-row box onto its storey floor (`E_Y` := 9s + 6, `E_PY` := 8 `E_Y`) so the
+corpse lies on the floor. The transform tick's `R_VIS` hide (fix/vamp-corruption) stays.
+
+| Region (`-DDEBUG_KIT=0`) | before | after VBAT-ART | Δ |
+|---|---|---|---|
+| bank 2 `kind_tab` ALIGN pad | 38 | **3** | −35 (`vb_fall` 32, the `.rs` call 3; free to `seq_rows` 14 unchanged) |
+| R6 free | 348 | **354** | +6 (`ksm_vb` death 22 → 7 B raw, `sqm_zx0` packed) |
+| seq cache need | 253 | 253 | the K_VBAT block −15 B (not the worst level's) |
+| pool (every level) | — | 0 | D8 slack 1,785 on main, 2,297 with MEM-RECLAIM w3 (≥ 2,230 kept) |

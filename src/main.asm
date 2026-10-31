@@ -576,7 +576,8 @@ kind_tab:
                 ; depth scaling; die/bonus = the dmg column); 3F-T13: their BODY (BW/BH, defs.asm
                 ; BH_K_*) and base inks are the real 3F-A1 art's. Legacy ids 0..8 are unchanged.
                 ; 3F-T9: id 2 = K_VBAT, the Vampire's bat form: the Bat's body / flags / atk 1 eva 4 /
-                ; 1d2 bite, every turn; the Vampire's hp row 14 (a banked bat's max hp, lp_spawn) and ink.
+                ; 1d2 bite, every turn; the Vampire's hp row 14 (a banked bat's max hp, lp_spawn); VBAT-ART:
+                ; the Bat's ink $43 (user: the bat form looks like a Bat).
                 KROW   3,  3,  3,  3,  3,  3,  4,  3,  3,   4,  3,  3,  3,  3,  3,  4,  3,  3,   4,  4,  3,  3,  4,  3,  3,  3,  3,  3,  3,  3          ; KT_BW (cells; 3F-T13: Spider / Black Widow 32x16, Ogre 32x48)
                 KROW BH_K_KNIGHT, BH_K_WIZARD, BH_K_BAT, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME, BH_K_SPIDER, BH_K_VAMPIRE, BH_K_ORC, BH_K_ARCHER, BH_K_MUMMY, BH_K_NECRO, BH_K_OGRE, BH_K_DKNIGHT, BH_K_ARCHMAGE, BH_K_RAT, BH_K_RAT, BH_K_BAT, BH_K_GOBLIN, BH_K_SPIDER, BH_K_SKELETON, BH_K_SKELETON, BH_K_GHOST, BH_K_ORC, BH_K_ORC, BH_K_ARCHER, BH_K_NECRO ; KT_BH
                 KROW  24, 16, 14, 10,  6,  8,  3,  3,  6,   7, 14, 14,  8, 18, 12, 40, 50, 40,   5,  8,  5,  8, 10, 14, 18, 11, 18, 24, 10, 14          ; KT_HP
@@ -595,7 +596,7 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 ; + the Orc (Berserker, Bouncer), Necro (Bone Caller), Archer (Sniper) on the shared
                 ; climb pair; not Vampire / Archmage / DK / Ogre / Mummy; Mummy / Ogre / DK do not open doors
                 KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_FLYER|KF_BAT, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0, KF_CLIMBER, KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL  ; KT_FLAGS
-                KROW $47,$45,$05,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
+                KROW $47,$45,$43,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
                 ; 3F-T2: KT_SEQ (runtime: lowram.asm (sq_load / sq_fill) writes the kind's SEQ_ROWS row
                 ; low byte per level; 0 until the first game start). The old
                 ; KT_FID0 / KT_FCNT columns are the R6 generation-unit table gu_tab.
