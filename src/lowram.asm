@@ -761,6 +761,39 @@ tx_dec:
 ; (one page switch for the 3 pieces instead of a far3).
 ; Clobbers: A, BC, DE, HL (IX kept).   ~1.4k T
 ;------------------------------------------------------------------------------
+; vb_fall — VBAT-ART (anim .rs, a DEATH starting): a dying bat form (K_VBAT)
+; drops its 2-row box onto its storey's floor (box top 9s + 6, the floor row
+; 9s + 8) so its DEAD frame — the Vampire's own small_corpse (U_DEADR, pooled
+; with the Vampire: 0 pool) — lies on the floor, not in the air. The HURT 3
+; ticks (the glide frame) already show there: the bat falls, then lies.
+; Changing E_Y / E_PY at the sequence start is render-safe: start_seq sets this
+; tick's R_FID, the next render places it by the same KT_BH (bat 2 rows).
+; IX = the dying entity. Out: A = RC_DEATH. Keeps BC.  Clobbers: E, HL.
+; ~45 T other kinds, ~0.13k T a bat form (once a death). In low RAM (always
+; mapped): bank 2 has no room on main + MEM-RECLAIM w3 (31 B free there).
+;------------------------------------------------------------------------------
+vb_fall:
+                ld   a, (ix+E_KIND)
+                cp   K_VBAT
+                jr   nz, .q
+                ld   a, (ix+E_Y)
+                ld   e, a
+                add  a, (kind_tab + KT_MOD9) & $FF
+                ld   l, a
+                ld   h, (kind_tab + KT_MOD9) >> 8   ; (y <= 23: one page, main.asm ASSERT)
+                ld   a, e
+                sub  (hl)                      ; 9s
+                add  a, STOREY_ROWS - 1 - BH_K_BAT
+                ld   (ix+E_Y), a
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   (ix+E_PY), a
+.q:             ld   a, RC_DEATH
+                ret
+                ASSERT BH_K_BAT == 2 && STOREY_ROWS == 9
+
+;------------------------------------------------------------------------------
 show_impact_msg:
                 ld   a, (ix+E_MSG)
                 or   a
