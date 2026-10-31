@@ -179,14 +179,14 @@ class Run:
             self.z.cmd("run %d" % RUN_LIMIT)
             if self.pc() in want:
                 if "select_tick" in labels and self.S.get("GS_ANYKEY") and \
-                        self.rb("GAME_STATE") == self.S["GS_ANYKEY"]:
+                        self.rb("GAME_STATE") in (self.S["GS_ANYKEY"], self.S.get("GS_HELP1"), self.S.get("GS_HELP2")):
                     self.anykey(want)             # BOOT-ANYKEY: answer, run on to the menu
                     continue
                 return int(self.z.cmd("get-tstates-partial"))
         raise RuntimeError(f"never reached {labels}")
 
     def anykey(self, want):
-        """boot6_wait (GS_ANYKEY, probe = select_tick): released for 2 frames, ENTER for 2,
+        """instr_main's key waits (GS_ANYKEY, GS_HELP1 / 2; one call each, probe = select_tick): released for 2 frames, ENTER for 2,
         released for 2 (ENTER and '1' share a menu bit), each frame = one select_tick."""
         self.wb("INPUT_SRC", 1)
         for keys in ((), (), ("ENTER",), ("ENTER",), (), ()):

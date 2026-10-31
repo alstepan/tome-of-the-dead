@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """BOOT-ANYKEY: after boot the loading picture stays up (music playing) until a
-key; the menu then appears and the key is swallowed (boot6_wait, boot6.asm).
+key; then the two HOW TO PLAY pages (INSTR-BUILD, tests/instr.py covers them), then
+the menu, and the last key is swallowed (instr_ovl.asm, run by boot6_wait).
 The .sna does not hold the loading screen (the tape's SCREEN$ block is not in
 it), so the test pokes assets/gfx/loading/loading_l3c.scr into $4000 first.
    ZRCP_PORT=<port> python3 tests/anykey.py
@@ -10,7 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import game_lib  # noqa: E402
-from game_lib import Harness, Proto, S, EMU_ARGS, GS_SELECT, GS_ANYKEY, GS_PLAYING  # noqa: E402
+from game_lib import Harness, Proto, S, EMU_ARGS, GS_SELECT, GS_ANYKEY, GS_PLAYING, GS_HELP1, GS_HELP2  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCR = open(os.path.join(REPO, "assets/gfx/loading/loading_l3c.scr"), "rb").read()
@@ -65,10 +66,22 @@ def main():
             for b in scr[((y & 0xC0) << 5) | ((y & 7) << 8) | ((y & 0x38) << 2):][:32]), True)
         h.expect("8 title tune requested", p.rb("MUS_REQ"), 7)
         h.expect("9 title tune sounding (MUS_CUR)", p.rb("MUS_CUR"), 7)
-        # a '1' (START) as the dismissing key must not start the game
+        # the picture's key -> HOW TO PLAY page 1; ENTER -> page 2; a '1' (START) as
+        # the last key must not start the game
+        p.hold("1")
+        ok = p.until(lambda: p.rb("GAME_STATE") == GS_HELP1, 60)
+        h.expect("10 key -> HOW TO PLAY page 1 (GS_HELP1)", ok, True)
+        p.release()
+        p.tick(3)
+        p.hold("ENTER")
+        p.tick(2)
+        p.release()
+        ok = p.until(lambda: p.rb("GAME_STATE") == GS_HELP2, 60)
+        h.expect("10b page 1 key (released) -> page 2 (GS_HELP2)", ok, True)
+        p.tick(2)
         p.hold("1")
         ok = p.until(lambda: p.rb("GAME_STATE") == GS_SELECT, 60)
-        h.expect("10 key -> menu (GS_SELECT)", ok, True)
+        h.expect("10c page 2 key -> menu (GS_SELECT)", ok, True)
         p.tick(12)                                # '1' still down through the menu
         h.expect("11 key swallowed: '1' did not START", p.rb("GAME_STATE"), GS_SELECT)
         p.release()

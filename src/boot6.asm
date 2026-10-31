@@ -16,6 +16,7 @@
 ;   boot6_init   boot, under DI: IM 2 install + the power-on state
 ;   boot6_tiles  boot: common tiles + ornament, HOT_COPY image, planar FONT6,
 ;                then boot6_ft (MEM-FT: frame_tab -> the FRT rows)
+;   boot6_wait   boot: the key waits + HOW TO PLAY (INSTR-BUILD overlay, bank 0)
 ; Was: low RAM (isr_install, isr_image, boot's state init, keytab_defaults)
 ; and bank 7 (init_tiles, panel_boot) + bank-1 vdata (tiles_common, orn_glyphs,
 ; panel_hot_img, font6x8).
@@ -190,43 +191,18 @@ boot6_ft:
                 ASSERT FID_COUNT >= 1 && FID_COUNT <= 255
 
 ;------------------------------------------------------------------------------
-; boot6_wait — farb from boot after the boot pool (gen_idles): the loading
-; picture (L3c SCREEN$, still on the bank-5 screen: boot clears nothing) stays up
-; with the title tune playing until a key (user 2026-10-30). "PRESS ANY KEY" on
-; rows 22-23 (blank in the art, attrs 7 = white on black). A key counts only
-; after every key was released once (the ENTER of LOAD "" may still be down);
-; no timeout; Kempston is not read (input_tick, GAME_STATE != GS_PLAYING). The key
-; is swallowed without code: menu_run primes its edge detector from the matrix, so
-; a key still down gives no edge. menu_frame = the frame sync + the select_tick
-; probe + the seed mixing. GS_ANYKEY is test-observable (tests/game_lib.py).
-; Does not return: ends in enter_select (the stack is back at its base).
+; boot6_wait — farb from boot after boot6_tiles, BEFORE the boot pool: the
+; INSTR-BUILD overlay (instr_ovl.asm, unpacked from bank 0 into GEN_SCRATCH):
+; the loading picture (L3c SCREEN$, still on the bank-5 screen) + "PRESS ANY
+; KEY" with the title tune until a key (BOOT-ANYKEY, GS_ANYKEY), then the two
+; HOW TO PLAY pages (GS_HELP1 / GS_HELP2). Returns to boot (gen_idles, menu);
+; ovl_run hands bank 6 back for farb's return.   Clobbers: all but IX, IY.
 ;------------------------------------------------------------------------------
 boot6_wait:
-                ld   a, GS_ANYKEY
-                ld   (GAME_STATE), a
-                ld   hl, bw_text
-                ld   bc, BW_ROW << 8 | BW_COL
-                call print_str
-.rel:           call bw_down                   ; all released once
-                jr   nz, .rel
-.prs:           call bw_down
-                jr   z, .prs
-                ld   sp, WORKSTORE_TOP         ; drop farb's frame (jp from boot, no return:
-                jp   enter_select              ; bank 2 trampoline -> bank 3; saves boot 3 B)
-bw_down:        call menu_frame                ; one frame; then Z = no key down:
-                ld   hl, KBD_MATRIX            ; AND the 8 rows (a down key = a low bit)
-                ld   b, KBD_MATRIX_LEN
-                ld   a, $FF
-.l:             and  (hl)
-                inc  l
-                djnz .l
-                or   $E0                       ; bits 5-7 (EAR) are not keys
-                inc  a                         ; Z = all ones = nothing down
-                ret
-bw_text:        DB   "PRESS ANY KEY", 0
-BW_ROW          EQU 22
-BW_COL          EQU (32 - 13) / 2
-                ASSERT (KBD_MATRIX >> 8) == ((KBD_MATRIX + KBD_MATRIX_LEN - 1) >> 8)
+                ld   hl, instr_zx0
+                ld   c, BANK_INSTR
+                ld   de, INSTR_ORG
+                jp   ovl_run
 
 ;==============================================================================
 ; boot-only data (read in place by the two routines above)

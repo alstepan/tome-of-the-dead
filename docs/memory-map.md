@@ -138,6 +138,11 @@ load, and IM 2 installed.
 
 ### Boot block (3E-T1, memory levers (a) + (d))
 
+**INSTR-BUILD (2026-10-31): `boot6_wait` is now 11 B** (`jp ovl_run` of the HOW TO PLAY overlay, bank 0,
+see "INSTR-BUILD" at the end); `boot` calls it BEFORE `gen_idles` / `sel_frt_copy` and ends in `jp enter_select`
+(+3 B low RAM). The BOOT-ANYKEY flow below is unchanged in behaviour, its code moved into the overlay.
+Boot block `$C038..$C7FF` 1,992 B (was `$C005..`, 2,043 B: −51).
+
 **BOOT-ANYKEY (user 2026-10-30):** after `boot` the loading picture (L3c SCREEN$ on the bank-5
 screen) STAYS up, the title tune playing (`boot6_init` sets `MUS_REQ` = `MUS_LAMENT` before the first
 EI; `menu_run` asks for the same id = no restart), until a key; `boot6_init` no longer clears the
@@ -1441,7 +1446,7 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 
 | Address | Symbol | Meaning |
 |---------|--------|---------|
-| `$BF00` | `GAME_STATE` | `GS_BOOT 1`, `GS_PLAYING 2`, `GS_WIN 3`, `GS_DEAD 4`, **`GS_SELECT 5`**, **`GS_TRANSITION 6`**, **`GS_ANYKEY 8`** (BOOT-ANYKEY: `boot6_wait`, the loading picture waits for a key), **`GS_LEVEL 7`** (3F-T1: `level_enter` before the room map exists — card, `level_new`, the level pool; `gen_frame` allowed; `GS_TRANSITION` from the end of the pool) |
+| `$BF00` | `GAME_STATE` | `GS_BOOT 1`, `GS_PLAYING 2`, `GS_WIN 3`, `GS_DEAD 4`, **`GS_SELECT 5`**, **`GS_TRANSITION 6`**, **`GS_ANYKEY 8`** (BOOT-ANYKEY: the loading picture waits for a key; INSTR-BUILD: `instr_main`, run by `boot6_wait`), **`GS_HELP1 9`** / **`GS_HELP2 10`** (INSTR-BUILD: HOW TO PLAY page 1 / 2 up, boot only), **`GS_LEVEL 7`** (3F-T1: `level_enter` before the room map exists — card, `level_new`, the level pool; `gen_frame` allowed; `GS_TRANSITION` from the end of the pool) |
 | `$BF01` | `RNG_STATE` | xorshift16 (7,9,8); reseeded `$A55A` every new game |
 | `$BF03` | `TURN_COUNTER` | word; +1 at the end of every turn's animation |
 | `$BF05` / `$BF06` | `INPUT_SRC` / `KBD_MATRIX` | P3 injection contract, unchanged |
@@ -4677,3 +4682,39 @@ Build ASSERTs delta + `KXP_*` (combat_defs.asm, used by the `kx_tab` rows) == §
 | bank 7 free | 53 | **35** | -18 (`grate_open` +18) |
 | data7 / tileset block free to `$10000` | 123 | **115** | -8 (`bxp_d`) |
 | bank 3 / R6 / other | -- | unchanged | 0 |
+
+## INSTR-BUILD (`feat/instr-screen`; HOW TO PLAY, game.md §3.2.1 option A flow, pages: `docs/design/instructions_screen.md` / `.txt`)
+
+Once per power-on, before the first menu: the loading picture + `PRESS ANY KEY` (`GS_ANYKEY`), any key ->
+page 1 (`GS_HELP1`), a key (counted after all keys were released once; BREAK held at any frame of
+that press skips page 2) -> page 2 (`GS_HELP2`), any key -> the menu (key swallowed by `menu_run`'s priming).
+No timeout, Kempston not read, the title tune plays on.
+
+- **Code:** `src/instr_ovl.asm`, a boot-only overlay assembled at `INSTR_ORG` = `GEN_SCRATCH` `$6000`
+  (359 B), its page images (`tools/instr_pack.py` -> `build/text/instr_p{1,2}.inc`: text rows with space
+  runs, icon records `IK_*`, attr RLE; 772 / 682 B) unpacked by it to `INSTR_DATA` (= right after the code,
+  405 / 495 B left in the window). Rows go through `TX_DEC` to `print6` (x = 0); icons: R6 `ic_scr` (bank 6),
+  its own `in_vblk` for the vdata `icon_bag`, `icon_sword`, `label_key` (`copy_virt` -> `GEN_SRC`; not bank-3
+  `pblit` / `glyph8`: their SMC would make bank 3 != the .sna at the menu, game.py #50), `TILE_GLYPHS`
+  (lectern 15-18, grate 13). Attrs are written last (the page appears at once).
+- **Streams:** bank 0 `instr_p1_zx0` = `POOL_START` (`$C916`) .. `instr_zx0_end` (`$CE73`), 1,374 B: page 1,
+  page 2, then the code (last, so no overlay address depends on a packed size). On the text tape block
+  (`TEXT_TAPE_LEN` = `TEXT_LEN` + 1,374; no new tape block, `tape_tab` unchanged). Dead after the help:
+  `gen_idles` (now after it) writes the boot pool from `POOL_START` over them; `POOL_START`, `POOL_CAP`
+  unchanged (0 pool bytes).
+- **Spec = build:** `tools/instr_pack.py` holds the attr fills / icon placements (`PAGES`) and reads the rows
+  verbatim from `instructions_screen.txt`; `tools/gen_instr_mock.py` renders from the same table (renders
+  byte-identical to the approved PNGs). `tests/instr.py` compares both pages on the emulator screen with that
+  model byte for byte (no stored hash), plus held key / release / BREAK skip / swallow; `tests/tape_layout.py`
+  checks the bank-0 block = text + streams; harnesses answer `BOOT_WAITS` (8, 9, 10) with ENTER taps
+  (`game_lib.boot_key`, `sound.py`, `zx0_pool.py`, game.py #50).
+- **Cost:** page draw ~0.7M T each, boot only (no tick code touched).
+
+| Region (`-DDEBUG_KIT=0`) | main `35d37a0` | after | Δ |
+|---|---|---|---|
+| low RAM spare | 41 | **38** | −3 (`boot`: `call farb` + `jp enter_select`) |
+| boot block | 2,043 B (`$C005..`) | **1,992 B** (`$C038..`) | −51 (`boot6_wait` 11 B; key waits moved to the overlay) |
+| bank 0 text tape block | 2,326 | **3,700** | +1,374 (boot-only streams) |
+| tape total (.tap bytes, measured) | 80,704 | **82,025** | +1,321 B (+1,374 streams, −51 boot block, low-RAM +3) |
+| bank 1 / bank 3 / bank 7 / R6 / SRC6 / pool slack | 42 / 0 / 53 / 153 / 19 / 1,264 | unchanged | 0 |
+

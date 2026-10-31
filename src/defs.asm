@@ -163,6 +163,17 @@ PAGE_SCR_END    EQU PAGE_BUF + PAGE_BUF_LEN
 ITEMS_ORG       EQU GEN_SCRATCH
 BANK_OVL_ITEMS  EQU BANK_UI1       ; MEM-1: back in bank 1 (main.asm, after the it_text block)
 BANK_OVL_PAGE   EQU BANK_R6         ; R6: the page stream (page_ovl, menu1.asm)
+; INSTR-BUILD: the HOW TO PLAY screen (game.md §3.2.1 option A flow, docs/design/
+; instructions_screen.md / .txt pages): boot-only overlay instr_ovl.asm at INSTR_ORG,
+; its page images (tools/instr_pack.py) unpacked by it to INSTR_DATA (right after its
+; code, same window). All three ZX0 streams sit in bank 0 right after the text block
+; (POOL_START.., on the text tape block; the boot pool overwrites them after the help).
+INSTR_ORG       EQU GEN_SCRATCH
+BANK_INSTR      EQU BANK_TEXT
+IK_I16          EQU 1               ; page icon record kinds (instr_pack.py): R6 ic_scr, logical index
+IK_BAR          EQU 2               ; 24x16 bar icon, vdata label (bank-3 pblit)
+IK_GLY          EQU 3               ; 8x8 label, vdata label (bank-3 glyph8)
+IK_TILE         EQU 4               ; a common tile id (TILE_GLYPHS, 1 cell)
 ; (3E-T8's fx overlay is gone since 3E-T12: ZX0 packed its code only 3 %, so the
 ; effects are R6-resident code, src/fx6.asm, entered by far6.)
 B7_CODE         EQU $DB00           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), right
@@ -480,7 +491,9 @@ GS_SELECT       EQU $05
 GS_TRANSITION   EQU $06
 GS_LEVEL        EQU $07             ; 3F-T1: level_enter before the room map exists (card,
                                     ;   level_new, the level pool): gen_frame allowed (GEN_TRAP off)
-GS_ANYKEY       EQU $08             ; boot6_wait: the loading picture waits for a key (set at boot, replaced by menu_run)
+GS_ANYKEY       EQU $08             ; INSTR-BUILD: instr_main (was boot6_wait): the loading picture waits for a key
+GS_HELP1        EQU $09             ; INSTR-BUILD: HOW TO PLAY page 1 up (instr_main; boot only, before the menu)
+GS_HELP2        EQU $0A             ; INSTR-BUILD: HOW TO PLAY page 2 up (menu_run replaces it)
 
 ; TURN_PHASE
 TP_INPUT        EQU 0
