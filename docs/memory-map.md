@@ -4427,13 +4427,15 @@ the only kind using it), plus the cyan Vampire ink on Bat frames. Fix: `KT_ATTR[
 (st_tint's CONFUSED twin rule as the Bat's); `vb_death` = `DEATHSEQ glide, small_corpse` (HURT 3 ticks =
 glide + `ATTR_HIT`, DEAD 12 = the Vampire's own `small_corpse`, `U_DEADR`, already pooled with the Vampire on
 every Vampire level: **0 pool**; `bat_hurt` / `bat_dead` would cost +448 B each on D6 / D8 and D8 must keep
-2,080 + 150 B for T11); **`vb_fall`** (anim.asm, called at a DEATH start in anim `.rs`, ~45 T other kinds):
+2,080 + 150 B for T11); **`vb_fall`** (low RAM `lowram.asm`, before `impact_line`; called at a DEATH start in anim `.rs`, ~45 T
+other kinds; not bank 2: main + MEM-RECLAIM w3 leaves 31 B there):
 a dying `K_VBAT` drops its 2-row box onto its storey floor (`E_Y` := 9s + 6, `E_PY` := 8 `E_Y`) so the
 corpse lies on the floor. The transform tick's `R_VIS` hide (fix/vamp-corruption) stays.
 
 | Region (`-DDEBUG_KIT=0`) | before | after VBAT-ART | Δ |
 |---|---|---|---|
-| bank 2 `kind_tab` ALIGN pad | 38 | **3** | −35 (`vb_fall` 32, the `.rs` call 3; free to `seq_rows` 14 unchanged) |
-| R6 free | 348 | **354** | +6 (`ksm_vb` death 22 → 7 B raw, `sqm_zx0` packed) |
+| bank 2 free (`kind_tab` ALIGN pad + to `seq_rows`) | 38 + 14 | **35 + 14** | −3 (the `.rs` call; main + w3: 31 → 28) |
+| low RAM spare | 78 | **46** | −32 (`vb_fall`; the cold block starts `$6F94` → `$6F74`) |
+| R6 free | 348 | **354** | +6 (`ksm_vb` death 22 → 7 B raw, `sqm_zx0` packed; main + w3: 543 → 537, packing) |
 | seq cache need | 253 | 253 | the K_VBAT block −15 B (not the worst level's) |
 | pool (every level) | — | 0 | D8 slack 1,785 on main, 2,297 with MEM-RECLAIM w3 (≥ 2,230 kept) |
