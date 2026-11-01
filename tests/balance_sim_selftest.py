@@ -215,9 +215,60 @@ def test_monotone():
     check("monotone ogre phys (W depth) %.2f -> %.2f" % (d0, d1), d1 >= d0 - 0.05)
 
 
+def test_features(D):
+    """SIM-UPD: image-read constants, GEAR1 gate, GEAR2 q / v, GEAR3 Enchant, FEAR-CAST, the Tome ending."""
+    import items_model as IM
+    check("gold xp image", D.params["GOLD_XP"] == [20, 30, 45, 60, 65, 80, 90, 0], str(D.params["GOLD_XP"]))
+    check("tome consts", (D.params["TOME_HP"], D.params["TOME_AURA_R"]) == (5, 6))
+    check("archmage hp image", D.k[D.id("ARCHMAGE")]["hp"] == 60)
+    g = new_game(D, "M")
+    g.equip_consider("Chain Mail", 2)                     # banned type for the Mage: never worn
+    g.equip_consider("Helm", 0)
+    check("gear1 gate equip", g.h.gear["a"] == "Robe" and g.h.gear["h"] is None and not g.h.gear_ban)
+    g.h.gear["a"] = "Chain Mail"
+    g.recalc()
+    check("gear1 gate ban", g.h.gear_ban)
+    g = new_game(D, "W")
+    df0, mp0 = g.h.df, g.h.maxmp
+    g.equip_consider("Chain Mail", 2)
+    check("v = m + q on DEF", g.h.gear["a"] == "Chain Mail" and g.h.df == 2 + 2)
+    g.h.scr["ench"] = 3
+    g.use_enchant()
+    check("enchant spent", g.h.scr["ench"] == 0 and sum(g.h.m.values()) == 3 and max(g.h.m.values()) <= 3, str(g.h.m))
+    g = new_game(D, "M")
+    g.h.fearT = 3
+    g.D.params["FEAR_CAST"] = 1
+    g.h.ranks["Spark"] = 1
+    mp = g.h.mp
+    front = B.Mon(D, D.id("RAT"), 1)
+    front.x = 4
+    check("fear-cast no spell", g.mage_act([front], front, [front]) == "skip" and g.h.mp == mp)
+    g = new_game(D, "M")
+    g.h.fearT = 0
+    g.h.ranks["Spark"] = 1
+    check("no fear casts", g.mage_act([front], front, [front]) == "act" and g.h.mp < mp)
+    # the ending: a bare Warrior walks 6 aura cols and lands 5 melee hits (the last one ends the run): 6 + 5 - 1 = 10 aura turns
+    g = new_game(D, "W")
+    g.stats = {}
+    g.h.hp = g.h.maxhp = 99
+    g.h.daggers, g.h.arrows, g.h.bow = 0, 0, False
+    g.depth = 8
+    g.in_boss_dead = True
+    g.sanctum()
+    check("tome melee aura", g.stats.get("tome_aura") == 10, str(g.stats))
+    g = new_game(D, "W")
+    g.stats = {}
+    g.h.hp = g.h.maxhp = 99
+    g.h.bow, g.h.arrows = True, 5
+    g.depth = 8
+    g.in_boss_dead = True
+    g.sanctum()
+    check("tome arrows free", g.stats.get("tome_aura") == 0, str(g.stats))
+
+
 def main():
     D = B.Data()
-    for t in (test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
+    for t in (test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
         t(D)
     test_monotone()
     if FAILS:

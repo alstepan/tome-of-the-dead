@@ -10,7 +10,9 @@ WHAT IS MODELLED
     on-hit effect), ab_rank (7 abilities x 3 ranks), ab_ammo, xpn_tab.  Ranged-monster rows come from
     tools/ranged_model.ROWS, books from tests/book_model.book_read, item pools/counts/trap counts from
     tools/items_model constants, trickle constants from tools/respawn_model.  Every game.md rule that
-    is not in a table is a named constant in the RULES block below (with its section).
+    is not in a table is a named constant in the RULES block below (with its section).  Also from the repo: golden-boss XP
+    (src/data7.asm bxp_d + KXP_*), Archmage hp (kind_tab), TOME_MAX / TOME_AURA_R / TOME_REACH (.sym), item type ids, the per-depth
+    q table, class gear pools, the GEAR1 gate and the GEAR3 Enchant target pick (tools/items_model.py).
   * Any table cell / rule constant can be overridden (JSON file or --set), so sweeps need no code edits.
   * Level: 6..9 rooms (D8: + Sanctum), monsters split per sec 9.4.1 (quota, ROOM_MAX, BFS-distance
     weights are a random 1..4 stand-in), kinds from LP_KINDS, tier roll sec 9.6 (T2/T3_BASE, LVL delta),
@@ -26,14 +28,24 @@ WHAT IS MODELLED
     Frost freeze (self-freeze 1), Spark confusion, boss halving, immunity masks.
   * Statuses: HOLD (frozen/stun/sleep), confuse, fear, poison (cap 30, -1 HP/4 turns, never below 1),
     WEAK (Mummy curse), hunger stages (FED regen, HUNGRY atk-1, WEAK atk-2 eva-1), food/potion/scroll/gear
-    pickups per level (potions >=1 Heal, food 3-4, scrolls 1-2, gear 1-2, books, uniques), equip-best,
-    Enchant, class books with pity, level-ups and +atk/+eva steps, MP regen (period, MAXMP div 16).
-  * Tome (sec 1.3): 5 hits; aura 1 HP/turn within 6 cols; free ranged hits from >= 7 cols.
+    pickups per level (potions >=1 Heal, food 3-4, scrolls 1-2, gear 1-2, books, uniques), equip-best (GEAR1 gates; v = m + q),
+    per-instance q (GEAR2), random Enchant (GEAR3: worn weapon/armour/helmet m < +3, else bag), class books with pity, level-ups
+    and +atk/+eva steps, MP regen (period, MAXMP div 16).  FEAR-CAST (param.FEAR_CAST, default 1): a FEARed hero cannot cast
+    (Mage: no spell, no staff melee either - fear_chk gates every melee-reach action) and the Warrior cannot melee / Power Strike /
+    Whirlwind; heals, Cure, thrown daggers and arrows stay.  FEAR sources = the kx on-hit efx 4 kinds (table) + the Necromancer /
+    Bone Caller bolt rider (1/3, FEAR 3) + the Archmage Death Bolt (85/256, FEAR 3).
+  * TRAP2: the level's traps (items_model.TRAP_COUNT, type pool by depth) sit in distinct rooms (start / fight rooms / lair);
+    every crossing (entering the room, each retreat-return, TRAP_PATH_P per trap per transit) fires with TRAP_HIT_P; no trap is
+    ever removed.  ALARM waves only while the boss lives and LP_RESPAWNS < TRICKLE_MAX (a wave counts 1).
+  * D8 ending (game.md 1.3 / WIN2): Archmage dead -> seal breaks -> walk to the Sanctum -> Tome TOME_MAX hits (melee, Power Strike,
+    Whirlwind, spells, arrows, daggers: one hit per attack, resist ignored, never missed); untyped aura 1 HP per turn end while the
+    hero is within TOME_AURA_R cols (gap < 6), so attacks released from gap >= 6 (range >= 7) are free; Tome gone -> the exit gate
+    opens -> walk out -> win.  TOME_MAX / TOME_AURA_R / TOME_REACH come from the .sym.
 
 WHAT IS NOT MODELLED (-> emulator spot-check, sec 4.5)
   two storeys, ladders, pits, jumps, squeeze/wedges; door-closing tactics (flyers blocked); real AI
-  pathing; line-of-fire from real layouts; trap placement (traps = a flat per-level dart/stun/gas cost,
-  no pits/falls/teleport/alarm waves); banking bugs; input skill; RNG-stream interleave; monsters on both
+  pathing; line-of-fire from real layouts; trap placement (traps sit in rooms; TELEPORT is a flat delay, no pits/falls;
+  no jumping over a known plate); banking bugs; input skill; RNG-stream interleave; monsters on both
   sides of the hero (so Whirlwind rarely has 2 targets); weapon wear/notch/ACID; hunger faints; Rabbit Rat
   breeding is modelled, idle waves are not; floor items are collected on room clear (no item hunt);
   real level geometry / items_model.gen_level_items placement (counts and pools only, not cells).
@@ -42,9 +54,8 @@ WHAT IS NOT MODELLED (-> emulator spot-check, sec 4.5)
 ASSUMPTIONS THE SPEC LEFT OPEN (all overridable or documented; sensitivity-test them before trusting a delta)
   * Damage order is the BUILT one (combat3.asm deal_hit): roll -> R halves (min 1) / W doubles -> minus DEF (PHYS only,
     min 1).  Power Strike multiplies the roll first.  Whirlwind +dmg is added to the roll first.
-  * Golden-boss XP = game.md 4.1 (20/30/45/60/65/80/90; user 2026-10-31: the per-depth table WILL be built; the build today
-    still gives base-kind KXP: param.GOLD_XP=null reproduces that) and Archmage hp 60 (67 at D8, 9.9; the built kind_tab holds 40
-    until T11).  Both are defaults now.
+  * Golden-boss XP = bxp_d + KXP (game.md 4.1; param.GOLD_XP="image" default, null = base-kind KXP only, a list = explicit) and
+    Archmage hp from kind_tab (60, +7 depth scaling = 67 at D8; param.ARCHMAGE_HP overrides).
   * JUMP (param.JUMP=1, 2.4): the bot jumps AWAY from an adjacent melee front monster (+6 cols, 1 turn, 2 FOOD, never two turns
     in a row, not when Weak/held, needs 6 free cols behind from the 1-D BEHIND budget; cautious always, average 1 in 2, reckless
     never; the Mage needs MP for a spell, the Warrior >= 2 daggers/arrows).  NOT modelled: jumping over low bodies, over pits,
@@ -55,7 +66,7 @@ ASSUMPTIONS THE SPEC LEFT OPEN (all overridable or documented; sensitivity-test 
     melee (boss never follows; escorts within 2 cols follow and are fought); Mage casts the best dmg-per-MP spell (resist-aware),
     skips a bouncing spell that could come back unless HP >= 90 % and the self-hit cannot kill, skips piercing Lightning with a
     reflector in line; staff when MP < the cheapest rank-1 cost.  Warrior throws daggers/arrows at gap 3..range.
-  * Floor loot is collected room by room (no hunting); gear equip by a fixed score; unknown-BUC/cursed gear does not exist (3E rev 6).
+  * Floor loot is collected room by room (no hunting); gear equip by a fixed score (v = m + q), never a type the GEAR1 gate would ban; cursed gear does not exist (3E rev 6).
   * STALL = 220 turns in a fight or > 12 / 40 retreat cycles: the bot gives up, run counted as a loss.
 
 USAGE
@@ -89,7 +100,7 @@ PARAMS = {
     "FED_REGEN": 12,                    # 7: +1 HP per 12 turns when FOOD >= 50
     "HEAL_AMT": 10, "MANA_AMT": 8, "CURE_HP": 4,  # 8 consumables
     "PITY_N": 2,                        # 5
-    "ARCHMAGE_HP": 60,                  # 9.9 A1 (kind_tab now holds 60)
+    "ARCHMAGE_HP": None,                # null = the image's kind_tab row (60; 67 at D8 after the depth term)
     "T2_BASE": [24, 48, 64, 72, 80, 88, 96, 96], "T3_BASE": [0, 0, 0, 16, 24, 32, 40, 48],  # 9.6
     "TIER_SHIFT2": 16, "TIER_SHIFT3": 8, "TIER_DELTA_MAX": 2, "T2_CAP": 160, "T3_CAP": 80, "TIER3_MIN_DEPTH": 4,
     "ROOM_MAX": [2, 2, 3, 3, 3, 3, 3, 3],  # 9.4.1
@@ -108,12 +119,16 @@ PARAMS = {
     "NO_MIRROR_FEAR_P": 85 / 256,
     # XP of a golden boss: null = what the build does (base-kind KXP: combat3.asm reads kx_tab only);
     # game.md 4.1 says King 20 / Queen 30 / Lord 45 / Pharaoh 65 / H.Necro 80 -> set this list to test it
-    "GOLD_XP": [20, 30, 45, 60, 65, 80, 90, 0],   # user 2026-10-31: the table WILL be built (game.md 4.1); null = the old build
+    "GOLD_XP": "image",                 # "image" = bxp_d + KXP_<base> (src/data7.asm + .sym); null = base-kind KXP only; or a list
     "JUMP": 1,                          # 2.4: jump-then-cast / jump-to-range bot tactic (0 = off)
     "JUMP_COLS": 6, "JUMP_FOOD": 2,     # D = 6 cols, 1 turn + 2 FOOD, never two turns in a row
     "W_HP0": 24, "W_MP0": 6, "W_LVL_HP": 4, "W_LVL_MP": 1,     # 4 / 4.1 (hero_st_init / xp7 immediates = CODE)
     "M_HP0": 16, "M_MP0": 10, "M_LVL_HP": 3, "M_LVL_MP": 2,
     "PS_R": 0,                          # 1 = Power Strike ignores PHYS R (CODE flag; BAL-1d W1 option)
+    "TOME_HP": None, "TOME_AURA_R": None,   # null = .sym TOME_MAX (5) / TOME_AURA_R (6); aura 1 HP untyped per turn end, gap < R
+    "EXIT_LO": 10, "EXIT_HI": 30,       # WIN2: turns Sanctum -> exit gate (the exit col sits in the lair next to the Sanctum)
+    "FEAR_CAST": 1,                     # FEAR-CAST (planned rule): a FEARed hero cannot cast (Mage also not melee); 0 = old rule
+    "TRAP_PATH_P": 0.3,                 # TRAP2: P(a transit crosses a given known plate); fires with TRAP_HIT_P
     "W_START_POWER": 0,                 # Warrior starts with Power Strike at this rank after the D1 book (CODE)
 }
 POLICIES = {   # 4.3: rest_hp, rest_mp(Mage), heal, escape, kite_p, boss_retreat (fractions; None = never)
@@ -155,10 +170,16 @@ GEAR = {
     "Amulet of Plenty": dict(slot="c", food=0.5), "Scarab": dict(slot="c", regen=0.5, food=0.5),
     "Ring of the Grave": dict(slot="c", mp=2, res={DARK: 2}),
 }
-ITEM_GEAR = {"IT_W_LONG": "Long Sword", "IT_W_AXE": "War Axe", "IT_W_IRON": "Iron Staff", "IT_W_RUNE": "Rune Staff",
+ITEM_GEAR = {"IT_A_ROBE": "Robe", "IT_A_LEATHER": "Leather", "IT_W_LONG": "Long Sword", "IT_W_AXE": "War Axe", "IT_W_IRON": "Iron Staff", "IT_W_RUNE": "Rune Staff",
              "IT_A_CHAIN": "Chain Mail", "IT_A_PLATE": "Plate", "IT_H_HOOD": "Hood", "IT_H_HELM": "Helm",
              "IT_C_MIGHT": "Ring of Might", "IT_C_WARD": "Ring of Warding", "IT_C_FIRE": "Ring of Fire Ward",
              "IT_C_MANA": "Amulet of Mana", "IT_C_PLENTY": "Amulet of Plenty"}
+# gear name -> items_model type id name (GEAR1 gate / GEAR3 Enchant target use type ids); uniques included
+NAME_TYPE = dict((v, k) for k, v in ITEM_GEAR.items())
+NAME_TYPE.update({"Short Sword": "IT_W_SHORT", "Oak Staff": "IT_W_OAK", "Cleaver": "IT_W_CLEAVER", "Bone Staff": "IT_W_BONE",
+                  "Silk Cloak": "IT_A_SILK", "Gravecloak": "IT_A_GRAVE", "Goblin Helm": "IT_H_KING", "Mirror Helm": "IT_H_MIRROR",
+                  "Scarab": "IT_C_SCARAB", "Ring of the Grave": "IT_C_GRAVE"})
+BAG_GEAR_MAX = 8
 UNIQUE = {1: "Goblin Helm", 2: "Silk Cloak", 3: "Gravecloak", 4: ("Cleaver", "Bone Staff"), 5: "Scarab",
           6: "Ring of the Grave", 7: "Mirror Helm"}
 FOODS = [10, 15, 20, 30, 40]   # 7 / 8: Carrot Apple Pear Cheese Meat (uniform)
@@ -239,7 +260,6 @@ class Data:
             self.k[self.kid[kn.upper().replace(" ", "_")]].update(cells)
         # --- derived
         self.id = lambda n: self.kid[n]
-        self.k[self.kid["ARCHMAGE"]]["hp"] = self.params["ARCHMAGE_HP"] if "hp" not in ov.get("kind", {}).get("Archmage", {}) else self.k[self.kid["ARCHMAGE"]]["hp"]
         self.k[self.kid["ARCHMAGE"]]["df"] = 1
         import ranged_model as RM
         self.rows = RM.ROWS
@@ -247,8 +267,25 @@ class Data:
         self.gear = copy.deepcopy(GEAR)
         for gn, cells in ov.get("gear", {}).items():
             self.gear[gn].update(cells)
+        P = self.params
+        if P["ARCHMAGE_HP"] is not None and "hp" not in ov.get("kind", {}).get("Archmage", {}):
+            self.k[self.kid["ARCHMAGE"]]["hp"] = P["ARCHMAGE_HP"]
+        if P["GOLD_XP"] == "image":
+            P["GOLD_XP"] = self.image_gold_xp()
+        if P["TOME_HP"] is None:
+            P["TOME_HP"] = sym["TOME_MAX"]
+        if P["TOME_AURA_R"] is None:
+            P["TOME_AURA_R"] = sym["TOME_AURA_R"]
         self.tiers = {self.kid[b]: tuple(self.kid[t] if t else None for t in ts) for b, ts in TIERS.items()}
         self.tier_base = {t: b for b, ts in self.tiers.items() for t in ts if t is not None}
+
+    def image_gold_xp(self):
+        """Golden-boss XP by depth = bxp_d[depth - 1] (src/data7.asm, boss7 grate_open) + the base kind's KXP (kx_tab, in the
+        image); D4 Ogre / D7 Death Knight / D8 Archmage are not golden (delta 0) and do not use this list."""
+        txt = open(os.path.join(REPO, "src", "data7.asm")).read()
+        mm = re.search(r"^bxp_d:\s*DB\s+([0-9, ]+)", txt, re.M)
+        delta = [int(v) for v in mm.group(1).split(",")]
+        return [delta[d] + self.k[self.kid[BOSS_KIND[d + 1]]]["kxp"] for d in range(8)]
 
     def describe(self):
         return {"ab_rank": self.rank, "params": self.params}
@@ -362,7 +399,8 @@ class Game:
         h.food = self.P["FOOD_START"]
         h.gear = {"w": "Short Sword" if hero == "W" else "Oak Staff", "a": "Leather" if hero == "W" else "Robe",
                   "h": None, "c": None}
-        h.ench = 0
+        h.q = {"w": 0, "a": 0, "h": 0, "c": 0}     # GEAR2 per-instance offsets of the worn items (start kit q 0)
+        h.m = {"w": 0, "a": 0, "h": 0, "c": 0}     # GEAR3 Enchant steps per worn item
         h.ranks = {n: 0 for n in ABIL}
         h.dry = 0
         h.bagfood = [15]
@@ -400,6 +438,7 @@ class Game:
         self.visited_cleared = 0
         self.lp_lvl = 1
         self.boss_prep = False
+        self.traps, self.trap_known, self.slot_start, self.slot_lair = {}, set(), -1, -2
 
     # ---- hero derived stats ----------------------------------------------------------------
     def hp0(self):
@@ -409,19 +448,39 @@ class Game:
         P = self.P
         return (P["W_LVL_HP"], P["W_LVL_MP"]) if self.hero == "W" else (P["M_LVL_HP"], P["M_LVL_MP"])
 
+    def main_stat(self, g):
+        """The stat v = m + q adds to (gear_rules 2.4): weapon die bonus; DEF for armour / helmets with DEF; MP for Robe / Hood."""
+        d = self.G[g]
+        if d["slot"] == "w":
+            return "bonus"
+        if d["slot"] in ("a", "h"):
+            return "df" if "df" in d else "mp" if "mp" in d else None
+        return None            # charms are never numeric
+
     def gear_prop(self, key, default=0):
-        return sum(self.G[g].get(key, default) for g in self.h.gear.values() if g)
+        h = self.h
+        tot = 0
+        for sl, g in h.gear.items():
+            if g:
+                tot += self.G[g].get(key, default)
+                if key == self.main_stat(g):
+                    tot += h.q[sl] + h.m[sl]
+        return tot
 
     def recalc(self):
         h = self.h
         lv = h.lvl
         h.maxhp = self.P["HP_BONUS"] + self.hp0() + (lv - 1) * self.lvl_gain()[0] + getattr(h, "vigor", 0) * 3 + getattr(h, "powerhp", 0)
-        h.maxmp = h.base_mp + (lv - 1) * self.lvl_gain()[1] + self.gear_prop("mp") + getattr(h, "power", 0) * 3 + getattr(h, "vigor", 0)
+        h.maxmp = h.base_mp + (lv - 1) * self.lvl_gain()[1] + max(0, self.gear_prop("mp")) + getattr(h, "power", 0) * 3 + getattr(h, "vigor", 0)
         w = self.G[h.gear["w"]]
-        h.df = self.gear_prop("df")
+        h.df = max(0, self.gear_prop("df"))
+        # GEAR1 gate (gear_rules 1.2): worn Chain / Plate / Helm bans the Mage's spells, Robe / Hood the Warrior's power attacks
+        import items_model as IM
+        tid = lambda sl: IM.T[NAME_TYPE[h.gear[sl]]] if h.gear[sl] else 0
+        h.gear_ban = IM.gear_banned(IM.HERO_MAGE if self.hero == "M" else IM.HERO_WARRIOR, tid("a"), tid("h"))
         h.atk_base = h.atk0 + (1 if lv >= 4 else 0) + (1 if lv >= 8 else 0) + self.gear_prop("atk")   # weapon atk is in GEAR
         h.eva_base = h.eva0 + (1 if lv >= 6 else 0) + self.gear_prop("eva")
-        h.wdie, h.wbonus = w["die"], w["bonus"] + h.ench
+        h.wdie, h.wbonus = w["die"], w["bonus"] + h.q["w"] + h.m["w"]
         h.spellbonus = w.get("spell", 0)
         h.regen_mult = 1.0
         for g in h.gear.values():
@@ -606,8 +665,12 @@ class Game:
         pots = ["heal"] + [("heal", "mana", "cure")[rng.randrange(3)] for _ in range(npot - 1)]
         food = [FOODS[rng.randrange(5)] for _ in range(3 + rng.randrange(2))]
         scr = [("tele", "fear", "sleep", "ench")[rng.randrange(4)] for _ in range(1 + rng.randrange(2))]
-        gp = [ITEM_GEAR[next(n for n, v in IM.T.items() if v == t)] for t in IM.gear_pool(depth, "warrior" if self.hero == "W" else "mage")]
-        gear = [gp[rng.randrange(len(gp))] for _ in range(1 + rng.randrange(2))]
+        gp = [ITEM_GEAR[next(n for n, v in IM.T.items() if v == t)] for t in IM.gear_pool(depth, IM.HERO_WARRIOR if self.hero == "W" else IM.HERO_MAGE)]
+        gear = []
+        for _ in range(1 + rng.randrange(2)):
+            g = gp[rng.randrange(len(gp))]
+            w = rng.randrange(8)       # GEAR2 2.3: one rnd(8) per gear entry; charms draw but keep q 0
+            gear.append((g, IM.q_roll(w, depth) if self.G[g]["slot"] in ("w", "a", "h") else 0))
         books = 0
         if 1 <= depth <= 7:
             books = 1 + (1 if depth >= 4 and rng.randrange(2) == 0 else 0)
@@ -623,7 +686,56 @@ class Game:
             self.floor["books"] -= 1
             self.read_book()
         self.collect_frac = 0.0
-        self.ntrap = IM.TRAP_COUNT[depth]
+        self.setup_traps(depth)
+
+    # ---- traps (TRAP2: every plate re-arms and stays) ---------------------------------------------
+    def setup_traps(self, depth):
+        """items_model.TRAP_COUNT[depth] plates, type uniform from the depth pool, in distinct slots: 0..len(rooms)-1 = fight rooms,
+        len(rooms) = the start room (crossed when the hero leaves it), len(rooms)+1 = the lair (crossed on entry)."""
+        import items_model as IM
+        names = {IM.T["TT_DART"]: "dart", IM.T["TT_GAS"]: "gas", IM.T["TT_TELEPORT"]: "teleport", IM.T["TT_STUN"]: "stun",
+                 IM.T["TT_ALARM"]: "alarm"}
+        pool = [names[t] for t in IM.trap_pool(depth)]
+        n = len(self.rooms)
+        slots = list(range(n + 2))
+        self.rng.shuffle(slots)
+        self.traps = {sl: pool[self.rng.randrange(len(pool))] for sl in slots[:IM.TRAP_COUNT[depth]]}
+        self.trap_known = set()
+        self.slot_start, self.slot_lair = n, n + 1
+
+    def cross_trap(self, slot):
+        """The hero's move brings a plate under the body: fires with TRAP_HIT_P (a known plate fires again on every new crossing)."""
+        t = self.traps.get(slot)
+        if t is None or self.rr() >= self.P["TRAP_HIT_P"]:
+            return
+        h, rng = self.h, self.rng
+        self.trap_known.add(slot)
+        self.stat_add("trap_" + t)
+        if t == "dart":
+            self.dmg_hero(max(1, rng.randint(1, 4) + 1 - h.df), "trap", "trap")      # 1d4+1 PHYS, DEF applies
+            if not h.poison_imm:
+                h.poison = min(30, h.poison + 12)
+        elif t == "gas":
+            self.adv(4)                                                             # ASLEEP 4, no monster in the room yet
+        elif t == "teleport":
+            self.adv(rng.randint(5, 20))                                            # a flat walk back; never the lair while the boss lives
+        elif t == "stun":
+            self.dmg_hero(max(1, rng.randint(1, 3) - h.df), "trap", "trap")          # 1d3 PHYS + STUNNED 2-3
+            self.adv(rng.randint(2, 3))
+        elif t == "alarm":
+            if not self.in_boss_dead and self.resp_count < self.P["TRICKLE_MAX"]:
+                self.resp_count += 1                                                # a wave counts toward LP_RESPAWNS < 6
+                wave = []
+                for _ in range(1 + rng.getrandbits(1)):
+                    kind = self.roll_kind(self.D.id(rng.choice(ROSTER[self.depth])), self.depth, self.lp_lvl)
+                    wave.append(Mon(self.D, kind, self.depth, resp=True))
+                self.visit(wave, "room")
+
+    def cross_known(self):
+        """A transit passes some of the known plates again (TRAP_PATH_P each)."""
+        for sl in sorted(self.trap_known):
+            if self.rr() < self.P["TRAP_PATH_P"]:
+                self.cross_trap(sl)
 
     # ---- pickups ---------------------------------------------------------------------------
     def pick_some(self, frac):
@@ -650,8 +762,8 @@ class Game:
             h.bagfood.append(v)
         for s in take(f["scr"]):
             h.scr[s] += 1
-        for g in take(f["gear"]):
-            self.equip_consider(g)
+        for g, q in take(f["gear"]):
+            self.equip_consider(g, q)
         nb = f["books"]
         for _ in range(nb):
             if self.rr() < frac:
@@ -672,38 +784,69 @@ class Game:
         self.use_enchant()
 
     def use_enchant(self):
+        """GEAR3 (gear_rules 3.1): every Enchant scroll goes through items_model.enchant_target with the sim's own RNG as `step`:
+        a random worn weapon / armour / helmet with m < +3, else a bag item, else NOTHING HAPPENS (scroll kept here, so the loop ends)."""
+        import items_model as IM
         h = self.h
-        while h.scr["ench"] and h.ench < 3:
+        ist = lambda q, m: ((m & 7) << 5) | (q & 7)
+        step = lambda: self.rng.getrandbits(16)
+        while h.scr["ench"]:
+            slots = ("w", "a", "h")
+            worn = [(IM.T[NAME_TYPE[h.gear[sl]]], ist(h.q[sl], h.m[sl])) if h.gear[sl] else (0, 0) for sl in slots]
+            bag = [(IM.T[NAME_TYPE[n]], ist(q, m)) for n, q, m in h.bag_gear]
+            r = IM.enchant_target(worn, bag, step)
+            if r is None:
+                break
             h.scr["ench"] -= 1
-            h.ench += 1
-            self.recalc()
+            where, i, new = r
+            if where == "worn":
+                h.m[slots[i]] = IM.istate_m(new)
+                self.recalc()
+            else:
+                n, q, _ = h.bag_gear[i]
+                h.bag_gear[i] = (n, q, IM.istate_m(new))
+            self.stat_add("enchants")
 
-    def equip_consider(self, g):
+    def equip_consider(self, g, q=0):
         h = self.h
+        import items_model as IM
         gd = self.G[g]
         slot = gd["slot"]
         cur = h.gear.get(slot)
-        if self.gear_score(g) > (self.gear_score(cur) if cur else -1):
+        banned = IM.type_banned_for(IM.HERO_MAGE if self.hero == "M" else IM.HERO_WARRIOR, IM.T[NAME_TYPE[g]])
+        if not banned and self.gear_score(g, q, 0) > (self.gear_score(cur, h.q[slot], h.m[slot]) if cur else -1):
+            if cur:
+                self.to_bag(cur, h.q[slot], h.m[slot])
             h.gear[slot] = g
+            h.q[slot], h.m[slot] = q, 0
             self.recalc()
+        else:
+            self.to_bag(g, q, 0)
 
-    def gear_score(self, g):
+    def to_bag(self, g, q, m):
+        if self.G[g]["slot"] in ("w", "a", "h") and len(self.h.bag_gear) < BAG_GEAR_MAX:
+            self.h.bag_gear.append((g, q, m))
+
+    def gear_score(self, g, q=0, m=0):
         if not g:
             return -1
         d = self.G[g]
+        v = (q + m) if d["slot"] in ("w", "a", "h") else 0     # v = m + q on the main stat (gear_rules 2.4)
         if d["slot"] == "w":
-            avg = (d["die"] + 1) / 2 + d["bonus"] + (d.get("atk", 0) * 0.5)
+            avg = (d["die"] + 1) / 2 + d["bonus"] + v + (d.get("atk", 0) * 0.5)
             if self.hero == "M":
                 avg += d.get("spell", 0) * 2.5
             return avg
-        s = d.get("df", 0) * 3 + d.get("eva", 0) * 2 + d.get("poison", 0) * 1
+        df = d.get("df", 0) + (v if "df" in d else 0)
+        mp = d.get("mp", 0) + (v if "df" not in d and "mp" in d else 0)
+        s = df * 3 + d.get("eva", 0) * 2 + d.get("poison", 0) * 1
         if self.hero == "M":
-            s += d.get("mp", 0) * 1.5 + (4 if d.get("regen") == 0.5 else 0) - (6 if d.get("regen") == 2.0 else 0)
+            s += mp * 1.5 + (4 if d.get("regen") == 0.5 else 0) - (6 if d.get("regen") == 2.0 else 0)
             s += d.get("atk", 0) * 0.2
             if g == "Ring of the Grave":
                 s += 3
         else:
-            s += d.get("atk", 0) * 3 + d.get("mp", 0) * 0.3 - (1 if d.get("regen") == 2.0 else 0) + (3 if d.get("regen") == 0.5 else 0)
+            s += d.get("atk", 0) * 3 + mp * 0.3 - (1 if d.get("regen") == 2.0 else 0) + (3 if d.get("regen") == 0.5 else 0)
         if d.get("food"):
             s += 2
         if d.get("mirror"):
@@ -825,25 +968,15 @@ class Game:
 
     def run_level(self, depth):
         P, h, rng = self.P, self.h, self.rng
-        # traps: flat expected cost
-        for _ in range(self.ntrap):
-            if self.rr() < P["TRAP_HIT_P"]:
-                kind = rng.choice(("dart", "gas", "stun", "dart"))
-                if kind == "dart":
-                    self.dmg_hero(rng.randint(1, 4), "trap", "trap")
-                    if not h.poison_imm:
-                        h.poison = min(30, h.poison + 12)
-                elif kind == "gas":
-                    self.adv(4)
-                else:
-                    self.adv(2)
+        self.cross_trap(self.slot_start)
         order = list(range(len(self.rooms)))
         rng.shuffle(order)
         n = len(order)
         for i, ri in enumerate(order):
             self.transit()
             self.pre_room_rest()
-            self.visit(self.rooms[ri], "room")
+            self.cross_trap(ri)
+            self.visit(self.rooms[ri], "room", slot=ri)
             self.visited_cleared += 1
             self.pick_some(1.0 / (n - i + 0.0) * 1.0 if i < n else 1.0)
             self.meet_respawns()
@@ -852,6 +985,7 @@ class Game:
         self.transit()
         self.meet_respawns()
         self.pre_room_rest(lair=True)
+        self.cross_trap(self.slot_lair)
         self.lair_fight(depth)
         self.in_boss_dead = True
         # boss unique
@@ -859,13 +993,14 @@ class Game:
         if u:
             if isinstance(u, tuple):
                 u = u[0] if self.hero == "W" else u[1]
-            self.equip_consider(u)
+            self.equip_consider(u, 0)
         if depth == 8:
             self.sanctum()
 
     def transit(self):
         self.adv(self.rng.randint(self.P["TRANSIT_LO"], self.P["TRANSIT_HI"]))
         self.eat_if_needed()
+        self.cross_known()
 
     def meet_respawns(self):
         keep = []
@@ -892,7 +1027,7 @@ class Game:
         elif self.hero == "M" and h.mp < h.maxmp:
             pass
 
-    def visit(self, mons, kind):
+    def visit(self, mons, kind, slot=None):
         """Fight a room's monsters until all dead; the bot may retreat (non-boss: stall/escape)."""
         tries = 0
         while mons:
@@ -903,6 +1038,7 @@ class Game:
             # escaped / retreated: rest and come back (monsters persisted with exact hp)
             self.stat_add("retreats")
             self.rest(1.0, 1.0)
+            self.cross_trap(slot)          # the way back into the room crosses the plate again
             if tries > 12:
                 raise Stall()
 
@@ -917,28 +1053,68 @@ class Game:
             self.boss_prep = True
             self.rest(1.0, 1.0)
             self.boss_prep = False
+            self.cross_trap(self.slot_lair)
             tries += 1
             if tries > 40:
                 raise Stall()
 
     def sanctum(self):
-        h = self.h
-        # Tome: 5 hits, aura 1 HP/turn within 6 cols.  Ranged hits from >= 7 cols are free.
-        hits = 0
-        if self.hero == "M":
-            cost = [(self.D.rank[s][0]["mp"], s) for s in SPELLS if h.ranks[s] and self.D.rank[s][0]["range"] >= 7]
-            if cost:
-                c = min(cost)[0]
-                hits = min(5, h.mp // max(1, c))
-        elif h.bow:
-            hits = min(5, h.arrows)
-        aura_turns = 6 + (5 - hits)
-        # the bot rests to full first (no timer in the Sanctum)
-        self.rest(1.0, 1.0)
-        for _ in range(aura_turns):
+        """D8 ending (WIN2): the Archmage is dead -> the seal broke -> walk to the Sanctum -> destroy the Tome (TOME_HP hits, one per
+        attack released inside its reach / range, never missed, resist ignored) -> the exit gate opens -> leave through it -> win.
+        Aura: 1 HP untyped at every turn end while gap < TOME_AURA_R.  The turn of the last hit ends the run before its aura tick."""
+        D, P, h, pol = self.D, self.P, self.h, self.pol
+        self.transit()
+        self.meet_respawns()
+        self.boss_prep = True
+        self.rest(1.0, 1.0)             # no timer in the Sanctum; the bot arrives full and un-feared
+        self.boss_prep = False
+        h.fearT = h.confT = 0
+        T, R = P["TOME_HP"], P["TOME_AURA_R"]
+        nA = nB = 0                     # attacks from gap R (outside the aura: range > R) / from gap range-1 (< R)
+        gB = 0
+        if self.hero == "M" and not h.gear_ban:
+            opts = [(D.rank[s][r]["range"], D.rank[s][r]["mp"]) for s in SPELLS for r in range(h.ranks[s])]
+            a = [c for rg, c in opts if rg > R]
+            if a and h.mp >= min(a):
+                nA = min(T, h.mp // min(a))
+                left = h.mp - nA * min(a)
+                b = [(rg, c) for rg, c in opts if 2 <= rg <= R and c <= left]
+                if b and nA < T:
+                    gB, cB = max(b)[0] - 1, min(c for rg, c in b if rg == max(b)[0])
+                    nB = min(T - nA, left // cB)
+            else:
+                b = [(rg, c) for rg, c in opts if 2 <= rg <= R and c <= h.mp]
+                if b:
+                    gB, cB = max(b)[0] - 1, min(c for rg, c in b if rg == max(b)[0])
+                    nB = min(T, h.mp // cB)
+        elif self.hero == "W":
+            if h.bow and D.ammo[1]["range"] > R:
+                nA = min(T, h.arrows)
+            if nA < T and h.daggers and 2 <= D.ammo[0]["range"] <= R:
+                gB = D.ammo[0]["range"] - 1
+                nB = min(T - nA, h.daggers)
+            elif nA < T and h.daggers and D.ammo[0]["range"] > R:
+                nA = min(T, nA + h.daggers)
+        nM = T - nA - nB                # melee / Power Strike / Whirlwind / staff on the lectern: 1 hit each, gap 0
+        g_final = 0 if nM else (gB if nB else R)
+        approach = max(0, R - g_final)
+        shots = nB + nM
+        aura_turns = approach + shots - 1 if shots else 0
+        self.stat_add("tome_aura", aura_turns)
+        n = aura_turns
+        while n > 0:
+            n -= 1
             self.adv(1)
             self.dmg_hero(1, "Tome aura", "aura")
-        self.stat_add("tome_aura", aura_turns)
+            if h.hp / h.maxhp < pol["heal"] and h.heal:      # a potion costs a turn inside the aura
+                h.heal -= 1
+                h.hp = min(h.maxhp, h.hp + P["HEAL_AMT"])
+                n += 1
+        # the gate opens: the way out of the lair (the exit col sits there)
+        self.adv(self.rng.randint(P["EXIT_LO"], P["EXIT_HI"]))
+        self.eat_if_needed()
+        self.cross_known()
+        self.meet_respawns()
 
     # ---- the fight ---------------------------------------------------------------------------
     def setup_geometry(self, mons, boss_room):
@@ -1296,7 +1472,8 @@ class Game:
         if boss_room and pol["retreat"] is not None and pc < pol["retreat"] and self.boss.hp > 0 and self.boss in alive:
             if self.boss.x >= 2 or True:
                 return self.do_retreat(alive, mons)
-        if h.fearT and h.cure and front is not None and front.x <= 1 and self.hero == "W":
+        cure_gap = 1 if self.hero == "W" else 8 if P["FEAR_CAST"] else -1     # Warrior: monster at melee reach; Mage (FEAR-CAST): in spell range
+        if h.fearT and h.cure and front is not None and front.x <= cure_gap:
             h.cure -= 1
             h.fearT = 0
             h.weak = 0
@@ -1381,9 +1558,9 @@ class Game:
         # melee reach
         adj = [m for m in alive if m.x <= 1 and self.in_line(m)]
         r = h.ranks
-        if r["Whirl"] and len(adj) >= 2 and h.mp >= D.rank["Whirl"][0]["mp"]:
+        if r["Whirl"] and len(adj) >= 2 and h.mp >= D.rank["Whirl"][0]["mp"] and not h.gear_ban:
             return self.whirlwind(adj)
-        if r["Power"] and gap <= 1 and (front.hp > 2 * ((h.wdie + 1) / 2 + h.wbonus)) and h.mp >= D.rank["Power"][0]["mp"] and not front.k["res"][PHYS] == 2:
+        if r["Power"] and not h.gear_ban and gap <= 1 and (front.hp > 2 * ((h.wdie + 1) / 2 + h.wbonus)) and h.mp >= D.rank["Power"][0]["mp"] and not front.k["res"][PHYS] == 2:
             return self.power_strike(front)
         return self.melee(front)
 
@@ -1515,10 +1692,12 @@ class Game:
             for m in alive:
                 m.x += 1
             return "skip"
+        if P["FEAR_CAST"] and h.fearT:
+            return "skip"      # FEAR-CAST: no spell, and fear_chk also stops the staff melee (waits it out; heals / Cure ran above)
         best = None
         for s in SPELLS:
             rk = h.ranks[s]
-            if not rk:
+            if not rk or h.gear_ban:
                 continue
             costs = [D.rank[s][i]["mp"] for i in range(3)]
             if h.mp < costs[0]:
@@ -1851,7 +2030,7 @@ def main(argv=None):
     ap.add_argument("--policy", default="all", choices=list(POLICIES) + ["all"])
     ap.add_argument("--runs", type=int, default=10000)
     ap.add_argument("--seed", default="1")
-    ap.add_argument("--overrides", help="JSON override file (see tools/balance_optionA.json)")
+    ap.add_argument("--overrides", action="append", help="JSON override file (see tools/balance_optionA.json); repeatable, merged in order")
     ap.add_argument("--set", action="append", dest="sets", help="key=val override (repeatable)")
     ap.add_argument("--compare", help="override JSON: run baseline AND the override, print both")
     ap.add_argument("--json", help="write results JSON here")
@@ -1861,8 +2040,8 @@ def main(argv=None):
     heroes = ["W", "M"] if a.hero == "both" else [a.hero]
     pols = list(POLICIES) if a.policy == "all" else [a.policy]
     ov = {}
-    if a.overrides:
-        ov = merge(ov, json.load(open(a.overrides)))
+    for f in a.overrides or []:
+        ov = merge(ov, json.load(open(f)))
     if a.sets:
         ov = merge(ov, parse_set(a.sets))
     configs = [("baseline" if not ov and not a.compare else "run", ov)]
