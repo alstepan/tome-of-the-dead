@@ -6,6 +6,10 @@ flow, pages per docs/design/instructions_screen.md / .txt).
   I2  the page-1 key still held: no page 2 until it is released (no timeout either)
   I3  page 2 (GS_HELP2) == page(2) byte for byte
   I9  page 3 (GS_HELP3, TREASURES) == page(3) byte for byte (differing rows reported)
+  I9a icon cells: 13 records, 32 bitmap bytes + 4 attrs each, text attr beside them (cells 2 / 18)
+  I9b empty half (rows 17-18 cells 16-31; rows 14, 18 outside the icons)
+  I9c full-width rows 03 / 05 (cells 15, 16, 31)
+  I9d plain rows 01 / 11 / 19 zero, 20-22 attr $05, 23 == the footer model
   I10 the page-2 key held: still page 2 until it is released, then page 3
   I4  page 3's key ('1') -> menu, swallowed (no START), menu answers a real press
   I5  BREAK on page 1 skips pages 2 and 3 -> menu (GS_SELECT), never GS_HELP2 / 3
@@ -70,6 +74,45 @@ def bad_rows(a, b):
     return sorted(r)
 
 
+def cell(scr, r, c):
+    """The 8 bitmap bytes of cell (r, c)."""
+    return bytes(scr[((r & 24) << 8) | ((r & 7) << 5) | (y << 8) | c] for y in range(8))
+
+
+def at(scr, r, c):
+    return scr[6144 + r * 32 + c]
+
+
+def icons_ok(h, scr):
+    """I9a-d on a page-3 screen dump (decoded icons from the render model's source tables)."""
+    import instr_pack
+    bad, rowat = [], {3: 0x47, 4: 0x47, 5: 0x45, 6: 0x45, 7: 0x47, 8: 0x47, 9: 0x45, 10: 0x45,
+                      13: 0x47, 14: 0x47, 15: 0x45, 16: 0x45, 17: 0x47, 18: 0x47}
+    for ic in instr_pack.PAGES[3]["icons"]:
+        _, name, r, c, a = ic
+        bm = gen_instr_mock.icon16(name)
+        for i, (dr, dc) in enumerate(((0, 0), (0, 1), (1, 0), (1, 1))):
+            want = bytes(sum(int(bm[dr * 8 + y, dc * 8 + x]) << (7 - x) for x in range(8)) for y in range(8))
+            if cell(scr, r + dr, c + dc) != want or at(scr, r + dr, c + dc) != a:
+                bad.append((name, i))
+        for dr in (0, 1):
+            for cc in (c + 2,):
+                if at(scr, r + dr, cc) != rowat[r + dr]:
+                    bad.append((name, "textattr", r + dr, cc))
+    h.expect("I9a 13 icon records: bitmap + attr + beside-text attr (bad %s)" % bad[:6], len(bad), 0)
+    z = [(r, c) for r in (17, 18) for c in range(16, 32) if any(cell(scr, r, c)) or at(scr, r, c) != 0x47]
+    z += [(14, c) for c in range(32) if not (c < 2 or 16 <= c < 18) and any(cell(scr, 14, c))]
+    z += [(18, c) for c in range(2, 32) if any(cell(scr, 18, c))]
+    h.expect("I9b empty half / icon-only rows clean (bad %s)" % z[:6], len(z), 0)
+    c3 = [any(cell(scr, 3, c)) for c in (16, 31)] + [any(cell(scr, 5, c)) for c in (15, 16, 31)]
+    h.expect("I9c rows 03 (16,31) / 05 (15,16,31) filled %s" % c3, int(all(c3)), 1)
+    pl = [(r, c) for r in (1, 11, 19) for c in range(32) if any(cell(scr, r, c)) or at(scr, r, c)]
+    pl += [(r, c) for r in (20, 21, 22) for c in range(32) if at(scr, r, c) != 0x05]
+    m = model(3)
+    pl += [(23, c) for c in range(32) if cell(scr, 23, c) != cell(m, 23, c)]
+    h.expect("I9d plain rows (bad %s)" % pl[:6], len(pl), 0)
+
+
 def to_page1(p):
     p.load()
     p.wb("INPUT_SRC", 1)
@@ -109,10 +152,12 @@ def main():
         ok = p.until(lambda: p.rb("GAME_STATE") == GS_HELP3, 60)
         h.expect("I10b released -> page 3", ok, True)
         p.tick(25)
-        h.expect("I9a no timeout on page 3", p.rb("GAME_STATE"), GS_HELP3)
+        h.expect("I9t no timeout on page 3", p.rb("GAME_STATE"), GS_HELP3)
         n, cells = diffs(screen(p), model(3))
         h.expect("I9 page 3 == approved render (%d bytes differ, cells %s, rows %s)" % (
                  n, cells, bad_rows(screen(p), model(3))), n, 0)
+        scr = screen(p)
+        icons_ok(h, scr)
         p.hold("1")
         ok = p.until(lambda: p.rb("GAME_STATE") == GS_SELECT, 60)
         h.expect("I4 page 3 key -> menu", ok, True)

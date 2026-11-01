@@ -4706,6 +4706,10 @@ No timeout, Kempston not read, the title tune plays on.
   the pool; ASSERT `instr_zx0_end <= tap_loader` kept). Text tape block 4,486 B (2,378 text + 246 reserve + 1,862).
   Tape 82,696 -> **83,190 B (+494)**. Resident bytes 0: low RAM / boot block / R6 / bank 1 / 3 / 7 / pool slack
   unchanged (bank 7 free 5+, R6 free 87, bank 3 free 40, low RAM spare 8, bank 1 free 44).
+- **INSTR-P3-ICONS (`feat/instr-p3-icons`, layout B, `docs/design/instructions_treasures.md`):** page 3 shows 13 i16
+  item icons (two columns) instead of names; 0 new code bytes (the page-2 `.i16` / `ic_scr` path). Page 3 raw 741 ->
+  **702 B** (window 460 left; code 374 unchanged); streams 1,862 -> **1,822 B** (`instr_zx0_end` **`$D15E`**).
+  Tape 83,315 (7f90472) -> **83,275 B (-40)**. Resident bytes 0 (R6 free 24 unchanged).
 - **Streams (pre-P3 figures, 2 pages):** bank 0 `instr_p1_zx0` = `POOL_START` (`$C916`; **M0: `$C960`**, the fixed reserve) .. `instr_zx0_end` (`$CE6D`; M0: `$CEB8`), 1,368 B: page 1,
   page 2, then the code (last, so no overlay address depends on a packed size). On the text tape block
   (`TEXT_TAPE_LEN` = `TEXT_LEN` + 1,368; no new tape block, `tape_tab` unchanged). Dead after the help:
