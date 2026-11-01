@@ -87,9 +87,9 @@ spell_fire:
                 ld   a, (pf_lost)              ; "THE BOLT HITS YOU" (the burst's own line: pf_burst,
                 or   a                         ; bank 3). pf_tgt is the FIRST body struck: a bolt
                 jr   z, .nsf                   ; that hit a monster and then bounced onto the
-                call log_room                  ; caster prints no self line (deferred)
+                call log_room_d                ; caster prints no self line (deferred); LN_VAL = A = pf_lost
                 ld   a, TX_SPL_HIT_SELF
-                call msg_push
+                call msg_push_d                ; LOG-DMG: "THE BOLT HITS YOU -D"
 .nsf:
                 ld   a, (ACT_ABL)              ; LOG-FIX: the one result line (hit / kill) through
                 ld   b, a                      ; ammo_fire's tail: B = ABL, C = 0 (no named miss);

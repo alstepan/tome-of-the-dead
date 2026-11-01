@@ -19,7 +19,8 @@ consumed, no floor drop), §2.3 (no throws / shots mid-ladder), §6 "Logic"
       model = a one-shot cast at the release, TURN_TICK 2); after the fire
       tick (probe_act_fire, TURN_TICK 2) pf_stop / pf_col / pf_tgt / pf_lost / pf_itick /
       pf_desc, the RNG and every body == the model; the line == "YOUR DAGGER
-      / ARROW HITS THE <kind>" / "YOU KILL THE <kind>" / "... MISSES"; the
+      / ARROW HITS THE <kind>" / "YOU KILL THE <kind>" / "... MISSES" (LOG-DMG: "DAGGER / ARROW HITS
+      <kind> -D HP H" / "YOU KILL <kind> -D"); the
       monsters only after the FX; FX_DROP 0; the turn ends.
       F1 dagger hits a Rat (dmg 3..6)   F2 dagger misses the Rat (flies on
       to the range end)   F3 dagger: a Goblin 7 cells away is out of range (range
@@ -300,10 +301,11 @@ def run(h, p, check):
             exp_l.append(TXT[f"cmb_{name}_miss"] + " THE " + NM[kinds[mi]])
         if tg == NONE:
             exp_l = exp_l or [TXT[f"cmb_{name}_miss"]]
-        elif w.bodies[tg].hp == 0:
-            exp_l.append(TXT["you_kill"] + NM[kinds[tg]])
-        elif tg != 0:
-            exp_l.append(TXT[f"cmb_{name}_hit"] + NM[kinds[tg]])
+        elif w.bodies[tg].hp == 0:                # LOG-DMG: + " -D" (pf_lost)
+            exp_l.append(TXT["you_kill"] + NM[kinds[tg]] + (f" -{min(res['lost'], 99)}" if res["lost"] else ""))
+        elif tg != 0:                             # LOG-DMG: + " -D HP H" (D = 0: none; a parry: its own line)
+            tl = f" -{min(res['lost'], 99)} HP {min(w.bodies[tg].hp, 99)}" if 0 < res["lost"] < 255 else ""
+            exp_l.append(TXT[f"cmb_{name}_hit"] + NM[kinds[tg]] + tl)
         check(f"{tag}: the line {exp_l}", [l.rstrip(".") for l in lines] == [l.rstrip(".") for l in exp_l],
               (lines, exp_l))
         if extra:
@@ -419,7 +421,7 @@ def run(h, p, check):
             lo, hi = (3, 6) if abl == DAGGER else (2, 7)
             ok = (got["tgt"] == gob and got["miss"] == NONE and lo <= got["lost"] <= hi
                   and p.rb("pf_stop") == proj3.PFS["BODY"] and p.rb("pf_col") == near
-                  and lines == [TXT[f"cmb_{name}_hit"] + "GOBLIN"])
+                  and lines == [TXT[f"cmb_{name}_hit"] + "GOBLIN" + f" -{got['lost']} HP {g['HP']}"])   # LOG-DMG
         else:
             want_at = 2 + gap + 1                 # TURN_TICK 2 + FXD_DELAY 0 + move index gap + 1
             ok = (got["tgt"] == NONE and got["miss"] == gob and got["lost"] == 0

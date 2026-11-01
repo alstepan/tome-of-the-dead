@@ -239,7 +239,7 @@ def run(h, p, check):
     r = fx(S["FX_DRINK"], 0)
     check("D1 DRINK Heal at HP 10: a turn, +10 HP, 'YOU DRINK THE HEAL POTION' + 'YOU FEEL HEALTHIER', consumed",
           (r, lines, p.ent(0)["HP"], [b[0] for b in bag()]) ==
-          (1, ["YOU DRINK THE HEAL POTION", "YOU FEEL HEALTHIER"], 20, [I("S_ENCHANT"), I("BOOK")]),
+          (1, ["YOU DRINK THE HEAL POTION", "YOU FEEL HEALTHIER +10"], 20, [I("S_ENCHANT"), I("BOOK")]),   # LOG-DMG +G
           (r, lines, p.ent(0)["HP"], bag()))
 
     # ---- R read a scroll (Enchant on the equipped sword) -------------------------------

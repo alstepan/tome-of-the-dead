@@ -230,8 +230,10 @@ def run(p, lines, r):
     check("K1 lp_bank: the bat form banked as K_VBAT with its hp", [(k_ & 0x1F, hp) for k_, hp in ents] == [(KB, 7)], ents)
     # ------------------------------------------------------------------ D
     got = []
+    p.wb(S["P_ENTITIES"] + S["E_HIT"], 0)          # LOG-DMG: IX = an attacker with E_HIT 0 -> no " -D" tail
     for k in (KV, KB):
-        keep_pc(lambda q: q.code([0x06, S["MSG_M_HIT"], 0x0E, k, 0xCD] + w16(S["impact_line"]), game=True))(p)
+        keep_pc(lambda q: q.code([0xDD, 0x21] + w16(S["P_ENTITIES"]) + [0x06, S["MSG_M_HIT"], 0x0E, k, 0xCD]
+                                 + w16(S["impact_line"]), game=True))(p)
         got.append(stream_text(p.z.read_memory(S["MSG_BUF"], 32)).rstrip("."))
     check("D1 the bite hit: 'THE VAMPIRE DRAINS YOU' (humanoid) / 'THE VAMPIRE HITS YOU' (bat form)",
           got == ["THE VAMPIRE DRAINS YOU", "THE VAMPIRE HITS YOU"], got)

@@ -873,7 +873,8 @@ pf_burst:
                 jr   nz, .nb
                 call log_room                  ; (the result line is never the one dropped)
                 ld   a, TX_SPL_BURN_SELF
-                call msg_push                  ; "THE BURST SCORCHES YOU" (AF, BC, DE, HL)
+                call msg_push_d                ; "THE BURST SCORCHES YOU -D" (LN_VAL = this deal_hit's L;
+                                               ; AF, BC, DE, HL)
 .nb:
                 ld   a, (pf_itick)
                 ld   b, a

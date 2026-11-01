@@ -264,8 +264,8 @@ fx_drunk:       ld   hl, P_ENTITIES + E_FLT    ; the heal flash (as the quick po
                 jr   z, .l2
                 ld   e, S_FX_CURED             ; "YOU ARE CURED"
                 jr   nc, .l2
-                ld   a, TX_SPL_DRAIN_HEAL      ; Heal: "YOU FEEL HEALTHIER" (bank 0)
-                call msg_push
+                ld   a, TX_SPL_DRAIN_HEAL      ; Heal: "YOU FEEL HEALTHIER +G" (bank 0; LOG-DMG:
+                call msg_push_h                ; G = LN_G, pot_eff's cap_add)
                 jr   .l3
 .l2:            xor  a
                 call fx_line
@@ -542,22 +542,24 @@ POT_CURE_HP     EQU 4                          ; game.md §8: Cure +4 HP
                 ASSERT MAXMP == MP + 1 && E_MAXHP == E_HP + 1 && IT_P_CURE == IT_P_MANA + 1 && IT_P_HEAL + 1 == IT_P_MANA
                 ASSERT (ST_FLAGS >> 8) == (ST_T1 >> 8) && (ST_T1 >> 8) == (ST_T2 >> 8)
 
-; cap_add — HL = a value, (HL + 1) its max, E = amount: value = min(value +
-; E, max); CF = 1 (nothing done) if it was already >= max.  Clobbers: A, D
+; cap_add — HL = a value, (HL + 1) its max, E = amount (>= 1): value = min(value +
+; E, max); CF = 1 (nothing done) if it was already >= max. LOG-DMG: LN_G = the gain
+; G = min(E, max - value) (msg_push_h; MP too, harmless: only a heal line reads it);
+; out A = G (was the new value: the callers read CF only).  Clobbers: A
 cap_add:
-                inc  hl
-                ld   d, (hl)
-                dec  hl
                 ld   a, (hl)
-                cp   d
+                inc  hl
+                sub  (hl)                      ; value - max: NC = already full
+                dec  hl
                 ccf
                 ret  c
-                add  a, e
-                cp   d
-                jr   c, .s
-                ld   a, d
-.s:             ld   (hl), a
-                or   a
+                neg                            ; room = max - value (>= 1)
+                cp   e
+                jr   c, .g
+                ld   a, e
+.g:             ld   (LN_G), a
+                add  a, (hl)                   ; <= max: CF = 0
+                ld   (hl), a
                 ret
 
 ;------------------------------------------------------------------------------

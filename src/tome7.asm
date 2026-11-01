@@ -42,6 +42,6 @@ tome_strike:    ld   hl, TOME_HP
                 dec  (hl)
                 jp   z, tome_gone              ; low RAM (CF = 1)
                 ld   a, TX_TOME_HIT
-                call msg_push
+                call msg_push_t                ; LOG-DMG: "THE TOME SHUDDERS -1 HP H" (H = TOME_HP)
                 scf
                 ret

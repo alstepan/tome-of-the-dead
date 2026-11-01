@@ -8,7 +8,7 @@ drawn; LQ_DROP (the ring's drop counter) is asserted where a drop would be a bug
   L1  every spell rank 1 on a Rat: "YOU CAST <SPELL>" then the hit line
       (SPARK HITS THE / FIREBOLT BURNS THE / FROST HITS THE / YOU DRAIN THE /
       LIGHTNING HITS THE RAT); LQ_DROP 0
-  L2  a Firebolt kill: "YOU CAST FIREBOLT", "YOU KILL THE RAT"
+  L2  a Firebolt kill: "YOU CAST FIREBOLT", "YOU KILL RAT"
   L3  a cast into a wall (no target): "YOU CAST SPARK" only
   L4  Drain: CAST, YOU FEEL HEALTHIER (deal_hit), YOU DRAIN THE
   L5  Frost: CAST, its status line (FROZEN) from the strike, then the hit line
@@ -21,9 +21,13 @@ drawn; LQ_DROP (the ring's drop counter) is asserted where a drop would be a bug
   L12 a hunger crossing on a fight turn
   L14 a level-up on a kill
   C   the cast line is dropped (not the hit line) when >= 3 lines are pending
+LOG-DMG (2026-11-01): the hero-strike lines lost "THE " and every hit line got a
+" -D" / " -D HP H" / " +G" tail; this suite compares the lines with the tail
+stripped (tail(): the numbers themselves are tests/logdmg.py's).
 Run: ZRCP_PORT=<port> python3 tests/log_audit.py
 """
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -44,7 +48,13 @@ NOWHERE = 7
 SPARK, FIREBOLT, FROST, DRAINL, LIGHTNING = range(5)
 CAST = ["YOU CAST SPARK", "YOU CAST FIREBOLT", "YOU CAST FROST SHARD", "YOU CAST DRAIN LIFE",
         "YOU CAST LIGHTNING"]
-HIT = ["SPARK HITS THE ", "FIREBOLT BURNS THE ", "FROST HITS THE ", "YOU DRAIN THE ", "LIGHTNING HITS THE "]
+HIT = ["SPARK HITS ", "FIRE BURNS ", "FROST HITS ", "YOU DRAIN ", "BOLT HITS "]   # LOG-DMG: no "THE "
+TAIL = re.compile(r" [-+]\d{1,2}( HP \d{1,2})?$")
+
+
+def tail(line):
+    """LOG-DMG: the line without its " -D" / " -D HP H" / " +G" tail."""
+    return TAIL.sub("", line)
 SLOT_KIND = {1: K_RAT, 2: K_SLIME, 3: K_GOBLIN, 5: K_SKELETON}
 NAME = {K_RAT: "RAT", K_SLIME: "SLIME", K_GOBLIN: "GOBLIN", K_SKELETON: "SKELETON"}
 
@@ -124,7 +134,7 @@ def run(h, p, check):
             n = S["LOG_SLOTS"]
         L = S["LOG_SLOT_LEN"]
         raw = slots_raw()
-        return [stream_text(raw[((wr0 + k) % S["LOG_SLOTS"]) * L:][:L]) for k in range(n)]
+        return [tail(stream_text(raw[((wr0 + k) % S["LOG_SLOTS"]) * L:][:L])) for k in range(n)]
 
     def run_turn(act, pre=None, ticks=160):
         """`act()` presses the key; run the turn out. -> (lines pushed, drops). Sampled every tick
@@ -172,7 +182,7 @@ def run(h, p, check):
     # ---- L2: a kill ---------------------------------------------------------------
     scene(K_WIZARD, [(1, sx + 3, 1)], learn={FIREBOLT: 1})
     lines, dd = play_turn(FIREBOLT + 1)
-    check("L2 Firebolt kills a Rat: CAST, YOU KILL THE RAT", lines == [CAST[FIREBOLT], "YOU KILL THE RAT"] and dd == 0,
+    check("L2 Firebolt kills a Rat: CAST, YOU KILL THE RAT", lines == [CAST[FIREBOLT], "YOU KILL RAT"] and dd == 0,
           (lines, dd))
 
     # ---- L3: no target ------------------------------------------------------------
@@ -184,7 +194,7 @@ def run(h, p, check):
     scene(K_WIZARD, [(1, sx + 2, 200)], hero_hp=5, learn={DRAINL: 1})
     lines, dd = play_turn(DRAINL + 1)
     check("L4 Drain: CAST, YOU FEEL HEALTHIER, YOU DRAIN THE RAT",
-          lines == [CAST[DRAINL], "YOU FEEL HEALTHIER", "YOU DRAIN THE RAT"] and dd == 0, (lines, dd))
+          lines == [CAST[DRAINL], "YOU FEEL HEALTHIER", "YOU DRAIN RAT"] and dd == 0, (lines, dd))
 
     # ---- L5: Frost ----------------------------------------------------------------
     scene(K_WIZARD, [(2, sx + 5, 200)], learn={FROST: 2})
@@ -211,7 +221,7 @@ def run(h, p, check):
         lines, dd = play_turn(LIGHTNING + 1)
         print(f"[info] S Lightning through {nb} ASLEEP: {lines} LQ_DROP {dd}", flush=True)
         check(f"S Lightning through {nb} sleepers: the hit line is not lost",
-              any(l.startswith("LIGHTNING HITS THE") for l in lines), (lines, dd))
+              any(l.startswith("BOLT HITS ") for l in lines), (lines, dd))
 
     # ---- L7: onto the caster -------------------------------------------------------
     scene(K_WIZARD, [], learn={SPARK: 1})
@@ -227,7 +237,7 @@ def run(h, p, check):
     scene(K_WIZARD, [(1, sx, 200)], learn={FIREBOLT: 1})
     lines, dd = play_turn(FIREBOLT + 1)
     check("L7 Firebolt r1 burst on the adjacent Rat scorches the caster: CAST, THE BURST SCORCHES YOU, hit line",
-          lines[:3] == [CAST[FIREBOLT], "THE BURST SCORCHES YOU", "FIREBOLT BURNS THE RAT"] and dd == 0, (lines, dd))
+          lines[:3] == [CAST[FIREBOLT], "THE BURST SCORCHES YOU", "FIRE BURNS RAT"] and dd == 0, (lines, dd))
 
     # ---- L9: two monsters hitting on the same tick ----------------------------------
     def goblin(slot, x, left):
@@ -247,12 +257,12 @@ def run(h, p, check):
     scene(K_KNIGHT, [(1, sx + 3, 200)], daggers=3, arrows=10, bow=1)
     lines, dd = play_turn(3)
     check("L8 dagger: one hit / miss line, no cast line",
-          len(lines) == 1 and (lines[0] == "YOUR DAGGER HITS THE RAT" or lines[0].startswith("YOUR DAGGER MISSES")),
+          len(lines) == 1 and (lines[0] == "DAGGER HITS RAT" or lines[0].startswith("YOUR DAGGER MISSES")),
           (lines, dd))
     scene(K_KNIGHT, [(1, sx + 3, 200)], daggers=3, arrows=10, bow=1)
     lines, dd = play_turn(4)
     check("L8 bow: one hit / miss line, no cast line",
-          len(lines) == 1 and (lines[0] == "YOUR ARROW HITS THE RAT" or lines[0].startswith("YOUR ARROW MISSES")),
+          len(lines) == 1 and (lines[0] == "ARROW HITS RAT" or lines[0].startswith("YOUR ARROW MISSES")),
           (lines, dd))
 
     # ---- L10: an Archer's arrow ------------------------------------------------------
@@ -295,8 +305,8 @@ def run(h, p, check):
             lines, dd = l_, d_
             break
     print(f"[info] L14 kill + level-up: {lines} drop {dd}", flush=True)
-    check("L14 a kill that levels up: YOU KILL THE GOBLIN and YOU REACH LEVEL 2 both logged",
-          "YOU KILL THE GOBLIN" in lines and any(l.startswith("YOU REACH LEVEL 2") for l in lines), (lines, dd))
+    check("L14 a kill that levels up: YOU KILL GOBLIN and YOU REACH LEVEL 2 both logged",
+          "YOU KILL GOBLIN" in lines and any(l.startswith("YOU REACH LEVEL 2") for l in lines), (lines, dd))
 
     # ---- C: the cast line is dropped, not the hit line, with >= 3 lines pending ---------
     def prefill(n):
@@ -330,7 +340,7 @@ def run(h, p, check):
         print(f"[info] C {n} pending at the accept: {lines} drop {drops()}", flush=True)
         has_cast = CAST[SPARK] in lines
         check(f"C {n} lines pending at the accept: cast line {'kept' if n < 3 else 'dropped'}, the hit line kept",
-              at and has_cast == (n < 3) and "SPARK HITS THE RAT" in lines, (at, lines))
+              at and has_cast == (n < 3) and "SPARK HITS RAT" in lines, (at, lines))
 
 
 if __name__ == "__main__":

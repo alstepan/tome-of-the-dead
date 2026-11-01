@@ -717,7 +717,24 @@ theme_ids:      DB T_PLAT, T_WALLF, T_END_L, T_END_R, 0
 ; into the LOG_TXT ring as is. msg_push_end — the same through log_push_end
 ; (GS_DEAD / GS_WIN lines: never dropped). Any bank paged, any caller.
 ; Clobbers: A, BC, DE, HL (BC too: page_bank / log_push use it).   ~0.35k T + log_push (~25 T per stream byte)
+; LOG-DMG (log0.asm): msg_push_d — the same + " -D" (D = LN_VAL, the hero's
+; self / burst / fall loss; D = 0: bare); msg_push_h — + " +G" (G = LN_G, the
+; heal); msg_push_t — + " -1 HP H" (H = TOME_HP, P3). Same clobbers, +~0.3k T.
 ;------------------------------------------------------------------------------
+; (12 B, not 3 x 5: each entry loads E only; DB $01 = ld bc, nn swallows the next entry's
+; 2-byte ld e, n; BC is msg_go's clobber anyway. The three pushers share one page, ASSERTed.)
+msg_push_h:
+                ld   e, ln_push_h & $FF
+                DB   $01                       ; ld bc, nn: skips msg_push_t's ld e, n
+msg_push_t:
+                ld   e, ln_push_t & $FF
+                DB   $01                       ; ld bc, nn: skips msg_push_d's ld e, n
+msg_push_d:
+                ld   e, ln_push_d & $FF
+                ld   d, ln_push_d >> 8
+                jr   msg_go
+                ASSERT (ln_push_h >> 8) == (ln_push_d >> 8) && (ln_push_t >> 8) == (ln_push_d >> 8)
+                ASSERT msg_push_t == msg_push_h + 3 && msg_push_d == msg_push_t + 3
 msg_push_end:
                 ld   de, log_push_end
                 jr   msg_go
@@ -794,7 +811,7 @@ tx_dec:
 ;------------------------------------------------------------------------------
 ; show_impact_msg — IX = attacker at IMPACT (anim_tick, MSG_Q): queue its
 ; E_MSG line, composed in MSG_BUF as pre + kind name + post (imp_pre /
-; imp_post): "YOU HIT THE RAT", "THE RAT MISSES". Token streams concatenate
+; imp_post): "YOU HIT RAT -3 HP 1" (LOG-DMG), "THE RAT MISSES". Token streams concatenate
 ; into a valid stream, decoded at print time. B3B-13: moved here from bank 3
 ; (one page switch for the 3 pieces instead of a far3).
 ; Clobbers: A, BC, DE, HL (IX kept).   ~1.4k T
@@ -851,17 +868,13 @@ show_impact_msg:
                 ; fall through
 ; impact_line — B = message code (MSG_P_HIT .. MSG_SQUEEZE), C = kind: the
 ; line pre + kind name + post queued to the log (B14: "YOU SQUEEZE PAST THE
-; RAT" uses it from the input phase). Clobbers: A, BC, DE, HL (IX kept).
+; RAT" uses it from the input phase). LOG-DMG: bank-0 ln_imp (log0.asm) adds
+; the -D / HP H tail by the code and IX (the caller's: show_impact_msg the
+; attacker, melee_strike the target) and terminates + pushes the line; it
+; also recomposes the Vampire's bite (was the MSG_M_DRAIN remap here, 3F-T9).
+; Clobbers: A, BC, DE, HL (IX kept).
 impact_line:
                 call sfx_msg                   ; SND-5: melee hit / miss / kill / hurt (bank 2; BC kept)
-                ld   a, b                      ; 3F-T9: the Vampire's bite hit drains (heals it):
-                cp   MSG_M_HIT                 ; "THE VAMPIRE DRAINS YOU" (after sfx_msg: the HURT
-                jr   nz, .nd                   ; sound stays; its bat form K_VBAT bites plainly)
-                ld   a, c
-                cp   K_VAMPIRE
-                jr   nz, .nd
-                ld   b, MSG_M_DRAIN
-.nd:
                 ld   a, (PORT_7FFD_SHADOW)
                 push af                        ; caller's page
                 push bc
@@ -878,10 +891,7 @@ impact_line:
                 ld   a, b
                 ld   hl, imp_post - 1
                 call .tab
-                xor  a
-                ld   (de), a
-                ld   hl, MSG_BUF
-                call log_push                  ; (any bank: the ring is bank 5)
+                call ln_imp                    ; LOG-DMG (bank 0): + the tail, 0, log_push
                 pop  af
                 jp   restore_page
 .tab:           add  a, l                      ; A = (HL + A): the piece's id
@@ -902,13 +912,14 @@ impact_line:
 ; D3-6a: + MSG_M_UNAFF .. MSG_M_THAW (deal_hit, combat3.asm): "THE " + name + status suffix
 imp_pre:        DB   TX_YOU_HIT, TX_YOU_MISS, TX_YOU_KILL, TX_THE, TX_THE, TX_YOU_SQUEEZE
                 DB   TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE, TX_THE   ; (+ MSG_P_PARRY)
-                DB   TX_THE, TX_THE                                                       ; 3F-T9 MSG_M_SUMMON, MSG_M_DRAIN
+                DB   TX_THE                                                               ; 3F-T9 MSG_M_SUMMON
 imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EMPTY
                 DB   TX_CMB_UNAFFECTED, TX_ST_M_FROZEN, TX_ST_M_ASLEEP, TX_ST_M_STUNNED
                 DB   TX_ST_M_FLEES, TX_ST_M_CONFUSED, TX_ST_M_WAKE, TX_ST_M_THAW, TX_CMB_PARRIES
-                DB   TX_CMB_SUMMONS, TX_CMB_DRAINS
-                ASSERT imp_post - imp_pre == MSG_M_DRAIN && $ - imp_post == MSG_M_DRAIN && MSG_P_PARRY == MSG_M_THAW + 1
-                ASSERT MSG_M_DRAIN == MSG_M_SUMMON + 1 && TXL_THE + NM_LONG + TXL_CMB_DRAINS < 32
+                DB   TX_CMB_SUMMONS
+                ASSERT imp_post - imp_pre == MSG_M_SUMMON && $ - imp_post == MSG_M_SUMMON && MSG_P_PARRY == MSG_M_THAW + 1
+                ; LOG-DMG: the Vampire's bite (log0 ln_imp) "THE " + name + " DRAINS YOU" + " -D" (4)
+                ASSERT TXL_THE + NM_LONG + TXL_CMB_DRAINS + 4 <= 31
                 ASSERT MSG_M_SUMMON == MSG_P_PARRY + 1 && TXL_THE + NM_LONG + TXL_CMB_SUMMONS < 32
                 ASSERT TXL_THE + NM_LONG + TXL_CMB_PARRIES < 32
                 ASSERT MSG_M_UNAFF == 7 && MSG_M_FROZEN == 8 && MSG_M_ASLEEP == 9 && MSG_M_STUNNED == 10
@@ -945,8 +956,12 @@ imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EM
                 ASSERT NM_LONG >= TXL_NM_KNIGHT && NM_LONG >= TXL_NM_WIZARD
                 ASSERT NM_LONG >= TXL_NM_GOBLIN && NM_LONG >= TXL_NM_GHOST
                 ASSERT NM_LONG >= TXL_NM_RAT && NM_LONG >= TXL_NM_BAT && NM_LONG >= TXL_NM_SLIME
-                ASSERT TXL_YOU_HIT + NM_LONG + TXL_EMPTY < 32 && TXL_YOU_MISS + NM_LONG < 32
-                ASSERT TXL_YOU_KILL + NM_LONG < 32 && TXL_THE + NM_LONG + TXL_HITS_YOU < 32
+                ASSERT NM_LONG >= TXL_NM_SKELETON && NM_LONG >= TXL_NM_RABBIT_RAT   ; (LOG-DMG review: every kind listed)
+                ; LOG-DMG (log_damage.md §3): worst tail " -99 HP 99" = 10 chars, " -99" = 4;
+                ; every line <= 31 chars (MSG_BUF 32 B with its 0)
+                ASSERT TXL_YOU_HIT + NM_LONG + TXL_EMPTY + 10 <= 31 && TXL_YOU_MISS + NM_LONG <= 31
+                ASSERT TXL_CMB_POWER + NM_LONG + 10 <= 31       ; "YOU SMASH " (ln_imp, Power Strike)
+                ASSERT TXL_YOU_KILL + NM_LONG + 4 <= 31 && TXL_THE + NM_LONG + TXL_HITS_YOU + 4 <= 31
                 ASSERT TXL_THE + NM_LONG + TXL_MISSES < 32 && MSG_BUF + 32 <= TIMING_MARK
 
 ;==============================================================================
@@ -1413,6 +1428,8 @@ hero_fall:
                 ld   a, (ix+E_HP)
                 sub  b
                 jr   nc, .hp
+                add  a, b                      ; LOG-DMG: overkill -> B = the HP it had
+                ld   b, a
                 xor  a                         ; saturating
 .hp:            ld   (ix+E_HP), a
                 ld   (ix+E_REACTAT), 0         ; plays on landing (anim: REST again)
@@ -1422,8 +1439,10 @@ hero_fall:
                 set  EF_DYING_BIT, (ix+E_FLAGS)
                 ld   c, RC_DEATH
 .r:             ld   (ix+E_REACT), c
+                ld   a, b
+                ld   (LN_VAL), a               ; LOG-DMG: D = the HP lost (>= 1)
                 ld   a, TX_FALL
-                call msg_push                  ; B3B-11: queued (panel_tick)
+                call msg_push_d                ; "YOU FALL INTO A PIT -D"; B3B-11: queued (panel_tick)
                 scf
                 ret
 

@@ -47,6 +47,7 @@ Run: ZRCP_PORT=<port> python3 tests/b19.py [K] [P] [L]   (default: all)
 """
 import os
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -217,7 +218,7 @@ def kills(p, kt, check):
             if lethal:
                 p.tick(2)
                 settled = p.bg_mismatch()
-                kl = [l for l in lines if l.startswith(TXT["you_kill"])]
+                kl = [re.sub(r" -\d+$", "", l) for l in lines if l.startswith(TXT["you_kill"])]   # LOG-DMG tail
                 # LOG-FIX (9aa2ec8): a spell kill logs "YOU KILL THE <kind>" like
                 # a thrown / shot / melee kill (the cast line "YOU CAST ..." is not a kill line)
                 want_kl = [TXT["you_kill"] + NAME[kind]]
@@ -229,7 +230,8 @@ def kills(p, kt, check):
             else:
                 check(f"{tag}: non-lethal hit — no DEATH, alive, a HITS line",
                       not seen["death"] and not seen["dead"] and e["FLAGS"] & EF_ACTIVE and 0 < e["HP"] < 40
-                      and any(l.endswith("HITS THE " + NAME[kind]) for l in lines), (seen, e, lines))
+                      and any(re.search(r"HITS " + NAME[kind] + r" -\d+ HP \d+$", l) for l in lines),
+                      (seen, e, lines))   # LOG-DMG: "<pre> HITS <kind> -D HP H"
             return
         check(f"{tag}: no seed gave the hit", False)
 

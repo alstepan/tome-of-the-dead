@@ -223,7 +223,8 @@ def five(L, tag, do, gap, setup=None):
         p.until(lambda: p.idle(), 300)
         seen.append(hp0 - p.rb("TOME_HP"))
         if i == 0:
-            check(f"{tag}: '{TXT['tome_hit']}'", L.last_line() == text6(TXT["tome_hit"]), "")
+            tl = TXT["tome_hit"] + " -1 HP %d" % p.rb("TOME_HP")    # LOG-DMG: msg_push_t
+            check(f"{tag}: '{tl}'", L.last_line() == text6(tl), "")
         if p.rb("GAME_STATE") != GS_PLAYING:
             break
     check(f"{tag}: 5 hits at gap {gap} destroy the Tome: TOME_HP 0, the gate opens, still GS_PLAYING, "
@@ -292,7 +293,8 @@ def dodge(p, L):
         p.until(lambda: p.rb("LOG_QN") == 0, 200)
         p.settle(2)
         fr = p.frame()
-        got = (p.rb("TOME_HP"), log_row(fr, 22) == text6(TXT["tome_hit"]), log_row(fr, 23) == named, p.ent(1)["HP"])
+        tl = TXT["tome_hit"] + " -1 HP %d" % p.rb("TOME_HP")        # LOG-DMG: msg_push_t
+        got = (p.rb("TOME_HP"), log_row(fr, 22) == text6(tl), log_row(fr, 23) == named, p.ent(1)["HP"])
         p.set_ent(1, FLAGS=0)
         if got[3] == 50:                                # the Skeleton dodged: the case happened
             break

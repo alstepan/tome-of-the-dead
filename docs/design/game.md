@@ -680,6 +680,9 @@ second person, upper case, **no trailing full stop** (the "." in the examples ab
 `YOU PICK UP A POTION` (20; matches `YOU PICK UP 3 ARROWS`; one verb for all pickups). Impact
 pieces (`YOU HIT THE ` / ` HITS YOU` / ` MISSES`) are approved; the longest composition
 (`YOU KILL THE SKELETON` = 21) is far under 32. Empty `nm_rogue` and `empty` are fine.
+**LOG-DMG (2026-11-01):** the hero-strike pieces lost `THE ` (`YOU HIT ` / `YOU MISS ` /
+`YOU KILL `) and the hit lines carry a number tail; the current lines are in §6.5 "Log lines
+carry the numbers".
 
 **Placement (memory; revised 2026-10-03, designer decision, after A7).** Since the A7
 double buffer, all text (panel, page, menus, cards) is drawn **only into the bank-5 screen**
@@ -1694,6 +1697,30 @@ the per-tick peak does not grow (Drain Life: target `-n` at f+1, caster `+n` at 
 spawns come at f+1 or later, the Whirlwind fire tick gets nothing extra. Code ~290–400 B
 (bank 7; +~40 B for the sign glyph, signed same-sign merge, heal colour and the heal hooks). Readout: ~150–200 B code, 0 B data. If a gated scenario still
 exceeds the budget, **lower the live cap to 2 before anything else**.
+
+**Log lines carry the numbers (LOG-DMG, user 2026-11-01; spec `docs/design/log_damage.md`; as
+built `feat/log-dmg`).** Until the flying numbers ship, every hit line in the message log ends in
+its number, and a hit on an enemy also shows the HP it has left. No new lines: a tail on the
+existing ones (ring load, `log_room`, the §6.5.1 gate unchanged). Current lines (N = kind name):
+
+| Event | Line |
+|---|---|
+| hero melee hit / Whirlwind blow | `YOU HIT N -D HP H` (a kill: `YOU KILL N -D`; miss `YOU MISS N`) |
+| Power Strike hit | `YOU SMASH N -D HP H` |
+| dagger / arrow hit | `DAGGER HITS N -D HP H` / `ARROW HITS N -D HP H` (miss lines unchanged) |
+| Spark / Firebolt / Frost / Drain / Lightning hit | `SPARK HITS` / `FIRE BURNS` / `FROST HITS` / `YOU DRAIN` / `BOLT HITS` `N -D HP H` (the FIRST body struck: its own numbers; a kill `YOU KILL N -D`) |
+| monster melee or ranged hit on the hero | `THE N HITS YOU -D`; the Vampire `THE VAMPIRE DRAINS YOU -D` |
+| own bolt bounce / burst / pit fall | `THE BOLT HITS YOU -D` / `THE BURST SCORCHES YOU -D` / `YOU FALL INTO A PIT -D` |
+| Drain Life caster heal, Heal potion | `YOU FEEL HEALTHIER +G` (bare at G = 0) |
+| Tome hit (P3) | `THE TOME SHUDDERS -1 HP H` (the last: `THE TOME IS DESTROYED`) |
+| bare (no number) | parry / unaffected / status lines, misses, `YOU ARE CURED` (cut-order 2), the dart / stone trap lines (cut-order 7, partial: pushed before the damage is rolled) |
+
+D = the HP actually lost (no overkill), H = the target's HP after the hit, G = the HP actually
+gained; 1-2 digits, ≥ 99 shown as 99; D or G = 0 prints no tail. `THE ` is dropped where the
+hero strikes (monster-subject and status lines keep it). Every line ≤ 31 chars (build
+ASSERTs; worst `DAGGER HITS NECROMAGE -99 HP 99`). Silent: poison ticks, the Tome aura, FED
+regen, level-up / tome max-HP raises; secondary bolt targets (pierce / burst) stay silent,
+kills included (§7.2 of the spec, not built: bank 3 has no room outside STATS1's 30 B).
 
 ### 6.5.1 Cast-time resolution timing (designer decision 2026-10-13)
 
