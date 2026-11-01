@@ -10,8 +10,11 @@
 ;   projectile / tile collision (the ruling): melee (bump: try_horizontal, FIRE:
 ;   intent7 ic_melee), Power Strike / Whirlwind (abil_melee accepts with no body
 ;   target; act_fire counts at the release), spells / daggers / arrows (act_fire).
-;   Never missed, no resistance, 1 hp a hit, "THE TOME SHUDDERS"; the 5th:
-;   game_win (low RAM: GS_WIN, "THE TOME IS DESTROYED"). No $43 flash, no ash.
+;   Never missed, no resistance, 1 hp a hit, "THE TOME SHUDDERS"; the 5th (WIN2,
+;   user 2026-11-01): tome_gone (low RAM: "THE TOME IS DESTROYED", the lair grate
+;   opens through grate_open.op); the run goes on until the hero leaves through
+;   it (level_descend -> game_win, GS_WIN). No $43 flash, no ash: the lectern
+;   stays, inert (tome_geo6: TOME_HP 0 = no Tome).
 ;   The aura: low-RAM tome_aura (end_turn).
 ;==============================================================================
 
@@ -22,7 +25,8 @@
 ;   ~0.4k T (far6 + tome_geo6)
 ; tome_rel — the same, then a hit if so (tome_strike): CF = 1 struck.
 ; tome_strike — the Tome loses 1 hp (never missed, no resistance): "THE TOME
-; SHUDDERS"; at 0 game_win (GS_WIN, "THE TOME IS DESTROYED"). CF = 1.
+; SHUDDERS"; at 0 tome_gone (low RAM; the gate opens). CF = 1. Only after
+; tome_in (TOME_HP > 0 there): the bump enters at tome_rel too (bank7.asm .tome).
 ; Clobbers (rel / strike): AF, BC, DE, HL (IX kept).   ~1.5k T (the line)
 ;------------------------------------------------------------------------------
 tome_in:        push bc                        ; (far6 does not pass BC)
@@ -36,7 +40,7 @@ tome_rel:       call tome_in
                 ret  nc
 tome_strike:    ld   hl, TOME_HP
                 dec  (hl)
-                jp   z, game_win               ; low RAM (CF = 1)
+                jp   z, tome_gone              ; low RAM (CF = 1)
                 ld   a, TX_TOME_HIT
                 call msg_push
                 scf

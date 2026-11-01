@@ -752,7 +752,7 @@ try_horizontal:
                 call lead_cell
                 jr   c, .solid
                 ld   a, (TMP6)
-                cp   1
+                dec  a                         ; dx == 1 (WIN2: -1 B vs cp 1; both paths reload A)
                 jr   z, .right
                 ld   a, c
                 or   a
@@ -811,8 +811,10 @@ try_horizontal:
                 ret  z
                 ld   a, (TMP6)
                 jp   hero_door                 ; lowram: opened (CF = 1) / locked (0)
-.tome:          call face_tmp6                 ; (bank 2) the hero faces it
-                jp   tome_strike               ; CF = 1
+.tome:          call face_tmp6                 ; (bank 2) the hero faces it (keeps C)
+                jp   tome_rel                  ; WIN2: through the geometry: adjacent (gap 0) < C = nx
+                                               ; (>= 2: the lectern is at cols 1-2 / 29-30): a hit,
+                                               ; CF = 1; destroyed (TOME_HP 0): CF = 0, a wall, no turn
 .blocked:       xor  a
                 ld   (EXIT_KIND), a            ; CF = 0 (xor)
                 ret

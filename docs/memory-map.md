@@ -4823,9 +4823,10 @@ Contracts (code: `src/tome7.asm`, `src/tome6.asm`, `lowram.asm` `game_win` / `to
 - **Hit**: a release by a hero standing on storey 1 of the Sanctum (`E_Y` == `TOME_HERO_Y` 11), facing the
   lectern, gap < reach / range (melee 1, `RK_RANGE` of Power Strike / Whirlwind now 1, spells `CAST_ROW`
   `RR_RANGE`, ammo `ABIL_RK` `RK_RANGE`): bump (`try_horizontal`), `ic_melee`, `act_fire` (all abilities; Power
-  Strike / Whirlwind accepted with an empty mask by `abil_melee`). 5th hit -> `game_win` (GS_WIN).
+  Strike / Whirlwind accepted with an empty mask by `abil_melee`). 5th hit -> `game_win` (GS_WIN). **Superseded by
+  WIN2** (ledger below): the 5th hit opens the D8 gate (`tome_gone`), leaving through it is the win.
 - **Seal**: `grate_open` on D8 (F3_GEN) -> `seal_open` (R6): `LF_SEAL_OPEN`, `EG_SEAL` off EDGE_TAB + 4 / + 5;
-  `LF_GRATE_OPEN` stays clear (the D8 grate never opens: game.md §1.1 "D8 has no exit").
+  `LF_GRATE_OPEN` stays clear (WIN2: until the Tome is destroyed).
 - **Ticks** (`tests/budget.py`, "old total / work"; the 126,000 cap gates the WORK figure, the review quoted totals):
   `sanct` 46,541 / 46,541, `adeath` (the seal tick) 102,697 / 99,397, `walarm` 124,965 / 122,403 (unchanged from
   main `ae0bf83`: headroom 1.0k T on the total, 3.6k on the gated work — this limits LOG-DMG, GEAR and STATS),
@@ -4879,3 +4880,30 @@ Contracts:
 - **`ench_any`** (gear6.asm): worn WEAPON / ARMOUR / HELM then the bag (slots 0..19, after the scroll left): candidates
   = type `IT_WPN_LO..IT_HELM_HI`, m != +3; one `rng_mod(n)`; `ISTATE += $20`; `hero_recalc` only for a worn target.
   Out A = the type (0 = NOTHING HAPPENS). `ist_v`: A = ISTATE -> A = m + q (clobbers A, H, L).
+
+## WIN2 ledger (`feat/win2-exit-gate`; user ruling 2026-11-01: the Tome's destruction opens the D8 exit gate)
+
+Measured by the build DISPLAY, `-DDEBUG_KIT=0`, against main `d1f9566` (GEAR2 + GEAR3 merged).
+
+| Region | before | after | spent | note |
+|---|---|---|---|---|
+| bank 7 low (`b7_end..$F800`) | 2 | **2** | 0 | `tome_strike` `jp z, tome_gone` (was `game_win`); the bump's `.tome` -> `jp tome_rel` (geometry with C = nx >= 2: 0 B); `grate_open` `ret z` -> `jr z, .msg` (+1); `try_horizontal` `cp 1` -> `dec a` (-1) |
+| low RAM spare | 8 | **0** | 8 | `tome_gone` 10 B (`TX_WIN` line + `call grate_open.op` + `scf`); `game_win` -2 (`jp msg_push_end`, no `scf`: only `level_descend` calls it now) |
+| R6 | 30 | **25** | 5 | `tome_geo6`: TOME_HP 0 -> L = $FF (no Tome: no hit, no aura, the bump = wall) |
+| bank 3 / bank 1 / bank 0 text | 30 / 3 / headroom 40 | unchanged | 0 | no new text: `TX_WIN` "THE TOME IS DESTROYED" + `TX_GATE_GLEAMS` on the hit, `TX_END_WIN` "YOU WIN!" on the exit |
+
+The kit build (`DEBUG_KIT=1`) already fails its bank-7 ASSERT on main `d1f9566` (GEAR2 + GEAR3); WIN2 adds 0 B there.
+
+Contracts:
+- **Destruction** (`tome_strike` 5th hit, bank 7 paged) -> low-RAM `tome_gone`: "THE TOME IS DESTROYED", then bank-7
+  `grate_open.op` (past the XP step: no XP): `LF_GRATE_OPEN`; CUR_ROOM is the Sanctum (RD_EXITCOL 0), so no ROOM_MAP /
+  screen work, "A GATE GLEAMS, THE WAY DOWN". The lair's next `build_room_map` stamps T_GRATE x 3 + the glow; the
+  flag is level state (re-entry / teleport keep it). CF = 1 (the turn).
+- **Inert Tome**: `tome_geo6` answers $FF at TOME_HP 0, so `tome_in` / `tome_rel` never strike again and
+  `tome_aura` stops (the destroying hit's own turn end included); the bump path goes through `tome_rel` (CF = 0 =
+  a wall, no turn). The lectern tiles stay drawn.
+- **Win**: `level_descend` at D8 (the open grate, `try_climb` reads `LF_GRATE_OPEN`) -> `game_win`: GS_WIN, MUS_WIN,
+  log "YOU WIN!" (`msg_push_end`).
+- **Ticks** (`tests/budget.py` total / work): `sanct` 46,544 / 46,544 (+3), `adeath` 102,700 / 99,400 (+3),
+  `walarm` 124,965 / 122,403 (unchanged). The destroying hit adds one log line + `grate_open.op` (~2k T) over the
+  old `game_win` hit, far under the cap (`sanct` ~47k).

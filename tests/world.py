@@ -3374,9 +3374,10 @@ def w16_level(p, check):
             blk = level_ok(8, m8, f"D8 from former exhausting seed {bad_seed}", seed=bad_seed)
             check(f"W16 D8 seed {bad_seed}: generated first time (no reseed under L1)",
                   p.rw("LVL_SEED") == bad_seed, p.rw("LVL_SEED"))
-        # ---- D8 descend = GS_WIN (stand-in) -----------------------------
+        # ---- D8 descend = GS_WIN (WIN2: the real win path, the gate the Tome's destruction opens;
+        # to_exit forces LF_GRATE_OPEN here, tests/sanctum.py W6 opens it by the Tome) -----------
         ran, cards, fr_n = to_exit(blk, "D8", walk=False)
-        check("W16 D8: descending = GS_WIN (game.md §1.4 stand-in), no card, depth stays 8",
+        check("W16 D8: descending through the open gate = GS_WIN (game.md §1.3 WIN2), no card, depth stays 8",
               (p.rb("GAME_STATE"), p.rb("LVL_DEPTH"), len(cards), p.rb("EXIT_KIND")) == (S["GS_WIN"], 8, 0, 0),
               (p.rb("GAME_STATE"), p.rb("LVL_DEPTH"), len(cards)))
         # ---- win -> new game: fresh D1, a new master seed ---------------

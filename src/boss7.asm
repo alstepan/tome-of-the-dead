@@ -15,7 +15,11 @@
 ; restore of rows 16-17 (rect_repaint, low RAM), "A GATE GLEAMS, THE WAY
 ; DOWN". Before the unique is placed (drop_put needs TF_FLOOR: never on the
 ; open gate). P3 (F3_GEN): on D8 -> R6 seal_open instead, LF_GRATE_OPEN stays clear
-; (the D8 grate never opens; any killer, the Archmage's own Mirror Helm return too). IX kept.
+; (any killer, the Archmage's own Mirror Helm return too). IX kept.
+; grate_open.op — WIN2 (user 2026-11-01), from low-RAM tome_gone (bank 7 paged): the
+; Tome is destroyed, the D8 gate opens: no XP; CUR_ROOM is the Sanctum (no exit
+; col), so only LF_GRATE_OPEN + the line; the lair's next build_room_map stamps
+; T_GRATE + the glow, try_climb reads the flag.
 ; Clobbers: A, BC, DE, HL.   ~9k T (the shadow + the line; the XP delta ~100 T)
 ;------------------------------------------------------------------------------
 grate_open:
@@ -32,7 +36,7 @@ grate_open:
                 ld   hl, (XP)
                 add  hl, de                    ; <= 9,999 + 70: no 16-bit wrap
                 ld   (XP), hl
-                ld   hl, LVL_FLAGS
+.op:            ld   hl, LVL_FLAGS
                 set  LF_GRATE_OPEN_BIT, (hl)
                 call cur_room_desc
                 ld   a, l
@@ -40,7 +44,7 @@ grate_open:
                 ld   l, a
                 ld   a, (hl)
                 or   a
-                ret  z                         ; (no level exit here: never)
+                jr   z, .msg                   ; no level exit here: only tome_gone (the Sanctum)
                 ld   c, a
                 ld   b, FLOOR_ROW1
                 call cell_addr                 ; (bank 2; keeps BC, DE)
@@ -65,7 +69,7 @@ grate_open:
 .ng:            dec  c                         ; C, B = c, 16: 3 cols x 2 rows
                 ld   de, $0302
                 call rect_repaint              ; (low RAM: shadow_rect, restore_page, queue_damage)
-                ld   a, TX_GATE_GLEAMS
+.msg:           ld   a, TX_GATE_GLEAMS
                 jp   msg_push
 .seal:          ld   hl, seal_open             ; R6 tome6.asm: LF_SEAL_OPEN, EG_SEAL off, "THE SEAL BREAKS"
                 jp   far6

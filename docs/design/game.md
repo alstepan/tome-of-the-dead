@@ -38,7 +38,7 @@
 | Going back up | **no**; the arrival shaft top is rubble | the previous level is discarded with its pool |
 | Save | **none; permadeath**. Death → death screen (`KILLED BY … ON D5, TURN n`) → main menu | user |
 | Seed | master seed = `FRAMES` when START is pressed; level seed = f(master, depth). Test flag `SEED_FIXED` forces the compile-time seed (F3) | a fixed seed would replay the same dungeon every game |
-| Win | D8: kill the **Necromancer Archmage** → the Sanctum seal opens → **destroy the Tome of Absolute Death Magic** (§1.3) → `GS_WIN` | user |
+| Win | D8: kill the **Necromancer Archmage** → the Sanctum seal opens → **destroy the Tome of Absolute Death Magic** (§1.3) → the exit gate opens → leave through it → `GS_WIN` (WIN2, user 2026-11-01) | user |
 
 ### 1.1 Generation rules (F6, per level, deterministic from the level seed)
 
@@ -49,7 +49,7 @@
 | Start | the DFS root, **on the top grid row (L1, 2026-10-05)**, 0 monsters. D2–D8: arrival shaft from above, rubble-capped |
 | Lair | **on the bottom grid row (L1, 2026-10-05; tiers in the L1 rules row)**, the farthest leaf (BFS) with a horizontal tree edge: boss + **level exit** = down-shaft `{c,2}` under a **GRATE** that opens when the boss dies. **The grate is SHUT (`T_GRATE_SHUT`, solid) while the boss lives; this is the rule (BOSS-GUARD 2026-10-29; the §1.4 "always open" row was the 3B stand-in only).** The boss is posted on the grate and guards it (§9.2 "Boss guard") |
 | Key room | the farthest other leaf (else the farthest non-start room): holds the **level key** (rev 2026-10-20: found on first entry, no floor item, §8.11 Q1). The lair edge is a **locked door** |
-| D8 Sanctum | an extra leaf off the lair behind a **sealed door** (opens on the Archmage's death); holds the Tome. D8 has no exit |
+| D8 Sanctum | an extra leaf off the lair behind a **sealed door** (opens on the Archmage's death); holds the Tome. **D8 keeps its exit** (WIN2, user 2026-11-01): the lair's grate over the down-shaft stays shut through the Archmage's death and opens only when the Tome is destroyed; leaving through it = `GS_WIN` |
 | **Level shape (L1, user 2026-10-05)** | The level exit (lair) is **always on the bottom grid row** (ids 6–8), and **no room is above the entry room**: the hero always heads down into the dungeon |
 | L1 rules (designer decision 2026-10-05) | Grid id `r = 3·row + col`, row 0 = top. **(1) Start = top row:** `start = rnd(3)` (replaces `rnd(9)`), so nothing can be above it; the start room has no up-exit; its row-0 horizontal neighbours are allowed (they are beside it, not above). Arrival shaft D2+ unchanged (storey 0 of the start room, rubble-capped). **(2) Room count:** `n = 7 + rnd(3)`; **D8: `n = min(7 + rnd(3), 8)`** (the Sanctum cell is reserved, see (5)). **(3) DFS growth:** the random DFS from `start` runs `while stack and not done`, where `done` = `|visited| ≥ n` **and** two horizontally adjacent bottom-row cells (6–7 or 7–8) are visited. A full DFS reaches all 9 cells, so `done` is always reachable; the room count stays 7–9. **(4) Bottom-row horizontal edge:** after the tree, if no tree edge joins two bottom-row rooms, the loop edge becomes **mandatory** and is drawn with `rnd(len)` from the unlinked present bottom-row pairs (the `LOOP_EDGE_ODDS` roll is skipped); otherwise the loop step is unchanged. Still 0–1 extra edges. **(5) D8 Sanctum:** before the DFS, reserve `S = 6 + 2·rnd(2)` (bottom-row end cell); the DFS never enters `S`; `done` additionally needs cell 7 and the other bottom end visited. The lair is then always cell 7 (the only bottom room next to the free `S`); the Sanctum hangs off its free side behind the sealed door. **(6) Lair tiers (replace F6 gap (1) tiers):** (a) farthest (BFS) **bottom-row** non-start leaf with a horizontal edge; (b) farthest bottom-row room with a horizontal edge (a through-room lair is fine; the boss never follows); ties = lowest id; D8 also needs `sanctum_ok`. (3)+(4) guarantee tier (b) exists, so **lair reseeds must be 0**; the reseed path (seed+1, ≤ 16) stays as a safety net only. Levelcheck asserts over the seed sweep: start on row 0 (so no room above it), lair on row 2, room count 7–9, lair has a horizontal edge, D8 lair = 7 with `S` free, lair-reseed count = 0; the junior reports Restart counts (feature/potion) before vs after. **(7) Lair door:** the lair's horizontal edge toward its BFS parent if horizontal, else its lowest-id horizontal edge, is the lair door (key gating only matters from 3F; the grate gates the exit). **(8)** Key room, vertical links, edges, door odds, shaft cols: unchanged |
 | In-room | 1–2 internal ladders `{c,1}`, `c ∈ 3..26`, ≥ 4 cols from ladders/pits · optional **pit** (3 cols, storey-0 floor, ≥ 3 clear cols on each side) · optional **dead-end block** (2–3 wall cols at an exitless edge, rubble at its foot) · decor **re-derived from the room seed** (never stored; rules in concept-screen §3.3) |
@@ -123,7 +123,7 @@
   - Each hit flashes the lectern `$43` and prints a message.
 - **Aura:** while the hero is within 6 cols on its storey, it deals 1 HP per turn (end of
   turn, ignores DEF).
-- At 0 it turns to ash (rubble glyph) → `THE TOME IS DESTROYED` → `GS_WIN`.
+- At 0 it turns to ash (rubble glyph) → `THE TOME IS DESTROYED` → **the D8 exit gate opens** (`A GATE GLEAMS, THE WAY DOWN`, as a D1–D7 boss death) → the hero walks to the lair and leaves through it → `GS_WIN` (WIN2, user 2026-11-01; the P3 build ended the run on the hit).
 - It is a tile with an `ATTACKABLE` flag, not an entity.
 - **P3 rulings as built (user 2026-10-31; engineer details marked E):** a hit counts when an attack is
   RELEASED by the hero standing on the lectern's storey, FACING it, with the gap (empty cols between body and
@@ -136,7 +136,13 @@
   storey 1 (either facing); its last hp ends the run (`GS_DEAD`, no death sequence). The seal opens on the
   Archmage's death by any hand (its own Mirror Helm return included): `THE SEAL BREAKS`; the door keeps its
   lock glyph until bumped open. (E) The D8 lair keeps its shut grate (the generator still places the exit
-  col); it never opens. No item or trap generates in the Sanctum. Accepted as is (manager review 2026-11-01):
+  col); the Archmage's death does not open it. **WIN2 as built (user 2026-11-01; E details):** the Tome's last hit
+  logs `THE TOME IS DESTROYED` then `A GATE GLEAMS, THE WAY DOWN` and sets `LF_GRATE_OPEN` (the lair is another
+  room: it opens off-screen, the lair's next build draws the raised gate + glow, re-entries / teleports keep it:
+  level state); the run goes on (summoned Skeletons stay). The destroyed Tome is inert: (E) the lectern stays
+  drawn (no ash), a bump on it is a wall (no turn), no hit counts, the aura stops (so the very hit that destroys
+  it can never kill by the aura; an earlier hit can, and then the gate stays shut). DOWN on the open D8 grate =
+  `GS_WIN`, log `YOU WIN!` (the end card's string; no new text), at any HP. No item or trap generates in the Sanctum. Accepted as is (manager review 2026-11-01):
   a FEARed hero can still hit the Tome by bump / FIRE (the Tome is no body, `fear_chk` gates body attacks
   only); the Mage's staff on the Tome plays no `melee_bonk` swing (the hit and the line only).
 
@@ -148,7 +154,7 @@
 | Population | a **fixed per-room table** using today's (prototype) kinds | §9.4 **lazy population** (user 2026-10-06; plan task LP): budget + per-room records, spawned on room entry (§9.4.1–9.4.3) |
 | Lair | **SUPERSEDED in 3F (BOSS-GUARD 2026-10-29): shut until the boss dies, §1.1 / §9.2 "Boss guard".** 3B stand-in was: the **grate is always open** (boss death not required), but drawn as the distinct raised-portcullis frame (id 26, ink `$46`, concept-screen §3.3 B3B-8 #4) with a first-entry hint `A GATE GLEAMS. THE WAY DOWN.` (designer decision 2026-10-04, B12); ordinary down-exit holes stay plain | §1.1, §8.6 |
 | Key / locked door | no key exists (potions only), so the lair door is an **ordinary unlocked door** (designer decision 2026-10-03) | §1.1 |
-| D8 | D8 gets a lair exit like D1–D7; **descending from D8 = `GS_WIN`** | §1.3 |
+| D8 | D8 gets a lair exit like D1–D7; **descending from D8 = `GS_WIN`** (F3_GEN 0: the Archmage's death opens it) | §1.3 (WIN2: the Tome's destruction opens it, descending = `GS_WIN`) |
 | Close door | keyboard key **`C`** (1 turn, §2.3 legality; not redefinable, not on joystick) until the 3C icon bar adds FIRE on the melee icon (designer decision 2026-10-03: the key) | §3.1 |
 | Start kit (3D, D3-7 debug; designer decision 2026-10-12) | Behind a debug build flag only, never in a release tape. **Mage:** all 5 spells rank 1, MP 40/40. **Warrior:** Power Strike + Whirlwind rank 1, bow in the bag, **ARROWS 20, DAGGERS 8**, MP 20/20. The near-cap ammo lets the D1 floor stacks trigger `QUIVER FULL.` 3E additions: §8.11 Q10 | §4 start kit (3E) |
 
