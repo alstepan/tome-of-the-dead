@@ -483,7 +483,7 @@ it_fmt:
                 ld   hl, fs_die
                 call fcat                      ; (A = 0 after it)
                 ld   a, (gd_die)
-                call fnum                      ; die sides
+                call msg_dec                   ; die sides
                 ld   a, (gd_bon)
                 or   a
                 call nz, fsgn
@@ -518,30 +518,12 @@ fsgn:           ld   c, '+'
                 inc  de
                 ld   a, b
                 ; fall through
-; fnum — A = 0..99 as 1-2 digits at DE.  Clobbers: A, BC, F
-fnum:           ld   b, '0' - 1
-.t:             inc  b
-                sub  10
-                jr   nc, .t
-                add  a, '0' + 10
-                ld   c, a
-                ld   a, b
-                cp   '0'
-                jr   z, .u
-                ld   (de), a
-                inc  de
-.u:             ld   a, c
-                ld   (de), a
-                inc  de
-                ret
-; fcat — copy the 0-terminated HL to DE (no 0).  Clobbers: A, HL, F
-fcat:           ld   a, (hl)
-                or   a
-                ret  z
-                ld   (de), a
-                inc  hl
-                inc  de
-                jr   fcat
+                jp   msg_dec                   ; = fnum: A = 0..99 as 1-2 digits at DE (msg2.asm, bank 2,
+                                               ; always mapped; the identical 21 B body was a copy here).
+                                               ; Clobbers: A, BC, F
+; fcat — copy the 0-terminated HL to DE (no 0).  Clobbers: A, HL, F.  msg_cat's copy loop
+; (msg2.asm) is the same 8 B, so R6 does not carry its own.
+fcat            EQU  msg_cat.c
 
 fs_food:        DB   " FOOD", 0
 fs_hp:          DB   " HP", 0

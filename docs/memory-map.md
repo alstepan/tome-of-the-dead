@@ -5008,3 +5008,20 @@ Tests: `tests/logdmg.py` (U: 26 vectors through the real routines; W: 30 kinds x
 text, longest 31 = `DAGGER HITS NECROMAGE -99 HP 99`; I: 15 game checks against the HP the bodies lost).
 Expected strings updated (reason: `THE ` dropped + the number tails): `log_audit` (tails stripped), `abil_melee`
 / `abil_ammo` (exact tails from their models), `b19`, `world` W15 / W17, `vbat` D1, `sanctum`, `exit3e` D1, `t12` Q5; `world` W17 `IMP_CAP` (impact_line compose) 4,500 -> 5,500 T: the worst tail line measures 5,195 T (`YOU HIT SCREECHER -99 HP 99`, +~1.4k: ent_ix, 2 msg_dec, 10 more stream bytes), once per log event.
+
+## RECLAIM-A ledger (`feat/reclaim-a`; package A of the reclaim audit, behaviour byte-identical, release build)
+
+Duplicate / dead code removed, six steps, one commit each. Free bytes (release `-DDEBUG_KIT=0`), before -> after:
+
+| Region | Before | After | Change |
+|---|---|---|---|
+| R6 | 2 | 28 | gear6 `fnum` (21 B) and `fcat` (8 B) gone: `fcat EQU msg_cat.c`, `fnum` = `call msg_dec` / the `fsgn` tail `jp msg_dec` (bank 2, always mapped; identical bodies) -26 |
+| bank 7 high | 6 | 21 | sanct7 `sn_step` (== io.asm `xs_core`) removed, 3 sites `call xs_core` -15 |
+| bank 3 | 30 | 61 | the dead `.proto/.pd` decor loop in `build_room_map` + `proto_decor` ({$FF}) -31 (seed-0 PROTO rooms jump to `.gate`; the PROTO rooms themselves stay) |
+| low RAM | 1 | 31 | `get_wh` entry in bank-2 `get_box` (the `ld c/ld b` moved in front; same bytes) called by the pend loop (-17); `start_game` / `level_descend` share `play_go` (-13) |
+| bank 7 low | 2 | 23 | `act_here` (Z = EF_ACTIVE only and in CUR_ROOM) for 3 sites (-21) |
+| bank 1 / bank 2 / b0 | 3 / 14 / 45 | same | untouched |
+
+Ticks: no per-tick path changed. Cold-path deltas only: `fnum` +10 T per gear page, the pend loop `get_wh` +27 T per
+pended body, `act_here` +~27 T per candidate (vbat: only kind matches; follow / arrival once per transition).
+The `STATS1` kill_note reserve (bank 3 30 B) is intact: the 61 free include it.

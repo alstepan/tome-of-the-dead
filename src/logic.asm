@@ -50,14 +50,17 @@ ix_slot:
 
 ;==============================================================================
 ; get_box — body box of IX: C = x, B = y, D = w, E = h.  Clobbers: A, HL
+; get_wh — RECLAIM-A: the D = w, E = h half alone (BC kept; lowram's pend loop pushes its C / B).
+;          Clobbers: A, HL.  Same bytes and T for get_box (the two ld's moved in front).
 ;==============================================================================
 get_box:
+                ld   c, (ix+E_X)
+                ld   b, (ix+E_Y)
+get_wh:
                 KFIELD KT_BW
                 ld   d, a
                 KFIELD KT_BH
                 ld   e, a
-                ld   c, (ix+E_X)
-                ld   b, (ix+E_Y)
                 ret
 
 ; feet_mod — A = (y+h) mod 9, L = (y+h) div 9 (raw; STOREY_ROWS).  Clobbers: A, H, L
