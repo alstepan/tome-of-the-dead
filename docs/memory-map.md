@@ -4765,6 +4765,25 @@ piece (as KIT-FIX did) or trim. The architect's ~110-B L4 cold event code has 29
 (~81 B) needs either the 240-B slack step (`B0_CODE_RES` up to ~250 at the same cost) or the unassigned R6 70 /
 bank 3 25 / bank 1 19.
 
+## M1 bank-0 room ledger (`feat/m1-b0`; user-approved 240-B pool-slack step 2026-11-01)
+
+Room for LOG-DMG (~54 B helpers + text) and STATS1-S1 (~40 B code + text). Moves only; `-DDEBUG_KIT=0`.
+
+| Constant | before (GEAR1, main `2ae5b3c`) | after M1 |
+|---|---|---|
+| `TEXT_RES` | 2,378 (text 2,378, headroom 0) | **2,418** (text 2,378 + **40 B** headroom) |
+| `B0_CODE_RES` | 22 (`b0_code` empty) | **206** (`b0_code` empty; ~25 `FARB0` sites at 8 B each) |
+| `POOL_START` | `$C960` (reserve 2,400) | **`$CA40`** (reserve 2,624) |
+| `POOL_CAP` | 32,416 | **32,192** (-224) |
+| D8 Warrior need / slack | 31,152 / 1,264 | **31,168 / 1,024** |
+
+Where the 240 B went: -224 B of `POOL_CAP` (the reserve grew 224 B) + 16 B of extra bank 0 -> 4 straddle waste at
+D8 Warrior (need 31,152 -> 31,168) = 240. `LEVEL_NEED` re-measured for all 16 level / hero rows (Warrior D8 +16;
+Mage D1..D8 +32 +160 +96 +96 +224 +96 +96 +96, Warrior D1..D7 unchanged). Cliff measured with `TEXT_RES` 2,418:
+`B0_CODE_RES` <= 206 -> slack 1,024, 207+ -> 384 (the next 880-B variant), so 206 is the maximum; the 40-B text
+headroom trades 1:1 with code (text +n = code -n). `ASSERT b0_code_end <= POOL_START` kept; `instr_p1_zx0 ==
+POOL_START` follows the symbol. Free bank-0 bytes after M1: text headroom 40 + code room 206 = 246.
+
 ## P3 SANCTUM-WIN ledger (`feat/p3-tome`; the real D8 ending, `F3_GEN` default 1)
 
 `F3_GEN` moved to `defs.asm` (`IFNDEF`, default **1**; levelgen.asm no longer defines it). Measured by the build

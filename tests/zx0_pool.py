@@ -115,11 +115,14 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # reserve: +74 B under bank 0, POOL_CAP 32,490 -> 32,416): every need is the old one - 74 + the level's new
 # bank 0 -> 4 straddle waste: Warrior D1..D7 -10 (straddle 25 -> 89), D8 -74 (worst level, slack 1,264 kept);
 # Mage D1 +54, D2 -74, D3 +166, D4 -74, D5 -74, D6 +166, D7 -74, D8 -74 (slack D3 / D6 Mage 8,896 / 6,688).
+# M1 (2026-11-01, user-approved 240-B step): POOL_START $C960 -> $CA40 (text 2,378 + 40 B headroom + 206 B
+# bank-0 cold-code room = 2,624 B under bank 0, POOL_CAP 32,416 -> 32,192): Warrior D8 +16 (straddle), the
+# Mage levels +32 / +160 / +96 / +96 / +224 / +96 / +96 / +96; D8 Warrior slack 1,264 -> 1,024.
 LEVEL_NEED = {
     (0, 1): 22528, (0, 2): 22240, (0, 3): 26528, (0, 4): 28576,
-    (0, 5): 23072, (0, 6): 28736, (0, 7): 27744, (0, 8): 31152,
-    (1, 1): 19456, (1, 2): 19104, (1, 3): 23520, (1, 4): 25696,
-    (1, 5): 20064, (1, 6): 25728, (1, 7): 24736, (1, 8): 28064,
+    (0, 5): 23072, (0, 6): 28736, (0, 7): 27744, (0, 8): 31168,
+    (1, 1): 19488, (1, 2): 19264, (1, 3): 23616, (1, 4): 25792,
+    (1, 5): 20288, (1, 6): 25824, (1, 7): 24832, (1, 8): 28160,
 }
 
 
