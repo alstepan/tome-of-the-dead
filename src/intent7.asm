@@ -251,12 +251,29 @@ ic_abil:
                 call abil_rank                 ; bank 2 (A, C, HL)
                 ld   a, TX_NOT_LEARNED
                 jr   z, ic_refuse
+                ; GEAR1 (gear_rules.md 1.2): all-or-nothing class gate, inline (24 B, no call).
+                ; k = HERO_KIND (Warrior 0 / Mage 1): banned armour = ROBE + 2k, count 1 + k
+                ; (Warrior ROBE; Mage CHAIN, PLATE), banned helm = HOOD + k (HOOD / HELM).
+                ; Uniques and charms never match. Before abil_load: no MP, no turn, the fizz.
                 ld   a, (HERO_KIND)
-                or   a
+                ld   c, a
+                ld   a, (WORN + WS_ARMOUR * IR_STRIDE + IR_TYPE)
+                sub  IT_A_ROBE
+                sub  c
+                sub  c                         ; a = armour - ROBE - 2k (unsigned)
+                inc  c                         ; c = k + 1
+                cp   c
+                jr   c, gear_ban
+                ld   a, (WORN + WS_HELM * IR_STRIDE + IR_TYPE)
+                sub  IT_H_HOOD - 1
+                sub  c                         ; a = helm - HOOD - k, 0 = banned
+                jr   z, gear_ban
+                dec  c                         ; Z = Warrior (ld leaves it)
                 ld   a, b
                 jr   nz, ic_disp               ; Mage
                 add  a, ABL_POWER              ; Warrior
                 ASSERT K_KNIGHT == 0 && ABL_SPARK == 0 && ABL_WHIRL == ABL_POWER + 1
+                ASSERT IT_A_CHAIN == IT_A_ROBE + 2 && IT_A_PLATE == IT_A_CHAIN + 1 && IT_H_HELM == IT_H_HOOD + 1
 ; ic_disp — A = ABL_*: abil_load (bank 3, rank3.asm) fills ABIL_DESC (the
 ; ab_def row + the rank / ammo row) and returns L = its ABF_* flags, B = the
 ; ABL_* (far3 passes BC / L out); dispatch by the flags: ABF_MELEE ->
@@ -275,6 +292,8 @@ ic_disp:
 .nm:            bit  ABF_AMMO_BIT, l
                 jp   nz, abil_ammo
                 jp   abil_spell
+gear_ban:       ld   a, TX_GEAR_BAN
+                jp   ic_no                     ; line + fizz, IC_REFUSED (out of jr range)
 ABF_MELEE_BIT   EQU 6
 ABF_AMMO_BIT    EQU 7
                 ASSERT ABF_MELEE == 1 << ABF_MELEE_BIT && ABF_AMMO == 1 << ABF_AMMO_BIT
