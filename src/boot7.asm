@@ -133,7 +133,7 @@ new_game:
                 ld   (TURN_PHASE), a
                 ld   (NEED_RELEASE), a
                 ld   hl, ITEM_RAM              ; 3E-T3: bag, worn,
-                ld   b, ITEM_RAM_LEN           ; hunger, quick slots := 0 (81 B, one page:
+                ld   b, ITEM_RAM_LEN           ; hunger, quick slots, M0 ST1_CNT := 0 (86 B, one page:
 .ir:            ld   (hl), a                   ; 9 B, ~2.1k T; level changes keep it)
                 inc  l
                 djnz .ir

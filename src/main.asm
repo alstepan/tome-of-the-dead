@@ -187,35 +187,47 @@ AY_LEN          EQU ay_code_end - AY_RESERVE
 ;==============================================================================
 ; LEVEL TILESETS (B3B-8; MEM-RECLAIM w2a: deduplicated, 2,560 -> TSET_LEN B) —
 ; the 8 per-level tile sets (tools/tiles_convert.py, format TSET_* in
-; level_defs.asm) in bank 7 above the shadow attrs, one headerless tape block;
-; level_tiles7 gathers one record per level.
+; level_defs.asm) in bank 7 above the shadow attrs (M0: from $FA40, the 3 spare
+; PROTO attr rows), then (M0, levers L1 + L2) the HIGH bank-7 cold code
+; b7h_code..b7h_end (same rules as bank7.asm: far7 only, no SMC, no data
+; written; tests/gfx_integrity.py compares TSET_BASE..$FFFF after play) up to
+; $10000. One headerless tape block TSET_BASE..b7h_end (B7D_LEN).
 ;==============================================================================
                 MMU  3, BANK_TSET
                 ORG  TSET_BASE
                 INCLUDE "../assets/gfx/tiles/tilesets.asm"
 TSET_LEN        EQU tilesets_end - tilesets
-data7:                                         ; MEM-RECLAIM w2b: the bank-7 code's read-only tables
-                INCLUDE "data7.asm"
-data7_end:
-B7D_LEN         EQU data7_end - TSET_BASE      ; tilesets + data7: one tape block
+b7h_code:
+                INCLUDE "tiles7.asm"           ; MEM-RECLAIM w2a: level_tiles7 (M0: from the low bank-7 block)
+    IF F3_GEN
+                INCLUDE "sanct7.asm"           ; 3F-T10: sanctum_leaf (M0 L1: from R6, far7 from level_gen)
+    ENDIF
+b7h_end:
+B7D_LEN         EQU b7h_end - TSET_BASE        ; tilesets + the high bank-7 code: one tape block
+B7H_FREE        EQU $10000 - b7h_end
                 ASSERT tilesets == TSET_BASE && tset_slots == TSET_BASE
                 ASSERT tileset_d2 - tileset_d1 == TSET_STRIDE && tset_fsets - tset_slots == LEVELS * TSET_STRIDE
                 ASSERT tset_pool - tset_fsets == TSET_NFSET * (TILE_IDS - TILE_COMMON) && TSET_NPOOL <= 256
-                ASSERT data7_end <= $10000
+                ASSERT b7h_end <= $10000
 
 ;==============================================================================
 ; BANK-7 COLD CODE (D3-S2; MEM-RECLAIM w2a: from $DB00, the old tileset slots
 ; 0..3) — B7_CODE (right after the screen-2 attrs) .. B7_LIMIT ($F800, the attr
-; shadow). Entered only through far7 (rules: src/bank7.asm). One tape block.
+; shadow): data7 (MEM-RECLAIM w2b read-only tables; M0: moved here from after
+; the tilesets, first so its page ASSERTs never move), then the code. Entered
+; only through far7 (rules: src/bank7.asm). One tape block B7_CODE..b7_end.
 ;==============================================================================
                 ORG  B7_CODE
+data7:
+                INCLUDE "data7.asm"
+data7_end:
 b7_code:
                 INCLUDE "bank7.asm"
 b7_end:
-B7_LEN          EQU b7_end - b7_code
+B7_LEN          EQU b7_end - B7_CODE
                 ASSERT B7_CODE == SCREEN7_ATTR + SCREEN_ATTR_LEN && b7_end <= B7_LIMIT && B7_LIMIT == SHADOW_ATTR
-                DISPLAY "GAME bank-7 cold code: ", /H, b7_code, "..", /H, b7_end - 1, " (", /D, B7_LEN, " B), free to the attr shadow: ", /D, B7_LIMIT - b7_end
-                DISPLAY "GAME bank-7 tilesets (MEM-RECLAIM w2a, dedup): ", /H, tilesets, "..", /H, tilesets_end - 1, " (", /D, TSET_LEN, " B, ", /D, TSET_NPOOL, " glyphs), + data7 ", /D, data7_end - data7, " B, free to $10000: ", /D, $10000 - data7_end
+                DISPLAY "GAME bank-7 cold code: ", /H, B7_CODE, "..", /H, b7_end - 1, " (", /D, B7_LEN, " B incl. data7 ", /D, data7_end - data7, "), free to the attr shadow: ", /D, B7_LIMIT - b7_end
+                DISPLAY "GAME bank-7 tilesets + high code (M0): ", /H, tilesets, "..", /H, b7h_end - 1, " (tilesets ", /D, TSET_LEN, " B, ", /D, TSET_NPOOL, " glyphs; code ", /D, b7h_end - b7h_code, " B), free to $10000: ", /D, B7H_FREE
 
 ;==============================================================================
 ; TEXT (B3B-13; D3-TX: bank 1 -> bank 0) — the text block (tools/textpack.py
@@ -231,12 +243,25 @@ text_img:
                 INCLUDE "../build/text/strings.asm"
 text_img_end:
 TEXT_LEN        EQU text_img_end - text_img
-POOL_START      EQU text_img_end               ; alloc_reset: first pool byte in bank 0
+; M0 (lever L4): the bank-0 cold code — cold event code right after the text,
+; entered by farb with C = BANK_TEXT (FARB0, defs.asm), then a zero pad up to
+; the FIXED POOL_START (defs.asm: TEXT_RES + B0_CODE_RES), so text or code
+; growth inside the reserve moves no pool byte. Rules = bank3.asm's (no page_bank
+; of $C000; blit_keep; helpers that page BANK_TEXT hand it back), no SMC: the
+; block is compared with the .sna after play (tests/gfx_integrity.py, game.py #50).
+b0_code:
+b0_code_end:
+B0_CODE_LEN     EQU b0_code_end - b0_code
+B0_FREE         EQU POOL_START - b0_code_end
+                ASSERT b0_code_end <= POOL_START        ; text + b0 code stay below the pool
+    IF B0_FREE > 0
+                DS   B0_FREE, 0                         ; the reserve (on the text tape block)
+    ENDIF
 ; INSTR-BUILD: the HOW TO PLAY streams (page 1, page 2, then the overlay code:
 ; the code stream is last so no address an overlay reads depends on a packed
 ; size — instr_main reaches page 2 as "past page 1"). Boot only: on the text
 ; tape block (TEXT_TAPE_LEN), read by boot6_wait -> ovl_run before gen_idles,
-; then the boot pool overwrites them (POOL_START is unchanged: 0 pool bytes).
+; then the boot pool overwrites them (0 pool bytes; M0: POOL_START is fixed at $C960, defs.asm).
 instr_p1_zx0:
     IF OVL_PASS == 2
                 INCBIN "instr1.zx0"
@@ -257,6 +282,7 @@ TEXT_TAPE_LEN   EQU instr_zx0_end - TEXT_ADDR
                 ASSERT (tx_entries & $FF) == 0         ; w2d: tk_get's B = tx_entries >> 8
                 ASSERT text_img_end <= tap_loader      ; the BASIC loader scratch ($E000, page 0)
                 DISPLAY "GAME text (bank 0): ", /D, TX_COUNT, " strings, ", /D, TX_TOKENS, " tokens, raw ", /D, TEXT_RAW, " -> ", /D, TEXT_PACKED, " B packed at ", /H, text_base, "; pool from ", /H, POOL_START
+                DISPLAY "GAME bank-0 cold code (M0 L4): ", /H, b0_code, " ", /D, B0_CODE_LEN, " B of ", /D, B0_CODE_RES, "; text ", /D, TEXT_LEN, " of TEXT_RES ", /D, TEXT_RES, " (headroom ", /D, TEXT_RES - TEXT_LEN, "); text + code reserve ", /D, POOL_START - TEXT_ADDR, " B, free to POOL_START: ", /D, B0_FREE
 
 ;==============================================================================
 ; BANK-5 LOW-RAM COLD CODE — tape entry, boot, generator, init_tiles, game

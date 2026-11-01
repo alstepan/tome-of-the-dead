@@ -1,8 +1,10 @@
 ;==============================================================================
-; sanct6.asm — 3F-T10: the D8 Sanctum leaf (R6; only with -DF3_GEN=1, else 0 B).
+; sanct7.asm — 3F-T10: the D8 Sanctum leaf (only with -DF3_GEN=1, else 0 B).
 ; sanctum_leaf == tools/levelgen.py sanctum_pass, byte-exact (tests/levelgen_z80.py --f3).
-; Lives in R6 because bank 3's cold code is full (68 B free); the bank-3 caller is
-; level_gen's tail (`ld hl, sanctum_leaf / call far6`, D8 only).
+; M0 (lever L1): bank 7, the high block after the tilesets (main.asm b7h_code; was
+; R6 sanct6.asm), so the 3F switch costs R6 nothing. Bank 3's cold code is full; the
+; bank-3 caller is level_gen's tail (`ld hl, sanctum_leaf / jp far7`, every depth).
+; Reads / writes only bank-5 low RAM (LVL_STATE), no bank-7 data, no SMC.
 ;
 ; The reserved bottom-row end cell S (6 or 8: the one the DFS never entered) becomes a
 ; leaf behind the lair's (7) SEALED edge EG_LINK|EG_DOOR|EG_SEAL; room flags
@@ -11,7 +13,7 @@
 ; calls in the Python order: rnd(2) edge storey, rnd(24) ladder col (its pick_feature
 ; accepts the 1st try: the empty room has no footprints), rnd16 room seed.
 ;
-; Entered as level_gen's tail (jp far6): also writes LVL_FLAGS = 0 (all depths), B = 0.
+; Entered as level_gen's tail (jp far7): also writes LVL_FLAGS = 0 (all depths), B = 0.
 ; In : the level generated (LVL_SEED = the seed used). Out: LVL_SANCTUM = S,
 ;      LVL_NROOMS + 1, the edge / exits / room written. Clobbers all but IY.
 ; Cost: ~2.1k T. No SMC.

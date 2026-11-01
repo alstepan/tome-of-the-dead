@@ -1264,8 +1264,8 @@ level_gen:      ld   (LVL_DEPTH), a
                 ld   (LVL_KEYROOM), a
                 ld   (LVL_SANCTUM), a
     IF F3_GEN
-                ld   hl, sanctum_leaf   ; 3F (R6, sanct6.asm): writes LVL_FLAGS = 0, the D8 Sanctum, B = 0
-                jp   far6               ; (bank 3 is full; restore_page keeps BC, callers test B)
+                ld   hl, sanctum_leaf   ; 3F (bank 7, sanct7.asm; M0: was R6): LVL_FLAGS = 0, the D8 Sanctum, B = 0
+                jp   far7               ; (bank 3 is full; restore_page keeps BC, callers test B)
     ELSE
                 xor  a                  ; 3F-T8 (BOSS-GUARD): the grate is SHUT at generation, the
                 ld   (LVL_FLAGS), a     ; boss's death opens it (grate_open); 3B opened it here

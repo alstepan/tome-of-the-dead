@@ -276,9 +276,14 @@ MP_HOLD         EQU HW_TMR + 1                  ; != 0: xp_turn skips MP regen t
                                                 ;   writes it every turn, just before xp_turn)
 QS_CACHE        EQU MP_HOLD + 1                 ; QS_COUNT (pot_sync, IC1): food / scroll QTY in BAG (0 = the icon
                                                 ;   greys), QS_POTION = the potion types present (bit k = IT_P_HEAL + k) (kept)
-ITEM_RAM_END    EQU QS_CACHE + QS_COUNT
-ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 81
-                ASSERT ITEM_RAM_LEN == 81
+; M0 (post-3F, reserved for STATS1 S1; architect 2026-10-31): 5 per-game counters, zeroed by
+; new_game with the rest of the block (0 B of code: ITEM_RAM_LEN is the clear's count). Unused
+; until STATS1 S1 defines them (names / meaning: that task; memory-map "M0 / post-3F ledger").
+ST1_CNT         EQU QS_CACHE + QS_COUNT         ; 5 B: STATS1 S1 counters                  (kept)
+ST1_LEN         EQU 5
+ITEM_RAM_END    EQU ST1_CNT + ST1_LEN
+ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 86 (M0: 81 + ST1_LEN)
+                ASSERT ITEM_RAM_LEN == 86
                 ASSERT (ITEM_RAM & $FF) == 0 && ITEM_RAM_LEN <= 256      ; one page (inc l, djnz clear)
                 ASSERT ITEM_RAM >= $5CCB        ; above the system variables + channel area
                 ASSERT ITEM_RAM_END <= PF_RAM   ; below D3-6b PF_RAM ($5E00) / MK_RAM ($5F00)
