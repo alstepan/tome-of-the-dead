@@ -50,7 +50,7 @@ def layout(check):
     check("L1 slot ids", [s[k] for k in ("WS_WEAPON", "WS_ARMOUR", "WS_HELM", "WS_CHARM")] == [0, 1, 2, 3])
     # ---- L2 ------------------------------------------------------------------
     check("L2 record", (s["IR_TYPE"], s["IR_QTY"], s["IR_IST"], s["IR_STRIDE"], s["STACK_MAX"]) == (0, 1, 2, 3, 9))
-    m = [s["IST_RSVD_MASK"], s["IST_ENCH_MASK"], s["IST_M_MASK"]]
+    m = [s["IST_Q_MASK"], s["IST_ENCH_MASK"], s["IST_M_MASK"]]
     check("L2 ISTATE fields", m == [0x07, 0x18, 0xE0] and sum(m) == 0xFF)
     check("L2 m encodings", [s["IST_M_" + k] for k in ("P2", "P1", "M1", "M2", "M3")]
           == [((v & 7) << 5) for v in (2, 1, -1, -2, -3)])

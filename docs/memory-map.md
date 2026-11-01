@@ -4839,3 +4839,34 @@ Contract: `ic_abil` order NOT LEARNED -> GEAR -> abil_load -> AFRAID -> NO MANA 
 entry points; banned = Mage: armour CHAIN / PLATE or helm HELM; Warrior: armour ROBE or helm HOOD (uniques,
 LEATHER, charms neutral). Refusal = `ic_no` (line + `SFX_NO`, `IC_REFUSED`, no MP, no turn). Tick cost on accept
 ~ 20 B of straight-line code, about 100 T per ability use (once per FIRE, not per tick: no walarm change).
+
+
+## GEAR2 + GEAR3 ledger (`feat/gear23`; q per instance, Enchant any worn item; docs/design/gear_rules.md 2 / 3)
+
+Measured by the build DISPLAY, `-DDEBUG_KIT=0` [kit in brackets], against GEAR1 (`2ae5b3c`).
+
+| Region | before | after | spent | note |
+|---|---|---|---|---|
+| R6 (`R6_ADDR..`) | 87 [15] | **30** [-42] | 57 | `ist_v` 16 B (v = m + q for `gear_dec` / `it_fmt`; `gear_dec` -7, `it_fmt` +0) + `ench_any` / `ea_pick` / `ea_scan` (two-pass count-and-pick, no scratch RAM) + `pu_add` +1 (`ld c, d / dec c / ld b, 1`) + the `fx_read` `.en` tail; `enchant_weapon` and the 7-B stem change (`glows` -> `enchanted`) are in. Ledger was GEAR2 26 + GEAR3 40 = 66 |
+| bank 7 low | 5 [0] | **2** [-3] | 3 | `floor_pickup` `.bag` passes `FL_QTY` in D (`inc l / ld d,(hl) / dec l`; DE passes through `far6`, BC does not) |
+| bank 1 (overlay, packed) | 44 | **3** | 41 | items overlay 1,087 -> 1,119 B raw, 908 -> 949 packed: the q pass (~44 B code), 2 gear rows (+4), minus tweaks (below). ZX0 does not shrink new code (spec said ~37) |
+| bank 3 (to `AY_RESERVE`) | 40 | **30** | 10 | `gq_qtab` (levelgen.asm, next to `idx`): the 10-B q table `FL_QTY - 1` by s = rnd(8) + band, built by `DUP` from `Q_T0..Q_T2` (knobs); it did not fit the overlay image (3 B short even after the tweaks below). kill_note's 30 B (P3 ledger) is untouched |
+| bank 0 text | 0 | 0 | 0 | no new string; `ENCHANTED: ` is an R6 fx stem |
+| low RAM / bank 2 / pool | | unchanged | 0 | |
+
+Overlay tweaks that paid for the q pass (all behaviour-neutral, `tests/items_gen.py` 16,000 levels byte-exact): `ig_tplen`
+(8 B table) -> `min(depth, TRAP_KINDS)` inline, four `call hla / ld a,(hl)` -> `call idx`, `ig_place` keeps the room in E
+(`rnd` keeps DE), the gear-pool class mask `$40 << HERO_KIND` (`GT_M` $40 / `GT_W` $80 swapped so the Warrior's mask
+is `inc a / rrca / rrca`), `ld d,a` for the second `(ix+0)` read.
+The kit build [DEBUG_KIT=1] does not assemble: bank 7 low is 3 B over and R6 is ~42 B over (the known kit overflow; DBG-1).
+
+Contracts:
+- **`FL_QTY` of a floor entry** = 1 + (q & 7) for generated numeric gear (weapons, armour, helmets: 1, 2, 3 or 8), 1 for
+  everything else non-ammo; ammo keeps its count. Readers audited: `ap_take` (ammo only), `uq_fit` / `fi_gc` (no qty),
+  `drop_put` (writes 1 / ammo counts), `levelcheck` (potions >= 1), `build_room_map` (no qty), the tests.
+- **Pickup**: `pu_add` ISTATE = FL_QTY - 1 (no type test), qty 1 (`B`); bank 7 passes D = FL_QTY.
+- **q pass** (`items_ovl.asm`, last step before `FLOOR_N`): walks the 32 list slots, one `rnd(8)` per gear type entry
+  (charms too), `gq_qtab[w + ((depth + 1) >> 2)]` -> FL_QTY of numeric gear only (a charm keeps 1).
+- **`ench_any`** (gear6.asm): worn WEAPON / ARMOUR / HELM then the bag (slots 0..19, after the scroll left): candidates
+  = type `IT_WPN_LO..IT_HELM_HI`, m != +3; one `rng_mod(n)`; `ISTATE += $20`; `hero_recalc` only for a worn target.
+  Out A = the type (0 = NOTHING HAPPENS). `ist_v`: A = ISTATE -> A = m + q (clobbers A, H, L).

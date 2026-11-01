@@ -591,7 +591,7 @@ row |0         1         2         3 |
 19  |GRATES ARE ONE WAY: LOOT FIRST. |  $44
 20  |BOSSES NEVER LEAVE THEIR LAIR.  |  $44
 21  |READ FEAR OR SLEEP WHEN SWARMED.|  $44
-22  |ENCHANT MENDS A WORN WEAPON.    |  $44
+22  |ENCHANT GIVES A WORN ITEM +1.   |  $44
 23  |         PRESS ANY KEY          |  $46
 ```
 
@@ -1855,7 +1855,7 @@ Weapons are class-locked; everything else is not.
   the room's monsters fall ASLEEP 8 turns, §6.4) · **Enchant** (if any worn item is cursed:
   **blesses every worn cursed item** instead (§8.7, `THE CURSE LIFTS. BLESSED!`); else
   weapon dmg +1, max +3).
-  **[rev 6, 2026-10-20: Enchant = worn weapon `m` +1, max +3; no blessing; §8.11 "3E simplification".]**
+  **[rev 6, 2026-10-20: Enchant = worn weapon `m` +1, max +3; no blessing; §8.11 "3E simplification". GEAR3, 2026-11-01: Enchant = a random worn weapon / armour / helmet (else a bag one) `m` +1, max +3: `docs/design/gear_rules.md` §3.]**
   Floor scrolls pick the type uniformly from the four.
 - The **key** opens the lair door and is consumed.
 
@@ -2512,9 +2512,10 @@ nothing): `YOU ARE HUNGRY` · `YOU ARE WEAK WITH HUNGER` · `YOU FEEL WELL FED`.
 | Cure | `YOU ARE CURED` 13 (also +4 HP) | N |
 | Fear scroll | `THEY FLEE IN TERROR!` 20 | N |
 | Sleep scroll | `THEY FALL ASLEEP!` 17 | N |
-| Fear/Sleep, empty room; Enchant at +3 or with no weapon | `NOTHING HAPPENS` 15 | N |
+| Fear/Sleep, empty room; Enchant with no candidate (GEAR3) | `NOTHING HAPPENS` 15 | N |
 | Teleport scroll / trap | `YOU ARE TELEPORTED!` 19 | N |
-| Enchant, weapon +1 | `YOUR WEAPON GLOWS!` 18 | N |
+| Enchant, an item +1 (GEAR3) | `ENCHANTED: ` + name (max 26) | N |
+| class gear gate refusal (GEAR1) | `YOUR GEAR FORBIDS IT` 20 | N |
 | Enchant, worn cursed | `THE CURSE LIFTS: BLESSED!` (`cmb_lifts`) | E |
 | equip / remove / discard | `YOU EQUIP ` 10 · `YOU REMOVE ` 11 · `YOU DISCARD ` 12 + [BUC] + name (no `THE`) | N |
 | equip cursed reveal | `IT CLINGS TO YOU! CURSED ` + signed digit (`cmb_cling`) | E |
@@ -2556,15 +2557,18 @@ unknown scrolls), and in this section: Q1 BUC tints and the "appearance ink" for
 (BUC `rnd(16)`, value `rnd(8)`, light-ID shuffle stream), text rulings (1) BUC composer and
 unknown names, (3) `IT WAS A`, `cmb_cling`/`cmb_lifts`/`cmb_cursed_no`/shatter lines.
 
-1. **Item record.** `TYPE` / `QTY` / `ISTATE`, 3 B as built. **`ISTATE` = bits 5–7 `m` only**
-   (signed −3..+3, the existing `IST_M_*` macros; bits 0–4 are 0 and reserved). **Gear has
-   FIXED stats by type** (the §8 table; no per-item random modifier, no roll code). `m` starts
-   0 and changes only by (a) the **Enchant scroll** and (b) §8.10 wear. Main-stat effect of `m`
-   as before: weapon dmg +m, armour/helm DEF +m (Robe/Hood max MP +m), clamped at 0 / `max(1,…)`.
+1. **Item record.** `TYPE` / `QTY` / `ISTATE`, 3 B as built. **`ISTATE` = bits 5–7 `m`
+   (signed −3..+3, the existing `IST_M_*` macros) + bits 0–2 `q` (GEAR2, 2026-11-01: the
+   per-instance offset rolled at generation for found weapons / armour / helmets, signed
+   −1..+2, never changes; bits 3–4 stay 0).** [Superseded by `docs/design/gear_rules.md`
+   §2 / §3: gear stats are the §8 table + v = m + q; Enchant picks a random worn item.]
+   `m` starts 0 and changes only by (a) the **Enchant scroll** and (b) §8.10 wear.
+   Main-stat effect of v = m + q: weapon dmg +v, armour/helm DEF +v (Robe/Hood max MP +v),
+   clamped at 0 / `max(1,…)`.
    Only gear carries `ISTATE`; stacks still merge on equal `TYPE`+`ISTATE` (potions, scrolls,
-   food only, always 0; books never stack). **Enchant (one rule):** worn weapon `m` +1, max +3 (`YOUR WEAPON
-   GLOWS!`); fists or already +3 → `NOTHING HAPPENS`, scroll consumed. Armour is never
-   enchanted. Wear (§8.10): `m` −1 on the target, destroyed at −3 (slot empties, fists 1d2);
+   food only, always 0; books never stack). **Enchant (one rule, GEAR3):** a random worn weapon / armour /
+   helmet (else a bag one) `m` +1, max +3 (`ENCHANTED: <name>`); no candidate →
+   `NOTHING HAPPENS`, scroll consumed. Charms are never enchanted. Wear (§8.10): `m` −1 on the target, destroyed at −3 (slot empties, fists 1d2);
    Enchant is the repair. EQUIP/REMOVE/swap are always free (no lock, no refusal but `BAG FULL`).
    Tiers: the §8 table unchanged (Short Sword start / Long D2+ / Axe D4+; Chain D3+, Plate
    D6+; rings D2+, amulets D3+; Hood/Helm D1+; uniques §8.6).
@@ -2585,7 +2589,7 @@ unknown names, (3) `IT WAS A`, `cmb_cling`/`cmb_lifts`/`cmb_cursed_no`/shatter l
    gear → books → ammo/bow → traps. Gear/trap/later outputs shift versus the T5 model (re-baseline
    `items_gen` goldens; `GEN_RNG`/world goldens untouched). **`FL_IST` is dropped:** a floor item
    is always `m` 0 (DISCARD destroys, nothing is dropped, boss/drop items are plain), so the floor
-   entry is TYPE/QTY only and a pickup writes `ISTATE` 0. Floor ink is a pure function of TYPE
+   entry is TYPE/QTY only and a pickup writes `ISTATE` 0 [GEAR2: `(FL_QTY − 1) & 7` = q, `FL_QTY` = 1 + (q & 7) for generated numeric gear, gear_rules.md §2.2] Floor ink is a pure function of TYPE
    (`it_attr`); `FL_ATTR` (T6) may become a per-draw lookup at the engineer's choice.
 4. **DELETE / simplify (staff).** `items_model.py`: `light_id_map`/`id_rng`, `roll_gear_state`
    (BUC odds, `CURSE_M`, `BLESSED_M`), HIDDEN, `BUC_*` parsing, blessed/cursed checks in

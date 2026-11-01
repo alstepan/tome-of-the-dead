@@ -14,10 +14,11 @@
 ; ig_main   In : the level_gen block (LVL_STATE..), MASTER_SEED, HERO_KIND.
 ;           The level on ITEM_RNG = LVL_SEED(master, depth|$80): potion types
 ;           (+ FLOOR1 the potion re-check), food, scrolls, gear, books, Warrior ammo /
-;           the D2 bow + bundle, traps (per item: type / qty, then placement);
+;           the D2 bow + bundle, traps (per item: type / qty, then placement), then
+;           (GEAR2) the q pass: one rnd(8) per gear entry -> numeric gear's FL_QTY;
 ;           writes FLOOR_N + all 32 FLOOR_LIST entries (unused = FL_EMPTY x 4)
-;           and TRAP_LIST / TRAP_N. A floor item is TYPE / QTY only (no ISTATE;
-;           its ink is f(type): fl_attr, lowram.asm). ITEM_RNG runs in the
+;           and TRAP_LIST / TRAP_N. A floor item is TYPE / QTY only (no ISTATE; FL_QTY = 1 +
+;           (q & 7) for numeric gear, pickup writes q; its ink is f(type): fl_attr, lowram.asm). ITEM_RNG runs in the
 ;           GEN_RNG word (bank-3 rnd reused as is); GEN_RNG is restored on the
 ;           only exit: every GEN_RNG-derived output stays.
 ;           Out: -. Clobbers: A, BC, DE, HL (IX kept).
@@ -25,15 +26,17 @@
 ;==============================================================================
 PLACE_TRIES     EQU 2 * FEAT_TRIES      ; col tries per item (model PLACE_TRIES; FLOOR1: 8 -> 16, the 2-col footprint)
 TRAP_TRIES      EQU 8
+TRAP_KINDS      EQU 5                   ; the trap pool at its full size (D5+)
 ITEM_COL_SPAN   EQU 28
 TRAP_COL_LO     EQU 6                   ; t = 6 + rnd(20)
 TRAP_COL_SPAN   EQU 20
 ARROW_BUNDLE    EQU 6
 BOW_DEPTH       EQU 2
 BOOK2_DEPTH     EQU 4                   ; 2nd-book roll D4..D7
-GT_W            EQU $40                 ; ig_gtab: Warrior-only weapon
-GT_M            EQU $80                 ;          Mage-only weapon
+GT_M            EQU $40                 ; ig_gtab: Mage-only row  (the Warrior's mask: $40 << HERO_KIND, K_KNIGHT 0)
+GT_W            EQU $80                 ;          Warrior-only row (the Mage's mask)
 GT_DMASK        EQU $0F                 ;          first depth
+                ASSERT K_KNIGHT == 0 && K_WIZARD == 1
 IG_GRP_N        EQU 3                   ; ig_grp descriptors: food, scrolls, gear
 IG_GRP_LEN      EQU 5
 
@@ -86,19 +89,20 @@ ig_main:
                 ld   (ig_st + 1), a
                 ; gear pool (no rolls): the §8 'Found' table, depth + class gated
                 ld   a, (HERO_KIND)
-                or   a
-                ld   c, GT_M                   ; the Warrior skips Mage weapons
-                jr   z, .gc
-                ld   c, GT_W
-.gc:            ld   ix, ig_gtab
+                inc  a
+                rrca
+                rrca
+                ld   c, a                      ; the mask of the OTHER class's rows: Warrior GT_M ($40), Mage GT_W ($80)
+                ld   ix, ig_gtab
                 ld   hl, ig_gp + 1
                 ld   a, (ig_d)
                 ld   e, a
                 ld   b, IG_GEAR_N
 .g:             ld   a, (ix+0)
+                ld   d, a
                 and  c
                 jr   nz, .gx
-                ld   a, (ix+0)
+                ld   a, d
                 and  GT_DMASK
                 dec  a
                 cp   e                         ; first depth <= depth
@@ -239,13 +243,12 @@ ig_main:
                 ld   b, (hl)
 .tl:            push bc
                 ld   a, (ig_d)
-                ld   hl, ig_tplen - 1
-                call hla
-                ld   a, (hl)
-                call rnd
+                cp   TRAP_KINDS + 1
+                jr   c, .tk
+                ld   a, TRAP_KINDS             ; pool length = min(depth, 5): DART D1+, GAS D2+, TELEPORT D3+,
+.tk:            call rnd                       ; STUN D4+, ALARM D5+ (was the 8-B ig_tplen table)
                 ld   hl, ig_tord               ; STUN1: the pool is a prefix of DART GAS TELEPORT STUN ALARM
-                call hla
-                ld   a, (hl)
+                call idx
                 ld   (ig_t), a                 ; consumed even if the trap drops
                 ld   b, TRAP_TRIES
 .tt:            push bc
@@ -294,6 +297,38 @@ ig_main:
 .tdrop:         pop  bc
 .tnx:           pop  bc
                 djnz .tl
+                ; 8. GEAR2 q pass (gear_rules.md 2.3, after the traps): every gear entry in list
+                ;    order takes one ITEM_RNG rnd(8); numeric gear's FL_QTY := qtab[w + band],
+                ;    band = (depth + 1) >> 2 (a charm keeps qty 1: the draw is still consumed).
+                ;    Walks all 32 slots: the unused ones are FL_EMPTY (type $FF, not gear).
+                ld   a, (ig_d)
+                inc  a
+                rrca
+                rrca
+                and  3
+                ld   c, a                      ; C = the depth band
+                ld   de, FLOOR_LIST + FL_ITEM  ; DE: rnd keeps it (clobbers A, HL)
+.gq:            ld   a, (de)
+                sub  IT_GEAR_LO
+                cp   IT_GEAR_HI - IT_GEAR_LO + 1
+                jr   nc, .gn
+                cp   IT_CHARM_LO - IT_GEAR_LO  ; CF = numeric gear
+                sbc  a, a
+                ld   b, a                      ; B = $FF numeric / 0 charm (the draw is taken either way)
+                ld   a, 8
+                call rnd                       ; (keeps BC, DE)
+                add  a, c                      ; s = w + band: 0..9
+                ld   hl, gq_qtab               ; bank 3 (levelgen.asm): the table is not in the stored image
+                call idx                       ; A = FL_QTY - 1 = q & 7
+                and  b                         ; a charm: 0 -> FL_QTY 1 (what it already holds)
+                inc  a
+                inc  e
+                ld   (de), a
+                dec  e
+.gn:            ld   a, e
+                add  a, FL_STRIDE
+                ld   e, a
+                jp   p, .gq                    ; 32 entries: E $02..$7E
                 ld   a, (ig_n)
                 ld   (FLOOR_N), a
                 pop  hl
@@ -342,8 +377,7 @@ ig_grp:         ld   a, 2
 .gear:          ld   a, (ig_gp)
                 call rnd
                 ld   hl, ig_gp + 1
-                call hla
-                ld   a, (hl)
+                call idx
 .t:             ld   l, (ix+3)
                 ld   h, (ix+4)
                 ld   e, (hl)
@@ -412,15 +446,13 @@ ig_place:       ld   (ig_pool), hl
                 call rnd
                 ld   hl, (ig_pool)
                 inc  hl
-                call hla
-                ld   a, (hl)
-                ld   (ig_r), a
+                call idx
+                ld   e, a                      ; (rnd keeps DE) the room
                 ld   a, 2
                 call rnd
                 rrca
-                ld   hl, ig_r
-                or   (hl)
-                ld   (hl), a
+                or   e
+                ld   (ig_r), a
                 ld   b, PLACE_TRIES
 .t:             push bc
                 ld   a, ITEM_COL_SPAN
@@ -695,25 +727,26 @@ ig_grps:        DB   3, IT_FOOD_LO, IT_FOOD_HI - IT_FOOD_LO + 1
                 ASSERT $ - ig_grps == IG_GRP_N * IG_GRP_LEN
 ig_nsp:         DW   ig_ns
 ig_st:          DB   1, 0                      ; [start] (+1 written per level)
-; §8 'Found' gear table (model GEAR_TABLE order): first depth | class flag, type
+; §8 'Found' gear table (model GEAR_TABLE order, gear_rules.md 1.3): first depth | class flag, type
 ig_gtab:        DB   2 | GT_W, IT_W_LONG
                 DB   4 | GT_W, IT_W_AXE
                 DB   2 | GT_M, IT_W_IRON
                 DB   4 | GT_M, IT_W_RUNE
-                DB   3, IT_A_CHAIN
-                DB   6, IT_A_PLATE
-                DB   1, IT_H_HOOD
-                DB   1, IT_H_HELM
+                DB   1 | GT_M, IT_A_ROBE        ; GEAR2 (gear_rules.md 1.3): the start-kit armours
+                DB   1 | GT_W, IT_A_LEATHER     ; become finds, the class gate splits the rest
+                DB   3 | GT_W, IT_A_CHAIN
+                DB   6 | GT_W, IT_A_PLATE
+                DB   1 | GT_M, IT_H_HOOD
+                DB   1 | GT_W, IT_H_HELM
                 DB   2, IT_C_MIGHT
                 DB   2, IT_C_WARD
                 DB   2, IT_C_FIRE
                 DB   3, IT_C_MANA
                 DB   3, IT_C_PLENTY
 IG_GEAR_N       EQU ($ - ig_gtab) / 2
-; §1.5 traps: count by depth; pool length (DART D1+, GAS D2+, TELEPORT D3+, STUN D4+, ALARM D5+)
+; §1.5 traps: count by depth; pool length = min(depth, TRAP_KINDS) (DART D1+, GAS D2+, TELEPORT D3+, STUN D4+, ALARM D5+)
 ; = a prefix of ig_tord (type = ig_tord[rnd(len)]; one draw, as before STUN1)
 ig_tcnt:        DB   1, 2, 2, 3, 3, 3, 4, 4
-ig_tplen:       DB   1, 2, 3, 4, 5, 5, 5, 5
 ig_tord:        DB   TT_DART, TT_GAS, TT_TELEPORT, TT_STUN, TT_ALARM
                 ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3 && TT_STUN == 4
 ig_image_end:

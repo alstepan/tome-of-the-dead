@@ -41,6 +41,8 @@ is dropped (counted, not an error).
  7. traps (1.5): count / pool by depth; per trap type = pool[rnd(len)], then up
     to TRAP_TRIES x (room = elig[rnd(len)], storey = rnd(2), t = 6 + rnd(20)),
     first legal wins; none -> dropped.
+ 8. GEAR2 q pass (gear_rules.md 2.3; Z80: items_ovl.asm, step 8): after the traps, one
+    rnd(8) per gear entry in list order -> numeric gear's FL_QTY = 1 + (q & 7).
 The key has no floor entry (8.11 Q1); LVL_KEYROOM stays whatever level_gen set.
 
 GEAR2 (docs/design/gear_rules.md 1.3 / 2.3): the gear pool is class-gated per row

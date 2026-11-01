@@ -141,7 +141,8 @@ IT_CHARM_HI     EQU IT_C_GRAVE
 ;------------------------------------------------------------------------------
 ; Item record (game.md §8.9): TYPE / QTY / ISTATE, 3 B. Bag and worn slots
 ; store it as is (IR_*); FLOOR_LIST keeps its 4-B entry (FL_ITEM = TYPE,
-; FL_QTY = QTY); a floor item has no ISTATE (3E rev 6: m 0, pickup writes 0).
+; FL_QTY = QTY); a floor item has no ISTATE: pickup writes (FL_QTY - 1) & 7 = q
+; (GEAR2: generated numeric gear carries FL_QTY = 1 + (q & 7), everything else 1).
 ; Stacks merge only on equal TYPE and ISTATE; QTY 1..STACK_MAX (ammo / key
 ; counts live outside the bag). TYPE = IT_NONE marks a free slot (QTY and
 ; ISTATE then 0).
@@ -153,12 +154,14 @@ IR_STRIDE       EQU 3
 STACK_MAX       EQU 9               ; game.md §8 "same-type stacks to 9"
 
 ; ISTATE bits (§8.9, 3E simplification: no BUC / HIDDEN; gear only, 0 elsewhere):
-;   bits 0-2 reserved, always 0 (were BUC / HIDDEN)
+;   bits 0-2 q, the per-instance offset set at generation (GEAR2, gear_rules.md 2.2):
+;            signed 3-bit two's complement, -1..+2 used, never changes; 0 elsewhere.
+;            Extract (gear_dec ist_v): v = m + q, the total offset on the main stat
 ;   bits 3-4 weapon enchant +0..ENCH_MAX (Enchant scroll)
 ;   bits 5-7 m, signed 3-bit two's complement -4..+3 (used -3..+2): the
 ;            wear modifier on the main stat (§8.7). Extract:
 ;            5 x `sra a` (sign-extends, 40 T) or the IST_M_* compares below
-IST_RSVD_MASK   EQU %00000111
+IST_Q_MASK      EQU %00000111
 IST_ENCH_MASK   EQU %00011000
 IST_ENCH_SHIFT  EQU 3
 IST_ENCH_ONE    EQU 1 << IST_ENCH_SHIFT
@@ -171,8 +174,8 @@ IST_M_P1        EQU (1 & 7) << IST_M_SHIFT   ; m = +1  $20
 IST_M_M1        EQU (-1 & 7) << IST_M_SHIFT  ; m = -1  $E0
 IST_M_M2        EQU (-2 & 7) << IST_M_SHIFT  ; m = -2  $C0
 IST_M_M3        EQU (-3 & 7) << IST_M_SHIFT  ; m = -3  $A0 (3F wear floor)
-                ASSERT (IST_RSVD_MASK & IST_ENCH_MASK) == 0 && ((IST_RSVD_MASK | IST_ENCH_MASK) & IST_M_MASK) == 0
-                ASSERT (IST_RSVD_MASK | IST_ENCH_MASK | IST_M_MASK) == $FF
+                ASSERT (IST_Q_MASK & IST_ENCH_MASK) == 0 && ((IST_Q_MASK | IST_ENCH_MASK) & IST_M_MASK) == 0
+                ASSERT (IST_Q_MASK | IST_ENCH_MASK | IST_M_MASK) == $FF
                 ASSERT (ENCH_MAX << IST_ENCH_SHIFT) == IST_ENCH_MASK
                 ASSERT IST_M_P1 == $20 && IST_M_P2 == $40 && IST_M_M1 == $E0 && IST_M_M2 == $C0
 

@@ -308,3 +308,18 @@ There are no other new strings. `NOTHING HAPPENS` and the `YOU READ THE` stem al
 - item_defs.asm: `IST_Q_MASK` = `%00000111` replaces `IST_RSVD_MASK`.
 - `items_model.py` docstring step 8 (q pass).
 - Regression risk: tests that equip the `DEBUG_KIT` Helm on a Mage and then cast.
+
+---
+
+## 8. Implementation notes (GEAR2 + GEAR3 Z80, 2026-11-01; ledger in memory-map.md "GEAR2 + GEAR3 ledger")
+
+- Z80 == `tools/items_model.py` on 16,000 levels (`tests/items_gen.py`, the legacy-model fallback is gone);
+  `tests/gear2.py` (G2-3..10) and `tests/gear3.py` (G3-1..14, 400-seed distribution, model oracle on 150 random bags).
+- The q table `gq_qtab` is bank 3 data (10 B), not overlay data: the packed overlay had 3 B left of 44 (the stored
+  image costs about 1 B packed per B raw for new code). The q-pass loop walks all 32 FLOOR_LIST slots (unused = FL_EMPTY,
+  not gear), so it needs no `ig_n` bookkeeping.
+- Bank-1 cost was 41 B packed (spec ~37); R6 57 B (66 allowed, no scratch RAM: `ea_scan` counts, then picks);
+  bank 7 3 B; bank 3 10 B.
+- The shipped two-page HOW TO PLAY screen (`instr_ovl.asm`) has no "ENCHANT MENDS ..." row: that wording existed only
+  in the old one-page layouts (game.md 3.2.1, instructions_screen.md option A), which are updated to
+  `ENCHANT GIVES A WORN ITEM +1.`; page 2 lists the scroll kinds (`SLEEP FEAR ENCHANT`) and needs no change.

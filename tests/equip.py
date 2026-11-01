@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """3E-T8 gear: hero_recalc (src/gear6.asm, R6), the effects overlay
 (3E-T12: R6 src/fx6.asm fx_main, far6; was the fx overlay), the page-verb
-consumer (page_post, src/menu1.asm), enchant_weapon, the page stat line
+consumer (page_post, src/menu1.asm), ench_any, the page stat line
 (it_fmt). Release build (DEBUG_KIT=0), PROTO room A, every monster parked.
 game.md §8 gear table, §8.6 uniques, §8.11 "3E simplification".
 
@@ -21,7 +21,7 @@ game.md §8 gear table, §8.6 uniques, §8.11 "3E simplification".
       applied, PAGE_VERB 0, the map restored from the page's save; DRINK Heal at
       full HP -> L 0, NO NEED, nothing consumed (T12); DISCARD -> "YOU DISCARD
       <name>", 0 turns
-  X   enchant_weapon: m +1 .. +3 (KT_BONUS 1..3), the 4th and fists -> L 0
+  X   ench_any: m +1 .. +3 (KT_BONUS 1..3), the 4th and fists -> unchanged
   L   level steps exactly once with gear: XP 922 -> L8: atk base +2 (+1 Might),
       eva +1; an equip afterwards keeps them (no double count)
   M   MP: remove the Robe -> MAXMP 10, MP clamped 10; re-equip -> 12, MP stays 10;
@@ -309,15 +309,16 @@ def run(h, p, check):
           (c1, c2, c3) == (2, 1, 0), (c1, c2, c3))
 
     # ======================= X: enchant ==========================================
-    wear(["W_SHORT", "A_LEATHER", None, None])
+    wear(["W_SHORT", None, None, None])               # GEAR3: the sword is the only candidate
     xs = []
     for _ in range(4):
-        xs.append((farcall("far6", "enchant_weapon"), p.rb(KTAB + S["KT_BONUS"]),
-                   z.read_memory(S["WORN"] + 2, 1)[0]))
-    wear([None, "A_LEATHER", None, None])
-    xf = farcall("far6", "enchant_weapon")
-    check("X1 enchant_weapon: m +1 .. +3 (bonus 1..3, ISTATE $20..$60), then L 0; fists L 0",
-          (xs, xf) == ([(1, 1, 0x20), (1, 2, 0x40), (1, 3, 0x60), (0, 3, 0x60)], 0), (xs, xf))
+        farcall("far6", "ench_any")                   # (its result is in A, lost by far6: read the state)
+        xs.append((p.rb(KTAB + S["KT_BONUS"]), z.read_memory(S["WORN"] + 2, 1)[0]))
+    wear([None, None, None, None])
+    farcall("far6", "ench_any")
+    xf = (p.rb(KTAB + S["KT_BONUS"]), list(z.read_memory(S["WORN"], 3)))
+    check("X1 ench_any: m +1 .. +3 (bonus 1..3, ISTATE $20..$60), then no change; fists: nothing to enchant",
+          (xs, xf) == ([(1, 0x20), (2, 0x40), (3, 0x60), (3, 0x60)], (0, [0, 0, 0])), (xs, xf))
 
     # ======================= L: level steps once =================================
     scene(K_KNIGHT)

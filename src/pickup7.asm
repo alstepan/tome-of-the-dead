@@ -107,7 +107,10 @@ floor_pickup:
                 ld   a, b
                 call z, ap_take                ; A = 0 daggers / 1 arrows
                 jr   .nx
-.bag:           ld   a, (hl)
+.bag:           inc  l
+                ld   d, (hl)                   ; GEAR2: FL_QTY -> pu_add (DE passes through far6; the loop's
+                dec  l                         ; D / E come back from the stack below)
+                ld   a, (hl)
                 ld   hl, pu_add                ; R6: bag_add + the line; L = 1 taken
                 call far6                      ; / 0 refused (bag full)
                 dec  l

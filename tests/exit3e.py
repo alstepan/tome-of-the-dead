@@ -11,7 +11,8 @@ PROTO room A, every monster parked, the hero on storey 1:
   F  eat: Pear at FOOD 45 -> hunger_add +20, "YOU EAT THE PEAR" + "YOU FEEL WELL FED" (HSTAGE FED);
      then the quick FOOD icon at FOOD 100 -> "NO NEED", no turn, nothing eaten
   D  drink a Heal potion (fx DRINK): +10 HP, both lines, consumed
-  R  read Enchant: the equipped sword m +1 (KT_BONUS +1), "YOUR WEAPON GLOWS!", consumed
+  R  read Enchant (GEAR3: worn sword + armour are the candidates, RNG seeded so the first draw picks
+     the sword): the sword m +1 (KT_BONUS +1), "ENCHANTED: LONG SWORD", consumed
   B  read a class book (fx_book -> abil_learn): "YOU LEARN POWER STRIKE!", ARANK slot 0 rank 1
   T  traps: a hidden DART under the next step fires (line, poison, known + drawn T_TRAP); a hidden
      one 6 cols off found by WAITs ("TRAP FOUND: DART")
@@ -243,11 +244,12 @@ def run(h, p, check):
 
     # ---- R read a scroll (Enchant on the equipped sword) -------------------------------
     b0 = stats()["bon"]
+    p.wmem(S["RNG_STATE"], w16(0x1234))            # rng_next -> L $30: even, so k = 0 of n = 2 (the sword)
     lines.clear()
     r = fx(S["FX_READ"], 0)
-    check("R1 READ Enchant: a turn, 'YOUR WEAPON GLOWS!', sword m +1 -> kind_tab bonus +1, scroll consumed",
+    check("R1 READ Enchant: a turn, 'ENCHANTED: LONG SWORD', sword m +1 -> kind_tab bonus +1, scroll consumed",
           (r, lines[-1:], z.read_memory(S["WORN"] + 2, 1)[0], stats()["bon"] - b0, [b[0] for b in bag()])
-          == (1, ["YOUR WEAPON GLOWS!"], 0x20, 1, [I("BOOK")]), (r, lines, stats(), bag()))
+          == (1, ["ENCHANTED: LONG SWORD"], 0x20, 1, [I("BOOK")]), (r, lines, stats(), bag()))
 
     # ---- B learn a spell from a book (abil_learn) --------------------------------------
     p.wmem(S["ARANK"], w16(0))
