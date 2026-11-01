@@ -1710,7 +1710,7 @@ def main():
             while time.monotonic() - t0 < 60:            # fast tape traps: ~1 s
                 time.sleep(0.25)
                 gs = p.rb("GAME_STATE")
-                if gs in BOOT_WAITS:                     # BOOT-ANYKEY / INSTR: picture + 2 help pages wait
+                if gs in BOOT_WAITS:                     # BOOT-ANYKEY / INSTR: picture + 3 help pages wait
                     p.wb("INPUT_SRC", 1)                 # for a key; inject one (the tape path has
                     p.release()                          # the host keyboard otherwise)
                     time.sleep(0.3)

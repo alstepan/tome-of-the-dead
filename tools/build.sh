@@ -12,7 +12,7 @@
 # 1b. tools/textpack.py -> build/text/strings.asm + strings_ids.inc (B3B-13:
 #    src/strings.txt as dictionary-token streams); it re-parses its output and
 #    fails on any round-trip mismatch / char outside 32..127 / > LOG_MAX.
-# 1b''. tools/instr_pack.py -> build/text/instr_p{1,2}.inc (INSTR-BUILD HOW TO PLAY pages).
+# 1b''. tools/instr_pack.py -> build/text/instr_p{1,2,3}.inc (INSTR-BUILD HOW TO PLAY pages).
 # 1c. tools/abc2wzm.py --game -> OUTDIR/build/music_game/ (7 WZM songs + game_songs.asm),
 #    INCLUDEd by src/ay.asm through the -i OUTDIR/build/music_game search path (SND-2 T2).
 # 1d. tools/sfx2asm.py -> OUTDIR/build/sfx/ (sfx_ids.inc + sfx_data.asm, SND-5; -i path).
@@ -38,7 +38,7 @@ fi
 python3 "$ROOT/tools/zx0_sources.py"
 python3 "$ROOT/tools/textpack.py"
 # INSTR-BUILD: the HOW TO PLAY page images (docs/design/instructions_screen.txt + the
-# PAGES table) -> build/text/instr_p1.inc / instr_p2.inc (src/main.asm "OVERLAYS")
+# PAGES table) -> build/text/instr_p1..3.inc (src/main.asm "OVERLAYS")
 python3 "$ROOT/tools/instr_pack.py"
 # 1b'. 3E-T4b: item text (src/items.txt) -> build/text/items_tab.asm + items_ids.inc; the
 # RESIDENT part is INCLUDEd in bank 1 before ovl_blobs (main.asm); the fx / page overlay

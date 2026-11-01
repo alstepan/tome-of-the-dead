@@ -115,7 +115,7 @@ class Snd:
             self.p.hold("ENTER")
         elif n == 8:
             self.p.release()
-        if n >= 12 and gs in BOOT_WAITS:     # INSTR: the next wait (a HOW TO PLAY page)
+        if n >= 12 and gs in BOOT_WAITS:     # INSTR: the next wait (a HOW TO PLAY page; 4 waits in all)
             n = 0
         self._ak = [n, n >= 12]
 

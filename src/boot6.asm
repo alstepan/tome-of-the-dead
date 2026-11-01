@@ -194,8 +194,8 @@ boot6_ft:
 ; boot6_wait — farb from boot after boot6_tiles, BEFORE the boot pool: the
 ; INSTR-BUILD overlay (instr_ovl.asm, unpacked from bank 0 into GEN_SCRATCH):
 ; the loading picture (L3c SCREEN$, still on the bank-5 screen) + "PRESS ANY
-; KEY" with the title tune until a key (BOOT-ANYKEY, GS_ANYKEY), then the two
-; HOW TO PLAY pages (GS_HELP1 / GS_HELP2). Returns to boot (gen_idles, menu);
+; KEY" with the title tune until a key (BOOT-ANYKEY, GS_ANYKEY), then the three
+; HOW TO PLAY pages (GS_HELP1 / 2 / 3). Returns to boot (gen_idles, menu);
 ; ovl_run hands bank 6 back for farb's return.   Clobbers: all but IX, IY.
 ;------------------------------------------------------------------------------
 boot6_wait:

@@ -166,7 +166,7 @@ BANK_OVL_PAGE   EQU BANK_R6         ; R6: the page stream (page_ovl, menu1.asm)
 ; INSTR-BUILD: the HOW TO PLAY screen (game.md §3.2.1 option A flow, docs/design/
 ; instructions_screen.md / .txt pages): boot-only overlay instr_ovl.asm at INSTR_ORG,
 ; its page images (tools/instr_pack.py) unpacked by it to INSTR_DATA (right after its
-; code, same window). All three ZX0 streams sit in bank 0 right after the text block
+; code, same window). All four ZX0 streams sit in bank 0 right after the text block
 ; (POOL_START.., on the text tape block; the boot pool overwrites them after the help).
 INSTR_ORG       EQU GEN_SCRATCH
 BANK_INSTR      EQU BANK_TEXT
@@ -514,7 +514,8 @@ GS_LEVEL        EQU $07             ; 3F-T1: level_enter before the room map exi
                                     ;   level_new, the level pool): gen_frame allowed (GEN_TRAP off)
 GS_ANYKEY       EQU $08             ; INSTR-BUILD: instr_main (was boot6_wait): the loading picture waits for a key
 GS_HELP1        EQU $09             ; INSTR-BUILD: HOW TO PLAY page 1 up (instr_main; boot only, before the menu)
-GS_HELP2        EQU $0A             ; INSTR-BUILD: HOW TO PLAY page 2 up (menu_run replaces it)
+GS_HELP2        EQU $0A             ; INSTR-BUILD: HOW TO PLAY page 2 up
+GS_HELP3        EQU $0B             ; INSTR-P3: HOW TO PLAY page 3 (TREASURES) up (menu_run replaces it)
 
 ; TURN_PHASE
 TP_INPUT        EQU 0

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""INSTR-BUILD: the two-page HOW TO PLAY screen (instr_ovl.asm; game.md §3.2.1 option A
+"""INSTR-BUILD / INSTR-P3: the three-page HOW TO PLAY screen (instr_ovl.asm; game.md §3.2.1 option A
 flow, pages per docs/design/instructions_screen.md / .txt).
   I1  page 1 (GS_HELP1) bitmap + attrs == the approved render model (tools/gen_instr_mock.py
       page(1), same spec as the build: tools/instr_pack.py) byte for byte
   I2  the page-1 key still held: no page 2 until it is released (no timeout either)
   I3  page 2 (GS_HELP2) == page(2) byte for byte
-  I4  page 2's key ('1') -> menu, swallowed (no START), menu answers a real press
-  I5  BREAK on page 1 skips page 2 -> menu (GS_SELECT), never GS_HELP2
+  I9  page 3 (GS_HELP3, TREASURES) == page(3) byte for byte (differing rows reported)
+  I10 the page-2 key held: still page 2 until it is released, then page 3
+  I4  page 3's key ('1') -> menu, swallowed (no START), menu answers a real press
+  I5  BREAK on page 1 skips pages 2 and 3 -> menu (GS_SELECT), never GS_HELP2 / 3
+  I11 BREAK on page 2 skips page 3 -> menu, never GS_HELP3
   I6  static: the boot pool's start (POOL_START) equals the page-1 stream label, i.e. the
       pool is laid over the streams; that it only runs after the help screens is not
       checked here (resident cost: build DISPLAYs)
@@ -21,7 +24,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "tools"))
 import game_lib  # noqa: E402
 from game_lib import (Harness, Proto, S, EMU_ARGS, GS_SELECT, GS_ANYKEY, GS_PLAYING,  # noqa: E402
-                      GS_HELP1, GS_HELP2)
+                      GS_HELP1, GS_HELP2, GS_HELP3)
 import gen_instr_mock  # noqa: E402  (render model; main() only runs as a script)
 
 
@@ -58,6 +61,15 @@ def tap(p, *keys):
     p.release()
 
 
+def bad_rows(a, b):
+    """Character rows (0..23) whose bitmap or attrs differ."""
+    r = set()
+    for i in range(6912):
+        if a[i] != b[i]:
+            r.add(((i >> 5 & 7) + (i >> 11 & 3) * 8) if i < 6144 else (i - 6144) >> 5)
+    return sorted(r)
+
+
 def to_page1(p):
     p.load()
     p.wb("INPUT_SRC", 1)
@@ -89,9 +101,21 @@ def main():
         h.expect("I3a no timeout on page 2", p.rb("GAME_STATE"), GS_HELP2)
         n, cells = diffs(screen(p), model(2))
         h.expect("I3 page 2 == approved render (%d bytes differ, cells %s)" % (n, cells), n, 0)
+        # I10: the page-2 key held: still page 2 until released, then page 3
+        p.hold("Q")
+        p.tick(15)
+        h.expect("I10 page-2 key held: still page 2", p.rb("GAME_STATE"), GS_HELP2)
+        p.release()
+        ok = p.until(lambda: p.rb("GAME_STATE") == GS_HELP3, 60)
+        h.expect("I10b released -> page 3", ok, True)
+        p.tick(25)
+        h.expect("I9a no timeout on page 3", p.rb("GAME_STATE"), GS_HELP3)
+        n, cells = diffs(screen(p), model(3))
+        h.expect("I9 page 3 == approved render (%d bytes differ, cells %s, rows %s)" % (
+                 n, cells, bad_rows(screen(p), model(3))), n, 0)
         p.hold("1")
         ok = p.until(lambda: p.rb("GAME_STATE") == GS_SELECT, 60)
-        h.expect("I4 page 2 key -> menu", ok, True)
+        h.expect("I4 page 3 key -> menu", ok, True)
         p.tick(12)
         h.expect("I4b '1' swallowed: no START", p.rb("GAME_STATE"), GS_SELECT)
         pool = S["POOL_START"]
@@ -108,7 +132,22 @@ def main():
         p.release()
         ok = p.until(lambda: (seen.add(p.rb("GAME_STATE")), p.rb("GAME_STATE") == GS_SELECT)[1], 80)
         h.expect("I5 BREAK on page 1 -> menu", ok, True)
-        h.expect("I5b page 2 never shown (states %s)" % sorted(seen), GS_HELP2 in seen, False)
+        h.expect("I5b pages 2 / 3 never shown (states %s)" % sorted(seen), bool(seen & {GS_HELP2, GS_HELP3}), False)
+        # I11: BREAK on page 2 -> straight to the menu, page 3 skipped
+        h.expect("I11a reload -> page 1", to_page1(p), True)
+        tap(p, "ENTER")
+        ok = p.until(lambda: p.rb("GAME_STATE") == GS_HELP2, 60)
+        h.expect("I11b page 1 key -> page 2", ok, True)
+        p.tick(3)
+        seen = set()
+        p.hold("CAPS", "SPACE")
+        for _ in range(4):
+            p.tick()
+            seen.add(p.rb("GAME_STATE"))
+        p.release()
+        ok = p.until(lambda: (seen.add(p.rb("GAME_STATE")), p.rb("GAME_STATE") == GS_SELECT)[1], 80)
+        h.expect("I11 BREAK on page 2 -> menu", ok, True)
+        h.expect("I11c page 3 never shown (states %s)" % sorted(seen), GS_HELP3 in seen, False)
         # I6: the boot pool (2 idles) starts at POOL_START = the first stream byte
         h.expect("I6 POOL_START = the page-1 stream (boot pool overwrites the help)",
                  pool == S["instr_p1_zx0"], True)

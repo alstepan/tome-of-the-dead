@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HOW TO PLAY (INSTR1) render mockups -> assets/gfx/instr/instr_p{1,2}.png (+ @3).
+"""HOW TO PLAY (INSTR1) render mockups -> assets/gfx/instr/instr_p{1,2,3}.png (+ @3).
 
 Source spec: docs/design/instructions_screen.txt + the PAGES table in tools/instr_pack.py
 (shared with the build, INSTR-BUILD). Text = real FONT6 (assets/gfx/fonts/font6x8.bin,
@@ -172,7 +172,7 @@ def check(s, name):
 
 def main():
     ok = True
-    for n, s in (("instr_p1", page1()), ("instr_p2", page2())):
+    for n, s in (("instr_p1", page(1)), ("instr_p2", page(2)), ("instr_p3", page(3))):
         ok &= check(s, n)
         if "--check" in sys.argv:
             continue
