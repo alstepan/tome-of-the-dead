@@ -17,8 +17,9 @@ into the lair through the non-Sanctum door (real do_exit + lp_transition), then 
       Archmage: standing, never moves except a blink to the other storey (once a life), KT_ATTR in
       the ORDER inks; no slot DYING for > 12 turns (corpse / ash slots freed); summon cooldown >= 6
       turns between two summons (S) unless a blink reset it.
-  E   the lair escort (game.md 9.4.4) alive: 0 summons (Archmage 6 + escort 3..6 + Skeleton 5 > 12) -> NOTE.
-      Every other scenario removes the escort first (kill_escort) so the summon paths run.
+  E   the lair escort (game.md 9.4.4) alive, S not poked: the Archmage summons within 40 turns (hard check;
+      the summon is exempt from LP_SIGMA_CAP, user 2026-11-01).
+      Every other scenario removes the escort first (kill_escort).
   S   50 summons in a row (each killed at once, S poked 0): free-slot count stable.
   K   kills: by the Mirror Helm return; by a ranged attack at the door; while a summon lives (then
       leave + re-enter: summon discarded, Archmage not back, LF_UNIQUE); after: GS_PLAYING, seal
@@ -28,7 +29,7 @@ into the lair through the non-Sanctum door (real do_exit + lp_transition), then 
   T   teleport mid-fight (summon alive, FX in flight): summon discarded, FX idle after, the lair
       record holds the Archmage only; re-entry: KT_ATTR $43, ST_X init bit clear, P = 0.
   W   into the Sanctum (seal open) with a summon at the door: does it follow? lectern cells free;
-      5 Tome hits -> GS_WIN; KT_ATTR after a new game D1 -> D8 lair entry = $43.
+      5 Tome hits -> gate open (WIN2), walk out, DOWN at the exit col -> GS_WIN; KT_ATTR after a new game D1 -> D8 lair entry = $43.
   G   the Archmage drawn at every x on both storeys: the playfield outside the sprites == ROOM_MAP in
       source glyphs (gfx_integrity.screen_check), pool + FRT unchanged.
 Exit 1 on a FAIL or an ANOMALY; NOTEs (design / doc mismatches) are listed only. ~16 min at the defaults.
@@ -480,6 +481,8 @@ class Fight:
         self.n = 0
         self.summons_made = 0
         self.summon_turns = []
+        self.summon_extra = []              # game turns beyond the 1st inside the detecting action (@2 / H cost 2)
+        self.tc_pre = 0
         self.blinks = 0
         self.seen_slots = {}
         self.dying_since = {}
@@ -592,6 +595,7 @@ class Fight:
                 self.known.add(key)
                 self.summons_made += 1
                 self.summon_turns.append(p.rw("TURN_COUNTER"))
+                self.summon_extra.append(max(0, p.rw("TURN_COUNTER") - self.tc_pre - 1))
                 want_hp = p.kb(KSK, "KT_HP") + p.rb("LVL_DEPTH") - 1
                 why = L.legal(m, e["KIND"], e["X"], e["Y"], es, skip=(s_,))
                 ok = (e["KIND"] == KSK and e["HP"] == want_hp and e["MAXHP"] == want_hp and e["GOLD"] == 0
@@ -652,6 +656,7 @@ class Fight:
                         if self.n - t0 >= self.kill_summons:
                             L.deal(0, s_, 99)
             act = self.action(es)
+            self.tc_pre = p.rw("TURN_COUNTER")
             self.do(act, es)
             if on_turn:
                 on_turn(self)
@@ -665,8 +670,7 @@ class Fight:
 
 
 def kill_escort(p, L):
-    """The lair's escort (game.md 9.4.4: boss + 1 escort, Sigma <= 12) blocks every Archmage summon while
-    it lives (Archmage 6 + escort >= 3 + Skeleton 5 > LP_SIGMA_CAP 12): kill it (deal_hit, the hero)."""
+    """Remove the lair's escort (game.md 9.4.4) so it cannot stand in a line of fire / shape the scenario."""
     es = L.ents()
     k = [s_ for s_ in range(1, 16) if es[s_]["FLAGS"] & EF_ACTIVE and es[s_]["KIND"] != KA]
     for s_ in k:
@@ -675,8 +679,9 @@ def kill_escort(p, L):
     return [(s_, es[s_]["KIND"]) for s_ in k]
 
 
-def escort_blocks(p, master, hero, turns=24):
-    """E: with the escort alive, the Archmage (S = 0, off-turns) never summons (the cap)."""
+def escort_blocks(p, master, hero, turns=40):
+    """E: with the lair escort PRESENT (no poke of S, no kill_escort) the Archmage summons within `turns`
+    (user 2026-11-01: its summon is exempt from LP_SIGMA_CAP; the audit saw 0 summons in 24 turns)."""
     L = D8(p, master, hero)
     tag = f"E escort {L.tag}"
     if not check(f"{tag}: D8 + lair entry", L.ok and L.enter(), ""):
@@ -684,13 +689,11 @@ def escort_blocks(p, master, hero, turns=24):
     es = L.ents()
     esc = [(s_, es[s_]["KIND"], p.rb(S["lp_wt"] + es[s_]["KIND"])) for s_ in range(1, 16)
            if es[s_]["FLAGS"] & EF_ACTIVE and es[s_]["KIND"] != KA]
-    F = Fight(L, random.Random(master), kill_summons=None, poke_s=True)
-    F.action = lambda es: ("WAIT",)
+    F = Fight(L, random.Random(master), kill_summons=3)
     F.run(tag, turns)
-    print(f"[info] {tag}: lair escort {esc}: {F.summons_made} summons in {turns} turns with S poked 0", flush=True)
-    if esc and F.summons_made == 0:
-        note(f"{tag}: the lair escort {esc} blocks every Archmage summon (6 + w + 5 > {S['LP_SIGMA_CAP']}): "
-                f"0 summons in {turns} off-turn-rich turns with S = 0 (game.md 9.9 A9b assumes the Archmage alone)", esc)
+    print(f"[info] {tag}: lair escort {esc}: {F.summons_made} summons in {turns} turns at {F.summon_turns[:6]}", flush=True)
+    check(f"{tag}: the escort {esc} alive, the Archmage summons within {turns} turns ({F.summons_made})",
+          bool(esc) and F.summons_made >= 1, (esc, F.summons_made))
     return esc, F.summons_made
 
 
@@ -715,6 +718,7 @@ def fight_canaries(p, master, hero, turns, mirror=False):
     low = stack_low(p, top)
     bad = canary_compare(p, L, s0, s1, tag)
     a = L.arch()
+    print(f"[info] {tag}: blink TURN_COUNTERs {F.blink_tc}", flush=True)
     print(f"[info] {tag}: {F.n} turns, summons {F.summons_made} at {F.summon_turns[:12]}, blinks {F.blinks}, inks "
           f"{sorted(hex(i) for i in F.inks)}, min free slots {F.min_free}, no-turn keys {F.stats['noturn']}, "
           f"stack low {low and hex(low)}, Archmage {a and L.ents()[a]['HP']}", flush=True)
@@ -722,7 +726,9 @@ def fight_canaries(p, master, hero, turns, mirror=False):
     check(f"{tag}: canary regions: only expected changes", not bad, bad)
     check(f"{tag}: stack depth <= 256 B (lowest byte touched)", low is None or low >= 0xBE00 + 1, low and hex(low))
     gaps = [b - a_ for a_, b in zip(F.summon_turns, F.summon_turns[1:])]
-    short = [(F.summon_turns[i], g) for i, g in enumerate(gaps) if g < S["AM_SUM_CD"]
+    # (a summon made inside a 2-turn action is only SEEN after it: its TURN_COUNTER is late by the extra turn,
+    # so the next gap reads 1 short: tolerated by summon_extra; verified on 0x5302 mirror turn 189 -> 195)
+    short = [(F.summon_turns[i], g) for i, g in enumerate(gaps) if g < S["AM_SUM_CD"] - F.summon_extra[i]
              and not any(F.summon_turns[i] < t <= F.summon_turns[i + 1] for t in F.blink_tc)]
     check(f"{tag}: summons happened ({F.summons_made}); every gap (TURN_COUNTER) >= AM_SUM_CD {S['AM_SUM_CD']} "
           f"unless a blink reset S (min {min(gaps) if gaps else None})", F.summons_made >= 1 and not short, (F.summons_made, short))
@@ -1077,7 +1083,32 @@ def sanctum_walk(p, master, hero):
         hits.append(h0 - p.rb("TOME_HP"))
         if p.rb("GAME_STATE") != GS_PLAYING:
             break
-    check(f"{tag}: 5 melee hits -> GS_WIN ({hits})", p.rb("GAME_STATE") == GS_WIN and p.rb("TOME_HP") == 0, (hits, p.rb("GAME_STATE")))
+    # WIN2 (user 2026-11-01): the 5th hit destroys the Tome and opens the gate (LF_GRATE_OPEN); the run goes on
+    check(f"{tag}: 5 melee hits ({hits}): the Tome destroyed, the gate open, still GS_PLAYING (the win is the descent)",
+          p.rb("GAME_STATE") == GS_PLAYING and p.rb("TOME_HP") == 0 and p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"],
+          (hits, p.rb("GAME_STATE"), p.rb("TOME_HP"), p.rb("LVL_FLAGS")))
+    # walk out into the lair (the Sanctum door is on the side facing the lair), then DOWN at the exit col
+    left_door = L.sn != 6
+    x = 2 if left_door else 30 - L.kw
+    L.place(x, 1, left=left_door)
+    p.tick(2)
+    for _ in range(6):
+        if p.rb("CUR_ROOM") != L.sn:
+            break
+        p.set_ent(0, HP=200)
+        p.turn("H" if left_door else "L")
+    p.until(lambda: p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+    p.settle(2)
+    c = room_model.field(room_model.read_block(p), L.lair, "RD_EXITCOL")
+    check(f"{tag}: walked out into the lair (room {p.rb('CUR_ROOM')} == {L.lair})", p.rb("CUR_ROOM") == L.lair, p.rb("CUR_ROOM"))
+    L.place(c, 1, left=False)
+    p.set_ent(0, HP=1)
+    p.turn("J")
+    p.until(lambda: p.idle(), 900)
+    p.until(lambda: p.rb("LOG_QN") == 0, 200)
+    p.settle(2)
+    check(f"{tag}: DOWN at the exit col {c} through the open gate -> GS_WIN, depth stays 8",
+          p.rb("GAME_STATE") == GS_WIN and p.rb("LVL_DEPTH") == 8, (p.rb("GAME_STATE"), p.rb("LVL_DEPTH")))
     # a new game after the win: D1, then D8 again: the lair entry resets the Archmage ink
     ink_end = p.rb(INK)
     p.tick(3)

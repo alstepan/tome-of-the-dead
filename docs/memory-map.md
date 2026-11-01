@@ -4319,6 +4319,8 @@ bit 7 **`RCD_ONCE`**. Bank 3: `lp_bank` frees a summon-made body without banking
 `RCD_ONCE` as **`LEK_BRED`** (bit 6 of the record's kind byte); `lp_spawn` restores it; `place_follower`
 keeps bits 2-7 (`RCD_KEEP`; a summon that follows stays summon-made and is dropped when that room is left).
 
+**SUMMON-CAP (user 2026-11-01):** `sp_fit` (spawn6.asm) zeroes `SP_SIG` when IX (the caster in `sp_summon`, the parent in `sp_run`, which now tests the parent before the cap and starts with `IX = P_ENTITIES` for wave bodies) is a `K_ARCHMAGE`: the Archmage's summon is exempt from `LP_SIGMA_CAP`, `ROOM_CAP` stays (+14 B R6: **10 B free**, was 24); `AM_LIVE` 2 -> 1 (one live summon; no memory change).
+
 Costs (`tests/spawn.py` T, far6 incl., interrupts on): `sp_run` a summon 10.4k T, an offspring 10.5k, a
 2-body wave 14.2k (gates 12k / 12k / 16k); producers: S > 0 ~80 T, a decision ~1.8k (`sp_scan`), `breed6`
 ~0.3k + far6 per Rabbit hit. `tests/budget.py` new **`bsum`** (nroom with the Bone Caller alone: the summon
