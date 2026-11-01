@@ -111,8 +111,8 @@ ammo_fire:
                 ld   b, d                      ; B = ABL_*
                 or   a
                 jr   nz, .hit
-                ld   b, MSG_P_KILL
-                call impact_line               ; "YOU KILL THE <kind>" (A, BC, DE, HL)
+                ld   b, TX_YOU_KILL            ; LOG-DMG: through hit_line (pf_lost, not dh_lost:
+                call hit_line                  ; "YOU KILL <kind> -D"; ln_hit requests SFX_KILL)
                 jr   .out
 .hit:           ld   a, (pf_lost)              ; 3F-T6: $FF = the hit was parried (deal_hit H = 1)
                 inc  a
@@ -123,7 +123,7 @@ ammo_fire:
 .nph:           ld   a, b                      ; LOG-FIX: spells share the tail: the hit line =
                 add  a, TX_SPL_SPARK           ; TX_SPL_SPARK + ABL (ASSERTed below), as a token
                 ld   b, a                      ; stream (msg2.asm hit_line, ~1.4k T)
-                call hit_line                  ; "YOUR DAGGER HITS THE <kind>" / "FIREBOLT BURNS ..."
+                call hit_line                  ; "DAGGER HITS <kind> -D HP H" / "FIRE BURNS ..." (LOG-DMG)
                 jr   .out
 .none:          dec  c
                 jr   z, .out                   ; the named miss line said it
@@ -169,9 +169,14 @@ miss_pre:
 
 ; Composed log lines in MSG_BUF: msg_cat / msg_kind / msg_dec / msg_end live in bank 2
 ; (src/msg2.asm, LOG-FIX: always mapped, 45 B off bank 7), shared with pickup7 / xp7.
-                ASSERT TXL_CMB_ARR_HIT + NM_LONG < 32 && TXL_CMB_DAG_HIT + NM_LONG < 32
-                ASSERT TXL_SPL_SPARK + NM_LONG < 32 && TXL_SPL_FIRE + NM_LONG < 32 && TXL_SPL_FROST + NM_LONG < 32
-                ASSERT TXL_SPL_DRAIN + NM_LONG < 32 && TXL_SPL_LIGHT + NM_LONG < 32
+                ; LOG-DMG (log_damage.md §3): + the worst tail " -99 HP 99" (10 chars) <= 31
+                ASSERT TXL_CMB_ARR_HIT + NM_LONG + 10 <= 31 && TXL_CMB_DAG_HIT + NM_LONG + 10 <= 31
+                ASSERT TXL_SPL_SPARK + NM_LONG + 10 <= 31 && TXL_SPL_FIRE + NM_LONG + 10 <= 31 && TXL_SPL_FROST + NM_LONG + 10 <= 31
+                ASSERT TXL_SPL_DRAIN + NM_LONG + 10 <= 31 && TXL_SPL_LIGHT + NM_LONG + 10 <= 31
+                ASSERT TXL_YOU_KILL + NM_LONG + 4 <= 31   ; the kill line through hit_line
+                ; msg_push_d / _h / _t lines (+ " -99" / " +99" / " -1 HP 5")
+                ASSERT TXL_SPL_HIT_SELF + 4 <= 31 && TXL_SPL_BURN_SELF + 4 <= 31 && TXL_FALL + 4 <= 31
+                ASSERT TXL_SPL_DRAIN_HEAL + 4 <= 31 && TXL_TOME_HIT + 8 <= 31 && TOME_MAX <= 9
                 ASSERT TXL_SPL_C_FROST <= LOG_MAX && TXL_SPL_C_DRAIN <= LOG_MAX && TXL_SPL_C_FIRE <= LOG_MAX
                 ASSERT TXL_SPL_C_LIGHT <= LOG_MAX && TXL_SPL_C_SPARK <= LOG_MAX && TXL_CMB_SHOOT <= LOG_MAX
                 ASSERT TXL_CMB_DAG_MISS + 1 + TXL_THE + NM_LONG <= LOG_MAX && TXL_CMB_ARR_MISS <= TXL_CMB_DAG_MISS

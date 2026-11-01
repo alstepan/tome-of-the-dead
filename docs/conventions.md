@@ -285,6 +285,11 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
 ## Message API (B3B-13)
 
 - `msg_push` / `msg_push_end` (low RAM) clobber **AF, BC, DE, HL** (C is no longer preserved, unlike the old `log_push`); callers in any paged bank (bank 3, bank-1 UI code) get their bank back (restore_page; W18 checks it from bank 1).
+- LOG-DMG: `msg_push_d` / `msg_push_h` / `msg_push_t` (low RAM, same clobbers) append ` -LN_VAL` /
+  ` +LN_G` / ` -1 HP TOME_HP` (0 = no tail); `impact_line` / `hit_line` end in the bank-0 composer
+  `src/log0.asm` (BANK_TEXT already paged: called directly). `impact_line`'s IX is read for the
+  P_HIT / P_KILL / M_HIT tails: the attacker (show_impact_msg), or the struck target with
+  `LN_VAL` = its loss (melee_strike); any other caller of those codes must set IX the same way.
 - `tk_get` uses an SMC mode switch (`tk_get.sw`): never call the text printer from the ISR.
 - D3-TX: the text block lives in bank 0 (`BANK_TEXT`, under the pool). Never read it in place —
   not even from bank-1 code: go through `msg_push`, `print6t` / `print6x`, or `tx_dec`

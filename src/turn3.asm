@@ -28,8 +28,8 @@
 ; shared core, combat3.asm). hit_roll (F1, the d20 first), then damage 1dN +
 ; bonus (kind_tab, prototype §6.2 / F2) dealt by deal_hit with the attacker's
 ; kx_tab KX_MELEE pair (type + on-hit effect: PHYS; the Ghost's DRAIN touch, CONFUSED
-; 4 at 1 in 4). Sets the attacker's ATTACK sequence + IMPACT info (E_HIT = 1
-; iff HP was lost: an immune target does not flash; E_MSG hit / miss / kill)
+; 4 at 1 in 4). Sets the attacker's ATTACK sequence + IMPACT info (E_HIT = the
+; HP lost, LOG-DMG: the line's -D; 0: an immune target does not flash; E_MSG hit / miss / kill)
 ; and the target's reaction (deal_hit: HURT / DEATH; a missed Knight: BLOCK).
 ; Clobbers: all but IX.
 ; Entered by far3 from try_horizontal (hero) and directly from attack_if_reach
@@ -78,7 +78,8 @@ do_attack:
                                                ; contract); the line "THE <kind> PARRIES!" at IMPACT
                 ld   a, MSG_P_PARRY
                 jr   .setm
-.lost:          ld   a, (ix+E_KIND)            ; 3F-T6: an on-hit side effect of the Mummy (FOOD) / Black Widow
+.lost:          push af                        ; LOG-DMG: A = L, the E_HIT (the line's -D; < 128: a hp)
+                ld   a, (ix+E_KIND)            ; 3F-T6: an on-hit side effect of the Mummy (FOOD) / Black Widow
                 ld   hl, mummy6                ; (ACID, 1 in 4): R6, only on a hit that cost HP
                 cp   K_MUMMY
                 jr   z, .fx
@@ -86,7 +87,7 @@ do_attack:
                 cp   K_BLACK_WIDOW
                 jr   nz, .nfx
 .fx:            call far6
-.nfx:           ld   a, 1
+.nfx:           pop  af                        ; (was ld a, 1: 0 B)
                 jr   .res
 .miss:          ld   a, (TMP2)
                 call ent_ix                    ; IX = target

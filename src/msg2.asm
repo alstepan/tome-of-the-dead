@@ -54,8 +54,12 @@ msg_end:
 ; self-hit line must never be the one that is lost): with the ring full
 ; (LOG_QN = LOG_SLOTS) the NEWEST pending line is replaced (LOG_QN - 1, counted
 ; in LQ_DROP; the same as log_push_end: a pending slot is never half drawn).
+; log_room_d — LOG-DMG: the same, LN_VAL = A first (spell_fire's self-bolt
+; line: A = pf_lost, the caster's own loss; later strikes overwrote dh_lost).
 ; Keeps A, BC, DE; clobbers HL, F.   ~60 T
 ;------------------------------------------------------------------------------
+log_room_d:
+                ld   (LN_VAL), a
 log_room:
                 ld   hl, LOG_QN
                 bit  2, (hl)                   ; = LOG_SLOTS (4)
@@ -68,9 +72,11 @@ log_room:
 
 ;------------------------------------------------------------------------------
 ; hit_line — the spell / dagger / arrow hit line as a token stream (no tx_dec
-; decode: ~1.4k T vs ~5k for msg_cat + msg_kind): pre string B (TX_SPL_SPARK + ABL_*)
-; + kind C's name, like impact_line (lowram.asm; no sfx_msg: the release sound
-; is sfx_abl's). The caller made room (log_room).
+; decode: ~1.4k T vs ~5k for msg_cat + msg_kind): pre string B (TX_SPL_SPARK + ABL_*;
+; LOG-DMG: or TX_YOU_KILL, ammo_fire's kill) + kind C's name, like impact_line
+; (lowram.asm; no sfx_msg: the release sound is sfx_abl's, a kill's SFX_KILL is
+; requested by ln_hit). LOG-DMG: bank-0 ln_hit (log0.asm) appends pf_tgt's
+; " -D HP H" (D = pf_lost) and pushes. The caller made room (log_room).
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 hit_line:
@@ -86,9 +92,6 @@ hit_line:
                 ld   a, c
                 add  a, TX_NM_KNIGHT
                 call impact_line.cat           ; + the kind name
-                xor  a
-                ld   (de), a
-                ld   hl, MSG_BUF
-                call log_push
+                call ln_hit                    ; LOG-DMG (bank 0): + the tail, 0, log_push
                 pop  af
                 jp   restore_page

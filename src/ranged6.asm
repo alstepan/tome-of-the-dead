@@ -123,13 +123,14 @@ rg_used:        ld   l, 1
 
 ;------------------------------------------------------------------------------
 ; rg_pose — IX = the monster, B = E_MSG: the line at its attack's IMPACT (do_impact),
-; E_TGT / E_HIT 0 (no flash), the attack sequence (the cut / cast pose). Shared by
-; rg_shoot and the 3F-T9 summon (spawn6.asm sp_summon).  Clobbers: A, DE, HL.
+; E_TGT 0, E_HIT = C (LOG-DMG: rg_shoot's $80 | L, 0 on a miss / the summon: no flash
+; at the IMPACT either way), the attack sequence (the cut / cast pose). Shared by
+; rg_shoot and the 3F-T9 summon (spawn6.asm sp_summon).  Clobbers: A, DE, HL (C kept).
 ;------------------------------------------------------------------------------
 rg_pose:        ld   (ix+E_MSG), b
                 xor  a
                 ld   (ix+E_TGT), a
-                ld   (ix+E_HIT), a
+                ld   (ix+E_HIT), c
                 call kind_seq_ptr              ; (bank 2)
                 ld   de, KS_ATTACK
                 add  hl, de
@@ -171,6 +172,7 @@ rg_shoot:
                 ld   a, l
                 or   a
                 ld   b, MSG_M_MISS
+                ld   c, a                      ; LOG-DMG: C = the E_HIT (0 on a miss)
                 jr   z, .msg
 .hit:           ld   a, (RG_ROW + RW_F)
                 and  RWF_NOIMP
@@ -199,7 +201,8 @@ rg_shoot:
                 ld   a, (RG_ROW + RW_DHC)
                 ld   hl, rs_deal
                 call far3                      ; L = HP lost (I: 0 + the UNAFFECTED line)
-.dl:            call rg_ri                     ; A = R, B = I
+.dl:            ld   c, l                      ; LOG-DMG: C = L (rg_ri / rg_pose keep C)
+                call rg_ri                     ; A = R, B = I
                 inc  l
                 dec  l
                 jr   z, .gate
@@ -216,7 +219,9 @@ rg_shoot:
                 jr   c, .g2
                 ld   (hl), a
 .g2:            ld   b, MSG_M_HIT
-.msg:           call rg_pose                   ; E_MSG at the attack's IMPACT; E_HIT 0: the flash waits for the bolt (shot_tick)
+                set  7, c                      ; LOG-DMG: E_HIT = $80 | L: the line's -D, bit 7 = no flash at
+.msg:           call rg_pose                   ; the IMPACT (do_impact): it waits for the bolt (shot_tick);
+                                               ; rg_pose stores C (a miss: C = 0)
                 ; --- the RS_Q entry (TP_SHOT: act_pend runs shot_tick every tick) ---
 rg_q:           ld   hl, TURN_PEND             ; (3F-T11b am_cast: the Mirror Helm return track)
                 bit  TP_SHOT_BIT, (hl)

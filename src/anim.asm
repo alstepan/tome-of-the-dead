@@ -540,9 +540,10 @@ cycle_frame:
 ; HUD message.  Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 do_impact:
-                ld   a, (ix+E_HIT)
-                or   a
-                jr   z, .nohit
+                ld   a, (ix+E_HIT)             ; LOG-DMG: the HP lost (1..127: flash), 0 or a
+                dec  a                         ; ranged shot's $80 | L (bit 7: shot_tick flashes
+                cp   $7F                       ; with the bolt): no flash. +2 B
+                jr   nc, .nohit
                 push ix
                 ld   a, (ix+E_TGT)
                 call ent_ix

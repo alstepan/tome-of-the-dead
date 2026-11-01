@@ -200,9 +200,14 @@ TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
 ; 45 + 29 B costs 0 slack (1,264 kept), but 45 + 30..250 B costs one 240-B variant
 ; (slack 1,024) and 45 + 260 B 880. M1 (user 2026-11-01) took the 240-B step: total reserve 2,624 B
 ; (cliff measured: B0_CODE_RES 206 -> slack 1,024, 207 -> 384, with TEXT_RES 2,418).
-TEXT_RES        EQU 2378 + 40                  ; M1: text 2378 B + 40 B headroom (GEAR3 / LOG-DMG strings)
-B0_CODE_RES     EQU 206                        ; M1: cold-code room (was 22); 207+ drops slack to 384 (cliff)
-POOL_START      EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES  ; $C960: alloc_reset's first bank-0 pool byte
+TEXT_RES        EQU 2367 + 45                  ; LOG-DMG: text 2367 B (-11: "THE " dropped) + 45 B headroom (M1: 2378 + 40)
+B0_CODE_RES     EQU 212                        ; LOG-DMG: log0.asm 212 B (M1: 206, empty); TEXT_RES + B0_CODE_RES
+                                               ; = 2,624 (M1) unchanged: one more byte drops the slack to 384 (cliff)
+; LOG-DMG + DBG-1: kit builds only — kit0.asm (83 B) + log0.asm (212 B) exceed the release reserve by
+; ~38 B: the kit image takes the next pool-slack variant (D8 Warrior slack 1,024 -> 384, kit only;
+; tests/kit.py runs it). The RELEASE layout (POOL_START $CA40, slack 1,024) is unchanged.
+B0_KIT_RES      EQU 40 * DEBUG_KIT             ; (DEBUG_KIT 0 / 1, defined below: an EQU, no IF)
+POOL_START      EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CA40 (release): alloc_reset's first bank-0 pool byte
     MACRO FARB0 target                  ; call a bank-0 cold-code routine (8 B; A / DE / IX pass in;
                 ld   hl, target         ;   C lost to the bank, B to farb's A): farb pages BANK_TEXT
                 ld   c, BANK_TEXT
@@ -476,7 +481,14 @@ JA_FALL_BIT     EQU 7               ;   set: the jump ends in a pit fall (E_Y al
 ; MENU_IN_SIG, PEND_N (below)
 SEQ_TRAP        EQU $BFFB           ; count (saturating): sq_load got a kind with no master block (ksm_tab 0) or no free cache slot
                                     ;   (the kind would blit the hero's sequences; build-ASSERTed never; debug trap, expect 0)
-GEN_TRAP        EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
+; LOG-DMG (docs/design/log_damage.md §4): the log-number carriers, always mapped (the bank-0
+; composer log0.asm reads them with BANK_TEXT paged). Were the bank-3 deal_hit scratch dh_lost /
+; dh_eff (combat3.asm EQUs them here: bank 3 -2 B).
+LN_VAL          EQU $BFFC           ; = dh_lost: the HP the last deal_hit target lost (melee_strike / self /
+                                    ;   burst lines; log_room_d: the self-bolt's pf_lost; hero_fall)
+LN_G            EQU $BFFD           ; the HP gained by the hero's last heal (deal_hit drain, cap_add)
+DH_EFF          EQU $BFFE           ; deal_hit's effect parameter (combat3 dh_eff; scratch)
+GEN_TRAP       EQU $BF99           ; count: gen_frame ran while PLAYING/TRANSITION (GEN_SCRATCH = live room maps; debug trap, expect 0)
 MSG_BUF         EQU $BFA0           ; 32 B: impact message composition (show_impact_msg -> log_push)
 TIMING_MARK     EQU $BFC0           ; spare
 IT_BAD          EQU TIMING_MARK     ; DEBUG_KIT only: count of item_glyph / item_ink calls with a type >= IT_COUNT (expect 0)
@@ -558,7 +570,8 @@ E_FLT           EQU 18              ; flash ticks left
 E_FLA           EQU 19              ; flash attr
 E_MSG           EQU 20              ; message code shown at IMPACT
 E_TGT           EQU 21              ; IMPACT target slot
-E_HIT           EQU 22              ; IMPACT: 1 = hit (flash)
+E_HIT           EQU 22              ; IMPACT: LOG-DMG: the HP the blow took (0 = none: no flash; < 128, a body's
+                                    ;   hp); bit 7 set = a ranged shot's (rg_shoot $80 | L): no flash at the IMPACT
 E_GOLD          EQU 23              ; 3F-T5: LEK_GOLD ($20) on a golden boss, else 0 (set by lp_spawn, banked back by lp_bank;
                                     ; D3-0: was E_ZAP, the PROTO wizard zap). Other readers: the T8 glow / atk / DEF flag
 E_DVIS          EQU 24              ; drawn: bit0 visible, bit3 = facing left (EF_LEFT)
@@ -629,8 +642,8 @@ MSG_M_THAW      EQU 14
 MSG_P_PARRY     EQU 15              ; 3F-T6: the hero's blow was parried: "THE <target> PARRIES!" (the target's name,
                                     ; like MSG_P_HIT..KILL; do_attack / melee_strike set it, show_impact_msg / impact_line)
 MSG_M_SUMMON    EQU 16              ; 3F-T9: "THE <kind> SUMMONS!" (spawn6.asm sp_summon: the caster's IMPACT line)
-MSG_M_DRAIN     EQU 17              ; 3F-T9: "THE VAMPIRE DRAINS YOU" (impact_line remaps the Vampire's MSG_M_HIT:
-                                    ; its bite heals it, game.md §9.1; the +n floater needs D3-11)
+; (MSG_M_DRAIN 17 retired by LOG-DMG: log0.asm ln_imp recomposes the Vampire's MSG_M_HIT as
+; "THE VAMPIRE DRAINS YOU -D"; its bite heals it, game.md §9.1)
 
 ;------------------------------------------------------------------------------
 ; Kinds (prototype §2/§6.3). Parallel byte tables, page-aligned (kind_tab).

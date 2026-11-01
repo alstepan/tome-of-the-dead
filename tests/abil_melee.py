@@ -25,7 +25,7 @@ power attack mid-ladder), §6.4 (stun: R halves, survivors only).
   DYING / ST_FLAGS / ST_T1 and the RNG == the model (per target in slot
   order: d20, 1dN); struck bodies: E_REACTAT = 2 (the strike tick, the
   HURT / DEATH already running), ATTR_HIT flash; the lines pushed that tick
-  == "[status] YOU HIT / MISS / KILL THE <kind>" per target; FX tracks:
+  == "[status] YOU HIT / SMASH / MISS / KILL <kind> [-D [HP H]]" per target (LOG-DMG); FX tracks:
   power_burst at the target's front col (a hit) / spark_fizz1 at x - 1 and
   x + w (Whirlwind), IF2 on the next tick; the monster phase only after the
   FX is idle; FX_DROP 0; the turn ends
@@ -297,7 +297,12 @@ def run(h, p, check):
             if hit and lost and b.hp and (b.stf & 3) == 3 and not (w0.bodies[sl].stf & 3):
                 exp_lines.append("THE " + NM[k] + TXT["st_m_stunned"])
             word = "you_miss" if not hit else ("you_kill" if b.hp == 0 else "you_hit")
-            exp_lines.append(TXT[word] + NM[k])
+            if word == "you_hit" and abl == POWER:
+                word = "cmb_power"                # LOG-DMG: "YOU SMASH <kind>"
+            tail = ""                             # LOG-DMG: " -D" (+ " HP H" alive); D = 0: none
+            if hit and lost:
+                tail = f" -{min(lost, 99)}" + (f" HP {min(b.hp, 99)}" if b.hp else "")
+            exp_lines.append(TXT[word] + NM[k] + tail)
         check(f"{tag}: the lines {exp_lines}",
               [l.rstrip(".") for l in lines] == [l.rstrip(".") for l in exp_lines]
               and p.rb(S["LOG_Q"] + S["LQ_DROP"]) == drop0, (lines, exp_lines))
@@ -405,7 +410,8 @@ def run(h, p, check):
     lines = [l.rstrip(".") for l in ring_lines(wr0, qn1 - qn0)]
     got = dict(lines=lines, rng=p.rw("RNG_STATE") == rng_end, gob=p.ent(gob)["HP"], rat=p.ent(ratsl)["HP"])
     check("K Whirlwind: a DYING target is skipped (no roll, no line), the other struck",
-          got == dict(lines=[TXT["you_hit"] + "GOBLIN"], rng=True, gob=w.bodies[gob].hp, rat=0), (got, res))
+          got == dict(lines=[TXT["you_hit"] + "GOBLIN" + f" -{res[0][2]} HP {w.bodies[gob].hp}"], rng=True,
+                      gob=w.bodies[gob].hp, rat=0), (got, res))
     p.until(lambda: p.idle(), 120)
 
     # ---- E: T7 edge clamp — the 40-px frames at cols 0 / 29 -----------------------------

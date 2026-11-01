@@ -160,7 +160,7 @@ sp_summon:      ld   a, (ix+E_RCD)
                 and  ~RCD_SUMMON & $FF
                 or   c
                 ld   (ix+E_RCD), a
-                ld   b, MSG_M_SUMMON
+                ld   bc, MSG_M_SUMMON << 8      ; C = 0: rg_pose's E_HIT (LOG-DMG; no flash, no number)
                 call rg_pose                   ; (ranged6.asm) the cast / attack pose + the line
                 scf
                 ret

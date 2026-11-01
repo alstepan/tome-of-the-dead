@@ -372,18 +372,20 @@ deal_hit:
                 ld   a, (ix+E_HP)
                 or   a
                 jr   z, .out                   ; a dying attacker stays dead
+                ld   b, a                      ; B = its HP before
                 ld   a, (dh_lost)
-                add  a, (ix+E_HP)
+                add  a, b
                 jr   c, .cap
                 cp   (ix+E_MAXHP)
                 jr   c, .hs
 .cap:           ld   a, (ix+E_MAXHP)
 .hs:            ld   (ix+E_HP), a
-                ld   a, (ix+E_FLAGS)
-                and  EF_PLAYER
-                jr   z, .out
+                bit  EF_PLAYER_BIT, (ix+E_FLAGS)
+                jr   z, .out                   ; (the Vampire: no line, LN_G untouched)
+                sub  b                         ; LOG-DMG: G = the HP gained after the cap
+                ld   (LN_G), a
                 ld   a, TX_SPL_DRAIN_HEAL
-                call msg_push
+                call msg_push_h                ; "YOU FEEL HEALTHIER +G" (bare at G = 0)
 .out:           ld   ix, (ATK_PTR)
 .ox:            ld   a, (dh_lost)
                 ld   l, a
@@ -792,9 +794,9 @@ efx_tab:
 ; deal_hit scratch (bank-3 RAM next to the code; deal_hit is not re-entrant)
 dh_slot:        DB   0
 dh_flags:       DB   0
-dh_eff:         DB   0
+dh_eff          EQU  DH_EFF                    ; LOG-DMG: state block (defs.asm; bank 3 -1 B)
 dh_dmg:         DB   0
-dh_lost:        DB   0
+dh_lost         EQU  LN_VAL                    ; LOG-DMG: always mapped (log0.asm reads it, bank 0 paged)
 dh_def:         DB   0
 dh_imm:         DB   0
 dh_weak:        DB   0

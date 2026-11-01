@@ -191,7 +191,7 @@ def run(h, p, check):
     d, ln = quick(POT_SLOT)
     check("Q5 quick POTION: 'YOU DRINK THE HEAL POTION' + 'YOU FEEL HEALTHIER', +10 HP, 1 turn",
           (d, ln, p.ent(0)["HP"] in (15, 16), [x[0] for x in bag()]) == (1, ["YOU DRINK THE HEAL POTION",
-                                                                       "YOU FEEL HEALTHIER"], True,
+                                                                       "YOU FEEL HEALTHIER +10"], True,   # LOG-DMG
                                                                        [I("F_APPLE")]), (d, ln, p.ent(0)["HP"]))
     put([])
     d, ln = quick(SCR_SLOT, use_turn=False)
@@ -229,7 +229,7 @@ def run(h, p, check):
     dd = (p.rb(RES), p.ent(0)["HP"], bag(), list(lines), p.rb("PAGE_VERB"),
           bytes(z.read_memory(S["ROOM_MAP"], S["PLAY_CELLS"])) == m0, p.ent(0)["POT"])
     check("D1 page DRINK Heal at 10: L 1, HP 20, consumed, both lines, verb consumed, map back, E_POT 0",
-          dd == (1, 20, [(I("F_APPLE"), 1, 0)], ["YOU DRINK THE HEAL POTION", "YOU FEEL HEALTHIER"], 0, True, 0), dd)
+          dd == (1, 20, [(I("F_APPLE"), 1, 0)], ["YOU DRINK THE HEAL POTION", "YOU FEEL HEALTHIER +10"], 0, True, 0), dd)
     # D2 Mana / Cure second lines
     put(["P_MANA", "P_CURE"])
     p.wb("MP", 0)

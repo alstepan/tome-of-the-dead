@@ -690,7 +690,8 @@ def w15(p, check):
           (p.rb("TURN_PHASE"), p.ent(0)["HP"]))
     check("W15 quaff: panel untouched in the input tick (composed rows 18-23)",
           panel(p.composed_frame()) == before, "")
-    want_log = text6("YOU FEEL HEALTHIER")          # 3E-T12: "YOU DRINK THE HEAL POTION", then this
+    want_log = text6("YOU FEEL HEALTHIER +%d" % S["QUAFF_HEAL"])   # 3E-T12: "YOU DRINK THE HEAL POTION", then
+                                                    # this (LOG-DMG: + the HP gained, 5 -> 15)
     seen = {}
     for k in range(1, 7):
         p.tick()
@@ -2196,6 +2197,8 @@ def w17(p, check):
     post = {1: "", 2: "", 3: "", 4: T_["hits_you"], 5: T_["misses"]}
     ent = lambda sl, k: S["P_ENTITIES"] + sl * 32 + S[k]
     bad, t_imp = [], 0
+    p.wb(ent(0, "E_HIT"), 0)                       # LOG-DMG: D = 0 -> the bare lines (the tails: (c') / logdmg.py)
+    p.wb(ent(1, "E_HIT"), 0)
     for kn, nmtxt in names.items():
         kind = S["K_" + kn.upper()]
         for m in (1, 2, 3, 4, 5):
@@ -2223,7 +2226,10 @@ def w17(p, check):
     # panel slot, whose own ceiling is W15's 25k. Gates: compose <= IMP_CAP (main 2162bc8
     # worst 3,500 T; w2d 3,774 T; + ~0.6k for one HOT_SKIP_MAX skip), compose + item <=
     # 25k + IMP_CAP (main's worst 29,082 T, w2d 29,149 T; budget.py gates the real ticks).
-    IMP_CAP = 4500
+    # LOG-DMG: + the number tail (log0.asm: " -99 HP 99" = ent_ix + 2 msg_dec + 10 more stream
+    # bytes for log_push: +~1.4k; measured worst 5,195 T 'YOU HIT SCREECHER -99 HP 99'): 4500 -> 5500.
+    # Once per log event, never per tick (budget.py gates the real ticks: all pass).
+    IMP_CAP = 5500
     k0 = [n for n, _ in STRINGS].index("nm_knight")
     PRE = [None, "you_hit", "you_miss", "you_kill", "the", "the", "you_squeeze"] + ["the"] * 9
     POST = [None, "empty", "empty", "empty", "hits_you", "misses", "empty", "cmb_unaffected",
@@ -2231,6 +2237,12 @@ def w17(p, check):
             "st_m_wake", "st_m_thaw", "cmb_parries"]
     assert len(PRE) == len(POST) == S["MSG_P_PARRY"] + 1
     bad2, t_cmp, t_all, n_all = [], (0, ""), (0, ""), 0
+    # LOG-DMG: IX = the hero, E_HIT 99, E_TGT 1 at HP 99 -> the worst tails (P_HIT / P_KILL " -99 HP 99",
+    # M_HIT " -99"): the compose gate covers log0.asm ln_imp's number path
+    p.wb(ent(0, "E_HIT"), 99)
+    p.wb(ent(0, "E_TGT"), 1)
+    p.wb(ent(1, "E_HP"), 99)
+    TAILS = {S["MSG_P_HIT"]: " -99 HP 99", S["MSG_P_KILL"]: " -99 HP 99", S["MSG_M_HIT"]: " -99"}
     for m in range(1, S["MSG_P_PARRY"] + 1):
         for k in range(S["K_FXW"]):
             nm = STRINGS[k0 + k][1]
@@ -2238,11 +2250,12 @@ def w17(p, check):
                 continue                                # a nameless kind (none since 3F-T9 nm_vbat)
             post = POST[m]
             if m == S["MSG_M_HIT"] and k == S["K_VAMPIRE"]:
-                post = "cmb_drains"                     # 3F-T9: impact_line remaps the Vampire's bite hit
-            exp = T_[PRE[m]] + nm + T_[post]
-            t1 = stub([0x06, m, 0x0E, k, 0xCD] + w(S["impact_line"]), f"impact_line {k} {m}", measure=True)
+                post = "cmb_drains"                     # 3F-T9: the Vampire's bite hit (LOG-DMG: log0 ln_imp)
+            exp = T_[PRE[m]] + nm + T_[post] + TAILS.get(m, "")
+            ixh = [0xDD, 0x21] + w(S["P_ENTITIES"])
+            t1 = stub(ixh + [0x06, m, 0x0E, k, 0xCD] + w(S["impact_line"]), f"impact_line {k} {m}", measure=True)
             p.wb("LOG_QN", 0)
-            t2 = stub([0x06, m, 0x0E, k, 0xCD] + w(S["impact_line"]) + [0x21] + w(S["PANEL_DIRTY"]) +
+            t2 = stub(ixh + [0x06, m, 0x0E, k, 0xCD] + w(S["impact_line"]) + [0x21] + w(S["PANEL_DIRTY"]) +
                       [0xCD] + w(S["item_log"]), f"impact_line+item {k} {m}", measure=True)
             n_all += 1
             t_cmp = max(t_cmp, (t1, exp))
@@ -2251,6 +2264,7 @@ def w17(p, check):
                 bad2.append((m, k, exp))
     check(f"W17 all {n_all} impact_line combos (msg 1..15 x every kind) drawn == text", bad2 == [] and n_all >= 400,
           (n_all, bad2[:4]))
+    p.wb(ent(0, "E_HIT"), 0)
     check(f"W17 impact_line compose <= {IMP_CAP} T", t_cmp[0] <= IMP_CAP, t_cmp)
     check(f"W17 impact_line + log item <= {25000 + IMP_CAP} T (W15 item ceiling + compose)",
           t_all[0] <= 25000 + IMP_CAP, t_all)
