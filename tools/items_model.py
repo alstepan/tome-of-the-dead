@@ -43,6 +43,14 @@ is dropped (counted, not an error).
     first legal wins; none -> dropped.
 The key has no floor entry (8.11 Q1); LVL_KEYROOM stays whatever level_gen set.
 
+GEAR2 (docs/design/gear_rules.md 1.3 / 2.3): the gear pool is class-gated per row
+(Robe / Hood Mage, Leather / Chain / Plate / Helm Warrior; 2 new rows), and a q pass runs
+AFTER gen_traps: for every gear entry in FLOOR_LIST order (generated gear only) one
+ITEM_RNG rnd(8); numeric gear (weapon / armour / helmet) gets q in -1..+2 stored as
+FL_QTY = 1 + (q & 7), charms keep qty 1 (the draw is still consumed). `gen_level_items(...,
+gear2=False)` skips the q pass (G2-1 on/off comparison); the pre-GEAR2 pool is
+GEAR_TABLE_OLD / gear_pool(..., old=True).
+
 Encodings
 ---------
 FLOOR_LIST entry (room | S1<<7, col, type, qty). Trap list entry: B0 = room |
@@ -90,8 +98,20 @@ BOOK_DEPTHS = range(1, 8)                   # 8.5: class book D1-D7
 AMMO_DEPTHS = range(1, 8)                   # 8.5: ammo D1-D7 (none on D8)
 BOW_DEPTH = 2
 
-# 8 table: (type, first depth, class lock) ; start-kit items are not found.
+# 8 table (gear_rules.md 1.3), id order: (type, first depth, class lock); start-kit weapons /
+# armour are not found, uniques neither.  GEAR2 adds ROBE (M) and LEATHER (W) and class-locks
+# CHAIN / PLATE / HELM (W) and HOOD (M).
 GEAR_TABLE = (
+    (T["IT_W_LONG"], 2, "W"), (T["IT_W_AXE"], 4, "W"),
+    (T["IT_W_IRON"], 2, "M"), (T["IT_W_RUNE"], 4, "M"),
+    (T["IT_A_ROBE"], 1, "M"), (T["IT_A_LEATHER"], 1, "W"),
+    (T["IT_A_CHAIN"], 3, "W"), (T["IT_A_PLATE"], 6, "W"),
+    (T["IT_H_HOOD"], 1, "M"), (T["IT_H_HELM"], 1, "W"),
+    (T["IT_C_MIGHT"], 2, None), (T["IT_C_WARD"], 2, None), (T["IT_C_FIRE"], 2, None),
+    (T["IT_C_MANA"], 3, None), (T["IT_C_PLENTY"], 3, None),
+)
+# the pre-GEAR2 table (baseline for the differential check)
+GEAR_TABLE_OLD = (
     (T["IT_W_LONG"], 2, "W"), (T["IT_W_AXE"], 4, "W"),
     (T["IT_W_IRON"], 2, "M"), (T["IT_W_RUNE"], 4, "M"),
     (T["IT_A_CHAIN"], 3, None), (T["IT_A_PLATE"], 6, None),
@@ -99,6 +119,11 @@ GEAR_TABLE = (
     (T["IT_C_MIGHT"], 2, None), (T["IT_C_WARD"], 2, None), (T["IT_C_FIRE"], 2, None),
     (T["IT_C_MANA"], 3, None), (T["IT_C_PLENTY"], 3, None),
 )
+# GEAR2 2.3 q thresholds (balance knobs): q = -1 + (s >= T0) + (s >= T1) + (s >= T2),
+# s = rnd(8) + ((depth + 1) >> 2)
+Q_T0, Q_T1, Q_T2 = 2, 6, 8
+Q_MIN, Q_MAX = -1, 2
+QTY_MAX_GEAR = 8                            # numeric gear FL_QTY = 1 + (q & 7): 1, 2, 3 or 8 (q -1)
 # 1.5 traps: count per depth; pool = kinds allowed at that depth (uniform)
 TRAP_COUNT = {1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4}
 # STUN1 (game.md 1.5.1): pool order DART GAS TELEPORT STUN ALARM (the overlay's ig_tord prefix)
@@ -294,11 +319,120 @@ def try_add(rng, b, lvl, pool, typ, qty, scan=False):
 # =============================================================================
 # 3. item rules
 # =============================================================================
-def gear_pool(depth, hero):
-    """game.md 8 table 'Found' column: gear types available at `depth` for `hero`
-    (weapons class-locked, 8.11 Q4 'no junk'); id order."""
+def gear_pool(depth, hero, old=False):
+    """gear_rules.md 1.3: gear types available at `depth` for `hero` (class-gated, id
+    order). old=True: the pre-GEAR2 table.  G2-9: Warrior D1 = [LEATHER, HELM]."""
     lock = "W" if hero == HERO_WARRIOR else "M"
-    return [t for t, d0, c in GEAR_TABLE if depth >= d0 and c in (None, lock)]
+    return [t for t, d0, c in (GEAR_TABLE_OLD if old else GEAR_TABLE) if depth >= d0 and c in (None, lock)]
+
+
+# =============================================================================
+# GEAR2 / GEAR1 / GEAR3 model hooks (pure functions; balance_sim.py imports these)
+# =============================================================================
+def is_numeric_gear(typ):
+    """Weapons, armour, helmets (IT_WPN_LO..IT_HELM_HI); charms are never numeric."""
+    return D["IT_WPN_LO"] <= typ <= D["IT_HELM_HI"]
+
+
+def q_roll(w, depth):
+    """gear_rules.md 2.3: q (-1..+2) from the ITEM_RNG draw w = rnd(8) at `depth`."""
+    s = w + ((depth + 1) >> 2)
+    return -1 + (s >= Q_T0) + (s >= Q_T1) + (s >= Q_T2)
+
+
+def q_support(depth, q):
+    """True if q can occur at `depth` (some w in 0..7 gives it)."""
+    return any(q_roll(w, depth) == q for w in range(8))
+
+
+def q_to_qty(q):
+    """Floor encoding FL_QTY = 1 + (q & 7)  (q -1 -> 8, 0 -> 1, +1 -> 2, +2 -> 3)."""
+    return 1 + (q & 7)
+
+
+def qty_to_q(qty):
+    """Inverse of q_to_qty: signed 3-bit q = (((qty - 1) & 7) ^ 4) - 4."""
+    return (((qty - 1) & 7) ^ 4) - 4
+
+
+def istate_q(istate):
+    """q of a bag / worn ISTATE (bits 0-2, two's complement): ((I & 7) ^ 4) - 4."""
+    return ((istate & 7) ^ 4) - 4
+
+
+def istate_m(istate):
+    """m of a bag / worn ISTATE (bits 5-7, signed -4..+3)."""
+    return (((istate >> 5) & 7) ^ 4) - 4
+
+
+def istate_v(istate):
+    """v = m + q, the item's total offset on its main stat (gear_dec uses v)."""
+    return istate_m(istate) + istate_q(istate)
+
+
+def pickup_istate(qty):
+    """Pickup of a non-ammo floor entry: ISTATE = (FL_QTY - 1) & 7 (no type test)."""
+    return (qty - 1) & 7
+
+
+def gear_instance_q(entry):
+    """q of a generated floor entry [room, col, type, qty]: qty_to_q for numeric gear,
+    0 for everything else (charms, potions, ...)."""
+    return qty_to_q(entry[3]) if is_numeric_gear(entry[2]) else 0
+
+
+def gear_banned(hero, armour, helm):
+    """GEAR1 gate predicate (gear_rules.md 1.2): True if the hero's class abilities are
+    blocked.  Mage: worn armour CHAIN/PLATE or helmet HELM; Warrior: armour ROBE or helmet
+    HOOD.  Uniques / LEATHER / charms never ban.  armour / helm = worn type id (0 = none)."""
+    if hero == HERO_MAGE:
+        return armour in (T["IT_A_CHAIN"], T["IT_A_PLATE"]) or helm == T["IT_H_HELM"]
+    return armour == T["IT_A_ROBE"] or helm == T["IT_H_HOOD"]
+
+
+def type_banned_for(hero, typ):
+    """equip_consider helper: would wearing `typ` ban `hero`?  (gear_rules.md 1.1)."""
+    if hero == HERO_MAGE:
+        return typ in (T["IT_A_CHAIN"], T["IT_A_PLATE"], T["IT_H_HELM"])
+    return typ in (T["IT_A_ROBE"], T["IT_H_HOOD"])
+
+
+def rng_mod_mask(n):
+    """io.asm rng_mod mask: (n - 1) smeared to 2^k - 1."""
+    m = n - 1
+    m |= m >> 1
+    m |= m >> 2
+    m |= m >> 4
+    return m
+
+
+def rng_mod(step, n):
+    """gear_rules.md 3.1 rng_mod: repeat x = step() (a gameplay rng_next returning L),
+    a = x & 0xFF & mask until a < n.  n = 1 still costs one step."""
+    mask = rng_mod_mask(n)
+    while True:
+        a = step() & 0xFF & mask
+        if a < n:
+            return a
+
+
+def enchant_candidate(typ, istate):
+    """Enchant candidate test: numeric gear (not IT_NONE) and m != +3."""
+    return is_numeric_gear(typ) and (istate & 0xE0) != 0x60
+
+
+def enchant_target(worn, bag, step):
+    """GEAR3 target selection (gear_rules.md 3.1), AFTER the scroll left the bag.
+    worn = [(type, istate)] in slot order WEAPON, ARMOUR, HELMET (type 0 = empty slot);
+    bag = [(type, istate)] in bag slot order (post-take indices); step = gameplay rng_next.
+    Returns ('worn', i, new_istate) / ('bag', i, new_istate) / None (NOTHING HAPPENS, 0 draws).
+    Worn m changes need hero_recalc; bag m changes do not.  new_istate = istate + $20."""
+    for where, lst in (("worn", worn), ("bag", bag)):
+        cand = [i for i, (t, ist) in enumerate(lst) if enchant_candidate(t, ist)]
+        if cand:
+            i = cand[rng_mod(step, len(cand))]
+            return where, i, (lst[i][1] + 0x20) & 0xFF
+    return None
 
 
 def gen_potions(rng, b, lvl, pres, start, lair):
@@ -322,9 +456,11 @@ def gen_potions(rng, b, lvl, pres, start, lair):
         e[0], e[1] = rb, col
 
 
-def gen_level_items(b, master, hero):
+def gen_level_items(b, master, hero, gear2=True, old_pool=False):
     """Whole 3E item + trap step for one levelgen block `b` (bytes, 320 B).
-    master = MASTER_SEED word; hero in {HERO_WARRIOR, HERO_MAGE}. Pure: returns Lvl."""
+    master = MASTER_SEED word; hero in {HERO_WARRIOR, HERO_MAGE}. Pure: returns Lvl.
+    gear2=False skips the q pass (the extra ITEM_RNG steps); old_pool=True uses the pre-GEAR2
+    gear table (both = the pre-GEAR2 model, byte-identical to 864f0c3)."""
     depth = b[G.H["LVL_DEPTH"]]
     rng = item_rng(master, depth)
     pres, start, lair = rooms_of(b)
@@ -344,7 +480,7 @@ def gen_level_items(b, master, hero):
         typ = D["IT_SCR_LO"] + rng.rnd(D["IT_SCR_HI"] - D["IT_SCR_LO"] + 1)
         try_add(rng, b, lvl, non_start, typ, 1)
     # 8.5 gear 1-2 depth-gated, fixed stats
-    gp = gear_pool(depth, hero)
+    gp = gear_pool(depth, hero, old=old_pool)
     for _ in range(GEAR_N_MIN + rng.rnd(GEAR_N_SPAN)):
         typ = gp[rng.rnd(len(gp))]
         try_add(rng, b, lvl, glyph_pool, typ, 1)
@@ -365,7 +501,19 @@ def gen_level_items(b, master, hero):
             add(lvl, rsc, T["IT_ARROW"], ARROW_BUNDLE)   # same cell (8.5); bundle first, the bow LAST:
             add(lvl, rsc, IT_BOW, 1)                     # the cell shows its last entry (BOW-ICON)
     gen_traps(rng, b, lvl, pres, start, lair)
+    if gear2:
+        gen_gear_q(rng, lvl)
     return lvl
+
+
+def gen_gear_q(rng, lvl):
+    """GEAR2 2.3: after the traps, one rnd(8) per gear entry in FLOOR_LIST order (generated
+    gear only exists here).  Numeric gear: FL_QTY = 1 + (q & 7); charms: qty stays 1."""
+    for e in lvl.floor:
+        if is_gear(e[2]):
+            w = rng.rnd(8)
+            if e[2] < D["IT_CHARM_LO"]:
+                e[3] = q_to_qty(q_roll(w, lvl.depth))
 
 
 # =============================================================================
@@ -499,9 +647,16 @@ def check_items(b, lvl, hero=None):
             v.append("legacy potion left")
         if qty < 1:
             v.append(f"entry {i}: qty 0")
+        if not is_numeric_gear(typ) and typ not in (T["IT_DAGGER"], T["IT_ARROW"]) and qty != 1:
+            v.append(f"entry {i}: non-ammo type {typ} qty {qty} (invariant: 1 unless numeric gear)")
         if is_gear(typ):
-            if qty != 1:
-                v.append(f"entry {i}: gear qty {qty}")
+            if is_numeric_gear(typ):
+                if not 1 <= qty <= QTY_MAX_GEAR or not Q_MIN <= qty_to_q(qty) <= Q_MAX:
+                    v.append(f"entry {i}: gear qty {qty}")
+                elif not q_support(depth, qty_to_q(qty)):
+                    v.append(f"entry {i}: q {qty_to_q(qty)} outside D{depth} support")
+            elif qty != 1:
+                v.append(f"entry {i}: charm qty {qty}")
             if typ not in gear_pool(depth, hero):
                 v.append(f"entry {i}: gear {typ} not in D{depth} {hero} pool")
     # FLOOR1: one item per footprint, except the bow + its bundle (exact col), no two
