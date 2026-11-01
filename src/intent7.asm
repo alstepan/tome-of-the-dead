@@ -346,14 +346,9 @@ hero_st_init:
                 ld   a, b                      ; D3-7 T3: base MP (game.md §4; 3E-T8: the
                 ld   (MP), a                   ; Robe's +2 is gear: hero_recalc adds it,
                 ld   (MAXMP), a                ; kit_add fills MP)
-    IF DEBUG_KIT
-                ld   hl, debug_kit             ; R6 (r6.asm): only writes RAM; the
-                jp   far6                      ; kit build's bank 7 was 9 B over B7_LIMIT
-    ELSE
-                ret
-    ENDIF
+                ret                            ; (DBG-1: the debug kit's stats are bank-0 kit_b0, from R6 kit_add)
 WARRIOR_MP      EQU 6
 MAGE_MP         EQU 10                         ; 3E-T8: base (game.md §4: 10 + Robe 2 = 12)
 WARRIOR_DAGGERS EQU 3                          ; (EQUs: no bytes in bank 7)
 
-; (debug_kit: R6 fx6-side block in r6.asm — kit builds only, bank-7 relief)
+; (DBG-1: the debug kit lives in bank 0, src/kit0.asm — kit builds only)

@@ -30,37 +30,7 @@
                 INCLUDE "spawn6.asm"           ; 3F-T9: the spawn queue (breed6 / sp_bcall / ph_summon) + sp_run (end_turn)
                 INCLUDE "trickle6.asm"         ; 3F-T12: trk_run, the respawn trickle (far6 from end_turn every RESPAWN_PERIOD turns)
                 INCLUDE "vbat6.asm"            ; 3F-T9: the Vampire's bat form (vb_one: far6 from bank-7 vb_turn, end_turn)
-    IF DEBUG_KIT
-;------------------------------------------------------------------------------
-; debug_kit — the tail of hero_st_init (game.md §1.4 start kit, debug builds
-; only; 3E: delete this block, the jump in hero_st_init and DEBUG_KIT; D3-7
-; T5: moved from bank-3 rank3.asm for bank-3 room; now R6, far6 from hero_st_init,
-; so the kit costs bank 7 only the 4-B call).
-; Mage: 5 spells rank 1, MP 40/40. Warrior: bow, 20 arrows, 8 daggers, Power
-; Strike + Whirlwind rank 1, MP 20/20.
-; Clobbers: A, BC, DE, HL (far6 also loses F; no result)
-;------------------------------------------------------------------------------
-debug_kit:
-                ld   a, (HERO_KIND)
-                or   a
-                ld   hl, %0101                 ; Warrior: k0, k1 rank 1
-                ld   b, 20
-                jr   nz, .m
-                ld   a, 1
-                ld   (HAS_BOW), a
-                ld   a, 20
-                ld   (ARROWS), a
-                ld   a, 8
-                ld   (DAGGERS), a
-                jr   .s
-.m:             ld   hl, %0101010101           ; Mage: k0..4 rank 1
-                ld   b, 40 - 2                 ; 3E-T8: + the Robe's MP 2 (hero_recalc) = 40
-.s:             ld   (ARANK), hl
-                ld   a, b
-                ld   (MP), a
-                ld   (MAXMP), a
-                ret
-    ENDIF
+                ; (DBG-1: debug_kit moved to bank 0, src/kit0.asm kit_b0, far from kit_add)
                 ; (MEM-RECLAIM w3: lq_block, the AI-L1 ladder queue, moved to bank 3: src/lq3.asm)
                 INCLUDE "boss6.asm"            ; 3F-T8: lp_post (the lair boss; w2b: ai_guard / grate_open / boss_chk -> boss7.asm)
                 ; (3F-T10 sanct6.asm: M0 -> bank 7 sanct7.asm, the high block after the tilesets)

@@ -250,6 +250,10 @@ TEXT_LEN        EQU text_img_end - text_img
 ; of $C000; blit_keep; helpers that page BANK_TEXT hand it back), no SMC: the
 ; block is compared with the .sna after play (tests/gfx_integrity.py, game.py #50).
 b0_code:
+                ; (release b0 routines go here, BEFORE the kit)
+    IF DEBUG_KIT
+                INCLUDE "kit0.asm"                      ; DBG-1: the debug kit, kit builds only (keep LAST)
+    ENDIF
 b0_code_end:
 B0_CODE_LEN     EQU b0_code_end - b0_code
 B0_FREE         EQU POOL_START - b0_code_end

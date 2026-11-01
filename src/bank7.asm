@@ -309,6 +309,22 @@ end_turn:
                 ld   a, TRW_ENTRY              ; (immediate mode, no trigger test:
                 ld   (TRP_WAIT), a             ; this is the transition tick)
                 jp   trap_chk
+    IF DEBUG_KIT
+; DBG-1 infinite lives (kit builds only, game.md §1.4): every death reaches here (deal_hit /
+; hero_fall EF_DYING, tome_aura's HP 0), so the hero is revived at the death check, 19 B
+; = the release .dead: EF_DYING off, HP 1, the held DEATH pose / a pending reaction back
+; to standing; no GS_DEAD, no line. The hit, its HURT / DEATH reaction and the log played
+; as usual; this turn's hunger step is skipped (the level-up check still runs).
+.dead:          ld   hl, P_ENTITIES + E_FLAGS
+                res  EF_DYING_BIT, (hl)
+                ld   l, (P_ENTITIES + E_HP) & $FF
+                ld   (hl), 1
+                xor  a                         ; M_REST / RC_NONE
+                ld   (P_ENTITIES + E_MODE), a
+                ld   (P_ENTITIES + E_REACT), a
+                jp   xp_turn
+                ASSERT M_REST == 0 && RC_NONE == 0 && (P_ENTITIES >> 8) == ((P_ENTITIES + E_HP) >> 8)
+    ELSE
 .dead:          xor  a                         ; SND-3: Game Over once (GS_DEAD never reaches
                 ld   (MUS_REQ), a              ; end_turn again; end_screen only redraws): final
                 ld   a, MUS_OVER               ; cue = loop off, then the shot
@@ -317,6 +333,7 @@ end_turn:
                 ld   (GAME_STATE), a
                 ld   a, TX_DIED
                 jp   msg_push_end              ; never dropped (B3B-11b); end_screen drains it
+    ENDIF
 
 ;------------------------------------------------------------------------------
 ; vb_turn — end_turn (3F-T9, game.md §9.2 Vampire bat form; no exit this turn):

@@ -609,3 +609,9 @@ ABIL_DESC_LEN   EQU 16
 ; power_fire on the fire tick (nothing moves in between: the monster phase is
 ; deferred), so the fire tick does not scan again. Right after ABIL_DESC.
 ABIL_TGT        EQU ABIL_DESC + ABIL_DESC_LEN   ; $5E78..$5E79 (D3-8e; was $5E70)
+    IF DEBUG_KIT
+; KIT_LIST (DBG-1, kit builds only) — the hero's start-kit list (KIT_LEN 15 B), written by
+; bank-0 kit_b0 and read at once by R6 kit_add (new game: no projectile / ability live), in
+; PF_RAM's free middle $5E7A.. after ABIL_TGT (ASSERTed below PF_ROWF in kit0.asm).
+KIT_LIST        EQU ABIL_TGT + 2
+    ENDIF

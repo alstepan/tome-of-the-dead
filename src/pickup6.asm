@@ -145,12 +145,18 @@ pu_add:
 kit_add:
                 ld   a, FOOD_START             ; 3E-T9: new_game zeroed ITEM_RAM (FED, timers 0)
                 ld   (FOOD), a
+    IF DEBUG_KIT
+                FARB0 kit_b0                   ; DBG-1 (bank 0, kit0.asm): the kit stats, HL =
+                                               ; KIT_LIST (the hero's list, copied to low RAM)
+    ELSE
                 ld   a, (HERO_KIND)
                 ld   hl, kit_w
                 or   a
                 jr   z, .k
                 ld   hl, kit_m
-.k:             ld   de, WORN                  ; WS_WEAPON, then WS_ARMOUR: TYPE, QTY 1
+.k:
+    ENDIF
+                ld   de, WORN                  ; WS_WEAPON, then WS_ARMOUR: TYPE, QTY 1
                 ld   b, 2
 .w:             ld   a, (hl)
                 inc  hl
@@ -174,18 +180,14 @@ kit_add:
                 ld   a, (MAXMP)                ; start full (the Robe's +2 included)
                 ld   (MP), a
                 ret
-kit_w:          DB   IT_W_SHORT, IT_A_LEATHER, IT_P_HEAL, IT_F_APPLE
-    IF DEBUG_KIT
-                DB   IT_P_CURE, IT_P_MANA, IT_S_TELEPORT, IT_S_FEAR, IT_S_SLEEP, IT_S_ENCHANT
-                DB   IT_F_MEAT, IT_BOOK, IT_H_HELM, IT_BOW
-    ENDIF
+; the release lists (weapon, armour, then the bag; 0 ends; KIT_*_BASE: item_defs.asm). The
+; kit build's lists are bank-0 kit_bw / kit_bm (kit0.asm: the same bases + the designer's extras).
+    IF !DEBUG_KIT
+kit_w:          KIT_W_BASE
                 DB   0
-kit_m:          DB   IT_W_OAK, IT_A_ROBE, IT_P_HEAL, IT_P_MANA, IT_F_APPLE
-    IF DEBUG_KIT
-                DB   IT_P_CURE, IT_S_TELEPORT, IT_S_FEAR, IT_S_SLEEP, IT_S_ENCHANT
-                DB   IT_F_MEAT, IT_BOOK, IT_H_HELM
-    ENDIF
+kit_m:          KIT_M_BASE
                 DB   0
+    ENDIF
                 ASSERT WS_WEAPON == 0 && WS_ARMOUR == 1 && ((WORN + 2 * IR_STRIDE) >> 8) == (WORN >> 8)
 
 ;------------------------------------------------------------------------------
