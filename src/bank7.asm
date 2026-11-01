@@ -1256,5 +1256,5 @@ intent_icon7:
                 INCLUDE "hunger7.asm"          ; MEM-RECLAIM w2b: hunger_turn / hunger_add (from R6 hunger6.asm)
                 INCLUDE "trap7.asm"            ; MEM-RECLAIM w2b: trap_turn / trap_step / effects (from R6 trap6.asm)
                 INCLUDE "boss7.asm"            ; MEM-RECLAIM w2b: grate_open / boss_chk (from R6 boss6.asm)
-                INCLUDE "tiles7.asm"           ; MEM-RECLAIM w2a: level_tiles7 (deduplicated tileset gather)
+                ; (tiles7.asm: M0 -> the high bank-7 block after the tilesets, main.asm b7h_code)
                 INCLUDE "boot7.asm"            ; MEM-SND: panel_init7, new_game (from bank 3; 3E-T1: the boot parts -> boot6.asm)

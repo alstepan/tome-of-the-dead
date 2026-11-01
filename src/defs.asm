@@ -72,7 +72,7 @@ BANK_SHADOW    EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect's
 BANK_COLD7      EQU 7               ; D3-S2: bank-7 cold code B7_CODE..B7_LIMIT (via far7)
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
 BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
-AY_RESERVE      EQU $EFD0           ; MEM-RECLAIM w3: $EFA0 -> $EFD0 (+48 B bank-3 cold code for lq_block; 121 B SFX slack kept); was: A8 / D3-0 / MEM-SND / 3E lever (c): bank 3 $EFA0..$FFFF = 4192 B AY player/music/FX
+AY_RESERVE      EQU $F010           ; M0 (L3): $EFD0 -> $F010 (+64 B bank-3 cold code; the AY slot keeps 57 B for 3G SFX); MEM-RECLAIM w3: $EFA0 -> $EFD0 (+48 B bank-3 cold code for lq_block; 121 B SFX slack kept); was: A8 / D3-0 / MEM-SND / 3E lever (c): bank 3 $EFA0..$FFFF = 4192 B AY player/music/FX
                                     ;     reserve (game.md §11.2, user 2026-10-06: 7 KB -> 4 KB at $F000,
                                     ;     was $E400; MEM-SND: -608 B after 406 B of bank-3 cold code went
                                     ;     to bank 7, ~200 B bank-3 slack kept; 3E lever (c): +512 B
@@ -179,7 +179,8 @@ IK_TILE         EQU 4               ; a common tile id (TILE_GLYPHS, 1 cell)
 B7_CODE         EQU $DB00           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), right
                                     ;     after screen 2 (MEM-RECLAIM w2a: was $E000, above tilesets 0..3)
 B7_LIMIT        EQU $F800           ; ... up to the attr shadow (ASSERTed)
-SHADOW_ATTR     EQU $F800           ; bank 7: room tile attrs in screen layout ($F800..$FA3F used)
+SHADOW_ATTR     EQU $F800           ; bank 7: room tile attrs in screen layout ($F800..$FA3F = rows 0..17;
+                                    ;     M0 (L2): the 3 spare PROTO rows $FA40..$FA9F went to TSET_BASE)
 BANK_WINDOW     EQU $C000
 FT_BLOCKER      EQU $FE             ; find_target: nearest body is mid-ladder (not a slot)
 PAGING_PROBE    EQU $A5             ; check_paging: bank-1 marker (bank 0 gets ~)
@@ -191,6 +192,21 @@ SRC_VIRT_BASE   EQU $8000           ; sources are assembled at virtual $8000..$F
 ; (msg_push, impact_line, print6t, print6x, tx_dec); never in place.
 BANK_TEXT       EQU BANK_POOL0      ; uncontended (bank 1 was contended)
 TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
+; M0 (lever L4, user 2026-10-31): POOL_START is FIXED above a shared reserve for the
+; text block (TEXT_LEN 2,326 B at M0 + 45 B of post-3F strings) and the bank-0 cold
+; code (b0_code, main.asm). ASSERT b0_code_end <= POOL_START (main.asm): text and code
+; may trade bytes. The pool slack is QUANTISED here (memory-map "M0 / post-3F ledger"):
+; the worst level (D8 Warrior) leaves a ~74-B tail at bank 0's end, so a reserve of
+; 45 + 29 B costs 0 slack (1,264 kept), but 45 + 30..250 B costs one 240-B variant
+; (slack 1,024) and 45 + 260 B 880. 29 = the largest free code reserve.
+TEXT_RES        EQU 2326 + 45
+B0_CODE_RES     EQU 29
+POOL_START      EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES  ; $C960: alloc_reset's first bank-0 pool byte
+    MACRO FARB0 target                  ; call a bank-0 cold-code routine (8 B; A / DE / IX pass in;
+                ld   hl, target         ;   C lost to the bank, B to farb's A): farb pages BANK_TEXT
+                ld   c, BANK_TEXT
+                call farb
+    ENDM
 TEXT_DISP       EQU BANK_WINDOW - SRC_VIRT_BASE   ; virtual bank-1 address -> runtime ($C000..): vdata, ui1_code
 BANK_UI1        EQU BANK_SRC_LO     ; C3-0: bank-1 UI code (ui1_code, after vdata; via far1)
 UI1_LIMIT       EQU $10000          ; ui1_code runs at $C000.. (DISPed by TEXT_DISP), ends below this

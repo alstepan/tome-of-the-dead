@@ -219,7 +219,7 @@ LVL_FLAGS       EQU LVL_STATE + 12  ; LF_* below
 FLOOR_N         EQU LVL_STATE + 13  ; FLOOR_LIST entries used (0..32)
 MASTER_SEED     EQU LVL_STATE + 14  ; word: per game (FRAMES at START / SEED_FIXED)
 LVL_HDR_LEN     EQU 16
-EDGE_TAB        EQU LVL_STATE + $10 ; 6 B ($6D50..$6D55); $6D56 TRK_PHASE, $6D57 TRK_PREV (3F-T12); $6D58..$6D5F spare
+EDGE_TAB        EQU LVL_STATE + $10 ; 6 B ($6D50..$6D55); $6D56 TRK_PHASE, $6D57 TRK_PREV (3F-T12); $6D58 TOME_HP (M0); $6D59..$6D5F spare
 ROOM_DESC       EQU LVL_STATE + $20 ; 9 x 16 = 144 B ($6D60..$6DEF); $6DF0..$6DFF spare
 FLOOR_LIST      EQU LVL_STATE + $C0 ; 32 x 4 = 128 B ($6E00..$6E7F, page-aligned)
 LVL_STATE_END   EQU LVL_STATE + $140
@@ -317,6 +317,9 @@ TRK_DUE_BIT     EQU 7
 TRK_CNT_MASK    EQU %01111111
 TRK_PREV        EQU EDGE_TAB + 7    ; $6D57: prev_room = the room the hero left last (do_exit .in; 0 at level
                                     ; entry is harmless: only CUR_ROOM is VISITED until the first exit) (test-observable)
+TOME_HP         EQU EDGE_TAB + 8    ; $6D58: M0 reserve for P3 (the real Tome ending): the Tome's hp, 1 B (EDGE_TAB
+                                    ; spare: level_gen's attempt zeroes it = reset on level entry; unused until P3) (test-observable)
+                ASSERT TOME_HP < ROOM_DESC && TOME_HP == LVL_STATE + $18
 TRK_W           EQU LP_SIG          ; trk_run scratch, 9 B (LP_STATE + 15 .. + 23: lp_enter / lp_budget scratch,
                                     ; dead between entries): live floor entries, then w_r per room
                 ASSERT TRK_W + GRID_CELLS <= ROOM_VISITS && TRK_W >= LP_HW + 1 && TRK_PREV < ROOM_DESC
@@ -458,10 +461,12 @@ TSET_GIDX       EQU 0
 TSET_ATTRS      EQU 32
 TSET_FSET       EQU 64
 TSET_STRIDE     EQU 65
-TSET_BASE       EQU $FAA0           ; right above the shadow attrs (PROTO rows 0–20; 3B 0–17)
+TSET_BASE       EQU SHADOW_ATTR + PLAY_ROWS * ATTR_STRIDE   ; $FA40: right above the shadow attrs (rows 0..17;
+                                    ; M0 (L2): was $FAA0 = 3 spare PROTO rows 18..20, never written: every
+                                    ; shadow writer clips to PLAY_ROWS, tests/gfx_integrity.py compares it)
                 ASSERT TSET_ATTRS == TILE_IDS - TILE_COMMON && TSET_FSET == 2 * TSET_ATTRS
                 ASSERT TSET_STRIDE == TSET_FSET + 1   ; level_tiles7: slot * 65 = slot * 64 + slot
-                ASSERT TSET_BASE >= SHADOW_ATTR + PLAY_ROWS * ATTR_STRIDE   ; (+3 PROTO rows of slack)
+                ASSERT TSET_BASE == SHADOW_ATTR + PLAY_ROWS * ATTR_STRIDE && TSET_BASE == $FA40
                 ASSERT BANK_TSET == BANK_SCREEN7 && BANK_TSET == BANK_SHADOW
 
 ;------------------------------------------------------------------------------

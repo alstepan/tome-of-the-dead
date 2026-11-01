@@ -63,9 +63,7 @@ debug_kit:
     ENDIF
                 ; (MEM-RECLAIM w3: lq_block, the AI-L1 ladder queue, moved to bank 3: src/lq3.asm)
                 INCLUDE "boss6.asm"            ; 3F-T8: lp_post (the lair boss; w2b: ai_guard / grate_open / boss_chk -> boss7.asm)
-    IF F3_GEN
-                INCLUDE "sanct6.asm"           ; 3F-T10: sanctum_leaf (D8 Sanctum generation, only with the 3F switch)
-    ENDIF
+                ; (3F-T10 sanct6.asm: M0 -> bank 7 sanct7.asm, the high block after the tilesets)
                 INCLUDE "icons6.asm"           ; IC1: icon_slot / worn_draw / qs_draw (the 16x16 icon blitter)
                 ; AMMO-COUNT: before the icon data (after it, qs_ammo's +66 B made the guard pad 26 B)
                 ; (MEM-RECLAIM w3: lp_wt6 is gone: R6 reads the bank-2 lp_wt, kind_tab + KT_REACH)
