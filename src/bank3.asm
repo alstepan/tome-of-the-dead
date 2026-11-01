@@ -394,7 +394,7 @@ kind_wt:        push af
 ; proto_level — B3B-8: the PROTO rooms A-D (data.asm map) as a 3B level state
 ; at LVL_STATE: header (LVL_DEPTH 0 = PROTO: level_load_tiles takes D1's set +
 ; the chest; D1 colours), EDGE_TAB (A|B door open, D|C closed), the 4 room
-; descriptors (RD_SEED 0: build_room_map lays proto_decor instead of calling
+; descriptors (RD_SEED 0: build_room_map skips
 ; decor_room), FLOOR_LIST = the 4 potions (entry i = PROTO potion id i =
 ; POTIONS_TAKEN bit i). Until B3B-12 generates real levels for a game.
 ; Clobbers: A, BC, DE, HL.
@@ -464,8 +464,6 @@ PROTO_ROOMS     EQU ($ - proto_rooms) / (PROTO_DESC_LEN + 1)
                 ASSERT PROTO_ROOMS == 4 && proto_rooms == proto_floor + PROTO_FLOOR_LEN
                 ASSERT proto_floor == proto_hdr + PROTO_HDR_LEN
                 ASSERT RD_FLAGS == 0 && RD_BLOCK == 9 && RD_LAD1 == 6 && RD_PITCOL == 8
-; PROTO decor (seed-0 rooms only): room, tile, col, row; $FF ends
-proto_decor:    DB   $FF                       ; (empty: B3B-13 dropped the room-D chest, DEC1 the room-A torch)
 
 HERO_START_COL  EQU 2
 HERO_START_S    EQU 1
@@ -624,7 +622,7 @@ glow_ids:       DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_G
 ;   items    FLOOR1: every live FLOOR_LIST entry of this room -> T_ITEM0 + k on its
 ;            2x2 cells (c..c+1, rows 9s+6..9s+7); the icon is drawn after the
 ;            map draw (fi_cells, from the R6 fi_full glyph cache)
-;   decor    RD_SEED != 0: decor_room (B3B-9); seed 0 (PROTO): proto_decor.
+;   decor    RD_SEED != 0: decor_room (B3B-9); seed 0 (PROTO): none.
 ;            The animated cells go to ANIM_N/ANIM_LIST (ROOM_MAP) or
 ;            ANIM_N2/ANIM_LIST2 (NEXT_MAP: do_exit's room_shadow copies it
 ;            after the scroll); the list is emptied first (PROTO: stays 0)
@@ -825,7 +823,7 @@ build_room_map:
                 ; decor
                 ld   a, (ix+RD_SEED)
                 or   (ix+RD_SEED + 1)
-                jr   z, .proto
+                jr   z, .gate                  ; seed 0 (PROTO rooms): no decor (their old list was empty)
                 ld   a, (TMP0)
                 call decor_room                ; B3B-9 (IX = descriptor)
                 ; B12 (concept-screen B3B-8 #4): the OPEN level exit = the raised gate
@@ -858,26 +856,6 @@ build_room_map:
                 pop  ix
                 ret
                 ASSERT T_AIR == 0
-.proto:         ld   hl, proto_decor           ; seed 0: the PROTO rooms' list
-.pd:            ld   a, (hl)
-                cp   $FF
-                jr   z, .gate
-                ld   d, a                      ; room
-                inc  hl
-                ld   e, (hl)                   ; tile
-                inc  hl
-                ld   c, (hl)                   ; col
-                inc  hl
-                ld   b, (hl)                   ; row
-                inc  hl
-                ld   a, (TMP0)
-                cp   d
-                jr   nz, .pd
-                push hl
-                call map_cell
-                ld   (hl), e
-                pop  hl
-                jr   .pd
 .x:             pop  ix
                 ret
                 ASSERT FL_ROOM == 0 && FL_COL == 1 && FL_ITEM == 2 && FL_S1 == $80

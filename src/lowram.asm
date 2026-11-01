@@ -182,12 +182,7 @@ start_game:
                 jr   .go
 .gen:           inc  a                         ; A = 1: D1
                 call level_enter
-.go:            ld   a, 1
-                ld   (NEED_RELEASE), a         ; the select key must be released
-                ld   a, GS_PLAYING
-                ld   (GAME_STATE), a
-                ld   a, (SYS_FRAMES)
-                ld   (LAST_TICK_FRAME), a
+.go:            call play_go                   ; (level_descend's tail: RECLAIM-A, shared)
                 jp   play_loop
 
 ; B3B-12 run configuration (on tape, in this cold block; tests poke them right
@@ -339,9 +334,12 @@ level_descend:
                 ld   (MUS_SHOT), a             ; with music off); level_enter holds for it
                 ld   a, b
                 call level_enter
-                ld   a, 1                      ; like start_game: a key still held
-                ld   (NEED_RELEASE), a         ; through the card must be released
-                ld   a, GS_PLAYING             ; (edge-triggered input) first
+; play_go — a level is shown: a key still held through the card must be released
+; (edge-triggered input) first, GS_PLAYING, the tick clock resynced.  start_game calls it
+; (then enters play_loop), level_descend falls into it.  Clobbers: A, F
+play_go:        ld   a, 1
+                ld   (NEED_RELEASE), a
+                ld   a, GS_PLAYING
                 ld   (GAME_STATE), a
                 jp   resync_tick
 ; tome_gone — WIN2 (game.md §1.3, user 2026-11-01): bank-7 tome_strike's last hit (bank 7
@@ -1362,10 +1360,7 @@ climb_blocked:
                 ld   (ACT_SLOT), a             ; hidden body stacked under a live one
                 push bc                        ; popped up on its corpse when it died
                 push de                        ; (materialise: DYING bodies don't collide)
-                KFIELD KT_BW
-                ld   d, a
-                KFIELD KT_BH
-                ld   e, a
+                call get_wh                    ; D = w, E = h (bank 2; BC kept)
                 ld   a, (TMP7)
                 sub  e
                 ld   b, a                      ; C = the hero's col (the foot cell)

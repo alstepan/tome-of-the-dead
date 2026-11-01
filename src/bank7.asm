@@ -368,12 +368,7 @@ vb_turn:        ld   a, (P_ENTITIES + E_FLAGS)
 .l:             ld   a, c
                 cp   (ix+E_KIND)
                 jr   nz, .n
-                ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING | EF_DYING
-                dec  a
-                jr   nz, .n
-                ld   a, (CUR_ROOM)
-                cp   (ix+E_ROOM)
+                call act_here                  ; (EF_ACTIVE only, in CUR_ROOM)
                 jr   nz, .n
                 ld   a, P_MAX_ENT
                 sub  b                         ; A = the slot (B = 15 .. 1)
@@ -1089,12 +1084,7 @@ follow_select:
                 add  hl, de
                 ld   (hl), $FF
                 call ent_ix
-                ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING | EF_DYING
-                cp   EF_ACTIVE
-                jp   nz, .cn
-                ld   a, (CUR_ROOM)
-                cp   (ix+E_ROOM)
+                call act_here
                 jp   nz, .cn
                 ld   a, (ix+E_KIND)            ; 3F-T8 (game.md §8.6 / §9.2): the lair boss
                 or   (ix+E_GOLD)               ; NEVER follows (it was a plain candidate: the
@@ -1177,12 +1167,7 @@ arrival_conflicts:
 .l:             push af
                 push bc
                 push de
-                ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING | EF_DYING
-                cp   EF_ACTIVE
-                jr   nz, .n
-                ld   a, (CUR_ROOM)
-                cp   (ix+E_ROOM)
+                call act_here
                 jr   nz, .n
                 call box_vs_ix
                 jr   nc, .n
@@ -1195,6 +1180,17 @@ arrival_conflicts:
                 inc  a
                 cp   P_MAX_ENT
                 jr   c, .l
+                ret
+
+; act_here — RECLAIM-A: Z if the entity IX is EF_ACTIVE (not PENDING / DYING) and in CUR_ROOM
+; (the test vbat_turn, the follower candidates and arrival_conflicts each had inline, 17 B).
+; Clobbers: A, F   ~60 T incl. call/ret
+act_here:       ld   a, (ix+E_FLAGS)
+                and  EF_ACTIVE | EF_PENDING | EF_DYING
+                cp   EF_ACTIVE
+                ret  nz
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
                 ret
 
 ;------------------------------------------------------------------------------

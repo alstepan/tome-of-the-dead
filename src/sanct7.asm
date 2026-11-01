@@ -24,23 +24,6 @@ SANCT_XOR       EQU $521F
                 ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + 8 * RD_STRIDE + RD_STRIDE - 1) >> 8)
                 ASSERT (TOME_HP >> 8) == (EDGE_TAB >> 8)
 
-sn_step:                                ; HL = xorshift(7,9,8)(HL) (lg_step without the memory); A clobbered
-                ld   a, h
-                rra
-                ld   a, l
-                rra
-                xor  h
-                ld   h, a
-                ld   a, l
-                rra
-                ld   a, h
-                rra
-                xor  l
-                ld   l, a
-                xor  h
-                ld   h, a
-                ret
-
 sanctum_leaf:   xor  a
                 ld   (LVL_FLAGS), a     ; 3F, every depth: the grate opens on the boss's death
                 ld   b, a               ; B = 0 for level_gen's caller (restore_page keeps BC)
@@ -57,7 +40,7 @@ sanctum_leaf:   xor  a
                 or   h
                 jr   nz, .nz
                 inc  l                  ; x = 0 would lock the xorshift
-.nz:            call sn_step            ; rnd(2): the edge's storey s
+.nz:            call xs_core            ; rnd(2): the edge's storey s
                 ld   a, l
                 and  1
                 rrca
@@ -71,13 +54,13 @@ sanctum_leaf:   xor  a
                 ld   a, b
                 or   RDX_L
                 ld   b, a               ; B = the right room's (L | LS1)
-                call sn_step            ; rnd(24): ladder col
+                call xs_core            ; rnd(24): ladder col
                 ld   a, l
 .m:             sub  LAD_COL_MAX - LAD_COL_MIN + 1
                 jr   nc, .m
                 add  a, LAD_COL_MAX - LAD_COL_MIN + 1 + LAD_COL_MIN
                 ld   d, a
-                call sn_step            ; rnd16: room seed
+                call xs_core            ; rnd16: room seed
                 push hl
                 ld   hl, ROOM_DESC + 6 * RD_STRIDE   ; left room of the pair
                 ld   e, 6               ; E = S
