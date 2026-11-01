@@ -21,7 +21,7 @@
 
 ;------------------------------------------------------------------------------
 ; trk_run — far6 from end_turn on a RESPAWN_PERIOD turn: §9.5 steps 2-10.
-;   2. a level (LVL_DEPTH), boss alive (LF_GRATE_OPEN clear), LP_RESPAWNS < MAX;
+;   2. a level (LVL_DEPTH), boss alive (LF_GRATE_OPEN, LF_UNIQUE clear), LP_RESPAWNS < MAX;
 ;   3. w_r = min(RESPAWN_ITEM_CAP, 1 + 2 x live FLOOR_LIST entries of r) for r
 ;      VISITED, entries < 4, not CUR_ROOM / TRK_PREV / LVL_LAIR / LVL_SANCTUM,
 ;      Σ(entry weights) + minW <= 12; else 0 -> TRK_W[r] (ascending id);
@@ -33,8 +33,8 @@ trk_run:        ld   a, (LVL_DEPTH)
                 or   a
                 ret  z                         ; PROTO rooms: no LP
                 ld   a, (LVL_FLAGS)
-                rra
-                ret  c                         ; LF_GRATE_OPEN: the boss is dead
+                and  LF_GRATE_OPEN | LF_UNIQUE ; the boss is dead: D1-D7 grate_open (LF_UNIQUE set just before
+                ret  nz                        ; it), D8 .seal (LF_SEAL_OPEN | LF_UNIQUE, the grate stays shut)
                 ld   a, (LP_RESPAWNS)
                 cp   RESPAWN_MAX
                 ret  nc

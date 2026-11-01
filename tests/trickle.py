@@ -14,6 +14,7 @@ against tools/respawn_model.py trickle_check, on seeded generated levels (the re
      after the 48th
   P  prev_room: a real do_exit into the lair -> TRK_PREV = the room left; a teleport -> the lair
   R  the appended entry is placed by lp_enter on entry: F_RESPAWN body, the kind, the scaled hp
+  B  boss dead (D1/D5: UNIQUE or GRATE_OPEN; D8: SEAL_OPEN|UNIQUE, no grate): 120 trk_run calls, no respawn
   T  cost: worst far6 trk_run over the M cases + a heavy state (8 VISITED records x 3 entries, a
      spawn through the Skeleton-fails / Rat-retry path, 450 seeds; review measured 14.1k)
 Build with -DDEBUG_KIT=0. ZRCP_PORT=<port> python3 tests/trickle.py
@@ -337,6 +338,40 @@ def heavy_cost(p, L, rnd):
           sp <= 15000 and sc <= 15000, (sc, sp))
 
 
+def boss_dead_cases(p, L, rnd):
+    """B game.md 9.5 (U): the trickle stops the turn the boss dies. D1-D7: grate_open sets LF_UNIQUE then
+    LF_GRATE_OPEN; D8: .seal sets LF_SEAL_OPEN | LF_UNIQUE and never the grate. trk_run must do nothing
+    for either flag alone; the control (both clear) must spawn on the same states."""
+    d = L.depth
+    pr = present(L)
+    st = L.blk[S["LVL_START"] - G.BASE]
+    fl0 = p.rb("LVL_FLAGS")
+    base = fl0 & ~(S["LF_GRATE_OPEN"] | S["LF_UNIQUE"] | S["LF_SEAL_OPEN"]) & 255
+    cur = next(r for r in pr if r != L.lair)
+    for name, bits in (("alive", 0), ("D8 death (SEAL_OPEN|UNIQUE)", S["LF_SEAL_OPEN"] | S["LF_UNIQUE"]),
+                       ("UNIQUE", S["LF_UNIQUE"]), ("GRATE_OPEN", S["LF_GRATE_OPEN"])):
+        resp = worst = 0
+        for i in range(120):
+            recs = [None if r not in pr else {"visited": True, "ents": []} for r in range(9)]
+            write_state(p, d, recs, rnd)
+            p.wb("CUR_ROOM", cur)
+            p.wb("TRK_PREV", L.lair)
+            p.wb("LP_RESPAWNS", 0)
+            p.wb("LVL", 6)
+            p.wb("LVL_FLAGS", base | bits)
+            x = rnd.randint(1, 0xFFFF)
+            p.wmem(S["RNG_STATE"], [x & 255, x >> 8])
+            ok, ts = far6(p, "trk_run")
+            resp += p.rb("LP_RESPAWNS")
+            worst = max(worst, ts)
+        p.wb("LVL_FLAGS", fl0)
+        if bits:
+            check(f"B d{d} {name}: 120 trk_run calls, no respawn, worst {worst} T",
+                  ok and resp == 0 and worst < 1000, (resp, worst))
+        else:
+            check(f"B d{d} control (boss alive) respawns: {resp}", resp > 0, resp)
+
+
 def prev_cases(p, L):
     ok = L.enter()
     check("P1 a real do_exit into the lair: TRK_PREV = the room left", ok and p.rb("TRK_PREV") == L.nb,
@@ -365,6 +400,7 @@ def main():
             if not L.ok:
                 continue
             model_cases(p, L, rnd, 120 if d != 8 else 80, worst)
+            boss_dead_cases(p, L, rnd)
             if d == 5:
                 L = Lair(p, d, seed)
                 due_cases(p, L, rnd)

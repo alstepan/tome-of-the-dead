@@ -24,7 +24,7 @@ into the lair through the non-Sanctum door (real do_exit + lp_transition), then 
       leave + re-enter: summon discarded, Archmage not back, LF_UNIQUE); after: GS_PLAYING, seal
       open, the slot freed, 20 more turns clean.
   R   trk_run after the Archmage's death (D8: LF_SEAL_OPEN + LF_UNIQUE, LF_GRATE_OPEN never set):
-      game.md 9.5 says the trickle stops; ANOMALY while it still respawns (control: LF_GRATE_OPEN).
+      game.md 9.5 says the trickle stops; hard check (control: LF_GRATE_OPEN).
   T   teleport mid-fight (summon alive, FX in flight): summon discarded, FX idle after, the lair
       record holds the Archmage only; re-entry: KT_ATTR $43, ST_X init bit clear, P = 0.
   W   into the Sanctum (seal open) with a summon at the door: does it follow? lectern cells free;
@@ -908,8 +908,7 @@ def kill_with_summon(p, master, hero):
 # ------------------------------------------------------------------ R: the trickle after the Archmage's death
 def trickle_after(p, master, hero, n=120):
     """game.md 9.5 (U): the trickle stops permanently the turn the boss dies. trk_run (R6) tests
-    LF_GRATE_OPEN, which D8 never sets (P3: the death sets LF_SEAL_OPEN + LF_UNIQUE, the grate stays
-    shut). n trk_run calls (far6, GEN_RNG varied, TRK_PREV = the lair) after the kill: LP_RESPAWNS must
+    LF_GRATE_OPEN | LF_UNIQUE (P3: the D8 death sets LF_SEAL_OPEN + LF_UNIQUE, the grate stays shut). n trk_run calls (far6, GEN_RNG varied, TRK_PREV = the lair) after the kill: LP_RESPAWNS must
     stay; control: the same with LF_GRATE_OPEN set."""
     L = D8(p, master, hero)
     tag = f"R trickle after the death {L.tag}"
@@ -939,9 +938,8 @@ def trickle_after(p, master, hero, n=120):
         p.wb("LVL_FLAGS", fl)
     print(f"[info] {tag}: LVL_FLAGS {fl:#04x}; after the death: LP_RESPAWNS {res[False][0]}, worst trk_run "
           f"{res[False][1]} T, records changed {res[False][2]}; control (LF_GRATE_OPEN): {res[True]}", flush=True)
-    if res[False][0] or res[False][2]:
-        anomaly(f"{tag}: the trickle keeps refilling D8 after the Archmage died (trk_run tests LF_GRATE_OPEN, "
-                f"never set on D8; LF_SEAL_OPEN | LF_UNIQUE = {fl:#04x}): {res[False][0]} respawns in {n} calls", res)
+    check(f"{tag}: after the death trk_run does nothing (LF_UNIQUE; flags {fl:#04x})",
+          res[False][0] == 0 and not res[False][2] and res[False][1] < 1000, res[False])
     check(f"{tag}: control: with LF_GRATE_OPEN trk_run stops at step 2", res[True][0] == 0 and not res[True][2], res[True])
 
 
