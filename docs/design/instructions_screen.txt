@@ -102,29 +102,28 @@ TIPS
       TOME OF THE DEAD - TREASURES     3/3
 
 EACH LAIR BOSS DROPS ONE (D = DEPTH)
-D1  KING HELM       DEF 1, DODGE +1
-D2  SILK CLOAK      DEF 1, DODGE +2
-                    IMMUNE TO POISON
-D3  GRAVE CLOAK     DEF 2, HALF DAMAGE
-                    FROM DARK AND DRAIN
-D4  WARLORD CLEAVER WARRIOR 1D10+1, ATK +1
-D4  BONE STAFF      MAGE 1D6, SPELL DMG +2
-D5  SCARAB AMULET   MP REGEN TWICE AS FAST
-                    HUNGER HALF AS FAST
-D6  GRAVE RING      MP +2, IMMUNE TO DARK
-D7  MIRROR HELM     DEF 2, REFLECTS DARK
+   D1 DEF 1             D2 DEF 1, DODGE +2
+   DODGE +1             IMMUNE TO POISON
+   D3 DEF 2, HALF DMG   D4 WARRIOR: 1D10+1
+   FROM DARK + DRAIN    ATK +1
+   D4 MAGE: 1D6         D5 2X MP REGEN
+   SPELL DMG +2         HALF HUNGER
+   D6 MP +2             D7 DEF 2
+   IMMUNE TO DARK       REFLECTS DARK
 
 CHARMS: WEAR ONE RING OR AMULET
-MIGHT RING  ATK +1      WARD RING   DEF +1
-FIRE RING   HALF FIRE DAMAGE
-MANA AMULET MP REGEN TWICE AS FAST
-FOOD AMULET HUNGER HALF AS FAST
+   ATK +1               DEF +1
+
+   HALF DMG             2X MP REGEN
+   FROM FIRE
+   HALF HUNGER
+
+
 METAL ARMOUR OR HELM STOPS MAGE SPELLS
 ROBE OR HOOD STOPS POWER ATTACKS
 BOSS TREASURES AND CHARMS NEVER DO
               ANY KEY: START
 === PAGE 3 ATTRS (row: cells -> attr) ===
-# 00,23: 0-31 $46 | 01,14: $00 | 02,15: $06 (group headers)
-# 03,06,07,09,12,16,18: 0-31 $47 | 04,05,08,10,11,13,17,19: 0-31 $45 (per-entry alternation)
-# 20,21,22: 0-31 $05 (class-gate note)
-=== PAGE 3 ICONS === none
+# 00,23: 0-31 $46 | 02,12: $06 (headers) | 20,21,22: $05 (class-gate note)
+# 03,04,07,08,13,14,17,18: 0-31 $47 | 05,06,09,10,15,16: 0-31 $45 (per grid row; icon cells below)
+=== PAGE 3 ICONS === 13 i16 (see tools/instr_pack.py PAGES[3]; docs/design/instructions_treasures.md)

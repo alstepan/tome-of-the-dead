@@ -58,11 +58,17 @@ PAGES = {
                   ("tile", 13, 9, 16), ("tile", 13, 9, 17), ("tile", 13, 10, 16), ("tile", 13, 10, 17)],
     },
     3: {
-        "fills": (_rows_fill([0, 23], 0, 31, 0x46) + _rows_fill([2, 15], 0, 31, 0x06)
-                  + _rows_fill([3, 6, 7, 9, 12, 16, 18], 0, 31, 0x47)
-                  + _rows_fill([4, 5, 8, 10, 11, 13, 17, 19], 0, 31, 0x45)
+        "fills": (_rows_fill([0, 23], 0, 31, 0x46) + _rows_fill([2, 12], 0, 31, 0x06)
+                  + _rows_fill([3, 4, 7, 8, 13, 14, 17, 18], 0, 31, 0x47)
+                  + _rows_fill([5, 6, 9, 10, 15, 16], 0, 31, 0x45)
                   + _rows_fill([20, 21, 22], 0, 31, 0x05)),
-        "icons": [],
+        "icons": [("i16", "h_king", 3, 0, 0x07), ("i16", "a_silk", 3, 16, 0x07),
+                  ("i16", "a_grave", 5, 0, 0x07), ("i16", "w_cleaver", 5, 16, 0x07),
+                  ("i16", "w_bone", 7, 0, 0x06), ("i16", "c_scarab", 7, 16, 0x06),
+                  ("i16", "c_grave", 9, 0, 0x06), ("i16", "h_mirror", 9, 16, 0x07),
+                  ("i16", "c_might", 13, 0, 0x06), ("i16", "c_ward", 13, 16, 0x06),
+                  ("i16", "c_fire", 15, 0, 0x06), ("i16", "c_mana", 15, 16, 0x06),
+                  ("i16", "c_plenty", 17, 0, 0x06)],
     },
 }
 
@@ -111,6 +117,27 @@ def icon_attrs(ic):
     if kind == "tile":
         return [(r, c, bytes_after(rd("tiles/tiles_common.asm"), "tiles_common_attrs", 32)[arg])]
     return [(r + i // 2, c + i % 2, ic[4]) for i in range(4)]
+
+
+def check_icons(page):
+    """Static asserts: (a) no text char overlaps an i16 icon's pixels; (b) i16 attr == items.txt INK."""
+    items = open(os.path.join(ROOT, "src", "items.txt")).read()
+    rr = rows(page)
+    for ic in PAGES[page]["icons"]:
+        if ic[0] != "i16":
+            continue
+        _, name, r, c, a = ic
+        x0, x1 = 8 * c, 8 * c + 15
+        for k in range(CHARS):
+            if 6 * k + 5 >= x0 and 6 * k <= x1:
+                for rw in (r, r + 1):
+                    ch = rr[rw][k] if k < len(rr[rw]) else " "
+                    assert ch == " ", (page, name, rw, k, ch)
+        m = re.search(r"^IT_%s\s*\|[^|]*\|\s*\$([0-9A-Fa-f]{2})\s*\|" % name.upper(), items, re.M)
+        if m:
+            assert int(m.group(1), 16) == a, (name, m.group(1), a)
+        elif page == 3:
+            raise AssertionError("no IT_ row for " + name)
 
 
 def attr_grid(page):
@@ -196,6 +223,7 @@ def main():
     os.makedirs(out, exist_ok=True)
     rep = []
     for p in (1, 2, 3):
+        check_icons(p)
         txt, nt, na = emit(p)
         path = os.path.join(out, "instr_p%d.inc" % p)
         if not os.path.exists(path) or open(path).read() != txt:
