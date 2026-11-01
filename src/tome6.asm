@@ -7,8 +7,8 @@
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; seal_open — far6 from bank-7 grate_open on D8 (F3_GEN; the D8 grate never
-; opens: game.md §1.1 "D8 has no exit"): the Archmage died — by any hand, its own Mirror Helm return
+; seal_open — far6 from bank-7 grate_open on D8 (F3_GEN; the Archmage's death
+; does not open the D8 grate, the Tome's destruction does: tome_gone): the Archmage died — by any hand, its own Mirror Helm return
 ; included (deal_hit's kill -> mon_drop -> grate_open). Resident: nothing is
 ; unpacked on the death tick. LF_SEAL_OPEN; EG_SEAL off the lair<->Sanctum edge
 ; (EDGE_TAB + 4 = 6-7 or + 5 = 7-8: both bits cleared, cheaper than finding S's;
@@ -34,12 +34,16 @@ seal_open:
 ; against the Sanctum's dead-end wall: cols 1-2 when the Sanctum is cell 6 (S
 ; bit 1 set), 29-30 when it is cell 8. Out: L = the gap (empty cols between the
 ; hero's body and the lectern; 0 = adjacent), + $80 when he faces away from it;
-; L = $FF: no Tome here (CUR_ROOM != LVL_SANCTUM — always off D8, ROOM_NONE — or
+; L = $FF: no Tome here (TOME_HP 0 — WIN2: destroyed, so no more hits / aura /
+; bump, never twice; or off D8, never generated —, CUR_ROOM != LVL_SANCTUM, or
 ; the hero is not standing on storey 1: E_Y, so never mid-ladder / mid-jump).
 ; Clobbers: A, H, L (BC, DE, IX kept).   ~0.1k T (+ far6 ~0.25k)
 ;------------------------------------------------------------------------------
 tome_geo6:
                 ld   l, $FF
+                ld   a, (TOME_HP)
+                or   a
+                ret  z
                 ld   a, (ix+E_Y)
                 cp   TOME_HERO_Y
                 ret  nz

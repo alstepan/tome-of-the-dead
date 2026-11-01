@@ -319,9 +319,10 @@ lair_hint:
                 ASSERT LF_GATE_HINT == 1 << LF_GATE_HINT_BIT
 
 ; level_descend — do_exit with EXIT_KIND = EX_LEVEL (the hero took the
-; lair's level exit, logic.asm try_climb): D8 -> game_win (F3_GEN 0: the
-; game.md §1.4 stand-in; F3_GEN 1: D8 has no level exit, a safety net
-; only), else level_enter (depth + 1). Back in end_turn, which finishes
+; lair's level exit, logic.asm try_climb): D8 -> game_win (F3_GEN 1, WIN2:
+; the D8 grate opens on the Tome's destruction, tome_hit6, and leaving through
+; it is THE win; F3_GEN 0: the Archmage's death opens it, the §1.4 stand-in),
+; else level_enter (depth + 1). Back in end_turn, which finishes
 ; the turn (potion pickup on the new level, TURN_PHASE 0).
 ; Clobbers: all but IY.
 ;------------------------------------------------------------------------------
@@ -343,18 +344,25 @@ level_descend:
                 ld   a, GS_PLAYING             ; (edge-triggered input) first
                 ld   (GAME_STATE), a
                 jp   resync_tick
-; game_win — P3: GS_WIN (bank-7 tome_strike: the Tome's last hit, game.md §1.3; level_descend
-; from D8). CF = 1 (the bump's / melee's turn). Any bank. Clobbers: AF, BC, DE, HL.
+; tome_gone — WIN2 (game.md §1.3, user 2026-11-01): bank-7 tome_strike's last hit (bank 7
+; paged): "THE TOME IS DESTROYED", then the D8 gate opens (bank-7 grate_open.op: LF_GRATE_OPEN,
+; "A GATE GLEAMS, THE WAY DOWN"). Summons stay, the run goes on. CF = 1. Clobbers: AF, BC, DE, HL.
+tome_gone:      ld   a, TX_WIN
+                call msg_push
+                call grate_open.op             ; bank 7 (paged)
+                scf
+                ret
+; game_win — GS_WIN: level_descend from D8 only (WIN2: the hero leaves through the gate the
+; Tome's destruction opened, game.md §1.3). "YOU WIN!" (the end card's string) is the log line.
+; Any bank. Clobbers: AF, BC, DE, HL.
 game_win:       xor  a                         ; SND-4: Game Win once (like Game Over in end_turn
                 ld   (MUS_REQ), a              ; .dead): loop off, then the final shot; no stinger
                 ld   a, MUS_WIN                ; and no stinger_wait here (level_enter not run);
                 ld   (MUS_SHOT), a             ; the ISR drops it with music off
                 ld   a, GS_WIN
                 ld   (GAME_STATE), a
-                ld   a, TX_WIN                 ; "THE TOME IS DESTROYED"
-                call msg_push_end              ; never dropped; end_screen drains it
-                scf
-                ret
+                ld   a, TX_END_WIN             ; "YOU WIN!" (TX_WIN is the Tome's line now)
+                jp   msg_push_end              ; never dropped; end_screen drains it
 
 ;------------------------------------------------------------------------------
 ; tome_aura — P3 (game.md §1.3), called by bank-7 end_turn in place of its

@@ -12,10 +12,19 @@ Seeded generated games (F3_GEN build, DEBUG_KIT=0), the real level_descend D7 ->
   L   the Sanctum map: the lectern ids 15-18 on storey 1 at the dead-end wall == room_model
   H*  5 releases destroy the Tome, per attack type: melee bump, melee FIRE, Power Strike,
       Whirlwind, dagger, arrow (Warrior), Spark (Mage): TOME_HP 5 -> 0, "THE TOME SHUDDERS"
-      per hit, the 5th -> GS_WIN + "THE TOME IS DESTROYED"; out of range / facing away: no hit
+      per hit, the 5th (WIN2, user 2026-11-01) -> NOT GS_WIN: "THE TOME IS DESTROYED" + "A GATE
+      GLEAMS, THE WAY DOWN", LF_GRATE_OPEN, the run goes on; out of range / facing away: no hit
       (Power Strike refused: no turn, no MP)
   A   the aura: gap 5 -> -1 hp a turn (either facing), gap 6 / storey 0 -> none; HP 1 -> GS_DEAD
   R   leaving the Sanctum and coming back keeps TOME_HP (no regeneration), the lectern redrawn
+  W1  the destroyed Tome: a bump = a wall (no turn, no line), no aura, a dagger strikes nothing (never twice)
+  W2  the 5th hit with a Skeleton alive in the Sanctum: the gate opens anyway, the Skeleton stays
+  W3  the 5th hit at HP 1: the Tome's aura is gone with it, the hero lives, the gate opens
+  W4  before the Tome: DOWN on the lair's shut D8 grate = no turn
+  W5  the aura kills on a non-final hit (TOME_HP 2 -> 1, HP 1): GS_DEAD, the gate stays shut
+  W6  after the Tome: the hero walks out into the lair (real do_exit): the grate T_GRATE x 3 (opened
+      off-screen), ROOM_MAP == room_model; re-entry (room_show) keeps it; DOWN at c with HP 1 ->
+      GS_WIN, depth stays 8, the last line "YOU WIN!" 
 ZRCP_PORT=<port> python3 tests/sanctum.py
 """
 import sys
@@ -120,6 +129,16 @@ class D8:
 def play_mode(p):
     p.wb("GAME_STATE", GS_PLAYING)
     p.wb("TOME_HP", S["TOME_MAX"])
+    p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~S["LF_GRATE_OPEN"] & 0xFF)
+
+
+def gone_ok(L):
+    """After the 5th hit: TOME_HP 0, LF_GRATE_OPEN, still GS_PLAYING, the 2 lines."""
+    p = L.p
+    L.last_line()
+    fr = p.frame()
+    return (p.rb("TOME_HP") == 0 and p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"] and p.rb("GAME_STATE") == GS_PLAYING
+            and log_row(fr, 22) == text6(TXT["win"]) and log_row(fr, 23) == text6(TXT["gate_gleams"]))
 
 
 def items_absent(p):
@@ -207,9 +226,9 @@ def five(L, tag, do, gap, setup=None):
             check(f"{tag}: '{TXT['tome_hit']}'", L.last_line() == text6(TXT["tome_hit"]), "")
         if p.rb("GAME_STATE") != GS_PLAYING:
             break
-    check(f"{tag}: 5 hits at gap {gap} destroy the Tome: TOME_HP 0, GS_WIN",
-          seen == [1] * 5 and p.rb("TOME_HP") == 0 and p.rb("GAME_STATE") == GS_WIN,
-          (seen, p.rb("TOME_HP"), p.rb("GAME_STATE")))
+    check(f"{tag}: 5 hits at gap {gap} destroy the Tome: TOME_HP 0, the gate opens, still GS_PLAYING, "
+          f"'{TXT['win']}' + '{TXT['gate_gleams']}'",
+          seen == [1] * 5 and gone_ok(L), (seen, p.rb("TOME_HP"), p.rb("GAME_STATE"), p.rb("LVL_FLAGS")))
     p.tick(3)
     play_mode(p)
 
@@ -325,6 +344,121 @@ def revisit(p, L):
           (left_ok, p.rb("CUR_ROOM"), p.rb("TOME_HP"), m[15 * 32 + c0]))
 
 
+def gate(p, L, key):
+    """W1-W4: the destroyed Tome, a live summon, the last hit at HP 1, the shut grate before."""
+    play_mode(p)
+    p.wb("TOME_HP", 1)
+    L.at_gap(0)
+    p.set_ent(0, HP=200)
+    p.turn(key)
+    p.until(lambda: p.idle(), 300)
+    check("W1 setup: the last bump destroys the Tome", gone_ok(L), (p.rb("TOME_HP"), p.rb("LVL_FLAGS")))
+    q0 = p.rb("LOG_QN")
+    nt = p.no_turn(key)
+    check("W1 the destroyed Tome: a bump = a wall (no turn, no line, TOME_HP 0)",
+          nt and p.rb("TOME_HP") == 0 and p.rb("LOG_QN") == q0 and L.last_line() == text6(TXT["gate_gleams"]),
+          (nt, p.rb("TOME_HP")))
+    p.set_ent(0, HP=50)
+    p.wb("HP_RG", 0)                                    # no FED regen on these turns (12 turns away)
+    p.turn("WAIT")
+    check("W1 the destroyed Tome: no aura (gap 0, a WAIT: HP 50)", p.ent(0)["HP"] == 50 and p.rb("TOME_HP") == 0,
+          p.ent(0)["HP"])
+    L.at_gap(5)
+    p.turn("@3")
+    p.until(lambda: p.idle(), 300)
+    check("W1 the destroyed Tome: a dagger at gap 5 strikes nothing (TOME_HP 0, no SHUDDERS), never twice",
+          p.rb("TOME_HP") == 0 and L.last_line() != text6(TXT["tome_hit"]) and p.rb("GAME_STATE") == GS_PLAYING,
+          p.rb("TOME_HP"))
+    # W2: a Skeleton alive in the Sanctum (out of reach), the 5th hit
+    play_mode(p)
+    p.wb("TOME_HP", 1)
+    L.at_gap(0)
+    k = S["K_SKELETON"]
+    h = p.kb(k, "KT_BH")
+    x = 20 if L.left else 8
+    p.set_ent(1, KIND=k, ROOM=L.sn, X=x, Y=stand_y(0, h), PX=x * 8, PY=stand_y(0, h) * 8, HP=50, MAXHP=50,
+              MODE=0, REACT=0, FLAGS=EF_ACTIVE | EF_HOSTILE)
+    p.set_ent(0, HP=200)
+    p.turn(key)
+    p.until(lambda: p.idle(), 300)
+    check("W2 the 5th hit with a Skeleton alive: the gate opens anyway, the Skeleton stays",
+          gone_ok(L) and p.ent(1)["FLAGS"] & EF_ACTIVE and p.ent(1)["HP"] == 50, (p.rb("LVL_FLAGS"), p.ent(1)))
+    p.set_ent(1, FLAGS=0)
+    # W3: the 5th hit at HP 1: the aura goes with the Tome
+    play_mode(p)
+    p.wb("TOME_HP", 1)
+    L.at_gap(0)
+    p.set_ent(0, HP=1)
+    p.wb("HP_RG", 0)
+    p.turn(key)
+    p.until(lambda: p.idle(), 300)
+    p.tick(3)
+    check("W3 the 5th hit at HP 1: no aura on that turn end, the hero lives (HP 1, GS_PLAYING), the gate opens",
+          gone_ok(L) and p.ent(0)["HP"] == 1, (p.rb("GAME_STATE"), p.ent(0)["HP"]))
+    # W4: before the Tome, DOWN on the lair's shut grate
+    play_mode(p)
+    c = room_model.field(L.blk, L.lair, "RD_EXITCOL")
+    L.put_hero(L.lair, c, 1)
+    nt = p.no_turn("J")
+    check(f"W4 before the Tome: DOWN at c {c} on the shut D8 grate = no turn, depth 8",
+          c and nt and p.rb("LVL_DEPTH") == 8 and p.rb("GAME_STATE") == GS_PLAYING, (c, nt))
+    L.put_hero(L.sn, 14, 1)
+
+
+def aura_hit_death(p, L, key):
+    """W5: the aura kills on a non-final hit: GS_DEAD, the gate stays shut."""
+    play_mode(p)
+    p.wb("TOME_HP", 2)
+    L.at_gap(0)
+    p.set_ent(0, HP=1)
+    p.turn(key)
+    p.until(lambda: p.idle(), 300)
+    p.tick(3)
+    check("W5 the aura kills on the 4th hit (TOME_HP 1, HP 0): GS_DEAD, LF_GRATE_OPEN clear",
+          p.rb("GAME_STATE") == GS_DEAD and p.rb("TOME_HP") == 1 and not p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"],
+          (p.rb("GAME_STATE"), p.rb("TOME_HP"), p.rb("LVL_FLAGS")))
+
+
+def exit_win(p, L, key):
+    """W6: the gate opened off-screen; the hero walks out into the lair and leaves through it."""
+    play_mode(p)
+    p.wb("TOME_HP", 1)
+    L.at_gap(0)
+    p.set_ent(0, HP=200)
+    p.turn(key)
+    p.until(lambda: p.idle(), 300)
+    check("W6 setup: the Tome destroyed in the Sanctum", gone_ok(L), p.rb("LVL_FLAGS"))
+    x = 2 if L.door_l else 30 - L.kw
+    L.place(x, L.s, left=L.door_l)
+    out = "H" if L.door_l else "L"
+    for _ in range(6):
+        if p.rb("CUR_ROOM") != L.sn:
+            break
+        p.turn(out)
+    p.until(lambda: p.idle(), 600)
+    p.settle(2)
+    c = room_model.field(L.blk, L.lair, "RD_EXITCOL")
+    F1 = S["FLOOR_ROW1"]
+    for tag in ("walked in (do_exit)", "re-entered (room_show)"):
+        if tag[0] == "r":
+            L.put_hero(L.lair, 14, 1)
+        m = list(p.z.read_memory(S["ROOM_MAP"], 576))
+        want = room_model.render_room(room_model.read_block(p), L.lair)
+        check(f"W6 the lair {tag}: the gate open off-screen (T_GRATE x 3 at c {c}), ROOM_MAP == room_model",
+              p.rb("CUR_ROOM") == L.lair and all(m[F1 * 32 + c + k] == S["T_GRATE"] for k in range(3))
+              and m == want, (p.rb("CUR_ROOM"), m[F1 * 32 + c:F1 * 32 + c + 3],
+                              [(j % 32, j // 32, m[j], want[j]) for j in range(576) if m[j] != want[j]][:4]))
+    L.place(c, 1, left=False)
+    p.set_ent(0, HP=1)
+    p.turn("J")
+    p.until(lambda: p.idle(), 900)
+    p.until(lambda: p.rb("LOG_QN") == 0, 200)
+    p.settle(2)
+    check("W6 DOWN at c with HP 1: GS_WIN, depth stays 8, the last line 'YOU WIN!'",
+          p.rb("GAME_STATE") == GS_WIN and p.rb("LVL_DEPTH") == 8
+          and log_row(p.frame(), 23) == text6(TXT["end_win"]), (p.rb("GAME_STATE"), p.rb("LVL_DEPTH")))
+
+
 def mage(p):
     L = D8(p, 0x5302, hero=1)
     p.clear_slots()
@@ -351,8 +485,11 @@ def main():
             if L is None or p.rb("CUR_ROOM") != L.sn:
                 continue
             revisit(p, L)
-            warrior_hits(p, L)
-            aura(p, L)
+            key = warrior_hits(p, L)
+            aura(p, L)                                  # (first: its storey-0 case sees no FED regen turn)
+            gate(p, L, key)
+            aura_hit_death(p, L, key)
+            exit_win(p, L, key)
         mage(p)
     print(f"sanctum: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
     return 1 if fails else 0
