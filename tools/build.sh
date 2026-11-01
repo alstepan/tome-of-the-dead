@@ -35,6 +35,15 @@ if [ "${1:-}" = "-o" ]; then
     OUT=$(cd "$2" && pwd)
     shift 2
 fi
+# DBG-1: the extra args go to sjasmplus as -D defines; a double-dash one (e.g.
+# --DEBUG_KIT=0) was only an "unrecognized option" line of sjasmplus while the
+# build went on with the default flags. Refuse it before anything runs.
+for a in "$@"; do
+    case "$a" in
+        --*) echo "build.sh: unknown option '$a' (defines are single-dash: use -D${a#--})" >&2
+             exit 2 ;;
+    esac
+done
 python3 "$ROOT/tools/zx0_sources.py"
 python3 "$ROOT/tools/textpack.py"
 # INSTR-BUILD: the HOW TO PLAY page images (docs/design/instructions_screen.txt + the

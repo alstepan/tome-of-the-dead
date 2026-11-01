@@ -290,6 +290,14 @@ ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 86 (M0: 81 + ST1_LEN)
                 ASSERT (ITEM_RAM & $FF) == 0 && ITEM_RAM_LEN <= 256      ; one page (inc l, djnz clear)
                 ASSERT ITEM_RAM >= $5CCB        ; above the system variables + channel area
                 ASSERT ITEM_RAM_END <= PF_RAM   ; below D3-6b PF_RAM ($5E00) / MK_RAM ($5F00)
+; The start kit's base lists (game.md §8.11 Q10 / §4; weapon, armour, then the bag): R6
+; kit_add's kit_w / kit_m (release) and, DBG-1, bank-0 kit_bw / kit_bm (kit0.asm, + extras).
+    MACRO KIT_W_BASE
+                DB   IT_W_SHORT, IT_A_LEATHER, IT_P_HEAL, IT_F_APPLE
+    ENDM
+    MACRO KIT_M_BASE
+                DB   IT_W_OAK, IT_A_ROBE, IT_P_HEAL, IT_P_MANA, IT_F_APPLE
+    ENDM
                 ASSERT WORN == BAG + BAG_SLOTS * IR_STRIDE      ; bag + worn = one 24-record scan
 
 ;------------------------------------------------------------------------------
