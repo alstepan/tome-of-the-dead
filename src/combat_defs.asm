@@ -225,7 +225,7 @@ AM_VENOM        EQU 6
 AM_HEX_R        EQU 12              ; A3c: gap < 12
 AM_HEX_CD       EQU 4               ; A3c: H = 4
 AM_SUM_CD       EQU 6               ; A3b: S = 6
-AM_LIVE         EQU 2               ; A3b: < 2 live summons
+AM_LIVE         EQU 1               ; A3b: one live summon at a time (user 2026-11-01; the Sigma cap no longer enforces it)
 AM_BLINK_N      EQU 8               ; A3a: P' + 1 .. 8 cols toward the room centre
 AM_BLINK_ATTR   EQU $47             ; A3a: the teleport flash attr ($47)
 AM_SLEEP_T      EQU 3               ; Sleep: ASLEEP 3 (A2 row 5)

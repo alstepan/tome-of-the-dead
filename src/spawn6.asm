@@ -95,11 +95,16 @@ sp_scan:        push ix
 
 ;------------------------------------------------------------------------------
 ; sp_fit — after sp_scan: A = kind byte -> CF = the room cannot take it (§9.3:
-; SP_N >= ROOM_CAP or SP_SIG + w > LP_SIGMA_CAP).  Clobbers: A, C.
+; SP_N >= ROOM_CAP or SP_SIG + w > LP_SIGMA_CAP; IX = the caster / parent: a K_ARCHMAGE
+; one skips the Sigma term).  Clobbers: A, C.
 ;------------------------------------------------------------------------------
 sp_fit:         call sp_wt
                 ld   c, a
-                ld   a, (SP_N)
+                ld   a, (ix+E_KIND)            ; user 2026-11-01: the Archmage's own summon is exempt from
+                xor  K_ARCHMAGE                ; the Sigma cap (escort 3-6 + 6 + 5 > 12 refused every one):
+                jr   nz, .f                    ; IX = the caster / parent; A = 0 here -> SP_SIG := 0
+                ld   (SP_SIG), a               ; (ROOM_CAP stays)
+.f:             ld   a, (SP_N)
                 cp   ROOM_CAP
                 ccf
                 ret  c
@@ -249,6 +254,7 @@ sp_run:         ld   hl, SPQ_K
                 ret  nz
                 dec  a
                 ld   (ACT_SLOT), a             ; $FF: box_free tests every live body (try_player_turn resets it)
+                ld   ix, P_ENTITIES            ; (sp_fit's caster: a wave body has no parent = the hero)
 .b:             push bc
                 ld   a, c
                 and  LEK_KIND_MASK
@@ -267,10 +273,6 @@ sp_run:         ld   hl, SPQ_K
                 or   l
                 jr   z, .x                     ; no free slot
                 push hl
-                ld   a, (SP_KB)
-                and  ~SQF_ONCE & $FF           ; (LEK_GOLD's bit: not a golden weight)
-                call sp_fit
-                jr   c, .xp                    ; the §9.3 cap
                 ld   a, (SPQ_P)
                 cp   SPQ_NONE
                 jr   z, .nd
@@ -289,7 +291,11 @@ sp_run:         ld   hl, SPQ_K
                 KFIELD KT_BW
                 add  a, (ix+E_X)
                 ld   (SP_AR), a
-.nd:            pop  ix                        ; IX = the free slot
+.nd:            ld   a, (SP_KB)
+                and  ~SQF_ONCE & $FF           ; (LEK_GOLD's bit: not a golden weight)
+                call sp_fit                    ; (after the parent test: IX = the parent)
+                jr   c, .xp                    ; the §9.3 cap
+.np:            pop  ix                        ; IX = the free slot
                 call sp_init
                 ld   a, (SPQ_P)
                 cp   SPQ_NONE

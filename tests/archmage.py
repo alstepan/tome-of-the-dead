@@ -221,8 +221,8 @@ def main():
             live = [(s_, e_) for s_, e_ in ents.items() if s_ and not e_["FLAGS"] & EF_DYING]
             ns = sum(1 for s_, e_ in live if e_["POT"] & 0x40)
             free = any(s_ not in ents for s_ in range(1, 16))
-            summon_ok = (not busy and ns < 2 and free and len(live) < S["ROOM_CAP"]
-                         and sum(WT[e_["KIND"]] for _, e_ in live) + WT[K_SKELETON] <= S["LP_SIGMA_CAP"])
+            summon_ok = (not busy and ns < S["AM_LIVE"] and free and len(live) < S["ROOM_CAP"])
+            # (user 2026-11-01: the Archmage's summon is exempt from LP_SIGMA_CAP; one live summon)
             hero = dict(x=hx, y=hy, w=hw, h=hh, storey=hst, ladder=hlad, hp=ents[0]["HP"], res=res,
                         def_=0, imm=imm, stf=stf, st1=st1, st2=st2, stx=hstx, react=0)
             hero["def"] = p.rb("HERO_DEF")

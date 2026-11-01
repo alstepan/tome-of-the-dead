@@ -1937,7 +1937,7 @@ no kind row of their own (3F-D1, §9.7 R1).
 **Lair population (user 2026-10-06 lazy population; designer decision 2026-10-06, §9.4.4).**
 The boss and its 1 escort are created on the **first lair entry**, not at level start. When
 the hero leaves the lair, the boss is banked in the lair record with its **exact hp**. It does
-not regenerate and is never rerolled. Archmage summons are discarded on leave.
+not regenerate and is never rerolled. A summon standing next to the hero follows him like any follower (user 2026-11-01); summons that do not follow are discarded when the room is left.
 
 Uniques on the floor shimmer with the same cycle (it counts toward the room's attr-cycle
 cells). Panel and page use hardware FLASH.
@@ -3128,7 +3128,7 @@ levelcheck figure exceeds 15% or a playtest shows visibly empty first rooms.
   every lair entry (first and banked); it draws no spawn-stream step.
 - **Banked like any room:** the boss's **exact hp persists** and it does not regenerate. The
   escort is banked too.
-- Archmage summons are discarded on leave (their cooldown resets).
+- A summon next to the hero follows him like any follower (user ruling 2026-11-01: let them follow, also into the Sanctum); summons that do not follow are discarded when the room is left (their cooldown resets).
 - The boss never follows. It guards the exit (§9.2 "Boss guard"). Its death sets the
   boss-dead flag: the grate opens and the trickle stops (§9.5).
 - **D8 sealed edge (3F-D2, confirms T4 and memory-map `EDGE_TAB`):** the lair↔Sanctum edge is
@@ -3652,8 +3652,8 @@ the hero mid-ladder or on the other storey is out of line.
       toward the room centre; if none is legal, the bit is spent and nothing moves. Costs the
       turn, sets S = 0, `$47` attr flash on both footprints (the teleport flash),
       `THE ARCHMAGE VANISHES!`.
-   b. **Summon** (T9's Bone Caller code): S = 0, < 2 live summons, a free slot and the cap
-      allow it → one Skeleton beside it (Bone Caller placement rule), S = 6.
+   b. **Summon** (T9's Bone Caller code): S = 0, no live summon (one at a time, user 2026-11-01), a free slot and the room's ROOM_CAP
+      allow it (**exempt from `LP_SIGMA_CAP`**, user 2026-11-01) → one Skeleton beside it (Bone Caller placement rule), S = 6.
    c. **Hex:** H = 0, the hero in line, gap < 12 → **Sleep** if the hero has no HOLD and no
       HOLD_GUARD, else **Venom**. H = 4.
    d. **Staff:** the hero in reach → melee 1d6 PHYS (F1 roll, DEF applies; the cast/attack pose).
@@ -3745,8 +3745,10 @@ shared tracks, queued if busy). One footprint attr rewrite (≈ 2.2k T) per bolt
   (shot_tick applying a stored row at I) costs ≈ 30 B R6, over the ≈ 20 B ruling. No sleep cue flash.
 - **Blink flash on the new footprint only** (`$47`, `TELE_FLASH_T`); the old footprint is simply erased by render.
   If no box is legal the blink bit is spent and the off-turn goes on (b..e).
-- **"< 2 live summons" never binds:** the §9.3 room cap is the real limit (Archmage 6 + Skeleton 5 = 11 of
-  `LP_SIGMA_CAP` 12), so at most ONE summoned Skeleton lives at a time. No design change.
+- **Summon limits (user 2026-11-01, D8 audit):** the Archmage's own summon is EXEMPT from `LP_SIGMA_CAP` (the always-spawned
+  lair escort 3-6 + Archmage 6 + Skeleton 5 > 12 refused every summon); `ROOM_CAP`, a free slot, S = 0 and a legal box still
+  apply, and the live-summon cap `AM_LIVE` is now 1 (was 2, which the Sigma cap used to enforce de facto). Other casters
+  (Bone Caller, Pharaoh) keep the Sigma cap. `spawn6.asm sp_summon` zeroes `SP_SIG` for a `K_ARCHMAGE` caster.
 - The Archmage skips `ai_monster` entirely, so it never yields to a climbing hero; a legal blink box
   (`sp_try`) never overlaps a shaft's exit box in the tested rooms, and a hero mid-ladder can always climb
   back down (no combat either way): not a lock (`tests/archmage.py` L).
