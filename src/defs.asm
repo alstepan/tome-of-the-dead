@@ -198,9 +198,10 @@ TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
 ; may trade bytes. The pool slack is QUANTISED here (memory-map "M0 / post-3F ledger"):
 ; the worst level (D8 Warrior) leaves a ~74-B tail at bank 0's end, so a reserve of
 ; 45 + 29 B costs 0 slack (1,264 kept), but 45 + 30..250 B costs one 240-B variant
-; (slack 1,024) and 45 + 260 B 880. 29 = the largest free code reserve.
-TEXT_RES        EQU 2326 + 52                  ; GEAR1: +7 (gear_ban 27 B packed; 45 reserve had 20 left), taken from the code reserve
-B0_CODE_RES     EQU 22
+; (slack 1,024) and 45 + 260 B 880. M1 (user 2026-11-01) took the 240-B step: total reserve 2,624 B
+; (cliff measured: B0_CODE_RES 206 -> slack 1,024, 207 -> 384, with TEXT_RES 2,418).
+TEXT_RES        EQU 2378 + 40                  ; M1: text 2378 B + 40 B headroom (GEAR3 / LOG-DMG strings)
+B0_CODE_RES     EQU 206                        ; M1: cold-code room (was 22); 207+ drops slack to 384 (cliff)
 POOL_START      EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES  ; $C960: alloc_reset's first bank-0 pool byte
     MACRO FARB0 target                  ; call a bank-0 cold-code routine (8 B; A / DE / IX pass in;
                 ld   hl, target         ;   C lost to the bank, B to farb's A): farb pages BANK_TEXT
