@@ -522,7 +522,7 @@ WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|
 #### 3.2.1 HOW TO PLAY screen (INSTR1; user 2026-10-30 request, designer decision 2026-10-30)
 
 > **Superseded (user ruling 2026-10-30):** shown every game after START, two 42-col pages with
-> icons. Wording, flow and render spec: `docs/design/instructions_screen.md` / `.txt` (pending
+> icons (as built: THREE pages, page 3 = boss treasures and charms, `GS_HELP1..3`; once per power-on before the first menu; BREAK on page 1/2 skips the rest). Wording, flow and render spec: `docs/design/instructions_screen.md` / `.txt` (pending
 > user approval). The text below (Option A, 32 cols) is now only the fallback.
 
 **Problem.** The game never tells the player the goal or the non-obvious combos (↓ + FIRE,

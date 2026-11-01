@@ -3,8 +3,7 @@
 Designer, 2026-11-01. User request 2026-11-01: a third HOW TO PLAY page that explains the boss
 uniques and the charms. It extends `docs/design/instructions_screen.md` (Layout B) and its
 render spec `instructions_screen.txt`. The grid, fonts, attribute rules and render model there
-apply unchanged. When this is built, the PAGE 3 block below moves into the `.txt`, and the
-`.md` §1 flow line is updated (the manager's doc sync).
+apply unchanged. BUILT (feat/instr-p3): the PAGE 3 block is in the `.txt`, the `.md` §1 flow line is updated.
 
 ## 1. Grid (unchanged from instructions_screen.md §2)
 

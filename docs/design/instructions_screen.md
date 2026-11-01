@@ -7,7 +7,9 @@ section now points here). Exact render spec (rows, cells, attrs, icon coordinate
 ## 1. Flow (user ruling 2026-10-30)
 
 - **Shown every game: after START, before D1** (the seed is already taken at START). Page 1 →
-  any key → page 2 → any key → play. **BREAK on page 1 skips page 2** (repeat players: 1 press).
+  any key → page 2 → any key → page 3 (TREASURES, `instructions_treasures.md`) → any key → play.
+  **BREAK on page 1 or 2 skips all remaining pages** (repeat players: 1 press); on page 3 it is any key.
+  (As built, INSTR-BUILD / INSTR-P3: once per power-on before the first menu, Option A below.)
 - A key counts only after all keys have been released once (the START `1`/ENTER is still held).
 - The selected controls are live from START, so the selected joystick's FIRE also counts.
   Kempston is read only if it is selected (§3.2).
@@ -23,14 +25,14 @@ section now points here). Exact render spec (rows, cells, attrs, icon coordinate
 - 24×16 bar icons: cells 0–2, text from char 4. 16×16 item icons: cells 0–1 / 16–17, text in
   chars 3–20 / 24–41 (18 chars each); no text char shares a cell with an icon.
 
-## 3. Layout B — two pages (main proposal, recommended)
+## 3. Layout B — three pages (pages 1-2 here, page 3 in `instructions_treasures.md`) (main proposal, recommended)
 
 Page 1: the goal and the controls. `[..]` = icon (not text); attr per row on the right.
 
 ```
     0         1         2         3         4
     012345678901234567890123456789012345678901
-00        TOME OF THE DEAD - HOW TO PLAY   1/2   $46
+00        TOME OF THE DEAD - HOW TO PLAY   1/3   $46
 01                                               -
 02  FIND THE KEY, UNLOCK THE LAIR, KILL ITS      $47
 03  BOSS: ITS GRATE IS THE WAY DOWN              $47
@@ -61,7 +63,7 @@ Page 2: things you find, and tips.
 
 ```
     012345678901234567890123456789012345678901
-00                ITEMS AND TIPS           2/2   $46
+00                ITEMS AND TIPS           2/3   $46
 02  WALK OVER ITEMS TO TAKE THEM                 $06
 03  [P]POTION - DRINK IT    [M]FOOD - EAT IT     $47   P = p_heal, M = f_meat
 04  [ ]HEAL, MANA, CURE     [ ]OR GROW WEAK      $07
@@ -77,7 +79,7 @@ Page 2: things you find, and tips.
 17  * NO WAY BACK UP: LOOT EACH DEPTH FIRST       $47
 19  * SWARMED? READ SLEEP, FEAR OR TELEPORT       $45
 21  * STANDING NEAR THE TOME HURTS YOU            $47
-23                 ANY KEY: START                  $46
+23       ANY KEY: NEXT PAGE   BREAK: SKIP        $46
 ```
 Rows 01, 11, 14, 16, 18, 20 and 22 are blank (tips are bulleted `* `, only the 5 most important kept). (Here `[X]` is drawn 3 chars wide to keep the text columns
 visible; the real 16×16 icon fills cells 0–1 / 16–17 and the text starts at char 4 / 24.)

@@ -1,5 +1,5 @@
 ;==============================================================================
-; instr_ovl.asm — INSTR-BUILD: the boot's key waits + the two-page HOW TO PLAY
+; instr_ovl.asm — INSTR-BUILD: the boot's key waits + the three-page HOW TO PLAY
 ; screen (game.md §3.2.1 option A flow: once per power-on, before the first
 ; menu; pages / wording / render spec: docs/design/instructions_screen.md /
 ; .txt). A boot-only OVERLAY (main.asm "OVERLAYS"): assembled at INSTR_ORG
@@ -9,17 +9,19 @@
 ; POOL_START: the streams are dead after this). 0 resident bytes.
 ;
 ; Flow: the loading picture + "PRESS ANY KEY" (GS_ANYKEY, was boot6_wait),
-; then page 1 (GS_HELP1), then page 2 (GS_HELP2), then back to boot (menu).
+; then page 1 (GS_HELP1), page 2 (GS_HELP2), page 3 TREASURES (GS_HELP3), then
+; back to boot (menu).
 ; A key counts only after every key was released once (the ENTER of LOAD ""
 ; or the previous page's key may still be down). BREAK (CAPS + SPACE, seen at
-; any frame while page 1's key is held) on page 1 skips page 2. No timeout;
+; any frame while a page's key is held) on page 1 or 2 skips all remaining pages;
+; on page 3 it is any key. No timeout;
 ; Kempston is not read (input_tick: GAME_STATE != GS_PLAYING); a Sinclair
-; FIRE is a key. Page 2's key is swallowed by the menu (menu_run primes its
+; FIRE is a key. Page 3's key is swallowed by the menu (menu_run primes its
 ; edge detector from the matrix). The title tune plays on throughout.
 ;
 ; Page images (tools/instr_pack.py -> build/text/instr_p<n>.inc, format there)
 ; are unpacked to INSTR_DATA (after this code, same window): p1 from
-; INSTR_P1_ZX0 (= POOL_START), p2 straight after it (dzx0 leaves HL past p1).
+; INSTR_P1_ZX0 (= POOL_START), p2 / p3 straight after it (dzx0 leaves HL past the stream).
 ; Drawing pages: bank 0 (unpack), bank 1 (copy_virt: the vdata bar icons and
 ; the key label, GEN_SRC staging), bank 6 (R6 ic_scr: the 16x16 item icons);
 ; bank 3 is never paged (its pblit SMC must stay as loaded until panel_init,
@@ -41,7 +43,33 @@ instr_main:
                 ld   a, GS_HELP1
                 call in_page                   ; HL = the page-2 stream
                 push hl
-                call in_rel
+                call in_wait
+                pop  hl                        ; (flags kept)
+                ret  nc                        ; BREAK: straight to the menu
+                ld   a, GS_HELP2
+                call in_page                   ; HL = the page-3 stream
+                push hl
+                call in_wait
+                pop  hl
+                ret  nc                        ; BREAK on page 2 skips page 3 too
+                ld   a, GS_HELP3
+                call in_page
+                ; keys are all up (page 2 ended on the release): any key (BREAK
+                ; counts as one here); the last key is swallowed by the menu
+                ; fall through
+in_key:         call in_down                   ; wait for any key down
+                jr   z, in_key
+                ret
+in_rel:         call in_down                   ; wait until no key is down
+                jr   nz, in_rel
+                ret
+
+;------------------------------------------------------------------------------
+; in_wait — a page's key wait: every key released once, then any key, held until
+; all are released again; BREAK (CAPS + SPACE) seen at any frame while it is
+; held. Out: NC = BREAK was seen, C = not.  Clobbers: A, BC, DE, HL.
+;------------------------------------------------------------------------------
+in_wait:        call in_rel
                 call in_key
                 ld   c, 1                      ; bit 0 = 0 once BREAK was seen
 .hold:          ld   a, (KBD_MATRIX + KBROW_CAPSV)
@@ -53,18 +81,7 @@ instr_main:
                 pop  bc                        ; B = the BREAK bit so far (flags kept)
                 ld   c, b
                 jr   nz, .hold
-                pop  hl
                 rr   c
-                ret  nc                        ; BREAK: straight to the menu
-                ld   a, GS_HELP2
-                call in_page
-                ; keys are all up (page 1 ended on the release): any key
-                ; fall through
-in_key:         call in_down                   ; wait for any key down
-                jr   z, in_key
-                ret
-in_rel:         call in_down                   ; wait until no key is down
-                jr   nz, in_rel
                 ret
 
 ;------------------------------------------------------------------------------

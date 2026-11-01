@@ -1446,7 +1446,7 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 
 | Address | Symbol | Meaning |
 |---------|--------|---------|
-| `$BF00` | `GAME_STATE` | `GS_BOOT 1`, `GS_PLAYING 2`, `GS_WIN 3`, `GS_DEAD 4`, **`GS_SELECT 5`**, **`GS_TRANSITION 6`**, **`GS_ANYKEY 8`** (BOOT-ANYKEY: the loading picture waits for a key; INSTR-BUILD: `instr_main`, run by `boot6_wait`), **`GS_HELP1 9`** / **`GS_HELP2 10`** (INSTR-BUILD: HOW TO PLAY page 1 / 2 up, boot only), **`GS_LEVEL 7`** (3F-T1: `level_enter` before the room map exists — card, `level_new`, the level pool; `gen_frame` allowed; `GS_TRANSITION` from the end of the pool) |
+| `$BF00` | `GAME_STATE` | `GS_BOOT 1`, `GS_PLAYING 2`, `GS_WIN 3`, `GS_DEAD 4`, **`GS_SELECT 5`**, **`GS_TRANSITION 6`**, **`GS_ANYKEY 8`** (BOOT-ANYKEY: the loading picture waits for a key; INSTR-BUILD: `instr_main`, run by `boot6_wait`), **`GS_HELP1 9`** / **`GS_HELP2 10`** / **`GS_HELP3 11`** (INSTR-BUILD / INSTR-P3: HOW TO PLAY page 1 / 2 / 3 up, boot only), **`GS_LEVEL 7`** (3F-T1: `level_enter` before the room map exists — card, `level_new`, the level pool; `gen_frame` allowed; `GS_TRANSITION` from the end of the pool) |
 | `$BF01` | `RNG_STATE` | xorshift16 (7,9,8); reseeded `$A55A` every new game |
 | `$BF03` | `TURN_COUNTER` | word; +1 at the end of every turn's animation |
 | `$BF05` / `$BF06` | `INPUT_SRC` / `KBD_MATRIX` | P3 injection contract, unchanged |
@@ -4687,17 +4687,26 @@ Build ASSERTs delta + `KXP_*` (combat_defs.asm, used by the `kx_tab` rows) == §
 
 Once per power-on, before the first menu: the loading picture + `PRESS ANY KEY` (`GS_ANYKEY`), any key ->
 page 1 (`GS_HELP1`), a key (counted after all keys were released once; BREAK held at any frame of
-that press skips page 2) -> page 2 (`GS_HELP2`), any key -> the menu (key swallowed by `menu_run`'s priming).
+that press skips all remaining pages) -> page 2 (`GS_HELP2`), a key (same BREAK rule) -> page 3 TREASURES
+(`GS_HELP3`, INSTR-P3, `docs/design/instructions_treasures.md`), any key (BREAK counts) -> the menu (key
+swallowed by `menu_run`'s priming).
 No timeout, Kempston not read, the title tune plays on.
 
 - **Code:** `src/instr_ovl.asm`, a boot-only overlay assembled at `INSTR_ORG` = `GEN_SCRATCH` `$6000`
-  (359 B), its page images (`tools/instr_pack.py` -> `build/text/instr_p{1,2}.inc`: text rows with space
+  (359 B), its page images (`tools/instr_pack.py` -> `build/text/instr_p{1,2,3}.inc`: text rows with space
   runs, icon records `IK_*`, attr RLE; 772 / 682 B) unpacked by it to `INSTR_DATA` (= right after the code,
   405 / 495 B left in the window). Rows go through `TX_DEC` to `print6` (x = 0); icons: R6 `ic_scr` (bank 6),
   its own `in_vblk` for the vdata `icon_bag`, `icon_sword`, `label_key` (`copy_virt` -> `GEN_SRC`; not bank-3
   `pblit` / `glyph8`: their SMC would make bank 3 != the .sna at the menu, game.py #50), `TILE_GLYPHS`
   (lectern 15-18, grate 13). Attrs are written last (the page appears at once).
-- **Streams:** bank 0 `instr_p1_zx0` = `POOL_START` (`$C916`; **M0: `$C960`**, the fixed reserve) .. `instr_zx0_end` (`$CE6D`; M0: `$CEB8`), 1,368 B: page 1,
+- **INSTR-P3 (`feat/instr-p3`, -DDEBUG_KIT=0, main `bc6a531`):** third page (24 rows, no icons; `PAGES[3]`); code
+  359 -> **374 B** (`in_wait` shared by pages 1-2, +page 3); page raw 772 / 691 / **741** B (window `GEN_SCRATCH_LEN`
+  1,536: 390 / 471 / **421** left, ASSERTed for all three); streams `instr_p1_zx0` = `POOL_START` `$CA40` ..
+  `instr_zx0_end` **`$D185`** (1,368 -> **1,862 B**, +494; far below `tap_loader` `$E000`, the only bank-0 occupant above
+  the pool; ASSERT `instr_zx0_end <= tap_loader` kept). Text tape block 4,486 B (2,378 text + 246 reserve + 1,862).
+  Tape 82,696 -> **83,190 B (+494)**. Resident bytes 0: low RAM / boot block / R6 / bank 1 / 3 / 7 / pool slack
+  unchanged (bank 7 free 5+, R6 free 87, bank 3 free 40, low RAM spare 8, bank 1 free 44).
+- **Streams (pre-P3 figures, 2 pages):** bank 0 `instr_p1_zx0` = `POOL_START` (`$C916`; **M0: `$C960`**, the fixed reserve) .. `instr_zx0_end` (`$CE6D`; M0: `$CEB8`), 1,368 B: page 1,
   page 2, then the code (last, so no overlay address depends on a packed size). On the text tape block
   (`TEXT_TAPE_LEN` = `TEXT_LEN` + 1,368; no new tape block, `tape_tab` unchanged). Dead after the help:
   `gen_idles` (now after it) writes the boot pool from `POOL_START` over them; `POOL_START`, `POOL_CAP`
@@ -4706,7 +4715,7 @@ No timeout, Kempston not read, the title tune plays on.
   verbatim from `instructions_screen.txt`; `tools/gen_instr_mock.py` renders from the same table (renders
   byte-identical to the approved PNGs). `tests/instr.py` compares both pages on the emulator screen with that
   model byte for byte (no stored hash), plus held key / release / BREAK skip / swallow; `tests/tape_layout.py`
-  checks the bank-0 block = text + streams; harnesses answer `BOOT_WAITS` (8, 9, 10) with ENTER taps
+  checks the bank-0 block = text + streams; harnesses answer `BOOT_WAITS` (8, 9, 10, 11) with ENTER taps
   (`game_lib.boot_key`, `sound.py`, `zx0_pool.py`, game.py #50).
 - **Cost:** page draw ~0.7M T each, boot only (no tick code touched).
 

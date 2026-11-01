@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """HOW TO PLAY (INSTR1) page data -> asm for the build (stdlib only).
 
-THE spec of the two pages: the text rows come from docs/design/instructions_screen.txt
+THE spec of the three pages: the text rows come from docs/design/instructions_screen.txt
 (the approved wording, read verbatim), the attribute fills and the icon placements are
 the PAGES table below (the render spec's ATTRS / ICONS sections as data). The mockups
 (tools/gen_instr_mock.py) render from the same table, and tests/instr.py compares the
 emulator's screen with that render byte for byte.
 
-Output (per page n = 1, 2): OUTDIR/instr_p<n>.inc, the page image src/instr_ovl.asm
+Output (per page n = 1, 2, 3): OUTDIR/instr_p<n>.inc, the page image src/instr_ovl.asm
 assembles at INSTR_DATA (docs/memory-map.md "INSTR1"):
   text   24 rows; a byte 32..127 = that char, 1..31 = that many spaces, 0 = end of row
          (trailing spaces dropped; the row is printed from x = 0 by print6)
@@ -56,6 +56,13 @@ PAGES = {
                   ("i16", "ammo_dagger", 7, 0, 0x47), ("i16", "w_long", 7, 16, 0x07),
                   ("label", "label_key", 9, 1),
                   ("tile", 13, 9, 16), ("tile", 13, 9, 17), ("tile", 13, 10, 16), ("tile", 13, 10, 17)],
+    },
+    3: {
+        "fills": (_rows_fill([0, 23], 0, 31, 0x46) + _rows_fill([2, 15], 0, 31, 0x06)
+                  + _rows_fill([3, 6, 7, 9, 12, 16, 18], 0, 31, 0x47)
+                  + _rows_fill([4, 5, 8, 10, 11, 13, 17, 19], 0, 31, 0x45)
+                  + _rows_fill([20, 21, 22], 0, 31, 0x05)),
+        "icons": [],
     },
 }
 
@@ -188,7 +195,7 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "build", "text")
     os.makedirs(out, exist_ok=True)
     rep = []
-    for p in (1, 2):
+    for p in (1, 2, 3):
         txt, nt, na = emit(p)
         path = os.path.join(out, "instr_p%d.inc" % p)
         if not os.path.exists(path) or open(path).read() != txt:

@@ -257,9 +257,9 @@ B0_FREE         EQU POOL_START - b0_code_end
     IF B0_FREE > 0
                 DS   B0_FREE, 0                         ; the reserve (on the text tape block)
     ENDIF
-; INSTR-BUILD: the HOW TO PLAY streams (page 1, page 2, then the overlay code:
+; INSTR-BUILD: the HOW TO PLAY streams (page 1, 2, 3, then the overlay code:
 ; the code stream is last so no address an overlay reads depends on a packed
-; size — instr_main reaches page 2 as "past page 1"). Boot only: on the text
+; size — instr_main reaches page n+1 as "past page n"). Boot only: on the text
 ; tape block (TEXT_TAPE_LEN), read by boot6_wait -> ovl_run before gen_idles,
 ; then the boot pool overwrites them (0 pool bytes; M0: POOL_START is fixed at $C960, defs.asm).
 instr_p1_zx0:
@@ -269,6 +269,10 @@ instr_p1_zx0:
 instr_p2_zx0:
     IF OVL_PASS == 2
                 INCBIN "instr2.zx0"
+    ENDIF
+instr_p3_zx0:
+    IF OVL_PASS == 2
+                INCBIN "instr3.zx0"
     ENDIF
 instr_zx0:
     IF OVL_PASS == 2
@@ -1245,7 +1249,7 @@ ovl_raw_ft:
                 SAVEBIN "build/ovl/ft.bin", ovl_raw_ft, FID_COUNT * FT_LEN
                 DISPLAY "GAME frame_tab stream (MEM-FT): ", /D, FID_COUNT * FT_LEN, " B raw -> packed ", /D, ftz_zx0_end - ftz_zx0, " B in bank 2 (boot6_ft -> the FRT rows)"
 ;------------------------------------------------------------------------------
-; INSTR-BUILD: the HOW TO PLAY overlay (instr_ovl.asm at INSTR_ORG) + its two
+; INSTR-BUILD: the HOW TO PLAY overlay (instr_ovl.asm at INSTR_ORG) + its three
 ; page images (tools/instr_pack.py, DISPed at INSTR_DATA = right after the code);
 ; streams in bank 0 after the text block ("TEXT" above), boot only.
 ;------------------------------------------------------------------------------
@@ -1270,12 +1274,20 @@ instr_p2_img:
                 INCLUDE "../build/text/instr_p2.inc"
 instr_p2_end:
                 ENT
+ovl_raw_instr3:
+                DISP INSTR_DATA
+instr_p3_img:
+                INCLUDE "../build/text/instr_p3.inc"
+instr_p3_end:
+                ENT
 INSTR_P1_LEN    EQU instr_p1_end - instr_p1_img
 INSTR_P2_LEN    EQU instr_p2_end - instr_p2_img
-                ASSERT instr_p1_end <= GEN_SCRATCH + GEN_SCRATCH_LEN && instr_p2_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
+INSTR_P3_LEN    EQU instr_p3_end - instr_p3_img
+                ASSERT instr_p1_end <= GEN_SCRATCH + GEN_SCRATCH_LEN && instr_p2_end <= GEN_SCRATCH + GEN_SCRATCH_LEN && instr_p3_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
                 SAVEBIN "build/ovl/instr1.bin", ovl_raw_instr1, INSTR_P1_LEN
                 SAVEBIN "build/ovl/instr2.bin", ovl_raw_instr2, INSTR_P2_LEN
-                DISPLAY "GAME HOW TO PLAY overlay (INSTR-BUILD, boot only): code ", /D, INSTR_OVL_LEN, " + page 1 ", /D, INSTR_P1_LEN, " / page 2 ", /D, INSTR_P2_LEN, " B raw at ", /H, INSTR_ORG, " (", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p1_end, " / ", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p2_end, " left); packed ", /D, instr_zx0_end - instr_p1_zx0, " B in bank 0 after the text (", /H, instr_p1_zx0, "..", /H, instr_zx0_end - 1, ")"
+                SAVEBIN "build/ovl/instr3.bin", ovl_raw_instr3, INSTR_P3_LEN
+                DISPLAY "GAME HOW TO PLAY overlay (INSTR-BUILD, boot only): code ", /D, INSTR_OVL_LEN, " + page 1 ", /D, INSTR_P1_LEN, " / page 2 ", /D, INSTR_P2_LEN, " / page 3 ", /D, INSTR_P3_LEN, " B raw at ", /H, INSTR_ORG, " (", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p1_end, " / ", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p2_end, " / ", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p3_end, " left); packed ", /D, instr_zx0_end - instr_p1_zx0, " B in bank 0 after the text (", /H, instr_p1_zx0, "..", /H, instr_zx0_end - 1, ")"
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000
 
