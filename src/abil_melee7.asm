@@ -41,7 +41,10 @@ abil_melee:
                 pop  bc
                 ld   a, d
                 or   e
-                jr   z, .nt
+                ld   c, TOME_REACH             ; P3: no body, but the Tome faced in reach:
+                scf                            ; accepted with mask 0 (act_fire counts the
+                call z, tome_in                ; hit at the release; tome_in keeps B, DE)
+                jr   nc, .nt
                 ld   (ABIL_TGT), de            ; power_fire strikes these
                 call act_begin_ok              ; (A, HL)
                 ld   a, (ABIL_RK + RK_MP)

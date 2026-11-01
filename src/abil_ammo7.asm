@@ -61,7 +61,8 @@ abil_ammo:
 ;   KILL THE <kind>"; none ($FF) and no named miss -> "YOUR DAGGER / ARROW
 ;   MISSES" (absorbed / range / wall / exit); the hero (slot 0, after a
 ;   reflection) -> deal_hit's own hero line only.
-; In: IX = hero, B = ABL_DAGGER / ABL_BOW (= ACT_ABL). Out: L = 1 fired.
+; In: IX = hero, B = ABL_DAGGER / ABL_BOW (= ACT_ABL), C = 1 the Tome was struck (P3, act_fire),
+; else 0. Out: L = 1 fired.
 ; Clobbers: all but IY (IX kept).   ~2-6k T + proj_fire (10-30k T, contended)
 ;------------------------------------------------------------------------------
 ammo_fire:
@@ -70,8 +71,8 @@ ammo_fire:
                 ld   a, b
                 ld   hl, proj_rel
                 call far3                      ; L = pf_stop; IX = hero
-                pop  bc
-                ld   c, 0                      ; C = 1: a named miss line went out
+                pop  bc                        ; C = 1: a named miss line went out (P3: act_fire's
+                                               ; C = 1 when the release struck the Tome: no MISSES)
                 ld   a, (pf_miss)
                 or   a
                 jr   z, .t                     ; the hero (a reflection): no line
@@ -95,7 +96,8 @@ ammo_fire:
                 call msg_kind
                 call msg_end
                 pop  bc
-                inc  c
+                ld   c, 1                      ; (P3: not inc c — act_fire's C = 1 (the Tome struck) would
+                                               ; make it 2 and .none would print a 2nd MISSES line)
 .t:             ld   a, (pf_tgt)
                 or   a
                 jr   z, .out                   ; the hero: deal_hit logged it

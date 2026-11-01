@@ -380,6 +380,10 @@ ISR_SAVE_ALT    EQU 0                           ;     (needed once BOTH the play
 DEBUG_KIT       EQU 1                           ;     start kit (game.md §1.4 "Start kit", never in a
     ENDIF                                       ;     release tape); suites + goldens run on -DDEBUG_KIT=0
 KIT_DEBUG       EQU DEBUG_KIT                   ; (.sym: tests/game_lib.py refuses a kit build)
+    IFNDEF F3_GEN                               ; 3F switch == tools/levelgen.py generate(..., f3=True):
+F3_GEN          EQU 1                           ;     LVL_FLAGS = 0 (grate shut, all depths), the D8
+    ENDIF                                       ;     Sanctum leaf + the Tome ending (P3: default 1);
+                                                ;     0 = the 3B D8 stand-in (descend from D8 = win)
     IFNDEF PHASE_SHIFT                          ; phase-locked walk shifts (2026-10-21 default):
 PHASE_SHIFT     EQU 1                           ;     a walker's walk frame is only ever drawn
     ENDIF                                       ;     at one px parity -> one stored shift

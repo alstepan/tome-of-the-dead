@@ -104,7 +104,7 @@ RANK_MAX        EQU 3
 ; --- rank table: ab_rank + (ability * RANK_MAX + rank - 1) * RK_STRIDE -------
 ; Ranks are cumulative (§5): each row is the full effective value at that rank.
 RK_MP           EQU 0               ; MP cost
-RK_RANGE        EQU 1               ; range in cells (melee abilities: 0 = reach)
+RK_RANGE        EQU 1               ; range in cells (melee abilities: 1 = the reach; P3 act_fire's Tome hit reads it)
 RK_DIE          EQU 2               ; damage die sides (0 = the weapon die; Power Strike: multiplier code, see its rows)
 RK_BONUS        EQU 3               ; flat damage bonus (Whirlwind: added to weapon die)
 RK_BOUNCES      EQU 4               ; wall reversals allowed (Power Strike: extra to-hit)
@@ -148,13 +148,13 @@ ab_rank:
                 RANK 12, 28, 8, 8, 3, 0
 ; Power Strike (RK_DIE = the multiplier code 0 / 1 / 2 = x2 / x2.5 / x3, RK_BOUNCES = the to-hit
 ; added to ab_def's +2; RK_EFFECT = stun turns): 3 MP x2 +2 stun 1 | 5 MP x2.5 +3 stun 1 | 7 MP x3 +4 stun 2
-                RANK 3, 0, 0, 0, 0, 1
-                RANK 5, 0, 1, 0, 1, 1
-                RANK 7, 0, 2, 0, 2, 2
+                RANK 3, 1, 0, 0, 0, 1
+                RANK 5, 1, 1, 0, 1, 1
+                RANK 7, 1, 2, 0, 2, 2
 ; Whirlwind: 4 MP, dmg +1 | 7 MP, dmg +3 | 10 MP, dmg +4, to-hit +2
-                RANK 4, 0, 0, 1, 0, 0
-                RANK 7, 0, 0, 3, 0, 0
-                RANK 10, 0, 0, 4, 0, 2
+                RANK 4, 1, 0, 1, 0, 0
+                RANK 7, 1, 0, 3, 0, 0
+                RANK 10, 1, 0, 4, 0, 2
 RK_LEN          EQU $ - ab_rank
                 ASSERT RK_LEN == ABL_RANKED * RANK_MAX * RK_STRIDE      ; 126 B
 

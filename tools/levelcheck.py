@@ -468,6 +468,9 @@ def check3(b, lvl=1, stats=None):
             plain[OFF_EDGE + hedge(min(7, sc0))] = 0
             plain[G.H["LVL_SANCTUM"]] = D["ROOM_NONE"]
             plain[G.H["LVL_NROOMS"]] -= 1
+            if b[D["TOME_HP"] - G.BASE] != D["TOME_MAX"]:
+                return ["P3: D8 TOME_HP != TOME_MAX at generation"]
+            plain[D["TOME_HP"] - G.BASE] = 0
     seed_used = int.from_bytes(b[G.H["LVL_SEED"]:G.H["LVL_SEED"] + 2], "little")
     master = int.from_bytes(b[G.H["MASTER_SEED"]:G.H["MASTER_SEED"] + 2], "little")
     if bytes(plain) != G.generate(depth, seed_used, master):

@@ -319,8 +319,9 @@ lair_hint:
                 ASSERT LF_GATE_HINT == 1 << LF_GATE_HINT_BIT
 
 ; level_descend — do_exit with EXIT_KIND = EX_LEVEL (the hero took the
-; lair's level exit, logic.asm try_climb): D8 -> GS_WIN (game.md §1.4
-; stand-in), else level_enter (depth + 1). Back in end_turn, which finishes
+; lair's level exit, logic.asm try_climb): D8 -> game_win (F3_GEN 0: the
+; game.md §1.4 stand-in; F3_GEN 1: D8 has no level exit, a safety net
+; only), else level_enter (depth + 1). Back in end_turn, which finishes
 ; the turn (potion pickup on the new level, TURN_PHASE 0).
 ; Clobbers: all but IY.
 ;------------------------------------------------------------------------------
@@ -329,7 +330,7 @@ level_descend:
                 ld   (EXIT_KIND), a
                 ld   a, (LVL_DEPTH)
                 cp   LEVELS
-                jr   nc, .win
+                jr   nc, game_win
                 inc  a
                 ld   de, TX_DESCEND
                 ld   b, a
@@ -342,14 +343,42 @@ level_descend:
                 ld   a, GS_PLAYING             ; (edge-triggered input) first
                 ld   (GAME_STATE), a
                 jp   resync_tick
-.win:           xor  a                         ; SND-4: Game Win once (like Game Over in end_turn
+; game_win — P3: GS_WIN (bank-7 tome_strike: the Tome's last hit, game.md §1.3; level_descend
+; from D8). CF = 1 (the bump's / melee's turn). Any bank. Clobbers: AF, BC, DE, HL.
+game_win:       xor  a                         ; SND-4: Game Win once (like Game Over in end_turn
                 ld   (MUS_REQ), a              ; .dead): loop off, then the final shot; no stinger
                 ld   a, MUS_WIN                ; and no stinger_wait here (level_enter not run);
                 ld   (MUS_SHOT), a             ; the ISR drops it with music off
                 ld   a, GS_WIN
                 ld   (GAME_STATE), a
-                ld   a, TX_WIN
-                jp   msg_push_end              ; never dropped; end_screen drains it
+                ld   a, TX_WIN                 ; "THE TOME IS DESTROYED"
+                call msg_push_end              ; never dropped; end_screen drains it
+                scf
+                ret
+
+;------------------------------------------------------------------------------
+; tome_aura — P3 (game.md §1.3), called by bank-7 end_turn in place of its
+; mus_pick (GS_PLAYING, after the death check: the hero is not dying, HP > 0;
+; bank 7 paged, so mus_pick is called from here). The Tome's aura: 1 hp a turn,
+; untyped (no DEF, no resistance, no line), while the hero stands on storey 1 of
+; the Sanctum with a gap < TOME_AURA_R to the lectern, either facing (R6
+; tome_geo6). The hp it takes to 0 ends the run on this turn: end_turn.dead
+; (GS_DEAD, "YOU DIED"; no death sequence). Low RAM: bank 7 low is full.
+; Clobbers: all but IY.   ~0.4k T (far6 + tome_geo6) + mus_pick, every turn end
+;------------------------------------------------------------------------------
+tome_aura:      call mus_pick                  ; bank 7 (SND-3 Dangerous cue)
+                ld   ix, P_ENTITIES
+                ld   hl, tome_geo6             ; R6 tome6.asm: L = gap (+ $80 facing away) / $FF
+                call far6
+                ld   a, l
+                and  $7F                       ; either facing ($FF -> $7F: none)
+                cp   TOME_AURA_R
+                ret  nc
+                ld   hl, P_ENTITIES + E_HP     ; > 0 (end_turn's death check came first)
+                dec  (hl)
+                ret  nz
+                pop  af                        ; (end_turn's return) the run ends here
+                jp   end_turn.dead             ; bank 7 (paged)
 
 ;==============================================================================
 ; ROOM ENTRY / THEME (B3B-8). build_room_map v2 lives in bank 3 (D7); these

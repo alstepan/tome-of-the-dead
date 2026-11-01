@@ -15,12 +15,14 @@
 ;
 ; Entered as level_gen's tail (jp far7): also writes LVL_FLAGS = 0 (all depths), B = 0.
 ; In : the level generated (LVL_SEED = the seed used). Out: LVL_SANCTUM = S,
-;      LVL_NROOMS + 1, the edge / exits / room written. Clobbers all but IY.
+;      LVL_NROOMS + 1, the edge / exits / room written, TOME_HP = TOME_MAX (P3).
+;      Clobbers all but IY.
 ; Cost: ~2.1k T. No SMC.
 ;==============================================================================
 SANCT_XOR       EQU $521F
                 ASSERT (EDGE_TAB >> 8) == ((EDGE_TAB + 5) >> 8) && RD_EXITS == 1 && RD_STRIDE == 16 && RD_SEED + 1 < RD_STRIDE
                 ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + 8 * RD_STRIDE + RD_STRIDE - 1) >> 8)
+                ASSERT (TOME_HP >> 8) == (EDGE_TAB >> 8)
 
 sn_step:                                ; HL = xorshift(7,9,8)(HL) (lg_step without the memory); A clobbered
                 ld   a, h
@@ -100,6 +102,8 @@ sanctum_leaf:   xor  a
                 ld   l, a
                 ld   h, EDGE_TAB >> 8
                 ld   (hl), EG_LINK | EG_DOOR | EG_SEAL
+                ld   l, TOME_HP & $FF   ; P3 (game.md §1.3): the Tome's hp, once per level (it never
+                ld   (hl), TOME_MAX     ; regenerates: leaving the Sanctum keeps the damage)
                 ld   a, e
                 add  a, a
                 add  a, a

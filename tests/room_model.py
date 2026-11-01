@@ -248,6 +248,10 @@ def render_room(blk, r, decor=True, anim=None):
             for k in (0, 1):
                 m[SR * s + SA - 2][col + k] = tile + 2 * s
                 m[SR * s + SA - 1][col + k] = tile + 2 * s + 1
+    if d[S["RD_FLAGS"]] & S["RDF_SANCTUM"]:    # P3: the lectern, storey 1, the dead-end wall, before the decor
+        c0 = S["LECT_COL_L"] if ex & S["RDX_R"] else S["LECT_COL_R"]
+        for k, t in enumerate(("T_LECT_TL", "T_LECT_TR", "T_LECT_BL", "T_LECT_BR")):
+            m[S["LECT_ROW"] + k // 2][c0 + k % 2] = T[t]
     seed = d[S["RD_SEED"]] | d[S["RD_SEED"] + 1] << 8
     flat = [t for row in m for t in row]
     if seed == 0:

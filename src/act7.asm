@@ -221,6 +221,17 @@ act_pend:
 act_fire:
                 ld   ix, P_ENTITIES
                 ld   b, a
+                push bc                        ; P3: the Tome hit (tome7.asm) if it is faced
+                ld   hl, CAST_ROW + RR_RANGE   ; within the release's range: spells the
+                cp   ABL_POWER                 ; CAST_ROW, the rest the ABIL_RK row
+                jr   c, .tr                    ; (Power Strike / Whirlwind: 1 = the reach)
+                ld   hl, ABIL_RK + RK_RANGE
+.tr:            ld   c, (hl)
+                call tome_rel                  ; (all but IX) CF = the Tome struck
+                pop  bc
+                ld   c, 0
+                rl   c                         ; C = 1: struck (ammo_fire prints no MISSES line)
+                ld   a, b
                 sub  ABL_POWER
                 cp   ABL_WHIRL - ABL_POWER + 1
                 jr   nc, .guard

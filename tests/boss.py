@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import levelgen as G  # noqa: E402
 import room_model  # noqa: E402
-from game_lib import Harness, S, EMU_ARGS, stand_y, attr_at  # noqa: E402
+from game_lib import Harness, S, EMU_ARGS, stand_y, attr_at, F3  # noqa: E402
 from lp import T as Proto, w16, want_slots  # noqa: E402
 from world import log_row, text6, STRINGS  # noqa: E402
 
@@ -398,7 +398,7 @@ def model_sweep():
     tot = miss = 0
     for i in range(1750):
         d = 1 + i % 7
-        b = G.generate(d, rng.randrange(1, 65536))
+        b = G.generate(d, rng.randrange(1, 65536), f3=F3)
         lp = G.lp_budget(b, d, f3=True)
         lair = b[G.H["LVL_LAIR"]]
         ex = G._rd(b, lair, "RD_EXITS")
@@ -423,7 +423,7 @@ def post_overlap():
     """P1 (T8 review): a body placed before the boss in the same record over the post's cols
     (LPC_BODY: never exempt) shifts the post (model; the Z80 == model: tests/lp.py A7)."""
     D = G.D
-    b = G.generate(2, 0x2222)
+    b = G.generate(2, 0x2222, f3=F3)
     lp = G.lp_budget(b, 2, f3=True)
     lair = b[G.H["LVL_LAIR"]]
     c = G._rd(b, lair, "RD_EXITCOL")

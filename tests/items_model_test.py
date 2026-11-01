@@ -11,10 +11,11 @@ import items_model as M  # noqa: E402
 import levelgen as G  # noqa: E402
 
 D = G.D
+F3 = True                                   # P3: F3_GEN is the default build
 
 
 def level(master, d):
-    return G.generate(d, M.level_seed(master, d), master)
+    return G.generate(d, M.level_seed(master, d), master, f3=F3)
 
 
 class ItemsModel(unittest.TestCase):

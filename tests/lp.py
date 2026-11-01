@@ -40,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import levelgen as G                                    # noqa: E402
 import room_model                                       # noqa: E402
-from game_lib import Harness, Proto, S, EMU_ARGS, attr_at, cell_bytes   # noqa: E402
+from game_lib import Harness, Proto, S, EMU_ARGS, attr_at, cell_bytes, F3   # noqa: E402
 
 STUB = S["LOWRAM_END_3B"]
 RES = STUB + 120
@@ -226,7 +226,7 @@ def part_a(h, p, check, nrand):
         for sd in range(1, 20000):
             if nw >= 2 and nm >= 2:
                 break
-            bb = G.generate(d, sd)
+            bb = G.generate(d, sd, f3=F3)
             kw = any(bb[G.OFF_DESC + 16 * r + G.L2_PITW] for r in range(9))
             km = any(bb[G.OFF_DESC + 16 * r + G.L2_MIDB] for r in range(9))
             if (kw and nw < 2) or (km and nm < 2):
@@ -244,7 +244,7 @@ def part_a(h, p, check, nrand):
         ok1, _ = p.far3("level_gen", a=d)
         ok2, tb = p.far3("lp_budget")
         blk = p.block()
-        want_b = G.generate(d, seed)
+        want_b = G.generate(d, seed, f3=F3)
         wl = G.lp_budget(want_b, lvl, f3=True)
         got = p.lp()
         good = ok1 and ok2 and blk == want_b and mask(got) == mask(wl)

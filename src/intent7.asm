@@ -214,7 +214,9 @@ ic_melee:
                 call melee_bonk                ; D3-7 slot: the Mage staff bonk (abil_melee7.asm)
                 ld   l, 1
                 ret
-.door:          call try_close                 ; lowram: CF = 1 closed
+.door:          ld   c, TOME_REACH             ; P3: the Tome faced, adjacent: a melee hit
+                call tome_rel                  ; (tome7.asm, CF = 1), else
+                call nc, try_close             ; lowram: CF = 1 closed
                 ld   l, 1
                 ret  c
 .nt:            ld   l, IC_NOTGT               ; use_icon: the line, or a stumble

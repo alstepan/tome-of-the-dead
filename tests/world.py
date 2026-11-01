@@ -154,7 +154,7 @@ import game_lib  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "tools"))
 import textpack  # noqa: E402
 STRINGS = textpack.read_strings()           # [(name, text)], id order (B3B-13)
-from game_lib import (Harness, S, EMU_ARGS, attr_at, cell_bytes, split_frame,  # noqa: E402
+from game_lib import (Harness, S, EMU_ARGS, F3, attr_at, cell_bytes, split_frame,  # noqa: E402
                       stand_y, is_standing, item_row, ladder_rows, ROOM_LADDERS,
                       ROOM_A, ROOM_B, ROOM_C, ROOM_D, ROOM_LETTER,
                       STOREY_ROWS, STOREY_AIR, STOREY_COUNT, PLAY_ROWS, PANEL_ROW,
@@ -2620,7 +2620,7 @@ def run_gen_suites(p, check):
             seed = (0x2B3B * d) & 0xFFFF
             ok, tg, tt, blk = gen_level(p, d, seed, master=d)
             check(f"W11 D{d}: level_gen + level_load_tiles ran, block == levelgen.py",
-                  ok and blk == G.generate(d, seed, d), (ok, d, seed))
+                  ok and blk == G.generate(d, seed, d, f3=F3), (ok, d, seed))
             note("level_load_tiles", tt, f"D{d}")
             fl, wl = room_model.THEME[d]
             attrs = p.z.read_memory(S["TILE_ATTRS"], S["TILE_IDS"])
@@ -2730,7 +2730,7 @@ def run_gen_suites(p, check):
         feats = dict(doors=0, pits=0, blocks=0, arr=0, exit=0, lad2=0, wide=0, mid=0)
         for i in range(40):
             d, seed, master = rng.randint(1, 8), rng.randrange(65536), rng.randrange(65536)
-            want_blk = G.generate(d, seed, master)
+            want_blk = G.generate(d, seed, master, f3=F3)
             ok, _, _, blk = gen_level(p, d, seed, master)
             if not ok or blk != want_blk:
                 check(f"W12M d{d} seed {seed:#06x}: Z80 block == levelgen.py", False, ok)
@@ -2788,7 +2788,7 @@ def run_gen_suites(p, check):
             d = 1 + i % 8
             seed, master = rng.randrange(65536), rng.randrange(65536)
             ok, _, _, blk = gen_level(p, d, seed, master)
-            if not ok or blk != G.generate(d, seed, master):
+            if not ok or blk != G.generate(d, seed, master, f3=F3):
                 check(f"W13 D{d} seed {seed:#06x}: level generated", False, ok)
                 continue
             flags = bytes(p.z.read_memory(S["tile_flags"], 64))
@@ -2840,7 +2840,7 @@ def run_gen_suites(p, check):
         rng = __import__("random").Random(0xB3B10)
         for i in range(800):
             d, seed, master = (1 + i % 8), rng.randrange(65536), rng.randrange(65536)
-            blk = G.generate(d, seed, master)
+            blk = G.generate(d, seed, master, f3=F3)
             fl = depth_flags(p, d)
             for r in present_rooms(blk):
                 dd = room_model.desc(blk, r)
@@ -2862,12 +2862,16 @@ def run_gen_suites(p, check):
         nrm, nbad = 0, 0
         for i in range(480):
             d, seed, master = 1 + i % 8, rng.randrange(65536), rng.randrange(65536)
-            blk = G.generate(d, seed, master)
+            blk = G.generate(d, seed, master, f3=F3)
             for r in present_rooms(blk):
                 mm = room_model.render_room(blk, r)
                 nrm += 1
+                if r == blk[S["LVL_SANCTUM"] - room_model.BASE]:   # P3: the lectern, exactly once, in the Sanctum
+                    nbad += sorted(mm.count(t) for t in FREED_IDS) != [0, 1, 1, 1, 1]
+                    continue
                 nbad += any(t in mm for t in FREED_IDS)
-        check(f"W13 DEC2: common ids 15..18 / 31 (lectern / free) never appear in {nrm} rooms", nbad == 0, nbad)
+        check(f"W13 DEC2: common ids 15..18 / 31 (lectern / free) appear in {nrm} rooms only as the Sanctum's "
+              "lectern (P3)", nbad == 0, nbad)
         # ---- synthetic maps: structural cells scattered inside the decor rows
         # (rows 9s..9s+5 and their ring) -> Python checker on 600 maps, the Z80
         # deriver == Python on 86 of them (i % 7) (decor_room called directly: TMP1 =
@@ -2879,7 +2883,7 @@ def run_gen_suites(p, check):
         ybad, zbad, nsyn, nz = [], [], 0, 0
         for i in range(600):
             d, seed, master = 1 + i % 8, rng.randrange(65536), rng.randrange(65536)
-            blk = G.generate(d, seed, master)
+            blk = G.generate(d, seed, master, f3=F3)
             r = rng.choice(present_rooms(blk))
             base = room_model.render_room(blk, r, decor=False)
             for _ in range(rng.randint(3, 12)):
@@ -2975,7 +2979,7 @@ def w16_level(p, check):
     def level_ok(d, master, tag, hero_keep=None, seed=None):
         """Everything a fresh level must satisfy (tag: where we are)."""
         blk = room_model.read_block(p)
-        want = G.generate(d, lvl_seed(master, d) if seed is None else seed, master)
+        want = G.generate(d, lvl_seed(master, d) if seed is None else seed, master, f3=F3)
         import items_model as IM                   # 3E-T6: + the item / trap generator
         hero = IM.HERO_WARRIOR if p.rb("HERO_KIND") == S["K_KNIGHT"] else IM.HERO_MAGE
         want = IM.apply_block(want, IM.gen_level_items(want, master, hero))
@@ -3582,7 +3586,7 @@ def w26_l2(p, check):
     nl2 = nbad = 0
     for d in range(2, 9):
         for sd in range(1, 41):
-            blk = G.generate(d, sd, 0)
+            blk = G.generate(d, sd, 0, f3=F3)
             for r in present_rooms(blk):
                 m = room_model.render_room(blk, r, decor=False)
                 stand, fall, comps = l2_walk_parts(m, kh)
@@ -3639,7 +3643,7 @@ def w26_l2(p, check):
 
     try:
         for kind, d, sd, r in L2_CASES:
-            want_blk = G.generate(d, sd, 0)
+            want_blk = G.generate(d, sd, 0, f3=F3)
             dsc = room_model.desc(want_blk, r)
             p.boot(K_KNIGHT)
             kinds = {s_: p.ent(s_)["KIND"] for s_ in range(1, 16)}
