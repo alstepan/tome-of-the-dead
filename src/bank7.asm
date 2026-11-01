@@ -293,14 +293,15 @@ end_turn:
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
                 jr   nz, .dead
-                ld   a, (GAME_STATE)           ; not after a win (level_descend .win: GS_WIN
+                ld   a, (GAME_STATE)           ; not after a win (game_win: GS_WIN
                 cp   GS_PLAYING                ; returns here): the end screen owns the music
-                call z, mus_pick               ; SND-3: Dangerous cue (mus7.asm), mailbox only
+                call z, tome_aura              ; SND-3 mus_pick (Dangerous cue, mailbox only), then
+                                               ; P3 the Tome's aura (lowram.asm; a kill -> .dead)
                 call hunger_turn               ; 3E-T9: FOOD burn / jump cost / stage /
                                                ; FED regen / MP_HOLD (hunger7.asm; w2b: was far6)
                 jp   xp_turn                   ; D3-9b: MP regen + level-up (xp7.asm)
-                                               ; (B3B-13: the PROTO chest win is gone; a run
-                                               ; wins by descending from D8, level_descend)
+                                               ; (B3B-13: the PROTO chest win is gone; P3: a run
+                                               ; wins by the Tome's last hit, tome_strike)
 .ex:            call do_exit                   ; 3E-T16: + the room-entry Mage sense
                 ld   hl, HW_TMR                ; FAINT1: a faint defers across an exit / teleport
                 dec  (hl)                      ; (hunger_turn's +1 restores it: the clock stands
@@ -804,10 +805,14 @@ try_horizontal:
                 jp   c, hero_fall              ; lowram: CF = 1
 .ok:            scf
                 ret
-.solid:         and  TF_DOOR                   ; wall / block: CF = 0 (and), no turn
+.solid:         bit  TF_ATTACK_BIT, a          ; P3: the lectern (only the Sanctum's): a melee
+                jr   nz, .tome                 ; hit on the Tome (tome7.asm), 1 turn
+                and  TF_DOOR                   ; wall / block: CF = 0 (and), no turn
                 ret  z
                 ld   a, (TMP6)
                 jp   hero_door                 ; lowram: opened (CF = 1) / locked (0)
+.tome:          call face_tmp6                 ; (bank 2) the hero faces it
+                jp   tome_strike               ; CF = 1
 .blocked:       xor  a
                 ld   (EXIT_KIND), a            ; CF = 0 (xor)
                 ret
@@ -1256,5 +1261,6 @@ intent_icon7:
                 INCLUDE "hunger7.asm"          ; MEM-RECLAIM w2b: hunger_turn / hunger_add (from R6 hunger6.asm)
                 INCLUDE "trap7.asm"            ; MEM-RECLAIM w2b: trap_turn / trap_step / effects (from R6 trap6.asm)
                 INCLUDE "boss7.asm"            ; MEM-RECLAIM w2b: grate_open / boss_chk (from R6 boss6.asm)
+                INCLUDE "tome7.asm"            ; P3: the Tome's hits, aura and the win
                 ; (tiles7.asm: M0 -> the high bank-7 block after the tilesets, main.asm b7h_code)
                 INCLUDE "boot7.asm"            ; MEM-SND: panel_init7, new_game (from bank 3; 3E-T1: the boot parts -> boot6.asm)

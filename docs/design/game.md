@@ -125,6 +125,20 @@
   turn, ignores DEF).
 - At 0 it turns to ash (rubble glyph) → `THE TOME IS DESTROYED` → `GS_WIN`.
 - It is a tile with an `ATTACKABLE` flag, not an entity.
+- **P3 rulings as built (user 2026-10-31; engineer details marked E):** a hit counts when an attack is
+  RELEASED by the hero standing on the lectern's storey, FACING it, with the gap (empty cols between body and
+  lectern) below that attack's reach / range — melee bump or FIRE, Power Strike, Whirlwind (reach 1; both
+  accepted with no body target), spells / daggers / arrows (their rank-row range) — geometry only, no
+  projectile collision; no `$43` flash and (E) no ash (the end card covers the play area at once); each hit
+  `THE TOME SHUDDERS`. (E) The lectern stands on **storey 1 against the Sanctum's dead-end wall** (cols 1-2 in
+  cell 6, 29-30 in cell 8). (E) `TOME_HP` is set once per level at generation and **never restored**: leaving
+  the Sanctum keeps the damage. The aura is untyped (no DEF, no resistance), once per turn end, gap < 6 on
+  storey 1 (either facing); its last hp ends the run (`GS_DEAD`, no death sequence). The seal opens on the
+  Archmage's death by any hand (its own Mirror Helm return included): `THE SEAL BREAKS`; the door keeps its
+  lock glyph until bumped open. (E) The D8 lair keeps its shut grate (the generator still places the exit
+  col); it never opens. No item or trap generates in the Sanctum. Accepted as is (manager review 2026-11-01):
+  a FEARed hero can still hit the Tome by bump / FIRE (the Tome is no body, `fear_chk` gates body attacks
+  only); the Mage's staff on the Tome plays no `melee_bonk` swing (the hit and the line only).
 
 ### 1.4 Stage 3B stand-ins (user, 2026-10-03; temporary, replaced in 3C+)
 

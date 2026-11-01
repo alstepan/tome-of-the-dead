@@ -29,7 +29,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
-from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_RAT, K_BAT, K_SKELETON  # noqa: E402
+from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_RAT, K_BAT, K_SKELETON, F3  # noqa: E402
 from proj3 import T as PT, w16  # noqa: E402
 import ranged_model as M  # noqa: E402
 
@@ -39,6 +39,7 @@ EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING = 1, 2, 4, 8, 16
 E_ = {k: S["E_" + k] for k in ("KIND", "ROOM", "FLAGS", "X", "Y", "HP", "MAXHP", "POT", "PX", "PY", "MODE",
                                "REACT", "REACTAT", "MSG", "TGT", "HIT", "FLT", "FLA", "GOLD")}
 KA = S["K_ARCHMAGE"]
+DEATH_FLAG = S["LF_SEAL_OPEN"] if F3 else S["LF_GRATE_OPEN"]   # P3: the D8 death breaks the seal
 T_AIR, T_BRICK = S["T_AIR"], S["T_BRICK"]
 N_A = int(os.environ.get("ARCH_N", "1500"))
 INK = S["kind_tab"] + S["KT_ATTR"] + KA
@@ -349,7 +350,7 @@ def main():
             p.wb("LVL_LAIR", room)
             p.wb("LP_BOSS", KA)
             p.wb("LVL_DEPTH", depth)
-            p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~(S["LF_UNIQUE"] | S["LF_GRATE_OPEN"]) & 255)
+            p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~(S["LF_UNIQUE"] | S["LF_GRATE_OPEN"] | S["LF_SEAL_OPEN"]) & 255)
             p.set_ent(5, HP=hp)
         arena(hres=(0, 3 << 2, 0), pot=0x3C | 1)           # C 0: this turn is a bolt turn (P 0: Death Bolt)
         lair(2)
@@ -369,12 +370,13 @@ def main():
                     rsp=p.rb("RS_P"), rng=p.rw("RNG_STATE"), flags=p.rb("LVL_FLAGS"), q0=q[0][:2], q1=q[1][:2],
                     attr=(q[0][2 + 4], q[1][2 + 4]), col=(q[0][2 + 5], q[1][2 + 5]), hero=p.ent(0)["HP"])
         check("K killed by its own Mirror Helm return: hp 0, DYING, DEATH at I2 = I + gap + 1, both tracks queued "
-              "(R / I, re-inked $43, anchors swapped), RNG = the roll only (D8: no drop roll), LF_GRATE_OPEN + "
-              "LF_UNIQUE set (the boss-death flow), the hero untouched",
+              "(R / I, re-inked $43, anchors swapped), RNG = the roll only (D8: no drop roll), LF_SEAL_OPEN (P3: "
+              "the D8 boss-death flow, F3_GEN; the grate stays shut) + LF_UNIQUE set, the hero untouched",
               kres["hp"] == 0 and kres["dying"] and kres["react"] == 3 and kres["reactat"] == i1 + gap + 1
               and kres["rsp"] == (S["RS_Q"] + 2 * S["RS_STRIDE"]) & 255 and kres["rng"] == rng.st
               and kres["q0"] == [r0, 0] and kres["q1"] == [i1, 0] and kres["attr"] == (0x43, 0x43)
-              and kres["col"] == (6 + hw + gap - 1, 6 + hw) and kres["flags"] & S["LF_GRATE_OPEN"]
+              and kres["col"] == (6 + hw + gap - 1, 6 + hw) and kres["flags"] & DEATH_FLAG
+              and not kres["flags"] & S["LF_GRATE_OPEN"] * F3
               and kres["flags"] & S["LF_UNIQUE"] and kres["hero"] == 200, (kres, roll, gap, i1))
         # the same through a real turn: the death plays out, the game goes on (the slot freed, GS_PLAYING)
         p.boot(K_KNIGHT)
@@ -391,7 +393,7 @@ def main():
               "next turns run (TURN_PEND 0)",
               kr["state"] == S["GS_PLAYING"] and kr["hp5"] == 0 and not (kr["flags5"] & EF_ACTIVE and
                                                                           not kr["flags5"] & EF_DYING)
-              and kr["fxdrop"] == 0 and kr["tp"] == 0 and kr["lvl"] & S["LF_GRATE_OPEN"], kr)
+              and kr["fxdrop"] == 0 and kr["tp"] == 0 and kr["lvl"] & DEATH_FLAG, kr)
 
         # ------------------------------------------------------------- L blink box beside a ladder top
         # A legal blink box (sp_try: no ladder / hole floor cell, no ladder standing cell) may sit beside the

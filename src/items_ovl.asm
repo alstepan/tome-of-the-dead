@@ -53,8 +53,10 @@ ig_main:
                 ld   hl, ig_ns + 1
                 ld   de, ig_nl + 1
                 ld   c, 0
-.r:             bit  0, (ix+RD_FLAGS)
-                jr   z, .rn
+.r:             ld   a, (ix+RD_FLAGS)          ; P3 (T8 open item): the D8 Sanctum is in no
+                and  RDF_PRESENT | RDF_SANCTUM ; pool: no item / trap there (the lectern;
+                dec  a                         ; tools/items_model.py rooms_of)
+                jr   nz, .rn
                 ld   a, (LVL_START)
                 cp   c
                 jr   z, .rn

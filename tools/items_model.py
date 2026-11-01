@@ -218,7 +218,9 @@ def read_floor(b):
 
 
 def rooms_of(b):
-    pres = [r for r in range(9) if G._rd(b, r, "RD_FLAGS") & D["RDF_PRESENT"]]
+    # P3: the D8 Sanctum (f3 blocks) is in no pool (overlay ig_main: PRESENT and not SANCTUM)
+    pres = [r for r in range(9)
+            if (G._rd(b, r, "RD_FLAGS") & (D["RDF_PRESENT"] | D["RDF_SANCTUM"])) == D["RDF_PRESENT"]]
     return pres, b[G.H["LVL_START"]], b[G.H["LVL_LAIR"]]
 
 

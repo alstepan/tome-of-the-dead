@@ -186,7 +186,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # flicker with the A7 double buffer; renderer optimisation = A7b).
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -446,6 +446,17 @@ SCENARIOS = {
     # 3F-T11b review: "asum" = the Archmage at S 0 / C 1 (no Mirror Helm): turn 1 summons (the decision on the
     # input tick, end_turn's sp_run makes the Skeleton), then the Archmage + the live Skeleton (it walks in and
     # fights; the Archmage bolts / hexes when the line is clear, the staff otherwise)
+    # P3: "sanct" = room A as the D8 Sanctum (LVL_SANCTUM 0: the lectern's right-wall geometry, gap = 26 - x),
+    # the hero at x 26 facing it: every FIRE a melee Tome hit (far6 tome_geo6 + the line) and every end_turn
+    # the aura (far6 + 1 hp); TOME_HP 99 (no win). "adeath" = room A as the D8 lair: a Skeleton = LP_BOSS at
+    # 1 hp adjacent, FIRE kills it -> mon_drop -> grate_open -> R6 seal_open on the death tick (asserted)
+    "sanct": ("knight in the Sanctum, melee Tome hits + the aura every turn", [], [("FIRE", 6)], K_KNIGHT,
+              None, "sanct"),
+    "adeath": ("knight kills the D8 boss (seal_open on its death tick) + rat, goblin, bat", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (1, 22, stand_y(1, 2), HOSTILE),
+        (3, 25, stand_y(1, 4), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE)], [("FIRE", 4), ("WAIT", 2)], K_KNIGHT, None, "adeath"),
     "asum": ("knight + the Archmage summoning, then Archmage + its Skeleton, pmix items", [
         (7, 4, stand_y(1, 6), RIGHT)], KEYS, K_KNIGHT, None, "asum"),
     # 3F-T11b review: "rfar" = 2 shooters held OUT of range for the whole run (Archer gap 11 >= r 10 at x 26,
@@ -1081,6 +1092,18 @@ def run_scenario(h, scen):
         p.wmem(S["SPQ_K"], [S["SPQ_WAVE"], S["SPQ_NONE"], 2])
         if scen[5] == "walarm2":
             p.wb("LP_RESPAWNS", 1)
+    if len(scen) > 5 and scen[5] == "sanct":
+        p.wb("LVL_SANCTUM", 0)
+        p.wb("TOME_HP", 99)
+        p.place(0, 26, HERO_Y)
+        p.set_ent(0, HP=250, MAXHP=250)
+    if len(scen) > 5 and scen[5] == "adeath":
+        p.wb("LVL_DEPTH", 8)
+        p.wb("LVL_LAIR", 0)
+        p.wb("LP_BOSS", S["K_SKELETON"])
+        p.wb("LVL_FLAGS", 0)
+        p.set_ent(5, HP=1)
+        p.set_ent(0, HP=250, MAXHP=250)
     for f in EXTRA_SETUP:
         f(p)
     mode = scen[4] if len(scen) > 4 else None
@@ -1133,6 +1156,13 @@ def run_scenario(h, scen):
         wv = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and sl not in WALARM_PRE]
         print(f"[info] walarm after: wave slots {wv}, SPQ_K {p.rb('SPQ_K')}", flush=True)
         assert len(wv) == 2 and p.rb("SPQ_K") == 0, "walarm: the 2-body wave was not made"
+    if len(scen) > 5 and scen[5] == "sanct":        # P3: the Tome really took the hits, the aura the hp
+        print(f"[info] sanct after: TOME_HP {p.rb('TOME_HP')}, hero HP {p.ent(0)['HP']}", flush=True)
+        assert p.rb("TOME_HP") < 99 and p.ent(0)["HP"] < 250, "sanct: no Tome hit / no aura"
+    if len(scen) > 5 and scen[5] == "adeath":       # P3: the seal really broke on the boss's death
+        print(f"[info] adeath after: LVL_FLAGS {p.rb('LVL_FLAGS'):#04x}, EDGE 4/5 {p.rb(S['EDGE_TAB'] + 4):#04x}",
+              flush=True)
+        assert p.rb("LVL_FLAGS") & S["LF_SEAL_OPEN"], "adeath: the seal did not break"
     if len(scen) > 5 and scen[5] == "vbat":         # 3F-T9: the transform really happened (RCD_ONCE)
         e = p.ent(placements[0][0])
         print(f"[info] vbat after: kind {e['KIND']}, E_RCD {e['POT']:#04x}, HP {e['HP']}", flush=True)
@@ -1227,7 +1257,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,omix,lqmix").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,omix,lqmix,sanct,adeath").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")

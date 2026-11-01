@@ -592,7 +592,7 @@ tile_flags:
                 DB TF_SOLID | TF_FLOOR                 ; 13 T_GRATE_SHUT (3F-T8: the closed lair gate)
                 DB 0                                   ; 14 door jamb
                 DB TF_SOLID | TF_ATTACK, TF_SOLID | TF_ATTACK   ; 15-18 the Sanctum lectern (3F-T8, §9.7 R2;
-                DB TF_SOLID | TF_ATTACK, TF_SOLID | TF_ATTACK   ; placed by T11)
+                DB TF_SOLID | TF_ATTACK, TF_SOLID | TF_ATTACK   ; P3: build_room_map stamps them in the Sanctum)
                 DB TF_FLOOR, TF_FLOOR                  ; 19-20 T_END_L/R = pit caps
                 DB TF_SOLID, TF_SOLID                  ; 21-22 T_DOOR_ARCH_L/R
                 DB TF_SOLID | TF_DOOR, TF_SOLID | TF_DOOR   ; 23-24 T_DOOR_L/R (closed planks)

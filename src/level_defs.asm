@@ -112,6 +112,7 @@ RDF_SEEN        EQU %01000000       ; runtime: hero has entered (set by level co
 RDF_PRESENT_BIT EQU 0
 RDF_START_BIT   EQU 1
 RDF_LAIR_BIT    EQU 2
+RDF_SANCTUM_BIT EQU 5               ; P3: build_room_map stamps the lectern
 
 ; RD_EXITS: an exit bit means "a room is connected that way" (grid edges only;
 ; the arrival shaft / level exit have their own col bytes and no exit bit).
@@ -159,6 +160,7 @@ EG_SEAL         EQU %00010000       ; sealed: opens on the Archmage's death (D8;
 EG_LINK_BIT     EQU 0
 EG_DOOR_BIT     EQU 1
 EG_OPEN_BIT     EQU 2
+EG_SEAL_BIT     EQU 4               ; P3: seal_open (R6 boss6.asm) clears it on the Archmage's death
 ; States the task names: none = 0, open passage = LINK, closed door =
 ; LINK|DOOR, open door = LINK|DOOR|OPEN, locked = LINK|DOOR|LOCK,
 ; sealed = LINK|DOOR|SEAL.
@@ -317,9 +319,23 @@ TRK_DUE_BIT     EQU 7
 TRK_CNT_MASK    EQU %01111111
 TRK_PREV        EQU EDGE_TAB + 7    ; $6D57: prev_room = the room the hero left last (do_exit .in; 0 at level
                                     ; entry is harmless: only CUR_ROOM is VISITED until the first exit) (test-observable)
-TOME_HP         EQU EDGE_TAB + 8    ; $6D58: M0 reserve for P3 (the real Tome ending): the Tome's hp, 1 B (EDGE_TAB
-                                    ; spare: level_gen's attempt zeroes it = reset on level entry; unused until P3) (test-observable)
+TOME_HP         EQU EDGE_TAB + 8    ; $6D58: P3 (game.md §1.3) the Tome's hp, 1 B (EDGE_TAB spare: level_gen's attempt
+                                    ; zeroes it; D8 sanctum_leaf sets TOME_MAX once per level, the last hit (tome_strike,
+                                    ; bank 7 tome7.asm) -> 0 = GS_WIN; never restored: leaving the Sanctum keeps the
+                                    ; damage) (test-observable)
                 ASSERT TOME_HP < ROOM_DESC && TOME_HP == LVL_STATE + $18
+; P3 the Tome (game.md §1.3; tome7.asm, bank3.asm build_room_map). The lectern (2x2, ids T_LECT_TL..BR) stands
+; on STOREY 1 against the Sanctum's dead-end wall: cols LECT_COL_L..+1 when the Sanctum is cell 6 (its door
+; on the right), LECT_COL_R..+1 when it is cell 8; rows LECT_ROW..+1 (the item band above floor row 17).
+TOME_MAX        EQU 5               ; TOME_HP at generation
+TOME_AURA_R     EQU 6               ; the aura: 1 HP per turn while the gap hero - lectern < 6 cols (storey 1)
+TOME_REACH      EQU 1               ; melee / Power Strike / Whirlwind (find_target's reach: gap 0)
+LECT_ROW        EQU FLOOR_ROW1 - 2  ; 15
+LECT_COL_L      EQU 1
+LECT_COL_R      EQU ROOM_COLS - 3   ; 29
+TOME_HERO_W     EQU 3               ; both heroes are 3 x 6 cells (KT_BW / BH_K_KNIGHT, BH_K_WIZARD)
+TOME_HERO_Y     EQU FLOOR_ROW1 - 6  ; E_Y of a hero standing on storey 1
+                ASSERT BH_K_KNIGHT == 6 && BH_K_WIZARD == 6
 TRK_W           EQU LP_SIG          ; trk_run scratch, 9 B (LP_STATE + 15 .. + 23: lp_enter / lp_budget scratch,
                                     ; dead between entries): live floor entries, then w_r per room
                 ASSERT TRK_W + GRID_CELLS <= ROOM_VISITS && TRK_W >= LP_HW + 1 && TRK_PREV < ROOM_DESC
@@ -330,7 +346,8 @@ LOWRAM_END_3B   EQU LP_END          ; = LOWRAM_FREE_END (defs.asm); test stubs r
 LF_GRATE_OPEN   EQU %00000001       ; lair grate open (3F-T8: set by grate_open when the boss dies; 3B: at level start)
 LF_GRATE_OPEN_BIT EQU 0
 LF_KEY_TAKEN    EQU %00000010       ; (3E+)
-LF_SEAL_OPEN    EQU %00000100       ; (3F)
+LF_SEAL_OPEN    EQU %00000100       ; P3: the Archmage died, the Sanctum seal is open (seal_open, R6 boss6.asm)
+LF_SEAL_OPEN_BIT EQU 2
 LF_GATE_HINT    EQU %00001000       ; B12 / 3F-T8: the first-lair-entry line ("THE GATE IS BARRED")
                                     ; logged this level (do_exit; level_gen rewrites LVL_FLAGS)
 LF_GATE_HINT_BIT EQU 3
@@ -397,7 +414,7 @@ T_DOOR_JAMB_L   EQU 11              ; `#.#.....` x 8: the left arch's outer stro
 T_CHAIN         EQU 12              ; small decor (valid after B3B-13)
 ; 3F-T8 (§9.7 R2): 13 = T_GRATE_SHUT (above); 15..18 = the D8 Sanctum lectern 2x2
 ; (TL TR / BL BR, TF_SOLID | TF_ATTACK: `id - T_LECT_TL < 4` is the attackable test;
-; placed by T11 only)
+; P3: stamped by build_room_map in the Sanctum only, LECT_* below TOME_HP)
 T_LECT_TL       EQU 15
 T_LECT_TR       EQU 16
 T_LECT_BL       EQU 17

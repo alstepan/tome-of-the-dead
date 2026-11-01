@@ -30,7 +30,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 import levelgen as G                                    # noqa: E402
 import items_model as M                                 # noqa: E402
-from game_lib import Harness, Proto, S, EMU_ARGS, SNA_RAM   # noqa: E402
+from game_lib import Harness, Proto, S, EMU_ARGS, SNA_RAM, F3   # noqa: E402
 
 DRV = S["LOWRAM_END_3B"]
 BANK = S["BANK_POOL1"]                                  # bank 4: batch buffers
@@ -160,7 +160,7 @@ def cases(nseeds, part, parts):
             continue
         for d in range(1, 9):
             try:
-                b = G.generate(d, M.level_seed(m, d), m)
+                b = G.generate(d, M.level_seed(m, d), m, f3=F3)
             except RuntimeError:
                 continue
             for hero, hk in HEROES:
@@ -232,7 +232,7 @@ def main():
             p.z.cmd("set-register PC=%d" % DRV)
             p.z.cmd("run 50000000")
             ok = p.pc() == end
-            want = expected(bytes(G.generate(d, M.level_seed(m, d), m)), m, hero)
+            want = expected(bytes(G.generate(d, M.level_seed(m, d), m, f3=F3)), m, hero)
             bad = ([] if ok else ["did not finish"]) + \
                 compare(bytes(p.z.read_memory(S["LVL_STATE"], G.BLOCK_LEN)), want)
             g2 += not bad

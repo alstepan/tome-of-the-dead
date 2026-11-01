@@ -63,9 +63,7 @@ LG_SVP          EQU GEN_SCRATCH + 102   ; the narrow pit col removed while tryin
 ; L2 descriptor fields L2_PITW / L2_MIDB / L2_MIDW: level_defs.asm
 L2_MAX          EQU 2                   ; per feature per level
 RESEED_MAX      EQU 16
-    IFNDEF F3_GEN
-F3_GEN          EQU 0                   ; 3F switch (-DF3_GEN=1) == tools/levelgen.py generate(..., f3=True):
-    ENDIF                               ; LVL_FLAGS = 0 (grate shut, all depths) and the D8 Sanctum leaf. 0 = 3B
+                                        ; F3_GEN (defs.asm, P3: default 1) == tools/levelgen.py generate(..., f3=True)
 DOOR_ODDS       EQU 3
 PIT_COL_MIN     EQU 5
 PIT_COL_MAX     EQU 24

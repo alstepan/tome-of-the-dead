@@ -178,7 +178,7 @@ EG_LINK EG_DOOR FLOOR_MAX FL_STRIDE FL_ROOM FL_COL FL_ITEM FL_QTY FL_S1 FL_EMPTY
 IT_POTION LVL_STATE LVL_DEPTH LVL_SEED GEN_RNG LVL_ATTR_FLOOR LVL_ATTR_WALL LVL_START
 LVL_LAIR LVL_KEYROOM LVL_SANCTUM LVL_NROOMS LVL_FLAGS FLOOR_N MASTER_SEED EDGE_TAB
 ROOM_DESC FLOOR_LIST LVL_STATE_END ROOM_NONE LF_GRATE_OPEN FEAT_W FEAT_GAP LAD_COL_MIN
-LAD_COL_MAX FEAT_TRIES EDGES_H GRID_CELLS EG_SEAL RDF_SANCTUM""".split()
+LAD_COL_MAX FEAT_TRIES EDGES_H GRID_CELLS EG_SEAL RDF_SANCTUM TOME_HP TOME_MAX""".split()
 for _n in NEEDED:
     sym(_n)
 
@@ -594,6 +594,8 @@ def generate(depth, seed, master=0, l2=True, f3=False):
     b[H["MASTER_SEED"]:H["MASTER_SEED"] + 2] = (master & 0xFFFF).to_bytes(2, "little")
     for i, e in enumerate(edges):
         b[OFF_EDGE + i] = e
+    if sanct is not None:               # P3 (game.md §1.3): sanctum_leaf sets the Tome's hp once per level
+        b[D["TOME_HP"] - BASE] = D["TOME_MAX"]
     for r, rm in enumerate(rooms):
         o = OFF_DESC + r * D["RD_STRIDE"]
         if not rm.present:

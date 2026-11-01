@@ -14,11 +14,16 @@
 ; build_room_map draws an open exit), the bank-7 attr shadow + a queued
 ; restore of rows 16-17 (rect_repaint, low RAM), "A GATE GLEAMS, THE WAY
 ; DOWN". Before the unique is placed (drop_put needs TF_FLOOR: never on the
-; open gate). IX kept.
+; open gate). P3 (F3_GEN): on D8 -> R6 seal_open instead, LF_GRATE_OPEN stays clear
+; (the D8 grate never opens; any killer, the Archmage's own Mirror Helm return too). IX kept.
 ; Clobbers: A, BC, DE, HL.   ~9k T (the shadow + the line; the XP delta ~100 T)
 ;------------------------------------------------------------------------------
 grate_open:
                 ld   a, (LVL_DEPTH)            ; golden-boss XP: every boss body reaches here (D4 / D7 / D8 with delta 0); bank 3 then adds the
+    IF F3_GEN
+                cp   LEVELS                    ; P3: D8 has no exit (game.md §1.1): the Archmage's death
+                jr   z, .seal                  ; breaks the Sanctum seal, the grate stays shut (XP delta 0)
+    ENDIF
                 add  a, (bxp_d - 1) & $FF      ; base kind's KXP (and clamps at XP_MAX), so the delta makes §4.1's total
                 ld   l, a                      ; (0 on D4 / D7 / D8: kx_tab is already right). bxp_d: one page (ASSERT)
                 ld   h, (bxp_d - 1) >> 8
@@ -62,6 +67,8 @@ grate_open:
                 call rect_repaint              ; (low RAM: shadow_rect, restore_page, queue_damage)
                 ld   a, TX_GATE_GLEAMS
                 jp   msg_push
+.seal:          ld   hl, seal_open             ; R6 tome6.asm: LF_SEAL_OPEN, EG_SEAL off, "THE SEAL BREAKS"
+                jp   far6
 ;------------------------------------------------------------------------------
 ; boss_chk — far7 (w2b: was far6) from lp_transition right after lp_enter (bank 3): the lair
 ; boss must always exist on the level while it lives (LF_UNIQUE clear): as an

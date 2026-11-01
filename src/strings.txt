@@ -33,7 +33,7 @@ descend         "YOU DESCEND DEEPER"
 locked          "THE DOOR IS LOCKED"
 fall            "YOU FALL INTO A PIT"
 died            "YOU DIED - PRESS ENTER"
-win             "YOU WIN! PRESS ENTER"
+win             "THE TOME IS DESTROYED"
 # B12 (concept-screen B3B-8 #4, game.md §1.4): first entry to the lair per level;
 # the designer's exact line (its stops are part of it)
 gate_gleams     "A GATE GLEAMS, THE WAY DOWN"
@@ -296,3 +296,6 @@ vb_turns        "THE VAMPIRE TURNS INTO A BAT!"
 am_vanish       "THE ARCHMAGE VANISHES!"
 # 3F-T9 impact_line MSG_M_DRAIN: the Vampire's bite hit (it heals by the damage)
 cmb_drains      " DRAINS YOU"
+# P3 the Tome ending (game.md §1.3; tome7.asm / boss6.asm seal_open): TX_WIN above is the last hit's line
+seal_breaks     "THE SEAL BREAKS"
+tome_hit        "THE TOME SHUDDERS"

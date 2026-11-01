@@ -1403,7 +1403,7 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6900` | `TILE_ATTRS` | 64 | attr by tile id (one page: `ld h, TILE_ATTRS>>8`) |
 | `$6940` | `GEN_SRC` | 512 | **3F-T2: the generator session's scratch (R6 `pool_hero` / `pool_proto` / `pool_list` → `gen_list` / the seq loader; dead before `panel_init`): `PL_LIST` `$6940` (≤ 25 B: pairs fid0, fcnt, `$FF` end), `SQ_PTR` `$6959` (7 words), `SQ_TOP` `$6967`, `PL_PROTO` `$6969` (6 B), `SQ_IMG` `$6980..$6B34` (the unpacked sequence masters, 437 B; ASSERTed below `TX_DEC`) — over `FI_PAD` / `FI_TSLOT` / `FI_CELL` (SQ_IMG ends at `$6B34`, below `FI_INK` `$6C00` and `GEN_MIR`; it does not run over `FI_INK`), rebuilt by `fi_full` at the following room build as after any generator run.** 3F-T1: `PL_LIST` (12 B at `$6940`, R6 `pool_list` → `level_enter`, dead before `panel_init`). B3B-11b: `pblit` (one icon, <= 54 B) stages `vdata` here (3E-T1: `panel_boot`'s font halves no more: boot6_tiles reads the boot block in place) — new game only, never during generation. C3-6: the pause overlay saves rows 7-9 here (`PAUSE_SAVE`, 864 B: it runs on into `GEN_MIR`) while paused |
 | `$6B40` | `GEN_MIR` | 512 | generator: mirrored frame (`LOWRAM_END` = `LOWRAM_FREE_END` `$6D40`). D3-TX: its top 43 B `$6D15..$6D3F` = `TX_DEC` (`tx_dec`'s transient decode buffer, menu text) |
-| `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+ **3F-T12: `TRK_PHASE` `$6D56`, `TRK_PREV` `$6D57`**, **M0: `TOME_HP` `$6D58` (P3 reserve)** + 7 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
+| `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+ **3F-T12: `TRK_PHASE` `$6D56`, `TRK_PREV` `$6D57`**, **M0: `TOME_HP` `$6D58` (P3: the Tome's hp, `sanctum_leaf` sets `TOME_MAX` 5 once per level)** + 7 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
 | `$6E80..$6EBF` | `ORN_GLYPHS` | 64 | B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). `LOWRAM_END_3B` = `LOWRAM_FREE_END` = `$6EC0` |
 | `$6EC0..$6F31` | `LP_STATE` | 114 | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
 | `$6F32..$6FE3` (3F-T2, kit) | free | 178 | **3F-T2: 135 B kept for descriptor growth (`FRT_MAX` 128 − 101 frames), 43 spare kit** (review: +7 B `SEQ_TRAP` path in `sq_load`; 50 before); before: `$6F32..$71A5`, 628, of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3F-T1: 29 spare kit** (−48: the level-pool block in `level_enter`, `gen_idles`; the cold block now starts at `$7076`; "Level pool (3F-T1)"); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
@@ -4764,4 +4764,44 @@ blocks (both far7). The kit build is 5 B (bank 7 low) / 2 B (R6) short with ever
 piece (as KIT-FIX did) or trim. The architect's ~110-B L4 cold event code has 29 B in bank 0 for free; the rest
 (~81 B) needs either the 240-B slack step (`B0_CODE_RES` up to ~250 at the same cost) or the unassigned R6 70 /
 bank 3 25 / bank 1 19.
+
+## P3 SANCTUM-WIN ledger (`feat/p3-tome`; the real D8 ending, `F3_GEN` default 1)
+
+`F3_GEN` moved to `defs.asm` (`IFNDEF`, default **1**; levelgen.asm no longer defines it). Measured by the build
+DISPLAY, `-DDEBUG_KIT=0` [kit in brackets], against M0 (`ae0bf83`, F3_GEN 1).
+
+| Region | M0 free | after P3 | P3 ledger | P3 spent | note |
+|---|---|---|---|---|---|
+| bank 7 low (`b7_end..$F800`) | 110 [105] | **30** [25] | hits 55 + aura 25 = 80 | 80 | GEAR1 30 has 0 [kit −5] left (review fix: `ld c, 1` for `inc c`, +1) |
+| bank 7 high (`b7h_end..$FFFF`) | 10 | **6** | (turns counter 6) | 4 | `sanctum_leaf` TOME_HP init; turns counter 6 fits, 0 left |
+| R6 | 151 [79] | **87** [15] | 15 | 64 | `tome6.asm`: `seal_open` 17 + `tome_geo6` 47; GEAR2 + GEAR3 66 -> 21 left [kit −51] |
+| bank 3 | 72 | **40** | lectern stamp 15 + F3 2 | 32 | `build_room_map` stamp (2x2 loop); kill_note 30 -> 10 left |
+| bank 1 | 42 | **44** | 5 | −2 | `items_ovl` Sanctum exclusion (+2 raw; the packed stream shrank 2) |
+| low RAM spare | 38 | **8** | — | 30 | `tome_aura` 28 + `game_win` `scf; ret` 2 (not in the M0 ledger) |
+| bank 0 text headroom | 45 | **20** | 45 | 25 | `seal_breaks`, `tome_hit`; `win` re-texted "THE TOME IS DESTROYED" |
+| bank 2 / SRC6 / AY / pool | 14 / 19 / 57 / 1,264 | unchanged | — | 0 | |
+
+Overrun vs the P3 lines: R6 +49, bank 3 +15, low RAM +30 (all from unassigned space; no other feature's budget
+touched in release; the kit build assembles but has R6 15 / bank 7 26 left, i.e. GEAR2+3 and GEAR1 would not fit
+the kit image without a kit-only move). Placement: the geometry (`tome_geo6`) is R6 because bank 7 low could not
+hold it next to the call sites; the aura is low RAM (called from bank-7 `end_turn` with bank 7 paged: it calls
+`mus_pick` and tail-jumps `end_turn.dead`).
+
+Contracts (code: `src/tome7.asm`, `src/tome6.asm`, `lowram.asm` `game_win` / `tome_aura`, `bank3.asm` stamp):
+- **Lectern**: common ids 15-18 (TL TR / BL BR) on rows `LECT_ROW` 15..16 (storey 1), cols `LECT_COL_L` 1-2 when
+  the Sanctum is cell 6, `LECT_COL_R` 29-30 when it is cell 8; stamped by `build_room_map` on every Sanctum build,
+  BEFORE the decor (the deriver's T_AIR rule keeps objects off it; `tests/room_model.py` mirrors it).
+- **TOME_HP** `$6D58`: `TOME_MAX` 5 at generation (`sanctum_leaf`, == `tools/levelgen.py`), never restored.
+- **Hit**: a release by a hero standing on storey 1 of the Sanctum (`E_Y` == `TOME_HERO_Y` 11), facing the
+  lectern, gap < reach / range (melee 1, `RK_RANGE` of Power Strike / Whirlwind now 1, spells `CAST_ROW`
+  `RR_RANGE`, ammo `ABIL_RK` `RK_RANGE`): bump (`try_horizontal`), `ic_melee`, `act_fire` (all abilities; Power
+  Strike / Whirlwind accepted with an empty mask by `abil_melee`). 5th hit -> `game_win` (GS_WIN).
+- **Seal**: `grate_open` on D8 (F3_GEN) -> `seal_open` (R6): `LF_SEAL_OPEN`, `EG_SEAL` off EDGE_TAB + 4 / + 5;
+  `LF_GRATE_OPEN` stays clear (the D8 grate never opens: game.md §1.1 "D8 has no exit").
+- **Ticks** (`tests/budget.py`, "old total / work"; the 126,000 cap gates the WORK figure, the review quoted totals):
+  `sanct` 46,541 / 46,541, `adeath` (the seal tick) 102,697 / 99,397, `walarm` 124,965 / 122,403 (unchanged from
+  main `ae0bf83`: headroom 1.0k T on the total, 3.6k on the gated work — this limits LOG-DMG, GEAR and STATS),
+  `lqmix` 131,425 / 128,194 (identical on main: ALREADY over 126,000 before P3; lqmix is not cap-gated).
+- **Aura**: `tome_aura` (end_turn, GS_PLAYING, after the death check): gap < `TOME_AURA_R` 6, either facing,
+  1 hp untyped; 0 hp -> `end_turn.dead`.
 

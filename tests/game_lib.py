@@ -51,6 +51,7 @@ def load_syms(path=SYM):
 
 
 S = load_syms()
+F3 = bool(S.get("F3_GEN", 0))   # P3: the build's generator mode (default 1): oracles call generate(..., f3=F3)
 
 
 def tset_slot(rd, slot):

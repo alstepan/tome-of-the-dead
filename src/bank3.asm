@@ -799,6 +799,29 @@ build_room_map:
                 cp   (TRAP_LIST + TRAP_MAX * TRAP_STRIDE) & $FF
                 jr   nz, .tr
                 ASSERT TRF_S1 == 1 << 4 && (TRAP_LIST >> 8) == ((TRAP_LIST + TRAP_MAX * TRAP_STRIDE) >> 8)
+                ; P3 (game.md §1.3): the Sanctum's lectern, rows LECT_ROW..+1 of storey 1 against the
+                ; dead-end wall (the door on the right: cols 1-2, else 29-30), ids TL TR / BL BR. Every
+                ; build (the Tome's state is TOME_HP); BEFORE the decor, whose T_AIR footprint rule then
+                ; keeps every object off it (tests/room_model.py stamps it there too)
+                bit  RDF_SANCTUM_BIT, (ix+RD_FLAGS)
+                jr   z, .nolec
+                ld   bc, (LECT_ROW << 8) | LECT_COL_L
+                bit  RDX_R_BIT, (ix+RD_EXITS)
+                jr   nz, .lcl
+                ld   c, LECT_COL_R
+.lcl:            ld   e, T_LECT_TL
+.lec:            call map_cell                  ; (bank 2; A)
+                ld   (hl), e
+                inc  e
+                inc  l                         ; (col <= 30: same row)
+                ld   (hl), e
+                inc  e
+                inc  b
+                bit  0, b
+                jr   z, .lec                    ; rows 15, 16
+.nolec:
+                ASSERT T_LECT_TR == T_LECT_TL + 1 && T_LECT_BL == T_LECT_TL + 2 && T_LECT_BR == T_LECT_TL + 3
+                ASSERT (LECT_ROW & 1) && RDF_SANCTUM == 1 << RDF_SANCTUM_BIT && RDX_R == 1 << RDX_R_BIT
                 ; decor
                 ld   a, (ix+RD_SEED)
                 or   (ix+RD_SEED + 1)
