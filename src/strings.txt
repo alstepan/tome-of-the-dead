@@ -299,3 +299,5 @@ cmb_drains      " DRAINS YOU"
 # P3 the Tome ending (game.md §1.3; tome7.asm / boss6.asm seal_open): TX_WIN above is the last hit's line
 seal_breaks     "THE SEAL BREAKS"
 tome_hit        "THE TOME SHUDDERS"
+# GEAR1 (gear_rules.md 1.2; intent7.asm ic_abil): a metal-armoured Mage / cloth-clad Warrior uses an ability
+gear_ban        "YOUR GEAR FORBIDS IT"

@@ -199,8 +199,8 @@ TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
 ; the worst level (D8 Warrior) leaves a ~74-B tail at bank 0's end, so a reserve of
 ; 45 + 29 B costs 0 slack (1,264 kept), but 45 + 30..250 B costs one 240-B variant
 ; (slack 1,024) and 45 + 260 B 880. 29 = the largest free code reserve.
-TEXT_RES        EQU 2326 + 45
-B0_CODE_RES     EQU 29
+TEXT_RES        EQU 2326 + 52                  ; GEAR1: +7 (gear_ban 27 B packed; 45 reserve had 20 left), taken from the code reserve
+B0_CODE_RES     EQU 22
 POOL_START      EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES  ; $C960: alloc_reset's first bank-0 pool byte
     MACRO FARB0 target                  ; call a bank-0 cold-code routine (8 B; A / DE / IX pass in;
                 ld   hl, target         ;   C lost to the bank, B to farb's A): farb pages BANK_TEXT
