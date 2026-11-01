@@ -12,8 +12,9 @@ PROTO room A, every monster parked unless placed:
   E   EAT: FOOD 45 + Pear -> 65: "YOU EAT THE PEAR" then "YOU FEEL WELL FED",
       HP_RG reset to 0; clamp at 100 (Meat at 90)
   D   page DRINK (page_post): Heal at HP 10 -> 20, consumed, the line, L 1
-  R   READ Enchant: m +1, "YOUR WEAPON GLOWS!", consumed; at +3 / fists:
-      "NOTHING HAPPENS", still consumed. Fear: the room's living monsters FEAR 6
+  R   READ Enchant (GEAR3: a random worn weapon / armour / helmet): m +1,
+      "ENCHANTED: <name>", consumed; no candidate (fists, +3): "NOTHING HAPPENS",
+      still consumed (tests/gear3.py has the target-choice vectors). Fear: the room's living monsters FEAR 6
       (MIND overwritten), a DYING one / another room untouched, "THEY FLEE IN
       TERROR!"; Sleep: ASLEEP 8 + the sleep flash, a FROZEN one skipped, "THEY
       FALL ASLEEP!"; empty room -> "NOTHING HAPPENS"; kinds immune by kx_tab skipped
@@ -257,7 +258,7 @@ def run(h, p, check):
           (qa, qb, sh, sh2))
 
     # ======================= R: scrolls ===========================================
-    put(["S_ENCHANT", "S_ENCHANT", "S_ENCHANT", "S_ENCHANT"], ["W_SHORT", "A_LEATHER", None, None])
+    put(["S_ENCHANT", "S_ENCHANT", "S_ENCHANT", "S_ENCHANT"], ["W_SHORT", None, None, None])
     p.wmem(S["BAG"], [I("S_ENCHANT"), 4, 0] + [0] * 57)
     stub([0x21] + w16(S["hero_recalc"]) + [0xCD] + w16(S["far6"]))
     got = []
@@ -266,10 +267,10 @@ def run(h, p, check):
         r = fx(S["FX_READ"], 0)
         got.append((r, lines[-1] if lines else None, z.read_memory(S["WORN"] + 2, 1)[0],
                     p.rb(S["kind_tab"] + S["KT_BONUS"])))
-    check("R1 READ Enchant x4: GLOWS m +1..+3 (bonus 1..3), the 4th NOTHING HAPPENS, all consumed",
-          (got, bag()) == ([(1, "YOUR WEAPON GLOWS!", 0x20, 1), (1, "YOUR WEAPON GLOWS!", 0x40, 2),
-                            (1, "YOUR WEAPON GLOWS!", 0x60, 3), (1, "NOTHING HAPPENS", 0x60, 3)], []), (got, bag()))
-    put(["S_ENCHANT"], [None, "A_LEATHER", None, None])
+    check("R1 READ Enchant x4 (the sword the only candidate): ENCHANTED m +1..+3 (bonus 1..3), the 4th NOTHING HAPPENS, all consumed",
+          (got, bag()) == ([(1, "ENCHANTED: SHORT SWORD", 0x20, 1), (1, "ENCHANTED: SHORT SWORD", 0x40, 2),
+                            (1, "ENCHANTED: SHORT SWORD", 0x60, 3), (1, "NOTHING HAPPENS", 0x60, 3)], []), (got, bag()))
+    put(["S_ENCHANT"], [None, None, None, None])
     lines.clear()
     r = fx(S["FX_READ"], 0)
     check("R2 Enchant with fists: NOTHING HAPPENS, consumed", (r, lines, bag()) ==

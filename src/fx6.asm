@@ -305,7 +305,7 @@ fx_eat:
 ;  Fear      the room's monsters FEAR SCR_FEAR_T turns (room_status, bank 3)
 ;  Sleep     ... ASLEEP SCR_SLEEP_T turns; "THEY FLEE IN TERROR!" / "THEY
 ;            FALL ASLEEP!", none affected -> "NOTHING HAPPENS"
-;  Enchant   enchant_weapon: "YOUR WEAPON GLOWS!" / "NOTHING HAPPENS"
+;  Enchant   ench_any (gear6.asm): "ENCHANTED: <name>" / "NOTHING HAPPENS"
 ;  book      fx_book (game.md §5 reading rules)
 ;------------------------------------------------------------------------------
 SCR_FEAR_T      EQU 6               ; game.md §8: Fear "flee 6 turns"
@@ -336,13 +336,13 @@ fx_read:
                 jr   nz, .ln
 .no:            ld   e, S_FX_NOTHING
 .ln:            xor  a                         ; the stem alone
-                call fx_line
+.fl:            call fx_line
                 jp   fx_turn
-.en:            call enchant_weapon            ; L = 1 +1 done / 0 fists or +3
-                dec  l
-                jr   nz, .no
-                ld   e, S_FX_GLOWS
-                jr   .ln
+.en:            call ench_any                  ; GEAR3: A = the enchanted item's type / 0 nothing
+                or   a
+                ld   e, S_FX_ENCHANTED         ; "ENCHANTED: <name>"
+                jr   nz, .fl
+                jr   .no
 .tp:            call tele_arm                  ; 3E-T16: EX_TELE + the flash + the hold
                 jp   fx_turn
                 ASSERT IT_S_FEAR == IT_S_TELEPORT + 1 && IT_S_SLEEP == IT_S_FEAR + 1 && IT_S_ENCHANT == IT_S_SLEEP + 1

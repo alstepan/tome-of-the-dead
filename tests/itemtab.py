@@ -365,7 +365,7 @@ class ItemTabTests(unittest.TestCase):
         self.assertLessEqual(b["resident"], 700)
         self.assertLessEqual(b["resident"] - b["wcx"], 700)
         # fx overlay: effect / quick-use stems + it_stat (raw)
-        self.assertEqual(b["fx_stems"], 249)        # T11 review: NO NEED (8) moved to resident; T9: hg_* (58)
+        self.assertEqual(b["fx_stems"], 242)        # T11 review: NO NEED (8) moved to resident; T9: hg_* (58); GEAR3: glows 19 -> enchanted 12 (-7)
         self.assertEqual(b["stat"], ROWS * 2)
         self.assertEqual(b["fx"], b["fx_stems"] + b["stat"])
         self.assertLessEqual(b["fx"], 700)

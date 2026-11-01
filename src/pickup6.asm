@@ -103,8 +103,9 @@ pot_sync:
 ;------------------------------------------------------------------------------
 ; pu_add — far6 from floor_pickup (bank 7) for a non-ammo entry under the
 ; hero. In: A = its FL_ITEM (the legacy IT_POTION of the PROTO rooms / the 3B
-; levelgen step = a Heal potion). bag_add qty 1, ISTATE 0 (a floor item is
-; always plain, rev 6): added -> IT_BOW sets HAS_BOW (the bow icon / ic_bow
+; levelgen step = a Heal potion), D = its FL_QTY. bag_add qty 1, ISTATE =
+; (FL_QTY - 1) & 7 = the generated q of numeric gear (GEAR2, gear_rules.md 2.2;
+; 0 for everything else: their FL_QTY is 1): added -> IT_BOW sets HAS_BOW (the bow icon / ic_bow
 ; until HAS_BOW retires), "YOU PICK UP " + name, L = 1 (the caller empties the
 ; entry, sets its POTIONS_TAKEN bit, SFX, re-stamps the cell); refused (bag
 ; full) -> L = 0 (the caller prints BAG FULL on an arrival).
@@ -115,7 +116,9 @@ pu_add:
                 jr   nz, .t
                 ld   a, IT_P_HEAL
 .t:             push af
-                ld   bc, 1 << 8                ; B = qty 1, C = ISTATE 0
+                ld   c, d                      ; GEAR2: ISTATE = FL_QTY - 1 = q & 7 (gear 1..8, the generator's
+                dec  c                         ; invariant: every other non-ammo entry has FL_QTY 1 -> 0), no
+                ld   b, 1                      ; type test, no mask needed (<= 7); B = qty 1
                 call bag_add                   ; L = 0 added / 1 refused (A, DE, HL)
                 pop  af
                 dec  l

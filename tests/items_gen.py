@@ -16,7 +16,7 @@ tools/items_model.py (rev 6, game.md §8.11 "3E simplification"), byte-exact.
       few (master, depth, hero): the same comparison on the real path.
 Batches of 16 cases run in one emulator call: inputs / outputs in bank 4 (pool,
 free in a fresh snapshot), driver assembled by sjasmplus at LOWRAM_END_3B.
-Run: ZRCP_PORT=<port> python3 tests/items_gen.py [--seeds N] [--jobs-split K/M] [--gear2]
+Run: ZRCP_PORT=<port> python3 tests/items_gen.py [--seeds N] [--jobs-split K/M]
 """
 import os
 import subprocess
@@ -90,16 +90,10 @@ def assemble():
     return Path(out).read_bytes(), syms["done"], syms["cnt"]
 
 
-# GEAR2 (T7 model, T8 Z80): until the overlay carries the class-gated gear table and the q
-# pass, the Z80 still produces the pre-GEAR2 lists.  Default = compare against the legacy
-# model (gear2=False, old pool), so this test stays green and proves nothing else moved;
-# `--gear2` compares against the GEAR2 model (expected to differ in gear TYPE / FL_QTY
-# bytes until T8 lands).  tools/items_model_test.py proves the model itself.
-GEAR2 = "--gear2" in sys.argv
-
-
 def expected(b, master, hero):
-    return M.apply_block(b, M.gen_level_items(b, master, hero, gear2=GEAR2, old_pool=not GEAR2))
+    """The GEAR2 model (class-gated gear pool + the q pass, gear_rules.md 1.3 / 2.3): the
+    Z80 must match it byte for byte (T8; the legacy-model fallback is gone)."""
+    return M.apply_block(b, M.gen_level_items(b, master, hero))
 
 
 def table_check(h):

@@ -161,7 +161,7 @@ mana_surge    | N | "MANA SURGES!"
 cured         | N | "YOU ARE CURED"
 fear_flee     | N | "THEY FLEE IN TERROR!"
 sleep_fall    | N | "THEY FALL ASLEEP!"
-glows         | N | "YOUR WEAPON GLOWS!"
+enchanted     | N | "ENCHANTED: "
 
 [stems_page]
 # (none in this retag)

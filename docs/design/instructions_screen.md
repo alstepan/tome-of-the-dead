@@ -118,7 +118,7 @@ less after `textpack` tokenising. Natural home: two `@long` blocks in `src/strin
 18  NO WAY BACK UP: LOOT EACH DEPTH FIRST        $44
 19  BOSSES NEVER LEAVE THEIR LAIR                $44
 20  SWARMED? READ SLEEP, FEAR OR TELEPORT        $44
-21  ENCHANT MENDS A NOTCHED WEAPON               $44
+21  ENCHANT GIVES A WORN ITEM +1                 $44
 22  STANDING NEAR THE TOME HURTS YOU             $44
 23               PRESS ANY KEY                   $46
 ```
@@ -150,7 +150,7 @@ automatic trap sense.
 ## 6. Conflicts with the game or the brief (flagged)
 
 1. **The hero cannot parry.** Only Boneguard, Revenant and Deathlord parry (and notch your
-   weapon, §8.10). The screen says only `ENCHANT MENDS A NOTCHED WEAPON`.
+   weapon, §8.10). The screen says only `ENCHANT GIVES A WORN ITEM +1` (GEAR3, 2026-11-01).
 2. **There are no stairs.** You climb ladders and leave by the lair grate; the text says so.
 3. **The name of the goal.** The title says TOME; the game says `THE BOOK IS DESTROYED`
    (Book of Absolute Death Magic). The screen uses BOOK OF DEATH MAGIC. **User:** keep BOOK,

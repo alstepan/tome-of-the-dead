@@ -108,6 +108,17 @@ hla:            add  a, l               ; HL += A
 idx:            call hla                ; A = (HL + A)
                 ld   a, (hl)
                 ret
+; gq_qtab — GEAR2 q table (items_ovl.asm q pass; model q_roll / q_to_qty): FL_QTY - 1 = q & 7 by
+; s = rnd(8) + ((depth + 1) >> 2), q = -1 + (s >= Q_T0) + (s >= Q_T1) + (s >= Q_T2): s 0..9 ->
+; 7 7 0 0 0 0 1 1 2 2 (FL_QTY 8 8 1 1 1 1 2 2 3 3) with the knobs 2 / 6 / 8 (tools/items_model.py Q_T0..Q_T2). In bank 3 (10 B of the
+; ledger's spare) because the stored overlay image had no room (bank 1).
+Q_T0            EQU 2
+Q_T1            EQU 6
+Q_T2            EQU 8
+gq_qtab:
+                DUP  10, k                     ; k = s = 0..9 (sjasmplus: a true comparison is -1)
+                DB   (-1 - ((k >= Q_T0) + (k >= Q_T1) + (k >= Q_T2))) & 7
+                EDUP
 rdp:            add  a, a               ; A = room id -> HL = &ROOM_DESC[id]
                 add  a, a
                 add  a, a
