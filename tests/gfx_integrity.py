@@ -284,7 +284,7 @@ def screen_check(p, check, tag, depth):
           f"items as their 16x16 icons", n > 300 and bad == [], bad[:6])
     # IC1: the quick POTION slot shows a 16x16 potion icon (Heal / Mana / Cure, the pick) ==
     # its source (assets/gfx/icons/icons16.asm), not the 8x8 T_POTION glyph any more
-    col = 18 + 3 * p.rb("HERO_KIND")
+    col = 3 * (S["QS_SLOT0"] + S["QS_POTION"])   # UB5: one potion slot (7) for both heroes, 3 cells a slot
     pots = [GL.icon16_cells(S[n] - S["IT_BAG_LO"]) for n in ("IT_P_HEAL", "IT_P_MANA", "IT_P_CURE")]
     check(f"GI {tag}: panel quick potion icon (cols {col}-{col + 1}, rows 18-19) == a source 16x16 potion icon",
           any(all(cell_bytes(fr, col + dc, 18 + dr) == b for (dc, dr), b in ic.items()) for ic in pots), "")
