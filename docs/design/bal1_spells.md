@@ -203,7 +203,7 @@ Headless Monte Carlo, Python 3, stdlib only, `-I`-safe. Distributions, not byte-
   off `WALL`, caster valid after a reversal, X reverses at the front col, loop guard 4, burst ±1
   col, staff bonus before resist, auto-downcast. Statuses §6.4 with B2/HOLD_GUARD, durations.
 - **Between rooms:** transit 20–60 turns; HP/MP regen, FOOD burn and stages (§7), pickups,
-  equip-best (class-locked, cursed per BUC odds), Enchant, eat at HUNGRY.
+  equip-best (class-locked pools, GEAR1 gates, v = m + q), random Enchant (GEAR3), eat at HUNGRY.
 - **Progression:** KXP, level-ups (§4.1), books via `book_model`, tomes.
 
 ### 4.3 Bot policies (same rules both heroes)
