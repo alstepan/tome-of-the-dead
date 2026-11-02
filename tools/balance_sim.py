@@ -125,8 +125,11 @@ PARAMS = {
     "W_HP0": 24, "W_MP0": 6, "W_LVL_HP": 4, "W_LVL_MP": 1,     # 4 / 4.1 (hero_st_init / xp7 immediates = CODE)
     "M_HP0": 16, "M_MP0": 10, "M_LVL_HP": 3, "M_LVL_MP": 2,
     "PS_R": 0,                          # 1 = Power Strike ignores PHYS R (CODE flag; BAL-1d W1 option)
+    "BC_LIVE": None,                    # Bone Caller: max live summon-made bodies in the room (null = .sym BC_LIVE = 1; the sim used to have no cap at all)
+    "AM_LIVE": None, "AM_SUM_CD": None,   # Archmage summon: max live Skeletons / cooldown (null = .sym AM_LIVE 1 / AM_SUM_CD 6; exempt from the room cap)
     "TOME_HP": None, "TOME_AURA_R": None,   # null = .sym TOME_MAX (5) / TOME_AURA_R (6); aura 1 HP untyped per turn end, gap < R
     "EXIT_LO": 10, "EXIT_HI": 30,       # WIN2: turns Sanctum -> exit gate (the exit col sits in the lair next to the Sanctum)
+    "NECRO_FEAR_N": 3, "NECRO_FEAR_T": 3, "ARCH_FEAR_N": 3,   # rd_tab FEAR3_1IN3 (chance 1 in N, turns) for Necromancer / Bone Caller / Archmage Death Bolt
     "FEAR_CAST": 1,                     # FEAR-CAST (planned rule): a FEARed hero cannot cast (Mage also not melee); 0 = old rule
     "TRAP_PATH_P": 0.3,                 # TRAP2: P(a transit crosses a given known plate); fires with TRAP_HIT_P
     "W_START_POWER": 0,                 # Warrior starts with Power Strike at this rank after the D1 book (CODE)
@@ -272,6 +275,12 @@ class Data:
             self.k[self.kid["ARCHMAGE"]]["hp"] = P["ARCHMAGE_HP"]
         if P["GOLD_XP"] == "image":
             P["GOLD_XP"] = self.image_gold_xp()
+        if P["BC_LIVE"] is None:
+            P["BC_LIVE"] = sym["BC_LIVE"]
+        if P["AM_LIVE"] is None:
+            P["AM_LIVE"] = sym["AM_LIVE"]
+        if P["AM_SUM_CD"] is None:
+            P["AM_SUM_CD"] = sym["AM_SUM_CD"]
         if P["TOME_HP"] is None:
             P["TOME_HP"] = sym["TOME_MAX"]
         if P["TOME_AURA_R"] is None:
@@ -382,6 +391,7 @@ class Game:
         self.hero, self.pol, self.rng = hero, POLICIES[policy], rng
         self.G = D.gear
         self.jumped = False
+        self.committed = False
         self.pname = policy
         self.rr = rng.random
         self.t = 0
@@ -1043,6 +1053,7 @@ class Game:
                 raise Stall()
 
     def lair_fight(self, depth):
+        self.committed = False
         mons = self.lair
         tries = 0
         while self.boss.hp > 0:
@@ -1053,6 +1064,9 @@ class Game:
             self.boss_prep = True
             self.rest(1.0, 1.0)
             self.boss_prep = False
+            # a hero that could not rest back above the retreat line (HUNGRY / WEAK stage, empty bag) commits to the fight:
+            # retreating again would only loop (it used to burn 40 cycles and count as a STALL loss)
+            self.committed = self.pol["retreat"] is not None and self.h.hp / self.h.maxhp < self.pol["retreat"] + 0.25
             self.cross_trap(self.slot_lair)
             tries += 1
             if tries > 40:
@@ -1280,7 +1294,7 @@ class Game:
         gap = m.x
         if row:
             r, N, flags, die, bonus = row[0], row[1], row[2], row[3], row[4]
-            if kid == D.id("BONE_CALLER") and m.scd <= 0 and m.sumlive < 1:
+            if kid == D.id("BONE_CALLER") and m.scd <= 0 and len([o for o in mons if o.summoned and o.hp > 0]) < P["BC_LIVE"]:
                 m.scd = 8
                 base = D.id("SKELETON") if D.id("SKELETON") in [D.id(n) for n in ROSTER[self.depth]] else D.id("GHOST")
                 s = Mon(D, base, self.depth, resp=True)
@@ -1311,8 +1325,8 @@ class Game:
                         m.hp -= max(1, dm // 2) if dm else 0
                         dm = 0
                     self.dmg_hero(dm, k["name"], "ranged")
-                    if dm and self.rr() < 1 / 3 and not h.fearT:
-                        h.fearT = 3
+                    if dm and self.rr() < 1.0 / P["NECRO_FEAR_N"] and not h.fearT:
+                        h.fearT = P["NECRO_FEAR_T"]
                 return
             m.cd -= 1
         # melee / walking
@@ -1377,7 +1391,7 @@ class Game:
         D, h, P = self.D, self.h, self.P
         m.hexcd = max(0, m.hexcd - 1)
         m.scd = max(0, m.scd - 1)
-        order = [("Death", DARK, 28, 8, 3, "fear", 85 / 256), ("Frost", COLD, 12, 6, 1, "frz", 0.5),
+        order = [("Death", DARK, 28, 8, 3, "fear", 1.0 / P["ARCH_FEAR_N"]), ("Frost", COLD, 12, 6, 1, "frz", 0.5),
                  ("Light", SHOCK, 12, 8, 1, "conf", 0.5), ("Drain", DRAIN, 5, 6, 1, "weak", 0.5),
                  ("Fire", FIRE, 12, 8, 2, "stun", 85 / 256)]
         gap = m.x
@@ -1400,7 +1414,7 @@ class Game:
                     m.hp = min(m.maxhp, m.hp + dm)
                 if self.rr() < ch:
                     if eff == "fear":
-                        h.fearT = max(h.fearT, 3)
+                        h.fearT = max(h.fearT, P["NECRO_FEAR_T"])
                     elif eff == "frz" and not h.hold and not h.holdguard:
                         h.hold, h.holdkind = 2, "frozen"
                     elif eff == "conf":
@@ -1414,18 +1428,17 @@ class Game:
             m.cd -= 1
         if not m.blink and m.hp <= m.maxhp // 2:
             m.blink = True
-            m.x = min(22, m.x + self.rng.randint(4, 8))
-            m.scd = 0
+            m.x = min(22, m.x + self.rng.randint(4, 8))     # the blink does not touch the summon counter S (arch6.asm)
             return
         live = len([o for o in mons if o.summoned and o.hp > 0])
-        if m.scd <= 0 and live < 2:
+        if m.scd <= 0 and live < P["AM_LIVE"]:
             base = D.id("SKELETON")
             s = Mon(D, base, self.depth, resp=True)
             s.summoned = True
             s.x = max(2, m.x - 1)
             mons.append(s)
             alive.append(s)
-            m.scd = 6
+            m.scd = P["AM_SUM_CD"]
             return
         if m.hexcd <= 0 and gap < 12 and self.in_line(m):
             m.hexcd = 4
@@ -1469,7 +1482,7 @@ class Game:
                     if not m.boss and not (m.k["imm"] & 8):
                         m.fear = 6
                 return "skip"
-        if boss_room and pol["retreat"] is not None and pc < pol["retreat"] and self.boss.hp > 0 and self.boss in alive:
+        if boss_room and not self.committed and pol["retreat"] is not None and pc < pol["retreat"] and self.boss.hp > 0 and self.boss in alive:
             if self.boss.x >= 2 or True:
                 return self.do_retreat(alive, mons)
         cure_gap = 1 if self.hero == "W" else 8 if P["FEAR_CAST"] else -1     # Warrior: monster at melee reach; Mage (FEAR-CAST): in spell range
@@ -1898,7 +1911,7 @@ def BOSS_LBL(m, depth):
 # Batch runner / reports
 # ----------------------------------------------------------------------------------------------
 def run_batch(D, hero, policy, runs, seed, first=0):
-    res = dict(n=0, wins=0, death_depth=[0] * 9, killers={}, entry=[[0, 0.0, 0.0, 0.0] for _ in range(9)],
+    res = dict(n=0, wins=0, death_depth=[0] * 9, killers={}, dk={}, entry=[[0, 0.0, 0.0, 0.0] for _ in range(9)],
                spell_dmg={s: 0.0 for s in SPELLS}, spell_casts={s: 0 for s in SPELLS}, stalls=0, causes={},
                turns=0, overkill=[0.0, 0.0], lvl_entry=[0.0] * 9, reached=[0] * 9)
     for i in range(first, first + runs):
@@ -1917,6 +1930,8 @@ def run_batch(D, hero, policy, runs, seed, first=0):
         else:
             res["death_depth"][depth] += 1
             res["killers"][killer] = res["killers"].get(killer, 0) + 1
+            kk = "D%d %s" % (depth, killer)
+            res["dk"][kk] = res["dk"].get(kk, 0) + 1
             res["causes"][cause] = res["causes"].get(cause, 0) + 1
         for s in SPELLS:
             res["spell_dmg"][s] += g.mage_dmg[s]
@@ -1933,7 +1948,7 @@ def merge_res(a, b):
     for k in ("death_depth", "lvl_entry", "reached"):
         out[k] = [x + y for x, y in zip(a[k], b[k])]
     out["entry"] = [[x[0] + y[0], x[1] + y[1], x[2] + y[2], x[3] + y[3]] for x, y in zip(a["entry"], b["entry"])]
-    for k in ("killers", "causes"):
+    for k in ("killers", "causes", "dk"):
         d = dict(a[k])
         for kk, v in b[k].items():
             d[kk] = d.get(kk, 0) + v
@@ -2000,6 +2015,11 @@ def report(name, results, runs):
         tot = max(1, sum(r["killers"].values()))
         top = sorted(r["killers"].items(), key=lambda kv: -kv[1])[:5]
         lines.append("%s/%s: %s" % (hero, pol, ", ".join("%s %d%%" % (k, round(100 * v / tot)) for k, v in top)))
+    lines.append("-- top depth x killer (share of deaths) --")
+    for (hero, pol), r in results.items():
+        tot = max(1, sum(r["killers"].values()))
+        top = sorted(r.get("dk", {}).items(), key=lambda kv: -kv[1])[:7]
+        lines.append("%s/%s: %s" % (hero, pol, ", ".join("%s %d%%" % (k, round(100 * v / tot)) for k, v in top)))
     lines.append("-- Warrior-Mage gap (tolerance 5 pp average, 8 pp cautious/reckless) --")
     for pol, d in gap.items():
         if "W" in d and "M" in d:
@@ -2019,7 +2039,7 @@ def to_json(name, results):
     for (hero, pol), r in results.items():
         s = summarize(r)
         out["%s/%s" % (hero, pol)] = dict(n=r["n"], win=s["win"], ci95=[s["lo"], s["hi"]], death_depth=r["death_depth"],
-                                          killers=r["killers"], causes=r["causes"], reached=r["reached"],
+                                          killers=r["killers"], dk=r["dk"], causes=r["causes"], reached=r["reached"],
                                           mean_turns=r["turns"] / max(1, r["n"]), spell_dmg=r["spell_dmg"], spell_casts=r["spell_casts"])
     return out
 

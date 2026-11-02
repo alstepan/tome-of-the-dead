@@ -1,0 +1,153 @@
+{
+ "_doc": "FINAL-C (TABLE ONLY): W3 + Ogre Warlord hp 40 -> 36 and dmg bonus +2 -> +1 + Firebolt I 4 MP 1d6 -> 5 MP 1d8 (Power Strike stays 2/3/4). See docs/design/bal1_final.md",
+ "ab_rank": {
+  "Spark": {
+   "2": {
+    "range": 9,
+    "die": 8,
+    "bonus": 2
+   },
+   "3": {
+    "range": 10,
+    "die": 8,
+    "bonus": 4
+   }
+  },
+  "Firebolt": {
+   "1": {
+    "range": 8,
+    "die": 8,
+    "bonus": 0,
+    "mp": 5
+   },
+   "2": {
+    "range": 8,
+    "die": 8,
+    "bonus": 2,
+    "effect": 4,
+    "mp": 6
+   },
+   "3": {
+    "range": 10,
+    "die": 10,
+    "bonus": 4,
+    "mp": 10
+   }
+  },
+  "Frost": {
+   "1": {
+    "range": 10,
+    "die": 6,
+    "bonus": 1
+   },
+   "2": {
+    "range": 10,
+    "die": 8,
+    "bonus": 2
+   },
+   "3": {
+    "mp": 7,
+    "range": 12,
+    "die": 8,
+    "bonus": 4
+   }
+  },
+  "Drain": {
+   "1": {
+    "range": 6,
+    "die": 6,
+    "bonus": 2
+   },
+   "2": {
+    "range": 8,
+    "die": 8,
+    "bonus": 3
+   },
+   "3": {
+    "mp": 7,
+    "range": 8,
+    "die": 8,
+    "bonus": 6
+   }
+  },
+  "Lightning": {
+   "1": {
+    "range": 16,
+    "die": 8,
+    "bonus": 4,
+    "bounces": 1
+   },
+   "2": {
+    "range": 16,
+    "die": 8,
+    "bonus": 7,
+    "bounces": 1
+   },
+   "3": {
+    "mp": 11,
+    "range": 20,
+    "die": 10,
+    "bonus": 9,
+    "bounces": 2
+   }
+  },
+  "Power": {
+   "1": {
+    "mp": 2
+   },
+   "2": {
+    "mp": 3
+   },
+   "3": {
+    "mp": 4
+   }
+  }
+ },
+ "kx": {
+  "SPIDER": {
+   "FIRE": "N"
+  },
+  "BLACK_WIDOW": {
+   "FIRE": "N"
+  },
+  "SKELETON": {
+   "COLD": "R"
+  },
+  "ARCHER": {
+   "COLD": "R"
+  },
+  "SNIPER": {
+   "COLD": "R"
+  },
+  "SKEL_GUARD": {
+   "COLD": "R"
+  },
+  "SKEL_KNIGHT": {
+   "COLD": "R"
+  },
+  "GHOST": {
+   "COLD": "R"
+  },
+  "POLTERGEIST": {
+   "COLD": "R"
+  },
+  "NECRO": {
+   "DRAIN": "N"
+  },
+  "BONE_CALLER": {
+   "DRAIN": "N"
+  },
+  "MUMMY": {
+   "PHYS": "N"
+  },
+  "OGRE": {
+   "PHYS": "N"
+  }
+ },
+ "kind": {
+  "Ogre": {
+   "hp": 36,
+   "bonus": 1
+  }
+ }
+}
