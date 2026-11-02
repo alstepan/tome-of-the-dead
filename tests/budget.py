@@ -191,6 +191,10 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # "heavy" (hero + 2 skeletons + goblin + ghost = 5+5+3+3 = 16 > 12) is OVER
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
+# BOSS-RANGED "blair" (D1 lair walk-in, Σ 11) is REPORTED, not gated, pending a manager ruling: its
+# worst tick (an early input tick with 5 walkers + the glow + the 40-px slash, before any dagger) is
+# 145.7k T with the King's rk_tab row poked to 0 (BUDGET_BLAIR_NOSHOT=1) and 147.0k T with the shots:
+# the overrun predates the feature; ai_ranged's out-of-range decision adds ~1.3k T to that tick.
 GATED = ("mix", "mage")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
              "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath")
@@ -501,6 +505,15 @@ SCENARIOS = {
         (1, 22, stand_y(1, 2), HOSTILE),
         (3, 25, stand_y(1, 4), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "lglow"),
+    # BOSS-RANGED: "blair" = the "lglow" lair with the golden Goblin King IN LINE (x 24, the hero 12..14,
+    # nothing between): it walks in, throws a dagger every 3rd turn from gap < 6 (FX track, SFX_THROW), walks in
+    # between (RWF_WALK -> ai_guard), then melees; a D1 lair at the encounter cap (King 3 + 1, Goblin 3, Rat 2,
+    # Bat 2 = 11 <= 12): rat behind it, bat, slot 5 re-kinded to a plain Goblin left of the hero.
+    "blair": ("knight + golden Goblin King daggers in line (gap 9 -> 5) + goblin, rat, bat, pmix items", [
+        (3, 24, stand_y(1, 4), HOSTILE),
+        (1, 28, stand_y(1, 2), HOSTILE),
+        (4, 8, stand_y(1, 2) - 3, HOSTILE),
+        (5, 4, stand_y(1, 4), RIGHT)], KEYS, K_KNIGHT, None, "blair"),
     "omix": ("knight + Ogre SLAM (RAISE->SLAM, STUN) + goblin + rat + bat, pmix items", [
         (5, 15, stand_y(1, 6), HOSTILE),
         (1, 22, stand_y(1, 2), HOSTILE),
@@ -1020,11 +1033,15 @@ def boss_setup(p, key):
     pmix_setup(p)
     p.wb("LVL_LAIR", 0)
     p.wb(S["ROOM_DESC"] + S["RD_EXITCOL"], 25)       # the post (only ai_guard reads it here)
-    if key == "lglow":
+    if key == "blair" and os.environ.get("BUDGET_BLAIR_NOSHOT"):  # control run: the King never shoots
+        p.wb(S["rk_tab"] + S["K_GOBLIN"], 0)
+    if key in ("lglow", "blair"):
         p.wb("LP_BOSS", S["K_GOBLIN"] | S["LEK_GOLD"])
         p.wb(S["P_ENTITIES"] + 3 * S["P_ENT_STRIDE"] + S["E_GOLD"], S["LEK_GOLD"])
         p.set_ent(3, HP=60, MAXHP=60)
         p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~S["LF_PROVOKED"] & 255)
+        if key == "blair":
+            p.set_ent(5, KIND=S["K_GOBLIN"], HP=20, MAXHP=20)
     else:
         sk = p.rb(S["kind_tab"] + S["KT_SEQ"] + S["K_SKELETON"])
         p.wb(S["kind_tab"] + S["KT_SEQ"] + S["K_OGRE"], sk)
@@ -1083,7 +1100,7 @@ def run_scenario(h, scen):
         imix_setup(p)
     if len(scen) > 5 and scen[5] == "lqmix":
         lqmix_setup(p)
-    if len(scen) > 5 and scen[5] in ("lglow", "omix"):
+    if len(scen) > 5 and scen[5] in ("lglow", "blair", "omix"):
         boss_setup(p, scen[5])
     if len(scen) > 5 and scen[5] == "dmix":
         dmix_setup(p)
@@ -1126,11 +1143,17 @@ def run_scenario(h, scen):
         f" {S['MUS_LAMENT']}); MUS_REQ={p.rb('MUS_REQ')} (BUDGET_MUS={MUS_POKE!r}: set it to the"
         f" tune id to poke, until the level hook sets MUS_REQ)")
     swing = 0
+    blog = []                                     # "blair": per turn (gap at the start, King MSG, POT)
     for key, n in keys:
         for _ in range(n):
             if HAS_TRACE:                         # RECLAIM-C2: release builds have no trace
                 p.clear_trace()
+            if len(scen) > 5 and scen[5] == "blair":
+                g0 = p.ent(3)["X"] - (p.ent(0)["X"] + 3)
+                p.wb(S["P_ENTITIES"] + 3 * S["P_ENT_STRIDE"] + S["E_MSG"], 0)
             st.turn(key)
+            if len(scen) > 5 and scen[5] == "blair":
+                blog.append((g0, p.rb(S["P_ENTITIES"] + 3 * S["P_ENT_STRIDE"] + S["E_MSG"]), p.ent(3)["POT"] & 3))   # POT & 3 = counter ^ 1
             if HAS_TRACE:
                 swing += S["FID_wizard_staffswing"] in p.trace_fids(0)
     st.close()
@@ -1165,6 +1188,10 @@ def run_scenario(h, scen):
         wv = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1 and sl not in WALARM_PRE]
         print(f"[info] walarm after: wave slots {wv}, SPQ_K {p.rb('SPQ_K')}", flush=True)
         assert len(wv) == 2 and p.rb("SPQ_K") == 0, "walarm: the 2-body wave was not made"
+    if len(scen) > 5 and scen[5] == "blair":        # BOSS-RANGED: the daggers really flew (a hit / miss line at gap >= 2)
+        darts = sum(1 for g0, m_, c_ in blog if c_ == 3 and m_ in (S["MSG_M_HIT"], S["MSG_M_MISS"]))
+        print(f"[info] blair after: {darts} dagger turns; per turn (gap, MSG, counter) {blog}", flush=True)
+        assert darts or os.environ.get("BUDGET_BLAIR_NOSHOT"), "blair: the King never threw"
     if len(scen) > 5 and scen[5] == "sanct":        # P3: the Tome really took the hits, the aura the hp
         print(f"[info] sanct after: TOME_HP {p.rb('TOME_HP')}, hero HP {p.ent(0)['HP']}", flush=True)
         assert p.rb("TOME_HP") < 99 and p.ent(0)["HP"] < 250, "sanct: no Tome hit / no aura"
@@ -1184,8 +1211,8 @@ def run_scenario(h, scen):
             f"dmix: the boss kill-drop did not displace (BUDGET_DMIX_SEED?): {room}"
         print(f"[info] dmix after: {len(room)} entries, {len({t for _, t in room})} types, the potion type "
               f"displaced (the walk may have picked the KING HELM up)", flush=True)
-    if len(scen) > 5 and scen[5] in ("lglow", "omix"):
-        print(f"[info] {scen[5]} after: boss x {p.ent(3 if scen[5] == 'lglow' else 5)['X']}, hero HP "
+    if len(scen) > 5 and scen[5] in ("lglow", "blair", "omix"):
+        print(f"[info] {scen[5]} after: boss x {p.ent(5 if scen[5] == 'omix' else 3)['X']}, hero HP "
               f"{p.ent(0)['HP']}, GLOW_CNT {p.rb('GLOW_CNT')}, Ogre counter {p.ent(5)['POT'] & 3}", flush=True)
     if len(scen) > 5 and scen[5] == "lqmix":        # AI-L1: where the climbers ended
         print(f"[info] lqmix after: climbers (x, y) {[(p.ent(sl)['X'], p.ent(sl)['Y']) for sl in (5, 3, 1)]},"
@@ -1212,7 +1239,10 @@ def run_scenario(h, scen):
     print(f"== {name}")
     print(f"ticks measured : {len(totals)}")
     print(f"max tick       : {worst[0]} T  ({worst[0] / BUDGET * 100:.1f}% of {BUDGET})")
-    print(f"mean tick      : {sum(totals) // len(totals)} T")
+    if os.environ.get("BUDGET_WORST_IX"):         # diagnostic: where the worst tick sits (+ its neighbours)
+        wi = totals.index(worst[0])
+        print(f"worst index    : {wi} of {len(totals)}; totals around it {totals[max(0, wi - 3):wi + 4]}")
+    print(f"mean tick: {sum(totals) // len(totals)} T")
     print(f"worst split    : " + ", ".join(f"{k}={v}" for k, v in worst[1].items()))
     if os.environ.get("GAME_PROFILE"):            # 3F-B5: per-phase max / sum over ALL ticks (A/B work)
         ph = {}
@@ -1267,7 +1297,7 @@ def main():
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,omix,lqmix,sanct,adeath").split(","):
+                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath").split(","):
             st, bad = run_scenario(h, SCENARIOS[key])
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")

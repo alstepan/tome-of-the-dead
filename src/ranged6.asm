@@ -45,12 +45,18 @@ rd_tab:         ;    r   N  flags                      die bon dhc        dhe   
                 DB  12,  1, RWF_SPELL | RWF_HOLD, 8, 2, DTY_FIRE | DH_NODEF | (EFX_STUNNED << DH_EFX_SHIFT), $31, FID_nbolt_fly1 ; 4 Firebolt
                 DB  AM_HEX_R, 0, RWF_SPELL | RWF_HEX | RWF_HOLD, IMMF_SLEEP, TX_ST_ASLEEP, EFX_ASLEEP << DH_EFX_SHIFT, AM_SLEEP_T << 4, FID_nbolt_fly1 ; 5 Sleep
                 DB  AM_HEX_R, 0, RWF_SPELL | RWF_HEX, IMMF_POISON, TX_ST_POISONED, EFX_POISON << DH_EFX_SHIFT, AM_PSN_T, FID_nbolt_fly1     ; 6 Venom
+                ; BOSS-RANGED (golden only: ai_rhook's RK_GOLD1 gate): range 6, a shot every 3rd turn,
+                ; keeps walking in between shots (RWF_WALK), the yellow dagger_spin (RWF_NOIMP: ROCK_ATTR)
+                DB   6,  2, RWF_WALK | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 13 Goblin King
+                DB   6,  2, RWF_WALK | RWF_NOIMP,        2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), SQ_PSN_T / 2, FID_dagger_spin1  ; 14 Spider Queen (spit, always + 12 POISON)
                 ASSERT $ - rd_tab == RK_ROWS * RW_STRIDE
                 ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_arrow_hit == FID_arrow_fly1 + 2
                 ASSERT FID_dagger_spin2 == FID_dagger_spin1 + 1
                 ASSERT FID_nbolt_fly2 == FID_nbolt_fly1 + 1 && FID_nbolt_hit == FID_nbolt_fly1 + 2
                 ASSERT RK_ARCHER == 1 && RK_SNIPER == 2 && RK_SLINGER == 3 && RK_NECRO == 4 && RK_BONE_CALLER == 5 && RK_ARCHMAGE == 6
-                ASSERT RK_ARCHMAGE + AM_VENOM == RK_ROWS && AM_SLEEP_T << 4 < 256 && AM_SLEEP_T <= STS_MAX_TURNS && AM_PSN_T <= PSN_CAP
+                ASSERT RK_ARCHMAGE + AM_VENOM == RK_GKING - 1 && RK_SQUEEN == RK_GKING + 1 && RK_SQUEEN == RK_ROWS
+                ASSERT SQ_PSN_T <= PSN_CAP && SQ_PSN_T % 2 == 0 && SQ_PSN_T / 2 <= STS_MAX_TURNS && DTY_PHYS == 0
+                ASSERT AM_SLEEP_T << 4 < 256 && AM_SLEEP_T <= STS_MAX_TURNS && AM_PSN_T <= PSN_CAP
 
 ;------------------------------------------------------------------------------
 ; ai_ranged — the hook (game.md §9.2 "Per-turn order" step 4), first match:
@@ -63,6 +69,7 @@ rd_tab:         ;    r   N  flags                      die bon dhc        dhe   
 ;     DARK (a spell row without RWF_NOREFL) -> L = 0;
 ;     [caster pre-rule slot: T9 / T11 (RWF_PRE) hook in at .pre]
 ;  4. old == 0 -> SHOOT (rg_shoot), counter := N;
+;  4b. RWF_WALK (BOSS-RANGED: the Goblin King / Spider Queen) -> L = 0 (it walks in);
 ;  5. gap 2 and RWF_AWAY -> one step away (try_step_face); blocked -> wait;
 ;  6. HOLD: wait facing the hero. 4-6: L = 1 (the turn is used).
 ; Counter rule: a shot needs the counter at 0 when the hook is entered (the
@@ -102,13 +109,17 @@ ai_ranged:
                 ld   a, (RG_OLD)
                 or   a
                 jr   z, rg_shoot
-                ; 5. gap 2 and a step-away kind: one step away
+                ; 4b. BOSS-RANGED: a walking shooter (RWF_WALK, bit 7) between shots -> the walker rules
+                ; 5. gap 2 and a step-away kind: one step away (one RW_F load for both: +3 B)
+                ld   a, (RG_ROW + RW_F)
+                rla                            ; CF = RWF_WALK; RWF_AWAY -> bit 2
+                jr   c, rg_no
+                and  RWF_AWAY << 1
+                jr   z, .hold
                 ld   a, (RG_GAP)
                 cp   3
                 jr   nc, .hold
-                ld   a, (RG_ROW + RW_F)
-                and  RWF_AWAY
-                jr   z, .hold
+                ASSERT RWF_WALK == $80 && RWF_AWAY < $80
                 ld   a, (RG_DIR)
                 neg
                 ld   d, a
@@ -281,9 +292,15 @@ rg_q:           ld   hl, TURN_PEND             ; (3F-T11b am_cast: the Mirror He
                 dec  a
 .an:            ld   (de), a
                 inc  de
-                ld   a, (ix+E_Y)               ; FXD_ROW = the flight row
+                ld   a, (ix+E_KIND)            ; FXD_ROW = the flight row (rg_line's: top + 2, the
+                cp   K_SPIDER                  ; 2-high Spider Queen's top; HL / BC are live here:
+                ld   a, (ix+E_Y)               ; the kind test, not KT_BH)
+                jr   z, .fr
                 add  a, PF_ROW_DY
-                ld   (de), a
+.fr:            ld   (de), a
+                ; the only 2-high shooter is the Spider (rg_line's (h / 2) & 2 == rg_q's kind test)
+                ASSERT PF_ROW_DY == 2 && BH_K_SPIDER == 2 && BH_K_GOBLIN >= 4 && BH_K_ARCHER >= 4 && BH_K_NECRO >= 4 && BH_K_ARCHMAGE >= 4
+                ASSERT BH_K_GOBLIN <= 7 && BH_K_ARCHER <= 7 && BH_K_NECRO <= 7 && BH_K_ARCHMAGE <= 7
                 inc  de
                 ld   a, (RG_DIR)               ; FXD_FLAGS: FXDF_LEFT, 8 px a tick
                 rlca
@@ -372,7 +389,7 @@ rg_cnt:         ld   a, (ix+E_RCD)
 ;------------------------------------------------------------------------------
 ; rg_line — RANGED-SPEC "in line" (§9.2 Geometry): IX standing (E = 0) on the
 ; hero's storey TMP4, the hero standing (not mid-ladder), no overlap; RG_DIR /
-; RG_FIRST / RG_GAP set; gap < RG_ROW's RW_R (the row must be loaded); the flight row over the gap free of TF_SOLID cells
+; RG_FIRST / RG_GAP set; gap < RG_ROW's RW_R (the row must be loaded); the flight row (top + 2; a 2-high body: its top) over the gap free of TF_SOLID cells
 ; (rg_scan) and no live body in gap cols x my rows (box_free, ACT_SLOT = me).
 ; Out: CF = not in line; NC: A = gap.  Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
@@ -414,13 +431,14 @@ rg_line:        ld   a, e
                 or   a                         ; gap 0: in line (NC; 0 only guards the loops)
                 ret  z
                 ld   d, a                      ; D = gap cols
-                ld   a, (ix+E_Y)
-                add  a, PF_ROW_DY
-                ld   b, a                      ; B = flight row (top + 2)
+                KFIELD KT_BH                   ; (keeps BC, DE)
+                ld   e, a
+                rrca                           ; BOSS-RANGED: flight row = top + ((h / 2) & 2):
+                and  PF_ROW_DY                 ; top + 2, a 2-high body (the Spider Queen) its top
+                add  a, (ix+E_Y)               ; row (top + 2 is its floor; §9.2: fr lies in the
+                ld   b, a                      ; hero's rows). rg_q matches it (K_SPIDER)
                 call rg_scan
                 ret  c                         ; a solid cell (a mid-room block)
-                KFIELD KT_BH
-                ld   e, a
                 ld   b, (ix+E_Y)               ; gap cols x my rows
                 call box_free                  ; (ACT_SLOT = me)
                 ret  c                         ; a body in the way: no friendly fire

@@ -8,7 +8,7 @@ WHAT IS MODELLED
   * Numbers come from the BUILT IMAGE (build/wazhack.tap + .sna + .sym, via tests/combat_tables.load):
     kind_tab (hp/atk/eva/die/bonus/period/weight/flags), kx_tab (resistances, immunity mask, KXP, DEF,
     on-hit effect), ab_rank (7 abilities x 3 ranks), ab_ammo, xpn_tab.  Ranged-monster rows come from
-    tools/ranged_model.ROWS, books from tests/book_model.book_read, item pools/counts/trap counts from
+    tools/ranged_model.ROWS (+ GOLD_ROWS: BOSS-RANGED, the golden King / Queen only), books from tests/book_model.book_read, item pools/counts/trap counts from
     tools/items_model constants, trickle constants from tools/respawn_model.  Every game.md rule that
     is not in a table is a named constant in the RULES block below (with its section).  Also from the repo: golden-boss XP
     (src/data7.asm bxp_d + KXP_*), Archmage hp (kind_tab), TOME_MAX / TOME_AURA_R / TOME_REACH (.sym), item type ids, the per-depth
@@ -22,6 +22,9 @@ WHAT IS MODELLED
     for kiting, P_LINE same-storey probability else T_CLIMB turns out of line.  Monsters queue (no
     passing).  Melee F1 (d20+atk >= 10+eva), DEF, resist, speed periods, vampire bat form, parry,
     rage, Ogre SLAM, ranged cooldown N, Bone Caller summon, Archmage 7-spell cycle + blink + summon.
+    Ranged (BOSS-RANGED): fires at gap < r (param.RANGED_LT), golden + 1 dmg (GOLD_RDMG), PHYS rows d20 + DEF,
+    the Spider Queen's spit always POISON + 12 (cap 30, Silk Cloak immune); every shooter walks in between
+    shots (right for the King / Queen: RWF_WALK; the other shooters' HOLD-in-range rule is not modelled).
   * Spells: sec 6 projectile rules on the line: first body, pierce once per pass, wall bounces,
     reflect (X) at the front col, caster valid after any reversal, loop guard 4, Firebolt burst +-1 col
     (caster at point-blank, rank 3 spares), staff bonus before resist, auto-downcast, Drain heal,
@@ -133,6 +136,10 @@ PARAMS = {
     "FEAR_CAST": 1,                     # FEAR-CAST (planned rule): a FEARed hero cannot cast (Mage also not melee); 0 = old rule
     "TRAP_PATH_P": 0.3,                 # TRAP2: P(a transit crosses a given known plate); fires with TRAP_HIT_P
     "W_START_POWER": 0,                 # Warrior starts with Power Strike at this rank after the D1 book (CODE)
+    # BOSS-RANGED (2026-11-02): 1 = what the build does; 0 / 0 / 0 reproduces FINAL B
+    "RANGED_LT": 1,                     # a shooter fires at gap < r (ranged6.asm rg_line); 0 = the old sim's gap <= r
+    "GOLD_RDMG": 1,                     # a golden shooter's ranged dmg + 1 (rg_shoot, §9.7 R1: the High Necromancer too)
+    "BOSS_RANGED": 1,                   # the golden Goblin King daggers / Spider Queen spit (ranged_model.GOLD_ROWS)
 }
 POLICIES = {   # 4.3: rest_hp, rest_mp(Mage), heal, escape, kite_p, boss_retreat (fractions; None = never)
     "cautious": dict(rest_hp=0.70, rest_mp=0.70, heal=0.35, escape=0.25, kite=1.0, retreat=0.40),
@@ -266,6 +273,7 @@ class Data:
         self.k[self.kid["ARCHMAGE"]]["df"] = 1
         import ranged_model as RM
         self.rows = RM.ROWS
+        self.grows = RM.GOLD_ROWS               # BOSS-RANGED: golden-only rows (ai_rhook's RK_GOLD1 gate)
         import copy
         self.gear = copy.deepcopy(GEAR)
         for gn, cells in ov.get("gear", {}).items():
@@ -1256,6 +1264,27 @@ class Game:
             return 0
         return roll
 
+    def mrow(self, m):
+        """rk_tab + ai_rhook: the shooter row of m, or None (BOSS-RANGED: the Goblin / Spider rows only when golden)."""
+        kid = m.k["id"]
+        if kid in self.D.grows:
+            return self.D.grows[kid] if m.gold and self.P["BOSS_RANGED"] else None
+        return self.D.rows.get(kid)
+
+    def in_rng(self, gap, r):
+        """rg_line's range test: gap < r (RANGED_LT 0: the old sim's gap <= r)."""
+        return gap < r if self.P["RANGED_LT"] else gap <= r
+
+    def ranged_hit(self, m, row):
+        """rg_shoot of a PHYS (non-spell) row on the hero: d20 vs EVA, 1dDIE + BON (+1 golden) - DEF (min 1);
+        a poison rider (BOSS-RANGED Spider Queen: chance 0 = always) adds DHE x 2 turns, cap 30 (Silk Cloak immune)."""
+        h = self.h
+        if self.rr() < self.hit_hero_chance(m.atk):
+            dm = self.rng.randint(1, row[3]) + row[4] + (1 if m.gold and self.P["GOLD_RDMG"] else 0)
+            self.dmg_hero(max(1, dm - h.df), m.k["name"], "ranged")
+            if (row[5] >> 4) & 7 == 6 and not h.poison_imm:
+                h.poison = min(30, h.poison + (row[6] & 15) * 2)
+
     def hit_hero_chance(self, atk):
         p = (11 + atk - self.hero_eva()) / 20.0
         return 0.0 if p < 0 else 1.0 if p > 1 else p
@@ -1290,7 +1319,7 @@ class Game:
             m.fear -= 1
             m.x += 1
             return
-        row = D.rows.get(kid)
+        row = self.mrow(m)
         gap = m.x
         if row:
             r, N, flags, die, bonus = row[0], row[1], row[2], row[3], row[4]
@@ -1310,16 +1339,13 @@ class Game:
                 m.x += 1
                 m.back -= 1
                 return
-            if gap > 1 and gap <= r and m.cd <= 0 and self.front(alive) is m:
+            if gap > 1 and self.in_rng(gap, r) and m.cd <= 0 and self.front(alive) is m:
                 m.cd = N
                 spell = flags & 1
-                if kid == D.id("ARCHER") or kid == D.id("SNIPER") or kid == D.id("SLINGER"):
-                    atk = m.atk
-                    if self.rr() < self.hit_hero_chance(atk):
-                        dm = self.rng.randint(1, die) + bonus
-                        self.dmg_hero(max(1, dm - h.df), k["name"], "ranged")
+                if not spell:                           # PHYS rows: Archer / Sniper / Slinger / Goblin King / Spider Queen
+                    self.ranged_hit(m, row)
                 else:
-                    dm = self.rng.randint(1, die) + bonus
+                    dm = self.rng.randint(1, die) + bonus + (1 if m.gold and P["GOLD_RDMG"] else 0)
                     dm = self.hero_res(DARK, dm)
                     if h.res[DARK] == 3:     # Mirror: reflected to the shooter at x1/2
                         m.hp -= max(1, dm // 2) if dm else 0
@@ -1511,11 +1537,10 @@ class Game:
         for _ in range(max(1, self.behind)):
             self.adv(1)
             for m in alive:
-                if m.hp > 0 and m.k["id"] in self.D.rows and m.cd <= 0 and m.x <= self.D.rows[m.k["id"]][0] and self.in_line(m):
-                    m.cd = self.D.rows[m.k["id"]][1]
-                    if self.rr() < self.hit_hero_chance(m.atk):
-                        row = self.D.rows[m.k["id"]]
-                        self.dmg_hero(max(1, self.rng.randint(1, row[3]) + row[4] - h.df), m.k["name"], "ranged")
+                row = self.mrow(m)
+                if m.hp > 0 and row and m.cd <= 0 and self.in_rng(m.x, row[0]) and self.in_line(m):
+                    m.cd = row[1]
+                    self.ranged_hit(m, row)
                 else:
                     m.cd -= 1
         followers = [m for m in alive if not m.boss and m.x <= self.P["ESCORT_FOLLOW_GAP"]]

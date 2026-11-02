@@ -28,6 +28,12 @@ storey 1 (rows 9..16 rewritten per case).
   Q   3 Slingers in one phase: 3 tracks (released on ticks 2 / 3 by slot
       parity), FX_DROP 0; a 4th shooter queues (FXQ) and still starts
   L   climbers: an out-of-line Slinger walks to the ladder (.seek)
+  G   BOSS-RANGED (golden only): A also draws golden / ordinary Goblins and Spiders (+ golden
+      bits on every shooter: + GOLD_ATK, dmg + 1); fixed: a golden King / Queen fires at gap 5,
+      not 6, an ordinary Goblin / Spider never (counter untouched, RNG untouched); between
+      shots a golden King in range returns CF 0 (walks in); real turns: a golden King walks
+      in AND shoots every 3rd turn; the spit poisons + 12 (fresh 12, 24 -> cap 30), Silk Cloak
+      (IMMF_POISON) immune (damage still), a dagger hit never poisons
 Run: ZRCP_PORT=<port> python3 tests/ranged.py
 """
 import os
@@ -47,10 +53,12 @@ RES = STUB + 200
 STRIDE = S["P_ENT_STRIDE"]
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING = 1, 2, 4, 8, 16
 E_ = {k: S["E_" + k] for k in ("KIND", "ROOM", "FLAGS", "X", "Y", "HP", "MAXHP", "POT", "PX", "PY", "MODE",
-                               "REACT", "REACTAT", "MSG", "TGT", "HIT", "FLT", "FLA")}
+                               "REACT", "REACTAT", "MSG", "TGT", "HIT", "FLT", "FLA", "GOLD")}
 K = dict(ARCHER=S["K_ARCHER"], SNIPER=S["K_SNIPER"], SLINGER=S["K_SLINGER"], NECRO=S["K_NECRO"],
          BONE=S["K_BONE_CALLER"])
 SHOOTERS = list(K.values())
+GOLDK = [S["K_GOBLIN"], S["K_SPIDER"]]                # BOSS-RANGED: rows only when golden
+LEK_GOLD = 1 << S["LEK_GOLD_BIT"]
 T_AIR, T_BRICK = S["T_AIR"], S["T_BRICK"]
 S1 = 9                                   # storey 1 top row
 N_A = int(os.environ.get("RANGED_N", "2400"))
@@ -110,7 +118,7 @@ def main():
 
         def ent_of(kind, x, y, flags, hp=30, **kw):
             d = dict(KIND=kind, X=x, Y=y, FLAGS=flags, HP=hp, MAXHP=hp, MODE=0, REACT=0, REACTAT=0, MSG=0,
-                     TGT=0, HIT=0, FLT=0, POT=0)
+                     TGT=0, HIT=0, FLT=0, POT=0, GOLD=0)
             d.update(kw)
             return d
 
@@ -125,11 +133,13 @@ def main():
         WT = {k_: S[n_] for k_, n_ in ((K_RAT, "WT_K_RAT"), (K_BAT, "WT_K_BAT"), (K_SKELETON, "WT_K_SKELETON"),
               (S["K_GHOST"], "WT_K_GHOST"), (S["K_ARCHER"], "WT_K_ARCHER"), (S["K_SNIPER"], "WT_K_SNIPER"),
               (S["K_SLINGER"], "WT_K_SLINGER"), (S["K_NECRO"], "WT_K_NECRO"),
-              (S["K_BONE_CALLER"], "WT_K_BONE_CALLER"))}
+              (S["K_BONE_CALLER"], "WT_K_BONE_CALLER"), (S["K_GOBLIN"], "WT_K_GOBLIN"), (S["K_SPIDER"], "WT_K_SPIDER"))}
         bad_a, n_a, stats = [], 0, dict(shot=0, step=0, hold=0, no=0, hit=0, fear=0)
         while n_a < N_A:
-            kind = rnd.choice(SHOOTERS)
-            row = list(M.ROWS[kind])
+            kind = rnd.choice(SHOOTERS + GOLDK + GOLDK)
+            gold = rnd.random() < (0.6 if kind in GOLDK else 0.15)
+            mrow = M.row_of(kind, gold)
+            row = list(mrow or M.GOLD_ROWS[kind])
             row[7] = S["FID_" + row[7]]
             w, hgt = kt[kind]["bw"], kt[kind]["bh"]
             slot = rnd.randint(1, 15)
@@ -157,7 +167,7 @@ def main():
             rows = [T_AIR] * (8 * 32)
             for r_ in range(8):
                 rows[r_ * 32] = rows[r_ * 32 + 31] = T_BRICK
-            fr = sy + 2 - S1
+            fr = M.flight_row(dict(y=sy, h=hgt)) - S1
             if rnd.random() < 0.25:
                 for _ in range(rnd.randint(1, 2)):
                     rows[fr * 32 + rnd.randint(1, 30)] = T_BRICK
@@ -169,7 +179,8 @@ def main():
             hi = rnd.randint(0, 15) << 2
             left = rnd.random() < 0.5
             ents = {0: ent_of(K_KNIGHT, hx, hy_, EF_ACTIVE | EF_PLAYER, hp=rnd.randint(1, 40))}
-            ents[slot] = ent_of(kind, sx, sy, EF_ACTIVE | EF_HOSTILE | (EF_LEFT if left else 0), POT=(counter ^ 1) | hi)
+            ents[slot] = ent_of(kind, sx, sy, EF_ACTIVE | EF_HOSTILE | (EF_LEFT if left else 0), POT=(counter ^ 1) | hi,
+                                GOLD=LEK_GOLD if gold else 0)
             bodies = [(0, hx, hy_, hw, hh, False)]
             for _ in range(rnd.choice([0, 0, 1, 2, 3])):
                 bs = rnd.randint(1, 15)
@@ -191,18 +202,24 @@ def main():
             elif v < 0.4:
                 res[0] = rnd.choice([1, 2])                  # PHYS R / I
             hdef, imm = rnd.randint(0, 3), (8 if rnd.random() < 0.1 else 0)
+            if rnd.random() < 0.15:
+                imm |= S["IMMF_POISON"]                      # BOSS-RANGED: Silk Cloak
             stf, st1 = 0, 0
             v = rnd.random()
             if v < 0.1:
                 stf, st1 = 0x04, rnd.randint(1, 5)           # FEAR on
             elif v < 0.15:
                 stf, st1 = 0x02, 0x30                        # ASLEEP (held: eva 0, wakes)
+            stx = 0
+            if rnd.random() < 0.25:
+                stf, stx = stf | (1 << S["STS_POISON_BIT"]), rnd.randint(1, 15) * 2   # POISON on (ST_X turns)
             tt = rnd.randint(0, 5)
             seed = rnd.randint(1, 0xFFFF)
             put_world(None, ents, rows)
             p.wmem(S["ST_FLAGS"], [stf] + [0] * 15)
             p.wmem(S["ST_T1"], [st1] + [0] * 15)
             p.wmem(S["ST_T2"], [0] * 16)
+            p.wb(S["ST_X"], stx)
             p.wmem(S["HERO_RES"], res)
             p.wb("HERO_IMM", imm)
             p.wb("HERO_DEF", hdef)
@@ -217,16 +234,22 @@ def main():
             # bodies carry no RCD_SUMMONED), a free slot (<= 5 used), the cap: < ROOM_CAP live, Σ + w <= 12
             live = [e_["KIND"] for s_, e_ in ents.items() if s_ and not e_["FLAGS"] & EF_DYING]
             sw = WT[K_SKELETON] if K_SKELETON in LPK else WT[S["K_GHOST"]]
-            summon_ok = len(live) < S["ROOM_CAP"] and sum(WT[k_] for k_ in live) + sw <= S["LP_SIGMA_CAP"]
+            sig = sum(WT[k_] for k_ in live) + sum(1 for s_, e_ in ents.items()      # a golden body weighs + 1
+                                                    if s_ and not e_["FLAGS"] & EF_DYING and e_.get("GOLD"))
+            summon_ok = len(live) < S["ROOM_CAP"] and sig + sw <= S["LP_SIGMA_CAP"]
             sit = dict(kind=kind, row=row, slot=slot, x=sx, y=sy, w=w, h=hgt, left=left, standing=standing,
-                       storey=1, counter=counter, atk=kt[kind]["atk"], turn_tick=tt, map=mp,
+                       storey=1, counter=counter, atk=kt[kind]["atk"], gold=gold, turn_tick=tt, map=mp,
                        bodies=bodies, s=hi >> 2, summon_ok=summon_ok,
                        hero=dict(x=hx, y=hy_, w=hw, h=hh, storey=hst, ladder=hlad, hp=ents[0]["HP"],
                                  eva=kt[K_KNIGHT]["eva"], held=stf & 3 != 0, res=res, def_=hdef, imm=imm,
-                                 stf=stf, st1=st1, react=0))
+                                 stf=stf, st1=st1, stx=stx, react=0))
             sit["hero"]["def"] = hdef
             rng = M.Rng(seed)
-            want = M.decide(sit, rng)
+            if mrow is None:                                 # an ordinary Goblin / Spider: ai_rhook's gate ->
+                want = dict(used=False, counter=counter, left=left, x=sx, moved=False, shot=None)   # ai_ghook
+                stats["plain"] = stats.get("plain", 0) + 1
+            else:
+                want = M.decide(sit, rng)
             cf = p.hook(slot)
             cat = "shot" if want["shot"] else "step" if want["moved"] else "hold" if want["used"] else "no"
             tmax[cat] = max(tmax.get(cat, 0), p.tstates)
@@ -249,11 +272,11 @@ def main():
             if sh:
                 hs = sh["hero"]
                 got.update(msg=e(slot, "MSG"), hhp=e(0, "HP"), stf=p.rb(S["ST_FLAGS"]), st1=p.rb(S["ST_T1"]),
-                           cnb=p.rb("COMBAT_NOT_BEFORE"), rsp=p.rb("RS_P"))
+                           stx=p.rb(S["ST_X"]), cnb=p.rb("COMBAT_NOT_BEFORE"), rsp=p.rb("RS_P"))
                 q = list(p.z.read_memory(S["RS_Q"], S["RS_STRIDE"]))
                 got.update(q=q)
                 exp.update(msg=sh["msg"], hhp=hs.get("hp", sit["hero"]["hp"]), stf=hs.get("stf", stf),
-                           st1=hs.get("st1", st1), cnb=sh["gate"] or 0,
+                           st1=hs.get("st1", st1), stx=hs.get("stx", stx), cnb=sh["gate"] or 0,
                            rsp=(S["RS_Q"] + S["RS_STRIDE"]) & 255,
                            q=[sh["R"], sh["flash"]] + sh["desc"])
                 if sh["lost"]:
@@ -262,6 +285,11 @@ def main():
                 stats["shot"] += 1
                 stats["hit"] += sh["lost"] > 0
                 stats["fear"] += (hs.get("stf", 0) & 0x0C) == 4 and not (stf & 0x0C)
+                if kind in GOLDK:
+                    stats["gshot"] = stats.get("gshot", 0) + 1
+                    stats["psn"] = stats.get("psn", 0) + (hs.get("stx", stx) != stx)
+            elif kind in GOLDK and mrow and want["counter"] != counter and not want["used"] and counter:
+                stats["gwalk"] = stats.get("gwalk", 0) + 1
             elif want["moved"]:
                 stats["step"] += 1
             elif want["used"]:
@@ -286,14 +314,14 @@ def main():
         clean = clean + map0[8 * 32:]
 
         def hk(kind, gap, counter=0, slot=3, extra=(), bricks=(), res=(0, 0, 0), hdef=0, imm=0, seed=0x1357,
-               hx=6, hhp=200, stf=0, hy=None, sy=None):
+               hx=6, hhp=200, stf=0, hy=None, sy=None, gold=0, stx=None):
             """One hook call: the hero at hx, the shooter to its right at gap; -> (cf, entities, shooter x)."""
             w, hgt = kt[kind]["bw"], kt[kind]["bh"]
             sx = hx + hw + gap
             hy = S1 + 8 - hh if hy is None else hy
             sy = S1 + 8 - hgt if sy is None else sy
             ents = {0: ent_of(K_KNIGHT, hx, hy, EF_ACTIVE | EF_PLAYER, hp=hhp),
-                    slot: ent_of(kind, sx, sy, EF_ACTIVE | EF_HOSTILE, POT=counter ^ 1)}
+                    slot: ent_of(kind, sx, sy, EF_ACTIVE | EF_HOSTILE, POT=counter ^ 1, GOLD=gold)}
             for s_, k_, x_ in extra:
                 ents[s_] = ent_of(k_, x_, S1 + 8 - kt[k_]["bh"], EF_ACTIVE | EF_HOSTILE, hp=5)
             rows = list(clean)
@@ -301,7 +329,9 @@ def main():
                 rows[(r_ - S1) * 32 + c_] = T_BRICK
             put_world(None, ents, rows)
             p.wmem(S["ST_FLAGS"], [stf] + [0] * 15)
-            p.wmem(S["ST_T1"], [0x30 if stf else 0] + [0] * 15)
+            p.wmem(S["ST_T1"], [0x30 if stf & 3 else 0] + [0] * 15)
+            if stx is not None:
+                p.wb(S["ST_X"], stx)
             p.wmem(S["HERO_RES"], list(res))
             p.wb("HERO_IMM", imm)
             p.wb("HERO_DEF", hdef)
@@ -394,6 +424,43 @@ def main():
                             seed=i_ + 1)
             mh += shot(mem) or cf
         check("D Mirror Helm (DARK X): 0 Necro / Bone Caller shots (and no turn used) in 100 tries", mh == 0, mh)
+
+        # G BOSS-RANGED: golden-only rows, range 6, walk between shots, the spit's poison
+        KG, KS = S["K_GOBLIN"], S["K_SPIDER"]
+        ge = {}
+        for nm, kind in (("King", KG), ("Queen", KS)):
+            ge[nm] = [shot(hk(kind, g, hx=2, gold=LEK_GOLD)[1]) for g in (5, 6)]
+        plain = []
+        for kind in (KG, KS):
+            cf, mem, sx = hk(kind, 3, counter=0)
+            plain.append((cf, shot(mem), (mem[3 * STRIDE + E_["POT"]] & 3) ^ 1, p.rw("RNG_STATE") == 0x1357))
+        walk = []
+        for kind in (KG, KS):
+            cf, mem, sx = hk(kind, 3, counter=1, gold=LEK_GOLD)
+            walk.append((cf, shot(mem), (mem[3 * STRIDE + E_["POT"]] & 3) ^ 1))
+        check("G golden King / Queen fire at gap 5, not 6; ordinary Goblin / Spider: CF 0, no shot, counter 0 kept, "
+              "RNG untouched; golden, counter 1, gap 3: CF 0 (walker rules), no shot, counter 0",
+              all(v == [True, False] for v in ge.values()) and all(x == (False, False, 0, True) for x in plain)
+              and all(x == (False, False, 0) for x in walk), (ge, plain, walk))
+        PSN = 1 << S["STS_POISON_BIT"]
+
+        def spit(kind, stx0, imm=0, n=60):
+            """hits on a held hero (eva 0): -> list of (HP lost, ST_X after, POISON bit)."""
+            out = []
+            for i_ in range(n):
+                cf, mem, _ = hk(kind, 4, gold=LEK_GOLD, stf=2 | (PSN if stx0 else 0), stx=stx0, imm=imm, hdef=0,
+                                seed=0x300 + 41 * i_)
+                if shot(mem) and mem[3 * STRIDE + E_["MSG"]] == S["MSG_M_HIT"]:
+                    out.append((200 - mem[E_["HP"]], p.rb(S["ST_X"]), bool(p.rb(S["ST_FLAGS"]) & PSN)))
+            return out
+        fresh, capd, silk, dag = spit(KS, 0), spit(KS, 24), spit(KS, 0, imm=S["IMMF_POISON"]), spit(KG, 0)
+        check("G spit: every hit poisons + 12 (fresh 12, 24 -> cap 30), dmg 1d2 + 1 golden (2..3); Silk Cloak "
+              "(IMMF_POISON): damage, no poison; the King's dagger 1d3 + 1 (2..4), no poison",
+              fresh and capd and silk and dag
+              and all(x[1:] == (12, True) for x in fresh) and all(x[1:] == (30, True) for x in capd)
+              and all(x[1:] == (0, False) for x in silk) and all(x[1:] == (0, False) for x in dag)
+              and {x[0] for x in fresh + silk} == {2, 3} and {x[0] for x in dag} == {2, 3, 4},
+              (fresh[:4], capd[:4], silk[:4], dag[:6], len(fresh), len(dag)))
 
         # --------------------------------------------------- real turns
         seqk = {K["ARCHER"]: K_SKELETON, K["SNIPER"]: K_SKELETON, K["NECRO"]: K_SKELETON,
@@ -516,6 +583,26 @@ def main():
             xs.append((e3["X"], e3["Y"]))
         check("L the Slinger on the other storey seeks a ladder (walks to col 5 / 23, then climbs)",
               any(y_ != xs[0][1] for _, y_ in xs) or xs[-1][0] in (5, 23), xs)
+
+        # G real turns: a golden Goblin King walks in from far away, shoots every 3rd turn once in range
+        # (gap < 6), keeps walking between the shots, then melees
+        p.boot(K_KNIGHT)
+        arena([(3, S["K_GOBLIN"], 18)], hx=4)
+        p.wb(S["P_ENTITIES"] + 3 * STRIDE + E_["GOLD"], LEK_GOLD)
+        glog = []
+        for t_ in range(14):
+            p.wb(S["P_ENTITIES"] + 3 * STRIDE + E_["MSG"], 0)
+            p.wb(S["P_ENTITIES"] + E_["HP"], 200)
+            x0 = p.ent(3)["X"]
+            p.turn("WAIT", max_ticks=200)
+            glog.append((t_ + 1, x0, p.ent(3)["X"], p.rb(S["P_ENTITIES"] + 3 * STRIDE + E_["MSG"])))
+        gap0 = {t_: x0 - (4 + hw) for t_, x0, _, _ in glog}
+        shots_t = [t_ for t_, _, _, m_ in glog if m_ in (S["MSG_M_HIT"], S["MSG_M_MISS"]) and gap0[t_] > 1]   # gap <= 1: melee
+        moved_in = [t_ for t_, x0, x1, m_ in glog if x1 < x0 and 1 < gap0[t_] < 6 and t_ not in shots_t]
+        check("G real turns: the golden King shoots only at gap < 6, 3 turns apart, and walks in (x - 1) on a "
+              "turn between shots while in range",
+              len(shots_t) >= 2 and all(b - a == 3 for a, b in zip(shots_t, shots_t[1:]))
+              and all(gap0[t_] < 6 for t_ in shots_t) and moved_in, glog)
 
     print(f"[{'FAIL' if fails else 'PASS'}] ranged: {fails or 'all checks'}")
     return 1 if fails else 0

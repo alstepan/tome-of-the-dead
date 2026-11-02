@@ -391,7 +391,7 @@ sp_y:           ld   (SP_S), a
                 jr   z, .w
                 inc  a                         ; flyer: 9s + 1
                 jr   .o
-.w:             KFIELD KT_BH
+.w:             KFL    KT_BH                   ; BOSS-RANGED rebase: KFL (-3 B, +27 T, spawn only)
                 ld   b, a
                 ld   a, c
                 add  a, STOREY_AIR
@@ -431,7 +431,7 @@ sp_place:       ld   a, (P_ENTITIES + E_X)
                 ld   a, (SP_AR)
                 add  a, c
                 jr   .t
-.lft:           KFIELD KT_BW
+.lft:           KFL    KT_BW                   ; BOSS-RANGED rebase: KFL (-3 B, +27 T, placement only)
                 add  a, c
                 ld   e, a
                 ld   a, (SP_AX)

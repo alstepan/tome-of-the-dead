@@ -43,6 +43,5 @@ glow_kat:
                 ld   d, glow_tab >> 8          ; (DE free in render .kat)
                 ld   a, (de)
                 jp   render.tsh
-glow_tab:       DB   $06, $46, $47, $46
-                ASSERT (glow_tab >> 8) == ((glow_tab + 3) >> 8)
+                ; glow_tab (4 B): BOSS-RANGED moved it before kind_tab's ALIGN pad (main.asm)
 
