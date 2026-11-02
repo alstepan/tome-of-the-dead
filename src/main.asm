@@ -553,6 +553,10 @@ enter_select:
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
 ; pages, K_MAX (32) B per array; no array crosses a page (KFIELD, feet_mod).
 ;==============================================================================
+; glow_tab — boss2a.asm glow_kat's GOLDEN GLOW attr steps (BOSS-RANGED: moved out of the
+; image tail into the kind_tab ALIGN pad, 4 of its 8 B, for ai_rhook's golden gate)
+glow_tab:       DB   $06, $46, $47, $46
+                ASSERT (glow_tab >> 8) == ((glow_tab + 3) >> 8)
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
                 DS   (-($ + TILE_IDS)) & $FF, 0    ; B3B-5: tile_flags ends on the page
 ;------------------------------------------------------------------------------

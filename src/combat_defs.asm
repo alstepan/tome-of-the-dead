@@ -198,13 +198,19 @@ RWF_NOREFL      EQU %00010000       ; ignores the reflect gate (Archmage, T11)
 RWF_HEX         EQU %00100000       ; 3F-T11b: no damage, no hit line; the rider through the immunity mask only (am_hex)
 RWF_HOLD_BIT    EQU 6
 RWF_HOLD        EQU 1 << RWF_HOLD_BIT   ; 3F-T11b: a HOLD row (A4 hold lock: never on a held / HOLD_GUARD hero)
+RWF_WALK        EQU %10000000       ; BOSS-RANGED: between shots the walker rules run (keeps walking in, no
+                                    ; step-away / hold); ai_ranged tests it as bit 7 (rla)
 RK_ARCHER       EQU 1               ; rd_tab rows
 RK_SNIPER       EQU 2
 RK_SLINGER      EQU 3
 RK_NECRO        EQU 4
 RK_BONE_CALLER  EQU 5
 RK_ARCHMAGE     EQU 6               ; 3F-T11b: the Archmage's 7 spell rows RK_ARCHMAGE .. + 6 (arch_ai; no rk_tab entry)
-RK_ROWS         EQU 12
+RK_GKING        EQU 13              ; BOSS-RANGED: the Goblin King's dagger (D1) / the Spider Queen's spit (D2),
+RK_SQUEEN       EQU 14              ; after Venom; rows >= RK_GOLD1 shoot only for a golden body (ai_rhook)
+RK_GOLD1        EQU RK_GKING
+RK_ROWS         EQU 14
+SQ_PSN_T        EQU 12              ; BOSS-RANGED: a spit hit always poisons + 12 (deal_hit E = half, cap PSN_CAP)
 ;------------------------------------------------------------------------------
 ; 3F-T11b the Archmage spell AI (game.md §9.9 ARCHMAGE-SPEC; R6 arch6.asm, entered by
 ; bank-2 ai_mon). Spell index s = 0..6 -> rd_tab row RK_ARCHMAGE + s; s 0..4 = ORDER

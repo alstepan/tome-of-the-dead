@@ -121,11 +121,14 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # VAMP-BOSS (2026-11-02): the Vampire climbs, pool_gmap adds U_CLIMBH for K_VAMPIRE: D3 (the only level
 # without the shared climb pair: D6 / D8 already pool it via Orc / Necro / Mummy) +480 for both heroes
 # (Warrior 26,528 -> 27,008, Mage 23,616 -> 24,096; slack 5,184 / 8,096), every other level unchanged.
+# BOSS-RANGED rebaseline: +12 on every level = RECLAIM-B T1 (text -12 B -> POOL_START 12 B lower: the
+# need is measured to the pool top; the slack line is unchanged); BOSS-RANGED itself adds no pool frames
+# (dagger_spin is already pooled on D1 / D2 for both heroes)
 LEVEL_NEED = {
-    (0, 1): 22528, (0, 2): 22240, (0, 3): 27008, (0, 4): 28576,
-    (0, 5): 23072, (0, 6): 28736, (0, 7): 27744, (0, 8): 31168,
-    (1, 1): 19488, (1, 2): 19264, (1, 3): 24096, (1, 4): 25792,
-    (1, 5): 20288, (1, 6): 25824, (1, 7): 24832, (1, 8): 28160,
+    (0, 1): 22540, (0, 2): 22252, (0, 3): 27020, (0, 4): 28588,
+    (0, 5): 23084, (0, 6): 28748, (0, 7): 27756, (0, 8): 31180,
+    (1, 1): 19500, (1, 2): 19276, (1, 3): 24108, (1, 4): 25804,
+    (1, 5): 20300, (1, 6): 25836, (1, 7): 24844, (1, 8): 28172,
 }
 
 

@@ -9,7 +9,7 @@ decide(sit, rng) -> dict of the expected results. `sit` is a plain dict:
   x, y, w, h, left (facing), standing, storey, counter (0..3),
   hero: x, y, w, h, storey, ladder (mid-ladder), hp, eva, held, res (3 B),
         def, imm, stf, st1 (ST_FLAGS / ST_T1 of slot 0), react (E_REACT)
-  atk (shooter KT_ATK), turn_tick, map (dict row -> 32 tile flags (bit 0
+  atk (shooter KT_ATK), gold (BOSS-RANGED: a golden body, + GOLD_ATK / dmg + 1), turn_tick, map (dict row -> 32 tile flags (bit 0
   solid)), bodies: list of (slot, x, y, w, h, dying) — every live body but the
   shooter (the hero included), used by box_free.
 The RNG is io.asm's (rng_next / rng_mod, mask-and-reject), passed as Rng.
@@ -24,7 +24,7 @@ RSP_N, RSP_R, RSP_I, RSP_X = range(4)
 DTY_PHYS, DTY_DARK = 0, 5
 NODEF, EFX_SHIFT = 0x08, 4
 EFX_FEAR = 4
-RWF_SPELL, RWF_AWAY, RWF_NOIMP, RWF_PRE, RWF_NOREFL, RWF_HEX, RWF_HOLD = 1, 2, 4, 8, 16, 32, 64
+RWF_SPELL, RWF_AWAY, RWF_NOIMP, RWF_PRE, RWF_NOREFL, RWF_HEX, RWF_HOLD, RWF_WALK = 1, 2, 4, 8, 16, 32, 64, 128
 FEAR3 = (3 << 4) | 3
 DARK_DHC = DTY_DARK | NODEF | (EFX_FEAR << EFX_SHIFT)
 # kind -> (r, N, flags, die, bonus, dhc, dhe, fx name)
@@ -35,6 +35,20 @@ ROWS = {
     14: (8, 2, RWF_AWAY | RWF_SPELL, 6, 1, DARK_DHC, FEAR3, "nbolt_fly1"),     # Necromancer
     29: (8, 2, RWF_AWAY | RWF_SPELL | RWF_PRE, 6, 1, DARK_DHC, FEAR3, "nbolt_fly1"),  # Bone Caller
 }
+# BOSS-RANGED (plan.md rulings): rows used ONLY by a golden body (ai_rhook's RK_GOLD1 gate) —
+# the Goblin King's dagger (D1) and the Spider Queen's spit (D2, always POISON + 12 -> E = 6)
+K_GOBLIN, K_SPIDER, GOLD_ATK = 4, 9, 2
+GOLD_ROWS = {
+    K_GOBLIN: (6, 2, RWF_WALK | RWF_NOIMP, 3, 0, DTY_PHYS, 0, "dagger_spin1"),                  # Goblin King
+    K_SPIDER: (6, 2, RWF_WALK | RWF_NOIMP, 2, 0, DTY_PHYS | (6 << EFX_SHIFT), 12 // 2, "dagger_spin1"),  # Spider Queen
+}
+
+
+def row_of(kind, gold):
+    """rk_tab + ai_rhook's gate: the kind's row tuple, or None (the walker / guard rules)."""
+    if kind in GOLD_ROWS:
+        return GOLD_ROWS[kind] if gold else None
+    return ROWS.get(kind)
 # 3F-T11b (game.md §9.9 A2): the Archmage's 7 spell rows (arch6.asm), spell index 0..6
 DTY_FIRE, DTY_COLD, DTY_SHOCK, DTY_DRAIN = 1, 2, 3, 4
 EFX_FROZEN, EFX_ASLEEP, EFX_STUNNED, EFX_CONFUSED, EFX_POISON, EFX_WEAK = 1, 2, 3, 5, 6, 7
@@ -183,6 +197,12 @@ def _hero_status(H, rng, c, e, rsp, out):
 
 
 
+def flight_row(sit):
+    """§9.2 fr = shooter top + 2, inside the hero's rows; BOSS-RANGED: a 2-high shooter (the Spider
+    Queen, top = 9s+6) fires from its top row (top + 2 would be its floor)."""
+    return sit["y"] + (PF_ROW_DY if sit["h"] > 2 else 0)
+
+
 def decide(sit, rng):
     """-> dict: used, counter, left, x, moved, shot (None or the shot's results)."""
     r, N, fl, die, bon, dhc, dhe, fx = sit["row"]
@@ -201,7 +221,7 @@ def decide(sit, rng):
     if gap >= r:
         return out
     if gap:
-        fr = sit["y"] + PF_ROW_DY
+        fr = flight_row(sit)
         if any(sit["map"][fr][c] & 1 for c in range(first, first + gap)):
             return out
         if not box_free(sit, (first, sit["y"], gap, sit["h"])):
@@ -215,6 +235,8 @@ def decide(sit, rng):
         elif sit.get("summon_ok"):                  # -> the turn is the summon: S := BC_CD, no shot
             out.update(used=True, summon=True, s=BC_CD)
             return out
+    if old and fl & RWF_WALK:                       # BOSS-RANGED: between shots it walks in (L = 0)
+        return out
     out["used"] = True
     if old == 0:                                    # SHOOT
         out["left"] = d < 0
@@ -226,11 +248,11 @@ def decide(sit, rng):
         if not fl & RWF_SPELL:
             d20 = rng.mod(20) + 1
             eva = 0 if H["held"] else H["eva"]
-            hit = d20 + sit["atk"] - 10 - eva >= 0
+            hit = d20 + sit["atk"] + (GOLD_ATK if sit.get("gold") else 0) - 10 - eva >= 0
         hs = {}
         if hit:
             sh["imp"] = not fl & RWF_NOIMP
-            dmg = rng.mod(die) + 1 + bon
+            dmg = rng.mod(die) + 1 + bon + (1 if sit.get("gold") else 0)   # 3F-T8: a golden shooter + 1
             sh["lost"] = deal_hero(sit, rng, dmg, dhc, dhe, hs)
             sh["gate"] = min(I, R + CNB_MAX)
         else:
@@ -238,7 +260,7 @@ def decide(sit, rng):
         sh["hero"] = hs
         anchor = first if d > 0 else first + gap - 1
         sh["desc"] = [fx, fx + 1] + ([fx + 2] * 2 if sh["imp"] else [FX_NONE] * 2) + \
-            [ROCK_ATTR if fl & RWF_NOIMP else 0, anchor, sit["y"] + PF_ROW_DY, 1 if d < 0 else 0, 0, PF_IMPT if sh["imp"] else 0, 1, gap, 0, 0, 0, 0]
+            [ROCK_ATTR if fl & RWF_NOIMP else 0, anchor, flight_row(sit), 1 if d < 0 else 0, 0, PF_IMPT if sh["imp"] else 0, 1, gap, 0, 0, 0, 0]
         sh["flash"] = I if sh["lost"] else 0
         out["shot"] = sh
         return out

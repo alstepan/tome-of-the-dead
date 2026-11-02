@@ -5117,6 +5117,49 @@ reads the bonus first and reaches the die column from the same HL (both page 0, 
 the inline pair; one rng_mod as before (RNG order unchanged; `tools/balance_sim.py` output identical).
 Ticks: +27 T per KFL site on cold paths only (spawn / room exit / level start / pend / one per cast or impact); play ticks unchanged.
 
+### BOSS-RANGED ledger (`feat/boss-ranged`, 2026-11-02; plan.md "BOSS-RANGED" rulings)
+Behaviour: the golden Goblin King (D1) throws daggers and the golden Spider Queen (D2) spits, ONLY when golden
+(`LEK_GOLD`: lp_dtab gives it to the lair bosses only, so every golden Goblin / Spider is the boss). Range 6
+(gap < 6), a shot every 3rd turn (N 2; none on the first phase), `RWF_WALK`: between shots the walker rules run
+(walks in, then melees; never step-away / hold). King 1d3 + 1 golden - DEF (2..4 vs DEF 0); Queen 1d2 + 1 golden
+- DEF and every hit POISON + `SQ_PSN_T` 12 (deal_hit E = 6, chance 0; cap `PSN_CAP` 30; Silk Cloak `IMMF_POISON`
+immune, the damage stays). FX = `dagger_spin1/2` in `ROCK_ATTR` $06 (`RWF_NOIMP`), SFX_THROW, the LOG-DMG hit /
+miss lines + the poison line (no new strings). Golden to-hit + `GOLD_ATK` (hit_roll) as every golden attack.
+Flight row (§9.2 "fr inside the hero's rows"): a 2-high shooter fires from its TOP row (top + 2 = its floor):
+`rg_line` fr = top + ((KT_BH / 2) & 2), `rg_q` FXD_ROW by a `K_SPIDER` test (HL / BC live there), ASSERTed to agree
+(the only 2-high shooter; every other shooter kind 4..7 high: unchanged).
+
+Code / data: `combat_defs.asm` `RWF_WALK` (bit 7), `RK_GKING` 13 = `RK_GOLD1`, `RK_SQUEEN` 14, `RK_ROWS` 12 -> 14,
+`SQ_PSN_T`; `ranged6.asm` rd_tab rows 13 / 14 (+16 B), `ai_ranged` step 4b (one RW_F load for WALK + AWAY: +3 B),
+the flight-row change (+1 rg_line, +7 rg_q); `ranged2.asm` `rk_tab` K_GOBLIN / K_SPIDER entries (same 30 B) and the
+gate in `ai_rhook` (`cp RK_GOLD1 / jr c / bit LEK_GOLD_BIT,(ix+E_GOLD) / jr z,ai_ghook`, +10 B); `glow_tab` (4 B)
+moved from `boss2a.asm` (image tail) to `main.asm` before `kind_tab_pad` (the ALIGN pad 8 -> 4) to fit bank 2.
+Pool: `dagger_spin1/2` already pooled on D1 / D2 for both heroes (Warrior class FX unit `K_FXW`; Mage
+`pool_xmap` K_GOBLIN -> U_DAGM, a Goblin on both depths): `pool_gmap` / `LEVEL_NEED` unchanged.
+
+| region | before | after | delta | note |
+|---|---|---|---|---|
+| R6 (release) | free 33 | **free 6** | -27 | rows +16, step 4b +3, flight row +8 |
+| R6 (kit) | free 38 | **free 11** | -27 | same |
+| bank 2 | free 14 (6 to seq_rows + 8 pad) | **free 4** (0 + 4 pad) | -10 | `ai_rhook` gate +10; `glow_tab` 4 B tail -> pad |
+| bank 3 / bank 7 / low RAM / bank 0 / bank 1 / SRC6 / pool | | unchanged | 0 | `-DF3_GEN=0`: R6 free 6, bank 2 free 4 |
+
+Ticks: an ordinary Goblin / Spider turn +46 T (the gate, then ai_ghook as before); the golden King / Queen run
+`ai_ranged` every acting turn (~1.0-1.3k T out of line / range, ~9k T a shot incl. far6 + hit_roll + deal_hit +
+lines, tests/ranged.py T line). `tests/budget.py` walarm 124,951 T (headroom 1,049 >= 900); new REPORTED (not
+gated) scenario `blair` (D1 lair walk-in, King + Goblin + Rat + Bat, Σ 11): worst tick 147,018 T, an early input
+tick before any dagger; the control `BUDGET_BLAIR_NOSHOT=1` (rk_tab[K_GOBLIN] poked 0) is 145,688 T: the overrun
+predates the feature (manager ruling pending).
+Sim (`tools/balance_sim.py`, 10k runs/cell, cautious / average / reckless; `--set param.RANGED_LT=0 --set param.GOLD_RDMG=0
+--set param.BOSS_RANGED=0` reproduces FINAL B exactly): FINAL B W 47.3 / 41.7 / 18.3, M 41.8 / 42.8 / 15.1; alignment only
+(gap < r, golden ranged + 1) W 48.3 / 42.0 / 18.9, M 42.2 / 44.1 / 15.2; + BOSS-RANGED (default) **W 45.8 / 40.5 / 17.8,
+M 40.5 / 42.2 / 14.3** (vs FINAL B W -1.5 / -1.2 / -0.5, M -1.3 / -0.6 / -0.8). `tests/zx0_pool.py LEVEL_NEED` +12 every
+level = RECLAIM-B T1's POOL_START move (stale on main), not this feature.
+Rebase onto main `e6830a8` (corpse fix R6 -8, RECLAIM-C2): R6 25 free before; the two spawn6 KFIELD sites
+(`sp_y .w` KT_BH, `sp_place .lft` KT_BW) -> `KFL` (-6 B, +27 T each on the spawn / placement path only, same
+result: H / F are dead after both). Final: **R6 free 4 (release, also `-DF3_GEN=0`) / 9 (kit); bank 2 free 120
+(release: 0 to seq_rows + 120 pad) / 61 (kit)** (main: 130 / 73; -10 = the gate, `glow_tab` stays in the pad).
+
 ### fix/d8-corpse-topleft (2026-11-02, branch `fix/d8-corpse-topleft`)
 User playtest: a corpse frame flashes at the top-left when the hero kills a summoned Skeleton (the Archmage's
 and the Golden Pharaoh's). Cause: the summon dies on the turn's last tick while the next one is queued;

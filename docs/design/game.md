@@ -2804,7 +2804,8 @@ Poltergeist is not a shooter (melee touch). atk / dmg include depth scaling and 
   hero's near col = cell `gap+1`). **In line iff** shooter standing, hero standing (not
   mid-ladder) and the same storey (`storey_ref`); every standing body of a storey overlaps,
   so no row test is needed. **Flight row** `fr = shooter top + 2` (tall: `9s+4`, Slinger:
-  `9s+6`), always inside the standing hero's rows `9s+2..9s+7`.
+  `9s+6`), always inside the standing hero's rows `9s+2..9s+7`; a 2-high shooter (BOSS-RANGED: the
+  Spider Queen, top `9s+6`) fires from its top row `9s+6` (top + 2 would be its floor).
 - **Clear line iff** (a) no `TF_SOLID` cell in `ROOM_MAP` row `fr` over the gap cols (air
   decor, torches and back-wall patches are non-solid by §1.2, so in practice only a mid-room
   block stops it) and (b) no body (any kind or state, mid-ladder included, pending excluded)
