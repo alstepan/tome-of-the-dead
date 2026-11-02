@@ -404,6 +404,7 @@ pool_gmap:
                 ; the Necro adds the cast (3F-T11: the Archmage has its own unit); climbers (Orc, Necro, Mummy) add the
                 ; shared climb pair U_CLIMBH (the Archer family uses the Skeleton's U_SKCLIMB) (once a level: dedup per unit)
                 DB   K_VAMPIRE,  K_VAMPIRE,  U_DEADR   ; ANIM-IMPORT2: own set (was Necro walk + U_VBITE)
+                DB   K_VAMPIRE,  U_CLIMBH,   PG_NONE   ; VAMP-BOSS: the shared climb pair (the Vampire climbs)
                 DB   K_VAMPIRE,  K_VBAT,     PG_NONE   ; 3F-T9: its bat form (the Bat's first 2 frames; on a
                                                        ; Bat level pl_unit merges them into the Bat's unit)
                 DB   K_ORC,      K_ORC,      U_DEADR

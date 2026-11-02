@@ -9,7 +9,8 @@
 ;   (ai_guard: bank-7 boss7.asm since MEM-RECLAIM w2b)
 ;   (grate_open / boss_chk: bank-7 boss7.asm since MEM-RECLAIM w2b)
 ;==============================================================================
-GUARD_R         EQU 8                       ; G2: the leash, |hero x - c| <= R (user 2026-10-29)
+GUARD_R         EQU 31                      ; G2: the leash, |hero x - c| <= R: the whole storey (user 2026-11-02, was 8)
+                ASSERT GUARD_R < 255                 ; boss7 .ab: cp GUARD_R + 1 must not wrap
 GUARD_GAP       EQU 5                       ; G1a / G1b: body gap to the hero's arrival box
 
 ;------------------------------------------------------------------------------

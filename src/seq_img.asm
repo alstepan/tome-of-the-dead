@@ -212,11 +212,12 @@ am_attack:      DB FID_nun_walk1, 3, 0, FID_nun_cast, 2, SF_IMPACT, SEQ_END
 am_hurt:        DB FID_nun_hurt, 3, 0, SEQ_END
 am_death:       DEATHSEQ FID_nun_hurt, FID_small_corpse, FID_small_corpse, FID_nun_walk1
 ksm_am_e:
-; --- Vampire: ANIM-IMPORT2 its own 40-px set (ART9: cape, no staff; walk B3, BITE, HURT); not a climber ---
-ksm_vp:         KSMH ksm_vp_e - ksm_vp_s, 3, vp_idle, vp_move, vp_idle, vp_hurt, vp_attack, vp_hurt, vp_hurt, vp_death, ksm_vp_s
+; --- Vampire: ANIM-IMPORT2 its own 40-px set (ART9: cape, no staff; walk B3, BITE, HURT); VAMP-BOSS: a climber (the shared pair) ---
+ksm_vp:         KSMH ksm_vp_e - ksm_vp_s, 3, vp_idle, vp_move, vp_climb, vp_climb + 1, vp_attack, vp_hurt, vp_hurt, vp_death, ksm_vp_s
 ksm_vp_s:
 vp_idle:        DB 1, FID_vamp_walk1, 1, SEQ_END
 vp_move:        MOVECYC4 vamp_walk2, vamp_walk1, vamp_walk3, vamp_walk4   ; ANIM-X12 X2: 4 distinct poses
+vp_climb:       CLIMBCYC FID_climb_h1, FID_climb_h2, FID_vamp_walk1, FID_vamp_walk1, FID_vamp_walk1, FID_vamp_walk1
 vp_attack:      DB FID_vamp_walk1, 3, 0, FID_vamp_bite, 2, SF_IMPACT, SEQ_END
 vp_hurt:        DB FID_vamp_hurt, 3, 0, SEQ_END          ; its own HURT pose (ART9)
 vp_death:       DEATHSEQ FID_vamp_hurt, FID_small_corpse, FID_small_corpse, FID_vamp_walk1
@@ -269,5 +270,6 @@ ksm_ar_e:
                 ; KS_CLIMBREST = the climb cycle + 1 (one byte read): that byte is climb_h1, which
                 ; must be the cell-aligned STA climb art (CLIMBCYC emitted the real pair)
                 ASSERT FID_climb_h1 >= 0 && FID_climb_h2 >= 0 && !(FFL_climb_h1 & (FF_PH4 | FF_MOTION))
+                ; VAMP-BOSS: vp_climb + 1 = climb_h1 by the line above (CLIMBCYC emits "DB 2, c1": {b} cannot read a DISPed image)
                 ; the Archer / Sniper climb with the Skeleton's own pair (sk_climb's): cell-aligned STA|SYM
                 ASSERT !(FFL_skeleton_climb1 & (FF_PH4 | FF_MOTION)) && !(FFL_skeleton_climb2 & FF_MOTION)

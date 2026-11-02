@@ -7,8 +7,9 @@ the hero walked into the lair through its door (real do_exit + lp_transition).
       "THE GATE IS BARRED" logged, the 3 exit cells T_GRATE_SHUT, LF_GRATE_OPEN clear, BOSS_TRAP 0;
       golden: E_GOLD = LEK_GOLD, E_MAXHP = 2 x scaled + 6
   E2  DOWN on the shut grate (x = c, storey 1): no turn (F4), no exit, depth unchanged
-  G1  leash: the hero standing on storey 1 at |x - c| = 9 -> the boss holds its post (5 turns);
-      at 8 -> it engages (leaves the post toward him)
+  G1  leash (GUARD_R read from the symbol; VAMP-BOSS: 31, the whole storey): R >= 24: the hero on storey 0 for
+      20 turns -> the boss stays at its post c; the hero on storey 1 at |dx| 12 -> it engages at once.
+      R < 24 (the old cases): |x - c| = R + 1 -> holds its post (5 turns); at R -> it engages
   G2  PROVOKED: a hit from outside the leash (deal_hit stub) -> LF_PROVOKED, the boss chases past
       R; the hero on storey 0 -> it walks home to c
   G3  leave + re-enter: PROVOKED cleared, the boss back at its post with its exact hp
@@ -223,21 +224,64 @@ def run(p, depth, seed):
     # ---------------- G1 leash -------------------------------------------
     boss_at(p, bs, c)
     wb = p.kb(p.ent(bs)["KIND"], "KT_BW")
-    far = c + 9 if c + 9 + L.kw <= 29 else c - 9
-    if far >= 2:
-        L.place_hero(far, 1, left=far > c)
-        for _ in range(5):
-            p.turn("WAIT")
-        check(f"{tag} G1 hero at |dx| 9 on storey 1: the boss holds the post (5 turns)",
-              p.ent(bs)["X"] == c, p.ent(bs)["X"])
-        near = c + 8 if far > c else c - 8
-        L.place_hero(near, 1, left=near > c)
-        for _ in range(2):
-            p.turn("WAIT")
-        check(f"{tag} G1 hero at |dx| 8: engaged, the boss leaves the post toward him",
-              p.ent(bs)["KIND"] == S["K_NECRO"]         # a ranged caster engages by casting from its post
-              or (p.ent(bs)["X"] != c and (p.ent(bs)["X"] - c) * (near - c) > 0),
-              p.ent(bs)["X"])
+    R = S["GUARD_R"]                              # VAMP-BOSS (user 2026-11-02): 31 = the whole storey (was 8)
+    if R >= 24:
+        # the leash covers the storey: the hero on storey 0 never engages it; on storey 1 far away it engages at once
+        far = c + 12 if c + 12 + L.kw <= 29 else c - 12
+        if far >= 2:
+            L.place_hero(far, 0, left=far > c)
+            for _ in range(20):
+                p.turn("WAIT")
+            check(f"{tag} G1 R {R}: the hero on storey 0 for 20 turns: the boss stays at its post c",
+                  p.ent(bs)["X"] == c and eb(p, bs, "E_KIND") == p.ent(bs)["KIND"], p.ent(bs)["X"])
+            boss_at(p, bs, c)
+            L.place_hero(far, 1, left=far > c)
+            for _ in range(2):
+                p.turn("WAIT")
+            check(f"{tag} G1 R {R}: the hero on storey 1 at |dx| 12: engaged at once, the boss leaves the post toward him",
+                  p.ent(bs)["KIND"] == S["K_NECRO"]
+                  or (p.ent(bs)["X"] != c and (p.ent(bs)["X"] - c) * (far - c) > 0), p.ent(bs)["X"])
+    else:
+        far = c + R + 1 if c + R + 1 + L.kw <= 29 else c - R - 1
+        if far >= 2:
+            L.place_hero(far, 1, left=far > c)
+            for _ in range(5):
+                p.turn("WAIT")
+            check(f"{tag} G1 hero at |dx| {R + 1} on storey 1: the boss holds the post (5 turns)",
+                  p.ent(bs)["X"] == c, p.ent(bs)["X"])
+            near = c + R if far > c else c - R
+            L.place_hero(near, 1, left=near > c)
+            for _ in range(2):
+                p.turn("WAIT")
+            check(f"{tag} G1 hero at |dx| {R}: engaged, the boss leaves the post toward him",
+                  p.ent(bs)["KIND"] == S["K_NECRO"]         # a ranged caster engages by casting from its post
+                  or (p.ent(bs)["X"] != c and (p.ent(bs)["X"] - c) * (near - c) > 0),
+                  p.ent(bs)["X"])
+    if R >= 24 and p.ent(bs)["KIND"] == S["K_VAMPIRE"]:
+        # VAMP-BOSS (user 2026-11-02): the Lord left on storey 0 (after a bat flight) climbs back to storey 1
+        tf = p.z.read_memory(S["tile_flags"], 64)
+        rm = p.z.read_memory(S["ROOM_MAP"], 576)
+        cell = lambda cc, rr: tf[rm[rr * 32 + cc] & 63] if 0 <= cc < 32 and 0 <= rr < 18 else S["TF_SOLID"]
+        lad = [cc for cc in range(1, 31) if all(cell(cc, rr) & S["TF_LADDER"] for rr in range(10, 15))]
+        h6 = p.kb(S["K_VAMPIRE"], "KT_BH")
+        yy = stand_y(0, h6)
+        spots = [x for x in range(2, 28) if all(cell(cc, yy + h6) & S["TF_FLOOR"] and not cell(cc, yy + h6) & S["TF_HOLE"]
+                                                 and not any(cell(cc, rr) & (S["TF_SOLID"] | S["TF_LADDER"]) for rr in range(yy, yy + h6))
+                                                 for cc in range(x, x + 3))]
+        lx = next((x for x in spots for l in lad if 4 <= abs(x - l) <= 9), None)
+        check(f"{tag} G1b setup: a ladder and a storey-0 standing spot 4..9 cols from it", lx is not None, (lad, spots[:6]))
+        if lx is not None:
+            p.set_ent(bs, X=lx, PX=lx * 8, Y=yy, PY=yy * 8, MODE=0)
+            hxx = c + 6 if c + 6 + 3 <= 29 else c - 6
+            L.place_hero(hxx, 1, left=hxx > c)
+            t, e = 0, p.ent(bs)
+            while t < 40 and not (e["Y"] + h6 == 9 + 8 and True):
+                p.turn("WAIT")
+                t += 1
+                e = p.ent(bs)
+                p.set_ent(0, HP=250, MAXHP=250)
+            check(f"{tag} G1b the Lord on storey 0 climbs back to storey 1 within 40 turns ({t})",
+                  e["Y"] + h6 == 9 + 8, (e["X"], e["Y"], t))
     # ---------------- G2 PROVOKED ----------------------------------------
     boss_at(p, bs, c)
     p.set_ent(bs, HP=hp0)

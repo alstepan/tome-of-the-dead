@@ -48,6 +48,9 @@ vb_one:         ld   a, (ix+E_KIND)
                 call vb_gap
                 ret  c                         ; the hero on another storey
                 ld   d, a                      ; D = gap, C = the first gap col
+                call is_standing               ; VAMP-BOSS: a climbing Vampire keeps its form (the 3x2 bat box
+                ret  nz                        ; would drop it off the ladder); on_ladder minus the flyer test
+                                               ; (a humanoid here); bank 2, clobbers A, HL (keeps C, D)
                 bit  RCD_ONCE_BIT, (ix+E_RCD)
                 jr   nz, .close                ; fled once already
                 ld   a, (ix+E_HP)
