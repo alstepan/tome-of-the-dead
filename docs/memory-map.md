@@ -5073,3 +5073,27 @@ Behaviour: (B) `GUARD_R` 8 -> **31** (`boss6.asm`, ASSERT `< 255`; boss7 `.ab` `
 | tape | | | 0 | tape_layout 14 blocks, 83,310 B |
 
 Pool: D3 pays the shared climb pair (D6 / D8 already pooled it via Orc / Necro / Mummy): **D3 Warrior 26,528 -> 27,008, Mage 23,616 -> 24,096 (+480 each)** against `POOL_CAP` 32,192 (slack 5,184 / 8,096); every other level and the D8 Warrior slack (1,024) unchanged (`tests/zx0_pool.py LEVEL_NEED`). Cost: `vb_one` +~130 T (`is_standing`) only for a same-storey humanoid Vampire at the end of an odd turn; `tests/budget.py` unchanged (walarm max 124,965 T = 1,035 T headroom, worst play tick 115,185 T). Tests: `tests/climb3f.py` (Vampire C1-C4 on D3 / D8, both heroes; C5 = Ogre D4), `tests/vbat.py` M1-M3, `tests/boss.py` G1 (R >= 24: hero on storey 0 20 turns -> the boss stays at c; storey 1 far away -> engages at once) + G1b (the D3 Lord climbs back), `combat_tables` / `tools/levelgen.py CLIMBERS` (+ K_VAMPIRE).
+
+### RECLAIM-B ledger (T1/T3, `feat/reclaim-b2`, 2026-11-02)
+- **T1 (text DP parse):** `tools/textpack.py` `dp_parse`: after the greedy dictionary is built, every string is re-parsed optimally (1 B per literal or token) over the SAME dictionary; no decoder / dictionary change, strings identical. Bank-0 text 2,384 -> **2,372** B (-12), `TEXT_RES` 2,412 -> **2,400** (headroom 28 unchanged), `POOL_START` `$CA7E` -> `$CA72` (kit build; release `$CA40` -> `$CA34`): the bank-0 pool gains 12 B (the `zx0_pool` slack line is unchanged: the need grows with the top). Tests: log_audit / logdmg / stats1 / kit (both builds) 0 failed.
+- **T3 (menu font map):** bank-1 `menu_font_map` (64 B, ASCII 32..95 -> glyph) removed (and `MENU_FONT_MAP_LO/_N`, `MENU_FONT_MAP_BYTES`); `mf_char_e` (`src/menu1.asm`) computes the glyph by range arithmetic (' ' / '!' / '-' / '0'..':' / '>' / 'A'..'Z', absent -> 0), the same glyph for all 41 charset chars (`tools/menu_art.py font_glyph` is the model, asserted against the charset at generation; `tests/world.py menu_text_ok` uses it). Bank-1 UI code 4,837 -> **4,806** B, bank 1 free 2 -> **33** B (-31 net: -64 map, +33 code). Cold path (menu text only). Tests: redefine, gfx_integrity, snd1 (menu + redefine goldens) 0 failed, game.py 339 pass / 0 fail.
+
+### RECLAIM-B ledger (T2 kfl / dmg_roll, `feat/reclaim-b`, 2026-11-02; behaviour identical, memory-neutral refactor)
+Two shared helpers; every byte below is from the build DISPLAY (release `-DDEBUG_KIT=0`, branch tip `e4e2edb` = main `48bdcc8` + T1 / T3 -> after; the deltas are identical on bare main):
+
+| Region | Before | After | Change |
+|---|---|---|---|
+| R6 | 21 | **33** | `spawn6.asm` 4 cold KFIELD sites -> `KFL` (`sp_run`, `sp_y` flyer test, `sp_try` flyer test, `sp_door`; 3 B each) -12 (kit 26 -> 38) |
+| low RAM | 1 | **6** | `kfl` routine +7 (`lowram.asm` before `mon_door`, `$7409` today); 4 sites -12 (`mon_door`, `climb_blocked` B16 flyer test, `jump_bodies` J1 low-body test x2: only after a box hit) |
+| bank 3 | 1 | **60** | `bank3.asm` 10 sites (`spawn_one` x2, `init_ent_common`, `follow_admit`, `place_follower` x3, `dest_counts`, `level_populate` x2), `lpop3` 1, `proj3` `pf_rowof` 1: -36; `dmg_roll` (turn3.asm, 21 B) shared by `do_attack` and rank3 `melee_hit` (25 B each -> 3 B call): -23 |
+| bank 7 low | 2 | **14** | `boot7` `new_game` hero y, `abil_melee7` `power_fire` impact x, `bank7` `follow_select` climber / gap test: 4 sites -12 (F3_GEN=0: 6 -> 18) |
+| bank 1 | 33 | **34** | not touched: the items overlay re-packs 949 -> 948 B (its low-RAM call targets moved) |
+| bank 2 / bank 7 high / b0 / SRC6 | 14 / 1 / 28 / 19 | same | |
+
+`KFL off` (`defs.asm`, after `KFIELD`) = `ld hl, kind_tab + off` / `call kfl`: 6 B per site vs 9, +27 T, same result and clobbers
+(A, HL = the field's address, F from the add). COLD sites only; the hot ones keep the inline `KFIELD` (turn3 AI, combat3
+`hit_roll`, anim / logic / mark, act7, status7, bank7 `rg_line` / 445 / 454 / 953 / 978, spawn6 `sp_y` walker branch / the `.lft` gap).
+`dmg_roll` (IX = attacker -> A = 1d`KT_DIE` + `KT_BONUS`, F from that add; C = N, D = bonus; keeps E; clobbers A, BC, D, HL)
+reads the bonus first and reaches the die column from the same HL (both page 0, ASSERTed): 105 T + rng_mod, +1 T per hit vs
+the inline pair; one rng_mod as before (RNG order unchanged; `tools/balance_sim.py` output identical).
+Ticks: +27 T per KFL site on cold paths only (spawn / room exit / level start / pend / one per cast or impact); play ticks unchanged.

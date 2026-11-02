@@ -24,6 +24,28 @@
 ; (try_quaff: D3-7 T5 moved into bank-7 intent7.asm ic_potion.)
 
 ;------------------------------------------------------------------------------
+; dmg_roll — RECLAIM-B: the shared melee / ability damage roll (do_attack,
+; rank3 abil_hit). In : IX = attacker.  Out: A = 1d(KT_DIE) + KT_BONUS (signed: the
+; hero's weapon m, gear6 hero_recalc), F from that add (Z / S for the max(1, ..)
+; clamp), C = N, D = the bonus.  Keeps E.  Clobbers: A, B, C, D, HL, F.
+; One rng_mod (the RNG order is unchanged). The bonus is read first so the die
+; column is reached from the same HL (KT_DIE / KT_BONUS share page 0):
+; 105 T + rng_mod (+1 T vs the two inline KFIELDs it replaces).
+;------------------------------------------------------------------------------
+dmg_roll:
+                KFIELD KT_BONUS
+                ld   d, a
+                ld   a, l
+                sub  KT_BONUS - KT_DIE         ; L = kind + KT_DIE (no borrow: kind < 32)
+                ld   l, a
+                ld   c, (hl)
+                call rng_mod                   ; 0..N-1 (keeps C, DE)
+                inc  a
+                add  a, d
+                ret
+                ASSERT (KT_DIE >> 8) == (KT_BONUS >> 8) && KT_BONUS > KT_DIE
+
+;------------------------------------------------------------------------------
 ; do_attack — IX = attacker, A = target slot: one melee blow (D3-6a: on the
 ; shared core, combat3.asm). hit_roll (F1, the d20 first), then damage 1dN +
 ; bonus (kind_tab, prototype §6.2 / F2) dealt by deal_hit with the attacker's
@@ -54,13 +76,7 @@ do_attack:
                 inc  l
                 ld   e, (hl)
                 push bc
-                KFIELD KT_DIE                  ; damage: 1dN + bonus
-                ld   c, a
-                call rng_mod                   ; (keeps DE)
-                inc  a
-                ld   d, a
-                KFIELD KT_BONUS                ; (signed: the hero's weapon m, gear6 hero_recalc)
-                add  a, d
+                call dmg_roll                  ; damage: 1dN + bonus (keeps E)
                 jr   z, .one                   ; 3F-T6: max(1, 1dN + bonus) (a worn weapon at m < 0)
                 jp   p, .pos
 .one:           ld   a, 1

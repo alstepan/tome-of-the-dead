@@ -290,8 +290,33 @@ def build_dict(texts):
     return entries, streams
 
 
+def dp_parse(text, entries):
+    """Min-length token/literal parse of `text` over the fixed dictionary."""
+    n = len(text)
+    best = [0] * (n + 1)
+    pick = [None] * (n + 1)
+    for i in range(n - 1, -1, -1):
+        best[i], pick[i] = best[i + 1] + 1, None
+        for t, e in enumerate(entries):
+            if text.startswith(e, i) and best[i + len(e)] + 1 < best[i]:
+                best[i], pick[i] = best[i + len(e)] + 1, t
+    out, i = [], 0
+    while i < n:
+        if pick[i] is None:
+            out.append(text[i])
+            i += 1
+        else:
+            out.append(pick[i])
+            i += len(entries[pick[i]])
+    return out
+
+
 def encode(texts):
     entries, streams = build_dict(texts)
+    # Optimal re-parse with the SAME dictionary (no decoder change): the greedy
+    # substitution order can pick a token that blocks two better ones; a DP over
+    # each text (1 B per literal or token, ties -> fewer tokens) is never longer.
+    streams = [dp_parse(t, entries) for t in texts]
     ents = []
     for e in entries:
         b = [ord(ch) for ch in e]

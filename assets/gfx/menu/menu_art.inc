@@ -2,7 +2,6 @@
 ; The row-6 ornament reuses ORN_GLYPHS (panel_orn.asm, 0 B extra); hero previews reuse
 ; sprites knight_idle1 / wizard_idle (0 B extra).
 MENU_FONT_BYTES EQU 656
-MENU_FONT_MAP_BYTES EQU 64
 MENU_TITLE_BYTES EQU 277
 MENU_TORCH_BYTES EQU 107
-MENU_ART_BYTES EQU 1104
+MENU_ART_BYTES EQU 1040

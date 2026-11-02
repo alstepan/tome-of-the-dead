@@ -509,6 +509,29 @@ def run(h, p, check):
         check("X5: FEARed %s: refused (no turn, no MP, no damage), 'YOU ARE TOO AFRAID TO FIGHT!'" % nm,
               nt and p.rb("MP") == mp0 and p.ent(g)["HP"] == hp0 and TXT["st_afraid"].rstrip(".") in lines,
               (nt, p.rb("MP"), mp0, lines))
+    # FEAR-CAST: every Mage spell at every rank (the icon slot is 1 + k), full MP
+    for abl in range(5):
+        for rk in (1, 2, 3):
+            g, = scene(K_WIZARD, [(K_GOBLIN, HX + 3, 60, True)], learn={abl: rk}, mp=60)
+            setst(0, FEAR, 0x0F)
+            p.select_slot(1 + abl)
+            lines.clear()
+            mp0, hp0 = p.rb("MP"), p.ent(g)["HP"]
+            nt = p.no_turn("FIRE")
+            check("X5b: FEARed Mage spell %d rank %d: refused" % (abl, rk),
+                  nt and p.rb("MP") == mp0 and p.ent(g)["HP"] == hp0 and TXT["st_afraid"].rstrip(".") in lines,
+                  (nt, p.rb("MP"), mp0, lines))
+    # FEAR-CAST via the real deal_hit path (Necromancer-style bolt: DARK_DHC FEAR 3), then Firebolt
+    for dur in (3, 2):   # the hero's st_step runs before his action: FEAR 1 is gone at the first try (by design)
+        g, = scene(K_WIZARD, [(K_GOBLIN, HX + 3, 60, True)], learn={1: 1}, mp=60)
+        deal(g, 0, 1, S["DTY_DARK"] | S["DH_NODEF"] | (S["EFX_FEAR"] << S["DH_EFX_SHIFT"]), dur)
+        fs = st(0)
+        p.select_slot(2)
+        lines.clear()
+        mp0 = p.rb("MP")
+        nt = p.no_turn("FIRE")
+        check("X5c: real FEAR %d on the Mage then Firebolt: refused" % dur,
+              nt and p.rb("MP") == mp0 and TXT["st_afraid"].rstrip(".") in lines, (fs, nt, p.rb("MP"), mp0, lines))
     g, = scene(K_WIZARD, [(K_GOBLIN, HX + 3, 60, True)], learn={0: 1})
     setst(0, FEAR, 0x01)
     p.select_slot(1)

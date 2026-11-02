@@ -209,7 +209,7 @@ power_fire:
                 pop  bc
                 pop  de
                 push bc
-                KFIELD KT_BW
+                KFL    KT_BW
                 pop  bc
                 inc  a
                 add  a, e

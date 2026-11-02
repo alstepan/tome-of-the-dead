@@ -1022,7 +1022,7 @@ pf_row:
 pf_rowof:
                 push ix
                 call ent_ix
-                KFIELD KT_BH
+                KFL    KT_BH
                 add  a, (ix+E_Y)
                 dec  a
                 ld   e, a                      ; bottom
