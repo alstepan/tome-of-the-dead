@@ -3,7 +3,7 @@
 key; then the three HOW TO PLAY pages (INSTR-BUILD, tests/instr.py covers them), then
 the menu, and the last key is swallowed (instr_ovl.asm, run by boot6_wait).
 The .sna does not hold the loading screen (the tape's SCREEN$ block is not in
-it), so the test pokes assets/gfx/loading/loading_l3c.scr into $4000 first.
+it), so the test pokes assets/gfx/loading/loading_l3d.scr into $4000 first.
    ZRCP_PORT=<port> python3 tests/anykey.py
 """
 import os
@@ -14,7 +14,7 @@ import game_lib  # noqa: E402
 from game_lib import Harness, Proto, S, EMU_ARGS, GS_SELECT, GS_ANYKEY, GS_PLAYING, GS_HELP1, GS_HELP2, GS_HELP3  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCR = open(os.path.join(REPO, "assets/gfx/loading/loading_l3c.scr"), "rb").read()
+SCR = open(os.path.join(REPO, "assets/gfx/loading/loading_l3d.scr"), "rb").read()
 
 
 def poke(p, addr, data):
