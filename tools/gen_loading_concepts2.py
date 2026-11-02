@@ -19,6 +19,9 @@ assets/gfx/loading/loading_s2d.scr, tools/gen_loading_screen.py).
   L3a-L3c (user 2026-10-31): L3 with more colour -- a torches + shaded walls,
                   b multicolour rays + dais + torch stands, c crypt colonnade;
                   concepts2_l3_variants.png = L3 + a + b + c side by side.
+  L3d (user 2026-11-01): L3c redrawn at native resolution -- hand-built 48x64 Warrior /
+                  Mage, native torches / columns / Tome / lectern / rune circle;
+                  concepts2_l3d.png = L3c vs L3d (3x, 1:1, 4x crops of the hero aisles).
   L4 THE GALLERY  crypt arcade: 7 monsters in gothic niches (Archmage centre),
                   Ogre / Ghost / Spider / Bat facing the heroes below, title plaque.
 
@@ -1868,6 +1871,582 @@ def l3c() -> Scr:
     return s
 
 
+# ================================================================ L3d: L3c redrawn at native resolution
+# (user 2026-11-01: "the heroes and objects feel like upscaled sprites"). Nothing here is a
+# scaled game sprite: the figures, torches, columns, Tome, lectern and rune circle are built
+# from shapes at 1:1 with material labels, then rendered with ordered dither in ONE ink per
+# cell (the 1-bit lit side / shadow side of each part).
+MK, MS, MD, ML, MC, MH = 1, 2, 3, 4, 5, 6     # black detail, solid, 50 %, 25 %, chainmail, 75 %
+
+
+def _poly(h, w, pts):
+    m = np.zeros((h, w), bool)
+    n = len(pts)
+    ys = [p[1] for p in pts]
+    for y in range(max(0, int(min(ys))), min(h, int(max(ys)) + 1)):
+        yc = y + 0.5
+        xs = []
+        for i in range(n):
+            (x1, y1), (x2, y2) = pts[i], pts[(i + 1) % n]
+            if (y1 <= yc < y2) or (y2 <= yc < y1):
+                xs.append(x1 + (yc - y1) * (x2 - x1) / (y2 - y1))
+        xs.sort()
+        for a, b in zip(xs[0::2], xs[1::2]):
+            for x in range(max(0, int(math.ceil(a - 0.5))), min(w, int(math.floor(b - 0.5)) + 1)):
+                m[y, x] = True
+    return m
+
+
+def _ell(h, w, cx, cy, rx, ry):
+    yy, xx = np.mgrid[0:h, 0:w]
+    return ((xx + 0.5 - cx) / rx) ** 2 + ((yy + 0.5 - cy) / ry) ** 2 <= 1.0
+
+
+def _line(h, w, pts, r=0.0):
+    """Polyline (or a 3-point quadratic Bezier if bez) as a mask, radius r."""
+    m = np.zeros((h, w), bool)
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        n = int(max(abs(x1 - x0), abs(y1 - y0)) * 2) + 1
+        for i in range(n + 1):
+            x, y = x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n
+            for dy in range(-int(r) - 1, int(r) + 2):
+                for dx in range(-int(r) - 1, int(r) + 2):
+                    X, Y = int(math.floor(x + dx + 0.5)), int(math.floor(y + dy + 0.5))
+                    if 0 <= X < w and 0 <= Y < h and (X - x) ** 2 + (Y - y) ** 2 <= (r + 0.5) ** 2:
+                        m[Y, X] = True
+    return m
+
+
+def _bez(p0, p1, p2, n=24):
+    return [((1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0],
+             (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1])
+            for t in (i / n for i in range(n + 1))]
+
+
+class Fig:
+    """A figure as a label image; parts are painted back to front."""
+
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+        self.lab = np.zeros((h, w), np.uint8)
+
+    def sep(self, m):
+        """1-px black seam where part m lies over earlier parts."""
+        ring = dilate(m, 1) & ~m & (self.lab != 0)
+        self.lab[ring] = MK
+
+    def paint(self, m, mat, sep=True):
+        if sep:
+            self.sep(m)
+        self.lab[m] = mat
+
+    def shade(self, m, levels, lit_right=True, rim=True, sep=True):
+        """Per row, u = 0 (shadow side) .. 1 (lit side): first level with u >= t wins."""
+        if sep:
+            self.sep(m)
+        for y in range(self.h):
+            xs = np.nonzero(m[y])[0]
+            if not len(xs):
+                continue
+            a, b = xs[0], xs[-1]
+            for x in xs:
+                u = (x - a) / max(1, b - a)
+                if not lit_right:
+                    u = 1 - u
+                self.lab[y, x] = next(mat for t, mat in levels if u >= t)
+            if rim:                       # torch rim light on the shadow edge
+                self.lab[y, a if lit_right else b] = MS
+
+    def mask(self, kind, *a, **k):
+        f = {"poly": _poly, "ell": _ell, "line": _line}[kind]
+        return f(self.h, self.w, *a, **k)
+
+
+def render_fig(s: Scr, lab, x0, y0, ink, halo=1):
+    sil = lab != 0
+    for y, x in zip(*np.nonzero(dilate(np.pad(sil, halo), halo))):
+        s.clr(x0 + x - halo, y0 + y - halo)
+    for y, x in zip(*np.nonzero(sil)):
+        X, Y = x0 + x, y0 + y
+        m = lab[y, x]
+        on = (m == MS or (m == MH and dith(X, Y, 0.75)) or (m == MD and dith(X, Y, 0.5))
+              or (m == ML and dith(X, Y, 0.25))
+              or (m == MC and ((Y % 2 == 0 and X % 2 == 0) or (Y % 2 == 1 and X % 4 == 1))))
+        if on:
+            s.put(X, Y, ink(X, Y) if callable(ink) else ink)
+
+
+LIT2 = [(0.24, MS), (0.0, MD)]                 # lit body, one 50 % shadow band on the back edge
+
+
+def warrior_fig() -> Fig:
+    """Hand-built Warrior, 48x64, facing right (toward the Tome): flat lit shapes, black
+    seams, one dither shadow band; sword held upright before him."""
+    f = Fig(48, 64)
+    # kite shield on the back arm: 2-px rim, shaded field, cross
+    sh = f.mask("poly", [(2, 22), (14, 20), (15, 34), (9, 53), (3, 38)])
+    f.paint(sh, MD, sep=False)
+    inner = sh & ~dilate(~sh, 2)
+    f.lab[sh & ~inner] = MS
+    f.lab[(f.mask("line", [(8, 24), (8.5, 46)]) | f.mask("line", [(4, 31), (13, 30)])) & inner] = MS
+    # plume sweeping back from the crest, two strand seams
+    pl = f.mask("poly", [(17, 2), (23, 3), (17, 7), (11, 13), (5, 21), (2, 19), (6, 11), (11, 5)])
+    f.paint(pl, MS, sep=False)
+    for pts in (_bez((18, 4), (10, 7), (4, 18)), _bez((20, 3), (12, 9), (7, 16))):
+        f.lab[f.mask("line", pts) & pl & ~dilate(~pl, 1)] = MK
+    # legs and boots (back leg in shadow), knee cop
+    f.paint(f.mask("poly", [(14, 44), (20, 44), (20, 57), (15, 57)]), MD)
+    f.paint(f.mask("poly", [(13, 57), (21, 57), (22, 63), (12, 63)]), MS)
+    f.paint(f.mask("poly", [(21, 44), (28, 44), (28, 57), (22, 57)]), MS)
+    f.lab[f.mask("line", [(23, 52), (23, 56)])] = MD
+    f.paint(f.mask("ell", 25.5, 49.5, 3.2, 2.6), MS)
+    f.paint(f.mask("poly", [(21, 57), (29, 57), (33, 60), (34, 63), (21, 63)]), MS)
+    # mail skirt with a scalloped hem
+    sk = f.mask("poly", [(12, 36), (29, 36), (31, 45), (10, 45)])
+    f.paint(sk, MC)
+    for x in range(48):
+        if sk[44, x] and x % 3 == 0:
+            f.lab[44, x] = MK
+    # surcoat with a cross, shadow band on the back edge
+    tor = f.mask("poly", [(13, 19), (28, 19), (29, 36), (12, 36)])
+    f.shade(tor, [(0.18, MS), (0.0, MD)], rim=False)
+    f.lab[23:34, 20:22] = MK
+    f.lab[26:28, 16:26] = MK
+    # belt + buckle
+    belt = f.mask("poly", [(12, 34.5), (29.3, 34.5), (29.5, 37.5), (11.8, 37.5)])
+    f.lab[belt] = MS
+    f.lab[34][belt[35]] = MK
+    f.lab[37][belt[36]] = MK
+    f.lab[34:38, 23] = f.lab[34:38, 26] = MK
+    # back pauldron, mail coif
+    f.paint(f.mask("ell", 14.5, 20.5, 4.6, 3.8), MD)
+    f.paint(f.mask("poly", [(16, 15), (26, 15), (27, 20), (15, 20)]), MC)
+    # great helm: dome, flat face plate, front ridge, visor slit, breaths
+    helm = f.mask("poly", [(14, 7), (27, 6), (29, 9), (29, 16), (14, 16)]) | f.mask("ell", 21, 7.5, 7.6, 4.6)
+    f.shade(helm, [(0.2, MS), (0.0, MD)], rim=False)
+    f.lab[10, 21:30][helm[10, 21:30]] = MK
+    f.lab[6:10, 23] = MK
+    for (x, y) in ((25, 13), (27, 13), (26, 14), (28, 14)):
+        f.lab[y, x] = MK
+    f.lab[16, 15:29] = MK
+    # front pauldron with lames, mail sleeve, vambrace
+    pd = f.mask("ell", 27, 21.5, 5.6, 4.4)
+    f.paint(pd, MS)
+    for y in (23, 25):
+        f.lab[y][pd[y] & (np.arange(48) > 23)] = MK
+    f.paint(f.mask("poly", [(25, 25), (30, 25), (31, 30), (27, 31)]), MC)
+    f.paint(f.mask("poly", [(28, 29), (33, 28), (35, 31), (31, 33)]), MS)
+    # sword held upright: grip, hand, crossguard, blade (highlight / fuller / shade), pommel
+    f.paint(f.mask("poly", [(35, 29), (38, 29), (38, 34), (35, 34)]), MD)
+    f.paint(f.mask("ell", 36.5, 31.5, 2.8, 2.5), MS)
+    f.lab[31, 35:39] = MK
+    f.paint(f.mask("poly", [(30, 26), (43, 26), (43, 28), (30, 28)]), MS)
+    f.lab[25, 30] = f.lab[25, 42] = MS
+    for y in range(2, 26):
+        f.lab[y, 35] = MS
+        f.lab[y, 36] = MK if 6 <= y <= 22 else MS
+        f.lab[y, 37] = MD if y > 3 else 0
+    f.lab[1, 36] = MS
+    f.lab[2, 35] = 0
+    f.lab[2, 37] = 0
+    f.paint(f.mask("ell", 36.5, 35.5, 1.8, 1.4), MS)
+    return f
+
+
+def mage_fig() -> Fig:
+    """Hand-built Mage, 48x64, built facing right (mirrored on screen)."""
+    f = Fig(48, 64)
+    # staff + claw + orb with sparkle rays
+    f.lab[9:64, 41] = MS
+    f.lab[9:64, 40] = MD
+    for y in range(14, 64, 10):
+        f.lab[y, 40:42] = MK
+    f.paint(f.mask("line", [(39, 10), (37.5, 6)]) | f.mask("line", [(42, 10), (43.5, 6)]), MS, sep=False)
+    orb = f.mask("ell", 40.5, 5, 3.4, 3.4)
+    f.paint(orb, MS)
+    f.lab[orb & (np.arange(48)[None, :] < 39) & (np.arange(64)[:, None] > 4)] = MD
+    f.lab[3, 41] = MK
+    for (x, y) in ((40, 0), (35, 5), (45, 5), (37, 1), (44, 1)):
+        if f.lab[y, x] == 0:
+            f.lab[y, x] = MS
+    # back sleeve, robe (shadow band), three folds, hem
+    f.paint(f.mask("poly", [(11, 22), (17, 22), (17, 40), (11, 42), (8, 34)]), MD, sep=False)
+    robe = f.mask("poly", [(12, 21), (28, 21), (30, 34), (33, 55), (36, 63), (4, 63), (6, 50), (10, 34)])
+    f.shade(robe, [(0.2, MS), (0.0, MD)], rim=False)
+    for frac, ph in ((0.42, 0.0), (0.62, 1.3), (0.82, 2.1)):
+        for y in range(41, 62):
+            xs = np.nonzero(robe[y])[0]
+            x = int(round(xs[0] + (xs[-1] - xs[0]) * frac + 1.0 * math.sin(y / 5 + ph)))
+            f.lab[y, x] = MK
+    for x in range(48):
+        if robe[61, x] and (x // 3) % 2:
+            f.lab[61, x] = MK
+    # rope belt, knot + cords, pouch
+    for y in (36, 39):
+        f.lab[y][robe[y]] = MK
+    for y in (37, 38):
+        f.lab[y][robe[y]] = MS
+    f.paint(f.mask("ell", 23, 39.5, 2.2, 1.8), MS)
+    for x0 in (22, 24):
+        f.paint(f.mask("line", [(x0, 41), (x0 + (x0 - 23), 48)]), MS)
+    f.paint(f.mask("ell", 12.5, 43, 3.6, 4.0), MS)
+    f.lab[41, 9:16] = MK
+    f.lab[43, 12] = MK
+    # beard with strands
+    beard = f.mask("poly", [(21, 17), (29, 17), (30, 25), (27, 35), (24, 43), (22, 34), (20, 24)])
+    f.paint(beard, MS)
+    for k, x0 in enumerate((22, 25, 28)):
+        f.lab[f.mask("line", _bez((x0, 20), (x0 - 1, 28), (24 + k * 0.5, 38))) & beard & ~dilate(~beard, 1)] = MK
+    # face: nose, eye, moustache; brim shadow
+    face = f.mask("poly", [(21, 12), (29, 12), (31, 15), (33, 16.5), (30, 18), (22, 18)])
+    f.paint(face, MS)
+    f.lab[13, 21:31][face[13, 21:31]] = MD
+    f.lab[14, 28] = MK
+    f.lab[18, 26:30] = MK
+    # hat: wide brim, bent cone, band + buckle, star
+    brim = f.mask("ell", 21, 10.6, 14.5, 2.2)
+    f.paint(brim, MS)
+    cone = f.mask("poly", [(12, 10), (30, 10), (26, 5), (21, 1), (14, 0), (6, 3), (14, 4.5)])
+    f.shade(cone, [(0.22, MS), (0.0, MD)], rim=False)
+    f.lab[8][cone[8] & (np.arange(48) > 12)] = MK
+    f.lab[7:10, 22] = f.lab[7:10, 25] = MK
+    f.lab[7, 22:26] = MK
+    for (x, y) in ((18, 3), (17, 4), (18, 4), (19, 4), (18, 5)):
+        f.lab[y, x] = MK
+    # front sleeve to the staff, cuff, hand over the staff
+    f.paint(f.mask("poly", [(25, 22), (31, 22), (38, 27), (40, 33), (34, 38), (29, 34), (26, 28)]), MS)
+    f.lab[f.mask("line", [(35, 36), (40, 31)])] = MK
+    f.lab[f.mask("line", [(27, 27), (33, 33)])] = MD
+    f.paint(f.mask("ell", 40.5, 29, 2.6, 2.6), MS)
+    f.lab[29, 40] = MK
+    return f
+
+
+def torch_native(s: Scr, x0, y0, smoke=True):
+    """Native 16x32 torch in the game's cell inks: flame Y+ (2 rows), bowl Y, bracket W."""
+    s.clear_rect(x0, y0, 16, 32)
+    F, BOWL, BR = YEL + B, YEL, WHITE
+    fl = np.zeros((16, 16), bool)
+    core = np.zeros((16, 16), bool)
+    for y in range(16):
+        t = y / 15
+        c = 7.5 + 1.1 * math.sin(y / 2.6)
+        hw = 5.6 * t ** 0.7
+        for x in range(16):
+            if abs(x + 0.5 - c) <= hw:
+                fl[y, x] = True
+            if y >= 6 and abs(x + 0.5 - c) <= hw - 2.1:
+                core[y, x] = True
+    for (tx, ty, bx, by) in ((2.5, 4.0, 5.0, 13.0), (13.5, 6.0, 10.5, 13.0)):   # side tongues
+        for y in range(int(ty), 16):
+            t = (y - ty) / (by - ty)
+            cx = tx + (bx - tx) * min(1.0, t)
+            for x in range(16):
+                if abs(x + 0.5 - cx) <= 1.7 * min(1.0, t) ** 0.8:
+                    fl[y, x] = True
+    inner = np.zeros((16, 16), bool)
+    for y in range(9, 16):
+        for x in range(16):
+            if abs(x + 0.5 - 7.8) <= 1.6 * ((y - 9) / 6) ** 0.6:
+                inner[y, x] = True
+    img = (fl & ~core) | inner
+    for (x, y) in ((4, 0), (11, 1), (8, 0)):
+        img[y, x] = True                             # sparks
+    s.bits(img, x0, y0, F)
+    # bowl (Y): rim, curved cup, stem
+    for y in range(16, 24):
+        for x in range(16):
+            X, Y = x0 + x, y0 + y
+            if y in (16, 17) and 1 <= x <= 14:
+                if y == 16 or dith(X, Y, 0.5):
+                    s.put(X, Y, BOWL)
+            elif 18 <= y <= 21:
+                hw = 6 - (y - 18) * 1.0
+                if abs(x + 0.5 - 8) <= hw and (abs(x + 0.5 - 8) > hw - 1.2 or dith(X, Y, 0.25 + 0.5 * (x < 8))):
+                    s.put(X, Y, BOWL)
+            elif y >= 22 and 6 <= x <= 9:
+                s.put(X, Y, BOWL)
+    # bracket (W): stem, collar, riveted wall plate
+    for y in range(24, 32):
+        for x in range(16):
+            X, Y = x0 + x, y0 + y
+            if 7 <= x <= 8 and y <= 26:
+                s.put(X, Y, BR)
+            elif y == 25 and 5 <= x <= 10:
+                s.put(X, Y, BR)
+            elif 27 <= y <= 31 and 3 <= x <= 12:
+                edge = y in (27, 31) or x in (3, 12)
+                rivet = (x, y) in ((5, 29), (10, 29))
+                if not rivet and (edge or dith(X, Y, 0.35)):
+                    s.put(X, Y, BR)
+    if smoke:  # wisps rising into the column cells above (W)
+        for k, ph in enumerate((0.0, 2.2)):
+            for y in range(y0 - 14, y0 - 1):
+                x = int(x0 + 8 + (k * 2 - 1) * 2 + 2.2 * math.sin((y - y0) / 3.0 + ph))
+                if (y + k) % 3:
+                    s.clr(x - 1, y)
+                    s.clr(x + 1, y)
+                    s.put(x, y, WHITE)
+
+
+def column_native(s: Scr, x0, tcells, top=32, base=136):
+    """Fluted column 16 px wide: abacus + echinus + astragal, shaded shaft, torus + plinth."""
+    C = WHITE
+    for y in range(top, base):
+        if (x0 // 8, y // 8) in tcells:
+            continue
+        for x in range(x0, x0 + 16):
+            u = x - x0
+            on = False
+            if y < top + 2:                                  # abacus
+                on = True
+            elif y < top + 7:                                # echinus: swelling curve
+                inset = int(round(2.4 * ((y - top - 2) / 4) ** 1.6))
+                on = inset <= u <= 15 - inset and (u in (inset, 15 - inset) or y == top + 2
+                                                   or dith(x, y, 0.55 - 0.08 * (y - top - 2)))
+            elif y == top + 7:
+                on = False
+            elif y == top + 8:                               # astragal ring
+                on = 2 <= u <= 13
+            elif y >= base - 8:                              # torus, scotia, plinth
+                yy = y - (base - 8)
+                if yy <= 2:
+                    on = 1 <= u <= 14 and (yy != 1 or u in (1, 14) or dith(x, y, 0.75))
+                elif yy == 3:
+                    on = 3 <= u <= 12 and u % 2 == 0
+                else:
+                    on = yy in (4, 7) or u in (0, 15) or dith(x, y, 0.3)
+            else:                                            # shaft, 12 px, 3 flutes
+                if 2 <= u <= 13:
+                    if u in (2, 13):
+                        on = True
+                    elif u in (5, 8, 11):
+                        on = False
+                    else:
+                        lvl = 0.92 - 2.2 * ((u - 6.5) / 11) ** 2 - 0.1 * (u > 8)
+                        on = dith(x, y, lvl)
+            if on:
+                s.put(x, y, C)
+
+
+def tome_native(s: Scr, BX=128, BY=100, FLOOR=152):
+    """The Tome + lectern at 1:1: curved pages with text lines and gutter shade, skull +
+    pentacle, leather cover with clasp strap, ribbon; shaded lectern with mouldings."""
+    G_ = GREEN + B
+    lab = np.zeros((H, W), np.uint8)
+    for x in range(BX - 42, BX + 42):
+        t = min(1.0, abs(x + 0.5 - BX) / 40)
+        top = int(BY - 12 + 7 * t - 9 * math.sin(math.pi * min(1, t * 1.1)) * 0.6)
+        bot = top + 26 - int(3 * t)
+        if abs(x + 0.5 - BX) < 40:
+            lab[top:bot, x] = MS
+            lab[bot, x] = MK
+            if abs(x + 0.5 - BX) >= 36 and x % 2 == 0:
+                lab[top + 1:bot, x] = MK                 # page stack at the fore-edge
+            if abs(x + 0.5 - BX) < 3.5:
+                lab[top:bot, x] = MD                     # gutter shadow
+            if abs(x - BX) < 1:
+                lab[top:bot, x] = MK
+        lab[bot + 1:bot + 4, x] = MD                     # leather cover
+        lab[bot + 1, x] = MS if abs(x + 0.5 - BX) < 41 else MD
+        lab[bot + 3, x] = MS
+    # text lines on both pages (dotted words), kept clear of the skull / pentacle
+    for y in range(BY - 14, BY + 20):
+        for x in range(BX - 36, BX + 36):
+            if lab[y, x] != MS or abs(x - BX) < 5:
+                continue
+            left = x < BX
+            busy = (left and y <= BY + 6) or (not left and y <= BY + 10)
+            if not busy and (y - BY) % 3 == 0 and x % 2 == 0 and hsh(x // 5, y, 9) % 6 and lab[y + 1, x] == MS:
+                lab[y, x] = MK
+    sk = np.pad(G.SKULL_BM, 1)
+    for y, x in zip(*np.nonzero(dilate(sk, 1) & ~sk)):
+        lab[BY - 13 + y, BX - 31 + x] = MK
+    for i in range(5):
+        a1, a2 = -math.pi / 2 + i * 4 * math.pi / 5, -math.pi / 2 + (i + 1) * 4 * math.pi / 5
+        x1, y1 = BX + 21 + 9 * math.cos(a1), BY - 3 + 9 * math.sin(a1)
+        x2, y2 = BX + 21 + 9 * math.cos(a2), BY - 3 + 9 * math.sin(a2)
+        for k in range(49):
+            lab[int(round(y1 + (y2 - y1) * k / 48)), int(round(x1 + (x2 - x1) * k / 48))] = MK
+    for k in range(96):
+        a = k * 2 * math.pi / 96
+        lab[int(round(BY - 3 + 11 * math.sin(a))), int(round(BX + 21 + 11 * math.cos(a)))] = MK
+    # clasp strap hanging from the right board, ribbon from the gutter
+    cb = int(BY - 12 + 7 - 9 * math.sin(math.pi) * 0.6) + 23 + 4
+    for y in range(cb - 3, cb + 7):
+        for x in range(BX + 38, BX + 42):
+            lab[y, x] = MK if x == BX + 38 or (y == cb + 6) else MS
+    lab[cb + 2:cb + 5, BX + 39:BX + 41] = MK
+    lab[cb + 3, BX + 40] = MS
+    rb = int(BY - 12) + 26
+    for y in range(rb, rb + 13):
+        x = BX + 2 + int(round(1.3 * math.sin((y - rb) / 2.5)))
+        lab[y, x] = MS
+        lab[y, x + 1] = MK
+    # lectern: slanted desk, moulded column (cylinder shade), stepped base
+    for y in range(116, FLOOR):
+        if y < 124:
+            hw = 18 - (y - 116)
+        elif y < FLOOR - 12:
+            hw = 6
+        elif y < FLOOR - 6:
+            hw = 10
+        else:
+            hw = 16
+        for x in range(BX - hw, BX + hw):
+            if lab[y, x]:
+                continue
+            u = abs(x + 0.5 - BX) / hw
+            lab[y, x] = MS if (u < 0.35 or x == BX - hw or x == BX + hw - 1) else MH if u < 0.6 else MD
+        if y in (123, 124, FLOOR - 13, FLOOR - 7):
+            lab[y, BX - hw:BX + hw] = MK if y in (124, FLOOR - 7) else MS
+    for y in range(127, FLOOR - 13, 5):
+        lab[y, BX - 6:BX + 6] = MK                       # ring mouldings
+    sil = lab != 0
+    for y, x in zip(*np.nonzero(dilate(sil, 2))):      # halo + interior start black
+        s.clr(x, y)
+    for y, x in zip(*np.nonzero(sil)):
+        m = lab[y, x]
+        if m == MS or (m == MH and dith(x, y, 0.75)) or (m == MD and dith(x, y, 0.5)):
+            s.put(x, y, G_)
+    for k in range(3):                                   # rising wisps, as L3
+        x0 = BX - 16 + 16 * k
+        for y in range(52, BY - 20):
+            xx = int(x0 + 4 * math.sin((y + 7 * k) / 6))
+            if dith(xx, y, 0.9):
+                s.put(xx, y, G_)
+                s.clr(xx + 1, y)
+                s.clr(xx - 1, y)
+    return sil
+
+
+RUNES = [["#.#", ".#.", "#.#"], ["###", "#..", "###"], ["#..", "###", "..#"], [".#.", "###", ".#."],
+         ["#.#", "###", "#.#"], ["##.", ".#.", ".##"], ["###", ".#.", "#.#"], ["#.#", "#.#", "###"]]
+
+
+def l3d() -> Scr:
+    s = Scr()
+    menu_title(s, G.by_row([WHITE + B, WHITE + B, CYAN + B, CYAN + B], 0))
+    G_, STONE, ARCH = GREEN + B, WHITE, BLUE + B
+    FLOOR = 136
+    cols_ = [0, 8, 22, 30]
+    torches = [(c, 6) for c in cols_]
+    tcells = set().union(*(box(c, r, 2, 4) for c, r in torches))
+    colc = set().union(*(box(c, 4, 2, 13) for c in cols_)) - tcells
+    archc = box(2, 4, 6, 3) | box(24, 4, 6, 3)
+    glowc = box(10, 4, 12, 13)
+    # figures first (as label images) so their cells are known
+    war, mag = warrior_fig().lab, mage_fig().lab[:, ::-1]
+    WX, MX, FY = 16, 192, 152 - 64
+    hero_c = set()
+    for lab, x0 in ((war, WX), (mag, MX)):
+        for y, x in zip(*np.nonzero(lab)):              # (the black halo may cross cells)
+            hero_c.add(((x0 + x) // 8, (FY + y) // 8))
+    # rune circle: clean ellipse + 8 glyphs
+    RX, RY, RCX, RCY = 72, 9, 128, 150
+    rune_px = np.zeros((H, W), bool)
+    prev = None
+    for x in range(RCX - RX, RCX + RX + 1):
+        dy = RY * math.sqrt(max(0.0, 1 - ((x + 0.5 - RCX) / RX) ** 2))
+        for sgn in (-1, 1):
+            y = int(round(RCY + sgn * dy))
+            if y < 160:
+                rune_px[y, x] = True
+        if prev is not None:                           # close vertical gaps at the ends
+            for sgn in (-1, 1):
+                y0_, y1_ = sorted((int(round(RCY + sgn * prev)), int(round(RCY + sgn * dy))))
+                for y in range(y0_, y1_ + 1):
+                    if y < 160:
+                        rune_px[y, x] = True
+        prev = dy
+    glyph_px = np.zeros((H, W), bool)
+    for k in range(12):
+        a = math.pi + k * 2 * math.pi / 12 + 0.26
+        gx, gy = int(round(RCX + RX * math.cos(a))), int(round(RCY + RY * math.sin(a)))
+        if gy + 2 >= 160 or gy - 2 < 136:
+            continue
+        g = RUNES[k % len(RUNES)]
+        rune_px[gy - 2:gy + 3, gx - 2:gx + 3] = False
+        for j, row in enumerate(g):
+            for i, ch in enumerate(row):
+                if ch == "#":
+                    glyph_px[gy - 1 + j, gx - 1 + i] = True
+    rune_px |= glyph_px
+    lecmask = tome_masks(128, 100, 152)[0]
+    lec_cells = {(x // 8, y // 8) for y, x in zip(*np.nonzero(dilate(lecmask, 2))) if y >= 136}
+    rune_cells = {(x // 8, y // 8) for y, x in zip(*np.nonzero(rune_px))} - lec_cells - hero_c
+    cm = {}
+    compromised = 0
+    for r in range(4, 20):
+        for c in range(32):
+            if (c, r) in tcells:
+                continue
+            if (c, r) in lec_cells:
+                v = G_
+            elif r >= 17:
+                v = YEL + B if (c, r) in rune_cells else (MAG if (c + r) % 2 else BLUE)
+            elif (c, r) in colc:
+                v = STONE
+            elif (c, r) in archc:
+                v = ARCH
+            elif (c, r) in glowc:
+                v = G_
+            else:
+                v = BLUE
+            if (c, r) in hero_c:
+                compromised += r >= 17                  # floor cells taken by the feet
+                v = WHITE + B
+            cm[(c, r)] = v
+    assert not (hero_c & (colc | tcells | glowc | archc)), "figures must stay in the aisles"
+    ink = cell_ink(cm, BLUE)
+    for c in cols_:
+        column_native(s, c * 8, tcells)
+    for (a, b) in ((16, 64), (192, 240)):              # pointed arches + voussoir joints
+        cx, half = (a + b) / 2, (b - a) / 2
+        for y in range(32, 56):
+            t = (56 - y) / 24
+            off = half * math.sqrt(max(0.0, 1 - t * t))
+            for xx in (int(cx - off), int(cx + off) - 1, int(cx - off) + 1, int(cx + off) - 2):
+                s.put(xx, y, ink(xx, y))
+            for x in range(a, b):
+                if abs(x + 0.5 - cx) > off + 1:
+                    joint = (x - a) % 8 == 4 and (y - 32) % 6 < 5
+                    if (y - 32) % 6 == 5 or joint or dith(x, y, 0.3):
+                        s.put(x, y, ink(x, y))
+        for y in range(56, FLOOR):
+            for x in range(a, b):
+                if (x // 8, y // 8) not in hero_c and dith(x, y, 0.07 if (y // 6) % 2 else 0.12):
+                    s.put(x, y, ink(x, y))
+    radiance(s, ink, lambda c, r: (c, r) in glowc, y1=FLOOR, reach=0.9)
+    for y in range(FLOOR, 160):                        # floor: checker, rune circle
+        for x in range(W):
+            cell = (x // 8, y // 8)
+            if cell in lec_cells:
+                continue
+            if cell in rune_cells:
+                if rune_px[y, x]:
+                    s.put(x, y, ink(x, y))
+                continue
+            if x % 8 == 0 or y % 8 == 0 or ((x // 8 + y // 8) % 2 and dith(x, y, 0.25)):
+                s.put(x, y, ink(x, y))
+    for c, r in torches:
+        torch_native(s, c * 8, r * 8)
+    tome_native(s)
+    render_fig(s, war, WX, FY, WHITE + B)
+    render_fig(s, mag, MX, FY, WHITE + B)
+    text_c(s, "THE TOME OF ABSOLUTE DEATH MAGIC", 160, G_)
+    text_c(s, CREDIT, 168, WHITE)
+    s.compromised = compromised
+    s.notes = [
+        "L3c redrawn at 1:1, no scaled sprites. Warrior / Mage are 48x64 hand-built figures",
+        "(shapes + material labels: solid lit side, 75/50/25 % dither shadow, chainmail texture,",
+        "black seams, rim light on the shadow edge), W+ in the aisles cols 2-7 / 24-29 rows 11-18.",
+        "Torches, fluted columns, Tome + lectern and the rune circle redrawn natively; the cell plan",
+        f"is L3c's. Floor cells given to the figures' feet (W+ instead of checker): {compromised}.",
+    ]
+    return s
+
+
 # ---------------------------------------------------------------- validation
 def validate(tag, s: Scr, bm, attr):
     """Independent clash check on the intended composition + exact .scr round trip."""
@@ -1940,6 +2519,31 @@ def main() -> int:
         vs[:, i * (W + 8):i * (W + 8) + W] = im
     Image.fromarray(vs).resize((vs.shape[1] * 2, H * 2), Image.NEAREST).save(
         os.path.join(OUT, "concepts2_l3_variants.png"))
+    # L3d: L3c at native resolution + the comparison sheet (3x pair, 1:1 pair, 4x crops)
+    s = l3d()
+    bm, attr = s.resolve("l3d_native")
+    ok, scr, img_d = validate("l3d_native", s, bm, attr)
+    print(f"l3d_native: compromised cells {s.compromised}")
+    allok &= ok
+    base = os.path.join(OUT, "l3d_native")
+    open(base + ".scr", "wb").write(scr)
+    G.png(img_d, base + ".png", scale=3)
+    G.png(img_d, base + "_grid.png", scale=3, grid=True)
+    img_c = vimgs[3]
+    up = lambda a, k: Image.fromarray(a).resize((a.shape[1] * k, a.shape[0] * k), Image.NEAREST)
+    crops = [(0, 72, 80, 88), (176, 72, 80, 88)]     # x, y, w, h: both hero aisles
+    sheet = Image.new("RGB", (2 * W + 24 + 4 * (80 * 4 + 8), H * 3 + 24 + 88 * 4), (40, 40, 40))
+    sheet.paste(up(img_c, 3), (0, 0))
+    sheet.paste(up(img_d, 3), (W * 3 + 24, 0))
+    y2 = H * 3 + 24
+    sheet.paste(Image.fromarray(img_c), (0, y2))
+    sheet.paste(Image.fromarray(img_d), (W + 8, y2))
+    x = 2 * W + 24
+    for (cx, cy, cw, ch) in crops:
+        for im in (img_c, img_d):
+            sheet.paste(up(im[cy:cy + ch, cx:cx + cw], 4), (x, y2))
+            x += cw * 4 + 8
+    sheet.save(os.path.join(OUT, "concepts2_l3d.png"))
     print("ALL PASS" if allok else "FAILURES")
     return 0 if allok else 1
 
