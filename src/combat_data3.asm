@@ -36,9 +36,9 @@ kx_tab:
                 KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_KNIGHT (hero)
                 KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_WIZARD (hero)
                 KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_PHYS, EFX_NONE, 0, 0, 0              ; K_VBAT (3F-T9): the Vampire's row, a plain 1d2 bite (no drain / heal in bat form)
-                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_PHYS, EFX_NONE, 0, 0, 1              ; K_SKELETON (DEF 1, §9.1 / D3-1)
+                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_PHYS, EFX_NONE, 0, 0, 1              ; K_SKELETON (DEF 1, §9.1 / D3-1)
                 KXROW 0,0,0,0,0,0, 0, KXP_GOBLIN, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_GOBLIN
-                KXROW RSP_R,0,RSP_I,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 4, 4, 0  ; K_GHOST: the 1d4 DRAIN touch, 1 in 4 -> CONFUSED 4 (no heal: §9.1)
+                KXROW RSP_R,0,RSP_R,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 4, 4, 0  ; K_GHOST: the 1d4 DRAIN touch, 1 in 4 -> CONFUSED 4 (no heal: §9.1)
                 KXROW 0,0,0,0,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_RAT
                 KXROW 0,0,0,RSP_W,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0, 0                              ; K_BAT
                 KXROW RSP_R,RSP_W,0,0,0,0, IMMF_SLEEP | IMMF_CONFUSE | IMMF_FEAR, 3, DTY_PHYS, EFX_NONE, 0, 0, 1 ; K_SLIME (DEF 1, D3-1)
@@ -47,13 +47,13 @@ kx_tab:
                 ; reads it today); POISON's turns nibble is HALF the turns (PSN_*). Behaviour that
                 ; is NOT a plain on-hit status (Mummy FOOD drain, Ogre SLAM, parry, ACID, breed,
                 ; summon, ranged, rage) is T6-T9 code keyed on the kind id.
-                KXROW 0,RSP_W,0,0,0,0, 0, KXP_SPIDER, DTY_PHYS, EFX_POISON, 0, PSN_SPIDER / 2, 0               ; K_SPIDER: bite POISON 12
+                KXROW 0,0,0,0,0,0, 0, KXP_SPIDER, DTY_PHYS, EFX_POISON, 0, PSN_SPIDER / 2, 0               ; K_SPIDER: bite POISON 12
                 KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, KXP_VAMPIRE, DTY_DRAIN | DH_HEAL, EFX_NONE, 0, 0, 0 ; K_VAMPIRE: drain bite heals it
                 KXROW 0,RSP_R,0,0,0,0, 0, 9, DTY_PHYS, EFX_NONE, 0, 0, 1                               ; K_ORC
-                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 7, DTY_PHYS, EFX_NONE, 0, 0, 0              ; K_ARCHER (arrow: T7)
-                KXROW RSP_R,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, KXP_MUMMY, DTY_PHYS, EFX_WEAK, 3, 12, 2    ; K_MUMMY: curse 1 in 3 -> WEAK 12 (FOOD drain: T6)
-                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, 0, KXP_NECRO, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_NECRO (Dark Bolt: T7)
-                KXROW RSP_R,0,RSP_R,RSP_W,0,0, 1 << IMMF_BOSS_BIT, 60, DTY_PHYS, EFX_NONE, 0, 0, 2     ; K_OGRE: SLAM = T8
+                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 7, DTY_PHYS, EFX_NONE, 0, 0, 0              ; K_ARCHER (arrow: T7)
+                KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, KXP_MUMMY, DTY_PHYS, EFX_WEAK, 3, 12, 2    ; K_MUMMY: curse 1 in 3 -> WEAK 12 (FOOD drain: T6)
+                KXROW 0,0,RSP_R,0,0,RSP_I, 0, KXP_NECRO, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_NECRO (Dark Bolt: T7)
+                KXROW 0,0,RSP_R,RSP_W,0,0, 1 << IMMF_BOSS_BIT, 60, DTY_PHYS, EFX_NONE, 0, 0, 2     ; K_OGRE: SLAM = T8
                 KXROW 0,RSP_X,RSP_I,RSP_W,RSP_I,RSP_I, 1 << IMMF_BOSS_BIT, 90, DTY_PHYS, EFX_NONE, 0, 0, 3 ; K_DKNIGHT: parry 1 in 3, notch 1 in 2 = T6
                 KXROW 0,0,RSP_X,RSP_X,RSP_I,RSP_R, 1 << IMMF_BOSS_BIT, 0, DTY_PHYS, EFX_NONE, 0, 0, 1  ; K_ARCHMAGE: awards 0 XP (§4.1)
                 ; --- the 12 tier rows (§9.6): the base kind's resistances / immunity (+ the noted extras),
@@ -62,14 +62,14 @@ kx_tab:
                 KXROW 0,0,0,0,0,0, 0, 4, DTY_PHYS, EFX_NONE, 0, 0, 0                                   ; K_RABBIT_RAT (breeds: T6)
                 KXROW 0,0,0,RSP_W,0,0, 0, 3, DTY_PHYS, EFX_CONFUSED, 4, 2, 0                           ; K_SCREECH: bite 1 in 4 -> CONFUSED 2
                 KXROW 0,0,0,0,0,0, 0, 4, DTY_PHYS, EFX_NONE, 0, 0, 0                                   ; K_SLINGER (rock: T7)
-                KXROW 0,RSP_W,0,0,0,0, 0, 6, DTY_PHYS, EFX_POISON, 0, PSN_WIDOW / 2, 0                 ; K_BLACK_WIDOW: POISON 24 (ACID: T6)
-                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_PHYS, EFX_NONE, 0, 0, 2              ; K_SKEL_GUARD: parry 1 in 4 = T6
-                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 12, DTY_PHYS, EFX_STUNNED, 4, 1, 3          ; K_SKEL_KNIGHT: 1 in 4 -> STUNNED 1; parry 1 in 3 = T6
-                KXROW RSP_R,0,RSP_I,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_DRAIN, EFX_FEAR, 3, 3, 0     ; K_POLTERGEIST: touch 1 in 3 -> FEAR 3
+                KXROW 0,0,0,0,0,0, 0, 6, DTY_PHYS, EFX_POISON, 0, PSN_WIDOW / 2, 0                 ; K_BLACK_WIDOW: POISON 24 (ACID: T6)
+                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_PHYS, EFX_NONE, 0, 0, 2              ; K_SKEL_GUARD: parry 1 in 4 = T6
+                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 12, DTY_PHYS, EFX_STUNNED, 4, 1, 3          ; K_SKEL_KNIGHT: 1 in 4 -> STUNNED 1; parry 1 in 3 = T6
+                KXROW RSP_R,0,RSP_R,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_DRAIN, EFX_FEAR, 3, 3, 0     ; K_POLTERGEIST: touch 1 in 3 -> FEAR 3
                 KXROW 0,RSP_R,0,0,0,0, IMMF_FEAR, 13, DTY_PHYS, EFX_NONE, 0, 0, 1                      ; K_ORC_BERSERK: FEAR-immune; rage = T6
                 KXROW 0,RSP_R,0,0,0,0, 0, 18, DTY_PHYS, EFX_STUNNED, 3, 1, 2                           ; K_ORC_BOUNCER: 1 in 3 -> STUNNED 1
-                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 10, DTY_PHYS, EFX_NONE, 0, 0, 0             ; K_SNIPER (stand-and-shoot: T7)
-                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, 0, 15, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_BONE_CALLER (summon: T6)
+                KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 10, DTY_PHYS, EFX_NONE, 0, 0, 0             ; K_SNIPER (stand-and-shoot: T7)
+                KXROW 0,0,RSP_R,0,0,RSP_I, 0, 15, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_BONE_CALLER (summon: T6)
                 ASSERT ($ - kx_tab) == K_COUNT * KX_STRIDE && K_COUNT == 30
                 DS   KX_LEN - K_COUNT * KX_STRIDE, 0                      ; ids 30 / 31: the class FX kinds
                 ASSERT kx_tab == BANK_WINDOW && $ - kx_tab == KX_LEN
@@ -126,31 +126,32 @@ RKE_SPARE       EQU $80
 
 ab_rank:
 ; RANK1 (game.md §5 rev 6): rank 2 / 3 cost 1.6-3x rank 1 for more damage per cast.
-; Spark: 2 MP r6 1d4+1, 1 in 4 CONFUSED 4 (D3-8c) | 4 MP r8 1d8+2 | 6 MP r8 1d8+4, CONFUSED 1 in 2
+; BAL-1 FINAL B (docs/design/bal1_final.md, tools/apply_balance.py): the numbers below are the simulator-measured set.
+; Spark: 2 MP r6 1d4+1, 1 in 4 CONFUSED 4 (D3-8c) | 4 MP r9 1d8+2 | 6 MP r10 1d8+4, CONFUSED 1 in 2
                 RANK 2, 6, 4, 1, 0, (4 << 4) | 4
-                RANK 4, 8, 8, 2, 0, (4 << 4) | 4
-                RANK 6, 8, 8, 4, 0, (2 << 4) | 4
-; Firebolt: 3 MP r12 1d8+2, burst 1d4 | 5 MP 1d8+5, burst 1d6 | 8 MP 1d10+7, burst spares caster
-                RANK 3, 12, 8, 2, 0, 4
-                RANK 5, 12, 8, 5, 0, 6
-                RANK 8, 12, 10, 7, 0, 6 | RKE_SPARE
-; Frost Shard: 3 MP r12 1d6, 1 bounce, freeze 2 | 5 MP 1d6+1, 2 bounces, freeze 3 | 8 MP 1d6+3, freeze 4
-                RANK 3, 12, 6, 0, 1, 2
-                RANK 5, 12, 6, 1, 2, 3
-                RANK 8, 12, 6, 3, 2, 4
-; Drain Life: 3 MP r5 1d6+1 | 5 MP r8 1d6+3 | 8 MP r8 1d8+5
-                RANK 3, 5, 6, 1, 0, 0
-                RANK 5, 8, 6, 3, 0, 0
-                RANK 8, 8, 8, 5, 0, 0
-; Lightning: 5 MP r28 1d8+3, 2 bounces | 8 MP 1d8+6 | 12 MP 1d8+8, 3 bounces
-                RANK 5, 28, 8, 3, 2, 0
-                RANK 8, 28, 8, 6, 2, 0
-                RANK 12, 28, 8, 8, 3, 0
+                RANK 4, 9, 8, 2, 0, (4 << 4) | 4
+                RANK 6, 10, 8, 4, 0, (2 << 4) | 4
+; Firebolt: 5 MP r8 1d8, burst 1d4 | 6 MP r8 1d8+2, burst 1d4 | 10 MP r10 1d10+4, burst 1d6 spares caster
+                RANK 5, 8, 8, 0, 0, 4
+                RANK 6, 8, 8, 2, 0, 4
+                RANK 10, 10, 10, 4, 0, 6 | RKE_SPARE
+; Frost Shard: 3 MP r10 1d6+1, 1 bounce, freeze 2 | 5 MP r10 1d8+2, 2 bounces, freeze 3 | 7 MP r12 1d8+4, freeze 4
+                RANK 3, 10, 6, 1, 1, 2
+                RANK 5, 10, 8, 2, 2, 3
+                RANK 7, 12, 8, 4, 2, 4
+; Drain Life: 3 MP r6 1d6+2 | 5 MP r8 1d8+3 | 7 MP r8 1d8+6
+                RANK 3, 6, 6, 2, 0, 0
+                RANK 5, 8, 8, 3, 0, 0
+                RANK 7, 8, 8, 6, 0, 0
+; Lightning: 5 MP r16 1d8+4, 1 bounce | 8 MP r16 1d8+7, 1 bounce | 11 MP r20 1d10+9, 2 bounces
+                RANK 5, 16, 8, 4, 1, 0
+                RANK 8, 16, 8, 7, 1, 0
+                RANK 11, 20, 10, 9, 2, 0
 ; Power Strike (RK_DIE = the multiplier code 0 / 1 / 2 = x2 / x2.5 / x3, RK_BOUNCES = the to-hit
-; added to ab_def's +2; RK_EFFECT = stun turns): 3 MP x2 +2 stun 1 | 5 MP x2.5 +3 stun 1 | 7 MP x3 +4 stun 2
-                RANK 3, 1, 0, 0, 0, 1
-                RANK 5, 1, 1, 0, 1, 1
-                RANK 7, 1, 2, 0, 2, 2
+; added to ab_def's +2; RK_EFFECT = stun turns): 2 MP x2 +2 stun 1 | 3 MP x2.5 +3 stun 1 | 4 MP x3 +4 stun 2
+                RANK 2, 1, 0, 0, 0, 1
+                RANK 3, 1, 1, 0, 1, 1
+                RANK 4, 1, 2, 0, 2, 2
 ; Whirlwind: 4 MP, dmg +1 | 7 MP, dmg +3 | 10 MP, dmg +4, to-hit +2
                 RANK 4, 1, 0, 1, 0, 0
                 RANK 7, 1, 0, 3, 0, 0

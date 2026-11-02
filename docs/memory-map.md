@@ -5057,3 +5057,6 @@ Budget: the end card is a one-time static-screen tick (~150k T: the card + the t
 instead of gating it; every play tick is unchanged (walarm max 124,965 T = 1,035 T headroom, as before).
 Goldens: no GS_DEAD / GS_WIN golden exists in `tests/golden` (nothing to rebaseline); `tests/stats1.py` E checks the
 card pixel-exact (rows 10-12, 14), the box attr and the rows above / below.
+
+### BAL-1 FINAL B ledger (2026-11-02)
+Table-only (`tools/apply_balance.py`): 0 code bytes, no address moved. Bank-0 text 2,391 -> **2,384** B packed (-7: the 17 ranked info lines changed digits / dice and re-tokenised), `TEXT_RES` 2,412 unchanged, headroom 21 -> **28** B. Release tape and every other region unchanged.

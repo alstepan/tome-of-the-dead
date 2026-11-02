@@ -86,7 +86,7 @@ KROWS = {
     "K_ARCHER":     (12,  8, 3, False, 6, None,        1),
     "K_MUMMY":      (13, 18, 3, False, 5, None,        1),
     "K_NECRO":      (14, 12, 3, False, 6, None,        1),
-    "K_OGRE":       (15, 40, 4, False, 6, None,        1),    # unique boss D4
+    "K_OGRE":       (15, 36, 4, False, 6, None,        1),    # unique boss D4
     "K_DKNIGHT":    (16, 50, 3, False, 5, None,        1),    # unique boss D7
     "K_ARCHMAGE":   (17, 60, 3, False, 6, None,        1),    # unique boss D8
     # §9.6 tier rows, table order (hp from the stats column; a tier keeps its
@@ -700,7 +700,7 @@ KINFO = {"K_SKELETON": (3, 10, False), "K_GOBLIN": (3, 6, False), "K_GHOST": (3,
          # body, hp the game.md §9.1 / §9.6 value before depth scaling)
          "K_SPIDER": (4, 7, False), "K_VAMPIRE": (3, 14, False), "K_ORC": (3, 14, False),
          "K_ARCHER": (3, 8, False), "K_MUMMY": (3, 18, False), "K_NECRO": (3, 12, False),
-         "K_OGRE": (4, 40, False), "K_DKNIGHT": (3, 50, False), "K_ARCHMAGE": (3, 60, False),
+         "K_OGRE": (4, 36, False), "K_DKNIGHT": (3, 50, False), "K_ARCHMAGE": (3, 60, False),
          "K_GIANT_RAT": (4, 5, False), "K_RABBIT_RAT": (4, 8, False), "K_SCREECH": (3, 5, True),
          "K_SLINGER": (3, 8, False), "K_BLACK_WIDOW": (4, 10, False), "K_SKEL_GUARD": (3, 14, False),
          "K_SKEL_KNIGHT": (3, 18, False), "K_POLTERGEIST": (3, 11, True), "K_ORC_BERSERK": (3, 18, False),

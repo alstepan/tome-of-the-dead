@@ -1139,12 +1139,12 @@ removed.
 
 | Ability | Rank 1 (§6.1/§6.2) | Rank 2 | Rank 3 |
 |---|---|---|---|
-| Spark | **2 MP**, r6, 1d4+1, confuse 1 in 4 | **4 MP**, r8, **1d8+2** | **6 MP**, r8, **1d8+4**, confuse 1 in 2 |
-| Firebolt | **3 MP**, r12, 1d8+2, burst 1d4 | **5 MP**, **1d8+5**, burst 1d6 | **8 MP**, **1d10+7**, burst 1d6, burst **spares the caster** |
-| Frost Shard | **3 MP**, r12, 1d6, 1 bounce, freeze 2 | **5 MP**, **1d6+1**, 2 bounces, freeze 3 | **8 MP**, **1d6+3**, 2 bounces, freeze 4 (bosses halved, §6.4) |
-| Drain Life | **3 MP**, r5, 1d6+1 | **5 MP**, r8, **1d6+3** | **8 MP**, r8, **1d8+5** |
-| Lightning | **5 MP**, r28, 1d8+3, 2 bounces | **8 MP**, **1d8+6** | **12 MP**, **1d8+8**, 3 bounces (loop guard 4 still binds) |
-| Power Strike | **3 MP**, +2 hit, ×2, stun 1 | **5 MP**, +3 hit, **×2½** (2d + d div 2), stun 1 | **7 MP**, +4 hit, **×3**, stun 2 (bosses 1) |
+| Spark | **2 MP**, r6, 1d4+1, confuse 1 in 4 | **4 MP**, r**9**, **1d8+2** | **6 MP**, r**10**, **1d8+4**, confuse 1 in 2 |
+| Firebolt | **5 MP**, r8, 1d8, burst 1d4 | **6 MP**, r8, **1d8+2**, burst 1d4 | **10 MP**, r10, **1d10+4**, burst 1d6, burst **spares the caster** |
+| Frost Shard | **3 MP**, r10, 1d6+1, 1 bounce, freeze 2 | **5 MP**, r10, **1d8+2**, 2 bounces, freeze 3 | **7 MP**, r12, **1d8+4**, 2 bounces, freeze 4 (bosses halved, §6.4) |
+| Drain Life | **3 MP**, r6, 1d6+2 | **5 MP**, r8, **1d8+3** | **7 MP**, r8, **1d8+6** |
+| Lightning | **5 MP**, r16, 1d8+4, 1 bounce | **8 MP**, r16, **1d8+7**, 1 bounce | **11 MP**, r20, **1d10+9**, 2 bounces (loop guard 4 still binds) |
+| Power Strike | **2 MP**, +2 hit, ×2, stun 1 | **3 MP**, +3 hit, **×2½** (2d + d div 2), stun 1 | **4 MP**, +4 hit, **×3**, stun 2 (bosses 1) |
 | Whirlwind | **4 MP**, to-hit each, dmg +1 | **7 MP**, dmg **+3** | **10 MP**, dmg **+4**, to-hit +2 |
 
 **Auto-downcast (rule).** A cast fires at the **highest known rank the hero can afford now**;
@@ -1260,10 +1260,10 @@ sprite. **≤ 3 tracks at once**; more are queued.
 | Spell | Book | MP | Range | Dmg / type | Bounces | Effect | Projectile → impact sprites |
 |---|---|---|---|---|---|---|---|
 | **Spark** | D1 | **2** (B20, was 1) | 6 | 1d4+1 SHOCK | 0 | **1 in 4: CONFUSED 4** (§6.4; 3D; was 3, §6.4.1) | spark_fly1/2 8×8 `$43` → spark_fizz1/2 8×8 |
-| **Firebolt** | D2 | 3 | 12 | 1d8+2 FIRE | 0 | **burst**: bodies within 1 col of impact take 1d4 FIRE, **caster included** at point-blank (impact within 1 col of the caster's front col; ranks 1–2, intended; rank 3 spares him) | firebolt_fly1/2 16×8 alternating yellow `$46` / red `$42` per frame (**user 2026-10-06**) → firebolt_burst1/2 16×16 |
-| **Frost Shard** | D3 | 3 | 12 | 1d6 COLD | **1** | **freeze 2 turns** (bosses 1); can freeze the caster after a bounce or reflection: **1 turn at any rank** (§6.4.1) | frost_fly 8×8 `$45` → frost_crack **8×8** (**user 2026-10-06**: stays 8×8, not 16×16; revisit after playtesting) |
-| **Drain Life** | D4 | 3 | 5 | 1d6+1 DRAIN | 0 | **caster heals the damage dealt** (to max HP); useless on undead (I) | **drain_fly1/2 16×8 `$43` → drain_hit 16×16 (new art)**; the caster flashes `$44` |
-| **Lightning** | D5 | 5 | 28 | 1d8+3 SHOCK | **2** | **pierces** (each body once per pass) | lightning_fly1/2 16×8 `$47` (16 px/tick) → lightning_flash 16×16 |
+| **Firebolt** | D2 | 5 | 8 | 1d8 FIRE | 0 | **burst**: bodies within 1 col of impact take 1d4 FIRE, **caster included** at point-blank (impact within 1 col of the caster's front col; ranks 1–2, intended; rank 3 spares him) | firebolt_fly1/2 16×8 alternating yellow `$46` / red `$42` per frame (**user 2026-10-06**) → firebolt_burst1/2 16×16 |
+| **Frost Shard** | D3 | 3 | 10 | 1d6+1 COLD | **1** | **freeze 2 turns** (bosses 1); can freeze the caster after a bounce or reflection: **1 turn at any rank** (§6.4.1) | frost_fly 8×8 `$45` → frost_crack **8×8** (**user 2026-10-06**: stays 8×8, not 16×16; revisit after playtesting) |
+| **Drain Life** | D4 | 3 | 6 | 1d6+2 DRAIN | 0 | **caster heals the damage dealt** (to max HP); useless on undead (I) | **drain_fly1/2 16×8 `$43` → drain_hit 16×16 (new art)**; the caster flashes `$44` |
+| **Lightning** | D5 | 5 | 16 | 1d8+4 SHOCK | **1** | **pierces** (each body once per pass) | lightning_fly1/2 16×8 `$47` (16 px/tick) → lightning_flash 16×16 |
 
 - Cast: CAST1 2 → CAST2 3 ticks, with the hero flashing the spell ink. The projectile spawns
   on the CAST2 tick, so the release tick f = 2 (`FXD_DELAY` 2). No per-spell cast frames.
@@ -2666,7 +2666,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, opener, climber (the Skeleton's climb pair, user 2026-10-29) | ranged | Arrows ×3 1/2 (W) | D4, D5 (ARCHER-DEPTHS H1, user 2026-10-29: not D7, §9.8) |
 | Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, climber (shared humanoid climb pair, user 2026-10-29), acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5 |
 | Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener, climber (user 2026-10-29) | ranged, cooldown 2 (§9.2 RANGED-SPEC); Dark Bolt hit 1 in 3 → FEAR 3 (§6.4) | Mana 1/3 | D6–D8 |
-| **Ogre Warlord** (unique) | **32×48** | 40 | 5 | 1 | 2 | 1d10+2 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg, a hit STUNS 1 (§6.4) | unique | D4 |
+| **Ogre Warlord** (unique) | **32×48** | 36 | 4 | 1 | 2 | 1d10+1 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg, a hit STUNS 1 (§6.4) | unique | D4 |
 | **Death Knight** (unique) | 24×48 | 50 | 6 | 3 | 3 | 1d10+3 | 5 | walker, lair only (3F-D1: not a climber) | chase; **parries** 1 in 3 PHYS hits (BLOCK frame, 0 dmg); a parried melee hit **notches** the weapon 1 in 2 (§8.10) | unique | D7 |
 
 **Death Knight silhouette (round 4/5):** an evil twin of the Warrior with a clearly distinct
@@ -2701,26 +2701,26 @@ replaced by the values above (§9.8 D3-1); the §11.4 "monster DEF 0" rule was 3
 - Following is unaffected: the follow rule runs on the hero's exit turn, when the door the
   hero walked through is open by construction.
 
-**Resistances** (N blank; R resist, I immune, W weak, X reflect):
+**Resistances** (N blank; R resist, I immune, W weak, X reflect; BAL-1 FINAL B applied 2026-11-02, docs/design/bal1_final.md):
 
 | Kind | PHYS | FIRE | COLD | SHOCK | DRAIN | DARK |
 |---|---|---|---|---|---|---|
 | Rat, Goblin | | | | | | |
 | Bat | | | | W | | |
 | Slime | R | W | | | | |
-| Spider | | W | | | | |
-| Skeleton, Skeleton Archer | | | **I** | | **I** | I |
+| Spider, Black Widow | | | | | | |
+| Skeleton line (Archer, Guard, Knight, Sniper) | | | **R** | | **I** | I |
 | Vampire (undead set) | | **W** | **I** | | **I** | I |
-| Ghost | R | | I | **X** | I | I |
+| Ghost, Poltergeist | R | | **R** | **X** | I | I |
 | Orc | | R | | | | |
-| Mummy | R | W | I | | I | I |
-| Necromancer | | | R | | I | I |
-| Ogre Warlord | R | | R | W | | |
+| Mummy | | W | I | | I | I |
+| Necromancer, Bone Caller | | | R | | | I |
+| Ogre Warlord | | | R | W | | |
 | Death Knight | | **X** | I | W | I | I |
 | Archmage | | | **X** | **X** | I | R |
 
 Design intent:
-- Undead shut off Frost and Drain, but burn.
+- Undead shut off Drain (Frost is halved on the Skeleton and Ghost lines, BAL-1 FINAL B), but burn.
 - The Ghost bounces Lightning and Spark back at you.
 - The Death Knight reflects Firebolt.
 - The Archmage reflects Frost and Lightning, so the Mage must fight it with Firebolt and

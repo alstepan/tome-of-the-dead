@@ -8,7 +8,7 @@ sides, +1 dmg), §5 ranks (tests/combat_tables.py transcription), §2.3 (no
 power attack mid-ladder), §6.4 (stun: R halves, survivors only).
 
   R1  NOT LEARNED: the Power Strike slot forced (SEL_SLOT) with ARANK 0
-  R2  NO MANA: MP = rank-1 cost - 1 (Power 2 of 3 MP, Whirlwind r3 with 3 of 4 MP: the threshold stays at rank 1)
+  R2  NO MANA: MP = rank-1 cost - 1 (Power 1 of 2 MP, BAL-1 FINAL B costs 2/3/4; Whirlwind r3 with 3 of 4 MP: the threshold stays at rank 1)
   R3  mid-ladder (room A's {5,1} shaft) -> NO TARGET
   R4  no target: Power Strike with a Goblin only BEHIND the hero; Whirlwind
       with the nearest body 2 cols away (reach 1)
@@ -342,8 +342,8 @@ def run(h, p, check):
     # ---- refusals ---------------------------------------------------------------
     scene([(K_GOBLIN, gx, None, 30, True)])
     refuse("R1 Power Strike not learned", POWER, TXT["not_learned"], force=True)
-    scene([(K_GOBLIN, gx, None, 30, True)], learn={POWER: 1}, mp=2)
-    refuse("R2 Power Strike r1 with 2 MP", POWER, TXT["no_mana"])
+    scene([(K_GOBLIN, gx, None, 30, True)], learn={POWER: 1}, mp=1)
+    refuse("R2 Power Strike r1 with 1 MP", POWER, TXT["no_mana"])
     scene([(K_GOBLIN, gx, None, 30, True)], learn={WHIRL: 3}, mp=3)
     refuse("R2 Whirlwind r3 with 3 MP (rank 1 costs 4)", WHIRL, TXT["no_mana"])
     scene([], learn={POWER: 1, WHIRL: 1}, mp=20, hero=(5, HY))
@@ -378,10 +378,10 @@ def run(h, p, check):
     strike("W3 Whirlwind r3 (10 MP, dmg +4, to-hit +2) both sides", WHIRL, 3,
            [(K_GOBLIN, gx, None, 60, True), (K_RAT, HX - 4, None, 60, False)], [gob, ratsl], all_hit)
     # RANK1 auto-downcast: learned rank 3, the pool covers only rank 2 / rank 1 (NO MANA stays at rank 1's cost)
-    strike("D1 Power Strike r3 with MP 5 casts rank 2 (5 MP, x2.5)", POWER, 3,
-           [(K_GOBLIN, gx, None, 60, True)], [gob], all_hit, mp=5)
-    strike("D2 Power Strike r3 with MP 3 casts rank 1 (3 MP)", POWER, 3,
+    strike("D1 Power Strike r3 with MP 3 casts rank 2 (3 MP, x2.5)", POWER, 3,
            [(K_GOBLIN, gx, None, 60, True)], [gob], all_hit, mp=3)
+    strike("D2 Power Strike r3 with MP 2 casts rank 1 (2 MP)", POWER, 3,
+           [(K_GOBLIN, gx, None, 60, True)], [gob], all_hit, mp=2)
     strike("D3 Whirlwind r3 with MP 8 casts rank 2 (7 MP, dmg +3)", WHIRL, 3,
            [(K_GOBLIN, gx, None, 60, True)], [gob], all_hit, mp=8)
 

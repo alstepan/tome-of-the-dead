@@ -158,7 +158,7 @@ def main():
 
         # --- C2 real kx_tab rows (hero attacks slot 1) ---
         p.hero()
-        cases = [(K_GHOST, PHYS, 5, 2), (K_GHOST, COLD, 5, 0), (K_BAT, SHOCK, 3, 6),
+        cases = [(K_GHOST, PHYS, 5, 2), (K_GHOST, COLD, 5, 2), (K_BAT, SHOCK, 3, 6),
                  (K_SLIME, FIRE, 4, 8), (K_SLIME, PHYS, 1, 1), (K_RAT, PHYS, 2, 2), (K_SKELETON, DRAIN, 4, 0)]
         bad = []
         for k, t, dmg, want in cases:
@@ -166,7 +166,7 @@ def main():
             lost = p.deal(0, 1, dmg, t)
             if lost != want or p.ent(1)["HP"] != 20 - want:
                 bad.append((k, t, dmg, lost))
-        check("C2 kx_tab responses: Ghost PHYS R / COLD I, Bat SHOCK W, Slime FIRE W, Rat N, Skeleton DRAIN I", not bad, bad)
+        check("C2 kx_tab responses: Ghost PHYS R / COLD R (BAL-1 FINAL B), Bat SHOCK W, Slime FIRE W, Rat N, Skeleton DRAIN I", not bad, bad)
 
         # --- C3 hero DEF ---
         bad = []
