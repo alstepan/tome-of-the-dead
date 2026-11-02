@@ -13,7 +13,8 @@ sp_run makes the bodies (src/spawn6.asm). Seeded generated games (the real level
   C  the cap: Bone Caller + 3 Skeletons (4 monsters) -> no summon, S stays 0, the queue empty
   P  Golden Pharaoh (D5 lair): with its escort (Σ >= 9 + 5 > 12) no summon; escort gone -> 1
      minion (Skeleton / Mummy, summon-made) beside it, S = 8; PH_LIVE 1: one at a time; leaving
-     the lair discards it (record = the boss)
+     the lair discards it (record = the boss); P6: the minion killed on a re-summon turn -> the new one
+     takes its freed slot, no corpse frame at the top-left (fix/d8-corpse-topleft)
   A  ALARM (D5, boss alive): "AN ALARM BELL RINGS!", 1-2 bodies of LP_KINDS PENDING at a door
      (F_RESPAWN, not summon-made), walked in after the next turns; boss dead (LF_UNIQUE): the bell
      line and nothing
@@ -396,11 +397,44 @@ def pharaoh(p, lines):
         p.turn("WAIT")
         n += len(new_slots(p, before))
     check("P4 one minion at a time (PH_LIVE 1; 6 + 5 + 5 > 12 anyway): 12 turns, none", n == 0, n)
+    if mins:
+        corpse_reuse(p, bs, mins[0])
     ok = L.leave()
     ents, _ = rec_entries(p, L.lair)
     check("P5 leaving the lair discards the minion: the record holds the boss only",
           ok and [k_ for k_, _ in ents] == [p.rb("LP_BOSS")], (ok, ents))
 
+
+def corpse_reuse(p, bs, k):
+    """P6 (fix/d8-corpse-topleft, user playtest: the nun's / the Pharaoh's summoned Skeleton): the minion
+    killed (deal_hit, hp 1) and the Pharaoh's next summon queued the same turn (SPQ_* poked as ph_summon
+    fills them: the Mummy's own timing rarely lines up in a test): end_turn's sp_run reuses the just-freed
+    slot while LIVE_LIST still lists it and its render record still shows the corpse. The new minion is
+    placed (sp_init: ACT_SLOT = its own slot, box_free skips it) and the corpse frame is never drawn at
+    the top-left (sp_init: R_VIS 0) nor on it. Before the fix: no minion (every sp_try saw the slot's own
+    box) and the corpse blitted at px = py = 0 for a tick."""
+    hero_at(p, 2 if p.ent(bs)["X"] > 15 else 27, 0)
+    p.tick(3)
+    p.set_ent(k, HP=1)
+    p.wb(S["P_ENTITIES"] + bs * STRIDE + S["E_RCD"], p.ent(bs)["POT"] | 0x3C)   # S 15: no own summon
+    code(p, [0x3A] + w16(S["PORT_7FFD_SHADOW"]) + [0xF5, 0x3E, 3, 0xCD] + w16(S["page_bank"])
+         + [0xDD, 0x21] + w16(S["P_ENTITIES"]) + [0x3E, k, 0x01, 0, 99, 0x1E, 0, 0xCD] + w16(S["deal_hit"])
+         + [0xF1, 0xCD] + w16(S["restore_page"]))
+    heal(p)
+    p.wmem(S["SPQ_K"], [K["SKELETON"] | S["SQF_SUMM"] | S["SQF_RESP"], bs, 1])   # {kind, SPQ_P, SPQ_N}
+    p.turn("WAIT")
+    bad = []
+    for i in range(4):
+        q = p.ent(k)
+        if q["DVIS"] & 1 and q["DCOL"] < 5 and q["DROW"] < 9:
+            bad.append((i, "top-left", q))
+        if q["DVIS"] & 1 and q["FLAGS"] & EF_ACTIVE and not q["FLAGS"] & EF_DYING and q["DFID"] == S["FID_small_corpse"]:
+            bad.append((i, "new body drawn as a corpse", q))
+        p.tick(1)
+    q = p.ent(k)
+    check("P6 the minion killed as the next one is queued: the new minion takes its freed slot (placed), "
+          "no corpse frame at the top-left / on it", q["FLAGS"] & EF_ACTIVE and not q["FLAGS"] & EF_DYING
+          and q["POT"] & SUMM and stands_on_floor(p, k) and not bad, (q, bad[:3]))
 
 # ---------------------------------------------------------------------------- A
 def alarm(p, lines):

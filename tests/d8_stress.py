@@ -30,10 +30,12 @@ into the lair through the non-Sanctum door (real do_exit + lp_transition), then 
       record holds the Archmage only; re-entry: KT_ATTR $43, ST_X init bit clear, P = 0.
   W   into the Sanctum (seal open) with a summon at the door: does it follow? lectern cells free;
       5 Tome hits -> gate open (WIN2), walk out, DOWN at the exit col -> GS_WIN; KT_ATTR after a new game D1 -> D8 lair entry = $43.
+  C   a summon killed on the turn the Archmage re-summons: sp_run reuses the corpse slot before the next render;
+      sp_place failing (blocked) or not, no corpse frame at the top-left (fix/d8-corpse-topleft).
   G   the Archmage drawn at every x on both storeys: the playfield outside the sprites == ROOM_MAP in
       source glyphs (gfx_integrity.screen_check), pool + FRT unchanged.
 Exit 1 on a FAIL or an ANOMALY; NOTEs (design / doc mismatches) are listed only. ~16 min at the defaults.
-Run: ZRCP_PORT=<port> WZ_BUILD_DIR=<dir>/build python3 tests/d8_stress.py [--turns N] [--seeds a,b,c] [--only EFSKRTWG]
+Run: ZRCP_PORT=<port> WZ_BUILD_DIR=<dir>/build python3 tests/d8_stress.py [--turns N] [--seeds a,b,c] [--only EFSKRTWGC]
 """
 import argparse
 import random
@@ -658,6 +660,9 @@ class Fight:
                         t0 = self.seen_slots.setdefault((s_, self.summons_made), self.n)
                         if self.n - t0 >= self.kill_summons:
                             L.deal(0, s_, 99)
+                            # (fix/d8-corpse-topleft: the next summon may take this slot on the same turn,
+                            # so the slot never reads free in between: forget the body now)
+                            self.known.discard((s_, e["raw"][0], e["RCD"] & RCD_SUMMONED))
             act = self.action(es)
             self.tc_pre = p.rw("TURN_COUNTER")
             self.do(act, es)
@@ -1184,11 +1189,73 @@ def draw_sweep(p, master, hero):
     GI.pool_check(p, lambda t, c, d="": check(t, c, d), f"{tag} pool after the sweep", None, pool0)
 
 
+# ------------------------------------------------------------------ C: a summon's corpse slot reused (fix/d8-corpse-topleft)
+def corpse_reuse(p, master, hero, block):
+    """The summon dies on the turn's last tick while the Archmage queues the next one: end_turn's sp_run reuses
+    the just-freed corpse slot (sp_init zeroes E_PX / E_PY) BEFORE the next render, which still holds the
+    corpse's R_VIS 1 / R_FID. block = 1: two Skeletons beside the Archmage at the room's left edge, so
+    sp_place fails (the slot keeps px = py = 0): before the fix the corpse was blitted at the top-left for a
+    tick (user playtest: the nun's / the Pharaoh's summoned Skeleton). Hard check: the displayed playfield
+    cols 0-4 rows 0-8 == ROOM_MAP glyphs on the 4 ticks after the turn, and no drawn record there."""
+    L = D8(p, master, hero)
+    tag = f"C corpse-slot {'blocked' if block else 'placed'} {L.tag}"
+    if not check(f"{tag}: D8 + lair entry", L.ok and L.enter(), ""):
+        return
+    kill_escort(p, L)
+    F = Fight(L, random.Random(master), kill_summons=None, poke_s=True)
+    F.action = lambda es: ("WAIT",)
+    for _ in range(30):
+        F.run(tag, 1)
+        if F.summons_made:
+            break
+    es = L.ents()
+    a = L.arch(es)
+    sm = [s_ for s_ in range(1, 16) if es[s_]["FLAGS"] & EF_ACTIVE and es[s_]["RCD"] & RCD_SUMMONED]
+    if not check(f"{tag}: a summon lives", a is not None and sm, (a, sm)):
+        return
+    k = sm[0]
+    st = 0 if es[a]["Y"] < 9 else 1
+    sy = stand_y(st, p.kb(KSK, "KT_BH"))
+    ax = 2                                    # block = 0: an x with a legal cell beside it (sp_place succeeds)
+    if not block:
+        m = list(p.z.read_memory(S["ROOM_MAP"], 576))
+        ax = next((x for x in range(4, 18) if not L.legal(m, KSK, x + L.aw, sy, {})), 2)
+    p.set_ent(a, X=ax, PX=ax * 8, MODE=0)
+    p.set_ent(k, X=24, Y=sy, PX=192, PY=sy * 8, MODE=0, HP=1)
+    L.place(14, 1 - st)
+    free = [s_ for s_ in range(1, 16) if es[s_]["FLAGS"] == 0]
+    for j, x in zip(free[:2] if block else [], (2 + L.aw, 2 + L.aw + 3)):
+        p.set_ent(j, KIND=KSK, ROOM=p.rb("CUR_ROOM"), FLAGS=EF_ACTIVE | EF_HOSTILE, X=x, Y=sy, PX=x * 8, PY=sy * 8,
+                  HP=50, MAXHP=50, MODE=0, DVIS=0)
+        p.wb(S["P_ENTITIES"] + j * STRIDE + E_RCD, 0)
+        p.wb(S["ST_FLAGS"] + j, 0)
+    p.tick(4)
+    p.wb(S["P_ENTITIES"] + a * STRIDE + E_RCD, p.rb(S["P_ENTITIES"] + a * STRIDE + E_RCD) & ~RCD_SUMMON & 255)
+    L.deal(0, k, 99)
+    p.turn("WAIT")
+    bad = []
+    for i in range(4):
+        sub = []
+        GI.screen_check(p, lambda t, c, d="": sub.append((t, d)) if not c else None, tag, 8)
+        bad += [(i, c) for t, d in sub if isinstance(d, list) for c in d if c[0] < 5 and c[1] < 9]
+        e = p.ent(k)
+        if e["DVIS"] & 1 and e["DCOL"] < 5 and e["DROW"] < 9:
+            bad.append((i, "drawn", e))
+        if e["DVIS"] & 1 and e["FLAGS"] & EF_ACTIVE and not e["FLAGS"] & EF_DYING and e["DFID"] == S["FID_small_corpse"]:
+            bad.append((i, "new body drawn as a corpse", e))
+        p.tick(1)
+    e = p.ent(k)
+    print(f"[info] {tag}: slot {k} after the turn: flags {e['FLAGS']:#04x} x {e['X']} px {e['PX']} py {e['PY']}", flush=True)
+    check(f"{tag}: summon {'not ' if block else ''}made in slot {k}", bool(e["FLAGS"] & EF_ACTIVE) != bool(block), e)
+    check(f"{tag}: no corpse frame at the top-left / on the new body after the slot's reuse (sp_init hides R_VIS)",
+          not bad, bad[:4])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--turns", type=int, default=300)
     ap.add_argument("--seeds", default="0x5300,0x5302,0x5304")
-    ap.add_argument("--only", default="EFSKRTWG")
+    ap.add_argument("--only", default="EFSKRTWGC")
     args = ap.parse_args()
     seeds = [int(s, 0) for s in args.seeds.split(",")]
     if not F3:
@@ -1227,6 +1294,10 @@ def main():
         if "G" in args.only:
             for hero in (0, 1):
                 draw_sweep(p, seeds[0] + 16 * hero, hero)
+        if "C" in args.only:
+            for hero in (0, 1):
+                for block in (1, 0):
+                    corpse_reuse(p, seeds[0] + 16 * hero, hero, block)
     for (b, k), v in sorted(SEEN_CODE.items()):
         print(f"[info] code-bank writes bank {b} {k}: {len(v)} ranges, e.g. "
               f"{sorted(v)[:3] if k != 'var' else sorted({x[2][:60] for x in v})[:12]}", flush=True)
