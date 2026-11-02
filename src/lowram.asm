@@ -1283,10 +1283,13 @@ room_bodies:
 ;    cell") and goes PENDING in place (the §3.6 arrival-conflict mechanism:
 ;    hidden, collides with nothing, does not act — no free attack — and
 ;    materialises when that box is free; facing kept). Any kind, no exclusions.
-;    B16: a FLYER of the other storey (s != t) keeps its x / y and only goes
-;    PENDING — the foot cell is not in its air band; moving it there dropped
-;    a ghost over the top box onto the floor below (flyers never leave their
-;    band, prototype §3.5). Same storey: the foot cell is its band bottom.
+;    B16 / MONSTER-FALL: a body of the other storey (s != t; any kind but a
+;    mid-ladder climber, which is on this shaft and moves) keeps its x / y and
+;    only goes PENDING — the foot cell is not on its storey; moving it there
+;    dropped a ghost over the top box onto the floor below (B16) and lifted a
+;    walker standing at the foot of the shaft under a descending hero onto
+;    storey 0 (MONSTER-FALL; tests/storey_fuzz.py F2). Same storey: the foot
+;    cell is a flyer's band bottom / a walker's own standing row.
 ;    B19: a body whose foot cell already holds a live monster (box_free_mon)
 ;    or a PENDING body (pend_hit) stays PENDING in place, never stacked.
 ;    Log: "YOU SQUEEZE PAST THE <NAME>" (impact_line, MSG_SQUEEZE).
@@ -1390,13 +1393,14 @@ climb_blocked:
                 jr   nc, .n
                 ld   (ix+E_MODE), M_REST
                 set  EF_PENDING_BIT, (ix+E_FLAGS)
-                KFL    KT_FLAGS                ; B16: the foot cell is in a flyer's
-                and  KF_FLYER                  ; band only on its own storey: one
-                jr   z, .mv                    ; of the other storey stays PENDING
-                call storey_ref                ; in place (else it was dropped onto
-                call storey_row                ; the floor below / lifted above;
-                inc  a                         ; flyers never leave their band,
-                ld   hl, TMP7                  ; §3.5). A = 9s+8 vs 9t+8
+                call on_ladder                 ; MONSTER-FALL (B16 for every kind): only a
+                jr   z, .mv                    ; mid-ladder climber (on this shaft) moves to
+                call storey_ref                ; the foot cell; a body of the other storey
+                call storey_row                ; stays PENDING in place (a standing walker
+                inc  a                         ; of storey 1 under a descending hero was
+                ld   hl, TMP7                  ; lifted / dropped a storey; flyers keep their
+                                               ; band, §3.5). A = 9s+8 vs 9t+8 (-5 B; +~0.15k T a
+                                               ; body in the box, squeeze turn only)
                 cp   (hl)
                 jr   nz, .kind
 .mv:            pop  af                        ; B19: the foot cell already holds a live
