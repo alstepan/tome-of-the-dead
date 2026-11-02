@@ -5179,3 +5179,8 @@ D2 objects a room 6.8 -> 10.5 (visible 3.6 -> 4.75, rooms with <= 2 visible 22 %
 (12,259 -> 12,284, 20 free): `dg_wmax_tab` 8, `dg_wmax` 1, 14 code, 2 B `dh_bit` page guard in `combat3.asm`
 (`IF`: pads only if the bank-3 layout above it would cross a page). Build cost `decor_room` (W13): D2 ~87k ->
 ~96k T, worst depth 134k T (D8, unchanged).
+
+## FLAME-RATE (user 2026-11-02)
+
+Decor flames (large torch, large brazier, slim torch) swap their A/B glyph every 4th tick (160 ms; was 16 = 640 ms): `DT_GLYPH_HOLD` is gone, the 4-tick `DT_STEP_MASK` is the only period, and the redundant hold test in `decor_tick` is removed (**bank 2 -5 B**, 0 other regions). The D3-8b drip is its own system (`drip.asm`, `DRIP_*`), not an `ANIM_LIST` entry since D3-7 T6, so nothing needs the old 16-tick hold. Cost: `decor_tick` W14 (4 entries, hero only) mean 747 -> ~1,524 T, max 1,535 T. `tests/budget.py` all scenarios: **walarm max 124,886 T = headroom 1,114 T** (was 124,965 / 1,035), worst ordinary non-gated-cap scenario unchanged in kind. Side effect: one glyph step per tick in total (`DT_MAX_GLYPH` 1) now saturates at 4 entries (each wants a step per 4 ticks), so a room with more than 4 flame cells animates each at a slower-than-160 ms rate (first-in-list priority).
+Small brazier flames (`decor.tiles` `brazier_flame1/2`): ink yellow -> red = fixed bright red `$42` like the other flames (attr only, shapes and ids unchanged; `tools/tiles_convert.py` regenerated `tilesets.asm`, byte counts unchanged).
