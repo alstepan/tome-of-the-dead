@@ -277,20 +277,20 @@ ic_abil:
 ; ic_disp — A = ABL_*: abil_load (bank 3, rank3.asm) fills ABIL_DESC (the
 ; ab_def row + the rank / ammo row) and returns L = its ABF_* flags, B = the
 ; ABL_* (far3 passes BC / L out); dispatch by the flags: ABF_MELEE ->
-; abil_melee, ABF_AMMO -> abil_ammo, else (ABF_SPELL) -> abil_spell. Each:
+; abil_melee, ABF_AMMO -> abil_ammo, else (ABF_SPELL) -> abil_spell; FEAR
+; refuses melee + spell (not ammo) with TX_ST_AFRAID. Each:
 ; IX = hero, B = ABL_*, ABIL_DESC loaded -> L = 1 turn used / IC_REFUSED (a line) /
 ; IC_NOTGT (abil_melee: no target, no line yet) / 0 (silent) refused.
 ic_disp:
                 ld   hl, abil_load
                 call far3
-                bit  ABF_MELEE_BIT, l
-                jr   z, .nm
-                call fear_chk                  ; D3-8: FEAR: no Power Strike / Whirlwind
-                ld   a, TX_ST_AFRAID
+                bit  ABF_AMMO_BIT, l
+                jp   nz, abil_ammo             ; thrown daggers / arrows stay legal while FEARed
+                call fear_chk                  ; FEAR-CAST: FEAR: no spells, no Power Strike / Whirlwind
+                ld   a, TX_ST_AFRAID           ; (after abil_load, before the MP check: no MP, no turn)
                 jp   z, ic_refuse
-                jp   abil_melee
-.nm:            bit  ABF_AMMO_BIT, l
-                jp   nz, abil_ammo
+                bit  ABF_MELEE_BIT, l
+                jp   nz, abil_melee
                 jp   abil_spell
 gear_ban:       ld   a, TX_GEAR_BAN
                 jp   ic_no                     ; line + fizz, IC_REFUSED (out of jr range)

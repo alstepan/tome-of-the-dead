@@ -495,6 +495,35 @@ def run(h, p, check):
     l3 = deal(0, g, 3, 0, 0)
     l1 = deal(0, g, 1, 0, 0)
     check("X4: WEAK hero: deal_hit dmg 3 -> 2, 1 -> 1 (min 1)", (l3, l1) == (2, 1), (l3, l1, hp0))
+    # FEAR-CAST (user 2026-11-01): a FEARed hero cannot cast; no MP, no turn, the AFRAID line;
+    # thrown daggers stay legal; expiry restores. (The Mage has no dagger / bow slot.)
+    for kind, abl, slot, nm in ((K_WIZARD, 0, 1, "Mage Spark"), (K_WIZARD, 4, 5, "Mage Lightning"),
+                                (K_KNIGHT, S["ABL_POWER"], 1, "Warrior Power Strike"),
+                                (K_KNIGHT, S["ABL_POWER"] + 1, 2, "Warrior Whirlwind")):
+        g, = scene(kind, [(K_GOBLIN, HX + 3, 60, True)], learn={abl: 1})
+        setst(0, FEAR, 0x0F)
+        p.select_slot(slot)
+        lines.clear()
+        mp0, hp0 = p.rb("MP"), p.ent(g)["HP"]
+        nt = p.no_turn("FIRE")
+        check("X5: FEARed %s: refused (no turn, no MP, no damage), 'YOU ARE TOO AFRAID TO FIGHT!'" % nm,
+              nt and p.rb("MP") == mp0 and p.ent(g)["HP"] == hp0 and TXT["st_afraid"].rstrip(".") in lines,
+              (nt, p.rb("MP"), mp0, lines))
+    g, = scene(K_WIZARD, [(K_GOBLIN, HX + 3, 60, True)], learn={0: 1})
+    setst(0, FEAR, 0x01)
+    p.select_slot(1)
+    p.no_turn("FIRE")
+    setst(0, 0, 0)
+    mp0 = p.rb("MP")
+    ok = p.turn("FIRE")
+    check("X6: FEAR gone: the Mage casts again (turn used, MP spent)", ok and p.rb("MP") < mp0, (ok, p.rb("MP"), mp0))
+    g, = scene(K_KNIGHT, [(K_GOBLIN, HX + 3, 60, True)])
+    p.wb("DAGGERS", 3)
+    setst(0, FEAR, 0x0F)
+    p.select_slot(3)
+    ok = p.turn("FIRE")
+    check("X7: FEARed Warrior still throws a dagger (turn used, DAGGERS 2)", ok and p.rb("DAGGERS") == 2,
+          (ok, p.rb("DAGGERS")))
 
     # ======================= D: D3-8f rulings (game.md §6.4.2) =====================
     def kx_set(kind, off, v):
