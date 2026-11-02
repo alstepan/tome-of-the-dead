@@ -287,11 +287,11 @@ def run(h, p, check):
           (d11, "YOU ARE TELEPORTED!" in ln_11, ent()[0] & KNOWN, p.rb("GAME_STATE"), p.rb("EXIT_KIND")) ==
           (1, True, KNOWN, 2, 0), (d11, ln_11))
 
-    # teleport scroll (quick slot 7, PROTO: the room set A..D)
+    # teleport scroll (quick slot QS_SLOT0 + QS_SCROLL = 8, PROTO: the room set A..D)
     scene(K_KNIGHT)
     p.wmem(S["BAG"], [S["IT_S_TELEPORT"], 1, 0] + [0] * 57)
     stub([0x21] + w16(S["pot_sync"]) + [0xCD] + w16(S["far6"]))
-    p.select_slot(7)
+    p.select_slot(S["QS_SLOT0"] + S["QS_SCROLL"])   # UB5 (677be74): the scroll slot is 8 for both heroes (was 7)
     r0 = p.rb("CUR_ROOM")
     tl = []
     _, d12, ln_12 = act("FIRE", per_tick=lambda fr, hero: tl.append((p.rb("CUR_ROOM"), hero["FLT"], hero["FLA"],
