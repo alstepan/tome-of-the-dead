@@ -109,9 +109,11 @@ SCHEME = [(0x0F, 0x01), (0x27, 0x04), (0x17, 0x02), (0x28, 0x05),
 BIG = "bigdecor.grid"
 OBJ_SPEC = {
     # name:        (follow_wall, kind, args)
-    "TORCH_TALL":  (False, "big", BIG, ["torch_tall_f1", "torch_tall_f2"]),     # 2x4, 2 frames
-    "TORCH_SLIM":  (False, "big", BIG, ["torch_slim_f1", "torch_slim_f2"]),     # 1x3
-    "BRAZIER_BIG": (False, "big", BIG, ["brazier_big_f1", "brazier_big_f2"]),   # 2x4
+    # LOOK-1 (user 2026-11-02): RAG flames, fixed bright red $42 (no attr cycle; the glyph swap A/B
+    # stays) - the <obj>_look1_f1/f2 blocks of bigdecor.grid (tools/look1_flames.py --merge)
+    "TORCH_TALL":  (False, "big", BIG, ["torch_tall_look1_f1", "torch_tall_look1_f2"]),     # 2x4, 2 frames
+    "TORCH_SLIM":  (False, "big", BIG, ["torch_slim_look1_f1", "torch_slim_look1_f2"]),     # 1x3
+    "BRAZIER_BIG": (False, "big", BIG, ["brazier_big_look1_f1", "brazier_big_look1_f2"]),   # 2x4
     "BANNER_TALL": (False, "big", BIG, ["banner_tall"]),                        # 2x5
     "WINDOW_ARCH": (False, "big", BIG, ["window_arch"]),                        # 3x4
     "PILLAR":      (True,  "tiles", "walls_r4.tiles", [[["pillar_l", "pillar_r"]]]),   # 2x1 repeat

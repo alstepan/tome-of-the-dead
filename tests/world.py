@@ -466,15 +466,16 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
                 errs.append(("cobweb outside a corner (row 0, brick column in rows 0..2, ceiling above)", c0, r0))
     if ncob > 2:
         errs.append(("more than 2 cobwebs", ncob))
-    if npatch_cells > 6:
-        errs.append(("more than 6 patch / pillar cells", npatch_cells))
+    wall_cap = {2: 13}.get(d, 6)          # D2-DECOR: D2's wall-class budget is 13 (dg_wmax_tab), 6 elsewhere
+    if npatch_cells > wall_cap:
+        errs.append((f"more than {wall_cap} patch / pillar cells", npatch_cells))
     if need_patch and not npatch:
         errs.append(("no back-wall patch in the room (>= 1 guaranteed)",))
     n = len(al) // 4
     ents = [al[k:k + 4] for k in range(0, len(al), 4)]
     gl = [e for e in ents if e[2] >= 16]
     at = [e for e in ents if e[2] < 16]
-    if len(gl) > 4 or len(at) > 8 or n > 12:
+    if len(gl) > 4 or at or n > 12:      # LOOK-1: the flame attr cycle is gone, every entry is a glyph swap
         errs.append(("anim budget", len(gl), len(at)))
     cells = {(e[0], e[1]) for e in ents}
     for e in ents:
@@ -488,8 +489,6 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
             errs.append(("glyph-swap entry on a non-TF_ANIM id", e))
         if e[2] >= 16 and (not flags[e[2]] & ANIMF or flags[e[2]] & SOLID):
             errs.append(("glyph-swap alternate id not a non-solid TF_ANIM id", e))
-        if e[2] < 16 and e[2] != 1:
-            errs.append(("attr-cycle kind not 1 (DEC1: no candles)", e))
         if e[3] != (e[3] & 7):
             errs.append(("AL_PHASE not a 0..7 stagger", e))
     for j in ch:
@@ -2281,20 +2280,22 @@ def w17(p, check):
 # seeded rooms A and B (LVL_DEPTH 1 + RD_SEED, D1 tileset), A rebuilt in place
 # (room_show + present_full from the wait_tick probe), then played.
 # ---------------------------------------------------------------------------
-def dt_sim(ents, rmap, covered, tab):
+def dt_sim(ents, rmap, covered):
     """Model of one decor_tick (written from the B3B-10 contract, src/decor.asm
-    header): every AL_PHASE += 1; due when & 3 == 0 (glyph swaps: & 15 == 0); per tick caps 1 glyph /
-    2 attr steps and 3 occupancy tries; a due entry past a cap waits a tick
+    header): every AL_PHASE += 1; due when & 3 == 0 and & 15 == 0 (glyph swaps hold 16); per tick
+    caps 1 glyph step and 3 occupancy tries; a due entry past a cap waits a tick
     (phase - 1), a tried entry under a sprite skips the step (cell holds); a
-    glyph swap exchanges the map id with AL_TYPE. -> {entry index: attr shown}."""
-    caps = {"g": S["DT_MAX_GLYPH"], "a": S["DT_MAX_ATTR"], "t": S["DT_MAX_TRIES"]}
+    glyph swap exchanges the map id with AL_TYPE. LOOK-1: no attr-cycle entries any more.
+    -> {entry index: None} (= TILE_ATTRS[new id] shown)."""
+    caps = {"g": S["DT_MAX_GLYPH"], "t": S["DT_MAX_TRIES"]}
     shown = {}
     for k, e in enumerate(ents):
         e[3] = (e[3] + 1) & 255
         if e[3] & S["DT_STEP_MASK"]:
             continue
-        kind = "g" if e[2] >= S["AL_GLYPH_MIN"] else "a"
-        if kind == "g" and e[3] & (S["DT_GLYPH_HOLD"] - 1):
+        assert e[2] >= S["AL_GLYPH_MIN"], e       # no attr-cycle kinds
+        kind = "g"
+        if e[3] & (S["DT_GLYPH_HOLD"] - 1):
             continue                              # glyph swaps hold 16 ticks
         if caps[kind] == 0 or caps["t"] == 0:
             e[3] = (e[3] - 1) & 255
@@ -2303,12 +2304,9 @@ def dt_sim(ents, rmap, covered, tab):
         if covered(e[0], e[1]):
             continue
         caps[kind] -= 1
-        if kind == "g":
-            j = e[1] * 32 + e[0]
-            rmap[j], e[2] = e[2], rmap[j]
-            shown[k] = None                       # = TILE_ATTRS[new id]
-        else:
-            shown[k] = tab[(e[2] - 1) * 8 + ((e[3] >> 2) & 7)]
+        j = e[1] * 32 + e[0]
+        rmap[j], e[2] = e[2], rmap[j]
+        shown[k] = None                           # = TILE_ATTRS[new id]
     return shown
 
 
@@ -2345,7 +2343,7 @@ def w14(p, check):
             if cond(ents):
                 return sd, al
         raise RuntimeError("W14: no seed for room %d" % r)
-    sa, ala = pick(ROOM_A, lambda e: sum(x[2] >= 16 for x in e) >= 2 and sum(x[2] < 16 for x in e) >= 2   # DEC1: the small torch / candle attr cells are gone
+    sa, ala = pick(ROOM_A, lambda e: sum(x[2] >= 16 for x in e) >= 2   # LOOK-1: glyph swaps only (the flame attr cycle is gone)
                    and not any((x[0], x[1]) in hbox for x in e) and len(e) <= 7)   # D1: a short list, so the round robin visits the injected entry every tick
     sb, alb = pick(ROOM_B, lambda e: len(e) >= 2)
     blk[so(ROOM_A)], blk[so(ROOM_A) + 1] = sa & 255, sa >> 8
@@ -2365,9 +2363,9 @@ def w14(p, check):
           ok and got == ala and list(p.z.read_memory(S["ROOM_MAP"], 576)) == want_ma, (ok, n, got, ala))
     p.settle(3)
     # ---- N ticks against the model (dt_sim), every tick ------------------
-    tab = list(p.z.read_memory(S["dt_attr_tab"], 16))
-    check("W14 attr table: flame cycles $46/$42/$06 only (DEC1: no candle kind)",
-          set(tab[:8]) == {0x46, 0x42, 0x06}, tab)
+    check("W14 LOOK-1: no attr-cycle table / kind left (dt_attr_tab gone), every entry a glyph swap",
+          "dt_attr_tab" not in S and all(x[2] >= 16 for x in [ala[k:k + 4] for k in range(0, len(ala), 4)]),
+          ala)
     ents = [list(p.z.read_memory(S["ANIM_LIST"] + 4 * k, 4)) for k in range(n)]
     rmap = list(p.z.read_memory(S["ROOM_MAP"], 576))
     glyphs = p.z.read_memory(S["TILE_GLYPHS"], 512)
@@ -2383,7 +2381,7 @@ def w14(p, check):
     bad, steps, seen = [], [0] * n, [set() for _ in range(n)]
     p.present_watch(True)
     for t in range(40):
-        st_ = dt_sim(ents, rmap, lambda c, r: (c, r) in cov, tab)
+        st_ = dt_sim(ents, rmap, lambda c, r: (c, r) in cov)
         p.tick()
         for k, v in st_.items():
             steps[k] += 1
@@ -2404,33 +2402,34 @@ def w14(p, check):
                 bad.append((t, "shadow != screen", c, r))
     p.present_watch(False)
     check("W14 40 ticks: ANIM_LIST + ROOM_MAP == the decor_tick model every tick, each cell shows "
-          "its cycle attr / swapped glyph on bank 5 and the shadow", not bad, bad[:3])
-    check("W14 in 40 ticks attr entries stepped 8-10 times (period 4; a capped step waits a tick), "
-          "glyph swaps 2-3 times (hold 16), attr cells took >= 2 attrs, glyph cells both frames",
-          all((x in (2, 3)) if ents[k][2] >= 16 else (x in (8, 9, 10)) for k, x in enumerate(steps)) and all(len(x) >= 2 for x in seen), (steps, [len(x) for x in seen]))
+          "its swapped glyph + tile attr on bank 5 and the shadow", not bad, bad[:3])
+    check("W14 in 40 ticks glyph swaps stepped 2-3 times (hold 16; a capped step waits a tick), "
+          "glyph cells showed both frames and ONE fixed attr (LOOK-1: no colour flash)",
+          all(x in (2, 3) for x in steps) and all(len({g for _, g in x}) >= 2 for x in seen)
+          and all(len({a for a, _ in x}) == 1 for x in seen), (steps, [len(x) for x in seen]))
     ps = p.present_samples
     check("W14 displayed == composed at every tick-start present (probe_presented)",
           ps and not any(ps), (len(ps), [x for x in ps if x][:4]))
     sm = shadow_frame(p)
     tabs = p.bg_tables()
-    acells = {(e[0], e[1]) for e in ents if e[2] < 16}
     sbad = []
     for r in range(PLAY_ROWS):
         for c in range(32):
             g, a = room_model.expected_cell(*tabs, c, r)
-            if bytes(cell_bytes(sm, c, r)) != g or ((c, r) not in acells and attr_at(sm, c, r) != a):
+            if bytes(cell_bytes(sm, c, r)) != g or attr_at(sm, c, r) != a:
                 sbad.append((c, r))
-    check("W14 shadow == ROOM_MAP after animation (glyphs everywhere; attrs except the cycling cells)",
+    check("W14 shadow == ROOM_MAP after animation (glyphs and attrs everywhere)",
           not sbad, sbad[:4])
     # ---- a cell under a sprite holds -------------------------------------
     h = p.ent(0)
     hc, hr = h["DCOL"] + 1, h["DROW"] + 1
     k = min(n, S["ANIM_MAX"] - 1)
-    # DEC1: the room's attr cells now come in a same-phase pair (one torch): if the pair is due on the
-    # injected entry's first tick the cap of 2 attr steps makes it wait, so start it a phase earlier
-    q = [p.rb(S["ANIM_LIST"] + 4 * j + 3) for j in range(n) if p.rb(S["ANIM_LIST"] + 4 * j + 2) < 16]
-    p0 = 2 if any(x & 3 == 3 for x in q) else 3
-    p.z.cmd("write-memory %d %d %d 1 %d" % (S["ANIM_LIST"] + 4 * k, hc, hr, p0))
+    # a glyph-swap entry injected under the hero (type = the room's first alternate id, so a real
+    # TF_ANIM id): phase 12 -> its due step (phase 16) falls while the hero stands on it and is skipped
+    alt = ents[0][2]
+    j0 = hr * 32 + hc
+    id0 = p.rb(S["ROOM_MAP"] + j0)
+    p.z.cmd("write-memory %d %d %d %d 12" % (S["ANIM_LIST"] + 4 * k, hc, hr, alt))
     p.wb("ANIM_N", k + 1)
     a0 = attr_at(p.composed_frame(), hc, hr)
     g0 = bytes(cell_bytes(p.composed_frame(), hc, hr))
@@ -2439,15 +2438,20 @@ def w14(p, check):
         p.tick()
         f = p.composed_frame()
         held.append((p.rb(S["ANIM_LIST"] + 4 * k + 3), attr_at(f, hc, hr), bytes(cell_bytes(f, hc, hr)) == g0))
-    check("W14 a cell under the hero holds: its due steps (phases 4, 8) are skipped, the hero's "
-          "attr / pixels stay", [x[0] for x in held] == list(range(p0 + 1, p0 + 10))
-          and all(x[1:] == (a0, True) for x in held), held)
+    check("W14 a cell under the hero holds: its due step (phase 16) is skipped, the hero's "
+          "attr / pixels stay, the map id is untouched (the phase passes 16; a glyph-capped tick may wait it once)",
+          max(x[0] for x in held) >= 20
+          and all(x[1:] == (a0, True) for x in held) and p.rb(S["ROOM_MAP"] + j0) == id0, held)
     p.place(0, h["X"] + 6, h["Y"])
-    p.tick(4)
-    ph = p.rb(S["ANIM_LIST"] + 4 * k + 3)
-    want_a = tab[(ph >> 2) & 7]
-    check("W14 ... and steps once the hero has left (attr = the flame cycle at its phase)",
-          attr_at(p.composed_frame(), hc, hr) == want_a, (ph, hex(attr_at(p.composed_frame(), hc, hr))))
+    p.tick(1)
+    p.wb(S["ANIM_LIST"] + 4 * k + 3, 31)          # next tick: phase 32 -> due (+ a tick spare for the glyph cap)
+    p.tick(3)
+    gl_ = p.z.read_memory(S["TILE_GLYPHS"], 512)
+    got_g = bytes(cell_bytes(p.composed_frame(), hc, hr))
+    check("W14 ... and steps once the hero has left (the swapped glyph + its tile attr appear)",
+          p.rb(S["ROOM_MAP"] + j0) == alt and got_g == bytes(gl_[alt * 8:alt * 8 + 8]),
+          (p.rb(S["ROOM_MAP"] + j0), alt, got_g.hex()))
+    p.wb(S["ROOM_MAP"] + j0, id0)
     p.wb("ANIM_N", n)
     # ---- decor_tick cost (idle room A, budget.Stepper) ---------------------
     import budget
@@ -2495,14 +2499,13 @@ def w14(p, check):
     comp = p.composed_frame()
     sm = shadow_frame(p)
     tabs = p.bg_tables()
-    acells = {(gb2[i], gb2[i + 1]) for i in range(0, len(gb2), 4) if gb2[i + 2] < 16}
     sbad = []
     for r in range(PLAY_ROWS):
         for c in range(32):
             g, a = room_model.expected_cell(*tabs, c, r)
-            if bytes(cell_bytes(sm, c, r)) != g or (attr_at(sm, c, r) != (attr_at(comp, c, r) if (c, r) in acells else a)):
+            if bytes(cell_bytes(sm, c, r)) != g or attr_at(sm, c, r) != a:
                 sbad.append((c, r))
-    check("W14 room B: shadow == ROOM_MAP (attr-cycle cells == the screen's attr)", not sbad, sbad[:4])
+    check("W14 room B: shadow == ROOM_MAP (glyphs and attrs; no cycling cells any more)", not sbad, sbad[:4])
     p.load()
 
 
@@ -3201,7 +3204,7 @@ def w16_level(p, check):
               not map_structure(p, lair) and all(m[F1 * 32 + xc + k] == S["T_GRATE_SHUT"] for k in range(3)),
               (map_structure(p, lair)[:3], list(m[F1 * 32 + xc:F1 * 32 + xc + 3]), m[(F1 - 1) * 32 + xc + 1]))
         # the gate / glow cells and row 17 on both screens (the whole-room check
-        # would trip over the torches' attr cycle, decor_tick)
+        # would trip over the torches' glyph swaps, decor_tick)
         tabs = p.bg_tables()
         cells = [(c, F1) for c in range(32)]     # 3F-T8: the boss stands above the gate (no glow while shut)
         bad = [(scr, c, r_) for scr, f in (("displayed", p.frame()), ("composed", p.composed_frame()))

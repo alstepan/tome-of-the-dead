@@ -1,0 +1,10 @@
+LOOK-1 flames (concept only; tools/look1_flames.py -> look1_flames.grid, look1_sheet.png, look1_anim.gif)
+Refs: 14.48.37 ragged yellow tongues with gaps -> RAG; 14.49.39 thin red twisting tip -> A/B tip sway (S-twist);
+14.50.17 red teardrop + yellow core -> TEAR: outer shell, 1-px paper ring, solid inner core (core can't be a 2nd colour in a cell).
+Cost: slim 4 ids (same as today, glyphs unchanged, attr fixed). Tall torch / big brazier: 10 ids each, same as today; TEAR/RAG
+replace 6 of 10 (glyph,attr) cells (4 flame cells + 2 frame-B cells), bodies byte-identical; swap cells = today's (top row only).
+Colour: one attr per cell. Y=$46 everywhere, R=$42 everywhere, RY=$42 tip cells over $46 body cells (2x4 objects only;
+slim has a single flame cell, so Y or R). All variants cost the same ids. Today's $06 dim step is dropped.
+Recommend: tall torch + brazier TEAR RY (red tips/yellow hot core reads like 14.50.17, static), slim torch Y (R if RY is
+chosen, to match). A 3rd frame (+2 ids/object) is not needed; better: step the flame glyph swap every 4 ticks (~160 ms,
+as in look1_anim.gif) instead of DT_GLYPH_HOLD 16, else 2 frames at 640 ms read as sluggish (engine change, not done).

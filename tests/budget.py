@@ -521,14 +521,14 @@ SCENARIOS = {
 
 
 # B3B-10: the PROTO rooms carry no animated decor (RD_SEED 0), so the
-# scenarios get a synthetic FULL ANIM_LIST in room A (4 glyph swaps + 8 attr
-# cycles = the deriver's budget maximum, ALL with the same stagger so the
-# per-tick caps bind and the deferred steps pile into the following ticks),
+# scenarios get a synthetic FULL ANIM_LIST in room A (4 glyph swaps = the
+# deriver's budget maximum since LOOK-1 removed the flame attr cycle, ALL with
+# the same stagger so the per-tick caps bind and the deferred steps pile into the following ticks),
 # placed in the fight band (storey 1, rows 11-14) and storey 0. BUDGET_DECOR=0
 # measures without it.
 DECOR = os.environ.get("BUDGET_DECOR", "1") != "0"
 DECOR_GLYPH = [(10, 12), (18, 13), (12, 3), (20, 4)]
-DECOR_ATTR = [(9, 12), (14, 13), (16, 11), (20, 14), (11, 2), (15, 4), (27, 3), (27, 12)]
+DECOR_ATTR = []                       # LOOK-1: no attr-cycle entries any more
 
 
 # D3-8b: callables f(p) run after the scenario's setup (tests/drip.py injects a
@@ -539,7 +539,7 @@ EXTRA_SETUP = []
 def inject_decor(p):
     """Synthetic ANIM_LIST for room A (in ROOM_MAP): glyph cells get the D1
     tall-torch body id 36 in the map and its tip id 40 as the swap partner
-    (both non-solid, ids >= 16); attr cells kinds 1 / 2. Phase 3 = all due on
+    (both non-solid, ids >= 16). Phase 3 = all due on
     the next tick. Cells must be AIR (asserted)."""
     al = []
     for c, r in DECOR_GLYPH:

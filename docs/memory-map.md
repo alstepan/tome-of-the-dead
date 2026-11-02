@@ -472,7 +472,7 @@ in R6** and a **per-level cache in bank 2** (was: every kind's 17-B
   raw) → ZX0 → R6 **`sqm_zx0`** (280 B). The macros / role EQUs stay in
   data.asm.
 * **Cache** (bank 2): **`seq_rows`** (`SQ_SLOTS` 7 × `KS_STRIDE` 17 = 119 B,
-  one page, in the `kind_tab` ALIGN pad right below `dt_attr_tab`; zeros in
+  one page, in the `kind_tab` ALIGN pad right below `tile_flags`; zeros in
   the image) — slot 0 = the hero, 1..6 = the level's monster blocks (PROTO:
   all 6 original kinds); **`seq_bytes`** = `code_end` .. +`SEQB_LEN` 256
   (runtime only, below `FRT`), the rows point in. **`kind_tab` `KT_SEQ`**
@@ -1796,20 +1796,19 @@ holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
 
 - **Deriver** `decor_room` (bank 3, `src/decor_gen.asm`; reference
   `tools/decorgen.py`, byte-equal, W13): re-derived from `RD_SEED` (own
-  xorshift, never `GEN_RNG` / `RNG_STATE`); 12 attempts × 4 rnd calls; budgets
-  ≤ 2 large animated objects, ≤ 4 glyph-swap + ≤ 8 attr-cycle cells (≤ 12
-  entries), ≤ 6 wall-class cells; objects in rows `9s..9s+5` only, never on a
+  xorshift, never `GEN_RNG` / `RNG_STATE`); 12 attempts (D2: 19, D2-DECOR below) × 4 rnd calls; budgets
+  ≤ 2 large animated objects, ≤ 4 glyph-swap cells (LOOK-1: no attr-cycle budget; ≤ 12
+  entries), ≤ 6 wall-class cells (D2: 13); objects in rows `9s..9s+5` only, never on a
   structural cell or next to a ladder. Measured 47–72k T per room (W13: build
   with decor − build with `RD_SEED` 0; cold, room entry only).
 - **`ANIM_LIST` contract** (per entry `AL_COL`, `AL_ROW`, `AL_TYPE`,
   `AL_PHASE`; entries per object, row-major; an object's glyph and attr cells
-  are separate entries): `AL_TYPE` 1..15 = attr-cycle kind (1 flame:
-  `dt_attr_tab`, 8 steps; DEC1 removed kind 2, the candle), ≥ `AL_GLYPH_MIN` 16 = glyph swap holding the
+  are separate entries): `AL_TYPE` ≥ `AL_GLYPH_MIN` 16 = glyph swap (LOOK-1 2026-11-02: the 1..15 attr-cycle
+  kinds and `dt_attr_tab` are gone, the flame cells keep the fixed `$42` of their tile) holding the
   OTHER tile id (the deriver writes the alternate frame; `decor_tick`
   exchanges it with the `ROOM_MAP` cell, so the map always holds the shown
   id); drip entries hold 16 ticks (glyph entries step only at `AL_PHASE & 15 == 0`, `DT_GLYPH_HOLD`). `AL_PHASE` = the object's stagger `(col + row) & 7` at build, then a
-  tick counter (+1 per serviced tick; due when `& 3 == 0`; cycle index = bits
-  4..2).
+  tick counter (+1 per serviced tick; due when `& 3 == 0` and `& 15 == 0`).
 - **NEXT_MAP rule** (B3B-9 review 🔴): a build into `ROOM_MAP` fills `ANIM_N` /
   `ANIM_LIST`, a build into `NEXT_MAP` (do_exit) fills `ANIM_N2` /
   `ANIM_LIST2`; `room_shadow` (do_exit, after the scroll) copies the 49 B over
@@ -1825,8 +1824,7 @@ holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
   before `panel_tick`): skipped when `ANIM_N` = 0 or when the tick is already
   in its 2nd frame (`SYS_FRAMES` ≠ `LAST_TICK_FRAME`, like `panel_tick`: the
   decor holds, so a heavy input tick is never lengthened). Per tick ≤ `DT_MAX_GLYPH` 1 glyph
-  swap + ≤ `DT_MAX_ATTR` 2 attr steps (D6 allowed 2 + 3; measured ~1.2k /
-  ~0.75k T per step) and ≤ `DT_MAX_TRIES` 3 occupancy tests; a due entry past
+  swap (measured ~1.2k T per step; LOOK-1: the 2 attr steps are gone) and ≤ `DT_MAX_TRIES` 3 occupancy tests; a due entry past
   a cap waits a tick (`AL_PHASE` − 1); a tested entry whose cell lies in a
   drawn sprite footprint (`RLIST` slots' `R_COL..R_ROWS`, a direct test (like the
   old `zap_covered`): ~90 T per slot, only for the ≤ 3 tested cells — cheaper than
@@ -1834,7 +1832,7 @@ holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
   sprite) skips that step (the cell holds; next test at its
   next due tick). A step writes the
   bank-5 cell and the bank-7 attr shadow (D3-S2: no bitmap shadow; glyph swap: map id ↔
-  `AL_TYPE`, glyph + `TILE_ATTRS` attr; attr kind: the cycle colour) and marks
+  `AL_TYPE`, glyph + `TILE_ATTRS` attr) and marks
   the cell in `PRES_MASK` (inline 1-cell `pmark_rect`). Leaves bank 7 paged.
   Never touches panel rows (deriver rows ≤ 14). Measured per tick, by
   scenario: `tests/world.py` W14 (a real D1 room, its 8 derived entries,
@@ -1843,11 +1841,8 @@ holes are `T_AIR`, the pit itself is `RD_PITCOL`). `_BIT` twins for `bit`.
   panel test): max 5,364 T, mean 2,487 T (mix) / 1,117 T (heavy) — the
   budget figure is the worst case to plan with. Worst ticks (B3B-10) mix
   111,466 / heavy 116,235 T (without decor 116,883 / 114,139), 0 overruns.
-  Attr kinds write the whole attr byte (`DT_HOT` = `ATTR_TORCH` $46 /
-  `DT_RED` $42 / `DT_DIM` $06, `src/decor.asm`), overriding the cell's
-  paper: black on every attr-cycled cell (the large
-  torches' / braziers' row-1 cells in all 8 tileset slots; checked
-  2026-10-04), so nothing changes but the ink / BRIGHT.
+  LOOK-1 (user 2026-11-02): no attr kinds any more (was: whole attr bytes `DT_HOT` $46 /
+  `DT_RED` $42 / `DT_DIM` $06 from `dt_attr_tab`).
 - **Tests**: W13 (deriver == Python for `ROOM_MAP` and `NEXT_MAP` builds, an
   independent rules checker incl. a wall-heavy sweep and synthetic maps, Z80
   on synthetic maps), W14 (`decor_tick` == a Python model every tick for 32
@@ -5117,3 +5112,46 @@ slot (+3 B; `sp_run`'s `ACT_SLOT` $FF store, -4 B, gone) and its `R_VIS` := 0 (+
 
 Tests: `tests/d8_stress.py` C (Archmage: the re-summon blocked / placed), `tests/spawn.py` P6 (the Pharaoh's
 queued minion): both fail before the fix (top-left drawn record / no minion), pass after.
+
+## LOOK-1 (flames without the colour flash, 2026-11-02, branch `feat/look1-d2decor`)
+
+User-approved RAG shape, fixed bright red `$42` for the slim torch, `TORCH_TALL` and `BRAZIER_BIG`
+(the 2-row objects: all 4 flame cells `$42`). Sources: `assets/gfx/concept/look1/` (concept), imported
+into `bigdecor.grid` as `<obj>_look1_f1/f2` by `tools/look1_flames.py --merge`; `tools/tiles_convert.py`
+`OBJ_SPEC` points at them (same sizes, same ids: tilesets 1,224 B unchanged, ids per level unchanged).
+The old `_fN` blocks stay for the menu torches (`tools/menu_art.py`, `src/menu1.asm` keep their own flame-tip
+attr cycle) and the concept sheet.
+
+| region | before | after | delta |
+|---|---|---|---|
+| bank 2 `decor_tick` (code) + `dt_attr_tab` (8 B in the `kind_tab` ALIGN pad) | | | pad 8 -> 65 B (**bank 2 free 14 -> 71**: the pad is slack, `seq_rows` side unchanged at 6) |
+| bank 3 `decor_gen` (flag bit 4 / `dg_na` / `DG_MAX_ATTR` / `dg_da` / `dg_cell` row-1 path) | 12,303 B, 1 free | 12,259 B, **45 free** | -44 |
+| R6 / bank 7 / bank 1 / bank 0 / tape | | | 0 |
+
+`ANIM_LIST` now holds glyph entries only (slim 1, tall torch / big brazier 2): a D1 room's list shrinks
+(`MAX_ATTR` 8 gone), `decor_tick` per room is ~0.75k T cheaper per attr cell it no longer steps.
+`DT_GLYPH_HOLD` stays 16 (flame swap A/B every 640 ms); measured cost of 4: see the LOOK-1 report.
+
+## D2-DECOR (D2 looked empty, 2026-11-02, `tools/decor_density.py`)
+
+Measured over 1,000 seeds x 8 depths x all non-Sanctum rooms (`python3 tools/decor_density.py`; a build is
+needed only for the symbol table). Not RAM: the D2 budgets are nowhere near binding (glyph cells 1.15 of 4,
+ANIM list <= 4 of 12 entries). Cause: D2's set is all small objects (TORCH_SLIM 1x3, BRAZIER / BANNER /
+WINDOW_BAR 1x2, MOSS 1x1, PATCH_A/B) - 3.6 visible objects a room (median of the other depths 3.5) but only
+15.8 decor cells a room vs 24-25 on D1/3/4/5/7/8 (D6 = same set, 16.9) - and 48 % of every depth's patch +
+menu attempts die on the spent 6-cell wall budget (D2: PATCH_A/B + the 3 common wall records are 5 of its 11
+menu records, 84 % of its rooms hit the cap). The removed DEC1/DEC2 fillers (candles, skulls, small torch,
+bones, cauldron) were small too, so nothing replaced them. Fix, 0 new tiles: a per-depth wall-class budget
+(`dg_wmax_tab`, wall + 1) and menu tries = that + `DG_TRIES_ADD` 5; every depth keeps 7 / 12, **D2 = 14 / 19**
+(wall budget 13 = more patch rolls / bricks, 19 attempts).
+
+| decor cells a room (1,000 seeds) | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 |
+|---|---|---|---|---|---|---|---|---|
+| before | 24.7 | **15.8** | 25.5 | 24.2 | 23.6 | 16.9 | 25.4 | 25.5 |
+| after | 24.7 | **24.7** | 25.5 | 24.2 | 23.6 | 16.9 | 25.4 | 25.5 |
+
+D2 objects a room 6.8 -> 10.5 (visible 3.6 -> 4.75, rooms with <= 2 visible 22 % -> 7 %). D6 (same set,
+16.9) is untouched: its `dg_wmax_tab` entry is one data byte away from the same fix. Bank 3: +25 B
+(12,259 -> 12,284, 20 free): `dg_wmax_tab` 8, `dg_wmax` 1, 14 code, 2 B `dh_bit` page guard in `combat3.asm`
+(`IF`: pads only if the bank-3 layout above it would cross a page). Build cost `decor_room` (W13): D2 ~87k ->
+~96k T, worst depth 134k T (D8, unchanged).

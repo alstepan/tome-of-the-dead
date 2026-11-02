@@ -2,47 +2,34 @@
 ; decor.asm — B3B-10 animated decor (plan D6, concept-screen §3.3), bank 2.
 ;   ANIM_LIST (level_defs.asm; filled by the B3B-9 deriver for the room in
 ;   ROOM_MAP, or copied from ANIM_LIST2 by do_exit's room_shadow): per entry
-;   AL_COL, AL_ROW, AL_TYPE (1..15 attr-cycle kind: 1 flame; >= 16
-;   glyph swap: the OTHER tile id), AL_PHASE (tick counter, starts at the
-;   object's stagger (col + row) & 7). The attr tables (dt_attr_tab) sit in
-;   main.asm's kind_tab ALIGN pad.
+;   AL_COL, AL_ROW, AL_TYPE (>= 16: glyph swap, the OTHER tile id), AL_PHASE
+;   (tick counter, starts at the object's stagger (col + row) & 7).
+;   LOOK-1 (user 2026-11-02): the flame attr cycle (kind 1, dt_attr_tab, the
+;   $46 / $42 / $06 steps) is gone: the flame cells keep the fixed $42 of
+;   their tile; only the glyph A/B swap animates.
 ;==============================================================================
 DT_STEP_MASK    EQU 3               ; an entry steps when AL_PHASE & 3 == 0: every 4th tick
 DT_GLYPH_HOLD   EQU 16              ; glyph swaps (drips) step every 16th tick (designer ~12)
-DT_MAX_GLYPH    EQU 1               ; per tick: <= 1 glyph swap and <= 2 attr steps (D6
-DT_MAX_ATTR     EQU 2               ; allows 2 + 3; measured ~1.2k / ~0.75k T per step, so
-                                    ; 1 + 2 keeps a tick <= ~3.5k T). The deriver's maxima
-                                    ; (4 glyph + 8 attr cells, all due once per 4 ticks)
-                                    ; still fit 4 ticks; a same-stagger bunch spreads
+DT_MAX_GLYPH    EQU 1               ; per tick: <= 1 glyph swap (measured ~1.2k T per step)
 DT_MAX_TRIES    EQU 3               ; per tick: <= 3 due entries reach the occupancy test
                                     ; (~0.1k per RLIST slot each); the rest wait a tick
-DT_KINDS        EQU 1               ; attr-cycle kinds in dt_attr_tab (1 flame; DEC1 dropped the candle)
-; dt_attr_tab colours (main.asm). A step writes the WHOLE attr byte, so the
-; cell's paper becomes black: fine, every attr-cycled cell (the large torches' / braziers' row-1 cells in all 8 tileset
-; slots) already has paper 0 in its TILE_ATTRS / tileset attr (checked
-; 2026-10-04: $46 or $06), and the deriver never puts decor on floor rows.
-DT_HOT          EQU ATTR_TORCH      ; $46 bright yellow on black (the base attr)
-DT_RED          EQU $42             ; bright red on black
-DT_DIM          EQU $06             ; yellow on black (no BRIGHT)
-                ASSERT DT_HOT == $46 && (DT_HOT & $38) == 0 && (DT_RED & $38) == 0 && (DT_DIM & $38) == 0
-DT_CAPS         EQU (DT_MAX_TRIES << 6) | (DT_MAX_GLYPH << 4) | DT_MAX_ATTR   ; C: tries
-                                    ; left (bits 7-6), glyph steps (5-4), attr steps (1-0)
+DT_CAPS         EQU (DT_MAX_TRIES << 6) | (DT_MAX_GLYPH << 4)   ; C: tries left (bits 7-6),
+                                    ; glyph steps left (5-4)
 
 ;------------------------------------------------------------------------------
 ; decor_tick — play_loop, after this tick's render (+ pmark_dmg; with
 ; RENDER_FIRST also after read_turn_input / anim_tick, which leave R_COL..
 ; R_ROWS alone) and before panel_tick: SLOTREC's R_COL..R_ROWS are the
 ; footprints on the bank-5 screen. Every entry's AL_PHASE += 1; a
-; due entry (AL_PHASE & 3 == 0; glyph swaps only when AL_PHASE & 15 == 0,
-; i.e. drips hold 16 ticks per frame) steps: attr kinds take the next colour of
-; their 8-step cycle (index = AL_PHASE bits 4..2), glyph swaps exchange the
-; map id with AL_TYPE and draw the new glyph + its TILE_ATTRS attr. Each step
+; due entry (AL_PHASE & 3 == 0, and AL_PHASE & 15 == 0: a glyph swap holds
+; DT_GLYPH_HOLD = 16 ticks per frame) steps: it exchanges the map id with
+; AL_TYPE and draws the new glyph + its TILE_ATTRS attr. Each step
 ; writes the bank-5 cell (glyph / attr) AND the bank-7 attr shadow (else the
 ; next erase would restore a stale colour) and marks the cell for present.
 ; ROOM_MAP keeps the shown id (erase_rect redraws its glyph, D3-S2), so the
-; screens stay == the map (glyphs; attrs follow the cycle).
+; screens stay == the map.
 ; A due entry WAITS a tick (AL_PHASE - 1, due again next tick) when the tick's
-; cap for its kind (DT_MAX_GLYPH / DT_MAX_ATTR) or its occupancy tries
+; glyph cap (DT_MAX_GLYPH) or its occupancy tries
 ; (DT_MAX_TRIES) are spent: a same-stagger bunch spreads over ticks. A tried
 ; entry whose cell is under a drawn sprite (RLIST footprints, R_COL..R_ROWS)
 ; SKIPS this step: the cell holds (nothing written), the
@@ -54,8 +41,7 @@ DT_CAPS         EQU (DT_MAX_TRIES << 6) | (DT_MAX_GLYPH << 4) | DT_MAX_ATTR   ; 
 ; the decor holds there, so it never adds to a tick that is already long.
 ; Leaves bank 7 paged if it stepped anything (every later user pages itself).
 ; Clobbers: A, BC, DE, HL.
-; Cost (contended): ~0.1k + ~60 T per entry; per step ~0.75k (attr) / ~1.2k
-; (glyph) incl. ~90 T per RLIST slot (occupancy; 1 slot) and the present mark
+; Cost (contended): ~0.1k + ~60 T per entry; per step ~1.2k incl. ~90 T per RLIST slot (occupancy; 1 slot) and the present mark
 ; (~0.2k); + ~0.1k to page bank 7 once. Measured per tick: tests/world.py W14
 ; (D1 room, its 8 real entries, hero only) max 3,534 / mean 2,458 T;
 ; tests/budget.py (synthetic full list, 12 entries, 5 sprites; incl. the call
@@ -83,29 +69,19 @@ decor_tick:
                 ret
 .capd:          dec  (hl)                      ; cap spent: due again next tick
                 jr   .nx
-.due:           dec  l
-                ld   a, (hl)                   ; AL_TYPE
-                inc  l
-                cp   AL_GLYPH_MIN
-                ld   a, c
-                jr   c, .ka
-                ld   a, (hl)                   ; drips hold DT_GLYPH_HOLD ticks: step only
+.due:           ld   a, (hl)                   ; glyph swaps hold DT_GLYPH_HOLD ticks: step only
                 and  DT_GLYPH_HOLD - 1         ; when AL_PHASE & 15 == 0 (the staggered
                 jr   nz, .nx                   ; phase keeps them apart); no cap spent
                 ld   a, c
                 and  $30
                 jr   z, .capd
                 ld   a, -$10 - $40
-                jr   .go
-.ka:            and  $03
-                jr   z, .capd
-                ld   a, -1 - $40
-.go:            bit  7, c
+                bit  7, c
                 jr   nz, .try
                 bit  6, c
                 jr   z, .capd                  ; no tries left this tick
 .try:           add  a, c
-                ld   c, a                      ; spend a try + the kind's cap (.skip
+                ld   c, a                      ; spend a try + the glyph cap (.skip
                 push bc                        ; gives the cap back)
                 push hl                        ; [count, caps][AL_PHASE]
                 dec  l
@@ -114,7 +90,14 @@ decor_tick:
                 dec  l
                 ld   c, (hl)                   ; C = col
                 call cell_occ                  ; a drawn sprite / FX there: skip
-                jr   c, .skip                  ; (D3-8b: shared with the drip)
+                jr   nc, .free                 ; (D3-8b: shared with the drip)
+.skip:          pop  hl                        ; under a sprite: this step is skipped
+                pop  bc                        ; (the cell holds; next try 4 ticks on)
+                ld   a, $10                    ; give the glyph cap back
+                add  a, c
+                ld   c, a
+                jp   .nx
+.free:
                 ld   a, (PORT_7FFD_SHADOW)     ; the shadow: bank 7 at $C000 (paged
                 and  7                         ; once per tick: render paged a pool
                 cp   BANK_SHADOW               ; bank since)
@@ -136,39 +119,9 @@ decor_tick:
                 ld   d, a
                 pop  hl
                 push hl
-                ld   a, (hl)                   ; AL_PHASE
                 dec  l
-                ld   c, (hl)                   ; C = AL_TYPE
-                rrca
-                rrca
-                and  7                         ; cycle index
-                ld   l, a
-                ld   a, c
-                cp   AL_GLYPH_MIN
-                jr   nc, .glyph
-                dec  a                         ; attr kind 1..DT_KINDS
-                add  a, a
-                add  a, a
-                add  a, a
-                add  a, l
-                add  a, dt_attr_tab & $FF
-                ld   l, a
-                ld   h, dt_attr_tab >> 8
-                ld   c, (hl)                   ; C = the cycle's attr
-                jr   .attr
-.skip:          pop  hl                        ; under a sprite: this step is skipped
-                pop  bc                        ; (the cell holds; next try 4 ticks on)
-                dec  l
-                ld   a, (hl)
-                inc  l
-                cp   AL_GLYPH_MIN              ; give the cap back
-                ld   a, 1
-                jr   c, .hb
-                ld   a, $10
-.hb:            add  a, c
-                ld   c, a
-                jp   .nx
-.glyph:         ld   a, d                      ; swap the map id with AL_TYPE
+                ld   c, (hl)                   ; C = AL_TYPE: the id to show now
+                ld   a, d                      ; swap the map id with AL_TYPE
                 add  a, ROOM_MAP >> 8
                 ld   h, a
                 ld   l, e
@@ -206,7 +159,7 @@ decor_tick:
                 ld   l, c
                 ld   h, TILE_ATTRS >> 8
                 ld   c, (hl)                   ; C = the new id's attr
-.attr:          ld   a, d                      ; C -> the attr cell of bank 5 + shadow
+                ld   a, d                      ; C -> the attr cell of bank 5 + shadow
                 add  a, SCREEN_ATTR >> 8
                 ld   h, a
                 ld   l, e
@@ -313,5 +266,5 @@ cell_bf:
                 ASSERT R_COL == 4 && R_ROW == 5 && R_COLS == 6 && R_ROWS == 7
                 ASSERT SLOTREC_STRIDE == 16 && (SLOTREC & $FF) == 0
                 ASSERT (RLIST >> 8) == ((RLIST + P_MAX_ENT - 1) >> 8)
-                ASSERT DT_MAX_GLYPH <= 3 && DT_MAX_ATTR <= 3 && DT_MAX_TRIES <= 3 && DT_MAX_TRIES >= 1
+                ASSERT DT_MAX_GLYPH <= 3 && DT_MAX_TRIES <= 3 && DT_MAX_TRIES >= 1
 
