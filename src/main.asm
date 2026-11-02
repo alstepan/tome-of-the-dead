@@ -201,7 +201,6 @@ TSET_LEN        EQU tilesets_end - tilesets
                                                ; frames) are these tset_pool glyphs (menu1 reads them, ldir7): byte-equal
 b7h_code:
                 INCLUDE "tiles7.asm"           ; MEM-RECLAIM w2a: level_tiles7 (M0: from the low bank-7 block)
-                INCLUDE "stat7.asm"            ; STATS1 S1: es_stats (the end card's KILLS / TURNS rows; far7 from end_card)
     IF F3_GEN
                 INCLUDE "sanct7.asm"           ; 3F-T10: sanctum_leaf (M0 L1: from R6, far7 from level_gen)
     ENDIF
@@ -516,8 +515,7 @@ end_screen:
                 ld   a, (GAME_STATE)
                 ld   hl, end_card              ; bank 1 (menu1.asm)
                 call far1
-.shown:         call panel_tick                ; B3B-11: the death / win line, HP 0
-                call keys_down                 ; C3-6b: raw 1..0 / ENTER (not FIRE: a
+.shown:         call keys_down                 ; C3-6b: raw 1..0 / ENTER (not FIRE: a
                 ld   hl, END_SHOWN             ; held FIRE / joystick cannot skip it)
                 jr   z, .none
                 bit  1, (hl)                   ; END_SHOWN 2 = armed (all released once)

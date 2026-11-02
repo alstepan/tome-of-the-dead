@@ -286,10 +286,19 @@ ST1_CNT         EQU QS_CACHE + QS_COUNT         ; 5 B: STATS1 S1 counters       
 ST1_LEN         EQU 5
 ST1_KILLS       EQU ST1_CNT                     ; word: the hero's kills (kill_note, combat3.asm; the end card)
 ST1_BL          EQU ST1_CNT + 2                 ; best kind: its kx_tab entry's low byte (8 * kind + KX_XP)
-ES_ROW          EQU 10                          ; end card: KILLS row, TURNS ES_ROW + 1, BEST KILL ES_ROW + 2
-ES_LX           EQU 48                          ; pixel x of the labels / of the values (multiples of 8; BEST KILL = 54 px)
-ES_VX           EQU 112
-ST1_BXP         EQU ST1_CNT + 3                 ; best kind's KXP (the compare); ST1_CNT + 4 spare
+ST1_BXP         EQU ST1_CNT + 3                 ; best kind's KXP (the compare)
+ST1_KILLER      EQU ST1_CNT + 4                 ; ENDCARD-G1: $80 | the kind that killed the hero, 0 = no monster
+                                                ; (deal_hit .kill; traps / poison / falls / the aura / his own hit: 0)
+; ENDCARD-G1 end card layout (menu1.asm end_card, combat3.asm ec_tab): a clean full screen
+EC_POS          EQU TMP6                        ; 2 B: ec_tab's label x (px), then its next row (TMP7)
+EC_VX           EQU 64                          ; value x = label x + EC_VX (px)
+EC_TROW         EQU 6                           ; the title row (menu font, 2 rows)
+EC_ATTR         EQU $47                         ; the card (bright white on black)
+EC_A_HERO       EQU $46                         ; CLASS / LEVEL / DEPTH rows (yellow)
+EC_A_DEAD       EQU $42                         ; YOU DIED (red)
+EC_A_WIN        EQU $46                         ; YOU WIN! (yellow)
+EC_A_KBY        EQU $45                         ; KILLED BY (cyan)
+EC_A_NAME       EQU $43                         ; the killer's name (magenta)
 ITEM_RAM_END    EQU ST1_CNT + ST1_LEN
 ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 86 (M0: 81 + ST1_LEN)
                 ASSERT ITEM_RAM_LEN == 86
