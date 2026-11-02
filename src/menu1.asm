@@ -1141,12 +1141,12 @@ end_card:       push af
                 out  (PORT_BORDER), a          ; (the ALARM's red border may be up)
                 ld   a, EC_ATTR
                 call clear_screen              ; (keeps A)
-                ld   a, EC_A_HERO              ; the CLASS / LEVEL / DEPTH rows of either
-                ld   bc, (10 << 8) | 9         ; layout (rows 10-12 or 11-13, cols 9-24); the
-                ld   de, (16 << 8) | 4         ; killer's portrait (cols <= 10) stamps after
+                ld   a, EC_A_HERO              ; the CLASS / LEVEL / DEPTH rows (cols 9-24)
+                ld   bc, (EC_TAB_ROW << 8) | 9
+                ld   de, (16 << 8) | 3
                 call stamp_rect
                 pop  af
-                ld   bc, (EC_TROW << 8) | 12
+                ld   bc, (EC_TROW << 8) | 12   ; YOU DIED / YOU WIN!: 8 chars, cols 12-19 = centred
                 cp   GS_WIN
                 jr   z, .win
                 ld   a, (ST1_KILLER)
@@ -1155,65 +1155,67 @@ end_card:       push af
                 ld   a, TX_END_DEAD
                 ld   e, EC_A_DEAD
                 call mf_tx_attr
-                ld   de, (10 << 8) | 72        ; no portrait on the left: the table at x 72
                 jr   .tab
 .kil:           rrca                           ; A = the kind
                 push af
                 add  a, TX_NM_KNIGHT
-                ld   e, EC_A_NAME
-                ld   c, 16
-                call mf_tx_attr
+                push af                        ; the name's TX id
+                call tx_dec                    ; DE = TX_DEC + len + 1 (low byte: TX_DEC does not wrap)
+                ld   a, 23 + (TX_DEC & $FF)    ; the title is 10 + len cols: col = (32 - 10 - len) / 2
+                sub  e                         ; = (22 - len) / 2 (a half col rounds left)
+                srl  a
+                ld   c, a
+                ld   b, EC_TROW
                 ld   a, TX_END_KILLED
                 ld   e, EC_A_KBY
-                ld   bc, (EC_TROW << 8) | 6
+                call mf_tx_attr
+                ld   bc, (mf_row)              ; the col after "KILLED BY" (+ the space)
+                inc  c
+                ld   e, EC_A_NAME
+                pop  af
                 call mf_tx_attr
                 pop  af
-                ld   bc, (17 << 8) | 4         ; feet row 17, col 4 (<= 6 cols + the spill: col 10)
+                ld   bc, (EC_FEET << 8) | EC_PCOL_L
                 ld   de, KS_MOVE               ; D = 0: facing right
                 call ec_kind
-                ld   de, (10 << 8) | 88
                 jr   .tab
 .win:           ld   a, TX_END_WIN
                 ld   e, EC_A_WIN
                 call mf_tx_attr
-                ld   a, TX_WIN                 ; "THE TOME IS DESTROYED"
+                ld   a, TX_WIN                 ; "THE TOME IS DESTROYED": 21 x 6 px at x 64 = centred
                 ld   b, EC_TROW + 2
                 ld   e, 64
                 call print6x
-                ld   hl, ROOM_MAP + 16 * ROOM_COLS + 6   ; the run is over: the map is dead
+                ld   hl, ROOM_MAP + (EC_FEET - 2) * ROOM_COLS + EC_PCOL_L + 3   ; the run is over: the map is dead
                 ld   a, T_LECT_TL
                 ld   (hl), a
                 inc  l
                 inc  a
                 ld   (hl), a                   ; T_LECT_TR
-                ld   l, (17 * ROOM_COLS + 6) & $FF
+                ld   l, ((EC_FEET - 1) * ROOM_COLS + EC_PCOL_L + 3) & $FF
                 inc  a
                 ld   (hl), a                   ; T_LECT_BL
                 inc  l
                 inc  a
                 ld   (hl), a                   ; T_LECT_BR
-                ld   bc, (16 << 8) | 6
+                ld   bc, ((EC_FEET - 2) << 8) | EC_PCOL_L + 3
                 ld   de, (2 << 8) | 2
                 call tile_rect                 ; (low RAM; glyph + TILE_ATTRS)
-                ld   de, (11 << 8) | 88
-.tab:           push de
+.tab:           ld   de, (EC_TAB_ROW << 8) | EC_TAB_X
                 ld   hl, ec_tab                ; bank 3 (combat3.asm); DE passes in
                 call far3
-                pop  de
-                ld   a, d
-                add  a, 7
-                ld   b, a                      ; the feet row
+                ld   b, EC_FEET
                 ld   a, (HERO_KIND)
-                ld   c, 28
+                ld   c, EC_PCOL_R
                 ld   de, (6 << 8) | KS_IDLE    ; D = 6: facing left
                 call ec_kind
-                ld   a, TX_END_PRESS
+                ld   a, TX_END_PRESS           ; 18 x 6 px at x 72 = centred
                 ld   b, 22
                 ld   e, 72
                 call print6x
                 jp   present_full
                 ASSERT T_LECT_TR == T_LECT_TL + 1 && T_LECT_BL == T_LECT_TL + 2 && T_LECT_BR == T_LECT_TL + 3
-                ASSERT (ROOM_MAP & $FF) == 0 && ((ROOM_MAP + 16 * ROOM_COLS) >> 8) == ((ROOM_MAP + 17 * ROOM_COLS + 7) >> 8)
+                ASSERT (ROOM_MAP & $FF) == 0 && ((ROOM_MAP + (EC_FEET - 2) * ROOM_COLS) >> 8) == ((ROOM_MAP + (EC_FEET - 1) * ROOM_COLS + EC_PCOL_L + 4) >> 8)
                 ASSERT KS_IDLE == 0 && KS_MOVE < 256
 
 ;------------------------------------------------------------------------------

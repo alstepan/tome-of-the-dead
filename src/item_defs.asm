@@ -292,6 +292,11 @@ ST1_KILLER      EQU ST1_CNT + 4                 ; ENDCARD-G1: $80 | the kind tha
 ; ENDCARD-G1 end card layout (menu1.asm end_card, combat3.asm ec_tab): a clean full screen
 EC_POS          EQU TMP6                        ; 2 B: ec_tab's label x (px), then its next row (TMP7)
 EC_VX           EQU 64                          ; value x = label x + EC_VX (px)
+EC_TAB_X        EQU 72                          ; the table's label x: 72 + 118 (EC_VX + 9 chars) = 190, centre 131
+EC_TAB_ROW      EQU 11                          ; its first row (CLASS); the last row (BEST KILL) = 17
+EC_FEET         EQU EC_TAB_ROW + 7              ; the portraits' / lectern's shared feet row (= the table's bottom)
+EC_PCOL_L       EQU 2                           ; killer col (the Ogre's ink ends ~10 px short of the table at x 72); lectern = +3
+EC_PCOL_R       EQU 25                          ; the hero's col (his ink starts ~11 px after the table's widest row, x 190)
 EC_TROW         EQU 6                           ; the title row (menu font, 2 rows)
 EC_ATTR         EQU $47                         ; the card (bright white on black)
 EC_A_HERO       EQU $46                         ; CLASS / LEVEL / DEPTH rows (yellow)
