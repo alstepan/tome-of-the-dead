@@ -413,7 +413,7 @@ def centre(width):
 
 
 SUB = "A DUNGEON ROGUELIKE - ZX SPECTRUM 128K"
-CREDIT = "(C) 2026 ALSTEPAN"
+CREDIT = "by alstepan, 2026"
 
 
 # ================================================================ S1 THE GATE
