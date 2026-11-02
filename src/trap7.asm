@@ -259,7 +259,11 @@ tr_eff:
                 ld   a, (LVL_FLAGS)            ; (its unique not dropped: as the teleport's lair rule)
                 and  LF_UNIQUE
                 jr   nz, .bell
-                inc  (hl)                      ; (HL = LP_RESPAWNS still)
+                ld   hl, LP_RESPAWNS           ; TRAP2: the wave counts towards the cap (game.md 1.5); HL was
+                ld   a, (hl)                   ; the ENTRY here (fix/trap-tile: `inc (hl)` bumped TR_B0, moving
+                cp   RESPAWN_MAX               ; the record to the next room and leaving a stray plate there)
+                jr   nc, .bell                 ; at the cap: nothing comes
+                inc  (hl)
                 ld   hl, SPQ_K                 ; a wave of 1 + (rnd & 1) at a door, made by end_turn's
                 ld   (hl), SPQ_WAVE            ; sp_run (the queue is empty: the trap fires in the
                 inc  l                         ; hero's phase, before any producer of this turn)
