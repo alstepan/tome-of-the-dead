@@ -1115,5 +1115,31 @@ decor_room:
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing
                 ; fi3.asm (FLOOR1 fi_full) lives in bank 2 since LAND-PENDING (bank-3 relief)
                 INCLUDE "drop3.asm"            ; FLOOR1: mon_drop + drop_tab / uniq_tab (from R6)
+
+;------------------------------------------------------------------------------
+; page_lat3 — RECLAIM-C (e): page_post's epilogue (was bank-1 menu1.asm `.lat`, -41 B
+; bank 1), far3 from page_post. A = FXR_* (bit 0 = the verb spent the turn).
+; PAGE_OPEN off; nothing pressed on the page reaches play: no INTENT / DOWN window,
+; no stick edge, a held direction waits for its release (EXIT_LOCK), a held FIRE is
+; not a tap, no shortcut edge; the page time is not a tick overrun.
+; Out: L = 1 the verb spent the turn, else 0.  Clobbers: A, F, L.  Cold (once a page).
+;------------------------------------------------------------------------------
+page_lat3:      and  FXR_TURN
+                ld   l, a                      ; L out (resync_tick keeps it; far3 passes HL)
+                xor  a
+                ld   (PAGE_OPEN), a
+                ld   (INTENT), a
+                ld   (DN_T), a
+                ld   (DN_COMMIT), a
+                ld   a, (STICK)                ; no stick edge from the page's frames
+                ld   (STICK_OLD), a
+                and  JOY_DIRS
+                ld   (EXIT_LOCK), a            ; a held direction waits for its release
+                ld   a, FS_USED                ; a held FIRE is not a tap
+                ld   (FIRE_ST), a
+                ld   a, (PLAYER_SC)            ; no shortcut edge either
+                ld   (SC_OLD), a
+                jp   resync_tick               ; A only
+                ASSERT FXR_TURN == 1
                 ; R6 (2026-10-21): pickup3.asm / bag3.asm moved to the R6 region (r6.asm:
                 ; pickup6.asm, bag6.asm), reached through far6

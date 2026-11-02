@@ -58,7 +58,10 @@ def font_glyph(c: int) -> int:
 TITLE_LINES = ((1, "TOME OF"), (3, "THE DEAD"))
 TITLE_SET = sorted(set("TOME OF THE DEAD") - {" "}, key=ord)
 TORCH_COLS = (2, 28)               # concept screen_menu: tall torch, rows 0-3
-TORCH_STEP, TORCH_CYCLE = 3, (0x46, 0x46, 0x42)   # BIG_ANIM torch_tall (flame tips row 0)
+TORCH_STEP_OLD, TORCH_CYCLE = 3, (0x46, 0x46, 0x42)   # the pre-LOOK-1 torch: menu_torch.bin only (loading screen tool)
+# LOOK-1 (user 2026-11-02): the menu torch = the decor tall torch's RAG flame, fixed red, no attr cycle;
+# 2 glyph-swap frames every TORCH_STEP menu frames (8 x 20 ms = 160 ms, the decor flames' 4-tick rate)
+TORCH_STEP, TORCH_LOOK = 8, ("torch_tall_look1_f1", "torch_tall_look1_f2")
 A_TOP, A_BOT, A_ORN = 0x47, 0x46, 0x0D
 HEROES = (("warrior", "knight_idle1  (sprite idx KNIGHT_IDLE1_IDX, 24x48)", 21, 9, 0x07),
           ("mage", "wizard_idle   (sprite idx WIZARD_IDLE_IDX, 24x48)", 25, 9, 0x45))
@@ -67,6 +70,34 @@ HEROES = (("warrior", "knight_idle1  (sprite idx KNIGHT_IDLE1_IDX, 24x48)", 21, 
 def db(rows: list[bytes], comment=lambda i: "") -> str:
     return "".join("        DEFB " + ",".join(f"${b:02X}" for b in r) + f"    ; {comment(i)}\n"
                    for i, r in enumerate(rows))
+
+
+TSETS = os.path.join(ROOT, "assets", "gfx", "tiles", "tilesets.asm")
+
+
+def tset_pool_glyphs() -> list[bytes]:
+    """The bank-7 tset_pool glyphs (tools/tiles_convert.py output), in index order."""
+    out, on = [], False
+    for ln in open(TSETS):
+        t = ln.split(";")[0].strip()
+        if t.startswith("tset_pool:"):
+            on = True
+        elif on and t.startswith("DEFB"):
+            out.append(bytes(int(v.strip().lstrip("$"), 16) for v in t[4:].split(",")))
+        elif on and t.endswith(":"):
+            break
+    return out
+
+
+def torch_pool_ix(run: bytes) -> int:
+    """RECLAIM-C (d): index of the run of tset_pool glyphs == these torch cells (the D1 tall
+    torch); the menu reads them from bank 7 instead of a bank-1 copy."""
+    pool, n = tset_pool_glyphs(), len(run) // 8
+    for i in range(len(pool) - n + 1):
+        if b"".join(pool[i:i + n]) == run:
+            return i
+    sys.exit("menu_art: torch cells are no longer a tset_pool run "
+             "(tilesets.asm changed?): restore a bank-1 copy (RECLAIM-C (d))")
 
 
 def pack_rows(g: np.ndarray) -> bytes:
@@ -84,16 +115,21 @@ def build() -> dict:
     d = {"font": [pack_rows(f16[ord(c)]) for c in CHARSET],
          "title": [pack_rows(ft[ord(c)]) for c in TITLE_SET]}
     # --- torch: split cells into static / glyph-swap rows
-    fr = [big[f"torch_tall_f{k}"] for k in (1, 2, 3)]
     cells = lambda b: [b["bm"][r * 8:r * 8 + 8, c * 8:c * 8 + 8] for r in range(4) for c in range(2)]
-    cf = [cells(b) for b in fr]
-    diff = [i for i in range(8) if any(not np.array_equal(cf[0][i], cf[k][i]) for k in (1, 2))]
-    swap_rows = max(diff) // 2 + 1 if diff else 0
-    assert diff == [i for i in range(swap_rows * 2) if i in diff], "swap cells must sit at the top"
-    d["torch_swap"] = [b"".join(pack_rows(g) for g in cf[k][:swap_rows * 2]) for k in range(3)]
-    d["torch_static"] = b"".join(pack_rows(g) for g in cf[0][swap_rows * 2:])
-    d["torch_attr"] = bytes(int(a) for a in fr[0]["cells"].flatten())
-    d["swap_rows"] = swap_rows
+
+    def split(names):
+        fr = [big[n] for n in names]
+        cf = [cells(b) for b in fr]
+        diff = [i for i in range(8) if any(not np.array_equal(cf[0][i], cf[k][i]) for k in range(1, len(cf)))]
+        swap_rows = max(diff) // 2 + 1 if diff else 0
+        assert diff == [i for i in range(swap_rows * 2) if i in diff], "swap cells must sit at the top"
+        return ([b"".join(pack_rows(g) for g in cf[k][:swap_rows * 2]) for k in range(len(cf))],
+                b"".join(pack_rows(g) for g in cf[0][swap_rows * 2:]),
+                bytes(int(a) for a in fr[0]["cells"].flatten()), swap_rows)
+    # the pre-LOOK-1 3-frame torch: menu_torch.bin only (tools/gen_loading_screen.py reads it)
+    sw, st, at, _ = split([f"torch_tall_f{k}" for k in (1, 2, 3)])
+    d["legacy_bin"] = b"".join(sw) + st + at + bytes(TORCH_CYCLE)
+    d["torch_swap"], d["torch_static"], d["torch_attr"], d["swap_rows"] = split(TORCH_LOOK)
     return d
 
 
@@ -143,40 +179,46 @@ def emit(d: dict) -> dict:
                 for r, c, t in lines) + "        DEFB $FF               ; end of lines\n"
         "menu_title_lines_end:\n")
     open(os.path.join(OUT, "menu_title.asm"), "w").write(s)
-    # torch
+    # torch (RECLAIM-C (d) + LOOK-1): every glyph is in the bank-7 tset_pool; bank 1 keeps the attrs
     sr = d["swap_rows"]
     swap_b = len(d["torch_swap"][0])
-    tot = 3 * swap_b + len(d["torch_static"]) + len(d["torch_attr"]) + len(TORCH_CYCLE)
+    nfr = len(d["torch_swap"])
+    st = d["torch_static"]
+    six = torch_pool_ix(st)
+    fix = [torch_pool_ix(f) for f in d["torch_swap"]]
+    fstep = fix[1] - fix[0]
+    assert nfr == 2 and all(fix[k] == fix[0] + k * fstep for k in range(nfr)), "menu1 menu_torch: 2 frames, fixed stride"
+    tot = len(d["torch_attr"])
     sz["MENU_TORCH_BYTES"] = tot
-    open(os.path.join(OUT, "menu_torch.bin"), "wb").write(
-        b"".join(d["torch_swap"]) + d["torch_static"] + d["torch_attr"] + bytes(TORCH_CYCLE))
-    s = hdr.format("bigdecor.grid (torch_tall_f1..f3)") + (
+    open(os.path.join(OUT, "menu_torch.bin"), "wb").write(d["legacy_bin"])
+    chk = [(8 * six, st)] + [(8 * fix[k], d["torch_swap"][k]) for k in range(nfr)]
+
+    def check_lines(off, b, tag):
+        return "".join("        ASSERT " + " && ".join(f"{{b addr + {off + i + k}}} == ${b[i + k]:02X}" for k in range(8))
+                       + f"   ; {tag} cell {i // 8}\n" for i in range(0, len(b), 8))
+    s = hdr.format("bigdecor.grid (" + " / ".join(TORCH_LOOK) + "; LOOK-1)") + (
         f"; Animated title torch, 2x4 cells (16x32), drawn at cols {TORCH_COLS[0]} and {TORCH_COLS[1]},\n"
         "; rows 0-3.  Cells row-major (c0,r0),(c1,r0),(c0,r1)...; 8 B per cell.\n"
-        f"; Frames: 3 glyph-swap frames of the top {sr} cell rows ({swap_b} B each); the lower\n"
-        f"; {4 - sr} rows are static ({len(d['torch_static'])} B).  Frame k = (tick / {TORCH_STEP}) mod 3.\n"
-        "; Attrs: 8 cells ($46 flame, $06 bowl, $07 stem).  Flame-tip attr cycle on row 0\n"
-        f"; (both cells): {', '.join(f'${a:02X}' for a in TORCH_CYCLE)} indexed by the same k.\n"
-        "; Same frame on both torches in the concept; offset one by +1 for a calmer look.\n"
-        f"MENU_TORCH_STEP EQU {TORCH_STEP}\nMENU_TORCH_FRAMES EQU 3\n"
+        f"; LOOK-1: the decor tall torch's RAG flame, fixed attrs (no flame-tip cycle). {nfr} glyph-swap\n"
+        f"; frames of the top {sr} cell row(s) ({swap_b} B each), next frame every {TORCH_STEP} menu frames (the\n"
+        f"; decor flames' 160 ms); the right torch runs a frame ahead. The lower {4 - sr} rows are static.\n"
+        "; RECLAIM-C (d): NO glyph bytes in bank 1 - they are the bank-7 tileset glyphs (the D1 tall\n"
+        f"; torch): static = tset_pool[{six}..{six + len(st) // 8 - 1}], frame k = tset_pool[{fix[0]} + {fstep} k ..+{swap_b // 8 - 1}];\n"
+        "; menu1 fetches them with ldir7. main.asm runs MENU_TORCH_CHECK tset_pool after the tilesets\n"
+        "; (a tileset change that moves / alters them fails the build: rerun this tool).\n"
+        f"MENU_TORCH_STEP EQU {TORCH_STEP}\nMENU_TORCH_FRAMES EQU {nfr}\n"
         f"MENU_TORCH_SWAP_ROWS EQU {sr}\nMENU_TORCH_SWAP_BYTES EQU {swap_b}\n"
-        f"MENU_TORCH_COL_L EQU {TORCH_COLS[0]}\nMENU_TORCH_COL_R EQU {TORCH_COLS[1]}\n\n"
-        "menu_torch_swap:                       ; 3 x MENU_TORCH_SWAP_BYTES\n" +
-        "".join(f"        ; frame {k + 1}\n" + db([d['torch_swap'][k][i:i + 8]
-                                                   for i in range(0, swap_b, 8)])
-                for k in range(3)) +
-        "menu_torch_swap_end:\n"
-        f"        ASSERT menu_torch_swap_end - menu_torch_swap == {3 * swap_b}\n\n"
-        "menu_torch_static:                     ; cells of rows " f"{sr}-3\n" +
-        db([d['torch_static'][i:i + 8] for i in range(0, len(d['torch_static']), 8)]) +
-        "menu_torch_static_end:\n"
-        f"        ASSERT menu_torch_static_end - menu_torch_static == {len(d['torch_static'])}\n\n"
-        "menu_torch_attr:                       ; 2 x 4 cells, row-major\n" +
-        db([d['torch_attr'][i:i + 2] for i in range(0, 8, 2)]) + "\n"
-        "menu_torch_cycle:                      ; row-0 attr by frame index\n"
-        f"        DEFB {','.join(f'${a:02X}' for a in TORCH_CYCLE)}\n"
+        f"MENU_TORCH_COL_L EQU {TORCH_COLS[0]}\nMENU_TORCH_COL_R EQU {TORCH_COLS[1]}\n"
+        f"MENU_TORCH_STATIC_LEN EQU {len(st)}\nMENU_TORCH_POOL_IX EQU {six}\n"
+        f"MENU_TORCH_F0_IX EQU {fix[0]}\nMENU_TORCH_FSTEP_IX EQU {fstep}\n"
+        "    MACRO MENU_TORCH_CHECK addr\n" +
+        check_lines(8 * six, st, "static") +
+        "".join(check_lines(8 * fix[k], d["torch_swap"][k], f"frame {k}") for k in range(nfr)) +
+        "    ENDM\n\n"
+        "menu_torch_attr:                       ; 2 x 4 cells, row-major (fixed: LOOK-1)\n" +
+        db([d['torch_attr'][i:i + 2] for i in range(0, 8, 2)]) +
         "menu_torch_end:\n"
-        f"        ASSERT menu_torch_end - menu_torch_swap == {tot}\n")
+        f"        ASSERT menu_torch_end - menu_torch_attr == {tot}\n")
     open(os.path.join(OUT, "menu_torch.asm"), "w").write(s)
     # sizes
     total = sum(sz.values())
@@ -222,8 +264,6 @@ def compose(d: dict, frame: int = 0) -> C.Screen:
             b = (d["torch_swap"][frame][i * 8:i * 8 + 8] if r < sr
                  else d["torch_static"][(i - sr * 2) * 8:(i - sr * 2) * 8 + 8])
             a = d["torch_attr"][i]
-            if r == 0:
-                a = TORCH_CYCLE[frame]
             s.glyph(col + c, r, gl(b), a)
     orn = open(os.path.join(ROOT, "assets/gfx/panel/panel_orn.asm")).read()
     og = [bytes(int(x.strip().strip("$"), 16) for x in ln.split(";")[0].split("DEFB")[1].split(","))

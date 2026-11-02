@@ -72,7 +72,7 @@ BANK_SHADOW    EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect's
 BANK_COLD7      EQU 7               ; D3-S2: bank-7 cold code B7_CODE..B7_LIMIT (via far7)
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
 BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
-AY_RESERVE      EQU $F010           ; M0 (L3): $EFD0 -> $F010 (+64 B bank-3 cold code; the AY slot keeps 57 B for 3G SFX); MEM-RECLAIM w3: $EFA0 -> $EFD0 (+48 B bank-3 cold code for lq_block; 121 B SFX slack kept); was: A8 / D3-0 / MEM-SND / 3E lever (c): bank 3 $EFA0..$FFFF = 4192 B AY player/music/FX
+AY_RESERVE      EQU $F040           ; RECLAIM-C (a): $F010 -> $F040 (+48 B bank-3 cold code; the AY slot keeps 9 B, user 2026-11-02: the spare reserve only, no sound cut); M0 (L3): $EFD0 -> $F010 (+64 B bank-3 cold code; the AY slot keeps 57 B for 3G SFX); MEM-RECLAIM w3: $EFA0 -> $EFD0 (+48 B bank-3 cold code for lq_block; 121 B SFX slack kept); was: A8 / D3-0 / MEM-SND / 3E lever (c): bank 3 $EFA0..$FFFF = 4192 B AY player/music/FX
                                     ;     reserve (game.md §11.2, user 2026-10-06: 7 KB -> 4 KB at $F000,
                                     ;     was $E400; MEM-SND: -608 B after 406 B of bank-3 cold code went
                                     ;     to bank 7, ~200 B bank-3 slack kept; 3E lever (c): +512 B
@@ -232,6 +232,9 @@ TILE_GLYPHS     EQU $6600           ; 512 B: 64 tiles x 8 B ($6600..$67FF)
 BITREV_TAB      EQU $6800           ; 256 B: bit-reversed byte (page-aligned)
 TILE_ATTRS      EQU $6900           ; 64 B : attr per tile id (one page: ld h, TILE_ATTRS>>8)
 GEN_SRC         EQU $6940           ; 512 B: staging for vdata reads (pblit, copy_virt; 3E-T1: boot no longer)
+MENU_TORCH_BUF  EQU GEN_SRC           ; RECLAIM-C (d): 48 B, menu_static only (title menu: no room live, no pause /
+                                    ; page / generator meanwhile): the torch's static cells fetched from bank 7 (ldir7)
+MENU_TORCH_FBUF EQU GEN_SRC + 48      ; RECLAIM-C (d) + LOOK-1: 16 B, menu_torch: a flame frame's 2 cells (ldir7, used at once)
 GEN_MIR         EQU $6B40           ; 512 B: mirrored copy (left-facing)
 LOWRAM_END      EQU $6D40
 ; FLOOR1 floor-item glyph cache (docs/memory-map.md "FLOOR1"). One room (<= FI_SLOTS
@@ -803,15 +806,21 @@ KT_EVA          EQU $080
 KT_DIE          EQU $0A0
 KT_BONUS        EQU $0C0
 KT_REACH        EQU $0E0            ; MEM-RECLAIM w3: now the lp_wt weights (the old all-1 reach column is gone)
-KT_PERIOD       EQU $100            ;                            (page 1)
-KT_FLAGS        EQU $120
-KT_ATTR         EQU $140
-KT_SEQ          EQU $160            ; 3F-T2: RUNTIME, the low byte of the kind's SEQ_ROWS row
+                                    ; RECLAIM-C (b): the KT_PERIOD column ($100, all 1 but three 2s) is gone:
+                                    ; "acts every 2 turns" is KF_SLOW in KT_FLAGS (bank 2 +32 B)
+KT_FLAGS        EQU $100            ;                            (page 1)
+KT_ATTR         EQU $120
+                                    ; RECLAIM-C (b): DIV9 / MOD9 / SEQ (was SEQ $160, MOD9 $180, DIV9 $1A0)
+                                    ; reordered so the 32 B come off the END: turn3's DIV9 -> MOD9 row step
+                                    ; is `set 5, l` (was `res 5, l`), and KT_SEQ (a K_MAX array) sits
+                                    ; right after MOD9's 24 B — off the $20 grid, still inside page 1 (KFIELD's
+                                    ; 8-bit add never carries: $78 + 31 < $100)
+KT_DIV9         EQU $140            ; 24 B: n div STOREY_ROWS      (same page as KT_MOD9: feet_mod) + 8 B spare
+KT_MOD9         EQU $160            ; 24 B: n mod STOREY_ROWS (9)  (n = y+h or a row, 0..23)
+KT_SEQ          EQU $178            ; 3F-T2: RUNTIME, the low byte of the kind's SEQ_ROWS row
                                     ; (lowram.asm (sq_load / sq_fill) writes it per level; tiers share their base's)
                                     ; (was KT_FID0 / KT_FCNT: generator-only, now R6 gu_tab)
-KT_MOD9         EQU $180            ; 24 B: n mod STOREY_ROWS (9)  (n = y+h or a row, 0..23)
-KT_DIV9         EQU $1A0            ; 24 B: n div STOREY_ROWS      (same page as KT_MOD9: feet_mod)
-KT_END          EQU $1B8            ; D3-8d: mark.asm code follows from here (3F-T2: was $1D0)
+KT_END          EQU $198            ; RECLAIM-C (b): was $1B8; D3-8d: mark.asm code follows from here (3F-T2: was $1D0)
 KT_SIZE         EQU $200
 
 ; KT_FLAGS bits
@@ -820,7 +829,9 @@ KF_CLIMBER      EQU %00000010
 KF_TALL         EQU %00000100
 KF_HERO         EQU %00001000
 KF_BAT          EQU %00010000       ; bat jitter / wander
-; %00100000 spare (D3-0: was KF_ZAP, the PROTO wizard zap)
+KF_SLOW         EQU %00100000       ; RECLAIM-C (b): acts every 2 turns (rests on odd TURN_COUNTER) — the old KT_PERIOD 2
+                                    ; (Slime, Vampire, Mummy); D3-0..RECLAIM-C spare (was KF_ZAP, the PROTO wizard zap)
+KF_SLOW_BIT     EQU 5
 KF_OPENER       EQU %01000000       ; B3B-5: opens closed unlocked doors by bumping (game.md §9.1)
 
 ;------------------------------------------------------------------------------

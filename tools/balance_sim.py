@@ -244,7 +244,7 @@ class Data:
             efx = (md >> sym["DH_EFX_SHIFT"]) & 7
             self.k[i] = dict(
                 id=i, name=self.kname[i], hp=col(sym["KT_HP"]), atk=col(sym["KT_ATK"]), eva=col(sym["KT_EVA"]),
-                die=col(sym["KT_DIE"]), bonus=col(sym["KT_BONUS"]), period=col(sym["KT_PERIOD"]),
+                die=col(sym["KT_DIE"]), bonus=col(sym["KT_BONUS"]), period=2 if col(sym["KT_FLAGS"]) & sym["KF_SLOW"] else 1,
                 wt=col(sym["KT_REACH"]), flags=col(sym["KT_FLAGS"]), res=res, imm=e[3], kxp=e[4], df=e[5],
                 boss=bool(e[3] & 0x80), mdty=DRAIN if md & 7 == 3 else PHYS, heal=bool(md & 0x80),
                 efx=efx, ech=e[7] >> 4, etn=e[7] & 15)

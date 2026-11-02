@@ -289,21 +289,23 @@ ai_monster:
                 ; unmoved and the squeeze swapped it onto the other storey. Cost: a
                 ; slime's off turn now runs ai_monster's get_box + cork_check
                 ; first (~0.2k T; cork_check's fast path 30 T off a climb)
-                KFIELD KT_PERIOD
-                cp   2
-                jr   nz, .go
+                ; RECLAIM-C (b): KF_SLOW in the flags byte (was the KT_PERIOD column):
+                ; one KFIELD for both tests, HL kept for the reload (-8 B, -~40 T)
+                KFIELD KT_FLAGS
+                bit  KF_SLOW_BIT, a
+                jr   z, .go
                 ld   a, (TURN_COUNTER)
                 and  1
                 ret  nz
+                ld   a, (hl)                   ; HL = the KT_FLAGS byte still
 .go:
-                KFIELD KT_FLAGS
                 and  KF_FLYER
                 jp   nz, ai_flyer
                 ; ================= WALKER =================
                 ; BC / DE = the box still (get_box above; cork_check keeps BC,
                 ; DE, KFIELD clobbers A / HL only). n = y+h (= feet_mod's n):
                 ; storey_ref and is_standing from one KT_DIV9 / KT_MOD9 pair.
-                ASSERT KT_DIV9 == KT_MOD9 + $20 && ((kind_tab + KT_MOD9) & $3F) <= 8
+                ASSERT KT_MOD9 == KT_DIV9 + $20 && ((kind_tab + KT_DIV9) & $3F) <= 8   ; RECLAIM-C (b): bit 5 clear on the DIV9 row
                 ld   a, b
                 add  a, e
                 add  a, (kind_tab + KT_DIV9) & $FF
@@ -315,7 +317,7 @@ ai_monster:
                 sbc  a, a                      ; $FF / 0
                 inc  a                         ; 0 / 1 (4 B, 15 T vs cp / jr / ld 6 B)
                 ld   (TMP4), a                 ; my storey (storey_ref; TMP4 is scratch
-                res  5, l                      ; nothing in the attack reads) -> KT_MOD9 row
+                set  5, l                      ; nothing in the attack reads) -> KT_MOD9 row
                 ld   a, (hl)
                 xor  STOREY_AIR                ; Z / A = 0: standing (CF = 0)
                 push af
