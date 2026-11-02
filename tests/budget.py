@@ -67,6 +67,7 @@ class Stepper:
         self.cast_ix, self.casting = set(), False  # D3-7: indices of "cast" class ticks
         self.fire_t = []                      # D3-7 T4: the fire ticks' totals
         self.trans_t = []                     # 3E-T16: room-change (transition) ticks, not gated
+        self.end_shown = self.p.rb("END_SHOWN")
         # B3B-11b log latency: FIFO ring -> drawn = LQ_RD advances, pushed = drawn + LOG_QN
         self.rd, self.drawn, self.pushed = p.rb(S["LOG_Q"] + S["LQ_RD"]), 0, p.rb("LOG_QN")
         self.push_tick, self.lat = [0] * self.pushed, []
@@ -120,6 +121,12 @@ class Stepper:
             print(f"[info] transition tick {prev} T (room {room0} -> {self.p.rb('CUR_ROOM')}),"
                   f" not gated", flush=True)
             return                            # reported, not a play tick
+        shown = self.p.rb("END_SHOWN")
+        if shown and not self.end_shown:      # STATS1: the end card's one-time tick (a static screen: the
+            self.end_shown = shown            # card + the KILLS / TURNS / BEST KILL rows, ~150k T): reported,
+            print(f"[info] end-card tick {prev} T (GS_DEAD / GS_WIN card), not gated", flush=True)
+            return                            # not gated, like a transition
+        self.end_shown = shown
         self.ticks.append((prev, split))
         self.isr_in.append(isr_t)
         for f in TICK_HOOKS:

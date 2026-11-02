@@ -1278,4 +1278,5 @@ intent_icon7:
                 INCLUDE "boss7.asm"            ; MEM-RECLAIM w2b: grate_open / boss_chk (from R6 boss6.asm)
                 INCLUDE "tome7.asm"            ; P3: the Tome's hits, aura and the win
                 ; (tiles7.asm: M0 -> the high bank-7 block after the tilesets, main.asm b7h_code)
+                INCLUDE "stat7i.asm"           ; STATS1 S1: es_item (called by es_stats in the high block)
                 INCLUDE "boot7.asm"            ; MEM-SND: panel_init7, new_game (from bank 3; 3E-T1: the boot parts -> boot6.asm)

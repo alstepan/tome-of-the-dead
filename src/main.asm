@@ -199,6 +199,7 @@ AY_LEN          EQU ay_code_end - AY_RESERVE
 TSET_LEN        EQU tilesets_end - tilesets
 b7h_code:
                 INCLUDE "tiles7.asm"           ; MEM-RECLAIM w2a: level_tiles7 (M0: from the low bank-7 block)
+                INCLUDE "stat7.asm"            ; STATS1 S1: es_stats (the end card's KILLS / TURNS rows; far7 from end_card)
     IF F3_GEN
                 INCLUDE "sanct7.asm"           ; 3F-T10: sanctum_leaf (M0 L1: from R6, far7 from level_gen)
     ENDIF

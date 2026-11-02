@@ -17,6 +17,39 @@
 ;   the last one: a pierce / burst); msg_push_d = LN_VAL; msg_push_h = LN_G.
 ;==============================================================================
 
+; (STATS1: placed FIRST in b0_code so the text growth cannot push the three pushers over a page: msg_push_h / _t / _d
+; share one page, lowram.asm ASSERT)
+;------------------------------------------------------------------------------
+; ln_push_d / ln_push_h / ln_push_t — msg_go's pushers (lowram.asm msg_push_d /
+; _h / _t): HL = the stream of the string; copied to MSG_BUF + " -LN_VAL" /
+; " +LN_G" / " -1 HP TOME_HP" (P3, the Tome: 1 hp a hit; the last hit is
+; game_win's line, so TOME_HP >= 1 here), 0, log_push.
+; Clobbers: A, BC, DE, HL.   ~0.25k T + 25 T a stream byte
+;------------------------------------------------------------------------------
+ln_push_h:      ld   a, (LN_G)
+                ld   bc, '+'                   ; B = 0: no HP part, C = the sign
+                jr   ln_push
+ln_push_t:      ld   a, (TOME_HP)
+                ld   b, a
+                ld   a, 1
+                jr   ln_pm
+ln_push_d:      ld   a, (LN_VAL)
+                ld   b, 0
+ln_pm:          ld   c, '-'
+ln_push:        ld   de, MSG_BUF
+                push af
+                call impact_line.c             ; the stream (A, DE, HL; BC kept)
+                pop  af
+                ld   h, b
+                ld   l, c
+                jr   ln_tl
+
+; ln_dec — A = 1..255 -> its decimal at DE, >= 99 printed as 99 (rule 7).
+ln_dec:         cp   99
+                jp   c, msg_dec                ; (bank 2: A, BC)
+                ld   a, 99
+                jp   msg_dec
+
 ;------------------------------------------------------------------------------
 ; ln_imp — impact_line's end: B = message code, C = kind, DE = MSG_BUF past pre
 ; + name + post, IX = impact_line's caller's (show_impact_msg: the attacker;
@@ -120,37 +153,6 @@ ln_hit:         push ix
 .al:            ld   h, a
                 ld   a, (pf_lost)
                 jr   ln_tm
-
-;------------------------------------------------------------------------------
-; ln_push_d / ln_push_h / ln_push_t — msg_go's pushers (lowram.asm msg_push_d /
-; _h / _t): HL = the stream of the string; copied to MSG_BUF + " -LN_VAL" /
-; " +LN_G" / " -1 HP TOME_HP" (P3, the Tome: 1 hp a hit; the last hit is
-; game_win's line, so TOME_HP >= 1 here), 0, log_push.
-; Clobbers: A, BC, DE, HL.   ~0.25k T + 25 T a stream byte
-;------------------------------------------------------------------------------
-ln_push_h:      ld   a, (LN_G)
-                ld   bc, '+'                   ; B = 0: no HP part, C = the sign
-                jr   ln_push
-ln_push_t:      ld   a, (TOME_HP)
-                ld   b, a
-                ld   a, 1
-                jr   ln_pm
-ln_push_d:      ld   a, (LN_VAL)
-                ld   b, 0
-ln_pm:          ld   c, '-'
-ln_push:        ld   de, MSG_BUF
-                push af
-                call impact_line.c             ; the stream (A, DE, HL; BC kept)
-                pop  af
-                ld   h, b
-                ld   l, c
-                jr   ln_tl
-
-; ln_dec — A = 1..255 -> its decimal at DE, >= 99 printed as 99 (rule 7).
-ln_dec:         cp   99
-                jp   c, msg_dec                ; (bank 2: A, BC)
-                ld   a, 99
-                jp   msg_dec
 
 ;------------------------------------------------------------------------------
 ; ln_re — recompose MSG_BUF as pre A + kind C's name (the SMASH / DRAINS lines).

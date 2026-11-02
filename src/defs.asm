@@ -206,7 +206,7 @@ B0_CODE_RES     EQU 212                        ; LOG-DMG: log0.asm 212 B (M1: 20
 ; LOG-DMG + DBG-1: kit builds only — kit0.asm (83 B) + log0.asm (212 B) exceed the release reserve by
 ; ~38 B: the kit image takes the next pool-slack variant (D8 Warrior slack 1,024 -> 384, kit only;
 ; tests/kit.py runs it). The RELEASE layout (POOL_START $CA40, slack 1,024) is unchanged.
-B0_KIT_RES      EQU 40 * DEBUG_KIT             ; (DEBUG_KIT 0 / 1, defined below: an EQU, no IF)
+B0_KIT_RES      EQU 62 * DEBUG_KIT             ; (DEBUG_KIT 0 / 1, defined below: an EQU, no IF)
 POOL_START      EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CA40 (release): alloc_reset's first bank-0 pool byte
     MACRO FARB0 target                  ; call a bank-0 cold-code routine (8 B; A / DE / IX pass in;
                 ld   hl, target         ;   C lost to the bank, B to farb's A): farb pages BANK_TEXT

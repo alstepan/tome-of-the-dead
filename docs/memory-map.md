@@ -5025,3 +5025,35 @@ Duplicate / dead code removed, six steps, one commit each. Free bytes (release `
 Ticks: no per-tick path changed. Cold-path deltas only: `fnum` +10 T per gear page, the pend loop `get_wh` +27 T per
 pended body, `act_here` +~27 T per candidate (vbat: only kind matches; follow / arrival once per transition).
 The `STATS1` kill_note reserve (bank 3 30 B) is intact: the 61 free include it.
+
+## STATS1 S1 ledger (`feat/stats1`; end-of-game statistics, user-approved option S1 2026-11-01)
+
+The end card (death and win) shows `KILLS n`, `TURNS n` and `BEST KILL <kind>` (rows 10 / 11 / 12; "PRESS 1-4 OR ENTER"
+moved to row 14; the box is rows 7-14, attr `$47` for the whole box, so the old PRESS stamp is gone). Numbers have no
+leading zeros (5 digits max). Free bytes, release `-DDEBUG_KIT=0`, before (main `aaaec7d`) -> after:
+
+| Region | Before | After | Spent | What |
+|---|---|---|---|---|
+| bank 3 | 61 | **1** | 60 | `kill_note` 30 B net (the XP lookup moved into it; `bit EF_PLAYER_BIT` -1 B at `.kill`), `es_best` 30 B (the BEST KILL row, far3) |
+| bank 7 low | 23 | **0** | 23 | `es_item` (stat7i.asm, end of `bank7.asm`): label (print6x) + decimal (print6t) |
+| bank 7 high | 21 | **1** | 20 | `es_stats` (stat7.asm, `b7h_code` before sanct7): the KILLS / TURNS rows, far7 from `end_card` |
+| low RAM | 31 | **1** | 30 | `es_num`: 16-bit decimal, no leading zeros, 0-terminated (lowram.asm after `tx_dec`) |
+| bank 1 | 3 | **2** | 1 | `end_card`: PRESS stamp removed (-11), `far7 es_stats` + `far3 es_best` (+12) |
+| bank 0 text + code | free 45 | **21** | 24 | 3 strings `KILLS` / `TURNS` / `BEST KILL` (text 2,367 -> 2,391); `log0.asm`'s `ln_push_*` block moved to the START of `b0_code` (the text growth shifted it over a page: the lowram.asm `msg_push_*` same-page ASSERT) |
+| R6 | 28 | 28 | 0 | |
+| kit | b0 free 2 | 0 | | `B0_KIT_RES` 40 -> 62 (the kit's pool slack stays at its 384 variant; `tests/kit.py`) |
+
+RAM: `ST1_CNT` (5 B in `ITEM_RAM`, zeroed by `new_game`): `ST1_KILLS` word, `ST1_BL` = the best kind's `kx_tab`
+entry low byte (8 * kind + `KX_XP`; `kx_tab` is page-aligned), `ST1_BXP` = its KXP, 1 B spare. `ES_ROW` /
+`ES_LX` / `ES_VX` (item_defs.asm) place the rows. Turns = the existing `TURN_COUNTER` (word, `end_turn`).
+Rules: only HERO kills count (`kill_note` tests `ATK_PTR == P_ENTITIES`: melee, Whirlwind, spells, arrows and daggers
+carry the hero; a monster killing a monster and the Archmage's own Mirror Helm return do not); respawned kills
+count; kills wrap at 65,536 (no saturation); best kind = the highest KXP, a tie goes to the latest kill (the
+Archmage, KXP 0, is never the best); no kills = no BEST row. Cost ~0.1k T per hero kill, nothing per tick.
+Tests: `tests/stats1.py`.
+
+Budget: the end card is a one-time static-screen tick (~150k T: the card + the three rows, `es_stats` 27k,
+`es_best` 15k, was ~110k): `tests/budget.py` reports it ("end-card tick ... not gated", like a room transition)
+instead of gating it; every play tick is unchanged (walarm max 124,965 T = 1,035 T headroom, as before).
+Goldens: no GS_DEAD / GS_WIN golden exists in `tests/golden` (nothing to rebaseline); `tests/stats1.py` E checks the
+card pixel-exact (rows 10-12, 14), the box attr and the rows above / below.

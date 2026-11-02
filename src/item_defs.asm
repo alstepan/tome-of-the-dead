@@ -284,6 +284,12 @@ QS_CACHE        EQU MP_HOLD + 1                 ; QS_COUNT (pot_sync, IC1): food
 ; until STATS1 S1 defines them (names / meaning: that task; memory-map "M0 / post-3F ledger").
 ST1_CNT         EQU QS_CACHE + QS_COUNT         ; 5 B: STATS1 S1 counters                  (kept)
 ST1_LEN         EQU 5
+ST1_KILLS       EQU ST1_CNT                     ; word: the hero's kills (kill_note, combat3.asm; the end card)
+ST1_BL          EQU ST1_CNT + 2                 ; best kind: its kx_tab entry's low byte (8 * kind + KX_XP)
+ES_ROW          EQU 10                          ; end card: KILLS row, TURNS ES_ROW + 1, BEST KILL ES_ROW + 2
+ES_LX           EQU 48                          ; pixel x of the labels / of the values (multiples of 8; BEST KILL = 54 px)
+ES_VX           EQU 112
+ST1_BXP         EQU ST1_CNT + 3                 ; best kind's KXP (the compare); ST1_CNT + 4 spare
 ITEM_RAM_END    EQU ST1_CNT + ST1_LEN
 ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 86 (M0: 81 + ST1_LEN)
                 ASSERT ITEM_RAM_LEN == 86
