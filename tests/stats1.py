@@ -285,15 +285,15 @@ def main():
             if PNG:
                 frame_png(fr, Path(PNG) / f"{tag}.png")
             if case == "killer":
-                t_ok = menu_text_ok(p, fr, TROW, 6, "KILLED BY") and menu_text_ok(p, fr, TROW, 16, kname(KILLER))
-                r0, lx = 10, 88
+                tc = (22 - len(kname(KILLER))) // 2      # the title is 10 + len cols, centred on col 16
+                t_ok = (menu_text_ok(p, fr, TROW, tc, "KILLED BY")
+                        and menu_text_ok(p, fr, TROW, tc + 10, kname(KILLER)))
             elif case == "died":
                 t_ok = menu_text_ok(p, fr, TROW, 12, "YOU DIED")
-                r0, lx = 10, 72
             else:
                 t_ok = (menu_text_ok(p, fr, TROW, 12, "YOU WIN!")
                         and log_row(fr, TROW + 2, 0, 32) == text6("THE TOME IS DESTROYED", 64, 32))
-                r0, lx = 11, 88
+            r0, lx = S["EC_TAB_ROW"], S["EC_TAB_X"]    # one table position for all three cards
             check(f"E {tag}: title", t_ok)
             vx = lx + S["EC_VX"]
             rows = [("CLASS", "WARRIOR" if cls == K_KNIGHT else "MAGE"), ("LEVEL", "7"), ("DEPTH", "5"), None,
@@ -301,8 +301,8 @@ def main():
             rows.append(("BEST KILL", kname(best)) if kills else None)
             for i, rw in enumerate(rows):
                 c0 = lx // 8                     # the table's columns (the portraits / lectern lie outside)
-                want = orw(text6(rw[0], 0, 27 - c0), text6(rw[1], vx - lx, 27 - c0)) if rw else [bytes(27 - c0)] * 8
-                check(f"E {tag}: row {r0 + i} = {rw}", log_row(fr, r0 + i, c0, 27 - c0) == want)
+                want = orw(text6(rw[0], 0, 24 - c0), text6(rw[1], vx - lx, 24 - c0)) if rw else [bytes(24 - c0)] * 8
+                check(f"E {tag}: row {r0 + i} = {rw}", log_row(fr, r0 + i, c0, 24 - c0) == want)
             check(f"E {tag}: row 22 = PRESS 1-4 OR ENTER", log_row(fr, 22, 0, 32) == text6("PRESS 1-4 OR ENTER", 72, 32))
             check(f"E {tag}: state {gs} held", p.rb("GAME_STATE") == gs, p.rb("GAME_STATE"))
             check(f"E {tag}: golden", golden(tag, fr))
