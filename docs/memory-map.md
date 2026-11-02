@@ -4301,9 +4301,9 @@ turn is used); the **ALARM** trap (`trap7.asm tr_eff`: a generated level (`LVL_D
 Σ `lp_wt6` (+1 golden), `SP_NS` summon-made, the first free slot (E_FLAGS 0)) -> `sp_fit` (`SP_N` <
 `ROOM_CAP` and Σ + w <= `LP_SIGMA_CAP`) -> the parent's storey / x / x + w (live, not PENDING / DYING,
 in the room) -> `sp_init` (bytes 0..23 + the slot's `ST_*` zeroed: **the drawn record `E_DVIS..` stays**,
-so a freed corpse still drawn in that slot is erased when render classifies the new body FULL) -> the spot:
+the slot's SLOTREC `R_VIS` := 0 and `ACT_SLOT` := the slot (fix/d8-corpse-topleft), so a freed corpse still drawn in that slot is erased by the next render) -> the spot:
 **beside the parent** (`sp_place`: d = 0..`SP_R`-1 = 3, the side toward the hero first; `sp_try`: body
-cols in `LP_XMIN..LP_XMAX`, `box_free` with `ACT_SLOT` = $FF (every live body, the hero included), a
+cols in `LP_XMIN..LP_XMAX`, `box_free` with `ACT_SLOT` = the body's own slot (every other live body, the hero included), a
 flyer `box_solid`-clear in its cruise row 9s+1, a walker on floor cells `TF_FLOOR` without `TF_HOLE` /
 `TF_LADDER` and standing-row cells without `TF_SOLID|TF_LADDER|TF_DOOR`), or **the door** (`sp_door`:
 left door x = 1, else right x = 31 - w, on its storey, `EF_PENDING | EF_WALKIN`: it walks in as a
@@ -5097,3 +5097,23 @@ Two shared helpers; every byte below is from the build DISPLAY (release `-DDEBUG
 reads the bonus first and reaches the die column from the same HL (both page 0, ASSERTed): 105 T + rng_mod, +1 T per hit vs
 the inline pair; one rng_mod as before (RNG order unchanged; `tools/balance_sim.py` output identical).
 Ticks: +27 T per KFL site on cold paths only (spawn / room exit / level start / pend / one per cast or impact); play ticks unchanged.
+
+### fix/d8-corpse-topleft (2026-11-02, branch `fix/d8-corpse-topleft`)
+User playtest: a corpse frame flashes at the top-left when the hero kills a summoned Skeleton (the Archmage's
+and the Golden Pharaoh's). Cause: the summon dies on the turn's last tick while the next one is queued;
+`sp_run` (end_turn, i.e. after this tick's `anim_tick`, before the next `render`: `RENDER_FIRST`) reuses the
+just-freed corpse slot. (1) `LIVE_LIST` is the turn start's and still lists that slot (flags 0 after
+`sp_init` = not DYING), and `ACT_SLOT` was $FF: every `sp_try` hit the body's own box, so `sp_place` always
+failed (the summon was lost) and left `E_PX` / `E_PY` = 0; (2) the slot's SLOTREC still held `R_VIS` 1 /
+`R_FID` = the corpse, and render reads `E_PX` / `E_PY` live: the corpse was blitted at px = py = 0 (cols 0-3,
+rows 4-5) for a tick (or, on a placement, on the new body). Fix (`src/spawn6.asm sp_init`): `ACT_SLOT` := the
+slot (+3 B; `sp_run`'s `ACT_SLOT` $FF store, -4 B, gone) and its `R_VIS` := 0 (+9 B). Cold (end_turn), ~+70 T a body.
+
+| Region | before | after | Δ |
+|---|---|---|---|
+| R6 (release) | free 21 | **free 13** | -8 |
+| R6 (kit) | free 26 | **free 18** | -8 |
+| bank 7 / bank 2 / bank 3 / low RAM | unchanged | unchanged | 0 |
+
+Tests: `tests/d8_stress.py` C (Archmage: the re-summon blocked / placed), `tests/spawn.py` P6 (the Pharaoh's
+queued minion): both fail before the fix (top-left drawn record / no minion), pass after.

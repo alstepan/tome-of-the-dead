@@ -251,9 +251,7 @@ sp_run:         ld   hl, SPQ_K
                 ret  nz
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
-                ret  nz
-                dec  a
-                ld   (ACT_SLOT), a             ; $FF: box_free tests every live body (try_player_turn resets it)
+                ret  nz                        ; (ACT_SLOT: sp_init sets the body's own slot)
                 ld   ix, P_ENTITIES            ; (sp_fit's caster: a wave body has no parent = the hero)
 .b:             push bc
                 ld   a, c
@@ -322,7 +320,8 @@ sp_run:         ld   hl, SPQ_K
 ;------------------------------------------------------------------------------
 ; sp_init — IX = the free slot: bytes 0 .. E_DVIS - 1 and its ST_* bytes
 ; zeroed (the drawn record E_DVIS.. stays: render erases a corpse still drawn
-; there when the new body is classified FULL), E_KIND (SP_KB), E_ROOM.
+; there), its SLOTREC R_VIS 0 (hidden until the next anim_tick), E_KIND (SP_KB), E_ROOM;
+; ACT_SLOT = the slot (box_free: every live body but this one).
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 sp_init:        push ix
@@ -334,6 +333,11 @@ sp_init:        push ix
                 ld   bc, E_DVIS - 1
                 ldir
                 call ix_slot                   ; (bank 2; A, E) A = the slot
+                ld   (ACT_SLOT), a             ; fix/d8-corpse-topleft: box_free skips the body itself.
+                                               ; LIVE_LIST is the turn start's: a summon killed this
+                                               ; turn is still listed, and its freed slot is the one
+                                               ; reused here: with $FF every sp_try saw its own box
+                                               ; (flags 0 = not DYING) and every placement failed
                 ld   c, a
                 ld   h, ST_FLAGS >> 8
                 add  a, ST_FLAGS & $FF
@@ -352,6 +356,15 @@ sp_init:        push ix
                 add  a, ST_X & $FF
                 ld   l, a
                 ld   (hl), b
+                ld   a, c                      ; fix/d8-corpse-topleft: R_VIS := 0. sp_run runs in
+                rrca                           ; end_turn, AFTER this tick's anim_tick and BEFORE
+                rrca                           ; the next render (RENDER_FIRST): a corpse freed on
+                rrca                           ; the turn's last tick still has R_VIS 1 / R_FID =
+                rrca                           ; its DEAD frame, and render reads E_PX / E_PY live:
+                ld   l, a                      ; zeroed here (a failed sp_place leaves them 0) ->
+                ld   h, SLOTREC >> 8           ; the corpse blitted at the top-left for a tick, or
+                ld   (hl), b                   ; at the new body's spot. Hidden: render erases the
+                                               ; drawn corpse (E_DVIS..) instead. 9 B, 50 T
                 ld   a, (SP_KB)
                 and  LEK_KIND_MASK
                 ld   (ix+E_KIND), a
@@ -359,6 +372,7 @@ sp_init:        push ix
                 ld   (ix+E_ROOM), a
                 ret
                 ASSERT (ST_FLAGS >> 8) == (ST_T1 >> 8) && (ST_T1 >> 8) == (ST_T2 >> 8) && E_DVIS == 24
+                ASSERT (SLOTREC & $FF) == 0 && R_VIS == 0 && SLOTREC_STRIDE == 16 && P_MAX_ENT == 16
 
 ;------------------------------------------------------------------------------
 ; sp_y — A = storey, IX = the body (E_KIND set): SP_S, E_Y = SP_Y = 9s + 8 - h
@@ -430,7 +444,7 @@ sp_place:       ld   a, (P_ENTITIES + E_X)
 ;------------------------------------------------------------------------------
 ; sp_try — A = candidate x (negative: >= $80), IX = the body (E_KIND, E_Y):
 ; E_X := A; CF = illegal: body cols outside LP_XMIN..LP_XMAX, a live body in
-; the box (box_free, ACT_SLOT $FF), a flyer's solid cell (box_solid), a
+; the box (box_free, ACT_SLOT = the body: sp_init), a flyer's solid cell (box_solid), a
 ; walker's floor cell without TF_FLOOR or with a hole / ladder, or its
 ; standing-row cell solid / a ladder / a plank.
 ; Clobbers: A, BC, DE, HL.   ~0.3k T + ~0.13k T a live body + walker ~0.3k T a col
