@@ -432,10 +432,11 @@ fi_row:         push af
 ; SMC: .base+1 = low byte of the rect's first mask byte (patched per call).
 ;------------------------------------------------------------------------------
 pmark_rect:
-                push bc
-                push de
                 ld   a, 1
                 ld   (PRES_ANY), a
+pmark_rect_np:                                 ; BLAIR-FIX: PRES_ANY already set (pmark_dmg)
+                push bc
+                push de
                 ld   hl, PRES_RMIN
                 ld   a, b
                 cp   (hl)
@@ -587,22 +588,24 @@ pmark_dmg:
                 or   a
                 ret  z
                 ld   b, a
+                ld   a, 1                      ; BLAIR-FIX: once here, not per rect (-20 T a rect)
+                ld   (PRES_ANY), a
                 ld   hl, DMG_LIST
 .l:             push bc
                 ld   c, (hl)                   ; c0
-                inc  hl
+                inc  l                         ; (DMG_LIST: one aligned page, dmg_add)
                 ld   a, (hl)
                 sub  c
                 ld   d, a                      ; cols = c1 - c0
-                inc  hl
+                inc  l
                 ld   b, (hl)                   ; r0
-                inc  hl
+                inc  l
                 ld   a, (hl)
                 sub  b
                 ld   e, a                      ; rows = r1 - r0
-                inc  hl
+                inc  l
                 push hl
-                call pmark_rect
+                call pmark_rect_np
                 pop  hl
                 pop  bc
                 djnz .l
@@ -835,7 +838,11 @@ shadow_room:
 ; 31 T/line char-aligned (54 T general path) + ~680 T setup.
 ;   24x48 shifted  (4 cols)  : 192 B -> 8.4k + 1.5k + 0.7k = 10.6k T
 ;   40x48 slash    (6 cols)  : 288 B -> 12.7k + 1.5k + 0.7k = 14.9k T
-; SMC: blit_jp+1 / blit_al_jp+1 (chain entry) — patched per sprite.
+; BLAIR-FIX: the per-line DJNZ jumps straight to the chain entry (its displacement
+; patched per sprite, +24 T setup) instead of to the entry JP: -10 T a line (21 T
+; aligned / 44 T general), ~0.4k T a 48-line sprite.
+; SMC: blit_jp+1 / blit_al_jp+1 (chain entry), blit_dj+1 / blit_al_dj+1 (the
+; line DJNZ displacement to it) — patched per sprite.
 ;==============================================================================
 BLIT_BLOCK      EQU 7                   ; bytes per unrolled chain block
 BLIT_MAXW       EQU 6
@@ -923,6 +930,9 @@ blit_sprite:
                 sbc  a, 0
                 ld   h, a
                 ld   (blit_al_jp+1), hl        ; SMC: entry = chain end - 7 * width
+                ld   a, blit_chain_al_end - (blit_al_dj + 2)
+                sub  d
+                ld   (blit_al_dj+1), a         ; SMC: the line DJNZ straight to the entry
                 ld   b, 8
                 ld   a, e
                 call scr_addr_py               ; HL = screen (BC, DE kept)
@@ -937,6 +947,9 @@ blit_sprite:
                 sbc  a, 0
                 ld   h, a
                 ld   (blit_jp+1), hl           ; SMC: entry = chain end - 7 * width
+                ld   a, blit_chain_end - (blit_dj + 2)
+                sub  d
+                ld   (blit_dj+1), a            ; SMC: the line DJNZ straight to the entry
                 ld   a, e
                 call scr_addr_py
                 ex   de, hl
@@ -968,7 +981,8 @@ blit_chain_end:
                 ld   a, d
                 sub  8
                 ld   d, a
-.nx:            djnz blit_rowloop
+.nx:
+blit_dj:        djnz blit_rowloop              ; SMC: displacement -> this width's entry
                 ret
 blit_clip_pop:  pop  de                        ; (the pushed frame pointer)
 blit_clip:
@@ -997,7 +1011,8 @@ blit_chain_al:                                 ; twin chain: falls into the
 blit_chain_al_end:
                 ld   e, c
                 inc  d
-                djnz blit_al_jp
+blit_al_dj:     djnz blit_al_jp                ; SMC: displacement -> this width's entry (BLAIR-FIX:
+                                               ; 10 T a line less than DJNZ to the JP below)
                 ld   a, c                      ; next char row
                 add  a, 32
                 ld   c, a
@@ -1013,6 +1028,7 @@ blit_chain_al_end:
                 ld   (BLIT_CROWS), a
 blit_al_jp:     jp   blit_chain_al             ; SMC: entry for this width
                 ASSERT (blit_chain_al_end - blit_chain_al) == BLIT_BLOCK * BLIT_MAXW
+                ASSERT (blit_al_dj + 2) - blit_chain_al <= 128 && (blit_dj + 2) - blit_chain <= 128   ; DJNZ reach
 
                 ASSERT FT_H == FT_COLS + 1     ; blit_sprite: inc hl
                 ASSERT FT_OFFR == FT_H + 1 && FT_OFFL == FT_OFFR + 1 ; render .vis: inc hl chain

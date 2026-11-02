@@ -1113,7 +1113,8 @@ decor_room:
                 INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
                 INCLUDE "rank3.asm"            ; D3-7: abil_load (ABIL_DESC for the bank-7 ability code)
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing
-                ; fi3.asm (FLOOR1 fi_full) lives in bank 2 since LAND-PENDING (bank-3 relief)
+                INCLUDE "fi3.asm"              ; FLOOR1 fi_full (cold, far3 only): bank 2 LAND-PENDING .. BLAIR-FIX
+                                               ; (resolve_monsters moved to bank 2 paid its 52 B back)
                 INCLUDE "drop3.asm"            ; FLOOR1: mon_drop + drop_tab / uniq_tab (from R6)
 
 ;------------------------------------------------------------------------------

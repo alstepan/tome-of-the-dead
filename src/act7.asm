@@ -205,8 +205,8 @@ act_pend:
                 ld   a, (EXIT_KIND)            ; 3E-T16: a teleport turn (scroll / trap,
                 or   a                         ; tele_arm's hold): no monster phase
                 ret  nz
-                ld   hl, resolve_monsters      ; bank 3 (cache_player: the hero's
-                jp   far3                      ; position / HP as the cast left them)
+                jp   resolve_monsters          ; bank 2, pages bank 3 itself (BLAIR-FIX; cache_player:
+                                               ; the hero's position / HP as the cast left them)
 
 ;------------------------------------------------------------------------------
 ; act_fire — the release (act_pend, fire tick): A = ABL_*. Dispatch:

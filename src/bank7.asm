@@ -177,8 +177,8 @@ turn_input:
                 ld   a, (EXIT_KIND)
                 ld   hl, MON_AT                ; D3-7: an ability turn (act_begin) defers
                 or   (hl)                      ; the monster phase to act_pend
-                ld   hl, resolve_monsters      ; B3B-R2: bank 3, one far3 a turn
-                call z, far3                   ; exit turn: monsters don't act
+                call z, resolve_monsters       ; BLAIR-FIX: bank 2 (pages bank 3 itself, gives
+                                               ; bank 7 back); exit turn: monsters don't act
                 ld   a, TP_ANIM
                 ld   (TURN_PHASE), a
                 ret
@@ -916,25 +916,25 @@ find_target:
 .player:        ld   a, (LIVE_N)
                 or   a
                 jr   z, .done
-                ld   b, a
+                ld   b, a                      ; B = entries left (.cand keeps B, C)
                 ld   hl, LIVE_LIST
-.pl:            push bc
-                push hl
-                ld   c, (hl)                   ; slot
-                inc  hl
+.pl:            ld   c, (hl)                   ; slot
+                inc  l                         ; (LIVE_LIST: one page, ASSERTed below)
                 ld   a, (hl)
                 ld   ixl, a
-                inc  hl
+                inc  l
                 ld   a, (hl)
                 ld   ixh, a
                 ld   a, (ix+E_FLAGS)
                 and  EF_HOSTILE | EF_DYING
                 cp   EF_HOSTILE
-                call z, .cand
+                jr   nz, .pn
+                push hl
+                call .cand                     ; (A, E, HL)
                 pop  hl
-                ld   de, 5
-                add  hl, de
-                pop  bc
+.pn:            ld   a, l
+                add  a, LL_STRIDE - 2
+                ld   l, a
                 djnz .pl
 .done:          pop  ix
                 ld   a, (TMP5)
@@ -942,18 +942,41 @@ find_target:
                 ret  nz
                 ld   a, $FF                    ; nearest body is mid-ladder: no target
                 ret
+                ASSERT (LIVE_LIST >> 8) == ((LIVE_LIST + P_MAX_ENT * LL_STRIDE - 1) >> 8)
 
+                ; BLAIR-FIX: the pure tests reordered (their conjunction is the
+                ; rule): the gap in the facing direction first (a body behind or
+                ; out of reach needs no height lookup), the vertical overlap, the
+                ; nearest-so-far test, and the ladder test last, only for a body
+                ; that becomes the best (a mid-ladder body still wins the slot, as
+                ; FT_BLOCKER, and so still ends the scan). Was on_ladder + 2 push /
+                ; pop pairs + the height lookup on every hostile (~0.6k T each in
+                ; contended bank 7); KFIELD keeps BC (A, HL only).
 .cand:          ; IX = candidate, C = its slot
-                push bc
-                call on_ladder
-                pop  bc
-                jr   nz, .cv
-                ld   c, FT_BLOCKER             ; no combat on ladders, but its body
-.cv:            push bc                        ; still blocks the line (reach
-                                               ; can't pass it). Vertical overlap:
-                KFIELD KT_BH                   ;   ty <= ay+ah-1 && ay <= ty+th-1
-                pop  bc
-                add  a, (ix+E_Y)
+                ld   a, (TMP6)                 ; gap in the facing direction
+                cp   1
+                jr   nz, .left
+                ld   a, (TMP0)
+                ld   hl, TMP2
+                add  a, (hl)                   ; ax+aw
+                ld   e, a
+                ld   a, (ix+E_X)
+                sub  e                         ; tx - (ax+aw)
+                ret  c                         ; behind
+                jr   .gap
+.left:          KFIELD KT_BW
+                add  a, (ix+E_X)               ; tx+tw
+                ld   e, a
+                ld   a, (TMP0)
+                sub  e
+                ret  c
+.gap:           ld   hl, TMP4                  ; the reach (1: find_target set it)
+                cp   (hl)
+                jr   z, .inr
+                ret  nc                        ; gap > reach
+.inr:           ld   d, a                      ; D = gap
+                KFIELD KT_BH                   ; vertical overlap:
+                add  a, (ix+E_Y)               ;   ty <= ay+ah-1 && ay <= ty+th-1
                 dec  a
                 ld   hl, TMP1
                 cp   (hl)
@@ -964,35 +987,16 @@ find_target:
                 dec  a
                 cp   (ix+E_Y)
                 ret  c
-                ld   a, (TMP6)                 ; gap in the facing direction
-                cp   1
-                jr   nz, .left
-                ld   a, (TMP0)
-                ld   hl, TMP2
-                add  a, (hl)                   ; ax+aw
-                ld   b, a
-                ld   a, (ix+E_X)
-                sub  b                         ; tx - (ax+aw)
-                ret  c                         ; behind
-                jr   .gap
-.left:          push bc
-                KFIELD KT_BW
-                pop  bc
-                add  a, (ix+E_X)               ; tx+tw
-                ld   b, a
-                ld   a, (TMP0)
-                sub  b
-                ret  c
-.gap:           ld   hl, TMP4
-                cp   (hl)
-                jr   z, .inr
-                ret  nc                        ; gap > reach
-.inr:           ld   hl, LAST_HIT_SLOT
+                ld   a, d
+                ld   hl, LAST_HIT_SLOT
                 cp   (hl)
                 ret  nc                        ; not nearer (ties: lower slot)
                 ld   (hl), a
+                call on_ladder                 ; (A, HL; keeps BC)
                 ld   a, c
-                ld   (TMP5), a
+                jr   nz, .cv
+                ld   a, FT_BLOCKER             ; no combat on ladders, but its body
+.cv:            ld   (TMP5), a                 ; still blocks the line (reach can't pass it)
                 ret
 
 ;------------------------------------------------------------------------------

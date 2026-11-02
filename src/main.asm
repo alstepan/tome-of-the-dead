@@ -693,7 +693,7 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
                 INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy (were low RAM / gfx.asm)
                 INCLUDE "msg2.asm"              ; LOG-FIX: msg_cat / msg_end (from bank 7), log_room, hit_line
-                INCLUDE "fi3.asm"               ; FLOOR1 fi_full (cold; far3 callers unchanged): from bank 3 (LAND-PENDING relief)
+                ; fi3.asm (FLOOR1 fi_full, cold, far3 only): back in bank 3 since BLAIR-FIX (bank3.asm)
                 INCLUDE "ldir2.asm"             ; RECLAIM-C (d): ldir7 (bank-1 menu_static reads a bank-7 tileset run)
 ftz_zx0:                                       ; MEM-FT frame_tab, FT_LEN B/fid contiguous, ZX0 (boot6_ft;
     IF OVL_PASS == 2                            ; bank 2: always mapped, on the CODE tape block; LAST in the
