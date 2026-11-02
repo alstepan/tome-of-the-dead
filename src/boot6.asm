@@ -52,7 +52,9 @@ boot6_init:
                 ld   (STICK), a
                 ld   (STICK_OLD), a
                 ld   (ANIM_FREEZE), a
+    IF ANIM_TRACE_ON
                 ld   (ANIM_TRACE_IDX), a
+    ENDIF
                 ld   (BLIT_MISS), a
                 ld   (DMG_OVERFLOW), a
                 ld   (CLIP_TRAP), a
@@ -95,11 +97,13 @@ boot6_init:
                 ld   (INPUT_REPEAT), a         ; play default: held keys repeat
                 ld   a, GS_BOOT
                 ld   (GAME_STATE), a
+    IF ANIM_TRACE_ON
                 ld   hl, ANIM_TRACE
                 ld   de, ANIM_TRACE + 1
                 ld   bc, ANIM_TRACE_LEN - 1
                 ld   (hl), $FF
                 ldir
+    ENDIF
                 call init_kbd_mirror
                 ld   hl, keytab_defaults       ; C3-1: Q / A / O / P / SPACE
                 ld   de, KEYTAB

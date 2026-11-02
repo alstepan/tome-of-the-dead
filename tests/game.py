@@ -10,6 +10,13 @@ Usage:
     python3 tests/game.py                  # run everything
     python3 tests/game.py --update-golden  # refresh game_select / game_start
     python3 tests/game.py 1 2 30           # run only the listed items
+
+RECLAIM-C2: the release build (-DDEBUG_KIT=0) has no ANIM_TRACE (the
+render's (slot, frame_id) ring that items 2/10/11/13/17/19/20/24/46/53/66 read).
+Run as a script on a build without it, this file assembles a private
+-DDEBUG_KIT=0 -DANIM_TRACE_ON=1 copy (~5 s, temp dir) and re-runs itself on it
+(WZ_BUILD_DIR); the trace build differs from the release only by the trace.
+Build with -DANIM_TRACE_ON=1 yourself to skip that (e.g. a variant build).
 """
 import hashlib
 import os
@@ -21,6 +28,34 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+
+
+def _trace_build():
+    """RECLAIM-C2: re-run on a private -DANIM_TRACE_ON=1 build when the build
+    under test has no ANIM_TRACE (BEFORE game_lib reads the .sym at import)."""
+    import subprocess
+    bdir = os.environ.get("WZ_BUILD_DIR", os.path.join(os.path.dirname(HERE), "build"))
+    try:
+        sym = open(os.path.join(bdir, "wazhack.sym")).read()
+    except OSError:
+        return                                   # game_lib reports the missing build
+    if re.search(r"^ANIM_TRACE:", sym, re.M):
+        return
+    out = tempfile.mkdtemp(prefix="game_trace_")
+    print(f"[game] {bdir} has no ANIM_TRACE (release): building -DDEBUG_KIT=0 -DANIM_TRACE_ON=1"
+          f" -> {out}", flush=True)
+    r = subprocess.run([os.path.join(os.path.dirname(HERE), "tools", "build.sh"), "-o", out,
+                        "-DDEBUG_KIT=0", "-DANIM_TRACE_ON=1"], capture_output=True, text=True)
+    if r.returncode:
+        sys.exit("trace build failed:\n" + r.stdout[-2000:] + r.stderr[-500:])
+    rc = subprocess.call([sys.executable, os.path.abspath(__file__)] + sys.argv[1:],
+                         env=dict(os.environ, WZ_BUILD_DIR=os.path.join(out, "build")))
+    shutil.rmtree(out, ignore_errors=True)
+    sys.exit(rc)
+
+
+if __name__ == "__main__":
+    _trace_build()
 import game_lib  # noqa: E402
 from game_lib import (Harness, Proto, S, EMU_ARGS, holes, floor_band_ok, attr_at, kind_frames,  # noqa: E402
                        cell_bytes, TILE_ATTRS, FLASH_ATTRS, KIND_ATTR, split_frame, frame_png,

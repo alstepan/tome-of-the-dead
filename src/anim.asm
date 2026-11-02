@@ -837,8 +837,10 @@ render:
                 add  a, R_DIRTY - R_FPY
                 ld   l, a
                 ld   (hl), c                   ; R_DIRTY = NONE / ATTR
+    IF ANIM_TRACE_ON
                 inc  l
                 ld   (hl), 0                   ; R_LOG
+    ENDIF
                 dec  c
                 jp   nz, .s                    ; NONE: nothing to erase or add
                 ld   a, (ix+E_GOLD)            ; 3F-T8: a golden body's attr-only repaint
@@ -859,12 +861,18 @@ render:
                 sub  l                         ; 256 - W - shift (D = 0, unshifted: exact fit)
 .ecl:           ld   e, a
                 jp   .fpx
+    IF ANIM_TRACE_ON
 .full_log:      RFIELD R_LOG
                 ld   (hl), 1
                 jr   .fullc
 .full:          RFIELD R_LOG
                 ld   (hl), 0
 .fullc:         dec  l                         ; R_DIRTY
+    ELSE                                       ; release: no R_LOG, one path (-13 B; -14 T,
+                                               ; -26 T on a frame change)
+.full_log:
+.full:          RFIELD R_DIRTY
+    ENDIF
                 ld   (hl), DIRTY_FULL
                 RFIELD R_COL
                 bit  0, (ix+E_DVIS)
@@ -955,9 +963,13 @@ render:
                 ld   e, (hl)
 .add1:          call dmg_add
                 jp   .s
+    IF ANIM_TRACE_ON
 .hidden:        RFIELD R_LOG
                 ld   (hl), 0
                 dec  l                         ; R_DIRTY
+    ELSE
+.hidden:        RFIELD R_DIRTY
+    ENDIF
                 ld   (hl), DIRTY_NONE
                 bit  0, (ix+E_DVIS)
                 jp   z, .s                     ; neither visible nor drawn
@@ -1122,6 +1134,7 @@ draw_slot:
                 ld   e, a
                 ld   bc, R_ROWS - R_FID + 1
                 ldir                           ; HL -> R_LEFT
+    IF ANIM_TRACE_ON
                 ld   a, l
                 add  a, R_LOG - R_LEFT
                 ld   l, a
@@ -1131,6 +1144,7 @@ draw_slot:
                 push hl
                 call trace_log                 ; ANIM_TRACE on a drawn-frame change (§11.2)
                 pop  hl
+    ENDIF
 .attr:          RFIELD R_COL
                 ld   c, (hl)
                 inc  l
@@ -1146,7 +1160,10 @@ draw_slot:
                 ld   (hl), a                   ; R_DATTR = the attr stamped now
                 jp   stamp_slot                ; 3F-T8 (boss2.asm): stamp_rect, or both screens
 
+    IF ANIM_TRACE_ON
 ; trace_log — append (ANIM_SLOT, BL_FID) to the 32-B ANIM_TRACE ring.
+; ANIM_TRACE_ON builds only (kit / test builds; 0 B in the release tape).
+; Clobbers: A, DE, HL.
 trace_log:
                 ld   a, (ANIM_TRACE_IDX)
                 ld   l, a
@@ -1162,6 +1179,7 @@ trace_log:
                 ld   a, (BL_FID)
                 ld   (hl), a
                 ret
+    ENDIF
 
 ;------------------------------------------------------------------------------
 ; damage list: rects stored as (c0, c1, r0, r1) with exclusive ends.

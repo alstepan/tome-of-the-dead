@@ -1365,7 +1365,7 @@ outweighing the +8 T per redrawn background cell of the 64-id glyph address.)
 | **`$A700..$AFFF`** (MEM-FT; `$A700..$AF3F` 3F-T13bc; `$A800..$AFFF` 3F-T2; was `$A600`) | `FRT` | **MEM-FT: `FRT_MAX` 144 (129 used, 15 spare; the most the `$A700` page holds, `FRT_GAP` 0). Row = 4 variants × bank,lo,hi (bytes 0..11) + the fid's static **`frame_tab`** entry (bytes 12..15 = `FT_IN_ROW`; `frame_tab` = `FRT` + 12, `FT_STRIDE` = 16): unpacked at boot by `boot6_ft` from bank-2 `ftz_zx0`; `frt_none` / `gen_frame` write bytes 0..11 only. "MEM-FT" below.** CORPSE-ASHES: `FRT_MAX` 132, 129 used, 3 spare (for the animation items). 3F-T13bc: `FRT_MAX` 132 (all used), `FRT` = (`P_ENTITIES` − `FRT_MAX` × 16) & `$FF00` (page-aligned: `blit_sprite`'s nibble-swap fid × 16), the rest up to `P_ENTITIES` is **`FRT_GAP`** (`$AF40..$AFFF`, 192 B, runtime only): `seq_rows` (119 B, moved out of the image) + 73 B free.** Before: frame runtime table (A6: moved from `$B200`): 16 B/fid (4 variants × bank,lo,hi), **`FRT_MAX` 128** (3F-T2, was 160: 101 used + the 23 lean 3F frames of plan 3F A1 = 124, 4 spare; +512 B bank 2 and −160 B of the low-RAM descriptor growth reserve; D3-4: 101 used; 74 at C3-7); `FRT = P_ENTITIES − FRT_MAX × 16` |
 | `$B000..$B1FF` | `P_ENTITIES` | 16 slots × **32 B** (layout below); slot 0 = hero |
 | `$B200..$B7FF` | `BANK2_FREE` | the vacated A5 `FRT` (1,536 B, runtime RAM, not in the image/tape; `BANK2_FREE_END` = `SLOTREC`). **B3B-1 (D8): fully reserved; B3B-11 / B3B-11b use it** — **`FONT6` `$B200..$B5FF` = the PLANAR 6×8 font** (B3B-11b, for the quad printer): line *l* of char *c* (32..127) at `FONT6 + (l>>1)*256 + c + (l&1)*FONT6_WB` (`FONT6_WB` 96): 4 pages, even lines in window A (offsets 32..127), odd lines in window B (128..223); built at boot by `panel_boot` from the char-major `font6x8` (bank-1 `vdata`, via `GEN_SRC`), glyph bits 1..0 masked off. Free holes inside the planes: offsets 0..31 / 224..255 of each page (`$B200..$B21F`, `$B2E0..$B31F`, `$B3E0..$B41F`, `$B4E0..$B51F`, 32 + 3 × 64 B); (B3B-13..C3-7: `ZAP_GLYPHS` `$B200..$B20F`, gone with the zap in D3-0.) **D3-0: the holes hold the 3D runtime state** — see "3D contracts (D3-0)": `FXREC` `$B2E0..$B30F`, `ST_FLAGS` `$B310..$B31F`, `ST_T1` / `ST_T2` / `ST_X` `$B3E0..$B40F`, `FXQ` `$B410..$B41F`, `RANK_ROWS` `$B4E0..$B4FD`; free: `$B200..$B21F` (32 B), `$B4FE..$B51F` (34 B). **`HOT_COPY` `$B5E0..$B7FF`** (544 B, boot-copied hot code, risk R2): **`$B5E0..$B7D6` = the panel hot image (503 B, C3-3; was 515**: `print6` (quad printer, 4 SMC fetch sites + 8 SMC plane offsets) ~270, `log_push` / `log_push_end` / `log_drop`, `panel_tick` / `panel_step`, `item_hp`, `item_depth`; **IC1: `item_hp` +5 → 508 B, 36 B spare**, was 41), **36 B spare** (C3-3: `panel_step` polls through `icon_poll` and ends in `panel_more`, bank 2; ASSERT `HOT_COPY + PANEL_HOT_LEN <= HOT_COPY_END`; the build DISPLAY reports it). Labels in the `.sym` are the runtime addresses (`DISP`) |
-| `$B800..$B8FF` | `SLOTREC` | A7b: per-slot render record, 16 slots × **16 B** (one page; record = `SLOTREC + slot*16`, fields reached by `inc l`): `R_VIS +0`, `R_FID +1` (written by `anim_tick`), `R_FPX +2`, `R_FPY +3`, `R_COL +4`, `R_ROW +5`, `R_COLS +6`, `R_ROWS +7` (`R_FID..R_ROWS` = the entity's drawn block `E_DFID..E_DROWS` in the same order: `draw_slot` copies it with one LDIR; ASSERTed), `R_LEFT +8`, `R_ATTR +9`, `R_DATTR +10`, `R_DIRTY +11`, `R_LOG +12`, **D3-8e2: `R_TINT +13`** (= `R_ATTR | 4`: the body attr — kind or status tint — last shown with no reaction pending; `render` keeps showing it while `E_REACT` is pending, game.md §6.5.1), **D3-8d: `R_MK +14` / `R_MKLO +15`** (the slot's status mark as drawn: g / frame / row >> 3, the cell's low byte; "Status marks (D3-8d)"; no spare left) (was the 13 × 16-B `SLOTVARS` arrays `N_VIS`… `$B800..$B8CF`) |
+| `$B800..$B8FF` | `SLOTREC` | A7b: per-slot render record, 16 slots × **16 B** (one page; record = `SLOTREC + slot*16`, fields reached by `inc l`): `R_VIS +0`, `R_FID +1` (written by `anim_tick`), `R_FPX +2`, `R_FPY +3`, `R_COL +4`, `R_ROW +5`, `R_COLS +6`, `R_ROWS +7` (`R_FID..R_ROWS` = the entity's drawn block `E_DFID..E_DROWS` in the same order: `draw_slot` copies it with one LDIR; ASSERTed), `R_LEFT +8`, `R_ATTR +9`, `R_DATTR +10`, `R_DIRTY +11`, `R_LOG +12` (RECLAIM-C2: written / read only in `ANIM_TRACE_ON` builds), **D3-8e2: `R_TINT +13`** (= `R_ATTR | 4`: the body attr — kind or status tint — last shown with no reaction pending; `render` keeps showing it while `E_REACT` is pending, game.md §6.5.1), **D3-8d: `R_MK +14` / `R_MKLO +15`** (the slot's status mark as drawn: g / frame / row >> 3, the cell's low byte; "Status marks (D3-8d)"; no spare left) (was the 13 × 16-B `SLOTVARS` arrays `N_VIS`… `$B800..$B8CF`) |
 | `$B900..$B9BF` | `DMG_LIST` | per-render damage rects, 4 B each (c0,c1,r0,r1), 48 max |
 | `$B9C0..$B9CF` | `PEND_DMG` | queued damage for the next render (4 rects) |
 | `$BA00..$BA4F` | `LIVE_LIST` | per-turn collider list, 5 B/entry (`LL_STRIDE`: slot, ptr, w, h); `LIVE_N $BA50`; entry 0 is always the hero (B19 `box_free_mon` skips it) |
@@ -1459,7 +1459,7 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 | `$BF17` | `ANIM_FREEZE` | poke 1: resting sprites hold IDLE frame 0 (goldens) |
 | `$BF18` | `PORT_7FFD_SHADOW` | last `$7FFD` value. The ROM's own shadow `BANKM` (`$5B5C`) is deliberately left stale: PROTO never returns to 128 BASIC and never calls 128-ROM paging routines |
 | `$BF19` | `OVERRUN_COUNT` | word: ticks whose work exceeded 2 frames |
-| `$BF1B` / `$BF20` | `ANIM_TRACE_IDX` / `ANIM_TRACE` | 32-B ring of (slot, frame_id) per drawn-frame change |
+| `$BF1B` / `$BF20` | `ANIM_TRACE_IDX` / `ANIM_TRACE` | 32-B ring of (slot, frame_id) per drawn-frame change. **RECLAIM-C2: `ANIM_TRACE_ON` builds only** (default = `DEBUG_KIT`; the tests' `-DDEBUG_KIT=0 -DANIM_TRACE_ON=1`): a release build defines neither symbol and never touches `$BF1B` / `$BF20..$BF3F` (free there, 33 B) |
 | `$BF1C..$BF1F` | `LAST_TICK_FRAME`, `TURN_TICK`, `NEED_RELEASE`, `EXIT_KIND` | loop internals |
 | `$BF40` | `BLIT_MISS` | count: stationary frame requested at an ungenerated shift (debug trap, expect 0) |
 | `$BF41` | `GEN_OVERFLOW` | 1 if the pre-shift pool ran out (expect 0). An allocation ending exactly at `$10000` opens the next bank for the next one |
@@ -1548,9 +1548,11 @@ its region checks with `RAM=7` (ZEsarUX condition). `GAME_PROFILE`'s
 only).
 
 Per-game vs since-boot observables: `new_game` resets `TICK_COUNTER`,
-`ANIM_TRACE`/`_IDX`, `BLIT_MISS`, `DMG_OVERFLOW`, `CLIP_TRAP` (plus RNG/turns);
+`ANIM_TRACE`/`_IDX` (`ANIM_TRACE_ON` builds only, RECLAIM-C2), `BLIT_MISS`, `DMG_OVERFLOW`, `CLIP_TRAP` (plus RNG/turns);
 `OVERRUN_COUNT`, `GEN_OVERFLOW` and `GEN_TRAP` count since boot. Moving them is
-free; removing them breaks `tests/game.py` / `tests/budget.py`.
+free; removing them breaks `tests/game.py` / `tests/budget.py` (the trace: `tests/game.py`
+re-runs itself on a private `-DDEBUG_KIT=0 -DANIM_TRACE_ON=1` build when the build under test has none;
+`tests/budget.py` reports its staff-swing count as n/a on a release build).
 
 ## 3B contracts (B3B-1) — code against these symbols
 
@@ -5020,6 +5022,28 @@ Duplicate / dead code removed, six steps, one commit each. Free bytes (release `
 Ticks: no per-tick path changed. Cold-path deltas only: `fnum` +10 T per gear page, the pend loop `get_wh` +27 T per
 pended body, `act_here` +~27 T per candidate (vbat: only kind matches; follow / arrival once per transition).
 The `STATS1` kill_note reserve (bank 3 30 B) is intact: the 61 free include it.
+
+## RECLAIM-C2 ledger (`feat/reclaim-c2`; the render trace leaves release builds, no feature cut, user 2026-11-02)
+
+`ANIM_TRACE_ON` (defs.asm; default = `DEBUG_KIT`, `-DANIM_TRACE_ON=0/1` overrides) gates `trace_log`, its call in
+`draw_slot`, every `R_LOG` store in `render`, the `ANIM_TRACE` / `ANIM_TRACE_IDX` symbols and their clears in `boot6_init`
+/ `new_game`. Kit and `-DANIM_TRACE_ON=1` builds are byte-identical to before. Free bytes, release `-DDEBUG_KIT=0`,
+main `704918e` -> after (build DISPLAY):
+
+| Region | Before | After | Change |
+|---|---|---|---|
+| bank 2 (image, `kind_tab` ALIGN pad) | 14 | **73** | -59: `trace_log` 27, the `draw_slot` R_LOG test + call 13, `render` R_LOG stores 19 (`.sa` 3, `.full_log` / `.full` 13, `.hidden` 3). The bytes land in the pad before `kind_tab` (image end unchanged `$A563`) |
+| bank 7 low | 14 | **30** | -16: `new_game` trace clear + `ANIM_TRACE_IDX` store |
+| boot block (bank 6, dead after boot) | 1,992 B | 1,976 B | -16: `boot6_init` trace clear (starts 16 B higher; not R6, no reusable room) |
+| R6 / low RAM / bank 1 / bank 3 / b0 / bank 7 high | 25 / 6 / 34 / 60 / 28 / 1 | same | untouched |
+| state block | `$BF1B`, `$BF20..$BF3F` | unused | 33 B of RAM no release code touches |
+
+Ticks: `render` -14 T per visible slot per tick (no R_LOG store), -26 T on a frame change; `draw_slot` -38 T per drawn
+slot, ~-200 T per logged draw (`trace_log` + push / call / pop); measured budget `walarm` worst work tick
+122,324 -> 121,527 T (render 53,449 -> 52,725). Tests: `tests/game.py` (11 trace users) re-runs
+itself on a private `-DDEBUG_KIT=0 -DANIM_TRACE_ON=1` build (~5 s) when the build under test lacks `ANIM_TRACE`, so the
+documented `-DDEBUG_KIT=0` gate is unchanged and the assertions are identical; `tests/budget.py` measures the release
+build (its staff-swing info line reads n/a there).
 
 ## STATS1 S1 ledger (`feat/stats1`; end-of-game statistics, user-approved option S1 2026-11-01)
 

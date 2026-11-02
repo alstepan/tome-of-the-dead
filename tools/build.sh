@@ -4,6 +4,11 @@
 #   tools/build.sh [-o OUTDIR] [extra sjasmplus args, e.g. -DPROTO_START=1]
 #   tools/build.sh --items        3E-T4 item text only, verbose (tools/itempack.py)
 #
+# Flags: -DDEBUG_KIT=0 = the release / tape build (the suites' build); the default
+# DEBUG_KIT 1 adds the designer's start kit. -DANIM_TRACE_ON=1 (RECLAIM-C2) adds the
+# render trace ANIM_TRACE (default = DEBUG_KIT: off in the release tape); tests/game.py
+# makes its own -DDEBUG_KIT=0 -DANIM_TRACE_ON=1 copy when the build under test lacks it.
+#
 # 1. tools/zx0_sources.py -> build/zx0/sprites_zx0.asm of THIS checkout (always
 #    regenerated, so a build never assembles stale packed art; the file is
 #    rewritten only when it changes). Needs tools/bin/zx0 (tools/setup_zx0.sh).
