@@ -643,6 +643,12 @@ ladder end** in its current climb direction.
   band, and moving it dropped a ghost over the top box onto the floor below. It goes
   PENDING in place (hidden, non-colliding) and materialises once its box is free.
   Flyers never leave their band. `tests/game.py` #64 / #65.
+  **MONSTER-FALL (engineering rule 2026-11-02, extends B16 to every kind):** any body of
+  the other storey, walker or flyer, stays PENDING in place; only a mid-ladder climber
+  (it is on this shaft) moves to the foot cell. A walker standing at the foot of the
+  shaft, wedged against a wall, used to be lifted to storey 0 under a descending hero
+  (or one at the top dropped to storey 1 under a climbing one). Invariant: no monster
+  changes storey except by climbing a shaft (`tests/storey_fuzz.py` F1-F5).
 
 Monsters get their fights when the hero steps off: the player acts first each turn,
 and in-reach monsters then attack.

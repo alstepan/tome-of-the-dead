@@ -5187,3 +5187,23 @@ Small brazier flames (`decor.tiles` `brazier_flame1/2`): ink yellow -> red = fix
 
 ### TRAP-TILE fix (`fix/trap-tile`, 2026-11-02)
 `trap7.asm tr_eff` ALARM: `inc (hl)` assumed HL = LP_RESPAWNS (TRAP2 d967e0f) but HL was the trap ENTRY: every ALARM fire on a generated level bumped TR_B0 (room + 1), so the record moved to the next room (a stray known plate there, often on a ladder top; the original plate left an inert tile). Now `ld hl, LP_RESPAWNS` + the spec's `< RESPAWN_MAX` gate (else "A BELL RINGS. NOTHING COMES") before the `inc`. **Bank 7 cold code +8 B: free to the attr shadow 14 -> 6** (release and kit identical; F3_GEN=0 assembles). Nothing else moves. Test: `tests/trap_cells.py` (new).
+
+### MONSTER-FALL ledger (`fix/monster-fall`, 2026-11-02; user playtest: monsters drop / rise a storey when blocked near a ladder)
+Root cause (found by the new fuzz `tests/storey_fuzz.py`, invariants F1-F5): the B14 **squeeze** (`lowram.asm climb_blocked`)
+moved every body in the hero's new box to the hero's foot cell on the storey the climb leaves; B16 exempted only flyers of
+the other storey. A walker / climber standing at the foot (or top) of a shaft, wedged against a wall so it cannot yield
+(the L3 wedge), sits in the box of a mid-ladder hero's next step on the OTHER storey, and was lifted to storey 0 under a
+descending hero (or dropped to storey 1 under a climbing one). Fix: the B16 storey compare now applies to every kind but a
+**mid-ladder climber** (`on_ladder` Z: on this shaft, it still moves to the foot cell); any other body of the other storey
+goes PENDING in place (hidden, materialises when its box is free). No runtime guard needed: the fuzz finds no other path.
+No address moved; no new symbol.
+
+| region | before | after | delta | note |
+|---|---|---|---|---|
+| low RAM (release / kit / F3_GEN=0) | free 6 | **free 11** | +5 | `KFL KT_FLAGS` / `and` / `jr` (10 B) -> `call on_ladder` / `jr` (5 B) |
+| R6 / bank 2 / bank 3 / bank 7 / bank 1 / bank 0 | 33 / 14 / 60 / 14 low / 34 / - | same | 0 | |
+
+Cost: cold (only the squeeze turn, per body in the hero's box): `on_ladder` ~0.2k T vs `KFL` ~0.06k T. Play ticks unchanged
+(`tests/budget.py` gate ok, walarm max 124,886 T). Tests: `tests/storey_fuzz.py` (new; main 9 violations / 11,470 turns at
+`--seeds 64`, 6 at the defaults; fix 0 / 11,092 + another seed base), `ai_equiv` (both variants: identical vs main),
+game / world / budget / ladder_jam / climb3f / lp / boss / spawn / vbat / d8_stress F all 0 failed.
