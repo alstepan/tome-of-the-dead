@@ -1398,7 +1398,7 @@ SEQB_NEED = SQ_HERO + SQ_MAX
                 DISPLAY "GAME sequence cache: ", /D, SQ_SLOTS, " rows (", /D, SQ_ROWS_LEN, " B) + bytes need ", /D, SEQB_NEED, " of SEQB_LEN ", /D, SEQB_LEN, " (hero ", /D, SQ_HERO, " + monsters ", /D, SQ_MAX, ", <= ", /D, SQ_NMAX, " blocks a level)"
 
 ;------------------------------------------------------------------------------
-; tap_loader — 10 CLEAR/BORDER 0../POKE: 15 LOAD "" SCREEN$: 20 LOAD "" CODE: 30 RANDOMIZE USR VAL "<start>"
+; tap_loader — 10 CLEAR/BORDER 0, PAPER 0, INK 7/POKE: 15 LOAD "" SCREEN$: 20 LOAD "" CODE: 30 RANDOMIZE USR VAL "<start>"
 ; CLEAR 24575 frees $6000..$7FFF for the room maps / generator buffers and the
 ; low-RAM cold code. The USR address is emitted as 5 ASCII digits of `start`.
 ; Tokenised in a scratch ORG (page 0 at $E000; not part of the runtime image —
@@ -1412,7 +1412,7 @@ tap_loader:
                 DB   0, 10
                 DW   tap_l10_end - tap_l10_body
 tap_l10_body:   DB   $FD, $B0, '"', "24575", '"', ':'                   ; CLEAR (also CLSes: must precede the picture)
-                DB   $E7, $B0, '"0"', ':', $DA, $B0, '"0"', ':', $D9, $B0, '"0"', ':', $FB, ':'  ; BORDER/PAPER/INK 0: CLS
+                DB   $E7, $B0, '"0"', ':', $DA, $B0, '"0"', ':', $D9, $B0, '"7"', ':', $FB, ':'  ; BORDER 0 / PAPER 0 / INK 7: CLS (INK 7: the picture's pixels show while the tape loads, before its attributes arrive)
                 DB   $F4, $B0, '"23739"', ',', $B0, '"111"', $0D       ; POKE 23739,111: drop the ROM's "Bytes:" header text
                 ; NB the game CODE header's CLS_LOWER still blanks rows 22-23 of the picture (DF_SZ tricks scroll it)
 tap_l10_end:
