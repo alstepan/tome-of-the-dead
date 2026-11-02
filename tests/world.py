@@ -210,7 +210,14 @@ def map_structure(p, r):
     level state in memory (descriptors, EDGE_TAB door states, FLOOR_LIST)."""
     m = p.z.read_memory(S["ROOM_MAP"], MAP_LEN)[:32 * PLAY_ROWS]
     want = room_model.render_room(room_model.read_block(p), r)
-    return [(r, i % 32, i // 32, m[i], want[i]) for i in range(len(want)) if m[i] != want[i]]
+    # Animated decor cells (ANIM_LIST) legitimately hold either flame glyph after the
+    # settle tick's decor_tick (LOOK-1 / FLAME-RATE: glyph A/B swap, id exchanged with
+    # AL_TYPE; W14 owns their phase): compare them as {map id, AL_TYPE} instead.
+    n = p.rb("ANIM_N")
+    al = p.z.read_memory(S["ANIM_LIST"], 4 * n) if 0 < n <= 12 else b""
+    alt = {al[i] + 32 * al[i + 1]: al[i + 2] for i in range(0, len(al), 4)}
+    return [(r, i % 32, i // 32, m[i], want[i]) for i in range(len(want))
+            if m[i] != want[i] and not (i in alt and want[i] in (m[i], alt[i]) and alt[i] in (m[i], want[i]))]
 
 
 # ---------------------------------------------------------------------------
