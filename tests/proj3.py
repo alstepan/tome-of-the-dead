@@ -678,7 +678,7 @@ def main():
                  must=lambda res, w: res["tgt"] == 0 and res["stop"] == PFS["BODY"] and w.bodies[1].hp == 50)
         case("P2 Lightning on Ghost (X): pierce stops, reverses", two(K_GHOST, LIGHTNING), LIGHTNING, 1,
                  must=lambda res, w: w.bodies[1].hp == 50 and res["tgt"] == 0)
-        case("P2 Frost on Skeleton (COLD I): stops, 0 dmg, no freeze", two(K_SKELETON, FROST), FROST, 1,
+        case("P2 Frost on Vampire (COLD I, defs.asm K_VAMPIRE 10; the Skeleton line is COLD R since BAL-1 FINAL B): stops, 0 dmg, no freeze", two(10, FROST), FROST, 1,
                  must=lambda res, w: res["tgt"] == 1 and res["lost"] == 0 and w.bodies[1].stf == 0)
         case("P2 Drain on Skeleton (I): no heal", two(K_SKELETON, DRAINL), DRAINL, 1,
                  must=lambda res, w: res["lost"] == 0)
@@ -687,7 +687,7 @@ def main():
         case("P2 Drain on Rat: caster heals the HP lost", w, DRAINL, 1,
                  must=lambda res, w: w.bodies[0].hp == 100 + res["lost"] and res["lost"] >= 2)
         case("P2 Firebolt on Slime (W)", two(K_SLIME, FIREBOLT), FIREBOLT, 1,
-                 must=lambda res, w: res["lost"] >= 6)
+                 must=lambda res, w: res["lost"] >= 2 and res["lost"] % 2 == 0)   # BAL-1 FINAL B: Firebolt I is 1d8 +0, doubled
         case("P2 bow on Ghost (PHYS R)", two(K_GHOST, BOW), BOW, 1, seed=0x5A5A)
         case("P2 Spark confuses 1 in 4 (Goblin)", two(K_GOBLIN, SPARK), SPARK, 3, seed=0x4321)
         conf = 0
@@ -739,8 +739,8 @@ def main():
         case("P4 loop guard: hero + Ghost both reflect SHOCK -> PFS_LOOP after 4 reversals", w, SPARK, 1,
              must=lambda res, w: res["stop"] == PFS["LOOP"] and res["desc"][10] == 5)
         w = world(hero_res=refl)
-        w.bodies[1] = Body(1, K_GHOST, hx + 9, hy + 1, 50)
-        case("P4 loop guard with Lightning (range 28)", w, LIGHTNING, 3,
+        w.bodies[1] = Body(1, K_GHOST, hx + 5, hy + 1, 50)           # BAL-1 FINAL B: Lightning III range 20 (was 28), so the Ghost is nearer
+        case("P4 loop guard with Lightning (range 20)", w, LIGHTNING, 3,
              must=lambda res, w: res["stop"] == PFS["LOOP"])
 
         # --- P5 pierce --------------------------------------------------------

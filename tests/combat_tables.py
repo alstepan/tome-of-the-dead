@@ -46,42 +46,44 @@ SLEEP, STUN, CONFUSE, FEAR, POISON = 1, 2, 4, 8, 16
 KINDS = {
     0: ("Knight", {}, 0, 0),
     1: ("Wizard", {}, 0, 0),
-    3: ("Skeleton", {"COLD": "I", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 6),
+    3: ("Skeleton", {"COLD": "R", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 6),
     4: ("Goblin", {}, 0, 3),
-    5: ("Ghost", {"PHYS": "R", "COLD": "I", "SHOCK": "X", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 6),
+    5: ("Ghost", {"PHYS": "R", "COLD": "R", "SHOCK": "X", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 6),
     6: ("Rat", {}, 0, 2),
     7: ("Bat", {"SHOCK": "W"}, 0, 2),
     8: ("Slime", {"PHYS": "R", "FIRE": "W"}, SLEEP | CONFUSE | FEAR, 3),
 }
 
 
+# BAL-1 FINAL B: Skeleton line + Ghost line COLD I->R, Spider / Black Widow lose FIRE W, Necro / Bone Caller lose DRAIN I,
+# Mummy and Ogre lose PHYS R.
 # 3F-T3 rows (game.md §9.1 resistances / immunity set / KXP / DEF, §9.6 tiers; ids = defs.asm K_*)
 BOSS = 0x80
 UNDEAD = SLEEP | POISON
-SK_RES = {"COLD": "I", "DRAIN": "I", "DARK": "I"}
+SK_RES = {"COLD": "R", "DRAIN": "I", "DARK": "I"}
 KINDS.update({
-    9: ("Spider", {"FIRE": "W"}, 0, 4),
+    9: ("Spider", {}, 0, 4),
     10: ("Vampire", {"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),
     2: ("Vampire bat form", {"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),   # 3F-T9 K_VBAT: the Vampire's row, PHYS bite
     11: ("Orc", {"FIRE": "R"}, 0, 9),
     12: ("Skeleton Archer", SK_RES, UNDEAD, 7),
-    13: ("Mummy", {"PHYS": "R", "FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 12),
-    14: ("Necromancer", {"COLD": "R", "DRAIN": "I", "DARK": "I"}, 0, 10),
-    15: ("Ogre Warlord", {"PHYS": "R", "COLD": "R", "SHOCK": "W"}, BOSS, 60),
+    13: ("Mummy", {"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 12),
+    14: ("Necromancer", {"COLD": "R", "DARK": "I"}, 0, 10),
+    15: ("Ogre Warlord", {"COLD": "R", "SHOCK": "W"}, BOSS, 60),
     16: ("Death Knight", {"FIRE": "X", "COLD": "I", "SHOCK": "W", "DRAIN": "I", "DARK": "I"}, BOSS, 90),
     17: ("Archmage", {"COLD": "X", "SHOCK": "X", "DRAIN": "I", "DARK": "R"}, BOSS, 0),
     18: ("Giant Rat", {}, 0, 3),
     19: ("Rabbit Rat", {}, 0, 4),
     20: ("Screech Bat", {"SHOCK": "W"}, 0, 3),
     21: ("Goblin Slinger", {}, 0, 4),
-    22: ("Black Widow", {"FIRE": "W"}, 0, 6),
+    22: ("Black Widow", {}, 0, 6),
     23: ("Skeleton Guard", SK_RES, UNDEAD, 9),
     24: ("Skeleton Knight", SK_RES, UNDEAD, 12),
-    25: ("Poltergeist", {"PHYS": "R", "COLD": "I", "SHOCK": "X", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),
+    25: ("Poltergeist", {"PHYS": "R", "COLD": "R", "SHOCK": "X", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),
     26: ("Orc Berserker", {"FIRE": "R"}, FEAR, 13),          # FEAR-immune extra (§9.6)
     27: ("Orc Bouncer", {"FIRE": "R"}, 0, 18),
     28: ("Skeleton Sniper", SK_RES, UNDEAD, 10),
-    29: ("Bone Caller", {"COLD": "R", "DRAIN": "I", "DARK": "I"}, 0, 15),
+    29: ("Bone Caller", {"COLD": "R", "DARK": "I"}, 0, 15),
 })
 # monster DEF (KX_DEF): the §9.1 / §9.6 DEF column (D3-1: Skeleton and Slime 1 too; the other 3D rows 0)
 DEF3F = {3: 1, 8: 1, 11: 1, 13: 2, 15: 2, 16: 3, 17: 1, 23: 2, 24: 3, 26: 1, 27: 2}
@@ -136,15 +138,16 @@ STEPS = {4: (1, 0), 6: (0, 1), 8: (1, 0)}                    # level -> (atk, ev
 
 # rank table, §5: (MP, range, die, bonus, bounces, effect) per rank 1..3, cumulative
 # effect: status = chance<<4 | turns; Firebolt = burst die (|$80 spare); Whirlwind = to-hit
-# RANK1 (game.md §5 rev 6): MP per rank 2/4/6, 3/5/8 x3, 5/8/12, 3/5/7, 4/7/10 and the damage columns.
+# BAL-1 FINAL B (docs/design/bal1_final.md): MP per rank Spark 2/4/6, Firebolt 5/6/10, Frost 3/5/7, Drain 3/5/7,
+# Lightning 5/8/11, Power 2/3/4, Whirl 4/7/10 and the damage columns (option A + W3 + FINAL B).
 # Power Strike: die = multiplier code (0/1/2 = x2 / x2.5 / x3), bounces = extra to-hit (+2 base in ab_def).
 RANKS = {
-    "Spark":     [(2, 6, 4, 1, 0, 0x44), (4, 8, 8, 2, 0, 0x44), (6, 8, 8, 4, 0, 0x24)],
-    "Firebolt":  [(3, 12, 8, 2, 0, 4), (5, 12, 8, 5, 0, 6), (8, 12, 10, 7, 0, 0x86)],
-    "Frost":     [(3, 12, 6, 0, 1, 2), (5, 12, 6, 1, 2, 3), (8, 12, 6, 3, 2, 4)],
-    "Drain":     [(3, 5, 6, 1, 0, 0), (5, 8, 6, 3, 0, 0), (8, 8, 8, 5, 0, 0)],
-    "Lightning": [(5, 28, 8, 3, 2, 0), (8, 28, 8, 6, 2, 0), (12, 28, 8, 8, 3, 0)],
-    "Power":     [(3, 1, 0, 0, 0, 1), (5, 1, 1, 0, 1, 1), (7, 1, 2, 0, 2, 2)],
+    "Spark":     [(2, 6, 4, 1, 0, 0x44), (4, 9, 8, 2, 0, 0x44), (6, 10, 8, 4, 0, 0x24)],
+    "Firebolt":  [(5, 8, 8, 0, 0, 4), (6, 8, 8, 2, 0, 4), (10, 10, 10, 4, 0, 0x86)],
+    "Frost":     [(3, 10, 6, 1, 1, 2), (5, 10, 8, 2, 2, 3), (7, 12, 8, 4, 2, 4)],
+    "Drain":     [(3, 6, 6, 2, 0, 0), (5, 8, 8, 3, 0, 0), (7, 8, 8, 6, 0, 0)],
+    "Lightning": [(5, 16, 8, 4, 1, 0), (8, 16, 8, 7, 1, 0), (11, 20, 10, 9, 2, 0)],
+    "Power":     [(2, 1, 0, 0, 0, 1), (3, 1, 1, 0, 1, 1), (4, 1, 2, 0, 2, 2)],
     "Whirl":     [(4, 1, 0, 1, 0, 0), (7, 1, 0, 3, 0, 0), (10, 1, 0, 4, 0, 2)],
 }
 AMMO = [(0, 6, 4, 2, 0, 0), (0, 14, 6, 1, 0, 0)]             # dagger r6 1d4+2, bow r14 1d6+1
@@ -220,7 +223,7 @@ def main():
     # id: (hp, atk, eva, die, bonus, period, weight)
     K3 = {9: (7, 3, 3, 4, 0, 1, 2), 10: (14, 2, 1, 6, 0, 2, 5), 11: (14, 3, 1, 8, 0, 1, 5),
           12: (8, 2, 2, 4, 0, 1, 6), 13: (18, 3, 0, 8, 0, 2, 5), 14: (12, 2, 2, 4, 0, 1, 6),
-          15: (40, 5, 1, 10, 2, 1, 6), 16: (50, 6, 3, 10, 3, 1, 5), 17: (60, 4, 3, 6, 0, 1, 6),
+          15: (36, 4, 1, 10, 1, 1, 6), 16: (50, 6, 3, 10, 3, 1, 5), 17: (60, 4, 3, 6, 0, 1, 6),
           18: (5, 1, 1, 3, 0, 1, 2), 19: (8, 2, 3, 4, 0, 1, 2), 20: (5, 2, 4, 3, 0, 1, 2),
           21: (8, 2, 1, 4, 0, 1, 4), 22: (10, 4, 3, 4, 0, 1, 2), 23: (14, 3, 2, 6, 0, 1, 5),
           24: (18, 4, 2, 8, 0, 1, 5), 25: (11, 3, 3, 4, 0, 1, 3), 26: (18, 4, 0, 8, 2, 1, 5),

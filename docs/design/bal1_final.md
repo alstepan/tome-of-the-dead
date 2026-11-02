@@ -131,3 +131,23 @@ the live-summon count BC_LIVE / AM_LIVE; the Pharaoh summon is not modelled at a
 real AI pathing, RNG interleave and player skill (the bot is a fixed rule set; cautious vs average differ
 little). Spot-check in the emulator per bal1_spells.md 4.5: D3 Vampire Lord, D4 Ogre, D7 Ghost room,
 D8 lair with the Skeleton summons (jump legality at the lair arrival, the Ogre closing the gap, the Tome fight geometry).
+
+## 8. APPLIED (2026-11-02, branch `feat/bal-apply`)
+User approved FINAL B. Applied table-only (0 code bytes) by `tools/apply_balance.py`
+(`balance_optionA.json` + `balance_pkgW3.json` + `balance_pkgFINAL_B.json`, merged in order; the script resolves every
+sim cell to its source line, prints old -> new and was re-checked by loading the build with and without the merged
+overrides: `Data(None) == Data(overrides)` for every rank row and kind cell). 56 cells changed (16 more were already at
+target): `ab_rank` rows in `src/combat_data3.asm` (Spark II/III range; Firebolt 5/6/10 MP, r8/8/10, 1d8 / 1d8+2 / 1d10+4, burst 1d4/1d4/1d6;
+Frost, Drain, Lightning; Power Strike MP 2/3/4), the `KXROW` resist columns (Spider / Black Widow no FIRE W; Skeleton line + Ghost + Poltergeist COLD I -> R;
+Necro / Bone Caller no DRAIN I; Mummy and Ogre no PHYS R), Ogre Warlord hp 36 / atk 4 / bonus +1 in `kind_tab` (`src/main.asm`) and the
+hand copies in `tools/levelgen.py` (`KROWS`, `KINFO`). Info-line strings (`src/strings.txt`, 17 lines) follow the table.
+
+Simulator, NO overrides, on the built image (10,000 games per cell, seed 1, `--jobs 8`):
+
+| Hero | cautious | average | reckless |
+|---|---|---|---|
+| Warrior | 47.3 [46.4,48.3] | **41.7** [40.7,42.6] | 18.3 [17.6,19.1] |
+| Mage | 41.8 [40.8,42.8] | **42.8** [41.9,43.8] | 15.1 [14.4,15.8] |
+
+Reproduces FINAL B (W 41.4 / M 43.4; cautious 46.9 / 41.8; reckless 18.6 / 15.5) within noise (+-0.7 pp; one seed here, two pooled in section 2). Gap average -1.2 pp.
+Survival at entry D2..D8, W average: 100 99 97 78 70 60 50; M average: 100 100 90 81 80 78 56.

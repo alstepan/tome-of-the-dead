@@ -50,6 +50,9 @@ from game_lib import (Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_RAT, K_SLIME, 
                       K_SKELETON, stand_y, split_frame, attr_at, frame_png)
 from proj3 import T, w16, World, Body, Rng  # noqa: E402
 import combat_tables as CT  # noqa: E402
+import textpack  # noqa: E402
+
+IMG = textpack.parse_emitted(os.path.join(os.environ.get("WZ_BUILD_DIR", str(Path(__file__).resolve().parent.parent / "build")), "text", "strings.asm"))
 
 GOLDEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden")
 UPDATE = "--update-golden" in sys.argv
@@ -354,7 +357,7 @@ def spells(h, p, check):
     # RANK1 auto-downcast: learned rank 3, MP only covers rank 2 / rank 1
     cast("Lightning III with MP 9 casts rank II (8 MP)", LIGHTNING, 3,
          [(1, sx + 2, 60), (2, sx + 6, 60), (5, sx + 10, 60)], hero_hp=120, mp=9)
-    cast("Firebolt III with MP 4 casts rank I (3 MP)", FIREBOLT, 3, [(1, sx + 3, 40), (2, sx + 4, 40)], mp=4)
+    cast("Firebolt III with MP 5 casts rank I (5 MP)", FIREBOLT, 3, [(1, sx + 3, 40), (2, sx + 4, 40)], mp=5)
 
     # --- S6: no MP ---
     scene([(1, sx + 3, 40)], learn={SPARK: 1}, mp=0)
@@ -363,8 +366,7 @@ def spells(h, p, check):
     t0 = p.rw("TURN_COUNTER")
     nt = p.no_turn("FIRE")
     raw = p.z.read_memory(S["LOG_TXT"] + slot * S["LOG_SLOT_LEN"], S["LOG_MAX"])
-    txt = bytes(raw).split(b"\0")[0].decode("latin-1")
-    # (the ring holds the token stream: "NO " is a dictionary token)
+    txt = textpack.expand(IMG, bytes(raw).split(b"\0")[0])   # the ring holds the token stream; the dictionary changes with the strings
     got = dict(no_turn=nt, tc=p.rw("TURN_COUNTER") - t0, mp=p.rb("MP"), pend=p.rb("TURN_PEND"),
                log=txt.endswith("MANA"))
     check("S6 Spark with 0 MP: refused, no turn, NO MANA", got == dict(no_turn=True, tc=0, mp=0, pend=0,
