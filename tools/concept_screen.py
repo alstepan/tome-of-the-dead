@@ -862,6 +862,9 @@ SCHEMES = [("BLUE KEEP", 0x0F, 0x01), ("RED CRYPT", 0x17, 0x02),
 
 # Animated large decor: glyph-swap frames (cells that differ between _fN blocks) + attr
 # cycles on named cells. step = ticks per animation step.
+# LOOK-1 (2026-11-02): the IN-GAME torches / big brazier no longer cycle attrs (RAG art, fixed $42,
+# bigdecor.grid <obj>_look1_f1/f2, tools/tiles_convert.py OBJ_SPEC). This table + the _fN blocks are
+# kept only for the concept sheets and the MENU torches (tools/menu_art.py, src/menu1.asm).
 BIG_ANIM = {
     "torch_tall": {"frames": 3, "step": 3, "cycle": {(0, 0): [0x46, 0x46, 0x42],
                                                      (1, 0): [0x46, 0x46, 0x42]}},

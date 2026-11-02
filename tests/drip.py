@@ -189,7 +189,7 @@ def exit_room(p, check, exit_, want):
     rm1 = bytes(p.z.read_memory(S["ROOM_MAP"], 32 * PLAY_ROWS))
     sd = p.z.read_memory(S["ROOM_DESC"] + room1 * S["RD_STRIDE"] + S["RD_SEED"], 2)
     want1 = model_room(rm1, p.rb("LVL_DEPTH"), sd[0] | sd[1] << 8)
-    na = p.rb("ANIM_N")                           # decor attr cycles / glyph swaps (W14's)
+    na = p.rb("ANIM_N")                           # decor glyph swaps (W14's)
     al = p.z.read_memory(S["ANIM_LIST"], 4 * na) if 0 < na <= 12 else b""
     anim = {(al[i], al[i + 1]) for i in range(0, len(al), 4)}
     bad = [cr for cr in p.bg_mismatch() + p.bg_mismatch_in(p.composed_frame()) if cr not in anim]

@@ -861,6 +861,9 @@ dh_lost         EQU  LN_VAL                    ; LOG-DMG: always mapped (log0.as
 dh_def:         DB   0
 dh_imm:         DB   0
 dh_weak:        DB   0
+                IF (($ & $FF) + 8) > $100      ; D2-DECOR: bank-3 code above moved: keep the table in one page
+                DS   $100 - ($ & $FF), 0       ; (no pad, 0 B, unless it would cross)
+                ENDIF
 dh_bit:         DB   1, 2, 4, 8, 16, 32, 64, 128   ; deal_hit's weak test: 1 << t
                 ASSERT (dh_bit >> 8) == ((dh_bit + 7) >> 8)
 dh_rsp:         DB   0

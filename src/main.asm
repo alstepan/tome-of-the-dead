@@ -554,7 +554,7 @@ enter_select:
 ; pages, K_MAX (32) B per array; no array crosses a page (KFIELD, feet_mod).
 ;==============================================================================
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
-                DS   (-($ + TILE_IDS + DT_ATTR_LEN)) & $FF, 0    ; B3B-5: tile_flags ends on the page
+                DS   (-($ + TILE_IDS)) & $FF, 0    ; B3B-5: tile_flags ends on the page
 ;------------------------------------------------------------------------------
 ; SEQ_ROWS — 3F-T2 the per-level sequence cache's rows (RUNTIME, written by R6
 ; pool6.asm / lowram.asm at a game start / level entry before any kind animates):
@@ -567,17 +567,6 @@ kind_tab_pad:                                  ; ALIGN padding starts here (head
 ;------------------------------------------------------------------------------
 seq_rows        EQU FRT - SQ_ROWS_LEN
                 ASSERT (seq_rows >> 8) == ((seq_rows + SQ_ROWS_LEN - 1) >> 8)
-;------------------------------------------------------------------------------
-; dt_attr_tab — B3B-10 decor_tick attr cycles, 8 steps per kind (concept-screen
-; §3.3): kind 1 flame (DT_HOT -> DT_RED -> DT_DIM: tall / slim torch bodies, braziers).
-; (DEC1: kind 2, the candle flicker, is gone with the candles.) Whole attr bytes: they override the cell's
-; paper (black on every cycled cell, see decor.asm DT_HOT). In the pad below
-; tile_flags: never crosses a page.
-;------------------------------------------------------------------------------
-dt_attr_tab:
-                DB   DT_HOT, DT_RED, DT_DIM, DT_HOT, DT_RED, DT_DIM, DT_HOT, DT_RED   ; 1 flame
-DT_ATTR_LEN     EQU  DT_KINDS * 8
-                ASSERT $ - dt_attr_tab == DT_ATTR_LEN && (dt_attr_tab >> 8) == (($ - 1) >> 8)
 ;------------------------------------------------------------------------------
 ; tile_flags — TILE_FLAGS[64] (D2, level_defs.asm TF_*), static, by tile id;
 ; the 64 B right below kind_tab (low byte $C0: cell_blocked adds the id with
@@ -722,7 +711,7 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
                 ASSERT LOWRAM_END <= LOWRAM_FREE_END
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), seq cache bytes ", /D, SEQB_LEN, ", free to seq_rows: ", /D, seq_rows - seq_bytes_end, " (+", /D, dt_attr_tab - kind_tab_pad, " B kind_tab ALIGN pad; bank 2 free ", /D, seq_rows - seq_bytes_end + dt_attr_tab - kind_tab_pad, "; seq_rows ", /H, seq_rows, " ", /D, SQ_ROWS_LEN, " B, FRT ", /H, FRT, " ", /D, FRT_MAX, " rows (", /D, FRT_MAX - FID_COUNT, " spare), FRT_GAP ", /D, FRT_GAP, "); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), seq cache bytes ", /D, SEQB_LEN, ", free to seq_rows: ", /D, seq_rows - seq_bytes_end, " (+", /D, tile_flags - kind_tab_pad, " B kind_tab ALIGN pad; bank 2 free ", /D, seq_rows - seq_bytes_end + tile_flags - kind_tab_pad, "; seq_rows ", /H, seq_rows, " ", /D, SQ_ROWS_LEN, " B, FRT ", /H, FRT, " ", /D, FRT_MAX, " rows (", /D, FRT_MAX - FID_COUNT, " spare), FRT_GAP ", /D, FRT_GAP, "); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
 
 ;==============================================================================
 ; BOOT BLOCK (3E-T1, memory levers a + d) — boot-only code + data in pool

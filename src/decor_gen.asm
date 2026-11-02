@@ -16,8 +16,8 @@
 ;   calls (o, col, storey, r0; the row comes from the object class: mount row 1, ceiling
 ;   row 0, floor row 7 at the bottom, patch / brick 1 + r0); (4) removed: the drips (D3-7 T6, ids 17 / 18
 ;   are the ammo floor glyphs) and the DEC1 bones pass (DEC2). An attempt
-;   places one object iff the budgets (<= 2 large animated, 4 glyph + 8 attr cells, 6
-;   patch / brick cells), the footprint (T_AIR; T_BRICK for the pillar), the class
+;   places one object iff the budgets (<= 2 large animated, 4 glyph-swap cells, 6
+;   patch / brick cells; LOOK-1: the flame attr-cycle budget is gone), the footprint (T_AIR; T_BRICK for the pillar), the class
 ;   support (T_PLAT / T_WALLF above a ceiling object / below a floor object) and the ring
 ;   (no ladder, no other decor: dg_bad) allow. ANIM_LIST contract: see tools/decorgen.py.
 ; Clobbers: A, BC, DE, HL.  Cold path (room entry): D1 measured ~120k T (W13 profile,
@@ -25,11 +25,8 @@
 ;==============================================================================
 F_MOSS          EQU 1               ; record flags (tools/decorgen.py)
 F_TILED         EQU 2
-DG_TRIES        EQU 12
 DG_MAX_LARGE    EQU 2
 DG_MAX_GLYPH    EQU 4
-DG_MAX_ATTR     EQU 8
-DG_MAX_WALL     EQU 6
 DG_PTRIES       EQU 8
 DG_MAX_COB      EQU 2
 DC_CEIL         EQU 1               ; object classes (record wh byte bits 5..7)
@@ -43,7 +40,6 @@ DC_COMP         EQU 5
                 xor  a
                 ld   (dg_nl), a
                 ld   (dg_ng), a
-                ld   (dg_na), a
                 ld   (dg_nw), a
                 ld   a, (LVL_DEPTH)
                 dec  a
@@ -59,9 +55,15 @@ DC_COMP         EQU 5
                 sub  c
                 add  a, DG_NCOM
                 ld   (dg_n), a                 ; menu size = common + this depth's
+                ld   hl, dg_wmax_tab           ; D2-DECOR: this depth's wall budget + 1 (DE = depth - 1)
+                add  hl, de
+                ld   a, (hl)
+                ld   (dg_wmax), a
                 call dg_patches                ; D1: patches, then cobwebs, then the menu
                 call dg_cobwebs
-                ld   b, DG_TRIES
+                ld   a, (dg_wmax)              ; menu tries = wall budget + 1 + DG_TRIES_ADD (12 / D2 19)
+                add  a, DG_TRIES_ADD
+                ld   b, a
 .t:             push bc
                 call dg_try
                 pop  bc
@@ -184,19 +186,17 @@ dg_obj:
                 sbc  a, a
                 and  T_BRICK
                 ld   (dg_req), a               ; T_BRICK for the brick class, else T_AIR
-                ; budget cost: B = glyph cells, C = attr cells
+                ; budget cost: B = glyph cells (LOOK-1: no attr-cycle cells any more; flag bit 4
+                ; and DEC2's bit 3 are unused)
                 ld   a, (dg_fl)
                 ld   e, a
-                ld   bc, 0
-                ld   a, (dg_w)
-                ld   d, a
+                ld   b, 0
                 bit  2, e
                 jr   z, .g3
-                ld   b, d
-.g3:            bit  4, e                      ; (DEC2: flag bit 3, glyph last col = cauldron, gone)
-                jr   z, .g4
-                ld   c, d
-.g4:            ld   (dg_da), bc               ; dg_da = C, dg_dg = B
+                ld   a, (dg_w)
+                ld   b, a
+.g3:            ld   a, b
+                ld   (dg_dg), a
                 ld   a, e
                 rlca                           ; CF = large animated
                 ld   a, (dg_nl)
@@ -207,17 +207,14 @@ dg_obj:
                 add  a, b
                 cp   DG_MAX_GLYPH + 1
                 ret  nc
-                ld   a, (dg_na)
-                add  a, c
-                cp   DG_MAX_ATTR + 1
-                ret  nc
                 ld   a, (dg_cls)
                 cp   DC_PATCH
                 jr   c, .fit
                 ld   a, (dg_nw)
                 ld   hl, dg_area
                 add  a, (hl)
-                cp   DG_MAX_WALL + 1
+                ld   hl, dg_wmax
+                cp   (hl)
                 ret  nc
                 ; fit test: the footprint must be the base tile ...
 .fit:           ld   a, (dg_row)
@@ -346,10 +343,6 @@ dg_obj:
                 ld   a, (dg_ng)
                 add  a, (hl)
                 ld   (dg_ng), a
-                dec  hl                        ; dg_da
-                ld   a, (dg_na)
-                add  a, (hl)
-                ld   (dg_na), a
 .nw:            ld   a, (dg_cls)
                 cp   DC_PATCH
                 ret  c                         ; only patch / brick / composite cells count
@@ -595,25 +588,16 @@ dg_nr:          ld   a, l                      ; HL += 32 (next map row, same co
 ; ANIM_LIST entry (col, row, type, phase) if the object animates it.
 ; Keeps BC, DE.
 dg_cell:
-                ld   a, (dg_fl)
-                ld   l, a
                 ld   a, d
                 or   a
-                jr   nz, .r1
-                bit  2, l                      ; row 0: glyph swap (all cells)
-                jr   z, .at
+                ret  nz                        ; only row 0 animates (LOOK-1: the flame attr row
+                ld   a, (dg_fl)                ; and DEC1's attr kinds are gone)
+                bit  2, a                      ; row 0: glyph swap (all cells)
+                ret  z
                 ld   hl, dg_alt
                 ld   a, (hl)                   ; type = alternate tile id (>= 16)
                 inc  (hl)
-                jr   .em
-.r1:            dec  a
-                jr   nz, .at
-                bit  4, l                      ; row 1: flame body, attr cycle 1
-                jr   z, .at
-                ld   a, 1
-                jr   .em
-.at:            ret                            ; (DEC1: the attr-all / candle kinds are gone)
-.em:            push de
+                push de
                 ld   d, a
                 ld   a, (dg_dst)               ; ANIM_N or ANIM_N2 (build_room_map)
                 ld   l, a
@@ -660,12 +644,15 @@ dg_rnd:
 ; by combat_data3.asm at $C100 (right after kx_tab: 64-aligned, no ALIGN pad).
 ; GENERATED by tools/decorgen.py --asm (edit the tool, re-run, paste)
 ; record (3 B): base id | w + h*4 + class*32 | flags (bit0 moss, 1 tiled, 2 glyph row 0, 3 unused (DEC2),
-;                 4 attr row 1, 5 / 6 unused (DEC1), 7 large animated)
+;                 4 / 5 / 6 unused (4 = the flame attr row: LOOK-1), 7 large animated)
 ; class 0 mount, 1 ceiling, 2 floor, 3 patch, 4 brick, 5 composite patch
 dg_start:       ; first per-level record of depth 1..8, then the end
                 DEFB 4, 8, 15, 19, 22, 25, 32, 35, 39
 dg_pk:          ; PATCH_A/B records at the head of each level's records (0 = composite)
                 DEFB 0, 2, 1, 1, 1, 2, 1, 0
+dg_wmax_tab:    ; per depth: wall-class cell budget + 1 (D2-DECOR); menu tries = that + DG_TRIES_ADD
+                DEFB 7, 14, 7, 7, 7, 7, 7, 7
+DG_TRIES_ADD    EQU 5
 dg_cob:         ; COBWEB left / right corner id per depth (0 = none)
                 DEFB  56,  58
                 DEFB  52,  54
@@ -682,45 +669,45 @@ dg_recs:
                 DEFB  28, 101, $00      ;  1 common WALL_DITHER
                 DEFB  29, 101, $00      ;  2 common WALL_PATCH
                 DEFB  30, 101, $00      ;  3 common WALL_FADE
-                DEFB  32,  18, $94      ;  4 D1 TORCH_TALL
+                DEFB  32,  18, $84      ;  4 D1 TORCH_TALL
                 DEFB  42,  19, $00      ;  5 D1 WINDOW_ARCH
                 DEFB  54,   9, $00      ;  6 D1 BANNER
                 DEFB  57,  37, $01      ;  7 D1 MOSS
                 DEFB  32, 106, $00      ;  8 D2 PATCH_A
                 DEFB  36, 107, $00      ;  9 D2 PATCH_B
-                DEFB  42,  13, $94      ; 10 D2 TORCH_SLIM
+                DEFB  42,  13, $84      ; 10 D2 TORCH_SLIM
                 DEFB  46,  73, $84      ; 11 D2 BRAZIER
                 DEFB  49,  10, $02      ; 12 D2 WINDOW_BAR
                 DEFB  50,   9, $00      ; 13 D2 BANNER
                 DEFB  53,  37, $01      ; 14 D2 MOSS
                 DEFB  52, 106, $00      ; 15 D3 PATCH_A
-                DEFB  32,  82, $94      ; 16 D3 BRAZIER_BIG
+                DEFB  32,  82, $84      ; 16 D3 BRAZIER_BIG
                 DEFB  42,  22, $00      ; 17 D3 BANNER_TALL
                 DEFB  56,  10, $02      ; 18 D3 BOOKSHELF
                 DEFB  52, 106, $00      ; 19 D4 PATCH_A
-                DEFB  32,  18, $94      ; 20 D4 TORCH_TALL
+                DEFB  32,  18, $84      ; 20 D4 TORCH_TALL
                 DEFB  42,  22, $00      ; 21 D4 BANNER_TALL
                 DEFB  54, 106, $00      ; 22 D5 PATCH_A
-                DEFB  32,  82, $94      ; 23 D5 BRAZIER_BIG
+                DEFB  32,  82, $84      ; 23 D5 BRAZIER_BIG
                 DEFB  42,  19, $00      ; 24 D5 WINDOW_ARCH
                 DEFB  39, 106, $00      ; 25 D6 PATCH_A
                 DEFB  43, 107, $00      ; 26 D6 PATCH_B
-                DEFB  32,  13, $94      ; 27 D6 TORCH_SLIM
+                DEFB  32,  13, $84      ; 27 D6 TORCH_SLIM
                 DEFB  36,  10, $02      ; 28 D6 BOOKSHELF
                 DEFB  37,   9, $00      ; 29 D6 BANNER
                 DEFB  49,  10, $02      ; 30 D6 WINDOW_BAR
                 DEFB  51,  37, $01      ; 31 D6 MOSS
                 DEFB  52, 107, $00      ; 32 D7 PATCH_B
-                DEFB  32,  18, $94      ; 33 D7 TORCH_TALL
+                DEFB  32,  18, $84      ; 33 D7 TORCH_TALL
                 DEFB  42,  22, $00      ; 34 D7 BANNER_TALL
-                DEFB  32,  82, $94      ; 35 D8 BRAZIER_BIG
+                DEFB  32,  82, $84      ; 35 D8 BRAZIER_BIG
                 DEFB  42,  10, $02      ; 36 D8 BOOKSHELF
                 DEFB  43,  22, $00      ; 37 D8 BANNER_TALL
-                DEFB  53,  13, $94      ; 38 D8 TORCH_SLIM
+                DEFB  53,  13, $84      ; 38 D8 TORCH_SLIM
 DG_NCOM         EQU 4
 DG_NREC         EQU 39
 
-; state (bank 3 is RAM). dg_da before dg_dg (one `ld (dg_da), bc`).
+; state (bank 3 is RAM).
 dg_cmin:        DEFB 1, 1, 1, 2, 0, 2     ; col minimum by class (mount ceiling floor patch brick composite)
 dg_rng:         DW   0
 dg_cls:         DB   0
@@ -736,8 +723,8 @@ dg_first:       DB   0
 dg_n:           DB   0
 dg_nl:          DB   0
 dg_ng:          DB   0
-dg_na:          DB   0
 dg_nw:          DB   0
+dg_wmax:        DB   0                 ; wall-class cell budget + 1 of the room's depth
 dg_base:        DB   0
 dg_row:         DB   0
 dg_h:           DB   0
@@ -750,13 +737,11 @@ dg_req:         DB   0
 dg_id:          DB   0
 dg_alt:         DB   0
 dg_ph:          DB   0
-dg_da:          DB   0
 dg_dg:          DB   0
                 ASSERT T_AIR == 0 && T_BRICK == 2 && F_MOSS == 1 && F_TILED == 2
                 ASSERT T_HOLE_R == T_LAD_L + 5 && ANIM_MAX == 12 && AL_STRIDE == 4
                 ASSERT (ANIM_N >> 8) == ((ANIM_LIST + ANIM_MAX * AL_STRIDE) >> 8) && PLAY_ROWS < 32
                 ASSERT (ANIM_N2 >> 8) == ((ANIM_LIST2 + ANIM_MAX * AL_STRIDE) >> 8) && ANIM_LIST2 == ANIM_N2 + 1
-                ASSERT dg_dg == dg_da + 1
                 ASSERT T_END_L == 19 && T_RUBBLE == 27 && T_DOOR_JAMB_L == 11 && T_DOOR_JAMB_R == 14
                 ASSERT T_PLAT == 1 && T_WALLF == 3 && STOREY_ROWS == 9
                 ASSERT (dg_bad & 63) == 0 && TILE_IDS == 64 && DG_NREC * 3 < 256 && (dg_recs - dg_crec) == 3

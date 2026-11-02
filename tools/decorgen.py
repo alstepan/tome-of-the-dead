@@ -39,7 +39,7 @@ whether or not it places anything:
     row = 9*s + r0                     (so the object sits in rows 9s..9s+5:
                                         never the 2 rows above a floor)
 Then (no more rng): reject if the budgets would be exceeded (large animated
-objects <= 2, glyph-swap cells <= 4, attr-cycle cells <= 8, wall-class cells
+objects <= 2, glyph-swap cells <= 4, wall-class cells
 <= 6); reject unless every footprint cell is exactly the base tile (T_AIR for
 air-class, T_BRICK for wall-class: so never door / arch / lintel / jamb /
 ladder / pit / cap / rubble / potion cells, and wall decor never touches a
@@ -48,8 +48,9 @@ ladder cell (T_LAD_L..T_HOLE_R).  Placed objects are row-major ids
 base + dy*w + dx (tiled: all base).  Solidity follows the cell class: wall-class
 ids go on T_BRICK only, air-class on T_AIR only (designer, game.md 1.2).
 
-ANIM_LIST contract for B3B-10 (AL_TYPE): 1 .. 15 = attr cycle kind (1 flame
-$46 -> $42 -> $06; 2 was the candle, gone with DEC1); >= 16 = glyph swap, the value is the ALTERNATE
+ANIM_LIST contract for B3B-10 (AL_TYPE): LOOK-1 (2026-11-02): the flame attr cycle (kind 1,
+$46 -> $42 -> $06) is gone, the flame cells keep the fixed $42 of their tile; every entry is a
+glyph swap (AL_TYPE >= 16), the value is the ALTERNATE
 tile id (the map keeps frame 1; decor_tick toggles map id <-> AL_TYPE).
 AL_PHASE = (col + row) & 7 of the object's top-left (an object swaps in step).
 Entries are emitted per object, row-major.
@@ -68,7 +69,22 @@ ROWS, COLS = D["PLAY_ROWS"], 32
 T_AIR, T_BRICK = D["T_AIR"], D["T_BRICK"]
 T_LAD_L, T_HOLE_R = D["T_LAD_L"], D["T_HOLE_R"]
 # D3-7 T6: the B3B-13b drips are gone (ids 17 / 18 = the ammo floor glyphs, game.md §6.3)
-MAX_LARGE, MAX_GLYPH, MAX_ATTR, MAX_WALL = 2, 4, 8, 6
+MAX_LARGE, MAX_GLYPH, MAX_WALL = 2, 4, 6   # LOOK-1: no attr-cycle budget any more
+# D2-DECOR (user 2026-11-02, "D2 looks empty"): D2's set is all small objects (1x1..1x3, 3.6 visible
+# objects but only ~16 decor cells a room vs 24-25 on D1/3/4/5/7/8) and ~48 % of the menu attempts of
+# every level die on the spent 6-cell wall budget.  Per-depth wall budget (wall-class cells) and menu
+# tries: D2 wall 13 / tries 19 (tries = wall + 6; 12 / 6 elsewhere) -> D2 ~24.6 cells a room.
+# The Z80 holds one byte per depth: wall budget + 1 (dg_wmax_tab); tries = that + DG_TRIES_ADD (5).
+WALL_MAX = {d: MAX_WALL for d in range(1, 9)}
+WALL_MAX[2] = 13
+TRIES_ADD = 5
+
+
+def tries_of(depth):
+    return WALL_MAX[depth] + 1 + TRIES_ADD
+
+
+assert tries_of(1) == 12 and tries_of(3) == 12   # TRIES: the default depths keep their 12 attempts
 
 # object classes (record wh byte bits 5..7)
 C_MOUNT, C_CEIL, C_FLOOR, C_PATCH, C_BRICK, C_COMP = 0, 1, 2, 3, 4, 5
@@ -81,8 +97,9 @@ CLASS_OF = {"TORCH_TALL": C_MOUNT, "TORCH_SLIM": C_MOUNT, "WINDOW_ARCH": C_MOUNT
 PATCH_TRIES = 8
 MAX_COB = 2
 # flags byte of an object record (bit 0 = moss: a ceiling object that needs a floor above)
-# (bits 5 / 6 were attr-all / attr type 2: candles + small torch, gone with DEC1; never set now)
-F_MOSS, F_TILED, F_GROW0, F_AROW1, F_LARGE = 1, 2, 4, 16, 128   # bit 3 (glyph last col) was the cauldron: DEC2, gone
+# (bit 3 glyph last col = the cauldron: DEC2, gone; bit 4 attr row 1 = the flame cycle: LOOK-1, gone;
+#  bits 5 / 6 were attr-all / attr type 2: candles + small torch, gone with DEC1; never set now)
+F_MOSS, F_TILED, F_GROW0, F_LARGE = 1, 2, 4, 128
 
 # common objects (all depths): name, base, w, h, flags
 COMMON = [
@@ -98,8 +115,8 @@ COMMON = [o + (CLASS_OF[o[0]],) for o in COMMON]
 COMP = ("PATCH3", 0, 2, 2, 0, C_COMP)
 COMP_AREA = 3
 TILED_OBJ = ("BOOKSHELF", "WINDOW_BAR")
-ANIM_FLAGS = {"TORCH_TALL": F_GROW0 | F_AROW1 | F_LARGE, "BRAZIER_BIG": F_GROW0 | F_AROW1 | F_LARGE,
-              "TORCH_SLIM": F_GROW0 | F_AROW1 | F_LARGE, "BRAZIER": F_GROW0 | F_LARGE}
+ANIM_FLAGS = {"TORCH_TALL": F_GROW0 | F_LARGE, "BRAZIER_BIG": F_GROW0 | F_LARGE,
+              "TORCH_SLIM": F_GROW0 | F_LARGE, "BRAZIER": F_GROW0 | F_LARGE}
 
 
 def level_objects():
@@ -146,8 +163,6 @@ def level_objects():
             assert len(diff) == want, (d, name, diff)
         else:
             assert not fl & F_GROW0, (d, name)
-        if fl & F_AROW1:
-            assert h >= 2
         out[d].append((name, base, w, h, fl, CLASS_OF[name]))
     for d in out:
         out[d].sort(key=lambda o: o[0] not in ("PATCH_A", "PATCH_B"))   # stable: patches first
@@ -186,11 +201,8 @@ class Rng:
 
 
 def counts(w, h, fl):
-    """(glyph cells, attr cells) an object adds to the room budgets."""
-    area = w * h
-    g = w if fl & F_GROW0 else 0
-    a = w if fl & F_AROW1 else 0
-    return g, a
+    """glyph cells an object adds to the room budget (LOOK-1: no attr-cycle cells any more)."""
+    return w if fl & F_GROW0 else 0
 
 
 def is_decor(t):
@@ -230,17 +242,17 @@ def fits(m, row, col, w, h, cls, fl):
 
 class Room:
     """decorate() state: budgets + ANIM list."""
-    def __init__(self, m, live):
-        self.m, self.live = list(m), live
+    def __init__(self, m, live, maxwall=MAX_WALL):
+        self.m, self.live, self.maxwall = list(m), live, maxwall
         self.anim = []
-        self.nl = self.ng = self.na = self.nw = 0
+        self.nl = self.ng = self.nw = 0
 
     def budget_ok(self, w, h, fl, cls, area):
-        dg, da = counts(w, h, fl)
+        dg = counts(w, h, fl)
         large = 1 if fl & F_LARGE else 0
-        if self.nl + large > MAX_LARGE or self.ng + dg > MAX_GLYPH or self.na + da > MAX_ATTR:
+        if self.nl + large > MAX_LARGE or self.ng + dg > MAX_GLYPH:
             return False
-        if cls in (C_PATCH, C_BRICK, C_COMP) and self.nw + area > MAX_WALL:
+        if cls in (C_PATCH, C_BRICK, C_COMP) and self.nw + area > self.maxwall:
             return False
         return True
 
@@ -281,14 +293,10 @@ class Room:
                 typ = 0
                 if dy == 0 and fl & F_GROW0:
                     typ, alt = alt, alt + 1
-                elif dy == 1 and fl & F_AROW1:
-                    typ = 1
                 if typ and self.live:
                     self.anim += [col + dx, row + dy, typ, ph]
-        dg, da = counts(w, h, fl)
         self.nl += 1 if fl & F_LARGE else 0
-        self.ng += dg
-        self.na += da
+        self.ng += counts(w, h, fl)
         self.nw += area if cls in (C_PATCH, C_BRICK) else 0
         return True
 
@@ -340,11 +348,11 @@ def cobwebs(room, rng, depth):
 
 def decorate(m, depth, seed, live=True):
     rng = Rng(seed)
-    room = Room(m, live)
+    room = Room(m, live, WALL_MAX[depth])
     patch_pass(room, rng, depth)
     cobwebs(room, rng, depth)
     mn = menu(depth)
-    for _ in range(TRIES):
+    for _ in range(tries_of(depth)):
         o = mn[rng.rnd(len(mn))]
         room.try_place(rng, o, None)
     return room.m, room.anim
@@ -353,12 +361,15 @@ def decorate(m, depth, seed, live=True):
 def emit_asm():
     out = ["; GENERATED by tools/decorgen.py --asm (edit the tool, re-run, paste)",
            "; record (3 B): base id | w + h*4 + class*32 | flags (bit0 moss, 1 tiled, 2 glyph row 0, 3 unused (DEC2),",
-           ";                 4 attr row 1, 5 / 6 unused (DEC1), 7 large animated)",
+           ";                 4 / 5 / 6 unused (4 = the flame attr row: LOOK-1), 7 large animated)",
            "; class 0 mount, 1 ceiling, 2 floor, 3 patch, 4 brick, 5 composite patch",
            "dg_start:       ; first per-level record of depth 1..8, then the end"]
     out.append("                DEFB " + ", ".join(str(LEVEL_FIRST[d]) for d in range(1, 10)))
     out.append("dg_pk:          ; PATCH_A/B records at the head of each level's records (0 = composite)")
     out.append("                DEFB " + ", ".join(str(PATCHK[d]) for d in range(1, 9)))
+    out.append("dg_wmax_tab:    ; per depth: wall-class cell budget + 1 (D2-DECOR); menu tries = that + DG_TRIES_ADD")
+    out.append("                DEFB " + ", ".join(str(WALL_MAX[d] + 1) for d in range(1, 9)))
+    out.append(f"DG_TRIES_ADD    EQU {TRIES_ADD}")
     out.append("dg_cob:         ; COBWEB left / right corner id per depth (0 = none)")
     for d in range(1, 9):
         l, r = COBWEB[d] or (0, 0)
