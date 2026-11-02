@@ -111,6 +111,13 @@ FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scena
   game.md §1.4); `tests/game_lib.py` refuses such a `.sna` (`.sym`
   `KIT_DEBUG` = 1; `GAME_ALLOW_DEBUG_KIT=1` overrides for kit scenarios), and
   `zx0_pool.py` builds its private copy with `DEBUG_KIT=0`.
+- **RECLAIM-C2: the release build has no render trace** (`ANIM_TRACE`, default
+  `ANIM_TRACE_ON` = `DEBUG_KIT`). `tests/game.py`, run as a script on a build
+  without it, assembles a private `-DDEBUG_KIT=0 -DANIM_TRACE_ON=1` copy (~5 s,
+  temp dir) and re-runs itself on it (`WZ_BUILD_DIR`); the gate command stays
+  `tools/build.sh -DDEBUG_KIT=0`. Build with `-DANIM_TRACE_ON=1` yourself to
+  skip the rebuild (e.g. a variant build). `budget.py` measures the release
+  build; `Proto.clear_trace` / `trace_fids` raise on a build without a trace.
 - **B3B-12 start mode:** new games start on a generated D1 by default.
   `game_lib.Proto.load()` pokes `proto_start = 1` after every load (and #50
   after the tape boot), so every PROTO-room scenario keeps rooms A-D; set

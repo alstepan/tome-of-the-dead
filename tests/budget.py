@@ -20,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.argv = [sys.argv[0]] + ["999"]           # keep game.py's item filter inert
 import game  # noqa: E402
-from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, EF_ACTIVE, EF_HOSTILE, EF_LEFT, stand_y  # noqa: E402
+from game_lib import Harness, S, HAS_TRACE, EMU_ARGS, K_KNIGHT, K_WIZARD, EF_ACTIVE, EF_HOSTILE, EF_LEFT, stand_y  # noqa: E402
 
 BUDGET = 2 * 70908
 CAP = 126000                                      # D5: worst tick incl. the panel item
@@ -1128,9 +1128,11 @@ def run_scenario(h, scen):
     swing = 0
     for key, n in keys:
         for _ in range(n):
-            p.clear_trace()
+            if HAS_TRACE:                         # RECLAIM-C2: release builds have no trace
+                p.clear_trace()
             st.turn(key)
-            swing += S["FID_wizard_staffswing"] in p.trace_fids(0)
+            if HAS_TRACE:
+                swing += S["FID_wizard_staffswing"] in p.trace_fids(0)
     st.close()
     st.trap_ev = trap_report(p, scen[5]) if len(scen) > 5 and scen[5] in TRAPS else None
     if len(scen) > 5 and scen[5] == "umix":         # the uses really happened (bag / FOOD / statuses)
@@ -1237,7 +1239,8 @@ def run_scenario(h, scen):
               f" ROOM_MAP, +37 T/cell, already in these ticks);"
               f" {sum(st.casts)}/{len(st.casts)} fx_start accepted, {st.fx_ticks} ticks with FX live", flush=True)
     if len(scen) > 3:                             # C3-7: did the staff swing run?
-        print(f"staff swings   : {swing} turns drew STAFF_SWING", flush=True)
+        print(f"staff swings   : {swing if HAS_TRACE else 'n/a (no ANIM_TRACE: release build)'}"
+              f" turns drew STAFF_SWING", flush=True)
     dts = [sp.get("decor_tick", 0) for _, sp in st.ticks]
     print(f"decor_tick     : {'on' if DECOR else 'off'}, max {max(dts)} T, mean {sum(dts) // len(dts)} T"
           f" (incl. the call / panel test to panel_tick)", flush=True)

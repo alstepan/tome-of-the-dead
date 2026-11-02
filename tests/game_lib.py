@@ -51,6 +51,7 @@ def load_syms(path=SYM):
 
 
 S = load_syms()
+HAS_TRACE = "ANIM_TRACE" in S   # RECLAIM-C2: release builds have no render trace
 F3 = bool(S.get("F3_GEN", 0))   # P3: the build's generator mode (default 1): oracles call generate(..., f3=F3)
 
 
@@ -542,7 +543,11 @@ class Proto:
             self.turn("WAIT")
 
     # --- trace --------------------------------------------------------------
+    # RECLAIM-C2: ANIM_TRACE exists only in -DANIM_TRACE_ON=1 builds (the kit
+    # build, or -DDEBUG_KIT=0 -DANIM_TRACE_ON=1; tests/game.py makes one itself)
     def clear_trace(self):
+        if not HAS_TRACE:
+            raise RuntimeError("this build has no ANIM_TRACE: rebuild with -DANIM_TRACE_ON=1")
         self.z.cmd("write-memory %d %s" % (S["ANIM_TRACE"], " ".join(["255"] * 32)))
         self.wb("ANIM_TRACE_IDX", 0)
 

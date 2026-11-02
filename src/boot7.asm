@@ -119,13 +119,17 @@ new_game:
                 ld   hl, 0
                 ld   (TURN_COUNTER), hl
                 ld   (TICK_COUNTER), hl        ; per-game test observables
-                ld   hl, ANIM_TRACE            ; (OVERRUN_COUNT, GEN_OVERFLOW
-                ld   de, ANIM_TRACE + 1        ; stay "since boot")
+    IF ANIM_TRACE_ON                          ; (OVERRUN_COUNT, GEN_OVERFLOW
+                ld   hl, ANIM_TRACE            ; stay "since boot")
+                ld   de, ANIM_TRACE + 1
                 ld   bc, ANIM_TRACE_LEN - 1
                 ld   (hl), $FF
                 ldir
+    ENDIF
                 xor  a
+    IF ANIM_TRACE_ON
                 ld   (ANIM_TRACE_IDX), a
+    ENDIF
                 ld   (BLIT_MISS), a
                 ld   (DMG_OVERFLOW), a
                 ld   (CLIP_TRAP), a

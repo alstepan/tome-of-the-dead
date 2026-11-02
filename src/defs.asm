@@ -340,7 +340,8 @@ R_LEFT          EQU 8               ; desired facing (0 / EF_LEFT)
 R_ATTR          EQU 9               ; desired attr
 R_DATTR         EQU 10              ; attr last stamped
 R_DIRTY         EQU 11              ; DIRTY_* class this tick
-R_LOG           EQU 12              ; 1 = log this draw in ANIM_TRACE
+R_LOG           EQU 12              ; 1 = log this draw in ANIM_TRACE (ANIM_TRACE_ON only:
+                                    ; unwritten / unread in a release build)
 R_TINT          EQU 13              ; D3-8e2: the body attr (kind / status tint) last shown with
                                     ; no reaction pending: kept while one is (render; R_ATTR | 4)
 R_MK            EQU 14              ; D3-8d: the slot's status mark as drawn (0 = none; mark.asm:
@@ -386,6 +387,13 @@ ISR_SAVE_ALT    EQU 0                           ;     (needed once BOTH the play
 DEBUG_KIT       EQU 1                           ;     start kit (game.md §1.4 "Start kit", never in a
     ENDIF                                       ;     release tape); suites + goldens run on -DDEBUG_KIT=0
 KIT_DEBUG       EQU DEBUG_KIT                   ; (.sym: tests/game_lib.py refuses a kit build)
+    IFNDEF ANIM_TRACE_ON                        ; RECLAIM-C2: 1 = render logs (slot, fid) per drawn
+ANIM_TRACE_ON   EQU DEBUG_KIT                   ;     frame change in ANIM_TRACE (test observable);
+    ENDIF                                       ;     default follows DEBUG_KIT: the release tape
+                                                ;     has none (bank 2 / bank 7 / render T saved).
+                                                ;     tests/game.py builds -DDEBUG_KIT=0
+                                                ;     -DANIM_TRACE_ON=1 privately when build/ lacks it
+                ASSERT ANIM_TRACE_ON == 0 || ANIM_TRACE_ON == 1
     IFNDEF F3_GEN                               ; 3F switch == tools/levelgen.py generate(..., f3=True):
 F3_GEN          EQU 1                           ;     LVL_FLAGS = 0 (grate shut, all depths), the D8
     ENDIF                                       ;     Sanctum leaf + the Tome ending (P3: default 1);
@@ -412,13 +420,17 @@ INPUT_REPEAT    EQU $BF16           ; 1 = hold repeats (default); 0 = edge-trigg
 ANIM_FREEZE     EQU $BF17           ; 1 = resting sprites hold IDLE frame 0
 PORT_7FFD_SHADOW EQU $BF18          ; last value written to $7FFD
 OVERRUN_COUNT   EQU $BF19           ; word: ticks that exceeded 2 frames (t-o)
+    IF ANIM_TRACE_ON                ; (release: $BF1B and $BF20..$BF3F unused, no symbol)
 ANIM_TRACE_IDX  EQU $BF1B           ; next write offset into ANIM_TRACE (0..30, even)
+    ENDIF
 LAST_TICK_FRAME EQU $BF1C           ; SYS_FRAMES low byte at the current tick start
 TURN_TICK       EQU $BF1D           ; ticks elapsed in the current ANIM phase
 NEED_RELEASE    EQU $BF1E           ; edge-trigger latch (INPUT_REPEAT = 0)
 EXIT_KIND       EQU $BF1F           ; pending exit after this turn's anim (EX_*)
+    IF ANIM_TRACE_ON
 ANIM_TRACE      EQU $BF20           ; 32 B ring: (slot, frame_id) per drawn change
 ANIM_TRACE_LEN  EQU 32
+    ENDIF
 BLIT_MISS       EQU $BF40           ; count: stationary frame asked at a missing shift
 GEN_OVERFLOW    EQU $BF41           ; 1 if the pre-shift pool ran out (build bug)
 ALLOC_IDX       EQU $BF42           ; pool bank index 0..2
