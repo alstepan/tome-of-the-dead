@@ -234,7 +234,7 @@ def main():
     for k, (hp, atk, eva, die, bon, per, wt) in K3.items():
         chk(f"kind_tab[{k}] hp/atk/eva/die/bonus/period",
             [kcol(sym["KT_HP"], k), kcol(sym["KT_ATK"], k), kcol(sym["KT_EVA"], k), kcol(sym["KT_DIE"], k),
-             kcol(sym["KT_BONUS"], k), kcol(sym["KT_PERIOD"], k)], [hp, atk, eva, die, bon, per])
+             kcol(sym["KT_BONUS"], k), 2 if kcol(sym["KT_FLAGS"], k) & sym["KF_SLOW"] else 1], [hp, atk, eva, die, bon, per])   # RECLAIM-C (b): period = KF_SLOW
         chk(f"lp_wt[{k}]", [kcol(sym["KT_REACH"], k)], [wt])
     # tiers keep their base's body / flags / BH (§9.6), differ only in the ink from it
     for tier, base in ((18, 6), (19, 6), (20, 7), (21, 4), (22, 9), (23, 3), (24, 3), (25, 5),

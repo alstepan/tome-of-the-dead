@@ -125,15 +125,21 @@ menu_wait:
 ; menu_static — torches, title, subtitle, ornament, footer, previews.
 ;------------------------------------------------------------------------------
 menu_static:
-                ; torches: the static lower cells (frame 0 on top: menu_torch)
+                ; torches: the static lower cells (frame 0 on top: menu_torch).
+                ; RECLAIM-C (d): they are the bank-7 tileset run tset_pool[MENU_TORCH_POOL_IX..]
+                ; (byte-checked in main.asm): fetched into MENU_TORCH_BUF (-36 B bank 1, +17 bank 2)
+                ld   hl, tset_pool + 8 * MENU_TORCH_POOL_IX
+                ld   de, MENU_TORCH_BUF
+                ld   bc, MENU_TORCH_STATIC_LEN
+                call ldir7
                 ld   c, MENU_TORCH_COL_L
                 call .torch
                 ld   c, MENU_TORCH_COL_R
                 call .torch
-                ld   a, 3
-                ld   (torch_t), a              ; draw frame 0 now
-                xor  a
-                ld   (torch_k), a
+                ld   a, 1
+                ld   (torch_t), a              ; draw now ...
+                ld   (torch_k), a              ; ... frame 0 (menu_torch flips k first): the
+                                               ; same picture frozen or not (goldens)
                 call menu_torch
                 ; title: lines of 16x16 glyphs, 2 x 2 cells
                 ld   hl, menu_title_lines
@@ -175,7 +181,7 @@ menu_static:
                 jp   menu_previews
 ; .torch — C = col: the 6 static cells (rows 1-3) and the 8 attrs.
 .torch:         push bc
-                ld   hl, menu_torch_static
+                ld   hl, MENU_TORCH_BUF
                 ld   b, 1
 .tr:            push bc
                 call mcell                     ; DE = bitmap line 0 of (B, C)
@@ -289,8 +295,11 @@ menu_orn_b:                                    ; B = row (3E-T2: the bag page's 
                 ret
 
 ;------------------------------------------------------------------------------
-; menu_torch — every MENU_TORCH_STEP frames: the next flame frame on both
-; torches (the right one a frame ahead) + the flame-tip attr cycle.
+; menu_torch — every MENU_TORCH_STEP frames (8 = 160 ms, the decor flames' rate,
+; LOOK-1): the other flame frame on both torches (the right one a frame ahead).
+; LOOK-1: fixed attrs (written by menu_static), no flame-tip cycle. RECLAIM-C (d):
+; the frame's 2 cells come from the bank-7 tileset (tset_pool, the D1 tall torch)
+; through ldir7 into MENU_TORCH_FBUF.  Clobbers: A, BC, DE, HL.  ~1.5k T a swap
 ;------------------------------------------------------------------------------
 menu_torch:
                 ld   hl, torch_t
@@ -299,53 +308,38 @@ menu_torch:
                 ld   (hl), MENU_TORCH_STEP
                 ld   hl, torch_k
                 ld   a, (hl)
-                inc  a
-                cp   MENU_TORCH_FRAMES
-                jr   c, .k
-                xor  a
-.k:             ld   (hl), a
+                xor  1                         ; 2 frames
+                ld   (hl), a
                 ld   a, (ANIM_FREEZE)          ; goldens: hold frame 0 (as the sprites'
                 or   a                         ; IDLE frames do)
                 jr   z, .nf
-                xor  a
-                ld   (hl), a
-.nf:
+                ld   (hl), 0
+.nf:            ld   a, (hl)
+                push af
                 ld   c, MENU_TORCH_COL_L
                 call .one
-                ld   a, (torch_k)
-                inc  a
-                cp   MENU_TORCH_FRAMES
-                jr   c, .k2
-                xor  a
-.k2:            ld   c, MENU_TORCH_COL_R
-.one:           ld   e, a                      ; A = frame
-                add  a, a
-                add  a, a
-                add  a, a
-                add  a, a                      ; * 16
+                pop  af
+                xor  1
+                ld   c, MENU_TORCH_COL_R
+.one:           push bc                        ; A = frame 0 / 1, C = col
+                rrca
+                rrca                           ; A = frame * 8 * MENU_TORCH_FSTEP_IX
                 ld   l, a
                 ld   h, 0
-                push de
-                ld   de, menu_torch_swap
+                ld   de, tset_pool + 8 * MENU_TORCH_F0_IX
                 add  hl, de
+                ld   de, MENU_TORCH_FBUF
+                ld   bc, MENU_TORCH_SWAP_BYTES
+                call ldir7
+                pop  bc
+                ld   hl, MENU_TORCH_FBUF
                 ld   b, 0
                 call mcell
                 call copy8
                 inc  c
                 call mcell
-                call copy8
-                dec  c
-                pop  de
-                ld   d, 0
-                ld   hl, menu_torch_cycle
-                add  hl, de
-                ld   b, 0
-                call mattr                     ; DE = attr (0, C) (clobbers A)
-                ld   a, (hl)
-                ld   (de), a
-                inc  e
-                ld   (de), a
-                ret
+                jp   copy8
+                ASSERT MENU_TORCH_FRAMES == 2 && MENU_TORCH_FSTEP_IX == 8 && MENU_TORCH_SWAP_ROWS == 1
 
 ;------------------------------------------------------------------------------
 ; menu_items — the 4 items (menu font); no cursor (digits-only, C3-6b).
@@ -1126,26 +1120,9 @@ page_post:      ld   hl, (PAGE_VERB)           ; L = verb, H = slot (PAGE_SLOT f
                 ld   hl, bag_discard           ; R6: the whole stack, HAS_BOW for the bow
                 call far6
                 xor  a                         ; no turn
-.lat:           and  FXR_TURN
-                push af                        ; L out: 1 = the verb spent the turn
-                xor  a
-                ld   (PAGE_OPEN), a
-                ld   (INTENT), a
-                ld   (DN_T), a
-                ld   (DN_COMMIT), a
-                ld   a, (STICK)                ; no stick edge from the page's frames
-                ld   (STICK_OLD), a
-                and  JOY_DIRS
-                ld   (EXIT_LOCK), a            ; a held direction waits for its release
-                ld   a, FS_USED                ; a held FIRE is not a tap
-                ld   (FIRE_ST), a
-                ld   a, (PLAYER_SC)            ; no shortcut edge either
-                ld   (SC_OLD), a
-                call resync_tick               ; the page time is not a tick overrun
-                pop  af
-                ld   l, a                      ; L = 1 turn spent (far1 passes HL out)
-                ret
-                ASSERT FXR_TURN == 1 && PAGE_SLOT == PAGE_VERB + 1
+.lat:           ld   hl, page_lat3             ; RECLAIM-C (e): the epilogue is bank 3 (far3 passes
+                jp   far3                      ; A in, HL out: L = 1 the verb spent the turn)
+                ASSERT PAGE_SLOT == PAGE_VERB + 1
 
 ;------------------------------------------------------------------------------
 ; end_card — far1 from end_screen (first tick of GS_DEAD / GS_WIN): A = the

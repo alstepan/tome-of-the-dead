@@ -197,6 +197,8 @@ AY_LEN          EQU ay_code_end - AY_RESERVE
                 ORG  TSET_BASE
                 INCLUDE "../assets/gfx/tiles/tilesets.asm"
 TSET_LEN        EQU tilesets_end - tilesets
+                MENU_TORCH_CHECK tset_pool     ; RECLAIM-C (d) + LOOK-1: the menu torch's glyphs (static run + the 2 flame
+                                               ; frames) are these tset_pool glyphs (menu1 reads them, ldir7): byte-equal
 b7h_code:
                 INCLUDE "tiles7.asm"           ; MEM-RECLAIM w2a: level_tiles7 (M0: from the low bank-7 block)
                 INCLUDE "stat7.asm"            ; STATS1 S1: es_stats (the end card's KILLS / TURNS rows; far7 from end_card)
@@ -639,20 +641,18 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 LP_WT_ROWS                     ; weights, ONE copy read by bank 3 (kind_wt / levelgen) and R6 (lp_wt6 is gone): H = kind_tab page, L = $E0 + row
                 DS   K_MAX - K_COUNT, 0
                 ASSERT lp_wt == kind_tab + KT_REACH && K_COUNT <= K_MAX && (lp_wt & $FF) + K_COUNT <= $100
-                KROW   1,  1,  1,  1,  1,  1,  1,  1,  2,   1,  2,  1,  1,  2,  1,  1,  1,  1,   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1          ; KT_PERIOD (Slime, Vampire, Mummy: acts every 2)
+                ; RECLAIM-C (b): no KT_PERIOD column — KF_SLOW (acts every 2) on the Slime, Vampire, Mummy
                 ; B3B-5: skeleton + goblin are openers (game.md §9.1); the heroes
                 ; open by bump in try_horizontal, not through KF_OPENER. 3F-T3: climbers were only
                 ; the Goblin, Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
                 ; + the Orc (Berserker, Bouncer), Necro (Bone Caller), Archer (Sniper) on the shared
                 ; climb pair; VAMP-BOSS (user 2026-11-02): + the Vampire (and the Lord) on the shared pair; not Archmage / DK / Ogre / Mummy; Mummy / Ogre / DK do not open doors
-                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_FLYER|KF_BAT, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, 0, KF_CLIMBER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL  ; KT_FLAGS
+                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_FLYER|KF_BAT, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, KF_SLOW, KF_CLIMBER, KF_CLIMBER|KF_OPENER|KF_TALL|KF_SLOW, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL|KF_SLOW, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL  ; KT_FLAGS
                 KROW $47,$45,$43,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
                 ; 3F-T2: KT_SEQ (runtime: lowram.asm (sq_load / sq_fill) writes the kind's SEQ_ROWS row
                 ; low byte per level; 0 until the first game start). The old
                 ; KT_FID0 / KT_FCNT columns are the R6 generation-unit table gu_tab.
-                ASSERT $ - kind_tab == KT_SEQ
-                DS   K_MAX, 0                  ; KT_SEQ
-                ASSERT $ - kind_tab == KT_MOD9
+                ASSERT $ - kind_tab == KT_DIV9          ; RECLAIM-C (b): DIV9, MOD9, then KT_SEQ
                 ; walker height (B3B-5 lead_cell, logic.asm): a non-flyer body
                 ; never reaches a door's arch / lintel rows. Reads the bytes
                 ; just assembled ({b}), so it covers every kind automatically.
@@ -665,15 +665,18 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 DUP K_COUNT, n
                 ASSERT !({b kind_tab + KT_FLAGS + n} & KF_CLIMBER) || ({b kind_tab + KT_BW + n} == FEAT_W) || (n == K_SPIDER) || (n == K_BLACK_WIDOW)   ; the 4-wide Spider (+ tier): fix/spider-climb
                 EDUP
-                ASSERT (KT_MOD9 >> 8) == ((KT_DIV9 + 23) >> 8)    ; feet_mod: one H for both
-                DUP 24, n
-                DB   n % STOREY_ROWS           ; KT_MOD9
-                EDUP
-                DS   KT_DIV9 - KT_MOD9 - 24, 0 ; 8 B spare (3F-T2)
-                ASSERT $ - kind_tab == KT_DIV9
+                ASSERT (KT_MOD9 >> 8) == ((KT_DIV9 + 23) >> 8) && (KT_DIV9 >> 8) == ((KT_MOD9 + 23) >> 8)  ; feet_mod: one H for both
                 DUP 24, n
                 DB   n / STOREY_ROWS           ; KT_DIV9
                 EDUP
+                DS   KT_MOD9 - KT_DIV9 - 24, 0 ; 8 B spare (3F-T2)
+                ASSERT $ - kind_tab == KT_MOD9
+                DUP 24, n
+                DB   n % STOREY_ROWS           ; KT_MOD9
+                EDUP
+                ASSERT $ - kind_tab == KT_SEQ
+                DS   K_MAX, 0                  ; KT_SEQ
+                ASSERT ((kind_tab + KT_SEQ) & $FF) + K_MAX <= $100   ; KFIELD: no carry out of L
                 ASSERT $ - kind_tab == KT_END
                 ASSERT KT_END <= KT_SIZE           ; (the old "$1D0..$1FF spare, resistances 3F":
                                                    ; the resistances are bank-3 kx_tab since D3-0)
@@ -693,6 +696,7 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy (were low RAM / gfx.asm)
                 INCLUDE "msg2.asm"              ; LOG-FIX: msg_cat / msg_end (from bank 7), log_room, hit_line
                 INCLUDE "fi3.asm"               ; FLOOR1 fi_full (cold; far3 callers unchanged): from bank 3 (LAND-PENDING relief)
+                INCLUDE "ldir2.asm"             ; RECLAIM-C (d): ldir7 (bank-1 menu_static reads a bank-7 tileset run)
 ftz_zx0:                                       ; MEM-FT frame_tab, FT_LEN B/fid contiguous, ZX0 (boot6_ft;
     IF OVL_PASS == 2                            ; bank 2: always mapped, on the CODE tape block; LAST in the
                 INCBIN "ft.zx0"                 ; image so its pass-1/2 size moves only code_end)

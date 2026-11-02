@@ -212,9 +212,9 @@ mon_status:
                 ld   l, 0                      ; DE; pop / ld keep CF)
                 ret  c
                 ld   c, b                      ; C = the MIND kind
-                KFIELD KT_PERIOD               ; acts every 2: rests on odd turns
-                cp   2
-                jr   nz, .on
+                KFIELD KT_FLAGS                ; KF_SLOW (RECLAIM-C b; was KT_PERIOD 2):
+                and  KF_SLOW                   ; acts every 2: rests on odd turns
+                jr   z, .on
                 ld   a, (TURN_COUNTER)
                 rrca
                 ld   l, 0
