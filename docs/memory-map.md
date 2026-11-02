@@ -90,7 +90,7 @@ and attr-shadow banks are uncontended (0/4/6) resp. contended (7: erase attrs,
 decor steps, the D3-S2 cold code).
 `PORT_7FFD_SHADOW` always has bit 4 = 1 (48K ROM: charset, LD-BYTES).
 
-Tape (LOAD-WIRE): BASIC `10 CLEAR VAL "24575": BORDER/PAPER/INK 0: CLS: POKE 23739,111`,
+Tape (LOAD-WIRE): BASIC `10 CLEAR VAL "24575": BORDER 0: PAPER 0: INK 7: CLS: POKE 23739,111` (INK 7 so the picture pixels are visible while loading),
 `15 LOAD "" SCREEN$`, `20 LOAD "" CODE`, `30 RANDOMIZE USR VAL "<start>"`; then the
 **loading picture** (`assets/gfx/loading/loading_l3d.scr`, 6,912 B, crypt variant L3d (native-resolution redraw of L3c), approved 2026-11-02, replaces L3c; generator
 `tools/gen_loading_concepts2.py`) as a CODE block `$4000` + 6,912 B straight after the BASIC
