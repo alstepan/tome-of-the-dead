@@ -13,9 +13,9 @@
 ; ROOM_MAP / ROOM_DESC / FLOOR_LIST (bank 5): none at $C000.
 ;
 ; Entries (far3 from bank 2; far3 clobbers AF, so nothing returns in A/F):
-;   resolve_monsters  read_turn_input (ONE far3 per turn: the per-monster
-;                     ai_monster calls, materialise and the monster attacks'
-;                     do_attack stay inside bank 3)
+;   (resolve_monsters: bank 2 since BLAIR-FIX, logic.asm; it pages bank 3 once
+;                     per turn, so the per-monster ai_monster calls, materialise
+;                     and the monster attacks' do_attack still run in bank 3)
 ;   do_attack         try_horizontal (the hero's bump attack; A = target slot)
 ; Contention: bank 3 is contended, so these bodies pay ULA contention on code
 ; fetches (measured in tests/budget.py; the bank-2 helpers they call do not).
@@ -809,50 +809,8 @@ corpse_hit:
 .out:           pop  ix
                 ret
 
-;==============================================================================
-; resolve_monsters — step 2: every non-pending, living monster in CUR_ROOM acts
-; in slot order (D3-8: after its status step, mon_status, unless STATUS = 0).
-; Then step 3 materialise.  Clobbers: all but IY.
-; far3 from read_turn_input (B3B-R2): one bank switch per turn, not per monster.
-;==============================================================================
-resolve_monsters:
-                call cache_player
-                ld   ix, P_ENTITIES + P_ENT_STRIDE ; B6: IX walks by 32, slot in C; MON_SLOT is
-                ld   de, P_ENT_STRIDE                 ; (MON_SLOT is no longer stored: nothing read it)
-                ld   bc, ((P_MAX_ENT - 1) << 8) | 1    ; B = slots left, C = slot
-.lp:            ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING | EF_DYING
-                cp   EF_ACTIVE
-                jr   nz, .step
-                ld   a, (CUR_ROOM)
-                cp   (ix+E_ROOM)
-                jr   nz, .step
-                ld   a, (P_ENTITIES + E_FLAGS)
-                and  EF_DYING
-                jr   nz, .step                 ; player already dying: stand down
-                push bc                        ; the callees clobber BC / DE (keep IX): the
-                push de                        ; walk state lives on the stack across them
-                ld   a, c
-                ld   (ACT_SLOT), a             ; 3F-B5: ai_monster's ACT_SLOT (was its ix_slot)
-                add  a, ST_FLAGS & $FF         ; D3-8: the status step at the start of its
-                ld   l, a                      ; phase (game.md §2.2 / §6.4); STATUS 0 =
-                ld   h, ST_FLAGS >> 8          ; the fast path (~50 T)
-                ld   a, (hl)
-                or   a
-                jr   z, .ai
-                ld   a, c
-                ld   hl, mon_status            ; bank 7 (status7.asm): L = 1 the action is
-                call far7                      ; spent (held / confused step / fear)
-                ld   a, l
-                or   a
-                jr   nz, .next
-.ai:            call ai_mon                    ; 3F-T11b (bank 2): the Archmage -> R6 arch_ai, else ai_monster
-.next:          pop  de
-                pop  bc
-.step:          inc  c
-                add  ix, de
-                djnz .lp
-                jp   materialise
+; (BLAIR-FIX: resolve_monsters, the step-2 loop, moved to bank 2 logic.asm: its
+; 15-slot walk runs uncontended and its callers reach it without far3.)
 
 ; (POTIONS: potion_pickup moved to bank-7 pickup7.asm, D3-7 T5; T6: floor_pickup.)
 

@@ -3,9 +3,9 @@
 ;   world/room build, collision, player actions (walk / climb / bump-attack /
 ;   quaff / wait / exits), combat rolls, monster AI (walker / climber / flyer +
 ;   yield rule), pending materialise, follow selection, potions, HUD.
-;   B3B-R2: the monster phase (resolve_monsters / ai_monster / ai_flyer /
-;   materialise) and do_attack now live in bank 3 (floor_pickup / try_quaff:
-;   bank 7 since D3-7 T5)
+;   B3B-R2: the monster phase (ai_monster / ai_flyer / materialise) and
+;   do_attack live in bank 3 (floor_pickup / try_quaff: bank 7 since D3-7 T5;
+;   resolve_monsters back here since BLAIR-FIX, paging bank 3 once a turn)
 ;   (src/turn3.asm, entered via far3; B3B-13: show_impact_msg -> lowram.asm); what stays here is
 ;   per-tick or shared with the hero path / tests (try_step, cork_check,
 ;   find_target, cache_player, ...).
@@ -59,30 +59,27 @@ get_box:
 get_wh:
                 KFIELD KT_BW
                 ld   d, a
-                KFIELD KT_BH
+                set  5, l                      ; BLAIR-FIX: L = kind (KT_BW = 0) -> the KT_BH row
+                ld   a, (hl)                   ; (15 T, 3 B; was a 2nd KFIELD, 44 T, 9 B)
                 ld   e, a
                 ret
+                ASSERT KT_BW == 0 && KT_BH == $20 && (kind_tab & $FF) == 0 && K_COUNT <= 32
 
 ; feet_mod — A = (y+h) mod 9, L = (y+h) div 9 (raw; STOREY_ROWS).  Clobbers: A, H, L
+; (F = the flags of n + KT_MOD9 low, as before). BLAIR-FIX: the KT_MOD9 row has
+; bit 5 set, the KT_DIV9 row (= MOD9 - $20) clear (ai_monster's ASSERT), so one
+; RES 5 moves L between the rows: 130 T incl. the call (was 191), 22 B (was 31).
 feet_mod:
                 KFIELD KT_BH
                 add  a, (ix+E_Y)
+                add  a, (kind_tab + KT_MOD9) & $FF
                 ld   l, a
                 ld   h, (kind_tab + KT_MOD9) >> 8   ; KT_MOD9/KT_DIV9: one page
-                push hl
-                ld   a, l
-                add  a, KT_DIV9 & $FF
-                ld   l, a
-                ld   a, (hl)
-                pop  hl
-                push af
-                ld   a, l
-                add  a, KT_MOD9 & $FF
-                ld   l, a
-                ld   a, (hl)
-                pop  hl
-                ld   l, h                      ; L = div9
+                ld   a, (hl)                   ; n mod 9
+                res  5, l                      ; -> the KT_DIV9 row
+                ld   l, (hl)                   ; L = div9
                 ret
+                ASSERT KT_MOD9 == KT_DIV9 + $20 && ((kind_tab + KT_DIV9) & $3F) <= 8 && ((kind_tab + KT_DIV9) >> 8) == ((kind_tab + KT_MOD9 + 23) >> 8)
 
 ; is_standing — Z if IX stands on a floor ((y+h) mod 9 == 8, game.md §2.1).  Clobbers: A, HL
 is_standing:
@@ -96,7 +93,8 @@ on_ladder:
                 KFIELD KT_FLAGS
                 and  KF_FLYER
                 jr   nz, .free
-                call is_standing
+                call feet_mod                  ; (is_standing inline: -27 T, +2 B)
+                cp   STOREY_AIR
                 jr   z, .free
                 xor  a                         ; Z = mid-ladder
                 ret
@@ -118,130 +116,157 @@ storey_ref:
 ; cached). DYING is re-checked live (it changes mid-turn). Rebuilt at turn start
 ; and whenever a pending monster materialises. The hero (slot 0, never PENDING)
 ; is always entry 0 (box_free_mon). B19: PEND_N = the PENDING bodies of
-; CUR_ROOM (pend_hit's fast path).  ~1.3k T.  Clobbers: A, BC, DE, HL
+; CUR_ROOM (pend_hit's fast path).  Clobbers: A, BC, DE, HL (IX kept)
+; BLAIR-FIX: HL walks the E_FLAGS bytes (no IX, no push / pop per slot): an
+; empty slot 74 T (was ~132), a live one ~0.26k; ~2.1k T at 5 live (was 3.3k).
 ;==============================================================================
 build_live:
-                push ix
                 xor  a
                 ld   (PEND_N), a               ; B19: PENDING bodies of CUR_ROOM (pend_hit)
                 ld   de, LIVE_LIST
-                ld   ix, P_ENTITIES
-                ld   c, a                      ; slot
-                ld   b, a                      ; count
-.l:             ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING
-                cp   EF_ACTIVE
-                jr   z, .live
-                cp   EF_ACTIVE | EF_PENDING
-                jr   nz, .n
+                ld   hl, P_ENTITIES + E_FLAGS
+                ld   c, a                      ; C = slot
+                ld   b, a                      ; B = count
+.l:             ld   a, (hl)                   ; E_FLAGS
+                rrca                           ; CF = EF_ACTIVE
+                jr   nc, .n
+                dec  hl                        ; E_ROOM (16-bit INC / DEC: the CP's Z survives)
                 ld   a, (CUR_ROOM)
-                cp   (ix+E_ROOM)
-                jr   nz, .n
-                ld   hl, PEND_N
-                inc  (hl)
-                jr   .n
-.live:          ld   a, (CUR_ROOM)
-                cp   (ix+E_ROOM)
-                jr   nz, .n
+                cp   (hl)
+                inc  hl
+                jr   nz, .n                    ; another room (PENDING or not)
+                bit  EF_PENDING_BIT, (hl)
+                jr   nz, .pend
                 ld   a, c
-                ld   (de), a
-                inc  de
-                ld   a, ixl
-                ld   (de), a
-                inc  de
-                ld   a, ixh
-                ld   (de), a
-                inc  de
-                KFIELD KT_BW
-                ld   (de), a
-                inc  de
-                KFIELD KT_BH
-                ld   (de), a
-                inc  de
+                ld   (de), a                   ; slot
+                inc  e                         ; (LIVE_LIST: one page)
+                ld   a, l
+                sub  E_FLAGS
+                ld   (de), a                   ; ptr lo
+                inc  e
+                ld   a, h
+                ld   (de), a                   ; ptr hi
+                inc  e
+                push hl
+                dec  l
+                dec  l                         ; E_KIND
+                ld   a, (hl)
+                add  a, KT_BW & $FF
+                ld   l, a
+                ld   h, (kind_tab + KT_BW) >> 8
+                ld   a, (hl)
+                ld   (de), a                   ; w
+                inc  e
+                set  5, l                      ; -> the KT_BH row (get_wh's ASSERT)
+                ld   a, (hl)
+                ld   (de), a                   ; h
+                inc  e
+                pop  hl
                 inc  b
-.n:             push de
-                ld   de, P_ENT_STRIDE
-                add  ix, de
-                pop  de
-                inc  c
-                ld   a, c
-                cp   P_MAX_ENT
-                jr   c, .l
+.n:             ld   a, l
+                add  a, P_ENT_STRIDE
+                ld   l, a
+                jr   nc, .nc
+                inc  h
+.nc:            inc  c
+                bit  4, c
+                jr   z, .l                     ; slots 0..15
                 ld   a, b
                 ld   (LIVE_N), a
-                pop  ix
                 ret
+.pend:          ld   a, (PEND_N)               ; PENDING in CUR_ROOM (pend_hit / materialise)
+                inc  a
+                ld   (PEND_N), a
+                jr   .n
+                ASSERT P_MAX_ENT == 16 && (P_ENTITIES & $FF) == 0 && E_FLAGS == E_ROOM + 1 && E_ROOM == E_KIND + 1 && EF_ACTIVE == 1
+                ASSERT (kind_tab & $FF) == 0 && ((kind_tab + KT_BW) >> 8) == ((kind_tab + KT_BH + K_COUNT - 1) >> 8)
+                ASSERT (LIVE_LIST >> 8) == ((LIVE_LIST + P_MAX_ENT * LL_STRIDE - 1) >> 8)
 
 ;==============================================================================
 ; box_free — CF = 1 if box (C=x, B=y, D=w, E=h) overlaps any LIVE_LIST entity
 ; other than slot ACT_SLOT that is not DYING (prototype §6.1: pending/dying
 ; never block). box_free_mon: the monsters only (LIVE_LIST entry 0 = the hero
 ; skipped; LIVE_N >= 1 always in play). Preserves: BC, DE, IX.  Clobbers: A, HL
-; ~60 T + ~130 T per live entity (was ~200 T x 16 slots).
+; BLAIR-FIX: D / E become the exclusive ends x+w / y+h for the loop (restored),
+; ACT_SLOT is patched into the slot test, the DYING test runs last (on an
+; overlap only: the conjunction is unchanged) and L walks the one-page list:
+; ~90 T + ~150 T per live entity (was ~60 + ~200). "ox >= x+w" equals the old
+; "x+w-1 < ox" except when x+w wraps to 0 (x >= 250, a negative probe col of
+; try_jump), where "ox+ow-1 < x" skips every body under both forms.
+; Out (CF = 1): HL = the hit entry + 4 (lq_block reads it), A = entries left.
+; SMC: .act+1 = ACT_SLOT (per call).
 ;==============================================================================
 box_free_mon:                                  ; B19: the same, the hero (entry 0) skipped
                 push ix
+                ld   hl, LIVE_LIST + LL_STRIDE
                 ld   a, (LIVE_N)
                 cp   2
                 jr   c, box_free.free          ; (review: LIVE_N 0 must not wrap)
                 dec  a
-                ld   hl, LIVE_LIST + LL_STRIDE
-                jr   box_free.lp
+                jr   box_free.go
 box_free:
                 push ix
+                ld   hl, LIVE_LIST
                 ld   a, (LIVE_N)
                 or   a
                 jr   z, .free
-                ld   hl, LIVE_LIST
-.lp:            push af
+.go:            push de
+                ld   ixl, a                    ; (IX is free until the loop)
                 ld   a, (ACT_SLOT)
-                cp   (hl)
+                ld   (.act+1), a               ; SMC: the skipped slot
+                ld   a, c
+                add  a, d
+                ld   d, a                      ; D = x + w
+                ld   a, b
+                add  a, e
+                ld   e, a                      ; E = y + h
+                ld   a, ixl
+.lp:            push af
+                ld   a, (hl)                   ; slot
+.act:           cp   0                         ; SMC: ACT_SLOT
                 jr   z, .skip5
-                inc  hl
+                inc  l
                 ld   a, (hl)
                 ld   ixl, a
-                inc  hl
+                inc  l
                 ld   a, (hl)
                 ld   ixh, a
-                inc  hl                        ; -> w
-                bit  EF_DYING_BIT, (ix+E_FLAGS)
-                jr   nz, .skip3
-                ld   a, (ix+E_X)               ; ox+ow-1 >= x
-                add  a, (hl)
+                inc  l                         ; -> w
+                ld   a, (ix+E_X)               ; ox < x+w
+                cp   d
+                jr   nc, .skip3
+                add  a, (hl)                   ; ox+ow-1 >= x
                 dec  a
                 cp   c
                 jr   c, .skip3
-                ld   a, c                      ; x+w-1 >= ox
-                add  a, d
-                dec  a
-                cp   (ix+E_X)
-                jr   c, .skip3
-                inc  hl                        ; -> h
-                ld   a, (ix+E_Y)
-                add  a, (hl)
+                inc  l                         ; -> h
+                ld   a, (ix+E_Y)               ; oy < y+h
+                cp   e
+                jr   nc, .skip2
+                add  a, (hl)                   ; oy+oh-1 >= y
                 dec  a
                 cp   b
                 jr   c, .skip2
-                ld   a, b
-                add  a, e
-                dec  a
-                cp   (ix+E_Y)
-                jr   c, .skip2
+                bit  EF_DYING_BIT, (ix+E_FLAGS)
+                jr   nz, .skip2                ; a corpse never blocks
                 pop  af                        ; overlap
+                pop  de
                 pop  ix
                 scf
                 ret
-.skip5:         inc  hl                        ; slot byte -> +5 in total
-                inc  hl
-                inc  hl
-.skip3:         inc  hl
-.skip2:         inc  hl
+.skip5:         inc  l                         ; slot byte -> +5 in total
+                inc  l
+                inc  l
+.skip3:         inc  l
+.skip2:         inc  l
                 pop  af
                 dec  a
                 jr   nz, .lp
+                pop  de                        ; (A = 0)
 .free:          pop  ix
                 or   a
                 ret
+                ASSERT (LIVE_LIST >> 8) == ((LIVE_LIST + P_MAX_ENT * LL_STRIDE - 1) >> 8)
 
 ;==============================================================================
 ; ROOM DESCRIPTOR QUERIES (current room unless noted)
@@ -537,7 +562,8 @@ box_vs_ix:
                 dec  a
                 cp   (ix+E_X)
                 jr   c, .no
-                KFIELD KT_BH
+                set  5, l                      ; HL = the KT_BW byte still -> KT_BH (get_wh's ASSERT)
+                ld   a, (hl)
                 add  a, (ix+E_Y)
                 dec  a
                 cp   b
@@ -792,7 +818,7 @@ cork_check:
 ;------------------------------------------------------------------------------
 ; cache_player — the hero's box / storey / mid-ladder flag for this turn's
 ; monster phase (the hero doesn't move while monsters act).  Clobbers: A,BC,DE,HL
-; B3B-R2: stays in bank 2 (called by bank-3 resolve_monsters and by the
+; B3B-R2: stays in bank 2 (called by resolve_monsters, bank 2 since BLAIR-FIX, and by the
 ; tests/world.py try_step unit stub)
 ;------------------------------------------------------------------------------
 cache_player:
@@ -816,6 +842,61 @@ cache_player:
 .n:             ld   (PL_LADDER), a
                 pop  ix
                 ret
+
+;==============================================================================
+; resolve_monsters — step 2: every non-pending, living monster in CUR_ROOM acts
+; in slot order (D3-8: after its status step, mon_status, unless STATUS = 0).
+; Then step 3 materialise.  Clobbers: all but IY.
+; BLAIR-FIX: bank 2 (was bank-3 turn3.asm, entered by far3): it pages bank 3
+; once for ai_monster / materialise and gives the caller's bank back (callers
+; in bank 7: turn_input, act_pend, call it directly). The slot walk runs from
+; uncontended bank 2 (~0.8k T a turn less at 4 monsters); bank 3 is paged at
+; .next (tests/world.py W9R). One page switch per turn, as before.
+;==============================================================================
+resolve_monsters:
+                ld   a, (PORT_7FFD_SHADOW)
+                push af                        ; the caller's bank (restore_page)
+                ld   a, BANK_COLD3
+                call page_bank
+                call cache_player
+                ld   ix, P_ENTITIES + P_ENT_STRIDE ; B6: IX walks by 32, slot in C; MON_SLOT is
+                ld   de, P_ENT_STRIDE                 ; (MON_SLOT is no longer stored: nothing read it)
+                ld   bc, ((P_MAX_ENT - 1) << 8) | 1    ; B = slots left, C = slot
+.lp:            ld   a, (ix+E_FLAGS)
+                and  EF_ACTIVE | EF_PENDING | EF_DYING
+                cp   EF_ACTIVE
+                jr   nz, .step
+                ld   a, (CUR_ROOM)
+                cp   (ix+E_ROOM)
+                jr   nz, .step
+                ld   a, (P_ENTITIES + E_FLAGS)
+                and  EF_DYING
+                jr   nz, .step                 ; player already dying: stand down
+                push bc                        ; the callees clobber BC / DE (keep IX): the
+                push de                        ; walk state lives on the stack across them
+                ld   a, c
+                ld   (ACT_SLOT), a             ; 3F-B5: ai_monster's ACT_SLOT (was its ix_slot)
+                add  a, ST_FLAGS & $FF         ; D3-8: the status step at the start of its
+                ld   l, a                      ; phase (game.md §2.2 / §6.4); STATUS 0 =
+                ld   h, ST_FLAGS >> 8          ; the fast path (~50 T)
+                ld   a, (hl)
+                or   a
+                jr   z, .ai
+                ld   a, c
+                ld   hl, mon_status            ; bank 7 (status7.asm): L = 1 the action is
+                call far7                      ; spent (held / confused step / fear); farb
+                ld   a, l                      ; gives bank 3 back
+                or   a
+                jr   nz, .next
+.ai:            call ai_mon                    ; 3F-T11b (bank 2): the Archmage -> R6 arch_ai, else ai_monster
+.next:          pop  de                        ; (test probe W9R: bank 3 paged here)
+                pop  bc
+.step:          inc  c
+                add  ix, de
+                djnz .lp
+                call materialise               ; (bank 3)
+                pop  af
+                jp   restore_page
 
 ; queue_damage — C = col, B = row, D = cols, E = rows -> PEND_DMG (next render
 ; restores tiles there and repairs overlapping sprites). Full queue: the last

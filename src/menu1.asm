@@ -1175,6 +1175,12 @@ end_card:       push af
                 pop  af
                 call mf_tx_attr
                 pop  af
+                ; BLAIR-FIX review: ec_kind reads the killer's row of the CURRENT level's
+                ; sequence cache (kind_tab KT_SEQ -> seq_rows, R6 pool6 / lowram per level).
+                ; Valid: ST1_KILLER is stored at the fatal hit (combat3 deal_hit .kill) by a
+                ; body on this level, nothing changes level between it and this card (GS_DEAD
+                ; stops the loop; a kit revive clears it, bank7). A kind the cache lacks
+                ; (test pokes only) reads a stale row: its FRT_NONE frame is not drawn (blit_miss).
                 ld   bc, (EC_FEET << 8) | EC_PCOL_L
                 ld   de, KS_MOVE               ; D = 0: facing right
                 call ec_kind
@@ -1217,6 +1223,10 @@ end_card:       push af
                 ASSERT T_LECT_TR == T_LECT_TL + 1 && T_LECT_BL == T_LECT_TL + 2 && T_LECT_BR == T_LECT_TL + 3
                 ASSERT (ROOM_MAP & $FF) == 0 && ((ROOM_MAP + (EC_FEET - 2) * ROOM_COLS) >> 8) == ((ROOM_MAP + (EC_FEET - 1) * ROOM_COLS + EC_PCOL_L + 4) >> 8)
                 ASSERT KS_IDLE == 0 && KS_MOVE < 256
+                ; ec_kind: the KT_ATTR -> KT_SEQ step changes L only; the cache row + the slot
+                ; stays in the seq_rows page (the per-level cache, see .kil)
+                ASSERT ((kind_tab + KT_ATTR) >> 8) == ((kind_tab + KT_SEQ + K_MAX - 1) >> 8)
+                ASSERT (seq_rows >> 8) == ((seq_rows + SQ_ROWS_LEN - 1) >> 8) && KS_MOVE < KS_STRIDE
 
 ;------------------------------------------------------------------------------
 ; ec_kind — A = kind, E = a sequence slot (KS_IDLE / KS_MOVE: a cycle), B = the feet row,

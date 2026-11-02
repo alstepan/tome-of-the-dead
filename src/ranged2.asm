@@ -25,7 +25,7 @@ rk_tab:
                 ASSERT K_COUNT == K_BONE_CALLER + 1 && K_BOSS_D1 == K_GOBLIN && K_BOSS_D2 == K_SPIDER && K_SPIDER < K_ARCHER
 
 ;------------------------------------------------------------------------------
-; ai_mon — 3F-T11b, resolve_monsters' (bank 3) per-monster AI call: the
+; ai_mon — 3F-T11b, resolve_monsters' (bank 2, bank 3 paged) per-monster AI call: the
 ; Archmage (game.md §9.9 A3: its own branch, one kind test) far6s R6 arch_ai
 ; (arch6.asm), every other kind runs ai_monster (bank 3, paged). Same In / Out
 ; as ai_monster (IX = the monster, ACT_SLOT; no result; clobbers all but IX).

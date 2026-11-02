@@ -2901,7 +2901,7 @@ are derived from them, never stored.
   after a used non-ability turn, `act_pend` before the deferred monster phase
   of an ability turn (so his own bounced / reflected Frost is refused on the
   guarded turn); a held turn keeps it; the hero's end lines / `MSG_M_WAKE` via `st_msg`.
-  **Monsters:** `resolve_monsters` (bank 3) tests `ST_FLAGS[slot]` (0 = the
+  **Monsters:** `resolve_monsters` (bank 2 since BLAIR-FIX, bank 3 paged) tests `ST_FLAGS[slot]` (0 = the
   fast path, ~50 T) and far7s **`mon_status`** (A = slot, IX kept → L = 1
   the action is spent): the step; then on a turn it acts (`KF_SLOW`, was KT_PERIOD 2, rests
   on odd turns) FEAR = a step away (x), cornered → far3 `attack_if_reach`;
@@ -3710,7 +3710,7 @@ pre-filter = a marker under the body on row 9s+7; `drop_put`'s free test = 4
 
 All low-RAM parts sit in the play-free GEN_SRC / GEN_MIR window (pblit's ≤ 54 B at
 `$6940` below; `TX_DEC` `$6D15` above, ASSERTed): the pause save, the page's map save and
-the generator overwrite them, so each is followed by **`fi_full`** (bank 3, bank 2 since LAND-PENDING; far3: room_show
+the generator overwrite them, so each is followed by **`fi_full`** (bank 3; bank 2 LAND-PENDING .. BLAIR-FIX; far3: room_show
 (level entry, start_game, teleport), `do_exit` for `EXIT_DEST` before the scroll, pause
 resume, `page_post`). Per pickup / drop: bank-7 `ap_stamp` writes the 2×2 markers + attr
 shadow + `queue_damage` 2×2 and far6 **`fi_add`** (R6) with the col's last live type
@@ -5305,3 +5305,45 @@ the end-card tick, not gated). Tests: `tests/stats1.py` E (3 cases x Warrior / M
 rows text6 pixel-exact, PRESS row, `ST1_KILLER` after the fatal blow, whole-frame goldens
 `tests/golden/endcard_{killer,died,win}_{warrior,mage}.hash`: new, the card did not exist), `tests/kit.py` D / X
 (`ST1_KILLER` stored, cleared by the revive).
+
+## BLAIR-FIX ledger (`feat/blair-fix`, 2026-11-02; `tests/budget.py` "blair" over the 2-frame budget, no feature cut)
+
+`blair` (the D1 lair: golden Goblin King throwing in line + Goblin, Rat, Bat, the Knight walking the pmix
+items) had one tick over the budget: the input tick right after a walk step of all 5 bodies (the render
+redraws every one, then the turn's logic). Profiled instruction by instruction (ZRCP cpu-step over the worst
+tick); every change is behaviour-identical (`tests/ai_equiv.py` vs main, the blair turn log unchanged):
+
+| Change | Where | T (worst tick) | Bytes |
+|---|---|---|---|
+| `find_target`: the gap test first, then the vertical overlap, the nearest-so-far test, `on_ladder` last and only for a new best (FT_BLOCKER rule unchanged); no push / pop around `KFIELD`; L walks the one-page `LIVE_LIST` | bank 7 `bank7.asm` | ~-2.2k | bank 7 -6 |
+| `build_live`: HL walks the `E_FLAGS` bytes (no IX, no per-slot push / pop), `set 5, l` for `KT_BH` | bank 2 `logic.asm` | ~-0.9k | |
+| `box_free`: exclusive ends `x+w` / `y+h` in D / E (restored), `ACT_SLOT` patched into the slot test (SMC `.act+1`), DYING tested last, `inc l` | bank 2 | ~-0.75k | |
+| `feet_mod`: one `res 5, l` between the `KT_MOD9` / `KT_DIV9` rows (130 T, was 191); `on_ladder` calls it inline; `get_wh` / `box_vs_ix` `set 5, l` for `KT_BH` | bank 2 | ~-0.6k | -9 / +2 / -6 / -6 |
+| `cycle_frame`: power-of-two totals (every walk, the 1-entry rests, the hero idles) by mask, not the 8-step division | bank 2 `anim.asm` | ~-1.1k | +9 |
+| blit line loops: the per-line `djnz` jumps straight to the chain entry (displacement SMC `blit_al_dj+1` / `blit_dj+1`), not to the entry `jp` | bank 2 `gfx.asm` | ~-1.0k | +10 |
+| `anim_tick`: the record pointer rides on the stack across `anim_entity`; `anim_entity .move` computes 8x / 8y once; `KFIELD_KEEPHL` -> DE (`.mv`, render `.kat`) | bank 2 | ~-1.2k | ~-20 |
+| `rl_next` through HL (`RL_IDX` = `RLIST_N + 1`), `dmg_add` / `pmark_dmg` on the aligned `DMG_LIST` page, `PRES_ANY` once per `pmark_dmg` (`pmark_rect_np`) | bank 2 | ~-0.6k | ~-10 |
+| **`resolve_monsters` -> bank 2** (`logic.asm`): pages bank 3 once (shadow saved, `restore_page`), so the 15-slot walk runs uncontended and `turn_input` / `act_pend` (bank 7) call it directly (no far3); bank 3 is paged at `.next` (`tests/world.py` W9R) | bank 2 / 3 / 7 | ~-0.8k | bank 2 -89 (the `kind_tab` pad), bank 3 +76, bank 7 -6 |
+| `fi3.asm` (`fi_full`, cold, far3 only) back to bank 3 (bank 2 since LAND-PENDING) to pay for it | bank 2 -> 3 | 0 | bank 2 +52, bank 3 -52 |
+
+(T column: per change, from the profile; measured steps on the worst tick: the first five rows together -7,781,
+`box_free` -753, `get_wh` / `on_ladder` -591, `anim_tick` loop -524, `dmg_add` + `.kat` -144, the `find_target` reorder
+-565, `.move` + `rl_next` + `pmark_dmg` -765, `resolve_monsters` -817 = -11,940.)
+
+`blair` worst tick (release, `GAME_PROFILE=1`): total **145,564 -> 133,624 T**, work 139,016 -> **130,393**, real
+152,514 -> **139,995** (<= 141,816; `OVERRUN_COUNT` 1 -> 0). It stays over the 126k cap (work), so budget.py now
+gates it in `GATED` (every tick <= the 2-frame budget, as `mix`), not in `CAP_GATED`.
+
+Free bytes (build DISPLAY, main `147d519` -> `feat/blair-fix`):
+
+| Region | release before / after | kit before / after |
+|---|---|---|
+| bank 2 (to `seq_rows` + `kind_tab` pad) | 143 -> **162** (15 + 128 -> 67 + 95) | 84 -> **103** |
+| bank 3 (to `AY_RESERVE`) | 4 -> **28** | 4 -> **28** |
+| bank 7 low (to the attr shadow) | 45 -> **55** | 26 -> **36** |
+| bank 1 / R6 / b0 text / low RAM | 6 / 5 / 10 / 11 unchanged | 6 / 10 / 7 / unchanged |
+
+Also: budget.py counts the Mage melee scenarios' STAFF_SWING on a private `-DANIM_TRACE_ON=1` copy after the timed
+run (`swing_pass`, tests/game.py's approach; the trace adds render work, so the timed numbers stay the release's);
+`spawn6.asm sp_run`'s IX comment corrected (the hero only for the first body of a run); `menu1.asm end_card .kil`
+documents and ASSERTs that `ec_kind` reads the current level's sequence cache.

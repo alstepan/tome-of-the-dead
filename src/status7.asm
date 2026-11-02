@@ -8,7 +8,7 @@
 ; a second copy of the state.
 ;   st_step     the status step of one entity (hero: turn_input; monsters:
 ;               mon_status)
-;   mon_status  far7 from resolve_monsters (bank 3) for a monster with
+;   mon_status  far7 from resolve_monsters (bank 2, bank 3 paged) for a monster with
 ;               STATUS != 0: the step, then CONFUSED / FEAR behaviour
 ;   conf_roll / h_walk / h_jump / h_stumble / fear_chk   the hero's CONFUSED
 ;               reversal and FEAR refusal (bank7.asm tpt_intent, intent7.asm)
@@ -174,7 +174,7 @@ st_msg:
                 jp   impact_line
 
 ;------------------------------------------------------------------------------
-; mon_status — far7 from resolve_monsters (bank 3; STATUS != 0): IX = monster,
+; mon_status — far7 from resolve_monsters (bank 2, bank 3 paged; STATUS != 0): IX = monster,
 ; A = slot. The step (st_step); held -> L = 1. Then, on a turn it acts (an
 ; "acts every 2" monster rests on odd TURN_COUNTER; ai_monster's rule):
 ;  FEAR: a step away from the hero (walkers and flyers, x only); cornered (the

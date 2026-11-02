@@ -50,6 +50,10 @@ anim_tick:
                 ld   (MSG_Q), a
                 ret
 
+                ; BLAIR-FIX: the record pointer HL rides on the stack across
+                ; anim_entity (was re-derived from ANIM_SLOT twice), the RLIST
+                ; append indexes through DE (reloaded with the stride after):
+                ; ~0.29k T a live slot (was ~0.43k)
 .full:          ld   c, a                      ; C = E_FLAGS (A is the slot below)
                 ld   a, l                      ; ANIM_SLOT only stored when a callee
                 rrca                           ; may read it (non-empty / drawn)
@@ -64,47 +68,35 @@ anim_tick:
                 ld   a, (CUR_ROOM)
                 cp   (ix+E_ROOM)
                 jr   nz, .next
-                push de                        ; (anim_entity clobbers DE; IX is kept)
+                push hl                        ; (anim_entity clobbers BC, DE, HL; IX is kept)
                 call anim_entity               ; A = fid, B = visible
-                pop  de
-                ld   c, a
-                ld   a, (ANIM_SLOT)
-                rlca
-                rlca
-                rlca
-                rlca
-                ld   l, a
-                ld   h, SLOTREC >> 8
+                pop  hl
                 ld   (hl), b                   ; R_VIS
                 inc  l
-                ld   (hl), c                   ; R_FID
+                ld   (hl), a                   ; R_FID
+                dec  l
                 ld   a, b
                 or   a
                 jr   nz, .add                  ; visible -> render list
 .next:          bit  0, (ix+E_DVIS)
                 jr   z, .skip                  ; not drawn either -> nothing to do
 .add:           ld   a, (RLIST_N)
-                ld   l, a
+                ld   e, a
                 inc  a
                 ld   (RLIST_N), a
-                ld   h, RLIST >> 8
-                ld   a, l
+                ld   d, RLIST >> 8
+                ld   a, e
                 add  a, RLIST & $FF
-                ld   l, a
+                ld   e, a
                 ld   a, (ANIM_SLOT)
-                ld   (hl), a
-.skip:          ld   a, (ANIM_SLOT)
-                inc  a
-                and  P_MAX_ENT - 1             ; wraps to 0 after the last slot
-                add  ix, de                    ; (keeps Z)
-                jp   z, .done
-                rlca
-                rlca
-                rlca
-                rlca
+                ld   (de), a
+.skip:          ld   de, P_ENT_STRIDE
+                add  ix, de
+                ld   a, l
+                add  a, 16
                 ld   l, a
-                ld   h, SLOTREC >> 8
-                jp   .lp
+                jp   nc, .lp                   ; carry = slot 16 reached
+                jp   .done
 
 ;------------------------------------------------------------------------------
 ; rl_first / rl_next — iterate RLIST (slots visible or still drawn this tick,
@@ -115,15 +107,14 @@ anim_tick:
 rl_first:       xor  a
                 ld   (RL_IDX), a
                 ret
-rl_next:        ld   a, (RL_IDX)
-                ld   hl, RLIST_N
+rl_next:        ld   hl, RL_IDX                ; BLAIR-FIX: RL_IDX / RLIST_N through HL
+                ld   a, (hl)                   ; (adjacent): -12 T a call, -3 B
+                dec  l                         ; RLIST_N
                 cp   (hl)
                 ccf
                 ret  c
-                ld   l, a
-                inc  a
-                ld   (RL_IDX), a
-                ld   a, l
+                inc  l
+                inc  (hl)                      ; RL_IDX + 1
                 add  a, RLIST & $FF
                 ld   l, a                      ; (RLIST, RLIST_N: one page)
                 ld   a, (hl)
@@ -137,7 +128,7 @@ rl_next:        ld   a, (RL_IDX)
                 ld   a, (ANIM_SLOT)
                 or   a                         ; CF = 0; Z = slot 0
                 ret
-                ASSERT (RLIST >> 8) == (RLIST_N >> 8)
+                ASSERT (RLIST >> 8) == (RLIST_N >> 8) && RL_IDX == RLIST_N + 1 && (RLIST_N & $FF) != $FF
 
 ;------------------------------------------------------------------------------
 ; anim_entity — IX = live entity. Out: A = fid, B = 1 visible / 0 hidden.
@@ -258,10 +249,13 @@ anim_entity:
                 ret
 
 .move:          ; vertical move of a non-flyer = climbing
+                ; BLAIR-FIX: 8x / 8y computed once (D = 8y, B = 8x; were 2 / 3 times),
+                ; "arrived" from the tween results (E = px - 8x): ~0.12k T a mover
                 ld   a, (ix+E_Y)
                 add  a, a
                 add  a, a
                 add  a, a
+                ld   d, a                      ; D = 8y
                 cp   (ix+E_PY)
                 ld   c, KS_MOVE
                 jr   z, .horiz
@@ -279,26 +273,14 @@ anim_entity:
                 ld   a, (ix+E_PX)
                 call tween
                 ld   (ix+E_PX), a
-                ld   a, (ix+E_Y)
-                add  a, a
-                add  a, a
-                add  a, a
-                ld   b, a
+                sub  b
+                ld   e, a                      ; E = 0 iff px arrived
+                ld   b, d
                 ld   a, (ix+E_PY)
                 call tween
                 ld   (ix+E_PY), a
-                ; arrived?
-                ld   a, (ix+E_X)
-                add  a, a
-                add  a, a
-                add  a, a
-                cp   (ix+E_PX)
-                jr   nz, .mv
-                ld   a, (ix+E_Y)
-                add  a, a
-                add  a, a
-                add  a, a
-                cp   (ix+E_PY)
+                sub  d                         ; arrived: both at 8x / 8y
+                or   e
                 jr   nz, .mv
                 ld   (ix+E_MODE), M_REST
 .mv:            ; frame: flyers use the idle loop phase; others the walk phase
@@ -309,7 +291,11 @@ anim_entity:
                 inc  hl
                 ld   h, (hl)
                 ld   l, a
-                KFIELD_KEEPHL KT_FLAGS
+                ld   a, (ix+E_KIND)            ; KFIELD KT_FLAGS through DE (free here:
+                add  a, KT_FLAGS & $FF         ; .walkph / idle_phase clobber it): -21 T
+                ld   e, a                      ; vs KFIELD_KEEPHL's push / pop
+                ld   d, (kind_tab + KT_FLAGS) >> 8
+                ld   a, (de)
                 and  KF_FLYER
                 jr   z, .walkph
                 call idle_phase
@@ -513,11 +499,22 @@ idle_phase:
 
 ; cycle_frame — HL = cycle (DB total, (fid,ticks)*), A = phase -> A = fid.
 ; Clobbers: A, BC, D, HL
+; BLAIR-FIX: a power-of-two total (every MOVECYC2 / MOVECYC4 walk, the 1-entry
+; rests, the hero idles of 32) takes phase AND (total - 1): ~45 T instead of the
+; ~330 T division; other totals (6, 12, 24) pay +24 T. +9 B.
 cycle_frame:
                 ld   c, (hl)                   ; total ticks
                 inc  hl
-                ld   d, a                      ; phase mod total (8-bit restoring div)
-                xor  a
+                ld   d, a
+                ld   a, c
+                dec  a                         ; total - 1
+                ld   b, a
+                and  c
+                jr   nz, .div                  ; not a power of two
+                ld   a, b
+                and  d                         ; phase mod total
+                jr   .walk
+.div:           xor  a                         ; phase mod total (8-bit restoring div)
                 ld   b, 8
 .dv:            sla  d
                 rla
@@ -805,7 +802,11 @@ render:
 .kat:           ld   a, (ix+E_GOLD)            ; 3F-T8: a golden body glows (boss2.asm)
                 or   a
                 jp   nz, glow_kat
-                KFIELD_KEEPHL KT_ATTR
+                ld   a, (ix+E_KIND)            ; KFIELD KT_ATTR through DE (free here):
+                add  a, KT_ATTR & $FF          ; BLAIR-FIX -21 T a drawn slot vs
+                ld   e, a                      ; KFIELD_KEEPHL's push / pop, -2 B
+                ld   d, (kind_tab + KT_ATTR) >> 8
+                ld   a, (de)
 .tsh:           ld   (hl), a                   ; R_TINT = shown now
 .ro:            res  2, l                      ; back to R_ATTR
 .fl:            ld   (hl), a                   ; R_ATTR
@@ -1196,24 +1197,21 @@ dmg_add:
                 dec  a
                 add  a, a
                 add  a, a
-                ld   l, a
-                ld   h, 0
-                push de
-                ld   de, DMG_LIST
-                add  hl, de
-                pop  de
+                ld   l, a                      ; BLAIR-FIX: DMG_LIST is one aligned page
+                ld   h, DMG_LIST >> 8          ; (-48 T, -6 B vs the 16-bit add)
                 ld   (hl), c
-                inc  hl
+                inc  l
                 ld   a, c
                 add  a, d
                 ld   (hl), a
-                inc  hl
+                inc  l
                 ld   (hl), b
-                inc  hl
+                inc  l
                 ld   a, b
                 add  a, e
                 ld   (hl), a
                 ret
+                ASSERT (DMG_LIST & $FF) == 0 && DMG_MAX * 4 <= 256
 .full:          ld   hl, DMG_OVERFLOW
                 inc  (hl)
                 ld   hl, DMG_LIST + (DMG_MAX - 1) * 4

@@ -252,7 +252,13 @@ sp_run:         ld   hl, SPQ_K
                 ld   a, (P_ENTITIES + E_FLAGS)
                 and  EF_DYING
                 ret  nz                        ; (ACT_SLOT: sp_init sets the body's own slot)
-                ld   ix, P_ENTITIES            ; (sp_fit's caster: a wave body has no parent = the hero)
+                ld   ix, P_ENTITIES            ; sp_fit's IX (BLAIR-FIX review: the hero only for the
+                                               ; FIRST body; a later body of the run reaches .nd with
+                                               ; IX = the body made last, `pop ix` at .np. sp_fit reads
+                                               ; only E_KIND, for the Archmage's Sigma exemption, and a
+                                               ; parentless body is a wave kind (LP_KINDS, lpop3.asm
+                                               ; lp_dtab: never K_ARCHMAGE) or a parent-less respawn,
+                                               ; so the exemption never applies to it)
 .b:             push bc
                 ld   a, c
                 and  LEK_KIND_MASK

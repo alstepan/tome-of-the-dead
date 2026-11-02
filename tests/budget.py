@@ -12,6 +12,9 @@ FOLLOW against the skeleton while everything else moves/attacks, then a run of
 walking turns. Reports max / mean tick and the per-phase split of the worst tick.
 
 Usage: python3 tests/budget.py      (exit 1 if any tick > budget)
+BLAIR-FIX: on a build without ANIM_TRACE (the release) the Mage melee scenarios' STAFF_SWING count
+comes from a private -DANIM_TRACE_ON=1 copy run after the timed pass (swing_pass; BUDGET_NO_SWING=1
+skips it); the gated T-states are always those of the build under test.
 """
 import os
 import sys
@@ -191,11 +194,13 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # "heavy" (hero + 2 skeletons + goblin + ghost = 5+5+3+3 = 16 > 12) is OVER
 # the cap: a REPORTED stress scenario only (rare 3-frame ticks accepted, no
 # flicker with the A7 double buffer; renderer optimisation = A7b).
-# BOSS-RANGED "blair" (D1 lair walk-in, Σ 11) is REPORTED, not gated, pending a manager ruling: its
-# worst tick (an early input tick with 5 walkers + the glow + the 40-px slash, before any dagger) is
-# 145.7k T with the King's rk_tab row poked to 0 (BUDGET_BLAIR_NOSHOT=1) and 147.0k T with the shots:
-# the overrun predates the feature; ai_ranged's out-of-range decision adds ~1.3k T to that tick.
-GATED = ("mix", "mage")
+# BOSS-RANGED "blair" (D1 lair walk-in, Σ 11): BLAIR-FIX gates it like "mix" (every tick within the
+# 2-frame budget, real <= BUDGET). Its worst tick is an input tick (the turn's logic) right after a
+# walk step of all 5 bodies (the render redraws every one): 145,564 T total / 152,514 real before,
+# 133,624 / 139,995 after (find_target / build_live / box_free / feet_mod / cycle_frame / the blit
+# line DJNZ / anim_tick and render bookkeeping / resolve_monsters in bank 2). It stays over the
+# 126k cap (work ~130.4k), so it is NOT in CAP_GATED.
+GATED = ("mix", "mage", "blair")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
              "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
@@ -1269,7 +1274,8 @@ def run_scenario(h, scen):
               f" ROOM_MAP, +37 T/cell, already in these ticks);"
               f" {sum(st.casts)}/{len(st.casts)} fx_start accepted, {st.fx_ticks} ticks with FX live", flush=True)
     if len(scen) > 3:                             # C3-7: did the staff swing run?
-        print(f"staff swings   : {swing if HAS_TRACE else 'n/a (no ANIM_TRACE: release build)'}"
+        st.swing = swing if HAS_TRACE else None
+        print(f"staff swings   : {swing if HAS_TRACE else 'counted on the ANIM_TRACE copy (end of run)'}"
               f" turns drew STAFF_SWING", flush=True)
     dts = [sp.get("decor_tick", 0) for _, sp in st.ticks]
     print(f"decor_tick     : {'on' if DECOR else 'off'}, max {max(dts)} T, mean {sum(dts) // len(dts)} T"
@@ -1292,13 +1298,57 @@ def run_scenario(h, scen):
     return st, over
 
 
+ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath")
+
+
+def swing_pass(keys):
+    """BLAIR-FIX (tests/game.py's RECLAIM-C2 approach): the release build has no ANIM_TRACE, so the
+    STAFF_SWING count of the Mage scenarios is taken on a private -DDEBUG_KIT=0 -DANIM_TRACE_ON=1 copy
+    (~5 s, temp dir), in a child run AFTER the timed one: the trace adds render work (R_LOG, trace_log),
+    so the gated T-states stay those of the build under test. Returns {key: swings} (None: build failed)."""
+    import shutil
+    import subprocess
+    import tempfile
+    root = os.path.dirname(HERE)
+    out = tempfile.mkdtemp(prefix="budget_trace_")
+    print(f"[budget] staff-swing count: building -DDEBUG_KIT=0 -DANIM_TRACE_ON=1 -> {out}", flush=True)
+    try:
+        r = subprocess.run([os.path.join(root, "tools", "build.sh"), "-o", out, "-DDEBUG_KIT=0",
+                            "-DANIM_TRACE_ON=1"], capture_output=True, text=True)
+        if r.returncode:
+            print("[budget] trace build failed:\n" + r.stdout[-1500:] + r.stderr[-500:], flush=True)
+            return None
+        r = subprocess.run([sys.executable, os.path.abspath(__file__)], capture_output=True, text=True,
+                           env=dict(os.environ, WZ_BUILD_DIR=os.path.join(out, "build"),
+                                    BUDGET_SWING_ONLY="1", BUDGET_ONLY=",".join(keys)))
+        res = {}
+        for ln in r.stdout.splitlines():
+            if ln.startswith("[swing] "):
+                k, v = ln.split()[1:3]
+                res[k] = int(v)
+        if not res:
+            print("[budget] swing pass printed nothing:\n" + r.stdout[-1500:] + r.stderr[-500:], flush=True)
+        return res
+    finally:
+        shutil.rmtree(out, ignore_errors=True)
+
+
 def main():
     fails = []
+    keys = os.environ.get("BUDGET_ONLY", ALL_KEYS).split(",")
+    swing_only = bool(os.environ.get("BUDGET_SWING_ONLY"))      # child of swing_pass (trace copy)
+    # the Mage scenarios on the melee KEYS (FIRE taps at gap 0: the C3-7 STAFF_SWING); the cast ones
+    # FIRE a spell, so their count says nothing (and the child pass would double the run)
+    wiz = [k for k in keys if len(SCENARIOS[k]) > 3 and SCENARIOS[k][3] == K_WIZARD and SCENARIOS[k][2] is KEYS]
     with Harness() as h:
         h.launch(EMU_ARGS)
-        for key in os.environ.get("BUDGET_ONLY", "mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-                                  "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath").split(","):
+        for key in keys:
             st, bad = run_scenario(h, SCENARIOS[key])
+            if swing_only:
+                if getattr(st, "swing", None) is not None:
+                    print(f"[swing] {key} {st.swing}", flush=True)
+                continue
             if st.real_over and (key in GATED or key in CAP_GATED):
                 fails.append(key + " (real)")
                 continue
@@ -1315,6 +1365,13 @@ def main():
                 fails.append(key)
             elif bad:
                 print(f"[info] {key}: {len(bad)} ticks over budget (reported, not gated)")
+    if swing_only:
+        return 0
+    if wiz and not HAS_TRACE and not os.environ.get("BUDGET_NO_SWING"):
+        sw = swing_pass(wiz)                      # (the timed harness is closed: same ZRCP port)
+        if sw is not None:
+            print("staff swings   : " + ", ".join(f"{k} {sw.get(k, '?')}" for k in wiz)
+                  + " turns drew STAFF_SWING (ANIM_TRACE copy)", flush=True)
     print(f"[{'FAIL' if fails else 'PASS'}] budget gate (every tick <= budget in"
           f" {', '.join(GATED)}; <= {CAP} in {', '.join(CAP_GATED)}; cast ticks <= {CAST_CAP}): {fails or 'ok'}")
     return 1 if fails else 0
