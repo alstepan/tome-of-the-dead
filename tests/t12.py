@@ -515,14 +515,23 @@ def run(h, p, check):
             p.tick(3)
             fr, comp = p.frame(), p.composed_frame()
             diff = [i for i in range(6912) if fr[i] != comp[i]]
-            # an animated-decor attr step (decor_tick) trails the display by one tick: attr-only,
-            # only in a room with ANIM_N > 0; anything else is a stale / torn present
-            if diff and not (all(i >= 6144 for i in diff) and p.rb("ANIM_N") and len(diff) <= 4):
+            # an animated-decor step (decor_tick) trails the display by one tick. LOOK-1 / FLAME-RATE:
+            # it is a GLYPH swap every 4th tick now (the attr cycle is gone), so the tolerance is
+            # "every differing byte lies in an ANIM_LIST cell (its 8 bitmap lines or its attr)";
+            # anything else is a stale / torn present
+            an = p.rb("ANIM_N")
+            al = p.z.read_memory(S["ANIM_LIST"], 4 * an) if 0 < an <= 12 else b""
+            ok_i = set()
+            for k in range(0, len(al), 4):
+                c, r = al[k], al[k + 1]
+                ok_i.add(6144 + 32 * r + c)
+                ok_i.update(((((0x40 | (r & 0x18)) + y) << 8) | ((r & 7) << 5) | c) - 0x4000 for y in range(8))
+            if diff and not all(i in ok_i for i in diff):
                 unsynced.append((seed, n, len(diff), diff[0]))
     check(f"T1 teleport fuzz ({len(fuzz)} reads over 8 seeds, both heroes): 1 turn, consumed, both lines, a legal room + "
           "spot, no body / pit / ladder box / trap under the hero, no followers, GS_PLAYING", all(fuzz),
           fuzz)
-    check("T2 the displayed screen == composed after every teleport (but a decor attr step)", not unsynced,
+    check("T2 the displayed screen == composed after every teleport (but a decor cell step)", not unsynced,
           unsynced)
     # F: the fallbacks (review): lp_cmap's call NOPed, LP_CMAP poked; no traps
     hook = S["tp_room.cmap"]

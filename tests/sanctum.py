@@ -36,7 +36,7 @@ import items_model as M  # noqa: E402
 import room_model  # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, stand_y, F3  # noqa: E402
 from lp import T as Proto, w16  # noqa: E402
-from world import log_row, text6, STRINGS  # noqa: E402
+from world import log_row, text6, STRINGS, map_structure, menu_text_ok  # noqa: E402
 
 STRIDE = S["P_ENT_STRIDE"]
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING = 1, 2, 4, S["EF_LEFT"], S["EF_DYING"]
@@ -201,10 +201,11 @@ def seal(p, master, mirror):
     m = list(p.z.read_memory(S["ROOM_MAP"], 576))
     c0 = 1 if L.left else 29
     lect = [m[15 * 32 + c0], m[15 * 32 + c0 + 1], m[16 * 32 + c0], m[16 * 32 + c0 + 1]]
-    want = room_model.render_room(room_model.read_block(p), L.sn)
+    # LOOK-1 / FLAME-RATE: animated decor cells hold either flame glyph (world.map_structure
+    # compares them as the pair {map id, AL_TYPE}, as world.py W0 / W3 since 9c8a16b)
+    ms = map_structure(p, L.sn)
     check(f"L S {L.sn}: the lectern 15-18 at cols {c0}-{c0 + 1} rows 15-16; ROOM_MAP == room_model",
-          lect == [15, 16, 17, 18] and m == want,
-          (lect, [(j % 32, j // 32, m[j], want[j]) for j in range(576) if m[j] != want[j]][:4]))
+          lect == [15, 16, 17, 18] and not ms, (lect, ms[:4]))
     return L
 
 
@@ -445,20 +446,24 @@ def exit_win(p, L, key):
         if tag[0] == "r":
             L.put_hero(L.lair, 14, 1)
         m = list(p.z.read_memory(S["ROOM_MAP"], 576))
-        want = room_model.render_room(room_model.read_block(p), L.lair)
+        ms = map_structure(p, L.lair)               # (animated decor as the pair: see L above)
         check(f"W6 the lair {tag}: the gate open off-screen (T_GRATE x 3 at c {c}), ROOM_MAP == room_model",
               p.rb("CUR_ROOM") == L.lair and all(m[F1 * 32 + c + k] == S["T_GRATE"] for k in range(3))
-              and m == want, (p.rb("CUR_ROOM"), m[F1 * 32 + c:F1 * 32 + c + 3],
-                              [(j % 32, j // 32, m[j], want[j]) for j in range(576) if m[j] != want[j]][:4]))
+              and not ms, (p.rb("CUR_ROOM"), m[F1 * 32 + c:F1 * 32 + c + 3], ms[:4]))
     L.place(c, 1, left=False)
     p.set_ent(0, HP=1)
+    p.wb("END_SHOWN", 0)    # ENDCARD-G1: an earlier GS_DEAD (A / W5, revived by play_mode) left it set; a real
+                            # run's new_game clears it, else GS_WIN skips the card (end_screen draws it once)
     p.turn("J")
     p.until(lambda: p.idle(), 900)
     p.until(lambda: p.rb("LOG_QN") == 0, 200)
     p.settle(2)
-    check("W6 DOWN at c with HP 1: GS_WIN, depth stays 8, the last line 'YOU WIN!'",
+    # ENDCARD-G1 (30dc3b1): GS_WIN shows the full-screen end card (no panel / log row 23 any more):
+    # its title "YOU WIN!" (menu font, row EC_TROW, col 12) replaces the old last-log-line check
+    check("W6 DOWN at c with HP 1: GS_WIN, depth stays 8, the end card 'YOU WIN!'",
           p.rb("GAME_STATE") == GS_WIN and p.rb("LVL_DEPTH") == 8
-          and log_row(p.frame(), 23) == text6(TXT["end_win"]), (p.rb("GAME_STATE"), p.rb("LVL_DEPTH")))
+          and menu_text_ok(p, p.frame(), S["EC_TROW"], 12, "YOU WIN!"),
+          (p.rb("GAME_STATE"), p.rb("LVL_DEPTH"), p.rb("END_SHOWN")))
 
 
 def mage(p):
