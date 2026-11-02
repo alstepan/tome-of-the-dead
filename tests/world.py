@@ -532,11 +532,10 @@ def bank_bytes(p, bank, addr, n):
 def menu_text_ok(p, fr, row, col, txt):
     """C3-6: txt drawn in the 8x16 menu font (bank-1 menu_font / _map) at
     cell (col, row): each char = 2 cells (rows row, row+1), 1 col."""
-    fmap = bank_bytes(p, 1, S["menu_font_map"], 64)
+    import menu_art                                  # RECLAIM-B T3: the glyph model (asm range arithmetic)
     font = bank_bytes(p, 1, S["menu_font"], S["MENU_FONT_COUNT"] * 16)
     for i, ch in enumerate(txt):
-        g = fmap[ord(ch) - 32]
-        g = 0 if g == 0xFF else g
+        g = menu_art.font_glyph(ord(ch))
         gl = font[g * 16:g * 16 + 16]
         if bytes(cell_bytes(fr, col + i, row)) != gl[:8] or bytes(cell_bytes(fr, col + i, row + 1)) != gl[8:]:
             return False

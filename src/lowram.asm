@@ -1089,7 +1089,21 @@ door_open:
                 ret
 
 ;------------------------------------------------------------------------------
-; mon_door — try_step's step into a closed plank, IX = monster, A = dx: an
+; kfl — RECLAIM-B: the body of KFIELD as a routine (low RAM: callable from bank
+; 3 / 6 / 7 code; kind_tab is bank 2, always mapped). Use through the KFL macro.
+; In : HL = kind_tab + KT_x, IX = entity.  Out: A = kind_tab[KT_x + kind],
+;      HL = its address (as KFIELD: kind_tab is page-aligned, kind < 32).
+; Clobbers: A, L, F.   44 T (+27 T at the site: ld hl + call)
+;------------------------------------------------------------------------------
+kfl:
+                ld   a, (ix+E_KIND)
+                add  a, l
+                ld   l, a
+                ld   a, (hl)
+                ret
+
+;------------------------------------------------------------------------------
+; mon_door —try_step's step into a closed plank, IX = monster, A = dx: an
 ; opener (KF_OPENER, never a flyer) opens it instead of moving, spending its
 ; turn (CF = 1, nothing moves); a non-opener, a flyer or a locked / sealed
 ; door: blocked (CF = 0; its AI tries its next choice or waits, §9.1).
@@ -1100,7 +1114,7 @@ mon_door:
                 ld   a, (YIELD_FLAG)           ; a yield step never opens a door:
                 or   a                         ; blocked, so the yield tries the
                 ret  nz                        ; other side (CF = 0: or a)
-                KFIELD KT_FLAGS
+                KFL    KT_FLAGS
                 and  KF_OPENER | KF_FLYER
                 cp   KF_OPENER
                 ld   a, b
@@ -1376,7 +1390,7 @@ climb_blocked:
                 jr   nc, .n
                 ld   (ix+E_MODE), M_REST
                 set  EF_PENDING_BIT, (ix+E_FLAGS)
-                KFIELD KT_FLAGS                ; B16: the foot cell is in a flyer's
+                KFL    KT_FLAGS                ; B16: the foot cell is in a flyer's
                 and  KF_FLYER                  ; band only on its own storey: one
                 jr   z, .mv                    ; of the other storey stays PENDING
                 call storey_ref                ; in place (else it was dropped onto
@@ -1726,10 +1740,10 @@ jump_bodies:
                 jr   nz, .n
                 call box_vs_ix
                 jr   nc, .n
-                KFIELD KT_BH
+                KFL    KT_BH
                 cp   3
                 jr   nc, .hit
-                KFIELD KT_BW
+                KFL    KT_BW
                 cp   5                         ; J1: 32-px Rat / Spider are low
                 jr   nc, .hit
                 call is_standing

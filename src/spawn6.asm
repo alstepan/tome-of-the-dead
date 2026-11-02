@@ -288,7 +288,7 @@ sp_run:         ld   hl, SPQ_K
                 ld   (SP_S), a
                 ld   a, (ix+E_X)
                 ld   (SP_AX), a
-                KFIELD KT_BW
+                KFL    KT_BW
                 add  a, (ix+E_X)
                 ld   (SP_AR), a
 .nd:            ld   a, (SP_KB)
@@ -371,7 +371,7 @@ sp_y:           ld   (SP_S), a
                 add  a, a
                 add  a, c
                 ld   c, a                      ; 9s
-                KFIELD KT_FLAGS
+                KFL    KT_FLAGS
                 and  KF_FLYER
                 ld   a, c
                 jr   z, .w
@@ -450,7 +450,7 @@ sp_try:         ld   (ix+E_X), a
                 ret  c                         ; runs past the last col
                 call box_free                  ; (bank 2; keeps BC, DE) a body there
                 ret  c
-                KFIELD KT_FLAGS
+                KFL    KT_FLAGS
                 and  KF_FLYER
                 jp   nz, box_solid             ; (bank 2) CF = a solid cell
                 ld   a, b
@@ -515,7 +515,7 @@ sp_door:        call cur_room_desc             ; (bank 2) HL, L low nibble = 0
                 ld   a, e
                 or   a
                 jr   nz, .x
-                KFIELD KT_BW                   ; the right door: 31 - w
+                KFL    KT_BW                   ; the right door: 31 - w
                 cpl
                 add  a, ROOM_COLS
 .x:             ld   (ix+E_X), a

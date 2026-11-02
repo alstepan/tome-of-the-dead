@@ -1302,15 +1302,35 @@ mf_char:        ld   (mf_row), bc
                 ld   a, e
                 ld   (mf_attr), a
                 pop  af
-mf_char_e:      sub  MENU_FONT_MAP_LO
-                ld   l, a
-                ld   h, 0
-                ld   de, menu_font_map
-                add  hl, de
-                ld   a, (hl)
-                cp   $FF
-                jr   nz, .g
-                xor  a                         ; absent: glyph 0 (space)
+; RECLAIM-B T3: ASCII -> glyph by range arithmetic (was a 64-B map; same glyph for all
+; 41 charset chars, absent -> 0 = space; tools/menu_art.py `font_glyph` is the model
+; and asserts it against the charset). Cold path (menu text only). A = char in,
+; glyph out; DE is dead here (reloaded below).
+mf_char_e:      cp   'A'
+                jr   c, .lo
+                cp   'Z' + 1
+                jr   nc, .sp
+                sub  50                        ; 'A'..'Z' -> 15..40
+                jr   .g
+.lo:            cp   '0'
+                jr   c, .pu
+                cp   ':' + 1
+                jr   c, .dg
+                cp   '>'
+                ld   a, 14
+                jr   z, .g
+.sp:            xor  a                         ; absent: glyph 0 (space)
+                jr   .g
+.dg:            sub  45                        ; '0'..'9' -> 3..12, ':' -> 13
+                jr   .g
+.pu:            sub  32                        ; ' ' 0, '!' 1, '-' (13) -> 2
+                jr   z, .g
+                cp   1
+                jr   z, .g
+                cp   13
+                ld   a, 2
+                jr   z, .g
+                xor  a
 .g:             ld   l, a
                 ld   h, 0
                 add  hl, hl

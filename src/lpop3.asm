@@ -315,7 +315,7 @@ lp_transition:
                 call lp_bank
                 ; the hero's arrival box (do_exit places it there after the scroll)
                 ld   ix, P_ENTITIES
-                KFIELD KT_BW
+                KFL    KT_BW
                 ld   (LP_HW), a
                 ld   b, a
                 ld   a, (EXIT_KIND)

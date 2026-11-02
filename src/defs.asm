@@ -200,7 +200,7 @@ TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
 ; 45 + 29 B costs 0 slack (1,264 kept), but 45 + 30..250 B costs one 240-B variant
 ; (slack 1,024) and 45 + 260 B 880. M1 (user 2026-11-01) took the 240-B step: total reserve 2,624 B
 ; (cliff measured: B0_CODE_RES 206 -> slack 1,024, 207 -> 384, with TEXT_RES 2,418).
-TEXT_RES        EQU 2367 + 45                  ; LOG-DMG: text 2367 B (-11: "THE " dropped) + 45 B headroom (M1: 2378 + 40)
+TEXT_RES        EQU 2367 + 33                  ; RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom (was 2384 + 28; LOG-DMG: 2367 + 45)
 B0_CODE_RES     EQU 212                        ; LOG-DMG: log0.asm 212 B (M1: 206, empty); TEXT_RES + B0_CODE_RES
                                                ; = 2,624 (M1) unchanged: one more byte drops the slack to 384 (cliff)
 ; LOG-DMG + DBG-1: kit builds only — kit0.asm (83 B) + log0.asm (212 B) exceed the release reserve by
@@ -976,6 +976,15 @@ ATTR_GRATE      EQU $46             ; lair gate, raised (B12 variant B; tiles_co
                 ld   l, a
                 ld   h, (kind_tab + (off)) >> 8
                 ld   a, (hl)
+    ENDM
+
+; KFL off — RECLAIM-B: KFIELD as a call to the low-RAM `kfl` (6 B per site vs 9,
+; +27 T): only for COLD sites (spawn / level / room-exit / one-off lookups). Same
+; result and clobbers as KFIELD (A, HL = kind_tab + off + kind, F from the add).
+; Hot sites (the AI pass, hit_roll, anim / logic / mark, render) keep KFIELD.
+    MACRO KFL off
+                ld   hl, kind_tab + (off)
+                call kfl
     ENDM
 
 ;------------------------------------------------------------------------------

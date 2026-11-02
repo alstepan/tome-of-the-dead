@@ -146,7 +146,7 @@ new_game:
                 ld   (ix+E_ROOM), ROOM_A
                 ld   (ix+E_FLAGS), EF_ACTIVE | EF_PLAYER
                 ld   (ix+E_X), HERO_START_COL
-                KFIELD KT_BH
+                KFL    KT_BH
                 ld   b, a
                 ld   a, HERO_START_S * STOREY_ROWS + STOREY_AIR
                 sub  b                         ; 9s+8-h

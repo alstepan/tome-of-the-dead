@@ -171,13 +171,7 @@ melee_hit:
                 jr   z, .x                     ; miss: L = 0, H = 0
                 push de
                 push bc
-                KFIELD KT_DIE
-                ld   c, a
-                call rng_mod                   ; 0..N-1 (keeps C, DE)
-                inc  a
-                ld   d, a
-                KFIELD KT_BONUS
-                add  a, d
+                call dmg_roll                  ; 1dN + bonus (turn3; A, BC, D, HL)
                 ld   hl, ABIL_RK + RK_BONUS
                 add  a, (hl)
                 jr   z, .one                   ; 3F-T6: max(1, ...) (the weapon's m < 0)

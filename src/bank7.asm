@@ -1111,14 +1111,14 @@ follow_select:
                 ld   a, (EXIT_KIND)
                 cp   EX_UP
                 jr   c, .hz
-                KFIELD KT_FLAGS                ; vertical: climbers only
+                KFL    KT_FLAGS                ; vertical: climbers only
                 and  KF_CLIMBER
                 jr   z, .cn
 .hz:            ; gap = |boxes| distance
                 ld   a, (TMP0)
                 cp   (ix+E_X)
                 jr   c, .mright
-                KFIELD KT_BW
+                KFL    KT_BW
                 add  a, (ix+E_X)
                 ld   b, a
                 ld   a, (TMP0)

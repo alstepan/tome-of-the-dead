@@ -152,13 +152,13 @@ spawn_one:
                 add  a, a
                 add  a, c
                 ld   c, a                      ; 9s
-                KFIELD KT_FLAGS
+                KFL    KT_FLAGS
                 and  KF_FLYER
                 jr   z, .walker
                 ld   a, c
                 inc  a                         ; flyer cruises at 9s+1
                 jr   .sety
-.walker:        KFIELD KT_BH
+.walker:        KFL    KT_BH
                 ld   b, a
                 ld   a, c
                 add  a, STOREY_AIR
@@ -167,7 +167,7 @@ spawn_one:
                 ; fall through
 ; init_ent_common — hp/max from the kind, px/py from x/y, render state reset.
 init_ent_common:
-                KFIELD KT_HP
+                KFL    KT_HP
                 ld   (ix+E_HP), a
                 ld   (ix+E_MAXHP), a
                 call snap_pxpy
@@ -244,7 +244,7 @@ follow_admit:
                 jr   nc, .pick
                 ld   (TMP4), a
                 jr   .admit
-.tall:          KFIELD KT_FLAGS
+.tall:          KFL    KT_FLAGS
                 and  KF_TALL
                 jr   z, .admit
                 ld   a, (TMP4)
@@ -278,14 +278,14 @@ place_follower:
                 ld   (ix+E_X), 1
                 res  EF_LEFT_BIT, (ix+E_FLAGS)
                 jr   .hy
-.fromleft:      KFIELD KT_BW
+.fromleft:      KFL    KT_BW
                 ld   b, a
                 ld   a, ROOM_COLS - 1
                 sub  b
                 ld   (ix+E_X), a
                 set  EF_LEFT_BIT, (ix+E_FLAGS)
 .hy:            set  EF_WALKIN_BIT, (ix+E_FLAGS)
-                KFIELD KT_FLAGS
+                KFL    KT_FLAGS
                 and  KF_FLYER
                 ret  nz                        ; flyers keep their band offset (same s)
                 ld   a, (EXIT_STOREY)
@@ -300,7 +300,7 @@ place_follower:
 .stand:         MUL_STOREY b
                 add  a, STOREY_AIR             ; 9s+8
                 ld   b, a
-                KFIELD KT_BH
+                KFL    KT_BH
                 ld   c, a
                 ld   a, b
                 sub  c
@@ -332,7 +332,7 @@ dest_counts:
                 or   a
                 ld   a, (ix+E_KIND)
                 jr   nz, .w
-                KFIELD KT_FLAGS
+                KFL    KT_FLAGS
                 and  KF_TALL
                 jr   z, .n
                 ld   hl, TMP4
@@ -556,7 +556,7 @@ level_populate:
                 ld   a, c
                 or   EF_ACTIVE | EF_PLAYER
                 ld   (ix+E_FLAGS), a
-                KFIELD KT_BH
+                KFL    KT_BH
                 ld   b, a
                 ld   a, FLOOR_ROW0             ; storey 0: 8 - h
                 sub  b
@@ -576,7 +576,7 @@ level_populate:
                 ld   (LP_HX), a                ; storey 0 at its start col (quota 0:
                 xor  a                         ; nothing spawns; the record becomes
                 ld   (LP_HS), a                ; VISITED, ROOM_VISITS = 1)
-                KFIELD KT_BW
+                KFL    KT_BW
                 ld   (LP_HW), a
                 ld   a, (LVL_START)
                 call lp_enter
