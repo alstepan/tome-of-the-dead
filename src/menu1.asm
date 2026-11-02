@@ -1125,47 +1125,168 @@ page_post:      ld   hl, (PAGE_VERB)           ; L = verb, H = slot (PAGE_SLOT f
                 ASSERT PAGE_SLOT == PAGE_VERB + 1
 
 ;------------------------------------------------------------------------------
-; end_card — far1 from end_screen (first tick of GS_DEAD / GS_WIN): A = the
-; state. "YOU DIED" / "YOU WIN!" (menu font, rows 8-9), the STATS1 rows 10-12 (es_stats:
-; KILLS / TURNS, es_best: BEST KILL) and "PRESS 1-4 OR ENTER" (row 14) over playfield
-; rows 7-14 of the bank-5 screen (attr $47 for the whole box), marked for present.
+; end_card — ENDCARD-G1 (user 2026-11-02, plan "ENDCARD-L1F-G1"): far1 from end_screen (the
+; first tick of GS_DEAD / GS_WIN): A = the state. A clean full screen (black border, attr
+; EC_ATTR): the title in the menu font (row EC_TROW) — "KILLED BY" + the killer's kind name
+; (ST1_KILLER), "YOU DIED" (no monster killer), "YOU WIN!" + "THE TOME IS DESTROYED"; on the
+; left the killer's first KS_MOVE frame (1x, facing right) or, on a win, the D8 lectern (4
+; common tiles, written into the dead room map and drawn by tile_rect); on the right the hero's
+; KS_IDLE frame (facing left); the table (ec_tab, bank 3) and "PRESS 1-4 OR ENTER" (row 22);
+; then the whole screen is presented (present_full; it leaves bank 7 paged, farb re-pages).
+; Feet row of both portraits = the table's first row + 7. Clobbers: all but IY.
+; Cost ~0.35M T (clear 0.1M + present_full 0.15M + text + 2 blits), once.
 ;------------------------------------------------------------------------------
-END_ROWS        EQU 8                          ; the card box: rows 7 .. 7 + END_ROWS - 1
-end_card:       ld   c, a
-                push bc
-                ld   b, 7
-.c:             push bc
-                call row_clear
-                pop  bc
-                inc  b
-                ld   a, b
-                cp   7 + END_ROWS
-                jr   c, .c
-                ld   a, $47                    ; bright white on black: the title, PRESS and the
-                ld   bc, 7 << 8                ; stats print into it (print6 sets no attrs)
-                ld   de, (32 << 8) | END_ROWS
+end_card:       push af
+                xor  a
+                out  (PORT_BORDER), a          ; (the ALARM's red border may be up)
+                ld   a, EC_ATTR
+                call clear_screen              ; (keeps A)
+                ld   a, EC_A_HERO              ; the CLASS / LEVEL / DEPTH rows of either
+                ld   bc, (10 << 8) | 9         ; layout (rows 10-12 or 11-13, cols 9-24); the
+                ld   de, (16 << 8) | 4         ; killer's portrait (cols <= 10) stamps after
                 call stamp_rect
-                pop  bc
-                ld   a, c
+                pop  af
+                ld   bc, (EC_TROW << 8) | 12
                 cp   GS_WIN
+                jr   z, .win
+                ld   a, (ST1_KILLER)
+                add  a, a
+                jr   c, .kil                   ; $80 | kind
                 ld   a, TX_END_DEAD
-                ld   e, $42                    ; red
-                jr   nz, .d
-                ld   a, TX_END_WIN
-                ld   e, $46
-.d:             ld   bc, (8 << 8) | 12
-                call mf_tx
-                ld   hl, es_stats              ; STATS1 S1: KILLS / TURNS rows (bank 7 stat7.asm)
-                call far7
-                ld   hl, es_best               ; BEST KILL row (bank 3, combat3.asm)
-                call far3
-                ld   a, TX_END_PRESS
-                ld   b, ES_ROW + 4
-                ld   e, 10 * 8
+                ld   e, EC_A_DEAD
+                call mf_tx_attr
+                ld   de, (10 << 8) | 72        ; no portrait on the left: the table at x 72
+                jr   .tab
+.kil:           rrca                           ; A = the kind
+                push af
+                add  a, TX_NM_KNIGHT
+                ld   e, EC_A_NAME
+                ld   c, 16
+                call mf_tx_attr
+                ld   a, TX_END_KILLED
+                ld   e, EC_A_KBY
+                ld   bc, (EC_TROW << 8) | 6
+                call mf_tx_attr
+                pop  af
+                ld   bc, (17 << 8) | 4         ; feet row 17, col 4 (<= 6 cols + the spill: col 10)
+                ld   de, KS_MOVE               ; D = 0: facing right
+                call ec_kind
+                ld   de, (10 << 8) | 88
+                jr   .tab
+.win:           ld   a, TX_END_WIN
+                ld   e, EC_A_WIN
+                call mf_tx_attr
+                ld   a, TX_WIN                 ; "THE TOME IS DESTROYED"
+                ld   b, EC_TROW + 2
+                ld   e, 64
                 call print6x
-                ld   bc, 7 << 8
-                ld   de, (32 << 8) | END_ROWS
-                jp   pmark_rect
+                ld   hl, ROOM_MAP + 16 * ROOM_COLS + 6   ; the run is over: the map is dead
+                ld   a, T_LECT_TL
+                ld   (hl), a
+                inc  l
+                inc  a
+                ld   (hl), a                   ; T_LECT_TR
+                ld   l, (17 * ROOM_COLS + 6) & $FF
+                inc  a
+                ld   (hl), a                   ; T_LECT_BL
+                inc  l
+                inc  a
+                ld   (hl), a                   ; T_LECT_BR
+                ld   bc, (16 << 8) | 6
+                ld   de, (2 << 8) | 2
+                call tile_rect                 ; (low RAM; glyph + TILE_ATTRS)
+                ld   de, (11 << 8) | 88
+.tab:           push de
+                ld   hl, ec_tab                ; bank 3 (combat3.asm); DE passes in
+                call far3
+                pop  de
+                ld   a, d
+                add  a, 7
+                ld   b, a                      ; the feet row
+                ld   a, (HERO_KIND)
+                ld   c, 28
+                ld   de, (6 << 8) | KS_IDLE    ; D = 6: facing left
+                call ec_kind
+                ld   a, TX_END_PRESS
+                ld   b, 22
+                ld   e, 72
+                call print6x
+                jp   present_full
+                ASSERT T_LECT_TR == T_LECT_TL + 1 && T_LECT_BL == T_LECT_TL + 2 && T_LECT_BR == T_LECT_TL + 3
+                ASSERT (ROOM_MAP & $FF) == 0 && ((ROOM_MAP + 16 * ROOM_COLS) >> 8) == ((ROOM_MAP + 17 * ROOM_COLS + 7) >> 8)
+                ASSERT KS_IDLE == 0 && KS_MOVE < 256
+
+;------------------------------------------------------------------------------
+; ec_kind — A = kind, E = a sequence slot (KS_IDLE / KS_MOVE: a cycle), B = the feet row,
+; C = the col, D = facing (0 right / 6 left): the cycle's first frame (the per-level sequence
+; cache: the kind is on this level) in the kind's KT_ATTR, through ec_port.
+; ec_port — A = fid, E = attr, B / C / D as above: blit_keep at (C * 8 [+ 4 when only the
+; shift-4 variant exists: a WK4 walk frame], feet * 8 - FT_H), facing D; then the attr box
+; rows feet - 8 .. feet - 1, cols C .. C + FT_COLS. Clobbers: A, BC, DE, HL.
+;------------------------------------------------------------------------------
+ec_kind:        add  a, KT_ATTR & $FF
+                ld   l, a
+                ld   h, (kind_tab + KT_ATTR) >> 8
+                ld   a, (hl)                   ; attr
+                push af
+                ld   a, l
+                add  a, KT_SEQ - KT_ATTR
+                ld   l, a
+                ld   a, (hl)                   ; the kind's SEQ_ROWS row
+                add  a, e
+                ld   l, a
+                ld   h, seq_rows >> 8
+                ld   a, (hl)
+                inc  l
+                ld   h, (hl)
+                ld   l, a                      ; HL = the cycle: total ticks, (fid, ticks)...
+                inc  hl
+                ld   a, (hl)                   ; its first fid
+                pop  hl
+                ld   e, h
+ec_port:        ld   (BL_FID), a
+                push de
+                call frt_ptr                   ; HL = the FRT row (bank 2; A, DE)
+                pop  de
+                ld   a, d
+                ld   (BL_LEFT), a
+                add  a, l
+                ld   l, a                      ; the facing's shift-0 variant
+                ld   a, (hl)
+                inc  a                         ; Z: FRT_NONE
+                ld   a, c
+                rlca
+                rlca
+                rlca
+                jr   nz, .s
+                or   4
+.s:             ld   (BL_FPX), a
+                ld   a, l
+                or   $0F
+                sub  3 - FT_H                  ; L = row + FT_IN_ROW + FT_H
+                ld   l, a
+                ld   a, b
+                rlca
+                rlca
+                rlca
+                sub  (hl)
+                ld   (BL_FPY), a               ; feet * 8 - H
+                dec  l
+                ld   d, (hl)                   ; FT_COLS
+                inc  d                         ; + the spill col
+                push bc
+                push de
+                call blit_keep
+                pop  de
+                pop  bc
+                ld   a, b
+                sub  8
+                ld   b, a
+                ld   a, e
+                ld   e, 8
+                jp   stamp_rect
+                ASSERT FRT_NONE == $FF && FT_IN_ROW + 3 == 15 && FT_COLS == FT_H - 1 && FRT_STRIDE == 16
+                ASSERT (KT_ATTR >> 8) == (KT_SEQ >> 8) && (kind_tab & $FF) == 0
 
 ;------------------------------------------------------------------------------
 ; level_card — far1 from level_show (low RAM): A = depth 1..8: "DEPTH n" in

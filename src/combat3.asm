@@ -333,8 +333,16 @@ deal_hit:
                 ld   (hl), a
                 ASSERT ST_T1 > ST_FLAGS && ST_T2 > ST_T1 && (ST_FLAGS >> 8) == (ST_T2 >> 8)
                 bit  EF_PLAYER_BIT, (ix+E_FLAGS)
-                jr   nz, .heal                 ; the hero's death awards nothing
-                call mon_drop                  ; 3E-T11: drop / boss unique (drop3.asm; keeps IX)
+                jr   z, .mk                    ; the hero's death awards nothing; ENDCARD-G1:
+                ld   hl, (ATK_PTR)             ; the killer = the attacker's kind (E_KIND = 0)
+                ld   a, (hl)
+                cp   K_WIZARD + 1
+                jr   c, .heal                  ; the hero himself (trap_hit, his own bolt): 0
+                or   $80
+                ld   (ST1_KILLER), a
+                jr   .heal
+                ASSERT E_KIND == 0 && K_KNIGHT < K_WIZARD + 1
+.mk:            call mon_drop                 ; 3E-T11: drop / boss unique (drop3.asm; keeps IX)
                 call kill_note                 ; STATS1: A = KXP (+ the hero's kill count / best kind)
                 bit  EF_RESPAWN_BIT, (ix+E_FLAGS)
                 jr   z, .xp
@@ -429,29 +437,73 @@ kill_note:
                 ASSERT (ST1_KILLS >> 8) == (ST1_BXP >> 8) && ST1_BL == ST1_BXP - 1 && ST1_BXP == ST1_KILLS + 3 && K_COUNT <= 32
 
 ;------------------------------------------------------------------------------
-; es_best — STATS1 S1: far3 from end_card: row ES_ROW + 2 "BEST KILL <kind name>" (the label at
-; ES_LX, the name at ES_VX); nothing when the hero killed nothing. ST1_BL = 8 * kind + 4: three
-; rrca leave kind + $80, so the TX id is kind + TX_NM_KNIGHT = A + (TX_NM_KNIGHT - $80) mod 256.
-; Clobbers: A, BC, DE, HL.   ~1.5k T (once, at the end card)
+; ec_tab — ENDCARD-G1 (STATS1 S1's rows): far3 from end_card: the end card's one label / value
+; table (6x8 font). In: D = the first row, E = the label x (px, a multiple of 8; the values at
+; x + EC_VX). Rows: CLASS <WARRIOR / MAGE>, LEVEL n (LVL), DEPTH n (LVL_DEPTH), a gap, KILLS n
+; (ST1_KILLS), TURNS n (TURN_COUNTER), BEST KILL <kind> (only after a kill: ST1_BL = 8 * kind + 4
+; is 0 until the first kill; three rrca leave kind + $80). Numbers without leading zeros
+; (es_num). The printers hand bank 3 back. Clobbers: A, BC, DE, HL.   ~45k T (once)
 ;------------------------------------------------------------------------------
-es_best:
+ec_tab:         ld   (EC_POS), de              ; EC_POS = the label x, EC_POS + 1 = the row
+                ld   a, (HERO_KIND)
+                add  a, TX_CLS_WARRIOR
+                ld   b, TX_END_CLASS
+                call ec_txv
+                ld   hl, LVL
+                ld   a, TX_END_LEVEL
+                call ec_byte
+                ld   hl, LVL_DEPTH
+                ld   a, TX_CARD_DEPTH          ; "DEPTH " (the level card's)
+                call ec_byte
+                ld   hl, EC_POS + 1
+                inc  (hl)                      ; the gap
                 ld   hl, (ST1_KILLS)
-                ld   a, h
-                or   l
-                ret  z
-                ld   a, TX_END_BEST
-                ld   b, ES_ROW + 2
-                ld   e, ES_LX
-                call print6x                   ; (low RAM / bank 2: restores bank 3)
-                ld   a, (ST1_BL)
+                ld   a, TX_END_KILLS
+                call ec_num
+                ld   hl, (TURN_COUNTER)
+                ld   a, TX_END_TURNS
+                call ec_num
+                ld   a, (ST1_BL)               ; (not ST1_KILLS: 65,536 kills wrap it to 0)
+                or   a
+                ret  z                         ; no kill: no BEST row
                 rrca
                 rrca
                 rrca
                 add  a, (TX_NM_KNIGHT - $80) & $FF
-                ld   b, ES_ROW + 2
-                ld   e, ES_VX
-                jp   print6x
-                ASSERT TX_NM_KNIGHT + K_COUNT < 256
+                ld   b, TX_END_BEST
+                ; fall through
+; ec_txv — B = the label, A = the value's TX id (decoded into TX_DEC).
+ec_txv:         push bc
+                call tx_dec                    ; HL = TX_DEC (low RAM)
+                pop  af                        ; A = the label (B)
+                jr   ec_row
+; ec_byte — A = the label, HL -> the value byte.  ec_num — HL = the value (0..65535).
+ec_byte:        ld   l, (hl)
+                ld   h, 0
+ec_num:         push af
+                ld   de, MSG_BUF
+                call es_num                    ; (low RAM)
+                pop  af
+                ld   hl, MSG_BUF
+; ec_row — A = the label's TX id, HL = the value (plain 0-terminated text: a valid token
+; stream) -> the label at (EC_POS + 1, EC_POS), the value EC_VX px right; the row += 1.
+ec_row:         push hl
+                ld   hl, (EC_POS)
+                ld   b, h
+                ld   e, l
+                ld   c, l                      ; (kept: print6x clobbers B, D)
+                inc  h
+                ld   (EC_POS), hl
+                push bc
+                call print6x
+                pop  bc
+                pop  hl
+                ld   a, c
+                add  a, EC_VX
+                ld   e, a
+                jp   print6t
+                ASSERT TX_NM_KNIGHT + K_COUNT < 256 && EC_POS + 1 == TMP7 && TX_CLS_MAGE == TX_CLS_WARRIOR + 1
+                ASSERT K_WIZARD == K_KNIGHT + 1 && K_KNIGHT == 0
 
 ;------------------------------------------------------------------------------
 ; dh_status — deal_hit step 5 for a surviving target (IX = target, dh_* set):

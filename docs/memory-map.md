@@ -4757,7 +4757,7 @@ without spending D8 pool slack. Behaviour unchanged (moves only); measured by th
   Pool (`POOL_CAP` 32,490 -> 32,416): D8 Warrior need 31,226 -> 31,152, slack **1,264** (unchanged); every
   level / hero re-measured in `tests/zx0_pool.py` `LEVEL_NEED`.
 - **RAM reserves (EQUs only, 0 code):** `TOME_HP` = `EDGE_TAB + 8` `$6D58` (1 B, LVL_STATE spare, zeroed per level by
-  `attempt`; P3); `ST1_CNT` `$5D51..$5D55` (`ST1_LEN` 5, ITEM_RAM 81 -> 86, zeroed by `new_game`; STATS1 S1).
+  `attempt`; P3); `ST1_CNT` `$5D51..$5D55` (`ST1_LEN` 5, ITEM_RAM 81 -> 86, zeroed by `new_game`; STATS1 S1; ENDCARD-G1: `ST1_KILLER` = `ST1_CNT + 4` `$5D55`).
 
 | Region (release) | before (main `d967e0f`) | after M0 | feature budgets (sum) | left |
 |---|---|---|---|---|
@@ -5063,7 +5063,7 @@ leading zeros (5 digits max). Free bytes, release `-DDEBUG_KIT=0`, before (main 
 | kit | b0 free 2 | 0 | | `B0_KIT_RES` 40 -> 62 (the kit's pool slack stays at its 384 variant; `tests/kit.py`) |
 
 RAM: `ST1_CNT` (5 B in `ITEM_RAM`, zeroed by `new_game`): `ST1_KILLS` word, `ST1_BL` = the best kind's `kx_tab`
-entry low byte (8 * kind + `KX_XP`; `kx_tab` is page-aligned), `ST1_BXP` = its KXP, 1 B spare. `ES_ROW` /
+entry low byte (8 * kind + `KX_XP`; `kx_tab` is page-aligned), `ST1_BXP` = its KXP, 1 B spare (**ENDCARD-G1: now `ST1_KILLER`**). `ES_ROW` /
 `ES_LX` / `ES_VX` (item_defs.asm) place the rows. Turns = the existing `TURN_COUNTER` (word, `end_turn`).
 Rules: only HERO kills count (`kill_note` tests `ATK_PTR == P_ENTITIES`: melee, Whirlwind, spells, arrows and daggers
 carry the hero; a monster killing a monster and the Archmage's own Mirror Helm return do not); respawned kills
@@ -5268,3 +5268,40 @@ Free bytes from the build DISPLAY (release `-DDEBUG_KIT=0`, main `704918e` -> af
 | (d2) | bank 2 / bank 3 / R6 / bank 7 | main 135 / 81 / 25 / 30 | **150 / 96 / 24 / 30** | bank 2 +15 ((b) +32, `ldir7` -17), bank 3 +15 ((a) +48, (b) +8, (e) -41), R6 -1 (page-overlay repack); kit R6 29 |
 
 RECLAIM-C totals after the main merge (release, main `7485ffa` -> `feat/reclaim-c`): **bank 1 34 -> 176 (+142)**, bank 3 81 -> 96 (+15), bank 2 135 -> 150 (+15), AY slot 57 -> 9 (-48), R6 25 -> 24 (-1), bank 7 low 30 / high / low RAM / b0 / SRC6 unchanged. Goldens `game_select` / `game_select_mage` / `w24_menu` re-captured: the menu torches' LOOK-1 flame (user request 2026-11-02). `world` W21 / W26 fail on main `7485ffa` too (LOOK-1 / FLAME-RATE decor, not RECLAIM-C).
+
+## ENDCARD-G1 ledger (`feat/endcard-g1b`, 2026-11-02; plan "ENDCARD-L1F-G1", the approved L1f card with the G1 table)
+
+The end card (GS_DEAD / GS_WIN, `end_screen` -> far1 `end_card`) is a clean full screen: black border, `clear_screen`
+attr `EC_ATTR` $47, the title in the 1x menu font at row `EC_TROW` 6 (`KILLED BY` cyan cols 6.. + the killer's kind
+name magenta col 16 / `YOU DIED` red col 12 / `YOU WIN!` yellow col 12 + `THE TOME IS DESTROYED` print6x row 8 x 64),
+left: the killer's first `KS_MOVE` frame 1x facing right (feet row 17, col 4; `ec_kind` -> `ec_port` = `blit_keep` +
+the kind's `KT_ATTR` box) or, on a win, the 4 lectern tiles (`T_LECT_*` written into the dead `ROOM_MAP` at rows
+16-17 cols 6-7, `tile_rect`); right: the hero's `KS_IDLE` frame facing left (col 28, feet = the table's first row +
+7); the table `ec_tab` (bank 3, far3; `EC_POS` = `TMP6` / `TMP7`: label x, row): `CLASS` / `LEVEL` (`LVL`) /
+`DEPTH` (`LVL_DEPTH`) yellow, gap, `KILLS` / `TURNS` / `BEST KILL` (only once `ST1_BL` != 0) white, values at label
+x + `EC_VX` 64 (died: rows 10.., x 72; killer: rows 10.., x 88; win: rows 11.., x 88); `PRESS 1-4 OR ENTER` row 22
+x 72; then `present_full`. `panel_tick` no longer runs on the card (no panel): the death / win log line is flushed by
+`panel_init7` at the next game (checked by the previous engineer). Killer: `deal_hit .kill` of the HERO stores
+`ST1_KILLER` = `$80 | kind` of `ATK_PTR`'s entity unless it is a hero kind (his own blow / `trap_hit`); poison,
+falls, the Tome's aura, traps = 0 = `YOU DIED`; zeroed by `new_game` (ST1_CNT) and by the kit build's revive
+(`end_turn .dead`, kit only). Removed: `es_stats` (stat7.asm), `es_item` (stat7i.asm), `es_best`, `ES_ROW/LX/VX`.
+
+Free bytes from the build DISPLAY, main `da0f4dd` -> `feat/endcard-g1b`:
+
+| Region | Before | After | Change |
+|---|---|---|---|
+| bank 1 (release = kit) | 176 | **6** | -170: `end_card` 76 -> 161, `ec_kind` 24 + `ec_port` 61 (bank 1: the trace / kit builds have only 81 B in bank 2) |
+| bank 3 (all builds) | 96 | **4** | -92: `ec_tab` 107 (CLASS / LEVEL / DEPTH / KILLS / TURNS / BEST rows, `ec_txv` / `ec_byte` / `ec_num` / `ec_row`) replaces `es_best` 30, the killer store in `deal_hit` +15 |
+| bank 7 low (release / kit) | 22 / 6 | **45 / 26** | +23 `es_item` gone; kit -3 the revive's `ld (ST1_KILLER), a` |
+| bank 7 high | 1 | **21** | +20 `es_stats` gone |
+| bank 2 (release / trace + kit) | 140 / 81 | **143 / 84** | +3: `end_screen .shown` no longer calls `panel_tick` (no panel on the card) |
+| text (bank 0) | 2,372 B, headroom 28 | **2,390 B, headroom 10** | +18: `end_killed` "KILLED BY", `end_class` "CLASS", `end_level` "LEVEL" (`DEPTH ` = `card_depth`, the class names = `TX_CLS_*`, kind names = `TX_NM_*` reused); `TEXT_RES` unchanged |
+| b0 release / kit | 28 / 7 | **10 / 7** | kit: `B0_KIT_RES` 62 -> **80** (kit pool slack stays 384; release `POOL_START` `$CA34`, slack 1,024 unchanged) |
+| R6 release / kit | 3 / 8 | **5 / 10** | page-overlay stream repack (bank-1 helper addresses moved) |
+| low RAM | 11 | 11 | `es_num` unchanged (now called by `ec_tab`) |
+
+Cost: once per game end (clear + present_full + text + 2 blits, ~0.35M T, a static screen; `tests/budget.py` reports
+the end-card tick, not gated). Tests: `tests/stats1.py` E (3 cases x Warrior / Mage: title in the menu font, table
+rows text6 pixel-exact, PRESS row, `ST1_KILLER` after the fatal blow, whole-frame goldens
+`tests/golden/endcard_{killer,died,win}_{warrior,mage}.hash`: new, the card did not exist), `tests/kit.py` D / X
+(`ST1_KILLER` stored, cleared by the revive).

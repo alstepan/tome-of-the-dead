@@ -3,7 +3,7 @@
 
 The hook is kill_note (bank 3, combat3.asm): deal_hit's monster-kill path, ATK_PTR == the hero.
 ST1_KILLS (16-bit, no saturation: it wraps at 65,536), ST1_BXP / ST1_BL = the best kind (KXP >=: a
-tie goes to the LATEST kill), TURN_COUNTER = the turns. The end card prints rows 10-12 + PRESS 14.
+tie goes to the LATEST kill), TURN_COUNTER = the turns; ST1_KILLER (ENDCARD-G1) = the hero's killer.
 
 U  unit (deal_hit called from a stub, attacker = slot A, target = slot T):
    U1 hero kills a Rat / Ogre / Goblin: kills 1 2 3, best = the Ogre (KXP 60), the lesser kill keeps it
@@ -17,13 +17,20 @@ U  unit (deal_hit called from a stub, attacker = slot A, target = slot T):
 G  the real game (controls / turns), the counters read right after each:
    G1 Warrior bump kill, G2 Whirlwind kills 2 at once (+2), G3 dagger kill, G4 arrow kill,
    G5 Mage Spark kill, G6 new_game resets the counters (GS_DEAD -> menu -> start)
-E  the end card, death / win / no kills: rows 10 / 11 / 12 (KILLS / TURNS / BEST KILL) + PRESS on row 14
-   == text6 at the exact pixel x, no kills = no BEST row, rows 7-14 attr $47, rows 6 / 15 untouched;
-   PNGs to $STATS1_PNG when set
-Run: ZRCP_PORT=<port> python3 tests/stats1.py
+E  ENDCARD-G1 (user 2026-11-02, plan "ENDCARD-L1F-G1"): the full-screen end card, 3 cases x Warrior / Mage:
+   killed by a monster (deal_hit stores ST1_KILLER = $80 | kind: title KILLED BY + the kind name, its
+   portrait left), YOU DIED (the hero's own / a trap blow: ST1_KILLER 0, no portrait), YOU WIN! (+ the
+   Tome line, the lectern left). Title in the menu font (menu_text_ok), the table CLASS / LEVEL /
+   DEPTH / gap / KILLS / TURNS / BEST KILL == text6 at the exact pixel x (no kills = no BEST row), PRESS
+   on row 22, then the whole frame against tests/golden/endcard_<case>_<hero>.hash (the portraits /
+   attrs; --update-golden rewrites). PNGs to $STATS1_PNG when set
+Run: ZRCP_PORT=<port> python3 tests/stats1.py [--update-golden]
 """
+import hashlib
 import os
 import sys
+
+UPDATE = "--update-golden" in sys.argv               # (before world.py, which resets sys.argv)
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -33,7 +40,7 @@ from game_lib import (Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_RAT, K_GOBLIN,
                       stand_y, frame_png)
 from lp import T  # noqa: E402
 from proj3 import w16  # noqa: E402
-from world import log_row, text6, STRINGS  # noqa: E402
+from world import log_row, text6, menu_text_ok, STRINGS  # noqa: E402
 
 KIT = bool(S.get("KIT_DEBUG", 0))
 STRIDE = S["P_ENT_STRIDE"]
@@ -43,8 +50,24 @@ GS_DEAD, GS_WIN = S["GS_DEAD"], S["GS_WIN"]
 HY = stand_y(1, 6)
 HX = 9
 NOWHERE = 7
-ES_LX, ES_VX = S["ES_LX"], S["ES_VX"]
 PNG = os.environ.get("STATS1_PNG")
+GOLDEN_DIR = HERE / "golden"
+
+
+def golden(name, fr):
+    """ENDCARD-G1: the whole card (bitmap + attrs) hashed; --update-golden writes."""
+    got = hashlib.sha256(bytes(fr[:6912])).hexdigest()
+    path = GOLDEN_DIR / (name + ".hash")
+    if UPDATE:
+        path.write_text(f"frame {got}\n")
+        print(f"[golden] wrote {path}", flush=True)
+        return True
+    try:
+        ref = path.read_text().split()[1]
+    except (FileNotFoundError, IndexError):
+        print(f"[FAIL] golden missing: {path} (run --update-golden)", flush=True)
+        return False
+    return got == ref
 
 
 def kname(kind):
@@ -232,38 +255,64 @@ def main():
               ok and st() == (0, 0, 0) and p.rb("ST1_BL") == 0 and p.rw("TURN_COUNTER") < 20, (ok, st()))
 
         # ------------------------------------------------------------------ end card
-        def card(gs, kills, turns, kind, tag):
-            scene()
+        def card(cls, case, kills, turns, best, tag):
+            """ENDCARD-G1: the full-screen card, pixel-exact text + the golden frame."""
+            scene(cls)
             p.wmem(S["ST1_KILLS"], w16(kills))
-            p.wb("ST1_BL", kind * 8 + 4)
+            p.wb("ST1_BL", best * 8 + 4 if kills else 0)
             p.wb("ST1_BXP", 60 if kills else 0)
             p.wmem(S["TURN_COUNTER"], w16(turns))
-            before = p.frame()
+            p.wb("LVL", 7)
+            p.wb("LVL_DEPTH", 5)
+            if case == "win":
+                gs = GS_WIN
+            else:
+                gs = GS_DEAD
+                p.wb("ST1_KILLER", 0)
+                place(0, HX, HY, EF_ACTIVE | EF_PLAYER, 1)
+                if case == "killer":
+                    mon(1, KILLER, cls=cls)
+                    deal(1, 0)
+                else:
+                    deal(0, 0)                       # the hero's own blow (a trap): no killer
+                want = 0x80 | KILLER if case == "killer" else 0
+                check(f"E {tag}: ST1_KILLER = {want:#x} after the fatal hit", p.rb("ST1_KILLER") == want,
+                      p.rb("ST1_KILLER"))
             p.wb("GAME_STATE", gs)
             p.tick(8)
             p.settle(4)
             fr = p.frame()
             if PNG:
                 frame_png(fr, Path(PNG) / f"{tag}.png")
-            rows = {r: log_row(fr, r, 0, 32) for r in (10, 11, 12, 14)}
-            e10 = orw(text6("KILLS", ES_LX, 32), text6(str(kills), ES_VX, 32))
-            e11 = orw(text6("TURNS", ES_LX, 32), text6(str(turns), ES_VX, 32))
-            e12 = orw(text6("BEST KILL", ES_LX, 32), text6(kname(kind), ES_VX, 32)) if kills else [bytes(32)] * 8
-            e14 = text6("PRESS 1-4 OR ENTER", 80, 32)
-            check(f"E {tag}: row 10 = KILLS {kills}", rows[10] == e10)
-            check(f"E {tag}: row 11 = TURNS {turns}", rows[11] == e11)
-            check(f"E {tag}: row 12 = " + ("BEST KILL " + kname(kind) if kills else "empty (no kills)"), rows[12] == e12)
-            check(f"E {tag}: row 14 = PRESS 1-4 OR ENTER", rows[14] == e14)
-            attrs = [fr[6144 + r * 32 + c] for r in range(7, 15) for c in range(32)]
-            check(f"E {tag}: rows 7-14 attr $47 (bar the title row's own)", all(a == 0x47 for a in attrs[:32])
-                  and all(a == 0x47 for a in attrs[32 * 3:]), sorted(set(attrs)))
-            check(f"E {tag}: rows 6 and 15 untouched",
-                  [log_row(fr, r, 0, 32) for r in (6, 15)] == [log_row(before, r, 0, 32) for r in (6, 15)])
+            if case == "killer":
+                t_ok = menu_text_ok(p, fr, TROW, 6, "KILLED BY") and menu_text_ok(p, fr, TROW, 16, kname(KILLER))
+                r0, lx = 10, 88
+            elif case == "died":
+                t_ok = menu_text_ok(p, fr, TROW, 12, "YOU DIED")
+                r0, lx = 10, 72
+            else:
+                t_ok = (menu_text_ok(p, fr, TROW, 12, "YOU WIN!")
+                        and log_row(fr, TROW + 2, 0, 32) == text6("THE TOME IS DESTROYED", 64, 32))
+                r0, lx = 11, 88
+            check(f"E {tag}: title", t_ok)
+            vx = lx + S["EC_VX"]
+            rows = [("CLASS", "WARRIOR" if cls == K_KNIGHT else "MAGE"), ("LEVEL", "7"), ("DEPTH", "5"), None,
+                    ("KILLS", str(kills)), ("TURNS", str(turns))]
+            rows.append(("BEST KILL", kname(best)) if kills else None)
+            for i, rw in enumerate(rows):
+                c0 = lx // 8                     # the table's columns (the portraits / lectern lie outside)
+                want = orw(text6(rw[0], 0, 27 - c0), text6(rw[1], vx - lx, 27 - c0)) if rw else [bytes(27 - c0)] * 8
+                check(f"E {tag}: row {r0 + i} = {rw}", log_row(fr, r0 + i, c0, 27 - c0) == want)
+            check(f"E {tag}: row 22 = PRESS 1-4 OR ENTER", log_row(fr, 22, 0, 32) == text6("PRESS 1-4 OR ENTER", 72, 32))
             check(f"E {tag}: state {gs} held", p.rb("GAME_STATE") == gs, p.rb("GAME_STATE"))
+            check(f"E {tag}: golden", golden(tag, fr))
 
-        card(GS_DEAD, 37, 4512, KX["OGRE"], "death")
-        card(GS_WIN, 1234, 65535, S["K_DKNIGHT"], "win")
-        card(GS_DEAD, 0, 0, 0, "death0")
+        KILLER = K_GOBLIN
+        TROW = S["EC_TROW"]
+        for cls, hn in ((K_KNIGHT, "warrior"), (K_WIZARD, "mage")):
+            card(cls, "killer", 37, 4512, KX["OGRE"], f"endcard_killer_{hn}")
+            card(cls, "died", 0, 0, 0, f"endcard_died_{hn}")
+            card(cls, "win", 1234, 65535, S["K_DKNIGHT"], f"endcard_win_{hn}")
         print(f"stats1: {len(fails)} failed" + (f": {fails[:10]}" if fails else ""), flush=True)
         return 1 if fails or h.failures else 0
 

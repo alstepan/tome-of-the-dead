@@ -1809,7 +1809,7 @@ def w24(p, check):
         p.wb("GAME_STATE", GS_DEAD)
         p.tick(4)
         fr = p.frame()
-        card = p.rb("END_SHOWN") == 1 and menu_text_ok(p, fr, 8, 12, "YOU DIED")
+        card = p.rb("END_SHOWN") == 1 and menu_text_ok(p, fr, S["EC_TROW"], 12, "YOU DIED")   # ENDCARD-G1: full-screen card, title row 6
         p.tick(4)
         held = p.rb("GAME_STATE") == GS_DEAD         # no release yet: not accepted
         hold()
@@ -1820,7 +1820,7 @@ def w24(p, check):
         p.tick(4)
         p.wb("JOY_MIRROR", 0)
         still = p.rb("GAME_STATE") == GS_DEAD        # FIRE (key or stick) does not return
-        check("W24 death: the 'YOU DIED' card (menu font, rows 8-9); a held digit, FIRE and a stick "
+        check("W24 death: the 'YOU DIED' card (menu font, rows EC_TROW..+1); a held digit, FIRE and a stick "
               "press do not return to the menu",
               card and held and armed and still, (card, held, armed, still))
         tap("2")

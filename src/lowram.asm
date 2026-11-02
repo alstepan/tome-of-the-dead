@@ -809,8 +809,8 @@ tx_dec:
 ;------------------------------------------------------------------------------
 ; es_num — STATS1 S1 (the end card): HL = 0..65535 -> its decimal at DE, no leading zeros, 0-terminated
 ; (DE past the 0). Repeated /10 (16 shift-subtract steps), the digits pushed behind a 0 sentinel
-; (its A = 0 ends the pop loop and is stored as the terminator). In low RAM so bank 7 (es_item)
-; calls it directly. Clobbers: A, BC, DE, HL.   ~1.4k T a digit
+; (its A = 0 ends the pop loop and is stored as the terminator). In low RAM: bank-3 ec_tab (ENDCARD-G1;
+; was bank-7 es_item) calls it directly. Clobbers: A, BC, DE, HL.   ~1.4k T a digit
 ;------------------------------------------------------------------------------
 es_num:
                 xor  a

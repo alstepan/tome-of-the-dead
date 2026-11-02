@@ -9,7 +9,8 @@ Kit build (DEBUG_KIT=1; GAME_ALLOW_DEBUG_KIT=1 needed, as for every suite):
       Leather, bag = base + extras (Helm, Bow, ...); Mage ARANK %0101010101, MP 40/40, worn
       Oak + Robe, bag = base + extras
   D   deal_hit 50 on the hero at 1 HP (DEATH reaction, EF_DYING, HP 0), then end_turn:
-      HP 1, EF_DYING off, MODE REST, REACT none, GS_PLAYING; a real WAIT turn follows
+      HP 1, EF_DYING off, MODE REST, REACT none, GS_PLAYING, ST1_KILLER $80|Goblin -> 0 (ENDCARD-G1);
+      a real WAIT turn follows
   P   POISON at HP 1 over 8 real turns: HP 1, playing
   A   the Tome aura's kill (HP 1 -> 0, tome_aura's jp end_turn.dead): HP 1, playing
   F   hero_fall (1d4, no DEF) at HP 1 on storey 0, then end_turn: HP 1, playing
@@ -129,7 +130,9 @@ def run(h, p, check):
         lethal()
         check("X release: the lethal hit -> HP 0 + EF_DYING", p.ent(0)["HP"] == 0 and p.ent(0)["FLAGS"] & EF_DYING)
         far7("end_turn")
-        check("X release: end_turn -> GS_DEAD", p.rb("GAME_STATE") == GS_DEAD, p.rb("GAME_STATE"))
+        check("X release: end_turn -> GS_DEAD, ST1_KILLER = $80 | K_GOBLIN (ENDCARD-G1)",
+              p.rb("GAME_STATE") == GS_DEAD and p.rb("ST1_KILLER") == 0x80 | K_GOBLIN,
+              (p.rb("GAME_STATE"), p.rb("ST1_KILLER")))
         return
 
     # --- B: placement ---
@@ -162,10 +165,13 @@ def run(h, p, check):
     e = p.ent(0)
     check("D the lethal hit lands (HP 0, EF_DYING, DEATH reaction)",
           e["HP"] == 0 and e["FLAGS"] & EF_DYING and e["REACT"] & 0x7F == S["RC_DEATH"], e)
+    check("D ENDCARD-G1: the Goblin's kill stores ST1_KILLER = $80 | K_GOBLIN",
+          p.rb("ST1_KILLER") == 0x80 | K_GOBLIN, p.rb("ST1_KILLER"))
     far7("end_turn")
     if alive("D after end_turn:"):
         e = p.ent(0)
         check("D revived: MODE REST, REACT none", e["MODE"] == 0 and e["REACT"] == 0, e)
+        check("D ENDCARD-G1: the revive clears ST1_KILLER", p.rb("ST1_KILLER") == 0, p.rb("ST1_KILLER"))
         check("D a real WAIT turn runs after the revive", p.turn("WAIT") and alive("D after the next turn:"))
 
     # --- P: poison at HP 1 ---

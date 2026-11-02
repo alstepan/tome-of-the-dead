@@ -311,7 +311,7 @@ end_turn:
                 jp   trap_chk
     IF DEBUG_KIT
 ; DBG-1 infinite lives (kit builds only, game.md §1.4): every death reaches here (deal_hit /
-; hero_fall EF_DYING, tome_aura's HP 0), so the hero is revived at the death check, 19 B
+; hero_fall EF_DYING, tome_aura's HP 0), so the hero is revived at the death check, 22 B
 ; = the release .dead: EF_DYING off, HP 1, the held DEATH pose / a pending reaction back
 ; to standing; no GS_DEAD, no line. The hit, its HURT / DEATH reaction and the log played
 ; as usual; this turn's hunger step is skipped (the level-up check still runs).
@@ -322,6 +322,7 @@ end_turn:
                 xor  a                         ; M_REST / RC_NONE
                 ld   (P_ENTITIES + E_MODE), a
                 ld   (P_ENTITIES + E_REACT), a
+                ld   (ST1_KILLER), a           ; ENDCARD-G1: a revived hero has no killer
                 jp   xp_turn
                 ASSERT M_REST == 0 && RC_NONE == 0 && (P_ENTITIES >> 8) == ((P_ENTITIES + E_HP) >> 8)
     ELSE
@@ -1278,5 +1279,4 @@ intent_icon7:
                 INCLUDE "boss7.asm"            ; MEM-RECLAIM w2b: grate_open / boss_chk (from R6 boss6.asm)
                 INCLUDE "tome7.asm"            ; P3: the Tome's hits, aura and the win
                 ; (tiles7.asm: M0 -> the high bank-7 block after the tilesets, main.asm b7h_code)
-                INCLUDE "stat7i.asm"           ; STATS1 S1: es_item (called by es_stats in the high block)
                 INCLUDE "boot7.asm"            ; MEM-SND: panel_init7, new_game (from bank 3; 3E-T1: the boot parts -> boot6.asm)
