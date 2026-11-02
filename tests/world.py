@@ -2282,7 +2282,7 @@ def w17(p, check):
 # ---------------------------------------------------------------------------
 def dt_sim(ents, rmap, covered):
     """Model of one decor_tick (written from the B3B-10 contract, src/decor.asm
-    header): every AL_PHASE += 1; due when & 3 == 0 and & 15 == 0 (glyph swaps hold 16); per tick
+    header): every AL_PHASE += 1; due when & 3 == 0 (FLAME-RATE: a flame frame lasts 4 ticks); per tick
     caps 1 glyph step and 3 occupancy tries; a due entry past a cap waits a tick
     (phase - 1), a tried entry under a sprite skips the step (cell holds); a
     glyph swap exchanges the map id with AL_TYPE. LOOK-1: no attr-cycle entries any more.
@@ -2295,8 +2295,6 @@ def dt_sim(ents, rmap, covered):
             continue
         assert e[2] >= S["AL_GLYPH_MIN"], e       # no attr-cycle kinds
         kind = "g"
-        if e[3] & (S["DT_GLYPH_HOLD"] - 1):
-            continue                              # glyph swaps hold 16 ticks
         if caps[kind] == 0 or caps["t"] == 0:
             e[3] = (e[3] - 1) & 255
             continue
@@ -2403,9 +2401,9 @@ def w14(p, check):
     p.present_watch(False)
     check("W14 40 ticks: ANIM_LIST + ROOM_MAP == the decor_tick model every tick, each cell shows "
           "its swapped glyph + tile attr on bank 5 and the shadow", not bad, bad[:3])
-    check("W14 in 40 ticks glyph swaps stepped 2-3 times (hold 16; a capped step waits a tick), "
+    check("W14 in 40 ticks glyph swaps stepped 9-10 times (FLAME-RATE: one per 4 ticks; a capped step waits a tick), "
           "glyph cells showed both frames and ONE fixed attr (LOOK-1: no colour flash)",
-          all(x in (2, 3) for x in steps) and all(len({g for _, g in x}) >= 2 for x in seen)
+          all(x in (9, 10) for x in steps) and all(len({g for _, g in x}) >= 2 for x in seen)
           and all(len({a for a, _ in x}) == 1 for x in seen), (steps, [len(x) for x in seen]))
     ps = p.present_samples
     check("W14 displayed == composed at every tick-start present (probe_presented)",
@@ -2423,14 +2421,17 @@ def w14(p, check):
     # ---- a cell under a sprite holds -------------------------------------
     h = p.ent(0)
     hc, hr = h["DCOL"] + 1, h["DROW"] + 1
-    k = min(n, S["ANIM_MAX"] - 1)
+    # FLAME-RATE: one glyph step per tick in total and a 4-tick period, so a 4-entry list saturates the
+    # glyph cap and an injected LAST entry would starve: inject over slot 0 alone (ANIM_N = 1), restore after
+    k = 0
+    sv0 = bytes(p.z.read_memory(S["ANIM_LIST"], 4))
     # a glyph-swap entry injected under the hero (type = the room's first alternate id, so a real
     # TF_ANIM id): phase 12 -> its due step (phase 16) falls while the hero stands on it and is skipped
     alt = ents[0][2]
     j0 = hr * 32 + hc
     id0 = p.rb(S["ROOM_MAP"] + j0)
     p.z.cmd("write-memory %d %d %d %d 12" % (S["ANIM_LIST"] + 4 * k, hc, hr, alt))
-    p.wb("ANIM_N", k + 1)
+    p.wb("ANIM_N", 1)
     a0 = attr_at(p.composed_frame(), hc, hr)
     g0 = bytes(cell_bytes(p.composed_frame(), hc, hr))
     held = []
@@ -2443,15 +2444,19 @@ def w14(p, check):
           max(x[0] for x in held) >= 20
           and all(x[1:] == (a0, True) for x in held) and p.rb(S["ROOM_MAP"] + j0) == id0, held)
     p.place(0, h["X"] + 6, h["Y"])
-    p.tick(1)
+    p.tick(2)                                     # FLAME-RATE: one try per 4 ticks now: let the footprint move first
     p.wb(S["ANIM_LIST"] + 4 * k + 3, 31)          # next tick: phase 32 -> due (+ a tick spare for the glyph cap)
-    p.tick(3)
+    for _ in range(9):                            # due every 4th tick; a skipped try (stale frame) retries 4 on
+        p.tick(1)
+        if p.rb(S["ROOM_MAP"] + j0) == alt:
+            break
     gl_ = p.z.read_memory(S["TILE_GLYPHS"], 512)
     got_g = bytes(cell_bytes(p.composed_frame(), hc, hr))
     check("W14 ... and steps once the hero has left (the swapped glyph + its tile attr appear)",
           p.rb(S["ROOM_MAP"] + j0) == alt and got_g == bytes(gl_[alt * 8:alt * 8 + 8]),
           (p.rb(S["ROOM_MAP"] + j0), alt, got_g.hex()))
     p.wb(S["ROOM_MAP"] + j0, id0)
+    p.z.cmd("write-memory %d %s" % (S["ANIM_LIST"], " ".join(str(b) for b in sv0)))
     p.wb("ANIM_N", n)
     # ---- decor_tick cost (idle room A, budget.Stepper) ---------------------
     import budget

@@ -5,8 +5,8 @@
 # Attr cycles (torch, brazier flame, candles) are attr-only and live in concept_screen.py.
 # The wall torch (#1) is NOT here: it reuses item_torch (existing art, 0 new ids).
 
-# --- #2 Brazier: flame (2-frame glyph swap + $46/$42 attr cycle) over a bowl ($07)
-=== brazier_flame1 ink:yellow paper:black bright
+# --- #2 Brazier: flame (2-frame glyph swap, fixed bright red $42 since FLAME-RATE) over a bowl ($07)
+=== brazier_flame1 ink:red paper:black bright
 ....#...
 ...##...
 ..###.#.
@@ -16,7 +16,7 @@
 .######.
 ..####..
 
-=== brazier_flame2 ink:yellow paper:black bright
+=== brazier_flame2 ink:red paper:black bright
 ...#....
 ...##.#.
 .#.##...

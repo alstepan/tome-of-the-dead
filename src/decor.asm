@@ -9,7 +9,9 @@
 ;   their tile; only the glyph A/B swap animates.
 ;==============================================================================
 DT_STEP_MASK    EQU 3               ; an entry steps when AL_PHASE & 3 == 0: every 4th tick
-DT_GLYPH_HOLD   EQU 16              ; glyph swaps (drips) step every 16th tick (designer ~12)
+; FLAME-RATE (user 2026-11-02): flame glyph A/B swap every 4th tick (160 ms; was 16 = 640 ms). The
+; hold equals the step period, so there is no separate hold test (-5 B). The D3-8b drip is its own
+; system (drip.asm), not in ANIM_LIST since D3-7 T6: no entry needs the old 16-tick hold.
 DT_MAX_GLYPH    EQU 1               ; per tick: <= 1 glyph swap (measured ~1.2k T per step)
 DT_MAX_TRIES    EQU 3               ; per tick: <= 3 due entries reach the occupancy test
                                     ; (~0.1k per RLIST slot each); the rest wait a tick
@@ -21,8 +23,7 @@ DT_CAPS         EQU (DT_MAX_TRIES << 6) | (DT_MAX_GLYPH << 4)   ; C: tries left 
 ; RENDER_FIRST also after read_turn_input / anim_tick, which leave R_COL..
 ; R_ROWS alone) and before panel_tick: SLOTREC's R_COL..R_ROWS are the
 ; footprints on the bank-5 screen. Every entry's AL_PHASE += 1; a
-; due entry (AL_PHASE & 3 == 0, and AL_PHASE & 15 == 0: a glyph swap holds
-; DT_GLYPH_HOLD = 16 ticks per frame) steps: it exchanges the map id with
+; due entry (AL_PHASE & 3 == 0: a flame frame lasts 4 ticks) steps: it exchanges the map id with
 ; AL_TYPE and draws the new glyph + its TILE_ATTRS attr. Each step
 ; writes the bank-5 cell (glyph / attr) AND the bank-7 attr shadow (else the
 ; next erase would restore a stale colour) and marks the cell for present.
@@ -69,10 +70,7 @@ decor_tick:
                 ret
 .capd:          dec  (hl)                      ; cap spent: due again next tick
                 jr   .nx
-.due:           ld   a, (hl)                   ; glyph swaps hold DT_GLYPH_HOLD ticks: step only
-                and  DT_GLYPH_HOLD - 1         ; when AL_PHASE & 15 == 0 (the staggered
-                jr   nz, .nx                   ; phase keeps them apart); no cap spent
-                ld   a, c
+.due:           ld   a, c
                 and  $30
                 jr   z, .capd
                 ld   a, -$10 - $40
