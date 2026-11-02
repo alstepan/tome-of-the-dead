@@ -12,7 +12,8 @@ top storey (0). The AI (turn3.asm .seek, KF_CLIMBER only) must take it up the la
       pair while it stands at a ladder end (the climb starts / ends at a standing row);
   C4  PHASE_TRAP, BLIT_MISS, GEN_TRAP, SEQ_TRAP stay 0 (the climb pair is pooled on that level,
       the cycle is drawn cell-aligned: STA|SYM, docs/conventions.md "Walk cycles");
-  C5  a NON-climber (Vampire on D8) put the same way never changes storey.
+  C5  a NON-climber (Ogre on D4) put the same way never changes storey (VAMP-BOSS: was the Vampire on D8;
+      the Vampire now climbs: C1..C3 on D3 and D8 for both heroes).
 Scenarios (hero, depth, kind): Orc + Archer + Sniper on D4, Orc + Necro on D7, Archer + Sniper + Skeleton + Mummy on
 D5 (Archer / Sniper / Skeleton: the SKELETON's climb pair skeleton_climb1/2, fix/archer-climb; Spider: spider_climb1/2, SPIDER-CLIMB;
 Orc / Necro / Mummy: the shared humanoid pair). --png DIR saves a mid-climb screen per run.
@@ -47,7 +48,9 @@ OWN = {
 # (hero, depth, kind name, climber?, master seed)
 RUNS = [(0, 4, "ORC", True, 0x4101), (1, 4, "ARCHER", True, 0x4102), (0, 7, "NECRO", True, 0x7101),
         (1, 7, "ORC", True, 0x7102), (0, 5, "ARCHER", True, 0x5101), (1, 5, "SKELETON", True, 0x5102),
-        (0, 8, "VAMPIRE", False, 0x8101), (0, 5, "MUMMY", True, 0x5103), (1, 5, "MUMMY", True, 0x5104),
+        (0, 4, "OGRE", False, 0x4106),
+        # VAMP-BOSS (user 2026-11-02): the Vampire (and the Lord) climbs the shared pair
+        (0, 3, "VAMPIRE", True, 0x3101), (1, 3, "VAMPIRE", True, 0x3102), (0, 8, "VAMPIRE", True, 0x8101), (1, 8, "VAMPIRE", True, 0x8102), (0, 5, "MUMMY", True, 0x5103), (1, 5, "MUMMY", True, 0x5104),
         # fix/archer-climb: Archer / Sniper (the Skeleton body) climb on the SKELETON's own pair
         (0, 2, "SPIDER", True, 0x2101), (1, 2, "SPIDER", True, 0x2102), (0, 4, "SPIDER", True, 0x4105),
         (1, 5, "SPIDER", True, 0x5106), (0, 4, "ARCHER", True, 0x4103), (0, 4, "SNIPER", True, 0x4104), (1, 5, "SNIPER", True, 0x5105)]
@@ -81,7 +84,7 @@ with Harness() as h:
     for hero, depth, kn, climber, seed in RUNS:
         tag = f"{kn} D{depth} hero {hero}"
         kind = S["K_" + kn]
-        W, H = (4, 2) if kn == "SPIDER" else (3, H6)
+        W, H = (4, 2) if kn == "SPIDER" else (4, S["BH_K_OGRE"]) if kn == "OGRE" else (3, H6)
         done = False
         for attempt in range(6):                     # find a start room with a usable ladder {c, 1}
             p.proto_start = 0

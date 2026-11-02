@@ -146,9 +146,9 @@ boss_chk:
 ;  - mid-ladder, or off storey 1 (a Vampire Lord left on storey 0 after its bat
 ;    flight): the ordinary rules;
 ;  - ENGAGED iff the hero stands on storey 1 (not mid-ladder) and (|hero x - c|
-;    <= GUARD_R or LF_PROVOKED): the ordinary rules (L = 0);
+;    <= GUARD_R (31: the whole storey, user 2026-11-02) or LF_PROVOKED): the ordinary rules (L = 0);
 ;  - else home: x != c -> one walker step toward c (blocked: wait); x == c ->
-;    wait facing the hero (L = 1). Never climbs, never follows.
+;    wait facing the hero (L = 1). Never leaves the post (the Vampire Lord climbs only back from storey 0 via the ordinary rules; it never follows through exits).
 ; Out: L = 1 the turn is used, 0 the walker rules run.
 ; Clobbers: all but IX.   ~0.25k T + a step (far7 ~0.25k on top; contended)
 ;------------------------------------------------------------------------------

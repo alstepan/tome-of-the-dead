@@ -168,6 +168,24 @@ def run(p, lines, r):
     p.wb(S["ST_T1"] + 1, 0x20)
     vb_turn(p, 3)
     check("O2 held (STUNNED): no change", p.ent(1)["KIND"] == KV, p.ent(1))
+    # ------------------------------------------------------------------ M  (VAMP-BOSS: a climbing Vampire keeps its form)
+    setup(p, s_, c0, vx, hp=4)                 # flee case, mid-ladder (feet off the standing row), odd turn
+    p.set_ent(1, Y=vy - 2, PY=(vy - 2) * 8)
+    build_live(p)
+    vb_turn(p, 3)
+    e = p.ent(1)
+    check("M1 mid-ladder, hp 5-of-14 flee case, odd turn: stays a Vampire (no RCD bits, no FEAR)",
+          e["KIND"] == KV and e["POT"] & (ONCE | VFLEE) == 0 and fear(p, 1)[0] != MIND_FEAR, (e, fear(p, 1)))
+    p.set_ent(1, Y=vy, PY=vy * 8)
+    vb_turn(p, 3)
+    check("M2 the same Vampire standing again: flees into a bat (the control)", p.ent(1)["KIND"] == KB, p.ent(1))
+    setup(p, s_, c0, c0 + 3 + 6)               # close-distance case: gap 6 with a pit between
+    p.set_ent(1, Y=vy - 2, PY=(vy - 2) * 8)
+    build_live(p)
+    old = cell(p, 9 * s_ + 8, c0 + 5, S["T_AIR"])
+    vb_turn(p, 3)
+    check("M3 mid-ladder, close-distance case (a pit between): stays a Vampire", p.ent(1)["KIND"] == KV, p.ent(1))
+    cell(p, 9 * s_ + 8, c0 + 5, old)
     # ------------------------------------------------------------------ C
     vx = c0 + 3 + 6                            # gap 6
     setup(p, s_, c0, vx)
@@ -247,8 +265,8 @@ def run(p, lines, r):
     setup(p, s_, c0, c0 + 3, hp=4)
     _, t2 = vb_turn(p, 3)
     print(f"[info] vb_turn T-states (far7 incl.): none {t0}, a Vampire staying {t1}, a flee transform {t2}", flush=True)
-    check("T vb_turn <= 2.5k T without a candidate, <= 6k staying, <= 12k a transform (end_turn tick)",
-          t0 <= 2500 and t1 <= 6000 and t2 <= 12000, (t0, t1, t2))
+    check("T vb_turn <= 2.5k T without a candidate, <= 6.3k staying (was 6k; VAMP-BOSS adds the is_standing test ~130 T and the figure includes the AY ISR, 5.4k..6.2k seen), <= 12k a transform (end_turn tick)",
+          t0 <= 2500 and t1 <= 6300 and t2 <= 12000, (t0, t1, t2))
     # ------------------------------------------------------------------ R
     lines.arm()
     vx = c0 + 6

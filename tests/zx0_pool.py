@@ -118,10 +118,13 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # M1 (2026-11-01, user-approved 240-B step): POOL_START $C960 -> $CA40 (text 2,378 + 40 B headroom + 206 B
 # bank-0 cold-code room = 2,624 B under bank 0, POOL_CAP 32,416 -> 32,192): Warrior D8 +16 (straddle), the
 # Mage levels +32 / +160 / +96 / +96 / +224 / +96 / +96 / +96; D8 Warrior slack 1,264 -> 1,024.
+# VAMP-BOSS (2026-11-02): the Vampire climbs, pool_gmap adds U_CLIMBH for K_VAMPIRE: D3 (the only level
+# without the shared climb pair: D6 / D8 already pool it via Orc / Necro / Mummy) +480 for both heroes
+# (Warrior 26,528 -> 27,008, Mage 23,616 -> 24,096; slack 5,184 / 8,096), every other level unchanged.
 LEVEL_NEED = {
-    (0, 1): 22528, (0, 2): 22240, (0, 3): 26528, (0, 4): 28576,
+    (0, 1): 22528, (0, 2): 22240, (0, 3): 27008, (0, 4): 28576,
     (0, 5): 23072, (0, 6): 28736, (0, 7): 27744, (0, 8): 31168,
-    (1, 1): 19488, (1, 2): 19264, (1, 3): 23616, (1, 4): 25792,
+    (1, 1): 19488, (1, 2): 19264, (1, 3): 24096, (1, 4): 25792,
     (1, 5): 20288, (1, 6): 25824, (1, 7): 24832, (1, 8): 28160,
 }
 

@@ -5060,3 +5060,16 @@ card pixel-exact (rows 10-12, 14), the box attr and the rows above / below.
 
 ### BAL-1 FINAL B ledger (2026-11-02)
 Table-only (`tools/apply_balance.py`): 0 code bytes, no address moved. Bank-0 text 2,391 -> **2,384** B packed (-7: the 17 ranked info lines changed digits / dice and re-tokenised), `TEXT_RES` 2,412 unchanged, headroom 21 -> **28** B. Release tape and every other region unchanged.
+
+### VAMP-BOSS ledger (`feat/vamp-boss`, 2026-11-02; user rulings B / A / C)
+Behaviour: (B) `GUARD_R` 8 -> **31** (`boss6.asm`, ASSERT `< 255`; boss7 `.ab` `cp GUARD_R + 1`: a boss engages whenever the hero stands on storey 1; the High Necromancer's firing range is unchanged); (A) the Vampire (and the golden Lord) is a **climber**: `KF_CLIMBER` in `KT_FLAGS` column 10 (`main.asm`; `turn3 .seek` and the `bank7` exit-follow read only this flag; the Lord is still excluded from the follow by the `LP_BOSS` test; KT_BW 3 keeps the AI-L1 J1 ASSERT), `vp_climb` = `CLIMBCYC climb_h1, climb_h2` in the `KS_CLIMB` slot and `KS_CLIMBREST` = `vp_climb + 1` (`seq_img.asm ksm_vp`), `pool_gmap` gains `K_VAMPIRE, U_CLIMBH` (`pool6.asm`), `vb_one` skips a mid-ladder Vampire (`is_standing`, bank 2; R6) so a climber never turns into the 3x2 bat box in the shaft. (C) game.md only (the Lord's close-distance bat rule stays on). No new frame ids (144/144), no new strings.
+
+| region | before | after | delta | note |
+|---|---|---|---|---|
+| R6 (release) | free 28 | **free 21** | -7 | `vb_one` +4, `pool_gmap` +3 (the sequence stream packs +0..1: `ksm_vp` +6 raw) |
+| R6 (kit) | free 33 | **free 26** | -7 | same |
+| sequence masters (`SQ_IMG`) | 869 raw / 500 packed | 875 raw (42 left) / 500 packed | +6 raw | D3 cache 203 -> 209, D8 239 -> 245 of `SEQB_LEN` 288 (worst-level need still 253) |
+| low RAM / bank 2 / bank 3 / bank 7 / bank 0 | unchanged | unchanged | 0 | |
+| tape | | | 0 | tape_layout 14 blocks, 83,310 B |
+
+Pool: D3 pays the shared climb pair (D6 / D8 already pooled it via Orc / Necro / Mummy): **D3 Warrior 26,528 -> 27,008, Mage 23,616 -> 24,096 (+480 each)** against `POOL_CAP` 32,192 (slack 5,184 / 8,096); every other level and the D8 Warrior slack (1,024) unchanged (`tests/zx0_pool.py LEVEL_NEED`). Cost: `vb_one` +~130 T (`is_standing`) only for a same-storey humanoid Vampire at the end of an odd turn; `tests/budget.py` unchanged (walarm max 124,965 T = 1,035 T headroom, worst play tick 115,185 T). Tests: `tests/climb3f.py` (Vampire C1-C4 on D3 / D8, both heroes; C5 = Ogre D4), `tests/vbat.py` M1-M3, `tests/boss.py` G1 (R >= 24: hero on storey 0 20 turns -> the boss stays at c; storey 1 far away -> engages at once) + G1b (the D3 Lord climbs back), `combat_tables` / `tools/levelgen.py CLIMBERS` (+ K_VAMPIRE).

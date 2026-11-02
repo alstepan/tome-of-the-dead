@@ -432,6 +432,9 @@ def canary_compare(p, L, s0, s1, tag, room_ok=True):
             rr = [(lo, hi) for lo, hi in rr if not (S["FLOOR_LIST"] <= lo and hi < S["FLOOR_LIST"] + 128)]
         if n == "ITEM_RAM":       # FOOD .. MP_HOLD (hunger_turn) tick every few turns; a pickup changes the bag / quick slots
             rr = [(lo, hi) for lo, hi in rr if not (S["FOOD"] <= lo and hi <= S["MP_HOLD"])]
+            # STATS1 (merged after this test): ST1_CNT (KILLS word, best-kind BL / BXP) changes on every hero kill,
+            # e.g. the Mage's Spark on a summoned Skeleton (the only diff of F M 0x5310 / 0x5312 on VAMP-BOSS)
+            rr = [(lo, hi) for lo, hi in rr if not (S["ST1_CNT"] <= lo and hi <= S["ST1_CNT"] + 4)]
             if picked:
                 rr = []
         if n == "LP_STATE":       # the trickle (T12) state / other rooms' records may change; the lair's must not

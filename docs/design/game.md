@@ -2660,7 +2660,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Goblin | 24×32 | 6 | 1 | 1 | 0 | 1d4 | 3 | walker, climber, opener | chase | Apple 1/4 | D1, D2 |
 | Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker, climber (own dorsal climb pair spider_climb1/2, STA|SYM; user 2026-10-30, was its rest pose) | hit **poisons**: POISON +12 per bite, cap 30 (= −1 HP / 4 turns; POIS1 §6.4.3) | — | D2, D4, D5 |
 | Skeleton | 24×48 | 10 | 2 | 2 | 1 | 1d6 | 5 | walker, climber, opener | chase | — | D3, D5, D8 |
-| **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | walker, opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
+| **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | climber (VAMP-BOSS, user 2026-11-02: the shared climb pair), opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
 | Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch 1 in 4 → CONFUSED 4 (§6.4) | — | D3, D6–D8 |
 | Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, opener, climber (shared humanoid climb pair, 3F-T13bc) | chase | Meat 1/3 | D4, D6, D7 |
 | Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, opener, climber (the Skeleton's climb pair, user 2026-10-29) | ranged | Arrows ×3 1/2 (W) | D4, D5 (ARCHER-DEPTHS H1, user 2026-10-29: not D7, §9.8) |
@@ -2919,20 +2919,23 @@ tries to protect it; rules designer decision 2026-10-29).** Applies to every lai
 - **G2 Guard AI** (the boss slot only; inserted in `ai_monster` **after** the attack rules
   (melee in reach; ranged rule 2 shoot / Archmage rules) and **before** any movement rule):
   - **Engaged** iff the hero is **standing on storey 1** (not mid-ladder) **and** (`|hero_x − c|
-    ≤ R`, **R = 8**, or the boss is **PROVOKED**). Engaged → its normal rules (chase, SLAM,
+    ≤ R`, **R = 31** = the whole storey (user 2026-11-02, was 8: bosses notice the hero from anywhere on storey 1; `GUARD_R`, boss6.asm), or the boss is **PROVOKED**). Engaged → its normal rules (chase, SLAM,
     parry, Necro step-away), anywhere on storey 1.
   - **Not engaged** → go home: `x ≠ c` → one step toward `c` (the walker step, blocked → wait);
-    `x == c` → wait, facing the hero. Never climbs (the golden Goblin King loses climbing in
-    its lair), never follows (§8.6). A ranged boss (golden High Necromancer) still shoots from
-    the post by rule 2 (its r8 ≤ R, so in practice when the hero is inside the leash).
+    `x == c` → wait, facing the hero (so a hero on storey 0 never draws it up). Never leaves storey 1 by
+    choice (the golden Goblin King loses climbing in its lair), never follows (§8.6); the one exception is
+    a Vampire Lord left on storey 0 after its bat flight, which climbs back down to storey 1 by the
+    ordinary rules and then guards again. A ranged boss (golden High Necromancer) shoots from the post
+    by rule 2 (its firing range is unchanged; with R = 31 it is engaged whenever the hero is on storey 1).
   - **PROVOKED** (1 bit per slot, engineer's choice, e.g. a spare `E_GOLD` bit): set when the
     hero's damage (melee, ammo, spell, burst) reaches the boss; cleared at spawn (so leaving
     the lair resets it; banking drops AI state anyway). Why: without it a bow (r14), Firebolt
-    (r12) or Lightning (r28) kills a boss parked at its post from outside R for free.
+    (r12) or Lightning (r28) kills a boss parked at its post from outside R for free (R = 31 since VAMP-BOSS: the bit only matters with the hero off storey 1 or mid-ladder).
   - **Statuses:** ASLEEP/FEAR immune (unchanged); FROZEN/STUNNED skip the action as for anyone;
     CONFUSED wanders as usual and the next clear turn resumes G2. Vampire Lord: flee (rule 1)
-    as before; the close-distance rule (rule 2) is **off** for a guarding boss; a Lord left on
-    storey 0 after its bat flight uses its ordinary chase there (rare; it cannot climb back).
+    as before; the close-distance rule (rule 2) stays **on** for the golden Lord (user 2026-11-02; the
+    code was always right, this text said off); a Lord left on storey 0 after its bat flight uses its
+    ordinary chase there and **climbs back** to storey 1 (VAMP-BOSS), then guards again.
   - **Hero on the grate:** he is inside R, so the boss attacks him. If the boss dies while the
     hero stands on the grate, the grate opens under him (walkable, no fall); DOWN descends.
   - The escort has **no leash**: it is an ordinary monster (may chase, may follow on exit).
@@ -3505,10 +3508,10 @@ grate glyph (8 B). Tome hit flash `$43` rewrites the 4 attrs (§1.3 unchanged).
 **R3 Climbers.** Only kinds with climb frames climb: **Goblin, Skeleton** (+ their tiers) and the
 heroes. **Orc, Skeleton Archer (+ Sniper), Death Knight are walkers, not climbers** (§9.1). 0 B,
 avoids +1,152 B pool on D4/D7 (a shared Skeleton climb pair would have to be resident there, and
-D7 is the worst level; since H1, §9.8, D7 has no Archer, so this now concerns D4 only). Gameplay: like Ogre/Mummy/Vampire/Necro, a hero on the other storey is
+D7 is the worst level; since H1, §9.8, D7 has no Archer, so this now concerns D4 only). Gameplay: like Ogre/Mummy/Vampire/Necro (Vampire: climbs since VAMP-BOSS), a hero on the other storey is
 safe from them; the Archer still shoots along its storey, the DK lair fight is unchanged (bosses
 never follow). **Orc = 3 frames** (WALK1 = MOT rest, WALK2, ATTACK), HURT = flash, DEAD = the
-shared humanoid DEAD (as Mummy; pool spike assumption confirmed). **Superseded (3F-T13bc + user 2026-10-29):** the Orc, Necromancer and Mummy families climb on the shared humanoid climb pair, the Archer / Sniper on the Skeleton's own pair, the Spider / Black Widow on their rest pose (no art); Vampire, Ogre, Death Knight and every boss stay walkers.
+shared humanoid DEAD (as Mummy; pool spike assumption confirmed). **Superseded (3F-T13bc + user 2026-10-29):** the Orc, Necromancer and Mummy families climb on the shared humanoid climb pair, the Archer / Sniper on the Skeleton's own pair, the Spider / Black Widow on their rest pose (no art); Ogre, Death Knight and the Archmage stay walkers. **Superseded (VAMP-BOSS, user 2026-11-02):** the Vampire (and the golden Vampire Lord) climbs on the shared humanoid pair too (`KF_CLIMBER`, `vp_climb`, pooled via `pool_gmap`); a climbing Vampire follows the hero through vertical exits (the Lord never follows, §8.6); a Vampire mid-ladder never changes form (the bat transform is skipped until it stands). Bosses otherwise stay at their post (G2).
 
 **R4 HURT on frame-less kinds** (Spider, Orc, Necro, Mummy, Vampire, Archer, Ogre, DK, Archmage,
 golden bosses): the body keeps its current frame and its footprint takes the existing **`$42` hit

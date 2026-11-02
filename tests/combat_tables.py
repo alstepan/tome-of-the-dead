@@ -244,7 +244,7 @@ def main():
         chk(f"tier {tier} ink != base {base} ink", [kcol(sym["KT_ATTR"], tier) != kcol(sym["KT_ATTR"], base)], [True])
     # climbers: Goblin / Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
     # + Orc (Berserker 26, Bouncer 27), Archer (Sniper 28), Necro (Bone Caller 29), + Mummy 13, Spider 9 + Black Widow 22 (fix/archer-climb; the Pharaoh boss guard is the AI's)
-    CLIMB = {0, 1, 3, 4, 9, 21, 22, 23, 24, 11, 12, 13, 14, 26, 27, 28, 29}
+    CLIMB = {0, 1, 3, 4, 9, 10, 21, 22, 23, 24, 11, 12, 13, 14, 26, 27, 28, 29}   # VAMP-BOSS: + 10 (K_VAMPIRE)
     for k in range(30):
         chk(f"KF_CLIMBER[{k}]", [kcol(sym["KT_FLAGS"], k) & sym["KF_CLIMBER"] != 0], [k in CLIMB])
     # drop_tab: (kind, item, N, k) = "k in N" (§8.11 + §9.6: the base numerator + 1 per tier above 1)
