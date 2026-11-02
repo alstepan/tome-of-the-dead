@@ -303,3 +303,7 @@ seal_breaks     "THE SEAL BREAKS"
 tome_hit        "THE TOME SHUDDERS"
 # GEAR1 (gear_rules.md 1.2; intent7.asm ic_abil): a metal-armoured Mage / cloth-clad Warrior uses an ability
 gear_ban        "YOUR GEAR FORBIDS IT"
+# STATS1 S1 (stat7.asm es_stats / es_item, combat3.asm es_best): the end card's statistics rows
+end_kills       "KILLS"
+end_turns       "TURNS"
+end_best        "BEST KILL"

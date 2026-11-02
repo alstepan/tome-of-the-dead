@@ -332,18 +332,10 @@ deal_hit:
                 xor  a
                 ld   (hl), a
                 ASSERT ST_T1 > ST_FLAGS && ST_T2 > ST_T1 && (ST_FLAGS >> 8) == (ST_T2 >> 8)
-                ld   a, (ix+E_FLAGS)
-                and  EF_PLAYER
+                bit  EF_PLAYER_BIT, (ix+E_FLAGS)
                 jr   nz, .heal                 ; the hero's death awards nothing
                 call mon_drop                  ; 3E-T11: drop / boss unique (drop3.asm; keeps IX)
-                ld   a, (ix+E_KIND)            ; KXP = kx_tab[kind * 8 + KX_XP]
-                add  a, a                      ; x 8 (KX_STRIDE; kind < K_MAX = 32)
-                add  a, a
-                add  a, a
-                add  a, (kx_tab & $FF) + KX_XP
-                ld   l, a
-                ld   h, kx_tab >> 8
-                ld   a, (hl)
+                call kill_note                 ; STATS1: A = KXP (+ the hero's kill count / best kind)
                 bit  EF_RESPAWN_BIT, (ix+E_FLAGS)
                 jr   z, .xp
                 srl  a                         ; respawned: KXP / 2 ...
@@ -391,6 +383,75 @@ deal_hit:
                 ld   l, a
                 ld   h, 0                      ; 3F-T6: H = 1 only for a parry (above)
                 ret
+
+;------------------------------------------------------------------------------
+; kill_note — STATS1 S1 (deal_hit .kill, a monster just died, after mon_drop): IX = the dead
+; monster. Out: A = its KXP (the XP lookup lives here now), IX kept; clobbers BC, DE, HL.
+; The statistics count only the HERO's kills: the attacker (ATK_PTR, set by deal_hit /
+; do_attack on entry; a Whirlwind / spell / arrow / dagger kill carries the hero) must be
+; slot 0, so a monster killing a monster and the Archmage's own Mirror Helm return (rs_self:
+; attacker = the Archmage) are not. A respawned monster counts. Then
+;   ST1_KILLS (16-bit) += 1 (no saturation: 65,536 kills do not happen),
+;   best kind: ST1_BXP = KXP, ST1_BL = the kx_tab entry's low byte (8 * kind + KX_XP, kx_tab is
+;   page-aligned) iff KXP >= the best so far (a tie goes to the LATEST kill; the first kill
+;   always stores). ~0.1k T a monster kill, 0 elsewhere.
+;------------------------------------------------------------------------------
+kill_note:
+                ld   a, (ix+E_KIND)            ; KXP = kx_tab[kind * 8 + KX_XP]
+                add  a, a                      ; x 8 (KX_STRIDE; kind < K_MAX = 32)
+                add  a, a
+                add  a, a
+                add  a, (kx_tab & $FF) + KX_XP
+                ld   l, a
+                ld   h, kx_tab >> 8
+                ld   a, (hl)
+                ld   de, (ATK_PTR)
+                ld   c, a
+                ld   a, d
+                xor  P_ENTITIES >> 8
+                or   e                         ; Z iff ATK_PTR == P_ENTITIES (the hero)
+                ld   a, c
+                ret  nz
+                ld   e, l                      ; the best-kind key
+                ld   hl, ST1_KILLS
+                inc  (hl)
+                jr   nz, .n
+                inc  hl
+                inc  (hl)
+.n:             ld   l, ST1_BXP & $FF
+                cp   (hl)
+                ret  c                         ; a lesser kind: the best stays
+                ld   (hl), a
+                dec  l
+                ld   (hl), e                   ; ST1_BL
+                ret
+                ASSERT (kx_tab & $FF) == 0 && KX_XP == 4 && (P_ENTITIES & $FF) == 0
+                ASSERT (ST1_KILLS >> 8) == (ST1_BXP >> 8) && ST1_BL == ST1_BXP - 1 && ST1_BXP == ST1_KILLS + 3 && K_COUNT <= 32
+
+;------------------------------------------------------------------------------
+; es_best — STATS1 S1: far3 from end_card: row ES_ROW + 2 "BEST KILL <kind name>" (the label at
+; ES_LX, the name at ES_VX); nothing when the hero killed nothing. ST1_BL = 8 * kind + 4: three
+; rrca leave kind + $80, so the TX id is kind + TX_NM_KNIGHT = A + (TX_NM_KNIGHT - $80) mod 256.
+; Clobbers: A, BC, DE, HL.   ~1.5k T (once, at the end card)
+;------------------------------------------------------------------------------
+es_best:
+                ld   hl, (ST1_KILLS)
+                ld   a, h
+                or   l
+                ret  z
+                ld   a, TX_END_BEST
+                ld   b, ES_ROW + 2
+                ld   e, ES_LX
+                call print6x                   ; (low RAM / bank 2: restores bank 3)
+                ld   a, (ST1_BL)
+                rrca
+                rrca
+                rrca
+                add  a, (TX_NM_KNIGHT - $80) & $FF
+                ld   b, ES_ROW + 2
+                ld   e, ES_VX
+                jp   print6x
+                ASSERT TX_NM_KNIGHT + K_COUNT < 256
 
 ;------------------------------------------------------------------------------
 ; dh_status — deal_hit step 5 for a surviving target (IX = target, dh_* set):

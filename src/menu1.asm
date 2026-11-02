@@ -1149,9 +1149,11 @@ page_post:      ld   hl, (PAGE_VERB)           ; L = verb, H = slot (PAGE_SLOT f
 
 ;------------------------------------------------------------------------------
 ; end_card — far1 from end_screen (first tick of GS_DEAD / GS_WIN): A = the
-; state. "YOU DIED" / "YOU WIN!" (menu font) + "PRESS 1-4 OR ENTER" over
-; playfield rows 7-11 of the bank-5 screen, marked for present.
+; state. "YOU DIED" / "YOU WIN!" (menu font, rows 8-9), the STATS1 rows 10-12 (es_stats:
+; KILLS / TURNS, es_best: BEST KILL) and "PRESS 1-4 OR ENTER" (row 14) over playfield
+; rows 7-14 of the bank-5 screen (attr $47 for the whole box), marked for present.
 ;------------------------------------------------------------------------------
+END_ROWS        EQU 8                          ; the card box: rows 7 .. 7 + END_ROWS - 1
 end_card:       ld   c, a
                 push bc
                 ld   b, 7
@@ -1160,11 +1162,11 @@ end_card:       ld   c, a
                 pop  bc
                 inc  b
                 ld   a, b
-                cp   12
+                cp   7 + END_ROWS
                 jr   c, .c
-                ld   a, $40
-                ld   bc, 7 << 8
-                ld   de, (32 << 8) | 5
+                ld   a, $47                    ; bright white on black: the title, PRESS and the
+                ld   bc, 7 << 8                ; stats print into it (print6 sets no attrs)
+                ld   de, (32 << 8) | END_ROWS
                 call stamp_rect
                 pop  bc
                 ld   a, c
@@ -1176,16 +1178,16 @@ end_card:       ld   c, a
                 ld   e, $46
 .d:             ld   bc, (8 << 8) | 12
                 call mf_tx
+                ld   hl, es_stats              ; STATS1 S1: KILLS / TURNS rows (bank 7 stat7.asm)
+                call far7
+                ld   hl, es_best               ; BEST KILL row (bank 3, combat3.asm)
+                call far3
                 ld   a, TX_END_PRESS
-                ld   b, 11
+                ld   b, ES_ROW + 4
                 ld   e, 10 * 8
                 call print6x
-                ld   a, $47
-                ld   bc, (11 << 8) | 10
-                ld   de, (15 << 8) | 1
-                call stamp_rect
                 ld   bc, 7 << 8
-                ld   de, (32 << 8) | 5
+                ld   de, (32 << 8) | END_ROWS
                 jp   pmark_rect
 
 ;------------------------------------------------------------------------------

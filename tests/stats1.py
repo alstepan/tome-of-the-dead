@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+"""STATS1 S1 (user 2026-11-01): end-of-game statistics. Release build (DEBUG_KIT=0), PROTO room A.
+
+The hook is kill_note (bank 3, combat3.asm): deal_hit's monster-kill path, ATK_PTR == the hero.
+ST1_KILLS (16-bit, no saturation: it wraps at 65,536), ST1_BXP / ST1_BL = the best kind (KXP >=: a
+tie goes to the LATEST kill), TURN_COUNTER = the turns. The end card prints rows 10-12 + PRESS 14.
+
+U  unit (deal_hit called from a stub, attacker = slot A, target = slot T):
+   U1 hero kills a Rat / Ogre / Goblin: kills 1 2 3, best = the Ogre (KXP 60), the lesser kill keeps it
+   U2 a monster killing a monster: not counted
+   U3 the Archmage killed by its OWN Mirror Helm return (attacker = target = the Archmage): not counted
+   U4 the hero hit by a trap-like blow (target = the hero, not a kill): not counted
+   U5 an EF_RESPAWN monster killed by the hero: counted
+   U6 best kind ties: Giant Rat (KXP 3) then Slime (KXP 3): the latest (Slime) is the best; a Rat (KXP 2) after: stays
+   U7 16-bit: 255 -> 256 carries into the high byte; 65535 -> 0 (wraps, documented)
+   U8 the Archmage (KXP 0) as the only kill: counted, key stored (KXP 0 >= 0)
+G  the real game (controls / turns), the counters read right after each:
+   G1 Warrior bump kill, G2 Whirlwind kills 2 at once (+2), G3 dagger kill, G4 arrow kill,
+   G5 Mage Spark kill, G6 new_game resets the counters (GS_DEAD -> menu -> start)
+E  the end card, death / win / no kills: rows 10 / 11 / 12 (KILLS / TURNS / BEST KILL) + PRESS on row 14
+   == text6 at the exact pixel x, no kills = no BEST row, rows 7-14 attr $47, rows 6 / 15 untouched;
+   PNGs to $STATS1_PNG when set
+Run: ZRCP_PORT=<port> python3 tests/stats1.py
+"""
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "tools"))
+from game_lib import (Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_RAT, K_GOBLIN,  # noqa: E402
+                      stand_y, frame_png)
+from lp import T  # noqa: E402
+from proj3 import w16  # noqa: E402
+from world import log_row, text6, STRINGS  # noqa: E402
+
+KIT = bool(S.get("KIT_DEBUG", 0))
+STRIDE = S["P_ENT_STRIDE"]
+EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT = 1, 2, 4, 8
+EF_RESPAWN = S["EF_RESPAWN"]
+GS_DEAD, GS_WIN = S["GS_DEAD"], S["GS_WIN"]
+HY = stand_y(1, 6)
+HX = 9
+NOWHERE = 7
+ES_LX, ES_VX = S["ES_LX"], S["ES_VX"]
+PNG = os.environ.get("STATS1_PNG")
+
+
+def kname(kind):
+    for n, t in STRINGS:
+        if n.startswith("nm_") and S.get("TX_NM_" + n[3:].upper()) == S["TX_NM_KNIGHT"] + kind:
+            return t
+    raise KeyError(kind)
+
+
+def orw(a, b):
+    return [bytes(x | y for x, y in zip(r, s)) for r, s in zip(a, b)]
+
+
+def main():
+    fails = []
+    with Harness() as h:
+        h.launch(EMU_ARGS)
+        p = T(h)
+
+        def check(tag, cond, detail=""):
+            if not h.expect(tag, bool(cond), True):
+                fails.append(tag)
+                if detail != "":
+                    print(f"[detail] {tag}: {str(detail)[:600]}", flush=True)
+
+        if KIT:
+            print("[skip] stats1 needs a DEBUG_KIT=0 build", flush=True)
+            return 0
+
+        def st():
+            return (p.rw("ST1_KILLS"), p.rb("ST1_BL") >> 3, p.rb("ST1_BXP"))
+
+        def place(slot, x, y, flags, hp=None):
+            kw = dict(X=x, Y=y, PX=x * 8, PY=y * 8, MODE=0, ROOM=p.rb("CUR_ROOM"),
+                      FLAGS=flags, REACT=0, FLT=0, HIT=0)
+            if hp is not None:
+                kw.update(HP=hp, MAXHP=hp)
+            p.set_ent(slot, **kw)
+
+        seed = [0x1357]
+
+        def scene(cls=K_KNIGHT):
+            p.boot(cls)
+            seed[0] = (seed[0] * 75 + 74) % 65537 or 1   # each scene its own rolls (the snapshot's RNG is fixed)
+            p.wmem(S["RNG_STATE"], w16(seed[0] & 0xFFFF or 1))
+            room = p.rb("CUR_ROOM")
+            for sl in range(1, 16):
+                e = p.ent(sl)
+                if e["FLAGS"] & EF_ACTIVE and e["ROOM"] == room:
+                    p.set_ent(sl, ROOM=NOWHERE)
+            place(0, HX, HY, EF_ACTIVE | EF_PLAYER, 200)
+            p.wb("MAXMP", 40)
+            p.wb("MP", 40)
+            p.wmem(S["ST_FLAGS"], [0] * 16)
+            p.wmem(S["ST_T1"], [0] * 16)
+            p.wb("FX_DROP", 0)
+            p.tick(3)
+
+        def mon(slot, kind, hp=5, extra=0, x=HX + 3, cls=K_KNIGHT, left=True):
+            y = HY + p.kb(cls, "KT_BH") - p.kb(kind, "KT_BH")
+            place(slot, x, y, EF_ACTIVE | EF_HOSTILE | (EF_LEFT if left else 0) | extra, hp)
+            p.set_ent(slot, KIND=kind)
+
+        def deal(att, tgt, dmg=99):
+            pc0 = p.pc()
+            ok, _ = p.code([0x3A] + w16(S["PORT_7FFD_SHADOW"]) + [0xF5, 0x3E, 3, 0xCD] + w16(S["page_bank"])
+                           + [0xDD, 0x21] + w16(S["P_ENTITIES"] + att * STRIDE)
+                           + [0x3E, tgt, 0x01, 0, dmg, 0x1E, 0, 0xCD] + w16(S["deal_hit"])
+                           + [0xF1, 0xCD] + w16(S["restore_page"]), game=True)
+            p.z.cmd("set-register PC=%d" % pc0)
+            return ok
+
+        KX = {k: S["K_" + k] for k in ("RAT", "OGRE", "GOBLIN", "ARCHMAGE", "GIANT_RAT", "SLIME")}
+
+        # ------------------------------------------------------------------ unit
+        scene()
+        check("U0 the counters start at 0 / 0 / 0", st() == (0, 0, 0) and p.rb("ST1_BL") == 0, st())
+        got = []
+        for slot, k in ((1, "RAT"), (2, "OGRE"), (3, "GOBLIN")):
+            mon(slot, KX[k])
+            ok = deal(0, slot)
+            got.append((ok,) + st())
+        check("U1 hero kills Rat / Ogre / Goblin: kills 1 2 3; best = the Ogre (KXP 60), the Goblin keeps it",
+              [g[1] for g in got] == [1, 2, 3] and [g[2] for g in got] == [KX["RAT"], KX["OGRE"], KX["OGRE"]]
+              and got[2][3] == 60 and all(g[0] for g in got), got)
+        s0 = st()
+        mon(1, KX["RAT"])
+        mon(2, KX["GOBLIN"])
+        deal(2, 1)
+        check("U2 a monster killing a monster: not counted", st() == s0 and p.ent(1)["FLAGS"] & S["EF_DYING"], st())
+        mon(1, KX["ARCHMAGE"], hp=5)
+        deal(1, 1)
+        check("U3 the Archmage killed by its own Mirror Helm return (attacker = itself): not counted",
+              st() == s0 and p.ent(1)["FLAGS"] & S["EF_DYING"], st())
+        deal(0, 0, 1)
+        check("U4 the hero hit by a trap-like blow (target = the hero): not counted", st() == s0, st())
+        mon(1, KX["RAT"], extra=EF_RESPAWN)
+        deal(0, 1)
+        check("U5 an EF_RESPAWN monster killed by the hero is counted", st()[0] == s0[0] + 1, st())
+        scene()
+        for slot, k in ((1, "GIANT_RAT"), (2, "SLIME"), (3, "RAT")):
+            mon(slot, KX[k])
+            deal(0, slot)
+        check("U6 tie: Giant Rat then Slime (KXP 3): the latest is the best; a Rat (KXP 2) after: stays",
+              st() == (3, KX["SLIME"], 3), st())
+        p.wmem(S["ST1_KILLS"], [255, 0])
+        mon(1, KX["RAT"])
+        deal(0, 1)
+        a = p.rw("ST1_KILLS")
+        p.wmem(S["ST1_KILLS"], [255, 255])
+        mon(1, KX["RAT"])
+        deal(0, 1)
+        check("U7 16-bit: 255 -> 256 carries; 65535 -> 0 (wraps)", a == 256 and p.rw("ST1_KILLS") == 0,
+              (a, p.rw("ST1_KILLS")))
+        scene()
+        mon(1, KX["ARCHMAGE"], hp=5)
+        deal(0, 1)
+        check("U8 the Archmage (KXP 0) as the only kill: counted, key stored", st() == (1, KX["ARCHMAGE"], 0), st())
+
+        # ------------------------------------------------------------------ game
+        def run_turn(act, ticks=200):
+            t0 = p.rw("TURN_COUNTER")
+            act()
+            for _ in range(ticks):
+                if p.rw("TURN_COUNTER") != t0 and p.idle() and p.rb("LOG_QN") == 0:
+                    break
+                p.tick()
+            p.tick(3)
+
+        def game_scene(cls, mons, learn=None, daggers=0, arrows=0, bow=0):
+            scene(cls)
+            for sl, k, x, left in mons:
+                mon(sl, k, hp=1, x=x, cls=cls, left=left)
+            av = 0
+            for k, r in (learn or {}).items():
+                av |= r << (2 * k)
+            p.wmem(S["ARANK"], w16(av))
+            p.wb("DAGGERS", daggers)
+            p.wb("ARROWS", arrows)
+            p.wb("HAS_BOW", bow)
+            p.tick(2)
+
+        def fire(slot):
+            p.select_slot(slot)
+            run_turn(lambda: p.tap("FIRE"))
+
+        for rep in range(6):
+            game_scene(K_KNIGHT, [(1, K_RAT, HX + 3, True)])
+            fire(0)
+            if st()[0]:
+                break
+        check("G1 Warrior bump kills a Rat: 1 kill, best Rat", st() == (1, K_RAT, 2), st())
+        for rep in range(6):
+            game_scene(K_KNIGHT, [(1, K_RAT, HX + 3, True), (3, K_GOBLIN, HX - 3, False)], learn={1: 1})
+            fire(2)
+            if st()[0] == 2:
+                break
+        check("G2 Whirlwind kills a Rat and a Goblin in one blow: +2, best Goblin",
+              st()[0] == 2 and st()[1] == K_GOBLIN, st())
+        for rep in range(8):
+            game_scene(K_KNIGHT, [(1, K_RAT, HX + 6, True)], daggers=3)
+            fire(3)
+            if st()[0]:
+                break
+        check("G3 a thrown dagger kills a Rat: counted", st()[0] == 1 and p.rb("DAGGERS") == 2, (st(), p.rb("DAGGERS")))
+        for rep in range(8):
+            game_scene(K_KNIGHT, [(1, K_RAT, HX + 6, True)], arrows=5, bow=1)
+            fire(4)
+            if st()[0]:
+                break
+        check("G4 an arrow kills a Rat: counted", st()[0] == 1 and p.rb("ARROWS") == 4, (st(), p.rb("ARROWS")))
+        for rep in range(4):
+            game_scene(K_WIZARD, [(1, K_RAT, HX + 3, True)], learn={0: 1})
+            fire(1)
+            if st()[0]:
+                break
+        check("G5 a Spark kills a Rat (Mage): counted", st()[0] == 1 and p.rb("MP") < 40, (st(), p.rb("MP")))
+
+        p.wmem(S["ST1_KILLS"], [9, 0])
+        p.wb("GAME_STATE", GS_DEAD)
+        p.tick(8)
+        ok = p.end_to_menu()
+        p.menu_start(K_KNIGHT)
+        check("G6 new_game zeroes the counters (end card -> menu -> start)",
+              ok and st() == (0, 0, 0) and p.rb("ST1_BL") == 0 and p.rw("TURN_COUNTER") < 20, (ok, st()))
+
+        # ------------------------------------------------------------------ end card
+        def card(gs, kills, turns, kind, tag):
+            scene()
+            p.wmem(S["ST1_KILLS"], w16(kills))
+            p.wb("ST1_BL", kind * 8 + 4)
+            p.wb("ST1_BXP", 60 if kills else 0)
+            p.wmem(S["TURN_COUNTER"], w16(turns))
+            before = p.frame()
+            p.wb("GAME_STATE", gs)
+            p.tick(8)
+            p.settle(4)
+            fr = p.frame()
+            if PNG:
+                frame_png(fr, Path(PNG) / f"{tag}.png")
+            rows = {r: log_row(fr, r, 0, 32) for r in (10, 11, 12, 14)}
+            e10 = orw(text6("KILLS", ES_LX, 32), text6(str(kills), ES_VX, 32))
+            e11 = orw(text6("TURNS", ES_LX, 32), text6(str(turns), ES_VX, 32))
+            e12 = orw(text6("BEST KILL", ES_LX, 32), text6(kname(kind), ES_VX, 32)) if kills else [bytes(32)] * 8
+            e14 = text6("PRESS 1-4 OR ENTER", 80, 32)
+            check(f"E {tag}: row 10 = KILLS {kills}", rows[10] == e10)
+            check(f"E {tag}: row 11 = TURNS {turns}", rows[11] == e11)
+            check(f"E {tag}: row 12 = " + ("BEST KILL " + kname(kind) if kills else "empty (no kills)"), rows[12] == e12)
+            check(f"E {tag}: row 14 = PRESS 1-4 OR ENTER", rows[14] == e14)
+            attrs = [fr[6144 + r * 32 + c] for r in range(7, 15) for c in range(32)]
+            check(f"E {tag}: rows 7-14 attr $47 (bar the title row's own)", all(a == 0x47 for a in attrs[:32])
+                  and all(a == 0x47 for a in attrs[32 * 3:]), sorted(set(attrs)))
+            check(f"E {tag}: rows 6 and 15 untouched",
+                  [log_row(fr, r, 0, 32) for r in (6, 15)] == [log_row(before, r, 0, 32) for r in (6, 15)])
+            check(f"E {tag}: state {gs} held", p.rb("GAME_STATE") == gs, p.rb("GAME_STATE"))
+
+        card(GS_DEAD, 37, 4512, KX["OGRE"], "death")
+        card(GS_WIN, 1234, 65535, S["K_DKNIGHT"], "win")
+        card(GS_DEAD, 0, 0, 0, "death0")
+        print(f"stats1: {len(fails)} failed" + (f": {fails[:10]}" if fails else ""), flush=True)
+        return 1 if fails or h.failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

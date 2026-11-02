@@ -807,6 +807,36 @@ tx_dec:
                 ret
 
 ;------------------------------------------------------------------------------
+; es_num — STATS1 S1 (the end card): HL = 0..65535 -> its decimal at DE, no leading zeros, 0-terminated
+; (DE past the 0). Repeated /10 (16 shift-subtract steps), the digits pushed behind a 0 sentinel
+; (its A = 0 ends the pop loop and is stored as the terminator). In low RAM so bank 7 (es_item)
+; calls it directly. Clobbers: A, BC, DE, HL.   ~1.4k T a digit
+;------------------------------------------------------------------------------
+es_num:
+                xor  a
+                push af                        ; sentinel
+.l:             ld   b, 16
+                xor  a
+.d:             add  hl, hl
+                rla
+                cp   10
+                jr   c, .n
+                sub  10
+                inc  l                         ; the quotient bit
+.n:             djnz .d
+                add  a, '0'
+                push af
+                ld   a, h
+                or   l
+                jr   nz, .l
+.p:             pop  af
+                ld   (de), a
+                inc  de
+                or   a
+                jr   nz, .p
+                ret
+
+;------------------------------------------------------------------------------
 ; show_impact_msg — IX = attacker at IMPACT (anim_tick, MSG_Q): queue its
 ; E_MSG line, composed in MSG_BUF as pre + kind name + post (imp_pre /
 ; imp_post): "YOU HIT RAT -3 HP 1" (LOG-DMG), "THE RAT MISSES". Token streams concatenate
