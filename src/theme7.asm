@@ -1,5 +1,5 @@
 ;==============================================================================
-; theme7.asm - LOWER-FLAME exp.: the attr-patch tail of level_tiles7 (tiles7.asm), moved to the low bank-7
+; theme7.asm - half-row flames: the attr-patch tail of level_tiles7 (tiles7.asm), moved to the low bank-7
 ; block (the high block TSET_BASE..$FFFF was 8 B over with the extra flame glyph; this block had 31 B free).
 ; Same bank, so level_tiles7 reaches it with plain CALL / JP; reached only through far7.
 ;------------------------------------------------------------------------------

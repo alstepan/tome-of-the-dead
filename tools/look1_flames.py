@@ -90,7 +90,7 @@ RAG_TORCH_B = """\
 ....#.#.##..#...
 ....##.###..#...
 ...##..##.##...."""
-# LOWER-FLAME experiment (user 2026-11-02): the lower flame cell row (rows 8..15 of the 2x4 objects) swaps
+# half-row flame experiment, shipped (user 2026-11-02): the lower flame cell row (rows 8..15 of the 2x4 objects) swaps
 # too. B shifts the ragged gaps one column (anti-phase to the top tongues); the stem rows (torch 14..15,
 # brazier 13..14 + the body rim in row 15) stay identical, so only the upper flame rows differ.
 RAG_TORCH_LO_B = """\
@@ -214,7 +214,7 @@ def build_grid(src: dict) -> str:
                     cells[1, :] = mid
                     out.append(block_text(f"{obj}_{shape}_{col}_{k}", rows, cells))
     lo_b = {"torch_tall": RAG_TORCH_LO_B, "brazier_big": RAG_BRAZ_LO_B}
-    for obj, shapes in SHAPES.items():           # LOWER-FLAME: top B + lower B (frame 2 of the lower variant)
+    for obj, shapes in SHAPES.items():           # half-row flames: top B + lower B (frame 2 of the lower variant)
         body = src[f"{obj}_f1"]
         brows = ["".join("#" if v else "." for v in r) for r in body["bm"]]
         flame = rows_of(shapes["rag"][1]) + rows_of(lo_b[obj])
@@ -302,7 +302,7 @@ def merge_bigdecor() -> None:
         for k, f in (("a", "f1"), ("b", "f2")):
             b = blk[f"{pre}_{k}"]
             base += b.replace(f"=== {pre}_{k} ", f"=== {obj}_look1_{f} ", 1).rstrip("\n") + "\n\n"
-    for obj, pre in APPROVED.items():           # LOWER-FLAME: frame 2 with the lower row B (f1 is shared)
+    for obj, pre in APPROVED.items():           # half-row flames: frame 2 with the lower row B (f1 is shared)
         if obj != "torch_slim":
             b = blk[f"{pre[:-2]}_r_c"]
             base += b.replace(f"=== {pre[:-2]}_r_c ", f"=== {obj}_look2_f2 ", 1).rstrip("\n") + "\n\n"

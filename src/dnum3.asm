@@ -88,7 +88,12 @@ dn_take:
                 jr   nz, .nm
                 ld   a, (DN_TXT + 5)           ; dn_lvt (bank 2) filled DN_TXT: "MISS" / "+LVL", 0, its attr
                 ld   (ix+DL_ATTR), a
-                ld   bc, 3 << 8 | 0            ; 24 px = 3 cells, no pad
+                cp   DNA_LVL
+                jr   nz, .nl
+                set  7, (ix+DL_SLOT)           ; LVL-KEEP: "+LVL" is filed as slot | $80: dn_find never
+                                               ; matches it, so a later number takes its own free entry
+                                               ; (or ends the oldest) instead of replacing "+LVL"
+.nl:            ld   bc, 3 << 8 | 0            ; 24 px = 3 cells, no pad
                 jr   .tx
 .nm:            or   a
                 jr   z, .dg                    ; "0": no sign

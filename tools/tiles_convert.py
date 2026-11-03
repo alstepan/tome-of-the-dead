@@ -90,7 +90,7 @@ COMMON = [
     (28, "T_WALL_DITHER", ("grid", "walls_r4.tiles", "wall_worn")),
     (29, "T_WALL_PATCH", ("grid", "walls_r4.tiles", "wall_brk_top")),
     (30, "T_WALL_FADE",  ("grid", "walls_r4.tiles", "wall_brk_bot")),
-    (31, "T_GLOW",       ("grid", "b12_gate.tiles", "gate_glow")),    # LOWER-FLAME exp.: B12 glow, the same glyph + attr
+    (31, "T_GLOW",       ("grid", "b12_gate.tiles", "gate_glow")),    # half-row flames: B12 glow, the same glyph + attr
                                                                       # on every depth -> common (was 1 per-level id x 8)
 ]
 # ids whose attr follows ATTR_FLOOR[depth] / ATTR_WALL[depth] at runtime (engine patches)
@@ -155,7 +155,7 @@ LEVEL_OBJECTS = [
     ["TORCH_TALL", "BANNER_TALL", "PATCH_B"],                     # D7 Fortress (-PILLAR)
     ["BRAZIER_BIG", "BOOKSHELF", "BANNER_TALL", "TORCH_SLIM", "COBWEB", "COBWEB_R"],  # D8
 ]
-# LOWER-FLAME experiment: the big objects' frame 2 also swaps the lower flame cell row.  The FULL row (+2 ids per
+# Half-row flames (shipped): the big objects' frame 2 also swaps the lower flame cell row.  The FULL row (+2 ids per
 # object) fits only D4 (26 ids); with GLOW common (id 31) D5 / D7 are exactly at the 28 cap, D1 / D3 / D8 (COBWEB
 # pair kept) are 1 id short.  So the shipped variant is HALF everywhere: only the lower-LEFT cell swaps (+1 id,
 # F_LO0), which also keeps the shared glyph pool / flag sets small (bank 7: the full row is +48 B, 25 B over).

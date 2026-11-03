@@ -46,6 +46,8 @@ number's on a bare cell (bank-5 attr == the attr shadow), else the bank-5 one.
       attr $46, 3 cells, FONT6 text) spawns on the hero, lives 12 passes, erases cleanly,
       model7 exact, ROOM_MAP / bank-7 code untouched; a miss line + a level-up = one
       "+LVL"; a Goblin's MISS stays MISS; a blow first keeps the owed "+LVL"
+      (LVL-KEEP) "+LVL" is filed as slot | $80: a blow / poison tick N = 1..8 passes after
+      it takes its own entry, "+LVL" keeps its full 12 passes
   R   ROOM_MAP never written; after everything expired the composed screen ==
       the presented one
   every sampled tick of H / M / G / K / Y / V / Q: model7 exact (MODEL)
@@ -622,6 +624,10 @@ def run(h, p, check):
             out.append(bytes(col))
         return out
 
+    def ofl(slot):
+        """LVL-KEEP: a live "+LVL" is filed as slot | $80 (dn_find never matches it)."""
+        return of(slot | 0x80)
+
     code0 = b7(S["B7_CODE"], S["B7_LIMIT"] - S["B7_CODE"])
     scene([], hhp=50)
     xp_next = p.z.read_memory(S["xpn_tab"], 2)
@@ -633,18 +639,18 @@ def run(h, p, check):
     tr, yrec, ybad, yglyph, yshot = [], None, [], b"", None
     for _ in range(30):
         at_pres()
-        r = of(0)
+        r = ofl(0)
         tr.append(dict(r) if r else None)
         if r and yrec is None:
             yrec = dict(r)
-            yglyph = bytes(p.z.read_memory(LIVE + LSTR * next(e for e, s, _ in live() if s == 0) + GLY, 24))
+            yglyph = bytes(p.z.read_memory(LIVE + LSTR * next(e for e, s, _ in live() if s == 0x80) + GLY, 24))
             yshot = p.frame()
         ybad += model7("Y")[0]
     ages = [t["AGE"] if t else None for t in tr]
     first = next((i for i, t in enumerate(tr) if t), None)
     check("Y a level-up (LVL +1): +LVL spawns on the hero: value MISS, attr $46, 3 cells",
           p.rb("LVL") == lvl0 + 1 and yrec and yrec["VAL"] == 0x80 and yrec["ATTR"] == 0x46 and yrec["W"] == 3
-          and yrec["SLOT"] == 0, (p.rb("LVL"), lvl0, yrec))
+          and yrec["SLOT"] == 0x80, (p.rb("LVL"), lvl0, yrec))
     if yrec:
         shot("dnum_levelup", yshot)
         want = b"".join(font_lines("+LVL"))
@@ -667,7 +673,7 @@ def run(h, p, check):
     scene([], hhp=50)
     p.wb(SLOTS + S["DS_FLG"], 0x81)
     p.tick(2)
-    r = of(0)
+    r = ofl(0)
     check("Y a miss line + a level-up on the hero together: one +LVL ($46), both flag bits consumed",
           r and r["VAL"] == 0x80 and r["ATTR"] == 0x46 and p.rb(SLOTS + S["DS_FLG"]) == 0,
           (r, p.rb(SLOTS + S["DS_FLG"])))
@@ -676,7 +682,7 @@ def run(h, p, check):
     p.wb(SLOTS + S["DS_FLG"], 0x80)
     p.wb(SLOTS + 4 * g + S["DS_FLG"], 1)
     p.tick(4)
-    rg, rh = of(g), of(0)
+    rg, rh = of(g), ofl(0)
     check("Y a Goblin's MISS stays MISS ($45) beside the hero's +LVL ($46), each on its body",
           rg and rh and rg["VAL"] == 0x80 and rg["ATTR"] == 0x45 and rh["ATTR"] == 0x46, (rg, rh))
     # a blow on the hero and a level-up between two passes: the blow's -n first, +LVL kept for after
@@ -691,9 +697,61 @@ def run(h, p, check):
         p.tick()
         r = of(0)
         seen.append((sval(r["VAL"]), r["ATTR"]) if r else None)
+        r = ofl(0)
+        seen.append((sval(r["VAL"]), r["ATTR"]) if r else None)
     check("Y a blow + a level-up: the -7 shows first, the +LVL is kept (not lost) and follows",
           (-7, 0x42) in seen and ("MISS", 0x46) in seen and seen.index((-7, 0x42)) < seen.index(("MISS", 0x46)),
           seen)
+
+    # LVL-KEEP: a number spawned N passes after the +LVL must not replace it (it once did: the
+    # MISS-valued "+LVL" was "replaceable"): +LVL keeps its whole 12 passes (value MISS, attr $46,
+    # age +1 a pass, never rewritten) and the -n shows beside it in its own entry. N = 1..8, a monster
+    # blow (hurt reaction) and a poison tick; model7 exact every tick.
+    def lvl_then(n, poison):
+        scene([], hhp=150)
+        p.set_ent(0, MAXHP=200)
+        p.tick(14)
+        p.wb(SLOTS + S["DS_FLG"], 0x80)
+        for _ in range(8):
+            p.tick()
+            if ofl(0):
+                break
+        at_lvl = ofl(0)
+        k = 0
+        while ofl(0) and ofl(0)["AGE"] < n + 1 and k < 20:
+            at_pres()
+            k += 1
+        hp = p.ent(0)["HP"]
+        if poison:
+            p.wb(STX, 3)
+            p.poke_hp(0, hp - 3)
+        else:
+            p.poke_hp(0, hp - 7)
+            p.wb(S["P_ENTITIES"] + S["E_REACT"], 0x80 | S["RC_HURT"])
+        want = -3 if poison else -7
+        lv, dm, bad = [], [], []
+        for _ in range(16):
+            at_pres()
+            a, d = ofl(0), of(0)
+            lv.append((a["AGE"], a["VAL"], a["ATTR"]) if a else None)
+            dm.append(sval(d["VAL"]) if d else None)
+            bad += model7("Y")[0]
+        if poison:
+            p.wb(STX, 0)
+        return at_lvl, lv, dm, bad, want
+
+    for poison, ns in ((False, range(1, 9)), (True, (1, 4, 8))):
+        for n in ns:
+            at_lvl, lv, dm, bad, want = lvl_then(n, poison)
+            live_l = [x for x in lv if x]
+            ages = [x[0] for x in live_l]
+            gone = lv.index(None) if None in lv else len(lv)
+            ok = (at_lvl and live_l and all(x[1:] == (0x80, 0x46) for x in live_l)
+                  and ages == sorted(set(ages)) and ages[-1] == 12 and all(x is None for x in lv[gone:])
+                  and want in dm and not bad)
+            check("Y a %s %d passes after the +LVL: +LVL keeps its full life (MISS $46, ages up to 12), the %d "
+                  "appears beside it, model7 exact" % ("poison tick" if poison else "blow", n, want), ok,
+                  (n, lv, dm, bad[:3]))
 
     # ====================== V / Q: a body walking through a standing number ====
     def walk_through(tag, walker, silent=False):

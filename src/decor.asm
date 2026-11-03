@@ -12,7 +12,7 @@ DT_STEP_MASK    EQU 3               ; an entry steps when AL_PHASE & 3 == 0: eve
 ; FLAME-RATE (user 2026-11-02): flame glyph A/B swap every 4th tick (160 ms; was 16 = 640 ms). The
 ; hold equals the step period, so there is no separate hold test (-5 B). The D3-8b drip is its own
 ; system (drip.asm), not in ANIM_LIST since D3-7 T6: no entry needs the old 16-tick hold.
-DT_MAX_GLYPH    EQU 2               ; per tick: <= 2 glyph swaps (~1.2k T per step; LOWER-FLAME exp.: was 1)
+DT_MAX_GLYPH    EQU 2               ; per tick: <= 2 glyph swaps (~1.2k T per step; half-row flames: was 1)
 DT_MAX_TRIES    EQU 3               ; per tick: <= 3 due entries reach the occupancy test
                                     ; (~0.1k per RLIST slot each); the rest wait a tick
 DT_CAPS         EQU (DT_MAX_TRIES << 6) | (DT_MAX_GLYPH << 4)   ; C: tries left (bits 7-6),
