@@ -412,8 +412,8 @@ do_exit:
                 call show_bank5                ; A7: the scroll runs on the $4000 screen
                 ld   a, GS_TRANSITION          ; (state flips once none is drawn)
                 ld   (GAME_STATE), a
-                ld   hl, lp_transition         ; LP (bank 3): bank the old room, spawn the
-                call far3                      ; new one's residents, admit the followers
+                call .lpt                      ; the hero to his arrival, then LP (bank 3): bank the
+                                               ; old room, spawn the new one's residents, admit
                 ld   h, NEXT_MAP >> 8
                 ld   a, (EXIT_DEST)
                 call build_room                ; B3B-8: far3 -> bank-3 build_room_map v2
@@ -433,8 +433,20 @@ do_exit:
                 ld   a, (EXIT_DEST)
                 ld   (CUR_ROOM), a
                 call lair_hint                 ; B12 (lowram: 3 B here, kind_tab pad)
-                ld   ix, P_ENTITIES
-                ld   (ix+E_ROOM), a
+                ld   (P_ENTITIES + E_ROOM), a
+                call arrival_conflicts         ; L-RELIEF: this bank (sets IX itself)
+                call vis_room_sync             ; B7: no old-room sprite in the next render
+                call present_full              ; A7: bank 5 -> 7 (6,912 B), show bank 7
+                xor  a
+                ld   (EXIT_KIND), a
+                ld   a, GS_PLAYING
+                ld   (GAME_STATE), a
+                jp   resync_tick
+; .lpt — ROOM-MEM: the hero's arrival placement (was .in's, after the scroll) runs BEFORE
+; lp_transition, which reads the arrival box from his slot (x, storey, width): nothing
+; between here and .in reads his x / y (the scroll / room build / glyph cache / room_show
+; never do; his sprite is hidden). Then far3 lp_transition (tail).
+.lpt:           ld   ix, P_ENTITIES
                 ld   a, (EXIT_KIND)
                 cp   EX_RIGHT
                 jr   nz, .nl
@@ -463,18 +475,12 @@ do_exit:
                 ld   (ix+E_Y), a
 .pos:           call snap_pxpy
                 ld   (ix+E_MODE), M_REST
-                call arrival_conflicts         ; L-RELIEF: this bank
-                call vis_room_sync             ; B7: no old-room sprite in the next render
-                call present_full              ; A7: bank 5 -> 7 (6,912 B), show bank 7
-                xor  a
-                ld   (EXIT_KIND), a
-                ld   a, GS_PLAYING
-                ld   (GAME_STATE), a
-                jp   resync_tick
+                ld   hl, lp_transition
+                jp   far3
 ; 3E-T12 (game.md §8.11 Q6): no followers, no scroll. tele_pick (R6) picks the
 ; room + spot and leaves EXIT_KIND = EX_UP / EX_DOWN + EXIT_COL, so
-; lp_transition banks / spawns for that arrival box and .in places the hero
-; there like a vertical arrival. The new room is composed in bank 5 (room_show:
+; .lpt places the hero there like a vertical arrival and lp_transition banks /
+; spawns for that arrival box. The new room is composed in bank 5 (room_show:
 ; map, screen, attr shadow, inks, ornament) while bank 7 still shows the old
 ; one, then shown at once (show_bank5; present_full copies it back to 7).
 .tele:          call hide_sprites
@@ -482,8 +488,7 @@ do_exit:
                 call far6
                 ld   a, GS_TRANSITION
                 ld   (GAME_STATE), a
-                ld   hl, lp_transition         ; bank the old room, spawn the new one
-                call far3
+                call .lpt                      ; the hero to the spot, bank the old room, spawn the new one
                 ld   a, (EXIT_DEST)
                 call room_show                 ; (lowram; leaves bank 7 paged)
                 call show_bank5
@@ -1058,7 +1063,10 @@ hide_sprites:
 ; do_exit): a plain call from do_exit; PROTO (LVL_DEPTH 0) admits at once
 ; through far3 follow_admit (bank 3: lp_wt / lp_rec), LP leaves the candidates
 ; to lp_transition. Cold (once per room exit): the contended fetches and the
-; far3 (~0.25k T) do not touch a tick.  Clobbers: all but IY.
+; far3 (~0.25k T) do not touch a tick. ROOM-MEM (F, user 2026-11-03): a PENDING
+; body is a candidate too (act_mask without EF_PENDING), and a box overlapping the
+; reference box (a PENDING follower on the hero's arrival box) counts as gap 0, so the
+; followers that came in with him follow him back out.  Clobbers: all but IY.
 ;==============================================================================
 follow_select:
                 xor  a
@@ -1089,8 +1097,9 @@ follow_select:
                 add  hl, de
                 ld   (hl), $FF
                 call ent_ix
-                call act_here
-                jp   nz, .cn
+                ld   a, EF_ACTIVE | EF_DYING   ; ROOM-MEM (F, user 2026-11-03): a PENDING body (a
+                call act_mask                  ; follower not yet in) may follow the hero back out
+                jr   nz, .cn
                 ld   a, (ix+E_KIND)            ; 3F-T8 (game.md §8.6 / §9.2): the lair boss
                 or   (ix+E_GOLD)               ; NEVER follows (it was a plain candidate: the
                 ld   hl, LP_BOSS               ; D4 Ogre left its lair, user playtest). Only the
@@ -1135,8 +1144,9 @@ follow_select:
                 ld   b, a
                 ld   a, (ix+E_X)
                 sub  b                         ; m.x - (ref.x+ref.w)
-.g:             jr   c, .cn
-                cp   FOLLOW_GAP + 1
+.g:             jr   nc, .gp
+                xor  a                         ; ROOM-MEM (F): boxes overlap = a PENDING body (it
+.gp:            cp   FOLLOW_GAP + 1            ; came in with the hero, on his arrival box): gap 0
                 jr   nc, .cn
                 ld   b, a
                 ld   a, (TMP7)
@@ -1190,8 +1200,10 @@ arrival_conflicts:
 ; act_here — RECLAIM-A: Z if the entity IX is EF_ACTIVE (not PENDING / DYING) and in CUR_ROOM
 ; (the test vbat_turn, the follower candidates and arrival_conflicts each had inline, 17 B).
 ; Clobbers: A, F   ~60 T incl. call/ret
-act_here:       ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING | EF_DYING
+; act_mask — the same with A = the flag mask (ROOM-MEM (F): follow_select passes
+; EF_ACTIVE | EF_DYING, so a PENDING body may follow the hero back).
+act_here:       ld   a, EF_ACTIVE | EF_PENDING | EF_DYING
+act_mask:       and  (ix+E_FLAGS)
                 cp   EF_ACTIVE
                 ret  nz
                 ld   a, (CUR_ROOM)
@@ -1262,7 +1274,7 @@ intent_icon7:
                 ld   b, CUR_DELAY2
 .step:          ld   (hl), b
                 ld   a, c
-                jp   cursor_step               ; intent7.asm (this bank)
+                jr   cursor_step               ; intent7.asm (this bank)
 
 ;==============================================================================
 ; D3-7 (abilities; T0 layout: refusing stubs, T1 fills them in)

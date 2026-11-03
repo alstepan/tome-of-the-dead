@@ -220,7 +220,8 @@ SQ_PSN_T        EQU 12              ; BOSS-RANGED: a spit hit always poisons + 1
 ; State: C = E_RCD bits 0-1 (stored XOR 1, as T7), S = E_RCD bits 2-5 (T9), and the
 ; byte ST_X + slot (monsters are never poisoned, §6.4.3; lp_spawn / sp_init zero it):
 ; bits 0-2 P, bits 3-5 H (hex cooldown), bit 6 blinked, bit 7 initialised (0 = a fresh
-; spawn / re-entry: P = H = 0, blinked = hp <= max / 2, A3 "Re-entry").
+; spawn / a re-entry after its parked slot was evicted: P = H = 0, blinked = hp <= max / 2;
+; ROOM-MEM: a re-entry from a parked slot keeps the byte, A3 "Re-entry").
 ;------------------------------------------------------------------------------
 AMS_P           EQU %00000111
 AMS_H           EQU %00111000
@@ -245,7 +246,9 @@ AM_ROW          EQU SP_Y            ; am_cast: the spell index
 AM_DMG          EQU SP_KB           ; rg_shoot: the last damage roll (the Mirror Helm return reuses it)
 ; E_RCD (= E_POT, unused by monsters): bits 0-1 the cooldown counter stored XOR 1 (the
 ; zeroed spawn slot (lp_spawn) / place_follower's 0 = counter 1: no shot on the first
-; monster phase after the room entry); bits 2-5 T9's summon counter S (Bone Caller / Pharaoh;
+; monster phase after the room entry; ROOM-MEM: a parked slot restored by lp_spawn keeps its
+; counter, raised to 1 if 0 (the same grace); the Ogre's raw SLAM count 1 becomes 0 there);
+; bits 2-5 T9's summon counter S (Bone Caller / Pharaoh;
 ; turns to the next summon, 0 = ready); bit 6 summon-made (sp_run; lp_bank discards it); bit 7
 ; the once bit (a Rabbit Rat has bred; banked as LEK_BRED, lp_spawn restores it).
 ; place_follower keeps bits 2-7 (RCD_KEEP).
@@ -261,7 +264,8 @@ RCD_KEEP        EQU RCD_SUMMON | RCD_SUMMONED | RCD_ONCE
 ; 3F-T9 the Vampire's bat form (vbat6.asm; the Vampire never summons, so bits 2-5 are free
 ; on it): RCD_ONCE = it has fled once; bit 2 RCD_VFLEE = this bat form is the FLEE one
 ; (reverts when its FEAR ends), clear = the close-distance one (reverts near the hero).
-; place_follower keeps it; lp_bank drops it (a banked bat returns as a close-distance one).
+; place_follower keeps it; a parked slot's restore (lp_spawn) clears it with the summon bits
+; (a banked bat returns as a close-distance one; its FEAR is kept).
 RCD_VFLEE       EQU %00000100
 RCD_VFLEE_BIT   EQU 2
 VB_FLEE_T       EQU 8               ; §9.2 rule 1: flee 8 turns (FEAR, MIND timer; <= STS_MAX_TURNS)
@@ -271,7 +275,7 @@ VB_S            EQU SP_S            ; vb_turn / vb_one scratch (end_turn, after 
                                     ; spawn6.asm sp_y writes SP_S itself)
 ; 3F-T8: the Ogre (never a shooter) keeps its SLAM counter in the same bits 0-1 (game.md §9.1:
 ; every 3rd turn SLAM, reach 2, x 1.5 dmg, a hit STUNS 1): turns since the last SLAM, 0 at spawn
-; (lp_spawn zeroes the slot); og_adv: 3 -> 1, 0 -> 1, 1 -> 2, 2 stays; at 2 (OG_READY) its reach
+; (lp_spawn zeroes a new slot; ROOM-MEM: a parked one keeps it, 1 -> 0); og_adv: 3 -> 1, 0 -> 1, 1 -> 2, 2 stays; at 2 (OG_READY) its reach
 ; is 2 and a blow sets 3 (OG_SLAM: this attack is the SLAM, atk_mod reads it). bank-2 boss2.asm.
 OG_READY        EQU 2
 OG_SLAM         EQU 3

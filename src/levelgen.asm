@@ -313,8 +313,7 @@ bfs:            ld   hl, LG_DIST
                 add  a, e
                 ld   e, a
                 ld   hl, LG_DIST
-                call hla
-                ld   a, (hl)
+                call idx
                 inc  a
                 jr   nz, .s
                 ld   (hl), d
@@ -381,8 +380,7 @@ lair:           ld   e, 1
                 jr   nc, .nx
 .ok:            ld   hl, LG_DIST
                 ld   a, c
-                call hla
-                ld   a, (hl)
+                call idx
                 cp   b
                 jr   c, .nx
                 jr   z, .nx
@@ -1129,7 +1127,7 @@ l2_kind:        ld   (LG_K2), a
                 sub  (hl)
                 ld   e, a               ; hi = c2 - W - R
                 sub  d
-                jp   c, .nt
+                jr   c, .nt
                 inc  a
                 call rnd
                 add  a, d
@@ -1144,7 +1142,7 @@ l2_kind:        ld   (LG_K2), a
                 ld   a, (LG_KP + 2)
                 ld   d, a
                 call l2_clear
-                jp   c, .nt
+                jr   c, .nt
                 ld   a, (LG_P)
                 dec  a
                 ld   d, a               ; p - 1
@@ -1153,7 +1151,7 @@ l2_kind:        ld   (LG_K2), a
                 add  a, (hl)
                 ld   e, a               ; p + W
                 call l2_items
-                jp   c, .nt
+                jr   c, .nt
                 ld   a, (LG_NL)
                 or   a
                 jr   z, .nn
@@ -1264,8 +1262,7 @@ level_gen:      ld   (LVL_DEPTH), a
                 dec  a
                 add  a, a
                 ld   hl, attr_tab
-                call hla
-                ld   a, (hl)
+                call idx
                 ld   (LVL_ATTR_FLOOR), a
                 inc  hl
                 ld   a, (hl)

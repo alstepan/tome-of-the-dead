@@ -282,6 +282,15 @@ LEK_GOLD_BIT    EQU 5
 LEK_RESPAWN     EQU %10000000       ; F_RESPAWN (§9.5): no drops, half XP (3F); = EF_RESPAWN (ASSERTed)
 LEK_BRED        EQU %01000000       ; the once bit (3F-T9): a Rabbit Rat has bred (§9.6); = the entity's RCD_ONCE
 LEK_BRED_BIT    EQU 6               ; (lp_bank writes it, lp_spawn restores it)
+; ROOM-MEM (user 2026-11-03, game.md §9.4.2): a banked monster's slot is PARKED, not freed:
+; E_FLAGS with EF_ACTIVE clear but != 0 (EF_HOSTILE stays; every slot loop tests EF_ACTIVE,
+; sp_scan / lp_spawn take only E_FLAGS = 0), E_ROOM = room | LPK_PARK; the rest of the slot
+; (x, y, facing, ST_* statuses, E_RCD cooldown, AI bytes) is the memory. lp_enter restores it in
+; place; lp_bank evicts every parked slot of a room other than the one banked, EXIT_DEST and
+; TRK_PREV (the two last rooms left); level_reset zeroes them with the slots.
+LPK_PARK        EQU %10000000
+LPK_ROOM        EQU %00001111           ; the room id bits of E_ROOM
+                ASSERT GRID_CELLS <= LPK_ROOM + 1
 LP_LEN          EQU 33 + GRID_CELLS * LR_STRIDE  ; 114 B
 LP_END          EQU LP_STATE + LP_LEN            ; $6F32
 ; budget constants (game.md §9.3 / §9.4.1)

@@ -1534,7 +1534,7 @@ reveal it and break §1.5 trap finding, and over a known trap it repeats the `T_
 |---|---|---|---|
 | R1 | Scope of WEAK `dmg −1` (curse **and** hunger stage, one rule) | Applies to **hero-dealt PHYS damage only** = exactly where DEF applies: melee, Mage staff bonk, Power Strike, Whirlwind, thrown daggers, arrows. Order: `max(1, roll × mult × resist − DEF − 1)` (Power Strike: after ×2). **Not** to spells (they ignore DEF): Spark, Firebolt + burst, Frost, Drain Life (heal = damage dealt, unreduced), Lightning, and a hero spell bounced/reflected onto himself. Not to traps, poison, monster hits. `atk −2` still applies to every hero to-hit roll | WEAK is lost strength; MP-regen halt is already the Mage's penalty. Gate = "DEF path", no extra source flag |
 | R2 | Boss + short ASLEEP/FEAR (halving runs before the immunity check, so nothing prints) | Fixed check order in `dh_status`: **(1) immunity mask + boss ASLEEP/FEAR immunity → ` IS UNAFFECTED.`** (stop); (2) typed-hit resistance I/X → none, R → halve; (3) boss halve; (4) B2 held-body / HOLD_GUARD. A result of 0 in steps 2–3 and any step-4 block are **silent** | Immunity is a fact the player should learn; a halved-to-0 stun on a boss is a partial resist already shown by the damage number, and printing it after every Power Strike is log spam |
-| R3 | Status of monsters leaving the room | **Accept the deviation:** banked monsters lose all status (§9.4.2 residue); no pause storage. **Admitted followers keep** their full 4-B status record (kind bits, timers, HOLD_GUARD), copied with the slot; timers do not tick during the transition. **HOLD or FEAR bodies are not follow candidates** (prototype §3.7 step 1); CONFUSED ones may follow | Pause would cost ≤ 4 × 9 rooms × 3 B ≈ 108 B of the 235 B bank-3 free for no visible gain (re-entry already re-places and keeps hp). A frozen monster walking through the door, or a fleeing one chasing, reads as a bug |
+| R3 | Status of monsters leaving the room | **Superseded by ROOM-MEM (2026-11-03, §9.4.2): the two last rooms left keep their monsters' statuses (frozen while away).** Original: **Accept the deviation:** banked monsters lose all status (§9.4.2 residue); no pause storage. **Admitted followers keep** their full 4-B status record (kind bits, timers, HOLD_GUARD), copied with the slot; timers do not tick during the transition. **HOLD or FEAR bodies are not follow candidates** (prototype §3.7 step 1); CONFUSED ones may follow | Pause would cost ≤ 4 × 9 rooms × 3 B ≈ 108 B of the 235 B bank-3 free for no visible gain (re-entry already re-places and keeps hp). A frozen monster walking through the door, or a fleeing one chasing, reads as a bug |
 | R4 | Confused hero + Whirlwind with no target | Whirlwind **never rolls** confusion (it strikes both sides; reversal is meaningless). No target → the plain §6.2 refusal: no turn, no MP. General reversed-path rule (§2.3): **direction failure → `YOU STUMBLE.`, turn spent, stays reversed**; **non-direction refusal (NO MANA, NOT LEARNED, AFRAID, no ammo/bow) → no turn, faces back** (user, confirmed) | A stumble must be caused by the confusion; Whirlwind's miss never is |
 
 ### 6.4.3 Poison review: longer poison, no eating (POIS1; user 2026-10-26 scope, designer decision 2026-10-26 details)
@@ -3079,8 +3079,12 @@ header ≈ **100 B**. The engineer lays it out in `memory-map.md`.
 **On leave**, every monster slot of the old room is handled as follows, except admitted
 followers:
 - If it is alive and not summon-made, it is **appended** to the record with its current hp.
-  Position, facing, AI state, statuses and PENDING are dropped.
-- The slot is freed. The record becomes VISITED.
+  **ROOM-MEM (built, user 2026-11-03):** its slot is **parked**, not freed: position, facing,
+  statuses, ranged cooldown and the AI bytes are kept while the room is one of the **two last
+  rooms left** (A → B → A and A → B → C → A both return to the same monsters); the parked
+  slots of any older room are freed (the record entries stay, so those monsters come back
+  re-placed by the stream as before). A level change clears them.
+- Any other slot (dead, summon-made) is freed. The record becomes VISITED.
 - **Summon-made monsters** (Archmage and Bone Caller summons, Rabbit Rat offspring) are
   discarded, not banked.
 - **Dead monsters are never written**, so they never return. The only way back is the §9.5
@@ -3091,9 +3095,19 @@ heal monsters and reroll their kinds and tiers. That is two exploits: leaving to
 leaving to turn a tier-3 monster into a base one. Option (b) costs ~80 B.
 
 Accepted residue:
-- Positions are re-placed on re-entry (at least 8 cols away, §9.4.3).
-- Statuses are lost both ways (a poisoned monster recovers; a frozen one thaws). Admitted
-  followers keep theirs (§6.4.2 R3).
+- ~~Positions are re-placed on re-entry (at least 8 cols away, §9.4.3).~~ ROOM-MEM: a monster
+  of one of the two last rooms left returns to its saved cell (try 0, below) if it is legal;
+  only a room left longer ago is re-placed.
+- ~~Statuses are lost both ways.~~ ROOM-MEM: kept (frozen while away: they tick only in play)
+  for the two last rooms left; the summon counter of a summoner still resets (its discarded
+  summons are gone, §9.4.4); a ranged cooldown is kept but a ready shooter still waits the first
+  monster phase after the entry (C = max(C, 1), user 2026-11-03), like a fresh spawn or a
+  follower; a Vampire bat that left fleeing (FEAR) keeps its FEAR but comes back as a
+  close-distance bat form (`RCD_VFLEE` shares the cleared summon bits: not kept, no byte for it).
+  Admitted followers keep theirs (§6.4.2 R3).
+- A PENDING follower (one that came in with the hero and has not stepped in yet) follows him
+  back out through the door he leaves by (it is a follower candidate; on his arrival box its
+  gap is 0); one that is not a candidate is banked into the room like any resident.
 
 #### 9.4.3 Spawn on entry (room build, `GS_TRANSITION`, before the scroll)
 
@@ -3127,8 +3141,11 @@ are visited.
 
 **VISITED room:** the entries are recreated in order, with their stored kind, hp and flags.
 
-**Placement**, per monster: up to **8 candidate cells** from the spawn stream; the first legal
-cell wins. Legal means:
+**Placement**, per monster: **ROOM-MEM try 0:** a monster with a parked slot (§9.4.2) first
+tries its **saved cell** (its x and storey; a flyer at its band default y) with the rules below
+and a **5-col** arrival gap; no stream step is drawn, no other-storey retry; a lair unit with a
+guard post takes the post instead (§9.4.4). Then up to **8 candidate cells** from the spawn
+stream; the first legal cell wins. Legal means:
 - the §9.5 placement rules hold: walker on a floor-standing cell; not a ladder, pit or door
   cell; not in a ladder-end box; not occupied; flyers inside their band;
 - it is **not inside any arrival box** of the room: cols 1–4 and 27–30 on a storey with a
@@ -3154,6 +3171,11 @@ path that writes or creates hp uses this value: FRESH spawn, lair boss + escort,
 scaled). The 3B/LP stand-in path that stores unscaled row hp is a **bug**, fixed in T5. atk
 scaling (`+ (d − 1) div 3`) is applied at creation from the row, never stored in the record. A teleport into a room (trap or scroll) is an entry with no followers; its arrival
 point is the teleport cell.
+
+**Whole transition (ROOM-MEM review, 2026-11-03):** `lp_transition` = bank the old room (+ park,
+evict) + this spawn + the follower admission, **≤ 70,000 T, under one 70,908-T frame** on the frozen
+transition screen (measured up to ~58.5k with 4 bodies parked and 4 re-placed from a record;
+`tests/lp.py` A8, `tests/roommem.py` ADV). The spawn alone keeps the 46k cap below.
 
 **Cost (revised 2026-10-06 after LP measurement: mean 20k, worst 38.6k T; 3F-D3 2026-10-28:
 real 3F weights measured worst 44.4k).** **Accepted: mean ≤ 20k (≤ 22k with 3F weights),
@@ -3220,7 +3242,8 @@ add nothing (already resident).
 - **ZRCP checks:**
   1. A FRESH room's slots equal the reference.
   2. The slot invariant (§9.4.5) holds after every transition.
-  3. Damage a monster, leave and re-enter: the same kind and hp, and the same count.
+  3. Damage a monster, leave and re-enter: the same kind and hp, and the same count; ROOM-MEM:
+     the same slot, x, storey, facing and statuses (`tests/roommem.py`, `tests/lp.py` A4 / B2).
   4. Kill one, leave and re-enter: the count is −1.
   5. The same snapshot with the same inputs gives identical spawns.
   6. A different room-visit order gives the same first-visit contents.
@@ -3277,7 +3300,11 @@ monster there, it is a §6.1 violation, not a design trade-off. Ranked options:
 5. Keeping the overlap is the fallback only. It causes clash, ambiguous targeting and the repair cost
    from (a).
 
-**(d) Re-entry continuity.** Monsters seem to jump because §9.4.2 drops positions and §9.4.3 re-places
+**(d) Re-entry continuity.** **BUILT as ROOM-MEM (user 2026-11-03, see §9.4.2 / §9.4.3):**
+option 1 for the **two last rooms left** (the slot itself is the stored state, so statuses,
+cooldown and facing come back too; the try-0 gap is 5), not for every room; option 2 (the
+"waited by the door" clamp) and the "PENDING in place after 9 failed tries" part are not built
+(an unplaced unit waits in the record as before). Original note: Monsters seem to jump because §9.4.2 drops positions and §9.4.3 re-places
 them ≥ 8 cols from the arrival. They seem to vanish because a placement wait leaves the unit in the
 record. Ranked options:
 1. **Chosen: store each banked monster's position.** Add 1 byte per record entry: x (5 bits), storey
@@ -3703,8 +3730,12 @@ the hero mid-ladder or on the other storey is out of line.
       HOLD_GUARD, else **Venom**. H = 4.
    d. **Staff:** the hero in reach → melee 1d6 PHYS (F1 roll, DEF applies; the cast/attack pose).
    e. Wait facing the hero.
-- **Re-entry** (banked; AI state is not banked): P = 0, H = 0, C = 1, S as T9 resets it,
-  blinked = (hp ≤ ½ max). It is re-placed at its G1d post, not at P′.
+- **Re-entry** (ROOM-MEM, user 2026-11-03: the lair is one of the two last rooms left, so its
+  slot was parked): P, H and blinked **persist** (the `ST_X` byte comes back with the slot), C =
+  max(C, 1) (a pending cooldown is kept; a ready one waits the first monster phase, as on a fresh
+  entry), S resets as T9's summoner rule. It is re-placed at its G1d post, not at P′. A lair left
+  longer ago (parked slot evicted) is re-entered as before: P = 0, H = 0, C = 1, S reset, blinked
+  = (hp ≤ ½ max).
 - Net cadence with the hero in line: a bolt on turns 2, 4, 6…, a hex about every 5th turn, the
   staff or a summon in between. **Something visible happens every turn.**
 

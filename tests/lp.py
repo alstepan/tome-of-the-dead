@@ -13,6 +13,8 @@ Part A (unit, stubs at LOWRAM_END_3B under DI, from the loaded snapshot):
   A4  bank + re-enter: one monster damaged, one dying; lp_bank -> record ==
       model (exact hp, the dead one gone); ROOM_VISITS + 1, lp_enter again ==
       model (§9.4.7 #3, #4, #8 on the lair's boss)
+  A8  ROOM-MEM: the lp_transition worst (4 bodies parked in Y, 4 re-placed in the evicted X),
+      <= LP_TRANS_GUARD 70,000 T (under one frame)
   A6  lp_mark clips out-of-range runs to the cell map (fix/3d-artefacts)
   A5  visit order: the first-visit contents of every room are the same when
       the rooms are entered in reverse order (§9.4.7 #6)
@@ -51,6 +53,9 @@ KT = S["kind_tab"]
 EF_ACTIVE, EF_HOSTILE, EF_LEFT, EF_PENDING, EF_DYING = 1, 4, S["EF_LEFT"], S["EF_PENDING"], S["EF_DYING"]
 GS_PLAYING = S["GS_PLAYING"]
 STRIDE = S["P_ENT_STRIDE"]
+LP_TRANS_GUARD = 70000             # ROOM-MEM: lp_transition (2 x lp_bank + lp_enter + follow_admit), frozen
+                                   # transition screen: under one 70,908-T frame (A8: 4 bodies parked + 4
+                                   # re-placed after their room's eviction, measured up to ~58.5k T)
 LP_T_GUARD = 46000                 # lp_enter worst (DI, incl. far3): game.md §9.8 D3-2: worst <= 46k, mean <= 22k (a room entry on a frozen screen, not a tick)
 
 
@@ -118,22 +123,40 @@ class T(Proto):
 
     def clear_slots(self):
         for s_ in range(1, 16):
-            self.set_ent(s_, FLAGS=0)
+            self.set_ent(s_, FLAGS=0, ROOM=0)          # (ROOM-MEM: no stale parked mark)
 
     def kb(self, k, off):
         return self.rb(KT + S[off] + k)
 
 
-def want_slots(p, blk, r, out, first_slot=1):
-    """levelgen.lp_enter's placed list -> the slots spawn_one makes (in order)."""
+def want_slots(p, blk, r, out, first_slot=1, got=None):
+    """levelgen.lp_enter's placed list -> the slots spawn_one makes (in order).
+    ROOM-MEM: a unit restored from its parked slot (levelgen.LP_OUT_SLOT) keeps that slot;
+    with `got` the others take the remaining slots of `got` in order (which free slot is
+    first depends on what is parked; the slot numbers are not the model's business)."""
     res = []
+    rest = sorted(set(x[0] for x in got) - set(q for q in G.LP_OUT_SLOT if q)) if got is not None else None
     for i, (kb, hp, s_, x, left) in enumerate(out):
         k = kb & S["LEK_KIND_MASK"]
         fly = p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
         y = 9 * s_ + 1 if fly else 9 * s_ + 8 - p.kb(k, "KT_BH")
         fl = EF_ACTIVE | EF_HOSTILE | (EF_LEFT if left else 0) | (kb & S["LEK_RESPAWN"])
-        res.append((first_slot + i, k, r, x, y, fl, hp))
-    return res
+        q = G.LP_OUT_SLOT[i] if got is not None and i < len(G.LP_OUT_SLOT) else None
+        sl_ = q if q else (rest.pop(0) if rest else first_slot + i) if got is not None else first_slot + i
+        res.append((sl_, k, r, x, y, fl, hp))
+    return sorted(res)
+
+
+def parked_of(p, r):
+    """ROOM-MEM: the slots lp_find would match for room r (E_ROOM = r | LPK_PARK), slot order:
+    (kind, storey (storey_ref: (y + h) div 9, max 1), x, facing left, slot)."""
+    out = []
+    for s_ in range(1, 16):
+        e = p.ent(s_)
+        if e["ROOM"] == r | S["LPK_PARK"]:
+            k = e["KIND"]
+            out.append((k, min(1, (e["Y"] + p.kb(k, "KT_BH")) // 9), e["X"], bool(e["FLAGS"] & EF_LEFT), s_))
+    return out
 
 
 def props(p, blk, r, slots, hs, hx, hw, tf):
@@ -200,10 +223,9 @@ def scaled_ok(p, sl, out, depth):
     record's LEK_GOLD (levelgen.k3_hp), one slot per placed unit, in order."""
     if len(sl) != len(out):
         return False
-    for (slot, *_), (kb, *_) in zip(sl, out):
-        if p.ent(slot)["MAXHP"] != G.k3_hp(kb, depth) or gold_of(p, slot) != (kb & G.LEK_GOLD):
-            return False
-    return True
+    # (ROOM-MEM: a restored unit keeps its parked slot, so compare as multisets)
+    return sorted((p.ent(slot)["KIND"], p.ent(slot)["MAXHP"], gold_of(p, slot)) for slot, *_ in sl) == \
+        sorted((kb & S["LEK_KIND_MASK"], G.k3_hp(kb, depth), kb & G.LEK_GOLD) for kb, *_ in out)
 
 
 def part_a(h, p, check, nrand):
@@ -453,20 +475,24 @@ def part_a4(h, p, check):
             lp0 = p.lp()
             ok, tb = p.far3("lp_bank", a=r, e=0)
             lp1 = p.lp()
-            check(f"A4 d{d} room {r}: lp_bank -> record == model (exact hp, golden bit, dead dropped), slots freed",
-                  ok and mask(lp1) == mask(bank_model(lp0, r, sl, gold)) and p.slots() == [],
-                  (lp1.hex(), bank_model(lp0, r, sl, gold).hex(), p.slots()))
+            pk = parked_of(p, r)
+            want_pk = [(x[1], 1 if x[4] >= 9 else 0, x[3], bool(x[5] & EF_LEFT), x[0]) for x in sl
+                       if not x[5] & EF_DYING]
+            check(f"A4 d{d} room {r}: lp_bank -> record == model (exact hp, golden bit, dead dropped), "
+                  f"no active slot; ROOM-MEM: the alive ones parked in place (kind, storey, x, facing)",
+                  ok and mask(lp1) == mask(bank_model(lp0, r, sl, gold)) and p.slots() == [] and pk == want_pk,
+                  (lp1.hex(), bank_model(lp0, r, sl, gold).hex(), p.slots(), pk, want_pk))
             p.wb(S["ROOM_VISITS"] + r, p.rb(S["ROOM_VISITS"] + r) + 1)
             lp1 = p.lp()
             p.wmem(S["LP_HX"], [1, 0, 3])
             p.far3("lp_enter", a=r)
-            wl, out = G.lp_enter(blk, lp1, r, 0, 1, 3, f3=True)
+            wl, out = G.lp_enter(blk, lp1, r, 0, 1, 3, f3=True, parked=pk)
             got = p.slots()
             alive = [(x[1], x[6]) for x in sl if not x[5] & EF_DYING] + [
                 (e[0] & 31, e[1]) for e in G_entries(lp0, r)]
             check(f"A4 d{d} room {r}: re-entry == levelgen.lp_enter of the banked record; "
                   f"kinds + hp kept {alive}",
-                  got == want_slots(p, blk, r, out) and mask(p.lp()) == mask(wl)
+                  got == want_slots(p, blk, r, out, got=got) and mask(p.lp()) == mask(wl)
                   and scaled_ok(p, got, out, d)
                   and sorted([(x[1], x[6]) for x in got] + [
                       (e[0] & 31, e[1]) for e in G_entries(p.lp(), r)]) == sorted(alive),
@@ -475,6 +501,46 @@ def part_a4(h, p, check):
                 print(f"[lp] A4 d{d}: lair boss hp {sl[0][6]} kept across bank / re-entry", flush=True)
             else:
                 break
+
+
+def part_a8(h, p, check):
+    """A8 (ROOM-MEM review): the lp_transition worst. Room Y holds 4 active bodies of LP_KINDS[0]
+    (banked + parked), room X's record 4 entries with nothing parked (evicted): Y -> X re-places all
+    four by the stream. lp_transition (far3, DI) <= LP_TRANS_GUARD; X ends with the 4 (slots + record)."""
+    p.load()
+    sync_bodies(p)
+    worst = (0, "")
+    for d, seed in ((1, 0x1234), (3, 0xBEEF), (5, 0x0042), (7, 0x7777), (8, 0x5151)):
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=d)
+        p.far3("lp_budget")
+        p.wb("LVL_DEPTH", d)
+        blk = p.block()
+        st, lair = blk[S["LVL_START"] - G.BASE], blk[S["LVL_LAIR"] - G.BASE]
+        rooms = [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+                 and r not in (st, lair, blk[S["LVL_SANCTUM"] - G.BASE])]
+        X, Y = rooms[:2]
+        k = p.rb(S["LP_KINDS"])
+        hp = p.kb(k, "KT_HP") + d - 1
+        kh0 = p.kb(k, "KT_BH")
+        p.clear_slots()
+        for i, x in enumerate((9, 13, 17, 21)):
+            p.set_ent(5 + i, KIND=k, ROOM=Y, X=x, Y=9 + 8 - kh0, FLAGS=EF_ACTIVE | EF_HOSTILE, HP=hp, MAXHP=hp)
+        p.wmem(S["LP_REC"] + 9 * X, [0x80 | 4] + [k, hp] * 4)
+        p.wmem(S["LP_REC"] + 9 * Y, [0x80] + [0] * 8)
+        p.wb("CUR_ROOM", Y)
+        p.set_ent(0, ROOM=Y, X=1, Y=8 - p.kb(S["K_KNIGHT"], "KT_BH"))
+        p.wb("TRK_PREV", st)
+        p.wmem(S["CAND_LIST"], [0xFF] * 16)
+        p.wb("FOLLOW_N", 0)
+        p.wb("EXIT_DEST", X)
+        ok, ts = p.code([0x21] + w16(S["lp_transition"]) + [0xCD] + w16(S["far3"]))
+        n = len([x for x in p.slots() if x[2] == X]) + len(G_entries(p.lp(), X))
+        check(f"A8 d{d} Y {Y} -> X {X} (4 parked in Y, 4 to re-place in X): X holds 4, {ts} T <= {LP_TRANS_GUARD}",
+              ok and n == 4 and ts <= LP_TRANS_GUARD, (ok, n, ts))
+        worst = max(worst, (ts, f"d{d} {seed:#06x}"))
+    print(f"[lp] A8 lp_transition worst {worst[0]} T ({worst[1]})", flush=True)
 
 
 def G_entries(lp, r):
@@ -619,11 +685,12 @@ def part_b(h, p, check):
           ok and sorted((e[0] & 31, e[1]) for e in ent) == sorted(keep), (ok, ent, keep))
     invariant("B2 out")
     lp_b = p.lp()
+    pk = parked_of(p, b)
     ok = walk_out(a, "R", s_)
-    wl, out = G.lp_enter(blk, _bank_all(lp_b, a), b, s_, 1, kw, f3=True)
+    wl, out = G.lp_enter(blk, _bank_all(lp_b, a), b, s_, 1, kw, f3=True, parked=pk)
     got = p.slots()
-    check(f"B2 re-entered {b}: slots == levelgen.lp_enter of the record; kinds + hp {keep}",
-          ok and got == want_slots(p, blk, b, out)
+    check(f"B2 re-entered {b}: slots == levelgen.lp_enter of the record + its parked bodies; kinds + hp {keep}",
+          ok and got == want_slots(p, blk, b, out, got=got)
           and sorted([(x[1], x[6]) for x in got] + [(e[0] & 31, e[1]) for e in G_entries(p.lp(), b)])
           == sorted(keep), (got, out, keep))
     invariant("B2 in")
@@ -739,6 +806,7 @@ def main():
             part_a(h, p, check, nrand)
             part_a4(h, p, check)
             part_a6(h, p, check)
+            part_a8(h, p, check)
             if nsweep:
                 part_a7(h, p, check, nsweep)
         part_b(h, p, check)

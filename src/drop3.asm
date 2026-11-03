@@ -54,8 +54,7 @@ mon_drop:
                 add  a, a                      ; Mage: 4 -> +3 below = 7
                 add  a, 3
 .u:             ld   hl, uniq_tab              ; uniq_tab[A]
-                call hla
-                ld   a, (hl)
+                call idx
                 push af                        ; [type]
                 ld   hl, uq_fit                ; R6 (fi6.asm): the room at 8 types: displace an
                 call far6                      ; ordinary item (far6 loses A)

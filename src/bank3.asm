@@ -164,37 +164,33 @@ follow_admit:
 .pick:          ld   a, (FOLLOW_N)
                 cp   FOLLOW_MAX
                 ret  nc
-                ld   b, $FF                    ; best gap
-                ld   c, $FF                    ; best slot
+                ld   bc, $FFFF                 ; B = best gap, C = best slot
                 ld   hl, CAND_LIST + 1
                 ld   de, CAND_GAP + 1
-                ld   a, 1
-.pl:            push af
-                ld   a, (hl)
-                cp   $FF
+.pl:            ld   a, (hl)                   ; the slot itself, or $FF
+                inc  a
                 jr   z, .pn
                 ld   a, (de)
                 cp   b
                 jr   nc, .pn                   ; not strictly smaller (ties: lower slot)
                 ld   b, a
-                pop  af
-                push af
-                ld   c, a
-.pn:            inc  hl
-                inc  de
-                pop  af
-                inc  a
-                cp   P_MAX_ENT
+                ld   c, (hl)
+.pn:            inc  l                         ; (one page: ASSERTed)
+                inc  e
+                ld   a, l
+                cp   (CAND_LIST + P_MAX_ENT) & $FF
                 jr   c, .pl
+                ASSERT (CAND_LIST >> 8) == ((CAND_LIST + P_MAX_ENT - 1) >> 8) && (CAND_GAP >> 8) == ((CAND_GAP + P_MAX_ENT - 1) >> 8)
+                ASSERT (CAND_LIST & $FF) + P_MAX_ENT <= $FF
                 ld   a, c
                 cp   $FF
                 ret  z                         ; no more candidates
                 ; mark processed
-                ld   hl, CAND_LIST
-                ld   e, a
-                ld   d, 0
-                add  hl, de
+                add  a, CAND_LIST & $FF        ; (one page: ASSERTed above)
+                ld   l, a
+                ld   h, CAND_LIST >> 8
                 ld   (hl), $FF
+                ld   a, c
                 call ent_ix
                 ; caps: alive + 1 <= ROOM_CAP ; tall + 1 <= TALL_CAP (PROTO)
                 ; or sum weight + w <= LP_SIGMA_CAP (LP, §9.3)
@@ -226,7 +222,7 @@ follow_admit:
                 ld   hl, FOLLOW_N
                 inc  (hl)
                 call place_follower            ; (3F-T8 review: bank 3 again; .pick reloads A)
-                jp   .pick                     ; (+3 B of far call: out of jr range)
+                jr   .pick
 
 ; place_follower — IX = admitted follower: room <- dest, PENDING, entry spot.
 ; (3F-T8 review: back in bank 3 from bank 7 — bank-7 relief; a plain call from follow_admit.)
@@ -336,15 +332,14 @@ dest_counts:
                 call kind_wt
                 ld   hl, TMP4
                 add  a, (hl)
-                ld   (TMP4), a
+                ld   (hl), a
                 pop  hl
                 ret
 ; kind_wt: A = kind byte (row | LEK_*) -> A = lp_wt[row] + 1 if LEK_GOLD (3F-T5, levelgen k3_weight). Clobbers HL.
 kind_wt:        push af
                 and  LEK_KIND_MASK
                 ld   hl, lp_wt
-                call hla
-                ld   a, (hl)
+                call idx
                 pop  hl                        ; H = the kind byte
                 bit  LEK_GOLD_BIT, h
                 ret  z
@@ -726,8 +721,7 @@ build_room_map:
                 ex   de, hl
                 ld   a, (LVL_DEPTH)            ; 1..8 (a lair exists only on D1..D8)
                 ld   hl, glow_ids - 1
-                call hla
-                ld   a, (hl)
+                call idx
                 ld   (de), a
                 pop  ix
                 ret
