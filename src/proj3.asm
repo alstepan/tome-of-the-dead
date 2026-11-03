@@ -147,6 +147,14 @@ proj_prep:
                 ld   de, pf_desc + FXD_FIDA
                 ld   bc, 4
                 ldir                           ; ABD_PF1..ABD_IF2 -> FXD_FIDA..FXD_IMPB
+                ; FXD_ATTR: 0 = the frame's own (fx_meta) except the thrown dagger, which flies $47 (fx_meta's
+                ; dagger_spin is the monsters' ROCK_ATTR; ABD_AT1/2 are not read here: firebolt alternates per frame)
+                ld   a, (pf_desc + FXD_FIDA)
+                cp   FID_dagger_spin1
+                ld   a, 0
+                jr   nz, .at
+                ld   a, THROW_ATTR
+.at:            ld   (pf_desc + FXD_ATTR), a
                 inc  hl
                 inc  hl                        ; ABD_SPEED: 8 / 16 px
                 ld   a, (hl)

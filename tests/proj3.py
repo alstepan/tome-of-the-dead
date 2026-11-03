@@ -425,7 +425,7 @@ class World:
                 self.deal(rng, cs, cd["s"], dmg, FIRE | NODEF, 0)
                 if self.bodies[cd["s"]].react:
                     self.bodies[cd["s"]].reactat = itick
-        desc = fids + [0, anchor, row0 if fxrow[0] is None else fxrow[0],
+        desc = fids + [S["THROW_ATTR"] if fids[0] == S["FID_dagger_spin1"] else 0, anchor, row0 if fxrow[0] is None else fxrow[0],
                        (1 if fxleft else 0) | (2 if fast else 0), delay, IMPT, len(segs)] + segs + [0] * (5 - len(segs))
         res.update(stop=PFS[stop], col=pos, desc=desc, itick=itick)
         return res
