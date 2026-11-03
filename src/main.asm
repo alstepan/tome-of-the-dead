@@ -618,7 +618,7 @@ tile_flags:
                 DB 0                                   ; 27 T_RUBBLE (decor at a block's foot)
                 DB 0, 0, 0                             ; 28-30 T_WALL_DITHER / PATCH / FADE:
                                                        ; non-solid back-wall patches (D1 decor rule)
-                DB 0                                   ; 31 free (DEC2)
+                DB 0                                   ; 31 T_GLOW (B12 lair-exit glow, common to all depths)
                 DS T_LVL_OBJ - TILE_COMMON, 0          ; 32-59 per-level decor
                 DS T_LVL_OBJ_N, 0                      ; 60-63 FLOOR1 item markers T_ITEM0..+3 (the slot loads 0)
                 ASSERT $ - tile_flags == TILE_IDS

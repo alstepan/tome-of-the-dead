@@ -1295,5 +1295,5 @@ intent_icon7:
                 INCLUDE "boss7.asm"            ; MEM-RECLAIM w2b: grate_open / boss_chk (from R6 boss6.asm)
                 INCLUDE "tome7.asm"            ; P3: the Tome's hits, aura and the win
                 ; (tiles7.asm: M0 -> the high bank-7 block after the tilesets, main.asm b7h_code)
-                INCLUDE "theme7.asm"           ; LOWER-FLAME exp.: level_theme7, the tail of level_tiles7 (high block was 8 B over)
+                INCLUDE "theme7.asm"           ; half-row flames: level_theme7, the tail of level_tiles7 (high block was 8 B over)
                 INCLUDE "boot7.asm"            ; MEM-SND: panel_init7, new_game (from bank 3; 3E-T1: the boot parts -> boot6.asm)

@@ -416,7 +416,7 @@ T_RUBBLE        EQU 27              ; block foot, arrival-shaft cap, ash of the 
 T_WALL_DITHER   EQU 28              ; wall set (concept-screen §3.3)
 T_WALL_PATCH    EQU 29
 T_WALL_FADE     EQU 30
-T_GLOW          EQU 31              ; LOWER-FLAME exp.: the B12 lair-exit glow, the same glyph + attr on every depth (was a per-level id)
+T_GLOW          EQU 31              ; half-row flames: the B12 lair-exit glow, the same glyph + attr on every depth (was a per-level id)
 ; B10 (user option B, designer 2026-10-03): open-door jambs on ids 11 / 14,
 ; non-solid, ink $06; cobweb / moss move to the per-level sets.
 T_DOOR_JAMB_L   EQU 11              ; `#.#.....` x 8: the left arch's outer strokes, continued
