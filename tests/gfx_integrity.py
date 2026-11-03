@@ -199,6 +199,9 @@ def pool_check(p, check, tag, snap0, snapd=None):
         check(f"GI {tag}: pool bank {b} below the level mark ({mi}, {mp:#06x}) == as built at hero start",
               bad == [], bad[:6])
     keep = list(range(0, f0 * st)) + list(range((f0 + fn) * st, len(now["FRT"])))
+    if p.rb("HERO_KIND") == 0:                 # SPIT-SPARK: the Warrior's pool_xmap extra spark_fly1/2 (Mage FX range,
+        sx = {S["FID_spark_fly1"], S["FID_spark_fly2"]}      # NONE at hero start) is generated on Spider levels
+        keep = [i for i in keep if i // st not in sx]        # (D2 / D4 / D5; zx0_pool checks it bit-exact)
     bad = [hex(S["FRT"] + i) for i in keep if now["FRT"][i] != snap0["FRT"][i]]
     check(f"GI {tag}: FRT rows outside the monster fids == as built at hero start", bad == [], bad[:6])
     # the level's generation kinds (pool_list's rule) generated, the rest NONE

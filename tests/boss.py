@@ -170,8 +170,27 @@ def main():
         for depth, seed in ((1, 0x1B01), (2, 0x2B02), (3, 0x3B03), (4, 0x4B04), (5, 0x5B05), (6, 0x6B16), (7, 0x7B07)):
             run(p, depth, seed)
         glow(p)
+        spit_pool(p)
     print(f"boss: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
     return 1 if fails else 0
+
+
+def spit_pool(p):
+    """SPIT-SPARK: the golden Spider Queen's spit draws spark_fly1/2 (rd_tab row 14): on the D2 lair of
+    BOTH heroes both frames have a resident FRT row (the Mage: his class FX; the Warrior: the
+    pool_xmap U_SPARKW extra), and the monsters' dagger_spin (Goblin King / Slinger rock) keeps its
+    yellow ROCK_ATTR through fx_meta."""
+    for hero in (0, 1):
+        L = Lair(p, 2, 0x2B02, hero=hero)
+        res = []
+        for nm in ("FID_spark_fly1", "FID_spark_fly2"):
+            row = S["FRT"] + S[nm] * S["FRT_STRIDE"]
+            res.append(any(b != S["FRT_NONE"] for b in p.z.read_memory(row, S["FT_IN_ROW"])))
+        check(f"SPIT D2 hero {hero}: spark_fly1/2 resident in the FRT", L.ok and all(res), (L.ok, res))
+    fm = S["fx_meta"] - S["KFID_FXM"]
+    check("SPIT fx_meta: dagger_spin1/2 = ROCK_ATTR, spark_fly1/2 = $43",
+          [p.rb(fm + S["FID_dagger_spin1"]), p.rb(fm + S["FID_dagger_spin2"])] == [S["ROCK_ATTR"]] * 2
+          and [p.rb(fm + S["FID_spark_fly1"]), p.rb(fm + S["FID_spark_fly2"])] == [0x43, 0x43])
 
 
 def run(p, depth, seed):
