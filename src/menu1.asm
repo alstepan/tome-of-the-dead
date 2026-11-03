@@ -167,7 +167,7 @@ menu_static:
 .tdone:         ; subtitle (6x8), ornament, footer
                 ld   a, TX_FT_SUBTITLE
                 ld   b, 5
-                ld   e, 5 * 8                  ; 28 chars x 6 = 168 px: centred at x=44 ~ 40
+                ld   e, 9 * 8                  ; 19 chars x 6 = 114 px: centred at x=71 ~ 72 (E: multiple of 8)
                 call print6x
                 ld   a, MENU_A_SUB
                 ld   bc, 5 << 8
