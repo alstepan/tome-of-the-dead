@@ -1384,7 +1384,7 @@ outweighing the +8 T per redrawn background cell of the 64-id glyph address.)
 | `$BE00..$BEFF` | — | stack, **512 B** (FLOOR1: was 768 from `$BD00`; SP = `$BF00`, grows down to `STACK_BOTTOM $BE00`; W20 asserts ≤ 256 B, FLOOR1 measured 66 B over the budget fights; A8: was 1 KB from `$BB00`; C3-1: `tests/world.py` W20 re-measures it: 40 B over boot, a generated D1 start and 53 random turns). **Measured max depth 40 B** (lowest byte touched `$BED8`; pattern-fill over boot, both hero starts, a room transition, the §8.2 walkthrough and both `budget.py` fights, ROM IM1 ISR included; tape path's `LD-BYTES` not covered, ~10 B). The A8 ISR adds 16 B (return address + 6 pairs) + the player's own depth to whatever is in use. **SND-2 T6:** W20 with the WZM player live (Lament) measures **44 B** (lowest byte `$BED4`) |
 | `$BF00..$BFFF` | state block | below |
 
-**Entity record** (32-B stride, `defs.asm`): `+0 KIND, +1 ROOM, +2 FLAGS
+**Entity record** (32-B stride, `defs.asm`; **ROOM-MEM: a parked slot = `FLAGS` bit 0 clear but != 0, `ROOM` | `LPK_PARK` $80**, "LP contracts"): `+0 KIND, +1 ROOM, +2 FLAGS
 (1 ACTIVE, 2 PLAYER, 4 HOSTILE, 8 FACING_LEFT, 16 DYING, 32 WALKIN, 64 PENDING),
 +3 X (body-left col), +4 Y (body-top row), +5 HP, +6 MAXHP, +7 AIDIR (±1 climb
 dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
@@ -2080,7 +2080,7 @@ none of this runs and every monster keeps its slot as before.
 | +10 | `LP_RNG` | word: the last entry's spawn-stream seed |
 | +12..+23 | `LP_HX` `LP_HS` `LP_HW` `LP_SIG` `LP_RECP` (w) `LP_W` `LP_GAPV` `LP_BEST` `LP_BS` `LP_BX` `LP_RES` | `lp_enter` / `lp_budget` scratch (tests mask it); **3F-T12: +15..+23 = `TRK_W` (9 B), `trk_run`'s scratch (per-room floor counts, then w_r) — dead between entries** |
 | +24 | `ROOM_VISITS` | 9 B: entries per room this level (spawn-stream input) |
-| +33 | `LP_REC` | 9 records × `LR_STRIDE` 9: `LR_HDR` (bit 7 `LR_VISITED`, bits 0–2 count) + 4 × {`LE_KIND` = kind row bits 0–4 \| **`LEK_GOLD` bit 5 (3F-T5: golden boss)** \| `LEK_BRED` bit 6 \| `LEK_RESPAWN` bit 7 (= `EF_RESPAWN`), `LE_HP` exact hp, **depth-scaled since 3F-T5**}. FRESH: count = quota, no entries; VISITED: count = entries (unused entries 0) |
+| +33 | `LP_REC` | 9 records × `LR_STRIDE` 9: `LR_HDR` (bit 7 `LR_VISITED`, bits 0–2 count) + 4 × {`LE_KIND` = kind row bits 0–4 \| **`LEK_GOLD` bit 5 (3F-T5: golden boss)** \| `LEK_BRED` bit 6 \| `LEK_RESPAWN` bit 7 (= `EF_RESPAWN`), `LE_HP` exact hp, **depth-scaled since 3F-T5**}. FRESH: count = quota, no entries; VISITED: count = entries (**ROOM-MEM: the bytes past the count are stale, not 0** — `lp_enter`'s zero fill went to the reclaim; every reader uses the count; `tools/levelgen.py` models it) |
 
 **`LP_CMAP`** = `NEXT_MAP + PLAY_CELLS` (`$6540..$6581`, 2 × 33 B, NEXT_MAP's
 unused tail): `lp_enter`'s per-col placement marks (`LPC_BAD` 1: footprints
@@ -2105,16 +2105,52 @@ their frames / sequences are stand-ins ("Kind rows (3F-T3)" below). Weights
 - `level_new` → `level_gen` → `level_populate` → `lp_budget` (after the
   generator, on a copy of `GEN_RNG`: the header keeps the generator's final
   state; 3E traps go before it) → `lp_enter(start)`.
-- `do_exit` → `follow_select` (candidates only on LP levels) → `hide_sprites`
-  → `far3 lp_transition`: `lp_bank(old, E=1)` (alive, non-candidate slots
-  appended, all freed; dead never written) → arrival box from `EXIT_*` →
-  `lp_enter(dest)` → `follow_admit` (≤ `ROOM_CAP` alive and Σ weight ≤ 12,
-  record leftovers counted) → `lp_bank(old, E=0)` (rejected candidates) →
+- `do_exit` → `follow_select` (candidates only on LP levels; **ROOM-MEM: PENDING bodies
+  too, an overlapping box = gap 0**) → `hide_sprites` → **`.lpt` (ROOM-MEM: the hero's
+  arrival placement, x / y / facing, moved before the transition)** → `far3 lp_transition`:
+  `lp_bank(old, E=1)` (alive, non-candidate slots appended and **PARKED**; dead / summoned
+  freed, never written; older parked rooms evicted) → arrival box from **the hero's slot**
+  (x, `storey_ref`, `KT_BW`; was re-derived from `EXIT_*`) → `lp_enter(dest)` (**parked
+  bodies: try 0 + in-place restore**) → `follow_admit` (≤ `ROOM_CAP` alive and Σ weight ≤ 12,
+  record leftovers counted) → `lp_bank(old, E=0)` (rejected candidates, parked) →
   `ROOM_VISITS[dest]` += 1 → `R_VIS` of slots 1..15 cleared (`vis_room_sync`
   rebuilds RLIST) → the NEXT_MAP build and the scroll as before.
 - `lp_append` (A room, B kind byte, C hp): the §9.5 trickle's record side (3F).
 - Invariant after every transition: every active non-hero slot has
-  `E_ROOM = CUR_ROOM` (`tests/lp.py` B1–B3).
+  `E_ROOM = CUR_ROOM` (`tests/lp.py` B1–B3). Parked slots are inactive (below).
+
+**ROOM-MEM parked slots (user 2026-11-03, plan ROOM-MEM; game.md §9.4.2 / §9.4.8 (d)).**
+0 B of RAM: the slot itself is the memory. `lp_bank` appends a banked monster to the record
+as before (the record stays the truth for kind / hp / count: `dest_counts`, the trickle,
+`boss_chk`, the tests) and then **parks** its slot: `res 0, E_FLAGS` (EF_ACTIVE clear; the
+flags stay != 0: `EF_HOSTILE`) + `set 7, E_ROOM` (**`LPK_PARK`** `$80`, `level_defs.asm`;
+room id = `E_ROOM & LPK_ROOM`). Everything else in the slot and its `ST_*` bytes is kept.
+- Every slot loop tests `EF_ACTIVE` (or `E_ROOM = CUR_ROOM`), so a parked slot is invisible:
+  `build_live`, `act_here`, `resolve_monsters`, `dest_counts`, `boss_chk`, `mus7`, the drop
+  code. `sp_scan` (summon / breed / wave) and `lp_spawn` take only `E_FLAGS = 0` slots: a
+  parked slot is never reused while parked. `anim_tick` tests `EF_ACTIVE` by `rrca` (was
+  `or a`): a parked slot costs what an empty one does (0 T per tick; review: the old test
+  would have sent it down the full path, ~85 T a parked slot a tick).
+- **Eviction** (`lp_bank`, every inactive slot): `E_ROOM & LPK_ROOM` not in {the room being
+  banked, `EXIT_DEST`, `TRK_PREV`} → `E_ROOM` 0, `E_FLAGS` 0. After a transition at most the
+  two last rooms left are parked (the destination's parked slots are consumed by
+  `lp_enter`); a parked slot whose unit found no cell stays parked (stale) until its room is
+  evicted; `level_reset` zeroes every slot at a level change.
+- **Restore** (`lp_enter`, per unit): `lp_find` (bank 3) = the first slot (slot order) with
+  `E_ROOM = room | LPK_PARK` and the unit's kind (exact unless a leftover entry of the same
+  kind precedes: two such bodies swap); a non-lair unit (or a lair unit without a post) tries
+  its saved cell first (`storey_ref` storey, `E_X`, `lp_legal` with `LP_GAPV` = `LP_GAP2` 5,
+  no stream step, no other-storey retry), else tries 1-8; `lp_spawn` restores the parked
+  slot **in place** (no zeroing: `ST_*`, AI bytes kept; the cooldown c (`E_RCD` bits 0-1, stored
+  c XOR 1) := max(c, 1) — kept, but a ready shooter waits the first monster phase as on a fresh
+  entry (user 2026-11-03; `ld b,a / rrca / or $FE / and b`: stored bit 0 &= bit 1; the Ogre's raw
+  SLAM count 1 becomes 0); the summon counter `RCD_SUMMON` cleared (with it the Vampire bat's
+  `RCD_VFLEE`: a bat that left fleeing comes back as a close-distance one, FEAR kept); its own
+  `EF_LEFT`), then `spawn_one` as before
+  (`E_ROOM` = room: the mark is gone; flyers at the band default y). `PK_NONE` =
+  `P_ENTITIES + 16 × 32` (`$B200`): "no parked slot" (`ixh` test).
+- Python reference: `tools/levelgen.py` `lp_enter(..., parked=[(kind, s, x, left[, slot])])`
+  (try 0 draws no RNG); `tests/lp.py` A4 / B2, `tests/roommem.py`.
 
 **Cost (measured, DI, contended bank-3 code / bank-5 data, `tests/lp.py`
 A2, after the 2026-10-06 tuning):** `lp_enter` mean ~19.8k T, worst ~37.7k T
@@ -5672,3 +5708,60 @@ Tests: `tests/dnum.py` Y (7 checks, 39 total): a real level-up (XP at `xpn_tab[0
 `$46` / 3 cells / slot 0, DL_GLY == the FONT6 composition of "+LVL" (and != "MISS"), row = the drawn top - 1, ages to 12 then free, DS_FLG consumed,
 window back to background, model7 exact on every sampled tick, ROOM_MAP and bank-7 code untouched; miss line + level-up = one "+LVL"; a Goblin's MISS
 stays `$45` beside the hero's; a blow + a level-up: `-7` first, "+LVL" follows. `DNUM_PNG=dir` dumps `dnum_levelup.png`.
+
+## ROOM-MEM ledger (`feat/room-mem`, 2026-11-03; on main `90a6f02`; plan ROOM-MEM, user decisions 2026-11-03)
+
+Player-visible: leave a room and come back (A → B → A, A → B → C → A) → the same monsters on the same cells,
+same facing, hp, statuses and ranged cooldown; PENDING followers follow the hero back out. Design and rules:
+"LP contracts" → "ROOM-MEM parked slots" (**0 B of RAM**: the parked slot is the memory, so no field had to be
+dropped — statuses, cooldown, `ST_X` (Archmage state), `E_AIDIR` all persist; the summon counter resets as the
+plan asks). game.md §9.4.2 / §9.4.3 / §9.4.7 / §9.4.8 (d) updated.
+
+Code: bank 3 `lpop3.asm` (`lp_bank` park + eviction +37, `lp_find` +44 incl. the FRESH skip, `lp_enter` try 0
++27, `lp_spawn` in-place restore; `lp_transition` reads the arrival box from the hero's slot); bank 7 `do_exit`
+`.lpt` (the hero's arrival placement moved before `lp_transition`), `follow_select` (PENDING candidates via
+`act_mask`, overlapping box = gap 0); bank 2 `anim_tick` (`rrca` EF_ACTIVE test, 0 B, 0 T). **Bank-3 reclaim
+that paid for it** (behaviour identical unless noted): `lp_budget` without the `LG_CAND` copy (`.elig` reads
+"in R" from the quota) −19, `LP_RMAX` by `sbc` −2, the dtab row offset −1, `.wl` −2; `lp_enter`'s zero fill
+of the unused record entries −13 (**stale bytes now**; `tools/levelgen.py` / `tools/levelcheck.py` model /
+read only the count) and a dead `ld c, a` −1; the arrival box from the hero's slot −30; `call idx` for `call
+hla` + `ld a, (hl)` (9 sites: lpop3, bank3, levelgen, drop3) −9; `lp_cmap` storey bits straight into C
+(lp_mark reads bit 0; the pit's C = 2 / 3 after the storey loop) −12; `lp_spawn` (zero stores via D, the slot
+cleared 2 B a pass (0.56k T, the LDIR was 0.67k), max hp from `E_MAXHP` = KT_HP, ST pointer) −16; `lp_place` other
+storey by `inc c / res 1, c` −1; `lp_legal` HL walk −2; `.hv` −1; `follow_admit`'s pick loop (CAND_LIST holds
+the slot) −9 and the "processed" store −1; the FRESH / VISITED count into `LPV_N` −1; 5 `jp` → `jr` (bank3
+`.pick`, levelgen 3 × `.nt`, proj3 `.stop`).
+Bank 7: `.in` writes the hero's E_ROOM without IX −4, 3 `jp` → `jr` (cursor_step, abil_spell, ap_stamp).
+
+| Region (free B) | release | kit | release `F3_GEN=0` | kit `F3_GEN=0` | release + trace |
+|---|---|---|---|---|---|
+| bank 3 (to `AY_RESERVE`) | 8 -> **8** | 8 -> **8** | 8 -> 8 | 8 -> 8 | 8 -> 8 |
+| bank 7 low | 15 -> **16** | 12 -> **13** | 19 -> **20** | 16 -> **17** | 2 -> **3** |
+| bank 1 | 3 -> **2** | 3 -> 2 | 3 -> 2 | 3 -> 2 | 3 -> 2 |
+| bank 2 tail + pad / bank 0 / R6 / low RAM / `HOT_COPY` | 60 / 67 / 5 / 2 / 5 unchanged | 34 / 10 / 10 / 2 / 5 | unchanged | unchanged | 4 / 67 / 5 / 2 / 5 |
+
+Bank 1 −1: no bank-1 code changed; the items overlay (ZX0, bank 1) packs 948 -> 949 B because the bank-3
+routines it calls (`rnd` / `idx` / `hla` / `rdp`, levelgen.asm) moved 12 B down (the bank3.asm reclaim before them).
+Cost (`tests/lp.py`, DI, incl. far3): A2 (639 first entries) mean 20,106 -> **19,457** T, worst 42,518 -> **39,910**;
+A7 (1,000 levels) mean 19,808 -> **19,139**, worst 45,653 -> **44,777** (cap 46,000): `lp_find`'s FRESH skip and the
+faster slot clear more than pay for the scan; a re-entry whose bodies all take try 0 draws no stream step at all.
+`tests/roommem.py` stub transitions (`lp_transition` incl. bank / restore / admission) worst ~42.3k T.
+
+Pool: `B0_CODE_RES` 704 and the D8 Warrior slack 384 unchanged. RAM: none (`LPK_PARK` / `LPK_ROOM` are EQUs).
+
+**Review fixes (same branch, user decisions 2026-11-03):** (1) cooldown grace on re-entry: `lp_spawn .pk`
+raises the restored counter to 1 (+5 B); (2) the Archmage's `ST_X` persists (game.md §9.9 A3, combat_defs.asm
+comments); (3) `lp_bank` honours `lp_append`'s CF (a full record: freed, not parked; +2 B); (4) the bat's
+`RCD_VFLEE` is not kept (it shares the cleared summon bits; a kind test costs ~7 B more bank 3: noted, not
+built); (5) `lp_transition` cap 70,000 T (under one frame) in `tests/lp.py` A8 / `tests/roommem.py` /
+game.md §9.4.3; (6) `tests/roommem.py` R5 (a ready Slinger does not fire on the first phase after the return)
++ ADV (the reviewer's 8-parked / eviction case). Paid in bank 3 by: VISITED set at `lp_bank`'s start (−3),
+`lp_cmap`'s tail `ret z` / `jp lp_mark` (−2), `dest_counts .wt` `ld (hl), a` (−2): bank 3 stays 8 free.
+
+Gate (release unless noted; every build variant 0 warnings): game 339 (trace build, incl. #50 tape boot), world
+2,584, dnum 39, combat, ranged 17, marks 39, boss 215, budget every gate ok (`blair` real **141,112** unchanged,
+margin 704; dnum / dkill ok), gfx_integrity 383, zx0_pool 303, lp 1,518 (A1-A7, B; A4 / B2 now model the parked
+bodies), **roommem 25 (new)**, kit 3 / 16 (release / kit build), levelcheck 1000 × 8 + f3 8000 pass,
+tier/respawn models pass. `ai_equiv` vs main 2,100 / 2,100, no logic / RNG / status mismatch, full entity hash
+identical on every turn: its 6 random-key runs never leave their start room, so the persistence (the only intended
+behaviour change) is exercised by `tests/roommem.py` / `tests/lp.py`, not there.

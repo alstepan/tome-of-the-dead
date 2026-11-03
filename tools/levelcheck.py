@@ -421,7 +421,8 @@ def lp_check(b, stats=None, f3=False, lvl=1):
         for hs, hx in arr:
             lp2, out = G.lp_enter(b, lp, r, hs, hx, 3, f3)
             ws = sum(wt(kb if f3 else kb & 31) for kb, *_ in out)
-            ws += sum(wt(e if f3 else e & 31) for e in lp2[o("LP_REC") + 9 * r + 1:o("LP_REC") + 9 * r + 9:2] if e)
+            nk = lp2[o("LP_REC") + 9 * r] & D["LR_CNT_MASK"]     # ROOM-MEM: entries past the count are stale
+            ws += sum(wt(e if f3 else e & 31) for e in lp2[o("LP_REC") + 9 * r + 1:o("LP_REC") + 9 * r + 1 + 2 * nk:2])
             minw = min(wt(kid(k)) for k in G.LP_TAB[depth][0])
             cap = D["LP_SIGMA_CAP"] if r == lair else max(D["LP_SIGMA_INIT"], rmax * minw)
             if lp2[o("LP_DISCARD")]:

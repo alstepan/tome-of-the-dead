@@ -682,8 +682,16 @@ def start_x(b):
 #   arrival gap >= LP_GAP (8) on tries 1-4, >= LP_GAP2 (5) on 5-8; a candidate
 #   failing ONLY the gap is re-tested at the same x on the other storey
 #   (the first legal one; 3F-T8: the old 'boss farthest from the hero' rule is
-#   gone). Unplaced units stay in the record (in order). Record -> VISITED.
+#   gone). Unplaced units stay in the record (in order). Record -> VISITED; the
+#   entries past the new count keep their old bytes (ROOM-MEM reclaim: no zero fill).
 #   ROOM_VISITS is NOT incremented here (the caller does it after admission).
+#   ROOM-MEM (user 2026-11-03): parked = the room's parked bodies in slot order,
+#   [(kind row, storey, x, facing_left)] (Z80: slots with E_ROOM = r | LPK_PARK, lp_bank).
+#   Per unit, BEFORE the post / tries: the first parked body of the same kind row
+#   (lp_find) -- a lair unit with a post still takes the post; else try 0 = its own
+#   (s, x) with lp_legal gap LP_GAP2 (5), no stream step, no other-storey retry; if
+#   that fails, the 8 tries as above. A placed unit consumes its parked body and keeps
+#   its facing; an unplaced one leaves it parked (a later unit of that kind may match it).
 LP_TAB = {1: (("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 11),
           2: (("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 12),
           3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT"), "K_BOSS_D3", 12),
@@ -995,10 +1003,14 @@ def lp_seed(b, lp, r):
 
 
 LP_CALLS = 0                # rnd calls of the last lp_enter (tests: cost)
+LP_OUT_SLOT = []            # ROOM-MEM: the parked slot each placed unit of the last lp_enter used (None: a free one)
 
 
-def lp_enter(b, lp, r, hs, hx, hw, f3=False):
+def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
     lp = bytearray(lp)
+    parked = [[True] + list(q) for q in (parked or [])]     # [still parked, kind, s, x, left(, slot)]
+    global LP_OUT_SLOT
+    LP_OUT_SLOT = []                                        # per out entry: its parked slot (q[5]) / None
     rng = Rng(0, 0)
     rng.x = lp_seed(b, lp, r)
     lp[lp_off("LP_RNG"):lp_off("LP_RNG") + 2] = rng.x.to_bytes(2, "little")
@@ -1050,13 +1062,19 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False):
                 k = fit(sigi, n - 1 - u, True)
                 if k is not None:
                     units.append((k, hp0(k)))
+        for i, (kb, hp) in enumerate(units):            # R6 lp_gen writes them into the record
+            lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i] = kb, hp
     else:
         units = [(lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i]) for i in range(hdr & D["LR_CNT_MASK"])]
     placed, out, left = [], [], []
     for i, (kb, hp) in enumerate(units):
         w, _, fly = info(kb & ROWM)
+        pk = next((q for q in parked if q[0] and q[1] == kb & D["LEK_KIND_MASK"]), None)
         best = lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM) \
             if r == b[H["LVL_LAIR"]] else None
+        if best is None and pk is not None and \
+                lp_legal(b, r, pk[2], pk[3], w, fly, hs, hx, hw, placed, D["LP_GAP2"]) == "ok":
+            best = (pk[2], pk[3])                       # try 0: the saved cell
         for t in range(0 if best else D["LP_TRIES"]):
             v = rng.rnd16()                             # one step per candidate
             s = (v >> 8) & 1
@@ -1075,12 +1093,17 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False):
             continue
         s, x = best[0], best[1]
         placed.append((s, x, x + w - 1))
-        out.append((kb, hp, s, x, x > hx))
+        if pk is not None:
+            pk[0] = False                               # restored in place: its own facing
+            out.append((kb, hp, s, x, bool(pk[4])))
+            LP_OUT_SLOT.append(pk[5] if len(pk) > 5 else None)
+        else:
+            out.append((kb, hp, s, x, x > hx))
+            LP_OUT_SLOT.append(None)
     lp[ro] = D["LR_VISITED"] | len(left)
     global LP_CALLS
     LP_CALLS = rng.calls
-    for i in range(D["LR_MAX"]):
-        kb, hp = left[i] if i < len(left) else (0, 0)
+    for i, (kb, hp) in enumerate(left):                 # the rest keep their bytes (no zero fill)
         lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i] = kb, hp
     return bytes(lp), out
 

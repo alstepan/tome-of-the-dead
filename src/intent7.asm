@@ -291,7 +291,7 @@ ic_disp:
                 jp   z, ic_refuse
                 bit  ABF_MELEE_BIT, l
                 jp   nz, abil_melee
-                jp   abil_spell
+                jr   abil_spell
 gear_ban:       ld   a, TX_GEAR_BAN
                 jp   ic_no                     ; line + fizz, IC_REFUSED (out of jr range)
 ABF_MELEE_BIT   EQU 6

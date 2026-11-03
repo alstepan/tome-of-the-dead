@@ -169,7 +169,7 @@ pp_take:
                 ld   (hl), a
 .nb:            ld   a, SFX_PICKUP             ; SND-5b (keeps BC / DE / HL)
                 call sfx_req
-                jp   ap_stamp
+                jr   ap_stamp
 
 ; ap_take — one ammo stack: A = 0 daggers / 1 arrows, HL = its &FL_ITEM, E =
 ; the FL_ROOM byte. Takes min(FL_QTY, cap - counter), logs, re-stamps the

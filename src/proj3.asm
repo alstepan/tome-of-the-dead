@@ -347,7 +347,7 @@ proj_tb:
                 ld   b, PFS_RANGE
                 ld   a, (pf_left)
                 or   a
-                jp   z, .stop                  ; the run used the range up
+                jr   z, .stop                  ; the run used the range up
                 ld   a, (hl)                   ; else L = the event cell (flags not 0)
                 ASSERT ((pf_desc + FXD_SEGS + FXD_SEGMAX - 1) >> 8) == (PF_RAM >> 8)
                 ; the next cell decides: A = its PF_ROWF flags, L = its col

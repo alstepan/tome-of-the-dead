@@ -31,8 +31,8 @@ anim_tick:
                 ld   h, SLOTREC >> 8
 .lp:            ld   (hl), 0                   ; R_VIS default: hidden
                 ld   a, (ix+E_FLAGS)
-                or   a
-                jr   nz, .full
+                rrca                           ; ROOM-MEM: CF = EF_ACTIVE (was `or a`: a parked slot,
+                jr   c, .full                  ; flags != 0 but not active, takes the empty path, 0 T)
                 bit  0, (ix+E_DVIS)
                 jr   nz, .full                 ; empty but still drawn: erase via list
                 add  ix, de                    ; empty slot: nothing more to do
@@ -54,7 +54,7 @@ anim_tick:
                 ; anim_entity (was re-derived from ANIM_SLOT twice), the RLIST
                 ; append indexes through DE (reloaded with the stride after):
                 ; ~0.29k T a live slot (was ~0.43k)
-.full:          ld   c, a                      ; C = E_FLAGS (A is the slot below)
+.full:          ld   c, a                      ; C = E_FLAGS rotated right 1 (A is the slot below)
                 ld   a, l                      ; ANIM_SLOT only stored when a callee
                 rrca                           ; may read it (non-empty / drawn)
                 rrca
@@ -62,9 +62,10 @@ anim_tick:
                 rrca
                 ld   (ANIM_SLOT), a
                 ld   a, c
-                and  EF_ACTIVE | EF_PENDING
-                cp   EF_ACTIVE
+                and  ((EF_ACTIVE | EF_PENDING) >> 1) | $80   ; (the flags rotated: ACTIVE = bit 7)
+                cp   $80
                 jr   nz, .next
+                ASSERT EF_ACTIVE == 1 && EF_PENDING == $40
                 ld   a, (CUR_ROOM)
                 cp   (ix+E_ROOM)
                 jr   nz, .next
