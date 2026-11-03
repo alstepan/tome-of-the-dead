@@ -65,17 +65,8 @@ level_tiles7:
                 ldir
                 ld   hl, theme_ids             ; common ids that follow the depth
                 ld   a, (LVL_ATTR_FLOOR)
-                call .patch
-                ld   a, (LVL_ATTR_WALL)
-.patch:         ; A = attr -> TILE_ATTRS[id] for the ids at HL up to a 0 (T_AIR)
-                ld   e, (hl)
-                inc  hl
-                inc  e
-                dec  e
-                ret  z
-                ld   d, TILE_ATTRS >> 8
-                ld   (de), a
-                jr   .patch
+                call level_patch7              ; LOWER-FLAME exp.: the patch loop lives in the LOW bank-7 block
+                jp   level_patch7w             ; (theme7.asm, same bank: the high block was 8 B over, the low had 31 free)
                 ASSERT (TILE_ATTRS & $FF) == 0 && T_AIR == 0
                 ASSERT ((tile_flags + TILE_IDS - 1) >> 8) == (tile_flags >> 8)
                 ASSERT TSET_GIDX == 0 && TSET_ATTRS == TILE_IDS - TILE_COMMON && TSET_FSET == TSET_ATTRS + TILE_IDS - TILE_COMMON

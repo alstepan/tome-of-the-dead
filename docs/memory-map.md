@@ -1680,7 +1680,7 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 | 12 | `T_CHAIN` | small decor; cobweb / moss move to the per-level sets |
 | 13 | `T_GRATE_SHUT` | **3F-T8 (§9.7 R2, BOSS-GUARD)**: the CLOSED lair gate (tiles_3f `grate_shut`, ink `$07`), `TF_SOLID \| TF_FLOOR`; `build_room_map` stamps it over the 3 exit cells AFTER the deriver while `LF_GRATE_OPEN` is clear; R6 `grate_open` swaps them to `T_GRATE` (+ glow) when the boss dies |
 | 15–18 | `T_LECT_TL/TR/BL/BR` | **3F-T8 (§9.7 R2)**: the D8 Sanctum lectern 2×2 (tiles_3f, `$43` top / `$06` bottom), `TF_SOLID \| TF_ATTACK` (`id − 15 < 4` = attackable); glyphs + flags only, placed by T11 |
-| 31 | `T_FREE31` | FREE (DEC2) |
+| 31 | `T_GLOW` | **LOWER-FLAME exp.**: the B12 lair-exit glow (`gate_glow`, `$46`), the same glyph + attr on every depth, so common: frees 1 per-level id on all 8 levels and the 8-B `glow_ids` (bank 3) / `glow7` (bank 7) tables |
 | 19, 20 | `T_END_L` = `T_PIT_R`, `T_END_R` = `T_PIT_L` | floor edge right / left of a hole: the pit caps share them |
 | 21–25 | `T_DOOR_ARCH_L/R`, `T_DOOR_L/R`, `T_DOOR_LOCK` | concept §3.1 (5 door ids) |
 | 26, 27 | `T_GRATE`, `T_RUBBLE` | B12: `T_GRATE` = the **raised** gate (variant B, ink `$46` = `ATTR_GRATE`), `TF_LADDER \| TF_HOLE`, stamped over the lair's open level exit; 3F-T8: `T_GRATE_SHUT` = 13 (own id, above) |

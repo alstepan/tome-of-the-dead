@@ -14,10 +14,6 @@ tr_fx:          DB   FX_NONE, FX_NONE, FID_arrow_hit, FID_arrow_hit
                 ASSERT $ - tr_fx == FXD_LEN && FXD_IMPT == 9 && FXD_NSEG == 10 && FXD_IMPA == 2
                 ASSERT FXD_LEN <= 32           ; MSG_BUF
 
-; glow7 — boss7 grate_open: bank-3 glow_ids (build_room_map) again, by depth - 1 (bank 7 cannot read bank 3)
-glow7:          DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_GLOW_F1_R0C0
-                DB   TS5_GLOW_F1_R0C0, TS6_GLOW_F1_R0C0, TS7_GLOW_F1_R0C0, TS8_GLOW_F1_R0C0
-                ASSERT $ - glow7 == LEVELS && ((glow7 - 1) >> 8) == ((glow7 + LEVELS - 1) >> 8)
                 ASSERT T_AIR == 0 && T_GRATE_SHUT != T_GRATE
 
 ; bxp_d — boss7 grate_open: golden-boss XP delta by depth - 1 = game.md §4.1 golden XP - the base kind's KXP

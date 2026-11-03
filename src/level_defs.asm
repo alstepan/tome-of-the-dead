@@ -416,7 +416,7 @@ T_RUBBLE        EQU 27              ; block foot, arrival-shaft cap, ash of the 
 T_WALL_DITHER   EQU 28              ; wall set (concept-screen §3.3)
 T_WALL_PATCH    EQU 29
 T_WALL_FADE     EQU 30
-T_FREE31        EQU 31              ; DEC2: free (was bones tile 3)
+T_GLOW          EQU 31              ; LOWER-FLAME exp.: the B12 lair-exit glow, the same glyph + attr on every depth (was a per-level id)
 ; B10 (user option B, designer 2026-10-03): open-door jambs on ids 11 / 14,
 ; non-solid, ink $06; cobweb / moss move to the per-level sets.
 T_DOOR_JAMB_L   EQU 11              ; `#.#.....` x 8: the left arch's outer strokes, continued
@@ -446,7 +446,7 @@ T_LVL_OBJ_N     EQU 4               ;   3E class glyphs, unreferenced); decor us
 T_ITEM0         EQU T_LVL_OBJ
                 ASSERT T_COUNT <= T_DOOR_ARCH_L        ; new ids start after the live PROTO ids
                 ASSERT T_COMMON_USED <= TILE_COMMON
-                ASSERT T_FREE31 < TILE_COMMON
+                ASSERT T_GLOW < TILE_COMMON
                 ASSERT T_LVL_OBJ + T_LVL_OBJ_N == TILE_IDS
 
 ; TILE_FLAGS[64] (D2) bit meanings. The table itself is B3B-5 data:
