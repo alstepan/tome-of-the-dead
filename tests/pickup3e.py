@@ -382,7 +382,7 @@ def run(p, check):
     got, st, cx = drop_case("U1", K_GOBLIN, K_KNIGHT, 0, True, None, 0, pre=lair)
     room = p.rb("CUR_ROOM") | S1
     want = dict(rng=st, new=[(got["new"][0][0] if got["new"] else None, [room, cx, IT["H_KING"], 1])],
-                lines=["BOSS DROPS KING HELM"])
+                lines=["A GATE GLEAMS, THE WAY DOWN", "BOSS DROPS KING HELM"])   # the D1 lair boss also opens the gate
     check("U1 D1 boss: KING HELM at the centre, BOSS DROPS line, no RNG", got == want, (got, want))
     check("U1 LF_UNIQUE set", p.rb("LVL_FLAGS") & S["LF_UNIQUE"], p.rb("LVL_FLAGS"))
     sl = monster(K_GOBLIN, 24)

@@ -14,7 +14,7 @@ NEXT_MAP, then on the ENGINE's map + tile_flags:
       per fire, capped at RESPAWN_MAX, the plate in the map, no other T_TRAP cell. (TRAP2
       shipped `inc (hl)` with HL = the entry: the record moved to the next room, a stray
       plate appeared there, often on a ladder top.)
-Run: ZRCP_PORT=<port> [WZ_BUILD_DIR=..] python3 tests/trap_cells.py [--seeds N]
+Run: ZRCP_PORT=<port> [WZ_BUILD_DIR=..] python3 tests/trap_cells.py [--seeds N]   (default 40 seeds, ~0.23 s a level)
 """
 import sys
 from pathlib import Path
@@ -99,7 +99,7 @@ def alarm_fires(h, seeds):
 
 
 def main():
-    nseeds = int(sys.argv[sys.argv.index("--seeds") + 1]) if "--seeds" in sys.argv else 300
+    nseeds = int(sys.argv[sys.argv.index("--seeds") + 1]) if "--seeds" in sys.argv else 40   # ~0.23 s a level: 40 seeds x 16 = ~2.5 min (300 was ~20 min of silence, read as a hang)
     tf_ok = None
     bad = []
     by_d = {d: [0, 0] for d in range(1, 9)}         # levels, plates
@@ -112,6 +112,8 @@ def main():
         T_TRAP = S["T_TRAP"]
         page = S["NEXT_MAP"] >> 8
         for m in range(nseeds):
+            if m % 10 == 0:
+                print(f"  seed {m}/{nseeds} ({len(bad)} violations so far)", flush=True)
             for d in range(1, 9):
                 for hk in (0, 1):
                     p.wb("HERO_KIND", hk)
