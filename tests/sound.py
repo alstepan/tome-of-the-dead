@@ -30,7 +30,8 @@ player_frame) is the START frame; the ISR after it plays oracle frame 0.
         (stinger); MUS_REQ 0 -> idle afterwards (final cue); dropped while music is off
   SND8  slot layout from the .sym: ay_code_end <= $10000, ay_vars contiguous,
         mus_tab_end - mus_tab = 14
-  SND10 in-play Dangerous: HP <= MAXHP/4 at a real turn end -> MUS_REQ 2, chip == oracle song 2
+  SND10 in-play Dangerous: HP <= MAXHP/4 at a real turn end -> MUS_REQ 2, chip R0..R12 ==
+        oracle song 2 for 300 frames over the running game
   SND9  cost, each of the 7 songs (>= 256 frames, one-shots via MUS_SHOT): max single ISR
         <= 6.5k T, frame T at isr.done < 14,336; reports the adjacent-pair max
 
@@ -577,23 +578,14 @@ def snd10(h):
     check("SND10 in play: HP <= MAXHP/4 at a real turn end -> MUS_REQ 2 (Dangerous)", got, s.rb(MUS_REQ))
     if not got:
         return
-    s.frame()
+    # The stop at isr.done that first shows MUS_REQ 2 IS the start frame: end_turn wrote the
+    # request before this ISR, whose ay_play took it (player_start, no player_frame). The next
+    # ISR plays oracle frame 0. (Until 2026-11-03 an extra frame() here shifted the capture by
+    # one: song 2's long notes hid it except at the note changes, frames 30/62/93/124 of R0..R5.)
     check("SND10 the ISR starts song 2 (MUS_CUR 2, MS_LOOP) over the running game",
           (s.cur(), s.state() & MS_MASK) == (2, MS_LOOP), (s.cur(), s.state()))
-    # Frame-exact on the mixer (R7) and the volumes (R8..R10), the rhythm / envelope of the
-    # song. The tone periods (R0..R5) differ from the oracle on 3 isolated frames (30, 62, 93)
-    # in play only (the same song matches all 300 frames at the menu): reported, not gated,
-    # until the cause is found (OPEN, see docs/plan.md leftovers).
-    bad, tone = [], []
-    for j in range(128):
-        s.frame()
-        c, w = s.chip()[:13], orc[j][:13]
-        if c[7:11] != w[7:11]:
-            bad.append((j, c.hex(), w.hex()))
-        if c[:6] != w[:6]:
-            tone.append(j)
-    check("SND10 in play: chip R7..R10 (mixer + volumes) == oracle song 2, frames 0..127", not bad, bad[:2])
-    print(f"[info] SND10 tone-period (R0..R5) frames off the oracle in play: {tone}", flush=True)
+    d = s.cmp(orc, 0, 300)
+    check("SND10 in play: chip R0..R12 == oracle song 2, frames 0..299", d is None, diff_info(d))
 
 
 def main():
