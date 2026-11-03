@@ -106,9 +106,7 @@ drip_erase:
                 call erase_rect
                 pop  bc
                 xor  a
-                ld   (DRIP_DRAWN), a
-                ld   de, $0101
-                jp   pmark_rect
+                jr   drip_mark                 ; RECLAIM-D: drip_draw's tail (-7 B, +12 T)
 
 ;------------------------------------------------------------------------------
 ; drip_draw — glyph HL (8 B, bank 2) at (DRIP_COL, DRIP_ROW) on the bank-5
@@ -145,7 +143,7 @@ drip_draw:
                 ld   a, DRIP_ATTR
                 ld   (de), a
                 ld   a, 1
-                ld   (DRIP_DRAWN), a
+drip_mark:      ld   (DRIP_DRAWN), a           ; (drip_erase's tail too: A = 0)
                 ld   de, $0101
                 jp   pmark_rect
                 ASSERT (SCREEN_BITMAP & $7FF) == 0 && (SCREEN_ATTR & $3FF) == 0

@@ -251,9 +251,7 @@ print6x:
                 ld   b, h
                 ld   c, l
                 ld   hl, pre_get
-                call print6g
-                pop  af
-                jp   restore_page              ; (keeps BC, DE)
+                jp   p6_tail                   ; RECLAIM-D: print6t's tail (-4 B, +10 T)
 
 ; pre_get — print6x's getter: tk_get, or with PRE_N = 1 (item_info in ICON
 ; MODE) a ">" first, and the string's char 15 dropped if it is a space, so

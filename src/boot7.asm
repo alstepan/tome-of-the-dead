@@ -106,9 +106,9 @@ panel_init7:
 ; potions re-initialised). HERO_KIND already set. MEM-SND: bank 7 (far7 from
 ; start_game; was bank 3 since A7). Hero slot 0: kind, flags, HP; the start
 ; kit (kit_add, 3E-T11: WORN + BAG; E_POT follows the bag).
-; B3B-12: proto_start = 1 (test path, docs/memory-map.md "Level entry"): the
-; PROTO rooms A-D as before (far3 new_game_proto, bank 3: proto_level +
-; spawn_tab, ends with vis_reset). Else (default): MASTER_SEED = SYS_FRAMES
+; B3B-12 / D3-11: proto_start = 1 (test path) no longer branches here: the
+; PROTO fixture (src/proto_fix.asm, run by start_game's proto_hook) rewrites the
+; level state and the slots after it. MASTER_SEED = SYS_FRAMES
 ; at the hero choice (game.md §1 "Seed"; seed_fixed = 1 forces seed_value)
 ; and nothing else — start_game's level_enter generates D1, populates it and
 ; ends with vis_reset. Clobbers: all but IY.
@@ -121,10 +121,10 @@ new_game:
                 ld   (TICK_COUNTER), hl        ; per-game test observables
     IF ANIM_TRACE_ON                          ; (OVERRUN_COUNT, GEN_OVERFLOW
                 ld   hl, ANIM_TRACE            ; stay "since boot")
-                ld   de, ANIM_TRACE + 1
-                ld   bc, ANIM_TRACE_LEN - 1
-                ld   (hl), $FF
-                ldir
+                ld   b, ANIM_TRACE_LEN         ; RECLAIM-D: a 10-B loop (was the 13-B LDIR)
+.trc:           ld   (hl), $FF
+                inc  l                         ; (one page: trace_log ASSERTs it)
+                djnz .trc
     ENDIF
                 xor  a
     IF ANIM_TRACE_ON
@@ -162,10 +162,7 @@ new_game:
                 call far6                      ; E_POT = its potions via pot_sync)
                 xor  a                         ; 3F-T9: the spawn queue is garbage at boot
                 ld   (SPQ_K), a                ; (end_turn empties it after that)
-                ld   a, (proto_start)
-                or   a
-                jr   nz, .proto
-                ld   hl, (seed_value)          ; generated: the master seed
+                ld   hl, (seed_value)          ; (D3-11: a PROTO fixture game rewrites it)          ; generated: the master seed
                 ld   a, (seed_fixed)
                 or   a
                 jr   nz, .ms
@@ -177,5 +174,3 @@ new_game:
                 ld   h, a                      ; the 20 ms keypress frame is the real source
 .ms:            ld   (MASTER_SEED), hl
                 ret
-.proto:         ld   hl, new_game_proto        ; bank 3: rooms A-D + spawn_tab (bank-3
-                jp   far3                      ; data) + vis_reset

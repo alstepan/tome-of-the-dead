@@ -74,6 +74,8 @@ hunger_turn:
                 jr   nc, .hold
                 dec  hl
                 inc  (hl)
+                ld   hl, DN_SLOT + DS_SNAP     ; D3-11: FED regen is silent (game.md §6.5): accounted
+                inc  (hl)
                 jr   .hold
 .nfed:          cp   HS_WEAK
                 jr   nz, .hold

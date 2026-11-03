@@ -186,7 +186,7 @@ lp_post:
                 ld   a, LP_XMAX + 1 - LP_XMIN
                 sub  e
                 cp   b
-                ld   a, c
+.rngt:          ld   a, c                      ; (.gap's tail too: RECLAIM-D -1 B R6)
                 pop  bc
                 ret
 ; .gap: A = x, E = width -> CF = on the hero's arrival storey 1 with a body gap < 5. Keeps A, BC, DE.
@@ -208,9 +208,7 @@ lp_post:
                 ld   b, a                      ; x + w + 5
                 ld   a, (LP_HX)
                 cp   b                         ; CF: hx < x + w + 5, too close
-                ld   a, c
-                pop  bc
-                ret
+                jr   .rngt                     ; (A = x, BC popped; CF kept)
 .gy:            ld   a, c
                 pop  bc
                 or   a

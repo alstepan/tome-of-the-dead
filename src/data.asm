@@ -29,7 +29,7 @@ dst EQU fb
 ; FRT: the FRT row image of every fid (12 x FRT_NONE + the 4-B frame_tab entry
 ; FT_COLS, FT_H, FT_OFFR, FT_OFFL), runtime RAM above the image — not on tape,
 ; only in the .sna. The build packs its frame_tab bytes (main.asm ovl_raw_ft ->
-; bank-2 ftz_zx0); boot6_ft rebuilds exactly these rows at boot. main.asm's LEVEL
+; bank-0 ftz_zx0, RECLAIM-D); instr_ovl in_ft rebuilds these rows at boot. main.asm's LEVEL
 ; POOL NEED reads the entries here ({b frame_tab + fid * FT_STRIDE}). Its
 ; generator half (source block / offset / flags) is fdesc_tab in lowram.asm.
 ;==============================================================================

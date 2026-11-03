@@ -1,6 +1,6 @@
 ;==============================================================================
 ; ldir2.asm — RECLAIM-C (d): bank-2 helpers for paged-bank code that must read
-; another $C000 bank. LAST code in the bank-2 image (before ftz_zx0): adding
+; another $C000 bank. near the end of the bank-2 image (RECLAIM-D: then dnum2 + dnum2b): adding
 ; here moves no other bank-2 symbol (the overlay / R6 streams that call bank-2
 ; code repack identically).
 ;==============================================================================

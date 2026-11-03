@@ -201,6 +201,7 @@ TSET_LEN        EQU tilesets_end - tilesets
                                                ; frames) are these tset_pool glyphs (menu1 reads them, ldir7): byte-equal
 b7h_code:
                 INCLUDE "tiles7.asm"           ; MEM-RECLAIM w2a: level_tiles7 (M0: from the low bank-7 block)
+                INCLUDE "dnum7h.asm"           ; D3-11: dn_evict (far7 from bank-3 dn_take)
     IF F3_GEN
                 INCLUDE "sanct7.asm"           ; 3F-T10: sanctum_leaf (M0 L1: from R6, far7 from level_gen)
     ENDIF
@@ -254,6 +255,7 @@ TEXT_LEN        EQU text_img_end - text_img
 b0_code:
                 INCLUDE "log0.asm"             ; LOG-DMG: the log-line damage / HP tails (direct calls,
                                                ; BANK_TEXT already paged by impact_line / hit_line / msg_go)
+                INCLUDE "dnum0.asm"            ; D3-11: the flying damage numbers (FARB0 dn_tick / dn_q2)
     IF DEBUG_KIT
                 INCLUDE "kit0.asm"                      ; DBG-1: the debug kit, kit builds only (keep LAST)
     ENDIF
@@ -269,6 +271,14 @@ B0_FREE         EQU POOL_START - b0_code_end
 ; size — instr_main reaches page n+1 as "past page n"). Boot only: on the text
 ; tape block (TEXT_TAPE_LEN), read by boot6_wait -> ovl_run before gen_idles,
 ; then the boot pool overwrites them (0 pool bytes; M0: POOL_START is fixed at $C960, defs.asm).
+; RECLAIM-D: FIRST the MEM-FT frame_tab stream (was the last 132 B of the bank-2 image):
+; at the FIXED POOL_START, so instr_main (the overlay) unpacks it into the FRT rows before
+; anything else and reaches page 1 as "past it" (no overlay byte depends on a packed size).
+ftz_zx0:                                       ; FT_LEN B/fid contiguous, ZX0 (instr_main in_ft)
+    IF OVL_PASS == 2
+                INCBIN "ft.zx0"
+    ENDIF
+ftz_zx0_end:
 instr_p1_zx0:
     IF OVL_PASS == 2
                 INCBIN "instr1.zx0"
@@ -286,9 +296,9 @@ instr_zx0:
                 INCBIN "instr.zx0"
     ENDIF
 instr_zx0_end:
-INSTR_P1_ZX0    EQU instr_p1_zx0
+INSTR_FT_ZX0    EQU ftz_zx0                    ; = POOL_START (fixed): the overlay's first stream
 TEXT_TAPE_LEN   EQU instr_zx0_end - TEXT_ADDR
-                ASSERT instr_p1_zx0 == POOL_START && instr_zx0_end <= tap_loader
+                ASSERT ftz_zx0 == POOL_START && instr_zx0_end <= tap_loader
                 ASSERT text_base == TEXT_ADDR && TEXT_LEN == TEXT_PACKED
                 ASSERT (tx_entries & $FF) == 0         ; w2d: tk_get's B = tx_entries >> 8
                 ASSERT text_img_end <= tap_loader      ; the BASIC loader scratch ($E000, page 0)
@@ -339,6 +349,7 @@ image_start:
 ; At probe_presented bank 7 == bank 5 (tests/flicker.py asserts it per tick).
 ;==============================================================================
 play_loop:
+                call dn_gate                   ; D3-11: the numbers pass ends the previous tick
                 call wait_tick
 tick_work:                                     ; budget probe: tick work starts here
                 call present                   ; A7: last tick's changes -> bank 7
@@ -477,16 +488,13 @@ wait_tick:
                 ld   hl, (OVERRUN_COUNT)
                 inc  hl
                 ld   (OVERRUN_COUNT), hl
-                jr   .go
+                jr   resync_tick
 .wait:          halt
                 ld   a, (SYS_FRAMES)
                 sub  b
                 cp   TICK_FRAMES
                 jr   c, .wait
-.go:            ld   a, (SYS_FRAMES)
-                ld   (LAST_TICK_FRAME), a
-                ret
-
+                ; fall through (RECLAIM-D: wait_tick's own tail was these 7 B)
 ; resync_tick — forget elapsed time (after a transition / long cold path).
 resync_tick:
                 ld   a, (SYS_FRAMES)
@@ -548,6 +556,9 @@ enter_select:
                 INCLUDE "decor.asm"             ; B3B-10 animated decor (decor_tick)
                 INCLUDE "fx.asm"                ; D3-5 FX tracks (fx_start / fx_tick / fx_render)
                 INCLUDE "drip.asm"              ; D3-8b decorative drip (drip_tick, per tick)
+                INCLUDE "dnfix2.asm"            ; DNUM-SPRITE-FIX: dn_fix (present's number cells), in the pad
+                ; dnum2.asm (the numbers' screen-2 draw + the kit's dnwin.asm): after ldir2.asm
+                ; (RECLAIM-D), so the kind_tab ALIGN pad keeps room for the -DANIM_TRACE_ON=1 code
 
 ;==============================================================================
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
@@ -667,7 +678,8 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 DUP 24, n
                 DB   n / STOREY_ROWS           ; KT_DIV9
                 EDUP
-                DS   KT_MOD9 - KT_DIV9 - 24, 0 ; 8 B spare (3F-T2)
+dn_miss_s:      DB   "MISS", 0                 ; D3-11 (dnum3.asm dn_take): in the 8-B spare (3F-T2)
+                DS   KT_MOD9 - KT_DIV9 - 24 - 5, 0 ; 3 B spare
                 ASSERT $ - kind_tab == KT_MOD9
                 DUP 24, n
                 DB   n % STOREY_ROWS           ; KT_MOD9
@@ -695,12 +707,10 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 INCLUDE "msg2.asm"              ; LOG-FIX: msg_cat / msg_end (from bank 7), log_room, hit_line
                 ; fi3.asm (FLOOR1 fi_full, cold, far3 only): back in bank 3 since BLAIR-FIX (bank3.asm)
                 INCLUDE "ldir2.asm"             ; RECLAIM-C (d): ldir7 (bank-1 menu_static reads a bank-7 tileset run)
-ftz_zx0:                                       ; MEM-FT frame_tab, FT_LEN B/fid contiguous, ZX0 (boot6_ft;
-    IF OVL_PASS == 2                            ; bank 2: always mapped, on the CODE tape block; LAST in the
-                INCBIN "ft.zx0"                 ; image so its pass-1/2 size moves only code_end)
-    ENDIF
-ftz_zx0_end:
-
+                INCLUDE "dnum2.asm"             ; D3-11 / DNUM-SPRITE-FIX: dn_show / dn_walk / dn_cel, screen 2 (+ kit builds: dnwin.asm)
+                INCLUDE "dnum2b.asm"            ; D3-11: dn_gate (play_loop) + dn_sfx (impact_line), after every other bank-2 code
+                ; RECLAIM-D: ftz_zx0 (the MEM-FT frame_tab stream, 132 B) left the image: bank 0
+                ; POOL_START, boot only, unpacked by the HOW TO PLAY overlay (main.asm "TEXT")
 code_end:
 ; 3F-T2: the sequence cache's bytes (RUNTIME only, not on tape: R6 pool6.asm / lowram.asm
 ; copies the hero's and the level's sequence blocks here; seq_rows point in)
@@ -1239,7 +1249,7 @@ SEQ_IMG_LEN     EQU seq_img_end - seq_img_main
 ;------------------------------------------------------------------------------
 ; MEM-FT frame_tab stream: the entries read back ({b}, slot 2 = page 2) from the
 ; FRT row image data.asm assembled at FRT, contiguous FT_LEN B per fid; packed
-; into R6 ftz_zx0, boot6_ft spreads it into the FRT rows. (124 B packed vs 516.)
+; into bank-0 ftz_zx0 (RECLAIM-D; was the bank-2 image tail), instr_main spreads it into the FRT rows.
 ;------------------------------------------------------------------------------
 ovl_raw_ft:
                 DUP  FID_COUNT, ftf
@@ -1248,7 +1258,7 @@ ovl_raw_ft:
                 EDUP
                 ASSERT $ - ovl_raw_ft == FID_COUNT * FT_LEN && FT_LEN == 4
                 SAVEBIN "build/ovl/ft.bin", ovl_raw_ft, FID_COUNT * FT_LEN
-                DISPLAY "GAME frame_tab stream (MEM-FT): ", /D, FID_COUNT * FT_LEN, " B raw -> packed ", /D, ftz_zx0_end - ftz_zx0, " B in bank 2 (boot6_ft -> the FRT rows)"
+                DISPLAY "GAME frame_tab stream (MEM-FT): ", /D, FID_COUNT * FT_LEN, " B raw -> packed ", /D, ftz_zx0_end - ftz_zx0, " B in bank 0 at POOL_START (boot only; the HOW TO PLAY overlay in_ft -> the FRT rows)"
 ;------------------------------------------------------------------------------
 ; INSTR-BUILD: the HOW TO PLAY overlay (instr_ovl.asm at INSTR_ORG) + its three
 ; page images (tools/instr_pack.py, DISPed at INSTR_DATA = right after the code);
@@ -1289,6 +1299,20 @@ INSTR_P3_LEN    EQU instr_p3_end - instr_p3_img
                 SAVEBIN "build/ovl/instr2.bin", ovl_raw_instr2, INSTR_P2_LEN
                 SAVEBIN "build/ovl/instr3.bin", ovl_raw_instr3, INSTR_P3_LEN
                 DISPLAY "GAME HOW TO PLAY overlay (INSTR-BUILD, boot only): code ", /D, INSTR_OVL_LEN, " + page 1 ", /D, INSTR_P1_LEN, " / page 2 ", /D, INSTR_P2_LEN, " / page 3 ", /D, INSTR_P3_LEN, " B raw at ", /H, INSTR_ORG, " (", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p1_end, " / ", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p2_end, " / ", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p3_end, " left); packed ", /D, instr_zx0_end - instr_p1_zx0, " B in bank 0 after the text (", /H, instr_p1_zx0, "..", /H, instr_zx0_end - 1, ")"
+;------------------------------------------------------------------------------
+; D3-11: the PROTO rooms test fixture (src/proto_fix.asm) — raw image only, no
+; stream: tests/game_lib.py pokes build/ovl/proto.bin at PROTO_FIX_ORG.
+;------------------------------------------------------------------------------
+ovl_raw_proto:
+                DISP PROTO_FIX_ORG
+proto_fix_main:
+                INCLUDE "proto_fix.asm"
+proto_fix_end:
+                ENT
+PROTO_FIX_LEN   EQU proto_fix_end - proto_fix_main
+                ASSERT PROTO_FIX_ORG + PROTO_FIX_LEN <= SCREEN_BITMAP + SCREEN_BITMAP_LEN
+                SAVEBIN "build/ovl/proto.bin", ovl_raw_proto, PROTO_FIX_LEN
+                DISPLAY "GAME PROTO test fixture (D3-11, not in the image): ", /D, PROTO_FIX_LEN, " B raw at ", /H, PROTO_FIX_ORG
 OVL_RAW_END     EQU $
                 ASSERT OVL_RAW_END <= $10000
 

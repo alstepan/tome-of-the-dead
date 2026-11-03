@@ -13,7 +13,7 @@
 ;     decor_tick skip this tick), probe_act_fire, act_fire (A = ACT_ABL);
 ;   the first tick with TURN_TICK >= MON_AT and FX_BUSY == 0 (the hero's FX
 ;     idle: its last impact shown and erased): TURN_PEND = MON_AT = 0, then
-;     resolve_monsters (far3) unless the hero is DYING.
+;     resolve_monsters (bank 2 since BLAIR-FIX; it pages bank 3) unless the hero is DYING.
 ; turn_done waits while TURN_PEND != 0. Contended bank: once per event.
 ;==============================================================================
 

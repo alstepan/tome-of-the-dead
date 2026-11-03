@@ -11,7 +11,7 @@ Assemble the project for the ZX Spectrum 128K.
 
 ```sh
 tools/build.sh                       # pack sprites + assemble into build/
-tools/build.sh -DPROTO_START=1       # extra args -> sjasmplus (B3B-12 run flags below)
+tools/build.sh -DSEED_FIXED=1        # extra args -> sjasmplus (B3B-12 run flags below)
 tools/build.sh -o DIR [-D...]        # artefacts into DIR/build/ (tests use this)
 ```
 
@@ -41,9 +41,13 @@ build (`-DZX0_SOURCES=0` now stops with an assembler ERROR).
 
 Run flags (B3B-12, `src/lowram.asm`; bytes in the cold block, tests poke the
 labels `proto_start` / `seed_fixed` / `seed_value` instead of rebuilding):
-`-DPROTO_START=1` new games start in the PROTO rooms A-D (default 0: a
-generated D1); `-DSEED_FIXED=1 [-DSEED_VALUE=n]` fixed master seed (default:
+`proto_start` != 0 starts new games in the PROTO rooms A-D — tests only
+(D3-11: the rooms are the test fixture `src/proto_fix.asm` -> `build/ovl/proto.bin`,
+poked by `tests/game_lib.py` at `proto_hook`; `-DPROTO_START=1` is an assembler
+ERROR); `-DSEED_FIXED=1 [-DSEED_VALUE=n]` fixed master seed (default:
 `SYS_FRAMES` when the hero is chosen).
+`-DANIM_TRACE_ON=1` builds only with `-DDEBUG_KIT=0` (D3-11 review: the kit + trace
+combination is 59 B over bank 2 and fails `seq_bytes_end <= seq_rows`).
 `-DDEBUG_KIT=0` (D3-7): no debug start kit — the build the test suites and
 goldens need (default 1 = the designer's debug kit, never in a release tape).
 - `src/main.asm` is the single entry the assembler walks (it `INCLUDE`s the rest).

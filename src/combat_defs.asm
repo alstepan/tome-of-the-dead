@@ -190,7 +190,8 @@ RW_DHC          EQU 5               ; deal_hit C (DTY_* | DH_NODEF | EFX << DH_E
 RW_DHE          EQU 6               ; deal_hit E (on-hit effect: chance 1 in N << 4 | turns)
 RW_FX           EQU 7               ; flight fid A; fid + 1 = B, fid + 2 = the impact frame (unless RWF_NOIMP)
 RW_STRIDE       EQU 8
-THROW_ATTR      EQU $47             ; the hero's thrown dagger (proj3 FXD_ATTR); fx_meta's dagger_spin = the monsters' ROCK_ATTR
+THROW_ATTR      EQU $47             ; the hero's thrown dagger = fx_meta's dagger_spin; the monsters' dagger_spin shots
+                                    ; (Slinger rock, Goblin King) fly ROCK_ATTR: ranged6.asm rg_q's FXD_ATTR
 RWF_SPELL       EQU %00000001       ; auto-hit (no d20; Necro / Bone Caller / Archmage)
 RWF_AWAY        EQU %00000010       ; steps away from the hero at gap 2 (not the Sniper)
 RWF_NOIMP       EQU %00000100       ; no impact frame (dagger_spin rock)
@@ -622,3 +623,60 @@ ABIL_TGT        EQU ABIL_DESC + ABIL_DESC_LEN   ; $5E78..$5E79 (D3-8e; was $5E70
 ; PF_RAM's free middle $5E7A.. after ABIL_TGT (ASSERTed below PF_ROWF in kit0.asm).
 KIT_LIST        EQU ABIL_TGT + 2
     ENDIF
+
+;------------------------------------------------------------------------------
+; D3-11 flying damage numbers (src/dnum0.asm / dnum3.asm, game.md §6.5 / §6.5.1
+; Q2). Runtime RAM only (garbage at boot: dn_reset at every vis_reset /
+; vis_room_sync before the first pass), in the free BASIC-area reserve
+; (memory-map "Bank 5 low RAM": $5CCB..$5CFF, $5D56..$5DFF) + the FONT6 plane
+; hole $B4E6..$B4FD. tests/items3e.py's canary skips DN_KEY..DN_A_END / DN_LIVE..
+;------------------------------------------------------------------------------
+DN_KEY          EQU $5CDB           ; 16 B: per slot, the last scan's candidate key ($FF none;
+                                    ; dn_scan writes them, dn_pop takes the lowest: the queue
+                                    ; the 2nd-frame ticks spawn from; dn_reset clears them)
+DN_A            EQU DN_KEY + P_MAX_ENT  ; $5CEB: scratch + pass state (12 B)
+DN_PASS         EQU DN_A            ; passes run (scans, not ticks)
+DN_SMAX         EQU DN_A + 1        ; the hero's MAXHP with his DN_SNAP (level-up / tomes: taken off)
+DN_CUR          EQU DN_A + 3        ; spawn: the slot (dn_pop)
+DN_BT           EQU DN_A + 4        ; spawn: its key (dn_pop: bit 0 DNT_MISS, bit 7 DNT_HP)
+DN_SRC          EQU DN_A + 5        ; DNUM-SPRITE-FIX: 2 B, dn_show -> dn_walk: the start row's /
+                                    ; the row above's DN_ZCOL source low byte (0 = that row left;
+                                    ; was DN_A + 5 spare / DN_K, the old dn_show's rise)
+DN_TXT          EQU DN_A + 7        ; 6 B: the text being composed (4 chars, ' '-padded: the
+                                    ; composer reads 4; up to 3 pads after 3 chars)
+DN_A_END        EQU DN_TXT + 6      ; $5CF8 (DN_KEY..DN_A_END = $5CDB..$5CF7, 29 B)
+                ASSERT DN_A_END <= ITEM_RAM && DN_KEY >= $5CCB && DN_A == $5CEB && DN_A_END == $5CF8
+DN_LIVE         EQU $5D60           ; 3 x 32 B live records (DL_*), then DN_SLOT
+DN_LIVE_N       EQU 3
+DN_LIVE_STRIDE  EQU 32
+DL_AGE          EQU 0               ; passes drawn (0..DN_LIFE) (offset 0: dn_evict)
+DL_COL          EQU 1               ; first cell col
+DL_ROW          EQU 2               ; start row (the window = row - 1 and row)
+DL_SLOT         EQU 3               ; the body's slot ($FF: free)
+DL_ATTR         EQU 4
+DL_W            EQU 5               ; cells 1..3
+DL_VAL          EQU 6               ; signed -99..99, DNV_MISS
+DL_MB           EQU 7               ; DNUM-SPRITE-FIX: PRES_MASK low byte of the row above's first
+                                    ; col (bank-0 dn_mb at the spawn; dn_fix's coarse test)
+DL_GLY          EQU 8               ; 24 B: the composed lines (cell-major: cell c line l at 8 c + l;
+                                    ; DNUM-SPRITE-FIX: drawn on screen 2 only, OR'd over bank 5)
+DN_SLOT         EQU DN_LIVE + DN_LIVE_N * DN_LIVE_STRIDE   ; $5DC0: 16 x 4 B per slot (DS_*)
+DS_SEEN         EQU 0               ; DN_PASS when last scanned
+DS_SRC          EQU 1               ; E_REACT at the last pass
+DS_FLG          EQU 2               ; 1 = a miss / parry line since (dn_sfx)
+DS_SNAP         EQU 3               ; the HP last accounted for
+                ASSERT DN_LIVE >= ITEM_RAM + ITEM_RAM_LEN && DN_SLOT == $5DC0 && DN_SLOT + 4 * P_MAX_ENT == $5E00
+                ASSERT DN_SLOT + 4 * P_MAX_ENT <= PF_RAM
+DN_ZCOL         EQU $B4E6           ; 24 B: 8 zero lines, the cell's 8, 8 zero (FONT6 hole)
+                ASSERT DN_ZCOL == CAST_ROW + RR_STRIDE && DN_ZCOL + 24 == FX_BUSY
+DNV_MISS        EQU $80
+DN_LIFE         EQU 12              ; rise 8, hold 4
+DN_RISE         EQU 8
+DNT_REACT       EQU 0               ; candidate kinds (scan; key = 2 E_X | kind): a reaction started,
+DNT_MISS        EQU 1               ; a miss line,
+DNT_HP          EQU $80             ; an HP change with no reaction (bit 7: after the others)
+DNA_MDMG        EQU $47             ; game.md §6.5 colours (black paper, BRIGHT)
+DNA_HDMG        EQU $42
+DNA_PSN         EQU $43
+DNA_HEAL        EQU $44
+DNA_MISS        EQU $45

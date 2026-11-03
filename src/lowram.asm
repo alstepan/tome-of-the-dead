@@ -153,7 +153,7 @@ sel_tab:        DB   FID_knight_idle1, FID_wizard_idle
 ;==============================================================================
 ; start_game — C = hero kind. Generate its frames (§5.2: only the chosen
 ; hero) and its class FX kind (D3-4: K_FX_BASE + hero), new game, first level (B3B-12: a generated D1 through level_enter;
-; proto_start = 1: the PROTO rooms A-D through level_show), then the play
+; proto_start != 0: the PROTO test fixture at proto_hook), then the play
 ; loop (bank 2, never returns).
 ;==============================================================================
 start_game:
@@ -169,43 +169,38 @@ start_game:
                 ld   de, TX_WELCOME            ; the first log line (panel_init)
                 ld   a, (proto_start)
                 or   a
-                jr   z, .gen
-                ; PROTO rooms (test fixture): every original monster kind, as
-                ; the boot pool held before 3F-T1 (POOL_NEED_PROTO, data.asm)
-                push de                        ; (far6 / gen_list clobber DE)
-                ld   hl, pool_proto            ; 3F-T2 R6: K_SKELETON .. K_PROTO_END - 1
-                call far6                      ; + their seq blocks
-                call gen_list
-                pop  de
-                xor  a                       ; depth 0: the PROTO rooms' theme
-                call level_show                ; (the D1 set)
-                jr   .go
-.gen:           inc  a                         ; A = 1: D1
+                jr   nz, proto_hook            ; (a test: the PROTO fixture)
+                inc  a                         ; A = 1: D1
                 call level_enter
 .go:            call play_go                   ; (level_descend's tail: RECLAIM-A, shared)
                 jp   play_loop
+; D3-11: the PROTO rooms A-D are a test fixture outside the image
+; (src/proto_fix.asm): tests/game_lib.py stops here, pokes build/ovl/proto.bin at
+; PROTO_FIX_ORG and runs on (rooms, slots, the 6-kind pool, level_show depth 0).
+; Never reached with the shipped proto_start 0.
+proto_hook:                                    ; test probe: the fixture is poked here
+                call PROTO_FIX_ORG
+                jr   start_game.go
 
 ; B3B-12 run configuration (on tape, in this cold block; tests poke them right
 ; after the snapshot load / tape boot, docs/memory-map.md "Level entry"):
 PS_SLIME_BIT    EQU 1                   ; 3F-T3: proto_start bit 1 = the PROTO pool also holds the
                                         ; Slime (6 kinds, 37,312 B: over POOL_CAP once the 3F names
-                                        ; are in the text; tests/game_lib.py pokes 3, the default
-                                        ; PROTO_START=1 is the build-asserted 5-kind pool)
-;   proto_start  1 = new games start in the PROTO rooms A-D (tests/game.py's
-;                walkthrough, budget, flicker); 0 (default) = a generated D1
+                                        ; are in the text; tests/game_lib.py pokes 3)
+;   proto_start  != 0 = new games start in the PROTO rooms A-D (tests only: the
+;                fixture is poked at proto_hook); 0 (always on tape) = a generated D1
 ;   seed_fixed   1 = MASTER_SEED = seed_value (game.md §1 SEED_FIXED, F3);
 ;                0 (default) = SYS_FRAMES when the hero is chosen
-    IFNDEF PROTO_START
-PROTO_START     EQU 0                   ; -DPROTO_START=1: PROTO rooms by default
-    ENDIF
+    IFDEF PROTO_START                   ; D3-11: the PROTO rooms left the image (test fixture,
+                ASSERT PROTO_START == 0         ; src/proto_fix.asm): a PROTO start without the fixture
+    ENDIF                                       ; would run screen RAM. Tests poke proto_start
     IFNDEF SEED_FIXED
 SEED_FIXED      EQU 0                   ; -DSEED_FIXED=1 [-DSEED_VALUE=n]
     ENDIF
     IFNDEF SEED_VALUE
 SEED_VALUE      EQU $1234
     ENDIF
-proto_start:    DB   PROTO_START * 3             ; 3F-T3: -DPROTO_START=1 emits 3 (rooms + Slime pooled: spawn_tab places the Slime)
-                ASSERT PROTO_START == 0 || PROTO_START == 1
+proto_start:    DB   0                           ; (tests: 1 / 3 = + the Slime pooled, with the fixture)
 seed_fixed:     DB   SEED_FIXED
 seed_value:     DW   SEED_VALUE
 
@@ -855,6 +850,20 @@ es_num:
 ; ~45 T other kinds, ~0.13k T a bat form (once a death). In low RAM (always
 ; mapped): bank 2 has no room on main + MEM-RECLAIM w3 (31 B free there).
 ;------------------------------------------------------------------------------
+; dn_find — D3-11 (bank-3 dn_take): A = slot ($FF: a free entry) -> Z: IX =
+; its live-number record (DN_LIVE). Low RAM: bank 3 is full.
+; Clobbers: B (DE kept)
+dn_find:
+                push de
+                ld   ix, DN_LIVE
+                ld   b, DN_LIVE_N
+                ld   de, DN_LIVE_STRIDE
+.f:             cp   (ix+DL_SLOT)
+                jr   z, .x
+                add  ix, de
+                djnz .f                        ; (NZ from the last cp)
+.x:             pop  de
+                ret
 vb_fall:
                 ld   a, (ix+E_KIND)
                 cp   K_VBAT
@@ -902,7 +911,7 @@ show_impact_msg:
 ; also recomposes the Vampire's bite (was the MSG_M_DRAIN remap here, 3F-T9).
 ; Clobbers: A, BC, DE, HL (IX kept).
 impact_line:
-                call sfx_msg                   ; SND-5: melee hit / miss / kill / hurt (bank 2; BC kept)
+                call dn_sfx                    ; SND-5: melee hit / miss / kill / hurt (bank 2; BC kept); D3-11: + a MISS number
                 ld   a, (PORT_7FFD_SHADOW)
                 push af                        ; caller's page
                 push bc
@@ -2052,9 +2061,10 @@ alloc:
                 jr   nz, .ok
                 ld   a, h                      ; end - 1 < POOL6_END <=> H < HIGH POOL6_END
 .lim6:          cp   HIGH POOL6_END            ; (LOW POOL6_END = 0, ASSERTed in defs.asm)
-                ; SMC: .lim6 + 1 = the bank-6 limit page, written by R6 pool6.asm only:
-                ; pool_hero (every game start) HIGH POOL6_END, pool_proto (the PROTO
-                ; fixture) HIGH R6_ADDR — PROTO pools over the SRC6 sources (3F-T13)
+                ; SMC: .lim6 + 1 = the bank-6 limit page, assembled HIGH POOL6_END; only
+                ; the PROTO test fixture (src/proto_fix.asm, D3-11) moves it to HIGH
+                ; R6_ADDR for its session (it pools over the SRC6 sources, 3F-T13) and
+                ; puts it back right after
                 jr   nc, alloc_next            ; into SRC6 / R6: next bank = 3 = the pool is full
 .ok:            inc  hl                        ; HL = end ($10000 -> 0: handled below)
                 ld   (ALLOC_PTR), hl

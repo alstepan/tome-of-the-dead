@@ -1664,6 +1664,20 @@ tints and the gold glow (§6.4), and one more meaning in a 2-colour cell is unre
   spawn from the font. `value` is a signed byte (−99..+99; `MISS` and `0` as flag values).
   About 90 B RAM (unchanged).
 
+**As built (D3-11, `feat/dmgnum`, 2026-11-02; memory-map "D3-11 ledger").** Detection is a per-body
+diff (HP and reaction snapshots), so there is no FIFO and nothing is dropped: an event waits in the
+body's state until a pass takes it (one spawn a pass, ranked left to right by body col, reactions and
+misses before changes with no reaction). A struck body's number spawns once its reaction started
+(its impact); a heal or poison tick with no reaction spawns when no FX track is busy. The pass is the
+last work of a tick: a tick still in its first frame runs the whole pass (age, erase, draw, rank
+every body, spawn the best); a tick already in its second frame spawns the next body of that same
+ranking (no re-rank, not while an FX track is busy; the live numbers hold their place). A body whose
+reaction starts after the last ranking, or while an FX track is busy, waits for the next first-frame
+tick: in a Whirlwind fight that is up to ~10 ticks (review 2026-11-03, open). A killed body whose
+death ends between two rankings still gets its -n. A blow and a level-up between two passes show
+the blow (the MAXHP rise is taken off). A row a number leaves is erased at once; a room exit erases
+every live number before the scroll.
+
 **Target readout (info line, row 20, transient).** The info line normally describes the
 selected icon (§3.3). After the hero attacks a monster (hit, miss, parry or immune), it switches
 to that monster:

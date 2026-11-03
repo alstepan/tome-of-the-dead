@@ -124,13 +124,17 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # BOSS-RANGED rebaseline: +12 on every level = RECLAIM-B T1 (text -12 B -> POOL_START 12 B lower: the
 # need is measured to the pool top; the slack line is unchanged); BOSS-RANGED itself adds no pool frames
 # (dagger_spin is already pooled on D1 / D2 for both heroes)
+# D3-11 (user-approved slack step, 2026-11-02): POOL_START 492 B higher (B0_CODE_RES 212 -> 704, the
+# flying numbers in bank 0; POOL_CAP 32,204 -> 31,712): every need is the old one - 12 + the level's new
+# bank 0 -> 4 straddle (Warrior D1..D7 -12, D8 +148 (worst level, slack 1,024 -> 384); Mage D1 -44, D2 +20,
+# D3..D7 -172, D8 -236); no pool frame changed
 # SPIT-SPARK (2026-11-03): the Warrior's spark_fly1/2 extra (the Queen's spit) on the Spider levels: D2 / D4 / D5 +64
-# (Warrior only; the Mage's class FX holds the frames); D8 (the binding level, slack 1,024) unchanged.
+# (Warrior only; the Mage's class FX holds the frames); D8 (the binding level, slack 384) unchanged.
 LEVEL_NEED = {
-    (0, 1): 22540, (0, 2): 22316, (0, 3): 27020, (0, 4): 28652,
-    (0, 5): 23148, (0, 6): 28748, (0, 7): 27756, (0, 8): 31180,
-    (1, 1): 19500, (1, 2): 19276, (1, 3): 24108, (1, 4): 25804,
-    (1, 5): 20300, (1, 6): 25836, (1, 7): 24844, (1, 8): 28172,
+    (0, 1): 22528, (0, 2): 22304, (0, 3): 27008, (0, 4): 28640,
+    (0, 5): 23136, (0, 6): 28736, (0, 7): 27744, (0, 8): 31328,
+    (1, 1): 19456, (1, 2): 19296, (1, 3): 23936, (1, 4): 25632,
+    (1, 5): 20128, (1, 6): 25664, (1, 7): 24672, (1, 8): 27936,
 }
 
 
@@ -297,7 +301,14 @@ class Run:
         z.cmd("set-register PC=%d" % pc0)
         return t
 
-    def select_hero(self, key):
+    def proto_poke(self):
+        """D3-11: the PROTO rooms are a test fixture (build/ovl/proto.bin, next to the
+        .sna): poked at PROTO_FIX_ORG while start_game waits at proto_hook."""
+        img = open(os.path.join(os.path.dirname(self.sna), "ovl", "proto.bin"), "rb").read()
+        for i in range(0, len(img), 64):
+            self.z.cmd("write-memory %d %s" % (self.S["PROTO_FIX_ORG"] + i, " ".join(str(b) for b in img[i:i + 64])))
+
+    def select_hero(self, key, proto=False):
         """C3-8a: through the C3-6 menu. '2' toggles HERO (menu_hero persists
         between games: toggled only if it is not the wanted hero), '1' = START;
         the returned T-states are START -> the first play tick (the timed
@@ -315,6 +326,9 @@ class Run:
             self.hold()
             self.run_to("select_tick")
         self.hold("1")
+        if proto:                                   # D3-11: the fixture at proto_hook
+            self.run_to("proto_hook")
+            self.proto_poke()
         t = self.run_to("tick_work")
         self.hold()
         return t
@@ -385,7 +399,7 @@ def proto_run(r):
             r.load()
             r.wb("proto_start", ps)
             r.run_to("select_tick")
-            r.select_hero(key)
+            r.select_hero(key, proto=True)
             a = r.z.read_memory(r.S["ALLOC_IDX"], 3)
             out[(hero, kinds)] = {"alloc": a, "GEN_OVERFLOW": r.rb("GEN_OVERFLOW"),
                                   "GEN_TRAP": r.rb("GEN_TRAP")}

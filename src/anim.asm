@@ -1165,21 +1165,24 @@ draw_slot:
 ; trace_log — append (ANIM_SLOT, BL_FID) to the 32-B ANIM_TRACE ring.
 ; ANIM_TRACE_ON builds only (kit / test builds; 0 B in the release tape).
 ; Clobbers: A, DE, HL.
+; RECLAIM-D: one page ($BFxx) for the index and the ring: H stays (-3 B; 24 B).
 trace_log:
-                ld   a, (ANIM_TRACE_IDX)
-                ld   l, a
+                ld   hl, ANIM_TRACE_IDX
+                ld   a, (hl)
+                ld   e, a                      ; the slot's offset (even)
                 add  a, 2
                 and  ANIM_TRACE_LEN - 1
-                ld   (ANIM_TRACE_IDX), a
-                ld   h, 0
-                ld   de, ANIM_TRACE
-                add  hl, de
+                ld   (hl), a
+                ld   a, e
+                add  a, ANIM_TRACE & $FF       ; (no carry: the ring is in the page)
+                ld   l, a
                 ld   a, (ANIM_SLOT)
                 ld   (hl), a
-                inc  hl
+                inc  l
                 ld   a, (BL_FID)
                 ld   (hl), a
                 ret
+                ASSERT (ANIM_TRACE_IDX >> 8) == (ANIM_TRACE >> 8) && (ANIM_TRACE >> 8) == ((ANIM_TRACE + ANIM_TRACE_LEN - 1) >> 8)
     ENDIF
 
 ;------------------------------------------------------------------------------

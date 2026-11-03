@@ -354,24 +354,19 @@ room_side:
 
 ; map_cell — HL = map(TMP1 page) + B*32 + C (build_room_map, ap_stamp:
 ; bank 2 so the per-turn pickup stays uncontended).  Clobbers: A
+; RECLAIM-D: H = the page first (no push / pop BC), then cell_addr's tail (-7 B, -9 T).
 map_cell:
+                ld   a, (TMP1)
+                ld   h, a
                 ld   a, b
                 rrca
                 rrca
                 rrca
                 ld   l, a
                 and  3
-                push bc
-                ld   b, a
-                ld   a, (TMP1)
-                add  a, b
-                pop  bc
+                add  a, h
                 ld   h, a
-                ld   a, l
-                and  $E0
-                or   c
-                ld   l, a
-                ret
+                jr   cell_tail
 
 ;==============================================================================
 ; B3B-5 TERRAIN (D2): TILE_FLAGS of the room map. Input / AI path only (the
@@ -390,7 +385,7 @@ cell_addr:
                 and  3
                 add  a, ROOM_MAP >> 8
                 ld   h, a
-                ld   a, l
+cell_tail:      ld   a, l                      ; (map_cell's tail too)
                 and  $E0
                 or   c
                 ld   l, a

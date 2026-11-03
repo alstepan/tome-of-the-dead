@@ -277,9 +277,12 @@ rg_q:           ld   hl, TURN_PEND             ; (3F-T11b am_cast: the Mirror He
                 inc  de
                 ld   (de), a
                 inc  de
-                xor  a                         ; FXD_ATTR 0 = the frames' own (fx_meta: dagger_spin's own is
-                                               ; the rock's ROCK_ATTR, the spark's $43, the arrow's $07)
-                ld   (de), a
+                ld   a, (RG_ROW + RW_FX)       ; FXD_ATTR: a dagger_spin shot (Slinger rock, Goblin King)
+                cp   FID_dagger_spin1          ; ROCK_ATTR (fx_meta's dagger_spin is the hero's throw
+                ld   a, ROCK_ATTR              ; THROW_ATTR); else 0 = the frames' own (the Queen's spark
+                jr   z, .at                    ; $43, arrows $07, bolts $43)
+                xor  a
+.at:            ld   (de), a
                 inc  de
                 ld   a, (RG_DIR)               ; FXD_COL = the cell next to the shooter:
                 rla                            ; right x + w = RG_FIRST, left x - 1 =

@@ -1,7 +1,7 @@
 #!/bin/sh
 # tools/build.sh — THE build entry point (A6): sprite packer, then sjasmplus.
 #
-#   tools/build.sh [-o OUTDIR] [extra sjasmplus args, e.g. -DPROTO_START=1]
+#   tools/build.sh [-o OUTDIR] [extra sjasmplus args, e.g. -DSEED_FIXED=1]
 #   tools/build.sh --items        3E-T4 item text only, verbose (tools/itempack.py)
 #
 # Flags: -DDEBUG_KIT=0 = the release / tape build (the suites' build); the default
@@ -111,4 +111,12 @@ for f in "$OVL"/*.raw1; do
     [ -e "$f" ] || continue
     cmp -s "$f" "${f%.raw1}.bin" || fail "overlay ${f%.raw1}.bin differs between the passes"
 done
+# The assembler reads the packed text from $ROOT/build/text (src INCLUDE "../build/text/..."), but the
+# suites run on -o builds read WZ_BUILD_DIR/text (status / abil_* log decoding): copy it, so a test
+# never decodes this image's log with an older build's dictionary (DNUM-SPRITE-FIX gate: status.py
+# 23 "failures" were a stale OUTDIR/build/text).
+if [ "$OUT" != "$ROOT" ]; then
+    mkdir -p "$OUT/build/text"
+    cp "$ROOT/build/text/"* "$OUT/build/text/"
+fi
 echo "build.sh: OK -> $OUT/build/wazhack.tap / .sna / .sym"

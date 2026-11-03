@@ -20,8 +20,9 @@
 ; edge detector from the matrix). The title tune plays on throughout.
 ;
 ; Page images (tools/instr_pack.py -> build/text/instr_p<n>.inc, format there)
-; are unpacked to INSTR_DATA (after this code, same window): p1 from
-; INSTR_P1_ZX0 (= POOL_START), p2 / p3 straight after it (dzx0 leaves HL past the stream).
+; are unpacked to INSTR_DATA (after this code, same window): p1 straight after
+; the frame_tab stream INSTR_FT_ZX0 (= POOL_START, in_ft: RECLAIM-D), p2 / p3 straight
+; after it (dzx0 leaves HL past the stream).
 ; Drawing pages: bank 0 (unpack), bank 1 (copy_virt: the vdata bar icons and
 ; the key label, GEN_SRC staging), bank 6 (R6 ic_scr: the 16x16 item icons);
 ; bank 3 is never paged (its pblit SMC must stay as loaded until panel_init,
@@ -32,6 +33,8 @@
 ; last pass), then the attrs (~16k T) reveal it at once.
 ;==============================================================================
 instr_main:
+                call in_ft                     ; RECLAIM-D: frame_tab -> FRT first
+                push hl                        ; HL = the page-1 stream
                 ld   a, GS_ANYKEY
                 ld   (GAME_STATE), a
                 ld   hl, in_press              ; ROM font on the picture's blank row 22
@@ -39,7 +42,7 @@ instr_main:
                 call print_str
                 call in_rel                    ; all released once
                 call in_key                    ; then any key
-                ld   hl, INSTR_P1_ZX0
+                pop  hl
                 ld   a, GS_HELP1
                 call in_page                   ; HL = the page-2 stream
                 push hl
@@ -63,6 +66,43 @@ in_key:         call in_down                   ; wait for any key down
 in_rel:         call in_down                   ; wait until no key is down
                 jr   nz, in_rel
                 ret
+
+;------------------------------------------------------------------------------
+; in_ft — RECLAIM-D (was boot6.asm boot6_ft, MEM-FT): the static frame_tab into
+; the FRT rows. ftz_zx0 (bank 0, the fixed POOL_START, boot only: was the last
+; 132 B of the bank-2 image) holds the entries contiguous (FT_LEN B/fid);
+; unpacked to FRT first, then spread from the LAST fid down to row tail FRT +
+; fid*16 + FT_IN_ROW, each row's variants := FRT_NONE. Top-down is overlap-safe:
+; the source of fid f (4f..4f+3) never lies above its row (16f..16f+15), and
+; every lower fid's source lies below row f. Result == the build's FRT image
+; (data.asm, the .sna's bytes) for fids < FID_COUNT; rows above stay untouched.
+; Runs first in the overlay: before the first gen_frame (boot: gen_idles, after
+; boot6_wait); nothing between boot6_tiles and here reads frame_tab.
+; Out: HL = past the stream (= the page-1 stream).  Clobbers: A, BC, DE, HL.
+; ~16k T (dzx0 of 576 B + ~76 T x 16 B/row; boot only)
+;------------------------------------------------------------------------------
+in_ft:          ld   a, BANK_INSTR
+                call page_bank
+                ld   hl, INSTR_FT_ZX0
+                ld   de, FRT
+                call dzx0_standard             ; HL = past the stream
+                push hl
+                ld   hl, FRT + FID_COUNT * FT_LEN - 1
+                ld   de, FRT + FID_COUNT * FRT_STRIDE - 1
+                ld   a, FID_COUNT
+.r:             ld   bc, FT_LEN
+                lddr                           ; the entry -> the row tail
+                ex   de, hl                    ; HL = row byte FT_IN_ROW - 1
+                ld   b, FT_IN_ROW
+.n:             ld   (hl), FRT_NONE
+                dec  hl
+                djnz .n
+                ex   de, hl                    ; DE = the row below's last byte
+                dec  a
+                jr   nz, .r
+                pop  hl
+                ret
+                ASSERT FID_COUNT >= 1 && FID_COUNT <= 255
 
 ;------------------------------------------------------------------------------
 ; in_wait — a page's key wait: every key released once, then any key, held until

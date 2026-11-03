@@ -31,6 +31,13 @@ CANARY = 0xA5
 LOW_RES = [(0x5CC0, 0x5E00)] + ([(S["SPQ_RAM_END"], 0x6000)] if S["SPQ_RAM_END"] < 0x6000 else [])
 
 
+
+def DN_RAM(a):
+    """D3-11: the flying numbers' runtime RAM (combat_defs.asm DN_KEY..DN_A_END, DN_LIVE..DN_SLOT + 64):
+    written by every pass (dn_reset at the game start), not by the item code."""
+    return S.get("DN_KEY", S["DN_A"]) <= a < S["DN_A_END"] or S["DN_LIVE"] <= a < S["DN_SLOT"] + 64
+
+
 def layout(check):
     s = S
     # ---- L1 ------------------------------------------------------------------
@@ -101,7 +108,8 @@ def emu(p, check):
         bad = []
         for a0, a1 in LOW_RES:
             b = mem(a0, a1 - a0)
-            bad += [hex(a0 + i) for i, v in enumerate(b) if v != CANARY and not lo <= a0 + i < lo + n]
+            bad += [hex(a0 + i) for i, v in enumerate(b) if v != CANARY and not lo <= a0 + i < lo + n
+                    and not DN_RAM(a0 + i)]
         return bad
 
     # ---- R1 ------------------------------------------------------------------
