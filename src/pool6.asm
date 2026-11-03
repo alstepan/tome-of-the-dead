@@ -380,6 +380,8 @@ U_NCAST         EQU K_MAX + 7
                 ; ANIM-IMPORT2: U_VBITE retired (vamp_bite is in the Vampire's own unit)
 U_SKCLIMB       EQU K_MAX + 8
                 GU   KFID_SKCLIMB, KFCNT_SKCLIMB               ; Skeleton climb1/2 (Skeleton, Archer, Sniper)
+U_SPARKW        EQU K_MAX + 9
+                GU   FID_spark_fly1, 2                         ; Warrior extra on Spider levels (the Queen's spit)
 gu_tab_end:
 GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
                 ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 30
@@ -389,6 +391,8 @@ GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
                 ASSERT KFID_NCAST == KFID_NECRO + KFCNT_NECRO
                 ASSERT FID_climb_h2 == KFID_CLIMBH + 1
                 ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_dagger_spin2 == FID_dagger_spin1 + 1
+                ASSERT FID_spark_fly2 == FID_spark_fly1 + 1 && FID_spark_fly1 == KFID_FXM   ; the Warrior's extra: outside K_FXW,
+                                                       ; inside the Mage's (xmap row is Warrior-only; fxr_none runs first)
                 ; the Mage's extras lie outside his class FX unit (fxr_none NONEs them per level)
                 ASSERT FID_arrow_fly1 >= KFID_FXM + KFCNT_FXM && FID_dagger_spin1 >= KFID_FXM + KFCNT_FXM
 
@@ -429,6 +433,8 @@ PGMAP_N         EQU (pool_gmap_end - pool_gmap - 1) / 3
 pool_xmap:
                 DB   K_ARCHER, K_WIZARD, U_ARROWM
                 DB   K_GOBLIN, K_WIZARD, U_DAGM
+                DB   K_SPIDER, K_KNIGHT, U_SPARKW              ; BOSS-RANGED: the Queen's spit = spark_fly1/2 (golden D2;
+                                                       ; the Mage's class FX unit already holds them)
                 DB   PG_NONE
 pool_xmap_end:
 PXMAP_N         EQU (pool_xmap_end - pool_xmap - 1) / 3

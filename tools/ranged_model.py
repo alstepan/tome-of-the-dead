@@ -40,7 +40,7 @@ ROWS = {
 K_GOBLIN, K_SPIDER, GOLD_ATK = 4, 9, 2
 GOLD_ROWS = {
     K_GOBLIN: (6, 2, RWF_WALK | RWF_NOIMP, 3, 0, DTY_PHYS, 0, "dagger_spin1"),                  # Goblin King
-    K_SPIDER: (6, 2, RWF_WALK | RWF_NOIMP, 2, 0, DTY_PHYS | (6 << EFX_SHIFT), 12 // 2, "dagger_spin1"),  # Spider Queen
+    K_SPIDER: (6, 2, RWF_WALK | RWF_NOIMP, 2, 0, DTY_PHYS | (6 << EFX_SHIFT), 12 // 2, "spark_fly1"),  # Spider Queen (the Mage spark, own attr)
 }
 
 
@@ -260,7 +260,7 @@ def decide(sit, rng):
         sh["hero"] = hs
         anchor = first if d > 0 else first + gap - 1
         sh["desc"] = [fx, fx + 1] + ([fx + 2] * 2 if sh["imp"] else [FX_NONE] * 2) + \
-            [ROCK_ATTR if fl & RWF_NOIMP else 0, anchor, flight_row(sit), 1 if d < 0 else 0, 0, PF_IMPT if sh["imp"] else 0, 1, gap, 0, 0, 0, 0]
+            [0, anchor, flight_row(sit), 1 if d < 0 else 0, 0, PF_IMPT if sh["imp"] else 0, 1, gap, 0, 0, 0, 0]
         sh["flash"] = I if sh["lost"] else 0
         out["shot"] = sh
         return out

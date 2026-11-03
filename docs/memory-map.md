@@ -5347,3 +5347,21 @@ Also: budget.py counts the Mage melee scenarios' STAFF_SWING on a private `-DANI
 run (`swing_pass`, tests/game.py's approach; the trace adds render work, so the timed numbers stay the release's);
 `spawn6.asm sp_run`'s IX comment corrected (the hero only for the first body of a run); `menu1.asm end_card .kil`
 documents and ASSERTs that `ec_kind` reads the current level's sequence cache.
+
+## SPIT-SPARK ledger (`feat/spit-spark`, 2026-11-03; the golden Spider Queen's spit draws the Mage's spark)
+
+`rd_tab` row 14 (Spider Queen, BOSS-RANGED) `RW_FX` `FID_dagger_spin1` -> **`FID_spark_fly1`** (fly1 / fly2 alternate; `RWF_NOIMP` kept: the next fid is
+`firebolt_fly1`, so no impact frame; range / cadence / 1d2+1 + POISON 12 unchanged). The shot's attr is the frame's own (`fx_meta`, magenta `$43`): the
+rock's yellow moved from the `rg_q` `RWF_NOIMP` test (`FXD_ATTR` = `ROCK_ATTR`) into `fx_meta` (`dagger_spin1/2` = `ROCK_ATTR`; the hero's thrown dagger
+passes `$47` itself, `ab_def`), so `rg_q` just stores 0.
+
+| What | Where | Bytes |
+|---|---|---|
+| `rg_q` FXD_ATTR: the `RW_F` / `NOIMP` test + `ld a, ROCK_ATTR` -> `xor a` | R6 `ranged6.asm` | -8 |
+| unit `U_SPARKW` (`FID_spark_fly1`, 2 frames: the Warrior's extra; the Mage's class FX unit already holds them) + `pool_xmap` row `K_SPIDER, K_KNIGHT, U_SPARKW` | R6 `pool6.asm` | +2 +3 |
+| `fx_meta` dagger_spin1/2 `$47` -> `ROCK_ATTR` | bank 2 `fx.asm` | 0 |
+
+R6 free (release) 3 -> **6** (kit 8 -> 11). Pool: the Warrior carries spark_fly1/2 on the Spider levels (D2 / D4 / D5; the golden Queen is D2's boss) — D2 22,316
+(was 22,252: +64 B for the 2 frames), D4 28,652 (was 28,588), D5 23,148 (was 23,084) of 32,204; **worst level D8 31,180 (Warrior), slack 1,024 unchanged** (a Spider level is never the worst: D8 binds, 0 B
+added there), so the post-dmgnum floor of 384 is untouched. The Mage: 0 B (spark in his class FX unit). Tests: `boss.py` `spit_pool` (FRT rows resident for both
+heroes on the D2 lair, `fx_meta` rock / spark attrs), `gfx_integrity` GI1 excludes the Warrior's spark rows, `tools/ranged_model.py` (fid + FXD_ATTR 0).

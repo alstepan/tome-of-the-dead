@@ -46,9 +46,9 @@ rd_tab:         ;    r   N  flags                      die bon dhc        dhe   
                 DB  AM_HEX_R, 0, RWF_SPELL | RWF_HEX | RWF_HOLD, IMMF_SLEEP, TX_ST_ASLEEP, EFX_ASLEEP << DH_EFX_SHIFT, AM_SLEEP_T << 4, FID_nbolt_fly1 ; 5 Sleep
                 DB  AM_HEX_R, 0, RWF_SPELL | RWF_HEX, IMMF_POISON, TX_ST_POISONED, EFX_POISON << DH_EFX_SHIFT, AM_PSN_T, FID_nbolt_fly1     ; 6 Venom
                 ; BOSS-RANGED (golden only: ai_rhook's RK_GOLD1 gate): range 6, a shot every 3rd turn,
-                ; keeps walking in between shots (RWF_WALK), the yellow dagger_spin (RWF_NOIMP: ROCK_ATTR)
+                ; keeps walking in between shots (RWF_WALK), the yellow dagger_spin (RWF_NOIMP: ROCK_ATTR); the Queen's spit the magenta spark_fly (NOIMP, own attr)
                 DB   6,  2, RWF_WALK | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 13 Goblin King
-                DB   6,  2, RWF_WALK | RWF_NOIMP,        2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), SQ_PSN_T / 2, FID_dagger_spin1  ; 14 Spider Queen (spit, always + 12 POISON)
+                DB   6,  2, RWF_WALK | RWF_NOIMP,        2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), SQ_PSN_T / 2, FID_spark_fly1  ; 14 Spider Queen (spit = the Mage's spark, always + 12 POISON)
                 ASSERT $ - rd_tab == RK_ROWS * RW_STRIDE
                 ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_arrow_hit == FID_arrow_fly1 + 2
                 ASSERT FID_dagger_spin2 == FID_dagger_spin1 + 1
@@ -277,11 +277,9 @@ rg_q:           ld   hl, TURN_PEND             ; (3F-T11b am_cast: the Mirror He
                 inc  de
                 ld   (de), a
                 inc  de
-                ld   a, (RG_ROW + RW_F)        ; FXD_ATTR: the frames' own (fx_meta, 0), the
-                and  RWF_NOIMP                 ; rock ROCK_ATTR (dagger_spin's own is $47)
-                jr   z, .at
-                ld   a, ROCK_ATTR
-.at:            ld   (de), a
+                xor  a                         ; FXD_ATTR 0 = the frames' own (fx_meta: dagger_spin's own is
+                                               ; the rock's ROCK_ATTR, the spark's $43, the arrow's $07)
+                ld   (de), a
                 inc  de
                 ld   a, (RG_DIR)               ; FXD_COL = the cell next to the shooter:
                 rla                            ; right x + w = RG_FIRST, left x - 1 =

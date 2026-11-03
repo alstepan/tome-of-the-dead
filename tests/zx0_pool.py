@@ -124,9 +124,11 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # BOSS-RANGED rebaseline: +12 on every level = RECLAIM-B T1 (text -12 B -> POOL_START 12 B lower: the
 # need is measured to the pool top; the slack line is unchanged); BOSS-RANGED itself adds no pool frames
 # (dagger_spin is already pooled on D1 / D2 for both heroes)
+# SPIT-SPARK (2026-11-03): the Warrior's spark_fly1/2 extra (the Queen's spit) on the Spider levels: D2 / D4 / D5 +64
+# (Warrior only; the Mage's class FX holds the frames); D8 (the binding level, slack 1,024) unchanged.
 LEVEL_NEED = {
-    (0, 1): 22540, (0, 2): 22252, (0, 3): 27020, (0, 4): 28588,
-    (0, 5): 23084, (0, 6): 28748, (0, 7): 27756, (0, 8): 31180,
+    (0, 1): 22540, (0, 2): 22316, (0, 3): 27020, (0, 4): 28652,
+    (0, 5): 23148, (0, 6): 28748, (0, 7): 27756, (0, 8): 31180,
     (1, 1): 19500, (1, 2): 19276, (1, 3): 24108, (1, 4): 25804,
     (1, 5): 20300, (1, 6): 25836, (1, 7): 24844, (1, 8): 28172,
 }
