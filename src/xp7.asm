@@ -160,6 +160,8 @@ xp_level:
 .nr:
                 ld   a, SFX_LEVELUP            ; SND-5 (F only)
                 call sfx_req
+                ld   hl, DN_SLOT + DS_FLG      ; LVL-FLOATER: the hero's "+LVL" number is owed
+                set  DSF_LVL, (hl)             ; (render-only: dn_cls ranks it, dn_lvt picks the text)
                 ld   hl, PANEL_DIRTY
                 set  PD_INFO_BIT, (hl)         ; (a new XP_NEXT; also PD_MP: max changed)
                 set  PD_MP_BIT, (hl)

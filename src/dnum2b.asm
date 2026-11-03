@@ -50,6 +50,5 @@ dn_sfx:
                 add  a, (DN_SLOT + DS_FLG) & $FF
                 ld   l, a
                 ld   h, DN_SLOT >> 8
-                ld   (hl), h                   ; DS_FLG != 0: a miss line
+                set  DSF_MISS, (hl)            ; DS_FLG bit 0: a miss line (bit 7 = the hero's level-up kept)
                 jp   sfx_msg
-                ASSERT (DN_SLOT >> 8) != 0

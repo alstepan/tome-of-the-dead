@@ -557,6 +557,9 @@ enter_select:
                 INCLUDE "fx.asm"                ; D3-5 FX tracks (fx_start / fx_tick / fx_render)
                 INCLUDE "drip.asm"              ; D3-8b decorative drip (drip_tick, per tick)
                 INCLUDE "dnfix2.asm"            ; DNUM-SPRITE-FIX: dn_fix (present's number cells), in the pad
+    IF !ANIM_TRACE_ON
+                INCLUDE "dnlvt2.asm"            ; LVL-FLOATER: dn_lvt (the "+LVL" text), in the pad (trace builds: the tail, below)
+    ENDIF
                 ; dnum2.asm (the numbers' screen-2 draw + the kit's dnwin.asm): after ldir2.asm
                 ; (RECLAIM-D), so the kind_tab ALIGN pad keeps room for the -DANIM_TRACE_ON=1 code
 
@@ -678,8 +681,8 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 DUP 24, n
                 DB   n / STOREY_ROWS           ; KT_DIV9
                 EDUP
-dn_miss_s:      DB   "MISS", 0                 ; D3-11 (dnum3.asm dn_take): in the 8-B spare (3F-T2)
-                DS   KT_MOD9 - KT_DIV9 - 24 - 5, 0 ; 3 B spare
+dn_miss_s:      DB   "MISS", 0, DNA_MISS       ; D3-11 / LVL-FLOATER (dnfix2.asm dn_lvt copies it to DN_TXT): in the 8-B spare (3F-T2)
+                DS   KT_MOD9 - KT_DIV9 - 24 - 6, 0 ; 2 B spare
                 ASSERT $ - kind_tab == KT_MOD9
                 DUP 24, n
                 DB   n % STOREY_ROWS           ; KT_MOD9
@@ -709,6 +712,9 @@ dn_miss_s:      DB   "MISS", 0                 ; D3-11 (dnum3.asm dn_take): in t
                 INCLUDE "ldir2.asm"             ; RECLAIM-C (d): ldir7 (bank-1 menu_static reads a bank-7 tileset run)
                 INCLUDE "dnum2.asm"             ; D3-11 / DNUM-SPRITE-FIX: dn_show / dn_walk / dn_cel, screen 2 (+ kit builds: dnwin.asm)
                 INCLUDE "dnum2b.asm"            ; D3-11: dn_gate (play_loop) + dn_sfx (impact_line), after every other bank-2 code
+    IF ANIM_TRACE_ON
+                INCLUDE "dnlvt2.asm"            ; LVL-FLOATER: dn_lvt (the pad holds 2 B in a trace build)
+    ENDIF
                 ; RECLAIM-D: ftz_zx0 (the MEM-FT frame_tab stream, 132 B) left the image: bank 0
                 ; POOL_START, boot only, unpacked by the HOW TO PLAY overlay (main.asm "TEXT")
 code_end:

@@ -16,6 +16,8 @@
 ;    as $80 | rc, DODGE / PARRY clear at once) the change spawns -n / +n: the
 ;    impact tick (§6.5.1 Q2); nothing lost on a HURT = "0" (immune), on a
 ;    BLOCK / DODGE / PARRY = MISS;
+;  - LVL-FLOATER: a hero level-up (xp7 sets DS_FLG bit 7) spawns "+LVL" as a MISS-kind
+;    candidate (dn_lvt picks the text; bank 2);
 ;  - a miss / parry line (impact_line -> dn_sfx: DS_FLG) spawns a MISS: melee,
 ;    Power Strike and every Whirlwind body, monsters' misses on the hero;
 ;  - an HP change with no reaction (potion, Drain Life's caster, a poison
@@ -111,7 +113,8 @@ dn_scan:
                 ld   a, (ix+E_REACT)
                 ld   (hl), a                   ; DS_SRC := now
                 inc  l
-                ld   (hl), 0                   ; DS_FLG: the miss line goes with it
+                res  DSF_MISS, (hl)            ; DS_FLG: the miss line goes with it (a level-up's bit 7
+                                               ; stays until dn_lvt spawns "+LVL": a reaction spawn first keeps it)
                 ld   a, (DN_BT)
                 rra
                 jr   c, .miss                  ; DNT_MISS (a MISS keeps the HP snapshot)
@@ -128,7 +131,8 @@ dn_scan:
                 ret  z
                 sub  RC_HURT
                 jr   z, .go                    ; struck, nothing lost: "0" (immune)
-.miss:          ld   a, DNV_MISS               ; BLOCK / DODGE / PARRY, a miss line: MISS
+.miss:          call dn_lvt                    ; BLOCK / DODGE / PARRY, a miss line: A = DNV_MISS, DN_TXT = "MISS"
+                                               ; (the hero's pending level-up: "+LVL" instead; bank 2)
 .go:            ld   hl, dn_take               ; (bank 3: A = the value passes in; IX = the
                 call far3                      ; new record comes back)
                 ; fall through (DNUM-SPRITE-FIX: the new number drawn now)

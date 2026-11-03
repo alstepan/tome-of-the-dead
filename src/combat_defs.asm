@@ -663,7 +663,10 @@ DL_GLY          EQU 8               ; 24 B: the composed lines (cell-major: cell
 DN_SLOT         EQU DN_LIVE + DN_LIVE_N * DN_LIVE_STRIDE   ; $5DC0: 16 x 4 B per slot (DS_*)
 DS_SEEN         EQU 0               ; DN_PASS when last scanned
 DS_SRC          EQU 1               ; E_REACT at the last pass
-DS_FLG          EQU 2               ; 1 = a miss / parry line since (dn_sfx)
+DS_FLG          EQU 2               ; bit 0 DSF_MISS = a miss / parry line since (dn_sfx), bit 7 DSF_LVL = the
+                                    ; hero levelled up (xp7 .nr; hero only): "+LVL" owed (dn_lvt)
+DSF_MISS        EQU 0
+DSF_LVL         EQU 7
 DS_SNAP         EQU 3               ; the HP last accounted for
                 ASSERT DN_LIVE >= ITEM_RAM + ITEM_RAM_LEN && DN_SLOT == $5DC0 && DN_SLOT + 4 * P_MAX_ENT == $5E00
                 ASSERT DN_SLOT + 4 * P_MAX_ENT <= PF_RAM
@@ -680,3 +683,4 @@ DNA_HDMG        EQU $42
 DNA_PSN         EQU $43
 DNA_HEAL        EQU $44
 DNA_MISS        EQU $45
+DNA_LVL         EQU $46             ; LVL-FLOATER: "+LVL" over the hero at a level-up (bright yellow)
