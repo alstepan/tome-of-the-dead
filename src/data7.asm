@@ -5,6 +5,25 @@
 ;==============================================================================
 tr_ink7:        TRAP_INKS                      ; trap7 tr_ink: the plate / hero flash attr by type (item_defs.asm)
 
+; pi_rects — boot7 panel_init7: the static panel's attr rects, 4 B each: attr, col, row, cols (rows = 1);
+; $FF ends it. Info line fields (game.md §3.4: name chars 0-15, numbers 16-27, notes 28-41 = cols 0-11 /
+; 12-20 / 21-31), the depth cell row 19 (key icon until 3F: none -> black), the level digit at (31, 19),
+; row 21 bar frames' attrs (the labels' cells HP_LBL_COL / MP_LBL_COL / FOOD_LBL_COL are outside: glyph8),
+; row 22 the log (cols 0..LOG_COLS-1; the gear cells: pblit).
+pi_rects:       DB   ATTR_INFO_NAME, 0, INFO_ROW, INFO_NUM_COL
+                DB   ATTR_INFO_NUM, INFO_NUM_COL, INFO_ROW, INFO_NOTE_COL - INFO_NUM_COL
+                DB   ATTR_INFO_NOTE, INFO_NOTE_COL, INFO_ROW, ROOM_COLS - INFO_NOTE_COL
+                DB   0, DEPTH_COL, ICON_ROW + 1, 2
+                DB   ATTR_LVL, LVL_COL, ICON_ROW + 1, 1
+                DB   ATTR_P_HP, HP_BAR_COL, STAT_ROW, HP_NUM_COL + 2 - HP_BAR_COL
+                DB   ATTR_P_MP, MP_BAR_COL, STAT_ROW, MP_NUM_COL + 2 - MP_BAR_COL
+                DB   ATTR_P_FED, FOOD_BAR_COL, STAT_ROW, GEAR_COL - FOOD_BAR_COL
+                DB   ATTR_LOG_OLD, 0, LOG_ROW, LOG_COLS
+                DB   $FF
+                ASSERT HP_LBL_COL < HP_BAR_COL && HP_NUM_COL + 2 <= MP_LBL_COL && MP_LBL_COL < MP_BAR_COL
+                ASSERT MP_NUM_COL + 2 <= FOOD_LBL_COL && FOOD_LBL_COL < FOOD_BAR_COL && LOG_COLS <= GEAR_COL
+                ASSERT ATTR_INFO_NAME != $FF && ATTR_LOG_OLD != $FF
+
 ; tr_fx — trap7's DART impact template (fx_start descriptor, FXD_LEN; read-only:
 ; tests/gfx_integrity.py compares this block after play):
 ; hidden until the impact, own attr, COL / ROW / DELAY patched in MSG_BUF.

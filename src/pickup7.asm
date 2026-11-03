@@ -128,10 +128,8 @@ floor_pickup:
                 sub  (hl)
                 cp   d
                 jr   c, .nx                    ; under the previous body span: not an arrival
-                xor  a                         ; IT_NONE: the stem alone
                 ld   e, S3_BAG_FULL
-                ld   hl, it_line               ; bank 1: "BAG FULL"
-                call far1
+                call hg_line                   ; bank 1: "BAG FULL" (the stem alone; hunger7.asm)
 .nx:            pop  hl
                 pop  de
                 pop  bc

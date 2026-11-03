@@ -342,6 +342,16 @@ TOME_REACH      EQU 1               ; melee / Power Strike / Whirlwind (find_tar
 LECT_ROW        EQU FLOOR_ROW1 - 2  ; 15
 LECT_COL_L      EQU 1
 LECT_COL_R      EQU ROOM_COLS - 3   ; 29
+; TOME-FX (user 2026-11-03; supersedes the P3 "no flash / no ash"): the lectern's attrs. TOP / FOOT = tiles_common
+; 15, 16 (the book) / 17, 18 (the stand), reloaded by level_patch7w every level start; FLASH = every hit's tick (the
+; book is already $43, so the old design's $43 flash would not show: bright white); ASH = from the last hit on
+; (dim blue: "burnt out"), the glyphs unchanged. Three different values, FLASH != FOOT, ASH != FOOT.
+ATTR_LECT_TOP   EQU $43
+ATTR_LECT_FOOT  EQU $06
+ATTR_TOME_FLASH EQU $47
+ATTR_TOME_ASH   EQU $01
+                ASSERT ATTR_TOME_FLASH != ATTR_LECT_FOOT && ATTR_TOME_ASH != ATTR_LECT_FOOT && ATTR_TOME_FLASH != ATTR_TOME_ASH
+                ASSERT ATTR_TOME_FLASH != ATTR_LECT_TOP && ATTR_TOME_ASH != ATTR_LECT_TOP
 TOME_HERO_W     EQU 3               ; both heroes are 3 x 6 cells (KT_BW / BH_K_KNIGHT, BH_K_WIZARD)
 TOME_HERO_Y     EQU FLOOR_ROW1 - 6  ; E_Y of a hero standing on storey 1
                 ASSERT BH_K_KNIGHT == 6 && BH_K_WIZARD == 6

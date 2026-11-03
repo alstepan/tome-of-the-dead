@@ -23,14 +23,13 @@
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 panel_init7:
-                ld   hl, HUD4_EXT              ; HUD4_EXT, HUD4_PW: rows blank, nothing pending
-                ld   b, 2 * TEXT_ROWS
+                ld   hl, HUD4_EXT              ; HUD4_EXT, HUD4_PW, LOG_QN, PANEL_POT_SH (set below), P_NUMBUF
+                ld   b, P_NUMBUF + 3 - HUD4_EXT ; (scratch) zeroed in one run: rows blank, nothing pending
                 xor  a
 .z:             ld   (hl), a
                 inc  l
                 djnz .z
-                ld   (LOG_QN), a
-                ld   hl, LOG_Q
+                inc  l                         ; FIRE_LOCK ($BFDF) lives across levels
                 ld   b, LOG_Q_LEN
 .zq:            ld   (hl), a
                 inc  l
@@ -39,13 +38,15 @@ panel_init7:
                                                ; static panel has; a status carried over
                                                ; level_show then differs and redraws
                 dec  a
-                ld   (PANEL_HP_SH), a          ; $FF: never drawn -> PD_HP / PD_ICONS
-                ld   (PANEL_HP_SH + 1), a
+                ld   h, a
+                ld   l, a                      ; HL = $FFFF: the word stores below are -1 B each pair
+                ld   (PANEL_HP_SH), hl         ; $FF: never drawn -> PD_HP / PD_ICONS (+ the next byte)
                 ld   (PANEL_POT_SH), a
                 ld   (PU_POS + 1), a           ; 3E-T11: FL_ROOM byte $FF = no cell: the
                                                ; first floor_pickup of a level has no span
-                ld   (LVL_SH), a               ; level digit: never drawn
-                ld   (ICON_SIG), a             ; (no real signature is $FF)
+                ld   (LVL_SH), hl              ; level digit: never drawn; ICON_SIG (no real
+                                               ; signature is $FF)
+                ASSERT ICON_SIG == LVL_SH + 1
                 ld   a, PD_HP | PD_MP | PD_ICONS | PD_DEPTH | PD_INFO | PD_FOOD   ; 3E-T9: FOOD bar + word
                 ld   (PANEL_DIRTY), a
                 ; C3-3: the icon bar is drawn by item_icons (icon_state vs
@@ -56,50 +57,25 @@ panel_init7:
 .ish:           ld   (hl), a
                 inc  l
                 djnz .ish
-                ; info line fields (game.md §3.4): name chars 0-15, numbers 16-27,
-                ; notes 28-41 = cols 0-11 / 12-20 / 21-31
-                ld   a, ATTR_INFO_NAME
-                ld   bc, INFO_ROW << 8
-                ld   de, (INFO_NUM_COL << 8) | 1
+                ; the attr rects of rows 18-22 (pi_rects, data7.asm: attr, col, row, cols; 1 row each)
+                ld   hl, pi_rects
+.r:             ld   a, (hl)
+                inc  hl
+                cp   $FF                       ; table end (the last panel_init7 step: ret z)
+                ret  z
+                ld   c, (hl)
+                inc  hl
+                ld   b, (hl)
+                inc  hl
+                ld   d, (hl)
+                inc  hl
+                ld   e, 1
+                push hl                        ; stamp_rect keeps only C
                 call stamp_rect
-                ld   a, ATTR_INFO_NUM
-                ld   bc, (INFO_ROW << 8) | INFO_NUM_COL
-                ld   de, ((INFO_NOTE_COL - INFO_NUM_COL) << 8) | 1
-                call stamp_rect
-                ld   a, ATTR_INFO_NOTE
-                ld   bc, (INFO_ROW << 8) | INFO_NOTE_COL
-                ld   de, ((ROOM_COLS - INFO_NOTE_COL) << 8) | 1
-                call stamp_rect
-                ; depth cell row 19 (key icon until 3F: none) -> black
-                ld   bc, ((ICON_ROW + 1) << 8) | DEPTH_COL
-                ld   de, (2 << 8) | 1
-                xor  a
-                call stamp_rect
-                ld   a, ATTR_LVL               ; C3-3: the level digit at (31, 19)
-                ld   bc, ((ICON_ROW + 1) << 8) | LVL_COL
-                ld   de, (1 << 8) | 1
-                call stamp_rect
-                ; row 21: bar frames' attrs (the labels' cells HP_LBL_COL /
-                ; MP_LBL_COL / FOOD_LBL_COL are outside these rects: glyph8)
-                ASSERT HP_LBL_COL < HP_BAR_COL && HP_NUM_COL + 2 <= MP_LBL_COL && MP_LBL_COL < MP_BAR_COL
-                ASSERT MP_NUM_COL + 2 <= FOOD_LBL_COL && FOOD_LBL_COL < FOOD_BAR_COL && LOG_COLS <= GEAR_COL
-                ld   a, ATTR_P_HP
-                ld   bc, (STAT_ROW << 8) | HP_BAR_COL
-                ld   de, ((HP_NUM_COL + 2 - HP_BAR_COL) << 8) | 1
-                call stamp_rect
-                ld   a, ATTR_P_MP
-                ld   bc, (STAT_ROW << 8) | MP_BAR_COL
-                ld   de, ((MP_NUM_COL + 2 - MP_BAR_COL) << 8) | 1
-                call stamp_rect
-                ld   a, ATTR_P_FED
-                ld   bc, (STAT_ROW << 8) | FOOD_BAR_COL
-                ld   de, ((GEAR_COL - FOOD_BAR_COL) << 8) | 1
-                call stamp_rect
-                ; row 22: log attrs (cols 0..LOG_COLS-1; the gear cells: pblit)
-                ld   a, ATTR_LOG_OLD
-                ld   bc, LOG_ROW << 8
-                ld   de, (LOG_COLS << 8) | 1
-                jp   stamp_rect
+                pop  hl
+                jr   .r
+                ASSERT HUD4_EXT + 2 * TEXT_ROWS <= LOG_QN && LOG_QN + 1 == PANEL_POT_SH && PANEL_POT_SH + 1 == P_NUMBUF
+                ASSERT P_NUMBUF + 3 == FIRE_LOCK && FIRE_LOCK + 1 == LOG_Q
 
 ;==============================================================================
 ; NEW GAME (prototype §6.5: fixed gameplay RNG seed; all rooms, monsters,

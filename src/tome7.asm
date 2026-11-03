@@ -13,8 +13,9 @@
 ;   Never missed, no resistance, 1 hp a hit, "THE TOME SHUDDERS"; the 5th (WIN2,
 ;   user 2026-11-01): tome_gone (low RAM: "THE TOME IS DESTROYED", the lair grate
 ;   opens through grate_open.op); the run goes on until the hero leaves through
-;   it (level_descend -> game_win, GS_WIN). No $43 flash, no ash: the lectern
-;   stays, inert (tome_geo6: TOME_HP 0 = no Tome).
+;   it (level_descend -> game_win, GS_WIN). TOME-FX (user 2026-11-03, replaces
+;   "no flash, no ash"): a hit flashes the 2x2 ATTR_TOME_FLASH + SFX_HIT, the last leaves ATTR_TOME_ASH + SFX_KILL (the
+;   glyphs stay); the lectern is inert (tome_geo6: TOME_HP 0 = no Tome).
 ;   The aura: low-RAM tome_aura (end_turn).
 ;==============================================================================
 
@@ -38,10 +39,62 @@ tome_in:        push bc                        ; (far6 does not pass BC)
                 ret
 tome_rel:       call tome_in
                 ret  nc
-tome_strike:    ld   hl, TOME_HP
+tome_strike:
+    IF TOME_FX
+                ld   de, ATTR_TOME_FLASH * $0101
+                call lect_paint                ; TOME-FX: the hit tick flashes the 2x2 (lect_back, the first INPUT
+                                               ; tick after the turn, ends it: ash after the last hit, else its own)
+                ld   hl, TOME_HP
+                ld   a, SFX_HIT                ; every hit sounds; the last one SFX_KILL (a spell's cast
+                dec  (hl)                      ; sound, equal / higher prio, may replace it)
+                jr   nz, .s
+                ld   a, SFX_KILL
+.s:             call sfx_req                   ; keeps AF: the dec's Z
+    ELSE
+                ld   hl, TOME_HP
                 dec  (hl)
+    ENDIF
                 jp   z, tome_gone              ; low RAM (CF = 1)
                 ld   a, TX_TOME_HIT
                 call msg_push_t                ; LOG-DMG: "THE TOME SHUDDERS -1 HP H" (H = TOME_HP)
                 scf
                 ret
+
+    IF TOME_FX
+;------------------------------------------------------------------------------
+; TOME-FX (user 2026-11-03). The lectern's 4 attrs live in TILE_ATTRS[T_LECT_TL..BR] (common ids, loaded at
+; boot, reset by lect_norm at every level start), so a room (re-)entry, the room memory and the end card all
+; draw whatever they hold: the ash after the last hit persists with no further state.
+; lect_back — turn_input (every INPUT tick: the first one after a hit's turn; a bump turn is 2 ticks, so end_turn
+;   would restore the attrs before present ever showed the flash: it is on screen for 2 ticks) and end_turn's
+;   .dead (a lethal turn must not reach the end card flashed): a hit's flash (BL = ATTR_TOME_FLASH) ends: the
+;   ash if TOME_HP is 0, else the book / stand attrs. Else nothing (~45 T).
+; lect_paint — DE = (top TL TR, foot BL BR): set the 4 attrs, then the 2x2 repainted (rect_repaint: the attr
+;   shadow + a queued restore; ROOM_MAP is unchanged, only attrs). Only in the Sanctum (a hit's turn never
+;   leaves the room). lect_norm / lect_attrs (theme7.asm): DE := its own attrs / store DE's two bytes in the 4 cells.
+; lect_cb — C, B = the lectern's TL col, row (LVL_SANCTUM 6: cols 1-2, 8: 29-30).
+; Clobbers: all but IX (back / paint, ~9k T when it repaints); norm / attrs: HL (and DE); cb: A, BC
+;------------------------------------------------------------------------------
+lect_back:      ld   a, (TILE_ATTRS + T_LECT_BL)
+                cp   ATTR_TOME_FLASH
+                ret  nz
+                ld   de, ATTR_LECT_TOP << 8 | ATTR_LECT_FOOT
+                ld   a, (TOME_HP)
+                or   a
+                jr   nz, lect_paint
+                ld   de, ATTR_TOME_ASH * $0101
+lect_paint:     call lect_attrs
+                call lect_cb
+                ld   de, $0202
+                jp   rect_repaint              ; (low RAM; hands bank 7 back)
+; (lect_norm / lect_attrs: theme7.asm, level_patch7w falls into them)
+lect_cb:        ld   bc, (LECT_ROW << 8) | LECT_COL_L
+                ld   a, (LVL_SANCTUM)
+                bit  1, a
+                ret  nz                        ; S = 6: the left wall
+                ld   c, LECT_COL_R
+                ret
+                ASSERT T_LECT_TR == T_LECT_TL + 1 && T_LECT_BL == T_LECT_TL + 2 && T_LECT_BR == T_LECT_TL + 3
+                ASSERT ((TILE_ATTRS + T_LECT_TL) >> 8) == ((TILE_ATTRS + T_LECT_BR) >> 8)
+                ASSERT (6 & 2) != 0 && (8 & 2) == 0
+    ENDIF
