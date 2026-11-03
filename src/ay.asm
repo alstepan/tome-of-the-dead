@@ -17,8 +17,9 @@
 ; Slot contract (docs/conventions.md "Interrupts"): the IM 2 ISR (lowram.asm
 ; `isr`, running from bank 2) pages BANK_AY in by OUT only and calls AY_PLAY
 ; once per frame with interrupts disabled, then re-OUTs PORT_7FFD_SHADOW.
-; ay_play clobbers AF, BC, DE, HL, IX (the ISR saves them + IY); no IY, no
-; alternate set, no EI, no $7FFD / shadow writes, no $C000 data of other banks.
+; ay_play clobbers AF, BC, DE, HL, IX (the ISR saves exactly those: IY is NOT
+; saved since ISR-RATE, so the slot must never touch IY: not here, not in the player, not
+; in the sfx code); no alternate set, no EI, no $7FFD / shadow writes, no $C000 data of other banks.
 ; Mailbox semantics: defs.asm (SND_MODE .. SFX_REQ), docs/memory-map.md.
 ;==============================================================================
 

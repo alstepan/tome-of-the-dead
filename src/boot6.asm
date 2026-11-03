@@ -208,9 +208,11 @@ keytab_defaults:                               ; C3-1: boot -> KEYTAB (hero_defs
 ;     with the main code's "shadow first, then OUT" (page_bank / set_screen):
 ;     an interrupt between the two leaves the port already at the new value,
 ;     and the main code's own OUT then rewrites the same byte. No DI needed.
-; Saves every register it or the player may touch: AF, BC, DE, HL, IX, IY
-; (+ the alternate set if ISR_SAVE_ALT). Stack: 12 B + AY_PLAY's 6 B (CALL 2 + player 4) (+8 alt).
-; Cost (measured): ISR own instructions 315 T + 19 T acknowledge = 334 T overhead,
+; Saves every register it or the player may touch: AF, BC, DE, HL, IX; IY is
+; neither used here nor by AY_PLAY (ay.asm + the WZM player: no IY, verified by grep
+; and by tests/isr_rate.py's IY-across-ISR check) so it is NOT saved (ISR-RATE, -29 T).
+; (+ the alternate set if ISR_SAVE_ALT). Stack: 10 B + AY_PLAY's 6 B (CALL 2 + player 4) (+8 alt).
+; Cost (measured): ISR own instructions 261 T + 19 T acknowledge = 280 T overhead (was 315 + 19),
 ; + AY_PLAY (SND-2: the dispatcher + WZM player, idle ~0.2k .. worst ~5k T), in the
 ; top border (docs/memory-map.md "Interrupts (A8)").
 ;------------------------------------------------------------------------------
@@ -220,20 +222,20 @@ isr:
                 push af
                 push hl
     IF !ISR_ROM_CHAIN
-                ld   hl, (SYS_FRAMES)
-                inc  hl
-                ld   (SYS_FRAMES), hl
-                ld   a, h
-                or   l
+                ld   hl, SYS_FRAMES            ; ROM: INC (IY+$40) chain; ISR-RATE: 33 T common path
+                inc  (hl)                      ; (was 58: ld hl,(nn) / inc hl / ld (nn),hl / ld a,h / or l)
                 jr   nz, .frames
-                ld   hl, SYS_FRAMES + 2        ; ROM: INC (IY+$40)
+                inc  l                         ; same page: SYS_FRAMES $5C78..$5C7A
+                inc  (hl)
+                jr   nz, .frames
+                inc  l
                 inc  (hl)
 .frames:
+                ASSERT (SYS_FRAMES & $FF) + 2 <= $FF
     ENDIF
                 push bc
                 push de
-                push ix
-                push iy
+                push ix                        ; ISR-RATE: no IY (ay.asm / the player never use it)
     IF ISR_SAVE_ALT
                 ex   af, af'
                 push af
@@ -260,7 +262,6 @@ isr:
                 pop  af
                 ex   af, af'
     ENDIF
-                pop  iy
                 pop  ix
                 pop  de
                 pop  bc
