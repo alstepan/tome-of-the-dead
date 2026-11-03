@@ -221,7 +221,7 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
 - **The ISR** (`isr`, `src/lowram.asm`, runs from bank 2): `SYS_FRAMES += 1`
   exactly as the ROM did (3 bytes; `wait_tick` paces on the low byte), then
   pages `BANK_AY` and calls `AY_PLAY` once per frame, then re-OUTs the shadow.
-  It saves AF, BC, DE, HL, IX, IY (+ AF'..HL' with `ISR_SAVE_ALT=1`). No ROM
+  It saves AF, BC, DE, HL, IX (+ AF'..HL' with `ISR_SAVE_ALT=1`); **not IY** (ISR-RATE: neither the ISR nor `AY_PLAY` touch it, -29 T / -4 B; `tests/isr_rate.py` `iy` checks it across 500 ISRs). `SYS_FRAMES` is bumped in place (`inc (hl)` chain on one page, 33 T common path). No ROM
   chain by default: input is read straight from the ports (`scan_matrix`),
   nothing reads the ROM keyboard variables, so the ROM handler would only cost
   ~0.9k T/frame. `ISR_ROM_CHAIN=1` (assemble-only, untested at runtime: test #61's probe sets IY, invalid under ROM chain) ends the ISR with `jp $0038` instead (then
@@ -241,7 +241,7 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   to `$FFFF` since MEM-SND (4 KB from `$F000` since D3-0, 7 KB from `$E400` before); `src/ay.asm`: since SND-2 the
   mailbox dispatcher `ay_play` + the WZM v0.3 player (`MODULE wzm`, buzzer, no
   echo) + the songs (`MODULE mus`)): called with interrupts off,
-  bank 3 paged at `$C000`, any stack depth (it uses 8 B incl. the CALL since SND-5: `ay_play` → `ay_music` / `sfx_step` → the player's 4). The slot may clobber AF, BC, DE, HL, IX, IY
+  bank 3 paged at `$C000`, any stack depth (it uses 8 B incl. the CALL since SND-5: `ay_play` → `ay_music` / `sfx_step` → the player's 4). The slot may clobber AF, BC, DE, HL, IX (**not IY: the ISR no longer saves it**, ISR-RATE)
   (`ay_play` today: AF, BC, DE, HL, IX; no IY).
   Must not: write the shadow or `$7FFD`, `EI`, touch `$C000` data of other
   banks, use the alternate set unless `ISR_SAVE_ALT=1` (assemble-only, untested at runtime) (or main code never

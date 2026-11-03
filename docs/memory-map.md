@@ -1206,13 +1206,12 @@ showing bank 7; the 3E inventory page will draw in bank 5 behind
 | Item | Where | Why there |
 |------|-------|-----------|
 | vector table `ISR_VEC_TABLE` | `$BB00..$BC00` (257 B of `$BC`), `I` = `$BB` | bank 2: always mapped and uncontended. `I` in `$40-$7F` (bank 5, contended) triggers the 128K "snow"/crash bug; `$C0-$FF` is the paged window (the table would vanish when another bank is paged). A full 257-B table: the IM 2 low byte comes off the floating bus, `$FF` on a stock 128K but not guaranteed (peripherals, +2 variants) — any byte reads `$BCBC` |
-| ISR `isr` | `ISR_ADDR` `$BCBC..$BCF3` (56 B) | bank 2 like the table (the ISR must be mapped whatever bank sits at `$C000`); assembled in the low-RAM cold block (`isr_image`, `DISP ISR_ADDR`; **3E-T1: in the bank-6 boot block**, `boot6_init` installs it) and copied at boot, so it costs no bank-2 **image** bytes (the image headroom is for Stage-3 hot code) |
+| ISR `isr` | `ISR_ADDR` `$BCBC..$BCEC` (49 B; ISR-RATE: was 56, no `push iy` / `pop iy`, the 3-byte counter bump 15 -> 12 B) | bank 2 like the table (the ISR must be mapped whatever bank sits at `$C000`); assembled in the low-RAM cold block (`isr_image`, `DISP ISR_ADDR`; **3E-T1: in the bank-6 boot block**, `boot6_init` installs it) and copied at boot, so it costs no bank-2 **image** bytes (the image headroom is for Stage-3 hot code) |
 | player slot `AY_PLAY` | bank 3 `$F000..$FFFF` (4 KB, D3-0; was 7 KB at `$E400`) | the user-approved AY reserve (game.md §11.2, user 2026-10-06); bank 3 is contended, but the ISR runs at the frame start (top border), so its fetches are not delayed in practice |
 | `SYS_FRAMES` | `$5C78` (3 B) | unchanged: the tick pacing (`wait_tick`, `resync_tick`, `menu_frame`, `start_game`) reads its low byte |
 
 Sequence per frame (interrupts off): IM 2 acknowledge (19 T) → push AF, HL →
-`SYS_FRAMES` += 1 (ROM `MASK-INT` semantics: 16-bit increment, carry into the
-third byte) → push BC, DE, IX, IY → `OUT ($7FFD), (shadow & ~7) | BANK_AY` →
+`SYS_FRAMES` += 1 (ROM `MASK-INT` semantics: 3-byte counter, `inc (hl)` with the carry chain `inc l` / `inc (hl)` on one page: 33 T common path, was 58) → push BC, DE, IX (not IY since ISR-RATE: nothing in the handler or `AY_PLAY` uses it) → `OUT ($7FFD), (shadow & ~7) | BANK_AY` →
 `call AY_PLAY` → `OUT ($7FFD), shadow` → `isr.done` → pops → `EI` / `RET`.
 Build options (`src/defs.asm`): `ISR_SAVE_ALT=1` also saves AF'..HL' (+8 B,
 +~60 T; assemble-only, untested at runtime); `ISR_ROM_CHAIN=1` skips the counter and ends with `jp $0038` (ROM
@@ -1235,8 +1234,8 @@ bank 3 runtime code.
 
 **Cost (SND-2 T2, measured, ZEsarUX: T from the ISR's `call AY_PLAY` to
 its return, incl. CALL/RET; bank 3 runs in the top border, uncontended).**
-The ISR's own overhead is unchanged: **334 T** (315 T own instructions + 19 T
-acknowledge; A8). `ay_play` per case:
+The ISR's own overhead is **280 T** since ISR-RATE (**261 T** own instructions + 19 T
+acknowledge; was 334 T = 315 + 19: -29 T no IY save / restore, -25 T the `SYS_FRAMES` bump). `ay_play` per case:
 
 | Case | T | Note |
 |------|---|------|
@@ -1257,7 +1256,7 @@ of the Lament / Dangerous: worst **6,243 T** (contract ≤ 6.5k; 27 effects, duc
 ~0.4-0.9k T on top of the music (`sfx_step` ~0.35k, + noise ~75, `sfx_dk` ~0.13k (every effect),
 `sfx_out` ~60 T after a played frame, ~0.25k when it OUTs itself).
 
-So a frame costs ≤ ~0.6k T idle and ≤ **~5.5k T** with music (334 + 5,194),
+So a frame costs ≤ ~0.6k T idle and ≤ **~5.5k T** with music (280 + 5,194 since ISR-RATE; was 334 + 5,194),
 inside the ~6.5k T contract; a 2-frame tick holds two ISRs. **SND-2 T4/T6
 (`tests/sound.py` SND9, whole ISR `isr` → `isr.done`):** worst single
 **5,243 T** (song 2 frame 251), worst adjacent pair **8,566 T** (start + first
@@ -1268,9 +1267,16 @@ the SND-2 T5 **real** gate `total + PRE_MAX ≤ 141,816` (PRE_MAX = 402 + worst
 ISR, floor 5,300). Since T3 the Lament plays in game, so every `tests/budget.py`
 scenario runs with music: worst ordinary work **121,380 T** (mage + 4), cast
 work **119,055 T** (wcast4), real **130,754 T** (wcast4), 0 over; per-scenario
-table: budget.md §5.1. Stack: the ISR's 12 B + **8 B** for `AY_PLAY` (SND-5: CALL 2
+table: budget.md §5.1. Stack: the ISR's 10 B (ISR-RATE: no IY pair; was 12) + **8 B** for `AY_PLAY` (SND-5: CALL 2
 + `ay_play`'s `call ay_music` / `sfx_step` 2 + the player's deepest 4: `pl_voice` →
 `pl_fetch`, `sfx_dk` → `.duck`, or `player_start`'s two pushes; SND-2: 6 B); the stub used 2.
+
+**Rate gate (ISR-RATE, `tests/isr_rate.py`, port 10741):** per scenario (budget blair / dnum /
+dkill / wcast4, room exits, level descents with the stinger, bag page sessions; music on) over >= 2,000
+frames: `dSYS_FRAMES == dAY_CALLS` at every sample, `|dSYS_FRAMES - round(dT / 70,908)| <= 1` for the window and
+for every sample pair (no drift), `SND_HOLD` never set, music starts only where `MUS_REQ` / the stinger asked;
+plus IX / IY intact across 500 ISRs with SFX requests (IY is not saved). A DI'd harness stub (`p.code`) ends
+a window: its frames are lost by construction.
 
 History (A8, the silent stub): acknowledge + HALT exit 19 T, entry →
 `AY_PLAY` 198 T, stub 286 T, restoring `OUT` 35 T, pops + `EI`/`RET` 82 T:
@@ -1379,9 +1385,9 @@ outweighing the +8 T per redrawn background cell of the 64-id glyph address.)
 | `$BC41..$BC49` / `$BC4A..$BC50` / `$BC51..$BC5E` | `HERO3D` / `TURN_PEND` / — | **D3-0: `HERO3D`** (9 B: `MP_RG`, `HERO_RES` 3 B, `HERO_IMM`, `MP_SH`, `STAT_SH`, D3-6a `HERO_DEF`, `XP_UP`; "3D contracts (D3-0)"), **D3-7: the `TURN_PEND` block** (7 B: `TURN_PEND`, `ACT_ABL`, `ACT_AT`, `MON_AT`, `FX_DROP`, T7 `LOG_TURN` / `LOG_PDIR`), **3E-T2: `PAGE_OPEN` `$BC54` (1 while the bag page is up) / `PAGE_N` `$BC55` (opens, mod 256)**, **3E-T13: `PAGE_VERB` `$BC56` / `PAGE_SLOT` `$BC57`** (the page's return: "Bag page (3E-T13)") (`combat_defs.asm`, test-observable, not zeroed per level), **3E-T8: `GEAR_MP` `$BC58`, `MP_PER` `$BC59`, `FX_OP` `$BC5A`, `FX_ARG` `$BC5B`, `PAGE_VLAST` `$BC5C`** ("3E-T8"), **IC1: `QS_RECHK` `$BC5D`** (bit 7 = an icon-bar pass wanted in a 1st frame; "IC1 item icons"), **3F-T6: `WEAR_PEND` `$BC5E` (wear-event bitfield) — the HERO3D spare is now FULL (0 B)**; before: spare (1 B, `$BC5E`; IC1: 2 B; T13: 7 B; 3E-T2: 12 B; D3-8: 14 B; T6: 16 B; D3-0: 21 B; was 30 B spare, B3B-10: the `ANIM_RR` round-robin index dropped, unused — the per-entry `AL_PHASE` counters + per-tick caps need none) |
 | `$BC5F` / `$BC60..$BC8F` | `ANIM_N` / `ANIM_LIST` | B3B-1 (D6; B3B-10: `ANIM_N` moved `$BC58` → `$BC5F` so count + list are one 49-B block): animated decor cells of the room in `ROOM_MAP`, 12 × 4 B (`AL_COL`, `AL_ROW`, `AL_TYPE`, `AL_PHASE`); filled by the decor deriver (B3B-9) or copied from `ANIM_LIST2`; stepped by `decor_tick` (B3B-10) |
 | `$BC90..$BCBB` | `HERO_ST` | C3-0: the 3C hero / input state block (44 B, runtime RAM, `src/hero_defs.asm`; layout in "3C contracts"); full since C3-2 (`CUR_REP` .. `PAUSE_REQ`) |
-| `$BCBC..$BCF3` | `ISR_ADDR` | A8 ISR, 56 B (`ISR_LEN`; 68 with `ISR_SAVE_ALT`, 42 with `ISR_ROM_CHAIN`; ASSERT end ≤ `ISR_ADDR_END` `$BD00`), copied from `isr_image` at boot; `$BCF4..$BCFF` spare |
+| `$BCBC..$BCEC` | `ISR_ADDR` | A8 ISR, 49 B (`ISR_LEN`, ISR-RATE; was 56; 61 with `ISR_SAVE_ALT`, 35 with `ISR_ROM_CHAIN`; ASSERT end ≤ `ISR_ADDR_END` `$BD00`), copied from `isr_image` at boot; `$BCF4..$BCFF` spare |
 | `$BD00..$BDFF` | `FI_GLY` | **FLOOR1** floor-item glyph cache: 8 slots × 32 B (icons16 layout, 4 quarters of 8 lines), written by R6 `fi_slot`, read by `erase_rect .item` (uncontended) — see "FLOOR1" |
-| `$BE00..$BEFF` | — | stack, **512 B** (FLOOR1: was 768 from `$BD00`; SP = `$BF00`, grows down to `STACK_BOTTOM $BE00`; W20 asserts ≤ 256 B, FLOOR1 measured 66 B over the budget fights; A8: was 1 KB from `$BB00`; C3-1: `tests/world.py` W20 re-measures it: 40 B over boot, a generated D1 start and 53 random turns). **Measured max depth 40 B** (lowest byte touched `$BED8`; pattern-fill over boot, both hero starts, a room transition, the §8.2 walkthrough and both `budget.py` fights, ROM IM1 ISR included; tape path's `LD-BYTES` not covered, ~10 B). The A8 ISR adds 16 B (return address + 6 pairs) + the player's own depth to whatever is in use. **SND-2 T6:** W20 with the WZM player live (Lament) measures **44 B** (lowest byte `$BED4`) |
+| `$BE00..$BEFF` | — | stack, **512 B** (FLOOR1: was 768 from `$BD00`; SP = `$BF00`, grows down to `STACK_BOTTOM $BE00`; W20 asserts ≤ 256 B, FLOOR1 measured 66 B over the budget fights; A8: was 1 KB from `$BB00`; C3-1: `tests/world.py` W20 re-measures it: 40 B over boot, a generated D1 start and 53 random turns). **Measured max depth 40 B** (lowest byte touched `$BED8`; pattern-fill over boot, both hero starts, a room transition, the §8.2 walkthrough and both `budget.py` fights, ROM IM1 ISR included; tape path's `LD-BYTES` not covered, ~10 B). The A8 ISR adds 16 B (return address + 6 pairs; 2 B less since ISR-RATE: no IY pair) + the player's own depth to whatever is in use. **SND-2 T6:** W20 with the WZM player live (Lament) measures **44 B** (lowest byte `$BED4`) |
 | `$BF00..$BFFF` | state block | below |
 
 **Entity record** (32-B stride, `defs.asm`; **ROOM-MEM: a parked slot = `FLAGS` bit 0 clear but != 0, `ROOM` | `LPK_PARK` $80**, "LP contracts"): `+0 KIND, +1 ROOM, +2 FLAGS
