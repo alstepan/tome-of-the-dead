@@ -42,9 +42,13 @@ number's on a bare cell (bank-5 attr == the attr shadow), else the bank-5 one.
       displayed screen == the composed one (no digit left anywhere)
   Z   a body at the top row (Y 0): DL_ROW = 1 (window rows 0 / 1), bank-7 code
       untouched (review: the clamp once gave $FF)
+  Y   (LVL-FLOATER) a real level-up (XP at the next threshold, XP_UP): "+LVL" (value MISS,
+      attr $46, 3 cells, FONT6 text) spawns on the hero, lives 12 passes, erases cleanly,
+      model7 exact, ROOM_MAP / bank-7 code untouched; a miss line + a level-up = one
+      "+LVL"; a Goblin's MISS stays MISS; a blow first keeps the owed "+LVL"
   R   ROOM_MAP never written; after everything expired the composed screen ==
       the presented one
-  every sampled tick of H / M / G / K / V / Q: model7 exact (MODEL)
+  every sampled tick of H / M / G / K / Y / V / Q: model7 exact (MODEL)
 Run: ZRCP_PORT=<port> python3 tests/dnum.py   (DEBUG_KIT=0 build)
      DNUM_PNG=<dir>: also write 2x PNGs of the displayed screen (H a hit on the
      Goblin, P the hero hit, V / Q a body under a standing number)
@@ -601,6 +605,95 @@ def run(h, p, check):
     check("Z a body at the top row (Y 0): the number's window = rows 0 / 1 (DL_ROW 1), bank-7 code untouched, "
           "screen 2 == model7", zrec and zrec["ROW"] == 1 and not zbad
           and b7(S["B7_CODE"], S["B7_LIMIT"] - S["B7_CODE"]) == code0, (zrec, zbad[:4]))
+
+    # ====================== Y: LVL-FLOATER, "+LVL" at a real level-up ==========
+    # xp7 .nr sets the hero's DS_FLG bit 7; dn_cls ranks it as a MISS-kind candidate, dn_lvt (bank 2)
+    # puts "+LVL" + $46 in DN_TXT, dn_take composes it as MISS's 3-cell text. Render-only.
+    def font_lines(txt):
+        out = []
+        for ci in range(3):
+            col = []
+            for ln in range(8):
+                bits = 0
+                for ch in txt:
+                    g = p.z.read_memory(S["FONT6"] + (ln >> 1) * 256 + ord(ch) + (ln & 1) * S["FONT6_WB"], 1)[0]
+                    bits = (bits << 6) | (g >> 2)
+                col.append((bits >> (16 - 8 * ci)) & 0xFF)
+            out.append(bytes(col))
+        return out
+
+    code0 = b7(S["B7_CODE"], S["B7_LIMIT"] - S["B7_CODE"])
+    scene([], hhp=50)
+    xp_next = p.z.read_memory(S["xpn_tab"], 2)
+    lvl0 = p.rb("LVL")
+    map0 = bytes(p.z.read_memory(S["ROOM_MAP"], 576))
+    p.wmem(S["XP"], [xp_next[0], xp_next[1]])
+    p.wb("XP_UP", 1)
+    p.turn("WAIT")
+    tr, yrec, ybad, yglyph, yshot = [], None, [], b"", None
+    for _ in range(30):
+        at_pres()
+        r = of(0)
+        tr.append(dict(r) if r else None)
+        if r and yrec is None:
+            yrec = dict(r)
+            yglyph = bytes(p.z.read_memory(LIVE + LSTR * next(e for e, s, _ in live() if s == 0) + GLY, 24))
+            yshot = p.frame()
+        ybad += model7("Y")[0]
+    ages = [t["AGE"] if t else None for t in tr]
+    first = next((i for i, t in enumerate(tr) if t), None)
+    check("Y a level-up (LVL +1): +LVL spawns on the hero: value MISS, attr $46, 3 cells",
+          p.rb("LVL") == lvl0 + 1 and yrec and yrec["VAL"] == 0x80 and yrec["ATTR"] == 0x46 and yrec["W"] == 3
+          and yrec["SLOT"] == 0, (p.rb("LVL"), lvl0, yrec))
+    if yrec:
+        shot("dnum_levelup", yshot)
+        want = b"".join(font_lines("+LVL"))
+        miss = b"".join(font_lines("MISS"))
+        check("Y the composed text is +LVL (FONT6 lines, not MISS), over the hero (row = drawn top - 1)",
+              yglyph == want and want != miss and yrec["ROW"] == p.rb(S["SLOTREC"] + S["R_ROW"]) - 1,
+              (yglyph.hex(), want.hex(), yrec))
+        check("Y lives 12 passes then the entry is free; the DS_FLG bits are consumed",
+              ages[first] <= 4 and ages[first:first + 13 - ages[first]] == list(range(ages[first], 13))
+              and ages[first + 13 - ages[first]] is None and p.rb(SLOTS + S["DS_FLG"]) == 0,
+              (ages[first:first + 14], p.rb(SLOTS + S["DS_FLG"])))   # (the first sample is a few passes in)
+        at_pres(3)
+        fr7 = p.frame()
+        bad = [cl for cl in window(yrec) if not is_bg(*cl, fr=fr7)]
+        check("Y after expiry every window cell == map glyph + shadow attr (erased cleanly), "
+              "screen 2 == model7 every tick, ROOM_MAP and bank-7 code untouched",
+              not bad and not ybad and bytes(p.z.read_memory(S["ROOM_MAP"], 576)) == map0
+              and b7(S["B7_CODE"], S["B7_LIMIT"] - S["B7_CODE"]) == code0, (bad, ybad[:3]))
+    # a hero miss line owed in the same pass as the level-up: one +LVL (both bits consumed)
+    scene([], hhp=50)
+    p.wb(SLOTS + S["DS_FLG"], 0x81)
+    p.tick(2)
+    r = of(0)
+    check("Y a miss line + a level-up on the hero together: one +LVL ($46), both flag bits consumed",
+          r and r["VAL"] == 0x80 and r["ATTR"] == 0x46 and p.rb(SLOTS + S["DS_FLG"]) == 0,
+          (r, p.rb(SLOTS + S["DS_FLG"])))
+    # a monster's MISS is never +LVL, even with the hero's bit pending
+    g = scene([(K_GOBLIN, HX + 8, None, True, 60)])[0]
+    p.wb(SLOTS + S["DS_FLG"], 0x80)
+    p.wb(SLOTS + 4 * g + S["DS_FLG"], 1)
+    p.tick(4)
+    rg, rh = of(g), of(0)
+    check("Y a Goblin's MISS stays MISS ($45) beside the hero's +LVL ($46), each on its body",
+          rg and rh and rg["VAL"] == 0x80 and rg["ATTR"] == 0x45 and rh["ATTR"] == 0x46, (rg, rh))
+    # a blow on the hero and a level-up between two passes: the blow's -n first, +LVL kept for after
+    scene([], hhp=150)
+    p.set_ent(0, MAXHP=200)
+    p.tick(14)
+    p.wb(SLOTS + S["DS_FLG"], 0x80)
+    p.poke_hp(0, 143)
+    p.wb(S["P_ENTITIES"] + S["E_REACT"], 0x80 | S["RC_HURT"])
+    seen = []
+    for _ in range(10):
+        p.tick()
+        r = of(0)
+        seen.append((sval(r["VAL"]), r["ATTR"]) if r else None)
+    check("Y a blow + a level-up: the -7 shows first, the +LVL is kept (not lost) and follows",
+          (-7, 0x42) in seen and ("MISS", 0x46) in seen and seen.index((-7, 0x42)) < seen.index(("MISS", 0x46)),
+          seen)
 
     # ====================== V / Q: a body walking through a standing number ====
     def walk_through(tag, walker, silent=False):

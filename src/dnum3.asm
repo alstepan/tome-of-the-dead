@@ -86,9 +86,8 @@ dn_take:
                 ld   de, DN_TXT
                 cp   DNV_MISS
                 jr   nz, .nm
-                ld   hl, dn_miss_s
-                ld   bc, 5
-                ldir
+                ld   a, (DN_TXT + 5)           ; dn_lvt (bank 2) filled DN_TXT: "MISS" / "+LVL", 0, its attr
+                ld   (ix+DL_ATTR), a
                 ld   bc, 3 << 8 | 0            ; 24 px = 3 cells, no pad
                 jr   .tx
 .nm:            or   a

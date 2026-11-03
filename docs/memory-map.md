@@ -5637,3 +5637,38 @@ descriptor attr $47), `combat.py` C1 dagger track passes `THROW_ATTR`.
 bank 3 unchanged (6). Tests: `tools/ranged_model.py` descriptor attr = ROCK_ATTR for a dagger_spin shot (`M.FID_DAGGER`, set by `tests/ranged.py`:
 the A/B check covers every monster shot's FXD_ATTR), `ranged.py` ATTR (fx_meta: dagger_spin $47, spark / bolt $43, arrow $07), `proj3.py` model
 FXD_ATTR 0 again, `combat.py` C1 dagger track attr 0 (fx_meta's $47).
+
+## LVL-FLOATER ledger (`feat/lvl-floater`, 2026-11-03; on main `a7d2645`; user request: "+LVL" flying over the hero at a level-up)
+
+Render-only: no game state, RNG or entity byte changes (the owed flag is `DN_SLOT` hero `DS_FLG` bit 7, runtime RAM the numbers already own). The
+"+LVL" is a text floater on the existing MISS path: value `DNV_MISS`, 4 chars = 3 cells, so the spawn / merge ("replaced only") / placement /
+compose / draw / erase / `dn_fix` paths are MISS's, unchanged. Colour `DNA_LVL` `$46` (bright yellow; MISS cyan `$45`, heal green, hero dmg red).
+
+- **Trigger** (`xp7.asm` `.nr`, bank 7, +5 B): `set DSF_LVL, (DN_SLOT + DS_FLG)` (slot 0 = the hero) next to the LEVELUP sfx. `DS_FLG` is now two
+  bits: `DSF_MISS` 0 (a miss / parry line: `dn_sfx` `set 0,(hl)`, was `ld (hl),h`: +1 B bank 2) and `DSF_LVL` 7. `dn_cls` already ranks any nonzero
+  `DS_FLG` as a DNT_MISS candidate (key 2 E_X | 1), so the level-up competes with the kills' `-n` by E_X, one spawn a pass; nothing else in `dn_cls`.
+- **Spawn** (bank-0 `dn_scan`): clears only `DSF_MISS` (`res 0,(hl)`, same 2 B: was `ld (hl),0`) so a reaction spawn first (a blow in the same
+  window) does not lose the owed "+LVL"; `.miss` is `call dn_lvt` (3 B, was `ld a,DNV_MISS` 2 B: **bank 0 +1 B**). `dn_lvt` (`dnlvt2.asm`, bank 2):
+  DN_TXT := a 6-B record (4 chars, 0, attr) and A := DNV_MISS; the hero's slot with bit 7 set gets `dn_lvl_s` "+LVL" + `$46` and the bit
+  consumed (a miss line owed together: one "+LVL"), else `dn_miss_s` "MISS" + `$45`. Bank-3 `dn_take` MISS branch reads the attr from `DN_TXT + 5`
+  instead of copying the string (**bank 3 -8 +6 = -2 B: free 6 -> 8**). `dn_miss_s` grew 5 -> 6 B (kind_tab `KT_DIV9` spare: 2 of 8 B left).
+  Text from the string dictionary: not used (the dictionary is log text; two 6-B records are cheaper than a decoder).
+- Placement of `dn_lvt`: the kind_tab ALIGN pad (after `dnfix2.asm`) normally; **`-DANIM_TRACE_ON=1` includes it in the bank-2 tail** (after
+  `dnum2b.asm`): the trace leaves the pad 2 B and an overflow would push `kind_tab` a page.
+
+| Region (free B) | release | kit | release `F3_GEN=0` | kit `F3_GEN=0` | release + trace |
+|---|---|---|---|---|---|
+| bank 2 tail + pad | 101 (43 + 58) -> **60 (42 + 18)** | 75 (17 + 58) -> **34 (16 + 18)** | -> 60 | -> 34 | 45 (43 + 2) -> **4 (2 + 2)** |
+| bank 3 (to `AY_RESERVE`) | 6 -> **8** | 6 -> **8** | 8 | 8 | 8 |
+| bank 0 (to `POOL_START`); `B0_CODE_RES` 704 unchanged | 68 -> **67** | 11 -> **10** | 67 | 10 | 67 |
+| bank 7 low | 20 -> **15** | 17 -> **12** | 19 | 16 | 7 -> 2 |
+| R6 / low RAM / bank 1 / `HOT_COPY` spare | 5 / 2 / 3 / 5 unchanged | | | | |
+
+**Known shortfall: `-DDEBUG_KIT=1 -DANIM_TRACE_ON=1` (kit + trace, not a gated variant) no longer assembles**: bank 7 low 4 -> -1 (1 B short),
+bank 2 tail 16 + pad 2 vs `dn_lvt` + records 40 B (22 B short). Release, kit, `F3_GEN=0` (both) and release + trace build with 0 warnings.
+No-cut rule: nothing was dropped to make it fit; reclaim candidates for a later pass are listed by the manager (`docs/plan.md`).
+
+Tests: `tests/dnum.py` Y (7 checks, 39 total): a real level-up (XP at `xpn_tab[0]`, `XP_UP`, a WAIT turn): LVL + 1, the hero's record = value MISS /
+`$46` / 3 cells / slot 0, DL_GLY == the FONT6 composition of "+LVL" (and != "MISS"), row = the drawn top - 1, ages to 12 then free, DS_FLG consumed,
+window back to background, model7 exact on every sampled tick, ROOM_MAP and bank-7 code untouched; miss line + level-up = one "+LVL"; a Goblin's MISS
+stays `$45` beside the hero's; a blow + a level-up: `-7` first, "+LVL" follows. `DNUM_PNG=dir` dumps `dnum_levelup.png`.
