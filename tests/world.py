@@ -173,7 +173,9 @@ def want(tag):
 class W(game.T):
     def screen_vs_map(self, tag):
         """W4: both screens == ROOM_MAP outside sprite footprints; displayed ==
-        composed. Returns a list of problems (empty = ok)."""
+        composed. Returns a list of problems (empty = ok). D3-11: after any flying
+        number has ended (dn_settle: a fall's -n on the hero)."""
+        self.dn_settle()
         bad = []
         fr, comp = self.frame(), self.composed_frame()
         if fr != comp:
@@ -727,6 +729,8 @@ def w15(p, check):
     p.tick()
     fr = p.frame()
     check("W15 3 messages drained in 1 idle tick (B3B-11b: items while in the 1st frame)", n == 1, n)
+    p.dn_settle()                                   # D3-11: the quaff's +n has ended (screens compared)
+    fr = p.frame()
     check("W15 scroll after 3: row 22 = THE DOOR IS LOCKED, row 23 = YOU FALL INTO A PIT (displayed)",
           (log_row(fr, 22), log_row(fr, 23)) == (text6(TXT["str_locked"]), text6(TXT["str_fall"])), "")
     check("W15 displayed == composed after the drain", fr == p.composed_frame(), "")
@@ -747,6 +751,7 @@ def w15(p, check):
           (log_row(p.composed_frame(), 22), log_row(p.composed_frame(), 23), p.rb("LOG_QN"),
            p.rb("PANEL_DIRTY") & S["PD_LOG"]) == (text6(TXT["str_fall"]), text6(TXT["str_died"]), 0, 0), "")
     p.tick(2)
+    p.dn_settle()                                   # D3-11: no flying number between the screens
     check("W15 displayed == composed", p.frame() == p.composed_frame(), "")
 
     # --- GS_DEAD / GS_WIN lines are never dropped (log_push_end) -------------
@@ -3659,7 +3664,9 @@ def w26_l2(p, check):
         p.settle()
 
     def screens_ok(tag):
-        """W4 bar the animated decor cells (decor_tick steps them; W14 owns those)."""
+        """W4 bar the animated decor cells (decor_tick steps them; W14 owns those);
+        D3-11: after any flying number has ended (a fall's -n on the hero)."""
+        p.dn_settle()
         n = p.rb("ANIM_N")
         al = p.z.read_memory(S["ANIM_LIST"], 4 * n) if 0 < n <= 12 else b""
         anim = {(al[i], al[i + 1]) for i in range(0, len(al), 4)}

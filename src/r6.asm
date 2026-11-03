@@ -30,6 +30,7 @@
                 INCLUDE "spawn6.asm"           ; 3F-T9: the spawn queue (breed6 / sp_bcall / ph_summon) + sp_run (end_turn)
                 INCLUDE "trickle6.asm"         ; 3F-T12: trk_run, the respawn trickle (far6 from end_turn every RESPAWN_PERIOD turns)
                 INCLUDE "vbat6.asm"            ; 3F-T9: the Vampire's bat form (vb_one: far6 from bank-7 vb_turn, end_turn)
+                INCLUDE "dnum6.asm"            ; D3-11: dn_place (far6 from bank-3 dn_take)
                 ; (DBG-1: debug_kit moved to bank 0, src/kit0.asm kit_b0, far from kit_add)
                 ; (MEM-RECLAIM w3: lq_block, the AI-L1 ladder queue, moved to bank 3: src/lq3.asm)
                 INCLUDE "boss6.asm"            ; 3F-T8: lp_post (the lair boss; w2b: ai_guard / grate_open / boss_chk -> boss7.asm)

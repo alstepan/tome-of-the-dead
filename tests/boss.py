@@ -178,8 +178,8 @@ def main():
 def spit_pool(p):
     """SPIT-SPARK: the golden Spider Queen's spit draws spark_fly1/2 (rd_tab row 14): on the D2 lair of
     BOTH heroes both frames have a resident FRT row (the Mage: his class FX; the Warrior: the
-    pool_xmap U_SPARKW extra), and the monsters' dagger_spin (Goblin King / Slinger rock) keeps its
-    yellow ROCK_ATTR through fx_meta."""
+    pool_xmap U_SPARKW extra); fx_meta: dagger_spin = the hero's throw THROW_ATTR (the Goblin King /
+    Slinger rock pass FXD_ATTR ROCK_ATTR: R6 rg_q, tests/ranged.py A), the spark $43."""
     for hero in (0, 1):
         L = Lair(p, 2, 0x2B02, hero=hero)
         res = []
@@ -188,8 +188,8 @@ def spit_pool(p):
             res.append(any(b != S["FRT_NONE"] for b in p.z.read_memory(row, S["FT_IN_ROW"])))
         check(f"SPIT D2 hero {hero}: spark_fly1/2 resident in the FRT", L.ok and all(res), (L.ok, res))
     fm = S["fx_meta"] - S["KFID_FXM"]
-    check("SPIT fx_meta: dagger_spin1/2 = ROCK_ATTR, spark_fly1/2 = $43",
-          [p.rb(fm + S["FID_dagger_spin1"]), p.rb(fm + S["FID_dagger_spin2"])] == [S["ROCK_ATTR"]] * 2
+    check("SPIT fx_meta: dagger_spin1/2 = THROW_ATTR (monster shots: rg_q's ROCK_ATTR), spark_fly1/2 = $43",
+          [p.rb(fm + S["FID_dagger_spin1"]), p.rb(fm + S["FID_dagger_spin2"])] == [S["THROW_ATTR"]] * 2
           and [p.rb(fm + S["FID_spark_fly1"]), p.rb(fm + S["FID_spark_fly2"])] == [0x43, 0x43])
 
 

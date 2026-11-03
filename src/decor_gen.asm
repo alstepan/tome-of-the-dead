@@ -577,12 +577,8 @@ dg_brk3:
 ; .rf-style exit of the fit loops (one row pointer pushed) and the row step.
 dg_rf:          pop  hl
                 ret
-dg_nr:          ld   a, l                      ; HL += 32 (next map row, same col)
-                add  a, ROOM_COLS
-                ld   l, a
-                ret  nc
-                inc  h
-                ret
+dg_nr:          ld   a, ROOM_COLS              ; HL += 32 (next map row, same col)
+                jp   hla                       ; RECLAIM-D: levelgen's (-2 B bank 3, +10 T)
 
 ; dg_cell — B = row, C = col, D = dy, E = dx of a just-placed cell: append its
 ; ANIM_LIST entry (col, row, type, phase) if the object animates it.
@@ -627,18 +623,9 @@ dg_rnd:
                 ld   hl, (dg_rng)              ; xorshift 7,9,8 (= levelgen lg_step; MEM-RECLAIM w3: bank-2 xs_core)
                 call xs_core
                 ld   (dg_rng), hl
-                ld   a, c
-                cp   2
-                ld   a, l
-                jr   nz, .m
-                and  1                         ; n = 2 (storey): no 127-step loop
-                pop  bc
-                ret
-.m:             sub  c
-                jr   nc, .m
-                add  a, c
-                pop  bc
-                ret
+                jp   rnd_mod                   ; RECLAIM-D: levelgen rnd's mod tail (the same
+                                               ; result: n = 1 -> 0, n = 2 -> L & 1, else L mod n
+                                               ; by subtraction; -13 B bank 3, +~20 T a call)
 
 ; L-RELIEF: dg_bad is not in this block: --asm-bad -> src/dg_bad3.asm, INCLUDEd
 ; by combat_data3.asm at $C100 (right after kx_tab: 64-aligned, no ALIGN pad).

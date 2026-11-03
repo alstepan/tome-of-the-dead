@@ -277,11 +277,7 @@ ai_monster:
                 call .yv
                 jr   .yend
 .yv:            call clamp_band                ; E = 0: out of the band
-                ld   a, e
-                or   a
-                ret  z                         ; CF = 0
-                ld   d, 0
-                jp   try_step
+                jp   step_dy                   ; RECLAIM-D: ai_flyer's tail (-5 B bank 3, +10 T)
 .ny2:
                 ; act every 2 turns (slime): act on even TURN_COUNTER. B18: after
                 ; the yield (§6.4 "checked first, all kinds"): a slime on the
@@ -672,15 +668,17 @@ ai_flyer:                                      ; BC / DE = the box (ai_monster's
                 ret  c
                 ld   a, d
                 or   a
-                jr   z, .t2
+                jr   z, step_dy
                 push de
                 ld   e, 0
                 call try_step_face
                 pop  de
                 ret  c
-.t2:            ld   a, e
+; step_dy — RECLAIM-D: the shared "dy E != 0: try_step (D = 0, E)" tail of ai_flyer and
+; ai_monster's yield (.yv). E = 0: return Z, CF = 0.  Clobbers: as try_step.
+step_dy:        ld   a, e
                 or   a
-                ret  z
+                ret  z                         ; CF = 0
                 ld   d, 0
                 jp   try_step
 

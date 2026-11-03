@@ -83,7 +83,8 @@ rnd:                                    ; A = n -> A = (x & $FF) mod n. Clobbers
                 push bc                 ; n = 1 / 2 fast paths (most calls): exact, no loop
                 ld   c, a
                 call lg_step
-                ld   a, c
+rnd_mod:                                ; RECLAIM-D: decor_gen dg_rnd's tail (C = n, HL = the
+                ld   a, c               ; step, BC pushed): A = L mod n, BC popped
                 dec  a
                 jr   z, .z
                 dec  a

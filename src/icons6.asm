@@ -205,8 +205,7 @@ it_tab:         ITB  IC_NONE, 0                ; IT_NONE
 ; exact by ic_scr (onto the screen: ic_blit) or ic_unp (FI_GLY: fi6). A column
 ; = 2 octs (8 lines each: a mask byte, 1 = repeat the previous byte, bit 7
 ; first, + the literals); a MIRROR icon's right column is its left one
-; bit-reversed (rev8, 66 T a line: a 256-B table would cost more R6 than the
-; mirror saves).
+; bit-reversed (rev8, 49 T a line: RECLAIM-D reads the permanent low-RAM BITREV_TAB).
 ;
 ; ic_find — A = a LOGICAL icon index (type - IT_BAG_LO, ICONS16_PH + worn
 ; slot, the floor ammo): HL = its stream, C = MIRROR << 7 | delta. FLOOR1
@@ -303,22 +302,16 @@ ic_sstep:       ld   a, e
                 ld   d, a
                 ret
 
-; rev8 — A = A bit-reversed (J. Metcalf's 17-B swap network).  Clobbers: B, F.  66 T
-rev8:           ld   b, a
-                rlca
-                rlca
-                xor  b
-                and  $AA
-                xor  b
-                ld   b, a
-                rlca
-                rlca
-                rlca
-                rrc  b
-                xor  b
-                and  $66
-                xor  b
+; rev8 — A = A bit-reversed. RECLAIM-D: a BITREV_TAB lookup (the permanent low-RAM table
+; build_bitrev fills at boot, before any icon; gen_frame's mirroring reads it too), was
+; J. Metcalf's 17-B swap network (66 T, clobbered B): -11 B R6.  Keeps all but A.  49 T
+rev8:           push hl
+                ld   h, BITREV_TAB >> 8
+                ld   l, a
+                ld   a, (hl)
+                pop  hl
                 ret
+                ASSERT (BITREV_TAB & $FF) == 0
 
 ;------------------------------------------------------------------------------
 ; ic_unp — A = a logical icon index, DE = a 32-ALIGNED destination (FI_GLY +

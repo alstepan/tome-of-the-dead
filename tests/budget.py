@@ -46,13 +46,13 @@ MUS_POKE = os.environ.get("BUDGET_MUS", "7")      # MUS_REQ poked before START (
 # B3B-11: panel_tick .. play_loop.nopanel = the tick's panel item (D5: one per
 # tick, never in a turn's input tick); its present lands in the next tick_work.
 PHASES = ["tick_work", "intent_tick", "read_turn_input", "pend_far", "probe_act_fire", "anim_tick", "render",
-          "decor_tick", "panel_tick", "panel_done", "wait_tick"]
+          "decor_tick", "panel_tick", "panel_done", "dn_gate", "wait_tick"]   # D3-11: dn_gate = the numbers pass
 if os.environ.get("GAME_PROFILE"):                # finer split for optimisation work
     PHASES = ["tick_work", "intent_tick", "read_turn_input", "pend_far", "probe_act_fire",
               "try_player_turn", "resolve_monsters",
               "materialise", "anim_tick", "render", "render.nopend", "render.sdone",
               "render.f3done", "render.drdone", "render.nopl", "pmark_dmg", "present",
-              "decor_tick", "panel_tick", "panel_done", "wait_tick"]
+              "decor_tick", "panel_tick", "panel_done", "dn_gate", "wait_tick"]
     PHASES += [n for n in os.environ["GAME_PROFILE"].split(",") if n in S]
 
 
@@ -201,9 +201,9 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # line DJNZ / anim_tick and render bookkeeping / resolve_monsters in bank 2). It stays over the
 # 126k cap (work ~130.4k), so it is NOT in CAP_GATED.
 GATED = ("mix", "mage", "blair")
-CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast", "mkmix",
+CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast", "mkmix",
              "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath")
-CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "acast")        # D3-5: worst ordinary tick <= CAP
+CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
 HERO_Y = stand_y(1, 6)                            # 11
@@ -318,6 +318,22 @@ SCENARIOS = {
         (3, 9, stand_y(1, 4), RIGHT),
         (7, 15, stand_y(1, 6), HOSTILE),
         (1, 15, stand_y(1, 2), HOSTILE)], [("FIRE", 3)], K_KNIGHT, None, "wcast"),
+    # D3-11 "dnum": the flying numbers at their busiest: wcast4's Whirlwind r3 on 4 bodies
+    # (4 numbers rippling out, <= 3 live, the 4th ends the oldest), the hero POISONED (a -1
+    # magenta number every turn start), HP 150 / 200, then a Heal potion (+n green) and a
+    # third Whirlwind; dnum_setup / dnum_report (the passes really drew)
+    "dnum": ("knight Whirlwind r3 x 2 on 4 bodies, poisoned, a Heal potion, Whirlwind (flying numbers)", [
+        (5, 9, stand_y(1, 6), RIGHT),
+        (3, 9, stand_y(1, 4), RIGHT),
+        (7, 15, stand_y(1, 6), HOSTILE),
+        (1, 15, stand_y(1, 2), HOSTILE)], [("FIRE", 2), ("G", 1), ("@2", 1)], K_KNIGHT, None, "dnum"),
+    # D3-11 review "dkill": the same 4 bodies at 4 HP, ASLEEP: Whirlwinds r3 kill them all (DEATHs
+    # at once, their slots freed ~15 ticks later): every killed body must have shown its -n
+    "dkill": ("knight Whirlwind r3 kills 4 bodies at 4 HP (flying numbers: a -n per kill)", [
+        (5, 9, stand_y(1, 6), RIGHT),
+        (3, 9, stand_y(1, 4), RIGHT),
+        (7, 15, stand_y(1, 6), HOSTILE),
+        (1, 15, stand_y(1, 2), HOSTILE)], [("FIRE", 4), ("WAIT", 2)], K_KNIGHT, None, "dkill"),
     # D3-7 T6: the real bow shot through the controls (range 14), 4 monsters in
     # line to the right (60 HP; missed rolls fly on: up to 4 hit rolls + deal_hit
     # on the fire tick), a Skeleton behind walking in, 3 shots
@@ -758,6 +774,47 @@ def acast_setup(p, placements):
 MKMIX = {5: (1, 0xF0), 1: (2 << 2, 0x0F), 3: (1 << 2, 0x0F), 4: (2, 0xF0), 0: (2 << 2, 0x0F)}
 
 
+DNUM = {"pass0": 0, "spawns": 0, "dn": [], "react": {}, "lag": [], "k": 0, "sig": {}, "seen": [],
+        "passes": 0, "pass_k": 0}
+
+
+def dnum_hook(st):
+    """D3-11 "dnum" / "dkill" (TICK_HOOKS): the spawns, the passes and the spawn lags.
+    A pass = a tick whose DN_PASS moved (the 1st-frame scan; a 2nd-frame tick spawns from
+    the queue without one). A spawn = a live record at DL_AGE 1 whose (slot, value, col,
+    row, age) differs from the last tick's (a record stays at age 1 over the 2nd-frame
+    ticks until the next pass ages it, so age 1 alone over-counts). The lag = ticks from
+    the body's reaction start ($80 | rc seen) to its spawn."""
+    p = st.p
+    DNUM["k"] += 1
+    DNUM["dn"].append(st.ticks[-1][1].get("dn_gate", 0))
+    DNUM.setdefault("dn2", []).append((st.ticks[-1][1].get("dn_gate", 0), st.ticks[-1][0]))
+    ps = p.rb("DN_PASS")
+    if ps != DNUM["pass_k"]:
+        DNUM["passes"] += 1
+        DNUM["pass_k"] = ps
+    ents = p.z.read_memory(S["P_ENTITIES"], 16 * S["P_ENT_STRIDE"])
+    for sl in range(16):                          # the spawn lag: a reaction started -> its number
+        rc = ents[sl * S["P_ENT_STRIDE"] + S["E_REACT"]]
+        if rc & 0x80 and sl not in DNUM["react"]:
+            DNUM["react"][sl] = DNUM["k"]
+    for e in range(S["DN_LIVE_N"]):
+        r = p.z.read_memory(S["DN_LIVE"] + e * S["DN_LIVE_STRIDE"], 8)
+        sig = (r[S["DL_SLOT"]], r[S["DL_VAL"]], r[S["DL_COL"]], r[S["DL_ROW"]], r[S["DL_AGE"]])
+        if sig[0] != 0xFF and sig[4] == 1 and DNUM["sig"].get(e) != sig:
+            DNUM["spawns"] += 1
+            DNUM["seen"].append((sig[0], "MISS" if sig[1] == S["DNV_MISS"] else sig[1] - 256 if sig[1] > 128 else sig[1]))
+            if sig[0] in DNUM["react"]:
+                DNUM["lag"].append(DNUM["k"] - DNUM["react"].pop(sig[0]))
+        DNUM["sig"][e] = sig
+    if os.environ.get("BUDGET_DN2"):              # diagnostic: one line a tick
+        g, tot = st.ticks[-1][1].get("dn_gate", 0), st.ticks[-1][0]
+        keys = {i: v for i, v in enumerate(p.z.read_memory(S["DN_KEY"], 16)) if v != 0xFF}
+        rcs = {sl: ents[sl * S["P_ENT_STRIDE"] + S["E_REACT"]] for sl in (0, 1, 3, 5, 7)}
+        print(f"[dn2] k{DNUM['k']} {'F2' if tot - g > 70908 else 'F1'} gate {g} tot {tot} fx {p.rb('FX_BUSY')}"
+              f" keys {keys} react {rcs} spawns {DNUM['spawns']}", flush=True)
+
+
 def mkmix_setup(p):
     for slot, (f, t1) in MKMIX.items():
         p.wb(S["ST_FLAGS"] + slot, f)
@@ -1085,8 +1142,20 @@ def run_scenario(h, scen):
         fzcast_setup(p, placements, scen[5])
     if len(scen) > 5 and scen[5] == "fcast":
         lcast_setup(p, placements, k=S["ABL_FROST"], r=2, x=7)
-    if len(scen) > 5 and scen[5] == "wcast":
+    if len(scen) > 5 and scen[5] in ("wcast", "dnum", "dkill"):
         wcast_setup(p, placements)
+    if len(scen) > 5 and scen[5] in ("dnum", "dkill"):
+        if scen[5] == "dnum":
+            p.set_ent(0, HP=150)
+            p.wb(S["ST_X"], 30)                   # POISONED 30 turns (POIS1: ST_X slot 0)
+        else:
+            for slot, *_ in placements:
+                p.set_ent(slot, HP=4)             # one Whirlwind r3 blow kills: ASLEEP (STS_HOLD:
+                p.wb(S["ST_FLAGS"] + slot, 2)     # eva 0, every blow lands), 15 turns
+                p.wb(S["ST_T1"] + slot, 0xF0)
+        DNUM.update(pass0=p.rb("DN_PASS"), pass_k=p.rb("DN_PASS"), spawns=0, passes=0, k=0, dn=[], dn2=[],
+                    react={}, lag=[], sig={}, seen=[])
+        TICK_HOOKS.append(dnum_hook)
     if len(scen) > 5 and scen[5] == "acast":
         acast_setup(p, placements)
     if len(scen) > 5 and scen[5] == "mkmix":
@@ -1162,6 +1231,22 @@ def run_scenario(h, scen):
             if HAS_TRACE:
                 swing += S["FID_wizard_staffswing"] in p.trace_fids(0)
     st.close()
+    if dnum_hook in TICK_HOOKS:
+        TICK_HOOKS.remove(dnum_hook)
+        print(f"[info] {scen[5]} after: {DNUM['passes']} passes in {DNUM['k']} ticks, {DNUM['spawns']} spawns "
+              f"{DNUM['seen']}, worst dn_gate {sorted(DNUM['dn'])[-8:]} T, spawn lags after the reaction start "
+              f"{DNUM['lag']} ticks, hero HP {p.ent(0)['HP']}, bodies HP "
+              f"{[p.ent(sl)['HP'] for sl, *_ in placements]}", flush=True)
+        assert DNUM["spawns"] >= 4 and DNUM["passes"] >= 1, "dnum: too few numbers spawned / no pass"
+        if os.environ.get("BUDGET_DN2"):          # diagnostic: the 2nd-frame ticks' dn_gate share
+            print("[info] dn_gate in ticks > 1 frame (gate, total):",
+                  sorted(x for x in DNUM["dn2"] if x[1] - x[0] > 70908)[-10:], flush=True)
+        if scen[5] == "dkill":                    # every kill showed its -n
+            dead = [sl for sl, *_ in placements if p.ent(sl)["HP"] == 0]
+            hit = {sl for sl, v in DNUM["seen"] if v != "MISS" and v < 0}
+            assert len(dead) == len(placements), f"dkill: not every body died: {dead}"
+            assert set(dead) <= hit, f"dkill: kills with no -n: {sorted(set(dead) - hit)}"
+        st.dnum_lag = list(DNUM["lag"])
     st.trap_ev = trap_report(p, scen[5]) if len(scen) > 5 and scen[5] in TRAPS else None
     if len(scen) > 5 and scen[5] == "umix":         # the uses really happened (bag / FOOD / statuses)
         bag = list(p.z.read_memory(S["BAG"], 15))
@@ -1299,7 +1384,7 @@ def run_scenario(h, scen):
 
 
 ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath")
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill")
 
 
 def swing_pass(keys):
@@ -1372,6 +1457,9 @@ def main():
         if sw is not None:
             print("staff swings   : " + ", ".join(f"{k} {sw.get(k, '?')}" for k in wiz)
                   + " turns drew STAFF_SWING (ANIM_TRACE copy)", flush=True)
+        # D3-11 review: a melee Mage scenario that drew no STAFF_SWING proves nothing (the
+        # copy failed to swing, or the count was lost): a gate failure, not a 0 to read past
+        fails += [k + " (no STAFF_SWING)" for k in wiz if not (sw or {}).get(k)]
     print(f"[{'FAIL' if fails else 'PASS'}] budget gate (every tick <= budget in"
           f" {', '.join(GATED)}; <= {CAP} in {', '.join(CAP_GATED)}; cast ticks <= {CAST_CAP}): {fails or 'ok'}")
     return 1 if fails else 0

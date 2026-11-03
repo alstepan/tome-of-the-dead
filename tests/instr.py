@@ -14,7 +14,7 @@ flow, pages per docs/design/instructions_screen.md / .txt).
   I4  page 3's key ('1') -> menu, swallowed (no START), menu answers a real press
   I5  BREAK on page 1 skips pages 2 and 3 -> menu (GS_SELECT), never GS_HELP2 / 3
   I11 BREAK on page 2 skips page 3 -> menu, never GS_HELP3
-  I6  static: the boot pool's start (POOL_START) equals the page-1 stream label, i.e. the
+  I6  static: the boot pool's start (POOL_START) equals the frame_tab stream (RECLAIM-D), page 1 right after it, i.e. the
       pool is laid over the streams; that it only runs after the help screens is not
       checked here (resident cost: build DISPLAYs)
 The reference is a model, not a stored hash: a golden is the approved render itself.
@@ -193,9 +193,10 @@ def main():
         ok = p.until(lambda: (seen.add(p.rb("GAME_STATE")), p.rb("GAME_STATE") == GS_SELECT)[1], 80)
         h.expect("I11 BREAK on page 2 -> menu", ok, True)
         h.expect("I11c page 3 never shown (states %s)" % sorted(seen), GS_HELP3 in seen, False)
-        # I6: the boot pool (2 idles) starts at POOL_START = the first stream byte
-        h.expect("I6 POOL_START = the page-1 stream (boot pool overwrites the help)",
-                 pool == S["instr_p1_zx0"], True)
+        # I6: the boot pool (2 idles) starts at POOL_START = the first boot-only stream byte
+        # (RECLAIM-D: the frame_tab stream ftz_zx0, then page 1 right after it)
+        h.expect("I6 POOL_START = the frame_tab stream, then page 1 (boot pool overwrites them)",
+                 pool == S["ftz_zx0"] and S["ftz_zx0_end"] == S["instr_p1_zx0"], True)
     print("instr:", "OK" if h.ok else "FAIL %s" % h.failures)
     return 0 if h.ok else 1
 

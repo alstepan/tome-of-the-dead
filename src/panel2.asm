@@ -80,7 +80,7 @@ print6t:
                 pop  bc                        ; BC = the stream (tk_get state)
                 pop  af                        ; A = row (was B)
                 ld   hl, tk_get
-                call print6g
+p6_tail:        call print6g                   ; (RECLAIM-D: print6x's tail too)
                 pop  af
                 jp   restore_page              ; (keeps BC, DE)
 

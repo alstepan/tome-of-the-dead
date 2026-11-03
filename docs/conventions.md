@@ -99,6 +99,16 @@
   from the bank-2 pass, and only in a tick still in its first frame (the
   gate is tested once at `mark_tick`'s entry): the per-tick pass itself stays
   in bank 2. Do not extend this to other render code.
+- **Bank-0 per-tick code (D3-11, the flying numbers).** `b0_code` holds cold code AND the numbers
+  pass (`dnum0.asm`, uncontended bank 0): it is entered only by FARB0 from bank-2 `dn_gate` (the end of
+  a tick, gated: memory-map "D3-11 ledger"); bank3.asm's rules apply (no SMC,
+  no data, never pages `$C000`: `far3` / `far6` / `far7` hand it back). Its bank-3 / R6 / bank-7 parts are
+  far-called from it; nothing else may add per-tick work there without the budget gate.
+  **DNUM-SPRITE-FIX (2026-11-03): the numbers are drawn on the DISPLAYED screen only** (bank-2
+  `dnum2.asm` `dn_show`, entered by `far7` = bank 7 paged; `present` calls `dn_fix` first): bank 5
+  never holds a number, so nothing else needs to know about them; an erase is a `pmark_rect` (present
+  copies the composed cell back). Any new writer of screen 2 other than `present` / `present_full`
+  must keep that rule (screen 2 = bank 5 except the live numbers' cells).
 - **Boot block and overlays (3E-T1).** Boot-only code / data lives in the
   bank-6 boot block (`src/boot6.asm`, run by `boot` via `farb` before the pool
   is generated); nothing may read it after boot (the pool overwrites it).
@@ -227,7 +237,7 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   interrupt anywhere else restores exactly what was paged. The screen bit is
   never touched by the ISR (`tests/game.py` #61 checks port == shadow at every
   ISR exit across a 7 → 5 → 7 screen flip).
-- **AY player slot contract** (`AY_PLAY` = `AY_RESERVE` `$F040` (RECLAIM-C (a); `$F010` M0 L3, `$EFD0` MEM-RECLAIM w3, `$EFA0` before), bank 3, 4,032 B (4,023 used, 9 free)
+- **AY player slot contract** (`AY_PLAY` = `AY_RESERVE` `$F048` (D3-11; `$F040` RECLAIM-C (a), `$F010` M0 L3, `$EFD0` MEM-RECLAIM w3, `$EFA0` before), bank 3, 4,024 B (4,023 used, 1 free)
   to `$FFFF` since MEM-SND (4 KB from `$F000` since D3-0, 7 KB from `$E400` before); `src/ay.asm`: since SND-2 the
   mailbox dispatcher `ay_play` + the WZM v0.3 player (`MODULE wzm`, buzzer, no
   echo) + the songs (`MODULE mus`)): called with interrupts off,

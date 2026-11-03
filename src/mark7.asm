@@ -283,11 +283,44 @@ mk_sweep:
 ;------------------------------------------------------------------------------
 ; vis_tail — far7 from the tail of vis_reset / vis_room_sync (low RAM): the
 ; screen was redrawn for a new room / world, so the overlays start over —
-; mk_room, then drip_room. Clobbers: A, BC, DE, HL.
+; mk_room, drip_room, then (D3-11) dn_reset. Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 vis_tail:
                 call mk_room
-                jp   drip_room
+                call drip_room
+                ; fall through (D3-11)
+;------------------------------------------------------------------------------
+; dn_reset — D3-11 (dnum0.asm), vis_tail's end: the room / world was redrawn
+; (vis_reset, vis_room_sync): no live number, no miss pending, every slot
+; resynced at its next pass (DS_SEEN never = the last pass). (DN_ZCOL's pads:
+; zeroed once by boot6_init.)
+; Clobbers: A, B, HL.  ~0.7k T (cold: new game, level, room change)
+;------------------------------------------------------------------------------
+dn_reset:
+                ld   a, OP_LD_BC_NN            ; DNUM-SPRITE-FIX: none live, present's dn_fix call off
+                ld   (present.dnf), a          ; (a bank-2 code byte, not this bank's)
+                ld   hl, DN_LIVE + DL_SLOT
+                ld   b, DN_LIVE_N
+.l:             ld   (hl), $FF                 ; every entry free
+                ld   a, l
+                add  a, DN_LIVE_STRIDE
+                ld   l, a
+                djnz .l
+                ld   l, DN_SLOT & $FF
+                ld   a, (DN_PASS)
+                add  a, $80
+                ld   b, P_MAX_ENT
+.s:             ld   (hl), a                   ; DS_SEEN: resync
+                inc  l
+                inc  l
+                ld   (hl), 0                   ; DS_FLG: no miss
+                inc  l
+                inc  l
+                djnz .s
+                ret                            ; (the old room's DN_KEY queue: dn_scan drops
+                                               ; a key whose slot's DS_SEEN is not the last pass)
+                ASSERT DN_SLOT == DN_LIVE + DN_LIVE_N * DN_LIVE_STRIDE && DS_SEEN == 0 && DS_FLG == 2
+
 
 ;------------------------------------------------------------------------------
 ; mk_room — every mark forgotten without an erase (the screen was redrawn or

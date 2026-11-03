@@ -9,7 +9,7 @@
 ;   pool_hero   start_game, after gen_idles: the hero + its class FX kind; seq
 ;               slot 0 = the hero; every FX FRT row except the hero's class
 ;               FX := NONE (3F-T2: the other class's rows never go stale)
-;   pool_proto  start_game, PROTO rooms: the original monster kinds
+;   (pool_proto: D3-11, the PROTO test fixture src/proto_fix.asm)
 ;               K_SKELETON .. K_PROTO_END - 1, seq slots 1..6
 ;   pool_list   level_enter, after alloc_restore: monster FRT rows := NONE,
 ;               the FX rows outside the hero's class FX := NONE (stale extras
@@ -74,8 +74,8 @@ FX_END          EQU KFID_FXW + KFCNT_FXW
 ; pool_list — far6 from level_enter (after alloc_restore): PL_LIST := the
 ; units of LP_KINDS[0..3] + LP_BOSS (pool_gmap) + their hero extras
 ; (pool_xmap), each once, first-seen order; seq slots 1.. := their blocks.
-; pool_proto — far6 from start_game (PROTO rooms, after pool_hero's session):
-; the same for the original kinds K_SKELETON .. K_PROTO_END - 1.
+; (D3-11: the PROTO fixture, src/proto_fix.asm, runs the same session for the
+; original kinds K_SKELETON .. K_PROTO_END - 1 with pl_begin / pl_kinds.)
 ; All three first (pl_begin): the masters unpacked, monster FRT rows := NONE
 ; (a kind not generated now blits nothing — BLIT_MISS — never stale pool
 ; bytes; 3F-T1's level_enter LDIR), the FX rows outside the hero's class FX
@@ -83,9 +83,7 @@ FX_END          EQU KFID_FXW + KFCNT_FXW
 ; Clobbers: A, BC, DE, HL.   ~0.1M T (unpack ~60k, FRT rows ~15k)
 ;------------------------------------------------------------------------------
 pool_hero:
-                ld   a, HIGH POOL6_END         ; 3F-T13: alloc's bank-6 limit = below SRC6 (the
-                ld   (alloc.lim6 + 1), a       ; PROTO fixture may have moved it; SMC target, lowram.asm)
-                call pl_begin
+                call pl_begin                  ; (D3-11: the bank-6 limit is never left moved)
                 ld   a, (HERO_KIND)
                 call pl_unit
                 ld   a, (HERO_KIND)
@@ -93,43 +91,12 @@ pool_hero:
                 call pl_unit
                 jp   sq_fill
 
-pool_proto:
-                ; 3F-T13: the PROTO fixture (6 original kinds, POOL_NEED_PROTO) pools over the
-                ; SRC6 sources: no 3F kind, no stairs in rooms A-D, so this session never reads
-                ; them; the next game start (pool_hero) moves the limit back. A test must not
-                ; descend from PROTO without a reload (SRC6 is then overwritten).
-                ld   a, HIGH R6_ADDR
-                ld   (alloc.lim6 + 1), a       ; SMC target (lowram.asm alloc)
-                call pl_begin
-                ld   hl, PL_PROTO              ; the kind list K_SKELETON ..
-                ld   a, K_SKELETON
-.w:             ld   (hl), a
-                inc  hl
-                inc  a
-                cp   K_PROTO_END
-                jr   c, .w
-                ld   de, PL_PROTO
-                ld   b, K_PROTO_END - K_SKELETON
-                ld   a, (proto_start)          ; 3F-T3: bit PS_SLIME_BIT = also the Slime (the last
-                bit  PS_SLIME_BIT, a           ; kind of the list); the default fixture pools the
-                jr   nz, pl_kinds              ; other five (POOL_NEED_PROTO); tests poke 3
-                dec  b
-                jr   pl_kinds
-                ASSERT K_PROTO_END - 1 == K_SLIME
+; pool_proto: D3-11, the PROTO test fixture (src/proto_fix.asm) runs it.
 
 pool_list:
-                ; 3F-T13 guard: a level pool must never run with the PROTO limit (it would
-                ; pool over SRC6 and the next descend read overwritten sources): trap + reset.
-                ld   hl, alloc.lim6 + 1
-                ld   a, HIGH POOL6_END
-                cp   (hl)
-                jr   z, .lim
-                ld   (hl), a                   ; reset the SMC limit
-                ld   hl, GEN_TRAP
-                inc  (hl)
-                jr   nz, .lim
-                dec  (hl)                      ; saturate
-.lim:           call pl_begin
+                ; (3F-T13's PROTO-limit guard is gone, D3-11: the PROTO fixture puts the
+                ; bank-6 limit back itself after its pool session, proto_fix.asm)
+                call pl_begin
                 ld   de, LP_KINDS
                 ld   b, LP_GEN_N
                 ; fall through

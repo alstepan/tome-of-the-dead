@@ -51,6 +51,15 @@ def load_syms(path=SYM):
 
 
 S = load_syms()
+# D3-11: the PROTO rooms A-D test fixture (src/proto_fix.asm), not in the image: poked at
+# PROTO_FIX_ORG when start_game stops at proto_hook (Proto.arm_proto / tick)
+# (a pre-D3-11 build, e.g. an A/B base: PROTO in the image, no fixture, nothing to arm)
+_PF = os.path.join(BUILD_DIR, "ovl", "proto.bin")
+if "proto_hook" in S and not os.path.exists(_PF):
+    raise RuntimeError(f"{_PF} missing: the PROTO test fixture comes with the build (tools/build.sh)")
+PROTO_FIX = open(_PF, "rb").read() if "proto_hook" in S else None
+PROTO_HOOK = S["proto_hook"] if PROTO_FIX else -1
+PROTO_BP = 40                                    # its breakpoint (tests use 1..32)
 HAS_TRACE = "ANIM_TRACE" in S   # RECLAIM-C2: release builds have no render trace
 F3 = bool(S.get("F3_GEN", 0))   # P3: the build's generator mode (default 1): oracles call generate(..., f3=F3)
 
@@ -159,6 +168,22 @@ def kind_frames(k):
     return S["KFID_" + n], S["KFCNT_" + n]
 
 
+class _Probes(set):
+    """Proto.probes (D3-11): the probe PCs, and start_game's proto_hook while the PROTO
+    fixture is armed: a membership test at proto_hook pokes the fixture first, so every
+    suite's own run loop (`if pc in p.probes: return`, kit / equip / spawn / ...) passes
+    it as a tick boundary with the fixture in place: its next cpu-step runs the call."""
+    def __init__(self, owner, items):
+        super().__init__(items)
+        self.owner = owner
+
+    def __contains__(self, pc):
+        if pc == PROTO_HOOK and self.owner.proto_start:
+            self.owner.proto_poke()
+            return True
+        return set.__contains__(self, pc)
+
+
 class Proto:
     """Tick-exact driver. After load() ZEsarUX stays in cpu-step mode with
     breakpoints on wait_tick (once per 25 Hz game tick, render complete) and
@@ -209,9 +234,60 @@ class Proto:
         return {k: b[o] for k, o in E.items()}
 
     def set_ent(self, slot, **kw):
+        """Poke entity fields. D3-11: a poked HP / MAXHP is no game event: the flying
+        numbers' snapshot of the slot follows it (DS_SNAP, the hero's DN_SMAX), so no
+        number spawns for it (tests/dnum.py pokes the raw byte to make one: poke_hp)."""
         base = S["P_ENTITIES"] + slot * STRIDE
         for k, v in kw.items():
             self.h.write_byte(base + E[k], v)
+        if "DN_SLOT" in S and ("HP" in kw or "MAXHP" in kw):
+            e = self.z.read_memory(base, STRIDE)
+            self.h.write_byte(S["DN_SLOT"] + 4 * slot + S["DS_SNAP"], e[E["HP"]])
+            if slot == 0:
+                self.h.write_byte(S["DN_SMAX"], e[E["MAXHP"]])
+
+    def dn_cells(self):
+        """D3-11: the cells of every live flying number's window (rows start - 1, start),
+        as {(col, row)} (empty on a pre-D3-11 build)."""
+        out = set()
+        if "DN_LIVE" not in S:
+            return out
+        for e in range(S["DN_LIVE_N"]):
+            r = self.z.read_memory(S["DN_LIVE"] + e * S["DN_LIVE_STRIDE"], 8)
+            if r[S["DL_SLOT"]] != 0xFF:
+                c0, row, w = r[S["DL_COL"]], r[S["DL_ROW"]], r[S["DL_W"]]
+                out |= {(c, rr) for c in range(c0, c0 + w) for rr in (row - 1, row)}
+        return out
+
+    def dn_settle(self, max_ticks=40):
+        """D3-11: tick until no flying number is live (+2 ticks: its erase presented;
+        DNUM-SPRITE-FIX: screen 2 only, no repair), for checks that compare the screens with the
+        map or each other. Nothing else is stepped: idle ticks only move numbers /
+        decor / drips / marks."""
+        if "DN_LIVE" not in S:
+            return
+        n = 0
+        while self.dn_cells() and n < max_ticks:
+            self.tick()
+            n += 1
+        if n:
+            self.tick(2)
+
+    @staticmethod
+    def mask_cells(frame, cells):
+        """frame (bitmap + attrs, or bitmap only) with cells' 8 lines (+ attr) zeroed."""
+        f = bytearray(frame)
+        for c, r in cells:
+            for line in range(8):
+                y = r * 8 + line
+                f[((y & 0xC0) << 5) | ((y & 7) << 8) | ((y & 0x38) << 2) | c] = 0
+            if len(f) > 6144:
+                f[6144 + r * 32 + c] = 0
+        return bytes(f)
+
+    def poke_hp(self, slot, hp):
+        """The HP byte only (D3-11): seen by the flying numbers as a real change."""
+        self.h.write_byte(S["P_ENTITIES"] + slot * STRIDE + E["HP"], hp)
 
     # A7 double buffer: bank 7 (displayed) trails the composed bank 5 by one
     # tick (present runs at the next tick start). At settled points (every
@@ -240,13 +316,18 @@ class Proto:
         return fr
 
     def banks_differ(self):
-        """Screen bytes where bank 7 (displayed) != bank 5 (composed)."""
+        """Screen bytes where bank 7 (displayed) != bank 5 (composed). DNUM-SPRITE-FIX:
+        the flying numbers live on screen 2 only (OR'd over bank 5): their window cells
+        are skipped (tests/dnum.py checks them exactly against its model)."""
         self.z.cmd("set-memory-zone 0")
         try:
             b5 = self.z.read_memory(5 * 16384, SCREEN_FRAME_LEN)
             b7 = self.z.read_memory(7 * 16384, SCREEN_FRAME_LEN)
         finally:
             self.z.cmd("set-memory-zone -1")
+        cells = self.dn_cells()
+        if cells:
+            b5, b7 = self.mask_cells(b5, cells), self.mask_cells(b7, cells)
         return sum(1 for a, b in zip(b5, b7) if a != b)
 
     def present_watch(self, on):
@@ -275,7 +356,7 @@ class Proto:
 
     @property
     def probes(self):
-        return {S["wait_tick"], S["select_tick"]} | getattr(self, "extra_probes", set())
+        return _Probes(self, {S["wait_tick"], S["select_tick"]} | getattr(self, "extra_probes", set()))
 
     def pc(self):
         return int(self.z.cmd("get-registers")[3:7], 16)
@@ -321,13 +402,31 @@ class Proto:
         self.load_breakpoints()
 
     def load_breakpoints(self):
-        """Probe breakpoints only (1 wait_tick, 2 select_tick); 3..32 cleared."""
+        """Probe breakpoints only (1 wait_tick, 2 select_tick); 3..32 cleared;
+        PROTO_BP = start_game's proto_hook while proto_start (D3-11 fixture)."""
         self.extra_probes = set()
         self.z.cmd("enable-breakpoints")
         self.z.cmd("set-breakpoint 1 PC=%d" % S["wait_tick"])
         self.z.cmd("set-breakpoint 2 PC=%d" % S["select_tick"])
         for n in range(3, 33):                       # no stale per-test/profiler breakpoints
             self.z.cmd("set-breakpoint %d" % n)
+        self.arm_proto()
+
+    def arm_proto(self):
+        """D3-11: the PROTO rooms A-D left the image (src/proto_fix.asm, raw
+        build/ovl/proto.bin): while proto_start is set, breakpoint PROTO_BP on
+        start_game's proto_hook; tick() pokes the fixture at PROTO_FIX_ORG there
+        (proto_poke) and runs on: the call executes it."""
+        if self.proto_start and PROTO_FIX:
+            self.z.cmd("set-breakpoint %d PC=%d" % (PROTO_BP, PROTO_HOOK))
+        else:
+            self.z.cmd("set-breakpoint %d" % PROTO_BP)
+
+    def proto_poke(self):
+        for i in range(0, len(PROTO_FIX), 64):        # write-memory takes several values
+            self.z.cmd("write-memory %d %s" % (S["PROTO_FIX_ORG"] + i, " ".join(str(b) for b in PROTO_FIX[i:i + 64])))
+        if bytes(self.z.read_memory(S["PROTO_FIX_ORG"], len(PROTO_FIX))) != PROTO_FIX:
+            raise RuntimeError("PROTO fixture poke did not take")
 
     def tick(self, n=1):
         """Advance to the next probe breakpoint, n times. `run` can also return
@@ -342,6 +441,10 @@ class Proto:
                 if pc == getattr(self, "present_probe", None):
                     self.present_samples.append(self.banks_differ())
                     self.z.cmd("cpu-step")    # not a tick boundary: run on
+                    continue
+                if pc == PROTO_HOOK:          # D3-11: the PROTO fixture (arm_proto)
+                    self.proto_poke()
+                    self.z.cmd("cpu-step")    # into the fixture: run on
                     continue
                 if pc in self.probes:
                     break

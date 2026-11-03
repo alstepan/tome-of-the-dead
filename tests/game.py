@@ -248,6 +248,7 @@ class T(Proto):
                 covered |= {(c, r) for c in range(e["DCOL"], e["DCOL"] + e["DCOLS"])
                             for r in range(e["DROW"], e["DROW"] + e["DROWS"])}
         covered |= game_lib.mark_cells(self)        # D3-8d: screen-only overlay
+        covered |= self.dn_cells()                  # D3-11: the flying numbers (screen-only overlay)
         bad = []
         for r in range(PLAY_ROWS):
             for c in range(32):
@@ -1818,7 +1819,10 @@ def main():
                 flip = [0]
 
                 def cb(frame, hero):
-                    frames.append(frame[:6144])
+                    # D3-11: a flying number's timing follows the tick's frame budget (the
+                    # pass runs only in a 1st-frame tick), so the two runs' windows may
+                    # differ: they are masked (both runs' cells) before the compare
+                    frames.append((frame[:6144], p.dn_cells()))
                     sk = p.ent(SLOT_SKC)
                     if (sk["DVIS"] & 1 and sk["DCOL"] < hero["DCOL"] + hero["DCOLS"]
                             and hero["DCOL"] < sk["DCOL"] + sk["DCOLS"]):
@@ -1831,7 +1835,13 @@ def main():
                 return frames, overlap[0]
             fa, ova = skel_turn(False)
             fb, _ = skel_turn(True)
-            diff = [i for i, (a, b) in enumerate(zip(fa, fb)) if a != b]
+            def near(i):                          # +-2 ticks: an expired number's erase / repair
+                cs = set()
+                for j in range(max(0, i - 2), min(len(fa), len(fb), i + 3)):
+                    cs |= fa[j][1] | fb[j][1]
+                return cs
+            diff = [i for i, ((a, _), (b, _)) in enumerate(zip(fa, fb))
+                    if p.mask_cells(a, near(i)) != p.mask_cells(b, near(i))]
             h.expect("42 skeleton rect overlaps the hero on some ticks", ova > 0, True)
             h.expect("42 same tick count", len(fa), len(fb))
             h.expect("42 flashing hero keeps its pixels under an overlapping redraw", diff[:4], [])
@@ -2080,7 +2090,9 @@ def tape_rest(h, p):
     """#50 after the tape reached GS_SELECT: screen, pool, banks, play."""
     p.tick(2)                                    # park on select_tick
     p.wb("ANIM_FREEZE", 1)
-    p.tick(4)                         # C3-6: the torches hold frame 0
+    p.tick(9)                         # C3-6: the torches hold frame 0 from their next swap (every
+                                      # MENU_TORCH_STEP 8 frames; D3-11: the longer tape moved the
+                                      # menu's phase at GS_SELECT, 4 frames no longer reached it)
     golden(h, "game_select", p.frame())
     h.expect("50 tape GEN_OVERFLOW 0", p.rb("GEN_OVERFLOW"), 0)
     from game_lib import SNA_RAM
@@ -2139,7 +2151,7 @@ def tape_rest(h, p):
     h.expect("50 bank 6 R6 region (R6 tape block) == .sna", ram[ro:ro + S["R6_USED"]] ==
              SNA_RAM[ro:ro + S["R6_USED"]], True)
     # MEM-FT review: the FRT row image (frame_tab in row bytes 12..15) is .sna-only; on tape
-    # boot6_ft rebuilds it from ftz_zx0. At the menu every row == the .sna except bytes 0..11
+    # instr_ovl in_ft (RECLAIM-D) rebuilds it from bank-0 ftz_zx0. At the menu every row == the .sna except bytes 0..11
     # of the two select idles' rows (gen_idles wrote their variant pointers; tails compared)
     fo, nf = 2 * 16384 + S["FRT"] - 0x8000, S["FID_COUNT"]
     ft, fs = bytearray(ram[fo:fo + 16 * nf]), bytearray(SNA_RAM[fo:fo + 16 * nf])
@@ -2156,6 +2168,7 @@ def tape_rest(h, p):
     p.wb("ANIM_FREEZE", 1)
     p.wb("INPUT_SRC", 1)
     p.wb("proto_start", 3 if p.proto_start else 0)   # B3B-12: the tape loaded the default 0 (3F-T3: bit 1 = + Slime)
+    p.arm_proto()                                    # D3-11: the PROTO fixture breakpoint (proto_hook)
     p.hold("1")
     h.expect("50 tape: '1' starts the game", p.wait_state(GS_PLAYING), True)
     p.release()

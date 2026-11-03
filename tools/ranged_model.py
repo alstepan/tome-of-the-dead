@@ -72,6 +72,9 @@ EFX_TAB = {1: (0, 0x03, 1, "t1hi"), 2: (0x01, 0x03, 2, "t1hi"), 3: (0x02, 0x03, 
            4: (0x08, 0x0C, 4, "t1lo"), 5: (0x04, 0x0C, 8, "t1lo"), 6: (0x10, 0x10, 0x10, "x"),
            7: (0, 0x20, 0x20, "t2lo")}
 ROCK_ATTR = 0x06                                   # the Slinger's rock FX attr (§9.6)
+FID_DAGGER = None                                  # FID_dagger_spin1 (the caller sets it from the .sym):
+                                                   # a dagger_spin shot (rock, King) flies ROCK_ATTR (rg_q),
+                                                   # every other shot its frames' own (FXD_ATTR 0)
 PF_ROW_DY, RG_REL, CNB_MAX, PF_IMPT, FX_NONE = 2, 2, 8, 2, 0xFF
 STS_HOLD, STS_MIND, MIND_FEAR, IMMF_FEAR = 0x03, 0x0C, 0x04, 0x08
 MSG_M_HIT, MSG_M_MISS = 4, 5
@@ -260,7 +263,7 @@ def decide(sit, rng):
         sh["hero"] = hs
         anchor = first if d > 0 else first + gap - 1
         sh["desc"] = [fx, fx + 1] + ([fx + 2] * 2 if sh["imp"] else [FX_NONE] * 2) + \
-            [0, anchor, flight_row(sit), 1 if d < 0 else 0, 0, PF_IMPT if sh["imp"] else 0, 1, gap, 0, 0, 0, 0]
+            [ROCK_ATTR if fx == FID_DAGGER else 0, anchor, flight_row(sit), 1 if d < 0 else 0, 0, PF_IMPT if sh["imp"] else 0, 1, gap, 0, 0, 0, 0]
         sh["flash"] = I if sh["lost"] else 0
         out["shot"] = sh
         return out

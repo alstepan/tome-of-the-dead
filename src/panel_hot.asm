@@ -400,6 +400,38 @@ item_depth:
                 ld   de, (2 << 8) | 1
                 jp   pmark_rect
 
+;------------------------------------------------------------------------------
+; dn_mbit — DNUM-SPRITE-FIX (bank-2 dnum2.asm dn_cel; here: HOT_COPY's spare,
+; its image is boot-only): cell B row, C col: HL = its PRES_MASK byte, E = its
+; bit, A = (HL) & E (Z: not marked for present).  Clobbers: A, E, HL.  ~0.1k T
+;------------------------------------------------------------------------------
+dn_mbit:
+                ld   a, c
+                and  7
+                add  a, pm_tab & $FF
+                ld   l, a
+                ld   h, pm_tab >> 8
+                ld   a, (hl)
+                inc  l
+                xor  (hl)                      ; ($FF >> n) ^ ($FF >> n + 1) = bit 7 - n
+                ld   e, a
+                ld   a, b
+                add  a, a
+                add  a, a
+                ld   l, a                      ; row * 4
+                ld   a, c
+                rrca
+                rrca
+                rrca
+                and  3
+                add  a, l
+                add  a, PRES_MASK & $FF
+                ld   l, a
+                ld   h, PRES_MASK >> 8
+                ld   a, (hl)
+                and  e
+                ret
+
 panel_hot_end:
                 ENT
 PANEL_HOT_LEN   EQU panel_hot_end - panel_hot

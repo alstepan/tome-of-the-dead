@@ -14,8 +14,8 @@
 ; in place (no copy_virt / GEN_SRC staging) and the callees must not page
 ; $C000 (clear_screen, init_kbd_mirror: bank 5 low RAM, they page nothing).
 ;   boot6_init   boot, under DI: IM 2 install + the power-on state
-;   boot6_tiles  boot: common tiles + ornament, HOT_COPY image, planar FONT6,
-;                then boot6_ft (MEM-FT: frame_tab -> the FRT rows)
+;   boot6_tiles  boot: common tiles + ornament, HOT_COPY image, planar FONT6
+;                (RECLAIM-D: the MEM-FT frame_tab -> FRT step is instr_ovl.asm in_ft)
 ;   boot6_wait   boot: the key waits + HOW TO PLAY (INSTR-BUILD overlay, bank 0)
 ; Was: low RAM (isr_install, isr_image, boot's state init, keytab_defaults)
 ; and bank 7 (init_tiles, panel_boot) + bank-1 vdata (tiles_common, orn_glyphs,
@@ -114,6 +114,16 @@ boot6_init:
                 ld   bc, P_MAX_ENT * P_ENT_STRIDE - 1
                 ld   (hl), 0
                 ldir
+                ld   hl, DN_ZCOL               ; D3-11: the number window's zero pads (a FONT6
+                ld   b, 24                     ; hole, runtime RAM: garbage after a tape load);
+.zc:            ld   (hl), c                   ; only its middle 8 B are written after this
+                inc  l                         ; (C = 0 after the LDIR)
+                djnz .zc
+                ld   hl, DN_KEY                ; D3-11: the spawn queue empty (garbage after a
+                ld   b, P_MAX_ENT              ; tape load: dn_q2 may run before the first scan)
+.dk:            ld   (hl), $FF
+                inc  l
+                djnz .dk
                 ret
 
 ;------------------------------------------------------------------------------
@@ -162,37 +172,8 @@ boot6_tiles:
                 ld   a, c
                 cp   FONT6_FIRST + FONT6X8_COUNT
                 jr   nz, .ch
-                ; fall through
-;------------------------------------------------------------------------------
-; boot6_ft — MEM-FT: the static frame_tab into the FRT rows. ftz_zx0 (end of
-; the bank-2 image, always mapped) holds the entries contiguous (FT_LEN B/fid); unpacked to FRT
-; first, then spread from the LAST fid down to row tail FRT + fid*16 +
-; FT_IN_ROW, each row's variants := FRT_NONE. Top-down is overlap-safe: the
-; source of fid f (4f..4f+3) never lies above its row (16f..16f+15), and every
-; lower fid's source lies below row f. Result == the build's FRT image (data.asm,
-; the .sna's bytes) for fids < FID_COUNT; rows above stay untouched. Must run
-; before the first gen_frame (boot: gen_idles).   Clobbers: A, BC, DE, HL.
-; ~16k T (dzx0 of 516 B + ~76 T x 16 B/row; boot only)
-;------------------------------------------------------------------------------
-boot6_ft:
-                ld   hl, ftz_zx0
-                ld   de, FRT
-                call dzx0_standard
-                ld   hl, FRT + FID_COUNT * FT_LEN - 1
-                ld   de, FRT + FID_COUNT * FRT_STRIDE - 1
-                ld   a, FID_COUNT
-.r:             ld   bc, FT_LEN
-                lddr                           ; the entry -> the row tail
-                ex   de, hl                    ; HL = row byte FT_IN_ROW - 1
-                ld   b, FT_IN_ROW
-.n:             ld   (hl), FRT_NONE
-                dec  hl
-                djnz .n
-                ex   de, hl                    ; DE = the row below's last byte
-                dec  a
-                jr   nz, .r
-                ret
-                ASSERT FID_COUNT >= 1 && FID_COUNT <= 255
+                ret                            ; RECLAIM-D: boot6_ft (frame_tab -> the FRT rows)
+                                               ; is instr_ovl.asm in_ft now (its stream: bank 0)
 
 ;------------------------------------------------------------------------------
 ; boot6_wait — farb from boot after boot6_tiles, BEFORE the boot pool: the

@@ -117,6 +117,8 @@ ammo_fire:
 .hit:           ld   a, (pf_lost)              ; 3F-T6: $FF = the hit was parried (deal_hit H = 1)
                 inc  a
                 jr   nz, .nph
+                ld   a, (pf_tgt)               ; D3-11: dn_sfx flags the MISS on the hero's E_TGT:
+                ld   (P_ENTITIES + E_TGT), a   ; the struck body (not his last melee target)
                 ld   b, MSG_P_PARRY
                 call impact_line               ; "THE <kind> PARRIES!" (C = kind)
                 jr   .out

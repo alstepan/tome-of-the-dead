@@ -47,6 +47,7 @@ sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_RAT, K_BAT, K_SKELETON  # noqa: E402
 from proj3 import T as PT, w16  # noqa: E402
 import ranged_model as M  # noqa: E402
+M.FID_DAGGER = S["FID_dagger_spin1"]              # rg_q: a dagger_spin shot's FXD_ATTR = ROCK_ATTR
 
 STUB = S["LOWRAM_END_3B"]
 RES = STUB + 200
@@ -462,14 +463,15 @@ def main():
               and {x[0] for x in fresh + silk} == {2, 3} and {x[0] for x in dag} == {2, 3, 4},
               (fresh[:4], capd[:4], silk[:4], dag[:6], len(fresh), len(dag)))
 
-        # ATTR: every shot's colour (FXD_ATTR 0 = fx_meta, the model's descriptors); the hero's thrown dagger is $47
+        # ATTR: every shot's colour (FXD_ATTR 0 = fx_meta; the monsters' dagger_spin shots pass FXD_ATTR
+        # ROCK_ATTR: the model's descriptors, checked in A); fx_meta's dagger_spin = the hero's throw $47
         fm = S["fx_meta"] - S["KFID_FXM"]
         meta = {nm: p.rb(fm + S["FID_" + nm]) & 0x7F for nm in
                 ("dagger_spin1", "dagger_spin2", "spark_fly1", "spark_fly2", "arrow_fly1", "arrow_fly2",
                  "nbolt_fly1", "nbolt_fly2")}
-        check("ATTR monster shots: rock / King dagger (dagger_spin) = ROCK_ATTR $06, Queen spark $43, arrow $07, "
-              "Necro bolt $43; the hero's throw THROW_ATTR $47 (proj3 writes it; tests/proj3 + abil_ammo model)",
-              meta == {"dagger_spin1": 6, "dagger_spin2": 6, "spark_fly1": 0x43, "spark_fly2": 0x43, "arrow_fly1": 7,
+        check("ATTR fx_meta: dagger_spin = the hero's throw THROW_ATTR $47 (the monsters' rock / King dagger pass "
+              "FXD_ATTR ROCK_ATTR $06: A's descriptors), Queen spark $43, arrow $07, Necro bolt $43",
+              meta == {"dagger_spin1": 0x47, "dagger_spin2": 0x47, "spark_fly1": 0x43, "spark_fly2": 0x43, "arrow_fly1": 7,
                        "arrow_fly2": 7, "nbolt_fly1": 0x43, "nbolt_fly2": 0x43}
               and S["ROCK_ATTR"] == 6 and S["THROW_ATTR"] == 0x47, meta)
 

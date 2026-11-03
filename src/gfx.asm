@@ -634,6 +634,9 @@ pmark_dmg:
 ; low byte is the mask address * 8 (no per-row base), the screen highs are
 ; re-patched only when the screen third changes, and an all-zero HUD4_PW is
 ; skipped in one OR pass.
+; DNUM-SPRITE-FIX: after paging bank 7, .dnf calls dn_fix (dnfix2.asm) while a
+; flying number is live: its marked cells drawn (bank 5 | the number) and unmarked.
+; SMC: .dnf = OP_CALL_NN / OP_LD_BC_NN (bank-0 dn_mb / dn_tick, bank-7 dn_reset).
 ; SMC: .sbh/.dbh/.sah/.dah+1 (src/dst bitmap/attr high of the current third;
 ; .full8 reads them too) and .thd+1 (that third * 32; $FF = none yet).
 ;------------------------------------------------------------------------------
@@ -671,6 +674,9 @@ present:
                 ld   (PRES_ANY), a             ; (after the marks: they set it)
                 ld   a, BANK_SCREEN7
                 call page_bank
+.dnf:           ld   bc, dn_fix                ; SMC: CALL dn_fix while a flying number is live (bank-0
+                                               ; dn_mb on a spawn), LD BC (10 T) once none is (dn_tick,
+                                               ; dn_reset): DNUM-SPRITE-FIX, marked number cells drawn
                 ld   a, (PRES_RMIN)            ; skip the rows above the first mark
                 cp   PRES_LEN / 4
                 jr   c, .rmin

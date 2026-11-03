@@ -72,7 +72,7 @@ BANK_SHADOW    EQU 7               ; D3-S2: the ATTR shadow ($F800, erase_rect's
 BANK_COLD7      EQU 7               ; D3-S2: bank-7 cold code B7_CODE..B7_LIMIT (via far7)
 BANK_SCREEN7    EQU 7               ; A7: the displayed screen during play, $C000..$DAFF
 BANK_COLD3      EQU BANK_SRC_HI     ; bank-3 cold code (select, scrolls) after the source tail; via far3
-AY_RESERVE      EQU $F040           ; RECLAIM-C (a): $F010 -> $F040 (+48 B bank-3 cold code; the AY slot keeps 9 B, user 2026-11-02: the spare reserve only, no sound cut); M0 (L3): $EFD0 -> $F010 (+64 B bank-3 cold code; the AY slot keeps 57 B for 3G SFX); MEM-RECLAIM w3: $EFA0 -> $EFD0 (+48 B bank-3 cold code for lq_block; 121 B SFX slack kept); was: A8 / D3-0 / MEM-SND / 3E lever (c): bank 3 $EFA0..$FFFF = 4192 B AY player/music/FX
+AY_RESERVE      EQU $F048           ; D3-11: $F040 -> $F048 (+8 B bank-3 cold code; the AY slot keeps 1 B, user 2026-11-02); RECLAIM-C (a): $F010 -> $F040 (+48 B bank-3 cold code; the AY slot keeps 9 B, user 2026-11-02: the spare reserve only, no sound cut); M0 (L3): $EFD0 -> $F010 (+64 B bank-3 cold code; the AY slot keeps 57 B for 3G SFX); MEM-RECLAIM w3: $EFA0 -> $EFD0 (+48 B bank-3 cold code for lq_block; 121 B SFX slack kept); was: A8 / D3-0 / MEM-SND / 3E lever (c): bank 3 $EFA0..$FFFF = 4192 B AY player/music/FX
                                     ;     reserve (game.md §11.2, user 2026-10-06: 7 KB -> 4 KB at $F000,
                                     ;     was $E400; MEM-SND: -608 B after 406 B of bank-3 cold code went
                                     ;     to bank 7, ~200 B bank-3 slack kept; 3E lever (c): +512 B
@@ -169,6 +169,10 @@ BANK_OVL_PAGE   EQU BANK_R6         ; R6: the page stream (page_ovl, menu1.asm)
 ; code, same window). All four ZX0 streams sit in bank 0 right after the text block
 ; (POOL_START.., on the text tape block; the boot pool overwrites them after the help).
 INSTR_ORG       EQU GEN_SCRATCH
+; D3-11: the PROTO rooms test fixture (src/proto_fix.asm, build/ovl/proto.bin, never in
+; the image): run in the bank-5 screen bitmap (the menu's, cleared by level_show) once
+; tests/game_lib.py has poked it there at start_game's proto_hook.
+PROTO_FIX_ORG   EQU SCREEN_BITMAP
 BANK_INSTR      EQU BANK_TEXT
 IK_I16          EQU 1               ; page icon record kinds (instr_pack.py): R6 ic_scr, logical index
 IK_BAR          EQU 2               ; 24x16 bar icon, vdata label (bank-3 pblit)
@@ -201,12 +205,13 @@ TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
 ; (slack 1,024) and 45 + 260 B 880. M1 (user 2026-11-01) took the 240-B step: total reserve 2,624 B
 ; (cliff measured: B0_CODE_RES 206 -> slack 1,024, 207 -> 384, with TEXT_RES 2,418).
 TEXT_RES        EQU 2367 + 33                  ; RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom (was 2384 + 28; LOG-DMG: 2367 + 45)
-B0_CODE_RES     EQU 212                        ; LOG-DMG: log0.asm 212 B (M1: 206, empty); TEXT_RES + B0_CODE_RES
-                                               ; = 2,624 (M1) unchanged: one more byte drops the slack to 384 (cliff)
+B0_CODE_RES     EQU 704                        ; D3-11 (user 2026-11-02, the pool-slack step): log0.asm 212 + dnum0.asm;
+                                               ; the D8 Warrior slack 1,024 -> 384 (cliff measured with TEXT_RES 2,400:
+                                               ; 704 -> 384, 708 -> the pool no longer fits). LOG-DMG: 212 (M1: 206)
 ; LOG-DMG + DBG-1: kit builds only — kit0.asm (83 B) + log0.asm (212 B) exceed the release reserve by
 ; ~38 B: the kit image takes the next pool-slack variant (D8 Warrior slack 1,024 -> 384, kit only;
 ; tests/kit.py runs it). The RELEASE layout (POOL_START $CA40, slack 1,024) is unchanged.
-B0_KIT_RES      EQU 80 * DEBUG_KIT             ; ENDCARD-G1: 62 -> 80 (text +18 B; kit slack stays 384) (DEBUG_KIT 0 / 1, defined below: an EQU, no IF)
+B0_KIT_RES      EQU 0                          ; D3-11: 0 (was 80 x DEBUG_KIT): the slack step's 704-B code reserve holds kit0.asm too
 POOL_START      EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CA40 (release): alloc_reset's first bank-0 pool byte
     MACRO FARB0 target                  ; call a bank-0 cold-code routine (8 B; A / DE / IX pass in;
                 ld   hl, target         ;   C lost to the bank, B to farb's A): farb pages BANK_TEXT
@@ -323,7 +328,7 @@ FRT_MAX         EQU 144             ; MEM-FT: 132 -> 144, the most the $A700 pag
 FRT             EQU (P_ENTITIES - FRT_MAX * FRT_STRIDE) & $FF00   ; page-aligned (blit_sprite's nibble swap):
                                     ; MEM-FT $A700..$AFFF; frame runtime table, 16 B/fid: 4 variants
                                     ; x bank,lo,hi (0..11) + the fid's frame_tab entry (FT_IN_ROW..15,
-                                    ; static: boot6_ft unpacks it, nothing rewrites it); directly below
+                                    ; static: instr_ovl in_ft unpacks it, nothing rewrites it); directly below
                                     ; ENTITIES; seq_rows sits directly below it (main.asm)
 FRT_GAP         EQU P_ENTITIES - (FRT + FRT_MAX * FRT_STRIDE)   ; free bank-2 RAM between the FRT and
                                     ; ENTITIES (MEM-FT: 0; 3F-T13bc 192 held seq_rows, now below FRT)
@@ -391,9 +396,10 @@ DEBUG_KIT       EQU 1                           ;     start kit (game.md §1.4 "
     ENDIF                                       ;     release tape); suites + goldens run on -DDEBUG_KIT=0
 KIT_DEBUG       EQU DEBUG_KIT                   ; (.sym: tests/game_lib.py refuses a kit build)
     IFNDEF ANIM_TRACE_ON                        ; RECLAIM-C2: 1 = render logs (slot, fid) per drawn
-ANIM_TRACE_ON   EQU DEBUG_KIT                   ;     frame change in ANIM_TRACE (test observable);
-    ENDIF                                       ;     default follows DEBUG_KIT: the release tape
-                                                ;     has none (bank 2 / bank 7 / render T saved).
+ANIM_TRACE_ON   EQU 0                           ;     frame change in ANIM_TRACE (test observable);
+    ENDIF                                       ;     default 0 (D3-11 trace relief: was DEBUG_KIT,
+                                                ;     the kit build pays bank 2 / bank 7 for the
+                                                ;     flying numbers); the release tape never had it.
                                                 ;     tests/game.py builds -DDEBUG_KIT=0
                                                 ;     -DANIM_TRACE_ON=1 privately when build/ lacks it
                 ASSERT ANIM_TRACE_ON == 0 || ANIM_TRACE_ON == 1
@@ -838,7 +844,7 @@ KF_OPENER       EQU %01000000       ; B3B-5: opens closed unlocked doors by bump
 ; Frame table (static, frame_tab) — MEM-FT: the 4-B entry lives in the fid's
 ; FRT row (bytes FT_IN_ROW..FT_IN_ROW+3, the row's spare tail), so
 ; frame_tab = FRT + FT_IN_ROW and FT_STRIDE = FRT_STRIDE (16). Not in the
-; bank-2 image: boot6_ft unpacks ftz_zx0 (124 B, end of the image) (contiguous 4 B/fid) and spreads
+; bank-2 image: instr_ovl in_ft unpacks ftz_zx0 (bank 0 POOL_START, boot only; RECLAIM-D) (contiguous 4 B/fid) and spreads
 ; it into the rows at boot; frt_none / gen_frame write bytes 0..11 only.
 ; A6: only what the per-tick renderer reads (blit, footprint, frame offsets);
 ; the generator-only part is the bank-5 descriptor (FD_*).
@@ -923,7 +929,9 @@ KS_STRIDE       EQU 17
 ; page), KS_STRIDE each; the sequence bytes they point to: SEQ_BYTES.
 SQ_SLOTS        EQU 7               ; hero + <= 6 monster blocks (PROTO: all 6 original kinds)
 SQ_ROWS_LEN     EQU SQ_SLOTS * KS_STRIDE
-SEQB_LEN        EQU 288             ; 3F-T13bc: 256 -> 288; SEQ_BYTES: >= hero + the level's blocks (ASSERTed per depth)
+SEQB_LEN        EQU 256             ; SEQ_BYTES: >= hero + the level's blocks (ASSERTed per depth). 3F-T13bc: 256 -> 288;
+                                    ; D3-11 review: back to 256 (+32 B bank 2): the need is 253 (the PROTO
+                                    ; fixture's 6 kinds; the worst real level D8 245), ASSERTed below seq_rows
 ; master block (the unpacked image at SQ_IMG): KSM_LEN (sequence bytes n),
 ; KSM_IMP (= KS_IMPACT), KSM_OFF + 8 offsets (KS_IDLE..KS_DEATH order) from
 ; KSM_SEQ, then the n sequence bytes (position-independent: no pointer inside)

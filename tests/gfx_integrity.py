@@ -585,8 +585,9 @@ def main():
         check("GI R4: SEQ_TRAP 0 (every sq_load kind had a block and a slot)", p.rb("SEQ_TRAP") == 0, p.rb("SEQ_TRAP"))
         seq_sweep(p, check)
         check("GI R4: SEQ_TRAP 0 after the sequence sweep", p.rb("SEQ_TRAP") == 0, p.rb("SEQ_TRAP"))
-        # 3F-T13 R6 guard: a PROTO start moves alloc's limit over SRC6; a level_enter after it
-        # (pool_list) must bump GEN_TRAP and put the limit back (a PROTO session needs a reload)
+        # 3F-T13 R6 guard, D3-11: the PROTO fixture (src/proto_fix.asm) moves alloc's limit over
+        # SRC6 for its own pool session only and puts it back: a level_enter's pool step after it
+        # (pool_list) runs with the normal limit and needs no trap (the guard is gone)
         p.proto_start = 1
         p.load()
         p.wait_state(S["GS_SELECT"])
@@ -597,16 +598,16 @@ def main():
         p.wait_state(S["GS_PLAYING"])
         p.release()
         p.settle(3)
-        check("GI lim6: the PROTO start moved the limit to HIGH R6_ADDR, GEN_TRAP 0",
-              p.rb(lim6) == (S["R6_ADDR"] >> 8) and p.rb("GEN_TRAP") == 0, (p.rb(lim6), p.rb("GEN_TRAP")))
+        check("GI lim6: the PROTO start (the fixture) leaves the limit at HIGH POOL6_END, GEN_TRAP 0",
+              p.rb(lim6) == (S["POOL6_END"] >> 8) and p.rb("GEN_TRAP") == 0, (p.rb(lim6), p.rb("GEN_TRAP")))
         # level_enter's pool step (alloc_restore + far6 pool_list); the rest of level_enter would
         # gen_list from the overwritten SRC6 sources (garbage by design: reload after PROTO)
         pc0 = p.pc()
         ok, _ = p.code([0xCD] + w16(S["alloc_restore"]) + [0x21] + w16(S["pool_list"])
                        + [0xCD] + w16(S["far6"]), game=True)
         p.z.cmd("set-register PC=%d" % pc0)
-        check("GI lim6: PROTO then level_enter's pool step (pool_list) ran, tripped GEN_TRAP once and reset the limit",
-              ok and p.rb("GEN_TRAP") == 1 and p.rb(lim6) == (S["SRC6_ADDR"] >> 8),
+        check("GI lim6: PROTO then level_enter's pool step (pool_list) ran, GEN_TRAP 0, the limit HIGH POOL6_END",
+              ok and p.rb("GEN_TRAP") == 0 and p.rb(lim6) == (S["POOL6_END"] >> 8),
               (ok, p.rb("GEN_TRAP"), p.rb(lim6)))
         print(f"[info] run anomalies: {T.anomalies}", flush=True)
     print(f"gfx_integrity: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
