@@ -460,11 +460,8 @@ level_populate:
                 INCLUDE "levelgen.asm"          ; B3B-7: level_gen, level_start_x
                 INCLUDE "lpop3.asm"             ; LP: lazy monster population (game.md §9.4)
 
-; glow_ids — B12: the per-level GLOW tile id (tileset_ids.inc), by depth - 1;
+; B12 GLOW: T_GLOW (common id 31, the same glyph on every depth; was the 8-B glow_ids per-level table)
 ; build_room_map stamps it above the middle cell of the open level exit.
-glow_ids:       DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_GLOW_F1_R0C0
-                DB   TS5_GLOW_F1_R0C0, TS6_GLOW_F1_R0C0, TS7_GLOW_F1_R0C0, TS8_GLOW_F1_R0C0
-                ASSERT $ - glow_ids == LEVELS
 
 ;==============================================================================
 ; build_room_map — B3B-8 v2 (plan D7; game.md §1.1 / §2.1 / §2.5 / §3.3 /
@@ -499,7 +496,7 @@ glow_ids:       DB   TS1_GLOW_F1_R0C0, TS2_GLOW_F1_R0C0, TS3_GLOW_F1_R0C0, TS4_G
 ;            after the scroll); the list is emptied first (PROTO: stays 0)
 ;   gate     B12 / 3F-T8, after the deriver: shut (LF_GRATE_OPEN = 0, the boss
 ;            lives) T_GRATE_SHUT x 3; open: T_GRATE (raised, LADDER|HOLE) over the
-;            3 exit cells + glow_ids[depth] on row 16 above the middle one if T_AIR
+;            3 exit cells + T_GLOW on row 16 above the middle one if T_AIR
 ; Clobbers: A, BC, DE, HL (IX, IY kept).   45.4k T worst (measured, DI, contended: W11 / W12M)
 ;==============================================================================
 build_room_map:
@@ -718,11 +715,7 @@ build_room_map:
                 ld   a, (hl)
                 or   a                         ; T_AIR only (decor / potion: no glow)
                 jr   nz, .x
-                ex   de, hl
-                ld   a, (LVL_DEPTH)            ; 1..8 (a lair exists only on D1..D8)
-                ld   hl, glow_ids - 1
-                call idx
-                ld   (de), a
+                ld   (hl), T_GLOW              ; HL = the row-16 cell above the exit's middle
                 pop  ix
                 ret
                 ASSERT T_AIR == 0

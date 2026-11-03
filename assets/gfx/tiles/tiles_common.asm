@@ -43,7 +43,7 @@ tiles_common_glyphs:
         DEFB $EF,$88,$80,$88,$DD,$20,$22,$02    ; 28 T_WALL_DITHER
         DEFB $00,$06,$C1,$88,$EF,$32,$22,$22    ; 29 T_WALL_PATCH
         DEFB $FF,$88,$88,$98,$EF,$62,$87,$02    ; 30 T_WALL_FADE
-        DEFB $00,$00,$00,$00,$00,$00,$00,$00    ; 31 T_FREE31
+        DEFB $10,$12,$38,$EE,$38,$10,$90,$02    ; 31 T_GLOW
 tiles_common_attrs:
         DEFB $00    ;  0 T_AIR
         DEFB $0F    ;  1 T_PLAT
@@ -76,5 +76,5 @@ tiles_common_attrs:
         DEFB $01    ; 28 T_WALL_DITHER
         DEFB $01    ; 29 T_WALL_PATCH
         DEFB $01    ; 30 T_WALL_FADE
-        DEFB $00    ; 31 T_FREE31
+        DEFB $46    ; 31 T_GLOW
 TILES_COMMON_LEN EQU $ - tiles_common_glyphs

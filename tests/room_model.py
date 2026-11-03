@@ -277,8 +277,8 @@ def render_room(blk, r, decor=True, anim=None):
 
 
 def glow_id(depth):
-    """B12: the per-level GLOW tile id (assets/gfx/tiles/tileset_ids.inc)."""
-    return S[f"TS{depth}_GLOW_F1_R0C0"]
+    """B12 GLOW: one common tile id on every depth (T_GLOW, common id 31)."""
+    return S["T_GLOW"]
 
 
 def read_block(p):

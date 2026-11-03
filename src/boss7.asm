@@ -60,12 +60,7 @@ grate_open:
                 ld   a, (hl)
                 or   a
                 jr   nz, .ng
-                ld   a, (LVL_DEPTH)
-                add  a, (glow7 - 1) & $FF
-                ld   e, a
-                ld   d, (glow7 - 1) >> 8
-                ld   a, (de)
-                ld   (hl), a
+                ld   (hl), T_GLOW
 .ng:            dec  c                         ; C, B = c, 16: 3 cols x 2 rows
                 ld   de, $0302
                 call rect_repaint              ; (low RAM: shadow_rect, restore_page, queue_damage)

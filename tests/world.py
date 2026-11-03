@@ -484,8 +484,11 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
     ents = [al[k:k + 4] for k in range(0, len(al), 4)]
     gl = [e for e in ents if e[2] >= 16]
     at = [e for e in ents if e[2] < 16]
-    if len(gl) > 4 or at or n > 12:      # LOOK-1: the flame attr cycle is gone, every entry is a glyph swap
-        errs.append(("anim budget", len(gl), len(at)))
+    # LOWER-FLAME exp.: a lower flame cell (same object = same phase, directly below another entry) is free of
+    # the 4-column glyph budget, like decorgen.counts()
+    top = [e for e in gl if not any(o[0] == e[0] and o[1] == e[1] - 1 and o[3] == e[3] for o in gl)]
+    if len(top) > 4 or at or n > 12:     # LOOK-1: the flame attr cycle is gone, every entry is a glyph swap
+        errs.append(("anim budget", len(top), len(at)))
     cells = {(e[0], e[1]) for e in ents}
     for e in ents:
         if e[0] > 31 or e[1] > 17:

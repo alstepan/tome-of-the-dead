@@ -90,7 +90,8 @@ COMMON = [
     (28, "T_WALL_DITHER", ("grid", "walls_r4.tiles", "wall_worn")),
     (29, "T_WALL_PATCH", ("grid", "walls_r4.tiles", "wall_brk_top")),
     (30, "T_WALL_FADE",  ("grid", "walls_r4.tiles", "wall_brk_bot")),
-    (31, "T_FREE31",     ("hold",)),                                  # DEC2: was T_BONES_3 (dropped 2026-10-26)
+    (31, "T_GLOW",       ("grid", "b12_gate.tiles", "gate_glow")),    # LOWER-FLAME exp.: B12 glow, the same glyph + attr
+                                                                      # on every depth -> common (was 1 per-level id x 8)
 ]
 # ids whose attr follows ATTR_FLOOR[depth] / ATTR_WALL[depth] at runtime (engine patches)
 FLOOR_IDS = {1, 3, 19, 20}              # platform, wall-in-floor-row, end caps (= pit caps)
@@ -142,18 +143,25 @@ OBJ_SPEC = {
 # GLOW (B12, user 2026-10-05 option a) is last in every set: D5 / D7 drop PILLAR, D4 drops
 # WINDOW_BAR (1 id, the least-used item there) to fit it.
 LEVEL_OBJECTS = [
-    ["TORCH_TALL", "WINDOW_ARCH", "BANNER", "COBWEB", "MOSS", "COBWEB_R", "GLOW"],  # D1 Blue Keep
+    ["TORCH_TALL", "WINDOW_ARCH", "BANNER", "COBWEB", "MOSS", "COBWEB_R"],  # D1 Blue Keep
     ["PATCH_A", "PATCH_B", "TORCH_SLIM", "BRAZIER", "WINDOW_BAR", "BANNER",
-     "COBWEB", "MOSS", "COBWEB_R", "GLOW"],                               # D2
-    ["BRAZIER_BIG", "BANNER_TALL", "PATCH_A", "BOOKSHELF", "COBWEB", "COBWEB_R", "GLOW"],  # D3
-    ["TORCH_TALL", "BANNER_TALL", "PATCH_A", "GLOW"],         # D4 Warrens (-WINDOW_BAR)
-    ["BRAZIER_BIG", "WINDOW_ARCH", "PATCH_A", "GLOW"],                    # D5 Sandstone (-PILLAR)
+     "COBWEB", "MOSS", "COBWEB_R"],                               # D2
+    ["BRAZIER_BIG", "BANNER_TALL", "PATCH_A", "BOOKSHELF", "COBWEB", "COBWEB_R"],  # D3
+    ["TORCH_TALL", "BANNER_TALL", "PATCH_A"],         # D4 Warrens (-WINDOW_BAR)
+    ["BRAZIER_BIG", "WINDOW_ARCH", "PATCH_A"],                    # D5 Sandstone (-PILLAR)
     ["TORCH_SLIM", "BOOKSHELF", "BANNER", "PATCH_A", "PATCH_B", "WINDOW_BAR",
-     "COBWEB", "MOSS", "COBWEB_R", "GLOW"],                               # D6 (-PILLAR: MEM-RECLAIM w2a,
+     "COBWEB", "MOSS", "COBWEB_R"],                               # D6 (-PILLAR: MEM-RECLAIM w2a,
                                                                           # never placed since 2026-10-12)
-    ["TORCH_TALL", "BANNER_TALL", "PATCH_B", "GLOW"],                     # D7 Fortress (-PILLAR)
-    ["BRAZIER_BIG", "BOOKSHELF", "BANNER_TALL", "TORCH_SLIM", "COBWEB", "COBWEB_R", "GLOW"],  # D8
+    ["TORCH_TALL", "BANNER_TALL", "PATCH_B"],                     # D7 Fortress (-PILLAR)
+    ["BRAZIER_BIG", "BOOKSHELF", "BANNER_TALL", "TORCH_SLIM", "COBWEB", "COBWEB_R"],  # D8
 ]
+# LOWER-FLAME experiment: the big objects' frame 2 also swaps the lower flame cell row.  The FULL row (+2 ids per
+# object) fits only D4 (26 ids); with GLOW common (id 31) D5 / D7 are exactly at the 28 cap, D1 / D3 / D8 (COBWEB
+# pair kept) are 1 id short.  So the shipped variant is HALF everywhere: only the lower-LEFT cell swaps (+1 id,
+# F_LO0), which also keeps the shared glyph pool / flag sets small (bank 7: the full row is +48 B, 25 B over).
+LOWER_FLAME_DEPTHS = {1, 3, 4, 5, 7, 8}
+LOWER_HALF_DEPTHS = set(LOWER_FLAME_DEPTHS)      # = {} for the FULL row (D4 only fits; see report)
+LOWER_F2 = {"TORCH_TALL": "torch_tall_look2_f2", "BRAZIER_BIG": "brazier_big_look2_f2"}
 LECTERN = ("decor_r4.grid", "lectern")      # D8 Sanctum only: 2x2 attackable, ids 60..63 swapped in by T6
                                             # (tileset_lectern); the D8 slot itself carries the items
 # 3E floor-item class glyphs in slot 28..31 (ids 60..63) of EVERY depth (game.md §8.11 Q1)
@@ -378,6 +386,10 @@ def build_level(d):
     nxt = 0
     for on in LEVEL_OBJECTS[d - 1]:
         follow, frames = obj_frames(on)
+        if on in LOWER_F2 and d in LOWER_FLAME_DEPTHS:
+            frames = [frames[0], cells_of(BIG, LOWER_F2[on])]
+            if d in LOWER_HALF_DEPTHS:      # one id short: only the lower-LEFT cell swaps, the right keeps frame 1
+                frames[1][1][1] = frames[0][1][1]
         fid = []
         for fr in frames:
             grid = []
