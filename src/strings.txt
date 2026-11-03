@@ -155,7 +155,7 @@ key_press       "PRESS KEY FOR "
 key_brk         " (BREAK=QUIT)"
 key_used        "KEY IN USE"
 key_reserved    "KEY RESERVED"
-ft_subtitle     "(C) 2026 A DUNGEON ROGUELIKE"
+ft_subtitle     "A DUNGEON ROGUELIKE"
 
 # --- death / win screens and the DEPTH card (menu font; pieces take a number/name) -
 end_dead        "YOU DIED"
