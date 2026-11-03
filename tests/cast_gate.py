@@ -141,10 +141,15 @@ def main():
                 # next turn waits on it: LT_HOLD), never be dropped (LQ_DROP 0).
                 last = [t for t in ticks if t["ph"] == 0]
                 p.tick(4)
+                # Leftovers 2026-11-03: a fatal cast (T1, the hero's own HP-3 self-hit) ends in
+                # the full-screen end card (endcard-g1): the log drain stops there, so the
+                # queued 'YOU DIED' line stays pending (LOG_QN 1) by design; every other
+                # line must have drained.
+                dead = p.rb("GAME_STATE") == S["GS_DEAD"]
                 check(f"{tag}: the cast's log lines drain after the gate (<= 2 pending at the turn end, none 4 ticks later)",
                       any(t["served"] for t in ticks) and all(t["qn"] <= 2 for t in last)
-                      and p.rb("LOG_QN") == 0 and p.rb(S["LOG_Q"] + S["LQ_DROP"]) == 0,
-                      [(t["tt"], t["qn"], t["served"]) for t in ticks[:24]])
+                      and p.rb("LOG_QN") <= (1 if dead else 0) and p.rb(S["LOG_Q"] + S["LQ_DROP"]) == 0,
+                      [(t["tt"], t["qn"], t["served"]) for t in ticks[:24]] + [p.rb("GAME_STATE"), p.rb("LOG_QN")])
             kmon = next((i for i, t in enumerate(ticks) if t["pend"] == 0), None)
             if kmon is not None:
                 t = ticks[kmon]

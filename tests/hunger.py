@@ -209,7 +209,11 @@ def run(h, p, check):
             ("HUNGRY->WEAK", 9, WEAKS, HWEAK, [L_WEAK])]
     check("S1 thresholds 50 / 25 / 10: stage, STS_HWEAK, one line each (none into OK)", seq == want, seq)
     lines.clear()
-    for _ in range(48):
+    # wait up to HW_TMR 49 (not a fixed turn count: the WEAK transition turn of the
+    # S1 loop above lands on the 1st or 2nd of its WAITs depending on the food phase)
+    for _ in range(60):
+        if p.rb("HW_TMR") == 49:
+            break
         p.turn("WAIT")
     a = hl()
     p.turn("WAIT")

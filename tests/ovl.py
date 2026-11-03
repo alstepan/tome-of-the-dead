@@ -33,6 +33,9 @@ from game_lib import Harness, S, EMU_ARGS, GS_SELECT  # noqa: E402
 
 BANK = 16384
 STUB = S["LOWRAM_END_3B"]                     # free low RAM (the other suites' stub org)
+BLOB_BANK = 7                                # BANK_SHADOW: screen 2, dead at the menu
+BLOB_AT = 0xD000
+SCR2_END = 0xDAFF
 RES = STUB + 0xC0                             # result bytes
 
 
@@ -127,12 +130,13 @@ def run(p, check):
     raw, res_off = test_overlay()
     n = len(raw)
     packed1 = zx0_pack(raw)
-    # R6 (2026-10-21): O1 streams from the free R6 tail (bank 6, C = BANK_R6),
-    # like the page / items overlays now; O2 from the free bank-1 tail
-    tail = S["r6_end"]
-    check("O1 packed self-test overlay fits the free R6 tail", tail + len(packed1) <= 0x10000)
-    bank_write(p, S["BANK_R6"], tail, list(packed1))
-    code = stub_code(S["BANK_COLD3"], tail, S["BANK_R6"], 0x4321, True)
+    # Leftovers (2026-11-03): the R6 / bank-1 tails are now 5 / 2 B free, so the
+    # self-test blobs stream from the dead screen-2 area of bank 7 ($D000, unused
+    # at the menu: the window contract keeps $C000..$DAFF transient) instead.
+    tail = BLOB_AT
+    check("O1 packed self-test overlay fits the dead screen-2 area", tail + len(packed1) <= SCR2_END)
+    bank_write(p, BLOB_BANK, tail, list(packed1))
+    code = stub_code(S["BANK_COLD3"], tail, BLOB_BANK, 0x4321, True)
     before = ram128(p)
     pc0 = p.pc()
     ok = p.run_stub(code, org=STUB)
@@ -152,7 +156,7 @@ def run(p, check):
           "screen bit kept", (r[8] & 7, r[8] & 0x18) == (S["BANK_COLD3"], sh0 & 0x18), (hex(r[8]), hex(sh0)))
     check("O1 GEN_ZBLK cleared (stale key $FFFF poked before)", p.rw("GEN_ZBLK") == 0, p.rw("GEN_ZBLK"))
     win = (lin(S["GEN_SCRATCH"]), lin(S["GEN_SCRATCH"]) + n)
-    blob = (lin(tail, S["BANK_R6"]), lin(tail, S["BANK_R6"]) + len(packed1))
+    blob = (lin(tail, BLOB_BANK), lin(tail, BLOB_BANK) + len(packed1))
     bad = diffs(before, after, [win, stack, stub_r, zblk, blob])
     check("O1 nothing else in the 128K RAM changed (window, stub, GEN_ZBLK, stack aside; DI)",
           bad == [], [hex(x) for x in bad[:12]])
@@ -174,11 +178,11 @@ def run(p, check):
             big.extend(rnd.randrange(256) for _ in range(rnd.randrange(1, 4)))
     big = bytes(big[:L])
     packed = zx0_pack(big)
-    tail = S["bank1_end"]
-    check("O2 packed blob fits the free bank-1 tail", tail + len(packed) <= 0x10000,
+    tail = BLOB_AT
+    check("O2 packed blob fits the dead screen-2 area", tail + len(packed) <= SCR2_END,
           (hex(tail), len(packed)))
-    bank_write(p, S["BANK_UI1"], tail, list(packed))
-    code = stub_code(S["BANK_POOL0"], tail, S["BANK_UI1"], 0, False)
+    bank_write(p, BLOB_BANK, tail, list(packed))
+    code = stub_code(S["BANK_POOL0"], tail, BLOB_BANK, 0, False)
     before = ram128(p)
     pc0 = p.pc()
     p.z.cmd("reset-tstates-partial")

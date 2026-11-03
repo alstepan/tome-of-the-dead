@@ -398,7 +398,7 @@ def main():
             p.load()
             h.expect("1 boot GS_SELECT", p.wait_state(GS_SELECT), True)
             p.wb("ANIM_FREEZE", 1)
-            p.tick(4)                         # C3-6: the torches hold frame 0
+            hold_torches(p)                   # C3-6: the torches hold frame 0
             golden(h, "game_select", p.frame())
             p.boot(K_KNIGHT)
             e = p.ent(0)
@@ -1777,7 +1777,7 @@ def main():
             h.expect("51 knight dies", p.die(), True)
             h.expect("51 ENTER -> GS_SELECT", p.enter_to_select(), True)
             p.wb("ANIM_FREEZE", 1)
-            p.tick(4)                         # C3-6: the torches hold frame 0
+            hold_torches(p)                   # C3-6: the torches hold frame 0
             golden(h, "game_select", p.frame())
             p.hold("2")                       # C3-6 menu: '2' only toggles HERO ...
             p.tick()
@@ -1798,7 +1798,7 @@ def main():
             h.expect("51 wizard dies", p.die(), True)
             h.expect("51 ENTER -> GS_SELECT (after 2 heroes)", p.enter_to_select(), True)
             p.wb("ANIM_FREEZE", 1)
-            p.tick(4)                         # C3-6: the torches hold frame 0
+            hold_torches(p)                   # C3-6: the torches hold frame 0
             # C3-8a: HERO persists across games, so after the wizard game the
             # menu shows HERO: MAGE (no longer == the knight select frame)
             golden(h, "game_select_mage", p.frame())
@@ -2086,13 +2086,20 @@ def isr_tests(h, p):
     p.load()                                     # IY / room map / bank clobbered
 
 
+def hold_torches(p):
+    """Leftovers 2026-11-03: deterministic menu-torch phase for the select goldens.
+    With ANIM_FREEZE set, the next menu_torch swap (every MENU_TORCH_STEP frames) draws
+    the held frame; forcing torch_t = 1 makes the very next menu frame do it, so the
+    capture no longer depends on where the load / tape timing left the 8-frame counter."""
+    p.wb("torch_t", 1)
+    p.tick(3)
+
+
 def tape_rest(h, p):
     """#50 after the tape reached GS_SELECT: screen, pool, banks, play."""
     p.tick(2)                                    # park on select_tick
     p.wb("ANIM_FREEZE", 1)
-    p.tick(9)                         # C3-6: the torches hold frame 0 from their next swap (every
-                                      # MENU_TORCH_STEP 8 frames; D3-11: the longer tape moved the
-                                      # menu's phase at GS_SELECT, 4 frames no longer reached it)
+    hold_torches(p)                   # C3-6: the torches hold frame 0 (deterministic swap)
     golden(h, "game_select", p.frame())
     h.expect("50 tape GEN_OVERFLOW 0", p.rb("GEN_OVERFLOW"), 0)
     from game_lib import SNA_RAM
@@ -2259,7 +2266,7 @@ def walkthrough(h, p, check14=False):
     res["select"] = p.end_to_menu()   # C3-6b: a digit / ENTER (after a release) leaves an end card
     p.settle()
     p.wb("ANIM_FREEZE", 1)
-    p.tick(4)                         # C3-6: the torches hold frame 0
+    hold_torches(p)                   # C3-6: the torches hold frame 0
     golden(h, "game_select", p.frame())             # after a WIN -> ENTER
     return res
 
