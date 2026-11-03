@@ -5365,3 +5365,11 @@ R6 free (release) 3 -> **6** (kit 8 -> 11). Pool: the Warrior carries spark_fly1
 (was 22,252: +64 B for the 2 frames), D4 28,652 (was 28,588), D5 23,148 (was 23,084) of 32,204; **worst level D8 31,180 (Warrior), slack 1,024 unchanged** (a Spider level is never the worst: D8 binds, 0 B
 added there), so the post-dmgnum floor of 384 is untouched. The Mage: 0 B (spark in his class FX unit). Tests: `boss.py` `spit_pool` (FRT rows resident for both
 heroes on the D2 lair, `fx_meta` rock / spark attrs), `gfx_integrity` GI1 excludes the Warrior's spark rows, `tools/ranged_model.py` (fid + FXD_ATTR 0).
+
+### SPIT-SPARK fix (`fix/dagger-attr`, 2026-11-03)
+
+SPIT-SPARK moved the rock colour into `fx_meta` (`dagger_spin1/2` = `ROCK_ATTR`), which silently turned the hero's thrown dagger yellow: `proj3.asm` never writes
+`pf_desc + FXD_ATTR` (ABD_AT1/2 are skipped: firebolt alternates per frame), so it fell back to `fx_meta`. Fix: `proj_fire` writes `FXD_ATTR` = `THROW_ATTR` (`$47`,
+`combat_defs.asm`) when the flight fid is `FID_dagger_spin1`, else 0 (bank 3, +14 B: **bank 3 free 28 -> 14**, release and kit). The R6 route (`rg_q` passing `ROCK_ATTR`
+for NOIMP shots) needed +8 B with 6 free. Tests: `ranged.py` ATTR (fx_meta of every monster shot + the constants), `proj3.py` model + `abil_ammo` F1/F2/F3/F7 (dagger
+descriptor attr $47), `combat.py` C1 dagger track passes `THROW_ATTR`.

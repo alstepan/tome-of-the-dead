@@ -190,6 +190,7 @@ RW_DHC          EQU 5               ; deal_hit C (DTY_* | DH_NODEF | EFX << DH_E
 RW_DHE          EQU 6               ; deal_hit E (on-hit effect: chance 1 in N << 4 | turns)
 RW_FX           EQU 7               ; flight fid A; fid + 1 = B, fid + 2 = the impact frame (unless RWF_NOIMP)
 RW_STRIDE       EQU 8
+THROW_ATTR      EQU $47             ; the hero's thrown dagger (proj3 FXD_ATTR); fx_meta's dagger_spin = the monsters' ROCK_ATTR
 RWF_SPELL       EQU %00000001       ; auto-hit (no d20; Necro / Bone Caller / Archmage)
 RWF_AWAY        EQU %00000010       ; steps away from the hero at gap 2 (not the Sniper)
 RWF_NOIMP       EQU %00000100       ; no impact frame (dagger_spin rock)

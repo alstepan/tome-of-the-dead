@@ -65,7 +65,7 @@ fx_meta:        FXMETA spark_fly1,      $43
                 FXMETA spark_fizz1,     $43
                 FXMETA spark_fizz2,     $43
                 FXMETA power_burst,     $47
-                FXMETA dagger_spin1,    ROCK_ATTR   ; the monsters' rock (ranged6.asm); the hero's throw passes $47 (ab_def)
+                FXMETA dagger_spin1,    ROCK_ATTR   ; the monsters' rock (ranged6.asm); the hero's throw: proj3 sets FXD_ATTR THROW_ATTR
                 FXMETA dagger_spin2,    ROCK_ATTR
                 FXMETA arrow_fly1,      $07
                 FXMETA arrow_fly2,      $07

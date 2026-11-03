@@ -265,7 +265,7 @@ def c1(h):
     p.settle(3)
     p.run_tracks("warrior", [
         desc("arrow_fly1", "arrow_fly2", "arrow_hit", "arrow_hit", 28, ROW, left=True, impt=2, segs=(15,)),
-        desc("dagger_spin1", "dagger_spin2", None, None, 6, ROW + 1, delay=1, segs=(10,))])
+        desc("dagger_spin1", "dagger_spin2", None, None, 6, ROW + 1, delay=1, segs=(10,), attr=S["THROW_ATTR"])])  # proj3 passes THROW_ATTR
 
 
 TESTS = {"C1": c1}
