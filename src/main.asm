@@ -709,6 +709,9 @@ dn_miss_s:      DB   "MISS", 0, DNA_MISS       ; D3-11 / LVL-FLOATER (dnfix2.asm
                 INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy (were low RAM / gfx.asm)
                 INCLUDE "msg2.asm"              ; LOG-FIX: msg_cat / msg_end (from bank 7), log_room, hit_line
                 ; fi3.asm (FLOOR1 fi_full, cold, far3 only): back in bank 3 since BLAIR-FIX (bank3.asm)
+    IF TOME_FX                                  ; (a trace test build has 4 B of bank 2 left: trap7.asm keeps them)
+                INCLUDE "trap2.asm"             ; TOME-FX reclaim: tr_ent / tr_type (bank-7 trap7 leaf helpers)
+    ENDIF
                 INCLUDE "ldir2.asm"             ; RECLAIM-C (d): ldir7 (bank-1 menu_static reads a bank-7 tileset run)
                 INCLUDE "dnum2.asm"             ; D3-11 / DNUM-SPRITE-FIX: dn_show / dn_walk / dn_cel, screen 2 (+ kit builds: dnwin.asm)
                 INCLUDE "dnum2b.asm"            ; D3-11: dn_gate (play_loop) + dn_sfx (impact_line), after every other bank-2 code

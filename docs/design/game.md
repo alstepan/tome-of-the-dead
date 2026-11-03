@@ -120,17 +120,18 @@
 - **TOME_HP = 5.** Every hit whose line reaches the Tome removes 1: melee, power attack,
   spell, arrow or dagger.
   - It **ignores resistances** and is never missed.
-  - Each hit flashes the lectern `$43` and prints a message.
+  - Each hit flashes the lectern (TOME-FX, user 2026-11-03: bright white `$47` on the 2x2, since the book is
+    already `$43`; it sounds `SFX_HIT`) and prints a message.
 - **Aura:** while the hero is within 6 cols on its storey, it deals 1 HP per turn (end of
   turn, ignores DEF).
-- At 0 it turns to ash (rubble glyph) → `THE TOME IS DESTROYED` → **the D8 exit gate opens** (`A GATE GLEAMS, THE WAY DOWN`, as a D1–D7 boss death) → the hero walks to the lair and leaves through it → `GS_WIN` (WIN2, user 2026-11-01; the P3 build ended the run on the hit).
+- At 0 it turns to ash (TOME-FX: the 4 attrs go dim blue `$01`, the glyphs stay; `SFX_KILL`) → `THE TOME IS DESTROYED` → **the D8 exit gate opens** (`A GATE GLEAMS, THE WAY DOWN`, as a D1–D7 boss death) → the hero walks to the lair and leaves through it → `GS_WIN` (WIN2, user 2026-11-01; the P3 build ended the run on the hit).
 - It is a tile with an `ATTACKABLE` flag, not an entity.
 - **P3 rulings as built (user 2026-10-31; engineer details marked E):** a hit counts when an attack is
   RELEASED by the hero standing on the lectern's storey, FACING it, with the gap (empty cols between body and
   lectern) below that attack's reach / range — melee bump or FIRE, Power Strike, Whirlwind (reach 1; both
   accepted with no body target), spells / daggers / arrows (their rank-row range) — geometry only, no
-  projectile collision; no `$43` flash and (E) no ash (the end card covers the play area at once); each hit
-  `THE TOME SHUDDERS`. (E) The lectern stands on **storey 1 against the Sanctum's dead-end wall** (cols 1-2 in
+  projectile collision; each hit `THE TOME SHUDDERS`. (The P3 ruling "no `$43` flash, no ash" is **superseded by
+  TOME-FX, user request 2026-11-03**, see below.) (E) The lectern stands on **storey 1 against the Sanctum's dead-end wall** (cols 1-2 in
   cell 6, 29-30 in cell 8). (E) `TOME_HP` is set once per level at generation and **never restored**: leaving
   the Sanctum keeps the damage. The aura is untyped (no DEF, no resistance), once per turn end, gap < 6 on
   storey 1 (either facing); its last hp ends the run (`GS_DEAD`, no death sequence). The seal opens on the
@@ -140,11 +141,25 @@
   logs `THE TOME IS DESTROYED` then `A GATE GLEAMS, THE WAY DOWN` and sets `LF_GRATE_OPEN` (the lair is another
   room: it opens off-screen, the lair's next build draws the raised gate + glow, re-entries / teleports keep it:
   level state); the run goes on (summoned Skeletons stay). The destroyed Tome is inert: (E) the lectern stays
-  drawn (no ash), a bump on it is a wall (no turn), no hit counts, the aura stops (so the very hit that destroys
+  drawn (glyphs unchanged, ash attrs: TOME-FX), a bump on it is a wall (no turn), no hit counts, the aura stops (so the very hit that destroys
   it can never kill by the aura; an earlier hit can, and then the gate stays shut). DOWN on the open D8 grate =
   `GS_WIN`, log `YOU WIN!` (the end card's string; no new text), at any HP. No item or trap generates in the Sanctum. Accepted as is (manager review 2026-11-01):
   a FEARed hero can still hit the Tome by bump / FIRE (the Tome is no body, `fear_chk` gates body attacks
   only); the Mage's staff on the Tome plays no `melee_bonk` swing (the hit and the line only).
+
+**TOME-FX as built (user request 2026-11-03: "add some visuals that the tome is destroyed - a flash or a
+generic corpse frame"; the attr-only variant, no new glyph / tile):** every hit (all 7 attack kinds above)
+plays `SFX_HIT` and paints the 2x2 lectern `ATTR_TOME_FLASH` `$47` (bright white; not `$43`, the book's own
+attr) in the hit tick (`tome_strike`, before the hp is decremented); the flash ends on the first INPUT tick after
+the turn (`lect_back`, called by `turn_input`; a bump turn is only 2 ticks long and a restore at `end_turn` would
+overwrite it before present showed it - it is on screen for 2 ticks, ~80 ms, longer for a spell's turn), and a
+lethal turn restores it in `end_turn.dead` (the end card never draws a flashed lectern). The last hit plays `SFX_KILL`
+instead, and from then on the four cells hold `ATTR_TOME_ASH` `$01` (dim blue; the book `$43` / stand `$06` before) with the
+glyphs unchanged. It persists with no extra state: it lives in `TILE_ATTRS` ids 15-18 (common ids, loaded once at boot), so room
+re-entry / the room memory and the win end card (which draws the lectern) show it; every level start resets the 4
+attrs (`lect_norm`, tail of `level_patch7w`), so a new game / a new D8 starts with the book. Off D8 (`TOME_HP` 0) nothing runs
+(`lect_back` acts only on a flashed lectern). Log lines unchanged and in order: `THE TOME SHUDDERS -1 HP H` per hit; the last hit
+`THE TOME IS DESTROYED` then `A GATE GLEAMS, THE WAY DOWN` in the hit tick, together with the flash (the ash follows it). Tests: `tests/sanctum.py` FX0-FX6, W5, W6.
 
 ### 1.4 Stage 3B stand-ins (user, 2026-10-03; temporary, replaced in 3C+)
 
@@ -3545,7 +3560,7 @@ the Sanctum. **`T_GRATE_SHUT` = 13** (`TF_SOLID`). **31 stays free** (spare). Co
 bytes overwrite the blank common slots; static flags/attrs); it **deletes** the planned D8 60..63
 swap (≈ 40–60 B saved) and D8 keeps item markers like D1–D7. Tileset 8 loses the lectern (4
 per-level ids freed). Art: the artist supplies the lectern (4 cells, from tileset 8) and a closed
-grate glyph (8 B). Tome hit flash `$43` rewrites the 4 attrs (§1.3 unchanged).
+grate glyph (8 B). Tome hit flash (TOME-FX, §1.3: `$47`; was `$43`) rewrites the 4 attrs.
 
 **R3 Climbers.** Only kinds with climb frames climb: **Goblin, Skeleton** (+ their tiers) and the
 heroes. **Orc, Skeleton Archer (+ Sniper), Death Knight are walkers, not climbers** (§9.1). 0 B,

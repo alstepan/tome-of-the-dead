@@ -22,6 +22,10 @@ Seeded generated games (F3_GEN build, DEBUG_KIT=0), the real level_descend D7 ->
   W3  the 5th hit at HP 1: the Tome's aura is gone with it, the hero lives, the gate opens
   W4  before the Tome: DOWN on the lair's shut D8 grate = no turn
   W5  the aura kills on a non-final hit (TOME_HP 2 -> 1, HP 1): GS_DEAD, the gate stays shut
+  FX  TOME-FX (user 2026-11-03): every hit flashes the 2x2 lectern ATTR_TOME_FLASH for the turn (TILE_ATTRS
+      and the displayed attrs; the glyphs stay), end_turn restores it before the death check (W5 dies
+      unflashed); the last hit leaves the ASH attr (4 cells) which persists across leave / re-enter and
+      into the end card; a new level restores the book / stand attrs; SFX_HIT per hit, SFX_KILL on the last
   W6  after the Tome: the hero walks out into the lair (real do_exit): the grate T_GRATE x 3 (opened
       off-screen), ROOM_MAP == room_model; re-entry (room_show) keeps it; DOWN at c with HP 1 ->
       GS_WIN, depth stays 8, the last line "YOU WIN!" 
@@ -124,6 +128,27 @@ class D8:
 
     def door_key(self):
         return "L" if self.door_l else "H"              # game_lib: H = left, L = right
+
+
+LATTR = S["TILE_ATTRS"] + S["T_LECT_TL"]
+A_TOP, A_FOOT, A_FLASH, A_ASH = (S["ATTR_LECT_TOP"], S["ATTR_LECT_FOOT"], S["ATTR_TOME_FLASH"],
+                                 S["ATTR_TOME_ASH"])
+NORM = [A_TOP, A_TOP, A_FOOT, A_FOOT]
+
+
+def lect_attrs(p):
+    return list(p.z.read_memory(LATTR, 4))
+
+
+def lect_norm(p):
+    p.wmem(LATTR, NORM)
+
+
+def shown(fr, left, row0=15, col0=None):
+    """The displayed attrs of the 2x2 lectern (TL TR BL BR) from a frame."""
+    c0 = col0 if col0 is not None else (1 if left else 29)
+    return [fr[6144 + row0 * 32 + c0], fr[6144 + row0 * 32 + c0 + 1],
+            fr[6144 + (row0 + 1) * 32 + c0], fr[6144 + (row0 + 1) * 32 + c0 + 1]]
 
 
 def play_mode(p):
@@ -305,6 +330,98 @@ def dodge(p, L):
     play_mode(p)
 
 
+def fx_hit(p, L, key, hp):
+    """TOME_HP hp -> hp-1 by a real bump turn: the 2x2 flashes during the turn (TILE_ATTRS and the screen),
+    and is back (norm, or ash after the last hit) when the turn is idle. Returns the tick samples."""
+    play_mode(p)
+    p.wb("TOME_HP", hp)
+    L.at_gap(0)
+    p.set_ent(0, HP=200)
+    smp = []
+    p.turn(key, per_tick=lambda fr, hero: smp.append((lect_attrs(p), shown(fr, L.left), p.rb("TILE_ATTRS"))))
+    p.until(lambda: p.idle(), 300)
+    for _ in range(5):                                     # the INPUT ticks after it: lect_back, then present
+        smp.append((lect_attrs(p), shown(p.frame(), L.left), p.rb("TILE_ATTRS")))
+        p.tick()
+    return smp
+
+
+def fx_tests(p, L, key):
+    """FX1-FX4: the flash, the restore, the ash, its persistence (room re-entry), the sound."""
+    check("FX0 the lectern attrs: book / stand / flash / ash all distinct as needed (flash != foot, ash != foot, "
+          "flash != ash), boot TILE_ATTRS == the constants",
+          A_FLASH != A_FOOT and A_ASH != A_FOOT and A_FLASH != A_ASH and A_FLASH != A_TOP and A_ASH != A_TOP,
+          (A_TOP, A_FOOT, A_FLASH, A_ASH))
+    lect_norm(p)
+    smp = fx_hit(p, L, key, 2)                             # a non-final hit
+    glyph = list(p.z.read_memory(S["ROOM_MAP"] + 15 * 32 + (1 if L.left else 29), 1)) == [15]
+    check("FX1 a hit: the 2x2 shows the flash attr on a tick of the hit turn (TILE_ATTRS and displayed), "
+          "TOME_HP 1, glyph unchanged",
+          any(t == [A_FLASH] * 4 for t, _, _ in smp) and any(sh == [A_FLASH] * 4 for _, sh, _ in smp)
+          and p.rb("TOME_HP") == 1 and glyph, ([(t, sh) for t, sh, _ in smp][:6], p.rb("TOME_HP")))
+    fr = p.frame()
+    check("FX1 end_turn restores the book / stand attrs (TILE_ATTRS and displayed)",
+          lect_attrs(p) == NORM and shown(fr, L.left) == NORM, (lect_attrs(p), shown(fr, L.left)))
+    tl = TXT["tome_hit"] + " -1 HP 1"
+    check(f"FX1 the line '{tl}'", L.last_line() == text6(tl), "")
+    smp = fx_hit(p, L, key, 1)                             # the last hit
+    fr = p.frame()
+    ok_flash = any(t == [A_FLASH] * 4 for t, _, _ in smp) and any(sh == [A_FLASH] * 4 for _, sh, _ in smp)
+    check("FX2 the last hit: flash during the turn, then ASH x 4 (TILE_ATTRS and displayed), glyph unchanged, "
+          "'THE TOME IS DESTROYED' / 'A GATE GLEAMS' in order",
+          ok_flash and lect_attrs(p) == [A_ASH] * 4 and shown(fr, L.left) == [A_ASH] * 4 and gone_ok(L),
+          (ok_flash, lect_attrs(p), shown(fr, L.left)))
+    # persistence: out of the Sanctum and back (room_show redraws from TILE_ATTRS), the map as room_model
+    x = 2 if L.door_l else 30 - L.kw
+    L.place(x, L.s, left=L.door_l)
+    out, back = ("H", "L") if L.door_l else ("L", "H")
+    for _ in range(6):
+        if p.rb("CUR_ROOM") != L.sn:
+            break
+        p.turn(out)
+    p.until(lambda: p.idle(), 600)
+    left_ok = p.rb("CUR_ROOM") == L.lair
+    for _ in range(6):
+        if p.rb("CUR_ROOM") == L.sn:
+            break
+        p.turn(back)
+    p.until(lambda: p.idle(), 600)
+    p.settle(3)
+    fr = p.frame()
+    ms = map_structure(p, L.sn)
+    check("FX3 the ash persists across leaving / re-entering the Sanctum (TILE_ATTRS and displayed), "
+          "ROOM_MAP == room_model, TOME_HP 0",
+          left_ok and p.rb("CUR_ROOM") == L.sn and lect_attrs(p) == [A_ASH] * 4
+          and shown(fr, L.left) == [A_ASH] * 4 and not ms and p.rb("TOME_HP") == 0,
+          (left_ok, lect_attrs(p), shown(fr, L.left), ms[:3]))
+    # the sounds: tome_strike called directly (no ISR consumes SFX_REQ under the stub)
+    p.wb("SND_MODE", (p.rb("SND_MODE") | S["SND_SFX"]) & ~S["SND_HOLD"] & 0xFF)
+    got = []
+    play_mode(p)
+    lect_norm(p)
+    p.wb("TOME_HP", 2)
+    L.at_gap(0)
+    for _ in range(2):
+        p.wb("SFX_REQ", 0)
+        p.wb("SFX_NEXT", 0)
+        L.ingame([0x21] + w16(S["tome_strike"]) + [0xCD] + w16(S["far7"]))
+        got.append((p.rb("SFX_REQ"), p.rb("TOME_HP"), lect_attrs(p) == [A_FLASH] * 4))
+    check("FX4 SFX_HIT on a hit, SFX_KILL on the last, the flash painted by tome_strike itself",
+          got == [(S["SFX_HIT"], 1, True), (S["SFX_KILL"], 0, True)], got)
+    p.wb("SFX_REQ", 0)
+    p.wb("SFX_NEXT", 0)
+    L.ingame([0x21] + w16(S["lect_back"]) + [0xCD] + w16(S["far7"]))
+    p.settle(3)
+    check("FX4 lect_back (end_turn): TOME_HP 0 -> ASH, a flash only (no flash: no repaint, attrs kept)",
+          lect_attrs(p) == [A_ASH] * 4, lect_attrs(p))
+    lect_norm(p)
+    L.ingame([0x21] + w16(S["lect_back"]) + [0xCD] + w16(S["far7"]))
+    check("FX4 lect_back with no flash: nothing changes (the book is not repainted)", lect_attrs(p) == NORM,
+          lect_attrs(p))
+    play_mode(p)
+    lect_norm(p)
+
+
 def aura(p, L):
     play_mode(p)
     for gap, facing, s_, want, tag in ((5, True, 1, 1, "gap 5, facing"), (0, False, 1, 1, "gap 0, facing away"),
@@ -420,6 +537,8 @@ def aura_hit_death(p, L, key):
     check("W5 the aura kills on the 4th hit (TOME_HP 1, HP 0): GS_DEAD, LF_GRATE_OPEN clear",
           p.rb("GAME_STATE") == GS_DEAD and p.rb("TOME_HP") == 1 and not p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"],
           (p.rb("GAME_STATE"), p.rb("TOME_HP"), p.rb("LVL_FLAGS")))
+    check("W5 TOME-FX: the flash was restored before the death check (a lethal turn ends unflashed)",
+          lect_attrs(p) == NORM, lect_attrs(p))
 
 
 def exit_win(p, L, key):
@@ -460,6 +579,10 @@ def exit_win(p, L, key):
     p.settle(2)
     # ENDCARD-G1 (30dc3b1): GS_WIN shows the full-screen end card (no panel / log row 23 any more):
     # its title "YOU WIN!" (menu font, row EC_TROW, col 12) replaces the old last-log-line check
+    fr = p.frame()
+    ec = shown(fr, False, row0=S["EC_FEET"] - 2, col0=S["EC_PCOL_L"] + 3)
+    check("W6 TOME-FX: the win end card draws the destroyed lectern in the ASH attr (TILE_ATTRS persists)",
+          ec == [A_ASH] * 4 and p.rb("GAME_STATE") == GS_WIN, (ec, lect_attrs(p)))
     check("W6 DOWN at c with HP 1: GS_WIN, depth stays 8, the end card 'YOU WIN!'",
           p.rb("GAME_STATE") == GS_WIN and p.rb("LVL_DEPTH") == 8
           and menu_text_ok(p, p.frame(), S["EC_TROW"], 12, "YOU WIN!"),
@@ -478,6 +601,20 @@ def mage(p):
     five(L, "H8 staff (Mage melee FIRE)", lambda: p.turn("C"), 0)
 
 
+def offd8(p):
+    """FX6: TOME_HP is 0 off D8: end_turn's lect_back never repaints / rewrites the lectern attrs (a depth-1
+    game: a few turns, the attrs stay as loaded; never ash)."""
+    p.proto_start = 0
+    p.boot(hero=0, freeze=1)
+    p.release()
+    p.settle(4)
+    lect_norm(p)
+    for _ in range(3):
+        p.turn("WAIT")
+    check("FX6 off D8 (TOME_HP 0): 3 turns leave the lectern attrs untouched", p.rb("TOME_HP") == 0
+          and p.rb("LVL_DEPTH") == 1 and lect_attrs(p) == NORM, (p.rb("TOME_HP"), p.rb("LVL_DEPTH"), lect_attrs(p)))
+
+
 def main():
     if not F3:
         print("[skip] sanctum needs the F3_GEN build", flush=True)
@@ -488,6 +625,8 @@ def main():
         items_absent(p)
         for master in (0x5302, 0x5300):                  # S = 6 / S = 8, the door on storey 1
             seal(p, master, mirror=True)
+            check(f"FX5 master {master:#06x}: a NEW D8 starts with the book / stand attrs (a previous game's ash "
+                  "is reset by level_tiles7's tail)", lect_attrs(p) == NORM, lect_attrs(p))
             L = seal(p, master, mirror=False)
             if L is None or p.rb("CUR_ROOM") != L.sn:
                 continue
@@ -496,8 +635,11 @@ def main():
             aura(p, L)                                  # (first: its storey-0 case sees no FED regen turn)
             gate(p, L, key)
             aura_hit_death(p, L, key)
+            if S.get("TOME_FX", 1):                     # (0 only in a trace test build: no FX there)
+                fx_tests(p, L, key)
             exit_win(p, L, key)
         mage(p)
+        offd8(p)
     print(f"sanctum: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
     return 1 if fails else 0
 

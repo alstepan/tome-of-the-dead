@@ -37,6 +37,10 @@
 ; Clobbers: all but IY (far7: A, F lost; nothing is returned).
 ;------------------------------------------------------------------------------
 turn_input:
+    IF TOME_FX
+                call lect_back                 ; TOME-FX: a Tome hit's flash ends on the first INPUT tick after its
+                                               ; turn (tome7.asm; end_turn would restore it before a frame showed it)
+    ENDIF
                 ld   hl, TRK_PHASE             ; 3F-T12: a due trickle check takes this INPUT
                 bit  TRK_DUE_BIT, (hl)         ; tick ALONE (idle: no turn starts, no log line, a
                 jr   z, .nd                    ; deferred level-up waits too); the input is read on
@@ -326,7 +330,11 @@ end_turn:
                 jp   xp_turn
                 ASSERT M_REST == 0 && RC_NONE == 0 && (P_ENTITIES >> 8) == ((P_ENTITIES + E_HP) >> 8)
     ELSE
-.dead:          xor  a                         ; SND-3: Game Over once (GS_DEAD never reaches
+.dead:
+    IF TOME_FX
+                call lect_back                 ; TOME-FX: a lethal turn ends with the lectern unflashed (the end card)
+    ENDIF
+                xor  a                         ; SND-3: Game Over once (GS_DEAD never reaches
                 ld   (MUS_REQ), a              ; end_turn again; end_screen only redraws): final
                 ld   a, MUS_OVER               ; cue = loop off, then the shot
                 ld   (MUS_SHOT), a

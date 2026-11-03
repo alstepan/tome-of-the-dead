@@ -403,6 +403,10 @@ ANIM_TRACE_ON   EQU 0                           ;     frame change in ANIM_TRACE
                                                 ;     tests/game.py builds -DDEBUG_KIT=0
                                                 ;     -DANIM_TRACE_ON=1 privately when build/ lacks it
                 ASSERT ANIM_TRACE_ON == 0 || ANIM_TRACE_ON == 1
+    IFNDEF TOME_FX                              ; TOME-FX (user 2026-11-03, game.md §1.3): the Tome's hit flash /
+TOME_FX         EQU 1 - ANIM_TRACE_ON           ;     ash + sounds (tome7.asm). 0 only in a trace test build
+    ENDIF                                       ;     (bank 7 has 6 B and bank 2 4 B left there: it would not fit)
+                ASSERT TOME_FX == 0 || TOME_FX == 1
     IFNDEF F3_GEN                               ; 3F switch == tools/levelgen.py generate(..., f3=True):
 F3_GEN          EQU 1                           ;     LVL_FLAGS = 0 (grate shut, all depths), the D8
     ENDIF                                       ;     Sanctum leaf + the Tome ending (P3: default 1);

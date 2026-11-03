@@ -275,9 +275,7 @@ tr_eff:
                 ld   a, BORDER_ALARM           ; the red border, TRAP_STEP_T ticks (step 1 clears it)
                 out  (PORT_BORDER), a
                 ld   e, S3_TRAP_ALARM          ; "AN ALARM BELL RINGS!" (bank 1 resident stem)
-                xor  a
-                ld   hl, it_line
-                jp   far1
+                jp   hg_line                   ; (hunger7.asm: the stem alone via it_line / far1; -4 B a site)
 .bell:          xor  a                         ; (A = 0: the stem alone)
                 ld   e, S_FX_TRAP_BELL         ; boss dead / PROTO: "A BELL RINGS. NOTHING COMES"
                 ld   hl, fx_line               ; R6 gear6.asm (A = 0: the stem alone; E kept by farb)
@@ -286,9 +284,7 @@ tr_eff:
                 ld   b, TRAP_GAS_T
                 call hero_hold
                 ld   e, S3_TRAP_GAS
-                xor  a                         ; the stem alone
-                ld   hl, it_line
-                call far1
+                call hg_line                   ; the stem alone
                 ld   a, TX_ST_ASLEEP           ; "YOU FALL ASLEEP" (bank 0)
                 jp   msg_push
 .dart:          dec  a                         ; Z = STUN
@@ -298,9 +294,7 @@ tr_eff:
                 ld   hl, trap_stone            ; STUN1: 1d3 + STUNNED 2-3 through deal_hit
                 ld   e, S3_TRAP_STONE
 .st:            push hl
-                xor  a                         ; the stem alone
-                ld   hl, it_line
-                call far1
+                call hg_line                   ; the stem alone
                 pop  hl
                 call far3
                 ld   a, (P_ENTITIES + E_MODE)
@@ -382,11 +376,8 @@ hero_hold:
 tr_fline:       call tr_type
                 ld   hl, tf_line
                 jp   far1
-; tr_ent — HL = the sequence's entry (TRP_ENT).  Clobbers: A
-tr_ent:         ld   a, (TRP_ENT)
-                ld   l, a
-                ld   h, TRAP_LIST >> 8
-                ret
+; tr_ent / tr_type: bank 2 (trap2.asm; TOME-FX reclaim: leaf routines with no bank-7 data), except in an
+; trace test build (TOME_FX 0: bank 2 has 4 B left there): the same code at the end of this file.
 ; tr_ink — HL = an entry: A = its type attr (tr_ink7, data7.asm).  Keeps HL. Clobbers: F
 tr_ink:         call tr_type
                 push hl
@@ -404,18 +395,12 @@ tr_sto:         cp   STOREY_ROWS
                 ret  c
                 ld   a, TRF_S1
                 ret
-; tr_col — HL = an entry: A = its col.  tr_type — A = its TT_*.  Keep HL.
+; tr_col — HL = an entry: A = its col.  Keeps HL.
 tr_col:         inc  l
                 ld   a, (hl)
                 dec  l
                 and  TR_COL_MASK
                 ret
-tr_type:        inc  l
-                ld   a, (hl)
-                dec  l
-                rlca
-                rlca
-                rlca
-                and  7                         ; bits 5-7 -> 0-4 (STUN1: 3 bits)
-                ret
-                ASSERT TR_TYPE_SHIFT == 5 && TR_TYPE_MASK == $E0 && TR_B1 == 1 && (TRAP_LIST >> 8) == ((TRAP_LIST + 11) >> 8)
+    IF !TOME_FX
+                INCLUDE "trap2.asm"
+    ENDIF

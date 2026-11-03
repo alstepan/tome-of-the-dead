@@ -35,6 +35,14 @@
 ST_D_T1         EQU (ST_T1 - ST_FLAGS) & $FF   ; L offsets inside page $B3
 ST_D_T2         EQU (ST_T2 - ST_FLAGS) & $FF
 ST_D_X          EQU (ST_X - ST_FLAGS) & $FF    ; + slot: ST_X is in page ST_X >> 8
+; st_t1 — HL = a slot's STATUS byte: DE = its STMR1 byte, A = its value (TOME-FX reclaim: the 3 call sites
+; had this inline, -5 B).  Clobbers: A, DE.
+st_t1:          ld   a, l
+                add  a, ST_D_T1
+                ld   e, a
+                ld   d, h
+                ld   a, (de)
+                ret
 st_step:
                 add  a, ST_FLAGS & $FF
                 ld   l, a
@@ -86,11 +94,7 @@ st_step:
                 and  STS_MIND
                 jr   z, .hold
                 ld   c, a                      ; C = the MIND kind
-                ld   a, l
-                add  a, ST_D_T1
-                ld   e, a
-                ld   d, h
-                ld   a, (de)
+                call st_t1
                 dec  a
                 ld   (de), a
                 and  $0F
@@ -109,11 +113,7 @@ st_step:
                 and  STS_HOLD
                 jr   z, .act
                 ld   c, a                      ; C = the HOLD kind
-                ld   a, l
-                add  a, ST_D_T1
-                ld   e, a
-                ld   d, h
-                ld   a, (de)
+                call st_t1
                 sub  $10
                 ld   (de), a
                 and  $F0
@@ -141,11 +141,7 @@ st_step:
 .hclr:          ld   a, (hl)
                 and  ~STS_HOLD & $FF
                 ld   (hl), a
-                ld   a, l
-                add  a, ST_D_T1
-                ld   e, a
-                ld   d, h
-                ld   a, (de)
+                call st_t1
                 and  $0F
                 ld   (de), a
                 ret
