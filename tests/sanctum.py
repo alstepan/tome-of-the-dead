@@ -546,7 +546,7 @@ def fx_death(p, L):
     p.wb("END_SHOWN", 0)                                   # (an earlier GS_DEAD leaves it set: no card then)
     border_set(L, BORDER_W)
     p.turn("WAIT")                                         # the aura kills: GS_DEAD, the end card
-    p.tick(12)
+    p.end_card(12)                                         # (END-WAIT: the card waits for a key)
     check("FX8 death (the end card) blacks a Tome-hit border",
           p.rb("GAME_STATE") == GS_DEAD and border(p) == 0, (p.rb("GAME_STATE"), border(p)))
 
@@ -709,6 +709,8 @@ def exit_win(p, L, key):
     p.turn("J")
     p.until(lambda: p.idle(), 900)
     p.until(lambda: p.rb("LOG_QN") == 0, 200)
+    p.settle(2)
+    p.end_card()                                           # END-WAIT: the card waits for a key
     p.settle(2)
     # ENDCARD-G1 (30dc3b1): GS_WIN shows the full-screen end card (no panel / log row 23 any more):
     # its title "YOU WIN!" (menu font, row EC_TROW, col 12) replaces the old last-log-line check

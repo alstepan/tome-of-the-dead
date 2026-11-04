@@ -176,7 +176,7 @@ def main():
             """GS_DEAD reached (or set): tick to the card, then the title + portrait checks."""
             if p.rb("GAME_STATE") != GS_DEAD:
                 p.wb("GAME_STATE", GS_DEAD)
-            p.tick(8)
+            p.end_card(8)
             p.settle(4)
             fr = p.frame()
             if PNG:

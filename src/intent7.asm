@@ -320,7 +320,8 @@ hero_st_init:
                 ld   (ARROWS), a
                 ld   (HAS_BOW), a
                 ld   (ICON_MODE), a            ; C3-2b
-                ld   (END_SHOWN), a            ; C3-6
+                ld   hl, END_SHOWN             ; C3-6; END-WAIT: the end flow starts at END_DELAY
+                ld   (hl), END_DELAY
                 ld   (PAUSED), a
                 ld   (EXIT_LOCK), a
                 ld   (DN_T), a

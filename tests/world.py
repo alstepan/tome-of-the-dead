@@ -1814,15 +1814,22 @@ def w24(p, check):
         p.wait_state(GS_PLAYING, 400)
         p.settle(2)
         hold("2")                                    # a digit still down when the hero dies
+        p.wb("END_SHOWN", S["END_DELAY"])             # (start_game's value; END-WAIT: the card waits for a quiet + a key)
         p.wb("GAME_STATE", GS_DEAD)
         p.tick(4)
+        early = p.rb("END_SHOWN") == S["END_DELAY"] and not menu_text_ok(p, p.frame(), S["EC_TROW"], 12, "YOU DIED")
+        hold()
+        p.wb("END_SHOWN", 0)                         # the quiet over (tests/endwait.py runs the countdown)
+        p.tick(2)
+        hold("2")
+        p.tick(4)
         fr = p.frame()
-        card = p.rb("END_SHOWN") == 1 and menu_text_ok(p, fr, S["EC_TROW"], 12, "YOU DIED")   # ENDCARD-G1: full-screen card, title row 6
+        card = early and p.rb("END_SHOWN") & S["ES_CARD"] and menu_text_ok(p, fr, S["EC_TROW"], 12, "YOU DIED")   # ENDCARD-G1: full-screen card, title row 6
         p.tick(4)
         held = p.rb("GAME_STATE") == GS_DEAD         # no release yet: not accepted
         hold()
-        p.tick(3)
-        armed = p.rb("END_SHOWN") == 2
+        p.tick(S["END_DELAY"] + 3)                   # (the card's own quiet: a key leaves it only after END_DELAY ticks)
+        armed = p.rb("END_SHOWN") == S["ES_CARD"]
         tap("SPACE")
         p.wb("JOY_MIRROR", 0x10)   # JOY_F (Kempston bit 4)
         p.tick(4)
@@ -3418,9 +3425,7 @@ def w16_level(p, check):
               (p.rb("GAME_STATE"), p.rb("LVL_DEPTH"), len(cards)))
         # ---- win -> new game: fresh D1, a new master seed ---------------
         def new_game_from_end(tag, prev_master, fixed=None):
-            p.hold("ENTER")
-            p.wait_state(S["GS_SELECT"])
-            p.release()
+            p.end_to_menu("ENTER")                          # END-WAIT: the card (a key after the quiet), then a key
             p.tick(3)
             p.wb("seed_fixed", 0 if fixed is None else 1)   # the real seed source / a fixed one
             if fixed is not None:

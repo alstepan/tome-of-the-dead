@@ -553,7 +553,9 @@ EXIT_LOCK       EQU $BFD1           ; C3-2b: 1 = directions ignored until releas
 FIRE_LOCK       EQU $BFDF           ; C3-2b review: 1 = FIRE masked after BREAK until released
 MENU_SPIN       EQU $BF9A           ; C3-6: word, frames x busy-wait passes in the menu (seed entropy)
 PAUSED          EQU $BF9C           ; C3-6: 1 while the pause overlay is up (test-observable)
-END_SHOWN       EQU $BF9D
+END_SHOWN       EQU $BF9D           ; end flow (main.asm end_screen, END-WAIT): bit 7 ES_CARD = the card is drawn; low nibble = quiet countdown (END_DELAY reload, 0 = wait for a key)
+END_DELAY       EQU $0F             ; ticks of key-free quiet (before the card, and again before a key leaves the card)
+ES_CARD         EQU $80
 PEND_N          EQU $BF9F           ; B19: PENDING bodies of CUR_ROOM at the last build_live (pend_hit); an upper bound. RULE (3F-B4): whatever sets PENDING in CUR_ROOM before the monster phase (ALARM wave, summon, respawn) must call build_live
 MENU_IN_SIG     EQU $BF9E           ; C3-6 review: last input fold seen by menu_frame           ; C3-6: 1 = the death / win card is drawn
 LVL_SH          EQU $BFCA           ; C3-3: hero level digit last drawn ($FF = never)

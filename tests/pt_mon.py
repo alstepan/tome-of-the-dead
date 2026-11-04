@@ -127,7 +127,7 @@ class Mon:
         self.lv = bytes(p.z.read_memory(S["LVL_DEPTH"], S["TOME_FL"] - S["LVL_DEPTH"] + 1))
         rb = self.mb
         gs, room, depth = rb("GAME_STATE"), rb("CUR_ROOM"), rb("LVL_DEPTH")
-        shown = rb("END_SHOWN")
+        shown = rb("END_SHOWN") & S["ES_CARD"]
         why = None
         if self.room is not None and room != self.room:
             why = "room change"
