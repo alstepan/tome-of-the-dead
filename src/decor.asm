@@ -94,7 +94,7 @@ decor_tick:
                 ld   a, $10                    ; give the glyph cap back
                 add  a, c
                 ld   c, a
-                jp   .nx
+                jr   .nx                       ; (PERF-GHOST: jr, -1 B)
 .free:
                 ld   a, (PORT_7FFD_SHADOW)     ; the shadow: bank 7 at $C000 (paged
                 and  7                         ; once per tick: render paged a pool

@@ -437,36 +437,38 @@ lead_cell:
 ;------------------------------------------------------------------------------
 ; box_solid — CF = 1 if any cell of box C,B,D,E (in the map) is TF_SOLID.
 ; Flyers' steps (§9.1: a body passes an open door only through its opening
-; rows) and the jump's swept box. ~60 T a cell (bat 6 cells ~0.5k T, ghost
-; 12 ~0.9k T).  Keeps BC, DE.  Clobbers: A, HL
+; rows) and the jump's swept box. Keeps BC, DE.  Clobbers: A, HL
+; PERF-GHOST: DE is free inside a row (pushed), so D holds the tile_flags page
+; and E the flag byte's low byte (no push / pop HL a cell): 53 T a cell (was
+; 81), ~+30 T a row; a Ghost's 12-cell box ~0.75k T (was ~1.1k), -2 B. The
+; solid exit keeps CF through the POPs and leaves via the row tail's JR C.
 ;------------------------------------------------------------------------------
 box_solid:
                 push bc
                 push de
-.row:           call cell_addr                 ; HL = the row's first cell
+.row:           call cell_addr                 ; HL = the row's first cell (keeps BC, DE)
                 push bc
-                ld   b, d
-.col:           ld   a, (hl)
-                push hl
-                add  a, tile_flags & $FF
-                ld   l, a
-                ld   h, tile_flags >> 8
-                ld   a, (hl)
-                pop  hl
+                push de
+                ld   b, d                      ; B = cols
+                ld   d, tile_flags >> 8
+.col:           ld   a, (hl)                   ; tile id (< TILE_IDS)
+                add  a, tile_flags & $FF       ; (no carry: ASSERT below)
+                ld   e, a
+                ld   a, (de)
                 rrca                           ; CF = TF_SOLID
                 jr   c, .x
                 inc  l                         ; cols stay inside the row
-                djnz .col
+                djnz .col                      ; (falls out with CF = 0: the last RRCA)
+.x:             pop  de                        ; (POP keeps CF)
                 pop  bc
+                jr   c, .out                   ; a solid cell
                 inc  b
-                dec  e
+                dec  e                         ; (INC / DEC keep CF = 0)
                 jr   nz, .row
-                or   a
-                jr   .out
-.x:             pop  bc
 .out:           pop  de
                 pop  bc
                 ret
+                ASSERT (tile_flags & $FF) + TILE_IDS <= 256 && TF_SOLID == 1
 
                 ; lead_cell's one-cell rule: every non-flyer kind has KT_BH <=
                 ; STOREY_AIR - DOOR_PLANK_DY. Checked for ALL kinds by a DUP

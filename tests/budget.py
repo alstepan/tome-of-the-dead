@@ -56,6 +56,11 @@ if os.environ.get("GAME_PROFILE"):                # finer split for optimisation
     PHASES += [n for n in os.environ["GAME_PROFILE"].split(",") if n in S]
 
 
+TRACE_SLD = None
+if os.environ.get("BUDGET_TRACE"):
+    import tick_prof
+    TRACE_SLD = tick_prof.load_sld(os.path.join(__import__("game_lib").BUILD_DIR, "wazhack.sld"))
+
 RETURNS = {}
 # D3-8d: callables f(stepper) run after every measured tick (tests/marks.py
 # reads MK_OPS there: the mark ops of that tick)
@@ -103,6 +108,15 @@ class Stepper:
         room0 = self.p.rb("CUR_ROOM")
         self.z.cmd("reset-tstates-partial")
         split, last, prev, saved, isr_t = {}, "tick_work", 0, None, 0
+        tr = os.environ.get("BUDGET_TRACE")           # PERF-GHOST: instruction profile of tick N
+        if tr and len(self.ticks) in [int(x) for x in tr.split(",")]:
+            import tick_prof
+            ex, inc, cl = tick_prof.trace_tick(self.z, S["wait_tick"], TRACE_SLD, S["PORT_7FFD_SHADOW"])
+            prev = int(self.z.cmd("get-tstates-partial"))
+            print(f"[trace] tick {len(self.ticks)}: {prev} T\n" + tick_prof.report(ex, inc, cl), flush=True)
+            self.ticks.append((prev, {"trace": prev}))
+            self.isr_in.append(0)
+            return prev
         while True:
             n, v = self._run()
             split[last] = split.get(last, 0) + v - prev
@@ -130,6 +144,9 @@ class Stepper:
             print(f"[info] end-card tick {prev} T (GS_DEAD / GS_WIN card), not gated", flush=True)
             return                            # not gated, like a transition
         self.end_shown = shown
+        if os.environ.get("BUDGET_SPLITS") and prev >= int(os.environ["BUDGET_SPLITS"]):
+            print(f"[split] t{len(self.ticks)} {prev} T: " + ", ".join(f"{k}={v}" for k, v in split.items()),
+                  flush=True)                   # PERF-GHOST diagnostic: every tick >= the given T
         self.ticks.append((prev, split))
         self.isr_in.append(isr_t)
         for f in TICK_HOOKS:
@@ -202,7 +219,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # 126k cap (work ~130.4k), so it is NOT in CAP_GATED.
 GATED = ("mix", "mage", "blair")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -544,6 +561,23 @@ SCENARIOS = {
         (5, 21, stand_y(0, 6), RIGHT),
         (3, 24, stand_y(0, 4), HOSTILE),
         (1, 27, stand_y(0, 6), HOSTILE)], KEYS, K_KNIGHT, None, "lqmix"),
+    # PERF-GHOST (T14 finding, docs/t14-playthrough.md: M 0x1234 D3 room 3, 145,471 T): the Mage meleeing
+    # 3 awake Ghosts (24x32 flyers, DRAIN touch / CONFUSED) in a line on its storey (box_free keeps flyers
+    # apart: bodies placed overlapping jam), then walking away over pmix's bag items while they chase: a
+    # pickup turn end (floor_pickup + the line + ap_stamp) with 3 Ghosts flying; kinds / rows / HP by
+    # ghost_setup. "ghost3" GATES (<= CAP work, real <= BUDGET); "ghost5" (5 Ghosts, one behind the hero:
+    # over the encounter cap) is reported only. The real scene (4 bodies + the hero in a decorated room) is
+    # heavier: the gate for it is the playthrough run (docs/memory-map.md "PERF-GHOST ledger").
+    "ghost3": ("mage melee vs 3 Ghosts in a line, then a walk away over pmix items (pickups), the Ghosts chasing", [
+        (5, 15, stand_y(1, 4), HOSTILE),
+        (3, 18, stand_y(1, 4) - 1, HOSTILE),
+        (1, 21, stand_y(1, 4), HOSTILE)], KEYS, K_WIZARD, None, "ghost3"),
+    "ghost5": ("mage melee vs 5 Ghosts (both sides), then a walk over pmix items (informational)", [
+        (5, 15, stand_y(1, 4), HOSTILE),
+        (3, 18, stand_y(1, 4) - 1, HOSTILE),
+        (1, 21, stand_y(1, 4), HOSTILE),
+        (4, 24, stand_y(1, 4) - 1, HOSTILE),
+        (2, 3, stand_y(1, 4), RIGHT)], KEYS, K_WIZARD, None, "ghost5"),
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
         (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
@@ -838,6 +872,21 @@ def pmix_setup(p):
         p.put_item(i, S["FL_S1"], c, t)           # FLOOR1: T_ITEM 2x2 (rows 15..16, cols c..c+1)
     p.fi_refresh()                                # the glyph cache + the icons on screen
     p.set_ent(5, HP=1)
+
+
+def ghost_setup(p, placements):
+    """PERF-GHOST "ghost3" / "ghost5": the placements re-kinded to Ghosts (HP 60, standing on the hero's
+    floor), the hero HP 250 (the DRAIN touches), pmix's bag items under the walk (without its 1-HP kill)."""
+    floor = HERO_Y + p.rb(S["kind_tab"] + S["KT_BH"] + K_WIZARD)
+    y = floor - p.rb(S["kind_tab"] + S["KT_BH"] + S["K_GHOST"])
+    for slot, x, y0, _ in placements:
+        yy = y - (stand_y(1, 4) - y0)             # a placement 1 row up flies 1 row up
+        p.set_ent(slot, KIND=S["K_GHOST"], Y=yy, PY=yy * 8, HP=60, MAXHP=60)
+    p.set_ent(0, HP=250, MAXHP=250, FLAGS=EF_ACTIVE | 2)   # facing the Ghosts (right)
+    hp5 = p.ent(5)["HP"]
+    pmix_setup(p)
+    p.set_ent(5, HP=hp5)
+    p.settle()
 
 
 TRK = {"on": False, "checks": 0, "spawns": 0, "rec": []}
@@ -1164,6 +1213,8 @@ def run_scenario(h, scen):
         pmix_setup(p)
     if len(scen) > 5 and scen[5] == "tmix":
         tmix_setup(p)
+    if len(scen) > 5 and scen[5] in ("ghost3", "ghost5"):
+        ghost_setup(p, placements)
     if len(scen) > 5 and scen[5] in ("trickle", "otrickle"):
         trickle_setup(p, scen[5])
     if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat", "aroom", "asum", "rfar"):
@@ -1384,7 +1435,7 @@ def run_scenario(h, scen):
 
 
 ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill")
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5")
 
 
 def swing_pass(keys):

@@ -55,12 +55,12 @@ reach_ok:
                 ld   a, 1
                 cp   b
                 ret  c                         ; out of reach: ai_guard's og_adv this turn
-                jp   og_adv                    ; an ordinary blow (NC from og_put)
+                jr   og_adv                    ; an ordinary blow (NC from og_put; jr: -1 B)
 .rd:            ld   a, OG_REACH
                 cp   b
                 ret  c
                 ld   a, OG_SLAM
-                jp   og_put
+                jr   og_put                    ; (jr: -1 B)
                 ASSERT OG_READY == 2 && OG_SLAM == 3 && RCD_MASK == 3
 
 ;------------------------------------------------------------------------------

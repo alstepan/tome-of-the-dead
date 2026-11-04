@@ -86,7 +86,7 @@ dn_walk:
 ; dn_fix draws it); fix mode: an unmarked one is left, a marked one drawn and
 ; its bit cleared. Screen-2 line = bank-5 line | source line; attr = DL_ATTR on
 ; a bare cell (bank-5 attr == the attr shadow's), else the bank-5 attr.
-; Clobbers: A, DE, HL (B, C, IX kept).  ~0.12k left; ~0.55k drawn
+; Clobbers: A, DE, HL (B, C, IX kept).  ~0.12k left; ~0.4k drawn (trace builds ~0.55k)
 ; SMC: .md = RET NZ (pass) / RET Z (fix), patched by dn_fix only.
 ;------------------------------------------------------------------------------
 dn_cel:
@@ -113,6 +113,7 @@ dn_cel:
                 ld   h, a                      ; HL = the bank-5 cell, line 0
                 ld   e, d
                 ld   d, DN_ZCOL >> 8           ; DE = the source lines
+    IF ANIM_TRACE_ON                           ; (trace builds: the bank-2 tail has no room)
 .l:             ld   a, (de)
                 or   (hl)                      ; over the composed line (sprite pixels kept)
                 set  7, h                      ; screen 2 = bank 5 + $8000
@@ -123,6 +124,31 @@ dn_cel:
                 ld   a, h
                 and  7
                 jr   nz, .l
+    ELSE
+                ; PERF-GHOST: BC = the screen-2 line (B, C saved), 2 lines a pass: 44.5 T a
+                ; line (was 68), ~-0.15k T a drawn cell incl. the setup, +10 B
+                push bc
+                ld   c, l
+                ld   a, h
+                or   $80                       ; screen 2 = bank 5 + $8000
+                ld   b, a
+.l:             ld   a, (de)
+                or   (hl)                      ; over the composed line (sprite pixels kept)
+                ld   (bc), a
+                inc  e
+                inc  h
+                inc  b
+                ld   a, (de)
+                or   (hl)
+                ld   (bc), a
+                inc  e
+                inc  h
+                inc  b
+                ld   a, h
+                and  7
+                jr   nz, .l
+                pop  bc
+    ENDIF
                 pop  af
                 and  3
                 or   SCREEN_ATTR >> 8

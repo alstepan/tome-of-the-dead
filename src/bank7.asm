@@ -375,7 +375,8 @@ vb_turn:        ld   a, (P_ENTITIES + E_FLAGS)
                 ld   c, K_VAMPIRE              ; odd: the humanoids
 .k:             ld   ix, P_ENTITIES + P_ENT_STRIDE
                 ld   b, P_MAX_ENT - 1
-.l:             ld   a, c
+                ld   de, P_ENT_STRIDE          ; PERF-GHOST: hoisted (a candidate reloads it):
+.l:             ld   a, c                      ; -10 T a slot, +3 B (pickup7's walks paid them)
                 cp   (ix+E_KIND)
                 jr   nz, .n
                 call act_here                  ; (EF_ACTIVE only, in CUR_ROOM)
@@ -396,8 +397,8 @@ vb_turn:        ld   a, (P_ENTITIES + E_FLAGS)
                 ld   hl, vb_one
                 call far6                      ; (IX passes back: vb_one keeps it)
                 pop  bc
-.n:             ld   de, P_ENT_STRIDE
-                add  ix, de
+                ld   de, P_ENT_STRIDE
+.n:             add  ix, de
                 djnz .l
                 ret
                 ASSERT EF_ACTIVE == 1 && (ST_FLAGS & $FF) + P_MAX_ENT <= $100

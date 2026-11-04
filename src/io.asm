@@ -404,7 +404,7 @@ intent_tick:
                 ld   (DN_T), a
                 ld   (DN_COMMIT), a
                 call fire_used
-                jp   mode_enter
+                jr   mode_enter                ; PERF-GHOST: jr (cold, -1 B)
 .nfd:           bit  JOY_U_BIT, e
                 jr   z, .nfu
                 call fire_used
@@ -412,7 +412,7 @@ intent_tick:
 .nfu:           ld   a, d
                 and  JOY_DIRS
                 ret  z
-.used:          jp   fire_used                ; FIRE with a direction: not a tap
+.used:          jr   fire_used                ; FIRE with a direction: not a tap (jr: -1 B)
                 ; --- DOWN alone (FIRE up): the ICON MODE window ---
 .dn:            ld   a, (EXIT_LOCK)          ; the stick that left ICON MODE is
                 or   a                        ; still held: no DOWN window
@@ -510,7 +510,7 @@ fire_used:      ld   a, (FIRE_ST)
 ; pause_hook — FIRE+UP / BREAK (outside ICON MODE): D3-S2: the body is
 ; bank-7 pause_run7 (far7). Clobbers: all but IX, IY.
 pause_hook:     ld   hl, pause_run7
-                jp   far7
+                jr   far7                      ; (cold: jr -1 B, PERF-GHOST)
 
 ;==============================================================================
 ; rng_next — xorshift16, triplet (7,9,8) (J. Metcalf's Z80 form).

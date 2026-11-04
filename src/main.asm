@@ -559,6 +559,8 @@ enter_select:
                 INCLUDE "dnfix2.asm"            ; DNUM-SPRITE-FIX: dn_fix (present's number cells), in the pad
     IF !ANIM_TRACE_ON
                 INCLUDE "dnlvt2.asm"            ; LVL-FLOATER: dn_lvt (the "+LVL" text), in the pad (trace builds: the tail, below)
+                INCLUDE "ldir2.asm"             ; PERF-GHOST: in the pad (17 B), so the tail holds dn_cel's
+                                                ; 2-line pass (trace builds: the tail, below, and the old loop)
     ENDIF
                 ; dnum2.asm (the numbers' screen-2 draw + the kit's dnwin.asm): after ldir2.asm
                 ; (RECLAIM-D), so the kind_tab ALIGN pad keeps room for the -DANIM_TRACE_ON=1 code
@@ -715,7 +717,9 @@ dn_miss_s:      DB   "MISS", 0, DNA_MISS       ; D3-11 / LVL-FLOATER (dnfix2.asm
     IF TOME_FX                                  ; (a trace test build has 4 B of bank 2 left: trap7.asm keeps them)
                 INCLUDE "trap2.asm"             ; TOME-FX reclaim: tr_ent / tr_type (bank-7 trap7 leaf helpers)
     ENDIF
+    IF ANIM_TRACE_ON
                 INCLUDE "ldir2.asm"             ; RECLAIM-C (d): ldir7 (bank-1 menu_static reads a bank-7 tileset run)
+    ENDIF
                 INCLUDE "dnum2.asm"             ; D3-11 / DNUM-SPRITE-FIX: dn_show / dn_walk / dn_cel, screen 2 (+ kit builds: dnwin.asm)
                 INCLUDE "dnum2b.asm"            ; D3-11: dn_gate (play_loop) + dn_sfx (impact_line), after every other bank-2 code
     IF ANIM_TRACE_ON

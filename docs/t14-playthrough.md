@@ -91,6 +91,9 @@ revision of the same run showed 134,513 T at tick 5,234 (same room). Other runs 
 `ZRCP_PORT=<p> python3 tests/playthrough.py --hero M --seed 0x1234` on the release build (the bot is deterministic; the
 tick number moves with bot revisions; `heaviest_ticks` in the report lists the top 8 with room / depth / last log lines).
 
+**Fixed by PERF-GHOST (`perf/ghost-tick`, docs/memory-map.md "PERF-GHOST ledger"):** the same run now peaks at 137,897 T
+(tick 5,036) / 135,426 T (5,038); `tests/budget.py` gates the scene's synthetic twin `ghost3` (+ `ghost5`, reported).
+
 ### Bot notes (limits, for the next person)
 
 * The bot is a weak player: level 6-7 at D8, so most boss fights need god top-ups (see the poke table). `god_hp` counts

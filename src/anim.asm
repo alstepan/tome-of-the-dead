@@ -97,7 +97,7 @@ anim_tick:
                 add  a, 16
                 ld   l, a
                 jp   nc, .lp                   ; carry = slot 16 reached
-                jp   .done
+                jr   .done                     ; (once a tick: jr, -1 B, +2 T)
 
 ;------------------------------------------------------------------------------
 ; rl_first / rl_next — iterate RLIST (slots visible or still drawn this tick,
@@ -120,13 +120,14 @@ rl_next:        ld   hl, RL_IDX                ; BLAIR-FIX: RL_IDX / RLIST_N thr
                 ld   l, a                      ; (RLIST, RLIST_N: one page)
                 ld   a, (hl)
                 ld   (ANIM_SLOT), a
-                rlca
+                ld   h, a                      ; PERF-GHOST: the slot kept in H (was a 2nd
+                rlca                           ; ANIM_SLOT read): -5 T a call, -1 B
                 rlca
                 rlca
                 rlca
                 ld   l, a                      ; A7b: HL = the slot's record
+                ld   a, h
                 ld   h, SLOTREC >> 8
-                ld   a, (ANIM_SLOT)
                 or   a                         ; CF = 0; Z = slot 0
                 ret
                 ASSERT (RLIST >> 8) == (RLIST_N >> 8) && RL_IDX == RLIST_N + 1 && (RLIST_N & $FF) != $FF
@@ -611,6 +612,7 @@ turn_done:
                 ret  nz                        ; CF = 0 (or)
                 ld   ix, P_ENTITIES
                 ld   b, P_MAX_ENT
+                ld   de, P_ENT_STRIDE          ; PERF-GHOST: hoisted (-10 T a slot, 0 B)
 .l:             ld   a, (ix+E_FLAGS)
                 and  EF_ACTIVE | EF_PENDING
                 cp   EF_ACTIVE
@@ -626,8 +628,7 @@ turn_done:
 .rs:            ld   a, (ix+E_REACT)
                 or   a
                 ret  nz                        ; CF = 0 (or)
-.n:             ld   de, P_ENT_STRIDE
-                add  ix, de
+.n:             add  ix, de
                 djnz .l
                 scf
                 ret

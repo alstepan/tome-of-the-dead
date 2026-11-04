@@ -339,6 +339,13 @@ TOME_HP         EQU EDGE_TAB + 8    ; $6D58: P3 (game.md §1.3) the Tome's hp, 1
 ; same 2 ticks the lectern is white on screen). Level generation zeroes it (EDGE_TAB). Test-observable.
 TOME_FL         EQU EDGE_TAB + 9    ; $6D59 (same page as TOME_HP: tome_strike's `dec l`)
                 ASSERT TOME_FL == TOME_HP + 1 && (TOME_FL >> 8) == (TOME_HP >> 8) && TOME_FL < ROOM_DESC
+; PERF-GHOST: DN_QN = 0 <=> the flying numbers' spawn queue (DN_KEY) is known empty: bank-0 dn_pop
+; clears it when it finds no key left, dn_scan sets it (non-zero) before it ranks the slots. Level
+; generation zeroes it (EDGE_TAB; the keys left from the old level can never spawn: dn_reset resynced
+; their DS_SEEN). bank-2 dn_gate skips a 2nd-frame tick's FARB0 dn_q2 (~1.1k T, a no-op then) while
+; DN_QN and TOME_FL (dn_tm) are both 0: one LD DE, (TOME_FL) reads both (E, D). Test-observable.
+DN_QN           EQU TOME_FL + 1     ; $6D5A
+                ASSERT DN_QN < ROOM_DESC
 ; P3 the Tome (game.md §1.3; tome7.asm, bank3.asm build_room_map). The lectern (2x2, ids T_LECT_TL..BR) stands
 ; on STOREY 1 against the Sanctum's dead-end wall: cols LECT_COL_L..+1 when the Sanctum is cell 6 (its door
 ; on the right), LECT_COL_R..+1 when it is cell 8; rows LECT_ROW..+1 (the item band above floor row 17).

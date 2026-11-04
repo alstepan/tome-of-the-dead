@@ -315,7 +315,7 @@ erase_rect:
                 add  a, 32                     ; next char row: same third ...
                 ld   c, a
                 jr   nc, .row
-                jp   .third                    ; ... or the next one (rare; out of line so
+                jr   .third                    ; ... or the next one (rare; out of line so
                                                ; the JR C / JR Z below stay in range)
 ; .air — 3F-B1: T_AIR (id 0, glyph all zero: ASSERTed in boot6, tests/eraseair.py):
 ; 8 zero lines, no glyph read (the contended $66xx fetch). H = bitmap high
@@ -503,9 +503,9 @@ pmark_rect_np:                                 ; BLAIR-FIX: PRES_ANY already set
                 ld   a, (hl)
                 or   d
                 ld   (hl), a
-                ld   a, l
-                add  a, 3
-                ld   l, a
+                inc  l                         ; PERF-GHOST: 3 x INC L (12 T, 3 B) for
+                inc  l                         ; ld a, l / add a, 3 / ld l, a (15 T, 4 B):
+                inc  l                         ; the row stays in the PRES_MASK page
                 djnz .r2
 .done:          pop  de
                 pop  bc
@@ -840,7 +840,11 @@ shadow_room:
 ; read mask and data straight from the pool, so no temp register is needed
 ; (44 T/byte, was 52), and C keeps the line-start low byte, so a line ends
 ; with `ld e,c` (was ld a,l / sub w / ld l,a).
-; Cost: 44 T/byte (unrolled chain, entered at (6-width)*7 by an SMC jump) +
+; PERF-GHOST: the mask -> data step is INC L (was INC HL): every pre-shifted frame
+; starts at an even address (alloc: POOL_START / BANK_WINDOW even, every size =
+; 2 * cols * H; ASSERTed below), so a (mask, data) pair never straddles a page:
+; 42 T/byte, -2 T a byte drawn (~1.2k T at 3 Ghosts + the hero), 0 B.
+; Cost: 42 T/byte (unrolled chain, entered at (6-width)*7 by an SMC jump) +
 ; 31 T/line char-aligned (54 T general path) + ~680 T setup.
 ;   24x48 shifted  (4 cols)  : 192 B -> 8.4k + 1.5k + 0.7k = 10.6k T
 ;   40x48 slash    (6 cols)  : 288 B -> 12.7k + 1.5k + 0.7k = 14.9k T
@@ -967,7 +971,8 @@ blit_chain:
                 DUP  BLIT_MAXW
                 ld   a, (de)                   ; screen
                 and  (hl)                      ; mask
-                inc  hl
+                inc  l                         ; PERF-GHOST: mask -> data never carries (every
+                                               ; frame starts even: POOL_ASSERT below)
                 or   (hl)                      ; data
                 inc  hl
                 ld   (de), a
@@ -1000,6 +1005,8 @@ blit_miss:
                 inc  (hl)                      ; (§5.1 debug trap) -> not drawn
                 ret
                 ASSERT (blit_chain_end - blit_chain) == BLIT_BLOCK * BLIT_MAXW
+                ASSERT (POOL_START & 1) == 0 && (BANK_WINDOW & 1) == 0   ; PERF-GHOST: even frame starts
+                                               ; (gen_variant: every alloc size is even)
 
 ; char-aligned continuation (31 T/line vs 54): B = lines left in this char
 ; row; the char-row / third fix-up runs once per 8 lines.
@@ -1008,7 +1015,7 @@ blit_chain_al:                                 ; twin chain: falls into the
                 DUP  BLIT_MAXW                 ; aligned continuation below
                 ld   a, (de)
                 and  (hl)
-                inc  hl
+                inc  l                         ; PERF-GHOST: even pair start (as blit_chain)
                 or   (hl)
                 inc  hl
                 ld   (de), a

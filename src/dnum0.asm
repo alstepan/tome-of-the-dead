@@ -81,6 +81,8 @@ dn_tick:
 ; render list) still owes its -n (dn_cls).  Clobbers: all but IY
 ;------------------------------------------------------------------------------
 dn_scan:
+                ld   (DN_QN), a                ; PERF-GHOST: the queue may hold keys now (A != 0 on
+                                               ; both entries: dn_tick's INC A / JR NZ, OP_LD_BC_NN)
                 ld   hl, DN_PASS
                 inc  (hl)
                 ld   hl, DN_KEY
@@ -271,7 +273,7 @@ dn_erase:
 ;------------------------------------------------------------------------------
 ; dn_pop — the spawn queue's head (dn_scan / dn_q2): the lowest DN_KEY (the
 ; last scan's ranking) taken ($FF) -> DN_CUR = its slot, DN_BT = its key (bit 0
-; DNT_MISS, bit 7 DNT_HP). CF: none left.  Clobbers: A, BC, E, HL.  ~0.5k T
+; DNT_MISS, bit 7 DNT_HP). CF: none left (PERF-GHOST: then DN_QN := 0).  Clobbers: A, BC, E, HL.  ~0.5k T
 ; (DNUM-SPRITE-FIX: from bank 2, room for the screen-2 draw there)
 ;------------------------------------------------------------------------------
 dn_pop:
@@ -286,7 +288,7 @@ dn_pop:
                 djnz .f
                 ld   a, c
                 add  a, 1
-                ret  c                         ; all $FF
+                jr   c, .none                  ; all $FF
                 ld   l, e
                 ld   (hl), $FF                 ; taken
                 ld   a, c
@@ -295,6 +297,9 @@ dn_pop:
                 sub  DN_KEY & $FF              ; (NC)
                 ld   (DN_CUR), a
                 ret
+.none:          ld   (DN_QN), a                ; PERF-GHOST: A = 0 (CF kept): the queue empty
+                ret                            ; (dn_gate skips dn_q2 until the next scan)
+                ASSERT OP_LD_BC_NN != 0
 
 ;------------------------------------------------------------------------------
 ; dn_cls — A = slot: resync / hold / rank (header above): a candidate's key
