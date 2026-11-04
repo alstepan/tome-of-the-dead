@@ -5335,7 +5335,8 @@ the kind's `KT_ATTR` box) or, on a win, the 4 lectern tiles (`T_LECT_*` written 
 x + `EC_VX` 64 (died: rows 10.., x 72; killer: rows 10.., x 88; win: rows 11.., x 88); `PRESS 1-4 OR ENTER` row 22
 x 72; then `present_full`. `panel_tick` no longer runs on the card (no panel): the death / win log line is flushed by
 `panel_init7` at the next game (checked by the previous engineer). Killer: `deal_hit .kill` of the HERO stores
-`ST1_KILLER` = `$80 | kind` of `ATK_PTR`'s entity unless it is a hero kind (his own blow / `trap_hit`); poison,
+`ST1_KILLER` = `$80 | kind` of `ATK_PTR`'s entity unless it is a hero kind (his own blow / `trap_hit`; **ENDCARD-K**:
+his own bolt a body reflected = that reflector, see the ENDCARD-K ledger); poison,
 falls, the Tome's aura, traps = 0 = `YOU DIED`; zeroed by `new_game` (ST1_CNT) and by the kit build's revive
 (`end_turn .dead`, kit only). Removed: `es_stats` (stat7.asm), `es_item` (stat7i.asm), `es_best`, `ES_ROW/LX/VX`.
 
@@ -5798,3 +5799,24 @@ Measured before (TOME-FX): the lectern flash lasted staff FIRE 2 ticks, Spark 10
 - **Tests:** `tests/sanctum.py` FX7 (per attack x TOME_HP 3 / 1: `TILE_ATTRS` flash on exactly 2 ticks, the displayed flash 2 ticks 2 ticks later (not for Power Strike / Whirlwind: their own white swing), the border on exactly the 2 aligned ticks with the right colour then black / untouched with TOME_BORDER 0, ash / book after, `TOME_FL` 0), FX8 (TOME_BORDER 1: a white border is blacked by the bag, the pause, a room exit and the death end card; the port is read with ZRCP `get-io-ports`).
 
 - **Known divergence (TOME-FX2, review 2026-11-04):** kit builds (`DEBUG_KIT=1`) keep the old Tome flash timing (`turn_input` calls `lect_back`; the flash lasts the whole turn, no border flash) because kit bank 0 has 10 B free and the hook needs 21-43 B; no suite runs that path (game suites refuse kit builds). Closes when a bank-0 reclaim lets `TOME_FX2` into the kit.
+## ENDCARD-K ledger (`fix/endcard-killer`, 2026-11-04; user playtest: "i died but the game over screen did not show the ghost who killed me")
+
+- **Cause (not a regression; ENDCARD-G1 `30dc3b1` rule gap):** a Mage's Spark / Lightning (`DTY_SHOCK`) is reflected by a Ghost /
+  Poltergeist (`RSP_X`; also the Archmage COLD / SHOCK, the Death Knight FIRE) and kills its caster: `pf_strike`'s `deal_hit` has
+  IX = the caster, so `.kill` saw a hero attacker -> `ST1_KILLER` 0 -> `YOU DIED`, no portrait. Every melee / ranged / boss killer
+  already drew correctly (`tests/endcard_k.py` K: all 28 monster kinds; the Ghost's own touch R3).
+- **Fix (`ENDCARD_RK` builds = release without `ANIM_TRACE_ON`; `defs.asm`):** `pf_rfl` = `pf_moves + 1` (PF_RAM, bank 5, in the
+  `PF_ZN` zero-init block: 0 per cast at `proj_prep`, 0 B init; `pf_desc` / `pf_cand` / `PF_RAM_END` +1) = the slot of the body that
+  last reflected (or absorbed: nothing follows an absorb) this cast, set in `pf_bodies` (+3 B bank 3); `trap_hit`'s `th_go` zeroes
+  it (+3 B: a trap death never credits a past cast's reflector); `deal_hit .kill` of the hero = `call dh_killer` (15 -> 5 B) in the
+  new bank-2 `killer2.asm` (25 B, after `kind_tab`, after `msg2.asm`): the attacker's kind, else (hero attacker) `$80 |` the
+  reflector's kind when `pf_rfl` != 0, else unchanged (0). Kit (infinite lives, the revive clears `ST1_KILLER`; bank 2 0 B after
+  `kind_tab`) and the trace build (bank 2 4 B) keep the ENDCARD-G1 inline code (`ENDCARD_RK` 0, 0 B change).
+- **Free bytes (release):** bank 3 2 -> **6**; bank 2 44 -> **19** (after `kind_tab` 26 -> 1, the ALIGN pad 18 unchanged). Kit / trace /
+  `F3_GEN=0`: kit and trace unchanged; `F3_GEN=0` = release.
+- **Tests:** `tests/endcard_k.py` (release): K every monster kind 2..29 on a depth that generates it (lp_dtab / tiers -> base / VBAT ->
+  Vampire), killed through `deal_hit`: `ST1_KILLER`, the title, the portrait cells == the first `KS_MOVE` fid of the sequence masters
+  (`ovl/seq.bin`) drawn from its resident FRT variant + the `KT_ATTR` box; R1 / R2 the reflected Spark (both sides) / Lightning kill
+  through a real cast -> `KILLED BY GHOST` + portrait; R3 the Ghost's touch through real turns (both heroes); N1 a survived reflection
+  then a trap death -> `YOU DIED`. Main `302b440` fails R1 / R2 (9 checks), passes K / R3 / N1.
+

@@ -414,6 +414,13 @@ TOME_FX2        EQU TOME_FX * (1 - DEBUG_KIT)   ;     hit effect is timed by a b
                                                 ;     (restore on the first INPUT tick) until the bank-0 reclaim
                                                 ;     exists; -DTOME_FX2=1 there fails the b0_code_end ASSERT
                 ASSERT TOME_FX2 == 0 || TOME_FX2 == 1
+    IFNDEF ENDCARD_RK                           ; ENDCARD-K (user playtest 2026-11-04): 1 = a hero killed by
+ENDCARD_RK      EQU (1 - DEBUG_KIT) * (1 - ANIM_TRACE_ON)   ; his own bolt a body reflected is "KILLED BY"
+    ENDIF                                       ;     the reflector (bank-2 killer2.asm dh_killer, 25 B after
+                                                ;     kind_tab). 0 in the kit (infinite lives: the revive clears
+                                                ;     ST1_KILLER; bank 2 has 0 B after kind_tab there) and the
+                                                ;     trace test build (bank 2 4 B): the ENDCARD-G1 rule
+                ASSERT ENDCARD_RK == 0 || ENDCARD_RK == 1
     IFNDEF TOME_BORDER                          ; TOME-FX2: 1 = every Tome hit also flashes the border (white; yellow
 TOME_BORDER     EQU 1                           ;     on the last hit) for the 2 ticks the lectern is white; 0 = the
     ENDIF                                       ;     fast lectern flash only (22 B less)

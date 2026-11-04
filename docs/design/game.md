@@ -541,6 +541,10 @@ WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|
   screen's title), not WAZHACK. Torches animated and hero previews on the select screen follow
   `concept_menu` / `screen_menu.png` (designer decision 2026-10-04). Death `KILLED BY …`
   killer tracking is 3D (designer decision).
+  **ENDCARD-K (user playtest 2026-11-04):** a hero killed by his own bolt that a monster reflected
+  (Spark / Lightning off a Ghost, Firebolt off the Death Knight, Frost / Spark off the Archmage) is
+  `KILLED BY` that reflector (portrait drawn); his own bolt off a wall, his own Firebolt burst,
+  traps, falls, poison, hunger and the Tome's aura stay `YOU DIED`.
 
 #### 3.2.1 HOW TO PLAY screen (INSTR1; user 2026-10-30 request, designer decision 2026-10-30)
 
