@@ -147,6 +147,8 @@
   a FEARed hero can still hit the Tome by bump / FIRE (the Tome is no body, `fear_chk` gates body attacks
   only); the Mage's staff on the Tome plays no `melee_bonk` swing (the hit and the line only).
 
+**TOME-FX2 (user 2026-11-03: "faster flash, or a border flash when the Tome is hit"):** the lectern flash now lasts exactly 2 ticks (80 ms) for every attack, spells included (the bank-0 per-tick hook `dn_tm` counts `TOME_FL`; it used to wait for the end of the turn: Spark 10 ticks, Firebolt 11), and with the `TOME_BORDER` switch each hit also flashes the border white (yellow on the last hit) for the same 2 ticks; the pause / bag / room exit / end card black it. Build ledger: `docs/memory-map.md` "TOME-FX2 ledger". The paragraph below is the TOME-FX base (its "restore on the first INPUT tick" timing is what a DEBUG_KIT build still does).
+
 **TOME-FX as built (user request 2026-11-03: "add some visuals that the tome is destroyed - a flash or a
 generic corpse frame"; the attr-only variant, no new glyph / tile):** every hit (all 7 attack kinds above)
 plays `SFX_HIT` and paints the 2x2 lectern `ATTR_TOME_FLASH` `$47` (bright white; not `$43`, the book's own

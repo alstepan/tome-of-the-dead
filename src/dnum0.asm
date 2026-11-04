@@ -54,6 +54,9 @@
 ; ~0.6k (far7) + ~0.25k per cell + ~0.55k per drawn cell row (<= 3 cells x 2 rows).
 ;------------------------------------------------------------------------------
 dn_tick:
+    IF TOME_FX2
+                call dn_tm                     ; TOME-FX2: the Tome hit effect's per-tick count
+    ENDIF
                 ld   hl, dn_step               ; erases first, then every draw: an
                 call dn_each                   ; erase never wipes a number drawn
                 ld   hl, dn_shw7               ; earlier in the same pass
@@ -170,11 +173,60 @@ dn_shw7:
 ; while an FX track is busy (a bolt's targets and its caster wait for the next
 ; light tick).  Clobbers: all but IY
 dn_q2:
+    IF TOME_FX2
+                call dn_tm                     ; TOME-FX2 (every tick passes dn_tick or dn_q2 once)
+    ENDIF
                 ld   a, (FX_BUSY)
                 or   a
                 ret  nz
                 jr   dn_scan.pop
                 ASSERT (dn_q2 >> 8) == (dn_tick >> 8)      ; dn_gate: ld l, dn_q2 & $FF
+
+    IF TOME_FX2
+;------------------------------------------------------------------------------
+; dn_tm — TOME-FX2 (user 2026-11-03): the Tome hit effect, counted at the end of every playing tick (dn_gate
+; is play_loop's first call: the last work of the tick just done, after the turn logic). TOME_FL (tome_strike:
+; TOME_FL_N) 0 = nothing (~45 T with the call). Else it counts down and, per value AFTER the decrement:
+;   TOME_BORDER 0 (N 3): 0 -> lect_back (bank 7, far7: the flash restored, ash after the last hit).
+;   TOME_BORDER 1 (N 4): 2 -> the border BORDER_TOME (BORDER_TOME_END once TOME_HP is 0), 1 -> lect_back,
+;                        0 -> the border black. The border bits 3 / 4 (MIC / EAR) are 0: the game has no beeper
+;                        (AY only; the ALARM border and end_card write the port the same way).
+; A paint is queued after the tick's render and shown at the start of the tick after next; the restore queued
+; here is rendered / shown 2 ticks later too, so lectern white = exactly 2 ticks, whatever the attack (a
+; spell's projectile phase no longer holds it: the old restore waited for the end of the turn). The border
+; is written at the tick's end, just before the HALT that starts the tick which presents the change.
+; A modal screen (pause, bag) calls show_bank5, which blacks the border (lowram.asm).
+; Clobbers: A, HL (lect_back via far7: all but IX).
+;------------------------------------------------------------------------------
+dn_tm:
+                ld   hl, TOME_FL
+                ld   a, (hl)
+                or   a
+                ret  z
+                dec  a
+                ld   (hl), a
+    IF TOME_BORDER
+                jr   z, .off
+                cp   2
+                jr   z, .on
+                ret  nc                        ; 3: the paint is not on screen yet
+    ELSE
+                ret  nz
+    ENDIF
+                ld   hl, lect_back             ; (bank 7: back with bank 0 paged again, farb)
+                jp   far7
+    IF TOME_BORDER
+.on:            ld   a, (TOME_HP)
+                or   a
+                ld   a, BORDER_TOME
+                jr   nz, .o
+                ld   a, BORDER_TOME_END        ; the last hit: the destroyed beat
+                jr   .o
+.off:           xor  a
+.o:             out  (PORT_BORDER), a
+                ret
+    ENDIF
+    ENDIF
 
 ; dn_each — HL = routine, called with IX = the record for every live entry
 ; (it keeps IX).  Clobbers: as the routine

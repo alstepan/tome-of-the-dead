@@ -42,9 +42,16 @@ tome_rel:       call tome_in
 tome_strike:
     IF TOME_FX
                 ld   de, ATTR_TOME_FLASH * $0101
-                call lect_paint                ; TOME-FX: the hit tick flashes the 2x2 (lect_back, the first INPUT
-                                               ; tick after the turn, ends it: ash after the last hit, else its own)
+                call lect_paint                ; TOME-FX: the hit tick flashes the 2x2 (TOME_FX2: lect_back, called by the
+                                               ; bank-0 dn_tm hook on the TOME_FL_N-th tick end, ends it; else the first
+                                               ; INPUT tick after the turn: ash after the last hit, else its own)
+    IF TOME_FX2
+                ld   hl, TOME_FL               ; every hit restarts the count
+                ld   (hl), TOME_FL_N
+                dec  l                         ; = TOME_HP (ASSERTed adjacent)
+    ELSE
                 ld   hl, TOME_HP
+    ENDIF
                 ld   a, SFX_HIT                ; every hit sounds; the last one SFX_KILL (a spell's cast
                 dec  (hl)                      ; sound, equal / higher prio, may replace it)
                 jr   nz, .s
@@ -65,10 +72,11 @@ tome_strike:
 ; TOME-FX (user 2026-11-03). The lectern's 4 attrs live in TILE_ATTRS[T_LECT_TL..BR] (common ids, loaded at
 ; boot, reset by lect_norm at every level start), so a room (re-)entry, the room memory and the end card all
 ; draw whatever they hold: the ash after the last hit persists with no further state.
-; lect_back — turn_input (every INPUT tick: the first one after a hit's turn; a bump turn is 2 ticks, so end_turn
-;   would restore the attrs before present ever showed the flash: it is on screen for 2 ticks) and end_turn's
-;   .dead (a lethal turn must not reach the end card flashed): a hit's flash (BL = ATTR_TOME_FLASH) ends: the
-;   ash if TOME_HP is 0, else the book / stand attrs. Else nothing (~45 T).
+; lect_back — TOME-FX2: the bank-0 dn_tm hook (dnum0.asm; far7, TOME_FL_N tick ends after a hit = the flash has
+;   been on screen 2 ticks; before TOME-FX2 turn_input called it on the first INPUT tick, so a spell's 10-tick
+;   turn kept the flash up for the whole turn) and end_turn's .dead (a lethal turn must not reach the end
+;   card flashed): a hit's flash (BL = ATTR_TOME_FLASH) ends: the ash if TOME_HP is 0, else the book / stand
+;   attrs. Else nothing (~45 T).
 ; lect_paint — DE = (top TL TR, foot BL BR): set the 4 attrs, then the 2x2 repainted (rect_repaint: the attr
 ;   shadow + a queued restore; ROOM_MAP is unchanged, only attrs). Only in the Sanctum (a hit's turn never
 ;   leaves the room). lect_norm / lect_attrs (theme7.asm): DE := its own attrs / store DE's two bytes in the 4 cells.

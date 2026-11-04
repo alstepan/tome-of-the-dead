@@ -1946,6 +1946,9 @@ set_screen:
 ; Clobbers: A, BC
 show_bank5:
                 xor  a
+    IF TOME_FX2 && TOME_BORDER
+                out  (PORT_BORDER), a          ; TOME-FX2: pause / bag / transitions / menus black a Tome-hit border
+    ENDIF                                      ; (2 B of the cold block's spare: dn_tm never sees a modal's ticks)
                 jr   set_screen
 
 ;------------------------------------------------------------------------------

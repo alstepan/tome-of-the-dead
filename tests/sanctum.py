@@ -26,11 +26,16 @@ Seeded generated games (F3_GEN build, DEBUG_KIT=0), the real level_descend D7 ->
       and the displayed attrs; the glyphs stay), end_turn restores it before the death check (W5 dies
       unflashed); the last hit leaves the ASH attr (4 cells) which persists across leave / re-enter and
       into the end card; a new level restores the book / stand attrs; SFX_HIT per hit, SFX_KILL on the last
+  FX7 TOME-FX2 (user 2026-11-03): the flash is exactly 2 ticks on the displayed screen for EVERY attack (bump, FIRE,
+      Power Strike, dagger, arrow, staff, Spark, Firebolt), the border (TOME_BORDER 1) white / yellow (last hit) for the
+      same 2 ticks then black, never touched with TOME_BORDER 0; FX8 a white border is blacked by the bag, the pause,
+      a room exit and the death card (TOME_BORDER 1)
   W6  after the Tome: the hero walks out into the lair (real do_exit): the grate T_GRATE x 3 (opened
       off-screen), ROOM_MAP == room_model; re-entry (room_show) keeps it; DOWN at c with HP 1 ->
       GS_WIN, depth stays 8, the last line "YOU WIN!" 
 ZRCP_PORT=<port> python3 tests/sanctum.py
 """
+import re
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -149,6 +154,16 @@ def shown(fr, left, row0=15, col0=None):
     c0 = col0 if col0 is not None else (1 if left else 29)
     return [fr[6144 + row0 * 32 + c0], fr[6144 + row0 * 32 + c0 + 1],
             fr[6144 + (row0 + 1) * 32 + c0], fr[6144 + (row0 + 1) * 32 + c0 + 1]]
+
+
+def border(p):
+    """The last value written to port $FE (ZRCP get-io-ports "Spectrum FE port"): bits 0-2 = the border."""
+    m = re.search(r"Spectrum FE port:\s*([0-9A-Fa-f]+)", p.z.cmd("get-io-ports"))
+    return int(m.group(1), 16)
+
+
+def border_set(L, v):
+    L.ingame([0x3E, v, 0xD3, 0xFE])                        # ld a, v / out ($FE), a (bits 3 / 4 = 0: no beeper)
 
 
 def play_mode(p):
@@ -420,6 +435,124 @@ def fx_tests(p, L, key):
           lect_attrs(p))
     play_mode(p)
     lect_norm(p)
+    p.wb("TOME_HP", S["TOME_MAX"])
+    if not S.get("TOME_FX2", 0):                         # (a kit build keeps the TOME-FX timing: no hook)
+        return
+    fx_timing(p, L, [("melee bump", (key,), 0, False), ("melee FIRE", ("C",), 0, False), ("Power Strike", ("@1",), 0, True),
+                     ("Whirlwind", ("@2",), 0, True), ("dagger", ("@3",), 5, False), ("arrow", ("@4",), 13, False)], "Warrior")
+    if BORDER_ON:                                        # (TOME_BORDER 1; a -D define is not in the .sym)
+        fx_modal(p, L)
+
+
+def fx_timing(p, L, cases, tag):
+    """FX7 (TOME-FX2, user 2026-11-03): the lectern flash lasts exactly 2 ticks for EVERY attack (cases = [(label,
+    keys, gap, swing_fx)]) -- a spell's long projectile turn no longer holds it. Samples, one per tick (TOME_FL,
+    TILE_ATTRS BL, displayed BL attr, port $FE & 7), from the turn's start to 6 ticks after it is idle; ref = the
+    first sample with TOME_FL != 0 (the strike's tick, after dn_tm's first count). Expected: TILE_ATTRS flash on
+    [ref, ref + 1] (restored when dn_tm queues it), the displayed flash on [ref + 2, ref + 3] (paint and restore
+    each reach the screen 2 ticks after they are queued; skipped for a swing_fx attack: Power Strike / Whirlwind
+    draw their own white swing over the cells), the border (TOME_BORDER 1: white, yellow on the last hit) on
+    [ref + 1, ref + 2] (written at the end of the tick before the one that presents the flash) then black;
+    TOME_BORDER 0 never touches it. The last hit leaves the ASH attrs, TOME_FL 0."""
+    border_on = BORDER_ON
+    for label, keys, gap, swing in cases:
+        for hp, col in ((3, S["BORDER_TOME"]), (1, S["BORDER_TOME_END"])):
+            play_mode(p)
+            lect_norm(p)
+            border_set(L, 0)
+            p.wb("TOME_HP", hp)
+            L.at_gap(gap)
+            p.set_ent(0, HP=200)
+            smp = []
+
+            def snap(fr, hero):
+                smp.append((p.rb("TOME_FL"), lect_attrs(p)[2], shown(fr, L.left)[2], border(p) & 7))
+            p.turn(*keys, per_tick=snap)
+            p.until(lambda: p.idle(), 300)
+            for _ in range(6):
+                smp.append((p.rb("TOME_FL"), lect_attrs(p)[2], shown(p.frame(), L.left)[2], border(p) & 7))
+                p.tick()
+            ref = next((i for i, x in enumerate(smp) if x[0]), -9)
+            tile = [i for i, x in enumerate(smp) if x[1] == A_FLASH]
+            shw = [i for i, x in enumerate(smp) if x[2] == A_FLASH]
+            bd = [i for i, x in enumerate(smp) if x[3] != 0]
+            rest = A_ASH if hp == 1 else A_FOOT
+            ok = tile == [ref, ref + 1] and (swing or shw == [ref + 2, ref + 3]) and smp[-1][1] == rest
+            ok = ok and p.rb("TOME_HP") == hp - 1 and p.rb("TOME_FL") == 0
+            if border_on:
+                ok = ok and bd == [ref + 1, ref + 2] and all(smp[i][3] == col for i in bd) and smp[-1][3] == 0
+            else:
+                ok = ok and not bd and border(p) & 7 == 0
+            check(f"FX7 {tag} {label} (TOME_HP {hp} -> {hp - 1}): flash = 2 ticks (tile attrs"
+                  + ("" if swing else " + displayed") + ")"
+                  + (f", border {col} on the same 2 ticks, then black" if border_on else ", border untouched")
+                  + (", ash after" if hp == 1 else ", book / stand after") + ", TOME_FL 0",
+                  ok, (ref, tile, shw, bd, smp[:12]))
+    play_mode(p)
+    lect_norm(p)
+
+
+def fx_modal(p, L):
+    """FX8 (TOME_BORDER 1): the border is never left changed by a modal screen or the death card: with the hook idle
+    (TOME_FL 0: nothing else would black it) a white border is cleared by the bag page, the pause overlay, the
+    room exit (transition scroll) and the end card; MIC / EAR stay 0."""
+    play_mode(p)
+    lect_norm(p)
+    L.at_gap(3)
+    p.set_ent(0, HP=200)
+    p.wb("TOME_FL", 0)
+    border_set(L, BORDER_W)
+    p.tap("I")
+    opened = p.rb("PAGE_OPEN") == 1
+    b_bag = border(p)
+    p.tap("I")
+    p.tick(3)
+    check("FX8 the bag page blacks a Tome-hit border (and it stays black)", opened and b_bag == 0 and border(p) == 0,
+          (opened, b_bag, border(p)))
+    border_set(L, BORDER_W)
+    p.hold("SPACE")
+    p.tick()
+    p.hold("SPACE", "Q")
+    p.tick()
+    p.hold()
+    p.tick(2)
+    paused, b_pause = p.rb("PAUSED") == 1, border(p)
+    p.tap("SPACE")                                         # RESUME
+    p.tick(2)
+    check("FX8 the pause overlay blacks a Tome-hit border", paused and b_pause == 0, (paused, b_pause))
+    play_mode(p)
+    x = 2 if L.door_l else 30 - L.kw
+    L.place(x, L.s, left=L.door_l)
+    border_set(L, BORDER_W)
+    out = "H" if L.door_l else "L"
+    for _ in range(6):
+        if p.rb("CUR_ROOM") != L.sn:
+            break
+        p.turn(out)
+    p.until(lambda: p.idle(), 600)
+    check("FX8 a room exit (transition scroll) blacks a Tome-hit border",
+          p.rb("CUR_ROOM") == L.lair and border(p) == 0, (p.rb("CUR_ROOM"), border(p)))
+    L.put_hero(L.sn, 14, 1)                                # back in the Sanctum for the next suites
+    play_mode(p)
+
+
+def fx_death(p, L):
+    """FX8 (TOME_BORDER 1), last in the run: the death's end card blacks a Tome-hit border (the card draws over the
+    room, so nothing after it may rely on the screen)."""
+    L.put_hero(L.sn, 14, 1)
+    play_mode(p)
+    L.at_gap(3)
+    p.set_ent(0, HP=1)
+    p.wb("END_SHOWN", 0)                                   # (an earlier GS_DEAD leaves it set: no card then)
+    border_set(L, BORDER_W)
+    p.turn("WAIT")                                         # the aura kills: GS_DEAD, the end card
+    p.tick(12)
+    check("FX8 death (the end card) blacks a Tome-hit border",
+          p.rb("GAME_STATE") == GS_DEAD and border(p) == 0, (p.rb("GAME_STATE"), border(p)))
+
+
+BORDER_W = S["BORDER_TOME"]
+BORDER_ON = S["TOME_FL_N"] == 4
 
 
 def aura(p, L):
@@ -599,6 +732,10 @@ def mage(p):
     five(L, "H7 Spark (Mage, range 6)", lambda: p.turn("@1"), 5)
     miss(L, "H7 Spark", lambda: p.turn("@1"), 6)
     five(L, "H8 staff (Mage melee FIRE)", lambda: p.turn("C"), 0)
+    p.wmem(S["ARANK"], w16(1 | 1 << 2))                   # Spark r1, Firebolt r1
+    if S.get("TOME_FX2", 0):
+        fx_timing(p, L, [("staff FIRE", ("C",), 0, False), ("Spark", ("@1",), 5, False),
+                         ("Firebolt", ("@2",), 5, False)], "Mage")
 
 
 def offd8(p):
@@ -638,6 +775,8 @@ def main():
             if S.get("TOME_FX", 1):                     # (0 only in a trace test build: no FX there)
                 fx_tests(p, L, key)
             exit_win(p, L, key)
+            if S.get("TOME_FX2", 0) and BORDER_ON:
+                fx_death(p, L)
         mage(p)
         offd8(p)
     print(f"sanctum: {len(fails)} failed" + (f": {fails[:8]}" if fails else ""), flush=True)
