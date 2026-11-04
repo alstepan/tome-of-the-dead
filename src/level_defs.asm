@@ -221,7 +221,7 @@ LVL_FLAGS       EQU LVL_STATE + 12  ; LF_* below
 FLOOR_N         EQU LVL_STATE + 13  ; FLOOR_LIST entries used (0..32)
 MASTER_SEED     EQU LVL_STATE + 14  ; word: per game (FRAMES at START / SEED_FIXED)
 LVL_HDR_LEN     EQU 16
-EDGE_TAB        EQU LVL_STATE + $10 ; 6 B ($6D50..$6D55); $6D56 TRK_PHASE, $6D57 TRK_PREV (3F-T12); $6D58 TOME_HP (M0); $6D59..$6D5F spare
+EDGE_TAB        EQU LVL_STATE + $10 ; 6 B ($6D50..$6D55); $6D56 TRK_PHASE, $6D57 TRK_PREV (3F-T12); $6D58 TOME_HP (M0); $6D59 TOME_FL (TOME-FX2); $6D5A..$6D5F spare
 ROOM_DESC       EQU LVL_STATE + $20 ; 9 x 16 = 144 B ($6D60..$6DEF); $6DF0..$6DFF spare
 FLOOR_LIST      EQU LVL_STATE + $C0 ; 32 x 4 = 128 B ($6E00..$6E7F, page-aligned)
 LVL_STATE_END   EQU LVL_STATE + $140
@@ -333,6 +333,12 @@ TOME_HP         EQU EDGE_TAB + 8    ; $6D58: P3 (game.md §1.3) the Tome's hp, 1
                                     ; bank 7 tome7.asm) -> 0 = GS_WIN; never restored: leaving the Sanctum keeps the
                                     ; damage) (test-observable)
                 ASSERT TOME_HP < ROOM_DESC && TOME_HP == LVL_STATE + $18
+; TOME-FX2 (user 2026-11-03: "faster flash, or a border flash when the Tome is hit"): TOME_FL = ticks left of the
+; hit effect (0 = none; tome_strike sets TOME_FL_N, the bank-0 dn_tm hook (dnum0.asm, every tick while playing)
+; counts it down: the lectern flash is restored, and with TOME_BORDER the border is white / BORDER_TOME_END for the
+; same 2 ticks the lectern is white on screen). Level generation zeroes it (EDGE_TAB). Test-observable.
+TOME_FL         EQU EDGE_TAB + 9    ; $6D59 (same page as TOME_HP: tome_strike's `dec l`)
+                ASSERT TOME_FL == TOME_HP + 1 && (TOME_FL >> 8) == (TOME_HP >> 8) && TOME_FL < ROOM_DESC
 ; P3 the Tome (game.md §1.3; tome7.asm, bank3.asm build_room_map). The lectern (2x2, ids T_LECT_TL..BR) stands
 ; on STOREY 1 against the Sanctum's dead-end wall: cols LECT_COL_L..+1 when the Sanctum is cell 6 (its door
 ; on the right), LECT_COL_R..+1 when it is cell 8; rows LECT_ROW..+1 (the item band above floor row 17).
@@ -352,6 +358,13 @@ ATTR_TOME_FLASH EQU $47
 ATTR_TOME_ASH   EQU $01
                 ASSERT ATTR_TOME_FLASH != ATTR_LECT_FOOT && ATTR_TOME_ASH != ATTR_LECT_FOOT && ATTR_TOME_FLASH != ATTR_TOME_ASH
                 ASSERT ATTR_TOME_FLASH != ATTR_LECT_TOP && ATTR_TOME_ASH != ATTR_LECT_TOP
+; TOME-FX2 timing (ticks, counted at each tick's END by dn_tm; a paint is queued after the tick's render, shown at
+; the start of the tick after next, and so is its restore): the flash is on screen exactly 2 ticks when the restore
+; is queued on the 3rd call (TOME_FL_N 3 = flash only). With TOME_BORDER the border is on for the same 2 screen
+; ticks: on at the 2nd call, off at the 4th (one call after the restore is queued), so TOME_FL_N = 4.
+BORDER_TOME     EQU 7               ; white: every non-final hit
+BORDER_TOME_END EQU 6               ; yellow: the last hit (the Tome is destroyed; the gate gleams)
+TOME_FL_N       EQU 3 + TOME_BORDER
 TOME_HERO_W     EQU 3               ; both heroes are 3 x 6 cells (KT_BW / BH_K_KNIGHT, BH_K_WIZARD)
 TOME_HERO_Y     EQU FLOOR_ROW1 - 6  ; E_Y of a hero standing on storey 1
                 ASSERT BH_K_KNIGHT == 6 && BH_K_WIZARD == 6

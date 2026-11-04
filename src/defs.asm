@@ -407,6 +407,17 @@ ANIM_TRACE_ON   EQU 0                           ;     frame change in ANIM_TRACE
 TOME_FX         EQU 1 - ANIM_TRACE_ON           ;     ash + sounds (tome7.asm). 0 only in a trace test build
     ENDIF                                       ;     (bank 7 has 6 B and bank 2 4 B left there: it would not fit)
                 ASSERT TOME_FX == 0 || TOME_FX == 1
+    IFNDEF TOME_FX2                             ; TOME-FX2 (user 2026-11-03: faster flash / border flash): the Tome
+TOME_FX2        EQU TOME_FX * (1 - DEBUG_KIT)   ;     hit effect is timed by a bank-0 per-tick hook (dnum0.asm dn_tm,
+    ENDIF                                       ;     21 B, 43 B with the border): the kit image has only 10 B left
+                                                ;     in bank 0 (kit0.asm), so a kit build keeps the TOME-FX timing
+                                                ;     (restore on the first INPUT tick) until the bank-0 reclaim
+                                                ;     exists; -DTOME_FX2=1 there fails the b0_code_end ASSERT
+                ASSERT TOME_FX2 == 0 || TOME_FX2 == 1
+    IFNDEF TOME_BORDER                          ; TOME-FX2: 1 = every Tome hit also flashes the border (white; yellow
+TOME_BORDER     EQU 1                           ;     on the last hit) for the 2 ticks the lectern is white; 0 = the
+    ENDIF                                       ;     fast lectern flash only (22 B less)
+                ASSERT TOME_BORDER == 0 || TOME_BORDER == 1
     IFNDEF F3_GEN                               ; 3F switch == tools/levelgen.py generate(..., f3=True):
 F3_GEN          EQU 1                           ;     LVL_FLAGS = 0 (grate shut, all depths), the D8
     ENDIF                                       ;     Sanctum leaf + the Tome ending (P3: default 1);

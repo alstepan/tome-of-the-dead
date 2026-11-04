@@ -37,9 +37,10 @@
 ; Clobbers: all but IY (far7: A, F lost; nothing is returned).
 ;------------------------------------------------------------------------------
 turn_input:
-    IF TOME_FX
+    IF TOME_FX && !TOME_FX2
                 call lect_back                 ; TOME-FX: a Tome hit's flash ends on the first INPUT tick after its
-                                               ; turn (tome7.asm; end_turn would restore it before a frame showed it)
+                                               ; turn (tome7.asm; end_turn would restore it before a frame showed it).
+                                               ; TOME_FX2: the bank-0 dn_tm hook ends it 2 screen ticks after
     ENDIF
                 ld   hl, TRK_PHASE             ; 3F-T12: a due trickle check takes this INPUT
                 bit  TRK_DUE_BIT, (hl)         ; tick ALONE (idle: no turn starts, no log line, a
