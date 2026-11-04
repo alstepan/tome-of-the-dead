@@ -10,7 +10,7 @@ PROTO room A, every monster parked, the hero on storey 1:
      into the bag, the page's stat line (it_fmt) for the sword, hero_recalc moved kind_tab (ATK / DIE)
   F  eat: Pear at FOOD 45 -> hunger_add +20, "YOU EAT THE PEAR" + "YOU FEEL WELL FED" (HSTAGE FED);
      then the quick FOOD icon at FOOD 100 -> "NO NEED", no turn, nothing eaten
-  D  drink a Heal potion (fx DRINK): +10 HP, both lines, consumed
+  D  drink a Heal potion (fx DRINK): +12 HP, both lines, consumed
   R  read Enchant (GEAR3: worn sword + armour are the candidates, RNG seeded so the first draw picks
      the sword): the sword m +1 (KT_BONUS +1), "ENCHANTED: LONG SWORD", consumed
   B  read a class book (fx_book -> abil_learn): "YOU LEARN POWER STRIKE!", ARANK slot 0 rank 1
@@ -237,9 +237,9 @@ def run(h, p, check):
     p.set_ent(0, HP=10)
     lines.clear()
     r = fx(S["FX_DRINK"], 0)
-    check("D1 DRINK Heal at HP 10: a turn, +10 HP, 'YOU DRINK THE HEAL POTION' + 'YOU FEEL HEALTHIER', consumed",
+    check("D1 DRINK Heal at HP 10: a turn, +12 HP, 'YOU DRINK THE HEAL POTION' + 'YOU FEEL HEALTHIER', consumed",
           (r, lines, p.ent(0)["HP"], [b[0] for b in bag()]) ==
-          (1, ["YOU DRINK THE HEAL POTION", "YOU FEEL HEALTHIER +10"], 20, [I("S_ENCHANT"), I("BOOK")]),   # LOG-DMG +G
+          (1, ["YOU DRINK THE HEAL POTION", "YOU FEEL HEALTHIER +12"], 22, [I("S_ENCHANT"), I("BOOK")]),   # LOG-DMG +G
           (r, lines, p.ent(0)["HP"], bag()))
 
     # ---- R read a scroll (Enchant on the equipped sword) -------------------------------

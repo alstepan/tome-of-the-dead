@@ -37,19 +37,19 @@ LPV_K           EQU TMP7                ; unit kind / bank slot
 ; count incl. boss (3F-T3: real kind ids, defs.asm). 3F-T5: the golden depths (D1-D3, D5, D6, §9.7
 ; R1) carry LEK_GOLD in the boss byte (levelgen.py k3_boss); the entity bit is E_GOLD.
 ;------------------------------------------------------------------------------
-lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1 | LEK_GOLD, 11
-                DB   K_GOBLIN, K_SPIDER, K_BAT, K_RAT,         K_BOSS_D2 | LEK_GOLD, 12
-                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT,    K_BOSS_D3 | LEK_GOLD, 12
-                DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER,         K_BOSS_D4, 13
-                DB   K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER,  K_BOSS_D5 | LEK_GOLD, 13
-                DB   K_VAMPIRE, K_GHOST, K_NECRO, K_ORC,       K_BOSS_D6 | LEK_GOLD, 14
-                DB   K_ORC, K_NECRO, K_GHOST, K_NECRO,         K_BOSS_D7, 14   ; 3F-T13bc ARCHER-DEPTHS H1: the 2nd Necro replaces the Archer (weight 6 = 6)
-                DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE,  K_BOSS_D8, 11
+lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1 | LEK_GOLD, 13
+                DB   K_GOBLIN, K_SPIDER, K_BAT, K_RAT,         K_BOSS_D2 | LEK_GOLD, 14
+                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT,    K_BOSS_D3 | LEK_GOLD, 14
+                DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER,         K_BOSS_D4, 15
+                DB   K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER,  K_BOSS_D5 | LEK_GOLD, 16
+                DB   K_VAMPIRE, K_GHOST, K_NECRO, K_ORC,       K_BOSS_D6 | LEK_GOLD, 15
+                DB   K_ORC, K_NECRO, K_GHOST, K_NECRO,         K_BOSS_D7, 15   ; 3F-T13bc ARCHER-DEPTHS H1: the 2nd Necro replaces the Archer (weight 6 = 6)
+                DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE,  K_BOSS_D8, 12
 LP_DROW         EQU 6
                 ASSERT $ - lp_dtab == LEVELS * LP_DROW
-; §9.4.1 "N >= |R|" always holds (min N = 11 - 2 = 9 >= 7 = the most rooms R
+; §9.4.1 "N >= |R|" always holds (min N = 12 - 2 = 10 >= 7 = the most rooms R
 ; can have), so lp_budget has no "N farthest rooms" branch (levelgen.py keeps it).
-                ASSERT 11 - 2 >= GRID_CELLS - 2
+                ASSERT 12 - 2 >= GRID_CELLS - 2
 ; §9.3 weights by kind row (defs.asm WT_*), K_COUNT entries (3F-T3: 18 base + 12 tier rows)
 ; (the hero rows 0 / 1 stay 0: a record entry of kind 0 may exist in tests; id 2 = K_VBAT, 3F-T9)
 ; (3F: MEM-RECLAIM w3: lp_wt is the kind_tab KT_REACH slot, bank 2 main.asm; the macro LP_WT_ROWS lives in defs.asm)
@@ -101,12 +101,8 @@ lp_budget:
                 ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 4) >> 8)    ; lp_enter .mw: inc e
                 ld   a, (LVL)
                 ld   (LP_LVL), a
-                ld   a, (LVL_DEPTH)
-                cp   3
-                ld   a, ROOM_MAX_HI
-                sbc  a, 0                      ; D1-D2 (CF): ROOM_MAX_LO
+                ld   a, ROOM_MAX               ; MORE-MON: one cap for all depths (was 2 on D1-D2)
                 ld   (LP_RMAX), a
-                ASSERT ROOM_MAX_HI == ROOM_MAX_LO + 1
                 call bfs                       ; LG_DIST from LVL_START
                 ; every room of R: quota 1; C = |R| (ROOM-MEM reclaim: no LG_CAND copy any
                 ; more: .elig reads "in R" from the quota >= 1, the weight from LG_DIST)

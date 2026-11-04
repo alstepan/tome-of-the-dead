@@ -1106,11 +1106,12 @@ Pharaoh 65 · High Necromancer 80 · **Death Knight 90** · Archmage 0. (Tier XP
 |---|---|---|---|---|---|---|---|---|
 | `XP_NEXT` | 40 | 100 | 200 | 340 | 500 | 700 | 920 | 1,150 |
 
-Expected XP at depth entry (E, full clear incl. tiers and ~3 respawns per level): D2 ~48, D3
-~116, D4 ~243, D5 ~399, D6 ~589, D7 ~827, D8 ~1,072, run end ~1,190. So the **expected
+Expected XP at depth entry (E, full clear incl. tiers and ~3 respawns per level; MORE-MON
+counts 2026-11-04, designer estimate, not measured): D2 ~53, D3 ~126, D4 ~261, D5 ~423, D6
+~625, D7 ~870, D8 ~1,122, run end ~1,240 (was 48 / 116 / 243 / 399 / 589 / 827 / 1,072 / 1,190). So the **expected
 level is `LVL_EXP(d) = d`** at every depth entry (thresholds sit ~15 % under the expected
 totals, so a hero who skips a few monsters still keeps pace; skipping a third of a level
-drops one level). L9 comes near the end of D8, only for thorough play.
+drops one level). L9 now comes early on D8 for thorough play.
 
 **Level-up** (each level; several at once loop): **Warrior max HP +4, max MP +1 · Mage max
 HP +3, max MP +2; current HP/MP rise by the same amounts** (not a full heal). The class split
@@ -1915,7 +1916,7 @@ While POISON is set (`STS_POISON`), the hero **cannot eat** until it ends (timer
 Weapons are class-locked; everything else is not.
 
 **Consumables:**
-- Potions: **Heal** +10 HP · **Mana** +8 MP · **Cure** (clears POISON, WEAK, CONFUSED and
+- Potions: **Heal** +12 HP (MORE-MON 2026-11-04; was +10) · **Mana** +8 MP · **Cure** (clears POISON, WEAK, CONFUSED and
   FEAR, §6.4; +4 HP). No harmful or throwable potions (designer decision 2026-10-03: a throw
   verb needs an aim mode and item projectile art; a known-bad potion is junk).
 - Scrolls (read on the page): **Teleport** (random free spot in a random room, never the lair
@@ -2335,7 +2336,7 @@ Supersedes the 2026-10-19 "scaled 8×8 floor glyphs" ruling for the page and pan
 | 14 | worn labels `WEAPON ARMOUR HELM CHARM` |
 | 15–16 | **WORN row**: 4 icons 2×2 at cols 3, 9, 15, 21; empty slot = its slot placeholder (Q5) |
 | 18 | description 1: name with BUC prefix (§8.7), ×n for stacks; **from 2026-10-26 (Q5):** the selected item's 16×16 icon at cols 0–1 rows 18–19, both text lines start at col 2 (≤ 40 chars) |
-| 19 | description 2: stats generated from the type table (`1D8 ATK+1`, `DEF 2`, `HEAL 10 HP`, `UNKNOWN`) + note `WORN` / `STICKY` |
+| 19 | description 2: stats generated from the type table (`1D8 ATK+1`, `DEF 2`, `HEAL 12 HP`, `UNKNOWN`) + note `WORN` / `STICKY` |
 | 21 | **verb strip**: up to 3 words, the chosen one in inverse attr |
 | 22 | **message row** (refusals, page stays open) |
 | 23 | help `FIRE SELECT  I CLOSE` |
@@ -3037,14 +3038,14 @@ arrival, and it makes descending a valid escape.
 
 | Depth | Kinds | Monsters (incl. boss) | Boss |
 |---|---|---|---|
-| D1 | Rat, Bat, Slime, Goblin | 11 | Golden Goblin King |
-| D2 | Goblin, Spider, Bat, Rat | 12 | Golden Spider Queen |
-| D3 | Skeleton, Vampire, Ghost, Bat | 12 | Golden Vampire Lord |
-| D4 | Orc, Rat, Spider, Skeleton Archer | 13 | **Ogre Warlord** |
-| D5 | Mummy, Skeleton, Skeleton Archer, Spider | 13 | Golden Pharaoh |
-| D6 | Vampire, Ghost, Necromancer, Orc | 14 | Golden High Necromancer |
-| D7 | Orc, Necromancer, Ghost, Necromancer (two Necro entries, ARCHER-DEPTHS H1) | 14 | **Death Knight** |
-| D8 | Necromancer, Skeleton, Ghost, Vampire | 10 + Archmage (+ ≤ 2 summons) | Archmage |
+| D1 | Rat, Bat, Slime, Goblin | 13 | Golden Goblin King |
+| D2 | Goblin, Spider, Bat, Rat | 14 | Golden Spider Queen |
+| D3 | Skeleton, Vampire, Ghost, Bat | 14 | Golden Vampire Lord |
+| D4 | Orc, Rat, Spider, Skeleton Archer | 15 | **Ogre Warlord** |
+| D5 | Mummy, Skeleton, Skeleton Archer, Spider | 16 | Golden Pharaoh |
+| D6 | Vampire, Ghost, Necromancer, Orc | 15 | Golden High Necromancer |
+| D7 | Orc, Necromancer, Ghost, Necromancer (two Necro entries, ARCHER-DEPTHS H1) | 15 | **Death Knight** |
+| D8 | Necromancer, Skeleton, Ghost, Vampire | 11 + Archmage (+ ≤ 2 summons) | Archmage |
 
 **D7 pool (ARCHER-DEPTHS H1, user 2026-10-29).** `LP_KINDS` D7 = {Orc, Necromancer, Ghost,
 Necromancer}; `LP_KINDS[rnd & 3]` stays a 2-bit pick, so the Necromancer is drawn 2 in 4
@@ -3072,21 +3073,21 @@ Placed after traps, so every earlier generator output stays byte-identical (Pyth
 | `LP_LVL` | hero `LVL` at level entry (the §9.6 tier input for the whole level) |
 | `LP_RESPAWNS` | trickle spawns this level (§9.5 `RESPAWN_MAX`) |
 | `LP_DISCARD` | units lost to the split or to the Σ cap (tests only) |
-| `ROOM_MAX[d]` | constant: **D1–D2 = 2, D3–D8 = 3** monsters per room (initial population) |
+| `ROOM_MAX` | constant: **3** monsters per room at every depth (initial population; MORE-MON 2026-11-04: D1–D2 were 2) |
 
-**Split (quota per room).** `N = count − 1 (boss) − 1 (escort)`, so D1 = 9 … D6/D7 = 12, D8 = 9.
+**Split (quota per room).** `N = count − 1 (boss) − 1 (escort)`, so D1 = 11, D2/D3 = 12, D4 = 13, D5 = 14, D6/D7 = 13, D8 = 10 (MORE-MON medium, user 2026-11-04; was 9/10/10/11/11/12/12/9).
 `R` = present rooms except the start, the lair and the Sanctum (|R| ≥ 5).
 1. If `N ≥ |R|`, every room in `R` gets 1. Otherwise the `N` rooms farthest from the start
    (BFS distance; ties go to the lowest id) get 1.
-2. Each remaining unit: a weighted pick over the rooms in `R` with quota < `ROOM_MAX[d]`,
+2. Each remaining unit: a weighted pick over the rooms in `R` with quota < `ROOM_MAX`,
    weight = BFS distance from the start (≥ 1). If no room is eligible, the rest goes to
-   `LP_DISCARD`. With these counts that never happens (worst case D2: 10 = 5 × 2).
+   `LP_DISCARD`. With these counts that never happens (smallest |R| is 5, capacity 5 × 3 = 15 ≥ the largest N = 14).
 
 The start room gets 0. The lair gets boss + 1 escort (§9.4.4). The quota is stored as the
 room record's count (FRESH). No kinds are chosen at generation.
 
-**D8 (3F-D2, designer 2026-10-28, confirms T4):** `LP_TOTAL` = 11 (10 + Archmage; summons
-never count), `N` = 11 − 1 − 1 = **9**, the Sanctum's quota is **0** and it is never in `R`.
+**D8 (3F-D2, designer 2026-10-28, confirms T4):** `LP_TOTAL` = 12 (11 + Archmage; summons
+never count; was 11, MORE-MON), `N` = 12 − 1 − 1 = **10**, the Sanctum's quota is **0** and it is never in `R`.
 `LVL_NROOMS` counts every present room **including the Sanctum** (D8: 8–9); it is a room with a
 record like any other, always empty of monsters.
 
@@ -3147,7 +3148,7 @@ are visited.
 **FRESH room**, repeated `quota` times:
 - kind = `LP_KINDS[rnd & 3]`, then the §9.6 tier roll (with `LP_LVL`, from the spawn stream).
 - **Reservation fit (designer decision 2026-10-06, replaces "try the others, else lose").** Let
-  `SIGMA_INIT[d] = max(8, ROOM_MAX[d] × lightest LP_KINDS weight)` (D1–D4 = 8; D5–D8 = 9 if the
+  `SIGMA_INIT[d] = max(8, ROOM_MAX × lightest LP_KINDS weight)` (D1–D4 = 8; D5–D8 = 9 if the
   lightest kind weighs 3), `minW` = the lightest weight in `LP_KINDS`, `left` = units still to
   roll after this one. A kind is accepted only if `Σ + w + left × minW ≤ SIGMA_INIT[d]`. The
   rolled kind (with its tier roll) is tried first; if rejected, the other `LP_KINDS` in list
@@ -3645,7 +3646,7 @@ D3 is answered by PS / Firebolt / Spark. Tuning stays a BAL1 job, starting from 
 **D3-2 `lp_enter` ceiling: worst ≤ 46k T, mean ≤ 22k** (§9.4.3). Room-entry work on a frozen
 screen, not a tick; no new algorithm. Do not add placement tries.
 
-**D3-3 Waits target ≤ 15%** (§9.4.3). Accept 12.1%; no task.
+**D3-3 Waits target ≤ 15%** (§9.4.3). Accept 12.1% (13.0% with the MORE-MON counts, 8,000-level sweep; still under 15%); no task.
 
 **D3-4 Skeleton Archer ink = `$03` (magenta, not BRIGHT).** Rejected: `$47` (= Skeleton),
 `$05`/`$44` (Skeleton Guard/Knight, same frames on D5), `$04` (its Sniper), `$06` (= the D5
@@ -3954,6 +3955,19 @@ the per-fight budget, refill 48–84 turns, §4.0).
 event) and Cure now answers four effects; traps cost ~2–4 HP per level (DART) plus position
 (TELEPORT) and ~1 extra wave (ALARM, D5+); tiers raise threat by ~10 % (D2) to ~25 % (D8) of
 monsters being tougher, self-correcting through `Δ` for a hero who skips books or bosses.
+
+**MORE-MON (user 2026-11-04, `docs/design/more_monsters.md` MEDIUM).** Monsters per level
+D1..D8 = 13/14/14/15/16/15/15/12 (was 11/12/12/13/13/14/14/11) and `ROOM_MAX` 3 at every
+depth; kinds, pool and layout unchanged. balance_sim (average policy, 10k games x 2 seeds)
+with the counts alone: W 33.2 / M 35.5 (seed 1) and 33.2 / 35.4 (seed 2), under the 35 %
+floor (LIGHT 12/12/14/15/15/15/15/13 with ROOM_MAX_LO 2 was no better: 34.2 / 33.9, 33.8 / 34.6).
+Compensating knob chosen by the user: **Heal potion +10 -> +12 HP** (`QUAFF_HEAL`, items.txt
+HEAL POTION; 0 code bytes). Tried: Heal 11 = W 36.8 / M 37.7, Heal 12 = **W 41.3 / M 39.5
+(gap +1.8)**, with the old counts and Heal 10 = W 40.5 / M 42.2. Final (seed 1 / seed 2):
+W 41.1 / 41.5, M 40.1 / 38.8. Share of deaths per level D1..D8 (seed 1): W 0 3 4 29 17 17 16 14
+(D4 Ogre 24 %, D6 Ghost 10 %, D8 Archmage 9 %); M 0 1 20 14 2 5 35 24 (D7 Ghost 28 % of all
+Mage deaths, D3 Ghost 8 %). The Mage's D7 share is 35 % of deaths (33 % with the counts
+alone, 33 % old counts): slightly more of the survivors reach the Ghosts.
 
 **Tuning knobs, in order:** Heal amount, food per level, depth scaling, boss multiplier,
 `XP_NEXT`, level-up HP/MP, `T2_BASE`/`T3_BASE`, trap counts, rank table, `SHATTER_CHANCE`.

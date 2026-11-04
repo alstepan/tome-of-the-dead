@@ -1545,7 +1545,7 @@ def main():
             tc = p.rw("TURN_COUNTER")
             p.turn("G")
             e = p.ent(0)
-            h.expect("32 quaff hp 10 -> 20 (3E-T11: Heal +10)", e["HP"], 20)
+            h.expect("32 quaff hp 10 -> 22 (Heal +12, MORE-MON)", e["HP"], 22)
             h.expect("32 potions 1 -> 0", e["POT"], 0)
             h.expect("32 TURN_COUNTER += 1", p.rw("TURN_COUNTER") - tc, 1)
             h.expect("32 G with 0 potions: no turn", p.no_turn("G"), True)

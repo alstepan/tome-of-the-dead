@@ -398,7 +398,7 @@ def lp_check(b, stats=None, f3=False, lvl=1):
     kid = (lambda k: G.KROWS[k][0]) if f3 else (lambda k: D[k])      # noqa: E731
     o = lambda n: D[n] - D["LP_STATE"]                       # noqa: E731
     q = [lp[o("LP_REC") + r * D["LR_STRIDE"]] for r in range(9)]
-    rmax = D["ROOM_MAX_LO"] if depth <= 2 else D["ROOM_MAX_HI"]
+    rmax = D["ROOM_MAX"]
     n = G.LP_TAB[depth][2] - 2
     if q[st] != 0:
         v.append(f"LP: start quota {q[st]}")

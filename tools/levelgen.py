@@ -692,14 +692,14 @@ def start_x(b):
 #   (s, x) with lp_legal gap LP_GAP2 (5), no stream step, no other-storey retry; if
 #   that fails, the 8 tries as above. A placed unit consumes its parked body and keeps
 #   its facing; an unplaced one leaves it parked (a later unit of that kind may match it).
-LP_TAB = {1: (("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 11),
-          2: (("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 12),
-          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT"), "K_BOSS_D3", 12),
-          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER"), "K_BOSS_D4", 13),
-          5: (("K_MUMMY", "K_SKELETON", "K_ARCHER", "K_SPIDER"), "K_BOSS_D5", 13),
-          6: (("K_VAMPIRE", "K_GHOST", "K_NECRO", "K_ORC"), "K_BOSS_D6", 14),
-          7: (("K_ORC", "K_NECRO", "K_GHOST", "K_NECRO"), "K_BOSS_D7", 14),   # 3F-T13bc H1: no Archer on D7
-          8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE"), "K_BOSS_D8", 11)}
+LP_TAB = {1: (("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 13),
+          2: (("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 14),
+          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT"), "K_BOSS_D3", 14),
+          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER"), "K_BOSS_D4", 15),
+          5: (("K_MUMMY", "K_SKELETON", "K_ARCHER", "K_SPIDER"), "K_BOSS_D5", 16),
+          6: (("K_VAMPIRE", "K_GHOST", "K_NECRO", "K_ORC"), "K_BOSS_D6", 15),
+          7: (("K_ORC", "K_NECRO", "K_GHOST", "K_NECRO"), "K_BOSS_D7", 15),   # 3F-T13bc H1: no Archer on D7
+          8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE"), "K_BOSS_D8", 12)}
 # kind_tab mirror (main.asm KROW KT_BW / KT_HP / KF_FLYER; tests/lp.py checks
 # it against the build): kind -> (body width, hp, flyer)
 KINFO = {"K_SKELETON": (3, 10, False), "K_GOBLIN": (3, 6, False), "K_GHOST": (3, 8, True),
@@ -842,7 +842,7 @@ def lp_budget(b, lvl=0, f3=False):
     depth = b[H["LVL_DEPTH"]]
     start, lair, sanct = b[H["LVL_START"]], b[H["LVL_LAIR"]], b[H["LVL_SANCTUM"]]
     kinds, boss, total = LP_TAB[depth]
-    rmax = D["ROOM_MAX_LO"] if depth <= 2 else D["ROOM_MAX_HI"]
+    rmax = D["ROOM_MAX"]
     dist = lp_bfs(b)
     R = [r for r in range(9) if _rd(b, r, "RD_FLAGS") & D["RDF_PRESENT"] and r not in (start, lair, sanct)]
     n = total - 2

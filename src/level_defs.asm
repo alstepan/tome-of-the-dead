@@ -250,7 +250,7 @@ LP_TOTAL        EQU LP_STATE + 5    ; the table count incl. boss (tests / levelc
 LP_LVL          EQU LP_STATE + 6    ; hero LVL at level entry (§9.6 tier input, 3F)
 LP_RESPAWNS     EQU LP_STATE + 7    ; trickle spawns this level (§9.5, RESPAWN_MAX; 3F)
 LP_DISCARD      EQU LP_STATE + 8    ; units lost to the split / the sum cap / a full record (tests)
-LP_RMAX         EQU LP_STATE + 9    ; ROOM_MAX[depth] (2 / 3)
+LP_RMAX         EQU LP_STATE + 9    ; ROOM_MAX (3, every depth)
 LP_RNG          EQU LP_STATE + 10   ; word: the spawn stream's seed of the last entry (test-observable)
 ; lp_enter / lp_budget scratch (+12 .. +23)
 LP_HX           EQU LP_STATE + 12   ; hero arrival col
@@ -294,8 +294,7 @@ LPK_ROOM        EQU %00001111           ; the room id bits of E_ROOM
 LP_LEN          EQU 33 + GRID_CELLS * LR_STRIDE  ; 114 B
 LP_END          EQU LP_STATE + LP_LEN            ; $6F32
 ; budget constants (game.md §9.3 / §9.4.1)
-ROOM_MAX_LO     EQU 2               ; D1-D2 monsters per room (initial population)
-ROOM_MAX_HI     EQU 3               ; D3-D8
+ROOM_MAX        EQU 3               ; monsters per room (initial population), all depths (MORE-MON: D1-D2 were 2)
 LP_SIGMA_INIT   EQU 8               ; sum weight cap of a FRESH room: max(8, ROOM_MAX x minW)
 LP_SIGMA_CAP    EQU 12              ; §9.3 phase-2 cap: lair, follow admission, trickle
 LP_TRIES        EQU 8               ; candidate cells per monster (§9.4.3)
