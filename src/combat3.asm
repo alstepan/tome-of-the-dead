@@ -334,12 +334,17 @@ deal_hit:
                 ASSERT ST_T1 > ST_FLAGS && ST_T2 > ST_T1 && (ST_FLAGS >> 8) == (ST_T2 >> 8)
                 bit  EF_PLAYER_BIT, (ix+E_FLAGS)
                 jr   z, .mk                    ; the hero's death awards nothing; ENDCARD-G1:
+    IF !ENDCARD_RK
                 ld   hl, (ATK_PTR)             ; the killer = the attacker's kind (E_KIND = 0)
-                ld   a, (hl)
+                ld   a, (hl)                   ; (kit / trace builds, defs.asm ENDCARD_RK)
                 cp   K_WIZARD + 1
                 jr   c, .heal                  ; the hero himself (trap_hit, his own bolt): 0
                 or   $80
                 ld   (ST1_KILLER), a
+    ELSE
+                call dh_killer                 ; ENDCARD-K: the same + the reflector of his own
+                                               ; bolt (bank-2 killer2.asm; IX free: .heal reloads it)
+    ENDIF
                 jr   .heal
                 ASSERT E_KIND == 0 && K_KNIGHT < K_WIZARD + 1
 .mk:            call mon_drop                 ; 3E-T11: drop / boss unique (drop3.asm; keeps IX)
@@ -864,6 +869,9 @@ th_go:          push ix
                 jr   z, .nw
                 inc  b
 .nw:            xor  a                         ; the hero = slot 0
+    IF ENDCARD_RK
+                ld   (pf_rfl), a               ; ENDCARD-K: a trap death is never a past cast's reflector's
+    ENDIF
                 call deal_hit
                 pop  ix
                 ret

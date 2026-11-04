@@ -708,6 +708,9 @@ dn_miss_s:      DB   "MISS", 0, DNA_MISS       ; D3-11 / LVL-FLOATER (dnfix2.asm
                 INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
                 INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy (were low RAM / gfx.asm)
                 INCLUDE "msg2.asm"              ; LOG-FIX: msg_cat / msg_end (from bank 7), log_room, hit_line
+    IF ENDCARD_RK
+                INCLUDE "killer2.asm"           ; ENDCARD-K: dh_killer (deal_hit's hero-death killer, + a reflector)
+    ENDIF
                 ; fi3.asm (FLOOR1 fi_full, cold, far3 only): back in bank 3 since BLAIR-FIX (bank3.asm)
     IF TOME_FX                                  ; (a trace test build has 4 B of bank 2 left: trap7.asm keeps them)
                 INCLUDE "trap2.asm"             ; TOME-FX reclaim: tr_ent / tr_type (bank-7 trap7 leaf helpers)

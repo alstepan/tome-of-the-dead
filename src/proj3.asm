@@ -663,6 +663,9 @@ pf_bodies:
                 ld   a, (hl)
                 and  PFCF_SLOT
                 ld   (pf_cur), a
+    IF ENDCARD_RK
+                ld   (pf_rfl), a               ; ENDCARD-K: the reflector (a ladder absorb
+    ENDIF                                      ; too: nothing follows it); dh_killer reads it
                 push bc
                 call pf_row                    ; the FX flies at it
                 pop  bc
@@ -1096,7 +1099,9 @@ pf_ftick        EQU pf_lost + 1                 ;   D3-8e2: pf_tgt's impact tick
 pf_rev          EQU pf_ftick + 1                ; reversals so far
 pf_part         EQU pf_rev + 1                  ; D3-8e: 0 / PFP_MID / PFP_DONE (proj_part)
 pf_moves        EQU pf_part + 1                 ; FX moves after the anchor
-pf_desc         EQU pf_moves + 1                ; the FX descriptor
+pf_rfl          EQU pf_moves + 1                ; ENDCARD-K: the slot of the body that last reflected
+                                                ;   this cast (0 none; release builds; dh_killer)
+pf_desc         EQU pf_rfl + 1                  ; the FX descriptor
 pf_cand         EQU pf_desc + FXD_LEN           ; candidates (+ $FF end)
 PF_ZN           EQU pf_cand - pf_fxrow          ; (0-initialised: pf_fxrow .. pf_desc)
                 ASSERT PF_ZN < 256
