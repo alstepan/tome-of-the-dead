@@ -79,7 +79,7 @@ drops nothing (his death opens the Sanctum).
 
 | Name (ink) | Effect |
 |---|---|
-| HEAL POTION (red) | +10 HP. Refused at full HP (`NO NEED`, no turn) |
+| HEAL POTION (red) | +12 HP. Refused at full HP (`NO NEED`, no turn) |
 | MANA POTION (cyan) | +8 MP. Refused at full MP. Necromancers drop it 1 in 3 |
 | CURE POTION (green) | clears POISON, WEAK, CONFUSED, FEAR; +4 HP |
 

@@ -67,8 +67,8 @@ IT_F_APPLE      | APPLE             | $44  | 0 0 0 0 15 | -  | FOOD +15
 IT_F_PEAR       | PEAR              | $04  | 0 0 0 0 20 | -  | FOOD +20
 IT_F_CHEESE     | CHEESE            | $46  | 0 0 0 0 30 | -  | FOOD +30
 IT_F_MEAT       | MEAT              | $42  | 0 0 0 0 40 | -  | FOOD +40
-# potions (§8): Heal +10 HP, Mana +8 MP, Cure +4 HP (and clears)
-IT_P_HEAL       | HEAL POTION       | $42  | 0 0 0 0 10 | -  | HP
+# potions (§8): Heal +12 HP, Mana +8 MP, Cure +4 HP (and clears)
+IT_P_HEAL       | HEAL POTION       | $42  | 0 0 0 0 12 | -  | HP
 IT_P_MANA       | MANA POTION       | $45  | 0 0 0 0 8  | -  | MP
 IT_P_CURE       | CURE POTION       | $44  | 0 0 0 0 4  | -  | HP, clears POISON/WEAK/CONFUSED/FEAR
 # scrolls (§8): no numbers; fixed names and inks (§8.11 item 2)

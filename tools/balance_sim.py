@@ -101,13 +101,13 @@ PARAMS = {
     "TRANSIT_LO": 20, "TRANSIT_HI": 60,  # 4.2 between rooms
     "MAGE_REGEN": 6, "WARRIOR_REGEN": 8,  # 4.0 periods
     "FED_REGEN": 12,                    # 7: +1 HP per 12 turns when FOOD >= 50
-    "HEAL_AMT": 10, "MANA_AMT": 8, "CURE_HP": 4,  # 8 consumables
+    "HEAL_AMT": 12, "MANA_AMT": 8, "CURE_HP": 4,  # 8 consumables
     "PITY_N": 2,                        # 5
     "ARCHMAGE_HP": None,                # null = the image's kind_tab row (60; 67 at D8 after the depth term)
     "T2_BASE": [24, 48, 64, 72, 80, 88, 96, 96], "T3_BASE": [0, 0, 0, 16, 24, 32, 40, 48],  # 9.6
     "TIER_SHIFT2": 16, "TIER_SHIFT3": 8, "TIER_DELTA_MAX": 2, "T2_CAP": 160, "T3_CAP": 80, "TIER3_MIN_DEPTH": 4,
-    "ROOM_MAX": [2, 2, 3, 3, 3, 3, 3, 3],  # 9.4.1
-    "MON_COUNT": [11, 12, 12, 13, 13, 14, 14, 11],  # 9.4 (D8: 10 + Archmage)
+    "ROOM_MAX": [3, 3, 3, 3, 3, 3, 3, 3],  # 9.4.1
+    "MON_COUNT": [13, 14, 14, 15, 16, 15, 15, 12],  # 9.4 MORE-MON medium (D8: 11 + Archmage)
     "ROOMS_LO": 6, "ROOMS_HI": 9,       # 9.4.1 |R| >= 5 plus start+lair (+Sanctum on D8)
     "DAGGER_DMG": 4, "DAGGER_BONUS": 2, "BOW_DMG": 6, "BOW_BONUS": 1,  # 6.3 (also ab_ammo)
     "TRAP_HIT_P": 0.5, "TRAP_DMG": 3,   # 1.5 flat stand-in: expected 2-4 HP / level
@@ -624,8 +624,6 @@ class Game:
         nrooms = rng.randint(P["ROOMS_LO"], P["ROOMS_HI"]) + (1 if depth == 8 else 0)
         base = [D.id(n) for n in ROSTER[depth]]
         N = P["MON_COUNT"][depth - 1] - 2
-        if depth == 8:
-            N = 9
         nonspecial = nrooms - 2 - (1 if depth == 8 else 0)    # minus start, lair, (Sanctum)
         quota = [0] * nonspecial
         dist = [rng.randint(1, 4) for _ in range(nonspecial)]

@@ -2085,7 +2085,7 @@ none of this runs and every monster keeps its slot as before.
 | +6 | `LP_LVL` | hero `LVL` at level entry (§9.6 tier input, 3F) |
 | +7 | `LP_RESPAWNS` | trickle spawns this level (§9.5 `RESPAWN_MAX` 6; 3F) |
 | +8 | `LP_DISCARD` | units lost: split / sum cap / a full record (expect 0 from the split) |
-| +9 | `LP_RMAX` | `ROOM_MAX` 2 (D1–D2) / 3 (D3–D8) |
+| +9 | `LP_RMAX` | `ROOM_MAX` 3 (every depth; MORE-MON, was 2 on D1–D2) |
 | +10 | `LP_RNG` | word: the last entry's spawn-stream seed |
 | +12..+23 | `LP_HX` `LP_HS` `LP_HW` `LP_SIG` `LP_RECP` (w) `LP_W` `LP_GAPV` `LP_BEST` `LP_BS` `LP_BX` `LP_RES` | `lp_enter` / `lp_budget` scratch (tests mask it); **3F-T12: +15..+23 = `TRK_W` (9 B), `trk_run`'s scratch (per-room floor counts, then w_r) — dead between entries** |
 | +24 | `ROOM_VISITS` | 9 B: entries per room this level (spawn-stream input) |
@@ -5861,3 +5861,10 @@ Free bytes (build DISPLAY, main `4270d6f` -> `perf/ghost-tick`):
 
 Not done (bytes): the hero's FORCE rect forcing the bodies drawn before it (~20 B bank 2), an unrolled sprite attr stamp (~25 B
 bank 2, ~1.7k a heavy tick), `cycle_frame`'s first two division steps for totals >= 4 (~8 B, ~0.3k at 4 idle Ghosts).
+## MORE-MON ledger (`feat/more-monsters`, 2026-11-04; user decision: MEDIUM counts + Heal +12; docs/design/more_monsters.md)
+
+- **Data:** `lp_dtab` counts D1..D8 = 13/14/14/15/16/15/15/12 (was 11/12/12/13/13/14/14/11); `ROOM_MAX_LO`/`ROOM_MAX_HI` -> one `ROOM_MAX` 3
+  (`level_defs.asm`); `lp_budget` loads `LP_RMAX` with `ld a, ROOM_MAX` (the `LVL_DEPTH` `cp 3 / sbc` + ASSERT gone). `QUAFF_HEAL` 10 -> 12
+  and the items.txt HEAL POTION value (the `HEAL 12 HP` description). No new kinds, no pool / layout change (D8 Warrior pool slack 384).
+- **Free bytes (release):** bank 3 6 -> **13** (-7 B code); bank 2 19, bank-7 low 20 / high 2, bank 0 24, low-RAM spare 0, R6 5, bank 1 2: unchanged.
+  Kit: bank 3 9 (was 2), bank 0 10, R6 10, low RAM 2, bank 2 18, bank 1 2. `F3_GEN=0` = release (bank 3 13).

@@ -11,7 +11,7 @@ PROTO room A, every monster parked unless placed:
       Teleport x1), 1 turn; quick POTION line "YOU DRINK THE HEAL POTION"
   E   EAT: FOOD 45 + Pear -> 65: "YOU EAT THE PEAR" then "YOU FEEL WELL FED",
       HP_RG reset to 0; clamp at 100 (Meat at 90)
-  D   page DRINK (page_post): Heal at HP 10 -> 20, consumed, the line, L 1
+  D   page DRINK (page_post): Heal at HP 10 -> 22, consumed, the line, L 1
   R   READ Enchant (GEAR3: a random worn weapon / armour / helmet): m +1,
       "ENCHANTED: <name>", consumed; no candidate (fists, +3): "NOTHING HAPPENS",
       still consumed (tests/gear3.py has the target-choice vectors). Fear: the room's living monsters FEAR 6
@@ -189,9 +189,9 @@ def run(h, p, check):
     p.set_ent(0, HP=5)
     put(["P_HEAL", "F_APPLE"])
     d, ln = quick(POT_SLOT)
-    check("Q5 quick POTION: 'YOU DRINK THE HEAL POTION' + 'YOU FEEL HEALTHIER', +10 HP, 1 turn",
-          (d, ln, p.ent(0)["HP"] in (15, 16), [x[0] for x in bag()]) == (1, ["YOU DRINK THE HEAL POTION",
-                                                                       "YOU FEEL HEALTHIER +10"], True,   # LOG-DMG
+    check("Q5 quick POTION: 'YOU DRINK THE HEAL POTION' + 'YOU FEEL HEALTHIER', +12 HP, 1 turn",
+          (d, ln, p.ent(0)["HP"] in (17, 18), [x[0] for x in bag()]) == (1, ["YOU DRINK THE HEAL POTION",
+                                                                       "YOU FEEL HEALTHIER +12"], True,   # LOG-DMG
                                                                        [I("F_APPLE")]), (d, ln, p.ent(0)["HP"]))
     put([])
     d, ln = quick(SCR_SLOT, use_turn=False)
@@ -228,8 +228,8 @@ def run(h, p, check):
     stub([0x21] + w16(S["page_post"]) + [0xCD] + w16(S["far1"]) + [0x7D, 0x32] + w16(RES))
     dd = (p.rb(RES), p.ent(0)["HP"], bag(), list(lines), p.rb("PAGE_VERB"),
           bytes(z.read_memory(S["ROOM_MAP"], S["PLAY_CELLS"])) == m0, p.ent(0)["POT"])
-    check("D1 page DRINK Heal at 10: L 1, HP 20, consumed, both lines, verb consumed, map back, E_POT 0",
-          dd == (1, 20, [(I("F_APPLE"), 1, 0)], ["YOU DRINK THE HEAL POTION", "YOU FEEL HEALTHIER +10"], 0, True, 0), dd)
+    check("D1 page DRINK Heal at 10: L 1, HP 22, consumed, both lines, verb consumed, map back, E_POT 0",
+          dd == (1, 22, [(I("F_APPLE"), 1, 0)], ["YOU DRINK THE HEAL POTION", "YOU FEEL HEALTHIER +12"], 0, True, 0), dd)
     # D2 Mana / Cure second lines
     put(["P_MANA", "P_CURE"])
     p.wb("MP", 0)

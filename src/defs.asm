@@ -996,7 +996,7 @@ ATTR_HUD        EQU $47             ; bright white on black (screen clear; panel
 
 ; room geometry: STOREY_COUNT / STOREY_ROWS / PLAY_ROWS ... (level_defs.asm, B3B-3)
 MAX_POTIONS     EQU 9               ; (3E-T11: no engine user; the bag caps potions)
-QUAFF_HEAL      EQU 10              ; game.md §8: Heal +10 HP (3E-T11; was 8)
+QUAFF_HEAL      EQU 12              ; game.md §8: Heal +12 HP (MORE-MON knob 2026-11-04; was 10, 3E-T11 8)
 FOLLOW_GAP      EQU 4
 FOLLOW_MAX      EQU 2
 ROOM_CAP        EQU 4               ; monsters per room (on-screen cap)
