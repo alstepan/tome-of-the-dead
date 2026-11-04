@@ -21,18 +21,19 @@
 ;     1. flee: not RCD_ONCE and 3 hp <= max hp + 2 (hp <= 1/3 max, 5 of 14)
 ;        -> bat, RCD_ONCE | RCD_VFLEE, FEAR VB_FLEE_T turns (mon_status: a
 ;        step away from the hero each turn; cornered it bites);
-;     2. close distance: 1 <= gap <= VB_GAP and a cut between (vb_cut: a pit
-;        col in the floor row 9s+8 or a solid cell in the standing row 9s+7)
-;        -> bat (ai_flyer flies over it at the hero).
+;     2. close distance: 1 <= gap <= VB_GAP and (gap >= VB_FAR: open floor too, or a cut
+;        between: vb_cut, a pit col in the floor row 9s+8 or a solid cell in the standing
+;        row 9s+7) -> bat (ai_flyer flies over it at the hero). Its line prints only the
+;        first time per body (RCD_VSEEN); the flee transform always prints.
 ;     The hero on the OTHER storey: neither (open: a flyer cannot leave its
 ;     storey band, ai_flyer / clamp_band; see memory-map "3F-T9 Vampire bat form").
 ;   bat, even turn: revert when (RCD_VFLEE: its FEAR is over) / (else: the
-;     hero on its storey, gap <= VB_NEAR, no cut between) and the humanoid box
+;     hero on another storey / on its storey, gap <= VB_NEAR (hysteresis vs VB_FAR), no cut between) and the humanoid box
 ;     at its x is legal (spawn6.asm sp_try: standing floor, no wall / shaft /
 ;     plank, no body; else it stays a bat and retries next even turn).
 ; Every transform: M_REST, px / py snapped, LP_BOSS (golden), build_live
 ; (LIVE_LIST caches the body box). Turning into a bat prints
-; "THE VAMPIRE TURNS INTO A BAT!"; the revert is silent.
+; "THE VAMPIRE TURNS INTO A BAT!" (close distance: once per body); the revert is silent.
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
@@ -54,14 +55,12 @@ vb_one:         ld   a, (ix+E_KIND)
                 bit  RCD_ONCE_BIT, (ix+E_RCD)
                 jr   nz, .close                ; fled once already
                 ld   a, (ix+E_HP)
+                dec  a
                 ld   e, a
                 add  a, a
-                add  a, e
-                ld   e, a                      ; E = 3 hp (golden max <= 2 x 21 + 6: no overflow)
-                ld   a, (ix+E_MAXHP)
-                add  a, 2
-                cp   e
-                jr   c, .close                 ; hp > 1/3 max (rounded: 5 of 14 flees)
+                add  a, e                      ; 3 (hp - 1) (golden max <= 2 x 21 + 6: no overflow)
+                cp   (ix+E_MAXHP)              ; flee iff 3 hp <= max + 2  <=>  3 (hp - 1) < max
+                jr   nc, .close                ; hp > 1/3 max (rounded: 5 of 14 flees)
                 ; 1. flee
                 ld   a, (ix+E_RCD)
                 or   RCD_ONCE | RCD_VFLEE
@@ -78,14 +77,7 @@ vb_one:         ld   a, (ix+E_KIND)
                 and  $F0                       ; the HOLD nibble stays (0: not held)
                 or   VB_FLEE_T
                 ld   (hl), a
-                jr   vb_bat
-.close:         ; 2. close distance
-                ld   a, d
-                dec  a
-                cp   VB_GAP                    ; gap 1 .. VB_GAP (gap 0 wraps to $FF)
-                ret  nc
-                call vb_cut
-                ret  nc                        ; no cut: it walks
+                cp   a                         ; Z: the flee transform always logs its line
                 jr   vb_bat
 .bat:           bit  RCD_VFLEE_BIT, (ix+E_RCD)
                 jr   z, .near
@@ -96,13 +88,11 @@ vb_one:         ld   a, (ix+E_KIND)
                 ret  z                         ; still fleeing
                 jr   .rv
 .near:          call vb_gap
-                ret  c                         ; the hero on another storey
+                jr   c, .rv                    ; the hero on another storey: a flyer cannot follow, back to the humanoid
                 cp   VB_NEAR + 1
                 ret  nc
-                or   a
-                jr   z, .rv                    ; touching / overlapping: no col between
                 ld   d, a
-                call vb_cut
+                call vb_cut                    ; (gap 0: no col between, NC)
                 ret  c                         ; still a cut between: it stays a bat
 .rv:            ld   (ix+E_KIND), K_VAMPIRE    ; the humanoid box at its x, standing
                 ld   a, (ix+E_Y)
@@ -126,9 +116,20 @@ vb_one:         ld   a, (ix+E_KIND)
 ; LEK_GOLD, build_live, the slot hidden for the next render (R_VIS 0, below).
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
-vb_bat:         ld   (ix+E_KIND), K_VBAT
+.close:         ; 2. close distance: gap 1 .. VB_GAP and (gap >= VB_FAR: the open floor, or a cut
+                ; between: a pit / a block it cannot cross). The line only on the first one.
+                ld   a, d
+                cp   VB_GAP + 1
+                ret  nc
+                cp   VB_FAR
+                jr   nc, .go
+                call vb_cut                    ; (gap 0: touching, NC: it bites)
+                ret  nc                        ; gap < VB_FAR and no cut: it walks
+.go:            bit  RCD_VSEEN_BIT, (ix+E_RCD) ; Z = not logged yet; set / ld keep the flags
+                set  RCD_VSEEN_BIT, (ix+E_RCD)
+vb_bat:         ld   (ix+E_KIND), K_VBAT      ; (ld keeps Z)
                 ld   a, TX_VB_TURNS
-                call msg_push                  ; (low RAM; any bank)
+                call z, msg_push               ; (low RAM; any bank)
                 ; fix/vamp-corruption: RENDER_FIRST renders the next tick BEFORE anim_tick,
                 ; i.e. with this tick's R_FID = a frame of the OLD kind placed by the NEW
                 ; kind's KT_BH (fpy = py + 8 bh - H): a 48-px Vampire frame on the 2-row
@@ -168,12 +169,11 @@ vb_st:          ld   a, (ACT_SLOT)
 ; another storey; else NC, A = the box gap in cols (0: touching or overlapping,
 ; a bat above the hero), C = the first gap col. Both bodies are 3 cols wide
 ; (ASSERTed: the heroes, the Vampire, its bat form): gap = |dx| - 3, first =
-; min(x, px) + 3 (18 B less than ranged6's general box gap).  Clobbers: A, C.
+; min(x, px) + 3 (18 B less than ranged6's general box gap).  Clobbers: A, C, HL.
 ;------------------------------------------------------------------------------
 vb_gap:         ld   a, (VB_S)
-                ld   c, a
-                ld   a, (PL_STOREY)
-                cp   c
+                ld   hl, PL_STOREY
+                cp   (hl)
                 scf
                 ret  nz
                 ld   a, (PL_X)
@@ -199,26 +199,27 @@ vb_gap:         ld   a, (VB_S)
 ; the floor row 9s+8 with neither TF_FLOOR nor TF_LADDER (a narrow / wide
 ; pit; a ladder top is walkable), or a TF_SOLID cell in the standing row
 ; 9s+7 (a mid-room block: ranged6.asm rg_scan).
-; Clobbers: A, B, HL (C, D kept).   ~0.3k T + ~0.2k T a col
+; D = 0: NC.  Clobbers: A, B, C, E, HL (D kept).   ~0.3k T + ~0.2k T a col
 ;------------------------------------------------------------------------------
-vb_cut:         ld   a, (VB_S)
+vb_cut:         ld   a, d
+                or   a
+                ret  z                         ; gap 0: nothing between (NC)
+                ld   a, (VB_S)
                 MUL_STOREY b
                 add  a, STOREY_AIR
                 ld   b, a                      ; B = 9s + 8
-                push bc
-                push de
+                ld   e, d                      ; E = the col counter (cell_blocked keeps DE)
 .p:             call cell_blocked              ; (bank 2; keeps BC, DE) A = TILE_FLAGS
                 and  TF_FLOOR | TF_LADDER
                 jr   z, .c                     ; a pit col (CF = 0 from the and)
                 inc  c
-                dec  d
+                dec  e
                 jr   nz, .p
-                pop  de
-                pop  bc
+                ld   a, c
+                sub  d
+                ld   c, a                      ; C back to the first gap col (D kept)
                 dec  b                         ; the standing row 9s + 7
                 jp   rg_scan                   ; (ranged6.asm) CF = a solid cell
-.c:             pop  de
-                pop  bc
-                scf
+.c:             scf
                 ret
                 ASSERT STOREY_AIR == 8

@@ -4410,7 +4410,8 @@ the Vampire's `small_corpse` on the floor — see "VBAT-ART" below). A transform
 | `E_RCD` bit 7 `RCD_ONCE` | entity | the Vampire has fled once (banked as `LEK_BRED`) |
 | `E_RCD` bit 2 `RCD_VFLEE` | entity | this bat form is the flee one (reverts when its FEAR ends); clear = close-distance bat. `place_follower` keeps it, `lp_bank` drops it |
 | `VB_S` = `SP_S` | `$5FFA` | storey scratch (end_turn after `sp_run`: SPQ_RAM is free) |
-| `VB_FLEE_T` 8 / `VB_GAP` 10 / `VB_NEAR` 2 | combat_defs.asm | FEAR turns / close-distance gap / revert gap |
+| `VB_FLEE_T` 8 / `VB_GAP` 12 / `VB_FAR` 6 / `VB_NEAR` 2 | combat_defs.asm | FEAR turns / close-distance gap / open-floor trigger / revert gap |
+| `E_RCD` bit 3 `RCD_VSEEN` | entity | the close-distance line has been logged for this body (VAMP-BAT-CHASE) |
 | `MSG_M_DRAIN` 17 | defs.asm | the Vampire's bite-hit line (impact_line remap) |
 
 **Flow (end_turn only, never a cast / input tick).** Bank-7 `vb_turn` (bank7.asm, `call z` when no exit):
@@ -4420,7 +4421,7 @@ its whole turn"), a bat at the end of an **even** one (the humanoid then rests t
 not PENDING / DYING / held (HOLD), sets `ACT_SLOT`, `cache_player`, `VB_S` and far6s R6 **`vb_one`**
 (`vbat6.asm`): humanoid, hero on its storey: (1) flee: not `RCD_ONCE`, 3 hp <= max + 2 (5 of 14) ->
 bat, `RCD_ONCE|RCD_VFLEE`, MIND := FEAR `VB_FLEE_T` (mon_status steps it away; cornered it bites);
-(2) close: 1 <= gap <= 10 and `vb_cut` (a floor-row 9s+8 col with neither `TF_FLOOR` nor `TF_LADDER`,
+(2) close: 1 <= gap <= 12 and (gap >= 6 or `vb_cut`; VAMP-BAT-CHASE) (a floor-row 9s+8 col with neither `TF_FLOOR` nor `TF_LADDER`,
 or a `TF_SOLID` standing-row 9s+7 cell, via ranged6 `rg_scan`) -> bat. Bat: revert when (VFLEE: FEAR
 over) / (else: hero on its storey, gap <= 2, no cut between) and the humanoid box at its x is legal
 (spawn6 `sp_y` + `sp_try`, `box_free` skipping `ACT_SLOT`; else it stays a bat, y restored). Every
@@ -4438,6 +4439,22 @@ erases, one tick blank). Turning into a bat logs "THE VAMPIRE TURNS INTO A BAT!"
 fid0** (keeps the longer count; the build's `PL_KIND` sum drops `K_VBAT` when `K_BAT` is listed; the
 `zx0_pool.py` model merges the same way). `pl_kinds` loads `K_VBAT`'s block with the Vampire's (D3 / D6 /
 D8: 5 cache blocks, main.asm SEQ CACHE NEED counts it).
+
+**VAMP-BAT-CHASE (`feat/vamp-bat-chase`, user 2026-11-04): rule 2 on flat ground.** `vb_one`'s close
+test is now `gap 1..VB_GAP (12, was 10) and (gap >= VB_FAR (6) or vb_cut)`: a humanoid with the hero on its storey
+turns into a bat across open floor too; a cut still triggers it below 6 (a pit at gap 4 still does). Revert unchanged
+(`VB_NEAR` 2, same storey, no cut, legal box): hysteresis 6 vs 2, a bat hovering at gap 3-5 stays. The line prints
+only on the first close-distance transform of a body: **`E_RCD` bit 3 `RCD_VSEEN`** (a summon-counter bit, free on the
+Vampire: it never summons; `place_follower` keeps it via `RCD_KEEP`, `lp_spawn`'s restore clears it, so a banked body logs
+once more); the flee transform keeps its line (`cp a` -> Z -> `call z, msg_push`). Byte-saving rewrites paid for it:
+flee test `3 (hp-1) < max` via `cp (ix+E_MAXHP)` (-3), `vb_cut` D = 0 safe (the `or a / jr z` of `.near` and the close
+path gone) and the push/pop pairs replaced by E as the col counter + `sub d` (-4), `vb_gap` `cp (hl)` (-1).
+Bytes (release): **R6 free 6 -> 2 (+4 B `vbat6.asm`)**; every other region unchanged. Measured (`tests/vbat.py`
+B, real WAIT turns, flat room, D6): a Vampire 10 cols away: **17 turns to adjacency before (walks, period 2), 11 after**
+(bat at turn 2); 8 cols: 14 -> 8. `tools/balance_sim.py` already steps a Vampire at period 1 while `m.x > 2` (the 1-D
+encounters), so the sim needs no change.
+A close-distance bat also reverts when the hero is on **another storey** (+1 B: `ret c` -> `jr c, .rv`; same legal-box condition): a flyer cannot
+follow, so a provoked Lord does not stay a bat flying home erratically (`tests/boss.py` G2 "walks home" keeps 14 turns; `tests/vbat.py` N5).
 
 **Not built (open):** rule 2's **other-storey** case: a flyer cannot leave its storey band (ai_flyer /
 clamp_band, bank 3 has 8 B free), so a Vampire whose hero is on the other storey keeps walking

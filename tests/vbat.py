@@ -10,8 +10,14 @@ TURN_COUNTER poked (the end_turn decision), plus real turns for the flee flight.
      over: back to the Vampire standing, VFLEE cleared, once kept; once: never flees again;
      an even turn never turns a humanoid, an odd one never reverts a bat
   O  the hero on the other storey / the Vampire held (STUNNED): no change
-  C  close distance (rule 2): gap 6, no cut: walks; a pit col in the floor row or a solid cell in
-     the standing row between: bat; gap 11 with a pit: walks
+  C  close distance (rule 2): gap < VB_FAR (6), no cut: walks; a pit col in the floor row or a solid
+     cell in the standing row between: bat (also at gap 4); gap >= 6 .. VB_GAP (12) on open floor: bat;
+     gap 13 (also with a pit): walks; gap 0: walks (vb_cut D = 0 is safe)
+  B  bat chase on flat ground (VAMP-BAT-CHASE): E_RCD bit 3 RCD_VSEEN set by the first close-distance
+     transform; no flapping over 6 turns hovering at gap 3-5 (a bat stays, a humanoid walks); real
+     turns: a Vampire 10 cols away turns into a bat, reaches adjacency, reverts at gap <= 2 (<= 2
+     kind changes), and the line is logged once for the body (a second transform is silent);
+     info: turns to adjacency from gap 10
   N  revert near: gap <= 2, no cut, even turn: Vampire; a cut between at gap 2: stays a bat;
      over a pit (illegal humanoid box): stays a bat, y kept; gap 3: stays
   G  the golden Lord: LP_BOSS follows its kind (K_VBAT | LEK_GOLD and back)
@@ -45,7 +51,7 @@ from spawn import (Lines, kt, heal, clear_room, mon, hero_at, level, far3, keep_
                    fails, good_cols)
 
 KV, KB = S["K_VAMPIRE"], S["K_VBAT"]
-ONCE, VFLEE = 0x80, S["RCD_VFLEE"]
+ONCE, VFLEE, VSEEN = 0x80, S["RCD_VFLEE"], S.get("RCD_VSEEN", 8)
 MIND_FEAR, STS_MIND = S["MIND_FEAR"], S["STS_MIND"]
 GOLD = S["LEK_GOLD"]
 ATTR_BAT = None                                # the Bat's KT_ATTR (read at run time)
@@ -190,8 +196,31 @@ def run(p, lines, r):
     vx = c0 + 3 + 6                            # gap 6
     setup(p, s_, c0, vx)
     vb_turn(p, 3)
-    check("C1 gap 6, no cut: walks", p.ent(1)["KIND"] == KV, p.ent(1))
     fr, sr = 9 * s_ + 8, 9 * s_ + 7
+    check("C1 gap 6, no cut (open floor): bat, RCD_VSEEN, no flee bits",
+          p.ent(1)["KIND"] == KB and p.ent(1)["POT"] & (ONCE | VFLEE | VSEEN) == VSEEN, p.ent(1))
+    setup(p, s_, c0, c0 + 3 + 5)
+    vb_turn(p, 3)
+    check("C1b gap 5, no cut: walks (below VB_FAR)", p.ent(1)["KIND"] == KV, p.ent(1))
+    setup(p, s_, c0, c0 + 3 + 12)
+    vb_turn(p, 3)
+    check("C1c gap 12 (VB_GAP): bat", p.ent(1)["KIND"] == KB, p.ent(1))
+    setup(p, s_, c0, c0 + 3 + 13)
+    vb_turn(p, 3)
+    check("C1d gap 13: walks", p.ent(1)["KIND"] == KV, p.ent(1))
+    setup(p, s_, c0, c0 + 3)
+    vb_turn(p, 3)
+    check("C1e gap 0 (touching): walks / bites", p.ent(1)["KIND"] == KV, p.ent(1))
+    setup(p, s_, c0, vx)
+    old = cell(p, fr, c0 + 5, S["T_AIR"])
+    vb_turn(p, 3)
+    cell(p, fr, c0 + 5, old)
+    setup(p, s_, c0, c0 + 3 + 4)
+    old = cell(p, fr, c0 + 5, S["T_AIR"])
+    vb_turn(p, 3)
+    check("C1f gap 4 (< VB_FAR) with a pit between: bat (the cut rule stays)", p.ent(1)["KIND"] == KB, p.ent(1))
+    cell(p, fr, c0 + 5, old)
+    setup(p, s_, c0, vx)
     old = cell(p, fr, c0 + 5, S["T_AIR"])
     vb_turn(p, 3)
     check("C2 a pit col in the floor row between: bat (no flee bits)",
@@ -202,10 +231,10 @@ def run(p, lines, r):
     vb_turn(p, 3)
     check("C3 a solid cell in the standing row between: bat", p.ent(1)["KIND"] == KB, p.ent(1))
     cell(p, sr, c0 + 6, old)
-    setup(p, s_, c0, c0 + 3 + 11)
+    setup(p, s_, c0, c0 + 3 + 13)
     old = cell(p, fr, c0 + 5, S["T_AIR"])
     vb_turn(p, 3)
-    check("C4 gap 11 with a pit: walks", p.ent(1)["KIND"] == KV, p.ent(1))
+    check("C4 gap 13 with a pit: walks", p.ent(1)["KIND"] == KV, p.ent(1))
     # ------------------------------------------------------------------ N
     by = 9 * s_ + 1
     setup(p, s_, c0, c0 + 3 + 2, k=KB)
@@ -225,6 +254,21 @@ def run(p, lines, r):
     e = p.ent(1)
     check("N4 over a pit (illegal humanoid box): stays a bat, y kept", e["KIND"] == KB and e["Y"] == by, e)
     for c, t in zip(range(c0 + 4, c0 + 7), olds):
+        cell(p, fr, c, t)
+    setup(p, s_, c0, c0 + 3 + 8, k=KB)
+    hero_at(p, c0, s_ ^ 1)
+    vb_turn(p, 4)
+    e = p.ent(1)
+    check("N5 the hero on the other storey: a (close-distance) bat reverts to the humanoid, standing", e["KIND"] == KV and e["Y"] == vy, e)
+    vb_turn(p, 5)
+    vb_turn(p, 6)
+    check("N5b ... and stays one (no re-transform with the hero elsewhere)", p.ent(1)["KIND"] == KV, p.ent(1))
+    setup(p, s_, c0, c0 + 3 + 8, k=KB)
+    hero_at(p, c0, s_ ^ 1)
+    olds = [cell(p, fr, c, S["T_AIR"]) for c in range(c0 + 10, c0 + 13)]
+    vb_turn(p, 4)
+    check("N5c ... only when the humanoid box is legal (over a pit it stays a bat)", p.ent(1)["KIND"] == KB, p.ent(1))
+    for c, t in zip(range(c0 + 10, c0 + 13), olds):
         cell(p, fr, c, t)
     # ------------------------------------------------------------------ G
     lpb = p.rb("LP_BOSS")
@@ -260,7 +304,7 @@ def run(p, lines, r):
     hero_at(p, c0, s_)
     build_live(p)
     _, t0 = vb_turn(p, 3)
-    setup(p, s_, c0, c0 + 3 + 6)
+    setup(p, s_, c0, c0 + 3 + 5)                # (gap 5: stays humanoid, VB_FAR is 6)
     _, t1 = vb_turn(p, 3)
     setup(p, s_, c0, c0 + 3, hp=4)
     _, t2 = vb_turn(p, 3)
@@ -291,6 +335,45 @@ def run(p, lines, r):
           turned is not None and turned <= 2 and "THE VAMPIRE TURNS INTO A BAT!" in lines.lines, (turned, lines.lines))
     check(f"R2 it flees (gap > 2 by turn {flew}) and reverts within 14 turns (turn {back})",
           flew is not None and back is not None and back - turned <= 14, (flew, back, p.ent(1)))
+    p.z.cmd("set-breakpoint 5")
+    # ------------------------------------------------------------------ B
+    for gap in (3, 4, 5):                      # hovering: no flapping over 6 turns (3 each parity)
+        setup(p, s_, c0, c0 + 3 + gap, k=KB)
+        ks = [(vb_turn(p, n), p.ent(1)["KIND"])[1] for n in range(3, 9)]
+        setup(p, s_, c0, c0 + 3 + gap)
+        kh = [(vb_turn(p, n), p.ent(1)["KIND"])[1] for n in range(3, 9)]
+        check(f"B1 gap {gap}, 6 turns: a bat stays a bat only while a cut is between (here none: it reverts "
+              f"once at gap <= 2), a humanoid never turns", kh == [KV] * 6 and (
+              ks == [KB] * 6 if gap > 2 else True), (ks, kh))
+    lines.arm()
+    for rep_ in (1, 2):
+        vx = c0 + 3 + 10 if rep_ == 1 else c0 + 3 + 8
+        if rep_ == 1:
+            setup(p, s_, c0, vx)
+            lines.lines.clear()
+        else:
+            p.set_ent(1, X=vx, PX=vx * 8)     # a second cycle for the same body (RCD_VSEEN kept)
+            build_live(p)
+        kinds, adj, flips, xs = [], None, 0, []
+        for t in range(1, 41):
+            heal(p)
+            p.turn("WAIT")
+            e = p.ent(1)
+            if kinds and kinds[-1] != e["KIND"]:
+                flips += 1
+            kinds.append(e["KIND"])
+            xs.append(e["X"])
+            if adj is None and abs(e["X"] - c0) <= 4:             # melee reach: gap <= 1 col
+                adj = t
+            if adj is not None and e["KIND"] == KV:
+                break
+        n_ln = sum("TURNS INTO A BAT" in ln for ln in lines.lines)
+        print(f"[info] chase from gap {vx - c0 - 3}: bat at turn {kinds.index(KB) + 1 if KB in kinds else None}, "
+              f"adjacent at turn {adj}, kind flips {flips}, lines so far {n_ln}, hero x {c0}, x {xs}", flush=True)
+        check(f"B2.{rep_} flat room, hero {vx - c0 - 3} cols away: it becomes a bat, reaches adjacency, "
+              f"reverts (<= 2 flips)", KB in kinds and adj is not None and kinds[-1] == KV and flips <= 2
+              and p.ent(1)["POT"] & VSEEN, (kinds, adj, flips, p.ent(1)))
+        check(f"B3.{rep_} the line is logged once per body ({n_ln})", n_ln == 1, lines.lines)
     p.z.cmd("set-breakpoint 5")
     screen_safe(p)
     visual(p, r, "D6", cycles=True)

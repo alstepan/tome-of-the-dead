@@ -269,7 +269,10 @@ RCD_KEEP        EQU RCD_SUMMON | RCD_SUMMONED | RCD_ONCE
 RCD_VFLEE       EQU %00000100
 RCD_VFLEE_BIT   EQU 2
 VB_FLEE_T       EQU 8               ; §9.2 rule 1: flee 8 turns (FEAR, MIND timer; <= STS_MAX_TURNS)
-VB_GAP          EQU 10              ; rule 2: close distance at a box gap <= 10 cols
+RCD_VSEEN       EQU %00001000       ; the close-distance line has been logged for this body (bit 3 = a summon bit, free on the Vampire)
+RCD_VSEEN_BIT   EQU 3
+VB_GAP          EQU 12              ; rule 2: close distance at a box gap <= 12 cols
+VB_FAR          EQU 6               ; ... and gap >= 6 turns it on open floor too (gap < 6: only with a cut between)
 VB_NEAR         EQU 2               ; revert at a box gap <= 2 (same storey, no cut between)
 VB_S            EQU SP_S            ; vb_turn / vb_one scratch (end_turn, after sp_run: SPQ_RAM is free;
                                     ; spawn6.asm sp_y writes SP_S itself)

@@ -2913,12 +2913,19 @@ BAT!`. Bat form heals nothing; the drain bite exists only in humanoid form. Firs
 2. **Close distance:** humanoid, hero on the **other storey** or across a pit (no walk path
    shorter than 12 cols), gap ≤ 10 cols → bat and flies at the hero. It reverts to
    humanoid when within 2 cols of the hero on the same storey (costs its turn).
+   **VAMP-BAT-CHASE (user 2026-11-04): flat ground too.** On the same storey the gap alone now
+   triggers it: `VB_FAR` 6 ≤ gap ≤ `VB_GAP` 12 (was 10) → bat, with or without a cut between; a cut
+   still triggers it at any gap 1..12 (the pit / block cases below). Hysteresis is inherent (turn
+   at ≥ 6, revert at ≤ 2; a bat hovering at 3–5 stays a bat, a humanoid there walks). The line
+   `THE VAMPIRE TURNS INTO A BAT!` prints only for the **first close-distance transform of that
+   body** (`RCD_VSEEN`; the flee transform always prints; a body banked and restored prints once
+   more). A Vampire 10 cols away is adjacent in ~11 turns instead of ~17.
    **Cheap definition (RANGED-SPEC 2026-10-29; replaces the walk-path test):** `gap ≤ 10`
    (box gap in cols, as for shots) **and** either the hero is on the other storey (standing
    or mid-ladder), or the same storey with a **cut between** them: a scan of the gap cols
    finds a hole in the floor row `9s+8` (narrow or wide pit: a walker cannot jump) or a
    `TF_SOLID` cell in the standing row `9s+7` (mid-room block). Same scan routine as the
-   ranged wall scan, other row. No path search. Revert: gap ≤ 2, same storey, and the
+   ranged wall scan, other row. No path search (cut or gap ≥ 6, see above). Revert: gap ≤ 2, same storey, and the
    humanoid box at its x is legal and standing (over a pit it stays a bat until it is not).
 3. Otherwise humanoid chase and bite.
 Flying over a pit is fine (flyer rules); on a ladder it cannot attack, as for any body.
