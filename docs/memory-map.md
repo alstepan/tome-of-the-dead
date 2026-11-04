@@ -3359,7 +3359,7 @@ IX / IY never touched, no EXX; `BAG` is bank 5 (always mapped), so nothing pages
   deleted (no reader).
 - **Quick potion** (3E-T12: now R6 `fx_quick` + `pot_eff` / `cap_add`, moved out of bank 7; the line is "YOU DRINK THE <name>"; was `ic_quaff`, bank 7): Heal -> Mana -> Cure, the first type present
   (far3 `bag_find`, C out 0 = absent) whose effect is not refused (`pot_eff`, CF):
-  Heal `QUAFF_HEAL` 10 / Mana `POT_MANA` 8 (`cap_add`: HL = value, max at HL+1; refused
+  Heal `QUAFF_HEAL` 12 (was 10, MORE-MON) / Mana `POT_MANA` 8 (`cap_add`: HL = value, max at HL+1; refused
   when full) / Cure (`ST_FLAGS` slot 0: POISON, WEAK, MIND cleared, `ST_T1` low nibble and
   `ST_T2` 0, HOLD kept, + `POT_CURE_HP` 4; refused with none of the three); then
   `pot_take1` (far3), flash, `SFX_QUAFF`, `TX_QUAFF` (the "DRINK THE <name>" stem is the fx
@@ -5883,8 +5883,9 @@ bank 2, ~1.7k a heavy tick), `cycle_frame`'s first two division steps for totals
 - **Data:** `lp_dtab` counts D1..D8 = 13/14/14/15/16/15/15/12 (was 11/12/12/13/13/14/14/11); `ROOM_MAX_LO`/`ROOM_MAX_HI` -> one `ROOM_MAX` 3
   (`level_defs.asm`); `lp_budget` loads `LP_RMAX` with `ld a, ROOM_MAX` (the `LVL_DEPTH` `cp 3 / sbc` + ASSERT gone). `QUAFF_HEAL` 10 -> 12
   and the items.txt HEAL POTION value (the `HEAL 12 HP` description). No new kinds, no pool / layout change (D8 Warrior pool slack 384).
-- **Free bytes (release):** bank 3 6 -> **13** (-7 B code); bank 2 19, bank-7 low 20 / high 2, bank 0 24, low-RAM spare 0, R6 5, bank 1 2: unchanged.
-  Kit: bank 3 9 (was 2), bank 0 10, R6 10, low RAM 2, bank 2 18, bank 1 2. `F3_GEN=0` = release (bank 3 13).
+- **Free bytes (release):** bank 3 6 -> **13** (-7 B code); the rest at merge time: bank 2 19, bank-7 low 20 / high 2, bank 0 24, low-RAM spare 0, R6 5, bank 1 2.
+  **Measured on main after PERF-GHOST + END-WAIT (fresh release build, 2026-11-04):** bank 2 **13**, bank 0 **16**, R6 **6**, bank 3 **13**, bank-7 low **18** / high **2**, bank 1 **1**, low-RAM spare 0, SRC6 19.
+  Kit: bank 3 9 (was 2), bank 0 10, R6 10, low RAM 2, bank 2 18, bank 1 2 (as at MORE-MON merge). `F3_GEN=0` = release (bank 3 13).
 ## END-WAIT ledger (`feat/end-wait`, 2026-11-04; user: the end card must not hide the final scene)
 
 - **Behaviour:** on `GS_DEAD` / `GS_WIN` the last frame (death pose, the lethal turn's log line + HP 0, the win scene; the MUS_OVER /

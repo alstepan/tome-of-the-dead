@@ -51,6 +51,7 @@ GRID_H          EQU 3
 GRID_CELLS      EQU GRID_W * GRID_H ; 9 room ids
 ROOMS_MIN       EQU 7               ; game.md §1.1 (DFS tree, + 0–1 loop edge)
 ROOMS_MAX       EQU 9
+LP_N_MIN        EQU 12              ; smallest lp_dtab count incl. boss (D8; keep == the table, lpop3.asm)
 LEVELS          EQU 8               ; D1..D8 (LVL_DEPTH 1..8)
 ROOM_NONE       EQU $FF             ; "no room" in LVL_KEYROOM / LVL_SANCTUM
 
@@ -221,7 +222,7 @@ LVL_FLAGS       EQU LVL_STATE + 12  ; LF_* below
 FLOOR_N         EQU LVL_STATE + 13  ; FLOOR_LIST entries used (0..32)
 MASTER_SEED     EQU LVL_STATE + 14  ; word: per game (FRAMES at START / SEED_FIXED)
 LVL_HDR_LEN     EQU 16
-EDGE_TAB        EQU LVL_STATE + $10 ; 6 B ($6D50..$6D55); $6D56 TRK_PHASE, $6D57 TRK_PREV (3F-T12); $6D58 TOME_HP (M0); $6D59 TOME_FL (TOME-FX2); $6D5A..$6D5F spare
+EDGE_TAB        EQU LVL_STATE + $10 ; 6 B ($6D50..$6D55); $6D56 TRK_PHASE, $6D57 TRK_PREV (3F-T12); $6D58 TOME_HP (M0); $6D59 TOME_FL (TOME-FX2); $6D5A DN_QN (PERF-GHOST); $6D5B..$6D5F spare
 ROOM_DESC       EQU LVL_STATE + $20 ; 9 x 16 = 144 B ($6D60..$6DEF); $6DF0..$6DFF spare
 FLOOR_LIST      EQU LVL_STATE + $C0 ; 32 x 4 = 128 B ($6E00..$6E7F, page-aligned)
 LVL_STATE_END   EQU LVL_STATE + $140
