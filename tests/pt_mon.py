@@ -410,5 +410,13 @@ class PT(LPT):
                 print(f"[prof] tick {self.mon.ticks + 1} {t} T: room {self.rb('CUR_ROOM')} D{self.rb('LVL_DEPTH')} "
                       f"ph {self.rb('TURN_PHASE')}/{self.rb('TURN_PEND')}: "
                       + ", ".join(f"{k}={v}" for k, v in split.items()), flush=True)
+                if os.environ.get("PT_PROF_ENTS"):    # the scene: slot kind x y mode flags react hp
+                    raw = z.read_memory(S["P_ENTITIES"], 16 * STRIDE)
+                    room = self.rb("CUR_ROOM")
+                    print("[prof] ents " + " ".join(
+                        f"s{sl}:k{raw[sl*STRIDE]} x{raw[sl*STRIDE+game_lib.E['X']]} y{raw[sl*STRIDE+game_lib.E['Y']]}"
+                        f" m{raw[sl*STRIDE+game_lib.E['MODE']]} f{raw[sl*STRIDE+game_lib.E['FLAGS']]:02x}"
+                        for sl in range(16) if raw[sl*STRIDE+game_lib.E['FLAGS']] & 1
+                        and raw[sl*STRIDE+game_lib.E['ROOM']] == room), flush=True)
             if self.mon:
                 self.mon.sample(t, in_work, stop)

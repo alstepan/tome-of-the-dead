@@ -219,7 +219,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # 126k cap (work ~130.4k), so it is NOT in CAP_GATED.
 GATED = ("mix", "mage", "blair")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -578,6 +578,15 @@ SCENARIOS = {
         (1, 21, stand_y(1, 4), HOSTILE),
         (4, 24, stand_y(1, 4) - 1, HOSTILE),
         (2, 3, stand_y(1, 4), RIGHT)], KEYS, K_WIZARD, None, "ghost5"),
+    # PERF-GHOST2 (T14 rerun on main b0e299f: M 0x1234 D3 room 3, 149,206 T): the Mage CLIMBING (mid-ladder
+    # every turn: each monster's yield test + every try_step ran cork_check over the whole climb path) with a
+    # Ghost beside the shaft foot, 2 Ghosts on the storey above and a Bat over the shaft (its columns: the
+    # probe path); kinds / rows / HP by glad_setup (GLAD). Gated like ghost3.
+    "glad": ("mage climbing (mid-ladder) + Ghost beside it, 2 Ghosts above, a Bat over the shaft", [
+        (5, 26, 10, HOSTILE),
+        (3, 12, 1, RIGHT),
+        (1, 9, 1, RIGHT),
+        (4, 22, 0, HOSTILE)], [("K", 6), ("WAIT", 2)], K_WIZARD, None, "glad"),
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
         (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
@@ -886,6 +895,18 @@ def ghost_setup(p, placements):
     hp5 = p.ent(5)["HP"]
     pmix_setup(p)
     p.set_ent(5, HP=hp5)
+    p.settle()
+
+
+GLAD = {5: "K_GHOST", 3: "K_GHOST", 1: "K_GHOST", 4: "K_BAT"}
+
+
+def glad_setup(p, placements):
+    """PERF-GHOST2 "glad": the hero at the col-23 shaft foot (storey 1, x 23: K climbs to storey 0, mid-ladder
+    every turn), the placements re-kinded (GLAD) at their raw rows, HP 60; the hero HP 250."""
+    p.set_ent(0, X=23, PX=23 * 8, HP=250, MAXHP=250)
+    for slot, x, y, _ in placements:
+        p.set_ent(slot, KIND=S[GLAD[slot]], Y=y, PY=y * 8, HP=60, MAXHP=60)
     p.settle()
 
 
@@ -1215,6 +1236,8 @@ def run_scenario(h, scen):
         tmix_setup(p)
     if len(scen) > 5 and scen[5] in ("ghost3", "ghost5"):
         ghost_setup(p, placements)
+    if len(scen) > 5 and scen[5] == "glad":
+        glad_setup(p, placements)
     if len(scen) > 5 and scen[5] in ("trickle", "otrickle"):
         trickle_setup(p, scen[5])
     if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat", "aroom", "asum", "rfar"):
@@ -1435,7 +1458,7 @@ def run_scenario(h, scen):
 
 
 ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5")
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad")
 
 
 def swing_pass(keys):
