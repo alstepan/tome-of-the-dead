@@ -94,6 +94,9 @@ tick number moves with bot revisions; `heaviest_ticks` in the report lists the t
 **Fixed by PERF-GHOST (`perf/ghost-tick`, docs/memory-map.md "PERF-GHOST ledger"):** the same run now peaks at 137,897 T
 (tick 5,036) / 135,426 T (5,038); `tests/budget.py` gates the scene's synthetic twin `ghost3` (+ `ghost5`, reported).
 
+**PERF-GHOST2 (`perf/ghost-tick2`, on main `b0e299f`, the PENDING-skip bot):** the rerun's 3 over-budget ticks (the Mage
+climbing past Ghosts, 149,206 T max: `cork_check`) now peak at 130,818 T; `tests/budget.py` gates the scene as `glad`.
+
 ### Bot notes (limits, for the next person)
 
 * The bot is a weak player: level 6-7 at D8, so most boss fights need god top-ups (see the poke table). `god_hp` counts

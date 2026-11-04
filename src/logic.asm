@@ -778,7 +778,8 @@ pend_hit:
 ; shaft, boxed by a wall, never had to move: the hero waited forever).
 ; CLIMB_BLK is cleared by try_player_turn, so it only counts in the monster
 ; phase of the turn whose climb was blocked.
-; Preserves BC, DE, IX.  Clobbers: A, HL.  Fast path (hero not climbing) 30 T
+; Preserves BC, DE, IX.  Clobbers: A, HL.  Fast path (hero not climbing) 30 T; a box
+; outside the hero's columns ~0.3k T; else ~0.35k T a probe (PERF-GHOST2)
 ;------------------------------------------------------------------------------
 cork_check:
                 ld   a, (PL_LADDER)            ; fast path: hero not mid-ladder
@@ -786,30 +787,32 @@ cork_check:
                 or   (hl)
                 ret  z                         ; CF = 0
                 push ix
+                ld   ix, P_ENTITIES
+                ; PERF-GHOST2: every probe box has the hero's columns, so a box
+                ; outside them overlaps none: one box_vs_ix with rows 0..255
+                ; (B = 0, E = 0: b+e-1 = 255) first (~0.2k T, was n probes x ~0.4k:
+                ; 3.8k a call with the hero mid-ladder, 8 calls in a monster phase)
                 push bc
                 push de
-                ld   ix, P_ENTITIES
+                ld   b, 0
+                ld   e, b
+                call box_vs_ix                 ; (keeps BC, DE)
+                pop  de
+                pop  bc                        ; (POP keeps CF)
+                jr   nc, .out                  ; not in the hero's columns: free
                 ld   a, (ix+E_Y)
-                ld   (TMP5), a                 ; saved y
+                push af                        ; saved y (was TMP5)
 .probe:         ld   a, (ix+E_Y)
                 add  a, (ix+E_AIDIR)
                 ld   (ix+E_Y), a               ; next box along the path
-                pop  de
-                pop  bc
-                push bc
-                push de
-                call box_vs_ix
-                jr   c, .hit
+                call box_vs_ix                 ; (keeps BC, DE: the old per-probe pop /
+                jr   c, .hit                   ; push reload is gone, -42 T a probe)
                 call is_standing               ; reached the ladder end?
                 jr   nz, .probe
                 or   a
-.hit:           ld   a, (TMP5)                 ; restore y (flags kept)
-                ld   (ix+E_Y), a
-                jr   .out
-.free:          or   a
-.out:           pop  de
-                pop  bc
-                pop  ix
+.hit:           pop  hl                        ; H = the saved y (POP keeps CF)
+                ld   (ix+E_Y), h
+.out:           pop  ix
                 ret
 
 ;------------------------------------------------------------------------------

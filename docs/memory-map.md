@@ -5904,3 +5904,26 @@ bank 2, ~1.7k a heavy tick), `cycle_frame`'s first two division steps for totals
   D4 key -> card, held / tapped inside the card's quiet -> no menu, the card frame stable over 30 ticks (the unconditional `panel_tick`
   draws nothing), quiet -> armed; D5 key -> menu; death and win). `game_lib.Harness.end_card()` / `end_to_menu()` (skip the quiet, tap a key) used by
   `endcard_k`, `world` (W24, W6), `sanctum`, `game`; `budget` / `pt_mon` detect the card with `END_SHOWN & ES_CARD`.
+
+## PERF-GHOST2 ledger (`perf/ghost-tick2`, 2026-11-04; on main `b0e299f`; T14 rerun: 3 ticks over budget)
+
+**Finding:** `M 0x1234` (the bot now skips PENDING bodies: a new trajectory, ~53k ticks), D3 room 3, bot ticks 5,494 / 5,497 /
+5,500: **149,206 / 142,432 / 146,733 T**. Scene: the Mage CLIMBING the shaft (mid-ladder every turn, `PL_LADDER` 1) with a Ghost
+beside the shaft foot, a Poltergeist + a Ghost on the storey above, a Bat over the shaft; input ticks. Split (5,494): present 31.6k,
+render 42.8k, **`resolve_monsters` 49.8k** (4 monsters), anim 8.0k, ISRs 6.2k (two). Instruction profile: **`cork_check` 30.4k / 8
+calls** (each monster's §6.4 yield test + each `try_step`): it probed the hero's whole remaining climb path (65 probes x
+`box_vs_ix` + `is_standing`, ~0.45k each).
+
+**Fix (bank 2 `logic.asm`, behaviour identical):** every probe box has the hero's columns, so a box outside them overlaps none:
+`cork_check` first runs ONE `box_vs_ix` with rows 0..255 (B = E = 0) and returns free on a column miss (~0.3k T); the probe loop
+drops its per-probe `pop de / pop bc / push bc / push de` (`box_vs_ix` / `is_standing` keep BC, DE: -42 T a probe) and saves the
+hero's y on the stack (was `TMP5`; `pop hl` keeps CF). **-3 B** (bank 2 free 13 -> 16).
+
+**Result (release):** ticks 5,494 / 5,497 / 5,500 -> **126,009 / 124,122 / 130,818 T** (worst 130,818: 11.0k margin, one ISR);
+full runs: `M 0x1234` GS_WIN 53,151 ticks, `W 0x1234` 39,963, `W 0x0BAD` 32,486: **0 violations** (worst 130,818 / 114,116 /
+115,201). New gated `tests/budget.py` scenario **`glad`** (the Mage climbing the PROTO room-A col-23 shaft with a Ghost beside the
+foot, 2 Ghosts above, a Bat over the shaft): main **132,038 T, work 129,353 > 126k (FAIL)** -> **119,904 / 117,219 (PASS)**.
+`tests/ai_equiv.py` vs main: no logic / RNG / status difference.
+
+Free bytes (release): bank 2 13 -> **16**; bank 0 16, R6 1, bank 3 13, bank 1 1, bank 7 low 18 unchanged. The deferred items of
+PERF-GHOST (hero repair rect, unrolled attr stamp, `cycle_frame` steps) were not needed: the real scene's cost was `cork_check`.
