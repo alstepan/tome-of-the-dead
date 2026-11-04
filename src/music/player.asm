@@ -26,7 +26,7 @@
 ;
 ; No fixed addresses: code, period table and voice state live in this file;
 ; placement in the game (bank 3 AY slot) is a later task. Clobbers AF, BC, DE,
-; HL, IX only (the AY slot contract allows IY too); no alternate set, no EI.
+; HL, IX only (never IY: the ISR no longer saves it, ISR-RATE); no alternate set, no EI.
 ; Everything is in MODULE wzm (names wzm.player_start, wzm.AY_R_MIXER, ...): the
 ; game's src/defs.asm has its own AY_* names.
 ;
