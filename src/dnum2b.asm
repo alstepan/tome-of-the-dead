@@ -12,7 +12,8 @@
 ; redraw, rescan, <= 1 spawn; <= ~40k T, then ends below ~111k); a 2nd-frame
 ; tick only spawns the next queued number (dn_q2: the last scan's ranking, no
 ; rescan, 11-17k T measured; tests/budget.py gates both). The live numbers neither age
-; nor redraw in a 2nd-frame tick.  Clobbers: all but IY.  Gated ~0.1k T.
+; nor redraw in a 2nd-frame tick. PERF-GHOST: a 2nd-frame tick with DN_QN = 0 (the queue
+; empty) and TOME_FL = 0 returns at once (dn_q2 would be a no-op).  Clobbers: all but IY.  Gated ~0.1k T.
 ;------------------------------------------------------------------------------
 dn_gate:
                 ld   hl, GAME_STATE
@@ -24,10 +25,16 @@ dn_gate:
                 cp   (hl)
                 ld   hl, dn_tick
                 jr   z, .f                     ; still in its first frame: the pass
+    IF !ANIM_TRACE_ON                          ; (trace test builds: no room in the bank-2 tail)
+                ld   de, (TOME_FL)             ; PERF-GHOST: E = TOME_FL, D = DN_QN: no Tome count
+                ld   a, d                      ; (dn_tm) and the queue known empty -> dn_q2 would
+                or   e                         ; do nothing: skip its FARB0 (~1.1k T a 2nd-frame
+                ret  z                         ; tick, +7 B; DN_QN: level_defs.asm)
+    ENDIF
                 ld   l, dn_q2 & $FF            ; in its second: a queued spawn only (one page)
 .f:             ld   c, BANK_TEXT
                 jp   farb
-                ASSERT (GAME_STATE >> 8) == (LAST_TICK_FRAME >> 8)
+                ASSERT (GAME_STATE >> 8) == (LAST_TICK_FRAME >> 8) && DN_QN == TOME_FL + 1
 
 ;------------------------------------------------------------------------------
 ; dn_sfx — impact_line's entry (in place of sfx_msg): a miss / parry line also

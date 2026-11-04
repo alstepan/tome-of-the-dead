@@ -81,8 +81,10 @@ floor_pickup:
                 ld   e, a                      ; E = the FL_ROOM byte to match
                 inc  d                         ; D = w + 1: FLOOR1 footprint c..c+1 vs x..x+w-1
                 ld   hl, FLOOR_LIST + (FLOOR_MAX - 1) * FL_STRIDE   ; FLOOR1 review: LAST entry
-                ld   b, FLOOR_MAX              ; first = a pile's top first, so each re-stamp
-                                               ; shows the next one down (it has its slot)
+                                               ; first = a pile's top first, so each re-stamp
+                                               ; shows the next one down (it has its slot);
+                                               ; PERF-GHOST: L itself ends the walk (.n's borrow
+                                               ; past entry 0; was B = FLOOR_MAX + DJNZ: -2 B, -1 T)
 .l:             ld   a, (hl)
                 and  FL_ROOM_MASK | FL_S1      ; as build_room_map: bits 4-6 ignored
                 cp   e                         ; (FL_EMPTY -> $8F: never a room)
@@ -138,10 +140,10 @@ floor_pickup:
 .n:             ld   a, l
                 sub  FL_STRIDE
                 ld   l, a
-                djnz .l
+                jr   nc, .l                    ; (borrow: past entry 0, the list's first)
                 ret
                 ASSERT FL_ROOM == 0 && FL_COL == 1 && FL_ITEM == 2 && FL_QTY == 3 && FL_S1 == $80
-                ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE <= 256 && FL_STRIDE == 4
+                ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE == 128 && FL_STRIDE == 4   ; PERF-GHOST: the L-ended walks
                 ASSERT ((FL_EMPTY & (FL_ROOM_MASK | FL_S1)) & FL_ROOM_MASK) >= GRID_CELLS
                 ASSERT IT_ARROW == IT_DAGGER + 1 && K_KNIGHT == 0
 
@@ -274,9 +276,8 @@ ap_stamp_a:
                 ld   c, a
 ap_stamp:
                 ld   d, FI_NONE                ; D = the col's last live type
-                ld   hl, FLOOR_LIST
-                ld   b, FLOOR_MAX
-.l:             ld   a, (hl)
+                ld   hl, FLOOR_LIST            ; (PERF-GHOST: L ends the walk, .n's JP P: -1 B,
+.l:             ld   a, (hl)                   ; -3 T an entry vs B + DJNZ)
                 and  FL_ROOM_MASK | FL_S1
                 cp   e
                 jr   nz, .n
@@ -293,7 +294,7 @@ ap_stamp:
 .n:             ld   a, l
                 add  a, FL_STRIDE
                 ld   l, a
-                djnz .l
+                jp   p, .l                     ; L = FLOOR_MAX * FL_STRIDE (128): past the last
                 push de                        ; [D = that type (fi_add), E]
                 ld   a, e
                 rlca

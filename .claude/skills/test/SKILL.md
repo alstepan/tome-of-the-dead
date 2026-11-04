@@ -56,6 +56,10 @@ python3 tests/game.py 5 9 30          # only the listed checklist items
 python3 tests/game.py --update-golden # refresh game_select / game_start hashes
 python3 tests/budget.py          # per-tick T-state budget (exit 1 if > 2 frames)
 GAME_PROFILE=1 python3 tests/budget.py   # + per-phase split of the worst tick
+BUDGET_SPLITS=110000 GAME_PROFILE=1 python3 tests/budget.py   # PERF-GHOST: the split of every tick >= 110k T
+BUDGET_TRACE=99 [TRACE_LOCAL=render,present] [TRACE_SHOW=regex] python3 tests/budget.py   # instruction profile of
+                                         # measured tick 99 (tests/tick_prof.py: ZRCP cpu-step, exclusive / inclusive T per label)
+PT_PROF=5030-5045 / PT_ITRACE=5036 python3 tests/playthrough.py ...   # the same two for the T14 bot's ticks
 python3 tests/zx0_pool.py       # pool banks 0/4/6 + FRT + SEL_FRT_SAVE + allocator bit-exact vs a Python reference generator over the RAW frame data (B3B-12; the raw -DZX0_SOURCES=0 build is retired) at boot / each hero start / hero regen after a game / regen over a poked STALE GEN_ZBLK + garbage GEN_SCRATCH; GEN_TRAP 0; prints cold-path T-states (--baseline DIR: an old checkout against the same reference)
 python3 tests/sound.py          # SND-2 sound slot via the mailbox (SND1-SND9), frame-exact: ISR-stepped (breakpoints isr / isr.done), chip R0..R12 == tools/wzm_ref.py oracle (menu Lament through its loop, MUS_REQ / SND_MODE edges, real pause_run freeze + resume, MUS_SHOT stinger / final cue, music off <= 0.5k T), slot layout from the .sym, per-song ISR cost <= 6.5k T (reports worst single / adjacent pair); needs the DEBUG_KIT=0 build
 python3 tests/world.py [W16 ...] # 3B world suite; W16 = level change (generated D1, descend D1->D8, win), W9R = door opened in the bank-3 monster phase

@@ -1409,7 +1409,7 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6900` | `TILE_ATTRS` | 64 | attr by tile id (one page: `ld h, TILE_ATTRS>>8`) |
 | `$6940` | `GEN_SRC` | 512 | **3F-T2: the generator session's scratch (R6 `pool_hero` / `pool_proto` / `pool_list` → `gen_list` / the seq loader; dead before `panel_init`): `PL_LIST` `$6940` (≤ 25 B: pairs fid0, fcnt, `$FF` end), `SQ_PTR` `$6959` (7 words), `SQ_TOP` `$6967`, `PL_PROTO` `$6969` (6 B), `SQ_IMG` `$6980..$6B34` (the unpacked sequence masters, 437 B; ASSERTed below `TX_DEC`) — over `FI_PAD` / `FI_TSLOT` / `FI_CELL` (SQ_IMG ends at `$6B34`, below `FI_INK` `$6C00` and `GEN_MIR`; it does not run over `FI_INK`), rebuilt by `fi_full` at the following room build as after any generator run.** 3F-T1: `PL_LIST` (12 B at `$6940`, R6 `pool_list` → `level_enter`, dead before `panel_init`). B3B-11b: `pblit` (one icon, <= 54 B) stages `vdata` here (3E-T1: `panel_boot`'s font halves no more: boot6_tiles reads the boot block in place) — new game only, never during generation. C3-6: the pause overlay saves rows 7-9 here (`PAUSE_SAVE`, 864 B: it runs on into `GEN_MIR`) while paused; **RECLAIM-C (d): `MENU_TORCH_BUF` `$6940` (48 B) — `menu_static` (title menu only: no room, pause, page or generator meanwhile) fetches the torch's static cells here from bank 7 (`ldir7`)** |
 | `$6B40` | `GEN_MIR` | 512 | generator: mirrored frame (`LOWRAM_END` = `LOWRAM_FREE_END` `$6D40`). D3-TX: its top 43 B `$6D15..$6D3F` = `TX_DEC` (`tx_dec`'s transient decode buffer, menu text) |
-| `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+ **3F-T12: `TRK_PHASE` `$6D56`, `TRK_PREV` `$6D57`**, **M0: `TOME_HP` `$6D58` (P3: the Tome's hp, `sanctum_leaf` sets `TOME_MAX` 5 once per level)**, **TOME-FX2: `TOME_FL` `$6D59`** + 6 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
+| `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+ **3F-T12: `TRK_PHASE` `$6D56`, `TRK_PREV` `$6D57`**, **M0: `TOME_HP` `$6D58` (P3: the Tome's hp, `sanctum_leaf` sets `TOME_MAX` 5 once per level)**, **TOME-FX2: `TOME_FL` `$6D59`**, **PERF-GHOST: `DN_QN` `$6D5A`** (the flying numbers' spawn queue known empty = 0; "PERF-GHOST ledger") + 5 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
 | `$6E80..$6EBF` | `ORN_GLYPHS` | 64 | B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). `LOWRAM_END_3B` = `LOWRAM_FREE_END` = `$6EC0` |
 | `$6EC0..$6F31` | `LP_STATE` | 114 | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
 | `$6F32..$6FE3` (3F-T2, kit) | free | 178 | **3F-T2: 135 B kept for descriptor growth (`FRT_MAX` 128 − 101 frames), 43 spare kit** (review: +7 B `SEQ_TRAP` path in `sq_load`; 50 before); before: `$6F32..$71A5`, 628, of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3F-T1: 29 spare kit** (−48: the level-pool block in `level_enter`, `gen_idles`; the cold block now starts at `$7076`; "Level pool (3F-T1)"); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
@@ -5820,3 +5820,44 @@ Measured before (TOME-FX): the lectern flash lasted staff FIRE 2 ticks, Spark 10
   through a real cast -> `KILLED BY GHOST` + portrait; R3 the Ghost's touch through real turns (both heroes); N1 a survived reflection
   then a trap death -> `YOU DIED`. Main `302b440` fails R1 / R2 (9 checks), passes K / R3 / N1.
 
+
+## PERF-GHOST ledger (`perf/ghost-tick`, 2026-11-04; on main `4270d6f`; T14 finding: a work tick over the 2-frame budget, no feature / look cut)
+
+**Finding (docs/t14-playthrough.md):** `M 0x1234` playthrough, D3 room 3 (the Mage vs 3 Ghosts + a 4th body), bot tick 5,036:
+**145,471 T** (a turn-end tick: `end_turn` + the Might Ring pickup) and 5,038: **141,966 T** (an input tick: the hero's melee + 3
+Ghost replies). Reproduced exactly (the bot is deterministic) with the new per-phase / instruction profilers (`PT_PROF`, `PT_ITRACE`,
+`tests/tick_prof.py`). Split of 5,036 (`PT_PROF` phases): present 25.5k (`dn_fix` 6.6k inside), render classify + erase 25.9k,
+repair 1.3k, draw 4 bodies 33.7k, the hero 11.3k, `pmark_dmg` 4.4k, `anim_tick` 8.2k, `turn_done` + `end_turn` 24.8k (the pickup ~16k:
+`floor_pickup` / `ap_stamp` FLOOR_LIST walks 4.6k, `it_line` 5.7k, `bag_add` + `pot_sync` 3.5k), `dn_gate` 1.2k, ISRs 6.7k. **Both
+ticks held TWO frame ISRs**: a window longer than ~138.1k T (141,816 minus the frame-N ISR before `tick_work`) takes the frame-N+2
+interrupt (~3.3k with the D3 song) as well, so the real target is work + one ISR below that cliff.
+
+| Change | Where | T saved (5,036 / 5,038) | Bytes |
+|---|---|---|---|
+| blit chains: the mask -> data step `inc l` (was `inc hl`): every pool frame starts EVEN (alloc from `POOL_START` / `BANK_WINDOW`, every size `2 * cols * H`; ASSERTed in `gfx.asm`), so a (mask, data) pair never straddles a page; 42 T a drawn byte | bank 2 `gfx.asm` | -1.25k / -0.85k | 0 |
+| `box_solid`: D = the `tile_flags` page / E = the flag's low byte inside a row (no push / pop HL a cell): 53 T a cell (was 81); the solid exit keeps CF through the POPs | bank 2 `logic.asm` | 0 / ~-0.9k (a flyer step ~-0.35k) | -2 |
+| `dn_cel` (the numbers' drawn cell): BC = the screen-2 line, 2 lines a pass (44.5 T a line, was 68); `ldir2.asm` moved into the `kind_tab` pad to make room (trace builds: the old loop, `ldir2` in the tail) | bank 2 `dnum2.asm`, `main.asm` | -0.53k / ~-0.9k | +10 (tail) / -17 pad +17 tail |
+| **`DN_QN`** (`$6D5A`, LVL_STATE): 0 = the numbers' spawn queue is known empty (bank-0 `dn_pop` clears it when it finds no key, `dn_scan` sets it); `dn_gate` skips a 2nd-frame tick's FARB0 `dn_q2` while `DN_QN` and `TOME_FL` (`dn_tm`) are both 0 (`dn_q2` would be a no-op: no spawn, no state change) | bank 2 `dnum2b.asm`, bank 0 `dnum0.asm`, `level_defs.asm` | -1.1k (and the 2nd ISR, -3.3k measured) / 0 | bank 2 +7, bank 0 +8 |
+| `pot_sync`: stops at the first free BAG slot (the packed-list invariant: `sub IT_FOOD_LO` borrows only for `IT_NONE`), potion bit `cp 2 / sbc a, $FE` (1, 2, 4), `ld d, a / ld e, a` | R6 `pickup6.asm` | ~0 here (a near-full bag) / 0; ~-0.11k a free slot | -1 |
+| `floor_pickup` / `ap_stamp` FLOOR_LIST walks end on L (borrow past entry 0 / `jp p` at 128; `FLOOR_MAX * FL_STRIDE == 128` ASSERTed), `vb_turn` stride hoisted | bank 7 `pickup7.asm`, `bank7.asm` | ~-0.35k / 0 | -3 / +3 |
+| `turn_done` stride hoisted; `rl_next` keeps the slot in H; `pmark_rect_np .r2` 3 x `inc l`; cold `jp` -> `jr` (`mode_enter`, `fire_used`, `pause_hook`, `erase_rect .third`, `anim_tick .done`, decor `.nx`, `og_adv`, `og_put`) | bank 2 | ~-0.35k / ~-0.15k | -2 / -8 |
+
+**Result (release, `PT_PROF`, the same bot run):** tick 5,036 **145,471 -> 137,897 T** (one ISR: 3.9k under the budget, ~0.2k
+under the 2nd-ISR cliff), 5,038 **141,966 -> 135,426 T**, the lead-up ticks 4,963-5,040 118-133k; the whole run (GS_WIN,
+38,853 ticks) has 0 monitor violations and no other tick above 132.5k. `tests/budget.py` (all 53
+scenarios pass): **new `ghost3`** (gated: <= CAP work, real <= BUDGET; Mage vs 3 Ghosts in a line, then a walk over pmix items with
+a pickup turn end while they chase) 114,208 -> **110,224** T total, real 119,819 -> 115,835; **`ghost5`** (informational, 5 Ghosts)
+129,610 -> 127,563, real 135,824 -> 133,777; `blair` real 140,947 -> **138,871** (margin 869 -> 2,945); `mix` 109,971 -> 107,646;
+`mage` 120,372 -> 119,232. `tests/ai_equiv.py` vs main: logic + RNG + status identical over 2,100 turns.
+
+Free bytes (build DISPLAY, main `4270d6f` -> `perf/ghost-tick`):
+
+| Region | release before / after | kit before / after |
+|---|---|---|
+| bank 2 (to `seq_rows` + `kind_tab` pad) | 19 (1 + 18) -> **14** (3 + 11) | 18 -> **13** |
+| bank 0 cold code (`B0_CODE_RES` 704; pool slack 384 unchanged) | 24 -> **16** | 10 -> **2** |
+| R6 | 5 -> **6** | 10 -> **12** |
+| bank 7 low / high, bank 3, bank 1, low RAM, AY slot | 20 / 2, 6, 2, 0, 1 unchanged | unchanged |
+
+Not done (bytes): the hero's FORCE rect forcing the bodies drawn before it (~20 B bank 2), an unrolled sprite attr stamp (~25 B
+bank 2, ~1.7k a heavy tick), `cycle_frame`'s first two division steps for totals >= 4 (~8 B, ~0.3k at 4 idle Ghosts).

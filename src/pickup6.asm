@@ -24,7 +24,8 @@
 ; IT_P_HEAL + k: pot_need / icon_state's pick; the potion slot redraws on
 ; E_POT, item_icons). The quick slots are icon-bar slots 6..8 (both
 ; heroes, UB5) = QS_SLOT0 + QS_*.
-; Clobbers: A, HL, F (BC, DE kept).   ~1.7k T (20 slots)
+; Clobbers: A, HL, F (BC, DE kept).   ~0.4k T + ~0.1k T an occupied slot (was ~1.7k
+; T for all 20 slots: PERF-GHOST stops at the first free one)
 ;------------------------------------------------------------------------------
 pot_sync:
                 push bc
@@ -33,10 +34,14 @@ pot_sync:
                 ld   (QS_CACHE + QS_POTION), a
                 ld   hl, BAG
                 ld   bc, BAG_SLOTS << 8        ; B = slots, C = potions
-                ld   de, 0                     ; D = food QTY, E = scroll QTY
+                ld   d, a
+                ld   e, a                      ; D = food QTY, E = scroll QTY (A = 0: -1 B)
 .l:             ld   a, (hl)
                 inc  l                         ; -> QTY
-                sub  IT_FOOD_LO
+                sub  IT_FOOD_LO                ; PERF-GHOST: CF = a type below the bag range =
+                jr   c, .end                   ; IT_NONE (bag_add refuses the others) = the end of the
+                                               ; packed list (bag6.asm invariant): the free tail is
+                                               ; skipped (~0.11k T a free slot, +2 B)
                 cp   IT_FOOD_HI - IT_FOOD_LO + 1
                 jr   nc, .nf
                 ld   a, (hl)
@@ -48,11 +53,9 @@ pot_sync:
                 jr   nc, .np
                 push hl                        ; potion k = A: present bit 1 << k
                 ld   hl, QS_CACHE + QS_POTION
-                inc  a
-                cp   3
-                jr   c, .pb
-                inc  a                         ; 1, 2, 4
-.pb:            or   (hl)
+                cp   2                         ; PERF-GHOST: k + 2 - (k < 2) = 1, 2, 4
+                sbc  a, $FE                    ; (was inc / cp / jr / inc: -2 B, -~10 T)
+                or   (hl)
                 ld   (hl), a
                 pop  hl
                 ld   a, (hl)
@@ -68,7 +71,7 @@ pot_sync:
 .nx:            inc  l
                 inc  l
                 djnz .l
-                ld   a, c
+.end:           ld   a, c
                 ld   (P_ENTITIES + E_POT), a
                 ld   hl, QS_CACHE + QS_FOOD
                 ld   a, d
@@ -94,7 +97,7 @@ pot_sync:
                 set  7, (hl)
                 pop  hl
                 ret
-                ASSERT (BAG & $FF) + BAG_SLOTS * IR_STRIDE <= 256 && IR_QTY == 1 && IR_STRIDE == 3
+                ASSERT (BAG & $FF) + BAG_SLOTS * IR_STRIDE <= 256 && IR_QTY == 1 && IR_STRIDE == 3 && IT_NONE < IT_FOOD_LO && IT_FOOD_LO == IT_BAG_LO
                 ASSERT IT_POT_LO == IT_FOOD_HI + 1 && IT_SCR_LO == IT_POT_HI + 1 && IT_POT_HI == IT_POT_LO + 2
                 ASSERT ((QS_CACHE + QS_FOOD) >> 8) == ((QS_CACHE + QS_SCROLL) >> 8)
                 ASSERT (ICON_SH >> 8) == ((ICON_SH + ICON_SLOTS - 1) >> 8)

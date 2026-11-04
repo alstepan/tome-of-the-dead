@@ -321,20 +321,79 @@ class PT(LPT):
         super().load_breakpoints()
         self.z.cmd("set-breakpoint 6 PC=%d" % S["tick_work"])
 
+    # PERF-GHOST: PT_PROF="a-b" = per-phase split (tests/budget.py GAME_PROFILE phases + the ISR) of every
+    # play tick a..b (monitor tick numbers); ticks >= PT_PROF_MIN T (default 120000) are printed as
+    # "[prof] tick T split". Extra probe labels: PT_PROF_EXTRA=label,label. Emulated behaviour is unchanged
+    # (breakpoints only), so the run stays deterministic.
+    PROF_PHASES = ["intent_tick", "read_turn_input", "pend_far", "probe_act_fire", "try_player_turn",
+                   "resolve_monsters", "materialise", "anim_tick", "render", "render.nopend", "render.sdone",
+                   "render.f3done", "render.drdone", "render.nopl", "pmark_dmg", "present", "decor_tick",
+                   "panel_tick", "panel_done", "dn_gate", "isr", "isr.done"]
+    PROF_BP0 = 60
+    prof_on = False
+
+    def _prof_window(self):
+        w = os.environ.get("PT_PROF")
+        if not w or not self.mon:
+            return False
+        a, b = (int(x) for x in w.split("-"))
+        return a <= self.mon.ticks + 1 <= b
+
+    def _prof_set(self, on):
+        if on == self.prof_on:
+            return
+        self.prof_on = on
+        names = self.PROF_PHASES + [x for x in os.environ.get("PT_PROF_EXTRA", "").split(",") if x in S]
+        self.prof_inv = {S[nm]: nm for nm in names if nm in S}
+        for i, nm in enumerate(names):
+            if nm in S:
+                self.z.cmd("set-breakpoint %d PC=%d" % (self.PROF_BP0 + i, S[nm]) if on
+                           else "set-breakpoint %d" % (self.PROF_BP0 + i))
+
     def tick(self, n=1):
         z = self.z
         for _ in range(n):
+            self._prof_set(self._prof_window())
             z.cmd("cpu-step")
             in_work = False
             t = None
             stop = None
-            for attempt in range(MAX_RUN_RETRIES + 1):
+            split, last, prev, saved = {}, "tick_work", 0, None
+            attempt = 0
+            while attempt <= MAX_RUN_RETRIES:
                 r = z.cmd("run %d" % RUN_LIMIT)
                 m = re.search(r"^PC=([0-9a-fA-F]{4})", r, re.M)
                 pc = int(m.group(1), 16) if m else self.pc()
+                if self.prof_on and pc in self.prof_inv:
+                    if in_work:
+                        v = int(z.cmd("get-tstates-partial"))
+                        split[last] = split.get(last, 0) + v - prev
+                        prev = v
+                        nm = self.prof_inv[pc]
+                        if nm == "isr":
+                            saved, last = last, "isr"
+                        elif nm == "isr.done":
+                            last = saved or "tick_work"
+                        else:
+                            last = nm
+                    z.cmd("cpu-step")
+                    continue
+                attempt += 1
                 if pc == S["tick_work"]:
                     z.cmd("reset-tstates-partial")
                     in_work = True
+                    split, last, prev, saved = {}, "tick_work", 0, None
+                    trs = os.environ.get("PT_ITRACE")         # PERF-GHOST: instruction profile of these ticks
+                    if trs and self.mon and self.mon.ticks + 1 in [int(x) for x in trs.split(",")]:
+                        import tick_prof
+                        if not hasattr(self, "_sld"):
+                            self._sld = tick_prof.load_sld(os.path.join(game_lib.BUILD_DIR, "wazhack.sld"))
+                        ex, inc, cl = tick_prof.trace_tick(z, S["wait_tick"], self._sld, S["PORT_7FFD_SHADOW"])
+                        t = int(z.cmd("get-tstates-partial"))
+                        print(f"[trace] tick {self.mon.ticks + 1}: {t} T\n" + tick_prof.report(ex, inc, cl, 70),
+                              flush=True)
+                        stop = S["wait_tick"]
+                        break
                     z.cmd("cpu-step")
                     continue
                 if pc in self.probes:
@@ -346,5 +405,10 @@ class PT(LPT):
                 print(f"[ANOMALY] run returned at PC={pc:#06x} (not a probe): {r[:90]!r}", flush=True)
             else:
                 raise RuntimeError("run keeps returning outside the probes")
+            if self.prof_on and t is not None and t >= int(os.environ.get("PT_PROF_MIN", "120000")):
+                split[last] = split.get(last, 0) + t - prev
+                print(f"[prof] tick {self.mon.ticks + 1} {t} T: room {self.rb('CUR_ROOM')} D{self.rb('LVL_DEPTH')} "
+                      f"ph {self.rb('TURN_PHASE')}/{self.rb('TURN_PEND')}: "
+                      + ", ".join(f"{k}={v}" for k, v in split.items()), flush=True)
             if self.mon:
                 self.mon.sample(t, in_work, stop)
