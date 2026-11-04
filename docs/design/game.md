@@ -695,7 +695,7 @@ monster name abbreviated by a table if longer than the budget.
 
 **Message list (designer decision 2026-10-04; src/strings.txt, B3B-13).** Final wording:
 `YOU ENTER THE DUNGEON` (welcome) · `YOU WIN! PRESS ENTER` (win) · `YOU DESCEND DEEPER` ·
-`THE DOOR IS LOCKED` · `YOU FALL INTO A PIT` · `YOU DIED - PRESS ENTER`. Style: present tense,
+`THE DOOR IS LOCKED` · `YOU FALL INTO A PIT` · `YOU DIED - PRESS ENTER`. **End flow (END-WAIT, user 2026-11-04):** on death / win the final scene and the log line stay up; after ~0.6 s with no key down, the first 1..0 / ENTER draws the end card, and after the card's own 0.6 s quiet a key returns to the menu. Style: present tense,
 second person, upper case, **no trailing full stop** (the "." in the examples above is dropped;
 "!" only for wins, parries and transformations). Change: `found "YOU FOUND A POTION"` becomes
 `YOU PICK UP A POTION` (20; matches `YOU PICK UP 3 ARROWS`; one verb for all pickups). Impact

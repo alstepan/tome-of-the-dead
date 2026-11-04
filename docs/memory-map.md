@@ -1482,7 +1482,7 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 | `$BF98` | `JUMP_ARC` | J1: the hero's jump arc, written by `try_jump`, read by `anim_entity.jump` only while `M_JUMP`: bits 0-4 `JA_N` airborne ticks n = 2·\|x_f − x\| (12 / 14; less when a wide pit cuts the arc), bit 6 `JA_D7_BIT` (arc shape N = 14), bit 7 `JA_FALL_BIT` (the jump ends in a pit fall: `E_Y` already on storey 1, the arc is drawn 72 px up, then `M_FALL`). Was `FLY_INBOX` (B8 flyer ladder-end rule, removed by J1) |
 | `$BF9A` | `MENU_SPIN` | C3-6: word, busy-wait passes counted by the menu's frame wait (`menu_wait`); `new_game` adds it to `SYS_FRAMES` (+ R) for `MASTER_SEED` unless `seed_fixed` |
 | `$BF9C` | `PAUSED` | C3-6: 1 while the pause overlay is up (test-observable) |
-| `$BF9D` | `END_SHOWN` | C3-6: 1 = the death / win card is drawn, 2 = armed (all keys released once, C3-6b) (`end_screen`; cleared by `hero_st_init`) |
+| `$BF9D` | `END_SHOWN` | END-WAIT (was C3-6): bit 7 `ES_CARD` = the death / win card is drawn; the low nibble = the quiet countdown (`END_DELAY` $0F reload, 0 = waiting for a key): 0 + a key draws the card, the card's own countdown then 0 + a key = the menu (`end_screen`; `hero_st_init` sets `END_DELAY`) |
 | `$BF9E` | `MENU_IN_SIG` | C3-6 review: the last input fold `menu_frame` saw (key-edge seed mixing) |
 | `$BF9F` | `PEND_N` | B19: PENDING bodies of `CUR_ROOM` counted by the last `build_live`; 0 = `pend_hit`'s fast path (a monster move never ends on a PENDING body it does not already overlap: `try_step`; the squeeze's foot cell too) |
 | `$BF99` | `GEN_TRAP` | count (saturating): `gen_frame` ran while `GAME_STATE` = PLAYING/TRANSITION, i.e. while `GEN_SCRATCH` holds live room maps (debug trap, expect 0; `tests/game.py` #1/#40/#51) |
@@ -2361,8 +2361,8 @@ RESERVED`) and BREAK at a prompt cancels it (KEYTAB kept). Pause (`pause_hook`, 
 FIRE / ENTER; BREAK resumes; QUIT → `QUIT? Y/N`, FIRE or Y = yes, any other
 key = no) → L = 0: rows restored, `FIRE_ST` = USED + `SC_OLD` synced (the
 resuming press is no tap), `present_full`, `resync_tick`; L = 1: SP reset,
-`enter_select`. `end_screen`: once, far1 `end_card` (YOU DIED / YOU WIN!
-rows 7-11 + PRESS 1-4 OR ENTER), after every key was released once (`END_SHOWN` 2, `keys_down`) any 1-0 / ENTER → the menu (C3-6b: not FIRE). The menu (`menu_run`) reads only the raw matrix (`menu_read`: 1-4 / ENTER edges, no cursor, `menu_sel` gone); `input_tick` yields STICK = 0 and never polls Kempston unless `GAME_STATE == GS_PLAYING` (the pause overlay runs in-game controls). `level_card`
+`enter_select`. `end_screen` (END-WAIT, see its ledger: the card now waits for a quiet + a key): far1 `end_card` (YOU DIED / YOU WIN!
+rows 7-11 + PRESS 1-4 OR ENTER), then after the card's own quiet any 1-0 / ENTER → the menu (C3-6b: not FIRE). The menu (`menu_run`) reads only the raw matrix (`menu_read`: 1-4 / ENTER edges, no cursor, `menu_sel` gone); `input_tick` yields STICK = 0 and never polls Kempston unless `GAME_STATE == GS_PLAYING` (the pause overlay runs in-game controls). `level_card`
 (far1 from `level_show`): "DEPTH n" in the menu font at (12, 11). far1
 clobbers A, so bank-1 results come back in L / C.
 
@@ -5868,3 +5868,21 @@ bank 2, ~1.7k a heavy tick), `cycle_frame`'s first two division steps for totals
   and the items.txt HEAL POTION value (the `HEAL 12 HP` description). No new kinds, no pool / layout change (D8 Warrior pool slack 384).
 - **Free bytes (release):** bank 3 6 -> **13** (-7 B code); bank 2 19, bank-7 low 20 / high 2, bank 0 24, low-RAM spare 0, R6 5, bank 1 2: unchanged.
   Kit: bank 3 9 (was 2), bank 0 10, R6 10, low RAM 2, bank 2 18, bank 1 2. `F3_GEN=0` = release (bank 3 13).
+## END-WAIT ledger (`feat/end-wait`, 2026-11-04; user: the end card must not hide the final scene)
+
+- **Behaviour:** on `GS_DEAD` / `GS_WIN` the last frame (death pose, the lethal turn's log line + HP 0, the win scene; the MUS_OVER /
+  MUS_WIN shot) stays up; `end_screen` now runs `panel_tick` (it never did: the lethal turn's `YOU DIED` / `YOU WIN!` line was
+  queued but drained only into the card, i.e. never seen). The card (`end_card`) is drawn by the first 1..0 / ENTER (`keys_down`, not FIRE)
+  after a **quiet** of `END_DELAY` = 15 ticks (~0.6 s at 25 Hz) with no key down; any key during the countdown reloads it, so a panicked
+  press / a held key at death neither skips the scene nor ends it early. After the card the same quiet repeats, then a key -> the menu
+  (was: first release arms). Kit builds revive instead of dying: unchanged.
+- **`END_SHOWN` ($BF9D, no new byte):** bit 7 `ES_CARD` = card drawn; low nibble = countdown, 0 = waiting for a key. `hero_st_init`
+  (start of every run) sets `END_DELAY` (was 0). Old values 1 / 2 are gone (tests: `& ES_CARD`).
+- **Code:** `end_screen` (main.asm) 39 -> 40 B (one shared countdown: `add a,a` gives Z = terminal / C = card); `end_card` (menu1.asm) reads
+  `GAME_STATE` itself instead of `push af` / `pop af` (+1 B bank 1, -3 B bank 2); `hero_st_init` +2 B (bank 7 low).
+- **Free bytes (release `DEBUG_KIT=0`, before -> after):** bank 2 **19 -> 18**, bank 1 **2 -> 1**, bank-7 low **20 -> 18**; unchanged:
+  low RAM 0, bank 0 24 / `B0_CODE_RES` 704, bank 3 6, R6 5, pool slack 384. Trace test build (`ANIM_TRACE_ON=1`): bank 2 4 -> 3, bank 7 low 71 -> 69. Kit (default): bank 2 18 -> 17, bank 7 low 20 -> 18, bank 1 2 -> 1. All three build with 0 warnings.
+- **Tests:** `tests/endwait.py` (new: D1 held key at death -> no card, countdown pinned; D2 countdown + a key reloads; D3 quiet -> 0, no card, log drained;
+  D4 key -> card, held / tapped inside the card's quiet -> no menu, the card frame stable over 30 ticks (the unconditional `panel_tick`
+  draws nothing), quiet -> armed; D5 key -> menu; death and win). `game_lib.Harness.end_card()` / `end_to_menu()` (skip the quiet, tap a key) used by
+  `endcard_k`, `world` (W24, W6), `sanctum`, `game`; `budget` / `pt_mon` detect the card with `END_SHOWN & ES_CARD`.

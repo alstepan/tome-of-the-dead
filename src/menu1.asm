@@ -1126,7 +1126,7 @@ page_post:      ld   hl, (PAGE_VERB)           ; L = verb, H = slot (PAGE_SLOT f
 
 ;------------------------------------------------------------------------------
 ; end_card — ENDCARD-G1 (user 2026-11-02, plan "ENDCARD-L1F-G1"): far1 from end_screen (the
-; first tick of GS_DEAD / GS_WIN): A = the state. A clean full screen (black border, attr
+; first key after the end flow's quiet wait, GAME_STATE = GS_DEAD / GS_WIN). A clean full screen (black border, attr
 ; EC_ATTR): the title in the menu font (row EC_TROW) — "KILLED BY" + the killer's kind name
 ; (ST1_KILLER), "YOU DIED" (no monster killer), "YOU WIN!" + "THE TOME IS DESTROYED"; on the
 ; left the killer's first KS_MOVE frame (1x, facing right) or, on a win, the D8 lectern (4
@@ -1136,8 +1136,7 @@ page_post:      ld   hl, (PAGE_VERB)           ; L = verb, H = slot (PAGE_SLOT f
 ; Feet row of both portraits = the table's first row + 7. Clobbers: all but IY.
 ; Cost ~0.35M T (clear 0.1M + present_full 0.15M + text + 2 blits), once.
 ;------------------------------------------------------------------------------
-end_card:       push af
-                xor  a
+end_card:       xor  a
                 out  (PORT_BORDER), a          ; (the ALARM's red border may be up)
                 ld   a, EC_ATTR
                 call clear_screen              ; (keeps A)
@@ -1145,7 +1144,7 @@ end_card:       push af
                 ld   bc, (EC_TAB_ROW << 8) | 9
                 ld   de, (16 << 8) | 3
                 call stamp_rect
-                pop  af
+                ld   a, (GAME_STATE)           ; (END-WAIT: read here, not passed: -3 B in bank 2)
                 ld   bc, (EC_TROW << 8) | 12   ; YOU DIED / YOU WIN!: 8 chars, cols 12-19 = centred
                 cp   GS_WIN
                 jr   z, .win

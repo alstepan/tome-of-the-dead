@@ -524,11 +524,23 @@ class Proto:
         if settle:
             self.settle(settle)
 
+    def end_card(self, ticks=4):
+        """GS_DEAD / GS_WIN reached: skip the END-WAIT quiet (END_SHOWN := 0 = waiting for a key),
+        tap a digit -> the card is drawn (ES_CARD) and the key is released again."""
+        self.release()
+        self.wb("END_SHOWN", 0)
+        self.tap("1")
+        self.tick(ticks)
+
     def end_to_menu(self, key="ENTER"):
         """End screen (GS_DEAD / GS_WIN) -> the menu (C3-6b: a digit / ENTER,
         accepted only after every key was released once; FIRE does not)."""
         self.release()
         self.tick(3)
+        if not self.rb("END_SHOWN") & S["ES_CARD"]:       # END-WAIT: the card first (a key after the quiet)
+            self.end_card(3)
+            self.release()
+            self.tick(S["END_DELAY"] + 3)           # the card's own quiet before a key counts
         self.hold(key)
         ok = self.wait_state(GS_SELECT)
         self.release()

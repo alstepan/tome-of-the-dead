@@ -515,22 +515,34 @@ read_turn_input:
 ; the same fixed seed, §6.5).
 ;------------------------------------------------------------------------------
 end_screen:
-                ld   a, (END_SHOWN)            ; C3-6: the death / win card, once
-                or   a
-                jr   nz, .shown
-                inc  a
-                ld   (END_SHOWN), a
-                ld   a, (GAME_STATE)
+                ; END-WAIT (user 2026-11-04): the final scene stays up first and the card waits for a key.
+                ; END_SHOWN (start_game sets END_DELAY; bit 7 = ES_CARD, the card is up): the low nibble
+                ; is a quiet countdown, one per tick with no key down, a key reloads it (a panicked press at
+                ; death neither skips the scene nor ends the wait early). 0 + a key: the card is drawn
+                ; (ES_CARD | END_DELAY: the same quiet again, so a key that is still down never reaches
+                ; the menu); the card's 0 + a key: the menu. add a,a: Z = 0 / $80 (terminal), C = card.
+                ; panel_tick (clobbers all) draws the lethal turn's log line / HP 0; once everything is
+                ; drawn it only polls, so it is harmless over the card too (3 B instead of a card test).
+                call panel_tick
+                call keys_down                 ; raw 1..0 / ENTER (not FIRE: a held FIRE cannot skip)
+                ld   hl, END_SHOWN
+                ld   a, (hl)
+                jr   z, .nokey
+                add  a, a
+                jr   z, .act
+                ld   a, (hl)
+                or   END_DELAY                 ; = $0F: the countdown restarts, the card bit stays
+                ld   (hl), a
+                jr   .pl
+.nokey:         add  a, a
+                jr   z, .pl                    ; terminal: waiting for a key
+                dec  (hl)
+.pl:            jp   play_loop
+.card:          ld   (hl), ES_CARD | END_DELAY
                 ld   hl, end_card              ; bank 1 (menu1.asm)
                 call far1
-.shown:         call keys_down                 ; C3-6b: raw 1..0 / ENTER (not FIRE: a
-                ld   hl, END_SHOWN             ; held FIRE / joystick cannot skip it)
-                jr   z, .none
-                bit  1, (hl)                   ; END_SHOWN 2 = armed (all released once)
-                jr   nz, .go
-                jp   play_loop
-.none:          ld   (hl), 2                   ; released: from now on a key returns
-                jp   play_loop
+                jr   .pl
+.act:           jr   nc, .card
 .go:
                 ; ENTER: fall through into enter_select
 
