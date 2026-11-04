@@ -8,7 +8,7 @@ variant's HP squeeze) and every one is logged.
 import collections
 
 from pt_mon import *  # noqa: F401,F403
-from pt_mon import (S, K_KNIGHT, K_WIZARD, EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING, GS_WIN,
+from pt_mon import (S, K_KNIGHT, K_WIZARD, EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING, EF_PENDING, GS_WIN,
                     GS_DEAD, GS_PLAYING, STRIDE, stand_y, room_model)
 
 IT = {k[3:]: v for k, v in S.items() if k.startswith("IT_") and isinstance(v, int)}
@@ -104,7 +104,7 @@ class Bot:
             k = b[S["E_KIND"]]
             w, h = self.kb(k, "KT_BW"), self.kb(k, "KT_BH")
             x, y = b[S["E_X"]], b[S["E_Y"]]
-            out.append(dict(slot=s, kind=k, x=x, y=y, w=w, h=h, hp=b[S["E_HP"]], fl=fl,
+            out.append(dict(slot=s, kind=k, x=x, y=y, w=w, h=h, hp=b[S["E_HP"]], fl=fl, pend=bool(fl & EF_PENDING),
                             s=self.storey_of(y, h), left=bool(fl & EF_LEFT), react=b[S["E_REACT"]], gold=bool(b[S["E_GOLD"]] & S["LEK_GOLD"])))
         return out
 
@@ -453,7 +453,11 @@ class Bot:
 
     def fight(self):
         """-> True if a combat turn (or an approach turn) was spent."""
-        hs = [h for h in self.hostiles() if self.ignore.get(h["slot"], -1) < self.mon.ticks]
+        # A PENDING body (squeezed past on a ladder / arrival conflict, game.md 9.2) is hidden, collides with nothing
+        # and does not act until its cell is free: not a target.  Chasing it as "the nearest hostile" (its box overlaps
+        # the hero's: gap -1) refused every walk / melee while a live Ghost beside it kept hitting the hero (D7 W 0x1234
+        # stall, 666 overlap_skips); it materialises by itself once the hero has walked off its cell.
+        hs = [h for h in self.hostiles() if self.ignore.get(h["slot"], -1) < self.mon.ticks and not h["pend"]]
         if not hs:
             return False
         e, s, x, standing = self.hero_pos()

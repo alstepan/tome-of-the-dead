@@ -111,3 +111,11 @@ tick number moves with bot revisions; `heaviest_ticks` in the report lists the t
 * Room ping-pong guard: 7 alternating room changes within 500 ticks marks the rooms visited / skipped (36 times in M 0x5EED,
   mostly the D3 / D7 side rooms): "explore every room" is best effort; `levels[].visited / rooms / skipped` in the report
   (revisions after ee0353e) show what was skipped.
+* **PENDING bodies are not targets (fix/w-d7-stall, 2026-11-04).** After MORE-MON (942b950: Medium counts, D7 population) W 0x1234
+  stalled in D7 room 1 for 55 k ticks (666 `overlap_skips`, level cap). Cause: a climb blocked 4 times squeezes past a Ghost, which goes
+  `EF_PENDING` (hidden, collides with nothing, does not act, game.md 9.2) at the ladder top; its box overlaps the hero's (gap -1), so
+  `fight()` picked it as the nearest hostile and refused every walk / melee, while a second, live Ghost beside it kept hitting the hero
+  (god top-ups) and `approach()` re-climbed the same ladder for ever. **Not a game fault:** driven with real keys at the stall, H at
+  the top bump-attacks the live Ghost (hp 14 -> 13 -> 12), the hero walks off the pending cell (L/H move him), the pending Ghost
+  materialises when its cell is free, no key combination is refused. Fix: `hostiles()` reports `pend`, `fight()` skips pending bodies.
+  Results on this fix (release build): W 0x1234 win 34,693 ticks (79 overlap_skips), W 0x0BAD win 31,566, M 0x1234 win 53,151 (1 skip).

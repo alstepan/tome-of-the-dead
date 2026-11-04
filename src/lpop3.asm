@@ -47,9 +47,9 @@ lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1 | LEK_G
                 DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE,  K_BOSS_D8, 12
 LP_DROW         EQU 6
                 ASSERT $ - lp_dtab == LEVELS * LP_DROW
-; §9.4.1 "N >= |R|" always holds (min N = 12 - 2 = 10 >= 7 = the most rooms R
+; §9.4.1 "N >= |R|" always holds (min N = LP_N_MIN - 2 = 10 >= 7 = the most rooms R
 ; can have), so lp_budget has no "N farthest rooms" branch (levelgen.py keeps it).
-                ASSERT 12 - 2 >= GRID_CELLS - 2
+                ASSERT LP_N_MIN - 2 >= GRID_CELLS - 2
 ; §9.3 weights by kind row (defs.asm WT_*), K_COUNT entries (3F-T3: 18 base + 12 tier rows)
 ; (the hero rows 0 / 1 stay 0: a record entry of kind 0 may exist in tests; id 2 = K_VBAT, 3F-T9)
 ; (3F: MEM-RECLAIM w3: lp_wt is the kind_tab KT_REACH slot, bank 2 main.asm; the macro LP_WT_ROWS lives in defs.asm)

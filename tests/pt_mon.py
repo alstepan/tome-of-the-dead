@@ -45,7 +45,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 from game_lib import (Harness, S, EMU_ARGS, Proto, GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT,  # noqa: E402
                       GS_TRANSITION, K_KNIGHT, K_WIZARD, EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT,
-                      EF_DYING, RUN_LIMIT, MAX_RUN_RETRIES, stand_y, sna_bank7)
+                      EF_DYING, EF_PENDING, RUN_LIMIT, MAX_RUN_RETRIES, stand_y, sna_bank7)
 import game_lib  # noqa: E402
 import room_model  # noqa: E402
 import textpack  # noqa: E402
