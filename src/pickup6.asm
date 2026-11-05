@@ -126,6 +126,11 @@ pu_add:
                 pop  af
                 dec  l
                 ret  z                         ; refused: L = 0 (bank 7 prints BAG FULL)
+                ld   hl, ST2_ITM               ; STATS2: taken -> items found += 1, the book ->
+                cp   IT_BOOK                   ; books found instead (pickup only: no DROP)
+                jr   nz, .ni
+                dec  l                         ; ST2_BKF
+.ni:            call st2_inc                   ; (keeps A)
                 cp   IT_BOW
                 jr   nz, .nb
                 ld   hl, HAS_BOW
@@ -135,6 +140,34 @@ pu_add:
                 call far1
                 ld   l, 1
                 ret
+                ASSERT ST2_BKF == ST2_ITM - 1 && (ST2_BKF >> 8) == (ST2_ITM >> 8)
+
+;------------------------------------------------------------------------------
+; st2_inc — STATS2: HL -> a per-game counter byte: += 1, saturating at 255.
+; Keeps A, BC, DE, HL. Clobbers F.   ~30 T
+; st2_fmt — far6 from bank-3 ec_tab (the end card): "r/f" (ST2_BKR / ST2_BKF, no
+; leading zeros, 0-terminated) into MSG_BUF; HL = MSG_BUF. Clobbers: A, BC, DE, HL.
+;------------------------------------------------------------------------------
+st2_inc:        inc  (hl)
+                ret  nz
+                dec  (hl)
+                ret
+st2_fmt:        ld   hl, (ST2_BKR)             ; L = read, H = found
+                push hl
+                ld   h, 0
+                ld   de, MSG_BUF
+                call es_num                    ; (low RAM) DE past the 0
+                dec  de
+                ld   a, '/'
+                ld   (de), a                   ; over the read's terminator
+                inc  de
+                pop  hl
+                ld   l, h
+                ld   h, 0
+                call es_num
+                ld   hl, MSG_BUF
+                ret
+                ASSERT ST2_BKF == ST2_BKR + 1
 
 ;------------------------------------------------------------------------------
 ; kit_add — far6 from new_game (bank 7), after ITEM_RAM is cleared and the hero

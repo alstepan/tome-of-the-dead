@@ -204,15 +204,7 @@ ap_take:
                 ld   a, (hl)
                 add  a, b
                 ld   (hl), a                   ; counter += taken
-                inc  b
-                dec  b
-                jr   z, .p0                    ; nothing taken
-                ld   a, (PANEL_DIRTY)
-                or   PD_AMMO                   ; T7: the ammo count changed (no ammo item drawn
-                ld   (PANEL_DIRTY), a          ; yet: the panel clears it, as abil_ammo's)
-                ld   a, SFX_PICKUP             ; SND-5b (keeps BC / HL)
-                call sfx_req
-.p0:            pop  hl
+                pop  hl
                 dec  l
                 dec  l                         ; -> FL_COL
                 ld   a, (hl)
@@ -227,6 +219,15 @@ ap_take:
                 ld   a, b
                 or   a
                 jr   z, .full                  ; nothing fitted
+                ld   hl, PANEL_DIRTY           ; T7: the ammo count changed (no ammo item drawn
+                set  PD_AMMO_BIT, (hl)         ; yet: the panel clears it, as abil_ammo's)
+                ld   hl, ST2_ITM               ; STATS2: a stack taken (n > 0) = 1 item found,
+                inc  (hl)                      ; saturating (inline: st2_inc is R6)
+                jr   nz, .sat
+                dec  (hl)
+.sat:           ld   a, SFX_PICKUP             ; SND-5b (keeps BC / DE / HL)
+                call sfx_req
+                ld   a, b
                 ; "YOU PICK UP n DAGGERS": the suffix by type and number
                 dec  a
                 ld   a, TX_CMB_DAGGER

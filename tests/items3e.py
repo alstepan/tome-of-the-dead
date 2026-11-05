@@ -64,12 +64,13 @@ def layout(check):
     # ---- L3 ------------------------------------------------------------------
     fields = [("BAG", 60), ("WORN", 12), ("FOOD", 1),          # 3E rev 6: no FL_IST / ID_MAP / KNOWN
               ("FOOD_TMR", 1), ("HSTAGE", 1), ("HP_RG", 1), ("HW_TMR", 1),   # 3E-T9: the QPIN bytes
-              ("MP_HOLD", 1), ("QS_CACHE", 3), ("ST1_CNT", 5)]   # M0: the STATS1 S1 reserve
+              ("MP_HOLD", 1), ("QS_CACHE", 3), ("ST1_CNT", 5),   # M0: the STATS1 S1 reserve
+              ("ST2_CNT", 3)]                                  # STATS2: books read / found, items
     a, ok = s["ITEM_RAM"], True
     for name, n in fields:
         ok &= s[name] == a
         a += n
-    check("L3 ITEM_RAM fields", ok and a == s["ITEM_RAM_END"] and s["ITEM_RAM_LEN"] == 86,
+    check("L3 ITEM_RAM fields", ok and a == s["ITEM_RAM_END"] and s["ITEM_RAM_LEN"] == 89,
           [(n, hex(s[n])) for n, _ in fields])
     lo, hi = s["ITEM_RAM"], s["ITEM_RAM_END"]
     check("L3 one page", lo & 0xFF == 0 and (hi - 1) >> 8 == lo >> 8)
