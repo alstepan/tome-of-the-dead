@@ -318,7 +318,8 @@ lp_transition:
                 ld   e, 1
                 call lp_bank
                 ; the hero's arrival box: ROOM-MEM: do_exit (.lpt) has already placed him
-                ; there (x 1 / 31 - w / EXIT_COL, standing on the arrival storey)
+                ; there (x 1 / 31 - w / EXIT_COL, standing on the arrival storey; H1: a vertical
+                ; exit's arrival is mid-ladder at the shaft end, y 0 / 18 - h: storey_ref 0 / 1)
                 ld   ix, P_ENTITIES
                 KFL    KT_BW
                 ld   (LP_HW), a

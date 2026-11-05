@@ -476,12 +476,11 @@ do_exit:
                 ld   (ix+E_X), a
                 KFIELD KT_BH
                 ld   b, a
-                ld   a, (EXIT_KIND)
-                cp   EX_UP
-                ld   a, FLOOR_ROW1             ; up: stand on the bottom storey (9s+8-h, s 1)
-                jr   z, .vy
-                ld   a, FLOOR_ROW0             ; down: stand on storey 0
-.vy:            sub  b
+                ld   a, PLAY_ROWS              ; H1 (game.md §2.1): y' = 18 - h - y. An exit (y 0
+                sub  (ix+E_Y)                  ; up / 18 - h down): the other end of the new room's
+                sub  b                         ; shaft, mid-ladder (M_REST = the climb rest pose,
+                                               ; E_AIDIR = the exit's dy). The teleport: .tele
+                                               ; preset y = 18 - the floor row (stands on it)
                 ld   (ix+E_Y), a
 .pos:           call snap_pxpy
                 ld   (ix+E_MODE), M_REST
@@ -498,6 +497,12 @@ do_exit:
                 call far6
                 ld   a, GS_TRANSITION
                 ld   (GAME_STATE), a
+                ld   a, (EXIT_KIND)            ; H1: .lpt's y' = 18 - h - y stands him on
+                cp   EX_UP                     ; the floor row F when y = 18 - F (EX_UP:
+                ld   a, PLAY_ROWS - FLOOR_ROW1 ; storey 1, EX_DOWN: storey 0)
+                jr   z, .tu
+                ld   a, PLAY_ROWS - FLOOR_ROW0
+.tu:            ld   (P_ENTITIES + E_Y), a
                 call .lpt                      ; the hero to the spot, bank the old room, spawn the new one
                 ld   a, (EXIT_DEST)
                 call room_show                 ; (lowram; leaves bank 7 paged)
@@ -634,8 +639,15 @@ tpt_intent:
 
 ;------------------------------------------------------------------------------
 ; try_climb — IX = player, D = dy ($FF up / 1 down). CF = 1 if done (§3.4).
-; Standing: UP needs {x,s} ({x,0} = up-exit, no step), DOWN needs {x,s+1}
-; ({x,2} = down-exit, first step animated). Mid-ladder: continue or reverse.
+; Standing: UP needs {x,s} ({x,0}: only the up-exit), DOWN needs {x,s+1}
+; ({x,2}: the down-exit / the open level exit). Mid-ladder: continue or reverse.
+; H1 (user 2026-11-05, game.md §2.1 "H1"): every climb of an exit shaft is an
+; ordinary step / turn; the step that puts the head on row 0 (up) or the feet
+; on row 17 (down) also sets the exit (this turn). The hero arrives at the
+; other end of the new room's shaft, mid-ladder (do_exit .lpt), so a step
+; from there out of the room (y 0 up / feet row 17 down) is the exit back,
+; with no step (.x0; E_AIDIR = dy for cork_check). A blocked exit step
+; cancels the exit (a squeeze keeps it).
 ; Step blocked by an entity: climb_blocked (lowram, B14): the first time
 ; CF = 0, CLIMB_BLK = 1 (the caller turns it into a wait) and E_AIDIR = the
 ; attempted dy (the monster phase yields to that climb, cork_check); the 2nd
@@ -652,69 +664,57 @@ try_climb:
                 ld   b, l                      ; B = storey stood on
                 ld   c, (ix+E_X)
                 ld   a, (TMP6)
-                cp   1
+                dec  a                         ; dy == 1 (H1: -1 B vs cp 1)
                 jr   z, .down
                 call ladder_exists             ; UP: {x, s}
                 ret  nc
                 ld   a, b
                 or   a
                 jr   nz, .mid
-                ld   a, RDX_U                  ; {x,0}: the up-exit (player only;
+                ld   a, RDX_U                  ; {x,0}: the up-exit shaft only (player;
                 call .vexit                    ; ARR is a {c,0} without an exit)
-                jr   nz, .no
-                sub  GRID_W                    ; r - 3
-                ld   (EXIT_DEST), a
-                ld   a, EX_UP
-                ld   (EXIT_KIND), a
-                ld   a, (ix+E_X)
-                ld   (EXIT_COL), a
-                xor  a
-                ld   (EXIT_STOREY), a
-                scf
-                ret
-.no:            or   a
-                ret
+                jr   z, .mid                   ; H1: a plain step; .mid exits at y 0
+                ret                            ; (.vexit: NZ -> CF = 0)
 .down:          inc  b                         ; DOWN: {x, s+1}
                 call ladder_exists
                 ret  nc
                 ld   a, b
                 cp   STOREY_COUNT
                 jr   nz, .mid
-                ld   a, RDX_D                  ; {x,2}: the down-exit ...
-                call .vexit
-                jr   z, .dn
+                ld   a, RDX_D                  ; {x,2}: the down-exit (.mid: feet on
+                call .vexit                    ; row 17 = the exit step) ...
+                jr   z, .mid
                 call cur_room_desc             ; ... else the level exit (B3B-12), only at
                 ld   a, l                      ; x == RD_EXITCOL (descriptor: one page)
                 add  a, RD_EXITCOL
                 ld   l, a
                 ld   a, (hl)
-                cp   c
-                jr   nz, .no
+                xor  c                         ; (CF = 0: nothing legal)
+                ret  nz
                 ld   a, (LVL_FLAGS)            ; and only through an open grate (3F-T8:
                 and  LF_GRATE_OPEN             ; the boss's death). Shut: game.md §9.2 F4,
                 jr   nz, .lvl                  ; illegal, NO turn: drop the caller's frame
                 pop  hl                        ; (turn_input .nu's `jr .srch` wait); A = 0,
                 ret                            ; CF = 0 (and) = "nothing legal"
-.lvl:           ld   a, EX_LEVEL
-                jr   .dk
-.dn:            add  a, GRID_W                 ; dest r + 3
-                ld   (EXIT_DEST), a
-                ld   a, EX_DOWN
-.dk:            ld   (EXIT_KIND), a
-                ld   a, (ix+E_X)
-                ld   (EXIT_COL), a
-                ld   a, STOREY_COUNT - 1
-                ld   (EXIT_STOREY), a
-                call .mid                      ; animate the first step down
-                ret  c
-                xor  a                         ; blocked: cancel the exit
+.lvl:           call .mid                      ; the down-exit step (EX_DOWN, or cancelled) ...
+                ret  nc
+                ld   a, EX_LEVEL               ; ... is the level exit (ld keeps CF = 1)
                 ld   (EXIT_KIND), a
                 ret
 .mid:           call get_box
                 ld   a, (TMP6)
                 add  a, b
-                ld   b, a
-                call box_free
+                ld   b, a                      ; B = the new y
+                inc  a
+                jr   z, .x0                    ; up from row 0: the up exit, no step
+                add  a, e                      ; A = new y + h + 1
+                sub  PLAY_ROWS + 1
+                jr   z, .xs                    ; feet onto row 17: the down-exit step (CF = 0)
+                jr   nc, .x0                   ; feet past row 17: the down exit, no step
+                ld   a, b
+                or   a
+                jr   z, .xs                    ; head onto row 0: the up-exit step (CF = 0)
+.go:            call box_free
                 jr   c, .blk
                 ld   (ix+E_Y), b
                 ld   a, (TMP6)
@@ -726,9 +726,38 @@ try_climb:
                 ret
 .blk:           jp   climb_blocked             ; B14 (lowram): wait + forced yield,
                                                ; or the 2nd time: squeeze past
+; H1 exit fields, both ways (C = x): storey (dy+1)/2 = 0 up / 1 down (follow_select's
+; reference storey), kind EX_UP + storey, dest r + 3 dy, col x; E_AIDIR = dy (a
+; no-step exit's dir for cork_check after the arrival; .go / climb_blocked rewrite it).
+.x0:            scf                            ; CF = 1: no step
+.xs:            push af
+                ld   a, (TMP6)
+                ld   (ix+E_AIDIR), a
+                ld   l, a                      ; L = dy
+                inc  a
+                rrca
+                ld   (EXIT_STOREY), a
+                add  a, EX_UP
+                ld   (EXIT_KIND), a
+                ld   a, c
+                ld   (EXIT_COL), a
+                ld   a, (CUR_ROOM)
+                add  a, l
+                add  a, l
+                add  a, l
+                ld   (EXIT_DEST), a
+                pop  af
+                ret  c                         ; the exit from a shaft end: no step, 1 turn
+                call .go                       ; the step that reaches the end ...
+                ret  c
+                xor  a                         ; ... blocked: cancel the exit
+                ld   (EXIT_KIND), a
+                ret
+                ASSERT EX_DOWN == EX_UP + 1 && GRID_W == 3 && PLAY_ROWS == FLOOR_ROW1 + 1
 .vexit:         ; A = RDX_U / RDX_D, C = x: Z = that exit exists and its
-                ; shaft col (RD_UPCOL / RD_DNCOL) == x; A = CUR_ROOM then.
-                ; Clobbers: E, HL
+                ; shaft col (RD_UPCOL / RD_DNCOL) == x; NZ: CF = 0 (H1: the
+                ; caller's "no climb"; A = CUR_ROOM is gone, .xs reads it).
+                ; Clobbers: A, E, HL
                 ld   e, a
                 call cur_room_desc
                 inc  l                         ; RD_EXITS
@@ -741,9 +770,7 @@ try_climb:
                 jr   z, .vu
                 inc  l                         ; RD_DNCOL
 .vu:            ld   a, (hl)
-                cp   c
-                ret  nz
-                ld   a, (CUR_ROOM)
+                xor  c
                 ret
                 ASSERT RD_EXITS == 1 && RD_UPCOL == 2 && RD_DNCOL == 3
 
