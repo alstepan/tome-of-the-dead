@@ -372,6 +372,9 @@ TRP_EV          EQU $BFF8           ; the armed trap sequence (trap6.asm): TEV_F
 TRP_STEP        EQU $BFF9           ;   its step counter (trap_step)
 TRP_ENT         EQU $BFFA           ;   its TRAP_LIST entry (low byte)
                 ASSERT TRP_ENT < STATE_3B_END && TRP_PRE > SFX_XP
+TRAP_UNDER      EQU $BFFF           ; TRAP-OR: the tile id the drawn plate composes over (the cell's
+                                    ;   id before T_TRAP; bank-3 tr_cell3 writes it before any read)
+                ASSERT TRAP_UNDER == STATE_3B_END - 1
 TRW_WAIT_BIT    EQU 0
 TRW_ENTRY_BIT   EQU 1
 TRW_ENTRY       EQU 1 << TRW_ENTRY_BIT
