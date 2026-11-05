@@ -63,3 +63,10 @@ reaches 40 to 42: start HP +2 (40.4) or +1 HP per level-up (40.9); start HP +1 g
 to 40.9) in every row. Not modelled: Widow ACID (1 in 4 -> 1 in 8), so that candidate is untested. W_HP0 / W_LVL_HP are
 immediates in hero_st_init / xp7 (marked CODE in `PARAMS`), so both winning options are 1 to 2 changed immediates, not table cells; I did not check whether
 a table-only HP route exists. Smallest hitting 40 to 42 with M unchanged: +1 HP per level (40.9) over start HP +2 (40.4, at the edge of the band).
+
+## Implemented 2026-11-05 (WIDOW-SPIT, user approved): spit P6 N4 + Warrior HP per level 5
+In the game (`rd_tab` row `RK_WIDOW`, `LUP_W_HP` 5; docs/memory-map.md "WIDOW-SPIT ledger"). `tools/balance_sim.py` now reads both
+from the image (`WIDOW_SPIT` / `WIDOW_POISON` / `WIDOW_PERIOD` / `W_LVL_HP` default null = the image), so the default sim is the game;
+`tools/widow_spit_sim.py` / `tools/widow_comp_sim.py` pin the pre-spit game (`WIDOW_SPIT 0`, `W_LVL_HP 4`) to keep reproducing the
+tables above. Default sim on the built image (10,000 runs, average, seed 1, `--jobs 8`): **W 40.5 % [39.5, 41.5], M 40.4 %
+[39.5, 41.4]** (the comp row above: 40.9 / 40.4; inside the CI, chunk layout differs).

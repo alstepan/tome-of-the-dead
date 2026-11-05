@@ -8,8 +8,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import balance_sim as B  # noqa: E402
 
-VARIANTS = [("baseline", {})] + [
-    ("P%d/N%d" % (p, n), {"param": {"WIDOW_SPIT": 1, "WIDOW_POISON": p, "WIDOW_PERIOD": n}})
+# WIDOW-SPIT is in the game since 2026-11-05 (the image default = spit P6 N4 + Warrior HP/level 5): the what-if
+# grid is pinned to the pre-spit game (W_LVL_HP 4) so it reproduces docs/design/widow_spit_sim.md
+PRE = {"WIDOW_SPIT": 0, "W_LVL_HP": 4}
+VARIANTS = [("baseline", {"param": dict(PRE)})] + [
+    ("P%d/N%d" % (p, n), {"param": dict(PRE, WIDOW_SPIT=1, WIDOW_POISON=p, WIDOW_PERIOD=n)})
     for p in (12, 6) for n in (3, 4)]
 
 
