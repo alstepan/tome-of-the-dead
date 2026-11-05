@@ -21,6 +21,7 @@
 # 1c. tools/abc2wzm.py --game -> OUTDIR/build/music_game/ (7 WZM songs + game_songs.asm),
 #    INCLUDEd by src/ay.asm through the -i OUTDIR/build/music_game search path (SND-2 T2).
 # 1d. tools/sfx2asm.py -> OUTDIR/build/sfx/ (sfx_ids.inc + sfx_data.asm, SND-5; -i path).
+# NOTE: sjasmplus takes the include path ATTACHED (-i<dir>); the split "-i dir" form fails on Linux.
 # 2. sjasmplus src/main.asm with the project flags. Run in OUTDIR (default: the
 #    repo root), so the artefacts land in OUTDIR/build/: tome-of-the-dead.tap, .sna,
 #    .sym, .sld, .lst.
@@ -65,6 +66,9 @@ mkdir -p "$OUT/build/music_game"
 python3 "$ROOT/tools/abc2wzm.py" --game "$OUT/build/music_game" >/dev/null
 # SND-5: sound effects (assets/sfx/effects.json) -> sfx_ids.inc (main.asm) + sfx_data.asm (ay.asm)
 python3 "$ROOT/tools/sfx2asm.py" "$OUT/build/sfx" >/dev/null
+for g in music_game/game_songs.asm sfx/sfx_data.asm sfx/sfx_ids.inc; do
+    [ -f "$OUT/build/$g" ] || { echo "build.sh: generator produced no $OUT/build/$g" >&2; exit 1; }
+done
 LOG="$OUT/build/sjasmplus.log"
 cd "$OUT"
 # 3E-T1 overlays (main.asm "OVERLAYS"): pass 1 (-DOVL_PASS=1) assembles the
@@ -80,7 +84,7 @@ rm -f build/tome-of-the-dead.tap build/tome-of-the-dead.sna build/tome-of-the-de
 mkdir -p "$OVL"
 set +e
 sjasmplus "$ROOT/src/main.asm" --fullpath --sym="$OVL/pass1.sym" \
-    -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" -i "$OUT/build" -i "$OVL" \
+    "-i$ROOT/src" "-i$OUT/build/music_game" "-i$OUT/build/sfx" "-i$OUT/build" "-i$OVL" \
     -DOVL_PASS=1 "$@" >"$OVL/pass1.log" 2>&1
 RC=$?
 set -e
@@ -98,7 +102,7 @@ done
 set +e
 sjasmplus "$ROOT/src/main.asm" --fullpath \
     --lst=build/tome-of-the-dead.lst --sld=build/tome-of-the-dead.sld --sym=build/tome-of-the-dead.sym \
-    -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" -i "$OUT/build" -i "$OVL" "$@" >"$LOG" 2>&1
+    "-i$ROOT/src" "-i$OUT/build/music_game" "-i$OUT/build/sfx" "-i$OUT/build" "-i$OVL" "$@" >"$LOG" 2>&1
 RC=$?
 set -e
 grep -E '^>|rror|arning' "$LOG" || true
