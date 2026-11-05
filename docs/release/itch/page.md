@@ -52,7 +52,7 @@ Main menu keys: **1** Start, **2** Hero (Warrior or Mage), **3** Controls (Keys,
 ### How to load
 
 - **Emulators (Fuse, ZEsarUX, others):** set the machine to ZX Spectrum 128K, then either open `tome-of-the-dead-v1.0.tap` and let it load (type `LOAD ""` or choose Tape Loader), or open `tome-of-the-dead-v1.0.sna` directly for an instant start.
-- **Real 128K, +2, +2A or +3 hardware:** play the `.tap` through a tape interface, TZXDuino, divMMC or similar, and load it from the 128 tape loader. Tested on real hardware.
+- **Real 128K, +2, +2A or +3 hardware:** play the `.tap` through a tape interface, TZXDuino, divMMC or similar, and load it from the 128 tape loader. Tested on a real ZX Spectrum 128K (the original "toastrack").
 
 ### System requirements
 
@@ -62,10 +62,10 @@ Main menu keys: **1** Start, **2** Hero (Warrior or Mage), **3** Controls (Keys,
 
 ### Credits
 
-- Design and code: [YOUR NAME]
+- By alstepan.
 - WazHack-inspired.
 - Built with sjasmplus. Data compression by ZX0 by Einar Saukas.
-- Developed with AI assistance. [Edit this line as you prefer.]
+- Developed with AI assistance.
 
 ### Version history
 
@@ -83,7 +83,7 @@ Main menu keys: **1** Start, **2** Hero (Warrior or Mage), **3** Controls (Keys,
 - **Tags (10, lowercase):** `roguelike`, `zx-spectrum`, `retro`, `z80`, `8-bit`, `dungeon-crawler`, `turn-based`, `permadeath`, `homebrew`, `fantasy`
 - **Platforms:** tick none (the files are emulator and hardware images, not native Windows, macOS or Linux builds). If you must pick something, use "Other".
 - **Community:** enable comments (the simplest option, no moderation of a forum). Add a discussion board only if you want bug reports in one place.
-- **Licence / content:** leave "All rights reserved" unless you decide otherwise.
+- **Licence / content:** open licence (user 2026-11-05); exact licence TBD.
 - **Embed / browser play:** none.
 
 ---
@@ -108,7 +108,7 @@ It is a turn-based roguelike for the ZX Spectrum 128K, written in hand-coded Z80
 
 This first release has two classes, a full bestiary with a boss on every depth, spells, gear, boss treasures, hunger and status effects, AY music and effects, and Kempston, Sinclair or redefinable-key control. There is no saving, so every run counts.
 
-Download the `.tap` for tape-style loading or the `.sna` for an instant start in an emulator, and check the `SHA256SUMS` file if you like. It needs a 128K machine: 48K is not supported. It has been tested on real hardware.
+Download the `.tap` for tape-style loading or the `.sna` for an instant start in an emulator, and check the `SHA256SUMS` file if you like. It needs a 128K machine: 48K is not supported. It has been tested on a real ZX Spectrum 128K "toastrack".
 
 Bug reports and run stories are very welcome in the comments. Thank you for playing.
 
