@@ -56,7 +56,7 @@ EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING = 1, 2, 4, 8, 16
 E_ = {k: S["E_" + k] for k in ("KIND", "ROOM", "FLAGS", "X", "Y", "HP", "MAXHP", "POT", "PX", "PY", "MODE",
                                "REACT", "REACTAT", "MSG", "TGT", "HIT", "FLT", "FLA", "GOLD")}
 K = dict(ARCHER=S["K_ARCHER"], SNIPER=S["K_SNIPER"], SLINGER=S["K_SLINGER"], NECRO=S["K_NECRO"],
-         BONE=S["K_BONE_CALLER"])
+         BONE=S["K_BONE_CALLER"], WIDOW=S["K_BLACK_WIDOW"])      # WIDOW-SPIT: every Widow body (tests/widow.py)
 SHOOTERS = list(K.values())
 GOLDK = [S["K_GOBLIN"], S["K_SPIDER"]]                # BOSS-RANGED: rows only when golden
 LEK_GOLD = 1 << S["LEK_GOLD_BIT"]
@@ -134,7 +134,8 @@ def main():
         WT = {k_: S[n_] for k_, n_ in ((K_RAT, "WT_K_RAT"), (K_BAT, "WT_K_BAT"), (K_SKELETON, "WT_K_SKELETON"),
               (S["K_GHOST"], "WT_K_GHOST"), (S["K_ARCHER"], "WT_K_ARCHER"), (S["K_SNIPER"], "WT_K_SNIPER"),
               (S["K_SLINGER"], "WT_K_SLINGER"), (S["K_NECRO"], "WT_K_NECRO"),
-              (S["K_BONE_CALLER"], "WT_K_BONE_CALLER"), (S["K_GOBLIN"], "WT_K_GOBLIN"), (S["K_SPIDER"], "WT_K_SPIDER"))}
+              (S["K_BONE_CALLER"], "WT_K_BONE_CALLER"), (S["K_GOBLIN"], "WT_K_GOBLIN"), (S["K_SPIDER"], "WT_K_SPIDER"),
+              (S["K_BLACK_WIDOW"], "WT_K_BLACK_WIDOW"))}
         bad_a, n_a, stats = [], 0, dict(shot=0, step=0, hold=0, no=0, hit=0, fear=0)
         while n_a < N_A:
             kind = rnd.choice(SHOOTERS + GOLDK + GOLDK)

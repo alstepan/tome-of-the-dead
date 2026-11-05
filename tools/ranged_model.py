@@ -34,7 +34,11 @@ ROWS = {
     21: (6, 2, RWF_AWAY | RWF_NOIMP, 3, 0, DTY_PHYS, 0, "dagger_spin1"),        # Slinger
     14: (8, 2, RWF_AWAY | RWF_SPELL, 6, 1, DARK_DHC, FEAR3, "nbolt_fly1"),     # Necromancer
     29: (8, 2, RWF_AWAY | RWF_SPELL | RWF_PRE, 6, 1, DARK_DHC, FEAR3, "nbolt_fly1"),  # Bone Caller
+    # WIDOW-SPIT (user 2026-11-05): the Black Widow, every body (rd_tab row RK_WIDOW < RK_GOLD1: no gate) = the Queen's
+    # spit with N 3 (a shot every 4th turn) and always POISON + 6 (E = 3); 1d2 - DEF (not golden: no + 1)
+    22: (6, 3, RWF_WALK | RWF_NOIMP, 2, 0, DTY_PHYS | (6 << EFX_SHIFT), 6 // 2, "spark_fly1"),  # Black Widow
 }
+K_BLACK_WIDOW = 22
 # BOSS-RANGED (plan.md rulings): rows used ONLY by a golden body (ai_rhook's RK_GOLD1 gate) —
 # the Goblin King's dagger (D1) and the Spider Queen's spit (D2, always POISON + 12 -> E = 6)
 K_GOBLIN, K_SPIDER, GOLD_ATK = 4, 9, 2

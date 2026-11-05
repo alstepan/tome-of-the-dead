@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """D3-11 flying damage numbers (game.md §6.5, §6.5.1 Q2; src/dnum0.asm bank 0 =
 the pass, dnum3.asm bank 3 = the spawn + FONT6 compose, dnum2.asm / dnfix2.asm /
-dnum2b.asm bank 2 (the screen-2 draw, present's dn_fix), dnum6.asm R6 dn_place,
+dnum2b.asm bank 2 (the screen-2 draw, present's dn_fix), dnum3.asm dn_place (WIDOW-SPIT; was R6 dnum6.asm),
 dnum7h.asm dn_evict, mark7.asm dn_reset; hooks: play_loop dn_gate, present
 dn_fix, impact_line dn_sfx, hunger7 FED regen). PROTO room A, Knight
 (Whirlwind: a Warrior scene), every other monster parked.

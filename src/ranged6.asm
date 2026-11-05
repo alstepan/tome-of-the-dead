@@ -45,17 +45,21 @@ rd_tab:         ;    r   N  flags                      die bon dhc        dhe   
                 DB  12,  1, RWF_SPELL | RWF_HOLD, 8, 2, DTY_FIRE | DH_NODEF | (EFX_STUNNED << DH_EFX_SHIFT), $31, FID_nbolt_fly1 ; 4 Firebolt
                 DB  AM_HEX_R, 0, RWF_SPELL | RWF_HEX | RWF_HOLD, IMMF_SLEEP, TX_ST_ASLEEP, EFX_ASLEEP << DH_EFX_SHIFT, AM_SLEEP_T << 4, FID_nbolt_fly1 ; 5 Sleep
                 DB  AM_HEX_R, 0, RWF_SPELL | RWF_HEX, IMMF_POISON, TX_ST_POISONED, EFX_POISON << DH_EFX_SHIFT, AM_PSN_T, FID_nbolt_fly1     ; 6 Venom
-                ; BOSS-RANGED (golden only: ai_rhook's RK_GOLD1 gate): range 6, a shot every 3rd turn,
+                ; BOSS-RANGED (rows >= RK_GOLD1, golden only: ai_rhook's gate): range 6, a shot every 3rd turn,
                 ; keeps walking in between shots (RWF_WALK), the yellow dagger_spin (RWF_NOIMP: ROCK_ATTR); the Queen's spit the magenta spark_fly (NOIMP, own attr)
-                DB   6,  2, RWF_WALK | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 13 Goblin King
-                DB   6,  2, RWF_WALK | RWF_NOIMP,        2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), SQ_PSN_T / 2, FID_spark_fly1  ; 14 Spider Queen (spit = the Mage's spark, always + 12 POISON)
+                ; WIDOW-SPIT (user 2026-11-05): the Black Widow (any body, no gate) = the Queen's spit with N 3
+                ; (every 4th turn), + 6 POISON; 1d2 - DEF (not golden: no + 1)
+                DB   6, BW_SPIT_N, RWF_WALK | RWF_NOIMP, 2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), BW_PSN_T / 2, FID_spark_fly1  ; 13 Black Widow
+                DB   6,  2, RWF_WALK | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 14 Goblin King
+                DB   6,  2, RWF_WALK | RWF_NOIMP,        2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), SQ_PSN_T / 2, FID_spark_fly1  ; 15 Spider Queen (spit = the Mage's spark, always + 12 POISON)
                 ASSERT $ - rd_tab == RK_ROWS * RW_STRIDE
                 ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_arrow_hit == FID_arrow_fly1 + 2
                 ASSERT FID_dagger_spin2 == FID_dagger_spin1 + 1
                 ASSERT FID_nbolt_fly2 == FID_nbolt_fly1 + 1 && FID_nbolt_hit == FID_nbolt_fly1 + 2
                 ASSERT RK_ARCHER == 1 && RK_SNIPER == 2 && RK_SLINGER == 3 && RK_NECRO == 4 && RK_BONE_CALLER == 5 && RK_ARCHMAGE == 6
-                ASSERT RK_ARCHMAGE + AM_VENOM == RK_GKING - 1 && RK_SQUEEN == RK_GKING + 1 && RK_SQUEEN == RK_ROWS
+                ASSERT RK_ARCHMAGE + AM_VENOM == RK_WIDOW - 1 && RK_GKING == RK_WIDOW + 1 && RK_SQUEEN == RK_GKING + 1 && RK_SQUEEN == RK_ROWS
                 ASSERT SQ_PSN_T <= PSN_CAP && SQ_PSN_T % 2 == 0 && SQ_PSN_T / 2 <= STS_MAX_TURNS && DTY_PHYS == 0
+                ASSERT BW_PSN_T <= PSN_CAP && BW_PSN_T % 2 == 0 && BW_PSN_T / 2 <= STS_MAX_TURNS && RK_WIDOW < RK_GOLD1
                 ASSERT AM_SLEEP_T << 4 < 256 && AM_SLEEP_T <= STS_MAX_TURNS && AM_PSN_T <= PSN_CAP
 
 ;------------------------------------------------------------------------------
@@ -293,13 +297,14 @@ rg_q:           ld   hl, TURN_PEND             ; (3F-T11b am_cast: the Mirror He
                 dec  a
 .an:            ld   (de), a
                 inc  de
-                ld   a, (ix+E_KIND)            ; FXD_ROW = the flight row (rg_line's: top + 2, the
-                cp   K_SPIDER                  ; 2-high Spider Queen's top; HL / BC are live here:
-                ld   a, (ix+E_Y)               ; the kind test, not KT_BH)
+                ld   a, (RG_ROW + RW_FX)       ; FXD_ROW = the flight row (rg_line's: top + 2, a 2-high
+                cp   FID_spark_fly1            ; spitter's top; HL / BC are live here: the row's fid, not
+                ld   a, (ix+E_Y)               ; KT_BH; WIDOW-SPIT: was a K_SPIDER test, same 5 B)
                 jr   z, .fr
                 add  a, PF_ROW_DY
 .fr:            ld   (de), a
-                ; the only 2-high shooter is the Spider (rg_line's (h / 2) & 2 == rg_q's kind test)
+                ; the only 2-high shooters are the spark spitters (Spider Queen, Black Widow: rg_line's (h / 2) & 2
+                ; == rg_q's fid test; the Widow's KT_BH = BH_K_SPIDER, main.asm); no other row flies spark_fly1
                 ASSERT PF_ROW_DY == 2 && BH_K_SPIDER == 2 && BH_K_GOBLIN >= 4 && BH_K_ARCHER >= 4 && BH_K_NECRO >= 4 && BH_K_ARCHMAGE >= 4
                 ASSERT BH_K_GOBLIN <= 7 && BH_K_ARCHER <= 7 && BH_K_NECRO <= 7 && BH_K_ARCHMAGE <= 7
                 inc  de

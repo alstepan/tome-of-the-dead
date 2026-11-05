@@ -8,7 +8,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import balance_sim as B  # noqa: E402
 
-SPIT = {"WIDOW_SPIT": 1, "WIDOW_POISON": 6, "WIDOW_PERIOD": 4}
+# pinned to the pre-WIDOW-SPIT game (W_LVL_HP 4) so the rows reproduce docs/design/widow_spit_sim.md; the image
+# default since 2026-11-05 = the last row ("+ Warrior HP/level 5")
+SPIT = {"WIDOW_SPIT": 1, "WIDOW_POISON": 6, "WIDOW_PERIOD": 4, "W_LVL_HP": 4}
 
 
 def v(name, kind=None, **param):
@@ -19,7 +21,7 @@ def v(name, kind=None, **param):
 
 
 VARIANTS = [
-    ("baseline (no spit)", {}),
+    ("baseline (no spit)", {"param": {"WIDOW_SPIT": 0, "W_LVL_HP": 4}}),
     v("spit P6 N4"),
     v("+ bite poison 18 (etn 9)", {"etn": 9}),
     v("+ bite poison 12 (etn 6)", {"etn": 6}),

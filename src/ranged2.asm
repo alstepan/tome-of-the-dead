@@ -17,11 +17,12 @@ rk_tab:
                 DB   RK_NECRO                  ; 14
                 DS   K_SLINGER - K_NECRO - 1, 0
                 DB   RK_SLINGER                ; 21
-                DS   K_SNIPER - K_SLINGER - 1, 0
+                DB   RK_WIDOW                  ; 22 (WIDOW-SPIT: the Spider tier, every body; ordinary Spiders never)
+                DS   K_SNIPER - K_BLACK_WIDOW - 1, 0
                 DB   RK_SNIPER                 ; 28
                 DB   RK_BONE_CALLER            ; 29
                 ASSERT $ - rk_tab == K_COUNT && (rk_tab >> 8) == (($ - 1) >> 8)   ; ai_rhook adds the kind to the low byte
-                ASSERT K_NECRO == K_ARCHER + 2 && K_BONE_CALLER == K_SNIPER + 1 && K_SNIPER > K_SLINGER && K_SLINGER > K_NECRO
+                ASSERT K_BLACK_WIDOW == K_SLINGER + 1 && K_NECRO == K_ARCHER + 2 && K_BONE_CALLER == K_SNIPER + 1 && K_SNIPER > K_SLINGER && K_SLINGER > K_NECRO
                 ASSERT K_COUNT == K_BONE_CALLER + 1 && K_BOSS_D1 == K_GOBLIN && K_BOSS_D2 == K_SPIDER && K_SPIDER < K_ARCHER
 
 ;------------------------------------------------------------------------------
@@ -46,7 +47,7 @@ ai_mon:         ld   a, (ix+E_KIND)
 ; Out: CF = 1 the turn is used (shot / step-away / hold), CF = 0 the walker
 ;      rules run. TMP4 and HL kept.
 ; BOSS-RANGED: rows >= RK_GOLD1 (the Goblin King / Spider Queen) shoot only for a
-; golden body (LEK_GOLD: only the D1 / D2 lair bosses carry it, lp_dtab); an
+; golden body (WIDOW-SPIT: RK_WIDOW < RK_GOLD1, every Black Widow shoots) (LEK_GOLD: only the D1 / D2 lair bosses carry it, lp_dtab); an
 ; ordinary Goblin / Spider goes on to ai_ghook (+46 T); other shooters +19 T.
 ; Clobbers: A, BC, DE.  Not a shooter: 66 T incl. the call; a shooter:
 ;      + far6 ai_ranged
