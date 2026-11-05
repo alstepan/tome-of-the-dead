@@ -57,7 +57,7 @@ and per-task evidence: `docs/history.md`.
 | BSIM1 | `tests/balance_sim_selftest.py` `test_monotone` FAILS on main (2026-11-05): Mage win rate 0.378 / 0.386 / **0.242** at HP +0/+10/+30; Warrior depth 6.89 / 7.24 / 7.05. Either a sim artefact (stall/turn cap) or a real rule interaction — not a stale threshold | junior → designer | excluded from the CI gate until fixed |
 | D8S1 | `tests/d8_stress.py` 2 failures already on main b25e043 (found in the H1 review): 'T teleport mid-fight W/M: re-entry … ST_X 0' — the Archmage's ST_X reads 128 after a mid-fight teleport and re-entry | staff | open; repro on main first |
 | ECK1 | `tests/endcard_k.py` 16 failures, identical on main (STATS2 review): R1/R2/R3/N1 never get a Ghost reflection (rev 0, rfl 0, ST1_KILLER 0) — Ghost reflect/touch kill regressed or the scenario is stale; bisect | staff | open |
-| MEM1 | Memory nearly exhausted after STATS2: R6 3 B, bank 7 low 2 B, bank 3 7 B (kit 3) after TRAP-OR, b0/text kit 0 B. Any new feature needs a reclaim first (no-cut rule) | staff | open |
+| MEM1 | Memory nearly exhausted after STATS2 (SUMMON-SFX 2026-11-05: R6 now 1 B, the rest unchanged): R6 3 B, bank 7 low 2 B, bank 3 7 B (kit 3) after TRAP-OR, b0/text kit 0 B. Any new feature needs a reclaim first (no-cut rule) | staff | open |
 | LGZ8 | `tests/levelgen_z80.py --f3`: 43 D8 cases differ between the Z80 generator and `tools/levelgen.py` (237 pass), identical on main b25e043 | staff | open; decide which side is right |
 | B21 | Budget scenario for the deferred level-up + held key path (~115k T, unmeasured) in `tools/budget.py` | junior | – |
 | B4 / R1 | Update `prototype.md` §6.4 text: ladder squeeze rule = up to `CLIMB_SQZ_N`=4 waits before the swap (user accepted 2026-10-19) | designer | doc-only |

@@ -115,19 +115,38 @@ sp_fit:         call sp_wt
                 ret
 
 ;------------------------------------------------------------------------------
+; sp_bcall — ai_ranged's caster pre-rule slot for an RWF_PRE row (the Bone
+; Caller): sp_summon with a base Skeleton if Skeleton is in LP_KINDS, else a
+; base Ghost (game.md §9.4.6), BC_LIVE, 1 body, cooldown BC_CD.
+; Out: CF = summoned.  Clobbers: A, BC, DE, HL.  (Placed right before sp_summon: it falls in.)
+;------------------------------------------------------------------------------
+sp_bcall:       ld   hl, LP_KINDS
+                ld   bc, 4
+                ld   a, K_SKELETON
+                cpir
+                ld   d, K_SKELETON | SQF_SUMM | SQF_RESP
+                jr   z, .k
+                ld   d, K_GHOST | SQF_SUMM | SQF_RESP
+.k:             ld   e, BC_LIVE
+                ld   bc, (1 << 8) | (BC_CD << 2)
+                                               ; (falls into sp_summon: -2 B)
+                ASSERT BC_CD < 16 && PH_CD < 16 && (RCD_SUMMON >> 2) == 15
+
+;------------------------------------------------------------------------------
 ; sp_summon — a caster's summon decision (IX = caster, ACT_SLOT = its slot):
 ; D = the kind byte to queue (row | SQF_*), E = its live-summon cap, B =
 ; bodies, C = the cooldown to set (pre-shifted into RCD_SUMMON). S (E_RCD bits
 ; 2-5) > 0: S - 1, no summon. S = 0: the queue is free, the room holds < E
 ; summon-made bodies, a free slot and the cap take one more D -> queue {D,
 ; ACT_SLOT, B}, S := C, the cast pose (KS_ATTACK) with the line "THE <kind>
-; SUMMONS!" at its IMPACT (E_MSG, no hit flash). Out: CF = summoned (the turn
+; SUMMONS!" at its IMPACT (E_MSG, no hit flash) + SFX_DRAIN once. Out: CF = summoned (the turn
 ; is used). Keeps IX.  Clobbers: A, BC, DE, HL.   S > 0 ~80 T; a try ~1.8k T
 ;------------------------------------------------------------------------------
-sp_summon:      ld   a, (ix+E_RCD)
+sp_summon:      ld   l, (ix+E_RCD)             ; (L: -1 B vs reloading A)
+                ld   a, l
                 and  RCD_SUMMON
                 jr   z, .rdy
-                ld   a, (ix+E_RCD)
+                ld   a, l
                 sub  RCD_S1                    ; (S >= 1: no borrow; CF = 0)
                 ld   (ix+E_RCD), a
                 ret
@@ -160,6 +179,8 @@ sp_summon:      ld   a, (ix+E_RCD)
                 and  ~RCD_SUMMON & $FF
                 or   c
                 ld   (ix+E_RCD), a
+                ld   a, SFX_DRAIN              ; the dark-magic cue: once per cast (not per body), here =
+                call sfx_req                   ; the caster's own action in the shown room; sfx_req keeps all
                 ld   bc, MSG_M_SUMMON << 8      ; C = 0: rg_pose's E_HIT (LOG-DMG; no flash, no number)
                 call rg_pose                   ; (ranged6.asm) the cast / attack pose + the line
                 scf
@@ -167,24 +188,6 @@ sp_summon:      ld   a, (ix+E_RCD)
 .no:            pop  bc
                 or   a
                 ret
-
-;------------------------------------------------------------------------------
-; sp_bcall — ai_ranged's caster pre-rule slot for an RWF_PRE row (the Bone
-; Caller): sp_summon with a base Skeleton if Skeleton is in LP_KINDS, else a
-; base Ghost (game.md §9.4.6), BC_LIVE, 1 body, cooldown BC_CD.
-; Out: CF = summoned.  Clobbers: A, BC, DE, HL.
-;------------------------------------------------------------------------------
-sp_bcall:       ld   hl, LP_KINDS
-                ld   bc, 4
-                ld   a, K_SKELETON
-                cpir
-                ld   d, K_SKELETON | SQF_SUMM | SQF_RESP
-                jr   z, .k
-                ld   d, K_GHOST | SQF_SUMM | SQF_RESP
-.k:             ld   e, BC_LIVE
-                ld   bc, (1 << 8) | (BC_CD << 2)
-                jr   sp_summon
-                ASSERT BC_CD < 16 && PH_CD < 16 && (RCD_SUMMON >> 2) == 15
 
 ;------------------------------------------------------------------------------
 ; ph_summon — far6 from ai_guard (bank 7): IX = the lair boss, a Mummy = the

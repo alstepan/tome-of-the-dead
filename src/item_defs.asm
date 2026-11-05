@@ -293,12 +293,14 @@ ST1_KILLER      EQU ST1_CNT + 4                 ; ENDCARD-G1: $80 | the kind tha
 EC_POS          EQU TMP6                        ; 2 B: ec_tab's label x (px), then its next row (TMP7)
 EC_VX           EQU 64                          ; value x = label x + EC_VX (px)
 EC_TAB_X        EQU 72                          ; the table's label x: 72 + 118 (EC_VX + 9 chars) = 190, centre 131
-EC_TAB_ROW      EQU 10                          ; its first row (CLASS); the last row (BEST KILL) = 18 (user 2026-11-05: up 1 from 11; row 9 touched the win subtitle on row 8)
+EC_TAB_ROW      EQU 7                           ; its first row (CLASS); the last row (BEST KILL) = 15 (user 2026-11-05: the whole card up 3 rows
+                                                ; (was 10) so the ink, title top .. PRESS bottom, is centred: 25 px above / 33 below)
 EC_FEET         EQU EC_TAB_ROW + 9              ; the portraits' / lectern's shared feet row (= the table's bottom;
                                                 ; the first row below BEST KILL)
 EC_PCOL_L       EQU 2                           ; killer col (the Ogre's ink ends ~10 px short of the table at x 72); lectern = +3
 EC_PCOL_R       EQU 25                          ; the hero's col (his ink starts ~11 px after the table's widest row, x 190)
-EC_TROW         EQU 6                           ; the title row (menu font, 2 rows)
+EC_PRESS_ROW    EQU EC_TAB_ROW + 12             ; "PRESS 1-4 OR ENTER" (was 22)
+EC_TROW         EQU EC_TAB_ROW - 4                          ; the title row (menu font, 2 rows)
 EC_ATTR         EQU $47                         ; the card (bright white on black)
 EC_A_HERO       EQU $46                         ; CLASS / LEVEL / DEPTH rows (yellow)
 EC_A_DEAD       EQU $42                         ; YOU DIED (red)
