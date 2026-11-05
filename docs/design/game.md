@@ -355,7 +355,12 @@ within the depth pool" check for D4–D8 only.
   the exit is cancelled unless he squeezes). The level exit is unchanged (the step into the
   grate); the **Teleport still lands standing**. Followers arrive PENDING standing at the
   shaft foot as before (they materialise once the hero has left that box). The §6.4 yield
-  path (`cork_check`) ends at the room's top / bottom row on an exit shaft.
+  path (`cork_check`) ends at the room's top / bottom row on an exit shaft. Hunger (`FOOD_TMR`)
+  ticks on every climb step, the exit-step turn included; only the WEAK faint counter `HW_TMR`
+  is held on the exit turn (FAINT1); the no-turn UP at the D1 shaft top costs nothing. The
+  "blocked exit step" branch (`try_climb .xs`: the step onto row 0 / into row 17 blocked, the
+  exit cancelled) is unreachable in play (every body is >= 2 rows, so the cell the step enters
+  is already the climber's own) and is kept as a guard.
 - **H1-D1 the D1 entrance (user request 2026-11-05, as built):** the D1 start room now gets
   the same rubble-capped arrival shaft `{c,0}` as D2–D8 (`RD_ARRCOL`, picked by the same
   generator step for every depth; `tools/levelgen.py` matches). The game starts with the hero
