@@ -3030,8 +3030,8 @@ def w16_level(p, check):
               p.rb("LVL_DEPTH") == d and blk == want, (p.rb("LVL_DEPTH"), hex(p.rw("LVL_SEED"))))
         st = blk[S["LVL_START"] - room_model.BASE]
         e = p.ent(0)
-        check(f"W16 {tag}: hero on the start room, x = start_x, standing on storey 0 (H1-D1: D1 mid-ladder, y 0)",
-              (p.rb("CUR_ROOM"), e["ROOM"], e["X"], e["Y"]) == (st, st, G.start_x(blk), 0 if d == 1 else y0),
+        check(f"W16 {tag}: hero on the start room, x = start_x, mid-ladder at the arrival shaft top (H1-ARRIVAL: y 0)",
+              (p.rb("CUR_ROOM"), e["ROOM"], e["X"], e["Y"]) == (st, st, G.start_x(blk), 0),
               (p.rb("CUR_ROOM"), st, e["X"], e["Y"], G.start_x(blk)))
         if hero_keep:
             check(f"W16 {tag}: HP / MAXHP / potions / kind carried over",
@@ -3449,6 +3449,8 @@ def w16_level(p, check):
         blk = room_model.read_block(p)
         to_exit(blk, "new game D1", walk=False)
         check("W16 new game: descended to D2", p.rb("LVL_DEPTH") == 2, p.rb("LVL_DEPTH"))
+        p.turn("J")                                   # H1-ARRIVAL: down the arrival shaft (no combat
+        p.turn("J")                                   # with a mid-ladder hero) to storey 0
         e = p.ent(0)
         k = S["K_SKELETON"]
         sh = p.rb(S["kind_tab"] + S["KT_BH"] + k)

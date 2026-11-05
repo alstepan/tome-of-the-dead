@@ -367,8 +367,14 @@ within the depth pool" check for D4–D8 only.
   **mid-ladder at its top** (`x = c`, `y = 0`, climb rest pose), waiting for keys; two DOWN turns
   stand him on storey 0. The shaft leads nowhere, as on D2+ (where a standing hero's UP at the
   shaft col is not a climb: no turn): UP at its top is no turn, no exit (nothing above D1); from
-  y 1 UP is a plain step back to y 0. D2+ arrivals are unchanged (standing at `c + 1`).
-  Supersedes the D1 `x = 14` of §1.1 gaps (4) / the L1 rules row.
+  y 1 UP is a plain step back to y 0. Supersedes the D1 `x = 14` of §1.1 gaps (4) / the L1
+  rules row.
+- **H1-ARRIVAL every depth (user 2026-11-05 "D2-D8 — yes", as built):** one arrival rule: after
+  the D1 start and after every level descent (the lair grate → `level_descend` → `level_enter` /
+  `level_populate`) the hero appears mid-ladder at the top of the new depth's arrival shaft
+  (`x = c`, `y = 0`, rest pose, `E_AIDIR` +1), waits, and two DOWN turns stand him on storey 0;
+  UP at the top is no turn, no exit. Supersedes the D2+ "standing at `x = c + 1`" of §1.1 gaps
+  (4) (designer clarification 2026-10-03, option a) and the start-col legality move.
 - Flyers: `9s ≤ y ≤ 9s+8−h`.
 
 ### 2.2 Turn loop (prototype §3.2 + E0)
