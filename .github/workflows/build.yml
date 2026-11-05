@@ -114,6 +114,20 @@ jobs:
           name: tome-of-the-dead-${{ github.sha }}
           path: dist
 
+      # Licence + third-party notices ship with the binaries (ZX0's BSD-3 needs its notice
+      # in the materials distributed with the game).
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            LICENSE
+            LICENSE-ASSETS.md
+            THIRD-PARTY.md
+          sparse-checkout-cone-mode: false
+          path: src
+
+      - name: Add licence files
+        run: cp src/LICENSE src/LICENSE-ASSETS.md src/THIRD-PARTY.md dist/
+
       - name: Rename assets with the version + checksums
         working-directory: dist
         run: |

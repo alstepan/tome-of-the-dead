@@ -101,9 +101,11 @@ Items on the floor are picked up automatically at the end of your turn.
 ### Credits
 
 - By alstepan.
-- WazHack-inspired.
-- Built with sjasmplus. Data compression by ZX0 by Einar Saukas.
-- Developed with AI assistance.
+- Inspired by WazHack (https://www.wazhack.com/).
+- Built with sjasmplus. Data compression by ZX0 by Einar Saukas and Urusergi (BSD 3-Clause; the ZX0 decompressor is included in the game).
+- Licence: code MIT, art, music and text CC BY 4.0. Source: https://github.com/alstepan/tome-of-the-dead
+- Developed agentically: the Z80 code, tools and tests were written by AI agents under the author's direction and review.
+- Music composed with Google Flow Music (AI) and arranged for the AY chip.
 
 ### Version history
 
@@ -121,7 +123,7 @@ Items on the floor are picked up automatically at the end of your turn.
 - **Tags (10, lowercase):** `roguelike`, `zx-spectrum`, `retro`, `z80`, `8-bit`, `dungeon-crawler`, `turn-based`, `permadeath`, `homebrew`, `fantasy`
 - **Platforms:** tick none (the files are emulator and hardware images, not native Windows, macOS or Linux builds). If you must pick something, use "Other".
 - **Community:** enable comments (the simplest option, no moderation of a forum). Add a discussion board only if you want bug reports in one place.
-- **Licence / content:** open licence (user 2026-11-05); exact licence TBD.
+- **Licence / content:** code MIT, art/music/text CC BY 4.0 (`LICENSE`, `LICENSE-ASSETS.md`); third-party notices in `THIRD-PARTY.md`.
 - **Embed / browser play:** none.
 
 ---
@@ -133,8 +135,11 @@ Items on the floor are picked up automatically at the end of your turn.
 | `tome-of-the-dead-v1.0.tap` | Tape image (.tap), recommended for real hardware and emulators |
 | `tome-of-the-dead-v1.0.sna` | Snapshot (.sna), instant start in emulators |
 | `SHA256SUMS` | Checksums (SHA-256) |
+| `LICENSE`, `LICENSE-ASSETS.md`, `THIRD-PARTY.md` | Licences and third-party notices (required: ZX0's BSD notice must ship with the game) |
 
 Mark none as "executable for a platform"; leave platform tags unset.
+
+**Cover image:** `img/cover_b.png` (630x500). **Screenshots:** `img/shot1_menu.png` … `img/shot5_deeper_d5.png`, plus `img/walk_fight.gif`.
 
 ---
 
@@ -142,20 +147,10 @@ Mark none as "executable for a platform"; leave platform tags unset.
 
 **Tome of the Dead v1.0 is out.**
 
-It is a turn-based roguelike for the ZX Spectrum 128K, written in hand-coded Z80 assembly. Choose a Warrior or a Mage and descend through eight randomly generated depths. Each has a locked lair with a boss that guards the grate down. On depth 8 the Necromancer Archmage waits, and beyond him the Tome itself.
+It is a turn-based roguelike for the ZX Spectrum 128K, written in hand-coded Z80 assembly. Choose a Warrior or a Mage and descend through eight randomly generated depths. Each has a locked lair with a boss that guards the grate down. On depth 8 the Necromancer Archmage waits, and beyond the Archmage, the Tome itself.
 
 This first release has two classes, a full bestiary with a boss on every depth, spells, gear, boss treasures, hunger and status effects, AY music and effects, and Kempston, Sinclair or redefinable-key control. There is no saving, so every run counts.
 
 Download the `.tap` for tape-style loading or the `.sna` for an instant start in an emulator, and check the `SHA256SUMS` file if you like. It needs a 128K machine: 48K is not supported. It has been tested on a real ZX Spectrum 128K "toastrack".
 
 Bug reports and run stories are very welcome in the comments. Thank you for playing.
-
----
-
-## 6. Open questions for you
-
-1. Author name or handle for the Credits line, and do you want a contact or source link?
-2. Is the "developed with AI assistance" wording acceptable, or do you want it stronger, softer or removed?
-3. Licence: keep "All rights reserved", or choose a permissive one (e.g. a Creative Commons licence) for the game?
-4. Screenshots and cover image (itch wants a 630x500 cover plus 3-5 screenshots): which captures should I plan, e.g. menu, a play room, a boss fight and the Tome?
-5. Should the page say "tested on real hardware" for specific models (which 128K, +2 or +3 machines you used), or stay generic as drafted?
