@@ -344,7 +344,10 @@ def forced_exit(p, stats):
     p.wb("EXIT_KIND", kind)
     p.wb("EXIT_DEST", r + dd)
     if colk:
-        p.wb("EXIT_COL", p.rb(d0 + S[colk]))
+        c = p.rb(d0 + S[colk])
+        p.wb("EXIT_COL", c)
+        y = 0 if kind == S["EX_UP"] else S["PLAY_ROWS"] - 6      # H1: the hero leaves from the shaft's end
+        p.set_ent(0, X=c, Y=y, PX=c * 8, PY=y * 8)
     for n, pc in zip((5, 6), SCROLL_PCS):
         p.z.cmd("set-breakpoint %d PC=%d" % (n, pc))
     pc0 = p.pc()

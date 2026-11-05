@@ -686,15 +686,19 @@ class Bot:
                 self.act("WAIT")
                 return "stuck"
             return st
+        # H1 (user 2026-11-05): an exit shaft is climbed step by step (UP: 2 ladder turns, the 2nd exits) and the
+        # hero arrives mid-ladder at the other end of the new room's shaft: continue_climb keeps the direction
         if kind == "D":
             col = room_model.field(self.blk, r, "RD_DNCOL")
             st = self.go_node(1, col)
             if st == "there":
+                self.climb = "J"
                 return "moved" if self.act("J") else "stuck"
             return st
         col = room_model.field(self.blk, r, "RD_UPCOL")
         st = self.go_node(0, col)
         if st == "there":
+            self.climb = "K"
             return "moved" if self.act("K") else "stuck"
         return st
 
