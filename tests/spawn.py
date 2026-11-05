@@ -278,6 +278,33 @@ def rabbit(p, lines):
           len(got) == 1 and p.ent(got[0])["POT"] & ONCE, [(s2, p.ent(s2)["POT"]) for s2 in got])
 
 
+# ---------------------------------------------------------------------------- sfx_req log
+# (tests/sfx5b.py's patch: sfx_req's first 3 bytes -> JP stub that appends A to a log, then runs them)
+SFX_STUB = S["LOWRAM_END_3B"]
+SFX_RES = SFX_STUB + 200
+
+
+def sfx_log_install(p):
+    base = S["sfx_req"]
+    assert list(p.z.read_memory(base, 3)) == [0xF5, 0xC5, 0x47]
+    w = lambda v: [v & 255, v >> 8]  # noqa: E731
+    code = [0xE5, 0xF5, 0x2A] + w(SFX_RES) + [0x77, 0x23, 0x22] + w(SFX_RES) + [0xF1, 0xE1,
+            0xF5, 0xC5, 0x47, 0xC3] + w(base + 3)
+    p.z.cmd("write-memory %d %s" % (SFX_STUB, " ".join(str(b) for b in code)))
+    p.z.cmd("write-memory %d %s" % (base, " ".join(str(b) for b in [0xC3] + w(SFX_STUB))))
+    p.z.cmd("write-memory %d %s" % (SFX_RES, " ".join(str(b) for b in w(SFX_RES + 2))))
+    p.wb("SND_MODE", 3)
+
+
+def sfx_log_remove(p):
+    p.z.cmd("write-memory %d 245 197 71" % S["sfx_req"])   # push af / push bc / ld b,a
+
+
+def sfx_log(p):
+    end = p.rb(SFX_RES) | p.rb(SFX_RES + 1) << 8
+    return list(p.z.read_memory(SFX_RES + 2, end - SFX_RES - 2)) if end > SFX_RES + 2 else []
+
+
 # ---------------------------------------------------------------------------- B / C
 def bone_caller(p, lines):
     L, r = level(p, lines, 6, 0x7601, need=20)
@@ -293,9 +320,14 @@ def bone_caller(p, lines):
     mon(p, 1, K["BONE_CALLER"], bx, s_, hp=60)
     heal(p)
     lines.lines.clear()
+    sfx_log_install(p)
     p.turn("WAIT")
+    sfx_ids = sfx_log(p)
+    sfx_log_remove(p)
     sm = [s2 for s2 in room_slots(p) if s2 != 1]
     e = p.ent(sm[0]) if sm else None
+    check("B1s the summon cast requests SFX_DRAIN exactly once (sfx_msg MSG_M_SUMMON at the IMPACT)",
+          sfx_ids.count(S["SFX_DRAIN"]) == 1, sfx_ids)
     check(f"B1 the first in-line turn summons one {'Skeleton' if want_k == K['SKELETON'] else 'Ghost'}"
           " (summon-made, F_RESPAWN)",
           len(sm) == 1 and e["KIND"] == want_k and e["POT"] & SUMM and e["FLAGS"] & EF_RESPAWN, (sm, e, lpk))
