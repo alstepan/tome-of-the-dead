@@ -5927,3 +5927,69 @@ foot, 2 Ghosts above, a Bat over the shaft): main **132,038 T, work 129,353 > 12
 
 Free bytes (release): bank 2 13 -> **16**; bank 0 16, R6 1, bank 3 13, bank 1 1, bank 7 low 18 unchanged. The deferred items of
 PERF-GHOST (hero repair rect, unrolled attr stamp, `cycle_frame` steps) were not needed: the real scene's cost was `cork_check`.
+
+## H1 ledger (`feat/h1-climb`, 2026-11-05; on main `b25e043`; user rulings 2026-11-05: visible climb across vertical exits, game.md §2.1 "H1")
+
+**Behaviour:** every row climbed on an exit shaft is an ordinary ladder turn. Up: standing on storey 0 at the up-exit col, UP
+steps (y 2 -> 1); the step that puts the head on row 0 also sets EX_UP (same turn) -> scroll -> the hero appears mid-ladder at
+the bottom of the room above's shaft (`y = 18 - h`, feet in its row-17 hole), M_REST (the climb rest pose), and waits for keys.
+Down: the step into the down-exit hole (feet on row 17) sets EX_DOWN -> he appears mid-ladder at the top of the shaft below
+(`y = 0`). From an arrival end the opposite key is the exit back (no step, 1 turn). The level exit is unchanged (it rides the
+same step); the Teleport lands standing. No RAM, no new address, no frame, no pool change.
+
+**Code:** bank 7 `try_climb` (`src/bank7.asm`): the up-exit START is a plain step; `.mid` tests the new y: `$FF` (up from row 0)
+or feet past row 17 = the exit with no step (`.x0`); head onto row 0 / feet onto row 17 = the exit step (`.xs`, cancelled if
+blocked, a squeeze keeps it); one exit-field block for both directions (storey = (dy+1)/2, kind = `EX_UP` + storey, dest =
+r + 3 dy, `E_AIDIR` = dy so a no-step exit's arrival has the right `cork_check` dir); the level exit = that step, then kind
+`EX_LEVEL`. `.vexit` returns NZ with CF = 0 and no longer loads `CUR_ROOM`. `do_exit .lpt`: a vertical arrival is
+`y' = 18 - h - y` (the shaft's other end: 0 <-> 18 - h); `.tele` presets `y = 18 - F` (F = the floor row of tele_pick's storey)
+so the same formula stands him on it (no discriminator flag needed). Bank 2 `cork_check` (`src/logic.asm`): the climb-path walk
+stops past row 0 (`inc a / jr z`: the probe that wrapped to y 255) and after a probe with the feet on row 17 (`(y+h) div 9` = 2,
+`bit 1, l`): on an exit shaft no floor ends it; the old walk read past the 24-row `KT_MOD9` / `KT_DIV9` tables (a hero blocked
+stepping into a down-exit hole already did so before H1). Bank 3: comment only (`lp_transition` reads the mid-ladder arrival
+box: `storey_ref` of y 0 / 18 - h = 0 / 1).
+
+| Region (free B, before -> after) | release `DEBUG_KIT=0` | kit | release + trace |
+|---|---|---|---|
+| bank 7 low (to the attr shadow) | 18 -> **6** | 18 -> **6** | 69 -> **57** |
+| bank 2 (tail + `kind_tab` pad) | 16 (3 + 13) -> **9** (3 + 6) | 15 -> **8** | 18 -> **11** |
+| bank 3, bank 0, R6, bank 1, low RAM, bank-7 high | 13, 16, 1, 1, 0, 2 unchanged | unchanged | unchanged |
+
+Bank 7 +12 net: `try_climb` +8, `.vexit` -4, `.lpt` / `.tele` +8, after in-routine reclaim (`dec a` for `cp 1`, `ret` on
+`.vexit`'s NZ / CF = 0 instead of the `.no` tail, `xor c` for `cp c`, the dest by `add a, l` x 3 instead of `ld hl` + 3 x
+`add a, (hl)`, the teleport preset instead of a teleport flag). Bank 2 +7 (`cork_check`). Cost: `cork_check` +~20 T a probe;
+`tests/budget.py` every gate ok, `glad` 119,904 / work 117,219 / real 125,340 and `blair` real 138,871 (both unchanged).
+
+Tests: **`tests/h1climb.py` (new, 46 checks)**: D / U / R for both heroes (turn counts, arrival x / y / mid-ladder / M_REST /
+E_AIDIR, 30 idle ticks = no move / no turn, W4 screens), T (teleport from standing and from mid-ladder on the shaft lands
+standing), F (a goblin follows both ways, arrives PENDING, every key a turn, it materialises once the hero walks off), C
+(`cork_check` unit stub: the up-shaft and blocked-row-17 walks end, CF right, <= 2k T, y restored). Updated: `world.py` W3
+(arrivals (24, 0) / (24, 18 - h)), `game.py` 26 / 35 (the climb down before the follower check, 2 K turns up) and the §8.2
+walkthrough (2 J turns down C's shaft after the arrival), `floor1.py` F11 / `gfx_integrity.py` `forced_exit` (direct do_exit:
+the hero at the departure end), `pt_bot.py` `do_exit` (keeps the climb direction across the exit). No golden changed.
+
+### H1-D1 (same branch, 2026-11-05; user request: the D1 start shows the hero entering down a ladder, game.md §2.1 "H1-D1")
+
+**Behaviour:** the D1 start room gets the rubble-capped arrival shaft `{c,0}` (`RD_ARRCOL`) like D2-D8; the game starts with
+the hero mid-ladder at its top (`x = c`, `y = 0`, M_REST, `E_AIDIR` +1) waiting for keys. The shaft leads nowhere: UP at its
+top = no turn, no exit (D2+'s entrance: a standing UP there is no climb, no turn, unchanged); from y 1 UP is a plain step.
+
+**Code:** bank 3 `level_gen` (`levelgen.asm`): the arrival-shaft `pick_man` runs for every depth (the D2+ test gone, -7 B;
+D1 layouts and the D1 GEN_RNG stream change: `tools/levelgen.py` `generate` / `start_x` and `tools/levelcheck.py` (arrival col
+presence, D1 start x = the col) updated in the same commit); `level_start_x` returns the shaft col on D1 (-2 B);
+`level_populate` puts the D1 hero at y 0 with `E_AIDIR` +1 (+12 B: `cork_check` needs a non-zero dir for a mid-ladder hero).
+Bank 7 `try_climb .xs`: the dest is computed first; a dest above the grid (< 0: only a top-row room's shaft, and a top-row room
+never has an up exit) is no exit (`.nx`: from row 0 no turn, else the plain step) (+9 B); paid by the level exit folding into
+`.xs` (a dest past the grid = the lair's grate = `EX_LEVEL`, kind = `EX_UP` + (dy + 3 - CF) / 2; the `.lvl` block gone, -6 B).
+
+| Region (free B, H1 -> H1-D1) | release | kit | release + trace |
+|---|---|---|---|
+| bank 7 low | 6 -> **3** | 6 -> **3** | 57 -> **54** |
+| bank 3 (to `AY_RESERVE`) | 13 -> **10** | 9 -> **6** | 9 -> **6** |
+| bank 1 | 1 -> **2** (the items overlay repacks 1 B smaller: the bank-3 routines it calls moved) | 1 -> 2 | - |
+| bank 2, bank 0, R6, low RAM | 9, 16, 1, 0 unchanged | unchanged | unchanged |
+
+Tests: `tests/h1climb.py` S (both heroes, generated D1 with fixed seeds: the shaft present, the hero at its top mid-ladder,
+waits, UP = no turn / no exit, 2 J turns down, UP standing at the foot = no climb, y 1 -> 0 plain step); `levelgen_test` 8000 /
+8000 + 3F 8000 / 8000, `levelcheck --full` 524288 / 524288, `levelgen_z80` 280 / 280 (`--f3`: 43 D8 fails, identical on main
+`b25e043`: pre-existing).

@@ -805,10 +805,7 @@ attempt:        ld   (LG_SP), sp
                 ld   a, ixl
                 cp   LG_ROOMS_END
                 jr   nz, .fl
-                ; arrival shaft (D2+), level exit
-                ld   a, (LVL_DEPTH)
-                cp   2
-                jr   c, .noarr
+                ; arrival shaft (H1-D1: every depth, D1 too: the hero enters down it), level exit
                 ld   a, (LVL_START)
                 call rdp
                 push hl
@@ -818,7 +815,7 @@ attempt:        ld   (LG_SP), sp
                 ld   e, SHAFT_MIN + SHAFT_N - 1
                 call pick_man
                 ld   (ix+RD_ARRCOL), a
-.noarr:         ld   a, (LVL_LAIR)
+                ld   a, (LVL_LAIR)
                 call rdp
                 push hl
                 pop  ix
@@ -1281,7 +1278,8 @@ level_gen:      ld   (LVL_DEPTH), a
     ENDIF
 
 ;==============================================================================
-; level_start_x: D1 x = 14, D2+ x = arrival col + 1 (arrival shaft exempt); if
+; level_start_x: H1-D1: D1 x = the arrival col (on the shaft: level_populate puts
+; him mid-ladder at its top), D2+ x = arrival col + 1 (arrival shaft exempt); if
 ; another storey-0 footprint touches x-1..x+1 (or x is outside 2..29) move to the
 ; nearest legal col, d = 0.., x-d before x+d. Out A = B = col.
 ;==============================================================================
@@ -1289,11 +1287,11 @@ level_start_x:  ld   a, (LVL_START)
                 call rdp
                 push hl
                 pop  ix
-                ld   a, (LVL_DEPTH)
-                ld   b, 14
-                dec  a
-                jr   z, .x0
                 ld   b, (ix+RD_ARRCOL)
+                ld   a, (LVL_DEPTH)
+                dec  a
+                ld   a, b
+                ret  z                  ; D1: the shaft col itself
                 inc  b
 .x0:            ld   c, 0
 .d:             ld   a, b

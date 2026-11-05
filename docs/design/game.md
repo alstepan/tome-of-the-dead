@@ -342,6 +342,33 @@ within the depth pool" check for D4–D8 only.
 - Room map: 32×18 = 576 B, 6-bit tile ids.
 - Ladder segments: `{c,0}` up-exit (rows 0–7), `{c,1}` internal (hole in row 8, rows 8–16),
   `{c,2}` down-exit hole (row 17). **A climb between storeys takes 9 turns.**
+- **H1 vertical exits, visible climb (user rulings 2026-11-05, as built):** every row climbed on
+  an exit shaft is an ordinary ladder turn (monsters act, hunger ticks). **Up:** standing on
+  storey 0 at the up-exit col, UP climbs (48-px hero: y 2 → 1, one turn); the step that puts
+  the head on row 0 also triggers the exit in the same turn → scroll up → he appears
+  **mid-ladder at the bottom of the shaft** of the room above (feet on its row-17 hole, `y =
+  18 − h`), climb rest pose, and waits for keys. **Down:** the step from storey 1 into the
+  down-exit hole (feet on row 17) triggers the exit → scroll down → he appears **mid-ladder at
+  the top of the shaft** below (`y = 0`), rest pose, waits; two DOWN turns stand him on
+  storey 0. From an arrival end the opposite key is the exit back (no step, 1 turn: the body
+  cannot leave the room further). A blocked exit step is a blocked climb (wait / squeeze, §6.4;
+  the exit is cancelled unless he squeezes). The level exit is unchanged (the step into the
+  grate); the **Teleport still lands standing**. Followers arrive PENDING standing at the
+  shaft foot as before (they materialise once the hero has left that box). The §6.4 yield
+  path (`cork_check`) ends at the room's top / bottom row on an exit shaft. Hunger (`FOOD_TMR`)
+  ticks on every climb step, the exit-step turn included; only the WEAK faint counter `HW_TMR`
+  is held on the exit turn (FAINT1); the no-turn UP at the D1 shaft top costs nothing. The
+  "blocked exit step" branch (`try_climb .xs`: the step onto row 0 / into row 17 blocked, the
+  exit cancelled) is unreachable in play (every body is >= 2 rows, so the cell the step enters
+  is already the climber's own) and is kept as a guard.
+- **H1-D1 the D1 entrance (user request 2026-11-05, as built):** the D1 start room now gets
+  the same rubble-capped arrival shaft `{c,0}` as D2–D8 (`RD_ARRCOL`, picked by the same
+  generator step for every depth; `tools/levelgen.py` matches). The game starts with the hero
+  **mid-ladder at its top** (`x = c`, `y = 0`, climb rest pose), waiting for keys; two DOWN turns
+  stand him on storey 0. The shaft leads nowhere, as on D2+ (where a standing hero's UP at the
+  shaft col is not a climb: no turn): UP at its top is no turn, no exit (nothing above D1); from
+  y 1 UP is a plain step back to y 0. D2+ arrivals are unchanged (standing at `c + 1`).
+  Supersedes the D1 `x = 14` of §1.1 gaps (4) / the L1 rules row.
 - Flyers: `9s ≤ y ≤ 9s+8−h`.
 
 ### 2.2 Turn loop (prototype §3.2 + E0)

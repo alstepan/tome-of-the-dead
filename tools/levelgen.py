@@ -475,10 +475,9 @@ def attempt(rng, depth, l2=True):
     rooms[lair].lair = True
     for r in leaves:
         rooms[r].dead = True
-    # exits: arrival shaft, level exit
-    if depth >= 2:
-        rm = rooms[start]
-        rm.arr = pick_feature(rng, rm, SHAFT_MIN, SHAFT_MAX, (0,), True)
+    # exits: arrival shaft (H1-D1, user 2026-11-05: every depth, D1 too), level exit
+    rm = rooms[start]
+    rm.arr = pick_feature(rng, rm, SHAFT_MIN, SHAFT_MAX, (0,), True)
     rm = rooms[lair]
     rm.exitcol = pick_feature(rng, rm, SHAFT_MIN, SHAFT_MAX, (1,), True)
     # in-room features
@@ -626,7 +625,8 @@ def generate(depth, seed, master=0, l2=True, f3=False):
 
 def start_x(b):
     """Hero start col (storey 0, DFS-root room); a pure function of the block.
-    D1: 14; D2+: arrival col + 1 (arrival shaft exempt from the legality test).
+    H1-D1: D1 = the arrival col itself (the hero enters mid-ladder at the shaft's top, no
+    legality move); D2+: arrival col + 1 (arrival shaft exempt from the legality test).
     If that col is not 'legal' (other footprints) it moves to the
     nearest legal col (distance d = 1.., left first). Legal: 2..29 and cols
     x-1, x, x+1 touch no storey-0 footprint (up/arr/ladders; pit holes+caps)
@@ -635,6 +635,8 @@ def start_x(b):
         return b[OFF_DESC + r * D["RD_STRIDE"] + D[k]]
     st = b[H["LVL_START"]]
     depth = b[H["LVL_DEPTH"]]
+    if depth == 1:
+        return rd(st, "RD_ARRCOL")
     # the arrival shaft itself is exempt (hero stands at arr+1 by rule, game.md 1.1)
     spans = [(f, f + 2) for f in (rd(st, "RD_UPCOL"), rd(st, "RD_LAD1"), rd(st, "RD_LAD2")) if f]
     p = rd(st, "RD_PITCOL")
@@ -645,7 +647,7 @@ def start_x(b):
         w = bl & D["RDB_WMASK"]
         spans.append((32 - w - 1, 31) if bl & D["RDB_RIGHT"] else (0, w))
     ok = lambda x: 2 <= x <= 29 and not any(not (x + 1 < a or x - 1 > c) for a, c in spans)
-    x0 = 14 if depth == 1 else rd(st, "RD_ARRCOL") + 1
+    x0 = rd(st, "RD_ARRCOL") + 1
     for d in range(0, 32):
         for x in (x0 - d, x0 + d):
             if ok(x):

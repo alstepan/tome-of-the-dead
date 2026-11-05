@@ -429,9 +429,14 @@ level_populate:
                 ld   (ix+E_FLAGS), a
                 KFL    KT_BH
                 ld   b, a
-                ld   a, FLOOR_ROW0             ; storey 0: 8 - h
+                ld   a, (LVL_DEPTH)            ; H1-D1 (game.md §2.1): on D1 he enters down the
+                dec  a                         ; arrival shaft: mid-ladder at its top (y 0, the
+                jr   nz, .st                   ; climb rest pose), heading down (E_AIDIR: cork_check)
+                ld   (ix+E_AIDIR), 1
+                jr   .y                        ; (A = 0)
+.st:            ld   a, FLOOR_ROW0             ; storey 0: 8 - h
                 sub  b
-                ld   (ix+E_Y), a
+.y:             ld   (ix+E_Y), a
                 call init_ent_common
                 pop  hl
                 ld   (ix+E_HP), l

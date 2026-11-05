@@ -778,8 +778,11 @@ pend_hit:
 ; shaft, boxed by a wall, never had to move: the hero waited forever).
 ; CLIMB_BLK is cleared by try_player_turn, so it only counts in the monster
 ; phase of the turn whose climb was blocked.
+; H1: the walk stops at the room's end too (a probe past row 0 is not tested; one
+; with the feet on row 17 is the last): on an exit shaft no floor ends it (the old
+; walk wrapped y and read past the KT_MOD9 / KT_DIV9 rows).
 ; Preserves BC, DE, IX.  Clobbers: A, HL.  Fast path (hero not climbing) 30 T; a box
-; outside the hero's columns ~0.3k T; else ~0.35k T a probe (PERF-GHOST2)
+; outside the hero's columns ~0.3k T; else ~0.37k T a probe (PERF-GHOST2, H1 +20 T)
 ;------------------------------------------------------------------------------
 cork_check:
                 ld   a, (PL_LADDER)            ; fast path: hero not mid-ladder
@@ -805,11 +808,15 @@ cork_check:
 .probe:         ld   a, (ix+E_Y)
                 add  a, (ix+E_AIDIR)
                 ld   (ix+E_Y), a               ; next box along the path
+                inc  a                         ; H1: up past row 0 (0 -> $FF): the up-exit
+                jr   z, .end                   ; shaft's end, no floor there (A = 0)
                 call box_vs_ix                 ; (keeps BC, DE: the old per-probe pop /
                 jr   c, .hit                   ; push reload is gone, -42 T a probe)
-                call is_standing               ; reached the ladder end?
-                jr   nz, .probe
-                or   a
+                call is_standing               ; reached the ladder end? (L = (y+h) div 9)
+                jr   z, .end
+                bit  1, l                      ; H1: feet on row 17 (y+h = 18: L = 2): the
+                jr   z, .probe                 ; down-exit shaft's end (KT_MOD9 has 24 rows)
+.end:           or   a
 .hit:           pop  hl                        ; H = the saved y (POP keeps CF)
                 ld   (ix+E_Y), h
 .out:           pop  ix
