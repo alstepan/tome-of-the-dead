@@ -151,7 +151,7 @@ def build(src_root, defines, out, env=None):
             subprocess.run([sys.executable, os.path.join(src_root, "tools/zx0_sources.py")],
                            check=True)
         cmd = ["sjasmplus", os.path.join(src_root, "src/main.asm"), "--fullpath",
-               "--sym=build/tome-of-the-dead.sym", "-i", os.path.join(src_root, "src")] + flags
+               "--sym=build/tome-of-the-dead.sym", "-i" + os.path.join(src_root, "src")] + flags
     r = subprocess.run(cmd, cwd=out, capture_output=True, text=True,
                        env=dict(os.environ, **(env or {})))
     if r.returncode or "warning" in r.stdout.lower().replace("warnings: 0", ""):
