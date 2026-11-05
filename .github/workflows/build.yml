@@ -1,10 +1,11 @@
-# FINAL-2: build the tape on GitHub + the emulator-free checks.
+# FINAL-2: build the tape on GitHub + the emulator-free checks; a pushed v* tag also publishes a GitHub Release.
 # The ZEsarUX/ZRCP suites stay local (tests/*.py that drive the emulator; see docs/plan.md FINAL-2).
 name: build
 
 on:
   push:
     branches: [main]
+    tags: ['v*']          # release: git tag v1.0 && git push origin v1.0
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -24,9 +25,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -38,7 +39,7 @@ jobs:
       # --- toolchain (cached: sjasmplus by tag, zx0 by the pin inside setup_zx0.sh) ---
       - name: Cache sjasmplus
         id: cache-sjasm
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/sjasmplus
           key: sjasmplus-${{ runner.os }}-${{ env.SJASMPLUS_TAG }}
@@ -58,7 +59,7 @@ jobs:
           "$HOME/.local/sjasmplus/sjasmplus" --version | head -1
 
       - name: Cache zx0
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tools/bin
           key: zx0-${{ runner.os }}-${{ hashFiles('tools/setup_zx0.sh') }}
@@ -91,7 +92,7 @@ jobs:
         # (Mage win rate falls with +30 HP); open item in docs/plan.md.
 
       - name: Upload tape / snapshot / symbols
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tome-of-the-dead-${{ github.sha }}
           path: |
@@ -99,3 +100,34 @@ jobs:
             build/tome-of-the-dead.sna
             build/tome-of-the-dead.sym
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write             # only this job can write (create the release)
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: tome-of-the-dead-${{ github.sha }}
+          path: dist
+
+      - name: Rename assets with the version + checksums
+        working-directory: dist
+        run: |
+          v="${GITHUB_REF_NAME}"
+          for ext in tap sna; do mv "tome-of-the-dead.$ext" "tome-of-the-dead-$v.$ext"; done
+          rm -f tome-of-the-dead.sym      # debug symbols stay in the CI artifact only
+          sha256sum tome-of-the-dead-"$v".* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          v="${GITHUB_REF_NAME}"
+          pre=""; case "$v" in *-*) pre="--prerelease";; esac   # v1.0-rc1 -> pre-release
+          gh release create "$v" dist/* --title "Tome of the Dead $v" --generate-notes --verify-tag $pre
