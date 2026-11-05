@@ -142,7 +142,6 @@ too_sick      | N | "TOO SICK TO EAT"
 
 [stems_fx]
 # bank 0 (checked, not emitted)
-bk_read       | E:bk_read         | "YOU READ THE BOOK"
 st_asleep     | E:st_asleep       | "YOU FALL ASLEEP"
 spl_drain_heal | E:spl_drain_heal | "YOU FEEL HEALTHIER"
 # pickup / trap / teleport results that are not turn-path lines

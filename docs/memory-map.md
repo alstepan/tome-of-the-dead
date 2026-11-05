@@ -13,7 +13,7 @@
 | `$5800-$5AFF`| Screen attributes (bank 5)                  | 768 bytes, the clash grid     |
 | `$5B00-$5BFF`| Printer buffer → **`LOG_TXT`** (B3B-11)     | log message ring, 4 × 64 B (runtime only, after boot) |
 | `$5C00-$5CBF`| System variables                            |                               |
-| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`**; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`** (ranged scratch + shot queue, runtime only — "3F-T7") (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D55` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification, **M0: 86 B = + `ST1_CNT` 5 B, the STATS1 S1 reserve**; runtime only — "3E contracts"); **D3-11: `$5CDB-$5CEA` = `DN_KEY` (the spawn queue, review), `$5CEB-$5CF6` = `DN_A` (the flying numbers' pass state + scratch, 12 B), `$5D60-$5DFF` = `DN_LIVE` (3 x 32 B live records) + `DN_SLOT` (16 x 4 B per slot)**, runtime only ("D3-11 ledger") |
+| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`**; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`** (ranged scratch + shot queue, runtime only — "3F-T7") (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D55` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification, **M0: 86 B = + `ST1_CNT` 5 B, the STATS1 S1 reserve** **STATS2: 89 B = + `ST2_CNT` 3 B `$5D56-$5D58`**; runtime only — "3E contracts"); **D3-11: `$5CDB-$5CEA` = `DN_KEY` (the spawn queue, review), `$5CEB-$5CF6` = `DN_A` (the flying numbers' pass state + scratch, 12 B), `$5D60-$5DFF` = `DN_LIVE` (3 x 32 B live records) + `DN_SLOT` (16 x 4 B per slot)**, runtime only ("D3-11 ledger") |
 | `$8000-$BFFF`| Program origin region                       | `ORG $8000` for now           |
 | `$C000-$FFFF`| Paged bank window                           | bank selected by $7FFD bits0-2|
 
@@ -1443,7 +1443,7 @@ most of that margin — the alias stays. `$5B00-$5BFF` and `$5CC0-$5FFF` (~692 B
 $5F00..$5F8B (140 B), E: free once `boot` has moved SP off the BASIC stack) are a further runtime-only (not tape-loadable)
 reserve (B3B-11: `$5B00` = `LOG_TXT`; **D3-6b: `$5E00-$5EFF` = `PF_RAM`**, the
 proj_fire scratch — never touched before `boot`; **3E-T3: `$5D00-$5D78` = `ITEM_RAM`**, zeroed by `new_game`;
-still free: `$5CCB-$5CEA` (32 B; `$5CC0-$5CCA` is the ROM channel area, avoided; **D3-11: `$5CDB-$5CEA` = `DN_KEY`, `$5CEB-$5CF6` = `DN_A`; `$5CCB-$5CDA` and `$5CF7-$5CFF` free; DNUM-SPRITE-FIX: `DN_A` to `$5CF7` (`DN_TXT` 6 B), `$5CF8-$5CFF` free**), `$5D56-$5D5F` (10 B; **D3-11: `$5D60-$5DFF` = `DN_LIVE` + `DN_SLOT`**; was `$5D79-$5DFF` 135 B before ITEM_RAM grew),
+still free: `$5CCB-$5CEA` (32 B; `$5CC0-$5CCA` is the ROM channel area, avoided; **D3-11: `$5CDB-$5CEA` = `DN_KEY`, `$5CEB-$5CF6` = `DN_A`; `$5CCB-$5CDA` and `$5CF7-$5CFF` free; DNUM-SPRITE-FIX: `DN_A` to `$5CF7` (`DN_TXT` 6 B), `$5CF8-$5CFF` free**), `$5D56-$5D5F` (10 B; **STATS2: `$5D56-$5D58` = `ST2_CNT` (ITEM_RAM), `$5D59-$5D5F` free**; **D3-11: `$5D60-$5DFF` = `DN_LIVE` + `DN_SLOT`**; was `$5D79-$5DFF` 135 B before ITEM_RAM grew),
 `$5FF4-$5FFF` (12 B; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`**, the ranged-attack scratch + shot queue, "3F-T7"; **3F-T8: `$5FF4` = `BOSS_TRAP`; 3F-T9: `$5FF5-$5FFF` = `SPQ_RAM`, the spawn queue + `sp_run` scratch — the reserve after `RG_RAM` is full**, "3F-T9") — `tests/items3e.py` R1/R2 canary them through a game start, play and a descent). A8: after `boot` nothing uses the system variables but
 `SYS_FRAMES` (`$5C78-$5C7A`; the IM 2 ISR does not run the ROM keyboard scan),
 so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
@@ -6062,3 +6062,34 @@ average, seed 1): **W 40.5 % / M 40.4 %** (target 40.9 / 40.4 +-1 pp).
 cap, 1d2 - DEF, Silk Cloak, the FX descriptor, real turns: 4 turns apart walking in, a plain Spider never spits); `ranged.py` A draws
 Widows (17 pass), `xp.py` G1 / S1 Warrior + 5 (30), boss 213, status 81, status1 25, proj3 10, dnum 50, archmage 9,
 combat_tables PASS, budget all gates.
+
+## STATS2 ledger (`feat/stats2`, 2026-11-05; user-approved; docs/design/stats2.md, game.md "End card statistics")
+Two end-card rows, both cards: `BOOKS r/f` (row 17) and `ITEMS n` (row 18) between TURNS (16) and BEST KILL (now 19);
+the approved ENDCARD-L1F-G1 look is kept (table at x 72 row 11; the spec's rows 10-16 were the pre-ENDCARD layout):
+`EC_FEET` = `EC_TAB_ROW` + 9 (was + 7) so the portraits' / lectern's feet stay on the table's bottom row (the lectern's
+two `ROOM_MAP` rows 18-19 lie inside the 672-B buffer, same page: the existing ASSERT); PRESS stays on row 22.
+RAM: `ST2_CNT` `$5D56..$5D58` (`ST2_BKR` read, `ST2_BKF` found, `ST2_ITM` items) appended to `ITEM_RAM`
+(`ITEM_RAM_LEN` 86 -> **89**: new_game's clear covers them, 0 B of code), bytes saturating at 255.
+Hooks: R6 `pu_add` (taken: IT_BOOK -> BKF, else ITM; `st2_inc`), R6 `fx_book` entry (BKR: every book read reaches it,
+the book already consumed), bank-7 `ap_take` taken path (n > 0: ITM inline; its PANEL_DIRTY / SFX block moved there,
+`set PD_AMMO_BIT,(hl)`: -1 B net of the 7-B increment); end card: bank-3 `ec_tab` `far6 st2_fmt` (R6: "r/f" into
+MSG_BUF with low-RAM `es_num`) + `ec_row`, `ec_byte ST2_ITM`. Text: `end_books` / `end_items` added; the dead
+`bk_read` ("YOU READ THE BOOK", no code reference: fx_read prints "YOU READ THE <name>") removed from strings.txt /
+items.txt / itempack.py's stem checks (the kit build's shared text + b0 reserve was 9 B over without it).
+Cost: ~30 T per counted pickup / read; the end card +2 rows (~15k T, once); play ticks unchanged.
+
+| Region (free B) | release before -> after | kit before -> after | what |
+|---|---|---|---|
+| bank 3 (to AY) | 36 -> **17** | 32 -> **13** | ec_tab BOOKS (11) + ITEMS (8) |
+| R6 | 52 -> **3** | 58 -> **8** | st2_inc 4, st2_fmt 27, pu_add hook 9, fx_book hook 6 (+ overlay stream repack) |
+| bank 7 low | 3 -> **2** | 3 -> **2** | ap_take restructure (+1) |
+| bank 0 text + b0 (to POOL_START) | 16 -> **14** | 2 -> **0** | text 2,382 -> 2,384 B (+2 strings, -bk_read), TEXT_RES headroom 18 -> 16 |
+| bank 7 high / bank 1 / bank 2 / low RAM | 2 / 1 / 9 / 0 | same | |
+
+Tests: new `tests/stats2.py` (S0-S6: book pickup + READ, potion / food / arrows + DISCARD, rank-up + tome reads,
+saturation incl. the ammo path, refused pickups: full bag / full quiver / Mage on arrows, new_game reset);
+`tests/stats1.py` E checks rows 15-19 (+ blank 20-21) pixel-exact with poked counters (killer 3/5 12, died 0/0 0,
+win 255/255 255), G6 checks ST2 zeroed; stats1 E now opens the card with `end_card` (it still ticked as before END-WAIT, so
+all 84 E checks had been failing on main: the card was never drawn); `items3e.py` L3 (ITEM_RAM 89), `itemtab.py`, `d8_stress.py` mask.
+Goldens refreshed (content changed: the two new rows + the portraits 2 rows lower): `endcard_{killer,died,win}_{warrior,mage}`.
+

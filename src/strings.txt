@@ -207,7 +207,6 @@ ab_power        "POWER STRIKE"
 ab_whirl        "WHIRLWIND"
 
 # --- books (game.md §5) ---------------------------------------------------------
-bk_read         "YOU READ THE BOOK"
 bk_learn        "YOU LEARN "
 bk_rises        " RISES TO RANK "
 # placeholder text - designer to confirm
@@ -310,3 +309,6 @@ end_best        "BEST KILL"
 end_killed      "KILLED BY"
 end_class       "CLASS"
 end_level       "LEVEL"
+# STATS2 (combat3.asm ec_tab): BOOKS r/f, ITEMS n
+end_books       "BOOKS"
+end_items       "ITEMS"

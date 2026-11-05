@@ -726,6 +726,21 @@ Examples (all ≤ 32): `YOU HIT THE GOBLIN.` · `THE GOBLIN MISSES YOU.` ·
 `FOOD: HUNGRY.` The death line moves to the menu font: `KILLED BY …` ≤ 32 chars, with the
 monster name abbreviated by a table if longer than the budget.
 
+**End card statistics (STATS1 S1 2026-11-01, ENDCARD-L1F-G1 2026-11-02, STATS2 2026-11-05; spec `docs/design/stats2.md`).**
+Both end cards (death and win) show one label / value table (6x8 font, label x 72, values x 136, numbers without
+leading zeros): `CLASS` / `LEVEL` / `DEPTH` (rows 11-13), a gap, `KILLS` 15, `TURNS` 16, `BOOKS r/f` 17, `ITEMS` 18,
+`BEST KILL <kind>` 19 (absent with no kill: the only conditional row, so it stays last); `PRESS 1-4 OR ENTER` row 22;
+the portraits' feet = the table's bottom row (19). (The STATS2 spec's rows 10-16 were the pre-ENDCARD layout; the
+approved card keeps its table position and the two rows go between TURNS and BEST KILL.)
+- KILLS = the hero's own kills (respawns count, 16-bit wrap); BEST KILL = the highest-KXP kind killed (tie: latest).
+- BOOKS found = +1 per successful pickup of the class book (`IT_BOOK`; floor or monster drop; the D1 start-room book
+  only when it is taken). BOOKS read = +1 per completed READ of a book, any outcome (learn, pity, uniform, rank-up,
+  the Vigor / Power tome); a READ always completes once chosen (the book is consumed). r <= f.
+- ITEMS = +1 per successful non-book pickup: food, potion, scroll, bow, gear, unique, charm; an arrow / dagger stack =
+  1 per pickup that takes at least one (a full quiver takes 0: not counted; the Mage takes no ammo). A bag-full refusal
+  counts nothing; DISCARD destroys (there is no DROP) and never decrements; the start kit is not a pickup.
+- The three STATS2 counters are bytes saturating at 255, zeroed at new game; nothing touches them after the lethal turn.
+
 **Message list (designer decision 2026-10-04; src/strings.txt, B3B-13).** Final wording:
 `YOU ENTER THE DUNGEON` (welcome) · `YOU WIN! PRESS ENTER` (win) · `YOU DESCEND DEEPER` ·
 `THE DOOR IS LOCKED` · `YOU FALL INTO A PIT` · `YOU DIED - PRESS ENTER`. **End flow (END-WAIT, user 2026-11-04):** on death / win the final scene and the log line stay up; after ~0.6 s with no key down, the first 1..0 / ENTER draws the end card, and after the card's own 0.6 s quiet a key returns to the menu. Style: present tense,
