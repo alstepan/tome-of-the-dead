@@ -693,14 +693,10 @@ try_climb:
                 ret  nz
                 ld   a, (LVL_FLAGS)            ; and only through an open grate (3F-T8:
                 and  LF_GRATE_OPEN             ; the boss's death). Shut: game.md §9.2 F4,
-                jr   nz, .lvl                  ; illegal, NO turn: drop the caller's frame
+                jr   nz, .mid                  ; illegal, NO turn: drop the caller's frame
                 pop  hl                        ; (turn_input .nu's `jr .srch` wait); A = 0,
                 ret                            ; CF = 0 (and) = "nothing legal"
-.lvl:           call .mid                      ; the down-exit step (EX_DOWN, or cancelled) ...
-                ret  nc
-                ld   a, EX_LEVEL               ; ... is the level exit (ld keeps CF = 1)
-                ld   (EXIT_KIND), a
-                ret
+                                               ; (open: .xs makes the step EX_LEVEL: dest >= 9)
 .mid:           call get_box
                 ld   a, (TMP6)
                 add  a, b
@@ -726,26 +722,32 @@ try_climb:
                 ret
 .blk:           jp   climb_blocked             ; B14 (lowram): wait + forced yield,
                                                ; or the 2nd time: squeeze past
-; H1 exit fields, both ways (C = x): storey (dy+1)/2 = 0 up / 1 down (follow_select's
-; reference storey), kind EX_UP + storey, dest r + 3 dy, col x; E_AIDIR = dy (a
-; no-step exit's dir for cork_check after the arrival; .go / climb_blocked rewrite it).
+; H1 exit fields, both ways (C = x): dest r + 3 dy; storey (dy+1)/2 = 0 up / 1 down
+; (follow_select's reference storey), kind EX_UP + storey, or EX_LEVEL for a dest past
+; the grid (the lair is on the bottom row: only its open grate gets here going down);
+; col x; E_AIDIR = dy (a no-step exit's dir for cork_check after the arrival; .go /
+; climb_blocked rewrite it). H1-D1: a dest above the grid (< 0: a top-row room has no
+; up exit) is the D1 entrance shaft: a plain step onto row 0, nothing from row 0.
 .x0:            scf                            ; CF = 1: no step
 .xs:            push af
                 ld   a, (TMP6)
                 ld   (ix+E_AIDIR), a
                 ld   l, a                      ; L = dy
-                inc  a
-                rrca
+                ld   a, (CUR_ROOM)
+                add  a, l
+                add  a, l
+                add  a, l
+                jp   m, .nx                    ; above the grid: no exit
+                ld   (EXIT_DEST), a
+                cp   GRID_CELLS                ; CF = 0: past the grid (the level exit)
+                ld   a, l
+                sbc  a, -3                     ; dy + 3 - CF: up 1, down 3, level 4
+                srl  a                         ; 0 / 1 / 2
                 ld   (EXIT_STOREY), a
                 add  a, EX_UP
                 ld   (EXIT_KIND), a
                 ld   a, c
                 ld   (EXIT_COL), a
-                ld   a, (CUR_ROOM)
-                add  a, l
-                add  a, l
-                add  a, l
-                ld   (EXIT_DEST), a
                 pop  af
                 ret  c                         ; the exit from a shaft end: no step, 1 turn
                 call .go                       ; the step that reaches the end ...
@@ -753,7 +755,12 @@ try_climb:
                 xor  a                         ; ... blocked: cancel the exit
                 ld   (EXIT_KIND), a
                 ret
-                ASSERT EX_DOWN == EX_UP + 1 && GRID_W == 3 && PLAY_ROWS == FLOOR_ROW1 + 1
+.nx:            pop  af                        ; H1-D1: CF = 1 (from row 0): no turn (CF = 0);
+                ccf                            ; else the plain step onto row 0
+                ret  nc
+                jr   .go
+                ASSERT EX_DOWN == EX_UP + 1 && EX_LEVEL == EX_UP + 2 && GRID_W == 3 && PLAY_ROWS == FLOOR_ROW1 + 1
+                ASSERT GRID_CELLS + GRID_W < 128
 .vexit:         ; A = RDX_U / RDX_D, C = x: Z = that exit exists and its
                 ; shaft col (RD_UPCOL / RD_DNCOL) == x; NZ: CF = 0 (H1: the
                 ; caller's "no climb"; A = CUR_ROOM is gone, .xs reads it).

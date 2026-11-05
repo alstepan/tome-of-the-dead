@@ -356,6 +356,14 @@ within the depth pool" check for D4–D8 only.
   grate); the **Teleport still lands standing**. Followers arrive PENDING standing at the
   shaft foot as before (they materialise once the hero has left that box). The §6.4 yield
   path (`cork_check`) ends at the room's top / bottom row on an exit shaft.
+- **H1-D1 the D1 entrance (user request 2026-11-05, as built):** the D1 start room now gets
+  the same rubble-capped arrival shaft `{c,0}` as D2–D8 (`RD_ARRCOL`, picked by the same
+  generator step for every depth; `tools/levelgen.py` matches). The game starts with the hero
+  **mid-ladder at its top** (`x = c`, `y = 0`, climb rest pose), waiting for keys; two DOWN turns
+  stand him on storey 0. The shaft leads nowhere, as on D2+ (where a standing hero's UP at the
+  shaft col is not a climb: no turn): UP at its top is no turn, no exit (nothing above D1); from
+  y 1 UP is a plain step back to y 0. D2+ arrivals are unchanged (standing at `c + 1`).
+  Supersedes the D1 `x = 14` of §1.1 gaps (4) / the L1 rules row.
 - Flyers: `9s ≤ y ≤ 9s+8−h`.
 
 ### 2.2 Turn loop (prototype §3.2 + E0)

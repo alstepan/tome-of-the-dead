@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import game  # noqa: E402
 import world  # noqa: E402
-from game_lib import (Harness, S, EMU_ARGS, stand_y, is_standing, GS_PLAYING, EF_PENDING,  # noqa: E402
+from game_lib import (Harness, S, EMU_ARGS, stand_y, is_standing, GS_PLAYING, GS_SELECT, EF_PENDING,  # noqa: E402
                       EF_ACTIVE, EF_HOSTILE, K_KNIGHT, K_WIZARD, K_GOBLIN, ROOM_B, ROOM_C)
 from lp import w16  # noqa: E402
 
@@ -231,6 +231,53 @@ def main():
         g = p.ent(sg)
         check("F up: every key a turn, the goblin materialises once the hero walks off",
               all(took) and not g["FLAGS"] & EF_PENDING and g["ROOM"] == ROOM_B, (took, g["FLAGS"], g["X"], g["Y"]))
+
+        # ---- S: H1-D1 the D1 start (generated, fixed seeds): mid-ladder on the entrance shaft ----
+        for hk, hn, seed in ((K_KNIGHT, "Warrior", 0x1234), (K_WIZARD, "Mage", 0x0BAD)):
+            p.proto_start = 0
+            p.load()
+            p.proto_start = 1
+            p.wait_state(GS_SELECT)
+            p.wb("seed_fixed", 1)
+            p.z.cmd("write-memory %d %d %d" % (S["seed_value"], seed & 255, seed >> 8))
+            p.wb("INPUT_REPEAT", 0)
+            p.wb("ANIM_FREEZE", 1)
+            p.wb("INPUT_SRC", 1)
+            p.menu_start(hk)
+            p.until(lambda: p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+            p.settle()
+            st = p.rb("LVL_START")
+            arr = p.rb(S["ROOM_DESC"] + 16 * st + S["RD_ARRCOL"])
+            e = hero()
+            check(f"S {hn}: D1 start room {st} has an arrival shaft; hero on it mid-ladder at the top "
+                  f"(x {arr}, y 0, M_REST, E_AIDIR +1)",
+                  (p.rb("LVL_DEPTH"), p.rb("CUR_ROOM"), arr != 0, e["X"], e["Y"], is_standing(e["Y"], kh),
+                   e["MODE"], e["AIDIR"]) == (1, st, True, arr, 0, False, 0, 1),
+                  (p.rb("LVL_DEPTH"), st, arr, e["X"], e["Y"], e["MODE"], e["AIDIR"]))
+            for _ in range(3):                         # a torch flame swap (decor_tick, generated rooms)
+                if not p.screen_vs_map("S"):           # shows on screen 2 one tick after bank 5
+                    break
+                p.tick()
+            w4(f"S {hn} D1 start")
+            still(f"S {hn}")
+            check(f"S {hn}: UP at the shaft top = nothing above D1: no turn, no exit", p.no_turn("K")
+                  and (hero()["Y"], p.rb("CUR_ROOM"), p.rb("EXIT_KIND")) == (0, st, 0),
+                  (hero()["Y"], p.rb("CUR_ROOM"), p.rb("EXIT_KIND")))
+            t0 = turns()
+            ys = []
+            for _ in range(2):
+                p.turn("J")
+                ys.append(hero()["Y"])
+            check(f"S {hn}: J, J = 2 ladder turns to stand on storey 0", (ys, turns() - t0) == ([1, y0], 2), (ys, turns() - t0))
+            check(f"S {hn}: standing at the shaft foot, UP = no climb (the entrance leads nowhere, as on D2+)",
+                  p.no_turn("K") and hero()["Y"] == y0, hero()["Y"])
+            p.set_ent(0, Y=1, PY=8, AIDIR=255)          # back on the shaft (y 1): UP = a plain step onto row 0
+            p.settle()
+            t0 = turns()
+            p.turn("K")
+            check(f"S {hn}: from y 1, UP = a plain step to y 0 (1 turn, no exit)",
+                  (hero()["Y"], turns() - t0, p.rb("CUR_ROOM"), p.rb("EXIT_KIND")) == (0, 1, st, 0),
+                  (hero()["Y"], turns() - t0, p.rb("CUR_ROOM")))
 
         # ---- C: cork_check bound ----------------------------------------------------------
         p.boot(K_KNIGHT)

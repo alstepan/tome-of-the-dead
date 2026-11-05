@@ -5967,3 +5967,29 @@ standing), F (a goblin follows both ways, arrives PENDING, every key a turn, it 
 (arrivals (24, 0) / (24, 18 - h)), `game.py` 26 / 35 (the climb down before the follower check, 2 K turns up) and the §8.2
 walkthrough (2 J turns down C's shaft after the arrival), `floor1.py` F11 / `gfx_integrity.py` `forced_exit` (direct do_exit:
 the hero at the departure end), `pt_bot.py` `do_exit` (keeps the climb direction across the exit). No golden changed.
+
+### H1-D1 (same branch, 2026-11-05; user request: the D1 start shows the hero entering down a ladder, game.md §2.1 "H1-D1")
+
+**Behaviour:** the D1 start room gets the rubble-capped arrival shaft `{c,0}` (`RD_ARRCOL`) like D2-D8; the game starts with
+the hero mid-ladder at its top (`x = c`, `y = 0`, M_REST, `E_AIDIR` +1) waiting for keys. The shaft leads nowhere: UP at its
+top = no turn, no exit (D2+'s entrance: a standing UP there is no climb, no turn, unchanged); from y 1 UP is a plain step.
+
+**Code:** bank 3 `level_gen` (`levelgen.asm`): the arrival-shaft `pick_man` runs for every depth (the D2+ test gone, -7 B;
+D1 layouts and the D1 GEN_RNG stream change: `tools/levelgen.py` `generate` / `start_x` and `tools/levelcheck.py` (arrival col
+presence, D1 start x = the col) updated in the same commit); `level_start_x` returns the shaft col on D1 (-2 B);
+`level_populate` puts the D1 hero at y 0 with `E_AIDIR` +1 (+12 B: `cork_check` needs a non-zero dir for a mid-ladder hero).
+Bank 7 `try_climb .xs`: the dest is computed first; a dest above the grid (< 0: only a top-row room's shaft, and a top-row room
+never has an up exit) is no exit (`.nx`: from row 0 no turn, else the plain step) (+9 B); paid by the level exit folding into
+`.xs` (a dest past the grid = the lair's grate = `EX_LEVEL`, kind = `EX_UP` + (dy + 3 - CF) / 2; the `.lvl` block gone, -6 B).
+
+| Region (free B, H1 -> H1-D1) | release | kit | release + trace |
+|---|---|---|---|
+| bank 7 low | 6 -> **3** | 6 -> **3** | 57 -> **54** |
+| bank 3 (to `AY_RESERVE`) | 13 -> **10** | 9 -> **6** | 9 -> **6** |
+| bank 1 | 1 -> **2** (the items overlay repacks 1 B smaller: the bank-3 routines it calls moved) | 1 -> 2 | - |
+| bank 2, bank 0, R6, low RAM | 9, 16, 1, 0 unchanged | unchanged | unchanged |
+
+Tests: `tests/h1climb.py` S (both heroes, generated D1 with fixed seeds: the shaft present, the hero at its top mid-ladder,
+waits, UP = no turn / no exit, 2 J turns down, UP standing at the foot = no climb, y 1 -> 0 plain step); `levelgen_test` 8000 /
+8000 + 3F 8000 / 8000, `levelcheck --full` 524288 / 524288, `levelgen_z80` 280 / 280 (`--f3`: 43 D8 fails, identical on main
+`b25e043`: pre-existing).
