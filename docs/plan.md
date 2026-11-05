@@ -41,10 +41,11 @@ and per-task evidence: `docs/history.md`.
 
 | # | Item | Owner | Note |
 |---|------|-------|------|
-| H1 | Vertical room transition: the hero should visibly climb to the top before the scroll up and appear at the top of the ladder after the scroll down (user 2026-10-05) | staff | open; being costed by the architect |
+| H1 | Vertical room transition: the hero should visibly climb to the top before the scroll up and appear at the top of the ladder after the scroll down (user 2026-10-05) | staff | costed 2026-11-05 (architect): 0 RAM / frames / pool; bank 7 low ~20–28 B (18 free → ~10 B reclaim, e.g. move arrival override to `lp_transition` in bank 3) + bank 2 ~5 B `cork_check` y=0 bound; tick +<0.3k T. **Needs rulings:** do the extra climb steps cost turns (8−h each way, monsters act)? auto climb-down on arrival? symmetric for down exits? |
 | B9 | Test harness: ZEsarUX launch/teardown stalls and flaky tape load (#50, W5/W8) under host load; not a game bug | junior | per-launch timeouts + kill/retry in `tools/test_harness.py` |
 | B13 / D2 | Decor look and animation rework (user 2026-10-04/05), postponed until the game is mostly done | user + designer + artist | schedule a Design-canvas review session |
 | B19b | Two PENDING bodies created overlapping (arrival + follower) can still pop one onto the other's corpse; rare (the B19c fix covered the same-kind follower case) | staff | verify whether B19c closed it; else keep |
+| BSIM1 | `tests/balance_sim_selftest.py` `test_monotone` FAILS on main (2026-11-05): Mage win rate 0.378 / 0.386 / **0.242** at HP +0/+10/+30; Warrior depth 6.89 / 7.24 / 7.05. Either a sim artefact (stall/turn cap) or a real rule interaction — not a stale threshold | junior → designer | excluded from the CI gate until fixed |
 | B21 | Budget scenario for the deferred level-up + held key path (~115k T, unmeasured) in `tools/budget.py` | junior | – |
 | B4 / R1 | Update `prototype.md` §6.4 text: ladder squeeze rule = up to `CLIMB_SQZ_N`=4 waits before the swap (user accepted 2026-10-19) | designer | doc-only |
 | D-AI1c | Ladder deadlock rule: lower slot id has right of way, 2-turn swap backstop; 2-bit wait counter in ENT_STAT byte 3, ~80–120 B bank 2 | staff | unscheduled |
