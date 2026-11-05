@@ -344,7 +344,8 @@ def scenario_run(r):
     out["knight"] = r.dump()
     # knight -> (dead) -> select -> wizard: room maps were built in between
     r.wb("GAME_STATE", GS_DEAD)
-    r.run_to("tick_work")                     # C3-6b: the end card arms after a release
+    r.wb("END_SHOWN", r.S["ES_CARD"])         # END-WAIT: card up, quiet spent = waiting for a key
+    r.run_to("tick_work")
     r.run_to("tick_work")
     r.hold("ENTER")
     r.run_to("select_tick")
@@ -358,7 +359,8 @@ def scenario_run(r):
     out["wizard"] = r.dump()
     # wizard -> (dead) -> select; stale cache + garbage scratch -> '2'
     r.wb("GAME_STATE", GS_DEAD)
-    r.run_to("tick_work")                     # C3-6b: the end card arms after a release
+    r.wb("END_SHOWN", r.S["ES_CARD"])         # END-WAIT: card up, quiet spent = waiting for a key
+    r.run_to("tick_work")
     r.run_to("tick_work")
     r.hold("ENTER")
     r.run_to("select_tick")
