@@ -1,4 +1,4 @@
-# Delivery plan — WazHack/ZX
+# Delivery plan — Tome of the Dead
 
 > Manager-owned control document: **current state only**. Every phase has a
 > verifiable exit gate — state is proven by build/run/test, not by opinion.
@@ -14,7 +14,7 @@ squash of `feat/project-scaffold` @ `238af0c`; tape sha256 `6fa4629d…`).
 - Side-view, room-based (Cauldron-style transitions), 3 storeys + HUD, ladders.
 - Heroes Knight/Wizard/Rogue (24×48); monsters Skeleton, Goblin, Ghost, Rat,
   Bat, Slime; melee + Wizard zap, HP/death, potions, hero select.
-- Art source of truth: claude.ai Design canvas "WazHack Spectrum Sprites"
+- Art source of truth: claude.ai Design canvas "Tome of the Dead Spectrum Sprites"
   (https://claude.ai/artifact/U71G9dWUWzZBVxmJUrevD3), imported via
   `tools/svg_sprites.py` → `tools/gfx_convert.py`.
 - Spec: `docs/design/prototype.md`. Layout: `docs/memory-map.md`.
@@ -26,11 +26,11 @@ squash of `feat/project-scaffold` @ `238af0c`; tape sha256 `6fa4629d…`).
 - Remove spikes, legacy top-down build, legacy tests/goldens, AI-raster tools
   and concept art (archived outside the repo). ✅
 - Agent roster + model split + token rules (`CLAUDE.md`). ✅
-- PROTO → main rename (`src/main.asm`, `build/wazhack.*`, `tests/game*.py`) —
+- PROTO → main rename (`src/main.asm`, `build/tome-of-the-dead.*`, `tests/game*.py`) —
   `z80-junior` trial (Sonnet, ~47k tokens, no escalation). ✅
 - Design docs: still-binding parts of the old docs → `docs/design/foundations.md`
   (F1–F9); old docs → `docs/archive/design/`; `heroes.md` dropped. ✅
-- **Gate passed (manager):** build 0 warnings; `wazhack.sna` byte-identical to
+- **Gate passed (manager):** build 0 warnings; `tome-of-the-dead.sna` byte-identical to
   baseline; `tests/game.py` 179/179, goldens unchanged; no references to
   removed files. Tape sha256 `4db91773…` (only tape block names changed).
 - Follow-ups from the designer: make the 16-entity-slot cap explicit in
@@ -105,8 +105,8 @@ Engine work in this stage = flicker fix + real-hardware measurement only.
 - **Stats:** health, **mana**, **hunger**. Hunger **lowers stats** (no
   starvation death). Food: meat + monster drops (apple, carrot, pear, cheese).
 - **Warrior uses mana for power attacks**; Mage for spells. **Mage melee =
-  staff attack**, always available (the fallback at 0 mana, as in WazHack).
-- **Ranged magic (WazHack-like):** each spell has its **own range**; some
+  staff attack**, always available (the fallback at 0 mana, as in the original game).
+- **Ranged magic (WazHack-inspired):** each spell has its **own range**; some
   spells **reflect off walls**; each spell has its own projectile/impact
   animation.
 - **Monster kinds: up to 4 per level** (+ boss level); pool generated per level.
@@ -602,7 +602,7 @@ AY music + FX on the A8 slot; balance pass; hardware hardening.
 **ART19-IMPORT (`feat/ghost-h`, staff 2026-10-31; memory-map "ART19-IMPORT"):** user-approved ART19 Ghost option H (Wisp Shroud) replaces the five Ghost frames in place (`tools/import_anim40.py ghost_h`; same fids / sizes / flags / ax 0 / ink cyan; Poltergeist + golden attr-only). Cost: bank 1 free 2 -> **42** (-40 B packed), SRC6 / pool / fids 0.
 **GOLDEN-BOSS-XP (`fix/golden-boss-xp`, staff 2026-10-31; memory-map "GOLDEN-BOSS-XP"):** golden bosses now award game.md §4.1 XP (D1 King 20 ... D6 80; was base-kind KXP): `grate_open` adds `bxp_d[depth-1]` (data7, 8 B, build-ASSERTed against `KXP_*`); bank 7 53 -> 35 free; tests/boss.py case X (7 depths + same-kind escort).
 
-**FINAL-1 — RENAME TO "TOME OF THE DEAD" (user 2026-10-31; the VERY LAST task, after every feature, the final rebalance, T14 and the release gate):** the game is "Tome of the Dead". Nothing may reference `wazhack` / `WazHack` any more — repo name, directory, file names (`build/wazhack.tap/.sna/.sym/.lst/.sld`, `wazhack_sprites.dc.html`, ...), internal constants/labels/strings/tape name/BASIC loader name/snapshot names, tools, tests, skills, agents, docs, CLAUDE.md/AGENTS.md/README.md, artifact titles, golden/hash files. The ONLY allowed mention is the phrase "WazHack-inspired" in docs (credit). Scope notes for the plan of record: (1) a repo-wide inventory first (`grep -rIi wazhack`; ~900 files at the time of writing — mostly generated/art/docs), a classified rename map and a grep gate that fails the build/test if `wazhack` appears outside the allowed phrase; (2) rename tape/snapshot/artifact names consistently (`tome-of-the-dead.tap`...) and every consumer (`tools/build.sh`, tests' `build/<name>.sym/.sna`, skills `build/run/debug/test`, `docs/memory-map.md`); (3) the repo ORIGIN is in scope: rename the GitHub repository (`alstepan/wazhack` -> the new name), update `origin` (`git remote set-url`), every URL in docs/README/CLAUDE.md, + local directory rename + the Claude Code project memory path (it is keyed by the directory name) — user performs the remote/dir steps, manager prepares the commands; (4) `TOME OF THE DEAD` is already the on-screen title (loading screen, HOW TO PLAY header) — check the other strings (menu, end cards, README); (5) one dedicated PR, squash-merged, with the full gate (`build`, all suites, goldens re-baselined ONLY where a name/title string changed) before and after; (6) do it with no other work in flight (touches every file).
+**FINAL-1 — RENAME TO "TOME OF THE DEAD" (user 2026-10-31; the VERY LAST task; DONE on `chore/rename-tome-of-the-dead`, 2026-11-04):** the game is "Tome of the Dead"; the previous name is gone from every tracked file and file name (classified map: `docs/rename-map.md`; only allowed mention: the credit phrase "WazHack-inspired"). Build artefacts are `build/tome-of-the-dead.{tap,sna,sym,lst,sld}`, tape header name `tomedead` (10-char limit), art `assets/gfx/source/tome-of-the-dead_*`. Enforced by `tests/rename_gate.py` (non-emulator; run it with `tape_layout` / `combat_tables`). The repo ORIGIN rename (GitHub, `origin` URL, local directory, Claude Code project-memory path) is performed by the user: exact commands in `docs/rename-user-steps.md`. Goldens re-baselined only where a name/title string changed (none needed). No byte change in the game image.
 
 **FINAL-2 — GITHUB CI BUILD (user 2026-11-02; right after FINAL-1, once the repo is renamed):** configure GitHub Actions so the game builds on GitHub where possible: install sjasmplus 1.20.x (pinned release/source build) and build `zx0`/`dzx0` (`tools/setup_zx0.sh`, pinned clone) on the runner; run `tools/build.sh` for release (`-DDEBUG_KIT=0`), kit and `-DF3_GEN=0` builds (0 warnings), then the non-emulator checks (tape_layout, combat_tables, zx0_roundtrip, balance_sim selftest, the FINAL-1 rename grep gate); upload the `.tap`/`.sna`/`.sym` as artifacts. ZEsarUX/ZRCP emulator suites are optional (try a headless ZEsarUX build in CI; if infeasible keep them local and say so). Trigger on push/PR to main; cache toolchain. Needs the user to enable Actions on the renamed repo; manager prepares the workflow file.
 

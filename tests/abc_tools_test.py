@@ -19,7 +19,7 @@ import wzm_ref  # noqa: E402
 
 def concepts_dir():
     for d in (os.environ.get("WZ_CONCEPTS"), os.path.join(REPO, "assets/sfx/concepts"),
-              "/Users/alexs/sources/zxspectrum/wazhack/assets/sfx/concepts"):
+              "/Users/alexs/sources/zxspectrum/tome-of-the-dead/assets/sfx/concepts"):
         if d and os.path.isdir(os.path.join(d, "short-melodies")):
             return d
     return None

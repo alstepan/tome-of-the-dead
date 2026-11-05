@@ -6,7 +6,7 @@ tools/decorgen.py deriver, == Z80 decor_room by world.py W13) over N seeds x 8 d
 counts, for every per-level object of assets/gfx/tiles/tileset_ids.inc, how many rooms
 placed it (frame-1 ids in ROOM_MAP; frame-2 ids reached through ANIM_LIST glyph swaps;
 GLOW through render_room's open-exit pass, here forced open). Prints every object with ZERO
-placements: the dead-art candidates.  Needs a build (game_lib reads build/wazhack.sym).
+placements: the dead-art candidates.  Needs a build (game_lib reads build/tome-of-the-dead.sym).
 
     python3 tools/decor_sweep.py [seeds=2000]
 """

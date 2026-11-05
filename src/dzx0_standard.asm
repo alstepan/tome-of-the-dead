@@ -9,7 +9,7 @@
 ; (full text: https://github.com/einar-saukas/ZX0/blob/main/LICENSE, also
 ; tools/bin/ZX0-src/LICENSE after tools/setup_zx0.sh).
 ;
-; WazHack use (lowram.asm, zx0_frame): HL = packed stream, DE = output.
+; Tome of the Dead use (lowram.asm, zx0_frame): HL = packed stream, DE = output.
 ; Out: HL = past the stream, DE = past the output.  Clobbers: AF, BC, DE, HL
 ; (IX/IY untouched; 2 stack words). Its only exit is the end marker's
 ; `inc c / ret z`, so it returns with C = 0 (ovl_run relies on it, 3E-T1). Forward, non-overlapping: the stream is in

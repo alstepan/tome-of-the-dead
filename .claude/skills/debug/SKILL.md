@@ -16,7 +16,7 @@ real machine state instead of guessing from source.
   --machine 128k \
   --enable-remoteprotocol \
   --remoteprotocol-port 10000 \
-  --tape build/wazhack.tap &
+  --tape build/tome-of-the-dead.tap &
 ```
 
 (Standard ZEsarUX flags; default ZRCP port is 10000. If the connection in step 2

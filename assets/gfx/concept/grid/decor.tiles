@@ -1,4 +1,4 @@
-# WazHack/ZX CONCEPT decor tiles (docs/design/concept-screen.md §3.3) — DRAFT for user review.
+# Tome of the Dead CONCEPT decor tiles (docs/design/concept-screen.md §3.3) — DRAFT for user review.
 # Format = tools/gfx_convert.py --mode tile: "=== name ink:<c> paper:<c> [bright]" + 8 rows
 # of 8 ('#' ink, '.' paper). One paper+ink per tile, so clash-legal by construction.
 # Every decor tile sits in an AIR band (black paper, F9). Animated objects list every frame.

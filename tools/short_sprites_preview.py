@@ -95,7 +95,7 @@ def foot_gap(bm: np.ndarray) -> int:
 
 def grid_text(name, bm, solid, caption, ink, ax) -> str:
     h, w = bm.shape
-    lines = ["# WazHack/ZX gfx text grid — CONCEPT short sprite, tools/short_sprites_preview.py",
+    lines = ["# Tome of the Dead gfx text grid — CONCEPT short sprite, tools/short_sprites_preview.py",
              f"# name: {name}_short", f"# size: {w}x{h}", f"# character: {name.split('_')[0].upper()}",
              f"# caption: {caption} SHORT", f"# ink: {ink}", f"# anchor: {ax} 0",
              f"# source: assets/gfx/sprites/grid/{SPECS[name][0]}.grid (rows dropped: "

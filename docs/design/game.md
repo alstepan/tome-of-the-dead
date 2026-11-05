@@ -1,4 +1,4 @@
-# WazHack/ZX — Game mechanics (M1, Stage 2)
+# Tome of the Dead — Game mechanics (M1, Stage 2)
 
 > Game-designer deliverable. **Authoritative mechanics for Stage 3.**
 > **Rev 2 (2026-10-01):** user answers applied. 8 levels; 2 unique bosses + golden bosses;
@@ -508,7 +508,7 @@ in a row" caps flight speed at 7 cols per 2 turns.
 ### 3.2 Main menu (bank 3, cold)
 
 ```
-WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|SINCLAIR 2   4 REDEFINE KEYS   5 SOUND: ALL ON|SFX ONLY|OFF
+TOME OF THE DEAD   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|SINCLAIR 2   4 REDEFINE KEYS   5 SOUND: ALL ON|SFX ONLY|OFF
 ```
 
 (`5 SOUND`: §3.6, designer decision 2026-10-13. `S` is a reserved key, see the redefine bullet below.)
@@ -538,7 +538,7 @@ WAZHACK   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SINCLAIR 1|
   and keeps the previous key set.
 - START seeds the RNG → generates D1 → play.
 - **Title (user 2026-10-04):** the menu/title screen reads **"TOME OF THE DEAD"** (the concept
-  screen's title), not WAZHACK. Torches animated and hero previews on the select screen follow
+  screen's title), not TOME OF THE DEAD. Torches animated and hero previews on the select screen follow
   `concept_menu` / `screen_menu.png` (designer decision 2026-10-04). Death `KILLED BY …`
   killer tracking is 3D (designer decision).
   **ENDCARD-K (user playtest 2026-11-04):** a hero killed by his own bolt that a monster reflected
@@ -3003,7 +3003,7 @@ Heal potion** (1 bit in the spare `ENT_STAT` byte 3, beside the Vampire's fled b
 rule 0: hp ≤ ⅓ max and it has a potion → drink (whole turn, +10 hp to max, `+n` green number
 §6.5, `$44` attr flash, `THE ORC DRINKS A POTION`); killed before drinking → the potion
 drops (normal floor-list entry, identified as Heal). Bosses never carry one.
-- **Pros:** WazHack-like "monsters use items"; a readable tell and a choice (burst it down
+- **Pros:** WazHack-inspired "monsters use items"; a readable tell and a choice (burst it down
   before it drinks, or let it waste the turn); turns the potion drop into a visible reward;
   gives the new `+n` numbers a monster use beyond the Vampire.
 - **Cons:** longer fights at D4–D7 where Orcs are already the attrition wall (§10); stacks with

@@ -395,7 +395,7 @@ def pool_bytes(w: int, h: int, flag: str) -> int:
 
 def grid_text(name, bm, solid, caption, ink, note) -> str:
     h, w = bm.shape
-    lines = ["# WazHack/ZX gfx text grid — CONCEPT (tools/gen_art2_options.py); not engine data.",
+    lines = ["# Tome of the Dead gfx text grid — CONCEPT (tools/gen_art2_options.py); not engine data.",
              f"# name: {name}", f"# size: {w}x{h}", f"# character: {name.split('_')[0].upper()}",
              f"# caption: {caption}", f"# ink: {ink}", "# anchor: 0 0", f"# note: {note}",
              "# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent", "#"]

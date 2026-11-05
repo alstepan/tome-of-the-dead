@@ -1,4 +1,4 @@
-# WazHack/ZX 3E floor-item class glyphs + revealed trap plate (game.md §8.11 Q1, §1.5).
+# Tome of the Dead 3E floor-item class glyphs + revealed trap plate (game.md §8.11 Q1, §1.5).
 # DRAFT 2026-10-20 for user review (preview: assets/gfx/tiles/items3e.svg.html,
 # tools/items_glyph_preview.py). Format = tools/tiles_convert.py / gfx_convert.py --mode tile:
 # 8x8, '#' ink, '.' paper, MSB-left, 1 ink on BLACK paper (standing row = air row, attr paper 0,

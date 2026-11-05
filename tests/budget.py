@@ -59,7 +59,7 @@ if os.environ.get("GAME_PROFILE"):                # finer split for optimisation
 TRACE_SLD = None
 if os.environ.get("BUDGET_TRACE"):
     import tick_prof
-    TRACE_SLD = tick_prof.load_sld(os.path.join(__import__("game_lib").BUILD_DIR, "wazhack.sld"))
+    TRACE_SLD = tick_prof.load_sld(os.path.join(__import__("game_lib").BUILD_DIR, "tome-of-the-dead.sld"))
 
 RETURNS = {}
 # D3-8d: callables f(stepper) run after every measured tick (tests/marks.py

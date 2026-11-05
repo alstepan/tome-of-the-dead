@@ -29,7 +29,7 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_TSX = os.path.join(REPO, "assets/sfx/concepts/player-js/main.tsx")
-MAIN_CHECKOUT_TSX = ("/Users/alexs/sources/zxspectrum/wazhack/assets/sfx/concepts/"
+MAIN_CHECKOUT_TSX = ("/Users/alexs/sources/zxspectrum/tome-of-the-dead/assets/sfx/concepts/"
                      "player-js/main.tsx")   # untracked in worktrees
 OUTDIR = os.path.join(REPO, "assets/sfx/music/src")
 

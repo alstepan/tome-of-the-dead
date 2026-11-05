@@ -22,7 +22,7 @@
 #    INCLUDEd by src/ay.asm through the -i OUTDIR/build/music_game search path (SND-2 T2).
 # 1d. tools/sfx2asm.py -> OUTDIR/build/sfx/ (sfx_ids.inc + sfx_data.asm, SND-5; -i path).
 # 2. sjasmplus src/main.asm with the project flags. Run in OUTDIR (default: the
-#    repo root), so the artefacts land in OUTDIR/build/: wazhack.tap, .sna,
+#    repo root), so the artefacts land in OUTDIR/build/: tome-of-the-dead.tap, .sna,
 #    .sym, .sld, .lst.
 # Fails (exit 1) on any assembler error OR warning; prints the DISPLAY lines.
 set -eu
@@ -49,6 +49,8 @@ for a in "$@"; do
              exit 2 ;;
     esac
 done
+# FINAL-1: the old project name must not creep back (tracked files + names; ~0.3 s)
+python3 "$ROOT/tests/rename_gate.py" -q
 python3 "$ROOT/tools/zx0_sources.py"
 python3 "$ROOT/tools/textpack.py"
 # INSTR-BUILD: the HOW TO PLAY page images (docs/design/instructions_screen.txt + the
@@ -74,7 +76,7 @@ OVL="$OUT/build/ovl"
 rm -rf "$OVL"
 # no stale artefacts survive a failed build (pass 1 writes none: OVL_PASS 1
 # skips main.asm's SAVETAP / SAVESNA; pass 2 writes them only on success paths)
-rm -f build/wazhack.tap build/wazhack.sna build/wazhack.sym
+rm -f build/tome-of-the-dead.tap build/tome-of-the-dead.sna build/tome-of-the-dead.sym
 mkdir -p "$OVL"
 set +e
 sjasmplus "$ROOT/src/main.asm" --fullpath --sym="$OVL/pass1.sym" \
@@ -95,13 +97,13 @@ for f in "$OVL"/*.bin; do
 done
 set +e
 sjasmplus "$ROOT/src/main.asm" --fullpath \
-    --lst=build/wazhack.lst --sld=build/wazhack.sld --sym=build/wazhack.sym \
+    --lst=build/tome-of-the-dead.lst --sld=build/tome-of-the-dead.sld --sym=build/tome-of-the-dead.sym \
     -i "$ROOT/src" -i "$OUT/build/music_game" -i "$OUT/build/sfx" -i "$OUT/build" -i "$OVL" "$@" >"$LOG" 2>&1
 RC=$?
 set -e
 grep -E '^>|rror|arning' "$LOG" || true
 fail() {   # a failed pass 2 leaves no tape / snapshot / symbols behind
-    rm -f build/wazhack.tap build/wazhack.sna build/wazhack.sym
+    rm -f build/tome-of-the-dead.tap build/tome-of-the-dead.sna build/tome-of-the-dead.sym
     echo "build.sh: $1" >&2
     exit 1
 }
@@ -119,4 +121,4 @@ if [ "$OUT" != "$ROOT" ]; then
     mkdir -p "$OUT/build/text"
     cp "$ROOT/build/text/"* "$OUT/build/text/"
 fi
-echo "build.sh: OK -> $OUT/build/wazhack.tap / .sna / .sym"
+echo "build.sh: OK -> $OUT/build/tome-of-the-dead.tap / .sna / .sym"

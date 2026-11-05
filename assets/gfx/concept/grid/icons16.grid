@@ -1,4 +1,4 @@
-# WazHack/ZX CONCEPT 16x16 icons (docs/design/concept-screen.md §5/§6) — DRAFT for user review.
+# Tome of the Dead CONCEPT 16x16 icons (docs/design/concept-screen.md §5/§6) — DRAFT for user review.
 # Format: "=== name 16x16 ink:<c> paper:black [bright]" + 16 rows of 16 ('#' ink, '.' paper).
 # Unmasked, opaque 2x2 cells (panel / inventory page are sprite-free zones): 32 B + 1 attr.
 # The ink here is the DEFAULT one; potion/scroll ink is set per item type (§6), and the

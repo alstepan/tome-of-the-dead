@@ -1,4 +1,4 @@
-# WazHack/ZX CONCEPT 8x8 icons (docs/design/concept-screen.md §5/§6) — DRAFT for user review.
+# Tome of the Dead CONCEPT 8x8 icons (docs/design/concept-screen.md §5/§6) — DRAFT for user review.
 # Format = tools/gfx_convert.py --mode tile. Panel-only (sprite-free zone): 8 B + 1 attr each.
 # Uses: bar labels (heart/drop/drumstick), V1 separator, V1 worn-gear strip, V2 8x8 action bar,
 # and the 8x8 floor variant of items. Ink = default; potion/scroll ink is per type.

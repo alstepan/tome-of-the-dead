@@ -1,6 +1,6 @@
 ---
 name: build
-description: Assemble the Z80 source with sjasmplus into build/wazhack.tap (+ .sld debug info). Use whenever code or data changed and you need a fresh tape/snapshot, before running or testing.
+description: Assemble the Z80 source with sjasmplus into build/tome-of-the-dead.tap (+ .sld debug info). Use whenever code or data changed and you need a fresh tape/snapshot, before running or testing.
 ---
 
 # build
@@ -26,8 +26,8 @@ all use it, so a build can never assemble stale packed art. It runs:
    does). Deterministic; rewritten only when it changes. Strict input
    parsing: a frame `.asm` line that is not `DEFB $xx,...` (or a sub-label /
    comment) fails the build.
-2. `sjasmplus src/main.asm --fullpath --lst=build/wazhack.lst
-   --sld=build/wazhack.sld --sym=build/wazhack.sym -i src [args]`, run in the
+2. `sjasmplus src/main.asm --fullpath --lst=build/tome-of-the-dead.lst
+   --sld=build/tome-of-the-dead.sld --sym=build/tome-of-the-dead.sym -i src [args]`, run in the
    output dir. Exit 1 on any error **or warning**; prints the `DISPLAY`
    lines (full log: `build/sjasmplus.log`). 3E-T1: run TWICE — pass 1
    (`-DOVL_PASS=1`, log `build/ovl/pass1.log`) writes the raw overlay images
@@ -51,10 +51,10 @@ combination is 59 B over bank 2 and fails `seq_bytes_end <= seq_rows`).
 `-DDEBUG_KIT=0` (D3-7): no debug start kit — the build the test suites and
 goldens need (default 1 = the designer's debug kit, never in a release tape).
 - `src/main.asm` is the single entry the assembler walks (it `INCLUDE`s the rest).
-- Emits `build/wazhack.tap` (BASIC loader + the loading-picture SCREEN$ block (6,912 B CODE @ $4000,
+- Emits `build/tome-of-the-dead.tap` (BASIC loader + the loading-picture SCREEN$ block (6,912 B CODE @ $4000,
   tape-only, see memory-map "Tape") + one CODE block = bank-5 low-RAM
   cold code + bank-2 image, then two headerless blocks: bank 1 sources, bank 3
-  source tail + cold code) and `build/wazhack.sna` (128K, entry `boot`).
+  source tail + cold code) and `build/tome-of-the-dead.sna` (128K, entry `boot`).
 - `--sym` is required: `tests/game*.py` and `tests/budget.py` read every address /
   frame id from it.
 - `--sld` emits Source Level Debug data consumed by the `debug` skill / DeZog.
@@ -84,7 +84,7 @@ goldens need (default 1 = the designer's debug kit, never in a release tape).
 ## Success criteria
 
 - `tools/build.sh` exit 0 (it already fails on any error or warning).
-- `build/wazhack.tap` exists and is newer than the sources.
+- `build/tome-of-the-dead.tap` exists and is newer than the sources.
 - Review warnings — unexpected ones (e.g. overlapping ORG, undefined label
   defaulting to 0) are treated as failures here.
 

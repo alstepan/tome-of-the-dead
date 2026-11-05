@@ -5,7 +5,7 @@ WHAT IS MODELLED
   * Whole runs D1..D8 for a Warrior (W) or Mage (M) under a bot policy (cautious / average / reckless,
     spec 4.3).  Win = Archmage dead AND Tome destroyed (GS_WIN).  Loss = HP 0 or a STALL (the bot
     cannot damage what blocks the way; counted as a loss, reported under killer "STALL").
-  * Numbers come from the BUILT IMAGE (build/wazhack.tap + .sna + .sym, via tests/combat_tables.load):
+  * Numbers come from the BUILT IMAGE (build/tome-of-the-dead.tap + .sna + .sym, via tests/combat_tables.load):
     kind_tab (hp/atk/eva/die/bonus/period/weight/flags), kx_tab (resistances, immunity mask, KXP, DEF,
     on-hit effect), ab_rank (7 abilities x 3 ranks), ab_ammo, xpn_tab.  Ranged-monster rows come from
     tools/ranged_model.ROWS (+ GOLD_ROWS: BOSS-RANGED, the golden King / Queen only), books from tests/book_model.book_read, item pools/counts/trap counts from
@@ -219,7 +219,7 @@ class Data:
         import combat_tables as C
         self.C = C
         sym, m = C.load()
-        sna = open(os.path.join(os.environ.get("WZ_BUILD_DIR", os.path.join(REPO, "build")), "wazhack.sna"), "rb").read()
+        sna = open(os.path.join(os.environ.get("WZ_BUILD_DIR", os.path.join(REPO, "build")), "tome-of-the-dead.sna"), "rb").read()
         self.sym = sym
         ov = overrides or {}
         self.params = dict(PARAMS)

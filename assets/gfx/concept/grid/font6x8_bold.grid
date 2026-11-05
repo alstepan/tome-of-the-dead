@@ -1,4 +1,4 @@
-# WazHack/ZX 6x8 font, BOLD variant (round-6 comparison reference; superseded by font6x8.grid thin).
+# Tome of the Dead 6x8 font, BOLD variant (round-6 comparison reference; superseded by font6x8.grid thin).
 # Format: '=== <code> <char>' + 8 rows of 6 ('#' ink, '.' paper). Cell row 0 is the line gap;
 # caps use rows 1-6 (baseline row 6), descenders row 7, lowercase x-height rows 3-6. Column 5
 # is the built-in 1-px letter gap and must stay blank. Strokes are 2 px wide wherever the

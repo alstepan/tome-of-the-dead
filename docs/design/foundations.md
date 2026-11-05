@@ -1,4 +1,4 @@
-# WazHack/ZX — Foundations (stable rules and contracts)
+# Tome of the Dead — Foundations (stable rules and contracts)
 
 > Current design set = `docs/design/prototype.md` (rev C, the authoritative game
 > spec) + this file. Created 2026-10-01 by consolidating the still-binding parts of

@@ -9,14 +9,14 @@ prompt, returning the body lines.
 Usage as a library:
     from zrcp import Zrcp
     with Zrcp() as z:
-        z.smartload("/abs/path/build/wazhack.sna")
+        z.smartload("/abs/path/build/tome-of-the-dead.sna")
         regs = z.cmd("get-registers")
         frame = z.read_memory(0x4000, 6912)   # -> bytes
 
 Usage from the shell:
     python3 tools/zrcp.py get-registers
     python3 tools/zrcp.py read-memory 16384 16
-    python3 tools/zrcp.py --load build/wazhack.sna get-registers
+    python3 tools/zrcp.py --load build/tome-of-the-dead.sna get-registers
 """
 import os
 import socket

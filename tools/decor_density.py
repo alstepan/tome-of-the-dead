@@ -7,7 +7,7 @@ x 8 depths x every present non-Sanctum room, and counts per depth:
   objects / room by class (patch pass, cobwebs, menu: large animated / mount / ceiling), cells,
   budget use vs MAX_LARGE / MAX_GLYPH / MAX_WALL, and every menu / patch attempt's outcome
   (placed, budget, footprint, support, ring) - the placement failure reasons.
-Needs a build (game_lib reads build/wazhack.sym, WZ_BUILD_DIR honoured).
+Needs a build (game_lib reads build/tome-of-the-dead.sym, WZ_BUILD_DIR honoured).
 
     python3 tools/decor_density.py [seeds=1000] [depth ...]
 """

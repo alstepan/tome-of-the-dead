@@ -1,4 +1,4 @@
-# WazHack/ZX — Screen concept
+# Tome of the Dead — Screen concept
 
 > Status: **rev 3 (M1, 2026-10-02) — concept approved in round 5.** Rev 2 was the layout
 > revision after the user's first concept review: the V1 family, with the bottom panel grown

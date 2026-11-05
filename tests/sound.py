@@ -2,7 +2,7 @@
 """SND-2 T4: the in-game sound slot (src/ay.asm: dispatcher ay_play + WZM v0.3 player +
 7 songs in bank 3) through the mailbox, against the oracle tools/wzm_ref.py.
 
-Build first: tools/build.sh -DDEBUG_KIT=0  (build/wazhack.sna + .sym).
+Build first: tools/build.sh -DDEBUG_KIT=0  (build/tome-of-the-dead.sna + .sym).
 
 Frame-exact driver: ZEsarUX in cpu-step mode with breakpoints on `isr` and `isr.done`
 (lowram.asm; never a PC breakpoint at $E000+: the bank-3 AY slot ($EDA0+, MEM-SND),

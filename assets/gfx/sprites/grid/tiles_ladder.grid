@@ -1,4 +1,4 @@
-# WazHack/ZX ladder tiles — authored in tools/svg_sprites.py (LADDER_GRID).
+# Tome of the Dead ladder tiles — authored in tools/svg_sprites.py (LADDER_GRID).
 # Sheet style: one ink on black paper. Dim yellow (INK 6, no BRIGHT) = wood,
 # distinct from the cyan pillar/doorway and white-on-blue floor, and non-bright
 # so the bright sprites stay on top visually (canvas mock: scenery is dim).

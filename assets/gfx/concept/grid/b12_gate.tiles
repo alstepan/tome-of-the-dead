@@ -1,4 +1,4 @@
-# WazHack/ZX B12 level-exit gate (designer decision 2026-10-04, concept-screen §3.3 B3B-8 #4,
+# Tome of the Dead B12 level-exit gate (designer decision 2026-10-04, concept-screen §3.3 B3B-8 #4,
 # game.md §1.4 Lair row). USER 2026-10-05: variant B + glow approved. Format = tools/gfx_convert.py --mode tile.
 # Drawn over the 3 row-17 cells of the lair's level-exit hole (one glyph repeated x3), in place
 # of T_HOLE_L/M/R. No ordinary hole uses these glyphs or $46.

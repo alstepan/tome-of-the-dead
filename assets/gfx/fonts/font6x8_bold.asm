@@ -1,4 +1,4 @@
-; WazHack/ZX 6x8 font, BOLD round-5 variant (comparison only). Same layout as font6x8.
+; Tome of the Dead 6x8 font, BOLD round-5 variant (comparison only). Same layout as font6x8.
 
 FONT6X8_BOLD_W      EQU 6
 FONT6X8_BOLD_H      EQU 8

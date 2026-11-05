@@ -1,6 +1,6 @@
 ARCHIVED 2026-10-01 — superseded; current spec = docs/design/prototype.md + foundations.md
 
-# WazHack/ZX — Spectrum design (vertical slice)
+# Tome of the Dead — Spectrum design (vertical slice)
 
 > Game-designer deliverable. Authoritative for *what the game is*: rendering
 > approach, slice scope, controls, turn/entity model, combat + RNG, playability.
@@ -16,8 +16,8 @@ ARCHIVED 2026-10-01 — superseded; current spec = docs/design/prototype.md + fo
 
 ## Milestone context (staged delivery)
 
-> **Decided 2026-06-26.** The *target* look for WazHack/ZX is **side-view bitmap
-> sprites** (the WazHack feel). To de-risk, delivery is **staged**: this document
+> **Decided 2026-06-26.** The *target* look for Tome of the Dead is **side-view bitmap
+> sprites** (the WazHack-inspired feel). To de-risk, delivery is **staged**: this document
 > specifies **Slice 1 = top-down char-cell**, which proves the turn loop, combat,
 > RNG, level generation, items, and the whole test harness — all of which are
 > **reused unchanged** in **Milestone 2 = the side-view renderer**. Only §1
@@ -29,7 +29,7 @@ ARCHIVED 2026-10-01 — superseded; current spec = docs/design/prototype.md + fo
 ## Rendering & world model — 2026-07-03 revisions (side-view committed)
 
 > **Decided 2026-07-03, user.** The side-view spike track (SPIKE…SPIKE-4) proved
-> the WazHack-style renderer feasible, and it is now **committed as the Slice 1
+> the WazHack-inspired renderer feasible, and it is now **committed as the Slice 1
 > renderer** (the top-down §1 below is retained as the reference for the
 > renderer-agnostic game logic — turn loop, combat, RNG, entities, level gen —
 > which is reused unchanged; only the *presentation* switches to side-view). This
@@ -61,7 +61,7 @@ continuous scrolling during play** in favour of the model used by *Cauldron*
   tears or reads too fast.
 - **Why this wins:** normal movement becomes as cheap as the static top-down
   renderer (dirty-sprite redraw only, no shift), while transitions get the
-  faithful "camera pans to the next room" WazHack feel. It also kills the SPIKE-4
+  faithful "camera pans to the next room" WazHack-inspired feel. It also kills the SPIKE-4
   residual (spreading scroll work across frames, atomic flip) — no longer needed,
   because we never scroll *during* interactive frames.
 
@@ -74,7 +74,7 @@ continuous scrolling during play** in favour of the model used by *Cauldron*
 
 The world is **not** an open continuous floor; it is a graph of **discrete rooms**
 connected at their edges, which is exactly what R1's transition model wants and
-fits WazHack's dungeon structure naturally.
+fits the original game's dungeon structure naturally.
 
 - **A room = one screenful.** Each room fits the viewport (side-view playfield;
   see §2.4 for the row split). No intra-room scrolling.
@@ -108,7 +108,7 @@ fits WazHack's dungeon structure naturally.
 > `assets/gfx/cat_*`, unused). R3 below is kept for the record only.
 
 At game start the player picks one of **two hero classes**; both are side-view
-humanoids with a following **cat** pet (as in WazHack). Full visual/animation
+humanoids with a following **cat** pet (as in the original game). Full visual/animation
 spec for the artist is in `docs/design/heroes.md`; the game-model summary:
 
 - **Wizard** and **Witch** are the two selectable player kinds. For **Slice 1
@@ -163,7 +163,7 @@ AI. `MAX_ENTITIES` (16) is unchanged — cat + player + up to 14 monsters.
 ## 0. One-paragraph pitch
 
 A turn-based, top-down dungeon crawl in the Rogue/NetHack lineage, "faithful in
-spirit" to WazHack's *descend-or-die* loop but **not** its side-scrolling
+spirit" to the original game's *descend-or-die* loop but **not** its side-scrolling
 real-time presentation. You are an adventurer descending through two generated
 dungeon levels. You walk, you bump monsters to fight them, you pick up a couple
 of items, you find the down-stairs and descend to a freshly generated **level 2**;
@@ -187,18 +187,18 @@ The Spectrum screen is a 256×192 1-bit bitmap with a *separate* 32×24 attribut
 grid; each 8×8 cell carries exactly two colours (ink + paper). The two competing
 designs trade off like this:
 
-| Concern | UDG char-cell top-down (CHOSEN) | Bitmap sprites side-view (WazHack-like) |
+| Concern | UDG char-cell top-down (CHOSEN) | Bitmap sprites side-view (WazHack-inspired) |
 |---|---|---|
 | **Attribute clash** | **Structurally impossible.** A tile *is* a cell, so its 2 colours never collide with a neighbour. We never fight clash. | Endemic. A sprite at a non-8-pixel boundary forces ≥2 cells to share colours → visible colour bleed; needs masking/colour-snapping work every frame. |
 | **Per-cell draw cost** | Copy 8 bytes of bitmap (one per pixel row) + write 1 attribute byte. The 8 bitmap bytes are at fixed +256-stride screen addresses; a tile blit is ~tens of T-states, and we only redraw *dirty* cells. | A masked sprite blit is read-AND-mask-OR-write per byte across up to 2 cells horizontally and 2 vertically, plus pre-shifted sprite copies for sub-cell X — multiples of the cost, every moving frame. |
 | **Bytes (graphics data)** | One glyph = 8 bytes. A full tileset of ~32 glyphs = 256 bytes. Trivially fits low RAM, no banking needed for tiles. | Each sprite needs pre-shifted variants (up to 4 X-shifts) + masks → 8–16× the bytes per visual, pushing assets into paged banks. |
 | **Map model** | Map is a 2D byte array of tile IDs; render = map[y][x] → glyph + attr. Clean, indexable, cheap to diff. | Needs a free-floating entity list with pixel coordinates and a scrolling viewport — far more engine. |
-| **Look** | Classic Rogue/NetHack. Reads instantly, ages well, unmistakably "this is the slice." | Closer to WazHack's vibe but unbuildable cheaply on this hardware at this scope. |
+| **Look** | Classic Rogue/NetHack. Reads instantly, ages well, unmistakably "this is the slice." | Closer to the original game's vibe but unbuildable cheaply on this hardware at this scope. |
 
 The char-cell approach makes clash a **design invariant rather than a runtime
 battle**, makes rendering a *dirty-cell* problem (redraw only changed cells, not
 the screen), and keeps the map a flat indexable array. On a slow Z80 that is the
-difference between a smooth turn loop and a slideshow. WazHack's side-view does
+difference between a smooth turn loop and a slideshow. the original game's side-view does
 not port literally (charter §"Hard reality"); this is the faithful-in-spirit
 reinterpretation that is actually buildable.
 

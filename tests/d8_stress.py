@@ -123,7 +123,7 @@ def lst_index():
     rx = re.compile(r"^\s*\d+[+~>]*\s*([0-9A-F]{4})\s((?:[0-9A-F]{2} ?)+)\s*(.*)$")
     rd = re.compile(r"^\s*\d+[+~>]*\s*([0-9A-F]{4})\s+(?:[A-Za-z_.][\w.]*:)?\s*(DS|DEFS|BLOCK)\b\s*([^;]*)", re.I)
     cur = "?"
-    for line in open(Path(GL.BUILD_DIR) / "wazhack.lst", errors="replace"):
+    for line in open(Path(GL.BUILD_DIR) / "tome-of-the-dead.lst", errors="replace"):
         if line.startswith("# file opened:"):
             cur = line.split("/src/")[-1].strip() if "/src/" in line else line.split("/")[-1].strip()
             continue

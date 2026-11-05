@@ -1,4 +1,4 @@
-# WazHack/ZX CONCEPT spell projectiles + impact FX (docs/design/concept-screen.md §4) — DRAFT.
+# Tome of the Dead CONCEPT spell projectiles + impact FX (docs/design/concept-screen.md §4) — DRAFT.
 # Format: "=== name WxH ink:<c> paper:black [bright]" + H rows of W ('#' ink, '.' paper).
 # These are MASKED sprites (F8 native layout, one attr per frame, paper black).
 # tools/concept_screen.py derives the 3-state grids (mask = filled silhouette + 1-px

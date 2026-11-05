@@ -1,4 +1,4 @@
-# WazHack/ZX D3-7 T6 dropped-ammo floor glyphs (game.md §6.3, level_defs.asm T_DAGGERS/T_ARROWS).
+# Tome of the Dead D3-7 T6 dropped-ammo floor glyphs (game.md §6.3, level_defs.asm T_DAGGERS/T_ARROWS).
 # DRAFT 2026-10-13 for user review on the Design canvas (fragment: assets/gfx/tiles/ammo.svg.html,
 # tools/ammo_preview.py). Format = tools/gfx_convert.py --mode tile: 8x8, 1 ink on black paper.
 # Drawn in the air cell standing on the floor row (one stack per cell); the art sits on rows 1-7

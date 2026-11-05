@@ -21,8 +21,8 @@ def main():
     for f in FRAMES:
         src = f"{SRC}/ogre_{f}_a.grid"
         lines = open(os.path.join(REPO, src)).read().split("\n")
-        assert lines[0].startswith("# WazHack/ZX gfx text grid"), src
-        lines[0] = (f"# WazHack/ZX gfx text grid — ART16 Ogre option A (Club Brute), user-approved "
+        assert lines[0].startswith("# Tome of the Dead gfx text grid"), src
+        lines[0] = (f"# Tome of the Dead gfx text grid — ART16 Ogre option A (Club Brute), user-approved "
                     f"2026-10-31; from {src}; imported by tools/import_ogre_a.py")
         lines = [f"# name: ogre_{f}" if ln.startswith("# name:") else ln for ln in lines]
         lines = [f"# caption: {f.upper()}" if ln.startswith("# caption:") else ln for ln in lines]

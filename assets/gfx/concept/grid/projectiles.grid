@@ -1,4 +1,4 @@
-# WazHack/ZX CONCEPT round-2 projectiles + impact FX — DRAFT (same format as spells.grid).
+# Tome of the Dead CONCEPT round-2 projectiles + impact FX — DRAFT (same format as spells.grid).
 # MASKED sprites, F8 native, one attr per frame, paper black; tools/concept_screen.py derives
 # the 3-state grids into grid/sprites/. All face right (engine mirrors).
 # Thrown axe spin frames are in r2_frames.grid (generated: one frame rotated 90 deg steps).

@@ -1,4 +1,4 @@
-# WazHack/ZX side-view background tileset — durable git-diffable source.
+# Tome of the Dead side-view background tileset — durable git-diffable source.
 # Scene per docs/archive/design/sideview-renderer.md sec 5.1 + colour bands foundations F9.
 #   air band   (rows 0-17): black paper / cyan ink  -> features are cyan-on-black
 #   ground band(rows 18-23): blue  paper / white ink -> floor texture white-on-blue

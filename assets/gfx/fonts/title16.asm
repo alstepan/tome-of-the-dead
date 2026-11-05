@@ -1,4 +1,4 @@
-; WazHack/ZX title glyphs 16x16 (concept). 32 B/char, 2 B per row. Set:  ABCDEFGHIJKLMNOPQRSTUVWXYZ
+; Tome of the Dead title glyphs 16x16 (concept). 32 B/char, 2 B per row. Set:  ABCDEFGHIJKLMNOPQRSTUVWXYZ
 ; Index = code-32 for space, code-64 for A-Z (A=1). 'TOME OF THE DEAD' fits 2 rows.
 
 TITLE16_W      EQU 16
