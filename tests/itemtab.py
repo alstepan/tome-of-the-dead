@@ -394,7 +394,7 @@ class ItemTabTests(unittest.TestCase):
         self.assertEqual(groups["bag_full"], "res")
         self.assertEqual(groups["drink"], "fx")
         self.assertEqual(groups["hg_hungry"], "res")   # 3E-T9: the turn prints it (hunger6)
-        self.assertEqual(groups["bk_read"], "fx")
+        self.assertEqual(groups["st_asleep"], "fx")   # STATS2: bk_read (dead string) removed
         self.assertEqual(self.model.page_stems(), [])
 
     def test_verb_stem_name_combos_fit_32(self):

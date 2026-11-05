@@ -342,6 +342,39 @@ within the depth pool" check for D4–D8 only.
 - Room map: 32×18 = 576 B, 6-bit tile ids.
 - Ladder segments: `{c,0}` up-exit (rows 0–7), `{c,1}` internal (hole in row 8, rows 8–16),
   `{c,2}` down-exit hole (row 17). **A climb between storeys takes 9 turns.**
+- **H1 vertical exits, visible climb (user rulings 2026-11-05, as built):** every row climbed on
+  an exit shaft is an ordinary ladder turn (monsters act, hunger ticks). **Up:** standing on
+  storey 0 at the up-exit col, UP climbs (48-px hero: y 2 → 1, one turn); the step that puts
+  the head on row 0 also triggers the exit in the same turn → scroll up → he appears
+  **mid-ladder at the bottom of the shaft** of the room above (feet on its row-17 hole, `y =
+  18 − h`), climb rest pose, and waits for keys. **Down:** the step from storey 1 into the
+  down-exit hole (feet on row 17) triggers the exit → scroll down → he appears **mid-ladder at
+  the top of the shaft** below (`y = 0`), rest pose, waits; two DOWN turns stand him on
+  storey 0. From an arrival end the opposite key is the exit back (no step, 1 turn: the body
+  cannot leave the room further). A blocked exit step is a blocked climb (wait / squeeze, §6.4;
+  the exit is cancelled unless he squeezes). The level exit is unchanged (the step into the
+  grate); the **Teleport still lands standing**. Followers arrive PENDING standing at the
+  shaft foot as before (they materialise once the hero has left that box). The §6.4 yield
+  path (`cork_check`) ends at the room's top / bottom row on an exit shaft. Hunger (`FOOD_TMR`)
+  ticks on every climb step, the exit-step turn included; only the WEAK faint counter `HW_TMR`
+  is held on the exit turn (FAINT1); the no-turn UP at the D1 shaft top costs nothing. The
+  "blocked exit step" branch (`try_climb .xs`: the step onto row 0 / into row 17 blocked, the
+  exit cancelled) is unreachable in play (every body is >= 2 rows, so the cell the step enters
+  is already the climber's own) and is kept as a guard.
+- **H1-D1 the D1 entrance (user request 2026-11-05, as built):** the D1 start room now gets
+  the same rubble-capped arrival shaft `{c,0}` as D2–D8 (`RD_ARRCOL`, picked by the same
+  generator step for every depth; `tools/levelgen.py` matches). The game starts with the hero
+  **mid-ladder at its top** (`x = c`, `y = 0`, climb rest pose), waiting for keys; two DOWN turns
+  stand him on storey 0. The shaft leads nowhere, as on D2+ (where a standing hero's UP at the
+  shaft col is not a climb: no turn): UP at its top is no turn, no exit (nothing above D1); from
+  y 1 UP is a plain step back to y 0. Supersedes the D1 `x = 14` of §1.1 gaps (4) / the L1
+  rules row.
+- **H1-ARRIVAL every depth (user 2026-11-05 "D2-D8 — yes", as built):** one arrival rule: after
+  the D1 start and after every level descent (the lair grate → `level_descend` → `level_enter` /
+  `level_populate`) the hero appears mid-ladder at the top of the new depth's arrival shaft
+  (`x = c`, `y = 0`, rest pose, `E_AIDIR` +1), waits, and two DOWN turns stand him on storey 0;
+  UP at the top is no turn, no exit. Supersedes the D2+ "standing at `x = c + 1`" of §1.1 gaps
+  (4) (designer clarification 2026-10-03, option a) and the start-col legality move.
 - Flyers: `9s ≤ y ≤ 9s+8−h`.
 
 ### 2.2 Turn loop (prototype §3.2 + E0)
@@ -692,6 +725,21 @@ Examples (all ≤ 32): `YOU HIT THE GOBLIN.` · `THE GOBLIN MISSES YOU.` ·
 `THE TOME IS DESTROYED` (21) · `NO ARROWS.` · `QUIVER FULL.` · `THE VAMPIRE TURNS INTO A BAT!` (28) · `YOU PICK UP 3 ARROWS.` ·
 `FOOD: HUNGRY.` The death line moves to the menu font: `KILLED BY …` ≤ 32 chars, with the
 monster name abbreviated by a table if longer than the budget.
+
+**End card statistics (STATS1 S1 2026-11-01, ENDCARD-L1F-G1 2026-11-02, STATS2 2026-11-05; spec `docs/design/stats2.md`).**
+Both end cards (death and win) show one label / value table (6x8 font, label x 72, values x 136, numbers without
+leading zeros): `CLASS` / `LEVEL` / `DEPTH` (rows 11-13), a gap, `KILLS` 15, `TURNS` 16, `BOOKS r/f` 17, `ITEMS` 18,
+`BEST KILL <kind>` 19 (absent with no kill: the only conditional row, so it stays last); `PRESS 1-4 OR ENTER` row 22;
+the portraits' feet = the table's bottom row (19). (The STATS2 spec's rows 10-16 were the pre-ENDCARD layout; the
+approved card keeps its table position and the two rows go between TURNS and BEST KILL.)
+- KILLS = the hero's own kills (respawns count, 16-bit wrap); BEST KILL = the highest-KXP kind killed (tie: latest).
+- BOOKS found = +1 per successful pickup of the class book (`IT_BOOK`; floor or monster drop; the D1 start-room book
+  only when it is taken). BOOKS read = +1 per completed READ of a book, any outcome (learn, pity, uniform, rank-up,
+  the Vigor / Power tome); a READ always completes once chosen (the book is consumed). r <= f.
+- ITEMS = +1 per successful non-book pickup: food, potion, scroll, bow, gear, unique, charm; an arrow / dagger stack =
+  1 per pickup that takes at least one (a full quiver takes 0: not counted; the Mage takes no ammo). A bag-full refusal
+  counts nothing; DISCARD destroys (there is no DROP) and never decrements; the start kit is not a pickup.
+- The three STATS2 counters are bytes saturating at 255, zeroed at new game; nothing touches them after the lethal turn.
 
 **Message list (designer decision 2026-10-04; src/strings.txt, B3B-13).** Final wording:
 `YOU ENTER THE DUNGEON` (welcome) · `YOU WIN! PRESS ENTER` (win) · `YOU DESCEND DEEPER` ·
@@ -1113,8 +1161,9 @@ level is `LVL_EXP(d) = d`** at every depth entry (thresholds sit ~15 % under the
 totals, so a hero who skips a few monsters still keeps pace; skipping a third of a level
 drops one level). L9 now comes early on D8 for thorough play.
 
-**Level-up** (each level; several at once loop): **Warrior max HP +4, max MP +1 · Mage max
-HP +3, max MP +2; current HP/MP rise by the same amounts** (not a full heal). The class split
+**Level-up** (each level; several at once loop): **Warrior max HP +5, max MP +1 · Mage max
+HP +3, max MP +2; current HP/MP rise by the same amounts** (not a full heal). (WIDOW-SPIT, user
+2026-11-05: Warrior +4 → +5, the compensation for the Black Widow's spit; `docs/design/widow_spit_sim.md`.) The class split
 replaces the Vigor/Power tomes, which are now rare (§5: books mostly teach or rank up
 abilities). Extra steps: **L4 atk +1 · L6 eva +1 · L8 atk +1** (mirrors
 the monsters' atk + (d − 1) div 3, §9.1). DEF stays gear-only.
@@ -1411,7 +1460,7 @@ monster hit on the hero), with no "applied this turn" flag. A banked monster (ot
 | **STUNNED** | skip action; eva 0; cannot parry | timer (**not** HP loss). **HOLD_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero), STUN trap 2–3 rolled (hero, §1.5.1) |
 | **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action fails because of the direction the turn is spent (`YOU STUMBLE.`); a non-direction refusal costs no turn and faces back (§2.3, §6.4.2 R4). Whirlwind, climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
 | **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) **and no spells** (Mage: all 5; user 2026-11-01) → illegal, no MP, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; thrown daggers, arrows and items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll 6 (room); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
-| **POISON** | −1 HP every **4th** turn (step 1); **cannot eat** (§7.2) | timer; Cure | **adds per application, cap 30** (POIS1, §6.4.3): Spider bite **12**, Giant Rat 12, Spider Queen **18**, Black Widow **24**, DART trap 12 |
+| **POISON** | −1 HP every **4th** turn (step 1); **cannot eat** (§7.2) | timer; Cure | **adds per application, cap 30** (POIS1, §6.4.3): Spider bite **12**, Giant Rat 12, Spider Queen **18** (bite) / **12** (spit), Black Widow **24** (bite) / **6** (spit, WIDOW-SPIT), DART trap 12 |
 | **WEAK** | the hunger-WEAK penalties (§7: atk −2, eva −1, dmg −1 min 1 on **physical hits only**, §6.4.2 R1, no MP regen, no jump); **not cumulative** with hunger WEAK (the same penalties apply once) | timer; Cure | **Mummy curse** (below) 12 |
 
 **Mummy curse (defines §10's "curse").** A Mummy (and the Golden Pharaoh) hit drains 5 FOOD
@@ -1586,6 +1635,9 @@ own, but it would leave the D2 Mage (19 HP) at about half HP after one Spider Qu
   answer, and Firebolt is the Mage's.
 - D5 Black Widow (one bite 24 → 6 HP; two → cap 8): net −4 / −6 after regen. That is 15 % of the
   Warrior's 40 HP and 21 % of the Mage's 28 HP.
+- **Spit sources (BOSS-RANGED / WIDOW-SPIT, every hit, no chance roll; Silk Cloak immune, Cure clears):** the golden Spider
+  Queen's spit **+12**, the Black Widow's spit **+6** (range 6, every 4th turn): a Widow that spits on the way in and
+  then bites reaches 6 + 24 = 30 (the cap) after one bite. The bites are unchanged.
 - Worst case at any depth: a capped hero loses **8 HP over 30 turns**, never below 1 HP.
 - The danger estimate (§3.7) uses `EHP = HP − (POISON turns >> 2)`. That is now exactly the
   remaining poison HP (turns / 4), so the formula is unchanged. It reads `ST_X`.
@@ -2237,7 +2289,11 @@ comes from the item-type table; gear BUC tint `$45`/`$42` and unique shimmer ove
   whose glyph is 60..63 is lost (AMMO/PAGES are common and allowed).
 - **Key: no floor glyph and no floor entry.** The key is found automatically on the **first
   entry into the key room** (`LF_KEY_TAKEN`, panel key icon; `YOU FIND THE LAIR KEY.` 22).
-- Id 10 = `T_TRAP` as §1.5. ~~Page icons = these 6 glyphs scaled ×2 (16×16) in the item
+- Id 10 = `T_TRAP` as §1.5. **TRAP-OR (user playtest + ruling 2026-11-05):** the plate is OR-composited
+  over whatever its cell holds (a floor object's bottom row keeps its pixels; the decor of the room
+  never changes when a trap becomes known; the find blink's "off" shows the decor alone), and the cell
+  takes the **trap's own type attr** (ink = the type colour, paper / bright as on plain floor), so the
+  decor pixels of that one cell show in the trap ink. ~~Page icons = these 6 glyphs scaled ×2 (16×16) in the item
   ink.~~ **Superseded 2026-10-26 by Q5 below (true 16×16 icons); the floor keeps these 6 glyphs.**
 - **Art the artist must deliver (8×8, standing-row items, low in the cell): FOOD, PAGES
   (open book / scroll, reads in white and magenta), WEAPON (sword), WORN (shield), AMMO
@@ -2833,6 +2889,9 @@ Shooters (one descriptor row each, R6; the Archmage's row is T11):
 | Goblin Slinger | 6 | 2 | F1 roll | 1d3 PHYS, as above | — | yes | yes | dagger_spin `$06` |
 | Necromancer | 8 | 2 | auto-hit (spell) | 1d6+1 DARK, `roll×res`, no DEF | FEAR 3, 85/256 | yes | yes (user 2026-10-29) | NBOLT |
 | Bone Caller | 8 | 2 | auto-hit | as Necromancer | as Necromancer | yes | yes | NBOLT |
+| Golden Goblin King (BOSS-RANGED, golden only) | 6 | 2 | F1 roll + golden | 1d3 + 1 PHYS | — | no: walks in between shots | — | dagger_spin `$06` |
+| Golden Spider Queen (BOSS-RANGED, golden only) | 6 | 2 | F1 roll + golden | 1d2 + 1 PHYS | POISON **+12** always (Silk Cloak immune) | no: walks in | yes | spark_fly `$43` |
+| **Black Widow** (WIDOW-SPIT, every body) | 6 | **3** (every 4th turn) | F1 roll | **1d2** PHYS (not golden) | POISON **+6** always (Silk Cloak immune) | no: walks in | yes | spark_fly `$43` |
 
 Poltergeist is not a shooter (melee touch). atk / dmg include depth scaling and golden +2 / +1.
 - **Geometry.** `gap` = empty cols between the boxes (melee reach = gap 0–1). **In range iff
@@ -2841,7 +2900,7 @@ Poltergeist is not a shooter (melee touch). atk / dmg include depth scaling and 
   mid-ladder) and the same storey (`storey_ref`); every standing body of a storey overlaps,
   so no row test is needed. **Flight row** `fr = shooter top + 2` (tall: `9s+4`, Slinger:
   `9s+6`), always inside the standing hero's rows `9s+2..9s+7`; a 2-high shooter (BOSS-RANGED: the
-  Spider Queen, top `9s+6`) fires from its top row `9s+6` (top + 2 would be its floor).
+  Spider Queen; WIDOW-SPIT: the Black Widow, same) fires from its top row `9s+6` (top + 2 would be its floor).
 - **Clear line iff** (a) no `TF_SOLID` cell in `ROOM_MAP` row `fr` over the gap cols (air
   decor, torches and back-wall patches are non-solid by §1.2, so in practice only a mid-room
   block stops it) and (b) no body (any kind or state, mid-ladder included, pending excluded)
@@ -3499,7 +3558,7 @@ Short names ≤ 9 chars (3F-D3: `YOUR DAGGER MISSES THE ` + 9 = 32; final list �
 | | | **Rabbit Rat** | 8/2/3/0/1d4 | `$47` | **breeds**: hit and survives → 1 in 4 spawns one base **Rat** in the nearest legal cell (summon code, slot + §9.3 cap; `F_RESPAWN`); once per Rabbit Rat (`ENT_STAT` spare bit) |
 | Bat (`$43`) | **Screech Bat** | | 5/2/4/0/1d3 | `$05` | bite 1 in 4 → CONFUSED 2 |
 | Goblin (`$44`) | **Goblin Slinger** | | 8/2/1/0/1d4; rock 1d3 PHYS r6 | `$06` | ranged AI as the Archer (cooldown 2); rock = `dagger_spin` frames at `$06`, not recoverable; weight 3 + 1 |
-| Spider | **Black Widow** | | 10/4/3/0/1d4 | `$02` | POISON 24 (POIS1 §6.4.3); bite 1 in 4 → **ACID** (armour `m −1`, §8.10; rev 5 replaces ASLEEP 2) |
+| Spider | **Black Widow** | | 10/4/3/0/1d4 | `$02` | POISON 24 (POIS1 §6.4.3); bite 1 in 4 → **ACID** (armour `m −1`, §8.10; rev 5 replaces ASLEEP 2); **spits poison** (WIDOW-SPIT, user 2026-11-05; §9.2 shooters table): range 6 (gap < 6), a shot every **4th** turn, keeps walking in between, d20 vs EVA, **1d2 − DEF** (min 1), a hit always adds **POISON +6** (cap 30; Silk Cloak immune; Cure clears); the Queen's magenta spark, same SFX and lines. Every Widow spits (no golden gate); ordinary Spiders never |
 | Skeleton (`$47`) | **Skeleton Guard** | | 14/3/2/2/1d6 | `$05` | **parries 1 in 4** PHYS hits (Death Knight parry; 0 dmg, `PARRIED`, no BLOCK frame: the hit flash is skipped); a parried melee hit **notches** the weapon 1 in 2 (§8.10) |
 | | | **Skeleton Knight** | 18/4/2/3/1d8 | `$44` | parries 1 in 3 (notch 1 in 2, §8.10); hit 1 in 4 → STUNNED 1 |
 | Ghost (`$45`) | **Poltergeist** | | 11/3/3/0/1d4 DRAIN | `$03` | touch 1 in 3 → FEAR 3 (replaces the Ghost's confusion) |

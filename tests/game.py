@@ -871,11 +871,13 @@ def main():
             p.turn("J")                          # down-exit: step + transition
             e = p.ent(0)
             h.expect("35 B col 24 J -> C", p.rb("CUR_ROOM"), ROOM_C)
-            h.expect("35 arrive s0 x=24", (e["X"], e["Y"]), (24, Y0))
+            h.expect("35 arrive mid-ladder at the top of C's shaft x=24 (H1)", (e["X"], e["Y"]), (24, 0))
             h.expect("35 after B->C scroll: screen == room C tiles", p.bg_mismatch()[:4], [])
             g = p.ent(SLOT_GOBLIN)
             h.expect("26 goblin room = C, pending", (g["ROOM"], bool(g["FLAGS"] & EF_PENDING)), (ROOM_C, True))
             h.expect("26 bat does not follow", p.ent(SLOT_BATB)["ROOM"], 1)
+            p.turn("J")                          # H1: climb down to storey 0 (2 turns)
+            p.turn("J")
             for _ in range(4):
                 if not p.ent(SLOT_GOBLIN)["FLAGS"] & EF_PENDING:
                     break
@@ -886,9 +888,12 @@ def main():
             # 35 back up
             p.set_ent(SLOT_GOBLIN, ROOM=NOWHERE)
             p.place(0, 24, Y0)
-            p.turn("K")                          # up-exit: immediate transition
+            p.turn("K")                          # H1: up-exit = a step (y 1) ...
+            h.expect("35 K: one step up C's up-exit shaft, still in C", (p.rb("CUR_ROOM"), p.ent(0)["Y"]), (ROOM_C, 1))
+            p.turn("K")                          # ... then head on row 0 + the transition
             e = p.ent(0)
-            h.expect("35 K -> back in B s1 x=24", (p.rb("CUR_ROOM"), e["X"], e["Y"]), (1, 24, Y1))
+            h.expect("35 K -> back in B mid-ladder at the shaft bottom x=24 (H1)", (p.rb("CUR_ROOM"), e["X"], e["Y"]),
+                     (1, 24, PLAY_ROWS - 6))
             h.expect("35 after C->B scroll: screen == room B tiles", p.bg_mismatch()[:4], [])
 
         # ---------------- 27 cap / 28 arrival conflict ----------------------
@@ -2214,7 +2219,8 @@ def walkthrough(h, p, check14=False):
     # B3B-3 route (2 storeys; rooms re-authored from §8.2, same shape):
     go_room(1, "L")                  # A -> B (storey 1)
     go_x(24)
-    go_room(ROOM_C, "J")             # B {24,2} -> C (s0, col 24)
+    go_room(ROOM_C, "J")             # B {24,2} -> C (col 24, H1: mid-ladder at the top of the shaft)
+    climb("J", 0)                    # H1: 2 ladder turns down to storey 0
     sk_y0 = p.ent(5)["Y"]
     go_x(27)                         # potion 2 (C col 29, storey 0)
     def foe_left():

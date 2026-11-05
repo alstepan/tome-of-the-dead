@@ -14,7 +14,7 @@
 ;                     The reseed path is therefore unreachable under L1; it stays
 ;                     as a cheap guard (bit-exact with tools/levelgen.py).
 ;                     Clobbers all but IY, SP (far3 itself clobbers A/F on return).
-; level_start_x  In : block generated.  Out: A = B = hero start col (storey 0).
+; level_start_x  In : block generated.  Out: A = B = hero start col = the arrival shaft col.
 ;
 ; Scratch: LG_* below, in GEN_SCRATCH (= ROOM_MAP + NEXT_MAP, $6000..$6066).
 ; CONTRACT: call only before build_room_map / never mid-room (ROOM_MAP, NEXT_MAP
@@ -467,10 +467,7 @@ pick_man:       call pick_opt
 
 ; hits: In IX = room, C = storey, D = lo, E = hi. CF = a storey-C footprint
 ; (f..f+2), the pit (p-1..p+3, storey 0) or the storey-C block overlaps cols
-; lo..hi. Preserves BC. hits_x ignores the arrival shaft (start_x).
-hits_x:         push bc
-                ld   b, $31
-                jr   hits_m
+; lo..hi. Preserves BC.
 hits:           push bc
                 ld   b, $35
                 ld   a, c
@@ -805,10 +802,7 @@ attempt:        ld   (LG_SP), sp
                 ld   a, ixl
                 cp   LG_ROOMS_END
                 jr   nz, .fl
-                ; arrival shaft (D2+), level exit
-                ld   a, (LVL_DEPTH)
-                cp   2
-                jr   c, .noarr
+                ; arrival shaft (H1-D1: every depth, D1 too: the hero enters down it), level exit
                 ld   a, (LVL_START)
                 call rdp
                 push hl
@@ -818,7 +812,7 @@ attempt:        ld   (LG_SP), sp
                 ld   e, SHAFT_MIN + SHAFT_N - 1
                 call pick_man
                 ld   (ix+RD_ARRCOL), a
-.noarr:         ld   a, (LVL_LAIR)
+                ld   a, (LVL_LAIR)
                 call rdp
                 push hl
                 pop  ix
@@ -1281,55 +1275,15 @@ level_gen:      ld   (LVL_DEPTH), a
     ENDIF
 
 ;==============================================================================
-; level_start_x: D1 x = 14, D2+ x = arrival col + 1 (arrival shaft exempt); if
-; another storey-0 footprint touches x-1..x+1 (or x is outside 2..29) move to the
-; nearest legal col, d = 0.., x-d before x+d. Out A = B = col.
+; level_start_x: H1-ARRIVAL (game.md §2.1): every depth's hero enters down the start
+; room's arrival shaft: x = its col (level_populate puts him mid-ladder at its top).
+; (The D2+ x = col + 1 legality search and its hits_x entry are gone.) Out A = B = col.
 ;==============================================================================
 level_start_x:  ld   a, (LVL_START)
                 call rdp
-                push hl
-                pop  ix
-                ld   a, (LVL_DEPTH)
-                ld   b, 14
-                dec  a
-                jr   z, .x0
-                ld   b, (ix+RD_ARRCOL)
-                inc  b
-.x0:            ld   c, 0
-.d:             ld   a, b
-                sub  c
-                call .ok
-                jr   nc, .f1
-                ld   a, b
-                add  a, c
-                call .ok
-                jr   nc, .f2
-                inc  c
-                ld   a, c
-                cp   32
-                jr   nz, .d
-                ld   a, b
-                ret
-.f1:            ld   a, b
-                sub  c
-                jr   .r
-.f2:            ld   a, b
-                add  a, c
-.r:             ld   b, a
-                ret
-.ok:            cp   2                  ; CF = illegal
-                ret  c
-                cp   30
-                ccf
-                ret  c
-                push bc
-                push de
-                dec  a
-                ld   d, a
-                add  a, 2
-                ld   e, a
-                ld   c, 0
-                call hits_x
-                pop  de
-                pop  bc
+                ld   a, l
+                add  a, RD_ARRCOL       ; (ROOM_DESC: one page)
+                ld   l, a
+                ld   a, (hl)
+                ld   b, a
                 ret
