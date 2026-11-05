@@ -9,6 +9,8 @@ the real Spectrum palette (FLASH shown non-inverted).  Output: docs/release/itch
   python3 tools/itch_media.py gif                    # img/walk_fight.gif
   python3 tools/itch_media.py script W|M [part..]    # dev: run the hand-written input script (fast, no sound)
   python3 tools/itch_media.py video W|M [--reuse]    # script at emulator speed 100 + --aofile -> video/warrior.mp4 | mage.mp4 (with sound)
+  python3 tools/itch_media.py trailer rec music|W|M  # trailer captures (music once from the menu; hero SFX-only runs), speed 100
+  python3 tools/itch_media.py trailer                # assemble video/trailer.mp4 from those captures (real time, trim only)
 
 Recording needs the release build (tools/build.sh -DDEBUG_KIT=0), ZEsarUX and a free ZRCP port
 (ZRCP_PORT, never 10000).  The run is tick-exact (the playthrough bot of tests/pt_bot.py drives the
@@ -343,6 +345,7 @@ class Rec:
     def __init__(self, p):
         self.p, self.frames, self.black, self.last = p, [], False, None
         self.audio, self.a0, self.tot = None, 0, 0
+        self.marks = []                                   # (name, display-frame index) set by the scripts (trailer)
         self.orig = p.tick
         p.tick = self.tick
 
@@ -684,6 +687,7 @@ def d1_intro(st, p, rec, hero_name):
     if i is not None:
         st.bag_show(goto=i, use=True)                 # open, 2 s dwell, cursor to the tome 0.7 s/step, read, close
         log(st, f"ranks {st.ranks()}")
+    rec.marks.append(("d1fight", rec.total()))
     st.walk_to(1, st.room_ladders()[0])               # the room's ladder down to the lower storey
     st.walk_to(1, room_model.field(st.blk, st.room(), "RD_DNCOL"))
     st.leave("D")                                     # the vertical exit: the next room scrolls in
@@ -711,6 +715,7 @@ def deep(st, p, rec, depth, hp, mp, ranks, first_spell=None, first_steps=0, figh
     log(st, f"D{depth} start r{st.rb('LVL_START')} lair r{st.lair}")
     st.wait_s(1.2)
     boss = enter_lair(st, p, rec)
+    rec.marks.append((f"lair{depth}", rec.total()))
     log(st, f"boss {boss:#x} hostiles {[(h['kind'], h['x'], h['hp']) for h in st.hostiles()]}")
     st.god = True
     if first_spell is not None:
@@ -772,6 +777,186 @@ def cmd_shots():
         scaled(scr_to_rgb(load_rec(h, tag)[i][0]), 3).save(OUT / "img" / f"{name}.png")
 
 
+# ------------------------------------------------------------------ trailer
+# hero alternates, every clip from a different depth
+# (W D7 is left out: the scripted boss fight there stalls (hero idle 14 s), nothing readable to show)
+TR_CLIPS = [("W", "d1fight"), ("M", "lair5"), ("W", "lair4"), ("M", "lair8")]
+# window starts (s into the capture) picked by eye where the automatic most-motion pick is wrong
+TR_STARTS = {"d1fight": 22.0, "lair5": 18.5}
+TR_PARTS = {"W": ["d1", "d4", "d7"], "M": ["d5", "d8"]}
+TR_MUSIC_S = 64                       # menu capture length (the trailer needs ~51 s of it)
+
+
+def cmd_trailer_rec(what):
+    """what = music: the title/menu theme once, uninterrupted, from the menu (sound ALL ON, nothing pressed).
+    what = W|M: a scripted run with in-game sound set to EFFECTS ONLY through the real menu key 5 (ALL ON -> SFX ONLY),
+    so its --aofile holds SFX and no song.  Always emulator speed 100 (real time), never turbo."""
+    audio = TMP / f"tr_audio_{what}.raw"
+    TMP.mkdir(parents=True, exist_ok=True)
+    if audio.exists():
+        audio.unlink()
+    with session("W" if what == "music" else what, 0x1234, audio=audio, fast=False) as (h, p, rec, st):
+        sz = lambda: audio.stat().st_size if audio.exists() else 0
+        if what == "music":
+            s0 = (sz(), rec.sys())
+            rec.start()
+            st.wait_s(TR_MUSIC_S)
+        else:
+            p.tap("5")
+            st.wait_s(0.5)
+            if p.rb("SND_MODE") != 2:
+                sys.exit(f"SND_MODE {p.rb('SND_MODE')}: key 5 did not give EFFECTS ONLY")
+            s0 = (sz(), rec.sys())
+            hero = K_KNIGHT if what == "W" else K_WIZARD
+            try:
+                menu_start(p, rec, st, hero, dwell=0.5)
+                for nm in TR_PARTS[what]:
+                    PARTS[what][nm](st, p, rec)
+            finally:
+                if p.rb("SND_MODE") != 2:
+                    print("WARNING: SND_MODE changed during the run:", p.rb("SND_MODE"))
+        span = (s0, (sz(), rec.sys()), rec.total())
+        pickle.dump({"frames": rec.frames, "span": span, "marks": rec.marks}, open(TMP / f"tr_{what}.pkl", "wb"))
+        print(f"trailer capture {what}: {len(rec.frames)} probes, {rec.total() / 50:.1f} s, marks {rec.marks}")
+    check_audio(rec.frames, audio, span)
+
+
+def _tr_audio(what, d):
+    """the capture's sound aligned to its frame timeline (anchored at the END, as assemble), DC-free, float -1..1."""
+    raw = np.fromfile(TMP / f"tr_audio_{what}.raw", np.uint8)
+    need = d["span"][2] * BPF
+    a = raw[len(raw) - need:].astype(np.float32)
+    a -= np.convolve(a, np.ones(2000) / 2000, mode="same")
+    return a / 128.0
+
+
+def _tr_timeline(d):
+    """per 50 Hz display frame: probe index, picture change (bytes differing from the previous probe), black flag."""
+    fr = d["frames"]
+    tl_i = np.repeat(np.arange(len(fr)), [dd for _, dd in fr])
+    first = np.concatenate([[0], np.cumsum([dd for _, dd in fr])])[:-1]
+    act = np.zeros(len(tl_i), np.float32)
+    for i in range(1, len(fr)):
+        act[first[i]] = np.count_nonzero(np.frombuffer(fr[i][0][:6912], np.uint8) != np.frombuffer(fr[i - 1][0][:6912], np.uint8))
+    black = np.array([not any(f) for f, _ in fr])[tl_i]
+    return tl_i, act, black
+
+
+def _tr_window(d, tlx, mark, length):
+    """best `length`-frame window after `mark` (display frames of the capture): most picture change, no black frame."""
+    tl_i, act, black = tlx
+    mk = sorted(d["marks"], key=lambda x: x[1])
+    t0 = dict(mk)[mark] + 25
+    nxt = [t for _, t in mk if t > t0]
+    cut_end = nxt[0] if nxt else len(act)                       # stay inside this scene
+    cs, cb = np.concatenate([[0], np.cumsum(act)]), np.concatenate([[0], np.cumsum(black)])
+    best, bt = -1.0, None
+    for t in range(t0, cut_end - length):
+        if cb[t + length] - cb[t]:
+            continue
+        v = cs[t + length] - cs[t]
+        if v > best:
+            best, bt = v, t
+    return bt
+
+
+def cmd_trailer(starts=None):
+    """starts: {mark: seconds into the capture} overriding the automatic window pick (default TR_STARTS)."""
+    starts = starts or TR_STARTS
+    W, H, FPS = 768, 576, 50
+    nf = lambda s: int(round(s * FPS))                                        # noqa: E731
+    FADE, CLIP, TITLE, COVER = nf(0.4), nf(9.5), nf(3.0), nf(3.0)
+    mus = pickle.load(open(TMP / "tr_music.pkl", "rb"))
+    segs = [("title", TITLE)] + [(c, CLIP) for c in TR_CLIPS] + [("cover", COVER)]
+    total = sum(n for _, n in segs)
+    # ---- the music: ONE contiguous slice of the single menu capture, frame-aligned with its title picture
+    music_all = _tr_audio("music", mus)
+    if len(music_all) < total * BPF:
+        sys.exit(f"music capture too short: {len(music_all)} < {total * BPF}")
+    music = music_all[:total * BPF].copy()                                     # THE music: one slice, never spliced
+    first = int(np.argmax(np.abs(music) > 0.02))
+    print(f"music: first sound {first / AUDIO_HZ:.2f} s into the slice; capture {len(music_all) / AUDIO_HZ:.1f} s for "
+          f"{mus['span'][2]} frames = {mus['span'][2] / 50:.1f} s (15600 Hz x 312 B/frame -> 50 fps real time)")
+    music_src = music.copy()
+    heroes = {h: pickle.load(open(TMP / f"tr_{h}.pkl", "rb")) for h in "WM"}
+    aud = {h: _tr_audio(h, heroes[h]) for h in "WM"}
+    tlx = {h: _tr_timeline(heroes[h]) for h in "WM"}
+    env_pic = np.ones(total, np.float32)
+    sfx = np.zeros(total * BPF, np.float32)
+    env_sfx = np.zeros(total, np.float32)
+    plan, pos = {}, 0
+    for name, n in segs:
+        e = np.ones(n, np.float32)
+        a = min(FADE, n)
+        e[:a] = np.linspace(0, 1, a, endpoint=False)
+        b = nf(1.0) if name == "cover" else FADE
+        e[n - b:] = np.minimum(e[n - b:], np.linspace(1, 0, b))
+        env_pic[pos:pos + n] = e
+        if isinstance(name, tuple):
+            h, mark = name
+            t = nf(starts[mark]) if starts and mark in starts else _tr_window(heroes[h], tlx[h], mark, n)
+            plan[pos] = (h, t)
+            sfx[pos * BPF:(pos + n) * BPF] = aud[h][t * BPF:(t + n) * BPF] * np.repeat(e, BPF)
+            env_sfx[pos:pos + n] = 1
+            print(f"clip {h} {mark}: capture {t / 50:.1f}-{(t + n) / 50:.1f} s -> trailer {pos / 50:.1f} s")
+        pos += n
+    # ---- levels: SFX ~ -10 dB under the music (RMS over the 20 ms blocks where an effect actually sounds)
+    blk = sfx.reshape(total, BPF)
+    act = (blk.std(1) > 0.01) & (env_sfx > 0)
+    rms = lambda x: float(np.sqrt(np.mean(np.square(x)))) if len(x) else 1e-9     # noqa: E731
+    m_rms, s_rms = rms(music), rms(blk[act].reshape(-1))
+    g_sfx = m_rms * 10 ** (-10 / 20) / s_rms
+    print(f"music rms {m_rms:.4f}, sfx active rms {s_rms:.4f} ({int(act.sum())} active frames), sfx gain {g_sfx:.3f}")
+    me = np.ones(total * BPF, np.float32)
+    fi, fo = AUDIO_HZ, 2 * AUDIO_HZ
+    me[:fi] = np.linspace(0, 1, fi, endpoint=False)
+    me[-fo:] = np.linspace(1, 0, fo)
+    mix_m = music * me
+    mix = mix_m + sfx * g_sfx
+    gn = 0.89 / float(np.abs(mix).max())
+    mix *= gn
+    # contiguity guarantee: the music stem is exactly source-slice x (1 s in / 2 s out) envelope; no clip cut touches it
+    assert np.array_equal(music, music_src) and np.allclose(mix_m, music_src * me)
+    print(f"normalisation gain {gn:.3f} (peak 0.89)")
+    TMP.mkdir(parents=True, exist_ok=True)
+    wav = TMP / "trailer_audio.s16"
+    (np.clip(mix, -1, 1) * 32000).astype("<i2").tofile(wav)
+    (np.clip(mix_m * gn, -1, 1) * 32000).astype("<i2").tofile(TMP / "trailer_music_only.s16")
+    # ---- picture
+    mi = int(np.searchsorted(np.cumsum([dd for _, dd in mus["frames"]]), nf(1.0), side="right"))
+    title = np.repeat(np.repeat(scr_to_rgb(mus["frames"][mi][0]), 3, 0), 3, 1)
+    cover = np.zeros((H, W, 3), np.uint8)
+    cv = np.asarray(Image.open(OUT / "img/cover_b.png").convert("RGB"))
+    y0, x0 = (H - cv.shape[0]) // 2, (W - cv.shape[1]) // 2
+    cover[y0:y0 + cv.shape[0], x0:x0 + cv.shape[1]] = cv
+    (OUT / "video").mkdir(parents=True, exist_ok=True)
+    out = OUT / "video" / "trailer.mp4"
+    # no setpts/atempo/frame dropping: 1 emulated frame = 1 video frame = 312 audio bytes
+    cmd = [FFMPEG, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", "50", "-i", "-",
+           "-f", "s16le", "-ar", str(AUDIO_HZ), "-ac", "1", "-i", str(wav),
+           "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p", "-r", "50",
+           "-af", "aresample=44100", "-c:a", "aac", "-b:a", "160k", "-ar", "44100",
+           "-movflags", "+faststart", str(out)]
+    pr = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    pos = 0
+    for name, n in segs:
+        for i in range(n):
+            if name == "title":
+                im = title
+            elif name == "cover":
+                im = cover
+            else:
+                h, t = plan[pos]
+                im = np.repeat(np.repeat(scr_to_rgb(heroes[h]["frames"][tlx[h][0][t + i]][0]), 3, 0), 3, 1)
+            g = env_pic[pos + i]
+            pr.stdin.write((im if g >= 1 else (im * g).astype(np.uint8)).tobytes())
+        pos += n
+    pr.stdin.close()
+    if pr.wait():
+        sys.exit("ffmpeg failed")
+    print(f"{out}: {total} frames = {total / 50:.1f} s, {out.stat().st_size / 1e6:.1f} MB")
+
+
 def main():
     a = sys.argv[1:]
     if not a:
@@ -791,6 +976,11 @@ def main():
     elif a[0] == "clips":
         cmd_clip("W", 1110, 1400, "warrior.gif")
         cmd_clip("M", 1140, 1500, "mage.gif")
+    elif a[0] == "trailer":
+        if a[1:2] == ["rec"]:
+            cmd_trailer_rec(a[2])
+        else:
+            cmd_trailer()
     elif a[0] == "video":
         cmd_video(a[1], reuse="--reuse" in a)
     else:
