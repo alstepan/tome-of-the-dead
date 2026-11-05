@@ -3030,8 +3030,8 @@ def w16_level(p, check):
               p.rb("LVL_DEPTH") == d and blk == want, (p.rb("LVL_DEPTH"), hex(p.rw("LVL_SEED"))))
         st = blk[S["LVL_START"] - room_model.BASE]
         e = p.ent(0)
-        check(f"W16 {tag}: hero on the start room, x = start_x, standing on storey 0",
-              (p.rb("CUR_ROOM"), e["ROOM"], e["X"], e["Y"]) == (st, st, G.start_x(blk), y0),
+        check(f"W16 {tag}: hero on the start room, x = start_x, standing on storey 0 (H1-D1: D1 mid-ladder, y 0)",
+              (p.rb("CUR_ROOM"), e["ROOM"], e["X"], e["Y"]) == (st, st, G.start_x(blk), 0 if d == 1 else y0),
               (p.rb("CUR_ROOM"), st, e["X"], e["Y"], G.start_x(blk)))
         if hero_keep:
             check(f"W16 {tag}: HP / MAXHP / potions / kind carried over",
