@@ -101,7 +101,7 @@ Items on the floor are picked up automatically at the end of your turn.
 ### Credits
 
 - By alstepan.
-- Inspired by WazHack (https://www.wazhack.com/).
+- WazHack-inspired (https://www.wazhack.com/).
 - Built with sjasmplus. Data compression by ZX0 by Einar Saukas and Urusergi (BSD 3-Clause; the ZX0 decompressor is included in the game).
 - Licence: code MIT, art, music and text CC BY 4.0. Source: https://github.com/alstepan/tome-of-the-dead
 - Developed agentically: the Z80 code, tools and tests were written by AI agents under the author's direction and review.
