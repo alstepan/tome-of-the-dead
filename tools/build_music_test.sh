@@ -36,7 +36,7 @@ cd "$OUT"
 set +e
 sjasmplus "$ROOT/src/music/testtape.asm" --fullpath \
     --lst=build/music_test.lst --sym=build/music_test.sym \
-    -i "$ROOT/src/music" -i "$OUT/build/music" "$@" >"$LOG" 2>&1
+    "-i$ROOT/src/music" "-i$OUT/build/music" "$@" >"$LOG" 2>&1
 RC=$?
 set -e
 grep -E '^>|rror|arning' "$LOG" || true

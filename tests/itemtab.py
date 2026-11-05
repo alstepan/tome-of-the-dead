@@ -441,7 +441,7 @@ class ItemTabTests(unittest.TestCase):
             f.write('    ORG $6000\n    INCLUDE "items_tab.asm"\n    INCLUDE "items_fx_stems.asm"\n'
                     '    INCLUDE "items_ovl_stems.asm"\n')
         r = subprocess.run(["sjasmplus", "--nologo", "--raw=" + os.path.join(self.tmp, "o.bin"),
-                            "-i", self.tmp, wrap], capture_output=True, text=True)
+                            "-i" + self.tmp, wrap], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("Errors: 0, warnings: 0", r.stdout + r.stderr)
 
