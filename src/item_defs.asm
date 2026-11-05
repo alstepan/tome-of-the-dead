@@ -293,8 +293,9 @@ ST1_KILLER      EQU ST1_CNT + 4                 ; ENDCARD-G1: $80 | the kind tha
 EC_POS          EQU TMP6                        ; 2 B: ec_tab's label x (px), then its next row (TMP7)
 EC_VX           EQU 64                          ; value x = label x + EC_VX (px)
 EC_TAB_X        EQU 72                          ; the table's label x: 72 + 118 (EC_VX + 9 chars) = 190, centre 131
-EC_TAB_ROW      EQU 11                          ; its first row (CLASS); the last row (BEST KILL) = 17
-EC_FEET         EQU EC_TAB_ROW + 7              ; the portraits' / lectern's shared feet row (= the table's bottom)
+EC_TAB_ROW      EQU 10                          ; its first row (CLASS); the last row (BEST KILL) = 18 (user 2026-11-05: up 1 from 11; row 9 touched the win subtitle on row 8)
+EC_FEET         EQU EC_TAB_ROW + 9              ; the portraits' / lectern's shared feet row (= the table's bottom;
+                                                ; the first row below BEST KILL)
 EC_PCOL_L       EQU 2                           ; killer col (the Ogre's ink ends ~10 px short of the table at x 72); lectern = +3
 EC_PCOL_R       EQU 25                          ; the hero's col (his ink starts ~11 px after the table's widest row, x 190)
 EC_TROW         EQU 6                           ; the title row (menu font, 2 rows)
@@ -304,9 +305,16 @@ EC_A_DEAD       EQU $42                         ; YOU DIED (red)
 EC_A_WIN        EQU $46                         ; YOU WIN! (yellow)
 EC_A_KBY        EQU $45                         ; KILLED BY (cyan)
 EC_A_NAME       EQU $43                         ; the killer's name (magenta)
-ITEM_RAM_END    EQU ST1_CNT + ST1_LEN
-ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 86 (M0: 81 + ST1_LEN)
-                ASSERT ITEM_RAM_LEN == 86
+; STATS2 (game.md STATS1 / STATS2): 3 saturating per-game counters right after ST1_CNT (the free
+; BASIC-area bytes $5D56..; zeroed by new_game with the block: ITEM_RAM_LEN is the clear's count)
+ST2_CNT         EQU ST1_CNT + ST1_LEN           ; 3 B                                       (kept)
+ST2_LEN         EQU 3
+ST2_BKR         EQU ST2_CNT                     ; books read (fx_book, fx6.asm: every completed book READ)
+ST2_BKF         EQU ST2_CNT + 1                 ; books found (pu_add, pickup6.asm: an IT_BOOK taken)
+ST2_ITM         EQU ST2_CNT + 2                 ; items found (pu_add non-book + ap_take, pickup7.asm: n > 0)
+ITEM_RAM_END    EQU ST2_CNT + ST2_LEN
+ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 89 (M0: 81 + ST1_LEN; STATS2: + ST2_LEN)
+                ASSERT ITEM_RAM_LEN == 89
                 ASSERT (ITEM_RAM & $FF) == 0 && ITEM_RAM_LEN <= 256      ; one page (inc l, djnz clear)
                 ASSERT ITEM_RAM >= $5CCB        ; above the system variables + channel area
                 ASSERT ITEM_RAM_END <= PF_RAM   ; below D3-6b PF_RAM ($5E00) / MK_RAM ($5F00)

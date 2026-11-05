@@ -366,6 +366,8 @@ fx_read:
 ; abil_learn is bank 7 (far7: ARANK += 1 << 2k, PD_ICONS | PD_INFO, the line).
 ;------------------------------------------------------------------------------
 fx_book:
+                ld   hl, ST2_BKR               ; STATS2: books read += 1 (saturating; every
+                call st2_inc                   ; read gets here: the book is already taken)
                 ld   a, SFX_LEVELUP            ; UB2: every read learns / ranks up / tomes (keeps BC, HL)
                 call sfx_req
                 ld   hl, (ARANK)
