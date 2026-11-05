@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""font_tool.py — WazHack/ZX fonts: derive, validate, pack, preview.
+"""font_tool.py — Tome of the Dead fonts: derive, validate, pack, preview.
 
 Sources (text grids, deterministic; the 6x8 font is hand-authored, the others are DERIVED
 from it by explicit rules and then committed as editable grids):
@@ -302,11 +302,11 @@ def main() -> int:
     if cmd == "derive":
         f8 = derive_menu()
         write_grid(p8, f8, [
-            "# WazHack/ZX menu font 8x16, SCRIPT (round 6) — DERIVED by tools/font_tool.py derive from",
+            "# Tome of the Dead menu font 8x16, SCRIPT (round 6) — DERIVED by tools/font_tool.py derive from",
             f"# the SK skeletons (italic, 2-px downstrokes, 1-px hairlines, no dither). Set: {MENU_SET!r}",
             "# Editable after derivation (pack reads this file). Column 7 = letter gap."])
         write_grid(pt, derive_title(), [
-            "# WazHack/ZX title font 16x16, SCRIPT (round 6) — DERIVED by tools/font_tool.py derive",
+            "# Tome of the Dead title font 16x16, SCRIPT (round 6) — DERIVED by tools/font_tool.py derive",
             f"# from the SK skeletons (italic, 3-px downstrokes, hairlines). Set: {TITLE_SET!r}"])
         print(f"derived {p8}, {pt}")
         return 0
@@ -317,7 +317,7 @@ def main() -> int:
             print(f"font8x16 missing {ch!r}", file=sys.stderr)
             return 1
     b6 = emit("font6x8", f6, list(range(32, 128)), 6, 8, [
-        "WazHack/ZX 6x8 font (concept, from assets/gfx/concept/grid/font6x8.grid via",
+        "Tome of the Dead 6x8 font (concept, from assets/gfx/concept/grid/font6x8.grid via",
         "tools/font_tool.py pack; do not hand-edit). ASCII 32-127, 8 B/char, rows top-down,",
         "MSB-left, bits 7..2 used (6 px incl. the 1-px gap). Address = font6x8 + (code-32)*8.",
         "Used by: message log, info line, inventory page (42 chars per 256 px)."])
@@ -325,16 +325,16 @@ def main() -> int:
     for i, ch in enumerate(MENU_SET):
         idx[ord(ch)] = i
     b8 = emit("font8x16", f8, [ord(c) for c in MENU_SET], 8, 16, [
-        "WazHack/ZX menu font 8x16 (concept). 16 B/char in MENU_SET order; font8x16_map maps",
+        "Tome of the Dead menu font 8x16 (concept). 16 B/char in MENU_SET order; font8x16_map maps",
         f"ASCII 0-127 -> glyph index ($FF = not in set). Set: {MENU_SET}"],
         ["font8x16_map:"] + [f"    DEFB {', '.join(f'${v:02X}' for v in idx[i:i + 16])}"
                              for i in range(0, 128, 16)])
     bt = emit("title16", ft, [ord(c) for c in TITLE_SET], 16, 16, [
-        f"WazHack/ZX title glyphs 16x16 (concept). 32 B/char, 2 B per row. Set: {TITLE_SET}",
+        f"Tome of the Dead title glyphs 16x16 (concept). 32 B/char, 2 B per row. Set: {TITLE_SET}",
         "Index = code-32 for space, code-64 for A-Z (A=1). 'TOME OF THE DEAD' fits 2 rows."])
     f6b = parse(os.path.join(GRID, "font6x8_bold.grid"), 6, 8)
     emit("font6x8_bold", f6b, list(range(32, 128)), 6, 8, [
-        "WazHack/ZX 6x8 font, BOLD round-5 variant (comparison only). Same layout as font6x8."])
+        "Tome of the Dead 6x8 font, BOLD round-5 variant (comparison only). Same layout as font6x8."])
     f8b = parse(os.path.join(GRID, "font8x16_bold.grid"), 8, 16)
     preview(f6, f8, ft, os.path.join(OUT, "fonts_preview.png"), f6b, f8b)
     print(f"font6x8: {len(f6)} glyphs, {len(b6)} B")

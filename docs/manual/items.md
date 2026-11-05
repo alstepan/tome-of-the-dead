@@ -1,4 +1,4 @@
-# WazHack/ZX — Item guide (player manual)
+# Tome of the Dead — Item guide (player manual)
 
 Player-facing summary of every item, trap and status. Source of truth: `docs/design/game.md`
 §1.5, §5, §6.0–6.4, §7, §8 (incl. §8.6, §8.10, §8.11 "3E simplification"), `src/items.txt`.

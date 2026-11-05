@@ -62,10 +62,10 @@ makes every interleaving safe without `DI` (see "Interrupts (A8)").
 ## PROTO — first playable prototype (`src/main.asm`)
 
 > Build: `tools/build.sh` (A6, the single entry point: `tools/zx0_sources.py`,
-> then `sjasmplus src/main.asm --fullpath --lst=build/wazhack.lst
-> --sld=build/wazhack.sld --sym=build/wazhack.sym -i src`; fails on warnings;
-> `-o DIR` / extra `-D` args for tests; **D3-7: `DEBUG_KIT` (defs.asm, default 1 = the designer's debug start kit, game.md §1.4) — the suites and goldens run on `-DDEBUG_KIT=0`; `KIT_DEBUG` in the `.sym` mirrors it and `tests/game_lib.py` refuses a kit build**) → `build/wazhack.tap` / `build/wazhack.sna`. Includes `constants.asm` (read-only). Spec: `docs/design/prototype.md` rev B.
-> Tests read every address below from `build/wazhack.sym`, never hard-coded.
+> then `sjasmplus src/main.asm --fullpath --lst=build/tome-of-the-dead.lst
+> --sld=build/tome-of-the-dead.sld --sym=build/tome-of-the-dead.sym -i src`; fails on warnings;
+> `-o DIR` / extra `-D` args for tests; **D3-7: `DEBUG_KIT` (defs.asm, default 1 = the designer's debug start kit, game.md §1.4) — the suites and goldens run on `-DDEBUG_KIT=0`; `KIT_DEBUG` in the `.sym` mirrors it and `tests/game_lib.py` refuses a kit build**) → `build/tome-of-the-dead.tap` / `build/tome-of-the-dead.sna`. Includes `constants.asm` (read-only). Spec: `docs/design/prototype.md` rev B.
+> Tests read every address below from `build/tome-of-the-dead.sym`, never hard-coded.
 
 ### Banks & tape
 

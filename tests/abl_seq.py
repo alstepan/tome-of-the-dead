@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """D3-7 T2 static check (no emulator): ability animation sequences.
 
-Reads build/wazhack.sna + .sym (build first).
+Reads build/tome-of-the-dead.sna + .sym (build first).
   S1  every abl_seq row (ABL_COUNT x 3 B {DW seq, DB fire tick}) points at a
       well-formed (fid,ticks,flags)*,$FF sequence whose fids are < FID_COUNT
   S2  fire tick == sum of the entry ticks before the release entry (the first

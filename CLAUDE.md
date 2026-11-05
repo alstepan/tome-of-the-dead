@@ -1,6 +1,6 @@
-# WazHack/ZX — ZX Spectrum 128K roguelike
+# Tome of the Dead — ZX Spectrum 128K roguelike
 
-A roguelike for the ZX Spectrum 128K, inspired by WazHack. Hand-written Z80
+A roguelike for the ZX Spectrum 128K. A WazHack-inspired game. Hand-written Z80
 assembly, assembled with **sjasmplus**, developed fully agentically.
 
 ## Per-repo override of global preferences
@@ -77,7 +77,7 @@ subagent:
 
 ## Workflow
 
-- `build`  skill → assemble to `build/wazhack.tap` (+ `.sld` for debug)
+- `build`  skill → assemble to `build/tome-of-the-dead.tap` (+ `.sld` for debug)
 - `run`    skill → launch in Fuse
 - `debug`  skill → launch ZEsarUX with ZRCP and drive it (registers/memory/bp)
 - `test`   skill → automated emulator assertions + golden-screen regression

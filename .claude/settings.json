@@ -18,7 +18,7 @@
       "Bash(python3:*)",
       "Bash(ollama run:*)",
       "Bash(ollama list)",
-      "Read(//Users/alexs/sources/zxspectrum/wazhack/**)"
+      "Read(//Users/alexs/sources/zxspectrum/tome-of-the-dead/**)"
     ],
     "deny": []
   }

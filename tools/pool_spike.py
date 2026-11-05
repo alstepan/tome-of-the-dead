@@ -5,7 +5,7 @@ need D1..D8 for the LEAN 3F monster set, and the ZX0-packed source total.
 Method
   * Per-frame pool bytes = the src/defs.asm FRM / POOLACC formula (PHASE_SHIFT 1),
     replayed on the real frame metadata (assets/gfx/sprites/<name>.asm) with the
-    flags/body width from src/frames.asm.  Self-check against build/wazhack.sym
+    flags/body width from src/frames.asm.  Self-check against build/tome-of-the-dead.sym
     (POOL_MONSTERS / POOL_KNIGHT / POOL_WIZARD / POOL_FXM / POOL_FXW).
   * Missing 3F kinds are STAND-INS: each lean frame borrows the pixel bytes and
     the w/h/cols/ax of an existing frame of the same size (STAND_IN below), so
@@ -29,9 +29,9 @@ import zx0_pack as zp          # noqa: E402
 import zx0_sources as zs       # noqa: E402
 
 SPR = os.path.join(REPO, "assets/gfx/sprites")
-SYM = os.path.join(REPO, "build/wazhack.sym")
+SYM = os.path.join(REPO, "build/tome-of-the-dead.sym")
 FIXED = 2 * 576 + 3 * 576      # data.asm POOL_NEED: select idles + straddle allowance
-POOL_CAP_FALLBACK = 39804      # build/wazhack.sym 2026-10-26 (task text says 39,792)
+POOL_CAP_FALLBACK = 39804      # build/tome-of-the-dead.sym 2026-10-26 (task text says 39,792)
 ZX0_PACKED_TOTAL_FALLBACK = 8908
 
 

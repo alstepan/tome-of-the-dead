@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """D3-4 frames check (no emulator): the Stage 3D frames resolve and are as drawn.
 
-Reads build/wazhack.sna + .sym (build first) and the approved D3-3 grids
+Reads build/tome-of-the-dead.sna + .sym (build first) and the approved D3-3 grids
 (assets/gfx/source/d3_grid/*.grid, game.md §6.1-6.4, §11.4):
   F1  every grid frame has FID_<name> < FID_COUNT <= FRT_MAX, inside its kind's
       range: Knight frames in K_KNIGHT; FX frames in K_FXM and/or K_FXW
@@ -37,11 +37,11 @@ COL = {"black": 0, "blue": 1, "red": 2, "magenta": 3, "green": 4, "cyan": 5, "ye
 
 def load():
     S = {}
-    for ln in open(os.path.join(BUILD_DIR, "wazhack.sym")):
+    for ln in open(os.path.join(BUILD_DIR, "tome-of-the-dead.sym")):
         m = re.match(r"^([A-Za-z_][\w.]*):\s+EQU\s+0x([0-9A-Fa-f]+)", ln)
         if m:
             S[m.group(1)] = int(m.group(2), 16)
-    d = open(os.path.join(BUILD_DIR, "wazhack.sna"), "rb").read()
+    d = open(os.path.join(BUILD_DIR, "tome-of-the-dead.sna"), "rb").read()
     assert len(d) == 131103, "want a 128K .sna"
     r48, p7 = d[27:27 + 49152], d[49181]
     banks = {5: r48[:16384], 2: r48[16384:32768], p7 & 7: r48[32768:]}

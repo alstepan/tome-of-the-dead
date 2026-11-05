@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """3E-T1 overlays: ovl_run (src/lowram.asm), the GEN_SCRATCH window
-(docs/memory-map.md "Overlays"). Drives build/wazhack.sna in ZEsarUX.
+(docs/memory-map.md "Overlays"). Drives build/tome-of-the-dead.sna in ZEsarUX.
 
   O1  a self-test overlay (assembled here, test_overlay(): 3E-T2 dropped the
       built-in src/ovl_test.asm once the bag page overlay existed; tests/page.py

@@ -1,4 +1,4 @@
-; WazHack/ZX menu font 8x16 (concept). 16 B/char in MENU_SET order; font8x16_map maps
+; Tome of the Dead menu font 8x16 (concept). 16 B/char in MENU_SET order; font8x16_map maps
 ; ASCII 0-127 -> glyph index ($FF = not in set). Set:  ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,:;!?-'/()<>=+
 
 FONT8X16_W      EQU 8

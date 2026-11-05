@@ -1,6 +1,6 @@
-# WazHack/ZX — Stage 2 budget (G1)
+# Tome of the Dead — Stage 2 budget (G1)
 
-> z80-architect, 2026-10-01, from `build/wazhack.sym`, `src/*.asm`,
+> z80-architect, 2026-10-01, from `build/tome-of-the-dead.sym`, `src/*.asm`,
 > `assets/gfx/sprites/index.asm`, `docs/memory-map.md`, `docs/design/prototype.md`.
 > **M** = measured (sym/listing/memory-map/ASSERT formula), **E** = estimate.
 > 128K frame = 70,908 T; tick = 2 frames = 141,816 T; target 95% = **134.7k T**.

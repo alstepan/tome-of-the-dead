@@ -1,4 +1,4 @@
-# WazHack/ZX 16x16 item icon (IC1, game.md 8.11 Q5). Packed by tools/icons16.py.
+# Tome of the Dead 16x16 item icon (IC1, game.md 8.11 Q5). Packed by tools/icons16.py.
 # name: ammo_dagger
 # note: thrown dagger stuck point-down in the floor: ring pommel, wrapped grip, wide cross guard with dropped quillon tips, 3-px blade (sword-family band) tapering to a tip on row 14
 # legend: '#' ink (item-type ink from it_tab / ITEM_INK), '.' paper; 1 bit, no mask

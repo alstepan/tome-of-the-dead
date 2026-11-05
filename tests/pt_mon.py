@@ -387,7 +387,7 @@ class PT(LPT):
                     if trs and self.mon and self.mon.ticks + 1 in [int(x) for x in trs.split(",")]:
                         import tick_prof
                         if not hasattr(self, "_sld"):
-                            self._sld = tick_prof.load_sld(os.path.join(game_lib.BUILD_DIR, "wazhack.sld"))
+                            self._sld = tick_prof.load_sld(os.path.join(game_lib.BUILD_DIR, "tome-of-the-dead.sld"))
                         ex, inc, cl = tick_prof.trace_tick(z, S["wait_tick"], self._sld, S["PORT_7FFD_SHADOW"])
                         t = int(z.cmd("get-tstates-partial"))
                         print(f"[trace] tick {self.mon.ticks + 1}: {t} T\n" + tick_prof.report(ex, inc, cl, 70),

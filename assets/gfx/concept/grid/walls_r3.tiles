@@ -1,4 +1,4 @@
-# WazHack/ZX CONCEPT round-3 wall tiles — DRAFT (replaces the round-2 solid-plaster idea).
+# Tome of the Dead CONCEPT round-3 wall tiles — DRAFT (replaces the round-2 solid-plaster idea).
 # Format = tools/gfx_convert.py --mode tile. User direction: walls read as BLACK, with
 # occasional patches of light DITHERED brick. Bricks are in register with the existing WALL
 # tile (mortar rows 0/4, verticals x 0/4 then 2/6): faces = 50% checker ink, mortar = paper.

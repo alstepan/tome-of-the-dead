@@ -1,6 +1,6 @@
 ARCHIVED 2026-10-01 — superseded; current spec = docs/design/prototype.md + foundations.md
 
-# WazHack/ZX — Side-view renderer (FEASIBILITY SPIKE design)
+# Tome of the Dead — Side-view renderer (FEASIBILITY SPIKE design)
 
 > **PROTO revisions 2026-09-24 (pointer; spike text below unchanged).**
 > `docs/design/prototype.md` revises, for the shipped game: **§1.1** sprite box →
@@ -55,7 +55,7 @@ manager a **measured T-state number** (bitmap blit **plus** the per-frame
 attribute writes) that says whether the slice's ~8-12 on-screen entities are
 renderable per frame.
 
-This is the harder, more WazHack-like case the user asked the spike to prove
+This is the harder, more WazHack-inspired case the user asked the spike to prove
 (plan "Spike scope decisions", 2026-06-28): a **coloured, moving sprite with
 attribute clash managed at runtime**, not the earlier monochrome-uniform
 sidestep. The colour cost turns out to be small (§2.3) precisely because
@@ -261,7 +261,7 @@ sprite leaves. Empty (all-paper) footprint cells are visually unchanged — the
 colour artefact is confined to cells that actually hold background pixels.
 
 This is the classic, deliberate ZX "**colour follows the sprite**" look — the
-faithful WazHack-on-Spectrum compromise, and exactly the clash-under-motion case
+faithful WazHack-inspired Spectrum compromise, and exactly the clash-under-motion case
 the user wanted proven.
 
 ### 2.3 The footprint write/restore set and its EXACT per-frame cost

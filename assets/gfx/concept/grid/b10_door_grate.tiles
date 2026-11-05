@@ -1,4 +1,4 @@
-# WazHack/ZX B10 open-door jambs + lair exit grate — APPROVED by user 2026-10-03 (option B).
+# Tome of the Dead B10 open-door jambs + lair exit grate — APPROVED by user 2026-10-03 (option B).
 # Format = tools/gfx_convert.py --mode tile (same as door.tiles).
 # Open door (plan B10): the opening rows 9s+2..9s+7 stamp door_jamb_l / door_jamb_r instead
 # of AIR. Both are NON-solid, ink $06 on black like the arch. One glyph per side, repeated

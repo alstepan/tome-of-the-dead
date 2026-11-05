@@ -89,8 +89,8 @@ def ghost_h():
     for f in ("float1", "float2", "lunge", "hurt", "dead"):
         s = f"{src}/ghost_{f}_h.grid"
         lines = open(os.path.join(REPO, s)).read().split("\n")
-        assert lines[0].startswith("# WazHack/ZX gfx text grid"), s
-        lines[0] = ("# WazHack/ZX gfx text grid — ART19 Ghost option H (Wisp Shroud), user-approved "
+        assert lines[0].startswith("# Tome of the Dead gfx text grid"), s
+        lines[0] = ("# Tome of the Dead gfx text grid — ART19 Ghost option H (Wisp Shroud), user-approved "
                     f"2026-10-31; from {s}; imported by tools/import_anim40.py ghost_h")
         lines = [f"# name: ghost_{f}" if ln.startswith("# name:") else ln for ln in lines]
         lines = [ln for ln in lines if not ln.startswith("# note:")]
@@ -114,9 +114,9 @@ def main():
     os.makedirs(GRID, exist_ok=True)
     for name, (sname, ax, flag) in frames.items():
         lines = open(os.path.join(REPO, src, sname + ".grid")).read().split("\n")
-        assert lines[0].startswith("# WazHack/ZX gfx text grid"), sname
+        assert lines[0].startswith("# Tome of the Dead gfx text grid"), sname
         assert any(ln.startswith("# size:") and ln.endswith("x40") for ln in lines), sname
-        lines[0] = (f"# WazHack/ZX gfx text grid — {PICK[key]} (user 2026-10-30); from "
+        lines[0] = (f"# Tome of the Dead gfx text grid — {PICK[key]} (user 2026-10-30); from "
                     f"{src}/{sname}.grid; imported by tools/import_anim40.py (ANIM-IMPORT2)")
         lines = [f"# name: {name}" if ln.startswith("# name:") else ln for ln in lines]
         lines = [ln for ln in lines if not (ln.startswith("# note:") and "not imported" in ln)]

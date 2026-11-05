@@ -1,4 +1,4 @@
-# WazHack/ZX 16x16 item icon (IC1, game.md 8.11 Q5). Packed by tools/icons16.py.
+# Tome of the Dead 16x16 item icon (IC1, game.md 8.11 Q5). Packed by tools/icons16.py.
 # name: a_grave
 # note: drape without hood: high split collar, front slit, paper rips, tattered hem
 # legend: '#' ink (item-type ink from it_tab / ITEM_INK), '.' paper; 1 bit, no mask

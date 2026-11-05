@@ -1,4 +1,4 @@
-# WazHack/ZX DEC1 dead skeleton BONES floor decor (concept-screen §3.3 "Dead skeleton, BONES (DEC1)").
+# Tome of the Dead DEC1 dead skeleton BONES floor decor (concept-screen §3.3 "Dead skeleton, BONES (DEC1)").
 # DRAFT for user review (2026-10-19). Format = tools/tiles_convert.py block ("=== name WxH cells:..."),
 # '#' ink, '.' paper, MSB-left. 32x8 = 4 cells x 1 row, standing row 7, every cell $47
 # (bright white ink, black paper): one ink, black paper -> clash-legal by construction.

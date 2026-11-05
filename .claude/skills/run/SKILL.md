@@ -9,12 +9,12 @@ Run the current build in **Fuse for macOS** (the primary runtime emulator).
 
 ## Prerequisites
 
-- A fresh `build/wazhack.tap` (run the `build` skill first).
+- A fresh `build/tome-of-the-dead.tap` (run the `build` skill first).
 
 ## Command
 
 ```sh
-open "/Applications/Fuse for macOS/Fuse.app" build/wazhack.tap
+open "/Applications/Fuse for macOS/Fuse.app" build/tome-of-the-dead.tap
 ```
 
 Controls (128K model; keys 1/2/3 pick a hero, H/L walk+attack, K/J climb, G quaff,

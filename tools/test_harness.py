@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reusable ZRCP test harness for WazHack/ZX.
+"""Reusable ZRCP test harness for Tome of the Dead.
 
 Launches ZEsarUX headless with the ZRCP remote protocol, smartloads a build,
 and exposes small assert helpers (state reads + golden-screen hashing). Built on

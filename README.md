@@ -1,6 +1,6 @@
-# WazHack/ZX
+# Tome of the Dead
 
-A roguelike for the **ZX Spectrum 128K**, inspired by [WazHack], hand-written in
+A roguelike for the **ZX Spectrum 128K**, WazHack-inspired, hand-written in
 Z80 assembly and developed agentically with Claude Code.
 
 ## Status
@@ -32,10 +32,9 @@ tools/          build/run/debug/convert helper scripts
 
 ## Workflow (skills)
 
-- `build` — assemble to `build/wazhack.tap`
+- `build` — assemble to `build/tome-of-the-dead.tap`
 - `run` — launch in Fuse
 - `debug` — launch ZEsarUX + drive ZRCP
 - `test` — automated assertions + golden-screen regression
 - `gfx-convert` — image → attribute-legal → asm data
 
-[WazHack]: https://www.wazhack.com/

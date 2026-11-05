@@ -1,4 +1,4 @@
-; WazHack/ZX 6x8 font (concept, from assets/gfx/concept/grid/font6x8.grid via
+; Tome of the Dead 6x8 font (concept, from assets/gfx/concept/grid/font6x8.grid via
 ; tools/font_tool.py pack; do not hand-edit). ASCII 32-127, 8 B/char, rows top-down,
 ; MSB-left, bits 7..2 used (6 px incl. the 1-px gap). Address = font6x8 + (code-32)*8.
 ; Used by: message log, info line, inventory page (42 chars per 256 px).

@@ -23,7 +23,7 @@ Sprite art is authored on the user's claude.ai **Design** canvas (Artifact type
 the manager does. Flow:
 
 1. Manager reads the canvas and vendors its `project/Main.dc.html` into
-   `assets/gfx/source/<name>.dc.html` (current: `wazhack_sprites.dc.html`,
+   `assets/gfx/source/<name>.dc.html` (current: `tome-of-the-dead_sprites.dc.html`,
    https://claude.ai/artifact/U71G9dWUWzZBVxmJUrevD3).
 2. You run `python3 tools/svg_sprites.py import` → per-frame 3-state `.grid`
    (`assets/gfx/sprites/grid/`) → `tools/gfx_convert.py --layout native` (the

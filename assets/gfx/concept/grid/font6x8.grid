@@ -1,4 +1,4 @@
-# WazHack/ZX 6x8 font, THIN variant (round 6, user: thinner, slight script flavour) — DRAFT.
+# Tome of the Dead 6x8 font, THIN variant (round 6, user: thinner, slight script flavour) — DRAFT.
 # ASCII 32-127. Format: '=== <code> <char>' + 8 rows of 6 ('#' ink, '.' paper). Row 0 = line
 # gap; caps rows 1-6 (baseline 6), lowercase x-height rows 3-6, descenders row 7; column 5 =
 # 1-px letter gap. 1-px strokes, rounded corners; script flavour = exit tails on a d h k n u,

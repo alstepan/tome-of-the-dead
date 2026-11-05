@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Helpers for the game ZRCP tests (tests/game.py, tests/budget.py).
 
-Addresses and frame ids are parsed from build/wazhack.sym, so the tests follow the
+Addresses and frame ids are parsed from build/tome-of-the-dead.sym, so the tests follow the
 build instead of hard-coding numbers (docs/memory-map.md "PROTO" is the human
 reference). Input is injected through the P3 contract: INPUT_SRC=1 freezes the
 KBD_MATRIX mirror and we poke active-low half-row bytes.
@@ -21,8 +21,8 @@ sys.path.insert(0, os.path.join(REPO, "tools"))
 from test_harness import Harness  # noqa: E402,F401
 
 BUILD_DIR = os.environ.get("WZ_BUILD_DIR", os.path.join(REPO, "build"))   # a variant build (levelgen_z80 --f3)
-BUILD_SNA = os.path.join(BUILD_DIR, "wazhack.sna")
-SYM = os.path.join(BUILD_DIR, "wazhack.sym")
+BUILD_SNA = os.path.join(BUILD_DIR, "tome-of-the-dead.sna")
+SYM = os.path.join(BUILD_DIR, "tome-of-the-dead.sym")
 
 # Every ZRCP command must answer within this (a `run` is <= 1 emulated s of
 # boot pool generation; everything else is instant). A stuck command raises
@@ -84,8 +84,8 @@ def sna_bank7(addr, n):
 
 
 def _private_snapshot():
-    """Copy build/wazhack.sna once to a private temp file and load only that:
-    a concurrent assemble rewrites build/wazhack.sna in place (SAVESNA path is
+    """Copy build/tome-of-the-dead.sna once to a private temp file and load only that:
+    a concurrent assemble rewrites build/tome-of-the-dead.sna in place (SAVESNA path is
     hard-coded), and a smartload mid-write reads a torn file. Also parse the
     128K image so every load() can verify all 8 banks byte-for-byte."""
     data = open(BUILD_SNA, "rb").read()
@@ -102,11 +102,11 @@ def _private_snapshot():
             banks[b] = data[off:off + 16384]
             off += 16384
     if pc != S["boot"]:
-        raise RuntimeError(f"wazhack.sna entry {pc:#06x} != wazhack.sym boot {S['boot']:#06x}:"
+        raise RuntimeError(f"tome-of-the-dead.sna entry {pc:#06x} != tome-of-the-dead.sym boot {S['boot']:#06x}:"
                            " .sna and .sym are from different builds (rebuild with --sym)")
     if S.get("KIT_DEBUG", 0) and not os.environ.get("GAME_ALLOW_DEBUG_KIT"):
         # D3-7: the suites and goldens assume the release start kit
-        raise RuntimeError("build/wazhack.sna was built with DEBUG_KIT=1 (the default):"
+        raise RuntimeError("build/tome-of-the-dead.sna was built with DEBUG_KIT=1 (the default):"
                            " rebuild with tools/build.sh -DDEBUG_KIT=0 for the suites"
                            " (GAME_ALLOW_DEBUG_KIT=1 overrides)")
     return path, hashlib.sha256(data).hexdigest(), b"".join(banks[i] for i in range(8)), p7ffd

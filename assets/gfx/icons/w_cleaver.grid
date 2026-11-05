@@ -1,4 +1,4 @@
-# WazHack/ZX 16x16 item icon (IC1, game.md 8.11 Q5). Packed by tools/icons16.py.
+# Tome of the Dead 16x16 item icon (IC1, game.md 8.11 Q5). Packed by tools/icons16.py.
 # name: w_cleaver
 # note: broad 45-deg chopping blade (6-px band, square-cut end), heavy 3-px guard
 # legend: '#' ink (item-type ink from it_tab / ITEM_INK), '.' paper; 1 bit, no mask

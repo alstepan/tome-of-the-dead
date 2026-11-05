@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PROTO playability checklist (docs/design/prototype.md §11.3, items 1-40).
 
-Drives build/wazhack.sna in ZEsarUX over ZRCP. Fixed seed, INPUT_REPEAT=0
+Drives build/tome-of-the-dead.sna in ZEsarUX over ZRCP. Fixed seed, INPUT_REPEAT=0
 (edge-triggered), ANIM_FREEZE=1 unless a check needs idle motion. Scenario setup
 uses pokes of the entity array (layout in docs/memory-map.md) where walking there
 would only add time; the long no-softlock walkthrough (#37) plays the real game.
@@ -36,7 +36,7 @@ def _trace_build():
     import subprocess
     bdir = os.environ.get("WZ_BUILD_DIR", os.path.join(os.path.dirname(HERE), "build"))
     try:
-        sym = open(os.path.join(bdir, "wazhack.sym")).read()
+        sym = open(os.path.join(bdir, "tome-of-the-dead.sym")).read()
     except OSError:
         return                                   # game_lib reports the missing build
     if re.search(r"^ANIM_TRACE:", sym, re.M):
@@ -1722,13 +1722,13 @@ def main():
             h.expect("49 CLIP_TRAP counted", p.rb("CLIP_TRAP"), 1)
 
         # ---------------- 50 tape end-to-end (the real 128 Tape Loader path)
-        # The .sna enters at `boot`; this loads a private copy of wazhack.tap the
+        # The .sna enters at `boot`; this loads a private copy of tome-of-the-dead.tap the
         # way a user does (reset -> 128 menu Tape Loader autoload -> BASIC ->
         # CODE -> start -> 2x LD-BYTES into banks 1/3 -> boot).
         if want(50):
-            tap = os.path.join(tempfile.mkdtemp(prefix="game_tap_"), "wazhack.tap")
+            tap = os.path.join(tempfile.mkdtemp(prefix="game_tap_"), "tome-of-the-dead.tap")
             shutil.copyfile(os.path.join(os.environ.get("WZ_BUILD_DIR", os.path.join(os.path.dirname(HERE), "build")),
-                                         "wazhack.tap"), tap)      # (a variant build: WZ_BUILD_DIR, game_lib)
+                                         "tome-of-the-dead.tap"), tap)      # (a variant build: WZ_BUILD_DIR, game_lib)
             p.wb("GAME_STATE", 0)                        # no stale GS_SELECT
             p.z.cmd("set-memory-zone 0")                 # scrub banks 1/3: sources
             for b in (1, 3):                             # must come off the tape

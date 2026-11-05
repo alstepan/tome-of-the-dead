@@ -1,14 +1,14 @@
 ;==============================================================================
-; main.asm — WazHack/ZX: first playable fighting prototype.
+; main.asm — Tome of the Dead: first playable fighting prototype.
 ;             Spec: docs/design/prototype.md (rev B, authoritative).
 ;
 ; Target : ZX Spectrum 128K.   Build:
 ;   tools/build.sh   (zx0_sources.py, then sjasmplus src/main.asm --fullpath
-;                     --lst/--sld/--sym=build/wazhack.* -i src; fails on warnings)
-;   -> build/wazhack.tap (BASIC loader + CODE lowram_code..code_end + 3
+;                     --lst/--sld/--sym=build/tome-of-the-dead.* -i src; fails on warnings)
+;   -> build/tome-of-the-dead.tap (BASIC loader + CODE lowram_code..code_end + 3
 ;      headerless blocks: bank 1 sources, bank 3 source tail + cold code,
 ;      bank 3 AY slot)
-;   -> build/wazhack.sna (128K snapshot; entry = boot, all banks preloaded)
+;   -> build/tome-of-the-dead.sna (128K snapshot; entry = boot, all banks preloaded)
 ;
 ; Memory (docs/memory-map.md "PROTO"): HOT code+tables $8000..(< FRT, bank
 ; 2); frame runtime table FRT $A800..$AFFF; runtime entity/render tables
@@ -48,7 +48,7 @@ OVL_PASS        EQU 2                   ; tools/build.sh: -DOVL_PASS=1 first (3E
                 DW   addr, len
       ELSE
                 MMU  3, bank
-                SAVETAP  "build/wazhack.tap", HEADLESS, addr, len
+                SAVETAP  "build/tome-of-the-dead.tap", HEADLESS, addr, len
       ENDIF
                 ASSERT bank < 8 && addr >= BANK_WINDOW && len > 0 && addr + len <= $10000
     ENDM
@@ -1493,19 +1493,19 @@ tap_loader_len  EQU  $ - tap_loader
 ; banked blocks are saved by mapping each bank into slot 3 ($C000) in turn.
 ;==============================================================================
     IF OVL_PASS == 2                    ; pass 1 (overlay images only) writes no tape / snapshot
-                EMPTYTAP "build/wazhack.tap"
-                SAVETAP  "build/wazhack.tap", BASIC, "wazhack", tap_loader, tap_loader_len, 10
+                EMPTYTAP "build/tome-of-the-dead.tap"
+                SAVETAP  "build/tome-of-the-dead.tap", BASIC, "tomedead", tap_loader, tap_loader_len, 10
                 ; loading picture: slot 1 ($4000) holds game image bytes here, so park them in
                 ; a scratch file, INCBIN the .scr over them for SAVETAP, then restore (the .sna and
                 ; the CODE block below see the original bytes; 0 game bytes).
                 SAVEBIN  "build/slot1_park.bin", $4000, LOAD_SCR_LEN
                 ORG  $4000
                 INCBIN   "../assets/gfx/loading/loading_l3d.scr"
-                SAVETAP  "build/wazhack.tap", CODE,  "wazhack", $4000, LOAD_SCR_LEN
+                SAVETAP  "build/tome-of-the-dead.tap", CODE,  "tomedead", $4000, LOAD_SCR_LEN
                 ORG  $4000
                 INCBIN   "slot1_park.bin"                 ; found via build.sh -i OUTDIR/build
-                SAVETAP  "build/wazhack.tap", CODE,  "wazhack", lowram_code, TAPE_CODE_LEN
+                SAVETAP  "build/tome-of-the-dead.tap", CODE,  "tomedead", lowram_code, TAPE_CODE_LEN
                 TAPE_BLOCKS 1                  ; the headerless blocks = start's tape_tab
                 MMU  3, 0
-                SAVESNA  "build/wazhack.sna", boot
+                SAVESNA  "build/tome-of-the-dead.sna", boot
     ENDIF

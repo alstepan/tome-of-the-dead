@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """D3-1 combat-table check (no emulator). Reads the bank-3 block out of
-build/wazhack.tap (6th tape block: BASIC hdr/data, CODE hdr/data, bank-1
-headless, bank-3 headless at $C000), locates tables via build/wazhack.sym and
+build/tome-of-the-dead.tap (6th tape block: BASIC hdr/data, CODE hdr/data, bank-1
+headless, bank-3 headless at $C000), locates tables via build/tome-of-the-dead.sym and
 compares every byte with a Python transcription written straight from
 docs/design/game.md (§4.1, §5, §6.0-6.3, §9.1, §11.4). Build first.
 Run: python3 tests/combat_tables.py"""
@@ -17,7 +17,7 @@ R6BLK = b""
 
 def load():
     sym = {}
-    for ln in open(os.path.join(BUILD_DIR, "wazhack.sym")):
+    for ln in open(os.path.join(BUILD_DIR, "tome-of-the-dead.sym")):
         m = re.match(r"(\S+): EQU 0x([0-9A-Fa-f]+)", ln)
         if m:
             sym[m.group(1)] = int(m.group(2), 16)
@@ -25,7 +25,7 @@ def load():
     if need:
         sys.exit("combat_tables: %s lacks %s - stale build; run tools/build.sh and/or set WZ_BUILD_DIR=<dir>/build"
                  % (BUILD_DIR, ", ".join(need)))
-    tap = open(os.path.join(BUILD_DIR, "wazhack.tap"), "rb").read()
+    tap = open(os.path.join(BUILD_DIR, "tome-of-the-dead.tap"), "rb").read()
     blocks, i = [], 0
     while i < len(tap):
         n = tap[i] | tap[i + 1] << 8
@@ -208,7 +208,7 @@ def main():
     # header, then RAM $4000..$FFFF with bank 2 at $8000); the bank-3 copy, the
     # bank-1 xp_next and the bank-3 level-up tables are gone (xp7.asm immediates,
     # checked at runtime by tests/xp.py).
-    sna = open(os.path.join(BUILD_DIR, "wazhack.sna"), "rb").read()
+    sna = open(os.path.join(BUILD_DIR, "tome-of-the-dead.sna"), "rb").read()
     x = 27 + sym["xpn_tab"] - 0x4000
     chk("xpn_tab in bank 2", [0x8000 <= sym["xpn_tab"] < 0xC000], [True])
     chk("xp_next", [sna[x + 2 * i] | sna[x + 2 * i + 1] << 8 for i in range(8)], XP_NEXT)

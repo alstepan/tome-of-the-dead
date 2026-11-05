@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """B3B-7 (W10): Z80 level_gen / level_start_x (+ LP lp_budget) vs tools/levelgen.py, byte-exact.
 
-Loads build/wazhack.sna, then for each (depth, seed[, master]) pokes the header
+Loads build/tome-of-the-dead.sna, then for each (depth, seed[, master]) pokes the header
 seed, runs a probe stub (far3 -> level_gen, far3 -> level_start_x) and compares
 the 320-byte block with levelgen.generate() and the start col with start_x().
 Reports T-states of the worst cases (interrupts are off in the stub, so the

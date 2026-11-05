@@ -1,6 +1,6 @@
 """Static check of the phase-locked walk shifts (docs/conventions.md "Walk cycles").
 
-No emulator: reads build/wazhack.sym + .sna (any DEBUG_KIT) and src/*.asm.
+No emulator: reads build/tome-of-the-dead.sym + .sna (any DEBUG_KIT) and src/*.asm.
   * every non-flyer KS_MOVE cycle: 1 tick per entry, even length, even slots
     MOT or FF_PH4 (WK4), odd slots MOT or not FF_PH4 (WK0 / STA);
   * a WK4 frame (FF_PH4, drawn only at px & 4 = 4) is used nowhere else: not in
@@ -21,11 +21,11 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILD_DIR = os.environ.get("WZ_BUILD_DIR", os.path.join(REPO, "build"))
 S = {}
-for line in open(os.path.join(BUILD_DIR, "wazhack.sym")):
+for line in open(os.path.join(BUILD_DIR, "tome-of-the-dead.sym")):
     m = re.match(r"^([A-Za-z_][\w.]*):\s+EQU\s+0x([0-9A-Fa-f]+)", line)
     if m:
         S[m.group(1)] = int(m.group(2), 16)
-sna = open(os.path.join(BUILD_DIR, "wazhack.sna"), "rb").read()
+sna = open(os.path.join(BUILD_DIR, "tome-of-the-dead.sna"), "rb").read()
 RAM = sna[27:27 + 49152]                       # $4000..$FFFF as saved
 
 

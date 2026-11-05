@@ -1,4 +1,4 @@
-# WazHack/ZX menu font 8x16, BOLD round-5 variant — comparison reference only (superseded).
+# Tome of the Dead menu font 8x16, BOLD round-5 variant — comparison reference only (superseded).
 # (rule: COLMAP widen 5->7, double height, dither the bottom third). Set: " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,:;!?-'/()<>=+"
 # Editable after derivation (pack reads this file). Column 7 = letter gap.
 

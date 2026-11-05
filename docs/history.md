@@ -1,4 +1,4 @@
-# Project history — WazHack/ZX
+# Project history — Tome of the Dead
 
 > Archived from `docs/plan.md` on 2026-10-01 when the PROTO became the baseline
 > game. Decision log and evidence for P0–P3, SPIKE-1..4, and PROTO. Read-only;
@@ -6,9 +6,9 @@
 
 
 - **PROTO — first playable fighting prototype (user 2026-09-24) · IN-PROGRESS.**
-  Uses the user's claude.ai Design canvas "WazHack Spectrum Sprites"
+  Uses the user's claude.ai Design canvas "Tome of the Dead Spectrum Sprites"
   (https://claude.ai/artifact/U71G9dWUWzZBVxmJUrevD3, vendored at
-  `assets/gfx/source/wazhack_sprites.dc.html`) as the art source of truth.
+  `assets/gfx/source/tome-of-the-dead_sprites.dc.html`) as the art source of truth.
   Decisions: cast = the sheet's (heroes **Knight/Wizard/Rogue** 24×48; monsters
   Skeleton, Goblin, Ghost, Rat, Bat, Slime) — **supersedes Wizard/Witch + cat**
   (R3); "move in all directions" = **rooms + ladders/stairs** (walk L/R, climb
@@ -92,7 +92,7 @@
 - **Plan reorder (2026-06-28, manager+user):** the original plan retired the
   least-risky work first (top-down game logic on a clash-free grid) and the
   **most-risky, most-defining** feature last (the side-view sprite renderer — the
-  actual WazHack look, where graphics carry the gameplay). We are **pulling a
+  actual WazHack-inspired look, where graphics carry the gameplay). We are **pulling a
   side-view feasibility SPIKE forward, before P4 content**, to retire that #1 risk
   early. P2/P3 are renderer-agnostic (turn loop, input, RNG, test harness) and are
   kept. After the spike's evidence we re-decide: continue side-view as the Slice 1
@@ -100,7 +100,7 @@
   paused** pending the spike outcome.
 - **Spike scope decisions (2026-06-28, user):**
   - **Prove colour too** — the spike must manage **attribute clash under a moving
-    sprite** (not just monochrome). The hardest, most WazHack-like part; it changes
+    sprite** (not just monochrome). The hardest, most WazHack-inspired part; it changes
     the renderer's clash strategy and the sprite data contract.
   - **Asset pipeline is a co-equal risk** and a spike deliverable: build a working
     converter (`tools/gfx_convert.py`) + a quality-assessment tool
@@ -116,7 +116,7 @@
   design's original 8-key assumption; design §3/§5.3/§8.7 updated; AI stays
   4-connected (monsters orthogonal), player may step diagonally.
 - **Milestone strategy (decided 2026-06-26):** the eventual target look is
-  **side-view bitmap sprites (WazHack feel)**, but we **stage** it.
+  **side-view bitmap sprites (WazHack-inspired feel)**, but we **stage** it.
   **Slice 1 = top-down char-cell** — proves turn loop, combat, RNG, level gen,
   items, and the test harness fast and clash-free. **Milestone 2 = side-view
   renderer** built on top of the proven game logic. Phases P1–P6 below are the
@@ -148,7 +148,7 @@
 - **Owner:** `z80-staff-engineer` · **Depends:** P1 (boot/loader is design-light;
   can start in parallel once P1 is approved)
 - **Goal:** prove the pipeline end-to-end and lay the program skeleton.
-- **Exit gate:** a smoke-test `build/wazhack.tap` boots on **both** Fuse (`run`)
+- **Exit gate:** a smoke-test `build/tome-of-the-dead.tap` boots on **both** Fuse (`run`)
   and ZEsarUX, **`debug` confirms ZRCP connectivity** (regs/memory readable),
   and the `test` skill captures its first golden. `docs/memory-map.md` seeded
   with the real program/origin layout.
@@ -158,7 +158,7 @@
     **decimal** addr+value — recorded in the harness). Top P2 risk ("ZRCP flag
     names differ") **retired**.
   - Smoke frame is deterministic and ROM-independent: own glyph blitter draws
-    "WAZHACK" (verified by decoding `$4000` from screen RAM), attributes flooded
+    "TOME OF THE DEAD" (verified by decoding `$4000` from screen RAM), attributes flooded
     to `$47`, boot state `GAME_STATE=$01` / `RNG_STATE=$A55A`, CPU in halt loop.
   - First golden committed: `tests/golden/smoke.hash`
     (`8e0ba62a…d54c4e6`); `tests/smoke.py` via `tools/test_harness.py` asserts
@@ -201,7 +201,7 @@
 - **Owner:** `game-designer` (rendering approach) → `graphics-artist` (one real
   masked sprite + background) + `z80-staff-engineer` (renderer) → `z80-reviewer`
   (perf/feasibility verdict) · **Depends:** P3 (turn loop, input, test harness)
-- **Goal:** prove — with running, measured evidence — that a **WazHack-style
+- **Goal:** prove — with running, measured evidence — that a **WazHack-inspired
   side-view** is buildable on the 128K: a recognizable **masked, moving character
   sprite** over a background at arbitrary pixel position, with **attribute clash
   managed to an acceptable look**, a **horizontally scrolling viewport**, driven
@@ -445,7 +445,7 @@
 ### M2 — Side-view renderer (target look) · `TODO`
 - **Owner:** `z80-staff-engineer` + `graphics-artist` · **Depends:** P6 (proven
   game logic)
-- **Goal:** replace the top-down renderer with the WazHack-style side-view —
+- **Goal:** replace the top-down renderer with the WazHack-inspired side-view —
   pixel-coordinate entities, scrolling viewport, pre-shifted masked sprites,
   runtime attribute-clash management, banked sprite assets. Game logic (turn
   loop, combat, RNG, level gen, items) is reused; the renderer + entity-coord

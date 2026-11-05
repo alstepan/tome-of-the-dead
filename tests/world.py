@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Stage 3B world geometry suite (B3B-3: 2 storeys x 9 rows, plan "3B breakdown"
-D3/D4, game.md §2.1). Drives build/wazhack.sna in ZEsarUX over ZRCP.
+D3/D4, game.md §2.1). Drives build/tome-of-the-dead.sna in ZEsarUX over ZRCP.
 
   W0  rooms: the four descriptors in memory == game_lib.ROOM_LADDERS, and every
       room map (built by the engine) obeys the 2x9 structure: floor rows 8/17,

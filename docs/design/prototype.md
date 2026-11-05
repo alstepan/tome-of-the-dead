@@ -1,4 +1,4 @@
-# WazHack/ZX — PROTO: first playable prototype (design spec)
+# Tome of the Dead — PROTO: first playable prototype (design spec)
 
 > Game-designer deliverable, 2026-09-24. Phase **PROTO**: the first playable build
 > on the committed side-view renderer, using the user's sprite-sheet cast. Heroes
@@ -22,7 +22,7 @@
 > decision (§5.5); a balance note (§6.3). No design numbers changed.
 >
 > **Binding inputs (user, 2026-09-24):** (1) the cast is the sprite sheet
-> `assets/gfx/source/wazhack_sprites.dc.html` (Knight / Wizard / Rogue; Skeleton,
+> `assets/gfx/source/tome-of-the-dead_sprites.dc.html` (Knight / Wizard / Rogue; Skeleton,
 > Goblin, Ghost, Giant Rat, Bat, Slime). This replaces Wizard/Witch + cat. (2) "All
 > directions" means rooms with floors joined by ladders, plus up/down room exits
 > that use the Cauldron vertical transition (`foundations.md` F5/F6).

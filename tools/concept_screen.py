@@ -182,7 +182,7 @@ def derive_spell_grids(spells: dict, srcfile: str = "spells.grid",
         ink, paper = b["attr"] & 7, (b["attr"] >> 3) & 7
         hexink = svg_sprites.INK_HEX.get((ink, bool(b["attr"] & 0x40)), "?")
         lines = [
-            "# WazHack/ZX gfx text grid — DERIVED by tools/concept_screen.py from",
+            "# Tome of the Dead gfx text grid — DERIVED by tools/concept_screen.py from",
             f"# assets/gfx/concept/grid/{srcfile} (edit that); CONCEPT draft, not on the canvas yet.",
             f"# name: {name}",
             f"# size: {b['w']}x{b['h']}",
