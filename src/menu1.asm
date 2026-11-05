@@ -1131,7 +1131,7 @@ page_post:      ld   hl, (PAGE_VERB)           ; L = verb, H = slot (PAGE_SLOT f
 ; (ST1_KILLER), "YOU DIED" (no monster killer), "YOU WIN!" + "THE TOME IS DESTROYED"; on the
 ; left the killer's first KS_MOVE frame (1x, facing right) or, on a win, the D8 lectern (4
 ; common tiles, written into the dead room map and drawn by tile_rect); on the right the hero's
-; KS_IDLE frame (facing left); the table (ec_tab, bank 3) and "PRESS 1-4 OR ENTER" (row 22);
+; KS_IDLE frame (facing left); the table (ec_tab, bank 3) and "PRESS 1-4 OR ENTER" (row EC_PRESS_ROW);
 ; then the whole screen is presented (present_full; it leaves bank 7 paged, farb re-pages).
 ; Feet row of both portraits = the table's first row + 7. Clobbers: all but IY.
 ; Cost ~0.35M T (clear 0.1M + present_full 0.15M + text + 2 blits), once.
@@ -1215,7 +1215,7 @@ end_card:       xor  a
                 ld   de, (6 << 8) | KS_IDLE    ; D = 6: facing left
                 call ec_kind
                 ld   a, TX_END_PRESS           ; 18 x 6 px at x 72 = centred
-                ld   b, 22
+                ld   b, EC_PRESS_ROW
                 ld   e, 72
                 call print6x
                 jp   present_full

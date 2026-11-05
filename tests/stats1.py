@@ -22,7 +22,7 @@ E  ENDCARD-G1 (user 2026-11-02, plan "ENDCARD-L1F-G1"): the full-screen end card
    portrait left), YOU DIED (the hero's own / a trap blow: ST1_KILLER 0, no portrait), YOU WIN! (+ the
    Tome line, the lectern left). Title in the menu font (menu_text_ok), the table CLASS / LEVEL /
    DEPTH / gap / KILLS / TURNS / BOOKS r/f / ITEMS (STATS2) / BEST KILL == text6 at the exact pixel x (no
-   kills = no BEST row; rows below it blank down to 21), PRESS on row 22, then the whole frame against tests/golden/endcard_<case>_<hero>.hash (the portraits /
+   kills = no BEST row; rows below it blank down to the row above PRESS), PRESS on row EC_PRESS_ROW, then the whole frame against tests/golden/endcard_<case>_<hero>.hash (the portraits /
    attrs; --update-golden rewrites). PNGs to $STATS1_PNG when set
 Run: ZRCP_PORT=<port> python3 tests/stats1.py [--update-golden]
 """
@@ -296,6 +296,7 @@ def main():
             else:
                 t_ok = (menu_text_ok(p, fr, TROW, 12, "YOU WIN!")
                         and log_row(fr, TROW + 2, 0, 32) == text6("THE TOME IS DESTROYED", 64, 32))
+            PR = S["EC_PRESS_ROW"]
             r0, lx = S["EC_TAB_ROW"], S["EC_TAB_X"]    # one table position for all three cards
             check(f"E {tag}: title", t_ok)
             vx = lx + S["EC_VX"]
@@ -303,12 +304,12 @@ def main():
                     ("KILLS", str(kills)), ("TURNS", str(turns)),
                     ("BOOKS", f"{books[0]}/{books[1]}"), ("ITEMS", str(items))]   # STATS2 rows 17 / 18
             rows.append(("BEST KILL", kname(best)) if kills else None)
-            rows += [None] * (21 - r0 - len(rows) + 1)   # nothing else down to row 21 (PRESS on 22)
+            rows += [None] * (PR - 1 - r0 - len(rows) + 1)   # nothing else down to the row above PRESS
             for i, rw in enumerate(rows):
                 c0 = lx // 8                     # the table's columns (the portraits / lectern lie outside)
                 want = orw(text6(rw[0], 0, 24 - c0), text6(rw[1], vx - lx, 24 - c0)) if rw else [bytes(24 - c0)] * 8
                 check(f"E {tag}: row {r0 + i} = {rw}", log_row(fr, r0 + i, c0, 24 - c0) == want)
-            check(f"E {tag}: row 22 = PRESS 1-4 OR ENTER", log_row(fr, 22, 0, 32) == text6("PRESS 1-4 OR ENTER", 72, 32))
+            check(f"E {tag}: row {PR} = PRESS 1-4 OR ENTER", log_row(fr, PR, 0, 32) == text6("PRESS 1-4 OR ENTER", 72, 32))
             check(f"E {tag}: state {gs} held", p.rb("GAME_STATE") == gs, p.rb("GAME_STATE"))
             check(f"E {tag}: golden", golden(tag, fr))
 
