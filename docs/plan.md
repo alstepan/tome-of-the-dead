@@ -34,7 +34,7 @@ and per-task evidence: `docs/history.md`.
 | WIDOW-SPIT Black Widow poison spit (P6 every 4th turn) + Warrior +5 HP/level | DONE (user 2026-11-05; sim W 40.5 / M 40.4; review: ship) | `feat/widow-spit` dff9837 + 528671a; R6 1 → 52, bank 3 92 → 36; budget `wroom4` (4 Widows spitting) 97,873 T work; **`wroom` gated on real ≤ 141,816 like `blair` (user accepted; walk tick 126,696 work)** |
 | STATS2 end card BOOKS read/found + ITEMS found | DONE (user 2026-11-05; review: ship) | `feat/stats2` b2e0589; R6 52 → **3**, bank 3 36 → 17, bank 7 low 3 → 2, b0 16 → 14 (kit **0**) |
 | TRAP-OR revealed trap plate OR-composited over decor (bug since 3E-T16 785d4ad) | DONE (user playtest 2026-11-05; colour: the trap keeps its own ink over decor, user ruling; reviews: ship ×2) | `fix/trap-or2`; bank 3 17 → **7** (kit 3), bank 7 low 2 → **1**; t16 F1 fixed (stale since H1-ARRIVAL) |
-| FINAL-3 itch.io project + release | TODO | 3a page/assets, 3b downloads + publish, 3c dropped (user) |
+| FINAL-3 itch.io project + release | IN PROGRESS | 3a: page + licences done (uncommitted, feat/itch-page), media re-record running; 3b: repo public → tag v1.0 → user uploads; 3c dropped |
 
 ## Active / next
 
@@ -44,6 +44,7 @@ and per-task evidence: `docs/history.md`.
 - **3a — prepare the project (manager + designer + artist):** page copy (short pitch, story hook, features, controls incl. Kempston/redefine, "how to load" for Fuse / ZEsarUX / real 128K / divMMC, system requirements: ZX Spectrum 128K/+2/+3, credits incl. "WazHack-inspired"), cover image 630×500 (from the L3d loading screen), 3–5 screenshots + an animated GIF captured from ZEsarUX (golden-screen tooling), two 30–60 s gameplay videos (Warrior, Mage; MP4 from ZEsarUX captures, AY audio if feasible — itch embeds a YouTube/Vimeo link, the user uploads them there; user 2026-11-05), genre/tags (roguelike, zx-spectrum, retro, 8-bit), licence/price model, devlog post v1.0. Drafts in `docs/release/itch/`; the user reviews.
 - **3b — publish (user + manager):** the user creates the itch.io project (account/login is the user's; agents cannot log in) as Downloadable; uploads `tome-of-the-dead-vX.tap` + `.sna` (+ `SHA256SUMS`) from the GitHub Release of the same tag; visibility draft → user check → public.
 - **3c — optional:** play in browser (HTML5 zip with a JS Spectrum emulator embed — licence + 128K/AY support to check) and/or CI upload with `butler` on a `v*` tag (needs an `BUTLER_API_KEY` repo secret from the user).
+- **Licence + credits (user 2026-11-05):** code MIT (`LICENSE`), art/music/text CC BY 4.0 (`LICENSE-ASSETS.md`), every third party credited with links (`THIRD-PARTY.md`: ZX0 BSD-3 notice must ship with the game, so the release job attaches all three files; Claude, Google Flow Music (music), tools, the WazHack-inspired credit, trademarks). Credit line "developed agentically"; cover b; Archmage name kept. **The repo goes PUBLIC before the `v1.0` tag** (the page links the source).
 - **User decisions 2026-11-05:** FREE (no payments, no donation prompt unless asked later); upload BY HAND (no butler/CI push); NO browser play (3c dropped); this is the first public release → tag `v1.0`.
 
 ## Open items
