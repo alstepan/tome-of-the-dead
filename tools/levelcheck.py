@@ -200,7 +200,7 @@ def check(b, stats=None):
             elif col:
                 v.append(f"room {r} shaft col without exit")
         arr, ec = rd(b, r, "RD_ARRCOL"), rd(b, r, "RD_EXITCOL")
-        if bool(arr) != (r == start and depth >= 2): v.append(f"room {r} arrival col presence")
+        if bool(arr) != (r == start): v.append(f"room {r} arrival col presence")   # H1-D1: D1 too
         if bool(ec) != (r == lair): v.append(f"room {r} exit col presence")
         for nm, c in (("arr", arr), ("exitcol", ec)):
             if c and not SHAFT_LO <= c <= SHAFT_HI: v.append(f"room {r} {nm} range")
@@ -338,15 +338,8 @@ def check(b, stats=None):
     arr0 = rd(b, start, "RD_ARRCOL")
     if depth >= 2:
         if sx != arr0 + 1: v.append(f"start x {sx} != arrival col {arr0} + 1")
-    elif not start_legal(b, start, sx):
-        v.append(f"start x {sx} illegal")
-    else:                                   # D1: x = 14 unless illegal, else the nearest legal col
-        if start_legal(b, start, 14):
-            if sx != 14: v.append(f"start x {sx} != 14 although 14 is legal")
-        else:
-            d = abs(sx - 14)
-            if any(start_legal(b, start, x) for x in range(14 - d + 1, 14 + d)):
-                v.append(f"start x {sx} not the nearest legal col")
+    elif sx != arr0:                        # H1-D1: D1 enters mid-ladder on the arrival shaft
+        v.append(f"D1 start x {sx} != arrival col {arr0}")
     if stats is not None:
         stats["pits_n"] += sum(1 for r in present if rd(b, r, "RD_PITCOL"))
     for k, nm in ((("wide pit",), "wide pits"), (("mid-block",), "mid-blocks")):

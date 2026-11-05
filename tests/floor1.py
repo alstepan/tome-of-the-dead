@@ -307,6 +307,10 @@ def main():
                 p.wb("EXIT_DEST", dest)
             if col is not None:
                 p.wb("EXIT_COL", col)
+            if kind in (S["EX_UP"], S["EX_DOWN"]):     # H1: the hero leaves from the shaft's end (head on
+                kh = p.rb(S["kind_tab"] + S["KT_BH"] + p.ent(0)["KIND"])
+                y = 0 if kind == S["EX_UP"] else S["PLAY_ROWS"] - kh  # row 0 / feet on row 17)
+                p.set_ent(0, X=col, Y=y, PX=col * 8, PY=y * 8)
             pc0 = p.pc()
             code = [0xF3, 0x3E, kind, 0x21] + w16(S["do_exit"]) + [0xCD] + w16(S["far7"]) + [0xFB, 0x00, 0x18, 0xFE]
             stub = S["LOWRAM_END_3B"]

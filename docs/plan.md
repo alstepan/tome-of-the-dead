@@ -29,6 +29,7 @@ and per-task evidence: `docs/history.md`.
 | 3G sound & polish | DONE | late batch merged: LOG-DMG `c64d21e`, D3-11 flying numbers `a7d2645`, LVL floater `90a6f02`, ROOM-MEM `80519a8`, INSTR pages, loading screen L3d, END-WAIT, BAL-1 FINAL, VAMP-BOSS, vbat, STATS1 S1, RECLAIM-*, TRAP-TILE, FLY-CLIMB, LEFTOVERS, DBG-1, GEAR1-3, WIN2, BOSS-RANGED, ENDCARD, SND-0 (sound), LOOK-1 |
 | FINAL-1 rename to Tome of the Dead | DONE | `b25e043`; user completed the repo/remote/dir rename steps |
 | FINAL-2 GitHub CI + releases | DONE (release job: PR #3) | PR #1 merged `7e670f6`; `v*` tag → GitHub Release (.tap/.sna/SHA256SUMS) |
+| H1 visible climb across vertical exits + D1 entrance ladder | DONE (user approved in Fuse 2026-11-05; reviews: ship ×2) | `feat/h1-climb` abfba80 + 5fd61bf + d5962ed; bank 7 low 18 → 3, bank 2 16 → 9, bank 3 13 → 10; worst tick unchanged |
 | FINAL-3 itch.io project + release | TODO | 3a page/assets, 3b downloads + publish, 3c dropped (user) |
 
 ## Active / next
@@ -45,11 +46,13 @@ and per-task evidence: `docs/history.md`.
 
 | # | Item | Owner | Note |
 |---|------|-------|------|
-| H1 | Vertical room transition: the hero should visibly climb to the top before the scroll up and appear at the top of the ladder after the scroll down (user 2026-10-05) | staff | costed 2026-11-05 (architect): 0 RAM / frames / pool; bank 7 low ~20–28 B (18 free → ~10 B reclaim, e.g. move arrival override to `lp_transition` in bank 3) + bank 2 ~5 B `cork_check` y=0 bound; tick +<0.3k T. **User rulings 2026-11-05:** (1) the extra climb steps cost turns (normal ladder turns, monsters act, hunger ticks); (2) after arrival the hero waits mid-ladder for the player's keys; (3) symmetric: going DOWN the hero climbs to the ladder bottom before the scroll and appears at the ladder top; going UP he climbs to the top and appears at the ladder bottom. Cost to be re-measured with (3). |
+| BANK7 | Bank 7 low has **3 B** free after H1 (`feat/h1-climb`): plan a reclaim before the next bank-7 change (no-cut rule) | staff | open |
 | B9 | Test harness: ZEsarUX launch/teardown stalls and flaky tape load (#50, W5/W8) under host load; not a game bug | junior | per-launch timeouts + kill/retry in `tools/test_harness.py` |
 | B13 / D2 | Decor look and animation rework (user 2026-10-04/05), postponed until the game is mostly done | user + designer + artist | schedule a Design-canvas review session |
 | B19b | Two PENDING bodies created overlapping (arrival + follower) can still pop one onto the other's corpse; rare (the B19c fix covered the same-kind follower case) | staff | verify whether B19c closed it; else keep |
 | BSIM1 | `tests/balance_sim_selftest.py` `test_monotone` FAILS on main (2026-11-05): Mage win rate 0.378 / 0.386 / **0.242** at HP +0/+10/+30; Warrior depth 6.89 / 7.24 / 7.05. Either a sim artefact (stall/turn cap) or a real rule interaction — not a stale threshold | junior → designer | excluded from the CI gate until fixed |
+| D8S1 | `tests/d8_stress.py` 2 failures already on main b25e043 (found in the H1 review): 'T teleport mid-fight W/M: re-entry … ST_X 0' — the Archmage's ST_X reads 128 after a mid-fight teleport and re-entry | staff | open; repro on main first |
+| LGZ8 | `tests/levelgen_z80.py --f3`: 43 D8 cases differ between the Z80 generator and `tools/levelgen.py` (237 pass), identical on main b25e043 | staff | open; decide which side is right |
 | B21 | Budget scenario for the deferred level-up + held key path (~115k T, unmeasured) in `tools/budget.py` | junior | – |
 | B4 / R1 | Update `prototype.md` §6.4 text: ladder squeeze rule = up to `CLIMB_SQZ_N`=4 waits before the swap (user accepted 2026-10-19) | designer | doc-only |
 | D-AI1c | Ladder deadlock rule: lower slot id has right of way, 2-turn swap backstop; 2-bit wait counter in ENT_STAT byte 3, ~80–120 B bank 2 | staff | unscheduled |

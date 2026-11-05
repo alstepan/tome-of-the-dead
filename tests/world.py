@@ -3030,8 +3030,8 @@ def w16_level(p, check):
               p.rb("LVL_DEPTH") == d and blk == want, (p.rb("LVL_DEPTH"), hex(p.rw("LVL_SEED"))))
         st = blk[S["LVL_START"] - room_model.BASE]
         e = p.ent(0)
-        check(f"W16 {tag}: hero on the start room, x = start_x, standing on storey 0",
-              (p.rb("CUR_ROOM"), e["ROOM"], e["X"], e["Y"]) == (st, st, G.start_x(blk), y0),
+        check(f"W16 {tag}: hero on the start room, x = start_x, standing on storey 0 (H1-D1: D1 mid-ladder, y 0)",
+              (p.rb("CUR_ROOM"), e["ROOM"], e["X"], e["Y"]) == (st, st, G.start_x(blk), 0 if d == 1 else y0),
               (p.rb("CUR_ROOM"), st, e["X"], e["Y"], G.start_x(blk)))
         if hero_keep:
             check(f"W16 {tag}: HP / MAXHP / potions / kind carried over",
@@ -3908,15 +3908,18 @@ def main():
             p.place(0, 32 - 1 - kw, y1)             # A, right edge of storey 1
             go("L", 1, "R exit A->B", (1, y1))
             p.place(0, 24, y1)                      # B: down-exit {24,2}
-            go("J", ROOM_C, "D exit B->C", (24, y0))
-            go("K", 1, "U exit C->B", (24, y1))
+            # H1 (user 2026-11-05): a vertical exit arrives mid-ladder at the other end of the
+            # shaft (down: the top, y 0; up: the bottom, feet on row 17); from there the
+            # opposite key is the exit back, with no step (tests/h1climb.py has the climbs)
+            go("J", ROOM_C, "D exit B->C", (24, 0))
+            go("K", 1, "U exit C->B", (24, PLAY_ROWS - kh))
             p.place(0, 1, y1)
             go("H", 0, "L exit B->A", (32 - 1 - kw, y1))
             # C <-> D on storey 1: via B -> C again
             p.place(0, 32 - 1 - kw, y1)
             go("L", 1, "R exit A->B (2)", (1, y1))
             p.place(0, 24, y1)
-            go("J", ROOM_C, "D exit B->C (2)", (24, y0))
+            go("J", ROOM_C, "D exit B->C (2)", (24, 0))
             # C's left exit is on storey 1, behind the D|C door (B3B-5: starts
             # closed): bump it open from x = 2 (1 turn), step into it, exit
             p.place(0, 2, y1, flags=EF_ACTIVE | EF_PLAYER | EF_LEFT)
