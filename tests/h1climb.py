@@ -260,9 +260,9 @@ def main():
                 p.tick()
             w4(f"S {hn} D1 start")
             still(f"S {hn}")
-            check(f"S {hn}: UP at the shaft top = nothing above D1: no turn, no exit", p.no_turn("K")
-                  and (hero()["Y"], p.rb("CUR_ROOM"), p.rb("EXIT_KIND")) == (0, st, 0),
-                  (hero()["Y"], p.rb("CUR_ROOM"), p.rb("EXIT_KIND")))
+            check(f"S {hn}: UP at the shaft top = nothing above D1: no turn, no exit, E_AIDIR kept (+1)",
+                  p.no_turn("K") and (hero()["Y"], p.rb("CUR_ROOM"), p.rb("EXIT_KIND"), hero()["AIDIR"]) == (0, st, 0, 1),
+                  (hero()["Y"], p.rb("CUR_ROOM"), p.rb("EXIT_KIND"), hero()["AIDIR"]))
             t0 = turns()
             ys = []
             for _ in range(2):

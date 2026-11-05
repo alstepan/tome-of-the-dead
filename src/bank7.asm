@@ -731,13 +731,13 @@ try_climb:
 .x0:            scf                            ; CF = 1: no step
 .xs:            push af
                 ld   a, (TMP6)
-                ld   (ix+E_AIDIR), a
                 ld   l, a                      ; L = dy
                 ld   a, (CUR_ROOM)
                 add  a, l
                 add  a, l
                 add  a, l
-                jp   m, .nx                    ; above the grid: no exit
+                jp   m, .nx                    ; above the grid: no exit (E_AIDIR kept: review)
+                ld   (ix+E_AIDIR), l
                 ld   (EXIT_DEST), a
                 cp   GRID_CELLS                ; CF = 0: past the grid (the level exit)
                 ld   a, l
@@ -752,7 +752,8 @@ try_climb:
                 ret  c                         ; the exit from a shaft end: no step, 1 turn
                 call .go                       ; the step that reaches the end ...
                 ret  c
-                xor  a                         ; ... blocked: cancel the exit
+                xor  a                         ; ... blocked: cancel the exit (a guard: unreachable
+                                               ; in play, every body >= 2 rows: game.md §2.1 H1)
                 ld   (EXIT_KIND), a
                 ret
 .nx:            pop  af                        ; H1-D1: CF = 1 (from row 0): no turn (CF = 0);
