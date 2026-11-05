@@ -1681,7 +1681,7 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 | 2 | `T_BRICK` = `T_WALL_DARK` | plain air-band wall face; re-glyphed DARK (B3B-2) |
 | 3 | `T_WALLF` | wall in a floor row (blocks, lintels in row 8/17) |
 | 4–6 / 7–9 | `T_LAD_L/M/R` / `T_HOLE_L/M/R` | ladder / ladder cells in a floor row |
-| 10 | `T_TRAP` | **3E (user-approved glyphs, `assets/gfx/concept/grid/items3e.tiles`): the revealed trap plate**, ink `$42` default, `TILE_FLAGS` 0 (walkable, game.md §1.5). The potion moved to id 60 (`T_POTION` = `T_FLASK`). T6 generates the trap list; **3E-T16: a known unspent trap is stamped by `build_room_map` and `TILE_ATTRS[T_TRAP]` is set to its type attr there and on a mid-room reveal (≤ 1 trap a room; see "3E-T16"). TRAP-OR: stamped LAST (after decor / lectern / gate) by bank-3 `tr_cell3`, which also makes the slot per room: `TILE_GLYPHS[T_TRAP]` = glyph(`TRAP_UNDER`) \| the plate, attr = the decor's own unless the cell was `T_AIR` (see "TRAP-OR")** |
+| 10 | `T_TRAP` | **3E (user-approved glyphs, `assets/gfx/concept/grid/items3e.tiles`): the revealed trap plate**, ink `$42` default, `TILE_FLAGS` 0 (walkable, game.md §1.5). The potion moved to id 60 (`T_POTION` = `T_FLASK`). T6 generates the trap list; **3E-T16: a known unspent trap is stamped by `build_room_map` and `TILE_ATTRS[T_TRAP]` is set to its type attr there and on a mid-room reveal (≤ 1 trap a room; see "3E-T16"). TRAP-OR: stamped LAST (after decor / lectern / gate) by bank-3 `tr_cell3`, which also makes the slot per room: `TILE_GLYPHS[T_TRAP]` = glyph(`TRAP_UNDER`) \| the plate, attr = the trap's type attr (also over decor, user 2026-11-05; see "TRAP-OR")** |
 | 11, 14 | `T_DOOR_JAMB_L`, `T_DOOR_JAMB_R` | B10 (user option B): open-door jambs, `$A0` / `$05` × 8, ink `$06`, non-solid (the PROTO chest stand-in is gone, B3B-13) |
 | 12 | `T_CHAIN` | small decor; cobweb / moss move to the per-level sets |
 | 13 | `T_GRATE_SHUT` | **3F-T8 (§9.7 R2, BOSS-GUARD)**: the CLOSED lair gate (tiles_3f `grate_shut`, ink `$07`), `TF_SOLID \| TF_FLOOR`; `build_room_map` stamps it over the 3 exit cells AFTER the deriver while `LF_GRATE_OPEN` is clear; R6 `grate_open` swaps them to `T_GRATE` (+ glow) when the boss dies |
@@ -3594,7 +3594,7 @@ the input tick (pmix + DART was 141.4k T), flashes added (user 2026-10-26).
   tick); each step re-arms `ACT_AT = TURN_TICK + B` / `MON_AT = ACT_AT + 1`; after the last step
   `act_pend .mon` runs the monsters (skipped on an exit turn: `EXIT_KIND`). Fire: step 0 = SFX_TRAP,
   the hero flashes the type ink (`TRAP_FLASH_T` = 2), the plate shows `$47`
-  (TRAP-OR: `tr_plate` → far3 `tr_put3`; was `TILE_ATTRS[T_TRAP]` + far7 `ap_put_a`), the effect — DART: "A DART HITS YOU!", far3
+  (TRAP-OR: `tr_plate` → `tr_put7` → far3 `tr_cell3`; was `TILE_ATTRS[T_TRAP]` + far7 `ap_put_a`), the effect — DART: "A DART HITS YOU!", far3
   `trap_hit` (1d4+1, +1 when WEAK so deal_hit's own-attacker WEAK DEF+1 cancels; `DTY_PHYS` +
   POISON 12 (POIS1; the param nibble = 6, half): DEF, immunity (Silk: "YOU ARE UNAFFECTED"), cap 30 in `ST_X`, wake, death), `E_REACTAT` =
   arrival (walk 2, jump `JA_N` + 1), the Warrior's `arrow_hit` impact (`tr_fx` → `MSG_BUF` →
@@ -3610,8 +3610,8 @@ the input tick (pmix + DART was 141.4k T), flashes added (user 2026-10-26).
 - **Drawing.** Known plate = `T_TRAP` in the standing-row cell; `build_room_map` stamps every known
   trap of the room **last** (TRAP-OR: after the decor, lectern and gate; was before the deriver, which
   then dropped the overlapping decor object) **unless an item marker is there**, OR-composited by
-  bank-3 `tr_cell3` (see "TRAP-OR"); mid-room the sequence / `tr_show` → far3 `tr_put3` (same
-  routine). One attr for the id works because a room holds
+  bank-3 `tr_cell3` (far7 `tr_build7` → `tr_put7` → far3; see "TRAP-OR"); mid-room the sequence /
+  `tr_show` → `tr_plate` → `tr_put7` (same routine). One attr for the id works because a room holds
   ≤ 1 trap (low RAM untouched). Cosmetic: a scroll between two rooms with known traps of
   different types shows the old plate in the new ink while it scrolls out. **Item / trap
   overlap:** `drop_put` (R6) refuses a cell whose col has an unspent trap (`trap_at`, hidden or
@@ -6094,7 +6094,7 @@ win 255/255 255), G6 checks ST2 zeroed; stats1 E now opens the card with `end_ca
 all 84 E checks had been failing on main: the card was never drawn); `items3e.py` L3 (ITEM_RAM 89), `itemtab.py`, `d8_stress.py` mask.
 Goldens refreshed (content changed: the two new rows + the portraits 2 rows lower): `endcard_{killer,died,win}_{warrior,mage}`.
 
-## TRAP-OR ledger (`fix/trap-or`, 2026-11-05; on main `d17bf0b`; user playtest: a revealed trap erased the decor of its cell)
+## TRAP-OR ledger (`fix/trap-or2`, 2026-11-05; on `feat/stats2` b2e0589; user playtest: a revealed trap erased the decor of its cell)
 
 **Bug (since 3E-T16 `785d4ad`, visible more often since TRAP2):** every plate draw wrote `T_TRAP` over the map cell
 (bank-7 `ap_put_a`, from `tr_show` / `tr_plate`: reveal, Mage sense, fire, the find blinks), so the decor there (a
@@ -6102,32 +6102,32 @@ floor-class object's bottom row 9s+7, e.g. a brazier base) vanished; and `build_
 the decor deriver, whose `T_AIR` footprint rule then dropped the whole overlapping object on every re-entry / scroll-in
 (`tests/trap_cells.py` C3 on main: "decor changed by a known trap"; 5 of 437 plates of 10 seeds x D1..D8 lie on decor).
 
-**Fix (OR-compose, one tile slot per room):** bank-3 `trap3.asm`. `tr_cell3` (HL = cell, A = attr wanted): an item
-marker shows instead; else `TRAP_UNDER` (`$BFFF`, state block, test-observable) := the cell's id unless it is already
-`T_TRAP`; `TILE_GLYPHS[T_TRAP]` := glyph(u) with line 6 = `$FF`, line 7 |= `$DB` (`TRAP_GLY6` / `7`, level_defs; boot6
-ASSERTs them and blank lines 0..5 against `tiles_common` with `{b}`); attr := the wanted one over `T_AIR` or for the
-`$47` flash, else **the decor's own `TILE_ATTRS[u]`** (a cell keeps 2 colours: the decor never changes colour, the
-plate pixels take its ink); attr 0 (the find blink's "off") puts u back (the decor alone; over `T_AIR` identical to
-before). `build_room_map` stamps known traps LAST (after decor, lectern, gate) through it, so the decor is byte-identical
-whatever is known, for `ROOM_MAP` and `NEXT_MAP` (scroll strips / re-entry draw the composite: the renderers just draw
-tile 10). Live path: bank-7 `tr_plate` → far3 `tr_put3` (cell + compose, B/C out) → `queue_damage` 1x1 +
-`shadow_rect` (bank 5 by `erase_rect`, screen 2 by `present`, as before). `ap_put_a` deleted (its only caller).
-The slot is per room like `TILE_ATTRS[T_TRAP]` already was (≤ 1 trap a room): during a scroll the outgoing room's
-plate is not redrawn. Row 9s+7 never holds an animated decor cell (only floor-class objects reach it, their row 1 is
-static), so `decor_tick` never swaps a plate cell.
+**Fix (OR-compose, one tile slot per room).** Bank-3 `trap3.asm` `tr_cell3` (far3; DE = cell, A = attr): an item marker
+shows instead; else `TRAP_UNDER` (`$BFFF`, state block, test-observable) := the cell's id unless it is already
+`T_TRAP`; `TILE_GLYPHS[T_TRAP]` := glyph(u) with line 6 = `$FF`, line 7 |= `$DB` (`TRAP_GLY6` / `7`, level_defs;
+boot6 ASSERTs them and blank lines 0..5 against `tiles_common` with `{b}`); attr 0 (the find blink's "off") puts u back
+(the decor alone; over `T_AIR` identical to before). **Attr (user ruling 2026-11-05): always the trap's own** (type
+ink / the `$47` flash, written to `TILE_ATTRS[T_TRAP]` by `tr_put7`): over decor the cell's decor pixels take the
+trap ink, paper / bright as on plain floor. Bank-7 `tr_put7` (HL = entry, A = attr, `TMP1` = page): row 9s+7, col,
+`map_cell`, far3 `tr_cell3`; callers `tr_plate` (live: `TMP1` := `ROOM_MAP` page, then `queue_damage` 1x1 +
+`shadow_rect`: bank 5 by `erase_rect`, screen 2 by `present`) and `tr_build7` (far7 from `build_room_map`, which now
+stamps known traps LAST, after decor / lectern / gate, through it: the type ink by `tr_ink`, so bank-3 `tr_ink3` is
+gone). The decor is byte-identical whatever is known, for `ROOM_MAP` and `NEXT_MAP` (the scroll strips / re-entry draw
+tile 10 = the composite). `ap_put_a` deleted. **Contract:** `TRAP_UNDER` and the slot are per room (≤ 1 trap a room,
+`items_ovl.asm` `ig_elig`): no other room may be built between a room's build and a live `tr_put7` on it (true:
+the only second-map build is `do_exit`'s `NEXT_MAP`, after which the old room is never drawn on again). Row 9s+7 never
+holds an animated decor cell, so `decor_tick` never swaps a plate cell.
 
-| region (release / kit) | before | after | delta |
+| region (release / kit) | before (STATS2) | after | delta |
 |---|---|---|---|
-| bank 3 free (to `AY_RESERVE`) | 92 / 88 | **10 / 6** | -82 (`trap3.asm` +111 B: `tr_cell3` 72, `tr_loc3` 26, `tr_put3` 13; the build loop -29: its stamp is `tr_loc3` + `tr_cell3`, moved last, `.x` = its head) |
-| bank 7 low (to the attr shadow) | 3 / 3 | **37 / 37** | +34 (`tr_plate` 26 -> 19 B, `ap_put_a` out) |
-| bank 1, R6, bank 2, bank 0, low RAM | 1, 1 / 7, 9 / 8, 16 / 2, 0 | unchanged | 0 |
+| bank 3 free (to `AY_RESERVE`) | 17 / 13 | **7 / 3** | -10 (`tr_cell3` +50; the build's stamp loop -31 (now `far7 tr_build7`), `tr_ink3` -5, `.gate` tail -2, page drift) |
+| bank 7 low (to the attr shadow) | 2 / 2 | **1 / 1** | -1 (`tr_show`..`tr_put7` 60 B vs `tr_show`/`tr_plate` 26 + `ap_put_a` 25; reclaims: `tr_ink` one-page `ld h` -2 (ASSERT), `tr_eff` flash stores -1) |
+| bank 1, R6, bank 2, bank 0, low RAM | 1, 3 / 8, 9 / 8, 14 / 0, 0 | unchanged | 0 |
 | RAM | `$BFFF` spare | `TRAP_UNDER` | 1 B |
 
-Cost (t16 T-states, incl. probe): a plate step +0.45..0.94k T (far3 + compose: DART step 0 12.5k -> 13.4k, step 1
-1.8k -> 2.8k, find steps 1.8k -> 2.3-2.7k; cap 20k); `budget.py` tdart..tsense max ticks unchanged (102.1k .. 112.1k,
-0 over; the trap tick is never the worst), means +12..15 T. Room build: + ~0.3k T per known trap (cold).
-Tests: `tests/trap_cells.py` C3 (known vs hidden build: decor identical, composite glyph / attr / `TRAP_UNDER`) and
-L1..L3 (a real D5 room, a DART under a brazier-class bottom row: the Mage's Wait sense, the cell on bank 5 AND screen 2
-== decor | plate in the decor's attr; again after walking out and back in through the side exit, and after
-`room_show`); `tests/t16.py` O2 calls `tr_put3`, C1's cols moved off the PROTO ladder (25: a plate now composes over a
-ladder rail; the generator never puts one there).
+Cost: a plate step +~1k T (far3 + compose; t16 T2 cap 20k holds); the room build + ~0.6k T per known trap (far7 + far3,
+cold). Tests: `tests/trap_cells.py` C3 (known vs hidden build: decor identical, composite glyph / attr / `TRAP_UNDER`)
+and L1..L3 (a real D5 room, a DART under a floor object's bottom row: the Mage's Wait sense, the cell on bank 5 AND
+screen 2 == decor | plate in `$42`; again after walking out and back in through the side exit, and after `room_show`);
+`tests/t16.py` O2 drives `tr_plate`, C1's cols moved off the PROTO ladder (25), F1 climbs down the arrival shaft first
+(stale since H1-ARRIVAL: the fuzz never acted).

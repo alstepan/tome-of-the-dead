@@ -2,28 +2,35 @@
 ; trap3.asm — TRAP-OR (user playtest 2026-11-05): the known trap plate is OR-composited
 ; over the cell it lies on, bank 3 (bank3.asm rules: far3 only, no SMC, never pages
 ; $C000 itself). Before, the reveal / build wrote T_TRAP over the map cell, erasing the
-; decor there (a floor object's bottom row, the glow) and, at a room build, stamping it
-; before the deriver dropped the whole overlapping decor object on re-entry.
-; Model: <= 1 trap a room (generator), so the plate's tile slot T_TRAP is per room:
-;  TILE_GLYPHS[T_TRAP] = glyph(u) | the plate (lines 6 / 7, TRAP_GLY6 / 7), u = TRAP_UNDER
-;  = the cell's id before T_TRAP went in; TILE_ATTRS[T_TRAP] = the wanted attr when u is
-;  T_AIR or for the bright flash, else the decor's own attr (TILE_ATTRS[u]: a cell keeps
-;  2 colours; the decor never changes colour, its plate pixels take the decor ink).
-;  The blink's "off" (attr 0) puts u back: the decor alone, never a blank cell.
-; Every map writer of T_TRAP goes through tr_cell3: build_room_map (ROOM_MAP and
-; NEXT_MAP, so a scroll-in strip / re-entry draws the composite) and tr_put3 (the live
-; reveal / flashes, far3 from bank-7 tr_plate). The renderers (erase_rect, tile_rect,
-; the scroll strips, mark7) just draw the T_TRAP tile: nothing else knows about it.
-; The plate's row 9s+7 never holds an animated decor cell (decor_tick never swaps it:
-; only floor-class objects reach it and their row 1 is static, tests/trap_cells.py).
+; decor there (a floor object's bottom row), and the build stamped it before the deriver,
+; which then dropped the whole overlapping decor object on every re-entry.
+; Model: <= 1 trap a room (generator, items_ovl.asm ig_elig), so the plate's tile slot
+; T_TRAP is per room: TILE_GLYPHS[T_TRAP] = glyph(u) | the plate (lines 6 / 7,
+; TRAP_GLY6 / 7), u = TRAP_UNDER = the cell's id before T_TRAP went in;
+; TILE_ATTRS[T_TRAP] = the attr wanted (user ruling 2026-11-05: the trap keeps its own
+; type colour over decor too: the decor pixels of that cell take the trap ink, the paper /
+; bright as on plain floor). The blink's "off" (attr 0) puts u back: the decor alone.
+; Every map writer of T_TRAP goes through tr_cell3, via bank-7 tr_put7 (the location +
+; the type ink): build_room_map's stamp (ROOM_MAP and NEXT_MAP, so a scroll-in strip /
+; re-entry draws the composite: far7 tr_build7, which far3s back here) and the live
+; reveal / flashes (tr_plate). The renderers (erase_rect, tile_rect, the scroll strips,
+; mark7) just draw the T_TRAP tile: nothing else knows about it.
+; CONTRACT (TRAP_UNDER and the slot are per room, not per map): no other room may be
+; built (build_room_map with a known trap) between a room's build and a live tr_put7 on
+; it. True today: the only second-map build is do_exit's NEXT_MAP build, and the room it
+; leaves never gets another plate draw (the scroll, then room_shadow makes NEXT_MAP the room).
+; The plate's row 9s+7 never holds an animated decor cell (only floor-class objects reach
+; it and their row 1 is static), so decor_tick never swaps a plate cell.
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; tr_cell3 — HL = a map cell, A = the attr wanted (the type ink, PLATE_FLASH_ATTR, or 0 =
-; off): the plate composed there (see the header); an item marker there: nothing (it
-; shows; never generated: game.md §1.5).  Keeps BC, HL.  Clobbers: A, DE.   ~0.3k T
+; tr_cell3 — far3 from bank-7 tr_put7 (which already wrote A to TILE_ATTRS[T_TRAP]): DE = a
+; map cell, A = the attr wanted (the type ink, PLATE_FLASH_ATTR, or 0 = off): the plate composed there (see the header); an item
+; marker there: nothing (it shows; never generated: game.md §1.5).
+; Clobbers: A, BC, DE, HL.   ~0.3k T
 ;------------------------------------------------------------------------------
-tr_cell3:       ld   e, a                      ; E = the attr wanted
+tr_cell3:       ex   de, hl                    ; HL = the cell
+                ld   e, a                      ; E = the attr wanted
                 ld   a, (hl)
                 cp   T_ITEM0
                 ret  nc
@@ -33,10 +40,10 @@ tr_cell3:       ld   e, a                      ; E = the attr wanted
 .k:             ld   a, (TRAP_UNDER)
                 inc  e
                 dec  e
-                jr   z, .off                   ; off: u alone
-                push bc
-                push hl
-                ld   d, a                      ; D = u
+                jr   nz, .on
+                ld   (hl), a                   ; off: u alone
+                ret
+.on:            ld   (hl), T_TRAP
                 add  a, a
                 add  a, a
                 add  a, a                      ; CF = u bit 5 (u < 64: 512-B glyph table)
@@ -44,72 +51,16 @@ tr_cell3:       ld   e, a                      ; E = the attr wanted
                 ld   a, TILE_GLYPHS >> 8
                 adc  a, 0
                 ld   h, a                      ; HL = glyph(u)
-                push de
                 ld   de, TILE_GLYPHS + T_TRAP * 8
                 ld   bc, 6                     ; the plate's lines 0..5 are blank (boot6 ASSERT)
                 ldir
-                ld   a, TRAP_GLY6              ; line 6: $FF | anything = $FF (ASSERT)
+                ld   a, TRAP_GLY6              ; line 6: $FF | anything = $FF
                 ld   (de), a
                 inc  l                         ; (8-aligned glyphs: same page)
                 inc  e
                 ld   a, (hl)
                 or   TRAP_GLY7
                 ld   (de), a
-                pop  de
-                pop  hl
-                pop  bc
-                ld   a, d
-                or   a
-                ld   a, e
-                jr   z, .a                     ; over T_AIR: the attr wanted
-                cp   PLATE_FLASH_ATTR
-                jr   z, .a                     ; the bright flash: the whole cell (transient)
-                ld   e, d
-                ld   d, TILE_ATTRS >> 8
-                ld   a, (de)                   ; over decor: the decor's attr
-.a:             ld   (TILE_ATTRS + T_TRAP), a
-                ld   a, T_TRAP
-.off:           ld   (hl), a
                 ret
                 ASSERT T_AIR == 0 && T_ITEM0 + 4 == TILE_IDS && TILE_IDS <= 64 && (TILE_GLYPHS & $1FF) == 0
-                ASSERT (TILE_ATTRS & $FF) == 0 && ((TILE_GLYPHS + T_TRAP * 8) & 7) == 0 && TRAP_GLY6 == $FF
-
-;------------------------------------------------------------------------------
-; tr_loc3 — HL = a TRAP_LIST entry: B = its row 9s+7, C = its col, HL = its cell in the
-; (TMP1) map, A = its type (TT_*).  Keeps DE.  Clobbers: F.
-;------------------------------------------------------------------------------
-tr_loc3:        ld   a, (hl)
-                and  TRF_S1
-                rrca
-                rrca
-                rrca
-                rrca                           ; s
-                call storey_row                ; (bank 2) A = 9s+7, keeps BC, DE
-                ld   b, a
-                inc  l
-                ld   a, (hl)
-                and  TR_COL_MASK
-                ld   c, a
-                xor  (hl)                      ; the type << 5
-                rlca
-                rlca
-                rlca
-                push af
-                call map_cell                  ; (bank 2; A) keeps BC, DE
-                pop  af
-                ret
-                ASSERT TRF_S1 == 1 << 4 && TR_TYPE_SHIFT == 5 && TR_B1 == 1
-
-;------------------------------------------------------------------------------
-; tr_put3 — far3 from bank-7 tr_plate: DE = an entry of CUR_ROOM, A = the attr wanted
-; (tr_cell3): its plate composed in ROOM_MAP; out B = its row, C = its col (farb passes
-; BC out: tr_plate queues the 1x1 redraw + the attr shadow from bank 7, as ap_put_a did).
-; Clobbers: A, DE, HL.   ~0.5k T + the far call
-;------------------------------------------------------------------------------
-tr_put3:        ex   de, hl                    ; HL = the entry
-                ld   d, a                      ; D = the attr
-                ld   a, ROOM_MAP >> 8
-                ld   (TMP1), a
-                call tr_loc3                   ; B, C, HL = the cell (keeps DE)
-                ld   a, d
-                jr   tr_cell3                  ; (keeps BC)
+                ASSERT ((TILE_GLYPHS + T_TRAP * 8) & 7) == 0 && TRAP_GLY6 == $FF

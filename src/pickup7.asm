@@ -338,7 +338,7 @@ ap_stamp:
                 ld   a, c
                 ld   hl, fi_add                ; R6: the glyph cache's col
                 jp   far6
-; TRAP-OR: ap_put_a (the trap plate's one cell) is gone: bank-3 tr_put3 (trap3.asm) draws it.
+; TRAP-OR: ap_put_a (the trap plate's one cell) is gone: trap7.asm tr_put7 + bank-3 tr_cell3 (trap3.asm) draw it.
                 ASSERT TX_CMB_ARROWS - TX_CMB_ARROW == TX_CMB_DAGGERS - TX_CMB_DAGGER
                 ; T7: the composed pickup line fits a log slot ("YOU PICK UP " + 2 digits +
                 ; the longest suffix; ARROWS_MAX < 100) — msg_end does not cut it

@@ -17,11 +17,11 @@ NEXT_MAP, then on the ENGINE's map + tile_flags:
   C3  (TRAP-OR) the first 10 seeds: a room built with its traps known == built with them hidden,
       except the plate cells (the decor never depends on a known trap); after each build with a
       plate, TILE_GLYPHS[T_TRAP] == glyph(the hidden build's cell) | the plate (lines 6 / 7) and
-      TILE_ATTRS[T_TRAP] == the type ink over T_AIR, else the decor's own attr
+      TILE_ATTRS[T_TRAP] == the type ink, over decor too (user ruling 2026-11-05)
   L1..L3 (TRAP-OR, user playtest 2026-11-05: a revealed plate erased the decor of its cell) a
       real generated room, a hidden DART poked under a floor object's bottom row (row 9s+7):
       the Mage's sense finds it on a Wait (the blink sequence) -> the cell on the composed
-      (bank 5) AND the displayed (screen 2) screen == decor glyph | plate, the decor's attr;
+      (bank 5) AND the displayed (screen 2) screen == decor glyph | plate, the DART ink $42;
       L2 the same after walking out through the storey's side exit and back in (NEXT_MAP
       build + the scroll strips); L3 the same after a room_show rebuild (teleport / level entry)
 Run: ZRCP_PORT=<port> [WZ_BUILD_DIR=..] python3 tests/trap_cells.py [--seeds N]   (default 40 seeds, ~0.23 s a level)
@@ -192,7 +192,7 @@ def live_or(h, seeds):
         hgt = p.rb(S["kind_tab"] + S["KT_BH"] + p.ent(0)["KIND"])
         y = stand_y(s_, hgt)
         gly_u = list(p.z.read_memory(TG + 8 * u, 8))
-        want = (composed(gly_u), p.rb(TA + u))
+        want = (composed(gly_u), S["TRAP_INK_DART"])             # its own type colour over the decor (user 2026-11-05)
 
         def place(xx, left):
             fl = p.ent(0)["FLAGS"]
@@ -315,7 +315,7 @@ def main():
                                 gl = list(p.z.read_memory(S["TILE_GLYPHS"] + 8 * T_TRAP, 8))
                                 at = p.rb(S["TILE_ATTRS"] + T_TRAP)
                                 wg = composed(list(p.z.read_memory(S["TILE_GLYPHS"] + 8 * u, 8)))
-                                wa = INK[ty] if u == 0 else p.rb(S["TILE_ATTRS"] + u)
+                                wa = INK[ty]                  # user 2026-11-05: its own type colour, over decor too
                                 c3[1 if u else 0] += 1
                                 if gl != wg or at != wa or p.rb("TRAP_UNDER") != u:
                                     bad.append((m, d, hk, r, "C3 composite", u, gl, wg, hex(at), hex(wa)))

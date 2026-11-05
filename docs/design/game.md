@@ -2289,7 +2289,11 @@ comes from the item-type table; gear BUC tint `$45`/`$42` and unique shimmer ove
   whose glyph is 60..63 is lost (AMMO/PAGES are common and allowed).
 - **Key: no floor glyph and no floor entry.** The key is found automatically on the **first
   entry into the key room** (`LF_KEY_TAKEN`, panel key icon; `YOU FIND THE LAIR KEY.` 22).
-- Id 10 = `T_TRAP` as §1.5. ~~Page icons = these 6 glyphs scaled ×2 (16×16) in the item
+- Id 10 = `T_TRAP` as §1.5. **TRAP-OR (user playtest + ruling 2026-11-05):** the plate is OR-composited
+  over whatever its cell holds (a floor object's bottom row keeps its pixels; the decor of the room
+  never changes when a trap becomes known; the find blink's "off" shows the decor alone), and the cell
+  takes the **trap's own type attr** (ink = the type colour, paper / bright as on plain floor), so the
+  decor pixels of that one cell show in the trap ink. ~~Page icons = these 6 glyphs scaled ×2 (16×16) in the item
   ink.~~ **Superseded 2026-10-26 by Q5 below (true 16×16 icons); the floor keeps these 6 glyphs.**
 - **Art the artist must deliver (8×8, standing-row items, low in the cell): FOOD, PAGES
   (open book / scroll, reads in white and magenta), WEAPON (sword), WORN (shield), AMMO

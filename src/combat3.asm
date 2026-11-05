@@ -885,7 +885,6 @@ th_go:          push ix
                 ret
                 ASSERT TRAP_DART_PSN <= PSN_CAP && TRAP_DART_PSN % 2 == 0 && TRAP_DART_PSN / 2 <= STS_MAX_TURNS && DTY_PHYS == 0
                 ASSERT TRAP_STUN_T + 1 <= STS_MAX_TURNS
-tr_ink3:        TRAP_INKS                      ; build_room_map's known-plate attr (item_defs.asm)
 
 ;------------------------------------------------------------------------------
 ; efx_tab — per effect id 1..7 (row = (id - 1) * EF_STRIDE): immunity bit

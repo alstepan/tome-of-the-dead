@@ -404,8 +404,8 @@ TRAP_STONE_DIE  EQU 3               ; STUN1: the falling stone 1d3 PHYS (DEF app
 TRAP_STUN_T     EQU 2               ; ... + STUNNED 2 + rnd(2) (gameplay RNG: the damage die, then the duration)
 ; the known plate's attr by type (§1.5: ink on black). <= 1 trap per room
 ; (generator), so the room's known trap sets TILE_ATTRS[T_TRAP] itself:
-; build_room_map's stamp (bank 3 tr_ink3) and trap7's reveal (bank-7 data7 tr_ink7),
-; both tables built from these. (A scroll between two rooms with known traps
+; build_room_map's stamp and trap7's reveal, both through bank-7 tr_ink (data7 tr_ink7; TRAP-OR),
+; built from these. (A scroll between two rooms with known traps
 ; of different types shows the old plate in the new ink until it leaves.)
 TRAP_INK_DART   EQU $42
 TRAP_INK_GAS    EQU $44             ; (also the GAS hero flash, §1.5: $44 one step)
