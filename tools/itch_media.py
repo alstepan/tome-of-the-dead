@@ -5,6 +5,7 @@ the real Spectrum palette (FLASH shown non-inverted).  Output: docs/release/itch
   python3 tools/itch_media.py cover                  # img/cover_a.png, cover_b.png (630x500)
   python3 tools/itch_media.py record W|M [--ticks N] # scripted run -> build/itch/rec_<W|M>.pkl (frames)
   python3 tools/itch_media.py shots                  # img/shot*.png (x3)  [needs recordings + extras]
+  python3 tools/itch_media.py clips                  # img/warrior.gif, mage.gif from the video recordings
   python3 tools/itch_media.py gif                    # img/walk_fight.gif
   python3 tools/itch_media.py script W|M [part..]    # dev: run the hand-written input script (fast, no sound)
   python3 tools/itch_media.py video W|M [--reuse]    # script at emulator speed 100 + --aofile -> video/warrior.mp4 | mage.mp4 (with sound)
@@ -68,10 +69,19 @@ def cmd_cover():
 
 
 # ------------------------------------------------------------------ recording
+def require_no_zesarux():
+    """A second ZEsarUX steals CPU, the speed-100 emulator falls behind real time and --aofile is stretched/garbled.
+    Fuse may run (never touched)."""
+    r = subprocess.run(["pgrep", "-il", "zesarux"], capture_output=True, text=True)
+    if r.stdout.strip():
+        sys.exit("ERROR: another ZEsarUX process is running (would corrupt the sound recording); refusing:\n" + r.stdout)
+
+
 def record(hero_name, ticks, seed=0x1234, start_depth=1, out=None):
     """Bot-driven run from the menu; every probe (tick) is captured: [(frame6912, display_frames)]."""
     if os.environ.get("ZRCP_PORT", "10000") == "10000":
         sys.exit("never port 10000: set ZRCP_PORT")
+    require_no_zesarux()
     import playthrough as pt
     from pt_plan import Player, RunEnd, S, K_KNIGHT, K_WIZARD, PT, Harness, EMU_ARGS, Mon
     hero = K_KNIGHT if hero_name == "W" else K_WIZARD
@@ -130,6 +140,8 @@ def record(hero_name, ticks, seed=0x1234, start_depth=1, out=None):
 
 
 def load_rec(hero_name, tag=""):
+    if tag == "scr":                                   # the `video` script recording (bag, deeper depths)
+        return pickle.load(open(TMP / f"scr_{hero_name}.pkl", "rb"))
     return pickle.load(open(TMP / f"rec_{hero_name}{tag}.pkl", "rb"))
 
 
@@ -137,6 +149,27 @@ def load_rec(hero_name, tag=""):
 AUDIO_HZ = 15600                      # ZEsarUX --aofile: mono, unsigned 8 bit, 312 bytes per 50 Hz frame
 BPF = AUDIO_HZ // 50
 BLACK_KEEP = 0.35                     # s of black kept at each end of a cut (the rest is trimmed, picture AND sound)
+
+
+def check_audio(frames, audio_path, span):
+    """Fail loudly on stretched/garbled/silent sound.  span = (bytes at recording start, bytes at end) of the
+    --aofile while the recording ran: must equal emulated frames x 312 within 2 %."""
+    raw = np.fromfile(audio_path, np.uint8)
+    need = sum(d for _, d in frames) * BPF
+    (b0, f0), (b1, f1), rec_total = span
+    emu = (f1 - f0) & 0xFFFFFF                          # emulated 50 Hz frames (SYS_FRAMES) over the same span
+    got = b1 - b0
+    print(f"emulated frames {emu}, recorded frames {rec_total}")
+    need = rec_total * BPF                              # SYS_FRAMES undercounts DI stretches: Rec re-clocked on the sound
+    print(f"hidden (DI) frames {rec_total - emu} ({(rec_total - emu) / 50:.1f} s) assigned from the sound file clock")
+    ratio = got / need
+    tail = raw[-need:].astype(np.float32)
+    sd = float(tail.std())
+    print(f"audio check: {got} B vs {need} B expected, ratio {ratio:.4f}, file {len(raw)} B, std {sd:.2f}")
+    if abs(ratio - 1) > 0.02:
+        sys.exit(f"AUDIO CHECK FAILED: ratio {ratio:.4f} (emulator not real time?)")
+    if sd < 1.0 or len(np.unique(tail[::97])) < 4:
+        sys.exit("AUDIO CHECK FAILED: audio is silent/constant")
 
 
 def assemble(frames, audio_path, out, scale=6):
@@ -202,6 +235,12 @@ def assemble(frames, audio_path, out, scale=6):
     pr.stdin.close()
     if pr.wait():
         sys.exit("ffmpeg failed")
+    try:
+        dur = float(subprocess.run([FFMPEG.replace("ffmpeg", "ffprobe"), "-v", "error", "-show_entries", "format=duration",
+                                    "-of", "csv=p=0", str(out)], capture_output=True, text=True).stdout)
+    except ValueError:
+        dur = -1
+    print(f"ffprobe duration {dur:.1f} s vs expected {int(keep.sum()) / 50:.1f} s")
     print(f"{out}: {int(keep.sum()) / 50:.1f} s, {Path(out).stat().st_size / 1e6:.1f} MB, audio {'yes' if audio is not None else 'NO'}")
 
 
@@ -228,6 +267,7 @@ def cmd_video(hero_name, reuse=False):
             audio.unlink()
         cmd_script(hero_name, fast=False, audio=audio)
     frames = pickle.load(open(TMP / f"scr_{hero_name}.pkl", "rb"))
+    check_audio(frames, audio, pickle.load(open(TMP / f"span_{hero_name}.pkl", "rb")))
     assemble(frames, audio, OUT / "video" / f"{name}.mp4")
 
 
@@ -259,6 +299,33 @@ def cmd_gif(hero_name, start, end, name="walk_fight.gif"):
                optimize=True, disposal=1)
 
 
+def cmd_clip(hero_name, start, end, name, fps=25):
+    """GIF at 2x cut from the `video` recording (build/itch/scr_<W|M>.pkl, probes start..end), fps 25: the 50 Hz
+    display-frame timeline is sampled every 50/fps frames; equal consecutive frames are merged."""
+    frames = pickle.load(open(TMP / f"scr_{hero_name}.pkl", "rb"))[start:end]
+    tl = [f for f, d in frames for _ in range(d)][::50 // fps]
+    pal = []
+    for br in (0xD7, 0xFF):
+        for c in range(8):
+            pal += [(c >> 1 & 1) * br, (c >> 2 & 1) * br, (c & 1) * br]
+    pal += [0] * (768 - len(pal))
+    ref = Image.new("P", (1, 1))
+    ref.putpalette(pal)
+    q = [scaled(scr_to_rgb(f), 2).quantize(palette=ref, dither=Image.Dither.NONE) for f in tl]
+    mi, md = [q[0]], [1000 // fps]
+    for b in q[1:]:
+        if b.tobytes() == mi[-1].tobytes():
+            md[-1] += 1000 // fps
+        else:
+            mi.append(b)
+            md.append(1000 // fps)
+    md[-1] += 600                                  # hold the last frame before the loop restarts
+    (OUT / "img").mkdir(parents=True, exist_ok=True)
+    out = OUT / "img" / name
+    mi[0].save(out, save_all=True, append_images=mi[1:], duration=md, loop=0, optimize=True, disposal=1)
+    print(f"{out}: {sum(md) / 1000:.1f} s, {out.stat().st_size / 1e6:.2f} MB, {len(mi)} frames")
+
+
 # ------------------------------------------------------------------ scripted stages (hand-written input scripts)
 def _imports():
     global pt, Bot, Harness, PT, Mon, S, K_KNIGHT, K_WIZARD, EMU_ARGS, RunEnd, room_model, HERO_W, IT_NAME
@@ -275,6 +342,7 @@ class Rec:
 
     def __init__(self, p):
         self.p, self.frames, self.black, self.last = p, [], False, None
+        self.audio, self.a0, self.tot = None, 0, 0
         self.orig = p.tick
         p.tick = self.tick
 
@@ -284,6 +352,8 @@ class Rec:
 
     def start(self):
         self.last = self.sys()
+        if self.audio:
+            self.a0 = Path(self.audio).stat().st_size
 
     def tick(self, n=1):
         for _ in range(n):
@@ -293,6 +363,15 @@ class Rec:
             c = self.sys()
             d = max(1, (c - self.last) & 0xFFFFFF)
             self.last = c
+            if self.audio:
+                # SYS_FRAMES stands still while the game runs DI (level generation, ~1-2 s) but --aofile keeps
+                # being written: take the sound file (4096 B chunks = 13 frames of lag) as the clock there,
+                # else the picture would run short and the sound drift earlier by seconds.
+                a = (Path(self.audio).stat().st_size - self.a0) / BPF
+                extra = a - (self.tot + d) - 6.5
+                if extra > 20:
+                    d += int(extra)
+            self.tot += d
             self.frames.append((bytes(6912) if self.black else bytes(self.p.frame()), d))
 
     def total(self):
@@ -482,6 +561,8 @@ def session(hero_name, seed, audio=None, fast=True):
     only while the emulated machine runs, 312 bytes per 50 Hz frame)."""
     if os.environ.get("ZRCP_PORT", "10000") == "10000":
         sys.exit("never port 10000: set ZRCP_PORT")
+    require_no_zesarux()
+    TMP.mkdir(parents=True, exist_ok=True)
     _imports()
     hero = K_KNIGHT if hero_name == "W" else K_WIZARD
     args = EMU_ARGS if fast else ("--vo", "null", "--ao", "null") + (("--aofile", str(audio)) if audio else ())
@@ -500,6 +581,7 @@ def session(hero_name, seed, audio=None, fast=True):
         p.wb("INPUT_SRC", 1)
         p.release()
         rec = Rec(p)
+        rec.audio = audio if not fast else None
         st = make_stage(p, hero)
         yield h, p, rec, st
 
@@ -665,6 +747,8 @@ PARTS = {"W": {"d1": lambda st, p, rec: d1_intro(st, p, rec, "W"),
 def cmd_script(hero_name, seed=0x1234, fast=True, audio=None, parts=None):
     with session(hero_name, seed, audio=audio, fast=fast) as (h, p, rec, st):
         hero = K_KNIGHT if hero_name == "W" else K_WIZARD
+        sz = lambda: audio.stat().st_size if audio and Path(audio).exists() else 0
+        s0 = (sz(), rec.sys())
         menu_start(p, rec, st, hero)
         try:
             for nm in parts or ["all"]:
@@ -672,12 +756,13 @@ def cmd_script(hero_name, seed=0x1234, fast=True, audio=None, parts=None):
         finally:
             TMP.mkdir(parents=True, exist_ok=True)
             pickle.dump(rec.frames, open(TMP / f"scr_{hero_name}.pkl", "wb"))
+            pickle.dump((s0, (sz(), rec.sys()), rec.total()), open(TMP / f"span_{hero_name}.pkl", "wb"))
             print(f"captured {len(rec.frames)} probes, {rec.total() / 50:.1f} s")
 
 
 # probe indices into the (deterministic) recordings picked by eye from contact sheets
-SHOTS = [("shot1_menu", "W", "", 30), ("shot2_warrior_fight", "W", "", 492), ("shot3_mage_bolt", "M", "", 501),
-         ("shot4_bag", "W", "", 532), ("shot5_deeper_d5", "W", "_d5", 279)]
+SHOTS = [("shot1_menu", "W", "", 30), ("shot2_warrior_fight", "W", "scr", 1250), ("shot3_mage_bolt", "M", "scr", 1438),
+         ("shot4_bag", "W", "scr", 400), ("shot5_deeper_d5", "W", "_d5", 279)]
 GIF = ("W", 440, 560)
 
 
@@ -703,6 +788,9 @@ def main():
         cmd_shots()
     elif a[0] == "gif":
         cmd_gif(*GIF)
+    elif a[0] == "clips":
+        cmd_clip("W", 1110, 1400, "warrior.gif")
+        cmd_clip("M", 1140, 1500, "mage.gif")
     elif a[0] == "video":
         cmd_video(a[1], reuse="--reuse" in a)
     else:
