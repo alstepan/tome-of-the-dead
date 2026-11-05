@@ -7,7 +7,7 @@
 ; ASLEEP), §6 V3 (flashes). The generator (items_ovl.asm, T6) fills
 ; TRAP_LIST; the known plate is drawn by build_room_map (bank 3: T_TRAP in the
 ; map, its type attr into TILE_ATTRS[T_TRAP]), mid-room by tr_plate / tr_show
-; (the attr) + ap_put_a (bank 7, a plain call now).
+; -> tr_put7 -> far3 tr_cell3 (TRAP-OR: both OR-composite it over the cell, trap3.asm).
 ;
 ; Two halves (review 2026-10-26: a trap event on the input tick overran the
 ; 126k cap, pmix + DART 141k T):
@@ -211,39 +211,55 @@ trap_step:
                 xor  a                         ; odd steps off
                 jr   .pl
 
-; tr_show / tr_plate — HL = an entry in CUR_ROOM: its plate drawn in its type
-; attr / drawn with TILE_ATTRS[T_TRAP] := A; redrawn next render + the attr
-; shadow (ap_put_a, bank 7: the one cell).  TRAP2: no trap is ever erased.
-; Keep HL.  Clobbers: A, BC, DE.   ~4k T
+; tr_show / tr_plate — HL = an entry in CUR_ROOM: its plate drawn in its type attr /
+; with attr A (PLATE_FLASH_ATTR, or 0 = off: the cell as it was). TRAP-OR: OR-composited
+; over the cell's decor (tr_put7 -> bank-3 tr_cell3), redrawn next render + the attr
+; shadow.  TRAP2: no trap is ever erased.
+; Keep HL.  Clobbers: A, BC, DE.   ~2.5k T
 tr_show:        call tr_ink                    ; A = its type attr
-tr_plate:       ld   (TILE_ATTRS + T_TRAP), a  ; (<= 1 trap a room: item_defs.asm)
-                ld   b, T_TRAP
-                push hl
-                ld   a, (hl)
-                ld   e, a
-                and  TRF_ROOM_MASK
-                bit  TRF_S1_BIT, e
-                jr   z, .s
-                or   FL_S1
-.s:             ld   e, a                      ; E = the FL_ROOM-style byte
-                call tr_col                    ; A = col
-                ld   d, b                      ; D = the tile
-                call ap_put_a                  ; (A, DE in; keeps IX)
+tr_plate:       push hl
+                push af
+                ld   a, ROOM_MAP >> 8          ; (TMP1 may still be NEXT_MAP's: do_exit)
+                ld   (TMP1), a
+                pop  af
+                call tr_put7                   ; B, C = the cell
+                ld   de, $0101
+                call queue_damage              ; (keeps BC, DE)
+                call shadow_rect               ; (leaves bank 7 paged: ours)
                 pop  hl
                 ret
-                ASSERT TRF_ROOM_MASK == FL_ROOM_MASK
+; tr_build7 — far7 from build_room_map (bank 3): DE = a known entry of the room being
+; built (TMP1 = its map page): the plate in its type attr (no redraw: the room draw follows).
+tr_build7:      ex   de, hl
+                call tr_ink
+; tr_put7 — HL = an entry, A = the attr, (TMP1) = the map page: B = its row 9s+7, C = its
+; col; the cell composed (far3 tr_cell3, trap3.asm).  Clobbers: A, DE, HL.
+tr_put7:        ld   (TILE_ATTRS + T_TRAP), a  ; (a marker / off: no cell shows T_TRAP)
+                push af
+                ld   a, (hl)
+                and  TRF_S1
+                ld   b, STOREY_AIR - 1         ; storey 0: row 7
+                jr   z, .s
+                ld   b, STOREY_ROWS + STOREY_AIR - 1   ; storey 1: row 16
+.s:             call tr_col
+                ld   c, a
+                call map_cell                  ; (bank 2; A) HL = the cell, keeps BC, DE
+                pop  af
+                ex   de, hl                    ; DE = the cell
+                push bc
+                ld   hl, tr_cell3              ; bank 3 (far3 passes A, DE in)
+                call far3
+                pop  bc
+                ret
 
 ; tr_eff — the trigger's step 0 (HL = the entry; see trap_step).
 tr_eff:
                 ld   a, SFX_TRAP
                 call sfx_req                   ; (keeps all)
                 call tr_ink
-                ld   de, P_ENTITIES + E_FLT    ; the hero flashes the type ink
-                ex   de, hl
-                ld   (hl), TRAP_FLASH_T
-                inc  l
-                ld   (hl), a
-                ex   de, hl
+                ld   (P_ENTITIES + E_FLA), a   ; the hero flashes the type ink (TRAP-OR: -1 B)
+                ld   a, TRAP_FLASH_T
+                ld   (P_ENTITIES + E_FLT), a
                 call tr_type
                 dec  a
                 jr   z, .gas
@@ -383,12 +399,11 @@ tr_ink:         call tr_type
                 push hl
                 add  a, tr_ink7 & $FF
                 ld   l, a
-                adc  a, tr_ink7 >> 8
-                sub  l
-                ld   h, a
+                ld   h, tr_ink7 >> 8           ; TRAP-OR: one page (ASSERT; -2 B)
                 ld   a, (hl)
                 pop  hl
                 ret
+                ASSERT (tr_ink7 >> 8) == ((tr_ink7 + TT_STUN) >> 8)
 ; tr_sto — A = a body-top row: A = TRF_S1 on storey 1, else 0.  Clobbers: F
 tr_sto:         cp   STOREY_ROWS
                 ld   a, 0

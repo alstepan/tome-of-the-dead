@@ -26,7 +26,8 @@ trap_chk takes the room's first unspent entry, the generator puts <= 1 there):
      (the plate blinks $47 / off twice, then its ink), teleport scroll + trap
      (hero $43 >= 2 ticks before the room change and >= 2 after), nothing left
      tinted after
-  O  item / trap overlap (FLOOR1: no footprint covers a trap col): drop_put skips a hidden trap col; ap_stamp keeps a
+  O  item / trap overlap (FLOOR1: no footprint covers a trap col): drop_put skips a hidden trap col; tr_plate
+     (TRAP-OR) draws / turns off a plate's one cell; ap_stamp keeps a
      known plate; build_room_map never hides an item under T_TRAP; the Silk
      Cloak's poison immunity against the DART
 Generated levels (seed_fixed):
@@ -344,7 +345,7 @@ def run(h, p, check):
     scene(K_WIZARD)
     res = []
     for k, typ in enumerate((TELE, GAS, ALARM, DART, STUN)):
-        x0 = 8 + 3 * k
+        x0 = 8 + 2 * k                         # TRAP-OR: cols 13..21 (3 * k put STUN on the ladder col 25: a plate composes over a ladder now)
         col = x0 + 5
         put_hero(x0)
         trap(col, typ)
@@ -581,13 +582,17 @@ def overlap(p, check, scene, trap, put_hero, heal, ent, cell, act, stub, tick, l
     trap(HX + 4, GAS)                          # Warrior: not sensed; make it known by a find poke + draw
     p.wb(S["TRAP_LIST"], room | S1 | KNOWN)
     n0 = cell(HX + 5)
-    stub([0x3E, 0x47, 0x32] + w16(S["TILE_ATTRS"] + T_TRAP)
-         + [0x3E, HX + 4, 0x11] + w16((T_TRAP << 8) | rb) + [0x21] + w16(S["ap_put_a"]) + [0xCD] + w16(S["far7"]))
-    k1 = cell(HX + 4)
-    stub([0x3E, HX + 4, 0x11] + w16(rb) + [0x21] + w16(S["ap_put_a"]) + [0xCD] + w16(S["far7"]))   # D = T_AIR
+    # TRAP-OR: ap_put_a is gone; bank-7 tr_plate (HL = entry, A = attr) -> tr_put7 -> far3 tr_cell3; attr 0 = off
+    def plate(attr):
+        stub([0x3A] + w16(S["PORT_7FFD_SHADOW"]) + [0xF5, 0x3E, 7, 0xCD] + w16(S["page_bank"])
+             + [0x3E, attr, 0x21] + w16(S["TRAP_LIST"]) + [0xCD] + w16(S["tr_plate"])
+             + [0xF1, 0xCD] + w16(S["restore_page"]))
+    plate(0x47)
+    k1 = (cell(HX + 4), p.rb(S["TILE_ATTRS"] + T_TRAP))
+    plate(0)
     k2 = cell(HX + 4)
-    check("O2 ap_put_a: the plate drawn / erased in its one cell, its neighbour untouched",
-          (k1, k2, cell(HX + 5)) == (T_TRAP, 0, n0), (k1, k2, cell(HX + 5), n0))
+    check("O2 tr_plate: the plate drawn ($47) / off (the cell's own T_AIR back) in its one cell, "
+          "its neighbour untouched", (k1, k2, cell(HX + 5)) == ((T_TRAP, 0x47), 0, n0), (k1, k2, cell(HX + 5), n0))
     # O3 build_room_map: an item right of a known trap (footprint t+1..t+2) and the plate both show
     p.wb(S["TRAP_LIST"], room | S1 | KNOWN)
     fe = [i for i in range(32) if p.rb(S["FLOOR_LIST"] + 4 * i) == 0xFF][0]
@@ -730,6 +735,8 @@ def fuzz(p, check, lines, act, tick, heal, ent, cell):
         z.cmd("set-breakpoint 5 PC=%d" % S["log_push"])
         for sl in range(1, 16):
             p.set_ent(sl, ROOM=NOWHERE)
+        p.turn("J")                            # H1-ARRIVAL: the hero starts mid-ladder at the arrival
+        p.turn("J")                            # shaft top (y 0): down to storey 0 first (world W16)
         for step in range(60):
             p.until(p.idle, 60)                # a STUN / GAS hold keeps auto-turning: let the turn in flight end
             heal()

@@ -463,6 +463,10 @@ T_DOOR_JAMB_R   EQU 14              ; `.....#.#` x 8
 ; FLOOR1 (2026-10-26): the class glyphs 17 (AMMO) / 18 (PAGES) / 60..63 are no longer
 ; placed (floor items = T_ITEM + the 16x16 icon); 17 / 18 keep their glyph bytes, unused.
 T_TRAP          EQU 10              ; ink $42 (type ink = T6)
+; TRAP-OR: the plate's glyph lines 0..5 are blank, 6 / 7 = these (ASSERTed against tiles_common in
+; boot6.asm): bank-3 tr_cell3 composes TILE_GLYPHS[T_TRAP] = glyph(the cell under it) | the plate.
+TRAP_GLY6       EQU $FF
+TRAP_GLY7       EQU $DB
 ; D3-7 T6: the B3B-13b drips (T_DRIP1/2) are no longer placed (the per-level
 ; sets have no free ids; "if they are ever placed": per-level decor).
 T_COMMON_USED   EQU 32
@@ -604,7 +608,7 @@ HUD4_PW         EQU $BFD6           ; 4 B, rows 20..23: cols changed since prese
 LOG_QN          EQU $BFDA           ; pending log messages in LOG_Q
 LOG_Q           EQU $BFE0           ; 8 B: pending log messages (layout: B3B-11)
 LOG_Q_LEN       EQU 8
-STATE_3B_END    EQU $C000           ; $BFFF spare (LOG-DMG: $BFFC..$BFFE LN_VAL / LN_G / DH_EFF; $BFFB SEQ_TRAP, defs.asm; 3E-T16: TRP_PRE $BFF5, TRP_WAIT $BFF7, TRP_EV/STEP/ENT $BFF8..$BFFA, item_defs.asm; $BFF4 3E-T0 SFX_XP; $BFF3 SND-5 SFX_NEXT; $BFF1/$BFF2 SND-3 DNG_*; C3-0: JOY_MIRROR $BFEA, hero_defs.asm; C3-2b: EXIT_LOCK $BFD1, FIRE_LOCK $BFDF; SND-2: sound mailbox SND_MODE $BFEB..SFX_REQ $BFF0, defs.asm)
+STATE_3B_END    EQU $C000           ; $BFFF TRAP_UNDER (TRAP-OR, item_defs.asm; LOG-DMG: $BFFC..$BFFE LN_VAL / LN_G / DH_EFF; $BFFB SEQ_TRAP, defs.asm; 3E-T16: TRP_PRE $BFF5, TRP_WAIT $BFF7, TRP_EV/STEP/ENT $BFF8..$BFFA, item_defs.asm; $BFF4 3E-T0 SFX_XP; $BFF3 SND-5 SFX_NEXT; $BFF1/$BFF2 SND-3 DNG_*; C3-0: JOY_MIRROR $BFEA, hero_defs.asm; C3-2b: EXIT_LOCK $BFD1, FIRE_LOCK $BFDF; SND-2: sound mailbox SND_MODE $BFEB..SFX_REQ $BFF0, defs.asm)
                 ASSERT SND_MODE == JOY_MIRROR + 1 && SFX_REQ == SND_MODE + 5 && SFX_REQ < STATE_3B_END
                 ASSERT DNG_DWELL == SFX_REQ + 1 && DNG_CALM == DNG_DWELL + 1 && SFX_NEXT == DNG_CALM + 1 && SFX_NEXT < STATE_3B_END
                 ASSERT MUS_REQ == SND_MODE + 1 && MUS_SHOT == MUS_REQ + 1 && MUS_STATE == MUS_SHOT + 1 && MUS_CUR == MUS_STATE + 1

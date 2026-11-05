@@ -14,6 +14,16 @@ NEXT_MAP, then on the ENGINE's map + tile_flags:
       per fire, capped at RESPAWN_MAX, the plate in the map, no other T_TRAP cell. (TRAP2
       shipped `inc (hl)` with HL = the entry: the record moved to the next room, a stray
       plate appeared there, often on a ladder top.)
+  C3  (TRAP-OR) the first 10 seeds: a room built with its traps known == built with them hidden,
+      except the plate cells (the decor never depends on a known trap); after each build with a
+      plate, TILE_GLYPHS[T_TRAP] == glyph(the hidden build's cell) | the plate (lines 6 / 7) and
+      TILE_ATTRS[T_TRAP] == the type ink, over decor too (user ruling 2026-11-05)
+  L1..L3 (TRAP-OR, user playtest 2026-11-05: a revealed plate erased the decor of its cell) a
+      real generated room, a hidden DART poked under a floor object's bottom row (row 9s+7):
+      the Mage's sense finds it on a Wait (the blink sequence) -> the cell on the composed
+      (bank 5) AND the displayed (screen 2) screen == decor glyph | plate, the DART ink $42;
+      L2 the same after walking out through the storey's side exit and back in (NEXT_MAP
+      build + the scroll strips); L3 the same after a room_show rebuild (teleport / level entry)
 Run: ZRCP_PORT=<port> [WZ_BUILD_DIR=..] python3 tests/trap_cells.py [--seeds N]   (default 40 seeds, ~0.23 s a level)
 """
 import sys
@@ -98,11 +108,155 @@ def alarm_fires(h, seeds):
     return bad, fires
 
 
+def plate_glyph():
+    """The plate's 8 lines from the generated tiles_common.asm (independent of the engine)."""
+    for ln in (HERE.parent / "assets/gfx/tiles/tiles_common.asm").read_text().splitlines():
+        if ln.rstrip().endswith("T_TRAP") and "DEFB" in ln:
+            return [int(v.strip().lstrip("$"), 16) for v in ln.split("DEFB")[1].split(";")[0].split(",")]
+    raise SystemExit("no T_TRAP glyph line in tiles_common.asm")
+
+
+PLATE = plate_glyph()
+
+
+def composed(gly_u, plate=PLATE):
+    return [a | b for a, b in zip(gly_u, plate)]
+
+
+def cell_bytes(fr, col, row):
+    """8 bitmap lines + attr of a cell in a 6912-B Spectrum frame."""
+    base = ((row & 0x18) << 8) | ((row & 7) << 5) | col
+    return [fr[base + (k << 8)] for k in range(8)], fr[6144 + row * 32 + col]
+
+
+def live_or(h, seeds):
+    """L1..L3: a real reveal / scroll / rebuild over a decor cell on a generated level."""
+    p = LPT(h)
+    GL.Proto.snd_mode = 2
+    T_TRAP, TG, TA = S["T_TRAP"], S["TILE_GLYPHS"], S["TILE_ATTRS"]
+    NM = S["NEXT_MAP"]
+    bad, done = [], None
+    for sd in range(seeds):
+        depth = 1 + sd % 8
+        p.proto_start = 0
+        p.boot(hero=1, freeze=0)                               # the Mage: the sense finds it
+        p.wmem(S["MASTER_SEED"], w16(0x7300 + sd))
+        pc0 = p.pc()
+        if depth > 1:
+            p.code([0x3E, depth - 1, 0x32] + w16(S["LVL_DEPTH"]) + [0xCD] + w16(S["level_descend"]), game=True)
+            p.z.cmd("set-register PC=%d" % pc0)
+        p.release()
+        p.settle(3)
+        p.wmem(TL, [0] * (2 * TMAX))                           # no generated trap: ours only
+        p.wb(TN, 0)
+        cur = p.rb("CUR_ROOM")
+        cand = None
+        for r in range(15):
+            if r == cur or not p.rb(S["ROOM_DESC"] + r * S["RD_STRIDE"]) & 1:
+                continue
+            ex = p.rb(S["ROOM_DESC"] + r * S["RD_STRIDE"] + 1)
+            p.code([0x3E, r, 0x16, NM >> 8, 0x21] + w16(S["build_room_map"]) + [0xCD] + w16(S["far3"]), game=True)
+            p.z.cmd("set-register PC=%d" % pc0)
+            mp = p.z.read_memory(NM, 576)
+            for s_ in (0, 1):
+                row = 9 * s_ + 7
+                for side, bit, x_edge in (("L", 2 << 4 * s_, 28), ("H", 1 << 4 * s_, 1)):
+                    if not ex & bit:
+                        continue
+                    for t in range(6, 26):
+                        u = mp[row * 32 + t]
+                        x = t + 2 if side == "L" else t - 4    # the sense range, on the exit side
+                        if S["T_LVL_BASE"] <= u < S["T_ITEM0"] and 1 <= x <= 28 and \
+                                all(mp[row * 32 + c] == 0 for c in range(x, x + 3)):
+                            cand = (r, s_, t, side, x, x_edge, u)
+                            break
+                    if cand:
+                        break
+                if cand:
+                    break
+            if cand:
+                break
+        if not cand:
+            continue
+        r, s_, t, side, x, x_edge, u = cand
+        row = 9 * s_ + 7
+        back = "H" if side == "L" else "L"
+        p.wmem(TL, [r | (s_ << 4), t])                         # a hidden DART (type 0) at t
+        p.wb(TN, 1)
+        for sl in range(1, S["P_MAX_ENT"]):
+            p.set_ent(sl, FLAGS=0)
+        p.wb("CUR_ROOM", r)
+        p.set_ent(0, ROOM=r)
+        p.code([0x3E, r, 0xCD] + w16(S["room_show"]) + [0xCD] + w16(S["present_full"]), game=True)
+        p.z.cmd("set-register PC=%d" % pc0)
+        hgt = p.rb(S["kind_tab"] + S["KT_BH"] + p.ent(0)["KIND"])
+        y = stand_y(s_, hgt)
+        gly_u = list(p.z.read_memory(TG + 8 * u, 8))
+        want = (composed(gly_u), S["TRAP_INK_DART"])             # its own type colour over the decor (user 2026-11-05)
+
+        def place(xx, left):
+            fl = p.ent(0)["FLAGS"]
+            fl = (fl | S["EF_LEFT"]) if left else (fl & ~S["EF_LEFT"] & 255)
+            p.set_ent(0, HP=250, MAXHP=250, X=xx, Y=y, PX=8 * xx, PY=8 * y, MODE=0, REACT=0, FLT=0, FLAGS=fl)
+            p.settle(2)
+
+        def look(tag):
+            p.settle(4)
+            got5 = cell_bytes(p.composed_frame(), t, row)
+            gotd = cell_bytes(p.frame(), t, row)
+            mapc = p.rb(S["ROOM_MAP"] + row * 32 + t)
+            ok = got5 == want and gotd == want and mapc == T_TRAP and p.rb("CUR_ROOM") == r
+            if not ok:
+                bad.append((tag, sd, depth, cand, "bank5", got5, "shown", gotd, "want", want, "map", mapc,
+                            "room", p.rb("CUR_ROOM")))
+            return ok
+        place(x, side == "H")
+        p.turn("WAIT")
+        p.settle(12)                                           # the find's blink steps
+        if not p.rb(TL) & S["TRF_KNOWN"]:
+            bad.append(("L1 not found", sd, depth, cand))
+            continue
+        look("L1 reveal")
+        if p.rb("TRAP_UNDER") != u:
+            bad.append(("L1 TRAP_UNDER", p.rb("TRAP_UNDER"), u))
+
+        def go(key, xx):
+            place(xx, key == "H")
+            r0 = p.rb("CUR_ROOM")
+            for _ in range(5):
+                p.turn(key)
+                if p.rb("CUR_ROOM") != r0:
+                    break
+            p.settle(3)
+            for sl in range(1, S["P_MAX_ENT"]):
+                if p.ent(sl)["FLAGS"]:
+                    p.set_ent(sl, FLAGS=0)
+            return p.rb("CUR_ROOM")
+        if go(side, x_edge) == r:
+            print("  [info] L2 skip (the exit did not take: a door / block), seed", sd, cand, flush=True)
+            continue
+        back_edge = 1 if side == "L" else 28                   # the arrival side in the neighbour
+        if go(back, back_edge) != r:
+            print("  [info] L2 skip (did not come back), seed", sd, cand, flush=True)
+            continue
+        look("L2 scroll back in")
+        p.code([0x3E, r, 0xCD] + w16(S["room_show"]) + [0xCD] + w16(S["present_full"]), game=True)
+        p.z.cmd("set-register PC=%d" % pc0)
+        look("L3 room_show")
+        done = (sd, depth, cand)
+        break
+    if done is None:
+        bad.append(("L no candidate (decor on a standing row beside an exit) in", seeds, "seeds"))
+    return bad, done
+
+
 def main():
     nseeds = int(sys.argv[sys.argv.index("--seeds") + 1]) if "--seeds" in sys.argv else 40   # ~0.23 s a level: 40 seeds x 16 = ~2.5 min (300 was ~20 min of silence, read as a hang)
     tf_ok = None
     bad = []
     by_d = {d: [0, 0] for d in range(1, 9)}         # levels, plates
+    c3 = [0, 0]                                     # C3: plates over T_AIR / over decor
+    INK = [S["TRAP_INK_DART"], S["TRAP_INK_GAS"], S["TRAP_INK_TELE"], S["TRAP_INK_ALARM"], S["TRAP_INK_STUN"]]
     with Harness() as h:
         h.launch(EMU_ARGS)
         p = T(h)
@@ -138,8 +292,33 @@ def main():
                             continue
                         code = [0xF3, 0x31] + w16(S["WORKSTORE_TOP"]) + [0x3E, r, 0x16, page, 0x21] \
                             + w16(S["build_room_map"]) + [0xCD] + w16(S["far3"])
+                        mine = [(i, er, s, t) for i, (er, s, t) in enumerate(ents) if er == r]
+                        hid = None
+                        if m < 10 and mine:                   # C3: the hidden build first
+                            for i, *_ in mine:
+                                p.wb(TL + 2 * i, p.rb(TL + 2 * i) & ~S["TRF_KNOWN"] & 255)
+                            run_stub(p, code, DRV)
+                            hid = p.z.read_memory(S["NEXT_MAP"], 576)
+                            for i, *_ in mine:
+                                p.wb(TL + 2 * i, p.rb(TL + 2 * i) | S["TRF_KNOWN"])
                         run_stub(p, code, DRV)
                         mp = p.z.read_memory(S["NEXT_MAP"], 576)
+                        if hid is not None:
+                            plates = {(9 * s + 7) * 32 + t for (_, er, s, t) in mine}
+                            diff = [i for i in range(576) if mp[i] != hid[i] and i not in plates]
+                            if diff:
+                                bad.append((m, d, hk, r, "C3 decor changed by a known trap", diff[:6]))
+                            i_, _, s, t = mine[-1]
+                            u = hid[(9 * s + 7) * 32 + t]
+                            if u < S["T_ITEM0"]:
+                                ty = p.rb(TL + 2 * i_ + 1) >> 5
+                                gl = list(p.z.read_memory(S["TILE_GLYPHS"] + 8 * T_TRAP, 8))
+                                at = p.rb(S["TILE_ATTRS"] + T_TRAP)
+                                wg = composed(list(p.z.read_memory(S["TILE_GLYPHS"] + 8 * u, 8)))
+                                wa = INK[ty]                  # user 2026-11-05: its own type colour, over decor too
+                                c3[1 if u else 0] += 1
+                                if gl != wg or at != wa or p.rb("TRAP_UNDER") != u:
+                                    bad.append((m, d, hk, r, "C3 composite", u, gl, wg, hex(at), hex(wa)))
                         got = {i for i in range(576) if mp[i] == T_TRAP}
                         want = {(9 * s + 7) * 32 + t for (er, s, t) in ents if er == r}
                         tag = (m, d, hk, r)
@@ -158,6 +337,12 @@ def main():
                                         break
                             if why:
                                 bad.append(tag + ("C2 plate", (t, row), why[:2]))
+        print(f"  C3: {c3[0]} plates over T_AIR, {c3[1]} over decor, composed + checked")
+        lbad, ldone = live_or(h, 40)
+        print(f"  L1..L3 (seed, depth, (room, s, col, side, x, edge, decor id)): {ldone}, {len(lbad)} violations")
+        for b in lbad[:6]:
+            print("  FAIL L", b)
+        bad += lbad
         abad, fires = alarm_fires(h, 12)
         print(f"  A1: {fires} ALARM fires on generated D5..D8 levels, {len(abad)} violations")
         for b in abad[:6]:
