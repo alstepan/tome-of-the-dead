@@ -3,7 +3,7 @@
 Release build (DEBUG_KIT=0), PROTO room A. Counters (item_defs.asm, ITEM_RAM, zeroed by new_game):
 ST2_BKR books read (R6 fx_book), ST2_BKF books found (R6 pu_add, IT_BOOK), ST2_ITM items found
 (R6 pu_add any other type + bank-7 ap_take when n > 0); all saturate at 255. The card rows are
-checked pixel-exact by tests/stats1.py E (table rows EC_TAB_ROW.., PRESS 22).
+checked pixel-exact by tests/stats1.py E (table rows EC_TAB_ROW.., PRESS EC_PRESS_ROW).
 
   S0  a fresh game: 0 / 0 / 0
   S1  the class book picked up: found 1, read 0, items 0; READ it (fx_main FX_READ): 1/1, items 0
