@@ -52,11 +52,11 @@ Main menu keys: **1** Start, **2** Hero (Warrior or Mage), **3** Controls (Keys,
 ### How to load
 
 - **Emulators (Fuse, ZEsarUX, others):** set the machine to ZX Spectrum 128K, then either open `tome-of-the-dead-v1.0.tap` and let it load (type `LOAD ""` or choose Tape Loader), or open `tome-of-the-dead-v1.0.sna` directly for an instant start.
-- **Real 128K, +2, +2A or +3 hardware:** play the `.tap` through a tape interface, TZXDuino, divMMC or similar, and load it from the 128 tape loader. Tested on a real ZX Spectrum 128K (the original "toastrack").
+- **Real 128K or +2 (grey) hardware:** play the `.tap` through a tape interface, TZXDuino, divMMC or similar, and load it from the 128 tape loader. Tested on a real ZX Spectrum 128K (the original "toastrack").
 
 ### System requirements
 
-- ZX Spectrum 128K, +2, +2A or +3 (or an emulator in 128K mode).
+- ZX Spectrum 128K or +2 (grey), or an emulator in Spectrum 128K mode. The +2A / +3 are untested (different memory paging and contention). 48K is not supported.
 - **48K machines are not supported.** The game needs the extra RAM banks and the AY sound chip.
 - Keyboard; joystick optional (Kempston, Sinclair 1 or 2).
 
