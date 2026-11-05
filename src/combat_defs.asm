@@ -208,11 +208,15 @@ RK_SLINGER      EQU 3
 RK_NECRO        EQU 4
 RK_BONE_CALLER  EQU 5
 RK_ARCHMAGE     EQU 6               ; 3F-T11b: the Archmage's 7 spell rows RK_ARCHMAGE .. + 6 (arch_ai; no rk_tab entry)
-RK_GKING        EQU 13              ; BOSS-RANGED: the Goblin King's dagger (D1) / the Spider Queen's spit (D2),
-RK_SQUEEN       EQU 14              ; after Venom; rows >= RK_GOLD1 shoot only for a golden body (ai_rhook)
+RK_WIDOW        EQU 13              ; WIDOW-SPIT: the Black Widow's spit (any body: below RK_GOLD1, so ai_rhook's gate is unchanged)
+RK_GKING        EQU 14              ; BOSS-RANGED: the Goblin King's dagger (D1) / the Spider Queen's spit (D2),
+RK_SQUEEN       EQU 15              ; after the Widow; rows >= RK_GOLD1 shoot only for a golden body (ai_rhook)
 RK_GOLD1        EQU RK_GKING
-RK_ROWS         EQU 14
+RK_ROWS         EQU 15
 SQ_PSN_T        EQU 12              ; BOSS-RANGED: a spit hit always poisons + 12 (deal_hit E = half, cap PSN_CAP)
+BW_PSN_T        EQU 6               ; WIDOW-SPIT: a Widow spit hit always poisons + 6 (deal_hit E = half, cap PSN_CAP)
+BW_SPIT_N       EQU 3               ; WIDOW-SPIT: rd_tab N 3 = a shot every 4th turn (the Queen: N 2, every 3rd)
+                ASSERT BW_SPIT_N <= RCD_MASK
 ;------------------------------------------------------------------------------
 ; 3F-T11b the Archmage spell AI (game.md §9.9 ARCHMAGE-SPEC; R6 arch6.asm, entered by
 ; bank-2 ai_mon). Spell index s = 0..6 -> rd_tab row RK_ARCHMAGE + s; s 0..4 = ORDER

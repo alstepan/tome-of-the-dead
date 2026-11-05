@@ -176,7 +176,7 @@ def main():
 
 
 def spit_pool(p):
-    """SPIT-SPARK: the golden Spider Queen's spit draws spark_fly1/2 (rd_tab row 14): on the D2 lair of
+    """SPIT-SPARK: the golden Spider Queen's spit draws spark_fly1/2 (rd_tab row 15): on the D2 lair of
     BOTH heroes both frames have a resident FRT row (the Mage: his class FX; the Warrior: the
     pool_xmap U_SPARKW extra); fx_meta: dagger_spin = the hero's throw THROW_ATTR (the Goblin King /
     Slinger rock pass FXD_ATTR ROCK_ATTR: R6 rg_q, tests/ranged.py A), the spark $43."""

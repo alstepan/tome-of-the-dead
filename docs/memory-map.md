@@ -6016,3 +6016,49 @@ and the block are unchanged.
 Tests: `tests/h1climb.py` A (both heroes, `level_descend` D1 -> D8 on fixed seeds: each depth on the shaft top mid-ladder,
 waits, UP no turn / no exit / `E_AIDIR` kept, 2 J turns to storey 0); `world.py` W16 (arrival y 0 on every depth; the D2
 death scenario climbs down first: no combat with a mid-ladder hero).
+
+## WIDOW-SPIT ledger (`feat/widow-spit`, 2026-11-05; on `feat/h1-arrival` d209a9d + `sim/widow-spit`; user approved; docs/design/widow_spit_sim.md)
+
+**Behaviour:** every Black Widow (the Spider tier, D4 / D5; never golden) spits poison: the golden Spider Queen's BOSS-RANGED spit
+with N 3 (a shot every 4th turn; the Queen N 2), 1d2 - DEF (no golden + 1), every hit POISON + `BW_PSN_T` 6 (deal_hit E 3, chance 0;
+adds, cap `PSN_CAP` 30; Silk Cloak `IMMF_POISON` immune; Cure clears), range 6 (gap < 6), `RWF_WALK` (walks in between shots), the
+magenta `spark_fly1/2` (NOIMP, FXD_ATTR 0), the Queen's SFX and the LOG-DMG hit / miss + poison lines (no new strings). The bite
+(POISON 24, ACID 1 in 4) is unchanged; ordinary Spiders never spit; the Queen is unchanged. **Warrior level-up HP +4 -> +5**
+(`xp7.asm` `LUP_W_HP`, game.md §4.1).
+
+**Gate (0 B, bank 2):** new rd_tab row `RK_WIDOW` 13 **below** `RK_GOLD1`, so `ai_rhook`'s golden gate is untouched: the rows are
+renumbered `RK_WIDOW` 13, `RK_GKING` 14 (= `RK_GOLD1`), `RK_SQUEEN` 15, `RK_ROWS` 15; `rk_tab[K_BLACK_WIDOW]` (was a DS 0) = `RK_WIDOW`
+(same bytes). `rg_q`'s 2-high flight-row test reads the row's fid (`RW_FX == FID_spark_fly1`: the Queen and the Widow, no other row)
+instead of `E_KIND == K_SPIDER` (same 5 B). A Widow's turn now far6s `ai_ranged` (~0.6-1.3k T out of line / range, ~9k a shot) where
+it paid ai_ghook's +46 T.
+
+**Bytes (reclaim, no cut):** `dn_place` (59 B, D3-11 flying numbers) moved R6 `dnum6.asm` -> bank 3 `dnum3.asm` (its only caller
+`dn_take` is bank 3: the far6 becomes a direct `call`, -3 B; it reads bank-2 SLOTREC / kind_tab only); `dnum6.asm` deleted.
+
+| Region (free B, H1-ARRIVAL -> WIDOW-SPIT) | release | kit | delta | note |
+|---|---|---|---|---|
+| R6 | 1 -> **52** | 7 -> **58** | +51 | `dn_place` out -59, rd_tab row +8 (`F3_GEN=0` release: 52) |
+| bank 3 (to `AY_RESERVE`) | 92 -> **36** | 88 -> **32** | -56 | `dn_place` in +59, its far6 -> call -3 |
+| bank 2, bank 7 low, bank 0, bank 1, low RAM, SRC6 | 9, 3, 16, 1, 0, 19 unchanged | 8, 3, 2, 1, 2, 19 | 0 | rk_tab entry in the DS fill; the trace build bank 2 free 11 |
+
+**Pool:** unchanged. The Warrior carries `spark_fly1/2` (`U_SPARKW`, `pool_xmap` `K_SPIDER, K_KNIGHT`) on every Spider level, and a
+Widow exists only where its base K_SPIDER is in `LP_KINDS` (tiers spawn from the base, §9.6): D2 / D4 / D5 masks carry it. Need of
+31,712 (Warrior / Mage): D2 22,304 / 19,296, **D4 28,640 / 25,632, D5 23,136 / 20,128**, worst **D8 31,328 (Warrior): slack 384**
+(the floor) unchanged; the Mage holds the spark in its class FX unit (0 B).
+
+**Ticks (`tests/budget.py`, release, every gate passes):** new scenario **`wroom`** (D5, 2 Widows in line one each side + Rat + Bat,
+Σ 8, both spit together on turn 4, sparks in flight together): every tick of a spit turn <= `CAP` (asserted; worst **96,591 work**,
+the 2-spit turn); worst tick overall a later walk input tick (hero walking, 4 bodies stepping, a Bat bite, the hero POISONED:
+mark + number) **126,696 work / 135,511 real** (<= BUDGET 141,816; 696 over the 126k cap), so `wroom` is GATED like `blair` (real
+<= BUDGET) plus the spit-turn CAP assert. Controls: `BUDGET_WROOM_NOSHOT=1` (the Widows as plain walkers) 116,528 work, `=psn` (the
+same, hero poisoned from the start) 116,758: a different geometry, not a spit tick (the spit turns shift where the bodies stand).
+`blair` real 132,540 + PRE, `mix` 107,646.
+
+**Sim:** `tools/balance_sim.py` reads `WIDOW_SPIT` / `WIDOW_POISON` / `WIDOW_PERIOD` (rk_tab + the RK_WIDOW row, asserted == the Queen's
+spit but N / E) and `W_LVL_HP` (`.sym LUP_W_HP`) from the image; `tools/ranged_model.py` ROWS[K_BLACK_WIDOW]. Default run (10,000,
+average, seed 1): **W 40.5 % / M 40.4 %** (target 40.9 / 40.4 +-1 pp).
+
+**Tests:** new `tests/widow.py` (6: static rows, hook gap 5 / 6 + ordinary Spider never + Queen unchanged, poison + 6 fresh / adds /
+cap, 1d2 - DEF, Silk Cloak, the FX descriptor, real turns: 4 turns apart walking in, a plain Spider never spits); `ranged.py` A draws
+Widows (17 pass), `xp.py` G1 / S1 Warrior + 5 (30), boss 213, status 81, status1 25, proj3 10, dnum 50, archmage 9,
+combat_tables PASS, budget all gates.
