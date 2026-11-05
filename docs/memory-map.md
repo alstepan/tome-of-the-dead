@@ -1502,15 +1502,15 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 | `$BFCD` | `DN_T` | C3-2b: ticks ↓ alone has been held (`DN_DEFER` 3: the ICON MODE window; the wait / climb-down acts at 3) |
 | `$BFCE` | `DN_COMMIT` | C3-2b: 1 = a ↓ released inside the window: `tpt_intent` acts on it once |
 | `$BFCF` | `PRE_N` | C3-2b: `pre_get` state (the info line's `>` prefix in ICON MODE) |
-| `$BFD0..$BFFF` | **3B sub-range** (`STATE_3B`, B3B-1) | `PANEL_DIRTY $BFD0` (D5 `PD_*` bits), **`EXIT_LOCK $BFD1`** (C3-2b: directions ignored until released after leaving ICON MODE; was spare), `HUD4_EXT $BFD2` (4 B) / `HUD4_PW $BFD6` (4 B): rows 20..23 (B3B-11: the successors of `HUD_EXT`/`HUD_PW`), `LOG_QN $BFDA` (pending messages), `PANEL_POT_SH $BFDB` (potions last drawn), `P_NUMBUF $BFDC` (3 B: number / depth text), **`FIRE_LOCK $BFDF`** (C3-2b review: FIRE masked after BREAK until FIRE is released; B3B-11b: was `P_LIM`), `LOG_Q $BFE0` (8 B: `LQ_RD` +0 oldest ring slot, `LQ_DROP` +1 dropped / replaced pushes (saturating, expect 0), +2..+7 spare — B3B-11b: no chunked-print state), `PANEL_HP_SH $BFE8` (2 B: hero HP, MAXHP last drawn, `$FF` = never; B3B-11b, was `$BFD1`), **`JOY_MIRROR $BFEA`** (C3-0, see "3C contracts"), **SND-2 sound mailbox `$BFEB..$BFF0`** (below), `$BFF1` `DNG_DWELL` / `$BFF2` `DNG_CALM` (SND-3: Dangerous cue state, `mus7.asm`; `level_enter` clears both), **`$BFF3` `SFX_NEXT`** (SND-5, below), `$BFF4` `SFX_XP`, **3E-T16 `$BFF5..$BFFA` `TRP_PRE` / `TRP_WAIT` / `TRP_EV` / `TRP_STEP` / `TRP_ENT`** (below), `$BFFF` spare (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below). Test-observable |
+| `$BFD0..$BFFF` | **3B sub-range** (`STATE_3B`, B3B-1) | `PANEL_DIRTY $BFD0` (D5 `PD_*` bits), **`EXIT_LOCK $BFD1`** (C3-2b: directions ignored until released after leaving ICON MODE; was spare), `HUD4_EXT $BFD2` (4 B) / `HUD4_PW $BFD6` (4 B): rows 20..23 (B3B-11: the successors of `HUD_EXT`/`HUD_PW`), `LOG_QN $BFDA` (pending messages), `PANEL_POT_SH $BFDB` (potions last drawn), `P_NUMBUF $BFDC` (3 B: number / depth text), **`FIRE_LOCK $BFDF`** (C3-2b review: FIRE masked after BREAK until FIRE is released; B3B-11b: was `P_LIM`), `LOG_Q $BFE0` (8 B: `LQ_RD` +0 oldest ring slot, `LQ_DROP` +1 dropped / replaced pushes (saturating, expect 0), +2..+7 spare — B3B-11b: no chunked-print state), `PANEL_HP_SH $BFE8` (2 B: hero HP, MAXHP last drawn, `$FF` = never; B3B-11b, was `$BFD1`), **`JOY_MIRROR $BFEA`** (C3-0, see "3C contracts"), **SND-2 sound mailbox `$BFEB..$BFF0`** (below), `$BFF1` `DNG_DWELL` / `$BFF2` `DNG_CALM` (SND-3: Dangerous cue state, `mus7.asm`; `level_enter` clears both), **`$BFF3` `SFX_NEXT`** (SND-5, below), `$BFF4` `SFX_XP`, **3E-T16 `$BFF5..$BFFA` `TRP_PRE` / `TRP_WAIT` / `TRP_EV` / `TRP_STEP` / `TRP_ENT`** (below), `$BFFF` `TRAP_UNDER` (TRAP-OR) (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below). Test-observable |
 | `$BFEB` | `SND_MODE` | SND-2 (game.md §3.6): bit 0 `SND_MUSIC`, bit 1 `SND_SFX`, bit 7 `SND_HOLD` (pause). Boot = `SND_ALL` (3); per power-on: `new_game` / `hero_st_init` / `level_*` never write it. Main code: single-byte store or `set` / `res` |
 | `$BFEC` | `MUS_REQ` | SND-2, **level**: the looping tune id (`MUS_*`, `MUS_FIRST` 2 ..`MUS_COUNT` 7; id 1 = the removed Dungeon Crawl, rejected like any invalid id), 0 = silence. Never consumed: `ay_play` compares it with its private `ay_loop` and (re)starts on a change. Written by main code only (SND-3: `mus_pick` is the only writer in play). Boot 0 |
 | `$BFED` | `MUS_SHOT` | SND-2, **edge**: one-shot id, 0 = none. Main writes, the ISR clears (taken, or dropped while music is off / held, or an invalid id). A new shot replaces a playing one. Final cue (Y death, T win): `MUS_REQ` 0 then `MUS_SHOT` id; a stinger (R) leaves `MUS_REQ`: the loop restarts at bar 1 when the shot ends. Boot 0 |
 | `$BFEE` | `MUS_STATE` | SND-2, ISR-written: bits 0-1 `MS_IDLE` 0 / `MS_LOOP` 1 / `MS_SHOT` 2; bit 7 `MS_DONE` = the last one-shot finished (set when it ends, cleared when the next shot is taken; kept through loops / idle / music off). Boot 0 |
 | `$BFEF` | `MUS_CUR` | SND-2, ISR-written: the tune id sounding (the shot's while one plays), 0 = none. Boot 0 |
 | `$BFF0` | `SFX_REQ` | **SND-5, edge**: the requested sound effect id (`SFX_*`, `build/sfx/sfx_ids.inc` = prio << 5 \| index 1..`SFX_COUNT`), 0 = none. Main code writes it only through **`sfx_req`** (bank 2, `ld a, SFX_x : call sfx_req`, 5 B a call site, any bank; keeps A / BC): replaced only by a request of >= priority; dropped while `SND_HOLD` or with the SFX bit off. The ISR (`sfx_step`) clears it every unheld frame (taken: >= the playing effect's priority, else dropped) and every held frame (`ay_play` `.hold`). Boot 0 |
-| `$BFF5..$BFF6` / `$BFF7` / `$BFF8..$BFFA` | `TRP_PRE` / `TRP_WAIT` / `TRP_EV`, `TRP_STEP`, `TRP_ENT` | **3E-T16** (item_defs.asm): the hero's `E_X`, `E_Y` before this turn's action (`turn_input`, every try, before the held / free split: the trap trigger's "first brings it under the body"); `TRW_*` bits: bit 0 this turn's action was a Wait (`tpt_intent .srch`: DOWN without a climb, '.', a blocked climb), bit 1 the room-entry sense (`end_turn .ex`), read and cleared by `trap_chk`; the armed trap sequence: the event (`TEV_FIRE` + `TT_*` / `TEV_FIND`), the step counter, the entry's low byte. Never zeroed (written before read). `$BFFF` spare (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below) |
-| `$BFF4` | `SFX_XP` | **3E-T0**: the signed pitch offset (semitones, two's complement) of the next `SFX_STATUS` take. `sfx_msg` writes it before `sfx_req`; the ISR copies it to `sfx_xp` (AY-slot state, `ay_vars_end - 1`) when it takes `SFX_STATUS` and zeroes it for every other effect. Boot 0 (state block, no init needed: only read on a STATUS take). `$BFFF` spare (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below) |
+| `$BFF5..$BFF6` / `$BFF7` / `$BFF8..$BFFA` | `TRP_PRE` / `TRP_WAIT` / `TRP_EV`, `TRP_STEP`, `TRP_ENT` | **3E-T16** (item_defs.asm): the hero's `E_X`, `E_Y` before this turn's action (`turn_input`, every try, before the held / free split: the trap trigger's "first brings it under the body"); `TRW_*` bits: bit 0 this turn's action was a Wait (`tpt_intent .srch`: DOWN without a climb, '.', a blocked climb), bit 1 the room-entry sense (`end_turn .ex`), read and cleared by `trap_chk`; the armed trap sequence: the event (`TEV_FIRE` + `TT_*` / `TEV_FIND`), the step counter, the entry's low byte. Never zeroed (written before read). `$BFFF` `TRAP_UNDER` (TRAP-OR) (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below) |
+| `$BFF4` | `SFX_XP` | **3E-T0**: the signed pitch offset (semitones, two's complement) of the next `SFX_STATUS` take. `sfx_msg` writes it before `sfx_req`; the ISR copies it to `sfx_xp` (AY-slot state, `ay_vars_end - 1`) when it takes `SFX_STATUS` and zeroes it for every other effect. Boot 0 (state block, no init needed: only read on a STATUS take). `$BFFF` `TRAP_UNDER` (TRAP-OR) (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below) |
 | `$BFFC` / `$BFFD` / `$BFFE` | `LN_VAL` / `LN_G` / `DH_EFF` | **LOG-DMG** (defs.asm): the log-number carriers, always mapped so the bank-0 composer (`src/log0.asm`) reads them with `BANK_TEXT` paged. `LN_VAL` = `deal_hit`'s `dh_lost` (an EQU: the HP its last target lost; `melee_strike` / burst-self lines; `log_room_d` writes the self-bolt's `pf_lost`, `hero_fall` its loss); `LN_G` = the HP the hero's last heal gained (`deal_hit` drain heal, `cap_add`); `DH_EFF` = `deal_hit`'s `dh_eff` scratch (moved out of bank 3 to pay for the drain-heal G). Scratch: no init, not test-observable state |
 | `$BFF3` | `SFX_NEXT` | **SND-5**: one deferred effect id: a request of prio >= `SFX_DEFER_PRIO` (6) that lost to a pending (`sfx_req`) or playing (`sfx_step`) one of higher priority; the ISR starts it the frame the playing effect ends (and clears it; also cleared when the SFX bit is off, on a held frame with nothing playing, and by `level_enter`). The slot is overwritten only by an id of >= priority. Written by `sfx_req` and the ISR (single-byte stores). Boot 0 (`boot`, next to `SFX_REQ`); ASSERT `SFX_NEXT == DNG_CALM + 1` (`level_defs.asm`) |
 | `$BFC1` | `CLIMB_BLK` | 1 = this input's climb was blocked by an entity → `try_player_turn` makes it a WAIT (prototype §6.4, rule 2026-10-02); cleared at every `try_player_turn`. B14: also read by `cork_check` (the monster phase of that turn yields to the blocked climb, even from a standing hero; `climb_blocked` set the hero's `E_AIDIR` to the attempted dy) |
@@ -1681,7 +1681,7 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 | 2 | `T_BRICK` = `T_WALL_DARK` | plain air-band wall face; re-glyphed DARK (B3B-2) |
 | 3 | `T_WALLF` | wall in a floor row (blocks, lintels in row 8/17) |
 | 4–6 / 7–9 | `T_LAD_L/M/R` / `T_HOLE_L/M/R` | ladder / ladder cells in a floor row |
-| 10 | `T_TRAP` | **3E (user-approved glyphs, `assets/gfx/concept/grid/items3e.tiles`): the revealed trap plate**, ink `$42` default, `TILE_FLAGS` 0 (walkable, game.md §1.5). The potion moved to id 60 (`T_POTION` = `T_FLASK`). T6 generates the trap list; **3E-T16: a known unspent trap is stamped by `build_room_map` (before the decor deriver) and `TILE_ATTRS[T_TRAP]` is set to its type attr there and on a mid-room reveal (≤ 1 trap a room; see "3E-T16")** |
+| 10 | `T_TRAP` | **3E (user-approved glyphs, `assets/gfx/concept/grid/items3e.tiles`): the revealed trap plate**, ink `$42` default, `TILE_FLAGS` 0 (walkable, game.md §1.5). The potion moved to id 60 (`T_POTION` = `T_FLASK`). T6 generates the trap list; **3E-T16: a known unspent trap is stamped by `build_room_map` and `TILE_ATTRS[T_TRAP]` is set to its type attr there and on a mid-room reveal (≤ 1 trap a room; see "3E-T16"). TRAP-OR: stamped LAST (after decor / lectern / gate) by bank-3 `tr_cell3`, which also makes the slot per room: `TILE_GLYPHS[T_TRAP]` = glyph(`TRAP_UNDER`) \| the plate, attr = the trap's type attr (also over decor, user 2026-11-05; see "TRAP-OR")** |
 | 11, 14 | `T_DOOR_JAMB_L`, `T_DOOR_JAMB_R` | B10 (user option B): open-door jambs, `$A0` / `$05` × 8, ink `$06`, non-solid (the PROTO chest stand-in is gone, B3B-13) |
 | 12 | `T_CHAIN` | small decor; cobweb / moss move to the per-level sets |
 | 13 | `T_GRATE_SHUT` | **3F-T8 (§9.7 R2, BOSS-GUARD)**: the CLOSED lair gate (tiles_3f `grate_shut`, ink `$07`), `TF_SOLID \| TF_FLOOR`; `build_room_map` stamps it over the 3 exit cells AFTER the deriver while `LF_GRATE_OPEN` is clear; R6 `grate_open` swaps them to `T_GRATE` (+ glow) when the boss dies |
@@ -3594,7 +3594,7 @@ the input tick (pmix + DART was 141.4k T), flashes added (user 2026-10-26).
   tick); each step re-arms `ACT_AT = TURN_TICK + B` / `MON_AT = ACT_AT + 1`; after the last step
   `act_pend .mon` runs the monsters (skipped on an exit turn: `EXIT_KIND`). Fire: step 0 = SFX_TRAP,
   the hero flashes the type ink (`TRAP_FLASH_T` = 2), the plate shows `$47`
-  (`TILE_ATTRS[T_TRAP]` + far7 `ap_put_a`), the effect — DART: "A DART HITS YOU!", far3
+  (TRAP-OR: `tr_plate` → `tr_put7` → far3 `tr_cell3`; was `TILE_ATTRS[T_TRAP]` + far7 `ap_put_a`), the effect — DART: "A DART HITS YOU!", far3
   `trap_hit` (1d4+1, +1 when WEAK so deal_hit's own-attacker WEAK DEF+1 cancels; `DTY_PHYS` +
   POISON 12 (POIS1; the param nibble = 6, half): DEF, immunity (Silk: "YOU ARE UNAFFECTED"), cap 30 in `ST_X`, wake, death), `E_REACTAT` =
   arrival (walk 2, jump `JA_N` + 1), the Warrior's `arrow_hit` impact (`tr_fx` → `MSG_BUF` →
@@ -3608,9 +3608,10 @@ the input tick (pmix + DART was 141.4k T), flashes added (user 2026-10-26).
   with `MON_AT = TELE_HOLD_T` 5 so the flash shows before end_turn's `do_exit`; `tele_pick` calls
   `tele_flash` again for the arrival.
 - **Drawing.** Known plate = `T_TRAP` in the standing-row cell; `build_room_map` stamps every known
-  unspent trap of the room before the decor deriver (decor needs T_AIR) **unless an item glyph is
-  there** and writes its type attr (`tr_ink3`) to `TILE_ATTRS[T_TRAP]`; mid-room the sequence /
-  `tr_show` sets TILE_ATTRS and far7 `ap_put_a`. One attr for the id works because a room holds
+  trap of the room **last** (TRAP-OR: after the decor, lectern and gate; was before the deriver, which
+  then dropped the overlapping decor object) **unless an item marker is there**, OR-composited by
+  bank-3 `tr_cell3` (far7 `tr_build7` → `tr_put7` → far3; see "TRAP-OR"); mid-room the sequence /
+  `tr_show` → `tr_plate` → `tr_put7` (same routine). One attr for the id works because a room holds
   ≤ 1 trap (low RAM untouched). Cosmetic: a scroll between two rooms with known traps of
   different types shows the old plate in the new ink while it scrolls out. **Item / trap
   overlap:** `drop_put` (R6) refuses a cell whose col has an unspent trap (`trap_at`, hidden or
@@ -5022,7 +5023,7 @@ Measured by the build DISPLAY, `-DDEBUG_KIT=0`, first against main `cab4a0e` (GE
 | bank 7 low | 2 | **2** | 0 | call-target swaps only: ammo kill `TX_YOU_KILL` + `hit_line`, self bolt `log_room_d` + `msg_push_d`, Tome `msg_push_t` |
 | R6 | 30 | **19** | 11 | `rg_shoot` E_HIT = `$80` \| L (+7), `cap_add` LN_G (+4) |
 | bank 1 / SRC6 / AY / pool | 3 / 19 / 57 / slack 1,024 | unchanged | 0 | |
-| state block | `$BFFC..$BFFF` spare | **`$BFFC` `LN_VAL`, `$BFFD` `LN_G`, `$BFFE` `DH_EFF`**; `$BFFF` spare | 3 B RAM | |
+| state block | `$BFFC..$BFFF` spare | **`$BFFC` `LN_VAL`, `$BFFD` `LN_G`, `$BFFE` `DH_EFF`**; `$BFFF` spare (TRAP-OR: now `TRAP_UNDER`) | 3 B RAM | |
 
 **Merged (main `dc10dbe` -> LOG-DMG), both builds:**
 
@@ -6093,3 +6094,40 @@ win 255/255 255), G6 checks ST2 zeroed; stats1 E now opens the card with `end_ca
 all 84 E checks had been failing on main: the card was never drawn); `items3e.py` L3 (ITEM_RAM 89), `itemtab.py`, `d8_stress.py` mask.
 Goldens refreshed (content changed: the two new rows + the portraits 2 rows lower): `endcard_{killer,died,win}_{warrior,mage}`.
 
+## TRAP-OR ledger (`fix/trap-or2`, 2026-11-05; on `feat/stats2` b2e0589; user playtest: a revealed trap erased the decor of its cell)
+
+**Bug (since 3E-T16 `785d4ad`, visible more often since TRAP2):** every plate draw wrote `T_TRAP` over the map cell
+(bank-7 `ap_put_a`, from `tr_show` / `tr_plate`: reveal, Mage sense, fire, the find blinks), so the decor there (a
+floor-class object's bottom row 9s+7, e.g. a brazier base) vanished; and `build_room_map` stamped known traps BEFORE
+the decor deriver, whose `T_AIR` footprint rule then dropped the whole overlapping object on every re-entry / scroll-in
+(`tests/trap_cells.py` C3 on main: "decor changed by a known trap"; 5 of 437 plates of 10 seeds x D1..D8 lie on decor).
+
+**Fix (OR-compose, one tile slot per room).** Bank-3 `trap3.asm` `tr_cell3` (far3; DE = cell, A = attr): an item marker
+shows instead; else `TRAP_UNDER` (`$BFFF`, state block, test-observable) := the cell's id unless it is already
+`T_TRAP`; `TILE_GLYPHS[T_TRAP]` := glyph(u) with line 6 = `$FF`, line 7 |= `$DB` (`TRAP_GLY6` / `7`, level_defs;
+boot6 ASSERTs them and blank lines 0..5 against `tiles_common` with `{b}`); attr 0 (the find blink's "off") puts u back
+(the decor alone; over `T_AIR` identical to before). **Attr (user ruling 2026-11-05): always the trap's own** (type
+ink / the `$47` flash, written to `TILE_ATTRS[T_TRAP]` by `tr_put7`): over decor the cell's decor pixels take the
+trap ink, paper / bright as on plain floor. Bank-7 `tr_put7` (HL = entry, A = attr, `TMP1` = page): row 9s+7, col,
+`map_cell`, far3 `tr_cell3`; callers `tr_plate` (live: `TMP1` := `ROOM_MAP` page, then `queue_damage` 1x1 +
+`shadow_rect`: bank 5 by `erase_rect`, screen 2 by `present`) and `tr_build7` (far7 from `build_room_map`, which now
+stamps known traps LAST, after decor / lectern / gate, through it: the type ink by `tr_ink`, so bank-3 `tr_ink3` is
+gone). The decor is byte-identical whatever is known, for `ROOM_MAP` and `NEXT_MAP` (the scroll strips / re-entry draw
+tile 10 = the composite). `ap_put_a` deleted. **Contract:** `TRAP_UNDER` and the slot are per room (≤ 1 trap a room,
+`items_ovl.asm` `ig_elig`): no other room may be built between a room's build and a live `tr_put7` on it (true:
+the only second-map build is `do_exit`'s `NEXT_MAP`, after which the old room is never drawn on again). Row 9s+7 never
+holds an animated decor cell, so `decor_tick` never swaps a plate cell.
+
+| region (release / kit) | before (STATS2) | after | delta |
+|---|---|---|---|
+| bank 3 free (to `AY_RESERVE`) | 17 / 13 | **7 / 3** | -10 (`tr_cell3` +50; the build's stamp loop -31 (now `far7 tr_build7`), `tr_ink3` -5, `.gate` tail -2, page drift) |
+| bank 7 low (to the attr shadow) | 2 / 2 | **1 / 1** | -1 (`tr_show`..`tr_put7` 60 B vs `tr_show`/`tr_plate` 26 + `ap_put_a` 25; reclaims: `tr_ink` one-page `ld h` -2 (ASSERT), `tr_eff` flash stores -1) |
+| bank 1, R6, bank 2, bank 0, low RAM | 1, 3 / 8, 9 / 8, 14 / 0, 0 | unchanged | 0 |
+| RAM | `$BFFF` spare | `TRAP_UNDER` | 1 B |
+
+Cost: a plate step +~1k T (far3 + compose; t16 T2 cap 20k holds); the room build + ~0.6k T per known trap (far7 + far3,
+cold). Tests: `tests/trap_cells.py` C3 (known vs hidden build: decor identical, composite glyph / attr / `TRAP_UNDER`)
+and L1..L3 (a real D5 room, a DART under a floor object's bottom row: the Mage's Wait sense, the cell on bank 5 AND
+screen 2 == decor | plate in `$42`; again after walking out and back in through the side exit, and after `room_show`);
+`tests/t16.py` O2 drives `tr_plate`, C1's cols moved off the PROTO ladder (25), F1 climbs down the arrival shaft first
+(stale since H1-ARRIVAL: the fuzz never acted).
