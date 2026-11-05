@@ -204,15 +204,7 @@ ap_take:
                 ld   a, (hl)
                 add  a, b
                 ld   (hl), a                   ; counter += taken
-                inc  b
-                dec  b
-                jr   z, .p0                    ; nothing taken
-                ld   a, (PANEL_DIRTY)
-                or   PD_AMMO                   ; T7: the ammo count changed (no ammo item drawn
-                ld   (PANEL_DIRTY), a          ; yet: the panel clears it, as abil_ammo's)
-                ld   a, SFX_PICKUP             ; SND-5b (keeps BC / HL)
-                call sfx_req
-.p0:            pop  hl
+                pop  hl
                 dec  l
                 dec  l                         ; -> FL_COL
                 ld   a, (hl)
@@ -227,6 +219,15 @@ ap_take:
                 ld   a, b
                 or   a
                 jr   z, .full                  ; nothing fitted
+                ld   hl, PANEL_DIRTY           ; T7: the ammo count changed (no ammo item drawn
+                set  PD_AMMO_BIT, (hl)         ; yet: the panel clears it, as abil_ammo's)
+                ld   hl, ST2_ITM               ; STATS2: a stack taken (n > 0) = 1 item found,
+                inc  (hl)                      ; saturating (inline: st2_inc is R6)
+                jr   nz, .sat
+                dec  (hl)
+.sat:           ld   a, SFX_PICKUP             ; SND-5b (keeps BC / DE / HL)
+                call sfx_req
+                ld   a, b
                 ; "YOU PICK UP n DAGGERS": the suffix by type and number
                 dec  a
                 ld   a, TX_CMB_DAGGER
@@ -337,25 +338,7 @@ ap_stamp:
                 ld   a, c
                 ld   hl, fi_add                ; R6: the glyph cache's col
                 jp   far6
-; B22: placed after ap_stamp, not in front of it: ap_take falls through into ap_stamp_a
-; ap_put_a — 3E-T16 (called by trap7.asm tr_draw): A = a trap col t, D = its tile
-; (T_TRAP: the caller set TILE_ATTRS[T_TRAP] first; T_AIR: a spent plate
-; erased), E = the FL_ROOM-style byte: the ONE cell (t, 9s+7) — no item lies
-; on a trap col (the generator, drop_put) — redrawn next render + the attr
-; shadow.  Clobbers: all but IX, IY.
-ap_put_a:       ld   c, a
-                ld   a, e
-                rlca
-                and  1                         ; s
-                call storey_row                ; A = 9s + 7 (keeps BC)
-                ld   b, a
-                ld   a, ROOM_MAP >> 8
-                ld   (TMP1), a
-                call map_cell                  ; HL = the cell (keeps BC, DE)
-                ld   (hl), d
-                ld   de, $0101
-                call queue_damage              ; (keeps BC, DE)
-                jp   shadow_rect               ; (bank 7 paged)
+; TRAP-OR: ap_put_a (the trap plate's one cell) is gone: trap7.asm tr_put7 + bank-3 tr_cell3 (trap3.asm) draw it.
                 ASSERT TX_CMB_ARROWS - TX_CMB_ARROW == TX_CMB_DAGGERS - TX_CMB_DAGGER
                 ; T7: the composed pickup line fits a log slot ("YOU PICK UP " + 2 digits +
                 ; the longest suffix; ARROWS_MAX < 100) — msg_end does not cut it

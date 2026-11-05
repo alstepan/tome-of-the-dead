@@ -617,6 +617,8 @@ ig_cap:         ld   a, (ig_n)
 
 ; ig_elig — ig_el := the NL rooms without a trap (id order). Out A = n,
 ; Z = none. Clobbers A, BC, DE, HL.
+; TRAP-OR: <= 1 trap a room is load-bearing: bank-3 tr_cell3 (trap3.asm) keeps ONE
+; composed plate slot (TILE_GLYPHS / TILE_ATTRS [T_TRAP], TRAP_UNDER) per room.
 ig_elig:        ld   hl, ig_nl
                 ld   b, (hl)
                 ld   de, ig_el + 1

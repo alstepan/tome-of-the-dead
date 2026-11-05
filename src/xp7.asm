@@ -7,7 +7,7 @@
 
 MP_REG_W        EQU 8               ; game.md §4: Warrior +1 MP per 8 turns
 MP_REG_M        EQU 6               ; Mage period 6 (B20, game.md 4.0)
-LUP_W_HP        EQU 4               ; §4.1 level-up: Warrior max HP +4, max MP +1
+LUP_W_HP        EQU 5               ; §4.1 level-up: Warrior max HP +5 (WIDOW-SPIT: was 4), max MP +1
 LUP_W_MP        EQU 1
 LUP_M_HP        EQU 3               ; Mage max HP +3, max MP +2
 LUP_M_MP        EQU 2

@@ -445,9 +445,10 @@ kill_note:
 ; ec_tab — ENDCARD-G1 (STATS1 S1's rows): far3 from end_card: the end card's one label / value
 ; table (6x8 font). In: D = the first row, E = the label x (px, a multiple of 8; the values at
 ; x + EC_VX). Rows: CLASS <WARRIOR / MAGE>, LEVEL n (LVL), DEPTH n (LVL_DEPTH), a gap, KILLS n
-; (ST1_KILLS), TURNS n (TURN_COUNTER), BEST KILL <kind> (only after a kill: ST1_BL = 8 * kind + 4
+; (ST1_KILLS), TURNS n (TURN_COUNTER), STATS2: BOOKS r/f (ST2_BKR / ST2_BKF, R6 st2_fmt), ITEMS n
+; (ST2_ITM), BEST KILL <kind> (only after a kill: ST1_BL = 8 * kind + 4
 ; is 0 until the first kill; three rrca leave kind + $80). Numbers without leading zeros
-; (es_num). The printers hand bank 3 back. Clobbers: A, BC, DE, HL.   ~45k T (once)
+; (es_num). The printers hand bank 3 back. Clobbers: A, BC, DE, HL.   ~60k T (once)
 ;------------------------------------------------------------------------------
 ec_tab:         ld   (EC_POS), de              ; EC_POS = the label x, EC_POS + 1 = the row
                 ld   a, (HERO_KIND)
@@ -468,6 +469,13 @@ ec_tab:         ld   (EC_POS), de              ; EC_POS = the label x, EC_POS + 
                 ld   hl, (TURN_COUNTER)
                 ld   a, TX_END_TURNS
                 call ec_num
+                ld   hl, st2_fmt               ; STATS2: BOOKS r/f (R6 composes it in MSG_BUF)
+                call far6
+                ld   a, TX_END_BOOKS
+                call ec_row
+                ld   hl, ST2_ITM               ; STATS2: ITEMS n
+                ld   a, TX_END_ITEMS
+                call ec_byte
                 ld   a, (ST1_BL)               ; (not ST1_KILLS: 65,536 kills wrap it to 0)
                 or   a
                 ret  z                         ; no kill: no BEST row
@@ -877,7 +885,6 @@ th_go:          push ix
                 ret
                 ASSERT TRAP_DART_PSN <= PSN_CAP && TRAP_DART_PSN % 2 == 0 && TRAP_DART_PSN / 2 <= STS_MAX_TURNS && DTY_PHYS == 0
                 ASSERT TRAP_STUN_T + 1 <= STS_MAX_TURNS
-tr_ink3:        TRAP_INKS                      ; build_room_map's known-plate attr (item_defs.asm)
 
 ;------------------------------------------------------------------------------
 ; efx_tab — per effect id 1..7 (row = (id - 1) * EF_STRIDE): immunity bit

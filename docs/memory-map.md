@@ -13,7 +13,7 @@
 | `$5800-$5AFF`| Screen attributes (bank 5)                  | 768 bytes, the clash grid     |
 | `$5B00-$5BFF`| Printer buffer → **`LOG_TXT`** (B3B-11)     | log message ring, 4 × 64 B (runtime only, after boot) |
 | `$5C00-$5CBF`| System variables                            |                               |
-| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`**; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`** (ranged scratch + shot queue, runtime only — "3F-T7") (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D55` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification, **M0: 86 B = + `ST1_CNT` 5 B, the STATS1 S1 reserve**; runtime only — "3E contracts"); **D3-11: `$5CDB-$5CEA` = `DN_KEY` (the spawn queue, review), `$5CEB-$5CF6` = `DN_A` (the flying numbers' pass state + scratch, 12 B), `$5D60-$5DFF` = `DN_LIVE` (3 x 32 B live records) + `DN_SLOT` (16 x 4 B per slot)**, runtime only ("D3-11 ledger") |
+| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`**; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`** (ranged scratch + shot queue, runtime only — "3F-T7") (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D55` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification, **M0: 86 B = + `ST1_CNT` 5 B, the STATS1 S1 reserve** **STATS2: 89 B = + `ST2_CNT` 3 B `$5D56-$5D58`**; runtime only — "3E contracts"); **D3-11: `$5CDB-$5CEA` = `DN_KEY` (the spawn queue, review), `$5CEB-$5CF6` = `DN_A` (the flying numbers' pass state + scratch, 12 B), `$5D60-$5DFF` = `DN_LIVE` (3 x 32 B live records) + `DN_SLOT` (16 x 4 B per slot)**, runtime only ("D3-11 ledger") |
 | `$8000-$BFFF`| Program origin region                       | `ORG $8000` for now           |
 | `$C000-$FFFF`| Paged bank window                           | bank selected by $7FFD bits0-2|
 
@@ -1442,8 +1442,8 @@ its 1,920 B ≤ 12-B descriptor reserve), room for the ~0.6 KB level state with
 most of that margin — the alias stays. `$5B00-$5BFF` and `$5CC0-$5FFF` (~692 B after D3-6b PF_RAM $5E00..$5EFF and D3-8d MK_RAM
 $5F00..$5F8B (140 B), E: free once `boot` has moved SP off the BASIC stack) are a further runtime-only (not tape-loadable)
 reserve (B3B-11: `$5B00` = `LOG_TXT`; **D3-6b: `$5E00-$5EFF` = `PF_RAM`**, the
-proj_fire scratch — never touched before `boot`; **3E-T3: `$5D00-$5D78` = `ITEM_RAM`**, zeroed by `new_game`;
-still free: `$5CCB-$5CEA` (32 B; `$5CC0-$5CCA` is the ROM channel area, avoided; **D3-11: `$5CDB-$5CEA` = `DN_KEY`, `$5CEB-$5CF6` = `DN_A`; `$5CCB-$5CDA` and `$5CF7-$5CFF` free; DNUM-SPRITE-FIX: `DN_A` to `$5CF7` (`DN_TXT` 6 B), `$5CF8-$5CFF` free**), `$5D56-$5D5F` (10 B; **D3-11: `$5D60-$5DFF` = `DN_LIVE` + `DN_SLOT`**; was `$5D79-$5DFF` 135 B before ITEM_RAM grew),
+proj_fire scratch — never touched before `boot`; **3E-T3: `$5D00..` = `ITEM_RAM` (`ITEM_RAM_LEN` 89 B after STATS2: `$5D00-$5D58`)**, zeroed by `new_game`;
+still free: `$5CCB-$5CEA` (32 B; `$5CC0-$5CCA` is the ROM channel area, avoided; **D3-11: `$5CDB-$5CEA` = `DN_KEY`, `$5CEB-$5CF6` = `DN_A`; `$5CCB-$5CDA` and `$5CF7-$5CFF` free; DNUM-SPRITE-FIX: `DN_A` to `$5CF7` (`DN_TXT` 6 B), `$5CF8-$5CFF` free**), `$5D56-$5D5F` (10 B; **STATS2: `$5D56-$5D58` = `ST2_CNT` (ITEM_RAM), `$5D59-$5D5F` free**; **D3-11: `$5D60-$5DFF` = `DN_LIVE` + `DN_SLOT`**; was `$5D79-$5DFF` 135 B before ITEM_RAM grew),
 `$5FF4-$5FFF` (12 B; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`**, the ranged-attack scratch + shot queue, "3F-T7"; **3F-T8: `$5FF4` = `BOSS_TRAP`; 3F-T9: `$5FF5-$5FFF` = `SPQ_RAM`, the spawn queue + `sp_run` scratch — the reserve after `RG_RAM` is full**, "3F-T9") — `tests/items3e.py` R1/R2 canary them through a game start, play and a descent). A8: after `boot` nothing uses the system variables but
 `SYS_FRAMES` (`$5C78-$5C7A`; the IM 2 ISR does not run the ROM keyboard scan),
 so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
@@ -1502,15 +1502,15 @@ so most of `$5C00-$5CBF` is free too unless `ISR_ROM_CHAIN=1`.
 | `$BFCD` | `DN_T` | C3-2b: ticks ↓ alone has been held (`DN_DEFER` 3: the ICON MODE window; the wait / climb-down acts at 3) |
 | `$BFCE` | `DN_COMMIT` | C3-2b: 1 = a ↓ released inside the window: `tpt_intent` acts on it once |
 | `$BFCF` | `PRE_N` | C3-2b: `pre_get` state (the info line's `>` prefix in ICON MODE) |
-| `$BFD0..$BFFF` | **3B sub-range** (`STATE_3B`, B3B-1) | `PANEL_DIRTY $BFD0` (D5 `PD_*` bits), **`EXIT_LOCK $BFD1`** (C3-2b: directions ignored until released after leaving ICON MODE; was spare), `HUD4_EXT $BFD2` (4 B) / `HUD4_PW $BFD6` (4 B): rows 20..23 (B3B-11: the successors of `HUD_EXT`/`HUD_PW`), `LOG_QN $BFDA` (pending messages), `PANEL_POT_SH $BFDB` (potions last drawn), `P_NUMBUF $BFDC` (3 B: number / depth text), **`FIRE_LOCK $BFDF`** (C3-2b review: FIRE masked after BREAK until FIRE is released; B3B-11b: was `P_LIM`), `LOG_Q $BFE0` (8 B: `LQ_RD` +0 oldest ring slot, `LQ_DROP` +1 dropped / replaced pushes (saturating, expect 0), +2..+7 spare — B3B-11b: no chunked-print state), `PANEL_HP_SH $BFE8` (2 B: hero HP, MAXHP last drawn, `$FF` = never; B3B-11b, was `$BFD1`), **`JOY_MIRROR $BFEA`** (C3-0, see "3C contracts"), **SND-2 sound mailbox `$BFEB..$BFF0`** (below), `$BFF1` `DNG_DWELL` / `$BFF2` `DNG_CALM` (SND-3: Dangerous cue state, `mus7.asm`; `level_enter` clears both), **`$BFF3` `SFX_NEXT`** (SND-5, below), `$BFF4` `SFX_XP`, **3E-T16 `$BFF5..$BFFA` `TRP_PRE` / `TRP_WAIT` / `TRP_EV` / `TRP_STEP` / `TRP_ENT`** (below), `$BFFF` spare (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below). Test-observable |
+| `$BFD0..$BFFF` | **3B sub-range** (`STATE_3B`, B3B-1) | `PANEL_DIRTY $BFD0` (D5 `PD_*` bits), **`EXIT_LOCK $BFD1`** (C3-2b: directions ignored until released after leaving ICON MODE; was spare), `HUD4_EXT $BFD2` (4 B) / `HUD4_PW $BFD6` (4 B): rows 20..23 (B3B-11: the successors of `HUD_EXT`/`HUD_PW`), `LOG_QN $BFDA` (pending messages), `PANEL_POT_SH $BFDB` (potions last drawn), `P_NUMBUF $BFDC` (3 B: number / depth text), **`FIRE_LOCK $BFDF`** (C3-2b review: FIRE masked after BREAK until FIRE is released; B3B-11b: was `P_LIM`), `LOG_Q $BFE0` (8 B: `LQ_RD` +0 oldest ring slot, `LQ_DROP` +1 dropped / replaced pushes (saturating, expect 0), +2..+7 spare — B3B-11b: no chunked-print state), `PANEL_HP_SH $BFE8` (2 B: hero HP, MAXHP last drawn, `$FF` = never; B3B-11b, was `$BFD1`), **`JOY_MIRROR $BFEA`** (C3-0, see "3C contracts"), **SND-2 sound mailbox `$BFEB..$BFF0`** (below), `$BFF1` `DNG_DWELL` / `$BFF2` `DNG_CALM` (SND-3: Dangerous cue state, `mus7.asm`; `level_enter` clears both), **`$BFF3` `SFX_NEXT`** (SND-5, below), `$BFF4` `SFX_XP`, **3E-T16 `$BFF5..$BFFA` `TRP_PRE` / `TRP_WAIT` / `TRP_EV` / `TRP_STEP` / `TRP_ENT`** (below), `$BFFF` `TRAP_UNDER` (TRAP-OR) (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below). Test-observable |
 | `$BFEB` | `SND_MODE` | SND-2 (game.md §3.6): bit 0 `SND_MUSIC`, bit 1 `SND_SFX`, bit 7 `SND_HOLD` (pause). Boot = `SND_ALL` (3); per power-on: `new_game` / `hero_st_init` / `level_*` never write it. Main code: single-byte store or `set` / `res` |
 | `$BFEC` | `MUS_REQ` | SND-2, **level**: the looping tune id (`MUS_*`, `MUS_FIRST` 2 ..`MUS_COUNT` 7; id 1 = the removed Dungeon Crawl, rejected like any invalid id), 0 = silence. Never consumed: `ay_play` compares it with its private `ay_loop` and (re)starts on a change. Written by main code only (SND-3: `mus_pick` is the only writer in play). Boot 0 |
 | `$BFED` | `MUS_SHOT` | SND-2, **edge**: one-shot id, 0 = none. Main writes, the ISR clears (taken, or dropped while music is off / held, or an invalid id). A new shot replaces a playing one. Final cue (Y death, T win): `MUS_REQ` 0 then `MUS_SHOT` id; a stinger (R) leaves `MUS_REQ`: the loop restarts at bar 1 when the shot ends. Boot 0 |
 | `$BFEE` | `MUS_STATE` | SND-2, ISR-written: bits 0-1 `MS_IDLE` 0 / `MS_LOOP` 1 / `MS_SHOT` 2; bit 7 `MS_DONE` = the last one-shot finished (set when it ends, cleared when the next shot is taken; kept through loops / idle / music off). Boot 0 |
 | `$BFEF` | `MUS_CUR` | SND-2, ISR-written: the tune id sounding (the shot's while one plays), 0 = none. Boot 0 |
 | `$BFF0` | `SFX_REQ` | **SND-5, edge**: the requested sound effect id (`SFX_*`, `build/sfx/sfx_ids.inc` = prio << 5 \| index 1..`SFX_COUNT`), 0 = none. Main code writes it only through **`sfx_req`** (bank 2, `ld a, SFX_x : call sfx_req`, 5 B a call site, any bank; keeps A / BC): replaced only by a request of >= priority; dropped while `SND_HOLD` or with the SFX bit off. The ISR (`sfx_step`) clears it every unheld frame (taken: >= the playing effect's priority, else dropped) and every held frame (`ay_play` `.hold`). Boot 0 |
-| `$BFF5..$BFF6` / `$BFF7` / `$BFF8..$BFFA` | `TRP_PRE` / `TRP_WAIT` / `TRP_EV`, `TRP_STEP`, `TRP_ENT` | **3E-T16** (item_defs.asm): the hero's `E_X`, `E_Y` before this turn's action (`turn_input`, every try, before the held / free split: the trap trigger's "first brings it under the body"); `TRW_*` bits: bit 0 this turn's action was a Wait (`tpt_intent .srch`: DOWN without a climb, '.', a blocked climb), bit 1 the room-entry sense (`end_turn .ex`), read and cleared by `trap_chk`; the armed trap sequence: the event (`TEV_FIRE` + `TT_*` / `TEV_FIND`), the step counter, the entry's low byte. Never zeroed (written before read). `$BFFF` spare (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below) |
-| `$BFF4` | `SFX_XP` | **3E-T0**: the signed pitch offset (semitones, two's complement) of the next `SFX_STATUS` take. `sfx_msg` writes it before `sfx_req`; the ISR copies it to `sfx_xp` (AY-slot state, `ay_vars_end - 1`) when it takes `SFX_STATUS` and zeroes it for every other effect. Boot 0 (state block, no init needed: only read on a STATUS take). `$BFFF` spare (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below) |
+| `$BFF5..$BFF6` / `$BFF7` / `$BFF8..$BFFA` | `TRP_PRE` / `TRP_WAIT` / `TRP_EV`, `TRP_STEP`, `TRP_ENT` | **3E-T16** (item_defs.asm): the hero's `E_X`, `E_Y` before this turn's action (`turn_input`, every try, before the held / free split: the trap trigger's "first brings it under the body"); `TRW_*` bits: bit 0 this turn's action was a Wait (`tpt_intent .srch`: DOWN without a climb, '.', a blocked climb), bit 1 the room-entry sense (`end_turn .ex`), read and cleared by `trap_chk`; the armed trap sequence: the event (`TEV_FIRE` + `TT_*` / `TEV_FIND`), the step counter, the entry's low byte. Never zeroed (written before read). `$BFFF` `TRAP_UNDER` (TRAP-OR) (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below) |
+| `$BFF4` | `SFX_XP` | **3E-T0**: the signed pitch offset (semitones, two's complement) of the next `SFX_STATUS` take. `sfx_msg` writes it before `sfx_req`; the ISR copies it to `sfx_xp` (AY-slot state, `ay_vars_end - 1`) when it takes `SFX_STATUS` and zeroes it for every other effect. Boot 0 (state block, no init needed: only read on a STATUS take). `$BFFF` `TRAP_UNDER` (TRAP-OR) (`$BFFB` = `SEQ_TRAP`; `$BFFC..$BFFE` LOG-DMG, below) |
 | `$BFFC` / `$BFFD` / `$BFFE` | `LN_VAL` / `LN_G` / `DH_EFF` | **LOG-DMG** (defs.asm): the log-number carriers, always mapped so the bank-0 composer (`src/log0.asm`) reads them with `BANK_TEXT` paged. `LN_VAL` = `deal_hit`'s `dh_lost` (an EQU: the HP its last target lost; `melee_strike` / burst-self lines; `log_room_d` writes the self-bolt's `pf_lost`, `hero_fall` its loss); `LN_G` = the HP the hero's last heal gained (`deal_hit` drain heal, `cap_add`); `DH_EFF` = `deal_hit`'s `dh_eff` scratch (moved out of bank 3 to pay for the drain-heal G). Scratch: no init, not test-observable state |
 | `$BFF3` | `SFX_NEXT` | **SND-5**: one deferred effect id: a request of prio >= `SFX_DEFER_PRIO` (6) that lost to a pending (`sfx_req`) or playing (`sfx_step`) one of higher priority; the ISR starts it the frame the playing effect ends (and clears it; also cleared when the SFX bit is off, on a held frame with nothing playing, and by `level_enter`). The slot is overwritten only by an id of >= priority. Written by `sfx_req` and the ISR (single-byte stores). Boot 0 (`boot`, next to `SFX_REQ`); ASSERT `SFX_NEXT == DNG_CALM + 1` (`level_defs.asm`) |
 | `$BFC1` | `CLIMB_BLK` | 1 = this input's climb was blocked by an entity → `try_player_turn` makes it a WAIT (prototype §6.4, rule 2026-10-02); cleared at every `try_player_turn`. B14: also read by `cork_check` (the monster phase of that turn yields to the blocked climb, even from a standing hero; `climb_blocked` set the hero's `E_AIDIR` to the attempted dy) |
@@ -1681,7 +1681,7 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 | 2 | `T_BRICK` = `T_WALL_DARK` | plain air-band wall face; re-glyphed DARK (B3B-2) |
 | 3 | `T_WALLF` | wall in a floor row (blocks, lintels in row 8/17) |
 | 4–6 / 7–9 | `T_LAD_L/M/R` / `T_HOLE_L/M/R` | ladder / ladder cells in a floor row |
-| 10 | `T_TRAP` | **3E (user-approved glyphs, `assets/gfx/concept/grid/items3e.tiles`): the revealed trap plate**, ink `$42` default, `TILE_FLAGS` 0 (walkable, game.md §1.5). The potion moved to id 60 (`T_POTION` = `T_FLASK`). T6 generates the trap list; **3E-T16: a known unspent trap is stamped by `build_room_map` (before the decor deriver) and `TILE_ATTRS[T_TRAP]` is set to its type attr there and on a mid-room reveal (≤ 1 trap a room; see "3E-T16")** |
+| 10 | `T_TRAP` | **3E (user-approved glyphs, `assets/gfx/concept/grid/items3e.tiles`): the revealed trap plate**, ink `$42` default, `TILE_FLAGS` 0 (walkable, game.md §1.5). The potion moved to id 60 (`T_POTION` = `T_FLASK`). T6 generates the trap list; **3E-T16: a known unspent trap is stamped by `build_room_map` and `TILE_ATTRS[T_TRAP]` is set to its type attr there and on a mid-room reveal (≤ 1 trap a room; see "3E-T16"). TRAP-OR: stamped LAST (after decor / lectern / gate) by bank-3 `tr_cell3`, which also makes the slot per room: `TILE_GLYPHS[T_TRAP]` = glyph(`TRAP_UNDER`) \| the plate, attr = the trap's type attr (also over decor, user 2026-11-05; see "TRAP-OR")** |
 | 11, 14 | `T_DOOR_JAMB_L`, `T_DOOR_JAMB_R` | B10 (user option B): open-door jambs, `$A0` / `$05` × 8, ink `$06`, non-solid (the PROTO chest stand-in is gone, B3B-13) |
 | 12 | `T_CHAIN` | small decor; cobweb / moss move to the per-level sets |
 | 13 | `T_GRATE_SHUT` | **3F-T8 (§9.7 R2, BOSS-GUARD)**: the CLOSED lair gate (tiles_3f `grate_shut`, ink `$07`), `TF_SOLID \| TF_FLOOR`; `build_room_map` stamps it over the 3 exit cells AFTER the deriver while `LF_GRATE_OPEN` is clear; R6 `grate_open` swaps them to `T_GRATE` (+ glow) when the boss dies |
@@ -3594,7 +3594,7 @@ the input tick (pmix + DART was 141.4k T), flashes added (user 2026-10-26).
   tick); each step re-arms `ACT_AT = TURN_TICK + B` / `MON_AT = ACT_AT + 1`; after the last step
   `act_pend .mon` runs the monsters (skipped on an exit turn: `EXIT_KIND`). Fire: step 0 = SFX_TRAP,
   the hero flashes the type ink (`TRAP_FLASH_T` = 2), the plate shows `$47`
-  (`TILE_ATTRS[T_TRAP]` + far7 `ap_put_a`), the effect — DART: "A DART HITS YOU!", far3
+  (TRAP-OR: `tr_plate` → `tr_put7` → far3 `tr_cell3`; was `TILE_ATTRS[T_TRAP]` + far7 `ap_put_a`), the effect — DART: "A DART HITS YOU!", far3
   `trap_hit` (1d4+1, +1 when WEAK so deal_hit's own-attacker WEAK DEF+1 cancels; `DTY_PHYS` +
   POISON 12 (POIS1; the param nibble = 6, half): DEF, immunity (Silk: "YOU ARE UNAFFECTED"), cap 30 in `ST_X`, wake, death), `E_REACTAT` =
   arrival (walk 2, jump `JA_N` + 1), the Warrior's `arrow_hit` impact (`tr_fx` → `MSG_BUF` →
@@ -3608,9 +3608,10 @@ the input tick (pmix + DART was 141.4k T), flashes added (user 2026-10-26).
   with `MON_AT = TELE_HOLD_T` 5 so the flash shows before end_turn's `do_exit`; `tele_pick` calls
   `tele_flash` again for the arrival.
 - **Drawing.** Known plate = `T_TRAP` in the standing-row cell; `build_room_map` stamps every known
-  unspent trap of the room before the decor deriver (decor needs T_AIR) **unless an item glyph is
-  there** and writes its type attr (`tr_ink3`) to `TILE_ATTRS[T_TRAP]`; mid-room the sequence /
-  `tr_show` sets TILE_ATTRS and far7 `ap_put_a`. One attr for the id works because a room holds
+  trap of the room **last** (TRAP-OR: after the decor, lectern and gate; was before the deriver, which
+  then dropped the overlapping decor object) **unless an item marker is there**, OR-composited by
+  bank-3 `tr_cell3` (far7 `tr_build7` → `tr_put7` → far3; see "TRAP-OR"); mid-room the sequence /
+  `tr_show` → `tr_plate` → `tr_put7` (same routine). One attr for the id works because a room holds
   ≤ 1 trap (low RAM untouched). Cosmetic: a scroll between two rooms with known traps of
   different types shows the old plate in the new ink while it scrolls out. **Item / trap
   overlap:** `drop_put` (R6) refuses a cell whose col has an unspent trap (`trap_at`, hidden or
@@ -5022,7 +5023,7 @@ Measured by the build DISPLAY, `-DDEBUG_KIT=0`, first against main `cab4a0e` (GE
 | bank 7 low | 2 | **2** | 0 | call-target swaps only: ammo kill `TX_YOU_KILL` + `hit_line`, self bolt `log_room_d` + `msg_push_d`, Tome `msg_push_t` |
 | R6 | 30 | **19** | 11 | `rg_shoot` E_HIT = `$80` \| L (+7), `cap_add` LN_G (+4) |
 | bank 1 / SRC6 / AY / pool | 3 / 19 / 57 / slack 1,024 | unchanged | 0 | |
-| state block | `$BFFC..$BFFF` spare | **`$BFFC` `LN_VAL`, `$BFFD` `LN_G`, `$BFFE` `DH_EFF`**; `$BFFF` spare | 3 B RAM | |
+| state block | `$BFFC..$BFFF` spare | **`$BFFC` `LN_VAL`, `$BFFD` `LN_G`, `$BFFE` `DH_EFF`**; `$BFFF` spare (TRAP-OR: now `TRAP_UNDER`) | 3 B RAM | |
 
 **Merged (main `dc10dbe` -> LOG-DMG), both builds:**
 
@@ -5927,3 +5928,206 @@ foot, 2 Ghosts above, a Bat over the shaft): main **132,038 T, work 129,353 > 12
 
 Free bytes (release): bank 2 13 -> **16**; bank 0 16, R6 1, bank 3 13, bank 1 1, bank 7 low 18 unchanged. The deferred items of
 PERF-GHOST (hero repair rect, unrolled attr stamp, `cycle_frame` steps) were not needed: the real scene's cost was `cork_check`.
+
+## H1 ledger (`feat/h1-climb`, 2026-11-05; on main `b25e043`; user rulings 2026-11-05: visible climb across vertical exits, game.md §2.1 "H1")
+
+**Behaviour:** every row climbed on an exit shaft is an ordinary ladder turn. Up: standing on storey 0 at the up-exit col, UP
+steps (y 2 -> 1); the step that puts the head on row 0 also sets EX_UP (same turn) -> scroll -> the hero appears mid-ladder at
+the bottom of the room above's shaft (`y = 18 - h`, feet in its row-17 hole), M_REST (the climb rest pose), and waits for keys.
+Down: the step into the down-exit hole (feet on row 17) sets EX_DOWN -> he appears mid-ladder at the top of the shaft below
+(`y = 0`). From an arrival end the opposite key is the exit back (no step, 1 turn). The level exit is unchanged (it rides the
+same step); the Teleport lands standing. No RAM, no new address, no frame, no pool change.
+
+**Code:** bank 7 `try_climb` (`src/bank7.asm`): the up-exit START is a plain step; `.mid` tests the new y: `$FF` (up from row 0)
+or feet past row 17 = the exit with no step (`.x0`); head onto row 0 / feet onto row 17 = the exit step (`.xs`, cancelled if
+blocked, a squeeze keeps it); one exit-field block for both directions (storey = (dy+1)/2, kind = `EX_UP` + storey, dest =
+r + 3 dy, `E_AIDIR` = dy so a no-step exit's arrival has the right `cork_check` dir); the level exit = that step, then kind
+`EX_LEVEL`. `.vexit` returns NZ with CF = 0 and no longer loads `CUR_ROOM`. `do_exit .lpt`: a vertical arrival is
+`y' = 18 - h - y` (the shaft's other end: 0 <-> 18 - h); `.tele` presets `y = 18 - F` (F = the floor row of tele_pick's storey)
+so the same formula stands him on it (no discriminator flag needed). Bank 2 `cork_check` (`src/logic.asm`): the climb-path walk
+stops past row 0 (`inc a / jr z`: the probe that wrapped to y 255) and after a probe with the feet on row 17 (`(y+h) div 9` = 2,
+`bit 1, l`): on an exit shaft no floor ends it; the old walk read past the 24-row `KT_MOD9` / `KT_DIV9` tables (a hero blocked
+stepping into a down-exit hole already did so before H1). Bank 3: comment only (`lp_transition` reads the mid-ladder arrival
+box: `storey_ref` of y 0 / 18 - h = 0 / 1).
+
+| Region (free B, before -> after) | release `DEBUG_KIT=0` | kit | release + trace |
+|---|---|---|---|
+| bank 7 low (to the attr shadow) | 18 -> **6** | 18 -> **6** | 69 -> **57** |
+| bank 2 (tail + `kind_tab` pad) | 16 (3 + 13) -> **9** (3 + 6) | 15 -> **8** | 18 -> **11** |
+| bank 3, bank 0, R6, bank 1, low RAM, bank-7 high | 13, 16, 1, 1, 0, 2 unchanged | unchanged | unchanged |
+
+Bank 7 +12 net: `try_climb` +8, `.vexit` -4, `.lpt` / `.tele` +8, after in-routine reclaim (`dec a` for `cp 1`, `ret` on
+`.vexit`'s NZ / CF = 0 instead of the `.no` tail, `xor c` for `cp c`, the dest by `add a, l` x 3 instead of `ld hl` + 3 x
+`add a, (hl)`, the teleport preset instead of a teleport flag). Bank 2 +7 (`cork_check`). Cost: `cork_check` +~20 T a probe;
+`tests/budget.py` every gate ok, `glad` 119,904 / work 117,219 / real 125,340 and `blair` real 138,871 (both unchanged).
+
+Tests: **`tests/h1climb.py` (new, 46 checks)**: D / U / R for both heroes (turn counts, arrival x / y / mid-ladder / M_REST /
+E_AIDIR, 30 idle ticks = no move / no turn, W4 screens), T (teleport from standing and from mid-ladder on the shaft lands
+standing), F (a goblin follows both ways, arrives PENDING, every key a turn, it materialises once the hero walks off), C
+(`cork_check` unit stub: the up-shaft and blocked-row-17 walks end, CF right, <= 2k T, y restored). Updated: `world.py` W3
+(arrivals (24, 0) / (24, 18 - h)), `game.py` 26 / 35 (the climb down before the follower check, 2 K turns up) and the §8.2
+walkthrough (2 J turns down C's shaft after the arrival), `floor1.py` F11 / `gfx_integrity.py` `forced_exit` (direct do_exit:
+the hero at the departure end), `pt_bot.py` `do_exit` (keeps the climb direction across the exit). No golden changed.
+
+### H1-D1 (same branch, 2026-11-05; user request: the D1 start shows the hero entering down a ladder, game.md §2.1 "H1-D1")
+
+**Behaviour:** the D1 start room gets the rubble-capped arrival shaft `{c,0}` (`RD_ARRCOL`) like D2-D8; the game starts with
+the hero mid-ladder at its top (`x = c`, `y = 0`, M_REST, `E_AIDIR` +1) waiting for keys. The shaft leads nowhere: UP at its
+top = no turn, no exit (D2+'s entrance: a standing UP there is no climb, no turn, unchanged); from y 1 UP is a plain step.
+
+**Code:** bank 3 `level_gen` (`levelgen.asm`): the arrival-shaft `pick_man` runs for every depth (the D2+ test gone, -7 B;
+D1 layouts and the D1 GEN_RNG stream change: `tools/levelgen.py` `generate` / `start_x` and `tools/levelcheck.py` (arrival col
+presence, D1 start x = the col) updated in the same commit); `level_start_x` returns the shaft col on D1 (-2 B);
+`level_populate` puts the D1 hero at y 0 with `E_AIDIR` +1 (+12 B: `cork_check` needs a non-zero dir for a mid-ladder hero).
+Bank 7 `try_climb .xs`: the dest is computed first; a dest above the grid (< 0: only a top-row room's shaft, and a top-row room
+never has an up exit) is no exit (`.nx`: from row 0 no turn, else the plain step) (+9 B); paid by the level exit folding into
+`.xs` (a dest past the grid = the lair's grate = `EX_LEVEL`, kind = `EX_UP` + (dy + 3 - CF) / 2; the `.lvl` block gone, -6 B).
+
+| Region (free B, H1 -> H1-D1) | release | kit | release + trace |
+|---|---|---|---|
+| bank 7 low | 6 -> **3** | 6 -> **3** | 57 -> **54** |
+| bank 3 (to `AY_RESERVE`) | 13 -> **10** | 9 -> **6** | 9 -> **6** |
+| bank 1 | 1 -> **2** (the items overlay repacks 1 B smaller: the bank-3 routines it calls moved) | 1 -> 2 | - |
+| bank 2, bank 0, R6, low RAM | 9, 16, 1, 0 unchanged | unchanged | unchanged |
+
+Tests: `tests/h1climb.py` S (both heroes, generated D1 with fixed seeds: the shaft present, the hero at its top mid-ladder,
+waits, UP = no turn / no exit, 2 J turns down, UP standing at the foot = no climb, y 1 -> 0 plain step); `levelgen_test` 8000 /
+8000 + 3F 8000 / 8000, `levelcheck --full` 524288 / 524288, `levelgen_z80` 280 / 280 (`--f3`: 43 D8 fails, identical on main
+`b25e043`: pre-existing).
+
+### H1-ARRIVAL (`feat/h1-arrival`, 2026-11-05; on `feat/h1-climb` 5abe1b5; user "D2-D8 — yes", game.md §2.1 "H1-ARRIVAL")
+
+**Behaviour:** one arrival rule for every depth: the D1 start and every level descent (grate -> `level_descend` ->
+`level_enter` -> `level_populate`) put the hero mid-ladder at the top of the start room's arrival shaft (`x = RD_ARRCOL`,
+`y = 0`, M_REST, `E_AIDIR` +1); UP there = no turn, no exit (H1-D1's `try_climb .nx`, unchanged). The D1 special case is gone.
+The start room spawns nothing (quota 0) and no follower crosses a level exit (`level_reset` clears slots 1..15), so the shaft
+top is always free; D8's start room is an ordinary top-row room (the Sanctum / lair are on the bottom row).
+
+**Code (bank 3 only):** `level_start_x` = the arrival col (`rdp` + `RD_ARRCOL`; the D2+ `x = col + 1` legality search and the
+`hits_x` entry it alone used are gone); `level_populate` stores `y = 0` / `E_AIDIR` 1 for every depth (the depth test and the
+`KT_BH` read gone). `tools/levelgen.py` `start_x` / `tools/levelcheck.py` (start x == the arrival col) follow; the generator
+and the block are unchanged.
+
+| Region (free B, H1-D1 -> H1-ARRIVAL) | release | kit |
+|---|---|---|
+| bank 3 (to `AY_RESERVE`) | 10 -> **92** | 6 -> **88** |
+| bank 1 | 2 -> **1** (the items overlay repacks 1 B larger: the bank-3 routines it calls moved) | 2 -> 1 |
+| bank 7 low, bank 2, bank 0, R6, low RAM | 3, 9, 16, 1, 0 unchanged | unchanged |
+
+Tests: `tests/h1climb.py` A (both heroes, `level_descend` D1 -> D8 on fixed seeds: each depth on the shaft top mid-ladder,
+waits, UP no turn / no exit / `E_AIDIR` kept, 2 J turns to storey 0); `world.py` W16 (arrival y 0 on every depth; the D2
+death scenario climbs down first: no combat with a mid-ladder hero).
+
+## WIDOW-SPIT ledger (`feat/widow-spit`, 2026-11-05; on `feat/h1-arrival` d209a9d + `sim/widow-spit`; user approved; docs/design/widow_spit_sim.md)
+
+**Behaviour:** every Black Widow (the Spider tier, D4 / D5; never golden) spits poison: the golden Spider Queen's BOSS-RANGED spit
+with N 3 (a shot every 4th turn; the Queen N 2), 1d2 - DEF (no golden + 1), every hit POISON + `BW_PSN_T` 6 (deal_hit E 3, chance 0;
+adds, cap `PSN_CAP` 30; Silk Cloak `IMMF_POISON` immune; Cure clears), range 6 (gap < 6), `RWF_WALK` (walks in between shots), the
+magenta `spark_fly1/2` (NOIMP, FXD_ATTR 0), the Queen's SFX and the LOG-DMG hit / miss + poison lines (no new strings). The bite
+(POISON 24, ACID 1 in 4) is unchanged; ordinary Spiders never spit; the Queen is unchanged. **Warrior level-up HP +4 -> +5**
+(`xp7.asm` `LUP_W_HP`, game.md §4.1).
+
+**Gate (0 B, bank 2):** new rd_tab row `RK_WIDOW` 13 **below** `RK_GOLD1`, so `ai_rhook`'s golden gate is untouched: the rows are
+renumbered `RK_WIDOW` 13, `RK_GKING` 14 (= `RK_GOLD1`), `RK_SQUEEN` 15, `RK_ROWS` 15; `rk_tab[K_BLACK_WIDOW]` (was a DS 0) = `RK_WIDOW`
+(same bytes). `rg_q`'s 2-high flight-row test reads the row's fid (`RW_FX == FID_spark_fly1`: the Queen and the Widow, no other row)
+instead of `E_KIND == K_SPIDER` (same 5 B). A Widow's turn now far6s `ai_ranged` (~0.6-1.3k T out of line / range, ~9k a shot) where
+it paid ai_ghook's +46 T.
+
+**Bytes (reclaim, no cut):** `dn_place` (59 B, D3-11 flying numbers) moved R6 `dnum6.asm` -> bank 3 `dnum3.asm` (its only caller
+`dn_take` is bank 3: the far6 becomes a direct `call`, -3 B; it reads bank-2 SLOTREC / kind_tab only); `dnum6.asm` deleted.
+
+| Region (free B, H1-ARRIVAL -> WIDOW-SPIT) | release | kit | delta | note |
+|---|---|---|---|---|
+| R6 | 1 -> **52** | 7 -> **58** | +51 | `dn_place` out -59, rd_tab row +8 (`F3_GEN=0` release: 52) |
+| bank 3 (to `AY_RESERVE`) | 92 -> **36** | 88 -> **32** | -56 | `dn_place` in +59, its far6 -> call -3 |
+| bank 2, bank 7 low, bank 0, bank 1, low RAM, SRC6 | 9, 3, 16, 1, 0, 19 unchanged | 8, 3, 2, 1, 2, 19 | 0 | rk_tab entry in the DS fill; the trace build bank 2 free 11 |
+
+**Pool:** unchanged. The Warrior carries `spark_fly1/2` (`U_SPARKW`, `pool_xmap` `K_SPIDER, K_KNIGHT`) on every Spider level, and a
+Widow exists only where its base K_SPIDER is in `LP_KINDS` (tiers spawn from the base, §9.6): D2 / D4 / D5 masks carry it. Need of
+31,712 (Warrior / Mage): D2 22,304 / 19,296, **D4 28,640 / 25,632, D5 23,136 / 20,128**, worst **D8 31,328 (Warrior): slack 384**
+(the floor) unchanged; the Mage holds the spark in its class FX unit (0 B).
+
+**Ticks (`tests/budget.py`, release, every gate passes):** new scenario **`wroom`** (D5, 2 Widows in line one each side + Rat + Bat,
+Σ 8, both spit together on turn 4, sparks in flight together): every tick of a spit turn <= `CAP` (asserted; worst **96,591 work**,
+the 2-spit turn); worst tick overall a later walk input tick (hero walking, 4 bodies stepping, a Bat bite, the hero POISONED:
+mark + number) **126,696 work / 135,511 real** (<= BUDGET 141,816; 696 over the 126k cap), so `wroom` is GATED like `blair` (real
+<= BUDGET) plus the spit-turn CAP assert. Controls: `BUDGET_WROOM_NOSHOT=1` (the Widows as plain walkers) 116,528 work, `=psn` (the
+same, hero poisoned from the start) 116,758: a different geometry, not a spit tick (the spit turns shift where the bodies stand).
+`blair` real 132,540 + PRE, `mix` 107,646.
+
+**Sim:** `tools/balance_sim.py` reads `WIDOW_SPIT` / `WIDOW_POISON` / `WIDOW_PERIOD` (rk_tab + the RK_WIDOW row, asserted == the Queen's
+spit but N / E) and `W_LVL_HP` (`.sym LUP_W_HP`) from the image; `tools/ranged_model.py` ROWS[K_BLACK_WIDOW]. Default run (10,000,
+average, seed 1): **W 40.5 % / M 40.4 %** (target 40.9 / 40.4 +-1 pp).
+
+**Tests:** new `tests/widow.py` (6: static rows, hook gap 5 / 6 + ordinary Spider never + Queen unchanged, poison + 6 fresh / adds /
+cap, 1d2 - DEF, Silk Cloak, the FX descriptor, real turns: 4 turns apart walking in, a plain Spider never spits); `ranged.py` A draws
+Widows (17 pass), `xp.py` G1 / S1 Warrior + 5 (30), boss 213, status 81, status1 25, proj3 10, dnum 50, archmage 9,
+combat_tables PASS, budget all gates.
+
+## STATS2 ledger (`feat/stats2`, 2026-11-05; user-approved; docs/design/stats2.md, game.md "End card statistics")
+Two end-card rows, both cards: `BOOKS r/f` (row 17) and `ITEMS n` (row 18) between TURNS (16) and BEST KILL (now 19);
+the approved ENDCARD-L1F-G1 look is kept (table at x 72 row 11; the spec's rows 10-16 were the pre-ENDCARD layout):
+`EC_FEET` = `EC_TAB_ROW` + 9 (was + 7) so the portraits' / lectern's feet stay on the table's bottom row (the lectern's
+two `ROOM_MAP` rows 18-19 lie inside the 672-B buffer, same page: the existing ASSERT); PRESS stays on row 22.
+RAM: `ST2_CNT` `$5D56..$5D58` (`ST2_BKR` read, `ST2_BKF` found, `ST2_ITM` items) appended to `ITEM_RAM`
+(`ITEM_RAM_LEN` 86 -> **89**: new_game's clear covers them, 0 B of code), bytes saturating at 255.
+Hooks: R6 `pu_add` (taken: IT_BOOK -> BKF, else ITM; `st2_inc`), R6 `fx_book` entry (BKR: every book read reaches it,
+the book already consumed), bank-7 `ap_take` taken path (n > 0: ITM inline; its PANEL_DIRTY / SFX block moved there,
+`set PD_AMMO_BIT,(hl)`: -1 B net of the 7-B increment); end card: bank-3 `ec_tab` `far6 st2_fmt` (R6: "r/f" into
+MSG_BUF with low-RAM `es_num`) + `ec_row`, `ec_byte ST2_ITM`. Text: `end_books` / `end_items` added; the dead
+`bk_read` ("YOU READ THE BOOK", no code reference: fx_read prints "YOU READ THE <name>") removed from strings.txt /
+items.txt / itempack.py's stem checks (the kit build's shared text + b0 reserve was 9 B over without it).
+Cost: ~30 T per counted pickup / read; the end card +2 rows (~15k T, once); play ticks unchanged.
+
+| Region (free B) | release before -> after | kit before -> after | what |
+|---|---|---|---|
+| bank 3 (to AY) | 36 -> **17** | 32 -> **13** | ec_tab BOOKS (11) + ITEMS (8) |
+| R6 | 52 -> **3** | 58 -> **8** | st2_inc 4, st2_fmt 27, pu_add hook 9, fx_book hook 6 (+ overlay stream repack) |
+| bank 7 low | 3 -> **2** | 3 -> **2** | ap_take restructure (+1) |
+| bank 0 text + b0 (to POOL_START) | 16 -> **14** | 2 -> **0** | text 2,382 -> 2,384 B (+2 strings, -bk_read), TEXT_RES headroom 18 -> 16 |
+| bank 7 high / bank 1 / bank 2 / low RAM | 2 / 1 / 9 / 0 | same | |
+
+Tests: new `tests/stats2.py` (S0-S6: book pickup + READ, potion / food / arrows + DISCARD, rank-up + tome reads,
+saturation incl. the ammo path, refused pickups: full bag / full quiver / Mage on arrows, new_game reset);
+`tests/stats1.py` E checks rows 15-19 (+ blank 20-21) pixel-exact with poked counters (killer 3/5 12, died 0/0 0,
+win 255/255 255), G6 checks ST2 zeroed; stats1 E now opens the card with `end_card` (it still ticked as before END-WAIT, so
+all 84 E checks had been failing on main: the card was never drawn); `items3e.py` L3 (ITEM_RAM 89), `itemtab.py`, `d8_stress.py` mask.
+Goldens refreshed (content changed: the two new rows + the portraits 2 rows lower): `endcard_{killer,died,win}_{warrior,mage}`.
+
+## TRAP-OR ledger (`fix/trap-or2`, 2026-11-05; on `feat/stats2` b2e0589; user playtest: a revealed trap erased the decor of its cell)
+
+**Bug (since 3E-T16 `785d4ad`, visible more often since TRAP2):** every plate draw wrote `T_TRAP` over the map cell
+(bank-7 `ap_put_a`, from `tr_show` / `tr_plate`: reveal, Mage sense, fire, the find blinks), so the decor there (a
+floor-class object's bottom row 9s+7, e.g. a brazier base) vanished; and `build_room_map` stamped known traps BEFORE
+the decor deriver, whose `T_AIR` footprint rule then dropped the whole overlapping object on every re-entry / scroll-in
+(`tests/trap_cells.py` C3 on main: "decor changed by a known trap"; 5 of 437 plates of 10 seeds x D1..D8 lie on decor).
+
+**Fix (OR-compose, one tile slot per room).** Bank-3 `trap3.asm` `tr_cell3` (far3; DE = cell, A = attr): an item marker
+shows instead; else `TRAP_UNDER` (`$BFFF`, state block, test-observable) := the cell's id unless it is already
+`T_TRAP`; `TILE_GLYPHS[T_TRAP]` := glyph(u) with line 6 = `$FF`, line 7 |= `$DB` (`TRAP_GLY6` / `7`, level_defs;
+boot6 ASSERTs them and blank lines 0..5 against `tiles_common` with `{b}`); attr 0 (the find blink's "off") puts u back
+(the decor alone; over `T_AIR` identical to before). **Attr (user ruling 2026-11-05): always the trap's own** (type
+ink / the `$47` flash, written to `TILE_ATTRS[T_TRAP]` by `tr_put7`): over decor the cell's decor pixels take the
+trap ink, paper / bright as on plain floor. Bank-7 `tr_put7` (HL = entry, A = attr, `TMP1` = page): row 9s+7, col,
+`map_cell`, far3 `tr_cell3`; callers `tr_plate` (live: `TMP1` := `ROOM_MAP` page, then `queue_damage` 1x1 +
+`shadow_rect`: bank 5 by `erase_rect`, screen 2 by `present`) and `tr_build7` (far7 from `build_room_map`, which now
+stamps known traps LAST, after decor / lectern / gate, through it: the type ink by `tr_ink`, so bank-3 `tr_ink3` is
+gone). The decor is byte-identical whatever is known, for `ROOM_MAP` and `NEXT_MAP` (the scroll strips / re-entry draw
+tile 10 = the composite). `ap_put_a` deleted. **Contract:** `TRAP_UNDER` and the slot are per room (≤ 1 trap a room,
+`items_ovl.asm` `ig_elig`): no other room may be built between a room's build and a live `tr_put7` on it (true:
+the only second-map build is `do_exit`'s `NEXT_MAP`, after which the old room is never drawn on again). Row 9s+7 never
+holds an animated decor cell, so `decor_tick` never swaps a plate cell.
+
+| region (release / kit) | before (STATS2) | after | delta |
+|---|---|---|---|
+| bank 3 free (to `AY_RESERVE`) | 17 / 13 | **7 / 3** | -10 (`tr_cell3` +50; the build's stamp loop -31 (now `far7 tr_build7`), `tr_ink3` -5, `.gate` tail -2, page drift) |
+| bank 7 low (to the attr shadow) | 2 / 2 | **1 / 1** | -1 (`tr_show`..`tr_put7` 60 B vs `tr_show`/`tr_plate` 26 + `ap_put_a` 25; reclaims: `tr_ink` one-page `ld h` -2 (ASSERT), `tr_eff` flash stores -1) |
+| bank 1, R6, bank 2, bank 0, low RAM | 1, 3 / 8, 9 / 8, 14 / 0, 0 | unchanged | 0 |
+| RAM | `$BFFF` spare | `TRAP_UNDER` | 1 B |
+
+Cost: a plate step +~1k T (far3 + compose; t16 T2 cap 20k holds); the room build + ~0.6k T per known trap (far7 + far3,
+cold). Tests: `tests/trap_cells.py` C3 (known vs hidden build: decor identical, composite glyph / attr / `TRAP_UNDER`)
+and L1..L3 (a real D5 room, a DART under a floor object's bottom row: the Mage's Wait sense, the cell on bank 5 AND
+screen 2 == decor | plate in `$42`; again after walking out and back in through the side exit, and after `room_show`);
+`tests/t16.py` O2 drives `tr_plate`, C1's cols moved off the PROTO ladder (25), F1 climbs down the arrival shaft first
+(stale since H1-ARRIVAL: the fuzz never acted).

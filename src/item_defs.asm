@@ -293,8 +293,9 @@ ST1_KILLER      EQU ST1_CNT + 4                 ; ENDCARD-G1: $80 | the kind tha
 EC_POS          EQU TMP6                        ; 2 B: ec_tab's label x (px), then its next row (TMP7)
 EC_VX           EQU 64                          ; value x = label x + EC_VX (px)
 EC_TAB_X        EQU 72                          ; the table's label x: 72 + 118 (EC_VX + 9 chars) = 190, centre 131
-EC_TAB_ROW      EQU 11                          ; its first row (CLASS); the last row (BEST KILL) = 17
-EC_FEET         EQU EC_TAB_ROW + 7              ; the portraits' / lectern's shared feet row (= the table's bottom)
+EC_TAB_ROW      EQU 10                          ; its first row (CLASS); the last row (BEST KILL) = 18 (user 2026-11-05: up 1 from 11; row 9 touched the win subtitle on row 8)
+EC_FEET         EQU EC_TAB_ROW + 9              ; the portraits' / lectern's shared feet row (= the table's bottom;
+                                                ; the first row below BEST KILL)
 EC_PCOL_L       EQU 2                           ; killer col (the Ogre's ink ends ~10 px short of the table at x 72); lectern = +3
 EC_PCOL_R       EQU 25                          ; the hero's col (his ink starts ~11 px after the table's widest row, x 190)
 EC_TROW         EQU 6                           ; the title row (menu font, 2 rows)
@@ -304,9 +305,16 @@ EC_A_DEAD       EQU $42                         ; YOU DIED (red)
 EC_A_WIN        EQU $46                         ; YOU WIN! (yellow)
 EC_A_KBY        EQU $45                         ; KILLED BY (cyan)
 EC_A_NAME       EQU $43                         ; the killer's name (magenta)
-ITEM_RAM_END    EQU ST1_CNT + ST1_LEN
-ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 86 (M0: 81 + ST1_LEN)
-                ASSERT ITEM_RAM_LEN == 86
+; STATS2 (game.md STATS1 / STATS2): 3 saturating per-game counters right after ST1_CNT (the free
+; BASIC-area bytes $5D56..; zeroed by new_game with the block: ITEM_RAM_LEN is the clear's count)
+ST2_CNT         EQU ST1_CNT + ST1_LEN           ; 3 B                                       (kept)
+ST2_LEN         EQU 3
+ST2_BKR         EQU ST2_CNT                     ; books read (fx_book, fx6.asm: every completed book READ)
+ST2_BKF         EQU ST2_CNT + 1                 ; books found (pu_add, pickup6.asm: an IT_BOOK taken)
+ST2_ITM         EQU ST2_CNT + 2                 ; items found (pu_add non-book + ap_take, pickup7.asm: n > 0)
+ITEM_RAM_END    EQU ST2_CNT + ST2_LEN
+ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 89 (M0: 81 + ST1_LEN; STATS2: + ST2_LEN)
+                ASSERT ITEM_RAM_LEN == 89
                 ASSERT (ITEM_RAM & $FF) == 0 && ITEM_RAM_LEN <= 256      ; one page (inc l, djnz clear)
                 ASSERT ITEM_RAM >= $5CCB        ; above the system variables + channel area
                 ASSERT ITEM_RAM_END <= PF_RAM   ; below D3-6b PF_RAM ($5E00) / MK_RAM ($5F00)
@@ -364,6 +372,9 @@ TRP_EV          EQU $BFF8           ; the armed trap sequence (trap6.asm): TEV_F
 TRP_STEP        EQU $BFF9           ;   its step counter (trap_step)
 TRP_ENT         EQU $BFFA           ;   its TRAP_LIST entry (low byte)
                 ASSERT TRP_ENT < STATE_3B_END && TRP_PRE > SFX_XP
+TRAP_UNDER      EQU $BFFF           ; TRAP-OR: the tile id the drawn plate composes over (the cell's
+                                    ;   id before T_TRAP; bank-3 tr_cell3 writes it before any read)
+                ASSERT TRAP_UNDER == STATE_3B_END - 1
 TRW_WAIT_BIT    EQU 0
 TRW_ENTRY_BIT   EQU 1
 TRW_ENTRY       EQU 1 << TRW_ENTRY_BIT
@@ -393,9 +404,13 @@ TRAP_STONE_DIE  EQU 3               ; STUN1: the falling stone 1d3 PHYS (DEF app
 TRAP_STUN_T     EQU 2               ; ... + STUNNED 2 + rnd(2) (gameplay RNG: the damage die, then the duration)
 ; the known plate's attr by type (§1.5: ink on black). <= 1 trap per room
 ; (generator), so the room's known trap sets TILE_ATTRS[T_TRAP] itself:
-; build_room_map's stamp (bank 3 tr_ink3) and trap7's reveal (bank-7 data7 tr_ink7),
-; both tables built from these. (A scroll between two rooms with known traps
-; of different types shows the old plate in the new ink until it leaves.)
+; build_room_map's stamp and trap7's reveal, both through bank-7 tr_ink (data7 tr_ink7; TRAP-OR),
+; built from these. (A scroll between two rooms with known traps
+; shows the old plate in the new room's ink AND with the new room's decor
+; bits until it leaves: the NEXT_MAP build rewrites both TILE_ATTRS[T_TRAP] and
+; TILE_GLYPHS[T_TRAP] via tr_cell3. tr_cell3's item-marker early return also
+; leaves TILE_ATTRS changed with no T_TRAP placed; cosmetic, the next build or
+; reveal rewrites it.)
 TRAP_INK_DART   EQU $42
 TRAP_INK_GAS    EQU $44             ; (also the GAS hero flash, §1.5: $44 one step)
 TRAP_INK_TELE   EQU $43

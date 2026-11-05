@@ -21,8 +21,8 @@ E  ENDCARD-G1 (user 2026-11-02, plan "ENDCARD-L1F-G1"): the full-screen end card
    killed by a monster (deal_hit stores ST1_KILLER = $80 | kind: title KILLED BY + the kind name, its
    portrait left), YOU DIED (the hero's own / a trap blow: ST1_KILLER 0, no portrait), YOU WIN! (+ the
    Tome line, the lectern left). Title in the menu font (menu_text_ok), the table CLASS / LEVEL /
-   DEPTH / gap / KILLS / TURNS / BEST KILL == text6 at the exact pixel x (no kills = no BEST row), PRESS
-   on row 22, then the whole frame against tests/golden/endcard_<case>_<hero>.hash (the portraits /
+   DEPTH / gap / KILLS / TURNS / BOOKS r/f / ITEMS (STATS2) / BEST KILL == text6 at the exact pixel x (no
+   kills = no BEST row; rows below it blank down to 21), PRESS on row 22, then the whole frame against tests/golden/endcard_<case>_<hero>.hash (the portraits /
    attrs; --update-golden rewrites). PNGs to $STATS1_PNG when set
 Run: ZRCP_PORT=<port> python3 tests/stats1.py [--update-golden]
 """
@@ -247,17 +247,20 @@ def main():
         check("G5 a Spark kills a Rat (Mage): counted", st()[0] == 1 and p.rb("MP") < 40, (st(), p.rb("MP")))
 
         p.wmem(S["ST1_KILLS"], [9, 0])
+        p.wmem(S["ST2_BKR"], [1, 2, 3])                   # STATS2: zeroed with them
         p.wb("GAME_STATE", GS_DEAD)
         p.tick(8)
         ok = p.end_to_menu()
         p.menu_start(K_KNIGHT)
         check("G6 new_game zeroes the counters (end card -> menu -> start)",
-              ok and st() == (0, 0, 0) and p.rb("ST1_BL") == 0 and p.rw("TURN_COUNTER") < 20, (ok, st()))
+              ok and st() == (0, 0, 0) and p.rb("ST1_BL") == 0 and p.rw("TURN_COUNTER") < 20
+              and list(p.z.read_memory(S["ST2_BKR"], 3)) == [0, 0, 0], (ok, st()))
 
         # ------------------------------------------------------------------ end card
-        def card(cls, case, kills, turns, best, tag):
+        def card(cls, case, kills, turns, best, tag, books=(0, 0), items=0):
             """ENDCARD-G1: the full-screen card, pixel-exact text + the golden frame."""
             scene(cls)
+            p.wmem(S["ST2_BKR"], [books[0], books[1], items])    # STATS2: read, found, items
             p.wmem(S["ST1_KILLS"], w16(kills))
             p.wb("ST1_BL", best * 8 + 4 if kills else 0)
             p.wb("ST1_BXP", 60 if kills else 0)
@@ -279,7 +282,7 @@ def main():
                 check(f"E {tag}: ST1_KILLER = {want:#x} after the fatal hit", p.rb("ST1_KILLER") == want,
                       p.rb("ST1_KILLER"))
             p.wb("GAME_STATE", gs)
-            p.tick(8)
+            p.end_card(8)                            # END-WAIT: the card needs a key after the quiet (was tick(8))
             p.settle(4)
             fr = p.frame()
             if PNG:
@@ -297,8 +300,10 @@ def main():
             check(f"E {tag}: title", t_ok)
             vx = lx + S["EC_VX"]
             rows = [("CLASS", "WARRIOR" if cls == K_KNIGHT else "MAGE"), ("LEVEL", "7"), ("DEPTH", "5"), None,
-                    ("KILLS", str(kills)), ("TURNS", str(turns))]
+                    ("KILLS", str(kills)), ("TURNS", str(turns)),
+                    ("BOOKS", f"{books[0]}/{books[1]}"), ("ITEMS", str(items))]   # STATS2 rows 17 / 18
             rows.append(("BEST KILL", kname(best)) if kills else None)
+            rows += [None] * (21 - r0 - len(rows) + 1)   # nothing else down to row 21 (PRESS on 22)
             for i, rw in enumerate(rows):
                 c0 = lx // 8                     # the table's columns (the portraits / lectern lie outside)
                 want = orw(text6(rw[0], 0, 24 - c0), text6(rw[1], vx - lx, 24 - c0)) if rw else [bytes(24 - c0)] * 8
@@ -310,9 +315,9 @@ def main():
         KILLER = K_GOBLIN
         TROW = S["EC_TROW"]
         for cls, hn in ((K_KNIGHT, "warrior"), (K_WIZARD, "mage")):
-            card(cls, "killer", 37, 4512, KX["OGRE"], f"endcard_killer_{hn}")
+            card(cls, "killer", 37, 4512, KX["OGRE"], f"endcard_killer_{hn}", (3, 5), 12)
             card(cls, "died", 0, 0, 0, f"endcard_died_{hn}")
-            card(cls, "win", 1234, 65535, S["K_DKNIGHT"], f"endcard_win_{hn}")
+            card(cls, "win", 1234, 65535, S["K_DKNIGHT"], f"endcard_win_{hn}", (255, 255), 255)
         print(f"stats1: {len(fails)} failed" + (f": {fails[:10]}" if fails else ""), flush=True)
         return 1 if fails or h.failures else 0
 
