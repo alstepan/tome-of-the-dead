@@ -7,7 +7,7 @@
 ; ASLEEP), §6 V3 (flashes). The generator (items_ovl.asm, T6) fills
 ; TRAP_LIST; the known plate is drawn by build_room_map (bank 3: T_TRAP in the
 ; map, its type attr into TILE_ATTRS[T_TRAP]), mid-room by tr_plate / tr_show
-; (the attr) + ap_put_a (bank 7, a plain call now).
+; -> far3 tr_put3 (TRAP-OR: both OR-composite it over the cell, bank-3 trap3.asm).
 ;
 ; Two halves (review 2026-10-26: a trap event on the input tick overran the
 ; 126k cap, pmix + DART 141k T):
@@ -211,27 +211,21 @@ trap_step:
                 xor  a                         ; odd steps off
                 jr   .pl
 
-; tr_show / tr_plate — HL = an entry in CUR_ROOM: its plate drawn in its type
-; attr / drawn with TILE_ATTRS[T_TRAP] := A; redrawn next render + the attr
-; shadow (ap_put_a, bank 7: the one cell).  TRAP2: no trap is ever erased.
-; Keep HL.  Clobbers: A, BC, DE.   ~4k T
+; tr_show / tr_plate — HL = an entry in CUR_ROOM: its plate drawn in its type attr /
+; with attr A (PLATE_FLASH_ATTR, or 0 = off: the cell as it was). TRAP-OR: bank-3 tr_put3
+; ORs the plate over the cell's decor (the decor's attr unless the cell is T_AIR or the
+; flash), redrawn next render + the attr shadow.  TRAP2: no trap is ever erased.
+; Keep HL.  Clobbers: A, BC, DE.   ~2k T
 tr_show:        call tr_ink                    ; A = its type attr
-tr_plate:       ld   (TILE_ATTRS + T_TRAP), a  ; (<= 1 trap a room: item_defs.asm)
-                ld   b, T_TRAP
-                push hl
-                ld   a, (hl)
-                ld   e, a
-                and  TRF_ROOM_MASK
-                bit  TRF_S1_BIT, e
-                jr   z, .s
-                or   FL_S1
-.s:             ld   e, a                      ; E = the FL_ROOM-style byte
-                call tr_col                    ; A = col
-                ld   d, b                      ; D = the tile
-                call ap_put_a                  ; (A, DE in; keeps IX)
+tr_plate:       push hl
+                ex   de, hl                    ; DE = the entry (far3 passes A, DE in)
+                ld   hl, tr_put3               ; bank 3 trap3.asm: B, C = the cell out
+                call far3
+                ld   de, $0101
+                call queue_damage              ; (keeps BC, DE)
+                call shadow_rect               ; (leaves bank 7 paged: ours)
                 pop  hl
                 ret
-                ASSERT TRF_ROOM_MASK == FL_ROOM_MASK
 
 ; tr_eff — the trigger's step 0 (HL = the entry; see trap_step).
 tr_eff:

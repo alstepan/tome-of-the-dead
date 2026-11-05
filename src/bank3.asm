@@ -616,53 +616,6 @@ build_room_map:
                 add  a, FL_STRIDE
                 ld   l, a
                 djnz .pt
-                ; 3E-T16 known unspent traps (game.md §1.5): T_TRAP in their
-                ; standing-row cell, before the deriver (decor needs T_AIR: a
-                ; known trap overrides decor), and its type attr into
-                ; TILE_ATTRS[T_TRAP] (<= 1 trap a room; the draw that follows
-                ; reads it). All TRAP_MAX entries: unused ones are 0 (never known).
-                ld   hl, TRAP_LIST
-.tr:            ld   a, (TMP0)
-                xor  (hl)
-                and  TRF_ROOM_MASK | TRF_KNOWN | TRF_SPENT
-                cp   TRF_KNOWN                 ; this room, known, not spent
-                jr   nz, .tn
-                push hl
-                ld   a, (hl)
-                and  TRF_S1
-                rrca
-                rrca
-                rrca
-                rrca                           ; s
-                call storey_row                ; (bank 2) A = 9s+7
-                ld   b, a
-                inc  l
-                ld   a, (hl)
-                and  TR_COL_MASK
-                ld   c, a
-                xor  (hl)                      ; the type << 5
-                rlca
-                rlca
-                rlca
-                add  a, tr_ink3 & $FF
-                ld   e, a
-                adc  a, tr_ink3 >> 8
-                sub  e
-                ld   d, a
-                call map_cell
-                ld   a, (hl)
-                or   a
-                jr   nz, .tk                   ; an item there: it shows (never generated)
-                ld   (hl), T_TRAP
-                ld   a, (de)
-                ld   (TILE_ATTRS + T_TRAP), a
-.tk:            pop  hl
-.tn:            inc  l
-                inc  l
-                ld   a, l
-                cp   (TRAP_LIST + TRAP_MAX * TRAP_STRIDE) & $FF
-                jr   nz, .tr
-                ASSERT TRF_S1 == 1 << 4 && (TRAP_LIST >> 8) == ((TRAP_LIST + TRAP_MAX * TRAP_STRIDE) >> 8)
                 ; P3 (game.md §1.3): the Sanctum's lectern, rows LECT_ROW..+1 of storey 1 against the
                 ; dead-end wall (the door on the right: cols 1-2, else 29-30), ids TL TR / BL BR. Every
                 ; build (the Tome's state is TOME_HP); BEFORE the decor, whose T_AIR footprint rule then
@@ -714,11 +667,36 @@ build_room_map:
                 or   a                         ; T_AIR only (decor / potion: no glow)
                 jr   nz, .x
                 ld   (hl), T_GLOW              ; HL = the row-16 cell above the exit's middle
+                ASSERT T_AIR == 0
+                ; 3E-T16 known traps (game.md §1.5): T_TRAP in their standing-row cell,
+                ; TRAP-OR: LAST (after the decor, the lectern and the gate), composed over
+                ; whatever the cell holds (tr_cell3: decor pixels kept, the decor's attr; an
+                ; item marker shows instead), so the decor never depends on which traps are
+                ; known. All TRAP_MAX entries: unused ones are 0 (never known).
+.x:             ld   hl, TRAP_LIST
+.tr:            ld   a, (TMP0)
+                xor  (hl)
+                and  TRF_ROOM_MASK | TRF_KNOWN | TRF_SPENT
+                cp   TRF_KNOWN                 ; this room, known (TRAP2: never spent)
+                jr   nz, .tn
+                push hl
+                call tr_loc3                   ; HL = its map cell (TMP1 page), A = its type
+                add  a, tr_ink3 & $FF
+                ld   e, a
+                adc  a, tr_ink3 >> 8
+                sub  e
+                ld   d, a
+                ld   a, (de)                   ; its type attr
+                call tr_cell3
+                pop  hl
+.tn:            inc  l
+                inc  l
+                ld   a, l
+                cp   (TRAP_LIST + TRAP_MAX * TRAP_STRIDE) & $FF
+                jr   nz, .tr
                 pop  ix
                 ret
-                ASSERT T_AIR == 0
-.x:             pop  ix
-                ret
+                ASSERT (TRAP_LIST >> 8) == ((TRAP_LIST + TRAP_MAX * TRAP_STRIDE) >> 8)
                 ASSERT FL_ROOM == 0 && FL_COL == 1 && FL_ITEM == 2 && FL_S1 == $80
                 ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE <= 256
                 ASSERT (FL_EMPTY & FL_ROOM_MASK) >= GRID_CELLS
@@ -971,6 +949,7 @@ decor_room:
                 INCLUDE "turn3.asm"            ; B3B-R2 turn logic: monster phase, attacks, potions
                 INCLUDE "lq3.asm"              ; AI-L1: lq_block (the ladder queue: strongest first; R6 until MEM-RECLAIM w3)
                 INCLUDE "combat3.asm"          ; D3-6a: hit_roll, deal_hit (shared damage core)
+                INCLUDE "trap3.asm"            ; TRAP-OR: tr_cell3 / tr_put3 (the plate OR-composited)
                 INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
                 INCLUDE "rank3.asm"            ; D3-7: abil_load (ABIL_DESC for the bank-7 ability code)
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing
