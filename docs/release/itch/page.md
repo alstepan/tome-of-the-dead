@@ -34,20 +34,58 @@ The Tome of the Dead lies in the Sanctum beneath eight dark depths, and it hurts
 
 ### Controls
 
-Defaults shown. You can pick a joystick or redefine the keys from the main menu.
+Every action works with a joystick alone (four directions, diagonals and FIRE). Keyboard players use the default keys **Q A O P SPACE** (up, down, left, right, fire), or redefine them from the main menu. A joystick and the keys work together.
 
-| Action | Keys (default) | Joystick |
+**Moving**
+
+| Action | Keys | Joystick |
 |---|---|---|
-| Walk, turn, attack, open door | O / P | Left / Right |
-| Climb a ladder | Q / A | Up / Down |
-| Jump a narrow pit | Q+O / Q+P | Up-Left / Up-Right |
-| Wait a turn and search for traps | A (when no ladder below), or SYMBOL SHIFT+M | Down |
-| Use the selected icon | SPACE (or ENTER) | FIRE tap |
-| Choose an icon | 1–0 directly, or A+SPACE, then O / P, then SPACE | Down+FIRE, then Left / Right, then FIRE (Up exits) |
-| Inventory | I, or FIRE on the BAG icon | FIRE on the BAG icon |
-| Pause (resume, sound, quit) | BREAK | FIRE held + Up |
+| Walk, turn round, attack by walking into a monster, open a door | O / P | Left / Right |
+| Climb a ladder up / down | Q / A | Up / Down |
+| Jump a narrow pit | Q+O / Q+P | Up+Left / Up+Right |
+| Wait a turn and search for traps | A with no ladder below, or **.** (SYMBOL SHIFT+M) | Down |
 
-Main menu keys: **1** Start, **2** Hero (Warrior or Mage), **3** Controls (Keys, Kempston, Sinclair 1, Sinclair 2), **4** Redefine keys, **5** Sound. The number keys 1-0 also jump to icon slots in game.
+A tap turns you round without spending a turn; holding the direction walks.
+
+**Icons (attacks, spells, items)**
+
+The icon bar along the bottom holds your attacks, spells, quick items and the BAG.
+
+| Action | Keys | Joystick |
+|---|---|---|
+| Use the selected icon, towards the way you face | SPACE or ENTER | tap FIRE |
+| Select an icon directly | **1**-**9**, **0** (slot 10) | - |
+| Icon mode: pick an icon with the game paused | A+SPACE | Down+FIRE together |
+| In icon mode: move / use / leave | O P / SPACE / Q, A or BREAK | Left Right / FIRE / Up or Down |
+| Close the door you face, or strike the Tome | use the sword or staff icon | same |
+
+Using an icon that is not ready (no arrows, no mana, no bow yet) costs no turn and tells you why.
+
+**Bag (inventory)**
+
+| Action | Keys | Joystick |
+|---|---|---|
+| Open the bag | **I**, or use the BAG icon | FIRE on the BAG icon |
+| Move / choose an action (eat, drink, read, equip, discard) / confirm / back | Q A O P / O P / SPACE / A+SPACE | directions / Left Right / FIRE / Down+FIRE |
+
+Items on the floor are picked up automatically at the end of your turn.
+
+**Pause and sound**
+
+| Action | Keys | Joystick |
+|---|---|---|
+| Pause (Resume, Sound, Quit) | BREAK | hold FIRE + Up |
+| Cycle sound: all on, effects only, off | **S** | via Pause, Sound |
+| Quit confirmation | Y or FIRE = yes, anything else = no | FIRE = yes |
+
+**Main menu** (number keys only)
+
+**1** Start (or ENTER) - **2** Hero: Warrior / Mage - **3** Controls: Keys, Kempston, Sinclair 1, Sinclair 2 - **4** Redefine keys - **5** Sound: all on, effects only, off.
+
+- **Sinclair 1** uses keys 6-0, **Sinclair 2** keys 1-5 (Interface 2 / +2 joystick ports). Kempston is read only once selected.
+- **Redefine** asks for UP, DOWN, LEFT, RIGHT, FIRE. ENTER, 1-0, I, S, CAPS SHIFT and SYMBOL SHIFT are reserved; BREAK cancels and keeps your old keys.
+- The how-to-play pages: any key for the next page, BREAK skips them.
+- After death or victory, press a number key or ENTER to return to the menu.
 
 ### How to load
 
