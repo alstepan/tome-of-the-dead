@@ -336,10 +336,8 @@ def check(b, stats=None):
         elif not item_ok(b, r, s, ent[1]): v.append(f"floor {i} illegal cell col {ent[1]} s{s}")
     if not 2 <= fn <= 3: v.append(f"potion count {fn}")
     arr0 = rd(b, start, "RD_ARRCOL")
-    if depth >= 2:
-        if sx != arr0 + 1: v.append(f"start x {sx} != arrival col {arr0} + 1")
-    elif sx != arr0:                        # H1-D1: D1 enters mid-ladder on the arrival shaft
-        v.append(f"D1 start x {sx} != arrival col {arr0}")
+    if sx != arr0:                          # H1-ARRIVAL: every depth enters mid-ladder on the shaft
+        v.append(f"start x {sx} != arrival col {arr0}")
     if stats is not None:
         stats["pits_n"] += sum(1 for r in present if rd(b, r, "RD_PITCOL"))
     for k, nm in ((("wide pit",), "wide pits"), (("mid-block",), "mid-blocks")):

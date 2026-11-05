@@ -279,6 +279,68 @@ def main():
                   (hero()["Y"], turns() - t0, p.rb("CUR_ROOM"), p.rb("EXIT_KIND")) == (0, 1, st, 0),
                   (hero()["Y"], turns() - t0, p.rb("CUR_ROOM")))
 
+        # ---- A: H1-ARRIVAL every depth: after level_descend, mid-ladder at the arrival shaft top ----
+        def descend_from(d0):
+            # interrupts ON: level_enter's stinger_wait HALTs on the ISR (a DI stub hangs there)
+            code = bytes([0x3E, d0, 0x32] + w16(S["LVL_DEPTH"]) + [0xCD] + w16(S["level_descend"])
+                         + [0x00, 0x18, 0xFE])
+            end = STUB + len(code) - 3
+            p.z.cmd("write-memory %d %s" % (STUB, " ".join(str(b) for b in code)))
+            p.z.cmd("set-breakpoint 3 PC=%d" % end)
+            p.extra_probes = {end}
+            pc0 = p.pc()
+            p.z.cmd("set-register PC=%d" % STUB)
+            for _ in range(400):                       # short runs (the 30 s ZRCP timeout); the tick
+                p.z.cmd("run 2000000")                 # probes may stop it on the way: run on
+                if p.pc() == end:
+                    break
+            ok = p.pc() == end
+            p.z.cmd("set-breakpoint 3")
+            p.extra_probes = set()
+            p.z.cmd("set-register PC=%d" % pc0)
+            p.release()
+            p.settle(4)
+            p.until(lambda: p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+            p.settle()
+            return ok
+
+        for hk, hn, seed in ((K_KNIGHT, "Warrior", 0x2345), (K_WIZARD, "Mage", 0x1BAD)):
+            p.proto_start = 0
+            p.load()
+            p.proto_start = 1
+            p.wait_state(GS_SELECT)
+            p.wb("seed_fixed", 1)
+            p.z.cmd("write-memory %d %d %d" % (S["seed_value"], seed & 255, seed >> 8))
+            p.wb("INPUT_REPEAT", 0)
+            p.wb("ANIM_FREEZE", 1)
+            p.wb("INPUT_SRC", 1)
+            p.menu_start(hk)
+            p.until(lambda: p.idle() and p.rb("GAME_STATE") == GS_PLAYING, 600)
+            for d in range(2, 9):
+                ok = descend_from(d - 1)
+                st = p.rb("LVL_START")
+                arr = p.rb(S["ROOM_DESC"] + 16 * st + S["RD_ARRCOL"])
+                e = hero()
+                check(f"A {hn} D{d}: level_descend -> on the start room's arrival shaft top, mid-ladder "
+                      f"(x {arr}, y 0, M_REST, E_AIDIR +1)",
+                      ok and (p.rb("LVL_DEPTH"), p.rb("CUR_ROOM"), arr != 0, e["X"], e["Y"], is_standing(e["Y"], kh),
+                              e["MODE"], e["AIDIR"]) == (d, st, True, arr, 0, False, 0, 1),
+                      (ok, p.rb("LVL_DEPTH"), st, arr, e["X"], e["Y"], e["MODE"], e["AIDIR"]))
+                t0 = turns()
+                p.tick(30)
+                k_ok = p.no_turn("K")
+                check(f"A {hn} D{d}: waits (30 ticks, no turn); UP at the top = no turn, no exit, E_AIDIR kept",
+                      k_ok and (turns() - t0, hero()["Y"], p.rb("CUR_ROOM"), p.rb("EXIT_KIND"), hero()["AIDIR"])
+                      == (0, 0, st, 0, 1), (k_ok, turns() - t0, hero()["Y"], p.rb("EXIT_KIND"), hero()["AIDIR"]))
+                t0 = turns()
+                ys = []
+                for _ in range(2):
+                    p.turn("J")
+                    ys.append(hero()["Y"])
+                check(f"A {hn} D{d}: J, J = 2 ladder turns to stand on storey 0",
+                      (ys, turns() - t0, is_standing(hero()["Y"], kh)) == ([1, y0], 2, True), (ys, turns() - t0))
+                p.set_ent(0, HP=hero()["MAXHP"])           # (the poisoned / hit run must not die mid-test)
+
         # ---- C: cork_check bound ----------------------------------------------------------
         p.boot(K_KNIGHT)
         p.isolate()
