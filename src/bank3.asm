@@ -670,8 +670,8 @@ build_room_map:
                 ASSERT T_AIR == 0
                 ; 3E-T16 known traps (game.md §1.5): T_TRAP in their standing-row cell,
                 ; TRAP-OR: LAST (after the decor, the lectern and the gate), composed over
-                ; whatever the cell holds (tr_cell3: decor pixels kept, the decor's attr; an
-                ; item marker shows instead), so the decor never depends on which traps are
+                ; whatever the cell holds (far7 tr_build7 -> tr_put7 -> far3 tr_cell3, trap3.asm;
+                ; an item marker shows instead), so the decor never depends on which traps are
                 ; known. All TRAP_MAX entries: unused ones are 0 (never known).
 .x:             ld   hl, TRAP_LIST
 .tr:            ld   a, (TMP0)
@@ -680,14 +680,9 @@ build_room_map:
                 cp   TRF_KNOWN                 ; this room, known (TRAP2: never spent)
                 jr   nz, .tn
                 push hl
-                call tr_loc3                   ; HL = its map cell (TMP1 page), A = its type
-                add  a, tr_ink3 & $FF
-                ld   e, a
-                adc  a, tr_ink3 >> 8
-                sub  e
-                ld   d, a
-                ld   a, (de)                   ; its type attr
-                call tr_cell3
+                ex   de, hl                    ; DE = the entry (TMP1 = this build's page)
+                ld   hl, tr_build7
+                call far7
                 pop  hl
 .tn:            inc  l
                 inc  l
@@ -949,7 +944,7 @@ decor_room:
                 INCLUDE "turn3.asm"            ; B3B-R2 turn logic: monster phase, attacks, potions
                 INCLUDE "lq3.asm"              ; AI-L1: lq_block (the ladder queue: strongest first; R6 until MEM-RECLAIM w3)
                 INCLUDE "combat3.asm"          ; D3-6a: hit_roll, deal_hit (shared damage core)
-                INCLUDE "trap3.asm"            ; TRAP-OR: tr_cell3 / tr_put3 (the plate OR-composited)
+                INCLUDE "trap3.asm"            ; TRAP-OR: tr_cell3 (the plate OR-composited; far3 from bank-7 tr_put7)
                 INCLUDE "proj3.asm"            ; D3-6b: proj_fire (projectile logic at cast time)
                 INCLUDE "rank3.asm"            ; D3-7: abil_load (ABIL_DESC for the bank-7 ability code)
                 INCLUDE "icons3.asm"           ; C3-3 icon bar state + drawing
