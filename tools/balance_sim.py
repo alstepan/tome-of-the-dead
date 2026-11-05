@@ -219,7 +219,7 @@ class Data:
         import combat_tables as C
         self.C = C
         sym, m = C.load()
-        sna = open(os.path.join(REPO, "build/wazhack.sna"), "rb").read()
+        sna = open(os.path.join(os.environ.get("WZ_BUILD_DIR", os.path.join(REPO, "build")), "wazhack.sna"), "rb").read()
         self.sym = sym
         ov = overrides or {}
         self.params = dict(PARAMS)

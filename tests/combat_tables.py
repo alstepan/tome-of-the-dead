@@ -21,6 +21,10 @@ def load():
         m = re.match(r"(\S+): EQU 0x([0-9A-Fa-f]+)", ln)
         if m:
             sym[m.group(1)] = int(m.group(2), 16)
+    need = [k for k in ("KT_BONUS", "KT_FLAGS", "KF_SLOW") if k not in sym]
+    if need:
+        sys.exit("combat_tables: %s lacks %s - stale build; run tools/build.sh and/or set WZ_BUILD_DIR=<dir>/build"
+                 % (BUILD_DIR, ", ".join(need)))
     tap = open(os.path.join(BUILD_DIR, "wazhack.tap"), "rb").read()
     blocks, i = [], 0
     while i < len(tap):
