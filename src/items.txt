@@ -46,7 +46,7 @@
 # Composed lines (the checks in tools/itempack.py, LOG_MAX 32):
 #   pick / equip / remove / discard + name (no prefix)
 #   eat + food name · drink / read + potion or scroll name · read + book name
-#   trap_found + dart / gas / alarm / TELEPORT · bk_read (E)
+#   trap_found + dart / gas / alarm / TELEPORT
 
 # --- word-table seeds -----------------------------------------------------------
 [book]
