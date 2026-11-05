@@ -8,7 +8,7 @@ item_mp + the poll (xp2.asm / icons.asm); the rank info line item_info (D3-9a).
   L   a kill through deal_hit -> XP += KXP; level-up exactly at the threshold
       (XP 37 + Goblin 3 = 40 -> L2; 36 + 3 = 39 stays L1); a respawned Goblin
       (EF_RESPAWN) gives 1; LVL_SH (panel digit at (31, 19)) follows
-  G   gains: Warrior max/cur HP +4, MP +1; Mage HP +3, MP +2;
+  G   gains: Warrior max/cur HP +5 (WIDOW-SPIT; was +4), MP +1; Mage HP +3, MP +2;
       "YOU REACH LEVEL 2!"
   S   steps: XP 919 -> 922 at L1 = 7 levels at once: gains x 7, atk +2 (L4, L8),
       eva +1 (L6) in the hero's kind_tab columns; lines REACH LEVEL 8 / STRIKE
@@ -172,7 +172,7 @@ def run(h, p, check):
     st = hero_stats()
     check("L2 XP 37 + 3 = 40 = XP_NEXT[2]: L2, XP_UP cleared", x == 40 and st[0] == 2 and p.rb("XP_UP") == 0,
           (x, st))
-    check("G1 Warrior: HP 30/30 -> 34/34, MP 3/6 -> 4/7", st[1:] == (34, 34, 4, 7), st)
+    check("G1 Warrior: HP 30/30 -> 35/35, MP 3/6 -> 4/7", st[1:] == (35, 35, 4, 7) and S["LUP_W_HP"] == 5, st)
     check("G1 'YOU REACH LEVEL 2!' logged once", lines.count(TXT["xp_reach"] + "2!") == 1, lines)
     check("L3 panel level digit: LVL_SH follows LVL", p.rb("LVL_SH") == 2, p.rb("LVL_SH"))
     check("G1 no step at L2: atk / eva unchanged", katk(K_KNIGHT) == base_w, (katk(K_KNIGHT), base_w))
@@ -190,7 +190,7 @@ def run(h, p, check):
     kill(919)
     st = hero_stats()
     a1 = katk(K_KNIGHT)
-    check("S1 XP 922 from L1: L8 at once, HP +28, MP +7", st == (8, 58, 58, 7, 13), st)
+    check("S1 XP 922 from L1: L8 at once, HP +35, MP +7", st == (8, 65, 65, 7, 13), st)
     check("S1 atk +2 (L4, L8), eva +1 (L6)", a1 == (base_w[0] + 2, base_w[1] + 1), (a1, base_w))
     want = [TXT["xp_reach"] + "8!", TXT["xp_atk"], TXT["xp_eva"]]
     check("S1 lines: REACH LEVEL 8!, STRIKE TRUER, FEEL NIMBLE (once each)",

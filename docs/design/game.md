@@ -1146,8 +1146,9 @@ level is `LVL_EXP(d) = d`** at every depth entry (thresholds sit ~15 % under the
 totals, so a hero who skips a few monsters still keeps pace; skipping a third of a level
 drops one level). L9 now comes early on D8 for thorough play.
 
-**Level-up** (each level; several at once loop): **Warrior max HP +4, max MP +1 · Mage max
-HP +3, max MP +2; current HP/MP rise by the same amounts** (not a full heal). The class split
+**Level-up** (each level; several at once loop): **Warrior max HP +5, max MP +1 · Mage max
+HP +3, max MP +2; current HP/MP rise by the same amounts** (not a full heal). (WIDOW-SPIT, user
+2026-11-05: Warrior +4 → +5, the compensation for the Black Widow's spit; `docs/design/widow_spit_sim.md`.) The class split
 replaces the Vigor/Power tomes, which are now rare (§5: books mostly teach or rank up
 abilities). Extra steps: **L4 atk +1 · L6 eva +1 · L8 atk +1** (mirrors
 the monsters' atk + (d − 1) div 3, §9.1). DEF stays gear-only.
@@ -1444,7 +1445,7 @@ monster hit on the hero), with no "applied this turn" flag. A banked monster (ot
 | **STUNNED** | skip action; eva 0; cannot parry | timer (**not** HP loss). **HOLD_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero), STUN trap 2–3 rolled (hero, §1.5.1) |
 | **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action fails because of the direction the turn is spent (`YOU STUMBLE.`); a non-direction refusal costs no turn and faces back (§2.3, §6.4.2 R4). Whirlwind, climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
 | **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) **and no spells** (Mage: all 5; user 2026-11-01) → illegal, no MP, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; thrown daggers, arrows and items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll 6 (room); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
-| **POISON** | −1 HP every **4th** turn (step 1); **cannot eat** (§7.2) | timer; Cure | **adds per application, cap 30** (POIS1, §6.4.3): Spider bite **12**, Giant Rat 12, Spider Queen **18**, Black Widow **24**, DART trap 12 |
+| **POISON** | −1 HP every **4th** turn (step 1); **cannot eat** (§7.2) | timer; Cure | **adds per application, cap 30** (POIS1, §6.4.3): Spider bite **12**, Giant Rat 12, Spider Queen **18** (bite) / **12** (spit), Black Widow **24** (bite) / **6** (spit, WIDOW-SPIT), DART trap 12 |
 | **WEAK** | the hunger-WEAK penalties (§7: atk −2, eva −1, dmg −1 min 1 on **physical hits only**, §6.4.2 R1, no MP regen, no jump); **not cumulative** with hunger WEAK (the same penalties apply once) | timer; Cure | **Mummy curse** (below) 12 |
 
 **Mummy curse (defines §10's "curse").** A Mummy (and the Golden Pharaoh) hit drains 5 FOOD
@@ -1619,6 +1620,9 @@ own, but it would leave the D2 Mage (19 HP) at about half HP after one Spider Qu
   answer, and Firebolt is the Mage's.
 - D5 Black Widow (one bite 24 → 6 HP; two → cap 8): net −4 / −6 after regen. That is 15 % of the
   Warrior's 40 HP and 21 % of the Mage's 28 HP.
+- **Spit sources (BOSS-RANGED / WIDOW-SPIT, every hit, no chance roll; Silk Cloak immune, Cure clears):** the golden Spider
+  Queen's spit **+12**, the Black Widow's spit **+6** (range 6, every 4th turn): a Widow that spits on the way in and
+  then bites reaches 6 + 24 = 30 (the cap) after one bite. The bites are unchanged.
 - Worst case at any depth: a capped hero loses **8 HP over 30 turns**, never below 1 HP.
 - The danger estimate (§3.7) uses `EHP = HP − (POISON turns >> 2)`. That is now exactly the
   remaining poison HP (turns / 4), so the formula is unchanged. It reads `ST_X`.
@@ -2866,6 +2870,9 @@ Shooters (one descriptor row each, R6; the Archmage's row is T11):
 | Goblin Slinger | 6 | 2 | F1 roll | 1d3 PHYS, as above | — | yes | yes | dagger_spin `$06` |
 | Necromancer | 8 | 2 | auto-hit (spell) | 1d6+1 DARK, `roll×res`, no DEF | FEAR 3, 85/256 | yes | yes (user 2026-10-29) | NBOLT |
 | Bone Caller | 8 | 2 | auto-hit | as Necromancer | as Necromancer | yes | yes | NBOLT |
+| Golden Goblin King (BOSS-RANGED, golden only) | 6 | 2 | F1 roll + golden | 1d3 + 1 PHYS | — | no: walks in between shots | — | dagger_spin `$06` |
+| Golden Spider Queen (BOSS-RANGED, golden only) | 6 | 2 | F1 roll + golden | 1d2 + 1 PHYS | POISON **+12** always (Silk Cloak immune) | no: walks in | yes | spark_fly `$43` |
+| **Black Widow** (WIDOW-SPIT, every body) | 6 | **3** (every 4th turn) | F1 roll | **1d2** PHYS (not golden) | POISON **+6** always (Silk Cloak immune) | no: walks in | yes | spark_fly `$43` |
 
 Poltergeist is not a shooter (melee touch). atk / dmg include depth scaling and golden +2 / +1.
 - **Geometry.** `gap` = empty cols between the boxes (melee reach = gap 0–1). **In range iff
@@ -2874,7 +2881,7 @@ Poltergeist is not a shooter (melee touch). atk / dmg include depth scaling and 
   mid-ladder) and the same storey (`storey_ref`); every standing body of a storey overlaps,
   so no row test is needed. **Flight row** `fr = shooter top + 2` (tall: `9s+4`, Slinger:
   `9s+6`), always inside the standing hero's rows `9s+2..9s+7`; a 2-high shooter (BOSS-RANGED: the
-  Spider Queen, top `9s+6`) fires from its top row `9s+6` (top + 2 would be its floor).
+  Spider Queen; WIDOW-SPIT: the Black Widow, same) fires from its top row `9s+6` (top + 2 would be its floor).
 - **Clear line iff** (a) no `TF_SOLID` cell in `ROOM_MAP` row `fr` over the gap cols (air
   decor, torches and back-wall patches are non-solid by §1.2, so in practice only a mid-room
   block stops it) and (b) no body (any kind or state, mid-ladder included, pending excluded)
@@ -3532,7 +3539,7 @@ Short names ≤ 9 chars (3F-D3: `YOUR DAGGER MISSES THE ` + 9 = 32; final list �
 | | | **Rabbit Rat** | 8/2/3/0/1d4 | `$47` | **breeds**: hit and survives → 1 in 4 spawns one base **Rat** in the nearest legal cell (summon code, slot + §9.3 cap; `F_RESPAWN`); once per Rabbit Rat (`ENT_STAT` spare bit) |
 | Bat (`$43`) | **Screech Bat** | | 5/2/4/0/1d3 | `$05` | bite 1 in 4 → CONFUSED 2 |
 | Goblin (`$44`) | **Goblin Slinger** | | 8/2/1/0/1d4; rock 1d3 PHYS r6 | `$06` | ranged AI as the Archer (cooldown 2); rock = `dagger_spin` frames at `$06`, not recoverable; weight 3 + 1 |
-| Spider | **Black Widow** | | 10/4/3/0/1d4 | `$02` | POISON 24 (POIS1 §6.4.3); bite 1 in 4 → **ACID** (armour `m −1`, §8.10; rev 5 replaces ASLEEP 2) |
+| Spider | **Black Widow** | | 10/4/3/0/1d4 | `$02` | POISON 24 (POIS1 §6.4.3); bite 1 in 4 → **ACID** (armour `m −1`, §8.10; rev 5 replaces ASLEEP 2); **spits poison** (WIDOW-SPIT, user 2026-11-05; §9.2 shooters table): range 6 (gap < 6), a shot every **4th** turn, keeps walking in between, d20 vs EVA, **1d2 − DEF** (min 1), a hit always adds **POISON +6** (cap 30; Silk Cloak immune; Cure clears); the Queen's magenta spark, same SFX and lines. Every Widow spits (no golden gate); ordinary Spiders never |
 | Skeleton (`$47`) | **Skeleton Guard** | | 14/3/2/2/1d6 | `$05` | **parries 1 in 4** PHYS hits (Death Knight parry; 0 dmg, `PARRIED`, no BLOCK frame: the hit flash is skipped); a parried melee hit **notches** the weapon 1 in 2 (§8.10) |
 | | | **Skeleton Knight** | 18/4/2/3/1d8 | `$44` | parries 1 in 3 (notch 1 in 2, §8.10); hit 1 in 4 → STUNNED 1 |
 | Ghost (`$45`) | **Poltergeist** | | 11/3/3/0/1d4 DRAIN | `$03` | touch 1 in 3 → FEAR 3 (replaces the Ghost's confusion) |

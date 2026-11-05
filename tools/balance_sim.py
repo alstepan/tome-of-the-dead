@@ -125,7 +125,7 @@ PARAMS = {
     "GOLD_XP": "image",                 # "image" = bxp_d + KXP_<base> (src/data7.asm + .sym); null = base-kind KXP only; or a list
     "JUMP": 1,                          # 2.4: jump-then-cast / jump-to-range bot tactic (0 = off)
     "JUMP_COLS": 6, "JUMP_FOOD": 2,     # D = 6 cols, 1 turn + 2 FOOD, never two turns in a row
-    "W_HP0": 24, "W_MP0": 6, "W_LVL_HP": 4, "W_LVL_MP": 1,     # 4 / 4.1 (hero_st_init / xp7 immediates = CODE)
+    "W_HP0": 24, "W_MP0": 6, "W_LVL_HP": None, "W_LVL_MP": 1,  # 4 / 4.1 (hero_st_init / xp7 immediates = CODE); W_LVL_HP null = .sym LUP_W_HP (5 since WIDOW-SPIT)
     "M_HP0": 16, "M_MP0": 10, "M_LVL_HP": 3, "M_LVL_MP": 2,
     "PS_R": 0,                          # 1 = Power Strike ignores PHYS R (CODE flag; BAL-1d W1 option)
     "BC_LIVE": None,                    # Bone Caller: max live summon-made bodies in the room (null = .sym BC_LIVE = 1; the sim used to have no cap at all)
@@ -140,6 +140,11 @@ PARAMS = {
     "RANGED_LT": 1,                     # a shooter fires at gap < r (ranged6.asm rg_line); 0 = the old sim's gap <= r
     "GOLD_RDMG": 1,                     # a golden shooter's ranged dmg + 1 (rg_shoot, §9.7 R1: the High Necromancer too)
     "BOSS_RANGED": 1,                   # the golden Goblin King daggers / Spider Queen spit (ranged_model.GOLD_ROWS)
+    # WIDOW-SPIT (docs/design/widow_spit_sim.md; in the game since 2026-11-05): null = the image (rk_tab[K_BLACK_WIDOW] != 0,
+    # rd_tab row RK_WIDOW: P = dhe * 2 = 6, period = N + 1 = 4); a number overrides (WIDOW_SPIT 0 = the pre-spit game)
+    "WIDOW_SPIT": None,                 # 1 = the Black Widow has the Queen's spit row (range 6, walks in between, 1d2 - DEF, no golden +1)
+    "WIDOW_POISON": None,               # poison added per spit hit (the Queen: 12); row dhe = P / 2
+    "WIDOW_PERIOD": None,               # a shot every Nth turn (the Queen: 3) -> row N = period - 1 (cd counts the walk turns)
 }
 POLICIES = {   # 4.3: rest_hp, rest_mp(Mage), heal, escape, kite_p, boss_retreat (fractions; None = never)
     "cautious": dict(rest_hp=0.70, rest_mp=0.70, heal=0.35, escape=0.25, kite=1.0, retreat=0.40),
@@ -194,7 +199,7 @@ UNIQUE = {1: "Goblin Helm", 2: "Silk Cloak", 3: "Gravecloak", 4: ("Cleaver", "Bo
           6: "Ring of the Grave", 7: "Mirror Helm"}
 FOODS = [10, 15, 20, 30, 40]   # 7 / 8: Carrot Apple Pear Cheese Meat (uniform)
 DROP_FOOD = {"RAT": (30, 1, 4), "GOBLIN": (15, 1, 4), "ORC": (40, 1, 3)}   # (value, k, N) 8.6/9.6
-LEVELUP = {"W": (4, 1), "M": (3, 2)}
+LEVELUP = {"W": (5, 1), "M": (3, 2)}   # documentation only (the sim reads W_LVL_HP / M_* params; WIDOW-SPIT: W 4 -> 5)
 HERO0 = {"W": dict(hp=24, mp=6, atk=3, eva=2), "M": dict(hp=16, mp=12, atk=1, eva=1)}
 
 # ----------------------------------------------------------------------------------------------
@@ -293,8 +298,29 @@ class Data:
             P["TOME_HP"] = sym["TOME_MAX"]
         if P["TOME_AURA_R"] is None:
             P["TOME_AURA_R"] = sym["TOME_AURA_R"]
+        if P["W_LVL_HP"] is None:
+            P["W_LVL_HP"] = sym["LUP_W_HP"]
+        self.image_widow(sna, sym)
         self.tiers = {self.kid[b]: tuple(self.kid[t] if t else None for t in ts) for b, ts in TIERS.items()}
         self.tier_base = {t: b for b, ts in self.tiers.items() for t in ts if t is not None}
+
+    def image_widow(self, sna, sym):
+        """WIDOW-SPIT params from the image: rk_tab[K_BLACK_WIDOW] (bank 2, .sna) -> its rd_tab row (R6 tape block,
+        combat_tables.R6BLK); the row must be the Queen's spit (ranged_model.GOLD_ROWS) but for N and dhe."""
+        P, C = self.params, self.C
+        rk = sna[27 + sym["rk_tab"] - 0x4000 + self.kid["BLACK_WIDOW"]]
+        row = None
+        if rk:
+            o = sym["rd_tab"] - sym["R6_ADDR"] + (rk - 1) * 8
+            row = list(C.R6BLK[o:o + 8])
+            q = self.rows_q = __import__("ranged_model").GOLD_ROWS[self.kid["SPIDER"]]
+            assert row[0] == q[0] and row[2:6] == list(q[2:6]) and row[7] == sym["FID_" + q[7]], ("Widow row != the Queen's spit", row)
+        if P["WIDOW_SPIT"] is None:
+            P["WIDOW_SPIT"] = 1 if rk else 0
+        if P["WIDOW_POISON"] is None:
+            P["WIDOW_POISON"] = row[6] * 2 if row else 12
+        if P["WIDOW_PERIOD"] is None:
+            P["WIDOW_PERIOD"] = row[1] + 1 if row else 3
 
     def image_gold_xp(self):
         """Golden-boss XP by depth = bxp_d[depth - 1] (src/data7.asm, boss7 grate_open) + the base kind's KXP (kx_tab, in the
@@ -450,6 +476,7 @@ class Game:
         self.overkill = [0.0, 0.0]
         self.potions_used = 0
         self.scrolls_used = 0
+        self.wstats = [0, 0]   # [fights containing a Black Widow, hero HP lost in them]
         self.entry = []      # (hp, mp, food, lvl) at each depth entry
         self.killer = None
         self.in_boss_dead = False
@@ -1166,6 +1193,19 @@ class Game:
         self.hx = 0   # hero shifts by kiting; monsters coordinates absolute
 
     def fight(self, mons, boss_room):
+        """Widow-fight accounting wrapper (what-if stats only): HP lost over fights that contain a Black Widow."""
+        bw = self.D.kid["BLACK_WIDOW"]
+        if not any(m.k["id"] == bw and m.hp > 0 for m in mons):
+            return self.fight0(mons, boss_room)
+        hp0 = self.h.hp
+        ws = self.wstats
+        ws[0] += 1
+        try:
+            return self.fight0(mons, boss_room)
+        finally:
+            ws[1] += hp0 - max(0, self.h.hp)
+
+    def fight0(self, mons, boss_room):
         """Returns 'clear' or 'retreat'.  Raises Dead / Stall.  Mutates the monster list in place."""
         D, P, h, pol = self.D, self.P, self.h, self.pol
         mons[:] = [m for m in mons if m.hp > 0]
@@ -1267,7 +1307,14 @@ class Game:
         kid = m.k["id"]
         if kid in self.D.grows:
             return self.D.grows[kid] if m.gold and self.P["BOSS_RANGED"] else None
+        if kid == self.D.kid["BLACK_WIDOW"]:   # WIDOW-SPIT: every body (no gold gate); ranged_model.ROWS has it too
+            return self.widow_row() if self.P["WIDOW_SPIT"] else None
         return self.D.rows.get(kid)
+
+    def widow_row(self):
+        """The Queen's GOLD_ROWS spit with the WIDOW_* knobs (same tuple layout as ranged_model.GOLD_ROWS)."""
+        r = self.D.grows[self.D.kid["SPIDER"]]
+        return (r[0], self.P["WIDOW_PERIOD"] - 1, r[2], r[3], r[4], r[5], self.P["WIDOW_POISON"] // 2) + tuple(r[7:])
 
     def in_rng(self, gap, r):
         """rg_line's range test: gap < r (RANGED_LT 0: the old sim's gap <= r)."""
@@ -1936,13 +1983,15 @@ def BOSS_LBL(m, depth):
 def run_batch(D, hero, policy, runs, seed, first=0):
     res = dict(n=0, wins=0, death_depth=[0] * 9, killers={}, dk={}, entry=[[0, 0.0, 0.0, 0.0] for _ in range(9)],
                spell_dmg={s: 0.0 for s in SPELLS}, spell_casts={s: 0 for s in SPELLS}, stalls=0, causes={},
-               turns=0, overkill=[0.0, 0.0], lvl_entry=[0.0] * 9, reached=[0] * 9)
+               turns=0, overkill=[0.0, 0.0], lvl_entry=[0.0] * 9, reached=[0] * 9, wfights=0, wloss=0)
     for i in range(first, first + runs):
         rng = random.Random("%s/%s/%s/%d" % (seed, hero, policy, i))
         g = Game(D, hero, policy, rng)
         won, depth, killer, cause = g.play()
         res["n"] += 1
         res["turns"] += g.t
+        res["wfights"] += g.wstats[0]
+        res["wloss"] += g.wstats[1]
         for j, (hp, mp, food, lvl) in enumerate(g.entry):
             res["reached"][j + 1] += 1
             res["entry"][j + 1][1] += hp
@@ -1966,7 +2015,7 @@ def run_batch(D, hero, policy, runs, seed, first=0):
 
 def merge_res(a, b):
     out = dict(a)
-    for k in ("n", "wins", "turns", "stalls"):
+    for k in ("n", "wins", "turns", "stalls", "wfights", "wloss"):
         out[k] = a[k] + b[k]
     for k in ("death_depth", "lvl_entry", "reached"):
         out[k] = [x + y for x, y in zip(a[k], b[k])]
@@ -2063,7 +2112,7 @@ def to_json(name, results):
         s = summarize(r)
         out["%s/%s" % (hero, pol)] = dict(n=r["n"], win=s["win"], ci95=[s["lo"], s["hi"]], death_depth=r["death_depth"],
                                           killers=r["killers"], dk=r["dk"], causes=r["causes"], reached=r["reached"],
-                                          mean_turns=r["turns"] / max(1, r["n"]), spell_dmg=r["spell_dmg"], spell_casts=r["spell_casts"])
+                                          mean_turns=r["turns"] / max(1, r["n"]), wfights=r["wfights"], wloss=r["wloss"], spell_dmg=r["spell_dmg"], spell_casts=r["spell_casts"])
     return out
 
 
