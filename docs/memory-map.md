@@ -5340,6 +5340,17 @@ Free bytes from the build DISPLAY (release `-DDEBUG_KIT=0`, main `704918e` -> af
 
 RECLAIM-C totals after the main merge (release, main `7485ffa` -> `feat/reclaim-c`): **bank 1 34 -> 176 (+142)**, bank 3 81 -> 96 (+15), bank 2 135 -> 150 (+15), AY slot 57 -> 9 (-48), R6 25 -> 24 (-1), bank 7 low 30 / high / low RAM / b0 / SRC6 unchanged. Goldens `game_select` / `game_select_mage` / `w24_menu` re-captured: the menu torches' LOOK-1 flame (user request 2026-11-02). `world` W21 / W26 fail on main `7485ffa` too (LOOK-1 / FLAME-RATE decor, not RECLAIM-C).
 
+## SUMMON-SFX / ENDCARD-CENTRE ledger (`feat/summon-sfx-endcard`, user 2026-11-05)
+
+- Summon sound: `sp_summon` (spawn6.asm, R6; necromancer / Bone Caller, Archmage and Pharaoh all go through it) requests the
+  existing `SFX_DRAIN` once per accepted summon action (not per body; no new SFX data), just before the cast pose. Monster AI
+  only runs for the shown room, so it is gated like the other monster-action sounds. (A bank-2 `sfx_msg` hook at the
+  `MSG_M_SUMMON` impact needed 8 B against bank 2's real 3 B slack, so it was not used.)
+- R6: `sp_bcall` now sits directly before `sp_summon` and falls into it (-2 B), `sp_summon` reads E_RCD once into L (-1 B), the
+  `ld a,SFX_DRAIN / call sfx_req` pair +5 B: R6 free 3 -> 1 B. Other banks unchanged.
+- End card centred: `EC_TAB_ROW` 10 -> 7, `EC_TROW` = `EC_TAB_ROW - 4` = 3, `EC_FEET` = 16, new `EC_PRESS_ROW` = `EC_TAB_ROW + 12` = 19
+  (was the literal 22). Ink extent title top .. PRESS bottom: 25-26 px above / 33 px below (was 49 / 9). Goldens refreshed.
+
 ## ENDCARD-G1 ledger (`feat/endcard-g1b`, 2026-11-02; plan "ENDCARD-L1F-G1", the approved L1f card with the G1 table)
 
 The end card (GS_DEAD / GS_WIN, `end_screen` -> far1 `end_card`) is a clean full screen: black border, `clear_screen`
