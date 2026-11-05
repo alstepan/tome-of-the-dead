@@ -395,7 +395,7 @@ level_new:
 ; the start room's entry (lp_enter: quota 0, so no monster; record VISITED,
 ; ROOM_VISITS = 1). Monsters spawn when the hero enters their room (do_exit
 ; -> lp_transition). Hero (slot 0): kind / HP / MAXHP / facing (E_POT: pot_sync)
-; carried over, room = LVL_START, x = level_start_x, standing on storey 0
+; carried over, room = LVL_START, x = level_start_x, mid-ladder at the shaft top (H1-ARRIVAL)
 ; (game.md §1.1 gaps (4)), CUR_ROOM = LVL_START. Clobbers: all but IY.
 ;------------------------------------------------------------------------------
 ; Hero E_FLAGS bits carried over a descend (everything else is rebuilt:
@@ -427,16 +427,9 @@ level_populate:
                 ld   a, c
                 or   EF_ACTIVE | EF_PLAYER
                 ld   (ix+E_FLAGS), a
-                KFL    KT_BH
-                ld   b, a
-                ld   a, (LVL_DEPTH)            ; H1-D1 (game.md §2.1): on D1 he enters down the
-                dec  a                         ; arrival shaft: mid-ladder at its top (y 0, the
-                jr   nz, .st                   ; climb rest pose), heading down (E_AIDIR: cork_check)
-                ld   (ix+E_AIDIR), 1
-                jr   .y                        ; (A = 0)
-.st:            ld   a, FLOOR_ROW0             ; storey 0: 8 - h
-                sub  b
-.y:             ld   (ix+E_Y), a
+                ld   (ix+E_Y), 0               ; H1-ARRIVAL (game.md §2.1): every depth, he enters
+                ld   (ix+E_AIDIR), 1           ; down the arrival shaft: mid-ladder at its top (the
+                                               ; climb rest pose), heading down (cork_check's dir)
                 call init_ent_common
                 pop  hl
                 ld   (ix+E_HP), l

@@ -5993,3 +5993,26 @@ Tests: `tests/h1climb.py` S (both heroes, generated D1 with fixed seeds: the sha
 waits, UP = no turn / no exit, 2 J turns down, UP standing at the foot = no climb, y 1 -> 0 plain step); `levelgen_test` 8000 /
 8000 + 3F 8000 / 8000, `levelcheck --full` 524288 / 524288, `levelgen_z80` 280 / 280 (`--f3`: 43 D8 fails, identical on main
 `b25e043`: pre-existing).
+
+### H1-ARRIVAL (`feat/h1-arrival`, 2026-11-05; on `feat/h1-climb` 5abe1b5; user "D2-D8 — yes", game.md §2.1 "H1-ARRIVAL")
+
+**Behaviour:** one arrival rule for every depth: the D1 start and every level descent (grate -> `level_descend` ->
+`level_enter` -> `level_populate`) put the hero mid-ladder at the top of the start room's arrival shaft (`x = RD_ARRCOL`,
+`y = 0`, M_REST, `E_AIDIR` +1); UP there = no turn, no exit (H1-D1's `try_climb .nx`, unchanged). The D1 special case is gone.
+The start room spawns nothing (quota 0) and no follower crosses a level exit (`level_reset` clears slots 1..15), so the shaft
+top is always free; D8's start room is an ordinary top-row room (the Sanctum / lair are on the bottom row).
+
+**Code (bank 3 only):** `level_start_x` = the arrival col (`rdp` + `RD_ARRCOL`; the D2+ `x = col + 1` legality search and the
+`hits_x` entry it alone used are gone); `level_populate` stores `y = 0` / `E_AIDIR` 1 for every depth (the depth test and the
+`KT_BH` read gone). `tools/levelgen.py` `start_x` / `tools/levelcheck.py` (start x == the arrival col) follow; the generator
+and the block are unchanged.
+
+| Region (free B, H1-D1 -> H1-ARRIVAL) | release | kit |
+|---|---|---|
+| bank 3 (to `AY_RESERVE`) | 10 -> **92** | 6 -> **88** |
+| bank 1 | 2 -> **1** (the items overlay repacks 1 B larger: the bank-3 routines it calls moved) | 2 -> 1 |
+| bank 7 low, bank 2, bank 0, R6, low RAM | 3, 9, 16, 1, 0 unchanged | unchanged |
+
+Tests: `tests/h1climb.py` A (both heroes, `level_descend` D1 -> D8 on fixed seeds: each depth on the shaft top mid-ladder,
+waits, UP no turn / no exit / `E_AIDIR` kept, 2 J turns to storey 0); `world.py` W16 (arrival y 0 on every depth; the D2
+death scenario climbs down first: no combat with a mid-ladder hero).
