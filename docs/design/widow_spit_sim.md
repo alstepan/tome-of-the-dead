@@ -41,3 +41,25 @@ Run once on this tree: still FAILS, identically (Mage 0.378 / 0.386 / 0.242 at H
 real, not noise; cause not diagnosed). It exercises `HP_BONUS`, which this comparison never sets; the baseline here (M 40.1 %) is
 consistent with its HP+0 point. The spit effect (W -3 to -4 pp, M ~0) is far outside the CI, so the artefact is unlikely to flip
 the sign, but a bot-policy interaction that only shows at high HP cannot be excluded from these runs.
+
+## Decision 2026-11-05: spit = P6 N4, plus compensation search
+Driver `tools/widow_comp_sim.py` (same method: 10,000 runs, average policy, seed 1, spit P6 N4 in every row but the first).
+| variant | W win % | M win % | W reach D6 % | W D5 deaths % of runs |
+|---|---|---|---|---|
+| baseline (no spit) | 41.1 | 40.1 | 68.5 | 9.8 |
+| spit P6 N4 | 37.9 | 40.4 | 65.3 | 11.0 |
+| + Widow bite poison 18 | 37.9 | 40.5 | 65.6 | 11.1 |
+| + Widow bite poison 12 | 38.5 | 40.6 | 66.3 | 11.0 |
+| + Widow hp 9 / hp 8 | 37.2 / 37.3 | 40.9 / 40.8 | 65.0 / 65.0 | 11.9 / 12.0 |
+| + Widow atk 3 | 38.2 | 40.5 | 65.9 | 10.9 |
+| + bite 12 + atk 3 + hp 8 (all stacked) | 38.4 | 40.9 | 66.8 | 11.3 |
+| + Warrior start HP 25 | 39.3 | 40.4 | 67.6 | 11.9 |
+| + Warrior start HP 26 (+2) | 40.4 | 40.4 | 68.3 | 12.1 |
+| + Warrior HP per level 5 (+1) | 40.9 | 40.4 | 69.0 | 11.7 |
+
+Reading: no Widow-specific cut recovers the Warrior (even all three stacked: 38.4, about +0.5 pp): the loss is attrition into
+later levels, which a weaker Widow does not undo (CI about +-1 pp, so single steps of 0.3 to 0.6 pp are noise). Only Warrior-global HP
+reaches 40 to 42: start HP +2 (40.4) or +1 HP per level-up (40.9); start HP +1 gives 39.3, just short. The Mage is unmoved (40.1
+to 40.9) in every row. Not modelled: Widow ACID (1 in 4 -> 1 in 8), so that candidate is untested. W_HP0 / W_LVL_HP are
+immediates in hero_st_init / xp7 (marked CODE in `PARAMS`), so both winning options are 1 to 2 changed immediates, not table cells; I did not check whether
+a table-only HP route exists. Smallest hitting 40 to 42 with M unchanged: +1 HP per level (40.9) over start HP +2 (40.4, at the edge of the band).
