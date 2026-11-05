@@ -31,3 +31,4 @@ __pycache__/
 
 # Rendered audio (regenerate: python3 -I tools/tsx_render.py)
 /assets/sfx/music/renders/*.wav
+/out/
