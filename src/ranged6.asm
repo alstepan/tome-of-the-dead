@@ -442,7 +442,7 @@ rg_line:        ld   a, e
                 rrca                           ; BOSS-RANGED: flight row = top + ((h / 2) & 2):
                 and  PF_ROW_DY                 ; top + 2, a 2-high body (the Spider Queen) its top
                 add  a, (ix+E_Y)               ; row (top + 2 is its floor; §9.2: fr lies in the
-                ld   b, a                      ; hero's rows). rg_q matches it (K_SPIDER)
+                ld   b, a                      ; hero's rows). rg_q matches it (the spark fid)
                 call rg_scan
                 ret  c                         ; a solid cell (a mid-room block)
                 ld   b, (ix+E_Y)               ; gap cols x my rows
