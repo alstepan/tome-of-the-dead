@@ -219,13 +219,15 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # 126k cap (work ~130.4k), so it is NOT in CAP_GATED.
 # WIDOW-SPIT "wroom" (D5, 2 Widows + Rat + Bat, Σ 8): gated like "blair" (real <= BUDGET) + an assert that every
 # tick of a spit turn (the decision on the input tick, both sparks in flight) is <= CAP (measured 96.6k work).
+# "wroom4" (the room cap: 4 Widows spitting together, no Rat / Bat) peaks at 97.9k work / 107.3k real on the spit turn
+# and is CAP-gated as a whole.
 # Its worst tick is a later walk input tick (hero walking, 4 bodies stepping, a Bat bite, the hero POISONED:
 # mark + number) at 126.7k work / 135.5k real, not a spit tick; the control (BUDGET_WROOM_NOSHOT=1, the Widows
 # as plain walkers; =psn the same with the hero poisoned from the start) peaks at 116.5k / 116.8k work in
 # another geometry: the spit turns shift where the bodies stand on the later walk ticks.
-GATED = ("mix", "mage", "blair", "wroom")
+GATED = ("mix", "mage", "blair", "wroom", "wroom4")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4")
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -533,6 +535,15 @@ SCENARIOS = {
         (7, 4, stand_y(1, 2), RIGHT),
         (1, 26, stand_y(1, 2), HOSTILE),
         (4, 8, stand_y(1, 2) - 3, HOSTILE)], KEYS, K_KNIGHT, None, "wroom"),
+    # WIDOW-SPIT review: "wroom4" = the room cap of Widows (ROOM_CAP 4, Widow WT 2): two stacked on each side of the
+    # hero (same cols: a forced layout, as "sroom"), gaps 5 right / 4 left, all four counters 0 = all four spit on the
+    # first turn and every 4th after. No Rat / Bat: the cap is full. Drawn like "wroom" (Rat frames: 32 x 16, the
+    # Spider's size; KT_BW 4 is the real Widow row).
+    "wroom4": ("knight + 4 Black Widows spitting together (D5, ROOM_CAP), pmix items", [
+        (5, 20, stand_y(1, 2), HOSTILE),
+        (7, 4, stand_y(1, 2), RIGHT),
+        (1, 20, stand_y(1, 2), HOSTILE),
+        (3, 4, stand_y(1, 2), RIGHT)], KEYS, K_KNIGHT, None, "wroom4"),
     "rcast": ("mage Lightning r3 through 2 Archers in line, the deferred phase shoots back", [
         (5, 6, stand_y(1, 6), RIGHT),
         (7, 22, stand_y(1, 6), HOSTILE)], [("FIRE", 3)], K_WIZARD, None, "rcast"),
@@ -1000,6 +1011,8 @@ def tmix_setup(p):
         p.wmem(S["RNG_STATE"], [TMIX_SEED & 255, TMIX_SEED >> 8])
 
 
+WKEYS = ("wroom", "wroom4")                     # WIDOW-SPIT scenarios
+WSLOTS = {"wroom": (5, 7), "wroom4": (1, 3, 5, 7)}   # their Widow slots
 RANGED_FIDS = {}                                  # filled per run: non-resident bolt fid -> resident stand-in
 
 
@@ -1025,12 +1038,12 @@ def ranged_setup(p, placements, key):
     kinds = {"rroom": ("K_ARCHER", "K_ARCHER"), "nroom": ("K_NECRO", "K_BONE_CALLER"),
              "rcast": ("K_ARCHER", "K_ARCHER"), "sroom": ("K_SLINGER",) * 3, "bsum": ("K_BONE_CALLER",),
              "vbat": ("K_VAMPIRE",), "aroom": ("K_ARCHMAGE",), "asum": ("K_ARCHMAGE",),
-             "rfar": ("K_ARCHER", "K_NECRO"), "wroom": ("K_BLACK_WIDOW", "K_BLACK_WIDOW")}[key]
+             "rfar": ("K_ARCHER", "K_NECRO"), "wroom": ("K_BLACK_WIDOW",) * 2, "wroom4": ("K_BLACK_WIDOW",) * 4}[key]
     if key == "rcast":
         lcast_setup(p, placements)
     else:
         pmix_setup(p)
-    sk = p.rb(S["kind_tab"] + S["KT_SEQ"] + S[{"sroom": "K_GOBLIN", "wroom": "K_RAT"}.get(key, "K_SKELETON")])
+    sk = p.rb(S["kind_tab"] + S["KT_SEQ"] + S[{"sroom": "K_GOBLIN", "wroom": "K_RAT", "wroom4": "K_RAT"}.get(key, "K_SKELETON")])
     for (slot, *_), kn in zip(placements, kinds):
         p.wb(S["kind_tab"] + S["KT_SEQ"] + S[kn], sk)
         p.set_ent(slot, KIND=S[kn], HP=60, MAXHP=60, POT=1)
@@ -1055,7 +1068,7 @@ def ranged_setup(p, placements, key):
         p.set_ent(placements[0][0], HP=67, MAXHP=67, POT=0)
         p.wb(S["ST_X"] + placements[0][0], 0)
         p.wb("SPQ_K", 0)
-    if key == "wroom":                            # WIDOW-SPIT: a D5 room; no spark frames in the Knight's PROTO pool
+    if key in WKEYS:                              # WIDOW-SPIT: a D5 room; no spark frames in the Knight's PROTO pool
         p.wb("LVL_DEPTH", 5)
         p.wmem(S["ST_X"], [0] * 16)
         RANGED_FIDS.update({S["FID_spark_fly1"]: S["FID_arrow_fly1"], S["FID_spark_fly2"]: S["FID_arrow_fly2"]})
@@ -1266,7 +1279,7 @@ def run_scenario(h, scen):
         glad_setup(p, placements)
     if len(scen) > 5 and scen[5] in ("trickle", "otrickle"):
         trickle_setup(p, scen[5])
-    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat", "aroom", "asum", "rfar", "wroom"):
+    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat", "aroom", "asum", "rfar", "wroom", "wroom4"):
         ranged_setup(p, placements, scen[5])
     else:
         RANGED_FIDS.clear()
@@ -1325,13 +1338,13 @@ def run_scenario(h, scen):
             if len(scen) > 5 and scen[5] == "blair":
                 g0 = p.ent(3)["X"] - (p.ent(0)["X"] + 3)
                 p.wb(S["P_ENTITIES"] + 3 * S["P_ENT_STRIDE"] + S["E_MSG"], 0)
-            if len(scen) > 5 and scen[5] == "wroom":
-                for sl in (5, 7):
+            if len(scen) > 5 and scen[5] in WKEYS:
+                for sl in WSLOTS[scen[5]]:
                     p.wb(S["P_ENTITIES"] + sl * S["P_ENT_STRIDE"] + S["E_MSG"], 0)
                 t0w = len(st.ticks)
             st.turn(key)
-            if len(scen) > 5 and scen[5] == "wroom":   # a hit / miss line with the counter just set (3) = a spit
-                blog.append((t0w, [sl for sl in (5, 7) if (p.ent(sl)["POT"] & 3) ^ 1 == 3 and
+            if len(scen) > 5 and scen[5] in WKEYS:   # a hit / miss line with the counter just set (3) = a spit
+                blog.append((t0w, [sl for sl in WSLOTS[scen[5]] if (p.ent(sl)["POT"] & 3) ^ 1 == 3 and
                              p.rb(S["P_ENTITIES"] + sl * S["P_ENT_STRIDE"] + S["E_MSG"]) in (S["MSG_M_HIT"], S["MSG_M_MISS"])]))
             if len(scen) > 5 and scen[5] == "blair":
                 blog.append((g0, p.rb(S["P_ENTITIES"] + 3 * S["P_ENT_STRIDE"] + S["E_MSG"]), p.ent(3)["POT"] & 3))   # POT & 3 = counter ^ 1
@@ -1362,7 +1375,7 @@ def run_scenario(h, scen):
     if len(scen) > 5 and scen[5] == "tmix":         # the tier abilities really ran
         print(f"[info] tmix after: WORN {list(p.z.read_memory(S['WORN'], 9))}, WEAR_PEND {p.rb('WEAR_PEND')},"
               f" HP {p.ent(0)['HP']}/{p.ent(0)['MAXHP']}, Guard HP {p.ent(5)['HP']}", flush=True)
-    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat", "aroom", "asum", "rfar", "wroom"):
+    if len(scen) > 5 and scen[5] in ("rroom", "nroom", "rcast", "sroom", "bsum", "vbat", "aroom", "asum", "rfar", "wroom", "wroom4"):
         print(f"[info] {scen[5]} after: hero HP {p.ent(0)['HP']}, shooters HP "
               f"{[p.ent(sl)['HP'] for sl, *_ in placements]}, BLIT_MISS {p.rb('BLIT_MISS')}", flush=True)
     if len(scen) > 5 and scen[5] == "aroom":        # 3F-T11b: the bolts + the Mirror Helm returns really happened
@@ -1389,9 +1402,9 @@ def run_scenario(h, scen):
         darts = sum(1 for g0, m_, c_ in blog if c_ == 3 and m_ in (S["MSG_M_HIT"], S["MSG_M_MISS"]))
         print(f"[info] blair after: {darts} dagger turns; per turn (gap, MSG, counter) {blog}", flush=True)
         assert darts or os.environ.get("BUDGET_BLAIR_NOSHOT"), "blair: the King never threw"
-    if len(scen) > 5 and scen[5] == "wroom":        # WIDOW-SPIT: both Widows really spat, together
-        print(f"[info] wroom after: (first tick, spitting slots) per turn {blog}, hero HP {p.ent(0)['HP']}, ST_X {p.rb(S['ST_X'])}", flush=True)
-        assert os.environ.get("BUDGET_WROOM_NOSHOT") or sum(len(b) for _, b in blog) >= 3 and any(len(b) == 2 for _, b in blog), "wroom: the Widows did not spit"
+    if len(scen) > 5 and scen[5] in WKEYS:        # WIDOW-SPIT: both Widows really spat, together
+        print(f"[info] {scen[5]} after: (first tick, spitting slots) per turn {blog}, hero HP {p.ent(0)['HP']}, ST_X {p.rb(S['ST_X'])}", flush=True)
+        assert os.environ.get("BUDGET_WROOM_NOSHOT") or sum(len(b) for _, b in blog) >= len(WSLOTS[scen[5]]) + 1 and any(len(b) == len(WSLOTS[scen[5]]) for _, b in blog), "wroom: the Widows did not spit together"
     if len(scen) > 5 and scen[5] == "sanct":        # P3: the Tome really took the hits, the aura the hp
         print(f"[info] sanct after: TOME_HP {p.rb('TOME_HP')}, hero HP {p.ent(0)['HP']}", flush=True)
         assert p.rb("TOME_HP") < 99 and p.ent(0)["HP"] < 250, "sanct: no Tome hit / no aura"
@@ -1425,10 +1438,10 @@ def run_scenario(h, scen):
     totals = [t for t, _ in st.ticks]
     worst = max(st.ticks, key=lambda x: x[0])
     work = [t - i for t, i in zip(totals, st.isr_in)]
-    if len(scen) > 5 and scen[5] == "wroom" and blog:   # WIDOW-SPIT: the spit turns' ticks (decision + flight)
+    if len(scen) > 5 and scen[5] in WKEYS and blog:   # WIDOW-SPIT: the spit turns' ticks (decision + flight)
         ends = [t0 for t0, _ in blog[1:]] + [len(work)]
         sw = [(max(range(t0, e), key=lambda i: work[i]), sl) for (t0, sl), e in zip(blog, ends) if sl and e > t0]
-        print(f"[info] wroom spit turns: worst work tick per spit turn (tick, work T, slots) "
+        print(f"[info] {scen[5]} spit turns: worst work tick per spit turn (tick, work T, slots) "
               f"{[(i, work[i], sl) for i, sl in sw]}; worst overall t{work.index(max(work))} {max(work)} T", flush=True)
         assert all(work[i] <= CAP for i, _ in sw), f"wroom: a spit turn's tick over the {CAP} cap"
     pre_max = max(PRE_FLOOR, PRE_BASE + max(st.isr_in))
@@ -1500,7 +1513,7 @@ def run_scenario(h, scen):
 
 
 ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom")
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4")
 
 
 def swing_pass(keys):
