@@ -1442,7 +1442,7 @@ its 1,920 B ≤ 12-B descriptor reserve), room for the ~0.6 KB level state with
 most of that margin — the alias stays. `$5B00-$5BFF` and `$5CC0-$5FFF` (~692 B after D3-6b PF_RAM $5E00..$5EFF and D3-8d MK_RAM
 $5F00..$5F8B (140 B), E: free once `boot` has moved SP off the BASIC stack) are a further runtime-only (not tape-loadable)
 reserve (B3B-11: `$5B00` = `LOG_TXT`; **D3-6b: `$5E00-$5EFF` = `PF_RAM`**, the
-proj_fire scratch — never touched before `boot`; **3E-T3: `$5D00-$5D78` = `ITEM_RAM`**, zeroed by `new_game`;
+proj_fire scratch — never touched before `boot`; **3E-T3: `$5D00..` = `ITEM_RAM` (`ITEM_RAM_LEN` 89 B after STATS2: `$5D00-$5D58`)**, zeroed by `new_game`;
 still free: `$5CCB-$5CEA` (32 B; `$5CC0-$5CCA` is the ROM channel area, avoided; **D3-11: `$5CDB-$5CEA` = `DN_KEY`, `$5CEB-$5CF6` = `DN_A`; `$5CCB-$5CDA` and `$5CF7-$5CFF` free; DNUM-SPRITE-FIX: `DN_A` to `$5CF7` (`DN_TXT` 6 B), `$5CF8-$5CFF` free**), `$5D56-$5D5F` (10 B; **STATS2: `$5D56-$5D58` = `ST2_CNT` (ITEM_RAM), `$5D59-$5D5F` free**; **D3-11: `$5D60-$5DFF` = `DN_LIVE` + `DN_SLOT`**; was `$5D79-$5DFF` 135 B before ITEM_RAM grew),
 `$5FF4-$5FFF` (12 B; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`**, the ranged-attack scratch + shot queue, "3F-T7"; **3F-T8: `$5FF4` = `BOSS_TRAP`; 3F-T9: `$5FF5-$5FFF` = `SPQ_RAM`, the spawn queue + `sp_run` scratch — the reserve after `RG_RAM` is full**, "3F-T9") — `tests/items3e.py` R1/R2 canary them through a game start, play and a descent). A8: after `boot` nothing uses the system variables but
 `SYS_FRAMES` (`$5C78-$5C7A`; the IM 2 ISR does not run the ROM keyboard scan),

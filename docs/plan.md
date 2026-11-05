@@ -32,7 +32,7 @@ and per-task evidence: `docs/history.md`.
 | H1 visible climb across vertical exits + D1 entrance ladder | DONE (user approved in Fuse 2026-11-05; reviews: ship ×2) | `feat/h1-climb` abfba80 + 5fd61bf + d5962ed; bank 7 low 18 → 3, bank 2 16 → 9, bank 3 13 → 10; worst tick unchanged |
 | H1-ARRIVAL every depth arrives mid-ladder at the shaft top (like D1) | DONE (user 2026-11-05; review fix-then-ship → trickle bound fixed) | `feat/h1-arrival` d209a9d + 22273a3; bank 3 10 → 92, bank 1 2 → **1** |
 | WIDOW-SPIT Black Widow poison spit (P6 every 4th turn) + Warrior +5 HP/level | DONE (user 2026-11-05; sim W 40.5 / M 40.4; review: ship) | `feat/widow-spit` dff9837 + 528671a; R6 1 → 52, bank 3 92 → 36; budget `wroom4` (4 Widows spitting) 97,873 T work; **`wroom` gated on real ≤ 141,816 like `blair` (user accepted; walk tick 126,696 work)** |
-| STATS2 end card BOOKS read/found + ITEMS found | TODO (spec `docs/design/stats2.md`, user 2026-11-05) | after WIDOW-SPIT; needs ~40 B bank-7 reclaim |
+| STATS2 end card BOOKS read/found + ITEMS found | DONE (user 2026-11-05; review: ship) | `feat/stats2` b2e0589; R6 52 → **3**, bank 3 36 → 17, bank 7 low 3 → 2, b0 16 → 14 (kit **0**) |
 | FINAL-3 itch.io project + release | TODO | 3a page/assets, 3b downloads + publish, 3c dropped (user) |
 
 ## Active / next
@@ -49,12 +49,13 @@ and per-task evidence: `docs/history.md`.
 
 | # | Item | Owner | Note |
 |---|------|-------|------|
-| BANK7 | Bank 7 low has **3 B** free after H1 (`feat/h1-climb`): plan a reclaim before the next bank-7 change (no-cut rule) | staff | open |
 | B9 | Test harness: ZEsarUX launch/teardown stalls and flaky tape load (#50, W5/W8) under host load; not a game bug | junior | per-launch timeouts + kill/retry in `tools/test_harness.py` |
 | B13 / D2 | Decor look and animation rework (user 2026-10-04/05), postponed until the game is mostly done | user + designer + artist | schedule a Design-canvas review session |
 | B19b | Two PENDING bodies created overlapping (arrival + follower) can still pop one onto the other's corpse; rare (the B19c fix covered the same-kind follower case) | staff | verify whether B19c closed it; else keep |
 | BSIM1 | `tests/balance_sim_selftest.py` `test_monotone` FAILS on main (2026-11-05): Mage win rate 0.378 / 0.386 / **0.242** at HP +0/+10/+30; Warrior depth 6.89 / 7.24 / 7.05. Either a sim artefact (stall/turn cap) or a real rule interaction — not a stale threshold | junior → designer | excluded from the CI gate until fixed |
 | D8S1 | `tests/d8_stress.py` 2 failures already on main b25e043 (found in the H1 review): 'T teleport mid-fight W/M: re-entry … ST_X 0' — the Archmage's ST_X reads 128 after a mid-fight teleport and re-entry | staff | open; repro on main first |
+| ECK1 | `tests/endcard_k.py` 16 failures, identical on main (STATS2 review): R1/R2/R3/N1 never get a Ghost reflection (rev 0, rfl 0, ST1_KILLER 0) — Ghost reflect/touch kill regressed or the scenario is stale; bisect | staff | open |
+| MEM1 | Memory nearly exhausted after STATS2: R6 3 B, bank 7 low 2 B, bank 3 17 B (≈ −65 B more once TRAP-OR lands → TRAP-OR must reclaim), b0/text kit 0 B. Any new feature needs a reclaim first (no-cut rule) | staff | open |
 | LGZ8 | `tests/levelgen_z80.py --f3`: 43 D8 cases differ between the Z80 generator and `tools/levelgen.py` (237 pass), identical on main b25e043 | staff | open; decide which side is right |
 | B21 | Budget scenario for the deferred level-up + held key path (~115k T, unmeasured) in `tools/budget.py` | junior | – |
 | B4 / R1 | Update `prototype.md` §6.4 text: ladder squeeze rule = up to `CLIMB_SQZ_N`=4 waits before the swap (user accepted 2026-10-19) | designer | doc-only |
