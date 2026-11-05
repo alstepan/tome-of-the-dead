@@ -324,7 +324,7 @@ class Model:
                     self.errors.append(f"[stems] {st.name}: E:{st.ref} is '{strings[st.ref]}', "
                                        f"items.txt says '{t}'")
         self.stem = {st.name: st for st in self.items.stems}
-        for need in ("pick", "bk_read", "trap_found", "tf_dart", "tf_gas", "tf_alarm",
+        for need in ("pick", "trap_found", "tf_dart", "tf_gas", "tf_alarm",
                      "drink", "read", "eat", "equip", "remove", "discard"):
             if need not in self.stem:
                 self.errors.append(f"[stems] missing '{need}'")
@@ -436,7 +436,6 @@ def check_composed(model):
     for frag in ("tf_dart", "tf_gas", "tf_alarm"):
         line(frag, s("trap_found") + s(frag))
     line("trap_found TELEPORT", s("trap_found") + "TELEPORT")
-    line("bk_read", s("bk_read"))
     return worst[1], worst[0], errs
 
 
