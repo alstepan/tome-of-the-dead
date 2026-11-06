@@ -17,7 +17,7 @@ Eight depths, one cursed book. A WazHack-inspired roguelike for the ZX Spectrum 
 
 The Tome of the Dead lies in the Sanctum beneath eight dark depths, and it hurts all who stand near it. There is no way back up and no saving. Find the key, unlock each lair, slay its boss, and take the grate down.
 
-**Tome of the Dead** is a turn-based, side-view dungeon crawler written entirely in hand-coded Z80 assembly for the ZX Spectrum 128K. Pick a Warrior or a Mage, descend through procedurally generated depths, and see how far you get. Death is permanent.
+**Tome of the Dead** is a turn-based, side-view dungeon crawler for the ZX Spectrum 128K, written entirely in Z80 assembly by AI agents (agentic development, directed and reviewed by the author). Pick a Warrior or a Mage, descend through procedurally generated depths, and see how far you get. Death is permanent.
 
 ### What you get
 
@@ -148,7 +148,7 @@ Mark none as "executable for a platform"; leave platform tags unset.
 
 **Tome of the Dead v1.0 is out.**
 
-It is a turn-based roguelike for the ZX Spectrum 128K, written in hand-coded Z80 assembly. Choose a Warrior or a Mage and descend through eight randomly generated depths. Each has a locked lair with a boss that guards the grate down. On depth 8 the Necromancer Archmage waits, and beyond the Archmage, the Tome itself.
+It is a turn-based roguelike for the ZX Spectrum 128K, written entirely in Z80 assembly by AI agents (agentic development). Choose a Warrior or a Mage and descend through eight randomly generated depths. Each has a locked lair with a boss that guards the grate down. On depth 8 the Necromancer Archmage waits, and beyond the Archmage, the Tome itself.
 
 This first release has two classes, a full bestiary with a boss on every depth, spells, gear, boss treasures, hunger and status effects, AY music and effects, and Kempston, Sinclair or redefinable-key control. There is no saving, so every run counts.
 
