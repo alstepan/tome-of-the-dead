@@ -330,10 +330,10 @@ def cmd_clip(hero_name, start, end, name, fps=25):
 
 # ------------------------------------------------------------------ scripted stages (hand-written input scripts)
 def _imports():
-    global pt, Bot, Harness, PT, Mon, S, K_KNIGHT, K_WIZARD, EMU_ARGS, RunEnd, room_model, HERO_W, IT_NAME
+    global pt, Bot, Harness, PT, Mon, S, K_KNIGHT, K_WIZARD, EMU_ARGS, RunEnd, room_model, HERO_W, IT_NAME, IT
     import playthrough as pt                      # noqa: F811
     from pt_plan import Harness, PT, Mon, S, K_KNIGHT, K_WIZARD, EMU_ARGS, RunEnd   # noqa: F811
-    from pt_bot import Bot, HERO_W, IT_NAME       # noqa: F811
+    from pt_bot import Bot, HERO_W, IT_NAME, IT       # noqa: F811
     import room_model                             # noqa: F811
 
 
@@ -388,6 +388,7 @@ def make_stage(p, hero):
     """Bot used only as a LIBRARY (room geometry, pathing, exits, hostile scan, fight helper): every
     decision is made by the hand-written scripts, never by Bot.play()."""
     _imports()
+    _rev()
 
     class Stage(Bot):
         allow_jump = False
@@ -709,7 +710,7 @@ def d1_intro(st, p, rec, hero_name):
     st.wait_s(1.0)
 
 
-def deep(st, p, rec, depth, hp, mp, ranks, first_spell=None, first_steps=0, fight_s=14):
+def deep(st, p, rec, depth, hp, mp, ranks, first_spell=None, first_steps=0, fight_s=14, pre=None):
     """cut to depth N (the real level_descend), cut to the room beside the lair, walk in, fight the boss."""
     cut(st, rec, lambda: (st.go_depth(depth), st.buff(hp=hp, mp=mp, ranks=ranks, lvl=depth)), sec=0.3)
     log(st, f"D{depth} start r{st.rb('LVL_START')} lair r{st.lair}")
@@ -718,6 +719,8 @@ def deep(st, p, rec, depth, hp, mp, ranks, first_spell=None, first_steps=0, figh
     rec.marks.append((f"lair{depth}", rec.total()))
     log(st, f"boss {boss:#x} hostiles {[(h['kind'], h['x'], h['hp']) for h in st.hostiles()]}")
     st.god = True
+    if pre is not None:
+        pre(st, p, rec)
     if first_spell is not None:
         st.force_spell = first_spell
         st.fight_room(first_steps)
@@ -725,6 +728,80 @@ def deep(st, p, rec, depth, hp, mp, ranks, first_spell=None, first_steps=0, figh
     st.fight_room(260, max_s=fight_s)
     log(st, "fight over")
     st.wait_s(2.0)
+
+
+def give(st, name, qty=1):
+    """poke an item into the first free bag slot (type, qty, ident-state)."""
+    for i, (t, q) in enumerate(st.bag()):
+        if t == 0:
+            st.p.z.cmd("write-memory %d %d %d %d" % (S["BAG"] + 3 * i, IT_NAME_REV[name], qty, 0))
+            return i
+    return None
+
+
+def inv_clip(st, p, rec):
+    """Inventory clip (trailer): hurt hero, a potion + a helm + a weapon poked in; I opens the bag, the cursor moves slowly
+    across items (name line readable), DRINK the heal potion, close."""
+    st.wait_s(1.0)
+    for n, q in (("P_HEAL", 2), ("H_HELM", 1), ("W_LONG", 1)):
+        give(st, n, q)
+    st.p.set_ent(0, HP=max(6, st.heroe()["MAXHP"] // 3))
+    st.wait_s(0.5)
+    log(st, f"bag {st.bag()[:8]}")
+    rec.marks.append(("inv", rec.total()))
+    p.tap("I")
+    p.until(lambda: p.rb("PAGE_OPEN") == 1 and p.pc() == S["select_tick"], 20)
+    st.wait_s(1.0)
+    rc = lambda: (p.rb("pg_rc"), p.rb(S["pg_rc"] + 1))      # noqa: E731
+    pi = max(i for i, (t, q) in enumerate(st.bag()) if t == IT_NAME_REV["P_HEAL"])      # the stack of 2
+    row, col = 1 + pi // 5, pi % 5
+    for _ in range(8):                                        # to the first bag row, one slow step at a time
+        if rc()[0] >= row:
+            break
+        p.tap("A")
+        st.wait_s(0.9)
+    for _ in range(6):                                        # across the items, 0.9 s per step (reads the name line)
+        if rc()[1] >= col:
+            break
+        p.tap("P")
+        st.wait_s(0.9)
+    st.wait_s(0.6)
+    p.tap("FIRE")                                             # the verb strip
+    st.wait_s(1.0)
+    p.tap("FIRE")                                             # DRINK
+    st.wait_s(0.8)
+    if p.rb("PAGE_OPEN"):
+        p.tap("CAPS", "SPACE")
+        p.until(lambda: p.rb("PAGE_OPEN") == 0, 20)
+    p.tick(3)
+    st.wait_s(1.5)
+    rec.marks.append(("inv_end", rec.total()))
+
+
+def icon_clip(st, p, rec):
+    """Icon-mode clip (trailer): DOWN+FIRE enters ICON MODE, the cursor steps along the bar (0.7 s/step) to Frost
+    (slot 3), FIRE casts it at the monster; then number key 5 (Lightning) + FIRE."""
+    st.wait_s(0.8)
+    rec.marks.append(("icon", rec.total()))
+    p.hold("A", "SPACE")
+    p.tick(5)
+    p.release()
+    p.tick(2)
+    log(st, f"ICON_MODE {p.rb('ICON_MODE')} slot {p.rb('SEL_SLOT')}")
+    st.wait_s(1.0)
+    for _ in range(10):
+        if p.rb("SEL_SLOT") == 3:
+            break
+        p.tap("P")
+        st.wait_s(0.8)
+    st.wait_s(0.8)
+    p.tap("FIRE")
+    st.wait_s(2.5)
+    p.tap("6")                                                # direct select: Lightning
+    st.wait_s(1.0)
+    p.tap("FIRE")
+    st.wait_s(1.5)
+    rec.marks.append(("icon_end", rec.total()))
 
 
 def warrior(st, p, rec):
@@ -739,11 +816,21 @@ def mage(st, p, rec):
     deep(st, p, rec, 8, 90, 60, [3, 3, 2, 2, 3])
 
 
+IT_NAME_REV = {}
+
+
+def _rev():
+    _imports()
+    IT_NAME_REV.update(IT)
+
+
 PARTS = {"W": {"d1": lambda st, p, rec: d1_intro(st, p, rec, "W"),
+               "inv": inv_clip,
                "d4": lambda st, p, rec: deep(st, p, rec, 4, 60, 20, [2, 2, 0, 0, 0]),
                "d7": lambda st, p, rec: deep(st, p, rec, 7, 90, 30, [3, 3, 0, 0, 0]),
                "all": warrior},
          "M": {"d1": lambda st, p, rec: d1_intro(st, p, rec, "M"),
+               "d3": lambda st, p, rec: deep(st, p, rec, 3, 60, 40, [2, 2, 2, 1, 2], pre=icon_clip),
                "d5": lambda st, p, rec: deep(st, p, rec, 5, 60, 40, [2, 2, 2, 1, 2]),
                "d8": lambda st, p, rec: deep(st, p, rec, 8, 90, 60, [3, 3, 2, 2, 3]),
                "all": mage}}
@@ -780,11 +867,18 @@ def cmd_shots():
 # ------------------------------------------------------------------ trailer
 # hero alternates, every clip from a different depth
 # (W D7 is left out: the scripted boss fight there stalls (hero idle 14 s), nothing readable to show)
-TR_CLIPS = [("W", "d1fight"), ("M", "lair5"), ("W", "lair4"), ("M", "lair8")]
-# window starts (s into the capture) picked by eye where the automatic most-motion pick is wrong
-TR_STARTS = {"d1fight": 22.0, "lair5": 18.5}
-TR_PARTS = {"W": ["d1", "d4", "d7"], "M": ["d5", "d8"]}
-TR_MUSIC_S = 64                       # menu capture length (the trailer needs ~51 s of it)
+# (hero, mark, seconds).  inv / icon start exactly at their mark (scripted for readability); the others take the
+# most-motion window after the mark unless TR_STARTS gives an offset (s after the mark) picked by eye.
+TR_CLIPS = [("W", "d1fight", 9.5), ("W", "inv", 8.3), ("M", "icon", 9.5), ("W", "lair4", 9.5), ("M", "lair5", 9.5),
+            ("M", "lair8", 9.5)]
+TR_STARTS = {"d1fight": 5.7, "lair5": 9.0}
+TR_AT_MARK = ("inv", "icon")
+# captions (only on the control-teaching clips): (from s, to s, text), drawn in the game's own 6x8 bold font
+TR_CAPS = {"inv": [(0.0, 5.0, "I OR BAG ICON: INVENTORY"), (5.0, 8.3, "FIRE: SELECT   FIRE AGAIN: DRINK/EQUIP")],
+           "icon": [(0.0, 4.5, "DOWN+FIRE (A+SPACE): SPELL/ITEM BAR"),
+                    (4.5, 9.5, "LEFT/RIGHT: MOVE  FIRE: USE  1-0: PICK")]}
+TR_PARTS = {"W": ["d1", "inv", "d4"], "M": ["d3", "d5", "d8"]}
+TR_MUSIC_S = 72                       # menu capture length (the trailer needs ~51 s of it)
 
 
 def cmd_trailer_rec(what):
@@ -860,14 +954,35 @@ def _tr_window(d, tlx, mark, length):
     return bt
 
 
+_FONT = None
+
+
+def caption_bar(text, w, h, k=3):
+    """`text` in the game's own font6x8_bold (assets/gfx/fonts, 6 px advance, MSB-left rows), bright yellow on black,
+    nearest-neighbour x3, centred in a w x h bar."""
+    global _FONT
+    if _FONT is None:
+        _FONT = (ROOT / "assets/gfx/fonts/font6x8_bold.bin").read_bytes()
+    bits = np.zeros((8, 6 * len(text)), bool)
+    for n, ch in enumerate(text.upper()):
+        g = np.frombuffer(_FONT[(ord(ch) - 32) * 8:(ord(ch) - 32) * 8 + 8], np.uint8)
+        bits[:, n * 6:n * 6 + 6] = np.unpackbits(g[:, None], axis=1)[:, :6].astype(bool)
+    big = np.repeat(np.repeat(bits, k, 0), k, 1)
+    bar = np.zeros((h, w, 3), np.uint8)
+    y0, x0 = (h - big.shape[0]) // 2, (w - big.shape[1]) // 2
+    assert x0 >= 0, "caption too long"
+    bar[y0:y0 + big.shape[0], x0:x0 + big.shape[1]][big] = (255, 255, 0)
+    return bar
+
+
 def cmd_trailer(starts=None):
     """starts: {mark: seconds into the capture} overriding the automatic window pick (default TR_STARTS)."""
     starts = starts or TR_STARTS
-    W, H, FPS = 768, 576, 50
+    W, H, FPS, BAR = 768, 624, 50, 48                       # 3x game picture under a 48 px black caption bar
     nf = lambda s: int(round(s * FPS))                                        # noqa: E731
-    FADE, CLIP, TITLE, COVER = nf(0.4), nf(9.5), nf(3.0), nf(3.0)
+    FADE, TITLE, COVER = nf(0.4), nf(3.0), nf(3.0)
     mus = pickle.load(open(TMP / "tr_music.pkl", "rb"))
-    segs = [("title", TITLE)] + [(c, CLIP) for c in TR_CLIPS] + [("cover", COVER)]
+    segs = [("title", TITLE)] + [((c[0], c[1]), nf(c[2])) for c in TR_CLIPS] + [("cover", COVER)]
     total = sum(n for _, n in segs)
     # ---- the music: ONE contiguous slice of the single menu capture, frame-aligned with its title picture
     music_all = _tr_audio("music", mus)
@@ -894,7 +1009,13 @@ def cmd_trailer(starts=None):
         env_pic[pos:pos + n] = e
         if isinstance(name, tuple):
             h, mark = name
-            t = nf(starts[mark]) if starts and mark in starts else _tr_window(heroes[h], tlx[h], mark, n)
+            mt = dict(heroes[h]["marks"])[mark]
+            if mark in TR_AT_MARK:
+                t = mt
+            elif mark in starts:
+                t = mt + nf(starts[mark])
+            else:
+                t = _tr_window(heroes[h], tlx[h], mark, n)
             plan[pos] = (h, t)
             sfx[pos * BPF:(pos + n) * BPF] = aud[h][t * BPF:(t + n) * BPF] * np.repeat(e, BPF)
             env_sfx[pos:pos + n] = 1
@@ -924,11 +1045,12 @@ def cmd_trailer(starts=None):
     (np.clip(mix_m * gn, -1, 1) * 32000).astype("<i2").tofile(TMP / "trailer_music_only.s16")
     # ---- picture
     mi = int(np.searchsorted(np.cumsum([dd for _, dd in mus["frames"]]), nf(1.0), side="right"))
-    title = np.repeat(np.repeat(scr_to_rgb(mus["frames"][mi][0]), 3, 0), 3, 1)
+    title = np.zeros((H, W, 3), np.uint8)
+    title[BAR:] = np.repeat(np.repeat(scr_to_rgb(mus["frames"][mi][0]), 3, 0), 3, 1)
     cover = np.zeros((H, W, 3), np.uint8)
     cv = np.asarray(Image.open(OUT / "img/cover_b.png").convert("RGB"))
     y0, x0 = (H - cv.shape[0]) // 2, (W - cv.shape[1]) // 2
-    cover[y0:y0 + cv.shape[0], x0:x0 + cv.shape[1]] = cv
+    cover[y0:y0 + cv.shape[0], x0:x0 + cv.shape[1]] = cv      # 630x500 unscaled, centred
     (OUT / "video").mkdir(parents=True, exist_ok=True)
     out = OUT / "video" / "trailer.mp4"
     # no setpts/atempo/frame dropping: 1 emulated frame = 1 video frame = 312 audio bytes
@@ -947,7 +1069,11 @@ def cmd_trailer(starts=None):
                 im = cover
             else:
                 h, t = plan[pos]
-                im = np.repeat(np.repeat(scr_to_rgb(heroes[h]["frames"][tlx[h][0][t + i]][0]), 3, 0), 3, 1)
+                im = np.zeros((H, W, 3), np.uint8)
+                im[BAR:] = np.repeat(np.repeat(scr_to_rgb(heroes[h]["frames"][tlx[h][0][t + i]][0]), 3, 0), 3, 1)
+                for c0, c1, txt in TR_CAPS.get(name[1], []):
+                    if nf(c0) <= i < nf(c1):
+                        im[:BAR] = caption_bar(txt, W, BAR)
             g = env_pic[pos + i]
             pr.stdin.write((im if g >= 1 else (im * g).astype(np.uint8)).tobytes())
         pos += n
