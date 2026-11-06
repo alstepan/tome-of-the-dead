@@ -299,7 +299,7 @@ EC_FEET         EQU EC_TAB_ROW + 9              ; the portraits' / lectern's sha
                                                 ; the first row below BEST KILL)
 EC_PCOL_L       EQU 2                           ; killer col (the Ogre's ink ends ~10 px short of the table at x 72); lectern = +3
 EC_PCOL_R       EQU 25                          ; the hero's col (his ink starts ~11 px after the table's widest row, x 190)
-EC_PRESS_ROW    EQU EC_TAB_ROW + 12             ; "PRESS 1-4 OR ENTER" (was 22)
+EC_PRESS_ROW    EQU EC_TAB_ROW + 12             ; "PRESS 1-5 OR ENTER" (was 22)
 EC_TROW         EQU EC_TAB_ROW - 4                          ; the title row (menu font, 2 rows)
 EC_ATTR         EQU $47                         ; the card (bright white on black)
 EC_A_HERO       EQU $46                         ; CLASS / LEVEL / DEPTH rows (yellow)
