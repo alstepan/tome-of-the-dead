@@ -107,7 +107,7 @@ Preview candidates: **16, 12, 8, 6**.
 Optional extras only. All are in D minor, so they do not crossfade with the F-minor suite
 without a transposition (free in the converter).
 
-- **`dungeon-fugue.abc` stays REJECTED.** Its header says it arranges *Il Vento d'Oro* (Yugo Kanno, 2018), a copyrighted work. It also has two wrong-length lead bars (13 and 25).
+- **`dungeon-fugue.abc` was REJECTED and removed from the repo and its history (2026-11-06).** Its header said it arranges *Il Vento d'Oro* (Yugo Kanno, 2018), a copyrighted work. It also had two wrong-length lead bars (13 and 25).
 - Useful spares if loops need variety: the-forgotten-catacombs (explore, ~120 B), shadows-in-the-keep (danger, ~120 B), level-boss-dungeon-overlord (boss, ~160 B).
 
 ### 1.5 Provenance (as written in the files; no new questions)
