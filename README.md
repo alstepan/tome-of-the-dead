@@ -1,7 +1,8 @@
 # Tome of the Dead
 
-A roguelike for the **ZX Spectrum 128K**, WazHack-inspired, hand-written in
-Z80 assembly and developed agentically with Claude Code.
+A roguelike for the **ZX Spectrum 128K**, WazHack-inspired, written directly in
+Z80 assembly (no compiler) by AI agents: developed agentically with Claude Code
+under the author's direction and review.
 
 ## Status
 
