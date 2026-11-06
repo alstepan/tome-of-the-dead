@@ -118,7 +118,7 @@ tape_tab:       TAPE_BLOCKS 0                  ; main.asm: the same list the SAV
 ; read bank 1 back; on a mismatch print a message and stop (DI + HALT).
 ; Tape path only (the .sna preloads all banks and enters at boot). Bank 0 and
 ; bank 1 $C000 are free here (pool / sources are written after this).
-; +2A/+3 are unsupported (different paging). Clobbers: A, BC, HL (+ print).
+; +2A/+3: OK (their Loader leaves ROM 3 paged; tested in ZEsarUX). Clobbers: A, BC, HL (+ print).
 ;------------------------------------------------------------------------------
 check_paging:
                 ld   a, BANK_SRC_LO
