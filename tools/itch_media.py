@@ -226,7 +226,7 @@ def assemble(frames, audio_path, out, scale=6):
         wav = TMP / "audio.s16"
         (audio * 32000).astype("<i2").tofile(wav)
         cmd += ["-f", "s16le", "-ar", str(AUDIO_HZ), "-ac", "1", "-i", str(wav)]
-    cmd += ["-vf", f"scale={256 * scale}:{192 * scale}:flags=neighbor,format=yuv420p", "-c:v", "libx264", "-preset", "slow",
+    cmd += ["-vf", f"scale={256 * scale}:{192 * scale}:flags=neighbor,format=yuv420p", "-c:v", "libx264", "-preset", "slow", "-profile:v", "main", "-level", "4.0",
             "-crf", "16", "-r", "50"]
     if audio is not None:
         cmd += ["-af", "aresample=44100", "-c:a", "aac", "-b:a", "128k", "-shortest"]
@@ -1058,7 +1058,7 @@ def cmd_trailer(starts=None):
     # no setpts/atempo/frame dropping: 1 emulated frame = 1 video frame = 312 audio bytes
     cmd = [FFMPEG, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", "50", "-i", "-",
            "-f", "s16le", "-ar", str(AUDIO_HZ), "-ac", "1", "-i", str(wav),
-           "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p", "-r", "50",
+           "-c:v", "libx264", "-preset", "slow", "-profile:v", "main", "-level", "4.0", "-crf", "16", "-pix_fmt", "yuv420p", "-r", "50",
            "-af", "aresample=44100", "-c:a", "aac", "-b:a", "160k", "-ar", "44100",
            "-movflags", "+faststart", str(out)]
     pr = subprocess.Popen(cmd, stdin=subprocess.PIPE)
