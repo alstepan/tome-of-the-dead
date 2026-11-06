@@ -8,28 +8,28 @@ Paste each block into the matching itch.io field. Text in [square brackets] is f
 
 **Title:** Tome of the Dead
 
-**Short description / tagline (92 chars):**
+**Short description / tagline (85 chars):**
 Eight depths, one cursed book. A WazHack-inspired roguelike for the ZX Spectrum 128K.
 
 ---
 
 ## 2. Description (paste into the rich editor)
 
-The Tome of the Dead lies in the Sanctum beneath eight dark depths, and it hurts all who stand near it. There is no way back up and no saving. Find the key, unlock each lair, break its boss, and take the grate down.
+The Tome of the Dead lies in the Sanctum beneath eight dark depths, and it hurts all who stand near it. There is no way back up and no saving. Find the key, unlock each lair, slay its boss, and take the grate down.
 
-**Tome of the Dead** is a turn-based, side-view dungeon crawler written entirely in hand-coded Z80 assembly for the ZX Spectrum 128K. Pick a Warrior or a Mage, descend, and see how far you get. Death is permanent.
+**Tome of the Dead** is a turn-based, side-view dungeon crawler written entirely in hand-coded Z80 assembly for the ZX Spectrum 128K. Pick a Warrior or a Mage, descend through procedurally generated depths, and see how far you get. Death is permanent.
 
 ### What you get
 
 - **Two classes.** The Warrior fights with sword, throwing daggers, a bow found on depth 2, and mana-fuelled power attacks. The Mage fights with a staff and five spells: Spark, Firebolt, Frost Shard, Drain Life and Lightning.
-- **Eight depths**, each freshly generated every run from a 3x3 grid of rooms, with doors, ladders, pits you can jump, and traps you can search for.
+- **Procedural level generation.** All eight depths are generated anew every run from a 3x3 grid of rooms, with doors, ladders, pits you can jump, and traps you can search for.
 - **A boss on every depth.** Each guards a lair and a locked grate. Kill it to open the way down. Each drops a unique treasure, from the Goblin King's Helm on depth 1 to the Mirror Helm of the Death Knight on depth 7.
 - **A final fight.** On depth 8 you must slay the Necromancer Archmage, then destroy the Tome itself before its aura destroys you.
 - **A varied bestiary.** Rats, bats, slimes, goblins, spiders, skeletons, vampires, ghosts, orcs, archers, mummies, necromancers, an Ogre Warlord and a Death Knight, plus the Archmage.
 - **Items and gear.** Potions, scrolls, food, skill and spell books, weapons, armour, helmets, rings and amulets. Hunger, poison, fear, confusion and other status effects all matter.
 - **XP and levels**, and books that teach or strengthen your abilities.
 - **AY-3-8912 music and sound effects** (128K sound chip), with switchable sound options: all on, effects only, or off.
-- **Joystick-only play.** Kempston, Sinclair 1 and Sinclair 2 are supported, or use the keyboard with fully redefinable keys.
+- **Full joystick support.** Kempston, Sinclair 1 and Sinclair 2 are supported, or use the keyboard with fully redefinable keys.
 - **A built-in how-to-play screen** on first start.
 
 ### Controls
@@ -85,7 +85,7 @@ Items on the floor are picked up automatically at the end of your turn.
 - **Sinclair 1** uses keys 6-0, **Sinclair 2** keys 1-5 (Interface 2 / +2 joystick ports). Kempston is read only once selected.
 - **Redefine** asks for UP, DOWN, LEFT, RIGHT, FIRE. ENTER, 1-0, I, S, CAPS SHIFT and SYMBOL SHIFT are reserved; BREAK cancels and keeps your old keys.
 - The how-to-play pages: any key for the next page, BREAK skips them.
-- After death or victory, press a number key or ENTER to return to the menu.
+- After death or victory, press 1-5 or ENTER to return to the menu.
 
 ### How to load
 
@@ -94,7 +94,7 @@ Items on the floor are picked up automatically at the end of your turn.
 
 ### System requirements
 
-- ZX Spectrum 128K or +2 (grey), or an emulator in Spectrum 128K mode. The +2A / +3 are untested (different memory paging and contention). 48K is not supported.
+- ZX Spectrum 128K or +2 (grey), or an emulator in Spectrum 128K mode. The +2A / +3 are untested (different memory paging and contention).
 - **48K machines are not supported.** The game needs the extra RAM banks and the AY sound chip.
 - Keyboard; joystick optional (Kempston, Sinclair 1 or 2).
 
@@ -139,7 +139,7 @@ Items on the floor are picked up automatically at the end of your turn.
 
 Mark none as "executable for a platform"; leave platform tags unset.
 
-**Cover image:** `img/cover_b.png` (630x500). **Screenshots:** `img/shot1_menu.png` … `img/shot5_deeper_d5.png`, plus `img/walk_fight.gif`.
+**Cover image:** `img/cover_b.png` (630x500). **Screenshots, in this order:** `img/shot0_loading.png`, `img/shot1_menu.png`, then `shot2`…`shot5`, plus `img/warrior.gif` / `img/mage.gif`. **Trailer:** `video/trailer.mp4` (upload to YouTube, link in the trailer field).
 
 ---
 
