@@ -1,4 +1,4 @@
-# Tome of the Dead: itch.io page draft (v1.0)
+# Tome of the Dead: itch.io page draft (v1.1)
 
 Paste each block into the matching itch.io field. Text in [square brackets] is for you to fill in or decide.
 
@@ -89,7 +89,7 @@ Items on the floor are picked up automatically at the end of your turn.
 
 ### How to load
 
-- **Emulators (Fuse, ZEsarUX, others):** set the machine to ZX Spectrum 128K, then either open `tome-of-the-dead-v1.0.tap` and let it load (type `LOAD ""` or choose Tape Loader), or open `tome-of-the-dead-v1.0.sna` directly for an instant start.
+- **Emulators (Fuse, ZEsarUX, others):** set the machine to ZX Spectrum 128K, then either open `tome-of-the-dead-v1.1.tap` and let it load (type `LOAD ""` or choose Tape Loader), or open `tome-of-the-dead-v1.1.sna` directly for an instant start.
 - **Real 128K or +2 (grey) hardware:** play the `.tap` through a tape interface, TZXDuino, divMMC or similar, and load it from the 128 tape loader. Tested on a real ZX Spectrum 128K (the original "toastrack").
 
 ### System requirements
@@ -109,6 +109,7 @@ Items on the floor are picked up automatically at the end of your turn.
 
 ### Version history
 
+- **v1.1**: text fixes on the how-to-play and end screens.
 - **v1.0**: first public release.
 
 ---
@@ -132,8 +133,8 @@ Items on the floor are picked up automatically at the end of your turn.
 
 | File | Display name on itch |
 |---|---|
-| `tome-of-the-dead-v1.0.tap` | Tape image (.tap), recommended for real hardware and emulators |
-| `tome-of-the-dead-v1.0.sna` | Snapshot (.sna), instant start in emulators |
+| `tome-of-the-dead-v1.1.tap` | Tape image (.tap), recommended for real hardware and emulators |
+| `tome-of-the-dead-v1.1.sna` | Snapshot (.sna), instant start in emulators |
 | `SHA256SUMS` | Checksums (SHA-256) |
 | `LICENSE`, `LICENSE-ASSETS.md`, `THIRD-PARTY.md` | Licences and third-party notices (required: ZX0's BSD notice must ship with the game) |
 
