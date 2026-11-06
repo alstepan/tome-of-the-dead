@@ -309,7 +309,7 @@ def main():
                 c0 = lx // 8                     # the table's columns (the portraits / lectern lie outside)
                 want = orw(text6(rw[0], 0, 24 - c0), text6(rw[1], vx - lx, 24 - c0)) if rw else [bytes(24 - c0)] * 8
                 check(f"E {tag}: row {r0 + i} = {rw}", log_row(fr, r0 + i, c0, 24 - c0) == want)
-            check(f"E {tag}: row {PR} = PRESS 1-4 OR ENTER", log_row(fr, PR, 0, 32) == text6("PRESS 1-4 OR ENTER", 72, 32))
+            check(f"E {tag}: row {PR} = PRESS 1-5 OR ENTER", log_row(fr, PR, 0, 32) == text6("PRESS 1-5 OR ENTER", 72, 32))
             check(f"E {tag}: state {gs} held", p.rb("GAME_STATE") == gs, p.rb("GAME_STATE"))
             check(f"E {tag}: golden", golden(tag, fr))
 
