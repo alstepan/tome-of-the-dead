@@ -982,7 +982,7 @@ def cmd_trailer(starts=None):
     nf = lambda s: int(round(s * FPS))                                        # noqa: E731
     FADE, TITLE, COVER = nf(0.4), nf(3.0), nf(3.0)
     mus = pickle.load(open(TMP / "tr_music.pkl", "rb"))
-    segs = [("title", TITLE)] + [((c[0], c[1]), nf(c[2])) for c in TR_CLIPS] + [("cover", COVER)]
+    segs = [("loading", TITLE), ("title", TITLE)] + [((c[0], c[1]), nf(c[2])) for c in TR_CLIPS] + [("cover", COVER)]
     total = sum(n for _, n in segs)
     # ---- the music: ONE contiguous slice of the single menu capture, frame-aligned with its title picture
     music_all = _tr_audio("music", mus)
@@ -1047,6 +1047,8 @@ def cmd_trailer(starts=None):
     mi = int(np.searchsorted(np.cumsum([dd for _, dd in mus["frames"]]), nf(1.0), side="right"))
     title = np.zeros((H, W, 3), np.uint8)
     title[BAR:] = np.repeat(np.repeat(scr_to_rgb(mus["frames"][mi][0]), 3, 0), 3, 1)
+    loading = np.zeros((H, W, 3), np.uint8)             # the loading screen (768x576) under the caption bar
+    loading[BAR:] = np.asarray(Image.open(ROOT / "assets/gfx/loading/loading_l3d.png").convert("RGB"))
     cover = np.zeros((H, W, 3), np.uint8)
     cv = np.asarray(Image.open(OUT / "img/cover_b.png").convert("RGB"))
     y0, x0 = (H - cv.shape[0]) // 2, (W - cv.shape[1]) // 2
@@ -1063,7 +1065,9 @@ def cmd_trailer(starts=None):
     pos = 0
     for name, n in segs:
         for i in range(n):
-            if name == "title":
+            if name == "loading":
+                im = loading
+            elif name == "title":
                 im = title
             elif name == "cover":
                 im = cover
