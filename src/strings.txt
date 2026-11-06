@@ -160,7 +160,7 @@ ft_subtitle     "A DUNGEON ROGUELIKE"
 # --- death / win screens and the DEPTH card (menu font; pieces take a number/name) -
 end_dead        "YOU DIED"
 end_win         "YOU WIN!"
-end_press       "PRESS 1-4 OR ENTER"
+end_press       "PRESS 1-5 OR ENTER"
 card_depth      "DEPTH "
 
 # === long static text (ZX0 blocks) ==============================================
