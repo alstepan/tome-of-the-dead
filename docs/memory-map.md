@@ -4888,7 +4888,7 @@ Overrun vs the P3 lines: R6 +49, bank 3 +15, low RAM +30 (all from unassigned sp
 touched in release; the kit build assembles but has R6 15 / bank 7 26 left, i.e. GEAR2+3 and GEAR1 would not fit
 the kit image without a kit-only move). Placement: the geometry (`tome_geo6`) is R6 because bank 7 low could not
 hold it next to the call sites; the aura is low RAM (called from bank-7 `end_turn` with bank 7 paged: it calls
-`mus_pick` and tail-jumps `end_turn.dead`).
+`mus_pick`; at 0 hp it queues `RC_DEATH`, pops `end_turn`'s return and keeps `TURN_PHASE` 1 so the death pose plays, DEATH-FX).
 
 Contracts (code: `src/tome7.asm`, `src/tome6.asm`, `lowram.asm` `game_win` / `tome_aura`, `bank3.asm` stamp):
 - **Lectern**: common ids 15-18 (TL TR / BL BR) on rows `LECT_ROW` 15..16 (storey 1), cols `LECT_COL_L` 1-2 when
@@ -4907,7 +4907,7 @@ Contracts (code: `src/tome7.asm`, `src/tome6.asm`, `lowram.asm` `game_win` / `to
   main `ae0bf83`: headroom 1.0k T on the total, 3.6k on the gated work — this limits LOG-DMG, GEAR and STATS),
   `lqmix` 131,425 / 128,194 (identical on main: ALREADY over 126,000 before P3; lqmix is not cap-gated).
 - **Aura**: `tome_aura` (end_turn, GS_PLAYING, after the death check): gap < `TOME_AURA_R` 6, either facing,
-  1 hp untyped; 0 hp -> `end_turn.dead`.
+  1 hp untyped; 0 hp -> `RC_DEATH` + `TURN_PHASE` 1 (the turn goes on in ANIM until the pose is held); the second `end_turn`'s HP 0 check (was EF_DYING, DEATH-FX) -> `.dead`.
 
 
 ## GEAR1 ledger (`feat/gear1`; class gear gate in `ic_abil`, docs/design/gear_rules.md 1.2)
@@ -5001,8 +5001,7 @@ equal). Kit build (`tools/build.sh`, DEBUG_KIT=1, the Fuse build) free bytes, bu
 - **Call chain:** `new_game` (bank 7) -> `hero_st_init` (`ret`, both builds) -> far6 `kit_add` (R6) -> FARB0 `kit_b0`
   (bank 0: HAS_BOW / ARROWS / DAGGERS, ARANK, MP / MAXMP; HL = `KIT_LIST`) -> the WORN pair + `bag_add` loop ->
   `hero_recalc`.
-- **Infinite lives:** every hero death reaches `end_turn`'s EF_DYING check (deal_hit `.kill`, `hero_fall`) or jumps to
-  `end_turn.dead` (`tome_aura`); in the kit build `.dead` clears EF_DYING, sets HP 1, MODE `M_REST`, REACT `RC_NONE`
+- **Infinite lives:** every hero death reaches `end_turn`'s HP 0 check (deal_hit `.kill`, `hero_fall`, and `tome_aura` on its 2nd `end_turn` after the death pose; DEATH-FX: it tests HP 0, no longer EF_DYING); in the kit build `.dead` clears EF_DYING, sets HP 1, MODE `M_REST`, REACT `RC_NONE`
   and `jp xp_turn` (the hunger step of that turn is skipped). Poison (HP 1 floor) and hunger never kill.
 - Kit symbols (`kit_b0`, `KIT_LIST`, `kit_bw`, `kit_bm`, `it_byte_live`) are absent from a release `.sym`
   (`tests/kit.py` N). The base lists are one source: `KIT_W_BASE` / `KIT_M_BASE` macros (item_defs.asm).
@@ -6142,3 +6141,14 @@ and L1..L3 (a real D5 room, a DART under a floor object's bottom row: the Mage's
 screen 2 == decor | plate in `$42`; again after walking out and back in through the side exit, and after `room_show`);
 `tests/t16.py` O2 drives `tr_plate`, C1's cols moved off the PROTO ladder (25), F1 climbs down the arrival shaft first
 (stale since H1-ARRIVAL: the fuzz never acted).
+
+## DEATH-FX ledger (`fix/tome-death-anim`; the Tome aura's death plays the death sequence, game.md §1.3)
+
+The aura killed at `end_turn`, after the turn's animation, and `GS_DEAD` stops anim / render (`play_loop` -> `end_screen`), so the hero never showed the death pose. Now `tome_aura` queues `RC_DEATH` (+ `E_REACTAT` 0), keeps `TURN_PHASE` 1, and the death check (HP 0, was EF_DYING) of the second `end_turn` ends the run. No address moved.
+
+| Region | before | after | why |
+|---|---|---|---|
+| low RAM spare (`LOWRAM_SPARE`) release | 2 | **0** | `tome_aura` +8 net; paid by -1 `check_paging` (`ld bc`), -1 `build_bitrev` (`ld bc`), -1 `.sh` (`xor a`), -1 `mul8` (HL = 0 from D), -2 `level_descend` (`ld hl, MUS_SHOT`), -1 `game_win`, -1 `level_enter` (3 stores) |
+| bank 7 low (release) | 1 | **2** | the death check tests HP (`or a`) instead of `and EF_DYING` |
+| kit low RAM spare | 2 (kit build, DISPLAY) | **2** | the kit's own tail is not smaller: its spare stays 2 |
+| known side effect | | +1 `TURN_COUNTER` / `TRK_PHASE` on an aura death | the 2nd `end_turn`; not fixed (no bytes) |
