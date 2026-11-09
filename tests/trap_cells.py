@@ -10,7 +10,7 @@ NEXT_MAP, then on the ENGINE's map + tile_flags:
       ladder / hole cell in the storey's rows 9s..9s+8 within cols t-1 .. t+1
       (the generator's footprint rule, game.md 1.5), no item marker on the cell
   A1  (fix/trap-tile) ALARM on a generated level: the plate fires by walking onto it; the
-      TRAP_LIST entry keeps its room / storey / col / type (only KNOWN set), LP_RESPAWNS + 1
+      TRAP_LIST entry keeps its room / storey / col / type (only KNOWN + RUNG set), LP_RESPAWNS + 1
       per fire, capped at RESPAWN_MAX, the plate in the map, no other T_TRAP cell. (TRAP2
       shipped `inc (hl)` with HL = the entry: the record moved to the next room, a stray
       plate appeared there, often on a ladder top.)
@@ -81,6 +81,8 @@ def alarm_fires(h, seeds):
         if not n:
             continue
         b0, b1 = p.rb(TLa), p.rb(TLa + 1)
+        if b0 & S["TRF_RUNG"]:                                  # ALARM-1 guard: never set on an unfired plate
+            bad.append((sd, depth, "TRF_RUNG set before any step", hex(b0)))
         r0, s0, t0 = b0 & 15, (b0 >> 4) & 1, b1 & 31
         p.wb(TLa + 1, t0 | (3 << 5))                          # type ALARM
         for sl in range(1, S["P_MAX_ENT"]):
@@ -99,7 +101,7 @@ def alarm_fires(h, seeds):
             p.settle(2)
             fires += 1
         ent = (p.rb(TLa), p.rb(TLa + 1))
-        want0 = (b0 | S["TRF_KNOWN"], t0 | (3 << 5))
+        want0 = (b0 | S["TRF_KNOWN"] | S["TRF_RUNG"], t0 | (3 << 5))
         cells = len([q for q in p.z.read_memory(S["ROOM_MAP"], 576) if q == T_TRAP])
         resp = p.rb("LP_RESPAWNS")
         if ent != want0 or cells != 1 or p.rb("CUR_ROOM") != r0 or not 1 <= resp <= S["RESPAWN_MAX"]:
@@ -282,6 +284,8 @@ def main():
                     ents = []
                     for i in range(min(n, TMAX)):
                         b0, b1 = p.rb(TL + 2 * i), p.rb(TL + 2 * i + 1)
+                        if b0 & S["TRF_RUNG"]:                  # ALARM-1 guard (generation)
+                            bad.append(("C1 RUNG", sd, d, i, hex(b0)))
                         p.wb(TL + 2 * i, b0 | S["TRF_KNOWN"])
                         ents.append((b0 & 15, (b0 >> 4) & 1, b1 & 31))
                     blk = bytes(p.z.read_memory(S["LVL_STATE"], G.BLOCK_LEN))
