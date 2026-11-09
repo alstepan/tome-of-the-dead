@@ -275,19 +275,25 @@ tr_eff:
                 ld   a, (LVL_FLAGS)            ; (its unique not dropped: as the teleport's lair rule)
                 and  LF_UNIQUE
                 jr   nz, .bell
+                bit  TRF_RUNG_BIT, (hl)        ; ALARM-1: one wave per plate (game.md 1.5): HL = the entry; a
+                jr   nz, .bell                 ; second step on a rung plate: nothing comes
+                set  TRF_RUNG_BIT, (hl)        ; (before the cap check: HL is the entry only here; the cap never
+                                               ; falls within a level, so a plate rung at it would be dead anyway)
                 ld   hl, LP_RESPAWNS           ; TRAP2: the wave counts towards the cap (game.md 1.5); HL was
                 ld   a, (hl)                   ; the ENTRY here (fix/trap-tile: `inc (hl)` bumped TR_B0, moving
                 cp   RESPAWN_MAX               ; the record to the next room and leaving a stray plate there)
                 jr   nc, .bell                 ; at the cap: nothing comes
                 inc  (hl)
-                ld   hl, SPQ_K                 ; a wave of 1 + (rnd & 1) at a door, made by end_turn's
-                ld   (hl), SPQ_WAVE            ; sp_run (the queue is empty: the trap fires in the
-                inc  l                         ; hero's phase, before any producer of this turn)
+                call rng_next                  ; a wave of 1 + (rnd & 1) at a door, made by end_turn's
+                and  1                         ; sp_run (the queue is empty: the trap fires in the
+                inc  a                         ; hero's phase, before any producer of this turn).
+                ld   hl, SPQ_N                 ; Written N, P, K downward: rng_next clobbers HL, so
+                ld   (hl), a                   ; the roll goes first and HL walks the queue (-1 B)
+                dec  l
                 ld   (hl), SPQ_NONE            ; SPQ_P: the doors
-                call rng_next
-                and  1
-                inc  a
-                ld   (SPQ_N), a
+                dec  l
+                ld   (hl), SPQ_WAVE
+                ASSERT SPQ_P == SPQ_K + 1 && SPQ_N == SPQ_K + 2
                 ld   a, BORDER_ALARM           ; the red border, TRAP_STEP_T ticks (step 1 clears it)
                 out  (PORT_BORDER), a
                 ld   e, S3_TRAP_ALARM          ; "AN ALARM BELL RINGS!" (bank 1 resident stem)
@@ -394,21 +400,19 @@ tr_fline:       call tr_type
                 jp   far1
 ; tr_ent / tr_type: bank 2 (trap2.asm; TOME-FX reclaim: leaf routines with no bank-7 data), except in an
 ; trace test build (TOME_FX 0: bank 2 has 4 B left there): the same code at the end of this file.
-; tr_ink — HL = an entry: A = its type attr (tr_ink7, data7.asm).  Keeps HL. Clobbers: F
+; tr_ink — HL = an entry: A = its type attr (tr_ink7, data7.asm).  Keeps HL. Clobbers: F, BC
 tr_ink:         call tr_type
-                push hl
                 add  a, tr_ink7 & $FF
-                ld   l, a
-                ld   h, tr_ink7 >> 8           ; TRAP-OR: one page (ASSERT; -2 B)
-                ld   a, (hl)
-                pop  hl
+                ld   c, a
+                ld   b, tr_ink7 >> 8           ; TRAP-OR: one page (ASSERT); via BC the HL needs no
+                ld   a, (bc)                   ; push / pop (ALARM-1: -2 B; BC is dead at all 3 callers)
                 ret
                 ASSERT (tr_ink7 >> 8) == ((tr_ink7 + TT_STUN) >> 8)
-; tr_sto — A = a body-top row: A = TRF_S1 on storey 1, else 0.  Clobbers: F
+; tr_sto — A = a body-top row: A = $FF on storey 1, else 0 (both callers `xor (hl)` the entry
+; and mask TRF_S1; ALARM-1: sbc a,a form, -3 B).  Clobbers: F
 tr_sto:         cp   STOREY_ROWS
-                ld   a, 0
-                ret  c
-                ld   a, TRF_S1
+                ccf
+                sbc  a, a
                 ret
 ; tr_col — HL = an entry: A = its col.  Keeps HL.
 tr_col:         inc  l

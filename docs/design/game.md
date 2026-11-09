@@ -188,7 +188,7 @@ pathing change, no off-screen events).
 | **DART** | D1+ | 1d4+1 PHYS (DEF applies) + **POISON 12** (§6.4; was 6, POIS1 §6.4.3); impact = `arrow_hit` sprite at the hero | **re-arms** (stays, now known) | `A DART HITS YOU!` |
 | **GAS** | D2+ | **ASLEEP 4** (§6.4); hero flashes `$44` one step (no new art) | re-arms (stays) | `SLEEPING GAS! YOU FALL ASLEEP.` (30) |
 | **TELEPORT** | D3+ | as the Teleport scroll (§8): random free spot, random room, never the lair while its boss lives; attr flash as the Archmage's | re-arms (stays; accepted by the user: a free escape tool) | `YOU ARE TELEPORTED!` |
-| **ALARM** | D5+ | while the boss lives: one **wave** = the §9.5 idle-wave spawn (1 + (rnd & 1) of the level's kinds at the room's doors/exits, awake, `F_RESPAWN`, slot + §9.3 cap rules), runs even with `IDLE_WAVE` off; border flashes red 2 ticks. Boss dead, or `LP_RESPAWNS` at `RESPAWN_MAX` (6): nothing comes (TRAP2: a wave counts toward the §9.5 respawn cap, so a re-arming plate cannot be farmed for XP) | re-arms (stays) | `AN ALARM BELL RINGS!` / `A BELL RINGS. NOTHING COMES.` (28) |
+| **ALARM** | D5+ | while the boss lives: one **wave** = the §9.5 idle-wave spawn (1 + (rnd & 1) of the level's kinds at the room's doors/exits, awake, `F_RESPAWN`, slot + §9.3 cap rules), runs even with `IDLE_WAVE` off; border flashes red 2 ticks. Boss dead, or `LP_RESPAWNS` at `RESPAWN_MAX` (6): nothing comes (TRAP2: a wave counts toward the §9.5 respawn cap). **ALARM-1 (user 2026-11-09): ONE wave per plate** (`TRF_RUNG`, runtime only): the first fire rings, every later step on it (off / on again) prints `A BELL RINGS. NOTHING COMES.`; the plate stays visible / known. Wave bodies are **summon-made** (`SPQ_WAVE` = `SQF_RESP | SQF_SUMM`, §9.5): left behind, they are discarded on leaving the room, not banked | **one wave** per plate (stays visible; re-arms only as the bell line) | `AN ALARM BELL RINGS!` / `A BELL RINGS. NOTHING COMES.` (28) |
 | **STUN** (falling stone; STUN1, §1.5.1) | D4+ | 1d3 PHYS (DEF applies) + **STUNNED 2–3** (rolled, §6.4); hero flashes `$07` | re-arms (stays) | `A STONE FALLS ON YOU!` (21) then `YOU ARE STUNNED!` (existing) |
 
 ALARM's wave code lands in 3F; in 3E the trap is generated and prints the "nothing comes"
@@ -225,7 +225,7 @@ past a known DART. Teleport/fear arrivals never land with a trap col under the b
 `$42`, GAS `$44`, TELEPORT `$43`, ALARM `$46`, STUN `$07`; ink on black, joins the legality set). A trap
 becomes known when:
 1. it **triggers** (TRAP2, user 2026-10-28: **every** trap stays known and visible and re-arms; it fires again
-   only on a NEW crossing, and monsters ignore traps);
+   only on a NEW crossing, and monsters ignore traps; ALARM-1: an ALARM plate rings its wave only once);
 2. **Search = Wait** (↓ with no ladder below, §2.3; no new key, joystick-complete): each
    hidden trap in the current room on the hero's storey within **6 cols** of the body is
    found with **1 in 2** (gameplay RNG);
@@ -3498,7 +3498,7 @@ lightest base weight only; the picked tiered kind is cap-checked in 8/9. A room 
 therefore still refuse both tries (e.g. Σ 9, both picks weigh 5): accepted, a skip.
 
 **Flags (U).** Respawned monsters get `F_RESPAWN`: **no drops** (the death-drop roll is
-skipped) and XP / `RESPAWN_XP_DIV`. They are otherwise normal and may follow (prototype §3.7,
+skipped) and XP / `RESPAWN_XP_DIV`. ALARM-1: ALARM-wave bodies are **summon-made** (`RCD_SUMMONED`, `SPQ_WAVE`): leaving the room discards the ones not following (§9.4.2), so a wave is a room-local ambush; like summons they count towards the Bone Caller / Pharaoh live-summon caps (`BC_LIVE`, `PH_LIVE`, via `sp_scan` `SP_NS`: accepted, a caster in the same room summons a little less while a wave body lives). They are otherwise normal and may follow (prototype §3.7,
 subject to the §9.3 cap) like any monster.
 
 **Depth scaling (D).** None: period and chance are the same on every depth. Per-depth hp ×

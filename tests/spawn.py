@@ -15,8 +15,8 @@ sp_run makes the bodies (src/spawn6.asm). Seeded generated games (the real level
      minion (Skeleton / Mummy, summon-made) beside it, S = 8; PH_LIVE 1: one at a time; leaving
      the lair discards it (record = the boss); P6: the minion killed on a re-summon turn -> the new one
      takes its freed slot, no corpse frame at the top-left (fix/d8-corpse-topleft)
-  A  ALARM (D5, boss alive): "AN ALARM BELL RINGS!", 1-2 bodies of LP_KINDS PENDING at a door
-     (F_RESPAWN, not summon-made), walked in after the next turns; boss dead (LF_UNIQUE): the bell
+  A  ALARM (D5, boss alive): "AN ALARM BELL RINGS!", 1-2 summon-made bodies of LP_KINDS PENDING at a door; ONE wave per plate (TRF_RUNG: 2nd step = NOTHING COMES); a left-behind wave body is discarded by lp_bank
+     (F_RESPAWN | summon-made), walked in after the next turns; boss dead (LF_UNIQUE): the bell
      line and nothing
   N  sp_try with a parent at x = 2: a negative candidate x ($FF + width wraps) is refused, a legal col is not
   X  sp_run on an exit turn (EXIT_KIND) / a dying hero: the queue is emptied, nothing made
@@ -488,6 +488,7 @@ def alarm(p, lines):
         p.wmem(TL, [room | (S["TRF_S1"] if s_ else 0), (c0 + hw) | (S["TT_ALARM"] << 5)] + [0] * 10 + [1])
         lines.lines.clear()
         before = room_slots(p)
+        resp0 = p.rb("LP_RESPAWNS")
         p.turn("L")
         ns = new_slots(p, before)
         if dead:
@@ -497,9 +498,9 @@ def alarm(p, lines):
         es = [p.ent(s2) for s2 in ns]
         check("A1 'AN ALARM BELL RINGS!' logged; the queue empty after end_turn",
               "AN ALARM BELL RINGS!" in lines.lines and p.rb("SPQ_K") == 0, (lines.lines, p.rb("SPQ_K")))
-        check("A2 1-2 wave bodies of LP_KINDS, PENDING, F_RESPAWN, not summon-made",
+        check("A2 1-2 wave bodies of LP_KINDS, PENDING, F_RESPAWN, summon-made (ALARM-1: SPQ_WAVE has SQF_SUMM)",
               1 <= len(es) <= 2 and all(e["KIND"] in lpk and e["FLAGS"] & EF_PENDING and e["FLAGS"] & EF_RESPAWN
-                                         and not e["POT"] & SUMM for e in es), (es, lpk))
+                                         and e["POT"] & SUMM for e in es), (es, lpk))
         ex = p.rb(S["ROOM_DESC"] + room * 16 + 1)
         okx = []
         for e in es:
@@ -515,6 +516,34 @@ def alarm(p, lines):
         mat = [s2 for s2 in ns if p.ent(s2)["FLAGS"] & EF_ACTIVE and not p.ent(s2)["FLAGS"] & EF_PENDING]
         check("A5 the wave materialised within 6 turns (walked / popped in)", mat == [s2 for s2 in ns
               if p.ent(s2)["FLAGS"] & EF_ACTIVE], [(s2, p.ent(s2)) for s2 in ns])
+        # ALARM-1 (one wave per plate): the first ring set TRF_RUNG and counted once; the SPQ wave is summon-made
+        check("A6 the plate carries TRF_RUNG after the ring; LP_RESPAWNS +1; wave bodies are summon-made (E_RCD bit 6)",
+              p.rb(S["TRAP_LIST"]) & S["TRF_RUNG"] == S["TRF_RUNG"] and p.rb("LP_RESPAWNS") == resp0 + 1
+              and all(p.ent(s2)["POT"] & SUMM for s2 in ns), (p.rb(S["TRAP_LIST"]), resp0, p.rb("LP_RESPAWNS")))
+        # step off and on again (the pre-step cell is clear of the plate, as the first time): nothing comes
+        resp1 = p.rb("LP_RESPAWNS")
+        clear_room(p)
+        hero_at(p, c0, s_)
+        heal(p)
+        lines.lines.clear()
+        before = room_slots(p)
+        p.turn("L")
+        check("A7 second step on the rung plate: 'A BELL RINGS. NOTHING COMES', no body, LP_RESPAWNS unchanged, "
+              "SPQ_K empty, plate still known",
+              "A BELL RINGS. NOTHING COMES" in lines.lines and "AN ALARM BELL RINGS!" not in lines.lines
+              and not new_slots(p, before) and p.rb("LP_RESPAWNS") == resp1 and p.rb("SPQ_K") == 0
+              and p.rb(S["TRAP_LIST"]) & S["TRF_KNOWN"], (lines.lines, p.rb("LP_RESPAWNS"), resp1))
+        # (A8 covers lp_bank / lp_enter only, on a poked summon-made body; a full transit is covered by the lp / roommem suites)
+        # a left-behind wave body is not banked: lp_bank frees it (record unchanged), nothing waits on re-entry
+        mon(p, 1, K["SKELETON"], c0 + 8, s_, hp=5, pot=SUMM, flags=EF_RESPAWN)
+        room = p.rb("CUR_ROOM")
+        n0 = len(rec_entries(p, room)[0])
+        far3(p, "lp_bank", a=room, e=0)
+        n1 = len(rec_entries(p, room)[0])
+        p.wmem(S["LP_HX"], [2, s_ ^ 1, hw])
+        far3(p, "lp_enter", a=room)
+        check("A8 lp_bank: a wave body (SPQ_WAVE) left behind is discarded, not in the record, not back on re-entry",
+              n1 == n0 and not [s2 for s2 in room_slots(p) if p.ent(s2)["KIND"] == K["SKELETON"]], (n0, n1))
 
 
 # ---------------------------------------------------------------------------- N
@@ -574,7 +603,7 @@ def exits(p, lines):
     # costs: an offspring / a summon beside the caster, a 2-body wave (interrupts on: the real path)
     costs = {}
     for tag, qq in (("summon", [K["GHOST"] | 0xC0, 1, 1]), ("offspring", [K["RAT"] | 0xE0, 1, 1]),
-                    ("wave x2", [0x80, 0xFF, 2])):
+                    ("wave x2", [S["SPQ_WAVE"], 0xFF, 2])):
         clear_room(p)
         hero_at(p, c0, s_)
         if qq[1] != 0xFF:
