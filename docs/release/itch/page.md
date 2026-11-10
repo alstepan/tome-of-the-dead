@@ -90,11 +90,11 @@ Items on the floor are picked up automatically at the end of your turn.
 ### How to load
 
 - **Emulators (Fuse, ZEsarUX, others):** set the machine to ZX Spectrum 128K, then either open `tome-of-the-dead-v1.1.tap` and let it load (type `LOAD ""` or choose Tape Loader), or open `tome-of-the-dead-v1.1.sna` directly for an instant start.
-- **Real 128K or +2 (grey) hardware:** play the `.tap` through a tape interface, TZXDuino, divMMC or similar, and load it from the 128 tape loader. Tested on a real ZX Spectrum 128K (the original "toastrack").
+- **Real hardware:** play the `.tap` through a tape interface, TZXDuino, divMMC or similar. On a 128K or +2 choose **Tape Loader**; on a +2A, +2B or +3 choose **Loader** (on the +3, `LOAD ""` from +3 BASIC looks for a disk). Tested on a real ZX Spectrum 128K (the original "toastrack").
 
 ### System requirements
 
-- ZX Spectrum 128K or +2 (grey), or an emulator in Spectrum 128K mode. The +2A / +3 are untested (different memory paging and contention).
+- ZX Spectrum 128K, +2 (grey), +2A / +2B or +3, or an emulator in one of those modes. The 128K is tested on real hardware; the +2, +2A (ROM 4.0 and 4.1, which also covers the +2B) and +3 (ROM 4.0 and 4.1) are tested in the ZEsarUX emulator, not yet on real machines.
 - **48K machines are not supported.** The game needs the extra RAM banks and the AY sound chip.
 - Keyboard; joystick optional (Kempston, Sinclair 1 or 2).
 

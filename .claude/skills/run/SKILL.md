@@ -21,7 +21,7 @@ Controls (128K model; keys 1/2/3 pick a hero, H/L walk+attack, K/J climb, G quaf
 SPACE wait, ENTER on the end screens).
 Load it from the **128 BASIC / Tape Loader**: in 48 BASIC (or after `USR 0`)
 `$7FFD` paging is locked and `start` stops with "LOAD FROM 128 BASIC"
-(`check_paging`). +2A/+3 are unsupported (different paging); use a 128K/+2.
+(`check_paging`). +2A/+3 work (tested in ZEsarUX): load via the Loader menu.
 
 Fuse on macOS is a Cocoa GUI app — it has no useful headless/CLI text mode, so:
 - it's for **human-in-the-loop visual checks**, not automated verification;

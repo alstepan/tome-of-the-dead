@@ -165,7 +165,7 @@ SPQ_NONE         EQU $FF
 SQF_ONCE        EQU %00100000       ; sp_run sets the parent's RCD_ONCE when the body is made (the Rabbit Rat)
 SQF_SUMM        EQU %01000000       ; summon-made: RCD_SUMMONED (discarded on leave, §9.4.2)
 SQF_RESP        EQU %10000000       ; F_RESPAWN (= EF_RESPAWN: no drops, half XP)
-SPQ_WAVE         EQU SQF_RESP        ; an ALARM wave (kind 0: rolled per body)
+SPQ_WAVE         EQU SQF_RESP | SQF_SUMM       ; an ALARM wave (kind 0: rolled per body)
                 ASSERT SQF_RESP == EF_RESPAWN && ((SQF_ONCE | SQF_SUMM | SQF_RESP) & LEK_KIND_MASK) == 0
 SP_R            EQU 4               ; summon / breed placement: tries d = 0 .. SP_R - 1 on each side of the parent
 BC_CD           EQU 8               ; Bone Caller summon cooldown (game.md §9.6: cooldown 8, <= 1 live summon)
