@@ -134,7 +134,7 @@
   TOME-FX, user request 2026-11-03**, see below.) (E) The lectern stands on **storey 1 against the Sanctum's dead-end wall** (cols 1-2 in
   cell 6, 29-30 in cell 8). (E) `TOME_HP` is set once per level at generation and **never restored**: leaving
   the Sanctum keeps the damage. The aura is untyped (no DEF, no resistance), once per turn end, gap < 6 on
-  storey 1 (either facing); its last hp ends the run (`GS_DEAD`, no death sequence). The seal opens on the
+  storey 1 (either facing); its last hp ends the run, but the hero first plays the death sequence (DEATH-FX, user report 2026-11-09: `tome_aura` queues `RC_DEATH` and holds the turn in ANIM until the death pose is held, then the second `end_turn` sets `GS_DEAD`; as for any other death). One known side effect: that second `end_turn` counts one extra turn (`TURN_COUNTER`, `TRK_PHASE`) on the end card of an aura death (skipping it needs bytes the full regions do not have). The seal opens on the
   Archmage's death by any hand (its own Mirror Helm return included): `THE SEAL BREAKS`; the door keeps its
   lock glyph until bumped open. (E) The D8 lair keeps its shut grate (the generator still places the exit
   col); the Archmage's death does not open it. **WIN2 as built (user 2026-11-01; E details):** the Tome's last hit
