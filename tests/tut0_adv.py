@@ -51,7 +51,7 @@ OVR = S["OVERRUN_COUNT"]
 BREAK_KEYS = ("CAPS", "SPACE")
 
 VIOL = {}                                                # (scenario, kind) -> [count, first detail]
-STATS = dict(ticks=0, inputs=0, d0_ticks=0, overruns=0, heavy=0)
+STATS = dict(ticks=0, inputs=0, d0_ticks=0, overruns=0, heavy=0, i5_unsettled=0)
 
 
 def viol(ctx, kind, detail="", counts=True):
@@ -158,13 +158,47 @@ def invariants(c, heavy=False):
         if U.blob_bytes(p) != U.BLOB_IMAGE:
             viol(c, "I4 blob != blob.bin", U.st(p))
     # I5 mentor (heavy; D0 playing, idle, box stamped, nothing overlaying the play area)
-    if heavy and d0 and gs == GS_PLAYING and U.tv(p, "TV_STAMP") == 1 and p.rb(PAUSED) == 0 \
-            and p.rb("PAGE_OPEN") == 0 and p.rb("TURN_PHASE") == 0:
+    if heavy and d0 and gs == GS_PLAYING and i5_gate(p, True):
         mentor_check(c)
+
+
+def i5_gate(p, idle):
+    """I5 applies: D0 playing, box stamped, no pause / page over the play area (and, at the first look, no turn running)."""
+    return hooks(p) == D0H and p.rb("GAME_STATE") == GS_PLAYING and U.tv(p, "TV_STAMP") == 1 and p.rb(PAUSED) == 0 \
+        and p.rb("PAGE_OPEN") == 0 and (not idle or p.rb("TURN_PHASE") == 0)
+
+
+# TUT0-F3 (P2 root cause = this sampler): a pose / spot change made by end_turn (tt_mentor: glyphs + a queued
+# restore) is rendered in the next tick and presented in the tick after (A7 double buffer, RENDER_FIRST), so the
+# DISPLAYED box shows the previous pose for up to 2 probes. A held key can end a turn every tick (Wait '.', a
+# turn-around, a diagonal pair), and every turn toggles IDLE1 / IDLE2, so the old fixed 3-tick retry re-sampled
+# fresh latency (V1 in BW1 BW9 BW16 BM2 BM5): the recheck now waits until the pose has been unchanged for
+# POSE_LAT probes; never settling in POSE_WAIT ticks is inconclusive (counted, not a violation). BW15's V2 was a
+# flying damage number's line over the hero's head (== a mentor glyph): live number cells are excluded.
+POSE_LAT = 3
+POSE_WAIT = 24
+
+
+def pose_key(p):
+    return tuple(U.tv(p, n) for n in ("TV_IMG", "TV_SPOT", "TV_STAMP")) + (p.rb("CUR_ROOM"),)
+
+
+def pose_settle(p):
+    k0, stable = pose_key(p), 0
+    for _ in range(POSE_WAIT):
+        p.tick(1)
+        k = pose_key(p)
+        stable = stable + 1 if k == k0 else 0
+        k0 = k
+        if stable >= POSE_LAT:
+            return True
+    return False
 
 
 def mentor_check(c, again=True):
     p = c.p
+    if not again and not i5_gate(p, False):
+        return
     fr = p.frame()
     box = U.mentor_box(p)
     if box is None:
@@ -175,17 +209,20 @@ def mentor_check(c, again=True):
     ids = [p.rb(S["ROOM_MAP"] + 32 * (r0 + k // 3) + c0 + k % 3) for k in range(18)]
     gl = [bytes(p.z.read_memory(S["TILE_GLYPHS"] + 8 * i, 8)) for i in ids]
     c.mglyphs.update(g for g, i in zip(gl, ids) if i in U.MENTOR_IDS and any(g))
-    bad = []
+    dn = p.dn_cells()                                    # a live flying number is OR'd on the displayed screen only (BW15:
+    bad = []                                             # its top line f0.. == a mentor glyph at (20, 11), the hero's head)
     for k in range(18):
         col, row = c0 + k % 3, r0 + k // 3
-        if ids[k] not in U.MENTOR_IDS or hx - 2 <= col <= hx + 5:    # the id-less cell / under the hero sprite
+        if ids[k] not in U.MENTOR_IDS or hx - 2 <= col <= hx + 5 or (col, row) in dn:   # the id-less cell / under the hero
             continue
         if G.cell_bytes(fr, col, row) != gl[k] or G.attr_at(fr, col, row) != p.rb(S["TILE_ATTRS"] + ids[k]):
             bad.append((col, row))
     if bad:
-        if again:                                        # a persistent mismatch only (a blink / restore may be mid-flight)
-            p.tick(3)
-            return mentor_check(c, False)
+        if again:                                        # a persistent mismatch only (see POSE_LAT)
+            if pose_settle(p):
+                return mentor_check(c, False)
+            STATS["i5_unsettled"] += 1
+            return
         viol(c, "I5 mentor box != pose (V1)", f"cells {bad[:3]} (in ANIM_LIST/drip cells: {[b for b in bad if b in U.anim_cells(p)]}) box {box} {U.st(p)}")
     # V2: a mentor-only glyph anywhere outside the box (glyphs also used by ordinary tiles excluded)
     tiles = bytes(p.z.read_memory(S["TILE_GLYPHS"], 0x340))
@@ -193,8 +230,13 @@ def mentor_check(c, again=True):
     only = c.mglyphs - plain
     if only:
         stray = [(col, row) for row in range(G.PLAY_ROWS) for col in range(32)
-                 if not (c0 <= col < c0 + 3 and r0 <= row < r0 + 6) and G.cell_bytes(fr, col, row) in only]
-        if stray:
+                 if not (c0 <= col < c0 + 3 and r0 <= row < r0 + 6) and (col, row) not in dn
+                 and G.cell_bytes(fr, col, row) in only]
+        if stray and again:                              # the old box's cells after a spot change: the same latency
+            if pose_settle(p):
+                return mentor_check(c, False)
+            STATS["i5_unsettled"] += 1
+        elif stray:
             viol(c, "I5 mentor glyph outside the box (V2)", f"cells {stray[:3]} {U.st(p)}")
 
 
@@ -213,7 +255,7 @@ def finish_checks(c):
     """The Run tracer's own findings (V3 / blob at room changes) become violations."""
     r = c.run
     if r.ptr_bad:
-        viol(c, "I6 FLASH on blank pointer cell (V3)", str(r.ptr_bad[0]) + f" ({len(r.ptr_bad)} samples)", counts=False)   # reported, see the report: not failing the run
+        viol(c, "I6 FLASH on blank pointer cell (V3)", str(r.ptr_bad[0]) + f" ({len(r.ptr_bad)} samples)")   # TUT0-F3: failing (ROW20 = cols 0-25, the prompt owns 26-31)
     if r.blob_bad:
         viol(c, "I4 blob != blob.bin (room change)", str(r.blob_bad[:3]))
     c.step = "end"
@@ -877,7 +919,8 @@ def a16_icon_break(c):
 
 @scen("A17", (0, 1))
 def a17_mash_holds(c):
-    """Raise a hold, then mash keys: it must end after the first key and that key must not also move the hero."""
+    """Raise a hold, then mash keys: it must end after the first key and that key must not also move the hero (nor a FIRE tap /
+    DOWN window poked in before the dismissal: TUT0-F3)."""
     p = c.p
     rng = random.Random(77)
     keys = ["P", "O", "Q", "A", "FIRE", "ENTER", "I", "1", "2", "S", "."]
@@ -890,7 +933,14 @@ def a17_mash_holds(c):
             continue
         p.release()
         p.tick(3)
+        if k % 2 == 0:                                   # TUT0-F3 3: input left from the turn's last tick must not act
+            if k % 4 == 0:                               # after the dismissal: a queued use (IN_BAG: the page would open)
+                p.wb("INTENT", S["IN_BAG"])
+            else:                                        # a FIRE tap in progress + a DOWN window (a use / a wait turn)
+                p.wb("FIRE_ST", S["FS_TAP"])
+                p.wb("DN_T", 1)
         x0, t0 = p.ent(0)["X"], p.rw("TURN_COUNTER")
+        n_log = len(p.LOG) if p.LOG is not None else 0
         presses = 0
         for presses in range(1, 81):                     # mash until it ends (a hold ignores keys until its text is drawn)
             p.hold(*rng.sample(keys, rng.randint(1, 3)))
@@ -906,8 +956,10 @@ def a17_mash_holds(c):
         if U.tv(p, "TV_HOLD"):
             U.dismiss(p)
             c.fail(f"mash {k}: the hold survived {presses} key presses")
-        elif p.ent(0)["X"] != x0 or p.rw("TURN_COUNTER") != t0:
-            c.fail(f"mash {k}: the dismissing key also acted (x {x0}->{p.ent(0)['X']}, turns {t0}->{p.rw('TURN_COUNTER')})")
+        elif p.ent(0)["X"] != x0 or p.rw("TURN_COUNTER") != t0 or p.rb("PAGE_OPEN") \
+                or (p.LOG is not None and len(p.LOG) != n_log):
+            c.fail(f"mash {k}: the dismissing key (or the input before the hold) also acted (x {x0}->{p.ent(0)['X']}, "
+                   f"turns {t0}->{p.rw('TURN_COUNTER')}, page {p.rb('PAGE_OPEN')}, log +{len(p.LOG or []) - n_log})")
         ensure_play(p)
     print(f"  mashed {checks} holds, presses needed {MASH[-checks:]}", flush=True)
     return done(c)
@@ -1079,7 +1131,7 @@ def main():
                         h.launch(EMU_ARGS)                  # the emulator died: a fresh one for the next seed
     bad = [n for n, ok in results if not ok]
     print(f"tut0_adv: {len(bad)} failed of {len(results)}: {bad}  ticks {STATS['ticks']} inputs {STATS['inputs']} "
-          f"d0-ticks ~{STATS['d0_ticks']} heavy checks {STATS['heavy']} overruns {STATS['overruns']}  ({time.monotonic() - t0:.0f}s)", flush=True)
+          f"d0-ticks ~{STATS['d0_ticks']} heavy checks {STATS['heavy']} (I5 unsettled {STATS['i5_unsettled']}) overruns {STATS['overruns']}  ({time.monotonic() - t0:.0f}s)", flush=True)
     for (sc, kind), (n, d) in sorted(VIOL.items()):
         print(f"  VIOL {sc} {kind} x{n}: {d}")
     return 1 if bad or h.failures else 0

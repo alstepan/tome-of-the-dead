@@ -509,7 +509,7 @@ QS_SCROLL_ICON = S["QS_SLOT0"] + S["QS_SCROLL"]
 STAND_Y = (S["STAND_Y0"], S["STAND_Y1"])
 
 
-PTR_RECTS = [(18, 27, 3, 2), (18, 18, 3, 2), (18, 21, 3, 2), (18, 24, 3, 2), (21, 30, 2, 1), (21, 0, 30, 1), (20, 0, 32, 1)]  # tut_rects (row, col, w, h)
+PTR_RECTS = [(18, 27, 3, 2), (18, 18, 3, 2), (18, 21, 3, 2), (18, 24, 3, 2), (21, 30, 2, 1), (21, 0, 30, 1), (20, 0, 26, 1)]  # tut_rects (row, col, w, h)
 
 
 class Run:

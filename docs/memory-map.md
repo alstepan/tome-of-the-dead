@@ -6306,3 +6306,14 @@ unchanged; the stub area is boot-dead).
 `tt_repeat` skips the nudge count in B6 / B10-B12 (+10 B: the shaft / door walks reach 12+ turns; B11 walks to the sleeping Goblin),
 `tt_hold` re-asserts the row-20 pointer (`tt_ptr_re`, +3 B) after its final redraw, ICON MODE holds jump to `tt_holdm` (TALK pose, +0 B);
 `tests/budget.py` tut0 now also gates the post-resync part of room-change / blink ticks. Resident / ledgered regions: 0 B.
+**TUT0-F3 fix list (2026-11-10):** blob +14 B -> 7,484 B raw / 5,302 B packed (release; 5,300 kit 0), **706 B free in `BLOB_RES`**
+(the release text tape block 10,071 B ends `$E757`). (1) P2 soak failures (BW1/9/15/16, BM2/5) were the `tests/tut0_adv.py` I5 sampler, not the
+engine: a pose / spot change from end_turn is rendered next tick and presented the tick after (A7, RENDER_FIRST), and a
+held key can end a turn (IDLE1/IDLE2 toggle) every tick, so the fixed 3-tick retry re-sampled fresh latency; every case
+was clean once the pose was stable (ZRCP replay); BW15's V2 "glyph at (20,11)" was a flying damage number's top line
+(`f0 00..`, == a mentor edge glyph) over the hero's head. The recheck now waits for `POSE_LAT` 3 stable probes
+(`pose_settle`) and skips live number cells (`dn_cells`).
+(2) B12: pointer rect 6 (ROW20) = row 20 cols 0..`TUT_R20_W`-1 = 0..25 (tutorial_d0.md s14.6; ASSERT `TUT_R20_W <= HP_COL`):
+the hold prompt (cols 26..31) never sits on a pointer cell; V3 (I6) fails the run now. (3) `tt_hold` ends like
+`pause_run7` / `page_lat3`: `INTENT`, `DN_T`, `DN_COMMIT` := 0, `FIRE_ST` := `FS_USED` (+14 B; hold frames, not tick work).
+Resident: 0 B.

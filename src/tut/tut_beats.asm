@@ -90,6 +90,7 @@ TUT_PR_SCROLL   EQU 3
 TUT_PR_STATUS   EQU 4                   ; (TUT0-F2: the key-icon rect is gone, L24 reworded)
 TUT_PR_BARS     EQU 5
 TUT_PR_ROW20    EQU 6
+TUT_R20_W       EQU 26                  ; ROW20 = cols 0..25 (TUT0-F3; <= HP_COL, ASSERT tut_turn)
 
 ; one record = 16 B (ASSERTed). Group = 2 line ids (second may be $FF).
         MACRO TBEAT room, trig, p2, p3, spot, pose, g0a, g0b, g1a, g1b, g2a, g2b, r0, r1, fh, fl
@@ -274,5 +275,6 @@ tut_rects:
         DEFB 18, 24, 3, 2               ; SCROLL (slot 9)
         DEFB 21, 30, 2, 1               ; hero status icons, row 21 cols 30-31
         DEFB 21,  0, 30, 1              ; HP / MP / FOOD bars + numbers + hunger word
-        DEFB 20,  0, 32, 1              ; row 20, the info line
+        DEFB 20,  0, TUT_R20_W, 1       ; row 20, the info line cols 0-25 (TUT0-F3: the hold
+                                        ; prompt owns 26-31, tutorial_d0.md s14.6; ASSERT tut_turn)
 tut_rects_end:

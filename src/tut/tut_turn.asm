@@ -1288,7 +1288,9 @@ tt_tok:
 ; cue comes off at once (rows: the BRIGHT bit put back; row 20: its attrs put
 ; back, blanked, and PD_INFO redraws its text in the same frame), then frames until every key is up
 ; (swallowed: STICK / STICK_OLD and the shortcut matrix see no press when play
-; resumes). Clobbers: all.
+; resumes; INTENT / DN_T / DN_COMMIT cleared, FIRE_ST := FS_USED, TUT0-F3). The
+; ROW20 pointer rect stops at col HP_COL - 1: the prompt never sits on a pointer
+; cell (TUT0-F3 B12). Clobbers: all.
 ;------------------------------------------------------------------------------
 HP_COL          EQU 26                  ; the prompt area: a gap, the triangle, the name (<= 4 chars)
 HP_W            EQU 32 - HP_COL
@@ -1299,6 +1301,7 @@ HP_BLINK        EQU 3                   ; triangle: on / off every 8 frames (bit
 HP_PULSE        EQU 4                   ; rows: BRIGHT / normal every 16 frames (bit 4)
 HP_ATTR         EQU SCREEN_ATTR + LOG_ROW * 32
                 ASSERT HP_COL + 1 + 1 + 3 <= 32 && LOG_ROW + HP_ROWS == 24
+                ASSERT TUT_R20_W <= HP_COL      ; the prompt is on no ROW20 pointer cell (TUT0-F3)
 tt_hold:
                 ld   a, 1
                 ld   (TV_HOLD), a
@@ -1374,8 +1377,13 @@ tt_hold:
                 call tt_key
                 jr   nz, .up
                 call tt_ptr_re                 ; TUT0-F4: the row-20 pointer (PD_INFO's redraw dropped its FLASH)
-                xor  a
-                ld   (TV_HOLD), a
+                xor  a                         ; TUT0-F3 3: no input from before the hold acts
+                ld   (TV_HOLD), a              ; after it (as pause_run7 / page_lat3): a FIRE
+                ld   (INTENT), a               ; tap / ENTER queued in the last tick, a DOWN
+                ld   (DN_T), a                 ; window or commit; a FIRE still counted as held
+                ld   (DN_COMMIT), a            ; is not a tap
+                ld   a, FS_USED
+                ld   (FIRE_ST), a
                 jp   resync_tick
 
 ; tt_holdm — a turn's held group (tt_after): the hold starts (TV_HOLD), then the
