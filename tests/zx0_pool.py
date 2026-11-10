@@ -206,7 +206,7 @@ class Run:
         raise RuntimeError(f"never reached {labels}")
 
     def anykey(self, want):
-        """instr_main's key waits (GS_ANYKEY, GS_HELP1 / 2 / 3; one call each, probe = select_tick): released for 2 frames, ENTER for 2,
+        """instr_main's key waits (GS_ANYKEY, GS_HELP1 / GS_HELP3 (page 2; TUT0 dropped a page); one call each, probe = select_tick): released for 2 frames, ENTER for 2,
         released for 2 (ENTER and '1' share a menu bit), each frame = one select_tick."""
         self.wb("INPUT_SRC", 1)
         for keys in ((), (), ("ENTER",), ("ENTER",), (), ()):
@@ -217,6 +217,9 @@ class Run:
 
     def wb(self, name, v):
         self.z.cmd("write-memory %d %d" % (self.S[name], v))
+
+    def wb_abs(self, addr, v):
+        self.z.cmd("write-memory %d %d" % (addr, v))
 
     def rb(self, name):
         return self.z.read_memory(self.S[name], 1)[0]
@@ -325,6 +328,10 @@ class Run:
             self.run_to("select_tick")
             self.hold()
             self.run_to("select_tick")
+        if "es_go" in self.S:                       # TUT0-T6b: skip the tutorial choice screen ('1' -> START)
+            a = self.S["start_game"]
+            self.wb_abs(self.S["es_go"] + 1, a & 255)
+            self.wb_abs(self.S["es_go"] + 2, a >> 8)
         self.hold("1")
         if proto:                                   # D3-11: the fixture at proto_hook
             self.run_to("proto_hook")

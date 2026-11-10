@@ -1,5 +1,5 @@
 ;==============================================================================
-; instr_ovl.asm — INSTR-BUILD: the boot's key waits + the three-page HOW TO PLAY
+; instr_ovl.asm — INSTR-BUILD: the boot's key waits + the two-page HOW TO PLAY
 ; screen (game.md §3.2.1 option A flow: once per power-on, before the first
 ; menu; pages / wording / render spec: docs/design/instructions_screen.md /
 ; .txt). A boot-only OVERLAY (main.asm "OVERLAYS"): assembled at INSTR_ORG
@@ -9,20 +9,22 @@
 ; POOL_START: the streams are dead after this). 0 resident bytes.
 ;
 ; Flow: the loading picture + "PRESS ANY KEY" (GS_ANYKEY, was boot6_wait),
-; then page 1 (GS_HELP1), page 2 (GS_HELP2), page 3 TREASURES (GS_HELP3), then
+; then page 1 (GS_HELP1), page 2 TREASURES (GS_HELP3; GS_HELP2 unused), then
 ; back to boot (menu).
 ; A key counts only after every key was released once (the ENTER of LOAD ""
 ; or the previous page's key may still be down). BREAK (CAPS + SPACE, seen at
-; any frame while a page's key is held) on page 1 or 2 skips all remaining pages;
-; on page 3 it is any key. No timeout;
+; any frame while a page's key is held) on page 1 skips page 2;
+; on page 2 it is any key. No timeout;
 ; Kempston is not read (input_tick: GAME_STATE != GS_PLAYING); a Sinclair
-; FIRE is a key. Page 3's key is swallowed by the menu (menu_run primes its
+; FIRE is a key. Page 2's key is swallowed by the menu (menu_run primes its
 ; edge detector from the matrix). The title tune plays on throughout.
 ;
 ; Page images (tools/instr_pack.py -> build/text/instr_p<n>.inc, format there)
 ; are unpacked to INSTR_DATA (after this code, same window): p1 straight after
-; the frame_tab stream INSTR_FT_ZX0 (= POOL_START, in_ft: RECLAIM-D), p2 / p3 straight
+; the frame_tab stream INSTR_FT_ZX0 (= POOL_START, in_ft: RECLAIM-D), p2 straight
 ; after it (dzx0 leaves HL past the stream).
+; TUT0-T1: the common exit (also after a BREAK skip) is in_tut: the D0 blob into
+; bank 4 + the low-RAM stubs + the es_go patch.
 ; Drawing pages: bank 0 (unpack), bank 1 (copy_virt: the vdata bar icons and
 ; the key label, GEN_SRC staging), bank 6 (R6 ic_scr: the 16x16 item icons);
 ; bank 3 is never paged (its pblit SMC must stay as loaded until panel_init,
@@ -33,6 +35,93 @@
 ; last pass), then the attrs (~16k T) reveal it at once.
 ;==============================================================================
 instr_main:
+                call in_flow                   ; the key waits + pages (every exit: BREAK too)
+                ; fall through: TUT0-T1 the common exit
+
+;------------------------------------------------------------------------------
+; in_tut — TUT0-T1 (docs/design/tut0_split.md "Verdicts" F4): before gen_idles
+; overwrites bank 0. (1) The blob stream (bank 0, the LAST stream of the text tape
+; block + a DW length trailer; the block's end = TEXT_ADDR + tape_tab's text-record
+; length, so no byte here depends on a packed size) is copied through PF_RAM (256-B
+; bounces, bank 0 -> bank 4) to $10000 - length, then ZX0-unpacked in place to
+; BLOB_ORG (main.asm ASSERTs raw + delta <= BLOB_RES). (2) The stubs (in_stub, a copy
+; of tut_stub.asm DISP'd at check_paging) go over check_paging (tape path only, dead
+; now). (3) es_go := ts_choice (enter_select offers the tutorial). The stream's
+; leftover tail (BLOB_ORG + BLOB_LEN .. $FFFF) is zeroed: bank 4 == the .sna's.
+; Clobbers: A, BC, DE, HL (ovl_run gives the caller's bank back).
+; Cost: ~44 T/B packed (2 LDIRs + the bounce) + dzx0 (~LDIR rate + Elias bits per raw
+; byte) + 21 T per tail byte + ~1.3k T; boot only. Full 6 KB blob ~0.3M T (estimate).
+;------------------------------------------------------------------------------
+in_tut:         ld   a, BANK_TEXT
+                call page_bank
+                ld   hl, (tape_tab + TT_TEXT_REC * TT_STRIDE + 3)
+                ld   de, TEXT_ADDR - 2
+                add  hl, de                    ; HL = the trailer
+                ld   c, (hl)
+                inc  hl
+                ld   b, (hl)                   ; BC = packed length (> 0)
+                dec  hl
+                or   a
+                sbc  hl, bc                    ; HL = blob_zx0 (bank 0); CF = 0
+                ex   de, hl
+                ld   hl, 0
+                sbc  hl, bc                    ; HL = $10000 - length: the bank-4 destination
+                ex   de, hl
+                push de                        ; [dst] for dzx0
+.cp:            push bc                        ; [left]
+                ld   a, b
+                or   a
+                jr   z, .n                     ; < 256 left: all of it
+                ld   bc, PF_RAM_LEN
+.n:             push bc                        ; [chunk]
+                ld   a, BANK_TEXT
+                call page_bank                 ; (BC lost; HL, DE kept)
+                pop  bc
+                push bc
+                push de
+                ld   de, PF_RAM
+                ldir                           ; bank 0 -> the bounce; HL = next source
+                ld   a, BANK_BLOB
+                call page_bank
+                pop  de
+                pop  bc
+                push bc
+                push hl
+                ld   hl, PF_RAM
+                ldir                           ; -> bank 4; DE = next destination
+                pop  hl
+                pop  bc                        ; chunk
+                ex   (sp), hl                  ; HL = left, [sp] = source
+                or   a
+                sbc  hl, bc
+                ld   b, h
+                ld   c, l
+                pop  hl                        ; source (flags kept)
+                jr   nz, .cp
+                pop  hl                        ; the stream in bank 4 (still paged)
+                ld   de, BLOB_ORG
+                call dzx0_standard             ; in place (the stream's tail is at $FFFF)
+                ld   h, d                      ; DE = BLOB_ORG + BLOB_LEN: zero the stream's
+                ld   l, e                      ; leftover tail to $FFFF, so bank 4 == the
+                ld   (hl), 0                   ; .sna's (raw blob + zeros) for the pool checks
+                inc  de
+                ld   bc, BLOB_TAIL - 1
+                ldir
+                ld   hl, in_stub
+                ld   de, check_paging
+                ld   bc, TUT_STUB_LEN
+                ldir
+                ld   hl, ts_choice
+                ld   (es_go + 1), hl           ; SMC target (main.asm enter_select)
+                ret
+BLOB_TAIL       EQU $10000 - BLOB_ORG - BLOB_LEN  ; the zeroed tail (ASSERTed >= 2)
+                ASSERT PF_RAM_LEN == 256 && (BLOB_ORG & $FF) == 0 && BLOB_TAIL >= 2
+in_stub:                                       ; = tut_stub.asm as assembled at check_paging (main.asm)
+                DUP  TUT_STUB_LEN, tsi
+                DB   {b ovl_raw_stub + tsi}
+                EDUP
+
+in_flow:
                 call in_ft                     ; RECLAIM-D: frame_tab -> FRT first
                 push hl                        ; HL = the page-1 stream
                 ld   a, GS_ANYKEY
@@ -49,15 +138,9 @@ instr_main:
                 call in_wait
                 pop  hl                        ; (flags kept)
                 ret  nc                        ; BREAK: straight to the menu
-                ld   a, GS_HELP2
-                call in_page                   ; HL = the page-3 stream
-                push hl
-                call in_wait
-                pop  hl
-                ret  nc                        ; BREAK on page 2 skips page 3 too
-                ld   a, GS_HELP3
+                ld   a, GS_HELP3               ; TUT0-T2: page 2 = TREASURES (GS_HELP2 unused)
                 call in_page
-                ; keys are all up (page 2 ended on the release): any key (BREAK
+                ; keys are all up (page 1 ended on the release): any key (BREAK
                 ; counts as one here); the last key is swallowed by the menu
                 ; fall through
 in_key:         call in_down                   ; wait for any key down

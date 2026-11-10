@@ -7,8 +7,10 @@ section now points here). Exact render spec (rows, cells, attrs, icon coordinate
 ## 1. Flow (user ruling 2026-10-30)
 
 - **Shown every game: after START, before D1** (the seed is already taken at START). Page 1 →
-  any key → page 2 → any key → page 3 (TREASURES, `instructions_treasures.md`) → any key → play.
-  **BREAK on page 1 or 2 skips all remaining pages** (repeat players: 1 press); on page 3 it is any key.
+  any key → page 2 (TREASURES, `instructions_treasures.md`) → any key → play.
+  **BREAK on page 1 skips page 2** (repeat players: 1 press); on page 2 it is any key.
+  **TUT0-T2 (2026-11): the old items/tips page 2 is dropped** (taught by doing in the D0 tutorial,
+  `tutorial_d0.md` §7); pages are now 1/2 and 2/2; page 1 row 20 carries the pointer line.
   (As built, INSTR-BUILD / INSTR-P3: once per power-on before the first menu, Option A below.)
 - A key counts only after all keys have been released once (the START `1`/ENTER is still held).
 - The selected controls are live from START, so the selected joystick's FIRE also counts.
@@ -25,14 +27,14 @@ section now points here). Exact render spec (rows, cells, attrs, icon coordinate
 - 24×16 bar icons: cells 0–2, text from char 4. 16×16 item icons: cells 0–1 / 16–17, text in
   chars 3–20 / 24–41 (18 chars each); no text char shares a cell with an icon.
 
-## 3. Layout B — three pages (pages 1-2 here, page 3 in `instructions_treasures.md`) (main proposal, recommended)
+## 3. Layout B — two pages (page 1 here, page 2 in `instructions_treasures.md`; the old items/tips page is dropped, see below) (main proposal, recommended)
 
 Page 1: the goal and the controls. `[..]` = icon (not text); attr per row on the right.
 
 ```
     0         1         2         3         4
     012345678901234567890123456789012345678901
-00        TOME OF THE DEAD - HOW TO PLAY   1/3   $46
+00        TOME OF THE DEAD - HOW TO PLAY   1/2   $46
 01                                               -
 02  FIND THE KEY, UNLOCK THE LAIR, KILL ITS      $47
 03  BOSS: ITS GRATE IS THE WAY DOWN              $47
@@ -52,14 +54,14 @@ Page 1: the goal and the controls. `[..]` = icon (not text); attr per row on the
 17  [   ]EAT, DRINK, READ, EQUIP, DISCARD        icon $06, $07
 18  [swd]FIRE ON SWORD/STAFF: HIT, OR CLOSE      icon $47, $47
 19  [   ]THE OPEN DOOR YOU FACE                  icon $47, $07
-20                                               -
+20  NEW HERE? AFTER START, PICK 1 TUTORIAL        $45
 21  Q A O P SPACE = UP DOWN LEFT RIGHT FIRE      $05
 22  MENU: 3 PICKS JOYSTICK, 4 REDEFINES KEYS     $05
 23       ANY KEY: NEXT PAGE   BREAK: SKIP        $46
 ```
 `F` = the 3 fields (§2). (Icon rows: the text starts at char 4; in the .txt the icon area is spaces.)
 
-Page 2: things you find, and tips.
+Old page 2 (DROPPED by TUT0-T2, kept for reference only; no longer built): things you find, and tips.
 
 ```
     012345678901234567890123456789012345678901

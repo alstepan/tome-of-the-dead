@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HOW TO PLAY (INSTR1) render mockups -> assets/gfx/instr/instr_p{1,2,3}.png (+ @3).
+"""HOW TO PLAY (INSTR1) render mockups -> assets/gfx/instr/instr_p{1,2}.png (+ @3).
 
 Source spec: docs/design/instructions_screen.txt + the PAGES table in tools/instr_pack.py
 (shared with the build, INSTR-BUILD). Text = real FONT6 (assets/gfx/fonts/font6x8.bin,
@@ -107,11 +107,6 @@ def page(n):
     for r, c0, c1, a in instr_pack.PAGES[n]["fills"]:
         s.fill([r], c0, c1, a)
     s.text(rows)
-    if n == 2:
-        for r in range(3, 11):  # left-column text must end before the right icon (cell 16 = x128)
-            for k, ch in enumerate(rows[r][:24]):
-                if ch != ' ' and (k + 1) * 6 > 128:
-                    s.warn.append("row %d: left text char %d overlaps right icon" % (r, k))
     for ic in instr_pack.PAGES[n]["icons"]:
         kind, arg, r, c = ic[:4]
         if kind == "bar":
@@ -130,10 +125,6 @@ def page(n):
 
 def page1():
     return page(1)
-
-
-def page2():
-    return page(2)
 
 
 def rgb(idx, br):
@@ -172,7 +163,7 @@ def check(s, name):
 
 def main():
     ok = True
-    for n, s in (("instr_p1", page(1)), ("instr_p2", page(2)), ("instr_p3", page(3))):
+    for n, s in (("instr_p1", page(1)), ("instr_p2", page(2))):
         ok &= check(s, n)
         if "--check" in sys.argv:
             continue

@@ -174,6 +174,22 @@ INSTR_ORG       EQU GEN_SCRATCH
 ; tests/game_lib.py has poked it there at start_game's proto_hook.
 PROTO_FIX_ORG   EQU SCREEN_BITMAP
 BANK_INSTR      EQU BANK_TEXT
+; TUT0-T1: the D0 tutorial BLOB (docs/design/tut0_split.md "Verdicts" F4; memory-map
+; "TUT0 blob"): code + data assembled at BLOB_ORG in bank 4 (src/tut/tut_blob.asm), its
+; ZX0 stream the LAST stream of the bank-0 text tape block (blob_zx0, + a DW length
+; trailer). The INSTR overlay's common exit bounce-copies the stream (PF_RAM) to the top
+; of bank 4 and unpacks it in place to BLOB_ORG (once per power-on). Entered only through
+; the two low-RAM stubs (src/tut/tut_stub.asm over check_paging, farb with C = BANK_BLOB).
+; Pool bytes: the D1+ pool overwrites it (both SMC patches are undone by then); the D0
+; pool must end below BLOB_ORG (main.asm "LEVEL POOL NEED", D0 session ASSERT).
+BANK_BLOB       EQU BANK_POOL1      ; 4
+BLOB_ORG        EQU $E000           ; TUT0-F2: was $E800 (2 KB more; D0 pool tops $D140 W / $C5C0 M,
+                                    ; overlay scratch OVL_RAW_END $D930: both ASSERTed below it)
+BLOB_RES        EQU 8192            ; BLOB_ORG..$FFFF: raw image + the in-place ZX0 delta
+                ASSERT BLOB_ORG + BLOB_RES == $10000
+BLOB_CHOICE     EQU BLOB_ORG + 0    ; entry table (tut_blob.asm): A = menu hero kind -> C = hero
+BLOB_TURN       EQU BLOB_ORG + 3    ;   A = 1 before end_turn, 0 after
+BLOB_ICON       EQU BLOB_ORG + 6    ;   TUT0-R2: the ICON MODE tour (ts_icon, after intent_icon7)
 IK_I16          EQU 1               ; page icon record kinds (instr_pack.py): R6 ic_scr, logical index
 IK_BAR          EQU 2               ; 24x16 bar icon, vdata label (bank-3 pblit)
 IK_GLY          EQU 3               ; 8x8 label, vdata label (bank-3 glyph8)

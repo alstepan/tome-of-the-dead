@@ -2174,13 +2174,26 @@ def tape_rest(h, p):
     h.expect("50 tape: IM 2 installed by boot", " IM2 " in p.z.cmd("get-registers"), True)
     # CODE block starts in bank 5 low RAM (boot, generator) and runs into bank 2
     lo5 = S["lowram_code"] - 0x4000
-    h.expect("50 bank 5 low-RAM cold code == .sna", ram[5 * 16384 + lo5:6 * 16384] ==
-             SNA_RAM[5 * 16384 + lo5:6 * 16384], True)
+    # TUT0-T1: instr_ovl in_stub copies the two blob stubs over check_paging (TUT_STUB_LEN B, tape
+    # path only, dead after boot): compared against the assembled stub image `ovl_raw_stub`
+    # (OVL_RAW_BANK, in the .sna), not blanked; check_paging sits in bank 5's low RAM
+    l5, s5 = bytearray(ram[5 * 16384 + lo5:6 * 16384]), bytearray(SNA_RAM[5 * 16384 + lo5:6 * 16384])
+    m0, n0 = S["check_paging"] - S["lowram_code"], S["TUT_STUB_LEN"]
+    rs = S["OVL_RAW_BANK"] * 16384 + S["ovl_raw_stub"] - 0xC000
+    stub = SNA_RAM[rs:rs + n0]
+    h.expect("50 tape: TUT stubs installed over check_paging == ovl_raw_stub", bytes(l5[m0:m0 + n0]), bytes(stub))
+    l5[m0:m0 + n0] = s5[m0:m0 + n0] = bytes(n0)
+    h.expect("50 bank 5 low-RAM cold code (bar the TUT stubs over check_paging) == .sna", l5 == s5, True)
+    # the D0 blob (bank 4 BLOB_ORG..$FFFF) is unpacked once per power-on by instr_ovl in_tut
+    bo4 = 4 * 16384 + S["BLOB_ORG"] - 0xC000
+    h.expect("50 bank 4 D0 blob (BLOB_ORG..$FFFF, unpacked at boot) == .sna",
+             ram[bo4:5 * 16384] == SNA_RAM[bo4:5 * 16384], True)
     p.wb("INPUT_REPEAT", 0)
     p.wb("ANIM_FREEZE", 1)
     p.wb("INPUT_SRC", 1)
     p.wb("proto_start", 3 if p.proto_start else 0)   # B3B-12: the tape loaded the default 0 (3F-T3: bit 1 = + Slime)
     p.arm_proto()                                    # D3-11: the PROTO fixture breakpoint (proto_hook)
+    p.tut_off()                                      # TUT0-T6b: '1' would open the tutorial choice screen
     p.hold("1")
     h.expect("50 tape: '1' starts the game", p.wait_state(GS_PLAYING), True)
     p.release()
