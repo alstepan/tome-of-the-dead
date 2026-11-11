@@ -136,7 +136,7 @@ EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING, EF_WALKIN, EF_PENDING = 1, 
 GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION = 2, 3, 4, 5, 6
 GS_ANYKEY = 8                      # instr_main (boot6_wait): the loading picture waits for a key
 GS_HELP1, GS_HELP2, GS_HELP3 = 9, 10, 11   # INSTR-BUILD / INSTR-P3: the HOW TO PLAY pages (boot only, before the menu)
-BOOT_WAITS = (GS_ANYKEY, GS_HELP1, GS_HELP2, GS_HELP3)   # every boot key wait: the harness taps ENTER at each
+BOOT_WAITS = (GS_ANYKEY, GS_HELP1, GS_HELP3)   # every boot key wait (TUT0-T2: page 2 = TREASURES = GS_HELP3; GS_HELP2 unused): the harness taps ENTER at each
 
 # keys: (mirror row index, bit)
 KEYS = {
@@ -448,6 +448,8 @@ class Proto:
                     continue
                 if pc in self.probes:
                     break
+                # TUT0-F2: no bank-4 blob whitelist any more: blob_choice and the D0 hold loop
+                # pace on menu_frame (the select_tick probe)
                 Proto.anomalies += 1
                 print(f"[ANOMALY] run returned at PC={pc:#06x} (not a probe): {r[:90]!r}",
                       flush=True)
@@ -471,10 +473,10 @@ class Proto:
     snd_mode = None
 
     def boot_key(self):
-        """At a boot key wait (BOOT_WAITS: the picture's 'PRESS ANY KEY', then the three
+        """At a boot key wait (BOOT_WAITS: the picture's 'PRESS ANY KEY', then the two
         HOW TO PLAY pages, instr_ovl.asm): let it see every key released, tap ENTER
         (down 2 frames; the menu swallows the last one) and release. Called once per
-        wait (wait_state(GS_SELECT) -> boot()): 4 calls from boot to the menu."""
+        wait (wait_state(GS_SELECT) -> boot()): 3 calls from boot to the menu."""
         self.wb("INPUT_SRC", 1)                  # injected matrix, not the host's keyboard
         self.release()
         self.tick(2)
@@ -491,9 +493,21 @@ class Proto:
                 g = self.rb("GAME_STATE")
             return g == gs
         ok = self.until(pred, max_ticks)
+        if ok and gs == GS_SELECT and self.tut_default_off:
+            self.tut_off()
         if ok and gs in (GS_PLAYING, GS_SELECT) and self.snd_mode is not None:
             self.wb("SND_MODE", self.snd_mode if gs == GS_PLAYING else 3)
         return ok
+
+    # TUT0-T1b: boot's instr_ovl patches enter_select's SMC jump (es_go) to the tutorial choice;
+    # legacy suites skip it by pointing it back at start_game. One place: wait_state(GS_SELECT)
+    # (every boot path). tests/tut0.py sets Proto.tut_default_off = False.
+    tut_default_off = True
+
+    def tut_off(self):
+        a = S["start_game"]
+        self.wb(S["es_go"] + 1, a & 255)
+        self.wb(S["es_go"] + 2, a >> 8)
 
     def idle(self):
         return self.rb("TURN_PHASE") == 0 and self.rb("GAME_STATE") in (GS_PLAYING, GS_DEAD, GS_WIN)

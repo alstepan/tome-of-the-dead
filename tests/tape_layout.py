@@ -72,15 +72,18 @@ expect("block 5 = game CODE data", blocks[5][0] == 0xFF and len(blocks[5]) - 2 =
 rest = blocks[6:]
 expect("%d headerless blocks follow (TAPE_HEADLESS_N)" % len(rest),
        len(rest) == sym["TAPE_HEADLESS_N"] and all(b[0] == 0xFF for b in rest))
-# INSTR-BUILD: the bank-0 block (6th headerless, TAPE_BLOCKS order) = the text block + the
-# HOW TO PLAY streams (page 1 at POOL_START, pages 2 and 3, the overlay code), boot only
+# INSTR-BUILD / TUT0-T1: the bank-0 block (6th headerless, TAPE_BLOCKS order) = the text block + the
+# boot-only streams (frame_tab at POOL_START, HOW TO PLAY pages 1 and 2, the overlay code) + blob_zx0
+# + its 2-byte length trailer (in_tut reads it from the block's end)
 txt = rest[5] if len(rest) > 5 else b""
-# RECLAIM-D: the frame_tab stream ftz_zx0 is the first boot-only stream (at POOL_START), then the pages
-expect("headerless 6 = text + frame_tab + INSTR streams (%d B = %d + %d)" % (
+expect("headerless 6 = text + frame_tab + INSTR streams + blob_zx0 + trailer (%d B = %d + %d)" % (
        len(txt) - 2, sym["TEXT_LEN"], sym["TEXT_TAPE_LEN"] - sym["TEXT_LEN"]),
        len(txt) - 2 == sym["TEXT_TAPE_LEN"] and sym["ftz_zx0"] == sym["POOL_START"]
        and sym["ftz_zx0"] < sym["ftz_zx0_end"] == sym["instr_p1_zx0"]
-       and sym["TEXT_ADDR"] + sym["TEXT_TAPE_LEN"] == sym["instr_zx0_end"]
-       and sym["instr_p1_zx0"] < sym["instr_p2_zx0"] < sym["instr_p3_zx0"] < sym["instr_zx0"] < sym["instr_zx0_end"])
+       and sym["instr_p1_zx0"] < sym["instr_p2_zx0"] < sym["instr_zx0"] < sym["instr_zx0_end"] <= sym["blob_zx0"]
+       and sym["TEXT_ADDR"] + sym["TEXT_TAPE_LEN"] == sym["text_tape_end"])
+tl = len(txt) - 2
+expect("bank-0 block trailer (last 2 B) == BLOB_ZX0_LEN",
+       tl >= 2 and txt[1 + tl - 2] | txt[1 + tl - 1] << 8 == sym["BLOB_ZX0_LEN"])
 print("tape_layout: %s (%d blocks, %d B)" % ("OK" if not fails else "%d FAILED" % fails, len(blocks), len(d)))
 sys.exit(1 if fails else 0)

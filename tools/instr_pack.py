@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """HOW TO PLAY (INSTR1) page data -> asm for the build (stdlib only).
 
-THE spec of the three pages: the text rows come from docs/design/instructions_screen.txt
+THE spec of the two pages: the text rows come from docs/design/instructions_screen.txt
 (the approved wording, read verbatim), the attribute fills and the icon placements are
 the PAGES table below (the render spec's ATTRS / ICONS sections as data). The mockups
 (tools/gen_instr_mock.py) render from the same table, and tests/instr.py compares the
 emulator's screen with that render byte for byte.
 
-Output (per page n = 1, 2, 3): OUTDIR/instr_p<n>.inc, the page image src/instr_ovl.asm
+Output (per page n = 1, 2; TUT0-T2 dropped the old items/tips page): OUTDIR/instr_p<n>.inc, the page image src/instr_ovl.asm
 assembles at INSTR_DATA (docs/memory-map.md "INSTR1"):
   text   24 rows; a byte 32..127 = that char, 1..31 = that many spaces, 0 = end of row
          (trailing spaces dropped; the row is printed from x = 0 by print6)
@@ -42,22 +42,12 @@ PAGES = {
                   + _rows_fill([16], 3, 23, 0x47) + _rows_fill([16], 24, 31, 0x46)
                   + _rows_fill([17], 3, 31, 0x07)
                   + _rows_fill([18], 3, 31, 0x47) + _rows_fill([19], 3, 31, 0x07)
-                  + _rows_fill([21, 22], 0, 31, 0x05) + _rows_fill([23], 0, 31, 0x46)),
+                  + _rows_fill([20], 0, 31, 0x45) + _rows_fill([21, 22], 0, 31, 0x05) + _rows_fill([23], 0, 31, 0x46)),
         # (kind, name / tile id, row, col[, attr for i16])
         "icons": [("bar", "icon_bag", 16, 0), ("bar", "icon_sword", 18, 0),
                   ("tile", 15, 4, 30), ("tile", 16, 4, 31), ("tile", 17, 5, 30), ("tile", 18, 5, 31)],
     },
     2: {
-        "fills": (_rows_fill([0, 12, 23], 0, 31, 0x46) + _rows_fill([2], 0, 31, 0x06)
-                  + _rows_fill([3, 5, 7, 9], 2, 31, 0x47) + _rows_fill([4, 6, 8, 10], 2, 31, 0x07)
-                  + [(r, 0, 31, a) for r, a in ((13, 0x47), (15, 0x45), (17, 0x47), (19, 0x45), (21, 0x47))]),
-        "icons": [("i16", "p_heal", 3, 0, 0x42), ("i16", "f_meat", 3, 16, 0x42),
-                  ("i16", "s_teleport", 5, 0, 0x45), ("i16", "book", 5, 16, 0x43),
-                  ("i16", "ammo_dagger", 7, 0, 0x47), ("i16", "w_long", 7, 16, 0x07),
-                  ("label", "label_key", 9, 1),
-                  ("tile", 13, 9, 16), ("tile", 13, 9, 17), ("tile", 13, 10, 16), ("tile", 13, 10, 17)],
-    },
-    3: {
         "fills": (_rows_fill([0, 23], 0, 31, 0x46) + _rows_fill([2, 12], 0, 31, 0x06)
                   + _rows_fill([3, 4, 7, 8, 13, 14, 17, 18], 0, 31, 0x47)
                   + _rows_fill([5, 6, 9, 10, 15, 16], 0, 31, 0x45)
@@ -136,7 +126,7 @@ def check_icons(page):
         m = re.search(r"^IT_%s\s*\|[^|]*\|\s*\$([0-9A-Fa-f]{2})\s*\|" % name.upper(), items, re.M)
         if m:
             assert int(m.group(1), 16) == a, (name, m.group(1), a)
-        elif page == 3:
+        elif page == 2:
             raise AssertionError("no IT_ row for " + name)
 
 
@@ -222,7 +212,7 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "build", "text")
     os.makedirs(out, exist_ok=True)
     rep = []
-    for p in (1, 2, 3):
+    for p in (1, 2):
         check_icons(p)
         txt, nt, na = emit(p)
         path = os.path.join(out, "instr_p%d.inc" % p)

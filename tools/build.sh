@@ -17,7 +17,7 @@
 # 1b. tools/textpack.py -> build/text/strings.asm + strings_ids.inc (B3B-13:
 #    src/strings.txt as dictionary-token streams); it re-parses its output and
 #    fails on any round-trip mismatch / char outside 32..127 / > LOG_MAX.
-# 1b''. tools/instr_pack.py -> build/text/instr_p{1,2,3}.inc (INSTR-BUILD HOW TO PLAY pages).
+# 1b''. tools/instr_pack.py -> build/text/instr_p{1,2}.inc (INSTR-BUILD HOW TO PLAY pages).
 # 1c. tools/abc2wzm.py --game -> OUTDIR/build/music_game/ (7 WZM songs + game_songs.asm),
 #    INCLUDEd by src/ay.asm through the -i OUTDIR/build/music_game search path (SND-2 T2).
 # 1d. tools/sfx2asm.py -> OUTDIR/build/sfx/ (sfx_ids.inc + sfx_data.asm, SND-5; -i path).
@@ -55,8 +55,32 @@ python3 "$ROOT/tests/rename_gate.py" -q
 python3 "$ROOT/tools/zx0_sources.py"
 python3 "$ROOT/tools/textpack.py"
 # INSTR-BUILD: the HOW TO PLAY page images (docs/design/instructions_screen.txt + the
-# PAGES table) -> build/text/instr_p1..3.inc (src/main.asm "OVERLAYS")
+# PAGES table) -> build/text/instr_p1..2.inc (src/main.asm "OVERLAYS")
 python3 "$ROOT/tools/instr_pack.py"
+# TUT0-T6: the D0 blob's generated data (src/tut/tut_blob.asm INCLUDEs "tut/*.asm", found
+# through -i$OUT/build): tutpack (needs textpack's dictionary, above) every build; tut0_level.py
+# (a ~17 s seed search) only when its output is missing or older than the tool / the layouts it
+# reads; the committed 3/4 mentor art must match its grids (--check writes nothing: regenerate
+# by hand). TUT0-F2: both outputs go to THIS build's $OUT/build/tut (default: the repo's), so
+# parallel private builds never write one file; a -o build copies the repo's tut0_level.asm
+# when that one is up to date (deterministic output) instead of re-running the search.
+T0DEPS="$ROOT/tools/tut0_level.py $ROOT/tools/decorgen.py $ROOT/tools/levelgen.py \
+$ROOT/src/level_defs.asm $ROOT/src/item_defs.asm $ROOT/src/defs.asm"
+t0_fresh() {   # $1 = a tut0_level.asm: exists and newer than every input
+    # shellcheck disable=SC2086
+    [ -f "$1" ] && [ -z "$(find $T0DEPS -newer "$1" 2>/dev/null)" ]
+}
+mkdir -p "$OUT/build/tut"
+python3 "$ROOT/tools/tutpack.py" --out "$OUT/build/tut/tut_text.asm" >/dev/null
+T0L="$OUT/build/tut/tut0_level.asm"
+if ! t0_fresh "$T0L"; then
+    if [ "$OUT" != "$ROOT" ] && t0_fresh "$ROOT/build/tut/tut0_level.asm"; then
+        cp "$ROOT/build/tut/tut0_level.asm" "$T0L.tmp" && mv "$T0L.tmp" "$T0L"
+    else
+        python3 "$ROOT/tools/tut0_level.py" "$T0L" >/dev/null
+    fi
+fi
+python3 "$ROOT/tools/mentor_convert.py" --variant 34 --check >/dev/null
 # 1b'. 3E-T4b: item text (src/items.txt) -> build/text/items_tab.asm + items_ids.inc; the
 # RESIDENT part is INCLUDEd in bank 1 before ovl_blobs (main.asm); the fx / page overlay
 # streams (items_fx_stems.asm, items_ovl_stems.asm) are generated but not included yet.
@@ -95,10 +119,17 @@ if [ $RC -ne 0 ] || ! grep -q 'Errors: 0, warnings: 0' "$OVL/pass1.log"; then
 fi
 for f in "$OVL"/*.bin; do
     [ -e "$f" ] || continue
-    "$ROOT/tools/bin/zx0" -f "$f" "${f%.bin}.zx0" >/dev/null 2>&1 || {
+    ZREP=$("$ROOT/tools/bin/zx0" -f "$f" "${f%.bin}.zx0" 2>&1) || {
         echo "build.sh: zx0 failed on $f (run tools/setup_zx0.sh)" >&2; exit 1; }
+    case "$f" in */blob.bin) BLOBREP=$ZREP ;; esac
     mv "$f" "${f%.bin}.raw1"
 done
+# TUT0-T1: the D0 blob is unpacked IN PLACE (instr_ovl.asm in_tut): main.asm ASSERTs
+# raw + zx0's reported delta <= BLOB_RES, read from this include (pass 2 only).
+BLOBREP=${BLOBREP:-}
+DELTA=$(printf '%s\n' "$BLOBREP" | sed -n 's/.*(delta \([0-9][0-9]*\)).*/\1/p')
+[ -n "$DELTA" ] || { echo "build.sh: no delta in zx0's blob report: $BLOBREP" >&2; exit 1; }
+echo "BLOB_DELTA      EQU $DELTA" >"$OVL/blob_delta.inc"
 set +e
 sjasmplus "$ROOT/src/main.asm" --fullpath \
     --lst=build/tome-of-the-dead.lst --sld=build/tome-of-the-dead.sld --sym=build/tome-of-the-dead.sym \
