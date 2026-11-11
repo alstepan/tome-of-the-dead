@@ -154,3 +154,154 @@ incl. after ~3 s idle) and V2 (no mentor fragments in animated decor cells).
 5. Remove the bank-4 PC whitelist in tests/game_lib.py tick() (both loops hit select_tick now).
 6. tools/build.sh: tutpack / tut0_level.py / mentor outputs go under the build's own `-o DIR`, not $ROOT/build/tut.
 Then: re-review the F1 delta (mentor ids 43..59, N = 17, ANIM_LIST flame ids 40–42).
+
+## Playtest round 2 — key clarity (2026-11-10)
+
+Designer, 2026-11-10. Build 79b0c7d (Fuse). User: "not clear what keys to press to progress"; flagged
+**K-1** the hold prompt `▶ SP` (FIRE's 2-char REDEFINE name, row 20 cols 26–31) reads as "press FIRE"
+or as a label, not as "any key continues"; **K-2** lesson lines expand to 2-char names
+(`A+SP, MOVE TO IT, SP`); **K-3** once a line has scrolled away, nothing says what is expected (the
+nudge at 12 off-task turns is too late); **K-4** engine log lines (pickups, combat) push Morrow's
+instruction out of the 2-row log before it is acted on. Everything else: "good".
+Constraints: `BLOB_RES` ≈ 706 B free, 0 resident B, turn pre/post hooks only, lines ≤ 32 (token 5,
+chord 11), no free log cells. **Note:** tutorial_d0.md §14 (R3, ≈ 300–345 B) is still a proposal and
+unbuilt; R4 below is sized so that **R3 + R4 ≤ 706 B** with margin.
+
+### Recommended design R4: a pinned GOAL LINE on row 20 + full key names + an "ANY KEY" prompt
+
+**R4-1 Hold prompt.** Replace `▶ <FIRE name>` by a fixed, blinking **`▶ ANY KEY`**: triangle cell
+**col 24**, text from x = 200 (7 chars × 6 px, ends x = 242); `HP_COL` 26 → **24**, `HP_W` 8. The prompt
+sits right above the worn-gear column, flush with the log's right edge (cols 0–23 = log width), and
+the log rows keep the BRIGHT pulse (A2). The text is the same in every control mode (a stick input
+already dismisses a hold, B1). `tt_tok` + the width maths leave `tt_hold` (net ≈ −12 B).
+
+**R4-2 Key names spelled out.** `tt_tok` (KEYS mode) maps the three non-letter REDEFINE names to words:
+`SP` → **`SPACE`**, `CS` → **`CAPS`**, `SS` → **`SYM`** (`EN` is reserved, never a control key);
+letters / digits stay 1 char (trailing space dropped, as built). Sticks unchanged (`UP` … `FIRE`).
+All within the §4.4 width rule (token ≤ 5, chord ≤ 11). Writing rule for every line (tutpack lint):
+**a line never begins with a control token**; a key follows `PRESS` / `HOLD` / `(`, a chord is
+introduced as `{X}+{Y} AT ONCE` in its first use per action (B2 leap, B3 icons). ≈ 21 B table + 14 B.
+
+**R4-3 Goal line (fixes K-3 and K-4).** While a beat waits for a player action, its instruction is
+**pinned on row 20, cols 0–23** (the info line's first 32 chars; same width as a log line), in
+Morrow's ink: attr **`$45`** (bright cyan, black paper) on cols 0–23. The log keeps scrolling freely
+(game lines can no longer bury the instruction); row 20 cols 24–31 stay the info line / hold prompt.
+- **Source:** a new 16-B table `tut_goal` (one line id per beat, `$FF` = none; bit 7 = class pair via
+  `tut_cpairs`, as in the beat record). **No new text:** every goal is an existing line, reworded
+  where it lacked a key (table below).
+- **Visible iff:** the beat's G0 has been processed (silent G0 counts) and its trigger has not fired
+  (stage ≤ `ST_WAIT`), **and** the Goblin is not awake, **and** the beat is not B12 / B13 / B15
+  (combat owns row 20: the target readout is B12's lesson). Exceptions: **B9** only while POISONED;
+  **B14** from the moment the blob opens the grate (until the exit). Story groups after a trigger
+  (B1's L05…L55, B3's L13/L14, B14's Tome lines) run with no goal: the hold prompt is the cue.
+- **Drawn by `tt_goal`** (blob): called (1) at the end of `tt_after` on every D0 turn, (2) in
+  `tt_hold` after the drain (so the goal shows during the prompt) and again after the release
+  (the release redraws PD_INFO). It loops `tt_frame` while `PD_INFO` is dirty, then clears row 20
+  cols 0–23, writes the 24 attrs `$45`, expands the line into `TV_BUF` (the existing expander) and
+  `print6`s it at x = 0. Re-printed every turn end (cheap; turn-based), so any engine redraw of the
+  info line (icon change, readout) is undone at the next turn end.
+- **Off:** when the goal becomes invisible, once: restore the three info-field attrs (the
+  `pi_rects` pattern: `$47` cols 0–11, `$46` cols 12–20, `$45` cols 21–31; PD_INFO does not rewrite
+  attrs) and set `PD_INFO` dirty. Also on `tt_reset` (D0 → D1) and the quit path.
+- **ICON MODE:** costs no turn, so the engine's `>` icon info owns row 20 there (the tour needs it;
+  its text may show in cyan — accepted, D0 only); the goal comes back at the next turn end.
+
+| Beat | Goal line (id → text; widths by the token-5 / chord-11 rule) | Default keys show |
+|---|---|---|
+| B0 | L02 `PRESS {D} TO CLIMB DOWN` (25) | `PRESS A TO CLIMB DOWN` |
+| B1 | L03 `WALK TO ME: HOLD {L} OR {R}` (31) | `WALK TO ME: HOLD O OR P` |
+| B2 | L09 `LEAP: PRESS {U}+{R} AT ONCE` (31) | `LEAP: PRESS Q+P AT ONCE` |
+| B3 | L60 `ICONS: PRESS {D}+{F} AT ONCE` (32) | `ICONS: PRESS A+SPACE AT ONCE` |
+| B4 | L16 `LADDER DOWN TO ME: PRESS {D}` (30) | |
+| B5 | L20 `EAT: {D}+{F}, THEN PICK FOOD` (32) | `EAT: A+SPACE, THEN PICK FOOD` |
+| B6 | L23 `GO LEFT TO THE SHAFT: HOLD {L}` (32) | |
+| B7, B8 | L24 `YOU HAVE THE KEY. ON TO THE DOOR` (32, unchanged; no trap hint) | |
+| B9 | L30b `DRINK THE CURE: {D}+{F}, BAG` (32), poisoned only | |
+| B10 | L33 `GO DOWN, THEN WALK INTO THE DOOR` (unchanged) | |
+| B11 | `TUT_CP_L35`: W L35W `WALK INTO IT TO STRIKE` / M L35M `PICK SPARK, FACE IT, PRESS {F}` | |
+| B12, B13 | none (combat) | |
+| B14, B15 | L47 `STEP ON THE GRATE. GO, CHILD`, after the grate opens (as built: B15 keeps L47 to the exit — review OK 2026-11-11) | |
+
+**R4-4 Nudge sooner, and it points at the goal (K-3).** `NUDGE_T` 12 → **6**, second nudge 36 →
+**18** (then R3-REP's 32-turn window, if R3 lands; else silent). The nudge becomes **one group**:
+**L75 + the goal line id** (scroll, pointer re-armed), and for that turn the goal line's 24 attrs get
+the **FLASH** bit on the text cells only, not the blank tail (hardware, 0 CPU; cleared by the next `tt_goal`). As built: while the goal shows, row 20 cols 24–31 are blank (not the info line) — accepted, better than a cut-off info text. The old "next turn re-show the
+instruction group" step is dropped (the goal line now carries it). Suppression set unchanged (B6,
+B8, B10–B12, Goblin awake, hold up). Recall made discoverable: **L07** names the key (below).
+
+**R4-5 Rewordings (same ids; no new text).** All ≤ 32 under both width rules; "default" = Q A O P SPACE.
+
+| Id | Was | New | W |
+|---|---|---|---|
+| L02 | `{D} CLIMBS DOWN THE LADDER` | `PRESS {D} TO CLIMB DOWN` | 25 |
+| L03 | `{L} {R} WALK. COME TO ME` | `WALK TO ME: HOLD {L} OR {R}` | 31 |
+| L07 | `WAIT BY ME TO HEAR IT AGAIN` | `WAIT ({D}) BY ME TO HEAR AGAIN` | 32 |
+| L09 | `{U}+{R} LEAPS OVER THE PIT` | `LEAP: PRESS {U}+{R} AT ONCE` | 31 |
+| L12 | `{F}: THE BAG. GO TO THE BOOK` | `PRESS {F} TO OPEN THE BAG` | 27 |
+| L16 | `COME DOWN THE LADDER TO ME` | `LADDER DOWN TO ME: PRESS {D}` | 30 |
+| L20 | `{D}+{F}, MOVE TO IT, {F}` | `EAT: {D}+{F}, THEN PICK FOOD` | 32 |
+| L23 | `THE SHAFT DOWN IS BY THE WALL` | `GO LEFT TO THE SHAFT: HOLD {L}` | 32 |
+| L28 | `TRAPS HIDE. {D} SEEKS THEM` | `TRAPS HIDE. WAIT ({D}) TO SEEK` | 32 |
+| L30b | `DRINK THE CURE FROM THE BAG` | `DRINK THE CURE: {D}+{F}, BAG` | 32 |
+| L40 | `{D}+{F}, SCROLL ICON, {F}` | `ICONS {D}+{F}, SCROLL, {F}` | 32 |
+| L46 | `{F} HELD, THEN {U}: PAUSE` | `PAUSE: HOLD {F}, PRESS {U}` | 30 |
+| L60 | `{D}+{F} OPENS THE ICON BAR` | `ICONS: PRESS {D}+{F} AT ONCE` | 32 |
+| L61 | `{F} ON IT, THEN {F} ON READ` | `PRESS {F} ON BOOK, THEN READ` | 30 |
+| L72 | `{F}, FIND THE CURE, DRINK IT` | `PRESS {F}, THEN DRINK THE CURE` | 32 |
+| I00b | `{L} {R} MOVE, {U} LEAVES` | `PICK: {L} {R}. LEAVE: {U}` | 31 |
+
+Unchanged (already readable once names are words): L35M, L36W, L67, L73, I01–I10 (`SWORD: SPACE OR
+WALK INTO A FOE` …). Staff: confirm the B6 shaft is entered by walking onto it (else L23 :=
+`AT THE SHAFT (LEFT) PRESS {D}`, 29) and that Wait = DOWN off a ladder also searches (L28).
+
+**R4-6 Row-20 pointer (B12 question, TUT0-F3).** Changed, not kept: the prompt now owns cols 24–31,
+so `TUT_R20_W` 26 → **24** (rect 6 = row 20 cols 0–23); `ASSERT TUT_R20_W <= HP_COL` stays true.
+B12 shows no goal line, so its pointer flashes the target readout's name / bar exactly as intended.
+
+### Budget (raw blob bytes, estimates)
+
+| Part | B |
+|---|---|
+| R4-1 prompt (fixed string 8, drop `tt_tok` call + width maths) | ≈ −12 |
+| R4-2 name table + lookup | ≈ +35 |
+| R4-3 `tut_goal` 16 + `tt_goal` (visibility, drain, clear, attrs, expand, print) ≈ 65 + off/restore ≈ 18 + call sites ≈ 10 | ≈ +110 |
+| R4-4 nudge constants, one-group nudge + FLASH, drop the re-show stage | ≈ 0…+5 |
+| R4-5 rewordings (+≈ 3 B avg × 16, dictionary-packed) | ≈ +45 |
+| **Total** | **≈ +170–190 B** → `BLOB_RES` 706 → ≈ 515–535 free; with R3 (≤ 345) ≈ 170+ free |
+| Resident / `TUT_RAM` | 0 B / 0 B (goal-shown + flash state = 2 free flag bits; else `TV_ISAID` bits 15/14 if R3 takes `TV_FL`) |
+
+### Tests to add (tests/tut0.py unless noted)
+- **K1 prompt:** during a hold, row 20 cols 24–31 render `▶ ANY KEY` (font-match, KEYS and KEMPSTON);
+  a non-control key (`Z`) dismisses; golden hold screens regenerated.
+- **K2 names (tests/tut_text.py + runtime):** lint: no line starts with a token, all ≤ 32 (token 5,
+  chord 11). Runtime: default keys → L09 = `LEAP: PRESS Q+P AT ONCE`; FIRE redefined to CAPS / SYM →
+  `CAPS` / `SYM`; Kempston → `LEAP: PRESS UP+RIGHT AT ONCE`.
+- **K3 goal:** for B0–B11 and B14, after the beat's G0 turn row 20 cols 0–23 show its goal text with
+  attrs `$45`; still there after a turn with engine log lines (book / pear pickup, dart); still there
+  during and after a hold; back at the first turn end after an ICON MODE session; absent with the
+  info attrs restored (`$47/$46/$45`) and the target readout drawn once the Goblin wakes (B12);
+  absent after the D1 reset.
+- **K4 nudge:** idle in B2 → L75 + L09 at off-turn 6 with FLASH on row 20 cols 0–23 that turn only,
+  again at 18, no third before 32 (with R3) / ever (without).
+- **K5:** B12 G0 hold: no FLASH cell in cols 24–31 of row 20; rect 6 width 24 (ASSERT).
+- `tests/tut0_adv.py` soak + V1/V2 rerun: no softlock, no goal-line cell on the playfield.
+
+### Alternative (not recommended): sticky log line
+No row-20 use: at each turn end, if the engine pushed a log line after the current instruction, the
+blob re-pushes the goal line as the newest log row (≈ 70 B). Keeps the icon info visible, but the
+log becomes "event / same instruction" on every eventful turn (spam), loses the first line of
+2-line engine bursts, and still gives the instruction no distinct look. Choose it only if the user
+wants the selected-icon info on row 20 during D0.
+
+### Spec edits needed in tutorial_d0.md (after approval; not made yet)
+- §3 Always-on: add **Goal line** (R4-3); nudge 12/36 → 6/18, one group L75 + goal, FLASH (also §13.5).
+- §4.4: names `SPACE` / `CAPS` / `SYM` (not 2-char); "never begin a line with a token" + `AT ONCE`
+  rule; ROW20 rect cols 0–23 (supersedes §14.6's 0–25); hold prompt `▶ ANY KEY` at cols 24–31.
+- §3 table + §8: the 16 rewordings (R4-5); §13.7 unchanged (holds as built).
+- §10 checklist: K1–K5. §14.8: budget note R3 + R4 ≤ 706.
+
+### Open questions (defaults apply unless the user objects)
+1. Row 20 shows Morrow's goal (cyan) instead of the selected-icon info outside ICON MODE in D0
+   (readout kept in the fight). *Default: yes;* else the sticky-log alternative.
+2. Nudge at 6 / 18 off-task turns. *Default: yes.*
+3. Prompt text `▶ ANY KEY` (alternative `▶ KEY`). *Default: ANY KEY.*

@@ -23,8 +23,10 @@ Stream bytes (textpack's format, docstring there, plus the control tokens):
   128..255   resident dictionary token t: entry t - 128
 
 Width rules (a line must be <= 32 under BOTH):
-  KEYS       token = 2 chars (REDEFINE names, menu1.asm key_names); chord {D}+{F} = 5
+  KEYS       token = 5 chars (TUT0-F4 R4-2: the REDEFINE names, menu1.asm key_names, with
+             SP / CS / SS spelled SPACE / CAPS / SYM by the blob, SPACE widest); chord = 11
   STICK      token = 5 chars (UP DOWN LEFT RIGHT FIRE, RIGHT widest); chord = 11
+Lint (R4-2): a log line (TL_) never begins with a control token.
 
 Usage: tools/tutpack.py [--report]
 """
@@ -46,7 +48,7 @@ OUT = os.path.join(OUT_DIR, "tut_text.asm")
 CTRL = {"U": 1, "D": 2, "L": 3, "R": 4, "F": 5}
 TOK_RE = re.compile(r"\{([UDLRF])\}")
 ID_RE = re.compile(r"^(TL_L\d\d[WMb]?|TL_I\d\d[abWM]?|TS_[A-Z0-9_]+)$")
-W_KEYS = 2      # KEYS rule: token width (REDEFINE names)
+W_KEYS = 5      # KEYS rule: token width (REDEFINE names, SPACE spelled out: R4-2)
 W_STICK = 5     # STICK rule: token width (widest stick word)
 LINE_MAX = 32
 
@@ -82,6 +84,8 @@ def read_source(path=SRC):
             fail(f"{where}: {key}: no trailing full stop")
         if "  " in text and key.startswith("TL_"):
             fail(f"{where}: {key}: double space in a log line")
+        if key.startswith("TL_") and TOK_RE.match(text):
+            fail(f"{where}: {key}: a log line never begins with a key token (R4-2: PRESS / HOLD / ( first)")
         out.append((key, text))
     if not out:
         fail(f"{path}: no ids")

@@ -4,6 +4,12 @@ Designer, 2026-11-09. Status: **proposed, for user approval**. Implements the us
 2026-11-09 (mentor in-world, one D1-tier monster, flow menu → hero → TUTORIAL/START → D0 → D1,
 sandbox reset, new mentor art, once per tape load). Section refs `§n` are `game.md`.
 
+> **As built (TUT0, 2026-11-11) — where this spec and the code differ, the code + `game.md` win:**
+> `TUT_AVAIL` / `TUT_ON` flags were not built: the offer is SMC (`es_go` / `pl_et`, 0 resident B), spent on D1
+> entry. The talk pose is drawn at once when a group is emitted (no 16-tick blocking gesture, §4.3; playtest A1).
+> Panel depth reads `D0` at row 18 col 30. Choice lines read `1  TUTORIAL - DEPTH 0` / `2  START - DEPTH 1`.
+> Holds, goal line, nudges and key words: `tut0_split.md` "Playtest round 1" / "Playtest round 2 — key clarity".
+
 **Revision 2 (playtest 2, 2026-11-09): see §13** — mentor renamed **Brother Morrow**; pointers yield
 to the ICON MODE cursor; interactive icon tour; explicit bag / book / scroll steps; pit and
 WEAK-no-leap lessons; soft gating + nudges (no movement block). §3, §4.1, §8, §10 are updated
@@ -125,30 +131,42 @@ the group is current (§4.4).
 
 | # | Beat (room) | Mentor (spot, pose) | Says (group 1 / group 2) | Player must DO (trigger) | Placed | Fail / skip |
 |---|---|---|---|---|---|---|
-| B0 | Arrive (A) | A1, TALK | L01 `A LIVING ONE, AT LAST. COME DOWN` / L02 `‹D› CLIMBS DOWN THE LADDER` | stand on storey 0 (2 DOWN turns) | shaft | — |
-| B1 | Walk + the goal (A) | A1, IDLE → TALK | L03 `‹L› ‹R› WALK. COME TO ME` · L04 `A TAP ONLY TURNS YOU ROUND`; on trigger: L05 `I AM BROTHER MORROW, LONG DEAD` · L06 `I TENDED THEIR GRAVES. NOW YOU` (R2); next turn **L54 `THE ARCHMAGE'S TOME RAISED THEM` · L55 `IT LIES ON DEPTH 8. END IT`** (the run's goal, §1.3); next turn L07 `WAIT BY ME TO HEAR IT AGAIN` | hero box within 3 cols of A1 | — | walking past him also fires it |
-| B2 | Pit + jump (A) (R2) | blink → A2, POINT (at the pit) | G0 **L65 `THAT BLACK GAP IS A PIT` · L66 `STEP IN AND YOU FALL A FLOOR`** (hold); next turn G2 L08 `A BOOK LIES PAST THE PIT` · L09 `‹U›+‹R› LEAPS OVER THE PIT` (hold) | hero on storey 0 with `x ≥ 22` → G1 **L67 `LEAPS GO LEFT TOO: ‹U›+‹L›` · L68 `WIDE PITS ARE TOO FAR TO LEAP`** (scroll) | narrow pit, BOOK | fell into the pit: **L69 `FALLS HURT AND DROP ONE FLOOR`** · L10 `CLUMSY. THE LADDER LEADS BACK` (scroll), beat stays. Reached via L2 instead: fires anyway |
-| B3 | Book + bag (A) (R2) | A2, POINT_DN | on book pickup: L11 `A BOOK! READ IT FROM THE BAG` · **L60 `‹D›+‹F› OPENS THE ICON BAR`** (hold; pointer: BAG icon, retired when ICON MODE opens, §13.2). **Icon target BAG** (§13.3): L12 `‹F›: THE BAG. GO TO THE BOOK` · **L61 `‹F› ON IT, THEN ‹F› ON READ`** (hold the first time) | `ARANK ≠ 0` (book READ from the bag: Starter rule, §5, 0 RNG) → L13 `SEE? A NEW ICON ON YOUR BAR` · L14W/M (class) (hold); tail **L63 `SCROLLS READ FROM BAR OR BAG` · L64 `EMPTY ICONS WAIT FOR BOOKS`** (scroll) | — | book DISCARDed unread: L15 `NO BOOK? BELOW THEY ARE RARE`, advance. Book never picked up / unread and hero leaves A: skipped, **L76** on entering B (§13.5) |
-| B4 | Ladder (A) | blink → A3, IDLE | L16 `COME DOWN THE LADDER TO ME` | standing on storey 1 | L2 | fall from the pit also lands on storey 1: fires |
-| B5 | Panel + food (A) | A3, POINT_DN | L17 `BELOW YOU: LIFE, MANA AND FOOD` · L18 `YOUR BELLY SAYS OK, NOT FED` (pointer: row 21 bars + word); next turn L19 `EAT THE PEAR: THE FOOD ICON` · L20 `‹D›+‹F›, MOVE TO IT, ‹F›` (pointer: FOOD icon) | `FOOD` rose this turn (any EAT: quick slot or page) → L21 `FED HEALS. THE STARVED FAINT` · L22 `EAT WHEN IT SAYS HUNGRY`; next turn tail (R2) **L70 `AT WEAK YOUR LEGS WILL NOT LEAP` · L71 `A LEAP THEN JUST DOES NOTHING`** (scroll). **Icon target FOOD:** L73 | PEAR col 17 | hero leaves A uneaten: skipped, **L76** on entering B |
-| B6 | Shaft (A) | A3, POINT (left) | L23 `THE SHAFT DOWN IS BY THE WALL` | room = B | down-exit | — |
+| B0 | Arrive (A) | A1, TALK | L01 `A LIVING ONE, AT LAST. COME DOWN` / L02 `PRESS ‹D› TO CLIMB DOWN` | stand on storey 0 (2 DOWN turns) | shaft | — |
+| B1 | Walk + the goal (A) | A1, IDLE → TALK | L03 `WALK TO ME: HOLD ‹L› OR ‹R›` · L04 `A TAP ONLY TURNS YOU ROUND`; on trigger: L05 `I AM BROTHER MORROW, LONG DEAD` · L06 `I TENDED THEIR GRAVES. NOW YOU` (R2); next turn **L54 `THE ARCHMAGE'S TOME RAISED THEM` · L55 `IT LIES ON DEPTH 8. END IT`** (the run's goal, §1.3); next turn L07 `WAIT (‹D›) BY ME TO HEAR AGAIN` | hero box within 3 cols of A1 | — | walking past him also fires it |
+| B2 | Pit + jump (A) (R2) | blink → A2, POINT (at the pit) | G0 **L65 `THAT BLACK GAP IS A PIT` · L66 `STEP IN AND YOU FALL A FLOOR`** (hold); next turn G2 L08 `A BOOK LIES PAST THE PIT` · L09 `LEAP: PRESS ‹U›+‹R› AT ONCE` (hold) | hero on storey 0 with `x ≥ 22` → G1 **L67 `LEAPS GO LEFT TOO: ‹U›+‹L›` · L68 `WIDE PITS ARE TOO FAR TO LEAP`** (scroll) | narrow pit, BOOK | fell into the pit: **L69 `FALLS HURT AND DROP ONE FLOOR`** · L10 `CLUMSY. THE LADDER LEADS BACK` (scroll), beat stays. Reached via L2 instead: fires anyway |
+| B3 | Book + bag (A) (R2) | A2, POINT_DN | on book pickup: L11 `A BOOK! READ IT FROM THE BAG` · **L60 `ICONS: PRESS ‹D›+‹F› AT ONCE`** (hold; pointer: BAG icon, retired when ICON MODE opens, §13.2). **Icon target BAG** (§13.3): L12 `PRESS ‹F› TO OPEN THE BAG` · **L61 `PRESS ‹F› ON BOOK, THEN READ`** (hold the first time) | `ARANK ≠ 0` (book READ from the bag: Starter rule, §5, 0 RNG) → L13 `SEE? A NEW ICON ON YOUR BAR` · L14W/M (class) (hold); tail **L63 `SCROLLS READ FROM BAR OR BAG` · L64 `EMPTY ICONS WAIT FOR BOOKS`** (scroll) | — | book DISCARDed unread: L15 `NO BOOK? BELOW THEY ARE RARE`, advance. Book never picked up / unread and hero leaves A: skipped, **L76** on entering B (§13.5) |
+| B4 | Ladder (A) | blink → A3, IDLE | L16 `LADDER DOWN TO ME: PRESS ‹D›` | standing on storey 1 | L2 | fall from the pit also lands on storey 1: fires |
+| B5 | Panel + food (A) | A3, POINT_DN | L17 `BELOW YOU: LIFE, MANA AND FOOD` · L18 `YOUR BELLY SAYS OK, NOT FED` (pointer: row 21 bars + word); next turn L19 `EAT THE PEAR: THE FOOD ICON` · L20 `EAT: ‹D›+‹F›, THEN PICK FOOD` (pointer: FOOD icon) | `FOOD` rose this turn (any EAT: quick slot or page) → L21 `FED HEALS. THE STARVED FAINT` · L22 `EAT WHEN IT SAYS HUNGRY`; next turn tail (R2) **L70 `AT WEAK YOUR LEGS WILL NOT LEAP` · L71 `A LEAP THEN JUST DOES NOTHING`** (scroll). **Icon target FOOD:** L73 | PEAR col 17 | hero leaves A uneaten: skipped, **L76** on entering B |
+| B6 | Shaft (A) | A3, POINT (left) | L23 `AT THE SHAFT (LEFT) PRESS ‹D›` | room = B | down-exit | — |
 | B7 | Key (B) | fade-in B1, POINT_DN | (after the engine's key-found line) L24 `YOU HAVE THE KEY. ON TO THE DOOR` · L25 `IT OPENS ONE LOCKED DOOR` (no pointer: the build has no key icon; user option a, TUT0-F2) | standing on storey 0 | key room | — |
-| B8 | Trap + status (B) | B1, IDLE | — (silent: the trap must surprise) | hero POISONED → L26 `HA! A DART. YOU ARE POISONED` · L27 `SEE THE ICON? YOU CANNOT EAT` (pointer: status icon cells row 21 cols 30–31); next turn L28 `TRAPS HIDE. ‹D› SEEKS THEM` | hidden DART col 13 | not poisoned and `x ≥ 17` (jumped / sensed / searched): L29 `YOU PASSED A DART TRAP. LUCKY` + L28; B9 uses L32 |
-| B9 | Cure (B) | blink → B2, POINT_DN | poisoned: L30b `DRINK THE CURE FROM THE BAG` (pointer: BAG icon; as built, both kits hold a Heal). **Icon target BAG (R2):** **L72 `‹F›, FIND THE CURE, DRINK IT`** (hold the first time) | POISON cleared (Cure, or the timer) → L31 `POTIONS: HEAL, MANA AND CURE` | CURE col 19 | not poisoned: L32 `KEEP THE CURE FOR POISON`, advance on pickup |
+| B8 | Trap + status (B) | B1, IDLE | — (silent: the trap must surprise) | hero POISONED → L26 `HA! A DART. YOU ARE POISONED` · L27 `SEE THE ICON? YOU CANNOT EAT` (pointer: status icon cells row 21 cols 30–31); next turn L28 `TRAPS HIDE. WAIT (‹D›) TO SEEK` | hidden DART col 13 | not poisoned and `x ≥ 17` (jumped / sensed / searched): L29 `YOU PASSED A DART TRAP. LUCKY` + L28; B9 uses L32 |
+| B9 | Cure (B) | blink → B2, POINT_DN | poisoned: L30b `DRINK THE CURE: ‹D›+‹F›, BAG` (pointer: BAG icon; as built, both kits hold a Heal). **Icon target BAG (R2):** **L72 `PRESS ‹F›, THEN DRINK THE CURE`** (hold the first time) | POISON cleared (Cure, or the timer) → L31 `POTIONS: HEAL, MANA AND CURE` | CURE col 19 | not poisoned: L32 `KEEP THE CURE FOR POISON`, advance on pickup |
 | B10 | Door (B) | blink → B3, POINT (right) | L33 `GO DOWN, THEN WALK INTO THE DOOR` | room = C (the bump unlocks with the key: existing lines) | locked door | — |
 | B11 | The sleeping Goblin (C) | fade-in C1, POINT (right) | L34 `A GOBLIN, ASLEEP. SEE ITS HUE` · class L35/L36 W/M. **Icon target slot 2 (B11 + B12, R2):** L73 | Goblin HP < max (first damage wakes it, §6.4) | Goblin, scroll, Heal | arriving with earlier beats undone: L53 `IMPATIENT? THE GOBLIN WAITS` first |
 | B12 | Fight (C) | C1, TALK | L37 `IT WAKES! WATCH THE INFO LINE` (pointer: row 20) · class L38W/M | (passive; runs until B13/B14) | — | — |
-| B13 | Scroll (C) | C1, POINT_DN | when the awake Goblin is within 6 cols: L39 `IT COMES! READ THE SLEEP SCROLL` · L40 `‹D›+‹F›, SCROLL ICON, ‹F›` (R2 reworded; pointer: SCROLL icon). **Icon target SCROLL:** L73. The bag way (pick it → READ) also fires the trigger; L63 told it in B3 | Goblin ASLEEP → L41 `IT SLEEPS. HIT IT - IT WAKES` | — | Goblin dies first: the scroll lesson becomes L52 in B14 |
-| B14 | Victory + how to end the Tome (C) | blink → beside the grate, TALK | one group per turn, in this order: G1 L42 `WELL DONE. THE GRATE IS OPEN` · **L56 `ON 8, SLAY THE ARCHMAGE FIRST`**; G2 **L57 `HIT HIS TOME FIVE TIMES, FAST` · L58 `ITS AURA BURNS THOSE NEAR IT`**; G3 **L59 `ASHED, IT OPENS THE WAY OUT`** · L43 `WHAT YOU TOOK HERE STAYS HERE`; G4 L44 `FIND THE KEY, SLAY THE BOSS` · L45 `ITS GRATE IS YOUR WAY DOWN`; G5 L46 `‹F› HELD, THEN ‹U›: PAUSE` · L47 `STEP ON THE GRATE. GO, CHILD` | Goblin dead (blob opens the grate) | — | The Tome method comes first (G1–G2 are out within the 1–3 steps from the Goblin's corpse to the grate), so it is the last thing read before D1. **Manager 2026-11-09: the blob opens the grate only after G3 has been shown** (the Tome method and the sandbox warning are mandatory; the blob already owns the grate-open, F3, so this costs 0 resident B); G4–G5 not yet shown when the hero steps on the grate are dropped. HP < max and a Heal held: one extra group L48 `HURT? DRINK THE HEAL POTION` after G3; unread scroll: L52 `KEEP SCROLLS FOR BAD FIGHTS` after G4 |
+| B13 | Scroll (C) | C1, POINT_DN | when the awake Goblin is within 6 cols: L39 `IT COMES! READ THE SLEEP SCROLL` · L40 `ICONS ‹D›+‹F›, SCROLL, ‹F›` (R2 reworded; pointer: SCROLL icon). **Icon target SCROLL:** L73. The bag way (pick it → READ) also fires the trigger; L63 told it in B3 | Goblin ASLEEP → L41 `IT SLEEPS. HIT IT - IT WAKES` | — | Goblin dies first: the scroll lesson becomes L52 in B14 |
+| B14 | Victory + how to end the Tome (C) | blink → beside the grate, TALK | one group per turn, in this order: G1 L42 `WELL DONE. THE GRATE IS OPEN` · **L56 `ON 8, SLAY THE ARCHMAGE FIRST`**; G2 **L57 `HIT HIS TOME FIVE TIMES, FAST` · L58 `ITS AURA BURNS THOSE NEAR IT`**; G3 **L59 `ASHED, IT OPENS THE WAY OUT`** · L43 `WHAT YOU TOOK HERE STAYS HERE`; G4 L44 `FIND THE KEY, SLAY THE BOSS` · L45 `ITS GRATE IS YOUR WAY DOWN`; G5 L46 `PAUSE: HOLD ‹F›, PRESS ‹U›` · L47 `STEP ON THE GRATE. GO, CHILD` | Goblin dead (blob opens the grate) | — | The Tome method comes first (G1–G2 are out within the 1–3 steps from the Goblin's corpse to the grate), so it is the last thing read before D1. **Manager 2026-11-09: the blob opens the grate only after G3 has been shown** (the Tome method and the sandbox warning are mandatory; the blob already owns the grate-open, F3, so this costs 0 resident B); G4–G5 not yet shown when the hero steps on the grate are dropped. HP < max and a Heal held: one extra group L48 `HURT? DRINK THE HEAL POTION` after G3; unread scroll: L52 `KEEP SCROLLS FOR BAD FIGHTS` after G4 |
 | B15 | Exit (C) | FADE out | — | the grate step (exit pending at end of turn) → **sandbox reset** (§5.2) → normal D1 entry | grate | — |
 
 **Always-on rules (all beats):**
 - **Repeat:** a Wait (DOWN, no move, no other trigger) with the hero within 4 cols of the mentor
   re-shows the current beat's instruction group (L07 tells the player).
 - ~~**Nag:** 60 turns with no trigger re-shows the current instruction group once.~~ **R2: replaced
-  by the Nudge (§13.5):** 12 off-task turns → L75 `CHILD. FIRST, DO AS I SAID`, next turn the
-  instruction group again (scroll, pointer re-armed); once more at 36; then silent. No movement
-  is ever blocked (soft gating).
+  by the Nudge (§13.5); R4 (TUT0-F4):** **6** off-task turns → ONE group L75 `CHILD. FIRST, DO AS I
+  SAID` + the beat's goal line (scroll, pointer re-armed; L32 in B9's unpoisoned alternative), and
+  the goal line FLASHes for that turn; once more at **18**; then silent. No movement is ever
+  blocked (soft gating).
+- **Goal line (R4, TUT0-F4):** while a beat waits for the player (its G0 processed — a silent G0
+  counts — and its trigger not fired), its instruction is pinned on **row 20 cols 0–23** in
+  Morrow's ink (attr `$45`); the log scrolls freely under it, so engine lines no longer bury it.
+  One line id per beat (`tut_goal`, existing lines): B0 L02, B1 L03, B2 L09, B3 L60, B4 L16, B5
+  L20, B6 L23, B7/B8 L24, B9 L30b (only while POISONED), B10 L33, B11 class L35W/L35M, B12/B13 none
+  (combat owns row 20), B14 and B15 L47 from the moment the grate opens to the exit. Hidden while
+  the Goblin is awake and in story groups (the hold prompt is the cue). Redrawn at each turn end
+  when its id changed or the engine redrew row 20; survives holds; in ICON MODE (no turn) the
+  engine's `>` icon info owns row 20 and the goal returns at the next turn end. Hidden: the info
+  fields' attrs (`$47/$46/$45`) are put back and the info line redraws. Row 20 cols 24–31 stay the
+  info line / the hold prompt.
 - **R2 icon tour + pointer rule:** §13.2–13.3 (pointers never flash in ICON MODE; the cursor's
   slot is narrated).
 - **Mercy:** at the end of any D0 turn with `HP ≤ MERCY_HP` (= **8**): HP := max, statuses kept,
@@ -212,7 +230,9 @@ which suits a ghost and saves 2–4 frames.
 ### 4.4 Key-name tokens and the panel pointer
 
 - **Tokens `‹U› ‹D› ‹L› ‹R› ‹F›`** (1 B each in storage) are expanded by the blob when the line is
-  queued: **KEYS** → the redefined key's name from `KEYTAB` (`Q`, `A`, `SPACE` …; ≤ 5 chars);
+  queued: **KEYS** → the redefined key's name from `KEYTAB` (`Q`, `A`, `SPACE` …; ≤ 5 chars; **R4:
+  the REDEFINE screen's 2-char names are spelled out: `SP` → `SPACE`, `CS` → `CAPS`, `SS` → `SYM`;
+  `EN` never names a control key**);
   **KEMPSTON / SINCLAIR** → `UP` `DOWN` `LEFT` `RIGHT` `FIRE`. Every line in §8 fits 32 chars with
   each token at 5 chars and a chord `‹D›+‹F›` at 11. Name table: reuse the REDEFINE screen's if the
   blob can read it (bank 3), else a ≈ 110 B copy in the blob.
@@ -221,6 +241,11 @@ which suits a ghost and saves 2–4 frames.
   rewrites those attrs (a bar changes), the flash simply ends early. No cursor move: the player
   still drives ICON MODE himself. **R2: pointers yield to the cursor** — no pointer flashes while
   ICON MODE is open, and a pointer retired by ICON MODE does not come back (§13.2).
+- **R4 writing rule:** a line never begins with a token; `‹X›+‹Y› AT ONCE` introduces a chord (§8).
+- **R4 rows:** the ROW20 pointer rect is **row 20 cols 0–23** (supersedes §14.6's 0–25); the hold
+  prompt is a fixed **`▶ ANY KEY`** at **row 20 cols 24–31** (triangle col 24, blinking; text from
+  x = 200), the same in every control mode, bright white; cols 24–31 go back to `$45` and blank on
+  dismissal. The goal line (§3) uses cols 0–23.
 
 ## 5. Training monster, sandbox and endings
 
@@ -274,7 +299,7 @@ read (Starter rule, §5).
 All other beats are shared. The Warrior's Daggers/Bow slots are not taught (discoverable; the bow
 is greyed `NO BOW` anyway). *(Engineer: if a class kit already holds a Heal potion, the quick
 POTION slot picks Heal first (§8 auto-fill), so B9's L30 must be done from the bag page; in that
-case swap L30 for L30b `DRINK THE CURE FROM THE BAG` (27).)*
+case swap L30 for L30b `DRINK THE CURE: ‹D›+‹F›, BAG` (27).)*
 
 ## 7. Fate of the HOW TO PLAY screen
 
@@ -289,42 +314,45 @@ today): `NEW HERE? AFTER START, PICK 1 TUTORIAL` (38 ≤ 42, `$45`). Saves ≈ 0
 ## 8. Text budget
 
 Log lines are FONT6, ≤ 32 chars (tokens counted at 5, a chord at 11), upper case, no trailing full
-stop (§3.4 style). Counts are worst-case display widths.
+stop (§3.4 style). Counts are worst-case display widths. **R4 (TUT0-F4, 2026-11-10) writing rule
+(linted by `tools/tutpack.py`):** a line never begins with a key token; a key follows `PRESS` /
+`HOLD` / `(`; a chord is introduced as `‹X›+‹Y› AT ONCE` in its first use per action (B2 leap, B3
+icons). The 16 R4-5 rewordings are in the table below (same ids, no new text).
 
 | Id | Line | Chars |
 |---|---|---|
 | L01 | `A LIVING ONE, AT LAST. COME DOWN` | 32 |
-| L02 | `‹D› CLIMBS DOWN THE LADDER` | 28 |
-| L03 | `‹L› ‹R› WALK. COME TO ME` | 28 |
+| L02 | `PRESS ‹D› TO CLIMB DOWN` (R4; B0 goal) | 25 |
+| L03 | `WALK TO ME: HOLD ‹L› OR ‹R›` (R4; B1 goal) | 31 |
 | L04 | `A TAP ONLY TURNS YOU ROUND` | 26 |
 | L05 | `I AM BROTHER MORROW, LONG DEAD` (R2) | 30 |
 | L06 | `I TENDED THEIR GRAVES. NOW YOU` (R2) | 30 |
-| L07 | `WAIT BY ME TO HEAR IT AGAIN` | 27 |
+| L07 | `WAIT (‹D›) BY ME TO HEAR AGAIN` (R4: names the Repeat key) | 32 |
 | L08 | `A BOOK LIES PAST THE PIT` | 24 |
-| L09 | `‹U›+‹R› LEAPS OVER THE PIT` | 30 |
+| L09 | `LEAP: PRESS ‹U›+‹R› AT ONCE` (R4; B2 goal) | 31 |
 | L10 | `CLUMSY. THE LADDER LEADS BACK` | 29 |
 | L11 | `A BOOK! READ IT FROM THE BAG` | 28 |
-| L12 | `‹F›: THE BAG. GO TO THE BOOK` (R2: B3 icon target BAG, line 1) | 30 |
+| L12 | `PRESS ‹F› TO OPEN THE BAG` (R2: B3 icon target BAG, line 1; R4 reworded) | 27 |
 | L13 | `SEE? A NEW ICON ON YOUR BAR` | 27 |
 | L14W | `POWER STRIKE: A BLOW THAT STUNS` | 31 |
 | L14M | `SPARK: A BOLT THAT COSTS MANA` | 29 |
 | L15 | `NO BOOK? BELOW THEY ARE RARE` | 28 |
-| L16 | `COME DOWN THE LADDER TO ME` | 26 |
+| L16 | `LADDER DOWN TO ME: PRESS ‹D›` (R4; B4 goal) | 30 |
 | L17 | `BELOW YOU: LIFE, MANA AND FOOD` | 30 |
 | L18 | `YOUR BELLY SAYS OK, NOT FED` | 27 |
 | L19 | `EAT THE PEAR: THE FOOD ICON` | 27 |
-| L20 | `‹D›+‹F›, MOVE TO IT, ‹F›` | 30 |
+| L20 | `EAT: ‹D›+‹F›, THEN PICK FOOD` (R4; B5 goal) | 32 |
 | L21 | `FED HEALS. THE STARVED FAINT` | 28 |
 | L22 | `EAT WHEN IT SAYS HUNGRY` | 23 |
-| L23 | `THE SHAFT DOWN IS BY THE WALL` | 29 |
+| L23 | `AT THE SHAFT (LEFT) PRESS ‹D›` (R4; B6 goal: the shaft is a ladder top, entered with ‹D›) | 31 |
 | L24 | `YOU HAVE THE KEY. ON TO THE DOOR` (TUT0-F2) | 32 |
 | L25 | `IT OPENS ONE LOCKED DOOR` | 24 |
 | L26 | `HA! A DART. YOU ARE POISONED` | 28 |
 | L27 | `SEE THE ICON? YOU CANNOT EAT` | 28 |
-| L28 | `TRAPS HIDE. ‹D› SEEKS THEM` | 28 |
+| L28 | `TRAPS HIDE. WAIT (‹D›) TO SEEK` (R4: every Wait searches, game.md §2.3) | 32 |
 | L29 | `YOU PASSED A DART TRAP. LUCKY` | 29 |
 | ~~L30~~ | ~~`DRINK THE CURE: THE POTION ICON`~~ R2: **removed** (unused since T7: both kits hold a Heal) | — |
-| L30b | `DRINK THE CURE FROM THE BAG` (B9 G0, as built) | 27 |
+| L30b | `DRINK THE CURE: ‹D›+‹F›, BAG` (B9 G0 + goal while poisoned; R4) | 32 |
 | L31 | `POTIONS: HEAL, MANA AND CURE` | 28 |
 | L32 | `KEEP THE CURE FOR POISON` | 24 |
 | L33 | `GO DOWN, THEN WALK INTO THE DOOR` | 32 |
@@ -337,13 +365,13 @@ stop (§3.4 style). Counts are worst-case display widths.
 | L38W | `STRIKES COST MANA. IT RETURNS` | 29 |
 | L38M | `NO MANA? HIT IT WITH THE STAFF` | 30 |
 | L39 | `IT COMES! READ THE SLEEP SCROLL` | 31 |
-| L40 | `‹D›+‹F›, SCROLL ICON, ‹F›` (R2; was `IT SITS ON THE SCROLL ICON`) | 31 |
+| L40 | `ICONS ‹D›+‹F›, SCROLL, ‹F›` (R4; R2 was `‹D›+‹F›, SCROLL ICON, ‹F›`) | 32 |
 | L41 | `IT SLEEPS. HIT IT - IT WAKES` | 28 |
 | L42 | `WELL DONE. THE GRATE IS OPEN` | 28 |
 | L43 | `WHAT YOU TOOK HERE STAYS HERE` | 29 |
 | L44 | `FIND THE KEY, SLAY THE BOSS` | 27 |
 | L45 | `ITS GRATE IS YOUR WAY DOWN` | 26 |
-| L46 | `‹F› HELD, THEN ‹U›: PAUSE` | 29 |
+| L46 | `PAUSE: HOLD ‹F›, PRESS ‹U›` (R4) | 30 |
 | L47 | `STEP ON THE GRATE. GO, CHILD` | 28 |
 | L48 | `HURT? DRINK THE HEAL POTION` | 27 |
 | L50 | `ENOUGH. I MEND YOU - THIS TIME` | 30 |
@@ -357,8 +385,8 @@ stop (§3.4 style). Counts are worst-case display widths.
 | L58 | `ITS AURA BURNS THOSE NEAR IT` (B14: 1 HP/turn within 6 cols) | 28 |
 | L59 | `ASHED, IT OPENS THE WAY OUT` (B14: the gate opens, leave by it) | 27 |
 | **R2 beat lines** | | |
-| L60 | `‹D›+‹F› OPENS THE ICON BAR` (B3 G0 line 2) | 30 |
-| L61 | `‹F› ON IT, THEN ‹F› ON READ` (B3 icon target BAG, line 2) | 31 |
+| L60 | `ICONS: PRESS ‹D›+‹F› AT ONCE` (B3 G0 line 2 + goal; R4) | 32 |
+| L61 | `PRESS ‹F› ON BOOK, THEN READ` (B3 icon target BAG, line 2; R4) | 30 |
 | L63 | `SCROLLS READ FROM BAR OR BAG` (B3 tail) | 28 |
 | L64 | `EMPTY ICONS WAIT FOR BOOKS` (B3 tail) | 26 |
 | L65 | `THAT BLACK GAP IS A PIT` (B2 G0) | 23 |
@@ -368,13 +396,13 @@ stop (§3.4 style). Counts are worst-case display widths.
 | L69 | `FALLS HURT AND DROP ONE FLOOR` (B2 FH_PITFALL, with L10) | 29 |
 | L70 | `AT WEAK YOUR LEGS WILL NOT LEAP` (B5 tail) | 31 |
 | L71 | `A LEAP THEN JUST DOES NOTHING` (B5 tail) | 29 |
-| L72 | `‹F›, FIND THE CURE, DRINK IT` (B9 icon target BAG) | 30 |
+| L72 | `PRESS ‹F›, THEN DRINK THE CURE` (B9 icon target BAG; R4) | 32 |
 | L73 | `THAT ONE. NOW PRESS ‹F›` (icon target confirm: B5 FOOD, B11/B12 slot 2, B13 SCROLL) | 25 |
 | L75 | `CHILD. FIRST, DO AS I SAID` (Nudge, §13.5) | 26 |
 | L76 | `YOU LEFT A LESSON UNDONE ABOVE` (entering B with B2–B5 open, §13.5) | 30 |
 | **R2 icon tour (§13.3)** | | |
 | I00a | `THE LIT ICON IS YOUR CHOICE` (first ICON MODE entry, line 1) | 27 |
-| I00b | `‹L› ‹R› MOVE, ‹U› LEAVES` (first ICON MODE entry, line 2) | 30 |
+| I00b | `PICK: ‹L› ‹R›. LEAVE: ‹U›` (first ICON MODE entry, line 2; R4) | 31 |
 | I01W | `SWORD: ‹F› OR WALK INTO A FOE` (slot 1, Warrior) | 31 |
 | I01M | `STAFF: ‹F› OR WALK INTO A FOE` (slot 1, Mage) | 31 |
 | I02W | `POWER STRIKE: COSTS MANA, STUNS` (slot 2, Warrior, once learned) | 31 |
@@ -477,8 +505,8 @@ needs no hook (status rewrite in H-T2).
     tape image.
 11. Joystick-only (Kempston selected): the whole D0 incl. bag READ, quick FOOD/POTION/SCROLL and the
     Goblin fight is completable without the keyboard; lines show stick words.
-12. Redefined keys (e.g. `W S K L M`): L02 reads `S CLIMBS DOWN THE LADDER`; R2: L60
-    `S+M OPENS THE ICON BAR`, L12 `M: THE BAG. GO TO THE BOOK`, L67 `LEAPS GO LEFT TOO: W+K`.
+12. Redefined keys (e.g. `W S K L M`): L02 reads `PRESS S TO CLIMB DOWN`; L60
+    `ICONS: PRESS S+M AT ONCE`, L12 `PRESS M TO OPEN THE BAG`, L67 `LEAPS GO LEFT TOO: W+K` (R4 wordings).
 13. No softlock: from every reachable D0 cell the grate is reachable by walk + climb (pit fall
     optional); the mentor never occupies or blocks a cell for movement.
 14. The mentor never appears in the D1 pool / screen after the reset.
@@ -511,8 +539,8 @@ needs no hook (status rewrite in H-T2).
 23. **WEAK:** after the eat, B5 tail L70/L71 (no hold). Rule check (the line must be true): poke
     `FOOD = 5` (WEAK) at `x = 16` storey 0 → UP+RIGHT: `x`, `TURN_COUNTER` unchanged, no log line;
     poke `FOOD = 15` (HUNGRY) → the same jump lands at `x = 22`.
-24. **Nudge:** at B4, 12 Waits with the hero > 4 cols from the mentor → L75 on turn 12, B4 G0 on
-    turn 13; again on 36 / 37; nothing more up to turn 100. No L75 in B8, B12, B15, nor while the
+24. **Nudge (R4):** at B4, Waits with the hero > 4 cols from the mentor → L75 + L16 (the goal) in
+    one group on off-task turn 6; again on 18; nothing more up to turn 100. No L75 in B8, B12, B15, nor while the
     Goblin is awake.
 25. **Left lesson:** skip the book and the pear, take the shaft → L76 once in B, before L24; going
     back up and down again prints no second L76.
@@ -520,8 +548,24 @@ needs no hook (status rewrite in H-T2).
     dismissed by the stick and the dismissing input neither moves the cursor nor exits ICON MODE.
 27. **Hook hygiene:** after D1 entry, after Quit, after death and after choice `2`, the `pi_ic`
     operand == `intent_icon7` and `pl_et` == `end_turn`.
-28. **Budget:** blob `BLOB_LEN + BLOB_DELTA ≤ BLOB_RES` with ≥ 600 B free; `TUT_RAM_END ≤ PF_ROWF`;
+28. **Budget:** blob `BLOB_LEN + BLOB_DELTA ≤ BLOB_RES` with ≥ 350 B free (R4 built: the R3
+    reserve); `TUT_RAM_END ≤ PF_ROWF`;
     budget.py `tut0` unchanged CAP (the hook runs only in frozen ICON MODE ticks).
+
+**R4 key clarity (TUT0-F4, tut0_split.md "Playtest round 2"; `tests/tut0.py` K1–K5):**
+
+- **K1 prompt:** during a hold, row 20 cols 24–31 render `▶ ANY KEY` (font-match, KEYS and
+  KEMPSTON); a non-control key (`Z`) dismisses; cols 24–31 blank / `$45` afterwards.
+- **K2 names:** lint (`tests/tut_text.py`): no line starts with a token, all ≤ 32 (token 5, chord
+  11). Runtime: default keys → L09 = `LEAP: PRESS Q+P AT ONCE`; FIRE redefined to CAPS / SYM →
+  `CAPS` / `SYM`; Kempston → `LEAP: PRESS UP+RIGHT AT ONCE`.
+- **K3 goal:** sampled after every turn and inside every hold: row 20 cols 0–23 == the beat's goal
+  text with attrs `$45` whenever the model says it is shown (B0–B11 and B14 seen), through engine
+  log lines, holds and ICON MODE sessions (back at the first turn end); hidden with the info attrs
+  restored once the Goblin wakes (B12) and after the D1 reset.
+- **K4 nudge:** idle in B2 → L75 + L09 at off-task turn 6 with FLASH on row 20 cols 0–23 that turn
+  only, again at 18, nothing else up to 30.
+- **K5:** no FLASH cell in row 20 cols 24–31 during any hold (B12 G0 incl.); rect 6 is 24 wide.
 
 ## 11. Open questions — RESOLVED (user 2026-11-09: all defaults approved)
 
@@ -635,9 +679,9 @@ slot line said; persists for the whole D0).
 
 | Beat current (and its G0 shown) | Target slot | Target group | Hold |
 |---|---|---|---|
-| B3 | 10 BAG | L12 `‹F›: THE BAG. GO TO THE BOOK` · L61 `‹F› ON IT, THEN ‹F› ON READ` | first rest in B3 only |
+| B3 | 10 BAG | L12 `PRESS ‹F› TO OPEN THE BAG` · L61 `PRESS ‹F› ON BOOK, THEN READ` | first rest in B3 only |
 | B5 (after G2) | 7 FOOD | L73 `THAT ONE. NOW PRESS ‹F›` | no |
-| B9 (poisoned) | 10 BAG | L72 `‹F›, FIND THE CURE, DRINK IT` | first rest in B9 only |
+| B9 (poisoned) | 10 BAG | L72 `PRESS ‹F›, THEN DRINK THE CURE` | first rest in B9 only |
 | B11, B12 | 2 class power | L73 | no |
 | B13 (after G0) | 9 SCROLL | L73 | no |
 
@@ -698,7 +742,8 @@ Both scroll ways fire B13 (the trigger is "Goblin ASLEEP"). The verb strip opens
 **Decision: soft gating + nudges** (the physical gates already guarantee the order that matters;
 nothing new in the resident input path; no softlock class; joystick completeness untouched).
 
-**Nudge rule (replaces the 60-turn Nag):**
+**Nudge rule (replaces the 60-turn Nag; R4 / TUT0-F4: at 6 and 18, one group L75 + the goal line,
+FLASH on the goal line that turn, no next-turn re-show — the goal line carries the instruction):**
 - `OFF` = turns since the current beat's last instruction group was emitted, counted at
   `blob_turn` A = 0 on turns that emit no group and do not fire the trigger (the existing nag
   counter). Reset on any group of this beat and on a beat change.
@@ -785,7 +830,7 @@ even observe the attempt (no end-of-turn) — a demo would leave the player pres
   TUT_RAM `$5EDB..$5EDE`, the SMC site, the stub length.
 - **Verify (risks):** (1) `tt_hold` called from inside `intent_tick` → far7 → farb: stack depth,
   `present` / `resync_tick` legal there, the ICON MODE highlight and the `>` info line survive the
-  prompt at row 20 cols 26–31 (TV_HA restore); the swallowed key leaves `STICK_OLD` / `FIRE_ST`
+  prompt at row 20 cols 26–31 (TV_HA restore; R4: cols 24–31, constant `$45` restore, TV_HA gone); the swallowed key leaves `STICK_OLD` / `FIRE_ST`
   released. **Fallback if unsafe:** the bag targets and I00 scroll (no hold); they repeat on every
   rest anyway. (2) The log queue drains in frozen ICON MODE ticks (the info line does, so
   `panel_tick` runs); if not, `blob_icon` drains it like `tt_hold`'s pre-loop. (3) The cursor slot
@@ -970,6 +1015,7 @@ Reused as second lines: L15, L22, L52, I07, L70 (no change). Death-catch mercy r
 | R3-MERCY: revive ≈ 22, `pd_dv` set / undo ×3 ≈ 15 | ≈ +37 |
 | Grate after G4, A2 x, rect 6 | ≈ 0–2 |
 | **Total** | **≈ +300–345 B** (≤ 400 target); `BLOB_RES` 719 → ≈ 375–420 free |
+| **R4 note (TUT0-F4, 2026-11-10):** R4 is built first: +248 B raw (estimate was +170–190), `BLOB_RES` 706 → **458 free**; R3 (≤ 345) still fits: R3 + R4 ≤ 706 holds with ≈ 110 B margin | |
 | Resident | 0 B (stub area +≈ 12 B, boot-dead); `TUT_RAM` +0 B (flag bits only) |
 
 ### 14.9 In-place edits after approval (not made yet)

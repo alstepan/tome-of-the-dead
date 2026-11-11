@@ -6,7 +6,8 @@ build/tut/tut_text.asm and decodes every id with the engine's getter algorithm:
   (tx_entries / tx_dict read from build/text/strings.asm).
 Checks: every id decodes to its source text; TL_/TS_ EQUs match the table; tokens
 reference real resident entries; every line <= 32 chars under BOTH width rules
-(KEYS: token 2; STICK: token 5).
+(KEYS: token 5, SPACE spelled out (TUT0-F4 R4-2); STICK: token 5); K2 lint: no log line
+begins with a key token.
 Run: python3 tests/tut_text.py   (exit 0 = pass)"""
 import os
 import re
@@ -23,7 +24,7 @@ RES_ASM = os.path.join(REPO, "build/text/strings.asm")
 RES_IDS = os.path.join(REPO, "build/text/strings_ids.inc")
 TOK = re.compile(r"\{([UDLRF])\}")
 CTRL = {"U": 1, "D": 2, "L": 3, "R": 4, "F": 5}
-RULES = {"KEYS": 2, "STICK": 5}
+RULES = {"KEYS": 5, "STICK": 5}
 LINE_MAX = 32
 
 failures = []
@@ -132,6 +133,11 @@ def main():
     for key, text in src:
         check("ALDOUS" not in text and "SEXTON" not in text, f"{key}: the old mentor name in {text!r}")
     check("TL_L30" not in texts, "TL_L30 still present (R2: removed)")
+    # TUT0-F4 K2 (tut0_split.md "Playtest round 2"): no log line starts with a key token; the R4-5 wordings
+    for key, text in src:
+        check(not (key.startswith("TL_") and TOK.match(text)), f"{key}: begins with a key token: {text!r}")
+    check(texts.get("TL_L09") == "LEAP: PRESS {U}+{R} AT ONCE", f"TL_L09 = {texts.get('TL_L09')!r}")
+    check(texts.get("TL_L23") == "AT THE SHAFT (LEFT) PRESS {D}", f"TL_L23 = {texts.get('TL_L23')!r}")
 
     print(f"tut_text: {len(src)} ids; worst KEYS {worst['KEYS'][0]} ({worst['KEYS'][1]}), "
           f"worst STICK {worst['STICK'][0]} ({worst['STICK'][1]}); limit {LINE_MAX}")

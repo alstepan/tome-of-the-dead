@@ -40,7 +40,7 @@
 | Seed | master seed = `FRAMES` when START is pressed; level seed = f(master, depth). Test flag `SEED_FIXED` forces the compile-time seed (F3) | a fixed seed would replay the same dungeon every game |
 | Win | D8: kill the **Necromancer Archmage** → the Sanctum seal opens → **destroy the Tome of Absolute Death Magic** (§1.3) → the exit gate opens → leave through it → `GS_WIN` (WIN2, user 2026-11-01) | user |
 
-**TUT0 (2026-11-09; as built, `docs/design/tutorial_d0.md`, `tut0_split.md`):** the run now starts with an optional tutorial. After `1 START` a choice screen (menu font, digits only) offers `1 TUTORIAL - DEPTH 0` (ENTER = 1) or `2 START - DEPTH 1` (BREAK = back to the menu; keys are read only after a full release). **D0 "The Old Crypt"** is a fixed 3-room level (rooms A, B, C) with the mentor Brother Morrow (was Aldous the Sexton; renamed 2026-11-09) (a blob-resident ghost, §3.4) and a sleeping Goblin on the grate in room C. Killing the Goblin opens the grate; stepping into the grate is the D0 exit: the hero is reset to the new-game state (the START init, seed from `FRAMES`) and D1 is entered normally. **The hero cannot die in D0** (mercy, §5.3 of `tutorial_d0.md`). Internally `DEPTH` stays 1 during D0; the panel and the card show 0. Offered **once per tape load** (`TUT_AVAIL`: set at boot, cleared when D1's pool is first built); after that `1 START` goes straight to D1. The D0 code and data are a boot-loaded blob in bank 4 (§11.2).
+**TUT0 (2026-11-09; as built, `docs/design/tutorial_d0.md`, `tut0_split.md`):** the run now starts with an optional tutorial. After `1 START` a choice screen (menu font, digits only) offers `1 TUTORIAL - DEPTH 0` (ENTER = 1) or `2 START - DEPTH 1` (BREAK = back to the menu; keys are read only after a full release). **D0 "The Old Crypt"** is a fixed 3-room level (rooms A, B, C; §2.1) with the mentor Brother Morrow (was Aldous the Sexton; renamed 2026-11-09), a ghost who talks, points and blinks but never fights or blocks (`tutorial_d0.md` §4), and one Goblin asleep on the grate in room C. Killing the Goblin opens the grate once Morrow's Tome lines have been read; stepping into the grate is the D0 exit: the sandbox reset puts the hero back to the new-game state (the START init, seed from `FRAMES`) and D1 is entered normally, with nothing from D0 carried over. **The hero cannot die in D0:** at the end of any D0 turn with HP ≤ 8, HP is set to max (mercy; statuses kept). Morrow nudges after 6 and 18 off-task turns (§3.3). Internally `DEPTH` stays 1 during D0; the panel and the card show 0. Offered **once per tape load**: the offer is removed when `2 START` is chosen or the grate step runs the reset, so after D1 is entered `1 START` goes straight to D1 (death or Quit in D0 returns to the menu with the offer still in place). The D0 code and data are a boot-loaded blob in bank 4 (§11.2).
 
 ### 1.1 Generation rules (F6, per level, deterministic from the level seed)
 
@@ -380,7 +380,7 @@ within the depth pool" check for D4–D8 only.
   UP at the top is no turn, no exit. Supersedes the D2+ "standing at `x = c + 1`" of §1.1 gaps
   (4) (designer clarification 2026-10-03, option a) and the start-col legality move.
 - Flyers: `9s ≤ y ≤ 9s+8−h`.
-- **TUT0 (2026-11-09):** H1-ARRIVAL applies to D0's room A as well: the arrival shaft `{5,0}` (cols 5–7); the hero appears mid-ladder at `y = 0` and two DOWN turns stand him on storey 0.
+- **TUT0 (2026-11-09):** H1-ARRIVAL applies to D0's room A as well: the arrival shaft `{5,0}` (cols 5–7); the hero appears mid-ladder at `y = 0` and two DOWN turns stand him on storey 0. D0 is hand-made, not generated, and its rooms use these storeys: **A** (grid cell 1): arrival shaft `{5,0}`, down-exit `{5,2}` to B, ladders `{12,1}` and `{26,1}`, a 3-col pit at col 19 (jump over it at x 16 → 22), the BOOK at col 24, a PEAR at col 17 on storey 1. **B** (cell 4, the key room): up-exit `{5,0}`, ladder `{24,1}`, a hidden DART trap at col 13 on storey 0, a CURE potion at col 19, the locked door to C on the right of storey 1. **C** (cell 5, middle row): the Goblin on the grate (x 22, storey 1), a SLEEP scroll at col 4 and a HEAL potion at col 9 on storey 1, the level-exit grate at cols 22–24. Layout detail: `tutorial_d0.md` §2.
 
 ### 2.2 Turn loop (prototype §3.2 + E0)
 
@@ -575,7 +575,8 @@ TOME OF THE DEAD   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SI
   prompt stays on the same action. BREAK at any redefine prompt cancels the whole redefinition
   and keeps the previous key set.
 - START seeds the RNG → generates D1 → play.
-- **TUT0 (2026-11-09):** while `TUT_AVAIL` is set, `1 START` opens the **choice screen** (menu font, digits only): `1 TUTORIAL - DEPTH 0` / `2 START - DEPTH 1` / `BROTHER MORROW WILL TEACH YOU`. `1` or ENTER = D0 (§1); `2` = the START above, straight to D1 (`TUT_AVAIL` cleared); BREAK = back to the menu. Keys are read only after all keys have been released once. Quit from D0 returns to the menu with the tutorial still offered. Once D1's pool is built, START goes straight to D1 as before.- **Title (user 2026-10-04):** the menu/title screen reads **"TOME OF THE DEAD"** (the concept
+- **TUT0 (2026-11-09):** while the tutorial is still offered (once per tape load, §1), `1 START` opens the **choice screen** (menu font, digits only): `1 TUTORIAL - DEPTH 0` / `2 START - DEPTH 1` / `BROTHER MORROW WILL TEACH YOU`. `1` or ENTER = D0 (§1); `2` = the START above, straight to D1 (the offer is removed); BREAK = back to the menu. Keys are read only after all keys have been released once. Quit from D0 returns to the menu with the tutorial still offered. Once D1 has been entered (by `2` or by the grate step), START goes straight to D1 as before.
+- **Title (user 2026-10-04):** the menu/title screen reads **"TOME OF THE DEAD"** (the concept
   screen's title), not TOME OF THE DEAD. Torches animated and hero previews on the select screen follow
   `concept_menu` / `screen_menu.png` (designer decision 2026-10-04). Death `KILLED BY …`
   killer tracking is 3D (designer decision).
@@ -701,7 +702,12 @@ input tick**. Accepted latency (user 2026-10-04): **≤ 3 ticks** outside heavy 
 heavy fights a log message may wait **up to ~6 ticks (≈ 0.25 s)**. Logic reads the real values,
 never the panel.
 
-**TUT0 (2026-11-09):** in D0 the depth digit (row 19, col 31) reads **`0`**, drawn by the blob (card and panel). `PD_DEPTH` stays 1 internally, and **the `0` would revert if anything set `PD_DEPTH`** (only `panel_init` does, so it holds for the whole D0 run). The build has **no key icon**: B7 has no pointer and L24 reads `YOU HAVE THE KEY. ON TO THE DOOR` (user option a, TUT0-F2).
+**TUT0 (2026-11-09):** in D0 the depth readout (row 18, col 30, the normal `Dn` cell) reads **`D0`**, drawn by the blob (card and panel). `PD_DEPTH` stays 1 internally, and **the readout would revert if anything set `PD_DEPTH`** (only `panel_init` does, so it holds for the whole D0 run). The build has **no key icon**: B7 has no pointer and L24 reads `YOU HAVE THE KEY. ON TO THE DOOR` (user option a, TUT0-F2).
+
+**TUT0 goal line and hold prompt (TUT0-F4 R4; `tutorial_d0.md` §3, §4.4):**
+- **Goal line:** while a D0 beat waits for the player, its instruction is pinned on row 20, cols 0–23, in Morrow's ink (bright cyan). The engine's log lines scroll past it, so game events do not bury it. It is hidden while the Goblin is awake, during the B12 / B13 fight (row 20 shows the target readout there), and in ICON MODE (the icon info owns row 20); it returns at the next turn end. Story groups (after a trigger) show no goal line; the hold prompt is the cue.
+- **Nudge:** after 6 off-task turns Morrow says `CHILD. FIRST, DO AS I SAID` with the beat's goal line (it FLASHes for that turn); once more at 18, then silent. Not counted or shown at B6, B8, B10–B12, while the Goblin is awake, or during a hold.
+- **Hold prompt:** during a hold the two log rows pulse BRIGHT and row 20, cols 24–31, shows a blinking **`▶ ANY KEY`**, the same in every control mode. The hold is dismissed by a key going down (§3.4); cols 24–31 then return to the info line.
 
 **Row 17 (designer decision 2026-10-03).** Only row 17 differs from the normal floor. In the
 room map its cells stay logical PLATFORM (solid; the down-exit `{c,2}` cells are the hole /
@@ -761,7 +767,7 @@ pieces (`YOU HIT THE ` / ` HITS YOU` / ` MISSES`) are approved; the longest comp
 `YOU KILL `) and the hit lines carry a number tail; the current lines are in §6.5 "Log lines
 carry the numbers".
 
-**TUT0 (2026-11-09):** mentor lines and D0 beat lines are **blob-resident log lines**: `log_push` streams (resident-dictionary tokens, decoded by `print6t`), ≤ 32 chars, at most two lines per group. `‹U› ‹D› ‹L› ‹R› ‹F›` expand to the chosen controls (KEYS = the 2-char REDEFINE name; KEMPSTON / SINCLAIR = `UP DOWN LEFT RIGHT FIRE`). A group **holds until a key is pressed** (all keys up, a key down, all up) before the next group runs. The FLASH pointer on panel cells is the tutorial's only FLASH use while a group is current (§3.3).
+**TUT0 (2026-11-09):** mentor lines and D0 beat lines are **blob-resident log lines**: `log_push` streams (resident-dictionary tokens, decoded by `print6t`), ≤ 32 chars, at most two lines per group. `‹U› ‹D› ‹L› ‹R› ‹F›` expand to the chosen controls: KEYS = the REDEFINE name, with the three non-letter names spelled out (`SP` → `SPACE`, `CS` → `CAPS`, `SS` → `SYM`; letters and digits stay one character); KEMPSTON / SINCLAIR = `UP DOWN LEFT RIGHT FIRE`. A line never begins with a control name; a chord is introduced as `X+Y AT ONCE`. **Only the flagged groups hold** (the first explanation of each control, the Tome lines, the grate lines; repeats, nags and short confirmations scroll on). A hold waits for all keys to be released, then **dismisses on the next key going down**; that key is swallowed (no turn starts from it), and a stick input dismisses it too. The FLASH pointer on panel cells is the tutorial's FLASH use while a group is current (§3.3), plus the goal line's FLASH on a nudge turn.
 
 **Placement (memory; revised 2026-10-03, designer decision, after A7).** Since the A7
 double buffer, all text (panel, page, menus, cards) is drawn **only into the bank-5 screen**
@@ -1277,7 +1283,7 @@ Same messages as before (`YOU LEARN …` / `… RISES TO RANK n` / tome).
 
 ---
 
-**TUT0 (2026-11-09):** the D0 class book (room A) is a **sandbox read**: it teaches as any read, but the reset (§1) restores the new-game init (`ARANK` / `BOOK_DRY`, kit, STATS2 counters, `KILLS`, `TURN_COUNTER`, `KEY`), so the D1 start-room book is still the hero's first read under the Starter rule. D0 kills, items, books and turns are **not counted** in the D1 run.
+**TUT0 (2026-11-09):** the D0 class book (room A) is a **sandbox read**: it teaches as any read, but the reset (§1) restores the new-game init (`ARANK` / `BOOK_DRY`, kit, STATS2 counters, `KILLS`, `TURN_COUNTER`, `KEY`), so the D1 start-room book is still the hero's first read under the Starter rule. D0 kills, items, books and turns are **not counted** in the D1 run. Morrow teaches the read from the bag (B3: `PRESS F ON BOOK, THEN READ`); a book discarded unread gets `NO BOOK? BELOW THEY ARE RARE` and the beat moves on.
 
 ## 6. Abilities, projectiles, damage types
 
@@ -2847,7 +2853,7 @@ mask bit); WEAK targets only the hero.
 
 ### 9.2 Behaviours (on top of prototype §6.4)
 
-**TUT0 (2026-11-09; as built):** the D0 Goblin starts **ASLEEP on the grate** (hold while HP is max and the beat is ≤ B11); the first damage wakes it, then the normal chase AI applies, and it may follow the hero out of C like any monster. **It cannot kill the hero:** at the end of any D0 turn with HP ≤ 8 (`MERCY_HP`) HP is set to max (`tutorial_d0.md` §5.3). **Kill to leave:** the grate opens only when the Goblin dies (after the B14 closing lines are held); Quit or `2 START` are the only other exits.
+**TUT0 (2026-11-09; as built):** the D0 Goblin starts **ASLEEP on the grate** (hold while HP is max and the beat is ≤ B11); the first damage wakes it, then the normal chase AI applies, and it may follow the hero out of C like any monster. **It cannot kill the hero:** at the end of any D0 turn with HP ≤ 8 (`MERCY_HP`) HP is set to max (`tutorial_d0.md` §3). **Kill to leave:** the grate opens only when the Goblin dies, and only after Morrow's B14 Tome line G3 has been shown. The other ways out of D0 are Quit (back to the menu, tutorial still offered), `2 START`, and a death that mercy does not prevent (normal death flow, offer still in place; `tutorial_d0.md` §5.3).
 
 Flyers and ladders: engineering rule 2026-10-04 (B14), designer-confirmed. Full text in
 prototype §6.4 "B14 fix rules": facing-side tie-break for yields on the shaft column;
@@ -4106,7 +4112,7 @@ therefore needs the **Bat set resident too** (D6 and D8; D3 already has it): +2.
 | **Rev 5 (designer decision 2026-10-03)** | — | **Bank 2:** `KXP` 32 B (kind_tab page spare 48 → 16 B), current-rank rows ≤ 30 B, XP award ~40 B, regen check −10 B → **~+0.1 KB**. **Bank 3 cold:** level-up + display ~180 B, curse shatter/bless/reveal ~140 B, wear ~70 B, book read-time ~90 B, rank table 126 B, `XP_NEXT` 16 B, strings ~330 B raw (XP 70, curse 90, wear 110, ranks 60) → **~0.95 KB raw** (worst case uncompressed) against bank 3's free space after rev 4 (~6 KB). **Bank 5:** cursed value roll ~40 B (margin 0.45 → ~0.41 KB). **State block:** `XP` 2 + `LVL` 1 + `ARANK` 2 − `PL` 1 = **+4 B**. Item record: 0 B (`ISTATE` spare bits). Turn cost: ~150 T per kill, ~30 T per projectile hit on the hero, ≤ 0.3k T per wear event; 0 render | fits |
 | Render tick | ~114k T | §9.3 weights incl. projectiles; gold glow ≤ 1.5k/tick | by construction; E2 measures |
 
-**TUT0 blob (2026-11-09; as built, `memory-map.md` TUT0-T1 / T6 / T7 ledgers):** one boot-loaded overlay in **bank 4 `$E800..$FFFF`** (`BLOB_RES` 6,144 B): 5,975 B raw / 4,156 B packed, **167 B free**. It sits in the boot-time pool: the D0 pool top stays below `BLOB_ORG` (Warrior `$D140`, Mage `$C5C0`), and the D1+ pool overwrites it. **Resident 0 B** (`tutorial_d0.md` §12 estimated +16–20 B; the two SMC operands and the boot-installed stubs cost none). The packed blob rides in the bank-0 text tape block (no new record). Worst D0 play tick 88.9k (Warrior) / 90.5k (Mage) work vs the 126k CAP (T7 scratch run).
+**TUT0 blob (2026-11-09; as built, `memory-map.md` TUT0-T1 / T6 / T7 ledgers):** one boot-loaded overlay in **bank 4 `$E000..$FFFF`** (`BLOB_RES` 8,192 B; was `$E800` / 6,144 B before TUT0-F2): **7,732 B raw / 5,499 B packed (release), 458 B free** after TUT0-F4 R4 (`memory-map.md` TUT0-F4 R4 ledger; the goal line, name table and prompt are in it). It sits in the boot-time pool: the D0 pool top stays below `BLOB_ORG` (Warrior `$D140`, Mage `$C5C0`, per the memory-map ledgers), and the D1+ pool overwrites it. **Resident 0 B** (`tutorial_d0.md` §12 estimated +16–20 B; the two SMC operands and the boot-installed stubs cost none). The packed blob rides in the bank-0 text tape block (no new record). Worst D0 play tick 109.2k (Warrior) / 111.0k (Mage) work vs the 126k CAP (`tests/budget.py` `tut0`, after R4; was 88.9k / 90.5k at T7).
 
 **Risk.** Sources are the tightest store, and the ZX0 ratio is an estimate. At 1.5× instead
 of 1.7×, sources grow by ~2.3K. The levers, cheapest first:

@@ -2630,7 +2630,7 @@ reaction is pending — `anim_entity` turns it into an `ATTR_MISS` $46 flash for
 **`PF_RAM` `$5E00..$5EFF`** (bank 5, runtime only, not on tape: the dead
 BASIC area after boot; `PF_RAM_LEN` $100; **TUT0-T1: also used ONCE at boot by `in_tut`
 (`src/instr_ovl.asm`) as the 256-B bounce buffer copying the blob stream bank 0 → bank 4, before
-any game state exists — nothing may rely on PF_RAM contents before `in_tut` has run; **TUT0-T6: also the blob's menu-font text helper `tsp` + its vars + the raw-stream copy (`tsp_install`, `$5E00..` ≤ 192 B) while the choice screen / D0 card is up (no turn runs: the `pf_*` state is dead then)**; **TUT0-T7: `TUT_RAM` `$5E90..$5EDE` (79 B since TUT0-R2: + `TV_ISLOT` `$5EDB`, `TV_IREST`, `TV_ISAID` 2 B; 75 B since TUT0-F2: + `TV_HQ` `$5ED3`, `TV_TRI`, `TV_HA` 6 B; PF_RAM's free middle, above the kit build's `KIT_LIST` `$5E7A..$5E88`; ASSERTed `< PF_ROWF`) = the D0 turn engine's state (`TV_*`, `src/tut/tut_turn.asm`; test-observable `TV_BEAT` / `TV_STAGE` / `TV_SPOT` / `TV_HOLD`), written only while D0 runs (`tt_init` after the card: the `tsp` copy above is dead by then)**): the `pf_*` scratch / results +
+any game state exists — nothing may rely on PF_RAM contents before `in_tut` has run; **TUT0-T6: also the blob's menu-font text helper `tsp` + its vars + the raw-stream copy (`tsp_install`, `$5E00..` ≤ 192 B) while the choice screen / D0 card is up (no turn runs: the `pf_*` state is dead then)**; **TUT0-T7: `TUT_RAM` `$5E90..$5ED8` (73 B since TUT0-F4 R4: `TV_TRI` / `TV_HA` (7 B) gone, `TV_GID` `$5ED4` added, `TV_ISLOT` `$5ED5`, `TV_IREST` `$5ED6`, `TV_ISAID` `$5ED7..$5ED8`; was 79 B since TUT0-R2: + `TV_ISLOT` `$5EDB`, `TV_IREST`, `TV_ISAID` 2 B; 75 B since TUT0-F2: + `TV_HQ` `$5ED3`, `TV_TRI`, `TV_HA` 6 B; PF_RAM's free middle, above the kit build's `KIT_LIST` `$5E7A..$5E88`; ASSERTed `< PF_ROWF`) = the D0 turn engine's state (`TV_*`, `src/tut/tut_turn.asm`; test-observable `TV_BEAT` / `TV_STAGE` / `TV_SPOT` / `TV_HOLD`), written only while D0 runs (`tt_init` after the card: the `tsp` copy above is dead by then)**): the `pf_*` scratch / results +
 descriptor + candidate list `$5E00..$5E63` (**D3-8e2**: + `pf_ftick` right after `pf_lost` (one word store: `pf_strike`'s first-target record = HP lost + the impact tick), the block after it moved up 1; **D3-8e**: + `pf_dmc` (word: die, rng mask), `pf_tb` (`pf_tick`'s base), `pf_slim` / `pf_acc` (the accept's strike budget / mode), `pf_part` (0 / `PFP_MID` parked / `PFP_DONE` stopped), − `pf_cok` (the caster starts DONE instead); T7: + `pf_miss`, was `..$5E5C`; T7 `..$5E5D`), `PF_ROWF` `$5EE0..$5EFF` (the
 flight row's flags: bit 0 TF_SOLID, bit 2 edge, bits 3-7 the count of
 candidates not yet DONE on the col (`PFR_BODY1` 8: `pf_cands` +1, `pf_bdone` −1
@@ -6316,6 +6316,23 @@ was clean once the pose was stable (ZRCP replay); BW15's V2 "glyph at (20,11)" w
 the hold prompt (cols 26..31) never sits on a pointer cell; V3 (I6) fails the run now. (3) `tt_hold` ends like
 `pause_run7` / `page_lat3`: `INTENT`, `DN_T`, `DN_COMMIT` := 0, `FIRE_ST` := `FS_USED` (+14 B; hold frames, not tick work).
 Resident: 0 B.
+
+## TUT0-F4 R4 key clarity (`feat/tut0`, 2026-11-10; docs/design/tut0_split.md "Playtest round 2 — key clarity")
+
+**Blob:** 7,484 -> **7,732 B raw** (+248; packed 5,302 -> 5,499 release / 5,501 kit), in-place delta 2, **458 B free in
+`BLOB_RES`** (release; the text tape block 10,268 B ends `$E81C`). Text +22 B (16 rewordings); code / tables +226:
+`tt_goal` + `r20_attr` + `tt_gvis` + `tt_gid` 196 B, `tut_goal` 16 B, `tt_kw` 15 B + the `tt_tok` word path, `hp_text` 8 B;
+`tt_hold` lost the `tt_tok` width maths and the `TV_HA` save. Resident: 0 B. **`TUT_RAM` -6 B** (`TUT_RAM_END` `$5EDF` ->
+`$5ED9`): `TV_TRI` / `TV_HA` dropped (prompt fixed at `HP_COL` 24; cols 24..31 restored to the constant `ATTR_INFO_NOTE`,
+ASSERT `INFO_NOTE_COL <= HP_COL`), `TV_GID` `$5ED4` (the goal id drawn, $FF none; test-observable), `TV_ISLOT` / `TV_IREST` /
+`TV_ISAID` move down 6. `TV_FL` bit 4 `TFB_RESHOW` -> `TFB_GFLASH` (the nudge's goal FLASH).
+**Goal line:** row 20 cols 0..`TUT_R20_W`-1 (24), attr `$45`; redrawn only when `TV_GID` changes or **row 20's `HUD4_EXT`
+entry (`$BFD2`) is non-zero**: `item_info` is its only writer (`ROOM_COLS`) and nothing reads it (the log rows use
+`HUD4_EXT + 2 / + 3`), so `tt_goal` parks 0 there as an "engine redrew row 20" marker — a new reader / writer of `HUD4_EXT`
+row 0 must keep that contract. While shown a queued `PD_INFO` is dropped; hidden: pi_rects attrs back + `PD_INFO`.
+**Hold prompt:** `HP_COL` 26 -> 24, fixed "ANY KEY" at x 200; `TUT_R20_W` 26 -> 24 (rect 6). Nudge `NUDGE_T` 6 / `NUDGE_T2` 18.
+**Cost:** a goal redraw ~18-23k T (print6t), only on an id change / engine redraw; `tests/budget.py` tut0 worst work 109.2k (Warrior) /
+111.0k (Mage) < CAP 126k (was 106.4k / 108.5k).
 
 ## DEATH-FX ledger (`fix/tome-death-anim`; the Tome aura's death plays the death sequence, game.md §1.3)
 

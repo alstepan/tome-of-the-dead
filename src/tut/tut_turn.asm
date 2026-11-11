@@ -15,13 +15,15 @@
 ;   (tt_hold): whole frames — menu_frame (busy-waits SYS_FRAMES: the ISR / music
 ;   keep running; its select_tick is the harness probe, hit once per frame),
 ;   resync_tick, panel_tick (draws the queued lines), present. Once the lines
-;   are drawn the log rows pulse BRIGHT and a blinking prompt (the triangle +
-;   FIRE / the FIRE key's 2-char name) sits at the end of row 20 (the info
-;   line: the log rows 22-23 have no free cell, a line fills cols 0-23 and
+;   are drawn the log rows pulse BRIGHT and a prompt (a blinking triangle +
+;   "ANY KEY", TUT0-F4) sits in row 20 cols 24-31 (the info line, right of the
+;   log width: the log rows 22-23 have no free cell, a line fills cols 0-23 and
 ;   cols 24-31 are the worn gear); every key up, then the first key DOWN
 ;   dismisses it at once (rows / row 20 restored), then every key up again
 ;   before play resumes (the key is swallowed: no turn starts from it).
 ;   TV_HOLD = 1 meanwhile. Ends with resync_tick (not an overrun).
+; - TUT0-F4 R4-3: the goal line (tt_goal) — the current beat's instruction
+;   pinned on row 20 cols 0-23 while the beat waits for the player.
 ; - The talk pose is drawn AT ONCE: a shown group sets TALK1 / TALK2 now
 ;   (glyph copy + queued restore); a hold renders it before its first frame,
 ;   an unheld group's next tick render draws it.
@@ -53,11 +55,11 @@ TV_GOB          EQU TUT_RAM + 18        ; the Goblin's slot in CUR_ROOM ($FF non
 TV_CUR          EQU TUT_RAM + 19        ; 7 B: hero x, y, CUR_ROOM, HP, MP, FOOD, Goblin HP ($FF none)
 TV_PRV          EQU TUT_RAM + 26        ; 7 B: the same at the previous turn
 TV_SNAP         EQU 7
-TV_BUF          EQU TUT_RAM + 33        ; 34 B: the expanded line (LOG_MAX + 0 + 1); tt_hold: the prompt name
+TV_BUF          EQU TUT_RAM + 33        ; 34 B: the expanded line (LOG_MAX + 0 + 1): tt_line / tt_goal
 TV_HQ           EQU TUT_RAM + 67        ; 1 = this turn's shown group holds (tt_group_h)  (test-observable)
-TV_TRI          EQU TUT_RAM + 68        ; tt_hold: the triangle's col (right-aligned prompt)
-TV_HA           EQU TUT_RAM + 69        ; tt_hold: 6 B, row 20's attrs under the prompt (restored)
-TV_ISLOT        EQU TV_HA + HP_W        ; TUT0-R2 icon tour: the cursor slot of this session ($FF none)
+TV_GID          EQU TUT_RAM + 68        ; TUT0-F4 R4-3: the goal line drawn on row 20 (tut_goal id; $FF none)  (test-observable)
+                                        ; (TV_TRI / TV_HA gone: the prompt is fixed at HP_COL, cols 24-31 are ATTR_INFO_NOTE)
+TV_ISLOT        EQU TUT_RAM + 69        ; TUT0-R2 icon tour: the cursor slot of this session ($FF none)
 TV_IREST        EQU TV_ISLOT + 1        ;   hook calls resting on it (saturates at REST_T)
 TV_ISAID        EQU TV_ISLOT + 2        ;   2 B: bit 0 entry pair said, bit s+1 slot s's line said,
                                         ;   bits 11 / 12 the B3 / B9 bag target held once (test-observable)
@@ -68,7 +70,7 @@ TFB_MERCY       EQU 0                   ; mercy healed this turn (A = 1): its gr
 TFB_MSEEN       EQU 1                   ; the first mercy said L51
 TFB_ALT         EQU 2                   ; B9 entered unpoisoned: L32, advance when the Cure is held
 TFB_GRATE       EQU 3                   ; open the grate after this turn's hold (B14 G3 shown)
-TFB_RESHOW      EQU 4                   ; R2 nudge: L75 said, the instruction group next turn
+TFB_GFLASH      EQU 4                   ; R4-4: the nudge's turn: the goal line FLASHes (cleared by tt_goal)
 TFB_L76         EQU 5                   ; R2: L76 (a lesson left undone in A) said, once per D0
 
 ST_PRE          EQU 0                   ; FH_IMPATIENT: L53 first
@@ -103,12 +105,13 @@ TBF_H2_BIT      EQU 6
                 ASSERT TUT_BF_G2PRE == 1 << TBF_G2PRE_BIT && TUT_BF_GRATE == 1 << TBF_GRATE_BIT
 
 MERCY_HP        EQU 8                   ; spec §3; Mage max HP 16 (game.md §4) >= 12: maxHP - 4 not needed
-NUDGE_T         EQU 12                  ; R2 s13.5: L75 at 12 off-task turns, again at 36, then silent
-NUDGE_T2        EQU 36
+NUDGE_T         EQU 6                   ; R4-4 (was R2 12 / 36): L75 + the goal at 6 off-task turns, again at 18, then silent
+NUDGE_T2        EQU 18
 REST_T          EQU 12                  ; R2 s13.3: icon-hook calls resting on one slot -> its line
 REPEAT_COLS     EQU 6                   ; "within 4 cols" of his box: |x - col| <= 6
 TRAP_PASS_X     EQU 17                  ; B8: unpoisoned at x >= 17 = the dart was passed
 TUT_B6          EQU 6                   ; the shaft walk (A: x 17 -> 5, ~12 turns)
+TUT_B9          EQU 9                   ; the cure: its goal line only while POISONED (R4-3)
 TUT_B10         EQU 10                  ; the door walk (B: ~20 turns) .. B12 (the fight): contiguous, see tt_repeat
 TUT_B11         EQU 11
 TUT_B12         EQU 12
@@ -242,16 +245,162 @@ tt_after:
                 ldir
                 ld   a, (TV_SHOWN)
                 or   a
-                ret  z
+                jr   z, tt_goal
                 ld   a, (TV_HQ)
                 or   a
                 call nz, tt_holdm
                 ld   hl, TV_FL
                 bit  TFB_GRATE, (hl)
-                ret  z
+                jr   z, tt_goal
                 res  TFB_GRATE, (hl)
                 ld   hl, grate_open.op         ; bank 7: flag, T_GRATE + glow (in C), the line
-                jp   far7
+                call far7                      ; (before tt_goal: B14's goal shows from this turn)
+                ; fall through
+;------------------------------------------------------------------------------
+; tt_goal — TUT0-F4 R4-3 the GOAL LINE: while the current beat waits for the
+; player (tt_gvis), its instruction (tut_goal) is pinned on row 20 (the info
+; line) cols 0..TUT_R20_W-1 in Morrow's ink (TUT_GOAL_ATTR; + FLASH on a nudge's
+; turn, TFB_GFLASH, R4-4); the log scrolls freely under it. Called at every D0
+; turn end (tt_after's tail), in tt_hold before its drain (shown during the
+; prompt) and by tt_init. ICON MODE: nothing (the engine's ">" info owns row 20;
+; the goal is back at the next turn end).
+; Redraw only when needed (a turn-end tick must stay under CAP): the id changed
+; (TV_GID) or the engine redrew row 20 since — item_info is the only writer of
+; row 20's HUD4_EXT entry (ROOM_COLS; nothing reads it: the log rows' are
+; HUD4_EXT + 2 / + 3), so tt_goal parks 0 there and a non-zero value means "the
+; row was overwritten". While shown, a queued PD_INFO is dropped (it would bury
+; the goal; spec's tt_frame drain replaced: no frames inside a turn tick).
+; Hidden: once — the info fields' attrs back (pi_rects pattern; PD_INFO does not
+; rewrite attrs) and PD_INFO set. D1 needs no off: panel_init7 re-stamps them.
+; Clobbers: all but IX.
+; T: ~1.5k shown (attrs + mark), + ~18k a redraw (expand ~2k, print6t ~16k,
+; the tail clear); ~0.3k hidden; ~2k the off step.
+;------------------------------------------------------------------------------
+TUT_GOAL_ATTR   EQU $45                 ; Morrow's ink: bright cyan on black (= ATTR_INFO_NOTE)
+R20_ATTR        EQU SCREEN_ATTR + INFO_ROW * 32
+                ASSERT TUT_GOAL_ATTR == ATTR_INFO_NOTE && INFO_NUM_COL < INFO_NOTE_COL && INFO_NOTE_COL <= TUT_R20_W
+                ASSERT (R20_ATTR & $FF) + 32 <= $100 && TUT_R20_W == LOG_COLS
+tt_goal:
+                ld   a, (ICON_MODE)
+                or   a
+                ret  nz
+                call tt_gvis                   ; A = the goal id, $FF hidden
+                ld   hl, TV_GID
+                cp   TUT_NONE
+                jr   z, .off
+                ld   c, a
+                ld   de, PANEL_DIRTY
+                ld   a, (de)
+                and  ~PD_INFO & $FF            ; a queued info redraw would bury it
+                ld   (de), a
+                ld   a, (HUD4_EXT)             ; row 20 overwritten (item_info) since the draw?
+                or   a
+                jr   nz, .draw
+                ld   a, c
+                cp   (hl)
+                jr   z, .attr                  ; drawn already: attrs only (FLASH on / off)
+.draw:          ld   (hl), c
+                xor  a
+                ld   (HUD4_EXT), a
+                ld   a, c
+                call tt_exp                    ; TV_BUF = the line, keys spelled (tokens kept)
+                ld   hl, TV_BUF
+                ld   b, INFO_ROW
+                ld   e, 0
+                call print6t                   ; E = 6n (<= 192: a line is <= 32 chars)
+                ld   a, e
+                add  a, 7
+                rrca
+                rrca
+                rrca
+                and  $1F
+                ld   c, a                      ; the first cell past the text
+                call r20_clr                   ; .. col 31 blank (the info line's tail too)
+.attr:          ld   hl, TV_FL
+                ld   a, (hl)
+                res  TFB_GFLASH, (hl)
+                and  1 << TFB_GFLASH
+                ld   b, TUT_R20_W
+                jr   z, .pl
+                ld   hl, R20_ATTR              ; R4-4: the nudge's turn (hardware FLASH, 0 CPU); a BLANK
+.f:             ld   a, TUT_GOAL_ATTR          ; cell (the tail, spaces) never flashes (TUT0-F3: a solid bar)
+                call tt_cellpx
+                jr   z, .fw
+                or   $80
+.fw:            ld   (hl), a
+                inc   l
+                djnz .f
+                jr   .mk
+.pl:            ld   a, TUT_GOAL_ATTR
+                call r20_attr
+                jr   .mk
+.off:           ld   hl, TV_FL
+                res  TFB_GFLASH, (hl)
+                ld   hl, TV_GID
+                cp   (hl)
+                ret  z                         ; not shown
+                ld   (hl), a                   ; $FF
+                ld   hl, PANEL_DIRTY
+                set  PD_INFO_BIT, (hl)         ; the info line's text back
+                ld   a, ATTR_INFO_NOTE
+                ld   b, TUT_R20_W
+                call r20_attr
+                ld   a, ATTR_INFO_NUM
+                ld   b, INFO_NOTE_COL
+                call r20_attr
+                ld   a, ATTR_INFO_NAME
+                ld   b, INFO_NUM_COL
+                call r20_attr
+.mk:            ld   bc, INFO_ROW << 8
+                ld   de, (TUT_R20_W << 8) | 1
+                jp   pmark_rect
+; r20_attr — row 20 attrs cols 0..B-1 := A (r20_fill: from HL). Clobbers: B, HL.
+r20_attr:       ld   hl, R20_ATTR
+r20_fill:       ld   (hl), a
+                inc  l
+                djnz r20_fill
+                ret
+
+; tt_gvis — A = the current beat's goal id (tut_goal), or $FF: hidden. Shown
+; iff its G0 was processed and its trigger has not fired (ST_G2P / ST_WAIT;
+; a silent G0 counts), the Goblin is not awake, B9 only while POISONED; B14 /
+; B15 iff the grate is open (to the exit). B12 / B13: $FF in the table.
+; Clobbers: A, B, DE, HL.
+tt_gvis:
+                call tt_gid
+                ld   b, a
+                ld   a, e
+                cp   TUT_B14
+                jr   nc, .gr
+                ld   a, (TV_STAGE)
+                sub  ST_G2P
+                cp   ST_WAIT - ST_G2P + 1
+                jr   nc, .no                   ; G0 not yet / triggered (story groups run bare)
+                ld   a, e
+                cp   TUT_B9
+                jr   nz, .aw
+                call tt_poisoned
+                jr   z, .no
+.aw:            call tt_awake
+                jr   nz, .no
+                ld   a, b
+                ret
+.gr:            ld   a, (LVL_FLAGS)
+                and  LF_GRATE_OPEN
+                ld   a, b
+                ret  nz
+.no:            ld   a, TUT_NONE
+                ret
+                ASSERT ST_WAIT == ST_G2P + 1 && TUT_B15 == TUT_B14 + 1
+; tt_gid — A = tut_goal[TV_BEAT], E = TV_BEAT. Clobbers: D, HL.
+tt_gid:
+                ld   a, (TV_BEAT)
+                ld   e, a
+                ld   d, 0
+                ld   hl, tut_goal
+                add  hl, de
+                ld   a, (hl)
+                ret
 
 ;------------------------------------------------------------------------------
 ; tt_init — tut_d0, after level_show: the state, B0's G0 (pushed, NOT held:
@@ -268,6 +417,7 @@ tt_init:
                 ld   (TV_PTR), a
                 ld   (TV_IMG), a
                 ld   (TV_ISLOT), a
+                ld   (TV_GID), a
                 ld   a, (CUR_ROOM)
                 ld   (TV_ROOM), a
                 ld   a, ST_G0
@@ -282,7 +432,7 @@ tt_init:
                 call tt_mentor
                 xor  a
                 ld   (TV_SHOWN), a
-                ret
+                jp   tt_goal                   ; R4-3: B0's goal (L02) from the arrival
 
 ;------------------------------------------------------------------------------
 ; tt_snap — TV_GOB + TV_CUR. Clobbers: A, BC, DE, HL.
@@ -435,14 +585,13 @@ tt_glob:
                 ld   (hl), TUT_GOB_SLEEP << 4
                 ret
 
-; tt_nbeat — a new current beat: nudge count reset, the B9 alternative and a
-; pending nudge re-show off, pointer off.
+; tt_nbeat — a new current beat: nudge count reset, the B9 alternative off,
+; pointer off.
 tt_nbeat:
                 xor  a
                 ld   (TV_NAG), a
                 ld   hl, TV_FL
                 res  TFB_ALT, (hl)
-                res  TFB_RESHOW, (hl)
                 ; fall through
 ; tt_ptr_clr — the flashing pointer off. Clobbers: A, BC, DE, HL.
 tt_ptr_clr:
@@ -1052,8 +1201,10 @@ tt_gstat:
 ; tt_repeat — no group yet, WAIT stage, the beat has an instruction group
 ; (tt_igrp: G0, or G2 for a G2PRE beat): R2 s13.5 the NUDGE (replaces the
 ; 60-turn nag) — TV_NAG counts the off-task turns (no group, no trigger) since
-; this beat's last group; at NUDGE_T and NUDGE_T2 L75 (scroll), the next turn
-; the instruction group again (no hold, pointer re-armed); silent after that.
+; this beat's last group; R4-4: at NUDGE_T and NUDGE_T2 ONE group L75 + the
+; goal line (tut_goal; L32 in B9's unpoisoned alternative), no hold, the
+; instruction's pointer re-armed, and the goal line FLASHes this turn
+; (TFB_GFLASH, tt_goal); silent after that.
 ; Not counted in B6 / B10 / B11 (walks toward the target) / B12 (passive) nor while the Goblin is awake (combat); B8 / B15
 ; have no instruction group. The Repeat (a Wait near the mentor: nothing in
 ; TV_CUR changed, |x - his col| <= REPEAT_COLS) re-shows it too and restarts
@@ -1081,17 +1232,13 @@ tt_repeat:
                 ld   hl, TV_NAG
                 ld   a, (hl)
                 cp   NUDGE_T2 + 1
-                jr   nc, .rs                   ; saturated: no more nudges
+                jr   nc, .w                    ; saturated: no more nudges
                 inc  (hl)
                 ld   a, (hl)
                 cp   NUDGE_T
                 jr   z, .l75
                 cp   NUDGE_T2
-                jr   z, .l75
-.rs:            ld   hl, TV_FL
-                bit  TFB_RESHOW, (hl)
-                res  TFB_RESHOW, (hl)
-                jr   nz, .show                 ; (the count is NOT restarted: 12 / 36)
+                jr   z, .l75                   ; (the count is NOT restarted: 6 / 18)
 .w:             ld   hl, TV_CUR
                 ld   de, TV_PRV
                 ld   b, TV_SNAP
@@ -1115,9 +1262,15 @@ tt_repeat:
                 ld   c, e
                 jr   tt_group
 .l75:           ld   hl, TV_FL
-                set  TFB_RESHOW, (hl)
-                ld   de, (TL_L75 << 8) | TUT_NONE
-                ld   c, e
+                set  TFB_GFLASH, (hl)
+                call tt_igrp                   ; C = the instruction's rect (re-armed)
+                call tt_gid
+                ld   e, a                      ; the goal line
+                ld   a, (TV_FL)
+                bit  TFB_ALT, a
+                jr   z, .g
+                ld   e, TL_L32
+.g:             ld   d, TL_L75
                 jr   tt_group
 
 ; tt_igrp — IX = record: D, E, C = its instruction group + rect (G2 / +13 for a
@@ -1181,14 +1334,22 @@ tt_group_h:
 
 ;------------------------------------------------------------------------------
 ; tt_line — A = TL_ id (bit 7: tut_cpairs class pair, W / M by HERO_KIND):
-; the stream (resident-dictionary tokens, decoded at draw time by print6t) is
-; copied into TV_BUF with the control bytes 1..5 (U D L R F) expanded — KEYS:
-; the 2-char REDEFINE name (bank-1 key_name, far1; read by copy_virt_keep, a
-; trailing space dropped), Kempston / Sinclair: UP DOWN LEFT RIGHT FIRE — then
-; log_push. A full ring first drains (tt_frame) so no line is dropped.
-; Clobbers: all (IX too, when it drains).
+; tt_exp, then log_push. A full ring first drains (tt_frame) so no line is
+; dropped. Clobbers: all (IX too, when it drains).
+; tt_exp — the same id: the stream (resident-dictionary tokens, decoded at draw
+; time by print6t) copied into TV_BUF with the control bytes 1..5 (U D L R F)
+; expanded (tt_tok). Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 tt_line:
+                call tt_exp
+.dr:            ld   a, (LOG_QN)
+                cp   LOG_SLOTS
+                jr   c, .ok
+                call tt_frame                  ; ring full: let the panel draw one
+                jr   .dr
+.ok:            ld   hl, TV_BUF
+                jp   log_push
+tt_exp:
                 cp   TUT_CP
                 jr   c, .p
                 and  $7F
@@ -1224,19 +1385,16 @@ tt_line:
                 pop  hl
                 jr   .c
 .end:           ld   (de), a
-.dr:            ld   a, (LOG_QN)
-                cp   LOG_SLOTS
-                jr   c, .ok
-                call tt_frame                  ; ring full: let the panel draw one
-                jr   .dr
-.ok:            ld   hl, TV_BUF
-                jp   log_push
+                ret
                 ASSERT JOY_R_BIT == 0 && JOY_L_BIT == 1 && JOY_D_BIT == 2 && JOY_U_BIT == 3 && JOY_F_BIT == 4
 tt_stick:       DB   "UP", 0, "DOWN", 0, "LEFT", 0, "RIGHT", 0, "FIRE", 0
+tt_kw:          DB   "SPACE", 0, "CAPS", 0, "SYM", 0   ; R4-2 (offsets 0 / 6 / 11: tt_tok)
 
 ; tt_tok — A = control byte 1..5 (U D L R F): its name -> (DE..), DE past it.
-; KEYS: the 2-char REDEFINE name (trailing space dropped); sticks: tt_stick.
-; Clobbers: A, BC, HL.
+; KEYS: the REDEFINE name (bank-1 key_name, far1; read by copy_virt_keep): a
+; 1-char name as is (its trailing space dropped); TUT0-F4 R4-2 the 2-char ones
+; spelled out (tt_kw): SP -> SPACE, CS -> CAPS, SS -> SYM (EN never names a
+; control key: tutorial_d0.md s4.4). Sticks: tt_stick. Clobbers: A, BC, HL.
 tt_tok:
                 ld   c, a
                 ld   a, (JOY_MODE)
@@ -1256,11 +1414,19 @@ tt_tok:
                 ld   bc, 2
                 call copy_virt_keep            ; DE past
                 dec  de
-                ld   a, (de)
+                ld   a, (de)                   ; the 2nd char
                 cp   ' '
-                ret  z
-                inc  de
-                ret
+                ret  z                         ; 1 char: DE on its space (dropped)
+                dec  de                        ; a word over both chars
+                ld   hl, tt_kw                 ; "SP": SPACE
+                cp   'P'
+                jr   z, .sc
+                ld   a, (de)
+                ld   hl, tt_kw + 6             ; "CS": CAPS
+                cp   'C'
+                jr   z, .sc
+                ld   hl, tt_kw + 11            ; "SS": SYM
+                jr   .sc
 .stk:           ld   hl, tt_stick
                 dec  c
                 jr   z, .sc
@@ -1281,33 +1447,39 @@ tt_tok:
 ;------------------------------------------------------------------------------
 ; tt_hold — the shown group holds until a keypress (user 2026-11-09; TUT0-F2 A + B):
 ; render now (A1: the talk pose tt_mentor just stamped, before the first
-; presented frame), whole frames (tt_frame) until the lines and the info line
-; are drawn; then the cue (A2: the log rows pulse BRIGHT, A3: the blinking
-; prompt right-aligned in row 20 cols HP_COL..31, bright white, the info line's
-; end — no log-row cell is free) every frame until every key is up and then one goes DOWN (B1): the
-; cue comes off at once (rows: the BRIGHT bit put back; row 20: its attrs put
-; back, blanked, and PD_INFO redraws its text in the same frame), then frames until every key is up
+; presented frame), the goal line (tt_goal, TUT0-F4 R4-3: shown during the
+; prompt; a hidden one's info line is queued here, so the drain draws it), whole
+; frames (tt_frame) until the lines and the info line are drawn; then the cue
+; (A2: the log rows pulse BRIGHT, A3: TUT0-F4 R4-1 the fixed prompt "> ANY KEY"
+; in row 20 cols HP_COL..31 — the triangle blinking at HP_COL, the text from the
+; next cell — bright white, right of the log width; no log-row cell is free)
+; every frame until every key is up and then one goes DOWN (B1): the cue comes
+; off at once (rows: the BRIGHT bit put back; row 20 cols HP_COL..31: their
+; constant ATTR_INFO_NOTE back, blanked; PD_INFO redraws the info text unless
+; the goal line owns the row, tt_goal), then frames until every key is up
 ; (swallowed: STICK / STICK_OLD and the shortcut matrix see no press when play
 ; resumes; INTENT / DN_T / DN_COMMIT cleared, FIRE_ST := FS_USED, TUT0-F3). The
-; ROW20 pointer rect stops at col HP_COL - 1: the prompt never sits on a pointer
-; cell (TUT0-F3 B12). Clobbers: all.
+; ROW20 pointer rect and the goal line stop at col HP_COL - 1: the prompt never
+; sits on a pointer cell (TUT0-F3 B12). Clobbers: all.
 ;------------------------------------------------------------------------------
-HP_COL          EQU 26                  ; the prompt area: a gap, the triangle, the name (<= 4 chars)
+HP_COL          EQU 24                  ; the prompt area: the triangle, then "ANY KEY" (7 x 6 px from x 200)
 HP_W            EQU 32 - HP_COL
-HP_ATTR20       EQU SCREEN_ATTR + INFO_ROW * 32 + HP_COL
+HP_ATTR20       EQU R20_ATTR + HP_COL
 HP_INK          EQU ATTR_HUD            ; bright white on black
 HP_ROWS         EQU 2                   ; the log rows 22-23, cols 0..LOG_COLS-1 pulse
 HP_BLINK        EQU 3                   ; triangle: on / off every 8 frames (bit 3 of TV_HFC)
 HP_PULSE        EQU 4                   ; rows: BRIGHT / normal every 16 frames (bit 4)
 HP_ATTR         EQU SCREEN_ATTR + LOG_ROW * 32
-                ASSERT HP_COL + 1 + 1 + 3 <= 32 && LOG_ROW + HP_ROWS == 24
+                ASSERT (HP_COL + 1) * 8 + (hp_text_end - hp_text - 1) * 6 <= 256 && LOG_ROW + HP_ROWS == 24
                 ASSERT TUT_R20_W <= HP_COL      ; the prompt is on no ROW20 pointer cell (TUT0-F3)
+                ASSERT INFO_NOTE_COL <= HP_COL  ; cols HP_COL..31 = ATTR_INFO_NOTE (pi_rects): restored as a constant
 tt_hold:
                 ld   a, 1
                 ld   (TV_HOLD), a
 .go:            ld   hl, render                ; A1: the stamped pose's queued restore lands now
                 call farb4
                 call pmark_dmg
+                call tt_goal                   ; R4-3 (a PD_INFO it queues is drained below)
 .drn:           call tt_frame
                 ld   a, (LOG_QN)
                 or   a
@@ -1316,46 +1488,17 @@ tt_hold:
                 and  PD_LOG | PD_INFO
                 jr   nz, .drn
                 call tt_ptr_re                 ; TUT0-R2: the group's pointer (tt_group deferred it)
-                ; the prompt: its name ("FIRE" / the FIRE key's 2 chars) after the triangle
-                ld   de, TV_BUF
-                ld   a, TUT_CTL_N              ; F
-                call tt_tok
                 xor  a
-                ld   (de), a
                 ld   (TV_HFC), a
                 ld   (TV_HST), a
-                ld   a, e
-                sub  TV_BUF & $FF              ; n = 1..4 chars
-                ld   c, a
-                add  a, a
-                add  a, c
-                add  a, a                      ; 6n px
-                add  a, 7
-                rrca
-                rrca
-                rrca
-                and  $1F                       ; cells = ceil(6n / 8) = 1..3
-                cpl
-                add  a, 32                     ; 31 - cells
-                ld   (TV_TRI), a
-                ld   hl, HP_ATTR20             ; the attrs saved, then bright white
-                ld   de, TV_HA
-                ld   bc, HP_W
-                ldir
-                ld   hl, HP_ATTR20
+                ld   a, HP_INK
                 ld   b, HP_W
-.a:             ld   (hl), HP_INK
-                inc  l
-                djnz .a
+                ld   hl, HP_ATTR20
+                call r20_fill                  ; bright white
                 call hp_clr
-                ld   a, (TV_TRI)
-                inc  a
-                add  a, a
-                add  a, a
-                add  a, a
-                ld   e, a                      ; x = (col + 1) * 8
-                ld   hl, TV_BUF
+                ld   hl, hp_text
                 ld   b, INFO_ROW
+                ld   e, (HP_COL + 1) * 8
                 call print6
 .rel:           call tt_hframe
                 call tt_key
@@ -1366,13 +1509,14 @@ tt_hold:
                 ld   hl, TV_HST                ; B1: off at once
                 bit  0, (hl)
                 call nz, hp_rows
-                ld   hl, TV_HA
-                ld   de, HP_ATTR20
-                ld   bc, HP_W
-                ldir
+                ld   a, ATTR_INFO_NOTE
+                ld   b, HP_W
+                ld   hl, HP_ATTR20
+                call r20_fill
                 call hp_clr
                 ld   hl, PANEL_DIRTY
-                set  PD_INFO_BIT, (hl)         ; the info line back (tt_frame's panel_tick)
+                set  PD_INFO_BIT, (hl)         ; the info line back (tt_frame's panel_tick) ..
+                call tt_goal                   ; .. unless the goal line owns row 20 (drops it)
 .up:            call tt_frame
                 call tt_key
                 jr   nz, .up
@@ -1385,6 +1529,8 @@ tt_hold:
                 ld   a, FS_USED
                 ld   (FIRE_ST), a
                 jp   resync_tick
+hp_text:        DB   "ANY KEY", 0       ; R4-1: the same in every control mode (a stick input dismisses too)
+hp_text_end:
 
 ; tt_holdm — a turn's held group (tt_after): the hold starts (TV_HOLD), then the
 ; mentor's pose for the turn (tt_mentor: TALK, a blink) BEFORE the first frame
@@ -1460,11 +1606,8 @@ hp_tri:
                 and  2
                 jr   nz, .d
                 ld   de, hp_glyph + 8          ; 8 zero bytes: blank
-.d:             ld   a, (TV_TRI)
-                ld   c, a
-                add  a, INFO_BM & $FF
-                ld   l, a
-                ld   h, INFO_BM >> 8
+.d:             ld   c, HP_COL
+                ld   hl, INFO_BM + HP_COL
                 ld   b, 8
 .l:             ld   a, (de)
                 ld   (hl), a
@@ -1480,25 +1623,31 @@ hp_tri:
 hp_glyph:       DB   $00, $40, $60, $70, $78, $70, $60, $40   ; a solid right-pointing triangle
                 DS   8, 0
 
-; hp_clr — row 20 cols HP_COL..31 blanked (bitmap), marked. Clobbers: A, BC, DE, HL.
-hp_clr:
-                ld   hl, INFO_BM + HP_COL
-                ld   c, 8
-.l:             ld   b, HP_W
+; hp_clr — row 20 cols HP_COL..31 blanked (bitmap), marked. r20_clr — the
+; same from col C (0..31). Clobbers: A, BC, DE, HL.
+hp_clr:         ld   c, HP_COL
+r20_clr:        ld   a, 32
+                sub  c
+                ld   d, a                      ; width
+                ld   a, c
+                add  a, INFO_BM & $FF
+                ld   l, a
+                ld   h, INFO_BM >> 8
+                ld   e, 8
+.l:             push hl
+                ld   b, d
                 xor  a
 .c:             ld   (hl), a
                 inc  l
                 djnz .c
-                ld   a, l
-                sub  HP_W
-                ld   l, a
+                pop  hl
                 inc  h
-                dec  c
+                dec  e
                 jr   nz, .l
-                ld   bc, (INFO_ROW << 8) | HP_COL
-                ld   de, (HP_W << 8) | 1
+                ld   b, INFO_ROW
+                inc  e                         ; E = 1 row (C = col, D = w)
                 jp   pmark_rect
-                ASSERT ((INFO_BM + HP_COL) & $FF) + HP_W <= $100 && (HP_ATTR20 & $FF) + HP_W <= $100
+                ASSERT (INFO_BM & $FF) + 32 <= $100 && (HP_ATTR20 & $FF) + HP_W <= $100
 
 ; tt_frame — one frame: menu_frame (the select_tick probe, input_tick), the
 ; panel as in a 1st-frame tick, present. Clobbers: all.

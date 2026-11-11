@@ -90,7 +90,7 @@ TUT_PR_SCROLL   EQU 3
 TUT_PR_STATUS   EQU 4                   ; (TUT0-F2: the key-icon rect is gone, L24 reworded)
 TUT_PR_BARS     EQU 5
 TUT_PR_ROW20    EQU 6
-TUT_R20_W       EQU 26                  ; ROW20 = cols 0..25 (TUT0-F3; <= HP_COL, ASSERT tut_turn)
+TUT_R20_W       EQU 24                  ; ROW20 = cols 0..23 (TUT0-F4 R4-6, was 26; <= HP_COL, ASSERT tut_turn); = the goal line's width
 
 ; one record = 16 B (ASSERTed). Group = 2 line ids (second may be $FF).
         MACRO TBEAT room, trig, p2, p3, spot, pose, g0a, g0b, g1a, g1b, g2a, g2b, r0, r1, fh, fl
@@ -195,7 +195,7 @@ TUT_TI_B14      EQU 2
 TUT_TI_B3       EQU 6
 TUT_TI_B5       EQU 8
 tut_tail:
-        DEFB TL_L07, TUT_NONE           ; 0  B1 G3: WAIT BY ME TO HEAR IT AGAIN
+        DEFB TL_L07, TUT_NONE           ; 0  B1 G3: WAIT ({D}) BY ME TO HEAR AGAIN
         DEFB TUT_NONE, TUT_NONE         ; 1  end (B1)
         DEFB TL_L59, TL_L43             ; 2  B14 G3 (the grate opens after this one)
         DEFB TL_L44, TL_L45             ; 3  B14 G4
@@ -210,6 +210,17 @@ tut_tail_end:
 ; tt_step tests bit (i mod 8): R2's pairs 6 and 8 land on bits 6 / 0, both clear (they scroll).
 tut_tail_hold:
         DEFB %00011100
+
+; TUT0-F4 R4-3 goal lines (tt_goal / tt_gvis): one line id per beat ($FF none; bit 7 = a
+; tut_cpairs class pair), pinned on row 20 while the beat waits for the player; also the
+; second line of the R4-4 nudge (L75 + goal). No new text: existing lines (R4-5 rewordings).
+; B12 / B13 none (combat owns row 20: the target readout); B14 / B15 L47 while the grate is
+; open, to the exit (the B14 tail ends in B15 a few turns before the step). 16 B.
+tut_goal:
+        DEFB TL_L02, TL_L03, TL_L09, TL_L60, TL_L16, TL_L20, TL_L23, TL_L24     ; B0..B7
+        DEFB TL_L24, TL_L30b, TL_L33, TUT_CP_L35, TUT_NONE, TUT_NONE, TL_L47, TL_L47   ; B8..B15
+tut_goal_end:
+        ASSERT tut_goal_end - tut_goal == 16
 
 ; FH_VICTORY_EXTRAS lines: [0] after G3 if HP < max and a Heal is held,
 ; [1] after G4 if the scroll is unread. 2 B.
@@ -275,6 +286,6 @@ tut_rects:
         DEFB 18, 24, 3, 2               ; SCROLL (slot 9)
         DEFB 21, 30, 2, 1               ; hero status icons, row 21 cols 30-31
         DEFB 21,  0, 30, 1              ; HP / MP / FOOD bars + numbers + hunger word
-        DEFB 20,  0, TUT_R20_W, 1       ; row 20, the info line cols 0-25 (TUT0-F3: the hold
-                                        ; prompt owns 26-31, tutorial_d0.md s14.6; ASSERT tut_turn)
+        DEFB 20,  0, TUT_R20_W, 1       ; row 20, the info line cols 0-23 (TUT0-F4 R4-6: the hold
+                                        ; prompt owns 24-31; ASSERT tut_turn)
 tut_rects_end:

@@ -15,7 +15,8 @@ Invariants (checked every 25 ticks, in every scenario and the soak; "heavy" ones
   offer is unspent (es_go = ts_choice);   I5 (heavy) mentor box == the current pose (V1) when stamped and in view, no
   mentor glyph outside it (V2);   I6 no FLASH on blank pointer cells (V3, tut0.Run.ptr_check, every turn);   I7 the hero
   never dies in D0 (mercy), HP >= 1;   I8 TUT_RAM in range (TV_BEAT 0..15, TV_SPOT 0..7, TV_STAGE 0..5, TV_HOLD 0/1,
-  TV_PTR $FF or a rect id);   I9 OVERRUN_COUNT (ticks > 2 frames) reported, not gated (room builds / holds count).
+  TV_PTR $FF or a rect id);   I10 / I11 (TUT0-F4, tut0.Run.goal_check at every turn) the goal line == its model
+  (row 20 cols 0-23: text, attrs, visibility), no FLASH in cols 24-31 during a hold;   I9 OVERRUN_COUNT (ticks > 2 frames) reported, not gated (room builds / holds count).
 
 Usage: ZRCP_PORT=10801 python3 tests/tut0_adv.py [--only A3,A5] [--no-scen] [--no-soak] [--seeds N] [--inputs N]
        [--hero 0|1] [--seed0 K]
@@ -258,6 +259,10 @@ def finish_checks(c):
         viol(c, "I6 FLASH on blank pointer cell (V3)", str(r.ptr_bad[0]) + f" ({len(r.ptr_bad)} samples)")   # TUT0-F3: failing (ROW20 = cols 0-25, the prompt owns 26-31)
     if r.blob_bad:
         viol(c, "I4 blob != blob.bin (room change)", str(r.blob_bad[:3]))
+    if r.goal_bad:                                                   # TUT0-F4 K3: the goal line (row 20 cols 0-23 only)
+        viol(c, "I10 goal line != its model (row 20 text / attrs / visibility)", str(r.goal_bad[0]) + f" ({len(r.goal_bad)} samples)")
+    if r.k5_bad:
+        viol(c, "I11 FLASH in row 20 cols 24-31 during a hold (K5)", str(r.k5_bad[0]))
     c.step = "end"
     invariants(c, heavy=hooks(c.p)[0] == S["ts_choice"])
 
@@ -1062,6 +1067,7 @@ def soak(h, hero, seed, n_inputs):
                     if not U.press_start(p, "1", "tut_d0"):
                         c.fail(f"input {i}: tutorial start failed")
                         break
+                    p.tick(3)                            # TUT0-F4: as tut0.start: tt_init's goal line is presented first
                     c.run = U.Run(p)
                 elif p.rb("GAME_STATE") == GS_SELECT and hooks(p) == D1H:
                     if not U.press_start(p, "1", "start_game"):

@@ -40,7 +40,12 @@ the Mage run opens the page with the I key, the others through the BAG icon.
   C23 the B5 WEAK tail + the rule (WEAK refuses the leap silently, HUNGRY does not); C24 the nudge
   12 / 36 at B4, none in the fight; C25 L76 once; C26 Kempston tour (stick words, stick-dismissed
   in-mode hold swallowed); C27 pi_ic / pl_et restored after choice 2, D1 entry, death, Quit;
-  C28 blob >= 600 B free, TUT_RAM_END <= PF_ROWF
+  C28 blob >= 350 B free (TUT0-F4: was 600; the R3 reserve), TUT_RAM_END <= PF_ROWF
+  TUT0-F4 (tut0_split.md "Playtest round 2 - key clarity", R4): K1 the hold prompt '> ANY KEY' at row 20 cols 24-31
+  (font-match, KEYS + Kempston), a non-control key (Z) dismisses; K2 key names spelled (SPACE / CAPS / SYM, stick words);
+  K3 the goal line (row 20 cols 0-23, attr $45, its beat's text) sampled after every turn / hold, hidden (info attrs back) in
+  the fight and after D1; K4 the nudge at off-task turns 6 / 18 (L75 + the goal, FLASH that turn only), none after;
+  K5 B12's hold: no FLASH in row 20 cols 24-31, the ROW20 rect 24 wide
 
 Usage: ZRCP_PORT=10778 WZ_BUILD_DIR=<dir>/build python3 tests/tut0.py [--update-golden] [--only C3,C5]
 Output: one line per check, then `tut0: N failed of M: ids`.
@@ -66,6 +71,17 @@ from game_lib import Harness, Proto, S, EMU_ARGS, GS_PLAYING, GS_SELECT, GS_DEAD
 import textpack as tp                         # noqa: E402
 
 Proto.tut_default_off = False                 # the tutorial path is live (choice screen offered)
+UPD_ONLY = set(filter(None, os.environ.get("TUT0_UPDATE", "").split(",")))   # goldens rewritten by name (the rest compared)
+
+
+def golden(h, name, fr):
+    game.UPDATE = UPDATE or name in UPD_ONLY
+    try:
+        game.golden(h, name, fr)
+    finally:
+        game.UPDATE = UPDATE
+
+
 Proto.snd_mode = 2                            # SFX only: no Level Complete stinger hold on a descent
 
 # --- text model: the source lines + the resident dictionary (to decode log_push streams) ---
@@ -509,7 +525,53 @@ QS_SCROLL_ICON = S["QS_SLOT0"] + S["QS_SCROLL"]
 STAND_Y = (S["STAND_Y0"], S["STAND_Y1"])
 
 
-PTR_RECTS = [(18, 27, 3, 2), (18, 18, 3, 2), (18, 21, 3, 2), (18, 24, 3, 2), (21, 30, 2, 1), (21, 0, 30, 1), (20, 0, 26, 1)]  # tut_rects (row, col, w, h)
+PTR_RECTS = [(18, 27, 3, 2), (18, 18, 3, 2), (18, 21, 3, 2), (18, 24, 3, 2), (21, 30, 2, 1), (21, 0, 30, 1), (20, 0, 24, 1)]  # tut_rects (row, col, w, h)
+
+# --- TUT0-F4 R4: the goal line (row 20 cols 0..23) and the hold prompt (cols 24..31) ---------------------
+FONT6 = open(os.path.join(REPO, "assets", "gfx", "fonts", "font6x8.bin"), "rb").read()
+TL_NAME = {v: k for k, v in S.items() if k.startswith("TL_") and isinstance(v, int)}
+GOAL_W, R20 = 24, 20
+INFO_PAT = [S["ATTR_INFO_NAME"]] * 12 + [S["ATTR_INFO_NUM"]] * 9 + [S["ATTR_INFO_NOTE"]] * 3   # pi_rects, cols 0..23
+
+
+def text6(msg, x0=0, cols=32):
+    """8 lines x cols bitmap bytes of msg in the 6x8 font from pixel x0 (tests/world.py text6)."""
+    rows = [bytearray(cols) for _ in range(8)]
+    for i, ch in enumerate(msg):
+        g = FONT6[(ord(ch) - 32) * 8:(ord(ch) - 32) * 8 + 8]
+        x = x0 + 6 * i
+        for ln in range(8):
+            for b in range(6):
+                if g[ln] & (0x80 >> b):
+                    px = x + b
+                    rows[ln][px >> 3] |= 0x80 >> (px & 7)
+    return [bytes(r) for r in rows]
+
+
+def row_bytes(fr, row, c0, cols):
+    cells = [G.cell_bytes(fr, c, row) for c in range(c0, c0 + cols)]
+    return [bytes(cells[c][ln] for c in range(cols)) for ln in range(8)]
+
+
+def goal_key(gid, hero):
+    """tut_goal id (bit 7 = tut_cpairs pair) -> the TL_ name."""
+    if gid & 0x80:
+        gid = BLOB_IMAGE[S["tut_cpairs"] - S["BLOB_ORG"] + 2 * (gid & 0x7F) + hero]
+    return TL_NAME[gid]
+
+
+def goal_want(p):
+    """The goal id tt_gvis should show now ($FF hidden): spec R4-3, modelled independently."""
+    b, stg = tv(p, "TV_BEAT"), tv(p, "TV_STAGE")
+    gid = BLOB_IMAGE[S["tut_goal"] - S["BLOB_ORG"] + b]
+    if b >= 14:
+        return gid if p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"] else 0xFF
+    if stg not in (2, 3) or (b == 9 and not p.rb("ST_FLAGS") & S["STS_POISON"]):
+        return 0xFF
+    g = goblin(p)
+    if g and p.rb(S["ST_FLAGS"] + g[0]) & S["STS_HOLD"] != S["HOLD_ASLEEP"]:
+        return 0xFF
+    return gid
 
 
 class Run:
@@ -519,8 +581,35 @@ class Run:
         self.grate, self.grate_post, self.exit_mark, self.used_heal, self.blocked = [], [], 0, False, []
         self.ptr_bad, self.ptr_seen, self.ptr_cells = [], set(), 0
         self.wake_mark = None
+        self.goal_seen, self.goal_bad, self.goal_n, self.hide_n, self.k5_bad = set(), [], 0, 0, []
         p.run = self
         self.note()
+
+    def goal_check(self):
+        """K3 / K5 sampler (every note: after each turn and inside each hold, after its drain)."""
+        p = self.p
+        if p.rb("ICON_MODE") or p.rb("GAME_STATE") != GS_PLAYING or w2(p, S["pl_et"] + 1) != S["ts_turn"]:
+            return
+        gid, want, b = tv(p, "TV_GID"), goal_want(p), tv(p, "TV_BEAT")
+        fr = p.frame()
+        at = [G.attr_at(fr, c, R20) for c in range(32)]
+        if tv(p, "TV_HOLD") and any(a & 0x80 for a in at[GOAL_W:]):
+            self.k5_bad.append((b, [hex(a) for a in at[GOAL_W:]]))
+        if gid != want:
+            self.goal_bad.append(("id", b, tv(p, "TV_STAGE"), gid, want))
+            return
+        if gid == 0xFF:
+            self.hide_n += 1
+            if [a & 0x7F for a in at[:GOAL_W]] != INFO_PAT:
+                self.goal_bad.append(("hidden attrs", b, [hex(a) for a in at[:GOAL_W]]))
+            return
+        if p.rb(S["HUD4_EXT"]):                                   # the engine redrew row 20 since (an ICON MODE session):
+            return                                               # legal until the next turn end
+        self.goal_n += 1
+        self.goal_seen.add(b)
+        txt = line(goal_key(gid, p.rb("HERO_KIND")), p.scheme)
+        if row_bytes(fr, R20, 0, GOAL_W) != text6(txt, 0, GOAL_W) or any(a & 0x7F != 0x45 for a in at[:GOAL_W]):
+            self.goal_bad.append(("text / attr", b, txt, [hex(a) for a in at[:GOAL_W]]))
 
     def ptr_check(self):
         """V3 sampler: with a pointer up, no blank rect cell (8 bitmap bytes 0) has FLASH, every non-blank one has."""
@@ -540,6 +629,7 @@ class Run:
 
     def note(self):
         self.ptr_check()
+        self.goal_check()
         b = tv(self.p, "TV_BEAT")
         if not self.beats or self.beats[-1] != b:
             self.beats.append(b)
@@ -748,7 +838,7 @@ def snap_diff(a, b, skip_frame=False):
 
 
 # --- expected text ---------------------------------------------------------------------------
-KN = {"keys": dict(U="Q", D="A", L="O", R="P", F="SP"),         # the 2-char REDEFINE names of the default keys
+KN = {"keys": dict(U="Q", D="A", L="O", R="P", F="SPACE"),      # the default keys (TUT0-F4 R4-2: SP spelled SPACE)
       "redef": dict(U="W", D="S", L="K", R="L", F="M"),
       "kemp": dict(U="UP", D="DOWN", L="LEFT", R="RIGHT", F="FIRE")}   # Kempston: the stick words
 CLS = {0: "W", 1: "M"}
@@ -848,7 +938,7 @@ def scen_plain(h):
     ok = (p.rb("GAME_STATE") == GS_SELECT and w2(p, S["es_go"] + 1) == S["ts_choice"] and w2(p, S["pl_et"] + 1) == S["end_turn"])
     check("C1", "`1` START -> the choice screen (menu state, es_go = the blob's choice, no D0 hook yet)", ok,
           (p.rb("GAME_STATE"), hex(w2(p, S["es_go"] + 1))))
-    game.golden(h, "tut0_choice", ch)
+    golden(h, "tut0_choice", ch)
     press_start(p, "2", "start_game")
     p.tick(3)
     d2, a2 = d1_after(p)
@@ -903,7 +993,7 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
     p.tick(3)
     fr = arrival_checks(p, hero, tag)
     if final:
-        game.golden(h, "tut0_d0_arrival", fr)
+        golden(h, "tut0_d0_arrival", fr)
         SHARED["mentor_glyphs"] = {bytes(p.z.read_memory(S["TILE_GLYPHS"] + 8 * i, 8)) for i in MENTOR_IDS} - {bytes(8)}
     ok = go_to_C(p, run, True)
     check("C3", f"{tag}: B0-B10 walked (the book read from the page, the pear eaten, the cure drunk) to room C", ok, st(p))
@@ -932,6 +1022,11 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
     check("C3", f"{tag}: beats B0..B15 in order, none skipped", run.beats == list(range(16)), run.beats)
     miss, late = log_order(p, first_lines(hero), scheme)
     check("C3", f"{tag}: every beat's lines in the log, in beat order", not miss and not late, (miss, late))
+    check("K3", f"{tag}: the goal line == its beat's text, attr $45, at every sample ({run.goal_n} shown, {run.hide_n} hidden with the "
+          f"info attrs back), shown in B0-B11 + B14 (seen {sorted(run.goal_seen)})",
+          not run.goal_bad and set(range(12)) | {14} <= run.goal_seen, (run.goal_bad[:3], sorted(run.goal_seen)))
+    check("K5", f"{tag}: no FLASH in row 20 cols 24-31 during any hold (B12 G0 incl.); the ROW20 rect is 24 wide",
+          not run.k5_bad and BLOB_IMAGE[S["tut_rects"] - S["BLOB_ORG"] + 4 * 6 + 2] == GOAL_W, run.k5_bad[:3])
     check("C10", f"{tag}: blob bytes == the image at {run.blob_n} checks (D0 start, 3 rooms, page, fight, grate)",
           not run.blob_bad and run.blob_n >= 6, (run.blob_bad, run.blob_n))
     check("C4", f"{tag}: the grate is shut while the Goblin lives and open (after the victory groups) before the step",
@@ -952,6 +1047,9 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
         bad = d1_equal(SHARED["plain"][0], d1, a1 | SHARED["plain"][1])
         check("C5", "the D1 after D0 == the D1 of a plain `2 START` (hero record, ENT_STAT, bag, counters, FOOD, ARANK, TURN_COUNTER, "
               "level state, map, screen; only PU_POS / PU_ARR and the decor / drip phase tolerated)", not bad, bad)
+        fr1 = p.frame()
+        at1 = [G.attr_at(fr1, c, R20) for c in range(GOAL_W)]
+        check("K3", "D1 after the reset: no goal line (row 20 attrs = the info fields' pattern)", at1 == INFO_PAT, [hex(a) for a in at1])
         e1 = p.ent(0)
         check("C5", "reset hero: FOOD 80, ARANK 0, TURN_COUNTER 0, KILLS 0, KEY 0, kit bag, full HP",
               (p.rb("FOOD"), p.rb("ARANK"), p.rw("TURN_COUNTER"), p.rb("ST1_KILLS")) == (S["FOOD_START"], 0, 0, 0)
@@ -987,7 +1085,7 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
               "fight and the grate all completed; every hold dismissed by the stick's FIRE", p.rb("JOY_MODE") == 1 and p.dismissed >= 8
               and all(b == 0xFF for b in p.z.read_memory(S["KBD_MATRIX"], 8)) and ok and dead and used and left,
               (p.rb("JOY_MODE"), p.dismissed, ok, dead, used, left))
-        check("C11", f"{tag}: the lines show the stick's words (L02 'DOWN CLIMBS DOWN THE LADDER', R2 L60 'DOWN+FIRE OPENS THE ICON BAR')",
+        check("C11", f"{tag}: the lines show the stick's words (L02 'PRESS DOWN TO CLIMB DOWN', L60 'ICONS: PRESS DOWN+FIRE AT ONCE')",
               line("TL_L02", "kemp") in lines and line("TL_L60", "kemp") in lines,
               (line("TL_L02", "kemp"), line("TL_L60", "kemp"), [l for l in lines[:4]]))
         check("C20", f"{tag}: bag READ with the stick only (FIRE on BAG -> page, the book's slot from the bag, FIRE, FIRE READ): "
@@ -1168,7 +1266,7 @@ def scen_death(h):
           ok and p.rb("GAME_STATE") == GS_SELECT and w2(p, S["es_go"] + 1) == S["ts_choice"] and w2(p, S["pl_et"] + 1) == S["end_turn"],
           (ok, p.rb("GAME_STATE"), hex(w2(p, S["es_go"] + 1)), hex(w2(p, S["pl_et"] + 1))))
     check("C27", "after a D0 death -> menu -> `1`: pi_ic = intent_icon7, pl_et = end_turn", hooks_off(p), hex(w2(p, S["pi_ic"] + 1)))
-    game.golden(h, "tut0_choice", p.frame())                     # the same choice screen as the first offer
+    golden(h, "tut0_choice", p.frame())                     # the same choice screen as the first offer
     assert press_start(p, "1", "tut_d0")
     p.tick(3)
     d1 = snapshot(p)
@@ -1212,7 +1310,7 @@ def scen_redef(h, keys, via_menu, label):
     lines = [l.rstrip() for l in p.LOG]
     l02, l60, l67 = line("TL_L02", "redef"), line("TL_L60", "redef"), line("TL_L67", "redef")
     check("C12", f"{label}: L02 reads '{l02}', R2 L60 '{l60}', L67 '{l67}' (the redefined keys)",
-          l02.startswith(keys[1] + " CLIMBS DOWN") and l02 in lines and l60 == f"{keys[1]}+{keys[4]} OPENS THE ICON BAR"
+          l02 == f"PRESS {keys[1]} TO CLIMB DOWN" and l02 in lines and l60 == f"ICONS: PRESS {keys[1]}+{keys[4]} AT ONCE"
           and l60 in lines and l67 == f"LEAPS GO LEFT TOO: {keys[0]}+{keys[2]}" and l67 in lines, lines[:16])
     check("C12", f"{label}: the whole route works on the redefined keys: walk, leap the pit, pick up the book, READ it from the page",
           ok and p.rb("ARANK") != 0 and not run.blocked, (ok, p.rb("ARANK"), run.blocked))
@@ -1337,8 +1435,9 @@ def scen_static():
           f"'{ss[S['TS_CHOICE3']]}'", l05 == "I AM BROTHER MORROW, LONG DEAD" and not bad
           and ss[S["TS_CHOICE3"]] == "BROTHER MORROW WILL TEACH YOU", (l05, bad))
     free = S["BLOB_RES"] - S["BLOB_LEN"] - S["BLOB_DELTA"]
-    check("C28", f"blob BLOB_LEN + BLOB_DELTA <= BLOB_RES with >= 600 B free ({free}); TUT_RAM_END ${S['TUT_RAM_END']:04X} <= PF_ROWF "
-          f"${S['PF_ROWF']:04X}", free >= 600 and S["TUT_RAM_END"] <= S["PF_ROWF"], free)
+    check("C28", f"blob BLOB_LEN + BLOB_DELTA <= BLOB_RES with >= 350 B free ({free}; TUT0-F4: R4 built, the R3 reserve <= 345 B "
+          f"stays, tut0_split.md 'Playtest round 2'); TUT_RAM_END ${S['TUT_RAM_END']:04X} <= PF_ROWF "
+          f"${S['PF_ROWF']:04X}", free >= 350 and S["TUT_RAM_END"] <= S["PF_ROWF"], free)
 
 
 def hooks_off(p):
@@ -1413,6 +1512,8 @@ def scen_tour(h, hero, scheme="keys"):
     g1 = held(p, "TL_L66", scheme), held(p, "TL_L09", scheme), L("TL_L67") in [l.rstrip() for l in p.LOG], held(p, "TL_L68", scheme)
     check("C22", f"{tag}: B2 G0 L65 / L66 (held), then L08 / L09 (held); UP+RIGHT from x 16 lands x 22 storey 0; G1 L67 / L68 "
           "without a hold", g1 == (True, True, True, False) and land == (22, 0), (g1, land))
+    l09 = "LEAP: PRESS UP+RIGHT AT ONCE" if scheme == "kemp" else "LEAP: PRESS Q+P AT ONCE"
+    check("K2", f"{tag}: L09 reads '{l09}' (keys spelled, R4-2)", l09 in [l.rstrip() for l in p.LOG], l09)
     # --- B3: the book; C17 pointer; C19 BAG target ---
     T(p, "L")
     b3 = tv(p, "TV_BEAT")
@@ -1447,11 +1548,11 @@ def scen_tour(h, hero, scheme="keys"):
           t_hold and tgt1 == pair and tgt2 == pair and not t2_hold, (t_hold, tgt1, tgt2, t2_hold))
     # C17: the nudge re-show re-arms the BAG pointer (13 off-task moves, away from Morrow's repeat range not needed: moves)
     n4 = len(p.LOG)
-    for i in range(13):
+    for i in range(6):
         T(p, "H" if i % 2 == 0 else "L")
     nud = [l.rstrip() for l in p.LOG[n4:]]
-    check("C17", f"{tag}: B3 nudge (12 off-task turns: L75, then the G0 re-show) -> the BAG FLASH is back",
-          nud[:3] == [L("TL_L75"), L("TL_L11"), L("TL_L60")] and tv(p, "TV_PTR") == 0 and rect_flash_ok(p, 0), (nud, tv(p, "TV_PTR")))
+    check("C17", f"{tag}: B3 nudge (R4-4: 6 off-task turns: L75 + the goal L60 in one group) -> the BAG FLASH is back",
+          nud[:2] == [L("TL_L75"), L("TL_L60")] and tv(p, "TV_PTR") == 0 and rect_flash_ok(p, 0), (nud, tv(p, "TV_PTR")))
     # --- the read (bag page); B3 G1 + the tail L63 / L64 (no hold); slot 2 -> I02 ---
     page_use(p, S["IT_BOOK"], "icon")
     T(p, "WAIT")
@@ -1475,12 +1576,12 @@ def scen_tour(h, hero, scheme="keys"):
         marks.append(len(p.LOG))
     tut = {line(k, scheme) for k in SRC if k.startswith("TL_")}       # (engine lines, e.g. the hunger word's, ignored)
     lines = [l.rstrip() for l in p.LOG]
-    due = [t - k for t in (12, 13, 36, 37)]                       # Wait numbers of off-task turns 12, 13, 36, 37
+    due = [t - k for t in (6, 18)]                                # R4-4: Wait numbers of off-task turns 6, 18
     w = [[l for l in lines[marks[t - 2]:marks[t - 1]] if l in tut] for t in due]
     rest_lines = [l for t in range(2, 101) if t not in due for l in lines[marks[t - 2]:marks[t - 1]] if l in tut]
-    check("C24", f"{tag}: B4 (G0 L16), {k} walking turns + 100 Waits at x 27 (> 4 cols from Morrow): L75 on off-task turn 12, "
-          "L16 on 13; again on 36 / 37; nothing else up to 100",
-          g0_b4 and beat4 == 4 and k < 10 and w == [[L("TL_L75")], [L("TL_L16")], [L("TL_L75")], [L("TL_L16")]]
+    check("C24", f"{tag}: B4 (G0 L16), {k} walking turns + 100 Waits at x 27 (> 4 cols from Morrow): L75 + L16 (the goal) on "
+          "off-task turn 6, again on 18; nothing else up to 100",
+          g0_b4 and beat4 == 4 and 1 <= k < 6 and w == [[L("TL_L75"), L("TL_L16")]] * 2
           and not rest_lines, (g0_b4, beat4, k, w, rest_lines[:4]))
     # --- B5: G0 / G2, the FOOD target (no hold), the eat, the WEAK tail L70 / L71 (no hold) ---
     to_floor(p, 1)
@@ -1563,6 +1664,103 @@ def scen_left(h):
           at_menu and w2(p, S["es_go"] + 1) == S["ts_choice"] and hooks_off(p), (paused, at_menu, hex(w2(p, S["pi_ic"] + 1))))
 
 
+# --- TUT0-F4 R4 (K1 / K2 / K4) ---------------------------------------------------------------------------
+RAW.update({"Z": (0, 1), "Q": (2, 0), "A": (1, 0), "O": (5, 1), "P": (5, 0), "CAPS": (0, 0), "SYM": (7, 1)})
+HOLD_ATTR = S["ATTR_HUD"]
+TUT_LINES = {line(k) for k in SRC if k.startswith("TL_")}
+
+
+def hold_raise(p, keys, n=6):
+    """Turns (Proto.turn, holds NOT dismissed) until a hold is up; True if one is."""
+    for _ in range(n):
+        if tv(p, "TV_HOLD"):
+            return True
+        p.turn(*keys)
+        p.tick(2)
+    return bool(tv(p, "TV_HOLD"))
+
+
+def prompt_ok(p):
+    """K1: the drained hold's row 20 cols 24..31 = the triangle (on / off: it blinks) + 'ANY KEY' from x 200, bright white."""
+    p.release()
+    for _ in range(400):
+        p.tick()
+        if p.rb("LOG_QN") == 0:
+            break
+    p.tick(3)
+    fr = p.frame()
+    want = text6("ANY KEY", 0, 7)
+    got = row_bytes(fr, R20, 25, 7)
+    tri = G.cell_bytes(fr, 24, R20)
+    at = [G.attr_at(fr, c, R20) for c in range(24, 32)]
+    tri_ok = tri in (bytes(BLOB_IMAGE[S["hp_glyph"] - S["BLOB_ORG"]:][:8]), bytes(8))
+    return got == want and tri_ok and at == [HOLD_ATTR] * 8, (got == want, tri.hex(), [hex(a) for a in at])
+
+
+def scen_keys(h):
+    """K1 (KEYS: dismissed by Z; Kempston: by FIRE), K2 runtime (FIRE redefined to CAPS / SYM), K4 (the B2 nudge)."""
+    for scheme in ("keys", "kemp"):
+        p = start(h, 0, scheme=scheme, via_menu=menu_kempston if scheme == "kemp" else None)
+        run = Run(p)
+        up = hold_raise(p, ("J",))                                # B0 -> storey 0 -> B1 G0 (L03 / L04) holds
+        ok, det = prompt_ok(p)
+        run.note()
+        gid_hold = tv(p, "TV_GID")
+        if scheme == "keys":
+            p.hold("raw:Z")
+        else:
+            p.hold("FIRE")
+        p.tick(3)
+        p.release()
+        for _ in range(20):
+            p.tick()
+            if not tv(p, "TV_HOLD"):
+                break
+        p.tick(3)
+        fr = p.frame()
+        off = (not tv(p, "TV_HOLD") and [G.attr_at(fr, c, R20) for c in range(24, 32)] == [S["ATTR_INFO_NOTE"]] * 8
+               and not any(any(G.cell_bytes(fr, c, R20)) for c in range(24, 32)))
+        run.note()
+        check("K1", f"{scheme}: a hold (B1 G0) shows '> ANY KEY' at row 20 cols 24-31 (font-match, bright white)", up and ok, (up, det))
+        check("K1", f"{scheme}: {'Z (no control key)' if scheme == 'keys' else 'the stick FIRE'} dismisses it; cols 24-31 blank, "
+              "attrs $45 again", off, (tv(p, "TV_HOLD"), [hex(G.attr_at(fr, c, R20)) for c in range(24, 32)]))
+        check("K3", f"{scheme}: the goal line (L03, '{line('TL_L03', scheme)}') during and after the hold",
+              gid_hold == S["TL_L03"] and tv(p, "TV_GID") == S["TL_L03"] and not run.goal_bad, (gid_hold, run.goal_bad[:2]))
+        if scheme == "keys":                                      # K4: B2, idle at x 16 (9 cols from Morrow at A2)
+            for _ in range(24):                                   # walk right until B2's G2 (L08 / L09) is shown: the count starts
+                if (tv(p, "TV_BEAT"), tv(p, "TV_STAGE")) == (2, 3):
+                    break
+                T(p, "L" if p.ent(0)["X"] < 16 else "WAIT")
+            nag0 = tv(p, "TV_NAG")
+            seen = []
+            k4b = True
+            for i in range(1, 31):
+                n0 = len(p.LOG)
+                T(p, "WAIT")
+                fl = [c for c, r in flash_cells(p, rows=[R20])]
+                if fl:                                            # K4b: FLASH exactly on the non-blank goal cells (cols 0-23)
+                    nb = [c for c in range(GOAL_W) if any(p.z.read_memory(0x4000 + ((R20 & 24) << 8) + ((R20 & 7) << 5) + c + 256 * k, 1)[0]
+                                                          for k in range(8))]
+                    k4b = k4b and fl == nb and bool(nb) and len(nb) < GOAL_W
+                    fl = list(range(GOAL_W))
+                ls = [l.rstrip() for l in p.LOG[n0:] if l.rstrip() in TUT_LINES]     # (engine lines, e.g. hunger, ignored)
+                if ls or fl:
+                    seen.append((i + nag0, ls, fl == list(range(GOAL_W))))
+            want = [(n, [line("TL_L75"), line("TL_L09")], True) for n in (6, 18)]
+            check("K4", "B2 idle: L75 + L09 at off-task turn 6 with FLASH on row 20 cols 0-23 that turn only, again at 18, "
+                  "nothing else up to 30", (tv(p, "TV_BEAT"), seen) == (2, want), (tv(p, "TV_BEAT"), nag0, seen))
+            check("K4b", "the nudge turn's FLASH is on non-blank row-20 goal cells only (no flashing blank tail / gaps)", k4b)
+    for fk in ("CAPS", "SYM"):                                   # K2: FIRE = CAPS / SYM (reserved at the menu: KEYTAB poked)
+        keys = ["Q", "A", "O", "P", fk]
+        set_redef(keys)
+        p = start(h, 0, scheme="redef", via_menu=menu_poke_keytab(keys))
+        icon_mode(p, True)
+        cursor_to(p, 0)
+        got = rest(p)
+        want = f"SWORD: {fk} OR WALK INTO A FOE"
+        check("K2", f"FIRE redefined to {fk}: the slot-1 tour line reads '{want}'", got == [want], got)
+
+
 def main():
     t0 = time.monotonic()
     with Harness() as h:
@@ -1584,6 +1782,7 @@ def main():
         scen_tour(h, 1)
         scen_tour(h, 0, scheme="kemp")
         scen_left(h)
+        scen_keys(h)
     fails = sorted({c for c, ok, _ in CHECKS if not ok})
     nbad = sum(1 for c in CHECKS if not c[1])
     print(f"tut0: {nbad} failed of {len(CHECKS)}" + (f": {fails}" if fails else "") + f"  ({time.monotonic() - t0:.0f}s)", flush=True)
