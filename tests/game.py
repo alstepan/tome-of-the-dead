@@ -1987,8 +1987,11 @@ def isr_tests(h, p):
              set(p.z.read_memory(S["ISR_VEC_TABLE"], S["ISR_VEC_LEN"])), {S["ISR_VEC_BYTE"]})
     from game_lib import SNA_RAM                 # 3E-T1: the load image is in the boot
     io = S["BANK_BOOT6"] * 16384 + S["isr_image"] - 0xC000   # block (bank 6 tail, pool later)
-    h.expect("61 ISR copied to ISR_ADDR", p.z.read_memory(S["ISR_ADDR"], S["ISR_LEN"]) ==
-             SNA_RAM[io:io + S["ISR_LEN"]], True)
+    # C-T3: the exit's `ld sp,nn` / `jp nn` operands are SMC (rewritten at every entry): masked
+    smc = {a - S["ISR_ADDR"] for n in ("isr_rs", "isr_jp") for a in (S[n] + 1, S[n] + 2)}
+    live, img = p.z.read_memory(S["ISR_ADDR"], S["ISR_LEN"]), SNA_RAM[io:io + S["ISR_LEN"]]
+    h.expect("61 ISR copied to ISR_ADDR (SMC operands masked)",
+             all(live[i] == img[i] for i in range(S["ISR_LEN"]) if i not in smc), True)
     # 50 Hz: 50 idle ticks = 100 frames = 100 AY_PLAY calls, ~70,908 T each
     def frames():
         b = p.z.read_memory(S["SYS_FRAMES"], 3)

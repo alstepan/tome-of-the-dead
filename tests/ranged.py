@@ -539,7 +539,8 @@ def main():
             p.wmem(S["RNG_STATE"], w16(0x4000 + sd * 77))
             log = []
             start_turn()
-            for _ in range(400):
+            p.tick()                                       # C2 MON-DEFER: the monster phase runs on the
+            for _ in range(400):                           # tick after the input tick (TURN_TICK 1)
                 e0 = p.ent(0)
                 log.append((p.rb("TURN_TICK"), e0["HP"], e0["REACT"], p.rb(S["P_ENTITIES"] + E_["REACTAT"]), e0["MODE"],
                             p.rb("GAME_STATE"), p.rb("FX_BUSY")))
@@ -556,9 +557,9 @@ def main():
             pre, post = kres[:cut], kres[cut:]               # probes after ticks < I / from I on
             ok_k = (all(x[4] != S["M_SEQ"] and x[2] == 3 and x[5] == S["GS_PLAYING"] for x in pre)
                     and post and post[0][4] == S["M_SEQ"] and any(x[6] for x in kres)
-                    and kres[-1][5] == S["GS_DEAD"] and I == 0 + 2 + 1 + 7 + 1)
+                    and kres[-1][5] == S["GS_DEAD"] and I == 1 + 2 + 1 + 7 + 1)
             det = (I, kres[:14], kres[-2:], len(kres))
-        check("K arrow kill: HP 0 on the input tick, DEATH pending until the impact tick I (= 0 + 2 + slot 3 parity"
+        check("K arrow kill: HP 0 on the monster tick (C2: input tick + 1), DEATH pending until the impact tick I (= 1 + 2 + slot 3 parity"
               " + gap 7 + 1), the death sequence from I, the FX flew, GS_DEAD only after", ok_k, det)
 
         # Q the FX queue: 2 tracks busy, 2 Slingers (both sides) -> one track + one queued, both start

@@ -126,6 +126,15 @@ act_seq:
 
 ;------------------------------------------------------------------------------
 ; act_pend — far7 from bank-2 pend_far (anim_gate, TURN_PEND != 0).
+; MON-DEFER (C2): TP_MONQ (turn_input .spent, an ordinary turn) -> on the first
+; tick with TURN_TICK >= 1 (the tick after the input tick: anim_gate runs
+; before TURN_TICK++) resolve_monsters, then the TP_SHOT step below in the same
+; tick (as on the input tick before). Its own gate: no FX_BUSY / LOG_MON_MAX
+; wait (no lag on attack turns), no DYING / EXIT test (resolve_monsters' own
+; per-slot stand-down and materialise run exactly as they did on the input
+; tick). The logic is the same code on the same state: bit-identical (tests/
+; ai_equiv.py); every reaction it schedules is TURN_TICK-relative (+1 tick).
+; DN-GATE: heavy_mark on every tick that runs a release or a monster phase.
 ; T7: the monster phase also waits while LOG_QN > LOG_MON_MAX (at most
 ; LOG_WAIT_MAX ticks past max(MON_AT, COMBAT_NOT_BEFORE)), so panel_tick can drain the cast's lines on the rest
 ; ticks before the replies arrive (a Whirlwind on 4 bodies: 4 + 4 lines).
@@ -145,7 +154,17 @@ LOG_WAIT_MAX    EQU 8                          ; ticks (320 ms): progress if the
                 ASSERT ROOM_CAP + LOG_MON_MAX <= LOG_SLOTS
 act_pend:
                 ld   hl, TURN_PEND
-                bit  TP_SHOT_BIT, (hl)         ; 3F-T7: monster shots in flight (R6 shot_tick:
+                bit  TP_MONQ_BIT, (hl)         ; MON-DEFER: an ordinary turn's monster phase,
+                jr   z, .nq                    ; set by turn_input .spent: on the next tick
+                ld   a, (TURN_TICK)            ; (TURN_TICK 1) unconditionally — no FX_BUSY /
+                or   a                         ; log wait, no DYING / EXIT test: exactly what
+                ret  z                         ; the input tick ran before (resolve_monsters'
+                res  TP_MONQ_BIT, (hl)         ; per-slot DYING stand-down, materialise)
+                call heavy_mark                ; DN-GATE: no dn_q2 spawn in this tick
+                call resolve_monsters          ; bank 2 (pages bank 3, gives bank 7 back)
+                ld   hl, TURN_PEND             ; then its shots (TP_SHOT) in the same tick,
+.nq:            bit  TP_SHOT_BIT, (hl)         ; as on the input tick before
+                ASSERT (TURN_PEND >> 8) == (MON_AT >> 8)         ; 3F-T7: monster shots in flight (R6 shot_tick:
                 jr   z, .ns                    ; the FX start at the release, the hit flash at
                 ld   hl, shot_tick             ; the impact; clears TP_SHOT when done). Never
                 call far6                      ; with TP_ACT / TP_MON (set later, in .go)
@@ -158,6 +177,7 @@ act_pend:
                 ld   a, (TURN_TICK)
                 cp   b
                 ret  c                         ; before the release
+                call heavy_mark                ; DN-GATE: the release tick (A)
                 ld   a, (hl)
                 xor  TP_ACT | TP_FIRE          ; TP_ACT was set, TP_FIRE clear
                 ld   (hl), a
@@ -193,7 +213,8 @@ act_pend:
                 ld   a, (TURN_TICK)            ; rest ticks (review: a line drawn here on top
                 cp   b                         ; of a heavy repaint passed the cast cap in
                 ret  c                         ; "wcast4": cost-safe by construction now)
-.go:            xor  a
+.go:            call heavy_mark                ; DN-GATE: the monster phase's tick (A)
+                xor  a
                 ld   (hl), a                   ; TURN_PEND = 0: turn_done may end it
                 ld   (MON_AT), a               ; turn_input calls resolve_monsters again
                 ld   hl, ST_FLAGS              ; D3-8f: the hero's action is resolved (his

@@ -15,14 +15,15 @@
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; start — .tap entry (RANDOMIZE USR start): pull the eight headerless blocks
+; start — .tap entry (RANDOMIZE USR start): pull the nine headerless blocks
 ; off tape with the ROM loader, in `tape_tab` order (3E-T1: one table-driven
 ; loop, was one 15-20 B stanza per block): bank 1 = sources + vdata + UI code;
 ; bank 3 = source tail + bank-3 cold code; A8: bank 3 AY slot at AY_RESERVE;
 ; B3B-8: bank 7 tilesets at TSET_BASE (MEM-RECLAIM w2a) + D3-S2 the bank-7 cold code —
 ; nothing there is live yet: screen 2 is not shown, the 128 editor's bank-7
 ; workspace is abandoned with BASIC; D3-TX: the text block at the bottom of
-; bank 0 — check_paging's probe byte there is overwritten; 3E-T1: the boot
+; bank 0 — check_paging's probe byte there is overwritten; C-T8: the HOW TO PLAY
+; streams at bank 0's POOL_START (own block above the carve); 3E-T1: the boot
 ; block in bank 6 (boot6.asm, below R6); R6: the R6 region at the top of
 ; bank 6 (r6.asm, permanent). Then boot. The .sna enters at boot.
 ; Runs under the ROM IM1 ISR (LD-BYTES ends with EI; IY = $5C3A here): boot
@@ -70,7 +71,7 @@ start_loaded:                                  ; falls straight into boot:
 boot:
                 di
                 ld   sp, WORKSTORE_TOP
-                ld   iy, IY_SYSVAR             ; kept for ISR_ROM_CHAIN (conventions)
+                ld   iy, IY_SYSVAR             ; the tape path's ROM IM1 needs it (conventions)
                 ld   a, BANK_POOL0
                 call page_bank                 ; a valid shadow for farb's restore
                 ld   hl, boot6_init            ; IM 2 (EI below, once the shadow is
@@ -2439,20 +2440,11 @@ gen_frame:
                 call gen_facing
                 ; --- left facing ---
                 ld   a, (GEN_FLAGS)
-                and  FF_SYM
+                and  FF_SYM | FF_MIR
                 jr   z, .mirror
-                call frt_ptr_cur               ; SYM: left = right (no copy)
-                ld   d, h
-                ld   e, l
-                inc  de
-                inc  de
-                inc  de
-                inc  de
-                inc  de
-                inc  de                        ; DE = variant 2
-                ld   bc, 6
-                ldir
-                ret
+                ld   hl, gen_lshare            ; C-T6: SYM (left = right, no copy) / FF_MIR (left =
+                ld   c, BANK_TEXT              ; right | bank bit 7, mirrored by blit_sprite): bank 0
+                jp   farb                      ; (logsc0.asm), farb restores the caller's bank
 .mirror:
                 call mirror_src
                 ld   hl, GEN_MIR

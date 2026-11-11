@@ -72,15 +72,19 @@ expect("block 5 = game CODE data", blocks[5][0] == 0xFF and len(blocks[5]) - 2 =
 rest = blocks[6:]
 expect("%d headerless blocks follow (TAPE_HEADLESS_N)" % len(rest),
        len(rest) == sym["TAPE_HEADLESS_N"] and all(b[0] == 0xFF for b in rest))
-# INSTR-BUILD: the bank-0 block (6th headerless, TAPE_BLOCKS order) = the text block + the
-# HOW TO PLAY streams (page 1 at POOL_START, pages 2 and 3, the overlay code), boot only
+# INSTR-BUILD / C-T8: the bank-0 blocks (6th + 7th headerless, TAPE_BLOCKS order). 6th = the text
+# block + the b0 cold code + its reserve pad, ending at B0_FREE_START (the carve below POOL_START is
+# NOT on tape); 7th = the HOW TO PLAY streams at POOL_START (frame_tab first: RECLAIM-D), boot only
 txt = rest[5] if len(rest) > 5 else b""
-# RECLAIM-D: the frame_tab stream ftz_zx0 is the first boot-only stream (at POOL_START), then the pages
-expect("headerless 6 = text + frame_tab + INSTR streams (%d B = %d + %d)" % (
+ins = rest[6] if len(rest) > 6 else b""
+expect("headerless 6 = text + b0 code + pad (%d B = %d + %d), ends at the carve" % (
        len(txt) - 2, sym["TEXT_LEN"], sym["TEXT_TAPE_LEN"] - sym["TEXT_LEN"]),
-       len(txt) - 2 == sym["TEXT_TAPE_LEN"] and sym["ftz_zx0"] == sym["POOL_START"]
+       len(txt) - 2 == sym["TEXT_TAPE_LEN"] and sym["TEXT_ADDR"] + sym["TEXT_TAPE_LEN"] == sym["B0_FREE_START"]
+       and sym["B0_FREE_START"] + sym["B0_FREE_RES"] == sym["POOL_START"])
+expect("headerless 7 = frame_tab + INSTR streams at POOL_START (%d B)" % (len(ins) - 2),
+       len(ins) - 2 == sym["INSTR_TAPE_LEN"] and sym["ftz_zx0"] == sym["POOL_START"]
        and sym["ftz_zx0"] < sym["ftz_zx0_end"] == sym["instr_p1_zx0"]
-       and sym["TEXT_ADDR"] + sym["TEXT_TAPE_LEN"] == sym["instr_zx0_end"]
+       and sym["POOL_START"] + sym["INSTR_TAPE_LEN"] == sym["instr_zx0_end"]
        and sym["instr_p1_zx0"] < sym["instr_p2_zx0"] < sym["instr_p3_zx0"] < sym["instr_zx0"] < sym["instr_zx0_end"])
 print("tape_layout: %s (%d blocks, %d B)" % ("OK" if not fails else "%d FAILED" % fails, len(blocks), len(d)))
 sys.exit(1 if fails else 0)

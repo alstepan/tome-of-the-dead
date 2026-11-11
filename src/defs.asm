@@ -9,16 +9,15 @@
 ;------------------------------------------------------------------------------
 ; ROM / system variables (48K BASIC ROM = 128K ROM 1, paged via $7FFD bit 4)
 ;------------------------------------------------------------------------------
-IY_SYSVAR       EQU $5C3A           ; conventions: IY stays here (tape path IM1; ISR_ROM_CHAIN)
+IY_SYSVAR       EQU $5C3A           ; conventions: IY stays here (tape path ROM IM1 ISR)
 SYS_FRAMES      EQU $5C78           ; 50 Hz frame counter, 3 B (low byte paces the tick); A8: the
                                     ; IM2 ISR increments it exactly as the ROM ISR did
-ROM_ISR         EQU $0038           ; 48K ROM IM1 handler (ISR_ROM_CHAIN=1 jumps there)
 ROM_CHARSET     EQU $3D00           ; 48K ROM font, char 32 first, 8 B/char
 ROM_LD_BYTES    EQU $0556           ; ROM tape loader (IX=dst, DE=len, A=flag, CF=1)
 
 ;------------------------------------------------------------------------------
 ; 128K paging. $7FFD is write-only: always write through PORT_7FFD_SHADOW.
-;   bit 4 = 1 -> 48K BASIC ROM (charset, LD-BYTES, ISR_ROM_CHAIN handler)
+;   bit 4 = 1 -> 48K BASIC ROM (charset, LD-BYTES)
 ;   bit 3     -> displayed screen: 0 = bank 5 ($4000; boot, select, transition
 ;                scrolls), 1 = bank 7 (A7 double buffer: during play). Only
 ;                set_screen changes it (also via show_bank5 / present_full);
@@ -108,7 +107,7 @@ SFX_IDX_MASK    EQU $1F             ; bits 0-4 = index 0..SFX_COUNT-1 into sfx_t
 SFX_DUCK_PRIO   EQU 6 << 5          ; prio >= 6 ducks deeper
 SFX_DUCK_LO     EQU 3               ; any effect: the music's V2 / V3 fixed volumes - 3 (floor 0)
 SFX_DUCK_HI     EQU 4               ; prio >= SFX_DUCK_PRIO: - 4
-DNG_DWELL       EQU $BFF1           ; SND-3 (mus7.asm): turns since W entered (sat. 255), 0 = W off
+DNG_DWELL       EQU $BFF1           ; SND-3 (mus0.asm): turns since W entered (sat. 255), 0 = W off
 DNG_CALM        EQU $BFF2           ; SND-3: consecutive turns without the danger condition
 SFX_NEXT        EQU $BFF3           ; SND-5: ONE deferred SFX id (prio >= SFX_DEFER_PRIO that lost to
                                     ; a pending / playing higher one); the ISR takes it when the
@@ -205,14 +204,41 @@ TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
 ; (slack 1,024) and 45 + 260 B 880. M1 (user 2026-11-01) took the 240-B step: total reserve 2,624 B
 ; (cliff measured: B0_CODE_RES 206 -> slack 1,024, 207 -> 384, with TEXT_RES 2,418).
 TEXT_RES        EQU 2367 + 33                  ; RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom (was 2384 + 28; LOG-DMG: 2367 + 45)
-B0_CODE_RES     EQU 704                        ; D3-11 (user 2026-11-02, the pool-slack step): log0.asm 212 + dnum0.asm;
+B0_CODE_RES     EQU 1064                       ; C2 (2026-11-10): +150 = mus_pick0 (135, from bank-7 mus7.asm: funds
+                                               ; MON-DEFER) + dn_q2's DN-GATE test (13) + pad; the kit build (kit0.asm) fits
+                                               ; with the 16-B text headroom (1 B free). POOL_START unchanged (B0_FREE_RES
+                                               ; paid it). C-T6 (option C funding, 2026-11-10): +210 = log_scroll (182, from bank-2
+                                               ; panel2.asm) + gen_lshare (27, from low-RAM gen_frame) + even pad; the D8
+                                               ; Warrior slack stays 384 with the four FF_MIR frames (frames.asm). Was 704,
+                                               ; D3-11 (user 2026-11-02, the pool-slack step): log0.asm 212 + dnum0.asm;
                                                ; the D8 Warrior slack 1,024 -> 384 (cliff measured with TEXT_RES 2,400:
                                                ; 704 -> 384, 708 -> the pool no longer fits). LOG-DMG: 212 (M1: 206)
 ; LOG-DMG + DBG-1: kit builds only — kit0.asm (83 B) + log0.asm (212 B) exceed the release reserve by
 ; ~38 B: the kit image takes the next pool-slack variant (D8 Warrior slack 1,024 -> 384, kit only;
 ; tests/kit.py runs it). The RELEASE layout (POOL_START $CA40, slack 1,024) is unchanged.
 B0_KIT_RES      EQU 0                          ; D3-11: 0 (was 80 x DEBUG_KIT): the slack step's 704-B code reserve holds kit0.asm too
-POOL_START      EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CA40 (release): alloc_reset's first bank-0 pool byte
+; C-T8 (option C carve, user 2026-11-10): the bank-0 pages the blit-time mirror freed in the pool
+; (the D8 Warrior need 31,328 -> 24,542) are a RESERVED bank-0 region B0_FREE_START..B0_FREE_END-1
+; right above the text + cold-code reserve, below the (raised) POOL_START. Empty today: nothing is
+; assembled there and it is NOT on tape (the text block ends at B0_FREE_START, the HOW TO PLAY
+; streams are their own block at POOL_START) -> 0 tape bytes until used. For future bank-0 cold
+; code / data (FARB0 rules = b0_code's): AI-SEEK2, the new monsters' sources (+256 B frame table),
+; the DECOR2 planner, a resident HOW TO PLAY. To use it, move bytes from B0_FREE_RES to
+; B0_CODE_RES / TEXT_RES (POOL_START, so the pool, unchanged) and grow the text tape block.
+; Sized for >= ~1 KB pool slack at the binding level (POOL_NEED incl. POOL_SIM_MARGIN and the
+; simulated straddle waste; the slack is quantised by the bank-0 -> 4 straddle: memory-map ledger).
+B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CCF2 (= POOL_START before C-T8)
+B0_FREE_RES     EQU 10910                      ; C2 (full C, 2026-11-10): the carve -> POOL_START $F826 (B0_FREE_START $CD88 + 10910;
+                                               ; even, as gen_variant needs). CAPPED by the HOW TO PLAY streams (1,991 B
+                                               ; at POOL_START, must end <= $FFFF: 19 B spare), not by the pool: D8 Warrior
+                                               ; need 16,586 of 20,442 = slack 3,856 left in banks 4 / 6 (memory-map "C2").
+                                               ; C-T8 / C-H: was 6910 (POOL_START $E7F0).
+                                               ; C-H (10 hurt frames |MIR, -1,104 B at D8 Warrior) 5790 -> 6910. Cliff measured:
+                                               ; 6910 -> D8 Warrior slack 1,184; 6912 -> 864 (< 1 KB). (C-T8: 5790 -> 1,264,
+                                               ; 5792 -> 944.)
+B0_FREE_END     EQU B0_FREE_START + B0_FREE_RES
+POOL_START      EQU B0_FREE_END                ; $F826, C2 ($E7F0 C-H, $E390 C-T8; was $CCF2, C-T6; $CC20 before): alloc_reset's first bank-0 pool byte
+                ASSERT (B0_FREE_RES & 1) == 0
     MACRO FARB0 target                  ; call a bank-0 cold-code routine (8 B; A / DE / IX pass in;
                 ld   hl, target         ;   C lost to the bank, B to farb's A): farb pages BANK_TEXT
                 ld   c, BANK_TEXT
@@ -235,6 +261,7 @@ NEXT_MAP        EQU $6300           ; 672 B buffer: destination room during a tr
 ; +8 T per drawn cell vs the 32-id `ld d, base>>8` (tile_rect).
 TILE_GLYPHS     EQU $6600           ; 512 B: 64 tiles x 8 B ($6600..$67FF)
 BITREV_TAB      EQU $6800           ; 256 B: bit-reversed byte (page-aligned)
+BLIT_REV        EQU BITREV_TAB >> 8 ; C-T6: the mirror chain's H (mirror2.asm)
 TILE_ATTRS      EQU $6900           ; 64 B : attr per tile id (one page: ld h, TILE_ATTRS>>8)
 GEN_SRC         EQU $6940           ; 512 B: staging for vdata reads (pblit, copy_virt; 3E-T1: boot no longer)
 MENU_TORCH_BUF  EQU GEN_SRC           ; RECLAIM-C (d): 48 B, menu_static only (title menu: no room live, no pause /
@@ -384,10 +411,18 @@ ISR_VEC_LEN     EQU 257             ;     works whatever byte the floating bus s
 ISR_ADDR        EQU $BCBC           ; the ISR (copied here at boot from isr_image, lowram.asm)
 ISR_VEC_BYTE    EQU ISR_ADDR & $FF
 ISR_ADDR_END    EQU $BD00           ; ISR bytes end below this (ASSERTed)
-STACK_BOTTOM    EQU $BE00           ; stack grows down from $BF00 to here (512 B; FLOOR1: $BD00.. = FI_GLY)
-    IFNDEF ISR_ROM_CHAIN                        ; A8: 1 = the ISR ends with jp ROM_ISR (ROM
-ISR_ROM_CHAIN   EQU 0                           ;     FRAMES + keyboard scan, needs IY = $5C3A,
-    ENDIF                                       ;     ~+0.92k T/frame (measured 1.54k vs 0.62k)); 0 = FRAMES only (default)
+STACK_BOTTOM    EQU $BE00           ; stack area $BE00..$BEFF (256 B; SP = WORKSTORE_TOP $BF00 grows down; FLOOR1: $BD00.. = FI_GLY)
+; C-T3: the ISR runs on its own stack at the bottom of the stack area
+; (STACK_BOTTOM..ISR_STK); the main stack grows down from WORKSTORE_TOP and must
+; stay above ISR_STK: STACK_MAIN_MAX is its budget (W20 measures the depth and
+; gates it; ASSERTed against ISR_STK in boot6.asm). Measured C-T3: see memory-map.
+ISR_STK         EQU STACK_BOTTOM + $40  ; ISR SP after the switch (grows down to $BE00)
+ISR_STK_NEED    EQU 16 + ISR_SAVE_ALT * 10  ; 4 pushes + AY_PLAY 8 (CALL + player 6); alt: +4 pairs +isr_alt CALL
+ISR_ALT_ADDR    EQU STACK_BOTTOM    ; isr_alt (ISR_SAVE_ALT=1 only), below the ISR stack
+STACK_MAIN_MAX  EQU 160             ; main-stack depth budget (B below WORKSTORE_TOP); W20 gate
+    IFDEF ISR_ROM_CHAIN                         ; C-T3 (user 2026-11-09): dropped. The ROM $0038
+        ASSERT 0, "ISR_ROM_CHAIN dropped (C-T3): the ROM handler pushes on the interrupted stack"
+    ENDIF                                       ;     handler pushes on the interrupted stack (pop blits)
     IFNDEF ISR_SAVE_ALT                         ; A8: 1 = the ISR also saves AF'/BC'/DE'/HL'
 ISR_SAVE_ALT    EQU 0                           ;     (needed once BOTH the player and main
     ENDIF                                       ;     code use EXX / EX AF,AF'; neither does yet)
@@ -508,7 +543,10 @@ ACT_SLOT        EQU $BF8B           ; slot currently resolving
 PLAYER_DIR      EQU $BF8C           ; sampled direction bits this tick
 PLAYER_DISC     EQU $BF8D           ; sampled discrete keys this tick
 ATK_PTR         EQU $BF8E           ; word: attacker entity during do_attack
-MON_SLOT        EQU $BF90           ; resolve_monsters slot counter
+LOGIC_TICK      EQU $BF90           ; DN-GATE (C2): TICK_COUNTER low byte of the last tick that ran turn
+                                    ; logic (heavy_mark: try_player_turn, act_fire / trap_step, a monster
+                                    ; phase); dn_q2 spawns nothing in such a tick. (Was MON_SLOT, unused
+                                    ; since B6.)  Test-observable
 ANIM_SLOT       EQU $BF91           ; anim/render slot counter
 YIELD_FLAG      EQU $BF92           ; 1 while a monster takes a yield step
 GEN_ZBLK        EQU $BF93           ; word: virtual addr of the ZX0 block now unpacked in GEN_SCRATCH
@@ -921,6 +959,8 @@ FF_MOTION       EQU %00000001       ; store both shifts (0 and 4)
 FF_SYM          EQU %00000010       ; symmetric: left = right (no mirror)
 FF_PH4          EQU %00000100       ; PHASE_SHIFT: STATIONARY frame drawn at px & 4 = 4 (a
                                     ; parity-locked walk frame): its one shift = (anchor + 4) & 4
+FF_MIR          EQU %00001000       ; C-T6: no left variant: the left FRT entries = the right ones with
+                                    ; bank bit 7 set, blit_sprite mirrors them (mirror2.asm); SYM wins
                 ASSERT FF_PH4 == 4                  ; gen_facing / POOLACC add the flag as the 4 px
 
 ; FRT variant: v = facing_left*2 + (shift4 ? 1 : 0); 3 B each (bank, lo, hi)
@@ -1085,17 +1125,19 @@ FCTR = FCTR + 1
         ; bottom-anchored frames must fit the body rows and be whole cells
         ; (fpy = py + bh*8 - H stays inside the body, row fix-up every 8 lines)
         ASSERT (nm_h <= BH_kind * 8) && ((nm_h & 7) == 0)
+        ; C-F1: the mirror chain's BLIT_CROWS arithmetic needs a whole char row
+        ASSERT (((flg) & FF_MIR) == 0) || (nm_h >= 8)
         DS   FT_IN_ROW, FRT_NONE                ; MEM-FT: the FRT row's variants (none yet)
         DB   nm_cols, nm_h, low(0 - nm_ax), low(0 - (nm_w - nm_ax - bwpx))
         IF (flg) & FF_MOTION
-          IF (flg) & FF_SYM
+          IF (flg) & (FF_SYM | FF_MIR)
 POOLACC = POOLACC + nm_h * 2 * (2 * nm_cols + 1)
           ELSE
 POOLACC = POOLACC + 2 * nm_h * 2 * (2 * nm_cols + 1)
           ENDIF
         ELSE
 POOLACC = POOLACC + nm_h * 2 * (nm_cols + ((((nm_ax + ((flg) & FF_PH4)) & 7) != 0) & 1))
-          IF ((flg) & FF_SYM) == 0
+          IF ((flg) & (FF_SYM | FF_MIR)) == 0         ; C-T6: FF_MIR = the right term only
 POOLACC = POOLACC + nm_h * 2 * (nm_cols + ((((nm_w - nm_ax - bwpx + ((flg) & FF_PH4)) & 7) != 0) & 1))
           ENDIF
         ENDIF
@@ -1108,6 +1150,7 @@ FID_nm EQU -1
 MOT             EQU FF_MOTION
 STA             EQU 0
 SYM             EQU FF_SYM
+MIR             EQU FF_MIR              ; C-T6: left mirrored at blit time (T7 picks the set)
 ; PHASE_SHIFT walk-cycle flags (frames.asm): a walker's KS_MOVE frame at phase p
 ; is drawn only at px & 4 = (p even ? 4 : 0) (anim_entity .walkph locks it), so
 ; WK4 (WALK1/3) = one shift, the px & 4 = 4 one; WK0 (WALK2/4) = the aligned one.

@@ -321,7 +321,7 @@ def reg(z, name):
 
 
 def run_iy(h, checks):
-    """IX / IY across isr -> isr.done (+ the 7 instructions to the RET): sentinels set at the ISR entry
+    """IX / IY across isr -> isr.done (+ the 8 instructions to the exit jp, C-T3): sentinels set at the ISR entry
     must be intact (IY: never saved, so untouched; IX: pushed / popped)."""
     p = new_game(h)
     p.isolate()
@@ -348,7 +348,7 @@ def run_iy(h, checks):
             elif pc == S["isr.done"]:
                 n += 1
                 iy1 = reg(z, "IY")                # IY is never popped: it must be intact right here
-                for _ in range(7):                # pop ix / de / bc / hl / af, ei, ret
+                for _ in range(8):                # pop ix / de / bc / hl / af, ld sp, ei, jp (C-T3)
                     z.cmd("cpu-step")
                 if iy1 != 0x5A3C or reg(z, "IY") != 0x5A3C or reg(z, "IX") != 0x1357:
                     bad.append((i, hex(iy1), hex(reg(z, "IY")), hex(reg(z, "IX"))))

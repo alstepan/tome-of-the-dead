@@ -227,7 +227,7 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # another geometry: the spit turns shift where the bodies stand on the later walk ticks.
 GATED = ("mix", "mage", "blair", "wroom", "wroom4")
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4")
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4", "lmix", "lmixw", "lmix4", "lhurt", "lhurt4")   # C2: lwalk / lwalk4 / rwalk are measurements, not gated
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -615,6 +615,68 @@ SCENARIOS = {
         (3, 12, 1, RIGHT),
         (1, 9, 1, RIGHT),
         (4, 22, 0, HOSTILE)], [("K", 6), ("WAIT", 2)], K_WIZARD, None, "glad"),
+    # C-T10 (docs/design/mirror_c_split.md §6): Option C's worst mirrored case. The knight faces right (its
+    # slash / follow on the Skeleton), 4 bodies to its right face LEFT (HOSTILE) and are held in their attack
+    # sequences every tick (lmix_hook restarts KS_ATTACK as soon as one ends): the left-facing attack frames
+    # (skeleton raise / cut, goblin club-up / smash, rat bite, bat dive) of all 4 are drawn at once.
+    "lmix": ("knight facing right + 4 bodies to its right, all in left-facing attack frames at once", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (3, 18, stand_y(1, 4), HOSTILE),
+        (1, 21, stand_y(1, 2), HOSTILE),
+        (4, 25, stand_y(1, 2) - 3, HOSTILE)], [("FIRE", 12), ("WAIT", 2)], K_KNIGHT, None, "lmix"),
+    # C-T9: "lmixw" = "lmix" with the WIDEST kind the harness can pool: 4 Skeletons (32x48 cut / 24x48 raise,
+    # the biggest attack frames of the PROTO pool; the real 40-px kinds - Ogre, Widow, Orc, Mummy - are not
+    # resident under the PROTO fixture, so their frames cannot be drawn here). Skeletons share D3 / D5 / D8.
+    # All four stand on the Skeleton's floor row (6 cells tall), hook / hero as "lmix".
+    "lmixw": ("knight facing right + 4 Skeletons to its right, all in left-facing attack frames at once", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (3, 18, stand_y(1, 6), HOSTILE),
+        (1, 21, stand_y(1, 6), HOSTILE),
+        (4, 25, stand_y(1, 6), HOSTILE)], [("FIRE", 12), ("WAIT", 2)], K_KNIGHT, None, "lmixw"),
+    # C-F1: "lmix4" = the real-pool mirror worst case. The only scenario booted on a REAL level (proto_start 0,
+    # level_descend to D4 under a fixed MASTER_SEED: level_enter pools D4's units, the Ogre and the Orc with
+    # their real STA|MIR attack frames, no kind_tab / sequence pokes): the knight faces right, the Ogre Warlord
+    # (SLAM: 40x48 raise / slam) + 3 Orcs (24-px-wide frames, 40x48 attack) stand to its right facing LEFT, all
+    # held in KS_ATTACK every tick (lmix_hook). CAP-gated like lmix / lmixw (work <= CAP, real <= BUDGET).
+    "lmix4": ("knight (real D4 level) + Ogre SLAM + 3 Orcs to its right, all in left-facing attack frames", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (3, 20, stand_y(1, 6), HOSTILE),
+        (1, 24, stand_y(1, 6), HOSTILE),
+        (4, 27, stand_y(1, 6), HOSTILE)], [("FIRE", 12), ("WAIT", 2)], K_KNIGHT, None, "lmix4"),
+    # C-H (user 2026-11-10, policy hybrid+h): the hurt frames are STA|MIR too. "lhurt" = the worst hurt tick: the
+    # hero (knight) and 4 Skeletons (the widest resident kind with a hurt frame, 32x48) all facing LEFT and held
+    # in KS_HURT every tick (lmix_hook with LMIX_KS = KS_HURT, the hero included). "lhurt4" = the same on the
+    # real D4 pool: the hero + Ogre (no hurt frame: its own KS_HURT row) + 3 Orcs (orc_hurt). CAP-gated.
+    "lhurt": ("knight facing left + 4 Skeletons to its right, all in left-facing hurt frames at once", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (3, 18, stand_y(1, 6), HOSTILE),
+        (1, 21, stand_y(1, 6), HOSTILE),
+        (4, 25, stand_y(1, 6), HOSTILE)], [("WAIT", 14)], K_KNIGHT, None, "lhurt"),
+    "lhurt4": ("knight (real D4 level) facing left + Ogre + 3 Orcs, all in left-facing hurt frames", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (3, 20, stand_y(1, 6), HOSTILE),
+        (1, 24, stand_y(1, 6), HOSTILE),
+        (4, 27, stand_y(1, 6), HOSTILE)], [("WAIT", 14)], K_KNIGHT, None, "lhurt4"),
+    # PERF-SURVEY M2: "lwalk" = the full-C walk worst case: the knight and 4 Skeletons (the widest PROTO walker) all
+    # facing and WALKING LEFT in one room (the hero walks left, the bodies chase: left-facing WK4 / WK0 frames at
+    # once); no forced sequences (lwalk_hook only records which frames were drawn). "lwalk4" = the same on the
+    # real D4 pool (Ogre + 3 Orcs, the 40-px walkers). C2: MEASUREMENTS, NOT gated (in neither GATED nor CAP_GATED):
+    # 5 bodies walking every tick exceed the budget even facing right (rwalk, the pre-mirrored control).
+    "lwalk": ("knight walking left + 4 Skeletons walking left behind it", [
+        (5, 16, stand_y(1, 6), HOSTILE),
+        (3, 20, stand_y(1, 6), HOSTILE),
+        (1, 24, stand_y(1, 6), HOSTILE),
+        (4, 28, stand_y(1, 6), HOSTILE)], [("H", 9), ("WAIT", 1)], K_KNIGHT, None, "lwalk"),
+    "rwalk": ("mirror image of lwalk: knight walking right + 4 Skeletons walking right behind it (right = pre-mirrored)", [
+        (5, 4, stand_y(1, 6), RIGHT),
+        (3, 8, stand_y(1, 6), RIGHT),
+        (1, 12, stand_y(1, 6), RIGHT),
+        (4, 16, stand_y(1, 6), RIGHT)], [("L", 9), ("WAIT", 1)], K_KNIGHT, None, "rwalk"),
+    "lwalk4": ("knight (real D4 level) walking left + Ogre + 3 Orcs walking left behind it", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (3, 20, stand_y(1, 6), HOSTILE),
+        (1, 24, stand_y(1, 6), HOSTILE),
+        (4, 27, stand_y(1, 6), HOSTILE)], [("H", 9), ("WAIT", 1)], K_KNIGHT, None, "lwalk4"),
     "heavy": ("knight + 2 skeletons, goblin, ghost", [
         (5, 15, stand_y(1, 6), HOSTILE),          # skeleton C right, gap 0
         (7, 8, stand_y(1, 6), RIGHT),             # skeleton D left, gap 1
@@ -1085,6 +1147,56 @@ def ranged_setup(p, placements, key):
     p.settle()
 
 
+LMIX_SLOTS = (5, 3, 1, 4)
+LMIX_KS = None                                  # set per run: KS_ATTACK (lmix*) / KS_HURT (lhurt*, slot 0 included)
+LMIX_DRAWN = None                               # lmix4: set of (slot, drawn fid, left) seen after each tick
+
+
+def lmix_hook(st):
+    """"lmix" (C-T10, TICK_HOOKS): every body not in a one-shot sequence is put back into its kind's
+    KS_ATTACK (start_seq: SEQ ptr, TMR 0, M_SEQ), so each tick draws all 4 attack frames."""
+    p = st.p
+    # C2 MON-DEFER: no forcing until the scenario's first turn has run its monster phase. In the game every
+    # body is idle at the input tick (turn_done waits for it) and stays idle through the tick after it, which
+    # runs the deferred resolve_monsters and renders only the input tick's anim output (the hero); forcing
+    # the bodies into KS_ATTACK before that drew a 5-body repaint on top of the monster phase (lmix4: one
+    # tick, work 131,371), a state the real turn cannot reach. From the monster tick on, as before.
+    global LMIX_GO
+    if not LMIX_GO:
+        LMIX_GO = p.rb("TURN_PHASE") != 0 and not p.rb("TURN_PEND") & (1 << S["TP_MONQ_BIT"])
+    hold = not LMIX_GO
+    for slot in ((0,) + LMIX_SLOTS if LMIX_KS == S["KS_HURT"] else LMIX_SLOTS):
+        e = p.ent(slot)
+        if LMIX_DRAWN is not None:                # lmix4: which frames really got drawn (E_DFID, E_DVIS bit 3 = left)
+            LMIX_DRAWN.add((slot, p.rb(S["P_ENTITIES"] + slot * S["P_ENT_STRIDE"] + S["E_DFID"]),
+                            p.rb(S["P_ENTITIES"] + slot * S["P_ENT_STRIDE"] + S["E_DVIS"]) & 8))
+        if hold or not e["FLAGS"] & 1 or e["MODE"] == S["M_SEQ"]:
+            continue
+        row = p.rb(S["kind_tab"] + S["KT_SEQ"] + e["KIND"])
+        a = (S["seq_rows"] & ~255) | ((row + LMIX_KS) & 255)
+        base = S["P_ENTITIES"] + slot * 32
+        p.wmem(base + S["E_SEQL"], [p.rb(a), p.rb(a + 1)])
+        p.wb(base + S["E_TMR"], 0)
+        p.wb(base + S["E_MODE"], S["M_SEQ"])
+        p.wb(base + S["E_HP"], 60)
+        p.wb(base + S["E_MAXHP"], 60)
+
+
+LWALK_SEEN = {}
+LMIX_GO = False                                    # lmix_hook: the first turn's monster phase has run
+
+
+def lwalk_hook(st):
+    """"lwalk": count the drawn (frame, left) pairs per slot after every tick (E_DFID, E_DVIS bit 3 = left)."""
+    p = st.p
+    fn = {v: k[4:] for k, v in S.items() if k.startswith("FID_")}
+    for slot in (0,) + LMIX_SLOTS:
+        b = S["P_ENTITIES"] + slot * S["P_ENT_STRIDE"]
+        if p.rb(b + S["E_DVIS"]) & 1:
+            key = (slot, fn.get(p.rb(b + S["E_DFID"]), "?"), bool(p.rb(b + S["E_DVIS"]) & 8))
+            LWALK_SEEN[key] = LWALK_SEEN.get(key, 0) + 1
+
+
 def lqmix_setup(p):
     """"lqmix" (AI-L1): pmix items + slot 1 re-kinded to a Skeleton (60 HP each, so nothing dies)."""
     pmix_setup(p)
@@ -1226,16 +1338,43 @@ WALARM_PRE = []                                   # "walarm": the slots live bef
 
 
 def run_scenario(h, scen):
+    global LMIX_DRAWN, LMIX_KS, LMIX_GO
     name, placements, keys = scen[:3]
+    LMIX_DRAWN = None
     p = game.T(h)
+    real4 = len(scen) > 5 and scen[5] in ("lmix4", "lhurt4", "lwalk4")
+    LMIX_KS = S["KS_HURT"] if len(scen) > 5 and scen[5] in ("lhurt", "lhurt4") else S["KS_ATTACK"]
+    if real4:                                     # C-F1: a real generated D4, not the PROTO fixture
+        p.proto_start = 0
     p.boot(scen[3] if len(scen) > 3 else K_KNIGHT, freeze=0)
+    if real4:
+        p.wmem(S["MASTER_SEED"], [0x24, 0x4B])
+        pc0 = p.pc()
+        ld = S["level_descend"]                   # in play (no SP reset), as tests/lp.py T.code(game=True)
+        stub = S["LOWRAM_END_3B"]
+        code = [0xF3, 0x3E, 3, 0x32, S["LVL_DEPTH"] & 255, S["LVL_DEPTH"] >> 8, 0xCD, ld & 255, ld >> 8,
+                0xFB, 0x00, 0x18, 0xFE]
+        p.z.cmd("write-memory %d %s" % (stub, " ".join(map(str, code))))
+        end = stub + len(code) - 3
+        p.z.cmd("set-breakpoint 3 PC=%d" % end)
+        p.extra_probes = {end}
+        p.z.cmd("set-register PC=%d" % stub)
+        p.z.cmd("run 20000000")
+        ok = p.pc() == end
+        p.z.cmd("set-breakpoint 3")
+        p.extra_probes = set()
+        p.z.cmd("set-register PC=%d" % pc0)
+        p.release()
+        p.settle(4)
+        assert ok and p.rb("LVL_DEPTH") == 4, "lmix4: level_descend to D4 failed"
     p.isolate()
+    room0 = p.rb("CUR_ROOM") if real4 else 0
     if MUS_POKE:                                  # SND-2 T5: T3's level hook isn't merged yet
         p.wb("MUS_REQ", int(MUS_POKE, 0))
     p.place(0, 12, HERO_Y)
     for slot, x, y, flags in placements:
-        p.place(slot, x, y, room=0, flags=flags)
-    if DECOR:
+        p.place(slot, x, y, room=room0, flags=flags)
+    if DECOR and not real4:
         inject_decor(p)
     if len(scen) > 5 and scen[5] in ("lcast", "lcastf", "lcasts"):
         lcast_setup(p, placements)
@@ -1287,6 +1426,49 @@ def run_scenario(h, scen):
         imix_setup(p)
     if len(scen) > 5 and scen[5] == "lqmix":
         lqmix_setup(p)
+    if len(scen) > 5 and scen[5] in ("lmix", "lmixw", "lhurt"):
+        LMIX_DRAWN = set() if scen[5] == "lhurt" else None
+        pmix_setup(p)
+        for slot in LMIX_SLOTS:
+            p.set_ent(slot, HP=60, MAXHP=60)
+            if scen[5] in ("lmixw", "lhurt"):       # C-T9: every body a Skeleton (the widest resident kind)
+                yy = stand_y(1, 6)
+                p.set_ent(slot, KIND=S["K_SKELETON"], Y=yy, PY=yy * 8)
+        p.set_ent(0, HP=250, MAXHP=250)
+        if LMIX_KS == S["KS_HURT"]:               # C-H: the hero faces left too
+            p.set_ent(0, FLAGS=p.ent(0)["FLAGS"] | EF_LEFT)
+        LMIX_GO = False
+        if lmix_hook not in TICK_HOOKS:
+            TICK_HOOKS.append(lmix_hook)
+    elif lmix_hook in TICK_HOOKS and not real4:
+        TICK_HOOKS.remove(lmix_hook)
+    if real4:                                     # the real kinds, standing on their own floor rows
+        LMIX_DRAWN = None if scen[5] == "lwalk4" else set()
+        for slot, kn in zip(LMIX_SLOTS, ("K_OGRE", "K_ORC", "K_ORC", "K_ORC")):
+            yy = stand_y(1, p.rb(S["kind_tab"] + S["KT_BH"] + S[kn]))
+            p.set_ent(slot, KIND=S[kn], Y=yy, PY=yy * 8, HP=60, MAXHP=60)
+            p.wb(S["P_ENTITIES"] + slot * S["P_ENT_STRIDE"] + S["E_GOLD"], 0)
+        p.set_ent(0, HP=250, MAXHP=250)
+        if LMIX_KS == S["KS_HURT"]:               # C-H: the hero faces left too
+            p.set_ent(0, FLAGS=p.ent(0)["FLAGS"] | EF_LEFT)
+        if scen[5] == "lwalk4":
+            p.set_ent(0, FLAGS=p.ent(0)["FLAGS"] | EF_LEFT)
+        else:
+            LMIX_GO = False
+            if lmix_hook not in TICK_HOOKS:
+                TICK_HOOKS.append(lmix_hook)
+    if lwalk_hook in TICK_HOOKS:
+        TICK_HOOKS.remove(lwalk_hook)
+    if len(scen) > 5 and scen[5] in ("lwalk", "lwalk4", "rwalk"):
+        LWALK_SEEN.clear()
+        if scen[5] == "rwalk":
+            p.place(0, 20, HERO_Y)
+        if scen[5] in ("lwalk", "rwalk"):
+            for slot in LMIX_SLOTS:
+                yy = stand_y(1, 6)
+                p.set_ent(slot, KIND=S["K_SKELETON"], Y=yy, PY=yy * 8, HP=60, MAXHP=60)
+            p.set_ent(0, HP=250, MAXHP=250, FLAGS=p.ent(0)["FLAGS"] | (EF_LEFT if scen[5] == "lwalk" else 0))
+        TICK_HOOKS.append(lwalk_hook)
     if len(scen) > 5 and scen[5] in ("lglow", "blair", "omix"):
         boss_setup(p, scen[5])
     if len(scen) > 5 and scen[5] == "dmix":
@@ -1319,7 +1501,9 @@ def run_scenario(h, scen):
         f(p)
     mode = scen[4] if len(scen) > 4 else None
     st = {"fx": FxStepper, "cast": CastStepper}.get(mode, Stepper)(p)
-    for _ in range(6):                            # a few unmeasured ticks: the ISR picks MUS_REQ up
+    for _ in range(900 if real4 else 6):          # a few unmeasured ticks: the ISR picks MUS_REQ up (a real level: the
+        if real4 and p.rb("MUS_REQ") != int(MUS_POKE or 0):   # Level Complete stinger plays out first)
+            p.wb("MUS_REQ", int(MUS_POKE or 0))
         if p.rb("MUS_CUR") == S["MUS_LAMENT"]:
             break
         st._to("tick_work")
@@ -1351,6 +1535,29 @@ def run_scenario(h, scen):
             if HAS_TRACE:
                 swing += S["FID_wizard_staffswing"] in p.trace_fids(0)
     st.close()
+    if len(scen) > 5 and scen[5] in ("lwalk", "lwalk4", "rwalk"):
+        agg = {}
+        for (sl, n, left), c in LWALK_SEEN.items():
+            agg.setdefault((n, left), 0)
+            agg[(n, left)] += c
+        print(f"[info] {scen[5]} drawn (frame, left) x ticks: {sorted(agg.items(), key=lambda kv: -kv[1])[:14]}; "
+              f"BLIT_MISS {p.rb('BLIT_MISS')}", flush=True)
+    if LMIX_DRAWN is not None:                    # the mirrored frames really were drawn (left, STA|MIR)
+        hurt = LMIX_KS == S["KS_HURT"]
+        names = {S["FID_" + n]: n for n in (("knight_hurt", "orc_hurt", "skeleton_hurt") if hurt else
+                                            ("ogre_raise", "ogre_slam", "orc_raise", "orc_attack"))}
+        seen = sorted((sl, names[f]) for sl, f, left in LMIX_DRAWN if left and f in names)
+        print(f"[info] {scen[5]} left-facing {'hurt' if hurt else 'attack'} frames drawn: {seen}; BLIT_MISS {p.rb('BLIT_MISS')}", flush=True)
+        if hurt:
+            assert (0, "knight_hurt") in seen, "lhurt*: the hero's hurt frame was never drawn facing left"
+            if real4:
+                assert {sl for sl, n in seen if n.startswith("orc")} == {3, 1, 4}, "lhurt4: an Orc hurt frame was never drawn"
+            else:
+                assert {sl for sl, n in seen if n.startswith("skel")} == set(LMIX_SLOTS), "lhurt: a Skeleton hurt frame was never drawn"
+        else:
+            assert any(n == "ogre_slam" for _, n in seen), "lmix4: the Ogre slam frame was never drawn"
+            assert {sl for sl, n in seen if n.startswith("orc")} == {3, 1, 4}, "lmix4: an Orc attack frame was never drawn"
+        LMIX_DRAWN = None
     if dnum_hook in TICK_HOOKS:
         TICK_HOOKS.remove(dnum_hook)
         print(f"[info] {scen[5]} after: {DNUM['passes']} passes in {DNUM['k']} ticks, {DNUM['spawns']} spawns "
@@ -1513,7 +1720,7 @@ def run_scenario(h, scen):
 
 
 ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4")
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk")
 
 
 def swing_pass(keys):

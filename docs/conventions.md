@@ -104,6 +104,9 @@
   a tick, gated: memory-map "D3-11 ledger"); bank3.asm's rules apply (no SMC,
   no data, never pages `$C000`: `far3` / `far6` / `far7` hand it back). Its bank-3 / R6 / bank-7 parts are
   far-called from it; nothing else may add per-tick work there without the budget gate.
+  C2: `dn_q2` spawns nothing in a tick that ran turn logic (`heavy_mark` -> `LOGIC_TICK`, bank 7: call it from any
+  new per-turn logic entry that can run in a tick's 2nd frame) or rendered >= `DN2_DMG_MAX` damage rects.
+  Cold per-turn code may live there too (C2: `mus_pick0`, the Dangerous cue, via the bank-7 stub `mus_pick`).
   **DNUM-SPRITE-FIX (2026-11-03): the numbers are drawn on the DISPLAYED screen only** (bank-2
   `dnum2.asm` `dn_show`, entered by `far7` = bank 7 paged; `present` calls `dn_fix` first): bank 5
   never holds a number, so nothing else needs to know about them; an erase is a `pmark_rect` (present
@@ -145,6 +148,13 @@
   calls. `tests/world.py` W9R runs a goblin opening a door through the real
   `resolve_monsters` and asserts bank 3 is paged afterwards (it crashes with
   the restore removed).
+
+## Monster phase timing (C2 MON-DEFER, user 2026-11-10)
+
+- An ordinary turn's `resolve_monsters` runs on the tick AFTER the input tick (`TP_MONQ` -> `act_pend`); an
+  ability / trap turn's runs at `MON_AT` as before. Code that must see the monsters' turn result in the input
+  tick cannot: read it from the next tick on (turn_done holds the turn while `TURN_PEND` != 0). Anything the
+  phase schedules is `TURN_TICK`-relative; never write absolute tick numbers into reactions / shots.
 
 ## World-state changes (render resync contract)
 
@@ -218,15 +228,45 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   vector table `ISR_VEC_TABLE` (`I` = `$BB`, bank 2) of `ISR_VEC_BYTE`, ISR
   copied to `ISR_ADDR` `$BCBC`. The tape entry `start` runs before that under
   the ROM IM1 ISR (LD-BYTES ends with `EI`), with `IY = $5C3A`.
-- **The ISR** (`isr`, `src/lowram.asm`, runs from bank 2): `SYS_FRAMES += 1`
+- **The ISR** (`isr`, `src/boot6.asm` load image, runs from bank 2): **C-T3: SP-safe** — it never pushes
+  on the interrupted stack: entry `ex (sp),hl` / `ld (isr_jp+1),hl` / `pop hl` / `push bc` /
+  `ld (isr_rs+1),sp` / `ld sp,ISR_STK` takes the return address out of the word the CPU's interrupt push wrote
+  (S..S+1, S = interrupted SP − 2), **writes BC back over it** (unconditional, before anything is paged)
+  and switches to its own stack `ISR_STK` (bank 2, bottom of the stack area); exit `isr_rs: ld sp,S` /
+  `pop bc` (BC back from that word) / `ei` / `isr_jp: jp ret` (SMC; flags untouched). Then `SYS_FRAMES += 1`
   exactly as the ROM did (3 bytes; `wait_tick` paces on the low byte), then
   pages `BANK_AY` and calls `AY_PLAY` once per frame, then re-OUTs the shadow.
-  It saves AF, BC, DE, HL, IX (+ AF'..HL' with `ISR_SAVE_ALT=1`); **not IY** (ISR-RATE: neither the ISR nor `AY_PLAY` touch it, -29 T / -4 B; `tests/isr_rate.py` `iy` checks it across 500 ISRs). `SYS_FRAMES` is bumped in place (`inc (hl)` chain on one page, 33 T common path). No ROM
-  chain by default: input is read straight from the ports (`scan_matrix`),
-  nothing reads the ROM keyboard variables, so the ROM handler would only cost
-  ~0.9k T/frame. `ISR_ROM_CHAIN=1` (assemble-only, untested at runtime: test #61's probe sets IY, invalid under ROM chain) ends the ISR with `jp $0038` instead (then
-  `IY` must be `$5C3A` whenever interrupts are on — keep it there anyway: the
-  engine never touches `IY`).
+  It saves AF, BC, DE, HL, IX (+ AF'..HL' with `ISR_SAVE_ALT=1`, out of line in `isr_alt`); **not IY** (ISR-RATE: neither the ISR nor `AY_PLAY` touch it, -29 T / -4 B; `tests/isr_rate.py` `iy` checks it across 500 ISRs). `SYS_FRAMES` is bumped in place (`inc (hl)` chain on one page, 33 T common path). No ROM
+  chain: input is read straight from the ports (`scan_matrix`),
+  nothing reads the ROM keyboard variables. **`ISR_ROM_CHAIN` is dropped** (C-T3, user 2026-11-09: the
+  ROM `$0038` handler pushes on the interrupted stack, which a pop blit cannot allow; `-DISR_ROM_CHAIN`
+  stops the build with an ASSERT).
+- **Stack blits (C-T3 amendment, user 2026-11-09).** A blit may point SP at sprite data and `pop` it
+  **without `DI`**, under the **ISR write-back invariant: at every instruction boundary while SP is
+  borrowed, the word just below SP (SP−2..SP−1) equals BC.** The ISR rewrites that word with BC on
+  every entry (the CPU's interrupt push overwrote it), so an interrupt anywhere leaves the data
+  byte-identical. Consequences for such code: it pops into BC only (`pop bc` = the invariant holds by
+  construction); BC is preloaded from the word below the first pop (frame start − 2) **before** SP is
+  switched; between the switch and the SP restore, no other instruction writes BC, no `push` / `call` /
+  `rst` / `ex (sp)` (they write below SP), no `EXX` (swaps BC), no `$7FFD` write (the ISR reads BC
+  back from the word at its exit: the bank at `$C000` must be the one it wrote at entry). The word below the source start is
+  read, never written by the blit (a frame at `$C000` reads `$BFFE`, `DH_EFF` scratch; safe because the
+  write-back stores back what was read). After SP is restored the word below SP is free stack again.
+  The ISR stack (`ISR_STK`, bank 2) is never the borrowed stack. NMI: no handler — a hardware NMI
+  during a stack blit corrupts the data (accepted). Any other SP trick still needs `DI`.
+  **C-T4: the one stack blit is `blit_sprite`** (`src/gfx.asm`, both chains: `pop bc` = C mask, B data,
+  36 T/byte; DE screen, L line-start low byte, H line counter); the borrowed window is `blit_sp_on`
+  (the `ld sp,hl`) .. `blit_sp_off` (after `blit_rs: ld sp,<caller SP>`, SMC) — test probes for the
+  ISR-boundary fuzz. A new stack blit must follow the same rules and expose the same two probes.
+  **C-T6: the blit-time mirror** (`src/mirror2.asm`, part of `blit_sprite`): an FRT bank byte with bit 7 set
+  (FF_MIR frames: the left entries are the right ones | `$80`, `gen_frame` → bank-0 `gen_lshare`) diverts
+  `blit_sprite` (`jp p, blit_mback` at the bank read falls into `blit_mpro` for a mirrored entry; it patches `blit_mj+1` → `blit_mset`, which puts it back; so does the clip trap)
+  to the mirror chain: `pop bc / ld l,c / ld a,(de) / and (hl) / ld l,b / or (hl) / ld (de),a / dec e`
+  (50 T/byte; H = `BLIT_REV` = the `BITREV_TAB` page, $6800 bank 5), from the row's last byte column
+  leftwards; IXL = the line's first screen byte, IXH = lines to the next char row, `BLIT_CROWS` = lines after
+  this segment (one chain for aligned and general); the caller's IX is saved in the SMC operand `blit_mix+2`
+  and restored before `blit_rs`. Same invariant, same probes; nothing else may read an FRT bank byte without
+  masking bit 7 (only `blit_sprite` and `ec_port`'s FRT_NONE test read them today).
 - **Paging protocol (race-free without `DI`).** Every `$7FFD` write in main
   code goes **shadow first, then `OUT`** (`page_bank`, `set_screen`; never a
   bare `OUT`, never "OUT then shadow"). The ISR **never writes the shadow**:
@@ -241,7 +281,7 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   to `$FFFF` since MEM-SND (4 KB from `$F000` since D3-0, 7 KB from `$E400` before); `src/ay.asm`: since SND-2 the
   mailbox dispatcher `ay_play` + the WZM v0.3 player (`MODULE wzm`, buzzer, no
   echo) + the songs (`MODULE mus`)): called with interrupts off,
-  bank 3 paged at `$C000`, any stack depth (it uses 8 B incl. the CALL since SND-5: `ay_play` → `ay_music` / `sfx_step` → the player's 4). The slot may clobber AF, BC, DE, HL, IX (**not IY: the ISR no longer saves it**, ISR-RATE)
+  bank 3 paged at `$C000`, on the ISR's own stack `ISR_STK` (C-T3; it uses 8 B incl. the CALL since SND-5: `ay_play` → `ay_music` / `sfx_step` → the player's 4). The slot may clobber AF, BC, DE, HL, IX (**not IY: the ISR no longer saves it**, ISR-RATE)
   (`ay_play` today: AF, BC, DE, HL, IX; no IY).
   Must not: write the shadow or `$7FFD`, `EI`, touch `$C000` data of other
   banks, use the alternate set unless `ISR_SAVE_ALT=1` (assemble-only, untested at runtime) (or main code never
@@ -272,12 +312,12 @@ Single source of truth for the setup: `docs/memory-map.md` "Interrupts (A8)".
   SP reset, `isr_install` and the first shadow write — the ISR must not run
   before the shadow is valid), `check_paging.locked` (`DI` + `HALT`: the
   deliberate stop when paging is locked). The ISR itself runs with
-  interrupts off (~0.6k T idle, up to ~5.5k T with a tune playing (SND-2), in the top border). New routines that need `DI`
-  document the window and keep it as short as possible; SP tricks (stack
-  blits) are out unless they run under `DI` with that cost accepted.
+  interrupts off (~0.6k T idle, up to ~6.4k T with a tune + effects (SND-5, C-T3), in the top border). New routines that need `DI`
+  document the window and keep it as short as possible; SP tricks other than
+  the stack blits above (write-back invariant) are out unless they run under
+  `DI` with that cost accepted.
 - **`IY` = `$5C3A`**: still set by `start` / `boot` and never changed — needed
-  by the tape path (ROM IM1 ISR) and by `ISR_ROM_CHAIN=1`; the default IM 2
-  ISR does not use it.
+  by the tape path (ROM IM1 ISR); the IM 2 ISR does not use it.
 
 ## Testing hook
 

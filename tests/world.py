@@ -1107,9 +1107,10 @@ def w19(p, check):
 
 
 def w20(p, check):
-    """C3-1 review: measured stack depth (pattern fill below WORKSTORE_TOP)."""
+    """C3-1 review: measured stack depth (pattern fill below WORKSTORE_TOP). C-T3: the ISR has its own
+    stack STACK_BOTTOM..ISR_STK, so the main stack is measured down to ISR_STK and gated by STACK_MAIN_MAX."""
     import random
-    lo, top = S["STACK_BOTTOM"], S["WORKSTORE_TOP"]
+    lo, top = S["ISR_STK"], S["WORKSTORE_TOP"]
     PAT = 0x5A
     keep = p.proto_start
     p.proto_start = 0                               # generated D1: level_gen too
@@ -1136,8 +1137,8 @@ def w20(p, check):
     depth = top - low
     print(f"[info] W20 measured: max stack depth {depth} B (lowest byte touched {low:#06x}) over boot,"
           f" a generated D1 start and {turns} turns (rooms visited end {p.rb('CUR_ROOM')})", flush=True)
-    check("W20 stack: max depth <= 256 B of the 512-B stack (STACK_BOTTOM never reached)",
-          0 < depth <= 256, depth)
+    check("W20 stack: max main depth <= STACK_MAIN_MAX (%d B; ISR_STK never reached)" % S["STACK_MAIN_MAX"],
+          0 < depth <= S["STACK_MAIN_MAX"], depth)
 
 
 

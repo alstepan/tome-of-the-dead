@@ -221,7 +221,7 @@ def pool_check(p, check, tag, snap0, snapd=None):
         if f in fids:
             for side in (0, 2):
                 vs = [v for v in (side, side + 1) if row[3 * v] != S["FRT_NONE"]]
-                if not vs or any(row[3 * v] not in (0, 4, 6) for v in vs):   # MOT: 2 shifts
+                if not vs or any(row[3 * v] & (0x7F if side else 0xFF) not in (0, 4, 6) for v in vs):   # MOT: 2 shifts; C-T6: left bit 7 = FF_MIR
                     bad.append((f, side))
         elif any(row[3 * v] != S["FRT_NONE"] for v in range(4)):
             bad.append((f, "not NONE"))
@@ -240,14 +240,32 @@ def fx_check(p, check):
     want = ("KFID_FXW", "KFCNT_FXW") if hk == S["K_KNIGHT"] else ("KFID_FXM", "KFCNT_FXM")
     check(f"GI FX: kind {k} range == {want[0]}", (f0, fc) == (S[want[0]], S[want[1]]), (f0, fc))
     frt = bytes(p.z.read_memory(S["FRT"] + f0 * S["FRT_STRIDE"], fc * S["FRT_STRIDE"]))
-    bad = []
+    # C-T6: FF_MIR frames store ONE copy (the right); the left FRT entries repeat its address with bank
+    # bit 7 set (blit_sprite mirrors at draw time); FF_SYM: left == right (one copy); the rest
+    # (none among the FX today) keep one generated variant per facing.
+    names = {S[k]: k[4:] for k in S if k.startswith("FID_")}
+    bad, nm, ns, no = [], 0, 0, 0
     for i in range(fc):
         row = frt[i * S["FRT_STRIDE"]:(i + 1) * S["FRT_STRIDE"]]
-        for side in (0, 2):
-            vs = [row[3 * v:3 * v + 3] for v in (side, side + 1) if row[3 * v] != S["FRT_NONE"]]
-            if len(vs) != 1 or vs[0][0] not in (0, 4, 6) or (vs[0][1] | vs[0][2] << 8) < 0xC000:
-                bad.append((f0 + i, side))
-    check(f"GI FX: hero {hk} class FX frames ({fc}) generated, one variant per facing", bad == [], bad[:6])
+        fl = S["FFL_" + names[f0 + i]]
+        v = [row[3 * j:3 * j + 3] for j in range(4)]
+        r = [x for x in v[0:2] if x[0] != S["FRT_NONE"]]
+        l = [x for x in v[2:4] if x[0] != S["FRT_NONE"]]
+        if len(r) != 1 or len(l) != 1 or r[0][0] not in (0, 4, 6) or (r[0][1] | r[0][2] << 8) < 0xC000:
+            bad.append((f0 + i, "right")); continue
+        if fl & S["FF_SYM"]:
+            ns += 1
+            ok = bytes(l[0]) == bytes(r[0])
+        elif fl & S["FF_MIR"]:
+            nm += 1
+            ok = l[0][0] == r[0][0] | 0x80 and l[0][1:] == r[0][1:]
+        else:
+            no += 1
+            ok = l[0][0] in (0, 4, 6) and l[0][1:] != r[0][1:]
+        if not ok:
+            bad.append((f0 + i, "left", names[f0 + i]))
+    check(f"GI FX: hero {hk} class FX frames ({fc}): one stored copy each (MIR {nm}: left = right|$80, SYM {ns}: left = right),"
+          f" {no} other with one variant per facing", bad == [] and nm > 0, bad[:6])
 
 
 def screen_check(p, check, tag, depth):

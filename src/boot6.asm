@@ -42,6 +42,12 @@ boot6_init:
                 ld   de, ISR_ADDR
                 ld   bc, ISR_LEN
                 ldir
+    IF ISR_SAVE_ALT
+                ld   hl, isr_alt_image
+                ld   de, ISR_ALT_ADDR
+                ld   bc, ISR_ALT_LEN
+                ldir
+    ENDIF
                 ld   a, ISR_VEC_TABLE >> 8
                 ld   i, a
                 im   2
@@ -199,8 +205,24 @@ keytab_defaults:                               ; C3-1: boot -> KEYTAB (hero_defs
 ; isr — IM 2 handler, runs at ISR_ADDR (bank 2: uncontended, always mapped),
 ; once per frame (50 Hz), interrupts disabled on entry. This is its load
 ; image (boot6_init copies it; 3E-T1: was in low RAM).
+;  0. C-T3 (SP-safe, option C): the handler never pushes on the interrupted
+;     stack. Entry swaps the return address out of the word the CPU's own
+;     push just wrote ((S..S+1), S = interrupted SP - 2), writes BC back over
+;     that word and switches to its own stack ISR_STK; the exit reloads SP =
+;     S + 2 and leaves by `jp` (SMC). So an interrupt during a pop-based blit
+;     (SP walking up through the sprite pool, BC = the word just popped =
+;     the word at S: the "word below SP == BC" invariant, conventions.md
+;     "Interrupts") leaves the pool byte-identical, and the ISR's own
+;     pushes land in bank 2, not in whatever bank is paged at $C000.
+;     The write-back is UNCONDITIONAL (no "in a blit" flag): outside a blit
+;     the word below SP is free stack — nothing in the game keeps live data
+;     below SP (the only `ld sp` sites: boot, levelgen LG_SP, bank7 .quit) —
+;     so replacing the stale return address there with BC is harmless, and a
+;     flag would cost a test on every ISR plus a store pair around every blit.
+;     It runs first, before step 2 pages BANK_AY: the word at S may be in the
+;     pool bank at $C000 (a frame at $C000 makes S = $BFFE, DH_EFF scratch).
 ;  1. SYS_FRAMES += 1 exactly as the ROM's MASK-INT (3-byte counter; the tick
-;     pacing reads the low byte) — unless ISR_ROM_CHAIN, where the ROM does it.
+;     pacing reads the low byte).
 ;  2. Pages BANK_AY at $C000 by OUT only: (PORT_7FFD_SHADOW & ~7) | BANK_AY
 ;     keeps the shadow's screen bit 3 and ROM bit 4; the shadow is never
 ;     written. Calls AY_PLAY (bank 3).
@@ -208,20 +230,34 @@ keytab_defaults:                               ; C3-1: boot -> KEYTAB (hero_defs
 ;     with the main code's "shadow first, then OUT" (page_bank / set_screen):
 ;     an interrupt between the two leaves the port already at the new value,
 ;     and the main code's own OUT then rewrites the same byte. No DI needed.
-; Saves every register it or the player may touch: AF, BC, DE, HL, IX; IY is
+; Saves every register it or the player may touch: AF, BC, DE, HL, IX (BC in the write-back word
+; at S, popped back at the exit: S is in bank 2 / 5, or in the $C000 bank of a stack blit, which
+; never writes $7FFD while SP is borrowed, so the exit reads the bank the entry wrote); IY is
 ; neither used here nor by AY_PLAY (ay.asm + the WZM player: no IY, verified by grep
 ; and by tests/isr_rate.py's IY-across-ISR check) so it is NOT saved (ISR-RATE, -29 T).
-; (+ the alternate set if ISR_SAVE_ALT). Stack: 10 B + AY_PLAY's 6 B (CALL 2 + player 4) (+8 alt).
-; Cost (measured): ISR own instructions 261 T + 19 T acknowledge = 280 T overhead (was 315 + 19),
-; + AY_PLAY (SND-2: the dispatcher + WZM player, idle ~0.2k .. worst ~5k T), in the
+; (+ the alternate set if ISR_SAVE_ALT, out of line in isr_alt). Flags preserved
+; (pop af before the exit; ld sp / ei / jp touch none).
+; Stack: the interrupted stack only (S..S+1), rewritten to BC; own stack ISR_STK:
+; 8 B + AY_PLAY's 8 B (CALL 2 + the player's 6) = ISR_STK_NEED (+10 alt).
+; Cost (measured): ISR own instructions 261 T + 19 T acknowledge = 280 T overhead (was 315 + 19);
+; C-T3 +85 T: entry ex / ld / pop / push / ld / ld sp 86 T, push bc dropped -11 (isr -> isr.done
+; +75 T); exit ld sp / pop bc / ei / jp 34 T vs pop bc / ei / ret 24 T (+10); + AY_PLAY (SND-2: the dispatcher + WZM player, idle ~0.2k .. worst ~5k T), in the
 ; top border (docs/memory-map.md "Interrupts (A8)").
+; SMC: isr_rs+1 (the resume SP) and isr_jp+1 (the return address), written at
+;      every entry before use.
 ;------------------------------------------------------------------------------
 isr_image:
                 DISP ISR_ADDR
 isr:
+                ex   (sp), hl                  ; 19 HL = return address, (S) = HL (scratch)
+                ld   (isr_jp + 1), hl          ; 16 SMC: the exit's jp target
+                pop  hl                        ; 10 HL back; SP = S + 2
+                push bc                        ; 11 write-back: (S..S+1) = BC; the only
+                                               ;    write to the interrupted stack; SP = S
+                ld   (isr_rs + 1), sp          ; 20 SMC: the exit's ld sp (= S)
+                ld   sp, ISR_STK               ; 10 own stack (bank 2) from here on
                 push af
                 push hl
-    IF !ISR_ROM_CHAIN
                 ld   hl, SYS_FRAMES            ; ROM: INC (IY+$40) chain; ISR-RATE: 33 T common path
                 inc  (hl)                      ; (was 58: ld hl,(nn) / inc hl / ld (nn),hl / ld a,h / or l)
                 jr   nz, .frames
@@ -232,47 +268,33 @@ isr:
                 inc  (hl)
 .frames:
                 ASSERT (SYS_FRAMES & $FF) + 2 <= $FF
-    ENDIF
-                push bc
+                                               ; (no push bc: the exit pops BC back from
+                                               ;  the write-back word, -11 T here, -10 T there)
                 push de
                 push ix                        ; ISR-RATE: no IY (ay.asm / the player never use it)
-    IF ISR_SAVE_ALT
-                ex   af, af'
-                push af
-                exx
-                push bc
-                push de
-                push hl
-    ENDIF
                 ld   a, (PORT_7FFD_SHADOW)
                 and  ~7 & $FF                  ; keep screen bit 3 + ROM bit 4
                 or   BANK_AY
                 ld   bc, PORT_7FFD
                 out  (c), a                    ; shadow untouched
+    IF ISR_SAVE_ALT
+.page:          call isr_alt                   ; saves AF'..HL' around AY_PLAY (out of line:
+                                               ; the window has no room for the 12 B)
+    ELSE
 .page:          call AY_PLAY                   ; bank 3, contended fetches
+    ENDIF
                 ld   a, (PORT_7FFD_SHADOW)     ; the CURRENT shadow (see 3. above)
                 ld   bc, PORT_7FFD
                 out  (c), a
 .done:                                         ; test probe: port == shadow here
-    IF ISR_SAVE_ALT
-                pop  hl
-                pop  de
-                pop  bc
-                exx
-                pop  af
-                ex   af, af'
-    ENDIF
                 pop  ix
                 pop  de
-                pop  bc
                 pop  hl
                 pop  af
-    IF ISR_ROM_CHAIN
-                jp   ROM_ISR                   ; FRAMES, keyboard scan, EI, RET (IY!)
-    ELSE
-                ei
-                ret
-    ENDIF
+isr_rs:         ld   sp, 0                     ; 10 SMC: S (set at entry)
+                pop  bc                        ; 10 BC from the write-back word; SP = S + 2
+                ei                             ; 4 the next interrupt waits for the jp
+isr_jp:         jp   0                         ; 10 SMC: the return address (set at entry)
 isr_end:
                 ENT
 ISR_LEN         EQU isr_end - isr
@@ -282,6 +304,38 @@ ISR_LEN         EQU isr_end - isr
                 ASSERT (ISR_VEC_TABLE & $FF) == 0
                 ASSERT (ISR_VEC_TABLE >> 8) >= $80 && (ISR_VEC_TABLE >> 8) < $C0  ; I: bank 2
                 ASSERT ISR_ADDR_END <= STACK_BOTTOM
+
+    IF ISR_SAVE_ALT
+; isr_alt — the alternate set saved around AY_PLAY (ISR_SAVE_ALT=1 only,
+; assemble-only like before): copied to ISR_ALT_ADDR (the bottom of the ISR
+; stack area, below its deepest byte). +27 T (call / ret) over inline saves.
+isr_alt_image:
+                DISP ISR_ALT_ADDR
+isr_alt:
+                ex   af, af'
+                push af
+                exx
+                push bc
+                push de
+                push hl
+                call AY_PLAY
+                pop  hl
+                pop  de
+                pop  bc
+                exx
+                pop  af
+                ex   af, af'
+                ret
+isr_alt_end:
+                ENT
+ISR_ALT_LEN     EQU isr_alt_end - isr_alt
+    ELSE
+ISR_ALT_LEN     EQU 0
+    ENDIF
+                ; the ISR stack area STACK_BOTTOM..ISR_STK holds isr_alt (if any) + the ISR's
+                ; deepest use; the main stack must stay above ISR_STK (W20 measures it)
+                ASSERT ISR_ALT_ADDR + ISR_ALT_LEN <= ISR_STK - ISR_STK_NEED
+                ASSERT WORKSTORE_TOP - ISR_STK >= STACK_MAIN_MAX
 
 ; the boot6_tiles run: tiles_common (glyphs, attrs), orn_glyphs, the HOT_COPY
 ; image, font6x8 — contiguous, in this order (HL continues across them)
