@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
-"""INSTR-BUILD / INSTR-P3: the three-page HOW TO PLAY screen (instr_ovl.asm; game.md §3.2.1 option A
+"""INSTR-BUILD / INSTR-P3: the two-page HOW TO PLAY screen (instr_ovl.asm; game.md §3.2.1 option A
 flow, pages per docs/design/instructions_screen.md / .txt).
   I1  page 1 (GS_HELP1) bitmap + attrs == the approved render model (tools/gen_instr_mock.py
       page(1), same spec as the build: tools/instr_pack.py) byte for byte
   I2  the page-1 key still held: no page 2 until it is released (no timeout either)
-  I3  page 2 (GS_HELP2) == page(2) byte for byte
-  I9  page 3 (GS_HELP3, TREASURES) == page(3) byte for byte (differing rows reported)
+  I9  page 2 (GS_HELP3, TREASURES; TUT0-T2 dropped the items page, GS_HELP2 unused) == page(2)
+      byte for byte (differing rows reported)
   I9a icon cells: 13 records, 32 bitmap bytes + 4 attrs each, text attr beside them (cells 2 / 18)
   I9b empty half (rows 17-18 cells 16-31; rows 14, 18 outside the icons)
   I9c full-width rows 03 / 05 (cells 15, 16, 31)
   I9d plain rows 01 / 11 / 19 zero, 20-22 attr $05, 23 == the footer model
-  I10 the page-2 key held: still page 2 until it is released, then page 3
-  I4  page 3's key ('1') -> menu, swallowed (no START), menu answers a real press
-  I5  BREAK on page 1 skips pages 2 and 3 -> menu (GS_SELECT), never GS_HELP2 / 3
-  I11 BREAK on page 2 skips page 3 -> menu, never GS_HELP3
+  I4  page 2's key ('1') -> menu, swallowed (no START), menu answers a real press
+  I5  BREAK on page 1 skips page 2 -> menu (GS_SELECT), never GS_HELP3
   I6  static: the boot pool's start (POOL_START) equals the frame_tab stream (RECLAIM-D), page 1 right after it, i.e. the
       pool is laid over the streams; that it only runs after the help screens is not
       checked here (resident cost: build DISPLAYs)
@@ -84,11 +82,11 @@ def at(scr, r, c):
 
 
 def icons_ok(h, scr):
-    """I9a-d on a page-3 screen dump (decoded icons from the render model's source tables)."""
+    """I9a-d on a page-2 screen dump (decoded icons from the render model's source tables)."""
     import instr_pack
     bad, rowat = [], {3: 0x47, 4: 0x47, 5: 0x45, 6: 0x45, 7: 0x47, 8: 0x47, 9: 0x45, 10: 0x45,
                       13: 0x47, 14: 0x47, 15: 0x45, 16: 0x45, 17: 0x47, 18: 0x47}
-    for ic in instr_pack.PAGES[3]["icons"]:
+    for ic in instr_pack.PAGES[2]["icons"]:
         _, name, r, c, a = ic
         bm = gen_instr_mock.icon16(name)
         for i, (dr, dc) in enumerate(((0, 0), (0, 1), (1, 0), (1, 1))):
@@ -108,7 +106,7 @@ def icons_ok(h, scr):
     h.expect("I9c rows 03 (16,31) / 05 (15,16,31) filled %s" % c3, int(all(c3)), 1)
     pl = [(r, c) for r in (1, 11, 19) for c in range(32) if any(cell(scr, r, c)) or at(scr, r, c)]
     pl += [(r, c) for r in (20, 21, 22) for c in range(32) if at(scr, r, c) != 0x05]
-    m = model(3)
+    m = model(2)
     pl += [(23, c) for c in range(32) if cell(scr, 23, c) != cell(m, 23, c)]
     h.expect("I9d plain rows (bad %s)" % pl[:6], len(pl), 0)
 
@@ -138,34 +136,24 @@ def main():
         p.tick(15)
         h.expect("I2 page-1 key held: still page 1", p.rb("GAME_STATE"), GS_HELP1)
         p.release()
-        ok = p.until(lambda: p.rb("GAME_STATE") == GS_HELP2, 60)
-        h.expect("I2b released -> page 2", ok, True)
-        p.tick(25)
-        h.expect("I3a no timeout on page 2", p.rb("GAME_STATE"), GS_HELP2)
-        n, cells = diffs(screen(p), model(2))
-        h.expect("I3 page 2 == approved render (%d bytes differ, cells %s)" % (n, cells), n, 0)
-        # I10: the page-2 key held: still page 2 until released, then page 3
-        p.hold("Q")
-        p.tick(15)
-        h.expect("I10 page-2 key held: still page 2", p.rb("GAME_STATE"), GS_HELP2)
-        p.release()
         ok = p.until(lambda: p.rb("GAME_STATE") == GS_HELP3, 60)
-        h.expect("I10b released -> page 3", ok, True)
+        h.expect("I2b released -> page 2 (TREASURES, GS_HELP3)", ok, True)
         p.tick(25)
-        h.expect("I9t no timeout on page 3", p.rb("GAME_STATE"), GS_HELP3)
-        n, cells = diffs(screen(p), model(3))
-        h.expect("I9 page 3 == approved render (%d bytes differ, cells %s, rows %s)" % (
-                 n, cells, bad_rows(screen(p), model(3))), n, 0)
+        h.expect("I9t no timeout on page 2", p.rb("GAME_STATE"), GS_HELP3)
+        n, cells = diffs(screen(p), model(2))
+        h.expect("I9 page 2 == approved render (%d bytes differ, cells %s, rows %s)" % (
+                 n, cells, bad_rows(screen(p), model(2))), n, 0)
         scr = screen(p)
         icons_ok(h, scr)
         p.hold("1")
         ok = p.until(lambda: p.rb("GAME_STATE") == GS_SELECT, 60)
-        h.expect("I4 page 3 key -> menu", ok, True)
+        h.expect("I4 page 2 key -> menu", ok, True)
         p.tick(12)
         h.expect("I4b '1' swallowed: no START", p.rb("GAME_STATE"), GS_SELECT)
         pool = S["POOL_START"]
         p.release()
         p.tick(3)
+        p.tut_off()                               # TUT0-T6b: '1' now opens the choice screen
         h.expect("I4c menu answers a real press", (p.hold("1"), p.wait_state(GS_PLAYING, 200))[1], True)
         # I5: BREAK on page 1 -> straight to the menu
         h.expect("I5a reload -> page 1", to_page1(p), True)
@@ -177,22 +165,7 @@ def main():
         p.release()
         ok = p.until(lambda: (seen.add(p.rb("GAME_STATE")), p.rb("GAME_STATE") == GS_SELECT)[1], 80)
         h.expect("I5 BREAK on page 1 -> menu", ok, True)
-        h.expect("I5b pages 2 / 3 never shown (states %s)" % sorted(seen), bool(seen & {GS_HELP2, GS_HELP3}), False)
-        # I11: BREAK on page 2 -> straight to the menu, page 3 skipped
-        h.expect("I11a reload -> page 1", to_page1(p), True)
-        tap(p, "ENTER")
-        ok = p.until(lambda: p.rb("GAME_STATE") == GS_HELP2, 60)
-        h.expect("I11b page 1 key -> page 2", ok, True)
-        p.tick(3)
-        seen = set()
-        p.hold("CAPS", "SPACE")
-        for _ in range(4):
-            p.tick()
-            seen.add(p.rb("GAME_STATE"))
-        p.release()
-        ok = p.until(lambda: (seen.add(p.rb("GAME_STATE")), p.rb("GAME_STATE") == GS_SELECT)[1], 80)
-        h.expect("I11 BREAK on page 2 -> menu", ok, True)
-        h.expect("I11c page 3 never shown (states %s)" % sorted(seen), GS_HELP3 in seen, False)
+        h.expect("I5b page 2 never shown (states %s)" % sorted(seen), GS_HELP3 in seen, False)
         # I6: the boot pool (2 idles) starts at POOL_START = the first boot-only stream byte
         # (RECLAIM-D: the frame_tab stream ftz_zx0, then page 1 right after it)
         h.expect("I6 POOL_START = the frame_tab stream, then page 1 (boot pool overwrites them)",

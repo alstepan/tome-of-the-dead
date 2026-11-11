@@ -136,8 +136,7 @@ check_paging:
                 ret  z
                 ld   a, ATTR_HUD
                 call clear_screen
-                ld   b, 11
-                ld   c, 5
+                ld   bc, (11 << 8) | 5
                 ld   hl, str_lock
                 call print_str
 .locked:        di                             ; test probe (paging locked)
@@ -226,11 +225,15 @@ seed_value:     DW   SEED_VALUE
 ;------------------------------------------------------------------------------
 level_enter:
                 push af
-                ld   hl, 0                     ; SND-3: Dangerous off, calm count 0
-                ld   (DNG_DWELL), hl           ; (DNG_CALM = DNG_DWELL + 1)
-                xor  a
-                ld   (SFX_NEXT), a             ; SND-5: no deferred effect into a new level
-                ld   a, MUS_ROOM               ; same id as the menu = the tune keeps playing,
+                xor  a                         ; SND-3: Dangerous off, calm count 0 (DNG_CALM = DNG_DWELL + 1),
+                ld   hl, DNG_DWELL             ; SND-5: no deferred effect into a new level (SFX_NEXT =
+                ld   (hl), a                   ; DNG_CALM + 1: three stores, 1 B less than the word + byte)
+                inc  l
+                ld   (hl), a
+                inc  l
+                ld   (hl), a
+                ASSERT DNG_CALM == DNG_DWELL + 1 && SFX_NEXT == DNG_CALM + 1 && (DNG_DWELL >> 8) == (SFX_NEXT >> 8)
+                ld   a, MUS_ROOM              ; same id as the menu = the tune keeps playing,
                 ld   (MUS_REQ), a              ; no restart (Q rotation by depth: later)
                 pop  af
                 push de
@@ -325,11 +328,9 @@ level_descend:
                 jr   nc, game_win
                 inc  a
                 ld   de, TX_DESCEND
-                ld   b, a
-                ld   a, MUS_LEVEL              ; SND-4a: Level Complete stinger (the ISR drops it
-                ld   (MUS_SHOT), a             ; with music off); level_enter holds for it
-                ld   a, b
-                call level_enter
+                ld   hl, MUS_SHOT              ; SND-4a: Level Complete stinger (the ISR drops it
+                ld   (hl), MUS_LEVEL           ; with music off); level_enter holds for it (-2 B: no B
+                call level_enter               ; shuffle; it takes A, DE only)
 ; play_go — a level is shown: a key still held through the card must be released
 ; (edge-triggered input) first, GS_PLAYING, the tick clock resynced.  start_game calls it
 ; (then enters play_loop), level_descend falls into it.  Clobbers: A, F
@@ -349,10 +350,11 @@ tome_gone:      ld   a, TX_WIN
 ; game_win — GS_WIN: level_descend from D8 only (WIN2: the hero leaves through the gate the
 ; Tome's destruction opened, game.md §1.3). "YOU WIN!" (the end card's string) is the log line.
 ; Any bank. Clobbers: AF, BC, DE, HL.
-game_win:       xor  a                         ; SND-4: Game Win once (like Game Over in end_turn
-                ld   (MUS_REQ), a              ; .dead): loop off, then the final shot; no stinger
-                ld   a, MUS_WIN                ; and no stinger_wait here (level_enter not run);
-                ld   (MUS_SHOT), a             ; the ISR drops it with music off
+game_win:       ld   hl, MUS_REQ               ; SND-4: Game Win once (like Game Over in end_turn
+                ld   (hl), 0                   ; .dead): loop off, then the final shot; no stinger
+                inc  l                         ; and no stinger_wait here (level_enter not run);
+                ld   (hl), MUS_WIN             ; the ISR drops it with music off (MUS_SHOT = MUS_REQ + 1)
+                ASSERT MUS_SHOT == MUS_REQ + 1 && (MUS_REQ >> 8) == (MUS_SHOT >> 8)
                 ld   a, GS_WIN
                 ld   (GAME_STATE), a
                 ld   a, TX_END_WIN             ; "YOU WIN!" (TX_WIN is the Tome's line now)
@@ -365,7 +367,7 @@ game_win:       xor  a                         ; SND-4: Game Win once (like Game
 ; untyped (no DEF, no resistance, no line), while the hero stands on storey 1 of
 ; the Sanctum with a gap < TOME_AURA_R to the lectern, either facing (R6
 ; tome_geo6). The hp it takes to 0 ends the run on this turn: end_turn.dead
-; (GS_DEAD, "YOU DIED"; no death sequence). Low RAM: bank 7 low is full.
+; (GS_DEAD, "YOU DIED") - after the DEATH pose (DEATH-FX, below). Low RAM: bank 7 low is full.
 ; Clobbers: all but IY.   ~0.4k T (far6 + tome_geo6) + mus_pick, every turn end
 ;------------------------------------------------------------------------------
 tome_aura:      call mus_pick                  ; bank 7 (SND-3 Dangerous cue)
@@ -373,14 +375,18 @@ tome_aura:      call mus_pick                  ; bank 7 (SND-3 Dangerous cue)
                 ld   hl, tome_geo6             ; R6 tome6.asm: L = gap (+ $80 facing away) / $FF
                 call far6
                 ld   a, l
-                and  $7F                       ; either facing ($FF -> $7F: none)
-                cp   TOME_AURA_R
+                add  a, a                      ; either facing: x2 drops the away bit ($FF -> $FE: none)
+                cp   TOME_AURA_R * 2
                 ret  nc
-                ld   hl, P_ENTITIES + E_HP     ; > 0 (end_turn's death check came first)
-                dec  (hl)
+                dec  (ix+E_HP)                 ; > 0 (end_turn's death check came first)
                 ret  nz
-                pop  af                        ; (end_turn's return) the run ends here
-                jp   end_turn.dead             ; bank 7 (paged)
+                ld   (ix+E_REACT), RC_DEATH    ; DEATH-FX: the DEATH pose; E_REACTAT = the hero's last impact tick
+                ld   (ix+E_REACTAT), 0         ; and end_turn zeroed TURN_TICK: anim would freeze him at HP 0 till then
+                pop  af                        ; (end_turn's return) no GS_DEAD yet: play_loop's GS_DEAD branch
+                ld   hl, TURN_PHASE            ; skips anim, so the turn is kept in ANIM (0 -> 1) until the pose
+                inc  (hl)                      ; is held (turn_done), then the 2nd end_turn's HP 0 check dies
+                ret
+                ASSERT TOME_AURA_R * 2 < 128 && RC_DEATH != 0
 
 ;==============================================================================
 ; ROOM ENTRY / THEME (B3B-8). build_room_map v2 lives in bank 3 (D7); these
@@ -2094,8 +2100,7 @@ alloc:
 build_bitrev:
                 ld   hl, BITREV_TAB
 .next:          ld   a, l
-                ld   b, 8
-                ld   c, 0
+                ld   bc, 8 << 8
 .bit:           rra
                 rl   c
                 djnz .bit
@@ -2550,7 +2555,7 @@ gen_variant:
                 djnz .cp
                 jr   .rowdone
 .sh:            ld   c, $FF                    ; prev mask  (transparent feed)
-                ld   a, 0
+                xor  a
                 ld   (TMP0), a                 ; prev data  (empty feed)
 .shc:           ld   a, c
                 rrca
@@ -2670,9 +2675,10 @@ gen_rowbytes:   ld   a, (GEN_COLS)
 
 ; mul8 — HL = A * C (unsigned 8x8).  Clobbers: A, B, DE, HL
 mul8:
-                ld   hl, 0
                 ld   d, 0
                 ld   e, c
+                ld   h, d                      ; HL = 0 (DEATH-FX reclaim: 1 B less than LD HL, 0)
+                ld   l, d
                 ld   b, 8
 .m:             add  hl, hl
                 rla

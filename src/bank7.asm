@@ -303,9 +303,9 @@ end_turn:
                 ld   (TURN_TICK), a            ; D3-7: 0 throughout INPUT, so the input
                                                ; tick's set_reaction_at / pf_tick add 0
                 ld   (COMBAT_NOT_BEFORE), a    ; D3-8e2: the panel gate is per turn
-                ld   a, (P_ENTITIES + E_FLAGS)
-                and  EF_DYING
-                jr   nz, .dead
+                ld   a, (P_ENTITIES + E_HP)    ; DEATH-FX: HP 0 (not EF_DYING: every death zeroes the HP, and the
+                or   a                         ; Tome's aura, tome_aura, leaves a pass with HP 0 to play the
+                jr   z, .dead                  ; DEATH pose: its 2nd end_turn lands here; 1 B less than the flag test)
                 ld   a, (GAME_STATE)           ; not after a win (game_win: GS_WIN
                 cp   GS_PLAYING                ; returns here): the end screen owns the music
                 call z, tome_aura              ; SND-3 mus_pick (Dangerous cue, mailbox only), then
@@ -324,7 +324,7 @@ end_turn:
                 jp   trap_chk
     IF DEBUG_KIT
 ; DBG-1 infinite lives (kit builds only, game.md §1.4): every death reaches here (deal_hit /
-; hero_fall EF_DYING, tome_aura's HP 0), so the hero is revived at the death check, 22 B
+; hero_fall, tome_aura's 2nd pass: all HP 0, which is what the death check tests, DEATH-FX), so the hero is revived at the death check, 22 B
 ; = the release .dead: EF_DYING off, HP 1, the held DEATH pose / a pending reaction back
 ; to standing; no GS_DEAD, no line. The hit, its HURT / DEATH reaction and the log played
 ; as usual; this turn's hunger step is skipped (the level-up check still runs).

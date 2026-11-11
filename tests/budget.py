@@ -68,6 +68,8 @@ TICK_HOOKS = []
 
 
 class Stepper:
+    EXTRA = ()                                # subclass probes (phase names), ids past the ISR pair
+
     def __init__(self, p):
         self.p, self.z = p, p.z
         self.ticks = []                       # (total, {phase: T})
@@ -89,7 +91,14 @@ class Stepper:
         z.cmd("set-breakpoint %d PC=%d" % (len(PHASES) + 11, S["isr.done"]))
         self.inv = {S[n]: n for n in PHASES}
         self.inv[S["isr"]], self.inv[S["isr.done"]] = "isr", "isr.done"
+        for i, n in enumerate(self.EXTRA):
+            z.cmd("set-breakpoint %d PC=%d" % (self.extra_id(i), S[n]))
+            self.inv[S[n]] = n
         self._to("wait_tick")
+
+    @classmethod
+    def extra_id(cls, i):
+        return len(PHASES) + 12 + i
 
     def _run(self):
         self.z.cmd("run")
@@ -195,7 +204,8 @@ class Stepper:
         self.tick()
 
     def close(self):
-        for bp in list(range(1, len(PHASES) + 1)) + [len(PHASES) + 10, len(PHASES) + 11]:
+        extra = [self.extra_id(i) for i in range(len(self.EXTRA))]
+        for bp in list(range(1, len(PHASES) + 1)) + [len(PHASES) + 10, len(PHASES) + 11] + extra:
             self.z.cmd("set-breakpoint %d" % bp)    # cleared, not just disabled
         self.p.load_breakpoints()
 
@@ -1719,8 +1729,192 @@ def run_scenario(h, scen):
     return st, over
 
 
+class TutStepper(Stepper):
+    """TUT0-T9: a Stepper over the D0 play ticks. A tick that raised a hold (TV_HOLD: the mentor's group waits for a key,
+    whole frames of menu_frame / panel_tick) is dismissed on the spot (keys up, queue drawn, a key, up) and DROPPED from the
+    measurement, like a room change: the hold is the player's thinking time, not tick work.
+    A tick that ran `resync_tick` (TUT0-F2: the B4 / B9 blinks, whose multi-frame loop ends with it; a room change's
+    do_exit; a hold's own tail) is DROPPED too: its elapsed time was forgotten by design, so its total is not tick work.
+    The resync probe is on `resync_tick` itself, so wait_tick's fall-through into it (between two measured ticks, after
+    the wait_tick probe) is outside every window and is not counted: the flag is cleared at each `tick_work`.
+    TUT0-R2: the PRE-HOLD part of a hold tick IS measured: the work from the tick's start (or its last resync_tick,
+    e.g. a blink's) to the entry of the blob's `tt_hold` / `tt_holdm` (probe hit with BANK_BLOB paged), ISR time excluded, replaces
+    the dropped hold tick (the B5 G0 tick was 131.8k before its hold: now gated like any play tick)."""
+
+    EXTRA = ("resync_tick", "tt_hold", "tt_holdm")
+
+    def __init__(self, p):
+        self.excl = self.resynced = False
+        self.held = self.rsync = 0
+        self.prehold, self.pre_holds = None, []
+        self.post, self.post_parts = None, []
+        self.rs_v = self.rs_isr = self.isr_acc = self.isr_v = 0
+        Stepper.__init__(self, p)
+
+    def _raw(self):
+        """Stepper._run with the resync_tick / tt_hold hits swallowed (noted, the run goes on): the stop is the next probe."""
+        while True:
+            n, v = Stepper._run(self)
+            if n == "isr":
+                self.isr_v = v
+            elif n == "isr.done":
+                self.isr_acc += v - self.isr_v
+            if n in ("tt_hold", "tt_holdm"):
+                if self.prehold is None and self.p.rb("PORT_7FFD_SHADOW") & 7 == S["BANK_BLOB"]:
+                    self.prehold = (v - self.rs_v) - (self.isr_acc - self.rs_isr)
+                continue
+            if n != "resync_tick":
+                if n == "tick_work":
+                    self.resynced = False
+                    self.prehold, self.rs_v, self.rs_isr, self.isr_acc = None, 0, 0, 0
+                    self.post = None
+                elif n == "wait_tick" and self.resynced and self.prehold is None:
+                    self.post = (v - self.rs_v) - (self.isr_acc - self.rs_isr)   # TUT0-F4: after the last resync_tick
+                return n, v
+            self.resynced = True
+            if self.prehold is None:
+                self.rs_v, self.rs_isr = v, self.isr_acc
+
+    def _run(self):
+        n, v = self._raw()
+        if self.p.rb(S["TV_HOLD"]) == 1 and self.p.rb(S["pl_et"] + 1) | self.p.rb(S["pl_et"] + 2) << 8 == S["ts_turn"]:
+            self.excl = True
+            self._dismiss()
+            return None, v
+        return n, v
+
+    def _dismiss(self):
+        import tut0
+        p = self.p
+        p.release()
+        for _ in range(400):                              # the queue drawn (tt_hold waits for LOG_QN = 0)
+            self._raw()
+            if p.rb("LOG_QN") == 0:
+                break
+        for _ in range(8):
+            self._raw()
+        p.hold(tut0.anykey(p))
+        for _ in range(12):
+            self._raw()
+        p.release()
+        for _ in range(80):
+            self._raw()
+            if p.rb(S["TV_HOLD"]) == 0:
+                break
+
+    def tick(self):
+        self.excl = False
+        n0 = len(self.ticks)
+        r = Stepper.tick(self)
+        if self.post is not None and not self.excl:
+            # TUT0-F4: a resync tick (room change / blink; Stepper.tick may have dropped a transition before appending): the
+            # part AFTER its last resync_tick is play work, gated like the pre-hold part (the part before is the blink / build)
+            if len(self.ticks) > n0:
+                self.ticks.pop()
+                self.isr_in.pop()
+            self.ticks.append((self.post, {"post": self.post}))
+            self.isr_in.append(0)
+            self.post_parts.append(self.post)
+            self.rsync += 1
+            self.post = None
+            return r
+        if len(self.ticks) > n0 and (self.excl or self.resynced):
+            self.ticks.pop()
+            self.isr_in.pop()
+            if self.excl:
+                self.held += 1
+                if self.prehold is not None:          # TUT0-R2: the work before the hold is a play tick
+                    self.ticks.append((self.prehold, {"prehold": self.prehold}))
+                    self.isr_in.append(0)
+                    self.pre_holds.append(self.prehold)
+                    if self.prehold > 110000:
+                        print(f"[info] tut0 pre-hold {self.prehold} T at beat {self.p.rb(S['TV_BEAT'])} stage "
+                              f"{self.p.rb(S['TV_STAGE'])} room {self.p.rb('CUR_ROOM')}", flush=True)
+            else:
+                self.rsync += 1
+        return r
+
+
+def run_tut0(h):
+    """The `tut0` scenario: a scripted D0 run of each class (tests/tut0.py's taught route: the book read from the page, the
+    pear, the cure, the Sleep scroll, the Goblin, the grate; Kempston-free, keys), every play tick measured (turns, the
+    icon-mode quick uses, the ticks of the page-close turns); holds, room changes and the page's own frames are not play
+    ticks. Gate: work <= CAP, real <= BUDGET. Returns (rows, fails)."""
+    saved = (Proto_cls().tut_default_off, Proto_cls().snd_mode)      # (importing tut0 sets both: restored below)
+    import tut0
+    Proto_cls().tut_default_off, Proto_cls().snd_mode = False, 3          # the tutorial path live; music on (the real ISR load)
+    rows, fails = [], []
+    try:
+        for hero in (K_KNIGHT, K_WIZARD):
+            p = tut0.start(h, hero)
+            if MUS_POKE:
+                p.wb("MUS_REQ", int(MUS_POKE, 0))
+                p.tick(6)
+            run = tut0.Run(p)
+            acc = {"totals": [], "isr": [], "held": 0, "rsync": 0, "kinds": [], "pre": [], "post": []}
+
+            def absorb(st):
+                acc["totals"] += [t for t, _ in st.ticks]
+                acc["isr"] += st.isr_in
+                acc["held"] += st.held
+                acc["pre"] += st.pre_holds
+                acc["post"] += st.post_parts
+                acc["rsync"] += st.rsync
+                st.close()
+                p.extra_probes = set()
+
+            def mturn(*keys):                     # Proto.turn (its key timing: jumps need U + R held) on the measured ticks
+                st = TutStepper(p)
+                p.tick = lambda n=1: [st.tick() for _ in range(n)]
+                try:
+                    ok = p.turn(*keys)
+                finally:
+                    del p.tick
+                absorb(st)
+                return ok
+
+            def mwait(cond, max_ticks=300):
+                st = TutStepper(p)
+                for _ in range(max_ticks):
+                    st.tick()
+                    if cond():
+                        break
+                absorb(st)
+
+            p.mturn, p.mwait = mturn, mwait
+            ok = tut0.go_to_C(p, run, True)
+            dead, used = tut0.fight(p, run, True)
+            left = tut0.after_fight_to_exit(p, run, heal=True)
+            totals, isr = acc["totals"], acc["isr"]
+            pre_max = max(PRE_FLOOR, PRE_BASE + max(isr))
+            work = [t - i for t, i in zip(totals, isr)]
+            real = [t + pre_max for t in totals]
+            name = "Warrior" if hero == K_KNIGHT else "Mage"
+            rows.append((name, len(totals), max(work), max(real), acc["held"], ok and dead and used and left))
+            print(f"== tut0 {name}: {len(totals)} play ticks ({acc['held']} hold ticks dropped, {acc['rsync']} resync ticks"
+                  f" dropped; {len(acc['pre'])} pre-hold parts measured, worst {max(acc['pre'] or [0])} T; {len(acc['post'])} post-resync parts measured, worst {max(acc['post'] or [0])} T), worst work {max(work)} T"
+                  f" (cap {CAP}), worst real {max(real)} T (budget {BUDGET}), mean {sum(totals) // len(totals)} T;"
+                  f" route completed {ok and dead and used and left} (to C {ok}, Goblin dead {dead}, scroll {used}, grate step {left}; end: {tut0.st(p)})", flush=True)
+            if not (ok and dead and used and left):
+                fails.append(f"tut0 {name} (the scripted run did not complete)")
+            if max(work) > CAP:
+                fails.append(f"tut0 {name} (work {max(work)} > {CAP})")
+            if max(real) > BUDGET:
+                fails.append(f"tut0 {name} (real {max(real)} > {BUDGET})")
+            if len(totals) < 100:
+                fails.append(f"tut0 {name} (only {len(totals)} ticks measured)")
+    finally:
+        Proto_cls().tut_default_off, Proto_cls().snd_mode = saved
+    return rows, fails
+
+
+def Proto_cls():
+    from game_lib import Proto
+    return Proto
+
+
 ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk")
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk,tut0")
 
 
 def swing_pass(keys):
@@ -1761,10 +1955,14 @@ def main():
     swing_only = bool(os.environ.get("BUDGET_SWING_ONLY"))      # child of swing_pass (trace copy)
     # the Mage scenarios on the melee KEYS (FIRE taps at gap 0: the C3-7 STAFF_SWING); the cast ones
     # FIRE a spell, so their count says nothing (and the child pass would double the run)
-    wiz = [k for k in keys if len(SCENARIOS[k]) > 3 and SCENARIOS[k][3] == K_WIZARD and SCENARIOS[k][2] is KEYS]
+    wiz = [k for k in keys if k in SCENARIOS and len(SCENARIOS[k]) > 3 and SCENARIOS[k][3] == K_WIZARD and SCENARIOS[k][2] is KEYS]
     with Harness() as h:
         h.launch(EMU_ARGS)
         for key in keys:
+            if key == "tut0":                     # TUT0-T9: the D0 tutorial run (own driver, tests/tut0.py)
+                if not swing_only:
+                    fails += run_tut0(h)[1]
+                continue
             st, bad = run_scenario(h, SCENARIOS[key])
             if swing_only:
                 if getattr(st, "swing", None) is not None:

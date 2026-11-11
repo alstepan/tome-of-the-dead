@@ -565,10 +565,24 @@ def aura(p, L):
         check(f"A aura {tag}: -{want} hp (untyped)", p.ent(0)["HP"] == 50 - want, p.ent(0)["HP"])
     L.at_gap(3)
     p.set_ent(0, HP=1)
-    p.turn("WAIT")
+    p.h.write_byte(S["P_ENTITIES"] + S["E_REACTAT"], 9)       # a stale impact tick from an earlier hit
+    trace = []
+    p.turn("WAIT", per_tick=lambda fr, h: trace.append((p.rb("GAME_STATE"), h["MODE"], h["HP"])))
     p.tick(3)
     check("A aura: the last hp -> GS_DEAD", p.rb("GAME_STATE") == GS_DEAD and p.ent(0)["HP"] == 0,
           (p.rb("GAME_STATE"), p.ent(0)["HP"]))
+    # DEATH-FX (user report 2026-11-09, "no death animation near the Tome"): GS_DEAD stops anim / render
+    # (play_loop -> end_screen), so a kill at end_turn must keep the turn in ANIM until the DEATH pose is held:
+    # the death sequence (M_SEQ, HP 0) runs for >= 4 ticks while still GS_PLAYING, ends in M_HOLD, then GS_DEAD.
+    seq = [i for i, (gs, m, hp) in enumerate(trace) if gs == GS_PLAYING and m == S["M_SEQ"] and hp == 0]
+    check("A aura DEATH-FX: the DEATH sequence plays (>= 4 ticks, HP 0, still GS_PLAYING), then the pose is held "
+          "and GS_DEAD", len(seq) >= 4 and p.ent(0)["MODE"] == S["M_HOLD"] and p.rb("GAME_STATE") == GS_DEAD,
+          (len(seq), p.ent(0)["MODE"], trace[-12:]))
+    # ... and it starts at once: a stale E_REACTAT (the hero's last impact tick vs the zeroed TURN_TICK) would freeze
+    # him standing at HP 0 for ticks. HP 0 first seen at i0 -> M_SEQ within 2 ticks.
+    hp0 = [i for i, (gs, m, hp) in enumerate(trace) if hp == 0]
+    check("A aura DEATH-FX: no frozen frames, the sequence starts within 2 ticks of HP 0",
+          bool(hp0) and bool(seq) and seq[0] - hp0[0] <= 2, (hp0[:1], seq[:1], trace[-12:]))
 
 
 def revisit(p, L):

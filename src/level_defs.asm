@@ -603,7 +603,7 @@ AL_GLYPH_MIN    EQU 16              ; AL_TYPE >= this: glyph swap
 ;------------------------------------------------------------------------------
 STATE_3B        EQU $BFD0
 PANEL_DIRTY     EQU $BFD0           ; D5 queue bits PD_* (one item drained per non-input tick)
-HUD4_EXT        EQU $BFD2           ; 4 B, rows 20..23: ink extent (replaces HUD_EXT in B3B-11)
+HUD4_EXT        EQU $BFD2           ; 4 B, rows 20..23: ink extent (replaces HUD_EXT in B3B-11); row 20 = item_info's "redrawn" marker for the D0 goal line (tut_turn.asm tt_goal, TUT0-F4)
 HUD4_PW         EQU $BFD6           ; 4 B, rows 20..23: cols changed since present (replaces HUD_PW)
 LOG_QN          EQU $BFDA           ; pending log messages in LOG_Q
 LOG_Q           EQU $BFE0           ; 8 B: pending log messages (layout: B3B-11)

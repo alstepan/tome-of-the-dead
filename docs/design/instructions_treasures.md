@@ -1,5 +1,7 @@
 # HOW TO PLAY page 3 — TREASURES (INSTR-P3, INSTR-P3-ICONS)
 
+> **TUT0-T2 (2026-11-09):** this page is now **page 2 of 2** (the old items/tips page is dropped). Read "page 3" below as "page 2"; the page-3 stream and stub are gone.
+
 Designer, 2026-11-01. User request 2026-11-01: a third HOW TO PLAY page that explains the boss
 uniques and the charms. It extends `docs/design/instructions_screen.md` (Layout B) and its
 render spec `instructions_screen.txt`. The grid, fonts, attribute rules and render model there
@@ -220,4 +222,4 @@ The tool's figures (`instr_pack: p3 text … attrs …`) are authoritative; if t
 Files the engineer touches: `docs/design/instructions_screen.txt` (PAGE 3 ROWS block, and its
 page-3 ATTRS / ICONS notes if present), `tools/instr_pack.py` (`PAGES[3]` + the two asserts),
 `tools/gen_instr_mock.py` (only if its i16 path is page-2-specific), `tests/instr.py` (I9a–d),
-the regenerated `instr_p3.png` mock; memory-map INSTR-BUILD figures after the build.
+the regenerated `instr_p2.png` mock (TUT0-T2: `gen_instr_mock.py` writes `instr_p1` / `instr_p2` only; the old `instr_p3` mock was deleted); memory-map INSTR-BUILD figures after the build.

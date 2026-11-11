@@ -85,6 +85,6 @@ expect("headerless 7 = frame_tab + INSTR streams at POOL_START (%d B)" % (len(in
        len(ins) - 2 == sym["INSTR_TAPE_LEN"] and sym["ftz_zx0"] == sym["POOL_START"]
        and sym["ftz_zx0"] < sym["ftz_zx0_end"] == sym["instr_p1_zx0"]
        and sym["POOL_START"] + sym["INSTR_TAPE_LEN"] == sym["instr_zx0_end"]
-       and sym["instr_p1_zx0"] < sym["instr_p2_zx0"] < sym["instr_p3_zx0"] < sym["instr_zx0"] < sym["instr_zx0_end"])
+       and sym["instr_p1_zx0"] < sym["instr_p2_zx0"] < sym["instr_zx0"] < sym["instr_zx0_end"])
 print("tape_layout: %s (%d blocks, %d B)" % ("OK" if not fails else "%d FAILED" % fails, len(blocks), len(d)))
 sys.exit(1 if fails else 0)

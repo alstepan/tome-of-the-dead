@@ -360,8 +360,11 @@ intent_tick:
                 ld   a, (ICON_MODE)
                 or   a
                 jr   z, .play
-                ld   hl, intent_icon7          ; D3-S2: ICON MODE (frozen play) in
+.pi_ic:         ld   hl, intent_icon7          ; D3-S2: ICON MODE (frozen play) in
                 jp   far7                      ; bank 7; D, E pass in
+                                               ; SMC: TUT0-R2 — the operand (pi_ic + 1) = ts_icon
+                                               ; while D0 runs (with pl_et: blob tut_d0 sets both,
+                                               ; blob_choice / tt_reset undo both)
                 ; --- play ---
 .play:          ld   hl, FIRE_ST
                 bit  JOY_F_BIT, d
@@ -438,6 +441,8 @@ intent_tick:
                 inc  a
                 ld   (DN_COMMIT), a
                 ret
+
+pi_ic           EQU intent_tick.pi_ic          ; TUT0-R2: the SMC site's global name (blob / tests)
 
 ;------------------------------------------------------------------------------
 ; menu_frame — the menu / redefine / pause frame (C3-6; bank 2 so the test

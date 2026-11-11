@@ -126,6 +126,25 @@
   page / far-call anything, must not read `ROOM_MAP`, and nothing renders /
   presents meanwhile (`page_run`). Contracts: `docs/memory-map.md` "Boot block" /
   "Overlays".
+- **TUT0 boot stubs + SMC operands (TUT0-T1, user 2026-11-09: 0 resident bytes).** The D0
+  tutorial blob (bank 4 `BLOB_ORG..$FFFF`, `src/tut/`) is entered ONLY through three low-RAM
+  stubs (`src/tut/tut_stub.asm`: `ts_choice`, `ts_turn`, `ts_icon` (TUT0-R2), farb with C = `BANK_BLOB`) that the
+  INSTR overlay installs at boot over `check_paging` .. `sel_tab` (tape-path-only code, dead
+  after boot; nothing may call `check_paging` / read `str_lock` after boot, and no new code may
+  go there). Three bank-2 operands are SMC, flagged `; SMC:` in main.asm / io.asm: **`es_go + 1`**
+  (enter_select's `jp start_game`; = `ts_choice` from boot until `blob_choice` puts
+  `start_game` back), **`pl_et + 1`** (play_loop's `ld hl, end_turn`; = `ts_turn` only while
+  D0 runs) and, TUT0-R2, **`pi_ic + 1`** (intent_tick's ICON MODE `ld hl, intent_icon7`, the
+  global `pi_ic` = `intent_tick.pi_ic`; = `ts_icon` only while D0 runs: `ts_icon` calls the
+  real `intent_icon7`, then `blob_icon`). `pl_et` and `pi_ic` are always patched / undone
+  together: `tut_d0` sets both, `blob_choice` (death, Quit, choice `2`, BREAK) and `tt_reset`
+  (the grate step = EX_LEVEL / EX_DOWN from C) put both back. Invariant: every D0 exit passes
+  `enter_select` / `blob_choice` or undoes the operands itself — a stale `pl_et` / `pi_ic`
+  would far-call a blob the D1 pool has overwritten. `blob_icon` runs inside intent_tick (frozen
+  ICON MODE ticks only; a still-animating turn tick returns at once) and may hold (`tt_hold`:
+  whole frames + `resync_tick`); it keeps IX. Blob rules = bank3.asm's (never pages `$C000` itself; every paging helper via
+  farb with C = `BANK_BLOB`; far3 / far1 / far6 / far7 nest). Tests: `tut_off()` restores
+  `es_go` for the legacy suites (game_lib.py).
 - **Helpers restore the caller's bank.** Every bank-2 / low-RAM helper that
   pages `$C000` and returns, and is reachable from paged-bank code (bank 3 or
   bank 1), saves `PORT_7FFD_SHADOW` before paging and ends with
