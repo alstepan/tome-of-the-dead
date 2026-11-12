@@ -81,7 +81,7 @@ and per-task evidence: `docs/history.md`.
 | SPR-S | Shorter sprites (48->40, 32->24) | artist -> user | LAST-RESORT memory fallback only; never degrade graphics; 48 px kinds only |
 | UB1 | Dead-enemy frame on dagger throw (not reproducible) | – | parked; reopen only on a new report |
 | B5 | Fuse load of the tape not yet tried (real-hardware load passed, A9) | user | open; low priority |
-| WEB1 | Browser play on the itch page (reopens FINAL-3 3c, dropped 2026-11-05). Recommended: **JSSpeccy 3** (gasman/jsspeccy3, GPL-3, 128K+AY, loads our .tap/.sna directly, zero game-side work; itch zip = index.html + jsspeccy/ + tome.sna; licence + source link in THIRD-PARTY.md). Spike first: check_paging/$7FFD, ROM_LD_BYTES loader, ISR/AY timing (SFX10c/SND6 at 0 T margin), bank 5/7 double buffer, iframe key focus, redefine/Kempston. Alternatives: zxplay (JSSpeccy-based, mobile UI), EmulatorJS + Fuse libretro core, floooh tiny emulators (zlib); RVMPlayer v0.1.1 = +3 only + DSK/HFE only → needs a +3DOS disk loader (bank 7 = DOS workspace, restore $1FFD ROM 3) + a DSK builder in CI | user decision → junior spike | **later** (user 2026-11-10: "not now") |
+| WEB1 | Browser play on the itch page with **JSSpeccy 3 v3.2** (GPL-3, unmodified): `tools/web_bundle.sh v1.1` → `build/web/tome-of-the-dead-web-v1.1.zip` (index.html + jsspeccy/ + v1.1 .tap via the 128 loader; GPL text + corresponding source `third_party/jsspeccy3-v3.2-source.tar.gz` inside the zip). How-to: `docs/web_itch.md` | manager | **DONE — LIVE on itch 2026-11-12** (user-approved upload; kind HTML, 660×600, fullscreen button, screenshots column = Sidebar). Known: no Kempston/touch in JSSpeccy |
 
 ## How we control state
 

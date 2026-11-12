@@ -38,6 +38,17 @@ reproduced as its condition 2 requires:
     ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
     POSSIBILITY OF SUCH DAMAGE.
 
+## Included in the browser (itch.io HTML5) bundle only
+
+- **JSSpeccy 3** (v3.2, unmodified), by Matthew Westcott, GPL-3.0
+  (`JSSPECCY-LICENSE-GPL3.txt` in the bundle). Corresponding source ships in the bundle
+  (`jsspeccy3-v3.2-source.tar.gz`) and is kept in this repo at `third_party/`; upstream:
+  https://github.com/gasman/jsspeccy3/tree/v3.2. It embeds JSZip (MIT or GPL-3)
+  and pako (MIT), and ships the 48K/128K ZX Spectrum ROMs (c) Amstrad plc /
+  Sky; Amstrad permits free redistribution of these ROMs with emulators. The
+  game tape itself is not affected: it is loaded as data by the emulator, and
+  the bundle is built by `tools/web_bundle.sh`.
+
 ## AI tools used to make the game
 
 - **Anthropic Claude** (https://www.anthropic.com/claude; terms:
