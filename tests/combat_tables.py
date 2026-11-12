@@ -34,7 +34,7 @@ def load():
     b3 = blocks[7]                      # +2 since b918cc5: loading-screen header + SCREEN$ blocks precede the code header
     assert b3[0] == 0xFF, "bank-3 block flag"
     global R6BLK
-    R6BLK = blocks[13]                 # TAPE_BLOCKS order (main.asm): the R6 region, at R6_ADDR (3F-T5: drop_tab lives there)
+    R6BLK = blocks[-1]                 # TAPE_BLOCKS (main.asm): the R6 region is the LAST block, at R6_ADDR (3F-T5: drop_tab lives there)
     assert R6BLK[0] == 0xFF, "R6 block flag"
     R6BLK = R6BLK[1:-1]
     return sym, b3[1:-1]

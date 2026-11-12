@@ -58,13 +58,14 @@ OVL_PASS        EQU 2                   ; tools/build.sh: -DOVL_PASS=1 first (3E
                 TAPE_BLK mode, BANK_COLD3, AY_RESERVE, AY_LEN             ; A8 AY slot (BANK_AY = 3)
                 TAPE_BLK mode, BANK_TSET, B7_CODE, B7_LEN                 ; D3-S2 bank-7 cold code
                 TAPE_BLK mode, BANK_TSET, TSET_BASE, B7D_LEN              ; level tilesets (w2a: dedup) + data7 (w2b), one block
-                TAPE_BLK mode, BANK_TEXT, TEXT_ADDR, TEXT_TAPE_LEN        ; D3-TX text block (bank 0 bottom) + INSTR streams (boot only)
+                TAPE_BLK mode, BANK_TEXT, TEXT_ADDR, TEXT_TAPE_LEN        ; D3-TX text block (bank 0 bottom) + b0 cold code + its reserve pad
+                TAPE_BLK mode, BANK_BOOT4, BOOT4_ORG, BOOT4_TAPE_LEN      ; C+TUT0: frame_tab + INSTR + D0 blob streams (bank 4, boot only)
                 TAPE_BLK mode, BANK_BOOT6, BOOT6_ADDR, BOOT6_TAPE_LEN     ; 3E-T1 boot block + SRC6 sources (bank 6, below R6)
                 TAPE_BLK mode, BANK_R6, R6_ADDR, R6_USED                  ; R6 region (bank 6 top, permanent)
     ENDM
-TAPE_HEADLESS_N EQU 8                   ; = the TAPE_BLK lines above (tape_tab ASSERTs its size)
-TT_TEXT_REC     EQU 5                   ; TUT0-T1: the text block's record (0-based; in_tut reads its
-                                        ; length, ASSERTed after lowram.asm)
+TAPE_HEADLESS_N EQU 9                   ; = the TAPE_BLK lines above (tape_tab ASSERTs its size)
+TT_BOOT4_REC    EQU 6                   ; C+TUT0: the BOOT4 block's record (0-based; in_tut reads its
+                                        ; address + length, ASSERTed after lowram.asm)
 
 ;==============================================================================
 ; SPRITE SOURCES — banks 1 and 3, assembled contiguously at virtual $8000..$FFFF
@@ -258,62 +259,30 @@ b0_code:
                 INCLUDE "log0.asm"             ; LOG-DMG: the log-line damage / HP tails (direct calls,
                                                ; BANK_TEXT already paged by impact_line / hit_line / msg_go)
                 INCLUDE "dnum0.asm"            ; D3-11: the flying damage numbers (FARB0 dn_tick / dn_q2)
+                INCLUDE "logsc0.asm"           ; C-T6: log_scroll (FARB0 from item_log; was bank-2 panel2.asm)
+                INCLUDE "mus0.asm"             ; MON-DEFER: mus_pick0 (the Dangerous cue; was bank-7 mus7.asm)
     IF DEBUG_KIT
                 INCLUDE "kit0.asm"                      ; DBG-1: the debug kit, kit builds only (keep LAST)
     ENDIF
 b0_code_end:
 B0_CODE_LEN     EQU b0_code_end - b0_code
-B0_FREE         EQU POOL_START - b0_code_end
-                ASSERT b0_code_end <= POOL_START        ; text + b0 code stay below the pool
-    IF B0_FREE > 0
-                DS   B0_FREE, 0                         ; the reserve (on the text tape block)
+B0_PAD          EQU B0_FREE_START - b0_code_end        ; C-T8: was B0_FREE (pad to POOL_START)
+                ASSERT b0_code_end <= B0_FREE_START     ; text + b0 code stay below the carve (and the pool)
+    IF B0_PAD > 0
+                DS   B0_PAD, 0                          ; the reserve (on the text tape block)
     ENDIF
-; INSTR-BUILD: the HOW TO PLAY streams (page 1, 2, then the overlay code:
-; the code stream is last so no address an overlay reads depends on a packed
-; size — instr_main reaches page n+1 as "past page n"). Boot only: on the text
-; tape block (TEXT_TAPE_LEN), read by boot6_wait -> ovl_run before gen_idles,
-; then the boot pool overwrites them (0 pool bytes; M0: POOL_START is fixed at $C960, defs.asm).
-; RECLAIM-D: FIRST the MEM-FT frame_tab stream (was the last 132 B of the bank-2 image):
-; at the FIXED POOL_START, so instr_main (the overlay) unpacks it into the FRT rows before
-; anything else and reaches page 1 as "past it" (no overlay byte depends on a packed size).
-ftz_zx0:                                       ; FT_LEN B/fid contiguous, ZX0 (instr_main in_ft)
-    IF OVL_PASS == 2
-                INCBIN "ft.zx0"
-    ENDIF
-ftz_zx0_end:
-instr_p1_zx0:
-    IF OVL_PASS == 2
-                INCBIN "instr1.zx0"
-    ENDIF
-instr_p2_zx0:
-    IF OVL_PASS == 2
-                INCBIN "instr2.zx0"
-    ENDIF
-instr_zx0:
-    IF OVL_PASS == 2
-                INCBIN "instr.zx0"
-    ENDIF
-instr_zx0_end:
-; TUT0-T1: the D0 blob stream (tut_blob.asm, raw at BLOB_ORG in bank 4: "TUT0 BLOB" below),
-; LAST on the block, then a DW trailer = its packed length. The INSTR overlay (in_tut) finds
-; the block's end through tape_tab's text record (TT_TEXT_REC: no overlay byte depends on a
-; packed size), reads the trailer, copies the stream to $10000 - length in bank 4 and
-; unpacks it in place to BLOB_ORG. Dead after that (the boot pool overwrites it).
-blob_zx0:
-    IF OVL_PASS == 2
-                INCBIN "blob.zx0"
-    ENDIF
-blob_zx0_end:
-BLOB_ZX0_LEN    EQU blob_zx0_end - blob_zx0
-                DW   BLOB_ZX0_LEN              ; the trailer (in_tut)
 text_tape_end:
-INSTR_FT_ZX0    EQU ftz_zx0                    ; = POOL_START (fixed): the overlay's first stream
-TEXT_TAPE_LEN   EQU text_tape_end - TEXT_ADDR
-                ASSERT ftz_zx0 == POOL_START && text_tape_end <= $10000
+TEXT_TAPE_LEN   EQU text_tape_end - TEXT_ADDR  ; C-T8: text + b0 code + pad (= B0_FREE_START - TEXT_ADDR)
+                ASSERT text_tape_end == B0_FREE_START && TEXT_TAPE_LEN + B0_FREE_RES == POOL_START - TEXT_ADDR
+; C-T8: the carved bank-0 region B0_FREE_START..POOL_START-1 (defs.asm): nothing assembled,
+; not on tape. C+TUT0 merge: the boot-only streams (frame_tab, HOW TO PLAY, the D0 blob) are
+; no longer in bank 0 at all — they are the bank-4 BOOT4 block ("BOOT4 STREAMS", after
+; tap_loader), so nothing in bank 0 above the text block is loaded at boot.
                 ASSERT text_base == TEXT_ADDR && TEXT_LEN == TEXT_PACKED
                 ASSERT (tx_entries & $FF) == 0         ; w2d: tk_get's B = tx_entries >> 8
                 DISPLAY "GAME text (bank 0): ", /D, TX_COUNT, " strings, ", /D, TX_TOKENS, " tokens, raw ", /D, TEXT_RAW, " -> ", /D, TEXT_PACKED, " B packed at ", /H, text_base, "; pool from ", /H, POOL_START
-                DISPLAY "GAME bank-0 cold code (M0 L4): ", /H, b0_code, " ", /D, B0_CODE_LEN, " B of ", /D, B0_CODE_RES, "; text ", /D, TEXT_LEN, " of TEXT_RES ", /D, TEXT_RES, " (headroom ", /D, TEXT_RES - TEXT_LEN, "); text + code reserve ", /D, POOL_START - TEXT_ADDR, " B, free to POOL_START: ", /D, B0_FREE
+                DISPLAY "GAME bank-0 cold code (M0 L4): ", /H, b0_code, " ", /D, B0_CODE_LEN, " B of ", /D, B0_CODE_RES, "; text ", /D, TEXT_LEN, " of TEXT_RES ", /D, TEXT_RES, " (headroom ", /D, TEXT_RES - TEXT_LEN, "); text + code reserve ", /D, B0_FREE_START - TEXT_ADDR, " B, free to the carve: ", /D, B0_PAD
+                DISPLAY "GAME bank-0 carve (C-T8, reserved, not on tape): ", /H, B0_FREE_START, "..", /H, B0_FREE_END - 1, " (", /D, B0_FREE_RES, " B), pool from ", /H, POOL_START
 
 ;==============================================================================
 ; BANK-5 LOW-RAM COLD CODE — tape entry, boot, generator, init_tiles, game
@@ -333,8 +302,8 @@ FDESC_GROW      EQU (FRT_MAX - FDESC_COUNT) * FDESC_STRIDE
 LOWRAM_SPARE    EQU lowram_code - FDESC_GROW - LOWRAM_FREE_END
                 ASSERT lowram_code - FDESC_GROW >= LOWRAM_FREE_END
                 ASSERT fdesc_end == lowram_code_end
-                ; TUT0-T1: in_tut finds the blob stream's trailer at TEXT_ADDR + this record's length
-                ASSERT {b tape_tab + TT_TEXT_REC * TT_STRIDE} == BANK_TEXT && {tape_tab + TT_TEXT_REC * TT_STRIDE + 1} == TEXT_ADDR && {tape_tab + TT_TEXT_REC * TT_STRIDE + 3} == TEXT_TAPE_LEN
+                ; C+TUT0: in_tut finds the blob stream's trailer at this record's address + length
+                ASSERT {b tape_tab + TT_BOOT4_REC * TT_STRIDE} == BANK_BOOT4 && {tape_tab + TT_BOOT4_REC * TT_STRIDE + 1} == BOOT4_ORG && {tape_tab + TT_BOOT4_REC * TT_STRIDE + 3} == BOOT4_TAPE_LEN
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= TILE_GLYPHS  ; the lowest buffer above the alias
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= BITREV_TAB
                 ASSERT (TILE_GLYPHS & $1FF) == 0                    ; tile_rect glyph addressing
@@ -467,9 +436,18 @@ decor_gate:     call frozen
                 ret  nz
                 jp   decor_tick
 ; pend_far — the TURN_PEND hook's far entry (act7.asm act_pend, bank 7).
-; Clobbers: all but IY.
-pend_far:       ld   hl, act_pend
+; C+TUT0 (C2 review): not on the input tick (TURN_TICK 0): every act_pend case
+; is a no-op there (TP_MONQ waits for TURN_TICK >= 1, ACT_AT >= 1 (abilities
+; ACT_FIRE_TICK, traps TRAP_ACT_TICK / TURN_TICK + TRAP_STEP_T),
+; TP_SHOT / TP_FIRE are only set at TURN_TICK >= 1 and cleared before turn_done
+; lets the next turn start), so the far7 round trip (~0.3k T) is skipped on the
+; heaviest tick. 26 T when skipped.  Clobbers: all but IY.
+pend_far:       ld   a, (TURN_TICK)
+                or   a
+                ret  z
+                ld   hl, act_pend
                 jp   far7
+                ASSERT ACT_FIRE_TICK >= 1 && TRAP_ACT_TICK >= 1
 ; probe_act_fire — test probe (budget.py "cast" class): act_pend calls it on
 ; the fire tick, right before act_fire (bank-7 code cannot carry a probe).
 probe_act_fire: ret
@@ -577,6 +555,7 @@ es_go:          jp   start_game                ; SMC: TUT0 — the operand (es_g
 
                 INCLUDE "io.asm"
                 INCLUDE "gfx.asm"
+                INCLUDE "mirror2.asm"           ; C-T6: blit_sprite's blit-time mirror path (FF_MIR)
                 INCLUDE "logic.asm"
                 INCLUDE "anim.asm"
                 INCLUDE "data.asm"
@@ -754,8 +733,8 @@ dn_miss_s:      DB   "MISS", 0, DNA_MISS       ; D3-11 / LVL-FLOATER (dnfix2.asm
     IF ANIM_TRACE_ON
                 INCLUDE "dnlvt2.asm"            ; LVL-FLOATER: dn_lvt (the pad holds 2 B in a trace build)
     ENDIF
-                ; RECLAIM-D: ftz_zx0 (the MEM-FT frame_tab stream, 132 B) left the image: bank 0
-                ; POOL_START, boot only, unpacked by the HOW TO PLAY overlay (main.asm "TEXT")
+                ; RECLAIM-D: ftz_zx0 (the MEM-FT frame_tab stream, 132 B) left the image: bank 4
+                ; BOOT4 (C+TUT0), boot only, unpacked by the HOW TO PLAY overlay (main.asm "TEXT")
 code_end:
 ; 3F-T2: the sequence cache's bytes (RUNTIME only, not on tape: R6 pool6.asm / lowram.asm
 ; copies the hero's and the level's sequence blocks here; seq_rows point in)
@@ -877,14 +856,14 @@ PLF_R = {b frame_tab + (fid) * FT_STRIDE + FT_OFFR}
 PLF_L = {b frame_tab + (fid) * FT_STRIDE + FT_OFFL}
 PLF_F = {b fdesc_tab + (fid) * FDESC_STRIDE + FD_FLAGS}
       IF PLF_F & FF_MOTION                     ; both shifts per facing
-        IF PLF_F & FF_SYM
+        IF PLF_F & (FF_SYM | FF_MIR)           ; C-T6: FF_MIR = one facing stored
 PLN = PLN + PLF_H * 2 * (2 * PLF_C + 1)
         ELSE
 PLN = PLN + 2 * PLF_H * 2 * (2 * PLF_C + 1)
         ENDIF
       ELSE                                     ; one shift per facing (+1 col if shifted)
 PLN = PLN + PLF_H * 2 * (PLF_C + ((((PLF_R + (PLF_F & FF_PH4)) & 7) != 0) & 1))
-        IF (PLF_F & FF_SYM) == 0
+        IF (PLF_F & (FF_SYM | FF_MIR)) == 0
 PLN = PLN + PLF_H * 2 * (PLF_C + ((((PLF_L + (PLF_F & FF_PH4)) & 7) != 0) & 1))
         ENDIF
       ENDIF
@@ -977,7 +956,7 @@ PS_PTR = BANK_WINDOW
 PS_OVF = 1                                     ; GEN_OVERFLOW
       ENDIF
     ENDM
-    MACRO PS_FRAME fid                         ; gen_frame: right facing, then left unless FF_SYM
+    MACRO PS_FRAME fid                         ; gen_frame: right facing, then left unless FF_SYM / FF_MIR
 PSF_C = {b frame_tab + (fid) * FT_STRIDE + FT_COLS}
 PSF_H = {b frame_tab + (fid) * FT_STRIDE + FT_H}
 PSF_R = {b frame_tab + (fid) * FT_STRIDE + FT_OFFR}
@@ -991,13 +970,13 @@ PSF_P = 0
       IF PSF_F & FF_MOTION                     ; shift 0 then shift 4 (+1 col)
                 PS_ALLOC 2 * PSF_H * PSF_C
                 PS_ALLOC 2 * PSF_H * (PSF_C + 1)
-        IF (PSF_F & FF_SYM) == 0
+        IF (PSF_F & (FF_SYM | FF_MIR)) == 0
                 PS_ALLOC 2 * PSF_H * PSF_C
                 PS_ALLOC 2 * PSF_H * (PSF_C + 1)
         ENDIF
       ELSE
                 PS_ALLOC 2 * PSF_H * (PSF_C + ((((PSF_R + PSF_P) & 7) != 0) & 1))
-        IF (PSF_F & FF_SYM) == 0
+        IF (PSF_F & (FF_SYM | FF_MIR)) == 0
                 PS_ALLOC 2 * PSF_H * (PSF_C + ((((PSF_L + PSF_P) & 7) != 0) & 1))
         ENDIF
       ENDIF
@@ -1090,6 +1069,11 @@ POOL_NEED = 0
 POOL_LVL_MAX = 0
 POOL_LVL_WORST = 0
 POOL_SIM_PROTO = 0                             ; the worst simulated PROTO top (both heroes, 6 kinds)
+; C-T8: the 2 select idles' pool bytes for the VERBOSE straddle line (3 cols, ax 0: no extra
+; shift col, data.asm ASSERT): one facing when FF_SYM / FF_MIR (C-T7 marks both |MIR), else two.
+; Was a fixed "* 2 facings" -> since C-T7 the line printed a negative (unsigned-wrapped) waste;
+; the simulation itself (PS_FRAME) always honoured FF_MIR.
+PL_IDLE_B = (knight_idle1_h * (2 - (((FFL_knight_idle1 & (FF_SYM | FF_MIR)) != 0) & 1)) + wizard_idle_h * (2 - (((FFL_wizard_idle & (FF_SYM | FF_MIR)) != 0) & 1))) * 2 * 3
 TUT_D0_GAP = $10000                            ; TUT0-T1: the smallest BLOB_ORG - D0 pool top (bank 4)
 TUT_D0_TOP = 0
                 DUP  2, plh                    ; 3F-T3: per hero (K_KNIGHT = 0, K_WIZARD = 1)
@@ -1212,7 +1196,7 @@ PLU = PLU + ((PLM >> plb) & 1) + ((PLX >> plb) & 1)
                 EDUP
                 ASSERT 2 * PLU + 1 <= PL_CAP
       IFDEF POOL_LVL_VERBOSE
-                DISPLAY "GAME level pool D", /D, pld + 1, " hero ", /D, plh, ": units mask ", /H, PLM, " / ", /H, PLX, ", ", /D, PLN, " B; need ", /D, PS_NEED, " of ", /D, POOL_CAP, " (sim top idx ", /D, PS_IDX, " ptr ", /D, PS_PTR, " used ", /D, PS_USED, ", straddle waste ", /D, PS_USED - PLN - PL_HERO_B - 2 * (knight_idle1_h + wizard_idle_h) * 2 * 3, ")"
+                DISPLAY "GAME level pool D", /D, pld + 1, " hero ", /D, plh, ": units mask ", /H, PLM, " / ", /H, PLX, ", ", /D, PLN, " B; need ", /D, PS_NEED, " of ", /D, POOL_CAP, " (sim top idx ", /D, PS_IDX, " ptr ", /D, PS_PTR, " used ", /D, PS_USED, ", straddle waste ", /D, PS_USED - PLN - PL_HERO_B - PL_IDLE_B, ")"
       ENDIF
       IF PS_NEED > PL_MAX
 PL_MAX = PS_NEED
@@ -1259,7 +1243,7 @@ POOL_NEED_PROTO5 = POOL_NEED_PROTO - POOL_SLIME_B
     ENDIF
                 ASSERT POOL_NEED_PROTO <= POOL_CAP_PROTO || !POOL_PROTO_CHECK
                 ASSERT POOL_SIM_PROTO + POOL_SIM_MARGIN <= POOL_CAP_PROTO || !POOL_PROTO_CHECK   ; MEM-PS2 (the static bound above is the looser)
-                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (MEM-PS2 simulated top + margin ", /D, POOL_SIM_MARGIN, "; worst level D", /D, POOL_LVL_WORST, " ", /D, POOL_LVL_MAX, ", hero max ", /D, POOL_HERO_MAX, "; text ", /D, POOL_START - BANK_WINDOW, " B under bank 0); slack ", /D, POOL_CAP - POOL_NEED, " after SRC6 ", /D, SRC6_LEN, " B; PROTO rooms (6 kinds, over SRC6) ", /D, POOL_NEED_PROTO, " of ", /D, POOL_CAP_PROTO, " (slack ", /D, POOL_CAP_PROTO - POOL_NEED_PROTO, "; 5 kinds ", /D, POOL_NEED_PROTO5, ")"
+                DISPLAY "GAME frames: ", /D, FID_COUNT, "  pool need: ", /D, POOL_NEED, " of ", /D, POOL_CAP, " (MEM-PS2 simulated top + margin ", /D, POOL_SIM_MARGIN, "; worst level D", /D, POOL_LVL_WORST, " ", /D, POOL_LVL_MAX, ", hero max ", /D, POOL_HERO_MAX, "; text + code + carve ", /D, POOL_START - BANK_WINDOW, " B under bank 0); slack ", /D, POOL_CAP - POOL_NEED, " after SRC6 ", /D, SRC6_LEN, " B; PROTO rooms (6 kinds, over SRC6) ", /D, POOL_NEED_PROTO, " of ", /D, POOL_CAP_PROTO, " (slack ", /D, POOL_CAP_PROTO - POOL_NEED_PROTO, "; 5 kinds ", /D, POOL_NEED_PROTO5, ")"
 
 ;==============================================================================
 ; OVERLAYS (3E-T1) — code assembled at its runtime load address, stored
@@ -1267,7 +1251,7 @@ POOL_NEED_PROTO5 = POOL_NEED_PROTO - POOL_SLIME_B
 ; the GEN_SCRATCH window: at boot / menu / level start, or — ROOM_MAP saved
 ; to PAGE_MAP_SAVE — while the modal bag page is up; docs/memory-map.md
 ; "Overlays"). Two assembler passes (tools/build.sh): OVL_PASS 1 assembles each
-; raw image here — bank 4 scratch above tap_loader (TUT0-T1; was bank 0), pool at runtime, never
+; raw image here — bank 4 scratch above tap_loader (C-T8 / TUT0-T1; was bank 0), pool at runtime, never
 ; loaded — and SAVEBINs it to build/ovl/<name>.bin; build.sh packs each .bin
 ; with tools/bin/zx0 -> <name>.zx0; pass 2 (OVL_PASS 2, the real build)
 ; INCBINs the streams and SAVEBINs the raw images again: build.sh fails if one
@@ -1275,9 +1259,10 @@ POOL_NEED_PROTO5 = POOL_NEED_PROTO - POOL_SLIME_B
 ; after it returns (the window is reused); returns like a routine; ASSERT its
 ; end against the window.
 ;==============================================================================
-; TUT0-T1: the scratch moved from bank 0 $E100 to bank 4 $C100 (the bank-0 text tape block may now
-; run up to $10000: the blob stream); never loaded, the pool's at runtime; ends below the raw blob.
-OVL_RAW_BANK    EQU BANK_BLOB
+; C-T8 / TUT0-T1 (both made the same move): the scratch moved from bank 0 $E100 to bank 4 $C100;
+; never loaded, the pool's at runtime; ends below the raw blob (assembled in the same bank). C+TUT0:
+; the BOOT4 streams are assembled over it at the END of the source (after its last SAVEBIN / {b}).
+OVL_RAW_BANK    EQU BANK_POOL1
 OVL_RAW_ORG     EQU BANK_WINDOW + $100          ; after tap_loader (ASSERTed there)
                 MMU  3, OVL_RAW_BANK
                 ORG  OVL_RAW_ORG
@@ -1320,7 +1305,7 @@ SEQ_IMG_LEN     EQU seq_img_end - seq_img_main
 ;------------------------------------------------------------------------------
 ; MEM-FT frame_tab stream: the entries read back ({b}, slot 2 = page 2) from the
 ; FRT row image data.asm assembled at FRT, contiguous FT_LEN B per fid; packed
-; into bank-0 ftz_zx0 (RECLAIM-D; was the bank-2 image tail), instr_main spreads it into the FRT rows.
+; into bank-4 BOOT4 ftz_zx0 (RECLAIM-D; was the bank-2 image tail), instr_main spreads it into the FRT rows.
 ;------------------------------------------------------------------------------
 ovl_raw_ft:
                 DUP  FID_COUNT, ftf
@@ -1329,11 +1314,11 @@ ovl_raw_ft:
                 EDUP
                 ASSERT $ - ovl_raw_ft == FID_COUNT * FT_LEN && FT_LEN == 4
                 SAVEBIN "build/ovl/ft.bin", ovl_raw_ft, FID_COUNT * FT_LEN
-                DISPLAY "GAME frame_tab stream (MEM-FT): ", /D, FID_COUNT * FT_LEN, " B raw -> packed ", /D, ftz_zx0_end - ftz_zx0, " B in bank 0 at POOL_START (boot only; the HOW TO PLAY overlay in_ft -> the FRT rows)"
+                DISPLAY "GAME frame_tab stream (MEM-FT): ", /D, FID_COUNT * FT_LEN, " B raw -> packed ", /D, ftz_zx0_end - ftz_zx0, " B in bank 4 at BOOT4_ORG (boot only; the HOW TO PLAY overlay in_ft -> the FRT rows)"
 ;------------------------------------------------------------------------------
 ; INSTR-BUILD: the HOW TO PLAY overlay (instr_ovl.asm at INSTR_ORG) + its three
 ; page images (tools/instr_pack.py, DISPed at INSTR_DATA = right after the code);
-; streams in bank 0 after the text block ("TEXT" above), boot only.
+; streams in the bank-4 BOOT4 block ("BOOT4 STREAMS", C+TUT0), boot only.
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 ; TUT0-T1: the low-RAM stubs (src/tut/tut_stub.asm), assembled DISP'd at check_paging
@@ -1350,6 +1335,8 @@ tut_stub_end:
 TUT_STUB_LEN    EQU tut_stub_end - tut_stub
 TUT_STUB_ROOM   EQU sel_tab - check_paging      ; check_paging + str_lock (sel_tab is live: kept)
                 ASSERT TUT_STUB_LEN <= TUT_STUB_ROOM && TUT_STUB_LEN <= 58
+                SAVEBIN "build/ovl/stub.bin", ovl_raw_stub, TUT_STUB_LEN   ; C+TUT0: game.py #50's reference (the
+                                               ; .sna's scratch copy is overwritten by BOOT4)
                 DISPLAY "GAME TUT0 stubs: ", /D, TUT_STUB_LEN, " B at ", /H, check_paging, " (room ", /D, TUT_STUB_ROOM, ", free ", /D, TUT_STUB_ROOM - TUT_STUB_LEN, ")"
 ovl_raw_instr:
                 DISP INSTR_ORG
@@ -1377,7 +1364,7 @@ INSTR_P2_LEN    EQU instr_p2_end - instr_p2_img
                 ASSERT instr_p1_end <= GEN_SCRATCH + GEN_SCRATCH_LEN && instr_p2_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
                 SAVEBIN "build/ovl/instr1.bin", ovl_raw_instr1, INSTR_P1_LEN
                 SAVEBIN "build/ovl/instr2.bin", ovl_raw_instr2, INSTR_P2_LEN
-                DISPLAY "GAME HOW TO PLAY overlay (INSTR-BUILD, boot only): code ", /D, INSTR_OVL_LEN, " + page 1 ", /D, INSTR_P1_LEN, " / page 2 ", /D, INSTR_P2_LEN, " B raw at ", /H, INSTR_ORG, " (", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p1_end, " / ", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p2_end, " left); packed ", /D, instr_zx0_end - instr_p1_zx0, " B in bank 0 after the text (", /H, instr_p1_zx0, "..", /H, instr_zx0_end - 1, ")"
+                DISPLAY "GAME HOW TO PLAY overlay (INSTR-BUILD, boot only): code ", /D, INSTR_OVL_LEN, " + page 1 ", /D, INSTR_P1_LEN, " / page 2 ", /D, INSTR_P2_LEN, " B raw at ", /H, INSTR_ORG, " (", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p1_end, " / ", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p2_end, " left); packed ", /D, instr_zx0_end - instr_p1_zx0, " B in bank 4 BOOT4 (", /H, instr_p1_zx0, "..", /H, instr_zx0_end - 1, ")"
 ;------------------------------------------------------------------------------
 ; D3-11: the PROTO rooms test fixture (src/proto_fix.asm) — raw image only, no
 ; stream: tests/game_lib.py pokes build/ovl/proto.bin at PROTO_FIX_ORG.
@@ -1397,9 +1384,10 @@ OVL_RAW_END     EQU $
 ;------------------------------------------------------------------------------
 ; TUT0-T1: the D0 BLOB (src/tut/tut_blob.asm) — assembled where it runs (bank 4
 ; BLOB_ORG, so the .sna holds the raw image too), SAVEBINed for the packer; its
-; stream rides on the bank-0 text tape block (blob_zx0, "TEXT" above). In-place
-; unpack: the stream's last byte sits at $FFFF, so the raw end + the packer's
-; delta (build.sh -> blob_delta.inc) must not pass $10000 (= BLOB_ORG + BLOB_RES).
+; stream is the last of the bank-4 BOOT4 block (blob_zx0, "BOOT4 STREAMS"), which
+; ends <= BLOB_ORG: in_tut unpacks it forward to BLOB_ORG with no overlap, so the
+; packer's in-place delta (build.sh -> blob_delta.inc) no longer binds (DISPLAYed
+; for the record: a later move back to an in-place unpack needs raw + delta <= RES).
 ;------------------------------------------------------------------------------
                 MMU  3, BANK_BLOB
                 ORG  BLOB_ORG
@@ -1410,8 +1398,8 @@ BLOB_LEN        EQU blob_img_end - blob_img
                 SAVEBIN "build/ovl/blob.bin", blob_img, BLOB_LEN
     IF OVL_PASS == 2
                 INCLUDE "blob_delta.inc"        ; BLOB_DELTA EQU n (tools/build.sh, from zx0's report)
-                ASSERT BLOB_LEN + BLOB_DELTA <= BLOB_RES && BLOB_ZX0_LEN <= BLOB_RES
-                DISPLAY "GAME TUT0 blob: ", /D, BLOB_LEN, " B raw at ", /H, BLOB_ORG, " (bank ", /D, BANK_BLOB, "), packed ", /D, BLOB_ZX0_LEN, " B (+2 trailer) at ", /H, blob_zx0, ", in-place delta ", /D, BLOB_DELTA, "; free in BLOB_RES ", /D, BLOB_RES - BLOB_LEN - BLOB_DELTA, "; bank-0 text tape block ", /D, TEXT_TAPE_LEN, " B, ends ", /H, text_tape_end
+                ASSERT BLOB_LEN <= BLOB_RES
+                DISPLAY "GAME TUT0 blob: ", /D, BLOB_LEN, " B raw at ", /H, BLOB_ORG, " (bank ", /D, BANK_BLOB, "), packed ", /D, BLOB_ZX0_LEN, " B (+2 trailer) at ", /H, blob_zx0, " (BOOT4), in-place delta ", /D, BLOB_DELTA, " (not binding); free in BLOB_RES ", /D, BLOB_RES - BLOB_LEN
     ENDIF
                 MMU  3, OVL_RAW_BANK
 
@@ -1420,8 +1408,8 @@ BLOB_LEN        EQU blob_img_end - blob_img
 ; PROTO rooms (K_SKELETON .. K_PROTO_END - 1): the distinct master blocks of
 ; the level's kinds (ksm_tab, dedup by block as sq_load) must fit the cache:
 ; <= SQ_SLOTS - 1 monster blocks, and the largest hero block + their bytes <=
-; SEQB_LEN. Read from the raw image just assembled above ({b} at its bank-0
-; scratch address: SQB_PHYS), final pass only (DEFL, as POOL_NEED).
+; SEQB_LEN. Read from the raw image just assembled above ({b} at its bank-4
+; scratch address, C-T8: SQB_PHYS), final pass only (DEFL, as POOL_NEED).
 ;==============================================================================
     MACRO SQ_KIND k                            ; SQN / SQB += kind k's block, once
 SQ_P = {ovl_raw_seq + ksm_tab - SQ_IMG + 2 * (k)}
@@ -1488,7 +1476,7 @@ SQK1 = {b lp_dtab + sqd * LP_DROW + 1}
 SQK2 = {b lp_dtab + sqd * LP_DROW + 2}
 SQK3 = {b lp_dtab + sqd * LP_DROW + 3}
 SQK4 = {b lp_dtab + sqd * LP_DROW + 4} & LEK_KIND_MASK
-                MMU  3, OVL_RAW_BANK            ; TUT0-T1: the raw seq image is in the bank-4 scratch
+                MMU  3, OVL_RAW_BANK            ; C-T8 / TUT0-T1: the raw seq image is in the bank-4 scratch
                 SQ_RESET
                 SQ_KIND SQK0
                 SQ_KIND SQK1
@@ -1524,12 +1512,12 @@ SEQB_NEED = SQ_HERO + SQ_MAX
 ; tap_loader — 10 CLEAR/BORDER 0, PAPER 0, INK 7/POKE: 15 LOAD "" SCREEN$: 20 LOAD "" CODE: 30 RANDOMIZE USR VAL "<start>"
 ; CLEAR 24575 frees $6000..$7FFF for the room maps / generator buffers and the
 ; low-RAM cold code. The USR address is emitted as 5 ASCII digits of `start`.
-; Tokenised in a scratch ORG (TUT0-T1: bank 4 at $C000, was bank 0 $E000; not
+; Tokenised in a scratch ORG (C-T8 / TUT0-T1: bank 4 at $C000, was bank 0 $E000; not
 ; part of the runtime image — the pool's bytes; never loaded).
 ;------------------------------------------------------------------------------
 TAPE_CLEAR      EQU 24575
 LOAD_SCR_LEN    EQU 6912
-                MMU  3, OVL_RAW_BANK            ; TUT0-T1: bank-4 scratch (was bank 0 $E000)
+                MMU  3, OVL_RAW_BANK            ; C-T8 / TUT0-T1: bank-4 scratch (was bank 0 $E000)
                 ORG  BANK_WINDOW
 tap_loader:
                 DB   0, 10
@@ -1556,6 +1544,56 @@ tap_l30_body:   DB   $F9, $C0, $B0, '"'
 tap_l30_end:
 tap_loader_len  EQU  $ - tap_loader
                 ASSERT $ <= OVL_RAW_ORG        ; 3E-T1: the overlay raw images follow
+
+;==============================================================================
+; BOOT4 STREAMS (C+TUT0 merge, 2026-11-11) — the boot-only ZX0 streams as ONE
+; headerless tape block in pool bank 4 (BOOT4_ORG.., defs.asm), free at load:
+; nothing else is loaded into bank 4 and nothing pools there before gen_idles.
+; Order: frame_tab (RECLAIM-D: FIRST, at the fixed BOOT4_ORG = INSTR_FT_ZX0, so
+; the INSTR overlay unpacks it into the FRT rows before anything else and reaches
+; page 1 as "past it"), HOW TO PLAY page 1, page 2, the overlay code (last of the
+; INSTR streams: ovl_run's; no address an overlay reads depends on a packed size),
+; then the D0 blob stream + its DW length trailer (in_tut finds the trailer at
+; the block's end through tape_tab's TT_BOOT4_REC). All dead once gen_idles runs:
+; the D0 / D1 pools overwrite them. The block ends <= BLOB_ORG, so in_tut unpacks
+; the blob straight to BLOB_ORG in the same bank (no overlap, no bounce copy).
+; Assembled HERE, at the end of the source: the bytes overwrite the overlay
+; scratch ($C100.., OVL_RAW_BANK = 4) only after its last SAVEBIN / {b} read, and
+; stay above tap_loader ($C000..$C0FF, SAVETAPed with them below). The .sna holds
+; them too (tests boot the .sna through the same INSTR overlay path).
+;==============================================================================
+                MMU  3, BANK_BOOT4
+                ORG  BOOT4_ORG
+ftz_zx0:                                       ; FT_LEN B/fid contiguous, ZX0 (instr_main in_ft)
+    IF OVL_PASS == 2
+                INCBIN "ft.zx0"
+    ENDIF
+ftz_zx0_end:
+instr_p1_zx0:
+    IF OVL_PASS == 2
+                INCBIN "instr1.zx0"
+    ENDIF
+instr_p2_zx0:
+    IF OVL_PASS == 2
+                INCBIN "instr2.zx0"
+    ENDIF
+instr_zx0:
+    IF OVL_PASS == 2
+                INCBIN "instr.zx0"
+    ENDIF
+instr_zx0_end:
+blob_zx0:
+    IF OVL_PASS == 2
+                INCBIN "blob.zx0"
+    ENDIF
+blob_zx0_end:
+BLOB_ZX0_LEN    EQU blob_zx0_end - blob_zx0
+                DW   BLOB_ZX0_LEN              ; the trailer (in_tut)
+boot4_end:
+BOOT4_TAPE_LEN  EQU boot4_end - BOOT4_ORG      ; >= 2 in pass 1 too (the trailer): TAPE_BLK len > 0
+                ASSERT ftz_zx0 == INSTR_FT_ZX0 && boot4_end <= BLOB_ORG && BANK_BOOT4 == BANK_BLOB
+                ASSERT BOOT4_ORG >= tap_loader + tap_loader_len
+                DISPLAY "GAME BOOT4 block (bank ", /D, BANK_BOOT4, ", boot only): ", /H, BOOT4_ORG, "..", /H, boot4_end - 1, " (", /D, BOOT4_TAPE_LEN, " B: frame_tab + INSTR ", /D, instr_zx0_end - ftz_zx0, " + blob ", /D, BLOB_ZX0_LEN, " + 2); free below BLOB_ORG ", /D, BLOB_ORG - boot4_end
 
 ;==============================================================================
 ; Artefacts. SAVETAP dumps device memory at this point in source order (see

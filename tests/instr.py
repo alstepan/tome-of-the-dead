@@ -12,7 +12,8 @@ flow, pages per docs/design/instructions_screen.md / .txt).
   I9d plain rows 01 / 11 / 19 zero, 20-22 attr $05, 23 == the footer model
   I4  page 2's key ('1') -> menu, swallowed (no START), menu answers a real press
   I5  BREAK on page 1 skips page 2 -> menu (GS_SELECT), never GS_HELP3
-  I6  static: the boot pool's start (POOL_START) equals the frame_tab stream (RECLAIM-D), page 1 right after it, i.e. the
+  I6  static (C+TUT0): the streams are the bank-4 BOOT4 block in pool space (BANK_INSTR = pool bank 4, from
+      BOOT4_ORG, below BLOB_ORG), the frame_tab stream first (RECLAIM-D), page 1 right after it, i.e. the
       pool is laid over the streams; that it only runs after the help screens is not
       checked here (resident cost: build DISPLAYs)
 The reference is a model, not a stored hash: a golden is the approved render itself.
@@ -150,7 +151,6 @@ def main():
         h.expect("I4 page 2 key -> menu", ok, True)
         p.tick(12)
         h.expect("I4b '1' swallowed: no START", p.rb("GAME_STATE"), GS_SELECT)
-        pool = S["POOL_START"]
         p.release()
         p.tick(3)
         p.tut_off()                               # TUT0-T6b: '1' now opens the choice screen
@@ -166,10 +166,11 @@ def main():
         ok = p.until(lambda: (seen.add(p.rb("GAME_STATE")), p.rb("GAME_STATE") == GS_SELECT)[1], 80)
         h.expect("I5 BREAK on page 1 -> menu", ok, True)
         h.expect("I5b page 2 never shown (states %s)" % sorted(seen), GS_HELP3 in seen, False)
-        # I6: the boot pool (2 idles) starts at POOL_START = the first boot-only stream byte
-        # (RECLAIM-D: the frame_tab stream ftz_zx0, then page 1 right after it)
-        h.expect("I6 POOL_START = the frame_tab stream, then page 1 (boot pool overwrites them)",
-                 pool == S["ftz_zx0"] and S["ftz_zx0_end"] == S["instr_p1_zx0"], True)
+        # I6 (C+TUT0): the boot-only streams sit in pool bank 4 (BOOT4, below the D0 blob), the
+        # frame_tab stream ftz_zx0 first at BOOT4_ORG (RECLAIM-D), then page 1 right after it
+        h.expect("I6 BOOT4 (pool bank 4) = the frame_tab stream, then page 1 (the pool overwrites them)",
+                 S["BANK_INSTR"] == S["BANK_POOL1"] and S["ftz_zx0"] == S["BOOT4_ORG"]
+                 and S["ftz_zx0_end"] == S["instr_p1_zx0"] and S["boot4_end"] <= S["BLOB_ORG"], True)
     print("instr:", "OK" if h.ok else "FAIL %s" % h.failures)
     return 0 if h.ok else 1
 

@@ -348,18 +348,19 @@ def masked(name, a, b, base):
 
 
 def stack_fill(p):
-    """Pattern below the live stack (STACK_BOTTOM .. SP - 32) at a probe; returns the fill top."""
+    """Pattern below the live stack (ISR_STK .. SP - 32) at a probe; returns the fill top. C-T3: the ISR's
+    own stack (STACK_BOTTOM..ISR_STK) is not the main stack's."""
     sp = int(re.search(r"SP=([0-9a-fA-F]{4})", p.z.cmd("get-registers")).group(1), 16)
-    lo, top = 0xBE00, sp - 32
+    lo, top = S["ISR_STK"], sp - 32
     p.wmem(lo, [0xA5] * (top - lo))
     return top
 
 
 def stack_low(p, top):
-    m = p.z.read_memory(0xBE00, top - 0xBE00)
+    m = p.z.read_memory(S["ISR_STK"], top - S["ISR_STK"])
     for i, v in enumerate(m):
         if v != 0xA5:
-            return 0xBE00 + i
+            return S["ISR_STK"] + i
     return None
 
 
@@ -732,7 +733,7 @@ def fight_canaries(p, master, hero, turns, mirror=False):
           f"stack low {low and hex(low)}, Archmage {a and L.ents()[a]['HP']}", flush=True)
     check(f"{tag}: {F.n} turns, GS_PLAYING", gs == GS_PLAYING, gs)
     check(f"{tag}: canary regions: only expected changes", not bad, bad)
-    check(f"{tag}: stack depth <= 256 B (lowest byte touched)", low is None or low >= 0xBE00 + 1, low and hex(low))
+    check(f"{tag}: main stack above ISR_STK (lowest byte touched)", low is None or low >= S["ISR_STK"] + 1, low and hex(low))
     gaps = [b - a_ for a_, b in zip(F.summon_turns, F.summon_turns[1:])]
     # (a summon made inside a 2-turn action is only SEEN after it: its TURN_COUNTER is late by the extra turn,
     # so the next gap reads 1 short: tolerated by summon_extra; verified on 0x5302 mirror turn 189 -> 195)

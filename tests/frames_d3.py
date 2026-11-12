@@ -8,7 +8,7 @@ Reads build/tome-of-the-dead.sna + .sym (build first) and the approved D3-3 grid
       (spark_fizz1/2 in both: Spark + Whirlwind impact; staff_bonk Mage)
   F2  frame_tab row (bank 2) = cols W/8, H, FT_OFFR = -ax, FT_OFFL =
       -(W - ax - body_w) with ax from the grid (Knight body 24, FX 8)
-  F3  fdesc_tab FD_FLAGS (bank 5): STATIONARY; SYM exactly for the
+  F3  fdesc_tab FD_FLAGS (bank 5): STATIONARY; SYM exactly for the (full C: every other frame FF_MIR)
       mirror-symmetric FX (left = right)
   F4  the packed block (FD_BLK, banks 1/3) unpacks (tools/bin/dzx0) to the
       grid's pixels at FD_FRM: native rows [mask, data] per column, mask 1 =
@@ -150,7 +150,7 @@ def main():
         chk(f"F2 {nm} frame_tab", list(ft), [w // 8, h, -ax & 0xFF, -(w - ax - bw) & 0xFF])
         fd = mem(B, S["fdesc_tab"] + fid * S["FDESC_STRIDE"], S["FDESC_STRIDE"])
         sym = (not knight) and all(r == r[::-1] for r in rows)
-        chk(f"F3 {nm} FD_FLAGS", fd[S["FD_FLAGS"]], S["FF_SYM"] if sym else 0)
+        chk(f"F3 {nm} FD_FLAGS", fd[S["FD_FLAGS"]], S["FF_SYM"] if sym else S["FF_MIR"])   # full C: every non-SYM frame is mirrored at blit time
         blk = fd[0] | fd[1] << 8
         frm = (fd[2] | fd[3] << 8) - S["GEN_SCRATCH"]
         raw = native(rows)

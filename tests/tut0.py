@@ -1434,10 +1434,10 @@ def scen_static():
     check("C16", f"L05 decodes to '{l05}' from the blob image; no tutorial string names ALDOUS / SEXTON; the choice line is "
           f"'{ss[S['TS_CHOICE3']]}'", l05 == "I AM BROTHER MORROW, LONG DEAD" and not bad
           and ss[S["TS_CHOICE3"]] == "BROTHER MORROW WILL TEACH YOU", (l05, bad))
-    free = S["BLOB_RES"] - S["BLOB_LEN"] - S["BLOB_DELTA"]
-    check("C28", f"blob BLOB_LEN + BLOB_DELTA <= BLOB_RES with >= 350 B free ({free}; TUT0-F4: R4 built, the R3 reserve <= 345 B "
-          f"stays, tut0_split.md 'Playtest round 2'); TUT_RAM_END ${S['TUT_RAM_END']:04X} <= PF_ROWF "
-          f"${S['PF_ROWF']:04X}", free >= 350 and S["TUT_RAM_END"] <= S["PF_ROWF"], free)
+    free = S["BLOB_RES"] - S["BLOB_LEN"]
+    check("C28", f"blob BLOB_LEN <= BLOB_RES with >= 8 B free ({free}; C+TUT0: BLOB_ORG $E1B4 moved up into the old 444 B reserve, "
+          f"user decision; the in-place delta no longer binds); TUT_RAM_END ${S['TUT_RAM_END']:04X} <= PF_ROWF "
+          f"${S['PF_ROWF']:04X}", free >= 8 and S["TUT_RAM_END"] <= S["PF_ROWF"], free)
 
 
 def hooks_off(p):

@@ -17,7 +17,7 @@ item_log:
                 jr   nz, .go
                 res  PD_LOG_BIT, (hl)
                 ret
-.go:            call log_scroll
+.go:            FARB0 log_scroll               ; C-T6: bank 0 (logsc0.asm; +~0.25k T a log line)
                 ld   a, (LOG_Q + LQ_RD)
                 rrca
                 rrca                           ; * LOG_SLOT_LEN
@@ -180,78 +180,6 @@ p6_inline:
                 pop  hl
                 ret
 
-;------------------------------------------------------------------------------
-; log_scroll — row 23 -> row 22 (n = max(EXT22, EXT23) cols: row 23 is blank
-; past EXT23, so this also wipes row 22's longer old line), then row 23 cols
-; 0..EXT23-1 cleared; EXT22 = EXT23, EXT23 = 0; HUD4_PW widened for both.
-; Rows 22 / 23 share their bitmap third: same H, L $C0 / $E0 + col.
-; Clobbers: A, BC, DE, HL.  ~0.2k + 8 x (16 T per col copied + 11 per col cleared)
-; SMC: .cj+1 / .zj+1 = entries into the unrolled LDI / clear chains.
-;------------------------------------------------------------------------------
-LOG_BM_H        EQU (SCREEN_BITMAP >> 8) | (LOG_ROW & $18)
-LOG22_L         EQU (LOG_ROW & 7) << 5
-LOG23_L         EQU ((LOG_ROW + 1) & 7) << 5
-log_scroll:
-                ld   hl, HUD4_EXT + 2
-                ld   a, (hl)                   ; EXT22
-                inc  l
-                ld   c, (hl)                   ; EXT23
-                ld   (hl), 0
-                dec  l
-                ld   (hl), c                   ; EXT22 = EXT23
-                cp   c
-                jr   nc, .n
-                ld   a, c
-.n:             or   a
-                ret  z                         ; both rows blank
-                ld   b, a                      ; B = n
-                ld   l, (HUD4_PW + 2) & $FF
-                cp   (hl)
-                jr   c, .p22
-                ld   (hl), a
-.p22:           inc  l
-                ld   a, c
-                cp   (hl)
-                jr   c, .p23
-                ld   (hl), a
-.p23:           ld   a, 1
-                ld   (PRES_ANY), a
-                ld   a, LOG_COLS
-                sub  b
-                add  a, a                      ; LDI = 2 B
-                ld   l, a
-                ld   h, 0
-                ld   de, .copy
-                add  hl, de
-                ld   (.cj+1), hl
-                ld   a, LOG_COLS
-                sub  c
-                add  a, a                      ; ld (hl),a / inc l = 2 B
-                ld   l, a
-                ld   h, 0
-                ld   de, .zero
-                add  hl, de
-                ld   (.zj+1), hl
-                ld   a, LOG_BM_H
-                ld   bc, $08FF                 ; B = lines; C: 8 x 24 LDIs never borrow from B
-.line:          ld   h, a
-                ld   d, a
-                ld   l, LOG23_L
-                ld   e, LOG22_L
-.cj:            jp   .copy                     ; SMC
-.copy:          DUP  LOG_COLS
-                ldi
-                EDUP
-                xor  a
-                ld   l, LOG23_L
-.zj:            jp   .zero                     ; SMC
-.zero:          DUP  LOG_COLS
-                ld   (hl), a
-                inc  l
-                EDUP
-                ld   a, d                      ; (D = H: LDI never carries into D)
-                inc  a
-                djnz .line
-                ret
+; log_scroll: C-T6, bank 0 (logsc0.asm, FARB0 from item_log; it made room for the mirror blit).
 
 ; bars_draw / num2: after kind_tab since MEM-SND (bars2.asm: kind_tab ALIGN-pad headroom).

@@ -506,6 +506,8 @@ TP_MON          EQU 1 << TP_MON_BIT
 TP_FIRE         EQU 1 << TP_FIRE_BIT
 TP_SHOT_BIT     EQU 3               ; 3F-T7: monster shots queued (RS_Q): act_pend far6s shot_tick each
 TP_SHOT         EQU 1 << TP_SHOT_BIT ; tick (FX start at the release, hero flash at the impact); holds the turn
+TP_MONQ_BIT     EQU 4               ; MON-DEFER (C2): an ordinary turn's monster phase, deferred one tick:
+                                    ; turn_input .spent sets it (ADAPT-DEFER: only from a 3rd-frame input tick), act_pend runs it at TURN_TICK >= 1
 ACT_FIRE_TICK   EQU 2              ; release tick f of every ability (game.md §6.1 "Release ticks")
                 ASSERT TURN_PEND == $BC4A && HERO_T8_END <= ANIM_N
                 ASSERT (HERO3D >> 8) == ((HERO_T8_END - 1) >> 8) && FX_ARG == FX_OP + 1
@@ -659,6 +661,12 @@ DN_A_END        EQU DN_TXT + 6      ; $5CF8 (DN_KEY..DN_A_END = $5CDB..$5CF7, 29
                 ASSERT DN_A_END <= ITEM_RAM && DN_KEY >= $5CCB && DN_A == $5CEB && DN_A_END == $5CF8
 DN_LIVE         EQU $5D60           ; 3 x 32 B live records (DL_*), then DN_SLOT
 DN_LIVE_N       EQU 3
+    IFNDEF DN2_DMG_MAX
+DN2_DMG_MAX     EQU 6               ; DN-GATE (C2): dn_q2 spawns only after a render with < this many
+                                    ; DMG_LIST rects (and no turn logic in the tick: LOGIC_TICK). Measured
+                                    ; (budget.py dnum): 4 -> spawn lags up to 15 ticks (was 10), 1 spawn
+                                    ; fewer; 6 keeps the old lag profile; 99 (logic test only) +3.3k on wcast4
+    ENDIF
 DN_LIVE_STRIDE  EQU 32
 DL_AGE          EQU 0               ; passes drawn (0..DN_LIFE) (offset 0: dn_evict)
 DL_COL          EQU 1               ; first cell col

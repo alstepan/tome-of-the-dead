@@ -531,35 +531,66 @@ def main():
         check("B real turns: a Rat between: the Archer never shoots (the Rat untouched by it)",
               not any(tb) and p.ent(5)["HP"] == 60, (tb, p.ent(5)["HP"]))
 
-        # K an arrow kill: DEATH at the impact tick, GS_DEAD after it
-        kres = None
-        for sd in range(1, 40):
-            arena([(3, K["ARCHER"], 16)], hhp=1)
-            p.set_ent(3, POT=1)                            # counter 0: shoots this turn
-            p.wmem(S["RNG_STATE"], w16(0x4000 + sd * 77))
-            log = []
-            start_turn()
-            for _ in range(400):
-                e0 = p.ent(0)
-                log.append((p.rb("TURN_TICK"), e0["HP"], e0["REACT"], p.rb(S["P_ENTITIES"] + E_["REACTAT"]), e0["MODE"],
-                            p.rb("GAME_STATE"), p.rb("FX_BUSY")))
-                if p.rb("GAME_STATE") == S["GS_DEAD"] or (log[0][1] and p.idle()):
-                    break
+        # K an arrow kill: DEATH at the impact tick, GS_DEAD after it. ADAPT-DEFER: run twice — as played (the
+        # monster phase runs on the input tick: dfr 0, I = 11) and forced deferred (a probe at turn_input .spent
+        # pokes LAST_TICK_FRAME 2 frames back = an input tick already in its 3rd frame: dfr 1, I = 12).
+        spent = S["turn_input.spent"]
+
+        def start_forced():
+            p.z.cmd("set-breakpoint 3 PC=%d" % spent)
+            p.extra_probes = {spent}
+            p.hold("WAIT")
+            try:
+                for _ in range(8):
+                    p.tick()
+                    if p.pc() == spent and p.rb("PORT_7FFD_SHADOW") & 7 == 7 and p.rb("TURN_PHASE") == 0:
+                        p.wb("LAST_TICK_FRAME", (p.rb("SYS_FRAMES") - 2) & 255)
+                        p.z.cmd("set-breakpoint 3")
+                        p.extra_probes = set()
+                    if p.rb("TURN_PHASE") == 1:
+                        break
+            finally:
+                p.z.cmd("set-breakpoint 3")
+                p.extra_probes = set()
+                p.release()
+
+        def k_kill(forced):
+            for sd in range(1, 40):
+                arena([(3, K["ARCHER"], 16)], hhp=1)
+                p.set_ent(3, POT=1)                        # counter 0: shoots this turn
+                p.wmem(S["RNG_STATE"], w16(0x4000 + sd * 77))
+                log = []
+                (start_forced if forced else start_turn)()
+                dfr = 1 if p.rb("TURN_PEND") & (1 << S["TP_MONQ_BIT"]) else 0   # 1 = deferred to TURN_TICK 1
                 p.tick()
-            if log and log[0][1] == 0:
-                kres = log
-                break
-        ok_k, det = False, kres
-        if kres:
-            I = kres[0][3]
-            cut = next((i_ for i_, x in enumerate(kres) if x[0] > I), len(kres))
-            pre, post = kres[:cut], kres[cut:]               # probes after ticks < I / from I on
-            ok_k = (all(x[4] != S["M_SEQ"] and x[2] == 3 and x[5] == S["GS_PLAYING"] for x in pre)
-                    and post and post[0][4] == S["M_SEQ"] and any(x[6] for x in kres)
-                    and kres[-1][5] == S["GS_DEAD"] and I == 0 + 2 + 1 + 7 + 1)
-            det = (I, kres[:14], kres[-2:], len(kres))
-        check("K arrow kill: HP 0 on the input tick, DEATH pending until the impact tick I (= 0 + 2 + slot 3 parity"
-              " + gap 7 + 1), the death sequence from I, the FX flew, GS_DEAD only after", ok_k, det)
+                for _ in range(400):
+                    e0 = p.ent(0)
+                    log.append((p.rb("TURN_TICK"), e0["HP"], e0["REACT"], p.rb(S["P_ENTITIES"] + E_["REACTAT"]),
+                                e0["MODE"], p.rb("GAME_STATE"), p.rb("FX_BUSY")))
+                    if p.rb("GAME_STATE") == S["GS_DEAD"] or (log[0][1] and p.idle()):
+                        break
+                    p.tick()
+                if log and log[0][1] == 0:
+                    return log, dfr
+            return None, None
+
+        for heavy, want in ((False, 0), (True, 1)):
+            if heavy:
+                p.boot(K_KNIGHT)                           # the light run ended the game
+            kres, dfr = k_kill(heavy)
+            ok_k, det = False, kres
+            if kres:
+                I = kres[0][3]
+                cut = next((i_ for i_, x in enumerate(kres) if x[0] > I), len(kres))
+                pre, post = kres[:cut], kres[cut:]           # probes after ticks < I / from I on
+                ok_k = (dfr == want
+                        and all(x[4] != S["M_SEQ"] and x[2] == 3 and x[5] == S["GS_PLAYING"] for x in pre)
+                        and post and post[0][4] == S["M_SEQ"] and any(x[6] for x in kres)
+                        and kres[-1][5] == S["GS_DEAD"] and I == want + 2 + 1 + 7 + 1)
+                det = (I, dfr, kres[:14], kres[-2:], len(kres))
+            check(f"K arrow kill ({'forced 3rd-frame input tick: deferred' if heavy else 'as played: run on the input tick'}, dfr "
+                  f"{want}): HP 0 on the monster tick, DEATH pending until the impact tick I (= {want} + 2 + slot 3 "
+                  "parity + gap 7 + 1), the death sequence from I, the FX flew, GS_DEAD only after", ok_k, det)
 
         # Q the FX queue: 2 tracks busy, 2 Slingers (both sides) -> one track + one queued, both start
         p.boot(K_KNIGHT)                                   # K ended the game

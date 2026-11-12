@@ -181,7 +181,19 @@ dn_q2:
                 ld   a, (FX_BUSY)
                 or   a
                 ret  nz
-                jr   dn_scan.pop
+                ; DN-GATE (C2, 2026-11-10): the spawn (up to ~12.8k T) never lands on a heavy
+                ; 2nd-frame tick: none after turn logic (heavy_mark: LOGIC_TICK == this tick)
+                ; nor after a render with >= DN2_DMG_MAX damage rects (~ that many bodies
+                ; redrawn: its present follows in the next tick too). The number waits for the
+                ; next light 2nd-frame tick or the next 1st-frame pass (dn_tick).  ~60 T
+                ld   a, (DMG_COUNT)
+                cp   DN2_DMG_MAX
+                ret  nc
+                ld   a, (TICK_COUNTER)
+                ld   hl, LOGIC_TICK
+                cp   (hl)
+                ret  z
+                jp   dn_scan.pop
                 ASSERT (dn_q2 >> 8) == (dn_tick >> 8)      ; dn_gate: ld l, dn_q2 & $FF
 
     IF TOME_FX2

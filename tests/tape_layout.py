@@ -72,18 +72,26 @@ expect("block 5 = game CODE data", blocks[5][0] == 0xFF and len(blocks[5]) - 2 =
 rest = blocks[6:]
 expect("%d headerless blocks follow (TAPE_HEADLESS_N)" % len(rest),
        len(rest) == sym["TAPE_HEADLESS_N"] and all(b[0] == 0xFF for b in rest))
-# INSTR-BUILD / TUT0-T1: the bank-0 block (6th headerless, TAPE_BLOCKS order) = the text block + the
-# boot-only streams (frame_tab at POOL_START, HOW TO PLAY pages 1 and 2, the overlay code) + blob_zx0
-# + its 2-byte length trailer (in_tut reads it from the block's end)
+# INSTR-BUILD / C-T8 / C+TUT0: 6th headerless = the bank-0 text block + the b0 cold code + its
+# reserve pad, ending at B0_FREE_START (the carve below POOL_START is NOT on tape, nor is anything
+# above it); 7th = the bank-4 BOOT4 block: frame_tab (RECLAIM-D, first, at BOOT4_ORG), HOW TO PLAY
+# pages 1 and 2, the overlay code, then blob_zx0 + its 2-byte length trailer (in_tut reads it from
+# the block's end via tape_tab TT_BOOT4_REC), ending <= BLOB_ORG (forward unpack, no overlap)
 txt = rest[5] if len(rest) > 5 else b""
-expect("headerless 6 = text + frame_tab + INSTR streams + blob_zx0 + trailer (%d B = %d + %d)" % (
+b4 = rest[6] if len(rest) > 6 else b""
+expect("headerless 6 = text + b0 code + pad (%d B = %d + %d), ends at the carve" % (
        len(txt) - 2, sym["TEXT_LEN"], sym["TEXT_TAPE_LEN"] - sym["TEXT_LEN"]),
-       len(txt) - 2 == sym["TEXT_TAPE_LEN"] and sym["ftz_zx0"] == sym["POOL_START"]
-       and sym["ftz_zx0"] < sym["ftz_zx0_end"] == sym["instr_p1_zx0"]
-       and sym["instr_p1_zx0"] < sym["instr_p2_zx0"] < sym["instr_zx0"] < sym["instr_zx0_end"] <= sym["blob_zx0"]
+       len(txt) - 2 == sym["TEXT_TAPE_LEN"] and sym["TEXT_ADDR"] + sym["TEXT_TAPE_LEN"] == sym["B0_FREE_START"]
+       and sym["B0_FREE_START"] + sym["B0_FREE_RES"] == sym["POOL_START"]
        and sym["TEXT_ADDR"] + sym["TEXT_TAPE_LEN"] == sym["text_tape_end"])
-tl = len(txt) - 2
-expect("bank-0 block trailer (last 2 B) == BLOB_ZX0_LEN",
-       tl >= 2 and txt[1 + tl - 2] | txt[1 + tl - 1] << 8 == sym["BLOB_ZX0_LEN"])
+expect("headerless 7 = BOOT4: frame_tab + INSTR streams + blob_zx0 + trailer at BOOT4_ORG (%d B)" % (len(b4) - 2),
+       len(b4) - 2 == sym["BOOT4_TAPE_LEN"] and sym["ftz_zx0"] == sym["BOOT4_ORG"] == sym["INSTR_FT_ZX0"]
+       and sym["ftz_zx0"] < sym["ftz_zx0_end"] == sym["instr_p1_zx0"]
+       and sym["instr_p1_zx0"] < sym["instr_p2_zx0"] < sym["instr_zx0"] < sym["instr_zx0_end"] == sym["blob_zx0"]
+       and sym["BOOT4_ORG"] + sym["BOOT4_TAPE_LEN"] == sym["boot4_end"] <= sym["BLOB_ORG"]
+       and sym["BANK_BOOT4"] == sym["BANK_BLOB"] == sym["BANK_INSTR"])
+tl = len(b4) - 2
+expect("BOOT4 block trailer (last 2 B) == BLOB_ZX0_LEN",
+       tl >= 2 and b4[1 + tl - 2] | b4[1 + tl - 1] << 8 == sym["BLOB_ZX0_LEN"])
 print("tape_layout: %s (%d blocks, %d B)" % ("OK" if not fails else "%d FAILED" % fails, len(blocks), len(d)))
 sys.exit(1 if fails else 0)

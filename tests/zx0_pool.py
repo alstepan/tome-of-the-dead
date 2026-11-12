@@ -130,11 +130,24 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # D3..D7 -172, D8 -236); no pool frame changed
 # SPIT-SPARK (2026-11-03): the Warrior's spark_fly1/2 extra (the Queen's spit) on the Spider levels: D2 / D4 / D5 +64
 # (Warrior only; the Mage's class FX holds the frames); D8 (the binding level, slack 384) unchanged.
+# C-T6 (option C, the mirror blit's funding): POOL_START +210 B (B0_CODE_RES 704 -> 914: log_scroll +
+# gen_lshare to bank 0) and four STA frames FF_MIR (knight_dead / wizard_dead, skeleton_raise, ghost_dead:
+# no left variant); D8 Warrior slack stays 384. T9 rebaselines again after T7 / T8.
+# C-T9 (option C done: C-T6/T7/T8 ledgers in docs/memory-map.md): the build's own numbers, margin included.
+# C-H (10 hurt frames |MIR, skeleton_hurt not: wcast; B0_FREE_RES 5,790 -> 6,910): the build's own numbers again.
+# C2 (full C: every walk WK4 / WK0 + MOT frame and skeleton_hurt |MIR, after MON-DEFER; B0_FREE_RES 6,910 ->
+# 10,910, POOL_START $E7F0 -> $F826, capped by the HOW TO PLAY streams at POOL_START): the build's own numbers.
+# C+TUT0 merge: the boot streams moved to the bank-4 BOOT4 block (no longer a POOL_START cap); skeleton_walk1..4
+# |MIR again (user "full C, accept slowdown"); B0_FREE_RES 10,910 -> 11,486 (POOL_START $FA66, capped by the D0
+# pool vs BLOB_ORG): every need is the C2 one - 16 (straddle waste 154). Binding D8 Warrior 16,570, slack 3,296.
+# C+TUT0 (blob up): BLOB_ORG $E000 -> $E1B4, B0_FREE_RES 11,486 -> 11,958 (POOL_START $FC3E; the next even step 11,960
+# is a straddle cliff that breaks the D0 ASSERT): every need = the previous one - 152 (straddle waste 154 -> 2).
+# Binding D8 Warrior 16,418 of 19,394, slack 2,976.
 LEVEL_NEED = {
-    (0, 1): 22528, (0, 2): 22304, (0, 3): 27008, (0, 4): 28640,
-    (0, 5): 23136, (0, 6): 28736, (0, 7): 27744, (0, 8): 31328,
-    (1, 1): 19456, (1, 2): 19296, (1, 3): 23936, (1, 4): 25632,
-    (1, 5): 20128, (1, 6): 25664, (1, 7): 24672, (1, 8): 27936,
+    (0, 1): 11826, (0, 2): 11842, (0, 3): 14354, (0, 4): 15298,
+    (0, 5): 12546, (0, 6): 14978, (0, 7): 14482, (0, 8): 16418,
+    (1, 1): 10258, (1, 2): 10242, (1, 3): 12754, (1, 4): 13730,
+    (1, 5): 10978, (1, 6): 13378, (1, 7): 12882, (1, 8): 14818,
 }
 
 
@@ -585,6 +598,11 @@ class Ref:
         self.facing(fid, src, cols, h, flags, offr, 0)
         if flags & S["FF_SYM"]:
             self.frt[row + 6:row + 12] = self.frt[row:row + 6]
+            return
+        if flags & S.get("FF_MIR", 0):                 # C-T6: left = right | bank bit 7 (blit-time mirror)
+            self.frt[row + 6:row + 12] = self.frt[row:row + 6]
+            for v in (6, 9):
+                self.frt[row + v] |= 0x80              # (FRT_NONE $FF stays $FF)
             return
         mir = bytearray()
         for y in range(h):

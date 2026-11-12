@@ -66,3 +66,9 @@ Bank 2 has 4 B: #2/#3/#4/#7 need a funding task first (move page-free cold bank-
   Plus a dn_gate fix (never run dn_q2 in a tick that already carries a full render) to remove the chaotic spikes.
 - Dropped: #2, #4, edge trim. Kept: #1/1b, dn_gate scheduling, #3 (attack/stand ticks), #5/#6 (average).
 - More bodies per room: rwalk shows 5 always-walking bodies already exceed budget → needs #1 + render-side work or LOD.
+
+## Adaptive defer (2026-11-12, user decision)
+#1 (MON-DEFER) now fires only when the input tick is already in its 3rd frame (practically never): the monster phase
+runs on the input tick as on main, and an input tick may spill into a 3rd frame (+1 frame) instead of costing a
+whole extra tick (+2 frames). Budget: monster-phase ticks gated at 3 frames, render ticks at 2 (budget.md
+"ADAPT-DEFER"). Next lever for the 3-frame share: input-tick logic out of contended banks (#5 / #6 below).

@@ -33,9 +33,17 @@
 ; use (INTENT) goes straight to try_player_turn; while FIRE is held the stick
 ; is the cursor's; only directions and '.' count as held. D3-7: an ability
 ; turn (act_begin, act7.asm: MON_AT != 0) leaves its release and the monster
-; phase to act_pend (the anim_gate hook) instead.
+; phase to act_pend (the anim_gate hook) instead. ADAPT-DEFER (user
+; 2026-11-12, over C2's MON-DEFER): an ordinary turn's monster phase runs here
+; (main's tick, TURN_TICK 0) unless the input tick is already in its 3rd frame
+; (SYS_FRAMES - LAST_TICK_FRAME >= ADAPT_FRAMES): then .spent sets TP_MONQ and
+; act_pend runs it at TURN_TICK 1. An input tick may spill into a 3rd frame
+; (+1 frame, as on main); a defer costs a whole tick (+2 frames). Same logic,
+; order and RNG either way (tests/ai_equiv.py); only the tick moves.
 ; Clobbers: all but IY (far7: A, F lost; nothing is returned).
 ;------------------------------------------------------------------------------
+ADAPT_FRAMES    EQU 2                          ; ADAPT-DEFER: input tick frames at .spent from
+                                               ; which the monster phase defers one tick
 turn_input:
     IF TOME_FX && !TOME_FX2
                 call lect_back                 ; TOME-FX: a Tome hit's flash ends on the first INPUT tick after its
@@ -158,7 +166,8 @@ turn_input:
                 ld   (CLIMB_BLK), a
                 call trap_chk                  ; 3E-T16: the held Wait: sense only (TRP_WAIT 0)
                 jr   .spent
-.act:           call try_player_turn
+.act:           call heavy_mark               ; DN-GATE: no dn_q2 spawn in this tick
+                call try_player_turn
                 ret  nc                        ; illegal: no turn consumed
                 call trap_chk                  ; 3E-T16: trigger / search / Mage sense. BEFORE the
                                                ; guard clear (STUN1): a trap armed here keeps
@@ -182,8 +191,22 @@ turn_input:
                 ld   a, (EXIT_KIND)
                 ld   hl, MON_AT                ; D3-7: an ability turn (act_begin) defers
                 or   (hl)                      ; the monster phase to act_pend
-                call z, resolve_monsters       ; BLAIR-FIX: bank 2 (pages bank 3 itself, gives
-                                               ; bank 7 back); exit turn: monsters don't act
+                jr   nz, .nomon                ; exit turn: monsters don't act
+                ld   a, (SYS_FRAMES)           ; ADAPT-DEFER (user 2026-11-12): frames since this
+                ld   hl, LAST_TICK_FRAME       ; tick's start; >= ADAPT_FRAMES (its 3rd frame
+                sub  (hl)                      ; already: practically never) -> defer, else the
+                cp   ADAPT_FRAMES              ; phase runs now even if the tick then spills into
+                jr   nc, .defer                ; a 3rd frame (+1 frame, vs +1 tick = 2 frames
+                                               ; for a defer). Elapsed < 2 frames here (RENDER_FIRST:
+                                               ; present + render + try_player_turn spent) + resolve
+                                               ; (<= ~30k) + the tail < 3 frames: safe by construction
+                call heavy_mark                ; main's order and tick (TURN_TICK 0); DN-GATE
+                call resolve_monsters          ; (the held Wait skips .act's); bank 2 (pages
+                jr   .nomon                    ; bank 3 itself, gives bank 7 back)
+.defer:         ld   hl, TURN_PEND             ; MON-DEFER (C2): an input tick in its 3rd
+                set  TP_MONQ_BIT, (hl)         ; frame already runs it one tick later
+                                               ; (act_pend, TURN_TICK 1)
+.nomon:
                 ld   a, TP_ANIM
                 ld   (TURN_PHASE), a
                 ret
@@ -1334,7 +1357,18 @@ intent_icon7:
                 INCLUDE "drip7.asm"            ; D3-8b: drip sources, spawn / let go, hide
                 INCLUDE "mark7.asm"            ; D3-8d: status marks: room reset + glyph copy, hide
                 INCLUDE "xp7.asm"              ; D3-9b: MP regen, level-up, learn / rank-up
-                INCLUDE "mus7.asm"             ; SND-3: Dangerous (W) cue, mus_pick
+; mus_pick — SND-3 Dangerous cue: the stub of bank-0 mus_pick0 (mus0.asm, MON-DEFER: moved out
+; to fund act_pend's deferred monster phase). tome_aura (low RAM) calls it with bank 7 paged;
+; farb gives bank 7 back.  Clobbers: A, BC, DE, HL.  mus_pick0 + ~0.25k T
+; heavy_mark — DN-GATE (C2): LOGIC_TICK = this tick's TICK_COUNTER low byte: the tick runs turn
+; logic (try_player_turn, act_pend's release / monster phase), so its dn_gate never adds the
+; 2nd-frame spawn dn_q2 on top (dnum0.asm).  Clobbers: A.  27 T
+heavy_mark:     ld   a, (TICK_COUNTER)
+                ld   (LOGIC_TICK), a
+                ret
+mus_pick:       ld   hl, mus_pick0
+                ld   c, BANK_TEXT
+                jp   farb
                 INCLUDE "hunger7.asm"          ; MEM-RECLAIM w2b: hunger_turn / hunger_add (from R6 hunger6.asm)
                 INCLUDE "trap7.asm"            ; MEM-RECLAIM w2b: trap_turn / trap_step / effects (from R6 trap6.asm)
                 INCLUDE "boss7.asm"            ; MEM-RECLAIM w2b: grate_open / boss_chk (from R6 boss6.asm)

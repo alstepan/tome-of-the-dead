@@ -1,5 +1,8 @@
 ;==============================================================================
-; mus7.asm — SND-3, bank 7: the Dangerous (W) cue. Mailbox writes only (MUS_REQ,
+; mus0.asm — SND-3: the Dangerous (W) cue. MON-DEFER (C2, 2026-11-10): moved from
+; bank 7 (mus7.asm) to the bank-0 cold code (b0_code: FARB0 rules — no SMC, no data,
+; never pages $C000; everything it reads / writes is bank-2 RAM) to fund act_pend's
+; deferred monster phase in the full bank 7; bank-7 stub mus_pick (bank7.asm) -> FARB0. Mailbox writes only (MUS_REQ,
 ; level-triggered): no work in the ISR, SND_MODE / SND_HOLD are the dispatcher's
 ; business (music off: the request is remembered and restarts at bar 1 when it
 ; goes on; turns do not run while paused). Death (Y) is in end_turn.
@@ -18,7 +21,8 @@ DNG_SCAN_MASK   EQU EF_ACTIVE | EF_HOSTILE | EF_PENDING | EF_DYING
                 ASSERT (ST_FLAGS & $F0) == $10 && (ST_FLAGS & $0F) == 0   ; 'or slot' builds the address
 
 ;------------------------------------------------------------------------------
-; mus_pick — once per surviving turn, from end_turn (plain call, bank 7).
+; mus_pick0 — once per surviving turn, from end_turn (tome_aura -> bank-7 stub
+; mus_pick -> farb, BANK_TEXT paged; +~0.25k T the far call, uncontended now).
 ; Walks the LIVE_LIST (build_live: the active, non-pending bodies of CUR_ROOM,
 ; built at the turn start; hero = entry 0). Each entry's flags and room are
 ; re-checked (a body that died this turn is DYING; after a do_exit the list is
@@ -28,7 +32,7 @@ DNG_SCAN_MASK   EQU EF_ACTIVE | EF_HOSTILE | EF_PENDING | EF_DYING
 ; hostile (early out at the 4th), + ~0.15k T HP test and state update; worst
 ; ~2.1k T a turn (12 skipped + 3 counted), typ. < 1k.
 ;------------------------------------------------------------------------------
-mus_pick:
+mus_pick0:
                 ld   a, (LIVE_N)
                 or   a
                 jr   z, .hp                    ; (empty list: never walk 255 entries)

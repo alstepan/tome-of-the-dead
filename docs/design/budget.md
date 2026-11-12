@@ -128,7 +128,10 @@ of logic leaves the heaviest render tick.
 - **Hold back 13k T per tick** (2 calls × ~6.5k ≈ 9% of the tick). Measured
   (§5.1): ≤ 8.6k T for two adjacent ISRs; the 126k / 128k caps are kept as work
   caps and a real-deadline gate covers the rest.
-- Trap: `DI` windows stall music → no SP-trick blits.
+- Trap: `DI` windows stall music → no SP-trick blits under `DI`. **C-T3 (user 2026-11-09):** pop-based
+  (stack) blits are allowed WITHOUT `DI` under the ISR write-back invariant (word below SP == BC;
+  `docs/conventions.md` "Interrupts" → "Stack blits"); the SP-safe ISR costs +85 T per frame
+  (+75 T inside `isr` → `isr.done`).
 
 ### 5.1 Measured: the WZM player in the slot (SND-2, 2026-10-14, **M**)
 
@@ -142,7 +145,7 @@ no echo; sound.md §2/S1e, memory-map.md "Interrupts (A8)").
 | Start frame (loop or shot) | **~3.4k T** `ay_play` (`player_start` ~3.1k, no `player_frame` that call); **accepted ≈ 3.5k** by the manager (SND-2 T6) |
 | Adjacent-frame pair (a 2-frame tick holds two ISRs) | **8,566 T** max (frames 0+1 = start + first play frame, songs 1/2/3); steady play: Lament 7,698 T |
 | Idle / music off / hold | 243 / 210 (426 T whole ISR, gate ≤ 500) / 291 T `ay_play` |
-| Stack | ISR 12 B + 6 B under `AY_PLAY` (CALL + the player's deepest 4) |
+| Stack | ISR 12 B + 6 B under `AY_PLAY` (CALL + the player's deepest 4); **C-T3: on its own stack `ISR_STK` (8 B + `AY_PLAY` 8 B), 0 B on the interrupted stack (the CPU's push word, rewritten to BC)** |
 
 **Cap policy (manager, SND-2 T6): keep the 126k ordinary / 128k cast caps as
 WORK caps** (tick work excluding the ISR time that falls inside the window).
@@ -214,6 +217,106 @@ effects fire in the budget scenarios. ISR in window max 5,926 T (PRE_MAX up to 6
 work **121,769** (mage; cap 126k), cast work **119,197** (cap 128k), real **132,512** (wcast4 ordinary;
 **9,304 T** under 141,816); 0 over any gate. Worst single ISR with effects (tests/sfx.py SFX10) 6,243 T
 ≤ 6.5k; music alone 5,381 T, pair 8,749 T; AY slot 128 B free (sound.md "SFX as built").
+
+**C-T9 (option C, the blit-time mirror; docs/design/mirror_c_split.md, memory-map.md C-T3..C-T8 ledgers):**
+`blit_sprite` costs per byte: normal **36 T/B** nominal (37.2 measured), mirrored **~52 T/B measured** (52.1
+through the contended `$6800` BITREV, 51.7 uncontended; nominal 50) = **+16 T/B** (a 24x48 unshifted blit
++2.9k T, a 40x48 shifted one +5.0k T); every blit also pays **+20 T** for the mirror test (`jp m, blit_mpro` +
+the patched `blit_mj` jump), mirrored or not. Three new CAP-gated scenarios (the hook restarts each body's
+KS_ATTACK every tick so all the left-facing attack frames are drawn mirrored at once; the knight faces right).
+Metrics (fresh run, C-F1): **work** = max tick minus its ISR time (gate <= CAP 126,000), **real** = work + PRE_MAX
+(gate <= 141,816); the plain max tick (work + ISR, no PRE_MAX) is listed too (the reviewer's 110.9k / 120.5k):
+
+| scenario | max tick | work | real |
+|---|---|---|---|
+| `lmix` (Skeleton / Goblin / Rat / Bat, PROTO pool) | 110,895 | **107,723** | **117,541** |
+| `lmixw` (4 Skeletons, 32x48 cut; PROTO pool) | 120,518 | **117,267** | **127,331** |
+| `lmix4` (REAL D4 pool: Ogre raise / slam + 3 Orcs raise / attack, all STA\|MIR; `level_descend` under a fixed seed) | 110,307 | **106,972** | **117,046** |
+
+`lmix4` is the only scenario booted on a real level (`proto_start` 0, `level_descend` to D4): the Ogre and Orc frames
+come from the real pool (no KT_SEQ pokes), and the run asserts the left-facing `ogre_raise` / `ogre_slam` /
+`orc_raise` / `orc_attack` frames were really drawn (E_DFID / EF_LEFT). The Ogre frames **stay cold (`STA|MIR`)**:
+23k T of headroom to the real gate, so no pool bytes were spent. Whole-suite worst real 137,265 / work 127,593.
+
+**C-H (10 of the 11 hurt frames `STA|MIR`, user 2026-11-10 "hybrid+h"; memory-map.md C-H ledger):** two new CAP-gated
+scenarios, the knight (facing LEFT, hurt frame) + 4 bodies in left-facing hurt frames, held in KS_HURT every tick
+(measured with `skeleton_hurt` mirrored, an upper bound):
+
+| scenario | max tick | work | real |
+|---|---|---|---|
+| `lhurt` (knight + 4 Skeletons, 32x48 hurt; PROTO pool) | 105,456 | **102,859** | **110,756** |
+| `lhurt4` (REAL D4 pool: knight + Ogre + 3 Orcs `orc_hurt`) | 94,887 | **92,127** | **100,187** |
+
+`skeleton_hurt` stays pre-mirrored: mirrored, `wcast` (Whirlwind on Skeleton + Rat + Bat) went to work 126,381 > CAP.
+Freed 320..1,104 B a level (Warrior; Mage 288..960); `POOL_START` `$E390` -> `$E7F0` (`B0_FREE_RES` 6,910), D8
+Warrior slack 1,184 (need 23,408 of 24,592).
+
+ISR gates after C-T3: SFX10c 6,550 T and SND6 (music off) 500 T both sit at **0 T margin** (any ISR growth must be paid elsewhere).
+
+**C2 (full option C + MON-DEFER + DN-GATE, user 2026-11-10; memory-map.md "C2"):** the tick model changes: an
+ordinary turn is input tick = present + render + `try_player_turn` (no monster phase); tick 1 = present + render
+(the hero's first step only: no monster has started yet) + `resolve_monsters` (act_pend, `TP_MONQ`); the monsters'
+animation runs one tick later. `dn_q2` never spawns in a tick with turn logic (`LOGIC_TICK`) or a render of
+>= `DN2_DMG_MAX` (6) damage rects. Then every walk WK4 / WK0 + MOT frame and `skeleton_hurt` went `|MIR`.
+Work / real (`tests/budget.py`, `GAME_PROFILE=1`), base = the C-H build:
+
+| scenario | base work / real | MON-DEFER only | C2 (final) work / real |
+|---|---|---|---|
+| `blair` | 127,593 / 137,265 | 114,009 | **117,883 / 126,685** |
+| `wroom` | 124,680 / 133,563 | 109,836 | **99,096 / 107,780** |
+| `mage` | 114,863 / 124,137 | 98,655 | **101,847 / 111,387** |
+| `lmixw` | 117,406 / 127,064 | 121,003 | **114,364 / 124,438** |
+| `lmix4` | 106,972 / 117,046 | 131,371 (hook artefact, below) | **122,868 / 132,318** |
+| `ghost5` (informational) | 124,791 / 134,446 | 138,147 | 145,855 / 159,597 (2 ticks over) |
+
+All gates pass (worst CAP-gated work 122,868 `lmix4`, worst cast work 110,180, worst gated real 132,318). `lmix*` /
+`lhurt*` hook: it now waits for the first turn's monster phase before forcing the bodies into KS_ATTACK / KS_HURT
+(in the game every body is idle on the input tick and the monster tick; forcing them earlier stacked a 5-body
+repaint on the deferred `resolve_monsters`, an unreachable state). `ghost5` (5 Ghosts, over ROOM_CAP) regressed on a
+pure render tick (6 flyers moving, now offset by a tick from the hero): reported, not gated.
+Measurements, NOT gated (`lwalk` / `lwalk4` / `rwalk`: 5 bodies walking every tick): `lwalk` (knight + 4 Skeletons
+walking left, all mirrored) work 135,796 / real 151,119 (10 ticks over the real gate, 1 by the raw total); `lwalk4` (real D4: Ogre + 3 Orcs)
+147,333 / 160,992 (9 ticks over); `rwalk` (the same facing right, pre-mirror-free) 123,267 / 132,895 (0 over; was
+155.6k real before MON-DEFER). Numbers: `dnum` spawn lags [5, 2, 8, 9, 10, 2, 6, 7, 8, 9, 10] ticks (base [4, 2, 8,
+9, 10, 2, 7, 7, 8, 9, 10]), `dkill` max 5 (base 3). ISR untouched.
+
+**C+TUT0 merge (2026-11-11; memory-map.md "C+TUT0 merge ledger"):** (a) the walk measurements against the C-H walk
+flags (every walk / MOT frame pre-mirrored, MON-DEFER kept), work / real of the worst ordinary tick:
+
+| scenario | walks pre-mirrored | full C (final, user "accept slowdown") | gate |
+|---|---|---|---|
+| `rwalk` (facing right, control) | 123,189 / 133,641 | 123,189 / 132,984 (0 over) | **GATED** (real <= 141,816) |
+| `lwalk` (knight + 4 Skeletons, left) | 125,931 / 135,796 (0 over) | 135,712 / **151,033** (**10 ticks over** the real gate; 1 tick over by the raw tick total 142,762) | measurement, **not gated** (2026-11-11) |
+| `lwalk4` (real D4: Ogre + 3 Orcs, left) | 136,642 / 148,084 (6 over) | 147,251 / **160,910** (**12 ticks over** the real gate; 9 by the raw tick total) | measurement (the base is over too) |
+
+Mirroring costs ~+10k T on a 5-body left-walk tick (52 vs 36 T/B). User decision "full C, accept slowdown" (2026-11-11):
+`skeleton_walk1..4` stay `|MIR` (an experiment pre-mirroring them took `lwalk` back to 125,931 / 135,796 for +1,120 B
+pool at D8 Warrior; reverted). "Over" = ticks above 141,816 on the gate's `real` figure (the `real gate` line; `[info]` lines
+count the raw tick totals instead: 1 / 9). `lwalk` leaves the gate and is reported like `lwalk4`; `rwalk` passes and stays gated.
+`lwalk4` (40-px Ogre / Orcs) was over budget before C2 and stays an ungated measurement, like `lwalk` now. (b) `pend_far` skips the
+far7 `act_pend` round trip on the input tick (`TURN_TICK` 0): ~-0.3k T on every ordinary turn's heaviest tick.
+(c) TUT0's `tut0` route under C2 timing (the monsters' phase one tick later): worst work 113,875 W / 115,663 M (TUT0
+on main: 109.2k / 111.0k), real 126,951 / 125,236: inside CAP / BUDGET, no rebaseline needed.
+
+**ADAPT-DEFER (2026-11-12, user decision after an A/B playtest):** MON-DEFER cost a whole tick (+2 frames) on every
+turn with a monster on screen; main ran the monster phase on the input tick and, when that overran, paid +1 frame.
+Rule now: `turn_input` .spent runs `resolve_monsters` on the input tick (main's tick and order) unless the tick is
+already in its **3rd frame** (`SYS_FRAMES - LAST_TICK_FRAME >= ADAPT_FRAMES` 2; then `TP_MONQ` defers it one tick as
+in C2). With RENDER_FIRST, present + render + `try_player_turn` are spent at .spent, so a tick there in frame <= 2
+plus resolve (<= ~30k) and the tail stays under 3 frames: the defer is a safety net that practically never fires.
+The first (frame-1 + height-sum) version was dropped: it kept 4-monster walks +0.8..2.0 frames/turn behind main.
+**Budget gate (tests/budget.py):** a tick that runs the monster phase (`resolve_monsters` probe; cast-class ticks
+excepted) is gated **real <= `BUDGET3` = 3 x 70,908 - 402** and is outside the D5 CAP; every other tick (pure render
+/ anim) keeps real <= 141,816 and its CAP / CAST_CAP. Why: an input-tick overrun costs 1 frame once per turn, a
+render-tick overrun would cost a frame on every animation step. Each scenario prints its input-tick max real and
+its share of 3-frame ticks. Bank 7 +20 B (ISR untouched). Logic identical either path (`tests/ai_equiv.py`).
+Measured (release; `fpt` model, frames/turn, main 7ab186f -> now): plain 7.12 / 7.12, 1 Skeleton walk 8.88 / 8.88,
+fight 15.71 / 15.71, `blair` 17.86 / 17.86, `wroom` 15.86 / 15.86, every real D2-D5 3- / 4-monster room (walk and
+fight) identical to main, 0 % 3-frame ticks; only the 5-body left walks are slower (full C mirroring, user-accepted):
+lwalk-like 7.3 -> 8.3 (3-frame ticks 14.7 -> 44 %), D4 Ogre + 3 Orcs 8.4 -> 8.8 (21 -> 32 %). Gate: worst input-tick
+real 167,995 (`lwalk`, reported) / 140,475 (`blair`); `rwalk`, `lw24`, `lw24g` (5 bodies walking in step) now have
+render ticks past 2 frames (rwalk real 155.7k, as on main: perf_survey M2) and are reported, not gated, like
+`lwalk` / `lwalk4`; `lw24s` (hero + 3 Skeletons) and `lwalk4b` (real D4 Ogre + 2 Orcs) stay gated.
 
 ## 6. Headroom for Stage 2 content (after Rogue removal, E1 option A, AY reserve)
 

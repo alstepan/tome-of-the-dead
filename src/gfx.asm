@@ -6,7 +6,7 @@
 ;   the level tile load live in lowram.asm (bank 5); the transition scrolls,
 ;   init_tiles and build_room_map (B3B-8) in bank3.asm.
 ; Conventions: IX preserved unless stated; IY never touched (= $5C3A, kept for
-; the optional ISR_ROM_CHAIN; the default A8 IM 2 ISR does not use it).
+; the tape path's ROM IM1; the A8 IM 2 ISR does not use it).
 ;==============================================================================
 
 ;==============================================================================
@@ -834,27 +834,35 @@ shadow_room:
 ; MASKED BLIT (prototype §5.1): frame BL_FID, facing BL_LEFT, top-left
 ; (BL_FPX, BL_FPY). Variant = FRT[fid][left*2 + (fpx AND 4 ? 1 : 0)].
 ; screen = (screen AND mask) OR data, width = cols (+1 spill if shifted).
-; Clobbers: A, BC, DE, HL.  (IX/IY untouched)
+; Clobbers: A, BC, DE, HL.  (IX/IY untouched; SP restored)
 ;------------------------------------------------------------------------------
-; A7b: DE = screen, HL = pool data (was the reverse): `and (hl)` / `or (hl)`
-; read mask and data straight from the pool, so no temp register is needed
-; (44 T/byte, was 52), and C keeps the line-start low byte, so a line ends
-; with `ld e,c` (was ld a,l / sub w / ld l,a).
-; PERF-GHOST: the mask -> data step is INC L (was INC HL): every pre-shifted frame
-; starts at an even address (alloc: POOL_START / BANK_WINDOW even, every size =
-; 2 * cols * H; ASSERTed below), so a (mask, data) pair never straddles a page:
-; 42 T/byte, -2 T a byte drawn (~1.2k T at 3 Ghosts + the hero), 0 B.
-; Cost: 42 T/byte (unrolled chain, entered at (6-width)*7 by an SMC jump) +
-; 31 T/line char-aligned (54 T general path) + ~680 T setup.
-;   24x48 shifted  (4 cols)  : 192 B -> 8.4k + 1.5k + 0.7k = 10.6k T
-;   40x48 slash    (6 cols)  : 288 B -> 12.7k + 1.5k + 0.7k = 14.9k T
-; BLAIR-FIX: the per-line DJNZ jumps straight to the chain entry (its displacement
-; patched per sprite, +24 T setup) instead of to the entry JP: -10 T a line (21 T
-; aligned / 44 T general), ~0.4k T a 48-line sprite.
-; SMC: blit_jp+1 / blit_al_jp+1 (chain entry), blit_dj+1 / blit_al_dj+1 (the
-; line DJNZ displacement to it) — patched per sprite.
+; C-T4 (option C, docs/design/mirror_c_split.md §6 T4): a STACK blit. SP is
+; pointed at the pre-shifted frame and every (mask, data) pair is read with
+; one `pop bc` (C = mask, B = data: the pool stores mask first):
+;   pop bc / ld a,(de) / and c / or b / ld (de),a / inc e   = 36 T/byte, 6 B
+; (was ld a,(de) / and (hl) / inc l / or (hl) / inc hl / ld (de),a / inc e:
+; 42 T, 7 B). DE = screen, L = line-start low byte, H = line counter; the
+; line code uses A, D, E, H, L only.
+; NO DI: the ISR write-back invariant (docs/conventions.md "Interrupts" ->
+; "Stack blits"): at every instruction boundary while SP is borrowed
+; (blit_sp_on .. blit_sp_off) the word below SP == BC. BC is preloaded from
+; the word below the frame (frame - 2; a frame at $C000 reads $BFFE, DH_EFF
+; scratch in bank 2) BEFORE `ld sp,hl`; after that only `pop bc` writes BC,
+; nothing pushes / calls, no $7FFD write (page_bank ran before). An interrupt
+; anywhere in between rewrites (SP-2..SP-1) with BC = the bytes already
+; there, so the pool stays byte-identical.
+; Cost: 36 T/byte (unrolled chain, entered at chain end - 6*width by SMC jumps)
+; + 22 T/line char-aligned (45 T general path) + ~760 T setup (C-T4: +~90 T:
+; BC preload 38, SP save / switch / restore 36, H / L 8, entry jp 10).
+;   24x48 shifted  (4 cols)  : 192 B -> 6.9k + 1.1k + 0.8k =  8.8k T (was 10.6k)
+;   40x48 slash    (6 cols)  : 288 B -> 10.4k + 1.1k + 0.8k = 12.3k T (was 14.9k)
+; SMC: blit_go+1 (first entry), blit_dj+1 / blit_al_dj+1 / blit_al_jp+1 (the
+; per-line / per-char-row jumps to this width's chain entry), blit_rs+1 (the
+; caller's SP) — patched per sprite.
+; Test probes (T5 ISR-boundary fuzz): blit_sp_on = the `ld sp,hl` that borrows
+; SP (BC already preloaded); blit_sp_off = the RET right after SP is restored.
 ;==============================================================================
-BLIT_BLOCK      EQU 7                   ; bytes per unrolled chain block
+BLIT_BLOCK      EQU 6                   ; bytes per unrolled chain block
 BLIT_MAXW       EQU 6
 
 blit_sprite:
@@ -887,12 +895,20 @@ blit_sprite:
                 ld   a, (hl)                   ; bank
                 cp   FRT_NONE
                 jp   z, blit_miss
-                inc  l                         ; (16-B rows: no carry)
+                jp   p, blit_mback             ; C-T6: bit 7 = the RIGHT variant, mirrored at blit
+                                               ; time (S of A - $FF = bit 7 of A for banks 0..7);
+                                               ; a normal frame jumps over blit_mpro (10 T as before)
+; blit_mpro — a mirrored entry (A = bank | $80, HL = the FRT entry): divert the shared setup to
+; blit_mset (mirror2.asm) after its clip check. 57 T. Placed here to fall into blit_mback (-3 B).
+blit_mpro:      ld   de, blit_mset             ; (DE is loaded from the entry next)
+                ld   (blit_mj+1), de           ; SMC: divert
+                and  7                         ; the bank for page_bank
+blit_mback:     inc  l                         ; (16-B rows: no carry)
                 ld   e, (hl)
                 inc  l
                 ld   d, (hl)                   ; DE = pre-shifted frame
                 push de
-                call page_bank                 ; (A, BC; keeps HL)
+                call page_bank                 ; (A, BC; keeps HL) — the last $7FFD write
                 ld   a, l                      ; MEM-FT: frame_tab is the same FRT row's
                 and  $F0                       ; tail: HL = row + FT_IN_ROW (22 T; was
                 or   FT_IN_ROW + FT_COLS       ; fid*4 + frame_tab, 67 T)
@@ -913,12 +929,12 @@ blit_sprite:
                 add  a, c                      ; debug trap: col + width > 32
                 cp   ROOM_COLS + 1             ; would wrap into the next row
                 jp   nc, blit_clip_pop         ; (unreachable today)
+blit_mj:        jp   blit_mj + 3               ; SMC: blit_mset for a mirrored variant (10 T)
                 ld   a, c
                 add  a, a
+                add  a, c
                 add  a, a
-                add  a, a
-                sub  c
-                ld   d, a                      ; D = 7 * width
+                ld   d, a                      ; D = 6 * width (= BLIT_BLOCK * width)
                 ld   c, e                      ; C = byte col
                 ld   a, (BL_FPY)
                 ld   e, a
@@ -938,64 +954,76 @@ blit_sprite:
                 ld   l, a
                 ld   a, blit_chain_al_end >> 8
                 sbc  a, 0
-                ld   h, a
-                ld   (blit_al_jp+1), hl        ; SMC: entry = chain end - 7 * width
-                ld   a, blit_chain_al_end - (blit_al_dj + 2)
-                sub  d
-                ld   (blit_al_dj+1), a         ; SMC: the line DJNZ straight to the entry
-                ld   b, 8
+                ld   h, a                      ; HL = chain end - 6 * width
+                ld   (blit_go+1), hl           ; SMC: first entry
+                ld   (blit_al_dj+1), hl        ; SMC: the per-line jp nz
+                ld   (blit_al_jp+1), hl        ; SMC: the per-char-row jp
                 ld   a, e
                 call scr_addr_py               ; HL = screen (BC, DE kept)
                 ex   de, hl                    ; DE = screen
                 pop  hl                        ; HL = pool data
-                ld   c, e                      ; C = line-start low byte
-                jp   blit_al_jp
+                ld   a, 8                      ; H = lines left in this char row
+                jr   blit_go_sp
 .gen:           ld   a, blit_chain_end & $FF
                 sub  d
                 ld   l, a
                 ld   a, blit_chain_end >> 8
                 sbc  a, 0
-                ld   h, a
-                ld   (blit_jp+1), hl           ; SMC: entry = chain end - 7 * width
-                ld   a, blit_chain_end - (blit_dj + 2)
-                sub  d
-                ld   (blit_dj+1), a            ; SMC: the line DJNZ straight to the entry
+                ld   h, a                      ; HL = chain end - 6 * width
+                ld   (blit_go+1), hl           ; SMC: first entry
+                ld   (blit_dj+1), hl           ; SMC: the per-line jp nz
                 ld   a, e
                 call scr_addr_py
-                ex   de, hl
-                pop  hl
-                ld   c, e
-blit_rowloop:
-blit_jp:        jp   blit_chain                ; SMC: entry for this width
+                ex   de, hl                    ; DE = screen
+                pop  hl                        ; HL = pool data
+                ld   a, b                      ; H = rows
+                ; fall through
+; In: HL = frame, DE = screen, A = H (line counter). Borrows SP; 82 T to the chain.
+blit_go_sp:
+                dec  hl                        ; BC = the word below the frame, read before
+                dec  hl                        ; SP moves: the invariant holds from the
+                ld   c, (hl)                   ; first borrowed boundary on (38 T; a frame
+                inc  hl                        ; at $C000 reads $BFFE = DH_EFF, bank 2)
+                ld   b, (hl)
+                inc  hl
+                ld   (blit_rs+1), sp           ; SMC: the caller's SP (20 T; 10 T less per
+                                               ; sprite than ld (nn),sp / ld sp,(nn))
+blit_sp_on:                                    ; test probe: SP borrowed from the next boundary
+                ld   sp, hl                    ; SP = frame: from here no push / call / BC write
+                ld   h, a                      ; H = line counter
+                ld   l, e                      ; L = line-start low byte
+blit_go:        jp   blit_chain                ; SMC: entry for this width
 blit_chain:
                 DUP  BLIT_MAXW
+                pop  bc                        ; C = mask, B = data (BC = the word now below SP)
                 ld   a, (de)                   ; screen
-                and  (hl)                      ; mask
-                inc  l                         ; PERF-GHOST: mask -> data never carries (every
-                                               ; frame starts even: POOL_ASSERT below)
-                or   (hl)                      ; data
-                inc  hl
+                and  c
+                or   b
                 ld   (de), a
                 inc  e
                 EDUP
 blit_chain_end:
-                ld   e, c                      ; back to the line start
+                ld   e, l                      ; back to the line start
                 inc  d                         ; next pixel line
                 ld   a, d
                 and  7
                 jr   nz, .nx
-                ld   a, c                      ; crossed a char row
+                ld   a, l                      ; crossed a char row
                 add  a, 32
-                ld   c, a
+                ld   l, a
                 ld   e, a
                 jr   c, .nx                    ; crossed a third: D already right
                 ld   a, d
                 sub  8
                 ld   d, a
-.nx:
-blit_dj:        djnz blit_rowloop              ; SMC: displacement -> this width's entry
+.nx:            dec  h
+blit_dj:        jp   nz, blit_chain            ; SMC: this width's entry (45 T/line general)
+blit_rs:        ld   sp, 0                     ; SMC: the caller's SP (set in blit_go_sp)
+blit_sp_off:                                   ; test probe: SP is the caller's again
                 ret
 blit_clip_pop:  pop  de                        ; (the pushed frame pointer)
+                ld   hl, blit_mj + 3           ; C-F1: a mirrored frame was diverted by blit_mpro:
+                ld   (blit_mj+1), hl           ; SMC: undivert (6 B, trap path only)
 blit_clip:
                 ld   hl, CLIP_TRAP             ; not drawn
                 inc  (hl)
@@ -1005,43 +1033,42 @@ blit_miss:
                 inc  (hl)                      ; (§5.1 debug trap) -> not drawn
                 ret
                 ASSERT (blit_chain_end - blit_chain) == BLIT_BLOCK * BLIT_MAXW
-                ASSERT (POOL_START & 1) == 0 && (BANK_WINDOW & 1) == 0   ; PERF-GHOST: even frame starts
-                                               ; (gen_variant: every alloc size is even)
+                ASSERT (POOL_START & 1) == 0 && (BANK_WINDOW & 1) == 0   ; even frame starts (gen_variant:
+                                               ; every alloc size is even; `pop` itself does not need it)
 
-; char-aligned continuation (31 T/line vs 54): B = lines left in this char
-; row; the char-row / third fix-up runs once per 8 lines.
-; SMC: blit_al_jp+1 (chain entry) per sprite.
+; char-aligned continuation (22 T/line vs 45): H = lines left in this char
+; row; the char-row / third fix-up runs once per 8 lines. SP still borrowed.
 blit_chain_al:                                 ; twin chain: falls into the
                 DUP  BLIT_MAXW                 ; aligned continuation below
+                pop  bc
                 ld   a, (de)
-                and  (hl)
-                inc  l                         ; PERF-GHOST: even pair start (as blit_chain)
-                or   (hl)
-                inc  hl
+                and  c
+                or   b
                 ld   (de), a
                 inc  e
                 EDUP
 blit_chain_al_end:
-                ld   e, c
-                inc  d
-blit_al_dj:     djnz blit_al_jp                ; SMC: displacement -> this width's entry (BLAIR-FIX:
-                                               ; 10 T a line less than DJNZ to the JP below)
-                ld   a, c                      ; next char row
+                ld   e, l                      ; 4
+                inc  d                         ; 4
+                dec  h                         ; 4
+blit_al_dj:     jp   nz, blit_chain_al         ; 10 SMC: this width's entry (22 T/line)
+                ld   a, l                      ; next char row
                 add  a, 32
-                ld   c, a
+                ld   l, a
                 ld   e, a
                 jr   c, .third
                 ld   a, d
                 sub  8
                 ld   d, a
-.third:         ld   b, 8
+.third:         ld   h, 8
                 ld   a, (BLIT_CROWS)
                 dec  a
-                ret  z
+                jr   z, blit_rs                ; done: restore SP, return
                 ld   (BLIT_CROWS), a
-blit_al_jp:     jp   blit_chain_al             ; SMC: entry for this width
+blit_al_jp:     jp   blit_chain_al             ; SMC: this width's entry
                 ASSERT (blit_chain_al_end - blit_chain_al) == BLIT_BLOCK * BLIT_MAXW
-                ASSERT (blit_al_dj + 2) - blit_chain_al <= 128 && (blit_dj + 2) - blit_chain <= 128   ; DJNZ reach
+                ASSERT BLIT_CROWS < $C000 && BLIT_CROWS >= $8000   ; not in the paged pool bank
+                ASSERT blit_go_sp < $C000      ; (the blit code itself is never at $C000 either)
 
                 ASSERT FT_H == FT_COLS + 1     ; blit_sprite: inc hl
                 ASSERT FT_OFFR == FT_H + 1 && FT_OFFL == FT_OFFR + 1 ; render .vis: inc hl chain

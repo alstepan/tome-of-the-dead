@@ -81,16 +81,15 @@ anim_tick:
                 jr   nz, .add                  ; visible -> render list
 .next:          bit  0, (ix+E_DVIS)
                 jr   z, .skip                  ; not drawn either -> nothing to do
-.add:           ld   a, (RLIST_N)
-                ld   e, a
-                inc  a
-                ld   (RLIST_N), a
-                ld   d, RLIST >> 8
-                ld   a, e
-                add  a, RLIST & $FF
+.add:           ld   de, RLIST_N               ; C+TUT0: RLIST_N++ through DE, then E = RLIST + the
+                ld   a, (de)                   ; old count (same page, ASSERTed): -5 B, -17 T an
+                inc  a                         ; entry (funds pend_far's TURN_TICK gate)
+                ld   (de), a
+                add  a, (RLIST & $FF) - 1
                 ld   e, a
                 ld   a, (ANIM_SLOT)
                 ld   (de), a
+                ASSERT (RLIST_N >> 8) == (RLIST >> 8) && (RLIST & $FF) >= 1 && (RLIST & $FF) + P_MAX_ENT <= $100
 .skip:          ld   de, P_ENT_STRIDE
                 add  ix, de
                 ld   a, l
