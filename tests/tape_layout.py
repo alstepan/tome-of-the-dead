@@ -91,6 +91,7 @@ expect("headerless 6 = text + b0 code + pad + B0_CODE2 (%d B = %d + %d + %d), en
 # B0CODE: the B0_CODE2 bytes on tape are the assembled ones (.sna bank 0), i.e. the loader puts the
 # region's code where FARB0 enters it
 sna = os.path.join(BUILD, "tome-of-the-dead.sna")
+expect("B0CODE: %s exists (needed for the B0_CODE2 tape == .sna check)" % os.path.basename(sna), os.path.exists(sna))
 if os.path.exists(sna):
     s = open(sna, "rb").read()
     # 128K .sna: 27-B header + 48K (banks 5, 2, paged) + 4 B + the other banks in order 0,1,3,4,6,7
