@@ -37,7 +37,7 @@ if F3 and "WZ_BUILD_DIR" not in os.environ:
                              env=dict(os.environ, WZ_BUILD_DIR=os.path.join(_out, "build"))))
 import levelgen as G                                    # noqa: E402
 from game_lib import Harness, Proto, S, EMU_ARGS        # noqa: E402
-F3 = bool(S.get("F3_GEN", 0))                           # P3: F3_GEN is the default build (the .sym decides)
+F3 = F3 or bool(S.get("F3_GEN", 0))                     # P3: F3_GEN is the default build (the .sym decides); a -DF3_GEN=1 build has no such label, so --f3 must stick (LGZ8)
 
 ORG = S["LOWRAM_END_3B"]                                # free low RAM (above the LP state)
 RES = ORG + 40                                          # result bytes

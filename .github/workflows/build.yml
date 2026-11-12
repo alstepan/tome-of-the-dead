@@ -83,13 +83,11 @@ jobs:
           set -e
           for t in tape_layout combat_tables zx0_roundtrip frames_phase frames_d3 walk_feet \
                    abl_seq itemtab textpack_test items_model_test book_model \
-                   abc_tools_test test_tsx_render pt_plan pt_bot levelgen_test; do
+                   abc_tools_test test_tsx_render pt_plan pt_bot levelgen_test balance_sim_selftest; do
             echo "::group::$t"
             python3 "tests/$t.py"
             echo "::endgroup::"
           done
-        # tests/balance_sim_selftest.py is NOT gated: test_monotone fails on main
-        # (Mage win rate falls with +30 HP); open item in docs/plan.md.
 
       - name: Upload tape / snapshot / symbols
         uses: actions/upload-artifact@v7

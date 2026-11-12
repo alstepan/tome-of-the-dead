@@ -27,7 +27,7 @@ into the lair through the non-Sanctum door (real do_exit + lp_transition), then 
   R   trk_run after the Archmage's death (D8: LF_SEAL_OPEN + LF_UNIQUE, LF_GRATE_OPEN never set):
       game.md 9.5 says the trickle stops; hard check (control: LF_GRATE_OPEN).
   T   teleport mid-fight (summon alive, FX in flight): summon discarded, FX idle after, the lair
-      record holds the Archmage only; re-entry: KT_ATTR $43, ST_X init bit clear, P = 0.
+      record holds the Archmage only; re-entry: KT_ATTR $43, ST_X P = H = 0 and not blinked (init bit 7 may already be set by the entry turn's arch_ai).
   W   into the Sanctum (seal open) with a summon at the door: does it follow? lectern cells free;
       5 Tome hits -> gate open (WIN2), walk out, DOWN at the exit col -> GS_WIN; KT_ATTR after a new game D1 -> D8 lair entry = $43.
   C   a summon killed on the turn the Archmage re-summons: sp_run reuses the corpse slot before the next render;
@@ -1000,8 +1000,8 @@ def teleport_mid(p, master, hero):
     es = L.ents()
     a = L.arch(es)
     stx = p.rb(S["ST_X"] + a) if a else None
-    check(f"{tag}: re-entry: the Archmage back with hp {hp_a}, KT_ATTR $43, ST_X 0 (init: P = H = 0)",
-          ok and a and es[a]["HP"] == hp_a and p.rb(INK) == 0x43 and stx == 0, (ok, a and es[a], hex(p.rb(INK)), stx))
+    check(f"{tag}: re-entry: the Archmage back with hp {hp_a}, KT_ATTR $43, ST_X P = H = 0, not blinked (init bit 7 may be set: the entry turn already ran arch_ai)",
+          ok and a and es[a]["HP"] == hp_a and p.rb(INK) == 0x43 and stx in (0, 0x80), (ok, a and es[a], hex(p.rb(INK)), stx))
     F.arch_pos = None
     F.blinks = 0
     gs = F.run(tag + " re-entered", 25)
