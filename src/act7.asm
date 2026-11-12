@@ -126,7 +126,8 @@ act_seq:
 
 ;------------------------------------------------------------------------------
 ; act_pend — far7 from bank-2 pend_far (anim_gate, TURN_PEND != 0).
-; MON-DEFER (C2): TP_MONQ (turn_input .spent, an ordinary turn) -> on the first
+; MON-DEFER (C2): TP_MONQ (turn_input .spent, an ordinary turn whose input tick
+; is already in its 3rd frame: ADAPT-DEFER; else .spent ran it) -> on the first
 ; tick with TURN_TICK >= 1 (the tick after the input tick: anim_gate runs
 ; before TURN_TICK++) resolve_monsters, then the TP_SHOT step below in the same
 ; tick (as on the input tick before). Its own gate: no FX_BUSY / LOG_MON_MAX

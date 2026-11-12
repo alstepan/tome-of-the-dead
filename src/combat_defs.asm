@@ -507,7 +507,7 @@ TP_FIRE         EQU 1 << TP_FIRE_BIT
 TP_SHOT_BIT     EQU 3               ; 3F-T7: monster shots queued (RS_Q): act_pend far6s shot_tick each
 TP_SHOT         EQU 1 << TP_SHOT_BIT ; tick (FX start at the release, hero flash at the impact); holds the turn
 TP_MONQ_BIT     EQU 4               ; MON-DEFER (C2): an ordinary turn's monster phase, deferred one tick:
-                                    ; turn_input .spent sets it, act_pend runs resolve_monsters at TURN_TICK >= 1
+                                    ; turn_input .spent sets it (ADAPT-DEFER: only from a 3rd-frame input tick), act_pend runs it at TURN_TICK >= 1
 ACT_FIRE_TICK   EQU 2              ; release tick f of every ability (game.md §6.1 "Release ticks")
                 ASSERT TURN_PEND == $BC4A && HERO_T8_END <= ANIM_N
                 ASSERT (HERO3D >> 8) == ((HERO_T8_END - 1) >> 8) && FX_ARG == FX_OP + 1

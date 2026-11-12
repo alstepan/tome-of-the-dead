@@ -26,6 +26,11 @@ import game  # noqa: E402
 from game_lib import Harness, S, HAS_TRACE, EMU_ARGS, K_KNIGHT, K_WIZARD, EF_ACTIVE, EF_HOSTILE, EF_LEFT, stand_y  # noqa: E402
 
 BUDGET = 2 * 70908
+# ADAPT-DEFER (user 2026-11-12): a tick that runs the monster phase (resolve_monsters: the input tick, as on
+# main, or the rare deferred monster tick) may spill into a 3rd frame (+1 frame; a defer costs a whole tick =
+# +2 frames): gated real <= BUDGET3. Every other tick (pure render / anim) keeps real <= BUDGET; the D5 CAP /
+# CAST_CAP work caps apply to those only (cast ticks keep CAST_CAP).
+BUDGET3 = 3 * 70908 - 402
 CAP = 126000                                      # D5: worst tick incl. the panel item
 # D3-7 T1: the split ability turn. Ticks from the fire tick (probe_act_fire)
 # until the deferred monster phase has run (TURN_PEND back to 0) are class
@@ -45,8 +50,9 @@ PRE_BASE = 402
 MUS_POKE = os.environ.get("BUDGET_MUS", "7")      # MUS_REQ poked before START ("" = no poke)
 # B3B-11: panel_tick .. play_loop.nopanel = the tick's panel item (D5: one per
 # tick, never in a turn's input tick); its present lands in the next tick_work.
-PHASES = ["tick_work", "intent_tick", "read_turn_input", "pend_far", "probe_act_fire", "anim_tick", "render",
-          "decor_tick", "panel_tick", "panel_done", "dn_gate", "wait_tick"]   # D3-11: dn_gate = the numbers pass
+PHASES = ["tick_work", "intent_tick", "read_turn_input", "resolve_monsters", "pend_far", "probe_act_fire", "anim_tick",
+          "render", "decor_tick", "panel_tick", "panel_done", "dn_gate", "wait_tick"]   # D3-11: dn_gate = the numbers pass;
+# ADAPT-DEFER: resolve_monsters marks the "input" class (a tick that ran the monster phase, cast ticks excepted)
 if os.environ.get("GAME_PROFILE"):                # finer split for optimisation work
     PHASES = ["tick_work", "intent_tick", "read_turn_input", "pend_far", "probe_act_fire",
               "try_player_turn", "resolve_monsters",
@@ -235,7 +241,9 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # mark + number) at 126.7k work / 135.5k real, not a spit tick; the control (BUDGET_WROOM_NOSHOT=1, the Widows
 # as plain walkers; =psn the same with the hero poisoned from the start) peaks at 116.5k / 116.8k work in
 # another geometry: the spit turns shift where the bodies stand on the later walk ticks.
-GATED = ("mix", "mage", "blair", "wroom", "wroom4", "rwalk")   # C+TUT0: rwalk gated (real <= BUDGET); lwalk / lwalk4 reported measurements
+GATED = ("mix", "mage", "blair", "wroom", "wroom4", "lw24s", "lwalk4b")   # ADAPT-DEFER (2026-11-12): rwalk / lw24 / lw24g
+# reported like lwalk / lwalk4: 5 bodies walking in step (the monsters start with the hero, as on main) push some pure
+# render ticks past 2 frames (rwalk was 155.6k real on main too, perf_survey M2)   # C+TUT0: rwalk gated (real <= BUDGET); lwalk / lwalk4 reported measurements
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast", "mkmix",
              "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4", "lmix", "lmixw", "lmix4", "lhurt", "lhurt4")   # lwalk4: a measurement, not gated (see SCENARIOS)
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast")        # D3-5: worst ordinary tick <= CAP
@@ -687,6 +695,22 @@ SCENARIOS = {
         (3, 8, stand_y(1, 6), RIGHT),
         (1, 12, stand_y(1, 6), RIGHT),
         (4, 16, stand_y(1, 6), RIGHT)], [("L", 9), ("WAIT", 1)], K_KNIGHT, None, "rwalk"),
+    # ADAPT-DEFER walk set (2026-11-12): every body walking left in step with the hero (the monster phase on the
+    # input tick, as on main). lw24s (hero + 3 Skeletons) and lwalk4b (real D4: Ogre + 2 Orcs) are GATED; lw24 /
+    # lw24g (5 bodies) are reported, like lwalk: some render ticks pass 2 frames. Kinds per slot in WALK_KINDS.
+    "lw24": ("ADAPT band: knight walking left + 2 Skeletons + Goblin + Rat (height sum 24, 5 bodies)", [
+        (5, 16, stand_y(1, 6), HOSTILE), (3, 20, stand_y(1, 6), HOSTILE),
+        (1, 24, stand_y(1, 6), HOSTILE), (4, 28, stand_y(1, 6), HOSTILE)], [("H", 9), ("WAIT", 1)], K_KNIGHT, None, "lw24"),
+    "lw24g": ("ADAPT band: knight walking left + Skeleton + 3 Goblins (height sum 24, 5 bodies)", [
+        (5, 16, stand_y(1, 6), HOSTILE), (3, 20, stand_y(1, 6), HOSTILE),
+        (1, 24, stand_y(1, 6), HOSTILE), (4, 28, stand_y(1, 6), HOSTILE)], [("H", 9), ("WAIT", 1)], K_KNIGHT, None, "lw24g"),
+    "lw24s": ("ADAPT band: knight walking left + 3 Skeletons (height sum 24, 4 bodies)", [
+        (5, 16, stand_y(1, 6), HOSTILE), (3, 20, stand_y(1, 6), HOSTILE),
+        (1, 24, stand_y(1, 6), HOSTILE)], [("H", 9), ("WAIT", 1)], K_KNIGHT, None, "lw24s"),
+    "lwalk4b": ("ADAPT band: knight (real D4 level) walking left + Ogre + 2 Orcs (height sum 24, the Ogre 32 wide)", [
+        (5, 15, stand_y(1, 6), HOSTILE),
+        (3, 20, stand_y(1, 6), HOSTILE),
+        (1, 24, stand_y(1, 6), HOSTILE)], [("H", 9), ("WAIT", 1)], K_KNIGHT, None, "lwalk4b"),
     "lwalk4": ("knight (real D4 level) walking left + Ogre + 3 Orcs walking left behind it", [
         (5, 15, stand_y(1, 6), HOSTILE),
         (3, 20, stand_y(1, 6), HOSTILE),
@@ -1198,12 +1222,16 @@ def lmix_hook(st):
 
 
 LWALK_SEEN = {}
+WALK_KINDS = {"lw24": {1: "K_GOBLIN", 4: "K_RAT"}, "lw24g": {3: "K_GOBLIN", 1: "K_GOBLIN", 4: "K_GOBLIN"}}   # ADAPT band
+LWALK_KEYS = ("lwalk", "lwalk4", "rwalk", "lw24", "lw24g", "lw24s", "lwalk4b")
 LMIX_GO = False                                    # lmix_hook: the first turn's monster phase has run
 
 
 def lwalk_hook(st):
     """"lwalk": count the drawn (frame, left) pairs per slot after every tick (E_DFID, E_DVIS bit 3 = left)."""
     p = st.p
+    if p.rb("TURN_PEND") & (1 << S["TP_MONQ_BIT"]):   # ADAPT-DEFER: an input tick that deferred the monsters
+        LWALK_SEEN["monq"] = LWALK_SEEN.get("monq", 0) + 1
     fn = {v: k[4:] for k, v in S.items() if k.startswith("FID_")}
     for slot in (0,) + LMIX_SLOTS:
         b = S["P_ENTITIES"] + slot * S["P_ENT_STRIDE"]
@@ -1357,7 +1385,7 @@ def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     LMIX_DRAWN = None
     p = game.T(h)
-    real4 = len(scen) > 5 and scen[5] in ("lmix4", "lhurt4", "lwalk4")
+    real4 = len(scen) > 5 and scen[5] in ("lmix4", "lhurt4", "lwalk4", "lwalk4b")
     LMIX_KS = S["KS_HURT"] if len(scen) > 5 and scen[5] in ("lhurt", "lhurt4") else S["KS_ATTACK"]
     if real4:                                     # C-F1: a real generated D4, not the PROTO fixture
         p.proto_start = 0
@@ -1458,7 +1486,7 @@ def run_scenario(h, scen):
     elif lmix_hook in TICK_HOOKS and not real4:
         TICK_HOOKS.remove(lmix_hook)
     if real4:                                     # the real kinds, standing on their own floor rows
-        LMIX_DRAWN = None if scen[5] == "lwalk4" else set()
+        LMIX_DRAWN = None if scen[5] in ("lwalk4", "lwalk4b") else set()
         for slot, kn in zip(LMIX_SLOTS, ("K_OGRE", "K_ORC", "K_ORC", "K_ORC")):
             yy = stand_y(1, p.rb(S["kind_tab"] + S["KT_BH"] + S[kn]))
             p.set_ent(slot, KIND=S[kn], Y=yy, PY=yy * 8, HP=60, MAXHP=60)
@@ -1466,7 +1494,7 @@ def run_scenario(h, scen):
         p.set_ent(0, HP=250, MAXHP=250)
         if LMIX_KS == S["KS_HURT"]:               # C-H: the hero faces left too
             p.set_ent(0, FLAGS=p.ent(0)["FLAGS"] | EF_LEFT)
-        if scen[5] == "lwalk4":
+        if scen[5] in ("lwalk4", "lwalk4b"):
             p.set_ent(0, FLAGS=p.ent(0)["FLAGS"] | EF_LEFT)
         else:
             LMIX_GO = False
@@ -1474,15 +1502,16 @@ def run_scenario(h, scen):
                 TICK_HOOKS.append(lmix_hook)
     if lwalk_hook in TICK_HOOKS:
         TICK_HOOKS.remove(lwalk_hook)
-    if len(scen) > 5 and scen[5] in ("lwalk", "lwalk4", "rwalk"):
+    if len(scen) > 5 and scen[5] in LWALK_KEYS:
         LWALK_SEEN.clear()
         if scen[5] == "rwalk":
             p.place(0, 20, HERO_Y)
-        if scen[5] in ("lwalk", "rwalk"):
+        if scen[5] in ("lwalk", "rwalk", "lw24", "lw24g", "lw24s"):
             for slot in LMIX_SLOTS:
-                yy = stand_y(1, 6)
-                p.set_ent(slot, KIND=S["K_SKELETON"], Y=yy, PY=yy * 8, HP=60, MAXHP=60)
-            p.set_ent(0, HP=250, MAXHP=250, FLAGS=p.ent(0)["FLAGS"] | (EF_LEFT if scen[5] == "lwalk" else 0))
+                kn = WALK_KINDS.get(scen[5], {}).get(slot, "K_SKELETON")
+                yy = stand_y(1, p.rb(S["kind_tab"] + S["KT_BH"] + S[kn]))
+                p.set_ent(slot, KIND=S[kn], Y=yy, PY=yy * 8, HP=60, MAXHP=60)
+            p.set_ent(0, HP=250, MAXHP=250, FLAGS=p.ent(0)["FLAGS"] | (EF_LEFT if scen[5] != "rwalk" else 0))
         TICK_HOOKS.append(lwalk_hook)
     if len(scen) > 5 and scen[5] in ("lglow", "blair", "omix"):
         boss_setup(p, scen[5])
@@ -1550,8 +1579,10 @@ def run_scenario(h, scen):
             if HAS_TRACE:
                 swing += S["FID_wizard_staffswing"] in p.trace_fids(0)
     st.close()
-    if len(scen) > 5 and scen[5] in ("lwalk", "lwalk4", "rwalk"):
+    if len(scen) > 5 and scen[5] in LWALK_KEYS:
         agg = {}
+        monq = LWALK_SEEN.pop("monq", 0)
+        print(f"[info] {scen[5]} ADAPT-DEFER: {monq} deferred monster phases (TP_MONQ seen after an input tick)", flush=True)
         for (sl, n, left), c in LWALK_SEEN.items():
             agg.setdefault((n, left), 0)
             agg[(n, left)] += c
@@ -1665,13 +1696,19 @@ def run_scenario(h, scen):
         sw = [(max(range(t0, e), key=lambda i: work[i]), sl) for (t0, sl), e in zip(blog, ends) if sl and e > t0]
         print(f"[info] {scen[5]} spit turns: worst work tick per spit turn (tick, work T, slots) "
               f"{[(i, work[i], sl) for i, sl in sw]}; worst overall t{work.index(max(work))} {max(work)} T", flush=True)
-        assert all(work[i] <= CAP for i, _ in sw), f"wroom: a spit turn's tick over the {CAP} cap"
+        assert all(work[i] <= CAP for i, _ in sw if "resolve_monsters" not in st.ticks[i][1]), \
+            f"wroom: a spit turn's render tick over the {CAP} cap"   # ADAPT-DEFER: its input tick is BUDGET3-gated
     pre_max = max(PRE_FLOOR, PRE_BASE + max(st.isr_in))
     real = [t + pre_max for t in totals]
-    st.real_over = [r for r in real if r > BUDGET]
-    over = [t for t in totals if t > BUDGET]
+    in_ix = st.in_ix = {i for i, (_, sp) in enumerate(st.ticks) if "resolve_monsters" in sp and i not in st.cast_ix}
+    st.real_over = [r for i, r in enumerate(real) if r > (BUDGET3 if i in in_ix else BUDGET)]
+    over = [t for i, t in enumerate(totals) if t > (BUDGET3 if i in in_ix else BUDGET)]
     casts = [work[i] for i in sorted(st.cast_ix)]          # gated on work (ISR time removed)
-    ordinary = [w for i, w in enumerate(work) if i not in st.cast_ix]
+    ordinary = [w for i, w in enumerate(work) if i not in st.cast_ix and i not in in_ix]
+    real_in = [real[i] for i in sorted(in_ix)]
+    st.f3 = sum(1 for r in real if r > BUDGET)               # ticks past 2 frames (3-frame ticks)
+    print(f"input ticks    : {len(in_ix)} (ran resolve_monsters), max real {max(real_in, default=0)} (gate <= {BUDGET3});"
+          f" 3-frame ticks {st.f3} of {len(real)} ({100 * st.f3 / max(1, len(real)):.1f} %), of them input {sum(1 for r in real_in if r > BUDGET)}", flush=True)
     orig_o = [t for i, t in enumerate(totals) if i not in st.cast_ix]
     orig_c = [totals[i] for i in sorted(st.cast_ix)]
     real_o = [t + pre_max for t in orig_o]
@@ -1856,10 +1893,11 @@ def run_tut0(h):
                 p.wb("MUS_REQ", int(MUS_POKE, 0))
                 p.tick(6)
             run = tut0.Run(p)
-            acc = {"totals": [], "isr": [], "held": 0, "rsync": 0, "kinds": [], "pre": [], "post": []}
+            acc = {"totals": [], "isr": [], "inp": [], "held": 0, "rsync": 0, "kinds": [], "pre": [], "post": []}
 
             def absorb(st):
                 acc["totals"] += [t for t, _ in st.ticks]
+                acc["inp"] += ["resolve_monsters" in sp for _, sp in st.ticks]   # ADAPT-DEFER: BUDGET3 class
                 acc["isr"] += st.isr_in
                 acc["held"] += st.held
                 acc["pre"] += st.pre_holds
@@ -1892,9 +1930,15 @@ def run_tut0(h):
             left = tut0.after_fight_to_exit(p, run, heal=True)
             totals, isr = acc["totals"], acc["isr"]
             pre_max = max(PRE_FLOOR, PRE_BASE + max(isr))
-            work = [t - i for t, i in zip(totals, isr)]
-            real = [t + pre_max for t in totals]
+            inp = acc["inp"]
+            work = [t - i for t, i, f in zip(totals, isr, inp) if not f]       # render ticks: CAP / BUDGET
+            real = [t + pre_max for t, f in zip(totals, inp) if not f]
+            real_in = [t + pre_max for t, f in zip(totals, inp) if f]          # input ticks: BUDGET3
             name = "Warrior" if hero == K_KNIGHT else "Mage"
+            if max(real_in, default=0) > BUDGET3:
+                fails.append(f"tut0 {name} (input real {max(real_in)} > {BUDGET3})")
+            print(f"[info] tut0 {name}: {len(real_in)} input ticks, max real {max(real_in, default=0)}; 3-frame ticks "
+                  f"{sum(1 for r in real + real_in if r > BUDGET)} of {len(totals)}", flush=True)
             rows.append((name, len(totals), max(work), max(real), acc["held"], ok and dead and used and left))
             print(f"== tut0 {name}: {len(totals)} play ticks ({acc['held']} hold ticks dropped, {acc['rsync']} resync ticks"
                   f" dropped; {len(acc['pre'])} pre-hold parts measured, worst {max(acc['pre'] or [0])} T; {len(acc['post'])} post-resync parts measured, worst {max(acc['post'] or [0])} T), worst work {max(work)} T"
@@ -1919,7 +1963,7 @@ def Proto_cls():
 
 
 ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk,tut0")
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk,lw24,lw24g,lw24s,lwalk4b,tut0")
 
 
 def swing_pass(keys):
@@ -1999,7 +2043,7 @@ def main():
         # D3-11 review: a melee Mage scenario that drew no STAFF_SWING proves nothing (the
         # copy failed to swing, or the count was lost): a gate failure, not a 0 to read past
         fails += [k + " (no STAFF_SWING)" for k in wiz if not (sw or {}).get(k)]
-    print(f"[{'FAIL' if fails else 'PASS'}] budget gate (every tick <= budget in"
+    print(f"[{'FAIL' if fails else 'PASS'}] budget gate (input ticks real <= {BUDGET3}, every other tick <= budget in"
           f" {', '.join(GATED)}; <= {CAP} in {', '.join(CAP_GATED)}; cast ticks <= {CAST_CAP}): {fails or 'ok'}")
     return 1 if fails else 0
 

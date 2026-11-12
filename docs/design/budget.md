@@ -298,6 +298,26 @@ far7 `act_pend` round trip on the input tick (`TURN_TICK` 0): ~-0.3k T on every 
 (c) TUT0's `tut0` route under C2 timing (the monsters' phase one tick later): worst work 113,875 W / 115,663 M (TUT0
 on main: 109.2k / 111.0k), real 126,951 / 125,236: inside CAP / BUDGET, no rebaseline needed.
 
+**ADAPT-DEFER (2026-11-12, user decision after an A/B playtest):** MON-DEFER cost a whole tick (+2 frames) on every
+turn with a monster on screen; main ran the monster phase on the input tick and, when that overran, paid +1 frame.
+Rule now: `turn_input` .spent runs `resolve_monsters` on the input tick (main's tick and order) unless the tick is
+already in its **3rd frame** (`SYS_FRAMES - LAST_TICK_FRAME >= ADAPT_FRAMES` 2; then `TP_MONQ` defers it one tick as
+in C2). With RENDER_FIRST, present + render + `try_player_turn` are spent at .spent, so a tick there in frame <= 2
+plus resolve (<= ~30k) and the tail stays under 3 frames: the defer is a safety net that practically never fires.
+The first (frame-1 + height-sum) version was dropped: it kept 4-monster walks +0.8..2.0 frames/turn behind main.
+**Budget gate (tests/budget.py):** a tick that runs the monster phase (`resolve_monsters` probe; cast-class ticks
+excepted) is gated **real <= `BUDGET3` = 3 x 70,908 - 402** and is outside the D5 CAP; every other tick (pure render
+/ anim) keeps real <= 141,816 and its CAP / CAST_CAP. Why: an input-tick overrun costs 1 frame once per turn, a
+render-tick overrun would cost a frame on every animation step. Each scenario prints its input-tick max real and
+its share of 3-frame ticks. Bank 7 +20 B (ISR untouched). Logic identical either path (`tests/ai_equiv.py`).
+Measured (release; `fpt` model, frames/turn, main 7ab186f -> now): plain 7.12 / 7.12, 1 Skeleton walk 8.88 / 8.88,
+fight 15.71 / 15.71, `blair` 17.86 / 17.86, `wroom` 15.86 / 15.86, every real D2-D5 3- / 4-monster room (walk and
+fight) identical to main, 0 % 3-frame ticks; only the 5-body left walks are slower (full C mirroring, user-accepted):
+lwalk-like 7.3 -> 8.3 (3-frame ticks 14.7 -> 44 %), D4 Ogre + 3 Orcs 8.4 -> 8.8 (21 -> 32 %). Gate: worst input-tick
+real 167,995 (`lwalk`, reported) / 140,475 (`blair`); `rwalk`, `lw24`, `lw24g` (5 bodies walking in step) now have
+render ticks past 2 frames (rwalk real 155.7k, as on main: perf_survey M2) and are reported, not gated, like
+`lwalk` / `lwalk4`; `lw24s` (hero + 3 Skeletons) and `lwalk4b` (real D4 Ogre + 2 Orcs) stay gated.
+
 ## 6. Headroom for Stage 2 content (after Rogue removal, E1 option A, AY reserve)
 
 | Store | Free | For | |

@@ -33,12 +33,17 @@
 ; use (INTENT) goes straight to try_player_turn; while FIRE is held the stick
 ; is the cursor's; only directions and '.' count as held. D3-7: an ability
 ; turn (act_begin, act7.asm: MON_AT != 0) leaves its release and the monster
-; phase to act_pend (the anim_gate hook) instead. MON-DEFER (C2, user
-; 2026-11-10): an ordinary turn's monster phase is not run here either: .spent
-; sets TP_MONQ and act_pend runs resolve_monsters at TURN_TICK 1 (the monsters
-; start 40 ms after the hero; the input tick keeps render + try_player_turn).
+; phase to act_pend (the anim_gate hook) instead. ADAPT-DEFER (user
+; 2026-11-12, over C2's MON-DEFER): an ordinary turn's monster phase runs here
+; (main's tick, TURN_TICK 0) unless the input tick is already in its 3rd frame
+; (SYS_FRAMES - LAST_TICK_FRAME >= ADAPT_FRAMES): then .spent sets TP_MONQ and
+; act_pend runs it at TURN_TICK 1. An input tick may spill into a 3rd frame
+; (+1 frame, as on main); a defer costs a whole tick (+2 frames). Same logic,
+; order and RNG either way (tests/ai_equiv.py); only the tick moves.
 ; Clobbers: all but IY (far7: A, F lost; nothing is returned).
 ;------------------------------------------------------------------------------
+ADAPT_FRAMES    EQU 2                          ; ADAPT-DEFER: input tick frames at .spent from
+                                               ; which the monster phase defers one tick
 turn_input:
     IF TOME_FX && !TOME_FX2
                 call lect_back                 ; TOME-FX: a Tome hit's flash ends on the first INPUT tick after its
@@ -187,10 +192,20 @@ turn_input:
                 ld   hl, MON_AT                ; D3-7: an ability turn (act_begin) defers
                 or   (hl)                      ; the monster phase to act_pend
                 jr   nz, .nomon                ; exit turn: monsters don't act
-                ld   l, TURN_PEND & $FF        ; MON-DEFER (C2, user 2026-11-10): an ordinary
-                set  TP_MONQ_BIT, (hl)         ; turn's monster phase runs one tick later
-                                               ; (act_pend, TURN_TICK 1): off this tick, which
-                                               ; already carries render + try_player_turn
+                ld   a, (SYS_FRAMES)           ; ADAPT-DEFER (user 2026-11-12): frames since this
+                ld   hl, LAST_TICK_FRAME       ; tick's start; >= ADAPT_FRAMES (its 3rd frame
+                sub  (hl)                      ; already: practically never) -> defer, else the
+                cp   ADAPT_FRAMES              ; phase runs now even if the tick then spills into
+                jr   nc, .defer                ; a 3rd frame (+1 frame, vs +1 tick = 2 frames
+                                               ; for a defer). Elapsed < 2 frames here (RENDER_FIRST:
+                                               ; present + render + try_player_turn spent) + resolve
+                                               ; (<= ~30k) + the tail < 3 frames: safe by construction
+                call heavy_mark                ; main's order and tick (TURN_TICK 0); DN-GATE
+                call resolve_monsters          ; (the held Wait skips .act's); bank 2 (pages
+                jr   .nomon                    ; bank 3 itself, gives bank 7 back)
+.defer:         ld   hl, TURN_PEND             ; MON-DEFER (C2): an input tick in its 3rd
+                set  TP_MONQ_BIT, (hl)         ; frame already runs it one tick later
+                                               ; (act_pend, TURN_TICK 1)
 .nomon:
                 ld   a, TP_ANIM
                 ld   (TURN_PHASE), a
