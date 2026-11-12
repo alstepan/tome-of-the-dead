@@ -548,6 +548,9 @@ build_room_map:
                 ld   e, RDX_R
                 call .side
                 ; pit, block
+                ld   a, (ix+L2_MIDB)           ; AI-SEEK2 ROOM_CUT = K (ai_seek2.md §2.1): the pit col p (below),
+                dec  a                         ; else the mid-block's b - 1 ($FF = none: b = 0). One cut per room
+                ld   (ROOM_CUT), a             ; (L2 is one feature; a wide pit has no block)
                 ld   a, (ix+RD_PITCOL)
                 or   a
                 call nz, .pit
@@ -786,6 +789,7 @@ build_room_map:
 
 .pit:           ; A = p (game.md §2.5, §1.1 "Wide pit"): row 8, cap T_PIT_L at
                 ; p-1, holes p..p+W-1 AIR, cap T_PIT_R at p+W
+                ld   (ROOM_CUT), a             ; AI-SEEK2: K = p (the pit wins over a block b - 1)
                 dec  a
                 ld   c, a
                 ld   b, FLOOR_ROW0

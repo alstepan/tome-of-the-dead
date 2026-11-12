@@ -659,12 +659,17 @@ and in-reach monsters then attack.
 2. Else if standing and `storey_ref(me) == storey_ref(player)` → step 1 toward the
    player. If blocked → wait.
 3. Else:
-   - **Climber:** if mid-ladder → continue in `ai_dir` (blocked → wait). Else pick
-     the nearest segment on my storey leading toward the player's storey (up
-     `{col, my_s}` / down `{col, my_s+1}`; exit segments excluded). Step toward col.
+   - **Climber:** if mid-ladder → continue in `ai_dir` (blocked → wait; reverse if `ai_dir` leads
+     away from the hero's *destination* storey). Else (AI-SEEK2, `docs/design/ai_seek2.md`) pick the
+     internal ladder `{col, 1}` (exit segments excluded) whose **top end** is in the right segment: on
+     storey 1 the one into the hero's half of storey 0 (none: the nearest, R5), on storey 0 the one in
+     my own half, down (and, across a cut, down-across-up when both halves own a ladder); none -> step
+     toward the hero (R6). Step toward col.
      At col, **start climbing only if no other entity is mid-ladder on that segment
      or in its far-end box** (no head-on ladder jams). Otherwise wait.
-   - **Non-climber:** patrol. Step in the facing direction, reversing when blocked.
+   - **Non-climber:** across a cut on the hero's storey: step toward him (stops at the lip); another
+     storey: patrol. Step in the facing direction, reversing when blocked.
+   - Rule 2 reads **segments**, not storeys: the hero mid-climb counts on the end he is heading to.
 
 **Flyer** (Bat, Ghost):
 

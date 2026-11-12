@@ -90,6 +90,8 @@ def record(out, nturns):
                            tc=p.rw("TURN_COUNTER"), gs=p.rb("GAME_STATE"),
                            st=list(p.z.read_memory(S["ST_FLAGS"], 16)),
                            full=hashlib.sha1(ents).hexdigest()[:12])
+                if "ROOM_CUT" in S:                  # AI-SEEK2 triage (not compared): ROOM_CUT, PL_SEG, PL_LADDER
+                    rec["aux"] = [p.rb("ROOM_CUT"), p.rb("PL_SEG"), p.rb("PL_LADDER")]
                 if os.environ.get("AI_EQUIV_FULL"):  # 3F-T7 review: the full-hash diff offsets
                     rec["ents"] = ents.hex()
                 f.write(json.dumps(rec) + "\n")
@@ -118,12 +120,15 @@ def main():
     A = [json.loads(x) for x in open(fa)]
     B = [json.loads(x) for x in open(fb)]
     first = None
+    first_per_run = {}                       # AI-SEEK2 triage: the first mismatch of every run
     full_diff = 0
     for a, b in zip(A, B):
-        ka = {k: v for k, v in a.items() if k not in ("full", "ents")}
-        kb = {k: v for k, v in b.items() if k not in ("full", "ents")}
+        ka = {k: v for k, v in a.items() if k not in ("full", "ents", "aux")}
+        kb = {k: v for k, v in b.items() if k not in ("full", "ents", "aux")}
         if ka != kb and first is None:
             first = (a, b)
+        if ka != kb and a["run"] not in first_per_run:
+            first_per_run[a["run"]] = (a, b)
         full_diff += a["full"] != b["full"]
     offs = {}
     for a, b in zip(A, B):
@@ -142,6 +147,10 @@ def main():
     if first:
         print("  base:", json.dumps(first[0])[:400])
         print("  new: ", json.dumps(first[1])[:400])
+    for run, (a, b) in sorted(first_per_run.items()):   # AI-SEEK2: per-run first mismatch (aux = ROOM_CUT, PL_SEG, PL_LADDER of the NEW build)
+        slots = [i for i in range(16) if a["logic"][i] != b["logic"][i]]
+        print(f"  run {run} first mismatch turn {a['t']} key {a['key']} slots {slots} aux(new) {b.get('aux')} "
+              f"hero {b['logic'][0]} | " + "; ".join(f"s{i} base {a['logic'][i]} new {b['logic'][i]}" for i in slots[:3]))
     print("ai_equiv:", "OK" if ok else "FAILED")
     return 0 if ok else 1
 

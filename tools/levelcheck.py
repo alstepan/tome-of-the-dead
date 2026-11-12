@@ -206,6 +206,16 @@ def check(b, stats=None):
             if c and not SHAFT_LO <= c <= SHAFT_HI: v.append(f"room {r} {nm} range")
         l1, l2, pit = rd(b, r, "RD_LAD1"), rd(b, r, "RD_LAD2"), rd(b, r, "RD_PITCOL")
         if not l1: v.append(f"room {r} no ladder")
+        # AI-SEEK2 (ai_seek2.md §2.1 / §4): at most one cut per room; every ladder col c has a well defined
+        # half (seg0(c)): its 3-col footprint lies wholly on one side of K (c + 2 < K or c > K); a wide pit /
+        # mid-block room has a ladder in EACH half (the 1-hop route, R4).
+        K = G.room_cut(b[o:o + 16])
+        if pit and b[o + L2_MIDB]: v.append(f"room {r}: two cuts (pit {pit} and mid-block)")
+        if K != 0xFF:
+            for nm, c in (("lad1", l1), ("lad2", l2)):
+                if c and not (c + 2 < K or c > K): v.append(f"room {r}: {nm} {c} on the cut {K}")
+            if (b[o + L2_PITW] or b[o + L2_MIDB]) and not ({G.seg0(K, c) for c in (l1, l2) if c} == {0, 1}):
+                v.append(f"room {r}: a half of the cut {K} has no ladder")
         for nm, c in (("lad1", l1), ("lad2", l2)):
             if c and not D["LAD_COL_MIN"] <= c <= D["LAD_COL_MAX"]: v.append(f"room {r} {nm} range")
         if not b[OFF_DESC + r * 16 + L2_PITW]:

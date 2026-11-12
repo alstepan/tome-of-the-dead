@@ -844,36 +844,28 @@ try_horizontal:
                 or   a
                 jr   nz, .inside               ; nx >= 1
                 ; entering col 0: left exit on this storey?
-                push bc
-                push de
-                call storey_ref
-                ld   b, a
-                ld   (EXIT_STOREY), a
                 ld   a, EX_LEFT
-                call exit_h
-                pop  de
-                pop  bc
-                ret  nc
-                ld   (EXIT_DEST), a
-                ld   a, EX_LEFT
-                jr   .exit
+                jr   .edge
 .right:         ld   a, c
                 add  a, d
                 dec  a                         ; right col
                 cp   ROOM_COLS - 1
                 jr   c, .inside
-                push bc
+                ld   a, EX_RIGHT
+.edge:          push bc                        ; AI-SEEK2 reclaim: one copy of the edge test (was one per side)
                 push de
+                push af                        ; EX_LEFT / EX_RIGHT
                 call storey_ref
                 ld   b, a
                 ld   (EXIT_STOREY), a
-                ld   a, EX_RIGHT
+                pop  af
+                push af
                 call exit_h
+                jr   nc, .noex
+                ld   (EXIT_DEST), a
+                pop  af
                 pop  de
                 pop  bc
-                ret  nc
-                ld   (EXIT_DEST), a
-                ld   a, EX_RIGHT
 .exit:          ld   (EXIT_KIND), a
 .inside:
                 call box_free
@@ -901,6 +893,9 @@ try_horizontal:
                 jp   tome_rel                  ; WIN2: through the geometry: adjacent (gap 0) < C = nx
                                                ; (>= 2: the lectern is at cols 1-2 / 29-30): a hit,
                                                ; CF = 1; destroyed (TOME_HP 0): CF = 0, a wall, no turn
+.noex:          pop  af                        ; .edge: no exit that way -> .blocked (EXIT_KIND 0, CF = 0)
+                pop  de
+                pop  bc
 .blocked:       xor  a
                 ld   (EXIT_KIND), a            ; CF = 0 (xor)
                 ret
@@ -1376,3 +1371,5 @@ mus_pick:       ld   hl, mus_pick0
                 ; (tiles7.asm: M0 -> the high bank-7 block after the tilesets, main.asm b7h_code)
                 INCLUDE "theme7.asm"           ; half-row flames: level_theme7, the tail of level_tiles7 (high block was 8 B over)
                 INCLUDE "boot7.asm"            ; MEM-SND: panel_init7, new_game (from bank 3; 3E-T1: the boot parts -> boot6.asm)
+
+                INCLUDE "seek7.asm"            ; AI-SEEK2: seek_col (far7 from bank-3 ai_monster)

@@ -194,6 +194,29 @@ set_reaction_at:
                 ld   (ix+E_REACTAT), b
                 ret
 
+; pl_seg3 — AI-SEEK2 (design/ai_seek2.md §2.2): PL_SEG, the hero's target segment ($80 = storey 1,
+; $00 / $01 = storey-0 left / right half = seg0(x) = x > ROOM_CUT), from cache_player's PL_*.
+; Called by bank-2 resolve_monsters right after cache_player, bank 3 paged. A mid-climb on an INTERNAL
+; ladder (PL_LADDER == 2) counts on the end he is heading to (his E_AIDIR: $FF up -> storey 0,
+; 1 down -> storey 1); everything else on his own storey.   Clobbers: A, HL.  ~0.15k T
+pl_seg3:
+                ld   a, (PL_LADDER)
+                cp   2
+                ld   a, (PL_STOREY)
+                jr   nz, .ns
+                ld   a, (P_ENTITIES + E_AIDIR)
+                inc  a                         ; 0 up / 2 down
+.ns:            or   a
+                ld   a, $80
+                jr   nz, .sg
+                ld   a, (ROOM_CUT)             ; seg0: x > K (K = $FF: never)
+                ld   hl, PL_X
+                cp   (hl)
+                sbc  a, a
+                and  1
+.sg:            ld   (PL_SEG), a
+                ret
+
 ;==============================================================================
 ; MONSTER AI (prototype §6.4). IX = monster (active, CUR_ROOM, not pending/dying),
 ; ACT_SLOT = its slot (3F-B5: the caller, resolve_monsters, stores it; was an
@@ -252,8 +275,8 @@ ai_monster:
                 jr   c, .yend
                 ld   a, d                      ; that side blocked (a neighbour):
                 neg                            ; try the other one —
-                ld   d, a                      ; two monsters side by side can't
-                ld   e, 0                      ; pin the hero on the ladder
+                ld   d, a                      ; two monsters side by side can't pin the hero on the
+                                               ; ladder (E is still 0: the pop restored it)
                 call try_step_face
                 jr   c, .yend
                 ; B14 / §6.4 rule 2 ("flyers may use any in-band move that
@@ -324,16 +347,23 @@ ai_monster:
                 ret  c                         ; reject (~66 T), a shooter far6s R6 ai_ranged; CF = the turn
                                                ; is used. HL / TMP4 kept (the B5 box in BC / DE is not:
                                                ; nothing below reads it)
-                ld   a, (PL_STOREY)
-                ld   c, a                      ; C = player storey
+                ; AI-SEEK2 (design/ai_seek2.md §2.3): D = M, my segment ($80 = storey 1, else seg0(x) =
+                ; x > ROOM_CUT); H = PL_SEG, the hero's target segment. D survives to .seek (KFIELD keeps it).
                 ld   a, (TMP4)
-                xor  c
+                rrca
+                jr   c, .m1                    ; storey 1: A = $80
+                ld   a, (ROOM_CUT)
+                cp   (ix+E_X)                  ; CF iff K < x
+                ld   a, 0
+                rla
+.m1:            ld   d, a
+                ld   a, (PL_SEG)               ; H
+                xor  d
+                ld   c, a                      ; C = M ^ H (bit 7: another storey)
                 or   h
-                jr   nz, .other                ; another storey, or not standing
-                ; same storey, standing: step toward the player
-                call dx_to_player              ; D = dx (0 if aligned)
-                ld   a, d
-                or   a
+                jr   nz, .other                ; another segment, or not standing
+                ; R1 same segment, standing: step toward the player
+.same:          call dx_to_player              ; D = dx (0 if aligned: Z, from its own CP / RETs)
                 ret  z
 .fstep:         ld   e, 0                      ; try_step_face for a STANDING walker:
                 ld   a, d                      ; enters try_step past its on_ladder test
@@ -345,7 +375,7 @@ ai_monster:
                 ld   b, h                      ; B = 0 iff standing
                 KFIELD KT_FLAGS
                 and  KF_CLIMBER
-                jp   z, .patrol
+                jp   z, .nonclimb
                 ld   a, b                      ; (on_ladder: walker -> NZ iff standing)
                 or   a
                 jr   z, .seek
@@ -356,40 +386,36 @@ ai_monster:
                 ret  c
                 ; AI-L1 review: blocked, and ai_dir leads AWAY from the hero's storey
                 ; (it changed storey mid-climb): turn round (the turn is spent), else
-                ; it hangs over a waiter at the foot for ever. Away <=> bit 7 of
-                ; ai_dir (up) == PL_STOREY (segment {c,1}: 0 above, 1 below)
-                ld   a, (PL_STOREY)
-                rrca
-                xor  (ix+E_AIDIR)
-                ret  m                         ; it leads toward the hero: keep waiting
-                ld   a, (ix+E_AIDIR)
-                neg
+                ; it hangs over a waiter at the foot for ever. AI-SEEK2 R3: the wanted end is the one
+                ; in the hero's destination segment H = PL_SEG: up iff H == seg0(x) (the top end's
+                ; half; x == col mid-ladder), else down (H = storey 1, or the other half: the 1-hop
+                ; route goes DOWN first, S4b: it must not ping-pong). ai_dir := it (a no-op when it
+                ; already leads there).
+                ld   a, (ROOM_CUT)
+                cp   (ix+E_X)                  ; CF = seg0(x)
+                ld   a, (PL_SEG)
+                adc  a, 0                      ; H + seg0: even with bit 7 clear = the same half
+                and  $81
+                cp   1
+                sbc  a, a
+                or   1                         ; $FF up / 1 down
                 ld   (ix+E_AIDIR), a
                 ret
-.seek:          ; C = player storey, TMP4 = my storey
-                ld   a, (TMP4)
-                ld   b, a
-                ld   a, c
-                cp   b
-                ret  z
-                jr   c, .wantup
-                ; want down: segment {col, s+1}, s+1 < STOREY_COUNT (exit excluded)
-                ld   a, b
+.seek:          ; D = M, another segment (R4 / R5 / R6): seek_col (bank 7, far7) picks the ladder {c,1}
+                ; or answers STRANDED (L = $FF: no route; R6 = step toward the hero, and the hook for
+                ; the pit-stuck ranged fallback, new_monsters.md). TMP6 = the climb dy: up ($FF) from
+                ; storey 1 (M bit 7), else down (1)
+                ld   a, d
+                rlca
+                sbc  a, a
+                or   1
+                ld   (TMP6), a
+                ld   hl, seek_col
+                call far7                      ; (DE, IX pass in and out)
+                ld   a, l
                 inc  a
-                cp   STOREY_COUNT
-                ret  nc
-                ld   b, a
-                ld   a, 1
-                jr   .find
-.wantup:        ld   a, b
-                or   a
-                ret  z                         ; {col,0} is an exit: excluded
-                ld   a, $FF
-.find:          ld   (TMP6), a                 ; climb dy
-                ; nearest segment {col, B} in this room
-                call nearest_ladder            ; A = col or $FF
-                cp   $FF
-                ret  z
+                jr   z, .same                  ; STRANDED
+                dec  a
                 cp   (ix+E_X)
                 jr   z, .at
                 ld   e, a                      ; E = col (lq_block)
@@ -421,11 +447,8 @@ ai_monster:
                 ; A body overlapping the near-end box overlaps the Spider on its storey; only
                 ; one above its 2-row head (a flyer) can wait the start (it moves on). lq3
                 ; LQ_W: its queue box is 4 wide.
-                ld   c, a                      ; B = segment storey (its lower end)
-                ld   a, b                      ; shaft rect: rows 9(B-1) .. 9B+7
-                dec  a                         ; (upper standing top .. lower air bottom)
-                MUL_STOREY b
-                ld   b, a
+                ld   c, a                      ; the shaft rect: rows 0 .. 17 (the ladders are {c,1}: rows
+                ld   b, 0                      ; 9(1-1) .. 9*1+8; AI-SEEK2: always storey 1, was computed)
                 KFIELD KT_BW                   ; (A, HL; B / C kept)
                 ld   d, a
                 ld   e, 2 * STOREY_ROWS - 1
@@ -436,6 +459,12 @@ ai_monster:
                 ld   e, a
                 ld   (ix+E_AIDIR), a
                 jp   try_step
+.nonclimb:      ; R2 non-climber: standing on the hero's storey (only across a cut) -> step toward
+                ; him (it stops at the lip / block face, facing him); another storey -> patrol
+                ld   a, c
+                and  $80
+                or   b
+                jp   z, .same
 .patrol:        ; non-climber on another storey: pace in the facing direction
                 ld   d, 1
                 bit  EF_LEFT_BIT, (ix+E_FLAGS)
@@ -448,8 +477,7 @@ ai_monster:
                 ret  c
                 ld   a, d
                 neg
-                ld   d, a
-                ld   e, 0
+                ld   d, a                      ; (E is still 0: the pop restored it)
                 jp   try_step_face
 
 ; rs_hit / rs_deal — 3F-T7: far3 entries for R6 ai_ranged (ranged6.asm), which
@@ -471,38 +499,7 @@ rs_self:        ld   c, DTY_DARK | DH_NODEF
                 ld   a, e
                 jr   rs_dl
 
-; nearest_ladder — nearest segment with storey B in the current room to IX.x
-; (descriptor order RD_UPCOL..RD_LAD2; a tie keeps the first, as the PROTO
-; list did: rooms A-D keep LAD1/LAD2 in their old list order).
-; Out: A = col or $FF.  Preserves B.  Clobbers: A, C, DE, HL
-nearest_ladder:
-                call cur_room_desc
-                inc  l                         ; -> RD_EXITS; the loop pre-increments
-                ld   de, $FFFF                 ; D = best col, E = best dist
-.l:             inc  l
-                ld   a, l
-                and  RD_STRIDE - 1
-                cp   RD_LAD2 + 1
-                jr   nc, .done
-                call seg_storey
-                cp   b
-                jr   nz, .l
-                ld   a, (hl)                   ; col
-                or   a
-                jr   z, .l                     ; none
-                ld   c, a
-                sub  (ix+E_X)
-                jr   nc, .p
-                neg
-.p:             cp   e
-                jr   nc, .l                    ; not strictly nearer
-                ld   e, a
-                ld   d, c
-                jr   .l
-.done:          ld   a, d
-                ret
-
-; dx_to_player — D = sign(player.x - x) (0 if equal).  Clobbers: A
+; dx_to_player — D = sign(player.x - x) (0 if equal; Z iff D = 0 on return).  Clobbers: A
 dx_to_player:
                 ld   a, (P_ENTITIES + E_X)
                 ld   d, 0

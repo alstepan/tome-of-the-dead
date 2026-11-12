@@ -823,7 +823,7 @@ cork_check:
                 ret
 
 ;------------------------------------------------------------------------------
-; cache_player — the hero's box / storey / mid-ladder flag for this turn's
+; cache_player — the hero's box / storey / mid-ladder flag (AI-SEEK2: 2 = on an internal ladder) for this turn's
 ; monster phase (the hero doesn't move while monsters act).  Clobbers: A,BC,DE,HL
 ; B3B-R2: stays in bank 2 (called by resolve_monsters, bank 2 since BLAIR-FIX, and by the
 ; tests/world.py try_step unit stub)
@@ -832,21 +832,19 @@ cache_player:
                 push ix
                 ld   ix, P_ENTITIES
                 call get_box
-                ld   a, c
-                ld   (PL_X), a
-                ld   a, b
-                ld   (PL_Y), a
-                ld   a, d
-                ld   (PL_W), a
-                ld   a, e
-                ld   (PL_H), a
+                ld   (PL_X), bc                ; PL_X / PL_Y, PL_H / PL_W (AI-SEEK2: D:E in one LD, -8 B)
+                ld   (PL_H), de
                 call storey_ref
                 ld   (PL_STOREY), a
+                ld   d, l                      ; D = raw (y+h) div 9 (storey_ref keeps L)
                 call on_ladder
                 ld   a, 0
                 jr   nz, .n
                 inc  a
-.n:             ld   (PL_LADDER), a
+.n:             ld   e, a
+                and  d                         ; AI-SEEK2: PL_LADDER = 2 when the mid-climb is on an INTERNAL
+                add  a, e                      ; ladder (raw div 9 == 1; an exit shaft's rows are 0 / 2), else 1 / 0:
+                ld   (PL_LADDER), a            ; every other reader tests it for non-zero. pl_seg3 reads the 2
                 pop  ix
                 ret
 
@@ -866,6 +864,7 @@ resolve_monsters:
                 ld   a, BANK_COLD3
                 call page_bank
                 call cache_player
+                call pl_seg3                   ; AI-SEEK2: PL_SEG (bank 3, paged just above)
                 ld   ix, P_ENTITIES + P_ENT_STRIDE ; B6: IX walks by 32, slot in C; MON_SLOT is
                 ld   de, P_ENT_STRIDE                 ; (MON_SLOT is no longer stored: nothing read it)
                 ld   bc, ((P_MAX_ENT - 1) << 8) | 1    ; B = slots left, C = slot
