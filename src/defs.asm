@@ -165,26 +165,35 @@ BANK_OVL_PAGE   EQU BANK_R6         ; R6: the page stream (page_ovl, menu1.asm)
 ; INSTR-BUILD: the HOW TO PLAY screen (game.md §3.2.1 option A flow, docs/design/
 ; instructions_screen.md / .txt pages): boot-only overlay instr_ovl.asm at INSTR_ORG,
 ; its page images (tools/instr_pack.py) unpacked by it to INSTR_DATA (right after its
-; code, same window). All four ZX0 streams sit in bank 0 right after the text block
-; (POOL_START.., on the text tape block; the boot pool overwrites them after the help).
+; code, same window). Its ZX0 streams are the bank-4 BOOT4 tape block (BOOT4_ORG..,
+; C+TUT0 merge; the boot pool overwrites them after the help).
 INSTR_ORG       EQU GEN_SCRATCH
 ; D3-11: the PROTO rooms test fixture (src/proto_fix.asm, build/ovl/proto.bin, never in
 ; the image): run in the bank-5 screen bitmap (the menu's, cleared by level_show) once
 ; tests/game_lib.py has poked it there at start_game's proto_hook.
 PROTO_FIX_ORG   EQU SCREEN_BITMAP
-BANK_INSTR      EQU BANK_TEXT
+BANK_INSTR      EQU BANK_BOOT4  ; C+TUT0 (was BANK_TEXT: bank 0 POOL_START)
 ; TUT0-T1: the D0 tutorial BLOB (docs/design/tut0_split.md "Verdicts" F4; memory-map
 ; "TUT0 blob"): code + data assembled at BLOB_ORG in bank 4 (src/tut/tut_blob.asm), its
-; ZX0 stream the LAST stream of the bank-0 text tape block (blob_zx0, + a DW length
-; trailer). The INSTR overlay's common exit bounce-copies the stream (PF_RAM) to the top
-; of bank 4 and unpacks it in place to BLOB_ORG (once per power-on). Entered only through
+; ZX0 stream the LAST stream of the bank-4 BOOT4 tape block (blob_zx0, + a DW length
+; trailer; C+TUT0 merge, was the bank-0 text block). The INSTR overlay's common exit
+; unpacks it from there to BLOB_ORG (same bank, no overlap; once per power-on). Entered only through
 ; the two low-RAM stubs (src/tut/tut_stub.asm over check_paging, farb with C = BANK_BLOB).
 ; Pool bytes: the D1+ pool overwrites it (both SMC patches are undone by then); the D0
 ; pool must end below BLOB_ORG (main.asm "LEVEL POOL NEED", D0 session ASSERT).
 BANK_BLOB       EQU BANK_POOL1      ; 4
-BLOB_ORG        EQU $E000           ; TUT0-F2: was $E800 (2 KB more; D0 pool tops $D140 W / $C5C0 M,
-                                    ; overlay scratch OVL_RAW_END $D930: both ASSERTed below it)
-BLOB_RES        EQU 8192            ; BLOB_ORG..$FFFF: raw image + the in-place ZX0 delta
+; C+TUT0 merge (2026-11-11): the BOOT4 block — the boot-only streams (frame_tab, the HOW TO PLAY
+; pages + overlay code, the D0 blob stream + trailer; main.asm "BOOT4 STREAMS") as one headerless
+; tape block in pool bank 4 from BOOT4_ORG (after the tap_loader scratch), ending <= BLOB_ORG.
+; Free at load (nothing else loads into bank 4), dead once gen_idles pools. Was bank 0 POOL_START..
+; (C-T8's own block / TUT0's text-block tail): bank 0 above the text block loads nothing now.
+BANK_BOOT4      EQU BANK_POOL1      ; 4 (= BANK_BLOB, ASSERTed)
+BOOT4_ORG       EQU BANK_WINDOW + $100
+INSTR_FT_ZX0    EQU BOOT4_ORG       ; the frame_tab stream, FIRST in BOOT4 (RECLAIM-D; ASSERTed)
+BLOB_ORG        EQU $E1B4           ; C+TUT0 (user: move the blob up into its spare space): raw blob 7,748 B + 8 B tail
+                                    ; to $FFFF (was $E000, TUT0-F2 $E800). No alignment is assumed (ASSERTed by BLOB_LEN <= BLOB_RES
+                                    ; and BLOB_TAIL >= 8). Frees 436 B below it for the pool (POOL_START / B0_FREE grow).
+BLOB_RES        EQU $10000 - BLOB_ORG ; BLOB_ORG..$FFFF = 7,756: the raw image (no in-place delta since BOOT4)
                 ASSERT BLOB_ORG + BLOB_RES == $10000
 BLOB_CHOICE     EQU BLOB_ORG + 0    ; entry table (tut_blob.asm): A = menu hero kind -> C = hero
 BLOB_TURN       EQU BLOB_ORG + 3    ;   A = 1 before end_turn, 0 after
@@ -244,16 +253,16 @@ B0_KIT_RES      EQU 0                          ; D3-11: 0 (was 80 x DEBUG_KIT): 
 ; Sized for >= ~1 KB pool slack at the binding level (POOL_NEED incl. POOL_SIM_MARGIN and the
 ; simulated straddle waste; the slack is quantised by the bank-0 -> 4 straddle: memory-map ledger).
 B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CCF2 (= POOL_START before C-T8)
-B0_FREE_RES     EQU 10910                      ; C2 (full C, 2026-11-10): the carve -> POOL_START $F826 (B0_FREE_START $CD88 + 10910;
-                                               ; even, as gen_variant needs). CAPPED by the HOW TO PLAY streams (1,991 B
-                                               ; at POOL_START, must end <= $FFFF: 19 B spare), not by the pool: D8 Warrior
-                                               ; need 16,586 of 20,442 = slack 3,856 left in banks 4 / 6 (memory-map "C2").
+B0_FREE_RES     EQU 11958                      ; C2 (full C, 2026-11-10): the carve -> POOL_START $FC3E (B0_FREE_START $CD88 + 11958;
+                                               ; even, as gen_variant needs). C+TUT0: was 10910 ($F826), 11486 ($FA66). CAPPED by the D0
+                                               ; tutorial pool vs BLOB_ORG $E1B4 (top $E0E0, 212 B left, margin 64): 11,960 is a straddle
+                                               ; cliff that fails the ASSERT. Level pool: D8 Warrior need 16,418 of 19,394 = slack 2,976.
                                                ; C-T8 / C-H: was 6910 (POOL_START $E7F0).
                                                ; C-H (10 hurt frames |MIR, -1,104 B at D8 Warrior) 5790 -> 6910. Cliff measured:
                                                ; 6910 -> D8 Warrior slack 1,184; 6912 -> 864 (< 1 KB). (C-T8: 5790 -> 1,264,
                                                ; 5792 -> 944.)
 B0_FREE_END     EQU B0_FREE_START + B0_FREE_RES
-POOL_START      EQU B0_FREE_END                ; $F826, C2 ($E7F0 C-H, $E390 C-T8; was $CCF2, C-T6; $CC20 before): alloc_reset's first bank-0 pool byte
+POOL_START      EQU B0_FREE_END                ; $FC3E, C+TUT0 ($F826 C2, $E7F0 C-H, $E390 C-T8; was $CCF2, C-T6; $CC20 before): alloc_reset's first bank-0 pool byte
                 ASSERT (B0_FREE_RES & 1) == 0
     MACRO FARB0 target                  ; call a bank-0 cold-code routine (8 B; A / DE / IX pass in;
                 ld   hl, target         ;   C lost to the bank, B to farb's A): farb pages BANK_TEXT
@@ -922,7 +931,7 @@ KF_OPENER       EQU %01000000       ; B3B-5: opens closed unlocked doors by bump
 ; Frame table (static, frame_tab) — MEM-FT: the 4-B entry lives in the fid's
 ; FRT row (bytes FT_IN_ROW..FT_IN_ROW+3, the row's spare tail), so
 ; frame_tab = FRT + FT_IN_ROW and FT_STRIDE = FRT_STRIDE (16). Not in the
-; bank-2 image: instr_ovl in_ft unpacks ftz_zx0 (bank 0 POOL_START, boot only; RECLAIM-D) (contiguous 4 B/fid) and spreads
+; bank-2 image: instr_ovl in_ft unpacks ftz_zx0 (bank 4 BOOT4, boot only; RECLAIM-D) (contiguous 4 B/fid) and spreads
 ; it into the rows at boot; frt_none / gen_frame write bytes 0..11 only.
 ; A6: only what the per-tick renderer reads (blit, footprint, frame offsets);
 ; the generator-only part is the bank-5 descriptor (FD_*).

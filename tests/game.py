@@ -2179,11 +2179,12 @@ def tape_rest(h, p):
     lo5 = S["lowram_code"] - 0x4000
     # TUT0-T1: instr_ovl in_stub copies the two blob stubs over check_paging (TUT_STUB_LEN B, tape
     # path only, dead after boot): compared against the assembled stub image `ovl_raw_stub`
-    # (OVL_RAW_BANK, in the .sna), not blanked; check_paging sits in bank 5's low RAM
+    # (build/ovl/stub.bin), not blanked; check_paging sits in bank 5's low RAM
     l5, s5 = bytearray(ram[5 * 16384 + lo5:6 * 16384]), bytearray(SNA_RAM[5 * 16384 + lo5:6 * 16384])
     m0, n0 = S["check_paging"] - S["lowram_code"], S["TUT_STUB_LEN"]
-    rs = S["OVL_RAW_BANK"] * 16384 + S["ovl_raw_stub"] - 0xC000
-    stub = SNA_RAM[rs:rs + n0]
+    # C+TUT0: from build/ovl/stub.bin (main.asm SAVEBIN): the .sna's scratch copy is under the BOOT4 streams
+    from game_lib import BUILD_DIR
+    stub = open(os.path.join(BUILD_DIR, "ovl", "stub.bin"), "rb").read()[:n0]
     h.expect("50 tape: TUT stubs installed over check_paging == ovl_raw_stub", bytes(l5[m0:m0 + n0]), bytes(stub))
     l5[m0:m0 + n0] = s5[m0:m0 + n0] = bytes(n0)
     h.expect("50 bank 5 low-RAM cold code (bar the TUT stubs over check_paging) == .sna", l5 == s5, True)

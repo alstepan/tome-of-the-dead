@@ -235,9 +235,9 @@ KEYS = [("FIRE", 3), ("L", 3), ("H", 4), ("WAIT", 4)]
 # mark + number) at 126.7k work / 135.5k real, not a spit tick; the control (BUDGET_WROOM_NOSHOT=1, the Widows
 # as plain walkers; =psn the same with the hero poisoned from the start) peaks at 116.5k / 116.8k work in
 # another geometry: the spit turns shift where the bodies stand on the later walk ticks.
-GATED = ("mix", "mage", "blair", "wroom", "wroom4")
+GATED = ("mix", "mage", "blair", "wroom", "wroom4", "rwalk")   # C+TUT0: rwalk gated (real <= BUDGET); lwalk / lwalk4 reported measurements
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4", "lmix", "lmixw", "lmix4", "lhurt", "lhurt4")   # C2: lwalk / lwalk4 / rwalk are measurements, not gated
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4", "lmix", "lmixw", "lmix4", "lhurt", "lhurt4")   # lwalk4: a measurement, not gated (see SCENARIOS)
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -670,8 +670,13 @@ SCENARIOS = {
     # PERF-SURVEY M2: "lwalk" = the full-C walk worst case: the knight and 4 Skeletons (the widest PROTO walker) all
     # facing and WALKING LEFT in one room (the hero walks left, the bodies chase: left-facing WK4 / WK0 frames at
     # once); no forced sequences (lwalk_hook only records which frames were drawn). "lwalk4" = the same on the
-    # real D4 pool (Ogre + 3 Orcs, the 40-px walkers). C2: MEASUREMENTS, NOT gated (in neither GATED nor CAP_GATED):
-    # 5 bodies walking every tick exceed the budget even facing right (rwalk, the pre-mirrored control).
+    # real D4 pool (Ogre + 3 Orcs, the 40-px walkers). C+TUT0 (2026-11-11, release, worst ordinary tick work / real):
+    # rwalk (the facing-right control) 123,189 / 132,984 -> GATED (real <= BUDGET). The left walks with every walk /
+    # MOT frame pre-mirrored (C-H flags, MON-DEFER kept) vs full C (all mirrored at blit time): lwalk 125,931 / 135,796
+    # (0 over) -> 135,712 / 151,033 (10 over); lwalk4 136,642 / 148,084 (6 over: the base was already over budget) ->
+    # 147,251 / 160,910 (12 over). Fix for lwalk: skeleton_walk1..4 back to pre-mirrored (frames.asm; +1,120 B pool at
+    # D8 Warrior): REVERTED (user "full C, accept slowdown"): skeleton_walk1..4 |MIR again, lwalk ~151k real, NOT gated
+    # (in neither list, like lwalk4): reported measurements.
     "lwalk": ("knight walking left + 4 Skeletons walking left behind it", [
         (5, 16, stand_y(1, 6), HOSTILE),
         (3, 20, stand_y(1, 6), HOSTILE),

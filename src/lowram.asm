@@ -23,7 +23,7 @@
 ; nothing there is live yet: screen 2 is not shown, the 128 editor's bank-7
 ; workspace is abandoned with BASIC; D3-TX: the text block at the bottom of
 ; bank 0 — check_paging's probe byte there is overwritten; C-T8: the HOW TO PLAY
-; streams at bank 0's POOL_START (own block above the carve); 3E-T1: the boot
+; streams in the bank-4 BOOT4 block (C+TUT0, was bank 0 POOL_START); 3E-T1: the boot
 ; block in bank 6 (boot6.asm, below R6); R6: the R6 region at the top of
 ; bank 6 (r6.asm, permanent). Then boot. The .sna enters at boot.
 ; Runs under the ROM IM1 ISR (LD-BYTES ends with EI; IY = $5C3A here): boot
@@ -84,7 +84,7 @@ boot:
                 call farb                      ; B3B-11; were bank 7 init_tiles / panel_boot)
                 ld   hl, boot6_wait            ; the loading picture + title tune until a key,
                 ld   c, BANK_BOOT6             ; then HOW TO PLAY (INSTR-BUILD): before the boot
-                call farb                      ; pool, which overwrites its bank-0 streams
+                call farb                      ; pool, which overwrites its bank-4 BOOT4 streams
                 ; 3F-T1: the boot pool is the two select idles only; the hero
                 ; (start_game) and each level's monster kinds (level_enter)
                 ; are generated above them later

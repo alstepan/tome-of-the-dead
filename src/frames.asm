@@ -78,6 +78,9 @@ POOLACC = 0
                 ; 3F-D7LEV: MOVECYC4 walk2, walk3, walk4, walk1 (same cyclic order): WALK1 = the
                 ; rest pose in the odd (aligned) slot = one shift (-576 B pool on a Skeleton /
                 ; Archer level vs MOT); WALK2 / WALK4 are the WK4 strides. Goblin the same.
+                ; C+TUT0 (user decision "full C, accept slowdown"): the four walks are |MIR again
+                ; (blit-time mirror; pool -1,120 B at D8 Warrior). Knight + 4 Skeletons walking
+                ; left cost ~151k real (budget "lwalk": a reported measurement, not gated).
                 FRM skeleton_walk1,     K_SKELETON, 24, WK0|MIR
                 FRM skeleton_walk2,     K_SKELETON, 24, WK4|MIR
                 FRM skeleton_walk3,     K_SKELETON, 24, WK0|MIR

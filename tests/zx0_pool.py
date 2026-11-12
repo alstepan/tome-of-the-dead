@@ -137,11 +137,17 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # C-H (10 hurt frames |MIR, skeleton_hurt not: wcast; B0_FREE_RES 5,790 -> 6,910): the build's own numbers again.
 # C2 (full C: every walk WK4 / WK0 + MOT frame and skeleton_hurt |MIR, after MON-DEFER; B0_FREE_RES 6,910 ->
 # 10,910, POOL_START $E7F0 -> $F826, capped by the HOW TO PLAY streams at POOL_START): the build's own numbers.
+# C+TUT0 merge: the boot streams moved to the bank-4 BOOT4 block (no longer a POOL_START cap); skeleton_walk1..4
+# |MIR again (user "full C, accept slowdown"); B0_FREE_RES 10,910 -> 11,486 (POOL_START $FA66, capped by the D0
+# pool vs BLOB_ORG): every need is the C2 one - 16 (straddle waste 154). Binding D8 Warrior 16,570, slack 3,296.
+# C+TUT0 (blob up): BLOB_ORG $E000 -> $E1B4, B0_FREE_RES 11,486 -> 11,958 (POOL_START $FC3E; the next even step 11,960
+# is a straddle cliff that breaks the D0 ASSERT): every need = the previous one - 152 (straddle waste 154 -> 2).
+# Binding D8 Warrior 16,418 of 19,394, slack 2,976.
 LEVEL_NEED = {
-    (0, 1): 11994, (0, 2): 12010, (0, 3): 14522, (0, 4): 15466,
-    (0, 5): 12714, (0, 6): 15146, (0, 7): 14650, (0, 8): 16586,
-    (1, 1): 10426, (1, 2): 10410, (1, 3): 12922, (1, 4): 13898,
-    (1, 5): 11146, (1, 6): 13546, (1, 7): 13050, (1, 8): 14986,
+    (0, 1): 11826, (0, 2): 11842, (0, 3): 14354, (0, 4): 15298,
+    (0, 5): 12546, (0, 6): 14978, (0, 7): 14482, (0, 8): 16418,
+    (1, 1): 10258, (1, 2): 10242, (1, 3): 12754, (1, 4): 13730,
+    (1, 5): 10978, (1, 6): 13378, (1, 7): 12882, (1, 8): 14818,
 }
 
 

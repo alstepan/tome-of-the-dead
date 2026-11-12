@@ -3,10 +3,10 @@
 ; screen (game.md §3.2.1 option A flow: once per power-on, before the first
 ; menu; pages / wording / render spec: docs/design/instructions_screen.md /
 ; .txt). A boot-only OVERLAY (main.asm "OVERLAYS"): assembled at INSTR_ORG
-; (GEN_SCRATCH, bank 5), ZX0-packed into bank 0 right after the text block
-; (POOL_START..; the text tape block runs on through it), run once by
-; boot6_wait -> ovl_run BEFORE the boot pool (gen_idles writes from
-; POOL_START: the streams are dead after this). 0 resident bytes.
+; (GEN_SCRATCH, bank 5), ZX0-packed into the bank-4 BOOT4 tape block
+; (BOOT4_ORG..; C+TUT0 merge, was bank 0 POOL_START), run once by
+; boot6_wait -> ovl_run BEFORE the boot pool (gen_idles pools over bank 4:
+; the streams are dead after this). 0 resident bytes.
 ;
 ; Flow: the loading picture + "PRESS ANY KEY" (GS_ANYKEY, was boot6_wait),
 ; then page 1 (GS_HELP1), page 2 TREASURES (GS_HELP3; GS_HELP2 unused), then
@@ -21,11 +21,11 @@
 ;
 ; Page images (tools/instr_pack.py -> build/text/instr_p<n>.inc, format there)
 ; are unpacked to INSTR_DATA (after this code, same window): p1 straight after
-; the frame_tab stream INSTR_FT_ZX0 (= POOL_START, in_ft: RECLAIM-D), p2 straight
+; the frame_tab stream INSTR_FT_ZX0 (= BOOT4_ORG, bank 4, in_ft: RECLAIM-D), p2 straight
 ; after it (dzx0 leaves HL past the stream).
 ; TUT0-T1: the common exit (also after a BREAK skip) is in_tut: the D0 blob into
 ; bank 4 + the low-RAM stubs + the es_go patch.
-; Drawing pages: bank 0 (unpack), bank 1 (copy_virt: the vdata bar icons and
+; Drawing pages: bank 4 (BOOT4, the unpack source), bank 1 (copy_virt: the vdata bar icons and
 ; the key label, GEN_SRC staging), bank 6 (R6 ic_scr: the 16x16 item icons);
 ; bank 3 is never paged (its pblit SMC must stay as loaded until panel_init,
 ; game.py #50). ovl_run gives the caller's bank back afterwards.
@@ -40,70 +40,33 @@ instr_main:
 
 ;------------------------------------------------------------------------------
 ; in_tut — TUT0-T1 (docs/design/tut0_split.md "Verdicts" F4): before gen_idles
-; overwrites bank 0. (1) The blob stream (bank 0, the LAST stream of the text tape
-; block + a DW length trailer; the block's end = TEXT_ADDR + tape_tab's text-record
-; length, so no byte here depends on a packed size) is copied through PF_RAM (256-B
-; bounces, bank 0 -> bank 4) to $10000 - length, then ZX0-unpacked in place to
-; BLOB_ORG (main.asm ASSERTs raw + delta <= BLOB_RES). (2) The stubs (in_stub, a copy
-; of tut_stub.asm DISP'd at check_paging) go over check_paging (tape path only, dead
-; now). (3) es_go := ts_choice (enter_select offers the tutorial). The stream's
-; leftover tail (BLOB_ORG + BLOB_LEN .. $FFFF) is zeroed: bank 4 == the .sna's.
+; overwrites bank 4. (1) The blob stream (the LAST stream of the bank-4 BOOT4 tape
+; block + a DW length trailer; the block's end = tape_tab's TT_BOOT4_REC address +
+; length, so no byte here depends on a packed size) is ZX0-unpacked straight to
+; BLOB_ORG (C+TUT0 merge: same bank, the block ends <= BLOB_ORG, ASSERTed, so no
+; overlap and no bounce copy). (2) The stubs (in_stub, a copy of tut_stub.asm DISP'd
+; at check_paging) go over check_paging (tape path only, dead now). (3) es_go :=
+; ts_choice (enter_select offers the tutorial). The raw blob's tail (BLOB_ORG +
+; BLOB_LEN .. $FFFF) is zeroed: bank 4 there == the .sna's on a tape boot too.
 ; Clobbers: A, BC, DE, HL (ovl_run gives the caller's bank back).
-; Cost: ~44 T/B packed (2 LDIRs + the bounce) + dzx0 (~LDIR rate + Elias bits per raw
-; byte) + 21 T per tail byte + ~1.3k T; boot only. Full 6 KB blob ~0.3M T (estimate).
+; Cost: dzx0 (~LDIR rate + Elias bits per raw byte) + 21 T per tail byte + ~1k T;
+; boot only. ~7.7 KB blob ~0.2M T (estimate).
 ;------------------------------------------------------------------------------
-in_tut:         ld   a, BANK_TEXT
+in_tut:         ld   a, BANK_BLOB              ; = BANK_BOOT4 (main.asm ASSERT)
                 call page_bank
-                ld   hl, (tape_tab + TT_TEXT_REC * TT_STRIDE + 3)
-                ld   de, TEXT_ADDR - 2
-                add  hl, de                    ; HL = the trailer
-                ld   c, (hl)
-                inc  hl
-                ld   b, (hl)                   ; BC = packed length (> 0)
+                ld   hl, (tape_tab + TT_BOOT4_REC * TT_STRIDE + 1)
+                ld   de, (tape_tab + TT_BOOT4_REC * TT_STRIDE + 3)
+                add  hl, de                    ; HL = the block's end (CF = 0: <= $FFFF)
                 dec  hl
-                or   a
-                sbc  hl, bc                    ; HL = blob_zx0 (bank 0); CF = 0
-                ex   de, hl
-                ld   hl, 0
-                sbc  hl, bc                    ; HL = $10000 - length: the bank-4 destination
-                ex   de, hl
-                push de                        ; [dst] for dzx0
-.cp:            push bc                        ; [left]
-                ld   a, b
-                or   a
-                jr   z, .n                     ; < 256 left: all of it
-                ld   bc, PF_RAM_LEN
-.n:             push bc                        ; [chunk]
-                ld   a, BANK_TEXT
-                call page_bank                 ; (BC lost; HL, DE kept)
-                pop  bc
-                push bc
-                push de
-                ld   de, PF_RAM
-                ldir                           ; bank 0 -> the bounce; HL = next source
-                ld   a, BANK_BLOB
-                call page_bank
-                pop  de
-                pop  bc
-                push bc
-                push hl
-                ld   hl, PF_RAM
-                ldir                           ; -> bank 4; DE = next destination
-                pop  hl
-                pop  bc                        ; chunk
-                ex   (sp), hl                  ; HL = left, [sp] = source
-                or   a
-                sbc  hl, bc
-                ld   b, h
-                ld   c, l
-                pop  hl                        ; source (flags kept)
-                jr   nz, .cp
-                pop  hl                        ; the stream in bank 4 (still paged)
+                ld   b, (hl)
+                dec  hl
+                ld   c, (hl)                   ; BC = packed length; HL = the trailer
+                sbc  hl, bc                    ; HL = blob_zx0
                 ld   de, BLOB_ORG
-                call dzx0_standard             ; in place (the stream's tail is at $FFFF)
-                ld   h, d                      ; DE = BLOB_ORG + BLOB_LEN: zero the stream's
-                ld   l, e                      ; leftover tail to $FFFF, so bank 4 == the
-                ld   (hl), 0                   ; .sna's (raw blob + zeros) for the pool checks
+                call dzx0_standard             ; forward, the stream below BLOB_ORG
+                ld   h, d                      ; DE = BLOB_ORG + BLOB_LEN: zero the raw blob's
+                ld   l, e                      ; tail to $FFFF, so bank 4 == the .sna's
+                ld   (hl), 0                   ; (raw blob + zeros) for the pool checks
                 inc  de
                 ld   bc, BLOB_TAIL - 1
                 ldir
@@ -114,8 +77,8 @@ in_tut:         ld   a, BANK_TEXT
                 ld   hl, ts_choice
                 ld   (es_go + 1), hl           ; SMC target (main.asm enter_select)
                 ret
-BLOB_TAIL       EQU $10000 - BLOB_ORG - BLOB_LEN  ; the zeroed tail (ASSERTed >= 2)
-                ASSERT PF_RAM_LEN == 256 && (BLOB_ORG & $FF) == 0 && BLOB_TAIL >= 2
+BLOB_TAIL       EQU $10000 - BLOB_ORG - BLOB_LEN  ; the zeroed tail (ASSERTed >= 8)
+                ASSERT BLOB_TAIL >= 8
 in_stub:                                       ; = tut_stub.asm as assembled at check_paging (main.asm)
                 DUP  TUT_STUB_LEN, tsi
                 DB   {b ovl_raw_stub + tsi}
@@ -152,7 +115,7 @@ in_rel:         call in_down                   ; wait until no key is down
 
 ;------------------------------------------------------------------------------
 ; in_ft — RECLAIM-D (was boot6.asm boot6_ft, MEM-FT): the static frame_tab into
-; the FRT rows. ftz_zx0 (bank 0, the fixed POOL_START, boot only: was the last
+; the FRT rows. ftz_zx0 (bank 4, the fixed BOOT4_ORG, boot only: was the last
 ; 132 B of the bank-2 image) holds the entries contiguous (FT_LEN B/fid);
 ; unpacked to FRT first, then spread from the LAST fid down to row tail FRT +
 ; fid*16 + FT_IN_ROW, each row's variants := FRT_NONE. Top-down is overlap-safe:
@@ -225,7 +188,7 @@ in_down:        call menu_frame
                 ASSERT (KBD_MATRIX >> 8) == ((KBD_MATRIX + KBD_MATRIX_LEN - 1) >> 8)
 
 ;------------------------------------------------------------------------------
-; in_page — A = GAME_STATE for the page, HL = its ZX0 stream (bank 0): unpack
+; in_page — A = GAME_STATE for the page, HL = its ZX0 stream (bank 4 BOOT4): unpack
 ; the page image to INSTR_DATA, clear the screen (attrs 0: nothing visible),
 ; print the 24 text rows (FONT6, print6 from x = 0 through the TX_DEC row
 ; buffer), draw the icon records, then write the attrs (the reveal).

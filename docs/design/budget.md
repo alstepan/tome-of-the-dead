@@ -275,10 +275,28 @@ All gates pass (worst CAP-gated work 122,868 `lmix4`, worst cast work 110,180, w
 repaint on the deferred `resolve_monsters`, an unreachable state). `ghost5` (5 Ghosts, over ROOM_CAP) regressed on a
 pure render tick (6 flyers moving, now offset by a tick from the hero): reported, not gated.
 Measurements, NOT gated (`lwalk` / `lwalk4` / `rwalk`: 5 bodies walking every tick): `lwalk` (knight + 4 Skeletons
-walking left, all mirrored) work 135,796 / real 151,119 (1 tick over 2 frames); `lwalk4` (real D4: Ogre + 3 Orcs)
+walking left, all mirrored) work 135,796 / real 151,119 (10 ticks over the real gate, 1 by the raw total); `lwalk4` (real D4: Ogre + 3 Orcs)
 147,333 / 160,992 (9 ticks over); `rwalk` (the same facing right, pre-mirror-free) 123,267 / 132,895 (0 over; was
 155.6k real before MON-DEFER). Numbers: `dnum` spawn lags [5, 2, 8, 9, 10, 2, 6, 7, 8, 9, 10] ticks (base [4, 2, 8,
 9, 10, 2, 7, 7, 8, 9, 10]), `dkill` max 5 (base 3). ISR untouched.
+
+**C+TUT0 merge (2026-11-11; memory-map.md "C+TUT0 merge ledger"):** (a) the walk measurements against the C-H walk
+flags (every walk / MOT frame pre-mirrored, MON-DEFER kept), work / real of the worst ordinary tick:
+
+| scenario | walks pre-mirrored | full C (final, user "accept slowdown") | gate |
+|---|---|---|---|
+| `rwalk` (facing right, control) | 123,189 / 133,641 | 123,189 / 132,984 (0 over) | **GATED** (real <= 141,816) |
+| `lwalk` (knight + 4 Skeletons, left) | 125,931 / 135,796 (0 over) | 135,712 / **151,033** (**10 ticks over** the real gate; 1 tick over by the raw tick total 142,762) | measurement, **not gated** (2026-11-11) |
+| `lwalk4` (real D4: Ogre + 3 Orcs, left) | 136,642 / 148,084 (6 over) | 147,251 / **160,910** (**12 ticks over** the real gate; 9 by the raw tick total) | measurement (the base is over too) |
+
+Mirroring costs ~+10k T on a 5-body left-walk tick (52 vs 36 T/B). User decision "full C, accept slowdown" (2026-11-11):
+`skeleton_walk1..4` stay `|MIR` (an experiment pre-mirroring them took `lwalk` back to 125,931 / 135,796 for +1,120 B
+pool at D8 Warrior; reverted). "Over" = ticks above 141,816 on the gate's `real` figure (the `real gate` line; `[info]` lines
+count the raw tick totals instead: 1 / 9). `lwalk` leaves the gate and is reported like `lwalk4`; `rwalk` passes and stays gated.
+`lwalk4` (40-px Ogre / Orcs) was over budget before C2 and stays an ungated measurement, like `lwalk` now. (b) `pend_far` skips the
+far7 `act_pend` round trip on the input tick (`TURN_TICK` 0): ~-0.3k T on every ordinary turn's heaviest tick.
+(c) TUT0's `tut0` route under C2 timing (the monsters' phase one tick later): worst work 113,875 W / 115,663 M (TUT0
+on main: 109.2k / 111.0k), real 126,951 / 125,236: inside CAP / BUDGET, no rebaseline needed.
 
 ## 6. Headroom for Stage 2 content (after Rogue removal, E1 option A, AY reserve)
 
