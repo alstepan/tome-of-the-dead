@@ -623,6 +623,22 @@ def generate(depth, seed, master=0, l2=True, f3=False):
     return bytes(b)
 
 
+def room_cut(desc):
+    """AI-SEEK2 (docs/design/ai_seek2.md §2.1): the room's walker cut col K, the Python twin of the Z80
+    ROOM_CUT that build_room_map writes: the pit col p (narrow or wide), else the mid-block's b - 1,
+    else $FF (no cut). One cut per room (L2 is one feature). seg0(x) = x > K: 0 left / 1 right half.
+    desc: the 16 descriptor bytes (or any object indexed by the RD_* / L2 offsets)."""
+    p = desc[D["RD_PITCOL"]]
+    if p:
+        return p
+    b = desc[D["RD_SPARE"] + 1]                  # L2_MIDB
+    return (b - 1) & 0xFF if b else 0xFF
+
+
+def seg0(k, x):
+    return 1 if x > k else 0
+
+
 def start_x(b):
     """Hero start col (DFS-root room) = its arrival shaft col on every depth (H1-ARRIVAL, user
     2026-11-05: the hero enters mid-ladder at the shaft's top; level_start_x)."""

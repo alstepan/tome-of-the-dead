@@ -419,10 +419,14 @@ RLIST_N         EQU $BA70
 RL_IDX          EQU $BA71
 PL_X            EQU $BA72           ; cache_player: hero box / state for the monster phase
 PL_Y            EQU $BA73
-PL_W            EQU $BA74
-PL_H            EQU $BA75
+PL_H            EQU $BA74           ; (AI-SEEK2: H below W so cache_player stores the box D:E with one LD (nn),DE)
+PL_W            EQU $BA75
 PL_STOREY       EQU $BA76
-PL_LADDER       EQU $BA77           ; 1 = hero mid-ladder
+PL_LADDER       EQU $BA77           ; 1 = hero mid-ladder; AI-SEEK2: 2 = mid-climb on an INTERNAL ladder (every reader tests non-zero)
+ROOM_CUT        EQU $BA7A           ; AI-SEEK2: the room's walker cut col K (game.md §9.2; build_room_map: RD_PITCOL p,
+                                    ;   else L2_MIDB b - 1, else $FF = none): seg0(x) = x > K
+PL_SEG          EQU $BA7B           ; AI-SEEK2: the hero's target segment, pl_seg3: $00 / $01 = storey-0 left / right
+                                    ;   half, $80 = storey 1 (a mid-climb on an internal ladder = the end he is heading to)
 BLIT_CROWS      EQU $BA79           ; aligned blit: char rows left
 SEL_FRT_SAVE    EQU $BA80           ; 2 x FRT_STRIDE: boot FRT rows of the select idles ($BA80..$BA9F)
 MSG_Q           EQU $BA78           ; queued impact message: attacker slot + 1 (0 = none)

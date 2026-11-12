@@ -2,6 +2,11 @@
 
 Status: **APPROVED (user 2026-11-09), scheduled post-C** (docs/plan.md "POST-TUT0 ROADMAP" item 2): open questions take their defaults, except Q5: `seek_col` goes to bank 6 via far6 (bank 2 has ≈ 9–19 B free, shared with C's ≈ 130 B).
 
+**As built (`feat/ai-seek2`):** `seek_col` is in **bank 7** behind far7 (`src/seek7.asm`, 85 B; R6 had 2 B free and cannot grow, bank 2 had 4 B);
+`PL_SEG` is computed by bank-3 `pl_seg3` (called by `resolve_monsters` after `cache_player`, which encodes `PL_LADDER` = 2 for a
+mid-climb on an internal ladder); `ROOM_CUT` is written by `build_room_map`. seek_col returns `L = $FF` for STRANDED (far7 loses A / CF).
+Ledger: `docs/memory-map.md` "AI-SEEK2 ledger". Tests: `tests/ai_seek2.py`.
+
 User request 2026-11-09: monsters must follow the hero smarter; a monster must not climb into a
 part of the room that is cut off from him. This doc is the spec. It does not edit game.md;
 the impacts on other docs are listed in §7.
@@ -115,6 +120,7 @@ Let `M` = the monster's segment (`TMP4` storey, `seg0(x)` on storey 0), `H = PL_
   hero's x (today: it stands at the lip facing him); other storey → `.patrol` (today). The
   only visible change for non-climbers: a hero mid-climb heading away now counts as gone
   (patrol instead of waiting at the foot).
+- **R3 (as built, S4b fix):** the blocked reversal sets `ai_dir` to the end in the hero's destination segment: up iff `H == seg0(x)`, else down. A 1-hop descent (hero in the other storey-0 half) is therefore kept, not reversed (it ping-ponged on a body at the foot).
 - **R3 Climber mid-ladder:** unchanged (continue `E_AIDIR`; blocked and leading away → reverse),
   but "away" is now read from `PL_SEG` bit 7 (destination storey) instead of `PL_STOREY`.
 - **R4 Climber standing, different segment → pick a ladder** among LAD1 / LAD2 only (as today
@@ -163,8 +169,7 @@ Let `M` = the monster's segment (`TMP4` storey, `seg0(x)` on storey 0), `H = PL_
 whole segment map is `K`, and each ladder end's segment is one compare. (If a future feature
 allows two cuts on one storey, `K` becomes 2 bytes and `seg0` a 2-compare; still no table.)
 
-**Per-turn T:** `cache_player` +0.15k once; each climber in another segment ≈ 0.3k (2-entry
-loop, vs `nearest_ladder` ≈ 0.65k today), +0.2k if R6/far6 hosts `seek_col`. Same-segment
+**Per-turn T:** `cache_player` +0.15k once; each climber in another segment **measured ~1.37k worst case as built (bank 7, contended, far7 ~0.5k included; the 1-hop two-pass case; U1 bound 1.5k)**, vs `nearest_ladder` ≈ 0.65k (the original estimate 0.3k + 0.2k far6 assumed uncontended code). Same-segment
 walkers +≈ 40 T (the `M` computation). Worst case 8 climbers ≈ +1.5k T per turn, far under
 the 126k tick cap; nothing per frame.
 
@@ -192,7 +197,7 @@ asserts the outcome within a turn bound, no body overlap at any turn end, and x-
 | S8 | no cut, `c1 6, c2 22` | hero climbing LAD1 up from storey 1 (turn 3 of 9); Skeleton storey 0 x 20 | does NOT enter LAD2; walks to LAD1 lip, off the climb path every turn; attacks the turn he stands (F4) |
 | S9 | no cut | hero climbing LAD1 down; climber storey 1 | waits at the foot, off the path (R1) |
 | S10 | narrow pit, 2 ladders | hero jumps the pit 6 times; 2 climbers | no softlock, no overlap, every move legal |
-| U1 | stub | `seek_col` called with poked `ROOM_CUT` / `PL_SEG` / x over a 12-row (M, H, ladders) table | col / stranded as §2.3; T ≤ 0.5k (bank 2) / 0.7k (R6) |
+| U1 | stub | `seek_col` called with poked `ROOM_CUT` / `PL_SEG` / x over a 12-row (M, H, ladders) table | col / stranded as §2.3; T ≤ 1.5k as built (bank 7, far7 incl.; measured ~1.37k) |
 | U2 | stub | `cache_player` with the hero mid-ladder up / down / on an exit shaft | `PL_SEG` as §2.2 |
 
 **Levelcheck / tools:** `tools/levelgen.py` gets `room_cut(desc)` (Python twin of K); levelcheck
