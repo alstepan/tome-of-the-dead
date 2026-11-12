@@ -1745,22 +1745,28 @@ def main():
             p.z.cmd("set-memory-zone -1")
             p.z.cmd("disable-breakpoints")
             p.z.cmd("exit-cpu-step")
-            p.z.cmd("smartload " + tap)
-            t0 = time.monotonic()
-            gs = None
-            while time.monotonic() - t0 < 60:            # fast tape traps: ~1 s
-                time.sleep(0.25)
-                gs = p.rb("GAME_STATE")
-                if gs in BOOT_WAITS:                     # BOOT-ANYKEY / INSTR: picture + 3 help pages wait
-                    p.wb("INPUT_SRC", 1)                 # for a key; inject one (the tape path has
-                    p.release()                          # the host keyboard otherwise)
-                    time.sleep(0.3)
-                    p.hold("ENTER")
-                    time.sleep(0.3)
-                    p.release()
-                    continue
+            for tape_try in (1, 2):                      # B9: watchdog - a tape load that stalls
+                p.z.cmd("smartload " + tap)              # under host load is re-issued once
+                t0 = time.monotonic()
+                gs = None
+                while time.monotonic() - t0 < 60:        # fast tape traps: ~1 s
+                    time.sleep(0.25)
+                    gs = p.rb("GAME_STATE")
+                    if gs in BOOT_WAITS:                     # BOOT-ANYKEY / INSTR: picture + 3 help pages wait
+                        p.wb("INPUT_SRC", 1)                 # for a key; inject one (the tape path has
+                        p.release()                          # the host keyboard otherwise)
+                        time.sleep(0.3)
+                        p.hold("ENTER")
+                        time.sleep(0.3)
+                        p.release()
+                        continue
+                    if gs == GS_SELECT:
+                        break
                 if gs == GS_SELECT:
                     break
+                print(f"[WARN] 50 tape load try {tape_try} stalled (GAME_STATE {gs}) after "
+                      f"{time.monotonic() - t0:.0f}s", flush=True)
+                h.note_retry("tape", f"#50 try {tape_try} stalled")   # WZ_STRICT=1: a failure
             print(f"[info] 50 tape: GAME_STATE {gs} after {time.monotonic() - t0:.1f}s", flush=True)
             p.z.cmd("enter-cpu-step")
             p.load_breakpoints()

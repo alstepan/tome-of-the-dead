@@ -157,6 +157,8 @@ def main():
             for k in range(1, 16):
                 if p.ent(k)["ROOM"] == room:
                     p.set_ent(k, ROOM=NOWHERE)
+            for _ in range(2):                          # H1-ARRIVAL: the hero starts mid-ladder at the shaft top;
+                p.turn("J")                             # 2 ladder turns stand him on storey 0 (a cast needs the floor)
             p.wb("ST1_KILLER", 0)
             return L.ok, room
 

@@ -13,6 +13,7 @@ ZRCP quirk worth remembering (this harness only READS, but pokers beware):
   - `write-memory <addr> <b> [b ...]`  addr AND every byte value must be DECIMAL,
                                        space-separated, e.g. `write-memory 22528 71`.
 """
+import atexit
 import hashlib
 import os
 import signal
@@ -28,11 +29,88 @@ ZESARUX = "/Applications/zesarux.app/Contents/MacOS/zesarux"
 # emulator (launch() pkills whatever holds its port).
 DEFAULT_PORT = int(os.environ.get("ZRCP_PORT", "10000"))
 LAUNCH_ATTEMPTS = 3
+# B9: seconds to wait for the ZRCP port after spawning (per attempt; Zrcp polls at 0.2 s).
+LAUNCH_TIMEOUT = float(os.environ.get("WZ_LAUNCH_TIMEOUT", "10"))
+# B9: optional wall-clock cap for the whole suite process (0/unset = none). On expiry
+# the child emulators are killed and the suite exits 124 with a message, never hangs.
+SUITE_TIMEOUT = float(os.environ.get("WZ_SUITE_TIMEOUT", "0"))
 REPO =os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Full screen frame = bitmap (6144) + attributes (768). The golden unit.
 SCREEN_ADDR = 0x4000
 SCREEN_FRAME_LEN = 6912
+
+# --- B9: guaranteed teardown ------------------------------------------------
+# Every emulator we spawn is its own session/process group so one killpg takes it
+# (and anything it forks) down. atexit + signal handlers make sure a killed or
+# timed-out suite leaves no orphan ZEsarUX behind.
+_children = set()
+# Retry counters (B9), shown in the exit summary. WZ_STRICT=1 turns any retry into a
+# suite failure so a flaky infra path cannot silently pass.
+STRICT = os.environ.get("WZ_STRICT") == "1"
+RETRIES = {"launch": 0, "tape": 0}
+_hooks_installed = False
+
+
+def _kill_proc(proc):
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(proc.pid, sig)
+        except (ProcessLookupError, PermissionError):
+            return
+        try:
+            proc.wait(timeout=3 if sig == signal.SIGTERM else 5)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def _kill_all():
+    for proc in list(_children):
+        _kill_proc(proc)
+        _children.discard(proc)
+
+
+def _retry_summary():
+    if any(RETRIES.values()):
+        print(f"[harness] infra retries: launch {RETRIES['launch']}, tape-load {RETRIES['tape']}"
+              + (" (WZ_STRICT=1: counted as failures)" if STRICT else ""), flush=True)
+
+
+def _on_term(signum, _frame):
+    _kill_all()
+    if signum == signal.SIGINT:
+        # Ctrl-C keeps Python's normal semantics: callers' `except KeyboardInterrupt`
+        # / finally blocks still run (children are already dead by now).
+        raise KeyboardInterrupt
+    sys.exit(128 + signum)
+
+
+def _on_alarm(_signum, _frame):
+    # WZ_SUITE_TIMEOUT uses the process-wide SIGALRM/ITIMER_REAL: suites must NOT use
+    # signal.alarm/setitimer themselves. os._exit skips finally blocks, atexit and
+    # buffered output, so flush both streams first and kill children explicitly.
+    print(f"[harness] FAIL: suite wall-clock limit WZ_SUITE_TIMEOUT={SUITE_TIMEOUT:g}s exceeded; "
+          "killing emulator and aborting", file=sys.stderr, flush=True)
+    _kill_all()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(124)
+
+
+def _install_hooks():
+    global _hooks_installed
+    if _hooks_installed:
+        return
+    _hooks_installed = True
+    atexit.register(_kill_all)
+    atexit.register(_retry_summary)
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        if signal.getsignal(sig) in (signal.SIG_DFL, signal.default_int_handler):
+            signal.signal(sig, _on_term)
+    if SUITE_TIMEOUT > 0:
+        signal.signal(signal.SIGALRM, _on_alarm)
+        signal.setitimer(signal.ITIMER_REAL, SUITE_TIMEOUT)
 
 
 class Harness:
@@ -51,28 +129,40 @@ class Harness:
         uses --emulatorspeed / --vo null); settle-based suites keep defaults."""
         # B9: a launch that never opens the ZRCP port (Zrcp gives up after ~10 s)
         # is killed and retried instead of hanging/failing the whole suite.
+        _install_hooks()
         for attempt in range(1, LAUNCH_ATTEMPTS + 1):
             t0 = time.monotonic()
             # Kill a stray emulator holding our port so runs are repeatable.
-            subprocess.run(["pkill", "-f", f"remoteprotocol-port {self.port}"],
+            # anchored: port 10606 must not match 106060 / a prefix of another port
+            subprocess.run(["pkill", "-f", rf"remoteprotocol-port {self.port}( |$)"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(0.5)
             self.proc = subprocess.Popen(
                 [ZESARUX, "--machine", "128k",
                  "--enable-remoteprotocol", "--remoteprotocol-port", str(self.port),
                  "--nosplash", "--noconfigfile", *extra_args],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True)
+            _children.add(self.proc)
             try:
-                self.z = Zrcp(port=self.port)   # retries the connect until the port is up
-            except ConnectionError as e:
+                # retries the connect until the port is up, bounded by LAUNCH_TIMEOUT
+                self.z = Zrcp(port=self.port, connect_retries=max(1, int(LAUNCH_TIMEOUT / 0.2)))
+            except (ConnectionError, OSError) as e:
                 print(f"[harness] launch attempt {attempt} failed after "
                       f"{time.monotonic() - t0:.1f}s: {e}", file=sys.stderr, flush=True)
                 self.close()
+                self.note_retry("launch", f"attempt {attempt}")
                 if attempt == LAUNCH_ATTEMPTS:
                     raise
                 continue
             print(f"[harness] launch {time.monotonic() - t0:.1f}s (attempt {attempt})", flush=True)
             return self
+
+    def note_retry(self, kind, detail=""):
+        """Count an infra retry (kind: 'launch' | 'tape'); a failure under WZ_STRICT=1."""
+        RETRIES[kind] += 1
+        if STRICT:
+            self.failures.append(f"infra retry: {kind} {detail}".strip())
 
     def load(self, sna_path, settle=0.6):
         """smartload an .sna; it auto-runs from $8000. Settle so boot completes."""
@@ -87,11 +177,8 @@ class Harness:
         finally:
             self.z = None
             if self.proc:
-                self.proc.send_signal(signal.SIGTERM)
-                try:
-                    self.proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    self.proc.kill()
+                _kill_proc(self.proc)           # TERM then KILL on the whole group
+                _children.discard(self.proc)
                 self.proc = None
             print(f"[harness] close {time.monotonic() - t0:.1f}s", flush=True)
 
