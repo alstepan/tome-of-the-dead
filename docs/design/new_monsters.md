@@ -11,6 +11,9 @@ joint bank-2 plan (C ≈ 130 + AI-SEEK2 ≈ 26 + frames 256 B vs ≈ 9–19 B fr
 first task. Batch runs **after TUT0 and after
 option C** (`mirror_c_split.md`); §2.3 explains why C is a hard prerequisite even though every
 placement fits the pool on its own.
+**Amendment 2026-11-12 (§12, §5): APPROVED by the user 2026-11-12; pool numbers still to be confirmed by the
+engineer's pool measurement.** More kinds per level with depth (8-slot `LP_KINDS`), funded by
+returning 3 KB of `B0_FREE` to the pool. It supersedes amendment (1) and Plans X/Y.
 User-fixed: these three kinds, for variety; pit fallback scope (§8). No feature cuts: every
 existing kind keeps at least two depths, or one depth plus its boss role.
 
@@ -167,42 +170,28 @@ thaws the hero, but the Imp never shares a depth with the Wraith (alias), so the
 
 ---
 
-## 5. Placement (≤ 4 kinds + boss; replacements, not joins)
+## 5. Placement (2026-11-12: 4–6 kinds + boss, 8 slots, joins only; rule in §12)
 
-A 5th kind is impossible (`LP_KINDS[rnd & 3]`, §9.4), so every new entry replaces one.
+Plans X/Y and the "≤ 4 kinds, replace one" rule are retired: nothing is replaced. Slots 0..n−1 =
+the distinct kinds **in fallback order**. Slots n..7 = duplicates, which set the weight (draw = count/8).
+Same list for both heroes. `LP_BOSS` is unchanged per depth. **Bold** = joins or returns.
 
-**Plan X (recommended)** — each new kind gets 2 depths inside its brief range:
-
-| Depth | Today | Plan X `LP_KINDS` (order = fallback order) | Replaced kind keeps |
+| D | n | `LP_KINDS[0..7]` | Count of 8 (in slot-0.. order) |
 |---|---|---|---|
-| D4 | Orc, Rat, Spider, Archer | Orc, Rat, **Fire Imp**, Archer | Spider: D2, D5 (Widow: D2, D5). Rat stays (the Brood Rat tier 3 exists only on D4) |
-| D5 | Mummy, Skeleton, Archer, Spider | Mummy, Spider, **Gargoyle**, **Frost Wraith** | Skeleton: D3, D8 (Knight tier 3: D8). **Archer: D4 only** (Sniper: D4) |
-| D6 | Vampire, Ghost, Necro, Orc | Vampire, **Gargoyle**, **Fire Imp**, Orc | Ghost: D3, D7, D8. Necro: D7, D8 + the D6 boss (frames stay resident) |
-| D7 | Orc, Necro, Ghost, Necro | Orc, Necro, Ghost, **Frost Wraith** | the duplicate Necro entry only (Necro drawn 1/4, was 2/4) |
-| D1–D3, D8 | — | unchanged | — |
+| 1 | 4 | Rat, Bat, Slime, Goblin, Rat, Bat, Slime, Goblin | 2 2 2 2 (= today) |
+| 2 | 4 | Goblin, Spider, Bat, Rat, Goblin, Spider, Bat, Rat | 2 2 2 2 (= today) |
+| 3 | 5 | Skeleton, Vampire, Ghost, Bat, **Goblin**, Skeleton, Vampire, Ghost | 2 2 2 1 1 |
+| 4 | 5 | Orc, Rat, Spider, Archer, **Fire Imp**, Orc, Archer, Fire Imp | 2 1 1 2 2 |
+| 5 | 6 | Mummy, Spider, Skeleton, Archer, **Gargoyle**, **Frost Wraith**, Mummy, Archer | 2 1 1 2 1 1 |
+| 6 | 6 | Vampire, **Gargoyle**, **Fire Imp**, Ghost, Necro, Orc, Vampire, Orc | 2 1 1 1 1 2 |
+| 7 | 6 | Orc, Ghost, Necro, **Frost Wraith**, **Mummy**, **Spider**, Orc, Necro | 2 1 2 1 1 1 |
+| 8 | 6 | Necro, Skeleton, Ghost, Vampire, **Orc**, **Frost Wraith**, Necro, Skeleton | 2 2 1 1 1 1 |
 
-- Fallback fillers (§9.4.3, ascending index, minW kind): D5 Spider (minW 2, `SIGMA_INIT` 8),
-  D6 **Gargoyle before Imp** (3-unit rooms fill with perched statues, not triple ember
-  spitters), D7 Ghost before Wraith (as today).
-- `SIGMA_INIT` is unchanged everywhere: minW is D4 2, D5 2, D6 3 (was 3), D7 3.
-
-**Pool, Warrior** (estimates; `tools/pool_mirror.py` (C-T1) / `zx0_pool` confirm; slack = 31,712 − LEVEL_NEED):
-
-| Depth | Slack today | − removed | + added (today's classes) | Slack after | Needs C for pool? |
-|---|---|---|---|---|---|
-| D4 | 3,072 | Spider ≈ 3.0 KB (incl. climb pair; its spark extra stays for the Imp) | Imp 1,088 + dust 96 | **≈ 4.9 KB** | no |
-| D5 | 8,576 | Skeleton + Archer family ≈ 9 KB | Gargoyle 1,472 + Wraith 1,280 + dust 96 | **≈ 14 KB** | no |
-| D6 | 2,976 | Ghost ≈ 2.4–2.9 KB (Necro 0: boss) | Gargoyle 1,472 + Imp 1,088 + dust 96 + spark 64 | **≈ 2.4–2.9 KB** | no (tightest; C adds ≈ 0.4 KB margin) |
-| D7 | 3,968 | 0 | Wraith 1,280 + dust 96 | **≈ 2.6 KB** | no |
-| D8 | 384 | — | — | 384 | — (but §2.3's −256 B `POOL_CAP` → **needs C**) |
-
-The Mage has ≥ 3.7 KB more slack on every level. **Any future D8 placement needs C.** So would a
-4th/5th new kind on D6/D7.
-
-**Plan Y (alternative, keeps the Archer on D5 and the arrow economy):** D4 Orc, Rat, **Gargoyle**,
-Archer. D5 Mummy, **Frost Wraith** (for Skeleton), Archer, Spider. D6 Vampire, **Gargoyle** (for Ghost),
-**Fire Imp** (for Necro), Orc. D7 as X. Cost: the **Fire Imp gets D6 only**. The alias still holds
-(Imp D6, Wraith D5/D7). Choose Y if the Warrior's D5 arrow supply proves critical in the sim.
+- **Alias holds:** Imp D4/D6, Wraith D5/D7/D8 (disjoint, levelcheck ASSERT). Gargoyle D5/D6.
+- **Fallback fillers** (§9.4.3, minW kind, ascending index): D3 Bat, D4 Rat, D5 Spider, D6
+  **Gargoyle before Imp/Ghost** (3-unit rooms fill with statues, not ember spitters), D7 **Spider**
+  (was Ghost), D8 Ghost. minW changes only on D7 (3 → 2): the engineer re-checks D7 `SIGMA_INIT`.
+- **Why these returns** (§12.1): each deep list keeps melee + ranged + flyer + climber. Pool per depth: §12.3.
 
 ---
 
@@ -393,3 +382,60 @@ the track-limit read and use the existing "4th waits" FX queue (saves ≈ 6 B).
 - **tools**: `levelgen.py` (KROWS by depth, LP_TAB), `ranged_model.py` ROWS, `balance_sim.py`.
 - **plan.md** (manager): the task split. FX-U → A-1 → frames/art → kinds data → G-1/F-1 → P-1 → tests/sim.
   After TUT0 and C.
+
+---
+
+## 12. Kinds-by-depth curve (user 2026-11-12)
+
+**Status: APPROVED (user 2026-11-12). Numbers to be confirmed by the engineer's pool measurement (X = 3,072 B, else 4,096 B).**
+Curve: D1–D2 4, D3–D4 5, D5–D8 6 + boss. Deep lists reuse earlier kinds, so no new ids (§3: `K_MAX` 32).
+Larger depths (`larger_depths.md`, 3×4 grid, monsters ×1.35) lands **after** this. It changes counts, not kinds or pool.
+
+**12.1 Lists:** §5 table. Returns: **Goblin D3** (a light W3 body between Skeleton/Vampire. Its Slinger tier 2 can
+roll from D3, the first ranged threat before the D4 Archer). **Mummy D7** (was D5-only: a heavy melee wall
+next to Necro bolts. The climb pair is already pooled on D7). **Spider D7** (cheap W2 poisoner and climber,
+status pressure that does not stack with FEAR). **Orc D8** (a brute with a Berserker tier. It replaces
+the removed second Necro weight as the melee anchor). The Archer stays off D7/D8 (3F-T13bc H1). Every depth
+from D4 on has melee, ranged (Archer / Imp / Necro), flyer and climber.
+
+**12.2 Selection:** `LP_KINDS` grows **4 → 8 bytes**, pick `LP_KINDS[rnd & 7]`. Use duplicates for weights,
+not `rnd mod n` (no divide, same 1-step RNG draw, so the seeded stream stays 1 draw per pick). Every
+LP_KINDS consumer (pick, `pool_list`, the minW fallback scan, trickle/ALARM/respawn picks, D0 setup)
+loops 8 instead of 4. `pool_list` already dedups per unit, so duplicates cost 0 pool. Cost: code ≈ 0–10 B (masks
+and loop counts), `LP_TAB` +32 B (8 depths × 4), level header +4 B (`LP_BOSS` and the later header bytes move: ASSERT
+users such as `tests/zx0_pool.py` read 9 B, not 5). Rejected: per-depth n + `rnd mod n` (≈ 15–20 B, uneven odds unless rejection-sampled).
+
+**12.3 Pool and funding.** Full-C cost estimates: Gargoyle ≈ 830, Imp ≈ 540, Wraith ≈ 640, dust 96 (MOT
+frames halved vs §1). Returned old kinds ≈ Goblin 0.7, Spider 0.9 (+64 W spark), Mummy / Orc 1.5 KB each. Climb pair already
+pooled where added. **X = 3,072 B:** `POOL_START` $FC3E → **$F03E**, `POOL_CAP` 19,394 → **22,466**,
+`B0_FREE` 11,958 → **8,886** (≈ 7.3–7.6 KB after item info 0.45 + level-state 0.1–0.3 + NEW-MON3 code/FRT ≈ 0.5). The engineer nudges ±2 B off any
+bank 0→4 straddle cliff. The D0 pool only gains room.
+
+| D | W today → new (est.) | M new (est.) | W slack @ 22,466 |
+|---|---|---|---|
+| 1 / 2 | 11,826 / 11,842 (=) | 10,258 / 10,242 | ≥ 10.6 K |
+| 3 | 14,354 → 15,054 | 13,454 | 7.4 K |
+| 4 | 15,298 → 15,934 | 14,366 | 6.5 K |
+| 5 | 12,546 → 14,112 | 12,544 | 8.4 K |
+| 6 | 14,978 → 16,508 | 14,844 | 6.0 K |
+| 7 | 14,482 → 17,682 | 16,082 | 4.8 K |
+| 8 | 16,418 → **18,654** | 17,118 | **3.8 K (binding)** |
+
+At today's cap D8 W would have 740 B (< 1 KB), so funding is required. Even with a +30 % estimation error the binding slack stays ≥ 3 KB.
+**Escalation:** if the measured binding slack is < 1,024, use X = 4,096 (B0_FREE 7,862). Never go below B0_FREE 6 KB.
+
+**12.4 Balance (vs BAL-1 FINAL W 41.4 / M 43.4).** D3 is a bit easier (Goblin XP). D4–D6 change as §7, but they are
+joins, so the D5 Archer arrows and the D6 Ghost stay (D6 is less Mage-friendly than Plan X). **D7/D8 are harder** (Mummy and Orc heavy
+bodies, Wraith FROZEN next to Necro FEAR). Expect both to drop 2–5 points, the Warrior more. Gate: **both ≥ 35 % and |W − M| ≤ 3**
+(this supersedes §7's ≤ 5). `tools/balance_sim.py` re-run: 8-slot `LP_TAB` with the weights, row 31 by depth (Wraith D8 too), the
+new returns (Goblin D3 tier odds, Mummy/Spider D7, Orc D8), the Imp/Perch/Wraith models of §7. Knobs in order: slot weights (data
+only: drop the duplicate Necro/Orc on D7/D8 first), Wraith freeze ⅓ → ¼, `TIER3_MIN_DEPTH` odds on D7/D8, ember cooldown 2 → 3.
+Re-run again after larger depths (×1.35).
+
+**12.5 Interactions.** Spawn/respawn/trickle/ALARM draw through the same 8-slot pick, so their mix follows
+automatically. FRESH quotas are unchanged. **ROOM-MEM**: records keep the kind row (`LEK_KIND_MASK`, 5 bits), so there is no format
+change. Only the header grows by 4 B (count it in the larger-depths level-state budget). **TUT0**: D0 is untouched, but `tut_d0`
+must fill all 8 slots (Goblin ×8) or the pick reads stale bytes. Add a `tests/tut0.py` check. **Cards**: the level and end cards
+show no per-depth kind list. KILLED-BY strings per kind already exist. The engineer greps `instructions_*.md` for any
+bestiary-by-depth text. Tests: `tests/lp.py`, `roommem.py`, `trickle.py`, levelcheck (alias disjoint, D7 `SIGMA_INIT`, waits ≤ 15 %),
+`zx0_pool.py` LEVEL_NEED, `tools/levelgen.py` LP_TAB mirror.
