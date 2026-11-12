@@ -72,18 +72,34 @@ expect("block 5 = game CODE data", blocks[5][0] == 0xFF and len(blocks[5]) - 2 =
 rest = blocks[6:]
 expect("%d headerless blocks follow (TAPE_HEADLESS_N)" % len(rest),
        len(rest) == sym["TAPE_HEADLESS_N"] and all(b[0] == 0xFF for b in rest))
-# INSTR-BUILD / C-T8 / C+TUT0: 6th headerless = the bank-0 text block + the b0 cold code + its
-# reserve pad, ending at B0_FREE_START (the carve below POOL_START is NOT on tape, nor is anything
-# above it); 7th = the bank-4 BOOT4 block: frame_tab (RECLAIM-D, first, at BOOT4_ORG), HOW TO PLAY
+# INSTR-BUILD / C-T8 / C+TUT0 / B0CODE: 6th headerless = the bank-0 text block + the b0 cold code + its
+# reserve pad up to B0_FREE_START, then the used part of the carve, B0_CODE2 (b0c2_code = B0_FREE_START
+# .. b0c2_end <= POOL_START); the rest of the carve and anything above POOL_START are NOT on tape.
+# 7th = the bank-4 BOOT4 block: frame_tab (RECLAIM-D, first, at BOOT4_ORG), HOW TO PLAY
 # pages 1 and 2, the overlay code, then blob_zx0 + its 2-byte length trailer (in_tut reads it from
 # the block's end via tape_tab TT_BOOT4_REC), ending <= BLOB_ORG (forward unpack, no overlap)
 txt = rest[5] if len(rest) > 5 else b""
 b4 = rest[6] if len(rest) > 6 else b""
-expect("headerless 6 = text + b0 code + pad (%d B = %d + %d), ends at the carve" % (
-       len(txt) - 2, sym["TEXT_LEN"], sym["TEXT_TAPE_LEN"] - sym["TEXT_LEN"]),
-       len(txt) - 2 == sym["TEXT_TAPE_LEN"] and sym["TEXT_ADDR"] + sym["TEXT_TAPE_LEN"] == sym["B0_FREE_START"]
-       and sym["B0_FREE_START"] + sym["B0_FREE_RES"] == sym["POOL_START"]
-       and sym["TEXT_ADDR"] + sym["TEXT_TAPE_LEN"] == sym["text_tape_end"])
+expect("headerless 6 = text + b0 code + pad + B0_CODE2 (%d B = %d + %d + %d), ends at b0c2_end (<= POOL_START)" % (
+       len(txt) - 2, sym["TEXT_LEN"], sym["B0_FREE_START"] - sym["TEXT_ADDR"] - sym["TEXT_LEN"], sym["B0C2_LEN"]),
+       len(txt) - 2 == sym["TEXT_TAPE_LEN"]
+       and sym["b0c2_code"] == sym["B0_CODE2"] == sym["B0_FREE_START"]
+       and sym["TEXT_ADDR"] + sym["TEXT_TAPE_LEN"] == sym["b0c2_end"] == sym["text_tape_end"]
+       and sym["b0c2_end"] - sym["b0c2_code"] == sym["B0C2_LEN"]
+       and sym["b0c2_end"] + sym["B0C2_FREE"] == sym["POOL_START"]
+       and sym["B0_FREE_START"] + sym["B0_FREE_RES"] == sym["POOL_START"])
+# B0CODE: the B0_CODE2 bytes on tape are the assembled ones (.sna bank 0), i.e. the loader puts the
+# region's code where FARB0 enters it
+sna = os.path.join(BUILD, "tome-of-the-dead.sna")
+if os.path.exists(sna):
+    s = open(sna, "rb").read()
+    # 128K .sna: 27-B header + 48K (banks 5, 2, paged) + 4 B + the other banks in order 0,1,3,4,6,7
+    # minus the paged one; bank 0 is first unless it was paged at save time (then it sits in the 48K part)
+    paged = s[27 + 49152 + 2] & 7
+    off = 27 + 32768 if paged == 0 else 27 + 49152 + 4
+    o = sym["b0c2_code"] - sym["TEXT_ADDR"]
+    expect("B0_CODE2 tape bytes == .sna bank 0 (%d B)" % sym["B0C2_LEN"],
+           txt[1 + o:1 + o + sym["B0C2_LEN"]] == s[off + (sym["b0c2_code"] - 0xC000):off + (sym["b0c2_code"] - 0xC000) + sym["B0C2_LEN"]])
 expect("headerless 7 = BOOT4: frame_tab + INSTR streams + blob_zx0 + trailer at BOOT4_ORG (%d B)" % (len(b4) - 2),
        len(b4) - 2 == sym["BOOT4_TAPE_LEN"] and sym["ftz_zx0"] == sym["BOOT4_ORG"] == sym["INSTR_FT_ZX0"]
        and sym["ftz_zx0"] < sym["ftz_zx0_end"] == sym["instr_p1_zx0"]

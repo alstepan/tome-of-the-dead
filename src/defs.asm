@@ -190,7 +190,7 @@ BANK_BLOB       EQU BANK_POOL1      ; 4
 BANK_BOOT4      EQU BANK_POOL1      ; 4 (= BANK_BLOB, ASSERTed)
 BOOT4_ORG       EQU BANK_WINDOW + $100
 INSTR_FT_ZX0    EQU BOOT4_ORG       ; the frame_tab stream, FIRST in BOOT4 (RECLAIM-D; ASSERTed)
-BLOB_ORG        EQU $E1B4           ; C+TUT0 (user: move the blob up into its spare space): raw blob 7,748 B + 8 B tail
+BLOB_ORG        EQU $E1B2           ; B0CODE: -2 (tut_d0's FARB0 new_game, +2 B blob); C+TUT0 (user: move the blob up into its spare space, $E1B4): raw blob 7,750 B + 8 B tail
                                     ; to $FFFF (was $E000, TUT0-F2 $E800). No alignment is assumed (ASSERTed by BLOB_LEN <= BLOB_RES
                                     ; and BLOB_TAIL >= 8). Frees 436 B below it for the pool (POOL_START / B0_FREE grow).
 BLOB_RES        EQU $10000 - BLOB_ORG ; BLOB_ORG..$FFFF = 7,756: the raw image (no in-place delta since BOOT4)
@@ -244,12 +244,11 @@ B0_CODE_RES     EQU 1064                       ; C2 (2026-11-10): +150 = mus_pic
 B0_KIT_RES      EQU 0                          ; D3-11: 0 (was 80 x DEBUG_KIT): the slack step's 704-B code reserve holds kit0.asm too
 ; C-T8 (option C carve, user 2026-11-10): the bank-0 pages the blit-time mirror freed in the pool
 ; (the D8 Warrior need 31,328 -> 24,542) are a RESERVED bank-0 region B0_FREE_START..B0_FREE_END-1
-; right above the text + cold-code reserve, below the (raised) POOL_START. Empty today: nothing is
-; assembled there and it is NOT on tape (the text block ends at B0_FREE_START, the HOW TO PLAY
-; streams are their own block at POOL_START) -> 0 tape bytes until used. For future bank-0 cold
-; code / data (FARB0 rules = b0_code's): AI-SEEK2, the new monsters' sources (+256 B frame table),
-; the DECOR2 planner, a resident HOW TO PLAY. To use it, move bytes from B0_FREE_RES to
-; B0_CODE_RES / TEXT_RES (POOL_START, so the pool, unchanged) and grow the text tape block.
+; right above the text + cold-code reserve, below the (raised) POOL_START. B0CODE (2026-11-12):
+; its used part is the assemble-time region B0_CODE2 (b0c2_code..b0c2_end, main.asm), on the text
+; tape block (which now ends at b0c2_end: tape grows only by the bytes used); the rest is neither
+; assembled nor on tape. Permanent code / data (FARB0 rules = b0_code's; memory-map "B0CODE
+; ledger"): append files to B0_CODE2 — no reserve to move, POOL_START (so the pool) unchanged.
 ; Sized for >= ~1 KB pool slack at the binding level (POOL_NEED incl. POOL_SIM_MARGIN and the
 ; simulated straddle waste; the slack is quantised by the bank-0 -> 4 straddle: memory-map ledger).
 B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CCF2 (= POOL_START before C-T8)
@@ -262,6 +261,7 @@ B0_FREE_RES     EQU 11958                      ; C2 (full C, 2026-11-10): the ca
                                                ; 6910 -> D8 Warrior slack 1,184; 6912 -> 864 (< 1 KB). (C-T8: 5790 -> 1,264,
                                                ; 5792 -> 944.)
 B0_FREE_END     EQU B0_FREE_START + B0_FREE_RES
+B0_CODE2        EQU B0_FREE_START              ; B0CODE: the region's start (b0c2_code, ASSERTed in main.asm)
 POOL_START      EQU B0_FREE_END                ; $FC3E, C+TUT0 ($F826 C2, $E7F0 C-H, $E390 C-T8; was $CCF2, C-T6; $CC20 before): alloc_reset's first bank-0 pool byte
                 ASSERT (B0_FREE_RES & 1) == 0
     MACRO FARB0 target                  ; call a bank-0 cold-code routine (8 B; A / DE / IX pass in;

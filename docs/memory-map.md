@@ -21,7 +21,7 @@
 
 | Bank | Planned use                       | Status   |
 |------|-----------------------------------|----------|
-| 0    | **D3-TX: the text block** + b0 cold code (`TEXT_ADDR` `$C000..B0_FREE_START`, own tape block), **C-T8: the reserved carve `B0_FREE_START..B0_FREE_END-1` = `$CD88..$FC3D` (11,958 B, empty, not on tape; C+TUT0 grow, was 10,910 C2 / 6,910 C-H / 5,790 C-T8)**, then the pre-shift sprite pool from **`POOL_START` `$FC3E`** (C+TUT0; C2 `$F826`; C-H `$E7F0`; C-T8 `$E390`; C-T6 `$CCF2`; "C-T8 / C-H / C2 ledgers") | PROTO    |
+| 0    | **D3-TX: the text block** + b0 cold code (`TEXT_ADDR` `$C000..B0_FREE_START`, own tape block), **C-T8: the reserved carve `B0_FREE_START..B0_FREE_END-1` = `$CD88..$FC3D` (11,958 B; C+TUT0 grow, was 10,910 C2 / 6,910 C-H / 5,790 C-T8); B0CODE: its used part `B0_CODE2` `b0c2_code..b0c2_end` (131 B, `new_game`) rides on the text tape block, the rest (11,827 B) is not on tape ("B0CODE ledger")**, then the pre-shift sprite pool from **`POOL_START` `$FC3E`** (C+TUT0; C2 `$F826`; C-H `$E7F0`; C-T8 `$E390`; C-T6 `$CCF2`; "C-T8 / C-H / C2 ledgers") | PROTO    |
 | 1    | PROTO: sprite sources (virtual $8000-$BFFF), ZX0-packed since A5: 6,947 of 16,384 B (A6); + `vdata` (D3-TX: the text block moved to bank 0; **3E-T1: its boot-only part moved to the bank-6 boot block**); **C3-0: `ui1_code` (3C UI code, via `far1`)** after it; **3E-T1: then the packed overlay streams `ovl_blobs`** (**R6: moved to the R6 region**; bank 1 now ends at `bank1_end`, 1,300 B free) | PROTO |
 | 2    | (also $8000 fixed)                | system   |
 | 3    | PROTO: sprite sources tail (virtual $C000-; empty since A5) + **cold code** (select, transition scrolls, follower selection; new game → bank 7 since MEM-SND); **`$F048-$FFFF` AY player slot** (A8; **D3-11: 4,024 B from `$F048`, 4,023 B used, 1 B free; bank-3 cold code +8 B**; **RECLAIM-C (a): 4,032 B from `$F040`, 4,023 B used `$F040..$FFF6`, 9 B free; bank-3 cold code +48 B**; **M0 (L3): 4,080 B from `$F010`, 4,023 B used `$F010..$FFC6`, 57 B free; bank-3 cold code `$C000..$EFC7`, 72 B free**; **MEM-RECLAIM w3: 4,144 B from `$EFD0` (was `$EFA0`), 121 B free**; **3E lever (c): 4,192 B** from `$EFA0` (+512 B to bank-3 cold code); MEM-SND: 4,704 B from `$EDA0`, was 4 KB at `$F000` since D3-0 (user 2026-10-06), 7 KB from `$E400` before; called by the IM 2 ISR) | PROTO |
@@ -6619,3 +6619,44 @@ slack) to **bank 7 behind far7** (bank 2 had 4 B): the 70 B bank-7 free plus a t
 
 STRANDED (`seek_col` L = `$FF`, `ai_monster .seek` -> `inc a / jr z, .same`) is the hook for the pit-stuck ranged fallback
 (`new_monsters.md`): call it there. Tests: `tests/ai_seek2.py` (K, S1-S10, U1, U2), `tools/levelcheck.py` (cut invariants).
+
+## B0CODE ledger (`feat/b0-code`, on `feat/ai-seek2` c25f18d, 2026-11-12)
+
+`B0_FREE` (`$CD88..$FC3D`, 11,958 B) becomes usable for permanent code and data: its used part is the assemble-time
+region **`B0_CODE2`** (`b0c2_code` = `B0_CODE2` = `B0_FREE_START` .. `b0c2_end`, main.asm after the `b0_code` pad),
+loaded by the EXISTING text tape block (no 10th block, no pilot): `TEXT_TAPE_LEN` = `b0c2_end - TEXT_ADDR`, so the
+tape grows only by the bytes used. ASSERTs: `b0c2_code == B0_CODE2 == B0_FREE_START`, `b0c2_end <= POOL_START`,
+`text_tape_end == b0c2_end`, `B0_FREE_START + B0_FREE_RES == POOL_START`; DISPLAY "bank-0 B0_CODE2" prints used / free.
+`POOL_START` `$FC3E`, `B0_FREE_RES`, the pool (D8 Warrior need 16,418 / slack 2,976, `LEVEL_NEED`), the D0 pool vs
+`BLOB_ORG` and every pool ASSERT are unchanged.
+
+| Item | before | after |
+|---|---|---|
+| headerless 6 (text + b0 code + pad [+ B0_CODE2]) | 3,464 B (`$C000..$CD87`) | **3,595 B** (`$C000..$CE0A`: + `B0_CODE2` 131) |
+| headerless 4 (bank-7 cold code, `B7_LEN`) | 7,424 B | **7,296 B** (-128) |
+| headerless 7 (BOOT4) | 7,131 B | **7,133 B** (+2: the blob stream, and the INSTR overlay's moved low-RAM addresses) |
+| `.tap` total | 89,576 B | **89,583 B** (+7: +131 bank 0, -128 bank 7, +2 low RAM, +2 BOOT4) |
+| D0 blob / `BLOB_ORG` | 7,748 B at `$E1B4` | **7,750 B at `$E1B2`** (tut_d0's FARB0 +2 B; tail 8 kept, ASSERT `BLOB_TAIL >= 8`); D0 pool Warrior top `$E0E0` now 210 B below (margin 64) |
+| `B0_CODE2` used / free to `POOL_START` | 0 / 11,958 (not on tape) | **131 / 11,827** |
+| bank 7 low free (to the attr shadow) | 0 | **128** |
+| low-RAM spare (release) | 4 | **2** (`start_game`: FARB0 = 8 B vs `ld hl` + `call far7` 6 B) |
+
+**Proof routine: `new_game`** (src/newgame0.asm; was bank 7 boot7.asm). Once per game, `start_game` (low RAM) and the
+D0 tutorial's `tut_d0` (bank-4 blob, src/tut/tut_start.asm) -> `FARB0 new_game`; inside, `level_reset_new` / `init_ent_common` (far3), `kit_add` (far6) and `hero_st_init`
+(far7, was a direct bank-7 call: +3 B, ~0.25k T once a game) all hand bank 0 back; `KFL` / RAM stores are bank 2 /
+low RAM. Tests on it: every game start (game #50 tape boot + #61 PC fences, which now allow bank-0 PCs in
+`b0c2_code..b0c2_end`, breakpoints 17 / 18), world W16 new game after the win and after death (B0_CODE2 survives a full
+D1..D8 run and the pool), tut0 (the D0 start), tape_layout (the block's B0_CODE2 bytes == the .sna's).
+
+**Rules for code / data in B0_CODE2** (= `b0_code`'s, conventions.md "Banking"):
+- Append files between `b0c2_code` and `b0c2_end` (keep `b0c2_end` last); no reserve to move, no ORG.
+- Entered by `FARB0` (farb with C = `BANK_TEXT`, 8 B a site) or a direct call from code already running with bank 0
+  paged (`b0_code`, other B0_CODE2 code, low-RAM helpers called from it).
+- Never page `$C000` inside: only far3 / far6 / far7 / far1 and helpers that restore the caller's bank (`blit_keep`,
+  `msg_push`, ...); a helper that leaves another bank paged is forbidden (except as a tail jump under a farb).
+- No SMC and no runtime-written bytes: game #50, gfx_integrity and d8_stress compare `text_img..POOL_START` with the
+  .sna. Read-only data is fine; read it only with `BANK_TEXT` paged (from other banks: a bank-0 accessor via FARB0).
+- Uncontended (bank 0): fine for per-turn code; per-tick code still belongs in bank 2.
+- A PC breakpoint at `$CD88+` also fires in any other bank at the same address: probe bank-0 code by RAM=0 conditions.
+- Growth past ~3 KB will meet the new-monsters kinds curve hand-back (new_monsters.md §12): that lowers `POOL_START`
+  by moving bytes out of `B0_FREE_RES`; the ASSERT `b0c2_end <= POOL_START` catches a collision.

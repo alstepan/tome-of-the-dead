@@ -118,8 +118,7 @@ tut_d0:
                 ld   hl, gen_list
                 call farb4
                 call alloc_mark                ; the LEVEL mark
-                ld   hl, new_game
-                call far7
+                FARB0 new_game                 ; B0CODE: bank-0 B0_CODE2 (was far7; +2 B)
                 ld   a, TUT_FOOD               ; spec §2.4: FOOD 40, stage OK (no line)
                 ld   (FOOD), a
                 ld   a, HS_OK

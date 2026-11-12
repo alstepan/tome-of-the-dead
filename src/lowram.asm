@@ -164,8 +164,8 @@ start_game:
                 call far6                      ; kind (D3-4: only this class's projectiles /
                 call gen_list                  ; impacts), seq slot 0, other FX rows NONE
                 call alloc_mark                ; 3F-T1: the LEVEL mark (level_enter rewinds here)
-                ld   hl, new_game              ; bank 7 (MEM-SND; was bank 3, A7 review):
-                call far7                      ; hero slot, PROTO level / master seed
+                FARB0 new_game                 ; B0CODE: bank-0 B0_CODE2 (was bank 7 MEM-SND, bank 3 A7):
+                                               ; hero slot, master seed (+2 B vs far7)
                 ld   de, TX_WELCOME            ; the first log line (panel_init)
                 ld   a, (proto_start)
                 or   a
