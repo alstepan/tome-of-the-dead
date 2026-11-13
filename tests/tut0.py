@@ -828,7 +828,9 @@ def snap_diff(a, b, skip_frame=False):
     out = []
     for n, addr, ln in SNAP:
         bad = [(i, a[n][i], b[n][i]) for i in range(ln)
-               if a[n][i] != b[n][i] and not (n == "HERO_ST" and addr + i in PU_MASK)]
+               if a[n][i] != b[n][i] and not (n == "HERO_ST" and addr + i in PU_MASK)
+               and not (n == "ITEM_RAM" and addr + i == S["UX_FL"])]   # UX1 §6: the D0 book's hint flag
+                                                                       # survives the grate (by design)
         if bad:
             out.append((n, bad))
     if not skip_frame and a["frame"] != b["frame"]:

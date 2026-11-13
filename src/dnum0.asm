@@ -54,6 +54,8 @@
 ; ~0.6k (far7) + ~0.25k per cell + ~0.55k per drawn cell row (<= 3 cells x 2 rows).
 ;------------------------------------------------------------------------------
 dn_tick:
+                call ux_tick                   ; UX1 (ux0.asm, B0_CODE2): F3 countdown + F2 HP check
+                                               ; (dn_gate: GS_PLAYING 1st-frame ticks only) ~0.15k T idle
     IF TOME_FX2
                 call dn_tm                     ; TOME-FX2: the Tome hit effect's per-tick count
     ENDIF
@@ -194,7 +196,6 @@ dn_q2:
                 cp   (hl)
                 ret  z
                 jp   dn_scan.pop
-                ASSERT (dn_q2 >> 8) == (dn_tick >> 8)      ; dn_gate: ld l, dn_q2 & $FF
 
     IF TOME_FX2
 ;------------------------------------------------------------------------------

@@ -314,9 +314,19 @@ ST2_LEN         EQU 3
 ST2_BKR         EQU ST2_CNT                     ; books read (fx_book, fx6.asm: every completed book READ)
 ST2_BKF         EQU ST2_CNT + 1                 ; books found (pu_add, pickup6.asm: an IT_BOOK taken)
 ST2_ITM         EQU ST2_CNT + 2                 ; items found (pu_add non-book + ap_take, pickup7.asm: n > 0)
-ITEM_RAM_END    EQU ST2_CNT + ST2_LEN
-ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 89 (M0: 81 + ST1_LEN; STATS2: + ST2_LEN)
-                ASSERT ITEM_RAM_LEN == 89
+; ITEM-INFO + UX-POLISH (UX1, docs/design/ux_polish.md §8): the per-game UX state, outside the
+; page overlay (re-unpacked on every open) and outside B0_CODE2 (read-only); zeroed by new_game
+; with the block, which then sets LAST_PICK := $FF and keeps UXF_HINT across the D0 grate (ux0.asm).
+UX_RAM          EQU ST2_CNT + ST2_LEN
+NEW_MASK        EQU UX_RAM                      ; 3 B: bit k = bag slot k (0..19) is NEW (C3; bits 20-23 stay 0)
+LAST_PICK       EQU UX_RAM + 3                  ; the slot of the last bag pickup, $FF = none (C2)
+MPF_T           EQU UX_RAM + 4                  ; F3: ticks left of the MP-number flash, 0 = off
+UX_FL           EQU UX_RAM + 5                  ; bit UXF_HINT_B: the first-book hint was given (§6)
+UXF_HINT_B      EQU 0
+UX_RAM_LEN      EQU 6
+ITEM_RAM_END    EQU UX_RAM + UX_RAM_LEN
+ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 95 (M0: 81 + ST1_LEN; STATS2: + ST2_LEN; UX1: + UX_RAM_LEN)
+                ASSERT ITEM_RAM_LEN == 95
                 ASSERT (ITEM_RAM & $FF) == 0 && ITEM_RAM_LEN <= 256      ; one page (inc l, djnz clear)
                 ASSERT ITEM_RAM >= $5CCB        ; above the system variables + channel area
                 ASSERT ITEM_RAM_END <= PF_RAM   ; below D3-6b PF_RAM ($5E00) / MK_RAM ($5F00)

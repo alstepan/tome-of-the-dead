@@ -83,7 +83,7 @@ boot:
                 ld   c, BANK_BOOT6             ; code and the FONT6 planes (B3B-8 /
                 call farb                      ; B3B-11; were bank 7 init_tiles / panel_boot)
                 ld   hl, boot6_wait            ; the loading picture + title tune until a key,
-                ld   c, BANK_BOOT6             ; then HOW TO PLAY (INSTR-BUILD): before the boot
+                ld   c, BANK_BOOT6             ; (INSTR-BUILD overlay): before the boot
                 call farb                      ; pool, which overwrites its bank-4 BOOT4 streams
                 ; 3F-T1: the boot pool is the two select idles only; the hero
                 ; (start_game) and each level's monster kinds (level_enter)

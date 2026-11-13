@@ -29,7 +29,7 @@ in place; §13 is the authoritative delta (ids, flags, triggers, budget, impacts
 ## 1. Flow
 
 ```
-loading picture -> PRESS ANY KEY -> HOW TO PLAY (2 pages, §7) -> MENU (controls 3/4, hero 2)
+loading picture -> PRESS ANY KEY -> MENU (controls 3/4, hero 2; row 10 pointer, §7)
   -> 1 START -> [TUT_AVAIL?] -> CHOICE SCREEN --1/ENTER--> D0 (TUT_ON) --grate--> reset -> D1
                      |                       \--2--------> D1 (TUT_AVAIL := 0)
                      \--no----------------------------------> D1 (as today)
@@ -302,6 +302,11 @@ POTION slot picks Heal first (§8 auto-fill), so B9's L30 must be done from the 
 case swap L30 for L30b `DRINK THE CURE: ‹D›+‹F›, BAG` (27).)*
 
 ## 7. Fate of the HOW TO PLAY screen
+
+> **ITEM-INFO (user 2026-11-12, `item_info.md` §5): HOW TO PLAY is dropped entirely** (both pages,
+> `GS_HELP1..3`, the BOOT4 page streams). The pointer moved to the **main menu, row 10**:
+> `NEW HERE? START > 1 TUTORIAL` (28 chars, `$45`, cols 0–20), drawn only while the tutorial is
+> offered. Item and treasure properties are on the bag page (rows 18–19). The text below is history.
 
 **Decision: shorten to 2 pages.** Keep page 1 (goal + controls; the only reference for players who
 skip the tutorial on a later load, and it costs 0 resident bytes) and page 3 (boss treasures and

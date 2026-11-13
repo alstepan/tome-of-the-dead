@@ -135,8 +135,7 @@ EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING, EF_WALKIN, EF_PENDING = 1, 
 
 GS_PLAYING, GS_WIN, GS_DEAD, GS_SELECT, GS_TRANSITION = 2, 3, 4, 5, 6
 GS_ANYKEY = 8                      # instr_main (boot6_wait): the loading picture waits for a key
-GS_HELP1, GS_HELP2, GS_HELP3 = 9, 10, 11   # INSTR-BUILD / INSTR-P3: the HOW TO PLAY pages (boot only, before the menu)
-BOOT_WAITS = (GS_ANYKEY, GS_HELP1, GS_HELP3)   # every boot key wait (TUT0-T2: page 2 = TREASURES = GS_HELP3; GS_HELP2 unused): the harness taps ENTER at each
+BOOT_WAITS = (GS_ANYKEY,)          # every boot key wait (ITEM-INFO: the HOW TO PLAY pages are gone): the harness taps ENTER at it
 
 # keys: (mirror row index, bit)
 KEYS = {
@@ -473,10 +472,9 @@ class Proto:
     snd_mode = None
 
     def boot_key(self):
-        """At a boot key wait (BOOT_WAITS: the picture's 'PRESS ANY KEY', then the two
-        HOW TO PLAY pages, instr_ovl.asm): let it see every key released, tap ENTER
-        (down 2 frames; the menu swallows the last one) and release. Called once per
-        wait (wait_state(GS_SELECT) -> boot()): 3 calls from boot to the menu."""
+        """At the boot key wait (BOOT_WAITS: the picture's 'PRESS ANY KEY', instr_ovl.asm;
+        ITEM-INFO dropped the HOW TO PLAY pages): let it see every key released, tap ENTER
+        (down 2 frames; the menu swallows it) and release. One call from boot to the menu."""
         self.wb("INPUT_SRC", 1)                  # injected matrix, not the host's keyboard
         self.release()
         self.tick(2)

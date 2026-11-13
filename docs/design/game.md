@@ -576,6 +576,7 @@ TOME OF THE DEAD   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SI
   and keeps the previous key set.
 - START seeds the RNG → generates D1 → play.
 - **TUT0 (2026-11-09):** while the tutorial is still offered (once per tape load, §1), `1 START` opens the **choice screen** (menu font, digits only): `1 TUTORIAL - DEPTH 0` / `2 START - DEPTH 1` / `BROTHER MORROW WILL TEACH YOU`. `1` or ENTER = D0 (§1); `2` = the START above, straight to D1 (the offer is removed); BREAK = back to the menu. Keys are read only after all keys have been released once. Quit from D0 returns to the menu with the tutorial still offered. Once D1 has been entered (by `2` or by the grate step), START goes straight to D1 as before.
+- **ITEM-INFO (2026-11-12, `item_info.md` §5, as built):** while the tutorial is offered (`es_go` = `ts_choice`), main-menu **row 10** (between `1 START` rows 8–9 and `2 HERO` rows 11–12) shows `NEW HERE? START > 1 TUTORIAL` in FONT6 at x 0 (cols 0–20, attr `$45`; left of the hero preview at col 21); blank once the offer is gone. It replaces the HOW TO PLAY page-1 pointer (`ux0.asm mn_sub0`, FARB0 from `menu1.asm menu_static`).
 - **Title (user 2026-10-04):** the menu/title screen reads **"TOME OF THE DEAD"** (the concept
   screen's title), not TOME OF THE DEAD. Torches animated and hero previews on the select screen follow
   `concept_menu` / `screen_menu.png` (designer decision 2026-10-04). Death `KILLED BY …`
@@ -586,6 +587,12 @@ TOME OF THE DEAD   1 START   2 HERO: WARRIOR|MAGE   3 CONTROLS: KEYS|KEMPSTON|SI
   traps, falls, poison, hunger and the Tome's aura stay `YOU DIED`.
 
 #### 3.2.1 HOW TO PLAY screen (INSTR1; user 2026-10-30 request, designer decision 2026-10-30)
+
+> **DROPPED (ITEM-INFO, user 2026-11-12; `docs/design/item_info.md`).** HOW TO PLAY and its boot
+> streams are gone: the boot shows the loading picture + `PRESS ANY KEY`, then the menu. Item and
+> treasure properties live on the bag page (rows 18–19, §8.11 Q3); the tutorial pointer moved to
+> main-menu row 10 (§3.2). The pages' specs are archived (`docs/archive/design/instructions_*`).
+> Everything below in this section is history.
 
 > **Superseded (user ruling 2026-10-30):** shown every game after START, two 42-col pages with
 > icons (as built: THREE pages, page 3 = boss treasures and charms, `GS_HELP1..3`; once per power-on before the first menu; BREAK on page 1/2 skips the rest). Wording, flow and render spec: `docs/design/instructions_screen.md` / `.txt` (pending
@@ -2401,6 +2408,18 @@ Supersedes the 2026-10-19 "scaled 8×8 floor glyphs" ruling for the page and pan
   - Placeholders: dotted outlines (2 px dot / 2 px gap) of the sword, torso, helm and ring.
 
 **Q3 Page layout and verbs (full screen, 32×24 cells).**
+
+> **As built (ITEM-INFO + UX1, 2026-11-12; `page_ovl.asm`; supersedes the table below):** row 0 `BAG`
+> (menu font, cols 2–4), `ITEMS n/20` (x 48), `[CLOSE]` cols 26–31; row 1 `DAGGERS d  ARROWS a`
+> (Warrior), `KEY` at col 26; rows 2 / 23 ornament; **bag grid 5 × 4**: icon 2×2 at col `9 + 3c`,
+> rows `4 + 3r`, `5 + 3r`, QTY digit (≥ 2) at col `11 + 3c` row `5 + 3r`, the **NEW `*`** (UX1 C3) at
+> col `11 + 3c` row `4 + 3r`; row 15 `W A H C`, rows 16–17 `WORN` + 4 icons at cols `11 + 3k`;
+> **rows 18–19**: description icon cols 0–1; **row 18** name (+ ` Xn`) + `it_fmt` stats from x 16
+> (FONT6, ≤ 40 chars, attr `$47`; `EVA` shown as **`DODGE`**); **row 19** the type's effect phrase
+> `[, gate phrase]` (attr `$05`; `item_info.md` §3); row 20 verb strip `USE-word EQUIP REMOVE DISCARD
+> CLOSE` (highlight = ceil(6n/8) cells, UX1 §5); row 22 help / refusals. **Cursor** = paper blue
+> xor over the slot's **2×2 icon cells** (UX1 C1; the count column keeps black paper), `[CLOSE]`'s
+> 6 cells, the chosen verb. Opens on `LAST_PICK` when it is below the bag count, else slot 0 (UX1 C2).
 
 | Rows | Content |
 |---|---|

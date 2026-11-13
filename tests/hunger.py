@@ -29,6 +29,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
+import game_lib  # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_GOBLIN, stand_y, RUN_LIMIT, attr_at  # noqa: E402
 B7_LABELS = {"hunger_turn", "hunger_add", "trap_step", "trap_turn"}   # MEM-RECLAIM w2b: bank-7 cold code (far7), not R6
 from proj3 import T, w16  # noqa: E402
@@ -289,8 +290,11 @@ def run(h, p, check):
         f = p.frame()
         shots[stg] = f
         at = [attr_at(f, c, S["STAT_ROW"]) for c in range(S["FOOD_BAR_COL"], S["GEAR_COL"])]
-        check(f"P1 stage {stg} (FOOD {food}): PD_FOOD drained, row 21 cols 15..23 attr {ATTRS[stg]:#04x}",
-              not p.rb("PANEL_DIRTY") & 4 and at == [ATTRS[stg]] * 9, (hex(p.rb("PANEL_DIRTY")), at))
+        # UX1 F1: at WEAK the word's ink cells (19..23) also FLASH (bit 7); the bar never does
+        want = [ATTRS[stg] | (0x80 if stg == WEAKS and c >= S["HUNGER_COL"] and any(game_lib.cell_bytes(f, c, S["STAT_ROW"]))
+                              else 0) for c in range(S["FOOD_BAR_COL"], S["GEAR_COL"])]
+        check(f"P1 stage {stg} (FOOD {food}): PD_FOOD drained, row 21 cols 15..23 attr {ATTRS[stg]:#04x} (+ FLASH on the WEAK word)",
+              not p.rb("PANEL_DIRTY") & 4 and at == want, (hex(p.rb("PANEL_DIRTY")), at))
 
     def word(f):
         r = S["STAT_ROW"]

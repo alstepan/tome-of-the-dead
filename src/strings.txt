@@ -312,3 +312,31 @@ end_level       "LEVEL"
 # STATS2 (combat3.asm ec_tab): BOOKS r/f, ITEMS n
 end_books       "BOOKS"
 end_items       "ITEMS"
+# UX-POLISH §6 (ux0.asm ux_pick): the first book picked up in a game (not in D0)
+hint_book       "READ IT IN THE BAG"
+# ITEM-INFO §5 (ux0.asm mn_ptr, menu1.asm menu_static): main-menu row 10 while the tutorial is offered
+mn_tut          "NEW HERE? START > 1 TUTORIAL"
+# ITEM-INFO §3 (ux0.asm ie_line, the bag page's row 19): effect phrases, then the two gate phrases;
+# ie_* <= 40 chars (textpack IE_MAX); KEEP THIS ORDER (ie_map indexes TX_IE_CURE + k); the digits
+# 6 / 8 / +3 / +1 / +2 are kept in step with SCR_FEAR_T / SCR_SLEEP_T / the Enchant cap / the staff
+# bonuses by tests/itemtab.py
+ie_cure         "CURES POISON WEAK CONFUSED FEAR"
+ie_teleport     "SENDS YOU TO ANOTHER ROOM"
+ie_fear         "ROOM'S MONSTERS FLEE 6 TURNS"
+ie_sleep        "ROOM'S MONSTERS SLEEP 8 TURNS"
+ie_enchant      "A RANDOM WORN ITEM +1, UP TO +3"
+ie_book         "READ: A NEW SKILL OR A RANK"
+ie_bow          "SHOOT IT FROM BAR SLOT 5"
+ie_rune         "SPELL DMG +1"
+ie_bone         "SPELL DMG +2"
+ie_plate        "HALF MP REGEN"
+ie_silk         "IMMUNE TO POISON"
+ie_gcloak       "HALF DMG FROM DARK + DRAIN"
+ie_mirror       "REFLECTS DARK"
+ie_fire         "HALF DMG FROM FIRE"
+ie_mana         "2X MP REGEN"
+ie_plenty       "HALF HUNGER"
+ie_scarab       "2X MP REGEN, HALF HUNGER"
+ie_gring        "IMMUNE TO DARK"
+ie_metal        "BLOCKS MAGE SPELLS"
+ie_cloth        "BLOCKS POWER ATTACKS"

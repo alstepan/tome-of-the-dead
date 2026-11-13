@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """BOOT-ANYKEY: after boot the loading picture stays up (music playing) until a
-key; then the three HOW TO PLAY pages (INSTR-BUILD, tests/instr.py covers them), then
-the menu, and the last key is swallowed (instr_ovl.asm, run by boot6_wait).
+key; then the menu (ITEM-INFO: the HOW TO PLAY pages are gone), and the key is swallowed
+(instr_ovl.asm, run by boot6_wait). tests/instr.py: the boot overlay's static layout.
 The .sna does not hold the loading screen (the tape's SCREEN$ block is not in
 it), so the test pokes assets/gfx/loading/loading_l3d.scr into $4000 first.
    ZRCP_PORT=<port> python3 tests/anykey.py
@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import game_lib  # noqa: E402
-from game_lib import Harness, Proto, S, EMU_ARGS, GS_SELECT, GS_ANYKEY, GS_PLAYING, GS_HELP1, GS_HELP2, GS_HELP3  # noqa: E402
+from game_lib import Harness, Proto, S, EMU_ARGS, GS_SELECT, GS_ANYKEY, GS_PLAYING  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCR = open(os.path.join(REPO, "assets/gfx/loading/loading_l3d.scr"), "rb").read()
@@ -66,24 +66,14 @@ def main():
             for b in scr[((y & 0xC0) << 5) | ((y & 7) << 8) | ((y & 0x38) << 2):][:32]), True)
         h.expect("8 title tune requested", p.rb("MUS_REQ"), 7)
         h.expect("9 title tune sounding (MUS_CUR)", p.rb("MUS_CUR"), 7)
-        # the picture's key -> HOW TO PLAY page 1; ENTER -> page 2; a '1' (START) as
-        # the last key must not start the game
+        # ITEM-INFO: the picture's key -> straight to the menu (no HOW TO PLAY pages, the
+        # states 9..11 are never entered); a '1' (START) as that key must not start the game
+        seen = set()
         p.hold("1")
-        ok = p.until(lambda: p.rb("GAME_STATE") == GS_HELP1, 60)
-        h.expect("10 key -> HOW TO PLAY page 1 (GS_HELP1)", ok, True)
-        p.release()
-        p.tick(3)
-        p.hold("ENTER")
-        p.tick(2)
-        p.release()
-        ok = p.until(lambda: p.rb("GAME_STATE") == GS_HELP3, 60)
-        h.expect("10b page 1 key (released) -> page 2 (GS_HELP3: TUT0 dropped one page, GS_HELP2 unused)", ok, True)
-        p.tick(3)
-        h.expect("10c on page 2 (GS_HELP3)", p.rb("GAME_STATE"), GS_HELP3)
-        p.tick(2)
-        p.hold("1")
-        ok = p.until(lambda: p.rb("GAME_STATE") == GS_SELECT, 60)
-        h.expect("10d page 2 key -> menu (GS_SELECT)", ok, True)
+        ok = p.until(lambda: (seen.add(p.rb("GAME_STATE")), p.rb("GAME_STATE") == GS_SELECT)[1], 60)
+        h.expect("10 picture key -> menu (GS_SELECT)", ok, True)
+        h.expect("10b no HOW TO PLAY page state on the way (states %s)" % sorted(seen),
+                 bool(seen & {9, 10, 11}), False)
         p.tick(12)                                # '1' still down through the menu
         h.expect("11 key swallowed: '1' did not START", p.rb("GAME_STATE"), GS_SELECT)
         p.release()

@@ -41,11 +41,26 @@ new_game:
                 ld   (CUR_ROOM), a
                 ld   (TURN_PHASE), a
                 ld   (NEED_RELEASE), a
+                ; UX1 (ux_polish.md §6 / §7): the first-book hint survives the D0 grate only (tt_reset ->
+                ; start_game while GAME_STATE is still GS_PLAYING; a menu START comes from GS_SELECT)
+                ld   a, (GAME_STATE)
+                cp   GS_PLAYING
+                ld   a, (UX_FL)
+                jr   z, .kh
+                xor  a
+.kh:            and  1 << UXF_HINT_B
+                ld   c, a
+                xor  a
                 ld   hl, ITEM_RAM              ; 3E-T3: bag, worn,
-                ld   b, ITEM_RAM_LEN           ; hunger, quick slots, ST1_CNT, ST2_CNT := 0 (89 B, one page:
-.ir:            ld   (hl), a                   ; 9 B, ~2.1k T; level changes keep it)
+                ld   b, ITEM_RAM_LEN           ; hunger, quick slots, ST1_CNT, ST2_CNT, UX_RAM := 0 (95 B, one
+.ir:            ld   (hl), a                   ; page: 9 B, ~2.2k T; level changes keep it)
                 inc  l
                 djnz .ir
+                ld   a, c
+                ld   (UX_FL), a                ; UX1: NEW_MASK 0, MPF_T 0, the hint kept or cleared
+                dec  b                         ; (B = 0 after the djnz)
+                ld   a, b
+                ld   (LAST_PICK), a            ; $FF = none
                 ld   hl, level_reset_new      ; bank 3 (pf_prep is bank-3 data):
                 call far3                      ; per-level state + the entity table (+ hero 3D state)
                 ; --- hero, slot 0 ---

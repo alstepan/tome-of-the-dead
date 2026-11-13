@@ -370,9 +370,9 @@ item_hp:
                 ld   e, HP_NUM_COL * 8
                 call print6
                 ASSERT ((HP_NUM_COL * 8) & 7) == 0 && HP_NUM_COL * 8 + 6 * 2 <= 256   ; print6 x rule
-                ld   bc, (STAT_ROW << 8) | HP_BAR_COL
-                ld   de, ((HP_NUM_COL + 2 - HP_BAR_COL) << 8) | 1
-                jp   pmark_rect
+                ld   bc, (STAT_ROW << 8) | HP_BAR_COL   ; (UX1 F2: the HP number's FLASH is rebuilt
+                ld   de, ((HP_NUM_COL + 2 - HP_BAR_COL) << 8) | 1   ; from state by bank-0 ux_tick,
+                jp   pmark_rect                ; every 1st-frame tick: W15's 2nd-frame HP item cap)
 
 ;------------------------------------------------------------------------------
 ; item_depth — "Dn" at (30, 18) (LVL_DEPTH; the PROTO level 0 shows D1; the

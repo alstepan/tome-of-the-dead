@@ -164,20 +164,9 @@ menu_static:
                 inc  c
 .gap:           inc  c
                 jr   .tg
-.tdone:         ; subtitle (6x8), ornament, footer
-                ld   a, TX_FT_SUBTITLE
-                ld   b, 5
-                ld   e, 9 * 8                  ; 19 chars x 6 = 114 px: centred at x=71 ~ 72 (E: multiple of 8)
-                call print6x
-                ld   a, MENU_A_SUB
-                ld   bc, 5 << 8
-                ld   de, (32 << 8) | 2         ; rows 5-6
-                call stamp_rect
+.tdone:         ; ornament, then (bank 0, ITEM-INFO) subtitle, footer attrs, the tutorial pointer
                 call menu_orn
-                ld   a, MENU_A_LABEL
-                ld   bc, 22 << 8
-                ld   de, (32 << 8) | 2
-                call stamp_rect
+                FARB0 mn_sub0                  ; ux0.asm (B0_CODE2): row 10 while the tutorial is offered
                 jp   menu_previews
 ; .torch — C = col: the 6 static cells (rows 1-3) and the 8 attrs.
 .torch:         push bc

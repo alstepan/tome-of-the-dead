@@ -2194,7 +2194,7 @@ def w17(p, check):
     # --- (b) every string through msg_push + item_log (print6t) ---------------
     row_ok, worst, sh_bad = [], (0, ""), []
     log_ids = [(sid, nm, txt) for sid, (nm, txt) in enumerate(STRINGS)
-               if not nm.startswith(("info_", "ft_"))]
+               if not nm.startswith(("info_", "ft_", "ie_"))]   # ITEM-INFO: ie_* are bag-page phrases (40)
     for sid, nm, txt in log_ids:
         sh0 = p.rb("PORT_7FFD_SHADOW")
         t = stub([0x3E, sid, 0xCD] + w(S["msg_push"]) + [0x21] + w(S["PANEL_DIRTY"]) +

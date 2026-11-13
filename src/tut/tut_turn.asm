@@ -708,6 +708,8 @@ tt_ptr:
                 add  hl, bc
                 dec  e
                 jr   nz, .r
+                FARB0 ux_ptr                   ; UX1 (ux_polish.md §1 / §7): the panel flashes F1-F3
+                                               ; rebuilt from state over what the clear dropped
                 pop  de
                 pop  bc
                 jp   pmark_rect

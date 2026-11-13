@@ -1304,7 +1304,11 @@ pause_run7:     ld   hl, PAUSE_REQ
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 intent_icon7:
-                bit  JOY_F_BIT, e
+                ld   a, e                     ; UX1 F3: a new press in ICON MODE ends the MP
+                or   a                        ; flash (ux0.asm ux_mpkey keeps D / E)
+                jr   z, .mK
+                FARB0 ux_mpkey
+.mK:            bit  JOY_F_BIT, e
                 jr   z, .mNoF
                 ld   a, FS_USED               ; the release is not a tap
                 ld   (FIRE_ST), a

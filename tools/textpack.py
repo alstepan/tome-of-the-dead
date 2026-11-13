@@ -65,7 +65,8 @@ state is a plain pointer, so a buffer is just another stream source).
 
 Style checks (fail the build): every string upper case, 32..126, no '"', no
 trailing full stop, no double spaces (info_* excepted: field padding), length
-<= LIMIT (32; 42 for info_* / ft_*, the 6x8-font lines); info_* fields land on
+<= LIMIT (32; 42 for info_* / ft_*, the 6x8-font lines; 40 for ie_*, the bag
+page's item phrases); info_* fields land on
 the 16 / 28 boundaries (see src/strings.txt).
 
 Usage: tools/textpack.py [--report] [--src FILE]
@@ -101,7 +102,13 @@ def fail(msg):
     sys.exit(f"textpack: {msg}")
 
 
+IE_MAX = 40             # ITEM-INFO: the bag page's rows 18-19 from x 16 (6x8 font): 40 chars
+IE_PREFIXES = ("ie_",)
+
+
 def limit_for(name):
+    if name.lower().startswith(IE_PREFIXES):
+        return IE_MAX
     return WIDE_MAX if name.lower().startswith(WIDE_PREFIXES) else LOG_MAX
 
 

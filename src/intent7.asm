@@ -169,8 +169,7 @@ use_slot:
 .rf:            ld   a, e                      ; 3E-T12: the quick slots are R6 fx_quick
                 ld   hl, fx_quick              ; (fx6.asm; A = the class's NO line): L = 1
                 jp   far6                      ; used / IC_REFUSED (NO x, NO NEED: a line)
-; ic_no_mana — SND-5: the NO MANA refusal (abil_spell / abil_melee); plays FIZZ (= NO).
-ic_no_mana:     ld   a, TX_NO_MANA
+; (ic_no_mana: below gear_ban since UX1)
 ; ic_no — SND-5b: a 'nothing to use' refusal (no potion / food / scroll / bag /
 ; daggers / bow / arrows / mana) = ic_refuse + the shared NO effect (SFX_NO ==
 ; SFX_FIZZ); A = the TX_ line.
@@ -294,6 +293,11 @@ ic_disp:
                 jr   abil_spell
 gear_ban:       ld   a, TX_GEAR_BAN
                 jp   ic_no                     ; line + fizz, IC_REFUSED (out of jr range)
+; ic_no_mana — SND-5: the NO MANA refusal (abil_spell / abil_melee); plays FIZZ (= NO).
+; UX1 F3: first the MP number's flash for 32 frames (ux0.asm ux_mpset; was a fall into ic_no).
+ic_no_mana:     FARB0 ux_mpset
+                ld   a, TX_NO_MANA
+                jp   ic_no
 ABF_MELEE_BIT   EQU 6
 ABF_AMMO_BIT    EQU 7
                 ASSERT ABF_MELEE == 1 << ABF_MELEE_BIT && ABF_AMMO == 1 << ABF_AMMO_BIT

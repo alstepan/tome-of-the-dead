@@ -510,5 +510,122 @@ class ItemPackCliTests(unittest.TestCase):
         self.assertFalse(wrote)
 
 
+# ---- ITEM-INFO (docs/design/item_info.md §3 / §6): the bag page's row-19 phrases --------------------
+UX0 = os.path.join(ROOT, "src", "ux0.asm")
+FX6 = os.path.join(ROOT, "src", "fx6.asm")
+PROJ3 = os.path.join(ROOT, "src", "proj3.asm")
+# the spec table (§3): type name -> (phrase string name or None, gate None / "metal" / "cloth")
+IE_SPEC = {
+    "P_CURE": ("ie_cure", None), "S_TELEPORT": ("ie_teleport", None), "S_FEAR": ("ie_fear", None),
+    "S_SLEEP": ("ie_sleep", None), "S_ENCHANT": ("ie_enchant", None), "BOOK": ("ie_book", None),
+    "BOW": ("ie_bow", None), "W_RUNE": ("ie_rune", None), "W_BONE": ("ie_bone", None),
+    "A_ROBE": (None, "cloth"), "A_CHAIN": (None, "metal"), "A_PLATE": ("ie_plate", "metal"),
+    "A_SILK": ("ie_silk", None), "A_GRAVE": ("ie_gcloak", None), "H_HOOD": (None, "cloth"),
+    "H_HELM": (None, "metal"), "H_MIRROR": ("ie_mirror", None), "C_FIRE": ("ie_fire", None),
+    "C_MANA": ("ie_mana", None), "C_PLENTY": ("ie_plenty", None), "C_SCARAB": ("ie_scarab", None),
+    "C_GRAVE": ("ie_gring", None),
+}
+IE_TEXT = {  # item_info.md §3, verbatim
+    "ie_cure": "CURES POISON WEAK CONFUSED FEAR", "ie_teleport": "SENDS YOU TO ANOTHER ROOM",
+    "ie_fear": "ROOM'S MONSTERS FLEE 6 TURNS", "ie_sleep": "ROOM'S MONSTERS SLEEP 8 TURNS",
+    "ie_enchant": "A RANDOM WORN ITEM +1, UP TO +3", "ie_book": "READ: A NEW SKILL OR A RANK",
+    "ie_bow": "SHOOT IT FROM BAR SLOT 5", "ie_rune": "SPELL DMG +1", "ie_bone": "SPELL DMG +2",
+    "ie_plate": "HALF MP REGEN", "ie_silk": "IMMUNE TO POISON", "ie_gcloak": "HALF DMG FROM DARK + DRAIN",
+    "ie_mirror": "REFLECTS DARK", "ie_fire": "HALF DMG FROM FIRE", "ie_mana": "2X MP REGEN",
+    "ie_plenty": "HALF HUNGER", "ie_scarab": "2X MP REGEN, HALF HUNGER", "ie_gring": "IMMUNE TO DARK",
+    "ie_metal": "BLOCKS MAGE SPELLS", "ie_cloth": "BLOCKS POWER ATTACKS",
+}
+
+
+def ie_model(strings, syms):
+    """type id -> the composed row-19 text (phrase[, gate]) per the spec table."""
+    out = {}
+    for t in range(syms["IT_F_CARROT"], syms["IT_COUNT"]):
+        name = next((k[3:] for k, v in syms.items() if k.startswith("IT_") and v == t
+                     and k[3:] in IE_SPEC), None)
+        ph, gate = IE_SPEC.get(name, (None, None)) if name else (None, None)
+        parts = ([strings[ph]] if ph else []) + ([strings["ie_" + gate]] if gate else [])
+        out[t] = ", ".join(parts)
+    return out
+
+
+def ie_map_bytes(ids):
+    """ux0.asm ie_map's DB rows evaluated with the TX ids (TX_IE_x - TX_IE_CURE + 1 | IEM_*)."""
+    with open(UX0, encoding="utf-8") as f:
+        txt = f.read()
+    body = txt[txt.index("ie_map:"):txt.index("ie_map_end:")]
+    env = {"TX_IE_" + n[3:].upper(): i for n, i in ids.items() if n.startswith("ie_")}
+    env.update(IEM_METAL=0x40, IEM_CLOTH=0x80)
+    vals = []
+    for line in body.splitlines():
+        code = line.split(";", 1)[0].replace("ie_map:", "").strip()
+        if code.startswith("DB"):
+            vals += [eval(x, {}, dict(env)) for x in code[2:].split(",")]
+    return vals
+
+
+class ItemInfoTests(unittest.TestCase):
+    """ITEM-INFO: the phrase map ie_map (ux0.asm) covers IT_F_CARROT..IT_C_GRAVE; the strings are the
+    spec's; every composed row <= 40; the literal digits follow the code constants."""
+
+    @classmethod
+    def setUpClass(cls):
+        import textpack
+        rs = textpack.read_strings()
+        cls.strings = dict(rs)
+        cls.ids = {n.lower(): i for i, (n, _) in enumerate(rs)}
+        cls.syms = ip.parse_defs(DEFS)
+
+    def test_strings_verbatim(self):
+        for n, t in IE_TEXT.items():
+            self.assertEqual(self.strings[n], t, n)
+        ie = [i for n, i in self.ids.items() if n.startswith("ie_")]
+        self.assertEqual(sorted(ie), list(range(min(ie), min(ie) + 20)), "20 consecutive ie_ ids")
+        self.assertEqual(self.ids["ie_cure"], min(ie))
+        self.assertEqual(self.ids["ie_metal"] + 1, self.ids["ie_cloth"])
+        self.assertLessEqual(len(self.ids), 256, "tx_tab: 256 ids")
+
+    def test_map_covers_bag_types(self):
+        m = ie_map_bytes(self.ids)
+        lo, hi = self.syms["IT_F_CARROT"], self.syms["IT_C_GRAVE"]
+        self.assertEqual(len(m), hi - lo + 1)
+        names = {v: k for k, v in self.ids.items()}
+        model = ie_model(self.strings, self.syms)
+        for t in range(lo, hi + 1):
+            b = m[t - lo]
+            parts = []
+            if b & 0x1F:
+                parts.append(self.strings[names[self.ids["ie_cure"] + (b & 0x1F) - 1]])
+            if b & 0x40:
+                parts.append(self.strings["ie_metal"])
+            if b & 0x80:
+                parts.append(self.strings["ie_cloth"])
+            row = ", ".join(parts)
+            self.assertEqual(row, model[t], "type %d" % t)
+            self.assertLessEqual(len(row), 40, "type %d row 19" % t)
+
+    def test_gate_types(self):
+        m = ie_map_bytes(self.ids)
+        lo = self.syms["IT_F_CARROT"]
+        gated = sorted(t for t in range(lo, lo + len(m)) if m[t - lo] & 0xC0)
+        self.assertEqual(gated, [27, 29, 30, 33, 34])     # gear_rules.md §1.1 METAL + CLOTH
+
+    def test_literal_digits(self):
+        with open(FX6, encoding="utf-8") as f:
+            fx = f.read()
+        fear = int(re.search(r"^SCR_FEAR_T\s+EQU\s+(\d+)", fx, re.M).group(1))
+        sleep = int(re.search(r"^SCR_SLEEP_T\s+EQU\s+(\d+)", fx, re.M).group(1))
+        self.assertIn(" %d TURNS" % fear, self.strings["ie_fear"])
+        self.assertIn(" %d TURNS" % sleep, self.strings["ie_sleep"])
+        with open(DEFS, encoding="utf-8") as f:
+            ench = int(re.search(r"^ENCH_MAX\s+EQU\s+(\d+)", f.read(), re.M).group(1))
+        self.assertTrue(self.strings["ie_enchant"].endswith("UP TO +%d" % ench))
+        with open(PROJ3, encoding="utf-8") as f:
+            pj = f.read()
+        self.assertIn("sub  IT_W_RUNE", pj)                # proj_prep: bonus = type - IT_W_RUNE + 1
+        self.assertEqual(self.syms["IT_W_BONE"], self.syms["IT_W_RUNE"] + 1)
+        self.assertTrue(self.strings["ie_rune"].endswith("+1") and self.strings["ie_bone"].endswith("+2"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

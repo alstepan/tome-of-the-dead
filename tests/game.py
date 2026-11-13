@@ -399,7 +399,7 @@ def main():
             h.expect("1 boot GS_SELECT", p.wait_state(GS_SELECT), True)
             p.wb("ANIM_FREEZE", 1)
             hold_torches(p)                   # C3-6: the torches hold frame 0
-            golden(h, "game_select", p.frame())
+            golden(h, "game_select_tut", p.frame())   # ITEM-INFO: the boot menu offers the tutorial (row 10)
             p.boot(K_KNIGHT)
             e = p.ent(0)
             h.expect("1 GS_PLAYING", p.rb("GAME_STATE"), GS_PLAYING)
@@ -1791,7 +1791,7 @@ def main():
                 while time.monotonic() - t0 < 60:        # fast tape traps: ~1 s
                     time.sleep(0.25)
                     gs = p.rb("GAME_STATE")
-                    if gs in BOOT_WAITS:                     # BOOT-ANYKEY / INSTR: picture + 3 help pages wait
+                    if gs in BOOT_WAITS:                     # BOOT-ANYKEY: the picture waits
                         p.wb("INPUT_SRC", 1)                 # for a key; inject one (the tape path has
                         p.release()                          # the host keyboard otherwise)
                         time.sleep(0.3)
@@ -2155,7 +2155,7 @@ def tape_rest(h, p):
     p.tick(2)                                    # park on select_tick
     p.wb("ANIM_FREEZE", 1)
     hold_torches(p)                   # C3-6: the torches hold frame 0 (deterministic swap)
-    golden(h, "game_select", p.frame())
+    golden(h, "game_select_tut", p.frame())     # ITEM-INFO: the tutorial pointer on row 10
     h.expect("50 tape GEN_OVERFLOW 0", p.rb("GEN_OVERFLOW"), 0)
     from game_lib import SNA_RAM
     p.z.cmd("set-memory-zone 0")
