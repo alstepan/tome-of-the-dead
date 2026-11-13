@@ -45,6 +45,13 @@ WHAT IS MODELLED
     hero is within TOME_AURA_R cols (gap < 6), so attacks released from gap >= 6 (range >= 7) are free; Tome gone -> the exit gate
     opens -> walk out -> win.  TOME_MAX / TOME_AURA_R / TOME_REACH come from the .sym.
 
+  * NEW-MON3 (flag param.NEWMON3=1, default 0 = today's model; docs/design/new_monsters.md sec 4/5/8/12): 8-slot LP_KINDS lists (LP8,
+    param.NM3_LISTS), kind rows 30/31/32 (sim ids; Imp and Wraith are the same game id 31 by depth), Gargoyle PERCH (wakes at x <= PERCH_X
+    or when hurt, spends the turn; the bot walks up to a statue it cannot shoot), Fire Imp ember (auto-hit FIRE, cooldown, erratic flyer),
+    Frost Wraith (slow, COLD touch, freeze 1/WRAITH_FRZ_N for WRAITH_FRZ_T), Frost Charm (COLD R amulet, pool from D5, worn on D5/D7/D8),
+    P-1 pit throws as an expectation per room fight (PIT_P; no pit geometry).  The tuned section 12.4 preset is tools/balance_nm3.json:
+    python3 tools/balance_sim.py --hero both --policy average --runs 10000 --jobs 8 --overrides tools/balance_nm3.json
+
 WHAT IS NOT MODELLED (-> emulator spot-check, sec 4.5)
   two storeys, ladders, pits, jumps, squeeze/wedges; door-closing tactics (flyers blocked); real AI
   pathing; line-of-fire from real layouts; trap placement (traps sit in rooms; TELEPORT is a flat delay, no pits/falls;
@@ -145,6 +152,18 @@ PARAMS = {
     "WIDOW_SPIT": None,                 # 1 = the Black Widow has the Queen's spit row (range 6, walks in between, 1d2 - DEF, no golden +1)
     "WIDOW_POISON": None,               # poison added per spit hit (the Queen: 12); row dhe = P / 2
     "WIDOW_PERIOD": None,               # a shot every Nth turn (the Queen: 3) -> row N = period - 1 (cd counts the walk turns)
+    # NEW-MON3 (docs/design/new_monsters.md; SIM1 2026-11-13).  0 = today's model (4-slot ROSTER, no new kinds); 1 = Plan X with the
+    # section 12 curve: 8-slot LP_KINDS lists (NM3_LISTS, duplicates = weight), Gargoyle perch / Fire Imp ember / Frost Wraith freeze,
+    # the P-1 pit throws and the Frost Charm.  The sub-knobs below are the section 12.4 knobs (order: slot weights = NM3_LISTS,
+    # Wraith freeze, tier odds = T2_BASE / T3_BASE, Imp cooldown).
+    "NEWMON3": 0,
+    "NM3_LISTS": None,                  # {depth: [8 kind names]} override of LP8 (slot weights; data only)
+    "PERCH_X": 3,                       # section 4.1 PERCH_GAP 2 box cols = sim gap x <= 3 (melee reach is x <= 1)
+    "IMP_COOL": 2, "IMP_R": 6, "IMP_ERR": 0.5,   # section 4.2: ember every (COOL+1)th turn, range < 6; erratic flyer closes 1 col/turn with prob IMP_ERR
+    "WRAITH_FRZ_N": 4, "WRAITH_FRZ_T": 2,        # user 2026-11-13: freeze 1 in 4 for 2 turns (a landed touch; hero COLD R halves the turns, I/X none)
+    "IMP_MANA_N": 4,                    # section 4: Imp drops Mana 1/4
+    "PIT_P": 0.15, "PIT_THROWS": 1,     # P-1 term: P(a room fight has a stranded pit-row walker whose hero lingers) x throws per standoff
+    "CHARM_FROM": 5,                    # Frost Charm (amulet, COLD R only) joins the gear pool from this depth; worn on Wraith depths
 }
 POLICIES = {   # 4.3: rest_hp, rest_mp(Mage), heal, escape, kite_p, boss_retreat (fractions; None = never)
     "cautious": dict(rest_hp=0.70, rest_mp=0.70, heal=0.35, escape=0.25, kite=1.0, retreat=0.40),
@@ -162,6 +181,26 @@ ROSTER = {  # 9.4 (kind names -> sym K_ names)
     5: ["MUMMY", "SKELETON", "ARCHER", "SPIDER"], 6: ["VAMPIRE", "GHOST", "NECRO", "ORC"],
     7: ["ORC", "NECRO", "GHOST", "NECRO"], 8: ["NECRO", "SKELETON", "GHOST", "VAMPIRE"],
 }
+# NEW-MON3 sec 5 / 12: LP_KINDS[0..7] (slots n..7 are duplicates = weight; first-appearance order = fallback order)
+LP8 = {
+    1: ["RAT", "BAT", "SLIME", "GOBLIN", "RAT", "BAT", "SLIME", "GOBLIN"],
+    2: ["GOBLIN", "SPIDER", "BAT", "RAT", "GOBLIN", "SPIDER", "BAT", "RAT"],
+    3: ["SKELETON", "VAMPIRE", "GHOST", "BAT", "GOBLIN", "SKELETON", "VAMPIRE", "GHOST"],
+    4: ["ORC", "RAT", "SPIDER", "ARCHER", "FIRE_IMP", "ORC", "ARCHER", "FIRE_IMP"],
+    5: ["MUMMY", "SPIDER", "SKELETON", "ARCHER", "GARGOYLE", "FROST_WRAITH", "MUMMY", "ARCHER"],
+    6: ["VAMPIRE", "GARGOYLE", "FIRE_IMP", "GHOST", "NECRO", "ORC", "VAMPIRE", "ORC"],
+    7: ["ORC", "GHOST", "NECRO", "FROST_WRAITH", "MUMMY", "SPIDER", "ORC", "NECRO"],
+    8: ["NECRO", "SKELETON", "GHOST", "VAMPIRE", "ORC", "FROST_WRAITH", "NECRO", "SKELETON"],
+}
+# NEW-MON3 kind rows (sec 4; res codes N0 R1 I2 X3 W4 in TYPES order; imm bits 1 sleep 2 stun 4 confuse 8 fear 16 poison)
+NEWKINDS = {
+    30: dict(name="Gargoyle", hp=9, atk=3, eva=1, die=6, bonus=0, df=0, wt=3, kxp=8, res=[1, 0, 1, 0, 2, 0], imm=1 | 8 | 16, period=1, mdty=PHYS, perch=True),
+    31: dict(name="Fire Imp", hp=5, atk=2, eva=3, die=3, bonus=0, df=0, wt=3, kxp=6, res=[0, 2, 4, 0, 0, 0], imm=0, period=1, mdty=FIRE, perch=False),
+    32: dict(name="Frost Wraith", hp=13, atk=3, eva=2, die=6, bonus=1, df=1, wt=3, kxp=10, res=[0, 4, 2, 0, 2, 2], imm=1 | 16, period=2, mdty=COLD, perch=False),
+}
+# P-1 (sec 8.3): base kind -> (range, die, poison added); tiers share the row only for Orc / Skeleton.  Goblin: one dagger per life.
+PIT_KINDS = {"SPIDER": (4, 2, 6), "GOBLIN": (6, 3, 0), "ORC": (5, 6, 0), "SKELETON": (5, 4, 0)}
+PIT_TIERS = {"ORC": ("ORC_BERSERK", "ORC_BOUNCER"), "SKELETON": ("SKEL_GUARD", "SKEL_KNIGHT")}
 BOSS_KIND = {1: "GOBLIN", 2: "SPIDER", 3: "VAMPIRE", 4: "OGRE", 5: "MUMMY", 6: "NECRO", 7: "DKNIGHT", 8: "ARCHMAGE"}
 BOSS_NAME = {1: "Goblin King", 2: "Spider Queen", 3: "Vampire Lord", 4: "Ogre Warlord", 5: "Pharaoh",
              6: "High Necromancer", 7: "Death Knight", 8: "Archmage"}
@@ -184,6 +223,7 @@ GEAR = {
     "Ring of Fire Ward": dict(slot="c", res={FIRE: 1}), "Amulet of Mana": dict(slot="c", regen=0.5),
     "Amulet of Plenty": dict(slot="c", food=0.5), "Scarab": dict(slot="c", regen=0.5, food=0.5),
     "Ring of the Grave": dict(slot="c", mp=2, res={DARK: 2}),
+    "Frost Charm": dict(slot="c", res={COLD: 1}),     # NEW-MON3 (user 2026-11-13): amulet, COLD resist only, drops from D5, normal gear weight
 }
 ITEM_GEAR = {"IT_A_ROBE": "Robe", "IT_A_LEATHER": "Leather", "IT_W_LONG": "Long Sword", "IT_W_AXE": "War Axe", "IT_W_IRON": "Iron Staff", "IT_W_RUNE": "Rune Staff",
              "IT_A_CHAIN": "Chain Mail", "IT_A_PLATE": "Plate", "IT_H_HOOD": "Hood", "IT_H_HELM": "Helm",
@@ -193,7 +233,7 @@ ITEM_GEAR = {"IT_A_ROBE": "Robe", "IT_A_LEATHER": "Leather", "IT_W_LONG": "Long 
 NAME_TYPE = dict((v, k) for k, v in ITEM_GEAR.items())
 NAME_TYPE.update({"Short Sword": "IT_W_SHORT", "Oak Staff": "IT_W_OAK", "Cleaver": "IT_W_CLEAVER", "Bone Staff": "IT_W_BONE",
                   "Silk Cloak": "IT_A_SILK", "Gravecloak": "IT_A_GRAVE", "Goblin Helm": "IT_H_KING", "Mirror Helm": "IT_H_MIRROR",
-                  "Scarab": "IT_C_SCARAB", "Ring of the Grave": "IT_C_GRAVE"})
+                  "Scarab": "IT_C_SCARAB", "Ring of the Grave": "IT_C_GRAVE", "Frost Charm": "IT_C_FIRE"})   # Frost Charm: charm-class proxy for the GEAR1 gates
 BAG_GEAR_MAX = 8
 UNIQUE = {1: "Goblin Helm", 2: "Silk Cloak", 3: "Gravecloak", 4: ("Cleaver", "Bone Staff"), 5: "Scarab",
           6: "Ring of the Grave", 7: "Mirror Helm"}
@@ -253,6 +293,12 @@ class Data:
                 wt=col(sym["KT_REACH"]), flags=col(sym["KT_FLAGS"]), res=res, imm=e[3], kxp=e[4], df=e[5],
                 boss=bool(e[3] & 0x80), mdty=DRAIN if md & 7 == 3 else PHYS, heal=bool(md & 0x80),
                 efx=efx, ech=e[7] >> 4, etn=e[7] & 15)
+        for i, nk in NEWKINDS.items():
+            self.kid[nk["name"].upper().replace(" ", "_")] = i
+            self.kname[i] = nk["name"]
+            self.k[i] = dict(id=i, name=nk["name"], hp=nk["hp"], atk=nk["atk"], eva=nk["eva"], die=nk["die"], bonus=nk["bonus"],
+                             period=nk["period"], wt=nk["wt"], flags=0, res=list(nk["res"]), imm=nk["imm"], kxp=nk["kxp"], df=nk["df"],
+                             boss=False, mdty=nk["mdty"], heal=False, efx=0, ech=0, etn=0, perch=nk["perch"])
         # --- ranks (ab_rank 7 x 3 x (mp, range, die, bonus, bounces, effect))
         rk = sym["ab_rank"] - C.BASE
         self.rank = {}
@@ -301,6 +347,17 @@ class Data:
         if P["W_LVL_HP"] is None:
             P["W_LVL_HP"] = sym["LUP_W_HP"]
         self.image_widow(sna, sym)
+        self.lp = {d: [self.kid[n] for n in (P["NM3_LISTS"] or {}).get(str(d), LP8[d])] for d in range(1, 9)} if P["NEWMON3"] else \
+            {d: [self.kid[n] for n in ROSTER[d]] for d in range(1, 9)}
+        self.nm3 = bool(P["NEWMON3"])
+        if self.nm3:
+            self.rows = dict(self.rows)
+            self.rows[self.kid["FIRE_IMP"]] = (P["IMP_R"], P["IMP_COOL"], 0, 4, 1, 1, 0, "spark_fly1")   # bot-side shooter marker; the turn is imp_turn
+        self.pit = {}
+        if self.nm3:
+            for b, (r, die, psn) in PIT_KINDS.items():
+                for kk in (b,) + PIT_TIERS.get(b, ()):
+                    self.pit[self.kid[kk]] = (r, die, psn, kk == b)
         self.tiers = {self.kid[b]: tuple(self.kid[t] if t else None for t in ts) for b, ts in TIERS.items()}
         self.tier_base = {t: b for b, ts in self.tiers.items() for t in ts if t is not None}
 
@@ -370,7 +427,7 @@ def merge(a, b):
 class Mon:
     __slots__ = ("kind", "k", "hp", "maxhp", "x", "atk", "df", "gold", "boss", "hold", "holdkind", "conf", "fear",
                  "cd", "climb", "scd", "sumlive", "resp", "bred", "slam", "blink", "pidx", "hexcd", "line", "back",
-                 "tail", "summoned", "guard")
+                 "tail", "summoned", "guard", "awake", "pit")
 
     def __init__(self, D, kind, depth, gold=False, resp=False):
         k = D.k[kind]
@@ -398,6 +455,8 @@ class Mon:
         self.tail = 0
         self.summoned = False
         self.guard = False
+        self.awake = resp           # NEW-MON3 perch: an ALARM / trickle body appears awake; a level body is perched
+        self.pit = 0
 
     def label(self):
         return self.k["name"]
@@ -538,6 +597,8 @@ class Game:
         h.mirror = bool(self.gear_prop("mirror"))
         h.poison_imm = bool(self.gear_prop("poison"))
         h.res = [0] * 6
+        if getattr(h, "charm", False) and getattr(self, "depth", 0) in (5, 7, 8):
+            h.res[COLD] = 1       # bot rule: an owned Frost Charm is swapped in on Wraith depths (D5 / D7 / D8)
         for g in h.gear.values():
             if g:
                 for ty, rs in self.G[g].get("res", {}).items():
@@ -618,7 +679,7 @@ class Game:
         k = t1 // P["TRICKLE_PERIOD"] - t0 // P["TRICKLE_PERIOD"]
         for _ in range(k):
             if self.resp_count < P["TRICKLE_MAX"] and self.rr() < P["TRICKLE_P"] and self.visited_cleared > 0:
-                kind = self.roll_kind(self.D.id(self.rng.choice(ROSTER[self.depth])), self.depth, self.lp_lvl)
+                kind = self.roll_kind(self.rng.choice(self.D.lp[self.depth]), self.depth, self.lp_lvl)
                 m = Mon(self.D, kind, self.depth, resp=True)
                 self.respawns_pending.append(m)
                 self.resp_count += 1
@@ -644,12 +705,16 @@ class Game:
         self.depth = depth
         self.lvlturn = 0
         self.lp_lvl = self.h.lvl
+        if self.D.nm3:
+            self.recalc()             # the Frost Charm swap is by depth
         self.resp_count = 0
         self.respawns_pending = []
         self.in_boss_dead = False
         self.visited_cleared = 0
         nrooms = rng.randint(P["ROOMS_LO"], P["ROOMS_HI"]) + (1 if depth == 8 else 0)
-        base = [D.id(n) for n in ROSTER[depth]]
+        slots = D.lp[depth]
+        nslot = len(slots)                   # 4 today, 8 with NEWMON3 (duplicates = weight, the pick is lp[rnd & 7])
+        base = list(dict.fromkeys(slots))    # distinct kinds in first-appearance (= fallback) order
         N = P["MON_COUNT"][depth - 1] - 2
         nonspecial = nrooms - 2 - (1 if depth == 8 else 0)    # minus start, lair, (Sanctum)
         quota = [0] * nonspecial
@@ -681,9 +746,9 @@ class Game:
             sig, mons = 0, []
             for u in range(q):
                 left_u = q - u - 1
-                bi = rng.randrange(4)
-                kind = self.roll_kind(base[bi], depth, self.lp_lvl)
-                cand = [kind, base[bi]] + [b for i, b in enumerate(base) if i != bi]
+                pk = slots[rng.randrange(nslot)]
+                kind = self.roll_kind(pk, depth, self.lp_lvl)
+                cand = [kind, pk] + [b for b in base if b != pk]
                 for kd in cand:
                     w = D.k[kd]["wt"]
                     if sig + w + left_u * minw <= sigma or w == minw:
@@ -694,7 +759,7 @@ class Game:
         self.rooms = rooms
         # lair: boss + escort
         boss = Mon(D, D.id(BOSS_KIND[depth]), depth, gold=depth in (1, 2, 3, 5, 6))
-        esc = Mon(D, base[rng.randrange(4)], depth)
+        esc = Mon(D, slots[rng.randrange(nslot)], depth)
         self.lair = [boss, esc]
         self.boss = boss
         # items
@@ -709,6 +774,8 @@ class Game:
         food = [FOODS[rng.randrange(5)] for _ in range(3 + rng.randrange(2))]
         scr = [("tele", "fear", "sleep", "ench")[rng.randrange(4)] for _ in range(1 + rng.randrange(2))]
         gp = [ITEM_GEAR[next(n for n, v in IM.T.items() if v == t)] for t in IM.gear_pool(depth, IM.HERO_WARRIOR if self.hero == "W" else IM.HERO_MAGE)]
+        if self.D.nm3 and depth >= self.P["CHARM_FROM"]:
+            gp.append("Frost Charm")
         gear = []
         for _ in range(1 + rng.randrange(2)):
             g = gp[rng.randrange(len(gp))]
@@ -853,6 +920,8 @@ class Game:
     def equip_consider(self, g, q=0):
         h = self.h
         import items_model as IM
+        if g == "Frost Charm":
+            h.charm = True            # kept in the pack; worn on Wraith depths (recalc), wherever the amulet slot stands otherwise
         gd = self.G[g]
         slot = gd["slot"]
         cur = h.gear.get(slot)
@@ -1215,6 +1284,8 @@ class Game:
         self.turns = 0
         h.hold = 0
         start_t = self.t
+        if D.nm3 and not boss_room:
+            self.pit_throws(mons)
         while True:
             alive = [m for m in mons if m.hp > 0]
             if not alive:
@@ -1270,6 +1341,9 @@ class Game:
         h.holdguard = False
 
     # ---- monster side -----------------------------------------------------------------------
+    def perched(self, m):
+        return bool(m.k.get("perch")) and not m.awake and m.hp >= m.maxhp
+
     def in_line(self, m):
         return m.climb <= 0
 
@@ -1353,6 +1427,11 @@ class Game:
             per = 1
         if per > 1 and self.turns % per:
             return
+        if k.get("perch") and not m.awake:
+            # NEW-MON3 4.1 PERCH: wakes (and spends the turn) when the hero is within PERCH_GAP, or when hurt (the hit flash is the cue)
+            if m.hp < m.maxhp or m.x <= P["PERCH_X"]:
+                m.awake = True
+            return
         if m.conf and self.rr() < 0.5:
             m.conf -= 1
             return
@@ -1364,13 +1443,15 @@ class Game:
             m.fear -= 1
             m.x += 1
             return
+        if kid == D.kid.get("FIRE_IMP") and D.nm3:
+            return self.imp_turn(m, alive)
         row = self.mrow(m)
         gap = m.x
         if row:
             r, N, flags, die, bonus = row[0], row[1], row[2], row[3], row[4]
             if kid == D.id("BONE_CALLER") and m.scd <= 0 and len([o for o in mons if o.summoned and o.hp > 0]) < P["BC_LIVE"]:
                 m.scd = 8
-                base = D.id("SKELETON") if D.id("SKELETON") in [D.id(n) for n in ROSTER[self.depth]] else D.id("GHOST")
+                base = D.id("SKELETON") if D.id("SKELETON") in D.lp[self.depth] else D.id("GHOST")
                 s = Mon(D, base, self.depth, resp=True)
                 s.summoned = True
                 s.x = max(1, m.x - 1)
@@ -1411,6 +1492,46 @@ class Game:
             if m.x < 1:
                 m.x = 1
 
+    def imp_turn(self, m, alive):
+        """NEW-MON3 4.2: erratic flyer + ember (auto-hit, 1d4+1 FIRE x the hero's response, no DEF, cooldown IMP_COOL, in line = front,
+        gap > 1 and < IMP_R); between shots it flies on (erratic: closes one col with prob IMP_ERR), claw 1d3 FIRE in reach."""
+        P, h = self.P, self.h
+        gap = m.x
+        if gap > 1 and gap < P["IMP_R"] and m.cd <= 0 and self.front(alive) is m:
+            m.cd = P["IMP_COOL"]
+            dm = self.hero_res(FIRE, self.rng.randint(1, 4) + 1)
+            self.dmg_hero(dm, m.k["name"], "ranged")
+            return
+        m.cd -= 1
+        if gap <= 1:
+            return self.mon_melee(m, 1)
+        if self.rr() < P["IMP_ERR"] and not any(o is not m and o.hp > 0 and o.x < m.x and m.x - o.x < 2 for o in alive):
+            m.x -= 1
+
+    def pit_throws(self, mons):
+        """NEW-MON3 P-1 (8.2-8.4): a pit-row walker stranded at a pit edge throws at a lingering hero.  No pit model in the sim, so the
+        term is an expectation per room fight: with prob PIT_P the nearest pit-row body throws PIT_THROWS times (F1 vs EVA, roll - DEF
+        min 1; Spider +6 POISON; Goblin one dagger per life).  D1 has no pits; lairs never (bosses do not throw)."""
+        P, D, h = self.P, self.D, self.h
+        if self.depth < 2 or self.rr() >= P["PIT_P"]:
+            return
+        c = [m for m in mons if m.hp > 0 and m.k["id"] in D.pit and not m.boss and not m.gold and not m.summoned]
+        if not c:
+            return
+        m = min(c, key=lambda o: o.x)
+        r, die, psn, base = D.pit[m.k["id"]]
+        if m.k["id"] in (D.kid["SPIDER"], D.kid["GOBLIN"]) and not base:
+            return
+        for _ in range(P["PIT_THROWS"]):
+            if m.k["id"] == D.kid["GOBLIN"]:
+                if m.pit:
+                    return
+                m.pit = 1
+            if self.rr() < self.hit_hero_chance(m.atk):
+                self.dmg_hero(max(1, self.rng.randint(1, die) - h.df), m.k["name"], "pit")
+                if psn and not h.poison_imm:
+                    h.poison = min(30, h.poison + psn)
+
     def mon_melee(self, m, reach):
         D, P, h = self.D, self.P, self.h
         k = m.k
@@ -1432,9 +1553,14 @@ class Game:
         wk = self.weak_active()
         dty = k["mdty"]
         dm = self.hero_res(dty, dm)
-        dm = max(1 if dm else 0, dm - h.df)
+        if dty not in (FIRE, COLD):
+            dm = max(1 if dm else 0, dm - h.df)       # typed FIRE / COLD touches (NEW-MON3) ignore DEF like the Mage's bolts
         if dm:
             self.dmg_hero(dm, BOSS_LBL(m, self.depth), "melee")
+        if kid == D.kid["FROST_WRAITH"] and dm > 0 and not h.holdguard and not h.hold and self.rr() < 1.0 / P["WRAITH_FRZ_N"]:
+            tn = P["WRAITH_FRZ_T"] // 2 if h.res[COLD] == 1 else P["WRAITH_FRZ_T"]     # 4.3: R -> half, I / X -> none (dm 0)
+            if tn:
+                h.hold, h.holdkind = tn, "frozen"
         if k["heal"]:
             m.hp = min(m.maxhp, m.hp + dm)
         if kid == self.D.id("MUMMY"):
@@ -1629,11 +1755,15 @@ class Game:
                 m.x += 1
             return "skip"
         if gap >= 2:
+            rmax = max(D.ammo[0]["range"], D.ammo[1]["range"] if h.bow and h.arrows else 0)
+            if self.perched(front) and (gap > rmax or not (h.daggers or (h.bow and h.arrows))):
+                self.hero_step(alive)       # a perched statue never comes: out of throwing range / ammo, the bot walks up
+                return "skip"
             if gap >= 3 and (h.daggers or (h.bow and h.arrows)) and gap <= 14:
                 return self.warrior_ranged(front, gap)
             if gap > 1:
                 # advance toward the monster (monsters approach as well): wait if they come, else step
-                if front.k["id"] in D.rows or front.k["id"] == D.id("ARCHMAGE") or front.k["period"] > 1 or front.climb:
+                if front.k["id"] in D.rows or front.k["id"] == D.id("ARCHMAGE") or front.k["period"] > 1 or front.climb or self.perched(front):
                     self.hero_step(alive)
                     return "skip"
                 # same-speed walker will close: wait (free ranged opportunities used above)
@@ -1816,6 +1946,8 @@ class Game:
         if gap <= 1:
             return self.melee(front)
         # no spell, not adjacent: let it come (hero waits) unless slow monster
+        if self.perched(front):
+            self.hero_step(alive)       # a perched statue never comes: the bot walks up (spends the turn)
         return "skip"
 
     def cast(self, s, rank, row, alive, front):
@@ -1966,6 +2098,8 @@ class Game:
             if self.rr() < tier / dr[1]:
                 h.bagfood.append(dr[0])
         if base == self.D.id("NECRO") and not m.resp and self.rr() < 1 / 3:
+            h.mana += 1
+        if self.D.nm3 and base == self.D.kid["FIRE_IMP"] and not m.resp and self.rr() < 1.0 / self.P["IMP_MANA_N"]:
             h.mana += 1
         if self.stats is not None:
             self.stat_add("kills")
