@@ -1068,7 +1068,27 @@ ATTR_HUD        EQU $47             ; bright white on black (screen clear; panel
 ; room geometry: STOREY_COUNT / STOREY_ROWS / PLAY_ROWS ... (level_defs.asm, B3B-3)
 MAX_POTIONS     EQU 9               ; (3E-T11: no engine user; the bag caps potions)
 QUAFF_HEAL      EQU 12              ; game.md §8: Heal +12 HP (MORE-MON knob 2026-11-04; was 10, 3E-T11 8)
+; D-AI1d experiment: FOLLOW_V2 1 = gap <= 6 (0 B: the operand of follow_select's `cp FOLLOW_GAP + 1`);
+; 0 = the shipped gap 4. The awake/aware half of D-AI1d has no state to test (every monster that passes
+; the HOLD/FEAR filter is already awake and chasing; asleep = STS_HOLD, already excluded): see the report.
+    IFNDEF FOLLOW_V2
+FOLLOW_V2       EQU 1
+    ENDIF
+    IF FOLLOW_V2
+FOLLOW_GAP      EQU 6
+    ELSE
+; D-AI1d experiment: FOLLOW_V2 1 = gap <= 6 (0 B: the operand of follow_select's `cp FOLLOW_GAP + 1`);
+; 0 = the shipped gap 4. The awake/aware half of D-AI1d has no state to test (every monster that passes
+; the HOLD/FEAR filter is already awake and chasing; asleep = STS_HOLD, already excluded).
+    IFNDEF FOLLOW_V2
+FOLLOW_V2       EQU 1
+    ENDIF
+    IF FOLLOW_V2
+FOLLOW_GAP      EQU 6
+    ELSE
 FOLLOW_GAP      EQU 4
+    ENDIF
+    ENDIF
 FOLLOW_MAX      EQU 2
 ROOM_CAP        EQU 4               ; monsters per room (on-screen cap)
 TALL_CAP        EQU 2

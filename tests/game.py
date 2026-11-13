@@ -937,6 +937,45 @@ def main():
             g = p.ent(SLOT_GOBLIN)
             h.expect("28 reappears once the hero moved off", bool(g["FLAGS"] & EF_PENDING), False)
 
+        # ---------------- 67 follow gap (D-AI1d FOLLOW_V2): FOLLOW_GAP 6 (-DFOLLOW_V2=1) / 4 (=0) ----
+        # Hero x=28 steps to 29 through A's right exit; a standing walker follows iff its gap to
+        # the hero's box (29..31) is <= FOLLOW_GAP, <= 2 per exit, never one that is ASLEEP (HOLD).
+        # Expectations derive from the build's FOLLOW_GAP, so both builds assert their own rule.
+        if want(67):
+            G = S["FOLLOW_GAP"]
+            gw = {SLOT_GOBLIN: 3, SLOT_SLIME: 3, SLOT_RAT: 4}
+
+            def exit_with(cands, asleep=()):
+                """cands = {slot: gap}; returns {slot: followed?} after the A -> B exit."""
+                p.boot(K_KNIGHT)
+                for s_ in range(1, 16):          # B empty: caps never the limiter
+                    e_ = p.ent(s_)
+                    if e_["FLAGS"] & EF_ACTIVE and e_["ROOM"] == 1:
+                        p.set_ent(s_, ROOM=NOWHERE)
+                p.isolate()
+                p.wmem(S["ST_FLAGS"], [0] * 16)
+                for s_, gap in cands.items():
+                    y_ = R1 if s_ in (SLOT_RAT, SLOT_SLIME) else G1
+                    p.place(s_, 26 - gap - (gw[s_] - 3), y_, room=0)   # box ends at 29 - gap
+                for s_ in asleep:
+                    p.wb(S["ST_FLAGS"] + s_, 2)                        # HOLD_ASLEEP
+                p.place(0, 28, Y1)
+                p.turn("L")
+                p.until(lambda: p.rb("CUR_ROOM") == 1 and p.idle())
+                return {s_: p.ent(s_)["ROOM"] == 1 for s_ in cands}
+
+            for gap in (3, 4, 5, 6, 7):
+                r = exit_with({SLOT_GOBLIN: gap})
+                h.expect(f"67 chasing goblin gap {gap} follows iff <= {G}", r[SLOT_GOBLIN], gap <= G)
+            r = exit_with({SLOT_GOBLIN: 3}, asleep=(SLOT_GOBLIN,))
+            h.expect("67 ASLEEP goblin at gap 3 does not follow", r[SLOT_GOBLIN], False)
+            # caps: <= 2 per exit, nearest first (ties lower slot), only gap <= G
+            gaps = {SLOT_RAT: 4, SLOT_SLIME: 5, SLOT_GOBLIN: 6}
+            r = exit_with(gaps)
+            want_f = {s_ for s_, _ in sorted(((s_, g_) for s_, g_ in gaps.items() if g_ <= G),
+                                             key=lambda t: (t[1], t[0]))[:2]}
+            h.expect("67 cap 2: nearest two within the gap follow", {s_ for s_, f_ in r.items() if f_}, want_f)
+
         # ---------------- 52 (user bug B7) no old-room monster after a transition
         # Root cause: render runs first in a tick (A1 RENDER_FIRST), so the
         # first render after do_exit used the PREVIOUS tick's anim_tick output
