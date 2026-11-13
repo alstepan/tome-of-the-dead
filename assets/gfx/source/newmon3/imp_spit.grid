@@ -1,0 +1,27 @@
+# Tome of the Dead gfx text grid — NEW-MON3 DRAFT for canvas review (new_monsters.md §6); authored deterministically, not yet imported
+# name: imp_spit
+# size: 24x16
+# character: FIRE IMP
+# caption: SPIT
+# ink: #D7D700
+# anchor: 0 0
+# class: STA|MIR
+# note: head thrust forward, cheeks puffed, mouth open at the front with an ember; faces RIGHT
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+....+++......+++.....+++
+....+#++.....+#++...++#+
+....+##++....++#++.++#++
+....+#+#++....+##+++##+.
+....+##+#++...++#####++.
+....++##+#++..+#######+.
+.....++####++.+####++#++
+......++####+++########+
+.......++####++#######++
+........++++##+######+##
+..........+############+
+.........++####+#####+++
+.....+++++######++++++..
+....++#++#+##+++#+......
+....+####+++##++++......
+....++#+++.++++.........

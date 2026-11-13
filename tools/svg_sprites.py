@@ -86,11 +86,16 @@ CHAR_PREFIX = {
     "VAMPIRE": "vamp", "SMALL ANIMAL": "small",
     # 3F ART3 finals (tools/gen_art3_final.py): ONE shared humanoid climb pair
     "CLIMB": "climb",
+    # NEW-MON3 (docs/design/new_monsters.md §6; assets/gfx/source/newmon3_frames.svg.html)
+    "GARGOYLE": "garg", "FIRE IMP": "imp", "FROST WRAITH": "wraith", "DUST": "dust",
 }
 # FX "characters": cell-aligned, placed by the FX track (px, py), not by a body
 # box, so every FX frame's ax is declared 0 (ANCHOR_X below) and body_w = 8.
 FX_PREFIXES = ("spark", "firebolt", "frost", "drain", "lightning", "power", "dagger",
                "arrow", "staff", "nbolt")
+
+# NEW-MON3: monsters whose frames exist only on a draft sheet (appended at the end).
+DRAFT_ONLY_PREFIXES = ("garg", "imp", "wraith", "dust")
 
 # Characters present on the vendored canvas / draft sheets but dropped from the
 # build (out of scope; G1 budget docs/design/budget.md §2). The sheets stay
@@ -109,11 +114,13 @@ OUTLINE = True
 # a differing one is an error (the canvas and the draft disagree).
 DRAFT_SHEETS = [os.path.join(REPO, "assets/gfx/source/draft3_frames.html"),
                 os.path.join(REPO, "assets/gfx/source/c37_frames.svg.html"),
-                os.path.join(REPO, "assets/gfx/source/d3_frames.svg.html")]
+                os.path.join(REPO, "assets/gfx/source/d3_frames.svg.html"),
+                os.path.join(REPO, "assets/gfx/source/newmon3_frames.svg.html")]
 # Generator named in the emitted .asm header per draft sheet (default
 # tools/gen_missing_frames.py). C3-7 hero frames: tools/gen_c37_frames.py.
 DRAFT_GEN = {"assets/gfx/source/c37_frames.svg.html": "tools/gen_c37_frames.py",
-             "assets/gfx/source/d3_frames.svg.html": "tools/gen_d3_art.py"}
+             "assets/gfx/source/d3_frames.svg.html": "tools/gen_d3_art.py",
+             "assets/gfx/source/newmon3_frames.svg.html": "assets/gfx/source/newmon3/*.grid (hand-authored)"}
 
 # Canvas sections whose 8x8 artboards are background/FX TILES (tile mode:
 # 8 bitmap bytes + 1 attribute each), not sprites. The canvas draws every tile
@@ -143,6 +150,7 @@ BODY_W = {"knight": 24, "wizard": 24, "rogue": 24, "skeleton": 24, "goblin": 24,
           "spider": 32, "orc": 24, "necro": 24, "mummy": 24, "ogre": 32, "dk": 24,
           "dead": 24,              # shared humanoid DEAD (3F, game.md §9.7 R3)
           "vamp": 24, "small": 32,  # ART2: Vampire = Necro body; corpse = Rat body
+          "garg": 24, "imp": 24, "wraith": 24, "dust": 24,   # NEW-MON3 (new_monsters.md §6.1)
           "climb": 24,              # ART3: shared humanoid climb (Orc/Necro/Vampire/Archer)
           **{p: 8 for p in FX_PREFIXES}}
 
@@ -744,7 +752,8 @@ def merge_drafts(frames: list[Frame], drafts: list[str]) -> list[Frame]:
             if d.kind == "sprite":
                 last = max((i for i, f in enumerate(out)
                             if f.kind == "sprite" and f.character == d.character), default=None)
-                if last is None and CHAR_PREFIX.get(d.character) in FX_PREFIXES:
+                if last is None and (CHAR_PREFIX.get(d.character) in FX_PREFIXES
+                                     or CHAR_PREFIX.get(d.character) in DRAFT_ONLY_PREFIXES):
                     out.append(d)         # D3-4: FX characters exist only on a draft sheet
                     canvas[key] = d
                     continue
