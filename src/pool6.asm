@@ -87,7 +87,7 @@ pool_hero:
                 ld   a, (HERO_KIND)
                 call pl_unit
                 ld   a, (HERO_KIND)
-                add  a, K_FX_BASE
+                add  a, U_FX_BASE
                 call pl_unit
                 jp   sq_fill
 
@@ -254,7 +254,7 @@ frt_none:
 ; Clobbers: A, BC, DE, HL.
 fxr_none:
                 ld   a, (HERO_KIND)
-                add  a, K_FX_BASE
+                add  a, U_FX_BASE
                 add  a, a
                 ld   l, a
                 ld   h, 0
@@ -283,7 +283,7 @@ fxr_none:
 ;------------------------------------------------------------------------------
 ; gu_tab — the generation units: DB fid0, fcnt (see the header). Units < K_MAX
 ; are the kinds (the old kind_tab KT_FID0 / KT_FCNT columns; D3-4: the class FX
-; kinds K_FXW / K_FXM, ids 30 / 31, overlapping ranges).
+; units U_FXW / U_FXM, the last two of gu_tab_x since FX-U, overlapping ranges).
 ;------------------------------------------------------------------------------
     MACRO GU f0, fn
                 DB   f0, fn
@@ -323,9 +323,9 @@ gu_tab:
                 GU   KFID_ORC, KFCNT_ORC                       ; K_ORC_BOUNCER
                 GU   KFID_SKELETON, KFCNT_SKARCH               ; K_SNIPER
                 GU   KFID_NECRO, KFCNT_NECRO                   ; K_BONE_CALLER
-                ASSERT K_BONE_CALLER == K_FXW - 1
-                GU   KFID_FXW, KFCNT_FXW
-                GU   KFID_FXM, KFCNT_FXM
+                ASSERT K_BONE_CALLER == K_GARGOYLE - 1
+                GU   0, 0                                      ; K_GARGOYLE (30): no frames yet (T4)
+                GU   0, 0                                      ; K_ALIAS (31): no frames yet (T4: Imp / Wraith, per level)
 gu_tab_x:                                      ; units >= K_MAX (extras, 3F-T13)
 U_SKARCH        EQU K_MAX + 0
                 GU   KFID_SKELETON, KFCNT_SKARCH               ; Skeleton walk1..4 + cut + hurt (= the Archer; ANIM-IMPORT: + hurt)
@@ -349,16 +349,22 @@ U_SKCLIMB       EQU K_MAX + 8
                 GU   KFID_SKCLIMB, KFCNT_SKCLIMB               ; Skeleton climb1/2 (Skeleton, Archer, Sniper)
 U_SPARKW        EQU K_MAX + 9
                 GU   FID_spark_fly1, 2                         ; Warrior extra on Spider levels (the Queen's spit)
+                ; NEW-MON3 T2 (FX-U): the class FX units, freed from the kind ids 30 / 31
+U_FXW           EQU K_MAX + 10
+                GU   KFID_FXW, KFCNT_FXW
+U_FXM           EQU K_MAX + 11
+                GU   KFID_FXM, KFCNT_FXM
+U_FX_BASE       EQU U_FXW - K_KNIGHT                           ; + HERO_KIND = the hero's class FX unit
 gu_tab_end:
 GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
                 ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 30
-                ASSERT K_FXW == K_MAX - 2 && K_FXM == K_MAX - 1
+                ASSERT U_FXM == U_FX_BASE + K_WIZARD && U_FXM == U_FXW + 1 && U_FXM < 128
                 ASSERT KFID_SKCLIMB == KFID_SKELETON + KFCNT_SKARCH && KFID_SKREST == KFID_SKCLIMB + KFCNT_SKCLIMB && FID_skeleton_climb2 == KFID_SKREST - 1 && KFCNT_SKCLIMB == 2 && FID_skeleton_hurt == KFID_SKCLIMB - 1 && FID_skeleton_cut == KFID_SKCLIMB - 2 && KFCNT_SKREST == 1
                 ASSERT KFID_RATDEAD == KFID_RAT + KFCNT_RAT - 1 && FID_small_corpse == KFID_RATDEAD
                 ASSERT KFID_NCAST == KFID_NECRO + KFCNT_NECRO
                 ASSERT FID_climb_h2 == KFID_CLIMBH + 1
                 ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_dagger_spin2 == FID_dagger_spin1 + 1
-                ASSERT FID_spark_fly2 == FID_spark_fly1 + 1 && FID_spark_fly1 == KFID_FXM   ; the Warrior's extra: outside K_FXW,
+                ASSERT FID_spark_fly2 == FID_spark_fly1 + 1 && FID_spark_fly1 == KFID_FXM   ; the Warrior's extra: outside U_FXW,
                                                        ; inside the Mage's (xmap row is Warrior-only; fxr_none runs first)
                 ; the Mage's extras lie outside his class FX unit (fxr_none NONEs them per level)
                 ASSERT FID_arrow_fly1 >= KFID_FXM + KFCNT_FXM && FID_dagger_spin1 >= KFID_FXM + KFCNT_FXM

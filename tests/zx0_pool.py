@@ -23,7 +23,7 @@ SEL_FRT_SAVE and the allocator state (ALLOC_IDX/PTR, mark). The reference
 replays the same generator sessions (3F-T1 — boot: alloc_reset, the two
 select idles, save; each game: select restores the idles' FRT rows,
 alloc_reset + the idles again, (3F-T2 pool_hero: monster FRT rows + the FX
-rows outside the class FX NONE) gen(hero), gen(hero + K_FX_BASE) —
+rows outside the class FX NONE) gen(hero), gen(hero + U_FX_BASE) —
 D3-4: the class FX kind with its overlapping fid range —, alloc_mark; each
 level: alloc_restore, FRT monster rows + non-class FX rows NONE, the level's generation units
 from the LP_KINDS / LP_BOSS bytes read at that point and the snapshot's
@@ -671,7 +671,7 @@ class Ref:
         if "gu_tab" not in S:                          # --baseline: pre-3F-T2 keeps the other FX rows
             return
         fx0, fxn = S["KFID_FXM"], S["KFID_FXW"] + S["KFCNT_FXW"]
-        h0, hn = self.unit(hero + S["K_FX_BASE"])
+        h0, hn = self.unit(hero + S["U_FX_BASE"])
         if h0 > fx0:
             self.frt_none(fx0, h0 - fx0)
         if fxn > h0 + hn:
@@ -700,8 +700,8 @@ class Ref:
         self.hero = hero
         self.begin(hero)                               # 3F-T2 pool_hero
         self.kind(hero)
-        if "K_FX_BASE" in self.S:                      # D3-4: + the class FX kind
-            self.kind(hero + self.S["K_FX_BASE"])
+        if "U_FX_BASE" in self.S:                      # D3-4: + the class FX kind
+            self.kind(hero + self.S["U_FX_BASE"])
         self.mark = (self.idx, self.ptr)               # alloc_mark: the LEVEL mark
         self.level(lp)
 

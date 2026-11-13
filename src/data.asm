@@ -45,7 +45,7 @@ FRM_EMIT = FRM_HOT
                 ; hero + the 2 select-screen idles + worst per-bank straddle
                 ; waste (<= 1 largest variant, 6 cols x 48 x 2 = 576) x 3 banks.
                 ; D3-4: a hero is generated with its class FX kind (start_game),
-                ; so the hero term is max(Knight + K_FXW, Wizard + K_FXM).
+                ; so the hero term is max(Knight + U_FXW, Wizard + U_FXM).
                 ASSERT KFCNT_FXM == 17 && KFCNT_FXW == 8 && KFID_FXW + 2 == KFID_FXM + KFCNT_FXM
                 ASSERT FID_knight_powerstrike >= 0 && FID_spark_fizz2 >= 0 && FID_arrow_hit >= 0
 POOL_HERO_MAX = POOL_KNIGHT + POOL_FXW

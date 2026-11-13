@@ -262,46 +262,46 @@ KFID_CLIMBH = FCTR                      ; 3F-T13bc ART3 A1: the shared humanoid 
 POOL_F3 = POOLACC
 KFCNT_MONSTERS = FCTR - KFID_MONSTERS
 
-; D3-4: the class FX kinds (defs.asm K_FXM / K_FXW; game.md §6.1-6.3).
+; D3-4: the class FX kinds (defs.asm U_FXM / U_FXW; game.md §6.1-6.3).
 ; Render-only projectile / impact frames: ax 0, body width 8 (one cell), all
 ; STATIONARY (cell-aligned: one shift; 2 x source in the pool), SYM where the
 ; art is mirror-symmetric (drain_hit, power_burst: left = right). The two
 ; kinds' ranges overlap on spark_fizz1/2 (Spark impact = Whirlwind impact):
-;   K_FXM = [KFID_FXM, KFID_FXM + KFCNT_FXM) = mage-only + shared
-;   K_FXW = [KFID_FXW, KFID_FXW + KFCNT_FXW) = shared + warrior-only
+;   U_FXM = [KFID_FXM, KFID_FXM + KFCNT_FXM) = mage-only + shared
+;   U_FXW = [KFID_FXW, KFID_FXW + KFCNT_FXW) = shared + warrior-only
 ; The FRM kind argument (BH_ ASSERT, zx0_sources block grouping) is the
-; owning kind; the shared pair is grouped with K_FXW.
+; owning kind; the shared pair is grouped with U_FXW.
 KFID_FXM = FCTR
 POOLACC = 0
-                FRM spark_fly1,       K_FXM, 8, STA|MIR
-                FRM spark_fly2,       K_FXM, 8, STA|MIR
-                FRM firebolt_fly1,    K_FXM, 8, STA|MIR
-                FRM firebolt_fly2,    K_FXM, 8, STA|MIR
-                FRM firebolt_burst1,  K_FXM, 8, STA|MIR
-                FRM firebolt_burst2,  K_FXM, 8, STA|MIR
-                FRM frost_fly,        K_FXM, 8, STA|MIR
-                FRM frost_crack,      K_FXM, 8, STA|MIR
-                FRM drain_fly1,       K_FXM, 8, STA|MIR
-                FRM drain_fly2,       K_FXM, 8, STA|MIR
-                FRM drain_hit,        K_FXM, 8, STA|SYM
-                FRM lightning_fly1,   K_FXM, 8, STA|MIR
-                FRM lightning_fly2,   K_FXM, 8, STA|MIR
-                FRM lightning_flash,  K_FXM, 8, STA|MIR
-                FRM staff_bonk,       K_FXM, 8, STA|MIR
+                FRM spark_fly1,       U_FXM, 8, STA|MIR
+                FRM spark_fly2,       U_FXM, 8, STA|MIR
+                FRM firebolt_fly1,    U_FXM, 8, STA|MIR
+                FRM firebolt_fly2,    U_FXM, 8, STA|MIR
+                FRM firebolt_burst1,  U_FXM, 8, STA|MIR
+                FRM firebolt_burst2,  U_FXM, 8, STA|MIR
+                FRM frost_fly,        U_FXM, 8, STA|MIR
+                FRM frost_crack,      U_FXM, 8, STA|MIR
+                FRM drain_fly1,       U_FXM, 8, STA|MIR
+                FRM drain_fly2,       U_FXM, 8, STA|MIR
+                FRM drain_hit,        U_FXM, 8, STA|SYM
+                FRM lightning_fly1,   U_FXM, 8, STA|MIR
+                FRM lightning_fly2,   U_FXM, 8, STA|MIR
+                FRM lightning_flash,  U_FXM, 8, STA|MIR
+                FRM staff_bonk,       U_FXM, 8, STA|MIR
 POOL_FXM_ONLY = POOLACC
 KFID_FXW = FCTR
 POOLACC = 0
-                FRM spark_fizz1,      K_FXW, 8, STA|MIR
-                FRM spark_fizz2,      K_FXW, 8, STA|MIR
+                FRM spark_fizz1,      U_FXW, 8, STA|MIR
+                FRM spark_fizz2,      U_FXW, 8, STA|MIR
 POOL_FX_SHARED = POOLACC
 KFCNT_FXM = FCTR - KFID_FXM
 POOLACC = 0
-                FRM power_burst,      K_FXW, 8, STA|SYM
-                FRM dagger_spin1,     K_FXW, 8, STA|MIR
-                FRM dagger_spin2,     K_FXW, 8, STA|MIR
-                FRM arrow_fly1,       K_FXW, 8, STA|MIR
-                FRM arrow_fly2,       K_FXW, 8, STA|MIR
-                FRM arrow_hit,        K_FXW, 8, STA|MIR
+                FRM power_burst,      U_FXW, 8, STA|SYM
+                FRM dagger_spin1,     U_FXW, 8, STA|MIR
+                FRM dagger_spin2,     U_FXW, 8, STA|MIR
+                FRM arrow_fly1,       U_FXW, 8, STA|MIR
+                FRM arrow_fly2,       U_FXW, 8, STA|MIR
+                FRM arrow_hit,        U_FXW, 8, STA|MIR
 KFCNT_FXW = FCTR - KFID_FXW
 POOL_FXM = POOL_FXM_ONLY + POOL_FX_SHARED
 POOL_FXW = POOL_FX_SHARED + POOLACC

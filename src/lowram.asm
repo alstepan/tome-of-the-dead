@@ -152,7 +152,7 @@ sel_tab:        DB   FID_knight_idle1, FID_wizard_idle
 
 ;==============================================================================
 ; start_game — C = hero kind. Generate its frames (§5.2: only the chosen
-; hero) and its class FX kind (D3-4: K_FX_BASE + hero), new game, first level (B3B-12: a generated D1 through level_enter;
+; hero) and its class FX kind (D3-4: U_FX_BASE + hero), new game, first level (B3B-12: a generated D1 through level_enter;
 ; proto_start != 0: the PROTO test fixture at proto_hook), then the play
 ; loop (bank 2, never returns).
 ;==============================================================================

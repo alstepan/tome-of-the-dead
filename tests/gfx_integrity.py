@@ -231,11 +231,11 @@ def pool_check(p, check, tag, snap0, snapd=None):
 
 
 def fx_check(p, check):
-    """D3-4: the hero's class FX kind (K_FX_BASE + HERO_KIND) is resident at the
+    """D3-4: the hero's class FX kind (U_FX_BASE + HERO_KIND) is resident at the
     hero start: every fid of its gu_tab unit range has a right (v0/v1) and a
     left (v2/v3) variant in a pool bank whose bytes lie inside the pool."""
     hk = p.rb("HERO_KIND")
-    k = S["K_FX_BASE"] + hk
+    k = S["U_FX_BASE"] + hk
     f0, fc = bank_read(p, S["BANK_R6"], S["gu_tab"] + 2 * k, 2)     # 3F-T2: R6 gu_tab
     want = ("KFID_FXW", "KFCNT_FXW") if hk == S["K_KNIGHT"] else ("KFID_FXM", "KFCNT_FXM")
     check(f"GI FX: kind {k} range == {want[0]}", (f0, fc) == (S[want[0]], S[want[1]]), (f0, fc))

@@ -257,7 +257,7 @@ def c1(h):
     p.check("turn held until FX idle", (p.rb("FX_BUSY"), n >= 12, p.rw("TURN_COUNTER") == t0 + 1),
             (0, True, True))
 
-    # Warrior: K_FXW frames, both facings, no-impact dagger
+    # Warrior: U_FXW frames, both facings, no-impact dagger
     p = C(h)
     p.boot(K_KNIGHT)
     p.isolate()

@@ -1091,13 +1091,13 @@ PS_OVF = 0
 PS_LIM6 = POOL6_END
                 PS_FRAME FID_knight_idle1
                 PS_FRAME FID_wizard_idle
-PSS_M = (1 << plh) | (1 << (plh + K_FX_BASE))
-PSS_X = 0
+PSS_M = (1 << plh)                             ; (FX-U: the class FX unit is >= K_MAX: the X half)
+PSS_X = 1 << (plh + U_FX_BASE - 32)
 PSD_M = 0
 PSD_X = 0
                 PS_UNIT plh
-                PS_UNIT plh + K_FX_BASE
-                ASSERT {b gu_tab + GU_STRIDE * plh} != {b gu_tab + GU_STRIDE * (plh + K_FX_BASE)}
+                PS_UNIT plh + U_FX_BASE
+                ASSERT {b gu_tab + GU_STRIDE * plh} != {b gu_tab + GU_STRIDE * (plh + U_FX_BASE)}
                 ASSERT PS_OVF == 0
 PSM_IDX = PS_IDX                               ; the LEVEL mark
 PSM_PTR = PS_PTR

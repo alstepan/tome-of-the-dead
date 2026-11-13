@@ -168,7 +168,7 @@ ab_ammo:        RANK 0, 6, 4, 2, 0, 0
 ;------------------------------------------------------------------------------
 ; ab_def: per-ability constants (rank-independent), row = ab_def + ability * ABD_STRIDE.
 ; Frame ids (D3-4): the FXF_* EQUs name the class FX kinds' frames (frames.asm
-; K_FXM / K_FXW; FID_COUNT <= FRT_MAX so a fid fits a byte); FXF_NONE = no
+; U_FXM / U_FXW; FID_COUNT <= FRT_MAX so a fid fits a byte); FXF_NONE = no
 ; sprite (melee: no projectile; dagger: no impact). A one-frame sprite repeats
 ; its fid. Every non-NONE fid is in its class's FX kind range (ASSERTed below),
 ; i.e. generated with that hero.

@@ -165,8 +165,8 @@ _KNAMES = ("KNIGHT", "WIZARD", None, "SKELETON", "GOBLIN", "GHOST", "RAT", "BAT"
 def kind_frames(k):
     """(first fid, frame count) of kind k's own generation unit (3F-T2: R6
     gu_tab, built from these KFID_* / KFCNT_* EQUs; was kind_tab KT_FID0 /
-    KT_FCNT). k = K_* (heroes, original monsters) or K_FXW / K_FXM."""
-    n = {S["K_FXW"]: "FXW", S["K_FXM"]: "FXM"}.get(k) or _KNAMES[k]
+    KT_FCNT). k = K_* (heroes, original monsters) or U_FXW / U_FXM."""
+    n = {S["U_FXW"]: "FXW", S["U_FXM"]: "FXM"}.get(k) or _KNAMES[k]
     return S["KFID_" + n], S["KFCNT_" + n]
 
 

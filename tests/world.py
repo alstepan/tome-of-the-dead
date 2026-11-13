@@ -2267,7 +2267,7 @@ def w17(p, check):
     p.wb(ent(1, "E_HP"), 99)
     TAILS = {S["MSG_P_HIT"]: " -99 HP 99", S["MSG_P_KILL"]: " -99 HP 99", S["MSG_M_HIT"]: " -99"}
     for m in range(1, S["MSG_P_PARRY"] + 1):
-        for k in range(S["K_FXW"]):
+        for k in range(S["K_COUNT"]):
             nm = STRINGS[k0 + k][1]
             if not nm:
                 continue                                # a nameless kind (none since 3F-T9 nm_vbat)

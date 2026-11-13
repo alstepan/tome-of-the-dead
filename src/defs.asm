@@ -855,18 +855,19 @@ WT_K_BONE_CALLER EQU WT_K_NECRO
                 DB   WT_K_BLACK_WIDOW, WT_K_SKEL_GUARD, WT_K_SKEL_KNIGHT, WT_K_POLTERGEIST
                 DB   WT_K_ORC_BERSERK, WT_K_ORC_BOUNCER, WT_K_SNIPER, WT_K_BONE_CALLER
     ENDM
-K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 30 used, ids 30 / 31 = the class FX kinds)
-; D3-4: the class FX kinds (render-only projectile / impact frames, game.md §6;
-; never an entity's kind): the LAST two kind ids, so 3F's monster rows grow
-; up from K_COUNT without moving them (3F-T3: the monster rows now fill 0..29). Generated
-; with the hero only (start_game: R6 pool_hero -> unit HERO_KIND + K_FX_BASE), so the
-; pool holds the current class's FX only. Their fid ranges OVERLAP in
-; frames.asm (spark_fizz1/2: Spark impact and Whirlwind impact): K_FXM =
-; [mage-only | shared], K_FXW = [shared | warrior-only].
-K_FXW           EQU K_MAX - 2       ; Warrior FX (= K_FX_BASE + K_KNIGHT)
-K_FXM           EQU K_MAX - 1       ; Mage FX    (= K_FX_BASE + K_WIZARD)
-K_FX_BASE       EQU K_FXW - K_KNIGHT
-                ASSERT K_FXM == K_FX_BASE + K_WIZARD && K_FXW >= K_COUNT
+K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 32 ids; room records keep the row in 5 bits)
+; NEW-MON3 T2 (FX-U, new_monsters.md §3): ids 30 / 31 are the NEW kinds: K_GARGOYLE and the
+; row-31 alias (Fire Imp / Frost Wraith, patched per level, T4). K_COUNT stays 30 (the rows with
+; kind_tab data) until T4 fills rows 30 / 31; the tables pad them with 0 until then.
+K_GARGOYLE      EQU 30
+K_ALIAS         EQU 31
+                ASSERT K_GARGOYLE == K_COUNT && K_ALIAS == K_MAX - 1
+; D3-4: the class FX are generation UNITS only (render-only projectile / impact frames,
+; game.md §6; never an entity's kind), since FX-U the LAST two units of gu_tab_x (pool6.asm,
+; ids >= K_MAX): U_FXW / U_FXM are defined there. Generated with the hero only (start_game: R6
+; pool_hero -> unit HERO_KIND + U_FX_BASE), so the pool holds the current class's FX only. Their
+; fid ranges OVERLAP in frames.asm (spark_fizz1/2: Spark impact and Whirlwind impact):
+; U_FXM = [mage-only | shared], U_FXW = [shared | warrior-only].
 ; body height in cells per kind (single source: kind_tab KT_BH row and the FRM
 ; frame-height ASSERT both use these; named BH_<kind> so FRM can paste `kind`)
 BH_K_KNIGHT     EQU 6
@@ -893,8 +894,8 @@ BH_K_ARCHMAGE   EQU 6
                                     ; and the heroes is small_corpse):
 BH_G_CLIMBH     EQU 6               ; 3F-T13bc: the shared humanoid climb pair (24x48)
 BH_G_NBOLT      EQU 2               ; the Necro bolt (<= 16 px)
-BH_K_FXW       EQU 2               ; D3-4: FX frames are <= 16 px tall (FRM ASSERT only)
-BH_K_FXM        EQU 2
+BH_U_FXW       EQU 2               ; D3-4: FX frames are <= 16 px tall (FRM ASSERT only)
+BH_U_FXM        EQU 2
 
 ; offsets of the parallel arrays inside kind_tab: 2 pages, 32 B per array
 ; (K_MAX). An array never crosses a page (kind < 32, offsets multiple of $20),
