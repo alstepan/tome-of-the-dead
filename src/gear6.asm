@@ -419,7 +419,7 @@ fx_line:
 ; it_fmt — the page's stat line (3E-T8, page_ovl pg_info, far6): the
 ; numbers of the item in slot A appended at DE, each " WORD+n": food
 ; " FOOD+n", Heal / Cure " HP+n", Mana " MP+n"; gear " 1Dn[+b]" (weapon:
-; die and dmg bonus), " ATK+n", " DEF+n", " MP+n", " EVA+n" (non-zero ones,
+; die and dmg bonus), " ATK+n", " DEF+n", " MP+n", " DODGE+n" (non-zero ones,
 ; signed); nothing for scrolls / books / the bow / an empty slot.
 ; In : A = slot 0..23 (record BAG + 3 * A), DE = dest. Out: DE past the text
 ; (no terminator; <= 27 chars: a gear item with v = m + q != 0 first gets " -n" /
@@ -531,7 +531,7 @@ fs_mp:          DB   " MP", 0
 fs_die:         DB   " 1D", 0
 fs_atk:         DB   " ATK", 0
 fs_def:         DB   " DEF", 0
-fs_eva:         DB   " EVA", 0
+fs_eva:         DB   " DODGE", 0               ; ITEM-INFO §2: the word the treasures page taught (was EVA)
 
 ; gx_tab — what it_stat cannot carry (game.md §8 / §8.6): type, eva, RES B0,
 ; RES B1 (RSP_* fields, combat_defs.asm), IMM; 5 B a row, a 0 type ends it.

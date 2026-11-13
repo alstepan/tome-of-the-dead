@@ -75,8 +75,8 @@ expect("%d headerless blocks follow (TAPE_HEADLESS_N)" % len(rest),
 # INSTR-BUILD / C-T8 / C+TUT0 / B0CODE: 6th headerless = the bank-0 text block + the b0 cold code + its
 # reserve pad up to B0_FREE_START, then the used part of the carve, B0_CODE2 (b0c2_code = B0_FREE_START
 # .. b0c2_end <= POOL_START); the rest of the carve and anything above POOL_START are NOT on tape.
-# 7th = the bank-4 BOOT4 block: frame_tab (RECLAIM-D, first, at BOOT4_ORG), HOW TO PLAY
-# pages 1 and 2, the overlay code, then blob_zx0 + its 2-byte length trailer (in_tut reads it from
+# 7th = the bank-4 BOOT4 block: frame_tab (RECLAIM-D, first, at BOOT4_ORG), the boot overlay
+# code (ITEM-INFO: no HOW TO PLAY page streams), then blob_zx0 + its 2-byte length trailer (in_tut reads it from
 # the block's end via tape_tab TT_BOOT4_REC), ending <= BLOB_ORG (forward unpack, no overlap)
 txt = rest[5] if len(rest) > 5 else b""
 b4 = rest[6] if len(rest) > 6 else b""
@@ -101,10 +101,11 @@ if os.path.exists(sna):
     o = sym["b0c2_code"] - sym["TEXT_ADDR"]
     expect("B0_CODE2 tape bytes == .sna bank 0 (%d B)" % sym["B0C2_LEN"],
            txt[1 + o:1 + o + sym["B0C2_LEN"]] == s[off + (sym["b0c2_code"] - 0xC000):off + (sym["b0c2_code"] - 0xC000) + sym["B0C2_LEN"]])
-expect("headerless 7 = BOOT4: frame_tab + INSTR streams + blob_zx0 + trailer at BOOT4_ORG (%d B)" % (len(b4) - 2),
+expect("headerless 7 = BOOT4: frame_tab + INSTR code + blob_zx0 + trailer at BOOT4_ORG (%d B)" % (len(b4) - 2),
        len(b4) - 2 == sym["BOOT4_TAPE_LEN"] and sym["ftz_zx0"] == sym["BOOT4_ORG"] == sym["INSTR_FT_ZX0"]
-       and sym["ftz_zx0"] < sym["ftz_zx0_end"] == sym["instr_p1_zx0"]
-       and sym["instr_p1_zx0"] < sym["instr_p2_zx0"] < sym["instr_zx0"] < sym["instr_zx0_end"] == sym["blob_zx0"]
+       and sym["ftz_zx0"] < sym["ftz_zx0_end"] == sym["instr_zx0"]
+       and sym["instr_zx0"] < sym["instr_zx0_end"] == sym["blob_zx0"]
+       and "instr_p1_zx0" not in sym and "instr_p2_zx0" not in sym
        and sym["BOOT4_ORG"] + sym["BOOT4_TAPE_LEN"] == sym["boot4_end"] <= sym["BLOB_ORG"]
        and sym["BANK_BOOT4"] == sym["BANK_BLOB"] == sym["BANK_INSTR"])
 tl = len(b4) - 2

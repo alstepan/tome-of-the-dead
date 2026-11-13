@@ -155,18 +155,20 @@ PAGE_MAP_SAVE   EQU GEN_SRC             ; GEN_SRC.. (no pause save / pblit / gen
 PAGE_BUF        EQU PAGE_MAP_SAVE + PLAY_CELLS  ; PAGE_BUF_LEN B: a composed text line (print6)
 PAGE_BUF_LEN    EQU 40                          ; WEAR-UI: 39 chars + 0 (the row-19 line from x 16 is 40 chars wide; the longest gear line, the Cleaver at m -3, is 37)
 PAGE_SCR_END    EQU PAGE_BUF + PAGE_BUF_LEN
+IE_BUF          EQU PAGE_SCR_END                ; ITEM-INFO: row 19's composed phrase[, gate] (ux0.asm ie_line;
+IE_BUF_LEN      EQU 41                          ;   40 chars + 0; PAGE_BUF keeps row 18's line: test-observable)
+                ASSERT IE_BUF + IE_BUF_LEN <= TX_DEC
 ; 3E-T6: the level-start item / trap generator overlay (items_ovl.asm) runs
 ; in the same window at a level start (after level_populate: the LG_* /
 ; LP_CMAP scratch is dead), its packed stream in bank BANK_OVL_ITEMS (main.asm
 ; bank 1 tail, MEM-1; any bank ovl_run can page: move the INCBIN + this EQU together).
 ITEMS_ORG       EQU GEN_SCRATCH
 BANK_OVL_ITEMS  EQU BANK_UI1       ; MEM-1: back in bank 1 (main.asm, after the it_text block)
-BANK_OVL_PAGE   EQU BANK_R6         ; R6: the page stream (page_ovl, menu1.asm)
-; INSTR-BUILD: the HOW TO PLAY screen (game.md §3.2.1 option A flow, docs/design/
-; instructions_screen.md / .txt pages): boot-only overlay instr_ovl.asm at INSTR_ORG,
-; its page images (tools/instr_pack.py) unpacked by it to INSTR_DATA (right after its
-; code, same window). Its ZX0 streams are the bank-4 BOOT4 tape block (BOOT4_ORG..,
-; C+TUT0 merge; the boot pool overwrites them after the help).
+BANK_OVL_PAGE   EQU BANK_TEXT       ; ITEM-INFO: B0_CODE2 (was R6): the page stream (page_ovl, menu1.asm)
+; INSTR-BUILD: the boot overlay instr_ovl.asm at INSTR_ORG (frame_tab, the loading
+; picture's key wait, the D0 set-up; ITEM-INFO 2026-11-12 dropped the HOW TO PLAY
+; pages). Its ZX0 stream is in the bank-4 BOOT4 tape block (BOOT4_ORG.., C+TUT0
+; merge; the boot pool overwrites it).
 INSTR_ORG       EQU GEN_SCRATCH
 ; D3-11: the PROTO rooms test fixture (src/proto_fix.asm, build/ovl/proto.bin, never in
 ; the image): run in the bank-5 screen bitmap (the menu's, cleared by level_show) once
@@ -182,15 +184,15 @@ BANK_INSTR      EQU BANK_BOOT4  ; C+TUT0 (was BANK_TEXT: bank 0 POOL_START)
 ; Pool bytes: the D1+ pool overwrites it (both SMC patches are undone by then); the D0
 ; pool must end below BLOB_ORG (main.asm "LEVEL POOL NEED", D0 session ASSERT).
 BANK_BLOB       EQU BANK_POOL1      ; 4
-; C+TUT0 merge (2026-11-11): the BOOT4 block — the boot-only streams (frame_tab, the HOW TO PLAY
-; pages + overlay code, the D0 blob stream + trailer; main.asm "BOOT4 STREAMS") as one headerless
+; C+TUT0 merge (2026-11-11): the BOOT4 block — the boot-only streams (frame_tab, the boot
+; overlay code (ITEM-INFO: no HOW TO PLAY pages), the D0 blob stream + trailer; main.asm "BOOT4 STREAMS") as one headerless
 ; tape block in pool bank 4 from BOOT4_ORG (after the tap_loader scratch), ending <= BLOB_ORG.
 ; Free at load (nothing else loads into bank 4), dead once gen_idles pools. Was bank 0 POOL_START..
 ; (C-T8's own block / TUT0's text-block tail): bank 0 above the text block loads nothing now.
 BANK_BOOT4      EQU BANK_POOL1      ; 4 (= BANK_BLOB, ASSERTed)
 BOOT4_ORG       EQU BANK_WINDOW + $100
 INSTR_FT_ZX0    EQU BOOT4_ORG       ; the frame_tab stream, FIRST in BOOT4 (RECLAIM-D; ASSERTed)
-BLOB_ORG        EQU $E1B2           ; B0CODE: -2 (tut_d0's FARB0 new_game, +2 B blob); C+TUT0 (user: move the blob up into its spare space, $E1B4): raw blob 7,750 B + 8 B tail
+BLOB_ORG        EQU $E1B2           ; (UX1: tt_ptr's FARB0 ux_ptr +8 B, ITEM-INFO's dictionary -38 B: fits, unmoved); B0CODE: -2 (tut_d0's FARB0 new_game, +2 B blob); C+TUT0 (user: move the blob up into its spare space, $E1B4): raw blob 7,750 B + 8 B tail
                                     ; to $FFFF (was $E000, TUT0-F2 $E800). No alignment is assumed (ASSERTed by BLOB_LEN <= BLOB_RES
                                     ; and BLOB_TAIL >= 8). Frees 436 B below it for the pool (POOL_START / B0_FREE grow).
 BLOB_RES        EQU $10000 - BLOB_ORG ; BLOB_ORG..$FFFF = 7,756: the raw image (no in-place delta since BOOT4)
@@ -198,10 +200,6 @@ BLOB_RES        EQU $10000 - BLOB_ORG ; BLOB_ORG..$FFFF = 7,756: the raw image (
 BLOB_CHOICE     EQU BLOB_ORG + 0    ; entry table (tut_blob.asm): A = menu hero kind -> C = hero
 BLOB_TURN       EQU BLOB_ORG + 3    ;   A = 1 before end_turn, 0 after
 BLOB_ICON       EQU BLOB_ORG + 6    ;   TUT0-R2: the ICON MODE tour (ts_icon, after intent_icon7)
-IK_I16          EQU 1               ; page icon record kinds (instr_pack.py): R6 ic_scr, logical index
-IK_BAR          EQU 2               ; 24x16 bar icon, vdata label (bank-3 pblit)
-IK_GLY          EQU 3               ; 8x8 label, vdata label (bank-3 glyph8)
-IK_TILE         EQU 4               ; a common tile id (TILE_GLYPHS, 1 cell)
 ; (3E-T8's fx overlay is gone since 3E-T12: ZX0 packed its code only 3 %, so the
 ; effects are R6-resident code, src/fx6.asm, entered by far6.)
 B7_CODE         EQU $DB00           ; bank 7: cold code b7_code..b7_end (src/bank7.asm), right
@@ -228,8 +226,8 @@ TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
 ; 45 + 29 B costs 0 slack (1,264 kept), but 45 + 30..250 B costs one 240-B variant
 ; (slack 1,024) and 45 + 260 B 880. M1 (user 2026-11-01) took the 240-B step: total reserve 2,624 B
 ; (cliff measured: B0_CODE_RES 206 -> slack 1,024, 207 -> 384, with TEXT_RES 2,418).
-TEXT_RES        EQU 2367 + 33                  ; RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom (was 2384 + 28; LOG-DMG: 2367 + 45)
-B0_CODE_RES     EQU 1064                       ; C2 (2026-11-10): +150 = mus_pick0 (135, from bank-7 mus7.asm: funds
+TEXT_RES        EQU 2367 + 33 + 340            ; ITEM-INFO + UX1: +340 (22 strings: 20 ie_ phrases, mn_tut, hint_book; taken from B0_FREE_RES); RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom (was 2384 + 28; LOG-DMG: 2367 + 45)
+B0_CODE_RES     EQU 1064 + 10                  ; ITEM-INFO + UX1: +10 (dn_tick's 3-B call ux_tick + the pre-existing 1-B overrun + pad; from B0_FREE_RES); C2 (2026-11-10): +150 = mus_pick0 (135, from bank-7 mus7.asm: funds
                                                ; MON-DEFER) + dn_q2's DN-GATE test (13) + pad; the kit build (kit0.asm) fits
                                                ; with the 16-B text headroom (1 B free). POOL_START unchanged (B0_FREE_RES
                                                ; paid it). C-T6 (option C funding, 2026-11-10): +210 = log_scroll (182, from bank-2
@@ -252,7 +250,7 @@ B0_KIT_RES      EQU 0                          ; D3-11: 0 (was 80 x DEBUG_KIT): 
 ; Sized for >= ~1 KB pool slack at the binding level (POOL_NEED incl. POOL_SIM_MARGIN and the
 ; simulated straddle waste; the slack is quantised by the bank-0 -> 4 straddle: memory-map ledger).
 B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CCF2 (= POOL_START before C-T8)
-B0_FREE_RES     EQU 11958                      ; C2 (full C, 2026-11-10): the carve -> POOL_START $FC3E (B0_FREE_START $CD88 + 11958;
+B0_FREE_RES     EQU 11958 - 350                ; ITEM-INFO + UX1: -350 = TEXT_RES +340, B0_CODE_RES +10 (POOL_START unchanged); C2 (full C, 2026-11-10): the carve -> POOL_START $FC3E (B0_FREE_START $CD88 + 11958;
                                                ; even, as gen_variant needs). C+TUT0: was 10910 ($F826), 11486 ($FA66). CAPPED by the D0
                                                ; tutorial pool vs BLOB_ORG $E1B4 (top $E0E0, 212 B left, margin 64): 11,960 is a straddle
                                                ; cliff that fails the ASSERT. Level pool: D8 Warrior need 16,418 of 19,394 = slack 2,976.
@@ -637,9 +635,7 @@ GS_TRANSITION   EQU $06
 GS_LEVEL        EQU $07             ; 3F-T1: level_enter before the room map exists (card,
                                     ;   level_new, the level pool): gen_frame allowed (GEN_TRAP off)
 GS_ANYKEY       EQU $08             ; INSTR-BUILD: instr_main (was boot6_wait): the loading picture waits for a key
-GS_HELP1        EQU $09             ; INSTR-BUILD: HOW TO PLAY page 1 up (instr_main; boot only, before the menu)
-GS_HELP2        EQU $0A             ; INSTR-BUILD: HOW TO PLAY page 2 up
-GS_HELP3        EQU $0B             ; INSTR-P3: HOW TO PLAY page 3 (TREASURES) up (menu_run replaces it)
+                                    ; $09..$0B: the dropped HOW TO PLAY pages' GS_HELP1..3 (ITEM-INFO), free
 
 ; TURN_PHASE
 TP_INPUT        EQU 0

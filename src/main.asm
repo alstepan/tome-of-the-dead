@@ -281,6 +281,15 @@ B0_PAD          EQU B0_FREE_START - b0_code_end        ; C-T8: was B0_FREE (pad 
 ; POOL_START, so the region is permanent. Append new files at the end; keep b0c2_end last.
 b0c2_code:
                 INCLUDE "newgame0.asm"         ; B0CODE proof: new_game (FARB0 from start_game; was bank 7)
+                ; ==== ITEM-INFO + UX-POLISH (UX1) block (feat/item-info): resident code + read-only data ====
+                INCLUDE "ux0.asm"              ; item phrases (ie_line), panel flashes, NEW / LAST_PICK, the hint, menu pointer
+                ; ==== end ITEM-INFO + UX-POLISH block ====
+                ; ---- packed overlay streams: KEEP LAST (2-pass build: no code address may depend on a packed size;
+                ; append new code ABOVE this line) ----
+ovl_page_zx0:                                  ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG; ITEM-INFO: from R6,
+    IF OVL_PASS == 2                           ; ovl_run C = BANK_OVL_PAGE = BANK_TEXT)
+                INCBIN "page.zx0"
+    ENDIF
 b0c2_end:
 B0C2_LEN        EQU b0c2_end - b0c2_code
 B0C2_FREE       EQU POOL_START - b0c2_end
@@ -827,11 +836,7 @@ BOOT6_TAPE_LEN  EQU src6_end - BOOT6_ADDR
 r6_code:
                 INCLUDE "r6.asm"
 r6_code_end:
-r6_blobs:
-ovl_page_zx0:                                         ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG)
-    IF OVL_PASS == 2
-                INCBIN "page.zx0"
-    ENDIF
+r6_blobs:                                             ; (ITEM-INFO: the page stream moved to B0_CODE2)
 sqm_zx0:                                              ; 3F-T2 sequence masters (seq_img.asm, SQ_IMG)
     IF OVL_PASS == 2
                 INCBIN "seq.zx0"
@@ -1327,11 +1332,11 @@ ovl_raw_ft:
                 EDUP
                 ASSERT $ - ovl_raw_ft == FID_COUNT * FT_LEN && FT_LEN == 4
                 SAVEBIN "build/ovl/ft.bin", ovl_raw_ft, FID_COUNT * FT_LEN
-                DISPLAY "GAME frame_tab stream (MEM-FT): ", /D, FID_COUNT * FT_LEN, " B raw -> packed ", /D, ftz_zx0_end - ftz_zx0, " B in bank 4 at BOOT4_ORG (boot only; the HOW TO PLAY overlay in_ft -> the FRT rows)"
+                DISPLAY "GAME frame_tab stream (MEM-FT): ", /D, FID_COUNT * FT_LEN, " B raw -> packed ", /D, ftz_zx0_end - ftz_zx0, " B in bank 4 at BOOT4_ORG (boot only; the boot overlay in_ft -> the FRT rows)"
 ;------------------------------------------------------------------------------
-; INSTR-BUILD: the HOW TO PLAY overlay (instr_ovl.asm at INSTR_ORG) + its three
-; page images (tools/instr_pack.py, DISPed at INSTR_DATA = right after the code);
-; streams in the bank-4 BOOT4 block ("BOOT4 STREAMS", C+TUT0), boot only.
+; INSTR-BUILD: the boot overlay (instr_ovl.asm at INSTR_ORG: frame_tab, the loading
+; picture's key wait, the D0 set-up; ITEM-INFO dropped the HOW TO PLAY pages); its
+; stream is in the bank-4 BOOT4 block ("BOOT4 STREAMS", C+TUT0), boot only.
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 ; TUT0-T1: the low-RAM stubs (src/tut/tut_stub.asm), assembled DISP'd at check_paging
@@ -1358,26 +1363,9 @@ instr_ovl_main:
 instr_ovl_end:
                 ENT
 INSTR_OVL_LEN   EQU instr_ovl_end - instr_ovl_main
-INSTR_DATA      EQU instr_ovl_end
                 SAVEBIN "build/ovl/instr.bin", ovl_raw_instr, INSTR_OVL_LEN
-ovl_raw_instr1:
-                DISP INSTR_DATA
-instr_p1_img:
-                INCLUDE "../build/text/instr_p1.inc"
-instr_p1_end:
-                ENT
-ovl_raw_instr2:
-                DISP INSTR_DATA
-instr_p2_img:
-                INCLUDE "../build/text/instr_p2.inc"
-instr_p2_end:
-                ENT
-INSTR_P1_LEN    EQU instr_p1_end - instr_p1_img
-INSTR_P2_LEN    EQU instr_p2_end - instr_p2_img
-                ASSERT instr_p1_end <= GEN_SCRATCH + GEN_SCRATCH_LEN && instr_p2_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
-                SAVEBIN "build/ovl/instr1.bin", ovl_raw_instr1, INSTR_P1_LEN
-                SAVEBIN "build/ovl/instr2.bin", ovl_raw_instr2, INSTR_P2_LEN
-                DISPLAY "GAME HOW TO PLAY overlay (INSTR-BUILD, boot only): code ", /D, INSTR_OVL_LEN, " + page 1 ", /D, INSTR_P1_LEN, " / page 2 ", /D, INSTR_P2_LEN, " B raw at ", /H, INSTR_ORG, " (", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p1_end, " / ", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - instr_p2_end, " left); packed ", /D, instr_zx0_end - instr_p1_zx0, " B in bank 4 BOOT4 (", /H, instr_p1_zx0, "..", /H, instr_zx0_end - 1, ")"
+                ASSERT instr_ovl_end <= GEN_SCRATCH + GEN_SCRATCH_LEN
+                DISPLAY "GAME boot overlay (INSTR-BUILD, boot only): code ", /D, INSTR_OVL_LEN, " B raw at ", /H, INSTR_ORG, "; packed ", /D, instr_zx0_end - instr_zx0, " B in bank 4 BOOT4 (", /H, instr_zx0, "..", /H, instr_zx0_end - 1, ")"
 ;------------------------------------------------------------------------------
 ; D3-11: the PROTO rooms test fixture (src/proto_fix.asm) — raw image only, no
 ; stream: tests/game_lib.py pokes build/ovl/proto.bin at PROTO_FIX_ORG.
@@ -1563,9 +1551,8 @@ tap_loader_len  EQU  $ - tap_loader
 ; headerless tape block in pool bank 4 (BOOT4_ORG.., defs.asm), free at load:
 ; nothing else is loaded into bank 4 and nothing pools there before gen_idles.
 ; Order: frame_tab (RECLAIM-D: FIRST, at the fixed BOOT4_ORG = INSTR_FT_ZX0, so
-; the INSTR overlay unpacks it into the FRT rows before anything else and reaches
-; page 1 as "past it"), HOW TO PLAY page 1, page 2, the overlay code (last of the
-; INSTR streams: ovl_run's; no address an overlay reads depends on a packed size),
+; the INSTR overlay unpacks it into the FRT rows before anything else), the INSTR
+; overlay code (ovl_run's; ITEM-INFO: the HOW TO PLAY page streams are gone),
 ; then the D0 blob stream + its DW length trailer (in_tut finds the trailer at
 ; the block's end through tape_tab's TT_BOOT4_REC). All dead once gen_idles runs:
 ; the D0 / D1 pools overwrite them. The block ends <= BLOB_ORG, so in_tut unpacks
@@ -1582,14 +1569,6 @@ ftz_zx0:                                       ; FT_LEN B/fid contiguous, ZX0 (i
                 INCBIN "ft.zx0"
     ENDIF
 ftz_zx0_end:
-instr_p1_zx0:
-    IF OVL_PASS == 2
-                INCBIN "instr1.zx0"
-    ENDIF
-instr_p2_zx0:
-    IF OVL_PASS == 2
-                INCBIN "instr2.zx0"
-    ENDIF
 instr_zx0:
     IF OVL_PASS == 2
                 INCBIN "instr.zx0"
@@ -1606,7 +1585,7 @@ boot4_end:
 BOOT4_TAPE_LEN  EQU boot4_end - BOOT4_ORG      ; >= 2 in pass 1 too (the trailer): TAPE_BLK len > 0
                 ASSERT ftz_zx0 == INSTR_FT_ZX0 && boot4_end <= BLOB_ORG && BANK_BOOT4 == BANK_BLOB
                 ASSERT BOOT4_ORG >= tap_loader + tap_loader_len
-                DISPLAY "GAME BOOT4 block (bank ", /D, BANK_BOOT4, ", boot only): ", /H, BOOT4_ORG, "..", /H, boot4_end - 1, " (", /D, BOOT4_TAPE_LEN, " B: frame_tab + INSTR ", /D, instr_zx0_end - ftz_zx0, " + blob ", /D, BLOB_ZX0_LEN, " + 2); free below BLOB_ORG ", /D, BLOB_ORG - boot4_end
+                DISPLAY "GAME BOOT4 block (bank ", /D, BANK_BOOT4, ", boot only): ", /H, BOOT4_ORG, "..", /H, boot4_end - 1, " (", /D, BOOT4_TAPE_LEN, " B: frame_tab + INSTR code ", /D, instr_zx0_end - ftz_zx0, " + blob ", /D, BLOB_ZX0_LEN, " + 2); free below BLOB_ORG ", /D, BLOB_ORG - boot4_end
 
 ;==============================================================================
 ; Artefacts. SAVETAP dumps device memory at this point in source order (see

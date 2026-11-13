@@ -13,7 +13,7 @@
 | `$5800-$5AFF`| Screen attributes (bank 5)                  | 768 bytes, the clash grid     |
 | `$5B00-$5BFF`| Printer buffer → **`LOG_TXT`** (B3B-11)     | log message ring, 4 × 64 B (runtime only, after boot) |
 | `$5C00-$5CBF`| System variables                            |                               |
-| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`**; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`** (ranged scratch + shot queue, runtime only — "3F-T7") (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D55` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification, **M0: 86 B = + `ST1_CNT` 5 B, the STATS1 S1 reserve** **STATS2: 89 B = + `ST2_CNT` 3 B `$5D56-$5D58`**; runtime only — "3E contracts"); **D3-11: `$5CDB-$5CEA` = `DN_KEY` (the spawn queue, review), `$5CEB-$5CF6` = `DN_A` (the flying numbers' pass state + scratch, 12 B), `$5D60-$5DFF` = `DN_LIVE` (3 x 32 B live records) + `DN_SLOT` (16 x 4 B per slot)**, runtime only ("D3-11 ledger") |
+| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`**; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`** (ranged scratch + shot queue, runtime only — "3F-T7") (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D55` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification, **M0: 86 B = + `ST1_CNT` 5 B, the STATS1 S1 reserve** **STATS2: 89 B = + `ST2_CNT` 3 B `$5D56-$5D58`**; **UX1 (ITEM-INFO + UX-POLISH): 95 B = + `UX_RAM` 6 B `$5D59-$5D5E`** (`NEW_MASK`, `LAST_PICK`, `MPF_T`, `UX_FL`; "ITEM-INFO + UX-POLISH ledger"); runtime only — "3E contracts"); **D3-11: `$5CDB-$5CEA` = `DN_KEY` (the spawn queue, review), `$5CEB-$5CF6` = `DN_A` (the flying numbers' pass state + scratch, 12 B), `$5D60-$5DFF` = `DN_LIVE` (3 x 32 B live records) + `DN_SLOT` (16 x 4 B per slot)**, runtime only ("D3-11 ledger") |
 | `$8000-$BFFF`| Program origin region                       | `ORG $8000` for now           |
 | `$C000-$FFFF`| Paged bank window                           | bank selected by $7FFD bits0-2|
 
@@ -215,7 +215,7 @@ LAST (`r6_blobs`), run by `ovl_run` with C = `BANK_R6`.
 | (code, after `ranged6`) | **800** (3F-T9) | `spawn6.asm`: the spawn queue producers `breed6` / `sp_bcall` / `ph_summon` + `sp_summon` (the pose: ranged6 `rg_pose`, now shared with `rg_shoot`), `sp_scan` / `sp_wt` / `sp_fit` (§9.3 cap), `sp_run` (end_turn) + `sp_init` / `sp_y` / `sp_place` / `sp_try` / `sp_door` / `sp_fin`; no variables (bank-5 `SPQ_RAM`) — see "3F-T9" |
 | (code, after `spawn6`) | **285** (3F-T12) | `trickle6.asm`: `trk_run` (far6 from end_turn every `RESPAWN_PERIOD` turns) + `trk_sig` / `trk_draw`; tier6 `lp_minw` (shared with `lp_gen`, net +5 there); no variables (scratch `TRK_W`) — see "3F-T12" |
 | (code, after `trickle6`) | **~237** (3F-T9 bat) | `vbat6.asm`: `vb_one` (far6 from bank-7 `vb_turn`, end_turn) + `vb_bat` / `vb_fin` / `vb_st` / `vb_gap` / `vb_cut`; no variables — see "3F-T9 Vampire bat form" |
-| `$E75A` `ovl_page_zx0` | **1,182** (3E-T13; was 328) | the bag page stream (`BANK_OVL_PAGE`; was bank 1) |
+| ~~`ovl_page_zx0`~~ | 0 (was 1,182; 3E-T13) | **ITEM-INFO: moved to bank-0 `B0_CODE2`** (`BANK_OVL_PAGE` = `BANK_TEXT`; "ITEM-INFO + UX-POLISH ledger") |
 | ~~`ovl_items_zx0`~~ | 0 (was 881) | **MEM-1: back in bank 1** (`BANK_OVL_ITEMS` = `BANK_UI1`, after the `it_text` block; R6 holds only `ovl_page_zx0` now, 1,192 B of streams incl. the page stream; the R6 addresses below shift down 881 B) |
 | (code, after `bag6`) | 310 code+data (**STATUS1: +55** `hg_faint`) | **3E-T9** `hunger6.asm` — **MEM-RECLAIM w2b: `hunger_turn`, `food_sub` / `food_dirty`, `hunger_add`, `hg_stage` / `hg_line` moved to bank 7 (`hunger7.asm`); only `item_food`, `hg_attr` (4 B) stay here** — see "3E-T9" |
 | (code, after `hunger6`; release `$E889..$EC72`) | **1,001** (680 code + data + 337 generated) | **3E-T8** `gear6.asm`: `hero_recalc`, `gear_dec`, `rmax`, `enchant_weapon`, `fx_line`, `it_fmt`, `gx_tab` (35), vars `gd_*` / `hr_*` (18, written in play), + `items_fx_stems.asm` (`it_fx_stems` 249 + `it_stat` 88, resident: `hero_recalc` needs `it_stat` outside any overlay) — see "3E-T8" |
@@ -1447,7 +1447,7 @@ its 1,920 B ≤ 12-B descriptor reserve), room for the ~0.6 KB level state with
 most of that margin — the alias stays. `$5B00-$5BFF` and `$5CC0-$5FFF` (~692 B after D3-6b PF_RAM $5E00..$5EFF and D3-8d MK_RAM
 $5F00..$5F8B (140 B), E: free once `boot` has moved SP off the BASIC stack) are a further runtime-only (not tape-loadable)
 reserve (B3B-11: `$5B00` = `LOG_TXT`; **D3-6b: `$5E00-$5EFF` = `PF_RAM`**, the
-proj_fire scratch — never touched before `boot`; **3E-T3: `$5D00..` = `ITEM_RAM` (`ITEM_RAM_LEN` 89 B after STATS2: `$5D00-$5D58`)**, zeroed by `new_game`;
+proj_fire scratch — never touched before `boot`; **3E-T3: `$5D00..` = `ITEM_RAM` (`ITEM_RAM_LEN` 95 B after UX1: `$5D00-$5D5E`; 89 after STATS2)**, zeroed by `new_game`;
 still free: `$5CCB-$5CEA` (32 B; `$5CC0-$5CCA` is the ROM channel area, avoided; **D3-11: `$5CDB-$5CEA` = `DN_KEY`, `$5CEB-$5CF6` = `DN_A`; `$5CCB-$5CDA` and `$5CF7-$5CFF` free; DNUM-SPRITE-FIX: `DN_A` to `$5CF7` (`DN_TXT` 6 B), `$5CF8-$5CFF` free**), `$5D56-$5D5F` (10 B; **STATS2: `$5D56-$5D58` = `ST2_CNT` (ITEM_RAM), `$5D59-$5D5F` free**; **D3-11: `$5D60-$5DFF` = `DN_LIVE` + `DN_SLOT`**; was `$5D79-$5DFF` 135 B before ITEM_RAM grew),
 `$5FF4-$5FFF` (12 B; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`**, the ranged-attack scratch + shot queue, "3F-T7"; **3F-T8: `$5FF4` = `BOSS_TRAP`; 3F-T9: `$5FF5-$5FFF` = `SPQ_RAM`, the spawn queue + `sp_run` scratch — the reserve after `RG_RAM` is full**, "3F-T9") — `tests/items3e.py` R1/R2 canary them through a game start, play and a descent). A8: after `boot` nothing uses the system variables but
 `SYS_FRAMES` (`$5C78-$5C7A`; the IM 2 ISR does not run the ROM keyboard scan),
@@ -1457,7 +1457,7 @@ so most of `$5C00-$5CBF` is free too (C-T3: `ISR_ROM_CHAIN` dropped).
 
 | Address | Symbol | Meaning |
 |---------|--------|---------|
-| `$BF00` | `GAME_STATE` | `GS_BOOT 1`, `GS_PLAYING 2`, `GS_WIN 3`, `GS_DEAD 4`, **`GS_SELECT 5`**, **`GS_TRANSITION 6`**, **`GS_ANYKEY 8`** (BOOT-ANYKEY: the loading picture waits for a key; INSTR-BUILD: `instr_main`, run by `boot6_wait`), **`GS_HELP1 9`** / **`GS_HELP2 10`** / **`GS_HELP3 11`** (INSTR-BUILD / INSTR-P3: HOW TO PLAY page 1 / 2 / 3 up, boot only), **`GS_LEVEL 7`** (3F-T1: `level_enter` before the room map exists — card, `level_new`, the level pool; `gen_frame` allowed; `GS_TRANSITION` from the end of the pool) |
+| `$BF00` | `GAME_STATE` | `GS_BOOT 1`, `GS_PLAYING 2`, `GS_WIN 3`, `GS_DEAD 4`, **`GS_SELECT 5`**, **`GS_TRANSITION 6`**, **`GS_ANYKEY 8`** (BOOT-ANYKEY: the loading picture waits for a key; INSTR-BUILD: `instr_main`, run by `boot6_wait`), ~~`GS_HELP1 9` / `GS_HELP2 10` / `GS_HELP3 11`~~ (ITEM-INFO 2026-11-12: HOW TO PLAY dropped; 9..11 free), **`GS_LEVEL 7`** (3F-T1: `level_enter` before the room map exists — card, `level_new`, the level pool; `gen_frame` allowed; `GS_TRANSITION` from the end of the pool) |
 | `$BF01` | `RNG_STATE` | xorshift16 (7,9,8); reseeded `$A55A` every new game |
 | `$BF03` | `TURN_COUNTER` | word; +1 at the end of every turn's animation |
 | `$BF05` / `$BF06` | `INPUT_SRC` / `KBD_MATRIX` | P3 injection contract, unchanged |
@@ -4769,7 +4769,9 @@ Build ASSERTs delta + `KXP_*` (combat_defs.asm, used by the `kx_tab` rows) == §
 | data7 / tileset block free to `$10000` | 123 | **115** | -8 (`bxp_d`) |
 | bank 3 / R6 / other | -- | unchanged | 0 |
 
-## INSTR-BUILD (`feat/instr-screen`; HOW TO PLAY, game.md §3.2.1 option A flow, pages: `docs/design/instructions_screen.md` / `.txt`)
+## INSTR-BUILD (`feat/instr-screen`; HOW TO PLAY, game.md §3.2.1 option A flow, pages: `docs/archive/design/instructions_screen.md` / `.txt`)
+
+> **History: ITEM-INFO (2026-11-12) dropped the HOW TO PLAY pages** (`GS_HELP1..3`, `in_page` / `in_vblk` / `in_cell` / `in_wait`, the page streams, `INSTR_DATA`, `tools/instr_pack.py`, `tools/gen_instr_mock.py`). The overlay keeps `in_ft`, the picture's key wait and `in_tut`: "ITEM-INFO + UX-POLISH ledger".
 
 Once per power-on, before the first menu: the loading picture + `PRESS ANY KEY` (`GS_ANYKEY`), any key ->
 page 1 (`GS_HELP1`), a key (counted after all keys were released once; BREAK held at any frame of
@@ -6661,3 +6663,57 @@ D1..D8 run and the pool), tut0 (the D0 start), tape_layout (the block's B0_CODE2
 - A PC breakpoint at `$CD88+` also fires in any other bank at the same address: probe bank-0 code by RAM=0 conditions.
 - Growth past ~3 KB will meet the new-monsters kinds curve hand-back (new_monsters.md §12): that lowers `POOL_START`
   by moving bytes out of `B0_FREE_RES`; the ASSERT `b0c2_end <= POOL_START` catches a collision.
+
+## ITEM-INFO + UX-POLISH ledger (`feat/item-info`, on main `4add7e5`, 2026-11-13; docs/design/item_info.md, ux_polish.md)
+<!-- ==== ITEM-INFO + UX-POLISH block (kept separate from NEW-MON3's B0_CODE2 / memory-map edits) ==== -->
+
+**HOW TO PLAY removed (boot / tape only).** `instr_ovl.asm` = `in_ft` + the picture's key wait (`GS_ANYKEY`,
+release-first, the key swallowed by the menu) + `in_tut`; gone: `GS_HELP1..3` (`GAME_STATE` 9..11 free), `in_page` /
+`in_wait` / `in_vblk` / `in_cell`, `INSTR_DATA`, `IK_*`, the page streams `instr_p1_zx0` / `instr_p2_zx0`,
+`tools/instr_pack.py`, `tools/gen_instr_mock.py`, `assets/gfx/instr/`. BOOT4 = `ftz_zx0` (`BOOT4_ORG`) → `instr_zx0`
+(code 500 → **197 B raw**, 190 packed) → `blob_zx0` + trailer; `TT_BOOT4_REC` / trailer unchanged. **Reclaimed:
+BOOT4 frame_tab + INSTR 1,616 → 321 B (−1,295 B tape, boot only)**; BOOT4 block 7,133 → 5,852 B (the blob stream
++14 B: the text dictionary changed); free below `BLOB_ORG` 1,237 → 2,518. No resident byte (it never was).
+
+**Mutable state** (ITEM_RAM page, bank 5, zeroed by `new_game` with the block: `ITEM_RAM_LEN` 89 → **95**, ASSERTed;
+`DN_LIVE` `$5D60` right above):
+
+| Address | Symbol | Meaning |
+|---|---|---|
+| `$5D59` | `NEW_MASK` | 3 B: bit k = bag slot k is NEW (C3); set by `ux_pick`, cleared on the page's cursor arrival (`pg_arr`), shifted by `ux_compact`; bits 20-23 stay 0 |
+| `$5D5C` | `LAST_PICK` | slot of the last bag pickup (top-up too), `$FF` none (`new_game`); the page opens there if < the count (C2) |
+| `$5D5D` | `MPF_T` | F3: ticks left of the MP-number flash (`MPF_TICKS` 16 = 32 frames), counted down by `dn_tick` (GS_PLAYING ticks only; the ISR is untouched) |
+| `$5D5E` | `UX_FL` | bit 0 `UXF_HINT_B`: the first-book hint was given; `new_game` keeps it only when entered with `GAME_STATE` = `GS_PLAYING` (the D0 grate's `tt_reset`), a menu START clears it |
+| `$6BA8` | `IE_BUF` | 41 B page-time scratch (`PAGE_SCR_END`, below `TX_DEC`): row 19's composed phrase (test-observable); `PAGE_BUF` keeps row 18 |
+
+**Resident code / data: bank-0 `B0_CODE2`** (main.asm, after `newgame0.asm`, in a marked block; `src/ux0.asm`):
+`ie_line` + `ie_map` (39 B, bit 0-4 phrase, bit 6 METAL / 7 CLOTH), `ux_grp` (the one writer of the flash cells: base
+= the bar cell's attr, FLASH only on ink cells), `ux_tick` / `ux_food` / `ux_mpset` / `ux_mptick` / `ux_mpkey` / `ux_ptr`,
+`ux_pick` / `ux_compact` / `ux_div3` / `ux_bit`, `mn_sub0` (the menu subtitle / footer attrs, moved from bank 1, + the
+row-10 pointer): **543 B**; `new_game` +24 (the UX init). **The page overlay stream `ovl_page_zx0` moved R6 → B0_CODE2**
+(`BANK_OVL_PAGE` = `BANK_TEXT`), **LAST in B0_CODE2** (2-pass build: no code address may follow a packed size;
+append new code above it). Text: 22 strings (20 `ie_*`, LIMIT 40 = textpack `IE_MAX`; `hint_book`; `mn_tut`):
+`TX_COUNT` 209 → 231 (< 256), packed 2,384 → 2,723 B; `TEXT_RES` 2,400 → **2,740**, `B0_CODE_RES` 1,064 → **1,074**
+(`dn_tick`'s 3-B `call ux_tick` + the old 1-B overrun), `B0_FREE_RES` 11,958 → **11,608**, `B0_FREE_START` `$CD88` →
+**`$CEE6`**; **`POOL_START` `$FC3E` unchanged** (pool, D0 pool vs `BLOB_ORG` unchanged). `dn_gate` loads `dn_q2` with
+`ld hl` (+1 B bank 2): the text growth moved `dn_tick` / `dn_q2` across a page (the same-page ASSERT is gone).
+
+| Region (release) | before (B0CODE) | after | Δ / why |
+|---|---|---|---|
+| `B0_CODE2` used | 131 | **1,906** (`$CEE6..$D656`) | + ux0 543, new_game +24, page stream 1,207 (last) |
+| bank-0 text + b0 code | 2,384 + 1,065 | **2,723 + 1,068** (reserve 3,814, pad 23) | 22 strings; `call ux_tick` |
+| R6 free | 2 | **1,016** | − page stream; + `bag_add` / `bag_take` / `pu_add` hooks, `item_food`'s inline F1 (WEAK word FLASH), `DODGE` (+65) |
+| page overlay (GEN_SCRATCH) | 1,243 raw (293 left) | **1,402 raw (134 left)** | rows 18-19, C1-C3, C2 open, §5 widths |
+| bank 1 free | 1 | **24** | `menu_static`'s subtitle / footer → `mn_sub0` |
+| bank 7 free (low) | 128 | **105** | `ic_no_mana` FARB0 + `intent_icon7` press hook |
+| bank 2 free | 5 | **4** | `dn_gate` +1 (`item_hp` unchanged: F2 is `ux_tick`'s) |
+| D0 blob | 7,750 (tail 8) | **7,720 (free 38)** at `$E1B2` (unmoved) | `tt_ptr` FARB0 `ux_ptr` +8; dictionary −38 |
+| low RAM / boot block / SRC6 / AY slot | — | unchanged | |
+| `.tap` total | 89,583 | **89,414** | −169: BOOT4 −1,281, text block +1,775 (incl. the page stream), R6 block −1,014 |
+
+**Panel flash contract (UX §1):** row 21 cells HP num 5-6, MP num 12-13, FOOD word 19-23 are written ONLY by `ux_grp`
+(`dn_tick` → `ux_tick` for F2 every 1st-frame play tick from the DRAWN HP (`PANEL_HP_SH`: never in a turn's input tick), marked only on a change — `item_hp` only draws, W15 caps its 2nd-frame cost; F1 inline in R6 `item_food` (hunger T1's 9k cap) and `ux_foodg` for `ux_ptr`; `ic_no_mana` → `ux_mpset`, `dn_tick` → `ux_mptick`, `intent_icon7` →
+`ux_mpkey`, the D0 blob's `tt_ptr` → `ux_ptr`); `panel_init7`'s `pi_rects` stamp the base attrs and the dirty HP / FOOD
+items rebuild them. The page's close restores screen 2 (the state is unchanged meanwhile; `MPF_T` frozen). A pointer
+bit on the bar cell (tutorial) is inherited by the number / word cells (ink only).
+<!-- ==== end ITEM-INFO + UX-POLISH block ==== -->

@@ -31,7 +31,8 @@ dn_gate:
                 or   e                         ; do nothing: skip its FARB0 (~1.1k T a 2nd-frame
                 ret  z                         ; tick, +7 B; DN_QN: level_defs.asm)
     ENDIF
-                ld   l, dn_q2 & $FF            ; in its second: a queued spawn only (one page)
+                ld   hl, dn_q2                 ; in its second: a queued spawn only (ITEM-INFO: a full
+                                               ; load, +1 B: the text growth moved dnum0 across a page)
 .f:             ld   c, BANK_TEXT
                 jp   farb
                 ASSERT (GAME_STATE >> 8) == (LAST_TICK_FRAME >> 8) && DN_QN == TOME_FL + 1

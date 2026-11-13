@@ -16,6 +16,7 @@
 ; writes are contended)
 ;------------------------------------------------------------------------------
 HG_CHARS        EQU 6
+FOOD_WORD_BMP   EQU ((SCREEN_BITMAP >> 8) | (STAT_ROW & $18)) << 8 | ((STAT_ROW & 7) << 5) | HUNGER_COL
 FOOD_BAR_ADDR   EQU ((SCREEN_BITMAP >> 8) | (STAT_ROW & $18)) << 8 | ((STAT_ROW & 7) << 5) | FOOD_BAR_COL
 item_food:
                 ld   hl, PANEL_DIRTY
@@ -51,7 +52,29 @@ item_food:
                 ld   bc, (STAT_ROW << 8) | FOOD_BAR_COL
                 ld   de, ((GEAR_COL - FOOD_BAR_COL) << 8) | 1
                 call stamp_rect                ; (A, B, D, E, HL)
-                ld   bc, (STAT_ROW << 8) | FOOD_BAR_COL
+                ld   a, (HSTAGE)               ; UX1 F1 (ux_polish.md §2): at WEAK the word's ink
+                cp   HS_WEAK                   ; cells FLASH (bit 7; the bar never; a blank cell would
+                jr   nz, .pm                   ; flash as a block: R4). Inline (not ux0.asm's ux_foodg:
+                ld   hl, SCREEN_ATTR + STAT_ROW * 32 + HUNGER_COL   ; hunger.py T1's 9k cap)  ~1.1k T at WEAK
+                ld   de, FOOD_WORD_BMP
+                ld   c, GEAR_COL - HUNGER_COL
+.fw:            push de
+                xor  a
+                ld   b, 8
+.fp:            ex   de, hl
+                or   (hl)
+                ex   de, hl
+                inc  d
+                djnz .fp
+                pop  de
+                or   a
+                jr   z, .fb
+                set  7, (hl)
+.fb:            inc  l
+                inc  e
+                dec  c
+                jr   nz, .fw
+.pm:            ld   bc, (STAT_ROW << 8) | FOOD_BAR_COL
                 ld   de, ((GEAR_COL - FOOD_BAR_COL) << 8) | 1
                 jp   pmark_rect
 hg_attr:        DB   ATTR_P_FED, ATTR_P_OK, ATTR_P_HUNGRY, ATTR_P_WEAK   ; by HSTAGE

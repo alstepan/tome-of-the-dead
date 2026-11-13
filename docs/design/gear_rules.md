@@ -155,6 +155,9 @@ if type < IT_CHARM_LO:           # numeric gear
 - Names, pickup, equip and log lines are unchanged: no number in a name. The floor shows nothing.
 - q is visible on the page from the moment of pickup (there is no ID system).
 - Cost: R6 ≈ 20 B (gear_dec ≈ 10, it_fmt ≈ 6, pu_add 3). Ledger: 26.
+- **ITEM-INFO (2026-11-12, `item_info.md` §2):** the line is on page **row 18** (was row 19; row 19
+  now holds the type's effect / gate phrase), and the eva word is **` DODGE+n`** (was ` EVA+n`;
+  e.g. Silk Cloak ` DEF+1 DODGE+2`, King Helm ` DEF+1 DODGE+1`).
 
 ### 2.6 Expected power curve (hand estimate, average policy; the sim confirms)
 

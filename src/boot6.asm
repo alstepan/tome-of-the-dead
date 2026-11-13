@@ -16,7 +16,7 @@
 ;   boot6_init   boot, under DI: IM 2 install + the power-on state
 ;   boot6_tiles  boot: common tiles + ornament, HOT_COPY image, planar FONT6
 ;                (RECLAIM-D: the MEM-FT frame_tab -> FRT step is instr_ovl.asm in_ft)
-;   boot6_wait   boot: the key waits + HOW TO PLAY (INSTR-BUILD overlay, bank-4 BOOT4 streams)
+;   boot6_wait   boot: the picture's key wait + D0 set-up (INSTR-BUILD overlay, bank-4 BOOT4 stream)
 ; Was: low RAM (isr_install, isr_image, boot's state init, keytab_defaults)
 ; and bank 7 (init_tiles, panel_boot) + bank-1 vdata (tiles_common, orn_glyphs,
 ; panel_hot_img, font6x8).
@@ -185,8 +185,8 @@ boot6_tiles:
 ; boot6_wait — farb from boot after boot6_tiles, BEFORE the boot pool: the
 ; INSTR-BUILD overlay (instr_ovl.asm, unpacked from the bank-4 BOOT4 block into GEN_SCRATCH):
 ; the loading picture (L3d SCREEN$, still on the bank-5 screen) + "PRESS ANY
-; KEY" with the title tune until a key (BOOT-ANYKEY, GS_ANYKEY), then the two
-; HOW TO PLAY pages (GS_HELP1 / 3). Returns to boot (gen_idles, menu);
+; KEY" with the title tune until a key (BOOT-ANYKEY, GS_ANYKEY; ITEM-INFO: no
+; HOW TO PLAY pages), then the D0 set-up. Returns to boot (gen_idles, menu);
 ; ovl_run hands bank 6 back for farb's return.   Clobbers: all but IX, IY.
 ;------------------------------------------------------------------------------
 boot6_wait:

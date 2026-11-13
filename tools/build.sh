@@ -17,7 +17,6 @@
 # 1b. tools/textpack.py -> build/text/strings.asm + strings_ids.inc (B3B-13:
 #    src/strings.txt as dictionary-token streams); it re-parses its output and
 #    fails on any round-trip mismatch / char outside 32..127 / > LOG_MAX.
-# 1b''. tools/instr_pack.py -> build/text/instr_p{1,2}.inc (INSTR-BUILD HOW TO PLAY pages).
 # 1c. tools/abc2wzm.py --game -> OUTDIR/build/music_game/ (7 WZM songs + game_songs.asm),
 #    INCLUDEd by src/ay.asm through the -i OUTDIR/build/music_game search path (SND-2 T2).
 # 1d. tools/sfx2asm.py -> OUTDIR/build/sfx/ (sfx_ids.inc + sfx_data.asm, SND-5; -i path).
@@ -54,9 +53,6 @@ done
 python3 "$ROOT/tests/rename_gate.py" -q
 python3 "$ROOT/tools/zx0_sources.py"
 python3 "$ROOT/tools/textpack.py"
-# INSTR-BUILD: the HOW TO PLAY page images (docs/design/instructions_screen.txt + the
-# PAGES table) -> build/text/instr_p1..2.inc (src/main.asm "OVERLAYS")
-python3 "$ROOT/tools/instr_pack.py"
 # TUT0-T6: the D0 blob's generated data (src/tut/tut_blob.asm INCLUDEs "tut/*.asm", found
 # through -i$OUT/build): tutpack (needs textpack's dictionary, above) every build; tut0_level.py
 # (a ~17 s seed search) only when its output is missing or older than the tool / the layouts it

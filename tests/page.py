@@ -304,7 +304,7 @@ def rect_cells(s):
     c, r = slot_rect(s)
     if s == CLOSE_SLOT:
         return [(c + i, 0) for i in range(6)]
-    return [(c + i, r + j) for i in range(3) for j in range(2)]
+    return [(c + i, r + j) for i in range(2) for j in range(2)]   # UX1 C1: the 2x2 icon cells (count column: black)
 
 
 def wear_ui(p, check):
@@ -355,7 +355,7 @@ def wear_ui(p, check):
     # a fresh bag potion / food stack: unchanged (no m text, whatever bits 5-7 hold)
     pot = shown([I("P_HEAL"), 2, 0xE0])
     check("WU3 a potion stack with ISTATE $E0 (bits 5-7 set) has no m text", pot.startswith("HEAL POTION X2") and "-" not in pot, pot)
-    # destruction at -3: the slot empties and the page reflects it (the row 19 text = an always-empty slot's)
+    # destruction at -3: the slot empties and the page reflects it (the row 18 text = an always-empty slot's; ITEM-INFO)
     p.tap("I")
     p.until(lambda: p.rb("PAGE_OPEN") == 0, 12)
     # the wear event itself (wear_slot: m -3 + notch empties the slot, WEAR_PEND bit pair 2) is tier6.py W1;
@@ -376,7 +376,7 @@ def wear_ui(p, check):
     p.tick(2)
     at20 = (p.rb("pg_rc"), p.rb(S["pg_rc"] + 1))
     from game_lib import cell_bytes
-    row19 = lambda: [cell_bytes(p.frame(), c, 19) for c in range(2, 8)]   # noqa: E731
+    row19 = lambda: [cell_bytes(p.frame(), c, 18) for c in range(2, 8)]   # noqa: E731  (ITEM-INFO: row 18)
     r20 = row19()
     p.tap("P")
     p.tap("P")
@@ -487,7 +487,7 @@ def bag_page(p, check):
           " + the H placeholder ($05), description icon", ok and bad == [], (ok, bad[:6]))
     got = (p.rb("pg_n"), highlighted(fr), verbs(fr), p.rb("pg_use"))
     check("P6 ITEMS 11/20 (pg_n), cursor on slot 0 only, potion verbs DRINK / DISCARD / CLOSE",
-          got == (11, ({0}, 6), (1, 0, 0, 1, 1), VB["DRINK"]), got)
+          got == (11, ({0}, 4), (1, 0, 0, 1, 1), VB["DRINK"]), got)
     game.golden(p.h, "page_bag", fr)
 
     # ---- P7: cursor moves + wrap rules -----------------------------------------
@@ -557,7 +557,7 @@ def bag_page(p, check):
           "(swap), 1 turn; "
           "[CLOSE] FIRE -> VB_NONE; strip L / R skip disabled verbs and wrap, U back, BREAK closes; CLOSE verb",
           res == {"equip": (True, True, 0, VB["EQUIP"], 5, True, True, True, True), "[close]": (True, 0),
-                  "strip": ([0, 4, 0, 3], (0, ({0}, 6)), True, 0), "close verb": (True, 0, True)}, res)
+                  "strip": ([0, 4, 0, 3], (0, ({0}, 4)), True, 0), "close verb": (True, 0, True)}, res)
 
     # DISCARD: the Heal stack (E_POT follows), then the bow (HAS_BOW 0); 0 turns
     p.settle(2)

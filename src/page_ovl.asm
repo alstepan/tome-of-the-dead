@@ -13,7 +13,7 @@
 ; page_ovl has saved ROOM_MAP; this code draws the page over all 24 rows of
 ; the bank-5 screen from BAG / WORN (read only), shows bank 5, runs the modal
 ; cursor loop and returns when the page closes. The page changes NO game
-; state: its only outputs are PAGE_VERB (VB_*, item_defs.asm; VB_NONE = closed
+; state but NEW_MASK (UX1 C3: a slot's NEW bit clears when the cursor arrives); its only outputs are PAGE_VERB (VB_*, item_defs.asm; VB_NONE = closed
 ; without a verb) and PAGE_SLOT (0..19 bag, 20..23 worn), applied after the
 ; close (page_post: VB_DISCARD; T8 / T12: the rest). Music and effects play on.
 ; Clobbers: A, BC, DE, HL (IX, IY kept).
@@ -30,15 +30,17 @@
 ;        at row 5+3r, col 11+3c           |  directions  grid: the cursor (wrap rules
 ;  15    W A H C over the worn icons      |               below); strip: L / R the
 ;  16-17 WORN + 4 icons, cols 11+3k       |               next enabled verb (wraps),
-;  18-19 icon (cols 0-1, IC1); row 19:  |               U / D back to the grid
-;        item_name (+ " Xn") + stat line  |
+;  18-19 icon (cols 0-1, IC1); row 18:  |               U / D back to the grid
+;        item_name (+ " Xn") + stat line, |
+;        row 19 phrase[, gate] (ITEM-INFO)|
 ;  20    verbs USE-word EQUIP REMOVE      |
 ;        DISCARD CLOSE (enabled bright    | Cursor rows: 0 [CLOSE], 1-4 bag rows,
 ;        cyan, disabled dim blue)         | 5 worn. U / D step the row and wrap
 ;  22    help / refusal (message row)     | (worn <-> [CLOSE]); L / R wrap inside
 ; Cursor = paper blue over the slot's     | the row (5 bag / 4 worn / 1 [CLOSE]);
-; 3 x 2 cells (icon + count column),      | the column is remembered across rows
-; [CLOSE]'s 6 cells, the chosen verb.     | (worn shows min(col, 3)). Opens on slot 0.
+; 2 x 2 icon cells (UX1 C1),              | the column is remembered across rows
+; [CLOSE]'s 6 cells, the chosen verb.     | (worn shows min(col, 3)). Opens on
+; NEW '*' at the count column's top (C3). | LAST_PICK if < the count, else slot 0 (C2).
 ;==============================================================================
 PG_A_BG         EQU $07             ; page body: white ink on black
 PG_A_HEAD       EQU $46             ; title: bright yellow (menu font)
@@ -58,8 +60,11 @@ PG_GRID_COL     EQU 9               ; cols 9..23 (with the count column)
 PG_WLAB_ROW     EQU 15
 PG_WORN_ROW     EQU 16              ; 4 worn icons (rows 16..17), cols 11..21
 PG_WORN_COL     EQU 11
-PG_DESC_ROW     EQU 19
-PG_DICON_ROW    EQU PG_DESC_ROW - 1     ; IC1: the description icon, cols 0-1, rows 18-19
+PG_DESC_ROW     EQU 18                  ; ITEM-INFO: the name + stat line (was row 19); row 19 = ie_line
+PG_PHR_ROW      EQU PG_DESC_ROW + 1     ; ITEM-INFO: the effect / gate phrase (ux0.asm ie_line, IE_ROW)
+PG_DICON_ROW    EQU PG_DESC_ROW         ; IC1: the description icon, cols 0-1, rows 18-19
+PG_A_DESC       EQU $47                 ; ITEM-INFO §2: row 18 text cells
+PG_A_PHR        EQU $05                 ; row 19 text cells
 PG_DESC_X       EQU 16
 PG_NAME_MAX     EQU 26              ; + " X9" <= 29 chars from x 16; 3E-T8: real names <= 15, + it_fmt <= 14 (stacks: food / potions <= 11 + 3 + 8) <= 30; WEAR-UI gear lines <= 37 (test WU2) < PAGE_BUF_LEN 40
 PG_VERB_ROW     EQU 20
@@ -204,7 +209,22 @@ page_main:
                 xor  a                         ; help line (no message up)
                 ld   hl, pg_s_help
                 call pg_say
-                call pg_hl                     ; the cursor on slot 0
+                ; UX1 C2: open on LAST_PICK if it is below the bag count, else slot 0
+                ld   a, (LAST_PICK)
+                ld   hl, pg_n
+                cp   (hl)
+                jr   nc, .s0                   ; ($FF: none)
+                ld   b, 1                      ; row 1 = bag row 0
+.r5:            sub  5
+                jr   c, .r6
+                inc  b
+                jr   .r5
+.r6:            add  a, 5
+                ld   c, b
+                ld   b, a
+                ld   (pg_rc), bc               ; L = row, H = col
+.s0:            call pg_hl                     ; the cursor
+                call pg_arr                    ; UX1 C3: opening there is an arrival
                 call pg_info
                 call show_bank5                ; the page is up
                 call pg_keys
@@ -396,6 +416,7 @@ pg_move:        ld   a, c
 .hs:            ld   h, a
 .set:           ld   (pg_rc), hl
                 call pg_hl                     ; on
+                call pg_arr                    ; UX1 C3: the NEW mark clears on arrival
                 ; fall through
 ;------------------------------------------------------------------------------
 ; pg_info — the cursor slot's description (row 19; IC1: its icon at cols 0-1,
@@ -404,6 +425,8 @@ pg_move:        ld   a, c
 ; strip (row 20).  Clobbers: A, BC, DE, HL
 ;------------------------------------------------------------------------------
 pg_info:        ld   b, PG_DESC_ROW
+                call row_clear
+                inc  b                         ; ITEM-INFO: row 19 too (row_clear keeps BC)
                 call row_clear
                 call pg_cur                    ; A = slot (PG_SL_CLOSE: icon_slot clears)
                 ld   de, (PG_DICON_ROW << 8) | 0
@@ -468,11 +491,20 @@ pg_info:        ld   b, PG_DESC_ROW
                 call far6                      ; DE past it
                 ld   bc, (PG_DESC_ROW << 8) | PG_DESC_X
                 call pg_out
+                call pg_cur
+                ld   a, (hl)                   ; the type
+                FARB0 ie_line                  ; ITEM-INFO: row 19 = phrase[, gate] (ux0.asm, bank 0)
                 pop  bc
 .set:           ld   a, c
                 ld   (pg_en), a
                 ld   a, b
                 ld   (pg_use), a
+                cp   VB_DRINK                  ; UX1 §5: the USE highlight = ceil(6n / 8) cells:
+                ld   a, 3                      ; USE / EAT / READ 3, DRINK 4
+                jr   nz, .uw
+                inc  a
+.uw:            ld   (pg_vtab + 1), a
+                ld   a, b
                 add  a, a
                 ld   c, a
                 add  a, a
@@ -575,10 +607,11 @@ pg_tog:         push de
 
 ;------------------------------------------------------------------------------
 ; pg_rect — A = slot: B = row, C = col of its rect, D = cols, E = rows (bag /
-; worn: the 2x2 icon + the count column; PG_SL_CLOSE: the [CLOSE] text).
+; worn: the 2x2 icon (UX1 C1: the count column keeps black paper); PG_SL_CLOSE:
+; the [CLOSE] text).
 ; Clobbers: A, H, F
 ;------------------------------------------------------------------------------
-pg_rect:        ld   de, (3 << 8) | 2
+pg_rect:        ld   de, (2 << 8) | 2
                 cp   PG_SL_CLOSE
                 jr   nz, .n
                 ld   bc, (PG_CLOSE_ROW << 8) | PG_CLOSE_COL
@@ -622,6 +655,11 @@ pg_cell:        push af
                 inc  l
                 dec  l
                 jr   z, pg_box                 ; an empty bag slot
+                push af
+                push bc
+                call pg_star                   ; UX1 C3: '*' if NEW
+                pop  bc
+                pop  af
                 ld   h, a
                 add  a, a
                 add  a, h
@@ -706,6 +744,71 @@ pg_say:         ld   (pg_msgf), a
 ; pg_cat — copy the 0-terminated HL to DE (no 0), DE advanced. Clobbers: A, HL
 ; pg_num — A = 0..99 as 1-2 digits at DE, DE advanced.  Clobbers: A, BC
 ;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; UX1 C3 (ux_polish.md §3): the NEW mark, FONT6 '*' in the slot's top-right cell
+; (row 4+3r, col 11+3c; attr PG_A_BOX, the band's).
+; pg_star — A = slot, B / C = its rect (pg_rect): '*' if its NEW_MASK bit is set.
+;           Clobbers: A, BC, DE, HL
+; pg_arr  — the cursor arrived: a bag slot's NEW bit is cleared and its mark erased.
+;           Clobbers: A, BC, DE, HL (~0.3k T, ~60 T with no mark)
+; pg_nbit — A = slot 0..23: HL = its NEW_MASK byte, A = its bit.  Clobbers: B, F
+;------------------------------------------------------------------------------
+pg_star:        cp   BAG_SLOTS
+                ret  nc
+                push bc
+                call pg_nbit                   ; (B)
+                pop  bc
+                and  (hl)
+                ret  z
+                ld   a, c
+                add  a, 2
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   e, a
+                ld   hl, pg_s_star
+                jp   print6
+pg_arr:         call pg_cur
+                cp   BAG_SLOTS
+                ret  nc
+                push af
+                call pg_nbit
+                ld   c, a
+                and  (hl)
+                jr   z, .no
+                ld   a, c
+                xor  (hl)
+                ld   (hl), a
+                pop  af
+                call pg_rect                   ; B / C
+                inc  c
+                inc  c                         ; the count column
+                call mcell                     ; DE = line 0 of (B, C)
+                ld   b, 8
+                xor  a
+.cl:            ld   (de), a
+                inc  d
+                djnz .cl
+                ret
+.no:            pop  af
+                ret
+pg_nbit:        ld   b, a
+                rrca
+                rrca
+                rrca
+                and  $1F
+                add  a, NEW_MASK & $FF
+                ld   l, a
+                ld   h, NEW_MASK >> 8
+                ld   a, b
+                and  7
+                ld   b, a
+                inc  b
+                ld   a, $80
+.r:             rlca
+                djnz .r
+                ret
+
 pg_cat:         ld   a, (hl)
                 or   a
                 ret  z
@@ -753,6 +856,8 @@ pg_attrs:       DB   PG_A_ORN, PG_ORN_TOP, 0, 32, 1
                 DB   PG_A_MSG, PG_MSG_ROW, 0, 32, 1
                 DB   PG_A_ORN, PG_ORN_BOT, 0, 32, 1
                 DB   PG_A_VON, PG_CLOSE_ROW, PG_CLOSE_COL, PG_CLOSE_W, 1
+                DB   PG_A_DESC, PG_DESC_ROW, 2, 30, 1      ; ITEM-INFO §2 (cols 0-1: icon_slot's ink)
+                DB   PG_A_PHR, PG_PHR_ROW, 2, 30, 1
                 DB   0
                 ASSERT PG_A_ORN != 0 && PG_A_BOX != 0 && PG_A_VON != 0 && PG_A_MSG != 0
 pg_title:       DB   "BAG", 0
@@ -775,5 +880,6 @@ pg_s_arr:       DB   "  ARROWS ", 0
 pg_s_key:       DB   "KEY", 0
 pg_s_x:         DB   " X", 0
 pg_s_empty:     DB   "EMPTY", 0
+pg_s_star:      DB   "*", 0
 pg_s_help:      DB   "FIRE: SELECT   I: CLOSE", 0
                 ASSERT BAG_SLOTS == 20 && PAGE_SCR_END <= TX_DEC

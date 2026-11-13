@@ -117,7 +117,7 @@ class Snd:
             self.p.hold("ENTER")
         elif n == 8:
             self.p.release()
-        if n >= 12 and gs in BOOT_WAITS:     # INSTR: the next wait (a HOW TO PLAY page; 4 waits in all)
+        if n >= 12 and gs in BOOT_WAITS:     # still at the wait (ITEM-INFO: one wait, the picture's)
             n = 0
         self._ak = [n, n >= 12]
 
@@ -354,6 +354,7 @@ def snd5(h):
         tstep()
         if s.rb("GAME_STATE") == GS_SELECT:
             break
+    p.tut_off()                               # TUT0: '1' would open the tutorial choice (pre-existing on main 4add7e5)
     p.wb("INPUT_REPEAT", 0)
     p.wb("ANIM_FREEZE", 1)
     p.wb("INPUT_SRC", 1)
@@ -558,6 +559,7 @@ def snd10(h):
     p = s.p
     p.wb("INPUT_REPEAT", 0)
     p.wb("INPUT_SRC", 1)                      # (no ANIM_FREEZE: a turn's phase 1 waits on the animations)
+    p.tut_off()                               # TUT0: '1' would open the tutorial choice (pre-existing on main)
     p.hold("1")
     s.until(lambda: s.rb("GAME_STATE") == GS_PLAYING, cap=4000)
     p.release()

@@ -191,7 +191,8 @@ def run(p, check):
         got = dict(ok=ok, bag=bag(), lines=lines, e=entry(i)[0], c=cell(col),
                    sh=shadow_attr(IROW, col) == p.rb(S["TILE_ATTRS"] + S["T_AIR"]), pot=p.ent(0)["POT"],
                    bow=p.rb("HAS_BOW"))
-        want = dict(ok=True, bag=[(IT[nm], 1, 0)], lines=[PICK + NAME[nm]], e=S["FL_EMPTY"], c=S["T_AIR"], sh=True,
+        want = dict(ok=True, bag=[(IT[nm], 1, 0)], e=S["FL_EMPTY"], c=S["T_AIR"], sh=True,
+                    lines=[PICK + NAME[nm]] + (["READ IT IN THE BAG"] if nm == "BOOK" else []),   # UX1 §6: first book
                     pot=1 if nm == "P_MANA" else 0, bow=1 if nm == "BOW" else 0)
         check(f"P1 pick up {nm}: bag record, line, entry gone, cell + attr T_AIR, E_POT, HAS_BOW", got == want,
               (got, want))

@@ -135,9 +135,14 @@ pu_add:
                 jr   nz, .nb
                 ld   hl, HAS_BOW
                 ld   (hl), 1
-.nb:            ld   e, IL_PICK                ; "YOU PICK UP " + name (bank 1)
+.nb:            push af
+                push de                        ; E = 3 * slot (bag_add)
+                ld   e, IL_PICK                ; "YOU PICK UP " + name (bank 1)
                 ld   hl, it_line
                 call far1
+                pop  de
+                pop  af
+                FARB0 ux_pick                  ; UX1: NEW, LAST_PICK, the first-book hint (ux0.asm)
                 ld   l, 1
                 ret
                 ASSERT ST2_BKF == ST2_ITM - 1 && (ST2_BKF >> 8) == (ST2_ITM >> 8)

@@ -13,8 +13,9 @@
 ;------------------------------------------------------------------------------
 ; bag_add — add a stack of B items of type A with ISTATE C.
 ; In : A = type, B = qty (1..STACK_MAX), C = ISTATE (gear; 0 for stackables).
-; Out: L = 0 added, L = 1 refused (bag full, or A is not a bag type: < IT_BAG_LO
-;      (counters, the legacy potion id 1) or >= IT_COUNT). BAG untouched on 1.
+; Out: L = 0 added (UX1: E = 3 * the slot added to / topped up), L = 1 refused (bag
+;      full, or A is not a bag type: < IT_BAG_LO (counters, the legacy potion id 1) or
+;      >= IT_COUNT). BAG untouched on 1.
 ; Food / potions / scrolls (IT_FOOD_LO..IT_SCR_HI) top up the first stack of the
 ; type that stays <= STACK_MAX, else take the first free slot; gear, the book
 ; and the bow never merge (E = 0 never equals a used slot's non-zero type).
@@ -51,13 +52,17 @@ bag_add:
 .full:         ld   l, 1
                 ret
 .mg:            ld   (hl), a
+                dec  l
                 jr   .ok
 .new:           ld   (hl), d
                 inc  l
                 ld   (hl), b
                 inc  l
                 ld   (hl), c
-.ok:            call pot_sync                  ; 3E-T11: E_POT = the bag's potions
+                dec  l
+                dec  l
+.ok:            ld   e, l                      ; UX1: E = 3 * the slot (pu_add -> ux_pick)
+                call pot_sync                  ; 3E-T11: E_POT = the bag's potions (keeps DE)
                 ld   l, 0
                 ret
 
@@ -105,6 +110,10 @@ bag_take:
                 ld   (hl), a
                 jr   .sy
 .free:          dec  l
+                push hl
+                ld   a, l                      ; UX1 (ux_polish.md §4): NEW_MASK / LAST_PICK follow
+                FARB0 ux_compact               ; the shift (ux0.asm, B0_CODE2)
+                pop  hl
                 ld   d, h
                 ld   e, l                      ; DE = this record
                 inc  l
