@@ -276,6 +276,27 @@ def main():
               st == (True, 0xFF, 0x04, True, (1, 0)), st)
         close_page()
 
+        # U5 byte-crossing: 17 items, NEW {7, 8, 15, 16}, discard slot 7 -> {7, 14, 15} (bit 7 gone,
+        # the bits above shift down across both byte borders)
+        p.boot(K_KNIGHT)
+        put_bag([IT["F_APPLE"]] * 17)
+        p.wmem(S["NEW_MASK"], [0x80, 0x81, 0x01])
+        p.wb("LAST_PICK", 16)
+        ok = p.code(far(S["bag_discard"], 7))
+        st = (ok, hex(newmask()), p.rb("LAST_PICK"))
+        check("U5 byte-crossing compaction: NEW {7,8,15,16}, discard 7 -> {7,14,15}, LAST_PICK 16 -> 15",
+              st == (True, hex(0xC080), 15), st)
+        # fx_equip into an empty worn slot compacts the bag slot too: NEW {0,1,3}, equip slot 2 -> {0,1,2}
+        p.boot(K_KNIGHT)
+        put_bag([IT["F_APPLE"], IT["W_LONG"], IT["H_HELM"], IT["S_FEAR"]])
+        p.wmem(S["WORN"], [0] * (S["WORN_SLOTS"] * S["IR_STRIDE"]))
+        p.wmem(S["NEW_MASK"], [0x0B, 0, 0])
+        p.wb("LAST_PICK", 3)
+        ok = p.code(far(S["fx_equip"], 2))
+        st = (ok, hex(newmask()), p.rb("LAST_PICK"), p.z.read_memory(S["BAG"] + 6, 1)[0] == IT["S_FEAR"])
+        check("U5 fx_equip into an empty worn slot: bag compacts, NEW {0,1,3} -> {0,1,2}, LAST_PICK 3 -> 2",
+              st == (True, hex(0x07), 2, True), st)
+
         # ---- U6 the verb strip --------------------------------------------------------
         p.boot(K_KNIGHT)
         put_bag([IT["F_APPLE"], IT["BOOK"], IT["P_HEAL"], IT["W_LONG"]])
@@ -356,6 +377,20 @@ def main():
         disp = [c for c in range(WORD, WORD + 5) if attr_at(p.frame(), c, ROW) & 0x80]
         check("U8 WEAK: bag open / close -> F1 back (bank 5 + displayed)", before and after == before and disp == before,
               (before, after, disp))
+        # a BARS pointer up (bit 7 on the bar cells) + a FOOD redraw (item_food): the word keeps its flash
+        for stage, food, nm in ((S["HS_HUNGRY"], 10, "HUNGRY"), (S["HS_WEAK"], 9, "WEAK")):
+            p.boot(K_KNIGHT)
+            p.wb("FOOD", food)
+            p.wb("HSTAGE", stage)
+            p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_FOOD"])
+            panel_idle()
+            pb = S["SCREEN_ATTR"] + ROW * 32
+            p.wmem(pb + FOOD_BAR, [p.z.read_memory(pb + FOOD_BAR, 1)[0] | 0x80])
+            ok = p.code(far(S["item_food"], bank_far="b0"))
+            fr = p.composed_frame()
+            fl, ik = flash(range(WORD, WORD + 5))
+            check(f"U8 BARS pointer up + item_food at {nm}: the word's ink cells keep FLASH",
+                  ok and fl and fl == [c for c in ik if c >= WORD], (ok, fl, ik))
         # a pointer clear over row 21 (tt_ptr: bit 7 off), then its ux_ptr call
         base = S["SCREEN_ATTR"] + ROW * 32
         row = list(p.z.read_memory(base, 32))

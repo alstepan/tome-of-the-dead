@@ -24,13 +24,13 @@ here are the **as-built** `page_ovl.asm` ones; game.md Q3's table is stale.
 |---|---|---|---|---|---|
 | F1 FOOD | word 19–23 | stage WEAK (FOOD ≤ 9) | FOOD ≥ 10 | `$42` → `$C2` | none |
 | F2 HP | num 5–6 | HP ≤ max(MAXHP>>2, `HPLOW_MIN` 5), 8-bit | next HP redraw above | num attr \| `$80` | none |
-| F3 MP | num 12–13 | a `NO MANA` refusal (cast or Warrior special) | 32 frames, or the next input while ICON MODE is open | num attr \| `$80` | existing UI "denied" SFX, reused |
+| F3 MP | num 12–13 | a `NO MANA` refusal (cast or Warrior special) | ≥ 32 frames (16 game ticks, counted on GS_PLAYING ticks that finish in their first frame; paused on the bag page / level card), or the next input while ICON MODE is open | num attr \| `$80` | existing UI "denied" SFX, reused |
 
 - **F1** keeps flashing through a faint. The Mummy WEAK *status* icon (cols 30–31) never flashes:
   it is a timed curse.
 - **F2** is checked on every HP draw: damage, regen, Heal, level-up, MAXHP change.
-- **F3 timer:** `MPF_T` is a deadline that the main-loop tick checks against the existing frame
-  counter. **The ISR does not grow** (the SFX10c/SND6 gates have 0 T margin).
+- **F3 timer:** `MPF_T` counts down 16 game ticks (≥ 32 frames, not a `SYS_FRAMES` deadline; only first-frame
+  GS_PLAYING ticks count). **The ISR does not grow** (the SFX10c/SND6 gates have 0 T margin).
 - **F3 behaviour:** a repeat refusal restarts the countdown and replays the SFX. The refusal
   itself is unchanged: no turn, no MP, `NO MANA` in the log, ICON MODE stays open.
 
@@ -150,7 +150,7 @@ Both run inside the existing compaction routine, so there is no second path.
 1. FOOD 9 → word `$C2`, bar `$42`; eat to 10 → no bit 7.
 2. MAXHP 40: HP 10 flashes, 11 does not. MAXHP 12: HP 5 flashes, 6 does not.
 3. MP 0 + cast → cols 12–13 have bit 7 and `SFX_REQ` is set; turn and MP unchanged. Bit 7 clears
-   after 32 frames, or earlier on a key in ICON MODE.
+   after 16 game ticks (≥ 32 frames), or earlier on a key in ICON MODE.
 4. Pick up A, then B → page opens on B (mark cleared); A shows `*` until visited.
 5. Discard below a NEW slot → the mark moves down and `LAST_PICK` decreases by 1. Discarding
    `LAST_PICK` → the page opens on slot 0.

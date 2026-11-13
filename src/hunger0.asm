@@ -44,6 +44,9 @@ item_food:
                 ld   b, STAT_ROW
                 ld   e, HUNGER_COL * 8
                 call print6
+                ld   a, (UX_A_ROW + FOOD_BAR_COL) ; a tutorial BARS pointer = FLASH on the bar cell (as ux_grp reads it)
+                and  $80
+                push af                        ; Z = no pointer (the stamp below clears it)
                 ld   a, (HSTAGE)
                 ld   e, a
                 ld   d, 0
@@ -53,10 +56,12 @@ item_food:
                 ld   bc, (STAT_ROW << 8) | FOOD_BAR_COL
                 ld   de, ((GEAR_COL - FOOD_BAR_COL) << 8) | 1
                 call stamp_rect                ; (A, B, D, E, HL)
+                pop  af
+                jr   nz, .fl                   ; pointer up: its word cells keep FLASH
                 ld   a, (HSTAGE)               ; UX1 F1 (ux_polish.md §2): at WEAK the word's ink
                 cp   HS_WEAK                   ; cells FLASH (bit 7; the bar never; a blank cell would
                 jr   nz, .pm                   ; flash as a block: R4). Inline (not ux0.asm's ux_foodg:
-                ld   hl, SCREEN_ATTR + STAT_ROW * 32 + HUNGER_COL   ; hunger.py T1's 9k cap)  ~1.1k T at WEAK
+.fl:            ld   hl, SCREEN_ATTR + STAT_ROW * 32 + HUNGER_COL   ; hunger.py T1's 9k cap)  ~1.1k T at WEAK
                 ld   de, FOOD_WORD_BMP
                 ld   c, GEAR_COL - HUNGER_COL
 .fw:            push de

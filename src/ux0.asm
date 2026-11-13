@@ -11,7 +11,7 @@
 ;==============================================================================
 
 HPLOW_MIN       EQU 5               ; F2: HP <= max(MAXHP >> 2, HPLOW_MIN) flashes
-MPF_TICKS       EQU 16              ; F3: 16 ticks = 32 frames (25 Hz ticks)
+MPF_TICKS       EQU 16              ; F3: 16 game ticks = >= 32 frames (see ux_polish.md s2)
 UX_A_ROW        EQU SCREEN_ATTR + STAT_ROW * 32                 ; row 21 attrs ($5AA0)
 UX_B_ROW        EQU SCREEN_BITMAP + ((STAT_ROW & $18) << 8) + ((STAT_ROW & 7) << 5)   ; row 21 line 0
 HG_WORD_CELLS   EQU GEAR_COL - HUNGER_COL                       ; the FOOD word, cols 19..23
