@@ -38,7 +38,7 @@
 
 ;==============================================================================
 ; A7 review: cold game-state code moved out of bank 2 (bank-2 headroom for
-; Stage-3 hot code): new_game (bank 7 since MEM-SND; init_ent_common,
+; Stage-3 hot code): new_game (bank 7 since MEM-SND, bank 0 newgame0.asm since B0CODE; init_ent_common,
 ; D3-11: the PROTO rooms are the test fixture proto_fix.asm), the follower
 ; admission (L-RELIEF: the candidate scan, place_follower and the arrival
 ; conflicts are bank 7 now). None of it pages $C000 (only bank-2 queries +

@@ -170,7 +170,7 @@ st2_fmt:        ld   hl, (ST2_BKR)             ; L = read, H = found
                 ASSERT ST2_BKF == ST2_BKR + 1
 
 ;------------------------------------------------------------------------------
-; kit_add — far6 from new_game (bank 7), after ITEM_RAM is cleared and the hero
+; kit_add — far6 from new_game (bank 0, newgame0.asm), after ITEM_RAM is cleared and the hero
 ; slot is set: the start kit (game.md §8.11 Q10 / §4): WORN weapon + armour,
 ; the bag list by HERO_KIND (+ the DEBUG_KIT extras, rev 6 list, + the bow for
 ; the Warrior). Ends with E_POT synced (bag_add). 3E-T9: FOOD := FOOD_START.

@@ -107,6 +107,8 @@
   C2: `dn_q2` spawns nothing in a tick that ran turn logic (`heavy_mark` -> `LOGIC_TICK`, bank 7: call it from any
   new per-turn logic entry that can run in a tick's 2nd frame) or rendered >= `DN2_DMG_MAX` damage rects.
   Cold per-turn code may live there too (C2: `mus_pick0`, the Dangerous cue, via the bank-7 stub `mus_pick`).
+  **B0CODE: new permanent bank-0 code / read-only data goes in `B0_CODE2`** (`b0c2_code..b0c2_end`, the used part
+  of `B0_FREE`, on the text tape block; same rules; memory-map "B0CODE ledger"), not in the full `b0_code` reserve.
   **DNUM-SPRITE-FIX (2026-11-03): the numbers are drawn on the DISPLAYED screen only** (bank-2
   `dnum2.asm` `dn_show`, entered by `far7` = bank 7 paged; `present` calls `dn_fix` first): bank 5
   never holds a number, so nothing else needs to know about them; an erase is a `pmark_rect` (present

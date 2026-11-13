@@ -261,7 +261,7 @@ FAINT_GAP       EQU 30              ; faints come 30 turns apart (HW_TMR := HW_R
 ; ITEM_RAM — the 3E runtime item block. Bank 5 $5D00.., the BASIC area freed
 ; once boot has moved SP to $BF00 (garbage at power-on; not on tape; never
 ; touched before new_game). One page: every field is reached with `inc l`.
-; new_game (bank 7, boot7.asm) zeroes ALL of it; level changes keep it.
+; new_game (bank 0, newgame0.asm) zeroes ALL of it; level changes keep it.
 ; 3E simplification (game.md §8.11, 2026-10-20): no FL_IST (a floor item is
 ; TYPE / QTY only, m 0), no ID_MAP / KNOWN (names fixed), no FL_ATTR (the
 ; floor ink is f(type): it_tab, lowram.asm) -> 81 B (was 121 / 153).

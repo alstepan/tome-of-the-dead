@@ -58,7 +58,7 @@ OVL_PASS        EQU 2                   ; tools/build.sh: -DOVL_PASS=1 first (3E
                 TAPE_BLK mode, BANK_COLD3, AY_RESERVE, AY_LEN             ; A8 AY slot (BANK_AY = 3)
                 TAPE_BLK mode, BANK_TSET, B7_CODE, B7_LEN                 ; D3-S2 bank-7 cold code
                 TAPE_BLK mode, BANK_TSET, TSET_BASE, B7D_LEN              ; level tilesets (w2a: dedup) + data7 (w2b), one block
-                TAPE_BLK mode, BANK_TEXT, TEXT_ADDR, TEXT_TAPE_LEN        ; D3-TX text block (bank 0 bottom) + b0 cold code + its reserve pad
+                TAPE_BLK mode, BANK_TEXT, TEXT_ADDR, TEXT_TAPE_LEN        ; D3-TX text block (bank 0 bottom) + b0 cold code + its reserve pad + B0_CODE2 (B0CODE)
                 TAPE_BLK mode, BANK_BOOT4, BOOT4_ORG, BOOT4_TAPE_LEN      ; C+TUT0: frame_tab + INSTR + D0 blob streams (bank 4, boot only)
                 TAPE_BLK mode, BANK_BOOT6, BOOT6_ADDR, BOOT6_TAPE_LEN     ; 3E-T1 boot block + SRC6 sources (bank 6, below R6)
                 TAPE_BLK mode, BANK_R6, R6_ADDR, R6_USED                  ; R6 region (bank 6 top, permanent)
@@ -271,18 +271,31 @@ B0_PAD          EQU B0_FREE_START - b0_code_end        ; C-T8: was B0_FREE (pad 
     IF B0_PAD > 0
                 DS   B0_PAD, 0                          ; the reserve (on the text tape block)
     ENDIF
+; B0CODE (2026-11-12): B0_CODE2 — permanent bank-0 code AND data in the carve B0_FREE_START..
+; POOL_START-1, on the SAME tape block (it runs on from the pad above; the tape grows only by the
+; bytes used). Rules (memory-map "B0CODE ledger"): entered by FARB0 / farb C = BANK_TEXT (or
+; called directly by code already running with bank 0 paged); never pages $C000 itself (far3 /
+; far6 / far7 / far1 and the restoring helpers hand bank 0 back); no SMC and no runtime-written
+; bytes (game.py #50 / gfx_integrity / d8_stress compare text_img..POOL_START with the .sna);
+; data read only with BANK_TEXT paged. The pool (alloc from POOL_START) never reaches below
+; POOL_START, so the region is permanent. Append new files at the end; keep b0c2_end last.
+b0c2_code:
+                INCLUDE "newgame0.asm"         ; B0CODE proof: new_game (FARB0 from start_game; was bank 7)
+b0c2_end:
+B0C2_LEN        EQU b0c2_end - b0c2_code
+B0C2_FREE       EQU POOL_START - b0c2_end
+                ASSERT b0c2_code == B0_CODE2 && B0_CODE2 == B0_FREE_START && b0c2_end <= POOL_START
 text_tape_end:
-TEXT_TAPE_LEN   EQU text_tape_end - TEXT_ADDR  ; C-T8: text + b0 code + pad (= B0_FREE_START - TEXT_ADDR)
-                ASSERT text_tape_end == B0_FREE_START && TEXT_TAPE_LEN + B0_FREE_RES == POOL_START - TEXT_ADDR
-; C-T8: the carved bank-0 region B0_FREE_START..POOL_START-1 (defs.asm): nothing assembled,
-; not on tape. C+TUT0 merge: the boot-only streams (frame_tab, HOW TO PLAY, the D0 blob) are
-; no longer in bank 0 at all — they are the bank-4 BOOT4 block ("BOOT4 STREAMS", after
-; tap_loader), so nothing in bank 0 above the text block is loaded at boot.
+TEXT_TAPE_LEN   EQU text_tape_end - TEXT_ADDR  ; B0CODE: text + b0 code + pad + B0_CODE2 (was = B0_FREE_START - TEXT_ADDR)
+                ASSERT text_tape_end == b0c2_end && B0_FREE_START + B0_FREE_RES == POOL_START
+; The rest of the carve, b0c2_end..POOL_START-1, is not assembled and not on tape. C+TUT0 merge:
+; the boot-only streams (frame_tab, HOW TO PLAY, the D0 blob) are the bank-4 BOOT4 block ("BOOT4
+; STREAMS", after tap_loader), so nothing in bank 0 above B0_CODE2 is loaded at boot.
                 ASSERT text_base == TEXT_ADDR && TEXT_LEN == TEXT_PACKED
                 ASSERT (tx_entries & $FF) == 0         ; w2d: tk_get's B = tx_entries >> 8
                 DISPLAY "GAME text (bank 0): ", /D, TX_COUNT, " strings, ", /D, TX_TOKENS, " tokens, raw ", /D, TEXT_RAW, " -> ", /D, TEXT_PACKED, " B packed at ", /H, text_base, "; pool from ", /H, POOL_START
                 DISPLAY "GAME bank-0 cold code (M0 L4): ", /H, b0_code, " ", /D, B0_CODE_LEN, " B of ", /D, B0_CODE_RES, "; text ", /D, TEXT_LEN, " of TEXT_RES ", /D, TEXT_RES, " (headroom ", /D, TEXT_RES - TEXT_LEN, "); text + code reserve ", /D, B0_FREE_START - TEXT_ADDR, " B, free to the carve: ", /D, B0_PAD
-                DISPLAY "GAME bank-0 carve (C-T8, reserved, not on tape): ", /H, B0_FREE_START, "..", /H, B0_FREE_END - 1, " (", /D, B0_FREE_RES, " B), pool from ", /H, POOL_START
+                DISPLAY "GAME bank-0 B0_CODE2 (B0CODE, on the text tape block): ", /H, b0c2_code, "..", /H, b0c2_end - 1, " (", /D, B0C2_LEN, " B used of the carve ", /D, B0_FREE_RES, "), free to POOL_START ", /H, POOL_START, ": ", /D, B0C2_FREE
 
 ;==============================================================================
 ; BANK-5 LOW-RAM COLD CODE — tape entry, boot, generator, init_tiles, game

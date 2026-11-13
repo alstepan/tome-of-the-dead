@@ -299,7 +299,7 @@ ABF_AMMO_BIT    EQU 7
                 ASSERT ABF_MELEE == 1 << ABF_MELEE_BIT && ABF_AMMO == 1 << ABF_AMMO_BIT
 
 ;------------------------------------------------------------------------------
-; hero_st_init — far7 from new_game (bank 3): the C3-2 intent state + the start kit counters the
+; hero_st_init — far7 from bank-0 new_game (B0CODE; newgame0.asm): the C3-2 intent state + the start kit counters the
 ; icon handlers read (game.md §4: Warrior 3 daggers, no bow, 0 arrows; no
 ; ability learned). STICK / KEYTAB / JOY_MODE persist (boot), ICON_SH is the
 ; panel's (C3-3), LVL / XP / MP 3D's.  Clobbers: A, B, HL
