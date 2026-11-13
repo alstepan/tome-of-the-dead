@@ -6682,7 +6682,7 @@ BOOT4 frame_tab + INSTR 1,616 → 321 B (−1,295 B tape, boot only)**; BOOT4 bl
 |---|---|---|
 | `$5D59` | `NEW_MASK` | 3 B: bit k = bag slot k is NEW (C3); set by `ux_pick`, cleared on the page's cursor arrival (`pg_arr`), shifted by `ux_compact`; bits 20-23 stay 0 |
 | `$5D5C` | `LAST_PICK` | slot of the last bag pickup (top-up too), `$FF` none (`new_game`); the page opens there if < the count (C2) |
-| `$5D5D` | `MPF_T` | F3: ticks left of the MP-number flash (`MPF_TICKS` 16 = 32 frames), counted down by `dn_tick` (GS_PLAYING ticks only; the ISR is untouched) |
+| `$5D5D` | `MPF_T` | F3: ticks left of the MP-number flash (`MPF_TICKS` 16 ticks = ≥ 32 frames: counted in game ticks, paused on the bag page / level card), counted down by `dn_tick` (GS_PLAYING ticks only; the ISR is untouched) |
 | `$5D5E` | `UX_FL` | bit 0 `UXF_HINT_B`: the first-book hint was given; `new_game` keeps it only when entered with `GAME_STATE` = `GS_PLAYING` (the D0 grate's `tt_reset`), a menu START clears it |
 | `$6BA8` | `IE_BUF` | 41 B page-time scratch (`PAGE_SCR_END`, below `TX_DEC`): row 19's composed phrase (test-observable); `PAGE_BUF` keeps row 18 |
 

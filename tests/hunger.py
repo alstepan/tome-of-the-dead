@@ -350,14 +350,16 @@ def run(h, p, check):
         return ok, p.tstates
     tt = {"plain": cost("hunger_turn"), "burn": cost("hunger_turn", tmr=5),
           "burn + HUNGRY line": cost("hunger_turn", food=25, tmr=5, stage=OK),
-          "item_food HUNGRY": cost("item_food", food=20, stage=HUNGRY)}
+          "item_food HUNGRY": cost("item_food", food=20, stage=HUNGRY),
+          "item_food WEAK": cost("item_food", food=5, stage=WEAKS)}
     print(f"[info] costs incl. far6 / far7 (T): {tt}", flush=True)
     # MEM-RECLAIM w2b: hunger_turn is bank-7 code (contended, ~+0.25k measured) that end_turn calls
     # directly; the stub's far7 (~0.25k) is test overhead the game no longer pays (it paid far6 before):
     # the plain / burn cap incl. the far call is 1.5k (was 1.2k incl. far6; budget.py: every tick -88 T).
     check("T1 hunger_turn <= 1.5k T plain / burn incl. the test's far7, <= 5k with a line; item_food <= 9k (1st frame only)",
           all(v[0] for v in tt.values()) and tt["plain"][1] <= 1500 and tt["burn"][1] <= 1500
-          and tt["burn + HUNGRY line"][1] <= 5000 and tt["item_food HUNGRY"][1] <= 9000, tt)
+          and tt["burn + HUNGRY line"][1] <= 5000 and tt["item_food HUNGRY"][1] <= 9000
+          and tt["item_food WEAK"][1] <= 10500, tt)   # WEAK: + the FLASH loop (~1.1k T)
 
 
 if __name__ == "__main__":
