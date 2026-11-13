@@ -87,6 +87,7 @@ and per-task evidence: `docs/history.md`.
 | SPR-S | Shorter sprites (48->40, 32->24) | artist -> user | LAST-RESORT memory fallback only; never degrade graphics; 48 px kinds only |
 | UB1 | Dead-enemy frame on dagger throw (not reproducible) | – | parked; reopen only on a new report |
 | B5 | Fuse load of the tape not yet tried (real-hardware load passed, A9) | user | open; low priority |
+| ROOMMEM1 | tests/roommem.py S1/S2 (4 checks) failed on every build since at least #19: stale TEST, not a game bug. Part S picked X = first plain room, but the generator leaves some rooms empty (X=1 had no residents), so X banks nothing and is never parked and the "X in parked_rooms" asserts fail (the model checks passed). Fix: pick X among rooms the model says are populated | manager | **DONE** (test only; roommem 0 failed) |
 | WEB1 | Browser play on the itch page with **JSSpeccy 3 v3.2** (GPL-3, unmodified): `tools/web_bundle.sh v1.1` → `build/web/tome-of-the-dead-web-v1.1.zip` (index.html + jsspeccy/ + v1.1 .tap via the 128 loader; GPL text + corresponding source `third_party/jsspeccy3-v3.2-source.tar.gz` inside the zip). How-to: `docs/web_itch.md` | manager | **DONE — LIVE on itch 2026-11-12** (user-approved upload; kind HTML, 660×600, fullscreen button, screenshots column = Sidebar). user playtest OK 2026-11-12. Known: no Kempston/touch in JSSpeccy |
 
 ## How we control state
