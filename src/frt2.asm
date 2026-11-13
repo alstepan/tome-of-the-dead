@@ -1,6 +1,6 @@
 ;==============================================================================
-; frt2.asm — MEM-FT bank-2 FRT helpers (after kind_tab: bytes come out of the
-; free-to-seq_rows space, not the kind_tab ALIGN pad). Were low RAM (bank 5:
+; frt2.asm — MEM-FT bank-2 FRT helpers (NEW-MON3 T1: in the kind_tab ALIGN pad, before
+; kind_tab, so the T1 free bytes gather at the image tail; was after kind_tab). Were low RAM (bank 5:
 ; sel_frt_copy, frt_ptr, frt_ptr_cur) and gfx.asm (ft_ptr); moved so the low-RAM
 ; cold block keeps room for the FRT_MAX descriptor reserve (main.asm fit).
 ; Bank 2 is always mapped at $8000, so every caller (low RAM gen_frame, bank 1

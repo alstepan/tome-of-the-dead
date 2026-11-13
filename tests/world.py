@@ -822,8 +822,10 @@ def w15(p, check):
           f" scroll of 24 cols {t_s} T; print6 32 chars {t_p} T (~{t_p // 32} T/char), 4 chars {t_p4} T;"
           f" 2nd-frame HP item {t_hp2} T, idle step {t_none} T", flush=True)
     check("W15 whole log item <= 25k T (1st-frame ticks only: < 70.9k T used before it)", t_whole <= 25000, t_whole)
-    check("W15 2nd-frame small item (HP) <= 5.2k T (worst 2nd-frame pre-panel ~117k + 5.2k < 126k cap; C3-3: + icon_poll ~0.1k)",
-          t_hp2 <= 5200, t_hp2)
+    # NEW-MON3 T1: item_hp is bank 0 (FARB0 from HOT_COPY, +~0.3k): cap 5.2k -> 5.5k (measured 5,464);
+    # 117k + 5.5k = 122.5k still < the 126k cap, and tests/budget.py (the real per-tick gate) passes.
+    check("W15 2nd-frame small item (HP) <= 5.5k T (worst 2nd-frame pre-panel ~117k + 5.5k < 126k cap; C3-3: + icon_poll ~0.1k; NEW-MON3 T1: + FARB0)",
+          t_hp2 <= 5500, t_hp2)
     check("W15 print6 <= 500 T/char (32 chars)", t_p <= 500 * 32, t_p)
 
     # --- bars follow HP ------------------------------------------------------

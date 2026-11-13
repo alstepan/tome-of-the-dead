@@ -284,6 +284,8 @@ b0c2_code:
                 ; ==== ITEM-INFO + UX-POLISH (UX1) block (feat/item-info): resident code + read-only data ====
                 INCLUDE "ux0.asm"              ; item phrases (ie_line), panel flashes, NEW / LAST_PICK, the hint, menu pointer
                 ; ==== end ITEM-INFO + UX-POLISH block ====
+                INCLUDE "nm3_b0.asm"           ; NEW-MON3 T1 FUND: lp_hdr0 + lp_dtab, lp_post, the panel items,
+                                               ; item_log0, end_scr0, hit_line, try_close (memory-map ledger)
                 ; ---- packed overlay streams: KEEP LAST (2-pass build: no code address may depend on a packed size;
                 ; append new code ABOVE this line) ----
 ovl_page_zx0:                                  ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG; ITEM-INFO: from R6,
@@ -530,35 +532,11 @@ read_turn_input:
 ; the same fixed seed, §6.5).
 ;------------------------------------------------------------------------------
 end_screen:
-                ; END-WAIT (user 2026-11-04): the final scene stays up first and the card waits for a key.
-                ; END_SHOWN (start_game sets END_DELAY; bit 7 = ES_CARD, the card is up): the low nibble
-                ; is a quiet countdown, one per tick with no key down, a key reloads it (a panicked press at
-                ; death neither skips the scene nor ends the wait early). 0 + a key: the card is drawn
-                ; (ES_CARD | END_DELAY: the same quiet again, so a key that is still down never reaches
-                ; the menu); the card's 0 + a key: the menu. add a,a: Z = 0 / $80 (terminal), C = card.
-                ; panel_tick (clobbers all) draws the lethal turn's log line / HP 0; once everything is
-                ; drawn it only polls, so it is harmless over the card too (3 B instead of a card test).
-                call panel_tick
-                call keys_down                 ; raw 1..0 / ENTER (not FIRE: a held FIRE cannot skip)
-                ld   hl, END_SHOWN
-                ld   a, (hl)
-                jr   z, .nokey
-                add  a, a
-                jr   z, .act
-                ld   a, (hl)
-                or   END_DELAY                 ; = $0F: the countdown restarts, the card bit stays
-                ld   (hl), a
-                jr   .pl
-.nokey:         add  a, a
-                jr   z, .pl                    ; terminal: waiting for a key
-                dec  (hl)
-.pl:            jp   play_loop
-.card:          ld   (hl), ES_CARD | END_DELAY
-                ld   hl, end_card              ; bank 1 (menu1.asm)
-                call far1
-                jr   .pl
-.act:           jr   nc, .card
-.go:
+                ; NEW-MON3 T1: the body (END-WAIT) is bank-0 end_scr0 (nm3_b0.asm; -28 B bank 2, +~0.25k T
+                ; an end-screen tick): L = 0 -> the next tick, L = 1 -> the menu.
+                FARB0 end_scr0
+                dec  l
+                jp   nz, play_loop
                 ; ENTER: fall through into enter_select
 
 ;==============================================================================
@@ -592,6 +570,8 @@ es_go:          jp   start_game                ; SMC: TUT0 — the operand (es_g
                 INCLUDE "ldir2.asm"             ; PERF-GHOST: in the pad (17 B), so the tail holds dn_cel's
                                                 ; 2-line pass (trace builds: the tail, below, and the old loop)
     ENDIF
+                INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy; NEW-MON3 T1: in the pad (was after
+                                                ; kind_tab), so the free bytes gather at the image tail (the FRT page step)
                 ; dnum2.asm (the numbers' screen-2 draw + the kit's dnwin.asm): after ldir2.asm
                 ; (RECLAIM-D), so the kind_tab ALIGN pad keeps room for the -DANIM_TRACE_ON=1 code
 
@@ -735,10 +715,10 @@ dn_miss_s:      DB   "MISS", 0, DNA_MISS       ; D3-11 / LVL-FLOATER (dnfix2.asm
                 INCLUDE "mark.asm"              ; D3-8d status marks (mark_tick, per tick)
                 INCLUDE "xp2.asm"               ; D3-9b XP_NEXT table + item_mp (MP bar)
                 INCLUDE "sfx2.asm"              ; SND-5 sfx_req / sfx_msg (any bank calls them)
-                INCLUDE "bars2.asm"             ; MEM-SND bars_draw / num2 (from panel2.asm: pad headroom)
+                ; bars2.asm (bars_draw / num2): NEW-MON3 T1 -> bank-0 bars0.asm (src/nm3_b0.asm)
                 INCLUDE "boss2a.asm"            ; 3F-T8 og_adv / glow_kat (AMMO-COUNT: after kind_tab, its pad was 6 B)
                 INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
-                INCLUDE "frt2.asm"              ; MEM-FT ft_ptr / frt_ptr / sel_frt_copy (were low RAM / gfx.asm)
+                ; frt2.asm: NEW-MON3 T1 moved it before kind_tab (into the ALIGN pad the T1 moves freed)
                 INCLUDE "msg2.asm"              ; LOG-FIX: msg_cat / msg_end (from bank 7), log_room, hit_line
     IF ENDCARD_RK
                 INCLUDE "killer2.asm"           ; ENDCARD-K: dh_killer (deal_hit's hero-death killer, + a reflector)
@@ -1169,7 +1149,7 @@ POOL_SIM_PROTO = PS_USED
                 EDUP
 PS_LIM6 = POOL6_END
                 DUP  LEVELS, pld
-                MMU  3, BANK_COLD3
+                MMU  3, BANK_TEXT               ; NEW-MON3 T1: lp_dtab is bank 0 (nm3_b0.asm)
 PLK0 = {b lp_dtab + pld * LP_DROW + 0}
 PLK1 = {b lp_dtab + pld * LP_DROW + 1}
 PLK2 = {b lp_dtab + pld * LP_DROW + 2}
@@ -1471,7 +1451,7 @@ SQ_HERO = {b ovl_raw_seq + ksm_wz - SQ_IMG + KSM_LEN}
 SQ_MAX = 0
 SQ_NMAX = 0
                 DUP  LEVELS, sqd
-                MMU  3, BANK_COLD3
+                MMU  3, BANK_TEXT               ; NEW-MON3 T1: lp_dtab is bank 0
 SQK0 = {b lp_dtab + sqd * LP_DROW + 0}
 SQK1 = {b lp_dtab + sqd * LP_DROW + 1}
 SQK2 = {b lp_dtab + sqd * LP_DROW + 2}

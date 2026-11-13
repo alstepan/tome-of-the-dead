@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """3E-T9 hunger (game.md §7, §8.11 (2)) on a release build (DEBUG_KIT=0),
-PROTO room A, every monster parked. Code: src/hunger6.asm (R6: hunger_turn
+PROTO room A, every monster parked. Code: src/hunger0.asm (bank 0 since NEW-MON3 T1: item_food; was R6: hunger_turn
 from end_turn, hunger_add, item_food), the WEAK / HUNGRY hooks in hit_roll /
 deal_hit (combat3), h_jump (status7), xp_turn (MP_HOLD).
 
@@ -32,6 +32,7 @@ sys.path.insert(0, str(HERE.parent / "tools"))
 import game_lib  # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_GOBLIN, stand_y, RUN_LIMIT, attr_at  # noqa: E402
 B7_LABELS = {"hunger_turn", "hunger_add", "trap_step", "trap_turn"}   # MEM-RECLAIM w2b: bank-7 cold code (far7), not R6
+B0_LABELS = {"item_food"}   # NEW-MON3 T1: bank-0 B0_CODE2 (FARB0), was R6
 from proj3 import T, w16  # noqa: E402
 from abil_melee import stream_text  # noqa: E402
 
@@ -342,6 +343,9 @@ def run(h, p, check):
 
     def cost(label, food=60, tmr=0, stage=FED, a=0):
         setfood(food, tmr, stage)
+        if label in B0_LABELS:   # NEW-MON3 T1: item_food is bank 0 (hunger0.asm): FARB0 (farb, C = BANK_TEXT)
+            ok = p.code([0x3E, a, 0x21] + w16(S[label]) + [0x0E, S["BANK_TEXT"], 0xCD] + w16(S["farb"]))
+            return ok, p.tstates
         ok = p.code([0x3E, a, 0x21] + w16(S[label]) + [0xCD] + w16(S["far7" if label in B7_LABELS else "far6"]))
         return ok, p.tstates
     tt = {"plain": cost("hunger_turn"), "burn": cost("hunger_turn", tmr=5),

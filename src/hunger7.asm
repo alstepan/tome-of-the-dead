@@ -6,7 +6,7 @@
 ; (item_defs.asm) + ST_FLAGS slot 0 bit STS_HWEAK (combat_defs.asm).
 ;   hunger_turn  called by end_turn (bank 7), once per turn
 ;   hunger_add   far7 (R6 fx6 fx_eat; A = FOOD to add, the T12 EAT API)
-;   item_food    stays in R6 (hunger6.asm): the panel FOOD bar + stage word
+;   item_food    bank-0 hunger0.asm (NEW-MON3 T1; was R6 hunger6.asm): the panel FOOD bar + stage word
 ; The penalties are read where they apply (no hero_recalc): to-hit
 ; (hit_roll: HUNGRY atk -1, WEAK atk -2 / eva -1), WEAK dmg -1 (deal_hit),
 ; WEAK no jump (h_jump), MP regen (xp_turn reads MP_HOLD), FED HP regen

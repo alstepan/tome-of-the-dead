@@ -95,7 +95,8 @@ def unit(h, p, check):
         return ring_line(lambda: p.code(body))
 
     def hitl(pre, kind):
-        body = [0x06, pre, 0x0E, kind, 0xCD] + w16(S["hit_line"])
+        # NEW-MON3 T1: hit_line is bank 0 (A = pre, E = kind), entered by FARB0 (farb, C = BANK_TEXT)
+        body = [0x3E, pre, 0x1E, kind, 0x21] + w16(S["hit_line"]) + [0x0E, S["BANK_TEXT"], 0xCD] + w16(S["farb"])
         return ring_line(lambda: p.code(body))
 
     def push(label, tx):

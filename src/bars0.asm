@@ -1,8 +1,8 @@
 ;==============================================================================
-; bars2.asm — MEM-SND: panel-engine helpers moved from the end of panel2.asm
-; to after kind_tab (main.asm), so the bytes before the page-aligned kind_tab
-; (its ALIGN pad) are headroom for new bank-2 hooks. Bank 2, no alignment
-; needs (bars_draw reads pm_tab by its own H). Any bank may call them.
+; bars0.asm — the panel bars / 2-digit numbers. NEW-MON3 T1 (2026-11-13): moved from
+; bank 2 (bars2.asm; MEM-SND had moved them there from panel2.asm) to bank-0 B0_CODE2
+; (src/nm3_b0.asm) with their only callers item_hp / item_mp / item_food (all bank 0 now):
+; called directly with bank 0 paged. bars_draw reads pm_tab (bank 2) by its own H.
 ;==============================================================================
 ;------------------------------------------------------------------------------
 ; bars_draw — 32-px bar (concept: frame rows 1 / 6, end caps, fill rows 2..5)

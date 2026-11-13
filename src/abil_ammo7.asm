@@ -111,8 +111,9 @@ ammo_fire:
                 ld   b, d                      ; B = ABL_*
                 or   a
                 jr   nz, .hit
-                ld   b, TX_YOU_KILL            ; LOG-DMG: through hit_line (pf_lost, not dh_lost:
-                call hit_line                  ; "YOU KILL <kind> -D"; ln_hit requests SFX_KILL)
+                ld   a, TX_YOU_KILL            ; LOG-DMG: through hit_line (pf_lost, not dh_lost:
+                ld   e, c                      ; "YOU KILL <kind> -D"; ln_hit requests SFX_KILL)
+                FARB0 hit_line                 ; NEW-MON3 T1: bank 0 (A = pre, E = kind; was bank 2 B / C)
                 jr   .out
 .hit:           ld   a, (pf_lost)              ; 3F-T6: $FF = the hit was parried (deal_hit H = 1)
                 inc  a
@@ -124,8 +125,8 @@ ammo_fire:
                 jr   .out
 .nph:           ld   a, b                      ; LOG-FIX: spells share the tail: the hit line =
                 add  a, TX_SPL_SPARK           ; TX_SPL_SPARK + ABL (ASSERTed below), as a token
-                ld   b, a                      ; stream (msg2.asm hit_line, ~1.4k T)
-                call hit_line                  ; "DAGGER HITS <kind> -D HP H" / "FIRE BURNS ..." (LOG-DMG)
+                ld   e, c                      ; stream (bank-0 hit_line, nm3_b0.asm: ~1.4k T)
+                FARB0 hit_line                 ; "DAGGER HITS <kind> -D HP H" / "FIRE BURNS ..." (LOG-DMG)
                 jr   .out
 .none:          dec  c
                 jr   z, .out                   ; the named miss line said it

@@ -4,7 +4,7 @@
 ;   grate_open  far7 from mon_drop (bank 3): the lair boss died -> the gate opens.
 ;   boss_chk    far7 from lp_transition (bank 3): the boss-exists debug trap.
 ;   ai_guard    far7 from ai_ghook (bank 2): the lair boss's guard turn (G2).
-; lp_post stays in R6 (boss6.asm).
+; lp_post: bank-0 boss0.asm (NEW-MON3 T1; was R6 boss6.asm).
 ;==============================================================================
 ;------------------------------------------------------------------------------
 ; grate_open — far7 from mon_drop (bank 3; MEM-RECLAIM w2b: was R6 far6): the lair boss died (CUR_ROOM = the

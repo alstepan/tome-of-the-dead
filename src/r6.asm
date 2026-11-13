@@ -17,7 +17,7 @@
 ;==============================================================================
                 INCLUDE "pickup6.asm"          ; 3E-T11: pu_add, pot_take1, kit_add, mon_drop / drop_put (was bank 3)
                 INCLUDE "bag6.asm"             ; 3E-T10: bag_add / bag_find / bag_take / bag_pick, pot_sync user (was bank 3)
-                INCLUDE "hunger6.asm"          ; 3E-T9: item_food (w2b: the hunger logic is bank-7 hunger7.asm)
+                ; hunger6.asm (item_food): NEW-MON3 T1 -> bank-0 hunger0.asm (src/nm3_b0.asm)
                 INCLUDE "gear6.asm"            ; 3E-T8: hero_recalc, enchant_weapon, fx_line, it_fmt (+ fx stems, it_stat)
                 INCLUDE "fx6.asm"              ; 3E-T12 (+ the T8 equip / remove): fx_main, fx_quick, the effects, tele_pick, pot_eff
                 INCLUDE "trap6.asm"            ; 3E-T16: tele_arm / tele_flash / trap_at (w2b: the runtime is bank-7 trap7.asm)
@@ -32,7 +32,7 @@
                 INCLUDE "vbat6.asm"            ; 3F-T9: the Vampire's bat form (vb_one: far6 from bank-7 vb_turn, end_turn)
                 ; (DBG-1: debug_kit moved to bank 0, src/kit0.asm kit_b0, far from kit_add)
                 ; (MEM-RECLAIM w3: lq_block, the AI-L1 ladder queue, moved to bank 3: src/lq3.asm)
-                INCLUDE "boss6.asm"            ; 3F-T8: lp_post (the lair boss; w2b: ai_guard / grate_open / boss_chk -> boss7.asm)
+                ; boss6.asm (lp_post): NEW-MON3 T1 -> bank-0 boss0.asm (src/nm3_b0.asm)
                 ; (3F-T10 sanct6.asm: M0 -> bank 7 sanct7.asm, the high block after the tilesets)
                 INCLUDE "tome6.asm"            ; P3: seal_open (the Archmage's death) + tome_geo6 (hero vs lectern)
                 INCLUDE "icons6.asm"           ; IC1: icon_slot / worn_draw / qs_draw (the 16x16 icon blitter)

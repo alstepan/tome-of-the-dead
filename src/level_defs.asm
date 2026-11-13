@@ -671,7 +671,7 @@ ICON_W          EQU 3
 ATTR_P_HP       EQU $42
 ATTR_P_MP       EQU $45
 ATTR_P_FED      EQU $44             ; FOOD bar + stage word per HSTAGE (game.md §7; 3E-T9 item_food,
-ATTR_P_OK       EQU $46             ;   hunger6.asm hg_attr): FED / OK / HUNGRY / WEAK
+ATTR_P_OK       EQU $46             ;   hunger0.asm hg_attr): FED / OK / HUNGRY / WEAK
 ATTR_P_HUNGRY   EQU $42
 ATTR_P_WEAK     EQU $42
 ATTR_LOG_OLD    EQU $07             ; row 22
@@ -681,7 +681,7 @@ ATTR_P_SEL      EQU $08             ; OR: selected slot = PAPER blue
                 ASSERT LOG_ROW + 1 == 23 && (LOG_ROW & $18) == (23 & $18)   ; rows 22/23 share a bitmap third
 PD_HP_BIT       EQU 0
 PD_MP_BIT       EQU 1               ; D3-9b: item_mp (icons.asm); also polled (MP vs MP_SH)
-PD_FOOD_BIT     EQU 2               ; 3E-T9: item_food (hunger6.asm, R6; 1st frame only)
+PD_FOOD_BIT     EQU 2               ; 3E-T9: item_food (hunger0.asm, bank 0 since NEW-MON3 T1; 1st frame only)
 PD_LOG_BIT      EQU 4
 PD_ICONS_BIT    EQU 5
 PD_INFO_BIT     EQU 6

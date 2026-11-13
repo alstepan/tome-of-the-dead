@@ -1,18 +1,19 @@
 ;==============================================================================
-; hunger6.asm — 3E-T9 the panel FOOD item, R6 region (r6.asm rules: entered
-; only by far6, A / F lost on the way back). MEM-RECLAIM w2b: the hunger
+; hunger0.asm — 3E-T9 the panel FOOD item. NEW-MON3 T1 (2026-11-13): moved from R6
+; (hunger6.asm) to bank-0 B0_CODE2 (src/nm3_b0.asm) with bars_draw: entered only by FARB0
+; from panel_more (A / F lost on the way back; same cost as the far6 it replaced). MEM-RECLAIM w2b: the hunger
 ; logic (hunger_turn / hunger_add / hg_stage ...) is bank-7 hunger7.asm;
 ; item_food stays here (panel render code never runs from contended bank 7).
-;   item_food    far6 from panel_more (bank 2): the FOOD bar + stage word
+;   item_food    FARB0 from panel_more (bank 2): the FOOD bar + stage word
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
-; item_food — the panel FOOD item (far6 from panel_more, a tick's 1st frame
+; item_food — the panel FOOD item (FARB0 from panel_more, a tick's 1st frame
 ; only): the bar (fill FOOD / FOOD_MAX, cols 15..18), the stage word (bank-0
 ; hg_fed / hg_ok / hg_hungry / hg_weak, padded to HG_CHARS so a shorter word
 ; overwrites a longer one; cols 19..23) and the stage attr over both
 ; (hg_attr; game.md §7 table), marked for the present.
-; Clobbers: A, BC, DE, HL.   ~8.5k T incl. far6 (tests/hunger.py T1; screen
+; Clobbers: A, BC, DE, HL.   ~8.5k T incl. FARB0 (tests/hunger.py T1; screen
 ; writes are contended)
 ;------------------------------------------------------------------------------
 HG_CHARS        EQU 6
@@ -27,7 +28,7 @@ item_food:
                 call bars_draw
                 ld   a, (HSTAGE)
                 add  a, TX_HG_FED
-                call tx_dec                    ; HL = TX_DEC (bank 5; hands bank 6 back)
+                call tx_dec                    ; HL = TX_DEC (bank 5; hands bank 0 back)
                 ld   b, HG_CHARS
 .f:             ld   a, (hl)
                 or   a
