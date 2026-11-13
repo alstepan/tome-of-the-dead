@@ -1,6 +1,6 @@
 # AWARE1: monsters that notice you (D-AI1d half 2)
 
-**Status: APPROVED with the open-question defaults (user 2026-11-13).** Nothing here is built yet; FOLLOW_GAP 6 shipped separately.
+**Status: REJECTED after playtest (user 2026-11-13: makes the game much easier, monsters can be avoided completely).** Built on feat/aware, not merged. FOLLOW_GAP 6 shipped separately and stays.
 Today every non-held, non-feared monster on the hero's storey chases (prototype §6.4, game.md §9.2);
 non-climbers on the other storey patrol; ASLEEP exists only as a status (Sleep scroll, D0 Goblin).
 

@@ -315,6 +315,14 @@ def part_s(p, check, blk, st, lair, sanct, kw, kh, cur):
     if len(rooms) < 4:
         check("S setup: 4 plain rooms", False, rooms)
         return
+    # X must have residents (else it banks nothing and is never parked: S1/S2 assert X parked); the
+    # generator decides which rooms are populated, so probe the model on the fresh record
+    def residents(r):
+        try:
+            return len(G.lp_enter(blk, bytes(p.lp()), r, 0, 1, kw, f3=True, parked=[])[1])
+        except KeyError:
+            return 0
+    rooms.sort(key=lambda r: not residents(r))              # stable: populated rooms first
     X, Y, Z, W = rooms[:4]
     tsmax = 0
     ok, ts, mo, d = xfer(X)
