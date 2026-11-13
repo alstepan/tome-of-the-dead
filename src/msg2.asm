@@ -1,7 +1,7 @@
 ;==============================================================================
 ; msg2.asm — bank 2 (always mapped), after kind_tab (main.asm): the composed
 ; log-line helpers the bank-7 cold code calls (abil_ammo7, pickup7, xp7), moved
-; out of bank 7 by LOG-FIX (bank 7 had 3 B free), + the result-line helpers.
+; out of bank 7 by LOG-FIX (bank 7 had 3 B free), + log_room (hit_line: bank 0, NEW-MON3 T1).
 ;==============================================================================
 ;------------------------------------------------------------------------------
 ; Composed log lines in MSG_BUF (bank 7 cannot page the text block: it runs in
@@ -70,28 +70,4 @@ log_room:
                 ret
                 ASSERT LOG_SLOTS == 4
 
-;------------------------------------------------------------------------------
-; hit_line — the spell / dagger / arrow hit line as a token stream (no tx_dec
-; decode: ~1.4k T vs ~5k for msg_cat + msg_kind): pre string B (TX_SPL_SPARK + ABL_*;
-; LOG-DMG: or TX_YOU_KILL, ammo_fire's kill) + kind C's name, like impact_line
-; (lowram.asm; no sfx_msg: the release sound is sfx_abl's, a kill's SFX_KILL is
-; requested by ln_hit). LOG-DMG: bank-0 ln_hit (log0.asm) appends pf_tgt's
-; " -D HP H" (D = pf_lost) and pushes. The caller made room (log_room).
-; Clobbers: A, BC, DE, HL.
-;------------------------------------------------------------------------------
-hit_line:
-                ld   a, (PORT_7FFD_SHADOW)
-                push af                        ; caller's page
-                push bc
-                ld   a, BANK_TEXT
-                call page_bank                 ; (A, BC)
-                pop  bc
-                ld   de, MSG_BUF
-                ld   a, b
-                call impact_line.cat           ; + the pre stream
-                ld   a, c
-                add  a, TX_NM_KNIGHT
-                call impact_line.cat           ; + the kind name
-                call ln_hit                    ; LOG-DMG (bank 0): + the tail, 0, log_push
-                pop  af
-                jp   restore_page
+; hit_line: NEW-MON3 T1 -> bank-0 src/nm3_b0.asm (FARB0 from bank-7 ammo_fire; A = pre, E = kind).

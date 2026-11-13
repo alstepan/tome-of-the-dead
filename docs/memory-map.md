@@ -21,7 +21,7 @@
 
 | Bank | Planned use                       | Status   |
 |------|-----------------------------------|----------|
-| 0    | **D3-TX: the text block** + b0 cold code (`TEXT_ADDR` `$C000..B0_FREE_START`, own tape block), **C-T8: the reserved carve `B0_FREE_START..B0_FREE_END-1` = `$CD88..$FC3D` (11,958 B; C+TUT0 grow, was 10,910 C2 / 6,910 C-H / 5,790 C-T8); B0CODE: its used part `B0_CODE2` `b0c2_code..b0c2_end` (131 B, `new_game`) rides on the text tape block, the rest (11,827 B) is not on tape ("B0CODE ledger")**, then the pre-shift sprite pool from **`POOL_START` `$FC3E`** (C+TUT0; C2 `$F826`; C-H `$E7F0`; C-T8 `$E390`; C-T6 `$CCF2`; "C-T8 / C-H / C2 ledgers") | PROTO    |
+| 0    | **D3-TX: the text block** + b0 cold code (`TEXT_ADDR` `$C000..B0_FREE_START`, own tape block), **C-T8: the reserved carve `B0_FREE_START..B0_FREE_END-1` = `$CD8A..$EFBD` (8,756 B: NEW-MON3 T1 handed 3,200 B back to the pool; was 11,958 C+TUT0 / 10,910 C2 / 6,910 C-H / 5,790 C-T8); B0CODE: its used part `B0_CODE2` `b0c2_code..b0c2_end` (1,106 B: `new_game` + NEW-MON3 T1 `nm3_b0.asm`) rides on the text tape block, the rest (7,650 B) is not on tape ("B0CODE" / "NEW-MON3 T1 ledger")**, then the pre-shift sprite pool from **`POOL_START` `$EFBE`** (NEW-MON3 T1; C+TUT0 `$FC3E`; C2 `$F826`; C-H `$E7F0`; C-T8 `$E390`; C-T6 `$CCF2`; "C-T8 / C-H / C2 ledgers") | PROTO    |
 | 1    | PROTO: sprite sources (virtual $8000-$BFFF), ZX0-packed since A5: 6,947 of 16,384 B (A6); + `vdata` (D3-TX: the text block moved to bank 0; **3E-T1: its boot-only part moved to the bank-6 boot block**); **C3-0: `ui1_code` (3C UI code, via `far1`)** after it; **3E-T1: then the packed overlay streams `ovl_blobs`** (**R6: moved to the R6 region**; bank 1 now ends at `bank1_end`, 1,300 B free) | PROTO |
 | 2    | (also $8000 fixed)                | system   |
 | 3    | PROTO: sprite sources tail (virtual $C000-; empty since A5) + **cold code** (select, transition scrolls, follower selection; new game → bank 0 (newgame0.asm, B0CODE; was bank 7 since MEM-SND); **`$F048-$FFFF` AY player slot** (A8; **D3-11: 4,024 B from `$F048`, 4,023 B used, 1 B free; bank-3 cold code +8 B**; **RECLAIM-C (a): 4,032 B from `$F040`, 4,023 B used `$F040..$FFF6`, 9 B free; bank-3 cold code +48 B**; **M0 (L3): 4,080 B from `$F010`, 4,023 B used `$F010..$FFC6`, 57 B free; bank-3 cold code `$C000..$EFC7`, 72 B free**; **MEM-RECLAIM w3: 4,144 B from `$EFD0` (was `$EFA0`), 121 B free**; **3E lever (c): 4,192 B** from `$EFA0` (+512 B to bank-3 cold code); MEM-SND: 4,704 B from `$EDA0`, was 4 KB at `$F000` since D3-0 (user 2026-10-06), 7 KB from `$E400` before; called by the IM 2 ISR) | PROTO |
@@ -3435,7 +3435,7 @@ PROTO rooms and the 3B levelgen step still write it (levelgen parity; the items
 overlay retypes generated ones), and `pu_add` takes it as a Heal potion.
 
 **3E-T9 hunger** (`feat/3e-t9-hunger`; `tests/hunger.py`; game.md §7, §8.11 (2)).
-- **R6 `src/hunger6.asm`** (far6 only; r6.asm rules). `hunger_turn` (end_turn, bank 7: `ld hl,
+- **R6 `src/hunger6.asm`** (far6 only; r6.asm rules; **NEW-MON3 T1: the file is bank-0 `hunger0.asm`, item_food by FARB0**). `hunger_turn` (end_turn, bank 7: `ld hl,
   hunger_turn / call far6` right before `jp xp_turn`, not when DYING): (1) jump this turn
   (`JUMP_TURN == TURN_COUNTER`: try_jump stored counter + 1, end_turn incremented since; 0 B
   outside R6) -> FOOD −2; (2) `FOOD_TMR` +1, at `FOOD_PERIOD` 6 (12 with `IT_C_PLENTY` /
@@ -3683,7 +3683,7 @@ the input tick (pmix + DART was 141.4k T), flashes added (user 2026-10-26).
   into state bits 2-3, so a pick change is a slot redraw) = the lowest bit of `pot_need` (bank
   3: present & effect not refused — Heal HP < MAXHP, Mana MP < MAXMP, Cure a MIND / POISON /
   WEAK status: `pot_eff`'s tests), else the first present (quick-use says NO NEED). Its inputs:
-  `item_hp` (HOT_COPY) and `item_mp` (bank 2) set `QS_RECHK` bit 7 when they draw (once per
+  `item_hp` (HOT_COPY; NEW-MON3 T1: bank 0) and `item_mp` (bank 2; NEW-MON3 T1: bank 0) set `QS_RECHK` bit 7 when they draw (once per
   HP / MAXHP / MP / MAXMP change; not in the MP poll, which would re-set it every step until
   MP is drawn and starve the MP item behind ICONS), a status change already sets PD_ICONS
   (`STAT_SH`). The potion count change still rides on `E_POT` / `PANEL_POT_SH` (`pot_slot`
@@ -3957,7 +3957,7 @@ starts at `code_end` and moved with the bank-2 growth), never behaviour. Not don
   standing on the grate stays (LADDER | HOLE, no fall), DOWN at c descends. `lair_hint` (first lair entry) logs
   `THE GATE IS BARRED` (new string `gate_barred`, +19 B packed text). Teleport keeps excluding the lair while
   `LF_UNIQUE` is clear (unchanged).
-- **Post** (G1 / G1a / G1b): R6 `boss6.asm` `lp_post`, far6 from `lp_enter`'s unit loop for every unit of the lair
+- **Post** (G1 / G1a / G1b): R6 `boss6.asm` `lp_post` (**NEW-MON3 T1: bank-0 `boss0.asm`, FARB0**), far6 from `lp_enter`'s unit loop for every unit of the lair
   (FRESH and banked, no spawn-stream step); == `tools/levelgen.py lp_post` (`tests/lp.py` A2 / A7 byte-exact). The
   boss: storey 1, x = c, or (hero arriving on storey 1 with gap < 5) shifted 1 col at a time away from him to the
   first x with gap >= 5 and no `LP_CMAP` mark outside the exit's own c-1..c+3 (none in range -> lp_place); the escort
@@ -6623,9 +6623,9 @@ STRANDED (`seek_col` L = `$FF`, `ai_monster .seek` -> `inc a / jr z, .same`) is 
 (`new_monsters.md`): call it there. Tests: `tests/ai_seek2.py` (K, S1-S10, U1, U2), `tools/levelcheck.py` (cut invariants).
 
 ## B0CODE ledger (`feat/b0-code`, on `feat/ai-seek2` c25f18d, 2026-11-12)
-- Known (pre-existing, B0CODE review): the build line reads "b0 cold code 1065 B of 1064" — `B0_CODE_RES` is 1 B under the actual `b0_code` size; only the `B0_PAD` ASSERT catches it. Bump `B0_CODE_RES` at the next bank-0 layout change (it moves `B0_FREE_START` by 1).
+- Known (pre-existing, B0CODE review): the build line read "b0 cold code 1065 B of 1064" — `B0_CODE_RES` was 1 B under the actual `b0_code` size. **Fixed by NEW-MON3 T1**: `B0_CODE_RES` 1,066 (`B0_FREE_START` `$CD8A`, kept even).
 
-`B0_FREE` (`$CD88..$FC3D`, 11,958 B) becomes usable for permanent code and data: its used part is the assemble-time
+`B0_FREE` (then `$CD88..$FC3D`, 11,958 B; now `$CEE6..$EFBD`, 8,408 B after ITEM-INFO and NEW-MON3 T1) becomes usable for permanent code and data: its used part is the assemble-time
 region **`B0_CODE2`** (`b0c2_code` = `B0_CODE2` = `B0_FREE_START` .. `b0c2_end`, main.asm after the `b0_code` pad),
 loaded by the EXISTING text tape block (no 10th block, no pilot): `TEXT_TAPE_LEN` = `b0c2_end - TEXT_ADDR`, so the
 tape grows only by the bytes used. ASSERTs: `b0c2_code == B0_CODE2 == B0_FREE_START`, `b0c2_end <= POOL_START`,
@@ -6717,3 +6717,57 @@ append new code above it). Text: 22 strings (20 `ie_*`, LIMIT 40 = textpack `IE_
 items rebuild them. The page's close restores screen 2 (the state is unchanged meanwhile; `MPF_T` frozen). A pointer
 bit on the bar cell (tutorial) is inherited by the number / word cells (ink only).
 <!-- ==== end ITEM-INFO + UX-POLISH block ==== -->
+
+## NEW-MON3 T1 ledger (`feat/newmon3`, on main `4add7e5`, 2026-11-13; docs/design/new_monsters.md §2 / §12, the T1 FUND contract)
+
+Behaviour byte-identical (ai_equiv logic / RNG / status vs main: the full 512-B entity hash differs only in relocated addresses, `E_SEQL` / `E_SEQH` = seq-cache pointers, the image tail moved; goldens and `LEVEL_NEED` unchanged). Funds the batch: the bank-2 FRT page
+step (`$A700` -> `$A600`, T7) + `rk_tab` +2 + the F-1 entry, the bank-3 A-1 hook (in `lp_hdr0`), the low-RAM fdescs
+(9 x 5) + the LP header +4, the R6 F-1 / P-1 code. New code: **`src/nm3_b0.asm`** in `B0_CODE2` (one INCLUDE before
+`b0c2_end`, after `newgame0.asm`; it INCLUDEs `boss0.asm`, `hunger0.asm`, `bars0.asm`, the renamed R6 / bank-2 files).
+
+| Region (release; kit in brackets) | main `4add7e5` | after | delta |
+|---|---|---|---|
+| `B0_FREE_RES` / `POOL_START` | 11,958 / `$FC3E` | **8,756 / `$EFBE`** | 3,200 B back to the pool (see "carve") |
+| `POOL_CAP` / D8 Warrior slack (binding) | 19,394 / 2,976 | **22,594 / 6,176** | +3,200; every `LEVEL_NEED` unchanged (waste 2) |
+| D0 pool top (Warrior) vs `BLOB_ORG` `$E1B2` | `$E0E0` (210 B) | **`$D460` (3,410 B)** | ASSERT unchanged (symbolic) |
+| `B0_CODE_RES` / `B0_FREE_START` | 1,064 / `$CD88` | **1,066 / `$CD8A`** | the 1-B underrun fixed, + 1 pad (even) |
+| `B0_CODE2` used / free to `POOL_START` | 131 / 11,827 | **1,106 / 7,650** | +975 |
+| bank 2 free (image tail to `seq_rows` + kind_tab pad) | 5 (3 + 2) | **296 (283 + 13)** [295] | **+291**; the tail holds 283 for the FRT step |
+| `HOT_COPY` spare | 5 | **40** | +35 (`item_hp` out) |
+| bank 3 free to `AY_RESERVE` | 7 [3] | **79 [75]** | +72 (A-1 hooks here) |
+| bank 7 low free (to the attr shadow) | 128 | **112** | -16 (FARB0 call sites) |
+| low-RAM spare (after the fdesc reserve) | 2 | **199** [201] | +197 |
+| R6 free | 2 [7] | **345 [350]** | +343 |
+
+**Rebased on main `1fb15e4` (ITEM-INFO + UX-POLISH merged first).** `TEXT_RES` +340 / `B0_CODE_RES` 1,074 (main's; covers the
+1-B underrun) -> `B0_FREE_START` `$CEE6`, `B0_FREE_RES` = `$EFBE` - `$CEE6` = **8,408** (`POOL_START` kept at `$EFBE`, waste 2,
+`LEVEL_NEED` unchanged). Merged deltas vs main `1fb15e4`: `B0_CODE2` 1,906 / 9,702 free -> **2,918 / 5,490**; bank 2 free 4 -> **295**
+(282 tail); HOT_COPY 5 -> 40; bank 3 7 -> 79; bank 7 105 -> 89; low RAM 2 -> 199; R6 1,016 -> **1,395**; pool slack 2,976 -> 6,176.
+`nm3_b0.asm` sits after ITEM-INFO's `ux0.asm`; the page-overlay INCBIN stays last before `b0c2_end` (2-pass rule). The UX1 FOOD
+WEAK flash moved with `item_food` into `hunger0.asm`.
+
+**The carve.** X = 3,072 (`POOL_START` `$F03E`) puts the bank-0 -> 4 straddle inside the hero session with 194 B waste
+(Mage 114): every level need +192 / +112, slack only +2,880. The hero session's frame list (31 / 36 allocs) gives the
+cliffs: `$EFC0` fits the straddling frame exactly (waste 0), `$EFC2` jumps; **`$EFBE` = waste 2 for both heroes, as at
+`$FC3E`**, so all 16 needs are the old ones. X = 3,200 (128 B more than asked; `B0_FREE` stays far above the 6 KB floor).
+
+**Moved routines** (all page-free: they only call bank-2 / low-RAM helpers that restore the caller's bank, far1, and
+bank-0 code; no SMC; no runtime-written bytes). FARB0 ~0.3k T (far6 = FARB0 + 12 T).
+
+| Routine | from | bytes freed there | entry / frequency | T cost |
+|---|---|---|---|---|
+| `lp_hdr0` (LP_STATE clear + depth row copy) + `lp_dtab` (48 B) | bank 3 `lp_budget` (lpop3.asm) | -74 (+8 FARB0) | FARB0 from `lp_budget`, once a level | +~0.3k a level |
+| `lp_post` (`boss0.asm`, was `boss6.asm`) | R6 | -258 | FARB0 from bank-3 `lp_enter` (+2 B bank 3), per lair unit on entry | -12 T |
+| `item_food` (`hunger0.asm`, was `hunger6.asm`) | R6 | -85 | FARB0 from `panel_more` (was far6), per FOOD redraw | -12 T |
+| `bars_draw` / `num2` (`bars0.asm`, was `bars2.asm`) | bank 2 tail | -131 | direct calls from the bank-0 items | 0 (code unchanged) |
+| `item_mp` | bank 2 tail (xp2.asm) | -45 (+7 `panel_more`) | FARB0 from `panel_more`, per MP redraw | +~0.3k |
+| `item_hp` | HOT_COPY (panel_hot.asm) | -36 (+8 `item_hp_far`) | FARB0 from `panel_step`, per HP redraw | +~0.3k (world W15 2nd-frame HP item 5,464 T: cap 5.2k -> 5.5k, 117k + 5.5k < 126k; budget.py passes) |
+| `item_log0` (the line; the empty-queue test stays) | bank 2 (panel2.asm) | -62 | FARB0 from `item_log` (replaces its FARB0 `log_scroll`, now a direct call) | ~0 |
+| `end_scr0` (END-WAIT body) | bank 2 (main.asm `end_screen`) | -28 | FARB0, L = 0 next tick / 1 menu; each end-screen tick | +~0.3k |
+| `hit_line` (A = pre, E = kind; was B / C) | bank 2 (msg2.asm) | -31 | FARB0 from bank-7 `ammo_fire` x2 (+11 B bank 7) | ~+50 T (its own BANK_TEXT page / restore is gone) |
+| `try_close` + `room_bodies` (L = 1 / `IC_NOTGT`; was CF) | low RAM | -197 | FARB0 tail of bank-7 `ic_melee` (+5 B bank 7), per C-key close | +~0.3k |
+| `frt2.asm` | bank-2 tail -> before kind_tab (pad) | (tail +73) | — | 0 |
+
+Tests touched: `tests/endcard_k.py` (`lp_dtab` read from .sna bank 0), `tests/hunger.py` (`item_food` by FARB0),
+`tests/logdmg.py` (`hit_line` by FARB0, A / E), `tests/world.py` (W15 HP-item cap 5.2k -> 5.5k), `tests/zx0_pool.py` (comment only: needs unchanged).
+

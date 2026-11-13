@@ -32,21 +32,8 @@ LPV_K           EQU TMP7                ; unit kind / bank slot
                 ld   a, (hl)
     ENDM
 
-;------------------------------------------------------------------------------
-; Per-depth budget rows (game.md §9.4 table): 4 kinds in table order, boss,
-; count incl. boss (3F-T3: real kind ids, defs.asm). 3F-T5: the golden depths (D1-D3, D5, D6, §9.7
-; R1) carry LEK_GOLD in the boss byte (levelgen.py k3_boss); the entity bit is E_GOLD.
-;------------------------------------------------------------------------------
-lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1 | LEK_GOLD, 13
-                DB   K_GOBLIN, K_SPIDER, K_BAT, K_RAT,         K_BOSS_D2 | LEK_GOLD, 14
-                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT,    K_BOSS_D3 | LEK_GOLD, 14
-                DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER,         K_BOSS_D4, 15
-                DB   K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER,  K_BOSS_D5 | LEK_GOLD, 16
-                DB   K_VAMPIRE, K_GHOST, K_NECRO, K_ORC,       K_BOSS_D6 | LEK_GOLD, 15
-                DB   K_ORC, K_NECRO, K_GHOST, K_NECRO,         K_BOSS_D7, 15   ; 3F-T13bc ARCHER-DEPTHS H1: the 2nd Necro replaces the Archer (weight 6 = 6)
-                DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE,  K_BOSS_D8, 12
-LP_DROW         EQU 6
-                ASSERT $ - lp_dtab == LEVELS * LP_DROW
+; Per-depth budget rows lp_dtab (+ LP_DROW): NEW-MON3 T1 moved them to bank-0 B0_CODE2 with the
+; header copy (src/nm3_b0.asm lp_hdr0, FARB0 from lp_budget); A-1 (the row-31 alias) hooks in there.
 ; §9.4.1 "N >= |R|" always holds (min N = LP_N_MIN - 2 = 10 >= 7 = the most rooms R
 ; can have), so lp_budget has no "N farthest rooms" branch (levelgen.py keeps it).
                 ASSERT LP_N_MIN - 2 >= GRID_CELLS - 2
@@ -82,23 +69,8 @@ lp_rec:         ld   l, a
 ; Clobbers: all but IY.   ~5k T (bfs ~2k, <= 5 weighted picks ~0.5k each)
 ;------------------------------------------------------------------------------
 lp_budget:
-                ld   hl, LP_STATE
-                ld   de, LP_STATE + 1
-                ld   bc, LP_LEN - 1
-                ld   (hl), 0
-                ldir
-                ld   a, (LVL_DEPTH)
-                ld   b, a
-                add  a, a
-                add  a, b
-                add  a, a                      ; 6 d (row d - 1 from lp_dtab - 6)
-                ld   hl, lp_dtab - LP_DROW
-                call hla
-                ld   de, LP_KINDS
-                ld   bc, LP_DROW
-                ldir                           ; LP_KINDS, LP_BOSS, LP_TOTAL
-                ASSERT LP_BOSS == LP_KINDS + 4 && LP_TOTAL == LP_KINDS + 5
-                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 4) >> 8)    ; lp_enter .mw: inc e
+                FARB0 lp_hdr0                  ; NEW-MON3 T1: zero LP_STATE + the depth row (bank 0, nm3_b0.asm;
+                                               ; -74 B bank 3, +~0.25k T once a level)
                 ld   a, (LVL)
                 ld   (LP_LVL), a
                 ld   a, ROOM_MAX               ; MORE-MON: one cap for all depths (was 2 on D1-D2)
@@ -416,11 +388,10 @@ lp_enter:
                 ld   (LP_W), a
                 call lp_find                   ; ROOM-MEM: IX = the unit's parked slot / PK_NONE
                 ld   a, (LVL_LAIR)             ; 3F-T8 (game.md §9.2 G1 / G1a / G1b): a unit
-                ld   hl, LPV_ROOM              ; of the lair takes its post (R6 boss6.asm, no
+                ld   hl, LPV_ROOM              ; of the lair takes its post (bank-0 boss0.asm, no
                 cp   (hl)                      ; stream step; keeps IX); an escort with no legal
                 jr   nz, .t0                   ; post falls back to its saved cell / lp_place
-                ld   hl, lp_post
-                call far6                      ; L = 1: C = 1, E = x
+                FARB0 lp_post                  ; NEW-MON3 T1: bank 0 (boss0.asm; was far6 R6, +2 B); L = 1: C = 1, E = x
                 ld   a, l
                 cp   1                         ; Z, NC: posted
                 jr   z, .sp

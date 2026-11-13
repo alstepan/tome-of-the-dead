@@ -17,6 +17,13 @@ returning 3 KB of `B0_FREE` to the pool. It supersedes amendment (1) and Plans X
 User-fixed: these three kinds, for variety; pit fallback scope (§8). No feature cuts: every
 existing kind keeps at least two depths, or one depth plus its boss role.
 
+**Decisions 2026-11-13 (user).** (1) Frost Wraith freeze **1 in 4** (not ⅓; §4.3 / §10 Q5 closed).
+(2) **Frost Charm** = an **amulet**, **COLD resist only**, drops from **D5** on, normal gear weight
+(§10 Q3 closed: yes, as amendment (3)). (3) P-1 pit-stuck throws only **across pits**, never across
+mid-room blocks (§8.2: the refusal hook is the pit-col test only). Funding (T1 FUND, built): carve 3,200 B
+(`POOL_START` `$EFBE`: X = 3,072 landed 2 B off the straddle cliff; all `LEVEL_NEED` unchanged, D8 W slack 6,176), bank-2 / bank-3 / low-RAM / R6 room moved to bank-0 `B0_CODE2`
+(memory-map "NEW-MON3 T1 ledger").
+
 Verified sources: `src/defs.asm` K_* ids (0–29 used, `K_FXW`/`K_FXM` = 30/31), `KT_FLAGS` bit 7
 spare, `FRT_MAX` 144 with `src/frames.asm` FID_COUNT **144 (0 spare)**, `tests/zx0_pool.py`
 LEVEL_NEED against `POOL_CAP` 31,712, `src/turn3.asm` ai_monster / ai_flyer / ai_rhook call

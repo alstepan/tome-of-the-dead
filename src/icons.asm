@@ -197,12 +197,16 @@ st_sig:
 ; panel_more — panel_step's tail (HOT_COPY) after HP / LOG / ICONS / DEPTH:
 ; HL = PANEL_DIRTY, C = 0 in the tick's 1st frame. The info line (~25k T, a
 ; whole row of 6x8 text) draws only in a 1st frame, like a log line; MP
-; (D3-9b) first; 3E-T9 FOOD (bar + stage word, ~7k T incl. far6: 1st frame
+; (D3-9b) first; 3E-T9 FOOD (bar + stage word, ~7k T incl. FARB0: 1st frame
 ; only, like INFO); AMMO has nothing to draw yet (cleared).
 ;------------------------------------------------------------------------------
 panel_more:
                 bit  PD_MP_BIT, (hl)           ; D3-9b: a small item (HP's size), any frame
-                jp   nz, item_mp               ; (xp2.asm, after kind_tab)
+                jr   z, .nmp
+                ld   hl, item_mp               ; NEW-MON3 T1: bank 0 (xp2.asm -> nm3_b0.asm; was a jp,
+.b0:            ld   c, BANK_TEXT              ; +7 B here, -45 B xp2.asm; +~0.25k T a redraw)
+                jp   farb
+.nmp:
                 bit  PD_AMMO_BIT, (hl)         ; AMMO-COUNT: a throw / shot / pickup moved a count:
                 jr   z, .na                    ; redraw the dagger + bow slots (the count cell);
                 res  PD_AMMO_BIT, (hl)         ; PD_ICONS drains them next (item_icons: one slot
@@ -216,8 +220,8 @@ panel_more:
                 dec  c
                 jr   nz, .clr                  ; 2nd frame: FOOD / the info line wait
                 bit  PD_FOOD_BIT, (hl)
-                ld   hl, item_food             ; 3E-T9: R6 (hunger6.asm)
-                jp   nz, far6
+                ld   hl, item_food             ; 3E-T9; NEW-MON3 T1: bank 0 (hunger0.asm; was far6 R6:
+                jr   nz, .b0                   ; FARB0 = far6 - 12 T)
                 ld   hl, PANEL_DIRTY
                 bit  PD_INFO_BIT, (hl)
                 jr   z, .clr

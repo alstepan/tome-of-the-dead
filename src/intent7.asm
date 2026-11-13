@@ -215,9 +215,11 @@ ic_melee:
                 ret
 .door:          ld   c, TOME_REACH             ; P3: the Tome faced, adjacent: a melee hit
                 call tome_rel                  ; (tome7.asm, CF = 1), else
-                call nc, try_close             ; lowram: CF = 1 closed
                 ld   l, 1
                 ret  c
+                ld   hl, try_close             ; NEW-MON3 T1: bank 0 (nm3_b0.asm; was low RAM, CF out):
+                ld   c, BANK_TEXT              ; L = 1 closed, IC_NOTGT refused (+5 B here, -197 B low
+                jp   farb                      ; RAM; +~0.25k T a C-key close)
 .nt:            ld   l, IC_NOTGT               ; use_icon: the line, or a stumble
                 ret
 

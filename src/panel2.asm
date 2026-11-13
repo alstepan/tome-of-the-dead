@@ -8,8 +8,8 @@
 ; item_log — the oldest pending message as ONE item (B3B-11b: no chunked
 ; steps): log_scroll (row 23 -> 22, row 23 cleared), then the whole line on
 ; row 23 (B3B-13: print6t, the ring holds token streams), next ring slot,
-; LOG_QN -= 1, PD_LOG cleared at 0.
-; HL = PANEL_DIRTY. Clobbers: all but IX, IY.  ~23k T for 32 chars (W15)
+; LOG_QN -= 1, PD_LOG cleared at 0. NEW-MON3 T1: the empty-queue test stays here (bank 2), the
+; line (item_log0) is bank 0. HL = PANEL_DIRTY. Clobbers: all but IX, IY.  ~23k T for 32 chars (W15)
 ;------------------------------------------------------------------------------
 item_log:
                 ld   a, (LOG_QN)
@@ -17,45 +17,9 @@ item_log:
                 jr   nz, .go
                 res  PD_LOG_BIT, (hl)
                 ret
-.go:            FARB0 log_scroll               ; C-T6: bank 0 (logsc0.asm; +~0.25k T a log line)
-                ld   a, (LOG_Q + LQ_RD)
-                rrca
-                rrca                           ; * LOG_SLOT_LEN
-                ld   l, a
-                ld   h, LOG_TXT >> 8
-                ld   b, LOG_ROW + 1
-                ld   e, 0                      ; (x 0: a multiple of 8; 32 chars = 192 px)
-                call print6t
-                ASSERT LOG_ROW + 1 < 24 && 6 * LOG_MAX <= 256
-                ld   a, e
-                add  a, 7
-                rrca
-                rrca
-                rrca
-                and  $1F                       ; cols holding ink now (row 23 was cleared)
-                ld   hl, HUD4_EXT + 3          ; row 23
-                ld   (hl), a
-                ld   l, (HUD4_PW + 3) & $FF
-                cp   (hl)
-                jr   c, .w
-                ld   (hl), a
-.w:             ld   a, 1
-                ld   (PRES_ANY), a
-                ld   hl, LOG_TURN              ; T7: LT_SERVED (end_turn: the log was
-                set  0, (hl)                   ; not starved this turn)
-                ASSERT LT_SERVED == 1
-                ld   hl, LOG_Q + LQ_RD
-                ld   a, (hl)
-                inc  a
-                and  LOG_SLOTS - 1
-                ld   (hl), a
-                ld   hl, LOG_QN
-                dec  (hl)
-                ret  nz
-                ld   hl, PANEL_DIRTY
-                res  PD_LOG_BIT, (hl)
-                ret
-                ASSERT (HUD4_EXT >> 8) == ((HUD4_PW + 3) >> 8)
+.go:            ld   hl, item_log0             ; NEW-MON3 T1: the line itself is bank 0 (nm3_b0.asm), which
+                ld   c, BANK_TEXT              ; calls log_scroll directly: this FARB0 replaces the old
+                jp   farb                      ; FARB0 log_scroll (T ~ unchanged; -62 B bank 2)
 
 ; item_icons: C3-3, icons.asm.
 

@@ -339,7 +339,7 @@ panel_step:
                 or   a
                 ret  z
                 rrca
-                jr   c, item_hp
+                jr   c, item_hp_far            ; NEW-MON3 T1: bank 0
                 bit  PD_LOG_BIT, (hl)
                 jr   z, .nl
                 inc  c
@@ -352,27 +352,13 @@ panel_step:
                 jp   panel_more                ; C3-3 (icons.asm): INFO; MP / FOOD / AMMO 3D / 3E
 
 ;------------------------------------------------------------------------------
-; item_hp — HP bar + 2-digit number (row 21, cols 1..6). HL = PANEL_DIRTY.
+; item_hp_far — NEW-MON3 T1: the HP item is bank-0 item_hp (src/nm3_b0.asm, with bars_draw /
+; num2): FARB0 tail (8 B here for its ~36 B; +~0.25k T a redraw). HL = PANEL_DIRTY (reloaded there).
 ;------------------------------------------------------------------------------
-item_hp:
-                res  PD_HP_BIT, (hl)
-                ld   a, $80                    ; IC1: HP / MAXHP moved -> the quick potion
-                ld   (QS_RECHK), a             ; pick may (icon_poll: a 1st-frame pass)
-                ld   hl, (P_ENTITIES + E_HP)
-                ld   (PANEL_HP_SH), hl         ; HP and MAXHP as drawn
-                ld   d, h
-                ld   a, l
-                ld   hl, HP_BAR_ADDR
-                call bars_draw
-                ld   a, (PANEL_HP_SH)
-                call num2
-                ld   b, STAT_ROW
-                ld   e, HP_NUM_COL * 8
-                call print6
-                ASSERT ((HP_NUM_COL * 8) & 7) == 0 && HP_NUM_COL * 8 + 6 * 2 <= 256   ; print6 x rule
-                ld   bc, (STAT_ROW << 8) | HP_BAR_COL   ; (UX1 F2: the HP number's FLASH is rebuilt
-                ld   de, ((HP_NUM_COL + 2 - HP_BAR_COL) << 8) | 1   ; from state by bank-0 ux_tick,
-                jp   pmark_rect                ; every 1st-frame tick: W15's 2nd-frame HP item cap)
+item_hp_far:
+                ld   hl, item_hp
+                ld   c, BANK_TEXT
+                jp   farb
 
 ;------------------------------------------------------------------------------
 ; item_depth — "Dn" at (30, 18) (LVL_DEPTH; the PROTO level 0 shows D1; the

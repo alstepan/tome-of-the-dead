@@ -143,6 +143,9 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # C+TUT0 (blob up): BLOB_ORG $E000 -> $E1B4, B0_FREE_RES 11,486 -> 11,958 (POOL_START $FC3E; the next even step 11,960
 # is a straddle cliff that breaks the D0 ASSERT): every need = the previous one - 152 (straddle waste 154 -> 2).
 # Binding D8 Warrior 16,418 of 19,394, slack 2,976.
+# NEW-MON3 T1 (new_monsters.md §12 carve): POOL_START $FC3E -> $EFBE (B0_FREE_RES 11,958 -> 8,756: 3,200 B, the
+# X = 3,072 step moved 128 B down to land 2 B clear of the hero-session straddle cliff; $F03E wasted 194 B):
+# straddle waste 2 for both heroes as before, so every need is unchanged. POOL_CAP 22,594, D8 Warrior slack 6,176.
 LEVEL_NEED = {
     (0, 1): 11826, (0, 2): 11842, (0, 3): 14354, (0, 4): 15298,
     (0, 5): 12546, (0, 6): 14978, (0, 7): 14482, (0, 8): 16418,

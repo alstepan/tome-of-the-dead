@@ -1,10 +1,11 @@
 ;==============================================================================
-; boss6.asm — 3F-T8 bosses (R6; r6.asm rules: far6 only, no SMC, no bank-3
-; code / data). game.md §9.2 "Boss guard" (G1 post, G1a arrival gap, G1b
+; boss0.asm — 3F-T8 bosses: lp_post. NEW-MON3 T1 (2026-11-13): moved from R6 (boss6.asm)
+; to bank-0 B0_CODE2 (src/nm3_b0.asm; FARB0 from bank-3 lp_enter, once per lair unit at a
+; room entry: same cost as the far6 it replaced; B0CODE rules: no SMC, never pages $C000). game.md §9.2 "Boss guard" (G1 post, G1a arrival gap, G1b
 ; escort, G2 guard AI), §1.1 / §9.4.4 (the lair grate), §9.1 (Ogre SLAM).
 ; Byte-exact reference for lp_post: tools/levelgen.py lp_post (tests/lp.py A7).
 ;
-; Entries (far6; A and F are lost on the way back):
+; Entries (FARB0; A and F are lost on the way back):
 ;   lp_post     lp_enter's unit loop (bank 3), a unit of the lair: its post.
 ;   (ai_guard: bank-7 boss7.asm since MEM-RECLAIM w2b)
 ;   (grate_open / boss_chk: bank-7 boss7.asm since MEM-RECLAIM w2b)
@@ -39,7 +40,7 @@ GUARD_GAP       EQU 5                       ; G1a / G1b: body gap to the hero's 
 ; has one, else the right one (game.md §1.1 L1 (7)'s BFS-parent rule differs
 ; only for a through-room lair with both edges).
 ; Out: L = 1: C = 1 (storey), E = col; L = 0: lp_place.
-; Clobbers: A, BC, DE, HL.   ~0.5k T (+ ~0.2k a shifted col) + far6
+; Clobbers: A, BC, DE, HL (IX kept: lp_enter's slot).   ~0.5k T (+ ~0.2k a shifted col) + FARB0
 ;------------------------------------------------------------------------------
 LP_EXLO         EQU LP_BEST                 ; lp_post scratch (lp_place no longer uses LP_BEST / LP_BX)
 LP_EXHI         EQU LP_BX

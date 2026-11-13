@@ -79,9 +79,9 @@ def kname(kind):
 
 
 def kind_depths():
-    """kind -> a depth whose level generates its frames: lp_dtab (bank 3) kinds + boss, tier rows
+    """kind -> a depth whose level generates its frames: lp_dtab (bank 0) kinds + boss, tier rows
     (R6 tier_tab) -> their base's depth, K_VBAT -> the Vampire's."""
-    lp = sna(3, S["lp_dtab"], 8 * S["LP_DROW"])
+    lp = sna(S["BANK_TEXT"], S["lp_dtab"], 8 * S["LP_DROW"])   # NEW-MON3 T1: bank 0 (was bank 3)
     dep = {}
     for d in range(8):
         row = lp[d * 6:d * 6 + 5]

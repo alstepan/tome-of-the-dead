@@ -249,8 +249,16 @@ B0_KIT_RES      EQU 0                          ; D3-11: 0 (was 80 x DEBUG_KIT): 
 ; ledger"): append files to B0_CODE2 — no reserve to move, POOL_START (so the pool) unchanged.
 ; Sized for >= ~1 KB pool slack at the binding level (POOL_NEED incl. POOL_SIM_MARGIN and the
 ; simulated straddle waste; the slack is quantised by the bank-0 -> 4 straddle: memory-map ledger).
-B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CCF2 (= POOL_START before C-T8)
-B0_FREE_RES     EQU 11958 - 350                ; ITEM-INFO + UX1: -350 = TEXT_RES +340, B0_CODE_RES +10 (POOL_START unchanged); C2 (full C, 2026-11-10): the carve -> POOL_START $FC3E (B0_FREE_START $CD88 + 11958;
+B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CEE6 (ITEM-INFO; $CD88 B0CODE; $CCF2 = POOL_START before C-T8)
+B0_FREE_RES     EQU 8408                       ; NEW-MON3 T1 (new_monsters.md §12, X = 3,072 asked): POOL_START $FC3E -> $EFBE
+                                               ; (3,200 B back to the pool; = $EFBE - B0_FREE_START $CEE6 after ITEM-INFO's -350). $F03E
+                                               ; itself (X = 3,072) puts the bank-0 -> 4 straddle
+                                               ; inside the hero session at 194 B waste (Mage 114): every level need +192 / +112, slack
+                                               ; +2,880. $EFBE = 2 B clear of the cliff ($EFC0 fits the straddling frame exactly, $EFC2
+                                               ; jumps): waste 2 for both heroes as before, so every LEVEL_NEED is unchanged; POOL_CAP
+                                               ; 22,594, D8 Warrior slack 2,976 -> 6,176. D0 pool top $D460 (3,410 B below BLOB_ORG).
+                                               ; C2 (full C, 2026-11-10): the carve -> POOL_START $FC3E (B0_FREE_START $CD88 + 11958;
+                                               ; ITEM-INFO + UX1: -350 = TEXT_RES +340, B0_CODE_RES +10 (POOL_START unchanged).
                                                ; even, as gen_variant needs). C+TUT0: was 10910 ($F826), 11486 ($FA66). CAPPED by the D0
                                                ; tutorial pool vs BLOB_ORG $E1B4 (top $E0E0, 212 B left, margin 64): 11,960 is a straddle
                                                ; cliff that fails the ASSERT. Level pool: D8 Warrior need 16,418 of 19,394 = slack 2,976.
@@ -260,7 +268,7 @@ B0_FREE_RES     EQU 11958 - 350                ; ITEM-INFO + UX1: -350 = TEXT_RE
                                                ; 5792 -> 944.)
 B0_FREE_END     EQU B0_FREE_START + B0_FREE_RES
 B0_CODE2        EQU B0_FREE_START              ; B0CODE: the region's start (b0c2_code, ASSERTed in main.asm)
-POOL_START      EQU B0_FREE_END                ; $FC3E, C+TUT0 ($F826 C2, $E7F0 C-H, $E390 C-T8; was $CCF2, C-T6; $CC20 before): alloc_reset's first bank-0 pool byte
+POOL_START      EQU B0_FREE_END                ; $EFBE NEW-MON3 T1; $FC3E C+TUT0 ($F826 C2, $E7F0 C-H, $E390 C-T8; was $CCF2, C-T6; $CC20 before): alloc_reset's first bank-0 pool byte
                 ASSERT (B0_FREE_RES & 1) == 0
     MACRO FARB0 target                  ; call a bank-0 cold-code routine (8 B; A / DE / IX pass in;
                 ld   hl, target         ;   C lost to the bank, B to farb's A): farb pages BANK_TEXT
