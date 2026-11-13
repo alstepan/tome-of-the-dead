@@ -319,6 +319,10 @@ reset** on re-entry.
    measured to the shaft col's body box). A **vertical exit** also requires the
    `CLIMBER` flag (Skeleton, Goblin). Flyers and non-climbers follow only through
    horizontal exits.
+   *(Experiment D-AI1d, branch `exp/follow-v2`: assemble-time `FOLLOW_V2` (default 1 there) widens the gap to **6**;
+   `-DFOLLOW_V2=0` is the byte-identical shipped gap 4. 0 B: only the `cp FOLLOW_GAP + 1` operand changes. No
+   "awake/aware" filter exists: every monster that survives the HOLD/FEAR test is awake and chasing (ASLEEP is the
+   Archmage's HOLD_ASLEEP, already excluded), so that half of D-AI1d is a no-op.)*
 2. **Order:** by gap ascending, ties by lower slot.
 3. **Admit** each candidate in order while all hold:
    - at most **2 followers per exit**;
