@@ -107,7 +107,7 @@ for depth in range(1, 9):                                # golden: D1,2,3,5,6; u
     check(G.k3_weight(kb) == G.KROWS[G.BOSS3[depth][0]][4] + (1 if kb & G.LEK_GOLD else 0), "golden weight +1")
 b = G.generate(3, 5)
 lp = G.lp_budget(b, 5)
-check(lp[G.lp_off("LP_KINDS"):G.lp_off("LP_KINDS") + 4] == bytes(G.D[k] for k in G.LP_TAB[3][0]),
+check(lp[G.lp_off("LP_KINDS"):G.lp_off("LP_KINDS") + 8] == bytes(G.D[k] for k in G.LP_TAB[3][0]),
       "f3 off: stand-in ids")
 
 # ---- T4: Sanctum leaf + sealed edge ------------------------------------------------

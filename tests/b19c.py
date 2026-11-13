@@ -227,7 +227,7 @@ def gen_fuzz(p, kt, check, seeds, turns, proto=0, tag="G"):
                     p.set_ent(s_, KIND=k, Y=y, PY=y * 8, HP=kt["hp"][k], MAXHP=kt["hp"][k])
             p.tick(2)
         else:                                      # fresh rooms roll Goblins / Skeletons
-            p.wmem(S["LP_KINDS"], [K_GOBLIN, K_SKELETON, K_GOBLIN, K_SKELETON])
+            p.wmem(S["LP_KINDS"], [K_GOBLIN, K_SKELETON, K_GOBLIN, K_SKELETON] * 2)    # 8 slots (NEW-MON3 T3)
         w = Watch(p, kt)
         throws = 0
         sel = None

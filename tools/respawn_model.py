@@ -13,7 +13,7 @@ RNG    : the GAMEPLAY stream (levelgen.Rng; Rng.byte() = low byte of one step), 
          this fixed order (spec gap, see tests/respawn_model_test.py header):
            1. chance byte  (spawn iff < RESPAWN_CHANCE)           -- always, on a period turn
            2. room pick    rnd(sum of weights)                    -- only if a room is eligible
-           3. kind         rnd(4) over LP_KINDS, then the §9.6 tier roll (byte, if the kind has tiers)
+           3. kind         rnd(8) over the 8 LP_KINDS slots, then the §9.6 tier roll (byte, if the kind has tiers)
            4. cap retry    ONE retry with the next kind in the list (+ its tier roll)
          Hard limits that need no RNG are tested BEFORE step 1 so a skipped check
          costs one chance byte at most.
@@ -40,7 +40,7 @@ class Level:
     recs[r]   : None (no room) or {"visited": bool, "ents": [(kind byte, hp), ...]}
                 (a FRESH room has no entries yet: its quota is not an entry)
     items[r]  : un-picked floor items in room r (weight input)
-    kinds     : the level's LP_KINDS as KROWS keys (4)
+    kinds     : the level's LP_KINDS as KROWS keys (8 slots)
     """
 
     def __init__(self, depth, lvl, kinds, lair, recs, items=None):
@@ -101,8 +101,8 @@ def trickle_check(lv, turn, rng):
             room = r
             break
         v -= w
-    i = rng.rnd(4)
-    for j in (i, (i + 1) & 3):                        # picked kind, then the next in list order ONCE
+    i = rng.rnd(8)                                    # NEW-MON3 T3: the 8 slots
+    for j in (i, (i + 1) & 7):                        # picked kind, then the next in list order ONCE
         key = G.tier_roll(rng, lv.kinds[j], lv.depth, lv.lvl)
         kb = G.KROWS[key][0] | G.LEK_RESPAWN
         if lv.sigma(room) + G.k3_weight(kb) <= ROOM_CAP_SIGMA:

@@ -1416,7 +1416,7 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6B40` | `GEN_MIR` | 512 | generator: mirrored frame (`LOWRAM_END` = `LOWRAM_FREE_END` `$6D40`). D3-TX: its top 43 B `$6D15..$6D3F` = `TX_DEC` (`tx_dec`'s transient decode buffer, menu text) |
 | `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+ **3F-T12: `TRK_PHASE` `$6D56`, `TRK_PREV` `$6D57`**, **M0: `TOME_HP` `$6D58` (P3: the Tome's hp, `sanctum_leaf` sets `TOME_MAX` 5 once per level)**, **TOME-FX2: `TOME_FL` `$6D59`**, **PERF-GHOST: `DN_QN` `$6D5A`** (the flying numbers' spawn queue known empty = 0; "PERF-GHOST ledger") + 5 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
 | `$6E80..$6EBF` | `ORN_GLYPHS` | 64 | B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). `LOWRAM_END_3B` = `LOWRAM_FREE_END` = `$6EC0` |
-| `$6EC0..$6F31` | `LP_STATE` | 114 | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
+| `$6EC0..$6F35` | `LP_STATE` | 118 (NEW-MON3 T3: was 114 / `$6F31`: `LP_KINDS` 4 -> 8 B, every later field +4; the text below keeps the pre-T3 numbers) | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
 | `$6F32..$6FE3` (3F-T2, kit) | free | 178 | **3F-T2: 135 B kept for descriptor growth (`FRT_MAX` 128 − 101 frames), 43 spare kit** (review: +7 B `SEQ_TRAP` path in `sq_load`; 50 before); before: `$6F32..$71A5`, 628, of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3F-T1: 29 spare kit** (−48: the level-pool block in `level_enter`, `gen_idles`; the cold block now starts at `$7076`; "Level pool (3F-T1)"); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
 | `$6FE4..$7FFF` (3F-T2, kit) | `lowram_code` (`start` first) | 4,124 | **3F-T2: code 3,619 B + 101 descriptors 505 B; spare after the (now `FRT_MAX` 128) descriptor reserve 135 B: 43 kit** (50 before the `SEQ_TRAP` path) (was 29: +160 reserve, code +139 net: the sequence-cache loader `sq_reset` / `sq_load` / `ksm_ptr` / `sq_fill` in, `gen_kind` + its loops → `gen_list`, `level_enter`'s FRT LDIR → R6). Before: **cold block**, ends exactly at `$8000` (`src/lowram.asm`): **3E-T2: code 3,169 B + 101 descriptors 505 B**; 3E-T1: code 3,126 B (was 3,889 at `$70CF`); before: code 3,238 B + 101 frame descriptors 505 B (D3-S2 +89 incl. the bitmap-shadow paths' removal: + `clear_screen` / `print_char` / `print_str`, − `room_show` / `room_shadow`'s shadow ornament; L2 engine +28: `pit_range` / `pit_w`; D3-4 +8: `start_game` → `gen_kind(HERO_KIND + K_FX_BASE)`; J1 +145: `try_jump` D 6 / 7 + `jump_pit` + `pit_w`; earlier: D3-TX `tx_dec` + `.txt`, B12 +21, B14 +175, C3-2 +1, C3-1 +33, C3-0 +3, B3B-13 +37) |
 | inside the cold block | A5 `zx0_code..zx0_code_end` | 107 | `zx0_frame` 39 + `dzx0_standard` 68 (ASSERT ≤ `ZX0_BUDGET` 128) |
@@ -6778,3 +6778,28 @@ Tests touched: `tests/endcard_k.py` (`lp_dtab` read from .sna bank 0), `tests/hu
 `TEXT_RES` +16 (headroom 17), `B0_FREE_START` / `B0_CODE2` `$CEE6` -> **`$CEF6`**, `B0_FREE_RES` 8,408 -> **8,392**,
 **`POOL_START` `$EFBE` unchanged**; `B0_CODE2` free 5,481 -> 5,465. `h_jump`'s `.weak` (status7.asm, 15 B; once per press
 via `LOCK_SHOWN`, as bank-7 `.afraid`): bank 7 cold free 89 -> **74**.
+
+## NEW-MON3 T2 + T3 ledger (`feat/newmon3-lp8`, on main `064d329`, 2026-11-13; new_monsters.md §3 / §5 / §12)
+
+**T2 FX-U.** The class FX leave the kind ids: `U_FXW` / `U_FXM` = `K_MAX + 10` / `+ 11` (last two rows of `gu_tab_x`, pool6.asm),
+`U_FX_BASE` = `U_FXW - K_KNIGHT` (was `K_FX_BASE`; `pool_hero`, `fxr_none`, the build's hero session now sets `PSS_X`, not `PSS_M`).
+Kind ids **30 = `K_GARGOYLE`, 31 = `K_ALIAS`** (defs.asm); `gu_tab` rows 30 / 31 are `GU 0, 0` placeholders (0-frame units: `pl_unit`
+skips them). **`K_COUNT` stays 30** until T4 fills rows 30 / 31 (every `kind_tab` / `kx_tab` / `ksm_tab` / `rk_tab` pad, the
+tests that loop `K_COUNT`); T4 raises it to 32. `GU_N` 42 -> 44, R6 +4 B. `BH_K_FXW/M` -> `BH_U_FXW/M` (the FRM owner tokens).
+Python: `K_FXW/K_FXM/K_FX_BASE` -> `U_*` in tests/tools; `frames_d3` F5 reads units `K_MAX + 10 / 11`.
+
+**T3 LP8.** `LP_KINDS` 8 B (pick `rnd & 7`), `LP_BOSS` = `LP_STATE + 8`, `LP_TOTAL` + 9, every later field +4, `LP_LEN` 114 -> **118**,
+`LP_END` `$6F32` -> `$6F36` (low-RAM spare 199 -> **195**). `lp_dtab` rows 10 B (`LP_DROW` 10; 8 kinds, boss, count; +32 B in `B0_CODE2`,
+`lp_hdr0` +1 B). `LP_GEN_N` 9. DATA = today's 4 kinds listed twice (draws and fallbacks identical to `& 3`). Consumers: `gen_fit`
+(`and 7`, fallback `cp 8`), `lp_minw` (8), `sp_bcall` cpir 8, the ALARM wave pick `and 7`, `trk_run` `and 7` / `res 3, e`,
+`vb_turn` scan 9, `tut_d0` Goblin x 8; build-time pool / seq-cache sims walk slots 0..7 + boss. `pool6` static ASSERT
+`2 * (3 * LP_GEN_N + 2) + 1 <= PL_CAP` dropped (it bounded 4 distinct kinds); the exact per-depth `2 * PLU + 1 <= PL_CAP` in main.asm stays
+(T4: 6-kind depths may need `PL_CAP` / `SQ_SLOTS` raised: GEN_SRC use is 57 of 64 B, `SQ_SLOTS` 7).
+
+| Region (release) | before (`064d329`) | after |
+|---|---|---|
+| `B0_CODE2` used / free | 2,918 / 5,490 | **2,951 / 5,457** (+33) |
+| R6 free | 1,395 | **1,391** (-4, T2) |
+| low-RAM spare | 199 | **195** (-4, LP header) |
+| bank 2 / bank 3 / bank 7 low / HOT_COPY free | 295 / 79 / 89 / 40 | unchanged |
+| pool need / slack, `LEVEL_NEED`, D0 pool | | unchanged |

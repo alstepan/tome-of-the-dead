@@ -968,6 +968,9 @@ def arrival_checks(p, hero, tag):
     check("C2", f"{tag}: D0 starts in room A, hero mid-ladder at the shaft top (x 5, y 0), HP full",
           (p.rb("CUR_ROOM"), e["X"], e["Y"]) == (1, 5, 0) and e["HP"] == e["MAXHP"] and p.rb("HERO_KIND") == hero,
           (p.rb("CUR_ROOM"), e["X"], e["Y"], e["HP"], e["MAXHP"]))
+    lpk = bytes(p.z.read_memory(S["LP_KINDS"], 8))
+    check("C2", f"{tag}: NEW-MON3 T3 LP_KINDS = Goblin x 8 (the pick is LP_KINDS[rnd & 7]: no stale slot), LP_BOSS = Goblin | GOLD",
+          lpk == bytes([S["K_GOBLIN"]]) * 8 and p.rb("LP_BOSS") == S["K_GOBLIN"] | S["LEK_GOLD"], (lpk.hex(), p.rb("LP_BOSS")))
     ids = mentor_cells(p)
     check("C2", f"{tag}: the mentor stands at A1 (his {MN} tile ids {MID0}.. stamped in ROOM_MAP, a facing table)", ids in (MENTOR_R, MENTOR_L), ids)
     check("C2", f"{tag}: FOOD = 40, DEPTH stays 1, the turn hook is the blob's (pl_et = ts_turn), choice offer still armed",

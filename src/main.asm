@@ -1150,11 +1150,15 @@ POOL_SIM_PROTO = PS_USED
 PS_LIM6 = POOL6_END
                 DUP  LEVELS, pld
                 MMU  3, BANK_TEXT               ; NEW-MON3 T1: lp_dtab is bank 0 (nm3_b0.asm)
-PLK0 = {b lp_dtab + pld * LP_DROW + 0}
+PLK0 = {b lp_dtab + pld * LP_DROW + 0}                   ; NEW-MON3 T3: 8 slots (duplicates are no-ops here: PL_KIND / PS_KIND dedup per unit)
 PLK1 = {b lp_dtab + pld * LP_DROW + 1}
 PLK2 = {b lp_dtab + pld * LP_DROW + 2}
 PLK3 = {b lp_dtab + pld * LP_DROW + 3}
-PLK4 = {b lp_dtab + pld * LP_DROW + 4} & LEK_KIND_MASK   ; (3F-T5: the golden bit is not part of the kind)
+PLK4 = {b lp_dtab + pld * LP_DROW + 4}
+PLK5 = {b lp_dtab + pld * LP_DROW + 5}
+PLK6 = {b lp_dtab + pld * LP_DROW + 6}
+PLK7 = {b lp_dtab + pld * LP_DROW + 7}
+PLK8 = {b lp_dtab + pld * LP_DROW + 8} & LEK_KIND_MASK   ; the boss (3F-T5: the golden bit is not part of the kind)
                 MMU  3, BANK_R6
 PLM = 0
 PLX = 0
@@ -1163,6 +1167,10 @@ PLX = 0
                 PL_KIND PLK2
                 PL_KIND PLK3
                 PL_KIND PLK4
+                PL_KIND PLK5
+                PL_KIND PLK6
+                PL_KIND PLK7
+                PL_KIND PLK8
                 ; MEM-PS2: the level session replayed (PSS = the full unit set, before the
                 ; VBAT strip below: PS_UNIT merges same-fid0 units itself)
 PSS_M = PLM
@@ -1177,6 +1185,10 @@ PS_OVF = 0
                 PS_KIND PLK2
                 PS_KIND PLK3
                 PS_KIND PLK4
+                PS_KIND PLK5
+                PS_KIND PLK6
+                PS_KIND PLK7
+                PS_KIND PLK8
                 PS_LINEAR
 PS_NEED = PS_USED + POOL_SIM_MARGIN
       IF (PLM >> K_BAT) & 1                    ; 3F-T9: the bat form's frames lie inside the Bat's
@@ -1209,7 +1221,7 @@ POOL_LVL_WORST = PL_WORST
       ENDIF
                 EDUP
                 MMU  3, 0
-                ASSERT LP_DROW == 6 && K_MAX <= 32 && GU_N <= 64
+                ASSERT LP_DROW == 10 && K_MAX <= 32 && GU_N <= 64
     IF POOL_NEED > POOL_CAP
                 DISPLAY "POOL FULL: need ", /D, POOL_NEED, " (worst D", /D, POOL_LVL_WORST, ") > POOL_CAP ", /D, POOL_CAP, " (SRC6_LEN ", /D, SRC6_LEN, ")"
     ENDIF
@@ -1456,7 +1468,11 @@ SQK0 = {b lp_dtab + sqd * LP_DROW + 0}
 SQK1 = {b lp_dtab + sqd * LP_DROW + 1}
 SQK2 = {b lp_dtab + sqd * LP_DROW + 2}
 SQK3 = {b lp_dtab + sqd * LP_DROW + 3}
-SQK4 = {b lp_dtab + sqd * LP_DROW + 4} & LEK_KIND_MASK
+SQK4 = {b lp_dtab + sqd * LP_DROW + 4}
+SQK5 = {b lp_dtab + sqd * LP_DROW + 5}
+SQK6 = {b lp_dtab + sqd * LP_DROW + 6}
+SQK7 = {b lp_dtab + sqd * LP_DROW + 7}
+SQK8 = {b lp_dtab + sqd * LP_DROW + 8} & LEK_KIND_MASK
                 MMU  3, OVL_RAW_BANK            ; C-T8 / TUT0-T1: the raw seq image is in the bank-4 scratch
                 SQ_RESET
                 SQ_KIND SQK0
@@ -1464,7 +1480,11 @@ SQK4 = {b lp_dtab + sqd * LP_DROW + 4} & LEK_KIND_MASK
                 SQ_KIND SQK2
                 SQ_KIND SQK3
                 SQ_KIND SQK4
-      IF (SQK0 == K_VAMPIRE) || (SQK1 == K_VAMPIRE) || (SQK2 == K_VAMPIRE) || (SQK3 == K_VAMPIRE) || (SQK4 == K_VAMPIRE)
+                SQ_KIND SQK5
+                SQ_KIND SQK6
+                SQ_KIND SQK7
+                SQ_KIND SQK8
+      IF (SQK0 == K_VAMPIRE) || (SQK1 == K_VAMPIRE) || (SQK2 == K_VAMPIRE) || (SQK3 == K_VAMPIRE) || (SQK4 == K_VAMPIRE) || (SQK5 == K_VAMPIRE) || (SQK6 == K_VAMPIRE) || (SQK7 == K_VAMPIRE) || (SQK8 == K_VAMPIRE)
                 SQ_KIND K_VBAT                  ; 3F-T9: pl_kinds loads the bat form's block with the Vampire's
       ENDIF
                 DISPLAY "GAME sequence cache D", /D, sqd + 1, ": ", /D, SQN, " blocks, ", /D, SQB, " B + hero ", /D, SQ_HERO, " = ", /D, SQB + SQ_HERO, " of ", /D, SEQB_LEN   ; 3F-T13bc

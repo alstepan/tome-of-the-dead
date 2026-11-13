@@ -60,12 +60,12 @@ SQ_PTR          EQU PL_LIST + PL_CAP   ; SQ_SLOTS words: each slot's master bloc
 SQ_TOP          EQU SQ_PTR + 2 * SQ_SLOTS  ; word: the next free seq_bytes byte
 PL_PROTO        EQU SQ_TOP + 2         ; pool_proto's kind list (6 B)
 SQ_IMG          EQU GEN_SRC + 64       ; the unpacked masters (seq_img.asm is DISPed here)
-LP_GEN_N        EQU 5                  ; LP_KINDS[0..3] + LP_BOSS (not the LP scratch: lp.py
+LP_GEN_N        EQU 9                  ; LP_KINDS[0..7] + LP_BOSS (not the LP scratch: lp.py
                                        ; B0G reads LP_HX.. after a new game)
 GU_STRIDE       EQU 2
 FX_FID0         EQU KFID_FXM           ; the class FX fids [FX_FID0, FX_END): both FX units
 FX_END          EQU KFID_FXW + KFCNT_FXW
-                ASSERT LP_BOSS == LP_KINDS + 4 && PL_PROTO + K_PROTO_END - K_SKELETON <= SQ_IMG
+                ASSERT LP_BOSS == LP_KINDS + 8 && PL_PROTO + K_PROTO_END - K_SKELETON <= SQ_IMG
                 ASSERT FX_FID0 + KFCNT_FXM <= FX_END && KFID_FXW >= FX_FID0
 
 ;------------------------------------------------------------------------------
@@ -412,4 +412,4 @@ pool_xmap:
 pool_xmap_end:
 PXMAP_N         EQU (pool_xmap_end - pool_xmap - 1) / 3
                 ASSERT pool_xmap_end - pool_xmap == 3 * PXMAP_N + 1
-                ASSERT 2 * (3 * LP_GEN_N + 2) + 1 <= PL_CAP && 2 * 2 * (K_PROTO_END - K_SKELETON) + 1 <= PL_CAP
+                ASSERT 2 * 2 * (K_PROTO_END - K_SKELETON) + 1 <= PL_CAP

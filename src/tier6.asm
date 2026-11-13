@@ -130,8 +130,8 @@ gen_unit:      ld   (de), a
 ; Clobbers: A, BC, DE, HL.
 gen_fit:       call gen_step
                 ld   a, l
-                and  3
-                ld   c, a                      ; C = i = rnd(4)
+                and  7
+                ld   c, a                      ; C = i = rnd(8): the slot (NEW-MON3 T3; duplicates = weights)
                 ld   a, (LPV_BOSS)
                 or   a
                 jr   nz, .nt
@@ -160,7 +160,7 @@ gen_fit:       call gen_step
                 ret  nc
 .jn:            inc  b
                 ld   a, b
-                cp   4
+                cp   8                         ; (a duplicate of the rolled kind is refused again: same state)
                 jr   c, .j
                 ld   hl, LP_DISCARD
                 inc  (hl)
@@ -169,7 +169,7 @@ gen_fit:       call gen_step
 ; lp_minw — A = C = the lightest §9.3 weight in LP_KINDS (lp_gen, the T12 trickle).
 ; Keeps DE.  Clobbers: B, HL.
 lp_minw:        ld   hl, LP_KINDS
-                ld   bc, (4 << 8) | $FF
+                ld   bc, (8 << 8) | $FF
 .mw:            ld   a, (hl)
                 inc  l                         ; (LP_KINDS: one page, ASSERTed)
                 add  a, lp_wt & $FF
@@ -316,7 +316,7 @@ T3_BASE:        DB   0, 0, 0, 0, 16, 24, 32, 40, 48
                 ASSERT (T2_BASE >> 8) == ((T2_BASE + 8) >> 8) && (T3_BASE >> 8) == ((T3_BASE + 8) >> 8)
                 ASSERT LEVELS == 8
                 ASSERT 96 + TIER_SHIFT2 * TIER_DELTA_MAX <= T2_CAP && 48 + TIER_SHIFT3 * TIER_DELTA_MAX <= T3_CAP
-                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 3) >> 8)
+                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 7) >> 8)
 
 ; §9.3 weights by kind row: lp_wt (bank 2, kind_tab + KT_REACH; main.asm), one copy for bank 3 and R6
 

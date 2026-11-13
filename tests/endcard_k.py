@@ -84,7 +84,7 @@ def kind_depths():
     lp = sna(S["BANK_TEXT"], S["lp_dtab"], 8 * S["LP_DROW"])   # NEW-MON3 T1: bank 0 (was bank 3)
     dep = {}
     for d in range(8):
-        row = lp[d * 6:d * 6 + 5]
+        row = lp[d * S["LP_DROW"]:d * S["LP_DROW"] + S["LP_GEN_N"]]
         for k in row:
             dep.setdefault(k & S["LEK_KIND_MASK"], d + 1)
     tt = sna(S["BANK_R6"], S["tier_tab"], 3 * S["TIER_N"])

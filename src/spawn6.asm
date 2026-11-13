@@ -121,7 +121,7 @@ sp_fit:         call sp_wt
 ; Out: CF = summoned.  Clobbers: A, BC, DE, HL.  (Placed right before sp_summon: it falls in.)
 ;------------------------------------------------------------------------------
 sp_bcall:       ld   hl, LP_KINDS
-                ld   bc, 4
+                ld   bc, 8
                 ld   a, K_SKELETON
                 cpir
                 ld   d, K_SKELETON | SQF_SUMM | SQF_RESP
@@ -268,7 +268,7 @@ sp_run:         ld   hl, SPQ_K
                 ld   a, c
                 jr   nz, .k
                 call rng_next                  ; a wave body: one of the level's kinds
-                and  3
+                and  7                         ; (NEW-MON3 T3: the 8 slots)
                 add  a, LP_KINDS & $FF
                 ld   l, a
                 ld   h, LP_KINDS >> 8
@@ -324,7 +324,7 @@ sp_run:         ld   hl, SPQ_K
 .xp:            pop  hl
 .x:             pop  bc
                 ret
-                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 3) >> 8)
+                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 7) >> 8)
 
 ;------------------------------------------------------------------------------
 ; sp_init — IX = the free slot: bytes 0 .. E_DVIS - 1 and its ST_* bytes

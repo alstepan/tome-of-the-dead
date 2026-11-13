@@ -206,14 +206,14 @@ tut_d0:
                 ld   (hl), 0
                 ldir
                 ld   hl, LP_KINDS
-                ld   b, 4
+                ld   b, 8                      ; NEW-MON3 T3: all 8 slots (the pick is LP_KINDS[rnd & 7])
 .k:             ld   (hl), K_GOBLIN
                 inc  l
                 djnz .k
                 ld   (hl), K_GOBLIN | LEK_GOLD ; LP_BOSS: matches no body (E_GOLD 0): no
                 inc  l                         ; guard AI / provoke / follow ban, pool = Goblin
                 ld   (hl), 1                   ; LP_TOTAL
-                ASSERT LP_BOSS == LP_KINDS + 4 && LP_TOTAL == LP_KINDS + 5
+                ASSERT LP_BOSS == LP_KINDS + 8 && LP_TOTAL == LP_KINDS + 9
                 ld   a, (LVL)
                 ld   (LP_LVL), a
                 ld   a, RESPAWN_MAX            ; no trickle (LF_UNIQUE silences it too)

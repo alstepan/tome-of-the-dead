@@ -420,8 +420,8 @@ SEQ_BIN = Path(os.environ.get("WZ_BUILD_DIR", str(Path(__file__).resolve().paren
 
 
 def lp_kinds(p):
-    """LP_KINDS[0..3] + LP_BOSS as kind rows (3F-T5: LP_BOSS carries LEK_GOLD on the golden depths)."""
-    ks = [k & S["LEK_KIND_MASK"] for k in p.z.read_memory(S["LP_KINDS"], 5)]
+    """LP_KINDS[0..7] + LP_BOSS as kind rows (3F-T5: LP_BOSS carries LEK_GOLD on the golden depths)."""
+    ks = [k & S["LEK_KIND_MASK"] for k in p.z.read_memory(S["LP_KINDS"], S["LP_GEN_N"])]
     if S["K_VAMPIRE"] in ks and S["K_VBAT"] not in ks:
         ks.append(S["K_VBAT"])      # 3F-T9: the Vampire's bat form shares the level's pool
     return ks
