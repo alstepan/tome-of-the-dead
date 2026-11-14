@@ -1041,13 +1041,15 @@ def lp_slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap, bud=None):
         bud = [0]
     if bud[0]:
         return None
-    res = _slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap)
-    if res is None:
+    sc = [False]
+    res = _slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap, sc)
+    if res is None and sc[0]:                           # review 4: only a failure after a real scan spends it
         bud[0] = 1
     return res
 
 
-def _slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap):
+def _slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap, sc=None):
+    sc = sc if sc is not None else [False]
     lo, hi = D["LP_XMIN"], D["LP_XMAX"] + 1 - w
     if s == hs:
         if x0 > hx:
@@ -1062,6 +1064,7 @@ def _slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap):
     blk = [lp_legal(b, r, s, c, 1, fly, -1, hx, hw, placed, 0, ret=True) != "ok" for c in range(40)]
 
     def scan(cols, step, first):
+        sc[0] = True
         run = 0
         for k in range(cols):
             c = first + step * k
@@ -1155,8 +1158,9 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
         best = lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM) \
             if r == b[H["LVL_LAIR"]] else None
         try0 = False
-        if best is None and hdr & D["LR_VISITED"]:      # R6 lp_t06 runs: it copies the byte to the
-            lp[po + len(left)] = pos                    # compaction slot first (review 3)
+        if best is None and hdr & D["LR_VISITED"] or best is not None:
+            lp[po + len(left)] = pos                    # R6 lp_t06 (try 0) / bank-0 lp_post (posted, review 4)
+                                                        # copy the byte to the compaction slot first
         if best is None and pos:                        # try 0 (parked or not): the LP_POS cell
             s0, x0 = (pos >> D["LPP_S_BIT"]) & 1, pos & D["LPP_X"]
             if lp_legal(b, r, s0, x0, w, fly, hs, hx, hw, placed, D["LP_GAP2"], ret=True) == "ok":

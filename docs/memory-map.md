@@ -7017,7 +7017,8 @@ shaft footprint itself 147 (kept illegal, user decision: it slides off it), gap 
 The slide's fail cache (keyed by w) and its unreserved-first double sweep are gone. Now: **at most one failed slide
 an entry** (`LPS_USED` = `LP_SIG` bit 0; then every later unit skips the slide: tries 1-8). A slide that succeeds
 places its unit, i.e. costs less than that unit's 8 failing tries, so the worst entry = the no-slide worst (B0) +
-ONE failed slide (setup ~0.4k + reserving <= 3 later units ~0.75k + one full scan <= 35 cols x ~57 T). The
+ONE failed slide (setup ~0.4k + reserving <= 3 later units ~0.3-0.46k each (~0.16k fixed + ~38 T a col) + one full
+scan <= 35 cols x ~57 T). The
 reservations: at the entry's first slide every later unit's saved cell gets its own bit (`LPC_UNITS`, bit 4 + j)
 in `LP_CMAP` (never cleared; `lp_legal`, `lp_post` and try 0 mask bits 4-7 out); a slider masks the bits of the
 units after it, so one single scan sees them (no mark / sweep / unmark per slide). The LP_POS compaction moved into
@@ -7026,3 +7027,13 @@ units after it, so one single scan sees them (no mark / sweep / unmark per slide
 `KT_BW` <= 7, ASSERTed in main.asm over every kind row). Measured (`tests/lp.py`): A8S **68,074** T, A8M (new:
 A8S's rooms x mixed widths x every order) **67,286**, A8 61,410, A2 mean 21,685 (cap 22,000); A8R (new): a slide
 that fails only on the reservation sets the flag and the next unit comes back exactly. Free: bank 3 111, R6 484.
+
+**ROOM-MEM2 review 4.** (1) Only a slide that SCANNED and found nothing spends the entry's one failure (`LPS_USED`
+bit 1 = this slide scanned); the cheap exits before a scan (no room on the hero's side, hi < lo) do not, and the
+range is now computed before the mask / reservations, so those exits stay cheap; `levelgen._slide(..., sc)`.
+(2) A POSTED lair unit (lp_t06 never runs for it) gets its LP_POS byte copied to the compaction slot by bank-0
+`lp_post` (`.cpy`, B0_CODE2 +~40 B), so one that finds no free slot keeps its own byte (`tests/lp.py` A8P: fails on
+7b1ddb8, passes now; the model copies for posted units too). (3) The `.rsv` cost comment corrected.
+Measured: A8S 67,833 T, A8M 67,258, A8 61,410, `tests/roommem.py` ADV 63,744 (cap 70,000); A2 mean 21,730 (cap
+22,000). Free: bank 3 111 (kit / `F3_GEN=0` 107), R6 461 (466), B0_CODE2 4,251. Playtest 51.2 % exact / 96.8 % with
+the same storey <= 8 cols.

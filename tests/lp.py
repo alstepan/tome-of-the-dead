@@ -743,6 +743,52 @@ def part_a8r(h, p, check):
               (got, out, hex(p.rb(S["LP_SIG"]))))
 
 
+def part_a8p(h, p, check):
+    """A8P (ROOM-MEM2 review 4): a POSTED lair unit that finds no free slot stays in the record with ITS
+    LP_POS byte (bank-0 lp_post copies it to the compaction slot; lp_t06 never runs for it). The lair's
+    record {boss, escort} with saved cells A, B; one free slot: the boss takes it (its post), the escort
+    (posted, no slot) is compacted to entry 0 -> LP_POS[lair][0] == B (not the boss's stale A)."""
+    p.load()
+    sync_bodies(p)
+    done = 0
+    for seed in (3, 4, 7):                              # levelgen sweep: lp_post posts both on these D1 lairs
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=1)
+        p.far3("lp_budget")
+        blk = p.block()
+        lair = blk[S["LVL_LAIR"] - G.BASE]
+        lp = bytearray(p.lp())
+        boss, esc = p.rb(S["LP_BOSS"]), p.rb(S["LP_KINDS"])
+        ro = S["LP_REC"] - LPB + lair * S["LR_STRIDE"]
+        po = S["LP_POS"] - LPB + lair * S["LR_MAX"]
+        A, B = G.lp_pos_byte(3, 0, False), G.lp_pos_byte(20, 1, True)
+        lp[ro:ro + 5] = bytes([S["LR_VISITED"] | 2, boss, 9, esc, 4])
+        lp[po:po + 2] = bytes([A, B])
+        wb, _, fb = G.k3_info(boss)
+        we, _, fe = G.k3_info(esc)
+        p1 = G.lp_post(blk, bytes(lp), lair, boss, wb, fb, 0, 1, 3, [], G.k3_info, G.LEK_ROW_MASK)
+        if p1 is None or G.lp_post(blk, bytes(lp), lair, esc, we, fe, 0, 1, 3, [(p1[0], p1[1], p1[1] + wb - 1)],
+                                   G.k3_info, G.LEK_ROW_MASK) is None:
+            continue                                    # the model must post both (else lp_t06 copies)
+        p.wmem(LPB, lp)
+        p.clear_slots()
+        other = next(r for r in range(9) if r != lair)
+        for s_ in range(2, 16):                         # 14 slots busy elsewhere: one free slot (1)
+            p.set_ent(s_, KIND=esc, ROOM=other, FLAGS=EF_ACTIVE | EF_HOSTILE)
+        p.wmem(S["LP_HX"], [1, 0, 3])
+        ok, _ = p.far3("lp_enter", a=lair)
+        rec = p.lp()[ro:ro + 3]
+        pos0 = p.rb(S["LP_POS"] + lair * S["LR_MAX"])
+        check(f"A8P seed {seed:#06x} lair {lair}: the boss posted into the one free slot, the posted escort kept "
+              f"(no slot) as entry 0 with its own saved cell", ok and rec == bytes([S["LR_VISITED"] | 1, esc, 4])
+              and pos0 == B, (rec.hex(), hex(pos0), hex(A), hex(B)))
+        done += 1
+        if done == 2:
+            break
+    check("A8P setup: a lair where the model posts both units", done > 0, done)
+
+
 def G_entries(lp, r):
     ro = S["LP_REC"] - LPB + r * S["LR_STRIDE"]
     return [(lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i]) for i in range(lp[ro] & 7)]
@@ -1010,6 +1056,7 @@ def main():
             part_a8s(h, p, check)
             part_a8m(h, p, check)
             part_a8r(h, p, check)
+            part_a8p(h, p, check)
             part_a9(h, p, check)
             if nsweep:
                 part_a7(h, p, check, nsweep)

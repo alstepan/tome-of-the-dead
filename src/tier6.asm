@@ -541,7 +541,8 @@ LPS_LO          EQU LP_BEST                 ; lp_t06 scratch (lp_post's LP_EXLO 
 LPS_HI          EQU LP_BX                   ; unit's post was tried; LP_BS is lp_gen's LPG_MINW, dead here)
 LPS_XR          EQU LP_BS
 LPS_MASK        EQU LP_GAPV                 ; the slide's mark mask (LP_GAPV: lp_legal's, set per try)
-LPS_USED        EQU LP_SIG                  ; the entry's slide state: bit 0 = a slide failed (no more slides), bit 7 = the
+LPS_USED        EQU LP_SIG                  ; the entry's slide state: bit 0 = a slide failed (no more slides), bit 1 = this
+                                            ; slide scanned (review 4: only a scanned failure spends it), bit 7 = the
                                             ; saved cells are reserved (LP_SIG: lp_gen's, FRESH only; 0 from lp_enter)
 lp_t06:         xor  a
                 ld   (LPV_FACE), a
@@ -619,24 +620,7 @@ lp_t06:         xor  a
 .sl:            ld   hl, LPS_USED
                 bit  0, (hl)
                 jp   nz, .none                 ; a slide failed this entry already: tries 1-8
-                ld   a, (LPV_RDP)              ; the mask: LPC_BAD | LPC_BODY + the bits of the units after
-                ld   hl, LP_RECP               ; this one (index i: their saved cells are reserved; the earlier
-                sub  (hl)                      ; ones are placed or waiting, this one is itself)
-                rrca
-                and  LR_MAX - 1
-                inc  a
-                ld   b, a
-                ld   a, $10
-.ms:            add  a, a
-                djnz .ms
-                ld   e, a                      ; E = unit i+1's bit ($10 << (i+1); 0 for i = 3)
-                neg                            ; -bit: that bit and every one above
-                and  LPC_UNITS
-                or   LPC_BAD | LPC_BODY
-                ld   (LPS_MASK), a
-                ld   hl, LPS_USED
-                bit  7, (hl)
-                call z, .rsv                   ; the entry's first slide: the later units' saved cells
+                res  1, (hl)                   ; review 4: bit 1 = a scan ran (only that spends the budget)
                 ld   a, (LP_W)
                 cpl
                 add  a, LP_XMAX + 2
@@ -667,10 +651,32 @@ lp_t06:         xor  a
                 ld   h, a
 .rg:            ld   a, h
                 cp   l
-                jp   c, .none                  ; hi < lo
+                jp   c, .none                  ; hi < lo (cheap: not the entry's failed slide)
                 ld   (LPS_HI), a
                 ld   a, l
                 ld   (LPS_LO), a
+                ld   a, (LPV_RDP)              ; the mask: LPC_BAD | LPC_BODY + the bits of the units after
+                ld   hl, LP_RECP               ; this one (index i: their saved cells are reserved; the earlier
+                sub  (hl)                      ; ones are placed or waiting, this one is itself)
+                rrca
+                and  LR_MAX - 1
+                inc  a
+                ld   b, a
+                ld   a, $10
+.ms:            add  a, a
+                djnz .ms
+                ld   e, a                      ; E = unit i+1's bit ($10 << (i+1); 0 for i = 3)
+                neg                            ; -bit: that bit and every one above
+                and  LPC_UNITS
+                or   LPC_BAD | LPC_BODY
+                ld   (LPS_MASK), a
+                ld   hl, LPS_USED
+                bit  7, (hl)
+                call z, .rsv                   ; the entry's first slide: the later units' saved cells
+                ld   a, (LPS_LO)               ; L = lo, H = hi again (the mask / .rsv used HL)
+                ld   l, a
+                ld   a, (LPS_HI)
+                ld   h, a
                 ; right scan: cols c = max(x0+1, lo) .. hi + w - 1 (capped by the budget), E = the free run;
                 ; run = w at col c -> xR = c - w + 1. LPS_XR = the start col while scanning, then xR / $FF
                 ld   a, d
@@ -686,6 +692,8 @@ lp_t06:         xor  a
                 add  a, h
                 sub  b
                 ld   e, a                      ; cols = hi + w - start (>= w)
+                ld   hl, LPS_USED
+                set  1, (hl)                   ; a scan runs
                 ld   a, b
                 call .adr
                 push de                        ; (D = x0)
@@ -756,6 +764,8 @@ lp_t06:         xor  a
                 sub  l
                 inc  a
                 ld   e, a                      ; cols = start + w - lower
+                ld   hl, LPS_USED
+                set  1, (hl)                   ; a scan runs
                 ld   a, b
                 call .adr
                 push de
@@ -783,7 +793,7 @@ lp_t06:         xor  a
                 pop  de
 .res:           ld   a, (LPS_XR)               ; the right hit, if any
                 cp   $FF
-                jp   z, .none
+                jr   z, .nonef
                 jr   .sok
 .lh:            pop  bc
                 pop  de
@@ -800,16 +810,18 @@ lp_t06:         xor  a
                 set  3, (hl)                   ; EF_LEFT
 .ok1:           ld   b, 1                      ; B != 0
                 ret
-.none:          ld   hl, LPS_USED              ; (every exit here is a failed slide: the entry's one)
+.nonef:         ld   hl, LPS_USED              ; no window found: a failed slide if a scan ran (the entry's
+                bit  1, (hl)                   ; one: review 4 - the cheap exits before a scan spend nothing)
+                jr   z, .none
                 set  0, (hl)
-                xor  a
+.none:          xor  a
                 ld   (LPV_FACE), a
                 ld   b, a                      ; B = 0
                 ret
 ; .rsv: the entry's first slide (LPS_USED bit 7 clear; HL = LPS_USED), E = unit i+1's bit: every unit j
 ; after this one with a saved cell gets bit 4 + j ORed into its cols x .. x + w - 1 of its storey's
 ; LP_CMAP row (a later slider i' > i needs only j > i': a subset). lp_legal / lp_post / try 0 mask them
-; out. Keeps BC, DE.   ~0.25k T a later unit, once an entry
+; out. Keeps BC, DE.   ~0.16k T fixed + ~38 T a col a later unit (0.3-0.46k each), once an entry
 .rsv:           set  7, (hl)
                 ld   a, e
                 or   a
