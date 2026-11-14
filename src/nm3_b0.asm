@@ -13,8 +13,9 @@
 ; lp_hdr0 — lp_budget's header (FARB0 from bank 3, once a level, right after
 ; level_gen): LP_STATE zeroed, then the depth row lp_dtab[LVL_DEPTH - 1] ->
 ; LP_KINDS, LP_BOSS, LP_TOTAL. Was inline in lp_budget with lp_dtab in bank 3
-; (-74 B there). A-1 (the row-31 alias) hooks in here.
-; Clobbers: A, BC, DE, HL.   ~0.6k T (+ FARB0 ~0.25k)
+; (-74 B there). NEW-MON3 T9: then the A-1 alias patch (NM3_VAR, row 31's bank-2 / bank-3 /
+; R6 bytes; see nm3_apply).
+; Clobbers: A, BC, DE, HL.   ~2.2k T (+ FARB0 ~0.25k), once a level
 ;------------------------------------------------------------------------------
 lp_hdr0:
                 ld   hl, LP_STATE
@@ -35,13 +36,78 @@ lp_hdr0:
                 ld   de, LP_KINDS
                 ld   bc, LP_DROW
                 ldir                           ; LP_KINDS[0..7], LP_BOSS, LP_TOTAL
-                ret
+                ; ---- NEW-MON3 T9 A-1 (new_monsters.md §3): row 31 := this depth's variant, BEFORE any
+                ; spawn (lp_enter, trickle) and pool_list (gu_tab row 31). Every depth writes one of the two
+                ; (Imp -> Wraith -> Imp both ways, a new game's D1 included); the ksm_tab word is the 4th
+                ; group, applied by pool_list right after pl_begin's unpack (nm3_img0).
+                ld   a, (LVL_DEPTH)
+                or   a
+                jr   z, .va                    ; (D0 / PROTO: never listed; keep A)
+                ld   b, a
+                ld   a, NM3_B_DEPTHS
+.vr:            rrca                           ; CF = bit d-1 after d steps
+                djnz .vr
+                sbc  a, a
+                and  1
+.va:            ld   (NM3_VAR), a              ; 0 = Fire Imp (A), 1 = Frost Wraith (B)
+                ld   hl, nm3_var_b2            ; bank 2 (any $C000 bank: keep bank 0)
+                ld   c, BANK_TEXT
+                call nm3_apply
+                ld   hl, nm3_var_b3            ; kx_tab row 31: bank 3 at $C000
+                ld   c, BANK_COLD3
+                call nm3_apply
+                ld   hl, nm3_var_r6            ; gu_tab row 31, drop_imp's kind byte: R6
+                ld   c, BANK_R6
+                jr   nm3_apply
                 ASSERT LP_BOSS == LP_KINDS + 8 && LP_TOTAL == LP_KINDS + 9 && LP_DROW == 10 && LP_DROW * LEVELS < 256
                 ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 8) >> 8)    ; lp_enter .mw: inc e
 
 ;------------------------------------------------------------------------------
-; Per-depth budget rows (game.md §9.4 table): 8 kind slots (NEW-MON3 T3: today's 4 kinds listed twice, so
-; LP_KINDS[rnd & 7] draws as rnd & 3 did; T4 puts the §5 lists here), boss,
+; nm3_img0 — FARB0 from R6 pool_list, right after pl_begin unpacked the sequence masters to SQ_IMG
+; (low RAM) and before pl_kinds' first ksm_tab read (sq_load / sq_fill; no gen_list unpack between):
+; ksm_tab row 31 := the variant's block (nm3_var_img). Clobbers: A, BC, DE, HL.   ~0.3k T
+; nm3_apply — HL = a nm3_var group (DW addr, DB A, DB B; DW 0), C = the bank its targets need at
+; $C000 (bank 2 / low RAM: any): stages (addr, the NM3_VAR value) into TX_DEC, then farb runs low-RAM
+; vb_far with bank C paged and hands bank 0 back (B0CODE rule: bank-0 code never pages $C000 itself).
+; Clobbers: A, BC, DE, HL.   ~0.5k T a group (once a level)
+;------------------------------------------------------------------------------
+nm3_img0:       ld   hl, nm3_var_img
+                ld   c, BANK_TEXT
+nm3_apply:      push bc
+                ld   a, (NM3_VAR)
+                ld   c, a                      ; C = 0 (A) / 1 (B)
+                ld   de, TX_DEC
+.l:             ld   a, (hl)                   ; addr (DW 0 = end, staged too)
+                ld   (de), a
+                inc  hl
+                inc  de
+                ld   b, a
+                ld   a, (hl)
+                ld   (de), a
+                inc  hl
+                inc  de
+                or   b
+                jr   z, .go
+                ld   a, (hl)                   ; value A
+                inc  hl
+                bit  0, c
+                jr   z, .s
+                ld   a, (hl)                   ; value B
+.s:             inc  hl
+                ld   (de), a
+                inc  de
+                jr   .l
+.go:            pop  bc
+                ld   hl, vb_far
+                jp   farb                      ; (farb returns to our caller with bank 0 paged)
+                ; the staged lists (3 B an entry + the end word) fit TX_DEC
+                ASSERT (nm3_var_b3 - nm3_var_b2 - 2) / 4 * 3 + 2 <= TX_DEC_LEN && (nm3_var_r6 - nm3_var_b3 - 2) / 4 * 3 + 2 <= TX_DEC_LEN
+                ASSERT (nm3_var_img - nm3_var_r6 - 2) / 4 * 3 + 2 <= TX_DEC_LEN && (nm3_var_end - nm3_var_img - 2) / 4 * 3 + 2 <= TX_DEC_LEN
+
+;------------------------------------------------------------------------------
+; Per-depth budget rows (game.md §9.4 table): 8 kind slots (NEW-MON3 T9: the new_monsters.md §5 lists, slots 0..n-1
+; distinct in fallback order, slots n..7 duplicates = draw weight; weights = the tuned preset tools/balance_nm3.json,
+; user 2026-11-13: D3 Ghost x3, D4 Imp 1 Rat 2, D7 Necro 3 Orc 1, D8 Necro 3 Skeleton 1), boss,
 ; count incl. boss (3F-T3: real kind ids, defs.asm). 3F-T5: the golden depths (D1-D3, D5, D6, §9.7
 ; R1) carry LEK_GOLD in the boss byte (levelgen.py k3_boss); the entity bit is E_GOLD.
 ; NEW-MON3 T1: bank 0 (was bank-3 lpop3.asm); read by lp_hdr0 and the assembler's pool /
@@ -49,12 +115,12 @@ lp_hdr0:
 ;------------------------------------------------------------------------------
 lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN, K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1 | LEK_GOLD, 13
                 DB   K_GOBLIN, K_SPIDER, K_BAT, K_RAT, K_GOBLIN, K_SPIDER, K_BAT, K_RAT,         K_BOSS_D2 | LEK_GOLD, 14
-                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT, K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT,    K_BOSS_D3 | LEK_GOLD, 14
-                DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER, K_ORC, K_RAT, K_SPIDER, K_ARCHER,         K_BOSS_D4, 15
-                DB   K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER, K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER,  K_BOSS_D5 | LEK_GOLD, 16
-                DB   K_VAMPIRE, K_GHOST, K_NECRO, K_ORC, K_VAMPIRE, K_GHOST, K_NECRO, K_ORC,       K_BOSS_D6 | LEK_GOLD, 15
-                DB   K_ORC, K_NECRO, K_GHOST, K_NECRO, K_ORC, K_NECRO, K_GHOST, K_NECRO,         K_BOSS_D7, 15   ; 3F-T13bc ARCHER-DEPTHS H1: the 2nd Necro replaces the Archer (weight 6 = 6)
-                DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE, K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE,  K_BOSS_D8, 12
+                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT, K_GOBLIN, K_GHOST, K_VAMPIRE, K_GHOST,    K_BOSS_D3 | LEK_GOLD, 14
+                DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER, K_ALIAS, K_ORC, K_ARCHER, K_RAT,          K_BOSS_D4, 15      ; K_ALIAS = Fire Imp (A)
+                DB   K_MUMMY, K_SPIDER, K_SKELETON, K_ARCHER, K_GARGOYLE, K_ALIAS, K_MUMMY, K_ARCHER,  K_BOSS_D5 | LEK_GOLD, 16   ; = Frost Wraith (B)
+                DB   K_VAMPIRE, K_GARGOYLE, K_ALIAS, K_GHOST, K_NECRO, K_ORC, K_VAMPIRE, K_ORC,  K_BOSS_D6 | LEK_GOLD, 15   ; = Fire Imp (A)
+                DB   K_ORC, K_GHOST, K_NECRO, K_ALIAS, K_MUMMY, K_SPIDER, K_NECRO, K_NECRO,      K_BOSS_D7, 15      ; = Frost Wraith (B)
+                DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE, K_ORC, K_ALIAS, K_NECRO, K_NECRO,  K_BOSS_D8, 12      ; = Frost Wraith (B)
 LP_DROW         EQU 10
                 ASSERT $ - lp_dtab == LEVELS * LP_DROW
 

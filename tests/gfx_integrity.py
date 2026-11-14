@@ -445,6 +445,8 @@ def seq_check(p, check, tag, kinds):
     bad = []
     for k in sorted({hero, *kinds}):
         blk = iw(S["ksm_tab"] + 2 * k)
+        if k == S["K_ALIAS"] and p.rb("NM3_VAR"):     # NEW-MON3 T9 A-1: the Frost Wraith's block on its depths
+            blk = S["ksm_wr"]
         if blk == 0 or (k != hero and kt[k] == slot0):
             bad.append((k, "no row"))
             continue

@@ -14,7 +14,7 @@ RNG    : the GAMEPLAY stream (levelgen.Rng; Rng.byte() = low byte of one step), 
            1. chance byte  (spawn iff < RESPAWN_CHANCE)           -- always, on a period turn
            2. room pick    rnd(sum of weights)                    -- only if a room is eligible
            3. kind         rnd(8) over the 8 LP_KINDS slots, then the §9.6 tier roll (byte, if the kind has tiers)
-           4. cap retry    ONE retry with the next kind in the list (+ its tier roll)
+           4. cap retry    ONE retry with the next DISTINCT kind in the list (+ its tier roll; NEW-MON3 T9)
          Hard limits that need no RNG are tested BEFORE step 1 so a skipped check
          costs one chance byte at most.
 """
@@ -102,7 +102,9 @@ def trickle_check(lv, turn, rng):
             break
         v -= w
     i = rng.rnd(8)                                    # NEW-MON3 T3: the 8 slots
-    for j in (i, (i + 1) & 7):                        # picked kind, then the next in list order ONCE
+    # NEW-MON3 T9: the retry is the next slot of a DIFFERENT kind (k + s & 7, s = 1..7); none -> k + 1
+    nxt = next(((i + s) & 7 for s in range(1, 8) if lv.kinds[(i + s) & 7] != lv.kinds[i]), (i + 1) & 7)
+    for j in (i, nxt):                                # picked kind, then the next distinct kind ONCE
         key = G.tier_roll(rng, lv.kinds[j], lv.depth, lv.lvl)
         kb = G.KROWS[key][0] | G.LEK_RESPAWN
         if lv.sigma(room) + G.k3_weight(kb) <= ROOM_CAP_SIGMA:

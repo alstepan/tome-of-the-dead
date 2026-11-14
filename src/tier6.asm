@@ -215,11 +215,11 @@ gen_tryk:          ld   e, a
 ; tier_row — A = a base row, C = the hero LVL to use (lp_gen: LP_LVL, the level-entry
 ; LVL; the T12 trickle: the current LVL) -> A = its tier row to try first, 0 = none
 ; (the kind has no tiers: NO stream step; or the roll gave the base). The odds (out of 256):
-;   T2 = max(0, T2_BASE[d] + 16 Δ)   T3 = d >= 4 ? max(0, T3_BASE[d] + 8 Δ) : 0
+;   T2 = clamp(T2_BASE[d] + 16 Δ, 0, 160)   T3 = d >= 4 ? clamp(T3_BASE[d] + 8 Δ, 0, 80) : 0
 ;   r = the low byte of one stream step: r < T3 -> tier 3 (tier 2 if the base
-;   has none), r < T3 + T2 -> tier 2, else base. The caps (160 / 80) cannot be
-;   reached (ASSERTed below), the floors only at D1 for LVL < 1 (kept: exact for
-;   every LP_LVL <= 120). Clobbers: A, BC, DE, HL.   ~0.5k T tiered, ~0.15k else
+;   has none), r < T3 + T2 -> tier 2, else base. NEW-MON3 T9: the caps are reached
+;   on D7 / D8 (bases 144 / 72-80) and applied (+10 B; levelgen.py tier_odds); the
+;   floors only at D1 for LVL < 1 (kept: exact for every LP_LVL <= 120). Clobbers: A, BC, DE, HL.   ~0.5k T tiered, ~0.15k else
 ;------------------------------------------------------------------------------
 tier_row:       ld   hl, tier_tab
                 ld   b, TIER_N
@@ -262,7 +262,10 @@ tier_row:       ld   hl, tier_tab
                 sub  TIER_SHIFT2 * TIER_DELTA_MAX   ; T2_BASE + 16 (x - 2), floor 0
                 jr   nc, .t2
                 xor  a
-.t2:            ld   d, a                      ; D = T2
+.t2:            cp   T2_CAP + 1                ; NEW-MON3 T9: D7 / D8 base 144 + 32 reaches the cap
+                jr   c, .c2
+                ld   a, T2_CAP
+.c2:            ld   d, a                      ; D = T2
                 ld   e, 0                      ; E = T3
                 ld   a, c
                 cp   TIER3_MIN_DEPTH
@@ -275,7 +278,10 @@ tier_row:       ld   hl, tier_tab
                 sub  TIER_SHIFT3 * TIER_DELTA_MAX
                 jr   nc, .t3
                 xor  a
-.t3:            ld   e, a
+.t3:            cp   T3_CAP + 1                ; NEW-MON3 T9: D7 / D8 base 72 / 80 + 16 reaches the cap
+                jr   c, .c3
+                ld   a, T3_CAP
+.c3:            ld   e, a
 .r:             call gen_step
                 ld   a, l                      ; r
                 cp   e
@@ -308,14 +314,14 @@ tier_tab:       DB   K_RAT,      K_GIANT_RAT,     K_RABBIT_RAT
     IF (($ & $FF) + 9) > $100
                 ALIGN 256                      ; each 9-byte table inside one page (H loaded per table); MEM-RECLAIM w3: pad only when it would straddle (was ALIGN 16: 25 B)
     ENDIF
-T2_BASE:        DB   0, 24, 48, 64, 72, 80, 88, 96, 96
+T2_BASE:        DB   0, 24, 48, 64, 72, 80, 88, 144, 144   ; NEW-MON3 T9 (tools/balance_nm3.json, user 2026-11-13): D7 / D8 96 -> 144
     IF (($ & $FF) + 9) > $100
                 ALIGN 256
     ENDIF
-T3_BASE:        DB   0, 0, 0, 0, 16, 24, 32, 40, 48
+T3_BASE:        DB   0, 0, 0, 0, 16, 24, 32, 72, 80        ; NEW-MON3 T9: D7 / D8 40 / 48 -> 72 / 80
                 ASSERT (T2_BASE >> 8) == ((T2_BASE + 8) >> 8) && (T3_BASE >> 8) == ((T3_BASE + 8) >> 8)
                 ASSERT LEVELS == 8
-                ASSERT 96 + TIER_SHIFT2 * TIER_DELTA_MAX <= T2_CAP && 48 + TIER_SHIFT3 * TIER_DELTA_MAX <= T3_CAP
+                ASSERT 144 + 2 * TIER_SHIFT2 * TIER_DELTA_MAX < 256 && 80 + 2 * TIER_SHIFT3 * TIER_DELTA_MAX < 256   ; no 8-bit wrap before the caps
                 ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 7) >> 8)
 
 ; §9.3 weights by kind row: lp_wt (bank 2, kind_tab + KT_REACH; main.asm), one copy for bank 3 and R6

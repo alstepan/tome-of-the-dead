@@ -765,7 +765,9 @@ msg_go:
 ;------------------------------------------------------------------------------
                 ASSERT TX_STRIDE == 2 && (tx_tab & $FF) == 0   ; res 0,l = the word; H constant
 tx_ptr:
-                ld   l, a
+                cp   TX_NM_FIRE_IMP            ; NEW-MON3 T9 A-1: kind 31's name follows the level's variant
+                jr   z, .al                    ; (+14 T on every other id; one site for all six name paths)
+.go:            ld   l, a
                 res  0, l                      ; (id / 2) * 2
                 ld   h, tx_tab >> 8            ; HL = its tx_tab word
                 rra                            ; CF = odd id (no flag change below)
@@ -779,6 +781,10 @@ tx_ptr:
                 inc  hl
                 jr   nz, .s
                 ret
+.al:            ld   hl, NM3_VAR               ; 0 = "FIRE IMP" (A), 1 = the Wraith's name TX_NM_FIRE_IMP + 1 (B)
+                add  a, (hl)
+                jr   .go
+                ASSERT TX_NM_ICE_SHADE == TX_NM_FIRE_IMP + 1 && TX_NM_FIRE_IMP == TX_NM_KNIGHT + K_ALIAS
 
 ;------------------------------------------------------------------------------
 ; tx_dec — A = string id (TX_*): its decoded text, 0-terminated, in TX_DEC
@@ -2109,8 +2115,10 @@ gen_list:
 ;------------------------------------------------------------------------------
 ; sq_reset — no slot cached, seq_bytes empty, then the hero's block -> slot 0.
 ; Clobbers: A, BC, DE, HL.
+; NEW-MON3 T9: the hero's block goes to SEQH_BYTES (the free FRT_GAP above the FRT, bank 2), the
+; level's monster blocks to seq_bytes (SEQB_LEN all theirs: D8 lists 8 monster blocks).
 sq_reset:
-                ld   hl, seq_bytes
+                ld   hl, SEQH_BYTES
                 ld   (SQ_TOP), hl
                 ld   hl, SQ_PTR
                 ld   b, 2 * SQ_SLOTS
@@ -2118,7 +2126,10 @@ sq_reset:
                 inc  hl
                 djnz .z
                 ld   a, (HERO_KIND)
-                ; fall through
+                call sq_load
+                ld   hl, seq_bytes
+                ld   (SQ_TOP), hl
+                ret
 ;------------------------------------------------------------------------------
 ; sq_load — A = kind: its master block (ksm_tab; none = no-op) -> the first
 ; free cache slot, unless a slot holds it already: row = 8 pointers (SQ_TOP +
@@ -2718,6 +2729,28 @@ page_run:
 ; Generated from src/frames.asm (the same list as frame_tab). MUST stay the
 ; last thing in the cold block (ASSERTed): it is the part that grows.
 ;==============================================================================
+                INCLUDE "msgl.asm"             ; NEW-MON3 T9: msg_kind / msg_cat / msg_end (cold; were bank-2 msg2.asm:
+                                               ; room for the 9-slot seq_rows there)
+
+;------------------------------------------------------------------------------
+; vb_far — NEW-MON3 T9 A-1: write the staged list at TX_DEC (DW addr, DB value; DW 0 end) with
+; whatever bank farb paged at $C000 (bank-0 nm3_apply tail-jumps to farb with HL = vb_far: bank 0 can
+; neither write bank 3 / R6 nor stay paged while they are). Low RAM: readable / runnable in any bank.
+; Clobbers: A, BC, DE, HL.   ~60 T an entry
+;------------------------------------------------------------------------------
+vb_far:         ld   hl, TX_DEC
+.l:             ld   e, (hl)
+                inc  hl
+                ld   d, (hl)
+                inc  hl
+                ld   a, d
+                or   e
+                ret  z
+                ldi
+                jr   .l
+NM3_VAR:        DB   0                         ; NEW-MON3 T9: row 31's variant this level, 0 = Fire Imp (A), 1 = Frost
+                                               ; Wraith (B); lp_hdr0 writes it (tx_ptr, nm3_apply, tests read it)
+
 fdesc_tab:
 FRM_EMIT = FRM_DESC
                 INCLUDE "frames.asm"

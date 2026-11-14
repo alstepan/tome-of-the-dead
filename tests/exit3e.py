@@ -41,7 +41,8 @@ HX = 9
 HY = stand_y(1, 6)
 NOWHERE = 7
 STUB = S["LOWRAM_END_3B"]
-RES = STUB + 200
+SCR = S["GEN_SRC"] + 0x2C0   # play-free scratch: STUB+80.. now overlaps the cold block / gen_idles / start_game
+RES = SCR + 200
 I = lambda n: S["IT_" + n]                     # noqa: E731,E741
 STF, ST1 = S["ST_FLAGS"], S["ST_T1"]
 FL, FLS = S["FLOOR_LIST"], S["FL_STRIDE"]
@@ -261,11 +262,11 @@ def run(h, p, check):
 
     # UB2: every book read plays SFX_LEVELUP (learn, rank-up and tome); a scroll read does not.
     # sfx_req's entry is patched to log each id (tests/sfx5b.py install_log; own log area, the stubs use STUB..+120).
-    LOGB = STUB + 120
+    LOGB = SCR + 120
     base = S["sfx_req"]
-    p.wmem(STUB + 160, [0xE5, 0xF5, 0x2A] + w16(LOGB) + [0x77, 0x23, 0x22] + w16(LOGB) + [0xF1, 0xE1,
+    p.wmem(SCR + 160, [0xE5, 0xF5, 0x2A] + w16(LOGB) + [0x77, 0x23, 0x22] + w16(LOGB) + [0xF1, 0xE1,
            0xF5, 0xC5, 0x47, 0xC3] + w16(base + 3))
-    p.wmem(base, [0xC3] + w16(STUB + 160))
+    p.wmem(base, [0xC3] + w16(SCR + 160))
 
     def sfx_read(arank, item):
         setbag([item])

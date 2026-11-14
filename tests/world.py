@@ -229,6 +229,10 @@ def map_structure(p, r):
 # entry, not wired into play yet), or only far3 build_room_map (T-states).
 # ---------------------------------------------------------------------------
 STUB_ORG = S["LOWRAM_END_3B"]
+# NEW-MON3 T9: the low-RAM cold block grew down (43 B left above LOWRAM_END_3B): data buffers that sat at
+# STUB + 0x100.. (start_game / level_enter now) move to the play-free generator mirror (GEN_SRC + 0x2C0 .. TX_DEC)
+WDATA = S["GEN_SRC"] + 0x2C0
+assert WDATA + 0x80 <= S["TX_DEC"] and WDATA >= S["PAGE_SCR_END"] + 0x40
 
 
 def w16(v):
@@ -779,8 +783,8 @@ def w15(p, check):
 
     # --- costs: whole log item (scroll + 32 chars), print6 per char ----------
     long32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
-    p.z.cmd("write-memory %d %s" % (STUB + 0x100, " ".join(str(ord(c)) for c in long32 + "\0")))
-    MSG["long"] = STUB + 0x100
+    p.z.cmd("write-memory %d %s" % (WDATA, " ".join(str(ord(c)) for c in long32 + "\0")))
+    MSG["long"] = WDATA
     push("long")
     t_whole = step(0)
     check("W15 32-char line drawn whole", log_row(p.composed_frame(), 23) == text6(long32), "")
@@ -802,20 +806,20 @@ def w15(p, check):
     # odd-length tails and an x > 0 start: exact bytes, neighbours untouched
     for n, x in ((1, 8), (2, 16), (3, 0), (5, 40), (7, 64)):
         txt = long32[:n]
-        p.z.cmd("write-memory %d %s" % (STUB + 0x140, " ".join(str(ord(c)) for c in txt + "\0")))
+        p.z.cmd("write-memory %d %s" % (WDATA + 0x40, " ".join(str(ord(c)) for c in txt + "\0")))
         clear23()
         # sentinel ink on row 23 after the run's last byte
         nb = (6 * n + 7) // 8
         sent = row23 + x // 8 + nb
         for ln in range(8):
             p.wb(sent + ln * 256, 0xA5)
-        ex = stub([0x21] + w(STUB + 0x140) + [0x06, 23, 0x1E, x, 0xCD] + w(S["print6"],) + [0x7B, 0x32] + w(STUB + 0x13F),
+        ex = stub([0x21] + w(WDATA + 0x40) + [0x06, 23, 0x1E, x, 0xCD] + w(S["print6"],) + [0x7B, 0x32] + w(WDATA + 0x3F),
                   f"print6 tail {n}")
         got = log_row(p.composed_frame(), 23)
         want = text6(txt, x)
         ok = all(got[ln][:x // 8 + nb] == want[ln][:x // 8 + nb] and got[ln][x // 8 + nb] == 0xA5 for ln in range(8))
         check(f"W15 print6 {n} chars at x {x}: exact bytes, next byte untouched, E out = x + 6n",
-              ok and p.rb(STUB + 0x13F) == x + 6 * n, (n, x, p.rb(STUB + 0x13F)))
+              ok and p.rb(WDATA + 0x3F) == x + 6 * n, (n, x, p.rb(WDATA + 0x3F)))
     clear23()
     p.tick(2)
     print(f"[info] W15 measured (contended, ZEsarUX): whole log item scroll + 32 chars {t_whole} T;"
@@ -851,7 +855,7 @@ def w18(p, check):
     SH, RES = S["PORT_7FFD_SHADOW"], S["MSG_BUF"]
     T = S["ui1_end"]                      # free bank-1 RAM at runtime (C3-0: ui1 empty)
     RET = T + 0x80                        # a lone RET: the nested far1's target
-    DATA = STUB + 0x100
+    DATA = WDATA
     SID = 0
     tgt = ([0x32] + w(RES) +                                       # ld (RES+0),a: the arg
            [0x3A] + w(SH) + [0x32] + w(RES + 1) +                  # bank inside the target

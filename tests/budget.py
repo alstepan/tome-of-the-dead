@@ -245,7 +245,7 @@ GATED = ("mix", "mage", "blair", "wroom", "wroom4", "lw24s", "lwalk4b")   # ADAP
 # reported like lwalk / lwalk4: 5 bodies walking in step (the monsters start with the hero, as on main) push some pure
 # render ticks past 2 frames (rwalk was 155.6k real on main too, perf_survey M2)   # C+TUT0: rwalk gated (real <= BUDGET); lwalk / lwalk4 reported measurements
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4", "lmix", "lmixw", "lmix4", "lhurt", "lhurt4")   # lwalk4: a measurement, not gated (see SCENARIOS)
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4", "lmix", "lmixw", "lmix4", "lhurt", "lhurt4", "imp3")   # lwalk4: a measurement, not gated (see SCENARIOS)
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -661,6 +661,13 @@ SCENARIOS = {
         (3, 20, stand_y(1, 6), HOSTILE),
         (1, 24, stand_y(1, 6), HOSTILE),
         (4, 27, stand_y(1, 6), HOSTILE)], [("FIRE", 12), ("WAIT", 2)], K_KNIGHT, None, "lmix4"),
+    # NEW-MON3 T9: "imp3" = 3 Fire Imps (row 31 variant A, KF_BAT erratic flyers, 2-high) flying at their cruise row
+    # (9 s + 1) in one room of a REAL D4 (the D4 list pools the Imp: lmix4's boot), the knight fighting / walking
+    # under them (KEYS). CAP-gated (work <= CAP, real <= BUDGET), like ghost3.
+    "imp3": ("knight (real D4 level) + 3 Fire Imps flying in the room", [
+        (5, 16, 10, HOSTILE),
+        (3, 20, 10, HOSTILE),
+        (1, 24, 10, HOSTILE)], KEYS, K_KNIGHT, None, "imp3"),
     # C-H (user 2026-11-10, policy hybrid+h): the hurt frames are STA|MIR too. "lhurt" = the worst hurt tick: the
     # hero (knight) and 4 Skeletons (the widest resident kind with a hurt frame, 32x48) all facing LEFT and held
     # in KS_HURT every tick (lmix_hook with LMIX_KS = KS_HURT, the hero included). "lhurt4" = the same on the
@@ -1385,7 +1392,7 @@ def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     LMIX_DRAWN = None
     p = game.T(h)
-    real4 = len(scen) > 5 and scen[5] in ("lmix4", "lhurt4", "lwalk4", "lwalk4b")
+    real4 = len(scen) > 5 and scen[5] in ("lmix4", "lhurt4", "lwalk4", "lwalk4b", "imp3")
     LMIX_KS = S["KS_HURT"] if len(scen) > 5 and scen[5] in ("lhurt", "lhurt4") else S["KS_ATTACK"]
     if real4:                                     # C-F1: a real generated D4, not the PROTO fixture
         p.proto_start = 0
@@ -1485,7 +1492,14 @@ def run_scenario(h, scen):
             TICK_HOOKS.append(lmix_hook)
     elif lmix_hook in TICK_HOOKS and not real4:
         TICK_HOOKS.remove(lmix_hook)
-    if real4:                                     # the real kinds, standing on their own floor rows
+    if real4 and scen[5] == "imp3":               # NEW-MON3 T9: the D4 alias row = the Fire Imp
+        assert p.rb("NM3_VAR") == 0 and p.rb(S["kind_tab"] + S["KT_FLAGS"] + S["K_ALIAS"]) & S["KF_FLYER"]
+        for slot, x, y, _ in placements:
+            p.set_ent(slot, KIND=S["K_ALIAS"], Y=y, PY=y * 8, HP=60, MAXHP=60)
+            p.wb(S["P_ENTITIES"] + slot * S["P_ENT_STRIDE"] + S["E_GOLD"], 0)
+        p.set_ent(0, HP=250, MAXHP=250)
+        p.wb("BLIT_MISS", 0)
+    elif real4:                                   # the real kinds, standing on their own floor rows
         LMIX_DRAWN = None if scen[5] in ("lwalk4", "lwalk4b") else set()
         for slot, kn in zip(LMIX_SLOTS, ("K_OGRE", "K_ORC", "K_ORC", "K_ORC")):
             yy = stand_y(1, p.rb(S["kind_tab"] + S["KT_BH"] + S[kn]))
@@ -1963,7 +1977,7 @@ def Proto_cls():
 
 
 ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk,lw24,lw24g,lw24s,lwalk4b,tut0")
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk,lw24,lw24g,lw24s,lwalk4b,imp3,tut0")
 
 
 def swing_pass(keys):

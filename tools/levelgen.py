@@ -103,6 +103,10 @@ KROWS = {
     "K_ORC_BOUNCER": (27, 24, 3, False, 5, "K_ORC",    3),
     "K_SNIPER":     (28, 10, 3, False, 6, "K_ARCHER",  2),
     "K_BONE_CALLER": (29, 14, 3, False, 6, "K_NECRO",  2),
+    # NEW-MON3 (new_monsters.md §4): 30 Gargoyle; 31 = the A-1 alias row: the Fire Imp as assembled (hp 5),
+    # the Frost Wraith (hp 13) on the NM3_B_DEPTHS depths (k3_hp resolves it by depth; body / flyer / weight shared)
+    "K_GARGOYLE":   (30,  9, 3, True,  3, None,        1),
+    "K_ALIAS":      (31,  5, 3, True,  3, None,        1),
 }
 # boss per depth (§8.6): (row key, golden). Golden = base row + LEK_GOLD (§9.7 R1)
 BOSS3 = {1: ("K_GOBLIN", True), 2: ("K_SPIDER", True), 3: ("K_VAMPIRE", True),
@@ -113,8 +117,8 @@ LEK_BRED = 0x40
 LEK_RESPAWN = 0x80
 LEK_ROW_MASK = 0x1F
 # §9.6 tier roll constants
-T2_BASE = (None, 24, 48, 64, 72, 80, 88, 96, 96)             # index = depth
-T3_BASE = (None, 0, 0, 0, 16, 24, 32, 40, 48)
+T2_BASE = (None, 24, 48, 64, 72, 80, 88, 144, 144)           # index = depth (NEW-MON3 T9: D7 / D8 tuned preset)
+T3_BASE = (None, 0, 0, 0, 16, 24, 32, 72, 80)
 TIER3_MIN_DEPTH, TIER_SHIFT2, TIER_SHIFT3, TIER_DELTA_MAX, T2_CAP, T3_CAP = 4, 16, 8, 2, 160, 80
 # 3F-T3: the Z80 ids are authoritative (src/defs.asm K_*); this table must agree with them
 # (checked below once defs.asm is parsed).
@@ -690,14 +694,23 @@ def _x2(*k4):
     return tuple(k4) + tuple(k4)
 
 
+# NEW-MON3 T9: the new_monsters.md §5 lists (slots 0..n-1 distinct, fallback order; n..7 duplicates = weight),
+# weights = the tuned preset tools/balance_nm3.json (user 2026-11-13). K_ALIAS = Imp on D4 / D6, Wraith D5 / D7 / D8.
 LP_TAB = {1: (_x2("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 13),
           2: (_x2("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 14),
-          3: (_x2("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT"), "K_BOSS_D3", 14),
-          4: (_x2("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER"), "K_BOSS_D4", 15),
-          5: (_x2("K_MUMMY", "K_SKELETON", "K_ARCHER", "K_SPIDER"), "K_BOSS_D5", 16),
-          6: (_x2("K_VAMPIRE", "K_GHOST", "K_NECRO", "K_ORC"), "K_BOSS_D6", 15),
-          7: (_x2("K_ORC", "K_NECRO", "K_GHOST", "K_NECRO"), "K_BOSS_D7", 15),   # 3F-T13bc H1: no Archer on D7
-          8: (_x2("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE"), "K_BOSS_D8", 12)}
+          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT", "K_GOBLIN", "K_GHOST", "K_VAMPIRE", "K_GHOST"), "K_BOSS_D3", 14),
+          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER", "K_ALIAS", "K_ORC", "K_ARCHER", "K_RAT"), "K_BOSS_D4", 15),
+          5: (("K_MUMMY", "K_SPIDER", "K_SKELETON", "K_ARCHER", "K_GARGOYLE", "K_ALIAS", "K_MUMMY", "K_ARCHER"), "K_BOSS_D5", 16),
+          6: (("K_VAMPIRE", "K_GARGOYLE", "K_ALIAS", "K_GHOST", "K_NECRO", "K_ORC", "K_VAMPIRE", "K_ORC"), "K_BOSS_D6", 15),
+          7: (("K_ORC", "K_GHOST", "K_NECRO", "K_ALIAS", "K_MUMMY", "K_SPIDER", "K_NECRO", "K_NECRO"), "K_BOSS_D7", 15),
+          8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE", "K_ORC", "K_ALIAS", "K_NECRO", "K_NECRO"), "K_BOSS_D8", 12)}
+NM3_B_DEPTHS = D["NM3_B_DEPTHS"]          # bit d-1: row 31 is the Frost Wraith on depth d (defs.asm)
+NM3_WR_HP = D["NM3_WR_HP"]
+
+
+def nm3_variant(depth):
+    """A-1: 1 = row 31 is the Frost Wraith (variant B) on this depth, 0 = the Fire Imp (A)."""
+    return (NM3_B_DEPTHS >> (depth - 1)) & 1 if depth >= 1 else 0
 # kind_tab mirror (main.asm KROW KT_BW / KT_HP / KF_FLYER; tests/lp.py checks
 # it against the build): kind -> (body width, hp, flyer)
 KINFO = {"K_SKELETON": (3, 10, False), "K_GOBLIN": (3, 6, False), "K_GHOST": (3, 8, True),
@@ -710,7 +723,8 @@ KINFO = {"K_SKELETON": (3, 10, False), "K_GOBLIN": (3, 6, False), "K_GHOST": (3,
          "K_GIANT_RAT": (4, 5, False), "K_RABBIT_RAT": (4, 8, False), "K_SCREECH": (3, 5, True),
          "K_SLINGER": (3, 8, False), "K_BLACK_WIDOW": (4, 10, False), "K_SKEL_GUARD": (3, 14, False),
          "K_SKEL_KNIGHT": (3, 18, False), "K_POLTERGEIST": (3, 11, True), "K_ORC_BERSERK": (3, 18, False),
-         "K_ORC_BOUNCER": (3, 24, False), "K_SNIPER": (3, 10, False), "K_BONE_CALLER": (3, 14, False)}
+         "K_ORC_BOUNCER": (3, 24, False), "K_SNIPER": (3, 10, False), "K_BONE_CALLER": (3, 14, False),
+         "K_GARGOYLE": (3, 9, True), "K_ALIAS": (3, 5, True)}       # NEW-MON3: row 31 as assembled (the Imp)
 
 # 3F-T13bc: the climbing kinds (main.asm KT_FLAGS KF_CLIMBER; tests/lp.py A0 checks it against
 # the build). The LP model does not move monsters, so nothing here reads it yet (the AI / ladder
@@ -800,7 +814,8 @@ def k3_info(kb):
 
 def k3_hp(kb, depth):
     """Spawn hp: row hp + (depth - 1) (§9.1); golden = 2 x scaled + 6 (§9.7 R1)."""
-    hp = KROWS[K3_BY_ID[kb & LEK_ROW_MASK]][1] + depth - 1
+    row = kb & LEK_ROW_MASK
+    hp = (NM3_WR_HP if row == KROWS["K_ALIAS"][0] and nm3_variant(depth) else KROWS[K3_BY_ID[row]][1]) + depth - 1
     return 2 * hp + 6 if kb & LEK_GOLD else hp
 
 

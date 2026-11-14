@@ -272,9 +272,63 @@ def test_features(D):
     check("tome arrows free", g.stats.get("tome_aura") == 0, str(g.stats))
 
 
+def test_nm3(D0):
+    """SIM1 (NEWMON3 flag): default off = 4-slot lists / no ember path; on = 8-slot lists, perch wake, ember, Wraith freeze, charm."""
+    check("nm3 default off", not D0.nm3 and all(len(v) == 4 for v in D0.lp.values()))
+    D = B.Data({"param": {"NEWMON3": 1}})
+    check("nm3 lists 8 slots", all(len(v) == 8 for v in D.lp.values()))
+    check("nm3 alias disjoint", all(not ({D.kid["FIRE_IMP"]} & set(D.lp[d]) and {D.kid["FROST_WRAITH"]} & set(D.lp[d])) for d in D.lp))
+    check("nm3 imp D4/D6, wraith D5/D7/D8", [d for d in D.lp if D.kid["FIRE_IMP"] in D.lp[d]] == [4, 6]
+          and [d for d in D.lp if D.kid["FROST_WRAITH"] in D.lp[d]] == [5, 7, 8])
+    g = new_game(D, "W")
+    g.depth = 5
+    ga = B.Mon(D, D.kid["GARGOYLE"], 5)
+    ga.x = 6
+    g.turns = 1
+    g.monster_turn(ga, [ga], [ga])
+    check("perch waits at x 6", not ga.awake and ga.x == 6)
+    ga.x = 3
+    g.monster_turn(ga, [ga], [ga])
+    check("perch wakes at x 3, spends the turn", ga.awake and ga.x == 3)
+    gb = B.Mon(D, D.kid["GARGOYLE"], 5)
+    gb.x = 9
+    gb.hp -= 1
+    g.monster_turn(gb, [gb], [gb])
+    check("damage wakes", gb.awake)
+    g = new_game(D, "W")
+    g.depth = 4
+    im = B.Mon(D, D.kid["FIRE_IMP"], 4)
+    im.x = 4
+    hp = g.h.hp
+    g.monster_turn(im, [im], [im])
+    check("imp ember 2..5 auto-hit, cooldown", 2 <= hp - g.h.hp <= 5 and im.cd == D.params["IMP_COOL"], str((hp - g.h.hp, im.cd)))
+    g = new_game(D, "W")
+    g.depth = 5
+    g.h.hp = g.h.maxhp = 999
+    g.D.params["WRAITH_FRZ_N"] = 1
+    wr = B.Mon(D, D.kid["FROST_WRAITH"], 5)
+    wr.x = 1
+    wr.atk = 99
+    g.mon_melee(wr, 1)
+    check("wraith freeze 2 on a landed touch", g.h.hold == 2 and g.h.holdkind == "frozen", str(g.h.hold))
+    g.h.hold = 0
+    g.h.res[B.COLD] = 2
+    hp = g.h.hp
+    g.mon_melee(wr, 1)
+    check("cold I: no damage, no freeze", g.h.hold == 0 and g.h.hp == hp)
+    g = new_game(D, "M")
+    g.h.charm = True
+    g.depth = 5
+    g.recalc()
+    check("frost charm COLD R on Wraith depth", g.h.res[B.COLD] == 1)
+    g.depth = 6
+    g.recalc()
+    check("frost charm not worn on D6", g.h.res[B.COLD] == 0)
+
+
 def main():
     D = B.Data()
-    for t in (test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
+    for t in (test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
         t(D)
     test_monotone()
     if FAILS:
