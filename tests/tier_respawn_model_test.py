@@ -24,7 +24,8 @@ check(G.tier_odds(1, 1) == (24, 0), "D1 LVL1 = base, no tier 3")
 check(G.tier_odds(4, 4) == (72, 16), "D4 LVL4 = bases")
 check(G.tier_odds(4, 6) == (104, 32) and G.tier_odds(4, 9) == (104, 32), "delta clamps at +2")
 check(G.tier_odds(4, 2) == (40, 0) and G.tier_odds(4, 0) == (40, 0), "delta clamps at -2; T3 floors at 0")
-check(G.tier_odds(8, 10) == (128, 64), "D8 +2")
+check(G.tier_odds(8, 10) == (160, 80), "D8 +2 (NEW-MON3 T9: bases 144 / 80 -> both caps)")
+check(G.tier_odds(7, 7) == (144, 72) and G.tier_odds(7, 5) == (112, 56), "D7 bases / -2 (NEW-MON3 T9 preset)")
 check(G.tier_odds(1, -1) == (0, 0), "T2 floors at 0")
 check(all(G.tier_odds(d, l)[1] == 0 for d in (1, 2, 3) for l in range(1, 12)), "no tier 3 below D4")
 check(all(G.tier_odds(d, l)[0] <= G.T2_CAP and G.tier_odds(d, l)[1] <= G.T3_CAP
@@ -58,8 +59,8 @@ for d, l in ((2, 2), (4, 4), (7, 9), (8, 1)):          # exact distribution over
     else:
         check(cnt.get("K_ORC_BOUNCER", 0) == b and cnt.get("K_ORC_BERSERK", 0) == min(256 - b, a),
               f"D{d} L{l} counts")
-check(len(G.K3_BY_ID) == len(G.KROWS) == 27 and len(G.TIERS) == 9, "15 monster rows + 12 tiers")
-check(sorted(G.K3_BY_ID) == list(range(3, 30)), "provisional ids unique, 3..29")
+check(len(G.K3_BY_ID) == len(G.KROWS) == 29 and len(G.TIERS) == 9, "17 monster rows (NEW-MON3: Gargoyle, alias 31) + 12 tiers")
+check(sorted(G.K3_BY_ID) == list(range(3, 32)), "ids unique, 3..31")
 check(G.k3_weight(G.KROWS["K_SLINGER"][0]) == 4 and G.k3_weight(G.KROWS["K_GOBLIN"][0]) == 3, "Slinger weight 3+1")
 
 
@@ -88,9 +89,9 @@ for depth in (5, 6, 7, 8):
                         if kb == G.k3_boss(depth):
                             check(hp == G.k3_hp(kb, depth), "boss hp")
                         else:
-                            check(kb & G.LEK_GOLD == 0 and kb < 18, "escort: base tier, never golden")
+                            check(kb & G.LEK_GOLD == 0 and G.KROWS[G.K3_BY_ID[kb]][5] is None, "escort: base tier, never golden")
                     else:
-                        tiered[lvl] += kb >= 18
+                        tiered[lvl] += G.KROWS[G.K3_BY_ID[kb]][5] is not None
                         check(kb & ~G.LEK_ROW_MASK == 0, "no flags on a plain resident")
 check(tiered[10] > tiered[1] * 1.5, f"high LVL spawns more tiers ({tiered})")
 check(tiered[1] > 0, "tiers appear at LVL 1 on D5+")

@@ -575,7 +575,37 @@ def full(dmax=8):
     return 1 if report(st, tot, fails) else 0
 
 
+NM3_N = {1: 4, 2: 4, 3: 5, 4: 5, 5: 6, 6: 6, 7: 6, 8: 6}     # new_monsters.md §12 curve (kinds per depth, + boss)
+
+
+def check_lists():
+    """NEW-MON3 T9 (new_monsters.md §3 / §5 / §12): every LP_TAB row = n distinct kinds in slots 0..n-1 (gen_fit's
+    fallback order), slots n..7 duplicates of them; n = the curve; the A-1 alias row 31 is the Fire Imp only on
+    D4 / D6 and the Frost Wraith only on D5 / D7 / D8 (the two never share a depth); every listed kind has a
+    §9.3 weight; D7's minW (Spider 2) keeps LP_SIGMA_INIT's cap rule (lost units: the run's 'lost' count)."""
+    v = []
+    imp, wr = set(), set()
+    for d, (kinds, _boss, _n) in G.LP_TAB.items():
+        n = NM3_N[d]
+        if len(kinds) != 8 or len(set(kinds[:n])) != n or set(kinds[n:]) - set(kinds[:n]):
+            v.append(f"lists: D{d} slots {kinds} are not {n} distinct + duplicates")
+        if "K_ALIAS" in kinds:
+            (wr if G.nm3_variant(d) else imp).add(d)
+    if imp != {4, 6} or wr != {5, 7, 8} or imp & wr:
+        v.append(f"lists: alias depths Imp {sorted(imp)} / Wraith {sorted(wr)} (want D4 D6 / D5 D7 D8, disjoint)")
+    m7 = min(G.KROWS[k][4] for k in G.LP_TAB[7][0])
+    if m7 != 2 or D["ROOM_MAX"] * m7 > D["LP_SIGMA_CAP"]:
+        v.append(f"lists: D7 minW {m7} (Spider 2 expected) vs LP_SIGMA_CAP")
+    for f in v:
+        print("FAIL", f)
+    if not v:
+        print("lists: D1-D8 slot rule, curve 4/4/5/5/6/6/6/6, alias Imp D4 D6 / Wraith D5 D7 D8: pass")
+    return 1 if v else 0
+
+
 def run(nseeds=1000, dmax=8):
+    if check_lists():
+        return 1
     st = new_stats()
     fails = []
     tot = 0

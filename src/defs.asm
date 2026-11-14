@@ -397,6 +397,8 @@ FRT             EQU (P_ENTITIES - FRT_MAX * FRT_STRIDE) & $FF00   ; page-aligned
                                     ; ENTITIES; seq_rows sits directly below it (main.asm)
 FRT_GAP         EQU P_ENTITIES - (FRT + FRT_MAX * FRT_STRIDE)   ; free bank-2 RAM between the FRT and
                                     ; ENTITIES (NEW-MON3 T7: 112; MEM-FT: 0; 3F-T13bc 192 held seq_rows, now below FRT)
+SEQH_BYTES      EQU FRT + FRT_MAX * FRT_STRIDE   ; NEW-MON3 T9: the hero's sequence block (sq_reset, <= 49 of FRT_GAP;
+                                    ; ASSERTed main.asm "SEQ CACHE NEED"); runtime only, rewritten at every pool session
 BANK2_FREE      EQU $B200           ; A6: vacated old FRT ($B200..$B7FF, 1,536 B):
 BANK2_FREE_END  EQU SLOTREC         ;     free bank-2 runtime RAM (docs/memory-map.md)
 SLOTREC         EQU $B800           ; A7b: per-slot render record, 16 B per slot ($B800..$B8FF,
@@ -963,6 +965,8 @@ NM3_IMP_BONUS   EQU 0
 NM3_IMP_BH      EQU BH_K_ALIAS
 NM3_IMP_FLAGS   EQU KF_FLYER | KF_BAT
 NM3_IMP_ATTR    EQU $06             ; amber (new_monsters.md §6.2)
+NM3_B_DEPTHS    EQU %11010000          ; NEW-MON3 T9 (§5): bit d-1 set = row 31 is the Frost Wraith (variant B) on depth d:
+                                       ; D5 / D7 / D8; clear = the Fire Imp (A, as assembled; D4 / D6 list it). lp_hdr0 / the build sims
 NM3_WR_HP       EQU 13
 NM3_WR_ATK      EQU 3
 NM3_WR_EVA      EQU 2
@@ -1061,9 +1065,10 @@ KS_STRIDE       EQU 17
 ; monster blocks into slots 1.. at each level entry, then writes kind_tab
 ; KT_SEQ (the row's low byte) for every kind. Rows: SEQ_ROWS (bank 2, one
 ; page), KS_STRIDE each; the sequence bytes they point to: SEQ_BYTES.
-SQ_SLOTS        EQU 7               ; hero + <= 6 monster blocks (PROTO: all 6 original kinds)
+SQ_SLOTS        EQU 9               ; hero + <= 8 monster blocks (NEW-MON3 T9: D8 = 8; was 7)
 SQ_ROWS_LEN     EQU SQ_SLOTS * KS_STRIDE
-SEQB_LEN        EQU 256             ; SEQ_BYTES: >= hero + the level's blocks (ASSERTed per depth). 3F-T13bc: 256 -> 288;
+SEQB_LEN        EQU 256             ; SEQ_BYTES: >= the level's monster blocks (ASSERTed per depth; NEW-MON3 T9: the hero's
+                                    ; block moved to SEQH_BYTES = FRT_GAP, D8 needs 256). 3F-T13bc: 256 -> 288;
                                     ; D3-11 review: back to 256 (+32 B bank 2): the need is 253 (the PROTO
                                     ; fixture's 6 kinds; the worst real level D8 245), ASSERTed below seq_rows
 ; master block (the unpacked image at SQ_IMG): KSM_LEN (sequence bytes n),

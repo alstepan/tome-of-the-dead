@@ -1,6 +1,8 @@
 ;==============================================================================
 ; nm3var0.asm — NEW-MON3 T8: the row-31 ALIAS table (new_monsters.md §3). DATA ONLY (bank-0 B0_CODE2, read with
-; BANK_TEXT paged); the A-1 patch that applies it is T9.
+; BANK_TEXT paged). T9 applies it: lp_hdr0 (nm3_b0.asm) the b2 / b3 / r6 groups once a level through nm3_apply
+; (staged in TX_DEC, written by low-RAM vb_far under farb with the target bank paged), pool_list's FARB0 nm3_img0
+; the img group; the variant (NM3_VAR, low RAM) = bit d-1 of NM3_B_DEPTHS.
 ;
 ; Kind id 31 (K_ALIAS) is the Fire Imp as ASSEMBLED (variant A: D4 / D6) and the Frost Wraith (variant B: D5 / D7 / D8),
 ; chosen per level; the two never share a depth, and descent discards every monster, so a level only ever holds one.
@@ -12,8 +14,8 @@
 ;   nm3_var_r6   bank 6 R6: gu_tab row 31 (fid0, fcnt), drop_tab row `drop_imp` (kind byte: K_ALIAS | 0 = no drop)
 ;   nm3_var_img  the sequence masters' ksm_tab word of row 31 (ksm_ia | ksm_wr): an address of the UNPACKED image (SQ_IMG,
 ;                rewritten by every pool_* unpack): patch it after pl_begin's unpack, not before
-; Not here (code, T9): the name (TX_NM_KNIGHT + 31 = "FIRE IMP"; the Wraith's is TX_NM_FIRE_IMP + 1 = "ICE SHADE") and the
-; weight (3 for both: lp_wt row 31 does not change). Row 31's KT_BW (3) / lp_wt / KT_SEQ are the same for both.
+; Not here (code, T9): the name (TX_NM_KNIGHT + 31 = "FIRE IMP"; the Wraith's is TX_NM_FIRE_IMP + 1: low-RAM tx_ptr adds
+; NM3_VAR to that one id) and the weight (3 for both: lp_wt row 31 does not change). Row 31's KT_BW (3) / lp_wt / KT_SEQ are the same for both.
 ; tests/combat_tables.py checks every A byte against the assembled row and every B byte against the §4 spec.
 ;==============================================================================
     MACRO VB dst, val_a, val_b

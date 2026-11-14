@@ -100,6 +100,8 @@ pool_list:
                 ; (3F-T13's PROTO-limit guard is gone, D3-11: the PROTO fixture puts the
                 ; bank-6 limit back itself after its pool session, proto_fix.asm)
                 call pl_begin
+                FARB0 nm3_img0                 ; NEW-MON3 T9 A-1: ksm_tab row 31 := the level's variant (after
+                                               ; the unpack, before pl_kinds' sq_load / sq_fill)
                 ld   de, LP_KINDS
                 ld   b, LP_GEN_N
                 ; fall through

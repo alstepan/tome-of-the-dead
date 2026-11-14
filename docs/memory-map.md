@@ -470,6 +470,10 @@ in R6** and a **per-level cache in bank 2** (was: every kind's 17-B
   "OVERLAYS" DISPed at **`SQ_IMG` `$6980`** → `build/ovl/seq.bin` (437 B
   raw) → ZX0 → R6 **`sqm_zx0`** (280 B). The macros / role EQUs stay in
   data.asm.
+* **NEW-MON3 T9 (current):** `SQ_SLOTS` **9** (hero + ≤ 8 monster blocks: D8 lists 8), `seq_rows` 153 B at
+  `FRT` − 153 = `$A567`; the hero's block lives at **`SEQH_BYTES`** (= the `FRT_GAP` start `$AF90`, ≤ 49 of 112 B,
+  `sq_reset`), `seq_bytes` (256) holds the level's monster blocks only (D8 256 of 256; ASSERT `SQ_HERO <= FRT_GAP`).
+  Row 31's block is the variant's (`nm3_img0` patches `ksm_tab` after `pl_begin`'s unpack). "NEW-MON3 T9 ledger".
 * **Cache** (bank 2): **`seq_rows`** (`SQ_SLOTS` 7 × `KS_STRIDE` 17 = 119 B,
   one page, in the `kind_tab` ALIGN pad right below `tile_flags`; zeros in
   the image) — slot 0 = the hero, 1..6 = the level's monster blocks (PROTO:
@@ -6851,3 +6855,54 @@ tools/items_model_test.py pool sizes updated, balance_sim `Frost Charm` gear row
 | `B0_CODE2` used / free | 2,960 / 5,448 | **3,986 / 4,390** | SRC0 914 + `nm3_var` ~112 (carve 8,376) |
 | pool need / slack, `LEVEL_NEED`, D0 pool | | unchanged | nothing spawns the new kinds yet |
 
+## NEW-MON3 T9 ledger (`feat/newmon3-t9`, on main `b2ebd9a` + `sim/newmon3`, 2026-11-14; new_monsters.md §3 / §5 / §12, "Decisions 2026-11-13")
+
+First build where the new kinds spawn. Balance = the tuned preset `tools/balance_nm3.json` (user 2026-11-13).
+
+**Lists (`lp_dtab`, B0_CODE2; `tools/levelgen.py` LP_TAB mirrors; slots 0..n-1 distinct in fallback order, n..7 duplicates = weight):**
+D1 Rat Bat Slime Goblin x2 · D2 Goblin Spider Bat Rat x2 · D3 Skeleton Vampire Ghost Bat Goblin + Ghost Vampire Ghost ·
+D4 Orc Rat Spider Archer **Imp** + Orc Archer Rat · D5 Mummy Spider Skeleton Archer **Gargoyle** **Wraith** + Mummy Archer ·
+D6 Vampire **Gargoyle** **Imp** Ghost Necro Orc + Vampire Orc · D7 Orc Ghost Necro **Wraith** Mummy Spider + Necro Necro ·
+D8 Necro Skeleton Ghost Vampire Orc **Wraith** + Necro Necro. Bosses / totals unchanged. `tools/levelcheck.py check_lists` asserts the
+slot rule, the 4/4/5/5/6/6/6/6 curve, the alias depths (Imp D4 D6 / Wraith D5 D7 D8, disjoint) and D7 minW 2 (8000-seed run: waits
+13.0 % <= 15 %, lost to the cap 0).
+
+**A-1 alias patch.** `NM3_B_DEPTHS` `%11010000` (defs.asm: bit d-1 = row 31 is the Frost Wraith). `lp_hdr0` (B0_CODE2, once a level, before
+any spawn / pool_list) sets **`NM3_VAR`** (low RAM, 0 = Imp A / 1 = Wraith B; D0 / PROTO 0) and applies `nm3_var_b2` (kind_tab / rk_tab),
+`nm3_var_b3` (kx_tab row 31, bank 3) and `nm3_var_r6` (gu_tab row 31, `drop_imp` kind byte: 0 = the Wraith drops nothing) through
+**`nm3_apply`**: the chosen bytes are staged as (addr, value) in `TX_DEC` (scratch, <= 29 of 43 B, ASSERTed) and written by low-RAM
+**`vb_far`** under `farb` with the target bank paged (bank-0 code never pages `$C000`; nothing writes B0_CODE2 / the text: nm3.py checks).
+R6 `pool_list` does `FARB0 nm3_img0` right after `pl_begin` (the `ksm_tab` word of the unpacked masters, before pl_kinds' sq_load / sq_fill;
+no gen_list in between). The name: low-RAM `tx_ptr` adds `NM3_VAR` to `TX_NM_FIRE_IMP` (all six name paths; +14 T on every other id).
+Every depth writes one variant, so Imp -> Wraith -> Imp across descents and a new game's D1 need no reset. Build sims: `PL_UNIT` / `PS_UNIT`
+map unit `K_ALIAS` -> `U_WRAITH` and `SQ_KIND` row 31 -> `ksm_wr` on B depths (`PL_VB` / `SQ_VB`); `tests/zx0_pool.py`'s reference the same.
+Cost: lp_hdr0 ~2.2k T a level (+ FARB0), nm3_img0 ~0.6k T a level.
+
+**Sequence cache:** 8 monster blocks on D8 -> `SQ_SLOTS` 7 -> **9** (`seq_rows` 153 B at `$A567`); the hero's block moved to **`SEQH_BYTES`**
+(= the `FRT_GAP` start `$AF90`, 49 of 112 B, `sq_reset`) so `seq_bytes` 256 = monsters only (D8 256 / 256, D7 230, D6 216; ASSERT
+`SQ_HERO <= FRT_GAP`). `PL_CAP` 35 unchanged (GEN_SRC 61 of 64 B; the per-depth units ASSERT holds).
+**Funding bank 2:** `msg_kind` / `msg_cat` / `msg_end` -> low-RAM `src/msgl.asm` (cold; bank-7 callers by plain CALL); `msg_dec` / `log_room`
+stay in bank-2 `msg2.asm` (per log event, uncontended: world W17's impact_line cap 5,500 T holds).
+
+**Tier odds (tier6.asm `T2_BASE` / `T3_BASE`, levelgen.py):** D7 / D8 T2 96 -> **144**, T3 40 / 48 -> **72 / 80**; the caps 160 / 80 are now
+reached and applied in `tier_row` (+10 B R6, = levelgen.tier_odds / balance_sim). Wraith freeze 1/4 for 2 turns and Imp cooldown 2 = the T8 data.
+**Trickle retry** (trickle6.asm): the next slot holding a DIFFERENT kind (k + s & 7, s 1..7; none -> k + 1: D0's Goblin x 8);
+`tools/respawn_model.py` mirrors it.
+
+| Region (release) | before (`b2ebd9a`) | after | why |
+|---|---|---|---|
+| `B0_CODE2` used / free | 3,986 / 4,374 | **4,070 / 4,290** | lp_hdr0 variant + group calls, nm3_apply / nm3_img0 (+84); lists same size |
+| R6 free | 1,282 | **1,240** | FARB0 nm3_img0 8, tier caps 10, trickle distinct retry 24 |
+| bank 2 free (to seq_rows + pad) | 24 + 13 = 37 | **14 + 13 = 27** (kit 26, trace 29) | seq_rows +34; msgl out -24 |
+| low-RAM spare | 138 | **79** | msgl 25, vb_far 14, NM3_VAR 1, tx_ptr 10, sq_reset 9 (= the test-stub room above `LOWRAM_END_3B`) |
+| bank 1 / bank 3 / SRC6 / bank 7 low / HOT_COPY free | 7 / 79 / 19 / 74 / 40 | unchanged | |
+| `FRT_GAP` | 112 free | 49 hero seq block + 63 free | |
+| pool `LEVEL_NEED` Warrior D3..D8 | 14,354 15,298 12,546 14,978 14,482 16,418 | **16,274 15,938 14,114 16,450 17,362 19,154** | the §5 lists (Mage D3..D8: 14,706 14,370 12,546 14,850 15,730 17,554; D1 / D2 unchanged) |
+| binding slack (D8 Warrior, `POOL_CAP` 22,594) | 6,176 | **3,440** | >= 1,024: no X = 4,096 re-carve |
+| `.tap` | 90,803 | **90,964** | +161 |
+
+Tests: new `tests/nm3.py` (lists, alias tables / frames / seq row / name / drop per depth, both heroes, D1..D8 then D4 D5 again, a new game
+after dying on D7, the alias spawning on its depths through the real lp_enter); `zx0_pool` rebaselined; `gfx_integrity` seq_check row 31 =
+`ksm_wr` on B depths; `budget` `imp3` (3 Fire Imps flying in a real D4 room, CAP-gated); `tier_respawn_model_test` (caps, ids 3..31);
+`world` W15 / W18 data buffers moved to `GEN_SRC + $2C0` (STUB + `$100` lies in low-RAM code). Known, pre-existing on `b2ebd9a`: world W15's
+direct `log_scroll` stub fails (bank 0 not paged since C-T6 moved it to bank 0) and aborts the rest of a W15 run.

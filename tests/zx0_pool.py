@@ -146,11 +146,13 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # NEW-MON3 T1 (new_monsters.md §12 carve): POOL_START $FC3E -> $EFBE (B0_FREE_RES 11,958 -> 8,756: 3,200 B, the
 # X = 3,072 step moved 128 B down to land 2 B clear of the hero-session straddle cliff; $F03E wasted 194 B):
 # straddle waste 2 for both heroes as before, so every need is unchanged. POOL_CAP 22,594, D8 Warrior slack 6,176.
+# NEW-MON3 T9 (new_monsters.md §5 lists live, A-1 alias: row 31 = U_WRAITH's frames on D5 / D7 / D8): D3-D8 rebaselined
+# (D1 / D2 unchanged). Binding D8 Warrior 19,154 of POOL_CAP 22,594, slack 3,440 (>= 1,024: no X = 4,096 re-carve).
 LEVEL_NEED = {
-    (0, 1): 11826, (0, 2): 11842, (0, 3): 14354, (0, 4): 15298,
-    (0, 5): 12546, (0, 6): 14978, (0, 7): 14482, (0, 8): 16418,
-    (1, 1): 10258, (1, 2): 10242, (1, 3): 12754, (1, 4): 13730,
-    (1, 5): 10978, (1, 6): 13378, (1, 7): 12882, (1, 8): 14818,
+    (0, 1): 11826, (0, 2): 11842, (0, 3): 16274, (0, 4): 15938,
+    (0, 5): 14114, (0, 6): 16450, (0, 7): 17362, (0, 8): 19154,
+    (1, 1): 10258, (1, 2): 10242, (1, 3): 14706, (1, 4): 14370,
+    (1, 5): 12546, (1, 6): 14850, (1, 7): 15730, (1, 8): 17554,
 }
 
 
@@ -741,11 +743,14 @@ class Ref:
                   for u in gm[3 * r + 1:3 * r + 3] if u != 0xFF] or [k]
             us += [xm[3 * r + 2] for r in range(nx)
                    if xm[3 * r] == k and xm[3 * r + 1] == self.hero]
+            if self.vb and k == S.get("K_ALIAS"):       # NEW-MON3 T9 A-1: gu_tab row 31 = U_WRAITH's range
+                us = [S["U_WRAITH"] if u == k else u for u in us]
             out += [u for u in us if u not in out and self.unit(u)[1]]
         return out
 
-    def level(self, lp):
+    def level(self, lp, depth=1):
         S, st = self.S, self.S["FRT_STRIDE"]
+        self.vb = (S.get("NM3_B_DEPTHS", 0) >> (depth - 1)) & 1     # NEW-MON3 T9: row 31 = the Frost Wraith
         self.idx, self.ptr = self.mark                 # alloc_restore
         self.begin(self.hero)                          # 3F-T2 pool_list's pl_begin
         # pl_unit (R6) keeps one range per fid0, the longer count (3F-T9: K_VBAT's 2 Bat frames
@@ -798,7 +803,7 @@ def reference(S, init, out_run, lv=None):
         out["D1"] = r.dump()
         for d in range(2, 9):
             if f"D{d}" in lv:
-                r.level(bytes(lv[f"D{d}"]["LP"]))
+                r.level(bytes(lv[f"D{d}"]["LP"]), d)
                 out[f"D{d}"] = r.dump()
         if "M-D1" in lv:                               # MEM-PS2: the Mage's walk
             r = Ref(S, init, raw)
@@ -807,7 +812,7 @@ def reference(S, init, out_run, lv=None):
             out["M-D1"] = r.dump()
             for d in range(2, 9):
                 if f"M-D{d}" in lv:
-                    r.level(bytes(lv[f"M-D{d}"]["LP"]))
+                    r.level(bytes(lv[f"M-D{d}"]["LP"]), d)
                     out[f"M-D{d}"] = r.dump()
     return out
 

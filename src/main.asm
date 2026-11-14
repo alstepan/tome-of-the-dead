@@ -728,7 +728,7 @@ dn_miss_s:      DB   "MISS", 0, DNA_MISS       ; D3-11 / LVL-FLOATER (dnfix2.asm
                 INCLUDE "boss2a.asm"            ; 3F-T8 og_adv / glow_kat (AMMO-COUNT: after kind_tab, its pad was 6 B)
                 INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
                 ; frt2.asm: NEW-MON3 T1 moved it before kind_tab (into the ALIGN pad the T1 moves freed)
-                INCLUDE "msg2.asm"              ; LOG-FIX: msg_cat / msg_end (from bank 7), log_room, hit_line
+                INCLUDE "msg2.asm"              ; LOG-FIX: msg_dec, log_room (NEW-MON3 T9: msg_cat / msg_end -> low-RAM msgl.asm)
     IF ENDCARD_RK
                 INCLUDE "killer2.asm"           ; ENDCARD-K: dh_killer (deal_hit's hero-death killer, + a reflector)
     ENDIF
@@ -876,10 +876,14 @@ PLN = PLN + PLF_H * 2 * (PLF_C + ((((PLF_L + (PLF_F & FF_PH4)) & 7) != 0) & 1))
       ENDIF
     ENDM
     MACRO PL_UNIT u                            ; PLM / PLX |= unit u (units < 64)
-      IF (u) < 32
-PLM = PLM | (1 << (u))
+PLU_U = (u)
+      IF PLU_U == K_ALIAS && PL_VB             ; NEW-MON3 T9 A-1: gu_tab row 31 = U_WRAITH's range on a B depth
+PLU_U = U_WRAITH
+      ENDIF
+      IF PLU_U < 32
+PLM = PLM | (1 << PLU_U)
       ELSE
-PLX = PLX | (1 << ((u) - 32))
+PLX = PLX | (1 << (PLU_U - 32))
       ENDIF
     ENDM
     MACRO PL_KIND k                            ; kind k's generation units (pool6.asm pl_kinds)
@@ -925,7 +929,7 @@ PLK_FN = {b gu_tab + GU_STRIDE * ((ubase) + plk) + 1}
 ; gen_list replayed variant by variant at build time, in the real session order:
 ;   gen_idles (alloc_reset: POOL_START; knight_idle1, wizard_idle), pool_hero
 ;   (the hero unit, then its class FX unit), alloc_mark; per level alloc_restore
-;   + pool_list (LP_KINDS[0..3] + LP_BOSS = the lp_dtab row: each kind's pool_gmap
+;   + pool_list (LP_KINDS[0..7] + LP_BOSS = the lp_dtab row; K_ALIAS = U_WRAITH on PL_VB depths: each kind's pool_gmap
 ;   records in order, else its own unit, then its pool_xmap extras; a unit whose
 ;   fid0 is listed already is skipped, the listed range takes the longest count:
 ;   pl_unit .same); PROTO: pool_proto after the mark (bank-6 limit R6_ADDR).
@@ -996,8 +1000,12 @@ PSV_IN = ((x) >> ((v) - 32)) & 1
       ENDIF
     ENDM
     MACRO PS_UNIT u                            ; pl_unit u, then gen_list's frames for it
-PSU_F0 = {b gu_tab + GU_STRIDE * (u)}
-PSU_N = {b gu_tab + GU_STRIDE * (u) + 1}
+PSU_U = (u)
+      IF PSU_U == K_ALIAS && PL_VB             ; NEW-MON3 T9 A-1 (as PL_UNIT)
+PSU_U = U_WRAITH
+      ENDIF
+PSU_F0 = {b gu_tab + GU_STRIDE * PSU_U}
+PSU_N = {b gu_tab + GU_STRIDE * PSU_U + 1}
 PSU_GO = PSU_N != 0                            ; 0-frame unit: nothing
       IF PSU_GO
                 DUP  GU_N, psv                 ; listed already (a done unit, same fid0)
@@ -1024,10 +1032,10 @@ PSU_F = PSU_F0
 PSU_F = PSU_F + 1
                 EDUP
       ENDIF
-      IF (u) < 32
-PSD_M = PSD_M | (1 << (u))
+      IF PSU_U < 32
+PSD_M = PSD_M | (1 << PSU_U)
       ELSE
-PSD_X = PSD_X | (1 << ((u) - 32))
+PSD_X = PSD_X | (1 << (PSU_U - 32))
       ENDIF
     ENDM
     MACRO PS_KIND k                            ; pl_kinds for kind k (PL_KIND's walk, in order)
@@ -1073,6 +1081,7 @@ PS_USED = PS_USED + $10000
       ENDIF
     ENDM
 POOL_NEED = 0
+PL_VB = 0                                      ; NEW-MON3 T9: 1 inside a variant-B depth of the level loop
 POOL_LVL_MAX = 0
 POOL_LVL_WORST = 0
 POOL_SIM_PROTO = 0                             ; the worst simulated PROTO top (both heroes, 6 kinds)
@@ -1168,6 +1177,7 @@ PLK5 = {b lp_dtab + pld * LP_DROW + 5}
 PLK6 = {b lp_dtab + pld * LP_DROW + 6}
 PLK7 = {b lp_dtab + pld * LP_DROW + 7}
 PLK8 = {b lp_dtab + pld * LP_DROW + 8} & LEK_KIND_MASK   ; the boss (3F-T5: the golden bit is not part of the kind)
+PL_VB = (NM3_B_DEPTHS >> pld) & 1               ; NEW-MON3 T9: row 31 = the Frost Wraith here (PL_UNIT / PS_UNIT)
                 MMU  3, BANK_R6
 PLM = 0
 PLX = 0
@@ -1228,6 +1238,7 @@ POOL_NEED = PL_MAX
 POOL_LVL_MAX = PL_LVLB
 POOL_LVL_WORST = PL_WORST
       ENDIF
+PL_VB = 0
                 EDUP
                 MMU  3, 0
                 ASSERT LP_DROW == 10 && K_MAX <= 32 && GU_N <= 64
@@ -1415,6 +1426,9 @@ BLOB_LEN        EQU blob_img_end - blob_img
 ;==============================================================================
     MACRO SQ_KIND k                            ; SQN / SQB += kind k's block, once
 SQ_P = {ovl_raw_seq + ksm_tab - SQ_IMG + 2 * (k)}
+      IF ((k) == K_ALIAS) && SQ_VB                ; NEW-MON3 T9: row 31 on a variant-B depth = the Wraith's block
+SQ_P = ksm_wr                                  ; (the A-1 patch writes it into ksm_tab after pl_begin's unpack)
+      ENDIF
                 ASSERT SQ_P != 0                ; every kind of every depth / PROTO has a master block
       IF SQ_P
 SQ_DUP = 0
@@ -1436,6 +1450,12 @@ SQ_DUP = 1
         IF SQ_P == SQ_P5
 SQ_DUP = 1
         ENDIF
+        IF SQ_P == SQ_P6
+SQ_DUP = 1
+        ENDIF
+        IF SQ_P == SQ_P7
+SQ_DUP = 1
+        ENDIF
         IF SQ_DUP == 0
           IF SQN == 0
 SQ_P0 = SQ_P
@@ -1447,8 +1467,12 @@ SQ_P2 = SQ_P
 SQ_P3 = SQ_P
           ELSEIF SQN == 4
 SQ_P4 = SQ_P
-          ELSE
+          ELSEIF SQN == 5
 SQ_P5 = SQ_P
+          ELSEIF SQN == 6
+SQ_P6 = SQ_P
+          ELSE
+SQ_P7 = SQ_P
           ENDIF
 SQN = SQN + 1
 SQB = SQB + {b ovl_raw_seq + SQ_P - SQ_IMG + KSM_LEN}
@@ -1464,6 +1488,8 @@ SQ_P2 = -1
 SQ_P3 = -1
 SQ_P4 = -1
 SQ_P5 = -1
+SQ_P6 = -1
+SQ_P7 = -1
     ENDM
 SQ_HERO = {b ovl_raw_seq + ksm_kn - SQ_IMG + KSM_LEN}
     IF {b ovl_raw_seq + ksm_wz - SQ_IMG + KSM_LEN} > SQ_HERO
@@ -1482,6 +1508,7 @@ SQK5 = {b lp_dtab + sqd * LP_DROW + 5}
 SQK6 = {b lp_dtab + sqd * LP_DROW + 6}
 SQK7 = {b lp_dtab + sqd * LP_DROW + 7}
 SQK8 = {b lp_dtab + sqd * LP_DROW + 8} & LEK_KIND_MASK
+SQ_VB = (NM3_B_DEPTHS >> sqd) & 1               ; NEW-MON3 T9: row 31 = the Frost Wraith on this depth
                 MMU  3, OVL_RAW_BANK            ; C-T8 / TUT0-T1: the raw seq image is in the bank-4 scratch
                 SQ_RESET
                 SQ_KIND SQK0
@@ -1496,7 +1523,7 @@ SQK8 = {b lp_dtab + sqd * LP_DROW + 8} & LEK_KIND_MASK
       IF (SQK0 == K_VAMPIRE) || (SQK1 == K_VAMPIRE) || (SQK2 == K_VAMPIRE) || (SQK3 == K_VAMPIRE) || (SQK4 == K_VAMPIRE) || (SQK5 == K_VAMPIRE) || (SQK6 == K_VAMPIRE) || (SQK7 == K_VAMPIRE) || (SQK8 == K_VAMPIRE)
                 SQ_KIND K_VBAT                  ; 3F-T9: pl_kinds loads the bat form's block with the Vampire's
       ENDIF
-                DISPLAY "GAME sequence cache D", /D, sqd + 1, ": ", /D, SQN, " blocks, ", /D, SQB, " B + hero ", /D, SQ_HERO, " = ", /D, SQB + SQ_HERO, " of ", /D, SEQB_LEN   ; 3F-T13bc
+                DISPLAY "GAME sequence cache D", /D, sqd + 1, ": ", /D, SQN, " blocks, ", /D, SQB, " B of ", /D, SEQB_LEN, " (hero ", /D, SQ_HERO, " in FRT_GAP)"   ; 3F-T13bc / NEW-MON3 T9
       IF SQB > SQ_MAX
 SQ_MAX = SQB
       ENDIF
@@ -1504,6 +1531,7 @@ SQ_MAX = SQB
 SQ_NMAX = SQN
       ENDIF
                 EDUP
+SQ_VB = 0
                 SQ_RESET                       ; the PROTO rooms (pool_proto)
                 DUP  K_PROTO_END - K_SKELETON, sqk
                 SQ_KIND K_SKELETON + sqk
@@ -1514,9 +1542,9 @@ SQ_MAX = SQB
       IF SQN > SQ_NMAX
 SQ_NMAX = SQN
       ENDIF
-SEQB_NEED = SQ_HERO + SQ_MAX
-                ASSERT SQ_NMAX <= SQ_SLOTS - 1 && SEQB_NEED <= SEQB_LEN
-                DISPLAY "GAME sequence cache: ", /D, SQ_SLOTS, " rows (", /D, SQ_ROWS_LEN, " B) + bytes need ", /D, SEQB_NEED, " of SEQB_LEN ", /D, SEQB_LEN, " (hero ", /D, SQ_HERO, " + monsters ", /D, SQ_MAX, ", <= ", /D, SQ_NMAX, " blocks a level)"
+SEQB_NEED = SQ_MAX                             ; NEW-MON3 T9: the hero's block lives in SEQH_BYTES (FRT_GAP)
+                ASSERT SQ_NMAX <= SQ_SLOTS - 1 && SEQB_NEED <= SEQB_LEN && SQ_HERO <= FRT_GAP
+                DISPLAY "GAME sequence cache: ", /D, SQ_SLOTS, " rows (", /D, SQ_ROWS_LEN, " B) + bytes need ", /D, SEQB_NEED, " of SEQB_LEN ", /D, SEQB_LEN, " (monsters; hero ", /D, SQ_HERO, " in FRT_GAP ", /D, FRT_GAP, ", <= ", /D, SQ_NMAX, " blocks a level)"
 
 ;------------------------------------------------------------------------------
 ; tap_loader — 10 CLEAR/BORDER 0, PAPER 0, INK 7/POKE: 15 LOAD "" SCREEN$: 20 LOAD "" CODE: 30 RANDOMIZE USR VAL "<start>"

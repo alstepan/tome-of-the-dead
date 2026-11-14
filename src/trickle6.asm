@@ -153,7 +153,8 @@ trk_sig:        push bc
 ; through gen_step (GEN_RNG = the gameplay stream here, see trk_run):
 ;   5. byte >= RESPAWN_CHANCE -> stop;  6. room = byte mod Σ w walked over TRK_W;
 ;   7. k = byte & 7, tier_row(LP_KINDS[k], the current LVL) (draws only if tiered);
-;   8. Σ + w <= 12 -> 10;  9. once: k + 1 & 7, its tier roll, the cap; fail = stop;
+;   8. Σ + w <= 12 -> 10;  9. once: the next slot k + s & 7 (s = 1..7) of another kind
+;      (NEW-MON3 T9; none: k + 1), its tier roll, the cap; fail = stop;
 ;  10. append {row | LEK_RESPAWN, kind_hp} (the record stays VISITED), LP_RESPAWNS + 1.
 ; Clobbers: all but IY.   ~1.5-2.5k T
 ;------------------------------------------------------------------------------
@@ -202,9 +203,26 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 add  a, c
                 cp   LP_SIGMA_CAP + 1
                 jr   c, .ok
-                inc  e
-                res  3, e                      ; k + 1 & 7
-                dec  d
+                ; NEW-MON3 T9 (review): the retry = the next slot holding a DIFFERENT kind (a duplicate
+                ; slot = a weight, retrying it re-asks the same kind); none (D0: Goblin x 8) -> k + 1
+                ld   h, LP_KINDS >> 8
+                ld   a, e
+                add  a, LP_KINDS & $FF
+                ld   l, a
+                ld   c, (hl)                   ; C = slot k's kind
+                ld   b, 7
+.nd:            inc  e
+                res  3, e                      ; k + s & 7
+                ld   a, e
+                add  a, LP_KINDS & $FF
+                ld   l, a
+                ld   a, (hl)
+                cp   c
+                jr   nz, .rt
+                djnz .nd
+                inc  e                         ; (all one kind: k + 8 + 1 = k + 1)
+                res  3, e
+.rt:            dec  d
                 jr   nz, .k
                 ret                            ; both tries refused: the draws are spent
 .ok:            push hl
