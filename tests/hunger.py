@@ -7,7 +7,8 @@ deal_hit (combat3), h_jump (status7), xp_turn (MP_HOLD).
   N   new game: FOOD 80 (FOOD_START), FED, timers 0, no STS_HWEAK
   B   burn: -1 on every 6th turn exactly; x2 period with the Food / Scarab
       amulet worn; floor at 0 (never negative, no death)
-  J   a jump turn costs FOOD_JUMP 2 extra; WEAK (hunger): no jump, no turn
+  J   a jump turn costs FOOD_JUMP 2 extra; WEAK (hunger): no jump, no turn,
+      "TOO WEAK TO JUMP" once per press (4b)
   S   stages at the thresholds 50 / 25 / 10 with ONE line each: FED -> OK
       none, OK -> HUNGRY "YOU ARE HUNGRY", HUNGRY -> WEAK "YOU ARE WEAK WITH
       HUNGER" (+ STS_HWEAK), the 50th WEAK turn faints (FAINT1); hunger_add: WEAK ->
@@ -49,6 +50,7 @@ STF = S["ST_FLAGS"]
 HWEAK, WEAK = S["STS_HWEAK"], 1 << S["STS_WEAK_BIT"]
 FED, OK, HUNGRY, WEAKS = 0, 1, 2, 3
 L_HUNGRY, L_WEAK, L_FED = "YOU ARE HUNGRY", "YOU ARE WEAK WITH HUNGER", "YOU FEEL WELL FED"
+L_WJUMP = "TOO WEAK TO JUMP"
 ATTRS = {FED: 0x44, OK: 0x46, HUNGRY: 0x42, WEAKS: 0x42}
 
 
@@ -194,9 +196,16 @@ def run(h, p, check):
     setfood(5)
     p.turn("WAIT")                                  # the stage follows FOOD: WEAK
     t0 = p.rw("TURN_COUNTER")
-    nt = p.no_turn("K", "L")
+    n0 = len(lines)
+    nt = p.no_turn("K", "L")                        # held 6 ticks: the refusal retries each tick
     check("J3 hunger WEAK: no jump, no turn", nt and p.ent(0)["X"] == HX and p.rw("TURN_COUNTER") == t0
           and p.rb(STF) & HWEAK, (nt, p.ent(0)["X"], hex(p.rb(STF))))
+    got = [x for x in lines[n0:] if x == L_WJUMP]
+    n1 = len(lines)
+    nt2 = p.no_turn("K", "L")                       # a fresh press prints again
+    got2 = [x for x in lines[n1:] if x == L_WJUMP]
+    check("J4 4b: WEAK jump -> \"TOO WEAK TO JUMP\" once per press (no spam while held), again on a new press",
+          len(got) == 1 and len(got2) == 1 and nt2 and p.rw("TURN_COUNTER") == t0, (lines[n0:], nt2))
 
     # ======================= S: stages and lines ==================================
     scene()

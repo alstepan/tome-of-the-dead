@@ -6771,3 +6771,10 @@ bank-0 code; no SMC; no runtime-written bytes). FARB0 ~0.3k T (far6 = FARB0 + 12
 Tests touched: `tests/endcard_k.py` (`lp_dtab` read from .sna bank 0), `tests/hunger.py` (`item_food` by FARB0),
 `tests/logdmg.py` (`hit_line` by FARB0, A / E), `tests/world.py` (W15 HP-item cap 5.2k -> 5.5k), `tests/zx0_pool.py` (comment only: needs unchanged).
 
+
+### 4b "TOO WEAK TO JUMP" ledger
+
+`weak_jump` (+16 B packed text: the release text headroom 1 B, the kit image 7 B over) takes 16 B from `B0_FREE_RES`:
+`TEXT_RES` +16 (headroom 17), `B0_FREE_START` / `B0_CODE2` `$CEE6` -> **`$CEF6`**, `B0_FREE_RES` 8,408 -> **8,392**,
+**`POOL_START` `$EFBE` unchanged**; `B0_CODE2` free 5,481 -> 5,465. `h_jump`'s `.weak` (status7.asm, 15 B; once per press
+via `LOCK_SHOWN`, as bank-7 `.afraid`): bank 7 cold free 89 -> **74**.
