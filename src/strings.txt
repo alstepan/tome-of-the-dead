@@ -118,6 +118,7 @@ not_learned     "NOT LEARNED"
 no_mana         "NO MANA"
 no_target       "NO TARGET"
 quiver_full     "QUIVER FULL"
+weak_jump       "TOO WEAK TO JUMP"
 
 # --- hunger stage words (panel row 21, <= 6 chars; game.md §7) ------------------
 hg_fed          "FED"

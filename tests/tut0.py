@@ -37,7 +37,7 @@ the Mage run opens the page with the I key, the others through the BAG icon.
   one line per slot per class, no line for slots passed under auto-repeat, I02 after the read);
   C19 icon targets (B3 BAG held first, B5 FOOD); C20 bag READ stick-only; C21 the scroll from the icon
   (Warrior) and from the bag page (Mage); C22 the pit: leap (G0/G2 held, G1 not) and fall (L69+L10);
-  C23 the B5 WEAK tail + the rule (WEAK refuses the leap silently, HUNGRY does not); C24 the nudge
+  C23 the B5 WEAK tail + the rule (WEAK refuses the leap with one line (4b), HUNGRY does not); C24 the nudge
   12 / 36 at B4, none in the fight; C25 L76 once; C26 Kempston tour (stick words, stick-dismissed
   in-mode hold swallowed); C27 pi_ic / pl_et restored after choice 2, D1 entry, death, Quit;
   C28 blob >= 350 B free (TUT0-F4: was 600; the R3 reserve), TUT_RAM_END <= PF_ROWF
@@ -1602,7 +1602,7 @@ def scen_tour(h, hero, scheme="keys"):
     check("C23", f"{tag}: after the eat (L21 / L22) the B5 tail L70 / L71 shows, without a hold",
           L("TL_L21") in lines and L("TL_L70") in lines and lines.index(L("TL_L70")) > lines.index(L("TL_L21"))
           and not held(p, "TL_L71", scheme), lines[-6:])
-    # --- C23 rule check (the line must be true): WEAK refuses the leap silently, HUNGRY does not ---
+    # --- C23 rule check (the line must be true): WEAK refuses the leap (4b: one "TOO WEAK TO JUMP" line), HUNGRY does not ---
     if hero == 0 and scheme == "keys":
         p.wb("FOOD", 5)
         T(p, "WAIT")
@@ -1614,8 +1614,8 @@ def scen_tour(h, hero, scheme="keys"):
         x1 = p.ent(0)["X"]
         T(p, "K", "L")
         x2 = p.ent(0)["X"]
-        check("C23", "rule: FOOD 5 (WEAK) -> UP+RIGHT on the floor: x, TURN_COUNTER unchanged, no log line; FOOD 15 (HUNGRY) -> the "
-              "same leap moves 6 cols", weak == (x0, t0, []) and x2 - x1 == 6, (x0, t0, weak, x1, x2))
+        check("C23", "rule: FOOD 5 (WEAK) -> UP+RIGHT on the floor: x, TURN_COUNTER unchanged, one TOO WEAK TO JUMP line (4b); FOOD 15 (HUNGRY) -> the "
+              "same leap moves 6 cols", weak == (x0, t0, ["TOO WEAK TO JUMP"]) and x2 - x1 == 6, (x0, t0, weak, x1, x2))
     check("C10", f"{tag} tour run: blob bytes == the image ({run.blob_n} checks)", not run.blob_bad, run.blob_bad)
     return p
 
