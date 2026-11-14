@@ -310,7 +310,7 @@ text_tape_end:
 TEXT_TAPE_LEN   EQU text_tape_end - TEXT_ADDR  ; B0CODE: text + b0 code + pad + B0_CODE2 (was = B0_FREE_START - TEXT_ADDR)
                 ASSERT text_tape_end == b0c2_end && B0_FREE_START + B0_FREE_RES == POOL_START
 ; The rest of the carve, b0c2_end..POOL_START-1, is not assembled and not on tape. C+TUT0 merge:
-; the boot-only streams (frame_tab, HOW TO PLAY, the D0 blob) are the bank-4 BOOT4 block ("BOOT4
+; the boot-only streams (frame_tab, the D0 blob) are the bank-4 BOOT4 block ("BOOT4
 ; STREAMS", after tap_loader), so nothing in bank 0 above B0_CODE2 is loaded at boot.
                 ASSERT text_base == TEXT_ADDR && TEXT_LEN == TEXT_PACKED
                 ASSERT (tx_entries & $FF) == 0         ; w2d: tk_get's B = tx_entries >> 8
@@ -750,7 +750,7 @@ dn_miss_s:      DB   "MISS", 0, DNA_MISS       ; D3-11 / LVL-FLOATER (dnfix2.asm
                 INCLUDE "dnlvt2.asm"            ; LVL-FLOATER: dn_lvt (the pad holds 2 B in a trace build)
     ENDIF
                 ; RECLAIM-D: ftz_zx0 (the MEM-FT frame_tab stream, 132 B) left the image: bank 4
-                ; BOOT4 (C+TUT0), boot only, unpacked by the HOW TO PLAY overlay (main.asm "TEXT")
+                ; BOOT4 (C+TUT0), boot only, unpacked by the boot overlay (instr_ovl.asm) (main.asm "TEXT")
 code_end:
 ; 3F-T2: the sequence cache's bytes (RUNTIME only, not on tape: R6 pool6.asm / lowram.asm
 ; copies the hero's and the level's sequence blocks here; seq_rows point in)
