@@ -245,28 +245,29 @@ ORN_MID_N       EQU 4               ; (glyph indices ORN_* = panel_orn.asm, bank
 ;     +1 4 x {LE_KIND, LE_HP}: kind row (bits 0-4) | LEK_GOLD | LEK_RESPAWN | LEK_BRED, exact hp
 ;------------------------------------------------------------------------------
 LP_STATE        EQU ORN_GLYPHS + ORN_COUNT * 8   ; $6EC0
-LP_KINDS        EQU LP_STATE + 0    ; 4 B: the depth's kinds (game.md §9.4 table order)  (test-observable)
-LP_BOSS         EQU LP_STATE + 4    ; boss kind row | LEK_GOLD on the golden depths (3F-T5)
-LP_TOTAL        EQU LP_STATE + 5    ; the table count incl. boss (tests / levelcheck)
-LP_LVL          EQU LP_STATE + 6    ; hero LVL at level entry (§9.6 tier input, 3F)
-LP_RESPAWNS     EQU LP_STATE + 7    ; trickle spawns this level (§9.5, RESPAWN_MAX; 3F)
-LP_DISCARD      EQU LP_STATE + 8    ; units lost to the split / the sum cap / a full record (tests)
-LP_RMAX         EQU LP_STATE + 9    ; ROOM_MAX (3, every depth)
-LP_RNG          EQU LP_STATE + 10   ; word: the spawn stream's seed of the last entry (test-observable)
-; lp_enter / lp_budget scratch (+12 .. +23)
-LP_HX           EQU LP_STATE + 12   ; hero arrival col
-LP_HS           EQU LP_STATE + 13   ;   ... storey
-LP_HW           EQU LP_STATE + 14   ;   ... body width
-LP_SIG          EQU LP_STATE + 15   ; sum weight of the room's units so far
-LP_RECP         EQU LP_STATE + 16   ; word: the record being entered
-LP_W            EQU LP_STATE + 18   ; unit body width
-LP_GAPV         EQU LP_STATE + 19   ; arrival gap of the current try (LP_GAP / LP_GAP2)
-LP_BEST         EQU LP_STATE + 20   ; boss: best distance + 1 (0 = none yet)
-LP_BS           EQU LP_STATE + 21   ; boss: best storey
-LP_BX           EQU LP_STATE + 22   ; boss: best col
-LP_RES          EQU LP_STATE + 23   ; reservation: units still to roll x minW (lp_fit)
-ROOM_VISITS     EQU LP_STATE + 24   ; 9 B: entries per room this level (spawn-stream input)  (test-observable)
-LP_REC          EQU LP_STATE + 33   ; 9 records x LR_STRIDE                                   (test-observable)
+LP_KINDS        EQU LP_STATE + 0    ; 8 B (NEW-MON3 T3: was 4): the depth's kind slots, pick LP_KINDS[rnd & 7]; slots 0..n-1 = the distinct
+                                    ; kinds in fallback order, the rest duplicates = weights (new_monsters.md §5)  (test-observable)
+LP_BOSS         EQU LP_STATE + 8    ; boss kind row | LEK_GOLD on the golden depths (3F-T5)
+LP_TOTAL        EQU LP_STATE + 9    ; the table count incl. boss (tests / levelcheck)
+LP_LVL          EQU LP_STATE + 10    ; hero LVL at level entry (§9.6 tier input, 3F)
+LP_RESPAWNS     EQU LP_STATE + 11    ; trickle spawns this level (§9.5, RESPAWN_MAX; 3F)
+LP_DISCARD      EQU LP_STATE + 12    ; units lost to the split / the sum cap / a full record (tests)
+LP_RMAX         EQU LP_STATE + 13    ; ROOM_MAX (3, every depth)
+LP_RNG          EQU LP_STATE + 14   ; word: the spawn stream's seed of the last entry (test-observable)
+; lp_enter / lp_budget scratch (+16 .. +27)
+LP_HX           EQU LP_STATE + 16   ; hero arrival col
+LP_HS           EQU LP_STATE + 17   ;   ... storey
+LP_HW           EQU LP_STATE + 18   ;   ... body width
+LP_SIG          EQU LP_STATE + 19   ; sum weight of the room's units so far
+LP_RECP         EQU LP_STATE + 20   ; word: the record being entered
+LP_W            EQU LP_STATE + 22   ; unit body width
+LP_GAPV         EQU LP_STATE + 23   ; arrival gap of the current try (LP_GAP / LP_GAP2)
+LP_BEST         EQU LP_STATE + 24   ; boss: best distance + 1 (0 = none yet)
+LP_BS           EQU LP_STATE + 25   ; boss: best storey
+LP_BX           EQU LP_STATE + 26   ; boss: best col
+LP_RES          EQU LP_STATE + 27   ; reservation: units still to roll x minW (lp_fit)
+ROOM_VISITS     EQU LP_STATE + 28   ; 9 B: entries per room this level (spawn-stream input)  (test-observable)
+LP_REC          EQU LP_STATE + 37   ; 9 records x LR_STRIDE                                   (test-observable)
 LR_STRIDE       EQU 9
 LR_HDR          EQU 0
 LR_ENT          EQU 1               ; first entry
@@ -292,8 +293,8 @@ LEK_BRED_BIT    EQU 6               ; (lp_bank writes it, lp_spawn restores it)
 LPK_PARK        EQU %10000000
 LPK_ROOM        EQU %00001111           ; the room id bits of E_ROOM
                 ASSERT GRID_CELLS <= LPK_ROOM + 1
-LP_LEN          EQU 33 + GRID_CELLS * LR_STRIDE  ; 114 B
-LP_END          EQU LP_STATE + LP_LEN            ; $6F32
+LP_LEN          EQU 37 + GRID_CELLS * LR_STRIDE  ; 118 B (NEW-MON3 T3: +4, the 8-slot LP_KINDS)
+LP_END          EQU LP_STATE + LP_LEN            ; $6F36
 ; budget constants (game.md §9.3 / §9.4.1)
 ROOM_MAX        EQU 3               ; monsters per room (initial population), all depths (MORE-MON: D1-D2 were 2)
 LP_SIGMA_INIT   EQU 8               ; sum weight cap of a FRESH room: max(8, ROOM_MAX x minW)
@@ -375,7 +376,7 @@ TOME_FL_N       EQU 3 + TOME_BORDER
 TOME_HERO_W     EQU 3               ; both heroes are 3 x 6 cells (KT_BW / BH_K_KNIGHT, BH_K_WIZARD)
 TOME_HERO_Y     EQU FLOOR_ROW1 - 6  ; E_Y of a hero standing on storey 1
                 ASSERT BH_K_KNIGHT == 6 && BH_K_WIZARD == 6
-TRK_W           EQU LP_SIG          ; trk_run scratch, 9 B (LP_STATE + 15 .. + 23: lp_enter / lp_budget scratch,
+TRK_W           EQU LP_SIG          ; trk_run scratch, 9 B (LP_STATE + 19 .. + 27: lp_enter / lp_budget scratch,
                                     ; dead between entries): live floor entries, then w_r per room
                 ASSERT TRK_W + GRID_CELLS <= ROOM_VISITS && TRK_W >= LP_HW + 1 && TRK_PREV < ROOM_DESC
                 ASSERT LR_MAX * LE_STRIDE + 1 == LR_STRIDE && LP_REC == ROOM_VISITS + GRID_CELLS

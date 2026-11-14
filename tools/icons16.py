@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-"""icons16.py — IC1: the 45 true 16x16 item icons -> raw DEFB table + review page.
+"""icons16.py — IC1: the 46 true 16x16 item icons -> raw DEFB table + review page.
 
 Source (the single source of truth, hand-authored, deterministic):
   assets/gfx/icons/<name>.grid   16 rows x 16 chars, '#' ink, '.' paper ('# ' lines = comments).
-  <name> = the IT_* type name lower-cased without "IT_" (f_carrot .. c_grave) for the 39 bag
+  <name> = the IT_* type name lower-cased without "IT_" (f_carrot .. c_frost) for the 40 bag
   types, ph_weapon / ph_armour / ph_helmet / ph_charm for the 4 empty-worn-slot placeholders,
   ammo_dagger / ammo_arrow for the 2 floor-ammo counters (FLOOR1; IT_DAGGER / IT_ARROW).
 
 Writes:
-  assets/gfx/icons/icons16.asm       icons16: 43 x 32 B raw (the tests' reference, under IF 0) +
+  assets/gfx/icons/icons16.asm       icons16: 44 x 32 B raw (the tests' reference, under IF 0) +
                                      icpk_idx / icpk, the packed form the build holds (MEM-RECLAIM w2c)
   assets/gfx/icons/icons16.svg.html  review page (x4 per class, x1 row, bag/worn simulation)
 
 Format (game.md §8.11 Q5): 1 bit, NO mask, 32 B per icon: rows 0..15 top-down, each row the
 left byte then the right byte, bit 7 = leftmost pixel, set = ink, clear = paper. Drawn as a COPY
-into 2x2 byte-aligned cells. Index = type - IT_BAG_LO (0..38); placeholders at 39 + worn slot
-(weapon, armour, helmet, charm); 43 / 44 = floor ammo (IT_DAGGER, IT_ARROW: ITEM_INK). One ink per icon = it_tab / items_model.ITEM_INK (paper black;
+into 2x2 byte-aligned cells. Index = type - IT_BAG_LO (0..39); placeholders at 40 + worn slot
+(weapon, armour, helmet, charm); 44 / 45 = floor ammo (IT_DAGGER, IT_ARROW: ITEM_INK). One ink per icon = it_tab / items_model.ITEM_INK (paper black;
 page cursor = paper blue); placeholders ink $05.
 
 Validation (exit 1 on any failure): every grid 16x16 of '#'/'.' only; the 1-px margin (row 0,
-row 15, col 0, col 15) is paper; no empty icon; the 43 bitmaps pairwise distinct; the index map
-matches src/item_defs.asm (type - IT_BAG_LO, IT_COUNT - IT_BAG_LO = 39 bag types; ammo 43/44);
+row 15, col 0, col 15) is paper; no empty icon; the 44 bitmaps pairwise distinct; the index map
+matches src/item_defs.asm (type - IT_BAG_LO, IT_COUNT - IT_BAG_LO = 40 bag types; ammo 44/45);
 each ink is a
 legal non-black, non-blue ink on black paper and on blue cursor paper; attribute clash: every
 8x8 cell of every icon uses exactly that one ink + paper (true by construction: 1 bit, 1 attr);
@@ -48,9 +48,10 @@ W = H = 16
 ICON_BYTES = W // 8 * H                      # 32
 PH_INK = 0x05                                # §8.11 Q5: placeholder ink, dim cyan
 CURSOR_PAPER = 1                             # §8.11 Q3: page cursor = paper blue
-PH_NAMES = ["ph_weapon", "ph_armour", "ph_helmet", "ph_charm"]   # index 39 + worn slot
-AMMO_NAMES = [("ammo_dagger", "IT_DAGGER"), ("ammo_arrow", "IT_ARROW")]  # index 43, 44 (FLOOR1)
-N_ICONS = 39 + len(PH_NAMES) + len(AMMO_NAMES)                     # 45 logical indices
+N_BAG = 40                                   # bag types IT_BAG_LO..IT_COUNT-1 (NEW-MON3: + IT_C_FROST)
+PH_NAMES = ["ph_weapon", "ph_armour", "ph_helmet", "ph_charm"]   # index N_BAG + worn slot
+AMMO_NAMES = [("ammo_dagger", "IT_DAGGER"), ("ammo_arrow", "IT_ARROW")]  # index 44, 45 (FLOOR1)
+N_ICONS = N_BAG + len(PH_NAMES) + len(AMMO_NAMES)                  # 46 logical indices
 # FLOOR1 (user 2026-10-27): the 3 potions share ONE shape (p_heal's), told apart by their ink
 # (it_tab: Heal $42 red, Mana $45 cyan, Cure $44 green); p_mana / p_cure keep their grids
 # (review page) but get no table entry: logical 6 / 7 -> physical 5 (icons6.asm ic_addr)
@@ -62,7 +63,7 @@ GROUPS = [
                  "w_bone", "bow"]),
     ("ARMOUR", ["a_robe", "a_leather", "a_chain", "a_plate", "a_silk", "a_grave"]),
     ("HELMETS", ["h_hood", "h_helm", "h_king", "h_mirror"]),
-    ("CHARMS", ["c_might", "c_ward", "c_fire", "c_grave", "c_mana", "c_plenty", "c_scarab"]),
+    ("CHARMS", ["c_might", "c_ward", "c_fire", "c_grave", "c_mana", "c_plenty", "c_scarab", "c_frost"]),
     ("FOOD", ["f_carrot", "f_apple", "f_pear", "f_cheese", "f_meat"]),
     ("POTIONS", ["p_heal", "p_mana", "p_cure"]),
     ("SCROLLS", ["s_teleport", "s_fear", "s_sleep", "s_enchant"]),
@@ -86,7 +87,7 @@ def zx_hex(c: int, bright: bool) -> str:
 
 # ------------------------------------------------------------------------------ model
 def index_map():
-    """[(idx, grid name, IT_ name or None, ink attr)] for idx 0..44, from item_defs + ITEM_INK."""
+    """[(idx, grid name, IT_ name or None, ink attr)] for idx 0..45, from item_defs + ITEM_INK."""
     lo, cnt = IM.D["IT_BAG_LO"], IM.D["IT_COUNT"]
     by_id = {v: k for k, v in IM.T.items() if k.startswith("IT_") and k not in
              ("IT_BAD", "IT_COUNT") and not k.endswith(("_LO", "_HI"))}
@@ -94,11 +95,11 @@ def index_map():
     for typ in range(lo, cnt):
         it = by_id[typ]
         out.append((typ - lo, it[3:].lower(), it, IM.ITEM_INK[typ]))
-    if len(out) != 39:
-        raise Fail("expected 39 bag types IT_BAG_LO..IT_COUNT-1, got %d" % len(out))
+    if len(out) != N_BAG:
+        raise Fail("expected %d bag types IT_BAG_LO..IT_COUNT-1, got %d" % (N_BAG, len(out)))
     for slot, n in enumerate(PH_NAMES):
         out.append((cnt - lo + slot, n, None, PH_INK))
-    for n, it in AMMO_NAMES:                 # appended: indices 0..42 stay unchanged
+    for n, it in AMMO_NAMES:                 # appended after the placeholders
         out.append((len(out), n, it, IM.ITEM_INK[IM.T[it]]))
     return out
 
@@ -267,8 +268,8 @@ def emit_asm(model, packed) -> str:
          "; Per icon (FLOOR1 layout): 4 quarters of 8 lines, UL, UR, LL, LR (+0 / 8 / 16 / 24),",
          "; each 8 bytes top-down; bit 7 = leftmost pixel; set = ink, clear = paper. COPY (not",
          "; OR) into 2x2 byte-aligned cells.",
-         "; Index = type - IT_BAG_LO (0..38); 39 + worn slot = empty-slot placeholders",
-         "; (weapon, armour, helmet, charm); 43 / 44 = floor ammo (IT_DAGGER, IT_ARROW;",
+         "; Index = type - IT_BAG_LO (0..39); 40 + worn slot = empty-slot placeholders",
+         "; (weapon, armour, helmet, charm); 44 / 45 = floor ammo (IT_DAGGER, IT_ARROW;",
          "; counters, never in the bag). Raw: icons16 + index * 32 (reference only, below).",
          "; Ink per icon = it_tab (src/lowram.asm; source tools/items_model.py ITEM_INK) with",
          "; paper black (cursor: paper blue); placeholders ink $05; ammo = ITEM_INK. Ink per icon",
@@ -278,18 +279,18 @@ def emit_asm(model, packed) -> str:
          "ICONS16_W       EQU %d" % W,
          "ICONS16_H       EQU %d" % H,
          "ICONS16_BYTES   EQU %d              ; per icon" % ICON_BYTES,
-         "ICONS16_COUNT   EQU %d              ; logical: 39 bag types + 4 placeholders + 2 ammo"
+         "ICONS16_COUNT   EQU %d              ; logical: 40 bag types + 4 placeholders + 2 ammo"
          % N_ICONS,
          "ICONS16_PHYS    EQU %d              ; in this table: the 3 potions share one shape" % len(packed),
          "ICONS16_SHARE_LO EQU 6             ; logical 6 / 7 (Mana, Cure) -> physical 5 (Heal's shape)",
          "ICONS16_SHARE_N EQU 2",
-         "ICONS16_PH      EQU %d              ; first placeholder index (39 + worn slot)"
-         % (39),
-         "ICONS16_AMMO_DAGGER EQU %d          ; floor ammo IT_DAGGER" % (39 + len(PH_NAMES)),
-         "ICONS16_AMMO_ARROW  EQU %d          ; floor ammo IT_ARROW" % (40 + len(PH_NAMES)),
+         "ICONS16_PH      EQU %d              ; first placeholder index (40 + worn slot)"
+         % (N_BAG),
+         "ICONS16_AMMO_DAGGER EQU %d          ; floor ammo IT_DAGGER" % (N_BAG + len(PH_NAMES)),
+         "ICONS16_AMMO_ARROW  EQU %d          ; floor ammo IT_ARROW" % (N_BAG + 1 + len(PH_NAMES)),
          "ICONS16_INK_PH  EQU $%02X             ; placeholder ink (dim cyan)" % PH_INK,
          "ICONS16_PK_K    EQU %d              ; MEM-RECLAIM w2c: icpk_idx delta base (B per icon)" % PK_K,
-         "                ASSERT ICONS16_COUNT == 45 && ICONS16_AMMO_ARROW == ICONS16_COUNT - 1",
+         "                ASSERT ICONS16_COUNT == 46 && ICONS16_AMMO_ARROW == ICONS16_COUNT - 1",
          "                ASSERT ICONS16_PHYS == ICONS16_COUNT - ICONS16_SHARE_N",
          "",
          "; The RAW table: the reference the tests compare the screen against (tests/game_lib.py",
@@ -435,9 +436,9 @@ def emit_html(model, bm, notes) -> str:
          '<h2 style="margin:0;font-size:14px;">IC1 16&#215;16 ITEM ICONS (DRAFT FOR REVIEW)</h2>',
          '<div style="font-size:10px;color:#77758a;max-width:900px;line-height:1.6;">'
          'game.md &#167;8.11 Q5: 1 bit, no mask, 32 B each, one ink per icon from it_tab '
-         '(paper black; page cursor paper blue). Index = type &#8722; IT_BAG_LO; 39 + worn slot = '
-         'empty-slot placeholders (ink $05, dashed); 43 / 44 = floor ammo (dagger, arrow). '
-         '45 icons = 1,440 B. Source: '
+         '(paper black; page cursor paper blue). Index = type &#8722; IT_BAG_LO; 40 + worn slot = '
+         'empty-slot placeholders (ink $05, dashed); 44 / 45 = floor ammo (dagger, arrow). '
+         '46 icons = 1,472 B. Source: '
          'assets/gfx/icons/*.grid &#8594; tools/icons16.py &#8594; icons16.asm.</div>']
     for title, names in GROUPS:
         o.append('<h3 style="margin:0;font-size:12px;color:#c9c7d8;">%s</h3>' % html.escape(title))
@@ -457,8 +458,8 @@ def emit_html(model, bm, notes) -> str:
                         html.escape((it or n).replace("IT_", "")), ink, ink_label(attr), idx,
                         html.escape(notes[n])))
         o.append("</div>")
-    # 1x actual size, all 43 in index order
-    o.append('<h3 style="margin:0;font-size:12px;color:#c9c7d8;">ACTUAL SIZE (1&#215;, index order, all 45)</h3>')
+    # 1x actual size, all 46 in index order
+    o.append('<h3 style="margin:0;font-size:12px;color:#c9c7d8;">ACTUAL SIZE (1&#215;, index order, all 46)</h3>')
     o.append('<div style="display:flex;gap:2px;background:#000;padding:8px;width:max-content;">')
     for idx, n, _, attr in model:
         o.append(svg(bm[n], zx_hex(attr, bool(attr & 0x40)), 1))
@@ -509,7 +510,7 @@ def main() -> int:
         pm, pp = physical(model, packed)
         if back != pp or [unpack(b) for b in back] != [bm[m[1]] for m in pm]:
             raise Fail("round-trip: emitted DEFB != grids")
-        if len(pp) * ICON_BYTES != (N_ICONS - len(SHARED)) * ICON_BYTES or N_ICONS != 45:
+        if len(pp) * ICON_BYTES != (N_ICONS - len(SHARED)) * ICON_BYTES or N_ICONS != 46:
             raise Fail("table size %d != %d" % (len(pp) * ICON_BYTES, (N_ICONS - len(SHARED)) * ICON_BYTES))
         inks = [m[3] for m in model if m[1] in ("p_heal",) + SHARED]
         if len(set(inks)) != len(inks):

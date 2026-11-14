@@ -130,7 +130,7 @@ def main():
         p.hook(3)
         t_base, tmax = p.tstates, {}
         rnd = random.Random(0x7A7)
-        LPK = list(p.z.read_memory(S["LP_KINDS"], 4))         # 3F-T9: the Bone Caller's summon kind
+        LPK = list(p.z.read_memory(S["LP_KINDS"], 8))         # 3F-T9: the Bone Caller's summon kind
         WT = {k_: S[n_] for k_, n_ in ((K_RAT, "WT_K_RAT"), (K_BAT, "WT_K_BAT"), (K_SKELETON, "WT_K_SKELETON"),
               (S["K_GHOST"], "WT_K_GHOST"), (S["K_ARCHER"], "WT_K_ARCHER"), (S["K_SNIPER"], "WT_K_SNIPER"),
               (S["K_SLINGER"], "WT_K_SLINGER"), (S["K_NECRO"], "WT_K_NECRO"),

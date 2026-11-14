@@ -276,6 +276,8 @@ def run(h, p, check):
     u7 = (s["die"], s["bon"], s["atk"])
     s = wear([None, "A_LEATHER", "H_HELM", "C_WARD"])
     u8 = s["df"]
+    s = wear([None, None, None, "C_FROST"])
+    u9 = (s["res"], s["maxmp"], s["gmp"])
     R, X, IM = S["RSP_R"], S["RSP_X"], S["RSP_I"]
     check("U1 King Helm eva 3 DEF 2; Silk Cloak eva 4 DEF 1 IMMF_POISON",
           (u1, u2) == ((3, 2), (4, 1, S["IMMF_POISON"])), (u1, u2))
@@ -285,6 +287,8 @@ def run(h, p, check):
           (u3, u4, u5, u6))
     check("U3 Cleaver + Might: 1d10 +1, atk 3 + 1 + 1 = 5; Leather + Helm + Ward DEF 3",
           (u7, u8) == ((10, 1, 5), 3), (u7, u8))
+    check("U4 Frost Charm (NEW-MON3): COLD R only (RES_B0 bits 5-4), MP unchanged",
+          u9 == ((R << 4, 0, 0), 6, 0), u9)
 
     # ======================= C: combat reads DEF / RES ===========================
     g = None
@@ -376,7 +380,7 @@ def run(h, p, check):
     p.wb(S["BAG"] + 2, 0x40)                         # Cleaver m +2
     p.wb(S["BAG"] + 20, 0xE0)                        # Robe m -1
     got = [fmt(s) for s in range(7)]
-    want = [" +2 1D10+3 ATK+1", " DEF+1 EVA+2", " FOOD+30", " MP+8", "", " 1D10 ATK-1", " -1 MP+1"]   # WEAR-UI: " +m" before the numbers
+    want = [" +2 1D10+3 ATK+1", " DEF+1 DODGE+2", " FOOD+30", " MP+8", "", " 1D10 ATK-1", " -1 MP+1"]   # WEAR-UI: " +m" before the numbers; ITEM-INFO: EVA -> DODGE
     check("S1 it_fmt: Cleaver +2, Silk, Cheese, Mana, Fear (none), Axe, Robe -1", got == want, (got, want))
 
 

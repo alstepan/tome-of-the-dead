@@ -5,7 +5,7 @@ blit-time sprite mirroring would free, per level / hero, by frame class.
 Offline: no emulator. Reads
   src/frames.asm       FRM name, kind, bwpx, flags  (the frame list, fid order)
   src/pool6.asm        gu_tab (generation units: fid0, fcnt)
-  build .sym           nm_w/_h/_cols/_ax, FID_*, KFID_*, flags, K_FX_BASE ...
+  build .sym           nm_w/_h/_cols/_ax, FID_*, KFID_*, flags, U_FX_BASE ...
   build output         -DPOOL_LVL_VERBOSE=1 "level pool D<d> hero <h>: units mask
                        <lo> / <hi>, N B; ... straddle waste W" (the per-level kinds,
                        as the units set the build's own need uses)
@@ -176,7 +176,7 @@ def main():
     for nm, kind, bw, fl, flags in frm:
         byfid[S["FID_" + nm]] = frame_bytes(S, nm, bw, fl, flags, S["FID_" + nm], failures)
     gu = read_gu(S)
-    kfx = S["K_FX_BASE"]
+    kfx = S["U_FX_BASE"]
 
     rows = {}
     for line in log.splitlines():

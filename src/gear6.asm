@@ -541,8 +541,9 @@ gx_tab:         DB   IT_H_KING,   1, 0, 0, 0                                   ;
                 DB   IT_H_MIRROR, 0, 0, RSP_X << 2, 0                          ; DARK X
                 DB   IT_C_FIRE,   0, RSP_R << 2, 0, 0                          ; FIRE R
                 DB   IT_C_GRAVE,  0, 0, RSP_I << 2, 0                          ; DARK I
+                DB   IT_C_FROST,  0, RSP_R << 4, 0, 0                          ; COLD R (NEW-MON3 Frost Charm)
                 DB   0, 0, 0, 0, 0
-                ASSERT DTY_FIRE == 1 && DTY_DRAIN == 4 && DTY_DARK == 5
+                ASSERT DTY_FIRE == 1 && DTY_COLD == 2 && DTY_DRAIN == 4 && DTY_DARK == 5
 
 ; variables (written in play; r6.asm rules: no SMC, tests/game.py #50 checks R6 at the menu)
 gd_die:         DB   0                         ; gear_dec's record (GD_LEN)

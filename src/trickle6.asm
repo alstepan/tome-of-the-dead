@@ -152,8 +152,8 @@ trk_sig:        push bc
 ; trk_draw — §9.5 steps 5-10, C = Σ w (>= 1), TRK_W = the weights; the draws
 ; through gen_step (GEN_RNG = the gameplay stream here, see trk_run):
 ;   5. byte >= RESPAWN_CHANCE -> stop;  6. room = byte mod Σ w walked over TRK_W;
-;   7. k = byte & 3, tier_row(LP_KINDS[k], the current LVL) (draws only if tiered);
-;   8. Σ + w <= 12 -> 10;  9. once: k + 1 & 3, its tier roll, the cap; fail = stop;
+;   7. k = byte & 7, tier_row(LP_KINDS[k], the current LVL) (draws only if tiered);
+;   8. Σ + w <= 12 -> 10;  9. once: k + 1 & 7, its tier roll, the cap; fail = stop;
 ;  10. append {row | LEK_RESPAWN, kind_hp} (the record stays VISITED), LP_RESPAWNS + 1.
 ; Clobbers: all but IY.   ~1.5-2.5k T
 ;------------------------------------------------------------------------------
@@ -176,8 +176,8 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 jr   .p
 .hit:           call gen_step
                 ld   a, l
-                and  3
-                ld   e, a                      ; E = k
+                and  7
+                ld   e, a                      ; E = k: the slot (NEW-MON3 T3: 8 slots)
                 ld   d, 2                      ; D = tries
 .k:             push de
                 ld   a, e
@@ -203,7 +203,7 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 cp   LP_SIGMA_CAP + 1
                 jr   c, .ok
                 inc  e
-                res  2, e                      ; k + 1 & 3
+                res  3, e                      ; k + 1 & 7
                 dec  d
                 jr   nz, .k
                 ret                            ; both tries refused: the draws are spent
@@ -220,4 +220,4 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 inc  (hl)
                 ret
                 ASSERT LR_ENT == 1 && LE_STRIDE == 2 && LE_KIND == 0 && LE_HP == 1 && LR_STRIDE == 9
-                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 3) >> 8) && (TRK_W & $FF) + GRID_CELLS <= $100
+                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 7) >> 8) && (TRK_W & $FF) + GRID_CELLS <= $100

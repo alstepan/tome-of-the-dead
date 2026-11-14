@@ -1,0 +1,27 @@
+# Tome of the Dead gfx text grid — NEW-MON3 DRAFT for canvas review (new_monsters.md §6); authored deterministically, not yet imported
+# name: imp_fly1
+# size: 24x16
+# character: FIRE IMP
+# caption: FLY1
+# ink: #D7D700
+# anchor: 0 0
+# class: MOT|MIR
+# note: wing up; horns + curled spade tail keep it apart from the Bat; faces RIGHT (REST + flap A)
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+.+#++.......+#++...++#+.
+++##++......++#++.++#++.
++##+#++......+##+++##+..
++###+#++.....++#####++..
++####+#++....+#######+..
++#####+#++...+####++#+..
++++######++..+#+#####+..
+..++##+###++.+##++#+++..
+...+###+###+++#######+..
+...++++#######+#####++..
+......+++#######++#++...
+........+++#######++....
+.....+++++####++++#+....
+....++#++#+##++..+++....
+....+####+++##+.........
+....++#+++.++++.........

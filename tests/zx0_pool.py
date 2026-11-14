@@ -23,7 +23,7 @@ SEL_FRT_SAVE and the allocator state (ALLOC_IDX/PTR, mark). The reference
 replays the same generator sessions (3F-T1 — boot: alloc_reset, the two
 select idles, save; each game: select restores the idles' FRT rows,
 alloc_reset + the idles again, (3F-T2 pool_hero: monster FRT rows + the FX
-rows outside the class FX NONE) gen(hero), gen(hero + K_FX_BASE) —
+rows outside the class FX NONE) gen(hero), gen(hero + U_FX_BASE) —
 D3-4: the class FX kind with its overlapping fid range —, alloc_mark; each
 level: alloc_restore, FRT monster rows + non-class FX rows NONE, the level's generation units
 from the LP_KINDS / LP_BOSS bytes read at that point and the snapshot's
@@ -266,7 +266,7 @@ class Run:
             if "fdesc_tab" in S else None,
             "GEN_OVERFLOW": self.rb("GEN_OVERFLOW"),
             "GEN_TRAP": self.rb("GEN_TRAP") if "GEN_TRAP" in S else 0,
-            "LP": [k & S["LEK_KIND_MASK"] for k in self.z.read_memory(S["LP_KINDS"], 5)],   # LP_KINDS[0..3] + LP_BOSS (3F-T5: minus LEK_GOLD)
+            "LP": [k & S["LEK_KIND_MASK"] for k in self.z.read_memory(S["LP_KINDS"], S["LP_GEN_N"])],   # LP_KINDS[0..7] + LP_BOSS (NEW-MON3 T3: 9 B) (3F-T5: minus LEK_GOLD)
             "depth": self.rb("LVL_DEPTH"),
         }
 
@@ -513,8 +513,8 @@ def src6_decode(r, fails, name):
     seen = 0
     for b in range(S["ZX0_BLOCKS"]):
         lab = f"zblk_{b}"
-        if not (S["SRC6_ADDR"] <= S[lab] < S["R6_ADDR"]):
-            continue
+        if not (S["SRC6_ADDR"] <= S[lab] < S["R6_ADDR"]) or S["src0_blocks"] <= S[lab] < S["src0_end"]:
+            continue                              # (NEW-MON3 T7: SRC0's bank-0 blocks lie in bank 0, not here)
         seen += 1
         f0, n = S[lab + "_first"], S[lab + "_n"]
         raw = b"".join(frames[nm] for nm in names[f0:f0 + n])
@@ -534,6 +534,27 @@ def src6_decode(r, fails, name):
     if not seen:
         print(f"[FAIL] {name} S6: no SRC6 block in this build")
         fails.append(f"{name}/S6/none")
+    # NEW-MON3 T7 S0: every SRC0 block (bank 0 B0_CODE2, virtual FD_BLK = real - SRC0_VDELTA, $6000..$7FFF) through
+    # the real zx0_frame: bit-exact, GEN_ZBLK = the virtual key, bank 0 (BANK_TEXT) paged after
+    seen0 = 0
+    for b in range(S["ZX0_BLOCKS"]):
+        lab = f"zblk_{b}"
+        if lab not in S or not (S["src0_blocks"] <= S[lab] < S["src0_end"]):
+            continue
+        seen0 += 1
+        f0, n = S[lab + "_first"], S[lab + "_n"]
+        raw = b"".join(frames[nm] for nm in names[f0:f0 + n])
+        virt = S[lab] - S["SRC0_VDELTA"]
+        t, scr, hl, zb, shadow = decode_call(r, virt)
+        ok = (len(raw) == S[lab + "_raw"] and scr[:len(raw)] == raw and hl == S["GEN_SCRATCH"]
+              and zb == virt and shadow & 7 == S["BANK_TEXT"] and 0x6000 <= virt < 0x8000)
+        print(f"[{'PASS' if ok else 'FAIL'}] {name} S0 SRC0 block {b} [{', '.join(names[f0:f0 + n])}]: "
+              f"virt {virt:#06x} (bank 0 {S[lab]:#06x}) {S[lab + '_packed']} -> {len(raw)} B, zx0_frame {t:,} T")
+        if not ok:
+            fails.append(f"{name}/S0/{lab}")
+    if not seen0:
+        print(f"[FAIL] {name} S0: no SRC0 block in this build")
+        fails.append(f"{name}/S0/none")
 
 
 def ft_layout(S):
@@ -671,7 +692,7 @@ class Ref:
         if "gu_tab" not in S:                          # --baseline: pre-3F-T2 keeps the other FX rows
             return
         fx0, fxn = S["KFID_FXM"], S["KFID_FXW"] + S["KFCNT_FXW"]
-        h0, hn = self.unit(hero + S["K_FX_BASE"])
+        h0, hn = self.unit(hero + S["U_FX_BASE"])
         if h0 > fx0:
             self.frt_none(fx0, h0 - fx0)
         if fxn > h0 + hn:
@@ -700,8 +721,8 @@ class Ref:
         self.hero = hero
         self.begin(hero)                               # 3F-T2 pool_hero
         self.kind(hero)
-        if "K_FX_BASE" in self.S:                      # D3-4: + the class FX kind
-            self.kind(hero + self.S["K_FX_BASE"])
+        if "U_FX_BASE" in self.S:                      # D3-4: + the class FX kind
+            self.kind(hero + self.S["U_FX_BASE"])
         self.mark = (self.idx, self.ptr)               # alloc_mark: the LEVEL mark
         self.level(lp)
 

@@ -745,6 +745,7 @@ ig_gtab:        DB   2 | GT_W, IT_W_LONG
                 DB   2, IT_C_FIRE
                 DB   3, IT_C_MANA
                 DB   3, IT_C_PLENTY
+                DB   5, IT_C_FROST              ; NEW-MON3 Frost Charm: D5+, normal weight (one row)
 IG_GEAR_N       EQU ($ - ig_gtab) / 2
 ; §1.5 traps: count by depth; pool length = min(depth, TRAP_KINDS) (DART D1+, GAS D2+, TELEPORT D3+, STUN D4+, ALARM D5+)
 ; = a prefix of ig_tord (type = ig_tord[rnd(len)]; one draw, as before STUN1)

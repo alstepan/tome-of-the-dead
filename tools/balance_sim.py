@@ -184,11 +184,12 @@ GEAR = {
     "Ring of Fire Ward": dict(slot="c", res={FIRE: 1}), "Amulet of Mana": dict(slot="c", regen=0.5),
     "Amulet of Plenty": dict(slot="c", food=0.5), "Scarab": dict(slot="c", regen=0.5, food=0.5),
     "Ring of the Grave": dict(slot="c", mp=2, res={DARK: 2}),
+    "Frost Charm": dict(slot="c", res={COLD: 1}),                    # NEW-MON3 (D5+, gear table)
 }
 ITEM_GEAR = {"IT_A_ROBE": "Robe", "IT_A_LEATHER": "Leather", "IT_W_LONG": "Long Sword", "IT_W_AXE": "War Axe", "IT_W_IRON": "Iron Staff", "IT_W_RUNE": "Rune Staff",
              "IT_A_CHAIN": "Chain Mail", "IT_A_PLATE": "Plate", "IT_H_HOOD": "Hood", "IT_H_HELM": "Helm",
              "IT_C_MIGHT": "Ring of Might", "IT_C_WARD": "Ring of Warding", "IT_C_FIRE": "Ring of Fire Ward",
-             "IT_C_MANA": "Amulet of Mana", "IT_C_PLENTY": "Amulet of Plenty"}
+             "IT_C_MANA": "Amulet of Mana", "IT_C_PLENTY": "Amulet of Plenty", "IT_C_FROST": "Frost Charm"}
 # gear name -> items_model type id name (GEAR1 gate / GEAR3 Enchant target use type ids); uniques included
 NAME_TYPE = dict((v, k) for k, v in ITEM_GEAR.items())
 NAME_TYPE.update({"Short Sword": "IT_W_SHORT", "Oak Staff": "IT_W_OAK", "Cleaver": "IT_W_CLEAVER", "Bone Staff": "IT_W_BONE",

@@ -21,7 +21,7 @@ holds one DW (offset from it_words) per 8 words: a lookup starts at
 it_wcx[(k-1) >> 3] and skips (k-1) & 7 words (<= 7 scans).
 
 Type rows: it_name = 3 word ids per row (0-padded, no terminator when full),
-44 rows, one per type id. IT_BOOK's first word is HERO_MARK ($FF): item_name
+45 rows, one per type id. IT_BOOK's first word is HERO_MARK ($FF): item_name
 substitutes W_WAR (Warrior/knight) or W_SPELL (Mage); the TOME word is shared.
 it_stat = 2 B per row: byte0 = DIE | (ATK & $0F) << 4; byte1 = AMT (food,
 potions) or (DEF & $0F) | (MP << 4) (gear).
@@ -30,7 +30,7 @@ Stems: 0-terminated ASCII, offset = S3_<NAME> (resident) / S_FX_<NAME> (fx)
 / S3O_<NAME> (page).
 
 CHECKS (any failure = message on stderr and exit 1; nothing is written):
-  - every word A-Z and <= 8 chars; 48 distinct words (game.md §8.11 item 2);
+  - every word A-Z and <= 8 chars; 50 distinct words (game.md §8.11 item 2);
   - every name 1..3 words, <= 18 chars; no duplicate display name; only gear
     is unique;
   - every composed line <= 32 chars (LOG_MAX): pick / equip / remove /
@@ -60,9 +60,9 @@ LOG_MAX = 32
 WORD_MAX = 8
 NAME_MAX_WORDS = 3
 NAME_CAP = 18
-WORD_COUNT_SPEC = 48      # §8.11 item 2: 2 book words + names (no BUC / appearance / OF)
+WORD_COUNT_SPEC = 50      # §8.11 item 2: 2 book words + names (no BUC / appearance / OF); NEW-MON3 +2 FROST CHARM
 WCX_STEP = 8
-ROWS = 44                 # one row per type id 0..43 (IT_COUNT)
+ROWS = 45                 # one row per type id 0..44 (IT_COUNT; NEW-MON3 IT_C_FROST)
 HERO_TOKEN = "<HERO>"     # [types] name token: the class book's first word
 HERO_MARK = 0xFF          # it_name id; item_name substitutes W_WAR / W_SPELL
 HERO_WORD = {"warrior": "WAR", "knight": "WAR", "mage": "SPELL"}
@@ -92,11 +92,11 @@ def parse_defs(path):
                 syms[m.group(1)] = int(m.group(2))
     for need in ("IT_COUNT", "IT_F_CARROT", "IT_F_MEAT", "IT_P_HEAL", "IT_P_CURE",
                  "IT_S_TELEPORT", "IT_S_ENCHANT", "IT_BOOK", "IT_BOW",
-                 "IT_W_SHORT", "IT_C_GRAVE", "IT_DAGGER", "IT_ARROW", "IT_KEY"):
+                 "IT_W_SHORT", "IT_C_FROST", "IT_DAGGER", "IT_ARROW", "IT_KEY"):
         if need not in syms:
             raise ItemsError(f"{path}: {need} not found")
-    if syms["IT_COUNT"] != 44:
-        raise ItemsError(f"{path}: IT_COUNT is {syms['IT_COUNT']}, the packer expects 44")
+    if syms["IT_COUNT"] != ROWS:
+        raise ItemsError(f"{path}: IT_COUNT is {syms['IT_COUNT']}, the packer expects {ROWS}")
     return syms
 
 
@@ -287,7 +287,7 @@ class Model:
             k[t] = "scr"
         k[s["IT_BOOK"]] = "book"
         k[s["IT_BOW"]] = "bow"
-        for t in rng("IT_W_SHORT", "IT_C_GRAVE"):
+        for t in rng("IT_W_SHORT", "IT_C_FROST"):
             k[t] = "gear"
         return k
 
@@ -546,7 +546,7 @@ def emit(model, out_dir):
            "; it_wcx: DW offset (from it_words) of word 1, 9, 17, ... (every 8th word).",
            "it_wcx:"] + wcx_lines + [
            "",
-           "; it_name: 44 rows x 3 B word ids (1-based, 0 = none). $FF (ITN_HERO) = the hero tome word:",
+           "; it_name: 45 rows x 3 B word ids (1-based, 0 = none). $FF (ITN_HERO) = the hero tome word:",
            "; item_name substitutes W_WAR (Warrior/knight) or W_SPELL (Mage) for it; TOME is shared.",
            "it_name:"] + names_comment + [
            "",

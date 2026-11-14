@@ -122,7 +122,7 @@ def model_cases(p, L, rnd, n, worst):
     pr = present(L)
     pool = kind_pool(d)
     st = L.blk[S["LVL_START"] - G.BASE]
-    lp_kinds = list(p.z.read_memory(S["LP_KINDS"], 4))
+    lp_kinds = list(p.z.read_memory(S["LP_KINDS"], 8))      # NEW-MON3 T3: 8 slots
     check(f"M d{d} LP_KINDS == levelgen LP_TAB", lp_kinds == [G.KROWS[k][0] for k in G.LP_TAB[d][0]], lp_kinds)
     fl0 = list(p.z.read_memory(S["FLOOR_LIST"], 4 * S["FLOOR_MAX"]))
     spawns = mism = 0
@@ -313,7 +313,7 @@ def due_cases(p, L, rnd):
 def heavy_cost(p, L, rnd):
     cur = p.rb("CUR_ROOM")
     sk, rat, gob = S["K_SKELETON"], S["K_RAT"], S["K_GOBLIN"]
-    p.wmem(S["LP_KINDS"], [sk, rat, sk, rat])
+    p.wmem(S["LP_KINDS"], [sk, rat, sk, rat] * 2)
     p.wb("LVL_LAIR", S["ROOM_NONE"])
     p.wb("LVL_SANCTUM", S["ROOM_NONE"])
     p.wb("TRK_PREV", cur)

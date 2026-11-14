@@ -38,5 +38,5 @@
                 INCLUDE "icons6.asm"           ; IC1: icon_slot / worn_draw / qs_draw (the 16x16 icon blitter)
                 ; AMMO-COUNT: before the icon data (after it, qs_ammo's +66 B made the guard pad 26 B)
                 ; (MEM-RECLAIM w3: lp_wt6 is gone: R6 reads the bank-2 lp_wt, kind_tab + KT_REACH)
-                INCLUDE "../assets/gfx/icons/icons16.asm"   ; IC1 + FLOOR1: 45 logical icons packed in 995 B (1,376 raw; MEM-RECLAIM w2c; tools/icons16.py)
+                INCLUDE "../assets/gfx/icons/icons16.asm"   ; IC1 + FLOOR1: 46 logical icons packed in 995 B (1,376 raw; MEM-RECLAIM w2c; tools/icons16.py)
 fs_worn:        DB   " WORN OUT", 0           ; it_fmt (gear6.asm): m = -3 (after the icon data)

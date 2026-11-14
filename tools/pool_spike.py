@@ -138,7 +138,7 @@ GROUPS = {
     "GHOST": F("K_GHOST"), "SKELETON": F("K_SKELETON"),
     "SKEL_WALK": F("K_SKELETON", SKEL_WALK_NAMES),
     "DEAD_R": F("K_RAT", {"rat_dead"}),
-    "ARROWS": F("K_FXW", {"arrow_fly1", "arrow_fly2", "arrow_hit"}),
+    "ARROWS": F("U_FXW", {"arrow_fly1", "arrow_fly2", "arrow_hit"}),
 }
 for g, lst in STAND_IN.items():
     GROUPS[g] = [Fr(*t) for t in lst]
@@ -176,10 +176,10 @@ KIND_GROUPS = {
 OWN_COPY = {"Vampire": "NECRO", "Archmage": "NECRO", "Archer": "SKEL_WALK"}
 
 HEROES = {  # hero kind sets incl. class FX (PHASE_SHIFT 1)
-    "Warrior": sum(f.pool() for f in REAL["K_KNIGHT"]) + sum(f.pool() for f in REAL["K_FXW"]),
-    # K_FXM kind frames + the two shared fizz frames (FRM'd under K_FXW): POOL_FXM = 1,152
-    "Mage": sum(f.pool() for f in REAL["K_WIZARD"]) + sum(f.pool() for f in REAL["K_FXM"])
-            + sum(f.pool() for f in REAL["K_FXW"] if f.name in ("spark_fizz1", "spark_fizz2")),
+    "Warrior": sum(f.pool() for f in REAL["K_KNIGHT"]) + sum(f.pool() for f in REAL["U_FXW"]),
+    # U_FXM kind frames + the two shared fizz frames (FRM'd under U_FXW): POOL_FXM = 1,152
+    "Mage": sum(f.pool() for f in REAL["K_WIZARD"]) + sum(f.pool() for f in REAL["U_FXM"])
+            + sum(f.pool() for f in REAL["U_FXW"] if f.name in ("spark_fizz1", "spark_fizz2")),
 }
 
 
@@ -307,7 +307,7 @@ def main():
     w("* Arrows (3 frames, " + f"{gsize('ARROWS')} B) are added for the Mage on levels with an Archer; the Warrior's FX already holds them. "
       "Necro bolt frames (" + f"{gsize('NBOLT')} B) on Necro / Archmage levels.")
     w(f"* Fixed part as `data.asm` POOL_NEED: 2 select idles + 3 x 576 straddle = {FIXED:,}. "
-      f"Hero: Warrior = Knight + K_FXW = {HEROES['Warrior']:,}; Mage = Wizard + K_FXM = {HEROES['Mage']:,}.\n")
+      f"Hero: Warrior = Knight + U_FXW = {HEROES['Warrior']:,}; Mage = Wizard + U_FXM = {HEROES['Mage']:,}.\n")
 
     w("## Group sizes (pool bytes)\n")
     w("| Group | frames | pool B |")

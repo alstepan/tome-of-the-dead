@@ -401,7 +401,7 @@ def bag_page(p, check):
         return room_model.item_ink(t)
 
     def icon(idx):
-        """IC1: the 16x16 icon idx (type - IT_BAG_LO; 39 + worn slot = placeholder) cells."""
+        """IC1: the 16x16 icon idx (type - IT_BAG_LO; ICONS16_PH + worn slot = placeholder) cells."""
         return game_lib.icon16_cells(idx)
 
     def is_open():
@@ -469,7 +469,7 @@ def bag_page(p, check):
                 bad.append((s, "frame"))
             continue
         if rec is None:                           # IC1: an empty worn slot = its placeholder
-            idx, a, q = 39 + s - 20, S["ICONS16_INK_PH"], 0
+            idx, a, q = S["ICONS16_PH"] + s - 20, S["ICONS16_INK_PH"], 0
         else:
             idx, a, q = I(rec[0]) - S["IT_BAG_LO"], ink(I(rec[0])), rec[1]
         for (dc, dr), want in icon(idx).items():

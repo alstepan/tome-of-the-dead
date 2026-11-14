@@ -515,7 +515,7 @@ ec_row:         push hl
                 add  a, EC_VX
                 ld   e, a
                 jp   print6t
-                ASSERT TX_NM_KNIGHT + K_COUNT < 256 && EC_POS + 1 == TMP7 && TX_CLS_MAGE == TX_CLS_WARRIOR + 1
+                ASSERT TX_NM_ICE_SHADE < 256 && TX_NM_KNIGHT + K_COUNT < 256 && EC_POS + 1 == TMP7 && TX_CLS_MAGE == TX_CLS_WARRIOR + 1
                 ASSERT K_WIZARD == K_KNIGHT + 1 && K_KNIGHT == 0
 
 ;------------------------------------------------------------------------------

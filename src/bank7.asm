@@ -425,7 +425,7 @@ vb_turn:        ld   a, (P_ENTITIES + E_FLAGS)
                 djnz .l
                 ret
                 ASSERT EF_ACTIVE == 1 && (ST_FLAGS & $FF) + P_MAX_ENT <= $100
-                ASSERT LP_BOSS == LP_KINDS + 4
+                ASSERT LP_BOSS == LP_KINDS + 8
 
 ;------------------------------------------------------------------------------
 ; do_exit — A = EXIT_KIND. EX_LEVEL: level_descend (B3B-12). Else follower

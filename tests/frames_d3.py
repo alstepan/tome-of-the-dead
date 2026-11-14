@@ -4,7 +4,7 @@
 Reads build/tome-of-the-dead.sna + .sym (build first) and the approved D3-3 grids
 (assets/gfx/source/d3_grid/*.grid, game.md §6.1-6.4, §11.4):
   F1  every grid frame has FID_<name> < FID_COUNT <= FRT_MAX, inside its kind's
-      range: Knight frames in K_KNIGHT; FX frames in K_FXM and/or K_FXW
+      range: Knight frames in K_KNIGHT; FX frames in U_FXM and/or U_FXW
       (spark_fizz1/2 in both: Spark + Whirlwind impact; staff_bonk Mage)
   F2  frame_tab row (bank 2) = cols W/8, H, FT_OFFR = -ax, FT_OFFL =
       -(W - ax - body_w) with ax from the grid (Knight body 24, FX 8)
@@ -13,8 +13,8 @@ Reads build/tome-of-the-dead.sna + .sym (build first) and the approved D3-3 grid
   F4  the packed block (FD_BLK, banks 1/3) unpacks (tools/bin/dzx0) to the
       grid's pixels at FD_FRM: native rows [mask, data] per column, mask 1 =
       '.', data 1 = '#'
-  F5  R6 gu_tab fid0 / fcnt of K_FXW / K_FXM (the last two ids) and the
-      overlap (K_FXW starts at spark_fizz1 = the last 2 of K_FXM)
+  F5  R6 gu_tab fid0 / fcnt of U_FXW / U_FXM (the last two ids) and the
+      overlap (U_FXW starts at spark_fizz1 = the last 2 of U_FXM)
   F6  status icons (bank-1 vdata): 7 x 8 B glyphs + 7 attrs == status_icons.grid
 Run: python3 tests/frames_d3.py
 """
@@ -67,6 +67,8 @@ def virt(banks, v, n):
     """Virtual sprite-source / vdata address: $4000..$7FFF bank 6 (SRC6, real =
     virt + SRC6_VDELTA = virt + $8000), $8000.. bank 1, $C000.. bank 3."""
     assert v >= 0x4000, hex(v)
+    if 0x6000 <= v < 0x8000:                            # NEW-MON3 T7: SRC0 = bank 0's B0_CODE2 (real = virt + $6000)
+        return banks[0][v + 0x6000 - 0xC000:v + 0x6000 - 0xC000 + n]
     if v < 0x8000:
         return banks[6][v - 0x4000:v - 0x4000 + n]
     return banks[1][v - 0x8000:v - 0x8000 + n] if v < 0xC000 else banks[3][v - 0xC000:v - 0xC000 + n]
@@ -157,13 +159,13 @@ def main():
         chk(f"F4 {nm} pixels", block(blk)[frm:frm + len(raw)] == raw, True)
     chk("F1 frame count (4 Knight + 23 FX)", n, 27)
 
-    gu = B[6][S["gu_tab"] - 0xC000:S["gu_tab"] - 0xC000 + 2 * 32]   # 3F-T2: R6 gu_tab (was kind_tab KT_FID0 / KT_FCNT)
+    gu = B[6][S["gu_tab"] - 0xC000:S["gu_tab"] - 0xC000 + 2 * S["GU_N"]]   # 3F-T2: R6 gu_tab (was kind_tab KT_FID0 / KT_FCNT)
     for k in ("FXW", "FXM"):
-        kid = S[f"K_{k}"]
-        chk(f"F5 gu_tab K_{k} fid0 / fcnt", (gu[2 * kid], gu[2 * kid + 1]),
+        kid = S[f"U_{k}"]            # FX-U: the class FX are units >= K_MAX
+        chk(f"F5 gu_tab U_{k} fid0 / fcnt", (gu[2 * kid], gu[2 * kid + 1]),
             (S[f"KFID_{k}"], S[f"KFCNT_{k}"]))
-    chk("F5 ids", (S["K_FXW"], S["K_FXM"], S["K_FX_BASE"] + S["K_KNIGHT"], S["K_FX_BASE"] + S["K_WIZARD"]),
-        (30, 31, 30, 31))
+    chk("F5 ids", (S["U_FXW"], S["U_FXM"], S["U_FX_BASE"] + S["K_KNIGHT"], S["U_FX_BASE"] + S["K_WIZARD"]),
+        (S["K_MAX"] + 10, S["K_MAX"] + 11, S["K_MAX"] + 10, S["K_MAX"] + 11))
     chk("F5 overlap", S["KFID_FXW"], S["FID_spark_fizz1"])
     chk("F5 overlap end", S["KFID_FXM"] + S["KFCNT_FXM"], S["FID_spark_fizz2"] + 1)
 

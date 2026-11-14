@@ -662,8 +662,8 @@ def start_x(b):
 # lp_enter(block, lp, r, hs, hx, hw): one room entry (§9.4.3) -> (lp', placed)
 #   placed = [(kind_byte, hp, storey, col, facing_left)] in slot-fill order.
 #   Stream: x = (LVL_SEED ^ ((r*16 + $0F) << 8) ^ ROOM_VISITS[r]) or 1, the
-#   GEN_RNG algorithm. FRESH lair: [boss, escort = fit(rnd(4), cap 12)];
-#   FRESH room: count x fit(rnd(4), SIGMA_INIT = max(8, ROOM_MAX * minW),
+#   GEN_RNG algorithm. FRESH lair: [boss, escort = fit(rnd(8), cap 12)];
+#   FRESH room: count x fit(rnd(8), SIGMA_INIT = max(8, ROOM_MAX * minW),
 #   reserving left * minW for the units still to roll: the rolled kind, else the
 #   other LP_KINDS in list order; the lightest always fits, so nothing is lost);
 #   VISITED: its entries. Then per unit, in order: a unit of the LAIR first
@@ -684,14 +684,20 @@ def start_x(b):
 #   (s, x) with lp_legal gap LP_GAP2 (5), no stream step, no other-storey retry; if
 #   that fails, the 8 tries as above. A placed unit consumes its parked body and keeps
 #   its facing; an unplaced one leaves it parked (a later unit of that kind may match it).
-LP_TAB = {1: (("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 13),
-          2: (("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 14),
-          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT"), "K_BOSS_D3", 14),
-          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER"), "K_BOSS_D4", 15),
-          5: (("K_MUMMY", "K_SKELETON", "K_ARCHER", "K_SPIDER"), "K_BOSS_D5", 16),
-          6: (("K_VAMPIRE", "K_GHOST", "K_NECRO", "K_ORC"), "K_BOSS_D6", 15),
-          7: (("K_ORC", "K_NECRO", "K_GHOST", "K_NECRO"), "K_BOSS_D7", 15),   # 3F-T13bc H1: no Archer on D7
-          8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE"), "K_BOSS_D8", 12)}
+def _x2(*k4):
+    """NEW-MON3 T3: today's 4 kinds listed twice = the 8-slot LP_KINDS (pick rnd & 7 draws as rnd & 3 did).
+    T4 replaces the rows by the new_monsters.md section 5 lists (slots 0..n-1 distinct, then duplicates)."""
+    return tuple(k4) + tuple(k4)
+
+
+LP_TAB = {1: (_x2("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 13),
+          2: (_x2("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 14),
+          3: (_x2("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT"), "K_BOSS_D3", 14),
+          4: (_x2("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER"), "K_BOSS_D4", 15),
+          5: (_x2("K_MUMMY", "K_SKELETON", "K_ARCHER", "K_SPIDER"), "K_BOSS_D5", 16),
+          6: (_x2("K_VAMPIRE", "K_GHOST", "K_NECRO", "K_ORC"), "K_BOSS_D6", 15),
+          7: (_x2("K_ORC", "K_NECRO", "K_GHOST", "K_NECRO"), "K_BOSS_D7", 15),   # 3F-T13bc H1: no Archer on D7
+          8: (_x2("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE"), "K_BOSS_D8", 12)}
 # kind_tab mirror (main.asm KROW KT_BW / KT_HP / KF_FLYER; tests/lp.py checks
 # it against the build): kind -> (body width, hp, flyer)
 KINFO = {"K_SKELETON": (3, 10, False), "K_GOBLIN": (3, 6, False), "K_GHOST": (3, 8, True),
@@ -1008,7 +1014,7 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
     lp[lp_off("LP_RNG"):lp_off("LP_RNG") + 2] = rng.x.to_bytes(2, "little")
     ro = lp_off("LP_REC") + r * D["LR_STRIDE"]
     hdr = lp[ro]
-    kinds = [lp[lp_off("LP_KINDS") + i] for i in range(4)]
+    kinds = [lp[lp_off("LP_KINDS") + i] for i in range(8)]     # NEW-MON3 T3: 8 slots
     sig = [0]
     depth, lvl = b[H["LVL_DEPTH"]], lp[lp_off("LP_LVL")]
     wt = k3_weight if f3 else lp_wt
@@ -1027,8 +1033,8 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
         3F (tier=True, FRESH rooms only): the rolled kind gets the §9.6 tier roll
         (spawn stream, LP_LVL); a rejected tier falls back to its own base, then
         the other LP_KINDS at base tier (the escort is never rolled)."""
-        i = rng.rnd(4)
-        order = [kinds[i]] + [kinds[j] for j in range(4) if j != i]
+        i = rng.rnd(8)
+        order = [kinds[i]] + [kinds[j] for j in range(8) if j != i]
         if f3 and tier:
             key = tier_roll(rng, K3_BY_ID[kinds[i]], depth, lvl)
             if KROWS[key][0] != kinds[i]:

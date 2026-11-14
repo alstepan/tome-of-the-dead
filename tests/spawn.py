@@ -311,7 +311,7 @@ def bone_caller(p, lines):
     check("B setup: D6 + a 20-col standable run", L is not None, r)
     if not L:
         return
-    lpk = list(p.z.read_memory(S["LP_KINDS"], 4))
+    lpk = list(p.z.read_memory(S["LP_KINDS"], 8))
     want_k = K["SKELETON"] if K["SKELETON"] in lpk else K["GHOST"]
     s_, c0 = r
     clear_room(p)
@@ -476,7 +476,7 @@ def alarm(p, lines):
         return
     s_, c0 = r
     TL = S["TRAP_LIST"]
-    lpk = list(p.z.read_memory(S["LP_KINDS"], 4))
+    lpk = list(p.z.read_memory(S["LP_KINDS"], 8))
     for dead in (False, True):
         clear_room(p)
         room = p.rb("CUR_ROOM")

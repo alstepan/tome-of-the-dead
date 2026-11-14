@@ -55,6 +55,8 @@ def sna_virt(v, n):
     """Virtual sprite-source / vdata address (copy_virt): $4000..$7FFF = bank 6
     (SRC6 blocks, real = virt + SRC6_VDELTA), $8000.. = bank 1, $C000.. = bank 3."""
     assert v >= 0x4000, hex(v)
+    if 0x6000 <= v < 0x8000:                            # NEW-MON3 T7: SRC0 = bank 0's B0_CODE2, real = virt + SRC0_VDELTA
+        return sna_bank(0, v + S["SRC0_VDELTA"], n)
     if v < 0x8000:
         return sna_bank(6, v + S["SRC6_VDELTA"], n)
     return sna_bank(1, v + 0x4000, n) if v < 0xC000 else sna_bank(3, v, n)
@@ -62,7 +64,8 @@ def sna_virt(v, n):
 
 # self-check: the SRC6 window maps to bank 6 at the real address, not bank 1
 assert sna_virt(S["SRC6_ADDR"] - S["SRC6_VDELTA"], 16) == sna_bank(6, S["SRC6_ADDR"], 16)
-assert S["SRC6_VDELTA"] == 0x8000
+assert S["SRC6_VDELTA"] == 0x8000 and S["SRC0_VDELTA"] == 0x6000
+assert sna_virt(S["src0_blocks"] - S["SRC0_VDELTA"], 16) == sna_bank(0, S["src0_blocks"], 16)
 
 
 def sna_boot(addr, n):
@@ -231,11 +234,11 @@ def pool_check(p, check, tag, snap0, snapd=None):
 
 
 def fx_check(p, check):
-    """D3-4: the hero's class FX kind (K_FX_BASE + HERO_KIND) is resident at the
+    """D3-4: the hero's class FX kind (U_FX_BASE + HERO_KIND) is resident at the
     hero start: every fid of its gu_tab unit range has a right (v0/v1) and a
     left (v2/v3) variant in a pool bank whose bytes lie inside the pool."""
     hk = p.rb("HERO_KIND")
-    k = S["K_FX_BASE"] + hk
+    k = S["U_FX_BASE"] + hk
     f0, fc = bank_read(p, S["BANK_R6"], S["gu_tab"] + 2 * k, 2)     # 3F-T2: R6 gu_tab
     want = ("KFID_FXW", "KFCNT_FXW") if hk == S["K_KNIGHT"] else ("KFID_FXM", "KFCNT_FXM")
     check(f"GI FX: kind {k} range == {want[0]}", (f0, fc) == (S[want[0]], S[want[1]]), (f0, fc))
@@ -420,8 +423,8 @@ SEQ_BIN = Path(os.environ.get("WZ_BUILD_DIR", str(Path(__file__).resolve().paren
 
 
 def lp_kinds(p):
-    """LP_KINDS[0..3] + LP_BOSS as kind rows (3F-T5: LP_BOSS carries LEK_GOLD on the golden depths)."""
-    ks = [k & S["LEK_KIND_MASK"] for k in p.z.read_memory(S["LP_KINDS"], 5)]
+    """LP_KINDS[0..7] + LP_BOSS as kind rows (3F-T5: LP_BOSS carries LEK_GOLD on the golden depths)."""
+    ks = [k & S["LEK_KIND_MASK"] for k in p.z.read_memory(S["LP_KINDS"], S["LP_GEN_N"])]
     if S["K_VAMPIRE"] in ks and S["K_VBAT"] not in ks:
         ks.append(S["K_VBAT"])      # 3F-T9: the Vampire's bat form shares the level's pool
     return ks

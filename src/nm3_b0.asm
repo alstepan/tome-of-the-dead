@@ -25,35 +25,37 @@ lp_hdr0:
                 ld   a, (LVL_DEPTH)
                 ld   b, a
                 add  a, a
+                add  a, a
                 add  a, b
-                add  a, a                      ; 6 d (row d - 1 from lp_dtab - 6)
+                add  a, a                      ; 10 d (row d - 1 from lp_dtab - LP_DROW; <= 80)
                 ld   hl, lp_dtab - LP_DROW
                 ld   e, a
                 ld   d, 0
                 add  hl, de                    ; (hla is bank 3: inline)
                 ld   de, LP_KINDS
                 ld   bc, LP_DROW
-                ldir                           ; LP_KINDS, LP_BOSS, LP_TOTAL
+                ldir                           ; LP_KINDS[0..7], LP_BOSS, LP_TOTAL
                 ret
-                ASSERT LP_BOSS == LP_KINDS + 4 && LP_TOTAL == LP_KINDS + 5
-                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 4) >> 8)    ; lp_enter .mw: inc e
+                ASSERT LP_BOSS == LP_KINDS + 8 && LP_TOTAL == LP_KINDS + 9 && LP_DROW == 10 && LP_DROW * LEVELS < 256
+                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 8) >> 8)    ; lp_enter .mw: inc e
 
 ;------------------------------------------------------------------------------
-; Per-depth budget rows (game.md §9.4 table): 4 kinds in table order, boss,
+; Per-depth budget rows (game.md §9.4 table): 8 kind slots (NEW-MON3 T3: today's 4 kinds listed twice, so
+; LP_KINDS[rnd & 7] draws as rnd & 3 did; T4 puts the §5 lists here), boss,
 ; count incl. boss (3F-T3: real kind ids, defs.asm). 3F-T5: the golden depths (D1-D3, D5, D6, §9.7
 ; R1) carry LEK_GOLD in the boss byte (levelgen.py k3_boss); the entity bit is E_GOLD.
 ; NEW-MON3 T1: bank 0 (was bank-3 lpop3.asm); read by lp_hdr0 and the assembler's pool /
 ; seq-cache sims (main.asm, MMU 3 = BANK_TEXT), tests/endcard_k.py (.sna bank 0).
 ;------------------------------------------------------------------------------
-lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1 | LEK_GOLD, 13
-                DB   K_GOBLIN, K_SPIDER, K_BAT, K_RAT,         K_BOSS_D2 | LEK_GOLD, 14
-                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT,    K_BOSS_D3 | LEK_GOLD, 14
-                DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER,         K_BOSS_D4, 15
-                DB   K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER,  K_BOSS_D5 | LEK_GOLD, 16
-                DB   K_VAMPIRE, K_GHOST, K_NECRO, K_ORC,       K_BOSS_D6 | LEK_GOLD, 15
-                DB   K_ORC, K_NECRO, K_GHOST, K_NECRO,         K_BOSS_D7, 15   ; 3F-T13bc ARCHER-DEPTHS H1: the 2nd Necro replaces the Archer (weight 6 = 6)
-                DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE,  K_BOSS_D8, 12
-LP_DROW         EQU 6
+lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN, K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1 | LEK_GOLD, 13
+                DB   K_GOBLIN, K_SPIDER, K_BAT, K_RAT, K_GOBLIN, K_SPIDER, K_BAT, K_RAT,         K_BOSS_D2 | LEK_GOLD, 14
+                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT, K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT,    K_BOSS_D3 | LEK_GOLD, 14
+                DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER, K_ORC, K_RAT, K_SPIDER, K_ARCHER,         K_BOSS_D4, 15
+                DB   K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER, K_MUMMY, K_SKELETON, K_ARCHER, K_SPIDER,  K_BOSS_D5 | LEK_GOLD, 16
+                DB   K_VAMPIRE, K_GHOST, K_NECRO, K_ORC, K_VAMPIRE, K_GHOST, K_NECRO, K_ORC,       K_BOSS_D6 | LEK_GOLD, 15
+                DB   K_ORC, K_NECRO, K_GHOST, K_NECRO, K_ORC, K_NECRO, K_GHOST, K_NECRO,         K_BOSS_D7, 15   ; 3F-T13bc ARCHER-DEPTHS H1: the 2nd Necro replaces the Archer (weight 6 = 6)
+                DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE, K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE,  K_BOSS_D8, 12
+LP_DROW         EQU 10
                 ASSERT $ - lp_dtab == LEVELS * LP_DROW
 
 ;------------------------------------------------------------------------------

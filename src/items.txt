@@ -11,7 +11,7 @@
 #           CONTRACT for item_name (T10): $FF -> W_WAR when HERO_KIND is the Warrior
 #           (knight/warrior), W_SPELL for the Mage; the TOME word is shared.
 #
-# [types]   one row per type id, each id once, ids 0..43 (IT_* in item_defs.asm; IT_COUNT 44):
+# [types]   one row per type id, each id once, ids 0..44 (IT_* in item_defs.asm; IT_COUNT 45):
 #             IT_NAME | NAME | INK | DIE ATK DEF MP AMT | FLAG | NOTE
 #           NAME    1..3 words separated by single spaces, or '-' (no name).
 #                   Potions/scrolls: the fixed name (always known, §8.11 item 2).
@@ -108,6 +108,7 @@ IT_C_MANA       | MANA AMULET       | $06  | 0 0 0 0 0  | -  | MP regen x2 (not 
 IT_C_PLENTY     | FOOD AMULET       | $06  | 0 0 0 0 0  | -  | FOOD burn x1/2 (not packed)
 IT_C_SCARAB     | SCARAB AMULET     | $06  | 0 0 0 0 0  | U  | D5 unique: MP regen x2, FOOD burn x1/2 (not packed)
 IT_C_GRAVE      | GRAVE RING        | $06  | 0 0 0 2 0  | U  | D6 unique: MP+2, DARK I (not packed)
+IT_C_FROST      | FROST CHARM       | $45  | 0 0 0 0 0  | -  | NEW-MON3 amulet, D5+: COLD R (not packed)
 
 # --- message stems (§8.11 (3) table; lines that are NOT the item names) --------------
 # Retag (3E-T4c, architect 2026-10-20): the resident block keeps only what the turn

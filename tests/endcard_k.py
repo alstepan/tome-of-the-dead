@@ -84,7 +84,7 @@ def kind_depths():
     lp = sna(S["BANK_TEXT"], S["lp_dtab"], 8 * S["LP_DROW"])   # NEW-MON3 T1: bank 0 (was bank 3)
     dep = {}
     for d in range(8):
-        row = lp[d * 6:d * 6 + 5]
+        row = lp[d * S["LP_DROW"]:d * S["LP_DROW"] + S["LP_GEN_N"]]
         for k in row:
             dep.setdefault(k & S["LEK_KIND_MASK"], d + 1)
     tt = sna(S["BANK_R6"], S["tier_tab"], 3 * S["TIER_N"])
@@ -211,9 +211,10 @@ def main():
 
         # ------------------------------------------------------------- K: every killer kind
         dep = kind_depths()
-        kinds = sorted(k for k in dep if 2 <= k < S["K_COUNT"])
-        check("K setup: every monster kind 2..29 has a depth", kinds == list(range(2, S["K_COUNT"])),
-              sorted(set(range(2, S["K_COUNT"])) - set(kinds)))
+        KMON = S["K_GARGOYLE"]          # NEW-MON3 T8: kinds 30 / 31 are in no LP_KINDS yet (T10 places them)
+        kinds = sorted(k for k in dep if 2 <= k < KMON)
+        check("K setup: every monster kind 2..29 has a depth", kinds == list(range(2, KMON)),
+              sorted(set(range(2, KMON)) - set(kinds)))
         for i, k in enumerate(kinds):
             d, hero = dep[k], i & 1
             ok, room = setup(d, hero, 0x4E00 + 16 * d + k)

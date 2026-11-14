@@ -1057,7 +1057,7 @@ def trickle_setup(p, key="trickle"):
         pmix_setup(p)
     sk, rat, gob = S["K_SKELETON"], S["K_RAT"], S["K_GOBLIN"]
     p.wb("LVL_DEPTH", 5)
-    p.wmem(S["LP_KINDS"], [sk, rat, sk, rat])
+    p.wmem(S["LP_KINDS"], [sk, rat, sk, rat] * 2)    # 8 slots (NEW-MON3 T3)
     p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~S["LF_GRATE_OPEN"] & 255)
     if key == "trickle":
         p.wb("LVL_LAIR", S["ROOM_NONE"])
@@ -1525,7 +1525,7 @@ def run_scenario(h, scen):
         trap_setup(p, scen[5])
     if len(scen) > 5 and scen[5] in ("walarm", "walarm2"):
         WALARM_PRE[:] = [sl for sl in range(1, 16) if p.ent(sl)["FLAGS"] & 1]
-        p.wmem(S["LP_KINDS"], [S["K_GOBLIN"]] * 4)
+        p.wmem(S["LP_KINDS"], [S["K_GOBLIN"]] * 8)
         p.wmem(S["SPQ_K"], [S["SPQ_WAVE"], S["SPQ_NONE"], 2])
         if scen[5] == "walarm2":
             p.wb("LP_RESPAWNS", 1)

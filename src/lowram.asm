@@ -152,7 +152,7 @@ sel_tab:        DB   FID_knight_idle1, FID_wizard_idle
 
 ;==============================================================================
 ; start_game — C = hero kind. Generate its frames (§5.2: only the chosen
-; hero) and its class FX kind (D3-4: K_FX_BASE + hero), new game, first level (B3B-12: a generated D1 through level_enter;
+; hero) and its class FX kind (D3-4: U_FX_BASE + hero), new game, first level (B3B-12: a generated D1 through level_enter;
 ; proto_start != 0: the PROTO test fixture at proto_hook), then the play
 ; loop (bank 2, never returns).
 ;==============================================================================
@@ -977,7 +977,7 @@ imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EM
                 ASSERT TX_NM_WIZARD == TX_NM_KNIGHT + K_WIZARD && TX_NM_SKELETON == TX_NM_KNIGHT + K_SKELETON
                 ASSERT TX_NM_GOBLIN == TX_NM_KNIGHT + K_GOBLIN && TX_NM_GHOST == TX_NM_KNIGHT + K_GHOST
                 ASSERT TX_NM_RAT == TX_NM_KNIGHT + K_RAT && TX_NM_BAT == TX_NM_KNIGHT + K_BAT
-                ASSERT TX_NM_SLIME == TX_NM_KNIGHT + K_SLIME && K_KNIGHT == 0 && K_COUNT == 30
+                ASSERT TX_NM_SLIME == TX_NM_KNIGHT + K_SLIME && K_KNIGHT == 0 && K_COUNT == 32
                 ; 3F-T3: the new kinds' names (ids 9..29, in kind id order)
                 ASSERT TX_NM_SPIDER == TX_NM_KNIGHT + K_SPIDER && TX_NM_VAMPIRE == TX_NM_KNIGHT + K_VAMPIRE
                 ASSERT TX_NM_ORC == TX_NM_KNIGHT + K_ORC && TX_NM_ARCHER == TX_NM_KNIGHT + K_ARCHER
@@ -990,6 +990,9 @@ imp_post:       DB   TX_EMPTY, TX_EMPTY, TX_EMPTY, TX_HITS_YOU, TX_MISSES, TX_EM
                 ASSERT TX_NM_POLTERGEIST == TX_NM_KNIGHT + K_POLTERGEIST && TX_NM_BERSERKER == TX_NM_KNIGHT + K_ORC_BERSERK
                 ASSERT TX_NM_BOUNCER == TX_NM_KNIGHT + K_ORC_BOUNCER && TX_NM_SNIPER == TX_NM_KNIGHT + K_SNIPER
                 ASSERT TX_NM_BONE_CALLER == TX_NM_KNIGHT + K_BONE_CALLER
+                ; NEW-MON3 T8: 30 Gargoyle, 31 Fire Imp (the alias as assembled), + the Frost Wraith's name after it
+                ASSERT TX_NM_GARGOYLE == TX_NM_KNIGHT + K_GARGOYLE && TX_NM_FIRE_IMP == TX_NM_KNIGHT + K_ALIAS && TX_NM_ICE_SHADE == TX_NM_FIRE_IMP + 1
+                ASSERT TXL_NM_GARGOYLE <= NM_LONG && TXL_NM_FIRE_IMP <= NM_LONG && TXL_NM_ICE_SHADE <= NM_LONG
                 ASSERT TXL_NM_SPIDER <= NM_LONG && TXL_NM_VAMPIRE <= NM_LONG && TXL_NM_ORC <= NM_LONG && TXL_NM_ARCHER <= NM_LONG
                 ASSERT TXL_NM_MUMMY <= NM_LONG && TXL_NM_NECRO <= NM_LONG && TXL_NM_OGRE <= NM_LONG && TXL_NM_DKNIGHT <= NM_LONG
                 ASSERT TXL_NM_ARCHMAGE <= NM_LONG && TXL_NM_GIANT_RAT <= NM_LONG && TXL_NM_SCREECH <= NM_LONG && TXL_NM_SLINGER <= NM_LONG
@@ -2575,8 +2578,8 @@ mul8:
 ; hold 1-4 consecutive fids of one kind, so gen_kind unpacks each block
 ; exactly once). The tool guarantees no packed block straddles virtual $C000,
 ; so the whole stream is in one bank's $C000 window. Virtual map: $4000..$7FFF
-; = SRC6 (bank 6 at +SRC6_VDELTA; SRC6 spike), $8000..$BFFF = bank 1 at +$4000,
-; $C000.. = bank 3 as-is.
+; = SRC6 (bank 6 at +SRC6_VDELTA; SRC6 spike) and, from $6000, SRC0 (bank 0 at +SRC0_VDELTA, NEW-MON3 T7),
+; $8000..$BFFF = bank 1 at +$4000, $C000.. = bank 3 as-is.
 ; Out: HL = the frame's raw bytes (cols*H*2, in GEN_SCRATCH). $C000 = the
 ; source bank if a block was unpacked (else unchanged). Clobbers: A, BC, DE, HL.
 ; Cost: cache hit ~110 T (A5: ~0.4k T incl. the banked 4-B descriptor
@@ -2604,7 +2607,14 @@ zx0_frame:
                 ld   h, a                      ; SRC6 $40..$7F -> $80..$BF (bit 6 clear)
                 ld   a, BANK_SRC_LO            ; (ld keeps ZF)
                 jr   nz, .pg                   ; virt $8000.. = bank 1 at +$4000
-                set  6, h                      ; virt $4000.. = SRC6: bank 6 at +$8000
+                bit  5, h                      ; NEW-MON3 T7: h = $80..$9F SRC6 / $A0..$BF bank 0 (virt $6000..$7FFF)
+                jr   z, .s6
+                ld   a, h
+                xor  $60                       ; $A0..$BF -> $C0..$DF = virt + SRC0_VDELTA (bank 0's B0_CODE2)
+                ld   h, a
+                ld   a, BANK_TEXT
+                jr   .pg                       ; (+12 B, +~25 T per bank-0 unpack; the other paths +9 T)
+.s6:            set  6, h                      ; virt $4000.. = SRC6: bank 6 at +$8000
                 ld   a, BANK_SRC6              ; (SRC6 spike: +8 B, +20 T per bank-1 unpack)
 .pg:            push hl
                 call page_bank

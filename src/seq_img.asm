@@ -25,8 +25,9 @@ ksm_tab:
                 DW   ksm_sp, ksm_vp, ksm_or, ksm_ar, ksm_mu, ksm_ne, ksm_og, ksm_dk, ksm_am
                 ;    GR      RR      SB      SL      BW      SG      SK      PG      OB      OU      SN      BC
                 DW   ksm_rt, ksm_rt, ksm_bt, ksm_gb, ksm_sp, ksm_sk, ksm_sk, ksm_gh, ksm_or, ksm_or, ksm_ar, ksm_ne
-                DS   2 * (K_MAX - K_COUNT), 0  ; ids 30 / 31: the class FX kinds (no sequences)
-                ASSERT $ - ksm_tab == 2 * K_MAX && K_COUNT == 30
+                DW   ksm_ga, ksm_ia            ; NEW-MON3 T8: 30 Gargoyle, 31 = the alias as assembled (Fire Imp, variant A);
+                                               ; the Wraith's block ksm_wr is variant B (nm3_var patches this word AFTER the unpack)
+                ASSERT $ - ksm_tab == 2 * K_MAX && K_COUNT == 32
 
     ; KSMH nm: the block header; offsets are from nm_s (the first byte)
     MACRO KSMH len, imp, q0, q1, q2, q3, q4, q5, q6, q7, base
@@ -273,3 +274,35 @@ ksm_ar_e:
                 ; VAMP-BOSS: vp_climb + 1 = climb_h1 by the line above (CLIMBCYC emits "DB 2, c1": {b} cannot read a DISPed image)
                 ; the Archer / Sniper climb with the Skeleton's own pair (sk_climb's): cell-aligned STA|SYM
                 ASSERT !(FFL_skeleton_climb1 & (FF_PH4 | FF_MOTION)) && !(FFL_skeleton_climb2 & FF_MOTION)
+; --- NEW-MON3 T8 (new_monsters.md §6.1): the Gargoyle, the Fire Imp (row 31 as assembled) and the Frost Wraith
+; (row 31, variant B: its block is in the image but ksm_tab names it only after the A-1 patch). Flyers: none climbs
+; (KS_CLIMB = KS_MOVE, KS_CLIMBREST = idle + 1 = the first frame), every KS_MOVE frame is MOT (a flyer draws it at
+; any px parity). HURT / ATTACK / DEATH reuse the pose frames (0 pool): the flash alone is not acceptable.
+; Gargoyle: idle = the statue (STA|SYM, nothing to cycle), move = the spread-wing MOT frame, claw = ATTACK.
+ksm_ga:         KSMH ksm_ga_e - ksm_ga_s, 2, ga_idle, ga_fly, ga_fly, ga_idle + 1, ga_attack, ga_hurt, ga_hurt, ga_death, ksm_ga_s
+ksm_ga_s:
+ga_idle:        DB 1, FID_garg_perch, 1, SEQ_END
+ga_fly:         DB 1, FID_garg_fly, 1, SEQ_END
+                ASSERT FFL_garg_fly & FF_MOTION
+ga_attack:      DB FID_garg_fly, 2, 0, FID_garg_claw, 2, SF_IMPACT, SEQ_END
+ga_hurt:        DB FID_garg_perch, 3, 0, SEQ_END
+ga_death:       DEATHSEQ FID_garg_perch, FID_dust_dead, FID_dust_dead, FID_garg_perch
+ksm_ga_e:
+; Fire Imp: the Bat's 2-cycle (flap A / flap B, period 6), the spit frame = ATTACK / SHOOT / HURT.
+ksm_ia:         KSMH ksm_ia_e - ksm_ia_s, 2, ia_idle, ia_idle, ia_idle, ia_idle + 1, ia_attack, ia_hurt, ia_hurt, ia_death, ksm_ia_s
+ksm_ia_s:
+ia_idle:        DB 6, FID_imp_fly1, 3, FID_imp_fly2, 3, SEQ_END
+                ASSERT (FFL_imp_fly1 & FF_MOTION) && (FFL_imp_fly2 & FF_MOTION)
+ia_attack:      DB FID_imp_fly1, 2, 0, FID_imp_spit, 2, SF_IMPACT, SEQ_END
+ia_hurt:        DB FID_imp_spit, 3, 0, SEQ_END
+ia_death:       DEATHSEQ FID_imp_spit, FID_dust_dead, FID_dust_dead, FID_imp_fly1
+ksm_ia_e:
+; Frost Wraith: the Ghost's shape (one MOT drift frame; touch = ATTACK / HURT).
+ksm_wr:         KSMH ksm_wr_e - ksm_wr_s, 2, wr_idle, wr_idle, wr_idle, wr_idle + 1, wr_attack, wr_hurt, wr_hurt, wr_death, ksm_wr_s
+ksm_wr_s:
+wr_idle:        DB 1, FID_wraith_drift, 1, SEQ_END
+                ASSERT FFL_wraith_drift & FF_MOTION
+wr_attack:      DB FID_wraith_drift, 2, 0, FID_wraith_touch, 2, SF_IMPACT, SEQ_END
+wr_hurt:        DB FID_wraith_touch, 3, 0, SEQ_END
+wr_death:       DEATHSEQ FID_wraith_touch, FID_dust_dead, FID_dust_dead, FID_wraith_drift
+ksm_wr_e:

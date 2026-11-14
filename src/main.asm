@@ -286,6 +286,15 @@ b0c2_code:
                 ; ==== end ITEM-INFO + UX-POLISH block ====
                 INCLUDE "nm3_b0.asm"           ; NEW-MON3 T1 FUND: lp_hdr0 + lp_dtab, lp_post, the panel items,
                                                ; item_log0, end_scr0, hit_line, try_close (memory-map ledger)
+                INCLUDE "nm3var0.asm"          ; NEW-MON3 T8: the row-31 alias table (Fire Imp / Frost Wraith bytes), data only (T9 applies it)
+                ; NEW-MON3 T7 SRC0: the packed sprite sources of K_GARGOYLE / K_ALIAS / U_WRAITH / G_DUST (tools/zx0_sources.py
+                ; SRC0_KINDS; read only by zx0_frame with BANK_TEXT paged; virtual = real - SRC0_VDELTA)
+src0_blocks:
+                INCLUDE "../build/zx0/src0_zx0.asm"
+src0_end:
+SRC0_USED       EQU src0_end - src0_blocks
+                ASSERT src0_end - SRC0_VDELTA <= $8000 && src0_blocks - SRC0_VDELTA >= $6000
+                DISPLAY "GAME SRC0 sources (bank 0, B0_CODE2): ", /H, src0_blocks, "..", /H, src0_end - 1, " (", /D, SRC0_USED, " B: ", /D, SRC0_BLOCKS, " blocks, ", /D, SRC0_RAW, " raw)"
                 ; ---- packed overlay streams: KEEP LAST (2-pass build: no code address may depend on a packed size;
                 ; append new code ABOVE this line) ----
 ovl_page_zx0:                                  ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG; ITEM-INFO: from R6,
@@ -654,13 +663,13 @@ kind_tab:
                 ; 3F-T9: id 2 = K_VBAT, the Vampire's bat form: the Bat's body / flags / atk 1 eva 4 /
                 ; 1d2 bite, every turn; the Vampire's hp row 14 (a banked bat's max hp, lp_spawn); VBAT-ART:
                 ; the Bat's ink $43 (user: the bat form looks like a Bat).
-                KROW   3,  3,  3,  3,  3,  3,  4,  3,  3,   4,  3,  3,  3,  3,  3,  4,  3,  3,   4,  4,  3,  3,  4,  3,  3,  3,  3,  3,  3,  3          ; KT_BW (cells; 3F-T13: Spider / Black Widow 32x16, Ogre 32x48)
-                KROW BH_K_KNIGHT, BH_K_WIZARD, BH_K_BAT, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME, BH_K_SPIDER, BH_K_VAMPIRE, BH_K_ORC, BH_K_ARCHER, BH_K_MUMMY, BH_K_NECRO, BH_K_OGRE, BH_K_DKNIGHT, BH_K_ARCHMAGE, BH_K_RAT, BH_K_RAT, BH_K_BAT, BH_K_GOBLIN, BH_K_SPIDER, BH_K_SKELETON, BH_K_SKELETON, BH_K_GHOST, BH_K_ORC, BH_K_ORC, BH_K_ARCHER, BH_K_NECRO ; KT_BH
-                KROW  24, 16, 14, 10,  6,  8,  3,  3,  6,   7, 14, 14,  8, 18, 12, 36, 50, 60,   5,  8,  5,  8, 10, 14, 18, 11, 18, 24, 10, 14          ; KT_HP
-                KROW KN_ATK, WZ_ATK, 1, 2, 1, 2, 0, 1, 0,   3, 2, 3, 2, 3, 2, 4, 6, 4,   1, 2, 2, 2, 4, 3, 4, 3, 4, 5, 3, 3          ; KT_ATK (hero columns: + level steps at runtime, D3-9b)
-                KROW KN_EVA, WZ_EVA, 4, 2, 1, 3, 1, 4, 0,   3, 1, 1, 2, 0, 2, 1, 3, 3,   1, 3, 4, 1, 3, 2, 2, 3, 0, 1, 2, 2          ; KT_EVA (hero_st_init restores KN_* / WZ_*)
-                KROW   6,  4,  2,  4,  4,  4,  2,  2,  3,   4,  6,  8,  4,  8,  4, 10, 10,  6,   3,  4,  3,  4,  4,  6,  8,  4,  8, 10,  4,  4          ; KT_DIE
-                KROW   0,  0,  0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,  0,  0,  1,  3,  0,   0,  0,  0,  0,  0,  0,  0,  0,  2,  0,  0,  0          ; KT_BONUS
+                KROW   3,  3,  3,  3,  3,  3,  4,  3,  3,   4,  3,  3,  3,  3,  3,  4,  3,  3,   4,  4,  3,  3,  4,  3,  3,  3,  3,  3,  3,  3, 3, 3  ; KT_BW (cells; 3F-T13: Spider / Black Widow 32x16, Ogre 32x48)
+                KROW BH_K_KNIGHT, BH_K_WIZARD, BH_K_BAT, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME, BH_K_SPIDER, BH_K_VAMPIRE, BH_K_ORC, BH_K_ARCHER, BH_K_MUMMY, BH_K_NECRO, BH_K_OGRE, BH_K_DKNIGHT, BH_K_ARCHMAGE, BH_K_RAT, BH_K_RAT, BH_K_BAT, BH_K_GOBLIN, BH_K_SPIDER, BH_K_SKELETON, BH_K_SKELETON, BH_K_GHOST, BH_K_ORC, BH_K_ORC, BH_K_ARCHER, BH_K_NECRO, BH_K_GARGOYLE, NM3_IMP_BH  ; KT_BH
+                KROW  24, 16, 14, 10,  6,  8,  3,  3,  6,   7, 14, 14,  8, 18, 12, 36, 50, 60,   5,  8,  5,  8, 10, 14, 18, 11, 18, 24, 10, 14, 9, NM3_IMP_HP  ; KT_HP
+                KROW KN_ATK, WZ_ATK, 1, 2, 1, 2, 0, 1, 0,   3, 2, 3, 2, 3, 2, 4, 6, 4,   1, 2, 2, 2, 4, 3, 4, 3, 4, 5, 3, 3, 3, NM3_IMP_ATK  ; KT_ATK (hero columns: + level steps at runtime, D3-9b)
+                KROW KN_EVA, WZ_EVA, 4, 2, 1, 3, 1, 4, 0,   3, 1, 1, 2, 0, 2, 1, 3, 3,   1, 3, 4, 1, 3, 2, 2, 3, 0, 1, 2, 2, 1, NM3_IMP_EVA  ; KT_EVA (hero_st_init restores KN_* / WZ_*)
+                KROW   6,  4,  2,  4,  4,  4,  2,  2,  3,   4,  6,  8,  4,  8,  4, 10, 10,  6,   3,  4,  3,  4,  4,  6,  8,  4,  8, 10,  4,  4, 6, NM3_IMP_DIE  ; KT_DIE
+                KROW   0,  0,  0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,  0,  0,  1,  3,  0,   0,  0,  0,  0,  0,  0,  0,  0,  2,  0,  0,  0, 0, NM3_IMP_BONUS  ; KT_BONUS
 lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REACH column (all 1: reach_ok / the hero's reach are literals) holds the §9.3
                 LP_WT_ROWS                     ; weights, ONE copy read by bank 3 (kind_wt / levelgen) and R6 (lp_wt6 is gone): H = kind_tab page, L = $E0 + row
                 DS   K_MAX - K_COUNT, 0
@@ -671,8 +680,8 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 ; the Goblin, Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
                 ; + the Orc (Berserker, Bouncer), Necro (Bone Caller), Archer (Sniper) on the shared
                 ; climb pair; VAMP-BOSS (user 2026-11-02): + the Vampire (and the Lord) on the shared pair; not Archmage / DK / Ogre / Mummy; Mummy / Ogre / DK do not open doors
-                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_FLYER|KF_BAT, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, KF_SLOW, KF_CLIMBER, KF_CLIMBER|KF_OPENER|KF_TALL|KF_SLOW, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL|KF_SLOW, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL  ; KT_FLAGS
-                KROW $47,$45,$43,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
+                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_FLYER|KF_BAT, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, KF_SLOW, KF_CLIMBER, KF_CLIMBER|KF_OPENER|KF_TALL|KF_SLOW, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL|KF_SLOW, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_FLYER|KF_PERCH, NM3_IMP_FLAGS  ; KT_FLAGS
+                KROW $47,$45,$43,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06, $07, NM3_IMP_ATTR  ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
                 ; 3F-T2: KT_SEQ (runtime: lowram.asm (sq_load / sq_fill) writes the kind's SEQ_ROWS row
                 ; low byte per level; 0 until the first game start). The old
                 ; KT_FID0 / KT_FCNT columns are the R6 generation-unit table gu_tab.
@@ -1091,13 +1100,13 @@ PS_OVF = 0
 PS_LIM6 = POOL6_END
                 PS_FRAME FID_knight_idle1
                 PS_FRAME FID_wizard_idle
-PSS_M = (1 << plh) | (1 << (plh + K_FX_BASE))
-PSS_X = 0
+PSS_M = (1 << plh)                             ; (FX-U: the class FX unit is >= K_MAX: the X half)
+PSS_X = 1 << (plh + U_FX_BASE - 32)
 PSD_M = 0
 PSD_X = 0
                 PS_UNIT plh
-                PS_UNIT plh + K_FX_BASE
-                ASSERT {b gu_tab + GU_STRIDE * plh} != {b gu_tab + GU_STRIDE * (plh + K_FX_BASE)}
+                PS_UNIT plh + U_FX_BASE
+                ASSERT {b gu_tab + GU_STRIDE * plh} != {b gu_tab + GU_STRIDE * (plh + U_FX_BASE)}
                 ASSERT PS_OVF == 0
 PSM_IDX = PS_IDX                               ; the LEVEL mark
 PSM_PTR = PS_PTR
@@ -1150,11 +1159,15 @@ POOL_SIM_PROTO = PS_USED
 PS_LIM6 = POOL6_END
                 DUP  LEVELS, pld
                 MMU  3, BANK_TEXT               ; NEW-MON3 T1: lp_dtab is bank 0 (nm3_b0.asm)
-PLK0 = {b lp_dtab + pld * LP_DROW + 0}
+PLK0 = {b lp_dtab + pld * LP_DROW + 0}                   ; NEW-MON3 T3: 8 slots (duplicates are no-ops here: PL_KIND / PS_KIND dedup per unit)
 PLK1 = {b lp_dtab + pld * LP_DROW + 1}
 PLK2 = {b lp_dtab + pld * LP_DROW + 2}
 PLK3 = {b lp_dtab + pld * LP_DROW + 3}
-PLK4 = {b lp_dtab + pld * LP_DROW + 4} & LEK_KIND_MASK   ; (3F-T5: the golden bit is not part of the kind)
+PLK4 = {b lp_dtab + pld * LP_DROW + 4}
+PLK5 = {b lp_dtab + pld * LP_DROW + 5}
+PLK6 = {b lp_dtab + pld * LP_DROW + 6}
+PLK7 = {b lp_dtab + pld * LP_DROW + 7}
+PLK8 = {b lp_dtab + pld * LP_DROW + 8} & LEK_KIND_MASK   ; the boss (3F-T5: the golden bit is not part of the kind)
                 MMU  3, BANK_R6
 PLM = 0
 PLX = 0
@@ -1163,6 +1176,10 @@ PLX = 0
                 PL_KIND PLK2
                 PL_KIND PLK3
                 PL_KIND PLK4
+                PL_KIND PLK5
+                PL_KIND PLK6
+                PL_KIND PLK7
+                PL_KIND PLK8
                 ; MEM-PS2: the level session replayed (PSS = the full unit set, before the
                 ; VBAT strip below: PS_UNIT merges same-fid0 units itself)
 PSS_M = PLM
@@ -1177,6 +1194,10 @@ PS_OVF = 0
                 PS_KIND PLK2
                 PS_KIND PLK3
                 PS_KIND PLK4
+                PS_KIND PLK5
+                PS_KIND PLK6
+                PS_KIND PLK7
+                PS_KIND PLK8
                 PS_LINEAR
 PS_NEED = PS_USED + POOL_SIM_MARGIN
       IF (PLM >> K_BAT) & 1                    ; 3F-T9: the bat form's frames lie inside the Bat's
@@ -1209,7 +1230,7 @@ POOL_LVL_WORST = PL_WORST
       ENDIF
                 EDUP
                 MMU  3, 0
-                ASSERT LP_DROW == 6 && K_MAX <= 32 && GU_N <= 64
+                ASSERT LP_DROW == 10 && K_MAX <= 32 && GU_N <= 64
     IF POOL_NEED > POOL_CAP
                 DISPLAY "POOL FULL: need ", /D, POOL_NEED, " (worst D", /D, POOL_LVL_WORST, ") > POOL_CAP ", /D, POOL_CAP, " (SRC6_LEN ", /D, SRC6_LEN, ")"
     ENDIF
@@ -1297,9 +1318,9 @@ seq_img_main:
 seq_img_end:
                 ENT
 SEQ_IMG_LEN     EQU seq_img_end - seq_img_main
-                ASSERT SQ_IMG + SEQ_IMG_LEN <= TX_DEC
+                ASSERT SQ_IMG + SEQ_IMG_LEN <= GEN_SCRATCH + GEN_SCRATCH_LEN
                 SAVEBIN "build/ovl/seq.bin", ovl_raw_seq, SEQ_IMG_LEN
-                DISPLAY "GAME sequence masters (3F-T2): ", /D, SEQ_IMG_LEN, " B raw at ", /H, SQ_IMG, " (", /D, TX_DEC - SQ_IMG - SEQ_IMG_LEN, " left), packed ", /D, sqm_zx0_end - sqm_zx0, " B in R6"
+                DISPLAY "GAME sequence masters (3F-T2): ", /D, SEQ_IMG_LEN, " B raw at ", /H, SQ_IMG, " (", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - SQ_IMG - SEQ_IMG_LEN, " left), packed ", /D, sqm_zx0_end - sqm_zx0, " B in R6"
 ;------------------------------------------------------------------------------
 ; MEM-FT frame_tab stream: the entries read back ({b}, slot 2 = page 2) from the
 ; FRT row image data.asm assembled at FRT, contiguous FT_LEN B per fid; packed
@@ -1456,7 +1477,11 @@ SQK0 = {b lp_dtab + sqd * LP_DROW + 0}
 SQK1 = {b lp_dtab + sqd * LP_DROW + 1}
 SQK2 = {b lp_dtab + sqd * LP_DROW + 2}
 SQK3 = {b lp_dtab + sqd * LP_DROW + 3}
-SQK4 = {b lp_dtab + sqd * LP_DROW + 4} & LEK_KIND_MASK
+SQK4 = {b lp_dtab + sqd * LP_DROW + 4}
+SQK5 = {b lp_dtab + sqd * LP_DROW + 5}
+SQK6 = {b lp_dtab + sqd * LP_DROW + 6}
+SQK7 = {b lp_dtab + sqd * LP_DROW + 7}
+SQK8 = {b lp_dtab + sqd * LP_DROW + 8} & LEK_KIND_MASK
                 MMU  3, OVL_RAW_BANK            ; C-T8 / TUT0-T1: the raw seq image is in the bank-4 scratch
                 SQ_RESET
                 SQ_KIND SQK0
@@ -1464,7 +1489,11 @@ SQK4 = {b lp_dtab + sqd * LP_DROW + 4} & LEK_KIND_MASK
                 SQ_KIND SQK2
                 SQ_KIND SQK3
                 SQ_KIND SQK4
-      IF (SQK0 == K_VAMPIRE) || (SQK1 == K_VAMPIRE) || (SQK2 == K_VAMPIRE) || (SQK3 == K_VAMPIRE) || (SQK4 == K_VAMPIRE)
+                SQ_KIND SQK5
+                SQ_KIND SQK6
+                SQ_KIND SQK7
+                SQ_KIND SQK8
+      IF (SQK0 == K_VAMPIRE) || (SQK1 == K_VAMPIRE) || (SQK2 == K_VAMPIRE) || (SQK3 == K_VAMPIRE) || (SQK4 == K_VAMPIRE) || (SQK5 == K_VAMPIRE) || (SQK6 == K_VAMPIRE) || (SQK7 == K_VAMPIRE) || (SQK8 == K_VAMPIRE)
                 SQ_KIND K_VBAT                  ; 3F-T9: pl_kinds loads the bat form's block with the Vampire's
       ENDIF
                 DISPLAY "GAME sequence cache D", /D, sqd + 1, ": ", /D, SQN, " blocks, ", /D, SQB, " B + hero ", /D, SQ_HERO, " = ", /D, SQB + SQ_HERO, " of ", /D, SEQB_LEN   ; 3F-T13bc

@@ -50,14 +50,18 @@ rd_tab:         ;    r   N  flags                      die bon dhc        dhe   
                 ; WIDOW-SPIT (user 2026-11-05): the Black Widow (any body, no gate) = the Queen's spit with N 3
                 ; (every 4th turn), + 6 POISON; 1d2 - DEF (not golden: no + 1)
                 DB   6, BW_SPIT_N, RWF_WALK | RWF_NOIMP, 2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), BW_PSN_T / 2, FID_spark_fly1  ; 13 Black Widow
-                DB   6,  2, RWF_WALK | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 14 Goblin King
-                DB   6,  2, RWF_WALK | RWF_NOIMP,        2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), SQ_PSN_T / 2, FID_spark_fly1  ; 15 Spider Queen (spit = the Mage's spark, always + 12 POISON)
+                ; NEW-MON3 T8 (new_monsters.md §4.2): the Fire Imp's ember: range 6, a shot every 3rd turn (N 2), flies on between
+                ; shots (RWF_WALK), auto-hit (RWF_SPELL: the Necromancer branch, roll x response, no DEF) that never meets the
+                ; DARK reflect gate (RWF_NOREFL), 1d4+1 FIRE, impact = spark_fizz (class-shared; the ember's $42 ink is F-1 code)
+                DB   6,  2, RWF_WALK | RWF_SPELL | RWF_NOREFL, 4, 1, DTY_FIRE | DH_NODEF, 0, FID_spark_fly1  ; 14 Fire Imp
+                DB   6,  2, RWF_WALK | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 15 Goblin King
+                DB   6,  2, RWF_WALK | RWF_NOIMP,        2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), SQ_PSN_T / 2, FID_spark_fly1  ; 16 Spider Queen (spit = the Mage's spark, always + 12 POISON)
                 ASSERT $ - rd_tab == RK_ROWS * RW_STRIDE
                 ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_arrow_hit == FID_arrow_fly1 + 2
                 ASSERT FID_dagger_spin2 == FID_dagger_spin1 + 1
                 ASSERT FID_nbolt_fly2 == FID_nbolt_fly1 + 1 && FID_nbolt_hit == FID_nbolt_fly1 + 2
                 ASSERT RK_ARCHER == 1 && RK_SNIPER == 2 && RK_SLINGER == 3 && RK_NECRO == 4 && RK_BONE_CALLER == 5 && RK_ARCHMAGE == 6
-                ASSERT RK_ARCHMAGE + AM_VENOM == RK_WIDOW - 1 && RK_GKING == RK_WIDOW + 1 && RK_SQUEEN == RK_GKING + 1 && RK_SQUEEN == RK_ROWS
+                ASSERT RK_ARCHMAGE + AM_VENOM == RK_WIDOW - 1 && RK_IMP == RK_WIDOW + 1 && RK_GKING == RK_IMP + 1 && RK_SQUEEN == RK_GKING + 1 && RK_SQUEEN == RK_ROWS && RK_IMP < RK_GOLD1
                 ASSERT SQ_PSN_T <= PSN_CAP && SQ_PSN_T % 2 == 0 && SQ_PSN_T / 2 <= STS_MAX_TURNS && DTY_PHYS == 0
                 ASSERT BW_PSN_T <= PSN_CAP && BW_PSN_T % 2 == 0 && BW_PSN_T / 2 <= STS_MAX_TURNS && RK_WIDOW < RK_GOLD1
                 ASSERT AM_SLEEP_T << 4 < 256 && AM_SLEEP_T <= STS_MAX_TURNS && AM_PSN_T <= PSN_CAP
