@@ -34,7 +34,8 @@ HY = stand_y(1, 6)
 HX = 12
 NOWHERE = 7
 STUB = S["LOWRAM_END_3B"]
-RES = STUB + 200
+SCR = S["GEN_SRC"] + 0x2C0   # play-free scratch: STUB+80.. now overlaps the cold block / gen_idles / start_game
+RES = SCR + 200
 MUS_ROOM, MUS_DANGER, MUS_OVER = 7, 2, 6
 DWELL, CALM = S["DNG_DWELL"], S["DNG_CALM"]
 MUS_REQ, MUS_SHOT, MUS_STATE, MUS_CUR = (S[n] for n in ("MUS_REQ", "MUS_SHOT", "MUS_STATE", "MUS_CUR"))
@@ -300,8 +301,8 @@ def run(h, p, check):
     # ---- C: cost -----------------------------------------------------------------------
     scene()
     n_hosts(2)                                   # no early out: full scan + the HP test
-    p.wmem(RES + 100, [0xC9])
-    ok0 = p.code([0xCD] + w16(S["build_live"]) + [0x21] + w16(RES + 100) + [0xCD] + w16(S["far7"]))
+    p.wmem(SCR + 100, [0xC9])
+    ok0 = p.code([0xCD] + w16(S["build_live"]) + [0x21] + w16(SCR + 100) + [0xCD] + w16(S["far7"]))
     t0 = p.tstates
     scene()
     n_hosts(2)                                   # no early out: full scan + the HP test

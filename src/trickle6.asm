@@ -220,7 +220,7 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 cp   c
                 jr   nz, .rt
                 djnz .nd
-                inc  e                         ; (all one kind: k + 8 + 1 = k + 1)
+                inc  e                         ; (all one kind: 7 djnz steps + this inc leave E = k)
                 res  3, e
 .rt:            dec  d
                 jr   nz, .k
