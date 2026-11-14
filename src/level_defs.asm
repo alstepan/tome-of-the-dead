@@ -293,8 +293,22 @@ LEK_BRED_BIT    EQU 6               ; (lp_bank writes it, lp_spawn restores it)
 LPK_PARK        EQU %10000000
 LPK_ROOM        EQU %00001111           ; the room id bits of E_ROOM
                 ASSERT GRID_CELLS <= LPK_ROOM + 1
-LP_LEN          EQU 37 + GRID_CELLS * LR_STRIDE  ; 118 B (NEW-MON3 T3: +4, the 8-slot LP_KINDS)
-LP_END          EQU LP_STATE + LP_LEN            ; $6F36
+; ROOM-MEM2 (user playtest 2026-11-14, game.md §9.4.2 / §9.4.8 (d) option 1): the LAST cell of every
+; record entry, 1 byte, parallel to the entries: LP_POS + 4 room + i = entry i of room's record.
+; x bits 0-4 (E_X), storey bit 5 (storey_ref), facing left bit 6 (EF_LEFT); 0 = none (a FRESH unit,
+; a trickle entry: try 0 skipped; a real body is never at x 0 storey 0). Written by lp_bank (R6
+; lp_bk6) from the live slot on leave, compacted with the entries by lp_enter (a kept unit keeps
+; its byte), zeroed for a trickle entry (trickle6.asm); bytes past the count are stale like the
+; entries. lp_enter's try 0 = this cell for EVERY unit of a VISITED record (parked or not; R6
+; lp_t06: the cell if legal, else the door slide along its storey).
+LP_POS          EQU LP_REC + GRID_CELLS * LR_STRIDE   ; 36 B (test-observable)
+LPP_X           EQU %00011111
+LPP_S_BIT       EQU 5
+LPP_LEFT_BIT    EQU 6               ; a walker's facing; a FLYER's bits 6-7 = its band row y - 9s (0..3, LPP_FYO)
+LPP_FYO         EQU %11000000
+LP_LEN          EQU 37 + GRID_CELLS * LR_STRIDE + GRID_CELLS * LR_MAX  ; 154 B (ROOM-MEM2: +36 LP_POS; NEW-MON3 T3: +4)
+                ASSERT (LP_POS >> 8) == ((LP_POS + GRID_CELLS * LR_MAX - 1) >> 8)   ; one page: 8-bit index
+LP_END          EQU LP_STATE + LP_LEN            ; $6F5A (ROOM-MEM2; was $6F36)
 ; budget constants (game.md §9.3 / §9.4.1)
 ROOM_MAX        EQU 3               ; monsters per room (initial population), all depths (MORE-MON: D1-D2 were 2)
 LP_SIGMA_INIT   EQU 8               ; sum weight cap of a FRESH room: max(8, ROOM_MAX x minW)
@@ -315,6 +329,11 @@ LP_CMAP         EQU NEXT_MAP + PLAY_CELLS        ; $6540..$6581
 LPC_BAD         EQU 1               ; a body may not cover the col
 LPC_BODY        EQU 2               ; 3F-T8 review: a body lp_spawn placed this entry (lp_legal ORs every bit;
                                     ; lp_post exempts only LPC_BAD marks of the exit's own footprint)
+LPC_UNITS       EQU %11110000       ; ROOM-MEM2: bit 4 + j = unit j's saved cell (lp_t06's slide reserves the later
+                                    ; units' cells; set once an entry, never cleared: lp_legal / lp_post / try 0 mask it)
+LPC_MRG         EQU 8               ; ROOM-MEM2 (user 2026-11-14): the 1-col margin of a ladder / shaft footprint
+LPC_MRG_BIT     EQU 3               ; (f-1, f+3; the footprint f..f+2 is LPC_BAD): spawns / tries 1-8 treat it as
+                                    ; any mark; a RETURNING monster (lp_t06: try 0, the door slide) ignores it
                 ASSERT LP_CMAP + 2 * LP_CMW <= NEXT_MAP + MAP_BUF_LEN
 RESPAWN_MAX     EQU 6               ; §9.5 trickle cap per level (3F)
 ; 3F-T12 respawn trickle (game.md §9.5, R6 trickle6.asm; tools/respawn_model.py)

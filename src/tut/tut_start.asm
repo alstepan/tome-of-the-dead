@@ -250,6 +250,8 @@ tut_d0:
                 ld   (ST_FLAGS + TUT_GOB_SLOT), a
                 ld   a, TUT_GOB_SLEEP << 4
                 ld   (ST_T1 + TUT_GOB_SLOT), a
+                ld   a, TUT0_GOB_X | TUT0_GOB_S << LPP_S_BIT    ; ROOM-MEM2: its LP_POS cell (try 0 if
+                ld   (LP_POS + TUT0_GOB_ROOM * LR_MAX), a          ; the lair post fails; faces right)
                 ld   a, TUT0_GOB_ROOM          ; lp_bank keeps TRK_PREV's parked slots: the
                 ld   (TRK_PREV), a             ; Goblin's survives the first exit A -> B
                 ; --- the level pool (level_enter's middle) ---

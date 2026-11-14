@@ -45,7 +45,7 @@ import room_model                                       # noqa: E402
 from game_lib import Harness, Proto, S, EMU_ARGS, attr_at, cell_bytes, F3   # noqa: E402
 
 STUB = S["LOWRAM_END_3B"]
-RES = STUB + 120
+RES = S["lowram_code"]              # ROOM-MEM2 review: stubs end below the low-RAM cold block (43 B)
 LPB = S["LP_STATE"]
 LPN = S["LP_LEN"]
 SCR = (S["LP_HX"] - LPB, S["ROOM_VISITS"] - LPB)       # scratch range (masked)
@@ -136,10 +136,12 @@ def want_slots(p, blk, r, out, first_slot=1, got=None):
     first depends on what is parked; the slot numbers are not the model's business)."""
     res = []
     rest = sorted(set(x[0] for x in got) - set(q for q in G.LP_OUT_SLOT if q)) if got is not None else None
-    for i, (kb, hp, s_, x, left) in enumerate(out):
+    for i, o in enumerate(out):
+        kb, hp, s_, x, left = o[:5]
         k = kb & S["LEK_KIND_MASK"]
         fly = p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
-        y = 9 * s_ + 1 if fly else 9 * s_ + 8 - p.kb(k, "KT_BH")
+        # ROOM-MEM2: a flyer placed on its saved cell / slid keeps its saved band row (o[5])
+        y = 9 * s_ + (o[5] if len(o) > 5 else 1) if fly else 9 * s_ + 8 - p.kb(k, "KT_BH")
         fl = EF_ACTIVE | EF_HOSTILE | (EF_LEFT if left else 0) | (kb & S["LEK_RESPAWN"])
         q = G.LP_OUT_SLOT[i] if got is not None and i < len(G.LP_OUT_SLOT) else None
         sl_ = q if q else (rest.pop(0) if rest else first_slot + i) if got is not None else first_slot + i
@@ -391,17 +393,23 @@ def part_a7(h, p, check, nlev):
           worst[0] <= LP_T_GUARD and sum(tss) // len(tss) <= 22000, worst)
 
 
-def bank_model(lp, r, slots, gold=None):
-    """§9.4.2: append every alive slot of room r (exact hp, EF_RESPAWN, 3F-T5: LEK_GOLD) in slot order."""
+def bank_model(lp, r, slots, gold=None, p=None):
+    """§9.4.2: append every alive slot of room r (exact hp, EF_RESPAWN, 3F-T5: LEK_GOLD) in slot order.
+    ROOM-MEM2: with p (kind heights), each one's LP_POS byte too (G.lp_pos_byte: x, storey, facing)."""
     gold = gold or {}
     lp = bytearray(lp)
     ro = S["LP_REC"] - LPB + r * S["LR_STRIDE"]
     n = lp[ro] & 7
-    for (sl_, k, rr, _, _, fl, hp) in slots:
+    for (sl_, k, rr, x, y, fl, hp) in slots:
         if rr != r or fl & EF_DYING:
             continue
         lp[ro + 1 + 2 * n] = k | (fl & S["EF_RESPAWN"]) | gold.get(sl_, 0)
         lp[ro + 2 + 2 * n] = hp
+        if p is not None:
+            s_ = min(1, (y + p.kb(k, "KT_BH")) // 9)
+            fly = p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
+            lp[S["LP_POS"] - LPB + 4 * r + n] = G.lp_pos_byte(x, s_, bool(fl & EF_LEFT),
+                                                              y - 9 * s_ if fly else None)
         n += 1
     lp[ro] = S["LR_VISITED"] | n
     return bytes(lp)
@@ -480,8 +488,8 @@ def part_a4(h, p, check):
                        if not x[5] & EF_DYING]
             check(f"A4 d{d} room {r}: lp_bank -> record == model (exact hp, golden bit, dead dropped), "
                   f"no active slot; ROOM-MEM: the alive ones parked in place (kind, storey, x, facing)",
-                  ok and mask(lp1) == mask(bank_model(lp0, r, sl, gold)) and p.slots() == [] and pk == want_pk,
-                  (lp1.hex(), bank_model(lp0, r, sl, gold).hex(), p.slots(), pk, want_pk))
+                  ok and mask(lp1) == mask(bank_model(lp0, r, sl, gold, p)) and p.slots() == [] and pk == want_pk,
+                  (lp1.hex(), bank_model(lp0, r, sl, gold, p).hex(), p.slots(), pk, want_pk))
             p.wb(S["ROOM_VISITS"] + r, p.rb(S["ROOM_VISITS"] + r) + 1)
             lp1 = p.lp()
             p.wmem(S["LP_HX"], [1, 0, 3])
@@ -501,6 +509,55 @@ def part_a4(h, p, check):
                 print(f"[lp] A4 d{d}: lair boss hp {sl[0][6]} kept across bank / re-entry", flush=True)
             else:
                 break
+
+
+def part_a9(h, p, check, n=120):
+    """A9 ROOM-MEM2: try 0 (LP_POS) + the door slide (R6 lp_slide6) == levelgen.lp_enter / lp_slide on
+    random VISITED records (1-4 entries of the depth's kinds, random LP_POS cells, 10 % none), random
+    hero arrival boxes (both door edges, mid-room, both storeys), no parked slot; slots + LP state."""
+    rnd = random.Random(9)
+    p.load()
+    sync_bodies(p)
+    bad = slid = units = 0
+    for d, seed in ((1, 0x1234), (2, 0x2222), (5, 0x5555), (8, 0x0808)):
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=d)
+        p.far3("lp_budget")
+        blk = p.block()
+        base = p.lp()
+        lair, sanct = blk[S["LVL_LAIR"] - G.BASE], blk[S["LVL_SANCTUM"] - G.BASE]
+        rooms = [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+                 and r not in (lair, sanct)]
+        kinds = list(p.z.read_memory(S["LP_KINDS"], 8))
+        for c in range(n):
+            r = rnd.choice(rooms)
+            lp = bytearray(base)
+            ro = S["LP_REC"] - LPB + r * S["LR_STRIDE"]
+            po = S["LP_POS"] - LPB + r * S["LR_MAX"]
+            m = rnd.randint(1, 4)
+            lp[ro] = S["LR_VISITED"] | m
+            for i in range(m):
+                lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i] = rnd.choice(kinds), rnd.randint(1, 20)
+                lp[po + i] = 0 if rnd.random() < 0.1 else G.lp_pos_byte(
+                    rnd.randint(1, 29), rnd.randint(0, 1), rnd.random() < 0.5)
+            hx, hs = rnd.choice(((1, 0), (1, 1), (28, 0), (28, 1), (rnd.randint(5, 24), rnd.randint(0, 1))))
+            p.wmem(LPB, lp)
+            p.clear_slots()
+            p.wmem(S["LP_HX"], [hx, hs, 3])
+            ok, _ = p.far3("lp_enter", a=r)
+            wl, out = G.lp_enter(blk, bytes(lp), r, hs, hx, 3, f3=True, parked=[])
+            got = p.slots()
+            units += len(out)
+            slid += sum(1 for i, o in enumerate(out)
+                        if lp[po + i] and o[3] != lp[po + i] & 31 and o[2] == (lp[po + i] >> 5) & 1)
+            if not (ok and got == want_slots(p, blk, r, out) and mask(p.lp()) == mask(wl)):
+                bad += 1
+                if bad <= 3:
+                    print(f"[detail] A9 d{d} room {r} hx {hx} hs {hs}: {got} vs {want_slots(p, blk, r, out)}; "
+                          f"rec {p.lp()[ro:ro + 9].hex()} vs {wl[ro:ro + 9].hex()}", flush=True)
+    check(f"A9 ROOM-MEM2 try 0 + door slide: {4 * n} random re-entries ({units} placed, {slid} slid on their "
+          f"storey) == levelgen.lp_enter", bad == 0 and slid > 0, bad)
 
 
 def part_a8(h, p, check):
@@ -541,6 +598,195 @@ def part_a8(h, p, check):
               ok and n == 4 and ts <= LP_TRANS_GUARD, (ok, n, ts))
         worst = max(worst, (ts, f"d{d} {seed:#06x}"))
     print(f"[lp] A8 lp_transition worst {worst[0]} T ({worst[1]})", flush=True)
+
+
+def part_a8s(h, p, check):
+    """A8S (ROOM-MEM2 review): the lp_transition worst with the door slide. As A8 (4 bodies parked in Y),
+    but X's 4 entries (the depth's widest kind) carry an LP_POS cell on a storey with NO free window
+    (found by a levelgen sweep), the hero arriving on the other storey: try 0 fails for every unit, the
+    FIRST unit's slide scans the whole storey and fails, the others skip the slide (review 3: one failed
+    slide an entry), and every unit then spends all 8 stream tries (none legal: they stay in the record).
+    <= LP_TRANS_GUARD; == levelgen.lp_enter. A8M permutes mixed widths, A8R a reservation-made failure."""
+    p.load()
+    sync_bodies(p)
+    worst = (0, "")
+    for d, seed, X, s0, x0 in ((7, 396, 2, 0, 2), (7, 363, 1, 0, 2), (7, 331, 7, 1, 2), (7, 329, 8, 0, 2)):
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=d)
+        p.far3("lp_budget")
+        p.wb("LVL_DEPTH", d)
+        blk = p.block()
+        st, lair = blk[S["LVL_START"] - G.BASE], blk[S["LVL_LAIR"] - G.BASE]
+        Y = next(r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+                 and r not in (st, lair, X, blk[S["LVL_SANCTUM"] - G.BASE]))
+        kinds = list(p.z.read_memory(S["LP_KINDS"], 8))
+        k = max(kinds, key=lambda q: p.kb(q, "KT_BW"))
+        fly = p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
+        hp = p.kb(k, "KT_HP") + d - 1
+        k0 = kinds[0]
+        kh0 = p.kb(k0, "KT_BH")
+        p.clear_slots()
+        for i, x in enumerate((9, 13, 17, 21)):
+            p.set_ent(5 + i, KIND=k0, ROOM=Y, X=x, Y=9 + 8 - kh0, FLAGS=EF_ACTIVE | EF_HOSTILE, HP=hp, MAXHP=hp)
+        p.wmem(S["LP_REC"] + 9 * X, [0x80 | 4] + [k, hp] * 4)
+        p.wmem(S["LP_POS"] + 4 * X, [G.lp_pos_byte(x0, s0, False, 1 if fly else None)] * 4)
+        p.wmem(S["LP_REC"] + 9 * Y, [0x80] + [0] * 8)
+        p.wb("CUR_ROOM", Y)
+        hs = 1 - s0
+        p.set_ent(0, ROOM=Y, X=1, Y=9 * hs + 8 - p.kb(S["K_KNIGHT"], "KT_BH"))
+        p.wb("TRK_PREV", st)
+        p.wmem(S["CAND_LIST"], [0xFF] * 16)
+        p.wb("FOLLOW_N", 0)
+        p.wb("EXIT_DEST", X)
+        lp0 = p.lp()
+        ok, ts = p.code([0x21] + w16(S["lp_transition"]) + [0xCD] + w16(S["far3"]))
+        alive = [(5 + i, k0, Y, x, 9 + 8 - kh0, EF_ACTIVE | EF_HOSTILE, hp) for i, x in enumerate((9, 13, 17, 21))]
+        wl, out = G.lp_enter(blk, bank_model(lp0, Y, alive, None, p), X, hs, 1, p.kb(S["K_KNIGHT"], "KT_BW"),
+                             f3=True, parked=[])
+        got = [x for x in p.slots() if x[2] == X]
+        calls = G.LP_CALLS
+        check(f"A8S d{d} seed {seed:#06x} X {X}: 4 units, try 0 + full slide + 8 tries each ({calls} stream steps, "
+              f"{4 - len(out)} left in the record) == model; {ts} T <= {LP_TRANS_GUARD}",
+              ok and len(got) == len(out) and ts <= LP_TRANS_GUARD and calls == 32, (ok, got, out, calls, ts))
+        worst = max(worst, (ts, f"d{d} {seed:#06x}"))
+    print(f"[lp] A8S lp_transition worst (full slide + 8 tries a unit) {worst[0]} T ({worst[1]})", flush=True)
+
+
+def part_a8m(h, p, check):
+    """A8M (ROOM-MEM2 review 3): A8S's rooms with the depth's kinds of every width (3 / 4 on D7) in every
+    order of the 4 entries: lp_transition <= LP_TRANS_GUARD by construction (one failed slide an entry)."""
+    import itertools
+    worst = (0, "")
+    bad = 0
+    for d, seed, X, s0, x0 in ((7, 396, 2, 0, 2), (7, 363, 1, 0, 2), (7, 331, 7, 1, 2), (7, 329, 8, 0, 2)):
+        p.load()
+        sync_bodies(p)
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=d)
+        p.far3("lp_budget")
+        kinds = list(p.z.read_memory(S["LP_KINDS"], 8))
+        byw = {}
+        for q in sorted(set(kinds), key=lambda q: -p.kb(q, "KT_BW")):
+            byw.setdefault(p.kb(q, "KT_BW"), q)
+        seq = (list(byw.values()) * 4)[:4]
+        for perm in sorted(set(itertools.permutations(seq))):
+            p.load()
+            sync_bodies(p)
+            p.wb("LVL", 1)
+            p.wmem(S["LVL_SEED"], w16(seed))
+            p.far3("level_gen", a=d)
+            p.far3("lp_budget")
+            p.wb("LVL_DEPTH", d)
+            blk = p.block()
+            st, lair = blk[S["LVL_START"] - G.BASE], blk[S["LVL_LAIR"] - G.BASE]
+            Y = next(r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+                     and r not in (st, lair, X, blk[S["LVL_SANCTUM"] - G.BASE]))
+            k0 = kinds[0]
+            kh0 = p.kb(k0, "KT_BH")
+            p.clear_slots()
+            for i, x in enumerate((9, 13, 17, 21)):
+                p.set_ent(5 + i, KIND=k0, ROOM=Y, X=x, Y=9 + 8 - kh0, FLAGS=EF_ACTIVE | EF_HOSTILE, HP=10, MAXHP=10)
+            p.wmem(S["LP_REC"] + 9 * X, [0x80 | 4] + [v for k in perm for v in (k, 10)])
+            p.wmem(S["LP_POS"] + 4 * X, [G.lp_pos_byte(x0, s0, False, 1 if p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
+                                                       else None) for k in perm])
+            p.wmem(S["LP_REC"] + 9 * Y, [0x80] + [0] * 8)
+            p.wb("CUR_ROOM", Y)
+            hs = 1 - s0
+            p.set_ent(0, ROOM=Y, X=1, Y=9 * hs + 8 - p.kb(S["K_KNIGHT"], "KT_BH"))
+            p.wb("TRK_PREV", st)
+            p.wmem(S["CAND_LIST"], [0xFF] * 16)
+            p.wb("FOLLOW_N", 0)
+            p.wb("EXIT_DEST", X)
+            ok, ts = p.code([0x21] + w16(S["lp_transition"]) + [0xCD] + w16(S["far3"]))
+            if not ok or ts > LP_TRANS_GUARD:
+                bad += 1
+            worst = max(worst, (ts, f"d{d} {seed:#06x} widths {[p.kb(q, 'KT_BW') for q in perm]}"))
+    print(f"[lp] A8M lp_transition worst (mixed widths, every order) {worst[0]} T ({worst[1]})", flush=True)
+    check(f"A8M mixed widths x every order on A8S's rooms: worst {worst[0]} T <= {LP_TRANS_GUARD}", bad == 0, worst)
+
+
+def part_a8r(h, p, check):
+    """A8R (ROOM-MEM2 review 3): a slide that fails ONLY because of the reservation (the storey's one window
+    is the next unit's saved cell, a levelgen sweep): unit 0 slides nowhere (tries 1-8), unit 1 comes back
+    exactly; the entry's slide flag (LPS_USED = LP_SIG bit 0) is set; == levelgen.lp_enter."""
+    p.load()
+    sync_bodies(p)
+    for d, seed, r, s0, x0, x1 in ((1, 2, 1, 1, 2, 25), (1, 5, 3, 0, 2, 8), (1, 12, 5, 0, 2, 22), (1, 19, 7, 0, 5, 2)):
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=d)
+        p.far3("lp_budget")
+        blk = p.block()
+        lp = bytearray(p.lp())
+        kinds = list(p.z.read_memory(S["LP_KINDS"], 8))
+        k = max(kinds, key=lambda q: p.kb(q, "KT_BW"))
+        fly = p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
+        ro = S["LP_REC"] - LPB + r * S["LR_STRIDE"]
+        po = S["LP_POS"] - LPB + r * S["LR_MAX"]
+        lp[ro] = S["LR_VISITED"] | 2
+        for i, x in enumerate((x0, x1)):
+            lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i] = k, 5
+            lp[po + i] = G.lp_pos_byte(x, s0, False, 1 if fly else None)
+        p.wmem(LPB, lp)
+        p.clear_slots()
+        hs = 1 - s0
+        p.wmem(S["LP_HX"], [1, hs, 3])
+        ok, _ = p.far3("lp_enter", a=r)
+        wl, out = G.lp_enter(blk, bytes(lp), r, hs, 1, 3, f3=True, parked=[])
+        got = p.slots()
+        check(f"A8R d{d} seed {seed:#06x} room {r}: unit 0's slide fails on the reservation, unit 1 back at x {x1}, "
+              f"the slide flag set; == model",
+              ok and got == want_slots(p, blk, r, out) and mask(p.lp()) == mask(wl)
+              and any(o[2] == s0 and o[3] == x1 for o in out) and p.rb(S["LP_SIG"]) & 1,
+              (got, out, hex(p.rb(S["LP_SIG"]))))
+
+
+def part_a8p(h, p, check):
+    """A8P (ROOM-MEM2 review 4): a POSTED lair unit that finds no free slot stays in the record with ITS
+    LP_POS byte (bank-0 lp_post copies it to the compaction slot; lp_t06 never runs for it). The lair's
+    record {boss, escort} with saved cells A, B; one free slot: the boss takes it (its post), the escort
+    (posted, no slot) is compacted to entry 0 -> LP_POS[lair][0] == B (not the boss's stale A)."""
+    p.load()
+    sync_bodies(p)
+    done = 0
+    for seed in (3, 4, 7):                              # levelgen sweep: lp_post posts both on these D1 lairs
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=1)
+        p.far3("lp_budget")
+        blk = p.block()
+        lair = blk[S["LVL_LAIR"] - G.BASE]
+        lp = bytearray(p.lp())
+        boss, esc = p.rb(S["LP_BOSS"]), p.rb(S["LP_KINDS"])
+        ro = S["LP_REC"] - LPB + lair * S["LR_STRIDE"]
+        po = S["LP_POS"] - LPB + lair * S["LR_MAX"]
+        A, B = G.lp_pos_byte(3, 0, False), G.lp_pos_byte(20, 1, True)
+        lp[ro:ro + 5] = bytes([S["LR_VISITED"] | 2, boss, 9, esc, 4])
+        lp[po:po + 2] = bytes([A, B])
+        wb, _, fb = G.k3_info(boss)
+        we, _, fe = G.k3_info(esc)
+        p1 = G.lp_post(blk, bytes(lp), lair, boss, wb, fb, 0, 1, 3, [], G.k3_info, G.LEK_ROW_MASK)
+        if p1 is None or G.lp_post(blk, bytes(lp), lair, esc, we, fe, 0, 1, 3, [(p1[0], p1[1], p1[1] + wb - 1)],
+                                   G.k3_info, G.LEK_ROW_MASK) is None:
+            continue                                    # the model must post both (else lp_t06 copies)
+        p.wmem(LPB, lp)
+        p.clear_slots()
+        other = next(r for r in range(9) if r != lair)
+        for s_ in range(2, 16):                         # 14 slots busy elsewhere: one free slot (1)
+            p.set_ent(s_, KIND=esc, ROOM=other, FLAGS=EF_ACTIVE | EF_HOSTILE)
+        p.wmem(S["LP_HX"], [1, 0, 3])
+        ok, _ = p.far3("lp_enter", a=lair)
+        rec = p.lp()[ro:ro + 3]
+        pos0 = p.rb(S["LP_POS"] + lair * S["LR_MAX"])
+        check(f"A8P seed {seed:#06x} lair {lair}: the boss posted into the one free slot, the posted escort kept "
+              f"(no slot) as entry 0 with its own saved cell", ok and rec == bytes([S["LR_VISITED"] | 1, esc, 4])
+              and pos0 == B, (rec.hex(), hex(pos0), hex(A), hex(B)))
+        done += 1
+        if done == 2:
+            break
+    check("A8P setup: a lair where the model posts both units", done > 0, done)
 
 
 def G_entries(lp, r):
@@ -807,6 +1053,11 @@ def main():
             part_a4(h, p, check)
             part_a6(h, p, check)
             part_a8(h, p, check)
+            part_a8s(h, p, check)
+            part_a8m(h, p, check)
+            part_a8r(h, p, check)
+            part_a8p(h, p, check)
+            part_a9(h, p, check)
             if nsweep:
                 part_a7(h, p, check, nsweep)
         part_b(h, p, check)

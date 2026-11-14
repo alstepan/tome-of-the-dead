@@ -126,6 +126,7 @@ def model_cases(p, L, rnd, n, worst):
     check(f"M d{d} LP_KINDS == levelgen LP_TAB", lp_kinds == [G.KROWS[k][0] for k in G.LP_TAB[d][0]], lp_kinds)
     fl0 = list(p.z.read_memory(S["FLOOR_LIST"], 4 * S["FLOOR_MAX"]))
     spawns = mism = 0
+    pos_bad = [0]
     for c in range(n):
         recs = []
         for r in range(9):
@@ -169,10 +170,21 @@ def model_cases(p, L, rnd, n, worst):
             n0 = blob[9 * r] & 7
             blob[9 * r] += 1
             blob[9 * r + 1 + 2 * n0], blob[9 * r + 2 + 2 * n0] = kb, hp
+        # ROOM-MEM2: LP_POS = 0 for a FRESH record, junk for a VISITED one; after trk_run every FRESH
+        # record's bytes stay 0 and only the appended entry's byte changes (-> 0: no last cell)
+        pos0 = [0 if recs[r] is None or not recs[r]["visited"] else rnd.randint(1, 255)
+                for r in range(9) for _ in range(4)]
+        p.wmem(S["LP_POS"], pos0)
+        want_pos = list(pos0)
+        if want is not None:
+            want_pos[4 * want[0] + (blob[9 * want[0]] & 7) - 1] = 0
         ok, ts = far6(p, "trk_run")
         got = read_recs(p, recs)
+        pos1 = list(p.z.read_memory(S["LP_POS"], 36))
+        if pos1 != want_pos:
+            pos_bad[0] += 1
         good = (ok and got == rec_bytes(lv) and list(p.z.read_memory(REC, 81)) == blob and p.rb("LP_RESPAWNS") == lv.resp and p.rw("RNG_STATE") == rng.x
-                and p.rb("LP_LVL") == lplvl and room_slots(p) == sl0)
+                and p.rb("LP_LVL") == lplvl and room_slots(p) == sl0 and pos1 == want_pos)
         spawns += want is not None
         if not good:
             mism += 1
@@ -184,6 +196,8 @@ def model_cases(p, L, rnd, n, worst):
     p.wmem(S["FLOOR_LIST"], fl0)
     check(f"M d{d}: {n} cases == the model ({spawns} spawns, {mism} mismatches)", mism == 0 and spawns > 0,
           (spawns, mism))
+    check(f"M d{d}: ROOM-MEM2 LP_POS: every FRESH record's bytes 0, the appended entry's byte 0, the rest kept",
+          pos_bad[0] == 0, pos_bad[0])
 
 
 # ---------------------------------------------------------------------------- E / R

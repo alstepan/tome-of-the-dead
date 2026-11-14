@@ -15,7 +15,7 @@ tools/items_model.py (rev 6, game.md §8.11 "3E simplification"), byte-exact.
   G2  integration: far3 level_new (level_gen + level_populate + the overlay) for a
       few (master, depth, hero): the same comparison on the real path.
 Batches of 16 cases run in one emulator call: inputs / outputs in bank 4 (pool,
-free in a fresh snapshot), driver assembled by sjasmplus at LOWRAM_END_3B.
+free in a fresh snapshot), driver assembled by sjasmplus at GEN_SRC + $2C0.
 Run: ZRCP_PORT=<port> python3 tests/items_gen.py [--seeds N] [--jobs-split K/M]
 """
 import os
@@ -32,7 +32,9 @@ import levelgen as G                                    # noqa: E402
 import items_model as M                                 # noqa: E402
 from game_lib import Harness, Proto, S, EMU_ARGS, SNA_RAM, F3   # noqa: E402
 
-DRV = S["LOWRAM_END_3B"]
+# ROOM-MEM2 review: the ~91-B driver ran into `start` / `boot` at LOWRAM_END_3B (43 B below lowram_code):
+# the play-free generator mirror, as world.py's WDATA (GEN_SRC + 0x2C0 .. TX_DEC)
+DRV = S["GEN_SRC"] + 0x2C0
 BANK = S["BANK_POOL1"]                                  # bank 4: batch buffers
 SLOT = 1024
 NSLOT = 16
@@ -87,7 +89,9 @@ def assemble():
         if ": EQU " in line:
             k, v = line.split(": EQU ")
             syms[k.strip()] = int(v, 16)
-    return Path(out).read_bytes(), syms["done"], syms["cnt"]
+    drv = Path(out).read_bytes()
+    assert DRV + len(drv) <= S["TX_DEC"] and DRV >= S["PAGE_SCR_END"] + 0x40, len(drv)   # (world.py WDATA's window)
+    return drv, syms["done"], syms["cnt"]
 
 
 def expected(b, master, hero):

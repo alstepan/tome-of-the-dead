@@ -79,8 +79,30 @@ lp_post:
                 ld   a, AM_INK0                ; 3F-T11b (§9.9 A5): the Archmage's body ink at spawn = ORDER[0]'s
                 ld   (kind_tab + KT_ATTR + K_ARCHMAGE), a   ; (P = 0; only a D8 body reads it)
                 ld   e, c
-.one:           ld   c, 1
-                ld   l, c
+.one:           call .cpy                      ; ROOM-MEM2 review 4: the record's LP_POS compaction for a POSTED
+                ld   c, 1                      ; unit (lp_t06 does it for the others; a posted one that finds no
+                ld   l, c                      ; free slot stays in the record with its own byte, not a stale one)
+                ret
+; .cpy: LP_POS[WRP] = LP_POS[RDP] (lp_enter's read / write entries, LPV_ROOM). Keeps C, DE. ~0.25k T
+.cpy:           ld   a, (LPV_RDP)
+                call .pp
+                ld   b, (hl)
+                ld   a, (LPV_WRP)
+                call .pp
+                ld   (hl), b
+                ret
+.pp:            ld   hl, LP_RECP               ; (R6 lp_posr6's math: bank 0 cannot call R6)
+                sub  (hl)                      ; 1 + 2 i
+                rrca
+                and  LR_MAX - 1
+                ld   l, a
+                ld   a, (LPV_ROOM)
+                add  a, a
+                add  a, a
+                add  a, l
+                add  a, LP_POS & $FF
+                ld   l, a
+                ld   h, LP_POS >> 8
                 ret
 .esc:           ld   a, $FF
                 ld   (LP_EXLO), a              ; no exemption for anyone else
@@ -157,7 +179,7 @@ lp_post:
                 ld   h, LP_CMAP >> 8
                 ld   b, e
 .m1:            ld   a, (hl)
-                or   a
+                and  LPC_BAD | LPC_BODY | LPC_MRG    ; (ROOM-MEM2: not the slide's unit reservations, bits 4-7)
                 jr   z, .m2
                 and  LPC_BODY
                 jr   nz, .mb                   ; a placed body: never exempt

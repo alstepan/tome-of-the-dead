@@ -692,6 +692,11 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 DUP K_COUNT, n
                 ASSERT ({b kind_tab + KT_FLAGS + n} & KF_FLYER) || ({b kind_tab + KT_BH + n} <= STOREY_AIR - DOOR_PLANK_DY)
                 EDUP
+                ; ROOM-MEM2 review 3: every body <= 7 cols (LP_POS x + w and the door slide's scans stay
+                ; inside LP_CMAP's 33-col rows; the slide's reservations use one bit a unit, not w)
+                DUP K_COUNT, n
+                ASSERT {b kind_tab + KT_BW + n} <= 7
+                EDUP
                 ; AI-L1 J1 proof (turn3.asm .at): every climber is FEAT_W wide, so the
                 ; climb-start check over the whole shaft rect never sees a body in the
                 ; climber's own end box that does not already overlap the climber

@@ -323,6 +323,9 @@ class T(Proto):
         load) up to its final `jr $` (appended here). Unit-tests a routine
         in place; the caller reloads afterwards."""
         code = bytes(code) + b"\x18\xfe"
+        # ROOM-MEM2 review: a stub at LOWRAM_END_3B must end below lowram_code (43 B release since ROOM-MEM2)
+        assert org != S["LOWRAM_END_3B"] or org + len(code) <= S["lowram_code"], \
+            f"run_stub: {len(code)} B at LOWRAM_END_3B overruns lowram_code"
         self.z.cmd("write-memory %d %s" % (org, " ".join(str(b) for b in code)))
         end = org + len(code) - 2
         self.z.cmd("set-breakpoint 3 PC=%d" % end)

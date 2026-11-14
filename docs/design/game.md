@@ -3228,8 +3228,12 @@ followers:
   **ROOM-MEM (built, user 2026-11-03):** its slot is **parked**, not freed: position, facing,
   statuses, ranged cooldown and the AI bytes are kept while the room is one of the **two last
   rooms left** (A → B → A and A → B → C → A both return to the same monsters); the parked
-  slots of any older room are freed (the record entries stay, so those monsters come back
-  re-placed by the stream as before). A level change clears them.
+  slots of any older room are freed (the record entries stay). A level change clears them.
+  **ROOM-MEM2 (built, user playtest 2026-11-14: "store their last position, not the first
+  one"):** every appended monster also writes its **last cell** into its entry's position byte
+  (x, storey, facing; `LP_POS`, (d) option 1), for every room, so a monster of a room left
+  longer ago (slot freed) also comes back on the cell it stood on when the hero left (try 0,
+  §9.4.3), facing as it did; only its statuses / cooldown are lost (as before).
 - Any other slot (dead, summon-made) is freed. The record becomes VISITED.
 - **Summon-made monsters** (Archmage and Bone Caller summons, Rabbit Rat offspring) are
   discarded, not banked.
@@ -3241,9 +3245,10 @@ heal monsters and reroll their kinds and tiers. That is two exploits: leaving to
 leaving to turn a tier-3 monster into a base one. Option (b) costs ~80 B.
 
 Accepted residue:
-- ~~Positions are re-placed on re-entry (at least 8 cols away, §9.4.3).~~ ROOM-MEM: a monster
-  of one of the two last rooms left returns to its saved cell (try 0, below) if it is legal;
-  only a room left longer ago is re-placed.
+- ~~Positions are re-placed on re-entry (at least 8 cols away, §9.4.3).~~ ROOM-MEM / ROOM-MEM2:
+  a monster of any visited room returns to its last cell (try 0, below) if it is legal (the
+  §9.4.3 rules, 5-col arrival gap); one whose cell fails slides along its storey to the nearest
+  legal col (§9.4.3 door slide); only if that storey has none is it re-placed (tries 1-8).
 - ~~Statuses are lost both ways.~~ ROOM-MEM: kept (frozen while away: they tick only in play)
   for the two last rooms left; the summon counter of a summoner still resets (its discarded
   summons are gone, §9.4.4); a ranged cooldown is kept but a ready shooter still waits the first
@@ -3287,10 +3292,29 @@ are visited.
 
 **VISITED room:** the entries are recreated in order, with their stored kind, hp and flags.
 
-**Placement**, per monster: **ROOM-MEM try 0:** a monster with a parked slot (§9.4.2) first
-tries its **saved cell** (its x and storey; a flyer at its band default y) with the rules below
-and a **5-col** arrival gap; no stream step is drawn, no other-storey retry; a lair unit with a
-guard post takes the post instead (§9.4.4). Then up to **8 candidate cells** from the spawn
+**Placement**, per monster: **ROOM-MEM / ROOM-MEM2 try 0:** a VISITED entry with a stored
+position (§9.4.2: every monster banked on leave; not a FRESH unit or a trickle entry) first
+tries its **last cell** (its x and storey; a flyer at its saved band row, 0-3 below the band
+top, clamped) with the rules below and a **5-col** arrival gap; no stream step is drawn, no
+other-storey retry; a lair unit with a guard post takes the post instead (§9.4.4).
+**Returning monsters have no ladder / shaft margin (user decision 2026-11-14):** try 0 and the door
+slide test a ladder or shaft footprint against the monster's own body cols only (the footprint
+itself stays illegal; the ±1 col around it is allowed); the arrival box and gap, the pit (with
+its margin), blocks and occupied cells are unchanged. FRESH spawns and tries 1-8 keep the margin.
+**Door slide (user-approved 2026-11-14):** if that cell is rejected (the arrival gap or box, a
+ladder / shaft box, a pit landing, a body placed before it), the monster **keeps its storey**
+and slides to the nearest col (a tie goes right) inside cols 2..30 − w whose cells pass the
+rules; on the hero's arrival storey only on the side of him it was on and ≥ 5 cols clear of his
+box (it "waited just inside the door"). No RNG. Only if that storey has no such cell do tries
+1-8 run. **At most one slide may fail per room entry** (review 2026-11-14: it bounds the frozen
+transition under one frame); after it, the remaining monsters skip the slide and go straight to
+tries 1-8. The cells of the monsters still to place are reserved while sliding. Placed by try 0 or the slide in a fresh slot it keeps its stored facing (a flyer faces
+the hero: its facing bit holds the row; a parked slot keeps its own); placed by tries 1-8 it
+faces the hero. Accepted residue
+(ROOM-MEM2 review): parked slots are matched to entries by kind (first parked slot of that kind,
+§9.4.2), so in the rare case where an unplaced leftover entry of the same kind comes first, two
+same-kind bodies swap: each comes back on the other entry's cell with the other's statuses. A unit that finds
+no cell keeps its stored position for the next entry. Then up to **8 candidate cells** from the spawn
 stream; the first legal cell wins. Legal means:
 - the §9.5 placement rules hold: walker on a floor-standing cell; not a ladder, pit or door
   cell; not in a ladder-end box; not occupied; flyers inside their band;
@@ -3321,6 +3345,7 @@ point is the teleport cell.
 **Whole transition (ROOM-MEM review, 2026-11-03):** `lp_transition` = bank the old room (+ park,
 evict) + this spawn + the follower admission, **≤ 70,000 T, under one 70,908-T frame** on the frozen
 transition screen (measured up to ~58.5k with 4 bodies parked and 4 re-placed from a record;
+ROOM-MEM2: ~62.5k, + one far6 a banked body for its position byte;
 `tests/lp.py` A8, `tests/roommem.py` ADV). The spawn alone keeps the 46k cap below.
 
 **Cost (revised 2026-10-06 after LP measurement: mean 20k, worst 38.6k T; 3F-D3 2026-10-28:
@@ -3448,8 +3473,12 @@ monster there, it is a §6.1 violation, not a design trade-off. Ranked options:
 
 **(d) Re-entry continuity.** **BUILT as ROOM-MEM (user 2026-11-03, see §9.4.2 / §9.4.3):**
 option 1 for the **two last rooms left** (the slot itself is the stored state, so statuses,
-cooldown and facing come back too; the try-0 gap is 5), not for every room; option 2 (the
-"waited by the door" clamp) and the "PENDING in place after 9 failed tries" part are not built
+cooldown and facing come back too; the try-0 gap is 5); **ROOM-MEM2 (user playtest
+2026-11-14): option 1's position byte for every room** (x, storey, facing; a flyer: x, storey,
+band row 0-3; 36 B, written on leave from the live slot, try 0 for any VISITED entry; FRESH
+spawns and the Python == Z80 stream unchanged) **plus the door slide** (§9.4.3: a rejected
+try 0 keeps the storey and slides to the nearest legal col on its side of the hero, the
+user-approved form of option 2); option 2 as first written (the "waited by the door" clamp at bank time) and the "PENDING in place after 9 failed tries" part are not built
 (an unplaced unit waits in the record as before). Original note: Monsters seem to jump because §9.4.2 drops positions and §9.4.3 re-places
 them ≥ 8 cols from the arrival. They seem to vanish because a placement wait leaves the unit in the
 record. Ranked options:

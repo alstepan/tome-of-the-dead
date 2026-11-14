@@ -897,14 +897,16 @@ def lp_budget(b, lvl=0, f3=False):
     return bytes(lp)
 
 
-def lp_hits(b, r, s, lo, hi):
+def lp_hits(b, r, s, lo, hi, flo=None, fhi=None):
     """bank-3 `hits` (levelgen.asm): storey-s footprints f..f+2, the storey-0
-    pit p-1..p+3, the storey-s block, against cols lo..hi."""
+    pit p-1..p+3, the storey-s block, against cols lo..hi (ROOM-MEM2: the footprints
+    against flo..fhi when given: a returning monster without the 1-col margin)."""
     fp = ("RD_UPCOL", "RD_ARRCOL", "RD_LAD1", "RD_LAD2") if s == 0 else \
          ("RD_DNCOL", "RD_EXITCOL", "RD_LAD1", "RD_LAD2")
+    flo, fhi = (lo, hi) if flo is None else (flo, fhi)
     for k in fp:
         f = _rd(b, r, k)
-        if f and f <= hi and f + 2 >= lo:
+        if f and f <= fhi and f + 2 >= flo:
             return True
     p = _rd(b, r, "RD_PITCOL")
     pw = _rb(b, r, L2_PITW) or 3
@@ -924,7 +926,7 @@ def lp_hits(b, r, s, lo, hi):
     return False
 
 
-def lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap=8):
+def lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap=8, ret=False):
     """§9.4.3 placement legality -> "ok" / "gap" (fails ONLY the arrival-gap
     test: the caller re-tests the same x on the other storey) / "bad"."""
     for ps, plo, phi in placed:                         # occupied (same storey, cols)
@@ -937,7 +939,9 @@ def lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap=8):
         return "bad"                                    # right arrival box cols 27..30
     m = 1                                               # §9.4.3: footprints +-1 col (walkers and flyers)
     lo, hi = max(0, x - m), x + w - 1 + m
-    if lp_hits(b, r, s, lo, hi):
+    # ROOM-MEM2 (user 2026-11-14): a returning monster (ret: try 0, the door slide) has no ladder /
+    # shaft margin: the footprints are tested against its body cols only (the pit / blocks keep it)
+    if lp_hits(b, r, s, lo, hi, *((x, x + w - 1) if ret else (None, None))):
         return "bad"
     p = _rd(b, r, "RD_PITCOL")
     if s == 1 and p and p <= hi and p + (_rb(b, r, L2_PITW) or 3) - 1 >= lo:   # a fall from storey 0 lands here
@@ -1019,8 +1023,73 @@ LP_CALLS = 0                # rnd calls of the last lp_enter (tests: cost)
 LP_OUT_SLOT = []            # ROOM-MEM: the parked slot each placed unit of the last lp_enter used (None: a free one)
 
 
+def lp_pos_byte(x, s, left, fyo=None):
+    """ROOM-MEM2 LP_POS byte (level_defs.asm): x bits 0-4, storey bit 5, facing left bit 6; a flyer
+    (fyo = its band row y - 9s) bits 6-7 = min(fyo, 3) instead of the facing; 0 = none."""
+    if fyo is not None:
+        return (x & 31) | (s & 1) << 5 | min(fyo, 3) << 6
+    return (x & 31) | (s & 1) << 5 | (0x40 if left else 0)
+
+
+def lp_slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap, bud=None):
+    """ROOM-MEM2 door case (R6 lp_t06): try 0 rejected -> the same storey, the nearest x' (a tie: right)
+    in [LP_XMIN, LP_XMAX + 1 - w] whose cells are legal ignoring the gap rule (the margin-less returning
+    rules); on the hero's arrival storey only on the monster's side, >= gap clear of his box. The Z80's
+    two run-length scans (right from x0+1, then left only while nearer). bud = [1 once a slide failed
+    this entry]: review 3 (the lp_transition bound) allows one failed slide an entry. None: tries 1-8."""
+    if bud is None:
+        bud = [0]
+    if bud[0]:
+        return None
+    sc = [False]
+    res = _slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap, sc)
+    if res is None and sc[0]:                           # review 4: only a failure after a real scan spends it
+        bud[0] = 1
+    return res
+
+
+def _slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap, sc=None):
+    sc = sc if sc is not None else [False]
+    lo, hi = D["LP_XMIN"], D["LP_XMAX"] + 1 - w
+    if s == hs:
+        if x0 > hx:
+            lo = max(lo, hx + hw + gap)
+        else:
+            t = hx - w - gap
+            if t < 0:
+                return None
+            hi = min(hi, t)
+    if hi < lo:
+        return None
+    blk = [lp_legal(b, r, s, c, 1, fly, -1, hx, hw, placed, 0, ret=True) != "ok" for c in range(40)]
+
+    def scan(cols, step, first):
+        sc[0] = True
+        run = 0
+        for k in range(cols):
+            c = first + step * k
+            run = 0 if blk[c] else run + 1
+            if run == w:
+                return c
+        return None
+    xr = None
+    start = max(x0 + 1, lo)
+    if start <= hi:
+        c = scan(hi + w - start, 1, start)
+        xr = None if c is None else c - w + 1
+    lower = lo if xr is None else max(lo, 2 * x0 + 1 - xr)
+    sl = min(x0 - 1, hi)
+    if x0 - 1 >= 0 and sl >= lower:
+        c = scan(sl + w - lower, -1, sl + w - 1)
+        if c is not None:
+            return c
+    return xr
+
+
 def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
     lp = bytearray(lp)
+    # ROOM-MEM2: try 0 is every unit's LP_POS byte (the last cell lp_bank wrote; parked or not); a parked
+    # body (kind, s, x, left[, slot]) only decides the slot (restored in place) and keeps its own facing
     parked = [[True] + list(q) for q in (parked or [])]     # [still parked, kind, s, x, left(, slot)]
     global LP_OUT_SLOT
     LP_OUT_SLOT = []                                        # per out entry: its parked slot (q[5]) / None
@@ -1080,14 +1149,29 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
     else:
         units = [(lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i]) for i in range(hdr & D["LR_CNT_MASK"])]
     placed, out, left = [], [], []
+    po = lp_off("LP_POS") + r * D["LR_MAX"]             # ROOM-MEM2: the entries' last cells (0 = none)
+    bud = [0]                                           # the slide budget of this entry (LPS_USED)
     for i, (kb, hp) in enumerate(units):
         w, _, fly = info(kb & ROWM)
+        pos = lp[po + i]
         pk = next((q for q in parked if q[0] and q[1] == kb & D["LEK_KIND_MASK"]), None)
         best = lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM) \
             if r == b[H["LVL_LAIR"]] else None
-        if best is None and pk is not None and \
-                lp_legal(b, r, pk[2], pk[3], w, fly, hs, hx, hw, placed, D["LP_GAP2"]) == "ok":
-            best = (pk[2], pk[3])                       # try 0: the saved cell
+        try0 = False
+        if best is None and hdr & D["LR_VISITED"] or best is not None:
+            lp[po + len(left)] = pos                    # R6 lp_t06 (try 0) / bank-0 lp_post (posted, review 4)
+                                                        # copy the byte to the compaction slot first
+        if best is None and pos:                        # try 0 (parked or not): the LP_POS cell
+            s0, x0 = (pos >> D["LPP_S_BIT"]) & 1, pos & D["LPP_X"]
+            if lp_legal(b, r, s0, x0, w, fly, hs, hx, hw, placed, D["LP_GAP2"], ret=True) == "ok":
+                best, try0 = (s0, x0), True
+            else:                                       # the door case: keep the storey, slide x
+                rsv = [(s0, lp[po + j] & 31, (lp[po + j] & 31) + info(units[j][0] & ROWM)[0] - 1)
+                       for j in range(i + 1, len(units))                # the later units' saved cells
+                       if lp[po + j] and (lp[po + j] >> 5) & 1 == s0]   # on this storey: reserved
+                xs = lp_slide(b, r, s0, x0, w, fly, hs, hx, hw, placed + rsv, D["LP_GAP2"], bud)
+                if xs is not None:
+                    best, try0 = (s0, xs), True
         for t in range(0 if best else D["LP_TRIES"]):
             v = rng.rnd16()                             # one step per candidate
             s = (v >> 8) & 1
@@ -1102,22 +1186,26 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
             best = (s, x)
             break
         if best is None:
-            left.append((kb, hp))
+            left.append((kb, hp, pos))
             continue
         s, x = best[0], best[1]
         placed.append((s, x, x + w - 1))
         if pk is not None:
             pk[0] = False                               # restored in place: its own facing
-            out.append((kb, hp, s, x, bool(pk[4])))
+            out.append((kb, hp, s, x, bool(pk[4])) + ((pos >> 6,) if try0 and fly else ()))
             LP_OUT_SLOT.append(pk[5] if len(pk) > 5 else None)
-        else:
-            out.append((kb, hp, s, x, x > hx))
+        else:                                           # a fresh slot: its saved facing on try 0
+            if try0 and fly:                            # a flyer: faces the hero (from its saved x), its row
+                out.append((kb, hp, s, x, x > hx, pos >> 6))
+            else:
+                out.append((kb, hp, s, x, bool(pos >> D["LPP_LEFT_BIT"] & 1) if try0 else x > hx))
             LP_OUT_SLOT.append(None)
     lp[ro] = D["LR_VISITED"] | len(left)
     global LP_CALLS
     LP_CALLS = rng.calls
-    for i, (kb, hp) in enumerate(left):                 # the rest keep their bytes (no zero fill)
+    for i, (kb, hp, pos) in enumerate(left):            # the rest keep their bytes (no zero fill)
         lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i] = kb, hp
+        lp[po + i] = pos                                # ROOM-MEM2: compacted with its entry
     return bytes(lp), out
 
 def render(b):

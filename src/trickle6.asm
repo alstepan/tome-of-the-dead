@@ -233,9 +233,27 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 ld   (hl), b                   ; LE_KIND of entry n (record + 1 + 2n)
                 inc  hl
                 ld   (hl), a                   ; LE_HP
+                push ix                        ; ROOM-MEM2: its LP_POS byte = 0 (no last cell: placed by
+                pop  hl                        ; tries 1-8 on the next entry, not on a stale byte)
+                ld   de, -LP_REC
+                add  hl, de
+                ld   a, l                      ; 9 r (<= 72)
+                ld   l, (LP_POS & $FF) - LR_MAX
+.dv:            inc  l
+                inc  l
+                inc  l
+                inc  l
+                sub  LR_STRIDE
+                jr   nc, .dv                   ; L = LP_POS + 4 r
+                ld   a, (ix+LR_HDR)
+                and  LR_CNT_MASK
+                add  a, l
+                ld   l, a
+                ld   h, LP_POS >> 8            ; (one page, level_defs.asm ASSERT)
+                ld   (hl), 0
                 inc  (ix+LR_HDR)               ; count + 1 (VISITED kept)
                 ld   hl, LP_RESPAWNS
                 inc  (hl)
                 ret
-                ASSERT LR_ENT == 1 && LE_STRIDE == 2 && LE_KIND == 0 && LE_HP == 1 && LR_STRIDE == 9
+                ASSERT LR_ENT == 1 && LE_STRIDE == 2 && LE_KIND == 0 && LE_HP == 1 && LR_STRIDE == 9 && LR_MAX == 4
                 ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 7) >> 8) && (TRK_W & $FF) + GRID_CELLS <= $100
