@@ -48,7 +48,8 @@ WHAT IS MODELLED
   * NEW-MON3 (flag param.NEWMON3=1, default 0 = today's model; docs/design/new_monsters.md sec 4/5/8/12): 8-slot LP_KINDS lists (LP8,
     param.NM3_LISTS), kind rows 30/31/32 (sim ids; Imp and Wraith are the same game id 31 by depth), Gargoyle PERCH (wakes at x <= PERCH_X
     or when hurt, spends the turn; the bot walks up to a statue it cannot shoot), Fire Imp ember (auto-hit FIRE, cooldown, erratic flyer),
-    Frost Wraith (slow, COLD touch, freeze 1/WRAITH_FRZ_N for WRAITH_FRZ_T), Frost Charm (COLD R amulet, pool from D5, worn on D5/D7/D8),
+    Frost Wraith (slow, COLD touch, freeze 1/WRAITH_FRZ_N for WRAITH_FRZ_T; T10a FROST BOLT 1d4+1 COLD r WRAITH_R every
+    (WRAITH_COOL+1)th acting turn, param.WRAITH_BOLT), Frost Charm (COLD R amulet, pool from D5, worn on D5/D7/D8),
     P-1 pit throws as an expectation per room fight (PIT_P; no pit geometry).  The tuned section 12.4 preset is tools/balance_nm3.json:
     python3 tools/balance_sim.py --hero both --policy average --runs 10000 --jobs 8 --overrides tools/balance_nm3.json
 
@@ -161,6 +162,10 @@ PARAMS = {
     "PERCH_X": 3,                       # section 4.1 PERCH_GAP 2 box cols = sim gap x <= 3 (melee reach is x <= 1)
     "IMP_COOL": 2, "IMP_R": 6, "IMP_ERR": 0.5,   # section 4.2: ember every (COOL+1)th turn, range < 6; erratic flyer closes 1 col/turn with prob IMP_ERR
     "WRAITH_FRZ_N": 4, "WRAITH_FRZ_T": 2,        # user 2026-11-13: freeze 1 in 4 for 2 turns (a landed touch; hero COLD R halves the turns, I/X none)
+    # NEW-MON3 T10a (section 4.4, user 2026-11-14): the Frost Wraith's FROST BOLT = rd_tab row RK_WRAITH (ranged_model.WRAITH_ROW):
+    # auto-hit 1d4+1 COLD x the hero's response (Frost Charm R halves), range < WRAITH_R, a shot every (COOL+1)th ACTING turn
+    # (KF_SLOW: the period-2 gate runs first, so 1 per 6 game turns), drifts on between shots; rider none | FROZEN 1 @ 32/256
+    "WRAITH_BOLT": 1, "WRAITH_R": 6, "WRAITH_COOL": 3, "WRAITH_RIDER": 0, "WRAITH_DIE": 4, "WRAITH_BON": 1,
     "IMP_MANA_N": 4,                    # section 4: Imp drops Mana 1/4
     "PIT_P": 0.15, "PIT_THROWS": 1,     # P-1 term: P(a room fight has a stranded pit-row walker whose hero lingers) x throws per standoff
     "CHARM_FROM": 5,                    # Frost Charm (amulet, COLD R only) joins the gear pool from this depth; worn on Wraith depths
@@ -353,6 +358,8 @@ class Data:
         if self.nm3:
             self.rows = dict(self.rows)
             self.rows[self.kid["FIRE_IMP"]] = (P["IMP_R"], P["IMP_COOL"], 0, 4, 1, 1, 0, "spark_fly1")   # bot-side shooter marker; the turn is imp_turn
+            if P["WRAITH_BOLT"]:                # T10a: the FROST BOLT (marker as the Imp's; the turn is wraith_turn)
+                self.rows[self.kid["FROST_WRAITH"]] = (P["WRAITH_R"], P["WRAITH_COOL"], 1, 4, 1, 2, 0, "frost_fly")
         self.pit = {}
         if self.nm3:
             for b, (r, die, psn) in PIT_KINDS.items():
@@ -1249,6 +1256,9 @@ class Game:
             m.climb = rng.randint(P["T_CLIMB_LO"], P["T_CLIMB_HI"]) if self.rr() > P["P_LINE"] else 0
             m.back = rng.randint(0, 6)
             m.cd = 0 if m.k["id"] != self.D.id("ARCHMAGE") else 1
+            if self.D.nm3 and m.k["id"] == self.D.kid.get("FROST_WRAITH"):
+                m.cd = 1            # T10a 4.4: the FROST BOLT's entry grace (E_RCD counter 1: the first shot on its 2nd acting
+                                    # turn, as the section states); the older shooters keep the calibrated 0
             m.hold = m.hold if m.boss else 0
             m.hold = 0
             m.conf = m.fear = 0
@@ -1445,7 +1455,12 @@ class Game:
             return
         if kid == D.kid.get("FIRE_IMP") and D.nm3:
             return self.imp_turn(m, alive)
-        row = self.mrow(m)
+        if kid == D.kid.get("FROST_WRAITH") and D.nm3 and P["WRAITH_BOLT"]:
+            if self.wraith_bolt(m, alive):      # T10a 4.4: at range it shoots, adjacent it touches (melee below)
+                return
+            row = None                          # (its marker row is the bot's; the turn goes on to melee / drift)
+        else:
+            row = self.mrow(m)
         gap = m.x
         if row:
             r, N, flags, die, bonus = row[0], row[1], row[2], row[3], row[4]
@@ -1499,14 +1514,37 @@ class Game:
         gap = m.x
         if gap > 1 and gap < P["IMP_R"] and m.cd <= 0 and self.front(alive) is m:
             m.cd = P["IMP_COOL"]
-            dm = self.hero_res(FIRE, self.rng.randint(1, 4) + 1)
-            self.dmg_hero(dm, m.k["name"], "ranged")
+            self.flyer_shot(m)
             return
         m.cd -= 1
         if gap <= 1:
             return self.mon_melee(m, 1)
         if self.rr() < P["IMP_ERR"] and not any(o is not m and o.hp > 0 and o.x < m.x and m.x - o.x < 2 for o in alive):
             m.x -= 1
+
+    def flyer_shot(self, m):
+        """F-1 (T10a): an auto-hit typed bolt from a flyer (rd_tab RWF_SPELL, roll x the hero's response, no DEF): the Imp's
+        1d4+1 FIRE ember, the Wraith's 1d4+1 COLD frost bolt (+ the optional FROZEN 1 @ 32/256 rider knob)."""
+        P, h = self.P, self.h
+        wr = m.k["id"] == self.D.kid.get("FROST_WRAITH")
+        ty = COLD if wr else FIRE
+        dm = self.hero_res(ty, self.rng.randint(1, P["WRAITH_DIE"]) + P["WRAITH_BON"] if wr else self.rng.randint(1, 4) + 1)
+        self.dmg_hero(dm, m.k["name"], "ranged")
+        if wr and dm and P["WRAITH_RIDER"] and not h.holdguard and not h.hold and self.rr() < 32 / 256.0 and h.res[COLD] == 0:
+            h.hold, h.holdkind = 1, "frozen"
+
+    def wraith_bolt(self, m, alive):
+        """NEW-MON3 4.4 (T10a): the Frost Wraith on an ACTING turn (KF_SLOW gated already): in line (= the front body, as the Imp),
+        melee reach first (gap <= 1: the touch), gap < WRAITH_R and the counter 0 -> FROST BOLT, counter := WRAITH_COOL; else the
+        counter ticks and it drifts on (the caller's melee / walk).  -> True when the turn was the shot."""
+        P = self.P
+        gap = m.x
+        if gap > 1 and gap < P["WRAITH_R"] and m.cd <= 0 and self.front(alive) is m:
+            m.cd = P["WRAITH_COOL"]
+            self.flyer_shot(m)
+            return True
+        m.cd -= 1
+        return False
 
     def pit_throws(self, mons):
         """NEW-MON3 P-1 (8.2-8.4): a pit-row walker stranded at a pit edge throws at a lingering hero.  No pit model in the sim, so the
@@ -1711,7 +1749,10 @@ class Game:
                 row = self.mrow(m)
                 if m.hp > 0 and row and m.cd <= 0 and self.in_rng(m.x, row[0]) and self.in_line(m):
                     m.cd = row[1]
-                    self.ranged_hit(m, row)
+                    if self.D.nm3 and m.k["id"] in (self.D.kid.get("FIRE_IMP"), self.D.kid.get("FROST_WRAITH")):
+                        self.flyer_shot(m)              # T10a: the typed auto-hit bolt, not a PHYS d20 shot
+                    else:
+                        self.ranged_hit(m, row)
                 else:
                     m.cd -= 1
         followers = [m for m in alive if not m.boss and m.x <= self.P["ESCORT_FOLLOW_GAP"]]

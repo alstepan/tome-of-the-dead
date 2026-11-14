@@ -953,8 +953,10 @@ KF_SLOW         EQU %00100000       ; RECLAIM-C (b): acts every 2 turns (rests o
                                     ; (Slime, Vampire, Mummy); D3-0..RECLAIM-C spare (was KF_ZAP, the PROTO wizard zap)
 KF_SLOW_BIT     EQU 5
 KF_OPENER       EQU %01000000       ; B3B-5: opens closed unlocked doors by bumping (game.md §9.1)
-KF_PERCH        EQU %10000000       ; NEW-MON3 T8: the Gargoyle's perch (new_monsters.md §4.1 G-1; the bit is data only until the
-                                    ; G-1 code tests it: every other KT_FLAGS reader masks a single bit)
+KF_PERCH        EQU %10000000       ; NEW-MON3 T8: the Gargoyle's perch (new_monsters.md §4.1 G-1; T10a: ai_flyer tests it); every
+                                    ; other KT_FLAGS reader masks a single bit
+KF_PIT          EQU KF_PERCH        ; NEW-MON3 T10a P-1 (§8.3): the same bit on a WALKER = it has a pit-throw row (R6 pit6;
+                                    ; read only by ai_monster's refused .fstep, never on the flyer path)
 ; NEW-MON3 T8: row 31 (K_ALIAS) is the Fire Imp as assembled (variant A) and the Frost Wraith (variant B, new_monsters.md §3 / §4):
 ; the kind_tab columns that differ, the single source of both the KROW rows (main.asm) and the A-1 patch table (nm3var0.asm)
 NM3_IMP_HP      EQU 5

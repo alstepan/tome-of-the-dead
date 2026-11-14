@@ -22,7 +22,7 @@ rk_tab:
                 DB   RK_SNIPER                 ; 28
                 DB   RK_BONE_CALLER            ; 29
                 DB   0                         ; 30 Gargoyle: melee only
-                DB   RK_IMP                    ; 31 = the alias as assembled, the Fire Imp (nm3_var: 0 on a Frost Wraith level)
+                DB   RK_IMP                    ; 31 = the alias as assembled, the Fire Imp (nm3_var: RK_WRAITH on a Frost Wraith level)
                 ASSERT $ - rk_tab == K_COUNT && (rk_tab >> 8) == (($ - 1) >> 8)   ; ai_rhook adds the kind to the low byte
                 ASSERT K_BLACK_WIDOW == K_SLINGER + 1 && K_NECRO == K_ARCHER + 2 && K_BONE_CALLER == K_SNIPER + 1 && K_SNIPER > K_SLINGER && K_SLINGER > K_NECRO
                 ASSERT K_COUNT == K_BONE_CALLER + 3 && K_ALIAS == K_GARGOYLE + 1 && K_BOSS_D1 == K_GOBLIN && K_BOSS_D2 == K_SPIDER && K_SPIDER < K_ARCHER
@@ -41,7 +41,7 @@ ai_mon:         ld   a, (ix+E_KIND)
                 jp   far6
 
 ;------------------------------------------------------------------------------
-; ai_rhook — ai_monster (bank 3) right after its melee test (game.md §9.2
+; ai_rhook — ai_monster (bank 3) right after its melee test (game.md §9.2; T10a F-1: ai_flyer too, H = 0
 ; "Per-turn order" step 4): a kind with an rk_tab row goes to R6 ai_ranged
 ; (far6, ranged6.asm); every other kind pays this one lookup.
 ; In : IX = the monster, H = 0 iff standing (ai_monster's flag), TMP4 = its

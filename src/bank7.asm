@@ -1162,13 +1162,17 @@ follow_select:
                 call ent_ix
                 ld   a, EF_ACTIVE | EF_DYING   ; ROOM-MEM (F, user 2026-11-03): a PENDING body (a
                 call act_mask                  ; follower not yet in) may follow the hero back out
-                jr   nz, .cn
+                jp   nz, .cn
                 ld   a, (ix+E_KIND)            ; 3F-T8 (game.md §8.6 / §9.2): the lair boss
                 or   (ix+E_GOLD)               ; NEVER follows (it was a plain candidate: the
                 ld   hl, LP_BOSS               ; D4 Ogre left its lair, user playtest). Only the
                 cp   (hl)                      ; boss matches kind | E_GOLD = LP_BOSS (the Ogre /
                 jr   z, .cn                    ; Death Knight spawn nowhere else; PROTO: LP_BOSS 0
-                ld   a, (TMP7)                 ; = the Knight's id). D3-8f (game.md §6.4.2 R3): a HOLD or                 ; D3-8f (game.md §6.4.2 R3): a HOLD or
+                cp   K_GARGOYLE                ; NEW-MON3 T10a G-1: a PERCHED Gargoyle never follows (A = kind |
+                jr   nz, .ngp                  ; E_GOLD: never golden); an awake one may (place_follower keeps
+                bit  RCD_AWAKE_BIT, (ix+E_RCD) ; RCD_AWAKE: it stays awake)
+                jr   z, .cn
+.ngp:           ld   a, (TMP7)                ; = the Knight's id). D3-8f (game.md §6.4.2 R3): a HOLD or                 ; D3-8f (game.md §6.4.2 R3): a HOLD or
                 add  a, ST_FLAGS & $FF         ; FEAR body is not a candidate (CONFUSED
                 ld   l, a                      ; may follow)
                 ld   h, ST_FLAGS >> 8

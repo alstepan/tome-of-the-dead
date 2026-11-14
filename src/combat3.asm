@@ -310,7 +310,10 @@ deal_hit:
                 call set_reaction_at
                 call dh_status
                 ld   a, (ix+E_KIND)            ; 3F-T9 (§9.6): a Rabbit Rat hit and alive may breed:
-                cp   K_RABBIT_RAT              ; R6 breed6 only queues it (end_turn's sp_run makes
+                cp   K_GARGOYLE                ; NEW-MON3 T10a G-1 (§4.1): any HP loss wakes a perched
+                jr   nz, .gw                   ; Gargoyle, no line (the hit flash is the cue)
+                set  RCD_AWAKE_BIT, (ix+E_RCD)
+.gw:            cp   K_RABBIT_RAT              ; R6 breed6 only queues it (end_turn's sp_run makes
                 ld   hl, breed6                ; the Rat: never in this cast / input tick)
                 call z, far6
                 jr   .heal

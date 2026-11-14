@@ -108,7 +108,10 @@ do_attack:
 .miss:          ld   a, (TMP2)
                 call ent_ix                    ; IX = target
                 ld   a, (ix+E_KIND)
-                cp   K_KNIGHT
+                cp   K_GARGOYLE                ; NEW-MON3 T10a G-1: a missed bump wakes a perched Gargoyle
+                jr   nz, .mk                   ; (a hit wakes it in deal_hit: any HP loss)
+                set  RCD_AWAKE_BIT, (ix+E_RCD)
+.mk:            cp   K_KNIGHT
                 jr   nz, .m0
                 ld   c, RC_BLOCK               ; a miss on the Knight: BLOCK (§6.5)
                 call set_reaction_at
@@ -369,8 +372,14 @@ ai_monster:
                 ld   a, d                      ; enters try_step past its on_ladder test
                 ld   (TMP6), a                 ; (Z only mid-ladder; ~0.3k T). No result:
                 call try_step.vert             ; ai_monster's caller reads none (CF of
-                ret  nc                        ; face_tmp6 is not try_step_face's)
-                jp   face_tmp6
+                jp   c, face_tmp6              ; face_tmp6 is not try_step_face's)
+                ; NEW-MON3 T10a P-1 (new_monsters.md §8.2): a refused step of a KF_PIT walker -> R6 pit6 (it proves
+                ; the pit-col refusal itself, then the throw rules); every other refusal of a non-pit kind: +~60 T
+                KFL  KT_FLAGS
+                rla                            ; CF = KF_PIT (bit 7, walkers)
+                ret  nc
+                ld   hl, pit6
+                jp   far6
 .other:
                 ld   b, h                      ; B = 0 iff standing
                 KFIELD KT_FLAGS
@@ -576,11 +585,30 @@ attack_if_reach:
 ; ladder-end rule is gone); only try_step's anti-cork protects a climb.
 ; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
-ai_flyer:                                      ; BC / DE = the box (ai_monster's get_box)
-                call attack_if_reach.box       ; 3F-B5: a flyer is never mid-ladder
+; afl_perch — NEW-MON3 T10a G-1 (new_monsters.md §4.1): a KF_PERCH flyer (the Gargoyle) runs ai_flyer
+; only once RCD_AWAKE is set; perched, R6 perch6 decides the wake (gap <= PERCH_GAP: wake + line +
+; the waking pose, the turn spent) or waits in the rest pose. After the status step and the slow
+; gate (both run before .go); the yield rule (cork_check) still runs first for every kind.
+afl_perch:      bit  RCD_AWAKE_BIT, (ix+E_RCD)
+                jr   nz, ai_flyer.awake
+                ld   hl, perch6                ; (R6 ranged6.asm; far6 returns to ai_monster's caller)
+                jp   far6
+ai_flyer:                                      ; BC / DE = the box (ai_monster's get_box), HL = the KT_FLAGS byte (.go)
+                bit  7, (hl)                   ; KF_PERCH: +19 T a flyer turn
+                jr   nz, afl_perch
+                ASSERT KF_PERCH == $80
+.awake:         call attack_if_reach.box       ; 3F-B5: a flyer is never mid-ladder
                 ret  c
                 call storey_ref
                 ld   (TMP4), a                 ; my storey s
+                ; NEW-MON3 T10a F-1 (new_monsters.md §2.1 / §4.2 / §4.4): the flyer shooter on the COMMON exit (both
+                ; the KF_BAT and the Ghost-drift paths), so the Fire Imp and the Frost Wraith are rd_tab data only.
+                ; H = 0 (standing: a flyer is never mid-ladder), TMP4 = s (kept); rg_line takes the flyer's bottom row
+                ; as its flight row. Not a shooter: ai_rhook's reject + ai_ghook (+~110 T a flyer turn); RWF_WALK
+                ; rows between shots return CF = 0: it flies on below
+                ld   h, 0
+                call ai_rhook
+                ret  c
                 ld   a, (PL_STOREY)
                 ld   hl, TMP4
                 cp   (hl)

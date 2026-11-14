@@ -25,6 +25,11 @@
 ; Necro / Bone Caller) is DARK; the Archmage's typed rows (3F-T11b) never pass it.
 ;------------------------------------------------------------------------------
 ROCK_ATTR       EQU $06                 ; the Slinger's rock (game.md §9.6: $06)
+IMP_EMBER_ATTR  EQU $42                 ; NEW-MON3 §4.2 / §10 Q6: the Fire Imp's ember (Firebolt red)
+WR_BOLT_ATTR    EQU $45                 ; §4.4: the Frost Wraith's bolt = the Frost Shard pair's cyan
+WR_BOLT_R       EQU 6                   ; §4.4 r 8, cut to 6 by the sim re-gate (T10a)
+WR_BOLT_N       EQU 3                   ; §4.4 N 2, raised to 3 by the sim re-gate (T10a); <= RCD_MASK
+PIT_AXE_ATTR    EQU $07                 ; §8.3: the Orc's thrown hand axe (white); Goblin dagger / Skeleton bone THROW_ATTR $47
 FEAR3_1IN3      EQU (3 << 4) | 3        ; DARK on-hit: FEAR 3 turns, 1 in 3 (~85/256, §9.2)
 DARK_DHC        EQU DTY_DARK | DH_NODEF | (EFX_FEAR << DH_EFX_SHIFT)
 rd_tab:         ;    r   N  flags                      die bon dhc        dhe         fx
@@ -53,18 +58,54 @@ rd_tab:         ;    r   N  flags                      die bon dhc        dhe   
                 ; NEW-MON3 T8 (new_monsters.md §4.2): the Fire Imp's ember: range 6, a shot every 3rd turn (N 2), flies on between
                 ; shots (RWF_WALK), auto-hit (RWF_SPELL: the Necromancer branch, roll x response, no DEF) that never meets the
                 ; DARK reflect gate (RWF_NOREFL), 1d4+1 FIRE, impact = spark_fizz (class-shared; the ember's $42 ink is F-1 code)
+                ; T10a F-1: a flyer's flight row is its bottom row (rg_line); the ember flies $42 with the class-shared
+                ; spark_fizz impact (rd_x)
                 DB   6,  2, RWF_WALK | RWF_SPELL | RWF_NOREFL, 4, 1, DTY_FIRE | DH_NODEF, 0, FID_spark_fly1  ; 14 Fire Imp
-                DB   6,  2, RWF_WALK | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 15 Goblin King
-                DB   6,  2, RWF_WALK | RWF_NOIMP,        2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), SQ_PSN_T / 2, FID_spark_fly1  ; 16 Spider Queen (spit = the Mage's spark, always + 12 POISON)
+                ; NEW-MON3 T10a (new_monsters.md §4.4, user 2026-11-14): the Frost Wraith's FROST BOLT, the Imp's F-1 path as data:
+                ; auto-hit COLD 1d4+1 x the hero's response (the Frost Charm's COLD R halves it), damage only (no rider: the
+                ; touch stays the freezer), drifts on between shots (RWF_WALK); frost_fly -> frost_crack, $45 (rd_x: RXF_ONE).
+                ; Sim re-gate (§4.4 risk knobs, in order): N 2 -> 3 (every 4th ACTING turn = every 8th game turn under KF_SLOW),
+                ; r 8 -> 6 (tools/balance_nm3.json WRAITH_COOL / WRAITH_R)
+                DB   WR_BOLT_R, WR_BOLT_N, RWF_WALK | RWF_SPELL | RWF_NOREFL, 4, 1, DTY_COLD | DH_NODEF, 0, FID_frost_fly   ; 15 Frost Wraith
+                DB   6,  2, RWF_WALK | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 16 Goblin King
+                DB   6,  2, RWF_WALK | RWF_NOIMP,        2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), SQ_PSN_T / 2, FID_spark_fly1  ; 17 Spider Queen (spit = the Mage's spark, always + 12 POISON)
+                ; NEW-MON3 T10a P-1 (§8.3): the pit throws (pit6 only; F1 d20, PHYS - DEF min 1, no impact frame). The Goblin's
+                ; N 0 is never read twice (one dagger: RCD_SPENT). Inks in rd_x
+                DB   4,  3, RWF_NOIMP,                   2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), BW_PSN_T / 2, FID_spark_fly1  ; 18 pit Spider (+ 6 POISON)
+                DB   6,  0, RWF_NOIMP,                   3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 19 pit Goblin (one dagger)
+                DB   5,  3, RWF_NOIMP,                   6, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 20 pit Orc (a hand axe)
+                DB   5,  3, RWF_NOIMP,                   4, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 21 pit Skeleton (a bone)
                 ASSERT $ - rd_tab == RK_ROWS * RW_STRIDE
                 ASSERT FID_arrow_fly2 == FID_arrow_fly1 + 1 && FID_arrow_hit == FID_arrow_fly1 + 2
                 ASSERT FID_dagger_spin2 == FID_dagger_spin1 + 1
                 ASSERT FID_nbolt_fly2 == FID_nbolt_fly1 + 1 && FID_nbolt_hit == FID_nbolt_fly1 + 2
                 ASSERT RK_ARCHER == 1 && RK_SNIPER == 2 && RK_SLINGER == 3 && RK_NECRO == 4 && RK_BONE_CALLER == 5 && RK_ARCHMAGE == 6
-                ASSERT RK_ARCHMAGE + AM_VENOM == RK_WIDOW - 1 && RK_IMP == RK_WIDOW + 1 && RK_GKING == RK_IMP + 1 && RK_SQUEEN == RK_GKING + 1 && RK_SQUEEN == RK_ROWS && RK_IMP < RK_GOLD1
+                ASSERT RK_ARCHMAGE + AM_VENOM == RK_WIDOW - 1 && RK_IMP == RK_WIDOW + 1 && RK_WRAITH == RK_IMP + 1 && RK_GKING == RK_WRAITH + 1 && RK_SQUEEN == RK_GKING + 1 && RK_WRAITH < RK_GOLD1
+                ASSERT RK_PSPIDER == RK_SQUEEN + 1 && RK_PGOBLIN == RK_PSPIDER + 1 && RK_PORC == RK_PGOBLIN + 1 && RK_PSKEL == RK_PORC + 1 && RK_PSKEL == RK_ROWS
+                ASSERT FID_frost_crack == FID_frost_fly + 1 && WR_BOLT_N <= RCD_MASK
                 ASSERT SQ_PSN_T <= PSN_CAP && SQ_PSN_T % 2 == 0 && SQ_PSN_T / 2 <= STS_MAX_TURNS && DTY_PHYS == 0
                 ASSERT BW_PSN_T <= PSN_CAP && BW_PSN_T % 2 == 0 && BW_PSN_T / 2 <= STS_MAX_TURNS && RK_WIDOW < RK_GOLD1
                 ASSERT AM_SLEEP_T << 4 < 256 && AM_SLEEP_T <= STS_MAX_TURNS && AM_PSN_T <= PSN_CAP
+
+;------------------------------------------------------------------------------
+; rd_x — NEW-MON3 T10a: per rd_tab row (1-based, RG_RIX) 2 B: FXD_ATTR (0 = the frames' own fx_meta ink)
+; | RXF_ONE (one flight frame: FIDB = FIDA), and the impact fid (read only without RWF_NOIMP). Was rg_q's
+; "dagger_spin -> ROCK_ATTR, else 0" test and "impact = fid + 2": the Imp's ember ($42, spark_fizz), the
+; Wraith's frost (frost_fly -> frost_crack) and the pit inks need their own. One page (rg_q: ld h).
+;------------------------------------------------------------------------------
+rd_x:           DB   0, FID_arrow_hit,           0, FID_arrow_hit            ; Archer, Sniper
+                DB   ROCK_ATTR, 0,               0, FID_nbolt_hit            ; Slinger (rock), Necromancer
+                DB   0, FID_nbolt_hit                                        ; Bone Caller
+                DUP  AM_VENOM + 1                                            ; the Archmage's 7 (am_cast re-inks)
+                DB   0, FID_nbolt_hit
+                EDUP
+                DB   0, 0,                       IMP_EMBER_ATTR, FID_spark_fizz1   ; Black Widow (NOIMP), Fire Imp
+                DB   RXF_ONE | WR_BOLT_ATTR, FID_frost_crack                 ; Frost Wraith
+                DB   ROCK_ATTR, 0,               0, 0                        ; Goblin King (rock ink), Spider Queen ($43 own)
+                DB   0, 0,                       THROW_ATTR, 0               ; pit Spider ($43 own), pit Goblin (the hero's dagger ink)
+                DB   PIT_AXE_ATTR, 0,            THROW_ATTR, 0               ; pit Orc (a hand axe), pit Skeleton (a bone)
+                ASSERT $ - rd_x == 2 * RK_ROWS && (rd_x >> 8) == (($ - 1) >> 8)
+                ASSERT FID_arrow_hit == FID_arrow_fly1 + 2 && FID_nbolt_hit == FID_nbolt_fly1 + 2
 
 ;------------------------------------------------------------------------------
 ; ai_ranged — the hook (game.md §9.2 "Per-turn order" step 4), first match:
@@ -269,13 +310,22 @@ rg_q:           ld   hl, TURN_PEND             ; (3F-T11b am_cast: the Mirror He
                 ld   (de), a                   ; RS_FL = I or 0
                 inc  de
                 ld   c, (hl)                   ; C = RG_F
+                ld   a, (RG_RIX)               ; T10a: HL = the row's rd_x pair {attr | RXF_ONE, impact}
+                add  a, a
+                add  a, (rd_x - 2) & $FF
+                ld   l, a
+                ld   h, rd_x >> 8
                 ld   a, (RG_ROW + RW_FX)       ; FXD_FIDA / FIDB / IMPA / IMPB
                 ld   (de), a
                 inc  de
+                bit  7, (hl)                   ; RXF_ONE: one flight frame (frost_fly)
+                jr   nz, .one
                 inc  a
-                ld   (de), a
+.one:           ld   (de), a
                 inc  de
-                inc  a
+                inc  l
+                ld   a, (hl)                   ; the impact fid (rd_x)
+                dec  l
                 ld   b, PF_IMPT
                 bit  RGF_IMP_BIT, c
                 jr   nz, .im
@@ -285,13 +335,11 @@ rg_q:           ld   hl, TURN_PEND             ; (3F-T11b am_cast: the Mirror He
                 inc  de
                 ld   (de), a
                 inc  de
-                ld   a, (RG_ROW + RW_FX)       ; FXD_ATTR: a dagger_spin shot (Slinger rock, Goblin King)
-                cp   FID_dagger_spin1          ; ROCK_ATTR (fx_meta's dagger_spin is the hero's throw
-                ld   a, ROCK_ATTR              ; THROW_ATTR); else 0 = the frames' own (the Queen's spark
-                jr   z, .at                    ; $43, arrows $07, bolts $43)
-                xor  a
-.at:            ld   (de), a
+                ld   a, (hl)                   ; FXD_ATTR (rd_x): ROCK_ATTR for the Slinger / Goblin King
+                and  ~RXF_ONE & $FF            ; rock, the Imp's $42 ember, the pit inks; 0 = the frames'
+                ld   (de), a                   ; own (the spark $43, arrows $07, bolts $43)
                 inc  de
+                ASSERT RXF_ONE == $80
                 ld   a, (RG_DIR)               ; FXD_COL = the cell next to the shooter:
                 rla                            ; right x + w = RG_FIRST, left x - 1 =
                 ld   a, (RG_FIRST)             ; RG_FIRST + gap - 1
@@ -301,16 +349,8 @@ rg_q:           ld   hl, TURN_PEND             ; (3F-T11b am_cast: the Mirror He
                 dec  a
 .an:            ld   (de), a
                 inc  de
-                ld   a, (RG_ROW + RW_FX)       ; FXD_ROW = the flight row (rg_line's: top + 2, a 2-high
-                cp   FID_spark_fly1            ; spitter's top; HL / BC are live here: the row's fid, not
-                ld   a, (ix+E_Y)               ; KT_BH; WIDOW-SPIT: was a K_SPIDER test, same 5 B)
-                jr   z, .fr
-                add  a, PF_ROW_DY
-.fr:            ld   (de), a
-                ; the only 2-high shooters are the spark spitters (Spider Queen, Black Widow: rg_line's (h / 2) & 2
-                ; == rg_q's fid test; the Widow's KT_BH = BH_K_SPIDER, main.asm); no other row flies spark_fly1
-                ASSERT PF_ROW_DY == 2 && BH_K_SPIDER == 2 && BH_K_GOBLIN >= 4 && BH_K_ARCHER >= 4 && BH_K_NECRO >= 4 && BH_K_ARCHMAGE >= 4
-                ASSERT BH_K_GOBLIN <= 7 && BH_K_ARCHER <= 7 && BH_K_NECRO <= 7 && BH_K_ARCHMAGE <= 7
+                ld   a, (RG_FR)                ; FXD_ROW = rg_line's flight row (T10a: was a fid test here;
+                ld   (de), a                   ; the flyer's bottom row needs rg_line's own value)
                 inc  de
                 ld   a, (RG_DIR)               ; FXD_FLAGS: FXDF_LEFT, 8 px a tick
                 rlca
@@ -359,9 +399,10 @@ rg_ri:          push hl
 
 ;------------------------------------------------------------------------------
 ; rg_rp — A = rd_tab row 1.. -> HL = the row.  Clobbers: A, BC.
-; rg_row — the same, copied to RG_ROW (RW_STRIDE B).  Keeps DE.  Clobbers: A, BC, HL.
+; rg_row — the same, copied to RG_ROW (RW_STRIDE B), RG_RIX = A.  Keeps DE.  Clobbers: A, BC, HL.
 ;------------------------------------------------------------------------------
-rg_row:         call rg_rp
+rg_row:         ld   (RG_RIX), a               ; T10a: rg_q's rd_x row
+                call rg_rp
                 push de
                 ld   de, RG_ROW
                 ld   bc, RW_STRIDE
@@ -399,7 +440,8 @@ rg_cnt:         ld   a, (ix+E_RCD)
 ;------------------------------------------------------------------------------
 ; rg_line — RANGED-SPEC "in line" (§9.2 Geometry): IX standing (E = 0) on the
 ; hero's storey TMP4, the hero standing (not mid-ladder), no overlap; RG_DIR /
-; RG_FIRST / RG_GAP set; gap < RG_ROW's RW_R (the row must be loaded); the flight row (top + 2; a 2-high body: its top) over the gap free of TF_SOLID cells
+; RG_FIRST / RG_GAP set; gap < RG_ROW's RW_R (the row must be loaded); the flight row (top + 2; a 2-high body: its top;
+; T10a F-1: a flyer (E = 0 from ai_flyer) its bottom row y + h - 1) = RG_FR, at or below the hero's top row PL_Y; over the gap free of TF_SOLID cells
 ; (rg_scan) and no live body in gap cols x my rows (box_free, ACT_SLOT = me).
 ; Out: CF = not in line; NC: A = gap.  Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
@@ -438,15 +480,27 @@ rg_line:        ld   a, e
                 ld   hl, RG_ROW + RW_R         ; gap >= r: out of range, before the scans (cheap reject)
                 cp   (hl)
                 jr   nc, .no
-                or   a                         ; gap 0: in line (NC; 0 only guards the loops)
-                ret  z
                 ld   d, a                      ; D = gap cols
                 KFIELD KT_BH                   ; (keeps BC, DE)
-                ld   e, a
+                ld   e, a                      ; E = h
+                KFIELD KT_FLAGS
+                rrca                           ; CF = KF_FLYER
+                ld   a, e
+                jr   c, .fly
                 rrca                           ; BOSS-RANGED: flight row = top + ((h / 2) & 2):
                 and  PF_ROW_DY                 ; top + 2, a 2-high body (the Spider Queen) its top
-                add  a, (ix+E_Y)               ; row (top + 2 is its floor; §9.2: fr lies in the
-                ld   b, a                      ; hero's rows). rg_q matches it (the spark fid)
+                jr   .fr                       ; row (top + 2 is its floor; §9.2: fr lies in the hero's rows)
+.fly:           dec  a                         ; NEW-MON3 T10a F-1: a flyer's fr = y + h - 1 (its bottom row)
+.fr:            add  a, (ix+E_Y)
+                ld   b, a                      ; B = fr
+                ld   (RG_FR), a                ; rg_q's FXD_ROW (was its own fid test)
+                ld   hl, PL_Y                  ; F-1: in line only if fr >= the standing hero's top row 9s + 2
+                cp   (hl)                      ; (fr <= 9s + 7 always: a walker's fr is inside his rows, a flyer's
+                ret  c                         ; bottom row never leaves its band 9s .. 9s + 8 - h)
+                ld   a, d
+                or   a                         ; gap 0: in line (NC; 0 only guards the loops)
+                ret  z
+                ASSERT KF_FLYER == 1
                 call rg_scan
                 ret  c                         ; a solid cell (a mid-room block)
                 ld   b, (ix+E_Y)               ; gap cols x my rows
@@ -547,3 +601,130 @@ shot_tick:
                 ret
                 ASSERT E_FLA == E_FLT + 1 && ((P_ENTITIES + E_FLT) & $FF) != $FF
                 ASSERT RS_R == 0 && RS_FL == 1 && RS_D == 2 && (RS_Q >> 8) == (RS_SINK >> 8)
+
+;------------------------------------------------------------------------------
+; perch6 — NEW-MON3 T10a G-1 (new_monsters.md §4.1, as amended 2026-11-14): far6 from bank-3 afl_perch, a
+; perched Gargoyle's own turn (IX; RCD_AWAKE clear; the status step and the slow gate passed). The hero
+; standing (not mid-ladder) on its storey (storey_ref vs PL_STOREY) at a box gap <= PERCH_GAP (an overlap
+; counts as 0) -> RCD_AWAKE, it faces him, "THE GARGOYLE WAKES UP." (the existing MSG_M_WAKE line, 0 new
+; text), the WAKING pose (its KS_CLIMB one-shot: a flyer never climbs; T10b's art) and the turn is spent;
+; else it waits (the PERCHED rest pose: anim's KS_IDLE). Never otherwise. Damage (deal_hit) and a missed
+; bump (do_attack) set RCD_AWAKE silently; room re-entry re-perches (zeroed / restored slot clears bit 2).
+; Clobbers: all but IX.  A waiting turn ~0.5k T (far6 incl.); a wake + its line ~2.5k.
+;------------------------------------------------------------------------------
+perch6:         ld   a, (PL_LADDER)
+                or   a
+                ret  nz                        ; the hero mid-ladder: stays perched
+                call storey_ref                ; (bank 2; A, HL)
+                ld   hl, PL_STOREY
+                cp   (hl)
+                ret  nz                        ; the other storey: never
+                KFIELD KT_BW
+                add  a, (ix+E_X)
+                ld   b, a                      ; x + w
+                ld   a, (PL_X)
+                ld   c, 1                      ; C = the facing (+1 right / $FF left)
+                sub  b                         ; hero right: gap = px - (x + w)
+                jr   nc, .g
+                ld   a, (PL_X)
+                ld   hl, PL_W
+                add  a, (hl)
+                ld   b, a
+                ld   c, $FF
+                ld   a, (ix+E_X)
+                sub  b                         ; hero left: gap = x - (px + pw); CF = an overlap
+                jr   c, .wk
+.g:             cp   PERCH_GAP + 1
+                ret  nc                        ; too far: stays perched
+.wk:            set  RCD_AWAKE_BIT, (ix+E_RCD)
+                ld   a, c
+                call face_a                    ; (bank 2)
+                ld   b, MSG_M_WAKE
+                ld   c, (ix+E_KIND)
+                call impact_line               ; (low RAM: pages the text, restores R6) "THE GARGOYLE WAKES UP."
+                call kind_seq_ptr              ; (bank 2) the waking one-shot = KS_CLIMB
+                ld   de, KS_CLIMB
+                add  hl, de
+                ld   a, (hl)
+                inc  hl
+                ld   h, (hl)
+                ld   l, a
+                jp   start_seq                 ; (bank 2)
+
+;------------------------------------------------------------------------------
+; pit6 — NEW-MON3 T10a P-1 (new_monsters.md §8.2 / §8.3, user 2026-11-13: across pits only): far6 from
+; ai_monster's refused .fstep (bank 3) for a KF_PIT walker (IX, ACT_SLOT = its slot; the refused step went
+; toward the hero: .same's dx). First match:
+;  1. a golden body (a lair boss) never; my storey != 0 (pits exist only there); the refused col
+;     x + sign(hero x - x) outside the pit's fall range (pit_range = try_step's own walker test): another
+;     refusal (a body, a wall) -> nothing;
+;  2. the kind's pit row (pit_tab); the Goblin's one dagger spent (RCD_SPENT) -> nothing;
+;  3. track limit: >= FX_TRACKS shots queued this phase (RS_Q, TP_SHOT) -> wait, the counter untouched
+;     (pit throws never queue a 4th track);
+;  4. the counter (rg_cnt) and rg_line (the hero standing on storey 0, gap < r, the flight row and the gap
+;     box clear: the pit holes are in the floor row, never the flight row) -> no: wait;
+;  5. counter 0 at entry -> rg_shoot (faces the hero, F1 + PHYS - DEF, counter := N; the Goblin's SPENT set).
+; §8.6 fallback (step 1, no bytes and no routine to reuse: the hero's thrown daggers do not land as loot yet,
+; game.md §6.3): the Goblin's dagger is consumed like every monster shot. Out-of-line / reloading: the
+; refused step is the turn (a wait). No result (ai_monster's caller reads none).
+; Clobbers: all but IX.  Not a pit refusal ~0.5k T (far6 incl.); a throw + rg_shoot ~3-5k.
+;------------------------------------------------------------------------------
+pit6:           ld   a, (ix+E_GOLD)
+                or   a
+                ret  nz                        ; a lair boss never throws
+                call storey_ref                ; (bank 2; A, HL)
+                ld   (TMP4), a                 ; rg_line's storey
+                or   a
+                ret  nz                        ; pits: storey 0 only
+                ld   a, (PL_X)
+                sub  (ix+E_X)                  ; CF: the hero is left (the step was dx = -1)
+                ld   a, (ix+E_X)
+                jr   c, .l
+                inc  a
+                inc  a
+.l:             dec  a
+                ld   c, a                      ; C = x + dx (the refused body-left col)
+                call pit_range                 ; (low RAM; keeps BC, DE) CF = inside the fall range
+                ret  nc                        ; another refusal
+                ld   a, (ix+E_KIND)
+                ld   hl, pit_tab
+                ld   b, PIT_N
+.k:             cp   (hl)
+                inc  hl
+                jr   z, .row
+                inc  hl
+                djnz .k
+                ret                            ; (every KF_PIT kind has a row: pit_tab ASSERT)
+.row:           cp   K_GOBLIN
+                jr   nz, .ng
+                bit  RCD_SPENT_BIT, (ix+E_RCD)
+                ret  nz                        ; its one dagger is gone
+.ng:            ld   a, (TURN_PEND)            ; 3. the shots already queued this monster phase
+                bit  TP_SHOT_BIT, a
+                jr   z, .tf
+                ld   a, (RS_P)
+                cp   (RS_Q + FX_TRACKS * RS_STRIDE) & $FF
+                ret  nc                        ; all 3 tracks claimed: wait, the counter unchanged
+.tf:            ld   a, (hl)                   ; the pit row
+                call rg_row                    ; (keeps DE)
+                call rg_cnt                    ; 4. the counter
+                ld   e, 0                      ; standing (a walker's .fstep)
+                call rg_line
+                ret  c                         ; out of line / range / a body or a block in the way
+                ld   a, (RG_OLD)
+                or   a
+                ret  nz                        ; reloading: wait
+                ld   a, (ix+E_KIND)
+                cp   K_GOBLIN
+                jr   nz, .sh
+                set  RCD_SPENT_BIT, (ix+E_RCD) ; the one dagger
+.sh:            jp   rg_shoot                  ; 5. (faces the hero)
+                ASSERT (RS_Q & $FF) + FX_TRACKS * RS_STRIDE < $100 && FX_TRACKS == 3
+pit_tab:        DB   K_SPIDER, RK_PSPIDER,       K_GOBLIN, RK_PGOBLIN
+                DB   K_ORC, RK_PORC,             K_ORC_BERSERK, RK_PORC,     K_ORC_BOUNCER, RK_PORC
+                DB   K_SKELETON, RK_PSKEL,       K_SKEL_GUARD, RK_PSKEL,     K_SKEL_KNIGHT, RK_PSKEL
+PIT_N           EQU ($ - pit_tab) / 2
+                ; every KF_PIT kind has a row (and no other walker: pit6 is entered only for KF_PIT)
+                DUP K_COUNT, n
+                ASSERT !(({b kind_tab + KT_FLAGS + n} & (KF_PIT | KF_FLYER)) == KF_PIT) || n == K_SPIDER || n == K_GOBLIN || n == K_ORC || n == K_ORC_BERSERK || n == K_ORC_BOUNCER || n == K_SKELETON || n == K_SKEL_GUARD || n == K_SKEL_KNIGHT
+                EDUP
