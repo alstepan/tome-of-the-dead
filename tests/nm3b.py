@@ -7,19 +7,21 @@ pit throws) on the real game (DEBUG_KIT=0 build, F3_GEN), Knight, generated D6 (
      (either side) wakes it (RCD_AWAKE, faces him, the waking one-shot = its KS_CLIMB row, "WAKES UP" line);
      gap 3 / 4, the other storey, the hero mid-ladder: stays perched; through ai_monster: a perched far one
      does not move, an awake one flies; any HP loss (deal_hit) wakes it, a missed bump (do_attack, eva 99)
-     wakes it; the rest pose (anim_entity): perched = garg_perch, awake = garg_fly
+     wakes it, a POISON tick wakes it; a perched EF_WALKIN (ALARM wave) body still walks in (materialise); the rest
+     pose (anim_entity): perched = garg_perch, awake = garg_fly
   R  re-perch on room re-entry (stub lp_transition, as do_exit): an awake Gargoyle left behind comes back
      perched (parked slot restored: RCD_SUMMON cleared), hp kept; a perched one is never a follow candidate,
      an awake one is (follow_select), and place_follower keeps it awake
   F  the flyer shot line (ai_flyer's F-1 hook: ai_rhook with H = 0) vs tools/ranged_model.decide (flyer
      rows, rd_x FX): NB_F seeded situations each for the Fire Imp (D6) and the Frost Wraith (D7): band rows,
      range edges, counter 0..3, blocks / bodies, other storey / mid-ladder, FIRE / COLD resists; fixed: an Imp
-     at y = 9s never fires (fr = 9s + 1 above the hero), the Wraith at the cruise row fires at gap 5, not 6 (r 6)
+     at y = 9s never fires (fr = 9s + 1 above the hero), the Wraith at the cruise row fires at gap 7, not 8 (r 8)
   P  pit throws (R6 pit6, entered from ai_monster's refused .fstep): an Orc across a narrow pit throws
      (dagger_spin, $07, counter := 3), not at gap >= r, not while reloading (counter - 1), nothing when the
      refused col is not the pit's; the Goblin once (RCD_SPENT); never golden; the track limit waits with the
      counter untouched; Spider / Skeleton FX; the hero on the other storey: nothing; P0 the real ai_monster
      path (.fstep refused by the pit -> a throw)
+  C  (T10a follow-up) the Warrior's innate COLD R: HERO_RES with / without the Frost Charm, deal_hit COLD halves
 Run: ZRCP_PORT=<port> python3 tests/nm3b.py   (NB_F = flyer situations per kind, default 300)
 """
 import os
@@ -254,6 +256,27 @@ def part_w(p, w):
     p.wb(eva, e0)
     check("W a missed bump (do_attack, eva 99): HP kept, awake", w.e(3, "HP") == 30 and w.e(3, "POT") & AWAKE,
           (w.e(3, "HP"), w.e(3, "POT")))
+    # T10a review: a POISON tick (st_step, mon_status far7) is an HP loss: it wakes a perched Gargoyle (defensive)
+    w.clear()
+    w.rows()
+    w.hero(4)
+    w.put(3, KG, 20, gy, hp=30)
+    p.wb(S["ST_FLAGS"] + 3, 1 << S["STS_POISON_BIT"])
+    p.wb(S["ST_X"] + 3, 5)                               # 5 -> 4: a multiple of 4 costs 1 HP
+    ingame(p, bank3(pre(3) + [0x3E, 3, 0x21] + w16(S["mon_status"]) + [0xCD] + w16(S["far7"])))
+    check("W a POISON tick on a perched Gargoyle: HP - 1, awake", w.e(3, "HP") == 29 and w.e(3, "POT") & AWAKE,
+          (w.e(3, "HP"), w.e(3, "POT")))
+    kxi = GI_bank3(p, S["kx_tab"] + KG * S["KX_STRIDE"] + S["KX_IMM"])
+    check("W (and its kx row is POISON-immune: no monster source poisons it)", kxi & S["IMMF_POISON"], kxi)
+    # an ALARM-wave Gargoyle (perched, game.md §1.5 exception) still walks in: materialise is kind-blind
+    w.clear()
+    w.rows()
+    w.hero(14)
+    w.put(4, KG, 1, gy, flags=EF_ACTIVE | EF_HOSTILE | S["EF_PENDING"] | S["EF_WALKIN"])
+    ingame(p, bank3([0xCD] + w16(S["build_live"]) + [0xCD] + w16(S["materialise"])))
+    check("W a perched EF_WALKIN wave Gargoyle materialises and walks in (M_MOVE from px 0), still perched",
+          not w.e(4, "FLAGS") & S["EF_PENDING"] and w.e(4, "MODE") == S["M_MOVE"] and w.e(4, "PX") == 0
+          and not w.e(4, "POT") & AWAKE, (w.e(4, "FLAGS"), w.e(4, "MODE"), w.e(4, "PX"), w.e(4, "POT")))
     # the rest pose
     for awake, fid in ((0, "FID_garg_perch"), (1, "FID_garg_fly")):
         w.clear()
@@ -262,6 +285,40 @@ def part_w(p, w):
         ingame(p, [0xDD, 0x21] + w16(ENT + 3 * STRIDE) + [0x3E, 3, 0x32] + w16(S["ANIM_SLOT"]) +
                [0xCD] + w16(S["anim_entity"]) + [0x32] + w16(RES))
         check(f"W rest pose {'awake' if awake else 'perched'} = {fid[4:]}", p.rb(RES) == S[fid], p.rb(RES))
+
+
+def GI_bank3(p, addr):
+    """one byte of bank 3 at addr ($C000..): paged in by a stub."""
+    ingame(p, bank3([0x3A] + w16(addr) + [0x32] + w16(RES)))
+    return p.rb(RES)
+
+
+# ------------------------------------------------------------------------------------------------- C
+def part_c(p, w):
+    """T10a follow-up (user 2026-11-14): the Warrior's innate COLD R (hero_recalc's base): HERO_RES B0 COLD = R with
+    nothing worn and with the Frost Charm (no stacking); a COLD hit (the Wraith bolt / touch, the Archmage Frost row:
+    all deal_hit DTY_COLD) halves (min 1); a PHYS hit does not."""
+    R = S["RSP_R"]
+    worn0 = list(p.z.read_memory(S["WORN"], 12))
+    ingame(p, far6("hero_recalc"))
+    r0 = list(p.z.read_memory(S["HERO_RES"], 3))
+    cs = S["WORN"] + S["WS_CHARM"] * S["IR_STRIDE"]
+    p.wmem(cs, [S["IT_C_FROST"], 1, 0])
+    ingame(p, far6("hero_recalc"))
+    r1 = list(p.z.read_memory(S["HERO_RES"], 3))
+    p.wmem(S["WORN"], worn0)
+    ingame(p, far6("hero_recalc"))
+    check("C Warrior HERO_RES: COLD R innate (B0 bits 4-5), the same with the Frost Charm (no stacking)",
+          r0[0] & 0x30 == R << 4 and r1[0] & 0x30 == R << 4 and r0[1:] == [0, 0], (r0, r1))
+    for dhc, roll, want, tag in ((S["DTY_COLD"] | S["DH_NODEF"], 7, 3, "COLD 7 -> 3"),
+                                 (S["DTY_COLD"] | S["DH_NODEF"], 1, 1, "COLD 1 -> 1 (min 1)"),
+                                 (S["DTY_PHYS"], 4, 4 - p.rb("HERO_DEF"), "PHYS 4 - DEF (untouched)")):
+        w.clear()
+        w.hero(6, hp=100)
+        w.put(3, KA, 20, 10)
+        ingame(p, bank3([0xDD, 0x21] + w16(ENT + 3 * STRIDE) + [0x3E, 0, 0x06, roll, 0x0E, dhc, 0x1E, 0, 0xCD]
+                        + w16(S["deal_hit"])))
+        check(f"C deal_hit on the Warrior: {tag}", 100 - w.e(0, "HP") == max(1, want), 100 - w.e(0, "HP"))
 
 
 # ------------------------------------------------------------------------------------------------- R
@@ -430,12 +487,12 @@ def part_f(p, w, depth):
         cf, tp, _ = one(s1 + 1, 6)
         check("F Imp gap 6 (= r): no shot", not tp)
     else:
-        cf, tp, q = one(s1 + 1, 5)
-        check("F Wraith at the cruise row, gap 5 (< r 6): fires; FX frost_fly x2, impact frost_crack, $45, row 9s + 4",
+        cf, tp, q = one(s1 + 1, 7)
+        check("F Wraith at the cruise row, gap 7 (< r 8): fires; FX frost_fly x2, impact frost_crack, $45, row 9s + 4",
               cf and tp and q[2:7] == [S["FID_frost_fly"], S["FID_frost_fly"], S["FID_frost_crack"],
                                        S["FID_frost_crack"], 0x45] and q[8] == s1 + 4, q)
-        cf, tp, _ = one(s1 + 1, 6)
-        check("F Wraith gap 6 (= r): no shot", not tp)
+        cf, tp, _ = one(s1 + 1, 8)
+        check("F Wraith gap 8 (= r): no shot", not tp)
 
 
 # ------------------------------------------------------------------------------------------------- P
@@ -518,6 +575,7 @@ def main():
         p.wmem(S["MASTER_SEED"], w16(0x4D31))
         check("setup: level_descend -> D6", descend_to(p, 6))
         w = World(p)
+        part_c(p, w)
         part_w(p, w)
         part_p(p, w)
         part_f(p, w, 6)

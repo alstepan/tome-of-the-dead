@@ -72,7 +72,10 @@ ARCH_INK = [0x43, 0x45, 0x47, 0x44, 0x42, 0x41, 0x06]
 # D4 / D6, the Frost Wraith = B on D5 / D7 / D8; tools/levelgen / NM3_B_DEPTHS). Same tuple layout as ROWS. ai_flyer calls the hook
 # with H = 0 (standing); rg_line's flight row is the flyer's bottom row y + h - 1, in line only at fr >= the hero's top row.
 IMP_ROW = (6, 2, RWF_WALK | RWF_SPELL | RWF_NOREFL, 4, 1, DTY_FIRE | NODEF, 0, "spark_fly1")
-WRAITH_ROW = (6, 3, RWF_WALK | RWF_SPELL | RWF_NOREFL, 4, 1, DTY_COLD | NODEF, 0, "frost_fly")   # §4.4 r 8 N 2 -> sim re-gate r 6 N 3
+WRAITH_ROW = (8, 2, RWF_WALK | RWF_SPELL | RWF_NOREFL, 4, 1, DTY_COLD | NODEF, 0, "frost_fly")   # §4.4
+# T10a follow-up (user 2026-11-14): the Warrior's innate COLD R = hero_recalc's base HERO_RES (gear6.asm); the hero res the
+# callers pass in sit["hero"]["res"] is HERO_RES as built, so a Warrior's carries it: HERO_BASE_RES (hero kind -> 3 B)
+HERO_BASE_RES = {0: (RSP_R << 4, 0, 0), 1: (0, 0, 0)}
 NM3_B_DEPTHS = (5, 7, 8)
 
 

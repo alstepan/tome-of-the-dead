@@ -68,7 +68,11 @@ st_step:
                 cp   2
                 jr   c, .weak                  ; HP 1: never below (§6.4)
                 dec  (ix+E_HP)
-                ld   a, (hl)
+                ld   a, (ix+E_KIND)            ; NEW-MON3 T10a G-1 (review): a POISON tick is an HP loss too: it wakes
+                cp   K_GARGOYLE                ; a perched Gargoyle (defensive: its kx row is POISON-immune and no
+                jr   nz, .ngw                  ; monster is poisoned today, §6.4.3)
+                set  RCD_AWAKE_BIT, (ix+E_RCD)
+.ngw:           ld   a, (hl)
                 and  STS_HOLD
                 cp   HOLD_ASLEEP
                 jr   nz, .weak                 ; HP lost: a sleeper wakes

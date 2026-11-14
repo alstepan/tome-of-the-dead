@@ -27,8 +27,8 @@
 ROCK_ATTR       EQU $06                 ; the Slinger's rock (game.md §9.6: $06)
 IMP_EMBER_ATTR  EQU $42                 ; NEW-MON3 §4.2 / §10 Q6: the Fire Imp's ember (Firebolt red)
 WR_BOLT_ATTR    EQU $45                 ; §4.4: the Frost Wraith's bolt = the Frost Shard pair's cyan
-WR_BOLT_R       EQU 6                   ; §4.4 r 8, cut to 6 by the sim re-gate (T10a)
-WR_BOLT_N       EQU 3                   ; §4.4 N 2, raised to 3 by the sim re-gate (T10a); <= RCD_MASK
+WR_BOLT_R       EQU 8                   ; §4.4 (the T10a re-gate's r 6 / N 3 knobs undone by the Warrior's innate COLD R)
+WR_BOLT_N       EQU 2                   ; §4.4; <= RCD_MASK
 PIT_AXE_ATTR    EQU $07                 ; §8.3: the Orc's thrown hand axe (white); Goblin dagger / Skeleton bone THROW_ATTR $47
 FEAR3_1IN3      EQU (3 << 4) | 3        ; DARK on-hit: FEAR 3 turns, 1 in 3 (~85/256, §9.2)
 DARK_DHC        EQU DTY_DARK | DH_NODEF | (EFX_FEAR << DH_EFX_SHIFT)
@@ -64,8 +64,8 @@ rd_tab:         ;    r   N  flags                      die bon dhc        dhe   
                 ; NEW-MON3 T10a (new_monsters.md §4.4, user 2026-11-14): the Frost Wraith's FROST BOLT, the Imp's F-1 path as data:
                 ; auto-hit COLD 1d4+1 x the hero's response (the Frost Charm's COLD R halves it), damage only (no rider: the
                 ; touch stays the freezer), drifts on between shots (RWF_WALK); frost_fly -> frost_crack, $45 (rd_x: RXF_ONE).
-                ; Sim re-gate (§4.4 risk knobs, in order): N 2 -> 3 (every 4th ACTING turn = every 8th game turn under KF_SLOW),
-                ; r 8 -> 6 (tools/balance_nm3.json WRAITH_COOL / WRAITH_R)
+                ; r 8, N 2 (every 3rd ACTING turn = every 6th game turn under KF_SLOW): the §4.4 values, kept since the T10a
+                ; follow-up gave the Warrior an innate COLD R (gear6 hero_recalc; tools/balance_nm3.json WRAITH_R / WRAITH_COOL)
                 DB   WR_BOLT_R, WR_BOLT_N, RWF_WALK | RWF_SPELL | RWF_NOREFL, 4, 1, DTY_COLD | DH_NODEF, 0, FID_frost_fly   ; 15 Frost Wraith
                 DB   6,  2, RWF_WALK | RWF_NOIMP,        3, 0, DTY_PHYS,  0,          FID_dagger_spin1  ; 16 Goblin King
                 DB   6,  2, RWF_WALK | RWF_NOIMP,        2, 0, DTY_PHYS | (EFX_POISON << DH_EFX_SHIFT), SQ_PSN_T / 2, FID_spark_fly1  ; 17 Spider Queen (spit = the Mage's spark, always + 12 POISON)
@@ -653,10 +653,10 @@ perch6:         ld   a, (PL_LADDER)
 
 ;------------------------------------------------------------------------------
 ; pit6 — NEW-MON3 T10a P-1 (new_monsters.md §8.2 / §8.3, user 2026-11-13: across pits only): far6 from
-; ai_monster's refused .fstep (bank 3) for a KF_PIT walker (IX, ACT_SLOT = its slot; the refused step went
-; toward the hero: .same's dx). First match:
+; ai_monster's refused .fstep (bank 3) for a KF_PIT walker (IX, ACT_SLOT = its slot, TMP6 = the refused step's
+; dx, toward the hero: .same's). First match:
 ;  1. a golden body (a lair boss) never; my storey != 0 (pits exist only there); the refused col
-;     x + sign(hero x - x) outside the pit's fall range (pit_range = try_step's own walker test): another
+;     x + TMP6 outside the pit's fall range (pit_range = try_step's own walker test): another
 ;     refusal (a body, a wall) -> nothing;
 ;  2. the kind's pit row (pit_tab); the Goblin's one dagger spent (RCD_SPENT) -> nothing;
 ;  3. track limit: >= FX_TRACKS shots queued this phase (RS_Q, TP_SHOT) -> wait, the counter untouched
@@ -676,13 +676,8 @@ pit6:           ld   a, (ix+E_GOLD)
                 ld   (TMP4), a                 ; rg_line's storey
                 or   a
                 ret  nz                        ; pits: storey 0 only
-                ld   a, (PL_X)
-                sub  (ix+E_X)                  ; CF: the hero is left (the step was dx = -1)
-                ld   a, (ix+E_X)
-                jr   c, .l
-                inc  a
-                inc  a
-.l:             dec  a
+                ld   a, (TMP6)                 ; .fstep's refused dx (try_step.vert keeps TMP6)
+                add  a, (ix+E_X)
                 ld   c, a                      ; C = x + dx (the refused body-left col)
                 call pit_range                 ; (low RAM; keeps BC, DE) CF = inside the fall range
                 ret  nc                        ; another refusal
@@ -725,6 +720,12 @@ pit_tab:        DB   K_SPIDER, RK_PSPIDER,       K_GOBLIN, RK_PGOBLIN
                 DB   K_SKELETON, RK_PSKEL,       K_SKEL_GUARD, RK_PSKEL,     K_SKEL_KNIGHT, RK_PSKEL
 PIT_N           EQU ($ - pit_tab) / 2
                 ; every KF_PIT kind has a row (and no other walker: pit6 is entered only for KF_PIT)
+                ; rg_line's walker flight row top + ((h / 2) & 2) of a standing pit kind (top = 8 - h on storey 0) lies in
+                ; the standing hero's rows 2 .. 7 (review T10a: the Orc / Skeleton h 6 -> top + 2, the Spider h 2 -> its top)
+                DUP PIT_N, n
+PTH = {b kind_tab + KT_BH + {b pit_tab + 2 * n}}
+                ASSERT 8 - PTH + ((PTH >> 1) & 2) >= 2 && 8 - PTH + ((PTH >> 1) & 2) <= 7 && PTH <= STOREY_AIR
+                EDUP
                 DUP K_COUNT, n
                 ASSERT !(({b kind_tab + KT_FLAGS + n} & (KF_PIT | KF_FLYER)) == KF_PIT) || n == K_SPIDER || n == K_GOBLIN || n == K_ORC || n == K_ORC_BERSERK || n == K_ORC_BOUNCER || n == K_SKELETON || n == K_SKEL_GUARD || n == K_SKEL_KNIGHT
                 EDUP

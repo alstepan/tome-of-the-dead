@@ -177,6 +177,14 @@ thaws the hero, but the Imp never shares a depth with the Wraith (alias), so the
 
 ### 4.4 Frost Wraith FROST BOLT (F-1, user 2026-11-14) — RANGED-SPEC table row
 
+**As built (T10a + follow-up, user 2026-11-14):** the row below ships unchanged (**r 8, N 2, 1d4+1 COLD**, auto-hit, no
+rider, drifts on; `rd_tab` `RK_WRAITH`, FX frost_fly x 1 -> frost_crack `$45`). The sim with the bolt alone put the gap at
+−5.7 pp (W 35.2 / M 41.0); the §4.4 knobs (N 3, then r 6) only reached −4.9. The user's fix: the **Warrior's innate COLD R**
+(game.md §4 Classes; `hero_recalc` base `HERO_RES`): every COLD hit on him halves (min 1), the touch's FROZEN halves, the
+Archmage's Frost row too; the Frost Charm does not stack on him (R stays R; the Mage keeps the Charm's full value). With it the
+looser §4.4 bolt passes: **W 38.5 / M 41.0, gap −2.5** (seed 2: 38.5 / 40.9, −2.4); the −1-a-hit alternative failed (−3.0 /
+−3.8 / −2.7 over 3 seeds).
+
 | Kind | Range r | Cool N | Hit rule | Damage | On hit | Step-away | Climbs | FX |
 |---|---|---|---|---|---|---|---|---|
 | Frost Wraith | 8 | 2 (every 3rd **acting** turn = every **6th** game turn under `KF_SLOW`) | auto-hit (spell branch: `roll × response`, no DEF) | 1d4+1 COLD (avg 3.5; D5–D8 unscaled, as every RANGED-SPEC row) | **none** (damage only; the touch stays the freezer) | **no: drifts on** (reloading → CF = 0 → Ghost drift, the Imp/Widow semantics) | flyer | `frost_fly` `$45` → impact `frost_crack` `$45` (the Frost Shard pair, **0 B new art**) |
@@ -308,6 +316,10 @@ Same list for both heroes. `LP_BOSS` is unchanged per depth. **Bold** = joins or
   order: chance ⅓ → ¼, then duration 2 → 1. Second risk: Imp triple-rolls in D4/D6 rooms (auto-hit
   embers, 3 tracks).
 
+**T10a result (10k, average, `tools/balance_nm3.json`):** no bolt W 39.4 / M 41.3 (−2.0); bolt r8 N2 W 35.2 / M 41.0 (−5.7);
++ the Warrior's innate COLD R (§4.4 "As built"): **W 38.5 / M 41.0 (−2.5)**, survive-at-entry D2..D8 W 100 98 95 80 68 59 47,
+M 100 99 86 79 78 76 55 (D6 entry = the D5 line: W 68 vs 69 without the bolt).
+
 **`tools/balance_sim.py` re-sweep (FINAL B 10k × 2 seeds, targets W/M 35–45, gap ≤ 5):** new kind
 rows and resistances/immunity. Row 31 must be resolved by depth. Plan X `LP_KINDS` for D4–D7 (and
 the `levelgen.py` LP_TAB mirror). `tools/ranged_model.ROWS` + the Imp row (auto-hit FIRE r6 N2,
@@ -346,7 +358,7 @@ ranged hook in **pit mode**:
 | Kind (rows covered) | Range r | Cool N | Hit | Damage | Effect | Projectile (existing art) | Ammo |
 |---|---|---|---|---|---|---|---|
 | Spider (base only; the Widow's open-ground spit and the Queen's row are unchanged) | 4 | 3 (every 4th turn) | F1 | 1d2 PHYS − DEF, min 1 | POISON +6 (cap 30; Silk Cloak immune) | `spark_fly` `$43` (the WIDOW-SPIT look) | ∞ |
-| Goblin (base only; the Slinger and King have rows) | 6 | — | F1 | 1d3 PHYS − DEF | **one dagger per life**; it then lands as loot by §6.3 hero-dagger rules (hit: under the hero's feet; miss: at the impact cell; 1 in 4 lost; a pit col is always lost; floor list full: lost) | `dagger_spin` `$47` (the hero's dagger ink: it reads as pick-up-able) | 1 (spent bit: the same kind-exclusive per-slot bit as PERCH) |
+| Goblin (base only; the Slinger and King have rows) | 6 | — | F1 | 1d3 PHYS − DEF | **one dagger per life**; it then lands as loot by §6.3 hero-dagger rules (hit: under the hero's feet; miss: at the impact cell; 1 in 4 lost; a pit col is always lost; floor list full: lost) | `dagger_spin` `$47` (the hero's dagger ink: it reads as pick-up-able) | 1 (spent bit: the same kind-exclusive per-slot bit as PERCH) **As built (T10a):** §8.6 step 1, the dagger is consumed (no floor loot: the hero's own daggers do not land yet, game.md §6.3). The spent bit is `E_RCD` bit 2, which a room re-entry clears with the summon counter (a kept bit costs ~11 B of bank 3): **the Goblin gets a fresh dagger each time the hero comes back** (accepted) |
 | Orc (+ Berserker, Bouncer; no rage/stun riders on throws) | 5 | 3 | F1 | 1d6 PHYS − DEF | — | `dagger_spin` `$07` (a hand axe) | ∞ |
 | Skeleton (+ Guard, Knight; no parry on throws) | 5 | 3 | F1 | 1d4 PHYS − DEF | — | `dagger_spin` `$47` (a bone) | ∞ |
 

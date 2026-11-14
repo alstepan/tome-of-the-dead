@@ -165,7 +165,11 @@ PARAMS = {
     # NEW-MON3 T10a (section 4.4, user 2026-11-14): the Frost Wraith's FROST BOLT = rd_tab row RK_WRAITH (ranged_model.WRAITH_ROW):
     # auto-hit 1d4+1 COLD x the hero's response (Frost Charm R halves), range < WRAITH_R, a shot every (COOL+1)th ACTING turn
     # (KF_SLOW: the period-2 gate runs first, so 1 per 6 game turns), drifts on between shots; rider none | FROZEN 1 @ 32/256
-    "WRAITH_BOLT": 1, "WRAITH_R": 6, "WRAITH_COOL": 3, "WRAITH_RIDER": 0, "WRAITH_DIE": 4, "WRAITH_BON": 1,
+    # T10a follow-up (user 2026-11-14): the Warrior's innate COLD help (every COLD hit on him: Wraith touch / bolt, Archmage
+    # Frost): 0 none, 1 = - 1 a hit (min 1, after the response), 2 = innate COLD R (half, min 1, FROZEN turns halved: the
+    # game's HERO_RES base; the Frost Charm's R does not stack). The build: 2 (hero_recalc)
+    "W_COLD": 2,
+    "WRAITH_BOLT": 1, "WRAITH_R": 8, "WRAITH_COOL": 2, "WRAITH_RIDER": 0, "WRAITH_DIE": 4, "WRAITH_BON": 1,
     "IMP_MANA_N": 4,                    # section 4: Imp drops Mana 1/4
     "PIT_P": 0.15, "PIT_THROWS": 1,     # P-1 term: P(a room fight has a stranded pit-row walker whose hero lingers) x throws per standoff
     "CHARM_FROM": 5,                    # Frost Charm (amulet, COLD R only) joins the gear pool from this depth; worn on Wraith depths
@@ -606,6 +610,8 @@ class Game:
         h.res = [0] * 6
         if getattr(h, "charm", False) and getattr(self, "depth", 0) in (5, 7, 8):
             h.res[COLD] = 1       # bot rule: an owned Frost Charm is swapped in on Wraith depths (D5 / D7 / D8)
+        if self.P["W_COLD"] == 2 and self.hero == "W":
+            h.res[COLD] = 1       # T10a follow-up: the Warrior's innate COLD R (no stacking with the Charm)
         for g in h.gear.values():
             if g:
                 for ty, rs in self.G[g].get("res", {}).items():
@@ -1380,10 +1386,13 @@ class Game:
 
     def hero_res(self, ty, roll):
         r = self.h.res[ty]
-        if r == 1:
-            return max(1, roll // 2)
         if r >= 2:
             return 0
+        wc = self.P["W_COLD"] if ty == COLD and self.hero == "W" else 0
+        if r == 1:                              # (W_COLD 2 = the Warrior's innate COLD R: recalc, R does not stack)
+            roll = max(1, roll // 2)
+        if wc == 1:
+            roll = max(1, roll - 1)             # T10a follow-up: the Warrior's innate - 1 a COLD hit (min 1), after the response
         return roll
 
     def mrow(self, m):

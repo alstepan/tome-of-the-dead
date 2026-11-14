@@ -7085,3 +7085,23 @@ budget.py gate green (imp3: the Imps now spit, max tick 98,915 T). Tests: new `t
 follow, F flyer shot line A/B vs `ranged_model` for the Imp D6 and the Wraith D7, P pit throws incl. the real ai_monster path);
 `tests/nm3.py` A0 (4 R6 alias entries), `tests/zx0_pool.py` (needs, the U_FROSTW mirror), `tools/ranged_model.py` (flyer rows,
 rd_x, `fr >= PL_Y`), `tools/balance_sim.py` (Wraith bolt, entry grace), `tools/balance_nm3.json` (+ the WRAITH_* knobs).
+
+**T10a follow-up (same branch; user decision 2026-11-14 + review).**
+- **Warrior innate COLD R:** R6 `hero_recalc` seeds `hr_r0` = `RSP_R << 4` for `HERO_KIND` 0 before the per-field max over the
+  worn gear (+10 B R6): `HERO_RES` B0 COLD = R from the kit on; every `deal_hit` DTY_COLD on him halves (min 1) and R halves
+  FROZEN turns (the Wraith touch / bolt, the Archmage Frost row); the Frost Charm does not stack on him. With it the Wraith
+  bolt is back at the §4.4 values (`WR_BOLT_R` 8, `WR_BOLT_N` 2). `tools/balance_sim.py` param `W_COLD` 2 (recalc), the
+  ranged_model `HERO_BASE_RES` note; `tests/equip.py` N1 / U2 expect the Warrior's B0.
+- `status7.asm` st_step: a POISON tick on a Gargoyle sets `RCD_AWAKE` (defensive: POISON-immune row; bank 7 +11 B).
+- `pit6` reads `.fstep`'s TMP6 for the refused dx (-8 B R6); an ASSERT over the pit kinds' `KT_BH` for rg_line's
+  `top + ((h / 2) & 2)` flight row (inside the hero's rows 2..7).
+- Goblin dagger re-entry (lpop3 `.pk` clears bit 2 with `RCD_SUMMON`): kept as is (11 B > the ~6-B budget), noted in
+  new_monsters.md §8.3. ALARM-wave Gargoyles perched: game.md §1.5 exception.
+- budget.py: `pitv` (real D4: a pit-stuck Orc + 2 Imps, 3 tracks a phase) and `wr7` (real D7: 3 Wraith bolts), CAP-gated.
+
+| Region (release; kit / `F3_GEN=0`) | T10a | follow-up |
+|---|---|---|
+| bank 3 | 60 [56 / 56] | 60 [56 / 56] |
+| R6 | 135 [140 / 140] | **132** [137 / 137] |
+| bank 7 low | 63 [63 / 67] | **52** [52 / 56] |
+| bank 2 / `B0_CODE2` | 15 / 4,247 | 15 / 4,246 |
