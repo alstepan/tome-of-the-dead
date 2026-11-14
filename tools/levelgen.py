@@ -897,14 +897,16 @@ def lp_budget(b, lvl=0, f3=False):
     return bytes(lp)
 
 
-def lp_hits(b, r, s, lo, hi):
+def lp_hits(b, r, s, lo, hi, flo=None, fhi=None):
     """bank-3 `hits` (levelgen.asm): storey-s footprints f..f+2, the storey-0
-    pit p-1..p+3, the storey-s block, against cols lo..hi."""
+    pit p-1..p+3, the storey-s block, against cols lo..hi (ROOM-MEM2: the footprints
+    against flo..fhi when given: a returning monster without the 1-col margin)."""
     fp = ("RD_UPCOL", "RD_ARRCOL", "RD_LAD1", "RD_LAD2") if s == 0 else \
          ("RD_DNCOL", "RD_EXITCOL", "RD_LAD1", "RD_LAD2")
+    flo, fhi = (lo, hi) if flo is None else (flo, fhi)
     for k in fp:
         f = _rd(b, r, k)
-        if f and f <= hi and f + 2 >= lo:
+        if f and f <= fhi and f + 2 >= flo:
             return True
     p = _rd(b, r, "RD_PITCOL")
     pw = _rb(b, r, L2_PITW) or 3
@@ -924,7 +926,7 @@ def lp_hits(b, r, s, lo, hi):
     return False
 
 
-def lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap=8):
+def lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap=8, ret=False):
     """§9.4.3 placement legality -> "ok" / "gap" (fails ONLY the arrival-gap
     test: the caller re-tests the same x on the other storey) / "bad"."""
     for ps, plo, phi in placed:                         # occupied (same storey, cols)
@@ -937,7 +939,9 @@ def lp_legal(b, r, s, x, w, fly, hs, hx, hw, placed, gap=8):
         return "bad"                                    # right arrival box cols 27..30
     m = 1                                               # §9.4.3: footprints +-1 col (walkers and flyers)
     lo, hi = max(0, x - m), x + w - 1 + m
-    if lp_hits(b, r, s, lo, hi):
+    # ROOM-MEM2 (user 2026-11-14): a returning monster (ret: try 0, the door slide) has no ladder /
+    # shaft margin: the footprints are tested against its body cols only (the pit / blocks keep it)
+    if lp_hits(b, r, s, lo, hi, *((x, x + w - 1) if ret else (None, None))):
         return "bad"
     p = _rd(b, r, "RD_PITCOL")
     if s == 1 and p and p <= hi and p + (_rb(b, r, L2_PITW) or 3) - 1 >= lo:   # a fall from storey 0 lands here
@@ -1044,7 +1048,7 @@ def lp_slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap):
         return None
     for d in range(1, D["LP_XMAX"]):
         for c in (x0 + d, x0 - d):
-            if lo <= c <= hi and lp_legal(b, r, s, c, w, fly, -1, hx, hw, placed, 0) == "ok":
+            if lo <= c <= hi and lp_legal(b, r, s, c, w, fly, -1, hx, hw, placed, 0, ret=True) == "ok":
                 return c
     return None
 
@@ -1122,7 +1126,7 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
         try0 = False
         if best is None and pos:                        # try 0 (parked or not): the LP_POS cell
             s0, x0 = (pos >> D["LPP_S_BIT"]) & 1, pos & D["LPP_X"]
-            if lp_legal(b, r, s0, x0, w, fly, hs, hx, hw, placed, D["LP_GAP2"]) == "ok":
+            if lp_legal(b, r, s0, x0, w, fly, hs, hx, hw, placed, D["LP_GAP2"], ret=True) == "ok":
                 best, try0 = (s0, x0), True
             else:                                       # the door case: keep the storey, slide x
                 rsv = [(s0, lp[po + j] & 31, (lp[po + j] & 31) + info(units[j][0] & ROWM)[0] - 1)
@@ -1155,7 +1159,7 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
             LP_OUT_SLOT.append(pk[5] if len(pk) > 5 else None)
         else:                                           # a fresh slot: its saved facing on try 0
             if try0 and fly:                            # a flyer: faces the hero (from its saved x), its row
-                out.append((kb, hp, s, x, x0 > hx, pos >> 6))
+                out.append((kb, hp, s, x, x > hx, pos >> 6))
             else:
                 out.append((kb, hp, s, x, bool(pos >> D["LPP_LEFT_BIT"] & 1) if try0 else x > hx))
             LP_OUT_SLOT.append(None)

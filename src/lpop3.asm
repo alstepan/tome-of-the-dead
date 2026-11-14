@@ -347,7 +347,10 @@ lp_enter:
                 ld   (LPV_K), a
                 KTA  KT_BW
                 ld   (LP_W), a
-                call lp_find                   ; ROOM-MEM: IX = the unit's parked slot / PK_NONE
+                ld   ix, PK_NONE               ; review (A2's mean): a FRESH record has nothing parked:
+                ld   hl, (LP_RECP)             ; no lp_find call (-~56 T a first-visit unit)
+                bit  LR_VISITED_BIT, (hl)
+                call nz, lp_find               ; ROOM-MEM: IX = the unit's parked slot / PK_NONE
                 ld   a, (LVL_LAIR)             ; 3F-T8 (game.md §9.2 G1 / G1a / G1b): a unit
                 ld   hl, LPV_ROOM              ; of the lair takes its post (bank-0 boss0.asm, no
                 cp   (hl)                      ; stream step; keeps IX); an escort with no legal
@@ -365,12 +368,15 @@ lp_enter:
                 or   a                         ; that storey (a trickle entry; tries 1-8)
                 jr   nz, .sp                   ; (NC)
 .pl:            call lp_place                  ; CF = no legal cell, else C = s, E = x
-.sp:            call nc, lp_spawn              ; CF = no free slot
+                call nc, lp_spawn              ; (LPV_FACE is 0 here: lp_t06 cleared it / FRESH: no
+                jr   nc, .nu                   ; marker check, -~36 T a first-visit unit, A2's mean)
+                jr   .np
+.sp:            call nc, lp_spawn              ; CF = no free slot (posted / try 0)
                 jr   c, .np
                 ld   a, (LPV_FACE)             ; ROOM-MEM2: consumed (a later unit faces the hero unless
                 or   a                         ; its own try 0 sets it); a flyer placed by try 0 / the
                 jr   z, .nu                    ; slide (bit 6) goes back to its saved band row (R6 lp_fy6).
-                ld   e, a                      ; (0: 29 T, the FRESH path: A2's mean)
+                ld   e, a
                 xor  a
                 ld   (LPV_FACE), a
                 bit  6, e
@@ -455,7 +461,8 @@ lp_place:       ld   b, LP_TRIES
 ; lp_cmap — LPV_ROOM, LP_HX / LP_HS / LP_HW: build LP_CMAP (level_defs.asm),
 ; the §9.4.3 placement rules as per-col marks, once per entry:
 ;   LPC_BAD   every col a body may not cover, the 1-col margin baked in:
-;             storey-s footprints f-1..f+3 (the `hits` sets: s0 = up-exit,
+;             storey-s footprints f..f+2 + LPC_MRG on f-1 / f+3 (ROOM-MEM2: the
+;             margin a returning monster ignores) (the `hits` sets: s0 = up-exit,
 ;             arrival shaft, both ladders; s1 = down-exit, level exit, both
 ;             ladders: the ladder cells and their end boxes), the storey-0 pit
 ;             p-2..p+4, the storey-1 landing cols p-1..p+3, the block + rubble
@@ -497,9 +504,13 @@ lp_cmap:        ld   hl, LP_CMAP               ; clear: 3 stores / loop, ~15 T/B
                 jr   z, .fn
                 push hl
                 push bc
-                dec  a                         ; f-1 .. f+3: the footprint + the
-                ld   b, 5                      ; 1-col margin (body cols only are tested)
-                call lp_mark
+                ld   b, 3                      ; the footprint f .. f+2: LPC_BAD (E)
+                call lp_mark                   ; (in range: f 1..26 -> HL = f+3 after it)
+                set  LPC_MRG_BIT, (hl)         ; ROOM-MEM2 (user 2026-11-14): the 1-col margin f+3 / f-1
+                ld   a, l                      ; as LPC_MRG (a returning monster ignores it; spawns /
+                sub  4                         ; lp_legal see any mark): -15 T a footprint vs the
+                ld   l, a                      ; 5-col lp_mark it replaces
+                set  LPC_MRG_BIT, (hl)
                 pop  bc
                 pop  hl
 .fn:            inc  hl
@@ -816,14 +827,10 @@ lp_spawn:       push de                        ; E = col
 ; lp_enter reads the record in order, so the k-th entry of a kind gets the k-th
 ; parked body of that kind (exact unless a leftover entry of the same kind, one no
 ; cell was found for on the last entry, comes first: then two such bodies swap).
-; A FRESH record returns at once (nothing of a room never left is parked).
-; Clobbers: A, BC, DE, HL.   FRESH ~0.1k T; else ~45 T a slot that is not the room's: ~0.7k T
+; VISITED records only (ROOM-MEM2 review: lp_enter skips the call for a FRESH one, nothing parked).
+; Clobbers: A, BC, DE, HL.   ~45 T a slot that is not the room's: ~0.7k T
 ;------------------------------------------------------------------------------
-lp_find:        ld   hl, (LP_RECP)
-                bit  LR_VISITED_BIT, (hl)
-                ld   hl, PK_NONE + E_ROOM
-                jr   z, .f                     ; FRESH (never left, nothing parked): ~0.1k T, not ~0.6k
-                ld   a, (LPV_ROOM)
+lp_find:        ld   a, (LPV_ROOM)             ; (a VISITED record only: lp_enter skips the call for FRESH)
                 or   LPK_PARK
                 ld   hl, P_ENTITIES + P_ENT_STRIDE + E_ROOM
                 ld   de, P_ENT_STRIDE

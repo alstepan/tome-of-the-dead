@@ -6984,10 +6984,31 @@ occupied 7, pit 3; **no bug**: no move after entry, LP_POS always written. Fix (
 - **Flyer row**: a flyer's `LP_POS` bits 6-7 (`LPP_FYO`) = its band row y - 9s (0..3, clamped) instead of the
   facing (a returning flyer in a fresh slot faces the hero); R6 `lp_fy6` puts it back on that row (exact needs
   3 bits for a Bat: 9 bits total, does not fit; rows 0..3 cover every row seen in the playtest).
-After: 424 bodies (the scenario drifts with the slides), **42.0 % exact + 54.2 % same storey <= 8 cols = 96.2 %**
+(Superseded below by the margin exemption.) After: 424 bodies (the scenario drifts with the slides), **42.0 % exact + 54.2 % same storey <= 8 cols = 96.2 %**
 (before 69.6 %); the misses are now 86 % footprint (by design: the ±1 ladder / shaft box is a spawn rule; letting
 try 0 ignore the margin for a returning body would make most of them exact: proposed, not built), gap 19, box 4,
 pit 3, flyer band 5 (row > 3), occupied 3. Bank 3 121 -> **119**, R6 1,038 -> **538** (kit / `F3_GEN=0`: 115 / 543).
 Cost: `tests/roommem.py` ADV `lp_transition` worst 65,340 T (cap 70,000), `tests/lp.py` A8 61,771, A2 mean 21,789 (cap 22,000); `tests/lp.py` A9 (new): 480 random
 re-entries == the model (try 0 + slide + flyer rows). Tests: `tests/roommem.py` L6 / L7 (a chaser at the door,
 same-door re-entry after 1 / 3 rooms -> kept storey, slid to the model's col).
+
+**ROOM-MEM2 review 2 + margin exemption (same branch, user decision 2026-11-14).**
+- **No ladder / shaft margin for a returning monster**: `lp_cmap` marks a footprint f..f+2 `LPC_BAD` and its
+  margin cols f-1 / f+3 **`LPC_MRG`** (bit 3; `lp_mark` 3 cols + 2 `set`s, -15 T a footprint vs the 5-col
+  mark); spawns / tries 1-8 (`lp_legal`) and `lp_post` see any mark as before; R6 `lp_t06` (try 0, the slide
+  sweeps) masks `LPC_MRG` out. The pit / block margins stay `LPC_BAD`. Model: `levelgen.lp_legal(..., ret=True)`
+  (footprints vs the body cols only), `lp_hits(flo, fhi)`.
+- `.np`: `lp_cp6` clears `LPV_FACE` (a try-0 marker whose unit found no slot no longer leaks to the next one).
+- A flyer in a fresh slot faces the hero from its FINAL (slid) x (`lp_t06 .ok`, +8 B R6; model `x > hx`).
+- First-visit saving (A2): no `lp_find` call for a FRESH record, the `.pl` path skips the marker check.
+- **The slide's worst case** (`tests/lp.py` A8S, new: 4 units whose saved storey has no window at all -> full
+  slide + 8 failing tries each, 4 rooms found by a levelgen sweep): 84.5k T first -> **68,773 T** (cap 70,000;
+  the same case without the slide, 84a14d0: 66,634): the slide sweeps WITHOUT the reservations first (they
+  are marked and swept again only when the hit overlaps a later unit's saved cell), a fail cache
+  (`LPS_FAIL` = `LP_SIG`: key storey / side / w; marks only grow within an entry), the cache test before the
+  range setup, ~55-T sweep cols (w in C).
+Free (release / kit + `F3_GEN=0`): bank 3 **106** / 102, R6 **401** / 406. Cost: A2 mean **21,528** T (cap 22,000:
+2.1 % headroom; worst 41,706), A8 61,749, A8S 68,773, `tests/roommem.py` ADV 65,796 (cap 70,000).
+Playtest (`tests/roommem_play.py`, same seeds): 84a14d0 51.4 % exact / 69.6 % exact + same storey <= 8 cols;
+bf4e715 (slide) 42.0 / 96.2 %; **now 51.8 / 97.6 %** (380 bodies). Misses left: the body overlapped the ladder /
+shaft footprint itself 147 (kept illegal, user decision: it slides off it), gap 21, pit 4 + 4, occupied 2, flyer row 1.

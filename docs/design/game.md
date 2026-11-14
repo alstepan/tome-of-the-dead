@@ -3297,6 +3297,10 @@ position (§9.4.2: every monster banked on leave; not a FRESH unit or a trickle 
 tries its **last cell** (its x and storey; a flyer at its saved band row, 0-3 below the band
 top, clamped) with the rules below and a **5-col** arrival gap; no stream step is drawn, no
 other-storey retry; a lair unit with a guard post takes the post instead (§9.4.4).
+**Returning monsters have no ladder / shaft margin (user decision 2026-11-14):** try 0 and the door
+slide test a ladder or shaft footprint against the monster's own body cols only (the footprint
+itself stays illegal; the ±1 col around it is allowed); the arrival box and gap, the pit (with
+its margin), blocks and occupied cells are unchanged. FRESH spawns and tries 1-8 keep the margin.
 **Door slide (user-approved 2026-11-14):** if that cell is rejected (the arrival gap or box, a
 ladder / shaft box, a pit landing, a body placed before it), the monster **keeps its storey**
 and slides to the nearest col (a tie goes right) inside cols 2..30 − w whose cells pass the

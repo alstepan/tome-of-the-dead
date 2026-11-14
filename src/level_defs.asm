@@ -331,6 +331,9 @@ LPC_BODY        EQU 2               ; 3F-T8 review: a body lp_spawn placed this 
                                     ; lp_post exempts only LPC_BAD marks of the exit's own footprint)
 LPC_RES         EQU 4               ; ROOM-MEM2: lp_t06's door slide reserves the saved cells of the units
 LPC_RES_BIT     EQU 2               ; still to place on its storey (set + cleared inside the slide)
+LPC_MRG         EQU 8               ; ROOM-MEM2 (user 2026-11-14): the 1-col margin of a ladder / shaft footprint
+LPC_MRG_BIT     EQU 3               ; (f-1, f+3; the footprint f..f+2 is LPC_BAD): spawns / tries 1-8 treat it as
+                                    ; any mark; a RETURNING monster (lp_t06: try 0, the door slide) ignores it
                 ASSERT LP_CMAP + 2 * LP_CMW <= NEXT_MAP + MAP_BUF_LEN
 RESPAWN_MAX     EQU 6               ; §9.5 trickle cap per level (3F)
 ; 3F-T12 respawn trickle (game.md §9.5, R6 trickle6.asm; tools/respawn_model.py)

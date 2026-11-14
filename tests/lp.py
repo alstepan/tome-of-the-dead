@@ -600,6 +600,58 @@ def part_a8(h, p, check):
     print(f"[lp] A8 lp_transition worst {worst[0]} T ({worst[1]})", flush=True)
 
 
+def part_a8s(h, p, check):
+    """A8S (ROOM-MEM2 review): the lp_transition worst with the door slide. As A8 (4 bodies parked in Y),
+    but X's 4 entries (the depth's widest kind) carry an LP_POS cell on a storey with NO free window
+    (found by a levelgen sweep: tries 0 / the slide scan the full range and fail), the hero arriving on
+    the other storey: every unit pays lp_t06's full slide (+ the reservations) and then all 8 stream
+    tries (none legal: they stay in the record). <= LP_TRANS_GUARD; == levelgen.lp_enter."""
+    p.load()
+    sync_bodies(p)
+    worst = (0, "")
+    for d, seed, X, s0, x0 in ((7, 396, 2, 0, 2), (7, 363, 1, 0, 2), (7, 331, 7, 1, 2), (7, 329, 8, 0, 2)):
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=d)
+        p.far3("lp_budget")
+        p.wb("LVL_DEPTH", d)
+        blk = p.block()
+        st, lair = blk[S["LVL_START"] - G.BASE], blk[S["LVL_LAIR"] - G.BASE]
+        Y = next(r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+                 and r not in (st, lair, X, blk[S["LVL_SANCTUM"] - G.BASE]))
+        kinds = list(p.z.read_memory(S["LP_KINDS"], 8))
+        k = max(kinds, key=lambda q: p.kb(q, "KT_BW"))
+        fly = p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
+        hp = p.kb(k, "KT_HP") + d - 1
+        k0 = kinds[0]
+        kh0 = p.kb(k0, "KT_BH")
+        p.clear_slots()
+        for i, x in enumerate((9, 13, 17, 21)):
+            p.set_ent(5 + i, KIND=k0, ROOM=Y, X=x, Y=9 + 8 - kh0, FLAGS=EF_ACTIVE | EF_HOSTILE, HP=hp, MAXHP=hp)
+        p.wmem(S["LP_REC"] + 9 * X, [0x80 | 4] + [k, hp] * 4)
+        p.wmem(S["LP_POS"] + 4 * X, [G.lp_pos_byte(x0, s0, False, 1 if fly else None)] * 4)
+        p.wmem(S["LP_REC"] + 9 * Y, [0x80] + [0] * 8)
+        p.wb("CUR_ROOM", Y)
+        hs = 1 - s0
+        p.set_ent(0, ROOM=Y, X=1, Y=9 * hs + 8 - p.kb(S["K_KNIGHT"], "KT_BH"))
+        p.wb("TRK_PREV", st)
+        p.wmem(S["CAND_LIST"], [0xFF] * 16)
+        p.wb("FOLLOW_N", 0)
+        p.wb("EXIT_DEST", X)
+        lp0 = p.lp()
+        ok, ts = p.code([0x21] + w16(S["lp_transition"]) + [0xCD] + w16(S["far3"]))
+        alive = [(5 + i, k0, Y, x, 9 + 8 - kh0, EF_ACTIVE | EF_HOSTILE, hp) for i, x in enumerate((9, 13, 17, 21))]
+        wl, out = G.lp_enter(blk, bank_model(lp0, Y, alive, None, p), X, hs, 1, p.kb(S["K_KNIGHT"], "KT_BW"),
+                             f3=True, parked=[])
+        got = [x for x in p.slots() if x[2] == X]
+        calls = G.LP_CALLS
+        check(f"A8S d{d} seed {seed:#06x} X {X}: 4 units, try 0 + full slide + 8 tries each ({calls} stream steps, "
+              f"{4 - len(out)} left in the record) == model; {ts} T <= {LP_TRANS_GUARD}",
+              ok and len(got) == len(out) and ts <= LP_TRANS_GUARD and calls == 32, (ok, got, out, calls, ts))
+        worst = max(worst, (ts, f"d{d} {seed:#06x}"))
+    print(f"[lp] A8S lp_transition worst (full slide + 8 tries a unit) {worst[0]} T ({worst[1]})", flush=True)
+
+
 def G_entries(lp, r):
     ro = S["LP_REC"] - LPB + r * S["LR_STRIDE"]
     return [(lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i]) for i in range(lp[ro] & 7)]
@@ -864,6 +916,7 @@ def main():
             part_a4(h, p, check)
             part_a6(h, p, check)
             part_a8(h, p, check)
+            part_a8s(h, p, check)
             part_a9(h, p, check)
             if nsweep:
                 part_a7(h, p, check, nsweep)

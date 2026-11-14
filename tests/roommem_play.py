@@ -211,8 +211,10 @@ def why(blk, r, s_, x, w, fly, hs, hx, hw, placed, gap):
         return "box"
     if ex & G.D["RDX_R"] and bool(ex & G.D["RDX_RS1"]) == (s_ == 1) and x + w - 1 >= 27:
         return "box"
+    if G.lp_hits(blk, r, s_, max(0, x - 1), x + w, x, x + w - 1):
+        return "ladder/shaft footprint" if G.lp_hits(blk, r, s_, x, x + w - 1) else "pit/block margin"
     if G.lp_hits(blk, r, s_, max(0, x - 1), x + w):
-        return "footprint"
+        return "ladder margin (exempt since 2026-11-14)"
     pc = G._rd(blk, r, "RD_PITCOL")
     if s_ == 1 and pc and pc <= x + w and pc + (G._rb(blk, r, G.L2_PITW) or 3) - 1 >= x - 1:
         return "pit"
