@@ -221,7 +221,8 @@ def nm3_variant_check(sym, kcol, chk, r6):
     for nm, v in (("KT_HP", 13), ("KT_ATK", 3), ("KT_EVA", 2), ("KT_DIE", 6), ("KT_BONUS", 1), ("KT_BH", 4),
                   ("KT_FLAGS", sym["KF_FLYER"] | sym["KF_SLOW"]), ("KT_ATTR", 5)):
         want[sym["kind_tab"] + sym[nm] + K] = v
-    want[sym["rk_tab"] + K] = 0
+    want[sym["rk_tab"] + K] = sym["RK_WRAITH"]            # NEW-MON3 T10a: the FROST BOLT row (§4.4)
+    want[sym["pxm_alias"] + 2] = sym["U_FROSTW"]          # T10a: the Warrior's row-31 shot unit (pool_xmap)
     row = kx_row({"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 10, 1)[:6]
     row += [TYPES.index("COLD") | sym["EFX_FROZEN"] << sym["DH_EFX_SHIFT"], 4 << 4 | 2]    # 1 in 4 -> FROZEN 2
     for i, v in enumerate(row):
@@ -308,7 +309,14 @@ def main():
     for tier, base in ((18, 6), (19, 6), (20, 7), (21, 4), (22, 9), (23, 3), (24, 3), (25, 5),
                        (26, 11), (27, 11), (28, 12), (29, 14)):
         for col in ("KT_BW", "KT_BH", "KT_FLAGS"):
-            chk(f"kind_tab {col}[{tier}] == base {base}", [kcol(sym[col], tier)], [kcol(sym[col], base)])
+            msk = ~sym["KF_PIT"] & 255 if col == "KT_FLAGS" else 255   # T10a P-1: KF_PIT is per row (Slinger / Widow: base only)
+            chk(f"kind_tab {col}[{tier}] == base {base}", [kcol(sym[col], tier) & msk], [kcol(sym[col], base) & msk])
+    # NEW-MON3 T10a P-1 (new_monsters.md §8.3): KF_PIT on the walkers with a pit row only (Skeleton + Guard / Knight,
+    # Goblin and Spider base, Orc + Berserker / Bouncer); bit 7 on a flyer is KF_PERCH (the Gargoyle only)
+    PIT = {3, 23, 24, 4, 9, 11, 26, 27}
+    for k in range(32):
+        f = kcol(sym["KT_FLAGS"], k)
+        chk(f"KF_PIT / KF_PERCH[{k}]", [bool(f & sym["KF_PIT"])], [k in PIT or k == sym["K_GARGOYLE"]])
         chk(f"tier {tier} ink != base {base} ink", [kcol(sym["KT_ATTR"], tier) != kcol(sym["KT_ATTR"], base)], [True])
     # climbers: Goblin / Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
     # + Orc (Berserker 26, Bouncer 27), Archer (Sniper 28), Necro (Bone Caller 29), + Mummy 13, Spider 9 + Black Widow 22 (fix/archer-climb; the Pharaoh boss guard is the AI's)
