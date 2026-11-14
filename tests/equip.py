@@ -162,8 +162,8 @@ def run(h, p, check):
     # ======================= N: kit start ========================================
     scene(K_KNIGHT)
     st = stats()
-    want = dict(atk=3, eva=2, die=6, bon=0, df=1, mp=6, maxmp=6, per=8, gmp=0, res=(0, 0, 0), imm=0)
-    check("N1 Warrior start: atk 3 eva 2 1d6+0 DEF 1 MP 6/6 period 8", st == want, (st, want))
+    want = dict(atk=3, eva=2, die=6, bon=0, df=1, mp=6, maxmp=6, per=8, gmp=0, res=(S["RSP_R"] << 4, 0, 0), imm=0)
+    check("N1 Warrior start: atk 3 eva 2 1d6+0 DEF 1 MP 6/6 period 8, innate COLD R (NEW-MON3 T10a)", st == want, (st, want))
     scene(K_WIZARD)
     st = stats()
     want = dict(atk=1, eva=1, die=4, bon=0, df=0, mp=12, maxmp=12, per=6, gmp=2, res=(0, 0, 0), imm=0)
@@ -279,11 +279,12 @@ def run(h, p, check):
     s = wear([None, None, None, "C_FROST"])
     u9 = (s["res"], s["maxmp"], s["gmp"])
     R, X, IM = S["RSP_R"], S["RSP_X"], S["RSP_I"]
+    W0 = R << 4 if p.rb("HERO_KIND") == K_KNIGHT else 0   # NEW-MON3 T10a follow-up: the Warrior's innate COLD R
     check("U1 King Helm eva 3 DEF 2; Silk Cloak eva 4 DEF 1 IMMF_POISON",
           (u1, u2) == ((3, 2), (4, 1, S["IMMF_POISON"])), (u1, u2))
     check("U2 Grave Cloak DRAIN R + DARK R; + Mirror Helm DARK X (max); + Grave Ring (I) stays X, MP +2; "
           "Fire Ring FIRE R (MP back)",
-          (u3, u4, u5, u6) == ((0, R | R << 2, 0), (0, R | X << 2, 0), ((0, R | X << 2, 0), 8, 2), ((R << 2, 0, 0), 6, 0)),
+          (u3, u4, u5, u6) == ((W0, R | R << 2, 0), (W0, R | X << 2, 0), ((W0, R | X << 2, 0), 8, 2), ((R << 2 | W0, 0, 0), 6, 0)),
           (u3, u4, u5, u6))
     check("U3 Cleaver + Might: 1d10 +1, atk 3 + 1 + 1 = 5; Leather + Helm + Ward DEF 3",
           (u7, u8) == ((10, 1, 5), 3), (u7, u8))

@@ -279,11 +279,15 @@ ksm_ar_e:
 ; (KS_CLIMB = KS_MOVE, KS_CLIMBREST = idle + 1 = the first frame), every KS_MOVE frame is MOT (a flyer draws it at
 ; any px parity). HURT / ATTACK / DEATH reuse the pose frames (0 pool): the flash alone is not acceptable.
 ; Gargoyle: idle = the statue (STA|SYM, nothing to cycle), move = the spread-wing MOT frame, claw = ATTACK.
-ksm_ga:         KSMH ksm_ga_e - ksm_ga_s, 2, ga_idle, ga_fly, ga_fly, ga_idle + 1, ga_attack, ga_hurt, ga_hurt, ga_death, ksm_ga_s
+; T10a G-1 poses (RCD_AWAKE): PERCHED = KS_IDLE (the statue), AWAKE at rest = KS_MOVE (anim .cyc), WAKING = the KS_CLIMB
+; slot as a one-shot SEQUENCE (perch6 starts it on the proximity wake; a flyer never reads KS_CLIMB: anim .move takes
+; KS_MOVE for every flyer step). T10b maps the art: ga_wake is the placeholder statue -> spread wings.
+ksm_ga:         KSMH ksm_ga_e - ksm_ga_s, 2, ga_idle, ga_fly, ga_wake, ga_idle + 1, ga_attack, ga_hurt, ga_hurt, ga_death, ksm_ga_s
 ksm_ga_s:
 ga_idle:        DB 1, FID_garg_perch, 1, SEQ_END
 ga_fly:         DB 1, FID_garg_fly, 1, SEQ_END
                 ASSERT FFL_garg_fly & FF_MOTION
+ga_wake:        DB FID_garg_perch, 2, 0, FID_garg_fly, 2, 0, SEQ_END
 ga_attack:      DB FID_garg_fly, 2, 0, FID_garg_claw, 2, SF_IMPACT, SEQ_END
 ga_hurt:        DB FID_garg_perch, 3, 0, SEQ_END
 ga_death:       DEATHSEQ FID_garg_perch, FID_dust_dead, FID_dust_dead, FID_garg_perch

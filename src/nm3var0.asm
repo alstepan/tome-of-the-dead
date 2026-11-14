@@ -37,7 +37,7 @@ nm3_var_b2:
                 VB kind_tab + KT_BH + K_ALIAS,    NM3_IMP_BH,    NM3_WR_BH
                 VB kind_tab + KT_FLAGS + K_ALIAS, NM3_IMP_FLAGS, NM3_WR_FLAGS
                 VB kind_tab + KT_ATTR + K_ALIAS,  NM3_IMP_ATTR,  NM3_WR_ATTR
-                VB rk_tab + K_ALIAS,              RK_IMP,        0
+                VB rk_tab + K_ALIAS,              RK_IMP,        RK_WRAITH      ; T10a: the FROST BOLT (§4.4)
                 DW   0
 nm3_var_b3:
                 VB kx_tab + K_ALIAS * KX_STRIDE + 0, {b nm3_kx_a + 0}, {b nm3_kx_b + 0}    ; RES B0 (phys / fire / cold / shock)
@@ -53,6 +53,7 @@ nm3_var_r6:
                 VB gu_tab + GU_STRIDE * K_ALIAS,     KFID_IMP,  KFID_WRAITH
                 VB gu_tab + GU_STRIDE * K_ALIAS + 1, KFCNT_IMP, KFCNT_WRAITH
                 VB drop_imp,                         K_ALIAS,   0
+                VB pxm_alias + 2,                    U_SPARKW,  U_FROSTW   ; T10a: the Warrior's row-31 shot unit (pool_xmap)
                 DW   0
 nm3_var_img:
                 VB ksm_tab + 2 * K_ALIAS,     low ksm_ia,  low ksm_wr

@@ -4451,6 +4451,7 @@ the Vampire's `small_corpse` on the floor — see "VBAT-ART" below). A transform
 | `E_RCD` bit 7 `RCD_ONCE` | entity | the Vampire has fled once (banked as `LEK_BRED`) |
 | `E_RCD` bit 2 `RCD_VFLEE` | entity | this bat form is the flee one (reverts when its FEAR ends); clear = close-distance bat. `place_follower` keeps it, `lp_bank` drops it |
 | `VB_S` = `SP_S` | `$5FFA` | storey scratch (end_turn after `sp_run`: SPQ_RAM is free) |
+| `RG_FR` = `SP_S`, `RG_RIX` = `SP_AX` | `$5FFA`, `$5FFD` | NEW-MON3 T10a: `ai_ranged` scratch in the monster phase (rg_line's flight row -> rg_q's FXD_ROW; rg_row's rd_tab row -> rg_q's `rd_x` pair); dead there (sp_run / vb_turn run at end_turn; sp_summon writes SP_N / SP_SIG / SP_NS only) |
 | `VB_FLEE_T` 8 / `VB_GAP` 12 / `VB_FAR` 6 / `VB_NEAR` 2 | combat_defs.asm | FEAR turns / close-distance gap / open-floor trigger / revert gap |
 | `E_RCD` bit 3 `RCD_VSEEN` | entity | the close-distance line has been logged for this body (VAMP-BAT-CHASE) |
 | `MSG_M_DRAIN` 17 | defs.asm | the Vampire's bite-hit line (impact_line remap) |
@@ -7037,3 +7038,70 @@ range is now computed before the mask / reservations, so those exits stay cheap;
 Measured: A8S 67,833 T, A8M 67,258, A8 61,410, `tests/roommem.py` ADV 63,744 (cap 70,000); A2 mean 21,730 (cap
 22,000). Free: bank 3 111 (kit / `F3_GEN=0` 107), R6 461 (466), B0_CODE2 4,251. Playtest 51.2 % exact / 96.8 % with
 the same storey <= 8 cols.
+
+## NEW-MON3 T10a ledger (`feat/newmon3-t10a`, on main `b2c20b8`, 2026-11-14; new_monsters.md §2.1 / §4.1 / §4.2 / §4.4 / §8)
+
+Behaviours: G-1 PERCH (Gargoyle), F-1 flyer shooter (Fire Imp ember, Frost Wraith FROST BOLT), P-1 pit throws.
+- **State.** `RCD_AWAKE` = `E_RCD` bit 2 (a summon bit: kind-exclusive like `RCD_VFLEE`): the Gargoyle's AWAKE; the Goblin's
+  pit dagger SPENT (`RCD_SPENT_BIT`). Perched = clear: the zeroed spawn slot and `lp_spawn`'s parked restore (clears
+  `RCD_SUMMON`) re-perch it on every room entry (0 B); `place_follower` keeps bits 2-7 (a follower stays awake); bank-7
+  `follow_select` skips a PERCHED Gargoyle (+10 B; `.cn` jr -> jp +1). Pose for T10b: perched = `KS_IDLE` (garg_perch), awake at
+  rest = `KS_MOVE` (anim `.cyc`, bank 2 +12 B, +19 T a resting body of another kind), waking = the `KS_CLIMB` slot as a
+  one-shot sequence `ga_wake` (seq_img.asm, +7 B; a flyer never reads KS_CLIMB).
+- **Wake** (never otherwise): R6 `perch6` (far6 from bank-3 `afl_perch`, ai_flyer's `bit 7,(hl)` on `KF_PERCH`): the hero standing
+  on its storey at box gap <= `PERCH_GAP` 2 -> AWAKE, faces him, `MSG_M_WAKE` line, `ga_wake`, the turn spent; any HP loss
+  (`deal_hit` alive path, bank 3 +8 B) and a missed bump (`do_attack` .miss, +8 B) set it silently. ALARM waves: not set
+  (§4.1 "if <= 4 B": a kind test costs 11 B; a wave Gargoyle appears perched).
+- **F-1.** `ai_flyer` after `attack_if_reach` + `storey_ref`: `ld h, 0` / `call ai_rhook` / `ret c` (bank 3 +6 B, every flyer:
+  ~+110 T a non-shooter turn). R6 `rg_line`: a flyer's flight row = y + h - 1 (`KF_FLYER`), and every row must lie at or
+  below `PL_Y` (the Imp at y = 9s is not in line); the row goes to `RG_FR` (rg_q's FXD_ROW, was a fid test: -9 B there).
+  `rd_x` (R6, 2 B a row, one page): FXD_ATTR | `RXF_ONE` + the impact fid (was "dagger_spin -> ROCK_ATTR, impact = fid + 2"):
+  the Imp $42 + spark_fizz, the Wraith $45 frost_fly x 1 -> frost_crack, the pit inks. `rd_tab` rows: `RK_WRAITH` 15
+  (GKING / SQUEEN 16 / 17, `RK_GOLD1` 16), pit rows 18-21 (`RK_ROWS` 21). Wraith = data: `nm3_var_b2` rk_tab B = `RK_WRAITH`;
+  `U_FROSTW` = `K_MAX + 14` (frost_fly / frost_crack; `GU_N` 46 -> 47) via `pxm_alias` (pool_xmap `K_ALIAS, K_KNIGHT, U_SPARKW`, the
+  unit byte patched by a 4th `nm3_var_r6` entry -> `U_FROSTW` on the B depths: keyed on the RESOLVED row 31); main.asm
+  `PL_KIND` / `PS_KIND` and tests/zx0_pool.py mirror it. **Sim re-gate (§4.4 knobs in order): N 2 -> 3, r 8 -> 6**
+  (`WR_BOLT_N` / `WR_BOLT_R`, ranged6.asm).
+- **P-1.** KT_FLAGS bit 7 = `KF_PIT` on walkers (Skeleton / Goblin / Spider / Orc + Guard, Knight, Berserker, Bouncer; the same
+  bit as `KF_PERCH`, read only on the walker path). `.fstep`'s refused step -> `KFL KT_FLAGS` / `rla` -> far6 R6 `pit6` (bank 3
+  +13 B): golden never, storey 0 only, `pit_range` of x + dx proves the pit-col refusal, `pit_tab` row, the Goblin's SPENT,
+  track limit (>= 3 RS_Q shots this phase: wait, counter untouched), `rg_cnt` + `rg_line`, then `rg_shoot`. **§8.6 fallback
+  (step 1):** the Goblin's dagger is consumed (no floor loot: the hero's thrown daggers do not land as loot yet, game.md §6.3,
+  so there is no drop routine to reuse). Mage `U_DAGM` extras for the Orc / Skeleton (pool_xmap +6 B).
+
+| Region (release; kit / `F3_GEN=0` in brackets) | before (`b2c20b8`) | after | why |
+|---|---|---|---|
+| bank 3 free (to `AY_RESERVE`) | 111 [107] | **60** [56 / 56] | afl_perch / F-1 call (+22), .fstep pit hook (+13), deal_hit / do_attack wakes (+16) |
+| R6 free | 466 kit | **135** [140 / 140] | perch6, pit6 + pit_tab, rd_x 42, rd_tab +5 rows 40, rg_line flyer row, U_FROSTW + xmap rows, seq stream |
+| bank 2 free (seq_rows tail + kind_tab pad) | 14 + 13 = 27 | **14 + 1 = 15** [14] | anim `.cyc` pose test +12 |
+| bank 7 low free | 74 | **63** [63 / 67] | follow_select perched filter +11 |
+| `B0_CODE2` used / free | 4,110 / 4,250 | **4,113 / 4,247** | nm3_var_r6 +1 entry (4 B) |
+| low RAM / bank 1 / SRC6 / HOT_COPY | | unchanged | |
+| pool `LEVEL_NEED` W D5..D8 / M D4..D8 | 14,114 16,450 17,362 19,154 / 14,370 12,546 14,850 15,730 17,554 | **+32 each** (W D3 / D4 and M D1-D3 unchanged) | W: U_SPARKW on D6 (the Imp), U_FROSTW on D5 / D7 / D8; M: U_DAGM D4-D8 |
+| binding slack (D8 Warrior, `POOL_CAP` 22,594) | 3,440 | **3,408** | |
+
+Cost: tests/lp.py A2 mean 21,712 T (cap 22,000), A8 61,010, A8S 67,979, A8M 67,283; tests/roommem.py ADV 63,744 (cap 70,000);
+budget.py gate green (imp3: the Imps now spit, max tick 98,915 T). Tests: new `tests/nm3b.py` (W wake rules, R re-perch /
+follow, F flyer shot line A/B vs `ranged_model` for the Imp D6 and the Wraith D7, P pit throws incl. the real ai_monster path);
+`tests/nm3.py` A0 (4 R6 alias entries), `tests/zx0_pool.py` (needs, the U_FROSTW mirror), `tools/ranged_model.py` (flyer rows,
+rd_x, `fr >= PL_Y`), `tools/balance_sim.py` (Wraith bolt, entry grace), `tools/balance_nm3.json` (+ the WRAITH_* knobs).
+
+**T10a follow-up (same branch; user decision 2026-11-14 + review).**
+- **Warrior innate COLD R:** R6 `hero_recalc` seeds `hr_r0` = `RSP_R << 4` for `HERO_KIND` 0 before the per-field max over the
+  worn gear (+10 B R6): `HERO_RES` B0 COLD = R from the kit on; every `deal_hit` DTY_COLD on him halves (min 1) and R halves
+  FROZEN turns (the Wraith touch / bolt, the Archmage Frost row); the Frost Charm does not stack on him. With it the Wraith
+  bolt is back at the §4.4 values (`WR_BOLT_R` 8, `WR_BOLT_N` 2). `tools/balance_sim.py` param `W_COLD` 2 (recalc), the
+  ranged_model `HERO_BASE_RES` note; `tests/equip.py` N1 / U2 expect the Warrior's B0.
+- `status7.asm` st_step: a POISON tick on a Gargoyle sets `RCD_AWAKE` (defensive: POISON-immune row; bank 7 +11 B).
+- `pit6` reads `.fstep`'s TMP6 for the refused dx (-8 B R6); an ASSERT over the pit kinds' `KT_BH` for rg_line's
+  `top + ((h / 2) & 2)` flight row (inside the hero's rows 2..7).
+- Goblin dagger re-entry (lpop3 `.pk` clears bit 2 with `RCD_SUMMON`): kept as is (11 B > the ~6-B budget), noted in
+  new_monsters.md §8.3. ALARM-wave Gargoyles perched: game.md §1.5 exception.
+- budget.py: `pitv` (real D4: a pit-stuck Orc + 2 Imps, 3 tracks a phase) and `wr7` (real D7: 3 Wraith bolts), CAP-gated.
+
+| Region (release; kit / `F3_GEN=0`) | T10a | follow-up |
+|---|---|---|
+| bank 3 | 60 [56 / 56] | 60 [56 / 56] |
+| R6 | 135 [140 / 140] | **132** [137 / 137] |
+| bank 7 low | 63 [63 / 67] | **52** [52 / 56] |
+| bank 2 / `B0_CODE2` | 15 / 4,247 | 15 / 4,246 |

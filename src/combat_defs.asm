@@ -160,6 +160,10 @@ SP_NS           EQU SPQ_RAM + 8     ; sp_scan: how many are summon-made (= SP_SI
 SP_AX           EQU SPQ_RAM + 9     ; sp_run: the parent's x / x + w (the placement anchor)
 SP_AR           EQU SPQ_RAM + 10
 SPQ_RAM_END     EQU SPQ_RAM + 11    ; = $6000: the runtime reserve after RG_RAM is full
+; NEW-MON3 T10a: two ai_ranged scratch bytes on sp_run's end_turn scratch (dead in the monster phase: sp_bcall /
+; sp_summon only decide, sp_scan writes SP_N / SP_SIG / SP_NS; vb_turn / sp_run run at end_turn)
+RG_FR           EQU SP_S            ; rg_line: the flight row fr (rg_q's FXD_ROW; am_cast's return track reuses it)
+RG_RIX          EQU SP_AX           ; rg_row: the rd_tab row index (rg_q's rd_x lookup)
                 ASSERT SPQ_RAM_END <= $6000
 SPQ_NONE         EQU $FF
 SQF_ONCE        EQU %00100000       ; sp_run sets the parent's RCD_ONCE when the body is made (the Rabbit Rat)
@@ -209,12 +213,22 @@ RK_NECRO        EQU 4
 RK_BONE_CALLER  EQU 5
 RK_ARCHMAGE     EQU 6               ; 3F-T11b: the Archmage's 7 spell rows RK_ARCHMAGE .. + 6 (arch_ai; no rk_tab entry)
 RK_WIDOW        EQU 13              ; WIDOW-SPIT: the Black Widow's spit (any body: below RK_GOLD1, so ai_rhook's gate is unchanged)
-RK_IMP          EQU 14              ; NEW-MON3 T8: the Fire Imp's ember (new_monsters.md §4.2 F-1; row 31 variant A, rk_tab 0 on the
-                                    ; Wraith's): below RK_GOLD1, so it shoots for any body; the F-1 flyer-shooter code is a later task
-RK_GKING        EQU 15              ; BOSS-RANGED: the Goblin King's dagger (D1) / the Spider Queen's spit (D2),
-RK_SQUEEN       EQU 16              ; after the Imp; rows >= RK_GOLD1 shoot only for a golden body (ai_rhook)
+RK_IMP          EQU 14              ; NEW-MON3 T8: the Fire Imp's ember (new_monsters.md §4.2 F-1; row 31 variant A): below RK_GOLD1,
+                                    ; so it shoots for any body; T10a: ai_flyer's F-1 hook calls ai_rhook for every flyer
+RK_WRAITH       EQU 15              ; NEW-MON3 T10a: the Frost Wraith's FROST BOLT (§4.4; row 31 variant B, nm3_var), any body
+RK_GKING        EQU 16              ; BOSS-RANGED: the Goblin King's dagger (D1) / the Spider Queen's spit (D2),
+RK_SQUEEN       EQU 17              ; after the flyers; rows >= RK_GOLD1 shoot only for a golden body (ai_rhook)
 RK_GOLD1        EQU RK_GKING
-RK_ROWS         EQU 16
+; NEW-MON3 T10a P-1 (new_monsters.md §8.3): the pit-throw rows, reached only through R6 pit6's kind table (never rk_tab: the
+; open-ground step-4 hook cannot see them), so they sit after the golden rows
+RK_PSPIDER      EQU 18              ; Spider (base): 1d2 spit + POISON 6, r4, every 4th stranded turn
+RK_PGOBLIN      EQU 19              ; Goblin (base): one dagger per life (RCD_SPENT), r6
+RK_PORC         EQU 20              ; Orc / Berserker / Bouncer: a hand axe 1d6, r5, every 4th
+RK_PSKEL        EQU 21              ; Skeleton / Guard / Knight: a bone 1d4, r5, every 4th
+RK_ROWS         EQU 21
+; rd_x (ranged6.asm): per rd_tab row 2 B {FXD_ATTR | RXF_ONE, the impact fid}: RXF_ONE = one flight frame (FIDB = FIDA,
+; the Frost Wraith's frost_fly); the impact byte is read only when the row draws one (not RWF_NOIMP)
+RXF_ONE         EQU $80
 SQ_PSN_T        EQU 12              ; BOSS-RANGED: a spit hit always poisons + 12 (deal_hit E = half, cap PSN_CAP)
 BW_PSN_T        EQU 6               ; WIDOW-SPIT: a Widow spit hit always poisons + 6 (deal_hit E = half, cap PSN_CAP)
 BW_SPIT_N       EQU 3               ; WIDOW-SPIT: rd_tab N 3 = a shot every 4th turn (the Queen: N 2, every 3rd)
@@ -277,6 +291,14 @@ RCD_VFLEE_BIT   EQU 2
 VB_FLEE_T       EQU 8               ; §9.2 rule 1: flee 8 turns (FEAR, MIND timer; <= STS_MAX_TURNS)
 RCD_VSEEN       EQU %00001000       ; the close-distance line has been logged for this body (bit 3 = a summon bit, free on the Vampire)
 RCD_VSEEN_BIT   EQU 3
+; NEW-MON3 T10a: bit 2 (a summon bit: the Gargoyle and the Goblin never summon) is kind-exclusive like RCD_VFLEE:
+; the Gargoyle's AWAKE (G-1, new_monsters.md §4.1: 0 = perched; the zeroed spawn slot and lp_spawn's parked restore
+; (clears RCD_SUMMON) give "perched" for free; place_follower keeps it: a follower stays awake) and the Goblin's pit
+; dagger SPENT (P-1 §8.3: one per life)
+RCD_AWAKE       EQU %00000100
+RCD_AWAKE_BIT   EQU 2
+RCD_SPENT_BIT   EQU 2
+PERCH_GAP       EQU 2               ; G-1: a perched Gargoyle wakes at a box gap <= 2 to the standing hero on its storey
 VB_GAP          EQU 12              ; rule 2: close distance at a box gap <= 12 cols
 VB_FAR          EQU 6               ; ... and gap >= 6 turns it on open floor too (gap < 6: only with a cut between)
 VB_NEAR         EQU 2               ; revert at a box gap <= 2 (same storey, no cut between)

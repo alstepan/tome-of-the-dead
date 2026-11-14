@@ -68,6 +68,36 @@ ARCH_ROWS = [   # (r, N, flags, die / hex: immunity bit, bon / hex: line, dhc, d
     (12, 0, RWF_SPELL | RWF_HEX, IMMF_POISON, "TX_ST_POISONED", EFX_POISON << 4, 12, "nbolt_fly1"),            # Venom
 ]
 ARCH_INK = [0x43, 0x45, 0x47, 0x44, 0x42, 0x41, 0x06]
+# NEW-MON3 T10a F-1 (new_monsters.md §4.2 / §4.4): the flyer shooters on row 31 (resolved by depth: the Fire Imp = variant A on
+# D4 / D6, the Frost Wraith = B on D5 / D7 / D8; tools/levelgen / NM3_B_DEPTHS). Same tuple layout as ROWS. ai_flyer calls the hook
+# with H = 0 (standing); rg_line's flight row is the flyer's bottom row y + h - 1, in line only at fr >= the hero's top row.
+IMP_ROW = (6, 2, RWF_WALK | RWF_SPELL | RWF_NOREFL, 4, 1, DTY_FIRE | NODEF, 0, "spark_fly1")
+WRAITH_ROW = (8, 2, RWF_WALK | RWF_SPELL | RWF_NOREFL, 4, 1, DTY_COLD | NODEF, 0, "frost_fly")   # §4.4
+# T10a follow-up (user 2026-11-14): the Warrior's innate COLD R = hero_recalc's base HERO_RES (gear6.asm); the hero res the
+# callers pass in sit["hero"]["res"] is HERO_RES as built, so a Warrior's carries it: HERO_BASE_RES (hero kind -> 3 B)
+HERO_BASE_RES = {0: (RSP_R << 4, 0, 0), 1: (0, 0, 0)}
+NM3_B_DEPTHS = (5, 7, 8)
+
+
+def alias_row(depth):
+    """rk_tab[31] after the A-1 patch: the Imp's ember (A) or the Wraith's FROST BOLT (B)."""
+    return WRAITH_ROW if depth in NM3_B_DEPTHS else IMP_ROW
+
+
+# rd_x (ranged6.asm): fx name -> (FXD_ATTR, one flight frame, impact fid name) for the rows whose descriptor is not the
+# default (fid, fid + 1, impact fid + 2, attr 0 / ROCK_ATTR for dagger_spin): the Imp's $42 ember with the class-shared
+# spark_fizz impact, the Wraith's $45 frost_fly -> frost_crack. decide() takes them from sit["xfx"] = (attr, one, impact fid).
+FLYER_X = {"spark_fly1": (0x42, False, "spark_fizz1"), "frost_fly": (0x45, True, "frost_crack")}
+# P-1 pit rows (§8.3; R6 pit6 only, never the open-ground hook): base kind -> row; FXD_ATTR by row (rd_x)
+K_ORC, K_SKELETON = 11, 3
+PIT_ROWS = {
+    K_SPIDER: (4, 3, RWF_NOIMP, 2, 0, DTY_PHYS | (EFX_POISON << EFX_SHIFT), 3, "spark_fly1"),
+    K_GOBLIN: (6, 0, RWF_NOIMP, 3, 0, DTY_PHYS, 0, "dagger_spin1"),
+    K_ORC: (5, 3, RWF_NOIMP, 6, 0, DTY_PHYS, 0, "dagger_spin1"),
+    K_SKELETON: (5, 3, RWF_NOIMP, 4, 0, DTY_PHYS, 0, "dagger_spin1"),
+}
+PIT_TIERS = {26: K_ORC, 27: K_ORC, 23: K_SKELETON, 24: K_SKELETON}   # Berserker, Bouncer / Guard, Knight
+PIT_ATTR = {K_SPIDER: 0, K_GOBLIN: 0x47, K_ORC: 0x07, K_SKELETON: 0x47}
 AM_ORDER_N, AM_HEX_R, AM_HEX_CD, AM_SUM_CD, AM_BLINK_N = 5, 12, 4, 6, 8
 TELE_FLASH_T, AM_BLINK_ATTR, MSG_M_SUMMON = 5, 0x47, 16
 STS_GUARD, PSN_CAP = 0x40, 30
@@ -206,7 +236,10 @@ def _hero_status(H, rng, c, e, rsp, out):
 
 def flight_row(sit):
     """§9.2 fr = shooter top + 2, inside the hero's rows; BOSS-RANGED: a 2-high shooter (the Spider
-    Queen, top = 9s+6) fires from its top row (top + 2 would be its floor)."""
+    Queen, top = 9s+6) fires from its top row (top + 2 would be its floor). T10a F-1: a flyer
+    (sit["flyer"]) fires from its bottom row y + h - 1."""
+    if sit.get("flyer"):
+        return sit["y"] + sit["h"] - 1
     return sit["y"] + (PF_ROW_DY if sit["h"] > 2 else 0)
 
 
@@ -227,8 +260,10 @@ def decide(sit, rng):
         return out
     if gap >= r:
         return out
+    fr = flight_row(sit)
+    if fr < H["y"]:                                 # T10a F-1: a flyer above the hero's rows is not in line
+        return out
     if gap:
-        fr = flight_row(sit)
         if any(sit["map"][fr][c] & 1 for c in range(first, first + gap)):
             return out
         if not box_free(sit, (first, sit["y"], gap, sit["h"])):
@@ -266,8 +301,13 @@ def decide(sit, rng):
             sh["msg"] = MSG_M_MISS
         sh["hero"] = hs
         anchor = first if d > 0 else first + gap - 1
-        sh["desc"] = [fx, fx + 1] + ([fx + 2] * 2 if sh["imp"] else [FX_NONE] * 2) + \
-            [ROCK_ATTR if fx == FID_DAGGER else 0, anchor, flight_row(sit), 1 if d < 0 else 0, 0, PF_IMPT if sh["imp"] else 0, 1, gap, 0, 0, 0, 0]
+        if sit.get("xfx"):                          # T10a rd_x: (attr, one flight frame, impact fid)
+            xa, one, ximp = sit["xfx"]
+            sh["desc"] = [fx, fx if one else fx + 1] + ([ximp] * 2 if sh["imp"] else [FX_NONE] * 2) + \
+                [xa, anchor, fr, 1 if d < 0 else 0, 0, PF_IMPT if sh["imp"] else 0, 1, gap, 0, 0, 0, 0]
+        else:
+            sh["desc"] = [fx, fx + 1] + ([fx + 2] * 2 if sh["imp"] else [FX_NONE] * 2) + \
+                [ROCK_ATTR if fx == FID_DAGGER else 0, anchor, fr, 1 if d < 0 else 0, 0, PF_IMPT if sh["imp"] else 0, 1, gap, 0, 0, 0, 0]
         sh["flash"] = I if sh["lost"] else 0
         out["shot"] = sh
         return out

@@ -239,8 +239,15 @@ anim_entity:
                 ld   a, (hl)
                 ld   b, 1
                 ret
-.cyc:           call kind_seq_ptr
-                ld   a, (hl)                   ; KS_IDLE
+.cyc:           call kind_seq_ptr              ; (A = kind + KT_SEQ low: kind_seq_ptr's index)
+                cp   (K_GARGOYLE + KT_SEQ) & $FF   ; NEW-MON3 T10a G-1 pose: an AWAKE Gargoyle rests in its
+                jr   nz, .cy1                  ; KS_MOVE cycle (garg_fly), a perched one in KS_IDLE (the
+                bit  RCD_AWAKE_BIT, (ix+E_RCD) ; statue); waking = its KS_CLIMB one-shot (perch6). +19 T a
+                jr   z, .cy1                   ; resting body of another kind
+                inc  l                         ; KS_MOVE (a seq_rows row never crosses a page)
+                inc  l
+                ASSERT KS_MOVE == KS_IDLE + 2
+.cy1:           ld   a, (hl)                   ; KS_IDLE
                 inc  hl
                 ld   h, (hl)
                 ld   l, a

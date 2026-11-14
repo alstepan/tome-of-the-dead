@@ -310,7 +310,16 @@ def test_nm3(D0):
     wr.x = 1
     wr.atk = 99
     g.mon_melee(wr, 1)
-    check("wraith freeze 2 on a landed touch", g.h.hold == 2 and g.h.holdkind == "frozen", str(g.h.hold))
+    check("wraith freeze on a landed touch: 1 on the Warrior (innate COLD R halves 2, T10a follow-up)",
+          g.h.hold == 1 and g.h.holdkind == "frozen" and g.h.res[B.COLD] == 1, str(g.h.hold))
+    gm = new_game(D, "M")
+    gm.depth = 6
+    gm.h.hp = gm.h.maxhp = 999
+    gm.recalc()
+    gm.mon_melee(wr, 1)
+    check("wraith freeze 2 on the Mage (no innate COLD R)", gm.h.hold == 2 and gm.h.res[B.COLD] == 0, str(gm.h.hold))
+    check("the Warrior's COLD hits halve (min 1)", g.hero_res(B.COLD, 7) == 3 and g.hero_res(B.COLD, 1) == 1
+          and gm.hero_res(B.COLD, 7) == 7)
     g.h.hold = 0
     g.h.res[B.COLD] = 2
     hp = g.h.hp

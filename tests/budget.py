@@ -245,7 +245,7 @@ GATED = ("mix", "mage", "blair", "wroom", "wroom4", "lw24s", "lwalk4b")   # ADAP
 # reported like lwalk / lwalk4: 5 bodies walking in step (the monsters start with the hero, as on main) push some pure
 # render ticks past 2 frames (rwalk was 155.6k real on main too, perf_survey M2)   # C+TUT0: rwalk gated (real <= BUDGET); lwalk / lwalk4 reported measurements
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4", "lmix", "lmixw", "lmix4", "lhurt", "lhurt4", "imp3")   # lwalk4: a measurement, not gated (see SCENARIOS)
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4", "lmix", "lmixw", "lmix4", "lhurt", "lhurt4", "imp3", "pitv", "wr7")   # lwalk4: a measurement, not gated (see SCENARIOS)
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -668,6 +668,21 @@ SCENARIOS = {
         (5, 16, 10, HOSTILE),
         (3, 20, 10, HOSTILE),
         (1, 24, 10, HOSTILE)], KEYS, K_KNIGHT, None, "imp3"),
+    # NEW-MON3 T10a: "pitv" = a pit volley on a REAL D4 (new_monsters.md §8.3): the hero waits on storey 0 at x 9, an Orc
+    # stands at the edge of a (poked) narrow pit at col 14 (x 15: every step toward him is the pit-col refusal -> pit6
+    # throws), and two Fire Imps on his left in disjoint rows (y 1 / 5: both lines clear) spit; shooter_hook keeps
+    # every counter at 0, so each turn's monster phase queues 3 shots = 3 FX tracks. "wr7" = three Frost Wraiths on a
+    # REAL D7 (row 31 variant B) at band rows 9 / 13 (right: disjoint rows, both in line) and 10 (left), all at gap < 8
+    # from the knight (x 12; he waits / swings in place), counters held at 0: a 3-bolt phase every 2nd turn (KF_SLOW).
+    # Both CAP-gated.
+    "pitv": ("knight (real D4, storey 0) + a pit-stuck Orc throwing + 2 Fire Imps spitting: 3 tracks", [
+        (5, 15, stand_y(0, 6), HOSTILE),
+        (3, 3, 1, HOSTILE),
+        (1, 1, 5, HOSTILE)], [("WAIT", 12)], K_KNIGHT, None, "pitv"),
+    "wr7": ("knight (real D7) + 3 Frost Wraiths bolting (3 tracks every acting turn)", [
+        (5, 17, 9, HOSTILE),
+        (3, 21, 13, HOSTILE),
+        (1, 3, 10, HOSTILE)], [("WAIT", 4), ("FIRE", 3), ("WAIT", 5)], K_KNIGHT, None, "wr7"),
     # C-H (user 2026-11-10, policy hybrid+h): the hurt frames are STA|MIR too. "lhurt" = the worst hurt tick: the
     # hero (knight) and 4 Skeletons (the widest resident kind with a hurt frame, 32x48) all facing LEFT and held
     # in KS_HURT every tick (lmix_hook with LMIX_KS = KS_HURT, the hero included). "lhurt4" = the same on the
@@ -1194,6 +1209,30 @@ def ranged_setup(p, placements, key):
 
 
 LMIX_SLOTS = (5, 3, 1, 4)
+SHOOT_SLOTS = []                                # NEW-MON3 T10a pitv / wr7: the shooters shooter_hook re-arms
+
+
+def shooter_hook(st):
+    """"pitv" / "wr7" (TICK_HOOKS): every shooter's cooldown counter back to 0 (E_RCD bits 0-1 stored XOR 1 = 1),
+    so every acting monster phase fires (3 tracks), and the hero kept alive. Counts the shots seen (TP_SHOT)."""
+    p = st.p
+    if not SHOOT_SLOTS:
+        return
+    for sl in SHOOT_SLOTS:
+        a = S["P_ENTITIES"] + sl * S["P_ENT_STRIDE"] + S["E_POT"]
+        p.wb(a, (p.rb(a) & ~3 & 255) | 1)
+    if p.rb("TURN_PEND") & S["TP_SHOT"]:
+        n = ((p.rb("RS_P") - S["RS_Q"]) & 255) // S["RS_STRIDE"]
+        SHOOT_SEEN[1] = max(SHOOT_SEEN[1], n)
+        SHOOT_SEEN[0] += n == 3
+        if os.environ.get("BUDGET_SHOOT_DBG"):
+            print("[dbg] shots", n, [(sl, p.ent(sl)["X"], p.ent(sl)["Y"], p.ent(sl)["HP"], p.ent(sl)["FLAGS"]) for sl in SHOOT_SLOTS],
+                  p.ent(0)["X"], p.ent(0)["Y"], flush=True)
+    if p.ent(0)["HP"] < 120:
+        p.set_ent(0, HP=250)
+
+
+SHOOT_SEEN = [0, 0]                             # ticks with 3 shots queued, the most queued in one phase
 LMIX_KS = None                                  # set per run: KS_ATTACK (lmix*) / KS_HURT (lhurt*, slot 0 included)
 LMIX_DRAWN = None                               # lmix4: set of (slot, drawn fid, left) seen after each tick
 
@@ -1391,8 +1430,11 @@ def run_scenario(h, scen):
     global LMIX_DRAWN, LMIX_KS, LMIX_GO
     name, placements, keys = scen[:3]
     LMIX_DRAWN = None
+    SHOOT_SLOTS.clear()                           # NEW-MON3 T10a: shooter_hook idles outside pitv / wr7
+    SHOOT_SEEN[:] = [0, 0]
     p = game.T(h)
-    real4 = len(scen) > 5 and scen[5] in ("lmix4", "lhurt4", "lwalk4", "lwalk4b", "imp3")
+    real4 = len(scen) > 5 and scen[5] in ("lmix4", "lhurt4", "lwalk4", "lwalk4b", "imp3", "pitv", "wr7")
+    rdepth = 7 if real4 and scen[5] == "wr7" else 4          # NEW-MON3 T10a: wr7 on a real D7
     LMIX_KS = S["KS_HURT"] if len(scen) > 5 and scen[5] in ("lhurt", "lhurt4") else S["KS_ATTACK"]
     if real4:                                     # C-F1: a real generated D4, not the PROTO fixture
         p.proto_start = 0
@@ -1402,7 +1444,7 @@ def run_scenario(h, scen):
         pc0 = p.pc()
         ld = S["level_descend"]                   # in play (no SP reset), as tests/lp.py T.code(game=True)
         stub = S["LOWRAM_END_3B"]
-        code = [0xF3, 0x3E, 3, 0x32, S["LVL_DEPTH"] & 255, S["LVL_DEPTH"] >> 8, 0xCD, ld & 255, ld >> 8,
+        code = [0xF3, 0x3E, rdepth - 1, 0x32, S["LVL_DEPTH"] & 255, S["LVL_DEPTH"] >> 8, 0xCD, ld & 255, ld >> 8,
                 0xFB, 0x00, 0x18, 0xFE]
         p.z.cmd("write-memory %d %s" % (stub, " ".join(map(str, code))))
         end = stub + len(code) - 3
@@ -1416,7 +1458,7 @@ def run_scenario(h, scen):
         p.z.cmd("set-register PC=%d" % pc0)
         p.release()
         p.settle(4)
-        assert ok and p.rb("LVL_DEPTH") == 4, "lmix4: level_descend to D4 failed"
+        assert ok and p.rb("LVL_DEPTH") == rdepth, "lmix4: level_descend to D%d failed" % rdepth
     p.isolate()
     room0 = p.rb("CUR_ROOM") if real4 else 0
     if MUS_POKE:                                  # SND-2 T5: T3's level hook isn't merged yet
@@ -1499,6 +1541,25 @@ def run_scenario(h, scen):
             p.wb(S["P_ENTITIES"] + slot * S["P_ENT_STRIDE"] + S["E_GOLD"], 0)
         p.set_ent(0, HP=250, MAXHP=250)
         p.wb("BLIT_MISS", 0)
+    elif real4 and scen[5] in ("pitv", "wr7"):   # NEW-MON3 T10a: the F-1 / P-1 shooters, counters held at 0
+        assert p.rb("NM3_VAR") == (scen[5] == "wr7")
+        kinds = ("K_ORC", "K_ALIAS", "K_ALIAS") if scen[5] == "pitv" else ("K_ALIAS",) * 3
+        SHOOT_SLOTS[:] = [sl for sl, *_ in placements]
+        for (slot, x, y, _), kn in zip(placements, kinds):
+            p.set_ent(slot, KIND=S[kn], Y=y, PY=y * 8, HP=99, MAXHP=99, POT=1)   # counter 0 from the first phase (no drift)
+            p.wb(S["P_ENTITIES"] + slot * S["P_ENT_STRIDE"] + S["E_GOLD"], 0)
+        if scen[5] == "pitv":
+            d = S["ROOM_DESC"] + room0 * S["RD_STRIDE"]
+            p.wb(d + S["RD_PITCOL"], 14)
+            p.wb(d + S["L2_PITW"], 0)
+            p.wb("ROOM_CUT", 0xFF)
+            p.place(0, 9, stand_y(0, 6))
+        p.set_ent(0, HP=250, MAXHP=250)
+        p.wb("BLIT_MISS", 0)
+        if shooter_hook not in TICK_HOOKS:
+            TICK_HOOKS.append(shooter_hook)
+        if lmix_hook in TICK_HOOKS:               # (a previous lmix4 run's attack forcing)
+            TICK_HOOKS.remove(lmix_hook)
     elif real4:                                   # the real kinds, standing on their own floor rows
         LMIX_DRAWN = None if scen[5] in ("lwalk4", "lwalk4b") else set()
         for slot, kn in zip(LMIX_SLOTS, ("K_OGRE", "K_ORC", "K_ORC", "K_ORC")):
@@ -1602,6 +1663,9 @@ def run_scenario(h, scen):
             agg[(n, left)] += c
         print(f"[info] {scen[5]} drawn (frame, left) x ticks: {sorted(agg.items(), key=lambda kv: -kv[1])[:14]}; "
               f"BLIT_MISS {p.rb('BLIT_MISS')}", flush=True)
+    if SHOOT_SLOTS:                               # NEW-MON3 T10a: the 3-shot phases really happened
+        print(f"[info] {scen[5]}: ticks with 3 shots queued {SHOOT_SEEN[0]} (most in a phase {SHOOT_SEEN[1]}), FX_DROP {p.rb('FX_DROP')}", flush=True)
+        assert SHOOT_SEEN[0] > 0, f"{scen[5]}: no 3-shot monster phase"
     if LMIX_DRAWN is not None:                    # the mirrored frames really were drawn (left, STA|MIR)
         hurt = LMIX_KS == S["KS_HURT"]
         names = {S["FID_" + n]: n for n in (("knight_hurt", "orc_hurt", "skeleton_hurt") if hurt else
@@ -1977,7 +2041,7 @@ def Proto_cls():
 
 
 ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk,lw24,lw24g,lw24s,lwalk4b,imp3,tut0")
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk,lw24,lw24g,lw24s,lwalk4b,imp3,pitv,wr7,tut0")
 
 
 def swing_pass(keys):

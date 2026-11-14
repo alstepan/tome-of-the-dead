@@ -17,7 +17,8 @@
 ;   max MP gear part = sum(gear MP) + m of a worn Robe / Hood (MP, no DEF),
 ;          >= 0; MAXMP += new - GEAR_MP (level-ups / tomes stay in MAXMP),
 ;          MP clamped to MAXMP (never raised: the start fill is kit_add's)
-;   HERO_RES B0 / B1 = per-field max of the gear's (gx_tab), HERO_IMM = OR
+;   HERO_RES B0 / B1 = per-field max of the gear's (gx_tab), HERO_IMM = OR; the Warrior's base B0 = COLD R
+;          (T10a follow-up: innate, the max with gear: a Frost Charm adds nothing to him)
 ;   MP_PER = 8 / 6 (class), / 2 with the Mana / Scarab amulet, x 2 with Plate
 ; Charms carry no m (only the weapon is enchanted; wear hits weapon / armour /
 ; helm). Rune / Bone staff spell damage (+1 / +2) is not a recalc stat: proj_prep
@@ -43,7 +44,13 @@ hero_recalc:
 .z:             ld   (hl), a
                 inc  hl
                 djnz .z
-                ld   hl, WORN
+                ld   a, (HERO_KIND)            ; NEW-MON3 T10a follow-up (user 2026-11-14): the Warrior's innate COLD R
+                or   a                         ; (half of every COLD hit, min 1; FROZEN turns halved: deal_hit's R rule)
+                jr   nz, .nc                   ; = the base of the per-field max below, so a worn Frost Charm (COLD R)
+                ld   a, RSP_R << (2 * DTY_COLD) ; does not stack (R stays R). +10 B R6, once a recalc
+                ld   (hr_r0), a
+                ASSERT K_KNIGHT == 0 && DTY_COLD == 2 && RES_B0 == 0
+.nc:            ld   hl, WORN
                 ld   b, WORN_SLOTS
 .s:             ld   a, (hl)
                 or   a

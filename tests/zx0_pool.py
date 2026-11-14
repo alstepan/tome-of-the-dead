@@ -148,11 +148,14 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # straddle waste 2 for both heroes as before, so every need is unchanged. POOL_CAP 22,594, D8 Warrior slack 6,176.
 # NEW-MON3 T9 (new_monsters.md §5 lists live, A-1 alias: row 31 = U_WRAITH's frames on D5 / D7 / D8): D3-D8 rebaselined
 # (D1 / D2 unchanged). Binding D8 Warrior 19,154 of POOL_CAP 22,594, slack 3,440 (>= 1,024: no X = 4,096 re-carve).
+# NEW-MON3 T10a (F-1 / P-1 FX): the Warrior + 32 on D6 (the Imp's spark pair, U_SPARKW: D4 had it from the Spider) and on the
+# Wraith depths D5 / D7 / D8 (U_FROSTW); the Mage + 32 on D4..D8 (dagger_spin for the Orc / Skeleton pit throws, U_DAGM; D3 had
+# it from the Goblin). Binding D8 Warrior 19,186 of POOL_CAP 22,594, slack 3,408.
 LEVEL_NEED = {
     (0, 1): 11826, (0, 2): 11842, (0, 3): 16274, (0, 4): 15938,
-    (0, 5): 14114, (0, 6): 16450, (0, 7): 17362, (0, 8): 19154,
-    (1, 1): 10258, (1, 2): 10242, (1, 3): 14706, (1, 4): 14370,
-    (1, 5): 12546, (1, 6): 14850, (1, 7): 15730, (1, 8): 17554,
+    (0, 5): 14146, (0, 6): 16482, (0, 7): 17394, (0, 8): 19186,
+    (1, 1): 10258, (1, 2): 10242, (1, 3): 14706, (1, 4): 14402,
+    (1, 5): 12578, (1, 6): 14882, (1, 7): 15762, (1, 8): 17586,
 }
 
 
@@ -745,6 +748,8 @@ class Ref:
                    if xm[3 * r] == k and xm[3 * r + 1] == self.hero]
             if self.vb and k == S.get("K_ALIAS"):       # NEW-MON3 T9 A-1: gu_tab row 31 = U_WRAITH's range
                 us = [S["U_WRAITH"] if u == k else u for u in us]
+                if "U_FROSTW" in S:                     # T10a: nm3_var_r6 patches pxm_alias's unit (the Warrior's frost pair)
+                    us = [S["U_FROSTW"] if u == S["U_SPARKW"] else u for u in us]
             out += [u for u in us if u not in out and self.unit(u)[1]]
         return out
 

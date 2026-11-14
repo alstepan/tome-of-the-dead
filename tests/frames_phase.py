@@ -104,6 +104,9 @@ for k in range(S["K_COUNT"]):
             continue
         if n == "KS_CLIMB" and ptr[n] in (ptr["KS_IDLE"],):
             continue
+        if n == "KS_CLIMB" and flyer and b(S["kind_tab"] + S["KT_FLAGS"] + k) & S["KF_PERCH"]:
+            uses += [(f, f"kind {k} KS_CLIMB (waking one-shot)") for f in seq(ptr[n])]   # NEW-MON3 T10a G-1: a SEQUENCE
+            continue
         uses += [(f, f"kind {k} {n}") for f, _ in cycle(ptr[n])[1]]
     uses.append((b(ptr["KS_CLIMBREST"]), f"kind {k} KS_CLIMBREST"))
     for n in ("KS_ATTACK", "KS_HURT", "KS_BLOCK", "KS_DEATH"):

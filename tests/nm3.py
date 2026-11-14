@@ -62,8 +62,8 @@ def group(name, end):
 G_B2 = group("nm3_var_b2", "nm3_var_b3")
 G_B3 = group("nm3_var_b3", "nm3_var_r6")
 G_R6 = group("nm3_var_r6", "nm3_var_img")
-check("A0 table: 9 bank-2 / 8 kx / 3 R6 entries, A != B somewhere in each",
-      (len(G_B2), len(G_B3), len(G_R6)) == (9, 8, 3)
+check("A0 table: 9 bank-2 / 8 kx / 4 R6 entries (T10a: + pxm_alias's unit), A != B somewhere in each",
+      (len(G_B2), len(G_B3), len(G_R6)) == (9, 8, 4)
       and all(any(a != b for _, a, b in g) for g in (G_B2, G_B3, G_R6)), (len(G_B2), len(G_B3), len(G_R6)))
 B0_LO, B0_HI = S["b0c2_code"], S["b0c2_end"]
 B0_SNA = sna0(B0_LO, B0_HI - B0_LO)
