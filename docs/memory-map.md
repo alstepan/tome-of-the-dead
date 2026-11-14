@@ -2143,7 +2143,8 @@ their frames / sequences are stand-ins ("Kind rows (3F-T3)" below). Weights
   record leftovers counted) → `lp_bank(old, E=0)` (rejected candidates, parked) →
   `ROOM_VISITS[dest]` += 1 → `R_VIS` of slots 1..15 cleared (`vis_room_sync`
   rebuilds RLIST) → the NEXT_MAP build and the scroll as before.
-- `lp_append` (A room, B kind byte, C hp): the §9.5 trickle's record side (3F).
+- `lp_append` is gone (ROOM-MEM2 review): lp_bank's per-body append is R6 `lp_bk6`; the §9.5 trickle
+  appends itself (`trickle6.asm`).
 - Invariant after every transition: every active non-hero slot has
   `E_ROOM = CUR_ROOM` (`tests/lp.py` B1–B3). Parked slots are inactive (below).
 
@@ -2180,11 +2181,13 @@ room id = `E_ROOM & LPK_ROOM`). Everything else in the slot and its `ST_*` bytes
   `P_ENTITIES + 16 × 32` (`$B200`): "no parked slot" (`ixh` test).
 - **ROOM-MEM2 (user playtest 2026-11-14, every visited room):** try 0 reads the entry's
   **`LP_POS`** byte (above), not the slot: `lp_bank` writes it for every banked body (R6
-  `lp_pos6`, far6, E = lp_append's index), so a room left more than two rooms ago (slots
+  `lp_bk6`, far6: free / append / LP_POS / park), so a room left more than two rooms ago (slots
   evicted) comes back on its last cells too; a parked body still restores its slot in place
   (its own facing), a fresh slot placed by try 0 takes the saved facing (`LPV_FACE` = `LP_RES`
-  → lp_spawn), else faces the hero. A unit not placed keeps its byte (lp_enter compacts
-  `LP_POS` with the entries, `lp_posr`); a trickle entry gets 0 (tries 1-8 on the next entry).
+  → lp_spawn; set once before the unit loop, cleared at lp_spawn `.mk`), else faces the hero.
+  The decode is R6 `lp_t06` (VISITED records only: B byte, C storey, E x, D facing marker). A
+  unit not placed keeps its byte (R6 `lp_cp6` compacts `LP_POS` with the entries; skipped for
+  FRESH, whose bytes are 0); a trickle entry gets 0 (tries 1-8 on the next entry).
 - Python reference: `tools/levelgen.py` `lp_enter(..., parked=[(kind, s, x, left[, slot])])`
   (try 0 = the `LP_POS` byte, draws no RNG; `parked` decides the slot / own facing only;
   `lp_pos_byte`); `tests/lp.py` A4 / B2 (`bank_model(..., p)` writes `LP_POS`), `tests/roommem.py` L1-L5.

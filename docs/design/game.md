@@ -3296,7 +3296,10 @@ position (§9.4.2: every monster banked on leave; not a FRESH unit or a trickle 
 tries its **last cell** (its x and storey; a flyer at its band default y) with the rules below
 and a **5-col** arrival gap; no stream step is drawn, no other-storey retry; a lair unit with a
 guard post takes the post instead (§9.4.4). Placed there in a fresh slot it keeps its stored
-facing (a parked slot keeps its own); placed by tries 1-8 it faces the hero. A unit that finds
+facing (a parked slot keeps its own); placed by tries 1-8 it faces the hero. Accepted residue
+(ROOM-MEM2 review): parked slots are matched to entries by kind (first parked slot of that kind,
+§9.4.2), so in the rare case where an unplaced leftover entry of the same kind comes first, two
+same-kind bodies swap: each comes back on the other entry's cell with the other's statuses. A unit that finds
 no cell keeps its stored position for the next entry. Then up to **8 candidate cells** from the spawn
 stream; the first legal cell wins. Legal means:
 - the §9.5 placement rules hold: walker on a floor-standing cell; not a ladder, pit or door

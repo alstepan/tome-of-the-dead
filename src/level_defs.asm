@@ -297,7 +297,7 @@ LPK_ROOM        EQU %00001111           ; the room id bits of E_ROOM
 ; record entry, 1 byte, parallel to the entries: LP_POS + 4 room + i = entry i of room's record.
 ; x bits 0-4 (E_X), storey bit 5 (storey_ref), facing left bit 6 (EF_LEFT); 0 = none (a FRESH unit,
 ; a trickle entry: try 0 skipped; a real body is never at x 0 storey 0). Written by lp_bank (R6
-; lp_pos6) from the live slot on leave, compacted with the entries by lp_enter (a kept unit keeps
+; lp_bk6) from the live slot on leave, compacted with the entries by lp_enter (a kept unit keeps
 ; its byte), zeroed for a trickle entry (trickle6.asm); bytes past the count are stale like the
 ; entries. lp_enter's try 0 = this cell for EVERY unit of a VISITED record (parked or not).
 LP_POS          EQU LP_REC + GRID_CELLS * LR_STRIDE   ; 36 B (test-observable)

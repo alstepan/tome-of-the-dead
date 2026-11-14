@@ -423,15 +423,57 @@ DROP_ROWS       EQU ($ - drop_tab) / DROP_STRIDE
                 ASSERT DROP_ROWS == 18 && IT_F_APPLE == IT_F_CARROT + 1 && IT_F_PEAR == IT_F_CARROT + 2
 
 ;------------------------------------------------------------------------------
-; lp_pos6 — ROOM-MEM2 (user playtest 2026-11-14; game.md §9.4.2, level_defs.asm LP_POS):
-; far6 from bank-3 lp_bank, IX = a slot just appended to LPV_ROOM's record as entry E
-; (lp_append's E): LP_POS[4 room + E] = its LAST cell = E_X | storey_ref << 5 | EF_LEFT << 3
-; (the live slot at leave time: every step writes E_X, so this is where it stood). Here, not
-; in bank 3: -17 B there (bank 3 had 79 free), +~0.4k T a banked body (far6) inside
-; lp_transition (cap 70k T, measured worst ~58k with 4 + 4 bodies).
-; Clobbers: A, F, HL (BC, DE, IX kept).   ~0.2k T + far6
+; lp_bk6 — lp_bank's per-body part (ROOM-MEM2 review: moved from bank 3 with lp_append, its
+; only caller; -83 B there): far6 from bank-3 lp_bank, IX = an active slot of LPV_ROOM that
+; leaves play (not a kept-aside candidate). §9.4.2: dead (EF_DYING) or summon-made
+; (RCD_SUMMONED) -> freed (E_FLAGS 0), never written; else the entry {kind | EF_RESPAWN |
+; LEK_GOLD | LEK_BRED (RCD_ONCE), exact hp} is appended to the room's record (VISITED; a full
+; record (LR_MAX, cannot happen under the §9.3 cap): LP_DISCARD + 1, freed, not parked), its
+; LP_POS byte = its LAST cell (E_X | storey_ref << 5 | facing left << 6: the live slot, every
+; step writes E_X) and the slot is PARKED (ROOM-MEM: EF_ACTIVE clear, E_ROOM | LPK_PARK).
+; Nothing comes back (the caller's BC is lost to far6 anyway). Keeps IX.
+; Clobbers: A, F, BC, DE, HL.   ~0.4k T + far6 (~0.45k) a body
 ;------------------------------------------------------------------------------
-lp_pos6:        call storey_ref                ; (bank 2) A = 0 / 1; clobbers HL only
+lp_bk6:         ld   a, (ix+E_FLAGS)
+                bit  EF_DYING_BIT, a
+                jr   nz, .free                 ; dead: never returns
+                bit  RCD_SUMMONED_BIT, (ix+E_RCD)
+                jr   nz, .free                 ; 3F-T9: summon-made: discarded (§9.4.2)
+                and  EF_RESPAWN
+                or   (ix+E_KIND)
+                or   (ix+E_GOLD)               ; 3F-T5: LEK_GOLD or 0
+                bit  RCD_ONCE_BIT, (ix+E_RCD)
+                jr   z, .nb
+                set  LEK_BRED_BIT, a           ; 3F-T9: the once bit (a Rabbit Rat bred)
+.nb:            ld   b, a                      ; B = the kind byte
+                ld   a, (LPV_ROOM)
+                ld   e, a
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, e
+                ld   e, a
+                ld   d, 0
+                ld   hl, LP_REC
+                add  hl, de                    ; the record (LP_REC + 9 room; bank-3 lp_rec / hla: not here)
+                ld   a, (hl)
+                and  LR_CNT_MASK
+                cp   LR_MAX
+                jr   nc, .full
+                ld   c, a                      ; C = the entry index
+                inc  a
+                or   LR_VISITED
+                ld   (hl), a
+                ld   a, c
+                add  a, a
+                inc  a                         ; LR_ENT + 2 i
+                ld   e, a
+                add  hl, de
+                ld   (hl), b
+                inc  hl
+                ld   a, (ix+E_HP)
+                ld   (hl), a                   ; exact hp
+                call storey_ref                ; (bank 2) A = 0 / 1; clobbers HL only
                 rrca
                 rrca
                 rrca                           ; -> bit 5 (LPP_S_BIT)
@@ -439,15 +481,76 @@ lp_pos6:        call storey_ref                ; (bank 2) A = 0 / 1; clobbers HL
                 bit  3, (ix+E_FLAGS)
                 jr   z, .r
                 or   1 << LPP_LEFT_BIT
-.r:             ld   h, a
+.r:             ld   b, a
                 ld   a, (LPV_ROOM)
                 add  a, a
                 add  a, a
-                add  a, e
+                add  a, c
                 add  a, LP_POS & $FF           ; LP_POS: one page (level_defs.asm ASSERT)
                 ld   l, a
-                ld   a, h
                 ld   h, LP_POS >> 8
-                ld   (hl), a
+                ld   (hl), b
+                res  0, (ix+E_FLAGS)           ; ROOM-MEM: parked, not freed: EF_ACTIVE clear, the
+                set  7, (ix+E_ROOM)            ; rest (HOSTILE: != 0) kept, E_ROOM | LPK_PARK
                 ret
-                ASSERT EF_LEFT == 1 << 3 && LPP_S_BIT == 5 && LPP_X == 31 && LR_MAX == 4 && STOREY_COUNT == 2
+.full:          ld   hl, LP_DISCARD
+                inc  (hl)
+.free:          ld   (ix+E_FLAGS), 0
+                ret
+                ASSERT LPK_PARK == 1 << 7 && EF_ACTIVE == 1 && EF_HOSTILE != 0 && EF_LEFT == 1 << 3
+                ASSERT LPP_S_BIT == 5 && LPP_LEFT_BIT == 6 && LPP_X == 31 && STOREY_COUNT == 2
+                ASSERT LR_ENT == 1 && LE_KIND == 0 && LE_HP == 1 && LE_STRIDE == 2 && LR_STRIDE == 9
+
+;------------------------------------------------------------------------------
+; lp_t06 — ROOM-MEM2 try 0's decode (far6 from bank-3 lp_enter .t0, VISITED records only):
+; LPV_RDP = the unit's entry -> B = its LP_POS byte (0 = none), E = x, C = storey, D = the
+; byte rotated right 3 (facing left -> EF_LEFT bit 3; != 0 iff B != 0: lp_spawn's marker).
+; Clobbers: A, F, HL.   ~0.2k T + far6
+;------------------------------------------------------------------------------
+lp_t06:         ld   a, (LPV_RDP)
+                call lp_posr6
+                ld   a, (hl)
+                ld   b, a
+                and  LPP_X
+                ld   e, a
+                ld   a, b
+                rrca
+                rrca
+                rrca
+                ld   d, a                      ; bit 6 -> bit 3 (EF_LEFT), bit 5 -> bit 2
+                rrca
+                rrca
+                and  1
+                ld   c, a                      ; storey
+                ret
+
+;------------------------------------------------------------------------------
+; lp_cp6 — ROOM-MEM2 (far6 from bank-3 lp_enter, a VISITED unit not placed): its LP_POS
+; byte follows its entry down (LPV_RDP -> LPV_WRP, the record's compaction).
+; Clobbers: A, F, B, HL.   ~0.3k T + far6
+;------------------------------------------------------------------------------
+lp_cp6:         ld   a, (LPV_RDP)
+                call lp_posr6
+                ld   b, (hl)
+                ld   a, (LPV_WRP)
+                call lp_posr6
+                ld   (hl), b
+                ret
+
+; lp_posr6 — A = the low byte of an entry pointer of the record being entered (LPV_RDP /
+; LPV_WRP = LP_RECP + 1 + 2 i), LPV_ROOM -> HL = &LP_POS[4 room + i]. Clobbers: A, F.
+lp_posr6:       ld   hl, LP_RECP
+                sub  (hl)                      ; 1 + 2 i (8-bit: a record is 9 B)
+                rrca                           ; i | $80
+                and  LR_MAX - 1
+                ld   l, a
+                ld   a, (LPV_ROOM)
+                add  a, a
+                add  a, a
+                add  a, l
+                add  a, LP_POS & $FF
+                ld   l, a
+                ld   h, LP_POS >> 8
+                ret
+                ASSERT LR_MAX == 4
+

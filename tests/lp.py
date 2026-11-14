@@ -45,7 +45,7 @@ import room_model                                       # noqa: E402
 from game_lib import Harness, Proto, S, EMU_ARGS, attr_at, cell_bytes, F3   # noqa: E402
 
 STUB = S["LOWRAM_END_3B"]
-RES = STUB + 120
+RES = S["lowram_code"]              # ROOM-MEM2 review: stubs end below the low-RAM cold block (43 B)
 LPB = S["LP_STATE"]
 LPN = S["LP_LEN"]
 SCR = (S["LP_HX"] - LPB, S["ROOM_VISITS"] - LPB)       # scratch range (masked)
