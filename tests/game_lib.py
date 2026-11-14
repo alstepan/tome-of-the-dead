@@ -37,6 +37,9 @@ MAX_RUN_RETRIES = 3            # consecutive non-probe returns before failing
 # pacing (every advance is a breakpoint-bounded `run`), so let the emulator run
 # unthrottled and windowless: ~2x faster, and no GUI window for App Nap to
 # throttle. Override with GAME_EMU_ARGS="" to watch it in the cocoa window.
+# Measured (chore/test-speed): --emulatorspeed 2000/5000/9999 are accepted and give identical frames
+# but no more ticks/s than 1000 (a tick is one ZRCP `run`, CPU-bound in the emulator, ~16 ms idle);
+# --frameskip / sound-disable flags gain nothing either. Scale out with tests/tut0_adv_par.py instead.
 EMU_ARGS = tuple(os.environ.get("GAME_EMU_ARGS",
                                 "--emulatorspeed 1000 --vo null --ao null").split())
 
