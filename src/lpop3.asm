@@ -340,7 +340,7 @@ lp_enter:
                 or   a
                 jp   z, .done
                 xor  a                         ; ROOM-MEM2: face the hero unless try 0 places it
-                ld   (LPV_FACE), a             ; (once: lp_spawn clears it after a try-0 spawn)
+                ld   (LPV_FACE), a             ; (once: cleared after each placed unit, lp_t06 sets it)
 .u:             ld   hl, (LPV_RDP)
                 ld   a, (hl)
                 and  LEK_KIND_MASK
@@ -359,22 +359,25 @@ lp_enter:
 .t0:            ld   hl, (LP_RECP)             ; ROOM-MEM2 try 0 (no stream step): the entry's LP_POS
                 bit  LR_VISITED_BIT, (hl)      ; cell (its last one; parked or not), the §9.4.3 rules
                 jr   z, .pl                    ; with the 5-col arrival gap. FRESH: none (40 T: A2's mean cap)
-                ld   hl, lp_t06                ; R6 (tier6.asm): B = the byte (0 = none: a trickle entry),
-                call far6                      ; C = storey, E = x, D = the facing marker
-                ld   a, b
-                or   a
-                jr   z, .pl
-                ld   a, LP_GAP2
-                ld   (LP_GAPV), a
-                call lp_legal                  ; NC: legal (BC, DE kept)
-                jr   c, .pl
-                ld   a, d
-                ld   (LPV_FACE), a             ; its facing for a fresh slot (lp_spawn)
-                jr   .sp                       ; (NC)
+                ld   hl, lp_t06                ; R6 (tier6.asm), one far call: the LP_POS cell if legal,
+                call far6                      ; else the door slide on its storey (B != 0: C = s, E = x,
+                ld   a, b                      ; LPV_FACE = the marker); B = 0: none / no legal cell on
+                or   a                         ; that storey (a trickle entry; tries 1-8)
+                jr   nz, .sp                   ; (NC)
 .pl:            call lp_place                  ; CF = no legal cell, else C = s, E = x
 .sp:            call nc, lp_spawn              ; CF = no free slot
-                jr   nc, .nu
-                ld   hl, (LP_RECP)             ; not placed: stays in the record, ROOM-MEM2 with
+                jr   c, .np
+                ld   a, (LPV_FACE)             ; ROOM-MEM2: consumed (a later unit faces the hero unless
+                or   a                         ; its own try 0 sets it); a flyer placed by try 0 / the
+                jr   z, .nu                    ; slide (bit 6) goes back to its saved band row (R6 lp_fy6).
+                ld   e, a                      ; (0: 29 T, the FRESH path: A2's mean)
+                xor  a
+                ld   (LPV_FACE), a
+                bit  6, e
+                ld   hl, lp_fy6
+                call nz, far6
+                jr   .nu
+.np:            ld   hl, (LP_RECP)             ; not placed: stays in the record, ROOM-MEM2 with
                 bit  LR_VISITED_BIT, (hl)      ; its LP_POS byte (R6 lp_cp6; a FRESH record's are 0:
                 ld   hl, lp_cp6                ; skipped, A2's mean)
                 call nz, far6
@@ -389,7 +392,7 @@ lp_enter:
                 ld   (LPV_RDP), hl
                 ld   hl, LPV_N
                 dec  (hl)
-                jr   nz, .u
+                jp   nz, .u
 .done:          ld   hl, (LP_RECP)
                 ld   de, (LPV_WRP)
                 ld   a, e
@@ -750,9 +753,7 @@ lp_spawn:       push de                        ; E = col
                 and  b                         ; grace (no shot on the first monster phase after the
                 and  ~RCD_SUMMON & $FF         ; entry, user 2026-11-03), a longer one kept: stored
                 ld   (ix+E_RCD), a             ; bit 0 &= bit 1 (01 -> 00; 00 / 10 / 11 stay)
-.mk:            xor  a                         ; ROOM-MEM2: LPV_FACE used (or not: a parked one) -> 0
-                ld   (LPV_FACE), a
-                pop  bc
+.mk:            pop  bc
                 pop  de
                 push de
                 ld   a, (LP_W)

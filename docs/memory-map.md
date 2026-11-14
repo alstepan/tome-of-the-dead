@@ -2185,7 +2185,13 @@ room id = `E_ROOM & LPK_ROOM`). Everything else in the slot and its `ST_*` bytes
   evicted) comes back on its last cells too; a parked body still restores its slot in place
   (its own facing), a fresh slot placed by try 0 takes the saved facing (`LPV_FACE` = `LP_RES`
   → lp_spawn; set once before the unit loop, cleared at lp_spawn `.mk`), else faces the hero.
-  The decode is R6 `lp_t06` (VISITED records only: B byte, C storey, E x, D facing marker). A
+  Try 0 is ONE far6 to R6 `lp_t06` (VISITED records only): decode, lp_legal's rules at the saved
+  cell (marks + 5-col gap), else the **door slide** (same storey, nearest unmarked col in
+  `LP_XMIN..LP_XMAX+1-w`, on the hero's storey his side only and >= `LP_GAP2` clear; two
+  run-length sweeps; scratch `LPS_LO` / `LPS_HI` / `LPS_XR` = `LP_BEST` / `LP_BX` / `LP_BS`);
+  out B != 0, C storey, E x, `LPV_FACE` = marker (bit 7, bit 3 facing, bit 6 flyer, bits 4-5 row).
+  A flyer's `LP_POS` bits 6-7 (`LPP_FYO`) = its band row y - 9s (0..3) instead of the facing;
+  R6 `lp_fy6` puts a flyer placed by try 0 / the slide back on that row. A
   unit not placed keeps its byte (R6 `lp_cp6` compacts `LP_POS` with the entries; skipped for
   FRESH, whose bytes are 0); a trickle entry gets 0 (tries 1-8 on the next entry).
 - Python reference: `tools/levelgen.py` `lp_enter(..., parked=[(kind, s, x, left[, slot])])`
@@ -6956,3 +6962,32 @@ Test stubs at `LOWRAM_END_3B` now have 43 B before `lowram_code` (`start` / `boo
 `tests/roommem.py` ADV 62,504 (cap 70,000; was ~58.3k: + far6 `lp_pos6` per banked body).
 Python reference: `tools/levelgen.py` `lp_enter` (try 0 = `LP_POS`, compaction, saved facing; `lp_pos_byte`);
 `tests/lp.py` `bank_model(..., p)` writes `LP_POS`. Tests: `tests/roommem.py` L1-L5 (new).
+
+**ROOM-MEM2 review follow-up (same branch, 84a14d0): bank-3 reclaim.** `lp_bank`'s per-body block + `lp_append`
+(its only caller) -> R6 `lp_bk6` (free / append / LP_POS / park); the try-0 decode -> R6 `lp_t06`; the LP_POS
+compaction -> R6 `lp_cp6` (VISITED records only: FRESH bytes are 0); `LPV_FACE` set once per `lp_enter`. Bank 3
+5 -> **121** free, R6 1,179 -> 1,038. Tests: `tests/trickle.py` M checks LP_POS (FRESH records' bytes stay 0, the
+appended entry's byte 0); `run_stub` / `tests/lp.py` assert a stub at `LOWRAM_END_3B` ends below `lowram_code`;
+`tests/items_gen.py`'s ~91-B driver moved to `GEN_SRC + $2C0` (it overran `start` / `boot`).
+
+**ROOM-MEM2 playtest fix (same branch; user playtest 2026-11-14: "a Slime changed storey, Bats and Rats moved").**
+Scripted playtest `tests/roommem_play.py` (real do_exit / climbs, D1 + D2 of 3 seeds, every room x every door x
+{same door after 1 / 3+ rooms, another door after 2 / 3+}; a ~20-min diagnostic, not in the gate). Before (84a14d0):
+395 bodies, **51.4 % exact**, the rest re-placed at random (only 72 / 192 even on the same storey near their cell);
+causes: footprint (the cell inside a ladder / shaft box ±1, §9.4.3) 134, gap 22, flyer band (default row) 18,
+occupied 7, pit 3; **no bug**: no move after entry, LP_POS always written. Fix (user-approved door case):
+- **Door slide** (R6 `lp_t06`, ONE far6 a unit: decode + lp_legal's rules at the saved cell + the slide): a
+  rejected try 0 keeps the storey and takes the nearest unmarked col (tie right) in `LP_XMIN..LP_XMAX+1-w`; on the
+  hero's storey only his side, >= 5 cols clear; the later units' saved cells on that storey are reserved
+  (`LPC_RES` bit, set / cleared inside the slide) so a slid body never takes a later one's exact cell; no RNG.
+  Tries 1-8 only if the storey has no such col. `tools/levelgen.py` `lp_slide` + `lp_enter` mirror it.
+- **Flyer row**: a flyer's `LP_POS` bits 6-7 (`LPP_FYO`) = its band row y - 9s (0..3, clamped) instead of the
+  facing (a returning flyer in a fresh slot faces the hero); R6 `lp_fy6` puts it back on that row (exact needs
+  3 bits for a Bat: 9 bits total, does not fit; rows 0..3 cover every row seen in the playtest).
+After: 424 bodies (the scenario drifts with the slides), **42.0 % exact + 54.2 % same storey <= 8 cols = 96.2 %**
+(before 69.6 %); the misses are now 86 % footprint (by design: the ±1 ladder / shaft box is a spawn rule; letting
+try 0 ignore the margin for a returning body would make most of them exact: proposed, not built), gap 19, box 4,
+pit 3, flyer band 5 (row > 3), occupied 3. Bank 3 121 -> **119**, R6 1,038 -> **538** (kit / `F3_GEN=0`: 115 / 543).
+Cost: `tests/roommem.py` ADV `lp_transition` worst 65,340 T (cap 70,000), `tests/lp.py` A8 61,771, A2 mean 21,789 (cap 22,000); `tests/lp.py` A9 (new): 480 random
+re-entries == the model (try 0 + slide + flyer rows). Tests: `tests/roommem.py` L6 / L7 (a chaser at the door,
+same-door re-entry after 1 / 3 rooms -> kept storey, slid to the model's col).

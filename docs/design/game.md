@@ -3247,7 +3247,8 @@ leaving to turn a tier-3 monster into a base one. Option (b) costs ~80 B.
 Accepted residue:
 - ~~Positions are re-placed on re-entry (at least 8 cols away, §9.4.3).~~ ROOM-MEM / ROOM-MEM2:
   a monster of any visited room returns to its last cell (try 0, below) if it is legal (the
-  §9.4.3 rules, 5-col arrival gap); only one whose cell fails is re-placed (tries 1-8).
+  §9.4.3 rules, 5-col arrival gap); one whose cell fails slides along its storey to the nearest
+  legal col (§9.4.3 door slide); only if that storey has none is it re-placed (tries 1-8).
 - ~~Statuses are lost both ways.~~ ROOM-MEM: kept (frozen while away: they tick only in play)
   for the two last rooms left; the summon counter of a summoner still resets (its discarded
   summons are gone, §9.4.4); a ranged cooldown is kept but a ready shooter still waits the first
@@ -3293,10 +3294,17 @@ are visited.
 
 **Placement**, per monster: **ROOM-MEM / ROOM-MEM2 try 0:** a VISITED entry with a stored
 position (§9.4.2: every monster banked on leave; not a FRESH unit or a trickle entry) first
-tries its **last cell** (its x and storey; a flyer at its band default y) with the rules below
-and a **5-col** arrival gap; no stream step is drawn, no other-storey retry; a lair unit with a
-guard post takes the post instead (§9.4.4). Placed there in a fresh slot it keeps its stored
-facing (a parked slot keeps its own); placed by tries 1-8 it faces the hero. Accepted residue
+tries its **last cell** (its x and storey; a flyer at its saved band row, 0-3 below the band
+top, clamped) with the rules below and a **5-col** arrival gap; no stream step is drawn, no
+other-storey retry; a lair unit with a guard post takes the post instead (§9.4.4).
+**Door slide (user-approved 2026-11-14):** if that cell is rejected (the arrival gap or box, a
+ladder / shaft box, a pit landing, a body placed before it), the monster **keeps its storey**
+and slides to the nearest col (a tie goes right) inside cols 2..30 − w whose cells pass the
+rules; on the hero's arrival storey only on the side of him it was on and ≥ 5 cols clear of his
+box (it "waited just inside the door"). No RNG. Only if that storey has no such cell do tries
+1-8 run. Placed by try 0 or the slide in a fresh slot it keeps its stored facing (a flyer faces
+the hero: its facing bit holds the row; a parked slot keeps its own); placed by tries 1-8 it
+faces the hero. Accepted residue
 (ROOM-MEM2 review): parked slots are matched to entries by kind (first parked slot of that kind,
 §9.4.2), so in the rare case where an unplaced leftover entry of the same kind comes first, two
 same-kind bodies swap: each comes back on the other entry's cell with the other's statuses. A unit that finds
@@ -3460,10 +3468,11 @@ monster there, it is a §6.1 violation, not a design trade-off. Ranked options:
 **(d) Re-entry continuity.** **BUILT as ROOM-MEM (user 2026-11-03, see §9.4.2 / §9.4.3):**
 option 1 for the **two last rooms left** (the slot itself is the stored state, so statuses,
 cooldown and facing come back too; the try-0 gap is 5); **ROOM-MEM2 (user playtest
-2026-11-14): option 1's position byte for every room** (x, storey, facing; 36 B, written on
-leave from the live slot, try 0 for any VISITED entry; FRESH spawns and the Python == Z80
-stream unchanged); option 2 (the
-"waited by the door" clamp) and the "PENDING in place after 9 failed tries" part are not built
+2026-11-14): option 1's position byte for every room** (x, storey, facing; a flyer: x, storey,
+band row 0-3; 36 B, written on leave from the live slot, try 0 for any VISITED entry; FRESH
+spawns and the Python == Z80 stream unchanged) **plus the door slide** (§9.4.3: a rejected
+try 0 keeps the storey and slides to the nearest legal col on its side of the hero, the
+user-approved form of option 2); option 2 as first written (the "waited by the door" clamp at bank time) and the "PENDING in place after 9 failed tries" part are not built
 (an unplaced unit waits in the record as before). Original note: Monsters seem to jump because §9.4.2 drops positions and §9.4.3 re-places
 them ≥ 8 cols from the arrival. They seem to vanish because a placement wait leaves the unit in the
 record. Ranked options:

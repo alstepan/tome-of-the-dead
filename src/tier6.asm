@@ -436,9 +436,9 @@ DROP_ROWS       EQU ($ - drop_tab) / DROP_STRIDE
 ;------------------------------------------------------------------------------
 lp_bk6:         ld   a, (ix+E_FLAGS)
                 bit  EF_DYING_BIT, a
-                jr   nz, .free                 ; dead: never returns
+                jp   nz, .free                 ; dead: never returns
                 bit  RCD_SUMMONED_BIT, (ix+E_RCD)
-                jr   nz, .free                 ; 3F-T9: summon-made: discarded (§9.4.2)
+                jp   nz, .free                 ; 3F-T9: summon-made: discarded (§9.4.2)
                 and  EF_RESPAWN
                 or   (ix+E_KIND)
                 or   (ix+E_GOLD)               ; 3F-T5: LEK_GOLD or 0
@@ -474,15 +474,34 @@ lp_bk6:         ld   a, (ix+E_FLAGS)
                 ld   a, (ix+E_HP)
                 ld   (hl), a                   ; exact hp
                 call storey_ref                ; (bank 2) A = 0 / 1; clobbers HL only
+                ld   d, a                      ; D = s
                 rrca
                 rrca
                 rrca                           ; -> bit 5 (LPP_S_BIT)
                 or   (ix+E_X)                  ; bits 0-4 (a body-left col < 32)
-                bit  3, (ix+E_FLAGS)
+                ld   b, a
+                KFIELD KT_FLAGS
+                and  KF_FLYER
+                jr   z, .wk
+                ld   a, d                      ; a flyer: bits 6-7 = its band row y - 9s (0..3, clamped;
+                add  a, a                      ; the facing is not kept: it faces the hero on return)
+                add  a, a
+                add  a, a
+                add  a, d
+                neg
+                add  a, (ix+E_Y)
+                cp   4
+                jr   c, .fo
+                ld   a, 3
+.fo:            rrca
+                rrca                           ; -> bits 6-7 (LPP_FYO)
+                or   b
+                ld   b, a
+                jr   .r
+.wk:            bit  3, (ix+E_FLAGS)           ; a walker: bit 6 = facing left
                 jr   z, .r
-                or   1 << LPP_LEFT_BIT
-.r:             ld   b, a
-                ld   a, (LPV_ROOM)
+                set  LPP_LEFT_BIT, b
+.r:             ld   a, (LPV_ROOM)
                 add  a, a
                 add  a, a
                 add  a, c
@@ -502,26 +521,333 @@ lp_bk6:         ld   a, (ix+E_FLAGS)
                 ASSERT LR_ENT == 1 && LE_KIND == 0 && LE_HP == 1 && LE_STRIDE == 2 && LR_STRIDE == 9
 
 ;------------------------------------------------------------------------------
-; lp_t06 — ROOM-MEM2 try 0's decode (far6 from bank-3 lp_enter .t0, VISITED records only):
-; LPV_RDP = the unit's entry -> B = its LP_POS byte (0 = none), E = x, C = storey, D = the
-; byte rotated right 3 (facing left -> EF_LEFT bit 3; != 0 iff B != 0: lp_spawn's marker).
-; Clobbers: A, F, HL.   ~0.2k T + far6
+; lp_t06 — ROOM-MEM2 try 0 (far6 from bank-3 lp_enter .t0, VISITED records only; ONE far call a
+; unit: decode + legality + the door slide). LPV_RDP = the unit's entry, LPV_K its kind, LP_W,
+; LP_HX / HS / HW, LP_CMAP (lp_cmap + the bodies placed so far):
+;   x0 / s = its LP_POS byte (0: none -> B = 0). Try 0 = bank-3 lp_legal's rules at (s, x0)
+;   with the 5-col gap: no LP_CMAP mark in cols x0..x0+w-1, and on the hero's arrival storey a
+;   body gap >= LP_GAP2 to his box. Rejected -> the DOOR SLIDE (user-approved 2026-11-14,
+;   game.md §9.4.3): the same storey, the nearest x' (a tie: right) inside [LP_XMIN,
+;   LP_XMAX+1-w] with no mark in its cols; on the hero's storey only on the monster's side of
+;   him and >= LP_GAP2 clear of his box ("it waited just inside the door"). No RNG
+;   (levelgen.py lp_slide mirrors it). Two run-length sweeps (right from x0+1, then left from
+;   x0-1 only while nearer than the right hit): ~45 T a col.
+; Out: B != 0: C = s, E = x (x0 or x'), LPV_FACE = the marker for lp_spawn / lp_fy6 (bit 7
+; set, bit 3 EF_LEFT = the saved facing (a flyer: faces the hero, x0 > hx), bit 6 = a flyer,
+; bits 4-5 = its band row); B = 0: none, LPV_FACE = 0 (tries 1-8 follow). Keeps IX.
+; Clobbers: A, F, BC, DE, HL.   ~0.45k T (try 0) + ~0.4-2.8k T a slide, + far6
 ;------------------------------------------------------------------------------
-lp_t06:         ld   a, (LPV_RDP)
+LPS_LO          EQU LP_BEST                 ; lp_t06 scratch (lp_post's LP_EXLO / LP_EXHI: dead once the
+LPS_HI          EQU LP_BX                   ; unit's post was tried; LP_BS is lp_gen's LPG_MINW, dead here)
+LPS_XR          EQU LP_BS
+LPS_OP          EQU LP_GAPV                 ; .rsv: 0 mark / 1 unmark (LP_GAPV: bank-3 lp_legal's, set per try)
+lp_t06:         xor  a
+                ld   (LPV_FACE), a
+                ld   a, (LPV_RDP)
                 call lp_posr6
                 ld   a, (hl)
                 ld   b, a
+                or   a
+                ret  z                         ; no saved cell
                 and  LPP_X
+                ld   d, a                      ; D = x0 (the whole routine)
+                ld   a, b
+                rlca
+                rlca
+                rlca
+                and  1
+                ld   c, a                      ; C = s (bit 5)
+                ld   a, (LPV_K)                ; the marker -> LPV_FACE now (.none clears it)
+                add  a, (kind_tab + KT_FLAGS) & $FF
+                ld   l, a
+                ld   h, (kind_tab + KT_FLAGS) >> 8
+                ld   a, (hl)
+                and  KF_FLYER
+                jr   nz, .fl
+                ld   a, b                      ; a walker: bit 6 -> bit 3 (EF_LEFT)
+                rrca
+                rrca
+                rrca
+                and  EF_LEFT
+                jr   .mk
+.fl:            ld   a, (LP_HX)                ; a flyer: faces the hero (hx < x0: left), its row
+                cp   d
+                sbc  a, a
+                and  EF_LEFT
                 ld   e, a
                 ld   a, b
-                rrca
-                rrca
-                rrca
-                ld   d, a                      ; bit 6 -> bit 3 (EF_LEFT), bit 5 -> bit 2
-                rrca
-                rrca
+                rlca
+                rlca
+                and  3                         ; LPP_FYO bits 6-7 -> 0..3
+                rlca
+                rlca
+                rlca
+                rlca                           ; -> bits 4-5
+                or   e
+                or   $40                       ; bit 6: a flyer (lp_fy6)
+.mk:            or   $80
+                ld   (LPV_FACE), a
+                ; ---- try 0: no mark in x0..x0+w-1 (lp_legal's reads), then the gap on his storey
+                ld   a, d
+                call .adr
+                ld   a, (LP_W)
+                ld   b, a
+                xor  a
+.t:             or   (hl)
+                inc  l
+                djnz .t
+                or   a
+                jr   nz, .sl
+                ld   e, d                      ; E = x0
+                ld   a, (LP_HS)
+                cp   c
+                jp   nz, .ok                   ; another storey: no gap rule
+                ld   a, (LP_HX)
+                ld   b, a
+                ld   a, (LP_HW)
+                add  a, b
+                add  a, LP_GAP2 - 1
+                cp   d
+                jp   c, .ok                    ; x0 >= hx + hw + g: right of him
+                ld   a, (LP_W)
+                add  a, d
+                add  a, LP_GAP2 - 1
+                cp   b
+                jp   c, .ok                    ; x0 + w + g <= hx: left of him
+                ; ---- the slide: hi / lo (H / L) ----
+.sl:            ld   a, (LP_W)
+                cpl
+                add  a, LP_XMAX + 2
+                ld   h, a                      ; hi = LP_XMAX + 1 - w
+                ld   l, LP_XMIN                ; lo
+                ld   a, (LP_HS)
+                cp   c
+                jr   nz, .rg                   ; another storey: the whole range
+                ld   a, (LP_HX)
+                cp   d
+                jr   nc, .lf                   ; x0 <= hx: his left
+                ld   b, a                      ; right: lo = max(lo, hx + hw + g)
+                ld   a, (LP_HW)
+                add  a, b
+                add  a, LP_GAP2
+                cp   l
+                jr   c, .rg
+                ld   l, a
+                jr   .rg
+.lf:            ld   b, a                      ; left: hi = min(hi, hx - w - g); < 0: none
+                ld   a, (LP_W)
+                add  a, LP_GAP2
+                neg
+                add  a, b
+                jp   m, .none
+                cp   h
+                jr   nc, .rg
+                ld   h, a
+.rg:            ld   a, h
+                cp   l
+                jp   c, .none                  ; hi < lo
+                ld   (LPS_HI), a
+                ld   a, l
+                ld   (LPS_LO), a
+                ld   a, $FF
+                ld   (LPS_XR), a               ; no right hit yet
+                xor  a                         ; the saved cells of the units still to place on this
+                ld   (LPS_OP), a               ; storey are reserved while sliding (a slid body never takes
+                call .rsv                      ; a later one's exact cell: review / playtest 2026-11-14)
+                ld   a, (LPS_LO)               ; L = lo, H = hi again (.rsv clobbers HL)
+                ld   l, a
+                ld   a, (LPS_HI)
+                ld   h, a
+                ; right sweep: cols c = max(x0+1, lo) .. hi + w - 1, E = the free run; run = w at col c
+                ; -> xR = c - w + 1
+                ld   a, d
+                inc  a
+                cp   l
+                jr   nc, .r0
+                ld   a, l
+.r0:            ld   b, a                      ; B = the first candidate
+                ld   a, h
+                cp   b
+                jr   c, .lft                   ; > hi: none on the right
+                ld   a, (LP_W)
+                add  a, h
+                sub  b                         ; cols = hi + w - start (>= w)
+                ld   e, a
+                ld   a, b
+                call .adr
+                ld   b, e                      ; B = cols (C = s kept)
+                ld   e, 0
+.rl:            ld   a, (hl)
+                or   a
+                jr   z, .rf
+                ld   e, $FF
+.rf:            inc  e
+                inc  l
+                ld   a, (LP_W)
+                cp   e
+                jr   z, .rh                    ; the run reached w (it grows by 1)
+                djnz .rl
+                jr   .lft
+.rh:            ld   a, l                      ; L = past the run's last col
+                call .sub
+                ld   hl, LP_W
+                sub  (hl)
+                ld   (LPS_XR), a               ; xR
+                ; left sweep: candidates x' = min(x0-1, hi) down to lower = lo, or with a right hit
+                ; max(lo, 2 x0 + 1 - xR) (only nearer: a tie goes right); cols from x'start + w - 1
+.lft:           ld   a, (LPS_LO)
+                ld   l, a
+                ld   a, (LPS_XR)
+                cp   $FF
+                jr   z, .lw
+                ld   b, a
+                ld   a, d
+                add  a, d
+                inc  a
+                sub  b                         ; 2 x0 + 1 - xR (signed)
+                jp   m, .lw
+                cp   l
+                jr   c, .lw
+                ld   l, a                      ; L = lower
+.lw:            ld   a, (LPS_HI)
+                ld   h, a
+                ld   a, d
+                dec  a                         ; x0 - 1
+                jp   m, .res
+                cp   h
+                jr   nc, .l1
+                ld   h, a                      ; H = min(x0 - 1, hi)
+.l1:            ld   a, h
+                cp   l
+                jr   c, .res                   ; start < lower: no nearer left candidate
+                ld   a, (LP_W)
+                add  a, h
+                ld   b, a
+                sub  l
+                ld   e, a                      ; cols = start + w - lower
+                ld   a, b
+                dec  a                         ; the first col = start + w - 1
+                call .adr
+                ld   b, e
+                ld   e, 0
+.ll:            ld   a, (hl)
+                or   a
+                jr   z, .lf2
+                ld   e, $FF
+.lf2:           inc  e
+                ld   a, (LP_W)
+                cp   e
+                jr   z, .lh
+                dec  l
+                djnz .ll
+                jr   .res
+.lh:            ld   a, l                      ; xL = this col
+                call .sub
+                jr   .sok
+.res:           ld   a, (LPS_XR)               ; the right hit, if any
+                cp   $FF
+                jr   z, .snone
+.sok:           ld   (LPS_XR), a               ; (.rsv clobbers E)
+                ld   a, 1
+                ld   (LPS_OP), a
+                call .rsv                      ; unreserve
+                ld   a, (LPS_XR)
+                ld   e, a
+.ok:            ld   b, 1                      ; B != 0
+                ret
+.snone:         ld   a, 1
+                ld   (LPS_OP), a
+                call .rsv
+.none:          xor  a
+                ld   (LPV_FACE), a
+                ld   b, a                      ; B = 0
+                ret
+; .rsv: LPS_OP 0 = set / else clear LPC_RES on the saved cells (LP_POS) of the units after this
+; one (LPV_N - 1 entries from LPV_RDP + 2) that lie on storey C (widths: kind_tab KT_BW).
+; Keeps C, D. Clobbers A, B, E, HL.   ~0.15k T a unit
+.rsv:           ld   a, (LPV_N)
+                dec  a
+                ret  z
+                ld   b, a
+                ld   hl, (LPV_RDP)
+.rj:            inc  hl
+                inc  hl                        ; the next entry
+                push bc
+                push hl
+                ld   e, (hl)                   ; its kind byte
+                ld   a, l
+                call lp_posr6
+                ld   a, (hl)
+                or   a
+                jr   z, .rn
+                ld   b, a
+                rlca
+                rlca
+                rlca
                 and  1
-                ld   c, a                      ; storey
+                cp   c
+                jr   nz, .rn
+                ld   a, e
+                and  LEK_KIND_MASK
+                add  a, (kind_tab + KT_BW) & $FF
+                ld   l, a
+                ld   h, (kind_tab + KT_BW) >> 8
+                ld   e, (hl)                   ; E = its width
+                ld   a, b
+                and  LPP_X
+                call .adr
+                ld   b, e
+                ld   a, (LPS_OP)
+                or   a
+                jr   nz, .ru
+.rm:            set  LPC_RES_BIT, (hl)
+                inc  l
+                djnz .rm
+                jr   .rn
+.ru:            res  LPC_RES_BIT, (hl)
+                inc  l
+                djnz .ru
+.rn:            pop  hl
+                pop  bc
+                djnz .rj
+                ret
+; .adr: A = col -> HL = &LP_CMAP[C][col] (one page). Keeps BC, DE.
+.adr:           ld   hl, LP_CMAP
+                bit  0, c
+                jr   z, .a0
+                ld   l, (LP_CMAP + LP_CMW) & $FF
+.a0:            add  a, l
+                ld   l, a
+                ret
+; .sub: A = a pointer low byte -> its col. Keeps BC, DE, HL.
+.sub:           bit  0, c
+                jr   z, .s0
+                sub  (LP_CMAP + LP_CMW) & $FF
+                ret
+.s0:            sub  LP_CMAP & $FF
+                ret
+                ASSERT LP_XMIN >= 1 && LP_XMAX + 1 <= LP_CMW && (LP_CMAP >> 8) == ((LP_CMAP + 2 * LP_CMW - 1) >> 8)
+                ASSERT LPP_S_BIT == 5 && LPP_FYO == %11000000 && EF_LEFT == 1 << 3
+
+;------------------------------------------------------------------------------
+; lp_fy6 — ROOM-MEM2 (far6 from bank-3 lp_enter after lp_spawn placed a FLYER on its saved
+; column / slid: the LPV_FACE marker's bit 6), E = that marker: back to its saved band row (y =
+; 9s + bits 4-5; spawn_one put it at the default 9s + 1). IX = the slot.
+; Clobbers: A, F.   ~0.1k T + far6
+;------------------------------------------------------------------------------
+lp_fy6:         ld   a, e
+                rrca
+                rrca
+                rrca
+                rrca
+                and  3
+                add  a, (ix+E_Y)
+                dec  a                         ; 9s + 1 - 1 + row
+                ld   (ix+E_Y), a
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   (ix+E_PY), a
                 ret
 
 ;------------------------------------------------------------------------------

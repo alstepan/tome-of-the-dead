@@ -299,11 +299,13 @@ LPK_ROOM        EQU %00001111           ; the room id bits of E_ROOM
 ; a trickle entry: try 0 skipped; a real body is never at x 0 storey 0). Written by lp_bank (R6
 ; lp_bk6) from the live slot on leave, compacted with the entries by lp_enter (a kept unit keeps
 ; its byte), zeroed for a trickle entry (trickle6.asm); bytes past the count are stale like the
-; entries. lp_enter's try 0 = this cell for EVERY unit of a VISITED record (parked or not).
+; entries. lp_enter's try 0 = this cell for EVERY unit of a VISITED record (parked or not; R6
+; lp_t06: the cell if legal, else the door slide along its storey).
 LP_POS          EQU LP_REC + GRID_CELLS * LR_STRIDE   ; 36 B (test-observable)
 LPP_X           EQU %00011111
 LPP_S_BIT       EQU 5
-LPP_LEFT_BIT    EQU 6
+LPP_LEFT_BIT    EQU 6               ; a walker's facing; a FLYER's bits 6-7 = its band row y - 9s (0..3, LPP_FYO)
+LPP_FYO         EQU %11000000
 LP_LEN          EQU 37 + GRID_CELLS * LR_STRIDE + GRID_CELLS * LR_MAX  ; 154 B (ROOM-MEM2: +36 LP_POS; NEW-MON3 T3: +4)
                 ASSERT (LP_POS >> 8) == ((LP_POS + GRID_CELLS * LR_MAX - 1) >> 8)   ; one page: 8-bit index
 LP_END          EQU LP_STATE + LP_LEN            ; $6F5A (ROOM-MEM2; was $6F36)
@@ -327,6 +329,8 @@ LP_CMAP         EQU NEXT_MAP + PLAY_CELLS        ; $6540..$6581
 LPC_BAD         EQU 1               ; a body may not cover the col
 LPC_BODY        EQU 2               ; 3F-T8 review: a body lp_spawn placed this entry (lp_legal ORs every bit;
                                     ; lp_post exempts only LPC_BAD marks of the exit's own footprint)
+LPC_RES         EQU 4               ; ROOM-MEM2: lp_t06's door slide reserves the saved cells of the units
+LPC_RES_BIT     EQU 2               ; still to place on its storey (set + cleared inside the slide)
                 ASSERT LP_CMAP + 2 * LP_CMW <= NEXT_MAP + MAP_BUF_LEN
 RESPAWN_MAX     EQU 6               ; §9.5 trickle cap per level (3F)
 ; 3F-T12 respawn trickle (game.md §9.5, R6 trickle6.asm; tools/respawn_model.py)

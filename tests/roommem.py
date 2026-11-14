@@ -29,6 +29,8 @@ Part S (stub transitions: far3 lp_transition as do_exit runs it, same game):
       evicted) -> every body back on its LAST cell (storey, x), facing, hp (LP_POS try 0); == model
   L4  a body moved before the hero left: back on the moved cell after 3 rooms
   L5  a real walk (turns): an awake body walks towards the hero; 3 rooms later it stands where it stopped
+  L6 / L7 the door case (user-approved 2026-11-14): a chaser at the door the hero comes back through,
+      after 1 / 3 rooms -> kept its storey, slid to the nearest legal col beyond the gap (levelgen.lp_slide)
   S6  level change: the real level_descend leaves no parked slot
 Run with ZRCP_PORT=<port> (WZ_BUILD_DIR for a variant build).
 """
@@ -605,6 +607,23 @@ def part_l(p, check, blk, st, lair, sanct, kw, kh, cur, put_hero):
     print(f"[roommem] L5 walked x {x0} -> {e['X']} (legal for try 0: {bool(ok_cell)}), back: {where()}", flush=True)
     check(f"L5 a body walked {x0} -> {e['X']}, the hero left 3 rooms deep: back where it stopped",
           okm and e["X"] != x0 and (not ok_cell or where() == before), (x0, e, before, where(), d))
+    # L6 / L7: the door case (user-approved 2026-11-14): a chaser stood next to the door the hero comes
+    # back through (x 5, his arrival box x 1 .. 1 + w): try 0 fails the arrival gap -> it keeps its storey
+    # and slides right to the nearest legal x' >= 1 + w + 5 (levelgen.lp_slide), not a random cell
+    for tag, hops in (("L6", 1), ("L7", 3)):
+        setup()
+        for i in range(2, 4):
+            p.set_ent(i, FLAGS=0, ROOM=0)
+        p.set_ent(1, X=5, Y=ky(0), PX=40, PY=ky(0) * 8, FLAGS=EF_ACTIVE | EF_HOSTILE | EF_LEFT)
+        xs = G.lp_slide(blk, X, 0, 5, w, fly, 0, 1, kw, [], S["LP_GAP2"])
+        okm = True
+        for dst in others[:hops] + [X]:
+            ok, d = xfer(dst)
+            okm = okm and ok
+        got = where()
+        check(f"{tag} a chaser at the door (x 5, storey 0), back after {hops} room(s) through it: kept storey 0, "
+              f"slid to x {xs} (>= {1 + kw + 5}, nearest legal), its facing; == model",
+              okm and xs is not None and xs >= 1 + kw + 5 and got == [(0, xs, True, hp0 - 1)], (xs, got, d))
 
 
 if __name__ == "__main__":

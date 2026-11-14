@@ -1019,9 +1019,34 @@ LP_CALLS = 0                # rnd calls of the last lp_enter (tests: cost)
 LP_OUT_SLOT = []            # ROOM-MEM: the parked slot each placed unit of the last lp_enter used (None: a free one)
 
 
-def lp_pos_byte(x, s, left):
-    """ROOM-MEM2 LP_POS byte (level_defs.asm): x bits 0-4, storey bit 5, facing left bit 6; 0 = none."""
+def lp_pos_byte(x, s, left, fyo=None):
+    """ROOM-MEM2 LP_POS byte (level_defs.asm): x bits 0-4, storey bit 5, facing left bit 6; a flyer
+    (fyo = its band row y - 9s) bits 6-7 = min(fyo, 3) instead of the facing; 0 = none."""
+    if fyo is not None:
+        return (x & 31) | (s & 1) << 5 | min(fyo, 3) << 6
     return (x & 31) | (s & 1) << 5 | (0x40 if left else 0)
+
+
+def lp_slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap):
+    """ROOM-MEM2 door case (R6 lp_slide6): try 0 rejected -> the same storey, the nearest x' (x0+1,
+    x0-1, x0+2, ...) in [LP_XMIN, LP_XMAX + 1 - w] whose cells are legal ignoring the gap rule; on the
+    hero's arrival storey only on the monster's side, >= gap clear of his box. None: tries 1-8."""
+    lo, hi = D["LP_XMIN"], D["LP_XMAX"] + 1 - w
+    if s == hs:
+        if x0 > hx:
+            lo = max(lo, hx + hw + gap)
+        else:
+            t = hx - w - gap
+            if t < 0:
+                return None
+            hi = min(hi, t)
+    if hi < lo:
+        return None
+    for d in range(1, D["LP_XMAX"]):
+        for c in (x0 + d, x0 - d):
+            if lo <= c <= hi and lp_legal(b, r, s, c, w, fly, -1, hx, hw, placed, 0) == "ok":
+                return c
+    return None
 
 
 def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
@@ -1099,6 +1124,13 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
             s0, x0 = (pos >> D["LPP_S_BIT"]) & 1, pos & D["LPP_X"]
             if lp_legal(b, r, s0, x0, w, fly, hs, hx, hw, placed, D["LP_GAP2"]) == "ok":
                 best, try0 = (s0, x0), True
+            else:                                       # the door case: keep the storey, slide x
+                rsv = [(s0, lp[po + j] & 31, (lp[po + j] & 31) + info(units[j][0] & ROWM)[0] - 1)
+                       for j in range(i + 1, len(units))                # the later units' saved cells
+                       if lp[po + j] and (lp[po + j] >> 5) & 1 == s0]   # on this storey: reserved
+                xs = lp_slide(b, r, s0, x0, w, fly, hs, hx, hw, placed + rsv, D["LP_GAP2"])
+                if xs is not None:
+                    best, try0 = (s0, xs), True
         for t in range(0 if best else D["LP_TRIES"]):
             v = rng.rnd16()                             # one step per candidate
             s = (v >> 8) & 1
@@ -1119,10 +1151,13 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
         placed.append((s, x, x + w - 1))
         if pk is not None:
             pk[0] = False                               # restored in place: its own facing
-            out.append((kb, hp, s, x, bool(pk[4])))
+            out.append((kb, hp, s, x, bool(pk[4])) + ((pos >> 6,) if try0 and fly else ()))
             LP_OUT_SLOT.append(pk[5] if len(pk) > 5 else None)
         else:                                           # a fresh slot: its saved facing on try 0
-            out.append((kb, hp, s, x, bool(pos >> D["LPP_LEFT_BIT"] & 1) if try0 else x > hx))
+            if try0 and fly:                            # a flyer: faces the hero (from its saved x), its row
+                out.append((kb, hp, s, x, x0 > hx, pos >> 6))
+            else:
+                out.append((kb, hp, s, x, bool(pos >> D["LPP_LEFT_BIT"] & 1) if try0 else x > hx))
             LP_OUT_SLOT.append(None)
     lp[ro] = D["LR_VISITED"] | len(left)
     global LP_CALLS

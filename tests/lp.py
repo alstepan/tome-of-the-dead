@@ -136,10 +136,12 @@ def want_slots(p, blk, r, out, first_slot=1, got=None):
     first depends on what is parked; the slot numbers are not the model's business)."""
     res = []
     rest = sorted(set(x[0] for x in got) - set(q for q in G.LP_OUT_SLOT if q)) if got is not None else None
-    for i, (kb, hp, s_, x, left) in enumerate(out):
+    for i, o in enumerate(out):
+        kb, hp, s_, x, left = o[:5]
         k = kb & S["LEK_KIND_MASK"]
         fly = p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
-        y = 9 * s_ + 1 if fly else 9 * s_ + 8 - p.kb(k, "KT_BH")
+        # ROOM-MEM2: a flyer placed on its saved cell / slid keeps its saved band row (o[5])
+        y = 9 * s_ + (o[5] if len(o) > 5 else 1) if fly else 9 * s_ + 8 - p.kb(k, "KT_BH")
         fl = EF_ACTIVE | EF_HOSTILE | (EF_LEFT if left else 0) | (kb & S["LEK_RESPAWN"])
         q = G.LP_OUT_SLOT[i] if got is not None and i < len(G.LP_OUT_SLOT) else None
         sl_ = q if q else (rest.pop(0) if rest else first_slot + i) if got is not None else first_slot + i
@@ -404,8 +406,10 @@ def bank_model(lp, r, slots, gold=None, p=None):
         lp[ro + 1 + 2 * n] = k | (fl & S["EF_RESPAWN"]) | gold.get(sl_, 0)
         lp[ro + 2 + 2 * n] = hp
         if p is not None:
-            lp[S["LP_POS"] - LPB + 4 * r + n] = G.lp_pos_byte(x, min(1, (y + p.kb(k, "KT_BH")) // 9),
-                                                              bool(fl & EF_LEFT))
+            s_ = min(1, (y + p.kb(k, "KT_BH")) // 9)
+            fly = p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
+            lp[S["LP_POS"] - LPB + 4 * r + n] = G.lp_pos_byte(x, s_, bool(fl & EF_LEFT),
+                                                              y - 9 * s_ if fly else None)
         n += 1
     lp[ro] = S["LR_VISITED"] | n
     return bytes(lp)
@@ -505,6 +509,55 @@ def part_a4(h, p, check):
                 print(f"[lp] A4 d{d}: lair boss hp {sl[0][6]} kept across bank / re-entry", flush=True)
             else:
                 break
+
+
+def part_a9(h, p, check, n=120):
+    """A9 ROOM-MEM2: try 0 (LP_POS) + the door slide (R6 lp_slide6) == levelgen.lp_enter / lp_slide on
+    random VISITED records (1-4 entries of the depth's kinds, random LP_POS cells, 10 % none), random
+    hero arrival boxes (both door edges, mid-room, both storeys), no parked slot; slots + LP state."""
+    rnd = random.Random(9)
+    p.load()
+    sync_bodies(p)
+    bad = slid = units = 0
+    for d, seed in ((1, 0x1234), (2, 0x2222), (5, 0x5555), (8, 0x0808)):
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=d)
+        p.far3("lp_budget")
+        blk = p.block()
+        base = p.lp()
+        lair, sanct = blk[S["LVL_LAIR"] - G.BASE], blk[S["LVL_SANCTUM"] - G.BASE]
+        rooms = [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+                 and r not in (lair, sanct)]
+        kinds = list(p.z.read_memory(S["LP_KINDS"], 8))
+        for c in range(n):
+            r = rnd.choice(rooms)
+            lp = bytearray(base)
+            ro = S["LP_REC"] - LPB + r * S["LR_STRIDE"]
+            po = S["LP_POS"] - LPB + r * S["LR_MAX"]
+            m = rnd.randint(1, 4)
+            lp[ro] = S["LR_VISITED"] | m
+            for i in range(m):
+                lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i] = rnd.choice(kinds), rnd.randint(1, 20)
+                lp[po + i] = 0 if rnd.random() < 0.1 else G.lp_pos_byte(
+                    rnd.randint(1, 29), rnd.randint(0, 1), rnd.random() < 0.5)
+            hx, hs = rnd.choice(((1, 0), (1, 1), (28, 0), (28, 1), (rnd.randint(5, 24), rnd.randint(0, 1))))
+            p.wmem(LPB, lp)
+            p.clear_slots()
+            p.wmem(S["LP_HX"], [hx, hs, 3])
+            ok, _ = p.far3("lp_enter", a=r)
+            wl, out = G.lp_enter(blk, bytes(lp), r, hs, hx, 3, f3=True, parked=[])
+            got = p.slots()
+            units += len(out)
+            slid += sum(1 for i, o in enumerate(out)
+                        if lp[po + i] and o[3] != lp[po + i] & 31 and o[2] == (lp[po + i] >> 5) & 1)
+            if not (ok and got == want_slots(p, blk, r, out) and mask(p.lp()) == mask(wl)):
+                bad += 1
+                if bad <= 3:
+                    print(f"[detail] A9 d{d} room {r} hx {hx} hs {hs}: {got} vs {want_slots(p, blk, r, out)}; "
+                          f"rec {p.lp()[ro:ro + 9].hex()} vs {wl[ro:ro + 9].hex()}", flush=True)
+    check(f"A9 ROOM-MEM2 try 0 + door slide: {4 * n} random re-entries ({units} placed, {slid} slid on their "
+          f"storey) == levelgen.lp_enter", bad == 0 and slid > 0, bad)
 
 
 def part_a8(h, p, check):
@@ -811,6 +864,7 @@ def main():
             part_a4(h, p, check)
             part_a6(h, p, check)
             part_a8(h, p, check)
+            part_a9(h, p, check)
             if nsweep:
                 part_a7(h, p, check, nsweep)
         part_b(h, p, check)
