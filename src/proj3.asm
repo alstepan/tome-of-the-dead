@@ -469,7 +469,7 @@ pf_cands:
                 ld   de, pf_cand
                 ld   a, (LIVE_N)
                 or   a
-                jp   z, .end                   ; (jp: the x1 guard put .end out of jr range)
+                jr   z, .end                   ; (ROOM-MEM2 reclaim: in jr range again)
                 push ix
                 ld   b, a
                 ld   hl, LIVE_LIST

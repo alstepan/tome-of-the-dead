@@ -375,7 +375,7 @@ ai_monster:
                 ld   b, h                      ; B = 0 iff standing
                 KFIELD KT_FLAGS
                 and  KF_CLIMBER
-                jp   z, .nonclimb
+                jr   z, .nonclimb                ; (ROOM-MEM2 reclaim: jr)
                 ld   a, b                      ; (on_ladder: walker -> NZ iff standing)
                 or   a
                 jr   z, .seek

@@ -421,3 +421,33 @@ drop_imp:       DB   K_ALIAS,       IT_P_MANA,   4, 1    ; NEW-MON3 T8: the Fire
                                                          ; nothing: nm3_var turns this row's kind byte to 0 (no monster has kind 0)
 DROP_ROWS       EQU ($ - drop_tab) / DROP_STRIDE
                 ASSERT DROP_ROWS == 18 && IT_F_APPLE == IT_F_CARROT + 1 && IT_F_PEAR == IT_F_CARROT + 2
+
+;------------------------------------------------------------------------------
+; lp_pos6 — ROOM-MEM2 (user playtest 2026-11-14; game.md §9.4.2, level_defs.asm LP_POS):
+; far6 from bank-3 lp_bank, IX = a slot just appended to LPV_ROOM's record as entry E
+; (lp_append's E): LP_POS[4 room + E] = its LAST cell = E_X | storey_ref << 5 | EF_LEFT << 3
+; (the live slot at leave time: every step writes E_X, so this is where it stood). Here, not
+; in bank 3: -17 B there (bank 3 had 79 free), +~0.4k T a banked body (far6) inside
+; lp_transition (cap 70k T, measured worst ~58k with 4 + 4 bodies).
+; Clobbers: A, F, HL (BC, DE, IX kept).   ~0.2k T + far6
+;------------------------------------------------------------------------------
+lp_pos6:        call storey_ref                ; (bank 2) A = 0 / 1; clobbers HL only
+                rrca
+                rrca
+                rrca                           ; -> bit 5 (LPP_S_BIT)
+                or   (ix+E_X)                  ; bits 0-4 (a body-left col < 32)
+                bit  3, (ix+E_FLAGS)
+                jr   z, .r
+                or   1 << LPP_LEFT_BIT
+.r:             ld   h, a
+                ld   a, (LPV_ROOM)
+                add  a, a
+                add  a, a
+                add  a, e
+                add  a, LP_POS & $FF           ; LP_POS: one page (level_defs.asm ASSERT)
+                ld   l, a
+                ld   a, h
+                ld   h, LP_POS >> 8
+                ld   (hl), a
+                ret
+                ASSERT EF_LEFT == 1 << 3 && LPP_S_BIT == 5 && LPP_X == 31 && LR_MAX == 4 && STOREY_COUNT == 2

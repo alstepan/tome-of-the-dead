@@ -293,8 +293,20 @@ LEK_BRED_BIT    EQU 6               ; (lp_bank writes it, lp_spawn restores it)
 LPK_PARK        EQU %10000000
 LPK_ROOM        EQU %00001111           ; the room id bits of E_ROOM
                 ASSERT GRID_CELLS <= LPK_ROOM + 1
-LP_LEN          EQU 37 + GRID_CELLS * LR_STRIDE  ; 118 B (NEW-MON3 T3: +4, the 8-slot LP_KINDS)
-LP_END          EQU LP_STATE + LP_LEN            ; $6F36
+; ROOM-MEM2 (user playtest 2026-11-14, game.md §9.4.2 / §9.4.8 (d) option 1): the LAST cell of every
+; record entry, 1 byte, parallel to the entries: LP_POS + 4 room + i = entry i of room's record.
+; x bits 0-4 (E_X), storey bit 5 (storey_ref), facing left bit 6 (EF_LEFT); 0 = none (a FRESH unit,
+; a trickle entry: try 0 skipped; a real body is never at x 0 storey 0). Written by lp_bank (R6
+; lp_pos6) from the live slot on leave, compacted with the entries by lp_enter (a kept unit keeps
+; its byte), zeroed for a trickle entry (trickle6.asm); bytes past the count are stale like the
+; entries. lp_enter's try 0 = this cell for EVERY unit of a VISITED record (parked or not).
+LP_POS          EQU LP_REC + GRID_CELLS * LR_STRIDE   ; 36 B (test-observable)
+LPP_X           EQU %00011111
+LPP_S_BIT       EQU 5
+LPP_LEFT_BIT    EQU 6
+LP_LEN          EQU 37 + GRID_CELLS * LR_STRIDE + GRID_CELLS * LR_MAX  ; 154 B (ROOM-MEM2: +36 LP_POS; NEW-MON3 T3: +4)
+                ASSERT (LP_POS >> 8) == ((LP_POS + GRID_CELLS * LR_MAX - 1) >> 8)   ; one page: 8-bit index
+LP_END          EQU LP_STATE + LP_LEN            ; $6F5A (ROOM-MEM2; was $6F36)
 ; budget constants (game.md §9.3 / §9.4.1)
 ROOM_MAX        EQU 3               ; monsters per room (initial population), all depths (MORE-MON: D1-D2 were 2)
 LP_SIGMA_INIT   EQU 8               ; sum weight cap of a FRESH room: max(8, ROOM_MAX x minW)

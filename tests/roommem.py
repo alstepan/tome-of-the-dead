@@ -25,6 +25,10 @@ Part S (stub transitions: far3 lp_transition as do_exit runs it, same game):
       phase after the return only counts down (no shot), user 2026-11-03
   ADV (reviewer) 8 parked bodies + a FRESH room, a status through the eviction, the evicted
       room re-placed from its record; lp_transition worst <= LP_TRANS_GUARD (70,000 T)
+  L1-L3 ROOM-MEM2 (user playtest 2026-11-14): X left 1, 2 and 3 rooms ago (parked / parked /
+      evicted) -> every body back on its LAST cell (storey, x), facing, hp (LP_POS try 0); == model
+  L4  a body moved before the hero left: back on the moved cell after 3 rooms
+  L5  a real walk (turns): an awake body walks towards the hero; 3 rooms later it stands where it stopped
   S6  level change: the real level_descend leaves no parked slot
 Run with ZRCP_PORT=<port> (WZ_BUILD_DIR for a variant build).
 """
@@ -200,7 +204,7 @@ def game(p, check, M):
     ok = walk_out(a, "R", s_)
     got = p.slots()
     post = [body(p, q[0]) for q in pre]
-    wl, out = G.lp_enter(blk, bank_model(lp_b, a, in_a, ga), b, s_, 1, kw, f3=True, parked=pk)
+    wl, out = G.lp_enter(blk, bank_model(lp_b, a, in_a, ga, p), b, s_, 1, kw, f3=True, parked=pk)
     rb = S["LP_REC"] - LPB + b * S["LR_STRIDE"]
     check(f"R3 re-entered {b}: same slots, x, y, facing, hp, ST_* bytes, cooldown ({len(pre)} bodies)",
           ok and post == pre, (pre, post))
@@ -271,11 +275,11 @@ def game(p, check, M):
         for q in range(16):
             e = p.ent(q)
             print("[debug] slot", q, e["KIND"], e["ROOM"], hex(e["FLAGS"]), e["X"], e["Y"], e["HP"], flush=True)
-    part_s(p, check, blk, st, lair, sanct, kw, kh, b)
+    part_s(p, check, blk, st, lair, sanct, kw, kh, b, put_hero)
     return True
 
 
-def part_s(p, check, blk, st, lair, sanct, kw, kh, cur):
+def part_s(p, check, blk, st, lair, sanct, kw, kh, cur, put_hero):
     """Stub transitions (far3 lp_transition with the hero already placed, as do_exit .lpt)."""
     def xfer(dst, hx=1, hs=0):
         src = p.rb("CUR_ROOM")
@@ -294,7 +298,7 @@ def part_s(p, check, blk, st, lair, sanct, kw, kh, cur):
         p.wb("TRK_PREV", src)
         p.wb("CUR_ROOM", dst)
         p.set_ent(0, ROOM=dst)
-        lpb = bytearray(bank_model(lp0, src, alive, gold))
+        lpb = bytearray(bank_model(lp0, src, alive, gold, p))
         try:
             wl, out = G.lp_enter(blk_, bytes(lpb), dst, hs, hx, kw, f3=True, parked=pk)
         except KeyError:
@@ -412,6 +416,7 @@ def part_s(p, check, blk, st, lair, sanct, kw, kh, cur):
     print(f"[roommem] S lp_transition (DI, incl. far3) worst {tsmax} T", flush=True)
     check(f"S lp_transition worst {tsmax} T <= {LP_TRANS_GUARD}", tsmax <= LP_TRANS_GUARD, tsmax)
     part_adv(p, check, blk, st, lair, sanct, kw, kh, cur)
+    part_l(p, check, blk, st, lair, sanct, kw, kh, cur, put_hero)
     # S6: level change
     pc0 = p.pc()
     ok, _ = p.code([0x3E, 1, 0x32] + w16(S["LVL_DEPTH"]) + [0xCD] + w16(S["level_descend"]), game=True)
@@ -483,6 +488,123 @@ def part_adv(p, check, blk, st, lair, sanct, kw, kh, cur):
     tsm = max(ts1, ts2, ts3)
     print(f"[roommem] ADV lp_transition {ts1} / {ts2} / {ts3} T", flush=True)
     check(f"ADV lp_transition worst {tsm} T <= {LP_TRANS_GUARD} (one frame: 70,908)", tsm <= LP_TRANS_GUARD, tsm)
+
+
+def part_l(p, check, blk, st, lair, sanct, kw, kh, cur, put_hero):
+    """ROOM-MEM2 (user playtest 2026-11-14: "store their last position, not the first one"): every
+    VISITED room's monsters come back on the cell they stood on when the hero left (LP_POS, one byte
+    per record entry, try 0), whether the room was left 1, 2 or >= 3 rooms ago (parked or evicted);
+    a monster that walked before the hero left comes back where it stopped. == levelgen.lp_enter."""
+    rooms = [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+             and r not in (st, lair, sanct)]
+    lpk = p.rb(S["LP_KINDS"])
+    w, fly = p.kb(lpk, "KT_BW"), p.kb(lpk, "KT_FLAGS") & S["KF_FLYER"]
+    bh, hp0 = p.kb(lpk, "KT_BH"), p.kb(lpk, "KT_HP")
+    allc = [(s_, x) for x in (23, 12, 17, 26, 9, 20, 14, 24, 11, 18, 21, 15, 10, 25, 13, 19, 16, 22, 8, 27)
+            for s_ in (0, 1)]
+
+    def ky(s_):
+        return 9 * s_ + 1 if fly else stand_y(s_, bh)
+
+    def cells(r, placed, prefer):
+        """legal cells (model lp_legal, arrival hx 1 / hs 0, gap 5) not overlapping `placed` / each other."""
+        out = []
+        for s_, x in prefer:
+            pl = [(q[0], q[1], q[1] + w - 1) for q in placed + out]
+            if G.lp_legal(blk, r, s_, x, w, fly, 0, 1, kw, pl, S["LP_GAP2"]) == "ok":
+                out.append((s_, x))
+        return out
+    rooms.sort(key=lambda r: -len(cells(r, [], allc)))         # the roomiest room is X
+    X, others = rooms[0], rooms[1:4]
+    want = cells(X, [], allc)[:3]
+    if len(want) < 2 or len(others) < 3:
+        check(f"L setup: 2 legal cells in room {X}, 3 other rooms", False, (want, others))
+        return
+
+    def xfer(dst, hx=1, hs=0):
+        src = p.rb("CUR_ROOM")
+        lp0, pk = p.lp(), parked_of(p, dst)
+        alive = [x for x in p.slots() if x[2] == src]
+        gold = {x[0]: gold_of(p, x[0]) for x in alive}
+        lpb = bank_model(lp0, src, alive, gold, p)
+        p.set_ent(0, X=hx, Y=stand_y(hs, kh))
+        p.wmem(S["CAND_LIST"], [0xFF] * 16)
+        p.wb("FOLLOW_N", 0)
+        p.wb("EXIT_DEST", dst)
+        pc0 = p.pc()
+        ok, ts = p.code([0x21] + w16(S["lp_transition"]) + [0xCD] + w16(S["far3"]), game=True)
+        p.z.cmd("set-register PC=%d" % pc0)
+        p.wb("TRK_PREV", src)
+        p.wb("CUR_ROOM", dst)
+        p.set_ent(0, ROOM=dst)
+        wl, out = G.lp_enter(blk, lpb, dst, hs, hx, kw, f3=True, parked=pk)
+        got = p.slots()
+        ro = S["LP_REC"] - LPB + dst * S["LR_STRIDE"]
+        return ok and got == want_slots(p, blk, dst, out, got=got) and p.lp()[ro:ro + 9] == wl[ro:ro + 9], \
+            (got, out, pk)
+
+    def setup():
+        """X current, its bodies active on `want` (hp - 1, facing alternating)."""
+        for s_ in range(1, 16):
+            p.set_ent(s_, FLAGS=0, ROOM=0)
+            for a_ in ("ST_FLAGS", "ST_T1", "ST_T2", "ST_X"):
+                p.wb(S[a_] + s_, 0)
+        p.wb(S["LP_REC"] + 9 * X, S["LR_VISITED"])
+        for i, (s_, x) in enumerate(want):
+            p.set_ent(1 + i, KIND=lpk, ROOM=X, X=x, Y=ky(s_), PX=x * 8, PY=ky(s_) * 8, MODE=0, DVIS=0,
+                      FLAGS=EF_ACTIVE | EF_HOSTILE | (EF_LEFT if i & 1 else 0), HP=hp0 - 1, MAXHP=hp0)
+        p.wb("CUR_ROOM", X)
+        p.set_ent(0, ROOM=X)
+
+    def where():
+        return sorted((1 if e[4] >= 9 else 0, e[3], bool(e[5] & EF_LEFT), e[6]) for e in p.slots() if e[2] == X)
+
+    for k in (1, 2, 3):
+        setup()
+        before = where()
+        okm = True
+        for dst in others[:k] + [X]:
+            ok, d = xfer(dst)
+            okm = okm and ok
+        after = where()
+        print(f"[roommem] L{k} room {X} left {k} room(s) ago: {before} -> {after}", flush=True)
+        check(f"L{k} {X} -> {' -> '.join(map(str, others[:k]))} -> {X} (left {k} ago): every body back on its "
+              f"last cell (storey, x), facing, hp; == levelgen.lp_enter", okm and after == before, (before, after, d))
+    # L4: moved bodies (the parked slot / LP_POS take the cell at leave time, not the spawn cell)
+    setup()
+    alt = cells(X, want[1:], [q for q in allc if q != want[0]][::-1])
+    if alt:
+        p.set_ent(1, X=alt[0][1], Y=ky(alt[0][0]), PX=alt[0][1] * 8, PY=ky(alt[0][0]) * 8)
+    before = where()
+    okm = True
+    for dst in others[:3] + [X]:
+        ok, d = xfer(dst)
+        okm = okm and ok
+    check(f"L4 a body moved {want[0]} -> {alt[:1]} before the hero left, back after 3 rooms on the moved cell",
+          okm and alt and where() == before, (before, where(), d))
+    # L5: a real walk (turns): an awake body walks towards the hero, he leaves (stub) 3 rooms deep
+    # and comes back: it stands where it stopped
+    setup()
+    s0, mx = want[0]
+    for i in range(2, 4):
+        p.set_ent(i, FLAGS=0, ROOM=0)
+    p.set_ent(1, FLAGS=EF_ACTIVE | EF_HOSTILE | (EF_LEFT if mx > 15 else 0))
+    put_hero(X, 3 if mx > 15 else 28 - kw, s0, mx <= 15)
+    x0 = p.ent(1)["X"]
+    for _ in range(4):
+        p.turn("WAIT")
+        p.until(lambda: p.idle(), 300)
+    e = p.ent(1)
+    walked = (min(1, (e["Y"] + bh) // 9), e["X"])
+    okm = True
+    ok_cell = cells(X, [], [walked]) == [walked] and e["FLAGS"] & EF_ACTIVE
+    before = where()
+    for dst in others[:3] + [X]:
+        ok, d = xfer(dst)
+        okm = okm and ok
+    print(f"[roommem] L5 walked x {x0} -> {e['X']} (legal for try 0: {bool(ok_cell)}), back: {where()}", flush=True)
+    check(f"L5 a body walked {x0} -> {e['X']}, the hero left 3 rooms deep: back where it stopped",
+          okm and e["X"] != x0 and (not ok_cell or where() == before), (x0, e, before, where(), d))
 
 
 if __name__ == "__main__":

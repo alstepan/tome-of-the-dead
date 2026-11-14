@@ -1019,8 +1019,15 @@ LP_CALLS = 0                # rnd calls of the last lp_enter (tests: cost)
 LP_OUT_SLOT = []            # ROOM-MEM: the parked slot each placed unit of the last lp_enter used (None: a free one)
 
 
+def lp_pos_byte(x, s, left):
+    """ROOM-MEM2 LP_POS byte (level_defs.asm): x bits 0-4, storey bit 5, facing left bit 6; 0 = none."""
+    return (x & 31) | (s & 1) << 5 | (0x40 if left else 0)
+
+
 def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
     lp = bytearray(lp)
+    # ROOM-MEM2: try 0 is every unit's LP_POS byte (the last cell lp_bank wrote; parked or not); a parked
+    # body (kind, s, x, left[, slot]) only decides the slot (restored in place) and keeps its own facing
     parked = [[True] + list(q) for q in (parked or [])]     # [still parked, kind, s, x, left(, slot)]
     global LP_OUT_SLOT
     LP_OUT_SLOT = []                                        # per out entry: its parked slot (q[5]) / None
@@ -1080,14 +1087,18 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
     else:
         units = [(lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i]) for i in range(hdr & D["LR_CNT_MASK"])]
     placed, out, left = [], [], []
+    po = lp_off("LP_POS") + r * D["LR_MAX"]             # ROOM-MEM2: the entries' last cells (0 = none)
     for i, (kb, hp) in enumerate(units):
         w, _, fly = info(kb & ROWM)
+        pos = lp[po + i]
         pk = next((q for q in parked if q[0] and q[1] == kb & D["LEK_KIND_MASK"]), None)
         best = lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM) \
             if r == b[H["LVL_LAIR"]] else None
-        if best is None and pk is not None and \
-                lp_legal(b, r, pk[2], pk[3], w, fly, hs, hx, hw, placed, D["LP_GAP2"]) == "ok":
-            best = (pk[2], pk[3])                       # try 0: the saved cell
+        try0 = False
+        if best is None and pos:                        # try 0 (parked or not): the LP_POS cell
+            s0, x0 = (pos >> D["LPP_S_BIT"]) & 1, pos & D["LPP_X"]
+            if lp_legal(b, r, s0, x0, w, fly, hs, hx, hw, placed, D["LP_GAP2"]) == "ok":
+                best, try0 = (s0, x0), True
         for t in range(0 if best else D["LP_TRIES"]):
             v = rng.rnd16()                             # one step per candidate
             s = (v >> 8) & 1
@@ -1102,7 +1113,7 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
             best = (s, x)
             break
         if best is None:
-            left.append((kb, hp))
+            left.append((kb, hp, pos))
             continue
         s, x = best[0], best[1]
         placed.append((s, x, x + w - 1))
@@ -1110,14 +1121,15 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
             pk[0] = False                               # restored in place: its own facing
             out.append((kb, hp, s, x, bool(pk[4])))
             LP_OUT_SLOT.append(pk[5] if len(pk) > 5 else None)
-        else:
-            out.append((kb, hp, s, x, x > hx))
+        else:                                           # a fresh slot: its saved facing on try 0
+            out.append((kb, hp, s, x, bool(pos >> D["LPP_LEFT_BIT"] & 1) if try0 else x > hx))
             LP_OUT_SLOT.append(None)
     lp[ro] = D["LR_VISITED"] | len(left)
     global LP_CALLS
     LP_CALLS = rng.calls
-    for i, (kb, hp) in enumerate(left):                 # the rest keep their bytes (no zero fill)
+    for i, (kb, hp, pos) in enumerate(left):            # the rest keep their bytes (no zero fill)
         lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i] = kb, hp
+        lp[po + i] = pos                                # ROOM-MEM2: compacted with its entry
     return bytes(lp), out
 
 def render(b):

@@ -1422,7 +1422,7 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6B40` | `GEN_MIR` | 512 | generator: mirrored frame (`LOWRAM_END` = `LOWRAM_FREE_END` `$6D40`). D3-TX: its top 43 B `$6D15..$6D3F` = `TX_DEC` (`tx_dec`'s transient decode buffer, menu text) |
 | `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+ **3F-T12: `TRK_PHASE` `$6D56`, `TRK_PREV` `$6D57`**, **M0: `TOME_HP` `$6D58` (P3: the Tome's hp, `sanctum_leaf` sets `TOME_MAX` 5 once per level)**, **TOME-FX2: `TOME_FL` `$6D59`**, **PERF-GHOST: `DN_QN` `$6D5A`** (the flying numbers' spawn queue known empty = 0; "PERF-GHOST ledger") + 5 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
 | `$6E80..$6EBF` | `ORN_GLYPHS` | 64 | B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). `LOWRAM_END_3B` = `LOWRAM_FREE_END` = `$6EC0` |
-| `$6EC0..$6F35` | `LP_STATE` | 118 (NEW-MON3 T3: was 114 / `$6F31`: `LP_KINDS` 4 -> 8 B, every later field +4; the text below keeps the pre-T3 numbers) | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
+| `$6EC0..$6F59` | `LP_STATE` | **154 (ROOM-MEM2: + 36 B `LP_POS` `$6F36..$6F59`; was 118 / `$6F35`)**; 118 (NEW-MON3 T3: was 114 / `$6F31`: `LP_KINDS` 4 -> 8 B, every later field +4; the text below keeps the pre-T3 numbers) | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
 | `$6F32..$6FE3` (3F-T2, kit) | free | 178 | **3F-T2: 135 B kept for descriptor growth (`FRT_MAX` 128 − 101 frames), 43 spare kit** (review: +7 B `SEQ_TRAP` path in `sq_load`; 50 before); before: `$6F32..$71A5`, 628, of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3F-T1: 29 spare kit** (−48: the level-pool block in `level_enter`, `gen_idles`; the cold block now starts at `$7076`; "Level pool (3F-T1)"); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
 | `$6FE4..$7FFF` (3F-T2, kit) | `lowram_code` (`start` first) | 4,124 | **3F-T2: code 3,619 B + 101 descriptors 505 B; spare after the (now `FRT_MAX` 128) descriptor reserve 135 B: 43 kit** (50 before the `SEQ_TRAP` path) (was 29: +160 reserve, code +139 net: the sequence-cache loader `sq_reset` / `sq_load` / `ksm_ptr` / `sq_fill` in, `gen_kind` + its loops → `gen_list`, `level_enter`'s FRT LDIR → R6). Before: **cold block**, ends exactly at `$8000` (`src/lowram.asm`): **3E-T2: code 3,169 B + 101 descriptors 505 B**; 3E-T1: code 3,126 B (was 3,889 at `$70CF`); before: code 3,238 B + 101 frame descriptors 505 B (D3-S2 +89 incl. the bitmap-shadow paths' removal: + `clear_screen` / `print_char` / `print_str`, − `room_show` / `room_shadow`'s shadow ornament; L2 engine +28: `pit_range` / `pit_w`; D3-4 +8: `start_game` → `gen_kind(HERO_KIND + K_FX_BASE)`; J1 +145: `try_jump` D 6 / 7 + `jump_pit` + `pit_w`; earlier: D3-TX `tx_dec` + `.txt`, B12 +21, B14 +175, C3-2 +1, C3-1 +33, C3-0 +3, B3B-13 +37) |
 | inside the cold block | A5 `zx0_code..zx0_code_end` | 107 | `zx0_frame` 39 + `dzx0_standard` 68 (ASSERT ≤ `ZX0_BUDGET` 128) |
@@ -2094,7 +2094,7 @@ A level stores no monster list: a **budget** + one **record per room**; the
 Generated levels only: on the PROTO rooms (`LVL_DEPTH` 0, `proto_start`)
 none of this runs and every monster keeps its slot as before.
 
-**`LP_STATE`** (`$6EC0`, `LP_LEN` 118 B, bank 5 low RAM, `level_defs.asm`):
+**`LP_STATE`** (`$6EC0`, `LP_LEN` 154 B (ROOM-MEM2; was 118), bank 5 low RAM, `level_defs.asm`; `LP_END` `$6F5A` = `LOWRAM_END_3B`, the test-stub base):
 
 | Off | Symbol | |
 |---|---|---|
@@ -2108,6 +2108,7 @@ none of this runs and every monster keeps its slot as before.
 | +16..+27 | `LP_HX` `LP_HS` `LP_HW` `LP_SIG` `LP_RECP` (w) `LP_W` `LP_GAPV` `LP_BEST` `LP_BS` `LP_BX` `LP_RES` | `lp_enter` / `lp_budget` scratch (tests mask it); **3F-T12: +19..+27 = `TRK_W` (9 B), `trk_run`'s scratch (per-room floor counts, then w_r) — dead between entries** |
 | +28 | `ROOM_VISITS` | 9 B: entries per room this level (spawn-stream input) |
 | +37 | `LP_REC` | 9 records × `LR_STRIDE` 9: `LR_HDR` (bit 7 `LR_VISITED`, bits 0–2 count) + 4 × {`LE_KIND` = kind row bits 0–4 \| **`LEK_GOLD` bit 5 (3F-T5: golden boss)** \| `LEK_BRED` bit 6 \| `LEK_RESPAWN` bit 7 (= `EF_RESPAWN`), `LE_HP` exact hp, **depth-scaled since 3F-T5**}. FRESH: count = quota, no entries; VISITED: count = entries (**ROOM-MEM: the bytes past the count are stale, not 0** — `lp_enter`'s zero fill went to the reclaim; every reader uses the count; `tools/levelgen.py` models it) |
+| +118 | `LP_POS` | **ROOM-MEM2 (2026-11-14):** 9 rooms × `LR_MAX` 4 B, parallel to the entries: `LP_POS + 4 r + i` = entry i of room r's record. `LPP_X` bits 0-4 = `E_X`, bit 5 (`LPP_S_BIT`) = `storey_ref`, bit 6 (`LPP_LEFT_BIT`) = facing left; **0 = none** (FRESH units, trickle entries). Written by `lp_bank` (R6 `lp_pos6`, the live slot at leave), compacted with the kept entries by `lp_enter`, zeroed by the trickle for its entry, zeroed with `LP_STATE` by `lp_hdr0` / `tut_start` (TUT0 writes the Goblin's). Bytes past the count are stale. One page (ASSERT). Test-observable |
 
 **`LP_CMAP`** = `NEXT_MAP + PLAY_CELLS` (`$6540..$6581`, 2 × 33 B, NEXT_MAP's
 unused tail): `lp_enter`'s per-col placement marks (`LPC_BAD` 1: footprints
@@ -2166,7 +2167,8 @@ room id = `E_ROOM & LPK_ROOM`). Everything else in the slot and its `ST_*` bytes
 - **Restore** (`lp_enter`, per unit): `lp_find` (bank 3) = the first slot (slot order) with
   `E_ROOM = room | LPK_PARK` and the unit's kind (exact unless a leftover entry of the same
   kind precedes: two such bodies swap); a non-lair unit (or a lair unit without a post) tries
-  its saved cell first (`storey_ref` storey, `E_X`, `lp_legal` with `LP_GAPV` = `LP_GAP2` 5,
+  its saved cell first (**ROOM-MEM2: the entry's `LP_POS` byte, written from this slot at leave
+  = its `storey_ref` storey and `E_X`**; `lp_legal` with `LP_GAPV` = `LP_GAP2` 5,
   no stream step, no other-storey retry), else tries 1-8; `lp_spawn` restores the parked
   slot **in place** (no zeroing: `ST_*`, AI bytes kept; the cooldown c (`E_RCD` bits 0-1, stored
   c XOR 1) := max(c, 1) — kept, but a ready shooter waits the first monster phase as on a fresh
@@ -2176,8 +2178,16 @@ room id = `E_ROOM & LPK_ROOM`). Everything else in the slot and its `ST_*` bytes
   `EF_LEFT`), then `spawn_one` as before
   (`E_ROOM` = room: the mark is gone; flyers at the band default y). `PK_NONE` =
   `P_ENTITIES + 16 × 32` (`$B200`): "no parked slot" (`ixh` test).
+- **ROOM-MEM2 (user playtest 2026-11-14, every visited room):** try 0 reads the entry's
+  **`LP_POS`** byte (above), not the slot: `lp_bank` writes it for every banked body (R6
+  `lp_pos6`, far6, E = lp_append's index), so a room left more than two rooms ago (slots
+  evicted) comes back on its last cells too; a parked body still restores its slot in place
+  (its own facing), a fresh slot placed by try 0 takes the saved facing (`LPV_FACE` = `LP_RES`
+  → lp_spawn), else faces the hero. A unit not placed keeps its byte (lp_enter compacts
+  `LP_POS` with the entries, `lp_posr`); a trickle entry gets 0 (tries 1-8 on the next entry).
 - Python reference: `tools/levelgen.py` `lp_enter(..., parked=[(kind, s, x, left[, slot])])`
-  (try 0 draws no RNG); `tests/lp.py` A4 / B2, `tests/roommem.py`.
+  (try 0 = the `LP_POS` byte, draws no RNG; `parked` decides the slot / own facing only;
+  `lp_pos_byte`); `tests/lp.py` A4 / B2 (`bank_model(..., p)` writes `LP_POS`), `tests/roommem.py` L1-L5.
 
 **Cost (measured, DI, contended bank-3 code / bank-5 data, `tests/lp.py`
 A2, after the 2026-10-06 tuning):** `lp_enter` mean ~19.8k T, worst ~37.7k T
@@ -6908,3 +6918,38 @@ after dying on D7, the alias spawning on its depths through the real lp_enter); 
 `ksm_wr` on B depths; `budget` `imp3` (3 Fire Imps flying in a real D4 room, CAP-gated); `tier_respawn_model_test` (caps, ids 3..31);
 `world` W15 / W18 data buffers moved to `GEN_SRC + $2C0` (STUB + `$100` lies in low-RAM code). Known, pre-existing on `b2ebd9a`: world W15's
 direct `log_scroll` stub fails (bank 0 not paged since C-T6 moved it to bank 0) and aborts the rest of a W15 run.
+
+## ROOM-MEM2 ledger (`feat/roommem-last-pos`, 2026-11-14; from main `6d8d90f`; user playtest request)
+
+Player-visible: a room's monsters come back on the cell they stood on when the hero left, for **every**
+visited room (was: only the two last rooms left; older ones were re-placed by the spawn stream, which reads
+as "back at their first spawn spots", since first spawns and re-placements follow the same gap-8 rule).
+Diagnosis (`tests/roommem.py` L1-L5 on `6d8d90f`): left 1 / 2 rooms ago = exact (the parked slot is the live
+record: E_X is written by every step, no stale copy); left >= 3 ago = re-placed (L3 / L4 / L5 failed). A
+second, smaller cause stays by design: try 0 fails the 5-col arrival gap for a body within 5 cols of the
+hero's arrival box on his storey (or in the box / a ladder box), e.g. one that chased him to the door he
+comes back through: re-placed by tries 1-8 (no rule change proposed here).
+
+Design: game.md §9.4.2 / §9.4.3 / §9.4.8 (d) option 1. Data: **`LP_POS`** = `LP_STATE + 118`, 36 B
+(`$6F36..$6F59`, "LP contracts" table): `LP_LEN` 118 -> **154**, `LP_END` / `LOWRAM_END_3B` (the test-stub
+base) `$6F36` -> **`$6F5A`**. Code: R6 `tier6.asm` `lp_pos6` (writes the byte, far6 from `lp_bank`, ~32 B);
+bank 3 `lpop3.asm` `lp_enter` try 0 from `LP_POS` for every VISITED unit (FRESH skipped: 40 T), `lp_posr`,
+the compaction of kept units' bytes, `LPV_FACE` (= `LP_RES`) -> `lp_spawn` (a fresh slot on its saved cell
+keeps the saved facing); R6 `trickle6.asm` zeroes a trickle entry's byte (~30 B); TUT0 `tut_start` writes the
+Goblin's byte (+5 B raw). Bank-3 reclaim: 3 `jp` -> `jr` back in range (`lp_cmap` tail, turn3 `.nonclimb`,
+proj3 `.end`).
+
+| Region (free B) | release before | release after | kit / `F3_GEN=0` after |
+|---|---|---|---|
+| bank 3 (to `AY_RESERVE`) | 79 | **5** | 1 / 1 |
+| R6 | 1,240 | **1,179** | 1,184 / 1,184 |
+| low RAM (`LOWRAM_SPARE`) | 79 | **43** | 45 / 45 |
+| TUT0 `BLOB_RES` | 40 | **35** | |
+| bank 1 / bank 2 / bank 7 low / `B0_CODE2` | 7 / 27 / 74 / 4,290 | unchanged | |
+
+Test stubs at `LOWRAM_END_3B` now have 43 B before `lowram_code` (`start` / `boot`: boot-only; `tut_stub`
+`$7022` is now 200 B up (was 236): `tests/gear2.py`'s 200-B window still ends below it). Cost (`tests/lp.py`, DI incl. far calls): A2 mean **21,847** T (cap
+22,000), worst 41,751; A7 mean 21,559, worst 43,888 (cap 46,000); A8 `lp_transition` worst **61,005**;
+`tests/roommem.py` ADV 62,504 (cap 70,000; was ~58.3k: + far6 `lp_pos6` per banked body).
+Python reference: `tools/levelgen.py` `lp_enter` (try 0 = `LP_POS`, compaction, saved facing; `lp_pos_byte`);
+`tests/lp.py` `bank_model(..., p)` writes `LP_POS`. Tests: `tests/roommem.py` L1-L5 (new).

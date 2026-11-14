@@ -23,6 +23,8 @@ LPV_N           EQU TMP2                ; units left to place
 LPV_RDP         EQU TMP3                ; word (TMP3/4): record read pointer
 LPV_WRP         EQU TMP5                ; word (TMP5/6): record write pointer
 LPV_K           EQU TMP7                ; unit kind / bank slot
+LPV_FACE        EQU LP_RES              ; ROOM-MEM2 lp_enter -> lp_spawn: the unit's LP_POS byte when try 0
+                                        ; placed it (its saved facing), else 0 (LP_RES is lp_gen's, dead here)
 
 ; A = kind -> A = kind_tab[off + kind] (KFIELD without IX). Clobbers HL.
     MACRO KTA off
@@ -208,7 +210,9 @@ lp_append:      call lp_rec
 ; as LEK_BRED. The record becomes VISITED. Eviction: every inactive slot whose room
 ; (E_ROOM & LPK_ROOM) is not this one, EXIT_DEST or TRK_PREV is freed (the two last rooms
 ; left stay parked: A -> B -> C -> A; a free slot is "freed" again, harmless).
-; Clobbers: A, BC, DE, HL, IX.   ~2.6k T (15 slots) + ~0.2k T per banked one
+; ROOM-MEM2: every banked body's last cell goes to LP_POS (R6 lp_pos6): rooms left longer ago
+; than the two parked ones come back on their cells too (lp_enter try 0).
+; Clobbers: A, BC, DE, HL, IX.   ~2.6k T (15 slots) + ~0.6k T per banked one
 ;------------------------------------------------------------------------------
 lp_bank:        ld   (LPV_ROOM), a
                 call lp_rec                    ; VISITED first (lp_append keeps it; a room left
@@ -247,6 +251,8 @@ lp_bank:        ld   (LPV_ROOM), a
                 ld   a, (LPV_ROOM)
                 call lp_append
                 jr   c, .free                  ; the record is full (cannot happen, §9.3 cap): not parked
+                ld   hl, lp_pos6               ; ROOM-MEM2: LP_POS[room][E] = its last cell (R6 tier6.asm;
+                call far6                      ; E = the entry index lp_append left, IX = the slot)
                 res  0, (ix+E_FLAGS)           ; ROOM-MEM: parked, not freed: EF_ACTIVE clear, the
                 set  7, (ix+E_ROOM)            ; rest (HOSTILE: != 0) kept, E_ROOM | LPK_PARK
                 jr   .n
@@ -267,7 +273,7 @@ lp_bank:        ld   (LPV_ROOM), a
 .n:             ld   a, (LPV_K)
                 inc  a
                 cp   P_MAX_ENT
-                jr   c, .l
+                jp   c, .l
                 ret
                 ASSERT EF_ACTIVE == 1
 
@@ -328,9 +334,10 @@ lp_transition:
 ; with the reservation; entries {kind byte | LEK_GOLD, depth-scaled hp}) written into its own entry area; then every unit is placed
 ; (lp_place) into a free slot (lp_spawn) or kept, in order, in the record,
 ; which becomes VISITED. ROOM_VISITS is NOT incremented (callers do it).
-; ROOM-MEM: a unit with a parked slot (lp_find) tries its saved cell first (try 0, no stream
-; step, §9.4.3 rules with the 5-col arrival gap; not for a lair unit with a post) and is
-; restored in place (lp_spawn); else tries 1-8 as before.
+; ROOM-MEM2: every unit with an LP_POS byte (any VISITED entry lp_bank wrote: parked or not)
+; tries that last cell first (try 0, no stream step, §9.4.3 rules with the 5-col arrival gap;
+; not for a lair unit with a post), else tries 1-8 as before; LP_POS is compacted with the
+; entries kept. ROOM-MEM: a unit with a parked slot (lp_find) is restored in place (lp_spawn).
 ; Clobbers: all but IY.   <= ~15k T worst (4 units x 8 tries)
 ;------------------------------------------------------------------------------
 lp_enter:
@@ -379,8 +386,10 @@ lp_enter:
                 ld   (LPV_RDP), hl
                 ld   (LPV_WRP), hl
                 or   a
-                jr   z, .done
-.u:             ld   hl, (LPV_RDP)
+                jp   z, .done
+.u:             xor  a
+                ld   (LPV_FACE), a             ; ROOM-MEM2: face the hero unless try 0 places it
+                ld   hl, (LPV_RDP)
                 ld   a, (hl)
                 and  LEK_KIND_MASK
                 ld   (LPV_K), a
@@ -395,20 +404,41 @@ lp_enter:
                 ld   a, l
                 cp   1                         ; Z, NC: posted
                 jr   z, .sp
-.t0:            ld   a, ixh                    ; ROOM-MEM try 0 (no stream step): the saved cell,
-                cp   PK_NONE >> 8              ; the §9.4.3 rules with the 5-col arrival gap
-                jr   z, .pl
-                call storey_ref                ; (bank 2) A = its storey (feet: a flyer -> its band)
-                ld   c, a
-                ld   e, (ix+E_X)
+.t0:            ld   hl, (LP_RECP)             ; ROOM-MEM2 try 0 (no stream step): the entry's LP_POS
+                bit  LR_VISITED_BIT, (hl)      ; cell (its last one; parked or not), the §9.4.3 rules
+                jr   z, .pl                    ; with the 5-col arrival gap. FRESH: none (40 T, not ~0.15k:
+                ld   a, (LPV_RDP)              ; tests/lp.py A2's mean cap)
+                call lp_posr
+                ld   a, (hl)
+                or   a
+                jr   z, .pl                    ; none: a trickle entry
+                ld   b, a
+                and  LPP_X
+                ld   e, a                      ; E = x
+                ld   a, b
+                rlca
+                rlca
+                rlca
+                and  1
+                ld   c, a                      ; C = storey (bit 5; a flyer: its band)
                 ld   a, LP_GAP2
                 ld   (LP_GAPV), a
-                call lp_legal                  ; NC: legal (C = s, E = x kept)
-                jr   nc, .sp
+                call lp_legal                  ; NC: legal (BC, DE kept)
+                jr   c, .pl
+                ld   a, b
+                ld   (LPV_FACE), a             ; its facing for a fresh slot (lp_spawn)
+                jr   .sp                       ; (NC)
+                ASSERT LPP_S_BIT == 5
 .pl:            call lp_place                  ; CF = no legal cell, else C = s, E = x
 .sp:            call nc, lp_spawn              ; CF = no free slot
                 jr   nc, .nu
-                ld   hl, (LPV_RDP)             ; not placed: stays in the record
+                ld   a, (LPV_RDP)              ; not placed: stays in the record, ROOM-MEM2 with
+                call lp_posr                   ; its LP_POS byte (compacted like the entry)
+                ld   b, (hl)
+                ld   a, (LPV_WRP)
+                call lp_posr
+                ld   (hl), b
+                ld   hl, (LPV_RDP)
                 ld   de, (LPV_WRP)
                 ldi
                 ldi
@@ -419,7 +449,7 @@ lp_enter:
                 ld   (LPV_RDP), hl
                 ld   hl, LPV_N
                 dec  (hl)
-                jr   nz, .u
+                jp   nz, .u
 .done:          ld   hl, (LP_RECP)
                 ld   de, (LPV_WRP)
                 ld   a, e
@@ -431,6 +461,24 @@ lp_enter:
                 pop  hl                        ; their stale bytes; levelgen.py models it)
                 ld   (GEN_RNG), hl
                 ret
+
+; lp_posr — ROOM-MEM2: A = the low byte of an entry pointer of the record being entered
+; (LPV_RDP / LPV_WRP = LP_RECP + 1 + 2 i), LPV_ROOM -> HL = &LP_POS[4 room + i].
+; Clobbers: A, F.   ~0.1k T
+lp_posr:        ld   hl, LP_RECP
+                sub  (hl)                      ; 1 + 2 i (8-bit: a record is 9 B)
+                rrca                           ; i | $80
+                and  LR_MAX - 1
+                ld   l, a
+                ld   a, (LPV_ROOM)
+                add  a, a
+                add  a, a
+                add  a, l
+                add  a, LP_POS & $FF           ; one page (level_defs.asm ASSERT)
+                ld   l, a
+                ld   h, LP_POS >> 8
+                ret
+                ASSERT LR_ENT == 1 && LE_STRIDE == 2 && LR_MAX == 4
 ;------------------------------------------------------------------------------
 ; lp_place — LP_W / LP_M = the unit, LPV_BOSS: LP_TRIES candidates from the
 ; spawn stream, one step each: s = bit 0 of its high byte, x = LP_XMIN + (low
@@ -603,7 +651,7 @@ lp_cmap:        ld   hl, LP_CMAP               ; clear: 3 stores / loop, ~15 T/B
                 ld   c, a                      ; bit 0 = RDX_RS1
                 ld   a, 27
                 ld   b, 4
-                jp   lp_mark                   ; cols 27..30
+                jr   lp_mark                   ; cols 27..30 (ROOM-MEM2: in jr range again)
 ;------------------------------------------------------------------------------
 ; lp_mark — A = first col (signed: -128..127), B = cols (>= 1), C = storey,
 ; E = bit: OR E into LP_CMAP[C][A .. A+B-1], CLIPPED to cols 0..LP_CMW-1
@@ -768,8 +816,13 @@ lp_spawn:       push de                        ; E = col
                 ld   (hl), d
                 inc  l
                 djnz .z
+                ld   a, (LPV_FACE)             ; ROOM-MEM2: placed on its LP_POS cell (try 0): its saved
+                rrca                           ; facing (bit 6 -> bit 3 = EF_LEFT; != 0 marks it for
+                rrca                           ; .mk below; spawn_one rewrites E_FLAGS); 0 = face the hero
+                rrca
+                ld   (ix+E_FLAGS), a
                 jr   .mk
-                ASSERT (P_ENTITIES & (P_ENT_STRIDE - 1)) == 0
+                ASSERT (P_ENTITIES & (P_ENT_STRIDE - 1)) == 0 && LPP_LEFT_BIT == 6 && EF_LEFT == 1 << 3
 .pk:            ld   a, (ix+E_RCD)             ; its statuses / cooldown / AI bytes stay; the summon
                 ld   b, a                      ; counter resets (a discarded summon's ping-pong reset
                 rrca                           ; stays, plan ROOM-MEM); the cooldown c (bits 0-1,
@@ -794,7 +847,8 @@ lp_spawn:       push de                        ; E = col
                 ld   a, (ix+E_FLAGS)
                 or   a
                 jr   z, .fr
-                and  EF_LEFT                   ; ... ROOM-MEM: a parked one keeps its own facing
+                and  EF_LEFT                   ; ... ROOM-MEM: a parked one keeps its own facing (ROOM-MEM2:
+                                               ; a fresh slot on its LP_POS cell: the saved one)
                 ld   b, a
 .fr:            ld   hl, (LPV_RDP)
                 ld   a, (hl)

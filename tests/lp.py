@@ -391,17 +391,21 @@ def part_a7(h, p, check, nlev):
           worst[0] <= LP_T_GUARD and sum(tss) // len(tss) <= 22000, worst)
 
 
-def bank_model(lp, r, slots, gold=None):
-    """§9.4.2: append every alive slot of room r (exact hp, EF_RESPAWN, 3F-T5: LEK_GOLD) in slot order."""
+def bank_model(lp, r, slots, gold=None, p=None):
+    """§9.4.2: append every alive slot of room r (exact hp, EF_RESPAWN, 3F-T5: LEK_GOLD) in slot order.
+    ROOM-MEM2: with p (kind heights), each one's LP_POS byte too (G.lp_pos_byte: x, storey, facing)."""
     gold = gold or {}
     lp = bytearray(lp)
     ro = S["LP_REC"] - LPB + r * S["LR_STRIDE"]
     n = lp[ro] & 7
-    for (sl_, k, rr, _, _, fl, hp) in slots:
+    for (sl_, k, rr, x, y, fl, hp) in slots:
         if rr != r or fl & EF_DYING:
             continue
         lp[ro + 1 + 2 * n] = k | (fl & S["EF_RESPAWN"]) | gold.get(sl_, 0)
         lp[ro + 2 + 2 * n] = hp
+        if p is not None:
+            lp[S["LP_POS"] - LPB + 4 * r + n] = G.lp_pos_byte(x, min(1, (y + p.kb(k, "KT_BH")) // 9),
+                                                              bool(fl & EF_LEFT))
         n += 1
     lp[ro] = S["LR_VISITED"] | n
     return bytes(lp)
@@ -480,8 +484,8 @@ def part_a4(h, p, check):
                        if not x[5] & EF_DYING]
             check(f"A4 d{d} room {r}: lp_bank -> record == model (exact hp, golden bit, dead dropped), "
                   f"no active slot; ROOM-MEM: the alive ones parked in place (kind, storey, x, facing)",
-                  ok and mask(lp1) == mask(bank_model(lp0, r, sl, gold)) and p.slots() == [] and pk == want_pk,
-                  (lp1.hex(), bank_model(lp0, r, sl, gold).hex(), p.slots(), pk, want_pk))
+                  ok and mask(lp1) == mask(bank_model(lp0, r, sl, gold, p)) and p.slots() == [] and pk == want_pk,
+                  (lp1.hex(), bank_model(lp0, r, sl, gold, p).hex(), p.slots(), pk, want_pk))
             p.wb(S["ROOM_VISITS"] + r, p.rb(S["ROOM_VISITS"] + r) + 1)
             lp1 = p.lp()
             p.wmem(S["LP_HX"], [1, 0, 3])
