@@ -65,12 +65,13 @@ def layout(check):
     fields = [("BAG", 60), ("WORN", 12), ("FOOD", 1),          # 3E rev 6: no FL_IST / ID_MAP / KNOWN
               ("FOOD_TMR", 1), ("HSTAGE", 1), ("HP_RG", 1), ("HW_TMR", 1),   # 3E-T9: the QPIN bytes
               ("MP_HOLD", 1), ("QS_CACHE", 3), ("ST1_CNT", 5),   # M0: the STATS1 S1 reserve
-              ("ST2_CNT", 3)]                                  # STATS2: books read / found, items
+              ("ST2_CNT", 3),                                  # STATS2: books read / found, items
+              ("NEW_MASK", 3), ("LAST_PICK", 1), ("MPF_T", 1), ("UX_FL", 1)]   # ITEM-INFO + UX1 (UX_RAM)
     a, ok = s["ITEM_RAM"], True
     for name, n in fields:
         ok &= s[name] == a
         a += n
-    check("L3 ITEM_RAM fields", ok and a == s["ITEM_RAM_END"] and s["ITEM_RAM_LEN"] == 89,
+    check("L3 ITEM_RAM fields", ok and a == s["ITEM_RAM_END"] and s["ITEM_RAM_LEN"] == 95,   # ITEM-INFO + UX1: +6 (NEW_MASK, LAST_PICK, MPF_T, UX_FL)
           [(n, hex(s[n])) for n, _ in fields])
     lo, hi = s["ITEM_RAM"], s["ITEM_RAM_END"]
     check("L3 one page", lo & 0xFF == 0 and (hi - 1) >> 8 == lo >> 8)
@@ -124,6 +125,7 @@ def emu(p, check):
     want[S["FOOD"] - lo] = S["FOOD_START"]             # 3E-T9: kit_add
     want[S["QS_CACHE"] + S["QS_FOOD"] - lo] = 1          # 3E-T12 / IC1: pot_sync's food QTY (Apple x1)
     want[S["QS_CACHE"] + S["QS_POTION"] - lo] = 1        # IC1: potion types present (bit 0 = Heal)
+    want[S["LAST_PICK"] - lo] = 0xFF                     # UX1: new_game sets LAST_PICK := $FF (no pickup yet)
     check("R1 new_game zeroes ITEM_RAM + the start kit (T11)", mem(lo, n) == bytes(want), mem(lo, n).hex())
     bad = canaries()
     check("R1 the rest of the reserve untouched", not bad, bad[:16])
@@ -139,7 +141,10 @@ def emu(p, check):
     # pattern through play; the whole block (hunger included) through the descent
     h0, h1 = S["FOOD"] - lo, S["MP_HOLD"] + 1 - lo
 
+    mp = S["MPF_T"] - lo                               # UX1: MPF_T is a live countdown (ux_tick), owned by play
+
     def nohunger(b):
+        b = b[:mp] + b"\x00" + b[mp + 1:]
         return b[:h0] + b[h1:]
     check("R2 ITEM_RAM outside the hunger bytes kept by play", nohunger(mem(lo, n)) == nohunger(pat))
     pat = mem(lo, n)
