@@ -51,13 +51,13 @@ sites, `src/spawn6.asm` sp_y (a flyer spawns at its cruise row `9s+1`).
 | Id | Need | Est. | Where | Cheaper alternative (and what it costs the design) |
 |---|---|---|---|---|
 | **G-1 PERCH** | Gargoyle statue + proximity wake | ≈ 35–40 B | bank 3: a `bit 7` test (`KF_PERCH` = the spare `KT_FLAGS` bit 7) at `ai_monster .go`, before the flyer dispatch, ≈ 6 B; the handler in R6 via `far6`, ≈ 25 B; the wake-on-damage set in the monster damage path, ≈ 8 B | **ASLEEP at spawn** (timer 15, ≈ 12 B). **Rejected:** the `$41` tint and the overhead Zz mark (§6.4.1 V2: shown at `y = 9s+1`) reveal it at once. It would read as a sleeping monster, not decor, and it has no proximity trigger. The boss guard G2 is not reusable either: `LF_PROVOKED` is one level bit, and its storey and post are boss-only |
-| **F-1 FLYER SHOOTER** | Fire Imp spits from the air | ≈ 20–25 B | bank 3 ≈ 8 B: in `ai_flyer` after `attack_if_reach` (`ret c`), set TMP4 = storey and H = 0 (standing), then `call ai_rhook` / `ret c`. R6 ≈ 15 B in `ai_ranged` / `rg_line`: for a flyer, `fr = y + h − 1` (its bottom row) and the in-line test adds `fr ≥ 9s+2` (inside the standing hero's rows) | **(a) Fire-touch flyer**: melee claw 1d4 FIRE, no spit. 0 code, data only. It is still the first FIRE attacker, but it loses the ranged threat. **(b) Walker imp**: the ranged hook as-is (0 code), but it needs walker frames and loses flight. Fallback order: (a) then (b) |
+| **F-1 FLYER SHOOTER** | Fire Imp spits from the air; **shared by the Frost Wraith's FROST BOLT (user 2026-11-14, §4.4)**: the hook must sit on the common `ai_flyer` exit (after `attack_if_reach`, both the `KF_BAT` and the Ghost-drift paths), so the Wraith costs 0 code | ≈ 20–25 B | bank 3 ≈ 8 B: in `ai_flyer` after `attack_if_reach` (`ret c`), set TMP4 = storey and H = 0 (standing), then `call ai_rhook` / `ret c`. R6 ≈ 15 B in `ai_ranged` / `rg_line`: for a flyer, `fr = y + h − 1` (its bottom row) and the in-line test adds `fr ≥ 9s+2` (inside the standing hero's rows) | **(a) Fire-touch flyer**: melee claw 1d4 FIRE, no spit. 0 code, data only. It is still the first FIRE attacker, but it loses the ranged threat. **(b) Walker imp**: the ranged hook as-is (0 code), but it needs walker frames and loses flight. Fallback order: (a) then (b) |
 | **A-1 ALIAS ROW** | a 3rd kind id (§3) | ≈ 95–110 B (≈ 15 B loop + ≈ 20 differing bytes × (2 B addr + 2 values)) | R6 (or bank-0 cold via FARB0), runs once in `level_enter` **before** `pool_list` | none at ≤ 31 ids (§3) |
 | **FX-U** | move the class FX units out of ids 30/31 | ≈ 0–10 B | `pool6.asm` gu_tab_x (`U_FXW`/`U_FXM` ≥ `K_MAX`); `start_game` uses `HERO_KIND + U_FX_BASE`; the defs.asm ASSERT changes | — |
 | **P-1 PIT FALLBACK** | §8 | ≈ 30–40 B + Goblin dagger ≈ 20–25 B | call site in the bank-3 walker pit-refusal branch ≈ 6 B; the rest in R6 next to `ai_ranged` | §8.6 |
 
 **0 new code:** Frost Wraith (Ghost drift, `KF_SLOW`, the generic on-hit apply with effect
-FROZEN on the hero, the existing HOLD_GUARD), Imp FIRE thaw (§6.4 rule), resistances,
+FROZEN on the hero, the existing HOLD_GUARD; its FROST BOLT is an F-1 data row, §4.4), Imp FIRE thaw (§6.4 rule), resistances,
 immunities, shared DEAD unit (`pool_gmap`, the same mechanism as the shared humanoid DEAD).
 **Verified:** the `KF_SLOW` gate runs before the flyer dispatch (`turn3.asm:290-299`).
 
@@ -113,7 +113,7 @@ immunities, shared DEAD unit (`pool_gmap`, the same mechanism as the shared huma
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | **Gargoyle** | 24×32 | 9 | 3 | 1 | 0 | 1d6 | 3 | flyer, `KF_PERCH` | **perch** (§4.1), then Ghost-path chase | — | D5, D6 |
 | **Fire Imp** | 24×16 | 5 | 2 | 3 | 0 | 1d3 FIRE; ember 1d4+1 FIRE r6 | 3 (small 2 + projectile 1, the Slinger rule) | flyer, `KF_BAT` (erratic) | erratic + ranged, cooldown 2, **flies on between shots** (no hold, no step-away) | Mana 1/4 | D4, D6 |
-| **Frost Wraith** | 24×32 | 13 | 3 | 2 | 1 | 1d6+1 COLD | 3 | flyer, `KF_SLOW` (acts every 2) | drift (Ghost); touch **⅓ → FROZEN 2** | — | D5, D7 |
+| **Frost Wraith** | 24×32 | 13 | 3 | 2 | 1 | 1d6+1 COLD; frost bolt 1d4+1 COLD r8 | 3 | flyer, `KF_SLOW` (acts every 2) | drift (Ghost); touch **1 in 4 → FROZEN 2**; + ranged FROST BOLT, cooldown 2, damage only, drifts on (§4.4, user 2026-11-14) | — | D5, D7, D8 |
 
 Scaled: Gargoyle D5 13/4, D6 14/4. Imp D4 8/3, D6 10/3. Wraith D5 17/4, D7 19/5.
 **KXP:** Gargoyle 8, Fire Imp 6, Frost Wraith 10 (between Ghost 6 and Mummy 12; §4.1 table).
@@ -174,6 +174,45 @@ COLD-typed melee. The §6.4 typed-rider rule applies: FROZEN only if ≥ 1 damag
 none, R → 1. **There is no COLD-resist gear today** (§8.4 gear table: only Fire Ward FIRE R), so
 "cold gear matters" needs gear. See Q3. HOLD_GUARD (§6.4.1 B1) stops chain-freezing. FIRE
 thaws the hero, but the Imp never shares a depth with the Wraith (alias), so there is no accidental synergy.
+
+### 4.4 Frost Wraith FROST BOLT (F-1, user 2026-11-14) — RANGED-SPEC table row
+
+| Kind | Range r | Cool N | Hit rule | Damage | On hit | Step-away | Climbs | FX |
+|---|---|---|---|---|---|---|---|---|
+| Frost Wraith | 8 | 2 (every 3rd **acting** turn = every **6th** game turn under `KF_SLOW`) | auto-hit (spell branch: `roll × response`, no DEF) | 1d4+1 COLD (avg 3.5; D5–D8 unscaled, as every RANGED-SPEC row) | **none** (damage only; the touch stays the freezer) | **no: drifts on** (reloading → CF = 0 → Ghost drift, the Imp/Widow semantics) | flyer | `frost_fly` `$45` → impact `frost_crack` `$45` (the Frost Shard pair, **0 B new art**) |
+
+- **Same F-1 path as the Imp, data only:** one `rd_tab` row (R6) plus the row-31 alias `rk` byte
+  (already in the A-1 patch list). Flight row `fr = y + h − 1 = y + 3`: at the cruise row `9s+1`
+  that is `9s+4`, always inside the standing hero's `9s+2..9s+7`, so a Wraith on the hero's storey
+  is always "in line" (clear line, reflect gate, track limit as §9.2). It never fires when in melee
+  reach: `attack_if_reach` runs first, so adjacent it touches (1 in 4 freeze), at range it shoots.
+- **`KF_SLOW`:** the slow gate runs before the hook, and the cooldown only ticks on acting turns,
+  so the effective cadence is 1 shot per 6 game turns (spawn counter 1 → first shot on its 2nd
+  acting turn = game turn ≈ 4). ≈ 0.6 dmg/turn in range before resist. SHOOT pose = `wraith_touch`.
+- **Frost Charm (COLD R):** halves the bolt like the touch (`roll × res`, floor per §6.4). No
+  hero gear is COLD X, so the reflect gate never triggers. FIRE never comes from a Wraith.
+- **Why no freeze on the bolt (default):** the B2 rule and HOLD_GUARD stop *chain* locks on one
+  body, but a ranged FROZEN while an Orc/Mummy is adjacent is the §7 top risk at range 8 and on D8
+  next to the Necro's FEAR bolts. Melee = freezer, bolt = chip damage keeps the two attacks readable.
+  **Knob if the sim says the Wraith is too soft:** rider FROZEN **1** at 32/256 (1 in 8) on the bolt,
+  gated by the existing B2 + HOLD_GUARD (no extra code: the rider byte in the row). Not FROZEN 2.
+- **FX pool:** `frost_fly`/`frost_crack` are in the Mage class unit `U_FXM` (0 B for him). The
+  Warrior needs an extra unit **`U_FROSTW`** (the `U_SPARKW` precedent: unit +2 B, `pool_xmap` row
+  (row 31 → Warrior → `U_FROSTW`) +3 B, R6) = **+64 B pool on D5, D7, D8** for the Warrior. D8 is the binding
+  level (slack 3,440 after T9): fits. The `pool_xmap` row must key on the **resolved** row 31
+  (Wraith depths only), not on kind id 31, or the Imp levels pay 64 B for nothing.
+- **Bytes:** R6 ≈ 8 (rd_tab row) + 5 (unit + xmap) = **≈ 13 B R6**; **bank 3: 0 B** if T10 puts the
+  F-1 call on the common `ai_flyer` exit (≈ +6 B bank 3 for a second call site otherwise — avoid:
+  bank 3 is nearly full). Bank 2 0 B (no new fid). Low RAM 0 B. If R6 is short, the row and unit go
+  with the rest of F-1 into bank-0 `B0_CODE2` (§2.3).
+- **Balance gate:** re-run the sim with the bolt modelled (avg policy W/M ≥ 35 %, gap ≤ 3).
+  `tools/balance_sim.py` / `tools/ranged_model.py` `ROWS`: a Wraith row (auto-hit COLD r8 N2,
+  no rider, flyer, drifts on) with the cadence divided by `KF_SLOW` (1 shot / 6 turns), COLD R
+  halving via the Frost Charm, and the row-31 alias resolved by depth (Imp D4/D6, Wraith D5/D7/D8).
+  The NEW-MON3 package file (`tools/balance_nm3.json`, merged in T9 with the D7/D8 tier preset; extend it, originally derived from
+  `balance_pkgFINAL_B.json`) carries the Wraith stats, `LP_KINDS` D5/D7/D8 and the bolt row with a
+  `rider` knob (none | FROZEN 1 @ 32/256). **Risk:** D8 ranged density (2/8 Necro + boss DARK bolts +
+  1/8 Wraith); if D8 W or M drops > 3 pp, first knob = cooldown 2 → 3, then range 8 → 6.
 
 ---
 
@@ -342,7 +381,9 @@ the track-limit read and use the existing "4th waits" FX queue (saves ≈ 6 B).
 - `tests/ranged.py`, `tests/proj3.py`: Imp row (flyer `fr`, the `y = 9s` not-in-line case, flies on
   while reloading), pit rows (refused-step only, PIT skip at step 4, counter, track-limit wait,
   Goblin one-shot + floor dagger, poison spit).
-- `tests/status.py` / `status1.py`: Wraith FROZEN on the hero (⅓, R halves, HOLD_GUARD), Imp FIRE
+- `tests/ranged.py`: Wraith bolt (F-1 on the Ghost-drift path, `KF_SLOW` cadence 1/6, no rider,
+  Frost Charm halves, Warrior `U_FROSTW` resident on D5/D7/D8 only).
+- `tests/status.py` / `status1.py`: Wraith FROZEN on the hero (1 in 4, R halves, HOLD_GUARD), Imp FIRE
   thaw. Gargoyle: wake on gap 2, wake on damage, re-perch on re-entry, follower stays awake.
 - `tests/lp.py`, `tests/roommem.py`, `tests/trickle.py`, levelcheck: Plan X `LP_KINDS`, row-31
   alias by depth, waits ≤ 15 %, discard 0. `tools/levelgen.py` KROWS / LP_TAB mirror.
@@ -362,7 +403,9 @@ the track-limit read and use the existing "4th waits" FX queue (saves ≈ 6 B).
    item id + name ≈ 20 B + a `gear_pool` entry). Default **no**: the Wraith is tuned to be beatable
    without it. Revisit after the sim.
 4. `PERCH_GAP` 2 vs 3. Default **2**.
-5. Wraith freeze ⅓ / 2 turns. Default as specified; the sim may push it to ¼.
+5. Wraith freeze: **closed 2026-11-13, 1 in 4 / 2 turns** (touch only).
+8. **Wraith FROST BOLT (user 2026-11-14, §4.4):** r8, N2, 1d4+1 COLD, auto-hit, drifts on. Default
+   **damage only** (no freeze on the bolt); knob FROZEN 1 @ 1 in 8 if the sim calls it soft.
 6. Fire Imp ember ink `$42` (Firebolt red) vs `$46`. Default **`$42`**.
 7. FRT page funding (+256 B bank 2) from bank-0 relocation after C. Default **yes**. The architect
    picks the cold code to move.
