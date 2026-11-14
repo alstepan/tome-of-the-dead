@@ -191,8 +191,12 @@ rg_pose:        ld   (ix+E_MSG), b
                 xor  a
                 ld   (ix+E_TGT), a
                 ld   (ix+E_HIT), c
-                call kind_seq_ptr              ; (bank 2)
                 ld   de, KS_ATTACK
+                ld   a, (ix+E_KIND)            ; NEW-MON3 T10b: a row-31 shooter plays its KS_BLOCK (the Frost
+                cp   K_ALIAS                   ; Wraith's FROST BOLT cast; the Fire Imp's KS_BLOCK = its attack):
+                jr   nz, .at                   ; its melee keeps KS_ATTACK (the touch). +6 B
+                ld   e, KS_BLOCK
+.at:            call kind_seq_ptr              ; (bank 2; keeps DE)
                 add  hl, de
                 ld   a, (hl)
                 inc  hl

@@ -293,11 +293,13 @@ RCD_VSEEN       EQU %00001000       ; the close-distance line has been logged fo
 RCD_VSEEN_BIT   EQU 3
 ; NEW-MON3 T10a: bit 2 (a summon bit: the Gargoyle and the Goblin never summon) is kind-exclusive like RCD_VFLEE:
 ; the Gargoyle's AWAKE (G-1, new_monsters.md §4.1: 0 = perched; the zeroed spawn slot and lp_spawn's parked restore
-; (clears RCD_SUMMON) give "perched" for free; place_follower keeps it: a follower stays awake) and the Goblin's pit
-; dagger SPENT (P-1 §8.3: one per life)
+; (clears RCD_SUMMON) give "perched" for free; place_follower keeps it: a follower stays awake).
+; NEW-MON3 T10b (user 2026-11-14): the Goblin's pit dagger SPENT (P-1 §8.3: one per LIFE) is the once bit RCD_ONCE
+; (bit 7; the Goblin neither breeds nor flees): a parked slot keeps it (lp_spawn clears only RCD_SUMMON), lp_bank
+; writes it as LEK_BRED and lp_spawn restores it, place_follower keeps it (RCD_KEEP). Was bit 2 (T10a: lost on re-entry).
 RCD_AWAKE       EQU %00000100
 RCD_AWAKE_BIT   EQU 2
-RCD_SPENT_BIT   EQU 2
+RCD_SPENT_BIT   EQU RCD_ONCE_BIT
 PERCH_GAP       EQU 2               ; G-1: a perched Gargoyle wakes at a box gap <= 2 to the standing hero on its storey
 VB_GAP          EQU 12              ; rule 2: close distance at a box gap <= 12 cols
 VB_FAR          EQU 6               ; ... and gap >= 6 turns it on open floor too (gap < 6: only with a cut between)

@@ -59,6 +59,7 @@ PL_CAP          EQU 2 * 17 + 1         ; level: <= 5 kinds x 3 units + 2 extras 
 SQ_PTR          EQU PL_LIST + PL_CAP   ; SQ_SLOTS words: each slot's master block (0 = free)
 SQ_TOP          EQU SQ_PTR + 2 * SQ_SLOTS  ; word: the next free seq_bytes byte
 PL_PROTO        EQU SQ_TOP + 2         ; pool_proto's kind list (6 B)
+SQ_TOP2         EQU PL_PROTO + K_PROTO_END - K_SKELETON  ; NEW-MON3 T10b: word, the next free region-2 byte (seq2_bytes)
 SQ_IMG          EQU GEN_SCRATCH        ; the unpacked masters (seq_img.asm is DISPed here). NEW-MON3 T8: was GEN_SRC + 64 (917 B,
                                        ; 42 free); the pool_* calls run BEFORE gen_list (level_enter / start_game / the D0 start), so the
                                        ; generator's 1,536-B unpack window is idle: room for the new kinds' blocks (+102 B) and the
@@ -68,7 +69,7 @@ LP_GEN_N        EQU 9                  ; LP_KINDS[0..7] + LP_BOSS (not the LP sc
 GU_STRIDE       EQU 2
 FX_FID0         EQU KFID_FXM           ; the class FX fids [FX_FID0, FX_END): both FX units
 FX_END          EQU KFID_FXW + KFCNT_FXW
-                ASSERT LP_BOSS == LP_KINDS + 8 && PL_PROTO + K_PROTO_END - K_SKELETON <= GEN_SRC + 64
+                ASSERT LP_BOSS == LP_KINDS + 8 && SQ_TOP2 + 2 <= GEN_SRC + 64
                 ASSERT FX_FID0 + KFCNT_FXM <= FX_END && KFID_FXW >= FX_FID0
 
 ;------------------------------------------------------------------------------
@@ -92,7 +93,8 @@ pool_hero:
                 ld   a, (HERO_KIND)
                 add  a, U_FX_BASE
                 call pl_unit
-                jp   sq_fill
+                FARB0 sq_fill                  ; (bank 0 sq0.asm since NEW-MON3 T10b)
+                ret
 
 ; pool_proto: D3-11, the PROTO test fixture (src/proto_fix.asm) runs it.
 
@@ -150,17 +152,13 @@ pl_kinds:
 .xn:            inc  hl
                 jr   .x
 .xe:            ld   a, e
-                cp   K_VAMPIRE                 ; 3F-T9: + its bat form's block (K_VBAT's KT_SEQ)
-                jr   nz, .xs
-                ld   a, K_VBAT
-                call sq_load
-                ld   a, K_VAMPIRE
-.xs:            call sq_load
+                FARB0 sq_kind                  ; the kind's block (+ the Vampire's bat form, 3F-T9); bank 0 sq0.asm
                 pop  bc
                 pop  de
                 inc  de
                 djnz .k
-                jp   sq_fill
+                FARB0 sq_fill
+                ret
 
 ; pl_unit_hl — pl_unit of the unit byte at (HL); HL += 1. Keeps BC, DE.
 pl_unit_hl:
@@ -183,7 +181,8 @@ pl_begin:
                 call fxr_none
                 ld   a, PG_NONE                ; PL_LIST := empty
                 ld   (PL_LIST), a
-                jp   sq_reset                  ; seq slot 0 := the hero (low RAM)
+                FARB0 sq_reset                 ; seq slot 0 := the hero (bank 0 sq0.asm since NEW-MON3 T10b)
+                ret
 
 ; pl_unit — A = unit (PG_NONE: none): append its pair to PL_LIST unless it has
 ; no frames or is listed already (same fid0). Keeps BC, DE.  Clobbers: A, F, HL

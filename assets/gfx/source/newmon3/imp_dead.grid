@@ -1,0 +1,27 @@
+# Tome of the Dead gfx text grid — NEW-MON3 DEAD draft for canvas review (new_monsters.md §6); authored deterministically, not yet imported
+# name: imp_dead
+# size: 24x16
+# character: FIRE IMP
+# caption: DEAD
+# ink: #D7D700
+# anchor: 0 0
+# class: STA
+# note: struck dead mid-air (Bat-style, replaces shared dust_dead): tumbling upside-down, horns down, X eye, open-mouth grimace, near wing folded limp, tail slack with spade trailing up-left, 3 embers breaking off; faces RIGHT
+# legend: '#' ink, '+' opaque paper (mask 0, data 0), '.' transparent
+#
+.+++...+#++#++.++#+.+++.
+++#++..+++++#+.+#++.+#+.
++###++++++++#+++#+..+++.
+++#+#+##+##+#####+.+++..
+.++++#++##+#+####+++#+..
+....++++++++##+###++++..
+.......+++####++#####++.
+.....+++#####++#######++
+....++###+###+##+++++##+
+....+###+###++###+#+###+
+....+##+###+++#########+
+....+#+##+#+.+####+#+##+
+....++#++#++.+#####+###+
+.....++++++..+####+#+##+
+............++#+#####+#+
+............+#+++++++++#

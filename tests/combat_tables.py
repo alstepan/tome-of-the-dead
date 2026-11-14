@@ -229,7 +229,7 @@ def nm3_variant_check(sym, kcol, chk, r6):
         want[sym["kx_tab"] + 8 * K + i] = v
     want[sym["drop_imp"]] = 0
     want[sym["gu_tab"] + 2 * K] = sym["KFID_WRAITH"]
-    want[sym["gu_tab"] + 2 * K + 1] = 2
+    want[sym["gu_tab"] + 2 * K + 1] = 5                 # T10b: drift, touch, drift2, drift3, cast
     want[sym["ksm_tab"] + 2 * K] = sym["ksm_wr"] & 0xFF
     want[sym["ksm_tab"] + 2 * K + 1] = sym["ksm_wr"] >> 8
     o, end = sym["nm3_var_b2"] - 0xC000, sym["nm3_var_end"] - 0xC000

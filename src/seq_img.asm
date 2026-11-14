@@ -64,18 +64,6 @@ wz_attack:      DB WZ_SRAISE, WZ_WIND, 0, WZ_SSWING, 3, SF_IMPACT, SEQ_END
 wz_hurt:        DB WZ_HURT, 3, 0, SEQ_END
 wz_death:       DEATHSEQ WZ_HURT, WZ_DEAD, FID_wizard_dead, WZ_REST
 ksm_wz_e:
-; --- Skeleton ---
-ksm_sk:         KSMH ksm_sk_e - ksm_sk_s, 3, sk_idle, sk_move, sk_climb, sk_climbrest, sk_attack, sk_hurt, sk_hurt, sk_death, ksm_sk_s
-ksm_sk_s:
-sk_idle:        DB 1, SK_REST, 1, SEQ_END
-sk_move:        MOVECYC4 skeleton_walk2, skeleton_walk3, skeleton_walk4, skeleton_walk1
-sk_climb:       CLIMBCYC FID_skeleton_climb1, FID_skeleton_climb2, FID_skeleton_walk2, FID_skeleton_walk3, FID_skeleton_walk4, FID_skeleton_walk1
-sk_climbrest:   CLIMBREST FID_skeleton_climb1, FID_skeleton_walk1
-sk_attack:      DB FID_skeleton_raise, 3, 0, FID_skeleton_cut, 2, SF_IMPACT, SEQ_END
-sk_hurt:        DB SK_HURT, 3, 0, SEQ_END
-                ; CORPSE-ASHES: DEAD = the shared small_corpse (U_DEADR; was skeleton_collapsed)
-sk_death:       DEATHSEQ SK_HURT, FID_small_corpse, FID_small_corpse, SK_REST
-ksm_sk_e:
 ; --- Goblin ---
 ksm_gb:         KSMH ksm_gb_e - ksm_gb_s, 3, gb_idle, gb_move, gb_climb, gb_climbrest, gb_attack, gb_hurt, gb_hurt, gb_death, ksm_gb_s
 ksm_gb_s:
@@ -116,15 +104,6 @@ rt_attack:      DB FID_rat_run1, 1, 0, RT_BITE, 2, SF_IMPACT, SEQ_END
 rt_hurt:        DB RT_HURT, 3, 0, SEQ_END
 rt_death:       DEATHSEQ RT_HURT, RT_DEAD, FID_small_corpse, RT_REST
 ksm_rt_e:
-; --- Bat (flyer) ---
-ksm_bt:         KSMH ksm_bt_e - ksm_bt_s, 2, bt_idle, bt_idle, bt_idle, bt_climbrest, bt_attack, bt_hurt, bt_hurt, bt_death, ksm_bt_s
-ksm_bt_s:
-bt_idle:        DB 12, FID_bat_flapup, 3, FID_bat_glide, 3, FID_bat_flapdown, 3, FID_bat_glide, 3, SEQ_END
-bt_climbrest:   DB BT_REST, 0
-bt_attack:      DB FID_bat_flapup, 2, 0, BT_DIVE, 2, SF_IMPACT, SEQ_END
-bt_hurt:        DB BT_HURT, 3, 0, SEQ_END
-bt_death:       DEATHSEQ BT_HURT, BT_DEAD, FID_bat_dead, BT_REST
-ksm_bt_e:
 ; --- 3F-T9: the Vampire's bat form (K_VBAT, id 2): only the Bat's first VB_FCNT frames
 ; (flapup / glide, MOT: a flyer draws them at any px parity), so a Vampire level without the
 ; Bat pools 2 frames, not 6. VBAT-ART (user playtest: the old fade-out stand-in BLINKED — the
@@ -181,16 +160,6 @@ sp_attack:      DB FID_spider_walk1, 1, 0, FID_spider_bite, 2, SF_IMPACT, SEQ_EN
 sp_hurt:        DB FID_spider_bite, 3, 0, SEQ_END        ; ANIM-IMPORT item 1: HURT = the bite pose (0 B)
 sp_death:       DEATHSEQ FID_spider_bite, FID_small_corpse, FID_small_corpse, FID_spider_walk1
 ksm_sp_e:
-; --- Orc (Berserker, Bouncer): climber; RAISE -> ATTACK; V4 Ironhide B3 walk + HURT (ANIM-IMPORT2) ---
-ksm_or:         KSMH ksm_or_e - ksm_or_s, 3, or_idle, or_move, or_climb, or_climb + 1, or_attack, or_hurt, or_hurt, or_death, ksm_or_s
-ksm_or_s:
-or_idle:        DB 1, FID_orc_walk1, 1, SEQ_END
-or_move:        MOVECYC4 orc_walk2, orc_walk1, orc_walk3, orc_walk4   ; ANIM-X12 X1: 4 distinct poses (was walk1 twice)
-or_climb:       CLIMBCYC FID_climb_h1, FID_climb_h2, FID_orc_walk1, FID_orc_walk1, FID_orc_walk1, FID_orc_walk1
-or_attack:      DB FID_orc_raise, 3, 0, FID_orc_attack, 2, SF_IMPACT, SEQ_END
-or_hurt:        DB FID_orc_hurt, 3, 0, SEQ_END           ; ANIM-IMPORT2: its own HURT pose (Orc V4)
-or_death:       DEATHSEQ FID_orc_hurt, FID_small_corpse, FID_small_corpse, FID_orc_walk1
-ksm_or_e:
 ; --- Necromancer (Bone Caller): climber; walk B4 = walk2, walk4, walk3, walk1 (ART3; ANIM-IMPORT, was B3); CAST ---
 ksm_ne:         KSMH ksm_ne_e - ksm_ne_s, 3, ne_idle, ne_move, ne_climb, ne_climb + 1, ne_attack, ne_hurt, ne_hurt, ne_death, ksm_ne_s
 ksm_ne_s:
@@ -242,16 +211,6 @@ og_attack:      DB FID_ogre_raise, 3, 0, FID_ogre_slam, 2, SF_IMPACT, SEQ_END
 og_hurt:        DB FID_ogre_walk1, 3, 0, SEQ_END
 og_death:       DEATHSEQ FID_ogre_walk1, FID_small_corpse, FID_small_corpse, FID_ogre_walk1
 ksm_og_e:
-; --- Death Knight: 3F-T13bc the BLOCK frame is gone: a parry is RC_PARRY (anim: the rest
-; pose + a 1-tick ATTR_PARRY flash, no sequence); KS_BLOCK = the HURT seq (never started) ---
-ksm_dk:         KSMH ksm_dk_e - ksm_dk_s, 3, dk_idle, dk_move, dk_idle, dk_hurt, dk_attack, dk_hurt, dk_hurt, dk_death, ksm_dk_s
-ksm_dk_s:
-dk_idle:        DB 1, FID_dk_walk1, 1, SEQ_END
-dk_move:        MOVECYC4 dk_walk2, dk_walk1, dk_walk3, dk_walk1   ; 3F-T13bc B3 walk (ART4)
-dk_attack:      DB FID_dk_walk1, 3, 0, FID_dk_cleave, 2, SF_IMPACT, SEQ_END
-dk_hurt:        DB FID_dk_walk1, 3, 0, SEQ_END
-dk_death:       DEATHSEQ FID_dk_walk1, FID_small_corpse, FID_small_corpse, FID_dk_walk1
-ksm_dk_e:
 ; --- Skeleton Archer (Sniper): the Skeleton's walk + cut = U_SKARCH; SHOOT / melee = the cut
 ; (game.md §9.7 DECIDED: no SHOOT art); 3F-T13bc climber (the Skeleton's own climb pair, as sk_climb; user 2026-10-29);
 ; DEAD = small_corpse (CORPSE-ASHES) ---
@@ -275,38 +234,90 @@ ksm_ar_e:
                 ; the Archer / Sniper climb with the Skeleton's own pair (sk_climb's): cell-aligned STA|SYM
                 ASSERT !(FFL_skeleton_climb1 & (FF_PH4 | FF_MOTION)) && !(FFL_skeleton_climb2 & FF_MOTION)
 ; --- NEW-MON3 T8 (new_monsters.md §6.1): the Gargoyle, the Fire Imp (row 31 as assembled) and the Frost Wraith
-; (row 31, variant B: its block is in the image but ksm_tab names it only after the A-1 patch). Flyers: none climbs
-; (KS_CLIMB = KS_MOVE, KS_CLIMBREST = idle + 1 = the first frame), every KS_MOVE frame is MOT (a flyer draws it at
-; any px parity). HURT / ATTACK / DEATH reuse the pose frames (0 pool): the flash alone is not acceptable.
-; Gargoyle: idle = the statue (STA|SYM, nothing to cycle), move = the spread-wing MOT frame, claw = ATTACK.
-; T10a G-1 poses (RCD_AWAKE): PERCHED = KS_IDLE (the statue), AWAKE at rest = KS_MOVE (anim .cyc), WAKING = the KS_CLIMB
-; slot as a one-shot SEQUENCE (perch6 starts it on the proximity wake; a flyer never reads KS_CLIMB: anim .move takes
-; KS_MOVE for every flyer step). T10b maps the art: ga_wake is the placeholder statue -> spread wings.
-ksm_ga:         KSMH ksm_ga_e - ksm_ga_s, 2, ga_idle, ga_fly, ga_wake, ga_idle + 1, ga_attack, ga_hurt, ga_hurt, ga_death, ksm_ga_s
+; (row 31, variant B: its block is in the image but ksm_tab names it only after the A-1 patch). Flyers: none climbs,
+; every KS_MOVE frame is MOT (a flyer draws it at any px parity); KS_CLIMBREST = idle + 1 = the first frame.
+; NEW-MON3 T10b art pass (user-approved pose map 2026-11-14). The blocks after ksm_r2 go to REGION 2
+; (low-RAM seq2_bytes, sq0.asm; the split is ASSERTed per depth in main.asm "SEQ CACHE NEED").
+ksm_r2:                                         ; region 2 starts here (sq0.asm sq_load: block address >= ksm_r2)
+; T10b region 2 also takes four older blocks (Skeleton, Bat, Orc, Death Knight: moved here unchanged; the per-depth
+; split that keeps region 1 <= SEQB_LEN with the smallest region 2 that leaves region-1 headroom: D8 156 + 111 B)
+; --- Skeleton ---
+ksm_sk:         KSMH ksm_sk_e - ksm_sk_s, 3, sk_idle, sk_move, sk_climb, sk_climbrest, sk_attack, sk_hurt, sk_hurt, sk_death, ksm_sk_s
+ksm_sk_s:
+sk_idle:        DB 1, SK_REST, 1, SEQ_END
+sk_move:        MOVECYC4 skeleton_walk2, skeleton_walk3, skeleton_walk4, skeleton_walk1
+sk_climb:       CLIMBCYC FID_skeleton_climb1, FID_skeleton_climb2, FID_skeleton_walk2, FID_skeleton_walk3, FID_skeleton_walk4, FID_skeleton_walk1
+sk_climbrest:   CLIMBREST FID_skeleton_climb1, FID_skeleton_walk1
+sk_attack:      DB FID_skeleton_raise, 3, 0, FID_skeleton_cut, 2, SF_IMPACT, SEQ_END
+sk_hurt:        DB SK_HURT, 3, 0, SEQ_END
+                ; CORPSE-ASHES: DEAD = the shared small_corpse (U_DEADR; was skeleton_collapsed)
+sk_death:       DEATHSEQ SK_HURT, FID_small_corpse, FID_small_corpse, SK_REST
+ksm_sk_e:
+; --- Bat (flyer) ---
+ksm_bt:         KSMH ksm_bt_e - ksm_bt_s, 2, bt_idle, bt_idle, bt_idle, bt_climbrest, bt_attack, bt_hurt, bt_hurt, bt_death, ksm_bt_s
+ksm_bt_s:
+bt_idle:        DB 12, FID_bat_flapup, 3, FID_bat_glide, 3, FID_bat_flapdown, 3, FID_bat_glide, 3, SEQ_END
+bt_climbrest:   DB BT_REST, 0
+bt_attack:      DB FID_bat_flapup, 2, 0, BT_DIVE, 2, SF_IMPACT, SEQ_END
+bt_hurt:        DB BT_HURT, 3, 0, SEQ_END
+bt_death:       DEATHSEQ BT_HURT, BT_DEAD, FID_bat_dead, BT_REST
+ksm_bt_e:
+; --- Orc (Berserker, Bouncer): climber; RAISE -> ATTACK; V4 Ironhide B3 walk + HURT (ANIM-IMPORT2) ---
+ksm_or:         KSMH ksm_or_e - ksm_or_s, 3, or_idle, or_move, or_climb, or_climb + 1, or_attack, or_hurt, or_hurt, or_death, ksm_or_s
+ksm_or_s:
+or_idle:        DB 1, FID_orc_walk1, 1, SEQ_END
+or_move:        MOVECYC4 orc_walk2, orc_walk1, orc_walk3, orc_walk4   ; ANIM-X12 X1: 4 distinct poses (was walk1 twice)
+or_climb:       CLIMBCYC FID_climb_h1, FID_climb_h2, FID_orc_walk1, FID_orc_walk1, FID_orc_walk1, FID_orc_walk1
+or_attack:      DB FID_orc_raise, 3, 0, FID_orc_attack, 2, SF_IMPACT, SEQ_END
+or_hurt:        DB FID_orc_hurt, 3, 0, SEQ_END           ; ANIM-IMPORT2: its own HURT pose (Orc V4)
+or_death:       DEATHSEQ FID_orc_hurt, FID_small_corpse, FID_small_corpse, FID_orc_walk1
+ksm_or_e:
+; --- Death Knight: 3F-T13bc the BLOCK frame is gone: a parry is RC_PARRY (anim: the rest
+; pose + a 1-tick ATTR_PARRY flash, no sequence); KS_BLOCK = the HURT seq (never started) ---
+ksm_dk:         KSMH ksm_dk_e - ksm_dk_s, 3, dk_idle, dk_move, dk_idle, dk_hurt, dk_attack, dk_hurt, dk_hurt, dk_death, ksm_dk_s
+ksm_dk_s:
+dk_idle:        DB 1, FID_dk_walk1, 1, SEQ_END
+dk_move:        MOVECYC4 dk_walk2, dk_walk1, dk_walk3, dk_walk1   ; 3F-T13bc B3 walk (ART4)
+dk_attack:      DB FID_dk_walk1, 3, 0, FID_dk_cleave, 2, SF_IMPACT, SEQ_END
+dk_hurt:        DB FID_dk_walk1, 3, 0, SEQ_END
+dk_death:       DEATHSEQ FID_dk_walk1, FID_small_corpse, FID_small_corpse, FID_dk_walk1
+ksm_dk_e:
+; Gargoyle (G-1, RCD_AWAKE): PERCHED = KS_IDLE (garg_perch, the statue: only while perched); WAKING = the KS_CLIMB slot
+; as a one-shot SEQUENCE wake -> alert (perch6; 4 ticks as before; a flyer never reads KS_CLIMB: anim .move takes KS_MOVE
+; for every flyer step); AWAKE at rest = the KS_CLIMBREST fid = garg_alert, the grounded alert crouch (anim .cyc jumps to
+; .crest: a flyer is never on a ladder); flight = garg_fly / garg_fly2 (wing down-stroke, both MOT); ATTACK = windup ->
+; claw; HURT = garg_hurt; DEATH = garg_dead mid-air (the bat_dead shape).
+ksm_ga:         KSMH ksm_ga_e - ksm_ga_s, 2, ga_idle, ga_fly, ga_wake, ga_wake + 3, ga_attack, ga_hurt, ga_hurt, ga_death, ksm_ga_s
 ksm_ga_s:
 ga_idle:        DB 1, FID_garg_perch, 1, SEQ_END
-ga_fly:         DB 1, FID_garg_fly, 1, SEQ_END
-                ASSERT FFL_garg_fly & FF_MOTION
-ga_wake:        DB FID_garg_perch, 2, 0, FID_garg_fly, 2, 0, SEQ_END
-ga_attack:      DB FID_garg_fly, 2, 0, FID_garg_claw, 2, SF_IMPACT, SEQ_END
-ga_hurt:        DB FID_garg_perch, 3, 0, SEQ_END
-ga_death:       DEATHSEQ FID_garg_perch, FID_dust_dead, FID_dust_dead, FID_garg_perch
+ga_fly:         DB 6, FID_garg_fly, 3, FID_garg_fly2, 3, SEQ_END
+                ASSERT (FFL_garg_fly & FF_MOTION) && (FFL_garg_fly2 & FF_MOTION)
+ga_wake:        DB FID_garg_wake, 2, 0, FID_garg_alert, 2, 0, SEQ_END   ; 4 ticks as before; ga_wake + 3 = garg_alert
+ga_attack:      DB FID_garg_windup, 2, 0, FID_garg_claw, 2, SF_IMPACT, SEQ_END
+ga_hurt:        DB FID_garg_hurt, 3, 0, SEQ_END
+ga_death:       DEATHSEQ FID_garg_hurt, FID_garg_dead, FID_garg_dead, FID_garg_alert
 ksm_ga_e:
-; Fire Imp: the Bat's 2-cycle (flap A / flap B, period 6), the spit frame = ATTACK / SHOOT / HURT.
-ksm_ia:         KSMH ksm_ia_e - ksm_ia_s, 2, ia_idle, ia_idle, ia_idle, ia_idle + 1, ia_attack, ia_hurt, ia_hurt, ia_death, ksm_ia_s
+                ASSERT !(FFL_garg_alert & (FF_PH4 | FF_MOTION)) && !(FFL_garg_wake & (FF_PH4 | FF_MOTION))   ; cell-aligned rest / wake
+; Fire Imp: the Bat's 2-cycle (flap A / flap B, period 6), the spit frame = ATTACK / SHOOT / HURT; T10b: DEATH = imp_dead
+; mid-air (the bat_dead shape). KS_BLOCK = ia_attack: rg_pose plays a K_ALIAS shooter's KS_BLOCK (the Wraith's cast).
+ksm_ia:         KSMH ksm_ia_e - ksm_ia_s, 2, ia_idle, ia_idle, ia_idle, ia_idle + 1, ia_attack, ia_hurt, ia_attack, ia_death, ksm_ia_s
 ksm_ia_s:
 ia_idle:        DB 6, FID_imp_fly1, 3, FID_imp_fly2, 3, SEQ_END
                 ASSERT (FFL_imp_fly1 & FF_MOTION) && (FFL_imp_fly2 & FF_MOTION)
 ia_attack:      DB FID_imp_fly1, 2, 0, FID_imp_spit, 2, SF_IMPACT, SEQ_END
 ia_hurt:        DB FID_imp_spit, 3, 0, SEQ_END
-ia_death:       DEATHSEQ FID_imp_spit, FID_dust_dead, FID_dust_dead, FID_imp_fly1
+ia_death:       DEATHSEQ FID_imp_spit, FID_imp_dead, FID_imp_dead, FID_imp_fly1
 ksm_ia_e:
-; Frost Wraith: the Ghost's shape (one MOT drift frame; touch = ATTACK / HURT).
-ksm_wr:         KSMH ksm_wr_e - ksm_wr_s, 2, wr_idle, wr_idle, wr_idle, wr_idle + 1, wr_attack, wr_hurt, wr_hurt, wr_death, ksm_wr_s
+; Frost Wraith: T10b drift loop drift -> drift2 -> drift3 (all MOT: REST + flight, period 12); touch = melee ATTACK / HURT;
+; KS_BLOCK = the FROST BOLT cast (rg_pose: a K_ALIAS shooter plays KS_BLOCK; same IMPACT tick as the touch); DEAD = the
+; shared dust_dead (rime by KT_ATTR).
+ksm_wr:         KSMH ksm_wr_e - ksm_wr_s, 2, wr_idle, wr_idle, wr_idle, wr_idle + 1, wr_attack, wr_hurt, wr_cast, wr_death, ksm_wr_s
 ksm_wr_s:
-wr_idle:        DB 1, FID_wraith_drift, 1, SEQ_END
-                ASSERT FFL_wraith_drift & FF_MOTION
+wr_idle:        DB 12, FID_wraith_drift, 4, FID_wraith_drift2, 4, FID_wraith_drift3, 4, SEQ_END
+                ASSERT (FFL_wraith_drift & FF_MOTION) && (FFL_wraith_drift2 & FF_MOTION) && (FFL_wraith_drift3 & FF_MOTION)
 wr_attack:      DB FID_wraith_drift, 2, 0, FID_wraith_touch, 2, SF_IMPACT, SEQ_END
+wr_cast:        DB FID_wraith_drift, 2, 0, FID_wraith_cast, 2, SF_IMPACT, SEQ_END
 wr_hurt:        DB FID_wraith_touch, 3, 0, SEQ_END
 wr_death:       DEATHSEQ FID_wraith_touch, FID_dust_dead, FID_dust_dead, FID_wraith_drift
 ksm_wr_e:
+                ASSERT ksm_kn < ksm_r2 && ksm_wz < ksm_r2   ; the hero blocks: region 1 (sq_reset's SEQH_BYTES)
