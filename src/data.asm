@@ -77,14 +77,14 @@ POOL_SIM_MARGIN EQU 64
                 ; monster kind (start_game .gk, K_SKELETON .. K_PROTO_END - 1)
 K_PROTO_END     EQU K_SLIME + 1
                 ASSERT KFID_SKELETON == KFID_MONSTERS && KFID_SLIME + KFCNT_SLIME == KFID_F3
-                ASSERT KFID_CLIMBH + 2 == KFID_MONSTERS + KFCNT_MONSTERS   ; 3F-T13(bc): the 3F frames end the range
+                ASSERT KFID_CLIMBH + 2 == KFID_MONSTERS + KFCNT_MONSTERS && KFID_GARG == KFID_ARCH + KFCNT_ARCH && KFID_NBOLT == KFID_DUST + KFCNT_DUST   ; 3F-T13(bc) + NEW-MON3 T7: the new kinds' frames sit before the shared units
 POOL_NEED_PROTO EQU POOL_FIXED + POOL_HERO_MAX + POOL_MONSTERS
                 ; level_enter clears the FRT rows [KFID_MONSTERS, + KFCNT_MONSTERS):
                 ; every monster frame must lie there (heroes before, FX kinds after)
                 ASSERT KFID_MONSTERS + KFCNT_MONSTERS == KFID_FXM
 POOL_CAP        EQU 3 * 16384 - (POOL_START - BANK_WINDOW) - R6_LEN - SRC6_LEN   ; D3-TX: the text block under bank 0's pool; R6 + SRC6: bank 6 ends at POOL6_END
                 ASSERT POOL6_END - BANK_WINDOW == $4000 - R6_LEN - SRC6_LEN          ; POOL_CAP's bank-6 term = alloc's limit
-                ASSERT FID_COUNT <= FRT_MAX
+                ASSERT FID_COUNT == FRT_MAX         ; NEW-MON3 T7: descriptor reserve 0 (FRT_MAX 153 = the 153 fids)
                 DISPLAY "GAME class FX pool: warrior ", /D, POOL_FXW, " (", /D, KFCNT_FXW, " frames), mage ", /D, POOL_FXM, " (", /D, KFCNT_FXM, " frames); knight ", /D, POOL_KNIGHT, ", wizard ", /D, POOL_WIZARD
 
 ;==============================================================================
@@ -287,11 +287,12 @@ PIT_B           EQU 20              ; room B storey-0 pit, left hole col
 
 ; per-kind stats (prototype §6.3) — emitted into the page-aligned kind_tab,
 ; one K_MAX (32) B array per KROW (3F-T3: ids 0..29 = the 18 base + 12 tier rows;
-; 30 / 31 = the class FX kinds, which have no kind_tab column)
-KROW_W          EQU 30                  ; kinds per KROW (its parameter count)
-    MACRO KROW v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29
+; NEW-MON3 T8: 30 = Gargoyle, 31 = the Fire Imp / Frost Wraith alias row)
+KROW_W          EQU 32                  ; kinds per KROW (its parameter count; NEW-MON3 T8: 30 -> 32 = K_MAX)
+    MACRO KROW v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30, v31
                 DB v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14
                 DB v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29
+                DB v30, v31
                 DS K_MAX - KROW_W, 0
     ENDM
 ; (3F-T2: KROWFX — the FX kinds' KT_FID0 / KT_FCNT columns — is gone with them:

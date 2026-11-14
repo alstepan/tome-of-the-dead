@@ -31,11 +31,11 @@ LPG_MINW        EQU LP_BS                   ; lp_gen scratch: the lightest LP_KI
 
 ;------------------------------------------------------------------------------
 ; lp_gen — see above. fit (game.md §9.4.3 reservation fit, 3F-D2 fallback):
-;   i = rnd(4); the rolled tier row (iff the kind has tiers, FRESH ordinary
+;   i = rnd(8) (LP8); the rolled tier row (iff the kind has tiers, FRESH ordinary
 ;   room) is tried first, then LP_KINDS[i] at base, then the other kinds in list
 ;   order at base; a kind is accepted iff LP_SIG + w + LP_RES <= cap, then
 ;   LP_SIG += w. The lightest kind always passes (LP_DISCARD stays 0).
-; Clobbers: all but IX, IY.   ~0.9k T for a 2-unit room (the far6 ~0.45k included)
+; Clobbers: all but IX, IY.   ~0.9k T for a 2-unit room (the far6 ~0.45k included); a full room: gen_fit may make up to 8 gen_tryi calls (LP8), about +4 x ~100 T per refused unit
 ;------------------------------------------------------------------------------
 lp_gen:         ld   hl, (LP_RECP)
                 ld   a, (hl)
@@ -411,5 +411,7 @@ drop_tab:       DB   K_RAT,         IT_F_CHEESE, 4, 1
                 DB   K_SKEL_GUARD,  0, 4, 1
                 DB   K_SKEL_KNIGHT, 0, 4, 1
                 DB   K_POLTERGEIST, 0, 4, 1
+drop_imp:       DB   K_ALIAS,       IT_P_MANA,   4, 1    ; NEW-MON3 T8: the Fire Imp (row 31 variant A): Mana 1 in 4. The Frost Wraith drops
+                                                         ; nothing: nm3_var turns this row's kind byte to 0 (no monster has kind 0)
 DROP_ROWS       EQU ($ - drop_tab) / DROP_STRIDE
-                ASSERT DROP_ROWS == 17 && IT_F_APPLE == IT_F_CARROT + 1 && IT_F_PEAR == IT_F_CARROT + 2
+                ASSERT DROP_ROWS == 18 && IT_F_APPLE == IT_F_CARROT + 1 && IT_F_PEAR == IT_F_CARROT + 2

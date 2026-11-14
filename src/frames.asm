@@ -248,6 +248,34 @@ KFID_ARCH = FCTR
                 FRM nun_cast,       K_ARCHMAGE, 24, STA|MIR
                 FRM nun_hurt,       K_ARCHMAGE, 24, STA|MIR
 KFCNT_ARCH = FCTR - KFID_ARCH
+; NEW-MON3 T7 (new_monsters.md §6.1; placed before the shared units so fx_meta's pad stays 2 B; art assets/gfx/sprites/*.asm, anchors 0, drawn facing right): the
+; Gargoyle (K_GARGOYLE, 30), the row-31 alias's two bodies and the shared dust DEAD. Each kind's frames
+; are contiguous: [KFID_x, + KFCNT_x) = its gu_tab unit (pool6.asm). MOT = both shifts; STA = the one shift
+; the anchor implies (cell-aligned draws); |MIR = no stored left (blit-time mirror); |SYM = one facing.
+;   garg_perch  REST (the statue) + HURT (it flinches back to stone): STA|SYM, never mirrored, cold
+;   garg_fly    flight: the one MOT frame (the gh_fly shape), hot
+;   garg_claw   ATTACK: STA|MIR, cold
+KFID_GARG = FCTR
+                FRM garg_perch,     K_GARGOYLE, 24, STA|SYM
+                FRM garg_fly,       K_GARGOYLE, 24, MOT|MIR
+                FRM garg_claw,      K_GARGOYLE, 24, STA|MIR
+KFCNT_GARG = FCTR - KFID_GARG
+;   imp_fly1/2  REST + the flap pair (the Bat's 2-cycle): MOT|MIR, hot;  imp_spit ATTACK / SHOOT / HURT: STA|MIR
+;   Row 31 as assembled = the Fire Imp (variant A); the Frost Wraith is the variant unit U_WRAITH below
+KFID_IMP = FCTR
+                FRM imp_fly1,       K_ALIAS, 24, MOT|MIR
+                FRM imp_fly2,       K_ALIAS, 24, MOT|MIR
+                FRM imp_spit,       K_ALIAS, 24, STA|MIR
+KFCNT_IMP = FCTR - KFID_IMP
+;   wraith_drift REST + flight (frame 0 is MOT: the rest rule holds), hot;  wraith_touch ATTACK / HURT: STA|MIR, cold
+KFID_WRAITH = FCTR
+                FRM wraith_drift,   U_WRAITH, 24, MOT|MIR
+                FRM wraith_touch,   U_WRAITH, 24, STA|MIR
+KFCNT_WRAITH = FCTR - KFID_WRAITH
+;   dust_dead: the DEAD pose of all three (a heap of rubble / embers / rime by KT_ATTR), unit U_DUST
+KFID_DUST = FCTR
+                FRM dust_dead,      G_DUST, 24, STA|SYM
+KFCNT_DUST = FCTR - KFID_DUST
                 ; shared units with no kind of their own (G_* = zx0 block groups; defs.asm BH_G_*)
                 ; CORPSE-ASHES: dead_humanoid (G_DEADH) retired: the humanoids draw small_corpse
 KFID_NBOLT = FCTR                       ; the Necro / Archmage bolt (FX-style: cell-aligned, body 8)

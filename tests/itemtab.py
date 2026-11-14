@@ -33,7 +33,7 @@ TOOL = os.path.join(ROOT, "tools", "itempack.py")
 LOG_MAX = 32
 HERO_KINDS = ("warrior", "mage")
 HERO_WORD = {"warrior": "WAR", "mage": "SPELL"}   # knight maps to WAR too (tool table)
-ROWS = 44
+ROWS = 45
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import items_model as M  # noqa: E402  (ITEM_INK: the lowram ink source)
 
@@ -180,7 +180,7 @@ class ItemTabTests(unittest.TestCase):
             self.assertRegex(w, r"^[A-Z]{1,8}$", w)
 
     def test_word_bytes_top_bit_terminator(self):
-        self.assertEqual(self.budgets["words"], 229)
+        self.assertEqual(self.budgets["words"], 239)       # NEW-MON3: + FROST, CHARM
         self.assertEqual(sum(1 for b in self.tab["it_words"] if b & 0x80), ip.WORD_COUNT_SPEC)
 
     def test_retired_words_absent(self):
@@ -191,7 +191,7 @@ class ItemTabTests(unittest.TestCase):
         self.assertEqual(retired & set(self.model.words), set())
 
     def test_wcx_is_every_eighth_word(self):
-        self.assertEqual(len(self.dec.wcx), 6)
+        self.assertEqual(len(self.dec.wcx), 7)              # NEW-MON3: 50 words
         starts = []
         pos = 0
         for w in self.model.words:
@@ -349,9 +349,9 @@ class ItemTabTests(unittest.TestCase):
     # -- budgets ----------------------------------------------------------------------
     def test_budgets(self):
         b = self.budgets
-        self.assertEqual(b["words"], 229)
+        self.assertEqual(b["words"], 239)                   # NEW-MON3: + FROST, CHARM
         self.assertEqual(b["names"], ROWS * 3)
-        self.assertEqual(b["refs"], 361)
+        self.assertEqual(b["refs"], 374)                    # NEW-MON3: + 10 word bytes + 3 name refs
         self.assertLessEqual(b["refs"], 460)
         # resident: turn-path stems only (3E-T4c retag; ~80 B target, 89 B as built;
         # 3E-T11: + "BOSS DROPS " 11 + its terminator = 101; review: + "NO NEED" moved
@@ -361,7 +361,7 @@ class ItemTabTests(unittest.TestCase):
         # "resident stems 232 / 480")
         self.assertEqual(b["res_stems"], 232)
         self.assertLessEqual(b["res_stems"], 480)
-        self.assertEqual(b["resident"], 605)          # 3E-T11: + BOSS DROPS (12) + NO NEED (8); T9: + 58; + 65 (see above)
+        self.assertEqual(b["resident"], 620)          # NEW-MON3: + 15 (words 10, wcx 2, names 3); 3E-T11: + BOSS DROPS (12) + NO NEED (8); T9: + 58; + 65 (see above)
         self.assertLessEqual(b["resident"], 700)
         self.assertLessEqual(b["resident"] - b["wcx"], 700)
         # fx overlay: effect / quick-use stems + it_stat (raw)
@@ -523,7 +523,7 @@ IE_SPEC = {
     "A_SILK": ("ie_silk", None), "A_GRAVE": ("ie_gcloak", None), "H_HOOD": (None, "cloth"),
     "H_HELM": (None, "metal"), "H_MIRROR": ("ie_mirror", None), "C_FIRE": ("ie_fire", None),
     "C_MANA": ("ie_mana", None), "C_PLENTY": ("ie_plenty", None), "C_SCARAB": ("ie_scarab", None),
-    "C_GRAVE": ("ie_gring", None),
+    "C_GRAVE": ("ie_gring", None), "C_FROST": ("ie_cold", None),        # NEW-MON3 Frost Charm
 }
 IE_TEXT = {  # item_info.md §3, verbatim
     "ie_cure": "CURES POISON WEAK CONFUSED FEAR", "ie_teleport": "SENDS YOU TO ANOTHER ROOM",
@@ -533,6 +533,7 @@ IE_TEXT = {  # item_info.md §3, verbatim
     "ie_plate": "HALF MP REGEN", "ie_silk": "IMMUNE TO POISON", "ie_gcloak": "HALF DMG FROM DARK + DRAIN",
     "ie_mirror": "REFLECTS DARK", "ie_fire": "HALF DMG FROM FIRE", "ie_mana": "2X MP REGEN",
     "ie_plenty": "HALF HUNGER", "ie_scarab": "2X MP REGEN, HALF HUNGER", "ie_gring": "IMMUNE TO DARK",
+    "ie_cold": "HALF DMG FROM COLD",                                   # NEW-MON3 (item_info.md §3 format)
     "ie_metal": "BLOCKS MAGE SPELLS", "ie_cloth": "BLOCKS POWER ATTACKS",
 }
 
@@ -565,7 +566,7 @@ def ie_map_bytes(ids):
 
 
 class ItemInfoTests(unittest.TestCase):
-    """ITEM-INFO: the phrase map ie_map (ux0.asm) covers IT_F_CARROT..IT_C_GRAVE; the strings are the
+    """ITEM-INFO: the phrase map ie_map (ux0.asm) covers IT_F_CARROT..IT_COUNT-1 (NEW-MON3: ..IT_C_FROST); the strings are the
     spec's; every composed row <= 40; the literal digits follow the code constants."""
 
     @classmethod
@@ -580,14 +581,14 @@ class ItemInfoTests(unittest.TestCase):
         for n, t in IE_TEXT.items():
             self.assertEqual(self.strings[n], t, n)
         ie = [i for n, i in self.ids.items() if n.startswith("ie_")]
-        self.assertEqual(sorted(ie), list(range(min(ie), min(ie) + 20)), "20 consecutive ie_ ids")
+        self.assertEqual(sorted(ie), list(range(min(ie), min(ie) + 21)), "21 consecutive ie_ ids")
         self.assertEqual(self.ids["ie_cure"], min(ie))
         self.assertEqual(self.ids["ie_metal"] + 1, self.ids["ie_cloth"])
         self.assertLessEqual(len(self.ids), 256, "tx_tab: 256 ids")
 
     def test_map_covers_bag_types(self):
         m = ie_map_bytes(self.ids)
-        lo, hi = self.syms["IT_F_CARROT"], self.syms["IT_C_GRAVE"]
+        lo, hi = self.syms["IT_F_CARROT"], self.syms["IT_COUNT"] - 1
         self.assertEqual(len(m), hi - lo + 1)
         names = {v: k for k, v in self.ids.items()}
         model = ie_model(self.strings, self.syms)

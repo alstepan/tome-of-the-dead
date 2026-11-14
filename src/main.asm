@@ -286,6 +286,15 @@ b0c2_code:
                 ; ==== end ITEM-INFO + UX-POLISH block ====
                 INCLUDE "nm3_b0.asm"           ; NEW-MON3 T1 FUND: lp_hdr0 + lp_dtab, lp_post, the panel items,
                                                ; item_log0, end_scr0, hit_line, try_close (memory-map ledger)
+                INCLUDE "nm3var0.asm"          ; NEW-MON3 T8: the row-31 alias table (Fire Imp / Frost Wraith bytes), data only (T9 applies it)
+                ; NEW-MON3 T7 SRC0: the packed sprite sources of K_GARGOYLE / K_ALIAS / U_WRAITH / G_DUST (tools/zx0_sources.py
+                ; SRC0_KINDS; read only by zx0_frame with BANK_TEXT paged; virtual = real - SRC0_VDELTA)
+src0_blocks:
+                INCLUDE "../build/zx0/src0_zx0.asm"
+src0_end:
+SRC0_USED       EQU src0_end - src0_blocks
+                ASSERT src0_end - SRC0_VDELTA <= $8000 && src0_blocks - SRC0_VDELTA >= $6000
+                DISPLAY "GAME SRC0 sources (bank 0, B0_CODE2): ", /H, src0_blocks, "..", /H, src0_end - 1, " (", /D, SRC0_USED, " B: ", /D, SRC0_BLOCKS, " blocks, ", /D, SRC0_RAW, " raw)"
                 ; ---- packed overlay streams: KEEP LAST (2-pass build: no code address may depend on a packed size;
                 ; append new code ABOVE this line) ----
 ovl_page_zx0:                                  ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG; ITEM-INFO: from R6,
@@ -654,13 +663,13 @@ kind_tab:
                 ; 3F-T9: id 2 = K_VBAT, the Vampire's bat form: the Bat's body / flags / atk 1 eva 4 /
                 ; 1d2 bite, every turn; the Vampire's hp row 14 (a banked bat's max hp, lp_spawn); VBAT-ART:
                 ; the Bat's ink $43 (user: the bat form looks like a Bat).
-                KROW   3,  3,  3,  3,  3,  3,  4,  3,  3,   4,  3,  3,  3,  3,  3,  4,  3,  3,   4,  4,  3,  3,  4,  3,  3,  3,  3,  3,  3,  3          ; KT_BW (cells; 3F-T13: Spider / Black Widow 32x16, Ogre 32x48)
-                KROW BH_K_KNIGHT, BH_K_WIZARD, BH_K_BAT, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME, BH_K_SPIDER, BH_K_VAMPIRE, BH_K_ORC, BH_K_ARCHER, BH_K_MUMMY, BH_K_NECRO, BH_K_OGRE, BH_K_DKNIGHT, BH_K_ARCHMAGE, BH_K_RAT, BH_K_RAT, BH_K_BAT, BH_K_GOBLIN, BH_K_SPIDER, BH_K_SKELETON, BH_K_SKELETON, BH_K_GHOST, BH_K_ORC, BH_K_ORC, BH_K_ARCHER, BH_K_NECRO ; KT_BH
-                KROW  24, 16, 14, 10,  6,  8,  3,  3,  6,   7, 14, 14,  8, 18, 12, 36, 50, 60,   5,  8,  5,  8, 10, 14, 18, 11, 18, 24, 10, 14          ; KT_HP
-                KROW KN_ATK, WZ_ATK, 1, 2, 1, 2, 0, 1, 0,   3, 2, 3, 2, 3, 2, 4, 6, 4,   1, 2, 2, 2, 4, 3, 4, 3, 4, 5, 3, 3          ; KT_ATK (hero columns: + level steps at runtime, D3-9b)
-                KROW KN_EVA, WZ_EVA, 4, 2, 1, 3, 1, 4, 0,   3, 1, 1, 2, 0, 2, 1, 3, 3,   1, 3, 4, 1, 3, 2, 2, 3, 0, 1, 2, 2          ; KT_EVA (hero_st_init restores KN_* / WZ_*)
-                KROW   6,  4,  2,  4,  4,  4,  2,  2,  3,   4,  6,  8,  4,  8,  4, 10, 10,  6,   3,  4,  3,  4,  4,  6,  8,  4,  8, 10,  4,  4          ; KT_DIE
-                KROW   0,  0,  0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,  0,  0,  1,  3,  0,   0,  0,  0,  0,  0,  0,  0,  0,  2,  0,  0,  0          ; KT_BONUS
+                KROW   3,  3,  3,  3,  3,  3,  4,  3,  3,   4,  3,  3,  3,  3,  3,  4,  3,  3,   4,  4,  3,  3,  4,  3,  3,  3,  3,  3,  3,  3, 3, 3  ; KT_BW (cells; 3F-T13: Spider / Black Widow 32x16, Ogre 32x48)
+                KROW BH_K_KNIGHT, BH_K_WIZARD, BH_K_BAT, BH_K_SKELETON, BH_K_GOBLIN, BH_K_GHOST, BH_K_RAT, BH_K_BAT, BH_K_SLIME, BH_K_SPIDER, BH_K_VAMPIRE, BH_K_ORC, BH_K_ARCHER, BH_K_MUMMY, BH_K_NECRO, BH_K_OGRE, BH_K_DKNIGHT, BH_K_ARCHMAGE, BH_K_RAT, BH_K_RAT, BH_K_BAT, BH_K_GOBLIN, BH_K_SPIDER, BH_K_SKELETON, BH_K_SKELETON, BH_K_GHOST, BH_K_ORC, BH_K_ORC, BH_K_ARCHER, BH_K_NECRO, BH_K_GARGOYLE, NM3_IMP_BH  ; KT_BH
+                KROW  24, 16, 14, 10,  6,  8,  3,  3,  6,   7, 14, 14,  8, 18, 12, 36, 50, 60,   5,  8,  5,  8, 10, 14, 18, 11, 18, 24, 10, 14, 9, NM3_IMP_HP  ; KT_HP
+                KROW KN_ATK, WZ_ATK, 1, 2, 1, 2, 0, 1, 0,   3, 2, 3, 2, 3, 2, 4, 6, 4,   1, 2, 2, 2, 4, 3, 4, 3, 4, 5, 3, 3, 3, NM3_IMP_ATK  ; KT_ATK (hero columns: + level steps at runtime, D3-9b)
+                KROW KN_EVA, WZ_EVA, 4, 2, 1, 3, 1, 4, 0,   3, 1, 1, 2, 0, 2, 1, 3, 3,   1, 3, 4, 1, 3, 2, 2, 3, 0, 1, 2, 2, 1, NM3_IMP_EVA  ; KT_EVA (hero_st_init restores KN_* / WZ_*)
+                KROW   6,  4,  2,  4,  4,  4,  2,  2,  3,   4,  6,  8,  4,  8,  4, 10, 10,  6,   3,  4,  3,  4,  4,  6,  8,  4,  8, 10,  4,  4, 6, NM3_IMP_DIE  ; KT_DIE
+                KROW   0,  0,  0,  0,  0,  0,  0,  0,  0,   0,  0,  0,  0,  0,  0,  1,  3,  0,   0,  0,  0,  0,  0,  0,  0,  0,  2,  0,  0,  0, 0, NM3_IMP_BONUS  ; KT_BONUS
 lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REACH column (all 1: reach_ok / the hero's reach are literals) holds the §9.3
                 LP_WT_ROWS                     ; weights, ONE copy read by bank 3 (kind_wt / levelgen) and R6 (lp_wt6 is gone): H = kind_tab page, L = $E0 + row
                 DS   K_MAX - K_COUNT, 0
@@ -671,8 +680,8 @@ lp_wt:                                         ; MEM-RECLAIM w3: the old KT_REAC
                 ; the Goblin, Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
                 ; + the Orc (Berserker, Bouncer), Necro (Bone Caller), Archer (Sniper) on the shared
                 ; climb pair; VAMP-BOSS (user 2026-11-02): + the Vampire (and the Lord) on the shared pair; not Archmage / DK / Ogre / Mummy; Mummy / Ogre / DK do not open doors
-                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_FLYER|KF_BAT, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, KF_SLOW, KF_CLIMBER, KF_CLIMBER|KF_OPENER|KF_TALL|KF_SLOW, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL|KF_SLOW, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL  ; KT_FLAGS
-                KROW $47,$45,$43,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06          ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
+                KROW KF_HERO|KF_CLIMBER, KF_HERO|KF_CLIMBER, KF_FLYER|KF_BAT, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_OPENER, KF_FLYER, 0, KF_FLYER|KF_BAT, KF_SLOW, KF_CLIMBER, KF_CLIMBER|KF_OPENER|KF_TALL|KF_SLOW, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_TALL|KF_SLOW, KF_CLIMBER|KF_OPENER|KF_TALL, KF_TALL, KF_TALL, KF_TALL, 0, 0, KF_FLYER|KF_BAT, KF_CLIMBER|KF_OPENER, KF_CLIMBER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_CLIMBER|KF_TALL|KF_OPENER, KF_FLYER, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_CLIMBER|KF_OPENER|KF_TALL, KF_FLYER|KF_PERCH, NM3_IMP_FLAGS  ; KT_FLAGS
+                KROW $47,$45,$43,$47,$44,$45,$06,$43,$44,   $05,$05,$04,$03,$06,$03,$44,$47,$04,   $02,$47,$05,$06,$02,$05,$44,$03,$02,$03,$04,$06, $07, NM3_IMP_ATTR  ; KT_ATTR (3F-T13: the 3F-A1 base inks — Spider $05, Orc $04, Necro $03, Mummy $06, Ogre $44, DK $47; Archer $03 (§9.8 D3-4); Vampire $05 / Archmage $04 differ from the Necro frames' other users; tiers §9.6)
                 ; 3F-T2: KT_SEQ (runtime: lowram.asm (sq_load / sq_fill) writes the kind's SEQ_ROWS row
                 ; low byte per level; 0 until the first game start). The old
                 ; KT_FID0 / KT_FCNT columns are the R6 generation-unit table gu_tab.
@@ -1309,9 +1318,9 @@ seq_img_main:
 seq_img_end:
                 ENT
 SEQ_IMG_LEN     EQU seq_img_end - seq_img_main
-                ASSERT SQ_IMG + SEQ_IMG_LEN <= TX_DEC
+                ASSERT SQ_IMG + SEQ_IMG_LEN <= GEN_SCRATCH + GEN_SCRATCH_LEN
                 SAVEBIN "build/ovl/seq.bin", ovl_raw_seq, SEQ_IMG_LEN
-                DISPLAY "GAME sequence masters (3F-T2): ", /D, SEQ_IMG_LEN, " B raw at ", /H, SQ_IMG, " (", /D, TX_DEC - SQ_IMG - SEQ_IMG_LEN, " left), packed ", /D, sqm_zx0_end - sqm_zx0, " B in R6"
+                DISPLAY "GAME sequence masters (3F-T2): ", /D, SEQ_IMG_LEN, " B raw at ", /H, SQ_IMG, " (", /D, GEN_SCRATCH + GEN_SCRATCH_LEN - SQ_IMG - SEQ_IMG_LEN, " left), packed ", /D, sqm_zx0_end - sqm_zx0, " B in R6"
 ;------------------------------------------------------------------------------
 ; MEM-FT frame_tab stream: the entries read back ({b}, slot 2 = page 2) from the
 ; FRT row image data.asm assembled at FRT, contiguous FT_LEN B per fid; packed

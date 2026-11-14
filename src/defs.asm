@@ -64,6 +64,11 @@ SRC6_LEN        EQU SRC6_PAGES * 256
 SRC6_ADDR       EQU R6_ADDR - SRC6_LEN
 SRC6_VDELTA     EQU $8000           ; FD_BLK = real - $8000: virt $4000..$7FFF = bank 6
 POOL6_END       EQU SRC6_ADDR       ; the pool's bank-6 part ends here (alloc)
+; SRC0 (NEW-MON3 T7): the packed sources of the Gargoyle / Fire Imp / Frost Wraith / dust (914 B) live in bank
+; 0's B0_CODE2 (main.asm "SRC0"): banks 1 / 3 (24 / 79 B free) and SRC6 (19 B; the boot block under it) are full.
+; FD_BLK = real - SRC0_VDELTA: virtual $6000..$7FFF = bank 0 (real $C000..$DFFF), the free half of the virtual
+; $4000..$7FFF range SRC6 leaves ($4800..$55FF). zx0_frame tells the three apart by h bits 6 / 5.
+SRC0_VDELTA     EQU $6000
                 ASSERT SRC6_PAGES >= 1 && SRC6_ADDR >= BANK_WINDOW + $0800   ; 3F-T13: was + $1000; the boot block below
                                                 ; SRC6 is ASSERTed to fit bank 6 in main.asm (boot6_code)
                 ASSERT (POOL6_END & $FF) == 0   ; alloc's bank-6 limit test reads only the high byte
@@ -226,7 +231,7 @@ TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
 ; 45 + 29 B costs 0 slack (1,264 kept), but 45 + 30..250 B costs one 240-B variant
 ; (slack 1,024) and 45 + 260 B 880. M1 (user 2026-11-01) took the 240-B step: total reserve 2,624 B
 ; (cliff measured: B0_CODE_RES 206 -> slack 1,024, 207 -> 384, with TEXT_RES 2,418).
-TEXT_RES        EQU 2367 + 33 + 340 + 16       ; 4b: +16 ("TOO WEAK TO JUMP"; from B0_FREE_RES, POOL_START kept); ITEM-INFO + UX1: +340 (22 strings: 20 ie_ phrases, mn_tut, hint_book; taken from B0_FREE_RES); RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom (was 2384 + 28; LOG-DMG: 2367 + 45)
+TEXT_RES        EQU 2367 + 33 + 340 + 16 + 32  ; NEW-MON3 T8: +32 (kind names, Frost Charm); 4b: +16 ("TOO WEAK TO JUMP"); both from B0_FREE_RES, POOL_START kept. ITEM-INFO + UX1: +340 (22 strings); RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom
 B0_CODE_RES     EQU 1064 + 10                  ; ITEM-INFO + UX1: +10 (dn_tick's 3-B call ux_tick + the pre-existing 1-B overrun + pad; from B0_FREE_RES); C2 (2026-11-10): +150 = mus_pick0 (135, from bank-7 mus7.asm: funds
                                                ; MON-DEFER) + dn_q2's DN-GATE test (13) + pad; the kit build (kit0.asm) fits
                                                ; with the 16-B text headroom (1 B free). POOL_START unchanged (B0_FREE_RES
@@ -250,7 +255,7 @@ B0_KIT_RES      EQU 0                          ; D3-11: 0 (was 80 x DEBUG_KIT): 
 ; Sized for >= ~1 KB pool slack at the binding level (POOL_NEED incl. POOL_SIM_MARGIN and the
 ; simulated straddle waste; the slack is quantised by the bank-0 -> 4 straddle: memory-map ledger).
 B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CEE6 (ITEM-INFO; $CD88 B0CODE; $CCF2 = POOL_START before C-T8)
-B0_FREE_RES     EQU 8408 - 16                  ; 4b: -16 to TEXT_RES; NEW-MON3 T1 (new_monsters.md §12, X = 3,072 asked): POOL_START $FC3E -> $EFBE
+B0_FREE_RES     EQU 8408 - 16 - 32             ; 4b: -16, NEW-MON3 T8: -32 (to TEXT_RES; POOL_START stays $EFBE). NEW-MON3 T1 (new_monsters.md §12, X = 3,072 asked): POOL_START $FC3E -> $EFBE
                                                ; (3,200 B back to the pool; = $EFBE - B0_FREE_START $CEE6 after ITEM-INFO's -350). $F03E
                                                ; itself (X = 3,072) puts the bank-0 -> 4 straddle
                                                ; inside the hero session at 194 B waste (Mage 114): every level need +192 / +112, slack
@@ -379,17 +384,19 @@ P_ENTITIES      EQU $B000           ; 16 slots x 32 B = 512 B ($B000..$B1FF)
 P_ENT_STRIDE    EQU 32
 P_MAX_ENT       EQU 16
 FRT_STRIDE      EQU 16
-FRT_MAX         EQU 144             ; MEM-FT: 132 -> 144, the most the $A700 page holds (FRT_GAP 0; a
-                                    ; 145th fid steps FRT down a page, -256 B bank 2); 129 used, 15 spare.
-                                    ; Each fid also reserves FDESC_STRIDE (5) B of low RAM (main.asm fit).
+FRT_MAX         EQU 153             ; NEW-MON3 T7: 144 -> 153 = FID_COUNT (the 9 new frames), the FRT page steps down to
+                                    ; $A600 (the 145th fid: -256 B bank 2, funded by T1's image tail); 112 B of the page's top
+                                    ; ($AF90..$AFFF, FRT_GAP) stay free. Descriptor reserve 0 (FRT_MAX == FID_COUNT, ASSERTed
+                                    ; in data.asm): a 154th fid raises FRT_MAX and costs 16 B (+5 low RAM) a frame.
+                                    ; MEM-FT: 132 -> 144 (the $A700 page; 129 used). Each fid also reserves FDESC_STRIDE (5) B of low RAM.
                                     ; 3F-T13bc: 128 -> 132; CORPSE-ASHES: 129 used; 3F-T2: 160 -> 128
 FRT             EQU (P_ENTITIES - FRT_MAX * FRT_STRIDE) & $FF00   ; page-aligned (blit_sprite's nibble swap):
-                                    ; MEM-FT $A700..$AFFF; frame runtime table, 16 B/fid: 4 variants
+                                    ; NEW-MON3 T7 $A600..$AF8F (was MEM-FT $A700..$AFFF); frame runtime table, 16 B/fid: 4 variants
                                     ; x bank,lo,hi (0..11) + the fid's frame_tab entry (FT_IN_ROW..15,
                                     ; static: instr_ovl in_ft unpacks it, nothing rewrites it); directly below
                                     ; ENTITIES; seq_rows sits directly below it (main.asm)
 FRT_GAP         EQU P_ENTITIES - (FRT + FRT_MAX * FRT_STRIDE)   ; free bank-2 RAM between the FRT and
-                                    ; ENTITIES (MEM-FT: 0; 3F-T13bc 192 held seq_rows, now below FRT)
+                                    ; ENTITIES (NEW-MON3 T7: 112; MEM-FT: 0; 3F-T13bc 192 held seq_rows, now below FRT)
 BANK2_FREE      EQU $B200           ; A6: vacated old FRT ($B200..$B7FF, 1,536 B):
 BANK2_FREE_END  EQU SLOTREC         ;     free bank-2 runtime RAM (docs/memory-map.md)
 SLOTREC         EQU $B800           ; A7b: per-slot render record, 16 B per slot ($B800..$B8FF,
@@ -806,7 +813,7 @@ K_ORC_BERSERK   EQU 26
 K_ORC_BOUNCER   EQU 27
 K_SNIPER        EQU 28              ; Skeleton Sniper
 K_BONE_CALLER   EQU 29
-K_COUNT         EQU 30
+K_COUNT         EQU 32              ; NEW-MON3 T8: every kind row is filled (30 / 31 = Gargoyle / the row-31 alias below)
 K_BOSS_D1       EQU K_GOBLIN        ; Golden Goblin King (golden = flag, T8)
 K_BOSS_D2       EQU K_SPIDER        ; Golden Spider Queen
 K_BOSS_D3       EQU K_VAMPIRE       ; Golden Vampire Lord
@@ -846,6 +853,8 @@ WT_K_ORC_BERSERK EQU WT_K_ORC
 WT_K_ORC_BOUNCER EQU WT_K_ORC
 WT_K_SNIPER     EQU WT_K_ARCHER
 WT_K_BONE_CALLER EQU WT_K_NECRO
+WT_K_GARGOYLE   EQU 3               ; NEW-MON3 T8 (new_monsters.md §4): W3 bodies; the Imp (2 + its projectile 1) and the
+WT_K_ALIAS      EQU 3               ; Frost Wraith share the weight: the alias patch has no weight byte
     MACRO LP_WT_ROWS                           ; emitted once, in kind_tab's KT_REACH slot (main.asm)
                 DB   WT_K_KNIGHT, WT_K_WIZARD, WT_K_VAMPIRE, WT_K_SKELETON, WT_K_GOBLIN   ; 3F-T9: id 2 = K_VBAT keeps the Vampire's weight
                 DB   WT_K_GHOST, WT_K_RAT, WT_K_BAT, WT_K_SLIME
@@ -854,14 +863,15 @@ WT_K_BONE_CALLER EQU WT_K_NECRO
                 DB   WT_K_GIANT_RAT, WT_K_RABBIT_RAT, WT_K_SCREECH, WT_K_SLINGER
                 DB   WT_K_BLACK_WIDOW, WT_K_SKEL_GUARD, WT_K_SKEL_KNIGHT, WT_K_POLTERGEIST
                 DB   WT_K_ORC_BERSERK, WT_K_ORC_BOUNCER, WT_K_SNIPER, WT_K_BONE_CALLER
+                DB   WT_K_GARGOYLE, WT_K_ALIAS
     ENDM
 K_MAX           EQU 32              ; A6: kind_tab capacity (game.md §11.2: 32 ids; room records keep the row in 5 bits)
 ; NEW-MON3 T2 (FX-U, new_monsters.md §3): ids 30 / 31 are the NEW kinds: K_GARGOYLE and the
-; row-31 alias (Fire Imp / Frost Wraith, patched per level, T4). K_COUNT stays 30 (the rows with
-; kind_tab data) until T4 fills rows 30 / 31; the tables pad them with 0 until then.
+; row-31 alias K_ALIAS (Fire Imp as assembled = variant A; the Frost Wraith = variant B, patched per
+; level by the A-1 alias patch, T9: nm3_var, src/nm3var.asm). T8: K_COUNT = 32, every table row filled.
 K_GARGOYLE      EQU 30
 K_ALIAS         EQU 31
-                ASSERT K_GARGOYLE == K_COUNT && K_ALIAS == K_MAX - 1
+                ASSERT K_GARGOYLE == K_COUNT - 2 && K_ALIAS == K_MAX - 1 && K_COUNT == K_MAX
 ; D3-4: the class FX are generation UNITS only (render-only projectile / impact frames,
 ; game.md §6; never an entity's kind), since FX-U the LAST two units of gu_tab_x (pool6.asm,
 ; ids >= K_MAX): U_FXW / U_FXM are defined there. Generated with the hero only (start_game: R6
@@ -894,6 +904,12 @@ BH_K_ARCHMAGE   EQU 6
                                     ; and the heroes is small_corpse):
 BH_G_CLIMBH     EQU 6               ; 3F-T13bc: the shared humanoid climb pair (24x48)
 BH_G_NBOLT      EQU 2               ; the Necro bolt (<= 16 px)
+; NEW-MON3 T7 (new_monsters.md §6.1): Gargoyle 24x32, the row-31 alias's two bodies (Fire Imp 24x16 = the
+; row as assembled, Frost Wraith 24x32 = the variant unit U_WRAITH, pool6.asm), the shared dust DEAD (24x16)
+BH_K_GARGOYLE   EQU 4
+BH_K_ALIAS      EQU 2
+BH_U_WRAITH     EQU 4
+BH_G_DUST       EQU 2
 BH_U_FXW       EQU 2               ; D3-4: FX frames are <= 16 px tall (FRM ASSERT only)
 BH_U_FXM        EQU 2
 
@@ -935,6 +951,26 @@ KF_SLOW         EQU %00100000       ; RECLAIM-C (b): acts every 2 turns (rests o
                                     ; (Slime, Vampire, Mummy); D3-0..RECLAIM-C spare (was KF_ZAP, the PROTO wizard zap)
 KF_SLOW_BIT     EQU 5
 KF_OPENER       EQU %01000000       ; B3B-5: opens closed unlocked doors by bumping (game.md §9.1)
+KF_PERCH        EQU %10000000       ; NEW-MON3 T8: the Gargoyle's perch (new_monsters.md §4.1 G-1; the bit is data only until the
+                                    ; G-1 code tests it: every other KT_FLAGS reader masks a single bit)
+; NEW-MON3 T8: row 31 (K_ALIAS) is the Fire Imp as assembled (variant A) and the Frost Wraith (variant B, new_monsters.md §3 / §4):
+; the kind_tab columns that differ, the single source of both the KROW rows (main.asm) and the A-1 patch table (nm3var0.asm)
+NM3_IMP_HP      EQU 5
+NM3_IMP_ATK     EQU 2
+NM3_IMP_EVA     EQU 3
+NM3_IMP_DIE     EQU 3               ; claw 1d3 FIRE
+NM3_IMP_BONUS   EQU 0
+NM3_IMP_BH      EQU BH_K_ALIAS
+NM3_IMP_FLAGS   EQU KF_FLYER | KF_BAT
+NM3_IMP_ATTR    EQU $06             ; amber (new_monsters.md §6.2)
+NM3_WR_HP       EQU 13
+NM3_WR_ATK      EQU 3
+NM3_WR_EVA      EQU 2
+NM3_WR_DIE      EQU 6               ; touch 1d6+1 COLD
+NM3_WR_BONUS    EQU 1
+NM3_WR_BH       EQU BH_U_WRAITH
+NM3_WR_FLAGS    EQU KF_FLYER | KF_SLOW
+NM3_WR_ATTR     EQU $05             ; dim cyan
 
 ;------------------------------------------------------------------------------
 ; Frame table (static, frame_tab) — MEM-FT: the 4-B entry lives in the fid's

@@ -240,7 +240,7 @@ breed6:         bit  RCD_ONCE_BIT, (ix+E_RCD)
 ;------------------------------------------------------------------------------
 ; sp_run — far6 from end_turn (bank 7) when SPQ_K != 0: empties the queue; no
 ; spawn when the hero leaves the room this turn (EXIT_KIND) or is dying. Per
-; body: the kind (a wave: LP_KINDS[rnd & 3], base row), sp_scan + sp_fit (the
+; body: the kind (a wave: LP_KINDS[rnd & 7], base row), sp_scan + sp_fit (the
 ; cap) and a free slot, the parent anchor, sp_init, the spot (sp_place beside
 ; the parent / sp_door), sp_fin, build_live; a body that fails ends the run.
 ; Clobbers: all but IY.   ~6-8k T a summon / offspring, ~4k T a wave body

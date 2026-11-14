@@ -130,6 +130,17 @@
         INCLUDE "tiles_bg.asm"
         INCLUDE "status_icons.asm"
         INCLUDE "index_3f.asm"
+; NEW-MON3 T7: the Gargoyle / Fire Imp / Frost Wraith frames + the shared dust DEAD (hand-wired: not
+; part of tools/gen_3f_art.py's index_3f.asm; src/frames.asm FRM rows)
+        INCLUDE "garg_perch.asm"
+        INCLUDE "garg_fly.asm"
+        INCLUDE "garg_claw.asm"
+        INCLUDE "imp_fly1.asm"
+        INCLUDE "imp_fly2.asm"
+        INCLUDE "imp_spit.asm"
+        INCLUDE "wraith_drift.asm"
+        INCLUDE "wraith_touch.asm"
+        INCLUDE "dust_dead.asm"
 
 FRAME_F_MOTION    EQU 1
 FRAME_F_SYMMETRIC EQU 2

@@ -13,7 +13,7 @@
 ;               K_SKELETON .. K_PROTO_END - 1, seq slots 1..6
 ;   pool_list   level_enter, after alloc_restore: monster FRT rows := NONE,
 ;               the FX rows outside the hero's class FX := NONE (stale extras
-;               of the previous level), LP_KINDS[0..3] + LP_BOSS through
+;               of the previous level), LP_KINDS[0..7] + LP_BOSS through
 ;               pool_gmap + the hero-dependent extras (pool_xmap); seq slots 1..
 ;
 ; GENERATION UNITS (gu_tab, 3F-T2; was kind_tab KT_FID0 / KT_FCNT): DB fid0,
@@ -59,20 +59,23 @@ PL_CAP          EQU 2 * 17 + 1         ; level: <= 5 kinds x 3 units + 2 extras 
 SQ_PTR          EQU PL_LIST + PL_CAP   ; SQ_SLOTS words: each slot's master block (0 = free)
 SQ_TOP          EQU SQ_PTR + 2 * SQ_SLOTS  ; word: the next free seq_bytes byte
 PL_PROTO        EQU SQ_TOP + 2         ; pool_proto's kind list (6 B)
-SQ_IMG          EQU GEN_SRC + 64       ; the unpacked masters (seq_img.asm is DISPed here)
+SQ_IMG          EQU GEN_SCRATCH        ; the unpacked masters (seq_img.asm is DISPed here). NEW-MON3 T8: was GEN_SRC + 64 (917 B,
+                                       ; 42 free); the pool_* calls run BEFORE gen_list (level_enter / start_game / the D0 start), so the
+                                       ; generator's 1,536-B unpack window is idle: room for the new kinds' blocks (+102 B) and the
+                                       ; level-card growth to come. pl_begin clears GEN_ZBLK (the window no longer holds a cached block)
 LP_GEN_N        EQU 9                  ; LP_KINDS[0..7] + LP_BOSS (not the LP scratch: lp.py
                                        ; B0G reads LP_HX.. after a new game)
 GU_STRIDE       EQU 2
 FX_FID0         EQU KFID_FXM           ; the class FX fids [FX_FID0, FX_END): both FX units
 FX_END          EQU KFID_FXW + KFCNT_FXW
-                ASSERT LP_BOSS == LP_KINDS + 8 && PL_PROTO + K_PROTO_END - K_SKELETON <= SQ_IMG
+                ASSERT LP_BOSS == LP_KINDS + 8 && PL_PROTO + K_PROTO_END - K_SKELETON <= GEN_SRC + 64
                 ASSERT FX_FID0 + KFCNT_FXM <= FX_END && KFID_FXW >= FX_FID0
 
 ;------------------------------------------------------------------------------
 ; pool_hero — far6 from start_game (HERO_KIND set, after gen_idles):
 ; PL_LIST := [hero unit, class FX unit]; seq slot 0 := the hero; KT_SEQ.
 ; pool_list — far6 from level_enter (after alloc_restore): PL_LIST := the
-; units of LP_KINDS[0..3] + LP_BOSS (pool_gmap) + their hero extras
+; units of LP_KINDS[0..7] + LP_BOSS (pool_gmap) + their hero extras
 ; (pool_xmap), each once, first-seen order; seq slots 1.. := their blocks.
 ; (D3-11: the PROTO fixture, src/proto_fix.asm, runs the same session for the
 ; original kinds K_SKELETON .. K_PROTO_END - 1 with pl_begin / pl_kinds.)
@@ -170,6 +173,8 @@ pl_begin:
                 ld   hl, sqm_zx0               ; the sequence masters -> SQ_IMG
                 ld   de, SQ_IMG
                 call dzx0_standard
+                ld   hl, 0
+                ld   (GEN_ZBLK), hl            ; NEW-MON3 T8: SQ_IMG is the generator's unpack window: no block is cached there now
                 ld   a, KFID_MONSTERS
                 ld   b, KFCNT_MONSTERS
                 call frt_none
@@ -324,8 +329,9 @@ gu_tab:
                 GU   KFID_SKELETON, KFCNT_SKARCH               ; K_SNIPER
                 GU   KFID_NECRO, KFCNT_NECRO                   ; K_BONE_CALLER
                 ASSERT K_BONE_CALLER == K_GARGOYLE - 1
-                GU   0, 0                                      ; K_GARGOYLE (30): no frames yet (T4)
-                GU   0, 0                                      ; K_ALIAS (31): no frames yet (T4: Imp / Wraith, per level)
+                GU   KFID_GARG, KFCNT_GARG                     ; K_GARGOYLE (30): perch / fly / claw (NEW-MON3 T7)
+                GU   KFID_IMP, KFCNT_IMP                       ; K_ALIAS (31) as assembled = the Fire Imp (variant A: fly1 / fly2 / spit);
+                                                       ; the Frost Wraith (variant B) is U_WRAITH: the A-1 patch (T9) swaps the 2 bytes
 gu_tab_x:                                      ; units >= K_MAX (extras, 3F-T13)
 U_SKARCH        EQU K_MAX + 0
                 GU   KFID_SKELETON, KFCNT_SKARCH               ; Skeleton walk1..4 + cut + hurt (= the Archer; ANIM-IMPORT: + hurt)
@@ -355,10 +361,16 @@ U_FXW           EQU K_MAX + 10
 U_FXM           EQU K_MAX + 11
                 GU   KFID_FXM, KFCNT_FXM
 U_FX_BASE       EQU U_FXW - K_KNIGHT                           ; + HERO_KIND = the hero's class FX unit
+                ; NEW-MON3 T7: the units of the new kinds that are not a kind row of their own (appended after the FX
+                ; units: nothing assumes the FX units are last but their own ids / ASSERTs)
+U_WRAITH        EQU K_MAX + 12
+                GU   KFID_WRAITH, KFCNT_WRAITH                 ; the Frost Wraith's own frames: row 31's variant B (gu_tab bytes of K_ALIAS)
+U_DUST          EQU K_MAX + 13
+                GU   KFID_DUST, KFCNT_DUST                     ; dust_dead: the shared DEAD of the Gargoyle / Imp / Wraith (pool_gmap)
 gu_tab_end:
 GU_N            EQU (gu_tab_end - gu_tab) / GU_STRIDE
-                ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 30
-                ASSERT U_FXM == U_FX_BASE + K_WIZARD && U_FXM == U_FXW + 1 && U_FXM < 128
+                ASSERT gu_tab_x - gu_tab == GU_STRIDE * K_MAX && GU_N <= 64 && K_COUNT == 32
+                ASSERT U_FXM == U_FX_BASE + K_WIZARD && U_FXM == U_FXW + 1 && U_DUST < 128 && U_WRAITH == U_FXM + 1
                 ASSERT KFID_SKCLIMB == KFID_SKELETON + KFCNT_SKARCH && KFID_SKREST == KFID_SKCLIMB + KFCNT_SKCLIMB && FID_skeleton_climb2 == KFID_SKREST - 1 && KFCNT_SKCLIMB == 2 && FID_skeleton_hurt == KFID_SKCLIMB - 1 && FID_skeleton_cut == KFID_SKCLIMB - 2 && KFCNT_SKREST == 1
                 ASSERT KFID_RATDEAD == KFID_RAT + KFCNT_RAT - 1 && FID_small_corpse == KFID_RATDEAD
                 ASSERT KFID_NCAST == KFID_NECRO + KFCNT_NECRO
@@ -397,6 +409,10 @@ pool_gmap:
                 DB   K_DKNIGHT,  K_DKNIGHT,  U_DEADR
                 DB   K_ARCHMAGE, K_ARCHMAGE, U_DEADR   ; 3F-T11: the nun (walk1/2, cast, hurt)
                 DB   K_ARCHMAGE, U_NBOLT,    PG_NONE   ; its Death Bolt (rd_tab row RW_FX)
+                ; NEW-MON3 T7: the new kinds' own unit + the shared dust DEAD. K_ALIAS's own unit is gu_tab row 31
+                ; (the Fire Imp as assembled); on a Wraith level the A-1 patch (T9) points that row at U_WRAITH's frames.
+                DB   K_GARGOYLE, K_GARGOYLE, U_DUST
+                DB   K_ALIAS,    K_ALIAS,    U_DUST
                 DB   PG_NONE
 pool_gmap_end:
 PGMAP_N         EQU (pool_gmap_end - pool_gmap - 1) / 3

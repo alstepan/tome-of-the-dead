@@ -749,7 +749,7 @@ _ICONS16 = []
 
 
 def icons16_table():
-    """IC1 + FLOOR1: the 43 physical x 32-B icons (45 logical: + 2 floor ammo, - Mana / Cure
+    """IC1 + FLOOR1: the ICONS16_PHYS (44) physical x 32-B icons (46 logical: + 2 floor ammo, - Mana / Cure
     sharing Heal's shape) parsed from their source assets/gfx/icons/icons16.asm
     (independent of the build; tests compare the drawn cells against it)."""
     if _ICONS16:
@@ -765,7 +765,7 @@ def icons16_table():
             data += bytes(int(v.strip().lstrip("$"), 16) for v in line.split(None, 1)[1].split(";")[0].split(","))
         elif on and line.strip().startswith("ASSERT"):
             break
-    assert len(data) == 43 * 32, len(data)        # FLOOR1: the 3 potions share one shape
+    assert len(data) == S["ICONS16_PHYS"] * 32, len(data)   # FLOOR1: the 3 potions share one shape (NEW-MON3: 44)
     _ICONS16.append(bytes(data))
     return _ICONS16[0]
 

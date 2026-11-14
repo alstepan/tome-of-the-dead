@@ -53,7 +53,7 @@ def layout(check):
         nxt = s[g + "_HI"] + 1
     ok &= s["IT_GEAR_LO"] == s["IT_WPN_LO"] and s["IT_GEAR_HI"] == s["IT_CHARM_HI"] == nxt - 1
     ok &= s["IT_WPN_M_LO"] == s["IT_WPN_W_HI"] + 1 and s["IT_WPN_W_LO"] == s["IT_WPN_LO"]
-    check("L1 gear ranges in W/A/H/C order, IT_COUNT", ok and s["IT_COUNT"] == nxt == 44)
+    check("L1 gear ranges in W/A/H/C order, IT_COUNT", ok and s["IT_COUNT"] == nxt == 45)
     check("L1 slot ids", [s[k] for k in ("WS_WEAPON", "WS_ARMOUR", "WS_HELM", "WS_CHARM")] == [0, 1, 2, 3])
     # ---- L2 ------------------------------------------------------------------
     check("L2 record", (s["IR_TYPE"], s["IR_QTY"], s["IR_IST"], s["IR_STRIDE"], s["STACK_MAX"]) == (0, 1, 2, 3, 9))

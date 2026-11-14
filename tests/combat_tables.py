@@ -88,6 +88,9 @@ KINDS.update({
     27: ("Orc Bouncer", {"FIRE": "R"}, 0, 18),
     28: ("Skeleton Sniper", SK_RES, UNDEAD, 10),
     29: ("Bone Caller", {"COLD": "R", "DARK": "I"}, 0, 15),
+    # NEW-MON3 T8 (new_monsters.md §4): 30 Gargoyle, 31 = the alias as assembled = the Fire Imp (variant A)
+    30: ("Gargoyle", {"PHYS": "R", "COLD": "R", "DRAIN": "I"}, SLEEP | FEAR | POISON, 8),
+    31: ("Fire Imp", {"FIRE": "I", "COLD": "W"}, 0, 6),
 })
 # monster DEF (KX_DEF): the §9.1 / §9.6 DEF column (D3-1: Skeleton and Slime 1 too; the other 3D rows 0)
 DEF3F = {3: 1, 8: 1, 11: 1, 13: 2, 15: 2, 16: 3, 17: 1, 23: 2, 24: 3, 26: 1, 27: 2}
@@ -119,6 +122,7 @@ MELEE3F = {
     24: ("PHYS", "STUNNED", 4, 1),                # Skeleton Knight 1 in 4 -> STUNNED 1
     25: ("DRAIN", "FEAR", 3, 3),                  # Poltergeist touch 1 in 3 -> FEAR 3
     27: ("PHYS", "STUNNED", 3, 1),                # Orc Bouncer 1 in 3 -> STUNNED 1
+    31: ("FIRE", None, 0, 0),                     # Fire Imp claw 1d3 FIRE (the Wraith's: WRAITH_MELEE below)
 }
 
 
@@ -127,7 +131,7 @@ def kx_melee(k, sym):
         return [TYPES.index("DRAIN") | sym["EFX_CONFUSED"] << sym["DH_EFX_SHIFT"], 4 << 4 | 4]
     if k in MELEE3F:
         dty, efx, ch, tn = MELEE3F[k]
-        v = TYPES.index("DRAIN") if dty.startswith("DRAIN") else 0
+        v = TYPES.index(dty.split("|")[0]) if dty.split("|")[0] in TYPES else 0
         if dty.endswith("HEAL"):
             v |= 0x80
         if efx:
@@ -186,6 +190,65 @@ DEFS = [
 ]
 
 
+def sna_bank0(sna):
+    p7 = sna[49181] & 7
+    if p7 == 0:
+        return sna[27 + 32768:27 + 49152]
+    idx = [b for b in range(8) if b not in (5, 2, p7)].index(0)
+    o = 49183 + 16384 * idx
+    return sna[o:o + 16384]
+
+
+def nm3_variant_check(sym, kcol, chk, r6):
+    """NEW-MON3 T8: the row-31 alias table (src/nm3var0.asm, bank 0): every entry's A byte == the byte assembled
+    at its address (the Fire Imp), the B bytes == the Wraith of new_monsters.md §4 (independent transcription)."""
+    sna = open(os.path.join(BUILD_DIR, "tome-of-the-dead.sna"), "rb").read()
+    b0 = sna_bank0(sna)
+    K = sym["K_ALIAS"]
+
+    def cur(addr):                       # the assembled byte at a runtime address (bank 2 / bank 3 / R6 / the seq image)
+        if sym["SQ_IMG"] <= addr < sym["SQ_IMG"] + 0x600:
+            return None
+        if addr < 0xC000:
+            return sna[27 + addr - 0x4000]
+        if sym["kx_tab"] <= addr < sym["kx_tab"] + 256:
+            return m3[addr - 0xC000]
+        if addr >= sym["R6_ADDR"]:
+            return r6[addr - sym["R6_ADDR"]]
+        return None                      # the unpacked sequence image: checked by gfx_integrity
+    _, m3 = load()
+    want = {}                            # address -> B
+    for nm, v in (("KT_HP", 13), ("KT_ATK", 3), ("KT_EVA", 2), ("KT_DIE", 6), ("KT_BONUS", 1), ("KT_BH", 4),
+                  ("KT_FLAGS", sym["KF_FLYER"] | sym["KF_SLOW"]), ("KT_ATTR", 5)):
+        want[sym["kind_tab"] + sym[nm] + K] = v
+    want[sym["rk_tab"] + K] = 0
+    row = kx_row({"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 10, 1)[:6]
+    row += [TYPES.index("COLD") | sym["EFX_FROZEN"] << sym["DH_EFX_SHIFT"], 4 << 4 | 2]    # 1 in 4 -> FROZEN 2
+    for i, v in enumerate(row):
+        want[sym["kx_tab"] + 8 * K + i] = v
+    want[sym["drop_imp"]] = 0
+    want[sym["gu_tab"] + 2 * K] = sym["KFID_WRAITH"]
+    want[sym["gu_tab"] + 2 * K + 1] = 2
+    want[sym["ksm_tab"] + 2 * K] = sym["ksm_wr"] & 0xFF
+    want[sym["ksm_tab"] + 2 * K + 1] = sym["ksm_wr"] >> 8
+    o, end = sym["nm3_var_b2"] - 0xC000, sym["nm3_var_end"] - 0xC000
+    seen = {}
+    while o < end:
+        a = b0[o] | b0[o + 1] << 8
+        if a == 0:
+            o += 2
+            continue
+        seen[a] = (b0[o + 2], b0[o + 3])
+        o += 4
+    chk("nm3_var: entries", sorted(seen), sorted(want))
+    for a, (va, vb) in seen.items():
+        chk(f"nm3_var {a:#06x} B", [vb], [want.get(a)])
+        c = cur(a)
+        if c is not None:
+            chk(f"nm3_var {a:#06x} A == assembled", [va], [c])
+    chk("nm3_var KT_BH B = BH_U_WRAITH, A = BH_K_ALIAS", [kcol(sym["KT_BH"], K), sym["BH_U_WRAITH"]], [2, 4])
+
+
 def main():
     sym, m = load()
     fails = []
@@ -232,7 +295,8 @@ def main():
           21: (8, 2, 1, 4, 0, 1, 4), 22: (10, 4, 3, 4, 0, 1, 2), 23: (14, 3, 2, 6, 0, 1, 5),
           24: (18, 4, 2, 8, 0, 1, 5), 25: (11, 3, 3, 4, 0, 1, 3), 26: (18, 4, 0, 8, 2, 1, 5),
           27: (24, 5, 1, 10, 0, 1, 5), 28: (10, 3, 2, 4, 0, 1, 6), 29: (14, 3, 2, 4, 0, 1, 6),
-          2: (14, 1, 4, 2, 0, 1, 5)}           # 3F-T9 K_VBAT: Vampire hp / weight, the Bat's atk / eva, 1d2, every turn
+          2: (14, 1, 4, 2, 0, 1, 5),
+          30: (9, 3, 1, 6, 0, 1, 3), 31: (5, 2, 3, 3, 0, 1, 3)}      # NEW-MON3 T8: Gargoyle, Fire Imp (W3 both)           # 3F-T9 K_VBAT: Vampire hp / weight, the Bat's atk / eva, 1d2, every turn
     ASSERT_LW = sym["lp_wt"] == sym["kind_tab"] + sym["KT_REACH"]   # MEM-RECLAIM w3: lp_wt is the old KT_REACH slot, ONE copy (bank 2)
     chk("lp_wt == kind_tab + KT_REACH", [ASSERT_LW], [True])
     for k, (hp, atk, eva, die, bon, per, wt) in K3.items():
@@ -249,7 +313,7 @@ def main():
     # climbers: Goblin / Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
     # + Orc (Berserker 26, Bouncer 27), Archer (Sniper 28), Necro (Bone Caller 29), + Mummy 13, Spider 9 + Black Widow 22 (fix/archer-climb; the Pharaoh boss guard is the AI's)
     CLIMB = {0, 1, 3, 4, 9, 10, 21, 22, 23, 24, 11, 12, 13, 14, 26, 27, 28, 29}   # VAMP-BOSS: + 10 (K_VAMPIRE)
-    for k in range(30):
+    for k in range(32):
         chk(f"KF_CLIMBER[{k}]", [kcol(sym["KT_FLAGS"], k) & sym["KF_CLIMBER"] != 0], [k in CLIMB])
     # drop_tab: (kind, item, N, k) = "k in N" (§8.11 + §9.6: the base numerator + 1 per tier above 1)
     dt = sym["drop_tab"] - sym["R6_ADDR"]       # 3F-T5: drop_tab moved to R6 (tier6.asm)
@@ -258,7 +322,8 @@ def main():
              (21, "IT_F_APPLE", 4, 2), (26, "IT_F_MEAT", 3, 2), (27, "IT_F_MEAT", 3, 3),
              (28, "IT_ARROW", 2, 2), (29, "IT_P_MANA", 3, 2),
              # 3F-T6: the tiers of a base with no drop: a random food (type 0 = Carrot / Apple / Pear) 1 in 4
-             (20, 0, 4, 1), (22, 0, 4, 1), (23, 0, 4, 1), (24, 0, 4, 1), (25, 0, 4, 1)]
+             (20, 0, 4, 1), (22, 0, 4, 1), (23, 0, 4, 1), (24, 0, 4, 1), (25, 0, 4, 1),
+             (31, "IT_P_MANA", 4, 1)]                 # NEW-MON3 T8: the Fire Imp, Mana 1 in 4 (nm3_var zeroes the kind on a Wraith level)
     chk("DROP_ROWS", [sym["DROP_ROWS"]], [len(DROPS)])
     for i, (kd, it, n, kk) in enumerate(DROPS):
         chk(f"drop_tab[{i}]", R6BLK[dt + 4 * i:dt + 4 * i + 4], [kd, sym[it] if isinstance(it, str) else it, n, kk])
@@ -302,6 +367,7 @@ def main():
             chk(f"info line {name} rank {r + 1} MP / RNG", [mm and int(mm.group(2)), mm and int(mm.group(3))],
                 [row[0], row[1] if row[1] else 1])
 
+    nm3_variant_check(sym, kcol, chk, R6BLK)
     n = 32 + 8 + 2 + 8 + 21 + 2 + 9 + 42 + 40 + 48 + 30 + 13   # 3F-T3: kind_tab / lp_wt / climbers / drop_tab
     if fails:
         print("combat_tables: FAIL")

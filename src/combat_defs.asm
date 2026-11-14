@@ -147,7 +147,7 @@ BOSS_TRAP       EQU RG_RAM_END      ; 3F-T8: count (wraps; garbage at boot, test
 ; BOSS_TRAP (bank 5, garbage at boot: new_game zeroes SPQ_K; end_turn always empties it).
 ;------------------------------------------------------------------------------
 SPQ_RAM          EQU BOSS_TRAP + 1   ; $5FF5
-SPQ_K            EQU SPQ_RAM          ; queued kind byte: bits 0-4 the kind (0 = an ALARM wave: LP_KINDS[rnd & 3]
+SPQ_K            EQU SPQ_RAM          ; queued kind byte: bits 0-4 the kind (0 = an ALARM wave: LP_KINDS[rnd & 7]
                                     ; per body), SQF_* flags; 0 = empty
 SPQ_P            EQU SPQ_RAM + 1      ; the parent slot (summoner / breeder: placement anchor); SPQ_NONE = the doors
 SPQ_N            EQU SPQ_RAM + 2      ; bodies (1..2)
@@ -209,10 +209,12 @@ RK_NECRO        EQU 4
 RK_BONE_CALLER  EQU 5
 RK_ARCHMAGE     EQU 6               ; 3F-T11b: the Archmage's 7 spell rows RK_ARCHMAGE .. + 6 (arch_ai; no rk_tab entry)
 RK_WIDOW        EQU 13              ; WIDOW-SPIT: the Black Widow's spit (any body: below RK_GOLD1, so ai_rhook's gate is unchanged)
-RK_GKING        EQU 14              ; BOSS-RANGED: the Goblin King's dagger (D1) / the Spider Queen's spit (D2),
-RK_SQUEEN       EQU 15              ; after the Widow; rows >= RK_GOLD1 shoot only for a golden body (ai_rhook)
+RK_IMP          EQU 14              ; NEW-MON3 T8: the Fire Imp's ember (new_monsters.md §4.2 F-1; row 31 variant A, rk_tab 0 on the
+                                    ; Wraith's): below RK_GOLD1, so it shoots for any body; the F-1 flyer-shooter code is a later task
+RK_GKING        EQU 15              ; BOSS-RANGED: the Goblin King's dagger (D1) / the Spider Queen's spit (D2),
+RK_SQUEEN       EQU 16              ; after the Imp; rows >= RK_GOLD1 shoot only for a golden body (ai_rhook)
 RK_GOLD1        EQU RK_GKING
-RK_ROWS         EQU 15
+RK_ROWS         EQU 16
 SQ_PSN_T        EQU 12              ; BOSS-RANGED: a spit hit always poisons + 12 (deal_hit E = half, cap PSN_CAP)
 BW_PSN_T        EQU 6               ; WIDOW-SPIT: a Widow spit hit always poisons + 6 (deal_hit E = half, cap PSN_CAP)
 BW_SPIT_N       EQU 3               ; WIDOW-SPIT: rd_tab N 3 = a shot every 4th turn (the Queen: N 2, every 3rd)

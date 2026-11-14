@@ -29,6 +29,22 @@ RSP_W           EQU 4               ; local to the KXROW macro (not a stored val
     ENDM
 
 IMM_UNDEAD      EQU IMMF_SLEEP | IMMF_POISON
+; NEW-MON3 T8 rows (new_monsters.md §4; KXROW args: PHYS FIRE COLD SHOCK DRAIN DARK, imm, xp, dty, efx, chance, turns, def).
+; Macros, because the Wraith's row (variant B of row 31) is assembled a second time in the alias table (nm3var0.asm).
+KXP_GARGOYLE    EQU 8
+KXP_IMP         EQU 6
+KXP_WRAITH      EQU 10
+    MACRO KX_GARGOYLE_ROW
+                KXROW RSP_R,0,RSP_R,0,RSP_I,0, IMMF_SLEEP | IMMF_FEAR | IMMF_POISON, KXP_GARGOYLE, DTY_PHYS, EFX_NONE, 0, 0, 0
+    ENDM
+    MACRO KX_IMP_ROW
+                KXROW 0,RSP_I,RSP_W,0,0,0, 0, KXP_IMP, DTY_FIRE, EFX_NONE, 0, 0, 0
+    ENDM
+WR_FRZ_N        EQU 4               ; Frost Wraith: the touch freezes 1 in 4 (user 2026-11-13; tune after playtest) ...
+WR_FRZ_T        EQU 2               ; ... for 2 turns
+    MACRO KX_WRAITH_ROW
+                KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, KXP_WRAITH, DTY_COLD, EFX_FROZEN, WR_FRZ_N, WR_FRZ_T, 1
+    ENDM
 
 ; kinds not listed stay zero: heroes (0 XP; their resistances come from gear),
 ; every kind id >= K_COUNT (no 3D kind yet; 3F adds rows).
@@ -70,8 +86,11 @@ kx_tab:
                 KXROW 0,RSP_R,0,0,0,0, 0, 18, DTY_PHYS, EFX_STUNNED, 3, 1, 2                           ; K_ORC_BOUNCER: 1 in 3 -> STUNNED 1
                 KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 10, DTY_PHYS, EFX_NONE, 0, 0, 0             ; K_SNIPER (stand-and-shoot: T7)
                 KXROW 0,0,RSP_R,0,0,RSP_I, 0, 15, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_BONE_CALLER (summon: T6)
-                ASSERT ($ - kx_tab) == K_COUNT * KX_STRIDE && K_COUNT == 30
-                DS   KX_LEN - K_COUNT * KX_STRIDE, 0                      ; ids 30 / 31: the class FX kinds
+                ; --- NEW-MON3 T8 (new_monsters.md §4): ids 30 / 31. Row 31 = the Fire Imp (variant A); the Frost Wraith's
+                ; row (variant B: nm3_var, src/nm3var0.asm) is KX_WRAITH_ROW below.
+                KX_GARGOYLE_ROW                                                                           ; K_GARGOYLE: stone: PHYS R, COLD R, DRAIN I; SLEEP / FEAR / POISON immune; 8 XP
+                KX_IMP_ROW                                                                                ; K_ALIAS (A): the Fire Imp: FIRE I, COLD W; claw FIRE; 6 XP
+                ASSERT ($ - kx_tab) == K_COUNT * KX_STRIDE && K_COUNT == 32
                 ASSERT kx_tab == BANK_WINDOW && $ - kx_tab == KX_LEN
 
 ; L-RELIEF: decor_gen.asm's dg_bad (64 B, 64-aligned lookup) sits here, at

@@ -211,9 +211,10 @@ def main():
 
         # ------------------------------------------------------------- K: every killer kind
         dep = kind_depths()
-        kinds = sorted(k for k in dep if 2 <= k < S["K_COUNT"])
-        check("K setup: every monster kind 2..29 has a depth", kinds == list(range(2, S["K_COUNT"])),
-              sorted(set(range(2, S["K_COUNT"])) - set(kinds)))
+        KMON = S["K_GARGOYLE"]          # NEW-MON3 T8: kinds 30 / 31 are in no LP_KINDS yet (T10 places them)
+        kinds = sorted(k for k in dep if 2 <= k < KMON)
+        check("K setup: every monster kind 2..29 has a depth", kinds == list(range(2, KMON)),
+              sorted(set(range(2, KMON)) - set(kinds)))
         for i, k in enumerate(kinds):
             d, hero = dep[k], i & 1
             ok, room = setup(d, hero, 0x4E00 + 16 * d + k)

@@ -111,6 +111,7 @@ GEAR_TABLE = (
     (T["IT_H_HOOD"], 1, "M"), (T["IT_H_HELM"], 1, "W"),
     (T["IT_C_MIGHT"], 2, None), (T["IT_C_WARD"], 2, None), (T["IT_C_FIRE"], 2, None),
     (T["IT_C_MANA"], 3, None), (T["IT_C_PLENTY"], 3, None),
+    (T["IT_C_FROST"], 5, None),             # NEW-MON3 (new_monsters.md Decisions 2026-11-13): D5+, normal weight
 )
 # the pre-GEAR2 table (baseline for the differential check)
 GEAR_TABLE_OLD = (
@@ -201,6 +202,7 @@ _INK_BY_NAME = {
     "IT_H_HOOD": 0x07, "IT_H_HELM": 0x07, "IT_H_KING": 0x07, "IT_H_MIRROR": 0x07,
     "IT_C_MIGHT": 0x06, "IT_C_WARD": 0x06, "IT_C_FIRE": 0x06, "IT_C_MANA": 0x06,
     "IT_C_PLENTY": 0x06, "IT_C_SCARAB": 0x06, "IT_C_GRAVE": 0x06,
+    "IT_C_FROST": 0x45,                                                    # NEW-MON3 Frost Charm: bright cyan
 }
 ITEM_INK = {T[k]: v for k, v in _INK_BY_NAME.items()}
 

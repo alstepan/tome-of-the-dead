@@ -67,6 +67,8 @@ def virt(banks, v, n):
     """Virtual sprite-source / vdata address: $4000..$7FFF bank 6 (SRC6, real =
     virt + SRC6_VDELTA = virt + $8000), $8000.. bank 1, $C000.. bank 3."""
     assert v >= 0x4000, hex(v)
+    if 0x6000 <= v < 0x8000:                            # NEW-MON3 T7: SRC0 = bank 0's B0_CODE2 (real = virt + $6000)
+        return banks[0][v + 0x6000 - 0xC000:v + 0x6000 - 0xC000 + n]
     if v < 0x8000:
         return banks[6][v - 0x4000:v - 0x4000 + n]
     return banks[1][v - 0x8000:v - 0x8000 + n] if v < 0xC000 else banks[3][v - 0xC000:v - 0xC000 + n]

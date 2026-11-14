@@ -513,8 +513,8 @@ def src6_decode(r, fails, name):
     seen = 0
     for b in range(S["ZX0_BLOCKS"]):
         lab = f"zblk_{b}"
-        if not (S["SRC6_ADDR"] <= S[lab] < S["R6_ADDR"]):
-            continue
+        if not (S["SRC6_ADDR"] <= S[lab] < S["R6_ADDR"]) or S["src0_blocks"] <= S[lab] < S["src0_end"]:
+            continue                              # (NEW-MON3 T7: SRC0's bank-0 blocks lie in bank 0, not here)
         seen += 1
         f0, n = S[lab + "_first"], S[lab + "_n"]
         raw = b"".join(frames[nm] for nm in names[f0:f0 + n])
@@ -534,6 +534,27 @@ def src6_decode(r, fails, name):
     if not seen:
         print(f"[FAIL] {name} S6: no SRC6 block in this build")
         fails.append(f"{name}/S6/none")
+    # NEW-MON3 T7 S0: every SRC0 block (bank 0 B0_CODE2, virtual FD_BLK = real - SRC0_VDELTA, $6000..$7FFF) through
+    # the real zx0_frame: bit-exact, GEN_ZBLK = the virtual key, bank 0 (BANK_TEXT) paged after
+    seen0 = 0
+    for b in range(S["ZX0_BLOCKS"]):
+        lab = f"zblk_{b}"
+        if lab not in S or not (S["src0_blocks"] <= S[lab] < S["src0_end"]):
+            continue
+        seen0 += 1
+        f0, n = S[lab + "_first"], S[lab + "_n"]
+        raw = b"".join(frames[nm] for nm in names[f0:f0 + n])
+        virt = S[lab] - S["SRC0_VDELTA"]
+        t, scr, hl, zb, shadow = decode_call(r, virt)
+        ok = (len(raw) == S[lab + "_raw"] and scr[:len(raw)] == raw and hl == S["GEN_SCRATCH"]
+              and zb == virt and shadow & 7 == S["BANK_TEXT"] and 0x6000 <= virt < 0x8000)
+        print(f"[{'PASS' if ok else 'FAIL'}] {name} S0 SRC0 block {b} [{', '.join(names[f0:f0 + n])}]: "
+              f"virt {virt:#06x} (bank 0 {S[lab]:#06x}) {S[lab + '_packed']} -> {len(raw)} B, zx0_frame {t:,} T")
+        if not ok:
+            fails.append(f"{name}/S0/{lab}")
+    if not seen0:
+        print(f"[FAIL] {name} S0: no SRC0 block in this build")
+        fails.append(f"{name}/S0/none")
 
 
 def ft_layout(S):

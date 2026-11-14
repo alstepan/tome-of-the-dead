@@ -6,7 +6,7 @@ panel_hot.asm item_hp; pickup6.asm pot_sync).
 Release build (DEBUG_KIT=0), PROTO room A, monsters parked. Icon bytes are compared
 with their SOURCE (assets/gfx/icons/icons16.asm), inks with it_tab.
 
-  G1  page grid: every bag type (39, in two fills of 20 + 19) draws its icon into
+  G1  page grid: every bag type (40, in two fills of 20 + 20) draws its icon into
       its 2x2 cells in its it_tab ink; the 4 worn slots filled: the worn row
   G2  page description (cols 0-1, rows 18-19): the cursor item's icon; an empty bag
       slot / [CLOSE] -> blank; an empty worn slot -> its placeholder (ink $05)
@@ -155,7 +155,7 @@ def run(p, check):
             c, r = slot_rect(20 + k)
             bad += [(n,) + b for b in icon_ok(fr, I(n) - LO, c, r, ink(I(n)))]
         nfill += ok and close_page()
-    check("G1 page: all 39 bag types draw their icon (source bytes) in their 2x2 cells, it_tab ink; "
+    check("G1 page: all 40 bag types draw their icon (source bytes) in their 2x2 cells, it_tab ink; "
           "the worn row's 4 items", nfill == 2 and bad == [], (nfill, bad[:6]))
 
     put(["P_MANA", ("F_MEAT", 3)], [None, "A_ROBE", None, None])

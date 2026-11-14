@@ -1,7 +1,7 @@
 ;==============================================================================
 ; icons6.asm — IC1 the 16x16 item icons (game.md §8.11 Q5), the R6 region
 ; (r6.asm rules: far6 only from other banks, results in BC / DE / HL, no SMC).
-; The icon table (assets/gfx/icons/icons16.asm: 45 logical icons, the 3 potions share one shape, PACKED (MEM-RECLAIM w2c) into icpk 995 B for 1,376 raw; generated
+; The icon table (assets/gfx/icons/icons16.asm: 46 logical icons, the 3 potions share one shape, PACKED (MEM-RECLAIM w2c) into icpk 995 B for 1,376 raw; generated
 ; by tools/icons16.py) follows this code in R6: one copy, read only here, so
 ; every draw site reaches it through these routines (the ISR never reads it).
 ;   icon_slot  far6 from the page overlay (bag grid, worn row, description)
@@ -191,13 +191,15 @@ it_tab:         ITB  IC_NONE, 0                ; IT_NONE
                 DUP  IT_HELM_HI - IT_ARM_LO + 1
                 ITB  IC_WORN, $07              ; armour, helmets
                 EDUP
-                DUP  IT_CHARM_HI - IT_CHARM_LO + 1
+                DUP  IT_C_GRAVE - IT_CHARM_LO + 1
                 ITB  IC_WORN, $06              ; charms
                 EDUP
+                ITB  IC_WORN, $45              ; Frost Charm (NEW-MON3: bright cyan)
                 ASSERT $ - it_tab == IT_COUNT && IT_KEY == 4 && IT_F_CARROT == 5 && IT_P_HEAL == 10
                 ASSERT IT_S_TELEPORT == 13 && IT_BOOK == 17 && IT_BOW == 18 && IT_WPN_W_LO == 19
                 ASSERT IT_WPN_M_LO == IT_WPN_W_HI + 1 && IT_ARM_LO == IT_WPN_M_HI + 1
                 ASSERT IT_HELM_LO == IT_ARM_HI + 1 && IT_CHARM_LO == IT_HELM_HI + 1
+                ASSERT IT_C_FROST == IT_C_GRAVE + 1 && IT_CHARM_HI == IT_C_FROST
 
 ;------------------------------------------------------------------------------
 ; MEM-RECLAIM w2c: the icons are PACKED (icpk, 995 B for the 1,376 raw; format

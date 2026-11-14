@@ -60,13 +60,13 @@ def vectors():
     check("G2-9 M D3", M.gear_pool(3, M.HERO_MAGE),
           [T[k] for k in ("IT_W_IRON", "IT_A_ROBE", "IT_H_HOOD", "IT_C_MIGHT", "IT_C_WARD",
                           "IT_C_FIRE", "IT_C_MANA", "IT_C_PLENTY")])
-    # pool sizes 1.3: W 2,6,9,10,10,11,11,11 ; M 2,6,8,9,9,9,9,9
+    # pool sizes 1.3: W 2,6,9,10,10,11,11,11 ; M 2,6,8,9,9,9,9,9; NEW-MON3: + the Frost Charm from D5
     check("pool sizes W", [len(M.gear_pool(d, M.HERO_WARRIOR)) for d in range(1, 9)],
-          [2, 6, 9, 10, 10, 11, 11, 11])
+          [2, 6, 9, 10, 11, 12, 12, 12])
     check("pool sizes M", [len(M.gear_pool(d, M.HERO_MAGE)) for d in range(1, 9)],
-          [2, 6, 8, 9, 9, 9, 9, 9])
-    check("pool sizes W == old", [len(M.gear_pool(d, M.HERO_WARRIOR)) for d in range(1, 9)],
-          [len(M.gear_pool(d, M.HERO_WARRIOR, old=True)) for d in range(1, 9)])
+          [2, 6, 8, 9, 10, 10, 10, 10])
+    check("pool sizes W == old (+ Frost Charm D5+)", [len(M.gear_pool(d, M.HERO_WARRIOR)) for d in range(1, 9)],
+          [len(M.gear_pool(d, M.HERO_WARRIOR, old=True)) + (d >= 5) for d in range(1, 9)])
     # encodings: q -1,0,+1,+2 <-> FL_QTY 8,1,2,3 <-> ISTATE 07,00,01,02
     for q, qty, ist in ((-1, 8, 0x07), (0, 1, 0), (1, 2, 1), (2, 3, 2)):
         check(f"q_to_qty {q}", M.q_to_qty(q), qty)

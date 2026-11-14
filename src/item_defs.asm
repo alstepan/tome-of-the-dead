@@ -33,8 +33,8 @@ ITEM_COL_LAST   EQU 28
 ITEM_ROOM_CAP   EQU 6               ; FLOOR1: generated entries per room (both storeys), max (4: ~13 % of the levels lose an item)
 IT_POTION       EQU 1               ; legacy (see above); E_POT migration: memory-map "3E contracts"
 ; counters (floor-only types: pickup adds to a counter, never a bag slot)
-IT_DAGGER       EQU 2               ; D3-7: FL_QTY = count, cap DAGGERS_MAX (FLOOR1 icon 43)
-IT_ARROW        EQU 3               ; D3-7: FL_QTY = count, cap ARROWS_MAX (FLOOR1 icon 44)
+IT_DAGGER       EQU 2               ; D3-7: FL_QTY = count, cap DAGGERS_MAX (FLOOR1 icon 44)
+IT_ARROW        EQU 3               ; D3-7: FL_QTY = count, cap ARROWS_MAX (FLOOR1 icon 45)
 IT_KEY          EQU 4               ; level key: pickup sets LF_KEY_TAKEN (game.md §8)
 ; food, ascending FOOD value (game.md §7 table), so the quick slot's
 ; "smallest FOOD first" (§8) = the lowest food type present
@@ -86,7 +86,8 @@ IT_C_MANA       EQU 40              ; Amulet of Mana
 IT_C_PLENTY     EQU 41              ; Amulet of Plenty
 IT_C_SCARAB     EQU 42              ; Scarab Amulet (D5 unique)
 IT_C_GRAVE      EQU 43              ; Ring of the Grave (D6 unique)
-IT_COUNT        EQU 44              ; type tables (T4) have IT_COUNT entries
+IT_C_FROST      EQU 44              ; NEW-MON3: Frost Charm (amulet, COLD R, D5+; appended last: no id moves)
+IT_COUNT        EQU 45              ; type tables (T4) have IT_COUNT entries
 
 ; class ranges (inclusive)
 IT_CNT_LO       EQU IT_DAGGER       ; counters
@@ -101,7 +102,7 @@ IT_POT_HI       EQU IT_P_CURE
 IT_SCR_LO       EQU IT_S_TELEPORT
 IT_SCR_HI       EQU IT_S_ENCHANT
 IT_GEAR_LO      EQU IT_W_SHORT
-IT_GEAR_HI      EQU IT_C_GRAVE
+IT_GEAR_HI      EQU IT_C_FROST
 IT_WPN_LO       EQU IT_W_SHORT
 IT_WPN_HI       EQU IT_W_BONE
 IT_WPN_W_LO     EQU IT_W_SHORT      ; Warrior weapons
@@ -113,7 +114,7 @@ IT_ARM_HI       EQU IT_A_GRAVE
 IT_HELM_LO      EQU IT_H_HOOD
 IT_HELM_HI      EQU IT_H_MIRROR
 IT_CHARM_LO     EQU IT_C_MIGHT
-IT_CHARM_HI     EQU IT_C_GRAVE
+IT_CHARM_HI     EQU IT_C_FROST
 
                 ASSERT IT_NONE == 0 && IT_POTION == 1 && IT_DAGGER == 2 && IT_ARROW == 3
                 ASSERT IT_ARROW == IT_DAGGER + 1 && IT_KEY == IT_ARROW + 1

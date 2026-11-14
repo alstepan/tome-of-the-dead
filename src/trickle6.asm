@@ -152,8 +152,8 @@ trk_sig:        push bc
 ; trk_draw — §9.5 steps 5-10, C = Σ w (>= 1), TRK_W = the weights; the draws
 ; through gen_step (GEN_RNG = the gameplay stream here, see trk_run):
 ;   5. byte >= RESPAWN_CHANCE -> stop;  6. room = byte mod Σ w walked over TRK_W;
-;   7. k = byte & 3, tier_row(LP_KINDS[k], the current LVL) (draws only if tiered);
-;   8. Σ + w <= 12 -> 10;  9. once: k + 1 & 3, its tier roll, the cap; fail = stop;
+;   7. k = byte & 7, tier_row(LP_KINDS[k], the current LVL) (draws only if tiered);
+;   8. Σ + w <= 12 -> 10;  9. once: k + 1 & 7, its tier roll, the cap; fail = stop;
 ;  10. append {row | LEK_RESPAWN, kind_hp} (the record stays VISITED), LP_RESPAWNS + 1.
 ; Clobbers: all but IY.   ~1.5-2.5k T
 ;------------------------------------------------------------------------------

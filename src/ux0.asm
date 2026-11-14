@@ -100,9 +100,10 @@ ie_map:         DB   0, 0, 0, 0, 0                                     ; food 5.
                 DB   0, 0, TX_IE_FIRE - TX_IE_CURE + 1                 ; 37 Might, 38 Ward, 39 Fire Ring
                 DB   TX_IE_MANA - TX_IE_CURE + 1, TX_IE_PLENTY - TX_IE_CURE + 1      ; 40 / 41 amulets
                 DB   TX_IE_SCARAB - TX_IE_CURE + 1, TX_IE_GRING - TX_IE_CURE + 1     ; 42 / 43 uniques
+                DB   TX_IE_COLD - TX_IE_CURE + 1                       ; 44 Frost Charm (NEW-MON3)
 ie_map_end:
-                ASSERT ie_map_end - ie_map == IT_COUNT - IT_BAG_LO && IT_COUNT == 44
-                ASSERT TX_IE_GRING - TX_IE_CURE + 1 <= IEM_PHR && TX_IE_METAL == TX_IE_GRING + 1
+                ASSERT ie_map_end - ie_map == IT_COUNT - IT_BAG_LO && IT_COUNT == 45
+                ASSERT TX_IE_COLD - TX_IE_CURE + 1 <= IEM_PHR && TX_IE_METAL == TX_IE_COLD + 1
 
 ;------------------------------------------------------------------------------
 ; Panel flashes (UX §1-2): every flash is REBUILT from game state when its cells
