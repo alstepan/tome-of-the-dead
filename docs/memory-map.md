@@ -2192,8 +2192,8 @@ room id = `E_ROOM & LPK_ROOM`). Everything else in the slot and its `ST_*` bytes
   out B != 0, C storey, E x, `LPV_FACE` = marker (bit 7, bit 3 facing, bit 6 flyer, bits 4-5 row).
   A flyer's `LP_POS` bits 6-7 (`LPP_FYO`) = its band row y - 9s (0..3) instead of the facing;
   R6 `lp_fy6` puts a flyer placed by try 0 / the slide back on that row. A
-  unit not placed keeps its byte (R6 `lp_cp6` compacts `LP_POS` with the entries; skipped for
-  FRESH, whose bytes are 0); a trickle entry gets 0 (tries 1-8 on the next entry).
+  unit not placed keeps its byte (`lp_t06` copies it to the compaction slot `LPV_WRP` first, for every
+  unit that reaches try 0; a FRESH record's bytes are 0); a trickle entry gets 0 (tries 1-8 on the next entry).
 - Python reference: `tools/levelgen.py` `lp_enter(..., parked=[(kind, s, x, left[, slot])])`
   (try 0 = the `LP_POS` byte, draws no RNG; `parked` decides the slot / own facing only;
   `lp_pos_byte`); `tests/lp.py` A4 / B2 (`bank_model(..., p)` writes `LP_POS`), `tests/roommem.py` L1-L5.
@@ -7012,3 +7012,17 @@ Free (release / kit + `F3_GEN=0`): bank 3 **106** / 102, R6 **401** / 406. Cost:
 Playtest (`tests/roommem_play.py`, same seeds): 84a14d0 51.4 % exact / 69.6 % exact + same storey <= 8 cols;
 bf4e715 (slide) 42.0 / 96.2 %; **now 51.8 / 97.6 %** (380 bodies). Misses left: the body overlapped the ladder /
 shaft footprint itself 147 (kept illegal, user decision: it slides off it), gap 21, pit 4 + 4, occupied 2, flyer row 1.
+
+**ROOM-MEM2 review 3 (the 70k cap by construction; reviewer probe: mixed widths 3 / 4 in every order hit 78,849 T).**
+The slide's fail cache (keyed by w) and its unreserved-first double sweep are gone. Now: **at most one failed slide
+an entry** (`LPS_USED` = `LP_SIG` bit 0; then every later unit skips the slide: tries 1-8). A slide that succeeds
+places its unit, i.e. costs less than that unit's 8 failing tries, so the worst entry = the no-slide worst (B0) +
+ONE failed slide (setup ~0.4k + reserving <= 3 later units ~0.75k + one full scan <= 35 cols x ~57 T). The
+reservations: at the entry's first slide every later unit's saved cell gets its own bit (`LPC_UNITS`, bit 4 + j)
+in `LP_CMAP` (never cleared; `lp_legal`, `lp_post` and try 0 mask bits 4-7 out); a slider masks the bits of the
+units after it, so one single scan sees them (no mark / sweep / unmark per slide). The LP_POS compaction moved into
+`lp_t06` (a byte copy to `LPV_WRP` per unit that reaches try 0; `lp_cp6` and its far6 per unplaced unit gone,
+-~0.5k T each); `lp_place`'s `L mod n` takes one 8n step first (worst ~0.14k T a try, was ~0.19k; n >= 22:
+`KT_BW` <= 7, ASSERTed in main.asm over every kind row). Measured (`tests/lp.py`): A8S **68,074** T, A8M (new:
+A8S's rooms x mixed widths x every order) **67,286**, A8 61,410, A2 mean 21,685 (cap 22,000); A8R (new): a slide
+that fails only on the reservation sets the flag and the next unit comes back exactly. Free: bank 3 111, R6 484.

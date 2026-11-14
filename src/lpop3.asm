@@ -368,25 +368,20 @@ lp_enter:
                 or   a                         ; that storey (a trickle entry; tries 1-8)
                 jr   nz, .sp                   ; (NC)
 .pl:            call lp_place                  ; CF = no legal cell, else C = s, E = x
-                call nc, lp_spawn              ; (LPV_FACE is 0 here: lp_t06 cleared it / FRESH: no
-                jr   nc, .nu                   ; marker check, -~36 T a first-visit unit, A2's mean)
-                jr   .np
-.sp:            call nc, lp_spawn              ; CF = no free slot (posted / try 0)
+.sp:            call nc, lp_spawn              ; CF = no free slot
                 jr   c, .np
                 ld   a, (LPV_FACE)             ; ROOM-MEM2: consumed (a later unit faces the hero unless
                 or   a                         ; its own try 0 sets it); a flyer placed by try 0 / the
                 jr   z, .nu                    ; slide (bit 6) goes back to its saved band row (R6 lp_fy6).
-                ld   e, a
+                ld   e, a                      ; (0, the first-visit path: 29 T)
                 xor  a
                 ld   (LPV_FACE), a
                 bit  6, e
                 ld   hl, lp_fy6
                 call nz, far6
                 jr   .nu
-.np:            ld   hl, (LP_RECP)             ; not placed: stays in the record, ROOM-MEM2 with
-                bit  LR_VISITED_BIT, (hl)      ; its LP_POS byte (R6 lp_cp6; a FRESH record's are 0:
-                ld   hl, lp_cp6                ; skipped, A2's mean)
-                call nz, far6
+.np:            xor  a                         ; not placed: stays in the record (its LP_POS byte: lp_t06
+                ld   (LPV_FACE), a             ; copied it to WRP); no try-0 marker leaks to the next unit
                 ld   hl, (LPV_RDP)
                 ld   de, (LPV_WRP)
                 ldi
@@ -427,12 +422,20 @@ lp_place:       ld   b, LP_TRIES
                 ld   c, a
                 ld   a, (LP_W)
                 cpl
-                add  a, LP_XMAX + 1            ; LP_XMAX - w
+                add  a, LP_XMAX + 1            ; n = LP_XMAX - w (>= 22: w <= 7, main.asm ASSERT)
                 ld   b, a
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   d, a                      ; 8n (<= 216)
                 ld   a, l
+                cp   d                         ; ROOM-MEM2 review 3 (the lp_transition worst): one 8n step
+                jr   c, .md                    ; first (a byte < 16n), then <= 8 loop passes: worst
+                sub  d                         ; ~0.14k T a try (was ~0.19k), the same L mod n
 .md:            sub  b
                 jr   nc, .md
                 add  a, b
+                ASSERT (LP_XMAX - 7) * 16 > 255 && (LP_XMAX - 2) * 8 < 256   ; n in 22..27 (KT_BW 2..7): one 8n step
                 add  a, LP_XMIN
                 ld   e, a
                 pop  af                        ; A = tries left (8..1)
@@ -660,7 +663,7 @@ lp_legal:       push bc
 .g:             or   (hl)                      ; 24 T / col: OR the marks, test once
                 inc  l                         ; (LP_CMAP: one page, ASSERTed)
                 djnz .g
-                or   a
+                and  LPC_BAD | LPC_BODY | LPC_MRG    ; ROOM-MEM2: not the slide's unit reservations (bits 4-7)
                 jr   nz, .bad
                 ld   hl, LP_HS                 ; arrival storey: body gap >= LP_GAPV
                 ld   a, (hl)

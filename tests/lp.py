@@ -603,9 +603,10 @@ def part_a8(h, p, check):
 def part_a8s(h, p, check):
     """A8S (ROOM-MEM2 review): the lp_transition worst with the door slide. As A8 (4 bodies parked in Y),
     but X's 4 entries (the depth's widest kind) carry an LP_POS cell on a storey with NO free window
-    (found by a levelgen sweep: tries 0 / the slide scan the full range and fail), the hero arriving on
-    the other storey: every unit pays lp_t06's full slide (+ the reservations) and then all 8 stream
-    tries (none legal: they stay in the record). <= LP_TRANS_GUARD; == levelgen.lp_enter."""
+    (found by a levelgen sweep), the hero arriving on the other storey: try 0 fails for every unit, the
+    FIRST unit's slide scans the whole storey and fails, the others skip the slide (review 3: one failed
+    slide an entry), and every unit then spends all 8 stream tries (none legal: they stay in the record).
+    <= LP_TRANS_GUARD; == levelgen.lp_enter. A8M permutes mixed widths, A8R a reservation-made failure."""
     p.load()
     sync_bodies(p)
     worst = (0, "")
@@ -650,6 +651,96 @@ def part_a8s(h, p, check):
               ok and len(got) == len(out) and ts <= LP_TRANS_GUARD and calls == 32, (ok, got, out, calls, ts))
         worst = max(worst, (ts, f"d{d} {seed:#06x}"))
     print(f"[lp] A8S lp_transition worst (full slide + 8 tries a unit) {worst[0]} T ({worst[1]})", flush=True)
+
+
+def part_a8m(h, p, check):
+    """A8M (ROOM-MEM2 review 3): A8S's rooms with the depth's kinds of every width (3 / 4 on D7) in every
+    order of the 4 entries: lp_transition <= LP_TRANS_GUARD by construction (one failed slide an entry)."""
+    import itertools
+    worst = (0, "")
+    bad = 0
+    for d, seed, X, s0, x0 in ((7, 396, 2, 0, 2), (7, 363, 1, 0, 2), (7, 331, 7, 1, 2), (7, 329, 8, 0, 2)):
+        p.load()
+        sync_bodies(p)
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=d)
+        p.far3("lp_budget")
+        kinds = list(p.z.read_memory(S["LP_KINDS"], 8))
+        byw = {}
+        for q in sorted(set(kinds), key=lambda q: -p.kb(q, "KT_BW")):
+            byw.setdefault(p.kb(q, "KT_BW"), q)
+        seq = (list(byw.values()) * 4)[:4]
+        for perm in sorted(set(itertools.permutations(seq))):
+            p.load()
+            sync_bodies(p)
+            p.wb("LVL", 1)
+            p.wmem(S["LVL_SEED"], w16(seed))
+            p.far3("level_gen", a=d)
+            p.far3("lp_budget")
+            p.wb("LVL_DEPTH", d)
+            blk = p.block()
+            st, lair = blk[S["LVL_START"] - G.BASE], blk[S["LVL_LAIR"] - G.BASE]
+            Y = next(r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+                     and r not in (st, lair, X, blk[S["LVL_SANCTUM"] - G.BASE]))
+            k0 = kinds[0]
+            kh0 = p.kb(k0, "KT_BH")
+            p.clear_slots()
+            for i, x in enumerate((9, 13, 17, 21)):
+                p.set_ent(5 + i, KIND=k0, ROOM=Y, X=x, Y=9 + 8 - kh0, FLAGS=EF_ACTIVE | EF_HOSTILE, HP=10, MAXHP=10)
+            p.wmem(S["LP_REC"] + 9 * X, [0x80 | 4] + [v for k in perm for v in (k, 10)])
+            p.wmem(S["LP_POS"] + 4 * X, [G.lp_pos_byte(x0, s0, False, 1 if p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
+                                                       else None) for k in perm])
+            p.wmem(S["LP_REC"] + 9 * Y, [0x80] + [0] * 8)
+            p.wb("CUR_ROOM", Y)
+            hs = 1 - s0
+            p.set_ent(0, ROOM=Y, X=1, Y=9 * hs + 8 - p.kb(S["K_KNIGHT"], "KT_BH"))
+            p.wb("TRK_PREV", st)
+            p.wmem(S["CAND_LIST"], [0xFF] * 16)
+            p.wb("FOLLOW_N", 0)
+            p.wb("EXIT_DEST", X)
+            ok, ts = p.code([0x21] + w16(S["lp_transition"]) + [0xCD] + w16(S["far3"]))
+            if not ok or ts > LP_TRANS_GUARD:
+                bad += 1
+            worst = max(worst, (ts, f"d{d} {seed:#06x} widths {[p.kb(q, 'KT_BW') for q in perm]}"))
+    print(f"[lp] A8M lp_transition worst (mixed widths, every order) {worst[0]} T ({worst[1]})", flush=True)
+    check(f"A8M mixed widths x every order on A8S's rooms: worst {worst[0]} T <= {LP_TRANS_GUARD}", bad == 0, worst)
+
+
+def part_a8r(h, p, check):
+    """A8R (ROOM-MEM2 review 3): a slide that fails ONLY because of the reservation (the storey's one window
+    is the next unit's saved cell, a levelgen sweep): unit 0 slides nowhere (tries 1-8), unit 1 comes back
+    exactly; the entry's slide flag (LPS_USED = LP_SIG bit 0) is set; == levelgen.lp_enter."""
+    p.load()
+    sync_bodies(p)
+    for d, seed, r, s0, x0, x1 in ((1, 2, 1, 1, 2, 25), (1, 5, 3, 0, 2, 8), (1, 12, 5, 0, 2, 22), (1, 19, 7, 0, 5, 2)):
+        p.wb("LVL", 1)
+        p.wmem(S["LVL_SEED"], w16(seed))
+        p.far3("level_gen", a=d)
+        p.far3("lp_budget")
+        blk = p.block()
+        lp = bytearray(p.lp())
+        kinds = list(p.z.read_memory(S["LP_KINDS"], 8))
+        k = max(kinds, key=lambda q: p.kb(q, "KT_BW"))
+        fly = p.kb(k, "KT_FLAGS") & S["KF_FLYER"]
+        ro = S["LP_REC"] - LPB + r * S["LR_STRIDE"]
+        po = S["LP_POS"] - LPB + r * S["LR_MAX"]
+        lp[ro] = S["LR_VISITED"] | 2
+        for i, x in enumerate((x0, x1)):
+            lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i] = k, 5
+            lp[po + i] = G.lp_pos_byte(x, s0, False, 1 if fly else None)
+        p.wmem(LPB, lp)
+        p.clear_slots()
+        hs = 1 - s0
+        p.wmem(S["LP_HX"], [1, hs, 3])
+        ok, _ = p.far3("lp_enter", a=r)
+        wl, out = G.lp_enter(blk, bytes(lp), r, hs, 1, 3, f3=True, parked=[])
+        got = p.slots()
+        check(f"A8R d{d} seed {seed:#06x} room {r}: unit 0's slide fails on the reservation, unit 1 back at x {x1}, "
+              f"the slide flag set; == model",
+              ok and got == want_slots(p, blk, r, out) and mask(p.lp()) == mask(wl)
+              and any(o[2] == s0 and o[3] == x1 for o in out) and p.rb(S["LP_SIG"]) & 1,
+              (got, out, hex(p.rb(S["LP_SIG"]))))
 
 
 def G_entries(lp, r):
@@ -917,6 +1008,8 @@ def main():
             part_a6(h, p, check)
             part_a8(h, p, check)
             part_a8s(h, p, check)
+            part_a8m(h, p, check)
+            part_a8r(h, p, check)
             part_a9(h, p, check)
             if nsweep:
                 part_a7(h, p, check, nsweep)

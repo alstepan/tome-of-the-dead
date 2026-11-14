@@ -1031,10 +1031,23 @@ def lp_pos_byte(x, s, left, fyo=None):
     return (x & 31) | (s & 1) << 5 | (0x40 if left else 0)
 
 
-def lp_slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap):
-    """ROOM-MEM2 door case (R6 lp_slide6): try 0 rejected -> the same storey, the nearest x' (x0+1,
-    x0-1, x0+2, ...) in [LP_XMIN, LP_XMAX + 1 - w] whose cells are legal ignoring the gap rule; on the
-    hero's arrival storey only on the monster's side, >= gap clear of his box. None: tries 1-8."""
+def lp_slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap, bud=None):
+    """ROOM-MEM2 door case (R6 lp_t06): try 0 rejected -> the same storey, the nearest x' (a tie: right)
+    in [LP_XMIN, LP_XMAX + 1 - w] whose cells are legal ignoring the gap rule (the margin-less returning
+    rules); on the hero's arrival storey only on the monster's side, >= gap clear of his box. The Z80's
+    two run-length scans (right from x0+1, then left only while nearer). bud = [1 once a slide failed
+    this entry]: review 3 (the lp_transition bound) allows one failed slide an entry. None: tries 1-8."""
+    if bud is None:
+        bud = [0]
+    if bud[0]:
+        return None
+    res = _slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap)
+    if res is None:
+        bud[0] = 1
+    return res
+
+
+def _slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap):
     lo, hi = D["LP_XMIN"], D["LP_XMAX"] + 1 - w
     if s == hs:
         if x0 > hx:
@@ -1046,11 +1059,28 @@ def lp_slide(b, r, s, x0, w, fly, hs, hx, hw, placed, gap):
             hi = min(hi, t)
     if hi < lo:
         return None
-    for d in range(1, D["LP_XMAX"]):
-        for c in (x0 + d, x0 - d):
-            if lo <= c <= hi and lp_legal(b, r, s, c, w, fly, -1, hx, hw, placed, 0, ret=True) == "ok":
+    blk = [lp_legal(b, r, s, c, 1, fly, -1, hx, hw, placed, 0, ret=True) != "ok" for c in range(40)]
+
+    def scan(cols, step, first):
+        run = 0
+        for k in range(cols):
+            c = first + step * k
+            run = 0 if blk[c] else run + 1
+            if run == w:
                 return c
-    return None
+        return None
+    xr = None
+    start = max(x0 + 1, lo)
+    if start <= hi:
+        c = scan(hi + w - start, 1, start)
+        xr = None if c is None else c - w + 1
+    lower = lo if xr is None else max(lo, 2 * x0 + 1 - xr)
+    sl = min(x0 - 1, hi)
+    if x0 - 1 >= 0 and sl >= lower:
+        c = scan(sl + w - lower, -1, sl + w - 1)
+        if c is not None:
+            return c
+    return xr
 
 
 def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
@@ -1117,6 +1147,7 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
         units = [(lp[ro + 1 + 2 * i], lp[ro + 2 + 2 * i]) for i in range(hdr & D["LR_CNT_MASK"])]
     placed, out, left = [], [], []
     po = lp_off("LP_POS") + r * D["LR_MAX"]             # ROOM-MEM2: the entries' last cells (0 = none)
+    bud = [0]                                           # the slide budget of this entry (LPS_USED)
     for i, (kb, hp) in enumerate(units):
         w, _, fly = info(kb & ROWM)
         pos = lp[po + i]
@@ -1124,6 +1155,8 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
         best = lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM) \
             if r == b[H["LVL_LAIR"]] else None
         try0 = False
+        if best is None and hdr & D["LR_VISITED"]:      # R6 lp_t06 runs: it copies the byte to the
+            lp[po + len(left)] = pos                    # compaction slot first (review 3)
         if best is None and pos:                        # try 0 (parked or not): the LP_POS cell
             s0, x0 = (pos >> D["LPP_S_BIT"]) & 1, pos & D["LPP_X"]
             if lp_legal(b, r, s0, x0, w, fly, hs, hx, hw, placed, D["LP_GAP2"], ret=True) == "ok":
@@ -1132,7 +1165,7 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
                 rsv = [(s0, lp[po + j] & 31, (lp[po + j] & 31) + info(units[j][0] & ROWM)[0] - 1)
                        for j in range(i + 1, len(units))                # the later units' saved cells
                        if lp[po + j] and (lp[po + j] >> 5) & 1 == s0]   # on this storey: reserved
-                xs = lp_slide(b, r, s0, x0, w, fly, hs, hx, hw, placed + rsv, D["LP_GAP2"])
+                xs = lp_slide(b, r, s0, x0, w, fly, hs, hx, hw, placed + rsv, D["LP_GAP2"], bud)
                 if xs is not None:
                     best, try0 = (s0, xs), True
         for t in range(0 if best else D["LP_TRIES"]):

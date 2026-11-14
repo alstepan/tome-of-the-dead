@@ -540,15 +540,19 @@ lp_bk6:         ld   a, (ix+E_FLAGS)
 LPS_LO          EQU LP_BEST                 ; lp_t06 scratch (lp_post's LP_EXLO / LP_EXHI: dead once the
 LPS_HI          EQU LP_BX                   ; unit's post was tried; LP_BS is lp_gen's LPG_MINW, dead here)
 LPS_XR          EQU LP_BS
-LPS_OP          EQU LP_GAPV                 ; .rsv: 0 mark / 1 unmark / 2 test (3 = overlap) (LP_GAPV: lp_legal's, set per try)
-LPS_FAIL        EQU LP_SIG                  ; the slide's fail key (LP_SIG: lp_gen's, FRESH only; 0 from lp_enter)
+LPS_MASK        EQU LP_GAPV                 ; the slide's mark mask (LP_GAPV: lp_legal's, set per try)
+LPS_USED        EQU LP_SIG                  ; the entry's slide state: bit 0 = a slide failed (no more slides), bit 7 = the
+                                            ; saved cells are reserved (LP_SIG: lp_gen's, FRESH only; 0 from lp_enter)
 lp_t06:         xor  a
                 ld   (LPV_FACE), a
                 ld   a, (LPV_RDP)
                 call lp_posr6
-                ld   a, (hl)
-                ld   b, a
-                or   a
+                ld   b, (hl)
+                ld   a, (LPV_WRP)              ; review 3: the record's compaction of LP_POS, done here for
+                call lp_posr6                  ; every unit that reaches try 0 (was a far6 lp_cp6 a unit not
+                ld   (hl), b                   ; placed: -~0.5k T each in the lp_transition worst). A unit
+                ld   a, b                      ; placed after it leaves WRP where it is: the byte is past the
+                or   a                         ; count (stale) or the next kept one overwrites it
                 ret  z                         ; no saved cell
                 and  LPP_X
                 ld   d, a                      ; D = x0 (the whole routine)
@@ -591,7 +595,8 @@ lp_t06:         xor  a
 .t:             or   (hl)
                 inc  l
                 djnz .t
-                and  ~LPC_MRG & $FF            ; a returning monster ignores the ladder / shaft margin
+                and  LPC_BAD | LPC_BODY        ; a returning monster ignores the ladder / shaft margin (and
+                                               ; the slide's unit reservations, bits 4-7)
                 jr   nz, .sl
                 ld   e, d                      ; E = x0
                 ld   a, (LP_HS)
@@ -609,30 +614,29 @@ lp_t06:         xor  a
                 add  a, LP_GAP2 - 1
                 cp   b
                 jp   c, .ok                    ; x0 + w + g <= hx: left of him
-                ; ---- the slide: hi / lo (H / L) ----
-.sl:            ld   a, (LP_HS)                ; the fail cache first (review: the lp_transition worst):
-                cp   c                         ; key = $80 | s << 5 | mode << 3 | w, mode 0 another storey,
-                ld   b, 0                      ; 1 his left, 2 his right. No window for a key stays so for
-                jr   nz, .k0                   ; the rest of this entry (marks only grow; LPS_FAIL = LP_SIG,
-                inc  b                         ; 0 from lp_enter)
-                ld   a, (LP_HX)
-                cp   d
-                jr   nc, .k0
-                inc  b
-.k0:            ld   a, c
-                add  a, a
-                add  a, a
-                or   b
-                add  a, a
-                add  a, a
-                add  a, a
-                ld   hl, LP_W
-                or   (hl)
-                or   $80
-                ld   hl, LPS_FAIL
-                cp   (hl)
-                jp   z, .none                  ; known: no window
-                push af                        ; the key (popped by .fnd / .nonep)
+                ; ---- the slide (review 3: at most ONE failed slide an entry -> the lp_transition cap
+                ; by construction: a unit that slides is placed, i.e. cheaper than its 8 failing tries) ----
+.sl:            ld   hl, LPS_USED
+                bit  0, (hl)
+                jp   nz, .none                 ; a slide failed this entry already: tries 1-8
+                ld   a, (LPV_RDP)              ; the mask: LPC_BAD | LPC_BODY + the bits of the units after
+                ld   hl, LP_RECP               ; this one (index i: their saved cells are reserved; the earlier
+                sub  (hl)                      ; ones are placed or waiting, this one is itself)
+                rrca
+                and  LR_MAX - 1
+                inc  a
+                ld   b, a
+                ld   a, $10
+.ms:            add  a, a
+                djnz .ms
+                ld   e, a                      ; E = unit i+1's bit ($10 << (i+1); 0 for i = 3)
+                neg                            ; -bit: that bit and every one above
+                and  LPC_UNITS
+                or   LPC_BAD | LPC_BODY
+                ld   (LPS_MASK), a
+                ld   hl, LPS_USED
+                bit  7, (hl)
+                call z, .rsv                   ; the entry's first slide: the later units' saved cells
                 ld   a, (LP_W)
                 cpl
                 add  a, LP_XMAX + 2
@@ -657,90 +661,43 @@ lp_t06:         xor  a
                 add  a, LP_GAP2
                 neg
                 add  a, b
-                jp   m, .nonep
+                jp   m, .none
                 cp   h
                 jr   nc, .rg
                 ld   h, a
 .rg:            ld   a, h
                 cp   l
-                jr   c, .nonep                 ; hi < lo
+                jp   c, .none                  ; hi < lo
                 ld   (LPS_HI), a
                 ld   a, l
                 ld   (LPS_LO), a
-                call .sweep                    ; without the reservations first: A = x' / $FF
-                pop  hl                        ; H = the key
-                cp   $FF
-                jr   nz, .fnd
-                ld   a, h                      ; none even unreserved: none reserved either
-                ld   (LPS_FAIL), a
-                jp   .none
-.fnd:           ld   (LPS_XR), a
-                ld   a, 2
-                ld   (LPS_OP), a
-                call .rsv                      ; x' over a later unit's saved cell on this storey? (-> 3)
-                ld   a, (LPS_OP)
-                cp   3
-                ld   a, (LPS_XR)
-                jr   nz, .sok                  ; no: it is also the nearest with the reservations
-                xor  a                         ; yes: reserve those cells (a slid body never takes a later
-                ld   (LPS_OP), a               ; one's exact cell), sweep again, unreserve
-                call .rsv
-                call .sweep
-                push af
-                ld   a, 1
-                ld   (LPS_OP), a
-                call .rsv
-                pop  af
-                cp   $FF
-                jp   z, .none
-.sok:           ld   e, a
-.ok:            ld   hl, LPV_FACE              ; a flyer faces the hero from its FINAL x (review): hx < x
-                bit  6, (hl)
-                jr   z, .ok1
-                res  3, (hl)
-                ld   a, (LP_HX)
-                cp   e
-                jr   nc, .ok1
-                set  3, (hl)                   ; EF_LEFT
-.ok1:           ld   b, 1                      ; B != 0
-                ret
-.nonep:         pop  af                        ; (the key)
-.none:          xor  a
-                ld   (LPV_FACE), a
-                ld   b, a                      ; B = 0
-                ret
-; .sweep: LPS_LO / LPS_HI, D = x0, C = s -> A = the nearest x' (a tie: right) whose cols carry no mark
-; but LPC_MRG, else $FF. Right sweep: cols c = max(x0+1, lo) .. hi + w - 1, E = the free run; run = w
-; at col c -> xR = c - w + 1 (LPS_XR); left sweep from min(x0-1, hi) down to max(lo, 2 x0 + 1 - xR)
-; (only nearer; cols from x'start + w - 1). Clobbers B, E, HL.   ~70 T a col
-.sweep:         ld   a, $FF
-                ld   (LPS_XR), a
-                ld   a, (LPS_LO)
-                ld   l, a
-                ld   a, (LPS_HI)
-                ld   h, a
+                ; right scan: cols c = max(x0+1, lo) .. hi + w - 1 (capped by the budget), E = the free run;
+                ; run = w at col c -> xR = c - w + 1. LPS_XR = the start col while scanning, then xR / $FF
                 ld   a, d
                 inc  a
                 cp   l
                 jr   nc, .r0
                 ld   a, l
-.r0:            ld   b, a                      ; B = the first candidate
+.r0:            ld   b, a                      ; B = start
                 ld   a, h
                 cp   b
-                jr   c, .lft                   ; > hi: none on the right
+                jr   c, .rn                    ; > hi: none on the right
                 ld   a, (LP_W)
                 add  a, h
-                sub  b                         ; cols = hi + w - start (>= w)
-                ld   e, a
+                sub  b
+                ld   e, a                      ; cols = hi + w - start (>= w)
                 ld   a, b
                 call .adr
+                push de                        ; (D = x0)
                 push bc                        ; (C = s)
-                ld   b, e                      ; B = cols
+                ld   b, e
+                ld   a, (LPS_MASK)
+                ld   d, a
                 ld   a, (LP_W)
                 ld   c, a                      ; C = w
                 ld   e, 0
 .rl:            ld   a, (hl)
-                and  ~LPC_MRG & $FF            ; (the margin: free for a returning monster)
+                and  d
                 jr   nz, .rb
                 inc  e
                 ld   a, e
@@ -748,20 +705,25 @@ lp_t06:         xor  a
                 jr   z, .rh                    ; the run reached w
                 inc  l
                 djnz .rl
-                pop  bc
-                jr   .lft
+                jr   .re
 .rb:            ld   e, 0
                 inc  l
                 djnz .rl
-                pop  bc
+.re:            pop  bc
+                pop  de
+.rn:            ld   a, $FF
+                ld   (LPS_XR), a               ; no right hit
                 jr   .lft
 .rh:            pop  bc
-                ld   a, l                      ; L = the run's last col
-                inc  a
-                call .sub
+                pop  de
+                ld   a, l
+                call .sub                      ; A = c
                 ld   hl, LP_W
                 sub  (hl)
-                ld   (LPS_XR), a               ; xR
+                inc  a                         ; xR = c - w + 1
+                ld   (LPS_XR), a
+                ; left scan: candidates x' = min(x0-1, hi) down to lower = lo, or with a right hit
+                ; max(lo, 2 x0 + 1 - xR) (only nearer: a tie goes right); cols from x'start + w - 1 down
 .lft:           ld   a, (LPS_LO)
                 ld   l, a
                 ld   a, (LPS_XR)
@@ -789,108 +751,119 @@ lp_t06:         xor  a
                 jr   c, .res                   ; start < lower: no nearer left candidate
                 ld   a, (LP_W)
                 add  a, h
-                ld   b, a
+                dec  a
+                ld   b, a                      ; B = the first col = start + w - 1
                 sub  l
+                inc  a
                 ld   e, a                      ; cols = start + w - lower
                 ld   a, b
-                dec  a                         ; the first col = start + w - 1
                 call .adr
+                push de
                 push bc
+                ld   a, (LPS_MASK)
+                ld   d, a
                 ld   b, e
                 ld   a, (LP_W)
-                ld   c, a                      ; C = w
+                ld   c, a
                 ld   e, 0
 .ll:            ld   a, (hl)
-                and  ~LPC_MRG & $FF
+                and  d
                 jr   nz, .lb
                 inc  e
                 ld   a, e
                 cp   c
-                jr   z, .lh0
+                jr   z, .lh
                 dec  l
                 djnz .ll
-                pop  bc
-                jr   .res
+                jr   .le
 .lb:            ld   e, 0
                 dec  l
                 djnz .ll
-                pop  bc
-.res:           ld   a, (LPS_XR)               ; the right hit, if any ($FF: none)
-                ret
-.lh0:           pop  bc
-                ld   a, l                      ; xL = this col
-                jr   .sub
-; .rsv: LPS_OP 0 = set / else clear LPC_RES on the saved cells (LP_POS) of the units after this
-; one (LPV_N - 1 entries from LPV_RDP + 2) that lie on storey C (widths: kind_tab KT_BW).
-; Keeps C, D. Clobbers A, B, E, HL.   ~0.15k T a unit
-.rsv:           ld   a, (LPV_N)
-                dec  a
-                ret  z
-                ld   b, a
-                ld   hl, (LPV_RDP)
-.rj:            inc  hl
-                inc  hl                        ; the next entry
-                push bc
-                push hl
-                ld   e, (hl)                   ; its kind byte
+.le:            pop  bc
+                pop  de
+.res:           ld   a, (LPS_XR)               ; the right hit, if any
+                cp   $FF
+                jp   z, .none
+                jr   .sok
+.lh:            pop  bc
+                pop  de
                 ld   a, l
-                call lp_posr6
-                ld   a, (hl)
-                or   a
-                jr   z, .rn
-                ld   b, a
-                rlca
-                rlca
-                rlca
-                and  1
-                cp   c
-                jr   nz, .rn
+                call .sub                      ; A = xL (this col)
+.sok:           ld   e, a
+.ok:            ld   hl, LPV_FACE              ; a flyer faces the hero from its FINAL x (review): hx < x
+                bit  6, (hl)
+                jr   z, .ok1
+                res  3, (hl)
+                ld   a, (LP_HX)
+                cp   e
+                jr   nc, .ok1
+                set  3, (hl)                   ; EF_LEFT
+.ok1:           ld   b, 1                      ; B != 0
+                ret
+.none:          ld   hl, LPS_USED              ; (every exit here is a failed slide: the entry's one)
+                set  0, (hl)
+                xor  a
+                ld   (LPV_FACE), a
+                ld   b, a                      ; B = 0
+                ret
+; .rsv: the entry's first slide (LPS_USED bit 7 clear; HL = LPS_USED), E = unit i+1's bit: every unit j
+; after this one with a saved cell gets bit 4 + j ORed into its cols x .. x + w - 1 of its storey's
+; LP_CMAP row (a later slider i' > i needs only j > i': a subset). lp_legal / lp_post / try 0 mask them
+; out. Keeps BC, DE.   ~0.25k T a later unit, once an entry
+.rsv:           set  7, (hl)
                 ld   a, e
+                or   a
+                ret  z                         ; the last unit: nobody after it
+                push bc
+                push de
+                ld   a, (LPV_N)
+                dec  a
+                jr   z, .rx
+                ld   b, a                      ; B = the units after this one
+                ld   d, e                      ; D = their bit
+                ld   a, (LPV_RDP)
+                call lp_posr6
+                ld   e, l
+                inc  e                         ; E = &LP_POS[i+1] (low; one page)
+                ld   hl, (LPV_RDP)
+                inc  hl
+                inc  hl                        ; entry i+1
+.rj:            ld   a, (hl)                   ; its kind byte
+                inc  hl
+                inc  hl
+                push hl
                 and  LEK_KIND_MASK
                 add  a, (kind_tab + KT_BW) & $FF
                 ld   l, a
                 ld   h, (kind_tab + KT_BW) >> 8
-                ld   e, (hl)                   ; E = its width
-                ld   a, (LPS_OP)
-                cp   2
-                jr   c, .rmk                   ; 0 / 1: mark / unmark
-                jr   nz, .rn                   ; 3: an overlap found already
-                ld   a, b                      ; 2: test x' (LPS_XR) .. + w - 1 against xj .. xj + wj - 1
-                and  LPP_X
-                ld   l, a
-                add  a, e
-                ld   h, a                      ; xj + wj
-                ld   a, (LPS_XR)
-                cp   h
-                jr   nc, .rn                   ; x' >= xj + wj
-                ld   h, a
-                ld   a, (LP_W)
-                add  a, h
-                ld   h, a                      ; x' + w
-                ld   a, l
-                cp   h
-                jr   nc, .rn                   ; xj >= x' + w
-                ld   a, 3
-                ld   (LPS_OP), a
-                jr   .rn
-.rmk:           ld   a, b
-                and  LPP_X
-                call .adr
-                ld   b, e
-                ld   a, (LPS_OP)
+                ld   c, (hl)                   ; C = w
+                ld   l, e
+                ld   h, LP_POS >> 8
+                ld   a, (hl)                   ; its saved cell
+                inc  e
                 or   a
-                jr   nz, .ru
-.rm:            set  LPC_RES_BIT, (hl)
+                jr   z, .rnx
+                ld   l, a
+                and  LPP_X
+                bit  LPP_S_BIT, l
+                jr   z, .r6
+                add  a, LP_CMW
+.r6:            add  a, LP_CMAP & $FF
+                ld   l, a
+                ld   h, LP_CMAP >> 8
+.rm:            ld   a, (hl)
+                or   d
+                ld   (hl), a
                 inc  l
-                djnz .rm
-                jr   .rn
-.ru:            res  LPC_RES_BIT, (hl)
-                inc  l
-                djnz .ru
-.rn:            pop  hl
-                pop  bc
+                dec  c
+                jr   nz, .rm
+.rnx:           pop  hl
+                sla  d
                 djnz .rj
+.rx:            pop  de
+                pop  bc
                 ret
+                ASSERT LR_MAX == 4 && LPC_BAD == 1 && LPC_BODY == 2 && LPC_MRG == 8 && LPC_UNITS == $F0
 ; .adr: A = col -> HL = &LP_CMAP[C][col] (one page). Keeps BC, DE.
 .adr:           ld   hl, LP_CMAP
                 bit  0, c
@@ -928,21 +901,6 @@ lp_fy6:         ld   a, e
                 add  a, a
                 add  a, a
                 ld   (ix+E_PY), a
-                ret
-
-;------------------------------------------------------------------------------
-; lp_cp6 — ROOM-MEM2 (far6 from bank-3 lp_enter, a VISITED unit not placed): its LP_POS
-; byte follows its entry down (LPV_RDP -> LPV_WRP, the record's compaction).
-; Clobbers: A, F, B, HL.   ~0.3k T + far6
-;------------------------------------------------------------------------------
-lp_cp6:         xor  a                         ; review: lp_spawn found no slot after try 0 set the
-                ld   (LPV_FACE), a             ; marker: never leak it to the next unit (a posted one)
-                ld   a, (LPV_RDP)
-                call lp_posr6
-                ld   b, (hl)
-                ld   a, (LPV_WRP)
-                call lp_posr6
-                ld   (hl), b
                 ret
 
 ; lp_posr6 — A = the low byte of an entry pointer of the record being entered (LPV_RDP /

@@ -329,8 +329,8 @@ LP_CMAP         EQU NEXT_MAP + PLAY_CELLS        ; $6540..$6581
 LPC_BAD         EQU 1               ; a body may not cover the col
 LPC_BODY        EQU 2               ; 3F-T8 review: a body lp_spawn placed this entry (lp_legal ORs every bit;
                                     ; lp_post exempts only LPC_BAD marks of the exit's own footprint)
-LPC_RES         EQU 4               ; ROOM-MEM2: lp_t06's door slide reserves the saved cells of the units
-LPC_RES_BIT     EQU 2               ; still to place on its storey (set + cleared inside the slide)
+LPC_UNITS       EQU %11110000       ; ROOM-MEM2: bit 4 + j = unit j's saved cell (lp_t06's slide reserves the later
+                                    ; units' cells; set once an entry, never cleared: lp_legal / lp_post / try 0 mask it)
 LPC_MRG         EQU 8               ; ROOM-MEM2 (user 2026-11-14): the 1-col margin of a ladder / shaft footprint
 LPC_MRG_BIT     EQU 3               ; (f-1, f+3; the footprint f..f+2 is LPC_BAD): spawns / tries 1-8 treat it as
                                     ; any mark; a RETURNING monster (lp_t06: try 0, the door slide) ignores it

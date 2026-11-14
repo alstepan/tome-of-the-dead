@@ -3306,7 +3306,9 @@ ladder / shaft box, a pit landing, a body placed before it), the monster **keeps
 and slides to the nearest col (a tie goes right) inside cols 2..30 − w whose cells pass the
 rules; on the hero's arrival storey only on the side of him it was on and ≥ 5 cols clear of his
 box (it "waited just inside the door"). No RNG. Only if that storey has no such cell do tries
-1-8 run. Placed by try 0 or the slide in a fresh slot it keeps its stored facing (a flyer faces
+1-8 run. **At most one slide may fail per room entry** (review 2026-11-14: it bounds the frozen
+transition under one frame); after it, the remaining monsters skip the slide and go straight to
+tries 1-8. The cells of the monsters still to place are reserved while sliding. Placed by try 0 or the slide in a fresh slot it keeps its stored facing (a flyer faces
 the hero: its facing bit holds the row; a parked slot keeps its own); placed by tries 1-8 it
 faces the hero. Accepted residue
 (ROOM-MEM2 review): parked slots are matched to entries by kind (first parked slot of that kind,

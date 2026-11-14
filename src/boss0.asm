@@ -157,7 +157,7 @@ lp_post:
                 ld   h, LP_CMAP >> 8
                 ld   b, e
 .m1:            ld   a, (hl)
-                or   a
+                and  LPC_BAD | LPC_BODY | LPC_MRG    ; (ROOM-MEM2: not the slide's unit reservations, bits 4-7)
                 jr   z, .m2
                 and  LPC_BODY
                 jr   nz, .mb                   ; a placed body: never exempt
