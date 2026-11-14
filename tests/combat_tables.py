@@ -311,13 +311,13 @@ def main():
         for col in ("KT_BW", "KT_BH", "KT_FLAGS"):
             msk = ~sym["KF_PIT"] & 255 if col == "KT_FLAGS" else 255   # T10a P-1: KF_PIT is per row (Slinger / Widow: base only)
             chk(f"kind_tab {col}[{tier}] == base {base}", [kcol(sym[col], tier) & msk], [kcol(sym[col], base) & msk])
+        chk(f"tier {tier} ink != base {base} ink", [kcol(sym["KT_ATTR"], tier) != kcol(sym["KT_ATTR"], base)], [True])
     # NEW-MON3 T10a P-1 (new_monsters.md §8.3): KF_PIT on the walkers with a pit row only (Skeleton + Guard / Knight,
     # Goblin and Spider base, Orc + Berserker / Bouncer); bit 7 on a flyer is KF_PERCH (the Gargoyle only)
     PIT = {3, 23, 24, 4, 9, 11, 26, 27}
     for k in range(32):
         f = kcol(sym["KT_FLAGS"], k)
         chk(f"KF_PIT / KF_PERCH[{k}]", [bool(f & sym["KF_PIT"])], [k in PIT or k == sym["K_GARGOYLE"]])
-        chk(f"tier {tier} ink != base {base} ink", [kcol(sym["KT_ATTR"], tier) != kcol(sym["KT_ATTR"], base)], [True])
     # climbers: Goblin / Skeleton (+ tiers) and the heroes (§9.7 R3); 3F-T13bc (user 2026-10-29):
     # + Orc (Berserker 26, Bouncer 27), Archer (Sniper 28), Necro (Bone Caller 29), + Mummy 13, Spider 9 + Black Widow 22 (fix/archer-climb; the Pharaoh boss guard is the AI's)
     CLIMB = {0, 1, 3, 4, 9, 10, 21, 22, 23, 24, 11, 12, 13, 14, 26, 27, 28, 29}   # VAMP-BOSS: + 10 (K_VAMPIRE)
