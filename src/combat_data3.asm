@@ -93,12 +93,8 @@ kx_tab:
                 ASSERT ($ - kx_tab) == K_COUNT * KX_STRIDE && K_COUNT == 32
                 ASSERT kx_tab == BANK_WINDOW && $ - kx_tab == KX_LEN
 
-; L-RELIEF: decor_gen.asm's dg_bad (64 B, 64-aligned lookup) sits here, at
-; $C000 + KX_LEN = $C100: aligned by construction, so no ALIGN pad whatever the
-; bank-3 code size (it was an ALIGN 64 inside decor_gen.asm: 0..63 B of pad that
-; moved with every byte of code before it). Bank 3 data, read by bank-3 code only.
-                INCLUDE "dg_bad3.asm"           ; GENERATED: tools/decorgen.py --asm-bad
-                ASSERT dg_bad == kx_tab + KX_LEN && (dg_bad & 63) == 0 && $ - dg_bad == TILE_IDS
+; SIZE T3: decor_gen.asm's dg_bad (64 B, was here at $C100 since L-RELIEF) moved with
+; the deriver to bank-0 B0_CODE2 (src/dg_bad0.asm).
 
 ; (D3-9b: XP_NEXT = bank-2 xpn_tab (xp2.asm), the single table; the level-up
 ; gains / steps are xp_turn's immediates, bank-7 xp7.asm.)

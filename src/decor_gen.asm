@@ -1,10 +1,21 @@
 ;==============================================================================
-; decor_gen.asm — B3B-9: the decor deriver (bank 3, cold). INCLUDEd by
-; src/bank3.asm as the body of `decor_room`; the algorithm, the object menu and
-; the ANIM_LIST contract for B3B-10 are specified in tools/decorgen.py (the
-; Python reference; test W13 compares ROOM_MAP + ANIM_LIST byte for byte).
+; decor_gen.asm — B3B-9: the decor deriver. SIZE T3 (lever F2): bank-0 B0_CODE2
+; (main.asm, above the packed-overlay line; was bank 3, INCLUDEd as the body of
+; bank3.asm `decor_room`, which is now an 11-B stub: A = (dg_dst), FARB0 decor_b0).
+; The algorithm, the object menu and the ANIM_LIST contract for B3B-10 are
+; specified in tools/decorgen.py (the Python reference; test W13 compares
+; ROOM_MAP + ANIM_LIST byte for byte).
 ;
-; decor_room: A = room (unused), IX = descriptor (kept), (TMP1) = map page.
+; decor_b0: A = dg_dst (low byte of ANIM_N / ANIM_N2), IX = descriptor (kept),
+;   (TMP1) = map page. Entered only by FARB0 from bank-3 decor_room (BANK_TEXT
+;   paged; B0_CODE2 rules: no SMC, no runtime-written bytes here, never pages
+;   $C000). Everything it reads is visible with bank 0 at $C000: its read-only
+;   tables (dg_start .. dg_recs, dg_cmin, dg_bad) moved here WITH the code; its
+;   state (dg_rng .. dg_dg, dg_dst0) is the low-RAM DS block `dg_vars`
+;   (lowram.asm, runtime bytes, zeros on tape); the descriptor (ROOM_DESC),
+;   LVL_DEPTH, the maps (low RAM), TMP1 / ANIM_N* (bank 2) are always mapped. It
+;   calls only bank-2 map_cell / xs_core; bank-3 levelgen's rnd_mod / hla are
+;   inlined (dg_rnd's tail, dg_nr). The RNG call order is unchanged.
 ;   Re-derived from RD_SEED only (own xorshift state dg_rng, never GEN_RNG /
 ;   RNG_STATE), so re-entry rebuilds the identical map. The animated cells go
 ;   to the list build_room_map chose by the map page (dg_dst, count already
@@ -20,8 +31,9 @@
 ;   patch / brick cells; LOOK-1: the flame attr-cycle budget is gone), the footprint (T_AIR; T_BRICK for the pillar), the class
 ;   support (T_PLAT / T_WALLF above a ceiling object / below a floor object) and the ring
 ;   (no ladder, no other decor: dg_bad) allow. ANIM_LIST contract: see tools/decorgen.py.
-; Clobbers: A, BC, DE, HL.  Cold path (room entry): D1 measured ~120k T (W13 profile,
-; DI, contended): patches ~24k, cobwebs ~10k, menu ~64k (drips ~23k before D3-7 T6).
+; Clobbers: A, BC, DE, HL.  Cold path (room entry): D1 measured ~120k T in bank 3 (W13
+; profile, DI, contended): patches ~24k, cobwebs ~10k, menu ~64k (drips ~23k before D3-7 T6);
+; bank 0 is uncontended (only the state / map reads still are), + one FARB0 (~0.3k T).
 ;==============================================================================
 F_MOSS          EQU 1               ; record flags (tools/decorgen.py)
 F_TILED         EQU 2
@@ -34,6 +46,8 @@ DC_FLOOR        EQU 2
 DC_PATCH        EQU 3
 DC_BRICK        EQU 4
 DC_COMP         EQU 5
+decor_b0:
+                ld   (dg_dst0), a              ; the list (bank-3 dg_dst, passed in A by decor_room)
                 ld   l, (ix + RD_SEED)
                 ld   h, (ix + RD_SEED + 1)
                 ld   (dg_rng), hl
@@ -388,7 +402,7 @@ dg_ring:
                 ld   e, a
                 ld   b, dg_bad >> 8
 .rc:            ld   a, (hl)
-                or   dg_bad & $FF              ; id < 64, table 64-aligned: the OR is the add
+                add  a, dg_bad & $FF           ; id < 64, the table does not cross a page (ASSERT)
                 ld   c, a
                 ld   a, (bc)                   ; 1 = ladder / hole / decor id (table, ~55 T per cell)
                 or   a
@@ -577,8 +591,12 @@ dg_brk3:
 ; .rf-style exit of the fit loops (one row pointer pushed) and the row step.
 dg_rf:          pop  hl
                 ret
-dg_nr:          ld   a, ROOM_COLS              ; HL += 32 (next map row, same col)
-                jp   hla                       ; RECLAIM-D: levelgen's (-2 B bank 3, +10 T)
+dg_nr:          ld   a, ROOM_COLS              ; HL += 32 (next map row, same col): levelgen's hla
+                add  a, l                      ; inlined (bank 3 is not mapped here; -10 T vs jp hla)
+                ld   l, a
+                ret  nc
+                inc  h
+                ret
 
 ; dg_cell — B = row, C = col, D = dy, E = dx of a just-placed cell: append its
 ; ANIM_LIST entry (col, row, type, phase) if the object animates it.
@@ -607,7 +625,7 @@ dg_cell:
                 inc  (hl)
                 push de
                 ld   d, a
-                ld   a, (dg_dst)               ; ANIM_N or ANIM_N2 (build_room_map)
+                ld   a, (dg_dst0)              ; ANIM_N or ANIM_N2 (build_room_map -> dg_dst -> A at entry)
                 ld   l, a
                 ld   h, ANIM_N >> 8
                 ld   a, (hl)
@@ -635,12 +653,33 @@ dg_rnd:
                 ld   hl, (dg_rng)              ; xorshift 7,9,8 (= levelgen lg_step; MEM-RECLAIM w3: bank-2 xs_core)
                 call xs_core
                 ld   (dg_rng), hl
-                jp   rnd_mod                   ; RECLAIM-D: levelgen rnd's mod tail (the same
-                                               ; result: n = 1 -> 0, n = 2 -> L & 1, else L mod n
-                                               ; by subtraction; -13 B bank 3, +~20 T a call)
+                ; bank-3 levelgen rnd_mod, copied (bank 3 is not mapped here; same result:
+                ; n = 1 -> 0, n = 2 -> L & 1, else L mod n by subtraction)
+                ld   a, c
+                dec  a
+                jr   z, .z
+                dec  a
+                jr   nz, .g
+                ld   a, l
+                and  1
+                pop  bc
+                ret
+.z:             pop  bc                        ; A = 0
+                ret
+.g:             ld   a, l
+.m:             sub  c
+                jr   nc, .m
+                add  a, c
+                pop  bc
+                ret
 
-; L-RELIEF: dg_bad is not in this block: --asm-bad -> src/dg_bad3.asm, INCLUDEd
-; by combat_data3.asm at $C100 (right after kx_tab: 64-aligned, no ALIGN pad).
+; SIZE T3: dg_ring adds the id (< 64) to dg_bad's low byte with B = its page, so the 64-B table
+; must not cross a page: it goes before the generated tables if it fits there, else after them
+; (they are > 64 B, so it then fits); 0 B of pad either way.
+DGB_EARLY = (($ & $FF) <= 256 - TILE_IDS)
+    IF DGB_EARLY
+                INCLUDE "dg_bad0.asm"           ; GENERATED: tools/decorgen.py --asm-bad (was dg_bad3.asm, bank 3 $C100)
+    ENDIF
 ; GENERATED by tools/decorgen.py --asm (edit the tool, re-run, paste)
 ; record (3 B): base id | w + h*4 + class*32 | flags (bit0 moss, 1 tiled, 2 glyph row 0, 3 glyph row 1 too (half-row flames), 4 only its col 0,
 ;                 5 / 6 unused, 7 large animated)
@@ -706,41 +745,16 @@ dg_recs:
 DG_NCOM         EQU 4
 DG_NREC         EQU 39
 
-; state (bank 3 is RAM).
 dg_cmin:        DEFB 1, 1, 1, 2, 0, 2     ; col minimum by class (mount ceiling floor patch brick composite)
-dg_rng:         DW   0
-dg_cls:         DB   0
-dg_cc:          DB   0
-dg_ok:          DB   0
-dg_k:           DB   0
-dg_nc:          DB   0
-dg_cl:          DB   0
-dg_cr:          DB   0
-dg_cg:          DB   0
-dg_dst:         DB   0                 ; low byte of the list's count: ANIM_N / ANIM_N2
-dg_first:       DB   0
-dg_n:           DB   0
-dg_nl:          DB   0
-dg_ng:          DB   0
-dg_nw:          DB   0
-dg_wmax:        DB   0                 ; wall-class cell budget + 1 of the room's depth
-dg_base:        DB   0
-dg_row:         DB   0
-dg_h:           DB   0
-dg_col:         DB   0
-dg_w:           DB   0
-dg_fl:          DB   0
-dg_area:        DB   0
-dg_step:        DB   0
-dg_req:         DB   0
-dg_id:          DB   0
-dg_alt:         DB   0
-dg_ph:          DB   0
-dg_dg:          DB   0
+    IF !DGB_EARLY
+                INCLUDE "dg_bad0.asm"           ; GENERATED: tools/decorgen.py --asm-bad (was dg_bad3.asm, bank 3 $C100)
+    ENDIF
+                ASSERT (dg_bad >> 8) == ((dg_bad + TILE_IDS - 1) >> 8)
+; state: the low-RAM DS block dg_vars (lowram.asm; B0_CODE2 holds no runtime-written bytes).
                 ASSERT T_AIR == 0 && T_BRICK == 2 && F_MOSS == 1 && F_TILED == 2
                 ASSERT T_HOLE_R == T_LAD_L + 5 && ANIM_MAX == 12 && AL_STRIDE == 4
                 ASSERT (ANIM_N >> 8) == ((ANIM_LIST + ANIM_MAX * AL_STRIDE) >> 8) && PLAY_ROWS < 32
                 ASSERT (ANIM_N2 >> 8) == ((ANIM_LIST2 + ANIM_MAX * AL_STRIDE) >> 8) && ANIM_LIST2 == ANIM_N2 + 1
                 ASSERT T_END_L == 19 && T_RUBBLE == 27 && T_DOOR_JAMB_L == 11 && T_DOOR_JAMB_R == 14
                 ASSERT T_PLAT == 1 && T_WALLF == 3 && STOREY_ROWS == 9
-                ASSERT (dg_bad & 63) == 0 && TILE_IDS == 64 && DG_NREC * 3 < 256 && (dg_recs - dg_crec) == 3
+                ASSERT TILE_IDS == 64 && DG_NREC * 3 < 256 && (dg_recs - dg_crec) == 3

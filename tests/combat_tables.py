@@ -266,7 +266,7 @@ def main():
     for k in range(32):
         want = kx_row(*KINDS[k][1:], DEF3F.get(k, 0))[:6] + kx_melee(k, sym) if k in KINDS else [0] * 8
         chk(f"kx[{k}]", m[kx + 8 * k:kx + 8 * k + 8], want)
-    chk("kx_tab length (dg_bad follows, L-RELIEF)", [sym["dg_bad"] - sym["kx_tab"]], [256])
+    chk("kx_tab length (KX_LEN; SIZE T3: dg_bad moved to bank 0)", [sym["KX_LEN"]], [256])
 
     # D3-9b: XP_NEXT is ONE table, bank-2 xpn_tab (read from the .sna: 27-B
     # header, then RAM $4000..$FFFF with bank 2 at $8000); the bank-3 copy, the
