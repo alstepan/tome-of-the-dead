@@ -121,6 +121,26 @@ non-linear share ≥ 50 %, b1/b2 split. Emulator: `two_keys_count` → `two_keys
 6. *(rev 2, DECIDED by the user 2026-11-15: cyan + magenta; far-side bolt yes; red rejected because it clashes with the sealed Sanctum)* Colours: **cyan + magenta** (yellow clashes with the `$06` planks), or yellow + cyan as first suggested?
    Far-side bolt: **a lock opens keyless from its far side**, or exclude teleport from b1 dead ends instead?
 
+#### 2.1 rev 3 (designer 2026-11-15): supersedes rev 2 Placement keys, Selection, Coverage pass 2 and L1 steps (3)/(5); rest kept
+
+Rev 2 sweep (`select_keys`, D1–D8 × 300): **56 % keyless**, 15.5 % pass 2, 2-lock 65 / 1,500 on D4–D8, ~50 % lair-door locks.
+Causes: start sides of snake trees have no dead ends, Warnsdorff pass 2 makes snakes, and ring loops erase bridges.
+
+| Topic | Rule (rev 3) |
+|---|---|
+| (3) DFS branch | In **every** pass, at the top of each DFS iteration with `len(stack) ≥ 4`, draw `b = rnd(BRANCH_ODDS)` (**4**, pass 1; **2**, pass 2). If `b == 0` and `stack[2]` has a free neighbour, `cur = stack[2]`, else `cur = stack[-1]`. Then as before: `cur` has none free → pop (it is the top; no draw), else `rnd(k)`, link, **push**. No draw when `len(stack) < 4`. Warnsdorff is **dropped** |
+| (5) Loop split | 5a: mandatory loop exactly as now (`mand` → pick draw). 5b: lair (step 8 tiers, on adjacency) and **lock select on `G5a`** (no draws). 5c: if not `mand`: odds draw; on a loop the candidate list (same scan order) keeps only pairs whose two rooms are on the **same side of every chosen lock**, then `rnd(count)` if count ≥ 1 (no pick draw if 0). So an optional loop can never bypass a lock or erase a bridge |
+| Lock candidates | Horizontal tree bridges of `G5a`. A 1-lock set must be on `P` (otherwise not needed). Pairs: any 2 (the "needed" test filters) |
+| Key rooms | `best(X)` = the room in `X` (never start, lair or `S`) maximising (**dead end**, BFS distance in `G5a − e_j` from `e_j`'s near room, −id). 1 lock: `best(near(j))`. Pair `(i, j)`: lock `j`'s candidates are `best(near(j) ∩ far(i))` and `best(near(j) − far(i))` (each if non-empty). Test the ≤ 4 combos with distinct rooms by the fixpoint. No dead-end-only rule |
+| Score | `score = F + 1 (b1/b2) − 2 (a lock on the lair door)`. Choice: max score, then max `F`, then rev 2's tie order. Floor `F ≥ n − 4` (user decision) is kept, raw. 2 locks if D4–D8, `n ≥ 11` and a pair meets the floor, else 1 |
+| Fail ladder (in-level) | Pass 1 has no set meeting the floor → pass 2 (draws 3–8 rerun, `BRANCH_ODDS` 2). Pass 2 has no **valid** set (floor ignored) → **Restart** from draw 1 (existing mechanism, stream continues). So keyless = 0 by construction |
+| RNG (T4 port) | New draws: the `b` draw only (inside step 4, before the free-neighbour scan, so it is also made on iterations that end in a pop). `stack` is a list ≤ 12 B, and `stack[2]` is a fixed index. Step 5c's filter runs **before** `rnd(count)`. Lock and key select draw nothing. `levelgen_test` pins the draw count per seed |
+| Sweep targets | keyless **0**; pass-2 rate **≤ 10 %**; full Restarts (all causes) **≤ 3 %**; mean `F/n` **≥ 75 %**; D4–D8 2-lock share **≥ 40 %** of all levels (≈ 60 % of `n ≥ 11`), and **≥ 60 %** of those b1/b2; lair-door locks **≤ 35 %** of all locks; reseeds 0. Report the per-depth table |
+| Tuning ladder (junior, in order; stop when green; report each step) | 1. 2-lock share low → `BRANCH_ODDS` pass 1: 4 → 3 → 2. 2. Pass-2 rate high (floor misses) → key `best` drops the dead-end term (distance only). 3. Lair-door share high → penalty 2 → 3; if 2-lock non-linear low → b1/b2 bonus 1 → 2. 4. Still red → **stop and report**; lowering the floor to `n − 5` needs the user |
+
+Tests: `K3` → key = `best` of its candidate list · `K4` → argmax rev-3 score · `K10` no optional loop crosses a lock ·
+`K11` the GEN_RNG draw count per seed matches the reference (the `b` draws included).
+
 ## 3. Pacing: monsters and consumables ×~1.35, power items fixed
 
 ROOM_MAX 3 unchanged, so per-room fight and supply density stay; books/gear/bow/uniques stay as BAL-1 FINAL.
