@@ -39,6 +39,8 @@ fails = []
 LPB, LPN = S["LP_STATE"], S["LP_LEN"]
 REC = S["LP_REC"]
 EF_RESPAWN = S["EF_RESPAWN"]
+NR = S["GRID_CELLS"]                 # LARGER-D T4: 12 room slots (was 9)
+NREC = NR * S["LR_STRIDE"]
 
 
 def check(name, ok, got=None):
@@ -48,12 +50,12 @@ def check(name, ok, got=None):
 
 
 def present(L):
-    return [r for r in range(9) if room_model.field(L.blk, r, "RD_FLAGS") & S["RDF_PRESENT"]]
+    return [r for r in range(NR) if room_model.field(L.blk, r, "RD_FLAGS") & S["RDF_PRESENT"]]
 
 
 def items_of(p):
     fl = p.z.read_memory(S["FLOOR_LIST"], 4 * S["FLOOR_MAX"])
-    n = [0] * 9
+    n = [0] * NR
     for i in range(S["FLOOR_MAX"]):
         b = fl[4 * i]
         if b != S["FL_EMPTY"]:
@@ -73,7 +75,7 @@ def kind_pool(depth):
 def write_state(p, depth, recs, rnd):
     """recs[r] = None | {"visited", "ents"}: the LP records (FRESH: a quota, stale bytes)."""
     blob = []
-    for r in range(9):
+    for r in range(NR):
         rec = recs[r]
         if rec is None or not rec["visited"]:
             q = rnd.randint(0, 3) if rec is not None else 0
@@ -106,9 +108,9 @@ def rec_bytes(lv):
 
 
 def read_recs(p, recs):
-    blob = p.z.read_memory(REC, 81)
+    blob = p.z.read_memory(REC, NREC)
     out = []
-    for r in range(9):
+    for r in range(NR):
         if recs[r] is None or not recs[r]["visited"]:
             out.append(None)
             continue
@@ -130,7 +132,7 @@ def model_cases(p, L, rnd, n, worst):
     pos_bad = [0]
     for c in range(n):
         recs = []
-        for r in range(9):
+        for r in range(NR):
             if r not in pr:
                 recs.append(None)
                 continue
@@ -166,7 +168,7 @@ def model_cases(p, L, rnd, n, worst):
         rng = G.Rng(1, d)
         rng.x = x
         want = RM.trickle_check(lv, RM.RESPAWN_PERIOD, rng)
-        if want is not None:                                 # the expected 81 B: one append
+        if want is not None:                                 # the expected NREC B: one append
             r, kb, hp = want
             n0 = blob[9 * r] & 7
             blob[9 * r] += 1
@@ -174,17 +176,17 @@ def model_cases(p, L, rnd, n, worst):
         # ROOM-MEM2: LP_POS = 0 for a FRESH record, junk for a VISITED one; after trk_run every FRESH
         # record's bytes stay 0 and only the appended entry's byte changes (-> 0: no last cell)
         pos0 = [0 if recs[r] is None or not recs[r]["visited"] else rnd.randint(1, 255)
-                for r in range(9) for _ in range(4)]
+                for r in range(NR) for _ in range(4)]
         p.wmem(S["LP_POS"], pos0)
         want_pos = list(pos0)
         if want is not None:
             want_pos[4 * want[0] + (blob[9 * want[0]] & 7) - 1] = 0
         ok, ts = far6(p, "trk_run")
         got = read_recs(p, recs)
-        pos1 = list(p.z.read_memory(S["LP_POS"], 36))
+        pos1 = list(p.z.read_memory(S["LP_POS"], 4 * NR))
         if pos1 != want_pos:
             pos_bad[0] += 1
-        good = (ok and got == rec_bytes(lv) and list(p.z.read_memory(REC, 81)) == blob and p.rb("LP_RESPAWNS") == lv.resp and p.rw("RNG_STATE") == rng.x
+        good = (ok and got == rec_bytes(lv) and list(p.z.read_memory(REC, NREC)) == blob and p.rb("LP_RESPAWNS") == lv.resp and p.rw("RNG_STATE") == rng.x
                 and p.rb("LP_LVL") == lplvl and room_slots(p) == sl0 and pos1 == want_pos)
         spawns += want is not None
         if not good:
@@ -220,20 +222,20 @@ def time_off_cases(p, L, rnd):
     pr = present(L)
     cur = p.rb("CUR_ROOM")
     tgt = [r for r in pr if r not in (cur, L.lair, p.rb("LVL_SANCTUM"))][0]
-    recs = [None if r not in pr else {"visited": r == tgt or r == cur, "ents": []} for r in range(9)]
+    recs = [None if r not in pr else {"visited": r == tgt or r == cur, "ents": []} for r in range(NR)]
     write_state(p, d, recs, rnd)
     p.wb("TRK_PREV", cur)
     p.wb("LP_RESPAWNS", 0)
     p.wb("TRK_PHASE", 46)
-    p.wmem(S["TRK_W"], [0xEE] * 9)
-    r0 = list(p.z.read_memory(REC, 81))
+    p.wmem(S["TRK_W"], [0xEE] * NR)
+    r0 = list(p.z.read_memory(REC, NREC))
     ok = True
     for _ in range(60):
         heal(p)
         p.turn("WAIT")
         ok &= p.rb("TRK_PHASE") == 46
     check("E1 60 turns: TRK_PHASE stays 46 (no count, no TRK_DUE), no check: TRK_W / records / LP_RESPAWNS untouched",
-          ok and list(p.z.read_memory(S["TRK_W"], 9)) == [0xEE] * 9 and list(p.z.read_memory(REC, 81)) == r0
+          ok and list(p.z.read_memory(S["TRK_W"], NR)) == [0xEE] * NR and list(p.z.read_memory(REC, NREC)) == r0
           and p.rb("LP_RESPAWNS") == 0, (p.rb("TRK_PHASE"), p.rb("LP_RESPAWNS")))
     p.wb("TRK_PHASE", 0)
     p.wmem(S["SPQ_K"], [S["K_RAT"] | 0xE0, 15, 1])           # sp_run turn: the count is not touched either
@@ -249,7 +251,7 @@ def trk_entry_cases(p, L, rnd):
     pr = present(L)
     cur = p.rb("CUR_ROOM")
     tgt = [r for r in pr if r not in (cur, L.lair, p.rb("LVL_SANCTUM"))][0]
-    recs = [None if r not in pr else {"visited": r == tgt or r == cur, "ents": []} for r in range(9)]
+    recs = [None if r not in pr else {"visited": r == tgt or r == cur, "ents": []} for r in range(NR)]
     write_state(p, d, recs, rnd)
     p.wb("TRK_PREV", cur)
     p.wb("LP_RESPAWNS", 0)
@@ -297,7 +299,7 @@ def progress_cases(p, L, rnd):
 
     def setup(visited, quota, stamp_old, resp=0, visits=1, prev=None):
         blob = []
-        for r in range(9):
+        for r in range(NR):
             if r not in pr:
                 blob += [0] * 9
             elif r in visited:
@@ -311,7 +313,7 @@ def progress_cases(p, L, rnd):
         p.wb("TRK_PREV", prev if prev is not None else cur)
         p.wb("TRK_PHASE", 0x80)
         now = (p.rw("TURN_COUNTER") >> 2) & 255
-        for r in range(9):
+        for r in range(NR):
             p.wb(desc_off(r, RD_STAMP), (now - (60 if r in stamp_old else 5)) & 255)
         return now
 
@@ -320,10 +322,10 @@ def progress_cases(p, L, rnd):
     for k in range(n):
         setup({cur}, {}, set())
         p.wmem(S["RNG_STATE"], [rnd.randint(1, 255), rnd.randint(1, 255)])
-        before = list(p.z.read_memory(REC, 81))
+        before = list(p.z.read_memory(REC, NREC))
         far0(p, "rsp_run")
-        after = list(p.z.read_memory(REC, 81))
-        ch = [r for r in range(9) if before[9 * r] != after[9 * r]]
+        after = list(p.z.read_memory(REC, NREC))
+        ch = [r for r in range(NR) if before[9 * r] != after[9 * r]]
         if p.rb("LP_RESPAWNS") == 1:
             ev += 1
             if len(ch) != 1 or ch[0] not in others or after[9 * ch[0]] != before[9 * ch[0]] + 1:
@@ -335,9 +337,9 @@ def progress_cases(p, L, rnd):
     # G2: not a first entry (ROOM_VISITS 2): nothing, the RNG untouched
     setup({cur}, {}, set(), visits=2)
     rng0 = list(p.z.read_memory(S["RNG_STATE"], 2))
-    r0 = list(p.z.read_memory(REC, 81))
+    r0 = list(p.z.read_memory(REC, NREC))
     far0(p, "rsp_run")
-    check("G2 not a first entry: no record change, RNG_STATE untouched", list(p.z.read_memory(REC, 81)) == r0
+    check("G2 not a first entry: no record change, RNG_STATE untouched", list(p.z.read_memory(REC, NREC)) == r0
           and p.rb("LP_RESPAWNS") == 0 and list(p.z.read_memory(S["RNG_STATE"], 2)) == rng0, p.rb("LP_RESPAWNS"))
     # G3: the cap and the boss's death
     for tag, resp, dead in (("RESPAWN_MAX", RM.RESPAWN_MAX, False), ("boss dead", 0, True)):
@@ -348,9 +350,9 @@ def progress_cases(p, L, rnd):
         for k in range(30):
             setup({cur}, {}, set(), resp=resp)
             p.wmem(S["RNG_STATE"], [rnd.randint(1, 255), rnd.randint(1, 255)])
-            r0 = list(p.z.read_memory(REC, 81))
+            r0 = list(p.z.read_memory(REC, NREC))
             far0(p, "rsp_run")
-            got += list(p.z.read_memory(REC, 81)) != r0
+            got += list(p.z.read_memory(REC, NREC)) != r0
         check(f"G3 {tag}: 30 first entries, no record change", got == 0 and p.rb("LP_RESPAWNS") == resp, got)
         p.wb("LVL_FLAGS", lf)
     # G4: every room visited: a room >= 2 exits away and unseen >= 150 turns; an LEK_RESPAWN entry appended
@@ -359,10 +361,10 @@ def progress_cases(p, L, rnd):
     for k in range(60):
         setup(set(pr), {r: 1 for r in pr}, far_old | set(nb))
         p.wmem(S["RNG_STATE"], [rnd.randint(1, 255), rnd.randint(1, 255)])
-        before = list(p.z.read_memory(REC, 81))
+        before = list(p.z.read_memory(REC, NREC))
         far0(p, "rsp_run")
-        after = list(p.z.read_memory(REC, 81))
-        ch = [r for r in range(9) if before[9 * r] != after[9 * r]]
+        after = list(p.z.read_memory(REC, NREC))
+        ch = [r for r in range(NR) if before[9 * r] != after[9 * r]]
         if p.rb("LP_RESPAWNS"):
             hits += 1
             r = ch[0] if ch else -1
@@ -379,9 +381,9 @@ def progress_cases(p, L, rnd):
     for k in range(40):
         setup(set(pr), {r: 1 for r in pr}, set())
         p.wmem(S["RNG_STATE"], [rnd.randint(1, 255), rnd.randint(1, 255)])
-        r0 = list(p.z.read_memory(REC, 81))
+        r0 = list(p.z.read_memory(REC, NREC))
         far0(p, "rsp_run")
-        got += list(p.z.read_memory(REC, 81)) != r0
+        got += list(p.z.read_memory(REC, NREC)) != r0
     check("G5 all visited and seen < 150 turns ago: skipped, no record change", got == 0, got)
     # G6: the stamp of the room just left = (TURN_COUNTER >> 2) & 255
     other = others[0]
@@ -400,7 +402,7 @@ def heavy_cost(p, L, rnd):
     p.wb("TRK_PREV", cur)
     p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~S["LF_GRATE_OPEN"] & 255)
     rec = []
-    for r in range(9):
+    for r in range(NR):
         rec += [0x80] + [0] * 8 if r == cur else [0x83, gob, 9, gob, 9, rat, 7, 0, 0]
     res = []
     for lvl in (3, 7, 12):
@@ -413,10 +415,11 @@ def heavy_cost(p, L, rnd):
             res.append((t, p.rb("LP_RESPAWNS")))
     sc = max(t for t, n in res if not n)
     sp = max(t for t, n in res if n)
-    print(f"[info] heavy state (8 x 3 entries, 450 seeds): worst far6 trk_run no spawn {sc} T, with a spawn {sp} T",
+    print(f"[info] heavy state ({NR - 1} x 3 entries, 450 seeds): worst far6 trk_run no spawn {sc} T, with a spawn {sp} T",
           flush=True)
-    check("T2 heavy state: trk_run <= 15k T (on the idle INPUT tick, ~25-30k T: far under the 126k cap)",
-          sp <= 15000 and sc <= 15000, (sc, sp))
+    # LARGER-D T5: 11 heavy rooms on the 3x4 grid (was 8): 13.1k / 17.7k T measured -> bound 20k (was 15k)
+    check("T2 heavy state: trk_run <= 20k T (on the idle INPUT tick, ~30-35k T: far under the 126k cap)",
+          sp <= 20000 and sc <= 20000, (sc, sp))
 
 
 def boss_dead_cases(p, L, rnd):
@@ -433,7 +436,7 @@ def boss_dead_cases(p, L, rnd):
                        ("UNIQUE", S["LF_UNIQUE"]), ("GRATE_OPEN", S["LF_GRATE_OPEN"])):
         resp = worst = 0
         for i in range(120):
-            recs = [None if r not in pr else {"visited": True, "ents": []} for r in range(9)]
+            recs = [None if r not in pr else {"visited": True, "ents": []} for r in range(NR)]
             write_state(p, d, recs, rnd)
             p.wb("CUR_ROOM", cur)
             p.wb("TRK_PREV", L.lair)
