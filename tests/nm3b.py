@@ -8,7 +8,7 @@ pit throws) on the real game (DEBUG_KIT=0 build, F3_GEN), Knight, generated D6 (
      gap 3 / 4, the other storey, the hero mid-ladder: stays perched; through ai_monster: a perched far one
      does not move, an awake one flies; any HP loss (deal_hit) wakes it, a missed bump (do_attack, eva 99)
      wakes it, a POISON tick wakes it; a perched EF_WALKIN (ALARM wave) body still walks in (materialise); the rest
-     pose (anim_entity): perched = garg_perch, awake = garg_fly
+     pose (anim_entity): perched = garg_perch, awake = garg_alert (T10b art pass)
   R  re-perch on room re-entry (stub lp_transition, as do_exit): an awake Gargoyle left behind comes back
      perched (parked slot restored: RCD_SUMMON cleared), hp kept; a perched one is never a follow candidate,
      an awake one is (follow_select), and place_follower keeps it awake
@@ -21,6 +21,9 @@ pit throws) on the real game (DEBUG_KIT=0 build, F3_GEN), Knight, generated D6 (
      refused col is not the pit's; the Goblin once (RCD_SPENT); never golden; the track limit waits with the
      counter untouched; Spider / Skeleton FX; the hero on the other storey: nothing; P0 the real ai_monster
      path (.fstep refused by the pit -> a throw)
+  D  (T10b, user 2026-11-14) one Goblin dagger per LIFE: thrown (RCD_SPENT = RCD_ONCE), the hero leaves and comes
+     back (parked slot restored; then via 3 other rooms: banked as LEK_BRED, lp_spawn restores it): the bit is kept
+     and pit6 throws nothing; a Gargoyle in the same trip still re-perches (bit 2 cleared)
   C  (T10a follow-up) the Warrior's innate COLD R: HERO_RES with / without the Frost Charm, deal_hit COLD halves
 Run: ZRCP_PORT=<port> python3 tests/nm3b.py   (NB_F = flyer situations per kind, default 300)
 """
@@ -78,6 +81,7 @@ EF = {k: S["E_" + k] for k in ("KIND", "ROOM", "FLAGS", "X", "Y", "HP", "MAXHP",
                                "SEQL", "SEQH", "MSG", "GOLD", "REACT")}
 KG, KA, KK = S["K_GARGOYLE"], S["K_ALIAS"], S["K_KNIGHT"]
 AWAKE = S["RCD_AWAKE"]
+SPENT = 1 << S["RCD_SPENT_BIT"]
 T_AIR, T_BRICK = S["T_AIR"], S["T_BRICK"]
 LEK_GOLD = 1 << S["LEK_GOLD_BIT"]
 NB_F = int(os.environ.get("NB_F", "300"))
@@ -278,7 +282,7 @@ def part_w(p, w):
           not w.e(4, "FLAGS") & S["EF_PENDING"] and w.e(4, "MODE") == S["M_MOVE"] and w.e(4, "PX") == 0
           and not w.e(4, "POT") & AWAKE, (w.e(4, "FLAGS"), w.e(4, "MODE"), w.e(4, "PX"), w.e(4, "POT")))
     # the rest pose
-    for awake, fid in ((0, "FID_garg_perch"), (1, "FID_garg_fly")):
+    for awake, fid in ((0, "FID_garg_perch"), (1, "FID_garg_alert")):
         w.clear()
         w.put(3, KG, 20, gy, rcd=1 | (AWAKE if awake else 0))
         p.wb("ANIM_FREEZE", 1)
@@ -484,6 +488,9 @@ def part_f(p, w, depth):
         check("F Imp at the cruise row, gap 5 (< r 6): fires; FX spark_fly1/2, impact spark_fizz1, $42, row 9s + 2",
               cf and tp and q[2:7] == [S["FID_spark_fly1"], S["FID_spark_fly2"], S["FID_spark_fizz1"],
                                        S["FID_spark_fizz1"], 0x42] and q[8] == s1 + 2, q)
+        seq = w.e(3, "SEQL") | w.e(3, "SEQH") << 8
+        check("F Imp shot pose (T10b): rg_pose plays KS_BLOCK = its attack (fly1 -> spit)",
+              seq == seq_ptr(p, KA, S["KS_BLOCK"]) == seq_ptr(p, KA, S["KS_ATTACK"]), (seq, seq_ptr(p, KA, S["KS_BLOCK"])))
         cf, tp, _ = one(s1 + 1, 6)
         check("F Imp gap 6 (= r): no shot", not tp)
     else:
@@ -491,6 +498,11 @@ def part_f(p, w, depth):
         check("F Wraith at the cruise row, gap 7 (< r 8): fires; FX frost_fly x2, impact frost_crack, $45, row 9s + 4",
               cf and tp and q[2:7] == [S["FID_frost_fly"], S["FID_frost_fly"], S["FID_frost_crack"],
                                        S["FID_frost_crack"], 0x45] and q[8] == s1 + 4, q)
+        seq = w.e(3, "SEQL") | w.e(3, "SEQH") << 8
+        cast = seq_ptr(p, KA, S["KS_BLOCK"])
+        check("F Wraith FROST BOLT pose (T10b): rg_pose plays KS_BLOCK = drift -> wraith_cast (not the touch)",
+              seq == cast and p.rb(cast + 3) == S["FID_wraith_cast"] and cast != seq_ptr(p, KA, S["KS_ATTACK"]),
+              (seq, cast, p.rb(cast + 3)))
         cf, tp, _ = one(s1 + 1, 8)
         check("F Wraith gap 8 (= r): no shot", not tp)
 
@@ -541,8 +553,8 @@ def part_p(p, w):
     shot, c, _, _ = throw(KO, 3, counter=2, pit=5)
     check("P4 the refused col is not the pit's: nothing (counter untouched)", not shot and c == 2, (shot, c))
     shot, c, rcd, _ = throw(KGB, 3)
-    check("P5 Goblin: throws once, RCD_SPENT set", shot and rcd & AWAKE, (shot, rcd))
-    shot, c, rcd, _ = throw(KGB, 3, rcd_hi=AWAKE)
+    check("P5 Goblin: throws once, RCD_SPENT set", shot and rcd & SPENT, (shot, rcd))
+    shot, c, rcd, _ = throw(KGB, 3, rcd_hi=SPENT)
     check("P5 Goblin with its dagger spent: no throw (counter untouched)", not shot and c == 0, (shot, c))
     shot, c, _, _ = throw(KGB, 3, gold=LEK_GOLD)
     check("P6 a golden Goblin (the lair boss) never throws", not shot and c == 0, (shot, c))
@@ -563,6 +575,72 @@ def part_p(p, w):
     p.wb(w.desc + S["L2_PITW"], w.pit0[1])
 
 
+# ------------------------------------------------------------------------------------------------- D
+def part_d(p, w):
+    """T10b: the Goblin's one dagger survives room re-entry (parked and banked); the Gargoyle still re-perches."""
+    blk = bytes(p.z.read_memory(G.BASE, G.BLOCK_LEN))
+    X = p.rb("CUR_ROOM")
+    others = [r for r in range(9) if r != X and room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+              and r not in (p.rb("LVL_LAIR"), p.rb("LVL_SANCTUM"))]
+    KGB = S["K_GOBLIN"]
+    PIT = 14
+    gh = w.kt[KGB]["bh"]
+
+    def xfer(dst):
+        src = p.rb("CUR_ROOM")
+        p.set_ent(0, X=1, Y=stand_y(1, w.hh))
+        p.wmem(S["CAND_LIST"], [0xFF] * 16)
+        p.wb("FOLLOW_N", 0)
+        p.wb("EXIT_DEST", dst)
+        ingame(p, [0x21] + w16(S["lp_transition"]) + [0xCD] + w16(S["far3"]))
+        p.wb("TRK_PREV", src)
+        p.wb("CUR_ROOM", dst)
+        p.set_ent(0, ROOM=dst)
+
+    def find(kind):
+        return [s_ for s_ in range(1, 16) if w.e(s_, "FLAGS") & EF_ACTIVE and w.e(s_, "ROOM") == X
+                and w.e(s_, "KIND") == kind]
+
+    def pit_throw(slot):
+        """put the body at slot across the narrow pit from the hero (gap 3), run pit6 -> shot?"""
+        w.rows()
+        p.wb(w.desc + S["RD_PITCOL"], PIT)
+        p.wb(w.desc + S["L2_PITW"], 0)
+        mx = PIT + 1
+        w.hero(mx - 3 - w.hw, 0)
+        p.set_ent(slot, X=mx, Y=stand_y(0, gh), PX=8 * mx, PY=8 * stand_y(0, gh), MODE=S["M_REST"])
+        p.wb(ENT + slot * STRIDE + EF["POT"], (p.rb(ENT + slot * STRIDE + EF["POT"]) & ~3 & 255) | 1)  # counter 0
+        p.wb("TURN_PEND", 0)
+        p.wb("TMP6", 0xFF)                            # .fstep's refused dx: -1 (toward the hero, into the pit)
+        ingame(p, pre(slot) + far6("pit6"))
+        shot = bool(p.rb("TURN_PEND") & S["TP_SHOT"])
+        p.wb("TURN_PEND", 0)
+        p.wb(w.desc + S["RD_PITCOL"], w.pit0[0])
+        p.wb(w.desc + S["L2_PITW"], w.pit0[1])
+        return shot
+
+    w.clear()
+    w.hero(1)
+    w.put(3, KGB, 20, stand_y(0, gh), rcd=1, hp=6)
+    w.put(5, KG, 26, 10, rcd=1 | AWAKE, hp=9)
+    check("D1 the Goblin throws its dagger (RCD_SPENT set)", pit_throw(3) and w.e(3, "POT") & SPENT, w.e(3, "POT"))
+    for trip, hops in (("parked", others[:1]), ("banked", others[:3])):
+        if len(hops) < (1 if trip == "parked" else 3):
+            check(f"D {trip}: needs {3} other rooms on this level", False, others)
+            continue
+        for r in hops:
+            xfer(r)
+        xfer(X)
+        gb, ga = find(KGB), find(KG)
+        check(f"D2 {trip} re-entry: the Goblin keeps RCD_SPENT", gb and w.e(gb[0], "POT") & SPENT,
+              [(s_, w.e(s_, "POT")) for s_ in gb])
+        check(f"D3 {trip} re-entry: no second throw", gb and not pit_throw(gb[0]), gb)
+        check(f"D4 {trip} re-entry: the Gargoyle re-perched (RCD_AWAKE clear)", ga and not w.e(ga[0], "POT") & AWAKE,
+              [(s_, w.e(s_, "POT")) for s_ in ga])
+        if ga:
+            w.p.wb(ENT + ga[0] * STRIDE + EF["POT"], w.e(ga[0], "POT") | AWAKE)
+
+
 def main():
     if not F3:
         print("[skip] nm3b needs the F3_GEN build", flush=True)
@@ -580,6 +658,8 @@ def main():
         part_p(p, w)
         part_f(p, w, 6)
         part_r(p, w)
+        w = World(p)
+        part_d(p, w)
         check("setup: level_descend -> D7", descend_to(p, 7))
         w = World(p)
         part_f(p, w, 7)

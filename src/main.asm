@@ -287,6 +287,7 @@ b0c2_code:
                 INCLUDE "nm3_b0.asm"           ; NEW-MON3 T1 FUND: lp_hdr0 + lp_dtab, lp_post, the panel items,
                                                ; item_log0, end_scr0, hit_line, try_close (memory-map ledger)
                 INCLUDE "nm3var0.asm"          ; NEW-MON3 T8: the row-31 alias table (Fire Imp / Frost Wraith bytes), data only (T9 applies it)
+                INCLUDE "sq0.asm"              ; NEW-MON3 T10b: the sequence cache loader (was low RAM), two byte regions
                 ; NEW-MON3 T7 SRC0: the packed sprite sources of K_GARGOYLE / K_ALIAS / U_WRAITH / G_DUST (tools/zx0_sources.py
                 ; SRC0_KINDS; read only by zx0_frame with BANK_TEXT paged; virtual = real - SRC0_VDELTA)
 src0_blocks:
@@ -309,7 +310,7 @@ text_tape_end:
 TEXT_TAPE_LEN   EQU text_tape_end - TEXT_ADDR  ; B0CODE: text + b0 code + pad + B0_CODE2 (was = B0_FREE_START - TEXT_ADDR)
                 ASSERT text_tape_end == b0c2_end && B0_FREE_START + B0_FREE_RES == POOL_START
 ; The rest of the carve, b0c2_end..POOL_START-1, is not assembled and not on tape. C+TUT0 merge:
-; the boot-only streams (frame_tab, HOW TO PLAY, the D0 blob) are the bank-4 BOOT4 block ("BOOT4
+; the boot-only streams (frame_tab, the D0 blob) are the bank-4 BOOT4 block ("BOOT4
 ; STREAMS", after tap_loader), so nothing in bank 0 above B0_CODE2 is loaded at boot.
                 ASSERT text_base == TEXT_ADDR && TEXT_LEN == TEXT_PACKED
                 ASSERT (tx_entries & $FF) == 0         ; w2d: tk_get's B = tx_entries >> 8
@@ -595,16 +596,15 @@ glow_tab:       DB   $06, $46, $47, $46
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
                 DS   (-($ + TILE_IDS)) & $FF, 0    ; B3B-5: tile_flags ends on the page
 ;------------------------------------------------------------------------------
-; SEQ_ROWS — 3F-T2 the per-level sequence cache's rows (RUNTIME, written by R6
-; pool6.asm / lowram.asm at a game start / level entry before any kind animates):
+; SEQ_ROWS — 3F-T2 the per-level sequence cache's rows (RUNTIME, written by bank-0
+; sq0.asm (FARB0 from R6 pool6.asm) at a game start / level entry before any kind animates):
 ; SQ_SLOTS rows of KS_STRIDE (the old kind_seqs row: 8 sequence pointers +
 ; KS_IMPACT), slot 0 = the hero, 1.. = the level's monster kinds. One page
 ; (kind_tab KT_SEQ holds the row's low byte: kind_seq_ptr = 2 table reads, no
-; multiply). 3F-T13bc: moved out of the image (was 119 zero bytes of the kind_tab
-; ALIGN pad) into FRT_GAP; MEM-FT (FRT_MAX 144 fills the FRT page, FRT_GAP 0):
-; directly BELOW the page-aligned FRT, runtime RAM above seq_bytes (ASSERTed).
+; multiply). NEW-MON3 T10b: in FRT_GAP right ABOVE the FRT (was directly below it,
+; MEM-FT .. T9), the hero's block (SEQH_BYTES) after it.
 ;------------------------------------------------------------------------------
-seq_rows        EQU FRT - SQ_ROWS_LEN
+seq_rows        EQU FRT + FRT_MAX * FRT_STRIDE
                 ASSERT (seq_rows >> 8) == ((seq_rows + SQ_ROWS_LEN - 1) >> 8)
 ;------------------------------------------------------------------------------
 ; tile_flags — TILE_FLAGS[64] (D2, level_defs.asm TF_*), static, by tile id;
@@ -750,7 +750,7 @@ dn_miss_s:      DB   "MISS", 0, DNA_MISS       ; D3-11 / LVL-FLOATER (dnfix2.asm
                 INCLUDE "dnlvt2.asm"            ; LVL-FLOATER: dn_lvt (the pad holds 2 B in a trace build)
     ENDIF
                 ; RECLAIM-D: ftz_zx0 (the MEM-FT frame_tab stream, 132 B) left the image: bank 4
-                ; BOOT4 (C+TUT0), boot only, unpacked by the HOW TO PLAY overlay (main.asm "TEXT")
+                ; BOOT4 (C+TUT0), boot only, unpacked by the boot overlay (instr_ovl.asm) (main.asm "TEXT")
 code_end:
 ; 3F-T2: the sequence cache's bytes (RUNTIME only, not on tape: R6 pool6.asm / lowram.asm
 ; copies the hero's and the level's sequence blocks here; seq_rows point in)
@@ -761,13 +761,13 @@ TAPE_CODE_LEN   EQU code_end - lowram_code     ; one CODE block: low-RAM cold + 
                 ASSERT start == lowram_code    ; USR target = first byte of the block
                 ASSERT FDESC_COUNT == FID_COUNT    ; fdesc_tab and frame_tab: same frames
                 ASSERT image_start == $8000
-                ASSERT seq_bytes_end <= seq_rows   ; the image (+ the seq cache bytes) ends below seq_rows, then the FRT
+                ASSERT seq_bytes_end <= FRT        ; the image (+ the region-1 seq cache bytes) ends below the FRT (T10b)
                 ASSERT FRT + FRT_MAX * FRT_STRIDE <= P_ENTITIES
                 ASSERT P_ENTITIES + P_MAX_ENT * P_ENT_STRIDE <= BANK2_FREE
                 ASSERT DMG_LIST + DMG_MAX * 4 <= PEND_DMG
                 ASSERT LOWRAM_END <= LOWRAM_FREE_END
                 ASSERT lowram_code > TAPE_CLEAR    ; above the loader's RAMTOP
-                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), seq cache bytes ", /D, SEQB_LEN, ", free to seq_rows: ", /D, seq_rows - seq_bytes_end, " (+", /D, tile_flags - kind_tab_pad, " B kind_tab ALIGN pad; bank 2 free ", /D, seq_rows - seq_bytes_end + tile_flags - kind_tab_pad, "; seq_rows ", /H, seq_rows, " ", /D, SQ_ROWS_LEN, " B, FRT ", /H, FRT, " ", /D, FRT_MAX, " rows (", /D, FRT_MAX - FID_COUNT, " spare), FRT_GAP ", /D, FRT_GAP, "); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
+                DISPLAY "GAME image: $8000..", /H, code_end, " (", /D, IMAGE_LEN, " B), seq cache bytes ", /D, SEQB_LEN, ", free to FRT: ", /D, FRT - seq_bytes_end, " (+", /D, tile_flags - kind_tab_pad, " B kind_tab ALIGN pad; bank 2 free ", /D, FRT - seq_bytes_end + tile_flags - kind_tab_pad, "; seq_rows ", /H, seq_rows, " ", /D, SQ_ROWS_LEN, " B in FRT_GAP, FRT ", /H, FRT, " ", /D, FRT_MAX, " rows (", /D, FRT_MAX - FID_COUNT, " spare), FRT_GAP ", /D, FRT_GAP, "); HOT_COPY ", /H, HOT_COPY, ".. ", /D, PANEL_HOT_LEN, " B of ", /D, HOT_COPY_END - HOT_COPY, ", spare ", /D, HOT_COPY_END - HOT_COPY - PANEL_HOT_LEN
 
 ;==============================================================================
 ; BOOT BLOCK (3E-T1, memory levers a + d) — boot-only code + data in pool
@@ -1487,13 +1487,18 @@ SQ_P6 = SQ_P
 SQ_P7 = SQ_P
           ENDIF
 SQN = SQN + 1
+          IF SQ_P >= ksm_r2                    ; NEW-MON3 T10b: region 2 (sq0.asm: the blocks after ksm_r2)
+SQB2 = SQB2 + {b ovl_raw_seq + SQ_P - SQ_IMG + KSM_LEN}
+          ELSE
 SQB = SQB + {b ovl_raw_seq + SQ_P - SQ_IMG + KSM_LEN}
+          ENDIF
         ENDIF
       ENDIF
     ENDM
     MACRO SQ_RESET
 SQN = 0
 SQB = 0
+SQB2 = 0
 SQ_P0 = -1
 SQ_P1 = -1
 SQ_P2 = -1
@@ -1508,6 +1513,7 @@ SQ_HERO = {b ovl_raw_seq + ksm_kn - SQ_IMG + KSM_LEN}
 SQ_HERO = {b ovl_raw_seq + ksm_wz - SQ_IMG + KSM_LEN}
     ENDIF
 SQ_MAX = 0
+SQ_MAX2 = 0
 SQ_NMAX = 0
                 DUP  LEVELS, sqd
                 MMU  3, BANK_TEXT               ; NEW-MON3 T1: lp_dtab is bank 0
@@ -1535,9 +1541,12 @@ SQ_VB = (NM3_B_DEPTHS >> sqd) & 1               ; NEW-MON3 T9: row 31 = the Fros
       IF (SQK0 == K_VAMPIRE) || (SQK1 == K_VAMPIRE) || (SQK2 == K_VAMPIRE) || (SQK3 == K_VAMPIRE) || (SQK4 == K_VAMPIRE) || (SQK5 == K_VAMPIRE) || (SQK6 == K_VAMPIRE) || (SQK7 == K_VAMPIRE) || (SQK8 == K_VAMPIRE)
                 SQ_KIND K_VBAT                  ; 3F-T9: pl_kinds loads the bat form's block with the Vampire's
       ENDIF
-                DISPLAY "GAME sequence cache D", /D, sqd + 1, ": ", /D, SQN, " blocks, ", /D, SQB, " B of ", /D, SEQB_LEN, " (hero ", /D, SQ_HERO, " in FRT_GAP)"   ; 3F-T13bc / NEW-MON3 T9
+                DISPLAY "GAME sequence cache D", /D, sqd + 1, ": ", /D, SQN, " blocks, ", /D, SQB, " B of ", /D, SEQB_LEN, " + ", /D, SQB2, " B of ", /D, SEQ2_LEN, " (hero ", /D, SQ_HERO, " in FRT_GAP)"   ; 3F-T13bc / NEW-MON3 T9 / T10b
       IF SQB > SQ_MAX
 SQ_MAX = SQB
+      ENDIF
+      IF SQB2 > SQ_MAX2
+SQ_MAX2 = SQB2
       ENDIF
       IF SQN > SQ_NMAX
 SQ_NMAX = SQN
@@ -1551,12 +1560,16 @@ SQ_VB = 0
       IF SQB > SQ_MAX
 SQ_MAX = SQB
       ENDIF
+      IF SQB2 > SQ_MAX2
+SQ_MAX2 = SQB2
+      ENDIF
       IF SQN > SQ_NMAX
 SQ_NMAX = SQN
       ENDIF
+SEQ2_NEED = SQ_MAX2
 SEQB_NEED = SQ_MAX                             ; NEW-MON3 T9: the hero's block lives in SEQH_BYTES (FRT_GAP)
-                ASSERT SQ_NMAX <= SQ_SLOTS - 1 && SEQB_NEED <= SEQB_LEN && SQ_HERO <= FRT_GAP
-                DISPLAY "GAME sequence cache: ", /D, SQ_SLOTS, " rows (", /D, SQ_ROWS_LEN, " B) + bytes need ", /D, SEQB_NEED, " of SEQB_LEN ", /D, SEQB_LEN, " (monsters; hero ", /D, SQ_HERO, " in FRT_GAP ", /D, FRT_GAP, ", <= ", /D, SQ_NMAX, " blocks a level)"
+                ASSERT SQ_NMAX <= SQ_SLOTS - 1 && SEQB_NEED <= SEQB_LEN && SEQ2_NEED <= SEQ2_LEN && SEQH_BYTES + SQ_HERO <= P_ENTITIES
+                DISPLAY "GAME sequence cache: ", /D, SQ_SLOTS, " rows (", /D, SQ_ROWS_LEN, " B, FRT_GAP) + bytes need ", /D, SEQB_NEED, " of SEQB_LEN ", /D, SEQB_LEN, " (region 1, bank 2) + ", /D, SEQ2_NEED, " of SEQ2_LEN ", /D, SEQ2_LEN, " (region 2, low RAM); hero ", /D, SQ_HERO, " (FRT_GAP ", /D, FRT_GAP, ": ", /D, P_ENTITIES - SEQH_BYTES - SQ_HERO, " free), <= ", /D, SQ_NMAX, " blocks a level"
 
 ;------------------------------------------------------------------------------
 ; tap_loader — 10 CLEAR/BORDER 0, PAPER 0, INK 7/POKE: 15 LOAD "" SCREEN$: 20 LOAD "" CODE: 30 RANDOMIZE USR VAL "<start>"

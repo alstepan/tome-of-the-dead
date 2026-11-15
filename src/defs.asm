@@ -384,21 +384,21 @@ P_ENTITIES      EQU $B000           ; 16 slots x 32 B = 512 B ($B000..$B1FF)
 P_ENT_STRIDE    EQU 32
 P_MAX_ENT       EQU 16
 FRT_STRIDE      EQU 16
-FRT_MAX         EQU 153             ; NEW-MON3 T7: 144 -> 153 = FID_COUNT (the 9 new frames), the FRT page steps down to
-                                    ; $A600 (the 145th fid: -256 B bank 2, funded by T1's image tail); 112 B of the page's top
-                                    ; ($AF90..$AFFF, FRT_GAP) stay free. Descriptor reserve 0 (FRT_MAX == FID_COUNT, ASSERTed
-                                    ; in data.asm): a 154th fid raises FRT_MAX and costs 16 B (+5 low RAM) a frame.
-                                    ; MEM-FT: 132 -> 144 (the $A700 page; 129 used). Each fid also reserves FDESC_STRIDE (5) B of low RAM.
+FRT_MAX         EQU 163             ; NEW-MON3 T10b: 153 -> 163 = FID_COUNT (the 10 art-pass frames), the FRT page steps down
+                                    ; to $A500 ($A500..$AF2F); seq_rows + the hero's sequence block moved from below the FRT into
+                                    ; FRT_GAP above it (208 B). Descriptor reserve 0 (FRT_MAX == FID_COUNT, ASSERTed in data.asm):
+                                    ; a 164th fid raises FRT_MAX and costs 16 B (+5 low RAM) a frame.
+                                    ; NEW-MON3 T7: 144 -> 153 (the $A600 page). MEM-FT: 132 -> 144 (the $A700 page; 129 used).
                                     ; 3F-T13bc: 128 -> 132; CORPSE-ASHES: 129 used; 3F-T2: 160 -> 128
 FRT             EQU (P_ENTITIES - FRT_MAX * FRT_STRIDE) & $FF00   ; page-aligned (blit_sprite's nibble swap):
-                                    ; NEW-MON3 T7 $A600..$AF8F (was MEM-FT $A700..$AFFF); frame runtime table, 16 B/fid: 4 variants
-                                    ; x bank,lo,hi (0..11) + the fid's frame_tab entry (FT_IN_ROW..15,
-                                    ; static: instr_ovl in_ft unpacks it, nothing rewrites it); directly below
-                                    ; ENTITIES; seq_rows sits directly below it (main.asm)
-FRT_GAP         EQU P_ENTITIES - (FRT + FRT_MAX * FRT_STRIDE)   ; free bank-2 RAM between the FRT and
-                                    ; ENTITIES (NEW-MON3 T7: 112; MEM-FT: 0; 3F-T13bc 192 held seq_rows, now below FRT)
-SEQH_BYTES      EQU FRT + FRT_MAX * FRT_STRIDE   ; NEW-MON3 T9: the hero's sequence block (sq_reset, <= 49 of FRT_GAP;
-                                    ; ASSERTed main.asm "SEQ CACHE NEED"); runtime only, rewritten at every pool session
+                                    ; NEW-MON3 T10b $A500..$AF2F (T7 $A600..$AF8F, MEM-FT $A700..$AFFF); frame runtime table,
+                                    ; 16 B/fid: 4 variants x bank,lo,hi (0..11) + the fid's frame_tab entry (FT_IN_ROW..15,
+                                    ; static: instr_ovl in_ft unpacks it, nothing rewrites it); directly below ENTITIES
+FRT_GAP         EQU P_ENTITIES - (FRT + FRT_MAX * FRT_STRIDE)   ; bank-2 runtime RAM between the FRT and ENTITIES
+                                    ; (T10b: 208 B = seq_rows 153 + the hero's block <= 49 + 6 free; T7: 112; MEM-FT: 0)
+SEQH_BYTES      EQU FRT + FRT_MAX * FRT_STRIDE + SQ_ROWS_LEN   ; the hero's sequence block (sq_reset), right after seq_rows
+                                    ; in FRT_GAP (NEW-MON3 T9 / T10b; ASSERTed main.asm "SEQ CACHE NEED"); runtime only,
+                                    ; rewritten at every pool session
 BANK2_FREE      EQU $B200           ; A6: vacated old FRT ($B200..$B7FF, 1,536 B):
 BANK2_FREE_END  EQU SLOTREC         ;     free bank-2 runtime RAM (docs/memory-map.md)
 SLOTREC         EQU $B800           ; A7b: per-slot render record, 16 B per slot ($B800..$B8FF,
@@ -1069,10 +1069,12 @@ KS_STRIDE       EQU 17
 ; page), KS_STRIDE each; the sequence bytes they point to: SEQ_BYTES.
 SQ_SLOTS        EQU 9               ; hero + <= 8 monster blocks (NEW-MON3 T9: D8 = 8; was 7)
 SQ_ROWS_LEN     EQU SQ_SLOTS * KS_STRIDE
-SEQB_LEN        EQU 256             ; SEQ_BYTES: >= the level's monster blocks (ASSERTed per depth; NEW-MON3 T9: the hero's
-                                    ; block moved to SEQH_BYTES = FRT_GAP, D8 needs 256). 3F-T13bc: 256 -> 288;
-                                    ; D3-11 review: back to 256 (+32 B bank 2): the need is 253 (the PROTO
-                                    ; fixture's 6 kinds; the worst real level D8 245), ASSERTed below seq_rows
+SEQB_LEN        EQU 160             ; REGION 1, SEQ_BYTES (bank 2, code_end .. FRT): >= the level's region-1 monster blocks
+                                    ; (ASSERTed per depth). NEW-MON3 T10b: 256 -> 166 (the FRT page moved down 256 B, seq_rows
+                                    ; left for FRT_GAP); the blocks after seq_img.asm ksm_r2 go to REGION 2 (seq2_bytes, low
+                                    ; RAM, SEQ2_LEN, sq0.asm). T9: the hero's block moved to SEQH_BYTES, D8 needs 256.
+                                    ; 3F-T13bc: 256 -> 288; D3-11 review: back to 256
+SEQ2_LEN        EQU 112             ; REGION 2 (lowram.asm seq2_bytes): >= the level's region-2 blocks (ASSERTed per depth)
 ; master block (the unpacked image at SQ_IMG): KSM_LEN (sequence bytes n),
 ; KSM_IMP (= KS_IMPACT), KSM_OFF + 8 offsets (KS_IDLE..KS_DEATH order) from
 ; KSM_SEQ, then the n sequence bytes (position-independent: no pointer inside)

@@ -252,27 +252,40 @@ KFCNT_ARCH = FCTR - KFID_ARCH
 ; Gargoyle (K_GARGOYLE, 30), the row-31 alias's two bodies and the shared dust DEAD. Each kind's frames
 ; are contiguous: [KFID_x, + KFCNT_x) = its gu_tab unit (pool6.asm). MOT = both shifts; STA = the one shift
 ; the anchor implies (cell-aligned draws); |MIR = no stored left (blit-time mirror); |SYM = one facing.
-;   garg_perch  REST (the statue) + HURT (it flinches back to stone): STA|SYM, never mirrored, cold
-;   garg_fly    flight: the one MOT frame (the gh_fly shape), hot
-;   garg_claw   ATTACK: STA|MIR, cold
+;   garg_perch  PERCHED rest (the statue, only while perched): STA|SYM, never mirrored, cold
+;   garg_fly    flight, + garg_fly2 (wing down-stroke, T10b): MOT|MIR, hot
+;   garg_claw   ATTACK strike after garg_windup (T10b); garg_wake (the one-shot), garg_hurt, garg_dead (mid-air),
+;               garg_alert (AWAKE rest, grounded crouch): T10b art pass, all STA|MIR (cell-aligned), cold
 KFID_GARG = FCTR
                 FRM garg_perch,     K_GARGOYLE, 24, STA|SYM
                 FRM garg_fly,       K_GARGOYLE, 24, MOT|MIR
                 FRM garg_claw,      K_GARGOYLE, 24, STA|MIR
+                FRM garg_wake,      K_GARGOYLE, 24, STA|MIR
+                FRM garg_fly2,      K_GARGOYLE, 24, MOT|MIR
+                FRM garg_windup,    K_GARGOYLE, 24, STA|MIR
+                FRM garg_hurt,      K_GARGOYLE, 24, STA|MIR
+                FRM garg_dead,      K_GARGOYLE, 24, STA|MIR
+                FRM garg_alert,     K_GARGOYLE, 24, STA|MIR
 KFCNT_GARG = FCTR - KFID_GARG
-;   imp_fly1/2  REST + the flap pair (the Bat's 2-cycle): MOT|MIR, hot;  imp_spit ATTACK / SHOOT / HURT: STA|MIR
+;   imp_fly1/2  REST + the flap pair (the Bat's 2-cycle): MOT|MIR, hot;  imp_spit ATTACK / SHOOT / HURT: STA|MIR;
+;   imp_dead    DEATH mid-air (T10b): STA|MIR
 ;   Row 31 as assembled = the Fire Imp (variant A); the Frost Wraith is the variant unit U_WRAITH below
 KFID_IMP = FCTR
                 FRM imp_fly1,       K_ALIAS, 24, MOT|MIR
                 FRM imp_fly2,       K_ALIAS, 24, MOT|MIR
                 FRM imp_spit,       K_ALIAS, 24, STA|MIR
+                FRM imp_dead,       K_ALIAS, 24, STA|MIR
 KFCNT_IMP = FCTR - KFID_IMP
-;   wraith_drift REST + flight (frame 0 is MOT: the rest rule holds), hot;  wraith_touch ATTACK / HURT: STA|MIR, cold
+;   wraith_drift REST + flight (frame 0 is MOT: the rest rule holds), + drift2 / drift3 (T10b: the 3-frame drift loop,
+;   MOT|MIR), hot;  wraith_touch melee ATTACK / HURT, wraith_cast (T10b) the FROST BOLT: STA|MIR, cold
 KFID_WRAITH = FCTR
                 FRM wraith_drift,   U_WRAITH, 24, MOT|MIR
                 FRM wraith_touch,   U_WRAITH, 24, STA|MIR
+                FRM wraith_drift2,  U_WRAITH, 24, MOT|MIR
+                FRM wraith_drift3,  U_WRAITH, 24, MOT|MIR
+                FRM wraith_cast,    U_WRAITH, 24, STA|MIR
 KFCNT_WRAITH = FCTR - KFID_WRAITH
-;   dust_dead: the DEAD pose of all three (a heap of rubble / embers / rime by KT_ATTR), unit U_DUST
+;   dust_dead: the Wraith's DEAD pose (rime by KT_ATTR; T10b: the Gargoyle / Imp die mid-air with their own frame), unit U_DUST
 KFID_DUST = FCTR
                 FRM dust_dead,      G_DUST, 24, STA|SYM
 KFCNT_DUST = FCTR - KFID_DUST

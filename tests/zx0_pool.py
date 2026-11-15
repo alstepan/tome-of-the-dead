@@ -151,11 +151,14 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # NEW-MON3 T10a (F-1 / P-1 FX): the Warrior + 32 on D6 (the Imp's spark pair, U_SPARKW: D4 had it from the Spider) and on the
 # Wraith depths D5 / D7 / D8 (U_FROSTW); the Mage + 32 on D4..D8 (dagger_spin for the Orc / Skeleton pit throws, U_DAGM; D3 had
 # it from the Goblin). Binding D8 Warrior 19,186 of POOL_CAP 22,594, slack 3,408.
+# NEW-MON3 T10b (art pass, 10 frames): D4 +96 (imp_dead), D5 +2,496 (6 Gargoyle + 3 Wraith frames), D6 +1,504 (Gargoyle +
+# imp_dead), D7 / D8 +1,088 (wraith_drift2 / drift3 MOT, wraith_cast), both heroes. Binding D8 Warrior 20,274 of POOL_CAP
+# 22,594, slack 2,320.
 LEVEL_NEED = {
-    (0, 1): 11826, (0, 2): 11842, (0, 3): 16274, (0, 4): 15938,
-    (0, 5): 14146, (0, 6): 16482, (0, 7): 17394, (0, 8): 19186,
-    (1, 1): 10258, (1, 2): 10242, (1, 3): 14706, (1, 4): 14402,
-    (1, 5): 12578, (1, 6): 14882, (1, 7): 15762, (1, 8): 17586,
+    (0, 1): 11826, (0, 2): 11842, (0, 3): 16274, (0, 4): 16034,
+    (0, 5): 16642, (0, 6): 17986, (0, 7): 18482, (0, 8): 20274,
+    (1, 1): 10258, (1, 2): 10242, (1, 3): 14706, (1, 4): 14498,
+    (1, 5): 15074, (1, 6): 16386, (1, 7): 16850, (1, 8): 18674,
 }
 
 
