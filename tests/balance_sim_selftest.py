@@ -335,9 +335,32 @@ def test_nm3(D0):
     check("frost charm not worn on D6", g.h.res[B.COLD] == 0)
 
 
+def test_bal_knobs(D):
+    """LARGER-D re-sweep knobs: defaults = today's game, bal_conf wiring, progress respawns fire and obey the live cap."""
+    check("bal defaults", B.PARAMS["RESP_MODE"] == "time" and B.PARAMS["FED_REGEN_L"] is None and B.PARAMS["FED_REGEN_K"] is None)
+    o = B.bal_conf("level:4", "prog:0.5:6", "1.5", {})["param"]
+    check("bal_conf level/prog/dens", o["FED_REGEN_L"] == 4 and o["RESP_MODE"] == "progress" and o["RESP_P"] == 0.5
+          and o["TRICKLE_MAX"] == 6 and o["MON_COUNT"][0] == 20 and o["ROOMS_LO"] == 12)
+    o = B.bal_conf("maxhp:24", "progtime:1.0:8", "1.35", {})["param"]
+    check("bal_conf maxhp/progtime", o["FED_REGEN_K"] == 24 and o["RESP_MODE"] == "progress+time" and o["MON_COUNT"][0] == 18)
+    D2 = B.Data(B.bal_conf("flat", "prog:1.0:6", "1.5", {}))
+    g = new_game(D2, "W", 3)
+    g.build_level(1)
+    order = list(range(len(g.rooms)))
+    g.seen_t = {}
+    base = sum(len(r) for r in g.rooms)
+    for i in range(len(order)):
+        g.progress_respawn(order, i)
+        g.seen_t[order[i]] = -1000
+        check("progress live cap", g.live_resp() <= 6)
+    check("progress spawns some", sum(len(r) for r in g.rooms) + len(g.respawns_pending) > base)
+    r = B.run_batch(D2, "M", "average", 10, "bk", 0)
+    check("met counted", r["met"] > 10 * 5)
+
+
 def main():
     D = B.Data()
-    for t in (test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
+    for t in (test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
         t(D)
     test_monotone()
     if FAILS:

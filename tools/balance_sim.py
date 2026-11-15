@@ -128,6 +128,11 @@ PARAMS = {
     "ESCORT_FOLLOW_GAP": 2,
     # LARGER-D knobs (docs/design/larger_depths.md sec 3 / 3.1; defaults = today's game, the --larger-d preset sets them)
     "FED_REGEN_K": None,                # null = flat +1 per FED_REGEN turns; k = +(1 + MAXHP div k) per 12 turns
+    # LARGER-D re-sweep (user 2026-11-15): even regen + progress-driven respawns.  Defaults = today.
+    "FED_REGEN_L": None,                # k wins if both set; L = +(1 + LVL div L) per 12 turns (the same for both heroes)
+    "RESP_MODE": "time",                # time = the 48-turn trickle | progress | progress+time (the trickle at 1/3 rate)
+    "RESP_P": 0.75,                     # progress: P(an event per FIRST entry of a room, at most one)
+    "RESP_FAR_P": 0.7, "RESP_STALE": 150,   # progress: P(a visited room is >= 2 rooms away); it must also be unseen for >= RESP_STALE turns
     "XPN": None,                        # null = the image's xpn_tab; else 8 values (XP_NEXT L2..L9)
     "FOOD_N": [3, 4], "POT_N": [2, 3], "SCR_N": [1, 2],   # entries per level: inclusive (lo, hi); potions keep >= 1 Heal
     "ARR_BASE": 5, "TRAP_MULT": 1.0,    # arrows = ARR_BASE + 0..3 (1d4+4 -> 1d4+6 = 7); trap count = round(TRAP_COUNT * TRAP_MULT)
@@ -445,7 +450,7 @@ def merge(a, b):
 class Mon:
     __slots__ = ("kind", "k", "hp", "maxhp", "x", "atk", "df", "gold", "boss", "hold", "holdkind", "conf", "fear",
                  "cd", "climb", "scd", "sumlive", "resp", "bred", "slam", "blink", "pidx", "hexcd", "line", "back",
-                 "tail", "summoned", "guard", "awake", "pit")
+                 "tail", "summoned", "guard", "awake", "pit", "met")
 
     def __init__(self, D, kind, depth, gold=False, resp=False):
         k = D.k[kind]
@@ -464,6 +469,7 @@ class Mon:
         self.climb = 0
         self.sumlive = 0
         self.resp = resp
+        self.met = False
         self.bred = False
         self.slam = 0
         self.blink = False
@@ -547,6 +553,8 @@ class Game:
         self.ranks = h.ranks
         self.respawns_pending = []
         self.resp_count = 0
+        self.n_met = 0
+        self.seen_t = {}
         self.rooms = []
         self.mage_dmg = {n: 0.0 for n in SPELLS}
         self.mage_casts = {n: 0 for n in SPELLS}
@@ -681,7 +689,9 @@ class Game:
                 h.weak = max(0, h.weak - c)
             st = self.hunger_stage()
             if st == 0 and h.hp < h.maxhp:
-                if P["FED_REGEN_K"]:
+                if P["FED_REGEN_K"] is None and P["FED_REGEN_L"]:
+                    h.hp = min(h.maxhp, h.hp + (1 + h.lvl // P["FED_REGEN_L"]) * (t1 // 12 - t0 // 12))
+                elif P["FED_REGEN_K"]:
                     # sec 3.1: the game steps every 12 turns by 1 + MAXHP div k
                     h.hp = min(h.maxhp, h.hp + (1 + h.maxhp // P["FED_REGEN_K"]) * (t1 // 12 - t0 // 12))
                 else:
@@ -700,13 +710,42 @@ class Game:
         P = self.P
         if self.in_boss_dead or self.resp_count >= P["TRICKLE_MAX"] or self.depth > 8:
             return
-        k = t1 // P["TRICKLE_PERIOD"] - t0 // P["TRICKLE_PERIOD"]
+        if P["RESP_MODE"] == "progress":
+            return
+        per = P["TRICKLE_PERIOD"] * (3 if P["RESP_MODE"] == "progress+time" else 1)
+        k = t1 // per - t0 // per
         for _ in range(k):
             if self.resp_count < P["TRICKLE_MAX"] and self.rr() < P["TRICKLE_P"] and self.visited_cleared > 0:
                 kind = self.roll_kind(self.rng.choice(self.D.lp[self.depth]), self.depth, self.lp_lvl)
                 m = Mon(self.D, kind, self.depth, resp=True)
                 self.respawns_pending.append(m)
                 self.resp_count += 1
+
+    def live_resp(self):
+        return sum(1 for r in self.rooms for m in r if m.resp and m.hp > 0) + sum(1 for m in self.respawns_pending if m.hp > 0)
+
+    def progress_respawn(self, order, i):
+        """RESP_MODE progress: the hero enters room order[i] for the first time.  One event with prob RESP_P; the monster goes to a
+        room that is unvisited (met when the hero gets there) or to a visited one >= 2 rooms away and unseen for RESP_STALE turns
+        (a pending ambush, met by the usual backtrack roll).  Capped at TRICKLE_MAX live respawns."""
+        P = self.P
+        if self.in_boss_dead or self.depth > 8 or self.rr() >= P["RESP_P"] or self.live_resp() >= P["TRICKLE_MAX"]:
+            return
+        rmax = P["ROOM_MAX"][self.depth - 1]
+        cand = [("u", ri) for ri in order[i + 1:] if len(self.rooms[ri]) < rmax]
+        for j in range(i):
+            if self.t - self.seen_t[order[j]] >= P["RESP_STALE"] and self.rr() < P["RESP_FAR_P"]:
+                cand.append(("v", order[j]))
+        if not cand:
+            return
+        kind, ri = cand[self.rng.randrange(len(cand))]
+        base = self.roll_kind(self.rng.choice(self.D.lp[self.depth]), self.depth, self.lp_lvl)
+        m = Mon(self.D, base, self.depth, resp=True)
+        self.resp_count += 1
+        if kind == "u":
+            self.rooms[ri].append(m)
+        else:
+            self.respawns_pending.append(m)
 
     # ---- monster spawning -------------------------------------------------------------------
     def roll_kind(self, base, depth, lvl):
@@ -1108,11 +1147,15 @@ class Game:
         order = list(range(len(self.rooms)))
         rng.shuffle(order)
         n = len(order)
+        self.seen_t = {}
         for i, ri in enumerate(order):
             self.transit()
+            if P["RESP_MODE"] != "time":
+                self.progress_respawn(order, i)
             self.pre_room_rest()
             self.cross_trap(ri)
             self.visit(self.rooms[ri], "room", slot=ri)
+            self.seen_t[ri] = self.t
             self.visited_cleared += 1
             self.pick_some(1.0 / (n - i + 0.0) * 1.0 if i < n else 1.0)
             self.meet_respawns()
@@ -1290,6 +1333,10 @@ class Game:
 
     def fight(self, mons, boss_room):
         """Widow-fight accounting wrapper (what-if stats only): HP lost over fights that contain a Black Widow."""
+        for m in mons:
+            if not m.met and m.hp > 0:
+                m.met = True
+                self.n_met += 1
         bw = self.D.kid["BLACK_WIDOW"]
         if not any(m.k["id"] == bw and m.hp > 0 for m in mons):
             return self.fight0(mons, boss_room)
@@ -2178,13 +2225,14 @@ def BOSS_LBL(m, depth):
 def run_batch(D, hero, policy, runs, seed, first=0):
     res = dict(n=0, wins=0, death_depth=[0] * 9, killers={}, dk={}, entry=[[0, 0.0, 0.0, 0.0] for _ in range(9)],
                spell_dmg={s: 0.0 for s in SPELLS}, spell_casts={s: 0 for s in SPELLS}, stalls=0, causes={},
-               turns=0, overkill=[0.0, 0.0], lvl_entry=[0.0] * 9, reached=[0] * 9, wfights=0, wloss=0)
+               turns=0, met=0, overkill=[0.0, 0.0], lvl_entry=[0.0] * 9, reached=[0] * 9, wfights=0, wloss=0)
     for i in range(first, first + runs):
         rng = random.Random("%s/%s/%s/%d" % (seed, hero, policy, i))
         g = Game(D, hero, policy, rng)
         won, depth, killer, cause = g.play()
         res["n"] += 1
         res["turns"] += g.t
+        res["met"] += g.n_met
         res["wfights"] += g.wstats[0]
         res["wloss"] += g.wstats[1]
         for j, (hp, mp, food, lvl) in enumerate(g.entry):
@@ -2210,7 +2258,7 @@ def run_batch(D, hero, policy, runs, seed, first=0):
 
 def merge_res(a, b):
     out = dict(a)
-    for k in ("n", "wins", "turns", "stalls", "wfights", "wloss"):
+    for k in ("n", "wins", "turns", "met", "stalls", "wfights", "wloss"):
         out[k] = a[k] + b[k]
     for k in ("death_depth", "lvl_entry", "reached"):
         out[k] = [x + y for x, y in zip(a[k], b[k])]
@@ -2307,7 +2355,7 @@ def to_json(name, results):
         s = summarize(r)
         out["%s/%s" % (hero, pol)] = dict(n=r["n"], win=s["win"], ci95=[s["lo"], s["hi"]], death_depth=r["death_depth"],
                                           killers=r["killers"], dk=r["dk"], causes=r["causes"], reached=r["reached"],
-                                          mean_turns=r["turns"] / max(1, r["n"]), wfights=r["wfights"], wloss=r["wloss"], spell_dmg=r["spell_dmg"], spell_casts=r["spell_casts"])
+                                          mean_turns=r["turns"] / max(1, r["n"]), mean_met=r["met"] / max(1, r["n"]), wfights=r["wfights"], wloss=r["wloss"], spell_dmg=r["spell_dmg"], spell_casts=r["spell_casts"])
     return out
 
 
@@ -2366,6 +2414,57 @@ def larger_d_sweep(a, base):
     print("GATE:", "PASS at %s, k=%d" % passed if passed else "no (knob, k) passed")
     return 0 if passed else 1
 
+TODAY_COUNT = [13, 14, 14, 15, 16, 15, 15, 12]
+
+
+def bal_conf(regen, resp, dens, base):
+    """One LARGER-D re-sweep cell.  regen: flat | level:L | maxhp:k.  resp: time | prog:p:max | progtime:p:max.  dens: x today's MON_COUNT."""
+    pr = {}
+    kind, _, arg = regen.partition(":")
+    if kind == "level":
+        pr["FED_REGEN_L"] = int(arg)
+    elif kind == "maxhp":
+        pr["FED_REGEN_K"] = int(arg)
+    elif kind != "flat":
+        raise SystemExit("bad regen " + regen)
+    f = resp.split(":")
+    if f[0] in ("prog", "progtime"):
+        pr.update(RESP_MODE="progress" if f[0] == "prog" else "progress+time", RESP_P=float(f[1]), TRICKLE_MAX=int(f[2]))
+    elif f[0] != "time":
+        raise SystemExit("bad resp " + resp)
+    pr["MON_COUNT"] = [round(c * float(dens)) for c in TODAY_COUNT]
+    return merge(merge(LARGER_D, base), {"param": pr})
+
+
+def larger_d_bal(a, base):
+    """--ld-bal: regen x respawn x density grid (averages over the --seed list), W and M per cell, monsters met per run, run length;
+    --ld-bsim1 adds the Mage +30 HP case.  Gate: both >= 35, gap <= 3, Mage +30 >= Mage +0."""
+    seeds = a.seed.split(",")
+
+    def cell(ov, hero):
+        out = None
+        for sd in seeds:
+            r = run_cell(ov, hero, "average", a.runs, sd, a.jobs)
+            out = r if out is None else merge_res(out, r)
+        return out
+
+    print("regen        respawn          dens   W%     M%     gap   metW  metM  turnsW turnsM  gate")
+    for regen in a.bal_regen.split(","):
+        for resp in a.bal_resp.split(","):
+            for dens in a.bal_dens.split(","):
+                o = bal_conf(regen, resp, dens, base)
+                rw, rm = cell(o, "W"), cell(o, "M")
+                w, m = 100.0 * summarize(rw)["win"], 100.0 * summarize(rm)["win"]
+                ok = w >= 35 and m >= 35 and abs(w - m) <= 3
+                tail = ""
+                if a.ld_bsim1 and ok:
+                    m30 = 100.0 * summarize(cell(merge(o, {"param": {"HP_BONUS": 30}}), "M"))["win"]
+                    tail = "  BSIM1 M+30 %.2f %s" % (m30, "ok" if m30 >= m else "BELOW")
+                print("%-12s %-16s %-6s %-6.2f %-6.2f %-5.2f %-5.1f %-5.1f %-6.0f %-6.0f %s%s" % (
+                    regen, resp, dens, w, m, abs(w - m), rw["met"] / rw["n"], rm["met"] / rm["n"], rw["turns"] / rw["n"],
+                    rm["turns"] / rm["n"], "PASS" if ok else "fail", tail), flush=True)
+    return 0
+
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="BAL-1b balance Monte Carlo")
@@ -2382,6 +2481,11 @@ def main(argv=None):
     ap.add_argument("--larger-d", action="store_true", help="LARGER-D balance gate sweep (sec 3.1); --seed takes a comma list")
     ap.add_argument("--ld-k", default="16,24,32", help="FED regen divisors for --larger-d")
     ap.add_argument("--ld-steps", type=int, default=len(LD_KNOBS), help="--larger-d: sec 3.1 knobs to apply after the plain sec 3 step")
+    ap.add_argument("--ld-bal", action="store_true", help="LARGER-D re-sweep: regen x respawn x density grid (--bal-*)")
+    ap.add_argument("--bal-regen", default="flat,level:4,level:6")
+    ap.add_argument("--bal-resp", default="time,prog:0.75:8,progtime:0.75:8")
+    ap.add_argument("--bal-dens", default="1.35,1.5,1.65")
+    ap.add_argument("--ld-bsim1", action="store_true", help="--ld-bal: Mage +30 HP check on passing cells")
     a = ap.parse_args(argv)
     heroes = ["W", "M"] if a.hero == "both" else [a.hero]
     pols = list(POLICIES) if a.policy == "all" else [a.policy]
@@ -2392,6 +2496,8 @@ def main(argv=None):
         ov = merge(ov, parse_set(a.sets))
     if a.larger_d:
         return larger_d_sweep(a, ov)
+    if a.ld_bal:
+        return larger_d_bal(a, ov)
     configs = [("baseline" if not ov and not a.compare else "run", ov)]
     if a.compare:
         configs = [("baseline" + (" +sets" if ov else ""), ov), ("override:" + os.path.basename(a.compare), merge(ov, json.load(open(a.compare))))]
