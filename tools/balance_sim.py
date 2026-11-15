@@ -127,6 +127,7 @@ PARAMS = {
     "QUEEN_POISON": 36, "SLAM_EVERY": 3,
     "ESCORT_FOLLOW_GAP": 2,
     # LARGER-D knobs (docs/design/larger_depths.md sec 3 / 3.1; defaults = today's game, the --larger-d preset sets them)
+    "MANA_AMULET": 0,                   # 1 = the Mage wears the Amulet of Mana from D2 on (user-play stand-in; granted, never swapped out)
     "FED_REGEN_K": None,                # null = flat +1 per FED_REGEN turns; k = +(1 + MAXHP div k) per 12 turns
     # LARGER-D re-sweep (user 2026-11-15): even regen + progress-driven respawns.  Defaults = today.
     "FED_REGEN_L": None,                # k wins if both set; L = +(1 + LVL div L) per 12 turns (the same for both heroes)
@@ -562,6 +563,7 @@ class Game:
         self.potions_used = 0
         self.scrolls_used = 0
         self.wstats = [0, 0]   # [fights containing a Black Widow, hero HP lost in them]
+        self.amu = {}        # depth -> 1 if an Amulet of Mana / Scarab is worn at entry
         self.entry = []      # (hp, mp, food, lvl) at each depth entry
         self.killer = None
         self.in_boss_dead = False
@@ -988,6 +990,8 @@ class Game:
         gd = self.G[g]
         slot = gd["slot"]
         cur = h.gear.get(slot)
+        if slot == "c" and self.P["MANA_AMULET"] and self.hero == "M" and self.depth >= 2:
+            return                    # pinned
         banned = IM.type_banned_for(IM.HERO_MAGE if self.hero == "M" else IM.HERO_WARRIOR, IM.T[NAME_TYPE[g]])
         if not banned and self.gear_score(g, q, 0) > (self.gear_score(cur, h.q[slot], h.m[slot]) if cur else -1):
             if cur:
@@ -1131,6 +1135,10 @@ class Game:
         self.stats_out = {}
         try:
             for depth in range(1, 9):
+                if depth >= 2 and self.hero == "M" and self.P["MANA_AMULET"]:
+                    self.h.gear["c"] = "Amulet of Mana"
+                    self.recalc()
+                self.amu[depth] = 1 if self.h.gear.get("c") in ("Amulet of Mana", "Scarab") else 0
                 self.entry.append((self.h.hp / self.h.maxhp, self.h.mp, self.h.food, self.h.lvl))
                 self.stat_depth = depth
                 self.build_level(depth)
@@ -2225,7 +2233,7 @@ def BOSS_LBL(m, depth):
 def run_batch(D, hero, policy, runs, seed, first=0):
     res = dict(n=0, wins=0, death_depth=[0] * 9, killers={}, dk={}, entry=[[0, 0.0, 0.0, 0.0] for _ in range(9)],
                spell_dmg={s: 0.0 for s in SPELLS}, spell_casts={s: 0 for s in SPELLS}, stalls=0, causes={},
-               turns=0, met=0, overkill=[0.0, 0.0], lvl_entry=[0.0] * 9, reached=[0] * 9, wfights=0, wloss=0)
+               turns=0, met=0, amu=[0] * 9, overkill=[0.0, 0.0], lvl_entry=[0.0] * 9, reached=[0] * 9, wfights=0, wloss=0)
     for i in range(first, first + runs):
         rng = random.Random("%s/%s/%s/%d" % (seed, hero, policy, i))
         g = Game(D, hero, policy, rng)
@@ -2233,6 +2241,8 @@ def run_batch(D, hero, policy, runs, seed, first=0):
         res["n"] += 1
         res["turns"] += g.t
         res["met"] += g.n_met
+        for dd, v in g.amu.items():
+            res["amu"][dd] += v
         res["wfights"] += g.wstats[0]
         res["wloss"] += g.wstats[1]
         for j, (hp, mp, food, lvl) in enumerate(g.entry):
@@ -2260,7 +2270,7 @@ def merge_res(a, b):
     out = dict(a)
     for k in ("n", "wins", "turns", "met", "stalls", "wfights", "wloss"):
         out[k] = a[k] + b[k]
-    for k in ("death_depth", "lvl_entry", "reached"):
+    for k in ("death_depth", "lvl_entry", "reached", "amu"):
         out[k] = [x + y for x, y in zip(a[k], b[k])]
     out["entry"] = [[x[0] + y[0], x[1] + y[1], x[2] + y[2], x[3] + y[3]] for x, y in zip(a["entry"], b["entry"])]
     for k in ("killers", "causes", "dk"):
@@ -2417,7 +2427,7 @@ def larger_d_sweep(a, base):
 TODAY_COUNT = [13, 14, 14, 15, 16, 15, 15, 12]
 
 
-def bal_conf(regen, resp, dens, base):
+def bal_conf(regen, resp, dens, base, extra=None):
     """One LARGER-D re-sweep cell.  regen: flat | level:L | maxhp:k.  resp: time | prog:p:max | progtime:p:max.  dens: x today's MON_COUNT."""
     pr = {}
     kind, _, arg = regen.partition(":")
@@ -2432,6 +2442,7 @@ def bal_conf(regen, resp, dens, base):
         pr.update(RESP_MODE="progress" if f[0] == "prog" else "progress+time", RESP_P=float(f[1]), TRICKLE_MAX=int(f[2]))
     elif f[0] != "time":
         raise SystemExit("bad resp " + resp)
+    pr.update(extra or {})
     pr["MON_COUNT"] = [round(c * float(dens)) for c in TODAY_COUNT]
     return merge(merge(LARGER_D, base), {"param": pr})
 
@@ -2463,6 +2474,8 @@ def larger_d_bal(a, base):
                 print("%-12s %-16s %-6s %-6.2f %-6.2f %-5.2f %-5.1f %-5.1f %-6.0f %-6.0f %s%s" % (
                     regen, resp, dens, w, m, abs(w - m), rw["met"] / rw["n"], rm["met"] / rm["n"], rw["turns"] / rw["n"],
                     rm["turns"] / rm["n"], "PASS" if ok else "fail", tail), flush=True)
+                print("   Mage amulet worn at entry: D3 %.1f%%  D5 %.1f%%" % tuple(
+                    100.0 * rm["amu"][d] / max(1, rm["reached"][d]) for d in (3, 5)), flush=True)
     return 0
 
 
