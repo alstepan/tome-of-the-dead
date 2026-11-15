@@ -75,12 +75,12 @@ class D8:
         self.sn = p.rb("LVL_SANCTUM")
         self.lair = p.rb("LVL_LAIR")
         ex = room_model.field(self.blk, self.sn, "RD_EXITS")
-        self.door_l = self.sn == 8                   # the lair's door to the Sanctum: its right side if S = 8
+        self.door_l = self.sn == G.BOT + 2           # the lair's door to the Sanctum: its right side if S = 11 (LARGER-D T4; was 8)
         self.s = 1 if ex & (S["RDX_LS1"] | S["RDX_RS1"]) else 0
-        self.edge = S["EDGE_TAB"] + G.hedge(min(7, self.sn))
+        self.edge = S["EDGE_TAB"] + G.hedge(min(G.BOT + 1, self.sn))
         self.kw = p.kb(p.rb("HERO_KIND"), "KT_BW")
         self.kh = p.kb(p.rb("HERO_KIND"), "KT_BH")
-        self.left = self.sn == 6                     # the lectern on the Sanctum's left (cols 1-2)
+        self.left = self.sn == G.BOT                 # the lectern on the Sanctum's left (cols 1-2): S = 9 (was 6)
 
     def ingame(self, code):
         p = self.p
@@ -776,7 +776,7 @@ def main():
         h.launch(EMU_ARGS)
         p = Proto(h)
         items_absent(p)
-        for master in (0x5302, 0x5300):                  # S = 6 / S = 8, the door on storey 1
+        for master in (0x5302, 0x5300):                  # S = 9 / S = 11 (LARGER-D T4), the door on storey 1
             seal(p, master, mirror=True)
             check(f"FX5 master {master:#06x}: a NEW D8 starts with the book / stand attrs (a previous game's ash "
                   "is reset by level_tiles7's tail)", lect_attrs(p) == NORM, lect_attrs(p))

@@ -23,14 +23,19 @@
 ; Stack use <= ~16 B.
 ; No DI, no port writes. restart/reseed unwind with SP = LG_SP (set in attempt).
 ;
-; Room desc pointer: rdp (page-aligned ROOM_DESC, L = $60 + 16 r). The adjacency
+; LARGER-D T4: 3 wide x 4 tall (ids 0..11, bottom row 9..11), the rev-3 DFS branch draw,
+; the 5a / 5b / 5c loop split and the level-key locks + keys (lgkey3.asm kprep, bank 3 +
+; lgkey0.asm ksel, bank 0 via FARB0; larger_depths.md §2.1 rev 3): EG_LOCK (+ EG_LOCKC)
+; edges, LVL_KEYROOM / LVL_KEYROOM2. GEN_SCRATCH use up to $657F (memory-map "LARGER-D T4").
+;
+; Room desc pointer: rdp (page-aligned ROOM_DESC, L = $40 + 16 r). The adjacency
 ; of the DFS tree lives in RD_EXITS bits 0-3 (L,R,U,D == RDX_L/R/U/D), which is
 ; exactly what the exits end up as. The visited set is RDF_PRESENT.
 ;==============================================================================
-LG_STK          EQU GEN_SCRATCH + 0     ; 9 B DFS stack
-LG_DIST         EQU GEN_SCRATCH + 16    ; 9 B BFS distance (FF = unseen)
-LG_Q            EQU GEN_SCRATCH + 32    ; 9 B BFS queue (page-contained: ixl compare)
-LG_CAND         EQU GEN_SCRATCH + 48    ; 9 B potion room candidates
+LG_STK          EQU GEN_SCRATCH + 0     ; 12 B DFS stack
+LG_DIST         EQU GEN_SCRATCH + 16    ; 12 B BFS distance (FF = unseen; lp_budget's bfs)
+LG_Q            EQU GEN_SCRATCH + 32    ; 12 B BFS queue (page-contained: ixl compare)
+LG_CAND         EQU GEN_SCRATCH + 48    ; 12 B potion room candidates
 LG_N            EQU GEN_SCRATCH + 64    ; target room count
 LG_CNT          EQU GEN_SCRATCH + 65    ; visited count
 LG_CUR          EQU GEN_SCRATCH + 66
@@ -60,8 +65,15 @@ LG_K2           EQU GEN_SCRATCH + 93    ; kind: 0 wide, 1 mid
 LG_NL           EQU GEN_SCRATCH + 94    ; the 2nd ladder added this try (0 = none)
 LG_KP           EQU GEN_SCRATCH + 95    ; 7 B: the l2_kind_tab entry
 LG_SVP          EQU GEN_SCRATCH + 102   ; the narrow pit col removed while trying
+LG_PASS         EQU GEN_SCRATCH + 103   ; LARGER-D T4: 0 = pass 1, 1 = pass 2 (final)
+LG_BODDS        EQU GEN_SCRATCH + 104   ; rev 3 DFS branch odds (BRANCH_ODDS / BRANCH_ODDS2)
+LG_MAND         EQU GEN_SCRATCH + 105   ; 0 = the bottom loop edge was mandatory (5a)
+LG_KR           EQU GEN_SCRATCH + 106   ; 4 B: key room colour 0, colour 1, lock candidate colour 0, 1 ($FF none)
 ; L2 descriptor fields L2_PITW / L2_MIDB / L2_MIDW: level_defs.asm
-L2_MAX          EQU 2                   ; per feature per level
+L2_MAX          EQU 3                   ; per feature per level (LARGER-D: was 2)
+BRANCH_ODDS     EQU 4                   ; larger_depths.md §2.1 rev 3: pass 1 branch draw rnd(4)
+BRANCH_ODDS2    EQU 2                   ; pass 2
+POTIONS_MIN     EQU 3                   ; LARGER-D: 3 + rnd(2) potions
 RESEED_MAX      EQU 16
                                         ; F3_GEN (defs.asm, P3: default 1) == tools/levelgen.py generate(..., f3=True)
 DOOR_ODDS       EQU 3
@@ -71,7 +83,8 @@ MAX_RESTARTS    EQU 64
 SHAFT_MIN       EQU 5
 SHAFT_N         EQU 20
 LG_ROOMS_END    EQU (ROOM_DESC + GRID_CELLS * RD_STRIDE) & $FF
-                ASSERT (LG_Q >> 8) == ((LG_Q + 9) >> 8) && (LG_STK >> 8) == ((LG_X + 1) >> 8)
+                ASSERT (LG_Q >> 8) == ((LG_Q + GRID_CELLS) >> 8) && (LG_STK >> 8) == ((LG_X + 1) >> 8)
+                ASSERT LG_STK + GRID_CELLS <= LG_DIST && LG_DIST + GRID_CELLS <= LG_Q && LG_Q + GRID_CELLS <= LG_CAND && LG_CAND + GRID_CELLS <= LG_N
                 ASSERT RD_FLAGS == 0 && RD_EXITS == 1 && RDF_PRESENT == 1 && RDX_R == 2 && RDX_D == 8
                 ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + ROOM_SLOTS * RD_STRIDE - 1) >> 8)
 
@@ -156,23 +169,23 @@ lg_reseed:      ld   sp, (LG_SP)
                 ret
 
 ; valid_tab[r]: grid-edge bits L,R,U,D that exist for cell r
-valid_tab:      DB   $0A, $0B, $09, $0E, $0F, $0D, $06, $07, $05
+valid_tab:      DB   $0A, $0B, $09, $0E, $0F, $0D, $0E, $0F, $0D, $06, $07, $05
 dir_tab:        DB   RDX_L, $FF, RDX_R, 1, RDX_U, -3, RDX_D, 3, 0   ; (bit, delta), L,R,U,D
-hedge_tab:      DB   0, 1, 0, 2, 3, 0, 4, 5, 0
+hedge_tab:      DB   0, 1, 0, 2, 3, 0, 4, 5, 0, 6, 7, 0   ; r - r div 3 (r with a right neighbour)
 attr_tab:       DB   $0F, $01, $27, $04, $17, $02, $28, $05, $30, $06, $38, $07, $4F, $41, $1F, $03
 
-; dfs_done: Z = DFS finished: |visited| >= n and cell 7 and (6 or 8) visited
+; dfs_done: Z = DFS finished: |visited| >= n and cell 10 and (9 or 11) visited
 dfs_done:       ld   a, (LG_CNT)
                 ld   hl, LG_N
                 cp   (hl)
                 jr   c, .no
-                ld   a, 7
+                ld   a, GRID_BOT + 1
                 call ispres
                 jr   z, .no
-                ld   a, 6
+                ld   a, GRID_BOT
                 call ispres
                 jr   nz, .yes
-                ld   a, 8
+                ld   a, GRID_BOT + 2
                 call ispres
                 jr   z, .no
 .yes:           xor  a
@@ -222,6 +235,7 @@ nbrs_free:      ld   (LG_CUR), a
 
 ; loopc: In B = want. Out A = number of loop-edge candidates (r right/down
 ; present, not yet linked, r ascending, right before down); LG_RID/LG_RBIT = #want.
+; LG_LS = 0 (the optional loop, 5c): only pairs on the same side of every chosen lock.
 loopc:          ld   d, 0
                 ld   a, (LG_LS)
                 ld   c, a
@@ -238,7 +252,7 @@ loopc:          ld   d, 0
                 call .cand
 .nr:            inc  c
                 ld   a, c
-                cp   9
+                cp   GRID_CELLS
                 jr   nz, .r
                 ld   a, d
                 ret
@@ -259,7 +273,12 @@ loopc:          ld   d, 0
                 ld   a, (LG_BIT)
                 and  (hl)
                 ret  nz
-                ld   a, d
+                ld   a, (LG_LS)
+                or   a
+                jr   nz, .ok            ; 5a (LG_LS = 9): no filter
+                call lkside             ; 5c: Z = both rooms on the same side of every lock
+                ret  nz
+.ok:            ld   a, d
                 cp   b
                 jr   nz, .n
                 ld   a, c
@@ -269,10 +288,10 @@ loopc:          ld   d, 0
 .n:             inc  d
                 ret
 
-; bfs: distances from LVL_START over the RD_EXITS adjacency -> LG_DIST
+; bfs: distances from LVL_START over the RD_EXITS adjacency -> LG_DIST (lpop3 lp_budget, the final graph)
 bfs:            ld   hl, LG_DIST
                 ld   de, LG_DIST + 1
-                ld   bc, 8
+                ld   bc, GRID_CELLS - 1
                 ld   (hl), $FF
                 ldir
                 ld   a, (LVL_START)
@@ -354,7 +373,7 @@ sanct:          ld   hl, valid_tab
 lair:           ld   e, 1
 .pass:          ld   d, $FF
                 ld   b, 0
-                ld   c, 6               ; L1: bottom row only (never the start)
+                ld   c, GRID_BOT        ; L1: bottom row only (never the start)
 .r:             ld   a, c
                 call rdp
                 bit  0, (hl)
@@ -378,9 +397,15 @@ lair:           ld   e, 1
                 jr   nz, .ok
                 call sanct
                 jr   nc, .nx
-.ok:            ld   hl, LG_DIST
-                ld   a, c
-                call idx
+.ok:            ld   a, (LVL_START)     ; the start tree's distance (lgkey3 ktrees)
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, c
+                ld   l, a
+                ld   h, KT_DIST >> 8
+                ld   a, (hl)
                 cp   b
                 jr   c, .nx
                 jr   z, .nx
@@ -388,7 +413,7 @@ lair:           ld   e, 1
                 ld   d, c
 .nx:            inc  c
                 ld   a, c
-                cp   9
+                cp   GRID_CELLS
                 jr   nz, .r
                 ld   a, d
                 inc  a
@@ -401,6 +426,32 @@ lair:           ld   e, 1
 .found:         dec  a
                 ld   (LVL_LAIR), a
                 ret
+
+; loop_add: count the loopc candidates (LG_LS set); any -> rnd(count), link the pick
+loop_add:       ld   b, $FF
+                call loopc
+                or   a
+                ret  z
+                call rnd
+                ld   b, a
+                call loopc
+                ld   a, (LG_RBIT)
+                ld   c, a
+                ld   a, (LG_RID)
+                ld   b, a
+                call addexit
+                ld   a, c
+                call opp
+                ld   c, a
+                ld   a, b
+                inc  a
+                bit  0, c
+                jr   nz, .o
+                inc  a
+                inc  a
+.o:             jp   addexit
+
+; lkside / lk_edge: lgkey3.asm
 
 ; legal: In A = col, B = mask (bit k-2 <-> RD offset k), IX = room.
 ; CF = illegal (|col - f| < FEAT_GAP for a footprint f in the mask). Preserves BC;
@@ -622,7 +673,7 @@ attempt:        ld   (LG_SP), sp
                 ASSERT (LVL_STATE_END - 1) >> 8 == EDGE_TAB >> 8
                 xor  a
                 ld   (FLOOR_N), a
-                ; 1. room count, start
+                ; 1. room count, 2. start (kept by pass 2)
                 ld   a, 3
                 call rnd
                 add  a, ROOMS_MIN
@@ -630,23 +681,31 @@ attempt:        ld   (LG_SP), sp
                 ld   a, 3               ; L1: start on the top grid row
                 call rnd
                 ld   (LVL_START), a
+                ld   a, (LVL_DEPTH)
+                cp   8
+                jr   nz, .n8
+                ld   a, (LG_N)          ; D8: n = min(n, 11) (the Sanctum cell is reserved)
+                cp   ROOMS_MAX
+                jr   nz, .n8
+                dec  a
+                ld   (LG_N), a
+.n8:            xor  a
+                ld   (LG_PASS), a
+                ld   a, BRANCH_ODDS
+                ld   (LG_BODDS), a
+.pass:          ; a PASS = draws 3..5b (larger_depths.md §2.1 rev 3); pass 2 reruns it in-stream
                 ld   a, $FF
                 ld   (LG_S), a
                 ld   a, (LVL_DEPTH)
                 cp   8
                 jr   nz, .nos
-                ld   a, (LG_N)          ; D8: n = min(n, 8), Sanctum cell S = 6 + 2 rnd(2)
-                cp   9
-                jr   nz, .n8
-                dec  a
-                ld   (LG_N), a
-.n8:            ld   a, 2
+                ld   a, 2               ; 3. D8: Sanctum cell S = 9 + 2 rnd(2)
                 call rnd
                 add  a, a
-                add  a, 6
+                add  a, GRID_BOT
                 ld   (LG_S), a
 .nos:           ld   a, (LVL_START)
-                ; 2. DFS
+                ; 4. DFS (rev 3 branch draw)
                 call setpres
                 ld   a, 1
                 ld   (LG_CNT), a
@@ -655,20 +714,33 @@ attempt:        ld   (LG_SP), sp
                 ld   (ix+0), a
 .dfs:           call dfs_done           ; n rooms AND two adjacent bottom cells
                 jr   z, .dfsd
-                ld   a, (ix+0)
+                ld   a, ixl             ; len(stack) >= 4: b = rnd(odds), drawn before the scan;
+                sub  (LG_STK & $FF) + 3 ; b == 0 and stack[2] has a free neighbour: cur = stack[2]
+                jr   c, .top
+                ld   a, (LG_BODDS)
+                call rnd
+                or   a
+                jr   nz, .top
+                ld   a, (LG_STK + 2)
                 ld   b, $FF
                 call nbrs_free
                 or   a
+                ld   a, (LG_STK + 2)
+                jr   nz, .cur
+.top:           ld   a, (ix+0)
+.cur:           ld   b, $FF
+                call nbrs_free          ; (LG_CUR = cur)
+                or   a
                 jr   nz, .pk
-                dec  ix
+                dec  ix                 ; none free: pop (cur is the top), no draw
                 jr   .dfs
 .pk:            call rnd
                 ld   b, a
-                ld   a, (ix+0)
+                ld   a, (LG_CUR)
                 call nbrs_free
                 ld   a, (LG_RBIT)
                 ld   c, a
-                ld   a, (ix+0)
+                ld   a, (LG_CUR)
                 call addexit
                 ld   a, c
                 call opp
@@ -678,53 +750,71 @@ attempt:        ld   (LG_SP), sp
                 call addexit
                 ld   a, b
                 call setpres
-                inc  ix
+                inc  ix                 ; push (on top)
                 ld   (ix+0), b
                 ld   hl, LG_CNT
                 inc  (hl)
                 jr   .dfs
-.dfsd:          ; 3. loop edge: mandatory (bottom pairs only, no roll) when no tree
-                ; edge joins 6-7 / 7-8
-                ld   a, 6
+.dfsd:          ; 5a. mandatory loop edge: no tree edge joins 9-10 / 10-11
+                ld   a, GRID_BOT
                 call rdp
                 inc  hl
                 ld   b, (hl)
-                ld   a, 7
+                ld   a, GRID_BOT + 1
                 call rdp
                 inc  hl
                 ld   a, (hl)
                 or   b
                 and  RDX_R
-                ld   a, 6
-                jr   z, .mand
+                ld   (LG_MAND), a
+                jr   nz, .nom
+                ld   a, GRID_BOT
+                ld   (LG_LS), a
+                call loop_add
+.nom:           ; 5b. lair (BFS tiers) and the lock set, both on G5a: no draw
+                call ktrees             ; lgkey3.asm: every room's BFS tree (the lair reads the start one)
+                call lair
+                call kprep              ; lgkey3.asm: trees, lock candidates, key candidates
+                FARB0 ksel              ; lgkey.asm, bank 0 B0_CODE2: B = 1 a set (KS_RES), 0 none
+                djnz .nokey
+                jr   .keys
+.nokey:
+                ld   a, (LG_PASS)
+                or   a
+                jp   nz, lg_restart     ; pass 2 has no valid set: Restart (keyless = 0)
+                inc  a
+                ld   (LG_PASS), a
+                ld   a, BRANCH_ODDS2
+                ld   (LG_BODDS), a
+                ld   hl, ROOM_DESC      ; pass 2: the tree again (flags + exits)
+                ld   de, ROOM_DESC + 1
+                ld   bc, ROOM_SLOTS * RD_STRIDE - 1
+                ld   (hl), 0
+                ldir
+                jp   .pass
+.keys:          ld   hl, (KS_RES)
+                ld   de, KR_KEY0
+                add  hl, de
+                ld   de, LG_KR
+                ld   bc, 4
+                ldir
+                ld   hl, (LG_KR)        ; L = colour-0 key room, H = colour-1 ($FF)
+                ld   a, l
+                ld   (LVL_KEYROOM), a
+                ld   a, h
+                ld   (LVL_KEYROOM2), a
+                ; 5c. optional loop (not after a mandatory one): odds, then the pairs that cross no lock
+                ld   a, (LG_MAND)
+                or   a
+                jr   z, .noloop
                 ld   a, 2
                 call rnd
                 or   a
                 jr   nz, .noloop
                 xor  a
-.mand:          ld   (LG_LS), a
-                ld   b, $FF
-                call loopc
-                or   a
-                jr   z, .noloop
-                call rnd
-                ld   b, a
-                call loopc
-                ld   a, (LG_RBIT)
-                ld   c, a
-                ld   a, (LG_RID)
-                ld   b, a
-                call addexit
-                ld   a, c
-                call opp
-                ld   c, a
-                ld   a, b
-                inc  a
-                bit  0, c
-                jr   nz, .o
-                inc  a
-                inc  a
-.o:             call addexit
+                ld   (LG_LS), a
+                call loop_add
+                ASSERT KR_KEY1 == KR_KEY0 + 1 && KR_CI0 == KR_KEY0 + 2 && KR_CI1 == KR_KEY0 + 3
 .noloop:        ; 4. horizontal edges
                 ld   d, 0
 .he:            ld   a, d
@@ -761,8 +851,15 @@ attempt:        ld   (LG_SP), sp
                 set  4, (hl)
 .hn:            inc  d
                 ld   a, d
-                cp   9
+                cp   GRID_CELLS
                 jr   nz, .he
+                ; the locks: EG_LOCK | EG_DOOR (| EG_LOCKC for colour 1) on their edges
+                ld   a, (LG_KR + 2)
+                ld   c, EG_LOCK | EG_DOOR
+                call lk_edge
+                ld   a, (LG_KR + 3)
+                ld   c, EG_LOCK | EG_DOOR | EG_LOCKC
+                call lk_edge
                 ; 5. vertical links (col stored as DNCOL of r and UPCOL of r+3)
                 ld   b, 0
 .ve:            ld   a, b
@@ -788,11 +885,9 @@ attempt:        ld   (LG_SP), sp
                 ld   (hl), c            ; RD_UPCOL
 .vn:            inc  b
                 ld   a, b
-                cp   6
+                cp   GRID_BOT
                 jr   nz, .ve
-                ; 6. BFS, lair, flags
-                call bfs
-                call lair
+                ; 8. flags (the lair is G5a's, 5b)
                 ld   a, (LVL_START)
                 call rdp
                 set  1, (hl)
@@ -885,13 +980,13 @@ attempt:        ld   (LG_SP), sp
                 inc  e
 .pn:            inc  c
                 ld   a, c
-                cp   9
+                cp   GRID_CELLS
                 jr   nz, .pc
                 ld   a, e
                 ld   (LG_NC), a
                 ld   a, 2
                 call rnd
-                add  a, 2
+                add  a, POTIONS_MIN
                 ld   (LG_PT), a
                 xor  a
                 ld   (LG_K), a
@@ -908,7 +1003,7 @@ attempt:        ld   (LG_SP), sp
                 push hl
                 pop  ix
                 ld   a, (LG_K)
-                cp   2
+                cp   POTIONS_MIN
                 ld   a, 32
                 jr   c, .st
                 ld   a, FEAT_TRIES
@@ -924,7 +1019,7 @@ attempt:        ld   (LG_SP), sp
                 dec  (hl)
                 jr   nz, .try
                 ld   a, (LG_K)
-                cp   2
+                cp   POTIONS_MIN
                 jp   c, lg_restart
                 jr   .nk
 .ok:            ld   hl, FLOOR_N
@@ -1273,8 +1368,7 @@ level_gen:      ld   (LVL_DEPTH), a
                 inc  hl
                 ld   a, (hl)
                 ld   (LVL_ATTR_WALL), a
-                ld   a, ROOM_NONE
-                ld   (LVL_KEYROOM), a
+                ld   a, ROOM_NONE       ; (the key rooms: attempt, LARGER-D T4)
                 ld   (LVL_SANCTUM), a
     IF F3_GEN
                 ld   hl, sanctum_leaf   ; 3F (bank 7, sanct7.asm; M0: was R6): LVL_FLAGS = 0, the D8 Sanctum, B = 0

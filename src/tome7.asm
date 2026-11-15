@@ -80,7 +80,7 @@ tome_strike:
 ; lect_paint — DE = (top TL TR, foot BL BR): set the 4 attrs, then the 2x2 repainted (rect_repaint: the attr
 ;   shadow + a queued restore; ROOM_MAP is unchanged, only attrs). Only in the Sanctum (a hit's turn never
 ;   leaves the room). lect_norm / lect_attrs (theme7.asm): DE := its own attrs / store DE's two bytes in the 4 cells.
-; lect_cb — C, B = the lectern's TL col, row (LVL_SANCTUM 6: cols 1-2, 8: 29-30).
+; lect_cb — C, B = the lectern's TL col, row (LVL_SANCTUM 9: cols 1-2, 11: 29-30).
 ; Clobbers: all but IX (back / paint, ~9k T when it repaints); norm / attrs: HL (and DE); cb: A, BC
 ;------------------------------------------------------------------------------
 lect_back:      ld   a, (TILE_ATTRS + T_LECT_BL)
@@ -99,10 +99,10 @@ lect_paint:     call lect_attrs
 lect_cb:        ld   bc, (LECT_ROW << 8) | LECT_COL_L
                 ld   a, (LVL_SANCTUM)
                 bit  1, a
-                ret  nz                        ; S = 6: the left wall
+                ret  z                         ; S = 9: the left wall
                 ld   c, LECT_COL_R
                 ret
                 ASSERT T_LECT_TR == T_LECT_TL + 1 && T_LECT_BL == T_LECT_TL + 2 && T_LECT_BR == T_LECT_TL + 3
                 ASSERT ((TILE_ATTRS + T_LECT_TL) >> 8) == ((TILE_ATTRS + T_LECT_BR) >> 8)
-                ASSERT (6 & 2) != 0 && (8 & 2) == 0
+                ASSERT (GRID_BOT & 2) == 0 && ((GRID_BOT + 2) & 2) != 0
     ENDIF

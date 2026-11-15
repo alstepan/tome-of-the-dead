@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """levelgen.py - reference level generator for Stage 3B (B3B-6; Z80 port = B3B-7).
 
-Produces the level-state block the Z80 holds at LVL_STATE. LARGER-D: 3 x 4 grid (12 descriptors); offsets come
-from the defs (pre-T2 defs hold 9 descriptors, so a compat shim, _compat_layout, uses the architect layout
-until T2 lands: ROOM_DESC 12x16 @+0, FLOOR_LIST 32x4 @+$C0, header + EDGE_TAB (8) @+$140). Offsets/bit values are parsed from src/level_defs.asm (never copied).
+Produces the level-state block the Z80 holds at LVL_STATE. LARGER-D: 3 x 4 grid (12 descriptors; T4: the defs say
+so, the T3 compat shim is gone). Offsets/bit values are parsed from src/level_defs.asm (never copied).
 
 GEN_RNG (port bit-exactly)
 --------------------------
@@ -120,29 +119,15 @@ PIT_MIN = 5              # pit col 5..24 (game.md 1.1 Pit geometry (1))
 PIT_MAX = 24
 
 
-# LARGER-D (docs/design/larger_depths.md section 2): the grid is 3 wide x 4 tall, ids 0..11. Local to
-# this model; src/level_defs.asm keeps GRID_H 3 / EDGES_H 6 until T4 ports the generator (then these
-# two forced values equal the defs and nothing changes). Every LP_* / TRK_* offset that is derived from
-# GRID_CELLS in level_defs.asm follows the forced value.
-W, GH = 3, 4                      # GRID_W, GRID_H (module-local)
-NCELL = W * GH                    # 12 room ids
-BOT = W * (GH - 1)                # first bottom-row id = 9
-NEDGE_H = (W - 1) * GH            # 8 horizontal edges
-FORCED = {"GRID_H": GH, "EDGES_H": NEDGE_H}
-
-
-def load_defs(paths=None, larger=False):
-    syms = dict(FORCED) if larger else {}
+def load_defs(paths=None):
+    syms = {}
     for p in (paths or [ROOT / "src" / "defs.asm", ROOT / "src" / "level_defs.asm",
                         ROOT / "src" / "item_defs.asm"]):   # 3E-T3: IT_* moved there
-        _load_one(Path(p), syms, FORCED if larger else ())
-    if larger:
-        syms.update(FORCED)
-        syms["GRID_CELLS"] = W * GH
+        _load_one(Path(p), syms)
     return syms
 
 
-def _load_one(path, syms, forced=()):
+def _load_one(path, syms):
     pat = re.compile(r"^([A-Z][A-Z0-9_]*)\s+EQU\s+([^;]+)")
     for line in path.read_text().splitlines():
         m = pat.match(line)
@@ -150,39 +135,21 @@ def _load_one(path, syms, forced=()):
             continue
         expr = m.group(2).strip().replace("$", "0x")
         expr = re.sub(r"%([01]+)", lambda x: str(int(x.group(1), 2)), expr)
-        if m.group(1) in forced:
-            continue
         try:
             syms[m.group(1)] = int(eval(expr, {}, dict(syms)))
         except Exception:
             pass                       # needs symbols we do not define
 
 
-D = load_defs()                       # the defs as assembled today (3 x 3): legacy exports below, for the tools that
-                                      # still describe the Z80 block (tut0_level.py ...)
-L = load_defs(larger=True)            # the same with the LARGER-D grid forced: what this model generates
-COMPAT = {}                           # symbols moved by the pre-T2 layout shim below (empty after T2)
-
-
-def _compat_layout():
-    """Pre-T2 defs hold 9 descriptors (ROOM_DESC +$20, FLOOR_LIST +$C0): 12 do not fit. Until the T2
-    layout refactor lands, shim the block to the architect layout (larger_depths_tasks.md 'Low-RAM
-    layout'): ROOM_DESC at block +0 (12 x 16), FLOOR_LIST +$C0 unchanged, the header + EDGE_TAB
-    (+0..+$1F) moved to +$140..+$15F, LVL_STATE_END +$180. After T2 ROOM_DESC..FLOOR_LIST holds
-    12 descriptors, the test below is false and the defs are used as they are (the shim is dead code
-    to delete once T4 merges)."""
-    base = L["LVL_STATE"]
-    if L["FLOOR_LIST"] - L["ROOM_DESC"] >= NCELL * L["RD_STRIDE"]:
-        return
-    for k, v in list(L.items()):
-        if base <= v < base + 0x20 and k not in ("LVL_STATE", "ROOM_DESC", "FLOOR_LIST"):
-            COMPAT[k] = base + 0x140 + (v - base)
-    COMPAT["ROOM_DESC"] = base
-    COMPAT["LVL_STATE_END"] = base + 0x180
-    L.update(COMPAT)
-
-
-_compat_layout()
+D = load_defs()                       # the defs as assembled (LARGER-D T4: 3 wide x 4 tall, larger_depths.md section 2)
+# LARGER-D T4: the T3 layout shim (a forced 3 x 4 grid over 3 x 3 defs) is gone; L / LH / LOFF_* / LBASE /
+# LBLOCK_LEN stay as aliases of D / H / OFF_* / BASE / BLOCK_LEN for the tools that import them.
+L = D
+W, GH = D["GRID_W"], D["GRID_H"]      # 3, 4: r = 3*row + col, ids 0..11
+NCELL = W * GH                        # 12 room ids
+BOT = W * (GH - 1)                    # first bottom-row id = 9
+NEDGE_H = (W - 1) * GH                # 8 horizontal edges
+assert (W, GH, NCELL, NEDGE_H) == (3, 4, D["GRID_CELLS"], D["EDGES_H"]), "levelgen: level_defs.asm grid != 3 x 4"
 for _k, _v in KROWS.items():          # 3F-T3: KROWS ids == defs.asm K_* ids (the Z80 is the truth)
     if D.get(_k) != _v[0]:
         raise SystemExit(f"levelgen: KROWS {_k} id {_v[0]} != src/defs.asm {D.get(_k)}")
@@ -213,27 +180,9 @@ OFF_FLOOR = D["FLOOR_LIST"] - BASE
 H = {k: D[k] - BASE for k in ("LVL_DEPTH LVL_SEED GEN_RNG LVL_ATTR_FLOOR LVL_ATTR_WALL "
      "LVL_START LVL_LAIR LVL_KEYROOM LVL_SANCTUM LVL_NROOMS LVL_FLAGS FLOOR_N MASTER_SEED").split()}
 
-# the 3 x 4 model's own layout (== the legacy one once T2 / T4 land): every function below uses these
-LBASE = L["LVL_STATE"]
-LBLOCK_LEN = L["LVL_STATE_END"] - LBASE
-LOFF_EDGE = L["EDGE_TAB"] - LBASE
-LOFF_DESC = L["ROOM_DESC"] - LBASE
-LOFF_FLOOR = L["FLOOR_LIST"] - LBASE
-LOFF_KEYROOM2 = LOFF_EDGE + 11        # PROPOSED slot (T3b): LVL_KEYROOM2 = EDGE_TAB + 11 ($6D5B, spare); colour-1 key room, ROOM_NONE if unused
-EG_LOCKC = 0x20                       # PROPOSED edge bit (T3b): lock colour 1 (EG_LOCK set; clear = colour 0)
-LH = {k: L[k] - LBASE for k in ("LVL_DEPTH LVL_SEED GEN_RNG LVL_ATTR_FLOOR LVL_ATTR_WALL "
-     "LVL_START LVL_LAIR LVL_KEYROOM LVL_SANCTUM LVL_NROOMS LVL_FLAGS FLOOR_N MASTER_SEED").split()}
-
-def rm_compat(RM):
-    """Point tests/room_model.py (and game_lib.S, in this process only) at this model's block layout so
-    RM.render_room(blk, r) can read a 12-room block: the decor tools call it right after importing
-    room_model. Pre-T2 it applies the shim (COMPAT) and EDGES_H 8; after T2 / T4 the defs already say the
-    same and this changes nothing."""
-    RM.S.update(COMPAT)
-    RM.S["EDGES_H"] = L["EDGES_H"]
-    RM.BASE = LBASE
-    RM.OFF_EDGE, RM.OFF_DESC, RM.OFF_FLOOR = LOFF_EDGE, LOFF_DESC, LOFF_FLOOR
-    RM.BLOCK_LEN = LBLOCK_LEN
+LBASE, LBLOCK_LEN, LOFF_EDGE, LOFF_DESC, LOFF_FLOOR, LH = BASE, BLOCK_LEN, OFF_EDGE, OFF_DESC, OFF_FLOOR, H
+LOFF_KEYROOM2 = D["LVL_KEYROOM2"] - BASE   # LARGER-D T4: $6EAE (the T2 spare after TRAP_N): colour-1 key room, ROOM_NONE if unused
+EG_LOCKC = D["EG_LOCKC"]                  # LARGER-D T4: $20, lock colour 1 (EG_LOCK set; clear = colour 0)
 
 
 ATTRS = {1: (0x0F, 0x01), 2: (0x27, 0x04), 3: (0x17, 0x02), 4: (0x28, 0x05),
@@ -760,14 +709,11 @@ def attempt(rng, depth, l2=True):
     KEY (larger_depths.md 2.1 rev 2) adds NO draw of its own. Draws 3-8 form a PASS: after the lair is known (end of the
     pass, before the arrival-shaft picks) LOCK_SELECT = select_keys(adj, start, lair, n_visited, depth, final) picks locks
     and keys with no rnd. If it returns None (no valid set, or none with raw F >= n - 4) and this was pass 1, GEN_RNG simply
-    CONTINUES and pass 2 reruns draws 3-8 (n and start are KEPT, not redrawn; S IS redrawn) with the Warnsdorff DFS: in
-    draw 4, with the free neighbours in L, R, U, D order, keep only those with the fewest unvisited onward neighbours
-    (neighbours of the candidate that are unvisited and != S; the current cell is visited so never counts), then
-    pick = rnd(len(kept)) over them in that order. The draw is made even when 1 is kept (as in pass 1, k == 1 draws
-    rnd(1)), so the draw COUNT per DFS step is unchanged; only the candidate list differs. Pass 2 passes final=True: no
-    F floor, the best valid set is taken, else the level is keyless (lock/key outputs ROOM_NONE, no EG_LOCK). A Restart
+    CONTINUES and pass 2 reruns draws 3-5b (n and start are KEPT, not redrawn; S IS redrawn) with BRANCH_ODDS2 (rev 3: Warnsdorff
+    dropped). Pass 2 passes final=True: no F floor, the best valid set is taken, else a full Restart (rev 3). A Restart
     (pick_feature / potions) still re-enters from draw 1 with pass 1. Outputs: edges[hedge(min)] |= EG_LOCK | EG_DOOR
-    (| EG_LOCKC for colour 1); LVL_KEYROOM = colour-0 key room, LVL_KEYROOM2 (EDGE_TAB + 11, proposed) = colour-1, ROOM_NONE.
+    (| EG_LOCKC for colour 1); LVL_KEYROOM = colour-0 key room, LVL_KEYROOM2 ($6EAE) = colour-1, ROOM_NONE.
+    Z80: src/levelgen.asm attempt + src/lgkey.asm ksel (LARGER-D T4, bit-exact: tests/levelgen_z80.py).
     The D8 Sanctum leaf runs afterwards on its own stream (sanctum_pass, SANCT_SALT): no GEN_RNG draw."""
     n = 10 + rng.rnd(3)
     if depth == 8:

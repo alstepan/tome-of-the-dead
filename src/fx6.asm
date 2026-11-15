@@ -698,7 +698,7 @@ tele_pick:
                 jp   fx_line
                 ASSERT (CAND_LIST & $FF) + P_MAX_ENT <= 256 && (TRAP_LIST & $FF) + TRAP_MAX * TRAP_STRIDE <= 256
                 ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + ROOM_SLOTS * RD_STRIDE - 1) >> 8) && RD_FLAGS == 0
-                ASSERT LPC_BAD == 1 && TR_B0 == 0 && TR_B1 == 1 && TRAP_STRIDE == 2 && GRID_CELLS <= 9
+                ASSERT LPC_BAD == 1 && TR_B0 == 0 && TR_B1 == 1 && TRAP_STRIDE == 2 && GRID_CELLS <= TRF_ROOM_MASK + 1
                 ASSERT TELE_XN == 26 && STOREY_ROWS == 9
                 ASSERT (fx_cand >> 8) == ((fx_cand + GRID_CELLS - 2) >> 8)
 
@@ -804,4 +804,4 @@ fx_slot:        DB   0                         ; the bag slot being used
 fx_type:        DB   0                         ; its type
 tp_n:           DB   0                         ; tele_pick: eligible rooms left
 fx_cand:        DS   GRID_CELLS - 1            ; fx_book: rank-up candidates (<= 5);
-                                               ; tele_pick: the eligible rooms (<= 8)
+                                               ; tele_pick: the eligible rooms (<= 11)

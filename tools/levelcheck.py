@@ -678,7 +678,7 @@ def merge(a, b):
                 for f in ("n", "F", "FN", "lair_lock"): t[f] += kd[f]
                 t["m"].update(kd["m"])
         elif k == "restart_max": a[k] = max(a[k], v)
-        else: a[k] += v
+        else: a[k] = a.get(k, 0) + v          # (T4: counters a chunk adds lazily, e.g. key_levels / keyless)
 
 
 LP_WAIT_MAX = 0.15

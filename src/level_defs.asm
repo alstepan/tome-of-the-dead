@@ -41,22 +41,23 @@ TEXT_ROWS       EQU 4               ; rows 20..23
                 ; the 3F resistance spare.
 
 ;------------------------------------------------------------------------------
-; D1 room grid: 3x3 cells, room id r = gy*3 + gx (0..8).
+; Room grid (LARGER-D T4: 3 wide x 4 tall): room id r = gy*3 + gx (0..11), bottom row 9..11.
 ;   neighbours: left r-1 (gx > 0), right r+1 (gx < 2), up r-3 (gy > 0),
-;   down r+3 (gy < 2). "Up" = the grid row above = reached by the up-exit
+;   down r+3 (gy < 3). "Up" = the grid row above = reached by the up-exit
 ;   {c,0} (rows 0–7); "down" = by the down-exit hole {c,2} in row 17.
 ;------------------------------------------------------------------------------
 GRID_W          EQU 3
-GRID_H          EQU 3
-GRID_CELLS      EQU GRID_W * GRID_H ; 9 room ids
+GRID_H          EQU 4               ; LARGER-D T4 (was 3)
+GRID_CELLS      EQU GRID_W * GRID_H ; 12 room ids
+GRID_BOT        EQU GRID_CELLS - GRID_W   ; 9: the first bottom-row id
 ; LARGER-D T2: the per-room arrays (ROOM_DESC, TRK_W, ROOM_VISITS, LP_REC, LP_POS) are sized for
-; ROOM_SLOTS rooms (the 3x4 grid); the code still runs on GRID_CELLS (3x3 until T4), so slots
-; GRID_CELLS..ROOM_SLOTS-1 are kept 0 (level_gen's attempt, tut_start, proto_level).
+; ROOM_SLOTS rooms; T4: the generator fills all of them (GRID_CELLS == ROOM_SLOTS). The D0
+; tutorial (3x3 image) and the PROTO rooms keep slots 9..11 zero.
 ROOM_SLOTS      EQU 12
-                ASSERT GRID_CELLS <= ROOM_SLOTS
-ROOMS_MIN       EQU 7               ; game.md §1.1 (DFS tree, + 0–1 loop edge)
-ROOMS_MAX       EQU 9
-LP_N_MIN        EQU 12              ; smallest lp_dtab count incl. boss (D8; keep == the table, lpop3.asm)
+                ASSERT GRID_CELLS == ROOM_SLOTS
+ROOMS_MIN       EQU 10              ; larger_depths.md §2 (DFS tree, + 0–1 loop edge); D8 max 11 + Sanctum
+ROOMS_MAX       EQU 12
+LP_N_MIN        EQU 16              ; smallest lp_dtab count incl. boss (D8; keep == the table, lpop3.asm)
 LEVELS          EQU 8               ; D1..D8 (LVL_DEPTH 1..8)
 ROOM_NONE       EQU $FF             ; "no room" in LVL_KEYROOM / LVL_SANCTUM
 
@@ -156,14 +157,15 @@ RDB_RIGHT_BIT   EQU 7
 ; Byte = bit set; 0 = no connection. The door belongs to the CONNECTION:
 ; one byte, drawn in both rooms (cols 30–31 / 0–1 of the exit storey).
 ;------------------------------------------------------------------------------
-EDGES_H         EQU 6
+EDGES_H         EQU (GRID_W - 1) * GRID_H   ; 8 (LARGER-D T4; was 6)
 EDGE_SLOTS      EQU 8               ; LARGER-D T2: EDGE_TAB's size (3x4: 4 rows x 2); EDGES_H used
 EG_NONE         EQU 0
 EG_LINK         EQU %00000001       ; rooms connected (open passage unless EG_DOOR)
 EG_DOOR         EQU %00000010       ; a door stands on the connection
 EG_OPEN         EQU %00000100       ; door open (runtime: set by bump/opener, cleared by close)
-EG_LOCK         EQU %00001000       ; locked: needs the level key (lair edge; never set in 3B)
+EG_LOCK         EQU %00001000       ; locked: needs a level key (LARGER-D T4: set by level_gen, larger_depths.md §2.1)
 EG_SEAL         EQU %00010000       ; sealed: opens on the Archmage's death (D8; never set in 3B)
+EG_LOCKC        EQU %00100000       ; LARGER-D T4: lock colour 1 = magenta (with EG_LOCK; clear = colour 0 = cyan)
 EG_LINK_BIT     EQU 0
 EG_DOOR_BIT     EQU 1
 EG_OPEN_BIT     EQU 2
@@ -229,9 +231,9 @@ LVL_ATTR_FLOOR  EQU LVL_HDR + 5     ; ATTR_FLOOR[depth] (game.md §1.2)
 LVL_ATTR_WALL   EQU LVL_HDR + 6     ; ATTR_WALL[depth]
 LVL_START       EQU LVL_HDR + 7     ; start room id
 LVL_LAIR        EQU LVL_HDR + 8     ; lair room id
-LVL_KEYROOM     EQU LVL_HDR + 9     ; key room id (ROOM_NONE in 3B)
+LVL_KEYROOM     EQU LVL_HDR + 9     ; LARGER-D T4: colour-0 (cyan) key room id, ROOM_NONE = keyless (D0)
 LVL_SANCTUM     EQU LVL_HDR + 10    ; D8 Sanctum room id (ROOM_NONE in 3B)
-LVL_NROOMS      EQU LVL_HDR + 11    ; 7..9
+LVL_NROOMS      EQU LVL_HDR + 11    ; 10..12 (D8: 11..12 with the Sanctum)
 LVL_FLAGS       EQU LVL_HDR + 12    ; LF_* below
 FLOOR_N         EQU LVL_HDR + 13    ; FLOOR_LIST entries used (0..32)
 MASTER_SEED     EQU LVL_HDR + 14    ; word: per game (FRAMES at START / SEED_FIXED)
@@ -241,6 +243,8 @@ EDGE_TAB        EQU LVL_HDR + LVL_HDR_LEN   ; $6E90: EDGE_SLOTS (8) B, EDGES_H u
                                     ; $6E9C DN_QN (PERF-GHOST), $6E9D TRAP_LIST (item_defs.asm)
 DG_PLAN         EQU LVL_HDR + $30   ; $6EB0: 16 B, DECOR2's per-build plan (reserved; attempt zeroes it: harmless)
 DG_PLAN_LEN     EQU 16
+LVL_KEYROOM2    EQU DG_PLAN - 2     ; $6EAE (LARGER-D T4, the T2 spare after TRAP_N): colour-1 (magenta) key room id,
+                                    ; ROOM_NONE = none (1-lock level / D0). attempt zeroes it, then writes it (test-observable)
 LVL_STATE_END   EQU DG_PLAN + DG_PLAN_LEN   ; $6EC0
 ; row-17 ornament glyphs (game.md §3.3: 8 fixed glyphs x 8 B, NOT tile ids,
 ; same on every level; read by build_room_map v2 AND the transition scrolls,

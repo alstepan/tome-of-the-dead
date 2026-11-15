@@ -23,7 +23,6 @@ import levelgen as G            # noqa: E402
 import room_model as RM         # noqa: E402
 from game_lib import S          # noqa: E402
 
-G.rm_compat(RM)                 # LARGER-D: 12-room block layout (a no-op once T2 / T4 land)
 
 COLS, ROWS = DG.COLS, DG.ROWS
 CLS = {DG.C_MOUNT: "mount", DG.C_CEIL: "ceil", DG.C_FLOOR: "floor", DG.C_PATCH: "patch",

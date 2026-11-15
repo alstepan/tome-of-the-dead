@@ -22,7 +22,6 @@ import levelgen as G            # noqa: E402
 import room_model as RM         # noqa: E402
 from game_lib import S          # noqa: E402
 
-G.rm_compat(RM)                 # LARGER-D: 12-room block layout (a no-op once T2 / T4 land)
 
 COMMON_DECOR = {S[k]: k for k in ("T_CHAIN", "T_WALL_DITHER", "T_WALL_PATCH", "T_WALL_FADE")}
 PAT = re.compile(r"TS(\d)_([A-Z_]+?)_(?:F(\d)_)?R(\d)C(\d)\s+EQU (\d+)")

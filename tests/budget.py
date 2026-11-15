@@ -521,8 +521,8 @@ SCENARIOS = {
     # 3F-T11b review: "asum" = the Archmage at S 0 / C 1 (no Mirror Helm): turn 1 summons (the decision on the
     # input tick, end_turn's sp_run makes the Skeleton), then the Archmage + the live Skeleton (it walks in and
     # fights; the Archmage bolts / hexes when the line is clear, the staff otherwise)
-    # P3: "sanct" = room A as the D8 Sanctum (LVL_SANCTUM 0: the lectern's right-wall geometry, gap = 26 - x),
-    # the hero at x 26 facing it: every FIRE a melee Tome hit (far6 tome_geo6 + the line) and every end_turn
+    # P3: "sanct" = room A as the D8 Sanctum (LVL_SANCTUM 0: LARGER-D T4 the lectern's left-wall geometry, gap =
+    # x - 3; was the right wall), the hero at x 3 facing it: every FIRE a melee Tome hit (far6 tome_geo6 + the line) and every end_turn
     # the aura (far6 + 1 hp); TOME_HP 99 (no win). "adeath" = room A as the D8 lair: a Skeleton = LP_BOSS at
     # 1 hp adjacent, FIRE kills it -> mon_drop -> grate_open -> R6 seal_open on the death tick (asserted)
     "sanct": ("knight in the Sanctum, melee Tome hits + the aura every turn", [], [("FIRE", 6)], K_KNIGHT,
@@ -1087,7 +1087,7 @@ def trickle_setup(p, key="trickle"):
     cur = p.rb("CUR_ROOM")
     p.wb("TRK_PREV", cur)
     rec = []
-    for r in range(9):
+    for r in range(S["GRID_CELLS"]):
         rec += [0x80] + [0] * 8 if r == cur else [0x83, gob, 9, gob, 9, rat, 7, 0, 0]
     TRK["rec"] = rec
     trickle_arm(p)
@@ -1606,9 +1606,10 @@ def run_scenario(h, scen):
         if scen[5] == "walarm2":
             p.wb("LP_RESPAWNS", 1)
     if len(scen) > 5 and scen[5] == "sanct":
-        p.wb("LVL_SANCTUM", 0)
+        p.wb("LVL_SANCTUM", 0)                      # LARGER-D T4: S bit 1 clear = the LEFT wall (S = 9; was 6)
         p.wb("TOME_HP", 99)
-        p.place(0, 26, HERO_Y)
+        p.place(0, 3, HERO_Y)                       # gap = x - 3 = 0, facing left (the lectern)
+        p.set_ent(0, FLAGS=p.ent(0)["FLAGS"] | EF_LEFT)
         p.set_ent(0, HP=250, MAXHP=250)
     if len(scen) > 5 and scen[5] == "adeath":
         p.wb("LVL_DEPTH", 8)

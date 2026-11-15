@@ -92,7 +92,9 @@ def main():
 
 
 def run(p, check):
-    for M in (0x2468, 0x1357, 0x4242, 0x0BAD, 0x7171, 0x3C3C):
+    # LARGER-D T4: 12-room levels spread the D1 quota thinner; 4 / 5 / 7 / 13 have a 2-quota B behind an
+    # unlocked edge (tools/levelgen.py lp_budget), tried after the historical seeds
+    for M in (0x2468, 0x1357, 0x4242, 0x0BAD, 0x7171, 0x3C3C, 4, 5, 7, 13):
         if game(p, check, M):
             return
     check("R setup: a seed with a 2-room horizontal edge and >= 2 residents in B", False, "")
@@ -151,7 +153,7 @@ def game(p, check, M):
         check(f"{tag}: every active monster slot is in CUR_ROOM (§9.4.5)", bad == [], bad)
 
     pick = None
-    for r in range(9):
+    for r in range(G.NCELL):
         ex = room_model.field(blk, r, "RD_EXITS")
         if ex & S["RDX_R"] and r != st and r + 1 not in (lair, st, sanct) and r not in (lair, sanct):
             pick = (r, r + 1, 1 if ex & S["RDX_RS1"] else 0)
@@ -316,7 +318,7 @@ def part_s(p, check, blk, st, lair, sanct, kw, kh, cur, put_hero):
         model_ok = model_ok and set(parked_rooms(p)) == want | stale
         return ok, ts, model_ok, (got, out, pk, sorted(want | stale), parked_rooms(p))
 
-    rooms = [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+    rooms = [r for r in range(S["GRID_CELLS"]) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
              and r not in (st, lair, sanct, cur)]
     if len(rooms) < 4:
         check("S setup: 4 plain rooms", False, rooms)
@@ -432,7 +434,7 @@ def part_s(p, check, blk, st, lair, sanct, kw, kh, cur, put_hero):
 def part_adv(p, check, blk, st, lair, sanct, kw, kh, cur):
     """ADV (reviewer, 2026-11-03): 8 parked bodies (two rooms x 4) + a FRESH room's spawns, a status
     through the eviction, an evicted room re-placed from its record (the lp_transition worst)."""
-    rooms = [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+    rooms = [r for r in range(S["GRID_CELLS"]) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
              and r not in (st, lair, sanct, cur)]
     X, Y, Z = rooms[:3]
     lpk = p.rb(S["LP_KINDS"])
@@ -497,7 +499,7 @@ def part_l(p, check, blk, st, lair, sanct, kw, kh, cur, put_hero):
     VISITED room's monsters come back on the cell they stood on when the hero left (LP_POS, one byte
     per record entry, try 0), whether the room was left 1, 2 or >= 3 rooms ago (parked or evicted);
     a monster that walked before the hero left comes back where it stopped. == levelgen.lp_enter."""
-    rooms = [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+    rooms = [r for r in range(S["GRID_CELLS"]) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
              and r not in (st, lair, sanct)]
     lpk = p.rb(S["LP_KINDS"])
     w, fly = p.kb(lpk, "KT_BW"), p.kb(lpk, "KT_FLAGS") & S["KF_FLYER"]
