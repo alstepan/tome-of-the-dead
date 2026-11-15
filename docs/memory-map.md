@@ -7160,3 +7160,12 @@ packed sources SRC0 (B0_CODE2 914 -> 1,879 B, 7 blocks). `FID_COUNT` = `FRT_MAX`
 Tests: `tests/nm3b.py` W rest pose awake = `garg_alert`; F the shot poses (Imp KS_BLOCK = its attack, Wraith KS_BLOCK = the
 cast, not the touch); D (new) Goblin dagger: throw, leave, come back parked and via 3 rooms (banked) -> RCD_SPENT kept, no
 second throw, the Gargoyle re-perched. `tests/zx0_pool.py` LEVEL_NEED; `tests/combat_tables.py` gu_tab row 31 B fcnt 5; `tests/gfx_integrity.py` GI1 also exempts the Warrior's U_FROSTW rows (frost_fly / frost_crack, generated on D5 / D7 / D8 since T10a: the 3 GI1 failures were pre-existing).
+
+**SIZE T4 (lever E, menu font 14 rows).** Bank-1 `menu_font` stores rows 1..14 of each glyph (14 B x 41 = **574 B**, was 656; `MENU_FONT_STRIDE` 16 -> **14**,
+`MENU_FONT_BYTES`, `MENU_ART_BYTES` 941 -> 859). The survey claim "rows 0, 1, 15 blank" was only true for rows 0 and 15 (row 1 is inked in N, V, W), so the saving is 82 B,
+not 123. `mf_char_e` (`src/menu1.asm`) computes 14g (16g - 2g) and draws via the new `copy_top` (line 0 = 0, then 7 B) / `copy_bot` (7 B, then line 7 = 0) instead of `copy8`
+(still used by the title / torch / select). The pixels are byte-identical. `menu_font.bin` stays 16-row (gen_loading_screen); `tools/menu_art.py` asserts rows 0 / 15 blank.
+
+| Region | before | after | why |
+|---|---|---|---|
+| bank 1 free (`UI1_LIMIT - bank1_end`) | 7 | **64** | -82 font, +25 code (`copy_top` / `copy_bot`, the 14g step) |
