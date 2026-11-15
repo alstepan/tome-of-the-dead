@@ -121,7 +121,7 @@ trk_run:        ld   a, (LVL_DEPTH)
                 ld   (RNG_STATE), hl
                 ret
                 ASSERT LF_GRATE_OPEN == 1 && RESPAWN_ITEM_W == 2 && LP_SIGMA_CAP + 2 == 14
-                ASSERT (TRK_W >> 8) == ((TRK_W + GRID_CELLS - 1) >> 8) && (FLOOR_LIST & $FF) + FLOOR_MAX * FL_STRIDE <= $100
+                ASSERT (TRK_W >> 8) == ((TRK_W + ROOM_SLOTS - 1) >> 8) && (FLOOR_LIST & $FF) + FLOOR_MAX * FL_STRIDE <= $100
                 ASSERT LR_HDR == 0 && LR_VISITED == $80 && LR_MAX == 4 && (LP_KINDS >> 8) == (TRK_W >> 8)
 
 ;------------------------------------------------------------------------------
@@ -256,4 +256,4 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 inc  (hl)
                 ret
                 ASSERT LR_ENT == 1 && LE_STRIDE == 2 && LE_KIND == 0 && LE_HP == 1 && LR_STRIDE == 9 && LR_MAX == 4
-                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 7) >> 8) && (TRK_W & $FF) + GRID_CELLS <= $100
+                ASSERT (LP_KINDS >> 8) == ((LP_KINDS + 7) >> 8) && (TRK_W & $FF) + ROOM_SLOTS <= $100

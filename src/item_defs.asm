@@ -342,21 +342,21 @@ ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 95 (M0: 81 + ST1_LEN; STATS2: 
                 ASSERT WORN == BAG + BAG_SLOTS * IR_STRIDE      ; bag + worn = one 24-record scan
 
 ;------------------------------------------------------------------------------
-; Trap list (game.md §1.5): per level, in the LVL_STATE ROOM_DESC spare
-; ($6DF0..$6DFF), so level_gen's `attempt` (EDGE_TAB..LVL_STATE_END := 0) and
-; proto_level clear it on every level for free; written by T6 after
+; Trap list (game.md §1.5): per level, in LVL_STATE after DN_QN ($6E9D..$6EAD,
+; LARGER-D T2; was the ROOM_DESC spare $6DF0), so level_gen's `attempt`
+; (EDGE_TAB..LVL_STATE_END := 0), tut_start and proto_level clear it on every level; written by T6 after
 ; level_gen. TRAP_N entries used (0..TRAP_MAX); spent entries are skipped,
 ; never compacted mid-level.
 ;   byte TR_B0: bits 0-3 room id, bit 4 TRF_S1 (storey 1), bit 5 TRF_KNOWN,
 ;               bit 6 TRF_RUNG (ALARM-1, runtime only), bit 7 spare (0); TRAP2: no trap is ever spent
 ;   byte TR_B1: bits 0-4 col, bits 5-7 type TT_* (STUN1: 3 bits)
-; NOTE: tools/levelgen.py's 320-B block model (tests/levelgen_z80.py,
+; NOTE: tools/levelgen.py's 384-B block model (tests/levelgen_z80.py,
 ; room_model.py) must keep these bytes 0 until T6 / T7 model the traps.
 ;------------------------------------------------------------------------------
-TRAP_LIST       EQU ROOM_DESC + GRID_CELLS * RD_STRIDE   ; $6DF0
-TRAP_MAX        EQU 6
+TRAP_LIST       EQU DN_QN + 1       ; $6E9D (LARGER-D T2; TRAP_N stays right after the list: items_model.py)
+TRAP_MAX        EQU 8               ; LARGER-D T2: 8 (was 6); the generator's own cap is unchanged until T6
 TRAP_STRIDE     EQU 2
-TRAP_N          EQU TRAP_LIST + TRAP_MAX * TRAP_STRIDE   ; $6DFC ($6DFD..$6DFF spare)
+TRAP_N          EQU TRAP_LIST + TRAP_MAX * TRAP_STRIDE   ; $6EAD ($6EAE..$6EAF spare)
 TR_B0           EQU 0
 TR_B1           EQU 1
 TRF_ROOM_MASK   EQU %00001111
@@ -375,8 +375,8 @@ TT_GAS          EQU 1               ; D2+, one-shot
 TT_TELEPORT     EQU 2               ; D3+, one-shot
 TT_ALARM        EQU 3               ; D5+, one-shot
 TT_STUN         EQU 4               ; D4+, one-shot (STUN1: the falling stone; pool order DART GAS TELEPORT STUN ALARM)
-                ASSERT TRAP_N < FLOOR_LIST      ; inside the ROOM_DESC spare, below FLOOR_LIST
-                ASSERT TRAP_LIST == $6DF0 && TRAP_N == $6DFC
+                ASSERT TRAP_N < DG_PLAN && (TRAP_LIST >> 8) == (TRAP_N >> 8)   ; below DG_PLAN, one page
+                ASSERT TRAP_LIST == $6E9D && TRAP_N == $6EAD
 ; 3E-T16 traps runtime state (state block spare $BFF5..$BFF7, test-observable,
 ; never zeroed: both are written before they are read on every accepted turn)
 TRP_PRE         EQU $BFF5           ; 2 B: the hero's E_X, E_Y before this turn's action

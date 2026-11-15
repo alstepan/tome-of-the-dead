@@ -47,7 +47,7 @@ LPV_FACE        EQU LP_RES              ; ROOM-MEM2 lp_enter -> lp_spawn: the un
                 ASSERT LVL_LAIR == LVL_START + 1 && LVL_SANCTUM == LVL_START + 3
 ; low-RAM neighbours (D3-TX merge): TX_DEC (GEN_MIR top) < LVL_STATE < ORN_GLYPHS
 ; < LP_STATE < LOWRAM_FREE_END; the cell map stays in NEXT_MAP's unused tail
-                ASSERT TX_DEC + TX_DEC_LEN <= LVL_STATE && LP_STATE >= ORN_GLYPHS + ORN_COUNT * 8
+                ASSERT TX_DEC + TX_DEC_LEN <= LVL_STATE && LP_STATE >= ORN_GLYPHS + ORN_COUNT * 8 && (LP_STATE >> 8) == ((LP_END - 1) >> 8)
                 ASSERT LP_END <= LOWRAM_FREE_END && LP_CMAP >= NEXT_MAP + PLAY_CELLS
                 ASSERT LP_CMAP + 2 * LP_CMW <= NEXT_MAP + MAP_BUF_LEN && LP_CMAP + 2 * LP_CMW <= GEN_MIR
 

@@ -174,7 +174,7 @@ def run(h, p, check):
         if e["FLAGS"] & EF_ACTIVE and e["ROOM"] == room:
             p.set_ent(sl, ROOM=NOWHERE)
     p.set_ent(0, HP=200, MAXHP=200)
-    p.wmem(TL, [0] * 13)
+    p.wmem(TL, [0] * (2 * S["TRAP_MAX"] + 1))
     put_hero(HX)
     tick(2)
     z.cmd("set-breakpoint 5 PC=%d" % LOGP)
@@ -284,7 +284,7 @@ def run(h, p, check):
 
     # ---- T traps ------------------------------------------------------------------------
     def trap(c, typ=DART):
-        p.wmem(TL, [room | TS1, c | (typ << 5)] + [0] * 10 + [1])
+        p.wmem(TL, [room | TS1, c | (typ << 5)] + [0] * (2 * S["TRAP_MAX"] - 2) + [1])
 
     def tent():
         return tuple(z.read_memory(TL, 2))

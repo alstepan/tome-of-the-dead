@@ -49,6 +49,11 @@ TEXT_ROWS       EQU 4               ; rows 20..23
 GRID_W          EQU 3
 GRID_H          EQU 3
 GRID_CELLS      EQU GRID_W * GRID_H ; 9 room ids
+; LARGER-D T2: the per-room arrays (ROOM_DESC, TRK_W, ROOM_VISITS, LP_REC, LP_POS) are sized for
+; ROOM_SLOTS rooms (the 3x4 grid); the code still runs on GRID_CELLS (3x3 until T4), so slots
+; GRID_CELLS..ROOM_SLOTS-1 are kept 0 (level_gen's attempt, tut_start, proto_level).
+ROOM_SLOTS      EQU 12
+                ASSERT GRID_CELLS <= ROOM_SLOTS
 ROOMS_MIN       EQU 7               ; game.md §1.1 (DFS tree, + 0–1 loop edge)
 ROOMS_MAX       EQU 9
 LP_N_MIN        EQU 12              ; smallest lp_dtab count incl. boss (D8; keep == the table, lpop3.asm)
@@ -72,7 +77,7 @@ COL_NONE        EQU 0
 
 ;------------------------------------------------------------------------------
 ; Room descriptor (D1): 16 B per room id, ROOM_DESC + r*16 (one page: H is
-; constant, L = (ROOM_DESC & $FF) + r*16; ASSERTed). All 9 entries exist;
+; constant, L = (ROOM_DESC & $FF) + r*16; ASSERTed). ROOM_SLOTS (12) entries exist, GRID_CELLS used;
 ; RDF_PRESENT = 0 means the grid cell has no room. Written by the generator
 ; (B3B-7, == tools/levelgen.py B3B-6), read by build_room_map v2 (B3B-8),
 ; collision (B3B-5) and the decor deriver (B3B-9).
@@ -152,6 +157,7 @@ RDB_RIGHT_BIT   EQU 7
 ; one byte, drawn in both rooms (cols 30–31 / 0–1 of the exit storey).
 ;------------------------------------------------------------------------------
 EDGES_H         EQU 6
+EDGE_SLOTS      EQU 8               ; LARGER-D T2: EDGE_TAB's size (3x4: 4 rows x 2); EDGES_H used
 EG_NONE         EQU 0
 EG_LINK         EQU %00000001       ; rooms connected (open passage unless EG_DOOR)
 EG_DOOR         EQU %00000010       ; a door stands on the connection
@@ -202,40 +208,50 @@ FL_EMPTY        EQU $FF
 ; A pickup writes ISTATE 0 into the bag (game.md §8.11 3E simplification).
 
 ;------------------------------------------------------------------------------
-; Level state block — bank 5 low RAM, LVL_STATE..LVL_STATE_END (320 B), right
+; Level state block — bank 5 low RAM, LVL_STATE..LVL_STATE_END (384 B), right
 ; above the fixed buffers (LOWRAM_END). Covered by the low-RAM fit ASSERT
 ; (main.asm) through LOWRAM_FREE_END = LOWRAM_END_3B. Not on tape (runtime).
+; LARGER-D T2 layout (docs/design/larger_depths_tasks.md): ROOM_DESC first, so its
+; 12 x 16 B own page $6D (constant H, L = $40 + 16 r <= $F0); the header, EDGE_TAB,
+; the per-level bytes and the trap list share page $6E with FLOOR_LIST.
+;   $6D40 ROOM_DESC 12 x 16 | $6E00 FLOOR_LIST 32 x 4 | $6E80 header 16
+;   $6E90 EDGE_TAB 8 | $6E98 TRK_PHASE TRK_PREV TOME_HP TOME_FL DN_QN
+;   $6E9D TRAP_LIST 8 x 2 + TRAP_N $6EAD (item_defs.asm) + 2 spare | $6EB0 DG_PLAN 16
 ;------------------------------------------------------------------------------
-LVL_STATE       EQU LOWRAM_END      ; $6D40
-; header, 16 B
-LVL_DEPTH       EQU LVL_STATE + 0   ; 1..8 (0 = no level generated)          (test-observable)
-LVL_SEED        EQU LVL_STATE + 1   ; word: level seed = f(MASTER_SEED, depth) (test-observable)
-GEN_RNG         EQU LVL_STATE + 3   ; word: generator RNG (D9; NOT RNG_STATE)  (test-observable)
-LVL_ATTR_FLOOR  EQU LVL_STATE + 5   ; ATTR_FLOOR[depth] (game.md §1.2)
-LVL_ATTR_WALL   EQU LVL_STATE + 6   ; ATTR_WALL[depth]
-LVL_START       EQU LVL_STATE + 7   ; start room id
-LVL_LAIR        EQU LVL_STATE + 8   ; lair room id
-LVL_KEYROOM     EQU LVL_STATE + 9   ; key room id (ROOM_NONE in 3B)
-LVL_SANCTUM     EQU LVL_STATE + 10  ; D8 Sanctum room id (ROOM_NONE in 3B)
-LVL_NROOMS      EQU LVL_STATE + 11  ; 7..9
-LVL_FLAGS       EQU LVL_STATE + 12  ; LF_* below
-FLOOR_N         EQU LVL_STATE + 13  ; FLOOR_LIST entries used (0..32)
-MASTER_SEED     EQU LVL_STATE + 14  ; word: per game (FRAMES at START / SEED_FIXED)
+LVL_STATE       EQU LOWRAM_END      ; $6D40 (= ROOM_DESC; the header is LVL_HDR)
+ROOM_DESC       EQU LVL_STATE       ; ROOM_SLOTS x 16 = 192 B ($6D40..$6DFF)
+FLOOR_LIST      EQU ROOM_DESC + ROOM_SLOTS * RD_STRIDE   ; 32 x 4 = 128 B ($6E00..$6E7F, page-aligned)
+LVL_HDR         EQU FLOOR_LIST + FLOOR_MAX * FL_STRIDE   ; $6E80: header, 16 B (never zeroed by attempt)
+LVL_DEPTH       EQU LVL_HDR + 0     ; 1..8 (0 = no level generated)          (test-observable)
+LVL_SEED        EQU LVL_HDR + 1     ; word: level seed = f(MASTER_SEED, depth) (test-observable)
+GEN_RNG         EQU LVL_HDR + 3     ; word: generator RNG (D9; NOT RNG_STATE)  (test-observable)
+LVL_ATTR_FLOOR  EQU LVL_HDR + 5     ; ATTR_FLOOR[depth] (game.md §1.2)
+LVL_ATTR_WALL   EQU LVL_HDR + 6     ; ATTR_WALL[depth]
+LVL_START       EQU LVL_HDR + 7     ; start room id
+LVL_LAIR        EQU LVL_HDR + 8     ; lair room id
+LVL_KEYROOM     EQU LVL_HDR + 9     ; key room id (ROOM_NONE in 3B)
+LVL_SANCTUM     EQU LVL_HDR + 10    ; D8 Sanctum room id (ROOM_NONE in 3B)
+LVL_NROOMS      EQU LVL_HDR + 11    ; 7..9
+LVL_FLAGS       EQU LVL_HDR + 12    ; LF_* below
+FLOOR_N         EQU LVL_HDR + 13    ; FLOOR_LIST entries used (0..32)
+MASTER_SEED     EQU LVL_HDR + 14    ; word: per game (FRAMES at START / SEED_FIXED)
 LVL_HDR_LEN     EQU 16
-EDGE_TAB        EQU LVL_STATE + $10 ; 6 B ($6D50..$6D55); $6D56 TRK_PHASE, $6D57 TRK_PREV (3F-T12); $6D58 TOME_HP (M0); $6D59 TOME_FL (TOME-FX2); $6D5A DN_QN (PERF-GHOST); $6D5B..$6D5F spare
-ROOM_DESC       EQU LVL_STATE + $20 ; 9 x 16 = 144 B ($6D60..$6DEF); $6DF0..$6DFF spare
-FLOOR_LIST      EQU LVL_STATE + $C0 ; 32 x 4 = 128 B ($6E00..$6E7F, page-aligned)
-LVL_STATE_END   EQU LVL_STATE + $140
+EDGE_TAB        EQU LVL_HDR + LVL_HDR_LEN   ; $6E90: EDGE_SLOTS (8) B, EDGES_H used; then $6E98 TRK_PHASE,
+                                    ; $6E99 TRK_PREV (3F-T12), $6E9A TOME_HP (M0), $6E9B TOME_FL (TOME-FX2),
+                                    ; $6E9C DN_QN (PERF-GHOST), $6E9D TRAP_LIST (item_defs.asm)
+DG_PLAN         EQU LVL_HDR + $30   ; $6EB0: 16 B, DECOR2's per-build plan (reserved; attempt zeroes it: harmless)
+DG_PLAN_LEN     EQU 16
+LVL_STATE_END   EQU DG_PLAN + DG_PLAN_LEN   ; $6EC0
 ; row-17 ornament glyphs (game.md §3.3: 8 fixed glyphs x 8 B, NOT tile ids,
 ; same on every level; read by build_room_map v2 AND the transition scrolls,
 ; which run without bank 3 — hence a fixed low-RAM home). Filled at boot.
-ORN_GLYPHS      EQU LVL_STATE_END   ; 64 B ($6E80..$6EBF)
+ORN_GLYPHS      EQU LVL_STATE_END   ; 64 B ($6EC0..$6EFF)
 ORN_COUNT       EQU 8
 ORN_MID_COL     EQU 14              ; wing_l skull_l skull_r wing_r at cols 14..17 (concept_r4)
 ORN_MID_N       EQU 4               ; (glyph indices ORN_* = panel_orn.asm, bank 3)
 ;------------------------------------------------------------------------------
 ; LP — lazy monster population (game.md §9.4.1-9.4.7, user 2026-10-06). Per
-; level: a budget header + ROOM_VISITS + 9 room records; the 16 entity slots
+; level: a budget header + ROOM_VISITS + ROOM_SLOTS room records; the 16 entity slots
 ; hold only the current room's monsters. Built by lp_budget (bank 3) after
 ; level_gen, read / written by lp_bank / lp_enter on every room change.
 ; Runtime only, bank 5 (always mapped: ZRCP reads it directly).
@@ -244,7 +260,7 @@ ORN_MID_N       EQU 4               ; (glyph indices ORN_* = panel_orn.asm, bank
 ;                 (FRESH: the quota, no entries; VISITED: entries used)
 ;     +1 4 x {LE_KIND, LE_HP}: kind row (bits 0-4) | LEK_GOLD | LEK_RESPAWN | LEK_BRED, exact hp
 ;------------------------------------------------------------------------------
-LP_STATE        EQU ORN_GLYPHS + ORN_COUNT * 8   ; $6EC0
+LP_STATE        EQU ORN_GLYPHS + ORN_COUNT * 8   ; $6F00 (LARGER-D T2: one page, 199 B)
 LP_KINDS        EQU LP_STATE + 0    ; 8 B (NEW-MON3 T3: was 4): the depth's kind slots, pick LP_KINDS[rnd & 7]; slots 0..n-1 = the distinct
                                     ; kinds in fallback order, the rest duplicates = weights (new_monsters.md §5)  (test-observable)
 LP_BOSS         EQU LP_STATE + 8    ; boss kind row | LEK_GOLD on the golden depths (3F-T5)
@@ -254,7 +270,7 @@ LP_RESPAWNS     EQU LP_STATE + 11    ; trickle spawns this level (§9.5, RESPAWN
 LP_DISCARD      EQU LP_STATE + 12    ; units lost to the split / the sum cap / a full record (tests)
 LP_RMAX         EQU LP_STATE + 13    ; ROOM_MAX (3, every depth)
 LP_RNG          EQU LP_STATE + 14   ; word: the spawn stream's seed of the last entry (test-observable)
-; lp_enter / lp_budget scratch (+16 .. +27)
+; lp_enter / lp_budget scratch (+16 .. +27; TRK_W runs on to +30)
 LP_HX           EQU LP_STATE + 16   ; hero arrival col
 LP_HS           EQU LP_STATE + 17   ;   ... storey
 LP_HW           EQU LP_STATE + 18   ;   ... body width
@@ -266,8 +282,8 @@ LP_BEST         EQU LP_STATE + 24   ; boss: best distance + 1 (0 = none yet)
 LP_BS           EQU LP_STATE + 25   ; boss: best storey
 LP_BX           EQU LP_STATE + 26   ; boss: best col
 LP_RES          EQU LP_STATE + 27   ; reservation: units still to roll x minW (lp_fit)
-ROOM_VISITS     EQU LP_STATE + 28   ; 9 B: entries per room this level (spawn-stream input)  (test-observable)
-LP_REC          EQU LP_STATE + 37   ; 9 records x LR_STRIDE                                   (test-observable)
+ROOM_VISITS     EQU LP_STATE + 31   ; ROOM_SLOTS B: entries per room this level (spawn-stream input)  (test-observable)
+LP_REC          EQU ROOM_VISITS + ROOM_SLOTS   ; +43: ROOM_SLOTS records x LR_STRIDE          (test-observable)
 LR_STRIDE       EQU 9
 LR_HDR          EQU 0
 LR_ENT          EQU 1               ; first entry
@@ -301,14 +317,16 @@ LPK_ROOM        EQU %00001111           ; the room id bits of E_ROOM
 ; its byte), zeroed for a trickle entry (trickle6.asm); bytes past the count are stale like the
 ; entries. lp_enter's try 0 = this cell for EVERY unit of a VISITED record (parked or not; R6
 ; lp_t06: the cell if legal, else the door slide along its storey).
-LP_POS          EQU LP_REC + GRID_CELLS * LR_STRIDE   ; 36 B (test-observable)
+LP_POS          EQU LP_REC + ROOM_SLOTS * LR_STRIDE   ; +151: ROOM_SLOTS x LR_MAX = 48 B (test-observable)
 LPP_X           EQU %00011111
 LPP_S_BIT       EQU 5
 LPP_LEFT_BIT    EQU 6               ; a walker's facing; a FLYER's bits 6-7 = its band row y - 9s (0..3, LPP_FYO)
 LPP_FYO         EQU %11000000
-LP_LEN          EQU 37 + GRID_CELLS * LR_STRIDE + GRID_CELLS * LR_MAX  ; 154 B (ROOM-MEM2: +36 LP_POS; NEW-MON3 T3: +4)
-                ASSERT (LP_POS >> 8) == ((LP_POS + GRID_CELLS * LR_MAX - 1) >> 8)   ; one page: 8-bit index
-LP_END          EQU LP_STATE + LP_LEN            ; $6F5A (ROOM-MEM2; was $6F36)
+LP_LEN          EQU LP_POS + ROOM_SLOTS * LR_MAX - LP_STATE  ; 199 B (LARGER-D T2: 12 rooms; was 154)
+                ASSERT (LP_POS >> 8) == ((LP_POS + ROOM_SLOTS * LR_MAX - 1) >> 8)   ; one page: 8-bit index
+                ASSERT (LP_STATE >> 8) == ((LP_STATE + LP_LEN - 1) >> 8)            ; LARGER-D T2: all of LP in one page
+                ASSERT ROOM_VISITS == LP_STATE + 31 && LP_REC == LP_STATE + 43 && LP_POS == LP_STATE + 151 && LP_LEN == 199
+LP_END          EQU LP_STATE + LP_LEN            ; $6FC7 (LARGER-D T2; was $6F5A)
 ; budget constants (game.md §9.3 / §9.4.1)
 ROOM_MAX        EQU 3               ; monsters per room (initial population), all depths (MORE-MON: D1-D2 were 2)
 LP_SIGMA_INIT   EQU 8               ; sum weight cap of a FRESH room: max(8, ROOM_MAX x minW)
@@ -341,31 +359,31 @@ RESPAWN_PERIOD  EQU 48              ; a check every 48 turns of the level (TRK_P
 RESPAWN_CHANCE  EQU 96              ; of 256: draw 1 < this -> a spawn try
 RESPAWN_ITEM_W  EQU 2               ; room weight = min(RESPAWN_ITEM_CAP, 1 + 2 x un-picked floor items)
 RESPAWN_ITEM_CAP EQU 7
-TRK_PHASE       EQU EDGE_TAB + 6    ; $6D56: bits 0-6 turns since the last check 0..47, bit 7 TRK_DUE (EDGE_TAB spare; level_gen's
+TRK_PHASE       EQU EDGE_TAB + EDGE_SLOTS   ; $6E98: bits 0-6 turns since the last check 0..47, bit 7 TRK_DUE (EDGE_TAB spare; level_gen's
                                     ; attempt zeroes EDGE_TAB..LVL_STATE_END: reset on level entry)   (test-observable)
 TRK_DUE         EQU %10000000       ; TRK_PHASE bit 7: end_turn counted the 48th turn, turn_input runs trk_run
 TRK_DUE_BIT     EQU 7
 TRK_CNT_MASK    EQU %01111111
-TRK_PREV        EQU EDGE_TAB + 7    ; $6D57: prev_room = the room the hero left last (do_exit .in; 0 at level
+TRK_PREV        EQU TRK_PHASE + 1   ; $6E99: prev_room = the room the hero left last (do_exit .in; 0 at level
                                     ; entry is harmless: only CUR_ROOM is VISITED until the first exit) (test-observable)
-TOME_HP         EQU EDGE_TAB + 8    ; $6D58: P3 (game.md §1.3) the Tome's hp, 1 B (EDGE_TAB spare: level_gen's attempt
+TOME_HP         EQU TRK_PHASE + 2   ; $6E9A: P3 (game.md §1.3) the Tome's hp, 1 B (EDGE_TAB spare: level_gen's attempt
                                     ; zeroes it; D8 sanctum_leaf sets TOME_MAX once per level, the last hit (tome_strike,
                                     ; bank 7 tome7.asm) -> 0 = GS_WIN; never restored: leaving the Sanctum keeps the
                                     ; damage) (test-observable)
-                ASSERT TOME_HP < ROOM_DESC && TOME_HP == LVL_STATE + $18
+                ASSERT TOME_HP < LVL_STATE_END && TOME_HP == EDGE_TAB + EDGE_SLOTS + 2
 ; TOME-FX2 (user 2026-11-03: "faster flash, or a border flash when the Tome is hit"): TOME_FL = ticks left of the
 ; hit effect (0 = none; tome_strike sets TOME_FL_N, the bank-0 dn_tm hook (dnum0.asm, every tick while playing)
 ; counts it down: the lectern flash is restored, and with TOME_BORDER the border is white / BORDER_TOME_END for the
 ; same 2 ticks the lectern is white on screen). Level generation zeroes it (EDGE_TAB). Test-observable.
-TOME_FL         EQU EDGE_TAB + 9    ; $6D59 (same page as TOME_HP: tome_strike's `dec l`)
-                ASSERT TOME_FL == TOME_HP + 1 && (TOME_FL >> 8) == (TOME_HP >> 8) && TOME_FL < ROOM_DESC
+TOME_FL         EQU TOME_HP + 1     ; $6E9B (same page as TOME_HP: tome_strike's `dec l`)
+                ASSERT TOME_FL == TOME_HP + 1 && (TOME_FL >> 8) == (TOME_HP >> 8) && TOME_FL < LVL_STATE_END
 ; PERF-GHOST: DN_QN = 0 <=> the flying numbers' spawn queue (DN_KEY) is known empty: bank-0 dn_pop
 ; clears it when it finds no key left, dn_scan sets it (non-zero) before it ranks the slots. Level
 ; generation zeroes it (EDGE_TAB; the keys left from the old level can never spawn: dn_reset resynced
 ; their DS_SEEN). bank-2 dn_gate skips a 2nd-frame tick's FARB0 dn_q2 (~1.1k T, a no-op then) while
 ; DN_QN and TOME_FL (dn_tm) are both 0: one LD DE, (TOME_FL) reads both (E, D). Test-observable.
-DN_QN           EQU TOME_FL + 1     ; $6D5A
-                ASSERT DN_QN < ROOM_DESC
+DN_QN           EQU TOME_FL + 1     ; $6E9C
+                ASSERT DN_QN < LVL_STATE_END && (DN_QN >> 8) == (EDGE_TAB >> 8)
 ; P3 the Tome (game.md §1.3; tome7.asm, bank3.asm build_room_map). The lectern (2x2, ids T_LECT_TL..BR) stands
 ; on STOREY 1 against the Sanctum's dead-end wall: cols LECT_COL_L..+1 when the Sanctum is cell 6 (its door
 ; on the right), LECT_COL_R..+1 when it is cell 8; rows LECT_ROW..+1 (the item band above floor row 17).
@@ -395,10 +413,10 @@ TOME_FL_N       EQU 3 + TOME_BORDER
 TOME_HERO_W     EQU 3               ; both heroes are 3 x 6 cells (KT_BW / BH_K_KNIGHT, BH_K_WIZARD)
 TOME_HERO_Y     EQU FLOOR_ROW1 - 6  ; E_Y of a hero standing on storey 1
                 ASSERT BH_K_KNIGHT == 6 && BH_K_WIZARD == 6
-TRK_W           EQU LP_SIG          ; trk_run scratch, 9 B (LP_STATE + 19 .. + 27: lp_enter / lp_budget scratch,
+TRK_W           EQU LP_SIG          ; trk_run scratch, ROOM_SLOTS B (LP_STATE + 19 .. + 30: lp_enter / lp_budget scratch,
                                     ; dead between entries): live floor entries, then w_r per room
-                ASSERT TRK_W + GRID_CELLS <= ROOM_VISITS && TRK_W >= LP_HW + 1 && TRK_PREV < ROOM_DESC
-                ASSERT LR_MAX * LE_STRIDE + 1 == LR_STRIDE && LP_REC == ROOM_VISITS + GRID_CELLS
+                ASSERT TRK_W + ROOM_SLOTS <= ROOM_VISITS && TRK_W >= LP_HW + 1 && TRK_PREV < LVL_STATE_END
+                ASSERT LR_MAX * LE_STRIDE + 1 == LR_STRIDE && LP_REC == ROOM_VISITS + ROOM_SLOTS
 
 LOWRAM_END_3B   EQU LP_END          ; = LOWRAM_FREE_END (defs.asm); test stubs run here
 
@@ -426,15 +444,14 @@ LF_PROVOKED_BIT EQU 5               ; cleared when lp_post places the boss (ever
 LVL_SEED_MUL    EQU $9E37           ; 2^16 / golden ratio, odd
                 ASSERT (LVL_SEED_MUL & 1) == 1
 
-                ASSERT LVL_STATE == LOWRAM_END
-                ASSERT EDGE_TAB >= LVL_STATE + LVL_HDR_LEN
-                ASSERT EDGE_TAB + EDGES_H <= ROOM_DESC
-                ASSERT ROOM_DESC + GRID_CELLS * RD_STRIDE <= FLOOR_LIST
-                ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + GRID_CELLS * RD_STRIDE - 1) >> 8)  ; one page
+                ASSERT LVL_STATE == LOWRAM_END && ROOM_DESC == LVL_STATE
+                ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + ROOM_SLOTS * RD_STRIDE - 1) >> 8)  ; one page (ld h, ROOM_DESC >> 8)
                 ASSERT (ROOM_DESC & (RD_STRIDE - 1)) == 0
                 ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE <= 256           ; one page
-                ASSERT FLOOR_LIST + FLOOR_MAX * FL_STRIDE == LVL_STATE_END
-                ASSERT LVL_STATE_END - LVL_STATE <= 320
+                ASSERT LVL_HDR == FLOOR_LIST + FLOOR_MAX * FL_STRIDE && EDGE_TAB == LVL_HDR + LVL_HDR_LEN
+                ASSERT (LVL_HDR >> 8) == ((LVL_STATE_END - 1) >> 8)   ; header .. DG_PLAN: one page (tome6 / sanct7 L-only)
+                ASSERT TRK_PHASE == EDGE_TAB + EDGE_SLOTS && EDGES_H <= EDGE_SLOTS
+                ASSERT LVL_STATE_END - LVL_STATE == 384
                 ASSERT (ORN_GLYPHS & 7) == 0
                 ASSERT RD_SPARE + 4 == RD_STRIDE
 

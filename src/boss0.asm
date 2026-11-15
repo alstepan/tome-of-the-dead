@@ -237,4 +237,4 @@ lp_post:
                 or   a
                 ret
                 ASSERT (LP_CMAP >> 8) == ((LP_CMAP + 2 * LP_CMW - 1) >> 8) && LP_XMAX + 1 < $80
-                ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + 9 * RD_STRIDE - 1) >> 8) && FEAT_W == 3
+                ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + ROOM_SLOTS * RD_STRIDE - 1) >> 8) && FEAT_W == 3

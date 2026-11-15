@@ -83,8 +83,12 @@ def main():
 
     # ---- rebuild the block from the images ----------------------------------------------------------
     blk = bytearray(G.BLOCK_LEN)
-    img = (("tut0_lvl_state", 0, 16), ("tut0_edge_tab", OFF_EDGE, 6), ("tut0_room_desc", OFF_DESC, 144),
-           ("tut0_trap_list", D["TRAP_LIST"] - BASE, 16),
+    tl, tn = D["TRAP_LIST"] - BASE, D["TRAP_N"] - D["TRAP_LIST"]          # LARGER-D T2: TRAP_N right after the list
+    img = (("tut0_lvl_state", H["LVL_DEPTH"], H["MASTER_SEED"] - H["LVL_DEPTH"]),
+           ("tut0_edge_tab", OFF_EDGE, D["EDGE_SLOTS"]),
+           ("tut0_lvl_vars", OFF_EDGE + D["EDGE_SLOTS"], tl - OFF_EDGE - D["EDGE_SLOTS"]),
+           ("tut0_room_desc", OFF_DESC, D["GRID_CELLS"] * D["RD_STRIDE"]),
+           ("tut0_trap_list", tl, tn + 1),
            ("tut0_floor_list", OFF_FLOOR, D["FLOOR_MAX"] * D["FL_STRIDE"]))
     for lab, off, n in img:
         check(f"M image {lab} length {n}", len(flat.get(lab, b"")) == n, str(len(flat.get(lab, b""))))
@@ -108,17 +112,17 @@ def main():
     check("M LF_UNIQUE set, grate SHUT, gate hint clear", fl & D["LF_UNIQUE"] and not fl & D["LF_GRATE_OPEN"]
           and not fl & D["LF_GATE_HINT"], hex(fl))
     check("M attrs == ATTR_FLOOR/WALL[1]", (blk[H["LVL_ATTR_FLOOR"]], blk[H["LVL_ATTR_WALL"]]) == LC.ATTRS_REF[1])
-    check("M MASTER_SEED bytes 0 (blob copies TUT0_HDR_COPY only)", equs["TUT0_HDR_COPY"] == H["MASTER_SEED"]
+    check("M MASTER_SEED bytes 0 (blob copies TUT0_HDR_COPY only)", equs["TUT0_HDR_COPY"] == H["MASTER_SEED"] - H["LVL_DEPTH"]
           and blk[H["MASTER_SEED"]:H["MASTER_SEED"] + 2] == b"\0\0")
-    check("M header spare zero", not any(blk[H["MASTER_SEED"] + 2:D["LVL_HDR_LEN"]]))
+    check("M header spare zero", not any(blk[H["MASTER_SEED"] + 2:H["LVL_DEPTH"] + D["LVL_HDR_LEN"]]))
     check("M edge B-C = LINK|DOOR|LOCK, others 0", [blk[OFF_EDGE + e] for e in range(6)] ==
           [0, 0, 0, D["EG_LINK"] | D["EG_DOOR"] | D["EG_LOCK"], 0, 0] and TL.EDGE_BC == 3)
     check("M no L2 / block fields", all(not any(blk[OFF_DESC + r * 16 + D["RD_SPARE"]:OFF_DESC + r * 16 + 16]) and
                                          not rd(blk, r, "RD_BLOCK") for r in range(9)))
     check("M seeds nonzero in A B C", all(seeds[r] for r in (A, B, C)), str(seeds))
     check("M TRAP_LIST: 1 hidden dart in B storey 0 col 13",
-          flat["tut0_trap_list"][:2] == bytes((B, 13 | D["TT_DART"] << D["TR_TYPE_SHIFT"])) and flat["tut0_trap_list"][12] == 1
-          and not any(flat["tut0_trap_list"][2:12]) and not any(flat["tut0_trap_list"][13:]) and not flat["tut0_trap_list"][0] & D["TRF_KNOWN"])
+          flat["tut0_trap_list"][:2] == bytes((B, 13 | D["TT_DART"] << D["TR_TYPE_SHIFT"])) and flat["tut0_trap_list"][tn] == 1
+          and not any(flat["tut0_trap_list"][2:tn]) and not any(flat["tut0_trap_list"][tn + 1:]) and not flat["tut0_trap_list"][0] & D["TRF_KNOWN"])
     fn = blk[H["FLOOR_N"]]
     ents = [tuple(blk[OFF_FLOOR + 4 * i:OFF_FLOOR + 4 * i + 4]) for i in range(D["FLOOR_MAX"])]
     check("M FLOOR_N 5 + the rest FL_EMPTY", fn == 5 == equs["TUT0_FLOOR_N"] and

@@ -61,7 +61,7 @@ drip_room:
 .next:          pop  bc
                 djnz .src
                 ; fall through: IDLE + the first gap
-                ASSERT DRIP_SRC_MAX == 2 && LEVELS == 8 && ROOM_DESC + 9 * RD_STRIDE <= (ROOM_DESC | $FF) + 1
+                ASSERT DRIP_SRC_MAX == 2 && LEVELS == 8 && ROOM_DESC + ROOM_SLOTS * RD_STRIDE <= (ROOM_DESC | $FF) + 1
 
 ;------------------------------------------------------------------------------
 ; drip_idle — DRIP_ST = IDLE, DRIP_T = DRIP_GAP + (rnd & DRIP_GAP_RND).

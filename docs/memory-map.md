@@ -1431,10 +1431,10 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6900` | `TILE_ATTRS` | 64 | attr by tile id (one page: `ld h, TILE_ATTRS>>8`) |
 | `$6940` | `GEN_SRC` | 512 | **3F-T2: the generator session's scratch (R6 `pool_hero` / `pool_proto` / `pool_list` → `gen_list` / the seq loader; dead before `panel_init`): `PL_LIST` `$6940` (≤ 25 B: pairs fid0, fcnt, `$FF` end), `SQ_PTR` `$6963` (9 words), `SQ_TOP` `$6975`, `PL_PROTO` `$6977` (6 B), `SQ_IMG` `$6000` (= `GEN_SCRATCH`, the unpacked sequence masters, 977 B raw to `$63D0`; NEW-MON3 T8) — over `FI_PAD` / `FI_TSLOT` / `FI_CELL` (SQ_IMG ends at `$6B34`, below `FI_INK` `$6C00` and `GEN_MIR`; it does not run over `FI_INK`), rebuilt by `fi_full` at the following room build as after any generator run.** 3F-T1: `PL_LIST` (12 B at `$6940`, R6 `pool_list` → `level_enter`, dead before `panel_init`). B3B-11b: `pblit` (one icon, <= 54 B) stages `vdata` here (3E-T1: `panel_boot`'s font halves no more: boot6_tiles reads the boot block in place) — new game only, never during generation. C3-6: the pause overlay saves rows 7-9 here (`PAUSE_SAVE`, 864 B: it runs on into `GEN_MIR`) while paused; **RECLAIM-C (d): `MENU_TORCH_BUF` `$6940` (48 B) — `menu_static` (title menu only: no room, pause, page or generator meanwhile) fetches the torch's static cells here from bank 7 (`ldir7`)** |
 | `$6B40` | `GEN_MIR` | 512 | generator: mirrored frame (`LOWRAM_END` = `LOWRAM_FREE_END` `$6D40`). D3-TX: its top 43 B `$6D15..$6D3F` = `TX_DEC` (`tx_dec`'s transient decode buffer, menu text) |
-| `$6D40..$6E7F` | `LVL_STATE` | 320 | B3B-1: **3B level state** (header 16, `EDGE_TAB` 6 (+ **3F-T12: `TRK_PHASE` `$6D56`, `TRK_PREV` `$6D57`**, **M0: `TOME_HP` `$6D58` (P3: the Tome's hp, `sanctum_leaf` sets `TOME_MAX` 5 once per level)**, **TOME-FX2: `TOME_FL` `$6D59`**, **PERF-GHOST: `DN_QN` `$6D5A`** (the flying numbers' spawn queue known empty = 0; "PERF-GHOST ledger") + 5 spare), `ROOM_DESC` 9 × 16, 16 spare → **3E-T3: `TRAP_LIST` 6 × 2 + `TRAP_N` + 3 spare** at `$6DF0`, `FLOOR_LIST` 32 × 4) — byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
-| `$6E80..$6EBF` | `ORN_GLYPHS` | 64 | B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). `LOWRAM_END_3B` = `LOWRAM_FREE_END` = `$6EC0` |
-| `$6EC0..$6F59` | `LP_STATE` | **154 (ROOM-MEM2: + 36 B `LP_POS` `$6F36..$6F59`; was 118 / `$6F35`)**; 118 (NEW-MON3 T3: was 114 / `$6F31`: `LP_KINDS` 4 -> 8 B, every later field +4; the text below keeps the pre-T3 numbers) | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (`$6F32`): the test stubs moved up with it |
-| `$6F32..$6FE3` (3F-T2, kit) | free | 178 | **3F-T2: 135 B kept for descriptor growth (`FRT_MAX` 128 − 101 frames), 43 spare kit** (review: +7 B `SEQ_TRAP` path in `sq_load`; 50 before); before: `$6F32..$71A5`, 628, of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3F-T1: 29 spare kit** (−48: the level-pool block in `level_enter`, `gen_idles`; the cold block now starts at `$7076`; "Level pool (3F-T1)"); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
+| `$6D40..$6EBF` | `LVL_STATE` | 384 | **LARGER-D T2 (2026-11-15): reordered + sized for 12 rooms** (`ROOM_SLOTS` 12, `GRID_CELLS` stays 9 until T4): `ROOM_DESC` `$6D40..$6DFF` (12 × 16, page `$6D` alone: `ld h, ROOM_DESC >> 8`, L = `$40 + 16 r` ≤ `$F0`), `FLOOR_LIST` `$6E00..$6E7F` (unchanged), header `LVL_HDR` `$6E80..$6E8F` (same internal offsets), `EDGE_TAB` `$6E90..$6E97` (`EDGE_SLOTS` 8, `EDGES_H` 6 used), `TRK_PHASE` `$6E98`, `TRK_PREV` `$6E99`, `TOME_HP` `$6E9A`, `TOME_FL` `$6E9B`, `DN_QN` `$6E9C`, `TRAP_LIST` `$6E9D..$6EAC` (`TRAP_MAX` 8 × 2) + `TRAP_N` `$6EAD` (kept right after the list: `tools/items_model.py` reads `TRAP_LIST..TRAP_N` as one range; the task table's `TRAP_N $6E9D` / list `$6EA0` swapped for that), `$6EAE..$6EAF` spare, **`DG_PLAN` `$6EB0..$6EBF`** (16 B, DECOR2's per-build plan, reserved; replaces the `$6DF0` claim). Header `$6E80..` through `DG_PLAN` is one page (tome6 / sanct7 reach `EDGE_TAB` / `TOME_HP` with L only). Slots 9..11 are kept 0 by `attempt` / `tut_start` / `proto_level`. Before: `$6D40..$6E7F`, 320 B (header 16, `EDGE_TAB` 6 + per-level bytes `$6D56..$6D5A`, `ROOM_DESC` `$6D60` 9 × 16, `TRAP_LIST` `$6DF0` 6 × 2 + `TRAP_N` `$6DFC`, `FLOOR_LIST`). Byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
+| `$6EC0..$6EFF` | `ORN_GLYPHS` | 64 | **LARGER-D T2: `$6EC0` (= `LVL_STATE_END`; was `$6E80`).** B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). (B3B-1: `LOWRAM_END_3B` was `$6EC0`; now `LP_END`) |
+| `$6F00..$6FC6` | `LP_STATE` | **LARGER-D T2: 199 B, one page `$6F` (12 rooms: `TRK_W` 12 B +19..+30, `ROOM_VISITS` +31, `LP_REC` +43, `LP_POS` +151; was `$6EC0..$6F59`, 154)**; **154 (ROOM-MEM2: + 36 B `LP_POS` `$6F36..$6F59`; was 118 / `$6F35`)**; 118 (NEW-MON3 T3: was 114 / `$6F31`: `LP_KINDS` 4 -> 8 B, every later field +4; the text below keeps the pre-T3 numbers) | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (**`$6FC7`**, LARGER-D T2; was `$6F5A`): the test stubs moved up with it |
+| `$6FC7..$72A7` (kit; release `..$72A5`) | free | **737 kit / 735 release** (`LOWRAM_SPARE`) | **LARGER-D T2: −109 (LVL_STATE +64, LP +45; was 846 kit)**. Older: **3F-T2: 135 B kept for descriptor growth (`FRT_MAX` 128 − 101 frames), 43 spare kit** (review: +7 B `SEQ_TRAP` path in `sq_load`; 50 before); before: `$6F32..$71A5`, 628, of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3F-T1: 29 spare kit** (−48: the level-pool block in `level_enter`, `gen_idles`; the cold block now starts at `$7076`; "Level pool (3F-T1)"); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
 | `$6FE4..$7FFF` (3F-T2, kit) | `lowram_code` (`start` first) | 4,124 | **3F-T2: code 3,619 B + 101 descriptors 505 B; spare after the (now `FRT_MAX` 128) descriptor reserve 135 B: 43 kit** (50 before the `SEQ_TRAP` path) (was 29: +160 reserve, code +139 net: the sequence-cache loader `sq_reset` / `sq_load` / `ksm_ptr` / `sq_fill` in, `gen_kind` + its loops → `gen_list`, `level_enter`'s FRT LDIR → R6). Before: **cold block**, ends exactly at `$8000` (`src/lowram.asm`): **3E-T2: code 3,169 B + 101 descriptors 505 B**; 3E-T1: code 3,126 B (was 3,889 at `$70CF`); before: code 3,238 B + 101 frame descriptors 505 B (D3-S2 +89 incl. the bitmap-shadow paths' removal: + `clear_screen` / `print_char` / `print_str`, − `room_show` / `room_shadow`'s shadow ornament; L2 engine +28: `pit_range` / `pit_w`; D3-4 +8: `start_game` → `gen_kind(HERO_KIND + K_FX_BASE)`; J1 +145: `try_jump` D 6 / 7 + `jump_pit` + `pit_w`; earlier: D3-TX `tx_dec` + `.txt`, B12 +21, B14 +175, C3-2 +1, C3-1 +33, C3-0 +3, B3B-13 +37) |
 | inside the cold block | A5 `zx0_code..zx0_code_end` | 107 | `zx0_frame` 39 + `dzx0_standard` 68 (ASSERT ≤ `ZX0_BUDGET` 128) |
 | `$6000..$65FF` (alias) | A5 `GEN_SCRATCH` | 1,536 | ZX0 unpack target **aliasing `ROOM_MAP`+`NEXT_MAP`** (ends exactly at `TILE_GLYPHS`, ASSERTed): the generator runs only at boot, hero start and (3F) level start, before the room map is built — never mid-room. Guard: `GEN_TRAP` (state block) counts `gen_frame` calls while `GAME_STATE` is PLAYING/TRANSITION; tests assert 0 |
@@ -1647,7 +1647,7 @@ resistance spare. (Today, RECLAIM-C (b): `KT_DIV9` `$140`, `KT_MOD9` `$160`, `KT
 
 Room id `r = gy*3 + gx` (0..8); neighbours left `r−1` (gx>0), right `r+1`
 (gx<2), up `r−3` (gy>0, via the up-exit `{c,0}`), down `r+3` (gy<2, via the
-down-exit hole `{c,2}` in row 17). `ROOM_DESC` = `$6D60`, `r*16`, all in page
+down-exit hole `{c,2}` in row 17). `ROOM_DESC` = `$6D40` (LARGER-D T2; was `$6D60`; `ROOM_SLOTS` 12 slots, 0..8 used), `r*16`, all in page
 `$6D` (`ld h,$6D` constant). Every 3-col feature (ladder, shaft, pit) is named
 by its **left col c**; a col byte 0 = none (all legal cols ≥ 1). Same-storey
 footprints: `|c1 − c2| ≥ FEAT_GAP` (7).
@@ -1669,7 +1669,7 @@ footprints: `|c1 − c2| ≥ FEAT_GAP` (7).
 | 14 | `L2_MIDW` | its width w 2..3 |
 | 15 | — | zero (spare) |
 
-### `EDGE_TAB` (`$6D50`, 6 B) — horizontal edges only
+### `EDGE_TAB` (`$6E90`, `EDGE_SLOTS` 8 B, `EDGES_H` 6 used; LARGER-D T2, was `$6D50`) — horizontal edges only
 
 Index `e = gy*2 + gx` = edge between `r` and `r+1` (gx ∈ {0,1}): right edge of
 `r` = `r − gy`, left edge = `r − gy − 1`. Bits: `EG_LINK 1` (connected),
@@ -1681,21 +1681,21 @@ the shaft cols of both rooms. Door cells (concept §3.1): cols 0–1 / 30–31 o
 the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 (`DOOR_ARCH_DY`, `DOOR_PLANK_DY`, `DOOR_PLANK_H`); open = the plank rows drawn as the jambs `T_DOOR_JAMB_L` / `_R` (B10, non-solid), arch + lintel stay.
 
-### Level header (`LVL_STATE` `$6D40`, 16 B) and `FLOOR_LIST`
+### Level header (`LVL_HDR` `$6E80`, 16 B; LARGER-D T2, was `LVL_STATE` `$6D40`: every offset unchanged, +`$140`) and `FLOOR_LIST`
 
 | Addr | Symbol | |
 |---|---|---|
-| `$6D40` | `LVL_DEPTH` | 1..8 (0 = none) |
-| `$6D41` | `LVL_SEED` | word, f(`MASTER_SEED`, depth) |
-| `$6D43` | `GEN_RNG` | word, generator RNG (D9; never `RNG_STATE`) |
-| `$6D45` / `$6D46` | `LVL_ATTR_FLOOR` / `LVL_ATTR_WALL` | game.md §1.2 |
-| `$6D47`..`$6D4A` | `LVL_START`, `LVL_LAIR`, `LVL_KEYROOM`, `LVL_SANCTUM` | room ids (`ROOM_NONE` `$FF`) |
-| `$6D4B` | `LVL_NROOMS` | 7..9 |
-| `$6D4C` | `LVL_FLAGS` | `LF_GRATE_OPEN 1`, `LF_KEY_TAKEN 2`, `LF_SEAL_OPEN 4`, `LF_GATE_HINT 8` (B12: the lair's gate hint was logged this level; `lair_hint`, reset by `level_gen` rewriting the byte), `LF_UNIQUE 16` (3E-T11: the boss unique dropped this level, `mon_drop`), **`LF_PROVOKED 32`** (3F-T8: the hero's damage reached the lair boss, deal_hit `.mon`; cleared by `lp_post` when the boss is placed). **3F-T8: `level_gen` writes 0 (the grate SHUT); `grate_open` sets `LF_GRATE_OPEN`; `LF_GATE_HINT` now remembers the first-entry line `THE GATE IS BARRED`** |
-| `$6D4D` | `FLOOR_N` | floor-list entries used |
-| `$6D4E` | `MASTER_SEED` | word, per game |
+| `$6E80` | `LVL_DEPTH` | 1..8 (0 = none) |
+| `$6E81` | `LVL_SEED` | word, f(`MASTER_SEED`, depth) |
+| `$6E83` | `GEN_RNG` | word, generator RNG (D9; never `RNG_STATE`) |
+| `$6E85` / `$6E86` | `LVL_ATTR_FLOOR` / `LVL_ATTR_WALL` | game.md §1.2 |
+| `$6E87`..`$6E8A` | `LVL_START`, `LVL_LAIR`, `LVL_KEYROOM`, `LVL_SANCTUM` | room ids (`ROOM_NONE` `$FF`) |
+| `$6E8B` | `LVL_NROOMS` | 7..9 |
+| `$6E8C` | `LVL_FLAGS` | `LF_GRATE_OPEN 1`, `LF_KEY_TAKEN 2`, `LF_SEAL_OPEN 4`, `LF_GATE_HINT 8` (B12: the lair's gate hint was logged this level; `lair_hint`, reset by `level_gen` rewriting the byte), `LF_UNIQUE 16` (3E-T11: the boss unique dropped this level, `mon_drop`), **`LF_PROVOKED 32`** (3F-T8: the hero's damage reached the lair boss, deal_hit `.mon`; cleared by `lp_post` when the boss is placed). **3F-T8: `level_gen` writes 0 (the grate SHUT); `grate_open` sets `LF_GRATE_OPEN`; `LF_GATE_HINT` now remembers the first-entry line `THE GATE IS BARRED`** |
+| `$6E8D` | `FLOOR_N` | floor-list entries used |
+| `$6E8E` | `MASTER_SEED` | word, per game |
 
-`TRAP_LIST` `$6DF0..$6DFB` + `TRAP_N` `$6DFC` (3E-T3, the ROOM_DESC spare; `$6DFD..$6DFF` spare): see "3E contracts".
+`TRAP_LIST` `$6E9D..$6EAC` (`TRAP_MAX` 8) + `TRAP_N` `$6EAD` (LARGER-D T2; was `$6DF0` 6 × 2 + `$6DFC` in the ROOM_DESC spare; `$6EAE..$6EAF` spare): see "3E contracts".
 
 `FLOOR_LIST` `$6E00..$6E7F`, `FLOOR_MAX` 32 × `FL_STRIDE` 4: `FL_ROOM` (bits
 0–3 room, bit 7 `FL_S1` storey 1; `FL_EMPTY` `$FF` = picked up / free),
@@ -2106,7 +2106,7 @@ A level stores no monster list: a **budget** + one **record per room**; the
 Generated levels only: on the PROTO rooms (`LVL_DEPTH` 0, `proto_start`)
 none of this runs and every monster keeps its slot as before.
 
-**`LP_STATE`** (`$6EC0`, `LP_LEN` 154 B (ROOM-MEM2; was 118), bank 5 low RAM, `level_defs.asm`; `LP_END` `$6F5A` = `LOWRAM_END_3B`, the test-stub base):
+**`LP_STATE`** (`$6F00`, `LP_LEN` 199 B (LARGER-D T2: 12-room arrays; was 154 at `$6EC0`), bank 5 low RAM, one page, `level_defs.asm`; `LP_END` `$6FC7` = `LOWRAM_END_3B`, the test-stub base):
 
 | Off | Symbol | |
 |---|---|---|
@@ -2117,10 +2117,10 @@ none of this runs and every monster keeps its slot as before.
 | +12 | `LP_DISCARD` | units lost: split / sum cap / a full record (expect 0 from the split) |
 | +13 | `LP_RMAX` | `ROOM_MAX` 3 (every depth; MORE-MON, was 2 on D1–D2) |
 | +14 | `LP_RNG` | word: the last entry's spawn-stream seed |
-| +16..+27 | `LP_HX` `LP_HS` `LP_HW` `LP_SIG` `LP_RECP` (w) `LP_W` `LP_GAPV` `LP_BEST` `LP_BS` `LP_BX` `LP_RES` | `lp_enter` / `lp_budget` scratch (tests mask it); **3F-T12: +19..+27 = `TRK_W` (9 B), `trk_run`'s scratch (per-room floor counts, then w_r) — dead between entries** |
-| +28 | `ROOM_VISITS` | 9 B: entries per room this level (spawn-stream input) |
-| +37 | `LP_REC` | 9 records × `LR_STRIDE` 9: `LR_HDR` (bit 7 `LR_VISITED`, bits 0–2 count) + 4 × {`LE_KIND` = kind row bits 0–4 \| **`LEK_GOLD` bit 5 (3F-T5: golden boss)** \| `LEK_BRED` bit 6 \| `LEK_RESPAWN` bit 7 (= `EF_RESPAWN`), `LE_HP` exact hp, **depth-scaled since 3F-T5**}. FRESH: count = quota, no entries; VISITED: count = entries (**ROOM-MEM: the bytes past the count are stale, not 0** — `lp_enter`'s zero fill went to the reclaim; every reader uses the count; `tools/levelgen.py` models it) |
-| +118 | `LP_POS` | **ROOM-MEM2 (2026-11-14):** 9 rooms × `LR_MAX` 4 B, parallel to the entries: `LP_POS + 4 r + i` = entry i of room r's record. `LPP_X` bits 0-4 = `E_X`, bit 5 (`LPP_S_BIT`) = `storey_ref`, bit 6 (`LPP_LEFT_BIT`) = facing left; **0 = none** (FRESH units, trickle entries). Written by `lp_bank` (R6 `lp_pos6`, the live slot at leave), compacted with the kept entries by `lp_enter`, zeroed by the trickle for its entry, zeroed with `LP_STATE` by `lp_hdr0` / `tut_start` (TUT0 writes the Goblin's). Bytes past the count are stale. One page (ASSERT). Test-observable |
+| +16..+27 | `LP_HX` `LP_HS` `LP_HW` `LP_SIG` `LP_RECP` (w) `LP_W` `LP_GAPV` `LP_BEST` `LP_BS` `LP_BX` `LP_RES` | `lp_enter` / `lp_budget` scratch (tests mask it); **3F-T12: +19..+30 = `TRK_W` (LARGER-D T2: `ROOM_SLOTS` 12 B; +28..+30 only `TRK_W`), `trk_run`'s scratch (per-room floor counts, then w_r) — dead between entries** |
+| +31 | `ROOM_VISITS` | `ROOM_SLOTS` 12 B (LARGER-D T2; was +28, 9 B): entries per room this level (spawn-stream input) |
+| +43 | `LP_REC` | `ROOM_SLOTS` 12 records (LARGER-D T2; was +37, 9) × `LR_STRIDE` 9: `LR_HDR` (bit 7 `LR_VISITED`, bits 0–2 count) + 4 × {`LE_KIND` = kind row bits 0–4 \| **`LEK_GOLD` bit 5 (3F-T5: golden boss)** \| `LEK_BRED` bit 6 \| `LEK_RESPAWN` bit 7 (= `EF_RESPAWN`), `LE_HP` exact hp, **depth-scaled since 3F-T5**}. FRESH: count = quota, no entries; VISITED: count = entries (**ROOM-MEM: the bytes past the count are stale, not 0** — `lp_enter`'s zero fill went to the reclaim; every reader uses the count; `tools/levelgen.py` models it) |
+| +151 | `LP_POS` | **LARGER-D T2: +151, 12 rooms × 4 = 48 B (was +118, 36).** **ROOM-MEM2 (2026-11-14):** rooms × `LR_MAX` 4 B, parallel to the entries: `LP_POS + 4 r + i` = entry i of room r's record. `LPP_X` bits 0-4 = `E_X`, bit 5 (`LPP_S_BIT`) = `storey_ref`, bit 6 (`LPP_LEFT_BIT`) = facing left; **0 = none** (FRESH units, trickle entries). Written by `lp_bank` (R6 `lp_pos6`, the live slot at leave), compacted with the kept entries by `lp_enter`, zeroed by the trickle for its entry, zeroed with `LP_STATE` by `lp_hdr0` / `tut_start` (TUT0 writes the Goblin's). Bytes past the count are stale. One page (ASSERT). Test-observable |
 
 **`LP_CMAP`** = `NEXT_MAP + PLAY_CELLS` (`$6540..$6581`, 2 × 33 B, NEXT_MAP's
 unused tail): `lp_enter`'s per-col placement marks (`LPC_BAD` 1: footprints
@@ -3285,9 +3285,9 @@ Clear of `LOG_TXT`, `PF_RAM`, `MK_RAM`, the page band (`PAGE_ORG..PAGE_LIMIT`
 `$5000..$57FF`), `GEN_SCRATCH` and the stack (`$BF00`, bank 2) by address
 (`tests/items3e.py` L3).
 
-**Trap list** (§1.5): `TRAP_LIST` `$6DF0` 6 × 2 B + `TRAP_N` `$6DFC` (LVL_STATE,
-the ROOM_DESC spare). Per level for free: level_gen's `attempt` zeroes
-`EDGE_TAB..LVL_STATE_END` and `proto_level` the header..`FLOOR_LIST` (R2).
+**Trap list** (§1.5): `TRAP_LIST` `$6E9D` 8 × 2 B + `TRAP_N` `$6EAD` (LVL_STATE,
+after `DN_QN`; LARGER-D T2, was `$6DF0` 6 × 2 + `$6DFC`). Per level for free: level_gen's `attempt` zeroes
+`EDGE_TAB..LVL_STATE_END` (and `ROOM_DESC`, never the header), `tut_start` copies its image + zeroes the rest, `proto_level` zeroes the whole block (R2).
 `TR_B0`: bits 0–3 room, bit 4 `TRF_S1`, 5 `TRF_KNOWN`, 6 `TRF_RUNG` (ALARM-1: the plate has rung its one wave; runtime only, every reader masks it, generators keep it 0), 7 spare (**TRAP2: `TRF_SPENT` retired**, `EQU 0`, the mask terms in trap6 / fx6 / bank3 / bank7 are no-ops; every trap stays known and re-arms); `TR_B1`:
 bits 0–4 col, 5–7 type (**STUN1: 3 bits**, `TR_TYPE_MASK` `%11100000`; `TT_DART` 0, `TT_GAS` 1, `TT_TELEPORT` 2, `TT_ALARM` 3, `TT_STUN` 4).
 Written by the 3E-T6 generator after `level_gen` (`tools/items_model.py`
@@ -4646,9 +4646,9 @@ Byte-exact vs `tools/respawn_model.py` (now also excludes the Sanctum, 3F-D2).
 
 | Address | Symbol | |
 |---|---|---|
-| `$6D56` | `TRK_PHASE` | bits 0-6 turns since the last check 0..47, bit 7 `TRK_DUE` (the check runs on the next INPUT tick) (EDGE_TAB spare; level_gen zeroes it = reset on level entry; end_turn increments it BEFORE do_exit, so a descent leaves a fresh LVL_STATE — world.py W16 block compare). A turn whose end_turn runs `sp_run` does not advance it (no check shares a tick with sp_run) (test-observable) |
-| `$6D57` | `TRK_PREV` | prev_room: written in do_exit `.in` (exit + teleport) = the room left; 0 at level entry is harmless (only CUR_ROOM is VISITED before the first exit) (test-observable) |
-| `LP_STATE+19..+27` | `TRK_W` | 9 B scratch in the `lp_enter` scratch range (dead between entries) |
+| `$6E98` (LARGER-D T2; was `$6D56`) | `TRK_PHASE` | bits 0-6 turns since the last check 0..47, bit 7 `TRK_DUE` (the check runs on the next INPUT tick) (EDGE_TAB spare; level_gen zeroes it = reset on level entry; end_turn increments it BEFORE do_exit, so a descent leaves a fresh LVL_STATE — world.py W16 block compare). A turn whose end_turn runs `sp_run` does not advance it (no check shares a tick with sp_run) (test-observable) |
+| `$6E99` (was `$6D57`) | `TRK_PREV` | prev_room: written in do_exit `.in` (exit + teleport) = the room left; 0 at level entry is harmless (only CUR_ROOM is VISITED before the first exit) (test-observable) |
+| `LP_STATE+19..+30` | `TRK_W` | `ROOM_SLOTS` 12 B scratch (LARGER-D T2; was 9 B +19..+27) in the `lp_enter` scratch range (dead between entries) |
 
 `GEN_RNG` is used as the draw register (RNG_STATE copied in / back out around `trk_draw`, so the shared
 `tier_row` steps it) and is NOT restored: nothing consumes it between level generations (lp_enter
@@ -4883,7 +4883,7 @@ without spending D8 pool slack. Behaviour unchanged (moves only); measured by th
   manager's call; `tests/zx0_pool.py` `LEVEL_NEED` would change again).
   Pool (`POOL_CAP` 32,490 -> 32,416): D8 Warrior need 31,226 -> 31,152, slack **1,264** (unchanged); every
   level / hero re-measured in `tests/zx0_pool.py` `LEVEL_NEED`.
-- **RAM reserves (EQUs only, 0 code):** `TOME_HP` = `EDGE_TAB + 8` `$6D58` (1 B, LVL_STATE spare, zeroed per level by
+- **RAM reserves (EQUs only, 0 code):** `TOME_HP` = `EDGE_TAB + 8` `$6D58` (LARGER-D T2: `$6E9A`) (1 B, LVL_STATE spare, zeroed per level by
   `attempt`; P3); `ST1_CNT` `$5D51..$5D55` (`ST1_LEN` 5, ITEM_RAM 81 -> 86, zeroed by `new_game`; STATS1 S1; ENDCARD-G1: `ST1_KILLER` = `ST1_CNT + 4` `$5D55`).
 
 | Region (release) | before (main `d967e0f`) | after M0 | feature budgets (sum) | left |
@@ -4950,7 +4950,7 @@ Contracts (code: `src/tome7.asm`, `src/tome6.asm`, `lowram.asm` `game_win` / `to
 - **Lectern**: common ids 15-18 (TL TR / BL BR) on rows `LECT_ROW` 15..16 (storey 1), cols `LECT_COL_L` 1-2 when
   the Sanctum is cell 6, `LECT_COL_R` 29-30 when it is cell 8; stamped by `build_room_map` on every Sanctum build,
   BEFORE the decor (the deriver's T_AIR rule keeps objects off it; `tests/room_model.py` mirrors it).
-- **TOME_HP** `$6D58`: `TOME_MAX` 5 at generation (`sanctum_leaf`, == `tools/levelgen.py`), never restored.
+- **TOME_HP** `$6D58` (LARGER-D T2: `$6E9A`): `TOME_MAX` 5 at generation (`sanctum_leaf`, == `tools/levelgen.py`), never restored.
 - **Hit**: a release by a hero standing on storey 1 of the Sanctum (`E_Y` == `TOME_HERO_Y` 11), facing the
   lectern, gap < reach / range (melee 1, `RK_RANGE` of Power Strike / Whirlwind now 1, spells `CAST_ROW`
   `RR_RANGE`, ammo `ABIL_RK` `RK_RANGE`): bump (`try_horizontal`), `ic_melee`, `act_fire` (all abilities; Power
@@ -5876,7 +5876,7 @@ Supersedes the P3 "no flash / no ash" ruling. **No new tile, glyph or fixed addr
 
 ## TOME-FX2 ledger (`feat/tome-flash2`, 2026-11-03; on main `762d254`; user: "I'd do faster flash or maybe border flash when the Tome is hit")
 Measured before (TOME-FX): the lectern flash lasted staff FIRE 2 ticks, Spark 10, Firebolt 11 (the restore waited for the first INPUT tick after the turn). Now **exactly 2 screen ticks (80 ms) for every attack** (bump, FIRE, Power Strike, Whirlwind, dagger, arrow, staff, Spark, Firebolt), and optionally the **border** (`TOME_BORDER` 1: white `BORDER_TOME` 7, yellow `BORDER_TOME_END` 6 on the last hit) for the same 2 ticks.
-- **Mechanism:** `TOME_FL` = `EDGE_TAB + 9` `$6D59` (LVL_STATE spare, zeroed per level by `attempt`; test-observable): `tome_strike` sets it to `TOME_FL_N` (3 flash only / 4 with the border; every hit restarts it); the bank-0 hook `dn_tm` (`dnum0.asm`, called first by `dn_tick` AND `dn_q2`: exactly one of them runs per playing tick, `dn_gate` = the last work of the tick) counts it down: `TOME_BORDER` 0: 0 -> `lect_back` (far7, unchanged: norm / ash); 1: 2 -> border on, 1 -> `lect_back`, 0 -> border black. A paint and its restore each reach the screen 2 ticks after they are queued (PEND_DMG is consumed by the next render, presented at the tick after), so lectern white = 2 ticks regardless of the attack; the border is written at the end of the tick before the one that presents the flash (aligned, tests FX7). `turn_input`'s `lect_back` call is gone (-3 B bank 7, `tome_strike` +3: net 0). Port `$FE` is written with 0 / 7 / 6 only (MIC / EAR bits 0: the game has no beeper; the ALARM border / `end_card` write it the same way).
+- **Mechanism:** `TOME_FL` = `EDGE_TAB + 9` `$6D59` (LARGER-D T2: `$6E9B`) (LVL_STATE spare, zeroed per level by `attempt`; test-observable): `tome_strike` sets it to `TOME_FL_N` (3 flash only / 4 with the border; every hit restarts it); the bank-0 hook `dn_tm` (`dnum0.asm`, called first by `dn_tick` AND `dn_q2`: exactly one of them runs per playing tick, `dn_gate` = the last work of the tick) counts it down: `TOME_BORDER` 0: 0 -> `lect_back` (far7, unchanged: norm / ash); 1: 2 -> border on, 1 -> `lect_back`, 0 -> border black. A paint and its restore each reach the screen 2 ticks after they are queued (PEND_DMG is consumed by the next render, presented at the tick after), so lectern white = 2 ticks regardless of the attack; the border is written at the end of the tick before the one that presents the flash (aligned, tests FX7). `turn_input`'s `lect_back` call is gone (-3 B bank 7, `tome_strike` +3: net 0). Port `$FE` is written with 0 / 7 / 6 only (MIC / EAR bits 0: the game has no beeper; the ALARM border / `end_card` write it the same way).
 - **Border never left changed:** `show_bank5` (low RAM, +2 B: `out ($FE), a` after its `xor a`) blacks it for the pause, the bag page (`page_ovl` calls it), the room-exit scroll and the menus; `end_card` already did (death / win card). TOME_BORDER 1 only.
 - **Switches (`defs.asm`):** `TOME_BORDER` (default 1 since 302b440; 0 = flash only), `TOME_FX2` = `TOME_FX * (1 - DEBUG_KIT)`: **a kit build (DEBUG_KIT 1) keeps the TOME-FX timing** (restore on the first INPUT tick, `turn_input` calls `lect_back`): the kit image has 10 B free in bank 0 (kit0.asm 83 B + log0 + dnum0 at the B0_CODE_RES / pool-slack cliff: 704 -> slack 384, 708 -> the pool no longer fits) and the hook needs 21 B (flash only) / 43 B (border); `-DTOME_FX2=1` on a kit build fails `b0_code_end <= POOL_START`. **Needs >= 11 B (flash) / >= 33 B (border) of bank-0 reclaim to reach the default (kit) build.**
 - **Free bytes (release `DEBUG_KIT=0`):** flash only: bank 0 free 67 -> **46** (code 655 -> 676 of 704, text headroom 18), low RAM spare 2 -> 2; border: bank 0 **24** (698 of 704), low-RAM cold-block spare **0**; both: bank-7 low 20, high 2, bank 3 2, bank 2 44, R6 5, bank 1 2, `B0_CODE_RES` 704, D8 slack 384 unchanged. `F3_GEN=0`: bank-7 low 24. Trace test build (TOME_FX 0): unchanged (bank-7 low 71, bank 2 4). Kit (default, TOME_FX2 0): identical to `762d254` (bank 7 20, bank 0 10, bank 2 18, R6 10).
@@ -5921,7 +5921,7 @@ interrupt (~3.3k with the D3 song) as well, so the real target is work + one ISR
 | blit chains: the mask -> data step `inc l` (was `inc hl`): every pool frame starts EVEN (alloc from `POOL_START` / `BANK_WINDOW`, every size `2 * cols * H`; ASSERTed in `gfx.asm`), so a (mask, data) pair never straddles a page; 42 T a drawn byte | bank 2 `gfx.asm` | -1.25k / -0.85k | 0 |
 | `box_solid`: D = the `tile_flags` page / E = the flag's low byte inside a row (no push / pop HL a cell): 53 T a cell (was 81); the solid exit keeps CF through the POPs | bank 2 `logic.asm` | 0 / ~-0.9k (a flyer step ~-0.35k) | -2 |
 | `dn_cel` (the numbers' drawn cell): BC = the screen-2 line, 2 lines a pass (44.5 T a line, was 68); `ldir2.asm` moved into the `kind_tab` pad to make room (trace builds: the old loop, `ldir2` in the tail) | bank 2 `dnum2.asm`, `main.asm` | -0.53k / ~-0.9k | +10 (tail) / -17 pad +17 tail |
-| **`DN_QN`** (`$6D5A`, LVL_STATE): 0 = the numbers' spawn queue is known empty (bank-0 `dn_pop` clears it when it finds no key, `dn_scan` sets it); `dn_gate` skips a 2nd-frame tick's FARB0 `dn_q2` while `DN_QN` and `TOME_FL` (`dn_tm`) are both 0 (`dn_q2` would be a no-op: no spawn, no state change) | bank 2 `dnum2b.asm`, bank 0 `dnum0.asm`, `level_defs.asm` | -1.1k (and the 2nd ISR, -3.3k measured) / 0 | bank 2 +7, bank 0 +8 |
+| **`DN_QN`** (`$6D5A`, LARGER-D T2: `$6E9C`, LVL_STATE): 0 = the numbers' spawn queue is known empty (bank-0 `dn_pop` clears it when it finds no key, `dn_scan` sets it); `dn_gate` skips a 2nd-frame tick's FARB0 `dn_q2` while `DN_QN` and `TOME_FL` (`dn_tm`) are both 0 (`dn_q2` would be a no-op: no spawn, no state change) | bank 2 `dnum2b.asm`, bank 0 `dnum0.asm`, `level_defs.asm` | -1.1k (and the 2nd ISR, -3.3k measured) / 0 | bank 2 +7, bank 0 +8 |
 | `pot_sync`: stops at the first free BAG slot (the packed-list invariant: `sub IT_FOOD_LO` borrows only for `IT_NONE`), potion bit `cp 2 / sbc a, $FE` (1, 2, 4), `ld d, a / ld e, a` | R6 `pickup6.asm` | ~0 here (a near-full bag) / 0; ~-0.11k a free slot | -1 |
 | `floor_pickup` / `ap_stamp` FLOOR_LIST walks end on L (borrow past entry 0 / `jp p` at 128; `FLOOR_MAX * FL_STRIDE == 128` ASSERTed), `vb_turn` stride hoisted | bank 7 `pickup7.asm`, `bank7.asm` | ~-0.35k / 0 | -3 / +3 |
 | `turn_done` stride hoisted; `rl_next` keeps the slot in H; `pmark_rect_np .r2` 3 x `inc l`; cold `jp` -> `jr` (`mode_enter`, `fire_used`, `pause_hook`, `erase_rect .third`, `anim_tick .done`, decor `.nx`, `og_adv`, `og_put`) | bank 2 | ~-0.35k / ~-0.15k | -2 / -8 |
@@ -7223,3 +7223,25 @@ Measured (release): W13 `decor_room` cost worst 124,456 -> **98,995 T** (9 sampl
 from `KX_LEN`, `dg_bad` no longer follows it); `tests/gfx_integrity.py` R3, `tests/game.py` #29, `tests/dnum.py`: the
 `hscroll_room.step` / `vscroll_room.step` breakpoints add `RAM = BANK_UI1` (bank-1 scroll code; a bare PC breakpoint also
 fired inside bank-0 `decor_b0` at `$E643` during the NEXT_MAP build: GI R3 failed with 429 bogus steps until then).
+
+## LARGER-D T2 ledger (`feat/larger-d-t2`, 2026-11-15; docs/design/larger_depths_tasks.md T2; behaviour-neutral, grid stays 3×3)
+
+- **Layout** (`level_defs.asm`, `item_defs.asm`; table rows under "Bank 5 low RAM"): `LVL_STATE` = `ROOM_DESC`
+  `$6D40` (`ROOM_SLOTS` 12 × 16), `FLOOR_LIST` `$6E00`, `LVL_HDR` `$6E80` (new symbol; every `LVL_*` header name
+  kept, offsets unchanged), `EDGE_TAB` `$6E90` (`EDGE_SLOTS` 8), `TRK_PHASE`..`DN_QN` `$6E98..$6E9C`, `TRAP_LIST`
+  `$6E9D` (`TRAP_MAX` 8) + `TRAP_N` `$6EAD`, `DG_PLAN` `$6EB0` (16 B, reserved), `LVL_STATE_END` = `ORN_GLYPHS`
+  `$6EC0`, `LP_STATE` `$6F00` (199 B, one page; `TRK_W` 12 B +19, `ROOM_VISITS` +31, `LP_REC` +43, `LP_POS` +151),
+  `LP_END` = `LOWRAM_END_3B` `$6FC7`. Deviation from the task table: `TRAP_N` sits right AFTER the 16-B list
+  (`$6EAD`), not before it (`$6E9D` / list `$6EA0`), so `TRAP_N = TRAP_LIST + TRAP_MAX * TRAP_STRIDE` and the
+  `TRAP_LIST..TRAP_N` range `tools/items_model.py` checks keep holding.
+- **Code:** `attempt` (levelgen.asm) zeroes `ROOM_DESC` (192), fills `FLOOR_LIST`, zeroes `EDGE_TAB..LVL_STATE_END`
+  (48), never the header: 365 LDIR bytes (was 430), **−1,353 T per attempt** (uncontended count), bank 3 +5 B
+  (kit 11,063 → 11,068). `proto_level` zeroes the whole 384-B block, copies the header to `LVL_HDR` (+0 B).
+  `tut_start` copies the `tools/tut0_level.py` images in memory order with one HL run (9 descriptors, slots 9–11
+  := 0, `FLOOR_LIST`, the 14-B header, `EDGE_TAB..TRAP_N` 30 B; spare + `DG_PLAN` := 0): blob raw −2 B
+  (BLOB_RES free 35 → 37), packed +2. `build_room_map`'s known-trap scan walks 8 entries (+2 empty ones, ~60 T).
+  The other changes are ASSERTs (page checks now on `ROOM_SLOTS` / `EDGE_SLOTS`). Room-indexed L arithmetic
+  (`rdp`, `room_desc`, drip7 `RD_SEED`, boss0) stays in page `$6D` for r ≤ 11.
+- **T4 notes:** `tut_start`'s slot-zero loop ASSERTs `GRID_CELLS < ROOM_SLOTS` (drop it at 12);
+  `LG_ROOMS_END` becomes `$00` at 12 slots (IXL wraps to `$00`: the `cp` still ends the loops).
+- **Low RAM:** `LOWRAM_SPARE` 846 → **737 kit / 735 release** (−109).

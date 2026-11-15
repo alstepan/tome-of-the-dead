@@ -7,7 +7,7 @@ Release build (DEBUG_KIT=0) for the emulator part; the layout part runs on any b
   L2  record / ISTATE bits (reserved, enchant, m) partition the byte; IST_M_* values
   L3  ITEM_RAM fields consecutive in the documented order and sizes, one page, outside
       LOG_TXT / PF_RAM / MK_RAM / the page band / GEN_SCRATCH / the tape image;
-      TRAP_LIST / TRAP_N inside the ROOM_DESC spare below FLOOR_LIST; QPIN out of HERO_ST
+      TRAP_LIST / TRAP_N after DN_QN, below DG_PLAN (LARGER-D T2); QPIN out of HERO_ST
   R1  canary $A5 over ITEM_RAM + the rest of $5CC0..$5DFF + RG_RAM_END..$5FFF at the menu;
       START: new_game zeroes exactly ITEM_RAM, every other canary byte survives
   R2  20 turns of play + a descent (level_descend, music off): ITEM_RAM (a written
@@ -87,8 +87,8 @@ def layout(check):
           [n for n, b, e in busy if not clear(b, e)])
     check("L3 inside the runtime reserve", lo >= 0x5CC0 and hi <= s["PF_RAM"])
     tl, tn = s["TRAP_LIST"], s["TRAP_N"]
-    check("L3 trap list", tl == s["ROOM_DESC"] + 9 * 16 and tn == tl + 12 and tn < s["FLOOR_LIST"]
-          and s["TRAP_MAX"] == 6 and s["TRAP_STRIDE"] == 2)
+    check("L3 trap list", tl == s["DN_QN"] + 1 and tn == tl + 16 and tn < s["DG_PLAN"]      # LARGER-D T2 layout
+          and s["TRAP_MAX"] == 8 and s["TRAP_STRIDE"] == 2)
     check("L3 hunger state (the old QPIN) outside HERO_ST", not (s["HERO_ST"] <= s["HP_RG"] < s["HERO_ST_END"]))
 
 
@@ -168,10 +168,11 @@ def emu(p, check):
         return b[:q0] + b[q0 + S["QS_COUNT"]:]
     check("R2 ITEM_RAM kept across the level change (but the derived QS_CACHE)", noqs(got) == noqs(pat))
     tl = S["TRAP_LIST"]
-    tr = mem(tl, 13)
-    tn = tr[12]
+    tw = 2 * S["TRAP_MAX"]                          # TRAP_N right after the list
+    tr = mem(tl, tw + 1)
+    tn = tr[tw]
     check("R2 trap list: TRAP_N <= TRAP_MAX, unused entries 0",
-          1 <= tn <= S["TRAP_MAX"] and tr[2 * tn:12] == bytes(12 - 2 * tn), tr.hex())
+          1 <= tn <= S["TRAP_MAX"] and tr[2 * tn:tw] == bytes(tw - 2 * tn), tr.hex())
     p.tick(10)
     for _ in range(10):
         p.turn("WAIT")

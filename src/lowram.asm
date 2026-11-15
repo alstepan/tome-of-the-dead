@@ -1051,7 +1051,7 @@ door_find:
                 ld   h, EDGE_TAB >> 8
                 scf
                 ret
-                ASSERT (EDGE_TAB >> 8) == ((EDGE_TAB + EDGES_H - 1) >> 8)
+                ASSERT (EDGE_TAB >> 8) == ((EDGE_TAB + EDGE_SLOTS - 1) >> 8)
 
 ;------------------------------------------------------------------------------
 ; door_paint — the planks of the door at cols C, C+1, rows B .. B+5: A = 0
