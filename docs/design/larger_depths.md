@@ -52,23 +52,34 @@ I3–I6 unchanged. Junior reports Restart counts (feature/potion) before vs afte
 Keys and locked doors go live on D1–D8 (rev 2026-11-15, user: a lock may sit mid-route, and there may be several).
 This **supersedes game.md §1.4 "Key / locked door"**, game.md §1.1 "Key room" (the farthest leaf, with the lock always
 on the lair door) and L1 step (7)'s note "key gating only matters from 3F". The grate and the boss stay the final gate.
+**Rev 2 (user 2026-11-15, "clarity and non-linear routes from the start"):** keys and locks are **coloured** (2 colours) and
+2-lock levels may be **non-linear**. Rows marked *rev 2* replace the rev-1 text kept above them as history.
 
 | Topic | Rule (KEY, designer decision 2026-11-15) |
 |---|---|
 | Graph `G` | Rooms + tree edges (horizontal and vertical) + the 0–1 loop edge. Pits only drop storey 0 → 1 inside a room, the arrival shaft enters the start room, and the exit shaft leaves the level, so `G` holds **every** room-to-room link. `P` = the BFS-shortest path start → lair in `G` |
 | Lock candidates | An edge `e` may be locked iff it is (a) on `P`, (b) a **tree** edge, (c) **horizontal** (`T_DOOR_LOCK` plank art; shafts can't hold planks) and (d) a **bridge** of `G` (not on the loop's cycle). Removing `e` splits `G` into a start side and a lair side, so nothing (loop, shaft, fall) bypasses it. The lair door is a valid candidate when it qualifies |
+| Lock candidates *rev 2* | (b)–(d) stand; (a) "on `P`" is **relaxed to "needed"**: a lock off `P` is allowed only if it guards the region holding the other lock's key. Every lock must be needed: with lock `j` treated as a permanent wall, the key fixpoint (proof row) must fail to reach the lair. **Locked treasure vaults (an unneeded lock off the route) are OUT of scope**, a later add-on |
 | Lock count `m` | **D1–D3: 1. D4–D8: 2 if `n ≥ 11` and a valid pair exists, else 1.** Never more than 2, because 3+ fetches in a scrolling side-view are tedious. Locks are ordered along `P`: `L1` is nearer the start. The regions are `R0` (start side of `L1`), `R1` (between), `R2` (lair side of the last lock) |
 | Key rooms | Key `j` lies in `R(j−1)` (the region that is open before `Lj`). It is the room there **farthest (BFS within the region) from `Lj`'s near-side room**, i.e. the deepest leaf and the longest detour. Excluded: start, lair, Sanctum; ties lowest id. A lock set is valid only if every region it needs has a candidate. Stored as `LVL_KEYROOM[0..1]` (`ROOM_NONE` if unused) |
 | Lock choice | Enumerate the valid sets (1 edge, or 2 ordered edges). `F` = the distinct rooms on the BFS paths start → K1 (→ K2) → lair in `G` with all locks open. Both ends count, and a loop shortcut lowers `F`. **Pick the max `F`**; ties go to the lowest `P` index (lock 1, then lock 2). With ≤ 12 rooms and ≤ ~8 candidates this is a trivial loop |
-| Generic keys | `IT_KEY` is a **count 0–2**, not coloured, and needs no new art. This is safe because of the ordering: `Lj+1` can only be reached through `Lj`, and key `j+1` lies beyond `Lj`. The bag `KEY` slot shows the count (`KEY 2`); the panel icon is lit while the count is ≥ 1 |
+| Placement *rev 2* (supersedes Key rooms + Lock choice) | Removing the locks splits `G` into components; `C0` holds start. **Key candidates** = rooms of `G`-degree 1 (dead ends), never start/lair/Sanctum. Enumerate every lock set (1 edge, or an unordered pair) × key-room assignment. **Valid** iff the fixpoint from start with 0 keys reaches the lair and every lock is needed. Coloured keys are never wasted, so a fixpoint success holds under **every** collection order. **Shapes (2 locks):** *linear* = both locks on `P` and key 2 lies only beyond lock 1 (rev-1 chain); *non-linear* = (b1) **branch**: one lock off `P` guards a dead-end region holding the `P`-lock's key, its own key in `C0`; or (b2) **open series**: both locks on `P`, both keys in `C0` (any order) |
+| Route `F` *rev 2* | For each valid collection order, chain BFS segments start → first key → second key → lair in `G`, treating locks whose key is not yet held as walls (far-side bolt allowed); `F` = distinct rooms on the union, both ends counted. Set `F` = **min over valid orders** (the player's shortest honest route) |
+| Selection *rev 2* | Score = `F` + **1 if a 2-lock set is non-linear**. Pick the max score; ties: higher raw `F`, then non-linear, then lowest `P` index of the nearer lock (off-`P` lock: its branch room's `P` index), then lowest edge index, then lowest key room ids (colour 0 first). `F ≥ F_min` is still a hard floor (raw `F`, no bonus). 2 locks on D4–D8 when `n ≥ 11` and any valid pair meets `F_min`, else 1. No valid set from dead-end keys = "no valid lock" → restart path. **Target: ≥ 50 % of 2-lock levels non-linear**; if the sweep misses, report and the designer raises the bonus to 2 (not tuned silently) |
+| Colours *rev 2* | **Colour 0 = cyan, colour 1 = magenta.** Colour 0 goes to the lock the fixpoint opens first (its key is in `C0`); if both open in the same round (b2), colour 0 = the lock with the lower `P` index. 1-lock levels are cyan. Yellow was rejected: closed planks are already `$06` yellow (concept-screen §3.1), so a yellow plate reads as an ordinary door; red = seal, green = poison, blue is too dark on black |
+| Generic keys *(superseded by Coloured keys, rev 2)* | `IT_KEY` is a **count 0–2**, not coloured, and needs no new art. This is safe because of the ordering: `Lj+1` can only be reached through `Lj`, and key `j+1` lies beyond `Lj`. The bag `KEY` slot shows the count (`KEY 2`); the panel icon is lit while the count is ≥ 1 |
+| Coloured keys *rev 2* | `IT_KEY` becomes a **2-bit held mask** (bit 0 cyan, bit 1 magenta). **Lock plate:** only the `T_DOOR_LOCK` cell takes the colour, attr **`$45`** (cyan) / **`$43`** (magenta), drawn in **both** rooms (1 cell per side, 2 per door); the other plank cells stay `$06`. Once unlocked, that cell draws as a plain plank-R `$06` when the door is closed. **Panel** cell (30, 19), one key glyph: ink `$45` or `$43` for the held colour; both held = **`$EB`** (FLASH + BRIGHT, paper cyan, ink magenta: the hardware swaps the colours every 16 frames, 0 CPU); none = unlit as before. **Bag `KEY` slot:** one line per held key, `CYAN KEY` / `MAGENTA KEY` in its ink (0 new glyphs) |
+| Far-side bolt *rev 2* | A lock bars only its **start side** (the side of `C0`). From the far side the Open-door action opens it with no key (1 turn, ordinary open, no line, never relocks). Without this a teleport into a b1 dead end would softlock. Supersedes "locked from both sides" below |
 | Coverage minimum | **`F_min = n − 4`** (10 → 6, 11 → 7, 12 → 8: 60–67 %) over the full forced route with every detour. If `F < F_min` **or no valid lock exists**, the tree **restarts** in-stream (no reseed): pass 2 reruns steps 3–8 with the DFS **Warnsdorff bias** (pick the unvisited neighbour with the fewest unvisited onward neighbours; ties `rnd`), continuing GEN_RNG. Pass 2 is accepted as is, and if it still has no candidate the level is keyless (sweep target 0). Pass 1 has no fork bias, so side branches and their items still pull players in |
-| Sweep (300 seeds × D1–D8) | Assert `F ≥ F_min` after pass 2 and reseeds 0. Report the `F/n` histogram (mean **target ≥ 75 %**), the restart rate (**≤ 10 %**), the keyless count (**0**), and the share of D4–D8 levels with 2 locks and with a lair-door lock. If a target misses, report back to the designer rather than tuning silently |
+| Sweep (300 seeds × D1–D8) | Assert `F ≥ F_min` after pass 2 and reseeds 0. Report the `F/n` histogram (mean **target ≥ 75 %**), the restart rate (**≤ 10 %**), the keyless count (**0**), and the share of D4–D8 levels with 2 locks and with a lair-door lock, and (*rev 2*) the share of 2-lock levels that are non-linear, split b1 / b2 (target ≥ 50 %). If a target misses, report back to the designer rather than tuning silently |
 | No-softlock proof (levelcheck) | Simulate per level: the hero starts with 0 keys in **each** region `R0..Rm` (start, plus teleport arrival). Repeat: flood-fill the open rooms, take the keys there (first entry), and open any adjacent lock while the count is > 0. Assert the lair is always reached. By induction each `Rj` (j < m) holds key `j+1`, and the lair is in `Rm` |
+| Proof *rev 2* (supersedes the row above) | **Key-set fixpoint:** `R` = flood of `G` from start, held = ∅. Repeat until no change: held ∪= keys of key rooms in `R`; open every lock `j` with an end in `R` whose colour ∈ held, or whose far side is in `R` (bolt); re-flood. Assert lair ∈ `R`. Repeat from each component as the start (teleport, 0 keys) and assert the same. Also assert each lock is needed (fixpoint with lock `j` walled fails) |
 | Monsters | A locked edge is a **wall** to every monster, `KF_OPENER` included: they can't open it, path through it or attack through it. The boss stays posted on the grate (§9.2) |
-| Bump, no key | **0 turns**, no monster acts. Log `THE DOOR IS LOCKED` (existing), through the same `LOCK_SHOWN` path and latch as the D8 Sanctum door. The door is locked from both sides |
-| Bump, with key | The Open-door action (1 turn, game.md §2.3): **one key consumed** (count −1). `EG_LOCK` is cleared and the door is **open**. It stays unlocked for the rest of the level across re-entry (edge state lives in the level state), then behaves as an ordinary door (`C` closes it, `KF_OPENER` opens it). It never relocks |
+| Bump, no key | **0 turns**, no monster acts. Log `THE DOOR IS LOCKED` (existing), through the same `LOCK_SHOWN` path and latch as the D8 Sanctum door. The door is locked from both sides. *Rev 2:* start side only (bolt); holding only the other colour counts as no key (same line, 0 turns) |
+| Bump, with key | The Open-door action (1 turn, game.md §2.3): **one key consumed** (count −1; *rev 2:* the matching colour's bit cleared). `EG_LOCK` is cleared and the door is **open**. It stays unlocked for the rest of the level across re-entry (edge state lives in the level state), then behaves as an ordinary door (`C` closes it, `KF_OPENER` opens it). It never relocks |
 | Pickup | Granted on first entry into a key room (game.md §8.11 Q1), with no floor item. The flags `LF_KEY_TAKEN` become 2 bits, one per key room |
 | Byte hint (engineer sizes) | Level state +1 B (2nd key room) + 1 bit (2nd taken flag); `IT_KEY` is already a counter; `EG_LOCK` already exists per edge (0 B); +19 B unlock string; the generator gains bridge + region BFS + enumeration (bank 3, est. 250–400 B) |
+| Byte hint *rev 2* (supersedes the row above) | Level state +1 B (2nd key room) + 2 bits (taken) + 1 bit per lock edge for its colour (or 2 B lock-edge-by-colour, engineer picks); `IT_KEY` mask 0 B; strings **+92 B** whole (or **+46 B** as fragments `YOU FIND A ` 11 · ` KEY` 4 · `YOU UNLOCK THE ` 15 · ` DOOR` 5 · `CYAN` 4 · `MAGENTA` 7 if the log already composes); generator fixpoint + shape test + scored enumeration (≤ 28 pairs × ≤ 36 dead-end assignments) est. **350–550 B** bank 3; panel/bag colour code est. 40–60 B |
 
 **Messages** (≤ 32 chars, uppercase, game style):
 
@@ -77,6 +88,8 @@ on the lair door) and L1 step (7)'s note "key gating only matters from 3F". The 
 | Key room, first entry | `YOU FIND A KEY` (replaces `YOU FIND THE LAIR KEY`, since a key may open a mid door) | 14 (−7) |
 | Bump locked, no key | `THE DOOR IS LOCKED` (existing, reused) | 0 new |
 | Bump locked, with key | `YOU UNLOCK THE DOOR` (**new**) | 19 |
+| *rev 2* key room, first entry | `YOU FIND A CYAN KEY` / `YOU FIND A MAGENTA KEY` (supersede `YOU FIND A KEY`) | 19 / 22 |
+| *rev 2* unlock | `YOU UNLOCK THE CYAN DOOR` / `YOU UNLOCK THE MAGENTA DOOR` (supersede `YOU UNLOCK THE DOOR`) | 24 / 27 |
 
 **Edge cases.**
 
@@ -84,7 +97,7 @@ on the lair door) and L1 step (7)'s note "key gating only matters from 3F". The 
 |---|---|
 | D8 | The Sanctum door is **sealed, not locked**: it is never a lock candidate (it is off `P`), it opens only on the Archmage's death, and **a key never opens it** (existing sealed line, no key consumed). Locks may include the 10–E lair door. Key rooms exclude `S` |
 | D0 tutorial | Keyless: both `LVL_KEYROOM` = `ROOM_NONE`, and `EG_LOCK` is never set. The D0 blob is untouched |
-| Teleport | **Allowed, no exclusion.** Landing beyond a lock skips that key, but scrolls are rare, so this is a rare reward or gamble. The proof row covers every 0-key arrival region. In the lair the exit is the boss grate |
+| Teleport | **Allowed, no exclusion.** Landing beyond a lock skips that key, but scrolls are rare, so this is a rare reward or gamble. The proof row covers every 0-key arrival region. In the lair the exit is the boss grate. *Rev 2:* safe in b1 dead ends via the far-side bolt |
 | Falls / shafts | No bypass by construction: locks sit on bridges of `G`, and `G` holds every vertical, shaft and loop link. Levelcheck asserts that each lock edge is a bridge |
 | Death / reload | Single-life run, so nothing to save. A new game regenerates from the seed |
 
@@ -93,7 +106,10 @@ on the lair door) and L1 step (7)'s note "key gating only matters from 3F". The 
 reseeds 0, histogram/restart/keyless stats · `K6` no-softlock simulation from every region · `K7` D0 none, D8 seal
 never `EG_LOCK`. Emulator: `key_pickup_first_entry` · `lock_bump_nokey` (0 turns, line) · `lock_unlock_key` (1 turn,
 count −1) · `lock_persists_reentry` · `lock_opener_blocked` · `two_keys_count` (D4+) · `d8_lock_and_seal` ·
-`teleport_past_lock_no_softlock`.
+`teleport_past_lock_no_softlock`. *Rev 2:* `K1` → horizontal tree bridge, each needed · `K3` → keys in dead ends, fixpoint-valid ·
+`K4` → argmax score + tie chain · `K6` → key-set fixpoint from every component · `K8` colour rule (cyan first) · `K9`
+non-linear share ≥ 50 %, b1/b2 split. Emulator: `two_keys_count` → `two_keys_colours` (panel `$EB`, bag lines) ·
+`lock_wrong_colour` (0 turns) · `lock_plate_attr` (`$45`/`$43` both sides) · `lock_far_side_bolt` · `teleport_b1_deadend`.
 
 **Decisions (user 2026-11-15): Q1 (c), Q2 n − 4, Q3 0 turns, Q4 allowed APPROVED; Q5 default (no hint) taken.**
 1. Lock model: (a) lair door only, 1 lock; (b) 1 mid-route lock (the lair door allowed); **(c) 1 lock on D1–D3, up to 2
@@ -102,6 +118,8 @@ count −1) · `lock_persists_reentry` · `lock_opener_blocked` · `two_keys_cou
 3. Bump without a key: **0 turns** (not 1).
 4. Teleport past a lock: **allowed** (vs excluding the regions beyond any lock that is still shut).
 5. A hint in the locked line (`LOCKED - FIND A KEY`, 19 B)? **No: reuse `THE DOOR IS LOCKED`.** The panel key cell is the hint.
+6. *(rev 2, DECIDED by the user 2026-11-15: cyan + magenta; far-side bolt yes; red rejected because it clashes with the sealed Sanctum)* Colours: **cyan + magenta** (yellow clashes with the `$06` planks), or yellow + cyan as first suggested?
+   Far-side bolt: **a lock opens keyless from its far side**, or exclude teleport from b1 dead ends instead?
 
 ## 3. Pacing: monsters and consumables ×~1.35, power items fixed
 
