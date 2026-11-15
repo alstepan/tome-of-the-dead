@@ -318,6 +318,18 @@ real 167,995 (`lwalk`, reported) / 140,475 (`blair`); `rwalk`, `lw24`, `lw24g` (
 render ticks past 2 frames (rwalk real 155.7k, as on main: perf_survey M2) and are reported, not gated, like
 `lwalk` / `lwalk4`; `lw24s` (hero + 3 Skeletons) and `lwalk4b` (real D4 Ogre + 2 Orcs) stay gated.
 
+### 5.2 NEW-MON3 scenarios (T9 / T10a, as built 2026-11-15; `tests/budget.py` `CAP_GATED`)
+
+Three CAP-gated scenarios on a REAL level (`level_descend` under a fixed seed, as `lmix4`): the work tick (max tick minus its ISR time) must stay <= **CAP 126,000 T**, and real (+ PRE_MAX) <= 141,816. They cover the new flyers' MOT|MIR frames, the 3-track projectile queue (F-1 / P-1) and the mirrored left-facing frames (`lmix` family, §5.1 C-T10).
+
+| Scenario | Setup | Measured worst tick (T) | Gate |
+|---|---|---|---|
+| `imp3` | REAL D4: knight + 3 Fire Imps flying (erratic, embers) | **98,915** | CAP 126,000 |
+| `pitv` | REAL D4, storey 0: knight + a pit-stuck Orc throwing + 2 Fire Imps spitting; counters held at 0 = 3 FX tracks per monster phase | **97,072** | CAP 126,000 |
+| `wr7` | REAL D7: knight + 3 Frost Wraiths bolting (3 tracks every acting turn; `KF_SLOW` = every 2nd turn) | **95,642** | CAP 126,000 |
+
+The slack to CAP is about 27k T on `imp3` and 29-30k T on `pitv` / `wr7`.
+
 ## 6. Headroom for Stage 2 content (after Rogue removal, E1 option A, AY reserve)
 
 | Store | Free | For | |

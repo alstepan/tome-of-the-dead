@@ -223,6 +223,7 @@ hole), `POTION` (1 cell), `CHEST` (2×2 cells), `TORCH` (1×2, optional).
 - y is clamped to the storey's **air band**: `7s ≤ y ≤ 7s+6−h`. Bat: 5 rows of
   freedom, Ghost: 3. Flyers never enter a floor row and never pass through walls
   or entities. Ghosts do not phase.
+- **Flyers may shoot (NEW-MON3 F-1, as built 2026-11-15):** a flyer with a RANGED-SPEC row (the Fire Imp's ember, the Frost Wraith's frost bolt) fires from the common `ai_flyer` exit after its melee check; its flight row is its bottom row (inside the standing hero's rows), it flies on between shots, and the movement rules above are unchanged. Rules: game.md §9.2. (The Gargoyle is a flyer that stays perched until woken, game.md §9.2 G-1.)
 - **Flyers and ladders (user 2026-10-06: free flight, SUPERSEDES the B8
   ladder-end rules below, which are kept only as history).** Final rule: a
   flyer's movement is exactly the band/wall/entity rules above, plus pits are

@@ -72,6 +72,19 @@ lqmix 120,638; walarm 114,308; wcast4 112,793.
 - Hybrid risk: several bodies in mirrored attack frames in one tick (pmix/mage/lqmix) — T1 policy +
   budget.py decide the hot set.
 
+### 4.1 NEW-MON3 frame sets (as built, 2026-11-15; `src/frames.asm`, `new_monsters.md` §6.1)
+The batch ran after C / C2 ("full C"): every non-SYM new frame is `|MIR` (left = the right variant mirrored at blit time, 0 pool
+for the left side). "Hot" = the MOT frames drawn every tick of a flight, "cold" = the STA attack / hurt / dead poses.
+
+| Kind | Hot (MOT\|MIR) | Cold (STA\|MIR) | SYM (never mirrored) |
+|---|---|---|---|
+| Gargoyle | `garg_fly`, `garg_fly2` | `garg_claw`, `garg_wake`, `garg_windup`, `garg_hurt`, `garg_dead`, `garg_alert` | `garg_perch` (the statue) |
+| Fire Imp (row 31 A) | `imp_fly1`, `imp_fly2` | `imp_spit` (ATTACK / SHOOT / HURT), `imp_dead` | |
+| Frost Wraith (`U_WRAITH`) | `wraith_drift`, `wraith_drift2`, `wraith_drift3` | `wraith_touch`, `wraith_cast` (the bolt) | |
+| shared | | | `dust_dead` (the Wraith's DEAD) |
+
+Pool bytes: see the `memory-map.md` NEW-MON3 T7 / T10b ledgers (sources in bank-0 `SRC0`).
+
 ## 5. Where the freed pool goes
 - NOT R6: SRC6_ADDR = $10000 − 42×256 − 14×256 = $C800, exactly at the boot-block ASSERT (defs.asm:68).
 - (a) bank 0 by raising POOL_START (more B0_CODE_RES/text, cold code via FARB0; watch 0→4 straddle);
@@ -115,6 +128,14 @@ lqmix 120,638; walarm 114,308; wcast4 112,793.
 - **T10 [junior] Budget scenario "lmix"** — hero facing right, 4 bodies to its right in mirrored attack
   frames at once; ≤ CAP, real ≤ 141,816. Deps: T7.
 Order: T1 ∥ T2 → T3 → T4 (T5 in parallel) → T6 → T7 ∥ T10 → T8 → T9.
+
+**NEW-MON3 scenario list (T9 / T10a, as built; all CAP-gated in `tests/budget.py` `CAP_GATED`: work <= CAP 126,000, real <= 141,816):**
+- `lmix` (T10, C era): knight + 4 bodies in left-facing mirrored attack frames at once; its siblings `lmixw`, `lmix4`, `lhurt`, `lhurt4`. The new cold frames (`garg_claw`, `imp_spit`, `wraith_touch`, `wraith_cast`) are STA|MIR, so they fall under the same worst case; no new `lmix` variant was needed.
+- `imp3` (T9): knight + 3 Fire Imps flying in a REAL D4 room (erratic flyers, MOT|MIR frames, embers).
+- `pitv` (T10a): a pit volley on a REAL D4: a pit-stuck Orc throwing + 2 Fire Imps spitting, every counter held at 0 = 3 FX tracks queued per monster phase.
+- `wr7` (T10a): three Frost Wraiths bolting on a REAL D7 (3 tracks every acting turn, `KF_SLOW`).
+Measured worst ticks (T): `imp3` 98,915, `pitv` 97,072, `wr7` 95,642, all under CAP 126,000 (`budget.md` §5.2).
+
 
 ## 7. Integration risks
 1. Bank 2 full (9 B free); T3 + T6 need ≈ 130 B.
