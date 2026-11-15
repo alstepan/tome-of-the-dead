@@ -7125,9 +7125,9 @@ MOT|MIR, `wraith_cast` STA|MIR; `imp_dead` (24×16) STA|MIR. Contiguous per unit
 packed sources SRC0 (B0_CODE2 914 -> 1,879 B, 7 blocks). `FID_COUNT` = `FRT_MAX` **163**.
 - **Poses** (seq_img.asm): Gargoyle perched = KS_IDLE `garg_perch`; waking = KS_CLIMB one-shot `garg_wake` 2 + `garg_alert` 2;
   awake at rest = the KS_CLIMBREST fid (`ga_wake + 3` = `garg_alert`; anim `.cyc` jumps to `.crest` for an awake Gargoyle: a
-  flyer is never on a ladder; -2 B bank 2 before `kind_tab`, whose ALIGN pad had 1 B); move = `garg_fly` 3 / `garg_fly2` 3;
+  flyer is never on a ladder; -2 B bank 2 before `kind_tab`, whose ALIGN pad had 1 B); move = `garg_fly` 4 / `garg_fly2` 4 (total 8);
   attack `garg_windup` -> `garg_claw` (IMPACT at 2 as before); hurt `garg_hurt`; death `garg_dead` (mid-air). Wraith: idle /
-  move = drift 4 / drift2 4 / drift3 4; melee touch unchanged; **KS_BLOCK = the FROST BOLT cast** (drift 2 -> `wraith_cast` 2
+  move = drift 5 / drift2 5 / drift3 6 (total 16); melee touch unchanged; **KS_BLOCK = the FROST BOLT cast** (drift 2 -> `wraith_cast` 2
   + IMPACT): R6 `rg_pose` plays KS_BLOCK for a `K_ALIAS` shooter (+7 B; the Imp's KS_BLOCK = its attack, 0 B; a monster never
   gets RC_BLOCK: only the Knight blocks). Imp death `imp_dead` (mid-air). The Wraith keeps `dust_dead`. (U_DUST is still pooled
   with the Gargoyle / Imp rows: 96 B on D4 / D6 that no frame needs any more; left as is, pool slack is ample there.)
@@ -7137,7 +7137,7 @@ packed sources SRC0 (B0_CODE2 914 -> 1,879 B, 7 blocks). `FID_COUNT` = `FRT_MAX`
   PROTO): region 1 = bank-2 `seq_bytes` (`SEQB_LEN` 256 -> **160**); region 2 = low-RAM **`seq2_bytes`** (`SEQ2_LEN` **112**,
   lowram.asm DS) for the blocks after `ksm_r2` (Skeleton, Bat, Orc, Death Knight moved there unchanged + the three NEW-MON3
   blocks; the set = the smallest region 2 leaving region-1 headroom, brute-forced over D1..D8 + PROTO). Need: D8 156 + 111,
-  D7 138 + 103, D6 128 + 98, D5 110 + 108, D3 130 + 70, PROTO 134 + 70. Region-2 reads are contended low RAM (a few
+  D7 138 + 103, D6 128 + 97, D5 110 + 108, D3 130 + 70, PROTO 134 + 70. Region-2 reads are contended low RAM (a few
   sequence-byte reads a body a tick).
 - **Loader to bank 0**: `sq_reset` / `sq_load` / `sq_fill` / `ksm_ptr` (low RAM, ~190 B) -> `src/sq0.asm` in B0_CODE2 (+
   `sq_kind`: the Vampire's bat form; `sq_load` swaps `SQ_TOP` / `SQ_TOP2` around a region-2 block, ~0.2k T); R6 pool6.asm

@@ -285,12 +285,12 @@ ksm_dk_e:
 ; Gargoyle (G-1, RCD_AWAKE): PERCHED = KS_IDLE (garg_perch, the statue: only while perched); WAKING = the KS_CLIMB slot
 ; as a one-shot SEQUENCE wake -> alert (perch6; 4 ticks as before; a flyer never reads KS_CLIMB: anim .move takes KS_MOVE
 ; for every flyer step); AWAKE at rest = the KS_CLIMBREST fid = garg_alert, the grounded alert crouch (anim .cyc jumps to
-; .crest: a flyer is never on a ladder); flight = garg_fly / garg_fly2 (wing down-stroke, both MOT); ATTACK = windup ->
+; .crest: a flyer is never on a ladder); flight = garg_fly 4 / garg_fly2 4 (wing down-stroke, both MOT); ATTACK = windup ->
 ; claw; HURT = garg_hurt; DEATH = garg_dead mid-air (the bat_dead shape).
 ksm_ga:         KSMH ksm_ga_e - ksm_ga_s, 2, ga_idle, ga_fly, ga_wake, ga_wake + 3, ga_attack, ga_hurt, ga_hurt, ga_death, ksm_ga_s
 ksm_ga_s:
 ga_idle:        DB 1, FID_garg_perch, 1, SEQ_END
-ga_fly:         DB 6, FID_garg_fly, 3, FID_garg_fly2, 3, SEQ_END
+ga_fly:         DB 8, FID_garg_fly, 4, FID_garg_fly2, 4, SEQ_END   ; power-of-two total: cycle_frame AND path
                 ASSERT (FFL_garg_fly & FF_MOTION) && (FFL_garg_fly2 & FF_MOTION)
 ga_wake:        DB FID_garg_wake, 2, 0, FID_garg_alert, 2, 0, SEQ_END   ; 4 ticks as before; ga_wake + 3 = garg_alert
 ga_attack:      DB FID_garg_windup, 2, 0, FID_garg_claw, 2, SF_IMPACT, SEQ_END
@@ -308,12 +308,12 @@ ia_attack:      DB FID_imp_fly1, 2, 0, FID_imp_spit, 2, SF_IMPACT, SEQ_END
 ia_hurt:        DB FID_imp_spit, 3, 0, SEQ_END
 ia_death:       DEATHSEQ FID_imp_spit, FID_imp_dead, FID_imp_dead, FID_imp_fly1
 ksm_ia_e:
-; Frost Wraith: T10b drift loop drift -> drift2 -> drift3 (all MOT: REST + flight, period 12); touch = melee ATTACK / HURT;
+; Frost Wraith: T10b drift loop drift 5 -> drift2 5 -> drift3 6 (all MOT: REST + flight, period 16); touch = melee ATTACK / HURT;
 ; KS_BLOCK = the FROST BOLT cast (rg_pose: a K_ALIAS shooter plays KS_BLOCK; same IMPACT tick as the touch); DEAD = the
 ; shared dust_dead (rime by KT_ATTR).
 ksm_wr:         KSMH ksm_wr_e - ksm_wr_s, 2, wr_idle, wr_idle, wr_idle, wr_idle + 1, wr_attack, wr_hurt, wr_cast, wr_death, ksm_wr_s
 ksm_wr_s:
-wr_idle:        DB 12, FID_wraith_drift, 4, FID_wraith_drift2, 4, FID_wraith_drift3, 4, SEQ_END
+wr_idle:        DB 16, FID_wraith_drift, 5, FID_wraith_drift2, 5, FID_wraith_drift3, 6, SEQ_END   ; total 16: AND path
                 ASSERT (FFL_wraith_drift & FF_MOTION) && (FFL_wraith_drift2 & FF_MOTION) && (FFL_wraith_drift3 & FF_MOTION)
 wr_attack:      DB FID_wraith_drift, 2, 0, FID_wraith_touch, 2, SF_IMPACT, SEQ_END
 wr_cast:        DB FID_wraith_drift, 2, 0, FID_wraith_cast, 2, SF_IMPACT, SEQ_END

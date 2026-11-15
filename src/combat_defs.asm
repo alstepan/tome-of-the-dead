@@ -270,7 +270,8 @@ AM_DMG          EQU SP_KB           ; rg_shoot: the last damage roll (the Mirror
 ; counter, raised to 1 if 0 (the same grace); the Ogre's raw SLAM count 1 becomes 0 there);
 ; bits 2-5 T9's summon counter S (Bone Caller / Pharaoh;
 ; turns to the next summon, 0 = ready); bit 6 summon-made (sp_run; lp_bank discards it); bit 7
-; the once bit (a Rabbit Rat has bred; banked as LEK_BRED, lp_spawn restores it).
+; the once bit (a Rabbit Rat has bred / a Vampire has fled / a Goblin's pit dagger is spent; banked as
+; LEK_BRED, lp_spawn restores it).
 ; place_follower keeps bits 2-7 (RCD_KEEP).
 E_RCD           EQU E_POT
 RCD_MASK        EQU %00000011
