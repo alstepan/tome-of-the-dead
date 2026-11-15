@@ -29,11 +29,16 @@ Cost: low RAM 844 → ~735 free (LVL_STATE +64, LP +45). Manager decision: DG_PL
 | T2 | staff Opus | — | Behaviour-neutral layout refactor, grid stays 3×3: `ROOM_SLOTS` 12, `GRID_CELLS` 9, TRAP_MAX 8, `attempt` zeroing, tut_start / proto_fix / tut0_level copy 9 + zero 9–11, asserts; hex-address tests (endwait, endcard_k) | low RAM −109, bank 3 +~8, blob +2..10, proto +2 |
 | T3 | junior | — (block-model run needs T2) | Python 3×4 reference: `levelgen.py` §2 rules, LP `range(12)`, potions 3 + rnd(2) in level-gen step 8, `levelcheck`, decor_sweep / density, `levelgen_test` | 0 |
 | T4 | staff Sonnet-ok | T2, T3 | Z80 generator 3×4, bit-exact with T3: valid/hedge tabs, bottom row 9, dfs_done, D8 `cp 12`, S = 9 + 2·rnd, sanct7 pairs, **tome6/7 invert `bit 1`** (9 left, 11 right), fx_cand 11, GRID_H 4, ROOMS 10–12, LP_N_MIN 16, RESPAWN_MAX 8 | bank 3 +~20, R6 +3, bank 7 ±2 |
-| T5 | staff Sonnet-ok | T1 | Pacing: lp_dtab 18/19/19/20/22/20/20/16, xpn_tab ×1.35, FED regen 1 + MAXHP div k (DN_SLOT+DS_SNAP grows by the HP actually gained) | bank 7 +15–20 |
+| T5 | staff Sonnet-ok | T1 | Pacing (package 2, user 2026-11-15): lp_dtab = today × 1.5 half-up 20/21/21/23/24/23/23/18 (was ×1.35 18/19/19/20/22/20/20/16, superseded), xpn_tab ×1.35, FED regen 1 + MAXHP div 24 (DN_SLOT+DS_SNAP grows by the HP actually gained), Mage MP period alternating 4/5 (Warrior 8), respawns progress-tied per larger_depths §3.2 (p 0.75 per first room entry, cap 6, time trickle disabled on larger depths) | bank 7 +15–20 |
 | T6 | junior | T1, T2 | Item generator: food 4–5, scrolls 2, arrows 1d4+6, traps ×4/3 cap 8; `.fe` `bit 7, l` assumes 32 entries | B0 overlay +10–30 |
 | T7 | junior | T4–T6 | Tests / goldens re-baseline, doc sync (game.md §8, budget.md §6, decor_rules2 §3, larger_depths §5); re-check the trickle budget (+33 %) | 0 |
 
-Waves: T1 ∥ T2 ∥ T3 → T4 ∥ T5, then T6 → T7.
+| T3b | junior | T3 | Python level key per `larger_depths.md` §2.1: lock sets on bridge edges of the start→lair path, key placement, F_min = n − 4 with Warnsdorff-bias restart, levelcheck no-softlock proof + coverage report (300 seeds) | 0 |
+| T8 | staff Sonnet-ok | T4 | Z80 key runtime: key found on key-room first entry (count 0–2, `YOU FIND A KEY`), locked door = wall to all monsters, bump 0 turns `THE DOOR IS LOCKED` / with key 1 turn opens for the level (`YOU UNLOCK THE DOOR`), bag KEY slot shows the count | bank 3/7 + 19 B text |
+
+User 2026-11-15: level key goes live in LARGER-D (§2.1, decisions Q1–Q5). T4 ports T3+T3b bit-exact (lock/key generation in levelgen).
+
+Waves: T1 ∥ T2 ∥ T3 → T3b → T4 ∥ T5, then T6 ∥ T8 → T7.
 
 ## Acceptance highlights
 
