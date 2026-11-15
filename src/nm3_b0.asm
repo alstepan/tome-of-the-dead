@@ -125,9 +125,9 @@ LP_DROW         EQU 10
                 ASSERT $ - lp_dtab == LEVELS * LP_DROW
 
 ;------------------------------------------------------------------------------
-; lp_post (boss0.asm, was R6 boss6.asm): FARB0 from bank-3 lp_enter, once per lair unit.
+; lp_post (boss0.asm): LARGER-D T5 -> the low-RAM cold block (lowram.asm; B0_CODE2 had no room for the
+; ANIM_TRACE build); a plain call from bank-3 lp_enter.
 ;------------------------------------------------------------------------------
-                INCLUDE "boss0.asm"
 
 ;------------------------------------------------------------------------------
 ; The panel items (bars + 2-digit numbers): item_hp (was HOT_COPY), item_mp (was bank-2

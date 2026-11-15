@@ -276,7 +276,7 @@ lp_transition:
                 call hla
                 inc  (hl)
                 ld   hl, TRK_PHASE             ; LARGER-D T5: a room entry: the progress-respawn event runs on the next
-                set  TRK_DUE_BIT, (hl)         ; INPUT tick (turn_input -> low-RAM rsp_run: the first-entry test, the roll, the pick)
+                set  TRK_DUE_BIT, (hl)         ; INPUT tick (turn_input -> bank-0 rsp_run: the first-entry test, the roll, the pick)
                 ld   hl, SLOTREC + SLOTREC_STRIDE + R_VIS
                 ld   de, SLOTREC_STRIDE
                 ld   b, P_MAX_ENT - 1
@@ -363,7 +363,8 @@ lp_enter:
                 ld   hl, LPV_ROOM              ; of the lair takes its post (bank-0 boss0.asm, no
                 cp   (hl)                      ; stream step; keeps IX); an escort with no legal
                 jr   nz, .t0                   ; post falls back to its saved cell / lp_place
-                FARB0 lp_post                  ; NEW-MON3 T1: bank 0 (boss0.asm; was far6 R6, +2 B); L = 1: C = 1, E = x
+                xor  a                         ; LARGER-D T5: A = 0 the post (!= 0: .np's boss fallback)
+                call lp_post                   ; LARGER-D T5: low RAM (boss0.asm; was FARB0 bank 0); L = 1: C = 1, E = x
                 ld   a, l
                 cp   1                         ; Z, NC: posted
                 jr   z, .sp
@@ -378,7 +379,7 @@ lp_enter:
 .pl:            call lp_place                  ; CF = no legal cell, else C = s, E = x
 .sp:            call nc, lp_spawn              ; CF = no free slot
                 jr   c, .np
-                ld   a, (LPV_FACE)             ; ROOM-MEM2: consumed (a later unit faces the hero unless
+.spd:           ld   a, (LPV_FACE)             ; ROOM-MEM2: consumed (a later unit faces the hero unless
                 or   a                         ; its own try 0 sets it); a flyer placed by try 0 / the
                 jr   z, .nu                    ; slide (bit 6) goes back to its saved band row (R6 lp_fy6).
                 ld   e, a                      ; (0, the first-visit path: 29 T)
@@ -388,7 +389,23 @@ lp_enter:
                 ld   hl, lp_fy6
                 call nz, far6
                 jr   .nu
-.np:            xor  a                         ; not placed: stays in the record (its LP_POS byte: lp_t06
+.np:            ld   hl, (LPV_RDP)             ; LARGER-D T5 (boss.py R0): the lair's BOSS that neither its post (no
+                ld   a, (hl)                   ; gap-5 col: 3x4 lairs) nor try 0 / the slide / lp_place could seat:
+                and  LEK_KIND_MASK | LEK_GOLD  ; lp_post again with A != 0 -> the farthest cell-legal col of its G1a
+                ld   hl, LP_BOSS               ; walk (gap < 5). Never lost in the record (invisible) again.
+                cp   (hl)
+                jr   nz, .np0
+                ld   a, (LVL_LAIR)
+                ld   hl, LPV_ROOM
+                cp   (hl)
+                jr   nz, .np0
+                ld   a, 1                      ; the fallback mode
+                call lp_post
+                dec  l
+                jr   nz, .np0
+                call lp_spawn                  ; C = 1, E = x (IX kept); a 2nd CF: the plain path, no loop
+                jr   nc, .spd
+.np0:           xor  a                         ; not placed: stays in the record (its LP_POS byte: lp_t06
                 ld   (LPV_FACE), a             ; copied it to WRP); no try-0 marker leaks to the next unit
                 ld   hl, (LPV_RDP)
                 ld   de, (LPV_WRP)

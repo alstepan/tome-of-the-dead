@@ -3099,7 +3099,8 @@ tries to protect it; rules designer decision 2026-10-29).** Applies to every lai
     < 5 cols, the boss spawns shifted away from the hero, 1 col at a time, until the gap is 5
     (worst case 5 cols, e.g. `c` = 24 with the hero at x 28). It then walks to `P` by G2. LARGER-D T5
     (engineer, boss.py R0): if no col of the walk has gap 5 and legal cells (3×4 lairs with several shafts on
-    storey 1), the boss takes the farthest legal col of the walk (`c` if legal), gap < 5; never the random rule.
+    storey 1), the normal 8-try placement runs as before; if that seats nothing either, the boss takes the
+    farthest legal col of the walk (`c` if legal), gap < 5 — it is never left unplaced.
   - **G1b Escort:** storey 1, shoulder to shoulder on the **lair-door side** of the boss (door
     side from the lair edge in `EDGE_TAB`): `x = bx − 1 − we` (door left) or `x = bx + wb + 1`
     (door right), `we`/`wb` = body widths in cols. Illegal by §9.4.3 (ladder box, arrival box,

@@ -591,9 +591,10 @@ def lp_check(b, stats=None, f3=False, lvl=1):
                 v.append(f"LP: room {r} lost {lp2[o('LP_DISCARD')]} unit(s) to the sum cap")
             if ws > cap or len(out) > max(q[r], 1 if r == lair else 0) + (1 if r == lair else 0):
                 v.append(f"LP: room {r} spawn sum {ws} / {len(out)} units")
-            for kb, hp, s, x, _ in out:
+            for k_, (kb, hp, s, x, _) in enumerate(out):
                 w = (G.k3_info if f3 else G.lp_kinfo)(kb & 31)[0]
-                if s == hs and not (x >= hx + 3 + 5 or x + w + 5 <= hx):
+                if s == hs and not (x >= hx + 3 + 5 or x + w + 5 <= hx) and k_ not in G.LP_POST_FB:
+                    # (LARGER-D T5: the boss post fallback, game.md G1a, may stand closer: exempt)
                     v.append(f"LP: room {r} spawn x{x} s{s} within 5 of the arrival x{hx}")
                 # I6 (L2): nobody spawns inside / against a mid-block, on a wide pit's fall
                 # columns (storey 0: holes + caps) or on its storey-1 landing columns

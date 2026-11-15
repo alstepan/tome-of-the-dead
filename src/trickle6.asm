@@ -163,7 +163,7 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 cp   RESPAWN_CHANCE
                 ret  nc
                 jr   trk_pick
-; rsp_pick — far6 from low-RAM rsp_run (rsp0.asm; far6 loses C: DE = Σ w >= 1, TRK_W = the weights, GEN_RNG =
+; rsp_pick — far6 from bank-0 rsp_run (rsp0.asm; far6 loses C: DE = Σ w >= 1, TRK_W = the weights, GEN_RNG =
 ; the stream, its own 0.75 roll spent). LARGER-D T5: the rest is trk_draw's room pick; an UNVISITED room (rsp_w
 ; mode $80) gets quota + 1 instead of an entry (.hit).
 rsp_pick:       ld   c, e
