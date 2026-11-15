@@ -140,7 +140,7 @@ def kx_melee(k, sym):
     return [TYPES.index("PHYS"), 0]
 
 
-XP_NEXT = [40, 100, 200, 340, 500, 700, 920, 1150]          # levels 2..9
+XP_NEXT = [44, 110, 220, 374, 550, 770, 1012, 1265]      # levels 2..9 (LARGER-D T5 package 3)
 LEVELUP = [(4, 1), (3, 2)]                                   # Warrior, Mage (HP, MP)
 STEPS = {4: (1, 0), 6: (0, 1), 8: (1, 0)}                    # level -> (atk, eva)
 

@@ -2369,12 +2369,15 @@ def to_json(name, results):
     return out
 
 
-# LARGER-D (docs/design/larger_depths.md sec 3 / 3.1): 12-room levels, monsters and consumables x1.35, XP_NEXT x1.35.
+# LARGER-D (docs/design/larger_depths.md sec 3 / 3.1 / 3.2): 12-room levels, consumables x1.35, and the shipped
+# "package 3" (user 2026-11-15): monsters x1.5, XP_NEXT 44..1265, FED regen 1 + MAXHP div 40, Mage MP 5 turns,
+# progress respawns p 0.75 cap 6 (sim: W 25.4 / M 26.5).  --larger-d / --ld-bal sweep axes override their keys.
 LARGER_D = {"param": {
     "ROOMS_LO": 12, "ROOMS_HI": 12,
-    "MON_COUNT": [18, 19, 19, 20, 22, 20, 20, 16], "TRICKLE_MAX": 8,
+    "MON_COUNT": [20, 21, 21, 23, 24, 23, 23, 18], "TRICKLE_MAX": 6,
     "FOOD_N": [4, 5], "POT_N": [3, 4], "SCR_N": [2, 2], "ARR_BASE": 7, "TRAP_MULT": 4 / 3,
-    "XPN": [55, 135, 270, 460, 675, 945, 1240, 1550]}}
+    "XPN": [44, 110, 220, 374, 550, 770, 1012, 1265],
+    "FED_REGEN_K": 40, "MAGE_REGEN": 5, "RESP_MODE": "progress", "RESP_P": 0.75}}
 # knob ladder of sec 3.1, cumulative, in the spec's order (the regen divisor is the sweep axis itself)
 LD_KNOBS = [("XP_NEXT x1.25", {"XPN": [50, 125, 250, 425, 625, 875, 1150, 1440]}),
             ("potions min 4", {"POT_N": [4, 4]}),
@@ -2429,7 +2432,7 @@ TODAY_COUNT = [13, 14, 14, 15, 16, 15, 15, 12]
 
 def bal_conf(regen, resp, dens, base, extra=None):
     """One LARGER-D re-sweep cell.  regen: flat | level:L | maxhp:k.  resp: time | prog:p:max | progtime:p:max.  dens: x today's MON_COUNT."""
-    pr = {}
+    pr = {"FED_REGEN_K": None}         # LARGER_D presets k = 40: flat / level clear it (k wins if both set)
     kind, _, arg = regen.partition(":")
     if kind == "level":
         pr["FED_REGEN_L"] = int(arg)
@@ -2440,7 +2443,9 @@ def bal_conf(regen, resp, dens, base, extra=None):
     f = resp.split(":")
     if f[0] in ("prog", "progtime"):
         pr.update(RESP_MODE="progress" if f[0] == "prog" else "progress+time", RESP_P=float(f[1]), TRICKLE_MAX=int(f[2]))
-    elif f[0] != "time":
+    elif f[0] == "time":
+        pr["RESP_MODE"] = "time"         # LARGER_D now presets progress
+    else:
         raise SystemExit("bad resp " + resp)
     pr.update(extra or {})
     pr["MON_COUNT"] = [round(c * float(dens)) for c in TODAY_COUNT]
@@ -2494,6 +2499,7 @@ def main(argv=None):
     ap.add_argument("--larger-d", action="store_true", help="LARGER-D balance gate sweep (sec 3.1); --seed takes a comma list")
     ap.add_argument("--ld-k", default="16,24,32", help="FED regen divisors for --larger-d")
     ap.add_argument("--ld-steps", type=int, default=len(LD_KNOBS), help="--larger-d: sec 3.1 knobs to apply after the plain sec 3 step")
+    ap.add_argument("--ld-pkg", action="store_true", help="run the shipped LARGER-D preset (LARGER_D, package 3) under any overrides")
     ap.add_argument("--ld-bal", action="store_true", help="LARGER-D re-sweep: regen x respawn x density grid (--bal-*)")
     ap.add_argument("--bal-regen", default="flat,level:4,level:6")
     ap.add_argument("--bal-resp", default="time,prog:0.75:8,progtime:0.75:8")
@@ -2507,6 +2513,8 @@ def main(argv=None):
         ov = merge(ov, json.load(open(f)))
     if a.sets:
         ov = merge(ov, parse_set(a.sets))
+    if a.ld_pkg:
+        ov = merge(LARGER_D, ov)
     if a.larger_d:
         return larger_d_sweep(a, ov)
     if a.ld_bal:

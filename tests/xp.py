@@ -165,12 +165,12 @@ def run(h, p, check):
     # ======================= L / G: threshold, gains ============================
     scene(K_KNIGHT, hp=30, mp=3, maxmp=6)
     base_w = katk(K_KNIGHT)
-    x = kill(51)
-    check("L1 XP 51 + Goblin 3 = 54: stays L1", x == 54 and p.rb("LVL") == 1 and p.rb("XP_UP") == 0,
+    x = kill(40)
+    check("L1 XP 40 + Goblin 3 = 43: stays L1", x == 43 and p.rb("LVL") == 1 and p.rb("XP_UP") == 0,
           (x, p.rb("LVL")))
-    x = kill(52)
+    x = kill(41)
     st = hero_stats()
-    check("L2 XP 52 + 3 = 55 = XP_NEXT[2] (LARGER-D T5): L2, XP_UP cleared", x == 55 and st[0] == 2 and p.rb("XP_UP") == 0,
+    check("L2 XP 41 + 3 = 44 = XP_NEXT[2] (LARGER-D T5 package 3): L2, XP_UP cleared", x == 44 and st[0] == 2 and p.rb("XP_UP") == 0,
           (x, st))
     check("G1 Warrior: HP 30/30 -> 35/35, MP 3/6 -> 4/7", st[1:] == (35, 35, 4, 7) and S["LUP_W_HP"] == 5, st)
     check("G1 'YOU REACH LEVEL 2!' logged once", lines.count(TXT["xp_reach"] + "2!") == 1, lines)
@@ -205,7 +205,7 @@ def run(h, p, check):
 
     # ======================= M: MP regen ==========================================
     # B20 (game.md 4.0): Mage period 6; gain = 1 + MAXMP div 16 (MAXMP 16 -> +2), clamped
-    for hero, per, mx in ((K_KNIGHT, 32, 2), (K_WIZARD, 18, 2), (K_WIZARD, 18, 16)):   # LARGER-D T5: MP_PER in quarter-turns, +4 a turn (Mage 4.5)
+    for hero, per, mx in ((K_KNIGHT, 32, 2), (K_WIZARD, 20, 2), (K_WIZARD, 20, 16)):   # LARGER-D T5: MP_PER in quarter-turns, +4 a turn (Mage 5, package 3)
         gain = 1 + (mx >> 4)
         scene(hero, mp=0, maxmp=mx)
         got = []
@@ -273,10 +273,10 @@ def run(h, p, check):
         ok = p.code([0x21] + w16(S["xp_turn"]) + [0xCD] + w16(S["far7"]))   # (DI: SYS_FRAMES holds)
         return ok, p.tstates
     tt = {}
-    for nm, xp0, xpu in (("regen only", 0, 0), ("XP no level", 10, 1), ("1 level + line", 55, 1),
-                         ("L1->L4 + 2 lines", 270, 1), ("L1->L9 + 3 lines", 1550, 1)):
+    for nm, xp0, xpu in (("regen only", 0, 0), ("XP no level", 10, 1), ("1 level + line", 44, 1),
+                         ("L1->L4 + 2 lines", 220, 1), ("L1->L9 + 3 lines", 1265, 1)):
         tt[nm] = xp_code(xp0, xpu, True)[1]
-    ok2, t9 = xp_code(1550, 1, False)
+    ok2, t9 = xp_code(1265, 1, False)
     pend = (p.rb("XP_UP"), p.rb("LVL"))
     print(f"[info] xp_turn costs (1st frame): {tt}; in a 2nd frame (level-up deferred): {t9} T", flush=True)
     # Limit 13,500 T (was 13,000; MEM-SND fix): the cost is mostly the 3 log lines'
@@ -293,7 +293,7 @@ def run(h, p, check):
           ok2 and pend == (1, 1) and t9 <= 1000, (ok2, pend, t9))
     # a deferred level-up lands on a later INPUT tick (turn_input -> xp_level)
     scene(K_KNIGHT, hp=30, mp=0, maxmp=6)
-    p.wmem(S["XP"], w16(270))
+    p.wmem(S["XP"], w16(220))
     p.wb("XP_UP", 1)
     p.tick(2)
     check("C3 deferred level-up done by a later INPUT tick: L4, REACH LEVEL 4!, STRIKE TRUER; XP_UP 0",

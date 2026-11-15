@@ -27,8 +27,9 @@ GUARD_GAP       EQU 5                       ; G1a / G1b: body gap to the hero's 
 ;    if hx < c, else left) to the first x with gap >= 5 whose body cols carry
 ;    no LP_CMAP mark outside the exit's own footprint marks c-1 .. c+3 (game.md
 ;    §9.2 G1: the exit is exempt, every other rule holds); none inside
-;    LP_XMIN .. LP_XMAX + 1 - wb -> L = 0 (the ordinary placement; only test
-;    arrival boxes no real exit makes reach it);
+;    LP_XMIN .. LP_XMAX + 1 - wb -> the farthest such x without the gap rule
+;    (LARGER-D T5: 3x4 lairs reach it), L = 0 (the ordinary placement) only if
+;    no x of the walk is cell-legal;
 ;  - the boss (kind | LEK_GOLD == LP_BOSS): storey 1, x = bx; LF_PROVOKED
 ;    cleared (G2: cleared at spawn);
 ;  - any other unit (the escort; banked followers too): storey 1, shoulder to
@@ -144,11 +145,17 @@ lp_post:
 .ok:            ld   e, a
                 jr   .one
 ; .post: C = c, E = wb -> NC: A = bx; CF: no legal post. Keeps C, D, E.
+; LARGER-D T5 (boss.py R0, D5 seed 50107): a 3x4 lair can have no x with gap 5 in range (door right, c 24, three
+; more shafts' footprints on storey 1): then bx = the farthest cell-legal x of the walk (c itself if legal; the
+; "best" lives on the stack as AF: A = x, CF = none yet). +10 B.
 .post:          ld   a, c
+                call .marks
+                push af                        ; best = c (CF: c carries a body mark, none)
+                jr   c, .sh
                 call .gap
                 jr   c, .sh
-                call .marks
-                ret  nc                        ; gap and cells hold at c: bx = c
+                pop  af                        ; gap and cells hold at c: bx = c, NC
+                ret
 .sh:            ld   a, (LP_HX)
                 cp   c
                 ld   b, 1                      ; the hero left of c: shift right
@@ -157,11 +164,16 @@ lp_post:
 .pd:            ld   a, c
 .pl:            add  a, b
                 call .rng
-                ret  c                         ; ran out of the room: no post
-                call .gap
-                jr   c, .pl
+                jr   c, .pe                    ; ran out of the room: the best (CF if none)
                 call .marks
                 jr   c, .pl
+                pop  hl
+                push af                        ; best = x (NC)
+                call .gap
+                jr   c, .pl
+                pop  hl                        ; NC kept: A = bx
+                ret
+.pe:            pop  af
                 ret
 ; .legal: A = x, E = width -> NC = legal (range, gap, marks). Keeps A, BC, DE.
 .legal:         call .rng

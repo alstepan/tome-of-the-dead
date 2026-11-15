@@ -482,17 +482,15 @@ lp_place:       ld   b, LP_TRIES
 ;             (lp_legal); lp_spawn marks each body it places.
 ; Clobbers: A, BC, DE, HL, IX.   ~2.5k T
 ;------------------------------------------------------------------------------
-lp_cmap:        ld   hl, LP_CMAP               ; clear: 3 stores / loop, ~15 T/B
-                ld   b, 2 * LP_CMW / 3         ; (ldir: 21 T/B; ~0.4k T saved)
+lp_cmap:        ld   hl, LP_CMAP               ; clear: 6 stores / loop, ~13 T/B (LARGER-D T5: was 3,
+                ld   b, 2 * LP_CMW / 6         ; ~15 T/B: -0.14k T an entry for +6 B; ldir: 21 T/B)
                 xor  a
-.c:             ld   (hl), a
-                inc  l
+.c:             REPT 6
                 ld   (hl), a
                 inc  l
-                ld   (hl), a
-                inc  l
+                ENDR
                 djnz .c
-                ASSERT (2 * LP_CMW) % 3 == 0
+                ASSERT (2 * LP_CMW) % 6 == 0
                 ld   a, (LPV_ROOM)
                 call rdp
                 push hl
@@ -758,12 +756,13 @@ lp_spawn:       push de                        ; E = col
                 ASSERT (ST_T1 & $FF) == $E0 && ST_T2 == ST_T1 + 16 && ST_X == (ST_FLAGS & $FF00) + $100 && (ST_FLAGS & $FF) == $10
                 push ix
                 pop  hl
-                ld   b, P_ENT_STRIDE / 2       ; the slot = 0 (32-aligned: one page), 2 B a pass:
-.z:             ld   (hl), d                   ; 0.56k T (the LDIR it replaces: 0.67k), 2 B less
-                inc  l
-                ld   (hl), d
-                inc  l
+                ld   b, P_ENT_STRIDE / 8       ; the slot = 0 (32-aligned: one page), 8 B a pass:
+.z:             REPT 8                         ; 0.40k T (LARGER-D T5: was 2 B a pass, 0.56k; the
+                ld   (hl), d                   ; x1.5 density spawns ~1.8 units an entry: -0.29k T
+                inc  l                         ; on the lp_enter mean for +12 B)
+                ENDR
                 djnz .z
+                ASSERT P_ENT_STRIDE % 8 == 0
                 ld   a, (LPV_FACE)             ; ROOM-MEM2: placed on its LP_POS cell (try 0): its saved facing
                 ld   (ix+E_FLAGS), a           ; (lp_t06: EF_LEFT bit, != 0 marks it for .mk; spawn_one rewrites
                 jr   .mk                       ; E_FLAGS); 0 = face the hero

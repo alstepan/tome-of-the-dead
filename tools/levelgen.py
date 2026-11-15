@@ -981,14 +981,14 @@ def _x2(*k4):
 
 # NEW-MON3 T9: the new_monsters.md §5 lists (slots 0..n-1 distinct, fallback order; n..7 duplicates = weight),
 # weights = the tuned preset tools/balance_nm3.json (user 2026-11-13). K_ALIAS = Imp on D4 / D6, Wraith D5 / D7 / D8.
-LP_TAB = {1: (_x2("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 13),
-          2: (_x2("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 14),
-          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT", "K_GOBLIN", "K_GHOST", "K_VAMPIRE", "K_GHOST"), "K_BOSS_D3", 14),
-          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER", "K_ALIAS", "K_ORC", "K_ARCHER", "K_RAT"), "K_BOSS_D4", 15),
-          5: (("K_MUMMY", "K_SPIDER", "K_SKELETON", "K_ARCHER", "K_GARGOYLE", "K_ALIAS", "K_MUMMY", "K_ARCHER"), "K_BOSS_D5", 16),
-          6: (("K_VAMPIRE", "K_GARGOYLE", "K_ALIAS", "K_GHOST", "K_NECRO", "K_ORC", "K_VAMPIRE", "K_ORC"), "K_BOSS_D6", 15),
-          7: (("K_ORC", "K_GHOST", "K_NECRO", "K_ALIAS", "K_MUMMY", "K_SPIDER", "K_NECRO", "K_NECRO"), "K_BOSS_D7", 15),
-          8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE", "K_ORC", "K_ALIAS", "K_NECRO", "K_NECRO"), "K_BOSS_D8", 12)}
+LP_TAB = {1: (_x2("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 20),
+          2: (_x2("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 21),
+          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT", "K_GOBLIN", "K_GHOST", "K_VAMPIRE", "K_GHOST"), "K_BOSS_D3", 21),
+          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER", "K_ALIAS", "K_ORC", "K_ARCHER", "K_RAT"), "K_BOSS_D4", 23),
+          5: (("K_MUMMY", "K_SPIDER", "K_SKELETON", "K_ARCHER", "K_GARGOYLE", "K_ALIAS", "K_MUMMY", "K_ARCHER"), "K_BOSS_D5", 24),
+          6: (("K_VAMPIRE", "K_GARGOYLE", "K_ALIAS", "K_GHOST", "K_NECRO", "K_ORC", "K_VAMPIRE", "K_ORC"), "K_BOSS_D6", 23),
+          7: (("K_ORC", "K_GHOST", "K_NECRO", "K_ALIAS", "K_MUMMY", "K_SPIDER", "K_NECRO", "K_NECRO"), "K_BOSS_D7", 23),
+          8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE", "K_ORC", "K_ALIAS", "K_NECRO", "K_NECRO"), "K_BOSS_D8", 18)}
 NM3_B_DEPTHS = L["NM3_B_DEPTHS"]          # bit d-1: row 31 is the Frost Wraith on depth d (defs.asm)
 NM3_WR_HP = L["NM3_WR_HP"]
 
@@ -1260,7 +1260,8 @@ def lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM):
     lair -> (1, x) or None (the ordinary 8-try placement). No spawn-stream step. The post: c (the
     lair's RD_EXITCOL: on the grate); a hero arriving on storey 1 with a body gap < 5 to it shifts
     it 1 col at a time away (right if hx < c) to the first x with gap >= 5 whose body cols carry
-    no cell-map mark outside the exit's own c-1..c+3; out of LP_XMIN..LP_XMAX+1-wb -> None. The
+    no cell-map mark outside the exit's own c-1..c+3; out of LP_XMIN..LP_XMAX+1-wb -> the farthest
+    such x without the gap (LARGER-D T5), None only if no x of the walk is cell-legal. The
     boss (kind | LEK_GOLD == LP_BOSS) stands there; any other unit tries shoulder to shoulder on
     the door side (left if the lair has a left edge), then the other side: range, gap 5, no
     mark, else None (also when the boss has no post)."""
@@ -1279,13 +1280,21 @@ def lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM):
                    or any(ps == 1 and plo <= k <= phi for ps, plo, phi in placed) for k in range(x, x + ww))
     bx = c
     if not gap(c, wb) or marks(c, wb, c - 1, c + 3):
+        # LARGER-D T5 (boss.py R0, D5 seed 50107): a 3x4 lair can have no x with gap 5 (door right, c 24, three more
+        # shafts' footprints on storey 1) -> the farthest cell-legal x of the walk (c itself if legal), never None then
+        best = None if marks(c, wb, c - 1, c + 3) else c
         d = 1 if hx < c else -1
         while True:
             bx += d
             if not rng(bx, wb):
-                return None
-            if gap(bx, wb) and not marks(bx, wb, c - 1, c + 3):
+                if best is None:
+                    return None
+                bx = best
                 break
+            if not marks(bx, wb, c - 1, c + 3):
+                best = bx
+                if gap(bx, wb):
+                    break
     if kb & (ROWM | LEK_GOLD) == boss:
         return (1, bx)
     sides = [bx - 1 - w, bx + wb + 1]

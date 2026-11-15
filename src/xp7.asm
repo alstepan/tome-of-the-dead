@@ -6,11 +6,11 @@
 ;==============================================================================
 
 ; LARGER-D T5 (larger_depths §3): MP_PER / MP_RG count QUARTER-turns (MP_RG += MP_RG_STEP a turn, at MP_PER:
-; MP_RG -= MP_PER, the remainder kept), so the Mage's 4.5-turn period is exact: it alternates 5 / 4 turns with no
-; toggle state, and the Mana / Scarab x 1/2 (2.25) and Plate x 2 (9) stay exact. Warrior 8 turns unchanged.
+; MP_RG -= MP_PER, the remainder kept), so the Mana / Scarab x 1/2 of the Mage's 5-turn period (2.5 turns: alternates 3 / 2)
+; and Plate x 2 (10) stay exact with no toggle state (package 3). Warrior 8 turns unchanged.
 MP_RG_STEP      EQU 4               ; quarter-turns per turn
 MP_REG_W        EQU 8 * MP_RG_STEP  ; Warrior +1 MP per 8 turns (game.md §4)
-MP_REG_M        EQU 18              ; Mage 4.5 turns (was 6; B20, larger_depths §3)
+MP_REG_M        EQU 5 * MP_RG_STEP  ; Mage 5 turns (package 3; was 6, B20; larger_depths §3.2)
 LUP_W_HP        EQU 5               ; §4.1 level-up: Warrior max HP +5 (WIDOW-SPIT: was 4), max MP +1
 LUP_W_MP        EQU 1
 LUP_M_HP        EQU 3               ; Mage max HP +3, max MP +2
@@ -46,7 +46,7 @@ xp_turn:
                 ld   a, (MP_HOLD)              ; 3E-T9 (hunger_turn, just before): WEAK
                 or   a                         ; (status or hunger) or a HUNGRY odd turn:
                 jr   nz, .lv                   ; no regen, counter held (-1 B vs ST_FLAGS)
-                ld   a, (MP_PER)               ; 3E-T8: hero_recalc's period in quarter-turns (class 32 / 18,
+                ld   a, (MP_PER)               ; 3E-T8: hero_recalc's period in quarter-turns (class 32 / 20,
                 ld   b, a                      ; Mana / Scarab x 1/2, Plate x 2; -6 B)
                 ld   hl, MP_RG
                 ld   a, (hl)
@@ -54,7 +54,7 @@ xp_turn:
                 cp   b
                 ld   (hl), a                   ; (ld keeps the carry)
                 jr   c, .lv
-                sub  b                         ; keep the remainder: the 4.5-turn Mage alternates 5 / 4
+                sub  b                         ; keep the remainder: a halved Mage period (2.5) alternates 3 / 2
                 ld   (hl), a
                 ld   hl, MAXMP
                 ld   a, (hl)

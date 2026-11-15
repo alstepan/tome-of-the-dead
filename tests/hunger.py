@@ -247,7 +247,7 @@ def run(h, p, check):
     # ======================= R: regen =============================================
     # HUNGRY: MP_RG advances on even TURN_COUNTER only, so the 1st gain lands on
     # turn 12 or 13 (parity), then every 12
-    for food, per, tag in ((80, 6, "FED"), (20, 9, "HUNGRY"), (5, None, "WEAK")):
+    for food, per, tag in ((80, 5, "FED"), (20, 10, "HUNGRY"), (5, None, "WEAK")):
         scene(K_WIZARD, mp=0, maxmp=12)
         setfood(food)
         got = []
@@ -257,22 +257,22 @@ def run(h, p, check):
         gains = [i + 1 for i in range(30) if got[i] != (got[i - 1] if i else 0)]
         if per is None:
             ok = gains == [] and p.rb("MP_RG") == 0
-        elif per == 6:
-            ok = gains == [5, 9, 14, 18, 23, 27]      # LARGER-D T5: the Mage's 4.5-turn period alternates 5 / 4
+        elif per == 5:
+            ok = gains == [5, 10, 15, 20, 25, 30]     # LARGER-D T5 package 3: Mage 5 turns (MP_PER 20 quarter-turns)
         else:
             ok = len(gains) == 3 and all(gains[i + 1] - gains[i] in (8, 10) for i in range(2))   # HUNGRY: odd turns held, ~9
-        check(f"R1 Mage MP regen while {tag}: " + ("none, MP_RG frozen" if per is None else f"+1 per {per} turns (4.5 alternating 5 / 4; HUNGRY ~9)"),
+        check(f"R1 Mage MP regen while {tag}: " + ("none, MP_RG frozen" if per is None else f"+1 per {per} turns (HUNGRY ~10)"),
               ok, (gains, got[-1], p.rb("MP_RG")))
-    # LARGER-D T5 (larger_depths 3.1): FED regen = 1 + MAXHP div 24 per 12 turns; DN_SLOT + DS_SNAP grows by the HP gained
+    # LARGER-D T5 (larger_depths 3.1): FED regen = 1 + MAXHP div 40 per 12 turns (package 3); DN_SLOT + DS_SNAP grows by the HP gained
     snap_a = S["DN_SLOT"] + S["DS_SNAP"]
-    for food, mx, tag in ((80, 16, "FED"), (80, 40, "FED"), (80, 70, "FED"), (80, 23, "FED"), (80, 24, "FED"), (40, 40, "OK")):
+    for food, mx, tag in ((80, 16, "FED"), (80, 39, "FED"), (80, 40, "FED"), (80, 79, "FED"), (80, 80, "FED"), (40, 40, "OK")):
         scene(hp=mx)
         p.set_ent(0, HP=5)
         setfood(food)
         s0 = p.rb(snap_a)
         for _ in range(24):
             p.turn("WAIT")
-        inc = 0 if tag == "OK" else 2 * (1 + mx // 24)
+        inc = 0 if tag == "OK" else 2 * (1 + mx // 40)
         got = p.ent(0)["HP"]
         check(f"R2 {tag} MAXHP {mx}: HP +{inc} in 24 turns, DS_SNAP +{inc}", got == 5 + inc and (p.rb(snap_a) - s0) & 255 == inc,
               (got, (p.rb(snap_a) - s0) & 255))
