@@ -88,6 +88,9 @@ jobs:
             python3 "tests/$t.py"
             echo "::endgroup::"
           done
+          echo "::group::size_report --check"
+          python3 tools/size_report.py --check   # ~1.5 s; bank-3 sizes vs the build's DISPLAY lines
+          echo "::endgroup::"
 
       - name: Upload tape / snapshot / symbols
         uses: actions/upload-artifact@v7
