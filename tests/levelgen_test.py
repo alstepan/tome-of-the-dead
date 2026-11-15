@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B3B-6: generator determinism + invariants over 1000 seeds x depths 1..8.
+"""B3B-6: generator determinism + invariants over 1000 seeds x depths 1..8 (LARGER-D: 3 x 4 grid, ids 0..11).
 H1 (try_climb .x0 / .xs, bank7.asm): the no-step exit from an arrival end and the exit dest
 r -/+ 3 rely on RD_UPCOL(r) == RD_DNCOL(r - 3) with both exit bits set, and on no top-row room
 having an up exit (a dest above the grid = the D1 entrance shaft, never an exit). Checked here
@@ -21,7 +21,7 @@ def h1_links(nseeds=1000, dmax=8):
             for i in range(nseeds):
                 seed = (i * 0x9E37 + depth * 0x3D) & 0xFFFF or 1
                 b = G.generate(depth, seed, f3=f3)
-                for r in range(9):
+                for r in range(G.NCELL):
                     if not rd(b, r, "RD_FLAGS") & 1:
                         continue
                     ex = rd(b, r, "RD_EXITS")
@@ -32,7 +32,7 @@ def h1_links(nseeds=1000, dmax=8):
                         elif not (rd(b, r - 3, "RD_EXITS") & D["RDX_D"]
                                   and rd(b, r - 3, "RD_DNCOL") == rd(b, r, "RD_UPCOL") != 0):
                             bad.append((f3, depth, seed, r, "RD_UPCOL(r) != RD_DNCOL(r-3)"))
-                    if ex & D["RDX_D"] and (r >= 6 or not rd(b, r + 3, "RD_EXITS") & D["RDX_U"]):
+                    if ex & D["RDX_D"] and (r >= G.BOT or not rd(b, r + 3, "RD_EXITS") & D["RDX_U"]):
                         bad.append((f3, depth, seed, r, "down exit without the up exit below"))
     print(f"H1 vertical links: {n} up exits checked, {len(bad)} bad {bad[:4]}")
     return 1 if bad else 0

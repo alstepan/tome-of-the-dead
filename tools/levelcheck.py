@@ -14,7 +14,7 @@ import sys
 from collections import Counter
 
 import levelgen as G
-from levelgen import D, H, OFF_DESC, OFF_EDGE, OFF_FLOOR, BLOCK_LEN, hedge
+from levelgen import L as D, LH as H, LOFF_DESC as OFF_DESC, LOFF_EDGE as OFF_EDGE, LOFF_FLOOR as OFF_FLOOR, LBLOCK_LEN as BLOCK_LEN, hedge
 
 
 def rd(b, r, k):
@@ -25,11 +25,19 @@ def rd(b, r, k):
 # generator): sections 1.1 (rules), 1.2 (attrs), 2.4 (jump). Layout offsets/bit
 # values (level_defs.asm) come from levelgen.D, which only parses the contract.
 SHAFT_LO, SHAFT_HI = 5, 24                       # 1.1 "Shaft cols"
+# LARGER-D (larger_depths.md section 2), written here from the spec, not imported from the generator
+GW, GH = 3, 4                                    # grid 3 wide x 4 tall, id r = 3*row + col
+NCELL = GW * GH                                  # 12
+BOT = GW * (GH - 1)                              # bottom row = 9..11
+NEDGE = (GW - 1) * GH                            # 8 horizontal edges
+N_MIN, N_MAX, N_MAX_D8 = 10, 12, 11              # rooms per level (D8: + the Sanctum leaf in the f3 block)
+POTION_MIN, POTION_MAX = 3, 4
+BFS_MIN = 3                                      # start (row 0) -> lair (row 3): at least 3 steps
 ATTRS_REF = {1: (0x0F, 0x01), 2: (0x27, 0x04), 3: (0x17, 0x02), 4: (0x28, 0x05),
              5: (0x30, 0x06), 6: (0x38, 0x07), 7: (0x4F, 0x41), 8: (0x1F, 0x03)}  # 1.2
 # L2 descriptor fields (RD_SPARE bytes; written from game.md 1.1, not imported)
 L2_PITW, L2_MIDB, L2_MIDW = D["RD_SPARE"], D["RD_SPARE"] + 1, D["RD_SPARE"] + 2
-L2_ODDS_MAX = 2
+L2_ODDS_MAX = 3
 BODY_MIN, BODY_MAX = 1, 28                       # 1.1: hero stands at x = 1 .. x = 28
 DOOR_P, DOOR_TOL = 1 / 3, 0.02                   # 1.1 "1 in 3 carry a door"
 
@@ -109,26 +117,27 @@ def check(b, stats=None):
     depth = b[H["LVL_DEPTH"]]
     if not 1 <= depth <= 8:
         return ["depth range"]
-    present = [r for r in range(9) if rd(b, r, "RD_FLAGS") & D["RDF_PRESENT"]]
+    present = [r for r in range(NCELL) if rd(b, r, "RD_FLAGS") & D["RDF_PRESENT"]]
     pset = set(present)
     n = len(present)
-    if not 7 <= n <= 9: v.append(f"rooms {n} not 7..9")
+    if not N_MIN <= n <= N_MAX: v.append(f"rooms {n} not {N_MIN}..{N_MAX}")
+    if depth == 8 and n > N_MAX_D8: v.append(f"L1: D8 rooms {n} > {N_MAX_D8}")
     if b[H["LVL_NROOMS"]] != n: v.append("NROOMS mismatch")
     if b[H["LVL_KEYROOM"]] != D["ROOM_NONE"] or b[H["LVL_SANCTUM"]] != D["ROOM_NONE"]:
         v.append("key/sanctum must be ROOM_NONE in 3B")
     if b[H["LVL_FLAGS"]] != 0: v.append("LVL_FLAGS (3F-T8: the grate is shut at generation)")
     if (b[H["LVL_ATTR_FLOOR"]], b[H["LVL_ATTR_WALL"]]) != ATTRS_REF.get(depth): v.append("attrs")
-    for i in range(H["MASTER_SEED"] + 2, D["LVL_HDR_LEN"]):
+    for i in range(H["MASTER_SEED"] + 2, H["LVL_DEPTH"] + D["LVL_HDR_LEN"]):
         if b[i]: v.append("header spare")
-    for i in range(OFF_EDGE + 6, OFF_DESC):
+    for i in range(OFF_EDGE + NEDGE, BLOCK_LEN):
         if b[i]: v.append("EDGE_TAB spare nonzero")
-    for i in range(OFF_DESC + 9 * 16, OFF_FLOOR):
+    for i in range(OFF_DESC + NCELL * 16, OFF_FLOOR):
         if b[i]: v.append("desc-area spare nonzero")
     start = b[H["LVL_START"]]; lair = b[H["LVL_LAIR"]]
     if start not in pset or lair not in pset or start == lair:
         return v + ["start/lair ids"]
     adj = {r: set() for r in present}
-    for r in range(9):
+    for r in range(NCELL):
         o = OFF_DESC + r * 16
         if r not in pset:
             if any(b[o:o + 16]): v.append(f"absent room {r} not zero")
@@ -173,9 +182,9 @@ def check(b, stats=None):
         if b[o + D["RD_SEED"]] | b[o + D["RD_SEED"] + 1] == 0: v.append(f"room {r} seed 0")
         ex = rd(b, r, "RD_EXITS")
         if ex & 0xC0: v.append(f"room {r} exits bits 6-7")
-        gx = r % 3
+        gx = r % GW
         for bit, sbit, nb, ok in ((D["RDX_L"], D["RDX_LS1"], r - 1, gx > 0),
-                                  (D["RDX_R"], D["RDX_RS1"], r + 1, gx < 2)):
+                                  (D["RDX_R"], D["RDX_RS1"], r + 1, gx < GW - 1)):
             if ex & bit:
                 if not ok or nb not in pset: v.append(f"room {r} exit to nowhere"); continue
                 e = b[OFF_EDGE + hedge(min(r, nb))]
@@ -188,8 +197,8 @@ def check(b, stats=None):
             elif ex & sbit:
                 v.append(f"room {r} storey bit w/o exit")
         up, dn = rd(b, r, "RD_UPCOL"), rd(b, r, "RD_DNCOL")
-        for bit, col, nb, ok, ncolk in ((D["RDX_U"], up, r - 3, r >= 3, "RD_DNCOL"),
-                                         (D["RDX_D"], dn, r + 3, r < 6, "RD_UPCOL")):
+        for bit, col, nb, ok, ncolk in ((D["RDX_U"], up, r - GW, r >= GW, "RD_DNCOL"),
+                                         (D["RDX_D"], dn, r + GW, r < BOT, "RD_UPCOL")):
             if ex & bit:
                 if not ok or nb not in pset: v.append(f"room {r} vertical to nowhere"); continue
                 if not SHAFT_LO <= col <= SHAFT_HI: v.append(f"room {r} shaft col {col} out of range")
@@ -239,9 +248,9 @@ def check(b, stats=None):
             for f in (s0 if s == 0 else s1):
                 if not (f + 2 < lo or f > hi): v.append(f"room {r} block hits feature {f}")
             if s == 0 and pit and not (pit + 3 < lo or pit - 1 > hi): v.append(f"room {r} block hits pit")
-    for e in range(6):
-        gy, gx = divmod(e, 2)
-        r = gy * 3 + gx
+    for e in range(NEDGE):
+        gy, gx = divmod(e, GW - 1)
+        r = gy * GW + gx
         eb = b[OFF_EDGE + e]
         linked = r in pset and (r + 1) in adj.get(r, ())
         if eb & ~(D["EG_LINK"] | D["EG_DOOR"]): v.append(f"edge {e} unexpected bits")
@@ -260,22 +269,24 @@ def check(b, stats=None):
     def has_h(r): return bool(rd(b, r, "RD_EXITS") & (D["RDX_L"] | D["RDX_R"]))
     def san(r):
         if depth != 8: return True
-        return (r % 3 > 0 and r - 1 not in pset) or (r % 3 < 2 and r + 1 not in pset)
-    pools = ([r for r in present if r >= 6 and deg[r] == 1 and has_h(r) and san(r)],
-             [r for r in present if r >= 6 and has_h(r) and san(r)])
+        return (r % GW > 0 and r - 1 not in pset) or (r % GW < GW - 1 and r + 1 not in pset)
+    pools = ([r for r in present if r >= BOT and deg[r] == 1 and has_h(r) and san(r)],
+             [r for r in present if r >= BOT and has_h(r) and san(r)])
     pool = next((p for p in pools if p), [])
     fallback = pool is not pools[0]
     # L1 (game.md 1.1 "L1 rules"): entry on the top row, lair on the bottom row, a
-    # bottom-row horizontal edge, D8 Sanctum cell reserved (lair 7, one bottom end absent)
-    if start > 2: v.append(f"L1: start {start} not on the top row")
+    # bottom-row horizontal edge, D8 Sanctum cell reserved (lair 10, one bottom end absent)
+    if start >= GW: v.append(f"L1: start {start} not on the top row")
     if rd(b, start, "RD_EXITS") & D["RDX_U"] or rd(b, start, "RD_UPCOL"): v.append("L1: start has an up exit")
-    if lair < 6: v.append(f"L1: lair {lair} not on the bottom row")
-    if not (7 in adj.get(6, ()) or 8 in adj.get(7, ())): v.append("L1: no horizontal edge between bottom-row rooms")
+    if lair < BOT: v.append(f"L1: lair {lair} not on the bottom row")
+    if not (BOT + 1 in adj.get(BOT, ()) or BOT + 2 in adj.get(BOT + 1, ())):
+        v.append("L1: no horizontal edge between bottom-row rooms")
     if not pools[0] and not pools[1]: v.append("L1: no lair candidate")
     if depth == 8:
-        ends = [c in pset for c in (6, 8)]
-        if lair != 7 or 7 not in pset or sum(ends) != 1: v.append(f"L1: D8 lair {lair} / Sanctum cell not reserved")
-        if n > 8: v.append("L1: D8 rooms > 8")
+        ends = [c in pset for c in (BOT, BOT + 2)]
+        if lair != BOT + 1 or BOT + 1 not in pset or sum(ends) != 1:
+            v.append(f"L1: D8 lair {lair} / Sanctum cell not reserved")
+    if dist.get(lair, 0) < BFS_MIN: v.append(f"L1: BFS start -> lair {dist.get(lair)} < {BFS_MIN}")
     if lair not in pool: v.append("lair not in candidate pool")
     elif dist.get(lair, -1) != max(dist.get(r, 0) for r in pool): v.append("lair not farthest candidate")
     def side(r, s, col):                    # storey-0 floor divider: a pit (col p) or the mid-block (col b)
@@ -344,7 +355,7 @@ def check(b, stats=None):
         if ent[0] & 0x70 or r not in pset or r == start: v.append(f"floor {i} room")
         elif ent[2] != D["IT_POTION"] or ent[3] < 1: v.append(f"floor {i} item/qty")
         elif not item_ok(b, r, s, ent[1]): v.append(f"floor {i} illegal cell col {ent[1]} s{s}")
-    if not 2 <= fn <= 3: v.append(f"potion count {fn}")
+    if not POTION_MIN <= fn <= POTION_MAX: v.append(f"potion count {fn}")
     arr0 = rd(b, start, "RD_ARRCOL")
     if sx != arr0:                          # H1-ARRIVAL: every depth enters mid-ladder on the shaft
         v.append(f"start x {sx} != arrival col {arr0}")
@@ -357,7 +368,7 @@ def check(b, stats=None):
     master = int.from_bytes(b[H["MASTER_SEED"]:H["MASTER_SEED"] + 2], "little")
     pre = G.generate(depth, seed_used, master, l2=False)
     m = bytearray(b)
-    for r in range(9):
+    for r in range(NCELL):
         o = OFF_DESC + r * 16
         if m[o + L2_PITW] or m[o + L2_MIDB]:      # designer 2026-10-07: only L2 rooms may differ,
             m[o + D["RD_PITCOL"]] = 0             # in the narrow pit / 2nd ladder fields
@@ -371,7 +382,7 @@ def check(b, stats=None):
     if stats is not None:
         stats["l2_wide"] += sum(1 for r in present if b[OFF_DESC + r * 16 + L2_PITW])
         stats["l2_mid"] += sum(1 for r in present if b[OFF_DESC + r * 16 + L2_MIDB])
-        hedges = [b[OFF_EDGE + e] for e in range(6) if b[OFF_EDGE + e] & D["EG_LINK"]]
+        hedges = [b[OFF_EDGE + e] for e in range(NEDGE) if b[OFF_EDGE + e] & D["EG_LINK"]]
         stats["rooms"][n] += 1
         stats["h_edges"] += len(hedges)
         stats["doors"] += sum(1 for e in hedges if e & D["EG_DOOR"])
@@ -392,26 +403,26 @@ def lp_check(b, stats=None, f3=False, lvl=1):
     room's first entry from each of its horizontal exits (the spawn rules hold:
     sum weight <= 8 / lair <= 12, count <= quota, body gap >= 8 to the arrival)."""
     v = []
-    depth = b[G.H["LVL_DEPTH"]]
-    st, lair = b[G.H["LVL_START"]], b[G.H["LVL_LAIR"]]
+    depth = b[G.LH["LVL_DEPTH"]]
+    st, lair = b[G.LH["LVL_START"]], b[G.LH["LVL_LAIR"]]
     lp = G.lp_budget(b, lvl, f3)
     wt = G.k3_weight if f3 else G.lp_wt
     kid = (lambda k: G.KROWS[k][0]) if f3 else (lambda k: D[k])      # noqa: E731
     o = lambda n: D[n] - D["LP_STATE"]                       # noqa: E731
-    q = [lp[o("LP_REC") + r * D["LR_STRIDE"]] for r in range(9)]
+    q = [lp[o("LP_REC") + r * D["LR_STRIDE"]] for r in range(NCELL)]
     rmax = D["ROOM_MAX"]
     n = G.LP_TAB[depth][2] - 2
     if q[st] != 0:
         v.append(f"LP: start quota {q[st]}")
     if q[lair] != 2:
         v.append(f"LP: lair quota {q[lair]}")
-    if any(q[r] > rmax for r in range(9) if r != lair):
+    if any(q[r] > rmax for r in range(NCELL) if r != lair):
         v.append(f"LP: quota > ROOM_MAX {q}")
-    if sum(q[r] for r in range(9) if r != lair) != n:
+    if sum(q[r] for r in range(NCELL) if r != lair) != n:
         v.append(f"LP: sum quotas {sum(q) - 2} != N {n}")
     if lp[o("LP_DISCARD")]:
         v.append(f"LP: split discard {lp[o('LP_DISCARD')]}")
-    for r in range(9):
+    for r in range(NCELL):
         if not rd(b, r, "RD_FLAGS") & D["RDF_PRESENT"] or r == st:
             continue
         ex = rd(b, r, "RD_EXITS")
@@ -422,8 +433,8 @@ def lp_check(b, stats=None, f3=False, lvl=1):
         for hs, hx in arr:
             lp2, out = G.lp_enter(b, lp, r, hs, hx, 3, f3)
             ws = sum(wt(kb if f3 else kb & 31) for kb, *_ in out)
-            nk = lp2[o("LP_REC") + 9 * r] & D["LR_CNT_MASK"]     # ROOM-MEM: entries past the count are stale
-            ws += sum(wt(e if f3 else e & 31) for e in lp2[o("LP_REC") + 9 * r + 1:o("LP_REC") + 9 * r + 1 + 2 * nk:2])
+            nk = lp2[o("LP_REC") + D["LR_STRIDE"] * r] & D["LR_CNT_MASK"]     # ROOM-MEM: entries past the count are stale
+            ws += sum(wt(e if f3 else e & 31) for e in lp2[o("LP_REC") + D["LR_STRIDE"] * r + 1:o("LP_REC") + D["LR_STRIDE"] * r + 1 + 2 * nk:2])
             minw = min(wt(kid(k)) for k in G.LP_TAB[depth][0])
             cap = D["LP_SIGMA_CAP"] if r == lair else max(D["LP_SIGMA_INIT"], rmax * minw)
             if lp2[o("LP_DISCARD")]:
@@ -445,7 +456,7 @@ def lp_check(b, stats=None, f3=False, lvl=1):
                     v.append(f"I6: room {r} spawn s{s} x{x} on the wide pit {pp}/{pw} span")
             if stats is not None:
                 stats["lp_units"] += len(out)
-                stats["lp_left"] += lp2[o("LP_REC") + 9 * r] & 7
+                stats["lp_left"] += lp2[o("LP_REC") + D["LR_STRIDE"] * r] & 7
                 stats["lp_lost"] += lp2[o("LP_DISCARD")]
                 stats["lp_entries"] += 1
     return v
@@ -455,45 +466,45 @@ def check3(b, lvl=1, stats=None):
     """3F block (generate(..., f3=True)): the ordinary invariants, the closed grate,
     the D8 Sanctum leaf behind its sealed edge, then the 3F-mode LP checks
     (tier roll with LP_LVL = lvl, golden boss, escort at base tier)."""
-    depth = b[G.H["LVL_DEPTH"]]
-    lair = b[G.H["LVL_LAIR"]]
-    if b[G.H["LVL_FLAGS"]] & D["LF_GRATE_OPEN"]:
+    depth = b[G.LH["LVL_DEPTH"]]
+    lair = b[G.LH["LVL_LAIR"]]
+    if b[G.LH["LVL_FLAGS"]] & D["LF_GRATE_OPEN"]:
         return ["3F: grate open at level start"]
     plain = bytearray(b)                    # strip the Sanctum -> must equal the plain generator
     if depth == 8:
-        sc0 = b[G.H["LVL_SANCTUM"]]
-        if sc0 in (6, 8):
+        sc0 = b[G.LH["LVL_SANCTUM"]]
+        if sc0 in (BOT, BOT + 2):
             o = OFF_DESC + sc0 * D["RD_STRIDE"]
             plain[o:o + D["RD_STRIDE"]] = bytes(D["RD_STRIDE"])
-            plain[OFF_DESC + 7 * D["RD_STRIDE"] + D["RD_EXITS"]] &= ~(D["RDX_R"] | D["RDX_RS1"]) if sc0 == 8 \
+            plain[OFF_DESC + (BOT + 1) * D["RD_STRIDE"] + D["RD_EXITS"]] &= ~(D["RDX_R"] | D["RDX_RS1"]) if sc0 == BOT + 2 \
                 else ~(D["RDX_L"] | D["RDX_LS1"])
-            plain[OFF_EDGE + hedge(min(7, sc0))] = 0
-            plain[G.H["LVL_SANCTUM"]] = D["ROOM_NONE"]
-            plain[G.H["LVL_NROOMS"]] -= 1
-            if b[D["TOME_HP"] - G.BASE] != D["TOME_MAX"]:
+            plain[OFF_EDGE + hedge(min(BOT + 1, sc0))] = 0
+            plain[G.LH["LVL_SANCTUM"]] = D["ROOM_NONE"]
+            plain[G.LH["LVL_NROOMS"]] -= 1
+            if b[D["TOME_HP"] - G.LBASE] != D["TOME_MAX"]:
                 return ["P3: D8 TOME_HP != TOME_MAX at generation"]
-            plain[D["TOME_HP"] - G.BASE] = 0
-    seed_used = int.from_bytes(b[G.H["LVL_SEED"]:G.H["LVL_SEED"] + 2], "little")
-    master = int.from_bytes(b[G.H["MASTER_SEED"]:G.H["MASTER_SEED"] + 2], "little")
+            plain[D["TOME_HP"] - G.LBASE] = 0
+    seed_used = int.from_bytes(b[G.LH["LVL_SEED"]:G.LH["LVL_SEED"] + 2], "little")
+    master = int.from_bytes(b[G.LH["MASTER_SEED"]:G.LH["MASTER_SEED"] + 2], "little")
     if bytes(plain) != G.generate(depth, seed_used, master):
         return ["3F: block minus the Sanctum != the plain generator's block"]
     v = check(bytes(plain), stats)
-    sc = b[G.H["LVL_SANCTUM"]]
+    sc = b[G.LH["LVL_SANCTUM"]]
     if depth != 8:
         if sc != D["ROOM_NONE"]:
             v.append("3F: Sanctum on a depth that has none")
     else:
-        if sc not in (6, 8) or lair != 7:
+        if sc not in (BOT, BOT + 2) or lair != BOT + 1:
             return v + [f"3F: Sanctum {sc} lair {lair}"]
         fl = rd(b, sc, "RD_FLAGS")
         if not fl & D["RDF_PRESENT"] or not fl & D["RDF_SANCTUM"] or not fl & D["RDF_DEADEND"]:
             v.append(f"3F: Sanctum room flags {fl:#04x}")
         if bin(rd(b, sc, "RD_EXITS") & (D["RDX_L"] | D["RDX_R"] | D["RDX_U"] | D["RDX_D"])).count("1") != 1:
             v.append("3F: Sanctum is not a one-exit leaf")
-        e = b[OFF_EDGE + hedge(min(7, sc))]
+        e = b[OFF_EDGE + hedge(min(BOT + 1, sc))]
         if e != D["EG_LINK"] | D["EG_DOOR"] | D["EG_SEAL"]:
             v.append(f"3F: Sanctum edge {e:#04x} is not a sealed link")
-        if any(r != sc and rd(b, r, "RD_FLAGS") & D["RDF_SANCTUM"] for r in range(9)):
+        if any(r != sc and rd(b, r, "RD_FLAGS") & D["RDF_SANCTUM"] for r in range(NCELL)):
             v.append("3F: two Sanctum rooms")
         if G.lp_budget(b, lvl, True)[D["LP_REC"] - D["LP_STATE"] + sc * D["LR_STRIDE"]]:
             v.append("3F: Sanctum has a population quota")
@@ -504,12 +515,13 @@ def check3(b, lvl=1, stats=None):
 def new_stats():
     return {"rooms": Counter(), "h_edges": 0, "doors": 0, "pits": 0, "dead": 0, "loops": 0,
             "lair_fallback": 0, "walker_cut": 0, "blocks": 0, "lad2": 0, "potions": 0,
-            "pits_n": 0, "l2_wide": 0, "l2_mid": 0, "lp_units": 0, "lp_left": 0, "lp_lost": 0, "lp_entries": 0}
+            "pits_n": 0, "restarts": 0, "restart_max": 0, "reseeds": 0, "l2_wide": 0, "l2_mid": 0, "lp_units": 0, "lp_left": 0, "lp_lost": 0, "lp_entries": 0}
 
 
 def merge(a, b):
     for k, v in b.items():
         if k == "rooms": a[k].update(v)
+        elif k == "restart_max": a[k] = max(a[k], v)
         else: a[k] += v
 
 
@@ -523,6 +535,8 @@ def report(st, tot, fails):
     print("rooms", dict(sorted(st["rooms"].items())),
           f"doors {st['doors']}/{st['h_edges']} ({ratio:.3f})")
     print({k: round(st[k] / tot, 2) for k in ("pits", "dead", "loops", "lair_fallback", "walker_cut", "blocks", "lad2", "potions", "l2_wide", "l2_mid")}, "(per level)")
+    print(f"generator restarts {st['restarts']} in {tot} levels ({st['restarts'] / max(1, tot):.3f}/level, "
+          f"max {st['restart_max']}), reseeds {st['reseeds']}")
     u = st["lp_units"] + st["lp_left"]
     print("LP first entries:", st["lp_entries"], "units", u, "placed", st["lp_units"], "wait (no legal cell)",
           st["lp_left"], f"({100 * st['lp_left'] / max(1, u):.1f}%)", "lost to the sum cap", st["lp_lost"])
@@ -553,6 +567,7 @@ def _scan(args):
             for k, v in (("restarts", rs), ("reseeds", rsd), ("calls", calls)):
                 if v > mx[k][0]: mx[k] = (v, depth, seed)
             tot += 1
+            st["restarts"] += rs; st["reseeds"] += rsd; st["restart_max"] = max(st["restart_max"], rs)
             viol = check(b, st)
             if viol: fails.append((depth, seed, viol[:3]))
     return st, fails, mx, ex, tot
@@ -616,6 +631,8 @@ def run(nseeds=1000, dmax=8):
             b = G.generate(depth, seed)
             assert b == G.generate(depth, seed), "non-deterministic"
             assert G.LAIR_RESEEDS == lr0, f"L1: lair reseed d{depth} seed {seed:#06x}"
+            st["restarts"] += G.LAST[0]; st["reseeds"] += G.LAST[2]
+            st["restart_max"] = max(st["restart_max"], G.LAST[0])
             viol = check(b, st)
             tot += 1
             if viol:
