@@ -830,14 +830,98 @@ def merge(a, b):
         a["by_type"][k_] = a["by_type"].get(k_, 0) + n_
 
 
+# ---------------------------------------------------------------------------
+# LARGER-D FLOOR_LIST sweep (docs/design/larger_depths.md sec 3): --floor-loss. Statistical, no levelgen.
+# ---------------------------------------------------------------------------
+LD_MON = (18, 19, 19, 20, 22, 20, 20, 16)       # monsters incl. boss per depth (sec 3)
+DROP_N = {"RAT": 4, "GOBLIN": 4, "ORC": 3}      # balance_sim.kill: tier / N chance of a food drop (tier 1..3, mean ~1.5 across a depth's rolls)
+DROP_TIER = 1.5
+NECRO_MANA = 1 / 3                              # Necromancer mana drop
+
+
+def ld_statics(rng, depth, hero):
+    """Entries the generator appends on a LARGER-D level (sec 3 counts), excl. boss unique: potions 3-4, food 4-5, scrolls 2,
+    gear 1-2, books 1 (+1 half the time D4-D7), Warrior D1-D7 dagger + arrow stacks (+ bow + bundle on D2)."""
+    n = rng.randint(3, 4) + rng.randint(4, 5) + 2 + rng.randint(1, 2)
+    if depth in BOOK_DEPTHS:
+        n += 1 + (depth in BOOK2_DEPTHS and rng.random() < 0.5)
+    if hero == HERO_WARRIOR and depth in AMMO_DEPTHS:
+        n += 2 + (2 if depth == BOW_DEPTH else 0)
+    return n
+
+
+def _drop_p(Dd, depth):
+    """Mean drop chance per monster of a depth: uniform over its LP_KINDS slots, base kind of each."""
+    ids = {Dd.id(k): k for k in DROP_N}
+    necro = Dd.id("NECRO")
+    slots = [Dd.tier_base.get(k, k) for k in Dd.lp[depth]]
+    p = 0.0
+    for b in slots:
+        if b in ids:
+            p += DROP_TIER / DROP_N[ids[b]]
+        elif b == necro:
+            p += NECRO_MANA
+    return p / len(slots)
+
+
+def floor_loss(trials, seed=1, rooms=10, caps=(32, 40)):
+    """Per cap (entries; cap - 1 usable, 1 kept for the boss unique): % of generated + dropped items lost.
+    'static' = generator only; 'worst' = hero never picks anything up, every kill drops (balance_sim.kill rules) and the Warrior's
+    thrown stack lands once per room; 'play' = the hero collects a room's floor items on room clear (balance_sim's rule), loss
+    counted when a fresh drop finds the list full."""
+    import random
+    import balance_sim as B
+    Dd = B.Data({})
+    rng = random.Random(seed)
+    out = {}
+    for cap in caps:
+        use = cap - 1
+        tot = {"static": [0, 0], "worst": [0, 0], "play": [0, 0]}
+        for depth in range(1, 9):
+            pdrop = _drop_p(Dd, depth)
+            for hero in (HERO_WARRIOR, HERO_MAGE):
+                for _ in range(trials):
+                    st = ld_statics(rng, depth, hero)
+                    nm = LD_MON[depth - 1] - 1
+                    drops = sum(rng.random() < pdrop for _ in range(nm))
+                    thrown = rooms if (hero == HERO_WARRIOR and depth <= 7) else 0
+                    tot["static"][0] += st
+                    tot["static"][1] += max(0, st - use)
+                    gen = st + drops + thrown
+                    tot["worst"][0] += gen
+                    tot["worst"][1] += max(0, gen - use)
+                    left = [0] * rooms
+                    for _i in range(st):
+                        left[rng.randrange(rooms)] += 1
+                    lying, lost, made = st, 0, st
+                    for r in range(rooms):
+                        k_d = sum(rng.random() < pdrop for _ in range(nm // rooms + (r < nm % rooms)))
+                        new = k_d + (1 if thrown else 0)
+                        made += new
+                        room_new = min(new, max(0, use - lying))
+                        lost += new - room_new
+                        lying += room_new
+                        lying -= left[r] + room_new                 # room cleared and collected
+                    tot["play"][0] += made
+                    tot["play"][1] += lost + max(0, st - use)
+        out[cap] = {k: 100.0 * v[1] / v[0] for k, v in tot.items()}
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--seeds", type=int, default=1000, help="number of master seeds (0..N-1)")
     ap.add_argument("--depths", type=int, default=8)
     ap.add_argument("--jobs", type=int, default=0)
+    ap.add_argument("--floor-loss", type=int, metavar="TRIALS", help="LARGER-D FLOOR_LIST item-loss %% for 32 vs 40 entries (TRIALS per depth/hero)")
     ap.add_argument("--questions", action="store_true", help="print the open QUESTIONs and exit")
     ap.add_argument("--show", nargs=3, metavar=("MASTER", "DEPTH", "HERO"), help="dump one level")
     a = ap.parse_args(argv)
+    if a.floor_loss:
+        for cap, r in floor_loss(a.floor_loss).items():
+            print("FLOOR_LIST %d entries: item loss  static %.2f %%  play (collect on room clear) %.2f %%  worst (no pickups) %.2f %%"
+                  % (cap, r["static"], r["play"], r["worst"]))
+        return 0
     if a.questions:
         print("\n".join("QUESTION: " + q for q in QUESTIONS))
         return 0

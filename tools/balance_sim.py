@@ -126,6 +126,11 @@ PARAMS = {
     "EAT_AT": 24,                       # 4.3: eat at HUNGRY (<25)
     "QUEEN_POISON": 36, "SLAM_EVERY": 3,
     "ESCORT_FOLLOW_GAP": 2,
+    # LARGER-D knobs (docs/design/larger_depths.md sec 3 / 3.1; defaults = today's game, the --larger-d preset sets them)
+    "FED_REGEN_K": None,                # null = flat +1 per FED_REGEN turns; k = +(1 + MAXHP div k) per 12 turns
+    "XPN": None,                        # null = the image's xpn_tab; else 8 values (XP_NEXT L2..L9)
+    "FOOD_N": [3, 4], "POT_N": [2, 3], "SCR_N": [1, 2],   # entries per level: inclusive (lo, hi); potions keep >= 1 Heal
+    "ARR_BASE": 5, "TRAP_MULT": 1.0,    # arrows = ARR_BASE + 0..3 (1d4+4 -> 1d4+6 = 7); trap count = round(TRAP_COUNT * TRAP_MULT)
     "HP_BONUS": 0,                      # sweep/test knob: flat extra max HP for both heroes
     "NO_MIRROR_FEAR_P": 85 / 256,
     # XP of a golden boss: null = what the build does (base-kind KXP: combat3.asm reads kx_tab only);
@@ -318,6 +323,8 @@ class Data:
         self.ammo = [dict(zip(("mp", "range", "die", "bonus", "bounces", "effect"), m[am + 6 * i:am + 6 * i + 6])) for i in range(2)]
         x = 27 + sym["xpn_tab"] - 0x4000
         self.xpn = [sna[x + 2 * i] | sna[x + 2 * i + 1] << 8 for i in range(8)]
+        if self.params["XPN"]:
+            self.xpn = list(self.params["XPN"])
         # --- overrides
         for key, val in ov.get("ab_rank", {}).items():
             for rnk, cells in val.items():
@@ -674,7 +681,11 @@ class Game:
                 h.weak = max(0, h.weak - c)
             st = self.hunger_stage()
             if st == 0 and h.hp < h.maxhp:
-                h.hp = min(h.maxhp, h.hp + t1 // P["FED_REGEN"] - t0 // P["FED_REGEN"])
+                if P["FED_REGEN_K"]:
+                    # sec 3.1: the game steps every 12 turns by 1 + MAXHP div k
+                    h.hp = min(h.maxhp, h.hp + (1 + h.maxhp // P["FED_REGEN_K"]) * (t1 // 12 - t0 // 12))
+                else:
+                    h.hp = min(h.maxhp, h.hp + t1 // P["FED_REGEN"] - t0 // P["FED_REGEN"])
             if h.mp < h.maxmp and st < 3 and not h.weak:
                 per = P["MAGE_REGEN"] if self.hero == "M" else P["WARRIOR_REGEN"]
                 per = per * (2 if st == 2 else 1) * h.regen_mult
@@ -780,12 +791,12 @@ class Game:
 
     def level_items(self, depth):
         import items_model as IM
-        rng, h = self.rng, self.h
+        rng, h, P = self.rng, self.h, self.P
         items = []
-        npot = 2 + rng.randrange(2)
+        npot = P["POT_N"][0] + rng.randrange(P["POT_N"][1] - P["POT_N"][0] + 1)
         pots = ["heal"] + [("heal", "mana", "cure")[rng.randrange(3)] for _ in range(npot - 1)]
-        food = [FOODS[rng.randrange(5)] for _ in range(3 + rng.randrange(2))]
-        scr = [("tele", "fear", "sleep", "ench")[rng.randrange(4)] for _ in range(1 + rng.randrange(2))]
+        food = [FOODS[rng.randrange(5)] for _ in range(P["FOOD_N"][0] + rng.randrange(P["FOOD_N"][1] - P["FOOD_N"][0] + 1))]
+        scr = [("tele", "fear", "sleep", "ench")[rng.randrange(4)] for _ in range(P["SCR_N"][0] + rng.randrange(P["SCR_N"][1] - P["SCR_N"][0] + 1))]
         gp = [ITEM_GEAR[next(n for n, v in IM.T.items() if v == t)] for t in IM.gear_pool(depth, IM.HERO_WARRIOR if self.hero == "W" else IM.HERO_MAGE)]
         if self.D.nm3 and depth >= self.P["CHARM_FROM"]:
             gp.append("Frost Charm")
@@ -800,7 +811,7 @@ class Game:
         self.floor = dict(pots=pots, food=food, scr=scr, gear=gear, books=books, dag=0, arr=0, bow=False)
         if self.hero == "W" and depth <= 7:
             self.floor["dag"] = 2 + rng.randrange(2)
-            self.floor["arr"] = 5 + rng.randrange(4)
+            self.floor["arr"] = P["ARR_BASE"] + rng.randrange(4)
             if depth == 2:
                 self.floor["bow"] = True
                 self.floor["arr"] += 6
@@ -822,7 +833,7 @@ class Game:
         n = len(self.rooms)
         slots = list(range(n + 2))
         self.rng.shuffle(slots)
-        self.traps = {sl: pool[self.rng.randrange(len(pool))] for sl in slots[:IM.TRAP_COUNT[depth]]}
+        self.traps = {sl: pool[self.rng.randrange(len(pool))] for sl in slots[:int(IM.TRAP_COUNT[depth] * self.P["TRAP_MULT"] + 0.5)]}
         self.trap_known = set()
         self.slot_start, self.slot_lair = n, n + 1
 
@@ -2300,6 +2311,62 @@ def to_json(name, results):
     return out
 
 
+# LARGER-D (docs/design/larger_depths.md sec 3 / 3.1): 12-room levels, monsters and consumables x1.35, XP_NEXT x1.35.
+LARGER_D = {"param": {
+    "ROOMS_LO": 12, "ROOMS_HI": 12,
+    "MON_COUNT": [18, 19, 19, 20, 22, 20, 20, 16], "TRICKLE_MAX": 8,
+    "FOOD_N": [4, 5], "POT_N": [3, 4], "SCR_N": [2, 2], "ARR_BASE": 7, "TRAP_MULT": 4 / 3,
+    "XPN": [55, 135, 270, 460, 675, 945, 1240, 1550]}}
+# knob ladder of sec 3.1, cumulative, in the spec's order (the regen divisor is the sweep axis itself)
+LD_KNOBS = [("XP_NEXT x1.25", {"XPN": [50, 125, 250, 425, 625, 875, 1150, 1440]}),
+            ("potions min 4", {"POT_N": [4, 4]}),
+            ("Heal +13", {"HEAL_AMT": 13}),
+            ("counts -1 on D4/D7", {"MON_COUNT": [18, 19, 19, 19, 22, 20, 19, 16]})]
+
+
+def larger_d_sweep(a, base):
+    """--larger-d: average policy, both heroes, k in --ld-k, one cell per seed in --seed (comma list); then the BSIM1 Mage +30 HP case.
+    Gate (sec 3.1): W and M >= 35 % (pooled over the seeds), |W - M| <= 3, Mage +30 HP >= Mage +0."""
+    ks = [int(x) for x in a.ld_k.split(",")]
+    seeds = a.seed.split(",")
+
+    def cell(ov, hero):
+        res = [run_cell(ov, hero, "average", a.runs, sd, a.jobs) for sd in seeds]
+        out = res[0]
+        for r in res[1:]:
+            out = merge_res(out, r)
+        return 100.0 * summarize(out)["win"], [100.0 * summarize(r)["win"] for r in res]
+
+    def conf(k, extra, hp=0):
+        o = merge(merge(LARGER_D, base), {"param": {"FED_REGEN_K": k, **extra}})
+        return merge(o, {"param": {"HP_BONUS": hp}}) if hp else o
+
+    steps = [("LARGER-D sec 3", {})]
+    acc = {}
+    passed = None
+    for name, kn in (steps + LD_KNOBS)[:1 + a.ld_steps]:
+        acc = {**acc, **kn}
+        print("== %s (%d runs x %d seeds per cell) ==" % (name if not kn else "knob " + name + " (cumulative)", a.runs, len(seeds)))
+        print("  k    W%    M%    gap   per-seed W / M            gate")
+        for k in ks:
+            o = conf(k, acc)
+            w, ws = cell(o, "W")
+            m, ms = cell(o, "M")
+            ok = w >= 35 and m >= 35 and abs(w - m) <= 3
+            print("  %-4d %-7.2f %-7.2f %-5.2f %s / %s   %s" % (k, w, m, abs(w - m), "/".join("%.1f" % x for x in ws),
+                  "/".join("%.1f" % x for x in ms), "PASS" if ok else "fail"), flush=True)
+            if ok or not kn:                 # the plain sec 3 step always reports BSIM1
+                # BSIM1: the Mage with +30 max HP must not do worse than +0
+                m30, _ = cell(conf(k, acc, 30), "M")
+                print("       BSIM1 Mage +30 HP: %.2f (+0: %.2f) %s" % (m30, m, "ok" if m30 >= m else "BELOW +0"), flush=True)
+                if ok and passed is None and m30 >= m:
+                    passed = (name, k)
+        if passed:
+            break
+    print("GATE:", "PASS at %s, k=%d" % passed if passed else "no (knob, k) passed")
+    return 0 if passed else 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="BAL-1b balance Monte Carlo")
     ap.add_argument("--hero", default="both", choices=["W", "M", "both"])
@@ -2312,6 +2379,9 @@ def main(argv=None):
     ap.add_argument("--json", help="write results JSON here")
     ap.add_argument("--csv", help="write a flat CSV here")
     ap.add_argument("--jobs", type=int, default=1, help="processes (deterministic per chunk layout)")
+    ap.add_argument("--larger-d", action="store_true", help="LARGER-D balance gate sweep (sec 3.1); --seed takes a comma list")
+    ap.add_argument("--ld-k", default="16,24,32", help="FED regen divisors for --larger-d")
+    ap.add_argument("--ld-steps", type=int, default=len(LD_KNOBS), help="--larger-d: sec 3.1 knobs to apply after the plain sec 3 step")
     a = ap.parse_args(argv)
     heroes = ["W", "M"] if a.hero == "both" else [a.hero]
     pols = list(POLICIES) if a.policy == "all" else [a.policy]
@@ -2320,6 +2390,8 @@ def main(argv=None):
         ov = merge(ov, json.load(open(f)))
     if a.sets:
         ov = merge(ov, parse_set(a.sets))
+    if a.larger_d:
+        return larger_d_sweep(a, ov)
     configs = [("baseline" if not ov and not a.compare else "run", ov)]
     if a.compare:
         configs = [("baseline" + (" +sets" if ov else ""), ov), ("override:" + os.path.basename(a.compare), merge(ov, json.load(open(a.compare))))]
