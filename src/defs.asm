@@ -350,10 +350,9 @@ TILE_LEVEL_GLYPHS EQU TILE_GLYPHS + TILE_COMMON * 8
 TILE_LEVEL_ATTRS  EQU TILE_ATTRS + TILE_COMMON
 ; Bank-5 low-RAM fit (ASSERTed in main.asm, docs/memory-map.md "Bank 5 low RAM"):
 ;   fixed buffers ROOM_MAP..LOWRAM_END; then free RAM (level state, 3B);
-;   then the cold block lowram_code..$7FFF, which ends with the frame
-;   descriptors (fdesc_tab, FID_COUNT x FDESC_STRIDE). The cold block grows
-;   DOWN, so the fit ASSERT keeps room for (FRT_MAX - FID_COUNT) more
-;   descriptors: adding frames can never collide with the buffers.
+;   then the cold block lowram_code..$7FFF. F1: the frame descriptors
+;   (fdesc_tab, FID_COUNT x FDESC_STRIDE) are bank-0 B0_CODE2; ITS fit ASSERT keeps room
+;   for (FRT_MAX - FID_COUNT) more descriptors (FDESC_GROW) below POOL_START.
 ;   A5 ZX0 decompressor:  dzx0 + zx0_frame inside lowram.asm (<= ZX0_BUDGET B,
 ;                         ASSERTed); A5 ZX0 scratch aliases ROOM_MAP..NEXT_MAP
 ;                         ($6000..$65FF, 1,536 B) — the generator only runs
@@ -1016,7 +1015,7 @@ frame_tab       EQU FRT + FT_IN_ROW
     ENDM
 
 ;------------------------------------------------------------------------------
-; Frame descriptor (A6; bank 5 low RAM, fdesc_tab at the end of the cold block,
+; Frame descriptor (A6; F1: bank-0 B0_CODE2, fdesc_tab,
 ; read only by gen_frame) — 5 B/fid:
 ;   FD_BLK   word: VIRTUAL address of the frame's packed block
 ;                  ($8000.. bank 1 / $C000.. bank 3 / SRC6: $4000..$7FFF =
@@ -1184,7 +1183,7 @@ ATTR_GRATE      EQU $46             ; lair gate, raised (B12 variant B; tiles_co
 ;------------------------------------------------------------------------------
 ; FRM name, kind, body_w_px, flags — one frame of the frame list (src/frames.asm).
 ; The list is INCLUDEd twice (A6):
-;   FRM_EMIT = FRM_DESC  lowram.asm fdesc_tab (bank 5): the generator's 5-B
+;   FRM_EMIT = FRM_DESC  main.asm fdesc_tab (F1: bank 0 B0_CODE2): the generator's 5-B
 ;                        descriptor FD_BLK, FD_FRM, FD_FLAGS (defs.asm FD_*)
 ;   FRM_EMIT = FRM_HOT   data.asm: the FRT row image (MEM-FT: 12 x FRT_NONE + the
 ;                        renderer's 4-B frame_tab entry FT_COLS, FT_H, FT_OFFR,

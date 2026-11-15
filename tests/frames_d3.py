@@ -58,7 +58,9 @@ def load():
 
 
 def mem(banks, addr, n):
-    """CPU view with the standard $4000 = 5, $8000 = 2 mapping."""
+    """CPU view with the standard $4000 = 5, $8000 = 2 mapping; F1: $C000.. = bank 0 (fdesc_tab, B0_CODE2)."""
+    if addr >= 0xC000:
+        return banks[0][addr - 0xC000:addr - 0xC000 + n]
     b, o = (5, addr - 0x4000) if addr < 0x8000 else (2, addr - 0x8000)
     return banks[b][o:o + n]
 

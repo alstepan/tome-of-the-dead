@@ -5,9 +5,9 @@
 ; 1/3 and writes the pre-shift pool in banks 0/4/6, so it cannot live in a
 ; paged bank. main.asm ORGs this block so it ENDS at $8000 (lowram_code ..
 ; $7FFF): it is contiguous with the bank-2 image and the tape CODE block is the
-; single range lowram_code .. code_end, entered at its first byte (start). The
-; block ENDS with the frame descriptors (fdesc_tab, A6): new frames grow it
-; downward; main.asm keeps the FRT_MAX growth reserve free below it.
+; single range lowram_code .. code_end, entered at its first byte (start). F1: the frame
+; descriptors (fdesc_tab, A6) moved to bank-0 B0_CODE2 (main.asm); gen_frame reads them
+; with BANK_TEXT paged.
 ;
 ; Contended (bank 5): every opcode fetch pays ULA contention while the screen is
 ; being drawn. Nothing here runs per tick (boot, hero select, game start).
@@ -2122,7 +2122,7 @@ seq2_bytes:     DS   SEQ2_LEN, 0
 ; PLAYING/TRANSITION bumps GEN_TRAP (saturating; tests assert 0). The block
 ; cache (GEN_ZBLK) is valid for one generator session only: alloc_reset /
 ; alloc_restore drop it (every caller starts with one of them).
-; Static data: frame_tab (MEM-FT: the FRT row tail, bank 2: cols, H, offsets) + fdesc_tab (bank 5:
+; Static data: frame_tab (MEM-FT: the FRT row tail, bank 2: cols, H, offsets) + fdesc_tab (F1: bank 0 B0_CODE2, main.asm:
 ; block, frame address, flags) — no banked descriptor read, no copy_virt.
 ; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
@@ -2165,6 +2165,10 @@ gen_frame:
                 add  hl, de
                 ld   de, fdesc_tab
                 add  hl, de
+                ld   a, (PORT_7FFD_SHADOW)     ; F1: fdesc_tab is bank-0 B0_CODE2 (read-only data, BANK_TEXT paged)
+                push af                        ; caller's page, put back below (restore_page; ~+200 T a frame)
+                ld   a, BANK_TEXT
+                call page_bank                 ; clobbers A, BC only: HL kept
                 ld   e, (hl)                   ; FD_BLK
                 inc  hl
                 ld   d, (hl)                   ; DE = virt block (raw: virt src)
@@ -2175,6 +2179,8 @@ gen_frame:
                 inc  hl
                 ld   a, (hl)                   ; FD_FLAGS
                 ld   (GEN_FLAGS), a
+                pop  af
+                call restore_page              ; DE kept (zx0_frame's block key); $C000 as on entry
                 call zx0_frame                 ; HL = frame in GEN_SCRATCH (no copy)
                 ; --- right facing --- (GEN_BASE = the unmirrored source until
                 ; mirror_src has read it; gen_variant only reads it)
@@ -2571,13 +2577,6 @@ page_run:
 ; (MEM-FT: sel_frt_copy / frt_ptr / frt_ptr_cur moved to bank 2, frt2.asm:
 ; low RAM for the FRT_MAX descriptor reserve.)
 
-;==============================================================================
-; fdesc_tab — frame descriptors (A6), FDESC_STRIDE (5) B per fid, read only
-; by gen_frame: FD_BLK (ZX0: virtual packed-block address / raw: virtual
-; frame address), FD_FRM (ZX0: GEN_SCRATCH + in-block offset), FD_FLAGS.
-; Generated from src/frames.asm (the same list as frame_tab). MUST stay the
-; last thing in the cold block (ASSERTed): it is the part that grows.
-;==============================================================================
                 INCLUDE "msgl.asm"             ; NEW-MON3 T9: msg_kind / msg_cat / msg_end (cold; were bank-2 msg2.asm:
                                                ; room for the 9-slot seq_rows there)
 
@@ -2599,10 +2598,3 @@ vb_far:         ld   hl, TX_DEC
                 jr   .l
 NM3_VAR:        DB   0                         ; NEW-MON3 T9: row 31's variant this level, 0 = Fire Imp (A), 1 = Frost
                                                ; Wraith (B); lp_hdr0 writes it (tx_ptr, nm3_apply, tests read it)
-
-fdesc_tab:
-FRM_EMIT = FRM_DESC
-                INCLUDE "frames.asm"
-FDESC_COUNT     EQU FCTR
-fdesc_end:
-                ASSERT fdesc_end - fdesc_tab == FDESC_COUNT * FDESC_STRIDE
