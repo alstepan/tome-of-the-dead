@@ -127,8 +127,10 @@ ROOM_MAX 3 unchanged, so per-room fight and supply density stay; books/gear/bow/
 
 | Knob | Today | LARGER-D |
 |---|---|---|
-| Monsters incl. boss D1..D8 (§9.4) | 13/14/14/15/16/15/15/12 | **18/19/19/20/22/20/20/16** (D8 15 + Archmage); min `|R|` 8 × 3 = 24 ≥ max N 20 |
-| `RESPAWN_MAX` (§9.5) | 6 | **8** |
+| Monsters incl. boss D1..D8 (§9.4) | 13/14/14/15/16/15/15/12 | **20/21/21/23/24/23/23/18** (today × 1.5, rounded half up; user 2026-11-15 "package 2, option 1"); min `|R|` 8 × 3 = 24 ≥ max N 24 (tight, T5 asserts it). *History: ×1.35 row 18/19/19/20/22/20/20/16, superseded* |
+| `RESPAWN_MAX` (§9.5) | 6 | **6** unchanged. *History: spec 8, superseded* |
+| Respawn trigger (§9.5) | time trickle | **progress-tied (§3.2)**; the time trickle is **disabled for larger depths** |
+| Mage MP regen period (§7) | 6 turns | **4.5**: alternating 4/5 turns (same average). Warrior unchanged (8) |
 | Food entries (§8.5) | 3–4 | **4–5** (≈ 104 + drops ~27 ≈ 131 vs ~100 burned per ~610-turn level; today 100 / 75) |
 | Potions / scrolls | 2–3 (min 2) / 1–2 | **3–4 (min 3, ≥ 1 Heal) / 2** |
 | Arrow / dagger stack | 1d4+4 / 1d2+1 | **1d4+6** / unchanged |
@@ -150,7 +152,24 @@ any size, the same shape as the MP rule (`+1 + MAXMP div 16` per period, §7). F
 FED-only and the HUNGRY/WEAK halts stay. `FED_REGEN` 4 (+3 per 12) overshoots (0.66 vs the ~0.40 target).
 Sim the divisor 16/24/32; first food knob if starvation shows: 4–5 → 5–6.
 
-**Balance gate (before any Z80):** `tools/balance_sim.py` with 12-room levels, §3 table and §3.1 regen, 10k ×
+Package 2 keeps k = 24 (user 2026-11-15); the divisor sim is closed. `XP_NEXT` ×1.35 kept. Amulets (Mana, Scarab)
+unchanged; the mana-amulet player measured 63.7 % (amulet granted from D2, optimistic), accepted by the user.
+
+### 3.2 Progress-tied respawns (replaces the time trickle on larger depths)
+- On each **first entry** of a room (not the start room), a respawn event fires with probability **0.75**, at most
+  one event per first entry.
+- Placement: a random **unvisited** room; if none, a visited room **≥ 2 rooms away** (path distance) and
+  **unseen ≥ 150 turns**; if neither exists, the event is skipped.
+- A monster placed in a visited room may ambush via the existing 0.4 backtrack rule (unchanged).
+- Cap **6 live respawns per level** (`RESPAWN_MAX`); an event at the cap is skipped.
+- **Engineer: disable the time trickle for larger depths** (gate its call on the old small-level path, or on
+  `RESPAWN_MAX` timer = 0), do not delete it: the small D0 tutorial level and tests may still use it. The tier
+  and pool pick of the spawned kind is unchanged.
+
+**Sim evidence** (10k x 2 seeds, package 2): W 43.1 / M 42.7, gap 0.4; monsters met per run 162/187 (today 111/113);
+run length ~5,565/6,248 turns; BSIM1 ok (+30 HP Mage 50.5 %).
+
+**Balance gate (before any Z80; history, passed by package 2):** `tools/balance_sim.py` with 12-room levels, §3 table and §3.1 regen, 10k ×
 2 seeds, average policy. Pass = W and M ≥ 35 % and within ±3 of BAL-1 FINAL (W 41.1/41.5, M 40.1/38.8),
 gap ≤ 3; also the BSIM1 +30 HP Mage case must not fall below +0. Knobs in order: regen divisor, `XP_NEXT`
 ×1.35 → ×1.25, potions min 3 → 4, Heal +12 → +13, counts −1 on D4/D7.
