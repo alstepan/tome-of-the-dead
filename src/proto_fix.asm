@@ -87,7 +87,7 @@ proto_fix:
 ; skeleton climbs the far shaft while the hero takes potion 2.
 ;==============================================================================
 ; proto_level — B3B-8: the PROTO rooms A-D (data.asm map) as a 3B level state
-; at LVL_STATE: header (LVL_DEPTH 0 = PROTO: level_load_tiles takes D1's set +
+; at LVL_STATE (header at LVL_HDR: LVL_DEPTH 0 = PROTO: level_load_tiles takes D1's set +
 ; the chest; D1 colours), EDGE_TAB (A|B door open, D|C closed), the 4 room
 ; descriptors (RD_SEED 0: build_room_map skips
 ; decor_room), FLOOR_LIST = the 4 potions (entry i = PROTO potion id i =
@@ -97,16 +97,17 @@ proto_fix:
 proto_level:
                 ld   hl, LVL_STATE
                 ld   de, LVL_STATE + 1
-                ld   bc, FLOOR_LIST - LVL_STATE - 1
+                ld   bc, LVL_STATE_END - LVL_STATE - 1
                 ld   (hl), 0
-                ldir                           ; header, edges, all 9 descriptors
+                ldir                           ; LARGER-D T2: the whole block (descriptors, FLOOR_LIST,
+                                               ; header, edges, traps, DG_PLAN), then FLOOR_LIST := FL_EMPTY
                 ld   hl, FLOOR_LIST
                 ld   de, FLOOR_LIST + 1
                 ld   bc, FLOOR_MAX * FL_STRIDE - 1
                 ld   (hl), FL_EMPTY
                 ldir
                 ld   hl, proto_hdr             ; header + EDGE_TAB (contiguous)
-                ld   de, LVL_STATE
+                ld   de, LVL_HDR
                 ld   bc, PROTO_HDR_LEN
                 ldir
                 ld   de, FLOOR_LIST            ; the potions
@@ -135,9 +136,9 @@ proto_hdr:      DB   0                         ; LVL_DEPTH: 0 = PROTO
                 DW   0                         ; MASTER_SEED
                 DB   EG_LINK | EG_DOOR | EG_OPEN, 0, EG_LINK | EG_DOOR, 0, 0, 0   ; EDGE_TAB
 PROTO_HDR_LEN   EQU $ - proto_hdr
-                ASSERT PROTO_HDR_LEN == EDGE_TAB + EDGES_H - LVL_STATE
-                ASSERT EDGE_TAB == LVL_STATE + LVL_HDR_LEN && EDGE_AB == 0 && EDGE_DC == 2
-                ASSERT LVL_ATTR_FLOOR - LVL_STATE == 5 && FLOOR_N - LVL_STATE == 13
+                ASSERT PROTO_HDR_LEN == EDGE_TAB + EDGES_H - LVL_HDR
+                ASSERT EDGE_TAB == LVL_HDR + LVL_HDR_LEN && EDGE_AB == 0 && EDGE_DC == 2
+                ASSERT LVL_ATTR_FLOOR - LVL_HDR == 5 && FLOOR_N - LVL_HDR == 13 && LVL_DEPTH == LVL_HDR
 proto_floor:    ; FL_ROOM, FL_COL, FL_ITEM, FL_QTY: potion ids 0..3 (all storey 0)
                 DB   ROOM_A, 28, IT_POTION, 1
                 DB   ROOM_B, 1,  IT_POTION, 1

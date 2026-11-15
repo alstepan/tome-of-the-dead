@@ -320,8 +320,8 @@ class D8:
 LOW = [("ROOM_MAP", S["ROOM_MAP"], 576), ("NEXT_MAP", S["NEXT_MAP"], 576), ("ITEM_RAM", S["ITEM_RAM"], S["ITEM_RAM_LEN"]),
        ("LVL_STATE", S["LVL_STATE"], S["LVL_STATE_END"] - S["LVL_STATE"]), ("LP_STATE", S["LP_STATE"], S["LP_LEN"]),
        ("kind_tab", S["kind_tab"], S["KT_END"])]
-LVL_MASK = {S["LVL_FLAGS"], S["EDGE_TAB"] + 4, S["EDGE_TAB"] + 5, S["EDGE_TAB"] + 6, S["EDGE_TAB"] + 7,
-            S["GEN_RNG"], S["GEN_RNG"] + 1}           # TRK_PHASE / TRK_PREV (EDGE_TAB + 6 / 7), the trickle's GEN_RNG
+LVL_MASK = {S["LVL_FLAGS"], S["EDGE_TAB"] + 4, S["EDGE_TAB"] + 5, S["TRK_PHASE"], S["TRK_PREV"],
+            S["GEN_RNG"], S["GEN_RNG"] + 1}           # TRK_PHASE / TRK_PREV (by name since LARGER-D T2), the trickle's GEN_RNG
 
 
 def snap(p):

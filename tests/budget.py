@@ -1358,7 +1358,8 @@ def trap_setup(p, key):
         return
     room = p.rb("CUR_ROOM")
     p.z.cmd("write-memory %d %s" % (S["TRAP_LIST"], " ".join(
-        str(v) for v in [room | S["TRF_S1"], col | (typ << 5)] + [0] * 10 + [1])))
+        str(v) for v in [room | S["TRF_S1"], col | (typ << 5)] + [0] * (2 * S["TRAP_MAX"] - 2))))
+    p.wb("TRAP_N", 1)                             # LARGER-D T2: by name (was list + 12)
 
 
 def trap_report(p, key):

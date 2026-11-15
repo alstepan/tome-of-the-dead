@@ -145,7 +145,7 @@ def run(h, p, check):
         p.boot(hero)
         park()
         heal()
-        p.wmem(TL, [0] * 13)
+        p.wmem(TL, [0] * (2 * S["TRAP_MAX"] + 1))
         put_hero(HX)
         tick(2)
         z.cmd("set-breakpoint 5 PC=%d" % LOGP)
@@ -153,7 +153,7 @@ def run(h, p, check):
 
     def trap(col, typ, s=1, known=False, room=None):
         room = p.rb("CUR_ROOM") if room is None else room
-        p.wmem(TL, [room | (S1 if s else 0) | (KNOWN if known else 0), col | (typ << 5)] + [0] * 10 + [1])
+        p.wmem(TL, [room | (S1 if s else 0) | (KNOWN if known else 0), col | (typ << 5)] + [0] * (2 * S["TRAP_MAX"] - 2) + [1])
 
     def ent():
         return tuple(z.read_memory(TL, 2))
@@ -396,7 +396,7 @@ def run(h, p, check):
     live = []
     for si, seed in enumerate((0x1234, 0x9E37, 0x4242, 0x0101, 0xBEEF, 0x7A31)):
         start_level(p, seed, K_KNIGHT if si % 2 == 0 else K_WIZARD)
-        b = bytes(z.read_memory(S["LVL_STATE"], 320))
+        b = bytes(z.read_memory(S["LVL_STATE"], S["LVL_STATE_END"] - S["LVL_STATE"]))
         pres, start, lair = M.rooms_of(b)
         floor = M.read_floor(b)
         san = p.rb("LVL_SANCTUM")
@@ -684,7 +684,7 @@ def persistence(p, check, lines, act, tick, heal, ent, cell, shown_attr):
     n = go_out(side, edge)
     hx = p.ent(0)["X"]
     col = hx + 2 + 2 + 1 if side == "L" else hx - 3       # 3 off the arrival body, 2 off after one step in
-    p.wmem(S["TRAP_LIST"], [n | (S1 if s else 0), col | (GAS << 5)] + [0] * 10 + [1])
+    p.wmem(S["TRAP_LIST"], [n | (S1 if s else 0), col | (GAS << 5)] + [0] * (2 * S["TRAP_MAX"] - 2) + [1])
     for i in range(S["FLOOR_MAX"]):            # FLOOR1: no item footprint (c..c+1) may cover the
         fe = p.z.read_memory(S["FLOOR_LIST"] + 4 * i, 2)   # poked trap col (the generator's rule)
         if fe[0] == (n | (S["FL_S1"] if s else 0)) and fe[1] in (col - 1, col):
@@ -708,7 +708,7 @@ def persistence(p, check, lines, act, tick, heal, ent, cell, shown_attr):
     # D2 the room-entry sense: back to S, a hidden ALARM in N 2 cols off the arrival body, enter
     go_out(back, 1 if back == "H" else 28)
     ecol = 5 if side == "L" else 26            # arrival x 1 (body 1..3) / 28 (28..30)
-    p.wmem(S["TRAP_LIST"], [n | (S1 if s else 0), ecol | (ALARM << 5)] + [0] * 10 + [1])
+    p.wmem(S["TRAP_LIST"], [n | (S1 if s else 0), ecol | (ALARM << 5)] + [0] * (2 * S["TRAP_MAX"] - 2) + [1])
     r_e = go_out(side, edge)
     tick(2)
     check("D2 the room-entry Mage sense: a trap 2 cols off the arrival body found on the entry turn, drawn "
@@ -758,7 +758,7 @@ def fuzz(p, check, lines, act, tick, heal, ent, cell):
             if not mine or not -3 <= (cur[mine[0]][1] & 31) - e["X"] <= 5:
                 c = rnd.choice(ok_cols)
                 typ = rnd.choice((DART, DART, GAS, ALARM, TELE, STUN))
-                p.wmem(S["TRAP_LIST"], [room | (S1 if s else 0), c | (typ << 5)] + [0] * 10 + [1])
+                p.wmem(S["TRAP_LIST"], [room | (S1 if s else 0), c | (typ << 5)] + [0] * (2 * S["TRAP_MAX"] - 2) + [1])
                 cur = [tuple(z.read_memory(S["TRAP_LIST"] + 2 * i, 2)) for i in range(6)]
                 mine = [0]
             i0 = mine[0]
@@ -853,10 +853,10 @@ def costs(p, check, scene, trap, put_hero, heal):
         p.wb("TURN_TICK", 0)
         p.wb("EXIT_KIND", 0)
     scene(K_KNIGHT)
-    p.wmem(S["TRAP_LIST"], [0] * 13)
+    p.wmem(S["TRAP_LIST"], [0] * (2 * S["TRAP_MAX"] + 1))
     call("no trap (TRAP_N 0)")
     other = (p.rb("CUR_ROOM") + 1) & 7
-    p.wmem(S["TRAP_LIST"], [other, HX] * 6 + [6])
+    p.wmem(S["TRAP_LIST"], [other, HX] * 6 + [0, 0] * (S["TRAP_MAX"] - 6) + [6])
     call("6 entries, none in the room")
     trap(HX + 20, DART)
     call("one 18 cols off (pre-filtered)")

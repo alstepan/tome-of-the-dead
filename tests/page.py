@@ -73,7 +73,7 @@ def run(p, check):
     def state():
         """Game state that must survive any number of page opens / closes."""
         return {k: bytes(z.read_memory(S[a] if isinstance(a, str) else a, n)) for k, a, n in (
-            ("ROOM_MAP", "ROOM_MAP", ncell), ("LVL_STATE (GEN_RNG, seeds, FLOOR_LIST)", "LVL_STATE", 320),
+            ("ROOM_MAP", "ROOM_MAP", ncell), ("LVL_STATE (GEN_RNG, seeds, FLOOR_LIST)", "LVL_STATE", S["LVL_STATE_END"] - S["LVL_STATE"]),
             ("LP_STATE (LP_RNG)", "LP_STATE", S["LP_END"] - S["LP_STATE"]), ("ANIM_N", "ANIM_N", 49),
             ("ANIM_N2", "ANIM_N2", 49), ("P_ENTITIES", "P_ENTITIES", 512), ("RNG_STATE", "RNG_STATE", 2),
             ("tile_flags", "tile_flags", 64), ("FLOOR_LIST", "FLOOR_LIST", 128),

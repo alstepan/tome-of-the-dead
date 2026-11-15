@@ -154,7 +154,7 @@ def run(h, p, check):
 
     def state():
         return {k: bytes(z.read_memory(S[a], n)) for k, a, n in (
-            ("ROOM_MAP", "ROOM_MAP", S["PLAY_CELLS"]), ("LVL_STATE", "LVL_STATE", 320),
+            ("ROOM_MAP", "ROOM_MAP", S["PLAY_CELLS"]), ("LVL_STATE", "LVL_STATE", S["LVL_STATE_END"] - S["LVL_STATE"]),
             ("LP_STATE", "LP_STATE", S["LP_END"] - S["LP_STATE"]), ("P_ENTITIES", "P_ENTITIES", 512),
             ("RNG_STATE", "RNG_STATE", 2), ("FLOOR_LIST", "FLOOR_LIST", 128),
             ("MK_RAM", "MK_RAM", S["MK_RAM_END"] - S["MK_RAM"]), ("ANIM_N", "ANIM_N", 49), ("ANIM_N2", "ANIM_N2", 49))}

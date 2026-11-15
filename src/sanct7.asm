@@ -20,8 +20,8 @@
 ; Cost: ~2.1k T. No SMC.
 ;==============================================================================
 SANCT_XOR       EQU $521F
-                ASSERT (EDGE_TAB >> 8) == ((EDGE_TAB + 5) >> 8) && RD_EXITS == 1 && RD_STRIDE == 16 && RD_SEED + 1 < RD_STRIDE
-                ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + 8 * RD_STRIDE + RD_STRIDE - 1) >> 8)
+                ASSERT (EDGE_TAB >> 8) == ((EDGE_TAB + EDGE_SLOTS - 1) >> 8) && RD_EXITS == 1 && RD_STRIDE == 16 && RD_SEED + 1 < RD_STRIDE
+                ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + ROOM_SLOTS * RD_STRIDE - 1) >> 8)
                 ASSERT (TOME_HP >> 8) == (EDGE_TAB >> 8)
 
 sanctum_leaf:   xor  a

@@ -485,7 +485,7 @@ def alarm(p, lines):
         fl = p.rb("LVL_FLAGS")
         p.wb("LVL_FLAGS", (fl | S["LF_UNIQUE"]) if dead else (fl & ~S["LF_UNIQUE"] & 255))
         hw = kt(p, p.rb("HERO_KIND"), "KT_BW")
-        p.wmem(TL, [room | (S["TRF_S1"] if s_ else 0), (c0 + hw) | (S["TT_ALARM"] << 5)] + [0] * 10 + [1])
+        p.wmem(TL, [room | (S["TRF_S1"] if s_ else 0), (c0 + hw) | (S["TT_ALARM"] << 5)] + [0] * (2 * S["TRAP_MAX"] - 2) + [1])
         lines.lines.clear()
         before = room_slots(p)
         resp0 = p.rb("LP_RESPAWNS")

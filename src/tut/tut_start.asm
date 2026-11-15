@@ -148,26 +148,39 @@ tut_d0:
                 ld   hl, present_full
                 call farb4
                 ; --- the level block (tut0_level.asm; LVL_DEPTH stays 1) ---
-                ld   hl, tut0_lvl_state        ; the header less MASTER_SEED (new_game's)
-                ld   de, LVL_STATE
-                ld   bc, TUT0_HDR_COPY
-                ldir
-                ld   hl, EDGE_TAB              ; as level_gen's attempt: EDGE_TAB's spare
-                ld   de, EDGE_TAB + 1          ; (TRK_*, TOME_*, DN_QN) := 0
-                ld   bc, ROOM_DESC - EDGE_TAB - 1
-                ld   (hl), 0
-                ldir
-                ld   hl, tut0_edge_tab
-                ld   de, EDGE_TAB
-                ld   bc, 6
-                ldir
-                ld   hl, tut0_room_desc        ; ROOM_DESC + TRAP_LIST + FLOOR_LIST: one run
+                ; LARGER-D T2: one HL run over the images, stored in LVL_STATE memory order:
+                ; GRID_CELLS descriptors (slots GRID_CELLS..ROOM_SLOTS-1 := 0, as level_gen's
+                ; attempt), FLOOR_LIST, the header less MASTER_SEED (new_game's),
+                ; EDGE_TAB..TRAP_N (TRK_*, TOME_*, DN_QN = 0 in the image); the spare + DG_PLAN := 0
+                ld   hl, tut0_room_desc
                 ld   de, ROOM_DESC
-                ld   bc, LVL_STATE_END - ROOM_DESC
+                ld   bc, GRID_CELLS * RD_STRIDE
                 ldir
-                ASSERT tut0_trap_list - tut0_room_desc == TRAP_LIST - ROOM_DESC
-                ASSERT tut0_floor_list - tut0_room_desc == FLOOR_LIST - ROOM_DESC
-                ASSERT FLOOR_LIST + FLOOR_MAX * FL_STRIDE == LVL_STATE_END
+                xor  a
+                ld   b, (ROOM_SLOTS - GRID_CELLS) * RD_STRIDE
+.zs:            ld   (de), a
+                inc  de
+                djnz .zs                       ; DE = FLOOR_LIST
+                ld   c, FLOOR_MAX * FL_STRIDE  ; B = 0
+                ldir                           ; DE = LVL_HDR
+                ld   c, TUT0_HDR_COPY
+                ldir
+                inc  de
+                inc  de                        ; MASTER_SEED kept
+                ld   c, TRAP_N + 1 - EDGE_TAB
+                ldir
+                ld   b, LVL_STATE_END - TRAP_N - 1
+.zt:            ld   (de), a
+                inc  e
+                djnz .zt
+                ASSERT GRID_CELLS < ROOM_SLOTS && (ROOM_SLOTS - GRID_CELLS) * RD_STRIDE < 256   ; (T4: drop the .zs loop at 12)
+                ASSERT FLOOR_LIST == ROOM_DESC + ROOM_SLOTS * RD_STRIDE && FLOOR_MAX * FL_STRIDE < 256
+                ASSERT LVL_HDR == FLOOR_LIST + FLOOR_MAX * FL_STRIDE && TUT0_HDR_COPY == MASTER_SEED - LVL_HDR
+                ASSERT EDGE_TAB == MASTER_SEED + 2 && (TRAP_N >> 8) == ((LVL_STATE_END - 1) >> 8)
+                ASSERT tut0_floor_list - tut0_room_desc == GRID_CELLS * RD_STRIDE
+                ASSERT tut0_lvl_state - tut0_floor_list == FLOOR_MAX * FL_STRIDE
+                ASSERT tut0_edge_tab - tut0_lvl_state == TUT0_HDR_COPY
+                ASSERT tut0_lvl_vars - tut0_edge_tab == EDGE_SLOTS && tut0_trap_list - tut0_edge_tab == TRAP_LIST - EDGE_TAB
                 ; --- the hero (level_populate's part, bank3.asm) ---
                 ld   ix, P_ENTITIES
                 ld   l, (ix+E_HP)

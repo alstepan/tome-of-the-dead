@@ -697,7 +697,7 @@ tele_pick:
                 ld   e, S_FX_TELEPORTED
                 jp   fx_line
                 ASSERT (CAND_LIST & $FF) + P_MAX_ENT <= 256 && (TRAP_LIST & $FF) + TRAP_MAX * TRAP_STRIDE <= 256
-                ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + GRID_CELLS * RD_STRIDE - 1) >> 8) && RD_FLAGS == 0
+                ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + ROOM_SLOTS * RD_STRIDE - 1) >> 8) && RD_FLAGS == 0
                 ASSERT LPC_BAD == 1 && TR_B0 == 0 && TR_B1 == 1 && TRAP_STRIDE == 2 && GRID_CELLS <= 9
                 ASSERT TELE_XN == 26 && STOREY_ROWS == 9
                 ASSERT (fx_cand >> 8) == ((fx_cand + GRID_CELLS - 2) >> 8)

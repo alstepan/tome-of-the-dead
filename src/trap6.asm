@@ -72,4 +72,4 @@ trap_at:        push bc
 .x:             pop  de
                 pop  bc
                 ret
-                ASSERT FL_S1 == $80 && TRF_ROOM_MASK == FL_ROOM_MASK && (TRAP_LIST >> 8) == ((TRAP_LIST + 12) >> 8)
+                ASSERT FL_S1 == $80 && TRF_ROOM_MASK == FL_ROOM_MASK && (TRAP_LIST >> 8) == ((TRAP_LIST + TRAP_MAX * TRAP_STRIDE) >> 8)

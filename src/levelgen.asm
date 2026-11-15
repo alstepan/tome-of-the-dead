@@ -73,7 +73,7 @@ SHAFT_N         EQU 20
 LG_ROOMS_END    EQU (ROOM_DESC + GRID_CELLS * RD_STRIDE) & $FF
                 ASSERT (LG_Q >> 8) == ((LG_Q + 9) >> 8) && (LG_STK >> 8) == ((LG_X + 1) >> 8)
                 ASSERT RD_FLAGS == 0 && RD_EXITS == 1 && RDF_PRESENT == 1 && RDX_R == 2 && RDX_D == 8
-                ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + 16 * 8 + 15) >> 8)
+                ASSERT (ROOM_DESC >> 8) == ((ROOM_DESC + ROOM_SLOTS * RD_STRIDE - 1) >> 8)
 
 ;------------------------------------------------------------------------------
 ; helpers (all preserve BC, DE unless noted)
@@ -598,16 +598,28 @@ block_try:      bit  1, (ix+RD_FLAGS)
 ; attempt: one generation attempt. Out A = 0 ok, 1 restart, 2 reseed.
 ;==============================================================================
 attempt:        ld   (LG_SP), sp
-                ld   hl, EDGE_TAB
-                ld   de, EDGE_TAB + 1
-                ld   bc, LVL_STATE_END - EDGE_TAB - 1
+                ; LARGER-D T2: ROOM_DESC (all ROOM_SLOTS) := 0, FLOOR_LIST := FL_EMPTY,
+                ; EDGE_TAB..LVL_STATE_END := 0; never the header (between them). 365 LDIR
+                ; bytes (was 430: the old run zeroed FLOOR_LIST before filling it)
+                ld   hl, ROOM_DESC
+                ld   de, ROOM_DESC + 1
+                ld   bc, ROOM_SLOTS * RD_STRIDE - 1
                 ld   (hl), 0
-                ldir
-                ld   hl, FLOOR_LIST
-                ld   de, FLOOR_LIST + 1
-                ld   bc, FLOOR_MAX * FL_STRIDE - 1
+                ldir                    ; DE = FLOOR_LIST
+                ld   h, d
+                ld   l, e
+                inc  e                  ; (FLOOR_LIST page-aligned: no carry)
                 ld   (hl), FL_EMPTY
+                ld   c, FLOOR_MAX * FL_STRIDE - 1   ; B = 0 after LDIR
                 ldir
+                ld   l, EDGE_TAB & $FF  ; H = D = FLOOR_LIST's page = EDGE_TAB's (ASSERT): -2 B
+                ld   e, (EDGE_TAB + 1) & $FF
+                ld   c, LVL_STATE_END - EDGE_TAB - 1
+                ld   (hl), b            ; B = 0
+                ldir
+                ASSERT FLOOR_LIST == ROOM_DESC + ROOM_SLOTS * RD_STRIDE && (FLOOR_LIST & $FF) == 0
+                ASSERT (EDGE_TAB >> 8) == (FLOOR_LIST >> 8) && ((FLOOR_LIST + FLOOR_MAX * FL_STRIDE - 1) >> 8) == (FLOOR_LIST >> 8)
+                ASSERT (LVL_STATE_END - 1) >> 8 == EDGE_TAB >> 8
                 xor  a
                 ld   (FLOOR_N), a
                 ; 1. room count, start

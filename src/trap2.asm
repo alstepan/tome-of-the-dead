@@ -18,4 +18,4 @@ tr_type:        inc  l
                 rlca
                 and  7                         ; bits 5-7 -> 0-4 (STUN1: 3 bits)
                 ret
-                ASSERT TR_TYPE_SHIFT == 5 && TR_TYPE_MASK == $E0 && TR_B1 == 1 && (TRAP_LIST >> 8) == ((TRAP_LIST + 11) >> 8)
+                ASSERT TR_TYPE_SHIFT == 5 && TR_TYPE_MASK == $E0 && TR_B1 == 1 && (TRAP_LIST >> 8) == ((TRAP_LIST + TRAP_MAX * TRAP_STRIDE - 1) >> 8)
