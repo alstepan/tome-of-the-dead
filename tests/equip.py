@@ -22,7 +22,7 @@ game.md §8 gear table, §8.6 uniques, §8.11 "3E simplification".
       full HP -> L 0, NO NEED, nothing consumed (T12); DISCARD -> "YOU DISCARD
       <name>", 0 turns
   X   ench_any: m +1 .. +3 (KT_BONUS 1..3), the 4th and fists -> unchanged
-  L   level steps exactly once with gear: XP 922 -> L8: atk base +2 (+1 Might),
+  L   level steps exactly once with gear: XP 1242 -> L8: atk base +2 (+1 Might),
       eva +1; an equip afterwards keeps them (no double count)
   M   MP: remove the Robe -> MAXMP 10, MP clamped 10; re-equip -> 12, MP stays 10;
       period: Mana amulet 3, + Plate 6, Plate alone 12; regen +1 on the 3rd turn
@@ -162,12 +162,12 @@ def run(h, p, check):
     # ======================= N: kit start ========================================
     scene(K_KNIGHT)
     st = stats()
-    want = dict(atk=3, eva=2, die=6, bon=0, df=1, mp=6, maxmp=6, per=8, gmp=0, res=(S["RSP_R"] << 4, 0, 0), imm=0)
-    check("N1 Warrior start: atk 3 eva 2 1d6+0 DEF 1 MP 6/6 period 8, innate COLD R (NEW-MON3 T10a)", st == want, (st, want))
+    want = dict(atk=3, eva=2, die=6, bon=0, df=1, mp=6, maxmp=6, per=32, gmp=0, res=(S["RSP_R"] << 4, 0, 0), imm=0)
+    check("N1 Warrior start: atk 3 eva 2 1d6+0 DEF 1 MP 6/6 period 8 turns (MP_PER 32 quarter-turns), innate COLD R (NEW-MON3 T10a)", st == want, (st, want))
     scene(K_WIZARD)
     st = stats()
-    want = dict(atk=1, eva=1, die=4, bon=0, df=0, mp=12, maxmp=12, per=6, gmp=2, res=(0, 0, 0), imm=0)
-    check("N2 Mage start: atk 1 eva 1 1d4+0 DEF 0 MP 12/12 (10 + Robe) period 6", st == want, (st, want))
+    want = dict(atk=1, eva=1, die=4, bon=0, df=0, mp=12, maxmp=12, per=18, gmp=2, res=(0, 0, 0), imm=0)
+    check("N2 Mage start: atk 1 eva 1 1d4+0 DEF 0 MP 12/12 (10 + Robe) period 4.5 (MP_PER 18)", st == want, (st, want))
 
     # ======================= M: MP clamp, periods, regen =========================
     put(["P_HEAL", "F_APPLE"])
@@ -185,7 +185,7 @@ def run(h, p, check):
     pers.append(p.rb("MP_PER"))
     fx(S["FX_REMOVE"], S["PG_SLOT_WORN"] + S["WS_CHARM"])
     pers.append(p.rb("MP_PER"))
-    check("M2 MP_PER: Mana amulet 3, + Plate 6, Plate alone 12", pers == [3, 6, 12], pers)
+    check("M2 MP_PER: Mana amulet 9, + Plate 18, Plate alone 36 (quarter-turns: 2.25 / 4.5 / 9 turns)", pers == [9, 18, 36], pers)
     put(["C_SCARAB"], [None, "A_ROBE", None, None])
     fx(S["FX_EQUIP"], 0)
     p.wb("MP", 0)
@@ -194,7 +194,7 @@ def run(h, p, check):
     for _ in range(6):
         p.turn("WAIT")
         got.append(p.rb("MP"))
-    check("M3 Scarab: Mage regen +1 every 3 turns", got == [0, 0, 1, 1, 1, 2], got)
+    check("M3 Scarab: Mage regen +1 every 2.25 turns (3, 5, 7)", got == [0, 0, 1, 1, 2, 2], got)
 
     # ======================= E: equip / remove, F: round trip ====================
     scene(K_KNIGHT)
@@ -330,8 +330,8 @@ def run(h, p, check):
     put([], ["W_SHORT", "A_LEATHER", None, "C_MIGHT"])
     recalc()
     a0 = stats()
-    p.wb("XP", 922 & 255)
-    p.wb(S["XP"] + 1, 922 >> 8)
+    p.wb("XP", 1242 & 255)
+    p.wb(S["XP"] + 1, 1242 >> 8)
     p.wb("XP_UP", 1)
     for _ in range(3):
         p.turn("WAIT")
@@ -341,7 +341,7 @@ def run(h, p, check):
     put(["H_HELM"])
     fx(S["FX_EQUIP"], 0)
     a2 = stats()
-    check("L1 Might worn: atk 4 eva 2 at L1; XP 922 -> L8: atk 6 eva 3; an equip later keeps 6 / 3",
+    check("L1 Might worn: atk 4 eva 2 at L1; XP 1242 -> L8: atk 6 eva 3; an equip later keeps 6 / 3",
           (a0["atk"], a0["eva"], p.rb("LVL"), a1["atk"], a1["eva"], a2["atk"], a2["eva"]) == (4, 2, 8, 6, 3, 6, 3),
           (a0, p.rb("LVL"), a1, a2))
     fx(S["FX_REMOVE"], S["PG_SLOT_WORN"] + S["WS_CHARM"])

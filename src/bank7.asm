@@ -55,8 +55,9 @@ turn_input:
                 jr   z, .nd                    ; deferred level-up waits too); the input is read on
                 res  TRK_DUE_BIT, (hl)         ; the next tick (40 ms, once per 48 turns). A turn
                                                ; never starts with it set: end_turn sees it clear
-                ld   hl, trk_run               ; (R6 trickle6.asm)
-                jp   far6
+                ld   hl, rsp_run               ; LARGER-D T5: the progress respawn event (bank 0 rsp0.asm), set
+                ld   c, BANK_TEXT              ; by lp_transition on every room entry; the time trickle is off
+                jp   farb
 .nd:            ld   a, (XP_UP)                ; D3-9b: a level-up a heavy end_turn tick
                 or   a                         ; deferred (xp_level: 1st frame only)
                 call nz, xp_level
@@ -289,28 +290,20 @@ end_turn:
                 ld   a, (SPQ_K)                ; 3F-T9: the queued spawn (summon / breed / ALARM
                 or   a                         ; wave) is made now, never in the cast / input
                 jr   z, .nq                    ; tick (R6 spawn6.asm; it empties the queue and
-                ld   hl, TRK_PHASE             ; skips it on an exit / a dying hero). 3F-T12: the
-                dec  (hl)                      ; trickle phase stands still on this turn, so a
-                ld   hl, sp_run                ; check never shares the tick with sp_run (walarm
-                call far6                      ; 122.5k + trk_run ~10k > the 126k cap)
+                ld   hl, sp_run                ; skips it on an exit / a dying hero)
+                call far6
 .nq:
                 ld   a, (EXIT_KIND)
                 or   a
                 call z, vb_turn                ; 3F-T9: the Vampire's bat form (+ R6 vbat6.asm)
-                ld   hl, TRK_PHASE             ; 3F-T12: the level's turn count, BEFORE the exit
-                inc  (hl)                      ; (a level change zeroes it: a fresh LVL_STATE)
                 ld   a, (EXIT_KIND)
                 or   a
                 call nz, .ex
                 ld   hl, (TURN_COUNTER)
                 inc  hl
                 ld   (TURN_COUNTER), hl
-                ld   hl, TRK_PHASE             ; 3F-T12: every RESPAWN_PERIOD turns of the level
-                ld   a, (hl)                   ; the check is DUE (TRK_DUE = bit 7, count 0); it
-                and  TRK_CNT_MASK              ; runs on the next INPUT tick (turn_input), never
-                cp   RESPAWN_PERIOD            ; on this heavy turn-ending tick (review: up to
-                jr   nz, .nt                   ; 115.8k + 14.1k > the 126k cap)
-                ld   (hl), TRK_DUE
+                ; LARGER-D T5: no per-turn trickle count any more (the 48-turn time trickle is disabled on D1-D8;
+                ; trk_run stays in R6 for the model tests). TRK_PHASE is only TRK_DUE now (lp_transition).
 .nt:            call floor_pickup              ; pickup7.asm (D3-7 T6: potions + ammo, list-driven;
                                                ; HP / potions reach the panel by panel_tick's poll)
                 xor  a

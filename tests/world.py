@@ -1635,8 +1635,8 @@ def w15_icons(p, check):
           info(fr) == text6(line((0, "POTION"), (16, "X1"), (28, "FIRE: DRINK")), 0, 32), "")
     p.wb("SEL_SLOT", 9)
     fr = settle_panel()
-    check("W15i Bag line: 'BAG  LV 1  XP 0/40' (game.md §4.1)",
-          info(fr) == text6(line((0, "BAG"), (16, "LV 1"), (28, "XP 0/40")), 0, 32), "")
+    check("W15i Bag line: 'BAG  LV 1  XP 0/55' (game.md §4.1)",
+          info(fr) == text6(line((0, "BAG"), (16, "LV 1"), (28, "XP 0/55")), 0, 32), "")
     p.wb("XP", 39)
     p.wb(S["XP"] + 1, 1)                          # 295
     p.wb("LVL", 4)
@@ -1645,7 +1645,7 @@ def w15_icons(p, check):
     p.wb("SEL_SLOT", 9)
     fr = settle_panel()
     check("W15i Bag line follows LVL / XP; level digit follows LVL",
-          info(fr) == text6(line((0, "BAG"), (16, "LV 4"), (28, "XP 295/340")), 0, 32)
+          info(fr) == text6(line((0, "BAG"), (16, "LV 4"), (28, "XP 295/460")), 0, 32)
           and log_row(fr, 19, 31, 1) == text6("4", 0, 1), "")
     check("W15i displayed == composed", fr == p.composed_frame(), "")
 

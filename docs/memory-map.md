@@ -7245,3 +7245,12 @@ fired inside bank-0 `decor_b0` at `$E643` during the NEXT_MAP build: GI R3 faile
 - **T4 notes:** `tut_start`'s slot-zero loop ASSERTs `GRID_CELLS < ROOM_SLOTS` (drop it at 12);
   `LG_ROOMS_END` becomes `$00` at 12 slots (IXL wraps to `$00`: the `cp` still ends the loops).
 - **Low RAM:** `LOWRAM_SPARE` 846 → **737 kit / 735 release** (−109).
+
+## LARGER-D T5 ledger (pacing package 2, 2026-11-15; `feat/larger-d-t5`)
+
+- **Counts / XP:** `lp_dtab` totals 20/21/21/23/24/23/23/18 (`nm3_b0.asm`); `xpn_tab` 55/135/270/460/675/945/1240/1550 (`xp2.asm`, 8 DW, unchanged width). `lpop3.asm` ASSERTs `ROOMS_MIN * ROOM_MAX >= LP_N_MAX` (24) once `GRID_CELLS >= ROOM_SLOTS` (armed by T4; on 3x3 min |R| is 7 -> 21, the discard path covers it). `LP_N_MIN` (level_defs.asm, T4's file) is still 12: T4/T7 set it to the table min 18.
+- **FED regen:** `hunger7.asm` +(1 + MAXHP div 24) HP per `HP_REG_FED` (12) turns, clamped; `DN_SLOT + DS_SNAP` += the HP actually gained.
+- **MP regen:** `MP_PER` / `MP_RG` now count **quarter-turns** (`xp7.asm`: `MP_RG_STEP` 4 a turn; at `MP_PER` subtract, remainder kept): Warrior `MP_REG_W` 32 (8 turns), Mage `MP_REG_M` 18 (4.5 turns: alternates 5 / 4), Mana / Scarab x 1/2, Plate x 2 exact. No toggle byte.
+- **Progress respawns (§3.2):** the time trickle is **off** (`end_turn` no longer counts `TRK_PHASE`; `TRK_PHASE` is only `TRK_DUE` bit 7 now; `trk_run` / `RESPAWN_PERIOD` stay in R6 for the model tests). `lp_transition` sets `TRK_DUE` on every room entry; `turn_input` runs **`rsp_run`** (bank 0 B0_CODE2, `src/rsp0.asm`, FARB0 from bank 7) alone on the next INPUT tick: gate (== `trk_run`), stamp `RD_STAMP` (= `RD_SPARE + 3`, ROOM_DESC byte 15, runtime only, read for visited non-current rooms) of `TRK_PREV` with `TURN_COUNTER >> 2`, first entry only (`ROOM_VISITS` == 1), p 0.75 (`RSP_CHANCE` 192, `RNG_STATE`), `rsp_w` (TRK_W weights; scratch `TMP0` / `TMP1`) then R6 `rsp_pick` (= `trk_draw`'s room pick; an unvisited room gets quota + 1, a visited room a `LEK_RESPAWN` entry). `LP_RESPAWNS` + 1, cap `RESPAWN_MAX` 6.
+- **TURN_COUNTER** is a word (`$BF03`); the end card TURNS prints 0..65535 (`ec_num`): no change needed.
+- **Free after T5 (release `-DDEBUG_KIT=0`):** bank 7 48 B, R6 77 B, bank 3 free-to-AY 1,291 B, B0_CODE2 690 B.

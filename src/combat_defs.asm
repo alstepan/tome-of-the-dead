@@ -505,7 +505,7 @@ PAGE_END        EQU ST_HERO_END + 4
 ; 3E-T8 (same spare, after PAGE_*; level_reset_new zeroes HERO3D..GEAR_MP incl. PAGE_*):
 GEAR_MP         EQU PAGE_END        ; the gear MP hero_recalc has added into MAXMP (0 at new_game;
                                     ; recalc: MAXMP += new - GEAR_MP, so level-ups / tomes stay)
-MP_PER          EQU PAGE_END + 1    ; MP regen period (turns) for xp_turn: class 8 / 6, x 1/2 with
+MP_PER          EQU PAGE_END + 1    ; MP regen period in QUARTER-turns (LARGER-D T5: MP_RG += 4 a turn) for xp_turn: class 32 / 18, x 1/2 with
                                     ; the Mana / Scarab amulet, x 2 with Plate (hero_recalc)
 FX_OP           EQU PAGE_END + 2    ; fx_main (R6): in = the op (FX_*), out = the FXR_* result flags
 FX_ARG          EQU PAGE_END + 3    ; fx_main: the op's argument (a slot: BAG + 3 * arg)

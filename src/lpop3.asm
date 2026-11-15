@@ -39,6 +39,12 @@ LPV_FACE        EQU LP_RES              ; ROOM-MEM2 lp_enter -> lp_spawn: the un
 ; §9.4.1 "N >= |R|" always holds (min N = LP_N_MIN - 2 = 10 >= 7 = the most rooms R
 ; can have), so lp_budget has no "N farthest rooms" branch (levelgen.py keeps it).
                 ASSERT LP_N_MIN - 2 >= GRID_CELLS - 2
+; LARGER-D T5: lp_dtab max count 24 (D5) vs the tight min room capacity: the 3x4 grid's min |R| 8 x ROOM_MAX 3 = 24
+; (the discard path would silently drop units otherwise). Armed once the grid has 12 cells (T4); on 3x3 |R| can be 7.
+LP_N_MAX        EQU 24
+    IF GRID_CELLS >= ROOM_SLOTS
+                ASSERT ROOMS_MIN * ROOM_MAX >= LP_N_MAX
+    ENDIF
 ; §9.3 weights by kind row (defs.asm WT_*), K_COUNT entries (3F-T3: 18 base + 12 tier rows)
 ; (the hero rows 0 / 1 stay 0: a record entry of kind 0 may exist in tests; id 2 = K_VBAT, 3F-T9)
 ; (3F: MEM-RECLAIM w3: lp_wt is the kind_tab KT_REACH slot, bank 2 main.asm; the macro LP_WT_ROWS lives in defs.asm)
@@ -269,6 +275,8 @@ lp_transition:
                 ld   hl, ROOM_VISITS
                 call hla
                 inc  (hl)
+                ld   hl, TRK_PHASE             ; LARGER-D T5: a room entry: the progress-respawn event runs on the next
+                set  TRK_DUE_BIT, (hl)         ; INPUT tick (turn_input -> R6 rsp_run: the first-entry test, the roll, the pick)
                 ld   hl, SLOTREC + SLOTREC_STRIDE + R_VIS
                 ld   de, SLOTREC_STRIDE
                 ld   b, P_MAX_ENT - 1

@@ -162,7 +162,12 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 ld   a, l
                 cp   RESPAWN_CHANCE
                 ret  nc
-                call gen_step
+                jr   trk_pick
+; rsp_pick — far6 from bank-0 rsp_run (rsp0.asm; far6 loses C: DE = Σ w >= 1, TRK_W = the weights, GEN_RNG =
+; the stream, its own 0.75 roll spent). LARGER-D T5: the rest is trk_draw's room pick; an UNVISITED room (rsp_w
+; mode $80) gets quota + 1 instead of an entry (.hit).
+rsp_pick:       ld   c, e
+trk_pick:       call gen_step
                 ld   a, l
 .m:             sub  c
                 jr   nc, .m
@@ -175,7 +180,11 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 inc  l
                 add  ix, de
                 jr   .p
-.hit:           call gen_step
+.hit:           bit  LR_VISITED_BIT, (ix+LR_HDR)
+                jr   nz, .vk
+                inc  (ix+LR_HDR)               ; T5: an UNVISITED room (rsp_run): quota + 1, lp_gen rolls the unit
+                jr   .cn
+.vk:            call gen_step
                 ld   a, l
                 and  7
                 ld   e, a                      ; E = k: the slot (NEW-MON3 T3: 8 slots)
@@ -252,7 +261,7 @@ trk_draw:       call gen_step                  ; (bank 2) L = the byte
                 ld   h, LP_POS >> 8            ; (one page, level_defs.asm ASSERT)
                 ld   (hl), 0
                 inc  (ix+LR_HDR)               ; count + 1 (VISITED kept)
-                ld   hl, LP_RESPAWNS
+.cn:            ld   hl, LP_RESPAWNS
                 inc  (hl)
                 ret
                 ASSERT LR_ENT == 1 && LE_STRIDE == 2 && LE_KIND == 0 && LE_HP == 1 && LR_STRIDE == 9 && LR_MAX == 4
