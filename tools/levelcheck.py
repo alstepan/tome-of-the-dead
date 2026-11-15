@@ -187,7 +187,7 @@ def check_keys(b, adj, start, lair, n, depth, v, stats):
     for e, col in locks.items():
         a, c = e
         p2 = _bfs(A, start, {(a, c), (c, a)})
-        if len(p2) == nn: v.append(f"K1: lock {a}-{c} is not a bridge")
+        if len(p2) == nn: v.append(f"K1/K10: lock {a}-{c} is not a bridge of the final graph (an optional loop crosses it)")
         sides[e] = (a, c) if a in p2 else (c, a)
         colour[e] = col
         if c != a + 1 or a % GW == GW - 1: v.append(f"K1: lock {a}-{c} not horizontal")
@@ -195,7 +195,7 @@ def check_keys(b, adj, start, lair, n, depth, v, stats):
     m = len(locks)
     if m > 2 or (depth <= 3 and m > 1) or (depth >= 4 and m == 2 and nn < 11): v.append(f"K2: {m} locks at D{depth} n={nn}")
     for c, r in keys.items():
-        if r in (start, lair) or r == sanct or len(A[r]) != 1: v.append(f"K3: key {c} room {r} not a dead end / start / lair")
+        if r in (start, lair) or r == sanct: v.append(f"K3: key {c} in start / lair / Sanctum")
     # K6: every arrival room (start + teleport landings), 0 keys
     for x in A:
         if lair not in fixpoint(A, sides, colour, keys, x)[0]: v.append(f"K6: softlock from room {x}")
@@ -220,7 +220,12 @@ def check_keys(b, adj, start, lair, n, depth, v, stats):
             if c is not None: held.add(c)
         if ok and (F is None or len(used) < F): F = len(used)
     if F is None: v.append("K5: no valid collection order")
-    elif F < nn - 4: v.append(f"K5: F {F} < n-4 = {nn - 4}")
+    elif F < nn - 4:
+        if G.KEY_STATS["p2"]:                 # pass-2 sets are accepted below the floor (rev 3): a stat, not a failure
+            if stats is not None: stats["below_floor"] = stats.get("below_floor", 0) + 1
+        elif stats is not None:               # pass 1 chose F >= n-4 on G5a; the optional loop (5c) shortened a leg
+            stats["below_loop"] = stats.get("below_loop", 0) + 1
+        else: v.append(f"K5: F {F} < n-4 = {nn - 4}")
     shape = "one"
     if m == 2:
         onp = [frozenset(e) in pe for e in locks]
@@ -234,6 +239,7 @@ def check_keys(b, adj, start, lair, n, depth, v, stats):
         kd["lair_lock"] += any(lair in e for e in locks)
         stats["key_levels"] = stats.get("key_levels", 0) + 1
         stats["key_p2"] = stats.get("key_p2", 0) + (1 if G.KEY_STATS["p2"] else 0)
+        stats["krestart"] = G.KEY_STATS["krestart"]
 
 
 def check(b, stats=None):
@@ -415,8 +421,23 @@ def check(b, stats=None):
         if lair != BOT + 1 or BOT + 1 not in pset or sum(ends) != 1:
             v.append(f"L1: D8 lair {lair} / Sanctum cell not reserved")
     if dist.get(lair, 0) < BFS_MIN: v.append(f"L1: BFS start -> lair {dist.get(lair)} < {BFS_MIN}")
-    if lair not in pool: v.append("lair not in candidate pool")
-    elif dist.get(lair, -1) != max(dist.get(r, 0) for r in pool): v.append("lair not farthest candidate")
+    def lair_on(ad):                       # rev 3: the lair is chosen on G5a (before the optional loop), so accept the
+        dd = _bfs(ad, start)               # final graph or the final graph minus one (cycle) edge
+        if len(dd) != len(ad): return False
+        dd = {r: len(_path(dd, r)) - 1 for r in dd}
+        hh = lambda r: (r % GW > 0 and r - 1 in ad[r]) or (r % GW < GW - 1 and r + 1 in ad[r])
+        for pl in ([r for r in ad if r >= BOT and len(ad[r]) == 1 and hh(r) and san(r)],
+                   [r for r in ad if r >= BOT and hh(r) and san(r)]):
+            if pl: return lair in pl and dd[lair] == max(dd[r] for r in pl)
+        return False
+    ok = lair_on(adj)
+    for r in present:
+        for x in list(adj[r]):
+            if ok: break
+            if x > r:
+                ad = {k: set(a) for k, a in adj.items()}; ad[r].discard(x); ad[x].discard(r)
+                ok = lair_on(ad)
+    if not ok: v.append("lair not on G5a (final graph minus the optional loop)")
     def side(r, s, col):                    # storey-0 floor divider: a pit (col p) or the mid-block (col b)
         p = rd(b, r, "RD_PITCOL") or b[OFF_DESC + r * 16 + L2_MIDB]
         return 1 if (s == 0 and p and col >= p) else 0
@@ -676,6 +697,17 @@ def report(st, tot, fails):
     print(f"KEY: pass-2 restarts {st.get('key_p2', 0)}/{kl} ({100 * st.get('key_p2', 0) / kl:.1f}%), keyless {st.get('keyless', 0)}")
     for d, kd in sorted(st.get("key", {}).items()):
         print(f"  D{d}: F/n mean {100 * kd['FN'] / kd['n']:.1f}%  locks {dict(sorted(kd['m'].items()))}  lair-door lock {kd['lair_lock']}/{kd['n']}  shapes {dict(kd['shape'])}")
+    ks = st.get("key", {})
+    lv45 = sum(k["n"] for d, k in ks.items() if d >= 4)
+    two = sum(k["m"][2] for d, k in ks.items() if d >= 4)
+    nl = sum(k["shape"]["b1"] + k["shape"]["b2"] for d, k in ks.items() if d >= 4)
+    nlocks = sum(m * c for k in ks.values() for m, c in k["m"].items())
+    ll = sum(k["lair_lock"] for k in ks.values())
+    print(f"KEY summary: mean F/n {100 * sum(k['FN'] for k in ks.values()) / max(1, sum(k['n'] for k in ks.values())):.1f}%, "
+          f"D4-8 2-lock {100 * two / max(1, lv45):.1f}% of levels, non-linear {100 * nl / max(1, two):.1f}% of those "
+          f"(b1 {sum(k['shape']['b1'] for k in ks.values())}, b2 {sum(k['shape']['b2'] for k in ks.values())}), "
+          f"lair-door {100 * ll / max(1, nlocks):.1f}% of locks, F < n-4 after pass 2 {st.get('below_floor', 0)}, after 5c loop {st.get('below_loop', 0)}, "
+          f"key full-restarts {st.get('krestart', 0)} ({100 * st.get('krestart', 0) / kl:.1f}%)")
     u = st["lp_units"] + st["lp_left"]
     print("LP first entries:", st["lp_entries"], "units", u, "placed", st["lp_units"], "wait (no legal cell)",
           st["lp_left"], f"({100 * st['lp_left'] / max(1, u):.1f}%)", "lost to the sum cap", st["lp_lost"])

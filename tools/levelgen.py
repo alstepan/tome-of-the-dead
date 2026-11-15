@@ -434,15 +434,16 @@ def l2_pass(rng, rooms, floor, depth, start, lair):
                 rm.pit = pit0
 
 
-KEY_STATS = {"restart": 0, "last": None, "p2": False}   # KEY sweep stats: pass-1 failures (this process), last (locks, keys, F)
+KEY_STATS = {"krestart": 0, "restart": 0, "last": None, "p2": False}   # KEY sweep stats: pass-1 failures (this process), last (locks, keys, F)
 
 
-def tree_pass(rng, depth, n, start, warns):
-    """Steps 3-8 of the attempt() contract: S, DFS, loop edge, h-edges, vertical links, lair. warns = KEY pass 2:
-    the DFS picks among the unvisited neighbours (order L, R, U, D) with the FEWEST unvisited onward neighbours
-    (cells that are unvisited and != S, counted from the candidate), then rnd(len(ties)) over the tied ones."""
-    rooms = [Room() for _ in range(NCELL)]
-    edges = [0] * NEDGE_H
+BRANCH_ODDS = 4            # rev 3 step (3): pass 1 branch draw b = rnd(4); pass 2 uses BRANCH_ODDS2
+BRANCH_ODDS2 = 2
+
+
+def tree_pass(rng, depth, n, start, odds):
+    """Draws 3-5b of the attempt() contract: S, DFS (with the rev 3 branch draw), the mandatory loop (5a), then the lair
+    on G5a (5b, no draw). The optional loop (5c) and everything after it run in attempt()."""
     sanct = BOT + 2 * rng.rnd(2) if depth == 8 else None    # L1 (5): never visited
     adj = {r: set() for r in range(NCELL)}
     visited = {start}
@@ -450,53 +451,29 @@ def tree_pass(rng, depth, n, start, warns):
 
     def done():                         # L1 (3): n rooms AND two adjacent bottom cells
         return len(visited) >= n and BOT + 1 in visited and (BOT in visited or BOT + 2 in visited)
+
+    def free_of(c):
+        return [x for x in nbrs(c) if x not in visited and x != sanct]
     while stack and not done():
         cur = stack[-1]
-        free = [x for x in nbrs(cur) if x not in visited and x != sanct]
+        if len(stack) >= 4 and rng.rnd(odds) == 0 and free_of(stack[2]):
+            cur = stack[2]              # branch: grow from the third cell of the path
+        free = free_of(cur)
         if not free:
-            stack.pop()
+            stack.pop()                 # cur is the top here (the branch needs a free neighbour): no draw
             continue
-        if warns:
-            on = [sum(1 for y in nbrs(x) if y not in visited and y != sanct) for x in free]
-            free = [x for x, o in zip(free, on) if o == min(on)]
         nx = free[rng.rnd(len(free))]
         adj[cur].add(nx); adj[nx].add(cur)
         visited.add(nx)
         stack.append(nx)
-    for r in visited:
-        rooms[r].present = True
-    # loop edge; L1 (4): mandatory (from the bottom-row pairs only) when no tree
-    # edge joins two bottom-row rooms, and then the odds roll is skipped
-    loop = None
+    # 5a: the mandatory loop (L1 (4)): no tree edge joins two bottom-row rooms -> pick over the bottom pairs
     mand = not (BOT + 1 in adj[BOT] or BOT + 2 in adj[BOT + 1])
-    if mand or rng.rnd(LOOP_EDGE_ODDS) == 0:
-        cand = []
-        for r in (range(BOT, NCELL) if mand else range(NCELL)):
-            if r not in visited:
-                continue
-            if r % W < W - 1 and r + 1 in visited and r + 1 not in adj[r]:
-                cand.append((r, r + 1))
-            if r // W < GH - 1 and r + W in visited and r + W not in adj[r]:
-                cand.append((r, r + W))
+    if mand:
+        cand = loop_cands(adj, visited, True)
         if cand:
-            a, b = cand[rng.rnd(len(cand))]
-            adj[a].add(b); adj[b].add(a)
-            loop = (a, b)
-    # horizontal edges
-    for r in range(NCELL):
-        if r % W < W - 1 and r in visited and r + 1 in adj[r]:
-            s = rng.rnd(2)
-            door = rng.rnd(DOOR_ODDS) == 0
-            edges[hedge(r)] = L["EG_LINK"] | (L["EG_DOOR"] if door else 0)
-            rooms[r].exits |= L["RDX_R"] | (L["RDX_RS1"] if s else 0)
-            rooms[r + 1].exits |= L["RDX_L"] | (L["RDX_LS1"] if s else 0)
-    # vertical links
-    for r in range(BOT):                # r + 3 <= 11: the `cp 9` vertical-link bound of the Z80
-        if r in visited and r + 3 in adj[r]:
-            c = SHAFT_MIN + rng.rnd(SHAFT_N)
-            rooms[r].dn = c; rooms[r].exits |= L["RDX_D"]
-            rooms[r + 3].up = c; rooms[r + 3].exits |= L["RDX_U"]
-    # BFS distances, leaves, lair
+            a_, b_ = cand[rng.rnd(len(cand))]
+            adj[a_].add(b_); adj[b_].add(a_)
+    # 5b: lair on G5a (BFS only)
     dist = {start: 0}
     q = [start]
     for r in q:
@@ -504,8 +481,9 @@ def tree_pass(rng, depth, n, start, warns):
             if x not in dist:
                 dist[x] = dist[r] + 1
                 q.append(x)
+
     def has_h(r):
-        return bool(rooms[r].exits & (L["RDX_L"] | L["RDX_R"]))
+        return (r % W > 0 and r - 1 in adj[r]) or (r % W < W - 1 and r + 1 in adj[r])
     leaves = [r for r in visited if len(adj[r]) == 1]
 
     def sanctum_ok(r):
@@ -523,7 +501,20 @@ def tree_pass(rng, depth, n, start, warns):
         global LAIR_RESEEDS
         LAIR_RESEEDS += 1
         raise Reseed
-    return rooms, edges, adj, visited, sanct, lair, dist, leaves, loop
+    return adj, visited, sanct, lair, mand
+
+
+def loop_cands(adj, visited, mand):
+    cand = []
+    for r in (range(BOT, NCELL) if mand else range(NCELL)):
+        if r not in visited:
+            continue
+        if r % W < W - 1 and r + 1 in visited and r + 1 not in adj[r]:
+            cand.append((r, r + 1))
+        if r // W < GH - 1 and r + W in visited and r + W not in adj[r]:
+            cand.append((r, r + W))
+    return cand
+
 
 def _bfs_par(adj, src, banned=None):
     """BFS over G in sorted-neighbour order; parent = first discoverer (the deterministic shortest path)."""
@@ -602,27 +593,34 @@ def _route_f(adj, start, lair, locks, keyrooms):
     return best
 
 
+DEAD_PREF = True       # rev 3 key best(): prefer dead ends (ladder step 2 drops it)
+LAIR_PEN = 2           # score - LAIR_PEN when a lock stands on the lair door (ladder step 3: 3)
+NL_BONUS = 1           # score + NL_BONUS for a non-linear (b1 / b2) pair (ladder step 3: 2)
+
+
 def select_keys(adj, start, lair, n, depth, final=False):
-    """KEY placement rule (larger_depths.md 2.1 rev 2). PLUGGABLE: LOCK_SELECT. Draws NO rnd (pure function of the tree).
-    Returns (locks, keys, F, shape) or None. locks = [(near, far, colour)] (near = start-side room), keys =
-    [(room, colour)], shape in lin / b1 / b2 / one.
-    Candidates: every horizontal bridge of G (lock) x every dead end (deg 1 in G, never start / lair) (key), 1 lock or
-    every unordered pair with distinct key rooms. Valid iff the fixpoint from start reaches the lair and every lock is
-    needed (walled -> fixpoint fails). F = _route_f; score = F + 1 if a 2-lock set is non-linear (b1: exactly one
-    lock on P; b2: both on P and both keys in C0). Best = max (score, F, non-linear), then min (nearer lock's P
-    index, edge indices, key room ids by colour). Floor F >= n - 4 (raw): 2 locks only if depth >= 4 and n >= 11
-    and a valid pair meets it, else 1 lock; if neither (pass 1) -> None. final (pass 2): no floor, the best valid
-    set (pair if allowed and any exists) is taken as is."""
+    """KEY placement rule (larger_depths.md 2.1 rev 3). PLUGGABLE: LOCK_SELECT. Draws NO rnd (pure function of G5a =
+    the tree plus the mandatory loop). Returns (locks, keys, F, shape) or None. locks = [(near, far, colour)]
+    (near = start-side room), keys = [(room, colour)], shape in one / lin / b1 / b2.
+    Locks: horizontal bridges of G5a; a single lock must be on P. Keys: best(X) = the room of X (never start / lair)
+    maximising (dead end, BFS distance from the lock's near room in G5a minus that lock, -id). One lock: X = near(j).
+    A pair (i, j): lock j's candidates are best(near(j) & far(i)) and best(near(j) - far(i)) (each if non-empty),
+    likewise lock i, <= 4 combos with distinct rooms. Valid iff the fixpoint reaches the lair and every lock is needed.
+    F = _route_f; score = F + NL_BONUS (b1: exactly one lock on P; b2: both on P and both keys in C0)
+    - LAIR_PEN (a lock on the lair door). Best = max (score, F), then max non-linear, then min (nearer lock's P index,
+    edge indices, key ids by colour). Floor F >= n - 4 (raw): 2 locks only if depth >= 4 and n >= 11 and a pair meets
+    it, else 1. Pass 1 with no floor-meeting set -> None; final (pass 2): no floor, the best valid set (pair if
+    allowed and any exists), else None (the caller Restarts)."""
     par = _bfs_par(adj, start)
     P = _path(par, lair)
     pidx = {r: i for i, r in enumerate(P)}
     pe = {frozenset(e) for e in zip(P, P[1:])}
-    cands = []                                    # (edge idx, near, far, onP, pi)
+    cands = []                                    # (edge idx, near, far, onP, pi, near set, far set)
     for r in sorted(adj):
         x = r + 1
         if r % W < W - 1 and x in adj[r]:
             p2 = _bfs_par(adj, start, {(r, x), (x, r)})
-            if len(p2) < len(par):                # bridge of G (not on the loop cycle)
+            if len(p2) < len(par):                # bridge of G5a
                 near, far = (r, x) if r in p2 else (x, r)
                 onp = frozenset((r, x)) in pe
                 if onp:
@@ -636,10 +634,26 @@ def select_keys(adj, start, lair, n, depth, final=False):
                                 dist[v] = dist[u] + 1
                                 q.append(v)
                     pi = min((dist[p], pidx[p]) for p in P)[1]
-                cands.append((hedge(r), near, far, onp, pi))
-    dead = [r for r in sorted(adj) if len(adj[r]) == 1 and r != start and r != lair]
+                ns = set(p2)
+                cands.append((hedge(r), near, far, onp, pi, ns, set(adj) - ns))
+    cands = [c for c in cands if True]
     pair_ok = depth >= 4 and n >= 11
     best = {1: [], 2: []}                         # lists of (sortkey, result)
+
+    def bestkey(c, X):
+        if not X:
+            return None
+        dist = {c[1]: 0}                          # BFS in G5a - e_j from the near room
+        q = [c[1]]
+        for u in q:
+            for v in sorted(adj[u]):
+                if v not in dist and {u, v} != {c[1], c[2]}:
+                    dist[v] = dist[u] + 1
+                    q.append(v)
+        pool = [r for r in X if r != start and r != lair and r in dist]
+        if not pool:
+            return None
+        return max(pool, key=lambda r: (len(adj[r]) == 1 if DEAD_PREF else 0, dist[r], -r))
 
     def consider(sel, ks):
         locks = [(c[1], c[2]) for c in sel]
@@ -664,7 +678,7 @@ def select_keys(adj, start, lair, n, depth, final=False):
         # colours: the lock opened in the earlier round gets 0; a tie goes to the lower P index
         order = sorted(range(len(sel)), key=lambda j: (rounds[j], sel[j][4], sel[j][0]))
         col = {j: c for c, j in enumerate(order)}
-        score = F + nl
+        score = F + NL_BONUS * nl - (LAIR_PEN if any(lair in (c[1], c[2]) for c in sel) else 0)
         pi_min = min(c[4] for c in sel)
         kbycol = tuple(ks[j] for j in order)
         key = (-score, -F, -nl, pi_min, tuple(sorted(c[0] for c in sel)), kbycol)
@@ -672,15 +686,20 @@ def select_keys(adj, start, lair, n, depth, final=False):
                sorted(((ks[j], col[j]) for j in range(len(sel))), key=lambda t: t[1]), F, shape)
         best[len(sel)].append((key, res))
     for c in cands:
-        for k in dead:
-            consider([c], [k])
+        if c[3]:                                  # a single lock must be on P (else not needed)
+            k = bestkey(c, c[5])
+            if k is not None:
+                consider([c], [k])
     if pair_ok:
         for i in range(len(cands)):
             for j in range(i + 1, len(cands)):
-                for k1 in dead:
-                    for k2 in dead:
-                        if k1 != k2:
-                            consider([cands[i], cands[j]], [k1, k2])
+                ci, cj = cands[i], cands[j]
+                ki = {bestkey(ci, ci[5] & cj[6]), bestkey(ci, ci[5] - cj[6])} - {None}
+                kj = {bestkey(cj, cj[5] & ci[6]), bestkey(cj, cj[5] - ci[6])} - {None}
+                for a_ in sorted(ki):
+                    for b_ in sorted(kj):
+                        if a_ != b_:
+                            consider([ci, cj], [a_, b_])
     floor = n - KEY_FMIN_SLACK
     for m in (2, 1):
         pool = [t for t in best[m] if t[1][2] >= floor]
@@ -706,14 +725,21 @@ def attempt(rng, depth, l2=True):
       1. n      = 10 + rnd(3)               ; D8: n = min(n, 11)
       2. start  = rnd(3)                    ; top row
       3. D8 only: S = 9 + 2*rnd(2)          ; Sanctum cell (9 or 11), never entered by the DFS
-      4. DFS from start, `while stack and not done` (cell = stack top; neighbours L, R, U, D, those
-         unvisited and != S; k of them): k == 0 pops with NO draw; else pick = rnd(k), link, push.
+      4. DFS from start, `while stack and not done` (REV 3): at the top of each iteration with len(stack) >= 4 draw
+         b = rnd(BRANCH_ODDS) (4 in pass 1, 2 in pass 2) BEFORE the neighbour scan (also on iterations that end in a pop);
+         cur = stack[2] if b == 0 and stack[2] has a free neighbour else stack[-1]. Free = L, R, U, D neighbours
+         unvisited and != S, k of them: k == 0 pops with NO further draw; else pick = rnd(k), link, push (on top).
          done = |visited| >= n and 10 in visited and (9 or 11 in visited)   (D8: S is never visited,
          so it needs 10 and the other end)
-      5. loop edge: mand = no tree edge 9-10 and none 10-11.
-         if mand: NO odds draw; else odds = rnd(2), loop iff 0. When looping: candidates = unlinked
-         present pairs, scanning r = 9..11 (mand) or r = 0..11, per r: right pair (r, r+1) if col < 2,
-         then down pair (r, r+3) if row < 3; if any: pick = rnd(count)   (also drawn when count == 1)
+      5a. mandatory loop: mand = no tree edge 9-10 and none 10-11. If mand: candidates = unlinked present bottom pairs,
+         scanning r = 9..11 (right pair (r, r+1) if col < 2, then down pair is impossible); if any: pick = rnd(count)
+         (also when count == 1), link. No odds draw.
+      5b. lair (BFS tiers, on G5a = tree + the mandatory loop): NO draw; then LOCK_SELECT (select_keys): NO draw.
+         None in pass 1 -> pass 2 = draws 3, 4, 5a rerun (n and start kept; S redrawn; BRANCH_ODDS2) continuing GEN_RNG.
+         None in pass 2 -> Restart (from draw 1, pass 1; no reseed). So every level has locks and keys.
+      5c. optional loop (only when not mand): odds = rnd(2), loop iff 0. When looping: candidates = unlinked present
+         pairs, scanning r = 0..11 (right pair if col < 2, then down pair if row < 3), KEEPING only pairs whose two rooms
+         are on the same side of every chosen lock; if count >= 1: pick = rnd(count); count == 0 -> no pick draw.
       6. horizontal edges, e in r order r = 0..11 (col < 2, r present, edge linked): storey = rnd(2),
          then door = rnd(3) (door iff 0)                                    [2 draws per edge]
       7. vertical links, r = 0..8 with r+3 linked to r: col = 5 + rnd(20)   [1 draw per link]
@@ -747,16 +773,45 @@ def attempt(rng, depth, l2=True):
     if depth == 8:
         n = min(n, 11)                  # L1 (2): the Sanctum cell is reserved
     start = rng.rnd(3)                  # L1 (1): top grid row, nothing above it
-    for warns in (False, True):         # KEY: pass 1 plain DFS; pass 2 (in-stream restart) Warnsdorff DFS
-        rooms, edges, adj, visited, sanct, lair, dist, leaves, loop = tree_pass(rng, depth, n, start, warns)
+    for warns in (False, True):         # KEY: pass 1 (BRANCH_ODDS); pass 2 (BRANCH_ODDS2) = draws 3-5b rerun in-stream
+        adj, visited, sanct, lair, mand = tree_pass(rng, depth, n, start, BRANCH_ODDS2 if warns else BRANCH_ODDS)
         keyset = LOCK_SELECT(adj, start, lair, len(visited), depth, warns)
-        if warns or keyset:
+        if keyset:
             break
+        if warns:
+            KEY_STATS["krestart"] += 1  # pass 2 has no valid set: full Restart from draw 1 (keyless = 0 by construction)
+            raise Restart
         KEY_STATS["restart"] += 1
     KEY_STATS["p2"] = warns
-    KEY_STATS["shape"] = keyset[3] if keyset else None
-    KEY_STATS["last"] = keyset          # (locks, keys, F) or None (keyless)
-    locks, keys = (keyset[0], keyset[1]) if keyset else ([], [])
+    KEY_STATS["shape"] = keyset[3]
+    KEY_STATS["last"] = keyset
+    locks, keys = keyset[0], keyset[1]
+    # 5c: optional loop; candidate pairs must be on the same side of every lock (never bypasses or erases a bridge)
+    if not mand and rng.rnd(LOOP_EDGE_ODDS) == 0:
+        nears = [set(_bfs_par(adj, start, {(a_, b_), (b_, a_)})) for a_, b_, _ in locks]
+        cand = [(x, y) for x, y in loop_cands(adj, visited, False) if all((x in nr) == (y in nr) for nr in nears)]
+        if cand:
+            x, y = cand[rng.rnd(len(cand))]
+            adj[x].add(y); adj[y].add(x)
+    rooms = [Room() for _ in range(NCELL)]
+    edges = [0] * NEDGE_H
+    for r in visited:
+        rooms[r].present = True
+    # horizontal edges
+    for r in range(NCELL):
+        if r % W < W - 1 and r in visited and r + 1 in adj[r]:
+            s_ = rng.rnd(2)
+            door = rng.rnd(DOOR_ODDS) == 0
+            edges[hedge(r)] = L["EG_LINK"] | (L["EG_DOOR"] if door else 0)
+            rooms[r].exits |= L["RDX_R"] | (L["RDX_RS1"] if s_ else 0)
+            rooms[r + 1].exits |= L["RDX_L"] | (L["RDX_LS1"] if s_ else 0)
+    # vertical links
+    for r in range(BOT):                # r + 3 <= 11: the `cp 9` vertical-link bound of the Z80
+        if r in visited and r + 3 in adj[r]:
+            c = SHAFT_MIN + rng.rnd(SHAFT_N)
+            rooms[r].dn = c; rooms[r].exits |= L["RDX_D"]
+            rooms[r + 3].up = c; rooms[r + 3].exits |= L["RDX_U"]
+    leaves = [r for r in visited if len(adj[r]) == 1]
     for a_, b_, col in locks:           # LOCKed edges are doors (clearing EG_LOCK on unlock leaves the open door)
         edges[hedge(min(a_, b_))] |= L["EG_LOCK"] | L["EG_DOOR"] | (EG_LOCKC if col else 0)
     rooms[start].start = True

@@ -38,5 +38,22 @@ def h1_links(nseeds=1000, dmax=8):
     return 1 if bad else 0
 
 
+# K11 (larger_depths.md 2.1 rev 3): the GEN_RNG draw count per seed (the branch draw `b` in the DFS included) and the final
+# GEN_RNG state are pinned; T4's Z80 port must reproduce both. (depth, seed, rnd calls, restarts, final GEN_RNG)
+K11 = [(1, 4660, 208, 0, 37201), (2, 3855, 493, 1, 30998), (4, 30583, 400, 0, 19643), (5, 48879, 417, 0, 54893),
+       (7, 66, 401, 0, 61521), (8, 40503, 416, 0, 21507), (8, 10794, 493, 0, 28051), (3, 49374, 260, 0, 10104)]
+
+
+def k11():
+    bad = []
+    for d, sd, calls, rs, x in K11:
+        b = G.generate(d, sd)
+        got = (G.LAST[1], G.LAST[0], int.from_bytes(b[G.LH["GEN_RNG"]:G.LH["GEN_RNG"] + 2], "little"))
+        if got != (calls, rs, x):
+            bad.append((d, sd, got, (calls, rs, x)))
+    print(f"K11 draw counts: {len(K11) - len(bad)}/{len(K11)} pinned seeds match {bad[:3]}")
+    return 1 if bad else 0
+
+
 if __name__ == "__main__":
-    sys.exit(levelcheck.run(1000, 8) | h1_links())
+    sys.exit(levelcheck.run(1000, 8) | h1_links() | k11())
