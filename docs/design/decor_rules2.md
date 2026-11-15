@@ -152,6 +152,16 @@ DARK 6, CALM 0 on storey 1.
 
 ## 3. Cost realism
 
+> **Update (SIZE T3, code-size survey lever F2, `feat/decor-b0`): the deriver now lives in bank-0
+> `B0_CODE2`.** `decor_gen.asm` (all of `dg_obj` / `dg_ring` / `dg_patches` / `dg_cobwebs`, the
+> records, `dg_cmin`) and `dg_bad` (`src/dg_bad0.asm`) moved from bank 3 as a whole; entry `decor_b0`
+> is reached by FARB0 from the 11-B bank-3 stub `decor_room` (A = `dg_dst`). It has bank-0-local
+> copies of levelgen's `rnd_mod` / `hla`, and its ~30 B of state is the low-RAM DS block `dg_vars`
+> (B0_CODE2 holds no runtime-written bytes). Bank 0 is uncontended, like R6. The facts and the
+> "Where the (c) code goes" decision below predate this and need re-deciding: the planner can now sit
+> next to the executor in `B0_CODE2` (no `far6`, no pool page), and the bank-3 budget is no longer
+> the constraint. `B0_CODE2` free after T3: 980 B; bank 3: 1,301 B (release). Memory-map "F2".
+
 Budgets as of the latest ledger (`docs/memory-map.md`, trap-cells entry):
 
 | Region | Free |

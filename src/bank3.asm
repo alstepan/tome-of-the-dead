@@ -929,18 +929,25 @@ build_room_map:
                 ASSERT T_HOLE_M == T_HOLE_L + 1 && T_HOLE_R == T_HOLE_L + 2
 
 ;==============================================================================
-; decor_room — B3B-9 (src/decor_gen.asm). build_room_map calls it for a
-; seeded room (RD_SEED != 0) once every structural cell is placed: A = room,
-; IX = its descriptor, (TMP1) = the map page (map_cell). Contract: re-derive
-; everything from RD_SEED (re-entry must rebuild the identical map, W12);
-; game.md §1.2 "Solidity of decor" + concept-screen §3.3 (never in floor rows
-; or on door / arch / lintel / ladder / pit / cap / rubble cells; wall-set ids
-; only on solid wall cells, others only on non-solid ones); fill ANIM_LIST
-; into the list chosen by the map page (dg_dst, set + zeroed by
-; build_room_map: ROOM_MAP -> ANIM_N, NEXT_MAP -> ANIM_N2). Keep IX.
+; decor_room — B3B-9. build_room_map calls it for a seeded room (RD_SEED != 0)
+; once every structural cell is placed: IX = its descriptor, (TMP1) = the map
+; page (map_cell), dg_dst = the list (set + zeroed by build_room_map: ROOM_MAP ->
+; ANIM_N, NEXT_MAP -> ANIM_N2). Contract: re-derive everything from RD_SEED
+; (re-entry must rebuild the identical map, W12); game.md §1.2 "Solidity of
+; decor" + concept-screen §3.3 (never in floor rows or on door / arch / lintel /
+; ladder / pit / cap / rubble cells; wall-set ids only on solid wall cells,
+; others only on non-solid ones); fill ANIM_LIST. Keep IX.
+; SIZE T3 (lever F2): the deriver is bank-0 B0_CODE2 `decor_b0` (src/decor_gen.asm,
+; main.asm); this is its far-call stub (the label stays: world.py W13 far3s it and
+; pokes dg_dst here). A = dg_dst in; farb hands bank 3 back. Clobbers: A, BC, DE, HL.
+; ~0.3k T over the old direct call, won back by the uncontended bank-0 code.
 ;==============================================================================
 decor_room:
-                INCLUDE "decor_gen.asm"         ; B3B-9: the deriver (code from the label on)
+                ld   a, (dg_dst)
+                ld   hl, decor_b0
+                ld   c, BANK_TEXT
+                jp   farb                      ; FARB0 as a tail call (farb returns to build_room_map)
+dg_dst:         DB   0                         ; low byte of the list's count: ANIM_N / ANIM_N2 (build_room_map)
 
 ; init_tiles: bank 7 since MEM-SND, the boot block since 3E-T1 (boot6.asm boot6_tiles).
 ; (cold tile data: B3B-11b moved it to main.asm vdata, read via copy_virt3)

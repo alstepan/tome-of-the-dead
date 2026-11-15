@@ -795,7 +795,7 @@ def main():
             legal = legal_attrs(p)
             trans_viol, trans_samples = [], [0]
             # extra breakpoint on each scroll step: sample frames mid-transition
-            p.z.cmd("set-breakpoint 3 PC=%d" % S["hscroll_room.step"])
+            p.z.cmd("set-breakpoint 3 PC=%d and RAM=%d" % (S["hscroll_room.step"], S["BANK_UI1"]))   # SIZE T3: not bank-0 decor_b0
             p.extra_probes = {S["hscroll_room.step"]}
             t0 = p.rw("TURN_COUNTER")
             p.hold("L")

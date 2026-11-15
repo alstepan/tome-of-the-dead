@@ -372,7 +372,9 @@ def forced_exit(p, stats):
         y = 0 if kind == S["EX_UP"] else S["PLAY_ROWS"] - kh     # H1: the hero leaves from the shaft's end
         p.set_ent(0, X=c, Y=y, PX=c * 8, PY=y * 8)
     for n, pc in zip((5, 6), SCROLL_PCS):
-        p.z.cmd("set-breakpoint %d PC=%d" % (n, pc))
+        # SIZE T3: + RAM = BANK_UI1 (the scrolls are bank 1): a bare PC breakpoint also fires in
+        # bank-0 code at the same address (decor_b0 runs inside do_exit's NEXT_MAP build)
+        p.z.cmd("set-breakpoint %d PC=%d and RAM=%d" % (n, pc, S["BANK_UI1"]))
     pc0 = p.pc()
     code = [0xF3, 0x3E, kind, 0x21] + w16(S["do_exit"]) + [0xCD] + w16(S["far7"]) + [0xFB, 0x00, 0x18, 0xFE]
     stub = S["LOWRAM_END_3B"]

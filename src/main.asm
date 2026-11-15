@@ -307,6 +307,9 @@ FRM_EMIT = FRM_DESC
 FDESC_COUNT     EQU FCTR
 fdesc_end:
                 ASSERT fdesc_end - fdesc_tab == FDESC_COUNT * FDESC_STRIDE
+                ; SIZE T3 (lever F2): the decor deriver decor_b0 + its read-only tables + dg_bad (was bank 3;
+                ; FARB0 from the bank-3 decor_room stub, once per room build; state: low-RAM dg_vars)
+                INCLUDE "decor_gen.asm"
                 ; ---- packed overlay streams: KEEP LAST (2-pass build: no code address may depend on a packed size;
                 ; append new code ABOVE this line) ----
 ovl_page_zx0:                                  ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG; ITEM-INFO: from R6,

@@ -2115,6 +2115,42 @@ gen_list:
 ;------------------------------------------------------------------------------
 seq2_bytes:     DS   SEQ2_LEN, 0
 ;------------------------------------------------------------------------------
+; dg_vars — SIZE T3: the decor deriver's state (bank-0 decor_gen.asm; it was bank-3 RAM next to
+; the code, but B0_CODE2 may hold no runtime-written bytes). Runtime bytes, zeros on tape; live
+; only inside one decor_b0 call (re-derived from RD_SEED every room build).
+;------------------------------------------------------------------------------
+dg_vars:
+dg_rng:         DW   0
+dg_cls:         DB   0
+dg_cc:          DB   0
+dg_ok:          DB   0
+dg_k:           DB   0
+dg_nc:          DB   0
+dg_cl:          DB   0
+dg_cr:          DB   0
+dg_cg:          DB   0
+dg_dst0:        DB   0                 ; low byte of the list's count: ANIM_N / ANIM_N2 (A at decor_b0)
+dg_first:       DB   0
+dg_n:           DB   0
+dg_nl:          DB   0
+dg_ng:          DB   0
+dg_nw:          DB   0
+dg_wmax:        DB   0                 ; wall-class cell budget + 1 of the room's depth
+dg_base:        DB   0
+dg_row:         DB   0
+dg_h:           DB   0
+dg_col:         DB   0
+dg_w:           DB   0
+dg_fl:          DB   0
+dg_area:        DB   0
+dg_step:        DB   0
+dg_req:         DB   0
+dg_id:          DB   0
+dg_alt:         DB   0
+dg_ph:          DB   0
+dg_dg:          DB   0
+DG_VARS_LEN     EQU $ - dg_vars
+;------------------------------------------------------------------------------
 ; gen_frame — generate all variants of frame A into the pool; fill FRT[A].
 ; The frame is read from its ZX0 block unpacked in GEN_SCRATCH, which
 ; aliases ROOM_MAP/NEXT_MAP — callable only while no room is built (boot, hero

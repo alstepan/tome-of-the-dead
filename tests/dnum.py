@@ -557,7 +557,7 @@ def run(h, p, check):
     hit = None
     room0 = p.rb("CUR_ROOM")
     if r:
-        p.z.cmd("set-breakpoint 3 PC=%d" % step)
+        p.z.cmd("set-breakpoint 3 PC=%d and RAM=%d" % (step, S["BANK_UI1"]))   # SIZE T3: not bank-0 decor_b0
         p.extra_probes = {step}
         p.hold("L")
         for _ in range(200):
