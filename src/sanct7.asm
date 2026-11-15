@@ -6,8 +6,8 @@
 ; bank-3 caller is level_gen's tail (`ld hl, sanctum_leaf / jp far7`, every depth).
 ; Reads / writes only bank-5 low RAM (LVL_STATE), no bank-7 data, no SMC.
 ;
-; The reserved bottom-row end cell S (6 or 8: the one the DFS never entered) becomes a
-; leaf behind the lair's (7) SEALED edge EG_LINK|EG_DOOR|EG_SEAL; room flags
+; The reserved bottom-row end cell S (9 or 11 since LARGER-D T4: the one the DFS never entered) becomes a
+; leaf behind the lair's (10) SEALED edge EG_LINK|EG_DOOR|EG_SEAL; room flags
 ; PRESENT|DEADEND|SANCTUM, one ladder col, a room seed. Own stream, kept in HL (no
 ; memory, GEN_RNG untouched): x0 = LVL_SEED ^ SANCT_SALT ^ depth*$0101 (= ^ $521F, 0 -> 1),
 ; calls in the Python order: rnd(2) edge storey, rnd(24) ladder col (its pick_feature
@@ -62,12 +62,12 @@ sanctum_leaf:   xor  a
                 ld   d, a
                 call xs_core            ; rnd16: room seed
                 push hl
-                ld   hl, ROOM_DESC + 6 * RD_STRIDE   ; left room of the pair
-                ld   e, 6               ; E = S
+                ld   hl, ROOM_DESC + GRID_BOT * RD_STRIDE   ; left room of the pair
+                ld   e, GRID_BOT        ; E = S
                 bit  0, (hl)
-                jr   z, .a              ; room 6 absent: S = 6, pair (6, 7)
-                ld   e, 8
-                ld   l, (ROOM_DESC & $FF) + 7 * RD_STRIDE   ; pair (7, 8)
+                jr   z, .a              ; room 9 absent: S = 9, pair (9, 10)
+                ld   e, GRID_BOT + 2
+                ld   l, (ROOM_DESC & $FF) + (GRID_BOT + 1) * RD_STRIDE   ; pair (10, 11)
 .a:             inc  l                  ; -> RD_EXITS
                 ld   a, (hl)
                 or   c
@@ -80,8 +80,9 @@ sanctum_leaf:   xor  a
                 ld   (hl), a
                 ld   a, e
                 ld   (LVL_SANCTUM), a
-                srl  a                  ; S / 2 = 3 / 4; the edge index is hedge(left room) = 4 / 5
-                add  a, (EDGE_TAB & $FF) + 1
+                srl  a                  ; S / 2 = 4 / 5; the edge index is hedge(left room) = 6 / 7
+                add  a, (EDGE_TAB & $FF) + 2
+                ASSERT GRID_BOT == 9 && (GRID_BOT / 2) + 2 == 6 && ((GRID_BOT + 2) / 2) + 2 == 7
                 ld   l, a
                 ld   h, EDGE_TAB >> 8
                 ld   (hl), EG_LINK | EG_DOOR | EG_SEAL

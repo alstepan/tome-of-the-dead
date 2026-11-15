@@ -456,6 +456,7 @@ level_populate:
                 ret
 
                 INCLUDE "levelgen.asm"          ; B3B-7: level_gen, level_start_x
+                INCLUDE "lgkey3.asm"            ; LARGER-D T4: kprep (level-key analysis; ksel: lgkey0.asm, bank 0)
                 INCLUDE "lpop3.asm"             ; LP: lazy monster population (game.md §9.4)
 
 ; B12 GLOW: T_GLOW (common id 31, the same glyph on every depth; was the 8-B glow_ids per-level table)

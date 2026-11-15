@@ -760,8 +760,8 @@ ig_t            EQU ig_n + 1            ; type / trap type of the item being pla
 ig_q            EQU ig_t + 1            ; qty
 ig_r            EQU ig_q + 1            ; placement room | storey << 7
 ig_pool         EQU ig_r + 1            ; word: the pool of the last ig_place
-ig_ns           EQU ig_pool + 2         ; 1 + 9: present non-start rooms
-ig_nl           EQU ig_ns + 10          ; 1 + 9: ... minus the lair
-ig_el           EQU ig_nl + 10          ; 1 + 9: trap-eligible rooms
-ig_gp           EQU ig_el + 10          ; 1 + IG_GEAR_N: gear pool
+ig_ns           EQU ig_pool + 2         ; 1 + GRID_CELLS: present non-start rooms (LARGER-D T4: 12 rooms)
+ig_nl           EQU ig_ns + 1 + GRID_CELLS   ; 1 + GRID_CELLS: ... minus the lair
+ig_el           EQU ig_nl + 1 + GRID_CELLS   ; 1 + GRID_CELLS: trap-eligible rooms
+ig_gp           EQU ig_el + 1 + GRID_CELLS   ; 1 + IG_GEAR_N: gear pool
 ig_end          EQU ig_gp + 1 + IG_GEAR_N

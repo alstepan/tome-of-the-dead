@@ -11,7 +11,7 @@
 ; does not open the D8 grate, the Tome's destruction does: tome_gone): the Archmage died — by any hand, its own Mirror Helm return
 ; included (deal_hit's kill -> mon_drop -> grate_open). Resident: nothing is
 ; unpacked on the death tick. LF_SEAL_OPEN; EG_SEAL off the lair<->Sanctum edge
-; (EDGE_TAB + 4 = 6-7 or + 5 = 7-8: both bits cleared, cheaper than finding S's;
+; (EDGE_TAB + 6 = 9-10 or + 7 = 10-11 (LARGER-D T4): both bits cleared, cheaper than finding S's;
 ; the other edge never carries a seal), so the door is an ordinary closed door:
 ; it keeps its T_DOOR_LOCK plank on screen until a bump opens it (door_open reads
 ; the edge only; the planks then go as for any door). "THE SEAL BREAKS".
@@ -20,19 +20,19 @@
 seal_open:
                 ld   hl, LVL_FLAGS
                 set  LF_SEAL_OPEN_BIT, (hl)
-                ld   l, (EDGE_TAB + 4) & $FF
+                ld   l, (EDGE_TAB + 6) & $FF
                 res  EG_SEAL_BIT, (hl)
                 inc  l
                 res  EG_SEAL_BIT, (hl)
                 ld   a, TX_SEAL_BREAKS
                 jp   msg_push
-                ASSERT (LVL_FLAGS >> 8) == ((EDGE_TAB + 5) >> 8) && LF_SEAL_OPEN == 1 << LF_SEAL_OPEN_BIT
+                ASSERT (LVL_FLAGS >> 8) == ((EDGE_TAB + 7) >> 8) && LF_SEAL_OPEN == 1 << LF_SEAL_OPEN_BIT && GRID_BOT == 9
                 ASSERT EG_SEAL == 1 << EG_SEAL_BIT
 
 ;------------------------------------------------------------------------------
 ; tome_geo6 — IX = hero (passed through far6). The lectern stands on storey 1
-; against the Sanctum's dead-end wall: cols 1-2 when the Sanctum is cell 6 (S
-; bit 1 set), 29-30 when it is cell 8. Out: L = the gap (empty cols between the
+; against the Sanctum's dead-end wall: cols 1-2 when the Sanctum is cell 9 (S
+; bit 1 clear), 29-30 when it is cell 11 (LARGER-D T4). Out: L = the gap (empty cols between the
 ; hero's body and the lectern; 0 = adjacent), + $80 when he faces away from it;
 ; L = $FF: no Tome here (TOME_HP 0 — WIN2: destroyed, so no more hits / aura /
 ; bump, never twice; or off D8, never generated —, CUR_ROOM != LVL_SANCTUM, or
@@ -54,7 +54,7 @@ tome_geo6:
                 ret  nz
                 ld   a, (ix+E_X)
                 bit  1, h
-                jr   nz, .l                    ; S = 6: the lectern on the left
+                jr   z, .l                     ; S = 9: the lectern on the left
                 cpl                            ; right: gap = 26 - x (x <= 26: the lectern
                 add  a, LECT_COL_R - TOME_HERO_W + 1    ; is solid) = (255 - x) + 27
                 bit  EF_LEFT_BIT, (ix+E_FLAGS)
@@ -66,4 +66,4 @@ tome_geo6:
                 bit  EF_LEFT_BIT, (ix+E_FLAGS)
                 jr   nz, .t                    ; facing left = it
                 jr   .aw
-                ASSERT (6 & 2) && !(8 & 2) && LECT_COL_L + 2 == 3 && LECT_COL_R - TOME_HERO_W + 1 == 27
+                ASSERT !(GRID_BOT & 2) && ((GRID_BOT + 2) & 2) && LECT_COL_L + 2 == 3 && LECT_COL_R - TOME_HERO_W + 1 == 27

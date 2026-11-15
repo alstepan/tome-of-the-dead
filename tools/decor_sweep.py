@@ -22,6 +22,7 @@ import levelgen as G            # noqa: E402
 import room_model as RM         # noqa: E402
 from game_lib import S          # noqa: E402
 
+
 COMMON_DECOR = {S[k]: k for k in ("T_CHAIN", "T_WALL_DITHER", "T_WALL_PATCH", "T_WALL_FADE")}
 PAT = re.compile(r"TS(\d)_([A-Z_]+?)_(?:F(\d)_)?R(\d)C(\d)\s+EQU (\d+)")
 
@@ -50,8 +51,8 @@ def main(argv):
         for seed in range(1, n + 1):
             blk = bytearray(G.generate(d, seed * 7919 & 0xFFFF or 1))
             blk[off] |= S["LF_GRATE_OPEN"]          # the open exit (+ GLOW) after the boss dies
-            for r in range(9):                      # the 3 x 3 room grid (levelgen)
-                o = RM.OFF_DESC + r * S["RD_STRIDE"]
+            for r in range(G.NCELL):                # the 3 x 4 room grid (levelgen)
+                o = G.LOFF_DESC + r * S["RD_STRIDE"]
                 if not blk[o + S["RD_FLAGS"]] & S["RDF_PRESENT"]:
                     continue
                 al = []

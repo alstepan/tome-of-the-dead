@@ -87,7 +87,7 @@ def main():
     img = (("tut0_lvl_state", H["LVL_DEPTH"], H["MASTER_SEED"] - H["LVL_DEPTH"]),
            ("tut0_edge_tab", OFF_EDGE, D["EDGE_SLOTS"]),
            ("tut0_lvl_vars", OFF_EDGE + D["EDGE_SLOTS"], tl - OFF_EDGE - D["EDGE_SLOTS"]),
-           ("tut0_room_desc", OFF_DESC, D["GRID_CELLS"] * D["RD_STRIDE"]),
+           ("tut0_room_desc", OFF_DESC, TL.TUT0_CELLS * D["RD_STRIDE"]),   # LARGER-D T4: 9 (D0 is 3x3)
            ("tut0_trap_list", tl, tn + 1),
            ("tut0_floor_list", OFF_FLOOR, D["FLOOR_MAX"] * D["FL_STRIDE"]))
     for lab, off, n in img:

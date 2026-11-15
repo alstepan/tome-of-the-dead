@@ -136,7 +136,7 @@ proto_hdr:      DB   0                         ; LVL_DEPTH: 0 = PROTO
                 DW   0                         ; MASTER_SEED
                 DB   EG_LINK | EG_DOOR | EG_OPEN, 0, EG_LINK | EG_DOOR, 0, 0, 0   ; EDGE_TAB
 PROTO_HDR_LEN   EQU $ - proto_hdr
-                ASSERT PROTO_HDR_LEN == EDGE_TAB + EDGES_H - LVL_HDR
+                ASSERT PROTO_HDR_LEN == EDGE_TAB + 6 - LVL_HDR && EDGES_H >= 6   ; edges 6.. stay 0 (the block clear)
                 ASSERT EDGE_TAB == LVL_HDR + LVL_HDR_LEN && EDGE_AB == 0 && EDGE_DC == 2
                 ASSERT LVL_ATTR_FLOOR - LVL_HDR == 5 && FLOOR_N - LVL_HDR == 13 && LVL_DEPTH == LVL_HDR
 proto_floor:    ; FL_ROOM, FL_COL, FL_ITEM, FL_QTY: potion ids 0..3 (all storey 0)

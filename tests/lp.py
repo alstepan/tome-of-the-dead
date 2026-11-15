@@ -251,8 +251,8 @@ def part_a(h, p, check, nrand):
             if nw >= 2 and nm >= 2:
                 break
             bb = G.generate(d, sd, f3=F3)
-            kw = any(bb[G.OFF_DESC + 16 * r + G.L2_PITW] for r in range(9))
-            km = any(bb[G.OFF_DESC + 16 * r + G.L2_MIDB] for r in range(9))
+            kw = any(bb[G.OFF_DESC + 16 * r + G.L2_PITW] for r in range(S["GRID_CELLS"]))
+            km = any(bb[G.OFF_DESC + 16 * r + G.L2_MIDB] for r in range(S["GRID_CELLS"]))
             if (kw and nw < 2) or (km and nm < 2):
                 pairs.append((d, sd))
                 l2set.add((d, sd))
@@ -278,7 +278,7 @@ def part_a(h, p, check, nrand):
         # A2/A3: every present room, random arrival, in id order
         lp_ = got
         st = blk[S["LVL_START"] - G.BASE]
-        for r in range(9):
+        for r in range(S["GRID_CELLS"]):
             if not room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"] or r == st:
                 continue
             hs, hw = rng.randint(0, 1), 3
@@ -353,7 +353,7 @@ def part_a7(h, p, check, nlev):
             continue
         st = blk[S["LVL_START"] - G.BASE]
         hw = p.kb(hero, "KT_BW")
-        for r in range(9):
+        for r in range(S["GRID_CELLS"]):
             if not room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"] or r == st:
                 continue
             hs = rng.randint(0, 1)
@@ -452,7 +452,7 @@ def part_a4(h, p, check):
         base = p.lp()
         st = blk[S["LVL_START"] - G.BASE]
         lair = blk[S["LVL_LAIR"] - G.BASE]
-        rooms = [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"] and r != st]
+        rooms = [r for r in range(S["GRID_CELLS"]) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"] and r != st]
         first = {}
         for order in (rooms, rooms[::-1]):            # A5: two visit orders
             p.wmem(LPB, base)
@@ -527,7 +527,7 @@ def part_a9(h, p, check, n=120):
         blk = p.block()
         base = p.lp()
         lair, sanct = blk[S["LVL_LAIR"] - G.BASE], blk[S["LVL_SANCTUM"] - G.BASE]
-        rooms = [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+        rooms = [r for r in range(S["GRID_CELLS"]) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
                  and r not in (lair, sanct)]
         kinds = list(p.z.read_memory(S["LP_KINDS"], 8))
         for c in range(n):
@@ -575,7 +575,7 @@ def part_a8(h, p, check):
         p.wb("LVL_DEPTH", d)
         blk = p.block()
         st, lair = blk[S["LVL_START"] - G.BASE], blk[S["LVL_LAIR"] - G.BASE]
-        rooms = [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+        rooms = [r for r in range(S["GRID_CELLS"]) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
                  and r not in (st, lair, blk[S["LVL_SANCTUM"] - G.BASE])]
         X, Y = rooms[:2]
         k = p.rb(S["LP_KINDS"])
@@ -618,7 +618,7 @@ def part_a8s(h, p, check):
         p.wb("LVL_DEPTH", d)
         blk = p.block()
         st, lair = blk[S["LVL_START"] - G.BASE], blk[S["LVL_LAIR"] - G.BASE]
-        Y = next(r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+        Y = next(r for r in range(S["GRID_CELLS"]) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
                  and r not in (st, lair, X, blk[S["LVL_SANCTUM"] - G.BASE]))
         kinds = list(p.z.read_memory(S["LP_KINDS"], 8))
         k = max(kinds, key=lambda q: p.kb(q, "KT_BW"))
@@ -681,7 +681,7 @@ def part_a8m(h, p, check):
             p.wb("LVL_DEPTH", d)
             blk = p.block()
             st, lair = blk[S["LVL_START"] - G.BASE], blk[S["LVL_LAIR"] - G.BASE]
-            Y = next(r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
+            Y = next(r for r in range(S["GRID_CELLS"]) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]
                      and r not in (st, lair, X, blk[S["LVL_SANCTUM"] - G.BASE]))
             k0 = kinds[0]
             kh0 = p.kb(k0, "KT_BH")
@@ -773,7 +773,7 @@ def part_a8p(h, p, check):
             continue                                    # the model must post both (else lp_t06 copies)
         p.wmem(LPB, lp)
         p.clear_slots()
-        other = next(r for r in range(9) if r != lair)
+        other = next(r for r in range(S["GRID_CELLS"]) if r != lair)
         for s_ in range(2, 16):                         # 14 slots busy elsewhere: one free slot (1)
             p.set_ent(s_, KIND=esc, ROOM=other, FLAGS=EF_ACTIVE | EF_HOSTILE)
         p.wmem(S["LP_HX"], [1, 0, 3])
@@ -893,7 +893,7 @@ def part_b(h, p, check):
     # a horizontal edge between two non-start rooms A -> B (B not the lair)
     lair = blk[S["LVL_LAIR"] - G.BASE]
     pick = None
-    for r in range(9):
+    for r in range(S["GRID_CELLS"]):
         ex = room_model.field(blk, r, "RD_EXITS")
         if ex & S["RDX_R"] and r != st and r + 1 != lair and r + 1 != st:
             pick = (r, r + 1, 1 if ex & S["RDX_RS1"] else 0)

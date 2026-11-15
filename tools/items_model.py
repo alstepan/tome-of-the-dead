@@ -91,7 +91,7 @@ ARROW_BUNDLE = 6                            # 8.5 bow: 6-arrow bundle in the bow
 ARROWS_MAX = 24                             # 8.5 "capped 24" (checker only)
 
 POT_BY_ROLL = (T["IT_P_HEAL"], T["IT_P_MANA"], T["IT_P_CURE"])    # Q_POTION_TYPE
-POTION_COUNT_MIN = 2                        # 8.5 / levelgen (2..3 entries, from GEN_RNG)
+POTION_COUNT_MIN = G.POTIONS_MIN             # 8.5 / levelgen (LARGER-D: 3..4 entries, from GEN_RNG)
 FOOD_N_MIN, FOOD_N_SPAN = 3, 2              # 8.5 food 3-4
 SCROLL_N_MIN, SCROLL_N_SPAN = 1, 2          # 8.5 scrolls 1-2
 GEAR_N_MIN, GEAR_N_SPAN = 1, 2              # 8.5 gear 1-2
@@ -248,7 +248,7 @@ def read_floor(b):
 
 def rooms_of(b):
     # P3: the D8 Sanctum (f3 blocks) is in no pool (overlay ig_main: PRESENT and not SANCTUM)
-    pres = [r for r in range(9)
+    pres = [r for r in range(G.NCELL)
             if (G._rd(b, r, "RD_FLAGS") & (D["RDF_PRESENT"] | D["RDF_SANCTUM"])) == D["RDF_PRESENT"]]
     return pres, b[G.H["LVL_START"]], b[G.H["LVL_LAIR"]]
 

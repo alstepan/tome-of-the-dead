@@ -3,7 +3,7 @@
 
 Loads build/tome-of-the-dead.sna, then for each (depth, seed[, master]) pokes the header
 seed, runs a probe stub (far3 -> level_gen, far3 -> level_start_x) and compares
-the 320-byte block with levelgen.generate() and the start col with start_x().
+the LVL_STATE block (LARGER-D T4: incl. the locks + both key rooms) with levelgen.generate() and the start col with start_x().
 Reports T-states of the worst cases (interrupts are off in the stub, so the
 count is the generator alone). `--random N` sets the random-seed count (200).
 Run with ZRCP_PORT=<port>.
@@ -171,13 +171,31 @@ def main():
                 if nw >= 3 and nm >= 3:
                     break
                 bb = G.generate(d, sd)
-                kw = any(bb[G.OFF_DESC + 16 * r + G.L2_PITW] for r in range(9))
-                km = any(bb[G.OFF_DESC + 16 * r + G.L2_MIDB] for r in range(9))
+                kw = any(bb[G.OFF_DESC + 16 * r + G.L2_PITW] for r in range(G.NCELL))
+                km = any(bb[G.OFF_DESC + 16 * r + G.L2_MIDB] for r in range(G.NCELL))
                 if (kw and nw < 3) or (km and nm < 3):
                     pairs.append((d, sd))
                     nw += kw
                     nm += km
         pairs += [(d, d * 0x0101) for d in range(1, 9)]        # seed ^ depth*$0101 == 0 -> x = 1
+        # LARGER-D T4 (K11, larger_depths.md 2.1 rev 3): the levelgen_test pinned seeds; the block compare includes
+        # GEN_RNG (the header keeps it after draw 11), so equal blocks = equal draw counts (period 65535)
+        import levelgen_test as LT
+        pairs += [(d, sd) for d, sd, *_ in LT.K11]
+        # keys: seeds whose level takes pass 2 / a full key Restart / 2 locks b1 / lin, per depth (first found)
+        for d in range(1, 9):
+            want = {"p2": 1, "kr": 1, "b1": 1, "lin": 1}
+            for sd in range(1, 3000):
+                if not any(want.values()):
+                    break
+                kr0 = G.KEY_STATS["krestart"]
+                G.generate(d, sd)
+                tags = [t for t, ok in (("p2", G.KEY_STATS["p2"]), ("kr", G.KEY_STATS["krestart"] > kr0),
+                                        ("b1", G.KEY_STATS["shape"] == "b1"), ("lin", G.KEY_STATS["shape"] == "lin")) if ok]
+                if any(want.get(t) for t in tags):
+                    pairs.append((d, sd))
+                    for t in tags:
+                        want[t] = 0
         for d, s in pairs:
             ts = go(d, s, master=(s * 7) & 0xFFFF, tag="fixed")
             if (d, s) in ((8, 12634), (8, 770), (7, 8823)):

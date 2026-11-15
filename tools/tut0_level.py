@@ -8,7 +8,7 @@ at most 28 - 17 = 11 distinct per-level ids, animation frame ids included).
 
 Writes build/tut/tut0_level.asm: byte images (labels tut0_*), in LVL_STATE memory order so the
 blob's tut_start copies them with one HL run (LARGER-D T2 layout, src/level_defs.asm):
-    ROOM_DESC (GRID_CELLS x 16 B; slots GRID_CELLS..ROOM_SLOTS-1 are zeroed by tut_start)
+    ROOM_DESC (TUT0_CELLS = 9 x 16 B; slots 9..ROOM_SLOTS-1 are zeroed by tut_start)
     FLOOR_LIST (32 x 4 B)   header (TUT0_HDR_COPY = 14 B: MASTER_SEED is the game's)
     EDGE_TAB (EDGE_SLOTS B)   TRK_PHASE..DN_QN (0)   TRAP_LIST + TRAP_N (TRAP_MAX x 2 + 1 B)
 plus the spot table, the 17 reserved mentor tile ids and the Goblin parameters.
@@ -59,6 +59,7 @@ DEPTH = 1                                # D0 runs with LVL_DEPTH = 1 (spec §0 
 
 # ---- the level design (spec §2) -----------------------------------------------------------------
 ROOM_A, ROOM_B, ROOM_C = 1, 4, 5          # grid cells: A top row, B below A, C right of B
+TUT0_CELLS = 9                           # LARGER-D T4: the image holds 9 descriptors (D0 is 3x3 in the 3x4 grid)
 LVL_SEED_D0 = 0x0D00                      # level seed / GEN_RNG start: only used by nothing at runtime (no generation)
 LAIR_EDGE = ROOM_B                        # EDGE_TAB index: edge between B and C = e = gy*2 + gx = 1*2 + 1
 EDGE_BC = (ROOM_B // 3) * 2 + ROOM_B % 3
@@ -360,7 +361,7 @@ def emit(blk, spots, free_ids, seeds, used, per_room):
     hdr = blk[H["LVL_DEPTH"]:H["MASTER_SEED"]]                # MASTER_SEED (2 B) belongs to the game
     edge = blk[OFF_EDGE:OFF_EDGE + D["EDGE_SLOTS"]]
     lvars = blk[OFF_EDGE + D["EDGE_SLOTS"]:D["TRAP_LIST"] - BASE]   # TRK_PHASE..DN_QN: 0
-    rdesc = blk[OFF_DESC:OFF_DESC + D["GRID_CELLS"] * D["RD_STRIDE"]]
+    rdesc = blk[OFF_DESC:OFF_DESC + TUT0_CELLS * D["RD_STRIDE"]]   # LARGER-D T4: the 3x3 D0 rooms only
     tl = D["TRAP_LIST"] - BASE
     trap = blk[tl:D["TRAP_N"] - BASE + 1]                    # the list + TRAP_N (right after it)
     floor = blk[OFF_FLOOR:OFF_FLOOR + D["FLOOR_MAX"] * D["FL_STRIDE"]]
@@ -371,10 +372,11 @@ def emit(blk, spots, free_ids, seeds, used, per_room):
          f"TUT0_ROOM_A     EQU {ROOM_A}",
          f"TUT0_ROOM_B     EQU {ROOM_B}",
          f"TUT0_ROOM_C     EQU {ROOM_C}",
+         f"TUT0_CELLS      EQU {TUT0_CELLS}      ; descriptors in the image (D0 is 3x3; tut_start zeroes slots {TUT0_CELLS}..ROOM_SLOTS-1)",
          f"TUT0_HDR_COPY   EQU {H['MASTER_SEED'] - H['LVL_DEPTH']}      ; copy only the first 14 header bytes: MASTER_SEED (2 B) belongs to the game",
          "; no item identification state exists in this build (item_defs.asm ITEM_RAM: no ID_MAP / KNOWN,",
          "; game.md 8.8 CUT): D0 potions / scroll are known by construction, the blob needs nothing"]
-    o += dump("tut0_room_desc", rdesc, comment=f"-> ROOM_DESC ({D['GRID_CELLS']} x {D['RD_STRIDE']} B; rooms {ROOM_A} A, {ROOM_B} B, {ROOM_C} C)")
+    o += dump("tut0_room_desc", rdesc, comment=f"-> ROOM_DESC ({TUT0_CELLS} x {D['RD_STRIDE']} B; rooms {ROOM_A} A, {ROOM_B} B, {ROOM_C} C)")
     o += dump("tut0_floor_list", floor, comment=f"-> FLOOR_LIST ({D['FLOOR_MAX']} x {D['FL_STRIDE']} B; FLOOR_N = {len(ITEMS)})")
     o += dump("tut0_lvl_state", hdr, comment=f"-> LVL_HDR ({len(hdr)} B: the header less MASTER_SEED)")
     o += dump("tut0_edge_tab", edge, comment=f"-> EDGE_TAB ({len(edge)} B; B-C edge = index {EDGE_BC}: LINK|DOOR|LOCK)")
