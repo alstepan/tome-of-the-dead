@@ -71,8 +71,7 @@ jobs:
       - name: Build release (DEBUG_KIT=0)
         run: tools/build.sh -DDEBUG_KIT=0
 
-      - name: Build kit (DEBUG_KIT=1)
-        run: tools/build.sh -o out/kit
+      # The DEBUG_KIT=1 build is not run in CI (user 2026-11-15): it is built only on request.
 
       - name: Build F3_GEN=0
         run: tools/build.sh -o out/nogen -DF3_GEN=0
