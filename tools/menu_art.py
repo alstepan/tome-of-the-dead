@@ -141,16 +141,21 @@ def emit(d: dict) -> dict:
            "; Source: assets/gfx/concept/grid/{} (approved concept round 6).\n")
     # font
     raw = b"".join(d["font"])
+    open(os.path.join(OUT, "menu_font.bin"), "wb").write(raw)   # full 16-row glyphs (tools/tests)
+    # SIZE T4: rows 0 and 15 are blank in every glyph (asserted); asm keeps rows 1..14 only
+    assert all(g[0] == 0 and g[15] == 0 for g in d["font"]), "menu font rows 0/15 no longer blank"
+    packed = [g[1:15] for g in d["font"]]
+    raw = b"".join(packed)
     sz["MENU_FONT_BYTES"] = len(raw)
-    open(os.path.join(OUT, "menu_font.bin"), "wb").write(raw)
     s = hdr.format("font8x16.grid") + (
-        f"; 8x16 menu font, {n} glyphs x 16 B = {len(raw)} B (ASCII -> glyph by range arithmetic, menu1.asm mf_char_e).\n"
+        f"; 8x16 menu font, {n} glyphs x 14 B = {len(raw)} B (ASCII -> glyph by range arithmetic, menu1.asm mf_char_e).\n"
         f"; Charset: {''.join(CHARSET)!r}\n"
-        "; Glyph = 16 rows x 1 B, MSB-left, col 7 = letter gap; drawn 2 cell-rows tall\n"
+        "; Glyph = 14 rows x 1 B (rows 1..14 of the 16-row glyph; rows 0 and 15 are always blank and\n"
+        "; are zeroed by the draw code), MSB-left, col 7 = letter gap; drawn 2 cell-rows tall\n"
         f"; (rows 0-7 top cell, 8-15 bottom cell).  Ink per cell = attr of the cell pair.\n"
-        f"MENU_FONT_COUNT  EQU {n}\nMENU_FONT_STRIDE EQU 16\n"
+        f"MENU_FONT_COUNT  EQU {n}\nMENU_FONT_STRIDE EQU 14\n"
         "\n"
-        "menu_font:\n" + db(d["font"], lambda i: f"{ord(CHARSET[i])} {CHARSET[i]!r}") +
+        "menu_font:\n" + db(packed, lambda i: f"{ord(CHARSET[i])} {CHARSET[i]!r}") +
         "menu_font_end:\n"
         f"        ASSERT menu_font_end - menu_font == {len(raw)}\n")
     open(os.path.join(OUT, "menu_font.asm"), "w").write(s)

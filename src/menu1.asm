@@ -1432,20 +1432,24 @@ mf_char_e:      cp   'A'
 .g:             ld   l, a
                 ld   h, 0
                 add  hl, hl
+                ld   d, h
+                ld   e, l                      ; DE = 2g
                 add  hl, hl
                 add  hl, hl
-                add  hl, hl                    ; * 16
+                add  hl, hl                    ; 16g
+                or   a
+                sbc  hl, de                    ; 14g (SIZE T4: rows 1..14 stored)
                 ld   de, menu_font
                 add  hl, de
                 ld   bc, (mf_row)
                 push bc
                 call mcell
-                call copy8
+                call copy_top
                 pop  bc
                 push bc
                 inc  b
                 call mcell
-                call copy8
+                call copy_bot
                 pop  bc
                 push bc
                 call mattr
@@ -1459,7 +1463,7 @@ mf_char_e:      cp   'A'
                 inc  c
                 ld   (mf_row), bc
                 ret
-                ASSERT MENU_FONT_STRIDE == 16
+                ASSERT MENU_FONT_STRIDE == 14
 
 ;------------------------------------------------------------------------------
 ; small helpers (bank 1)
@@ -1500,6 +1504,25 @@ copy8:          push bc
                 inc  d
                 djnz .l
                 pop  bc
+                ret
+; copy_top — cell line 0 = 0, lines 1..7 = 7 B from HL (advanced).  Clobbers: A, D
+; copy_bot — lines 0..6 = 7 B from HL (advanced), line 7 = 0.  Clobbers: A, D
+; (SIZE T4: glyph rows 0 and 15 are blank and not stored.)
+copy_top:       xor  a
+                ld   (de), a
+                inc  d
+copy7:          push bc
+                ld   b, 7
+.l:             ld   a, (hl)
+                ld   (de), a
+                inc  hl
+                inc  d
+                djnz .l
+                pop  bc
+                ret
+copy_bot:       call copy7
+                xor  a
+                ld   (de), a
                 ret
 ; row_clear — char row B: bitmap 0 (attrs kept).  Clobbers: A, C, DE, HL
 row_clear:      push bc
