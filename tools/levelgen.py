@@ -219,6 +219,8 @@ LBLOCK_LEN = L["LVL_STATE_END"] - LBASE
 LOFF_EDGE = L["EDGE_TAB"] - LBASE
 LOFF_DESC = L["ROOM_DESC"] - LBASE
 LOFF_FLOOR = L["FLOOR_LIST"] - LBASE
+LOFF_KEYROOM2 = LOFF_EDGE + 11        # PROPOSED slot (T3b): LVL_KEYROOM2 = EDGE_TAB + 11 ($6D5B, spare); colour-1 key room, ROOM_NONE if unused
+EG_LOCKC = 0x20                       # PROPOSED edge bit (T3b): lock colour 1 (EG_LOCK set; clear = colour 0)
 LH = {k: L[k] - LBASE for k in ("LVL_DEPTH LVL_SEED GEN_RNG LVL_ATTR_FLOOR LVL_ATTR_WALL "
      "LVL_START LVL_LAIR LVL_KEYROOM LVL_SANCTUM LVL_NROOMS LVL_FLAGS FLOOR_N MASTER_SEED").split()}
 
@@ -432,49 +434,16 @@ def l2_pass(rng, rooms, floor, depth, start, lair):
                 rm.pit = pit0
 
 
-def attempt(rng, depth, l2=True):
-    """One generation attempt (LARGER-D 3 wide x 4 tall; docs/design/larger_depths.md section 2).
-    THE T4 CONTRACT: the Z80 generator (src/levelgen.asm) must make exactly these GEN_RNG draws in
-    exactly this order. rnd(n) = step, (x & $FF) mod n; rnd16 = step, x. A Restart (Restart exception)
-    re-enters from draw 1 WITHOUT reseeding (the stream continues). Ids: r = 3*row + col, 0..11,
-    bottom row 9..11. Draws:
-      1. n      = 10 + rnd(3)               ; D8: n = min(n, 11)
-      2. start  = rnd(3)                    ; top row
-      3. D8 only: S = 9 + 2*rnd(2)          ; Sanctum cell (9 or 11), never entered by the DFS
-      4. DFS from start, `while stack and not done` (cell = stack top; neighbours L, R, U, D, those
-         unvisited and != S; k of them): k == 0 pops with NO draw; else pick = rnd(k), link, push.
-         done = |visited| >= n and 10 in visited and (9 or 11 in visited)   (D8: S is never visited,
-         so it needs 10 and the other end)
-      5. loop edge: mand = no tree edge 9-10 and none 10-11.
-         if mand: NO odds draw; else odds = rnd(2), loop iff 0. When looping: candidates = unlinked
-         present pairs, scanning r = 9..11 (mand) or r = 0..11, per r: right pair (r, r+1) if col < 2,
-         then down pair (r, r+3) if row < 3; if any: pick = rnd(count)   (also drawn when count == 1)
-      6. horizontal edges, e in r order r = 0..11 (col < 2, r present, edge linked): storey = rnd(2),
-         then door = rnd(3) (door iff 0)                                    [2 draws per edge]
-      7. vertical links, r = 0..8 with r+3 linked to r: col = 5 + rnd(20)   [1 draw per link]
-      8. lair (BFS) and the D8 free-side rule: NO draw. Arrival col of start: pick_feature(5..24, storey 0,
-         mandatory); then the level-exit col of the lair: pick_feature(5..24, storey 1, mandatory)
-         (pick_feature: up to FEAT_TRIES=8 draws of lo + rnd(hi-lo+1), stops at the first legal one;
-         mandatory + none legal -> NO more draws: linear scan lo..hi, else Restart)
-      9. per present room r = 0..11 (id order): LAD1 = pick_feature(LAD_COL_MIN..MAX, both storeys, mandatory);
-         then `rnd(2) == 0` -> PIT = pick_feature(5..24, both, optional); `rnd(2) == 0` -> LAD2 =
-         pick_feature(LAD, both, optional); `rnd(2) == 0` -> BLOCK: (none, no draw, in the start / lair
-         room) else up to 8 tries of right = rnd(2), storey = rnd(2), w = 2 + rnd(2) (3 draws, always)
-     10. potions: total = 3 + rnd(2) draws (rnd(2) FIRST, k = 0..total-1): per potion room =
-         cands[rnd(len)] (cands = present non-start rooms in id order), storey = rnd(2), then up to 32
-         (k < 3) / 8 (k == 3, dropped on failure) tries of col = 2 + rnd(28); k < 3 failing -> Restart
-         (the Sanctum does not exist yet here: it is added after generation)
-     11. room seeds, present rooms in id order: rnd16.     <- the header keeps GEN_RNG here
-     12. L2 (after the header snapshot, GEN_RNG restored afterwards): see l2_pass.
-    The D8 Sanctum leaf runs afterwards on its own stream (sanctum_pass, SANCT_SALT): no GEN_RNG draw."""
+KEY_STATS = {"restart": 0, "last": None, "p2": False}   # KEY sweep stats: pass-1 failures (this process), last (locks, keys, F)
+
+
+def tree_pass(rng, depth, n, start, warns):
+    """Steps 3-8 of the attempt() contract: S, DFS, loop edge, h-edges, vertical links, lair. warns = KEY pass 2:
+    the DFS picks among the unvisited neighbours (order L, R, U, D) with the FEWEST unvisited onward neighbours
+    (cells that are unvisited and != S, counted from the candidate), then rnd(len(ties)) over the tied ones."""
     rooms = [Room() for _ in range(NCELL)]
     edges = [0] * NEDGE_H
-    n = 10 + rng.rnd(3)
-    if depth == 8:
-        n = min(n, 11)                  # L1 (2): the Sanctum cell is reserved
-    start = rng.rnd(3)                  # L1 (1): top grid row, nothing above it
     sanct = BOT + 2 * rng.rnd(2) if depth == 8 else None    # L1 (5): never visited
-    # DFS tree
     adj = {r: set() for r in range(NCELL)}
     visited = {start}
     stack = [start]
@@ -487,6 +456,9 @@ def attempt(rng, depth, l2=True):
         if not free:
             stack.pop()
             continue
+        if warns:
+            on = [sum(1 for y in nbrs(x) if y not in visited and y != sanct) for x in free]
+            free = [x for x, o in zip(free, on) if o == min(on)]
         nx = free[rng.rnd(len(free))]
         adj[cur].add(nx); adj[nx].add(cur)
         visited.add(nx)
@@ -495,6 +467,7 @@ def attempt(rng, depth, l2=True):
         rooms[r].present = True
     # loop edge; L1 (4): mandatory (from the bottom-row pairs only) when no tree
     # edge joins two bottom-row rooms, and then the odds roll is skipped
+    loop = None
     mand = not (BOT + 1 in adj[BOT] or BOT + 2 in adj[BOT + 1])
     if mand or rng.rnd(LOOP_EDGE_ODDS) == 0:
         cand = []
@@ -508,6 +481,7 @@ def attempt(rng, depth, l2=True):
         if cand:
             a, b = cand[rng.rnd(len(cand))]
             adj[a].add(b); adj[b].add(a)
+            loop = (a, b)
     # horizontal edges
     for r in range(NCELL):
         if r % W < W - 1 and r in visited and r + 1 in adj[r]:
@@ -549,6 +523,242 @@ def attempt(rng, depth, l2=True):
         global LAIR_RESEEDS
         LAIR_RESEEDS += 1
         raise Reseed
+    return rooms, edges, adj, visited, sanct, lair, dist, leaves, loop
+
+def _bfs_par(adj, src, banned=None):
+    """BFS over G in sorted-neighbour order; parent = first discoverer (the deterministic shortest path)."""
+    par = {src: None}
+    q = [src]
+    for r in q:
+        for x in sorted(adj[r]):
+            if x not in par and (banned is None or (r, x) not in banned):
+                par[x] = r
+                q.append(x)
+    return par
+
+
+def _path(par, dst):
+    out = []
+    while dst is not None:
+        out.append(dst)
+        dst = par[dst]
+    return out[::-1]
+
+
+FAR_BOLT = True        # larger_depths.md 2.1 rev 2: a lock bars only its start side; from the far side it opens keyless
+
+
+def _lock_arcs(locks, open_):
+    """Directed arcs the unopened locks forbid: near -> far always, far -> near too unless FAR_BOLT."""
+    out = set()
+    for i, (near, far) in enumerate(locks):
+        if i not in open_:
+            out.add((near, far))
+            if not FAR_BOLT:
+                out.add((far, near))
+    return out
+
+
+def _key_fix(adj, start, locks, keyrooms, walled=None):
+    """Key-set fixpoint (rev 2 proof). Returns (reach, rounds {lock: round it opened}). Coloured keys are never wasted,
+    so the outcome does not depend on collection order. `walled` lock never opens."""
+    open_ = set()
+    rounds = {}
+    rnd = 0
+    while True:
+        rnd += 1
+        reach = _bfs_par(adj, start, _lock_arcs(locks, open_))
+        new = {i for i, (near, far) in enumerate(locks)
+               if i not in open_ and i != walled and near in reach and keyrooms[i] in reach}
+        if not new:
+            return reach, rounds
+        for i in new:
+            rounds[i] = rnd
+        open_ |= new
+
+
+def _route_f(adj, start, lair, locks, keyrooms):
+    """F: min over the valid collection orders of the distinct rooms on the legs start -> key -> (key ->) lair; a lock
+    whose key is not yet held is a wall (arcs as _lock_arcs). None if no order is valid."""
+    from itertools import permutations
+    best = None
+    for perm in permutations(range(len(locks))):
+        held = set()
+        cur = start
+        used = {start}
+        ok = True
+        for j in list(perm) + [None]:
+            tgt = lair if j is None else keyrooms[j]
+            par = _bfs_par(adj, cur, _lock_arcs(locks, held))
+            if tgt not in par:
+                ok = False
+                break
+            used.update(_path(par, tgt))
+            cur = tgt
+            if j is not None:
+                held.add(j)
+        if ok and (best is None or len(used) < best):
+            best = len(used)
+    return best
+
+
+def select_keys(adj, start, lair, n, depth, final=False):
+    """KEY placement rule (larger_depths.md 2.1 rev 2). PLUGGABLE: LOCK_SELECT. Draws NO rnd (pure function of the tree).
+    Returns (locks, keys, F, shape) or None. locks = [(near, far, colour)] (near = start-side room), keys =
+    [(room, colour)], shape in lin / b1 / b2 / one.
+    Candidates: every horizontal bridge of G (lock) x every dead end (deg 1 in G, never start / lair) (key), 1 lock or
+    every unordered pair with distinct key rooms. Valid iff the fixpoint from start reaches the lair and every lock is
+    needed (walled -> fixpoint fails). F = _route_f; score = F + 1 if a 2-lock set is non-linear (b1: exactly one
+    lock on P; b2: both on P and both keys in C0). Best = max (score, F, non-linear), then min (nearer lock's P
+    index, edge indices, key room ids by colour). Floor F >= n - 4 (raw): 2 locks only if depth >= 4 and n >= 11
+    and a valid pair meets it, else 1 lock; if neither (pass 1) -> None. final (pass 2): no floor, the best valid
+    set (pair if allowed and any exists) is taken as is."""
+    par = _bfs_par(adj, start)
+    P = _path(par, lair)
+    pidx = {r: i for i, r in enumerate(P)}
+    pe = {frozenset(e) for e in zip(P, P[1:])}
+    cands = []                                    # (edge idx, near, far, onP, pi)
+    for r in sorted(adj):
+        x = r + 1
+        if r % W < W - 1 and x in adj[r]:
+            p2 = _bfs_par(adj, start, {(r, x), (x, r)})
+            if len(p2) < len(par):                # bridge of G (not on the loop cycle)
+                near, far = (r, x) if r in p2 else (x, r)
+                onp = frozenset((r, x)) in pe
+                if onp:
+                    pi = min(pidx[r], pidx[x])
+                else:                             # the P room nearest the branch (lowest P index on ties)
+                    dist = {near: 0}
+                    q = [near]
+                    for u in q:
+                        for v in sorted(adj[u]):
+                            if v not in dist:
+                                dist[v] = dist[u] + 1
+                                q.append(v)
+                    pi = min((dist[p], pidx[p]) for p in P)[1]
+                cands.append((hedge(r), near, far, onp, pi))
+    dead = [r for r in sorted(adj) if len(adj[r]) == 1 and r != start and r != lair]
+    pair_ok = depth >= 4 and n >= 11
+    best = {1: [], 2: []}                         # lists of (sortkey, result)
+
+    def consider(sel, ks):
+        locks = [(c[1], c[2]) for c in sel]
+        reach, rounds = _key_fix(adj, start, locks, ks)
+        if lair not in reach:
+            return
+        for j in range(len(locks)):
+            if lair in _key_fix(adj, start, locks, ks, walled=j)[0]:
+                return                            # lock j is not needed
+        F = _route_f(adj, start, lair, locks, ks)
+        if F is None:
+            return
+        nl = 0
+        shape = "one"
+        if len(sel) == 2:
+            onp = [c[3] for c in sel]
+            if onp[0] != onp[1]:
+                nl, shape = 1, "b1"
+            else:
+                c0 = _bfs_par(adj, start, _lock_arcs(locks, set()) | {(f, nr) for nr, f in locks})
+                nl, shape = (1, "b2") if all(k in c0 for k in ks) else (0, "lin")
+        # colours: the lock opened in the earlier round gets 0; a tie goes to the lower P index
+        order = sorted(range(len(sel)), key=lambda j: (rounds[j], sel[j][4], sel[j][0]))
+        col = {j: c for c, j in enumerate(order)}
+        score = F + nl
+        pi_min = min(c[4] for c in sel)
+        kbycol = tuple(ks[j] for j in order)
+        key = (-score, -F, -nl, pi_min, tuple(sorted(c[0] for c in sel)), kbycol)
+        res = ([(sel[j][1], sel[j][2], col[j]) for j in range(len(sel))],
+               sorted(((ks[j], col[j]) for j in range(len(sel))), key=lambda t: t[1]), F, shape)
+        best[len(sel)].append((key, res))
+    for c in cands:
+        for k in dead:
+            consider([c], [k])
+    if pair_ok:
+        for i in range(len(cands)):
+            for j in range(i + 1, len(cands)):
+                for k1 in dead:
+                    for k2 in dead:
+                        if k1 != k2:
+                            consider([cands[i], cands[j]], [k1, k2])
+    floor = n - KEY_FMIN_SLACK
+    for m in (2, 1):
+        pool = [t for t in best[m] if t[1][2] >= floor]
+        if pool:
+            return min(pool, key=lambda t: t[0])[1]
+    if final:
+        for m in (2, 1):
+            if best[m]:
+                return min(best[m], key=lambda t: t[0])[1]
+    return None
+
+
+KEY_FMIN_SLACK = 4                          # F_min = n - 4
+LOCK_SELECT = select_keys                 # swap to change the placement rule; the proof/output do not care
+
+
+def attempt(rng, depth, l2=True):
+    """One generation attempt (LARGER-D 3 wide x 4 tall; docs/design/larger_depths.md section 2).
+    THE T4 CONTRACT: the Z80 generator (src/levelgen.asm) must make exactly these GEN_RNG draws in
+    exactly this order. rnd(n) = step, (x & $FF) mod n; rnd16 = step, x. A Restart (Restart exception)
+    re-enters from draw 1 WITHOUT reseeding (the stream continues). Ids: r = 3*row + col, 0..11,
+    bottom row 9..11. Draws:
+      1. n      = 10 + rnd(3)               ; D8: n = min(n, 11)
+      2. start  = rnd(3)                    ; top row
+      3. D8 only: S = 9 + 2*rnd(2)          ; Sanctum cell (9 or 11), never entered by the DFS
+      4. DFS from start, `while stack and not done` (cell = stack top; neighbours L, R, U, D, those
+         unvisited and != S; k of them): k == 0 pops with NO draw; else pick = rnd(k), link, push.
+         done = |visited| >= n and 10 in visited and (9 or 11 in visited)   (D8: S is never visited,
+         so it needs 10 and the other end)
+      5. loop edge: mand = no tree edge 9-10 and none 10-11.
+         if mand: NO odds draw; else odds = rnd(2), loop iff 0. When looping: candidates = unlinked
+         present pairs, scanning r = 9..11 (mand) or r = 0..11, per r: right pair (r, r+1) if col < 2,
+         then down pair (r, r+3) if row < 3; if any: pick = rnd(count)   (also drawn when count == 1)
+      6. horizontal edges, e in r order r = 0..11 (col < 2, r present, edge linked): storey = rnd(2),
+         then door = rnd(3) (door iff 0)                                    [2 draws per edge]
+      7. vertical links, r = 0..8 with r+3 linked to r: col = 5 + rnd(20)   [1 draw per link]
+      8. lair (BFS) and the D8 free-side rule: NO draw. Arrival col of start: pick_feature(5..24, storey 0,
+         mandatory); then the level-exit col of the lair: pick_feature(5..24, storey 1, mandatory)
+         (pick_feature: up to FEAT_TRIES=8 draws of lo + rnd(hi-lo+1), stops at the first legal one;
+         mandatory + none legal -> NO more draws: linear scan lo..hi, else Restart)
+      9. per present room r = 0..11 (id order): LAD1 = pick_feature(LAD_COL_MIN..MAX, both storeys, mandatory);
+         then `rnd(2) == 0` -> PIT = pick_feature(5..24, both, optional); `rnd(2) == 0` -> LAD2 =
+         pick_feature(LAD, both, optional); `rnd(2) == 0` -> BLOCK: (none, no draw, in the start / lair
+         room) else up to 8 tries of right = rnd(2), storey = rnd(2), w = 2 + rnd(2) (3 draws, always)
+     10. potions: total = 3 + rnd(2) draws (rnd(2) FIRST, k = 0..total-1): per potion room =
+         cands[rnd(len)] (cands = present non-start rooms in id order), storey = rnd(2), then up to 32
+         (k < 3) / 8 (k == 3, dropped on failure) tries of col = 2 + rnd(28); k < 3 failing -> Restart
+         (the Sanctum does not exist yet here: it is added after generation)
+     11. room seeds, present rooms in id order: rnd16.     <- the header keeps GEN_RNG here
+     12. L2 (after the header snapshot, GEN_RNG restored afterwards): see l2_pass.
+    KEY (larger_depths.md 2.1 rev 2) adds NO draw of its own. Draws 3-8 form a PASS: after the lair is known (end of the
+    pass, before the arrival-shaft picks) LOCK_SELECT = select_keys(adj, start, lair, n_visited, depth, final) picks locks
+    and keys with no rnd. If it returns None (no valid set, or none with raw F >= n - 4) and this was pass 1, GEN_RNG simply
+    CONTINUES and pass 2 reruns draws 3-8 (n and start are KEPT, not redrawn; S IS redrawn) with the Warnsdorff DFS: in
+    draw 4, with the free neighbours in L, R, U, D order, keep only those with the fewest unvisited onward neighbours
+    (neighbours of the candidate that are unvisited and != S; the current cell is visited so never counts), then
+    pick = rnd(len(kept)) over them in that order. The draw is made even when 1 is kept (as in pass 1, k == 1 draws
+    rnd(1)), so the draw COUNT per DFS step is unchanged; only the candidate list differs. Pass 2 passes final=True: no
+    F floor, the best valid set is taken, else the level is keyless (lock/key outputs ROOM_NONE, no EG_LOCK). A Restart
+    (pick_feature / potions) still re-enters from draw 1 with pass 1. Outputs: edges[hedge(min)] |= EG_LOCK | EG_DOOR
+    (| EG_LOCKC for colour 1); LVL_KEYROOM = colour-0 key room, LVL_KEYROOM2 (EDGE_TAB + 11, proposed) = colour-1, ROOM_NONE.
+    The D8 Sanctum leaf runs afterwards on its own stream (sanctum_pass, SANCT_SALT): no GEN_RNG draw."""
+    n = 10 + rng.rnd(3)
+    if depth == 8:
+        n = min(n, 11)                  # L1 (2): the Sanctum cell is reserved
+    start = rng.rnd(3)                  # L1 (1): top grid row, nothing above it
+    for warns in (False, True):         # KEY: pass 1 plain DFS; pass 2 (in-stream restart) Warnsdorff DFS
+        rooms, edges, adj, visited, sanct, lair, dist, leaves, loop = tree_pass(rng, depth, n, start, warns)
+        keyset = LOCK_SELECT(adj, start, lair, len(visited), depth, warns)
+        if warns or keyset:
+            break
+        KEY_STATS["restart"] += 1
+    KEY_STATS["p2"] = warns
+    KEY_STATS["shape"] = keyset[3] if keyset else None
+    KEY_STATS["last"] = keyset          # (locks, keys, F) or None (keyless)
+    locks, keys = (keyset[0], keyset[1]) if keyset else ([], [])
+    for a_, b_, col in locks:           # LOCKed edges are doors (clearing EG_LOCK on unlock leaves the open door)
+        edges[hedge(min(a_, b_))] |= L["EG_LOCK"] | L["EG_DOOR"] | (EG_LOCKC if col else 0)
     rooms[start].start = True
     rooms[lair].lair = True
     for r in leaves:
@@ -598,7 +808,7 @@ def attempt(rng, depth, l2=True):
         x0 = rng.x                       # the header keeps the pre-L2 GEN_RNG: LP budgets
         l2_pass(rng, rooms, floor, depth, start, lair)     # (and all earlier output) unchanged
         rng.x = x0
-    return rooms, edges, floor, start, lair, len(visited)
+    return rooms, edges, floor, start, lair, len(visited), keys
 
 
 SANCT_SALT = 0x5A17     # 3F: the Sanctum leaf's own stream (GEN_RNG and every earlier output untouched)
@@ -634,7 +844,7 @@ def generate(depth, seed, master=0, l2=True, f3=False):
         try:
             for _ in range(MAX_RESTARTS):
                 try:
-                    rooms, edges, floor, start, lair, n = attempt(rng, depth, l2)
+                    rooms, edges, floor, start, lair, n, keys = attempt(rng, depth, l2)
                     break
                 except Restart:
                     restarts += 1
@@ -661,6 +871,9 @@ def generate(depth, seed, master=0, l2=True, f3=False):
     b[LH["LVL_START"]] = start
     b[LH["LVL_LAIR"]] = lair
     b[LH["LVL_KEYROOM"]] = L["ROOM_NONE"]
+    b[LOFF_KEYROOM2] = L["ROOM_NONE"]
+    for room, col in keys:              # slot = colour
+        b[LH["LVL_KEYROOM"] if col == 0 else LOFF_KEYROOM2] = room
     b[LH["LVL_SANCTUM"]] = L["ROOM_NONE"] if sanct is None else sanct
     b[LH["LVL_NROOMS"]] = n
     b[LH["LVL_FLAGS"]] = 0               # 3F-T8 (BOSS-GUARD): shut until the boss dies (grate_open); 3B: LF_GRATE_OPEN

@@ -109,6 +109,133 @@ def pit_violations(b, r):
     return out
 
 
+def _bfs(adj, src, ban=()):
+    par = {src: None}
+    q = [src]
+    for r in q:
+        for x in sorted(adj[r]):
+            if x not in par and (r, x) not in ban:
+                par[x] = r
+                q.append(x)
+    return par
+
+
+def _path(par, d):
+    out = []
+    while d is not None:
+        out.append(d); d = par[d]
+    return out[::-1]
+
+
+def key_state(b):
+    """(locks {(a, c): colour} with a < c, keys {colour: room}) read from the block (colour 1 = EG_LOCKC)."""
+    locks = {}
+    for e in range(NEDGE):
+        eb = b[OFF_EDGE + e]
+        if eb & D["EG_LOCK"]:
+            r = e + e // (GW - 1)
+            locks[(r, r + 1)] = 1 if eb & G.EG_LOCKC else 0
+    keys = {}
+    for c, o in ((0, H["LVL_KEYROOM"]), (1, G.LOFF_KEYROOM2)):
+        if b[o] != D["ROOM_NONE"]:
+            keys[c] = b[o]
+    return locks, keys
+
+
+def _arcs(sides, open_, bolt=True):
+    out = set()
+    for e, (near, far) in sides.items():
+        if e not in open_:
+            out.add((near, far))
+            if not bolt: out.add((far, near))
+    return out
+
+
+def fixpoint(adj, sides, colour, keys, src, wall=None, bolt=True):
+    """Key-set fixpoint from `src` with NO keys (checker's own copy, rev 2 proof row): flood, take the keys of the
+    rooms reached, open every lock with its near end reached and its colour held (the far-side bolt is the directed arc
+    rule), repeat. Returns (reach, {lock: round opened})."""
+    open_, rounds, rnd = set(), {}, 0
+    while True:
+        rnd += 1
+        reach = _bfs(adj, src, _arcs(sides, open_, bolt))
+        held = {c for c, r in keys.items() if r in reach}
+        new = {e for e, (near, far) in sides.items() if e not in open_ and e != wall
+               and near in reach and colour[e] in held}
+        if not new:
+            return reach, rounds
+        for e in new: rounds[e] = rnd
+        open_ |= new
+
+
+def check_keys(b, adj, start, lair, n, depth, v, stats):
+    """KEY rev 2 (larger_depths.md 2.1, K1-K9): every lock is a horizontal bridge of G and needed; keys sit in dead ends
+    (never start / lair / Sanctum); the key-set fixpoint reaches the lair from every arrival room with 0 keys; each lock is
+    needed (walled -> fixpoint fails); colour 0 opens first (tie: lower P index); F >= n - 4; no keyless level."""
+    locks, keys = key_state(b)
+    sanct = b[H["LVL_SANCTUM"]]
+    A = {r: {x for x in a if x != sanct} for r, a in adj.items() if r != sanct}
+    nn = len(A)
+    if not locks:
+        v.append("K: keyless level")
+        if stats is not None: stats["keyless"] = stats.get("keyless", 0) + 1
+        return
+    if set(keys) != set(locks.values()) or len(keys) != len(locks): v.append("K: key colours != lock colours")
+    P = _path(_bfs(A, start), lair)
+    pe = {frozenset(e) for e in zip(P, P[1:])}
+    sides, colour = {}, {}
+    for e, col in locks.items():
+        a, c = e
+        p2 = _bfs(A, start, {(a, c), (c, a)})
+        if len(p2) == nn: v.append(f"K1: lock {a}-{c} is not a bridge")
+        sides[e] = (a, c) if a in p2 else (c, a)
+        colour[e] = col
+        if c != a + 1 or a % GW == GW - 1: v.append(f"K1: lock {a}-{c} not horizontal")
+        if depth == 8 and sanct != D["ROOM_NONE"] and sanct in e: v.append("K7: Sanctum door locked")
+    m = len(locks)
+    if m > 2 or (depth <= 3 and m > 1) or (depth >= 4 and m == 2 and nn < 11): v.append(f"K2: {m} locks at D{depth} n={nn}")
+    for c, r in keys.items():
+        if r in (start, lair) or r == sanct or len(A[r]) != 1: v.append(f"K3: key {c} room {r} not a dead end / start / lair")
+    # K6: every arrival room (start + teleport landings), 0 keys
+    for x in A:
+        if lair not in fixpoint(A, sides, colour, keys, x)[0]: v.append(f"K6: softlock from room {x}")
+    for e in locks:                           # every lock is needed
+        if lair in fixpoint(A, sides, colour, keys, start, wall=e)[0]: v.append(f"K1: lock {e} not needed")
+    reach, rounds = fixpoint(A, sides, colour, keys, start)
+    if lair not in reach: v.append("K6: lair unreachable from start")
+    if m == 2:                                # K8: colour 0 = opened first, tie lower P index
+        ordr = sorted(locks, key=lambda e: (rounds.get(e, 99), min(P.index(r) if r in P else 99 for r in e), e))
+        if [locks[e] for e in ordr] != [0, 1]:
+            v.append(f"K8: colour 0 is not the lock opened first ({rounds})")
+    # F: min over the valid collection orders of the BFS legs (locks not yet held = directed walls)
+    from itertools import permutations
+    F = None
+    for perm in permutations(sorted(locks.values())):
+        held, cur, used, ok = set(), start, {start}, True
+        for c in list(perm) + [None]:
+            tgt = lair if c is None else keys[c]
+            pr = _bfs(A, cur, _arcs({e: sides[e] for e in locks if locks[e] not in held}, set()))
+            if tgt not in pr: ok = False; break
+            used.update(_path(pr, tgt)); cur = tgt
+            if c is not None: held.add(c)
+        if ok and (F is None or len(used) < F): F = len(used)
+    if F is None: v.append("K5: no valid collection order")
+    elif F < nn - 4: v.append(f"K5: F {F} < n-4 = {nn - 4}")
+    shape = "one"
+    if m == 2:
+        onp = [frozenset(e) in pe for e in locks]
+        if onp[0] != onp[1]: shape = "b1"
+        else:
+            c0 = _bfs(A, start, {x for e in locks for x in ((e[0], e[1]), (e[1], e[0]))})
+            shape = "b2" if all(r in c0 for r in keys.values()) else "lin"
+    if stats is not None and F is not None:
+        kd = stats.setdefault("key", {}).setdefault(depth, {"n": 0, "F": 0, "FN": 0.0, "m": Counter(), "lair_lock": 0, "shape": Counter()})
+        kd["n"] += 1; kd["F"] += F; kd["FN"] += F / nn; kd["m"][m] += 1; kd["shape"][shape] += 1
+        kd["lair_lock"] += any(lair in e for e in locks)
+        stats["key_levels"] = stats.get("key_levels", 0) + 1
+        stats["key_p2"] = stats.get("key_p2", 0) + (1 if G.KEY_STATS["p2"] else 0)
+
+
 def check(b, stats=None):
     v = []
     depth_l2 = {}
@@ -123,14 +250,14 @@ def check(b, stats=None):
     if not N_MIN <= n <= N_MAX: v.append(f"rooms {n} not {N_MIN}..{N_MAX}")
     if depth == 8 and n > N_MAX_D8: v.append(f"L1: D8 rooms {n} > {N_MAX_D8}")
     if b[H["LVL_NROOMS"]] != n: v.append("NROOMS mismatch")
-    if b[H["LVL_KEYROOM"]] != D["ROOM_NONE"] or b[H["LVL_SANCTUM"]] != D["ROOM_NONE"]:
-        v.append("key/sanctum must be ROOM_NONE in 3B")
+    if b[H["LVL_SANCTUM"]] != D["ROOM_NONE"]:
+        v.append("sanctum must be ROOM_NONE in the plain block")
     if b[H["LVL_FLAGS"]] != 0: v.append("LVL_FLAGS (3F-T8: the grate is shut at generation)")
     if (b[H["LVL_ATTR_FLOOR"]], b[H["LVL_ATTR_WALL"]]) != ATTRS_REF.get(depth): v.append("attrs")
     for i in range(H["MASTER_SEED"] + 2, H["LVL_DEPTH"] + D["LVL_HDR_LEN"]):
         if b[i]: v.append("header spare")
     for i in range(OFF_EDGE + NEDGE, BLOCK_LEN):
-        if b[i]: v.append("EDGE_TAB spare nonzero")
+        if b[i] and i != G.LOFF_KEYROOM2: v.append("EDGE_TAB spare nonzero")
     for i in range(OFF_DESC + NCELL * 16, OFF_FLOOR):
         if b[i]: v.append("desc-area spare nonzero")
     start = b[H["LVL_START"]]; lair = b[H["LVL_LAIR"]]
@@ -253,10 +380,11 @@ def check(b, stats=None):
         r = gy * GW + gx
         eb = b[OFF_EDGE + e]
         linked = r in pset and (r + 1) in adj.get(r, ())
-        if eb & ~(D["EG_LINK"] | D["EG_DOOR"]): v.append(f"edge {e} unexpected bits")
+        if eb & ~(D["EG_LINK"] | D["EG_DOOR"] | D["EG_LOCK"] | G.EG_LOCKC): v.append(f"edge {e} unexpected bits")
         if bool(eb & D["EG_LINK"]) != linked: v.append(f"edge {e} LINK vs exits")
         if eb & D["EG_DOOR"] and not eb & D["EG_LINK"]: v.append(f"edge {e} door w/o link")
     nedges = sum(len(a) for a in adj.values()) // 2
+    check_keys(b, adj, start, lair, n, depth, v, stats)
     if nedges not in (n - 1, n): v.append(f"edges {nedges} for {n} rooms")
     seen = {start}; q = [start]; dist = {start: 0}
     for r in q:
@@ -385,7 +513,8 @@ def check(b, stats=None):
         hedges = [b[OFF_EDGE + e] for e in range(NEDGE) if b[OFF_EDGE + e] & D["EG_LINK"]]
         stats["rooms"][n] += 1
         stats["h_edges"] += len(hedges)
-        stats["doors"] += sum(1 for e in hedges if e & D["EG_DOOR"])
+        stats["h_edges"] -= sum(1 for e in hedges if e & D["EG_LOCK"])   # forced doors are not the 1-in-3 roll
+        stats["doors"] += sum(1 for e in hedges if e & D["EG_DOOR"] and not e & D["EG_LOCK"])
         stats["pits"] += sum(1 for r in present if rd(b, r, "RD_PITCOL"))
         stats["dead"] += sum(1 for r in present if deg[r] == 1)
         stats["loops"] += nedges == n
@@ -521,6 +650,12 @@ def new_stats():
 def merge(a, b):
     for k, v in b.items():
         if k == "rooms": a[k].update(v)
+        elif k == "key":
+            for d, kd in v.items():
+                t = a.setdefault("key", {}).setdefault(d, {"n": 0, "F": 0, "FN": 0.0, "m": Counter(), "lair_lock": 0, "shape": Counter()})
+                t["shape"].update(kd["shape"])
+                for f in ("n", "F", "FN", "lair_lock"): t[f] += kd[f]
+                t["m"].update(kd["m"])
         elif k == "restart_max": a[k] = max(a[k], v)
         else: a[k] += v
 
@@ -537,6 +672,10 @@ def report(st, tot, fails):
     print({k: round(st[k] / tot, 2) for k in ("pits", "dead", "loops", "lair_fallback", "walker_cut", "blocks", "lad2", "potions", "l2_wide", "l2_mid")}, "(per level)")
     print(f"generator restarts {st['restarts']} in {tot} levels ({st['restarts'] / max(1, tot):.3f}/level, "
           f"max {st['restart_max']}), reseeds {st['reseeds']}")
+    kl = max(1, st.get("key_levels", 0))
+    print(f"KEY: pass-2 restarts {st.get('key_p2', 0)}/{kl} ({100 * st.get('key_p2', 0) / kl:.1f}%), keyless {st.get('keyless', 0)}")
+    for d, kd in sorted(st.get("key", {}).items()):
+        print(f"  D{d}: F/n mean {100 * kd['FN'] / kd['n']:.1f}%  locks {dict(sorted(kd['m'].items()))}  lair-door lock {kd['lair_lock']}/{kd['n']}  shapes {dict(kd['shape'])}")
     u = st["lp_units"] + st["lp_left"]
     print("LP first entries:", st["lp_entries"], "units", u, "placed", st["lp_units"], "wait (no legal cell)",
           st["lp_left"], f"({100 * st['lp_left'] / max(1, u):.1f}%)", "lost to the sum cap", st["lp_lost"])
