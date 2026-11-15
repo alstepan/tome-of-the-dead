@@ -27,6 +27,13 @@ for line in open(os.path.join(BUILD_DIR, "tome-of-the-dead.sym")):
         S[m.group(1)] = int(m.group(2), 16)
 sna = open(os.path.join(BUILD_DIR, "tome-of-the-dead.sna"), "rb").read()
 RAM = sna[27:27 + 49152]                       # $4000..$FFFF as saved
+# F1: fdesc_tab is bank-0 B0_CODE2 data: locate bank 0 in the 128K .sna (paged bank = the $C000 part, else the extras)
+_p7 = sna[49181] & 7
+if _p7 == 0:
+    BANK0 = RAM[32768:]
+else:
+    _o = 49183 + 16384 * sum(1 for _b in range(_p7) if _b not in (2, 5))   # extras ascend, minus banks 5 / 2 / the paged one
+    BANK0 = sna[_o:_o + 16384]
 
 
 # 3F-T2: the kind sequences are R6 masters (src/seq_img.asm), a ZX0 stream in
@@ -37,7 +44,9 @@ IMG = open(os.path.join(BUILD_DIR, "ovl/seq.bin"), "rb").read()
 def b(a):
     if S["SQ_IMG"] <= a < S["SQ_IMG"] + len(IMG):
         return IMG[a - S["SQ_IMG"]]
-    assert 0x4000 <= a < 0xC000, hex(a)        # bank 5 / bank 2 only (no paged reads)
+    if a >= 0xC000:                            # F1: bank 0 (fdesc_tab)
+        return BANK0[a - 0xC000]
+    assert 0x4000 <= a < 0xC000, hex(a)        # bank 5 / bank 2 otherwise (no other paged reads)
     return RAM[a - 0x4000]
 
 

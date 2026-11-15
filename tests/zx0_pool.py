@@ -247,6 +247,14 @@ class Run:
     def rb(self, name):
         return self.z.read_memory(self.S[name], 1)[0]
 
+    def bank0(self, addr, n):
+        """F1: bytes of bank 0 at the $C000-window address addr (fdesc_tab is B0_CODE2 data), whatever is paged."""
+        self.z.cmd("set-memory-zone 0")
+        try:
+            return self.z.read_memory(addr - 0xC000, n)
+        finally:
+            self.z.cmd("set-memory-zone -1")
+
     def hold(self, *keys):
         rows = [0xFF] * 8
         for k in keys:
@@ -270,7 +278,7 @@ class Run:
             "SEL_FRT_SAVE": self.z.read_memory(S["SEL_FRT_SAVE"], 2 * S["FRT_STRIDE"]),
             "alloc": self.z.read_memory(S["ALLOC_IDX"], 6),
             "static": {"kt": self.z.read_memory(S["kind_tab"], 512),
-                       "fdesc": self.z.read_memory(S["fdesc_tab"], S["FDESC_COUNT"] * S["FDESC_STRIDE"])}
+                       "fdesc": self.bank0(S["fdesc_tab"], S["FDESC_COUNT"] * S["FDESC_STRIDE"])}
             if "fdesc_tab" in S else None,
             "GEN_OVERFLOW": self.rb("GEN_OVERFLOW"),
             "GEN_TRAP": self.rb("GEN_TRAP") if "GEN_TRAP" in S else 0,
@@ -285,10 +293,10 @@ class Run:
         fid0 = S["FID_wizard_idle"]
         if "fdesc_tab" in S:
             # A6+: the block the generator would look up = fdesc_tab[fid0].FD_BLK
-            # (bank 5 low RAM, always mapped); raw build: the virtual frame
+            # (F1: bank 0 B0_CODE2); raw build: the virtual frame
             # address. Either way it must be non-zero (asserted in main), or
             # the poke would equal "no cached block" and test nothing.
-            m = self.z.read_memory(S["fdesc_tab"] + fid0 * S["FDESC_STRIDE"] + S["FD_BLK"], 2)
+            m = self.bank0(S["fdesc_tab"] + fid0 * S["FDESC_STRIDE"] + S["FD_BLK"], 2)
             blk = m[0] | m[1] << 8
         else:
             # pre-A6 baseline: the block whose first frame is fid0
@@ -512,7 +520,7 @@ def src6_decode(r, fails, name):
         # if that was overwritten with default sources the wizard idle block is in
         # bank 1/3 ($8000+) and this variant would silently test nothing
         fd = S["fdesc_tab"] + S["FID_wizard_idle"] * S["FDESC_STRIDE"]
-        blk = r.z.read_memory(fd, 2)
+        blk = r.bank0(fd, 2)
         blk = blk[0] | blk[1] << 8
         ok = blk < 0x8000
         print(f"[{'PASS' if ok else 'FAIL'}] {name} wizard idle FD_BLK {blk:#06x} is in bank 6 (< $8000)")

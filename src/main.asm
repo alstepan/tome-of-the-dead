@@ -296,6 +296,17 @@ src0_end:
 SRC0_USED       EQU src0_end - src0_blocks
                 ASSERT src0_end - SRC0_VDELTA <= $8000 && src0_blocks - SRC0_VDELTA >= $6000
                 DISPLAY "GAME SRC0 sources (bank 0, B0_CODE2): ", /H, src0_blocks, "..", /H, src0_end - 1, " (", /D, SRC0_USED, " B: ", /D, SRC0_BLOCKS, " blocks, ", /D, SRC0_RAW, " raw)"
+                ; F1: the frame descriptors (A6), FDESC_STRIDE (5) B per fid, read only by gen_frame with BANK_TEXT
+                ; paged (was the tail of the low-RAM cold block): FD_BLK (virtual packed-block address), FD_FRM
+                ; (GEN_SCRATCH + in-block offset), FD_FLAGS; generated from frames.asm (the list of frame_tab). The
+                ; assemble-time {b fdesc_tab+..} reads below see it because slot 3 = bank 0 there (MMU 3, 0).
+                ; Growth: FDESC_GROW B stay free after it (ASSERTed below).
+fdesc_tab:
+FRM_EMIT = FRM_DESC
+                INCLUDE "frames.asm"
+FDESC_COUNT     EQU FCTR
+fdesc_end:
+                ASSERT fdesc_end - fdesc_tab == FDESC_COUNT * FDESC_STRIDE
                 ; ---- packed overlay streams: KEEP LAST (2-pass build: no code address may depend on a packed size;
                 ; append new code ABOVE this line) ----
 ovl_page_zx0:                                  ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG; ITEM-INFO: from R6,
@@ -306,6 +317,8 @@ b0c2_end:
 B0C2_LEN        EQU b0c2_end - b0c2_code
 B0C2_FREE       EQU POOL_START - b0c2_end
                 ASSERT b0c2_code == B0_CODE2 && B0_CODE2 == B0_FREE_START && b0c2_end <= POOL_START
+FDESC_GROW      EQU (FRT_MAX - FDESC_COUNT) * FDESC_STRIDE   ; F1: the descriptor growth reserve now sits on the B0 side
+                ASSERT b0c2_end + FDESC_GROW <= POOL_START
 text_tape_end:
 TEXT_TAPE_LEN   EQU text_tape_end - TEXT_ADDR  ; B0CODE: text + b0 code + pad + B0_CODE2 (was = B0_FREE_START - TEXT_ADDR)
                 ASSERT text_tape_end == b0c2_end && B0_FREE_START + B0_FREE_RES == POOL_START
@@ -330,19 +343,15 @@ lowram_code:                                   ; = start (ASSERTed): the USR tar
 lowram_code_end:
 LOWRAM_CODE_LEN EQU lowram_code_end - lowram_code
                 ASSERT lowram_code_end == $8000
-                ; the descriptors are the tail of the cold block: room for the
-                ; remaining FRT_MAX - FDESC_COUNT ones is kept free below it
-FDESC_GROW      EQU (FRT_MAX - FDESC_COUNT) * FDESC_STRIDE
-LOWRAM_SPARE    EQU lowram_code - FDESC_GROW - LOWRAM_FREE_END
-                ASSERT lowram_code - FDESC_GROW >= LOWRAM_FREE_END
-                ASSERT fdesc_end == lowram_code_end
+LOWRAM_SPARE    EQU lowram_code - LOWRAM_FREE_END   ; F1: no descriptor reserve here any more (FDESC_GROW is in B0_CODE2)
+                ASSERT lowram_code >= LOWRAM_FREE_END
                 ; C+TUT0: in_tut finds the blob stream's trailer at this record's address + length
                 ASSERT {b tape_tab + TT_BOOT4_REC * TT_STRIDE} == BANK_BOOT4 && {tape_tab + TT_BOOT4_REC * TT_STRIDE + 1} == BOOT4_ORG && {tape_tab + TT_BOOT4_REC * TT_STRIDE + 3} == BOOT4_TAPE_LEN
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= TILE_GLYPHS  ; the lowest buffer above the alias
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= BITREV_TAB
                 ASSERT (TILE_GLYPHS & $1FF) == 0                    ; tile_rect glyph addressing
                 ASSERT (TILE_ATTRS & $FF) + TILE_IDS <= 256          ; one page
-                DISPLAY "GAME low-RAM cold block: ", /H, lowram_code, "..0x7FFF (", /D, LOWRAM_CODE_LEN, " B = code ", /D, fdesc_tab - lowram_code, " + ", /D, FDESC_COUNT, " frame descriptors ", /D, fdesc_end - fdesc_tab, " B); spare after the descriptor growth reserve (", /D, FDESC_GROW, " B): ", /D, LOWRAM_SPARE
+                DISPLAY "GAME low-RAM cold block: ", /H, lowram_code, "..0x7FFF (", /D, LOWRAM_CODE_LEN, " B); spare: ", /D, LOWRAM_SPARE, "; frame descriptors (bank-0 B0_CODE2) ", /D, FDESC_COUNT, " = ", /D, fdesc_end - fdesc_tab, " B, growth reserve ", /D, FDESC_GROW, " B"
 
 ;==============================================================================
 ; MAIN IMAGE — bank 2 at $8000. Hot code + tables only.
@@ -981,7 +990,9 @@ PSF_C = {b frame_tab + (fid) * FT_STRIDE + FT_COLS}
 PSF_H = {b frame_tab + (fid) * FT_STRIDE + FT_H}
 PSF_R = {b frame_tab + (fid) * FT_STRIDE + FT_OFFR}
 PSF_L = {b frame_tab + (fid) * FT_STRIDE + FT_OFFL}
+                MMU  3, 0                              ; F1: fdesc_tab is bank 0 (B0_CODE2); PS_* always run with R6 mapped
 PSF_F = {b fdesc_tab + (fid) * FDESC_STRIDE + FD_FLAGS}
+                MMU  3, BANK_R6
       IF PHASE_SHIFT                           ; gen_facing .stat: (anchor + FF_PH4) & 7
 PSF_P = PSF_F & FF_PH4
       ELSE
