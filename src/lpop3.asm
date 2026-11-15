@@ -276,7 +276,7 @@ lp_transition:
                 call hla
                 inc  (hl)
                 ld   hl, TRK_PHASE             ; LARGER-D T5: a room entry: the progress-respawn event runs on the next
-                set  TRK_DUE_BIT, (hl)         ; INPUT tick (turn_input -> bank-0 rsp_run: the first-entry test, the roll, the pick)
+                set  TRK_DUE_BIT, (hl)         ; INPUT tick (turn_input -> low-RAM rsp_run: the first-entry test, the roll, the pick)
                 ld   hl, SLOTREC + SLOTREC_STRIDE + R_VIS
                 ld   de, SLOTREC_STRIDE
                 ld   b, P_MAX_ENT - 1
@@ -364,7 +364,7 @@ lp_enter:
                 cp   (hl)                      ; stream step; keeps IX); an escort with no legal
                 jr   nz, .t0                   ; post falls back to its saved cell / lp_place
                 xor  a                         ; LARGER-D T5: A = 0 the post (!= 0: .np's boss fallback)
-                call lp_post                   ; LARGER-D T5: low RAM (boss0.asm; was FARB0 bank 0); L = 1: C = 1, E = x
+                FARB0 lp_post                  ; NEW-MON3 T1: bank 0 (boss0.asm; A passes in); L = 1: C = 1, E = x
                 ld   a, l
                 cp   1                         ; Z, NC: posted
                 jr   z, .sp
@@ -400,7 +400,7 @@ lp_enter:
                 cp   (hl)
                 jr   nz, .np0
                 ld   a, 1                      ; the fallback mode
-                call lp_post
+                FARB0 lp_post
                 dec  l
                 jr   nz, .np0
                 call lp_spawn                  ; C = 1, E = x (IX kept); a 2nd CF: the plain path, no loop

@@ -221,17 +221,16 @@ gen_tryk:          ld   e, a
 ;   on D7 / D8 (bases 144 / 72-80) and applied (+10 B; levelgen.py tier_odds); the
 ;   floors only at D1 for LVL < 1 (kept: exact for every LP_LVL <= 120). Clobbers: A, BC, DE, HL.   ~0.5k T tiered, ~0.15k else
 ;------------------------------------------------------------------------------
-tier_row:       ld   hl, tier_tab
-                ld   b, TIER_N
-.f:             cp   (hl)
-                jr   z, .hit
-                inc  hl
-                inc  hl
-                inc  hl
-                djnz .f
-                xor  a
-                ret
-.hit:           inc  hl
+tier_row:       cp   TIX_N                     ; LARGER-D T5 (lp_enter mean): a direct index, ~60 T (the 9-row scan
+                jr   nc, .no                   ; it replaces: ~0.2k T a hit, ~0.4k a miss; ~1.9 calls a room entry)
+                add  a, tier_ix & $FF
+                ld   l, a
+                ld   h, tier_ix >> 8
+                ld   a, (hl)
+                or   a
+                ret  z                         ; untiered (A = 0)
+                ld   l, a
+                ld   h, tier_tab >> 8          ; HL = the row's tier-2 entry
                 ld   e, (hl)                   ; tier-2 row
                 inc  hl
                 ld   d, (hl)                   ; tier-3 row, 0 = none
@@ -299,7 +298,36 @@ tier_row:       ld   hl, tier_tab
                 xor  a
                 ret
 
-; tiered bases: base row, tier-2 row, tier-3 row (0 = none). Order irrelevant (a scan).
+.no:            xor  a
+                ret
+; tiered bases: base row, tier-2 row, tier-3 row (0 = none). tier_ix[row] = the low byte of the row's tier-2 entry
+; (0 = untiered), rows 0 .. TIX_N - 1 (every tiered base is below TIX_N, ASSERTed).
+TIX_N           EQU 16
+tier_ix:
+                DUP  TIX_N, rr
+    IF rr == K_RAT
+                DB   (tier_tab + 1) & $FF
+    ELSEIF rr == K_BAT
+                DB   (tier_tab + 4) & $FF
+    ELSEIF rr == K_GOBLIN
+                DB   (tier_tab + 7) & $FF
+    ELSEIF rr == K_SPIDER
+                DB   (tier_tab + 10) & $FF
+    ELSEIF rr == K_SKELETON
+                DB   (tier_tab + 13) & $FF
+    ELSEIF rr == K_GHOST
+                DB   (tier_tab + 16) & $FF
+    ELSEIF rr == K_ORC
+                DB   (tier_tab + 19) & $FF
+    ELSEIF rr == K_ARCHER
+                DB   (tier_tab + 22) & $FF
+    ELSEIF rr == K_NECRO
+                DB   (tier_tab + 25) & $FF
+    ELSE
+                DB   0
+    ENDIF
+                EDUP
+                ASSERT (tier_ix >> 8) == ((tier_ix + TIX_N - 1) >> 8)
 tier_tab:       DB   K_RAT,      K_GIANT_RAT,     K_RABBIT_RAT
                 DB   K_BAT,      K_SCREECH,       0
                 DB   K_GOBLIN,   K_SLINGER,       0
@@ -310,6 +338,8 @@ tier_tab:       DB   K_RAT,      K_GIANT_RAT,     K_RABBIT_RAT
                 DB   K_ARCHER,   K_SNIPER,        0
                 DB   K_NECRO,    K_BONE_CALLER,   0
                 ASSERT ($ - tier_tab) == 3 * TIER_N
+                ASSERT (tier_tab >> 8) == (($ - 1) >> 8) && (tier_tab & $FF) != $FF   ; one page, no entry at low byte 0
+                ASSERT K_RAT < TIX_N && K_BAT < TIX_N && K_GOBLIN < TIX_N && K_SPIDER < TIX_N && K_SKELETON < TIX_N && K_GHOST < TIX_N && K_ORC < TIX_N && K_ARCHER < TIX_N && K_NECRO < TIX_N
 ; §9.6 odds bases, indexed by depth (1..8; entry 0 unused)
     IF (($ & $FF) + 9) > $100
                 ALIGN 256                      ; each 9-byte table inside one page (H loaded per table); MEM-RECLAIM w3: pad only when it would straddle (was ALIGN 16: 25 B)

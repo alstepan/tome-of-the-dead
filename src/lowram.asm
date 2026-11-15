@@ -2616,8 +2616,9 @@ page_run:
                 INCLUDE "msgl.asm"             ; NEW-MON3 T9: msg_kind / msg_cat / msg_end (cold; were bank-2 msg2.asm:
                                                ; room for the 9-slot seq_rows there)
 
-                INCLUDE "boss0.asm"            ; LARGER-D T5: lp_post (was bank-0 B0_CODE2: -~0.25k T farb a lair unit;
-                                               ; bank 3 calls it directly)
+                INCLUDE "rsp0.asm"             ; LARGER-D T5: the progress respawn rsp_run / rsp_w (cold, once per
+                                               ; room entry; B0_CODE2 had no room after T4; low RAM: a plain jp from bank 7)
+                INCLUDE "lgkeyl.asm"           ; LARGER-D T5: kins / kload (T4 lgkey0.asm; B0_CODE2 room)
 
 ;------------------------------------------------------------------------------
 ; vb_far — NEW-MON3 T9 A-1: write the staged list at TX_DEC (DW addr, DB value; DW 0 end) with

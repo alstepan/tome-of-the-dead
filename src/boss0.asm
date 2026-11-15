@@ -1,11 +1,11 @@
 ;==============================================================================
 ; boss0.asm — 3F-T8 bosses: lp_post. NEW-MON3 T1 (2026-11-13): moved from R6 (boss6.asm)
-; to bank-0 B0_CODE2; LARGER-D T5: to the low-RAM cold block (lowram.asm; a plain call from
-; bank-3 lp_enter, once per lair unit at a room entry; no SMC, never pages $C000). game.md §9.2 "Boss guard" (G1 post, G1a arrival gap, G1b
+; to bank-0 B0_CODE2 (src/nm3_b0.asm; FARB0 from bank-3 lp_enter, once per lair unit at a
+; room entry; B0CODE rules: no SMC, never pages $C000). game.md §9.2 "Boss guard" (G1 post, G1a arrival gap, G1b
 ; escort, G2 guard AI), §1.1 / §9.4.4 (the lair grate), §9.1 (Ogre SLAM).
 ; Byte-exact reference for lp_post: tools/levelgen.py lp_post (tests/lp.py A7).
 ;
-; Entries (plain call from bank 3; A = the mode, see lp_post):
+; Entries (FARB0, A passes in = the mode, see lp_post; A and F are lost on the way back):
 ;   lp_post     lp_enter's unit loop (bank 3), a unit of the lair: its post.
 ;   (ai_guard: bank-7 boss7.asm since MEM-RECLAIM w2b)
 ;   (grate_open / boss_chk: bank-7 boss7.asm since MEM-RECLAIM w2b)
@@ -156,14 +156,18 @@ lp_post:
 ; c 24, three more shafts' footprints on storey 1) and lp_place may seat nothing either: lp_enter then calls lp_post
 ; again with A != 0 for the boss, which takes that x (c itself if legal; the "best" lives on the stack as AF: A = x,
 ; CF = none yet).
+; The gap is monotonic along the walk (away from the hero): once it holds it holds to the wall, so "best" only
+; needs updating while it fails (.marks there only); a gap-holding cell-legal x returns at once (the old order:
+; .gap first, .marks only where it holds -> the mean of lp_enter is unchanged off the fallback).
 .post:          ld   a, c
-                call .marks
-                push af                        ; best = c (CF: c carries a body mark, none)
-                jr   c, .sh
                 call .gap
-                jr   c, .sh
-                pop  af                        ; gap and cells hold at c: bx = c, NC
-                ret
+                jr   c, .s0
+                call .marks
+                ret  nc                        ; gap and cells hold at c: bx = c
+                push af                        ; (CF: no best; the gap holds on along the walk)
+                jr   .sh
+.s0:            call .marks
+                push af                        ; best = c (CF: c carries a mark, none)
 .sh:            ld   a, (LP_HX)
                 cp   c
                 ld   b, 1                      ; the hero left of c: shift right
@@ -173,11 +177,14 @@ lp_post:
 .pl:            add  a, b
                 call .rng
                 jr   c, .pe                    ; ran out of the room: the best (CF if none)
-                call .marks
+                call .gap
+                jr   nc, .pg
+                call .marks                    ; the gap fails: only a best candidate
                 jr   c, .pl
                 pop  hl
                 push af                        ; best = x (NC)
-                call .gap
+                jr   .pl
+.pg:            call .marks
                 jr   c, .pl
                 pop  hl                        ; NC kept: A = bx
                 ret
